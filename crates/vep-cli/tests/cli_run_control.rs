@@ -206,7 +206,7 @@ fn empty_argv_prints_help_and_exits_0() {
 /// whose `--help` Getopt::Long pushes back) or a value flag of this version's
 /// own left without its value (`--pipeline_depth --help`, which Ensembl VEP
 /// leaves in `@ARGV` whole and prints its usage after), in either order, exits 0
-/// with the text of `--help` alone, as Ensembl VEP 116.2 prints its usage and
+/// with the text of `--help` alone, as Ensembl VEP 116.3 prints its usage and
 /// exits 0 on each of these lines. `--help=1` is refused on both engines
 /// (vep:30; exit 2 here, in clap's words). A string option takes `--help` as
 /// its value on both engines (`input_file=s`, `cell_type=s`, Config.pm:209),
@@ -263,11 +263,51 @@ fn help_and_version_win_over_a_flag_refused_before_parsing() {
     }
 }
 
-/// This version's own usage spellings, which Ensembl VEP 116.2 refuses or lacks
+/// The usage error `Config::from_argv` returns for a command line is what the
+/// binary ends on for it: the error's text is the text the binary writes, on
+/// standard output for the help and the version and on standard error for a
+/// syntax error, with nothing on the other stream, and the error's exit code is
+/// the binary's exit status.
+#[test]
+fn library_usage_error_carries_the_text_and_the_status_the_binary_ends_with() {
+    use vep_cli::config::ParseFailure;
+
+    for (flags, asks_for_help_or_version, status) in [
+        (&["--help"][..], true, 0),
+        (&["--version"][..], true, 0),
+        (&["--help=1"][..], false, 2),
+        (&["--fork", "x"][..], false, 2),
+        (&["--bogus"][..], false, 2),
+    ] {
+        let output = vep().args(flags).stdin(Stdio::null()).output().unwrap();
+        let usage = match vep_cli::Config::from_argv(["vep"].iter().chain(flags)) {
+            Err(ParseFailure::Usage(usage)) => usage,
+            Err(other) => panic!("{flags:?} is refused under the error contract: {other}"),
+            Ok(_) => panic!("{flags:?} parses"),
+        };
+        assert_eq!(
+            usage.is_help_or_version(),
+            asks_for_help_or_version,
+            "{flags:?}"
+        );
+        assert_eq!(usage.exit_code(), status, "{flags:?}");
+        assert_eq!(output.status.code(), Some(status), "{flags:?}");
+        let (written, silent) = if asks_for_help_or_version {
+            (&output.stdout, &output.stderr)
+        } else {
+            (&output.stderr, &output.stdout)
+        };
+        assert_eq!(text(written), usage.to_string(), "{flags:?}");
+        assert!(silent.is_empty(), "{flags:?}: {}", text(silent));
+    }
+}
+
+/// This version's own usage spellings, which Ensembl VEP 116.3 refuses or lacks
 /// (`-h` is a prefix of eight of its options, left in `@ARGV` and refused at
 /// vep:30; it has no `--version`): `-h` prints the help, `--version` and `-V` the
-/// version, each exit 0 and each winning over the rest of the line as `--help`
-/// does, `--version` ahead of `--help` included, where the help is printed.
+/// version, each exit 0. `-h` and `--version` win over the rest of the line as
+/// `--help` does, `--version` ahead of `--help` included, where the help is
+/// printed; `-V` is the version as the only argument.
 #[test]
 fn short_help_and_version_are_this_versions_own_and_win_the_same_way() {
     let help = text(&vep().arg("--help").output().unwrap().stdout);
@@ -277,7 +317,7 @@ fn short_help_and_version_are_this_versions_own_and_win_the_same_way() {
         (&["-h", "--bogus"][..], &help),
         (&["--af_exac", "--version"][..], &version),
         (&["--version", "--af_exac"][..], &version),
-        (&["-V", "--af_exac"][..], &version),
+        (&["-V"][..], &version),
         (&["--bogus", "--version"][..], &version),
         (&["--fork", "--version"][..], &version),
         (&["--version", "--help"][..], &help),
@@ -619,7 +659,7 @@ fn vcf_with_fileformat(dir: &Path, name: &str, headers: &[&str]) -> PathBuf {
 /// `VCFv003.3` reports `003.3`; and on a value with no such pair: `die "The
 /// script can't read the VCF file format version of 'fileformat'"` (`:129`). The
 /// key follows `##` and any blanks (`:93`), and a second `##fileformat` line is
-/// read like the first. Ensembl VEP 116.2 exits 25 on each of these inputs with
+/// read like the first. Ensembl VEP 116.3 exits 25 on each of these inputs with
 /// that text and, dying in `Runner::init` (BaseRunner.pm:406) before its output
 /// opens, writes no output file and leaves an existing one as it was; vep-rs
 /// refuses them under the error contract with the output file untouched.
@@ -674,7 +714,7 @@ fn vcf_fileformat_major_version_other_than_4_is_refused() {
 /// value and the key `fileformat` as spelled (`:93`, `:116`), and a file without
 /// the line is not checked: `VCFv4.5`, `VCFv4.5.1`, `VCFv04.2`, a bare `4.2`, an
 /// empty value, `##FILEFORMAT=VCFv3.3` and no `##fileformat` line each annotate
-/// to the rows a `VCFv4.2` header gives, with no warning, as Ensembl VEP 116.2
+/// to the rows a `VCFv4.2` header gives, with no warning, as Ensembl VEP 116.3
 /// annotates them (exit 0, the same row on each).
 #[test]
 fn vcf_fileformat_4x_and_a_missing_line_annotate_as_vcfv42() {
@@ -844,7 +884,7 @@ fn show_cache_info_prints_before_the_init_stage_refusals() {
 
 /// Under `--regulatory_gff` the print carries a `regulatory_gff\t<file>` line
 /// beside the cache's source versions, the first file of the flag: Ensembl VEP
-/// 116.2 prints the version data of every annotation source, first source first
+/// 116.3 prints the version data of every annotation source, first source first
 /// (BaseRunner.pm:415-417), and a regulatory GFF source's is its file
 /// (RegFeat.pm:674-677). The sources are built before the print, so a cache
 /// holding regulatory data of its own draws the replacement warning into the
@@ -881,7 +921,7 @@ fn show_cache_info_lists_the_regulatory_gff_file() {
 }
 
 /// A `--regulatory_gff` file that is not there ends a `--show_cache_info` run
-/// before anything prints: Ensembl VEP 116.2 builds the regulatory GFF sources
+/// before anything prints: Ensembl VEP 116.3 builds the regulatory GFF sources
 /// with the cache's, inside the chain the print reads from
 /// (AnnotationSourceAdaptor.pm:102, :264-267), and refuses the file by key and
 /// name.
@@ -900,7 +940,7 @@ fn show_cache_info_refuses_a_missing_regulatory_gff_before_printing() {
     assert_eq!(refused.status.code(), Some(1));
     assert_eq!(
         text(&refused.stderr).trim_end(),
-        "ERROR: [cli] --regulatory_gff file file /no/such/reg.gff3.gz not found"
+        "ERROR: [cli] --regulatory_gff file=/no/such/reg.gff3.gz not found"
     );
     assert!(refused.stdout.is_empty());
 }
@@ -913,7 +953,7 @@ fn indexed_bed() -> PathBuf {
 
 /// A `--custom` file that cannot be opened ends a `--show_cache_info` run
 /// before anything prints, as a run without the flag refuses it: Ensembl VEP
-/// 116.2 builds the custom sources with the cache's inside the chain the print
+/// 116.3 builds the custom sources with the cache's inside the chain the print
 /// reads from (vep:40, BaseRunner.pm:406, Runner.pm:827,
 /// AnnotationSourceAdaptor.pm:103) and opens each file's tabix index for its
 /// chromosome names there (BaseRunner.pm:453, File.pm:371), so a file that is
@@ -1227,7 +1267,7 @@ fn parquet_refuses_an_unsorted_input_naming_the_line() {
 
 /// The input lines the warnings file at `path` names as skipped, in file
 /// order, and nothing when the file is not there.
-#[cfg(feature = "parquet")]
+#[cfg(any(feature = "parquet", target_os = "linux"))]
 fn skipped_lines(path: &Path) -> Vec<u64> {
     std::fs::read_to_string(path)
         .unwrap_or_default()
@@ -1288,6 +1328,210 @@ fn a_refused_parquet_run_leaves_the_whole_batchs_warnings_at_any_worker_count() 
             left(&["--pipeline_mode", "streaming"]),
             batched,
             "run {run}"
+        );
+    }
+}
+
+/// The flags of every run a run that ends early is repeated under: both
+/// pipeline modes at 1, 2, 8 and 32 workers, `repeats` times each.
+#[cfg(any(feature = "parquet", target_os = "linux"))]
+fn modes_and_worker_counts(repeats: usize) -> Vec<[&'static str; 4]> {
+    let mut runs = Vec::new();
+    for mode in ["streaming", "batched"] {
+        for fork in ["1", "2", "8", "32"] {
+            for _ in 0..repeats {
+                runs.push(["--pipeline_mode", mode, "--fork", fork]);
+            }
+        }
+    }
+    runs
+}
+
+/// A Parquet run of several batches refused for a record out of order leaves,
+/// in each pipeline mode and at any worker count, the warnings of the batches
+/// through the one that holds the refused record and of none after it, in
+/// input order. Of 400 records in batches of 100, each batch holds one skipped
+/// line (30, 130, 230 and 330) and line 150, in the second, is out of order:
+/// every run names lines 30 and 130, whatever the batches it had read beyond.
+#[cfg(feature = "parquet")]
+#[test]
+fn a_refused_parquet_run_of_several_batches_leaves_the_stated_warnings_in_each_mode() {
+    let dir = tempfile::tempdir().unwrap();
+    let records: Vec<(&str, u64)> = (1..=400u64)
+        .map(|line| match line {
+            30 | 130 | 230 | 330 => ("Z", 1_000 + line),
+            150 => ("21", 5),
+            _ => ("21", 100 + line),
+        })
+        .collect();
+    let input = intergenic_vcf(dir.path(), "in.vcf", &records);
+    let out = dir.path().join("out.parquet");
+    let warnings = dir.path().join("out.parquet_warnings.txt");
+    for flags in modes_and_worker_counts(6) {
+        let _ = std::fs::remove_file(&warnings);
+        let mut extra = vec!["--buffer_size", "100"];
+        extra.extend(flags);
+        let output = parquet_run(&input, &extra, &out);
+        assert_eq!(output.status.code(), Some(1), "{flags:?}");
+        assert_eq!(
+            text(&output.stderr).trim_end(),
+            "ERROR: [parquet] input is not sorted by chromosome and position at line 150 (21:5 after 21:249); sort the input or pass --no_check_variants_order",
+            "{flags:?}"
+        );
+        assert!(!out.exists(), "{flags:?}: the refused run leaves no output");
+        assert_eq!(skipped_lines(&warnings), [30, 130], "{flags:?}");
+    }
+}
+
+/// A Parquet run refused for a record out of order leaves the warnings its
+/// reader found, a run of empty lines and, in a format the reader parses, a
+/// skipped line, through the batch that holds the refused record and no
+/// further, each in its place in input order, in both pipeline modes at any
+/// worker count: the reader hands them on with their batch, however far ahead
+/// of the writer it has read. Of 400 records in batches of 50, record 70, in
+/// the second batch, is out of order, and a run of two empty lines follows the
+/// record that fills that batch, so it is read once the batch is full and
+/// travels with the third: record 100 of the VCF, and record 102 of the
+/// Ensembl-format lines, whose batches count the records kept. The VCF skips
+/// records 7 and 27, around the empty line after record 20, and record 57; the
+/// Ensembl-format lines skip records 7 and 57, ahead of the empty line after
+/// record 80. Both skip record 107, which the run does not reach.
+#[cfg(feature = "parquet")]
+#[test]
+fn a_refused_parquet_run_leaves_the_readers_warnings_through_its_batch_in_input_order() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.parquet");
+    let warnings = dir.path().join("out.parquet_warnings.txt");
+    // 400 records with one empty line after record `empty_after` and a run of
+    // two after record `run_after`.
+    let lines = |skipped: &[u64],
+                 empty_after: u64,
+                 run_after: u64,
+                 record: &dyn Fn(&str, u64) -> String| {
+        let mut text = String::new();
+        for line in 1..=400u64 {
+            text.push_str(&match line {
+                70 => record("21", 5),
+                _ if skipped.contains(&line) => record("Z", 1_000 + line),
+                _ => record("21", 100 + line),
+            });
+            if line == empty_after {
+                text.push('\n');
+            }
+            if line == run_after {
+                text.push_str("\n\n");
+            }
+        }
+        text
+    };
+    let vcf = format!(
+        "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n{}",
+        lines(&[7, 27, 57, 107], 20, 100, &|chrom, pos| {
+            format!("{chrom}\t{pos}\t.\tA\tG\t.\t.\t.\n")
+        })
+    );
+    let ensembl = lines(&[7, 57, 107], 80, 102, &|chrom, pos| {
+        format!("{chrom}\t{pos}\t{pos}\tA/G\t1\n")
+    });
+    // A skipped line as `line N`, any other warning as its text.
+    let warned = || -> Vec<String> {
+        std::fs::read_to_string(&warnings)
+            .unwrap_or_default()
+            .lines()
+            .map(|line| {
+                let text = line.strip_prefix("WARNING: ").expect(line);
+                match text.split_once(" skipped (") {
+                    Some((line_number, _)) => line_number.to_string(),
+                    None => text.to_string(),
+                }
+            })
+            .collect()
+    };
+    for (format, text_in, expected) in [
+        (
+            "vcf",
+            &vcf,
+            vec![
+                "line 7",
+                "Skipped 1 empty line from line 21",
+                "line 27",
+                "line 57",
+            ],
+        ),
+        (
+            "ensembl",
+            &ensembl,
+            vec!["line 7", "line 57", "Skipped 1 empty line from line 81"],
+        ),
+    ] {
+        let input = dir.path().join(format!("in.{format}"));
+        std::fs::write(&input, text_in).unwrap();
+        for flags in modes_and_worker_counts(6) {
+            let _ = std::fs::remove_file(&warnings);
+            let mut extra = vec!["--format", format, "--buffer_size", "50"];
+            extra.extend(flags);
+            let output = parquet_run(&input, &extra, &out);
+            assert_eq!(output.status.code(), Some(1), "{format} {flags:?}");
+            assert_eq!(
+                text(&output.stderr).trim_end(),
+                "ERROR: [parquet] input is not sorted by chromosome and position at line 70 (21:5 after 21:169); sort the input or pass --no_check_variants_order",
+                "{format} {flags:?}"
+            );
+            assert!(!out.exists(), "{format} {flags:?}");
+            assert_eq!(warned(), expected, "{format} {flags:?}");
+        }
+    }
+}
+
+/// A text output that cannot be written ends the run with one error and one
+/// warnings file in both pipeline modes at any worker count: the warnings of
+/// every batch through the one whose write failed, in input order, and of no
+/// batch after it. Of 400 records in batches of 50 every fifth is skipped, and
+/// without its header the output is 40 rows of 65 to 67 bytes a batch: 7,954
+/// bytes for three batches and 10,634 for four. The output is Linux's
+/// `/dev/full`, which fails every write, so the buffered writer's first write,
+/// of a buffer of 9,000 bytes, fails inside the fourth batch and the run names
+/// the skipped lines through line 200.
+#[cfg(target_os = "linux")]
+#[test]
+fn a_text_output_that_cannot_be_written_leaves_one_warnings_file_at_any_worker_count() {
+    let dir = tempfile::tempdir().unwrap();
+    let records: Vec<(&str, u64)> = (1..=400u64)
+        .map(|line| match line % 5 {
+            3 => ("Z", 1_000 + line),
+            _ => ("21", 100 + line),
+        })
+        .collect();
+    let input = intergenic_vcf(dir.path(), "in.vcf", &records);
+    let warnings = dir.path().join("warnings.txt");
+    let mut args = corpus_args_with_input(&input);
+    args.extend(
+        [
+            "--quiet",
+            "--no_headers",
+            "--buffer_size",
+            "50",
+            "--output_buffer_size",
+            "9000",
+            "--warning_file",
+            warnings.to_str().unwrap(),
+        ]
+        .map(str::to_string),
+    );
+    let through_the_fourth_batch: Vec<u64> = (1..=200).filter(|line| line % 5 == 3).collect();
+    for flags in modes_and_worker_counts(6) {
+        let _ = std::fs::remove_file(&warnings);
+        let output = run_with(&args, &flags, Path::new("/dev/full"));
+        assert_eq!(output.status.code(), Some(1), "{flags:?}");
+        assert_eq!(
+            text(&output.stderr).trim_end(),
+            "ERROR: [run] Failed to write output: No space left on device (os error 28)",
+            "{flags:?}"
+        );
+        assert_eq!(
+            skipped_lines(&warnings),
+            through_the_fourth_batch,
+            "{flags:?}"
         );
     }
 }
@@ -1407,6 +1651,61 @@ fn parquet_contig_order_follows_the_cache_then_the_fasta_index() {
     assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
     let (kv, _) = parquet_footer(&dir.path().join("no_fasta.parquet"));
     assert_eq!(kv["contig_order"], "21,22");
+}
+
+/// A reference sequence the cache holds under another name adds no entry to
+/// the footer's `contig_order`. The GRCh38-custom cache's `chr_synonyms.txt`
+/// links `NC_000021.9` and `CM000683.2` to its chromosome `21`, so a reference
+/// index that names both accessions and a sequence the cache lacks lists `21`
+/// once, the other sequence after it and neither accession, and a record
+/// written with an accession ranks as `21`.
+#[cfg(feature = "parquet")]
+#[test]
+fn parquet_contig_order_folds_a_reference_synonym_of_a_cache_chromosome() {
+    let corpus =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden/116/GRCh38-custom");
+    let synonyms = std::fs::read_to_string(corpus.join("json_cache/chr_synonyms.txt")).unwrap();
+    for accession in ["NC_000021.9", "CM000683.2"] {
+        assert!(
+            synonyms
+                .lines()
+                .any(|line| line == format!("21\t{accession}")),
+            "the cache links {accession} to 21"
+        );
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let fasta = dir.path().join("ref.fa");
+    let mut sequences = String::new();
+    let mut fai = String::new();
+    for name in ["NC_000021.9", "Q", "CM000683.2"] {
+        sequences.push_str(&format!(">{name}\n"));
+        fai.push_str(&format!("{name}\t60\t{}\t60\t61\n", sequences.len()));
+        sequences.push_str(&"A".repeat(60));
+        sequences.push('\n');
+    }
+    std::fs::write(&fasta, sequences).unwrap();
+    std::fs::write(dir.path().join("ref.fa.fai"), fai).unwrap();
+    let input = intergenic_vcf(dir.path(), "in.vcf", &[("NC_000021.9", 10), ("Q", 7)]);
+    let out = dir.path().join("out.parquet");
+    let mut args = with_input(args_for(&corpus), &input);
+    args.extend(["--output_format", "parquet", "--quiet"].map(str::to_string));
+    let output = run_with(
+        &args,
+        &["--dont_skip", "--fasta", fasta.to_str().unwrap()],
+        &out,
+    );
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    let (kv, _) = parquet_footer(&out);
+    assert_eq!(kv["contig_order"], "21,Q");
+    assert!(
+        !kv["contig_order"]
+            .split(',')
+            .any(|entry| entry == "NC_000021.9" || entry == "CM000683.2"),
+        "{}",
+        kv["contig_order"]
+    );
+    let keys = vep_io::output::parquet::sort_keys(&out).unwrap();
+    assert_eq!(keys, [(0, 10), (1, 7)]);
 }
 
 /// The entries of a Parquet output directory as paths under it, sorted.
@@ -1548,16 +1847,10 @@ fn parquet_force_overwrite_refuses_a_foreign_file() {
     // A Parquet file of the output's own schema whose footer lacks the key.
     let formatter = ParquetOutputFormatter::new(FieldOptions::default(), vec![], vec![]);
     let unkeyed = dir.path().join("unkeyed");
-    ParquetDirectoryWriter::create(
-        &unkeyed,
-        std::sync::Arc::clone(formatter.schema()),
-        vec![],
-        InputOrder::Unchecked,
-        None,
-    )
-    .unwrap()
-    .close()
-    .unwrap();
+    ParquetDirectoryWriter::create(&unkeyed, &formatter, vec![], InputOrder::Unchecked, None)
+        .unwrap()
+        .close()
+        .unwrap();
     let foreign = out.join("part-00009.parquet");
     std::fs::copy(unkeyed.join("part-00000.parquet"), &foreign).unwrap();
     assert!(!vep_io::output::parquet::is_vep_rs_part(&foreign));
@@ -1636,12 +1929,13 @@ fn a_refused_parquet_replacement_leaves_the_earlier_output_whole() {
 }
 
 /// Runs a Parquet run into `out` that fails once its rows are rendered: one
-/// record draws a warning, and the warnings file is named in a directory under
-/// `dir` that does not exist.
-#[cfg(feature = "parquet")]
+/// record draws a warning, and the warnings file is Linux's `/dev/full`, a
+/// device, which the run does not test before its first record and which
+/// fails the write of the warning.
+#[cfg(all(feature = "parquet", target_os = "linux"))]
 fn parquet_run_failing_on_its_warnings_file(dir: &Path, mode: &str, out: &Path) {
     let warns = intergenic_vcf(dir, "warns.vcf", &[("21", 10), ("Z", 5), ("22", 7)]);
-    let warnings = dir.join("missing").join("warnings.txt");
+    let warnings = Path::new("/dev/full");
     let failed = parquet_run(
         &warns,
         &[
@@ -1665,7 +1959,7 @@ fn parquet_run_failing_on_its_warnings_file(dir: &Path, mode: &str, out: &Path) 
 
 /// A Parquet run into an earlier output that fails once rows are rendered
 /// leaves the earlier output as it was, in both pipeline modes.
-#[cfg(feature = "parquet")]
+#[cfg(all(feature = "parquet", target_os = "linux"))]
 #[test]
 fn a_parquet_replacement_that_fails_after_rendering_rows_leaves_the_earlier_output_whole() {
     let dir = tempfile::tempdir().unwrap();
@@ -1687,7 +1981,7 @@ fn a_parquet_replacement_that_fails_after_rendering_rows_leaves_the_earlier_outp
 
 /// A Parquet run into a new path that fails once rows are rendered leaves no
 /// directory there and nothing beside it, in both pipeline modes.
-#[cfg(feature = "parquet")]
+#[cfg(all(feature = "parquet", target_os = "linux"))]
 #[test]
 fn a_failed_parquet_run_into_a_new_path_leaves_nothing() {
     let dir = tempfile::tempdir().unwrap();
@@ -2146,6 +2440,83 @@ fn no_check_variants_order_relaxes_the_parquet_layout() {
     assert_eq!(parquet_footer(&out).0["sort"], "none");
 }
 
+/// Under `--parquet_partition chrom` a part closes at every change of spelling
+/// whether or not the order is checked, so a run that skips the check warns
+/// with the partitioned layout's own text and never that its parts are not
+/// rolled at contig boundaries: the unsorted input is written in input order
+/// as one part per run of a spelling, each in its spelling's directory.
+#[cfg(feature = "parquet")]
+#[test]
+fn the_unchecked_order_warning_is_true_of_a_partitioned_output() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = intergenic_vcf(dir.path(), "in.vcf", &[("21", 100), ("21", 50), ("22", 7)]);
+    let out = dir.path().join("out.parquet");
+    let mut args = corpus_args_with_input(&input);
+    args.extend(["--output_format", "parquet"].map(str::to_string));
+    let output = run_with(
+        &args,
+        &["--no_check_variants_order", "--parquet_partition", "chrom"],
+        &out,
+    );
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    let warning = "WARNING: input order not checked: Parquet row groups are not sorted and a part closes at every change of chromosome spelling";
+    let stderr = text(&output.stderr);
+    assert_eq!(
+        stderr.lines().filter(|line| *line == warning).count(),
+        1,
+        "{stderr}"
+    );
+    assert!(
+        !stderr.contains("parts are not rolled at contig boundaries"),
+        "{stderr}"
+    );
+    let warnings = std::fs::read_to_string(dir.path().join("out.parquet_warnings.txt")).unwrap();
+    assert_eq!(
+        warnings.lines().filter(|line| *line == warning).count(),
+        1,
+        "{warnings}"
+    );
+    assert!(
+        !warnings.contains("parts are not rolled at contig boundaries"),
+        "{warnings}"
+    );
+    assert_eq!(
+        directory_entries(&out),
+        [
+            "_vep_rs_manifest.json",
+            "chrom=21/part-00000.parquet",
+            "chrom=22/part-00001.parquet",
+        ]
+    );
+    let keys = vep_io::output::parquet::sort_keys(&out).unwrap();
+    assert_eq!(keys, [(0, 100), (0, 50), (1, 7)], "rows in input order");
+    assert_eq!(parquet_footer(&out).0["sort"], "none");
+
+    let returning = intergenic_vcf(
+        dir.path(),
+        "returning.vcf",
+        &[("21", 100), ("22", 7), ("21", 50)],
+    );
+    let out = dir.path().join("returning.parquet");
+    let mut args = corpus_args_with_input(&returning);
+    args.extend(["--output_format", "parquet", "--quiet"].map(str::to_string));
+    let output = run_with(
+        &args,
+        &["--no_check_variants_order", "--parquet_partition", "chrom"],
+        &out,
+    );
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    assert_eq!(
+        directory_entries(&out),
+        [
+            "_vep_rs_manifest.json",
+            "chrom=21/part-00000.parquet",
+            "chrom=21/part-00002.parquet",
+            "chrom=22/part-00001.parquet",
+        ]
+    );
+}
+
 /// Every warning of a run is written to `<output_file>_warnings.txt` beside the
 /// output (BaseVEP.pm:890), as `WARNING: line N skipped (<line>): <description>`
 /// for a skipped record (`:840-863`), and echoed on standard error; the file is
@@ -2218,7 +2589,8 @@ fn gencode_primary_assembly_warning_precedes_the_run() {
 }
 
 /// A cache without variation data, asked for co-located variants, warns once
-/// that the co-location columns stay empty, where Ensembl VEP annotates
+/// that the co-location columns stay empty, naming the flag that asks for
+/// them and the caches that hold the data, where Ensembl VEP annotates
 /// silently (CacheDir.pm:179 attaches no variation source). The line is a
 /// warning of the run like any other (BaseVEP.pm:802-822): written to the
 /// warnings file and echoed on standard error, and under `--quiet` written to
@@ -2233,7 +2605,9 @@ fn cache_without_variation_data_warns_into_the_warnings_file() {
     let cache = &args[cache_flag + 1];
     let warning = format!(
         "WARNING: [cache] no variation data under {cache}: Existing_variation and the frequency \
-         columns stay empty"
+         columns stay empty under --everything; a cache from vep-cache-builder --auto or \
+         --include-variations, or a conversion of Ensembl VEP's cache, holds it \
+         (docs/cache-variation-data.md)"
     );
     let output = run_with(&args, &["--everything"], &out);
     assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
@@ -2411,7 +2785,8 @@ fn warning_file_false_value_is_the_default_file() {
 
 /// A `--skipped_variants_file` value that is false in Perl is a file name here
 /// (`reserve_skipped_variants_file` in `warnings.rs` reserves every value): `0`
-/// is written as a file named `0` and the empty value fails the run's end with
+/// is written as a file named `0` and the empty value is refused before the
+/// first record is read, with no output written, with
 /// `Could not write to skipped variants file` (exit 1), where Ensembl VEP's
 /// `$self->dump_skipped_variants if $self->param('skipped_variants_file')`
 /// (Runner.pm:176) writes no file for either and exits 0, the reading
@@ -2434,6 +2809,7 @@ fn skipped_variants_file_false_value_is_a_file_name() {
     assert!(std::fs::read_to_string(dir.path().join("0"))
         .unwrap()
         .starts_with("[VEP skipped the following variants from "));
+    let written = std::fs::read(&out).unwrap();
 
     let empty = run_control(
         &[
@@ -2450,6 +2826,10 @@ fn skipped_variants_file_false_value_is_a_file_name() {
         text(&empty.stderr),
         "ERROR: [output] Could not write to skipped variants file \n",
         "the empty name follows the message's trailing space"
+    );
+    assert!(
+        std::fs::read(&out).unwrap() == written,
+        "the refused run wrote over the earlier output"
     );
 }
 
@@ -2806,9 +3186,9 @@ fn deletion_looks_incomplete_follows_the_type_and_precedes_the_span() {
 
 /// A structural record whose INFO/END is no number to Perl is skipped with two
 /// lines: `deletion looks incomplete` (Parser/VCF.pm:555-558: `abc` numifies to 0,
-/// below the start) and then `validate_vf`'s coordinate test over the start Perl
+/// below the start) and then `validate_vf`'s coordinate test over the start Ensembl VEP
 /// reads, `POS + 1`, and the END text as written (Parser.pm:475-477, the text kept
-/// by BaseVCF4.pm:307-308). Both lines are Ensembl VEP 116.2's for the record,
+/// by BaseVCF4.pm:307-308). Both lines are Ensembl VEP 116.3's for the record,
 /// which writes no row for it and reaches no cache.
 #[test]
 fn end_that_is_no_number_is_refused_with_the_coordinate_text() {
@@ -2956,7 +3336,7 @@ fn individual_copies_of_a_refused_record_warn_once_and_are_listed_twice() {
 /// count them on the undecoded line Ensembl VEP reads (BaseVEP.pm:848-850,
 /// `$maxChar = 50`): a 62-byte record whose identifier is twenty two-byte
 /// characters is quoted through byte 46, the first seventeen of them, then
-/// `...`, the bytes Ensembl VEP 116.2 writes for this line.
+/// `...`, the bytes Ensembl VEP 116.3 writes for this line.
 #[test]
 fn skip_warning_quotes_the_line_cut_by_bytes() {
     let dir = tempfile::tempdir().unwrap();
@@ -3059,7 +3439,7 @@ fn record_rows(output: &str, id: &str) -> Vec<String> {
 /// A repeated `--pick_order` keeps its last value, as Getopt::Long keeps the last
 /// value of the scalar `pick_order=s` (Config.pm:117, not in `@ALLOW_MULTIPLE`,
 /// :340-346): under `--pick --pick_order length --pick_order rank` Ensembl VEP
-/// 116.2 picks `C ENST00000339775`, the row `rank` alone picks, for the record
+/// 116.3 picks `C ENST00000339775`, the row `rank` alone picks, for the record
 /// `21 17604928 G A,C`; `length` alone would pick another transcript.
 #[test]
 fn repeated_pick_order_keeps_the_last_list() {
@@ -3093,7 +3473,7 @@ fn repeated_pick_order_keeps_the_last_list() {
 /// nothing, `_is_flag_active` reads the empty list as inactive (:902-906) so the
 /// value check never sees it, and `pick_worst_VariationFeatureOverlapAllele`
 /// compares no category and returns the first candidate (OutputFactory.pm:808).
-/// Ensembl VEP 116.2 picks `A ENST00000339775 synonymous_variant`, its first row,
+/// Ensembl VEP 116.3 picks `A ENST00000339775 synonymous_variant`, its first row,
 /// for the record `21 17604928 G A,C`; the default order picks another row.
 #[test]
 fn an_empty_pick_order_picks_the_first_row() {
@@ -3230,30 +3610,11 @@ fn verbose_prints_the_auto_decompression_resolution() {
     assert!(!text(&host_capped.stderr).contains("--fork 0 resolved"));
 }
 
-/// `text` without its ANSI colour sequences: the status layer colours its lines
-/// whether or not standard error is a terminal.
-fn strip_ansi(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut chars = text.chars().peekable();
-    while let Some(c) = chars.next() {
-        if c == '\x1b' && chars.peek() == Some(&'[') {
-            for c in chars.by_ref() {
-                if c == 'm' {
-                    break;
-                }
-            }
-        } else {
-            out.push(c);
-        }
-    }
-    out
-}
-
 /// The status lines of `stderr` at `level` (`INFO` or `DEBUG`), each without
-/// its colours and its timestamp: `<LEVEL> <target>: <message>`. The `INFO:`
-/// notices and the summary line carry no timestamp and are not among them.
+/// its timestamp: `<LEVEL> <target>: <message>`. The `INFO:` notices and the
+/// summary line carry no timestamp and are not among them.
 fn status_lines(stderr: &str, level: &str) -> Vec<String> {
-    strip_ansi(stderr)
+    stderr
         .lines()
         .filter_map(|line| {
             let (stamp, rest) = line.split_once(' ')?;
@@ -3262,6 +3623,162 @@ fn status_lines(stderr: &str, level: &str) -> Vec<String> {
         })
         .filter(|line| line.starts_with(level) && line[level.len()..].starts_with(' '))
         .collect()
+}
+
+/// A `--verbose` run of the run-control corpus on one annotation thread,
+/// writing to `out` with `NO_COLOR` unset: its INFO status lines are the same
+/// on every host but for their timestamps.
+fn verbose_run_on_one_thread(out: &Path) -> Command {
+    let mut command = vep();
+    command
+        .args(args_for(&run_control_dir()))
+        .args(["--verbose", "--fork", "1", "-o"])
+        .arg(out)
+        .env_remove("NO_COLOR")
+        .stdin(Stdio::null());
+    command
+}
+
+/// Asserts that `stderr`, the standard error of [`verbose_run_on_one_thread`]
+/// writing to `out`, is plain text: no escape character anywhere, every INFO
+/// status line whole after its timestamp, and the fields of a DEBUG status
+/// line as `name=value`.
+fn assert_plain_status_lines(stderr: &str, out: &Path) {
+    assert!(!stderr.contains('\x1b'), "{stderr:?}");
+    let args = args_for(&run_control_dir());
+    let value_of = |flag: &str| &args[args.iter().position(|a| a == flag).unwrap() + 1];
+    assert_eq!(
+        status_lines(stderr, "INFO"),
+        [
+            format!("INFO vep_cli::runner: input: {}", value_of("-i")),
+            format!("INFO vep_cli::runner: output: {}", out.display()),
+            "INFO vep_cli::runner: output format: vep".to_string(),
+            format!(
+                "INFO vep_cli::runner: Transcript cache: {}/homo_sapiens/116_GRCh38 \
+                 (lazy per-chromosome)",
+                value_of("--dir_cache")
+            ),
+            "INFO vep_cli::transcript_index:   chromosome 21: 2276 transcripts".to_string(),
+            "INFO vep_cli::transcript_index:   chromosome 22: 90 transcripts".to_string(),
+        ],
+        "{stderr}"
+    );
+    let tasks: Vec<String> = status_lines(stderr, "DEBUG")
+        .iter()
+        .filter_map(|line| {
+            line.strip_prefix("DEBUG vep_cli::pipeline: batch handed to the pool seq=0 tasks=")
+        })
+        .map(str::to_string)
+        .collect();
+    assert_eq!(tasks.len(), 1, "{stderr}");
+    assert!(tasks[0].parse::<u32>().is_ok(), "{stderr}");
+}
+
+/// The status lines a run sends to a file are plain text, `<timestamp> <LEVEL>
+/// <target>: <message>`: the status layer colours its lines on a terminal
+/// alone, and Ensembl VEP's status lines carry no colour code wherever they go
+/// (BaseVEP.pm:785).
+#[test]
+fn status_lines_sent_to_a_file_are_plain_text() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.txt");
+    let log = dir.path().join("run.log");
+    let status = verbose_run_on_one_thread(&out)
+        .stdout(Stdio::null())
+        .stderr(std::fs::File::create(&log).unwrap())
+        .status()
+        .unwrap();
+    let stderr = std::fs::read_to_string(&log).unwrap();
+    assert_eq!(status.code(), Some(0), "{stderr}");
+    assert_plain_status_lines(&stderr, &out);
+}
+
+/// The status lines a run sends to a pipe are the plain text a file takes.
+#[test]
+fn status_lines_sent_to_a_pipe_are_plain_text() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.txt");
+    let output = verbose_run_on_one_thread(&out).output().unwrap();
+    let stderr = text(&output.stderr);
+    assert_eq!(output.status.code(), Some(0), "{stderr}");
+    assert_plain_status_lines(&stderr, &out);
+}
+
+/// A status line names a chromosome as the cache spells it, with nothing put
+/// before the name, and counts one transcript as `1 transcript`. The fly
+/// corpus's cache names its sequences `4`, `2L`, `rDNA`, `mitochondrion_genome`
+/// and by scaffold names; its own run on one annotation thread loads them in
+/// the order of the input's first record on each, `MT` read through the
+/// synonyms file. Each count is the number of distinct transcript ids in the
+/// shards under that name.
+#[test]
+fn status_lines_name_a_chromosome_as_the_cache_spells_it() {
+    let corpus =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden/116/BDGP6.54-fly");
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.txt");
+    let output = vep()
+        .current_dir(&corpus)
+        .args([
+            "-i",
+            "variants.vcf",
+            "--offline",
+            "--json_cache",
+            "json_cache",
+            "--species",
+            "drosophila_melanogaster",
+            "--assembly",
+            "BDGP6.54",
+            "--fasta",
+            "reference.fa.gz",
+            "--synonyms",
+            "synonyms.txt",
+            "--no_stats",
+            "--fork",
+            "1",
+            "-o",
+        ])
+        .arg(&out)
+        .env_remove("NO_COLOR")
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    let stderr = text(&output.stderr);
+    assert_eq!(output.status.code(), Some(0), "{stderr}");
+    assert_eq!(
+        status_lines(&stderr, "INFO"),
+        [
+            "INFO vep_cli::runner: Using reference FASTA: reference.fa.gz".to_string(),
+            "INFO vep_cli::runner: input: variants.vcf".to_string(),
+            format!("INFO vep_cli::runner: output: {}", out.display()),
+            "INFO vep_cli::runner: output format: vep".to_string(),
+            "INFO vep_cli::runner: Transcript cache: json_cache (lazy per-chromosome)".to_string(),
+            "INFO vep_cli::transcript_index:   chromosome 4: 109 transcripts".to_string(),
+            "INFO vep_cli::transcript_index:   chromosome 211000022278760: 1 transcript"
+                .to_string(),
+            "INFO vep_cli::transcript_index:   chromosome 211000022278978: 2 transcripts"
+                .to_string(),
+            "INFO vep_cli::transcript_index:   chromosome 211000022279188: 1 transcript"
+                .to_string(),
+            "INFO vep_cli::transcript_index:   chromosome 211000022280328: 1 transcript"
+                .to_string(),
+            "INFO vep_cli::transcript_index:   chromosome Y: 1 transcript".to_string(),
+            "INFO vep_cli::transcript_index:   chromosome mitochondrion_genome: 38 transcripts"
+                .to_string(),
+            "INFO vep_cli::transcript_index:   chromosome Unmapped_Scaffold_8_D1580_D1567: \
+             4 transcripts"
+                .to_string(),
+            "INFO vep_cli::transcript_index:   chromosome rDNA: 2 transcripts".to_string(),
+            "INFO vep_cli::transcript_index:   chromosome Unmapped_Scaffold_60_D1601: \
+             1 transcript"
+                .to_string(),
+            "INFO vep_cli::transcript_index:   chromosome Y_mapped_Scaffold_9_D1573: \
+             1 transcript"
+                .to_string(),
+            "INFO vep_cli::transcript_index:   chromosome 2L: 567 transcripts".to_string(),
+        ],
+        "{stderr}"
+    );
 }
 
 /// The counts of the `\rProcessed <count> variants...` progress lines of
@@ -3280,14 +3797,10 @@ fn progress_counts(stderr: &str) -> Vec<u64> {
         .collect()
 }
 
-/// The last line of `stderr`, the summary line of a run that printed one,
-/// after the progress lines and the carriage return that share its line.
+/// The last line of `stderr`, whole: the summary line of a run that printed
+/// one, which stands on a line of its own after the progress lines.
 fn summary_line(stderr: &str) -> &str {
-    stderr
-        .lines()
-        .last()
-        .and_then(|line| line.rsplit('\r').next())
-        .unwrap_or("")
+    stderr.lines().last().unwrap_or("")
 }
 
 /// `output` without the two header lines that differ between two runs of one
@@ -3369,7 +3882,7 @@ fn no_progress_silences_the_progress_line_and_keeps_info() {
 /// batch is handed out. 12,000 records, all handed out before 10,000 of them
 /// are done, print the one line in both modes. `--quiet` prints nothing at all
 /// and `--no_progress` neither a progress line nor the carriage return that
-/// closes it, in either mode.
+/// opens one, in either mode.
 #[test]
 fn progress_line_appears_every_ten_thousand_variants_unless_quiet_or_no_progress() {
     let dir = tempfile::tempdir().unwrap();
@@ -3418,11 +3931,130 @@ fn progress_line_appears_every_ten_thousand_variants_unless_quiet_or_no_progress
     }
 }
 
+/// A line a run writes after a progress line opens a line of its own. The
+/// progress line is written after a carriage return and has no line end, so a
+/// line end closes it before any other line: the `ERROR:` line of a run that
+/// fails, the echo of a warning, a status line and the summary line. Three
+/// inputs show it in both pipeline modes, the first two of 25,000 records. A
+/// compressed input cut inside its deflate stream ends the run with exit 1. A
+/// record 15,000 on a chromosome the cache lacks is echoed, and a warnings
+/// file that fails at its first write then ends the run with exit 1: Linux's
+/// `/dev/full`, a device, which the run does not test before its first
+/// record, so that run is made on Linux alone. Three records
+/// on a second chromosome follow 35,000 on the first, and at a pipeline depth
+/// of 1 at most four batches stand between the reader and the batches done,
+/// so that chromosome's status line follows a progress line. The batched
+/// coordinator reaches each failure between whole batches of 5,000, so its
+/// progress lines are the ones before the failure.
+#[test]
+fn a_line_written_after_a_progress_line_opens_a_line_of_its_own() {
+    const SKIPPED: &str = "WARNING: line 15000 skipped (Z 15099 r15000 A G . . .): \
+        Chromosome Z not found in annotation sources or synonyms; \
+        chromosome Z does not overlap any features";
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.txt");
+    let run = |args: &[String], extra: &[&str]| {
+        let output = run_with(args, extra, &out);
+        (output.status.code(), text(&output.stderr))
+    };
+    let last_line = |stderr: &str| stderr.lines().last().unwrap_or("").to_string();
+
+    let many: Vec<(&str, u64)> = (0..25_000).map(|i| ("21", 100 + i)).collect();
+    let whole = std::fs::read(intergenic_vcf(dir.path(), "many.vcf", &many)).unwrap();
+    let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+    encoder.write_all(&whole).unwrap();
+    let mut compressed = encoder.finish().unwrap();
+    compressed.truncate(compressed.len() * 9 / 10);
+    let cut = dir.path().join("cut.vcf.gz");
+    std::fs::write(&cut, compressed).unwrap();
+    let cut_args = corpus_args_with_input(&cut);
+
+    let warned: Vec<(&str, u64)> = (0..25_000)
+        .map(|i| (if i == 14_999 { "Z" } else { "21" }, 100 + i))
+        .collect();
+    let warned_args = corpus_args_with_input(&intergenic_vcf(dir.path(), "warned.vcf", &warned));
+    let full_device = Path::new("/dev/full");
+    let unwritable = format!(
+        "ERROR: [output] Could not write to warnings file {}",
+        full_device.display()
+    );
+
+    let second: Vec<(&str, u64)> = (0..35_003)
+        .map(|i| (if i < 35_000 { "21" } else { "22" }, 100 + i))
+        .collect();
+    let second_args = corpus_args_with_input(&intergenic_vcf(dir.path(), "second.vcf", &second));
+
+    for mode in ["batched", "streaming"] {
+        let (code, stderr) = run(&cut_args, &["--pipeline_mode", mode]);
+        assert_eq!(code, Some(1), "{mode}:\n{stderr}");
+        assert!(
+            last_line(&stderr).starts_with("ERROR: [run] Failed to read input line: "),
+            "{mode}:\n{stderr}"
+        );
+        if mode == "batched" {
+            assert_eq!(progress_counts(&stderr), [10_000, 20_000], "{stderr}");
+            assert!(
+                stderr.contains("\rProcessed 20000 variants...\nERROR: [run] "),
+                "{stderr}"
+            );
+        }
+
+        if cfg!(target_os = "linux") {
+            let (code, stderr) = run(
+                &warned_args,
+                &[
+                    "--pipeline_mode",
+                    mode,
+                    "--warning_file",
+                    full_device.to_str().unwrap(),
+                ],
+            );
+            assert_eq!(code, Some(1), "{mode}:\n{stderr}");
+            assert!(stderr.lines().any(|l| l == SKIPPED), "{mode}:\n{stderr}");
+            assert_eq!(last_line(&stderr), unwritable, "{mode}:\n{stderr}");
+            if mode == "batched" {
+                assert_eq!(progress_counts(&stderr), [10_000], "{stderr}");
+                assert!(
+                    stderr.contains("\rProcessed 10000 variants...\nWARNING: line 15000 skipped "),
+                    "{stderr}"
+                );
+            }
+        }
+
+        let (code, stderr) = run(&warned_args, &["--pipeline_mode", mode]);
+        assert_eq!(code, Some(0), "{mode}:\n{stderr}");
+        assert!(stderr.lines().any(|l| l == SKIPPED), "{mode}:\n{stderr}");
+        assert!(!progress_counts(&stderr).is_empty(), "{mode}:\n{stderr}");
+        assert!(
+            last_line(&stderr).starts_with("Processed 24999 variants ("),
+            "{mode}:\n{stderr}"
+        );
+
+        let (code, stderr) = run(
+            &second_args,
+            &["--pipeline_mode", mode, "--pipeline_depth", "1"],
+        );
+        assert_eq!(code, Some(0), "{mode}:\n{stderr}");
+        let loaded: Vec<&str> = stderr
+            .lines()
+            .filter(|l| l.contains("INFO vep_cli::transcript_index:   chromosome 22: "))
+            .collect();
+        assert_eq!(loaded.len(), 1, "{mode}:\n{stderr}");
+        assert!(!loaded[0].contains('\r'), "{mode}:\n{stderr}");
+        let (before, _) = stderr.split_once(loaded[0]).unwrap();
+        assert!(before.ends_with(" variants...\n"), "{mode}:\n{stderr}");
+        assert!(
+            last_line(&stderr).starts_with("Processed 35003 variants ("),
+            "{mode}:\n{stderr}"
+        );
+    }
+}
+
 /// A progress line that cannot be written is dropped and the run goes on. The
 /// reader of standard error goes once the first progress line has arrived, so
 /// every later line fails to write: either coordinator still writes all
 /// 60,000 records to the output, and the run ends in success past the
-/// carriage return and the summary line it cannot write. A streaming task
+/// line end and the summary line it cannot write. A streaming task
 /// that panicked on the failed write would never send its chunk, which the
 /// writer waits for.
 #[test]
@@ -3489,6 +4121,30 @@ fn status_before_the_deadline(mut child: Child) -> ExitStatus {
     }
 }
 
+/// The streams that take no bytes on this host: a device that refuses every
+/// write, where the host has one, and a pipe whose reader has gone.
+fn unwritable_streams() -> &'static [&'static str] {
+    if Path::new("/dev/full").exists() {
+        &["/dev/full", "a pipe whose reader has gone"]
+    } else {
+        &["a pipe whose reader has gone"]
+    }
+}
+
+/// A standard error that takes no bytes, as [`unwritable_streams`] names it.
+fn unwritable(stream: &str) -> Stdio {
+    if stream == "/dev/full" {
+        return std::fs::File::options()
+            .write(true)
+            .open(stream)
+            .unwrap()
+            .into();
+    }
+    let (reader, writer) = std::io::pipe().unwrap();
+    drop(reader);
+    writer.into()
+}
+
 /// Standard error on a stream that takes no bytes never ends a run, a device
 /// that refuses every write (`/dev/full`) or a pipe whose reader has gone.
 /// Ensembl VEP's one write there on a run that completes, the `warn` of
@@ -3511,18 +4167,6 @@ fn an_unwritable_error_stream_never_fails_a_run() {
         })
         .collect();
     let args = corpus_args_with_input(&intergenic_vcf(dir.path(), "many.vcf", &records));
-    let unwritable = |stream: &str| -> Stdio {
-        if stream == "/dev/full" {
-            return std::fs::File::options()
-                .write(true)
-                .open(stream)
-                .unwrap()
-                .into();
-        }
-        let (reader, writer) = std::io::pipe().unwrap();
-        drop(reader);
-        writer.into()
-    };
     let run = |args: &[String], extra: &[&str], out: &Path, stderr: Stdio| {
         vep()
             .args(args)
@@ -3543,11 +4187,7 @@ fn an_unwritable_error_stream_never_fails_a_run() {
             std::fs::read_to_string(warnings).ok(),
         )
     };
-    let streams: &[&str] = if Path::new("/dev/full").exists() {
-        &["/dev/full", "a pipe whose reader has gone"]
-    } else {
-        &["a pipe whose reader has gone"]
-    };
+    let streams = unwritable_streams();
     let mut runs = 0;
     let mut fresh = || {
         runs += 1;
@@ -3576,6 +4216,94 @@ fn an_unwritable_error_stream_never_fails_a_run() {
         let out = dir.path().join("refused.txt");
         let status = run(&refused, &[], &out, unwritable(stream));
         assert_eq!(status.code(), Some(1), "{stream}: {status}");
+    }
+}
+
+/// A line a plugin prints on standard error is dropped by such a stream too,
+/// as a bare `warn` in an Ensembl VEP plugin fails there without ending the
+/// run. dbNSFP's bare-version warning at its load (dbNSFP.pm:208) and its
+/// per-row list errors under `transcript_match=1` (dbNSFP.pm:379, :384) are
+/// refused, and each run exits 0 with the output and the warnings file of the
+/// same run on a readable stream.
+#[test]
+fn an_unwritable_error_stream_never_fails_a_run_whose_plugin_warns() {
+    let dir = tempfile::tempdir().unwrap();
+    let corpus = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/golden/116/GRCh38-plugin-dbnsfp-fixture");
+    let bare = dir.path().join("dbNSFP4.9_grch38_synthetic.gz");
+    for suffix in ["", ".tbi"] {
+        std::fs::copy(
+            corpus.join(format!(
+                "plugin_data/dbNSFP4.9a_grch38_synthetic.gz{suffix}"
+            )),
+            dir.path()
+                .join(format!("dbNSFP4.9_grch38_synthetic.gz{suffix}")),
+        )
+        .unwrap();
+    }
+    let lists = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/dbnsfp-lists");
+    let cases = [
+        (
+            "the load",
+            args_for(&corpus),
+            format!("dbNSFP,{},SIFT_score", bare.display()),
+            "WARNING: Specific suffix 'a' or 'c' not found for version 4.9. Proceeding with \
+             general version.",
+        ),
+        (
+            "a row",
+            with_input(args_for(&corpus), &lists.join("variants.vcf")),
+            format!(
+                "dbNSFP,{},transcript_match=1,SIFT_score,SIFT_pred",
+                lists.join("dbNSFP4.9a_grch38_lists_synthetic.gz").display()
+            ),
+            "ERROR: Transcript index out of range for field SIFT_score",
+        ),
+    ];
+    let run = |args: &[String], plugin: &str, out: &Path, stderr: Stdio| {
+        vep()
+            .args(args)
+            .args(["--quiet", "--plugin", plugin])
+            .args(["-o", out.to_str().unwrap()])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(stderr)
+            .spawn()
+            .unwrap()
+    };
+    let left = |out: &Path| {
+        let warnings = PathBuf::from(format!("{}_warnings.txt", out.display()));
+        (
+            std::fs::read_to_string(out)
+                .map(|text| without_run_lines(&text).join("\n"))
+                .ok(),
+            std::fs::read_to_string(warnings).ok(),
+        )
+    };
+    let mut runs = 0;
+    let mut fresh = || {
+        runs += 1;
+        dir.path().join(format!("out{runs}.txt"))
+    };
+    for (case, args, plugin, line) in &cases {
+        let readable = fresh();
+        let printed = run(args, plugin, &readable, Stdio::piped())
+            .wait_with_output()
+            .unwrap();
+        assert!(printed.status.success(), "{case}: {}", printed.status);
+        let stderr = String::from_utf8_lossy(&printed.stderr);
+        assert!(
+            stderr.lines().any(|l| l == *line),
+            "{case}: the plugin's line on a readable stream:\n{stderr}"
+        );
+        let expected = left(&readable);
+        assert!(expected.0.is_some(), "{case}");
+        for stream in unwritable_streams() {
+            let out = fresh();
+            let status = status_before_the_deadline(run(args, plugin, &out, unwritable(stream)));
+            assert!(status.success(), "{case}, {stream}: {status}");
+            assert_eq!(left(&out), expected, "{case}, {stream}");
+        }
     }
 }
 
@@ -3619,7 +4347,7 @@ fn library_run(args: &[String], harness: &[&str]) -> Command {
 /// A process that runs the library and never calls
 /// `vep_cli::stderr::drop_refused_writes` writes the run's lines as `eprint!`
 /// does, so a test harness captures them. A batched run of 12,000 records
-/// with a skipped line puts a warning's echo, a progress line and the summary
+/// with a skipped line puts a warning, a progress line and the summary
 /// line on standard error under a harness that does not capture
 /// (`--nocapture`), and none of them under one that does.
 #[test]
@@ -3662,6 +4390,31 @@ fn a_library_runs_lines_are_captured_by_a_test_harness() {
     );
 }
 
+/// A process that runs the library and never configures the warning sink
+/// reads each warning once on standard error: the sink writes its one copy
+/// there and echoes none beside it. A library run of three records, the
+/// second on a chromosome the cache lacks, puts that record's skip line on
+/// standard error exactly once under a harness that does not capture. The two
+/// copies are the binary's under `--warning_file STDERR`
+/// ([`warning_file_stderr_literal`]).
+#[test]
+fn a_library_run_writes_each_warning_once_on_standard_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.txt");
+    let records = [("21", 100), ("Z", 1_000), ("21", 300)];
+    let mut args = corpus_args_with_input(&intergenic_vcf(dir.path(), "few.vcf", &records));
+    args.extend(["-o", out.to_str().unwrap()].map(str::to_string));
+    let output = library_run(&args, &["--nocapture"]).output().unwrap();
+    assert!(output.status.success(), "{}", text(&output.stdout));
+    let stderr = text(&output.stderr);
+    let warnings = warning_lines(&stderr);
+    assert_eq!(warnings.len(), 1, "{stderr}");
+    assert!(
+        warnings[0].starts_with("WARNING: line 2 skipped (Z 1000 r2 "),
+        "{stderr}"
+    );
+}
+
 /// The streaming coordinator's progress line is dropped when standard error
 /// refuses it in every process, the `vep` binary or another: a task that
 /// panicked on that write would never send its chunk, and the output would
@@ -3669,9 +4422,9 @@ fn a_library_runs_lines_are_captured_by_a_test_harness() {
 /// never calls `vep_cli::stderr::drop_refused_writes`, its harness not
 /// capturing, prints its one progress line on a readable stream; with
 /// standard error a pipe whose reader has gone it writes every record to the
-/// output all the same. Its next line there, the carriage return before the
-/// summary, is an `eprint!` the stream refuses, whose panic fails the child's
-/// one test.
+/// output all the same. Its next line there, the summary line behind the line
+/// end that closes the progress line, is an `eprint!` the stream refuses,
+/// whose panic fails the child's one test.
 #[test]
 fn a_refused_progress_line_leaves_a_library_runs_output_complete() {
     let dir = tempfile::tempdir().unwrap();
@@ -3796,7 +4549,7 @@ fn final_summary_line_states_variants_consequences_and_filtered_count() {
 }
 
 /// The banner opens standard error on every run, three lines before the first
-/// status line: a rule of three dashed columns, `Ensembl VEP (Rust)   v116.2`
+/// status line: a rule of three dashed columns, `Ensembl VEP (Rust)   v116.3`
 /// (the Ensembl VEP release the cache targets, not the crate version) and the
 /// rule again. Ensembl VEP prints its own banner only in its usage text
 /// (vep:55-58). `--quiet` withholds the banner with every other status line
@@ -3812,7 +4565,7 @@ fn banner_prints_three_lines_to_stderr_unless_quiet() {
     let banner: Vec<&str> = stderr.lines().take(3).collect();
     assert_eq!(
         banner,
-        [RULE, "Ensembl VEP (Rust)   v116.2", RULE],
+        [RULE, "Ensembl VEP (Rust)   v116.3", RULE],
         "{stderr}"
     );
     assert!(output.stdout.is_empty());
@@ -4075,7 +4828,7 @@ fn var_synonyms_prints_the_notice_and_switches_check_existing_on() {
 /// set the flag defined but false: `Config.pm:1101` and `:1158` store the `0`,
 /// Runner.pm:117 tests the flag with `defined`, so the notice prints and
 /// `check_existing` is switched on, while OutputFactory.pm:1090 reads the `0` as
-/// false and writes no `VAR_SYNONYMS`. On `21 14967531 T C` Ensembl VEP 116.2
+/// false and writes no `VAR_SYNONYMS`. On `21 14967531 T C` Ensembl VEP 116.3
 /// prints the notice, the row with `rs139263261`, `CLIN_SIG=benign;PHENO=1`, no
 /// `## VAR_SYNONYMS` header line and `--var_synonyms 0` in the command-line
 /// header, where `full_command` prints a stored value other than `1` after its
@@ -4350,7 +5103,8 @@ fn plugin_init_failure_warns_and_is_fatal_under_safe() {
         dir.path(),
     );
     assert_eq!(warned.status.code(), Some(0), "{}", text(&warned.stderr));
-    let prefix = "WARNING: Failed to instantiate plugin LoFtool: LoFtool: scores file /no/such/scores.txt not found";
+    let prefix =
+        "WARNING: Failed to instantiate plugin LoFtool: scores file /no/such/scores.txt not found";
     assert!(
         text(&warned.stderr).lines().any(|l| l == prefix),
         "{}",
@@ -4394,6 +5148,148 @@ fn plugin_init_failure_warns_and_is_fatal_under_safe() {
         !out.exists(),
         "no output is written when --safe refuses a plugin"
     );
+}
+
+/// UTRAnnotator reads the 5' UTR and coding sequences from the reference, so a
+/// run under `--no_fasta` refuses it at load as a plugin whose constructor
+/// fails: the warning `Failed to instantiate plugin UTRAnnotator: <reason>` on
+/// standard error and in the warnings file, a complete run whose header and
+/// rows name none of the plugin's five fields, and the plugin component's
+/// error under `--safe` with no output written. The same run with the corpus's
+/// reference declares the five fields. Ensembl VEP's module prints a notice
+/// and runs on (UTRAnnotator.pm:88), the difference
+/// `docs/plugins/transcript-model.md` states.
+#[test]
+fn utrannotator_without_a_reference_warns_and_is_fatal_under_safe() {
+    const FIELDS: [&str; 5] = [
+        "5UTR_consequence",
+        "5UTR_annotation",
+        "Existing_uORFs",
+        "Existing_OutOfFrame_oORFs",
+        "Existing_InFrame_oORFs",
+    ];
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.txt");
+    let corpus = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/golden/116/GRCh38-plugin-utr-annotator");
+    let args = args_for(&corpus);
+
+    let warned = run_with(&args, &["--no_fasta", "--plugin", "UTRAnnotator"], &out);
+    assert_eq!(warned.status.code(), Some(0), "{}", text(&warned.stderr));
+    let prefix = "WARNING: Failed to instantiate plugin UTRAnnotator: a reference FASTA is needed; pass --fasta";
+    assert!(
+        text(&warned.stderr).lines().any(|l| l == prefix),
+        "{}",
+        text(&warned.stderr)
+    );
+    let warnings = std::fs::read_to_string(dir.path().join("out.txt_warnings.txt")).unwrap();
+    assert!(warnings.lines().any(|l| l == prefix), "{warnings}");
+    let output = std::fs::read_to_string(&out).unwrap();
+    assert!(!data_lines(&output).is_empty());
+    for field in FIELDS {
+        assert!(
+            output.lines().all(|line| !line.contains(field)),
+            "{field} is named though the plugin is dropped"
+        );
+    }
+    std::fs::remove_file(&out).unwrap();
+
+    let fatal = run_with(
+        &args,
+        &["--no_fasta", "--plugin", "UTRAnnotator", "--safe"],
+        &out,
+    );
+    assert_eq!(fatal.status.code(), Some(1));
+    let stderr = text(&fatal.stderr);
+    let errors: Vec<&str> = stderr
+        .lines()
+        .filter(|l| l.starts_with("ERROR: "))
+        .collect();
+    assert_eq!(errors.len(), 1, "{stderr}");
+    assert_eq!(
+        errors[0],
+        prefix.replacen("WARNING: ", "ERROR: [plugin] ", 1)
+    );
+    assert!(
+        !out.exists(),
+        "no output is written when --safe refuses a plugin"
+    );
+
+    let fasta = corpus.join("reference.fa.gz");
+    let loaded = run_with(
+        &args,
+        &[
+            "--fasta",
+            fasta.to_str().unwrap(),
+            "--plugin",
+            "UTRAnnotator",
+        ],
+        &out,
+    );
+    assert_eq!(loaded.status.code(), Some(0), "{}", text(&loaded.stderr));
+    let output = std::fs::read_to_string(&out).unwrap();
+    for field in FIELDS {
+        assert!(
+            output
+                .lines()
+                .any(|line| line.starts_with(&format!("## {field} : "))),
+            "{field} is declared when the plugin loads"
+        );
+    }
+}
+
+/// A built-in the run refuses for what the run lacks never reaches its
+/// `init`, so its refusal is the one warning the run writes, on standard error
+/// and in the warnings file: no notice of a `file=` it was not given and none
+/// of a parameter it does not read. Under `--safe` the refusal is the run's
+/// one error and no warning precedes it. UTRAnnotator and MaxEntScan need the
+/// reference, HGVSIntronOffset the HGVS notations.
+#[test]
+fn a_plugin_refused_for_what_the_run_lacks_writes_its_refusal_alone() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.txt");
+    let corpus = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/golden/116/GRCh38-plugin-utr-annotator");
+    let args = args_for(&corpus);
+    let no_reference = "a reference FASTA is needed; pass --fasta";
+    let no_hgvs = "the HGVS notations are needed; pass --hgvs";
+    let cases: [(&[&str], &str, &str); 5] = [
+        (&["--no_fasta"], "UTRAnnotator", no_reference),
+        (&["--no_fasta"], "UTRAnnotator,stray", no_reference),
+        (&["--no_fasta"], "MaxEntScan", no_reference),
+        (&["--no_fasta"], "MaxEntScan,/no/such/dir", no_reference),
+        (&[], "HGVSIntronOffset,stray", no_hgvs),
+    ];
+    for (flags, plugin, need) in cases {
+        let name = plugin.split(',').next().unwrap();
+        let refusal = format!("Failed to instantiate plugin {name}: {need}");
+        let warning = format!("WARNING: {refusal}");
+        let mut extra = flags.to_vec();
+        extra.extend(["--plugin", plugin]);
+
+        let warned = run_with(&args, &extra, &out);
+        let stderr = text(&warned.stderr);
+        assert_eq!(warned.status.code(), Some(0), "{plugin}: {stderr}");
+        assert_eq!(warning_lines(&stderr), [warning.as_str()], "{plugin}");
+        let warnings_file = dir.path().join("out.txt_warnings.txt");
+        let warnings = std::fs::read_to_string(&warnings_file).unwrap();
+        assert_eq!(warnings, format!("{warning}\n"), "{plugin}");
+        // A run that writes no warning leaves an earlier run's warnings file in place.
+        std::fs::remove_file(&warnings_file).unwrap();
+        std::fs::remove_file(&out).unwrap();
+
+        extra.push("--safe");
+        let fatal = run_with(&args, &extra, &out);
+        let stderr = text(&fatal.stderr);
+        assert_eq!(fatal.status.code(), Some(1), "{plugin}: {stderr}");
+        assert!(warning_lines(&stderr).is_empty(), "{plugin}: {stderr}");
+        let errors: Vec<&str> = stderr
+            .lines()
+            .filter(|l| l.starts_with("ERROR: "))
+            .collect();
+        assert_eq!(errors, [format!("ERROR: [plugin] {refusal}")], "{plugin}");
+        assert!(!out.exists(), "{plugin}: --safe writes no output");
+    }
 }
 
 /// `LoF`, the name of LoFTEE's Ensembl VEP module, loads the LoFTEE built-in:
@@ -4537,15 +5433,16 @@ fn lof_names_the_loftee_plugin() {
     assert!(!out.exists());
 }
 
-/// LoFTEE's `conservation_file` asks Ensembl VEP's plugin for the PhyloCSF
-/// items of `LoF_flags` and `LoF_info` (`LoF.pm` lines 274-285), which vep-rs
-/// does not compute, so a value naming a database is refused at
-/// initialization: a warning and no `LoF` field, the plugin component's error
+/// LoFTEE's `conservation_file` names the database Ensembl VEP's plugin reads
+/// for the PhyloCSF items of `LoF_flags` and `LoF_info` (`LoF.pm` lines
+/// 274-285), so a value naming no file is refused at initialization, and so
+/// is the word `mysql`, under which the plugin opens a database connection
+/// (line 122): a warning and no `LoF` field, the plugin component's error
 /// under `--safe`. Without the parameter the corpus's three stop-gained rows
 /// carry their `LoF` fields, and under the off word `false` (line 274) the
 /// output is the one written without the parameter, byte for byte.
 #[test]
-fn loftee_refuses_a_conservation_file_and_runs_unchanged_without_one() {
+fn loftee_refuses_a_conservation_file_it_cannot_read_and_runs_unchanged_without_one() {
     let dir = tempfile::tempdir().unwrap();
     let run = |name: &str, plugin: &str, extra: &[&str]| {
         let out = dir.path().join(format!("{name}.txt"));
@@ -4590,73 +5487,212 @@ fn loftee_refuses_a_conservation_file_and_runs_unchanged_without_one() {
         without_run_lines(&without)
     );
 
-    let named = "LoF,use_gerp_end_trunc:0,conservation_file:/data/phylocsf.sqlite";
-    let refusal = "Failed to instantiate plugin LoF: LoFTEE: \
-                   conservation_file=/data/phylocsf.sqlite asks for the PhyloCSF items of \
-                   LoF_flags and LoF_info, which vep-rs does not compute";
-    let (dropped, out) = run("dropped", named, &[]);
-    assert_eq!(dropped.status.code(), Some(0), "{}", text(&dropped.stderr));
-    assert!(
-        text(&dropped.stderr)
-            .lines()
-            .any(|l| l == format!("WARNING: {refusal}")),
-        "{}",
-        text(&dropped.stderr)
-    );
-    let output = std::fs::read_to_string(&out).unwrap();
-    assert!(
-        !output.contains("\n## LoF : ")
-            && data_lines(&output).iter().all(|row| !row.contains("LoF=")),
-        "the plugin is dropped, so no LoF header or field is written:\n{output}"
-    );
+    let missing = dir.path().join("phylocsf.synthetic.sqlite");
+    let missing = missing.to_str().unwrap();
+    for (name, plugin, refusal) in [
+        (
+            "missing",
+            format!("LoF,use_gerp_end_trunc:0,conservation_file:{missing}"),
+            format!(
+                "Failed to instantiate plugin LoF: LoFTEE: conservation_file database not \
+                 found: '{missing}'"
+            ),
+        ),
+        (
+            "connection",
+            "LoF,use_gerp_end_trunc:0,conservation_file:mysql".to_string(),
+            "Failed to instantiate plugin LoF: LoFTEE: conservation_file=mysql asks for a \
+             database connection, which vep-rs does not open: pass the database file's path \
+             under conservation_file"
+                .to_string(),
+        ),
+    ] {
+        let (dropped, out) = run(&format!("{name}-dropped"), &plugin, &[]);
+        assert_eq!(dropped.status.code(), Some(0), "{}", text(&dropped.stderr));
+        assert!(
+            text(&dropped.stderr)
+                .lines()
+                .any(|l| l == format!("WARNING: {refusal}")),
+            "{}",
+            text(&dropped.stderr)
+        );
+        let output = std::fs::read_to_string(&out).unwrap();
+        assert!(
+            !output.contains("\n## LoF : ")
+                && data_lines(&output).iter().all(|row| !row.contains("LoF=")),
+            "the plugin is dropped, so no LoF header or field is written:\n{output}"
+        );
 
-    let (refused, out) = run("refused", named, &["--safe"]);
-    assert_eq!(refused.status.code(), Some(1));
+        let (refused, out) = run(&format!("{name}-refused"), &plugin, &["--safe"]);
+        assert_eq!(refused.status.code(), Some(1));
+        assert!(
+            text(&refused.stderr)
+                .lines()
+                .any(|l| l == format!("ERROR: [plugin] {refusal}")),
+            "{}",
+            text(&refused.stderr)
+        );
+        assert!(!out.exists());
+    }
     assert!(
-        text(&refused.stderr)
-            .lines()
-            .any(|l| l == format!("ERROR: [plugin] {refusal}")),
-        "{}",
-        text(&refused.stderr)
+        !std::path::Path::new(missing).exists(),
+        "no database file is created"
     );
-    assert!(!out.exists());
 }
 
-/// A tabix-indexed GERP TSV of the layout LoFTEE's GRCh37 bundle ships
-/// (`#chrom pos GERP`, one row per base) holding `rows`, under `dir`.
-fn gerp_tabix_tsv(dir: &Path, rows: &[(&str, usize, &str)]) -> PathBuf {
-    use noodles::bgzf;
-    use noodles::core::Position;
-    use noodles::csi::binning_index::index::header::Builder as HeaderBuilder;
-    use noodles::csi::binning_index::index::reference_sequence::bin::Chunk;
+/// Ensembl VEP's LoF plugin stores every `key:value` word and reads the keys
+/// its own branch names, printing nothing for a word it never reads (`LoF.pm`
+/// lines 67-72 on `master` and on `grch38`). `use_gerp_end_trunc`,
+/// `gerp_end_trunc_cutoff` and `filter_position` are read on `grch38` alone,
+/// `skip_lof_info` and `tabix_path` on `master` alone. A run that passes the
+/// other assembly's keys therefore writes the output and the warnings of the
+/// run without them: the GRCh37 frameshift at `21:10970009-10970012` keeps
+/// its GERP items and the GRCh38 stop-gained rows keep `LoF_info`. Each such
+/// key is named in one status line on standard error.
+#[test]
+fn loftee_keys_of_the_other_assembly_change_no_row_and_raise_no_warning() {
+    let dir = tempfile::tempdir().unwrap();
+    let warnings_of =
+        |out: &Path| std::fs::read_to_string(format!("{}_warnings.txt", out.display())).ok();
+    let lof_fields = |output: &str, location: Option<&str>| -> Vec<String> {
+        data_lines(output)
+            .iter()
+            .map(|row| row.split('\t').collect::<Vec<_>>())
+            .filter(|cells| location.is_none_or(|location| cells[1] == location))
+            .filter_map(|cells| {
+                let fields: Vec<&str> = cells
+                    .last()?
+                    .split(';')
+                    .filter(|field| field.starts_with("LoF"))
+                    .collect();
+                (!fields.is_empty()).then(|| format!("{} {}", cells[4], fields.join(";")))
+            })
+            .collect()
+    };
+    // The two runs agree in every output line but the two that name the run,
+    // in the warnings file and in the warnings on standard error, and the run
+    // with the keys names each in one status line.
+    let same_run = |without: (&Output, &Path), with: (&Output, &Path), notes: &[String]| {
+        for (run, _) in [without, with] {
+            assert_eq!(run.status.code(), Some(0), "{}", text(&run.stderr));
+        }
+        let (without_stderr, with_stderr) = (text(&without.0.stderr), text(&with.0.stderr));
+        assert_eq!(
+            without_run_lines(&std::fs::read_to_string(with.1).unwrap()),
+            without_run_lines(&std::fs::read_to_string(without.1).unwrap())
+        );
+        assert_eq!(warnings_of(with.1), warnings_of(without.1));
+        assert_eq!(
+            warning_lines(&with_stderr),
+            warning_lines(&without_stderr),
+            "{with_stderr}"
+        );
+        for note in notes {
+            let named = |stderr: &str| stderr.lines().filter(|l| l.contains(note)).count();
+            assert_eq!(named(&with_stderr), 1, "{note}\n{with_stderr}");
+            assert_eq!(named(&without_stderr), 0, "{note}\n{without_stderr}");
+        }
+    };
 
-    let path = dir.join("GERP_scores.final.sorted.txt.gz");
-    let mut writer = bgzf::io::Writer::new(std::fs::File::create(&path).unwrap());
-    let mut indexer = noodles::tabix::index::Indexer::default();
-    indexer.set_header(
+    let gerp = gerp_tabix_tsv(dir.path(), &[("21", 10970009, "2.5")]);
+    let grch37 = format!("LoF,gerp_file:{},run_splice_predictions:0", gerp.display());
+    let run = |name: &str, plugin: &str| {
+        let out = dir.path().join(format!("{name}.txt"));
+        (
+            run_with(&hgvs_corpus_args(), &["--plugin", plugin], &out),
+            out,
+        )
+    };
+    let (without, without_out) = run("grch37_without", &grch37);
+    let (with, with_out) = run(
+        "grch37_with",
+        &format!("{grch37},gerp_end_trunc_cutoff:-1000,use_gerp_end_trunc:0,filter_position:0.9"),
+    );
+    let notes = [
+        "gerp_end_trunc_cutoff",
+        "use_gerp_end_trunc",
+        "filter_position",
+    ]
+    .map(|key| {
+        format!(
+            "LoFTEE: ignoring '{key}' on GRCh37: Ensembl VEP's LoF plugin for that assembly \
+             never reads it and judges END_TRUNC by the GERP rule at its own cutoff of 180"
+        )
+    });
+    same_run((&without, &without_out), (&with, &with_out), &notes);
+    assert_eq!(warnings_of(&with_out), None);
+    assert_eq!(
+        lof_fields(
+            &std::fs::read_to_string(&with_out).unwrap(),
+            Some("21:10970009-10970012")
+        ),
+        [
+            "ENST00000298232 LoF=HC;LoF_info=GERP_DIST:2.5,BP_DIST:1466,\
+             PERCENTILE:0.0742821473158552,DIST_FROM_LAST_EXON:1331,50_BP_RULE:PASS",
+            "ENST00000342420 LoF=HC;LoF_info=GERP_DIST:2.5,BP_DIST:1407,\
+             PERCENTILE:0.0771725032425422,DIST_FROM_LAST_EXON:1272,50_BP_RULE:PASS",
+            "ENST00000361285 LoF=HC;LoF_info=GERP_DIST:2.5,BP_DIST:1519,\
+             PERCENTILE:0.0718599033816425,DIST_FROM_LAST_EXON:1384,50_BP_RULE:PASS",
+        ]
+    );
+
+    let run = |name: &str, plugin: &str| {
+        let out = dir.path().join(format!("{name}.txt"));
+        let args = ["-o", out.to_str().unwrap(), "--plugin", plugin];
+        (run_control(&args, dir.path()), out)
+    };
+    let grch38 = "LoF,use_gerp_end_trunc:0";
+    let (without, without_out) = run("grch38_without", grch38);
+    let (with, with_out) = run(
+        "grch38_with",
+        &format!("{grch38},skip_lof_info:1,tabix_path:/usr/local/bin/tabix"),
+    );
+    let notes = ["skip_lof_info", "tabix_path"].map(|key| {
+        format!("LoFTEE: ignoring '{key}': Ensembl VEP's LoF plugin reads it on GRCh37 alone")
+    });
+    same_run((&without, &without_out), (&with, &with_out), &notes);
+    let rows = lof_fields(&std::fs::read_to_string(&with_out).unwrap(), None);
+    let rows: Vec<&str> = rows
+        .iter()
+        .map(|row| row.split_once(' ').unwrap().1)
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            "LoF=LC;LoF_filter=END_TRUNC;LoF_flags=SINGLE_EXON;\
+             LoF_info=PERCENTILE:0.993589743589744",
+            "LoF=LC;LoF_filter=END_TRUNC;LoF_info=PERCENTILE:0.993019197207679",
+            "LoF=LC;LoF_filter=END_TRUNC;LoF_info=PERCENTILE:0.993019197207679",
+        ]
+    );
+}
+
+/// A made-up tabix-indexed GERP TSV holding `rows`, under `dir`: chromosome,
+/// position and score, the score in the third field, where the `master`
+/// branch of LoFTEE reads it (`gerp_dist.pl` lines 96 and 121).
+fn gerp_tabix_tsv(dir: &Path, rows: &[(&str, usize, &str)]) -> PathBuf {
+    use noodles::csi::binning_index::index::header::Builder as HeaderBuilder;
+
+    let lines: Vec<String> = rows
+        .iter()
+        .map(|(chromosome, position, score)| format!("{chromosome}\t{position}\t{score}"))
+        .collect();
+    let lines: Vec<&str> = lines.iter().map(String::as_str).collect();
+    common::indexed_lines(
+        dir,
+        "GERP_scores.synthetic.txt.gz",
         HeaderBuilder::default()
             .set_reference_sequence_name_index(0)
             .set_start_position_index(1)
             .set_end_position_index(None)
             .build(),
-    );
-    writeln!(writer, "#chrom\tpos\tGERP").unwrap();
-    for (chromosome, position, score) in rows {
-        let start = writer.virtual_position();
-        writeln!(writer, "{chromosome}\t{position}\t{score}").unwrap();
-        let base = Position::try_from(*position).unwrap();
-        indexer
-            .add_record(
-                chromosome,
-                base,
-                base,
-                Chunk::new(start, writer.virtual_position()),
-            )
-            .unwrap();
-    }
-    writer.finish().unwrap();
-    noodles::tabix::fs::write(format!("{}.tbi", path.display()), &indexer.build()).unwrap();
-    path
+        &["#chrom\tpos\tGERP"],
+        &lines,
+        |fields| {
+            let base = fields[1].parse::<usize>().unwrap();
+            (base, base)
+        },
+    )
 }
 
 /// master's `LoF.pm`, the LoFTEE plugin of a GRCh37 run, runs its
@@ -4751,6 +5787,66 @@ fn loftee_refuses_a_grch37_run_that_leaves_splice_predictions_on() {
     );
 }
 
+/// master's `LoF.pm` opens a database connection for its GERP scores when
+/// `gerp_file` is the word `mysql` (lines 134-136), which vep-rs does not
+/// open, so a GRCh37 run naming the word is refused at initialization under a
+/// line that says so, whatever file another GERP key names: a warning and no
+/// `LoF` field, the plugin component's error under `--safe`.
+#[test]
+fn loftee_refuses_a_gerp_database_connection_on_grch37() {
+    let dir = tempfile::tempdir().unwrap();
+    let gerp = gerp_tabix_tsv(dir.path(), &[("21", 10970009, "2.5")]);
+    let run = |name: &str, plugin: &str, extra: &[&str]| {
+        let out = dir.path().join(format!("{name}.txt"));
+        let mut args = vec!["--plugin", plugin];
+        args.extend_from_slice(extra);
+        (run_with(&hgvs_corpus_args(), &args, &out), out)
+    };
+    let refusal = "Failed to instantiate plugin LoF: LoFTEE: gerp_file=mysql asks for a \
+                   database connection, which vep-rs does not open: pass the GERP table's path \
+                   under gerp_file or gerp_tabix";
+    for (name, plugin) in [
+        (
+            "word",
+            "LoF,gerp_file:mysql,run_splice_predictions:0".to_string(),
+        ),
+        (
+            "beside-a-file",
+            format!(
+                "LoF,gerp_tabix={},gerp_file:mysql,run_splice_predictions:0",
+                gerp.display()
+            ),
+        ),
+    ] {
+        let (dropped, out) = run(&format!("{name}-dropped"), &plugin, &[]);
+        assert_eq!(dropped.status.code(), Some(0), "{}", text(&dropped.stderr));
+        assert!(
+            text(&dropped.stderr)
+                .lines()
+                .any(|l| l == format!("WARNING: {refusal}")),
+            "{}",
+            text(&dropped.stderr)
+        );
+        let output = std::fs::read_to_string(&out).unwrap();
+        assert!(
+            !output.contains("\n## LoF : ")
+                && data_lines(&output).iter().all(|row| !row.contains("LoF=")),
+            "the plugin is dropped, so no LoF header or field is written:\n{output}"
+        );
+
+        let (refused, out) = run(&format!("{name}-refused"), &plugin, &["--safe"]);
+        assert_eq!(refused.status.code(), Some(1));
+        assert!(
+            text(&refused.stderr)
+                .lines()
+                .any(|l| l == format!("ERROR: [plugin] {refusal}")),
+            "{}",
+            text(&refused.stderr)
+        );
+        assert!(!out.exists());
+    }
+}
+
 /// A `--plugin` file that exists but does not open as a shared library is
 /// dropped with `Failed to compile plugin <Name>: <reason>`, as Ensembl VEP drops
 /// a module `use` cannot load (Runner.pm:929-939), and the run completes; under
@@ -4795,7 +5891,7 @@ fn plugin_load_failures_warn_in_argument_order_and_a_bad_library_is_fatal_under_
     );
     assert_eq!(
         plugin_lines[1],
-        "WARNING: Failed to instantiate plugin LoFtool: LoFtool: scores file /no/such/scores.txt not found",
+        "WARNING: Failed to instantiate plugin LoFtool: scores file /no/such/scores.txt not found",
         "{warnings}"
     );
     assert_eq!(
@@ -5056,7 +6152,7 @@ fn existing_skipped_file_is_refused_without_force() {
 
 /// `--vcf_info_field` takes a VCF INFO key alone (`[A-Za-z_][0-9A-Za-z_.]*`, or
 /// the reserved `1000G`): the empty string, `0` and a name with a `;` are argument
-/// syntax errors (exit 2) naming the flag. Ensembl VEP 116.2 accepts them, prints
+/// syntax errors (exit 2) naming the flag. Ensembl VEP 116.3 accepts them, prints
 /// the given name in the `##INFO` line (OutputFactory/VCF.pm:268) and keys the
 /// entry `CSQ` for the two Perl reads as false (`:219`, `:312`). A dotted key,
 /// which the grammar admits, and `1000G` are accepted.
@@ -5096,19 +6192,41 @@ fn vcf_info_field_refuses_a_value_that_is_not_an_info_key() {
     }
 }
 
-/// A warnings file that cannot be created fails the run with Ensembl VEP's text
-/// (BaseVEP.pm:894) under the output component, exit 1; under `--quiet` the
-/// error line is all that reaches standard error, no warning is echoed. The run
-/// ends after the batch that warned, its rows written (here the corpus is one
-/// batch, so every row of a run without the flag), and without `--quiet` each
-/// warning is echoed on standard error before the error line. Ensembl VEP 116.2
-/// dies inside the first warning, with the header alone written and no warning
-/// echoed, exit 2; `docs/cli/compatibility.md` states the difference.
+/// A warnings file that `--warning_file` names and that cannot be created
+/// fails the run with Ensembl VEP's text (BaseVEP.pm:894) under the output
+/// component, exit 1, before the first record is read: no output is written
+/// and no warning is echoed, with and without `--quiet`. Ensembl VEP 116.3
+/// opens the file at its first warning and dies there, with the header alone
+/// written and no warning echoed, exit 2; `docs/cli/compatibility.md` states
+/// the difference.
 #[test]
 fn unwritable_warnings_file_fails_the_run() {
     let dir = tempfile::tempdir().unwrap();
     let out = dir.path().join("out.txt");
-    let output = run_control(
+    let unwritten = "ERROR: [output] Could not write to warnings file /nonexistent-dir/w.txt";
+    for quiet in [&["--quiet"][..], &[]] {
+        let mut args = vec![
+            "-o",
+            out.to_str().unwrap(),
+            "--warning_file",
+            "/nonexistent-dir/w.txt",
+        ];
+        args.extend(quiet);
+        let output = run_control(&args, dir.path());
+        assert_eq!(output.status.code(), Some(1), "{quiet:?}");
+        let stderr = text(&output.stderr);
+        assert_eq!(
+            stderr
+                .lines()
+                .filter(|line| line.starts_with("ERROR:"))
+                .collect::<Vec<_>>(),
+            [unwritten],
+            "{quiet:?}: {stderr}"
+        );
+        assert_eq!(warning_lines(&stderr), Vec::<&str>::new(), "{quiet:?}");
+        assert!(!out.exists(), "{quiet:?}: the refused run wrote an output");
+    }
+    let quiet = run_control(
         &[
             "-o",
             out.to_str().unwrap(),
@@ -5118,11 +6236,33 @@ fn unwritable_warnings_file_fails_the_run() {
         ],
         dir.path(),
     );
-    assert_eq!(output.status.code(), Some(1));
-    assert_eq!(
-        text(&output.stderr).trim_end(),
-        "ERROR: [output] Could not write to warnings file /nonexistent-dir/w.txt"
+    assert_eq!(text(&quiet.stderr).trim_end(), unwritten);
+}
+
+/// A warnings file that fails at its first write ends the run after the batch
+/// that warned, its rows written (here the corpus is one batch, so every row
+/// of a run without the flag); under `--quiet` the error line is all that
+/// reaches standard error, and without it each warning is echoed on standard
+/// error before the error line. The file is Linux's `/dev/full`, a device,
+/// which the run does not test before its first record.
+#[cfg(target_os = "linux")]
+#[test]
+fn a_warnings_file_that_fails_at_its_first_write_ends_the_run_after_the_batch_that_warned() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.txt");
+    let unwritten = "ERROR: [output] Could not write to warnings file /dev/full";
+    let output = run_control(
+        &[
+            "-o",
+            out.to_str().unwrap(),
+            "--warning_file",
+            "/dev/full",
+            "--quiet",
+        ],
+        dir.path(),
     );
+    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(text(&output.stderr).trim_end(), unwritten);
     let row_count = data_lines(&std::fs::read_to_string(&out).unwrap()).len();
     let plain = dir.path().join("plain.txt");
     assert!(
@@ -5136,12 +6276,7 @@ fn unwritable_warnings_file_fails_the_run() {
     );
 
     let output = run_control(
-        &[
-            "-o",
-            out.to_str().unwrap(),
-            "--warning_file",
-            "/nonexistent-dir/w.txt",
-        ],
+        &["-o", out.to_str().unwrap(), "--warning_file", "/dev/full"],
         dir.path(),
     );
     assert_eq!(output.status.code(), Some(1));
@@ -5151,18 +6286,113 @@ fn unwritable_warnings_file_fails_the_run() {
         expected_warnings().lines().collect::<Vec<_>>(),
         "{stderr}"
     );
-    assert!(
-        stderr
-            .trim_end()
-            .ends_with("ERROR: [output] Could not write to warnings file /nonexistent-dir/w.txt"),
-        "{stderr}"
+    assert!(stderr.trim_end().ends_with(unwritten), "{stderr}");
+}
+
+/// A Parquet run that holds a record out of order and cannot write its
+/// warnings file ends on one error line in both pipeline modes at any worker
+/// count. The warnings file's failure is the error when the batch that holds
+/// the refused record, or a batch before it, drew a warning, wherever in the
+/// batch the skipped line stands, as a `--warning_file` that fails at the
+/// warning is raised after the batch that warned; the order refusal is the
+/// error when the first skipped line stands in a later batch, whose warnings
+/// a refused run never reports. Of 400 records in batches of 50, one is
+/// skipped and one is out of order. The warnings file is Linux's `/dev/full`,
+/// a device, which the run does not test before its first record.
+#[cfg(all(feature = "parquet", target_os = "linux"))]
+#[test]
+fn a_refused_batch_that_could_not_write_a_warning_ends_on_the_warnings_file_in_each_mode() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.parquet");
+    let warnings = Path::new("/dev/full");
+    let unwritten = format!(
+        "ERROR: [output] Could not write to warnings file {}",
+        warnings.display()
     );
+    let out_of_order_at_line_20 = "ERROR: [parquet] input is not sorted by chromosome and position at line 20 (21:5 after 21:119); sort the input or pass --no_check_variants_order";
+    for (skipped, out_of_order, error) in [
+        (3, 20, unwritten.as_str()),
+        (40, 20, unwritten.as_str()),
+        (3, 70, unwritten.as_str()),
+        (70, 20, out_of_order_at_line_20),
+    ] {
+        let records: Vec<(&str, u64)> = (1..=400u64)
+            .map(|line| match line {
+                _ if line == skipped => ("Z", 1_000 + line),
+                _ if line == out_of_order => ("21", 5),
+                _ => ("21", 100 + line),
+            })
+            .collect();
+        let input = intergenic_vcf(dir.path(), "in.vcf", &records);
+        for flags in modes_and_worker_counts(3) {
+            let mut extra = vec![
+                "--buffer_size",
+                "50",
+                "--warning_file",
+                warnings.to_str().unwrap(),
+            ];
+            extra.extend(flags);
+            let output = parquet_run(&input, &extra, &out);
+            let run =
+                format!("line {skipped} skipped, line {out_of_order} out of order, {flags:?}");
+            assert_eq!(output.status.code(), Some(1), "{run}");
+            assert_eq!(text(&output.stderr).trim_end(), error, "{run}");
+            assert!(!out.exists(), "{run}: the run leaves no output");
+        }
+    }
+}
+
+/// A text output that takes no bytes and a warnings file that cannot be
+/// written end the run on the warnings file's error in both pipeline modes at
+/// any worker count, whatever the output's buffer holds. One batch of 96
+/// records, four of them skipped, writes 92 rows without its header, 6,064
+/// bytes: with a buffer of 1,000 bytes a write of the batch fails, and with
+/// one of 9,000 the buffer holds the whole output and the flush that completes
+/// it is the first write to fail. The output and the warnings file are
+/// Linux's `/dev/full`, a device, which the run does not test before its
+/// first record.
+#[cfg(target_os = "linux")]
+#[test]
+fn a_batch_that_could_not_write_a_warning_ends_on_the_warnings_file_at_any_output_buffer_size() {
+    let dir = tempfile::tempdir().unwrap();
+    let records: Vec<(&str, u64)> = (1..=96u64)
+        .map(|line| match line {
+            3 | 22 | 28 | 40 => ("Z", 1_000 + line),
+            _ => ("21", 100 + line),
+        })
+        .collect();
+    let input = intergenic_vcf(dir.path(), "in.vcf", &records);
+    let warnings = Path::new("/dev/full");
+    let unwritten = format!(
+        "ERROR: [output] Could not write to warnings file {}",
+        warnings.display()
+    );
+    let mut args = corpus_args_with_input(&input);
+    args.extend(
+        [
+            "--quiet",
+            "--no_headers",
+            "--warning_file",
+            warnings.to_str().unwrap(),
+        ]
+        .map(str::to_string),
+    );
+    for buffer in ["1000", "9000"] {
+        for flags in modes_and_worker_counts(3) {
+            let mut extra = vec!["--output_buffer_size", buffer];
+            extra.extend(flags);
+            let output = run_with(&args, &extra, Path::new("/dev/full"));
+            let run = format!("a buffer of {buffer} bytes, {flags:?}");
+            assert_eq!(output.status.code(), Some(1), "{run}");
+            assert_eq!(text(&output.stderr).trim_end(), unwritten, "{run}");
+        }
+    }
 }
 
 /// A comma-joined or trailing-comma value of a clap-enumerated `%VALID` flag is an
-/// argument syntax error (exit 2) in clap's words. Ensembl VEP 116.2 splits the
+/// argument syntax error (exit 2) in clap's words. Ensembl VEP 116.3 splits the
 /// value on commas before its `%VALID` test (Config.pm:946) and reads `b,` by its
-/// first letter (OutputFactory.pm:1808), annotating `SIFT=tolerated(0.19)` on
+/// first letter (OutputFactory.pm:1817), annotating `SIFT=tolerated(0.19)` on
 /// `21 14216193 C G`; `docs/cli/compatibility.md` states the difference.
 #[test]
 fn a_comma_joined_enumerated_value_is_a_syntax_error() {
@@ -5190,14 +6420,14 @@ fn a_comma_joined_enumerated_value_is_a_syntax_error() {
 /// `b` and `--nearest` takes `transcript`, `gene` or `symbol`, the
 /// `value_parser` lists of `args.rs`) is an argument syntax error (exit 2) in
 /// clap's words, `0` an invalid value and the empty string a missing one,
-/// before any run and with no output file written. Ensembl VEP 116.2 reads such
+/// before any run and with no output file written. Ensembl VEP 116.3 reads such
 /// a value as the flag unset:
 /// `_is_flag_active` (Config.pm:902-905, `return 0 unless
 /// defined($config->{$flag}); return ref($config->{$flag}) eq 'ARRAY' ? scalar
 /// @{$config->{$flag}} : $config->{$flag};`) keeps it out of the `%VALID` test
 /// (`:945`, `foreach my $flag(grep {$self->_is_flag_active($config, $_)} keys
 /// %VALID) {`), and the column gates are truthiness tests too,
-/// OutputFactory.pm:1805 (`if (my $opt = $self->{$lc_tool}) {`) for SIFT and
+/// OutputFactory.pm:1814 (`if (my $opt = $self->{$lc_tool}) {`) for SIFT and
 /// PolyPhen and AnnotationType/Transcript.pm:170 (`if(my $nearest_type =
 /// $self->{nearest}) {`) for NEAREST, so `--sift 0`, `--sift ''`, `--polyphen 0`
 /// and `--nearest 0` each exit 0 there and annotate without the column;
@@ -5353,7 +6583,8 @@ fn with_summary_row(text: &str, section: &str, key: &str, value: &str) -> String
 }
 
 /// A `stats_file` expectation compares the run's `--stats_text` report with the
-/// reference's as `scripts/concordance/compare_vep_stats.py` does: the seven
+/// reference's as `tools/vep-stats-compare` does, its rules for the two
+/// documented differences excepted: the seven
 /// volatile rows of `[VEP run statistics]` (the command line, the two times, the
 /// run time, the input and output paths) compare by key alone, the paths of
 /// `Annotation sources` are masked, a chart section compares as a set of
@@ -5449,8 +6680,8 @@ fn stats_file_expectation_applies_the_comparators_masks() {
         "  UNEXPECTED in vep-rs: section [Position in protein]\n"
     );
     let reordered = reference.replacen(
-        "VEP version (API)\t 116.2 (116)\nAnnotation sources\tCache: /work/cache/homo_sapiens/116_GRCh38\n",
-        "Annotation sources\tCache: /work/cache/homo_sapiens/116_GRCh38\nVEP version (API)\t 116.2 (116)\n",
+        "VEP version (API)\t 116.3 (116)\nAnnotation sources\tCache: /work/cache/homo_sapiens/116_GRCh38\n",
+        "Annotation sources\tCache: /work/cache/homo_sapiens/116_GRCh38\nVEP version (API)\t 116.3 (116)\n",
         1,
     );
     let report = compare_summary_sections(&reference, &reordered);
@@ -5746,7 +6977,7 @@ fn everything_without_fasta_prints_info_and_disables_hgvs() {
     assert!(output.contains("## HGVSc : HGVS coding sequence name"));
 }
 
-/// Ensembl VEP 116.2 prints `INFO: Disabling --hgvs; using --offline and no
+/// Ensembl VEP 116.3 prints `INFO: Disabling --hgvs; using --offline and no
 /// FASTA file found` as it reaches it (Runner.pm:752, BaseVEP.pm:785) and then
 /// throws for a flag `--everything` does not clear that needs a FASTA
 /// (:759-762), so `--everything` with `--hgvsg`, `--check_ref`, `--lookup_ref`
@@ -5797,7 +7028,7 @@ fn the_everything_notice_prints_before_each_fasta_refusal() {
     }
 }
 
-/// Ensembl VEP 116.2 prints `INFO: Colocated variants will be provided when
+/// Ensembl VEP 116.3 prints `INFO: Colocated variants will be provided when
 /// using --var_synonyms` as `init` begins (Runner.pm:117-120), before the
 /// annotation sources are built (:128), where a missing cache directory is
 /// refused (CacheDir.pm:109) and the transcript filter is compiled
@@ -6517,7 +7748,7 @@ fn cache_layout_selects_the_cache_directory_and_refuses_another_value() {
 /// here (`fasta: args.fasta` in `config.rs` takes it as given, and `open_fasta`
 /// in `runner.rs` opens it), refused before any output is written with
 /// vep-fasta's `Specified FASTA file/directory <value> not found` (exit 1),
-/// where Ensembl VEP 116.2 reads the flag as unset: CacheDir.pm:235
+/// where Ensembl VEP 116.3 reads the flag as unset: CacheDir.pm:235
 /// `unless($self->param('fasta') || $self->param('no_fasta')) {` auto-detects the
 /// cache directory's FASTA and BaseVEP.pm:521 `if(my $fasta_file =
 /// $self->param('fasta')) {` opens none otherwise, the reading
@@ -6546,14 +7777,14 @@ fn fasta_false_value_is_a_path() {
 /// corpus `info.json`'s `GRCh37`), so under `--json_cache` or its alias
 /// `--full_cache_dir` with no `--assembly`, a directory holding a GRCh38-named
 /// `toplevel` file beside the GRCh37 chromosome file opens the GRCh37 file and
-/// annotates as `--fasta` does. Ensembl VEP 116.2 filters on `param('assembly')`
+/// annotates as `--fasta` does. Ensembl VEP 116.3 filters on `param('assembly')`
 /// (BaseVEP.pm:497), which `--offline --full_cache_dir` without `--assembly` or
 /// `--grch37` leaves unset (CacheDir.pm:356 fills it inside the layout scan of
 /// :303 alone, and BaseRunner.pm:139 from a database `--offline` never opens),
 /// so the `/$assembly/i` test of BaseVEP.pm:508 is an empty pattern, which Perl
 /// reads as the last successful match, the species test of :507, and every
 /// species file passes; :502 then ranks the `toplevel` name first and :513 makes
-/// it the run's FASTA, which :523 opens. On such a directory Ensembl VEP 116.2
+/// it the run's FASTA, which :523 opens. On such a directory Ensembl VEP 116.3
 /// warns `Use of uninitialized value $assembly in regexp compilation` (reported
 /// at :506, the grep's first expression) and annotates against the GRCh38-named
 /// file, where with `--assembly GRCh37` it opens the GRCh37 file, as this run
@@ -6734,7 +7965,7 @@ fn stats_text_and_stats_html_write_two_files() {
     }
     assert!(html.contains("<td>Variants processed</td><td>339</td>"));
     assert!(html.contains("<td>Overlapped transcripts</td><td>843</td>"));
-    assert!(summary.starts_with("[VEP run statistics]\nVEP version (API)\t 116.2 (116)\n"));
+    assert!(summary.starts_with("[VEP run statistics]\nVEP version (API)\t 116.3 (116)\n"));
     assert_eq!(
         summary_section(&summary, "General statistics"),
         [
@@ -6834,6 +8065,100 @@ fn stats_html_is_the_default_report() {
         data_lines(&std::fs::read_to_string(&out).unwrap()),
         data_lines(&std::fs::read_to_string(&silent).unwrap())
     );
+}
+
+/// A run that writes a report without a FASTA says once, in an `INFO:` line on
+/// standard error, that the `Distribution of variants on chromosome` charts are
+/// left out, whichever report it writes. The line reaches no file of the run,
+/// whose report is the one a `--quiet` run writes, and `--quiet` withholds it
+/// as it withholds every notice. A run under `--no_stats` and a run with a
+/// FASTA, whose report has the chart, print none.
+#[test]
+fn a_report_without_a_fasta_says_the_distribution_charts_are_left_out() {
+    const NOTICE: &str = "INFO: No FASTA file found; the statistics report leaves out the \"Distribution of variants on chromosome\" charts, which need the chromosome lengths (see --fasta)";
+    fn notices(output: &Output) -> Vec<String> {
+        text(&output.stderr)
+            .lines()
+            .filter(|line| line.starts_with("INFO: "))
+            .map(str::to_string)
+            .collect()
+    }
+    // The report from its general statistics on: every count and chart, without
+    // the rows that name the run's own time, command line and output path.
+    fn counts_and_charts(dir: &Path, report: &str) -> String {
+        let html = std::fs::read_to_string(dir.join(report)).unwrap();
+        html[html.find("<h3 id=\"gen_stats\">").unwrap()..].to_string()
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let args = without_no_stats(args_for(&statistics_dir()));
+    for (name, flags) in [
+        ("html", &[][..]),
+        ("text", &["--stats_text"][..]),
+        ("both", &["--stats_text", "--stats_html"][..]),
+    ] {
+        let output = run_with(&args, flags, &dir.path().join(format!("{name}.txt")));
+        assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+        assert_eq!(notices(&output), [NOTICE], "{name}");
+        assert!(output.stdout.is_empty(), "{name}");
+    }
+    let written = files_in(dir.path());
+    assert_eq!(
+        written,
+        [
+            "both.txt",
+            "both.txt_summary.html",
+            "both.txt_summary.txt",
+            "both.txt_warnings.txt",
+            "html.txt",
+            "html.txt_summary.html",
+            "html.txt_warnings.txt",
+            "text.txt",
+            "text.txt_summary.txt",
+            "text.txt_warnings.txt",
+        ]
+    );
+    for file in &written {
+        let content = std::fs::read_to_string(dir.path().join(file)).unwrap();
+        assert!(!content.contains("No FASTA file found"), "{file}");
+        assert!(
+            !content.contains("Distribution of variants on chromosome"),
+            "{file}"
+        );
+    }
+
+    let quiet = run_with(&args, &["--quiet"], &dir.path().join("quiet.txt"));
+    assert_eq!(quiet.status.code(), Some(0), "{}", text(&quiet.stderr));
+    assert!(text(&quiet.stderr).is_empty(), "{}", text(&quiet.stderr));
+    assert_eq!(
+        counts_and_charts(dir.path(), "html.txt_summary.html"),
+        counts_and_charts(dir.path(), "quiet.txt_summary.html")
+    );
+
+    let no_report = run_with(&args, &["--no_stats"], &dir.path().join("none.txt"));
+    assert_eq!(no_report.status.code(), Some(0));
+    assert!(notices(&no_report).is_empty(), "{:?}", notices(&no_report));
+
+    let fasta = dir.path().join("ref.fa");
+    std::fs::write(&fasta, format!(">21\n{}\n", "N".repeat(60))).unwrap();
+    std::fs::write(dir.path().join("ref.fa.fai"), "21\t60\t4\t60\t61\n").unwrap();
+    let with_fasta = run_with(
+        &args,
+        &["--fasta", fasta.to_str().unwrap()],
+        &dir.path().join("fasta.txt"),
+    );
+    assert_eq!(
+        with_fasta.status.code(),
+        Some(0),
+        "{}",
+        text(&with_fasta.stderr)
+    );
+    assert!(
+        notices(&with_fasta).is_empty(),
+        "{:?}",
+        notices(&with_fasta)
+    );
+    let html = std::fs::read_to_string(dir.path().join("fasta.txt_summary.html")).unwrap();
+    assert!(html.contains("<h3 id=\"chr_21\">Distribution of variants on chromosome 21</h3>"));
 }
 
 /// `-o stdout` writes the report as `stdout_summary.html` in the working

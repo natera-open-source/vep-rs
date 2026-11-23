@@ -29,8 +29,10 @@
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
+use std::num::NonZeroUsize;
+use std::ops::Range;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
@@ -80,9 +82,11 @@ struct Args {
     #[arg(long, default_value_t = 3)]
     runs: usize,
 
-    /// Buffer size for batch processing.
-    #[arg(long = "buffer-size", default_value_t = 5000)]
-    buffer_size: usize,
+    /// Input records per batch: a run annotates the variant list batch by
+    /// batch, the consequence phase and then the plugins on each, and reports
+    /// the sums of the batches' times.
+    #[arg(long = "buffer-size", default_value = "5000")]
+    buffer_size: NonZeroUsize,
 
     /// Number of threads for consequence annotation.
     #[arg(long, default_value_t = 1)]
@@ -184,6 +188,7 @@ fn main() -> Result<()> {
     let args = Args::parse();
 
     let subscriber = tracing_subscriber::fmt()
+        .with_ansi(vep_cli::status_colour::on_standard_error())
         .with_max_level(tracing::Level::INFO)
         .with_writer(std::io::stderr)
         .finish();
@@ -237,7 +242,10 @@ fn main() -> Result<()> {
     );
 
     let parse_start = Instant::now();
-    let variants = load_variants(&args.input, args.variants)?;
+    let LoadedVariants {
+        variants,
+        per_record,
+    } = load_variants(&args.input, args.variants)?;
     let parse_ms = parse_start.elapsed().as_millis() as u64;
     let variant_count = variants.len();
     eprintln!("Parsed {} variants in {} ms", variant_count, parse_ms);
@@ -246,6 +254,7 @@ fn main() -> Result<()> {
         bail!("No variants loaded from input file");
     }
 
+    let batches = batch_ranges(&per_record, args.buffer_size);
     let use_parallel = num_threads > 1;
     let mut run_results: Vec<RunTimings> = Vec::with_capacity(args.runs);
     let mut plugin_failures: Vec<String> = Vec::new();
@@ -253,36 +262,44 @@ fn main() -> Result<()> {
     for run_idx in 0..args.runs {
         eprintln!("--- Run {}/{} ---", run_idx + 1, args.runs);
 
-        let mut batch = variants.clone();
+        let mut run_variants = variants.clone();
 
         let run_start = Instant::now();
 
-        let csq_start = Instant::now();
-        pool.install(|| {
-            annotate_consequences(
-                &mut batch,
-                &transcripts,
-                &variation_source,
-                &effects_config,
-                use_parallel,
-            )
-        })?;
-        let csq_ms = csq_start.elapsed().as_millis() as u64;
+        let mut consequence = Duration::ZERO;
+        let mut plugin_timings: Option<PluginTimings> = None;
+        for range in &batches {
+            let batch = &mut run_variants[range.clone()];
 
-        let plugin_timings = if registry.plugin_count() > 0 {
-            let (timings, outcome) = if args.sequential {
-                pool.install(|| registry.run_batch_sequential(&mut batch))
-            } else {
-                pool.install(|| registry.run_batch_timed(&mut batch))
-            };
-            for failure in &outcome.failures {
-                eprintln!("  plugin {} failed: {}", failure.plugin, failure.error);
-                plugin_failures.push(format!("{}: {}", failure.plugin, failure.error));
+            let csq_start = Instant::now();
+            pool.install(|| {
+                annotate_consequences(
+                    batch,
+                    &transcripts,
+                    &variation_source,
+                    &effects_config,
+                    use_parallel,
+                )
+            })?;
+            consequence += csq_start.elapsed();
+
+            if registry.plugin_count() > 0 {
+                let (timings, outcome) = if args.sequential {
+                    pool.install(|| registry.run_batch_sequential(batch))
+                } else {
+                    pool.install(|| registry.run_batch_timed(batch))
+                };
+                for failure in &outcome.failures {
+                    eprintln!("  plugin {} failed: {}", failure.plugin, failure.error);
+                    plugin_failures.push(format!("{}: {}", failure.plugin, failure.error));
+                }
+                match plugin_timings.as_mut() {
+                    Some(run) => add_timings(run, &timings),
+                    None => plugin_timings = Some(timings),
+                }
             }
-            Some(timings)
-        } else {
-            None
-        };
+        }
+        let csq_ms = consequence.as_millis() as u64;
 
         let total_ms = run_start.elapsed().as_millis() as u64;
         let plugin_prefetch_ms = plugin_timings
@@ -388,22 +405,24 @@ fn load_transcripts(args: &Args) -> Result<(Arc<vep_effects::EffectsConfig>, Tra
         )),
         None => None,
     };
-    let effects_config = Arc::new(vep_effects::EffectsConfig {
-        upstream_distance: 5000,
-        downstream_distance: 5000,
-        reference_fasta,
-        enable_indel_3prime_shift: false,
-        hgvs: vep_effects::hgvs::HgvsOptions::default(),
-        loftee_context: vep_effects::LofteeContextRows::None,
-        context_sequences: vep_effects::LofteeContextRows::None,
-        compute_hgvs: false,
-        compute_exon_intron_numbers: true,
-        protein_version: false,
-        hgvsg: None,
-        spdi: None,
-        domains: false,
-        use_transcript_ref: false,
-        process_ref_homs: false,
+    let effects_config = Arc::new({
+        let mut effects = vep_effects::EffectsConfig::default();
+        effects.upstream_distance = 5000;
+        effects.downstream_distance = 5000;
+        effects.reference_fasta = reference_fasta;
+        effects.enable_indel_3prime_shift = false;
+        effects.hgvs = vep_effects::hgvs::HgvsOptions::default();
+        effects.loftee_context = vep_effects::LofteeContextRows::None;
+        effects.context_sequences = vep_effects::LofteeContextRows::None;
+        effects.compute_hgvs = false;
+        effects.compute_exon_intron_numbers = true;
+        effects.protein_version = false;
+        effects.hgvsg = None;
+        effects.spdi = None;
+        effects.domains = false;
+        effects.use_transcript_ref = false;
+        effects.process_ref_homs = false;
+        effects
     });
     let transcripts = if effects_config.reference_fasta.is_some() {
         Transcripts::Paired(vep_cli::annotator::load_transcript_indexes(
@@ -428,11 +447,53 @@ fn load_transcripts(args: &Args) -> Result<(Arc<vep_effects::EffectsConfig>, Tra
     Ok((effects_config, transcripts))
 }
 
+/// The variants of an input file in input order and, for each record that
+/// yielded any, how many it yielded: one per alternate allele kept.
+struct LoadedVariants {
+    variants: Vec<InputVariant>,
+    per_record: Vec<usize>,
+}
+
+/// The batches of a variant list whose records yielded `per_record` variants
+/// each, as ranges of the list: `records_per_batch` records a batch, the last
+/// batch holding the rest. A record's variants share a batch, as the alleles
+/// of one input line share a buffer of `vep`.
+fn batch_ranges(per_record: &[usize], records_per_batch: NonZeroUsize) -> Vec<Range<usize>> {
+    let mut start = 0;
+    per_record
+        .chunks(records_per_batch.get())
+        .map(|records| {
+            let end = start + records.iter().sum::<usize>();
+            let range = start..end;
+            start = end;
+            range
+        })
+        .collect()
+}
+
+/// Adds one batch's plugin times to the run's. The per-plugin entries pair by
+/// position, the registry's load order in every batch. A batch's figures are
+/// whole milliseconds, so a run's sum is short of the time spent by under a
+/// millisecond a batch.
+fn add_timings(run: &mut PluginTimings, batch: &PluginTimings) {
+    for (sums, parts) in [
+        (&mut run.prefetch_ms, &batch.prefetch_ms),
+        (&mut run.annotate_ms, &batch.annotate_ms),
+    ] {
+        for ((_, sum), (_, part)) in sums.iter_mut().zip(parts) {
+            *sum += part;
+        }
+    }
+    run.total_prefetch_ms += batch.total_prefetch_ms;
+    run.total_annotate_ms += batch.total_annotate_ms;
+    run.total_ms += batch.total_ms;
+}
+
 /// Parse VCF variants from an input file.
 ///
 /// Supports both plain `.vcf` and compressed `.vcf.gz`/`.bgz` files.
 /// Compressed files are decompressed via `zcat` / `gzcat` subprocess.
-fn load_variants(path: &str, max_variants: usize) -> Result<Vec<InputVariant>> {
+fn load_variants(path: &str, max_variants: usize) -> Result<LoadedVariants> {
     let reader: Box<dyn BufRead> = if path.ends_with(".gz") || path.ends_with(".bgz") {
         // Decompress via subprocess (avoids needing noodles::bgzf in the binary).
         let child = std::process::Command::new("zcat")
@@ -454,6 +515,7 @@ fn load_variants(path: &str, max_variants: usize) -> Result<Vec<InputVariant>> {
     };
 
     let mut variants = Vec::new();
+    let mut per_record = Vec::new();
     for line_result in reader.lines() {
         if variants.len() >= max_variants {
             break;
@@ -465,12 +527,18 @@ fn load_variants(path: &str, max_variants: usize) -> Result<Vec<InputVariant>> {
         }
 
         match parse_vcf_line(trimmed) {
-            Ok(vs) => variants.extend(vs),
-            Err(_) => continue,
+            Ok(vs) if !vs.is_empty() => {
+                per_record.push(vs.len());
+                variants.extend(vs);
+            }
+            _ => continue,
         }
     }
 
-    Ok(variants)
+    Ok(LoadedVariants {
+        variants,
+        per_record,
+    })
 }
 
 /// Minimal VCF line parser: the allele-trimming subset of `vcf_parser::parse_vcf_line`,
@@ -656,7 +724,7 @@ fn build_report(
             input: args.input.clone(),
             variants_loaded: variant_count,
             plugins: plugin_names.to_vec(),
-            buffer_size: args.buffer_size,
+            buffer_size: args.buffer_size.get(),
             threads: args.threads,
             runs: args.runs,
             mode: if args.sequential {
@@ -804,6 +872,96 @@ mod tests {
         assert_eq!(
             held_stop_base(&["--json-cache", &cache]),
             (2, Some("12".to_string()))
+        );
+    }
+
+    /// `--buffer-size` records make a batch and a record's alleles share it:
+    /// five records, the second with two alternate alleles, load as six
+    /// variants, cut at two records into batches of three, two and one
+    /// variants, at one record into the five records and at five records or
+    /// more into one batch. The parser refuses a size of zero, and the default
+    /// is 5000.
+    #[test]
+    fn buffer_size_cuts_the_variant_list_into_batches_of_whole_records() {
+        let dir = tempfile::tempdir().unwrap();
+        let input = dir.path().join("records.vcf");
+        std::fs::write(
+            &input,
+            "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n\
+             1\t10\ta\tA\tC\t.\t.\t.\n1\t20\tb\tA\tC,G\t.\t.\t.\n1\t30\tc\tA\tC\t.\t.\t.\n\
+             1\t40\td\tA\tC\t.\t.\t.\n1\t50\te\tA\tC\t.\t.\t.\n",
+        )
+        .unwrap();
+        let loaded = load_variants(input.to_str().unwrap(), 50).unwrap();
+        assert_eq!(loaded.variants.len(), 6);
+        assert_eq!(loaded.per_record, [1, 2, 1, 1, 1]);
+
+        let batches =
+            |size: usize| batch_ranges(&loaded.per_record, NonZeroUsize::new(size).unwrap());
+        assert_eq!(batches(2), [0..3, 3..5, 5..6]);
+        assert_eq!(batches(1), [0..1, 1..3, 3..4, 4..5, 5..6]);
+        let whole = 0..loaded.variants.len();
+        for size in [5, 5000] {
+            assert_eq!(batches(size), std::slice::from_ref(&whole));
+        }
+        let ids: Vec<Vec<&str>> = batches(2)
+            .into_iter()
+            .map(|range| {
+                loaded.variants[range]
+                    .iter()
+                    .map(|variant| variant.id.as_deref().unwrap())
+                    .collect()
+            })
+            .collect();
+        assert_eq!(ids, [vec!["a", "b", "b"], vec!["c", "d"], vec!["e"]]);
+
+        let parse = |extra: &[&str]| {
+            Args::try_parse_from(
+                [
+                    "bench_plugins",
+                    "-i",
+                    "records.vcf",
+                    "--json-cache",
+                    "cache",
+                ]
+                .iter()
+                .chain(extra),
+            )
+        };
+        assert_eq!(parse(&[]).unwrap().buffer_size.get(), 5000);
+        assert_eq!(parse(&["--buffer-size", "2"]).unwrap().buffer_size.get(), 2);
+        assert_eq!(
+            parse(&["--buffer-size", "0"]).unwrap_err().kind(),
+            clap::error::ErrorKind::ValueValidation
+        );
+    }
+
+    /// A run's plugin times are the sums of its batches' times, plugin by
+    /// plugin in load order.
+    #[test]
+    fn plugin_times_sum_over_the_batches() {
+        let batch = |prefetch: u64, annotate: u64| {
+            PluginTimings::new(
+                vec![("First".to_string(), prefetch), ("Second".to_string(), 1)],
+                vec![("First".to_string(), annotate), ("Second".to_string(), 2)],
+                prefetch + 1,
+                annotate + 2,
+                prefetch + annotate + 3,
+            )
+        };
+        let mut run = batch(5, 7);
+        add_timings(&mut run, &batch(11, 13));
+        assert_eq!(
+            run.prefetch_ms,
+            [("First".to_string(), 16), ("Second".to_string(), 2)]
+        );
+        assert_eq!(
+            run.annotate_ms,
+            [("First".to_string(), 20), ("Second".to_string(), 4)]
+        );
+        assert_eq!(
+            (run.total_prefetch_ms, run.total_annotate_ms, run.total_ms),
+            (18, 24, 42)
         );
     }
 }

@@ -1,0 +1,128 @@
+{
+ "mode": "self-parity",
+ "verdict": "green",
+ "reasons": [],
+ "records": 36,
+ "default_entries": 977,
+ "pairs": {
+  "tab": {
+   "shared_entries": 977,
+   "one_sided": {
+    "default_only": 0,
+    "tab_only": 0
+   },
+   "default_only_examples": [],
+   "tab_only_examples": [],
+   "columns_compared": [
+    "Allele",
+    "Amino_acids",
+    "CDS_position",
+    "Codons",
+    "Consequence",
+    "DISTANCE",
+    "ENSP",
+    "Existing_variation",
+    "FLAGS",
+    "Feature",
+    "Feature_type",
+    "Gene",
+    "IMPACT",
+    "Location",
+    "Protein_position",
+    "STRAND",
+    "Uploaded_variation",
+    "cDNA_position"
+   ],
+   "differing": {},
+   "reasons": []
+  },
+  "vcf": {
+   "shared_entries": 977,
+   "one_sided": {
+    "default_only": 0,
+    "vcf_only": 0
+   },
+   "default_only_examples": [],
+   "vcf_only_examples": [],
+   "columns_compared": [
+    "Allele",
+    "Amino_acids",
+    "CDS_position",
+    "Codons",
+    "Consequence",
+    "DISTANCE",
+    "ENSP",
+    "Existing_variation",
+    "FLAGS",
+    "Feature",
+    "Feature_type",
+    "Gene",
+    "HGVSc",
+    "HGVSp",
+    "IMPACT",
+    "Protein_position",
+    "STRAND",
+    "cDNA_position"
+   ],
+   "differing": {},
+   "reasons": []
+  },
+  "json": {
+   "shared_entries": 977,
+   "one_sided": {
+    "default_only": 0,
+    "json_only": 0
+   },
+   "default_only_examples": [],
+   "json_only_examples": [],
+   "columns_compared": [
+    "Allele",
+    "Amino_acids",
+    "CDS_position",
+    "Codons",
+    "Consequence",
+    "DISTANCE",
+    "ENSP",
+    "FLAGS",
+    "Feature",
+    "Gene",
+    "IMPACT",
+    "OverlapBP",
+    "OverlapPC",
+    "Protein_position",
+    "STRAND",
+    "cDNA_position"
+   ],
+   "differing": {},
+   "reasons": []
+  }
+ },
+ "record_checks": {
+  "problems": []
+ },
+ "not_compared": {
+  "default_record_level": [],
+  "vcf_implied": [
+   "BIOTYPE",
+   "EXON",
+   "HGNC_ID",
+   "INTRON",
+   "SYMBOL",
+   "SYMBOL_SOURCE"
+  ],
+  "tab_undeclared": [
+   "OverlapBP",
+   "OverlapPC"
+  ],
+  "vcf_undeclared": [
+   "OverlapBP",
+   "OverlapPC"
+  ]
+ },
+ "files": {
+  "default": "<<G>>/expected/default.txt.gz",
+  "tab": "<<G>>/expected/tab.txt.gz",
+  "vcf": "<<G>>/expected/../expected/vcf.vcf.gz",
+  "json": "/<<G>>/expected/json.jsonl.gz"
+ }
+}

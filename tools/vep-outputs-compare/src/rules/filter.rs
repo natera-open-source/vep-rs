@@ -6,12 +6,27 @@
 //! and write the rows that stay open.
 
 use super::breakend::{strip_chr, vep_rs_pos};
+use super::coding_end::CodingEndSources;
 use super::gvcf::perl_split;
 use super::one_sided::{apply_116_2_one_sided_rules, Row};
-use super::row::{pair_row, replaced_reference, PairRow};
+use super::row::{
+    may_be_written_after_the_span, pair_row, record_names_its_rows, replaced_reference,
+    start_codon_stands, written_after_the_span, PairRow, RecordReadings,
+};
 use super::scope::{ReferenceRecordScope, ScopeFeatures};
-use super::{classify, excluded, ExclusionRule, EXCLUSION_REGISTRY};
-use crate::input::{for_each_record, for_each_row_at, open_vcf, push_canonical_location};
+use super::shared_dbid::apply_shared_dbid_rule;
+use super::shared_stable_id::apply_shared_stable_id_rule;
+use super::shared_synonym::apply_shared_synonym_rule;
+use super::table::{
+    MERGED_SAME_DBID_COLLAPSE, MERGED_SAME_STABLE_ID_COLLAPSE,
+    SYNONYM_OF_SEVERAL_SEQUENCES_BY_HASH_ORDER,
+};
+use super::{
+    classify_where, excluded_where, ExclusionRule, EXCLUSION_REGISTRY, START_COOCCURRENCE_SWAP,
+};
+use crate::input::{
+    for_each_record, for_each_row_at, open_vcf, push_canonical_location, CacheContigNames,
+};
 use memchr::{memchr, memchr_iter};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
@@ -36,16 +51,32 @@ pub struct Exclusions {
 /// one.
 pub type InputRecords<'a> = &'a dyn Fn(&str) -> Option<PathBuf>;
 
-/// The one-sided collector of the selected reference release.
+/// The name of the statistic a bucket carries where rows reached a test of it the run could
+/// not make; a bucket without such a row carries none.
+pub const NOT_EVALUATED: &str = "not_evaluated";
+
+/// The one-sided collector of the selected reference release; the 116.2 one beside the names
+/// the run's cache files its sequences under.
 pub enum Collector<'a> {
     Release115(&'a ScopeFeatures),
-    Release116(&'a ReferenceRecordScope),
+    Release116(&'a ReferenceRecordScope, &'a CacheContigNames),
 }
 
+/// `error` with the file it is about named before it.
+fn in_file(path: &Path, error: io::Error) -> io::Error {
+    io::Error::new(error.kind(), format!("{}: {error}", path.display()))
+}
+
+/// Opens `path` to read it; a failure names the file.
+fn open_to_read(path: &Path) -> io::Result<File> {
+    File::open(path).map_err(|error| in_file(path, error))
+}
+
+/// The column names and the rows of the `discordant.tsv` at `path`; a failure names the file.
 fn read_rows(path: &Path) -> io::Result<(Vec<String>, Vec<Row>)> {
     let mut columns: Option<Vec<String>> = None;
     let mut rows = Vec::new();
-    for_each_record(File::open(path)?, |record| {
+    for_each_record(open_to_read(path)?, |record| {
         let text = String::from_utf8_lossy(record);
         let fields: Vec<String> = text.split('\t').map(str::to_string).collect();
         let Some(columns) = &columns else {
@@ -71,15 +102,19 @@ fn read_rows(path: &Path) -> io::Result<(Vec<String>, Vec<Row>)> {
             fields,
         });
         Ok(())
-    })?;
+    })
+    .map_err(|error| in_file(path, error))?;
     Ok((columns.unwrap_or_default(), rows))
 }
 
 /// The rows of the two outputs behind unmatched pairs, for the row-aware pair rules: per
-/// index of `rows`, the distinct rows of its output that carry its tuple. Each output file
+/// index of `rows`, the distinct rows of its output that carry its tuple, each with its
+/// Protein_position, Amino_acids and Codons where it has twelve columns. Each output file
 /// that carries a tuple of `pairs` is read once more, as the record names of a dropped record
 /// are, and nothing else is read; an index one of whose rows has fewer than nine columns is
-/// left out, so no row-aware rule reads a pair with such a row.
+/// left out, so no row-aware rule reads a pair with such a row. An output that cannot be
+/// read is named in the failure. A row is read to its Codons column, the twelfth, and one
+/// that ends before it carries no Codons.
 fn fetch_pair_rows(
     rows: &[Row],
     pairs: &[(usize, usize)],
@@ -111,7 +146,7 @@ fn fetch_pair_rows(
             .keys()
             .map(|key| &key[..memchr(b'\t', key).unwrap_or(key.len())])
             .collect();
-        for_each_row_at(File::open(path)?, &locations, |key, columns| {
+        let read = for_each_row_at(open_to_read(path)?, &locations, |key, columns| {
             let Some(index) = index_of.get(key) else {
                 return;
             };
@@ -119,15 +154,20 @@ fn fetch_pair_rows(
                 None => {
                     short.insert(*index);
                 }
-                Some(columns) => {
+                Some((columns, cells)) => {
                     let row = pair_row(&columns);
+                    let row = match cells {
+                        Some(cells) => row.with_cells(cells),
+                        None => row,
+                    };
                     let rows = found.entry(*index).or_default();
                     if !rows.contains(&row) {
                         rows.push(row);
                     }
                 }
             }
-        })?;
+        });
+        read.map_err(|error| in_file(path, error))?;
     }
     found.retain(|index, _| !short.contains(index));
     Ok(found)
@@ -135,10 +175,12 @@ fn fetch_pair_rows(
 
 /// Gives each of `rows` that carries no reference bases (`PairRow::reference`) the bases its
 /// allele stands in for, read by position from the records of the input VCF `path` (plain or
-/// gzipped), as `read_record_references` of `compare_vep_outputs.py` does: a record is asked
-/// about a row whose Location starts on one of the record's own positions on its chromosome,
-/// a `chr` prefix set aside (`replaced_reference`). A row two records read differently keeps
-/// none, and the file is not opened when no row asks.
+/// gzipped): a record is asked about a row whose Location starts on one of the record's own
+/// positions on its chromosome, a `chr` prefix set aside (`replaced_reference`). Where two
+/// or more records read a row differently, the record whose identifier is the row's own
+/// first column (`Uploaded_variation`) decides; where no record carries that identifier, or
+/// more than one does and they read the row differently, the row keeps none. The file is
+/// not opened when no row asks.
 fn read_record_references(path: &Path, rows: &mut [&mut PairRow]) -> io::Result<()> {
     let mut asking: HashMap<String, HashMap<i128, Vec<usize>>> = HashMap::new();
     let mut location = Vec::new();
@@ -163,7 +205,7 @@ fn read_record_references(path: &Path, rows: &mut [&mut PairRow]) -> io::Result<
     if asking.is_empty() {
         return Ok(());
     }
-    let mut read: Vec<Vec<String>> = vec![Vec::new(); rows.len()];
+    let mut read: Vec<RecordReadings> = vec![RecordReadings::default(); rows.len()];
     for_each_record(open_vcf(path)?, |record| {
         if record.first() == Some(&b'#') {
             return Ok(());
@@ -176,7 +218,7 @@ fn read_record_references(path: &Path, rows: &mut [&mut PairRow]) -> io::Result<
         let text = String::from_utf8_lossy(&record[..tabs.next().unwrap_or(record.len())]);
         let mut fields = text.split('\t');
         let mut field = || fields.next().expect("five columns");
-        let (chrom, pos, _, reference, alt) = (field(), field(), field(), field(), field());
+        let (chrom, pos, ids, reference, alt) = (field(), field(), field(), field(), field());
         let Some(asked) = asking.get(strip_chr(chrom)) else {
             return Ok(());
         };
@@ -197,19 +239,38 @@ fn read_record_references(path: &Path, rows: &mut [&mut PairRow]) -> io::Result<
                     &row.location,
                     &row.allele,
                 );
-                if let Some(found) = found.filter(|found| !read[*at].contains(found)) {
-                    read[*at].push(found);
+                if let Some(found) = found {
+                    read[*at].add(found, record_names_its_rows(ids, &row.name));
                 }
             }
         }
         Ok(())
     })?;
-    for (row, mut found) in rows.iter_mut().zip(read) {
-        if found.len() == 1 {
-            row.reference = found.pop();
+    for (row, found) in rows.iter_mut().zip(read) {
+        if let Some(bases) = found.decided() {
+            row.reference = Some(bases);
         }
     }
     Ok(())
+}
+
+/// The place in `row_rules` of the first rule that takes the pair of `perl_rows` and
+/// `rust_rows`, whose tuple the row `pair` of `discordant.tsv` names. A rule that asks the
+/// coding ends of the pair's transcript is asked with what `sources` hold for the pair's
+/// Location and Feature.
+fn taking_rule(
+    row_rules: &[&ExclusionRule],
+    pair: &Row,
+    perl_rows: &[PairRow],
+    rust_rows: &[PairRow],
+    sources: CodingEndSources,
+) -> io::Result<Option<usize>> {
+    let read = sources.of_pair(&pair.location, &pair.feature, &pair.feature_type)?;
+    Ok(read.ask(|at| {
+        row_rules
+            .iter()
+            .position(|rule| rule.matches_rows_at(perl_rows, rust_rows, at))
+    }))
 }
 
 /// Reads `discordant_path`, applies the pair rules then the collector's one-sided pass, and
@@ -218,11 +279,23 @@ fn read_record_references(path: &Path, rows: &mut [&mut PairRow]) -> io::Result<
 /// `row_rules` are the row-aware pair rules of the reference release and `outputs` the
 /// reference's and vep-rs's output directory: a pair no other rule classifies or excludes is
 /// put to them in their order, the first match taking it, on the rows of the two outputs that
-/// carry its tuples, and their buckets follow the pair buckets. Without such a rule, or
-/// without `outputs`, no output is read. `input_records` names the input VCF behind an output
-/// file of that name (`--input-vcf` or `--input-dir`), or `None` for a file without one: the
-/// rows of such a pair whose first column spells no alleles take their record's from it
+/// carry its tuples, and their buckets follow the pair buckets. A pair whose allele opens with
+/// its whole reference allele is put to the row-aware rules also where a
+/// set rule classifies it without setting it aside, and is counted under the row-aware rule
+/// that takes it. Without such a rule, or without `outputs`, no output is read for a pair.
+/// The cache classes read outputs of their own, given `outputs`: the two classes of a
+/// comparison that names the converted cache read the reference's outputs for the rows they
+/// name (`apply_shared_dbid_rule`, `apply_shared_stable_id_rule`), and the class of a
+/// comparison that names the reference's cache reads the header of the reference's outputs
+/// and vep-rs's rows at the Locations it judges (`apply_shared_synonym_rule`).
+/// `input_records` names the input VCF behind an output file of that name (`--input-vcf` or
+/// `--input-dir`), or `None` for a file without one: the rows of a pair put to the row-aware
+/// rules whose first column spells no alleles take their record's from it
 /// (`read_record_references`).
+///
+/// A failure names the file it is about: `discordant_path` for its rows and their counts, an
+/// output or an input VCF that cannot be read, `open_out` where it cannot be written.
+#[allow(dead_code)]
 pub fn filter_intended_divergences(
     discordant_path: &Path,
     open_out: &Path,
@@ -230,6 +303,35 @@ pub fn filter_intended_divergences(
     row_rules: &[&ExclusionRule],
     outputs: Option<(&Path, &Path)>,
     input_records: Option<InputRecords>,
+) -> io::Result<Exclusions> {
+    filter_intended_divergences_beside(
+        discordant_path,
+        open_out,
+        collector,
+        row_rules,
+        outputs,
+        input_records,
+        CodingEndSources::default(),
+    )
+}
+
+/// `filter_intended_divergences` in a comparison that was given the candidate's cache, a
+/// reference sequence, both or neither (`sources`). A rule that asks the coding ends of a
+/// pair's transcript is asked with the reading of the transcript's cache record, looked up
+/// by the Feature and the Location of the pair's rows in `discordant.tsv`; the transcripts
+/// of a sequence are read when the first pair on it reaches such a rule, and a pair of
+/// another feature type asks no record. Beside a cache the set rule
+/// `start_cooccurrence_swap` takes a pair only on a transcript whose record shows a start
+/// codon (`start_codon_stands`); a pair it leaves is put to the row-aware rules. A cache
+/// that cannot be read is a failure that names what could not be read.
+pub fn filter_intended_divergences_beside(
+    discordant_path: &Path,
+    open_out: &Path,
+    collector: Collector,
+    row_rules: &[&ExclusionRule],
+    outputs: Option<(&Path, &Path)>,
+    input_records: Option<InputRecords>,
+    sources: CodingEndSources,
 ) -> io::Result<Exclusions> {
     let (columns, rows) = read_rows(discordant_path)?;
     let mut perl_by_key: HashMap<(&str, &str, &str, &str), Vec<usize>> = HashMap::new();
@@ -262,6 +364,9 @@ pub fn filter_intended_divergences(
         .map(|rule| (rule.bucket, 0, 0))
         .collect();
     let mut untaken: Vec<(usize, usize)> = Vec::new();
+    // The pairs a set rule classifies without setting them aside, whose Location and allele
+    // allow an insertion written after the span, each with its bucket's place in `pair_stats`.
+    let mut counted: Vec<(usize, usize, usize)> = Vec::new();
     for (key, perl_idx) in &perl_by_key {
         let Some(rust_idx) = rust_by_key.get(key) else {
             continue;
@@ -270,23 +375,39 @@ pub fn filter_intended_divergences(
             let pcsq = &rows[*pi].consequence_set;
             for ri in rust_idx {
                 let rcsq = &rows[*ri].consequence_set;
-                let bucket = classify(pcsq, rcsq, key.1);
-                let is_excluded = excluded(pcsq, rcsq, key.1);
+                // Beside a cache the rule of the start codon is asked the transcript's.
+                let start_rule = EXCLUSION_REGISTRY
+                    .iter()
+                    .find(|rule| rule.bucket == START_COOCCURRENCE_SWAP)
+                    .filter(|rule| sources.given() && rule.matches(pcsq, rcsq, key.1));
+                let start_stands = match start_rule {
+                    Some(_) => sources
+                        .of_pair(key.0, key.2, key.3)?
+                        .ask(start_codon_stands),
+                    None => true,
+                };
+                let stands =
+                    |rule: &ExclusionRule| rule.bucket != START_COOCCURRENCE_SWAP || start_stands;
+                let bucket = classify_where(pcsq, rcsq, key.1, &stands);
+                let is_excluded = excluded_where(pcsq, rcsq, key.1, &stands);
                 match bucket {
                     Some(bucket) => {
-                        let entry = pair_stats
-                            .iter_mut()
-                            .find(|(b, _, _)| *b == bucket)
+                        let at = pair_stats
+                            .iter()
+                            .position(|(b, _, _)| *b == bucket)
                             .expect("classifying bucket");
-                        entry.1 += 1;
+                        pair_stats[at].1 += 1;
                         if is_excluded {
-                            entry.2 += 1;
+                            pair_stats[at].2 += 1;
+                        } else if may_be_written_after_the_span(key.0, key.1) {
+                            counted.push((*pi, *ri, at));
                         }
                     }
                     None if is_excluded => {
-                        return Err(io::Error::other(format!(
+                        let unclassified = io::Error::other(format!(
                             "pair excluded but classified into no bucket: perl={pcsq:?} rust={rcsq:?}"
-                        )));
+                        ));
+                        return Err(in_file(discordant_path, unclassified));
                     }
                     None => untaken.push((*pi, *ri)),
                 }
@@ -303,10 +424,16 @@ pub fn filter_intended_divergences(
     // `discordant.tsv`; a row one of them set aside is not paired again.
     let mut row_stats: Vec<(&'static str, u64, u64)> =
         row_rules.iter().map(|rule| (rule.bucket, 0, 0)).collect();
-    if !row_rules.is_empty() && !untaken.is_empty() {
+    if !row_rules.is_empty() && !(untaken.is_empty() && counted.is_empty()) {
         if let Some((perl_dir, rust_dir)) = outputs {
             untaken.sort_unstable();
-            let mut fetched = fetch_pair_rows(&rows, &untaken, perl_dir, rust_dir)?;
+            counted.sort_unstable();
+            let asked: Vec<(usize, usize)> = untaken
+                .iter()
+                .copied()
+                .chain(counted.iter().map(|(pi, ri, _)| (*pi, *ri)))
+                .collect();
+            let mut fetched = fetch_pair_rows(&rows, &asked, perl_dir, rust_dir)?;
             if let Some(input_records) = input_records {
                 let mut by_file: HashMap<&str, Vec<&mut PairRow>> = HashMap::new();
                 for (index, pair_rows) in &mut fetched {
@@ -315,9 +442,8 @@ pub fn filter_intended_divergences(
                 }
                 for (file_name, rows_of_file) in &mut by_file {
                     if let Some(records) = input_records(file_name) {
-                        read_record_references(&records, rows_of_file).map_err(|e| {
-                            io::Error::new(e.kind(), format!("{}: {e}", records.display()))
-                        })?;
+                        read_record_references(&records, rows_of_file)
+                            .map_err(|error| in_file(&records, error))?;
                     }
                 }
             }
@@ -328,12 +454,39 @@ pub fn filter_intended_divergences(
                 let (Some(perl_rows), Some(rust_rows)) = (fetched.get(pi), fetched.get(ri)) else {
                     continue;
                 };
-                let Some(at) = row_rules
-                    .iter()
-                    .position(|rule| rule.matches_rows(perl_rows, rust_rows))
+                let Some(at) = taking_rule(row_rules, &rows[*pi], perl_rows, rust_rows, sources)?
                 else {
                     continue;
                 };
+                row_stats[at].1 += 1;
+                if row_rules[at].excludes {
+                    row_stats[at].2 += 1;
+                    excluded_perl += 1;
+                    excluded_rust += 1;
+                    masked.insert(*pi);
+                    masked.insert(*ri);
+                }
+            }
+            // A pair a set rule only counts leaves that rule's bucket where every row of its
+            // tuples is an insertion written after the span and a row-aware rule takes it.
+            for (pi, ri, set_bucket) in &counted {
+                if masked.contains(pi) || masked.contains(ri) {
+                    continue;
+                }
+                let (Some(perl_rows), Some(rust_rows)) = (fetched.get(pi), fetched.get(ri)) else {
+                    continue;
+                };
+                let after_the_span = perl_rows
+                    .iter()
+                    .all(|e| rust_rows.iter().all(|a| written_after_the_span(e, a)));
+                if !after_the_span {
+                    continue;
+                }
+                let Some(at) = taking_rule(row_rules, &rows[*pi], perl_rows, rust_rows, sources)?
+                else {
+                    continue;
+                };
+                pair_stats[*set_bucket].1 -= 1;
                 row_stats[at].1 += 1;
                 if row_rules[at].excludes {
                     row_stats[at].2 += 1;
@@ -347,19 +500,21 @@ pub fn filter_intended_divergences(
     }
     pair_stats.extend(row_stats);
     if excluded_perl > n_perl_rows || excluded_rust > n_rust_rows {
-        return Err(io::Error::other(format!(
+        let exceeded = io::Error::other(format!(
             "intended-divergence exclusions exceed available discordant rows (perl \
              {excluded_perl} > {n_perl_rows} or rust {excluded_rust} > {n_rust_rows}); a key \
              is matching more than one consequence set per side and the cross product is \
              over-counting"
-        )));
+        ));
+        return Err(in_file(discordant_path, exceeded));
     }
     let attributed: u64 = pair_stats.iter().map(|(_, _, e)| e).sum();
     if attributed != excluded_perl {
-        return Err(io::Error::other(format!(
+        let unattributed = io::Error::other(format!(
             "per-bucket excluded counts sum to {attributed} but {excluded_perl} pairs were \
              excluded; the mask is not attributable to the buckets that report it"
-        )));
+        ));
+        return Err(in_file(discordant_path, unattributed));
     }
     let mut buckets: Vec<(String, BucketStats)> = pair_stats
         .iter()
@@ -377,23 +532,61 @@ pub fn filter_intended_divergences(
             buckets.push((SV_TRANSCRIPT_SELECTION_BUCKET.to_string(), selection));
         }
         Collector::Release115(_) => {}
-        Collector::Release116(scope) => {
-            for (bucket, stats) in apply_116_2_one_sided_rules(&rows, &mut masked, scope) {
+        Collector::Release116(scope, cache_names) => {
+            // The cache classes take their rows first: the reference's lone intergenic row of a
+            // record left with no transcript has the shape the FASTA-named slice class counts,
+            // and that of a record vep-rs skipped the shape other one-sided classes count. The
+            // stable id class follows the `dbID` class, whose rows it reads beside its own at
+            // a record the two passes together left with no transcript.
+            let reference_dir = outputs.map(|(reference_dir, _)| reference_dir);
+            let shared_dbid = apply_shared_dbid_rule(&rows, &mut masked, scope, reference_dir)?;
+            let shared_stable_id =
+                apply_shared_stable_id_rule(&rows, &mut masked, scope, reference_dir)?;
+            let shared_synonym = apply_shared_synonym_rule(&rows, &mut masked, scope, outputs)?;
+            let one_sided = apply_116_2_one_sided_rules(&rows, &mut masked, scope, cache_names);
+            let dbid_class = shared_dbid.map(|stats| (MERGED_SAME_DBID_COLLAPSE.bucket, stats));
+            let stable_id_class =
+                shared_stable_id.map(|stats| (MERGED_SAME_STABLE_ID_COLLAPSE.bucket, stats));
+            let synonym_class = shared_synonym
+                .map(|stats| (SYNONYM_OF_SEVERAL_SEQUENCES_BY_HASH_ORDER.bucket, stats));
+            let cache_classes = dbid_class
+                .into_iter()
+                .chain(stable_id_class)
+                .chain(synonym_class);
+            for (bucket, stats) in one_sided.into_iter().chain(cache_classes) {
                 excluded_perl += stats.perl;
                 excluded_rust += stats.rust;
-                buckets.push((
-                    bucket.to_string(),
-                    vec![
-                        ("count", stats.count),
-                        ("excluded", stats.excluded),
-                        ("records", stats.records),
-                        ("perl", stats.perl),
-                        ("rust", stats.rust),
-                    ],
-                ));
+                let mut written = vec![
+                    ("count", stats.count),
+                    ("excluded", stats.excluded),
+                    ("records", stats.records),
+                    ("perl", stats.perl),
+                    ("rust", stats.rust),
+                ];
+                if stats.not_evaluated > 0 {
+                    written.push((NOT_EVALUATED, stats.not_evaluated));
+                }
+                buckets.push((bucket.to_string(), written));
             }
         }
     }
+    write_open_rows(open_out, &columns, &rows, &masked)
+        .map_err(|error| in_file(open_out, error))?;
+    Ok(Exclusions {
+        excluded_perl,
+        excluded_rust,
+        buckets,
+    })
+}
+
+/// Writes the rows of `rows` outside `masked` to `open_out` under `columns`, in their order
+/// and with the cells of those columns.
+fn write_open_rows(
+    open_out: &Path,
+    columns: &[String],
+    rows: &[Row],
+    masked: &HashSet<usize>,
+) -> io::Result<()> {
     let mut out = BufWriter::new(File::create(open_out)?);
     out.write_all(columns.join("\t").as_bytes())?;
     out.write_all(b"\n")?;
@@ -408,12 +601,7 @@ pub fn filter_intended_divergences(
             out.write_all(b"\n")?;
         }
     }
-    out.flush()?;
-    Ok(Exclusions {
-        excluded_perl,
-        excluded_rust,
-        buckets,
-    })
+    out.flush()
 }
 
 /// The 115.2 one-sided pass: the structural-variant comparator's transcript-selection class
@@ -476,6 +664,7 @@ fn transcript_selection(
 
 #[cfg(test)]
 mod tests {
+    use super::super::row::pair_row;
     use super::super::Predicate;
     use super::*;
     use crate::TempDir;
@@ -561,7 +750,7 @@ mod tests {
         let exclusions = filter_intended_divergences(
             &discordant_path,
             &open_path,
-            Collector::Release116(&scope),
+            Collector::Release116(&scope, &CacheContigNames::Human),
             row_rules,
             Some((&scratch.path.join("perl"), &scratch.path.join("rust"))),
             input_records.map(|_| &input_of as InputRecords),
@@ -610,6 +799,7 @@ mod tests {
         assert_eq!(
             *e,
             PairRow {
+                name: name.to_string(),
                 location: LOCATION.to_string(),
                 allele: "-".to_string(),
                 feature_type: "Transcript".to_string(),
@@ -619,6 +809,9 @@ mod tests {
                 indel: Some(true),
                 insertion: Some(false),
                 reference: Some("ACCTG".to_string()),
+                protein_position: Some("-".to_string()),
+                amino_acids: Some("-".to_string()),
+                codons: Some("-".to_string()),
             }
         );
         assert_eq!(
@@ -671,13 +864,21 @@ mod tests {
                     "20-22",
                     "14-16",
                 )
-                + &row("1993671", "ENST00000000004", "intron_variant", "-", "-")),
+                + &row("1993671", "ENST00000000004", "intron_variant", "-", "-")
+                + &row("1993671", "ENST00000000005", "intron_variant", "-", "-")),
             &(matched
                 + &row("1993671", "ENST00000000003", "stop_lost", "20-22", "14-16")
                 + &row(
                     "1993671",
                     "ENST00000000004",
                     "intron_variant,splice_region_variant",
+                    "-",
+                    "-",
+                )
+                + &row(
+                    "1993671",
+                    "ENST00000000005",
+                    "intron_variant,splice_polypyrimidine_tract_variant",
                     "-",
                     "-",
                 )),
@@ -691,13 +892,20 @@ mod tests {
                     "extra_in_rust",
                     "ENST00000000004",
                     "intron_variant,splice_region_variant",
+                )
+                + &discordant("missing_in_rust", "ENST00000000005", "intron_variant")
+                + &discordant(
+                    "extra_in_rust",
+                    "ENST00000000005",
+                    "intron_variant,splice_polypyrimidine_tract_variant",
                 )),
             &[&fabricated(shape)],
         );
         assert_eq!(
             *CALLS.lock().unwrap(),
             0,
-            "a tuple one engine alone writes and a pair an earlier rule takes"
+            "a tuple one engine alone writes, a pair an earlier rule sets aside and a deletion's \
+             pair an earlier rule only counts"
         );
         assert_eq!(
             outcome.bucket("fabricated_row_shape"),
@@ -705,9 +913,218 @@ mod tests {
         );
         assert_eq!(
             outcome.bucket("intronic_overcall_swap"),
+            vec![("count", 2), ("excluded", 1)]
+        );
+        assert_eq!(outcome.open_rows.len(), 4);
+        // The one pair an earlier rule classifies that reaches a row-aware rule: the earlier
+        // rule only counts it, and its allele opens with its whole reference allele.
+        let (perl, rust, rows) = gained(
+            AFTER_THE_SPAN_RECORD,
+            AFTER_THE_SPAN_LOCATION,
+            AFTER_THE_SPAN_ALLELE,
+            "ENST00000000006",
+            TRACT_TERM_COME,
+        );
+        let outcome = filtered(&perl, &rust, &rows, &[&fabricated(shape)]);
+        assert_eq!(
+            *CALLS.lock().unwrap(),
+            1,
+            "an insertion written after the span"
+        );
+        assert_eq!(
+            outcome.bucket("fabricated_row_shape"),
             vec![("count", 1), ("excluded", 1)]
         );
+        assert_eq!(
+            outcome.bucket("intronic_overcall_swap"),
+            vec![("count", 0), ("excluded", 0)]
+        );
+        assert!(outcome.open_rows.is_empty());
+    }
+
+    const INTRON_TERM_ALONE: &str = "intron_variant";
+    const TRACT_TERM_COME: &str = "intron_variant,splice_polypyrimidine_tract_variant";
+    /// The two positions after the first base the alleles of `AFTER_THE_SPAN_RECORD` share,
+    /// and the second alternate allele there: the two reference bases and two further ones.
+    const AFTER_THE_SPAN_LOCATION: &str = "19:13208046-13208047";
+    const AFTER_THE_SPAN_ALLELE: &str = "ACTT";
+    const AFTER_THE_SPAN_RECORD: &str = "19_13208045_GAC/G/GACTT";
+
+    /// The reference's and vep-rs's row of one transcript in an intron and their two rows of
+    /// `discordant.tsv`: vep-rs alone holds `terms_come`, which a set rule classifies.
+    fn gained(
+        name: &str,
+        location: &str,
+        allele: &str,
+        feature: &str,
+        terms_come: &str,
+    ) -> (String, String, String) {
+        let output = |terms: &str| {
+            format!(
+                "{name}\t{location}\t{allele}\tENSG1\t{feature}\tTranscript\t{terms}\t-\t-\t-\t-\t-\t-\tIMPACT=LOW;STRAND=-1\n"
+            )
+        };
+        let unmatched = |source: &str, terms: &str| {
+            format!("output.txt\t{source}\t{location}\t{allele}\t{feature}\tTranscript\t{terms}\n")
+        };
+        (
+            output(INTRON_TERM_ALONE),
+            output(terms_come),
+            unmatched("missing_in_rust", INTRON_TERM_ALONE)
+                + &unmatched("extra_in_rust", terms_come),
+        )
+    }
+
+    /// The rows of several pairs, side by side.
+    fn joined(pairs: &[(String, String, String)]) -> (String, String, String) {
+        let column = |at: fn(&(String, String, String)) -> &String| -> String {
+            pairs.iter().map(at).cloned().collect()
+        };
+        (
+            column(|pair| &pair.0),
+            column(|pair| &pair.1),
+            column(|pair| &pair.2),
+        )
+    }
+
+    #[test]
+    fn a_pair_a_set_rule_only_counts_reaches_a_row_aware_rule_as_an_insertion_after_the_span() {
+        static CALLS: Mutex<u32> = Mutex::new(0);
+        fn shape(_: &PairRow, _: &PairRow) -> bool {
+            *CALLS.lock().unwrap() += 1;
+            true
+        }
+        let at_the_span = |name: &str, allele: &str, feature: &str, terms_come: &str| {
+            gained(name, AFTER_THE_SPAN_LOCATION, allele, feature, terms_come)
+        };
+        let (perl, rust, rows) = joined(&[
+            at_the_span(
+                AFTER_THE_SPAN_RECORD,
+                AFTER_THE_SPAN_ALLELE,
+                "ENST00000000001",
+                TRACT_TERM_COME,
+            ),
+            // `covered_splice_region_swap` sets the pair aside.
+            at_the_span(
+                AFTER_THE_SPAN_RECORD,
+                AFTER_THE_SPAN_ALLELE,
+                "ENST00000000002",
+                "intron_variant,splice_region_variant",
+            ),
+            // One base the alleles share after the first: a reference allele of one base,
+            // which opens the allele.
+            gained(
+                "19_13208045_GA/G/GATT",
+                "19:13208046",
+                "ATT",
+                "ENST00000000003",
+                TRACT_TERM_COME,
+            ),
+            // The same bases written as the insertion between the two positions.
+            at_the_span(
+                "19_13208046_C/CTTT",
+                "TTT",
+                "ENST00000000004",
+                TRACT_TERM_COME,
+            ),
+            // The allele's first base is not the reference allele's.
+            at_the_span(
+                "19_13208045_GAC/G/GTCTT",
+                "TCTT",
+                "ENST00000000005",
+                TRACT_TERM_COME,
+            ),
+            // Under an identifier the record alone shows the allele.
+            at_the_span(
+                "rs1",
+                AFTER_THE_SPAN_ALLELE,
+                "ENST00000000006",
+                TRACT_TERM_COME,
+            ),
+        ]);
+        let without_the_record = filtered(&perl, &rust, &rows, &[&fabricated(shape)]);
+        assert_eq!(
+            *CALLS.lock().unwrap(),
+            2,
+            "the first pair and the pair of one kept base"
+        );
+        assert_eq!(
+            without_the_record.bucket("fabricated_row_shape"),
+            vec![("count", 2), ("excluded", 2)]
+        );
+        assert_eq!(
+            without_the_record.bucket("intronic_overcall_swap"),
+            vec![("count", 4), ("excluded", 1)]
+        );
+        assert_eq!(without_the_record.open_rows.len(), 6);
+        let beside_the_record = filtered_beside_input(
+            &perl,
+            &rust,
+            &rows,
+            &[&fabricated(shape)],
+            Some("19\t13208045\trs1\tGAC\tG,GACTT\t.\t.\t.\n"),
+        );
+        assert_eq!(
+            *CALLS.lock().unwrap(),
+            5,
+            "those two again and the pair under the identifier"
+        );
+        assert_eq!(
+            beside_the_record.bucket("fabricated_row_shape"),
+            vec![("count", 3), ("excluded", 3)]
+        );
+        assert_eq!(
+            beside_the_record.bucket("intronic_overcall_swap"),
+            vec![("count", 3), ("excluded", 1)]
+        );
+        assert_eq!(beside_the_record.open_rows.len(), 4);
+    }
+
+    #[test]
+    fn the_registrys_rule_sets_a_counted_pair_of_an_insertion_after_the_span_aside() {
+        let rules = super::super::row_pair_rules();
+        let pair = |feature: &str, terms_come: &str| {
+            gained(
+                AFTER_THE_SPAN_RECORD,
+                AFTER_THE_SPAN_LOCATION,
+                AFTER_THE_SPAN_ALLELE,
+                feature,
+                terms_come,
+            )
+        };
+        let (perl, rust, rows) = joined(&[
+            pair("ENST00000000001", TRACT_TERM_COME),
+            // No insertion gives a donor term beside the reference's intron term alone.
+            pair("ENST00000000002", "intron_variant,splice_donor_variant"),
+        ]);
+        let outcome = filtered(&perl, &rust, &rows, &rules);
+        assert_eq!(
+            outcome.bucket("splice_term_past_the_record_span"),
+            vec![("count", 1), ("excluded", 1)]
+        );
+        assert_eq!(
+            outcome.bucket("intronic_overcall_swap"),
+            vec![("count", 0), ("excluded", 0)]
+        );
+        assert_eq!(
+            outcome.bucket("splice_lastwrite_swap"),
+            vec![("count", 1), ("excluded", 0)],
+            "the pair the rule refuses keeps its set rule's bucket"
+        );
+        assert_eq!(
+            (
+                outcome.exclusions.excluded_perl,
+                outcome.exclusions.excluded_rust
+            ),
+            (1, 1)
+        );
         assert_eq!(outcome.open_rows.len(), 2);
+        let rows_alone = filtered(&perl, &rust, &rows, &[]);
+        assert_eq!(
+            rows_alone.bucket("intronic_overcall_swap"),
+            vec![("count", 1), ("excluded", 0)],
+            "without a row-aware rule the set rule keeps the pair"
+        );
     }
 
     #[test]
@@ -722,15 +1139,16 @@ mod tests {
         }
         let perl = row("first", FEATURE, "stop_retained_variant", "10-12", "4-6")
             + &row("second", FEATURE, "stop_retained_variant", "20-22", "14-16")
-            + &row("third", FEATURE, "stop_retained_variant", "10-12", "4-6");
+            + &row("third", FEATURE, "stop_retained_variant", "10-12", "4-6")
+            + &row("first", FEATURE, "stop_retained_variant", "10-12", "4-6");
         let rust = row("first", FEATURE, "stop_lost", "10-12", "4-6");
         let rows = discordant("missing_in_rust", FEATURE, "stop_retained_variant")
             + &discordant("extra_in_rust", FEATURE, "stop_lost");
         let taken = filtered(&perl, &rust, &rows, &[&fabricated(every)]);
         assert_eq!(
             *SEEN.lock().unwrap(),
-            ["10-12", "20-22"],
-            "each distinct row of the reference's tuple, once"
+            ["10-12", "20-22", "10-12"],
+            "each distinct row of the reference's tuple, its first column among its cells, once"
         );
         assert_eq!(
             (taken.bucket("fabricated_row_shape"), taken.open_rows.len()),
@@ -770,6 +1188,91 @@ mod tests {
                 outcome.open_rows.len()
             ),
             (vec![("count", 0), ("excluded", 0)], 2)
+        );
+    }
+
+    #[test]
+    fn a_row_aware_rule_is_handed_the_three_cells_after_the_positions_of_a_row_that_has_them() {
+        type Cells = [Option<String>; 3];
+        static SEEN: Mutex<Vec<(Cells, Cells)>> = Mutex::new(Vec::new());
+        fn shape(e: &PairRow, a: &PairRow) -> bool {
+            let cells = |row: &PairRow| {
+                [
+                    row.protein_position.clone(),
+                    row.amino_acids.clone(),
+                    row.codons.clone(),
+                ]
+            };
+            SEEN.lock().unwrap().push((cells(e), cells(a)));
+            true
+        }
+        let row_of = |consequence: &str, cells: &str| {
+            format!(
+                "1993671\t{LOCATION}\t-\tENSG1\t{FEATURE}\tTranscript\t{consequence}\t?-7057\t-{cells}\n"
+            )
+        };
+        let outcome = filtered(
+            &row_of(
+                "stop_retained_variant",
+                "\t 2341-? \tKL/X\taagCTg/aag\t-\tIMPACT=LOW",
+            ),
+            &row_of("stop_lost", "\t2341-?\tKL/X"),
+            &(discordant("missing_in_rust", FEATURE, "stop_retained_variant")
+                + &discordant("extra_in_rust", FEATURE, "stop_lost")),
+            &[&fabricated(shape)],
+        );
+        let text = |cell: &str| Some(cell.to_string());
+        assert_eq!(
+            *SEEN.lock().unwrap(),
+            [(
+                [text("2341-?"), text("KL/X"), text("aagCTg/aag")],
+                [None, None, None]
+            )],
+            "the cells stripped as the positions are, and none of a row that ends before the twelfth"
+        );
+        assert_eq!(
+            outcome.bucket("fabricated_row_shape"),
+            vec![("count", 1), ("excluded", 1)]
+        );
+    }
+
+    /// A row reaches a rule with its Amino_acids and its Codons where it holds the twelfth
+    /// column, and with neither where it ends at the ninth, the tenth or the eleventh.
+    #[test]
+    fn a_row_reaches_a_row_aware_rule_with_the_amino_acids_and_codons_it_holds() {
+        type Cells = (Option<String>, Option<String>);
+        static SEEN: Mutex<Vec<Cells>> = Mutex::new(Vec::new());
+        fn shape(e: &PairRow, _: &PairRow) -> bool {
+            let cells = (e.amino_acids.clone(), e.codons.clone());
+            SEEN.lock().unwrap().push(cells);
+            false
+        }
+        let cells = "1993671\t19:13208046-13208050\t-\tENSG1\tENST00000635895\tTranscript\t\
+                     stop_retained_variant\t?-7057\t-\t38\tL\tctG/ctA\t-\tIMPACT=LOW";
+        let cells: Vec<&str> = cells.split('\t').collect();
+        for columns in [14, 12, 11, 10, 9] {
+            let reference = cells[..columns].join("\t") + "\n";
+            let candidate = reference.replace("stop_retained_variant", "stop_lost");
+            filtered(
+                &reference,
+                &candidate,
+                &(discordant("missing_in_rust", FEATURE, "stop_retained_variant")
+                    + &discordant("extra_in_rust", FEATURE, "stop_lost")),
+                &[&fabricated(shape)],
+            );
+        }
+        let read = |amino_acids: &str, codons: &str| {
+            (Some(amino_acids.to_string()), Some(codons.to_string()))
+        };
+        assert_eq!(
+            *SEEN.lock().unwrap(),
+            [
+                read("L", "ctG/ctA"),
+                read("L", "ctG/ctA"),
+                (None, None),
+                (None, None),
+                (None, None),
+            ]
         );
     }
 
@@ -881,16 +1384,23 @@ mod tests {
     }
 
     #[test]
-    fn a_row_two_records_read_differently_keeps_no_reference_bases() {
+    fn a_row_two_records_read_differently_takes_the_reading_of_the_record_it_names() {
         let replaced = "7\t100999\tid_1\tTA\tGTG\t.\t.\t.\n";
         let inserted = "7\t100999\tid_2\tT\tTGTG\t.\t.\t.\n";
-        let read = |records: String| {
-            let rows = vec![pair_row_at("id_1", "7:100999-101000", "GTG")];
+        let read = |name: &str, records: String| {
+            let rows = vec![pair_row_at(name, "7:100999-101000", "GTG")];
             references_read("input.vcf", records.as_bytes(), rows)
         };
-        assert_eq!(read(format!("{replaced}{inserted}")), [None]);
-        assert_eq!(read(format!("{replaced}{replaced}")), [bases("TA")]);
-        assert_eq!(read(inserted.to_string()), [bases("")]);
+        let both = || format!("{replaced}{inserted}");
+        assert_eq!(read("id_1", both()), [bases("TA")]);
+        assert_eq!(read("id_2", both()), [bases("")]);
+        // A row that names neither record, or a record that stands twice with two readings.
+        assert_eq!(read("id_3", both()), [None]);
+        let renamed = inserted.replace("id_2", "id_1");
+        assert_eq!(read("id_1", format!("{replaced}{renamed}")), [None]);
+        // Records that read the row alike, and one record, whatever the row names.
+        assert_eq!(read("id_3", format!("{replaced}{replaced}")), [bases("TA")]);
+        assert_eq!(read("id_3", inserted.to_string()), [bases("")]);
     }
 
     #[test]
@@ -951,7 +1461,7 @@ mod tests {
             filter_intended_divergences(
                 &discordant_path,
                 &open_path,
-                Collector::Release116(&scope),
+                Collector::Release116(&scope, &CacheContigNames::Human),
                 row_rules,
                 Some((&absent, &absent)),
                 None,
@@ -987,3 +1497,15 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "filter_exclusion_bounds_tests.rs"]
+mod exclusion_bounds_tests;
+
+#[cfg(test)]
+#[path = "filter_pair_rule_rows_tests.rs"]
+mod pair_rule_rows_tests;
+
+#[cfg(test)]
+#[path = "filter_one_sided_passes_tests.rs"]
+mod one_sided_passes_tests;

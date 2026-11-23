@@ -1,0 +1,20 @@
+shape	location	allele	name	read	bases
+a replacement	7:100998-101000	GTTCA	1993671	yes	ACG
+a replacement behind a shared first base, the record's chromosome under a prefix	7:200998-201000	GTTCA	1993671	yes	ACG
+an insertion, the row's chromosome under a prefix	chr7:300999-301000	GTT	1993671	yes	
+a deletion	7:400998-401000	-	1993671	yes	ACG
+the second alternate of a record	7:700998-701000	GTTCA	1993671	yes	ACG
+a row two records read differently	7:500999-501000	GTT	1993671	no	
+a row whose record lies elsewhere	7:600998-601000	GTTCA	1993671	no	
+a row at a record's place that the record does not write	7:100998-101000	GTTC	1993671	no	
+a row of another chromosome than its record's	8:100998-101000	GTTCA	1993671	no	
+a row two records read alike	7:800998-801000	GTTCA	1993671	yes	ACG
+a row two records read differently, under the identifier of the one that inserts	7:500999-501000	GTT	made_up_5	yes	
+a row two records read differently, under the identifier of the one that replaces	7:500999-501000	GTT	made_up_4	yes	AC
+an insertion's row beside a deletion whose whole alleles fit it	7:900999-901000	A	made_up_9	yes	
+the same row under an identifier neither record carries	7:900999-901000	A	1993671	no	
+a row two records of its own identifier read differently	7:950999-951000	GTT	made_up_11	no	
+a row under one of the two identifiers its record's ID column lists	7:960999-961000	GTT	made_up_12	no	
+a row under the whole of that ID column	7:960999-961000	GTT	made_up_12;made_up_13	yes	AC
+a row whose first column is the dot of a record without an identifier	7:980999-981000	GTT	.	no	
+a row two records of its own identifier read alike beside one that differs	7:970999-971000	GTT	made_up_15	yes	AC

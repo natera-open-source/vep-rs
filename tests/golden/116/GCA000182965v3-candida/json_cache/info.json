@@ -1,0 +1,16 @@
+{
+  "assembly": "GCA000182965v3",
+  "cache_version": 63,
+  "contig_order": [
+    "Ca22chr7A_C_albicans_SC5314",
+    "Ca22chrM_C_albicans_SC5314"
+  ],
+  "polyphen": "",
+  "regulatory": false,
+  "sift": "",
+  "source_versions": {
+    "assembly": "GCA000182965v3",
+    "genebuild": "2016-03-02"
+  },
+  "species": "candida_albicans"
+}

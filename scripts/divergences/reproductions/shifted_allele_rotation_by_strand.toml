@@ -1,9 +1,9 @@
 entry = "shifted_allele_rotation_by_strand"
 page = "docs/output/vep-and-tab.md#allele-on-a-coding-row-after-a-shift"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 76,935 per million · 0 flag sets, 89 corpora"
+input_class_basis = "2 · 76,935 per million · 96 flag sets, 129 corpora"
 notes = "AGC inserted after the GCAGCAGC run in a coding exon of the reverse-strand ENST00000399136: the 3' shift along the transcript moves it eight bases, longer than the allele, so Ensembl VEP's count of seq_length - shift_length is negative and rotates nothing."
 
 [input]
@@ -29,3 +29,17 @@ columns = ["Allele", "Consequence", "Codons", "Amino_acids", "HGVSc", "HGVSp", "
 [expected]
 ensembl_vep = ["AGC | protein_altering_variant | ccc/cGCTcc | P/RS | ENST00000399136.1:c.455_457dup | ENSP00000382088.1:p.Pro153delinsArgSer | 8"]
 vep_rs = ["GCA | inframe_insertion | ccc/cTGCcc | P/LP | ENST00000399136.1:c.455_457dup | ENSP00000382088.1:p.Leu152dup | 8"]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/coding.rs::rotate_shifted_allele",
+    "crates/vep-effects/src/consequences.rs::shifted_display_allele",
+    "crates/vep-effects/src/consequences.rs::used_ref_rotation",
+    "crates/vep-effects/src/hgvs.rs::shift_feature_seq",
+]
+tests = [
+    "crates/vep-cli/tests/input_strand.rs::shifted_codons_turn_the_allele_as_read_on_the_transcript_strand",
+    "crates/vep-effects/src/consequences.rs::tests::a_shifted_coding_insertion_prints_the_rotated_allele",
+    "crates/vep-effects/src/consequences.rs::tests::used_ref_of_a_shifted_coding_deletion_is_rotated_by_the_shift",
+    "crates/vep-effects/src/hgvs.rs::tests::shift_feature_seq_turns_the_written_allele_by_the_transcript_strand_rule",
+]

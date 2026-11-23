@@ -1,0 +1,89 @@
+{
+ "plugin_fixtures": {
+  "generator": "scripts/fixtures/cut_plugin_regions.py",
+  "flank": 5000,
+  "record_flank": 2000,
+  "exon_flank": 50,
+  "gerp_regions": "exons",
+  "tools": {
+   "bgzip": "bgzip (htslib) 1.9"
+  },
+  "files": {
+   "reference.fa.fai": "24a19bcf90b736bcec9a972e85576949d6e9d8c87d34f18b871bc45dbeac85f7",
+   "reference.fa.gz": "2f91f76b6c47c3b31625197c44b633798e02a1f97138dc8203687061c32de34e",
+   "reference.fa.gz.fai": "24a19bcf90b736bcec9a972e85576949d6e9d8c87d34f18b871bc45dbeac85f7",
+   "reference.fa.gz.gzi": "2cf6304d7ff47d05cc99fdc3e973f3976f9145a304772250973ddbeccb573da7"
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species equus_caballus --assembly EquCab3.0 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "equus_caballus/116_EquCab3.0",
+ "fasta": "the three sequences the records and the pruned cache's transcripts sit on (chromosome 31, MT and the unplaced scaffold PJAA01003991.1) at their full length from Equus_caballus.EquCab3.0.dna.primary_assembly.31.fa, Equus_caballus.EquCab3.0.dna.primary_assembly.MT.fa and Equus_caballus.EquCab3.0.dna.nonchromosomal.fa of Ensembl release 116, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
+ "input": "variants.vcf: 348 records on chromosome 31, the mitochondrion and the unplaced scaffold PJAA01003991.1. 303 are seeded records of tools/vep-seeded-variants (generator version 2, seed 1, 40 records a category, placed on the three sequences with the genome sequence read for every reference allele), their IDs the category and an ordinal: a start codon, a gained stop and a lost stop under genetic code table 1; a codon table 2 reads differently, a start codon, a gained stop and a lost stop on the mitochondrion; the first and the last sequence; the organelle; a record named by a synonym of its sequence; a missense and a synonymous change on each strand; a splice donor and an acceptor; both untranslated regions; an intron; upstream, downstream and between genes; a frameshift insertion, a frameshift deletion and an in-frame deletion; the first and the last base of a sequence. The cache marks no sequence circular, so the generator writes no record across an origin. 45 are known variants, single-base substitutions sampled with seed 1 from the cache's variation files of chromosome 31 and the scaffold (the mitochondrion's file holds none), their IDs the rs identifiers. Two exemplars per consequence-set combination the two references show, stratified by variant class and strand, six per combination carrying a protein-level term, plus the records the manifest's included_records name: ten of every category of the seeded records, or all of a category that holds fewer, and forty of the sampled known variants at an even stride. 20 records name their sequence by a synonym the cache resolves (CM009178.1 and NC_009174.3 for chromosome 31, X79547 and NC_001640.1 for MT); the others carry the cache's names",
+ "sha256": {
+  "default.txt": "ec777f7175695b667221721765609696a547b441a5bcd38b6e18e4c20104e720",
+  "tab.txt": "8db65982e833f14dff9a3feb88e8f1baa99aa9b30bcc56784df44bbe4f779ad2",
+  "vcf.vcf": "6b1e7d2066f19d72e63f08983bd6aece5520c983ec34f6ac8d10cd056c120a4d",
+  "json.jsonl": "8b36f1a8c400d876907d2cd9a9a6ef5392b57f68723eb29d76c80682b3d7809f"
+ },
+ "variants_vcf_sha256": "dfa38859fb9a31fa5caef9ef6d9ce7b18093c23a879d7937ce8b63b72b574767",
+ "flag_sets": {
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species equus_caballus --assembly EquCab3.0 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "equus_caballus/116_EquCab3.0",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "92d07cf97f192db5b26bdf4ff230d66e309c66a091c0ef7db715e2e90a92207c",
+    "tab.txt": "9f48f56295a59e4a84eb3d2fa691c198cd54e7a038907217b108d73f17cfbfe6",
+    "vcf.vcf": "4b5230dedd64b21ea4ef07855ff8bab4bcb34a0f1c145b7b55d5706baa66a5c2",
+    "json.jsonl": "6621abfd2ed59136833fdea44780961fb2dfb1a9ea6fbd7f52718d038c09bc50"
+   },
+   "flags": [
+    "--everything"
+   ],
+   "expected_dir": "expected_everything"
+  },
+  "hgvs-sift": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species equus_caballus --assembly EquCab3.0 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs --sift b [--tab|--vcf|--json]",
+   "perl_cache": "equus_caballus/116_EquCab3.0",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "b02f0828ed8edfb2ebb725ed39703b3f6d141a7451b04c0ac9179c7fae26857d",
+    "tab.txt": "4c12c5dd8908d8768fe1261ff4d6a28557fbf8a27d2fdbb4ce3cbff4d7bee5c6",
+    "vcf.vcf": "bc3f54e47cf94a0992a88ed0f8835297e8fafce6f0ffc9895996117315d19b0f",
+    "json.jsonl": "561fa42373de7aaaf25560512719ac3e24da5639e500d2f131506dc636d8e5f3"
+   },
+   "flags": [
+    "--hgvs",
+    "--sift",
+    "b"
+   ],
+   "expected_dir": "expected_hgvs-sift"
+  }
+ },
+ "generator": "tools/vep-seeded-variants --seed 1 --records wide --per-category 40 --fasta <the genome sequence> --sequence MT --sequence 31 --sequence PJAA01003991.1 over the converted cache; 300 known variants sampled with seed 1 from the converted cache's variation files of those sequences; Ensembl VEP over the two inputs under the corpus flags; tools/vep-golden-corpus select --release 116 --assembly EquCab3.0 --species equus_caballus --dataset wide=<reference>=<the seeded records> --dataset known=<reference>=<the sampled known variants> --k 2 --seed 1 --max-span 1000000 --max-records 500 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 6 --include <the named records> --covers species-horse-equcab3 --covers genetic-code-tables --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_function_predictions --drop-except <the transcripts on which a record changes one residue, the rows SIFT scores> --perl-info <cache>/info.txt --cache-version 116 --variations <cache>/variations over the whole cache tools/vep-storable-to-json converts from the Ensembl VEP 116 EquCab3.0 cache (protein features kept for the DOMAINS column of the everything set; the variation slices hold the known variants within one base of a record); scripts/fixtures/cut_plugin_regions.py --reference <the genome sequence> --flank 5000 --record-flank 2000, given the records under the cache's sequence names; scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; tools/vep-golden-corpus flag-set (everything, hgvs-sift) and classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp --field SIFT for the hgvs-sift set)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "31": 424,
+   "MT": 37,
+   "PJAA01003991.1": 1
+  },
+  "shards": 26,
+  "synonym_lines": 8,
+  "matrices_kept_on": 155,
+  "variation_slices": "the known variants within one base of a record under variations/<chr>/all_vars.gz with its .csi, as the Ensembl VEP cache lays them out: 59 on chromosome 31 and 2 on the scaffold; the mitochondrion carries the empty indexed file the cache carries for a chromosome without variants"
+ }
+}

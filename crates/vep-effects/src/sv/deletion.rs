@@ -7,15 +7,16 @@
 //! Assigns consequence terms based on how the deletion span overlaps the
 //! transcript structure (exons, introns, CDS, UTRs).
 //!
-//! Perl citations name modules of ensembl-variation release/115
-//! (`Bio/EnsEMBL/Variation/...`).
+//! Ensembl VEP source citations name modules of ensembl-variation release/116
+//! (`Bio/EnsEMBL/Variation/...`); `OutputFactory.pm` is in ensembl-vep release/116.3
+//! (`Bio/EnsEMBL/VEP/...`).
 
 use super::{
     bnd_breakend_within_transcript, frameshift_intron_span, is_mature_mirna_sv,
     overlaps_any_exon as sv_overlaps_any_exon,
     overlaps_any_intron_trimmed as sv_overlaps_any_intron_trimmed, overlaps_cds_exon,
     overlaps_five_prime_utr, overlaps_polypyrimidine_tract, overlaps_three_prime_utr,
-    perl_coding_pre_predicate, perl_partial_codon,
+    structural_stop_lost,
 };
 use smallvec::SmallVec;
 use std::sync::Arc;
@@ -30,8 +31,10 @@ use vep_core::variant::{InputVariant, VariantClass};
 /// coding_sequence_variant, 5_prime_UTR_variant, 3_prime_UTR_variant,
 /// intron_variant, stop_lost, non_coding_transcript_exon_variant,
 /// upstream_gene_variant, downstream_gene_variant, and others according to
-/// overlap extent. `start_lost` needs both deletion ends in exons and no `cds_start_NF`.
-pub fn calculate(
+/// overlap extent. `start_lost` needs both deletion ends in exons and a start
+/// codon standing at the coding start; `stop_lost` needs a stop codon standing
+/// at the coding end.
+pub(crate) fn calculate(
     variant: &InputVariant,
     transcript: &Arc<Transcript>,
     upstream_distance: u64,
@@ -78,7 +81,7 @@ pub fn calculate(
     // Mature miRNA is Ensembl's tier-2 short-circuit and outranks every term
     // below: `@SORTED_OVERLAP_CONSEQUENCES = sort {$a->tier <=> $b->tier}`
     // (`BaseVariationFeatureOverlapAllele.pm:69`) orders predicates by tier alone
-    // and `get_all_OverlapConsequences` (`:266,275-278`) stops at
+    // and `get_all_OverlapConsequences` (`:267,277-279`) stops at
     // `last if $assigned_tier && $oc->{tier} > $assigned_tier`. `mature_miRNA_variant`
     // is tier 2 (`Utils/Config.pm`, rank 24); `feature_truncation` (rank 10) and
     // every regional term are tier 3, so rank never puts them earlier. Only
@@ -104,7 +107,7 @@ pub fn calculate(
     let extends_beyond = del_start < tx_start || del_end > tx_end;
     let complete_within = del_start >= tx_start && del_end <= tx_end;
 
-    // Perl's `feature_truncation` (Utils/VariationEffect.pm:350-373) has two arms.
+    // Ensembl VEP's `feature_truncation` (Utils/VariationEffect.pm:350-373) has two arms.
     //
     // The first is BND-only and bypasses the cDNA requirement outright:
     //   if (chromosome_breakpoint(@_)) { return 1 if within_feature(..., $bvfoa->breakend, 1) }
@@ -167,16 +170,16 @@ pub fn calculate(
                 // each of which excludes `complete_overlap_feature`.
             }
 
-            // Perl's structural-variant arms of `frameshift`
-            // (Utils/VariationEffect.pm:1459-1471) and `inframe_deletion`
-            // (:1186-1201) read the deletion's own length once it lies completely
+            // Ensembl VEP's structural-variant arms of `frameshift`
+            // (Utils/VariationEffect.pm:1568-1580) and `inframe_deletion`
+            // (:1189-1204) read the deletion's own length once it lies completely
             // within one exon (`complete_within_feature` against each exon, which
             // is the variant inside the exon, not the exon inside the variant).
             // `inframe_deletion` further needs `cds_coords` to be a single
             // Coordinate, i.e. the deletion inside that exon's coding part;
             // `frameshift` needs only the `coding` pre-predicate, an overlap with
-            // the CDS. Either one excludes `coding_unknown` (:1535). Both, like
-            // `stop_lost` (:1262), hold only for a `deletion` class: a BND routed
+            // the CDS. Either one excludes `coding_unknown` (:1643). Both, like
+            // `stop_lost` (:1268), hold only for a `deletion` class: a BND routed
             // through here is a `chromosome_breakpoint` and keeps
             // coding_sequence_variant.
             let within_cds_exon = overlaps_cds && overlaps_cds_exon(transcript, del_start, del_end);
@@ -205,35 +208,33 @@ pub fn calculate(
                 consequences.push(Consequence::CodingSequenceVariant);
             }
 
-            // `stop_lost` (:1262-1274) and `start_lost` (:886-896) for a structural
-            // deletion are genomic overlaps with the three codon bases, reached only
-            // behind the `coding` pre-predicate both terms carry in their `include`
-            // (`perl_coding_pre_predicate`): a stop codon split by an intron puts a
-            // codon base inside the window on the far side of that intron, and a
-            // deletion inside the intron is `non_coding`, so Perl never tests it.
+            // `stop_lost` (:1268-1280) and `start_lost` (:886-896) for a structural
+            // deletion are genomic overlaps with the three codon bases in Ensembl
+            // VEP, reached only behind the `coding` pre-predicate both terms carry
+            // in their `include` (`perl_coding_pre_predicate`): a stop codon split
+            // by an intron puts a codon base inside the window on the far side of
+            // that intron, and a deletion inside the intron is `non_coding`, so
+            // Ensembl VEP never tests it. Its `stop_lost` arm reads neither a flag
+            // nor a base; here the term is written only where a stop codon stands
+            // at the coding end and the span takes a base of it
+            // (`structural_stop_lost`).
             // `start_lost` also passes `_overlaps_start_codon` (:965-990), which
             // needs `cdna_start` and `cdna_end` defined: both ends of the deletion
-            // in exons, and no `cds_start_NF`. Perl co-emits
+            // in exons, and no `cds_start_NF`; here it is written only where a
+            // start codon stands at the coding start
+            // (`crate::coding::start_codon_stands_at_the_coding_start`), asked
+            // last. Ensembl VEP co-emits
             // `start_retained_variant` there because `_ins_del_start_altered`
             // returns 0 for every structural allele without reading the sequence,
             // so on a structural deletion the retained term is the erroneous
             // member and vep-rs keeps `start_lost` alone: the reverse of the
             // sequence-variant case in `coding::perl_coding_terms`, where the same
             // predicate has certified the start codon intact.
-            let (stop_lo, stop_hi, start_lo, start_hi) = match transcript.strand {
-                Strand::Forward => (cds_end.saturating_sub(2), cds_end, cds_start, cds_start + 2),
-                Strand::Reverse => (cds_start, cds_start + 2, cds_end.saturating_sub(2), cds_end),
+            let (start_lo, start_hi) = match transcript.strand {
+                Strand::Forward => (cds_start, cds_start + 2),
+                Strand::Reverse => (cds_end.saturating_sub(2), cds_end),
             };
-            let perl_coding = perl_coding_pre_predicate(transcript, del_start, del_end);
-            // `stop_lost` also opens with `return 0 if partial_codon(@_)` (release/116
-            // `Utils/VariationEffect.pm:1240`), the `perl_partial_codon` conjunct, read
-            // last so the transcript mapping runs only for a span inside the window.
-            if !is_chromosome_breakpoint
-                && perl_coding
-                && del_end >= stop_lo
-                && del_start <= stop_hi
-                && !perl_partial_codon(transcript, del_start, del_end)
-            {
+            if !is_chromosome_breakpoint && structural_stop_lost(transcript, del_start, del_end) {
                 push_unique(&mut consequences, Consequence::StopLost);
             }
             let ends_in_exons = |pos: u64| {
@@ -244,9 +245,9 @@ pub fn calculate(
             };
             if del_end >= start_lo
                 && del_start <= start_hi
-                && !transcript.facts().cds_start_nf
                 && ends_in_exons(del_start)
                 && ends_in_exons(del_end)
+                && crate::coding::start_codon_stands_at_the_coding_start(transcript)
             {
                 push_unique(&mut consequences, Consequence::StartLost);
             }
@@ -318,17 +319,17 @@ pub fn calculate(
         );
     }
 
-    // Context terms for non-coding transcripts (excluding NMD, handled separately).
-    // Perl's within_non_coding_gene: not translation and not mature_miRNA and not non_coding_exon_variant
+    // Context term for a transcript without a translation, whatever its biotype.
+    // Ensembl VEP's within_non_coding_gene: not translation and not mature_miRNA and not
+    // non_coding_exon_variant
     if !is_coding
-        && !transcript.facts().is_nmd
         && !consequences.contains(&Consequence::NonCodingTranscriptExonVariant)
         && !consequences.contains(&Consequence::MatureMirnaVariant)
     {
         push_unique(&mut consequences, Consequence::NonCodingTranscriptVariant);
     }
 
-    // NMD transcript context: Perl adds NMD_transcript_variant alongside other
+    // NMD transcript context: Ensembl VEP adds NMD_transcript_variant alongside other
     // consequences (not just as a fallback), e.g., "feature_truncation,coding_sequence_variant,...,NMD_transcript_variant"
     if transcript.facts().is_nmd {
         push_unique(&mut consequences, Consequence::NmdTranscriptVariant);
@@ -375,12 +376,11 @@ fn build_consequence(
         .map(|c| c.impact())
         .unwrap_or(Impact::MODIFIER);
 
-    TranscriptConsequence {
-        consequences,
-        impact,
-        distance,
-        ..TranscriptConsequence::for_transcript(transcript)
-    }
+    let mut consequence = TranscriptConsequence::for_transcript(transcript);
+    consequence.consequences = consequences;
+    consequence.impact = impact;
+    consequence.distance = distance;
+    consequence
 }
 
 /// `make_test_transcript()` with three frameshift introns cut into its exons: 5 bases
@@ -447,13 +447,40 @@ pub(super) fn frameshift_intron_test_transcript() -> Transcript {
     tx
 }
 
+/// `make_test_transcript()` with the coding region moved to cDNA 53..601, 183
+/// whole codons of which the last is a stop codon at cDNA 599..601: the last two
+/// bases of exon 2 (25_002_298, 25_002_299) and the first base of exon 3
+/// (25_004_000), split by intron 2.
+#[cfg(test)]
+pub(super) fn tx_with_stop_codon_split_by_intron_2() -> Transcript {
+    let mut tx = crate::test_helpers::make_test_transcript();
+    tx.cdna_coding_start = Some(53);
+    tx.cdna_coding_end = Some(601);
+    tx.coding_region_start = Some(25_000_052);
+    tx.coding_region_end = Some(25_004_000);
+    tx.translation_start = Some(25_000_052);
+    tx.translation_end = Some(25_004_000);
+    if let Some(translation) = tx.translation.as_mut() {
+        translation.start = 53;
+        translation.end = 1;
+    }
+    let vefc = tx.vefc.as_mut().expect("a coding model");
+    let coding = vefc.translateable_seq.as_mut().expect("a coding sequence");
+    coding.truncate(546);
+    coding.push_str("TAA");
+    let mapper = vefc.mapper.as_mut().expect("a mapper");
+    mapper.cdna_coding_start = 53;
+    mapper.cdna_coding_end = 601;
+    tx
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use vep_core::consequence::FeatureType;
     use vep_core::variant::{InputVariant, VariantClass};
 
-    /// [`super::calculate`] on a transcript the test owns: the row shares a copy of
+    /// `super::calculate` on a transcript the test owns: the row shares a copy of
     /// it, as the index shares its handle.
     fn calculate(
         variant: &InputVariant,
@@ -480,6 +507,12 @@ mod tests {
 
     fn tx() -> Transcript {
         crate::test_helpers::make_test_transcript()
+    }
+
+    /// [`tx`] with a coding sequence of 283 whole codons, the last a stop codon
+    /// at 25_004_296-25_004_298, where its coding region ends.
+    fn tx_closed_by_a_stop_codon() -> Transcript {
+        crate::concordance_tests::make_transcript_with_terminal_stop()
     }
 
     // Transcript layout reminder (forward strand, chr21):
@@ -561,8 +594,8 @@ mod tests {
         use vep_core::transcript::Exon;
 
         // A symbolic `<DEL>` reaching past a transcript edge with an intron-only
-        // overlap gets no `feature_truncation`: Perl's predicate requires
-        // `within_cdna` outside its BND arm (Utils/VariationEffect.pm:361), which
+        // overlap gets no `feature_truncation`: Ensembl VEP's predicate requires
+        // `within_cdna` outside its BND arm (Utils/VariationEffect.pm:362), which
         // needs an exon overlap, and `<DEL>`'s class SO term is `deletion`, not
         // `chromosome_breakpoint`. The fixture's exon 1 does not start at tx_start,
         // leaving an intron-only gap at the start edge.
@@ -601,7 +634,7 @@ mod tests {
             !result
                 .consequences
                 .contains(&Consequence::FeatureTruncation),
-            "a symbolic DEL with no exon overlap fails Perl's within_cdna, whichever \
+            "a symbolic DEL with no exon overlap fails Ensembl VEP's within_cdna, whichever \
              transcript edge it reaches past: {:?}",
             result.consequences
         );
@@ -618,7 +651,7 @@ mod tests {
     fn test_intron_only_breakend_extending_beyond_still_gets_truncation() {
         use vep_core::transcript::Exon;
 
-        // The complement: Perl's `feature_truncation` opens with a BND-only early
+        // The complement: Ensembl VEP's `feature_truncation` opens with a BND-only early
         // return that bypasses `within_cdna`:
         //   if (chromosome_breakpoint(@_)) { return 1 if within_feature(..., breakend, 1) }
         // and `chromosome_breakpoint` (`:311-321`) is the class SO term of
@@ -656,7 +689,7 @@ mod tests {
             result
                 .consequences
                 .contains(&Consequence::FeatureTruncation),
-            "a chromosome breakpoint takes Perl's BND arm and needs no exon overlap: {:?}",
+            "a chromosome breakpoint takes Ensembl VEP's BND arm and needs no exon overlap: {:?}",
             result.consequences
         );
         // The truncation must arrive without a coding context term: Ensembl gates
@@ -699,7 +732,7 @@ mod tests {
 
     #[test]
     fn test_coding_sequence_variant() {
-        // 101 bp inside exon 2's CDS: Perl's SV `frameshift` arm takes the term.
+        // 101 bp inside exon 2's CDS: Ensembl VEP's SV `frameshift` arm takes the term.
         let v = make_del("21", 25_002_050, 25_002_150);
         let result = calculate(&v, &tx(), 5000, 5000).unwrap();
         assert!(result
@@ -757,9 +790,9 @@ mod tests {
 
     #[test]
     fn test_stop_lost_forward_strand() {
-        // Deletion covers the CDS end (stop codon region) at 25_004_299.
+        // The deletion covers the stop codon, 25_004_296-25_004_298.
         let v = make_del("21", 25_004_200, 25_004_400);
-        let result = calculate(&v, &tx(), 5000, 5000).unwrap();
+        let result = calculate(&v, &tx_closed_by_a_stop_codon(), 5000, 5000).unwrap();
         assert!(
             result.consequences.contains(&Consequence::StopLost),
             "Expected stop_lost, got: {:?}",
@@ -769,7 +802,7 @@ mod tests {
 
     #[test]
     fn test_start_lost_for_structural_deletion_with_both_ends_exonic() {
-        // Perl's SV arm of `start_lost` is a genomic overlap with the start codon
+        // Ensembl VEP's SV arm of `start_lost` is a genomic overlap with the start codon
         // once `_overlaps_start_codon` holds (both deletion ends in exons). The
         // 21 bp span from 5' UTR into the CDS is a multiple of three, so no
         // frameshift, and is not inside the coding part of the exon, so no
@@ -789,7 +822,7 @@ mod tests {
 
     #[test]
     fn test_start_lost_withheld_when_a_deletion_end_is_intronic() {
-        // Starting in intron 1 leaves Perl's `cdna_start` undefined, so
+        // Starting in intron 1 leaves Ensembl VEP's `cdna_start` undefined, so
         // `_overlaps_start_codon` is 0 even though the span covers the ATG.
         let v = make_del("21", 25_000_100, 25_002_010);
         let result = calculate(&v, &tx(), 5000, 5000).unwrap();
@@ -810,7 +843,7 @@ mod tests {
     #[test]
     fn test_frameshift_for_structural_deletion_within_one_cds_exon() {
         // 68 bp inside exon 2 (all CDS): frameshift_variant replaces
-        // coding_sequence_variant, as for the 1000 Genomes chr21 deletions Perl
+        // coding_sequence_variant, as for the 1000 Genomes chr21 deletions Ensembl VEP
         // calls `feature_truncation,frameshift_variant`.
         let v = make_del("21", 25_002_010, 25_002_077);
         let result = calculate(&v, &tx(), 5000, 5000).unwrap();
@@ -823,7 +856,7 @@ mod tests {
     #[test]
     fn test_breakend_within_one_cds_exon_keeps_coding_sequence_variant() {
         // A `chromosome_breakpoint` is neither `deletion` nor `copy_number_loss`,
-        // so Perl's SV frameshift, inframe_deletion and stop_lost arms are 0 and
+        // so Ensembl VEP's SV frameshift, inframe_deletion and stop_lost arms are 0 and
         // `coding_unknown` holds.
         let mut v = make_del("21", 25_004_230, 25_004_297);
         v.variant_class = VariantClass::Translocation;
@@ -848,7 +881,7 @@ mod tests {
     #[test]
     fn test_structural_deletion_spanning_an_intron_keeps_coding_sequence_variant() {
         // 66 bp from exon 2 into intron 2 is inside no single exon: neither
-        // frameshift nor inframe_deletion, and Perl's `coding_unknown` holds.
+        // frameshift nor inframe_deletion, and Ensembl VEP's `coding_unknown` holds.
         let v = make_del("21", 25_002_250, 25_002_315);
         let result = calculate(&v, &tx(), 5000, 5000).unwrap();
         crate::test_helpers::assert_consequence_set_eq(
@@ -863,10 +896,11 @@ mod tests {
 
     #[test]
     fn test_stop_lost_for_structural_deletion_ending_inside_the_stop_codon() {
-        // Perl tests `overlap(cre - 2, cre, start, end)`: a deletion that ends on
-        // the first stop-codon base still loses the stop. 68 bp inside exon 3.
-        let v = make_del("21", 25_004_230, 25_004_297);
-        let result = calculate(&v, &tx(), 5000, 5000).unwrap();
+        // Ensembl VEP tests `overlap(cre - 2, cre, start, end)`: a deletion that ends on
+        // the first stop-codon base, 25_004_296, still loses the stop. 68 bp inside
+        // exon 3.
+        let v = make_del("21", 25_004_229, 25_004_296);
+        let result = calculate(&v, &tx_closed_by_a_stop_codon(), 5000, 5000).unwrap();
         crate::test_helpers::assert_consequence_set_eq(
             &result,
             &["feature_truncation", "frameshift_variant", "stop_lost"],
@@ -889,7 +923,7 @@ mod tests {
     }
 
     /// OverlapPC is `100 * ($overlap_length / $feature_length)` (ensembl-vep
-    /// `OutputFactory.pm:2091` at release/116.2) printed with `%.2f` (`:2094`): a
+    /// `OutputFactory.pm:2100` at release/116.3) printed with `%.2f` (`:2103`): a
     /// 23-bp and a 49-bp deletion inside a 160-bp transcript print `14.37` and
     /// `30.63`, the quotient-first roundings of the ties 14.375 and 30.625.
     #[test]
@@ -991,8 +1025,8 @@ mod tests {
     }
 
     /// The row carries the transcript's `gencode_primary` bit, which the
-    /// `GENCODE_PRIMARY` column prints as `1` (OutputFactory.pm:1604-1606 at
-    /// release/116.2) on a structural-variant row as on any other.
+    /// `GENCODE_PRIMARY` column prints as `1` (OutputFactory.pm:1613-1615 at
+    /// release/116.3) on a structural-variant row as on any other.
     #[test]
     fn test_gencode_primary_carried_from_transcript() {
         let v = make_del("21", 24_999_000, 25_007_000);
@@ -1061,29 +1095,10 @@ mod tests {
             .contains(&Consequence::CodingSequenceVariant));
     }
 
-    /// Move the coding region's end to cDNA 601, the first base of exon 3, so the
-    /// stop codon is cDNA 599..601: the last two bases of exon 2 (25_002_298,
-    /// 25_002_299) and the first base of exon 3 (25_004_000), split by intron 2.
-    fn tx_with_stop_codon_split_by_intron_2() -> Transcript {
-        let mut tx = tx();
-        if let Some(vefc) = tx.vefc.as_mut() {
-            if let Some(seq) = vefc.translateable_seq.as_mut() {
-                seq.truncate(551);
-            }
-            if let Some(mapper) = vefc.mapper.as_mut() {
-                mapper.cdna_coding_end = 601;
-            }
-        }
-        tx.cdna_coding_end = Some(601);
-        tx.coding_region_end = Some(25_004_000);
-        tx.translation_end = Some(25_004_000);
-        tx
-    }
-
     /// `13:21155152-21155692 deletion` on ENST00000314759 (SKA3, GRCh38) and the
     /// seven other SKA3 transcripts: a deletion inside the intron that splits the
     /// stop codon, ending two bases short of the exon that carries the codon's last
-    /// base. Perl: `intron_variant,splice_polypyrimidine_tract_variant`, no
+    /// base. Ensembl VEP: `intron_variant,splice_polypyrimidine_tract_variant`, no
     /// `stop_lost`. Its structural `stop_lost` arm (`Utils/VariationEffect.pm`)
     /// tests the span against `coding_region_end - 2 .. coding_region_end`, a
     /// genomic window that here reaches two bases into the intron, but the term
@@ -1127,7 +1142,7 @@ mod tests {
     /// transcript's protein id, a structural-variant row included (ensembl-vep
     /// `OutputFactory.pm` `BaseTranscriptVariationAllele_to_output_hash`, which every
     /// `TranscriptStructuralVariationAllele` passes through): a `transcript_ablation`
-    /// row carries the deleted transcript's ENSP, as Ensembl VEP 116.2 prints
+    /// row carries the deleted transcript's ENSP, as Ensembl VEP 116.3 prints
     /// `ENSP00000284881.4` on the `ENST00000284881` row of `del_10_6_mb` in the
     /// GRCh38-release116 golden corpus.
     #[test]
@@ -1152,7 +1167,7 @@ mod tests {
         assert_eq!(tc.protein_id(), None);
     }
 
-    /// Ensembl VEP 116.2 on a `<DEL>` clipping the last base of TRDD3
+    /// Ensembl VEP 116.3 on a `<DEL>` clipping the last base of TRDD3
     /// (`ENST00000448914`, 13 coding bases, forward strand) and running off its 3'
     /// end: `3_prime_UTR_variant,coding_sequence_variant,feature_truncation`, the
     /// `stop_lost` of the positional test withheld by `partial_codon` because the
@@ -1176,7 +1191,7 @@ mod tests {
         );
     }
 
-    /// Ensembl VEP 116.2 on a `<DEL>` clipping the last two bases of IGHD7-27
+    /// Ensembl VEP 116.3 on a `<DEL>` clipping the last two bases of IGHD7-27
     /// (`ENST00000439842`, 11 coding bases, reverse strand) and running off its 3'
     /// end, the transcript's genomic start: the same three terms and no
     /// `stop_lost`. The span's transcript-5' base is its genomic end, CDS 10, the
@@ -1225,7 +1240,7 @@ mod tests {
         t
     }
 
-    /// Ensembl VEP 116.2 on a `<DEL>` clipping the last two bases of IGLV4-60 and
+    /// Ensembl VEP 116.3 on a `<DEL>` clipping the last two bases of IGLV4-60 and
     /// running off its 3' end: `3_prime_UTR_variant,coding_sequence_variant,
     /// feature_truncation`, no `stop_lost`. Here the span's first coding base is
     /// CDS 613, mapped through the third exon, the first base of the terminal codon.
@@ -1270,11 +1285,13 @@ mod tests {
     }
 
     /// A `cds_end_NF` segment whose 12 coding bases end on a codon boundary has no
-    /// stop codon, yet `partial_codon` reads the codon arithmetic alone (a
-    /// three-base last codon is not partial) and the positional test keeps
-    /// `stop_lost` on a deletion clipping its last base, as Ensembl VEP does.
+    /// stop codon: a deletion clipping its last base loses none, and the row keeps
+    /// its other terms. Ensembl VEP's structural arm reads no flag and no base
+    /// (`Utils/VariationEffect.pm:1268-1280`): `partial_codon` reads the codon
+    /// arithmetic alone (a three-base last codon is not partial) and its positional
+    /// test writes `stop_lost` there.
     #[test]
-    fn stop_lost_kept_on_a_complete_last_codon_of_an_open_ended_segment() {
+    fn no_stop_lost_on_the_last_codon_of_an_open_ended_segment_that_names_a_residue() {
         let t = crate::test_helpers::make_open_ended_segment(Strand::Forward, "ACTGGGGGATAC");
         assert_eq!(t.coding_region_end, Some(40_000_042));
         let v = make_del("21", 40_000_042, 40_001_000);
@@ -1285,18 +1302,20 @@ mod tests {
                 "3_prime_UTR_variant",
                 "coding_sequence_variant",
                 "feature_truncation",
-                "stop_lost",
             ],
         );
     }
 
     /// The base before the partial codon: the deletion's first base is CDS 12 of 13,
-    /// the last base of the last complete codon, so Perl's `translation_start` is 4,
-    /// the last codon length 13 - 9 = 4, `partial_codon` is false and the positional
-    /// test keeps `stop_lost`; a span starting one base further on, at CDS 13, is the
-    /// withheld case of `stop_lost_withheld_in_the_partial_terminal_codon_forward_strand`.
+    /// the last base of the last complete codon, so Ensembl VEP's `translation_start` is 4,
+    /// the last codon length 13 - 9 = 4, `partial_codon` is false and its positional
+    /// test writes `stop_lost` (`Utils/VariationEffect.pm:1268-1280`). The segment
+    /// carries `cds_end_NF` and no stop codon stands at its coding end, so the row
+    /// has none, as for a span starting one base further on, at CDS 13, the case of
+    /// `stop_lost_withheld_in_the_partial_terminal_codon_forward_strand`.
     #[test]
-    fn stop_lost_kept_when_the_deletion_starts_on_the_last_complete_codon_forward_strand() {
+    fn no_stop_lost_when_the_deletion_starts_on_the_last_complete_codon_of_an_open_ended_segment_forward_strand(
+    ) {
         let t = crate::test_helpers::make_open_ended_segment(Strand::Forward, "ACTGGGGGATACG");
         let v = make_del("21", 40_000_042, 40_001_000);
         let result = calculate(&v, &t, 5000, 5000).unwrap();
@@ -1306,17 +1325,19 @@ mod tests {
                 "3_prime_UTR_variant",
                 "coding_sequence_variant",
                 "feature_truncation",
-                "stop_lost",
             ],
         );
     }
 
     /// The same edge on the reverse strand: the span's genomic end 40_000_003 is CDS 9
     /// of 11, the last base of codon 3, so the last codon length is 11 - 6 = 5 and
-    /// `stop_lost` stands; a span ending one base lower, at CDS 10, is the withheld
-    /// case of `stop_lost_withheld_in_the_partial_terminal_codon_reverse_strand`.
+    /// Ensembl VEP's positional test writes `stop_lost`; the segment carries
+    /// `cds_end_NF`, no stop codon stands at its coding end and the row has none,
+    /// as for a span ending one base lower, at CDS 10, the case of
+    /// `stop_lost_withheld_in_the_partial_terminal_codon_reverse_strand`.
     #[test]
-    fn stop_lost_kept_when_the_deletion_starts_on_the_last_complete_codon_reverse_strand() {
+    fn no_stop_lost_when_the_deletion_starts_on_the_last_complete_codon_of_an_open_ended_segment_reverse_strand(
+    ) {
         let t = crate::test_helpers::make_open_ended_segment(Strand::Reverse, "CTAACTGGGGA");
         let v = make_del("21", 39_999_000, 40_000_003);
         let result = calculate(&v, &t, 5000, 5000).unwrap();
@@ -1326,7 +1347,6 @@ mod tests {
                 "3_prime_UTR_variant",
                 "coding_sequence_variant",
                 "feature_truncation",
-                "stop_lost",
             ],
         );
     }
@@ -1334,17 +1354,19 @@ mod tests {
     /// A deletion that enters the partial-codon segment from its 5' UTR: the span's
     /// transcript-5' base is a UTR base, so `genomic2pep` opens with a Gap,
     /// `translation_start` is undefined, `partial_codon` returns 0 before its
-    /// arithmetic and the positional `stop_lost` stands on both strands; the
-    /// `start_lost` window is covered too, but `_overlaps_start_codon` is 0 on a
-    /// `cds_start_NF` transcript and for a span ending outside the transcript.
+    /// arithmetic and Ensembl VEP's positional test writes `stop_lost` on both
+    /// strands (`Utils/VariationEffect.pm:1268-1280`). The segment carries
+    /// `cds_end_NF` and no stop codon stands at its coding end, so the row has
+    /// none. The `start_lost` window is covered too, but `_overlaps_start_codon` is
+    /// 0 on a `cds_start_NF` transcript and for a span ending outside the
+    /// transcript.
     #[test]
-    fn stop_lost_kept_when_the_deletion_enters_the_partial_codon_from_the_utr() {
+    fn no_stop_lost_when_the_deletion_enters_an_open_ended_segment_from_the_utr() {
         let expected = [
             "3_prime_UTR_variant",
             "5_prime_UTR_variant",
             "coding_sequence_variant",
             "feature_truncation",
-            "stop_lost",
         ];
         // Forward: from cDNA 20 of the 30-base UTR over the 13 coding bases and off.
         let t = crate::test_helpers::make_open_ended_segment(Strand::Forward, "ACTGGGGGATACG");
@@ -1366,7 +1388,7 @@ mod tests {
         terms
     }
 
-    /// A `<DEL>` wholly inside a frameshift intron. Ensembl VEP 116.2 writes
+    /// A `<DEL>` wholly inside a frameshift intron. Ensembl VEP 116.3 writes
     /// `feature_truncation,coding_sequence_variant` for GRCh37 `21:38600094-38600097`
     /// and `21:38600643-38600644` on ENST00000288304 (a 4-base and a 2-base intron
     /// inside its coding region) and `intron_variant` for `21:38600300-38600303`, in
@@ -1409,7 +1431,7 @@ mod tests {
         );
     }
 
-    /// The same on a transcript without a translation: Ensembl VEP 116.2 writes
+    /// The same on a transcript without a translation: Ensembl VEP 116.3 writes
     /// `feature_truncation,non_coding_transcript_variant` for GRCh38
     /// `21:6358575-6358576` on ENST00000624847, a 2-base intron of a lncRNA, and
     /// `intron_variant,non_coding_transcript_variant` in its ordinary intron.
@@ -1432,5 +1454,184 @@ mod tests {
             deletion_terms(&tx, 25_001_000, 25_001_008),
             ["intron_variant", "non_coding_transcript_variant"]
         );
+    }
+
+    /// The genomic span of the coding positions `from..=to` of a transcript of
+    /// `make_single_exon_transcript`; a position past the coding end lies in
+    /// the 3' UTR or after the transcript's last base.
+    fn coding_span(tx: &Transcript, from: u64, to: u64) -> (u64, u64) {
+        use crate::test_helpers::genomic_of_cds;
+        let (a, b) = (genomic_of_cds(tx, from), genomic_of_cds(tx, to));
+        (a.min(b), a.max(b))
+    }
+
+    /// A single-exon transcript of `make_single_exon_transcript` whose coding
+    /// sequence is `codons` joined.
+    fn single_exon(strand: Strand, codons: &[&str], utr3: &[&str]) -> Transcript {
+        crate::test_helpers::make_single_exon_transcript(strand, &codons.concat(), &utr3.concat())
+    }
+
+    /// A structural deletion over the last three coding positions of a
+    /// transcript where no stop codon stands takes no `stop_lost` and keeps
+    /// its other terms: a transcript whose last codon names a residue, with
+    /// `cds_end_NF` and without it, at the transcript's end and before a 3'
+    /// UTR, and one that ends inside a codon before a 3' UTR. Ensembl VEP's
+    /// structural arm holds the span against those three positions alone and
+    /// reads neither a flag nor a base (VariationEffect.pm:1268-1280).
+    #[test]
+    fn structural_deletion_over_a_coding_end_where_no_stop_codon_stands_has_no_stop_lost() {
+        let terms = [
+            "3_prime_UTR_variant",
+            "coding_sequence_variant",
+            "feature_truncation",
+        ];
+        for strand in [Strand::Forward, Strand::Reverse] {
+            // Four codons, the last naming Tyr, on the transcript's last base.
+            let unflagged = single_exon(strand, &["ATG", "GCT", "GCT", "TAC"], &[]);
+            let mut flagged = unflagged.clone();
+            flagged.flags = vec!["cds_end_NF".to_string()].into();
+            for (tx, case) in [(&flagged, "cds_end_NF"), (&unflagged, "no flag")] {
+                let (start, end) = coding_span(tx, 10, 60);
+                assert_eq!(deletion_terms(tx, start, end), terms, "{strand:?}, {case}");
+            }
+            // The same codons before a 3' UTR of nine bases, the deletion
+            // inside the exon.
+            let before_a_utr = single_exon(
+                strand,
+                &["ATG", "GCT", "GCT", "TAC"],
+                &["GGC", "TTC", "AGG"],
+            );
+            let (start, end) = coding_span(&before_a_utr, 10, 15);
+            assert_eq!(
+                deletion_terms(&before_a_utr, start, end),
+                terms,
+                "{strand:?}, before a 3' UTR"
+            );
+        }
+        // 283 codons and one base before a 3' UTR.
+        assert_eq!(deletion_terms(&tx(), 25_004_200, 25_004_400), terms);
+    }
+
+    /// A stop codon that the last one or two coding bases begin on the
+    /// transcript's last base is read at those bases. Where the record shows
+    /// that polyadenylation completes it, by a mitochondrial codon table or a
+    /// consensus coding sequence id, a structural deletion that takes them
+    /// loses the stop codon wherever it starts. Where the record does not,
+    /// no stop codon stands and no span loses one. A deletion inside the
+    /// last whole codon takes no base of a stop codon on either record,
+    /// where Ensembl VEP holds the span against the last three coding
+    /// positions (VariationEffect.pm:1268-1280).
+    #[test]
+    fn structural_deletion_reads_a_stop_codon_begun_by_the_last_coding_bases_at_those_bases() {
+        let kept = [
+            "3_prime_UTR_variant",
+            "coding_sequence_variant",
+            "feature_truncation",
+        ];
+        let lost = [
+            "3_prime_UTR_variant",
+            "coding_sequence_variant",
+            "feature_truncation",
+            "stop_lost",
+        ];
+        for strand in [Strand::Forward, Strand::Reverse] {
+            for tail in ["T", "TA"] {
+                let case = format!("{strand:?}, a tail of {}", tail.len());
+                let not_shown = single_exon(strand, &["ATG", "GCT", "GCT", "CCA", tail], &[]);
+                let mut by_code = not_shown.clone();
+                by_code.vefc.as_mut().unwrap().codon_table = 2;
+                let mut by_id = not_shown.clone();
+                by_id.ccds = Some("CCDS1.1".into());
+                // From the stop codon's first base off the 3' end.
+                let (start, end) = coding_span(&not_shown, 13, 60);
+                assert_eq!(deletion_terms(&by_code, start, end), lost, "{case}");
+                assert_eq!(deletion_terms(&by_id, start, end), lost, "{case}");
+                assert_eq!(deletion_terms(&not_shown, start, end), kept, "{case}");
+                // From the last whole codon off the 3' end.
+                let (start, end) = coding_span(&not_shown, 11, 60);
+                for tx in [&by_code, &by_id] {
+                    assert_eq!(deletion_terms(tx, start, end), lost, "{case}");
+                }
+                assert_eq!(deletion_terms(&not_shown, start, end), kept, "{case}");
+                // The last base of the last whole codon alone.
+                let (start, end) = coding_span(&not_shown, 12, 12);
+                for tx in [&by_code, &by_id, &not_shown] {
+                    assert_eq!(
+                        deletion_terms(tx, start, end),
+                        ["feature_truncation", "frameshift_variant"],
+                        "{case}"
+                    );
+                }
+            }
+        }
+    }
+
+    /// A structural deletion over the first three coding positions is
+    /// `start_lost` only where a start codon stands at the coding start: the
+    /// first codon is a start codon of the table, or the record carries a
+    /// consensus coding sequence id. On a first codon that names Ala with no
+    /// such id the row keeps its other terms. Ensembl VEP reads those three
+    /// positions as the start codon on every transcript without
+    /// `cds_start_NF` (VariationEffect.pm:886-896 behind 965-990).
+    #[test]
+    fn structural_deletion_over_the_first_coding_bases_is_start_lost_only_where_a_start_codon_stands(
+    ) {
+        let utr3 = ["GGC", "TTC", "AGG"];
+        for strand in [Strand::Forward, Strand::Reverse] {
+            let opens = single_exon(strand, &["ATG", "GCT", "GCT", "TAA"], &utr3);
+            let no_start = single_exon(strand, &["GCT", "GCT", "GCT", "TAA"], &utr3);
+            let mut by_id = no_start.clone();
+            by_id.ccds = Some("CCDS1.1".into());
+            // The first codon alone.
+            let (start, end) = coding_span(&opens, 1, 3);
+            let in_frame = ["feature_truncation", "inframe_deletion"];
+            let in_frame_start_lost = ["feature_truncation", "inframe_deletion", "start_lost"];
+            assert_eq!(
+                deletion_terms(&opens, start, end),
+                in_frame_start_lost,
+                "{strand:?}"
+            );
+            assert_eq!(
+                deletion_terms(&by_id, start, end),
+                in_frame_start_lost,
+                "{strand:?}"
+            );
+            assert_eq!(
+                deletion_terms(&no_start, start, end),
+                in_frame,
+                "{strand:?}"
+            );
+            // Nine bases of the 5' UTR and the first codon.
+            let (start, end) = match strand {
+                Strand::Forward => (start - 9, end),
+                Strand::Reverse => (start, end + 9),
+            };
+            let from_the_utr = [
+                "5_prime_UTR_variant",
+                "coding_sequence_variant",
+                "feature_truncation",
+            ];
+            let from_the_utr_start_lost = [
+                "5_prime_UTR_variant",
+                "coding_sequence_variant",
+                "feature_truncation",
+                "start_lost",
+            ];
+            assert_eq!(
+                deletion_terms(&opens, start, end),
+                from_the_utr_start_lost,
+                "{strand:?}"
+            );
+            assert_eq!(
+                deletion_terms(&by_id, start, end),
+                from_the_utr_start_lost,
+                "{strand:?}"
+            );
+            assert_eq!(
+                deletion_terms(&no_start, start, end),
+                from_the_utr,
+                "{strand:?}"
+            );
+        }
     }
 }

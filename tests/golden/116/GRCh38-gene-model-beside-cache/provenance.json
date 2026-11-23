@@ -1,0 +1,177 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --symbol --biotype --canonical --mane --tsl --protein --protein_version --gene_version --transcript_version --custom file={corpus}/novel_models.gff3.gz,format=gff,short_name=novel [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "perl_cache_slice": "Ensembl VEP read the chromosome 21 directory of its release 116 GRCh38 cache, with the cache's info.txt and chr_synonyms.txt, mounted as homo_sapiens/116_GRCh38; it holds every transcript the records reach, all of them on chromosome 21",
+ "fasta": "the reference of the GRCh38-gtf-builder corpus, its four files copied byte for byte: GRCh38 chromosome 21 at its full length from Homo_sapiens.GRCh38.dna.primary_assembly.fa, every base masked to N outside the span of each transcript of chr21_genes.gtf.gz with 5,000 bases of flank and each record with 2,000; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run and vep-rs the compressed one; both engines read the sequence of the two files' transcripts from it, every one of them inside the unmasked regions, and the sequence of the cache's transcripts from the cache",
+ "input": "the 74 records of the GRCh38-gtf-builder corpus, the same variants.vcf byte for byte: chromosome 21 records inside and beside eight genes of the Ensembl 116 GTF (PWP2 and TMPRSS3, protein coding on either strand; LINC00308 and PLAC4, lncRNA; ANKRD30BP1, an unprocessed pseudogene; TMEM97P1, a processed pseudogene; RNU6-1149P, an snRNA; MIR6070, a miRNA): ClinVar GRCh38 records inside their spans and 21 synthetic single-base, two-base, deletion and insertion records written from the reference sequence inside, upstream and downstream of the non-coding genes; every record is named to vep-golden-corpus select with --include, so all 74 stay",
+ "sha256": {
+  "default.txt": "7938cf0a42bc20ddf317564c4e6fe2a5648a36d2d7b0a2593f2a938bcd844e0e",
+  "tab.txt": "df8ebcf3fd76c1b24d503518d250cfc1f8b20ab3edc2c27745154474d10efab6",
+  "vcf.vcf": "6205330676628b830417eb17ab65eb3f699d7c09807de7fd0f237c68871069fc",
+  "json.jsonl": "32006bf2f80670656d1b600eb093cf10f59214e6c9a05851d2fcb098cb244b12"
+ },
+ "variants_vcf_sha256": "82e2b0a2d78ae79bb420fb4a1cd00759b20610e052c604ad9390d32878bd5951",
+ "transcript_source": {
+  "chr21_genes.gtf.gz": "the file of the GRCh38-gtf-builder corpus, byte for byte, with its index: the lines of the eight genes from Homo_sapiens.GRCh38.116.gtf.gz (every feature type the release carries for them, the five header lines kept), sorted by start and end, bgzip-compressed and indexed with tabix -p gff; 59 transcripts, whose identifiers are those of the cache's transcripts, so a run that reads it beside the cache writes each such transcript once per source",
+  "novel_models.gff3.gz": "derived from chr21_genes.gtf.gz: the same eight genes and 59 transcripts with their exons and coding segments, written as an Ensembl GFF3 writes them under identifiers of their own, so that no transcript identifier equals one of the cache's. Every ENSG, ENST, ENSP and ENSE identifier becomes NOVG, NOVT, NOVP and NOVE with its digits kept. The first line is ##gff-version 3; column 1, the coordinates and the strand are the GTF line's, column 2 is novel, column 6 a dot and column 8 a dot on every line but a CDS line. One line per GTF gene line: type gene for a protein_coding gene, ncRNA_gene for a lncRNA, miRNA or snRNA gene, pseudogene for a processed_pseudogene or unprocessed_pseudogene gene; attributes ID=gene:<id>;Name=<gene_name>;biotype=<gene_biotype>;gene_id=<id>;version=<gene_version>. One line per GTF transcript line: type mRNA for the biotype protein_coding, lnc_RNA for lncRNA, miRNA for miRNA, snRNA for snRNA, pseudogenic_transcript for the two pseudogene biotypes and transcript for every other; attributes ID=transcript:<id>;Parent=gene:<gene id>;Name=<transcript_name>;biotype=<transcript_biotype>;tag=<tags>;transcript_id=<id>;transcript_support_level=<value>;version=<transcript_version>, where tag joins with commas, in the GTF line's order, its tags among Ensembl_canonical, MANE_Select, MANE_Plus_Clinical, gencode_basic and gencode_primary and is left out of a line with none of them, and transcript_support_level carries the GTF's value whole and is left out of a line whose GTF line has none. One exon line per GTF exon line: Parent=transcript:<id>;Name=<exon_id>;rank=<exon_number>. One CDS line per GTF CDS line, with the GTF's phase in column 8: ID=CDS:<protein_id>;Parent=transcript:<id>;protein_id=<protein_id>;version=<protein_version>; each GTF stop_codon segment is merged into the CDS segment of its transcript that it abuts (each of the 25 abuts one), so the coding segments run through the stop codon as an Ensembl GFF3's do. The GTF's five_prime_utr, three_prime_utr, start_codon and stop_codon lines have no line of their own. Lines are sorted by start, then end, then gene before transcript before exon and CDS, then the identifier of the line's gene (a gene line) or transcript (every other line), then exon before CDS; the file is bgzip-compressed and indexed with tabix -p gff. 844 lines after the first: 2 gene, 4 ncRNA_gene, 2 pseudogene, 26 mRNA, 21 lnc_RNA, 8 transcript, 2 pseudogenic_transcript, 1 miRNA, 1 snRNA, 464 exon and 313 CDS. Every type is one Ensembl VEP's GFF reader reads (%INCLUDE_FEATURE_TYPES of AnnotationSource/File/GFF.pm at release/116.3), so a run writes no warning about the file",
+  "sha256": {
+   "chr21_genes.gtf.gz": "59dc725979ac78a15a5ef8c4d0d22668483f7a7a9960f7344a1839f44424fbf9",
+   "chr21_genes.gtf.gz.tbi": "2c5dc2ac3ccc877bd0530240e5b7ef38b1d458c382e9d84d3380ff6b77873207",
+   "novel_models.gff3.gz": "9fc8db9f2286a08ff71e6e5dfb6586f9fdc4450377a1fc03dbad0dddff40d994",
+   "novel_models.gff3.gz.tbi": "c819737ca1f78cd413cc2155c91dd5814499c68f07789b5df3617663bbc9435f"
+  },
+  "tools": {
+   "bgzip": "bgzip (htslib) 1.9",
+   "tabix": "tabix (htslib) 1.9"
+  }
+ },
+ "reference_slice": {
+  "source": "the reference files of the GRCh38-gtf-builder corpus, byte for byte (its reference_slice records how they were cut)",
+  "files": {
+   "reference.fa.fai": "9a25d871c398f70f3d22d9542105e1c9b3dc8fdaa887e3331965b350ec77582d",
+   "reference.fa.gz": "e27fa844fb0559b15fb83c806f2bce16fc40eab2bab4907801cd064fcb56355c",
+   "reference.fa.gz.fai": "9a25d871c398f70f3d22d9542105e1c9b3dc8fdaa887e3331965b350ec77582d",
+   "reference.fa.gz.gzi": "dc86489d6ae3f1a5d0a5226d3b8c78a1fbfccbf0be0ccbba4a366f835db65b8f"
+  }
+ },
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "21": 188
+  },
+  "shards": 6,
+  "spans_by_chromosome": {
+   "21": 74
+  }
+ },
+ "flag_sets": {
+  "filter-source": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --symbol --biotype --canonical --mane --tsl --protein --protein_version --gene_version --transcript_version --custom file={corpus}/novel_models.gff3.gz,format=gff,short_name=novel --transcript_filter \"_source_cache is novel\" [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "e84f37160b3307d8379272d1f633a1f4a4604314ed7e8f2870c900b0703e6ca5",
+    "tab.txt": "fce99d31a092fcad9d100b64bb09a58c062e7a07226b51be8e40a14d393685fc",
+    "vcf.vcf": "faeb6a02aa2002ed2095f19eb314b176d299a53562aba2f402797c24f58457b5",
+    "json.jsonl": "3d996a0ed5f84527d6e2cf09077a62c6bede067a3bd614a3e9146f422b0d2825"
+   },
+   "flags": [
+    "--symbol",
+    "--biotype",
+    "--canonical",
+    "--mane",
+    "--tsl",
+    "--protein",
+    "--protein_version",
+    "--gene_version",
+    "--transcript_version",
+    "--custom",
+    "file={corpus}/novel_models.gff3.gz,format=gff,short_name=novel",
+    "--transcript_filter",
+    "_source_cache is novel"
+   ],
+   "expected_dir": "expected_filter-source"
+  },
+  "gtf": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --symbol --biotype --canonical --mane --tsl --protein --protein_version --gene_version --transcript_version --gtf {corpus}/chr21_genes.gtf.gz [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "ce7dc5b80dfda92ca553ab9dc2ace7ae8a63249676fd715bb86f73ce9732bec9",
+    "tab.txt": "b5d23826e636f43bc1c2cd5f9eaa42f12addb4b411ad74cabcea16f21767b553",
+    "vcf.vcf": "ef9e713de16d87569394064ec9784b4e95b22ab144b57316d8bdd8575b4edcb0",
+    "json.jsonl": "fbee76057b2bdd8844b05a80cee5e4029b450ad18e3edc303eae07b6f3e2697f"
+   },
+   "flags": [
+    "--symbol",
+    "--biotype",
+    "--canonical",
+    "--mane",
+    "--tsl",
+    "--protein",
+    "--protein_version",
+    "--gene_version",
+    "--transcript_version",
+    "--gtf",
+    "{corpus}/chr21_genes.gtf.gz"
+   ],
+   "expected_dir": "expected_gtf"
+  },
+  "two-files": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --symbol --biotype --canonical --mane --tsl --protein --protein_version --gene_version --transcript_version --gtf {corpus}/chr21_genes.gtf.gz --custom file={corpus}/novel_models.gff3.gz,format=gff,short_name=novel [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "b092d944ad208af240b82168346ff343178eb9e579206970ba2d83b85fd92d0a",
+    "tab.txt": "c1a3654dde2d72278da98be88ef7c2df267ce3a476cb7cf9614dd78d06662ad3",
+    "vcf.vcf": "ac5500991d9617e1eac83b1b11f18e80b25a78b1937c46d5ccef15fd5e43ecf2",
+    "json.jsonl": "4c3caa9d12ad11c0222b36c92813fc58667233e7505cc7c439f1c6db55ff436c"
+   },
+   "flags": [
+    "--symbol",
+    "--biotype",
+    "--canonical",
+    "--mane",
+    "--tsl",
+    "--protein",
+    "--protein_version",
+    "--gene_version",
+    "--transcript_version",
+    "--gtf",
+    "{corpus}/chr21_genes.gtf.gz",
+    "--custom",
+    "file={corpus}/novel_models.gff3.gz,format=gff,short_name=novel"
+   ],
+   "expected_dir": "expected_two-files"
+  },
+  "gff": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --symbol --biotype --canonical --mane --tsl --protein --protein_version --gene_version --transcript_version --gff {corpus}/novel_models.gff3.gz [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "62bb6e35057c92d621c212061317ed9492f8329f0ce5989ccfa0e3c51891ab66",
+    "tab.txt": "072b29838b3b458a8b5bb168424690371201c238dfb7e52839d4174a01b124ea",
+    "vcf.vcf": "f3b58e479f839a027f18faaf5b6992cd21f4f344c99727971d93383d23f1905c",
+    "json.jsonl": "dc37fc1fad1d80d96e63b96696ec818715b1427c5576fef198740c96f857aa58"
+   },
+   "flags": [
+    "--symbol",
+    "--biotype",
+    "--canonical",
+    "--mane",
+    "--tsl",
+    "--protein",
+    "--protein_version",
+    "--gene_version",
+    "--transcript_version",
+    "--gff",
+    "{corpus}/novel_models.gff3.gz"
+   ],
+   "expected_dir": "expected_gff"
+  }
+ },
+ "generator": "chr21_genes.gtf.gz with its index and reference.fa.gz with its three index files: copied from the GRCh38-gtf-builder corpus; novel_models.gff3.gz: derived from chr21_genes.gtf.gz as transcript_source describes, compressed and indexed with the bgzip and tabix of the Ensembl VEP image; json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice tools/vep-storable-to-json converts from the Ensembl VEP 116 GRCh38 cache, which keeps the 188 transcripts within 5,000 bases of a record; expected outputs: one Ensembl VEP 116.3 container run per format for the manifest's run and each flag set from the vep command recorded here and under its flag_sets entry, with the arguments, their order and the mounts of a corpus run of scripts/concordance/generate_reference_output.sh, the image named by its digest, the corpus mounted read-only at /work/corpus as its working directory, the chromosome 21 directory of the Ensembl VEP release 116 GRCh38 cache with its info.txt and chr_synonyms.txt at /work/cache/homo_sapiens/116_GRCh38 and the decompressed reference at /work/ref.fa, the --transcript_filter value of the filter-source set passed as one argument, each output compressed with gzip -n -9; manifest: tools/vep-golden-corpus select --release 116 --assembly GRCh38 over the default-format reference of the manifest's own run, --include for each of the 74 records, --k 2 --seed 1 --max-records 80 --cache json_cache --covers gff-gtf-with-cache --fasta-name reference.fa.gz and one --flag per word of the manifest's flags, then flag-set for each set (--unordered for gtf and two-files, whose file carries the cache's transcript identifiers: Ensembl VEP's order of the two rows of one identifier differs from run to run), then reference_warnings written by hand on the two sets that read the GTF, one text per line type of chr21_genes.gtf.gz that Ensembl VEP's reader skips with a warning (three_prime_utr, start_codon, five_prime_utr)"
+}

@@ -1,0 +1,34 @@
+{
+  "assembly": "MorexV3_pseudomolecules_assembly",
+  "cache_version": 63,
+  "contig_order": [
+    "1H"
+  ],
+  "polyphen": "",
+  "regulatory": false,
+  "sift": "b",
+  "source_versions": {
+    "assembly": "MorexV3_pseudomolecules_assembly",
+    "genebuild": "2021-04-JHI",
+    "sift": "sift"
+  },
+  "species": "hordeum_vulgare",
+  "var_type": "tabix",
+  "variation_cols": [
+    "chr",
+    "variation_name",
+    "failed",
+    "somatic",
+    "start",
+    "end",
+    "allele_string",
+    "strand",
+    "clin_sig",
+    "phenotype_or_disease",
+    "clin_sig_allele",
+    "clin_sig_ref_allele",
+    "clinical_impact",
+    "pubmed",
+    "var_synonyms"
+  ]
+}

@@ -21,9 +21,9 @@ The `--output_format` value is matched in any case (`VCF`, `Json`) and read once
 
 ## Compressed output
 
-`--compress_output gzip` writes the output as one gzip member and `--compress_output bgzip` as a BGZF stream. A BGZF stream is gzip members of at most 64 KiB ending in the empty end-of-file member, the form `bgzip`, `tabix` and `samtools` read. Either goes to the output file under the name given, or to standard output under `-o STDOUT`. Ensembl VEP pipes its output through the external `gzip -c` or `bgzip -c`. vep-rs encodes in process, so the decompressed text is the same output and the compressed bytes are the encoder's.
+`--compress_output gzip` writes the output as one gzip member and `--compress_output bgzip` as a BGZF stream: gzip members of at most 64 KiB ending in the empty end-of-file member, the form `bgzip`, `tabix` and `samtools` read. Either goes to the output file under the name given, or to standard output under `-o STDOUT`. Ensembl VEP pipes its output through the external `gzip -c` or `bgzip -c`. vep-rs encodes in process, so the decompressed text is the same output and the compressed bytes are the encoder's.
 
-The BGZF encoder deflates its blocks on worker threads and writes them in order. The hidden `--compression_threads` sets how many. `0`, the default, is the number of available logical CPUs capped at 16, and `1` deflates on the thread that writes the output. Every count writes the same bytes. The gzip encoder, one member, runs on the writing thread.
+The BGZF encoder deflates its blocks on worker threads and writes them in order. The hidden `--compression_threads` sets how many. `0`, the default, is the number of available logical CPUs capped at 16, and `1` deflates on the writing thread, as the one-member gzip encoder does. Compressed bytes depend on the text alone; two runs of a command differ only in the header's time.
 
 The flag applies to the default, `tab`, `vcf` and `json` formats and is refused with `parquet`, whose parts are ZSTD-compressed by the writer itself. The golden corpus `GRCh38-writers` runs both encoders in every text format and compares the decompressed output with Ensembl VEP's.
 
@@ -37,13 +37,13 @@ The columns a VCF line copies from the input, the ID among them, stay the input'
 
 ## Parity with Ensembl VEP
 
-With the default flag set and `--tab`, `--vcf` or `--json`, vep-rs matches Ensembl VEP exactly except for the documented divergences: the default, `tab`, `vcf` and `json` outputs are compared with what Ensembl VEP 116.2 writes field for field. Every column of every row is compared as text and, for JSON, every key of every object. Ensembl VEP writes JSON keys in Perl hash order, so the JSON is not byte-identical and key order is not compared. Header lines that carry a time, a cache path or the command line are compared by shape. Ensembl VEP's Perl API component version lines have no counterpart.
+With the default flag set and `--tab`, `--vcf` or `--json`, vep-rs matches Ensembl VEP exactly except for the documented divergences: the default, `tab`, `vcf` and `json` outputs are compared with what Ensembl VEP 116.3 writes field for field. Every column of every row is compared as text and, for JSON, every key of every object. Ensembl VEP writes JSON keys in Perl hash order, so the JSON is not byte-identical and key order is not compared. Header lines that carry a time, a cache path or the command line are compared by shape. Ensembl VEP's Perl API component version lines have no counterpart.
 
 Every format also names the engine that wrote it, which Ensembl VEP's output does not. The comparators set that one line or key aside and compare everything else ([Engine identity](#engine-identity)).
 
 The contract is enforced by the golden corpora under `tests/golden/<release>/<assembly>/` (`crates/vep-cli/tests/golden.rs` and `format_parity.rs`). Each corpus holds every consequence-set combination observed on the benchmark datasets. It is annotated with its own pruned cache and compared with Ensembl VEP's committed output in all four formats, plus the Parquet round trip. Consequence terms themselves are governed by the concordance measurement ([scripts/README.md](../scripts/README.md#reproducing-the-published-concordance)).
 
-The corpus manifest records the (Location, Allele, Feature) keys whose terms differ between the engines, and the rows only one engine emits, each under its divergence class. The differing keys by corpus, none of them `unexplained_residual`:
+The corpus manifest records the (Location, Allele, Feature) keys whose terms differ between the engines, and the rows only one engine emits, each under its divergence class. The differing keys of four corpora, none `unexplained_residual`:
 
 | Corpus | Differing keys | Rows |
 | --- | ---: | ---: |
@@ -60,7 +60,7 @@ The `GRCh38-regulatory` corpus records two documented differences. Under `--regu
 
 ### What the format flags and `--everything` switch on
 
-`--vcf` also switches on `--symbol`, `--biotype` and `--numbers`, as in Ensembl VEP, and `--json` switches on `--no_escape`, as Ensembl VEP's `rest` option set does. `--output_format json` switches it on here as well, where Ensembl VEP leaves that output escaped ([Unescaped JSON under `--output_format json`](divergences/json-escaping.md)). `--output_format vcf` switches on the same fields as `--vcf`, where Ensembl VEP ties them to the flag alone ([The CSQ fields of a VCF output selected with `--output_format vcf`](divergences/output-format-vcf-fields.md)). `--everything` switches on exactly Ensembl VEP's set ([CLI reference](cli-reference.md#option-sets-configpm351-593)), `--regulatory` among them. So its rows include the regulatory and motif rows of a cache converted with its regulatory features.
+`--vcf` also switches on `--symbol`, `--biotype` and `--numbers`, as in Ensembl VEP, and `--json` switches on `--no_escape`, as Ensembl VEP's `rest` option set does. `--output_format json` switches it on here as well, where Ensembl VEP leaves that output escaped ([Unescaped JSON under `--output_format json`](divergences/json-escaping.md)). `--output_format vcf` switches on the same fields as `--vcf`, where Ensembl VEP ties them to the flag alone ([The CSQ fields of a VCF output selected with `--output_format vcf`](divergences/output-format-vcf-fields.md)). `--everything` switches on exactly Ensembl VEP's set ([CLI reference](cli-reference.md#option-sets-configpm351-593)), `--regulatory` among them. So its rows include the regulatory and motif rows of a cache that carries regulatory features.
 
 ### Where each rule lives
 
@@ -103,7 +103,7 @@ The rules the formatters follow are Ensembl VEP's own, cited to their Perl sourc
 
 Under `--minimal`, a split allele's `cDNA_position`, `CDS_position` and `Protein_position` follow the format. The default and tab outputs print the record span's values, in the columns the allele's own span admits, as Ensembl VEP recomputes them after its rejoin (`OutputFactory.pm` lines 294-299). The VCF and JSON outputs print the allele's own, as their factories recompute them before it (`OutputFactory/VCF.pm` lines 305-308, `OutputFactory/JSON.pm` lines 217-220). Codons, Amino_acids and the terms are the trimmed allele's in every format. The HGVS notations shift as a bi-allelic record's do ([the HGVSp of a split allele](divergences/minimal-split-hgvsp.md)).
 
-Under `--coding_only`, a split allele's rows are judged over the span the output format rejoins on. That span is the record's in the default and tab outputs and the allele's own in the VCF and JSON outputs. Ensembl VEP's default and tab factories clear the cached CDS coordinates after the rejoin (`OutputFactory.pm` lines 297-323). Its VCF and JSON factories clear them before it (`OutputFactory/VCF.pm` lines 305-308, `OutputFactory/JSON.pm` lines 217-220). Every row of a split record prints the record's own `REF_ALLELE` when the first allele's feature kept no row before the rejoin (`OutputFactory.pm` line 1357 at line 2289).
+Under `--coding_only`, a split allele's rows are judged over the span the output format rejoins on. That span is the record's in the default and tab outputs and the allele's own in the VCF and JSON outputs. Ensembl VEP's default and tab factories clear the cached CDS coordinates after the rejoin (`OutputFactory.pm` lines 297-323). Its VCF and JSON factories clear them before it (`OutputFactory/VCF.pm` lines 305-308, `OutputFactory/JSON.pm` lines 217-220). Every row of a split record prints the record's own `REF_ALLELE` when the first allele's feature kept no row before the rejoin (`OutputFactory.pm` line 1357 at line 2298).
 
 ## Per-sample copies and the reference row
 
@@ -187,13 +187,13 @@ Under `--process_ref_homs` the codon path rotates nothing, because the reference
 
 ## Engine identity
 
-The Ensembl-shaped header lines stay as Ensembl VEP writes them, so a parser written for Ensembl VEP output reads vep-rs output unchanged. Each format adds one item naming the vep-rs version: the release, `0.6.0` in the examples below, read from the crate version `vep --version` prints.
+The Ensembl-shaped header lines stay as Ensembl VEP writes them, so a parser written for Ensembl VEP output reads vep-rs output unchanged. Each format adds one item naming the vep-rs version: the release, `1.0.0` in the examples below, read from the crate version `vep --version` prints.
 
 | Format           | Where                                                                                                                                | Form                         |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------- |
-| default, `--tab` | the second header line, after the `## ENSEMBL VARIANT EFFECT PREDICTOR` banner                                                       | `## vep-rs 0.6.0`            |
-| `--vcf`          | the meta line after `##VEP=`, in the `##key=value` form VCF 4.3 section 1.4 defines (a bare `## vep-rs` line is not valid VCF)        | `##vep-rs=0.6.0`             |
-| `--json`         | a key of every object, an unannotated record's input-only object included                                                            | `"vep_rs_version": "0.6.0"`  |
+| default, `--tab` | the second header line, after the `## ENSEMBL VARIANT EFFECT PREDICTOR` banner                                                       | `## vep-rs 1.0.0`            |
+| `--vcf`          | the meta line after `##VEP=`, in the `##key=value` form VCF 4.3 section 1.4 defines (a bare `## vep-rs` line is not valid VCF)        | `##vep-rs=1.0.0`             |
+| `--json`         | a key of every object, an unannotated record's input-only object included                                                            | `"vep_rs_version": "1.0.0"`  |
 | Parquet          | the key-value metadata of every part's footer, and the manifest                                                                      | `vep_rs_version`             |
 
 `--no_headers` drops the default, tab and VCF lines with the rest of the header. Re-annotating a VCF that vep-rs wrote replaces its `##vep-rs=` line along with the earlier `##VEP` lines, as a re-annotation by Ensembl VEP replaces its own. The golden-corpus comparators (`crates/vep-cli/tests/common/mod.rs`) set aside exactly one identity line or key of the version under test. They report a missing, repeated or differently versioned one as a header difference.

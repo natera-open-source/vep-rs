@@ -1,0 +1,5 @@
+#Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	Extra
+o1	1:9	A	-	-	-	zeta	-	-	-	-	-	-	-
+o2	1:2	A	-	-	-	alpha,café "quoted"\back	-	-	-	-	-	-	-
+o3	1:3	A	-	-	-	alpha,𝄞 ,zeta	-	-	-	-	-	 	-
+o4	1:4	A	-	-	-	beta	-	-	-	-	-	x	-

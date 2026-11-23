@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 
 /// One source's annotation of one variant.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct CustomAnnotations {
     /// The source's `short_name`, the output key.
     pub short_name: Arc<str>,
@@ -28,6 +29,23 @@ pub struct CustomAnnotations {
     pub matched: bool,
     /// The summary statistics; `None` when the source computes none.
     pub stats: Option<CustomStats>,
+}
+
+impl CustomAnnotations {
+    /// One source's annotation of one variant, from each of its fields.
+    pub fn new(
+        short_name: Arc<str>,
+        records: Vec<CustomRecord>,
+        matched: bool,
+        stats: Option<CustomStats>,
+    ) -> Self {
+        Self {
+            short_name,
+            records,
+            matched,
+            stats,
+        }
+    }
 }
 
 /// The summary statistics of one source over one variant
@@ -45,6 +63,7 @@ pub enum CustomStats {
 
 /// One matched record.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct CustomRecord {
     /// The record's identifier, its coordinates under `coords`, or `...`.
     pub name: String,
@@ -61,10 +80,27 @@ pub struct CustomRecord {
     pub score: Option<CustomValue>,
 }
 
+impl CustomRecord {
+    /// One matched record, from each of its fields.
+    pub fn new(
+        name: String,
+        allele: Option<Vec<u8>>,
+        fields: IndexMap<String, CustomFieldValue>,
+        score: Option<CustomValue>,
+    ) -> Self {
+        Self {
+            name,
+            allele,
+            fields,
+            score,
+        }
+    }
+}
+
 /// The value of one field of a record: the column's text, the list a
 /// `FILTER` column splits into on `;` (`File/VCF.pm:222`), or a value the
 /// record leaves undefined (a GFF window's `feature_id` when the record has no
-/// `ID` attribute, `File/GFF.pm:198`), which the text formats print empty and
+/// `ID` attribute, `File/GFF.pm:199`), which the text formats print empty and
 /// the JSON format `null`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]

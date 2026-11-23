@@ -1,0 +1,2 @@
+{"id": "rec1", "input": "21\t100\trec1\tG\tA", "seq_region_name": "21", "start": 100, "most_severe_consequence": "missense_variant", "transcript_consequences": [{"hgvsp": "ENSP1:p.Leu4%3D", "transcript_id": "ENST1", "sift_score": 5e-2, "consequence_terms": ["missense_variant"], "canonical": true, "flags": null}, {"transcript_id": "ENST2", "consequence_terms": ["intron_variant"], "distance": 12.0}]}
+{"id": "rec2", "input": "21\t300\trec2\tG\tC", "seq_region_name": "21", "start": 300}

@@ -4,7 +4,7 @@ Every example on the defect pages is a few VCF records, from a public dataset or
 
 ## The engines
 
-Every command on the defect pages and on this one writes both binaries as `vep`. vep-rs's `vep` is a release binary or a source build placed on PATH (`cargo build --release` leaves it at `target/release/vep`). Ensembl VEP's `vep` is the name it has inside the `ensemblorg/ensembl-vep:release_116.2` image (or a local install of release 116.2). The text beside each command names the engine it runs.
+Every command on the defect pages and on this one writes both binaries as `vep`. vep-rs's `vep` is a release binary or a source build placed on PATH (`cargo build --release` leaves it at `target/release/vep`). Ensembl VEP's `vep` is the name it has inside the `ensemblorg/ensembl-vep:release_116.3` image (or a local install of release 116.3). The text beside each command names the engine it runs.
 
 ## The inputs
 
@@ -20,7 +20,7 @@ Contig names are Ensembl's (`21`, not `chr21`; `scripts/README.md` describes the
 
 ## The transcripts
 
-The transcript sets are Ensembl release 116's: Ensembl VEP reads its own cache (`homo_sapiens/116_GRCh37` and `homo_sapiens/116_GRCh38`), and vep-rs reads the JSON conversion of the same cache (`scripts/data/storable_to_json.pl`, described in [`docs/cache-conversion.md`](../cache-conversion.md), laid out as `json_cache/homo_sapiens/116_GRCh37` and `json_cache/homo_sapiens/116_GRCh38`), so both engines see identical transcripts. Transcript coordinates quoted on the defect pages are read from that cache. The worked examples of classes 13 to 22 run vep-rs on the pruned slice of the GRCh38 cache committed with the golden corpus, `tests/golden/116/GRCh38-release116/json_cache`, which holds the transcripts the corpus's records reach.
+The transcript sets are Ensembl release 116's: Ensembl VEP reads its own cache (`homo_sapiens/116_GRCh37` and `homo_sapiens/116_GRCh38`), and vep-rs reads the JSON conversion of the same cache (`tools/vep-storable-to-json`, described in [`docs/cache-conversion.md`](../cache-conversion.md), laid out as `json_cache/homo_sapiens/116_GRCh37` and `json_cache/homo_sapiens/116_GRCh38`), so both engines see identical transcripts. Transcript coordinates quoted on the defect pages are read from that cache. The worked examples of classes 13 to 22 run vep-rs on the pruned slice of the GRCh38 cache committed with the golden corpus, `tests/golden/116/GRCh38-release116/json_cache`, which holds the transcripts the corpus's records reach.
 
 ## The reference genome
 
@@ -46,10 +46,10 @@ vep -i record.vcf -o vep-rs.txt --offline \
   --fork 16 --buffer_size 5000 --force --no_stats
 ```
 
-Ensembl VEP 116.2, with the flags the reference outputs were generated with:
+Ensembl VEP 116.3, with the flags the reference outputs were generated with:
 
 ```
-docker run --rm -v "$PWD":/work -v /path/to/vep_cache:/cache -v /path/to/fasta:/fasta ensemblorg/ensembl-vep:release_116.2 \
+docker run --rm -v "$PWD":/work -v /path/to/vep_cache:/cache -v /path/to/fasta:/fasta ensemblorg/ensembl-vep:release_116.3 \
   vep -i /work/record.vcf -o /work/vep.txt --offline --cache \
   --dir_cache /cache --cache_version 116 \
   --species homo_sapiens --assembly GRCh38 --format vcf \
@@ -76,4 +76,4 @@ Both engines write their warnings to `<output>_warnings.txt` beside the output (
 
 ## The comparators
 
-The comparators are `scripts/concordance/compare_vep_outputs.py` (SNP/indel) and `scripts/validation/compare_sv_concordance.py` (structural variants); their per-class counters are named in each class's last section, and `scripts/README.md` describes the full measurement.
+The comparators are `tools/vep-outputs-compare` (SNP/indel) and `tools/vep-sv-compare` (structural variants); their per-class counters are named in each class's last section, and `scripts/README.md` describes the full measurement.

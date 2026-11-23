@@ -1,0 +1,26 @@
+{
+  "total_annotation_lines": 8,
+  "consequence_counts": {
+    "missense_variant": 3,
+    "intron_variant": 3,
+    "splice_region_variant": 1,
+    "intergenic_variant": 1,
+    "upstream_gene_variant": 1
+  },
+  "existing_variation_count": 3,
+  "clin_sig_count": 2,
+  "hgvsc_count": 2,
+  "hgvsp_count": 1,
+  "frequency_field_counts": {
+    "AF": 2,
+    "gnomADe_AF": 1,
+    "gnomADg_AF": 1,
+    "MAX_AF": 1,
+    "EUR_AF": 1,
+    "AFR_AF": 1,
+    "AMR_AF": 1,
+    "EAS_AF": 1,
+    "SAS_AF": 1
+  },
+  "elapsed_seconds": 12
+}

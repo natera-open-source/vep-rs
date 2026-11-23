@@ -1,7 +1,8 @@
 #!/usr/bin/env perl
-# trace_perl_intermediates.pl: dump Perl VEP intermediate values for discordant variants.
+# trace_perl_intermediates.pl: dump Ensembl VEP intermediate values for
+# discordant variants.
 #
-# Runs inside the Perl VEP Docker container (ensemblorg/ensembl-vep:release_116.2).
+# Runs inside the Ensembl VEP Docker container (ensemblorg/ensembl-vep:release_116.3).
 # Requires the VEP cache to be mounted.
 #
 # Usage:
@@ -9,7 +10,7 @@
 #     -v "${VEP_PERL_CACHE_DIR}:/opt/vep/.vep" \
 #     -v $(pwd)/scripts:/scripts \
 #     -v "${VEP_VCF_DIR}:/vcf" \
-#     ensemblorg/ensembl-vep:release_116.2 \
+#     ensemblorg/ensembl-vep:release_116.3 \
 #     perl /scripts/concordance/trace_perl_intermediates.pl \
 #       --input /vcf/discordant.vcf \
 #       --cache_dir /opt/vep/.vep \

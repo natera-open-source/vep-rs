@@ -8,6 +8,8 @@
 //! codon translation, and allele utilities.
 
 pub mod allele;
+#[doc(hidden)]
+pub mod allele_trim;
 pub mod assembly;
 pub mod binding_matrix;
 pub mod cache_info;
@@ -22,6 +24,7 @@ pub mod prediction;
 pub mod regulatory_gff;
 pub mod so_ontology;
 pub mod spdi;
+pub mod stderr;
 pub mod sv_record;
 pub mod sv_routing;
 pub mod sv_span;
@@ -32,9 +35,24 @@ pub mod variant;
 pub mod variation;
 pub mod vcf_header;
 pub mod vcf_info;
+pub mod warning_hold;
 
 /// VEP version number (matches the Ensembl VEP release).
 pub const VEP_VERSION: u32 = 116;
 
 /// VEP sub-version number.
-pub const VEP_SUB_VERSION: u32 = 2;
+pub const VEP_SUB_VERSION: u32 = 3;
+
+/// The Ensembl API modules of the Ensembl VEP release that [`VEP_VERSION`] and
+/// [`VEP_SUB_VERSION`] name, each with the version that release's container
+/// image reports for it, `<release>.<the first seven characters of its commit>`,
+/// sorted by module name as Ensembl VEP lists them (`OutputFactory/VCF.pm`
+/// lines 244-256, `Utils.pm` lines 506-531). They state the reference release's
+/// install: no module of the list runs in vep-rs.
+pub const VEP_API_MODULE_VERSIONS: &[(&str, &str)] = &[
+    ("ensembl", "116.0d85231"),
+    ("ensembl-compara", "116.4038708"),
+    ("ensembl-funcgen", "116.90049ea"),
+    ("ensembl-io", "116.6afb5dc"),
+    ("ensembl-variation", "116.db7394a"),
+];

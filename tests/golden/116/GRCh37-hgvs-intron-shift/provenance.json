@@ -1,7 +1,7 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "divergences_classified_against": {
   "engine": "vep-rs",
@@ -16,16 +16,16 @@
  "perl_cache": "homo_sapiens/116_GRCh37",
  "fasta": "GRCh37 chromosome 21, the GRCh37-hgvs corpus's reference.fa.gz decompressed, passed to both engines on every run",
  "input": "variants.vcf: three hand-placed chromosome 21 records, the reference bases read from the FASTA, on ENST00000594486, a reverse-strand protein-coding transcript that carries a frameshift intron: a deletion of the last base of intron 1 as the transcript reads it, 47613089; an insertion of a copy of the first base of exon 2 between 47613089 and 47613090; and the same deletion written on the first base of exon 2, 47613088. The 3' shift carries the first two one and two bases into the coding sequence of exon 2 (HGVS_OFFSET -1 and -2), where Ensembl VEP writes an HGVSp beside the shifted HGVSc; the third is exonic as written",
- "generator": "candidate records annotated with Ensembl VEP under the corpus flags (the container command above), then scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh37 --suite shift=<reference>=<input> --k 100 --seed 1 --covers hgvs --covers hgvs-offset-field --matrix tests/parity/matrix.tsv --flag=--hgvs --fasta-name ../GRCh37-hgvs/reference.fa.gz --out tests/golden/116/GRCh37-hgvs-intron-shift; scripts/data/storable_to_json.pl <cache> <json> 21; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; scripts/concordance/generate_reference_output.sh --corpus tests/golden/116/GRCh37-hgvs-intron-shift --perl-cache-dir <cache root>; build_golden_corpus.py classify --field HGVSc --field HGVSp --field HGVS_OFFSET --flag=--hgvs",
+ "generator": "candidate records annotated with Ensembl VEP under the corpus flags (the container command above), then tools/vep-golden-corpus select --release 116 --assembly GRCh37 --dataset shift=<reference>=<input> --k 100 --seed 1 --covers hgvs --covers hgvs-offset-field --matrix tests/parity/matrix.tsv --flag=--hgvs --fasta-name ../GRCh37-hgvs/reference.fa.gz --out tests/golden/116/GRCh37-hgvs-intron-shift; tools/vep-storable-to-json <cache> <json> 21; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; scripts/concordance/generate_reference_output.sh --corpus tests/golden/116/GRCh37-hgvs-intron-shift --perl-cache-dir <cache root>; vep-golden-corpus classify --field HGVSc --field HGVSp --field HGVS_OFFSET --flag=--hgvs",
  "sha256": {
-  "default.txt": "bd3f6696c3ef30b9ddf26d734d4a443dda507aecd4199bf8f7e2ed378c98cf44",
-  "tab.txt": "b335c030e8073dc360cde21249a6c3f247cb8811c28d3c5b670969606c922374",
-  "vcf.vcf": "1a812bcb2da7f1f3e0873547c6f89bb728938a89b5dfb1a4a44d1c8c68757dfd",
-  "json.jsonl": "33e505e7c45cd87f189aa4998f3e2c4c557a79f8f969ddb812984f00bd67c3cd",
-  "default.summary.log": "546fba029981d70d8d0817f0ce472a80fe5a1358cd3a1ad84a44ff837e91de07",
-  "tab.summary.log": "af2e845d8c2ac501a0e6d861c11e2f8c41224cf9e24b008f8047213cb19b9f80",
-  "vcf.summary.log": "422cd56482754c888fdbe49e65e839c31029fde4b37f7fcb3c788ea07652cf01",
-  "json.summary.log": "124e610edaab85cb89e1e4698bc554acf665186e01cb3d3e40d3d6b027d47dd4"
+  "default.txt": "9562eed005e6b2b3de82f54fd9df8422cc249193ba4030b9a186ce8779e03b71",
+  "tab.txt": "f4ae5660ca64824e7c45633cd4b118841c784eac2d4b1a717d3f0f3d3ba3e28d",
+  "vcf.vcf": "d36898a5da335c5ce7968d2326ad00693aeac11c4cfdf1f24c41c41f8797f1b6",
+  "json.jsonl": "da7c9df5096994e10e065c54f1616bbe888e7d7ce2c77160b284f48d7080d626",
+  "default.summary.log": "1b4d21e929fb0e5b1b97d7da92af543b8de6493d412b67de5b53ecc37c36d9f4",
+  "tab.summary.log": "1b38fd10267347c4aa56d7d234f71e1e0a69f9c447806d1aa454de27f6b26d34",
+  "vcf.summary.log": "e85139ba4506dd7f5be64efa7558ce9818b02a93a9a2020f669b3557949fe837",
+  "json.summary.log": "014ca22bf43442c517042f16719cbe7b58b87d48499e644edf426cc7726698cb"
  },
  "variants_vcf_sha256": "bcda009b3fa80b778888c83c8855f7d5104780d4e854e8b779b2820e5212016a",
  "pruned_cache": {

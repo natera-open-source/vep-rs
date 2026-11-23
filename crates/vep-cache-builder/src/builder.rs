@@ -23,9 +23,11 @@ use vep_core::codon::{is_start_codon, is_ter_codon, known_table, translate_codon
 use vep_core::coordinate::is_cache_path_component;
 
 use crate::core_dumps::{CoreDumps, TranslationFacts};
-use crate::fasta::{record_of, Peptide};
+use crate::count::{counted, one_or};
+use crate::fasta::{record_of, ModelNames, Peptide};
 use crate::gff3::{located, CdsRecord, ExonRecord, GeneRecord};
 use crate::mapper;
+use crate::translation_row::{coding_records, RowUse};
 
 /// Region size for binning transcripts (1 Mb).
 pub(crate) const REGION_SIZE: u64 = 1_000_000;
@@ -48,12 +50,18 @@ pub struct BuildStats {
     pub sift_matrices: usize,
     /// Transcripts written with a PolyPhen matrix, HumVar or HumDiv.
     pub polyphen_matrices: usize,
+    /// Transcripts written with a translation that names no protein: neither
+    /// the CDS line that opens the coding sequence nor the core dumps name
+    /// one, so a run writes no `ENSP` and no HGVSp for their rows.
+    pub unnamed_translations: usize,
 }
 
 // These must serialize to field names matching what json_cache.rs expects.
 
+/// One transcript as a cache shard holds it; a list of them serializes to a
+/// shard's bytes ([`build_transcripts`]).
 #[derive(Serialize)]
-struct CacheTranscript {
+pub(crate) struct CacheTranscript {
     stable_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     version: Option<u32>,
@@ -116,6 +124,10 @@ struct CacheTranscript {
     /// for the build's own counts and never written.
     #[serde(skip)]
     record_use: RecordUse,
+    /// What the build makes of the transcript's translation row of the core
+    /// dumps, read for the build's own counts and never written.
+    #[serde(skip)]
+    row_use: RowUse,
 }
 
 /// What a build makes of the protein FASTA record that names a transcript.
@@ -135,13 +147,25 @@ enum RecordUse {
 /// coding sequence of `coding_bases`, the translateable sequence's length:
 /// its whole codons, or one fewer. The sequence carries its stop codon where
 /// the model's CDS lines do (an Ensembl GFF3's CDS line, a GTF's `stop_codon`
-/// line) and a record never carries the stop's residue, so a complete
-/// transcript's record is one fewer; one whose sequence ends without a stop
-/// codon has a record of exactly its whole codons.
+/// line) and a record's residues ([`residues`]) hold none for the stop, so a
+/// complete transcript's record is one fewer; one whose sequence ends without
+/// a stop codon has a record of exactly its whole codons.
 fn fits_coding_sequence(residues: usize, coding_bases: u64) -> bool {
     let codons = coding_bases / 3;
     let residues = residues as u64;
     residues == codons || residues + 1 == codons
+}
+
+/// The residues of a protein FASTA record: its sequence without the stop
+/// character that closes it, when one does. Ensembl VEP's cache peptide ends
+/// at its last residue, the stop codon's dropped (core
+/// `Transcript.pm:2154-2160`, stored at `BaseGXF.pm:764`), so the character
+/// is neither counted against the coding sequence nor stored.
+fn residues(record: &Peptide) -> &str {
+    record
+        .sequence
+        .strip_suffix('*')
+        .unwrap_or(&record.sequence)
 }
 
 #[derive(Serialize, Clone)]
@@ -204,7 +228,7 @@ struct CacheVEFC {
 /// protein positions, `alt_seq` the residues written over them and `length_diff`
 /// the growth they cause.
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
-pub struct CacheSeqEdit {
+struct CacheSeqEdit {
     pub code: String,
     pub name: String,
     pub start: u64,
@@ -219,7 +243,7 @@ impl CacheSeqEdit {
     /// is `start end alt_seq` split on whitespace (core `SeqEdit.pm:144`); the name
     /// is the code's `attrib_type.name`. `None` when the value lacks two integer
     /// coordinates.
-    pub fn from_attrib(code: &str, value: &str) -> Option<Self> {
+    fn from_attrib(code: &str, value: &str) -> Option<Self> {
         let name = match code {
             "initial_met" => "Initial methionine",
             "_selenocysteine" => "Selenocysteine",
@@ -240,6 +264,28 @@ impl CacheSeqEdit {
             alt_seq,
         })
     }
+}
+
+/// Per-peptide prediction data: up to 3 matrices (sift, polyphen_humvar, polyphen_humdiv).
+#[derive(Debug, Default, Clone)]
+pub struct PeptidePredictions {
+    pub sift: Option<PredictionBlob>,
+    pub polyphen_humvar: Option<PredictionBlob>,
+    pub polyphen_humdiv: Option<PredictionBlob>,
+}
+
+/// A prediction matrix blob ready for JSON serialization, with the keys of
+/// the Ensembl matrix object: the analysis attribute `polyphen_humvar` is the
+/// analysis `polyphen` with the sub-analysis `humvar`, and `sift` has none
+/// (`ProteinFunctionPredictionMatrixAdaptor` `_objs_from_sth`).
+#[derive(Debug, Clone)]
+pub struct PredictionBlob {
+    pub analysis: String,
+    pub sub_analysis: Option<String>,
+    /// The MD5 of the peptide the matrix was computed for.
+    pub translation_md5: String,
+    /// Base64-encoded gzip-compressed binary matrix.
+    pub base64_data: String,
 }
 
 /// Serialized SIFT/PolyPhen prediction matrices for JSON cache output.
@@ -305,14 +351,14 @@ struct CacheProteinFeature {
 #[derive(Clone, Copy)]
 pub struct BuildSources<'a> {
     /// The protein FASTA's records, each under its header's `transcript:`
-    /// token whole ([`record_of`] finds a transcript's): the peptide as
+    /// token whole (`record_of` finds a transcript's): the peptide as
     /// Ensembl VEP's cache carries it and the header's protein identifier and
     /// version; `None` when no protein FASTA was read and each peptide is
     /// translated from the genome.
     pub protein_sequences: Option<&'a HashMap<String, Peptide>>,
     /// The prediction matrices of each protein FASTA record, under the
     /// record's key in `protein_sequences`.
-    pub prediction_data: Option<&'a HashMap<String, crate::predictions::PeptidePredictions>>,
+    pub prediction_data: Option<&'a HashMap<String, PeptidePredictions>>,
     pub genome_fasta: Option<&'a vep_fasta::IndexedFasta>,
     pub gtf_tags: Option<&'a crate::gtf::GtfTags>,
     pub core_dumps: Option<&'a CoreDumps>,
@@ -400,28 +446,37 @@ fn translation_version(
     })
 }
 
-/// Build the full JSON cache directory from parsed GFF3 genes and `sources`;
-/// `codon_tables` is [`codon_tables`]'s map over the same genes. `model` is
-/// the file the genes were read from: a transcript whose coding sequence does
-/// not sit in its exons ([`Unplaced`]) fails the build before anything is
-/// written, naming that file, the CDS record's line and the transcript.
-pub fn build_cache(
+/// The transcript records of parsed GFF3 or GTF genes under `sources`, by
+/// sequence region in name order and by position within a region: the records
+/// [`build_cache`] writes as shards and [`crate::gene_model`] hands to a run in
+/// memory. `codon_tables` is [`codon_tables`]'s map over the same genes, or any
+/// map holding every sequence region of `genes`. `model` is the file the genes
+/// were read from: a transcript whose coding sequence does not sit in its
+/// exons (`Unplaced`) fails the call, naming that file, the CDS record's
+/// line and the transcript.
+pub(crate) fn build_transcripts(
     genes: &HashMap<String, GeneRecord>,
     model: &Path,
-    output_dir: &Path,
     sources: &BuildSources,
     codon_tables: &HashMap<String, u8>,
-) -> Result<BuildStats> {
+) -> Result<BTreeMap<String, Vec<CacheTranscript>>> {
     // Name order: the chromosomes are logged, and names that tie in
     // `contig_order` listed, in one order on every run.
     let mut by_chr: BTreeMap<String, Vec<CacheTranscript>> = BTreeMap::new();
-    let mut transcript_count = 0usize;
     let mut set_aside = SetAside::default();
     let mut translated = 0usize;
     let mut without_peptide_record = 0usize;
     let mut records_set_aside = 0usize;
+    let mut placed_by_row = 0usize;
+    let mut unplaced_rows = 0usize;
 
     let cache_content = is_cache_content(sources.protein_sequences, sources.core_dumps);
+    let names = ModelNames::of(
+        genes
+            .values()
+            .flat_map(|gene| &gene.transcripts)
+            .map(|tr| (tr.transcript_id.as_str(), tr.version)),
+    );
     // Key order: of several transcripts the build refuses, the same one is
     // named on every run.
     let mut gene_ids: Vec<&String> = genes.keys().collect();
@@ -435,7 +490,7 @@ pub fn build_cache(
                 .get(&tr.chr)
                 .copied()
                 .expect("codon_tables settles every sequence region of genes");
-            let cache_tr = match build_transcript(gene, tr, sources, codon_table) {
+            let cache_tr = match build_transcript(gene, tr, sources, &names, codon_table) {
                 Ok(cache_tr) => cache_tr,
                 Err(unplaced) => bail!("{}", unplaced.refusal(model, tr)),
             };
@@ -448,23 +503,62 @@ pub fn build_cache(
             if cache_tr.record_use == RecordUse::SetAside {
                 records_set_aside += 1;
             }
+            match cache_tr.row_use {
+                RowUse::Agrees => {}
+                RowUse::Placed => placed_by_row += 1,
+                RowUse::Unplaced => unplaced_rows += 1,
+            }
             by_chr.entry(tr.chr.clone()).or_default().push(cache_tr);
-            transcript_count += 1;
         }
     }
     if set_aside.total() > 0 {
         info!(
-            "Dropped {} artifact or readthrough transcripts, as Ensembl VEP's dumper does",
-            set_aside.total()
+            "Dropped {}, as Ensembl VEP's dumper does",
+            counted(set_aside.total(), "artifact or readthrough transcript")
+        );
+    }
+    // The core dumps' translation rows beside the model's CDS records
+    // (`coding_records`): Ensembl VEP's cache holds what the rows give.
+    if placed_by_row > 0 {
+        info!(
+            "{} {} a coding sequence that the translation table of the core dumps places \
+             otherwise than the model's CDS lines: {} built as the table places it",
+            counted(placed_by_row, "one-exon transcript"),
+            one_or(placed_by_row, "has", "have"),
+            one_or(placed_by_row, "it is", "each is")
+        );
+    }
+    if unplaced_rows > 0 {
+        warn!(
+            "{} {} a coding sequence that the translation table of the core dumps places \
+             otherwise than the model's CDS lines, at a place its exon identifiers alone do \
+             not give: {} built as the CDS lines place it",
+            counted(unplaced_rows, "transcript"),
+            one_or(unplaced_rows, "has", "have"),
+            one_or(unplaced_rows, "it is", "each is")
         );
     }
     // A protein FASTA of another release or assembly, or one whose headers
     // name no transcript, leaves the cache's content to the other sources, as
     // does a record that is not its transcript's peptide.
     if without_peptide_record > 0 || records_set_aside > 0 {
+        let set_aside = format!(
+            "{} {} set aside for {} length",
+            counted(records_set_aside, "record"),
+            one_or(records_set_aside, "was", "were"),
+            one_or(records_set_aside, "its", "their")
+        );
+        // The verb is singular beside one transcript without a record and
+        // beside none of one transcript.
+        let have = if without_peptide_record == 1 || translated == 1 {
+            "has"
+        } else {
+            "have"
+        };
+        let translated = counted(translated, "translated transcript");
         warn!(
-            "{without_peptide_record} of {translated} translated transcripts have no record in \
-             the protein FASTA, and {records_set_aside} records were set aside for their length, \
+            "{without_peptide_record} of {translated} {have} no record in \
+             the protein FASTA, and {set_aside}, \
              neither the coding sequence's whole codons nor one fewer: their peptides are \
              translated from the genome when one is given, else absent, and their versions come \
              from the model or the core dumps, else none"
@@ -479,6 +573,200 @@ pub fn build_cache(
             .sort_by(|a, b| (a.start, a.end, &a.stable_id).cmp(&(b.start, b.end, &b.stable_id)));
         copy_hgnc_ids_by_symbol(transcripts);
     }
+    Ok(by_chr)
+}
+
+/// Whether `region` is a name a GRCh37 model's mitochondrion is read under:
+/// `MT`, or `M` or `chrM` where the reader keeps the name as written
+/// ([`crate::gff3::SequenceNames`]).
+fn is_grch37_mitochondrial_region(region: &str) -> bool {
+    matches!(region, "MT" | "M" | "chrM")
+}
+
+/// A GRCh37 mitochondrial region whose coding transcripts do not read as
+/// coding sequences on the genome FASTA record they are cut from
+/// (`grch37_mitochondrial_regions_off_their_record`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct OffRecord {
+    /// The region's transcripts in the model, coding or not, less those the
+    /// model's reading sets aside.
+    pub transcripts: usize,
+    /// Its coding transcripts the test read.
+    pub coding: usize,
+    /// The name of the FASTA record the region's sequences are cut from.
+    pub record: String,
+    /// That record's length in bases.
+    pub record_length: u64,
+    /// The codon table the coding sequences were read under.
+    pub codon_table: u8,
+}
+
+impl OffRecord {
+    /// What the test found, as the clause a refusal or a warning carries.
+    pub fn finding(&self) -> String {
+        let length = self.record_length.to_string();
+        let mut grouped = String::new();
+        for (place, digit) in length.chars().enumerate() {
+            if place > 0 && (length.len() - place).is_multiple_of(3) {
+                grouped.push(',');
+            }
+            grouped.push(digit);
+        }
+        format!(
+            "of {} read from the FASTA record {}, {grouped} bases long, under codon table {}, \
+             none opens on a start codon and runs to its last codon without a stop codon",
+            counted(self.coding, "coding transcript"),
+            self.record,
+            self.codon_table
+        )
+    }
+}
+
+/// Whether a coding sequence reads as one under `codon_table`: its first
+/// codon is a start codon of the table and no codon before its last whole
+/// codon is a stop codon. `None` for a sequence the test cannot read: one
+/// shorter than a codon, or one whose first codon holds a base other than
+/// the four, as the padding of an incomplete start does.
+fn reads_as_coding_sequence(sequence: &str, codon_table: u8) -> Option<bool> {
+    let bases = sequence.as_bytes();
+    let (codons, _) = bases.as_chunks::<3>();
+    let (last, before_last) = codons.split_last()?;
+    let first = before_last.first().unwrap_or(last);
+    if !is_unambiguous(first) {
+        return None;
+    }
+    Some(
+        is_start_codon(first, codon_table)
+            && !before_last
+                .iter()
+                .any(|codon| is_ter_codon(codon, codon_table)),
+    )
+}
+
+/// The mitochondrial regions of a GRCh37 model that do not count on the
+/// genome FASTA record they are cut from, by region name.
+///
+/// On GRCh37 two mitochondrial sequences are in use, the assembly's and the
+/// one the UCSC hg19 naming calls `chrM`, whose positions do not stand at the
+/// assembly's. Neither the name a model writes nor the length of a FASTA
+/// record says which of the two a model counts on; its coding transcripts
+/// do. A coding sequence cut from the sequence its model counts on opens on
+/// a start codon of the region's codon table and holds no stop codon before
+/// its last codon (`reads_as_coding_sequence`). A region is listed when at
+/// least one of its transcripts is tested and none of the tested reads so.
+///
+/// Not tested: a transcript the FASTA gives no coding sequence for, one
+/// whose sequence `reads_as_coding_sequence` cannot read, one flagged
+/// `cds_start_NF`, one the model's reading sets aside and one no record is
+/// built for. The flag is the tag of the transcript's own line in the model
+/// ([`crate::gff3::TranscriptRecord::cds_start_nf`]) or the attribute of its
+/// record, which the core dumps or a GTF read for its tags supply
+/// (`gff3_attributes`). A model of another assembly, a model read without a
+/// genome FASTA and a region with no tested transcript list nothing.
+pub fn grch37_mitochondrial_regions_off_their_record(
+    genes: &HashMap<String, GeneRecord>,
+    sources: &BuildSources,
+    codon_tables: &HashMap<String, u8>,
+    assembly: Option<&str>,
+) -> BTreeMap<String, OffRecord> {
+    let mut off_record = BTreeMap::new();
+    let Some(fasta) = sources.genome_fasta.filter(|_| assembly == Some("GRCh37")) else {
+        return off_record;
+    };
+    let mitochondrial: Vec<(&GeneRecord, &crate::gff3::TranscriptRecord)> = genes
+        .values()
+        .flat_map(|gene| gene.transcripts.iter().map(move |tr| (gene, tr)))
+        .filter(|(_, tr)| is_grch37_mitochondrial_region(&tr.chr))
+        .collect();
+    if mitochondrial.is_empty() {
+        return off_record;
+    }
+    let cache_content = is_cache_content(sources.protein_sequences, sources.core_dumps);
+    let names = ModelNames::of(
+        genes
+            .values()
+            .flat_map(|gene| &gene.transcripts)
+            .map(|tr| (tr.transcript_id.as_str(), tr.version)),
+    );
+    // By region: its transcripts, its tested ones and those that read.
+    let mut counts: BTreeMap<&str, (usize, usize, usize)> = BTreeMap::new();
+    let mut set_aside = SetAside::default();
+    for (gene, tr) in mitochondrial {
+        if cache_content && set_aside.counts(tr, sources.core_dumps) {
+            continue;
+        }
+        let (transcripts, tested, reading) = counts.entry(tr.chr.as_str()).or_default();
+        *transcripts += 1;
+        if tr.cds_start_nf {
+            continue;
+        }
+        let Some(&codon_table) = codon_tables.get(&tr.chr) else {
+            continue;
+        };
+        let Ok(built) = build_transcript(gene, tr, sources, &names, codon_table) else {
+            continue;
+        };
+        if built.attributes.iter().any(|a| a.code == "cds_start_NF") {
+            continue;
+        }
+        let reads = built
+            .variation_effect_feature_cache
+            .translateable_seq
+            .as_deref()
+            .and_then(|sequence| reads_as_coding_sequence(sequence, codon_table));
+        if let Some(reads) = reads {
+            *tested += 1;
+            *reading += usize::from(reads);
+        }
+    }
+    for (region, (transcripts, tested, reading)) in counts {
+        if tested == 0 || reading > 0 {
+            continue;
+        }
+        let (Some(record), Some(record_length), Some(&codon_table)) = (
+            fasta.record_name(region),
+            fasta.sequence_length(region),
+            codon_tables.get(region),
+        ) else {
+            continue;
+        };
+        off_record.insert(
+            region.to_string(),
+            OffRecord {
+                transcripts,
+                coding: tested,
+                record: record.to_string(),
+                record_length,
+                codon_table,
+            },
+        );
+    }
+    off_record
+}
+
+/// Build the full JSON cache directory from parsed GFF3 genes and `sources`:
+/// `build_transcripts`'s records, written as one shard per megabase of each
+/// sequence region. A transcript the records refuse fails the build before
+/// anything is written. The first write marks `output_dir` as a build under
+/// way (`CacheManifest::mark_unfinished`), so the directory loads as a cache
+/// only once the caller has written its manifest.
+pub fn build_cache(
+    genes: &HashMap<String, GeneRecord>,
+    model: &Path,
+    output_dir: &Path,
+    sources: &BuildSources,
+    codon_tables: &HashMap<String, u8>,
+) -> Result<BuildStats> {
+    let by_chr = build_transcripts(genes, model, sources, codon_tables)?;
+    let transcript_count = by_chr.values().map(Vec::len).sum();
+
+    // Marked before the first shard: a build that ends from here on leaves a
+    // manifest that lists no file, which a run refuses by name.
+    std::fs::create_dir_all(output_dir)
+        .with_context(|| format!("Failed to create {}", output_dir.display()))?;
+    vep_core::cache_manifest::CacheManifest::mark_unfinished(output_dir)
+        .context("Failed to mark the output directory as a build under way")?;
 
     let transcripts_dir = output_dir.join("transcripts");
     let mut region_file_count = 0usize;
@@ -516,10 +804,10 @@ pub fn build_cache(
         }
 
         info!(
-            "chr {}: {} transcripts in {} regions",
+            "chr {}: {} in {}",
             chr,
-            transcripts.len(),
-            by_region.len()
+            counted(transcripts.len(), "transcript"),
+            counted(by_region.len(), "region")
         );
     }
 
@@ -539,6 +827,11 @@ pub fn build_cache(
             polyphen_matrices += 1;
         }
     }
+    let unnamed_translations = by_chr
+        .values()
+        .flatten()
+        .filter(|tr| tr.translation.is_some() && tr.protein.is_none())
+        .count();
     Ok(BuildStats {
         transcript_count,
         chromosome_count: by_chr.len(),
@@ -546,6 +839,7 @@ pub fn build_cache(
         chromosomes: crate::info::contig_order(by_chr.keys().cloned()),
         sift_matrices,
         polyphen_matrices,
+        unnamed_translations,
     })
 }
 
@@ -586,13 +880,16 @@ fn copy_hgnc_ids_by_symbol(transcripts: &mut [CacheTranscript]) {
 }
 
 /// Build a single CacheTranscript from parsed GFF3 data; `codon_table` is the
-/// transcript's sequence region's, as [`codon_table`] settles it. A transcript
-/// whose coding sequence does not sit in its exons ([`Unplaced`]) builds no
-/// record.
+/// transcript's sequence region's, as [`codon_table`] settles it, and `names`
+/// holds what every transcript of the model states, so a protein FASTA record
+/// or a tags line that is another transcript's is left to it. A transcript
+/// whose coding sequence does not sit in its exons, or whose exon ranks run
+/// against position ([`Unplaced`]), builds no record.
 fn build_transcript(
     gene: &GeneRecord,
     tr: &crate::gff3::TranscriptRecord,
     sources: &BuildSources,
+    names: &ModelNames,
     codon_table: u8,
 ) -> Result<CacheTranscript, Unplaced> {
     if let Some(outside) = translation_end_outside_exons(&tr.exons, &tr.cds_regions, tr.strand) {
@@ -611,10 +908,28 @@ fn build_transcript(
     let translation_facts = facts.and_then(|f| f.translation.as_ref());
 
     let ordered = transcript_order(&tr.exons, strand);
-    let phases = exon_phases(&ordered, &tr.cds_regions, strand);
+    let written = translation_bounds(&ordered, &tr.cds_regions, strand)?;
+    // With the core dumps read, a one-exon transcript's coding sequence is
+    // where its translation row places it; `cds_regions` are the records
+    // everything below is built from.
+    let (cds_regions, row_use) = coding_records(
+        &ordered,
+        &tr.cds_regions,
+        strand,
+        written,
+        translation_facts.and_then(|t| t.positions),
+    );
+    let bounds = match row_use {
+        RowUse::Placed => translation_bounds(&ordered, &cds_regions, strand)?,
+        RowUse::Agrees | RowUse::Unplaced => written,
+    };
+    let phases = exon_phases(&ordered, &cds_regions, strand);
     // The mapper's start phase is exon 1's phase (core TranscriptMapper.pm:110).
     let first_exon_phase = phases.first().map_or(-1, |p| p.0);
-    let mapper_result = mapper::build_mapper(&tr.exons, &tr.cds_regions, strand, first_exon_phase);
+    let mapper_result = mapper::build_mapper(&tr.exons, &cds_regions, strand, first_exon_phase);
+    if let Some(nested) = coding_end_before_its_start(&mapper_result, &cds_regions, strand) {
+        return Err(nested);
+    }
 
     let exons = build_exons(&ordered, &phases);
 
@@ -629,7 +944,7 @@ fn build_transcript(
 
     // The padding follows the translation start exon's phase (core
     // Transcript.pm:917-919), which is exon 1's only when exon 1 codes.
-    let span = cds_span(&tr.cds_regions);
+    let span = cds_span(&cds_regions);
     let start_exon_phase = ordered
         .iter()
         .zip(&phases)
@@ -647,13 +962,13 @@ fn build_transcript(
         _ => None,
     };
     // The translateable sequence's length, known with or without a genome:
-    // the cDNA coding span led by the padding; none without a coding span.
+    // the cDNA coding span, whose end is at or after its start
+    // (`coding_end_before_its_start`), led by the padding; none without a
+    // coding span.
     let coding_bases = mapper_result
         .cdna_coding_start
         .zip(mapper_result.cdna_coding_end)
-        .map(|(cdna_start, cdna_end)| {
-            (cdna_end + 1).saturating_sub(cdna_start) + start_exon_phase.max(0) as u64
-        });
+        .map(|(cdna_start, cdna_end)| cdna_end + 1 - cdna_start + start_exon_phase.max(0) as u64);
     // A transcript without a translation has the empty translateable sequence
     // (core Transcript.pm:906-908), whether or not a genome is given.
     let (translateable_seq, five_prime_utr, three_prime_utr) = match coding {
@@ -667,11 +982,11 @@ fn build_transcript(
     // translate to, the peptide is the translateable sequence's own
     // translation, as Ensembl VEP reads it off a GFF3 or GTF
     // (`BaseGXF.pm` `_add_translation`, `$translation->seq`).
-    let named =
-        protein_sequences.and_then(|peptides| record_of(peptides, &tr.transcript_id, tr.version));
+    let named = protein_sequences
+        .and_then(|peptides| record_of(peptides, names, &tr.transcript_id, tr.version));
     let (record_key, fasta_record) = named
         .filter(|(_, record)| {
-            coding_bases.is_none_or(|bases| fits_coding_sequence(record.sequence.len(), bases))
+            coding_bases.is_none_or(|bases| fits_coding_sequence(residues(record).len(), bases))
         })
         .unzip();
     let record_use = match (named, fasta_record) {
@@ -679,7 +994,7 @@ fn build_transcript(
         (Some(_), Some(_)) => RecordUse::Taken,
         (Some(_), None) => RecordUse::SetAside,
     };
-    let peptide = fasta_record.map(|p| p.sequence.clone()).or_else(|| {
+    let peptide = fasta_record.map(|p| residues(p).to_string()).or_else(|| {
         translateable_seq
             .as_deref()
             .filter(|s| !s.is_empty())
@@ -692,9 +1007,9 @@ fn build_transcript(
     // on the reverse (`BaseGXF.pm` `_add_translation`, the first of the
     // ordered CDS records); the other sources fill in what the line lacks.
     let first_cds = if strand > 0 {
-        tr.cds_regions.iter().min_by_key(|c| c.start)
+        cds_regions.iter().min_by_key(|c| c.start)
     } else {
-        tr.cds_regions.iter().max_by_key(|c| c.start)
+        cds_regions.iter().max_by_key(|c| c.start)
     };
     let protein_id = first_cds
         .and_then(|c| c.protein_id.clone())
@@ -705,15 +1020,19 @@ fn build_transcript(
         fasta_record.and_then(|p| p.version_beside(protein_id.as_deref())),
     );
 
-    let translation = translation_bounds(&ordered, &tr.cds_regions, strand)?.map(|(start, end)| {
-        CacheTranslation {
-            stable_id: protein_id.clone().unwrap_or_default(),
-            version: protein_version,
-            db_id: None,
-            start,
-            end,
-        }
+    let translation = bounds.map(|(start, end)| CacheTranslation {
+        stable_id: protein_id.clone().unwrap_or_default(),
+        version: protein_version,
+        db_id: None,
+        start,
+        end,
     });
+    // Looked at behind the translation's ends and its nested end, so a
+    // coding sequence that such ranks leave outside its first or last exon,
+    // or ending in an exon nested in its start exon, is named as that.
+    if let Some(against) = ranks_against_position(&ordered, strand) {
+        return Err(against);
+    }
 
     let cache_mapper = if !mapper_result.pairs.is_empty() {
         Some(CacheMapper {
@@ -749,7 +1068,7 @@ fn build_transcript(
                 value: a.value.clone(),
             })
             .collect(),
-        None => gff3_attributes(tr, gtf_tags),
+        None => gff3_attributes(tr, gtf_tags, names),
     };
 
     // Xref lists as `prefetch_transcript_ids` and `prefetch_translation_ids`
@@ -856,6 +1175,7 @@ fn build_transcript(
                 .map(convert_predictions),
         },
         record_use,
+        row_use,
     })
 }
 
@@ -867,6 +1187,7 @@ fn build_transcript(
 fn gff3_attributes(
     tr: &crate::gff3::TranscriptRecord,
     gtf_tags: Option<&crate::gtf::GtfTags>,
+    names: &ModelNames,
 ) -> Vec<CacheAttribute> {
     let mut attributes: Vec<CacheAttribute> = Vec::new();
     let mut push_attribute = |code: &str, value: &str| {
@@ -884,7 +1205,7 @@ fn gff3_attributes(
         push_attribute("gencode_primary", "GENCODE primary");
     }
     if let Some(gtf) = gtf_tags {
-        for code in gtf.kept_attribute_codes(&tr.transcript_id, tr.version) {
+        for code in gtf.kept_attribute_codes(names, &tr.transcript_id, tr.version) {
             let value = match code {
                 "gencode_basic" => "GENCODE basic",
                 "gencode_primary" => "GENCODE primary",
@@ -1039,8 +1360,9 @@ fn coding_sequences(
     )
 }
 
-/// A coding sequence that does not sit in its transcript's exons, one variant
-/// for each shape a build refuses.
+/// A transcript whose coding sequence does not sit in its exons, or whose
+/// exons do not sit in their ranks, one variant for each shape a build
+/// refuses.
 #[derive(Debug, PartialEq, Eq)]
 enum Unplaced {
     /// An end of the translation that lies in no exon of the transcript
@@ -1078,14 +1400,37 @@ enum Unplaced {
         line: usize,
         cds: (u64, u64),
     },
+    /// A coding sequence whose last base the transcript's cDNA places before
+    /// its first ([`coding_end_before_its_start`]), as it does on the reverse
+    /// strand where the translation starts in one exon and ends in an exon
+    /// nested in it: `nested` is the exon that holds the last coding base,
+    /// `exon` the one that holds the first, and `line` and `cds` are those of
+    /// the CDS record that sets the end, the lowest line when several do.
+    Nested {
+        nested: (u64, u64),
+        exon: (u64, u64),
+        line: usize,
+        cds: (u64, u64),
+    },
+    /// Exon ranks that run against position ([`ranks_against_position`]):
+    /// `exon` is the first exon in rank order that starts on the wrong side
+    /// of the exon ranked before it, `before`, each with its rank.
+    Order {
+        exon: (u64, u64),
+        rank: u32,
+        before: (u64, u64),
+        before_rank: u32,
+    },
 }
 
 impl Unplaced {
     /// The refusal `tr`, read from the file `model`, draws: the file and the
     /// CDS record's line, the transcript, and either the record's span with
-    /// the end of the translation it sets, in no exon or at an offset outside
-    /// the exon it is counted in, or the coding sequence's span with the
-    /// exon's.
+    /// the end of the translation it sets, in no exon, at an offset outside
+    /// the exon it is counted in or in an exon nested in the one the
+    /// translation starts in, or the coding sequence's span with the exon's;
+    /// for ranks that run against position, the file and the two exons with
+    /// their ranks, an exon record carrying no line.
     fn refusal(&self, model: &Path, tr: &crate::gff3::TranscriptRecord) -> String {
         let id = &tr.transcript_id;
         match *self {
@@ -1129,8 +1474,106 @@ impl Unplaced {
                 exon_end - exon_start + 1,
                 if starts { "first" } else { "last" },
             ),
+            Unplaced::Nested {
+                nested: (nested_start, nested_end),
+                exon: (exon_start, exon_end),
+                line,
+                cds: (start, end),
+            } => format!(
+                "{}: CDS {start}-{end} of transcript {id} ends the translation in exon \
+                 {nested_start}-{nested_end}, which lies inside exon {exon_start}-{exon_end}, \
+                 where the translation starts",
+                located(model, line),
+            ),
+            Unplaced::Order {
+                exon: (start, end),
+                rank,
+                before: (before_start, before_end),
+                before_rank,
+            } => format!(
+                "{}: exon {start}-{end} of transcript {id}, ranked {rank}, starts {} exon \
+                 {before_start}-{before_end}, ranked {before_rank}: the exon ranks run against \
+                 position",
+                model.display(),
+                if tr.strand < 0 { "after" } else { "before" },
+            ),
         }
     }
+}
+
+/// The refusal of a coding sequence whose last base `mapper` places before
+/// its first in the transcript's cDNA; `None` where the span runs from its
+/// first base to its last, and for a transcript without one. The mapper
+/// orders the exons by position, so on the reverse strand an exon nested in
+/// another comes before it: a coding sequence whose first base the outer
+/// exon alone holds and whose last base the nested one holds is placed end
+/// before start. No forward-strand sequence is, the outer exon coming first
+/// there and holding both bases.
+fn coding_end_before_its_start(
+    mapper: &mapper::MapperResult,
+    cds_regions: &[CdsRecord],
+    strand: i8,
+) -> Option<Unplaced> {
+    let (first, last) = mapper.cdna_coding_start.zip(mapper.cdna_coding_end)?;
+    if first <= last {
+        return None;
+    }
+    let exon_at = |cdna: u64| {
+        mapper
+            .pairs
+            .iter()
+            .find(|pair| pair.from_start <= cdna && cdna <= pair.from_end)
+            .map(|pair| (pair.to_start, pair.to_end))
+            .expect("a cDNA coding position lies in a mapper pair")
+    };
+    // The translation ends at the span's lowest base on the reverse strand
+    // and at its highest on the forward.
+    let (lowest, highest) = cds_span(cds_regions)?;
+    let sets_the_end = |c: &&CdsRecord| {
+        if strand < 0 {
+            c.start == lowest
+        } else {
+            c.end == highest
+        }
+    };
+    let record = cds_regions
+        .iter()
+        .filter(sets_the_end)
+        .min_by_key(|c| c.line)
+        .expect("the span's ends are those of CDS records");
+    Some(Unplaced::Nested {
+        nested: exon_at(last),
+        exon: exon_at(first),
+        line: record.line,
+        cds: (record.start, record.end),
+    })
+}
+
+/// The first exon of `ordered`, a transcript's exons in rank order, that
+/// starts on the wrong side of the exon ranked before it: before it on the
+/// forward strand, after it on the reverse. `None` when the ranks run 5' to
+/// 3' by position, and for exons ordered by position, one of them carrying
+/// no rank. Ensembl VEP's source places each exon of a GFF3 at its `rank`
+/// (`BaseGXF.pm:574`) and reads the introns between neighbours in that
+/// order, so on ranks that run against position it writes an exon's bases
+/// as an intron's; no reading of such ranks gives the transcript the file's
+/// positions state.
+fn ranks_against_position(ordered: &[&ExonRecord], strand: i8) -> Option<Unplaced> {
+    ordered.windows(2).find_map(|pair| {
+        let (before, exon) = (pair[0], pair[1]);
+        let (before_rank, rank) = (before.rank?, exon.rank?);
+        let against = if strand < 0 {
+            exon.start > before.start
+        } else {
+            exon.start < before.start
+        };
+        against.then_some(Unplaced::Order {
+            exon: (exon.start, exon.end),
+            rank,
+            before: (before.start, before.end),
+            before_rank,
+        })
+    })
 }
 
 /// The end of the translation that lies in no exon of `exons`, its start
@@ -1329,8 +1772,9 @@ fn translate_codon(codon: &[u8], codon_table: u8) -> u8 {
 /// GFF3 or GTF files from other sources, compared in any letter case; a region
 /// so named translates under a table of its own, which nothing but the core
 /// dumps or `--codon-table` can state.
-const ORGANELLE_REGION_NAMES: [&str; 12] = [
+const ORGANELLE_REGION_NAMES: [&str; 13] = [
     "MT",
+    "M",
     "chrM",
     "chrMT",
     "Mito",
@@ -1344,32 +1788,43 @@ const ORGANELLE_REGION_NAMES: [&str; 12] = [
     "plastid",
 ];
 
-fn is_organelle_name(chr: &str) -> bool {
+/// What a longer name of an organelle genome holds, in lower case: Ensembl's
+/// caches name mitochondria `OVOC_MITOCHONDRIAL`, `SM_V7_MITO` and
+/// `mito_A_fumigatus_Af293`, and a plastid `Chloro`.
+const ORGANELLE_NAME_PARTS: [&str; 3] = ["mito", "chloro", "plastid"];
+
+/// Whether `chr` names an organelle genome: one of
+/// [`ORGANELLE_REGION_NAMES`], or a name that holds one of
+/// [`ORGANELLE_NAME_PARTS`], in any letter case.
+pub(crate) fn is_organelle_name(chr: &str) -> bool {
+    let lower = chr.to_ascii_lowercase();
     ORGANELLE_REGION_NAMES
         .iter()
         .any(|name| name.eq_ignore_ascii_case(chr))
+        || ORGANELLE_NAME_PARTS.iter().any(|part| lower.contains(part))
 }
 
 /// The `--codon-table` values as a map of sequence region name to table:
 /// each value `<region>=<table>`, the region named as the GFF3 or GTF spells
-/// it (`chrM` and `chrMT` read as `MT`, as the model readers read them), the
-/// table one of the genetic codes `Bio::Tools::CodonTable` ships
+/// it (`chrM` and `chrMT` read as `MT`, as the model readers read them
+/// without a genome FASTA, [`crate::gff3::SequenceNames`]), the
+/// table one of the genetic codes `Bio::Tools::CodonTable` ships or 26
 /// ([`vep_core::codon::known_table`]). A region named twice with two tables,
-/// a table the module lacks, an empty region or a value without `=` is refused.
+/// a table that is not known, an empty region or a value without `=` is refused.
 pub fn codon_table_flag(values: &[String]) -> Result<HashMap<String, u8>> {
     let mut tables: HashMap<String, u8> = HashMap::new();
     for value in values {
         let Some((region, table_text)) = value.split_once('=') else {
             bail!("--codon-table {value} is not <region>=<table>");
         };
-        let region = crate::gff3::normalize_chr(region.trim());
+        let region = crate::gff3::SequenceNames::default().name(region.trim());
         if region.is_empty() {
             bail!("--codon-table {value} names no sequence region");
         }
         let table: u8 = match table_text.trim().parse::<u8>() {
             Ok(table) if known_table(table) => table,
             _ => bail!(
-                "--codon-table {value}: {table_text} is not a genetic code Ensembl VEP translates with"
+                "--codon-table {value}: {table_text} is not a genetic code vep-rs translates with"
             ),
         };
         if let Some(&earlier) = tables.get(region) {
@@ -1385,13 +1840,17 @@ pub fn codon_table_flag(values: &[String]) -> Result<HashMap<String, u8>> {
 }
 
 /// The codon table of every sequence region a transcript of `genes` sits on,
-/// by region name, each settled by [`codon_table`]; a `--codon-table` region
+/// by region name, each settled by `codon_table`; a `--codon-table` region
 /// no transcript sits on is logged. Resolved before any shard is built, so a
-/// region whose table is unknown refuses the build before it starts.
+/// region whose table is unknown refuses the build before it starts. `names`
+/// is the rule the model's sequences were named by: a region the flag writes
+/// as the model does is the sequence the reader named, also where the genome
+/// FASTA alone shortened its name.
 pub fn codon_tables(
     genes: &HashMap<String, GeneRecord>,
     core_dumps: Option<&CoreDumps>,
     named: &HashMap<String, u8>,
+    names: &crate::gff3::SequenceNames,
 ) -> Result<HashMap<String, u8>> {
     // Name order, so two unknown regions refuse on the same one every run.
     let regions: BTreeSet<&str> = genes
@@ -1399,14 +1858,27 @@ pub fn codon_tables(
         .flat_map(|g| &g.transcripts)
         .map(|tr| tr.chr.as_str())
         .collect();
+    // A region written as the cache names it comes before one the build's
+    // names read as the same sequence.
+    let mut by_name = named.clone();
+    let flag_regions: BTreeSet<&str> = named.keys().map(String::as_str).collect();
+    for region in &flag_regions {
+        by_name
+            .entry(names.name(region).to_string())
+            .or_insert(named[*region]);
+    }
     let mut tables: HashMap<String, u8> = HashMap::new();
     for chr in regions {
-        tables.insert(chr.to_string(), codon_table(chr, core_dumps, named)?);
+        tables.insert(chr.to_string(), codon_table(chr, core_dumps, &by_name)?);
     }
-    let unused: BTreeSet<&str> = named
-        .keys()
-        .map(String::as_str)
-        .filter(|r| !tables.contains_key(*r))
+    let flag_reading = crate::gff3::SequenceNames::default();
+    let unused: BTreeSet<&str> = flag_regions
+        .into_iter()
+        .filter(|region| {
+            !tables.keys().any(|chr| {
+                chr == region || flag_reading.name(chr) == *region || names.name(region) == chr
+            })
+        })
         .collect();
     for region in unused {
         warn!("--codon-table names {region}, a sequence region no transcript sits on");
@@ -1420,8 +1892,13 @@ pub fn codon_tables(
 /// to 1 (`Database/Transcript.pm:359-364`); on both human assemblies the
 /// mitochondrion is the only region carrying the attribute, with value 2.
 ///
+/// A region the model readers kept as written where the flag's reading
+/// names it `MT` (`chrM` or `M` under a genome FASTA that names an organelle
+/// genome of its own and whose reader reaches no record under `MT`) takes
+/// the flag's value under either spelling.
+///
 /// Refused: a region the dumps and the flag give two different tables, and a
-/// region named like an organelle genome ([`ORGANELLE_REGION_NAMES`]) that
+/// region named like an organelle genome ([`is_organelle_name`]) that
 /// neither names, since the default of 1 would translate its transcripts under
 /// the nuclear code.
 fn codon_table(
@@ -1430,7 +1907,10 @@ fn codon_table(
     named: &HashMap<String, u8>,
 ) -> Result<u8> {
     let from_dumps = core_dumps.and_then(|d| d.codon_table(chr));
-    let from_flag = named.get(chr).copied();
+    let from_flag = named
+        .get(chr)
+        .or_else(|| named.get(crate::gff3::SequenceNames::default().name(chr)))
+        .copied();
     match (from_dumps, from_flag) {
         (Some(dumps), Some(flag)) if dumps != flag => bail!(
             "codon table of sequence region {chr} is {dumps} in the core dumps and {flag} in --codon-table"
@@ -1449,8 +1929,8 @@ fn codon_table(
 }
 
 /// Convert fetched prediction data into the JSON-serializable cache format.
-fn convert_predictions(preds: &crate::predictions::PeptidePredictions) -> CachePredictions {
-    fn convert_blob(blob: &crate::predictions::PredictionBlob) -> CachePredictionMatrix {
+fn convert_predictions(preds: &PeptidePredictions) -> CachePredictions {
+    fn convert_blob(blob: &PredictionBlob) -> CachePredictionMatrix {
         CachePredictionMatrix {
             analysis: blob.analysis.clone(),
             sub_analysis: blob.sub_analysis.clone(),
@@ -1550,6 +2030,17 @@ mod tests {
                 version: None,
             },
         )])
+    }
+
+    /// Builds `tr` as the one transcript of its model.
+    fn build_transcript(
+        gene: &GeneRecord,
+        tr: &crate::gff3::TranscriptRecord,
+        sources: &BuildSources,
+        codon_table: u8,
+    ) -> Result<CacheTranscript, Unplaced> {
+        let names = ModelNames::of([(tr.transcript_id.as_str(), tr.version)]);
+        super::build_transcript(gene, tr, sources, &names, codon_table)
     }
 
     /// A build's sources with the peptides and genome given and nothing else;
@@ -1946,6 +2437,73 @@ mod tests {
         );
     }
 
+    /// The cDNA places a coding sequence's last base at or after its first.
+    /// The mapper orders exons by position, so on the reverse strand the
+    /// exon 1300-1350 comes before the exon 1000-1500 it is nested in: a
+    /// coding sequence that opens in the outer exon above the nested one and
+    /// closes inside the nested one is placed end before start, and is
+    /// refused with both exons and the CDS record that sets the end, the
+    /// lowest line of two that share the base. The same span on the forward
+    /// strand, and a reverse-strand span that stays inside the nested exon
+    /// or above it, are placed start before end.
+    #[test]
+    fn a_coding_sequence_placed_end_before_start_is_refused() {
+        let at_line = |line, record: CdsRecord| CdsRecord { line, ..record };
+        let placed = |strand: i8, records: &[CdsRecord]| {
+            let exons = [exon(1000, 1500, strand, 1), exon(1300, 1350, strand, 2)];
+            let mapper = mapper::build_mapper(&exons, records, strand, -1);
+            (
+                mapper.cdna_coding_start.zip(mapper.cdna_coding_end),
+                coding_end_before_its_start(&mapper, records, strand),
+            )
+        };
+        let nested = |line, cds| {
+            Some(Unplaced::Nested {
+                nested: (1300, 1350),
+                exon: (1000, 1500),
+                line,
+                cds,
+            })
+        };
+
+        let two_set_the_end = [
+            at_line(8, cds(1320, 1450, -1, 0)),
+            at_line(6, cds(1320, 1400, -1, 0)),
+        ];
+        assert_eq!(
+            placed(-1, &two_set_the_end),
+            (Some((102, 31)), nested(6, (1320, 1400)))
+        );
+        let whole_exons = [at_line(6, cds(1300, 1500, -1, 0))];
+        assert_eq!(
+            placed(-1, &whole_exons),
+            (Some((52, 51)), nested(6, (1300, 1500)))
+        );
+
+        assert_eq!(
+            placed(1, &[cds(1320, 1450, 1, 0)]),
+            (Some((321, 451)), None)
+        );
+        assert_eq!(
+            placed(-1, &[cds(1310, 1340, -1, 0)]),
+            (Some((11, 41)), None)
+        );
+        assert_eq!(
+            placed(-1, &[cds(1400, 1450, -1, 0)]),
+            (Some((102, 152)), None)
+        );
+        assert_eq!(placed(-1, &[]), (None, None));
+
+        let tr = transcript("21", -1, vec![exon(1000, 1500, -1, 1)], Vec::new());
+        assert_eq!(
+            nested(6, (1320, 1400))
+                .unwrap()
+                .refusal(Path::new("model.gff3"), &tr),
+            "model.gff3 line 6: CDS 1320-1400 of transcript ENST1 ends the translation in exon \
+             1300-1350, which lies inside exon 1000-1500, where the translation starts"
+        );
+    }
+
     /// The translation's start and end each lie inside an exon of the
     /// transcript: the coding sequence's lowest and highest bases on the
     /// forward strand, its highest and lowest on the reverse. An end in no
@@ -2044,6 +2602,7 @@ mod tests {
             tsl: None,
             ccds: None,
             readthrough: false,
+            cds_start_nf: false,
             exons,
             cds_regions,
         }
@@ -2181,7 +2740,6 @@ mod tests {
     /// it neither.
     #[test]
     fn a_record_under_the_transcripts_version_gives_its_peptide_and_predictions() {
-        use crate::predictions::{PeptidePredictions, PredictionBlob};
         let coding = transcript(
             "21",
             1,
@@ -2257,12 +2815,38 @@ mod tests {
         assert_eq!(used(six_codons(), "MPK"), (RecordUse::SetAside, None));
     }
 
+    /// A stop character that closes a record is not one of its residues: the
+    /// record is held to the coding sequence without it and stored without
+    /// it, beside a coding sequence that carries its stop codon, beside one
+    /// that leaves it out and on a transcript with none. One character is
+    /// taken off, so a stop character before it is a residue, and a record
+    /// of another length is set aside with the character as without.
+    #[test]
+    fn a_stop_character_that_closes_a_record_is_no_residue() {
+        let used = |cds: Vec<CdsRecord>, record: &str| {
+            let tr = transcript("21", 1, vec![exon(1, 12, 1, 1), exon(21, 30, 1, 2)], cds);
+            let proteins = peptides("ENST1", record);
+            let built = build_transcript(&gene(&tr), &tr, &sources(&proteins, None), 1).unwrap();
+            (
+                built.record_use,
+                built.variation_effect_feature_cache.peptide,
+            )
+        };
+        let taken = |peptide: &str| (RecordUse::Taken, Some(peptide.to_string()));
+        let six_codons = || vec![cds(4, 12, 1, 0), cds(21, 29, 1, 0)];
+        let five_codons = || vec![cds(4, 12, 1, 0), cds(21, 26, 1, 0)];
+        assert_eq!(used(six_codons(), "MPKAL*"), taken("MPKAL"));
+        assert_eq!(used(five_codons(), "MPKAL*"), taken("MPKAL"));
+        assert_eq!(used(Vec::new(), "MPKAL*"), taken("MPKAL"));
+        assert_eq!(used(five_codons(), "MPKA**"), taken("MPKA*"));
+        assert_eq!(used(five_codons(), "MPK*"), (RecordUse::SetAside, None));
+    }
+
     /// A record set aside for its length gives the transcript neither its
     /// peptide nor the prediction matrices held under its key; a record that
     /// fits, held under the same key, gives both.
     #[test]
     fn a_record_set_aside_gives_no_predictions() {
-        use crate::predictions::{PeptidePredictions, PredictionBlob};
         let coding = transcript(
             "21",
             1,
@@ -2432,8 +3016,8 @@ mod tests {
     /// flag), else the `--codon-table` value (`mitochondrion_genome=5` with no
     /// dumps reads 5; the flag's `chrM` is the readers' `MT`), else 1 (`21` with
     /// neither). The region's name never decides: the dumps' 2 beside a flag's
-    /// `MT=3` is refused, as is a flag whose table BioPerl lacks or whose
-    /// value names no region.
+    /// `MT=3` is refused, as is a flag whose table is not known or whose
+    /// value names no region. Table 26, which BioPerl lacks, is known.
     #[test]
     fn codon_table_is_the_regions_attribute_or_the_flag_never_the_name() {
         let dumps = chr21_dumps();
@@ -2461,7 +3045,7 @@ mod tests {
             "codon table of sequence region MT is 2 in the core dumps and 3 in --codon-table"
         );
 
-        for refused in ["MT=7", "MT=25", "MT=x", "MT", "=2", "MT=2=3"] {
+        for refused in ["MT=7", "MT=25", "MT=27", "MT=x", "MT", "=2", "MT=2=3"] {
             assert!(
                 codon_table_flag(&[refused.to_string()]).is_err(),
                 "{refused} parses"
@@ -2471,6 +3055,16 @@ mod tests {
         assert_eq!(
             codon_table_flag(&["MT=2".to_string(), "MT=2".to_string()]).unwrap(),
             HashMap::from([("MT".to_string(), 2)])
+        );
+        assert_eq!(
+            codon_table_flag(&["scaffold_1=26".to_string()]).unwrap(),
+            HashMap::from([("scaffold_1".to_string(), 26)])
+        );
+        assert_eq!(
+            codon_table_flag(&["MT=27".to_string()])
+                .unwrap_err()
+                .to_string(),
+            "--codon-table MT=27: 27 is not a genetic code vep-rs translates with"
         );
     }
 
@@ -2501,13 +3095,72 @@ mod tests {
         assert_eq!(codon_table("KI270728.1", None, &no_flag).unwrap(), 1);
 
         let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mito_codon_table");
-        let genes =
-            crate::gff3::parse_gff3(&fixture.join("mito.gff3"), crate::gff3::Reading::GffSource)
-                .unwrap();
+        let genes = crate::gff3::parse_gff3(
+            &fixture.join("mito.gff3"),
+            crate::gff3::Reading::GffSource,
+            &crate::gff3::SequenceNames::default(),
+        )
+        .unwrap();
         assert_eq!(
-            codon_tables(&genes, None, &no_flag).unwrap_err().to_string(),
+            codon_tables(&genes, None, &no_flag, &crate::gff3::SequenceNames::default()).unwrap_err().to_string(),
             "codon table of sequence region Mito unknown: pass --core-dumps or --codon-table Mito=<n>"
         );
+    }
+
+    /// The organelle names of genomes other than human refuse a build that
+    /// states no table for them, and take the flag's: the names the committed
+    /// corpora of the fly, the mouse, yeast and Arabidopsis use, and the
+    /// longer names Ensembl's caches give a mitochondrion or a plastid, which
+    /// are known by what they hold (`mito`, `chloro`, `plastid`) in any
+    /// letter case. A name written `M` or `chrM` that the model reader kept
+    /// refuses too and takes the table the flag names under either spelling.
+    /// The corpora's other sequences, and a bacterial chromosome or plasmid,
+    /// read 1.
+    #[test]
+    fn the_organelle_names_of_other_genomes_refuse_without_a_table() {
+        let no_flag = HashMap::new();
+        for name in [
+            "mitochondrion_genome",
+            "MT",
+            "Mito",
+            "Mt",
+            "Pt",
+            "MtDNA",
+            "Chloro",
+            "chloroplast",
+            "OVOC_MITOCHONDRIAL",
+            "SRAE_MITOCHONDRIAL",
+            "SM_V7_MITO",
+            "TMUE_MITO",
+            "mito_A_fumigatus_Af293",
+            "mito_C_glabrata_CBS138",
+            "mito_C_parapsilosis_CDC317",
+            "M",
+            "chrM",
+        ] {
+            assert_eq!(
+                codon_table(name, None, &no_flag).unwrap_err().to_string(),
+                format!(
+                    "codon table of sequence region {name} unknown: pass --core-dumps or --codon-table {name}=<n>"
+                )
+            );
+            let named = codon_table_flag(&[format!("{name}=4")]).unwrap();
+            assert_eq!(codon_table(name, None, &named).unwrap(), 4, "{name}");
+        }
+        for name in [
+            "2L",
+            "rDNA",
+            "211000022278760",
+            "IV",
+            "XVI",
+            "5",
+            "GL456210.1",
+            "Chromosome",
+            "pSYN1.2",
+            "chromosome_1",
+        ] {
+            assert_eq!(codon_table(name, None, &no_flag).unwrap(), 1, "{name}");
+        }
     }
 
     /// A synthetic `Mito` GFF3 built under `--codon-table Mito=3` writes the
@@ -2518,14 +3171,18 @@ mod tests {
     #[test]
     fn a_build_from_a_synthetic_gff3_under_table_three_writes_three() {
         let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mito_codon_table");
-        let genes =
-            crate::gff3::parse_gff3(&fixture.join("mito.gff3"), crate::gff3::Reading::GffSource)
-                .unwrap();
+        let genes = crate::gff3::parse_gff3(
+            &fixture.join("mito.gff3"),
+            crate::gff3::Reading::GffSource,
+            &crate::gff3::SequenceNames::default(),
+        )
+        .unwrap();
         let genome = vep_fasta::IndexedFasta::from_path(fixture.join("mito.fa")).unwrap();
         let peptides =
             crate::fasta::parse_protein_fasta(&fixture.join("mito_peptides.fa")).unwrap();
         let named = codon_table_flag(&["Mito=3".to_string()]).unwrap();
-        let tables = codon_tables(&genes, None, &named).unwrap();
+        let tables =
+            codon_tables(&genes, None, &named, &crate::gff3::SequenceNames::default()).unwrap();
         assert_eq!(tables, HashMap::from([("Mito".to_string(), 3)]));
 
         let cds = "ATGCTTTGAATAAAATAA";
@@ -2787,5 +3444,258 @@ mod tests {
         assert_eq!(region_start(1_000_000), 1);
         // Position 1000001 -> region 1000001-2000000
         assert_eq!(region_start(1_000_001), 1_000_001);
+    }
+
+    /// Exon ranks run against position when an exon starts before the exon
+    /// ranked before it on the forward strand, or after it on the reverse:
+    /// the first such exon in rank order is named with that neighbour and
+    /// both ranks. Ranks in position order, gaps between them or not, and
+    /// exons ordered by position, one carrying no rank, name none; the
+    /// refusal names the file, the transcript, the two exons and their
+    /// ranks.
+    #[test]
+    fn exon_ranks_that_run_against_position_name_the_first_exon_out_of_place() {
+        let ranked = |strand, ranks: [u32; 3]| {
+            [
+                exon(1000, 1200, strand, ranks[0]),
+                exon(1400, 1500, strand, ranks[1]),
+                exon(1700, 2000, strand, ranks[2]),
+            ]
+        };
+        let against = |exon, rank, before, before_rank| {
+            Some(Unplaced::Order {
+                exon,
+                rank,
+                before,
+                before_rank,
+            })
+        };
+        for (strand, ranks, expected) in [
+            (1, [1, 3, 2], against((1400, 1500), 3, (1700, 2000), 2)),
+            (1, [2, 1, 3], against((1000, 1200), 2, (1400, 1500), 1)),
+            (-1, [2, 3, 1], against((1400, 1500), 3, (1000, 1200), 2)),
+            (-1, [1, 2, 3], against((1400, 1500), 2, (1000, 1200), 1)),
+            (1, [1, 2, 3], None),
+            (1, [2, 5, 9], None),
+            (-1, [3, 2, 1], None),
+        ] {
+            let exons = ranked(strand, ranks);
+            assert_eq!(
+                ranks_against_position(&transcript_order(&exons, strand), strand),
+                expected,
+                "{strand} {ranks:?}"
+            );
+        }
+        let mut unranked = ranked(1, [3, 2, 1]);
+        unranked[1].rank = None;
+        for strand in [1, -1] {
+            assert_eq!(
+                ranks_against_position(&transcript_order(&unranked, strand), strand),
+                None
+            );
+        }
+
+        let tr = transcript("21", -1, ranked(-1, [2, 3, 1]).to_vec(), Vec::new());
+        assert_eq!(
+            against((1400, 1500), 3, (1000, 1200), 2)
+                .unwrap()
+                .refusal(Path::new("model.gff3"), &tr),
+            "model.gff3: exon 1400-1500 of transcript ENST1, ranked 3, starts after exon \
+             1000-1200, ranked 2: the exon ranks run against position"
+        );
+    }
+
+    /// A coding sequence reads as one when it opens on a start codon of its
+    /// table and holds no stop codon before its last whole codon. Under
+    /// table 2 `ATA` opens a sequence, `TGA` is no stop codon and `AGA` is
+    /// one; under table 1 it is the other way. A stop codon as the last
+    /// codon and bases short of a codon do not count. A sequence shorter
+    /// than a codon, or whose first codon holds another letter than the four
+    /// bases, is not read.
+    #[test]
+    fn a_coding_sequence_reads_by_its_first_codon_and_the_stop_codons_before_its_last() {
+        let reads = reads_as_coding_sequence;
+        assert_eq!(reads("ATGCTTTGAATAAAATAA", 2), Some(true));
+        assert_eq!(reads("ATACTTTAA", 2), Some(true));
+        assert_eq!(reads("ATGCTTAGA", 2), Some(true));
+        assert_eq!(reads("ATGCTTTA", 2), Some(true));
+        assert_eq!(reads("ATG", 2), Some(true));
+        assert_eq!(reads("ATGCTTTGAATAAAATAA", 1), Some(false));
+        assert_eq!(reads("ATACTTTAA", 1), Some(false));
+        assert_eq!(reads("ATGAGACTT", 1), Some(true));
+        assert_eq!(reads("ATGAGACTT", 2), Some(false));
+        assert_eq!(reads("CCATGCTTTGAATAAAAT", 2), Some(false));
+        assert_eq!(reads("CATGCTTTGAATAAAATA", 2), Some(false));
+        assert_eq!(reads("TAA", 2), Some(false));
+        assert_eq!(reads("NNGCTTTAA", 2), None);
+        assert_eq!(reads("AT", 2), None);
+        assert_eq!(reads("", 2), None);
+    }
+
+    /// The finding names the count of coding transcripts with its noun, the
+    /// record, its length with a comma before each three digits, and the
+    /// codon table.
+    #[test]
+    fn the_finding_names_the_transcripts_the_record_its_length_and_the_table() {
+        let finding = |coding, record_length| {
+            OffRecord {
+                transcripts: 37,
+                coding,
+                record: "chrM".to_string(),
+                record_length,
+                codon_table: 2,
+            }
+            .finding()
+        };
+        assert_eq!(
+            finding(13, 16_571),
+            "of 13 coding transcripts read from the FASTA record chrM, 16,571 bases long, under \
+             codon table 2, none opens on a start codon and runs to its last codon without a \
+             stop codon"
+        );
+        assert_eq!(
+            finding(1, 999),
+            "of 1 coding transcript read from the FASTA record chrM, 999 bases long, under codon \
+             table 2, none opens on a start codon and runs to its last codon without a stop \
+             codon"
+        );
+        assert!(finding(2, 1_234_567).contains("chrM, 1,234,567 bases long,"));
+        assert!(finding(2, 100_000).contains("chrM, 100,000 bases long,"));
+    }
+
+    /// A genome of one 60-base record `MT`: at positions 1 to 18 a coding
+    /// sequence that reads under codon table 2, and at positions 21 to 38
+    /// the same bases two positions on, which open on no start codon and
+    /// hold a stop codon before their last codon.
+    fn mitochondrial_genome(dir: &Path) -> vep_fasta::IndexedFasta {
+        let fa = dir.join("mt.fa");
+        let bases = [
+            "ATGCTTTGAATAAAATAA",
+            "AC",
+            "CCATGCTTTGAATAAAAT",
+            "ACGTACGTACGTACGTACGTAC",
+        ]
+        .concat();
+        assert_eq!(bases.len(), 60);
+        std::fs::write(&fa, format!(">MT\n{bases}\n")).unwrap();
+        std::fs::write(dir.join("mt.fa.fai"), "MT\t60\t4\t60\t61\n").unwrap();
+        vep_fasta::IndexedFasta::from_path(&fa).unwrap()
+    }
+
+    /// One gene of `region` for each `(identifier, start, coding)`: a
+    /// transcript of one exon of 18 bases from `start`, the whole exon its
+    /// coding sequence where `coding` is set.
+    fn mitochondrial_genes(
+        region: &str,
+        transcripts: &[(&str, u64, bool)],
+    ) -> HashMap<String, GeneRecord> {
+        transcripts
+            .iter()
+            .map(|&(id, start, coding)| {
+                let end = start + 17;
+                let cds_regions = if coding {
+                    vec![cds(start, end, 1, 0)]
+                } else {
+                    Vec::new()
+                };
+                let mut tr = transcript(region, 1, vec![exon(start, end, 1, 1)], cds_regions);
+                tr.transcript_id = id.to_string();
+                tr.gene_id = format!("G{id}");
+                let mut gene = gene(&tr);
+                gene.transcripts.push(tr);
+                (gene.gene_id.clone(), gene)
+            })
+            .collect()
+    }
+
+    /// The test lists a GRCh37 mitochondrial region none of whose coding
+    /// transcripts reads on the record it is cut from, with its counts and
+    /// the record: under `MT` and under a name kept as written. A region
+    /// with one transcript that reads, a region with no coding transcript,
+    /// another assembly, a model with no genome and a region that is no
+    /// mitochondrion list nothing.
+    #[test]
+    fn a_grch37_mitochondrial_region_is_off_its_record_when_no_coding_transcript_reads() {
+        let dir = tempfile::tempdir().unwrap();
+        let genome = mitochondrial_genome(dir.path());
+        let no_peptides = HashMap::new();
+        let off_record = |region: &str,
+                          transcripts: &[(&str, u64, bool)],
+                          genome: Option<&vep_fasta::IndexedFasta>,
+                          assembly: Option<&str>| {
+            let genes = mitochondrial_genes(region, transcripts);
+            let tables = HashMap::from([(region.to_string(), 2)]);
+            grch37_mitochondrial_regions_off_their_record(
+                &genes,
+                &sources(&no_peptides, genome),
+                &tables,
+                assembly,
+            )
+        };
+        let grch37 = Some("GRCh37");
+        let listed = |transcripts, coding| OffRecord {
+            transcripts,
+            coding,
+            record: "MT".to_string(),
+            record_length: 60,
+            codon_table: 2,
+        };
+
+        let moved: &[(&str, u64, bool)] = &[("MOVED", 21, true)];
+        assert_eq!(
+            off_record("MT", moved, Some(&genome), grch37),
+            BTreeMap::from([("MT".to_string(), listed(1, 1))])
+        );
+        assert_eq!(
+            off_record("chrM", moved, Some(&genome), grch37),
+            BTreeMap::from([("chrM".to_string(), listed(1, 1))])
+        );
+        let beside_a_noncoding: &[(&str, u64, bool)] =
+            &[("MOVED", 21, true), ("NONCODING", 41, false)];
+        assert_eq!(
+            off_record("MT", beside_a_noncoding, Some(&genome), grch37),
+            BTreeMap::from([("MT".to_string(), listed(2, 1))])
+        );
+
+        let nothing = BTreeMap::new();
+        let beside_one_that_reads: &[(&str, u64, bool)] =
+            &[("MOVED", 21, true), ("READS", 1, true)];
+        assert_eq!(
+            off_record("MT", beside_one_that_reads, Some(&genome), grch37),
+            nothing
+        );
+        let noncoding: &[(&str, u64, bool)] = &[("NONCODING", 21, false)];
+        assert_eq!(off_record("MT", noncoding, Some(&genome), grch37), nothing);
+        assert_eq!(
+            off_record("MT", moved, Some(&genome), Some("GRCh38")),
+            nothing
+        );
+        assert_eq!(off_record("MT", moved, Some(&genome), None), nothing);
+        assert_eq!(off_record("MT", moved, None, grch37), nothing);
+        assert_eq!(off_record("Mito", moved, Some(&genome), grch37), nothing);
+
+        // A transcript its own line flags as incomplete at its start is not
+        // tested, so a region whose one coding transcript is flagged lists
+        // nothing, and beside an unflagged one that does not read the region
+        // is listed with one tested transcript of its two.
+        let flagged = |transcripts: &[(&str, u64, bool)]| {
+            let mut genes = mitochondrial_genes("MT", transcripts);
+            let tr = &mut genes.get_mut("GMOVED").unwrap().transcripts[0];
+            tr.cds_start_nf = true;
+            let tables = HashMap::from([("MT".to_string(), 2)]);
+            grch37_mitochondrial_regions_off_their_record(
+                &genes,
+                &sources(&no_peptides, Some(&genome)),
+                &tables,
+                grch37,
+            )
+        };
+        assert_eq!(flagged(moved), nothing);
+        let beside_another_moved: &[(&str, u64, bool)] =
+            &[("MOVED", 21, true), ("ALSOMOVED", 21, true)];
+        assert_eq!(
+            flagged(beside_another_moved),
+            BTreeMap::from([("MT".to_string(), listed(2, 1))])
+        );
     }
 }

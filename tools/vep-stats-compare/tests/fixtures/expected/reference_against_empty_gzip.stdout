@@ -1,0 +1,11 @@
+stats: red
+  the actual file carries no [section] header
+  section [VEP run statistics] only in the expected file
+  section [Data version] only in the expected file
+  section [General statistics] only in the expected file
+  section [Variant classes] only in the expected file
+  section [Consequences (most severe)] only in the expected file
+  section [Consequences (all)] only in the expected file
+  section [Coding consequences] only in the expected file
+  section [Variants by chromosome] only in the expected file
+  section [Position in protein] only in the expected file

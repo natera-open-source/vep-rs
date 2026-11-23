@@ -13,10 +13,12 @@
 //! Each fixture under
 //! `tests/fixtures/malformed/` is the shape as a file; a failed build prints
 //! one `ERROR: [cache-builder]` line and exits 1, and a refused build writes
-//! nothing outside the output directory.
+//! nothing outside the output directory. Standard error that refuses every
+//! write changes neither a build nor its exit status.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
 
 use serde_json::Value;
 
@@ -26,8 +28,8 @@ fn fixture(name: &str) -> PathBuf {
         .join(name)
 }
 
-/// Runs the builder on `gff3` and `peptides` into `out` with `extra` flags.
-fn build(gff3: &Path, peptides: &Path, out: &Path, extra: &[(&str, &Path)]) -> Output {
+/// The builder's command on `gff3` and `peptides` into `out`.
+fn command(gff3: &Path, peptides: &Path, out: &Path) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_vep-cache-builder"));
     cmd.args(["--release", "116", "--assembly", "GRCh37"])
         .arg("--gff3")
@@ -36,6 +38,12 @@ fn build(gff3: &Path, peptides: &Path, out: &Path, extra: &[(&str, &Path)]) -> O
         .arg(peptides)
         .arg("--output-dir")
         .arg(out);
+    cmd
+}
+
+/// Runs the builder on `gff3` and `peptides` into `out` with `extra` flags.
+fn build(gff3: &Path, peptides: &Path, out: &Path, extra: &[(&str, &Path)]) -> Output {
+    let mut cmd = command(gff3, peptides, out);
     for (flag, path) in extra {
         cmd.arg(flag).arg(path);
     }
@@ -603,5 +611,340 @@ fn annotation_inside_a_sequence_section_is_refused_and_writes_nothing() {
             ),
         );
         assert!(!out.exists());
+    }
+}
+
+/// One coding transcript of two exons on chromosome 21 as a GFF3, or as a
+/// GTF, a line per entry, and the attribute column an exon line of it
+/// carries. The CDS line at 1100-1200 is the entry before the last.
+fn two_exon_model(gtf: bool) -> (Vec<String>, &'static str) {
+    let (gene, transcript, exon, cds) = if gtf {
+        (
+            "gene_id \"ENSG00000000001\"; gene_biotype \"protein_coding\";",
+            "gene_id \"ENSG00000000001\"; transcript_id \"ENST00000000001\"; transcript_biotype \"protein_coding\";",
+            "gene_id \"ENSG00000000001\"; transcript_id \"ENST00000000001\";",
+            "gene_id \"ENSG00000000001\"; transcript_id \"ENST00000000001\"; protein_id \"ENSP00000000001\";",
+        )
+    } else {
+        (
+            "ID=gene:ENSG00000000001;biotype=protein_coding",
+            "ID=transcript:ENST00000000001;Parent=gene:ENSG00000000001;biotype=protein_coding",
+            "Parent=transcript:ENST00000000001",
+            "Parent=transcript:ENST00000000001;protein_id=ENSP00000000001;version=1",
+        )
+    };
+    let transcript_type = if gtf { "transcript" } else { "mRNA" };
+    let mut lines = Vec::new();
+    if !gtf {
+        lines.push("##gff-version 3".to_string());
+    }
+    for (feature, start, end, phase, attributes) in [
+        ("gene", 1000, 2000, ".", gene),
+        (transcript_type, 1000, 2000, ".", transcript),
+        ("exon", 1000, 1200, ".", exon),
+        ("exon", 1500, 2000, ".", exon),
+        ("CDS", 1100, 1200, "0", cds),
+        ("CDS", 1500, 1600, "0", cds),
+    ] {
+        lines.push(format!(
+            "21\tx\t{feature}\t{start}\t{end}\t.\t+\t{phase}\t{attributes}"
+        ));
+    }
+    (lines, exon)
+}
+
+/// Builds `text` as the model `name` in `dir` under `flag` (`--gff3` or
+/// `--gtf`) into `dir/<name>.cache`.
+fn build_model(dir: &Path, flag: &str, name: &str, text: &[u8]) -> (PathBuf, Output) {
+    let model = dir.join(name);
+    std::fs::write(&model, text).unwrap();
+    let out = dir.join(format!("{name}.cache"));
+    let output = Command::new(env!("CARGO_BIN_EXE_vep-cache-builder"))
+        .args(["--release", "116", "--assembly", "GRCh38", flag])
+        .arg(&model)
+        .arg("--fasta")
+        .arg(fixture("mixed_exon_ranks_peptides.fa"))
+        .arg("--output-dir")
+        .arg(&out)
+        .output()
+        .expect("vep-cache-builder runs");
+    (model, output)
+}
+
+/// The chromosome 21 shard a build of `text` writes ([`build_model`]), the
+/// build succeeding, and what the build logs.
+fn model_shard(dir: &Path, flag: &str, name: &str, text: &str) -> (Vec<u8>, String) {
+    let (_, output) = build_model(dir, flag, name, text.as_bytes());
+    assert!(output.status.success(), "{name}: {}", stderr(&output));
+    let shard = dir.join(format!("{name}.cache/transcripts/21/1-1000000.json"));
+    (std::fs::read(shard).unwrap(), stderr(&output))
+}
+
+/// A line whose columns NUL bytes end is one the index build places, a
+/// column ending at a NUL byte as at a tab to it, and no record to a reader,
+/// which ends a column at a tab: it is skipped, as a line of four to eight
+/// columns is. Such a line, an exon's columns with numbers in the fourth and
+/// fifth, builds the shard of the file without it, as a GFF3 and as a GTF,
+/// in three places: among the records; led by `>`, with a placed line behind
+/// it at the file's end; and at the file's end behind a placed line that
+/// begins with `>`, where no sequence section opens.
+#[test]
+fn a_line_whose_columns_nul_bytes_end_builds_the_cache_of_the_file_without_it() {
+    let dir = tempfile::tempdir().unwrap();
+    for (flag, extension, gtf) in [("--gff3", "gff3", false), ("--gtf", "gtf", true)] {
+        let (lines, exon) = two_exon_model(gtf);
+        let sound = format!("{}\n", lines.join("\n"));
+        let nul_ended = ["21", "x", "exon", "1300", "1400", ".", "+", ".", exon].join("\0");
+        let other = if gtf {
+            "gene_id \"OTHER\";"
+        } else {
+            "ID=other"
+        };
+        let placed = format!("22\tx\tregion\t1\t100\t.\t+\t.\t{other}");
+        for (shape, text, without) in [
+            (
+                "among_the_records",
+                with_a_line_mid_file(&sound, &nul_ended).0,
+                sound.clone(),
+            ),
+            (
+                "led_by_an_angle_bracket",
+                format!("{sound}>{nul_ended}\n{placed}\n"),
+                format!("{sound}{placed}\n"),
+            ),
+            (
+                "behind_a_placed_angle_bracket_line",
+                format!("{sound}>{placed}\n{nul_ended}\n"),
+                format!("{sound}>{placed}\n"),
+            ),
+        ] {
+            assert!(text.contains('\0') && !without.contains('\0'));
+            let name = format!("{shape}.{extension}");
+            let (shard, log) = model_shard(dir.path(), flag, &name, &text);
+            let (expected, _) = model_shard(
+                dir.path(),
+                flag,
+                &format!("{shape}_without.{extension}"),
+                &without,
+            );
+            assert!(shard == expected, "{name}: the shard differs\n{log}");
+            assert!(!log.contains("holds a sequence section"), "{name}: {log}");
+        }
+    }
+}
+
+/// One NUL byte inside a column of a record, the CDS line at 1100-1200, as
+/// a GFF3 and as a GTF. The line is held to the index build's reading, in
+/// which the NUL byte ends a column: inside the sequence name, the source
+/// or the type it puts another column where that build reads a start, and
+/// the build is refused, naming that column's text; inside the start or the
+/// end it leaves text that is no number, refused as on any record. Behind
+/// the score or the strand it changes nothing the model reads, and the
+/// shard is that of the sound file.
+#[test]
+fn a_nul_byte_inside_a_column_of_a_record_is_read_where_the_index_build_ends_it() {
+    let dir = tempfile::tempdir().unwrap();
+    for (flag, extension, format, gtf) in [
+        ("--gff3", "gff3", "GFF3", false),
+        ("--gtf", "gtf", "GTF", true),
+    ] {
+        let (lines, _) = two_exon_model(gtf);
+        let at = lines.len() - 2;
+        let columns: Vec<&str> = lines[at].split('\t').collect();
+        let with_column = |column: usize, value: &str| {
+            let mut edited = lines.clone();
+            let mut columns = columns.clone();
+            columns[column] = value;
+            edited[at] = columns.join("\t");
+            format!("{}\n", edited.join("\n"))
+        };
+        for (shape, column, value, refusal) in [
+            ("sequence", 0, "2\x001", "start \"CDS\" is not a number"),
+            ("source", 1, "x\0y", "start \"CDS\" is not a number"),
+            ("type", 2, "C\0DS", "start \"DS\" is not a number"),
+            ("start", 3, "11\x0000", "start \"11\\000\" is not a number"),
+            ("end", 4, "12\x0000", "end \"12\\000\" is not a number"),
+        ] {
+            let name = format!("nul_in_{shape}.{extension}");
+            let text = with_column(column, value);
+            let (model, output) = build_model(dir.path(), flag, &name, text.as_bytes());
+            assert_refused(
+                &output,
+                &format!(
+                    "ERROR: [cache-builder] Failed to parse {format}: {} line {}: {format} {refusal}",
+                    model.display(),
+                    at + 1
+                ),
+            );
+        }
+        let sound = format!("{}\n", lines.join("\n"));
+        let (expected, _) = model_shard(dir.path(), flag, &format!("sound.{extension}"), &sound);
+        for (shape, column, value) in [("score", 5, ".\0"), ("strand", 6, "+\0")] {
+            let name = format!("nul_in_{shape}.{extension}");
+            let (shard, log) = model_shard(dir.path(), flag, &name, &with_column(column, value));
+            assert!(shard == expected, "{name}: the shard differs\n{log}");
+        }
+    }
+}
+
+/// A CDS line's phase is text Ensembl VEP's source takes for an exon's
+/// phase: `0`, `-1`, a number that reads 1 or 2, or text that holds a `.`,
+/// which states none. Any other text, a digit beside a NUL byte, a letter
+/// or another number, refuses the build, naming the file, the line and the
+/// value, as a GFF3 and as a GTF; Ensembl VEP ends its run on each (`Bad
+/// value (...) for exon phase`, core `Exon.pm:244-250`). The phases it takes
+/// build.
+#[test]
+fn a_cds_phase_ensembl_vep_ends_its_run_on_is_refused_naming_it() {
+    let dir = tempfile::tempdir().unwrap();
+    for (flag, extension, format, gtf) in [
+        ("--gff3", "gff3", "GFF3", false),
+        ("--gtf", "gtf", "GTF", true),
+    ] {
+        let (lines, _) = two_exon_model(gtf);
+        let at = lines.len() - 2;
+        let with_phase = |phase: &str| {
+            let mut edited = lines.clone();
+            let mut columns: Vec<&str> = lines[at].split('\t').collect();
+            columns[7] = phase;
+            edited[at] = columns.join("\t");
+            format!("{}\n", edited.join("\n"))
+        };
+        for (shape, phase, written) in [
+            ("nul", "0\0", "\"0\\0\""),
+            ("letter", "x", "\"x\""),
+            ("seven", "7", "\"7\""),
+            ("empty", "", "\"\""),
+            ("padded_zero", "00", "\"00\""),
+        ] {
+            let name = format!("phase_{shape}.{extension}");
+            let text = with_phase(phase);
+            let (model, output) = build_model(dir.path(), flag, &name, text.as_bytes());
+            assert_refused(
+                &output,
+                &format!(
+                    "ERROR: [cache-builder] Failed to parse {format}: {} line {}: {format} phase {written} is not a phase",
+                    model.display(),
+                    at + 1
+                ),
+            );
+        }
+        for (shape, phase) in [
+            ("dot", "."),
+            ("one", "1"),
+            ("two", "2"),
+            ("minus_one", "-1"),
+            ("one_then_a_letter", "1x"),
+            ("fraction", "0.5"),
+        ] {
+            let name = format!("phase_{shape}.{extension}");
+            let (_, output) = build_model(dir.path(), flag, &name, with_phase(phase).as_bytes());
+            assert!(output.status.success(), "{name}: {}", stderr(&output));
+        }
+    }
+}
+
+/// The device that refuses every write, where the platform has one.
+const FULL_DEVICE: &str = "/dev/full";
+
+/// The streams that take no bytes, by name: the device that refuses every
+/// write, where the platform has one, and a pipe whose reader has gone.
+fn unwritable_streams() -> &'static [&'static str] {
+    if Path::new(FULL_DEVICE).exists() {
+        &[FULL_DEVICE, "a pipe whose reader has gone"]
+    } else {
+        &["a pipe whose reader has gone"]
+    }
+}
+
+/// The stream [`unwritable_streams`] names as `stream`, opened for a child
+/// process to write.
+fn unwritable(stream: &str) -> Stdio {
+    if stream == FULL_DEVICE {
+        return std::fs::File::options()
+            .write(true)
+            .open(stream)
+            .unwrap()
+            .into();
+    }
+    let (reader, writer) = std::io::pipe().unwrap();
+    drop(reader);
+    writer.into()
+}
+
+/// Every file below `dir`, by its path from `dir`, with its bytes.
+fn files(dir: &Path) -> BTreeMap<String, Vec<u8>> {
+    let mut found = BTreeMap::new();
+    let mut pending = vec![dir.to_path_buf()];
+    while let Some(next) = pending.pop() {
+        for entry in std::fs::read_dir(&next).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                pending.push(path);
+            } else {
+                let name = path.strip_prefix(dir).unwrap().display().to_string();
+                found.insert(name, std::fs::read(&path).unwrap());
+            }
+        }
+    }
+    found
+}
+
+/// A build whose every log line standard error refuses, on a device that
+/// refuses every write or a pipe whose reader has gone, completes: it exits 0
+/// and writes the files of the same build on a readable stream, byte for byte.
+#[test]
+fn a_build_completes_on_an_unwritable_error_stream() {
+    let gff3 = fixture("mixed_exon_ranks.gff3");
+    let peptides = fixture("mixed_exon_ranks_peptides.fa");
+    let readable = tempfile::tempdir().unwrap();
+    let output = build(&gff3, &peptides, readable.path(), &[]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(
+        stderr(&output).contains("Cache built: "),
+        "{}",
+        stderr(&output)
+    );
+    let expected = files(readable.path());
+    assert!(
+        expected.contains_key("transcripts/21/1-1000000.json"),
+        "{:?}",
+        expected.keys()
+    );
+    for stream in unwritable_streams() {
+        let out = tempfile::tempdir().unwrap();
+        let status = command(&gff3, &peptides, out.path())
+            .stdout(Stdio::null())
+            .stderr(unwritable(stream))
+            .status()
+            .expect("vep-cache-builder runs");
+        assert!(status.success(), "{stream}: {status}");
+        assert!(files(out.path()) == expected, "{stream}: the files differ");
+    }
+}
+
+/// A refused build keeps its exit status of 1 on such a stream, though its log
+/// lines and its `ERROR: [cache-builder]` line are lost, and writes nothing.
+#[test]
+fn a_refused_build_exits_1_on_an_unwritable_error_stream() {
+    let gff3 = fixture("seqid_parent_escape.gff3");
+    let peptides = fixture("seqid_escape_peptides.fa");
+    let readable = tempfile::tempdir().unwrap();
+    let output = build(&gff3, &peptides, readable.path(), &[]);
+    assert_eq!(output.status.code(), Some(1), "{}", stderr(&output));
+    assert!(
+        stderr(&output).contains("Parsing GFF3: "),
+        "a log line precedes the error:\n{}",
+        stderr(&output)
+    );
+    for stream in unwritable_streams() {
+        let out = tempfile::tempdir().unwrap();
+        let status = command(&gff3, &peptides, out.path())
+            .stdout(Stdio::null())
+            .stderr(unwritable(stream))
+            .status()
+            .expect("vep-cache-builder runs");
+        assert_eq!(status.code(), Some(1), "{stream}: {status}");
+        assert!(entries(out.path()).is_empty(), "{stream}");
     }
 }

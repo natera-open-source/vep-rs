@@ -22,7 +22,7 @@
 //! - **Upstream/downstream**: standard distance-based consequences.
 //! - **No overlap at all**: None (caller handles intergenic).
 //!
-//! Perl citations name modules of ensembl-variation release/116
+//! Ensembl VEP source citations name modules of ensembl-variation release/116
 //! (`Bio/EnsEMBL/Variation/...`).
 
 use super::is_mature_mirna_sv;
@@ -168,13 +168,13 @@ pub fn calculate(
         // breakend and the mate coordinate for a bracket allele; an allele without
         // a breakend string (a single breakend on its own, a `<BND>` that names no
         // mate) is built without one, and the empty breakend ensembl-vep's
-        // `OutputFactory.pm:2029` autovivifies before the terms are computed matches
+        // `OutputFactory.pm:2038` autovivifies before the terms are computed matches
         // no feature's chromosome, so it never truncates (`truncation_arm_passes` in
         // `sv/mod.rs` states how that order depends on statistics).
         let add_truncation = if is_native_single_breakend {
             false
         } else if variant.is_single_breakend {
-            // Perl emits only mature_miRNA_variant, no feature_truncation, when the
+            // Ensembl VEP emits only mature_miRNA_variant, no feature_truncation, when the
             // breakpoint falls within a mature miRNA exon.
             !is_mature_mirna_sv(transcript, bp, bp)
         } else if let Some(mate_pos) = variant.mate_pos {
@@ -246,7 +246,7 @@ pub fn calculate(
                 if super::overlaps_polypyrimidine_tract(transcript, bp, bp) {
                     consequences.push(Consequence::SplicePolypyrimidineTractVariant);
                 }
-                if !is_coding && !transcript.facts().is_nmd {
+                if !is_coding {
                     consequences.push(Consequence::NonCodingTranscriptVariant);
                 }
             }
@@ -256,7 +256,7 @@ pub fn calculate(
                 } else {
                     consequences.push(Consequence::NonCodingTranscriptExonVariant);
                 }
-                // Perl: within_non_coding_gene requires not non_coding_exon_variant
+                // Ensembl VEP: within_non_coding_gene requires not non_coding_exon_variant
                 // and not mature_miRNA. So non_coding_transcript_variant is not added
                 // when there IS exon overlap (either type).
                 cdna_position = Some(cdna_pos.to_string());
@@ -302,15 +302,13 @@ pub fn calculate(
 
     consequences.sort_by_key(|c| c.rank());
 
-    let mut tc = TranscriptConsequence {
-        consequences,
-        impact,
-        cdna_position,
-        cds_position,
-        protein_position,
-        distance,
-        ..TranscriptConsequence::for_transcript(transcript)
-    };
+    let mut tc = TranscriptConsequence::for_transcript(transcript);
+    tc.consequences = consequences;
+    tc.impact = impact;
+    tc.cdna_position = cdna_position;
+    tc.cds_position = cds_position;
+    tc.protein_position = protein_position;
+    tc.distance = distance;
     if !is_coding {
         tc.protein_id_display = ProteinIdDisplay::Hidden;
     }
@@ -330,7 +328,7 @@ pub fn calculate(
 /// written for the breakend: it passes `$bvfoa->breakend`, the mate coordinate, into
 /// `within_feature` with the seq-region test on. Every other predicate receives the
 /// local variation feature (`BaseVariationFeatureOverlapAllele.pm:257,273`, `_bvfo_preds`
-/// `:454`, `upstream` and `downstream` `Utils/VariationEffect.pm:443-457`), so on a
+/// `:454`, `upstream` and `downstream` `Utils/VariationEffect.pm:444-458`), so on a
 /// mate-side row Ensembl measures the local coordinate against the mate chromosome's
 /// transcript: a coordinate on another chromosome, or a same-chromosome coordinate far
 /// from the transcript, and the row falls to bare `feature_truncation` or to the default
@@ -533,7 +531,7 @@ mod tests {
     }
 
     /// A breakend inside a frameshift intron takes the region's term. Ensembl VEP
-    /// 116.2 writes `coding_sequence_variant` for a single breakend inside a 9-base
+    /// 116.3 writes `coding_sequence_variant` for a single breakend inside a 9-base
     /// coding intron of a forward-strand transcript, `5_prime_UTR_variant` and
     /// `3_prime_UTR_variant` inside a 7-base and a 13-base UTR intron, and
     /// `feature_truncation` beside the term for a bracket breakend whose mate lies in
@@ -982,7 +980,7 @@ mod tests {
         assert!(tc
             .consequences
             .contains(&Consequence::NonCodingTranscriptExonVariant));
-        // Perl: within_non_coding_gene requires not non_coding_exon_variant.
+        // Ensembl VEP: within_non_coding_gene requires not non_coding_exon_variant.
         // So non_coding_transcript_variant is not added when there IS exon overlap.
         assert!(
             !tc.consequences
@@ -1228,7 +1226,8 @@ mod tests {
     }
 
     /// The local coordinate plays no part: the same mate on the same chromosome as
-    /// the record, 10 kb from it, gets the same row as the cross-chromosome shape.
+    /// the record, which lies 10 kb beyond the transcript, gets the same row as the
+    /// cross-chromosome shape.
     #[test]
     fn test_paired_mate_row_does_not_read_the_local_coordinate() {
         let tx = make_test_transcript();
@@ -1285,9 +1284,9 @@ mod tests {
     /// A `<BND>` that names no mate is a single breakend without a breakend string,
     /// so `feature_truncation`'s live arm (`Utils/VariationEffect.pm:357-358`,
     /// `within_feature` on `$bvfoa->breakend`) tests the empty breakend ensembl-vep's
-    /// `OutputFactory.pm:2029` autovivifies before the terms are computed, whose
+    /// `OutputFactory.pm:2038` autovivifies before the terms are computed, whose
     /// chromosome matches no feature's, and the row keeps the region term alone:
-    /// Ensembl VEP 116.2 writes `coding_sequence_variant` for a bare `<BND>` inside a
+    /// Ensembl VEP 116.3 writes `coding_sequence_variant` for a bare `<BND>` inside a
     /// coding exon, as for a native `N.`.
     #[test]
     fn a_bnd_that_names_no_mate_takes_no_feature_truncation() {
@@ -1341,80 +1340,81 @@ mod tests {
             ori: 1,
         }];
 
-        let vefc = TranscriptVEFC {
-            spliced_seq: None,
-            codon_table: 1,
-            five_prime_utr: None,
-            three_prime_utr: None,
-            translateable_seq: None,
-            peptide: None,
-            introns: vec![],
-            sorted_exons: exons.clone(),
-            mapper: Some(TranscriptMapper {
-                start_phase: 0,
-                cdna_coding_start: 0,
-                cdna_coding_end: 0,
-                exon_coord_mapper: ExonCoordMapper::new(mapper_pairs),
-            }),
-            protein_features: vec![],
-            protein_function_predictions: None,
-            seq_edits: vec![],
-        };
+        let mut vefc = TranscriptVEFC::default();
+        vefc.spliced_seq = None;
+        vefc.codon_table = 1;
+        vefc.five_prime_utr = None;
+        vefc.three_prime_utr = None;
+        vefc.translateable_seq = None;
+        vefc.peptide = None;
+        vefc.introns = vec![];
+        vefc.sorted_exons = exons.clone();
+        vefc.mapper = Some(TranscriptMapper {
+            start_phase: 0,
+            cdna_coding_start: 0,
+            cdna_coding_end: 0,
+            exon_coord_mapper: ExonCoordMapper::new(mapper_pairs),
+        });
+        vefc.protein_features = vec![];
+        vefc.protein_function_predictions = None;
+        vefc.seq_edits = vec![];
 
-        vep_core::transcript::Transcript {
-            stable_id: "ENST_MIRNA_001".into(),
-            version: Some(1),
-            db_id: None,
-            gene_stable_id: "ENSG_MIRNA_001".into(),
-            gene_version: None,
-            chr: "21".into(),
-            start: 1000,
-            end: 1100,
-            strand: Strand::Forward,
-            biotype: "miRNA".into(),
-            source: "Ensembl".into(),
-            gene_symbol: Some("MIR21".into()),
-            gene_symbol_source: Some("HGNC".into()),
-            gene_symbol_id: None,
-            hgnc_id: None,
-            gene_phenotype: None,
-            canonical: false,
-            mane_select: None,
-            mane_plus_clinical: None,
-            tsl: None,
-            appris: None,
-            ccds: None,
-            protein_id: None,
-            refseq: None,
-            swissprot: None,
-            trembl: None,
-            uniparc: None,
-            uniprot_isoform: None,
-            exons,
-            exon_ids: None,
-            introns: vec![],
-            cdna_coding_start: None,
-            cdna_coding_end: None,
-            coding_region_start: None,
-            coding_region_end: None,
-            translation_start: None,
-            translation_end: None,
-            translation: None,
-            cdna_sequence: None,
-            protein_sequence: None,
-            flags: Arc::from([]),
-            gencode_basic: false,
-            gencode_primary: false,
-            attributes: vec![Attribute {
-                code: "miRNA".into(),
-                value: "50-70".into(),
-            }],
-            vefc: Some(vefc),
-            source_cache: None,
-            bam_edit_status: None,
-            derived: Default::default(),
-            id_rank: 0,
-        }
+        let mut transcript = vep_core::transcript::Transcript::default();
+        transcript.stable_id = "ENST_MIRNA_001".into();
+        transcript.version = Some(1);
+        transcript.db_id = None;
+        transcript.gene_stable_id = "ENSG_MIRNA_001".into();
+        transcript.gene_version = None;
+        transcript.chr = "21".into();
+        transcript.start = 1000;
+        transcript.end = 1100;
+        transcript.strand = Strand::Forward;
+        transcript.biotype = "miRNA".into();
+        transcript.source = "Ensembl".into();
+        transcript.gene_symbol = Some("MIR21".into());
+        transcript.gene_symbol_source = Some("HGNC".into());
+        transcript.gene_symbol_id = None;
+        transcript.hgnc_id = None;
+        transcript.gene_phenotype = None;
+        transcript.canonical = false;
+        transcript.mane_select = None;
+        transcript.mane_plus_clinical = None;
+        transcript.tsl = None;
+        transcript.appris = None;
+        transcript.ccds = None;
+        transcript.protein_id = None;
+        transcript.refseq = None;
+        transcript.swissprot = None;
+        transcript.trembl = None;
+        transcript.uniparc = None;
+        transcript.uniprot_isoform = None;
+        transcript.exons = exons;
+        transcript.exon_ids = None;
+        transcript.introns = vec![];
+        transcript.cdna_coding_start = None;
+        transcript.cdna_coding_end = None;
+        transcript.coding_region_start = None;
+        transcript.coding_region_end = None;
+        transcript.translation_start = None;
+        transcript.translation_end = None;
+        transcript.translation = None;
+        transcript.cdna_sequence = None;
+        transcript.protein_sequence = None;
+        transcript.flags = Arc::from([]);
+        transcript.gencode_basic = false;
+        transcript.gencode_primary = false;
+        transcript.attributes = vec![Attribute {
+            code: "miRNA".into(),
+            value: "50-70".into(),
+        }];
+        transcript.vefc = Some(vefc);
+        transcript.source_cache = None;
+        transcript.bam_edit_status = None;
+        transcript.circular_length = None;
+        transcript.region_files = None;
+        transcript.derived = Default::default();
+        transcript.id_rank = 0;
+        transcript
     }
 
     /// Build a derived single-breakend variant (from a paired BND).
@@ -1429,7 +1429,7 @@ mod tests {
     #[test]
     fn test_derived_single_breakend_mirna_no_feature_truncation() {
         // Derived single-breakend at a miRNA exon within the mature miRNA region.
-        // Perl emits only mature_miRNA_variant (no feature_truncation).
+        // Ensembl VEP emits only mature_miRNA_variant (no feature_truncation).
         let tx = make_mirna_transcript(); // exon 1000-1100, miRNA 1049-1069
         let v = make_derived_single_breakend(1060); // Inside mature miRNA region
         let tc = calculate(&v, &tx, 5000, 5000).unwrap();
@@ -1477,7 +1477,7 @@ mod tests {
     #[test]
     fn test_nmd_intron_gets_nmd_transcript_variant_not_non_coding() {
         // BND breakpoint in intron of NMD transcript.
-        // Perl: feature_truncation,intron_variant,NMD_transcript_variant
+        // Ensembl VEP: feature_truncation,intron_variant,NMD_transcript_variant
         let tx = make_nmd_transcript();
         // Intron 1: 25_000_300 - 25_001_999
         let v = make_derived_single_breakend(25_001_000);
@@ -1503,7 +1503,7 @@ mod tests {
     #[test]
     fn test_nmd_coding_exon_gets_nmd_transcript_variant() {
         // BND breakpoint in coding exon of NMD transcript.
-        // Perl: feature_truncation,coding_sequence_variant,NMD_transcript_variant
+        // Ensembl VEP: feature_truncation,coding_sequence_variant,NMD_transcript_variant
         let tx = make_nmd_transcript();
         // Exon 1 coding region: 25_000_050 - 25_000_299
         let v = make_derived_single_breakend(25_000_100);
@@ -1571,7 +1571,8 @@ mod tests {
     #[test]
     fn test_bnd_upstream_nmd_no_nmd_context() {
         // BND breakpoint upstream of an NMD transcript should not get NMD_transcript_variant.
-        // Perl only adds NMD context for body/splice overlaps, not distance-only annotations.
+        // Ensembl VEP only adds NMD context for body/splice overlaps, not distance-only
+        // annotations.
         let tx = make_nmd_transcript();
         // Position within upstream distance of transcript start (25_000_000 - 5000 = 24_995_000)
         let v = make_derived_single_breakend(24_996_000);
@@ -1617,7 +1618,7 @@ mod tests {
     /// is in `tests/golden/116/GRCh38`: for `synth_bnd_rf_0076_A`
     /// (`21 31659665 A ]21:31659730]A`), whose position lies 22 bases before the
     /// `nonsense_mediated_decay` transcript ENST00000989287 while its mate lies
-    /// inside, Ensembl VEP 116.2 writes `feature_truncation,upstream_gene_variant`.
+    /// inside, Ensembl VEP 116.3 writes `feature_truncation,upstream_gene_variant`.
     #[test]
     fn mate_inside_an_nmd_transcript_earns_truncation_without_the_nmd_term() {
         let tx = make_nmd_transcript(); // 25_000_000 - 25_006_000, forward strand
@@ -1651,7 +1652,7 @@ mod tests {
     }
 
     /// A breakend on the first or last two bases of an intron keeps its transcript
-    /// row. Ensembl VEP 116.2 writes `intergenic_variant` for a single breakend and
+    /// row. Ensembl VEP 116.3 writes `intergenic_variant` for a single breakend and
     /// for a mate-less `<BND>` located at `21:44117964` or `21:44117965`, the first two
     /// bases of a 799-base intron of a forward-strand coding transcript, and
     /// `intron_variant` from its third base on.

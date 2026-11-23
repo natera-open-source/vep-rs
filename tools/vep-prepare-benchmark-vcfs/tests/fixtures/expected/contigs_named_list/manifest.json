@@ -1,0 +1,43 @@
+{
+  "generated_at_utc": "{{GENERATED_AT}}",
+  "input_dir": "{{INPUT_DIR}}",
+  "output_dir": "{{OUTPUT_DIR}}",
+  "requested_chrom_mode": "auto",
+  "cache_dir": null,
+  "max_variants": null,
+  "assembly": "BDGP6.54",
+  "canonical_contigs_policy": "named_set",
+  "canonical_contigs_filter_active": true,
+  "canonical_contigs_set": [
+    "2L",
+    "2R",
+    "X",
+    "mitochondrion_genome"
+  ],
+  "files": [
+    {
+      "input_file": "{{INPUT_DIR}}/ucsc.vcf",
+      "output_file": "{{OUTPUT_DIR}}/ucsc.vcf",
+      "detected_input_chrom_style": "chr",
+      "detected_cache_chrom_style": "unknown",
+      "normalization_mode": "keep",
+      "headers_written": 4,
+      "variants_written": 2,
+      "variants_dropped_non_canonical": 14,
+      "output_sha256": "611815ef53a197336f92f9732dffe62deea26669068f5bf68947ebec709cdf9d",
+      "chr_stripped": true
+    },
+    {
+      "input_file": "{{INPUT_DIR}}/ensembl.vcf.gz",
+      "output_file": "{{OUTPUT_DIR}}/ensembl.vcf",
+      "detected_input_chrom_style": "plain",
+      "detected_cache_chrom_style": "unknown",
+      "normalization_mode": "keep",
+      "headers_written": 3,
+      "variants_written": 4,
+      "variants_dropped_non_canonical": 11,
+      "output_sha256": "9866cebb4e090878a56a10f4ed1554a40fa290baebbc8ffdd4925469230e1618",
+      "chr_stripped": false
+    }
+  ]
+}

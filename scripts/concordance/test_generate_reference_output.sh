@@ -35,6 +35,35 @@ fi
 
 bash -n "$GEN" && ok "generate_reference_output.sh parses" || bad "generate_reference_output.sh has a syntax error"
 
+# The script counts and digests whole inputs and outputs through its tree's release build
+# of tools/vep-file-census. Every check below runs a copy of the script in a tree of its
+# own, whose build is this tree's where it is built and, where it is not, a stand-in made of
+# the pipelines the tool's subcommands stand for: the checks hold the same values either way.
+TREE="$TMP/tree"
+CENSUS_REL="tools/vep-file-census/target/release/vep-file-census"
+REAL_CENSUS="$(cd "$HERE/../.." && pwd)/$CENSUS_REL"
+mkdir -p "$TREE/scripts/concordance" "$TREE/$(dirname "$CENSUS_REL")"
+cp "$GEN" "$HERE/harness_genomes.sh" "$HERE/harness_genomes.tsv" "$TREE/scripts/concordance/"
+if [[ -f "$REAL_CENSUS" && -x "$REAL_CENSUS" ]]; then
+    ln -s "$REAL_CENSUS" "$TREE/$CENSUS_REL"
+else
+    cat >"$TREE/$CENSUS_REL" <<'STANDIN'
+#!/usr/bin/env bash
+set -o pipefail
+case "$1 $2" in
+"count --gunzip") [[ "$3 $4" == "--not-starting #" ]] && gzip -dc "$5" | grep -vc '^#' ;;
+"count --not-starting") [[ "$3" == "#" ]] && grep -vc '^#' "$4" ;;
+"count --containing") grep -c -F -e "$3" "$4" ;;
+"count --info-field") FIELD="$3" awk -F'\t' '!/^#/ && index(";" $8, ";" ENVIRON["FIELD"] "=") {c++} END {print c + 0}' "$4" ;;
+"digest --algorithm") [[ "$3" == sha256 ]] && if command -v sha256sum >/dev/null 2>&1; then sha256sum "$4"; else shasum -a 256 "$4"; fi ;;
+*) echo "stand-in vep-file-census: unexpected arguments: $*" >&2; exit 2 ;;
+esac
+STANDIN
+    chmod +x "$TREE/$CENSUS_REL"
+fi
+SOURCE_GEN="$GEN"
+GEN="$TREE/scripts/concordance/generate_reference_output.sh"
+
 # A fabricated data tree. Three records per SNP/indel input, two SV inputs per
 # assembly plus a `manifest.vcf` the script must skip, a full 25-contig cache slice
 # per assembly, and an indexed FASTA per assembly.
@@ -43,7 +72,7 @@ CACHE="$DATA/cache"
 SNP_GT="$DATA/gt/snp_indel"
 SV_GT="$DATA/gt/sv"
 SV_IN="$SV_GT/canonical_inputs"
-PINNED_DIGEST="sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+PINNED_DIGEST="sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 
 write_vcf() { # write_vcf <path> <records>
     local path="$1" n="$2" i
@@ -107,7 +136,7 @@ rc=$?
     head -5 "$TMP/dry.err" | sed 's/^/         /'
 }
 n=$(count_docker_cmds "$TMP/dry.out")
-# 6 SNP/indel suites + 2 SV files per assembly x 2 assemblies (manifest skipped) = 10.
+# 6 SNP/indel datasets + 2 SV files per assembly x 2 assemblies (manifest skipped) = 10.
 [[ "$n" -eq 10 ]] && ok "10 docker commands printed (6 SNP/indel + 2x2 SV, manifest skipped)" || bad "$n docker commands printed, expected 10"
 grep -q 'manifest' "$TMP/dry.out" && bad "the manifest file was planned as an SV input" || ok "manifest.vcf is skipped"
 [[ ! -e "$SNP_GT" && ! -e "$SV_GT/grch37" ]] && ok "dry run wrote no output directory" || bad "dry run created an output directory"
@@ -151,27 +180,27 @@ grep -q -- "-v $CACHE:/work/cache:ro" "$TMP/dry.out" && ok "the cache is mounted
 grep -q -- "-v $DATA/reference/grch38/genome.fa.fai:/work/ref.fa.fai:ro" "$TMP/dry.out" && ok "the FASTA index is mounted beside the FASTA" || bad "FASTA index mount is wrong"
 
 echo
-echo "FILTERS: --suites and --assembly select exactly what they name"
-run_gen --dry-run --suites sv --assembly GRCh38 >"$TMP/f1.out" 2>/dev/null
+echo "FILTERS: --datasets and --assembly select exactly what they name"
+run_gen --dry-run --datasets sv --assembly GRCh38 >"$TMP/f1.out" 2>/dev/null
 n=$(count_docker_cmds "$TMP/f1.out")
 [[ "$n" -eq 2 ]] && grep -q 'sv GRCh38' "$TMP/f1.out" && ! grep -q 'GRCh37' "$TMP/f1.out" &&
-    ok "--suites sv --assembly GRCh38 plans only the GRCh38 SV set" || bad "--suites sv --assembly GRCh38 planned $n command(s)"
-run_gen --dry-run --suites "s01 s07" >"$TMP/f2.out" 2>/dev/null
+    ok "--datasets sv --assembly GRCh38 plans only the GRCh38 SV set" || bad "--datasets sv --assembly GRCh38 planned $n command(s)"
+run_gen --dry-run --datasets "s01 s07" >"$TMP/f2.out" 2>/dev/null
 n=$(count_docker_cmds "$TMP/f2.out")
 [[ "$n" -eq 3 ]] && grep -q '/s01/output.txt' "$TMP/f2.out" && ! grep -q '/s02/' "$TMP/f2.out" &&
-    ok "--suites \"s01 s07\" plans s01 plus the GRCh37 SV set" || bad "--suites \"s01 s07\" planned $n command(s)"
-run_gen --dry-run --suites s09 >"$TMP/f3.out" 2>/dev/null
+    ok "--datasets \"s01 s07\" plans s01 plus the GRCh37 SV set" || bad "--datasets \"s01 s07\" planned $n command(s)"
+run_gen --dry-run --datasets s09 >"$TMP/f3.out" 2>/dev/null
 n=$(count_docker_cmds "$TMP/f3.out")
-[[ "$n" -eq 2 ]] && grep -q 'sv GRCh37' "$TMP/f3.out" && ok "--suites s09 resolves to the GRCh37 SV set it points at" || bad "--suites s09 planned $n command(s)"
-run_gen --dry-run --suites snp-indel >"$TMP/f4.out" 2>/dev/null
+[[ "$n" -eq 2 ]] && grep -q 'sv GRCh37' "$TMP/f3.out" && ok "--datasets s09 resolves to the GRCh37 SV set it points at" || bad "--datasets s09 planned $n command(s)"
+run_gen --dry-run --datasets snp-indel >"$TMP/f4.out" 2>/dev/null
 n=$(count_docker_cmds "$TMP/f4.out")
-[[ "$n" -eq 6 ]] && ok "--suites snp-indel plans the six SNP/indel suites" || bad "--suites snp-indel planned $n command(s)"
-run_gen --dry-run --suites p1 >"$TMP/f5.out" 2>"$TMP/f5.err"
+[[ "$n" -eq 6 ]] && ok "--datasets snp-indel plans the six SNP/indel datasets" || bad "--datasets snp-indel planned $n command(s)"
+run_gen --dry-run --datasets p1 >"$TMP/f5.out" 2>"$TMP/f5.err"
 rc=$?
-[[ "$rc" -ne 0 ]] && grep -q 'no suite matched' "$TMP/f5.err" && ok "an unknown filter word is an error, not an empty success" || bad "--suites p1 exited $rc"
-run_gen --dry-run --suites s99 >"$TMP/f6.out" 2>"$TMP/f6.err"
+[[ "$rc" -ne 0 ]] && grep -q 'no dataset matched' "$TMP/f5.err" && ok "an unknown filter word is an error, not an empty success" || bad "--datasets p1 exited $rc"
+run_gen --dry-run --datasets s99 >"$TMP/f6.out" 2>"$TMP/f6.err"
 rc=$?
-[[ "$rc" -ne 0 ]] && grep -q 'no suite matched' "$TMP/f6.err" && ok "an unknown suite id is an error, not an empty success" || bad "--suites s99 exited $rc"
+[[ "$rc" -ne 0 ]] && grep -q 'no dataset matched' "$TMP/f6.err" && ok "an unknown dataset id is an error, not an empty success" || bad "--datasets s99 exited $rc"
 
 echo
 echo "FORMATS: one container run per output format (Runner.pm:871 builds one OutputFactory per run)"
@@ -185,12 +214,12 @@ n=$(count_docker_cmds "$TMP/fmt_tab.out")
 n=$(grep -cE -- '--force_overwrite --tab ?$' "$TMP/fmt_tab.out") || n=0
 [[ "$n" -eq 10 ]] && ok "every tab command ends with --tab after the harness's flags" || bad "$n of 10 tab commands end with --tab"
 grep -q -- '--no_headers' "$TMP/fmt_tab.out" && bad "a tab command passes --no_headers, dropping the column line the comparators read" || ok "tab commands keep the header (the column line names the columns)"
-grep -q "DRY-RUN \[snp_indel GRCh37 tab\] -> $SNP_GT/s01/output.tsv" "$TMP/fmt_tab.out" && ok "the tab output is <suite>/output.tsv" || bad "tab output name is not output.tsv"
+grep -q "DRY-RUN \[snp_indel GRCh37 tab\] -> $SNP_GT/s01/output.tsv" "$TMP/fmt_tab.out" && ok "the tab output is <dataset>/output.tsv" || bad "tab output name is not output.tsv"
 grep -q "DRY-RUN \[sv GRCh37 tab\] -> $SV_GT/grch37/01_snv.tsv" "$TMP/fmt_tab.out" && ok "the SV tab output is <asm>/<basename>.tsv" || bad "SV tab output name is not <basename>.tsv"
-run_gen --dry-run --format all --suites s01 >"$TMP/fmt_all.out" 2>/dev/null
+run_gen --dry-run --format all --datasets s01 >"$TMP/fmt_all.out" 2>/dev/null
 rc=$?
 n=$(count_docker_cmds "$TMP/fmt_all.out")
-[[ "$rc" -eq 0 && "$n" -eq 4 ]] && ok "--format all on one suite plans four commands, one per format" || bad "--format all --suites s01: rc=$rc commands=$n"
+[[ "$rc" -eq 0 && "$n" -eq 4 ]] && ok "--format all on one dataset plans four commands, one per format" || bad "--format all --datasets s01: rc=$rc commands=$n"
 d=$(grep -cE -- '/output\.txt --offline .* --no_headers --no_stats --quiet --force_overwrite ?$' "$TMP/fmt_all.out") || d=0
 t=$(grep -cE -- '/output\.tsv --offline .* --no_stats --quiet --force_overwrite --tab ?$' "$TMP/fmt_all.out") || t=0
 v=$(grep -cE -- '/output\.vcf --offline .* --no_stats --quiet --force_overwrite --vcf ?$' "$TMP/fmt_all.out") || v=0
@@ -211,9 +240,9 @@ run_gen --dry-run --flags "--everything --max_sv_size -1" >"$TMP/flags.out" 2>"$
 rc=$?
 n=$(grep -cE -- '--force_overwrite --everything --max_sv_size -1 ?$' "$TMP/flags.out") || n=0
 [[ "$rc" -eq 0 && "$n" -eq 10 ]] && ok "every command carries the --flags words after --force_overwrite (10 of 10)" || bad "--flags: rc=$rc commands carrying the words=$n"
-run_gen --dry-run --flags "--everything --max_sv_size -1" --format vcf --suites s01 >"$TMP/flags_vcf.out" 2>/dev/null
+run_gen --dry-run --flags "--everything --max_sv_size -1" --format vcf --datasets s01 >"$TMP/flags_vcf.out" 2>/dev/null
 grep -qE -- '--force_overwrite --everything --max_sv_size -1 --vcf ?$' "$TMP/flags_vcf.out" && ok "the format flag follows the --flags words" || bad "the format flag does not follow the --flags words"
-run_gen --dry-run --flags $'--everything\n--max_sv_size\t-1' --suites s01 >"$TMP/flags_ws.out" 2>/dev/null
+run_gen --dry-run --flags $'--everything\n--max_sv_size\t-1' --datasets s01 >"$TMP/flags_ws.out" 2>/dev/null
 grep -qE -- '--force_overwrite --everything --max_sv_size -1 ?$' "$TMP/flags_ws.out" && ok "a newline or tab between --flags words is one word boundary like a space" || bad "a newline or tab inside --flags lost or merged a word"
 out=$(run_gen --dry-run --flags "--everything --fork 2" 2>&1)
 rc=$?
@@ -224,13 +253,13 @@ rc=$?
 out=$(run_gen --dry-run --flags "--fasta=/x.fa" 2>&1)
 rc=$?
 [[ "$rc" -ne 0 ]] && grep -q -- '--flags carries --fasta=/x.fa' <<<"$out" && ok "the --flag=value shape of an owned flag is refused too" || bad "--flags with --fasta=/x.fa exited $rc"
-run_gen --dry-run --flags "--nearest symbol" --suites s01 >"$TMP/flags_near.out" 2>/dev/null
+run_gen --dry-run --flags "--nearest symbol" --datasets s01 >"$TMP/flags_near.out" 2>/dev/null
 grep -q -- "-v $CACHE:/work/cache " "$TMP/flags_near.out" && ! grep -q -- "-v $CACHE:/work/cache:ro" "$TMP/flags_near.out" && ok "a --nearest family mounts the cache writable" || bad "--nearest family cache mount: $(grep -o -- "-v $CACHE:/work/cache[^ ]*" "$TMP/flags_near.out" | head -1)"
 grep -q -- "-v $CACHE:/work/cache:ro" "$TMP/flags_vcf.out" && ok "a family without --nearest keeps the read-only cache mount" || bad "a family without --nearest lost the read-only mount"
 out=$(run_gen --dry-run --flags "--vcf_info_field" 2>&1)
 rc=$?
 [[ "$rc" -ne 0 ]] && grep -q 'no field name' <<<"$out" && ok "a trailing --vcf_info_field without its name is refused" || bad "--flags \"--vcf_info_field\" exited $rc"
-# vep reads its options with Getopt::Long's defaults (vep:27, Config.pm:62 at release/116.2),
+# vep reads its options with Getopt::Long's defaults (vep:27, Config.pm:62 at release/116.3),
 # which take a single dash or a plus sign, any unambiguous abbreviation and any letter case
 # as the full option, and an option's alias (stats_file|sf) as the option.
 out=$(run_gen --dry-run --flags "-fork 2" 2>&1)
@@ -251,7 +280,7 @@ rc=$?
 out=$(run_gen --dry-run --flags "-sf x" 2>&1)
 rc=$?
 [[ "$rc" -ne 0 ]] && grep -q -- 'carries -sf, which vep reads as --stats_file' <<<"$out" && ok "the sf alias for --stats_file is refused and named" || bad "--flags \"-sf x\" exited $rc"
-run_gen --dry-run --flags "--max_sv_size -1 --individual all" --suites s01 >"$TMP/flags_ok.out" 2>/dev/null
+run_gen --dry-run --flags "--max_sv_size -1 --individual all" --datasets s01 >"$TMP/flags_ok.out" 2>/dev/null
 rc=$?
 [[ "$rc" -eq 0 ]] && grep -qE -- '--force_overwrite --max_sv_size -1 --individual all ?$' "$TMP/flags_ok.out" && ok "words naming no owned flag pass, a negative value word included" || bad "--flags with --max_sv_size -1 --individual all exited $rc"
 # A non-VCF input (Ensembl default format, region, HGVS) is read under the flags' own
@@ -280,13 +309,13 @@ rc=$?
 [[ "$rc" -ne 0 ]] && grep -q -- '--flags carries --fork' <<<"$out" && ok "the word after --format=<name> is still checked as an option" || bad "--flags \"--format=ensembl --fork 2\" exited $rc"
 # An exact option or alias name outranks an abbreviation in Getopt::Long: vep's `verbose|v`
 # (Config.pm:159), `terms|t` (:176) and `dir` (:241) are prefixes of owned flags and pass.
-run_gen --dry-run --flags "-v -t SO --dir /x" --suites s01 >"$TMP/flags_alias.out" 2>/dev/null
+run_gen --dry-run --flags "-v -t SO --dir /x" --datasets s01 >"$TMP/flags_alias.out" 2>/dev/null
 rc=$?
 [[ "$rc" -eq 0 ]] && grep -qE -- '--force_overwrite -v -t SO --dir /x ?$' "$TMP/flags_alias.out" && ok "-v, -t and --dir, exact vep names that prefix owned flags, pass through" || bad "--flags \"-v -t SO --dir /x\" exited $rc"
 # The same spellings of a flag the script reads: -nearest, --near and --NEAREST mount the
 # cache writable as --nearest does, and reach vep as written.
 for spelling in -nearest --near --NEAREST; do
-    run_gen --dry-run --flags "$spelling symbol" --suites s01 >"$TMP/flags_near_sp.out" 2>/dev/null
+    run_gen --dry-run --flags "$spelling symbol" --datasets s01 >"$TMP/flags_near_sp.out" 2>/dev/null
     grep -q -- "-v $CACHE:/work/cache " "$TMP/flags_near_sp.out" && ! grep -q -- "-v $CACHE:/work/cache:ro" "$TMP/flags_near_sp.out" && grep -qE -- "--force_overwrite $spelling symbol ?$" "$TMP/flags_near_sp.out" &&
         ok "the $spelling spelling of --nearest mounts the cache writable and is passed as written" || bad "$spelling cache mount: $(grep -o -- "-v $CACHE:/work/cache[^ ]*" "$TMP/flags_near_sp.out" | head -1)"
 done
@@ -295,7 +324,7 @@ echo
 echo "STATS: --stats keeps the text statistics report instead of passing --no_stats"
 # A run naming neither --stats_text nor --stats_html writes the HTML report alone
 # (Runner.pm:787-789), so the text report takes --stats_text.
-run_gen --dry-run --stats --suites s01 >"$TMP/stats.out" 2>/dev/null
+run_gen --dry-run --stats --datasets s01 >"$TMP/stats.out" 2>/dev/null
 grep -q -- '--no_stats' "$TMP/stats.out" && bad "--stats still passes --no_stats" || ok "--no_stats is absent under --stats"
 grep -qE -- '--no_headers --stats_text --quiet --force_overwrite' "$TMP/stats.out" && ok "--stats passes --stats_text in --no_stats's place" || bad "--stats does not pass --stats_text"
 grep -q -- '--stats_text' "$TMP/dry.out" && bad "--stats_text is passed without --stats" || ok "--stats_text is absent without --stats"
@@ -400,7 +429,7 @@ rc=$?
 [[ "$rc" -ne 0 ]] && grep -q 'data-dir not a directory' <<<"$out" && ok "a non-directory --data-dir is a named error" || bad "non-directory data-dir exited $rc"
 out=$(run_gen --dry-run --assembly hg19 2>&1)
 rc=$?
-[[ "$rc" -ne 0 ]] && grep -q 'no suite matched' <<<"$out" && ok "an assembly no suite carries is an error, not an empty success" || bad "--assembly hg19 exited $rc"
+[[ "$rc" -ne 0 ]] && grep -q 'no dataset matched' <<<"$out" && ok "an assembly no dataset carries is an error, not an empty success" || bad "--assembly hg19 exited $rc"
 out=$(run_gen --dry-run --assembly "GRCh38 x" 2>&1)
 rc=$?
 [[ "$rc" -ne 0 ]] && grep -q 'invalid --assembly' <<<"$out" && ok "an assembly that is not a directory name is refused" || bad "--assembly 'GRCh38 x' exited $rc"
@@ -419,7 +448,7 @@ rc=$?
 out=$(run_gen --dry-run --perl-image-digest sha256:abc 2>&1)
 rc=$?
 [[ "$rc" -ne 0 ]] && grep -q -- '--perl-image-digest must be sha256:<64 hex>' <<<"$out" && ok "a malformed --perl-image-digest is refused" || bad "--perl-image-digest sha256:abc exited $rc"
-out=$(run_gen --dry-run --suites s01 --snp-indel-gt-dir "$TMP/a|b" 2>&1)
+out=$(run_gen --dry-run --datasets s01 --snp-indel-gt-dir "$TMP/a|b" 2>&1)
 rc=$?
 [[ "$rc" -ne 0 ]] && grep -q "holds '|' or a newline" <<<"$out" && ! grep -q '^docker run ' <<<"$out" &&
     ok "a path holding '|' (the plan's record separator) is refused before any command is printed" || bad "a '|' in an output path exited $rc"
@@ -443,7 +472,7 @@ mkdir -p "$STUBDIR"
 cat >"$STUBDIR/docker" <<'EOF'
 #!/usr/bin/env bash
 case "$1" in
-image) echo "${STUB_DIGEST:-ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da}"; exit 0 ;;
+image) echo "${STUB_DIGEST:-ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3}"; exit 0 ;;
 pull) exit 0 ;;
 run) ;;
 *) echo "stub docker: unexpected subcommand $1" >&2; exit 99 ;;
@@ -504,7 +533,7 @@ EOF
 chmod +x "$STUBDIR/docker"
 
 build_tree
-STUB_ROWS=0 PATH="$STUBDIR:$PATH" run_gen --suites s01 >"$TMP/v0.out" 2>"$TMP/v0.err"
+STUB_ROWS=0 PATH="$STUBDIR:$PATH" run_gen --datasets s01 >"$TMP/v0.out" 2>"$TMP/v0.err"
 rc=$?
 [[ "$rc" -ne 0 ]] && ok "zero annotation rows exits non-zero (rc=$rc)" || bad "zero annotation rows exited 0"
 grep -q '0 annotation rows for 3 input records' "$TMP/v0.err" && ok "the row/record deficit is stated" || bad "stderr does not state the row/record deficit"
@@ -512,7 +541,7 @@ grep -q '0 annotation rows for 3 input records' "$TMP/v0.err" && ok "the row/rec
 [[ -z "$(find "$SNP_GT" -name '.generate.*' 2>/dev/null)" ]] && ok "the scratch directory was removed" || bad "a scratch directory survived the failure"
 
 build_tree
-STUB_ROWS=3 PATH="$STUBDIR:$PATH" run_gen --suites s01 >"$TMP/v3.out" 2>"$TMP/v3.err"
+STUB_ROWS=3 PATH="$STUBDIR:$PATH" run_gen --datasets s01 >"$TMP/v3.out" 2>"$TMP/v3.err"
 rc=$?
 [[ "$rc" -eq 0 ]] && ok "rows == records passes the gate and exits 0" || {
     bad "rows == records exited $rc"
@@ -529,7 +558,7 @@ grep -q '"output_format": "default"' "$SNP_GT/s01/output.provenance.json" && gre
     ok "the sidecar records the output format and the flags as run" || bad "the sidecar's output_format or vep_flags is wrong"
 [[ -z "$(find "$SNP_GT" -name '.generate.*' 2>/dev/null)" ]] && ok "no scratch directory survives a passing run" || bad "a scratch directory survived a passing run"
 n=$(find "$SNP_GT/s01" -name '*.txt' | wc -l | tr -d ' ')
-[[ "$n" -eq 1 ]] && ok "exactly one *.txt in the suite directory, so a *.txt glob pairs only the annotation" || bad "$n *.txt files in the suite directory"
+[[ "$n" -eq 1 ]] && ok "exactly one *.txt in the dataset directory, so a *.txt glob pairs only the annotation" || bad "$n *.txt files in the dataset directory"
 [[ ! -e "$SNP_GT/s01/output.summary.log" ]] && ok "no statistics report is kept without --stats" || bad "a summary was kept without --stats"
 
 # The SV set is gated in AGGREGATE: two files, 4 + 2 records; a stub writing 3 rows per
@@ -537,20 +566,20 @@ n=$(find "$SNP_GT/s01" -name '*.txt' | wc -l | tr -d ' ')
 # floor. Some synthetic SV files carry allele classes VEP declines to annotate, so a
 # per-file floor would fail a legitimately sparse file.
 build_tree
-STUB_ROWS=3 PATH="$STUBDIR:$PATH" run_gen --suites s07 >"$TMP/sv3.out" 2>"$TMP/sv3.err"
+STUB_ROWS=3 PATH="$STUBDIR:$PATH" run_gen --datasets s07 >"$TMP/sv3.out" 2>"$TMP/sv3.err"
 rc=$?
 [[ "$rc" -eq 0 && -f "$SV_GT/grch37/01_snv.txt" && -f "$SV_GT/grch37/09_breakends.txt" ]] &&
     ok "the SV set passes on aggregate rows >= records (6 >= 6) and both files land" || bad "SV aggregate gate: rc=$rc"
 [[ -f "$SV_GT/grch37/09_breakends.provenance.json" && -f "$SV_GT/grch37/09_breakends.warnings.log" ]] &&
     ok "SV sidecars use the VCF basename (09_breakends.provenance.json / .warnings.log)" || bad "SV sidecar naming is wrong"
 build_tree
-STUB_ROWS=2 PATH="$STUBDIR:$PATH" run_gen --suites s07 >/dev/null 2>"$TMP/sv2.err"
+STUB_ROWS=2 PATH="$STUBDIR:$PATH" run_gen --datasets s07 >/dev/null 2>"$TMP/sv2.err"
 rc=$?
 [[ "$rc" -ne 0 && ! -e "$SV_GT/grch37/01_snv.txt" && ! -e "$SV_GT/grch37/09_breakends.txt" ]] &&
     ok "an SV set below the aggregate floor (4 < 6) leaves neither file in place" || bad "SV set below the floor: rc=$rc, files left behind"
 
 build_tree
-STUB_ROWS=3 STUB_RC=3 PATH="$STUBDIR:$PATH" run_gen --suites s01 >/dev/null 2>"$TMP/rc.err"
+STUB_ROWS=3 STUB_RC=3 PATH="$STUBDIR:$PATH" run_gen --datasets s01 >/dev/null 2>"$TMP/rc.err"
 rc=$?
 [[ "$rc" -ne 0 ]] && grep -q 'vep exited 3' "$TMP/rc.err" && [[ ! -e "$SNP_GT/s01/output.txt" ]] &&
     ok "a non-zero vep exit is fatal and leaves no output" || bad "vep exit 3: rc=$rc"
@@ -558,17 +587,17 @@ rc=$?
 build_tree
 mkdir -p "$SNP_GT/s01"
 echo "pinned" >"$SNP_GT/s01/output.txt"
-STUB_ROWS=3 PATH="$STUBDIR:$PATH" run_gen --suites s01 >/dev/null 2>"$TMP/keep.err"
+STUB_ROWS=3 PATH="$STUBDIR:$PATH" run_gen --datasets s01 >/dev/null 2>"$TMP/keep.err"
 rc=$?
 [[ "$rc" -ne 0 && "$(cat "$SNP_GT/s01/output.txt")" == "pinned" ]] && ok "the real path also refuses to overwrite without --force" || bad "real path overwrote a pinned output (rc=$rc)"
-STUB_ROWS=3 PATH="$STUBDIR:$PATH" run_gen --suites s01 --force >/dev/null 2>&1
+STUB_ROWS=3 PATH="$STUBDIR:$PATH" run_gen --datasets s01 --force >/dev/null 2>&1
 rc=$?
 [[ "$rc" -eq 0 && "$(cat "$SNP_GT/s01/output.txt")" != "pinned" ]] && ok "--force replaces the pinned output" || bad "--force did not replace the output (rc=$rc)"
 
 # A backslash sequence in an output path is a literal to the plan's group matching, so the
 # group still finds its records and the output lands at the path as written.
 build_tree
-STUB_ROWS=3 PATH="$STUBDIR:$PATH" run_gen --suites s01 --snp-indel-gt-dir "$TMP/a\\nb" >/dev/null 2>"$TMP/bs.err"
+STUB_ROWS=3 PATH="$STUBDIR:$PATH" run_gen --datasets s01 --snp-indel-gt-dir "$TMP/a\\nb" >/dev/null 2>"$TMP/bs.err"
 rc=$?
 [[ "$rc" -eq 0 && -f "$TMP/a\\nb/s01/output.txt" ]] && ok "an output path holding a backslash sequence is matched literally and written" || {
     bad "backslash in an output path: rc=$rc"
@@ -578,16 +607,16 @@ rc=$?
 echo
 echo "VOLUME-FLOOR: --volume-floor any keeps the gate at one annotated unit for flags that drop rows"
 build_tree
-STUB_ROWS=1 PATH="$STUBDIR:$PATH" run_gen --suites s01 --flags "--coding_only" >/dev/null 2>"$TMP/vf1.err"
+STUB_ROWS=1 PATH="$STUBDIR:$PATH" run_gen --datasets s01 --flags "--coding_only" >/dev/null 2>"$TMP/vf1.err"
 rc=$?
 [[ "$rc" -ne 0 && ! -e "$SNP_GT/s01/output.txt" ]] && grep -q -- '--volume-floor any' "$TMP/vf1.err" &&
     ok "1 row for 3 records fails the records floor and the error names --volume-floor any" || bad "records floor with 1 < 3: rc=$rc"
 build_tree
-STUB_ROWS=1 PATH="$STUBDIR:$PATH" run_gen --suites s01 --flags "--coding_only" --volume-floor any >/dev/null 2>"$TMP/vf2.err"
+STUB_ROWS=1 PATH="$STUBDIR:$PATH" run_gen --datasets s01 --flags "--coding_only" --volume-floor any >/dev/null 2>"$TMP/vf2.err"
 rc=$?
 [[ "$rc" -eq 0 && -f "$SNP_GT/s01/output.txt" ]] && ok "--volume-floor any passes 1 row for 3 records" || bad "--volume-floor any with 1 row: rc=$rc"
 build_tree
-STUB_ROWS=0 PATH="$STUBDIR:$PATH" run_gen --suites s01 --volume-floor any >/dev/null 2>"$TMP/vf3.err"
+STUB_ROWS=0 PATH="$STUBDIR:$PATH" run_gen --datasets s01 --volume-floor any >/dev/null 2>"$TMP/vf3.err"
 rc=$?
 [[ "$rc" -ne 0 && ! -e "$SNP_GT/s01/output.txt" ]] && grep -q 'no annotated unit' "$TMP/vf3.err" && ok "--volume-floor any still fails zero rows" || bad "--volume-floor any passed zero rows (rc=$rc)"
 
@@ -598,7 +627,7 @@ echo "FORMAT-GATES: the VCF and JSON formats are gated on every written record b
 # arrays only on an annotated one. A record VEP skipped before its input buffer is absent
 # from both, so the records floor for these formats is "no bare record", not a row count.
 build_tree
-STUB_ROWS=3 PATH="$STUBDIR:$PATH" run_gen --suites s01 --format vcf >"$TMP/fv.out" 2>"$TMP/fv.err"
+STUB_ROWS=3 PATH="$STUBDIR:$PATH" run_gen --datasets s01 --format vcf >"$TMP/fv.out" 2>"$TMP/fv.err"
 rc=$?
 [[ "$rc" -eq 0 && -f "$SNP_GT/s01/output.vcf" ]] && ok "--format vcf lands output.vcf (3 of 3 records carry CSQ)" || {
     bad "--format vcf: rc=$rc"
@@ -611,43 +640,43 @@ grep -q '"output_format": "vcf"' "$SNP_GT/s01/output.vcf.provenance.json" && gre
     ok "the VCF sidecar records the format, the --vcf flag and the annotated-record count" || bad "the VCF sidecar's fields are wrong"
 grep -q '^#CHROM' "$SNP_GT/s01/output.vcf" && ok "the VCF reference keeps its header lines" || bad "the VCF reference lost its header"
 build_tree
-STUB_ROWS=3 STUB_VCF_BARE=1 PATH="$STUBDIR:$PATH" run_gen --suites s01 --format vcf >/dev/null 2>"$TMP/fvb.err"
+STUB_ROWS=3 STUB_VCF_BARE=1 PATH="$STUBDIR:$PATH" run_gen --datasets s01 --format vcf >/dev/null 2>"$TMP/fvb.err"
 rc=$?
 [[ "$rc" -ne 0 && ! -e "$SNP_GT/s01/output.vcf" ]] && grep -q '1 of 3 written records carry no CSQ field' "$TMP/fvb.err" &&
     ok "a written VCF record without CSQ fails the records floor and is counted" || bad "bare VCF record: rc=$rc"
 build_tree
-STUB_ROWS=3 STUB_VCF_BARE=1 PATH="$STUBDIR:$PATH" run_gen --suites s01 --format vcf --volume-floor any >/dev/null 2>"$TMP/fvb2.err"
+STUB_ROWS=3 STUB_VCF_BARE=1 PATH="$STUBDIR:$PATH" run_gen --datasets s01 --format vcf --volume-floor any >/dev/null 2>"$TMP/fvb2.err"
 rc=$?
 [[ "$rc" -eq 0 && -f "$SNP_GT/s01/output.vcf" ]] && ok "--volume-floor any accepts a bare VCF record (a kept record with no row, as under --dont_skip)" || bad "bare VCF record under --volume-floor any: rc=$rc"
 build_tree
-STUB_ROWS=3 PATH="$STUBDIR:$PATH" run_gen --suites s01 --format vcf --flags "--vcf_info_field ANN" >/dev/null 2>"$TMP/fva.err"
+STUB_ROWS=3 PATH="$STUBDIR:$PATH" run_gen --datasets s01 --format vcf --flags "--vcf_info_field ANN" >/dev/null 2>"$TMP/fva.err"
 rc=$?
 [[ "$rc" -eq 0 && -f "$SNP_GT/s01/output.vcf" ]] && grep -q 'ANN=' "$SNP_GT/s01/output.vcf" && ok "--vcf_info_field in --flags moves the gate to that INFO key" || bad "--vcf_info_field ANN: rc=$rc"
 build_tree
-STUB_ROWS=3 PATH="$STUBDIR:$PATH" run_gen --suites s01 --format vcf --flags "--vcf_info_field=ANN" >/dev/null 2>"$TMP/fva2.err"
+STUB_ROWS=3 PATH="$STUBDIR:$PATH" run_gen --datasets s01 --format vcf --flags "--vcf_info_field=ANN" >/dev/null 2>"$TMP/fva2.err"
 rc=$?
 [[ "$rc" -eq 0 && -f "$SNP_GT/s01/output.vcf" ]] && grep -q 'ANN=' "$SNP_GT/s01/output.vcf" && ok "the --vcf_info_field=NAME spelling moves the gate's key too" || bad "--vcf_info_field=ANN: rc=$rc"
 build_tree
-STUB_ROWS=3 PATH="$STUBDIR:$PATH" run_gen --suites s01 --format vcf --flags "--vcf_info ANN" >/dev/null 2>"$TMP/fva3.err"
+STUB_ROWS=3 PATH="$STUBDIR:$PATH" run_gen --datasets s01 --format vcf --flags "--vcf_info ANN" >/dev/null 2>"$TMP/fva3.err"
 rc=$?
 [[ "$rc" -eq 0 && -f "$SNP_GT/s01/output.vcf" ]] && grep -q 'ANN=' "$SNP_GT/s01/output.vcf" && ok "an abbreviation vep accepts for --vcf_info_field (--vcf_info) moves the gate's key" || bad "--vcf_info ANN: rc=$rc"
 build_tree
-STUB_ROWS=3 PATH="$STUBDIR:$PATH" run_gen --suites s07 --format json >/dev/null 2>"$TMP/fj.err"
+STUB_ROWS=3 PATH="$STUBDIR:$PATH" run_gen --datasets s07 --format json >/dev/null 2>"$TMP/fj.err"
 rc=$?
 [[ "$rc" -eq 0 && -f "$SV_GT/grch37/01_snv.jsonl" && -f "$SV_GT/grch37/09_breakends.jsonl" && -f "$SV_GT/grch37/01_snv.jsonl.provenance.json" ]] &&
     ok "--format json lands <basename>.jsonl per SV file with its sidecar" || bad "--format json on the SV set: rc=$rc"
 n=$(grep -c '_consequences' "$SV_GT/grch37/01_snv.jsonl") || n=0
 [[ "$n" -eq 4 ]] && ok "the JSON reference carries one annotated object per record (4)" || bad "$n annotated JSON objects for 4 records"
 build_tree
-STUB_ROWS=3 STUB_JSON_BARE=2 PATH="$STUBDIR:$PATH" run_gen --suites s01 --format json >/dev/null 2>"$TMP/fjb.err"
+STUB_ROWS=3 STUB_JSON_BARE=2 PATH="$STUBDIR:$PATH" run_gen --datasets s01 --format json >/dev/null 2>"$TMP/fjb.err"
 rc=$?
 [[ "$rc" -ne 0 && ! -e "$SNP_GT/s01/output.jsonl" ]] && grep -q '2 of 3 written objects carry no consequences array' "$TMP/fjb.err" &&
     ok "a JSON object without consequences fails the records floor and is counted" || bad "bare JSON object: rc=$rc"
 build_tree
-STUB_ROWS=3 PATH="$STUBDIR:$PATH" run_gen --suites s01 --format all >/dev/null 2>"$TMP/fall.err"
+STUB_ROWS=3 PATH="$STUBDIR:$PATH" run_gen --datasets s01 --format all >/dev/null 2>"$TMP/fall.err"
 rc=$?
 [[ "$rc" -eq 0 && -f "$SNP_GT/s01/output.txt" && -f "$SNP_GT/s01/output.tsv" && -f "$SNP_GT/s01/output.vcf" && -f "$SNP_GT/s01/output.jsonl" ]] &&
-    ok "--format all lands the four outputs of one suite side by side" || bad "--format all on s01: rc=$rc"
+    ok "--format all lands the four outputs of one dataset side by side" || bad "--format all on s01: rc=$rc"
 n=$(find "$SNP_GT/s01" -name '*.txt' | wc -l | tr -d ' ')
 [[ "$n" -eq 1 ]] && ok "with four formats present, still exactly one *.txt (the default output)" || bad "$n *.txt files beside the four formats"
 grep -q '^#Uploaded_variation' "$SNP_GT/s01/output.tsv" && ! grep -q '^#' "$SNP_GT/s01/output.txt" &&
@@ -658,15 +687,15 @@ n=$(find "$SNP_GT/s01" -name '*.provenance.json' | wc -l | tr -d ' ')
 echo
 echo "STATS-RUN: --stats keeps the report as <stem>.summary.log and fails closed without one"
 build_tree
-STUB_ROWS=3 PATH="$STUBDIR:$PATH" run_gen --suites s01 --stats >/dev/null 2>"$TMP/st.err"
+STUB_ROWS=3 PATH="$STUBDIR:$PATH" run_gen --datasets s01 --stats >/dev/null 2>"$TMP/st.err"
 rc=$?
 [[ "$rc" -eq 0 && -f "$SNP_GT/s01/output.summary.log" && ! -e "$SNP_GT/s01/output.txt_summary.txt" ]] &&
     ok "the statistics report lands as output.summary.log" || bad "--stats run: rc=$rc"
 n=$(find "$SNP_GT/s01" -name '*.txt' | wc -l | tr -d ' ')
-[[ "$n" -eq 1 ]] && ok "the kept report leaves exactly one *.txt in the suite directory" || bad "$n *.txt files with --stats"
+[[ "$n" -eq 1 ]] && ok "the kept report leaves exactly one *.txt in the dataset directory" || bad "$n *.txt files with --stats"
 grep -q '"vep_flags": ".*--stats_text --quiet --force_overwrite"' "$SNP_GT/s01/output.provenance.json" && ok "the sidecar records --stats_text" || bad "the sidecar does not record --stats_text"
 build_tree
-STUB_ROWS=3 STUB_NO_SUMMARY=1 PATH="$STUBDIR:$PATH" run_gen --suites s01 --stats >/dev/null 2>"$TMP/st2.err"
+STUB_ROWS=3 STUB_NO_SUMMARY=1 PATH="$STUBDIR:$PATH" run_gen --datasets s01 --stats >/dev/null 2>"$TMP/st2.err"
 rc=$?
 [[ "$rc" -ne 0 && ! -e "$SNP_GT/s01/output.txt" ]] && grep -q 'wrote no output.txt_summary.txt' "$TMP/st2.err" &&
     ok "--stats with no report written is fatal and leaves no output" || bad "--stats without a report: rc=$rc"
@@ -676,19 +705,19 @@ echo "DIGEST: the pulled image must carry the pinned digest before anything runs
 build_tree
 other="sha256:0000000000000000000000000000000000000000000000000000000000000000"
 : >"$TMP/stub.log"
-STUB_ROWS=3 STUB_LOG="$TMP/stub.log" PATH="$STUBDIR:$PATH" run_gen --suites s01 --perl-image-digest "$other" >/dev/null 2>"$TMP/dg.err"
+STUB_ROWS=3 STUB_LOG="$TMP/stub.log" PATH="$STUBDIR:$PATH" run_gen --datasets s01 --perl-image-digest "$other" >/dev/null 2>"$TMP/dg.err"
 rc=$?
 [[ "$rc" -eq 1 ]] && grep -q 'image digest mismatch' "$TMP/dg.err" && grep -q "$other" "$TMP/dg.err" &&
     ok "a digest mismatch exits 1 and names the expected digest" || bad "digest mismatch: rc=$rc"
 [[ ! -s "$TMP/stub.log" && ! -e "$SNP_GT/s01" ]] && ok "no container ran and nothing was written before the digest check" || bad "a container ran despite the digest mismatch"
-STUB_ROWS=3 STUB_DIGEST="ensemblorg/ensembl-vep@$other" PATH="$STUBDIR:$PATH" run_gen --suites s01 >/dev/null 2>"$TMP/dg2.err"
+STUB_ROWS=3 STUB_DIGEST="ensemblorg/ensembl-vep@$other" PATH="$STUBDIR:$PATH" run_gen --datasets s01 >/dev/null 2>"$TMP/dg2.err"
 rc=$?
 [[ "$rc" -eq 1 ]] && grep -q 'image digest mismatch' "$TMP/dg2.err" && ok "an image whose RepoDigests lack the pinned digest is refused" || bad "moved-tag digest: rc=$rc"
-STUB_ROWS=3 STUB_DIGEST="ensemblorg/ensembl-vep@$other" PATH="$STUBDIR:$PATH" run_gen --suites s01 --perl-image-digest "$other" >/dev/null 2>"$TMP/dg3.err"
+STUB_ROWS=3 STUB_DIGEST="ensemblorg/ensembl-vep@$other" PATH="$STUBDIR:$PATH" run_gen --datasets s01 --perl-image-digest "$other" >/dev/null 2>"$TMP/dg3.err"
 rc=$?
 [[ "$rc" -eq 0 ]] && grep -q "ensemblorg/ensembl-vep@$other" "$SNP_GT/s01/output.provenance.json" && ok "--perl-image-digest names another image's digest and the sidecar records it" || bad "--perl-image-digest override: rc=$rc"
 build_tree
-STUB_ROWS=3 VEP_PERL_IMAGE_DIGEST="$other" PATH="$STUBDIR:$PATH" run_gen --suites s01 >/dev/null 2>"$TMP/dg4.err"
+STUB_ROWS=3 VEP_PERL_IMAGE_DIGEST="$other" PATH="$STUBDIR:$PATH" run_gen --datasets s01 >/dev/null 2>"$TMP/dg4.err"
 rc=$?
 [[ "$rc" -eq 1 ]] && grep -q 'image digest mismatch' "$TMP/dg4.err" && ok "VEP_PERL_IMAGE_DIGEST sets the expected digest" || bad "VEP_PERL_IMAGE_DIGEST: rc=$rc"
 
@@ -792,8 +821,8 @@ for n in names:
 for n in reports:
     assert hashlib.sha256((c / "expected" / n).read_bytes()).hexdigest() == p["sha256"][n], n
 assert p["variants_vcf_sha256"] == hashlib.sha256((c / "variants.vcf").read_bytes()).hexdigest()
-assert p["vep_image"] == "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da", p["vep_image"]
-assert p["vep_image_tag"] == "ensemblorg/ensembl-vep:release_116.2"
+assert p["vep_image"] == "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3", p["vep_image"]
+assert p["vep_image_tag"] == "ensemblorg/ensembl-vep:release_116.3"
 assert p["vep_version_reported"] == "ensembl-vep          : 116.2", p["vep_version_reported"]
 assert p["cache_version"] == 116
 assert p["perl_cache"] == "homo_sapiens/116_GRCh38"
@@ -891,9 +920,9 @@ rc=$?
 [[ "$rc" -eq 0 ]] && ok "--volume-floor any applies to a corpus whose flags keep a record without rows" || bad "corpus --volume-floor any: rc=$rc"
 
 build_corpus
-out=$(run_corpus --dry-run --suites s01 2>&1)
+out=$(run_corpus --dry-run --datasets s01 2>&1)
 rc=$?
-[[ "$rc" -ne 0 ]] && grep -q -- 'drop --suites' <<<"$out" && ok "--corpus refuses a suite option (--suites)" || bad "--corpus --suites exited $rc"
+[[ "$rc" -ne 0 ]] && grep -q -- 'drop --datasets' <<<"$out" && ok "--corpus refuses a dataset option (--datasets)" || bad "--corpus --datasets exited $rc"
 out=$(run_corpus --dry-run --flags "--everything" 2>&1)
 rc=$?
 [[ "$rc" -ne 0 ]] && grep -q 'takes its flags from manifest.json' <<<"$out" && ok "--corpus refuses --flags (the manifest's flags are the corpus's)" || bad "--corpus --flags exited $rc"
@@ -980,7 +1009,7 @@ build_corpus
 run_corpus --dry-run >"$TMP/sp2.out" 2>/dev/null
 n=$(grep -cE -- '--cache_version 116 --species homo_sapiens --assembly GRCh38 ' "$TMP/sp2.out") || n=0
 [[ "$n" -eq 4 ]] && ok "a manifest without species plans under homo_sapiens and its release" || bad "$n of 4 commands of a species-less manifest carry homo_sapiens"
-out=$(run_gen --dry-run --suites s01 --fasta-for "homo_sapiens:GRCh37=$TMP/none.fa" 2>&1)
+out=$(run_gen --dry-run --datasets s01 --fasta-for "homo_sapiens:GRCh37=$TMP/none.fa" 2>&1)
 rc=$?
 [[ "$rc" -ne 0 ]] && grep -q "FASTA for GRCh37 not found: $TMP/none.fa" <<<"$out" && ok "a later --fasta-for for a human genome replaces its default" || bad "--fasta-for override exited $rc: $(grep -m1 ERROR <<<"$out")"
 
@@ -988,7 +1017,7 @@ echo
 echo "SETS: the species directory follows --refseq and --merged, and --flag-set runs one flag_sets entry"
 # generate_reference_output_species_directory_follows_the_set_flags: Ensembl VEP appends
 # `_refseq` and `_merged` to the species directory name for the flags (CacheDir.pm:312 at
-# release/116.2), so the slice checked and recorded is that directory while --species
+# release/116.3), so the slice checked and recorded is that directory while --species
 # stays the species. The fabricated tree holds the three human slices of one assembly.
 build_tree
 for c in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 X Y MT; do
@@ -1029,10 +1058,10 @@ out=$(run_corpus --dry-run 2>&1)
 rc=$?
 [[ "$rc" -ne 0 ]] && grep -q "Perl cache slice not found: $CACHE/homo_sapiens_refseq/116_GRCh38" <<<"$out" && grep -q 'Expected homo_sapiens_refseq/116_GRCh38 under' <<<"$out" &&
     ok "a --refseq corpus without the RefSeq slice fails preflight naming homo_sapiens_refseq" || bad "missing RefSeq slice exited $rc"
-out=$(run_gen --dry-run --suites s02 --flags "--refseq" 2>&1)
+out=$(run_gen --dry-run --datasets s02 --flags "--refseq" 2>&1)
 rc=$?
 [[ "$rc" -ne 0 ]] && grep -q "Perl cache slice not found: $CACHE/homo_sapiens_refseq/116_GRCh38" <<<"$out" &&
-    ok "a suite run under --flags --refseq checks the RefSeq slice too" || bad "suite run under --refseq exited $rc"
+    ok "a dataset run under --flags --refseq checks the RefSeq slice too" || bad "dataset run under --refseq exited $rc"
 for c in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 X Y MT; do
     mkdir -p "$CACHE/homo_sapiens_refseq/116_GRCh38/$c"
 done
@@ -1142,7 +1171,7 @@ add_flag_set '{"name": "gone", "flags": ["--refseq"], "input": "missing.vcf"}'
 out=$(run_corpus --dry-run --flag-set gone 2>&1)
 rc=$?
 [[ "$rc" -ne 0 ]] && grep -q 'names an input the corpus lacks: missing.vcf' <<<"$out" && ok "a flag set whose input is missing is refused" || bad "missing-input flag set exited $rc"
-out=$(run_gen --dry-run --suites s02 --flag-set hgvs 2>&1)
+out=$(run_gen --dry-run --datasets s02 --flag-set hgvs 2>&1)
 rc=$?
 [[ "$rc" -ne 0 ]] && grep -q -- '--flag-set names a flag_sets entry of a corpus manifest; pass --corpus' <<<"$out" && ok "--flag-set without --corpus is refused" || bad "--flag-set without --corpus exited $rc"
 out=$(bash "$GEN" --corpus "$CORPUS" --tool filter_vep --flag-set hgvs --dry-run 2>&1)
@@ -1177,7 +1206,7 @@ n=$(grep -c -- "-v $CORPUS:/work/corpus:ro " "$TMP/ph.out") || n=0
 rewritten=$(printf '%q ' --custom "file=/work/corpus/custom/sites.vcf.gz,short_name=CE,format=vcf,type=exact" --custom "/work/corpus/custom/regions.bed.gz,RE,bed,overlap")
 n=$(grep -cF -- "--force_overwrite $rewritten" "$TMP/ph.out") || n=0
 [[ "$n" -eq 4 ]] && ok "{corpus} is rewritten to /work/corpus inside every word that carries it, keyed or positional" || bad "$n of 4 commands carry the rewritten words"
-grep '^docker run ' "$TMP/ph.out" | grep -q 'corpus}' && bad "a {corpus} word reached a command unrewritten" || ok "no command carries {corpus}"
+grep '^docker run ' "$TMP/ph.out" | grep 'corpus}' >/dev/null && bad "a {corpus} word reached a command unrewritten" || ok "no command carries {corpus}"
 : >"$TMP/ph.log"
 STUB_ROWS=3 STUB_LOG="$TMP/ph.log" PATH="$STUBDIR:$PATH" run_corpus >/dev/null 2>"$TMP/phr.err"
 rc=$?
@@ -1199,15 +1228,15 @@ grep -q '^OK$' "$TMP/ph.check" && ok "the recorded vep_command keeps {corpus} as
     bad "the recorded vep_command does not keep {corpus}"
     tail -2 "$TMP/ph.check" | sed 's/^/         /'
 }
-out=$(run_gen --dry-run --suites s01 --flags "--custom {corpus}/sites.vcf.gz,CE,vcf,exact" 2>&1)
+out=$(run_gen --dry-run --datasets s01 --flags "--custom {corpus}/sites.vcf.gz,CE,vcf,exact" 2>&1)
 rc=$?
-[[ "$rc" -ne 0 ]] && grep -q 'a suite run has no corpus' <<<"$out" && ! grep -q '^docker run ' <<<"$out" &&
-    ok "--flags carrying {corpus} on a suite run is refused by name" || bad "--flags with {corpus} on a suite run exited $rc"
+[[ "$rc" -ne 0 ]] && grep -q 'a dataset run has no corpus' <<<"$out" && ! grep -q '^docker run ' <<<"$out" &&
+    ok "--flags carrying {corpus} on a dataset run is refused by name" || bad "--flags with {corpus} on a dataset run exited $rc"
 
 # corpus_without_placeholder_is_unchanged: the committed GRCh38-synonyms corpus plans the
 # command its provenance records, byte for byte once <out> and <cache> take their mounts,
-# and mounts no corpus directory. The record carries --no_stats, so the dry run opts out
-# of the report.
+# and runs in its corpus directory, mounted read-only. The record carries --no_stats, so
+# the dry run opts out of the report.
 SYN=$(cd "$HERE/../../tests/golden/116/GRCh38-synonyms" && pwd)
 bash "$GEN" --corpus "$SYN" --perl-cache-dir "$CACHE" --dry-run --force --no-stats >"$TMP/syn.out" 2>"$TMP/syn.err"
 rc=$?
@@ -1215,13 +1244,13 @@ committed=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["ve
 expected="${committed% \[--tab|--vcf|--json\]}"
 expected="${expected/vep -i variants.vcf -o <out>/vep -i /work/input.vcf -o /work/perl_out/default.txt}"
 expected="${expected/--dir_cache <cache>/--dir_cache /work/cache}"
-printed=$(grep '^docker run ' "$TMP/syn.out" | head -1 | sed 's/^.* ensemblorg\/ensembl-vep:release_116\.2 //; s/ $//')
+printed=$(grep '^docker run ' "$TMP/syn.out" | head -1 | sed 's/^.* ensemblorg\/ensembl-vep:release_116\.3 //; s/ $//')
 [[ "$rc" -eq 0 && -n "$printed" && "$printed" == "$expected" ]] && ok "corpus_without_placeholder_is_unchanged: the committed GRCh38-synonyms corpus plans the vep command its provenance records" || {
     bad "GRCh38-synonyms dry run (rc=$rc) differs from the committed command"
     echo "         expected: $expected"
     echo "         printed:  $printed"
 }
-grep '^docker run ' "$TMP/syn.out" | grep -q -- "-v $SYN:/work/corpus:ro -w /work/corpus " && ok "a corpus without {corpus} still runs in its mounted corpus directory" || bad "a corpus without {corpus} does not run in its mounted corpus directory"
+grep '^docker run ' "$TMP/syn.out" | grep -- "-v $SYN:/work/corpus:ro -w /work/corpus " >/dev/null && ok "a corpus without {corpus} still runs in its mounted corpus directory" || bad "a corpus without {corpus} does not run in its mounted corpus directory"
 [[ ! -e "$SYN/.generate.dry-run" && -z "$(find "$SYN" -name '.generate.*')" ]] && ok "the committed corpus is left untouched by the dry run" || bad "the dry run wrote into the committed corpus"
 
 echo
@@ -1264,7 +1293,7 @@ n=$(grep -c -- "-v $CORPUS:/work/corpus:ro " "$TMP/pl.out") || n=0
 rewritten=$(printf '%q ' --dir_plugins /work/plugins --plugin "Example,file=/work/corpus/plugin_data/scores.tsv,home:/work/plugins")
 n=$(grep -cF -- "--force_overwrite $rewritten" "$TMP/pl.out") || n=0
 [[ "$n" -eq 4 ]] && ok "{plugins} takes the mount in every word that carries it, beside {corpus}" || bad "$n of 4 commands carry the rewritten plugin words"
-grep '^docker run ' "$TMP/pl.out" | grep -q 'plugins}' && bad "a {plugins} word reached a command unrewritten" || ok "no command carries {plugins}"
+grep '^docker run ' "$TMP/pl.out" | grep 'plugins}' >/dev/null && bad "a {plugins} word reached a command unrewritten" || ok "no command carries {plugins}"
 : >"$TMP/pl.log"
 STUB_ROWS=3 STUB_LOG="$TMP/pl.log" PATH="$STUBDIR:$PATH" run_corpus --dir-plugins "$TMP/plugins" >/dev/null 2>"$TMP/plr.err"
 rc=$?
@@ -1324,13 +1353,13 @@ run_corpus --dry-run --dir-plugins "$TMP/plugins" >"$TMP/pl5.out" 2>/dev/null
 rc=$?
 n=$(grep -cF -- "--dir_plugins /work/plugins --plugin Example" "$TMP/pl5.out") || n=0
 [[ "$rc" -eq 0 && "$n" -eq 4 ]] && ok "{plugins} without plugin_files takes the mount as well" || bad "{plugins} without plugin_files: rc=$rc rewritten=$n"
-out=$(run_gen --dry-run --suites s01 --dir-plugins "$TMP/plugins" 2>&1)
+out=$(run_gen --dry-run --datasets s01 --dir-plugins "$TMP/plugins" 2>&1)
 rc=$?
-[[ "$rc" -ne 0 ]] && grep -q 'a suite run takes none' <<<"$out" && ok "--dir-plugins on a suite run is refused" || bad "--dir-plugins on a suite run exited $rc"
-out=$(run_gen --dry-run --suites s01 --flags "--dir_plugins {plugins}" 2>&1)
+[[ "$rc" -ne 0 ]] && grep -q 'a dataset run takes none' <<<"$out" && ok "--dir-plugins on a dataset run is refused" || bad "--dir-plugins on a dataset run exited $rc"
+out=$(run_gen --dry-run --datasets s01 --flags "--dir_plugins {plugins}" 2>&1)
 rc=$?
-[[ "$rc" -ne 0 ]] && grep -q 'a suite run has no plugin directory' <<<"$out" && ! grep -q '^docker run ' <<<"$out" &&
-    ok "--flags carrying {plugins} on a suite run is refused by name" || bad "--flags with {plugins} on a suite run exited $rc"
+[[ "$rc" -ne 0 ]] && grep -q 'a dataset run has no plugin directory' <<<"$out" && ! grep -q '^docker run ' <<<"$out" &&
+    ok "--flags carrying {plugins} on a dataset run is refused by name" || bad "--flags with {plugins} on a dataset run exited $rc"
 
 # --perl-env NAME=VALUE sets a variable in every vep container run (-e before the image)
 # and is recorded under perl_env; a word without `=`, with an empty name or with whitespace
@@ -1339,29 +1368,29 @@ build_tree
 build_corpus
 run_corpus --dry-run --perl-env PERL_HASH_SEED=0 --perl-env PERL_PERTURB_KEYS=0 >"$TMP/env.out" 2>"$TMP/env.err"
 rc=$?
-n=$(grep -cF -- "-e PERL_HASH_SEED=0 -e PERL_PERTURB_KEYS=0 ensemblorg/ensembl-vep:release_116.2 vep " "$TMP/env.out") || n=0
+n=$(grep -cF -- "-e PERL_HASH_SEED=0 -e PERL_PERTURB_KEYS=0 ensemblorg/ensembl-vep:release_116.3 vep " "$TMP/env.out") || n=0
 [[ "$rc" -eq 0 && "$n" -eq 4 ]] && ok "--perl-env words reach every container run as -e before the image" || {
     bad "--perl-env dry run: rc=$rc commands carrying the words=$n"
     head -3 "$TMP/env.err" | sed 's/^/         /'
 }
 run_corpus --dry-run >"$TMP/env0.out" 2>/dev/null
-grep '^docker run ' "$TMP/env0.out" | grep -q -- ' -e ' && bad "a run without --perl-env carries an -e word" || ok "a run without --perl-env sets no variable"
+grep '^docker run ' "$TMP/env0.out" | grep -- ' -e ' >/dev/null && bad "a run without --perl-env carries an -e word" || ok "a run without --perl-env sets no variable"
 for word in PERL_HASH_SEED =0 "=a=b" "FOO=a b"; do
     out=$(run_corpus --dry-run --perl-env "$word" 2>&1)
     rc=$?
     [[ "$rc" -ne 0 ]] && grep -q -- "--perl-env takes NAME=VALUE without whitespace, got '$word'" <<<"$out" && ok "--perl-env '$word' is refused by name" || bad "--perl-env '$word' exited $rc"
 done
-out=$(run_gen --dry-run --suites s01 --perl-env PERL_HASH_SEED=0 2>&1)
+out=$(run_gen --dry-run --datasets s01 --perl-env PERL_HASH_SEED=0 2>&1)
 rc=$?
-n=$(grep -c -- "-e PERL_HASH_SEED=0 ensemblorg/ensembl-vep:release_116.2 vep " <<<"$out") || n=0
-[[ "$rc" -eq 0 && "$n" -eq 1 ]] && ok "--perl-env reaches a suite run's command" || bad "--perl-env on a suite run: rc=$rc commands=$n"
+n=$(grep -c -- "-e PERL_HASH_SEED=0 ensemblorg/ensembl-vep:release_116.3 vep " <<<"$out") || n=0
+[[ "$rc" -eq 0 && "$n" -eq 1 ]] && ok "--perl-env reaches a dataset run's command" || bad "--perl-env on a dataset run: rc=$rc commands=$n"
 mkdir -p "$TMP/globdir" && : >"$TMP/globdir/X=1"
 out=$(cd "$TMP/globdir" && run_corpus --dry-run --perl-env 'X=*' 2>&1)
 rc=$?
 n=$(grep -cF -- '-e X=\* ' <<<"$out") || n=0
 [[ "$rc" -eq 0 && "$n" -eq 4 ]] && ok "a glob character in a --perl-env value reaches the command unexpanded" || bad "--perl-env glob value: rc=$rc commands carrying it=$n"
 : >"$TMP/envs.log"
-STUB_ROWS=3 STUB_LOG="$TMP/envs.log" PATH="$STUBDIR:$PATH" run_gen --suites s01 --perl-env PERL_HASH_SEED=0 >/dev/null 2>"$TMP/envs.err"
+STUB_ROWS=3 STUB_LOG="$TMP/envs.log" PATH="$STUBDIR:$PATH" run_gen --datasets s01 --perl-env PERL_HASH_SEED=0 >/dev/null 2>"$TMP/envs.err"
 rc=$?
 python3 - "$SNP_GT/s01/output.provenance.json" <<'EOF2' >"$TMP/envs.check" 2>&1
 import json, sys
@@ -1369,8 +1398,8 @@ p = json.load(open(sys.argv[1]))
 assert p["perl_env"] == ["PERL_HASH_SEED=0"], p.get("perl_env")
 print("OK")
 EOF2
-[[ "$rc" -eq 0 ]] && grep -q '^OK$' "$TMP/envs.check" && ok "a suite run's provenance records perl_env as a JSON array" || {
-    bad "suite provenance perl_env: rc=$rc"
+[[ "$rc" -eq 0 ]] && grep -q '^OK$' "$TMP/envs.check" && ok "a dataset run's provenance records perl_env as a JSON array" || {
+    bad "dataset provenance perl_env: rc=$rc"
     tail -2 "$TMP/envs.check" | sed 's/^/         /'
     head -3 "$TMP/envs.err" | sed 's/^/         /'
 }
@@ -1519,8 +1548,8 @@ from pathlib import Path
 c = Path(sys.argv[1])
 p = json.loads((c / "provenance.json").read_text())
 assert p["tool"] == "filter_vep", p["tool"]
-assert p["tool_image"] == "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da", p["tool_image"]
-assert p["tool_image_tag"] == "ensemblorg/ensembl-vep:release_116.2"
+assert p["tool_image"] == "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3", p["tool_image"]
+assert p["tool_image_tag"] == "ensemblorg/ensembl-vep:release_116.3"
 cases = p["tool_cases"]
 assert list(cases) == ["missense", "count", "ontology", "tab"], list(cases)
 for name, case in cases.items():
@@ -1590,7 +1619,7 @@ rc=$?
 [[ "$rc" -ne 0 ]] && grep -q 'drop --flags and --format' <<<"$out" && ok "--tool refuses --flags" || bad "--tool --flags exited $rc"
 out=$(TGEN --dry-run --assembly GRCh38 2>&1)
 rc=$?
-[[ "$rc" -ne 0 ]] && grep -q 'takes no suite option' <<<"$out" && ok "--tool refuses a suite option" || bad "--tool --assembly exited $rc"
+[[ "$rc" -ne 0 ]] && grep -q 'takes no dataset option' <<<"$out" && ok "--tool refuses a dataset option" || bad "--tool --assembly exited $rc"
 out=$(TGEN --dry-run --no-stats 2>&1)
 rc=$?
 [[ "$rc" -ne 0 ]] && grep -q 'writes no statistics; drop --stats and --no-stats' <<<"$out" && ok "--tool refuses --no-stats (filter_vep writes no report)" || bad "--tool --no-stats exited $rc"
@@ -1741,11 +1770,348 @@ rc=$?
 [[ "$rc" -ne 0 ]] && grep -q 'runs variant_recoder, which writes no statistics' <<<"$out" && ok "--tool variant_recoder refuses --stats naming the tool" || bad "--tool variant_recoder --stats exited $rc"
 
 echo
+echo "GENOME-TABLE: a dataset's genome reads its FASTA and cache version from its row of the genome table"
+# The table is harness_genomes.tsv beside the script, or the file VEP_HARNESS_GENOMES names.
+# run_gen_table runs without the two --fasta-for lines run_gen passes, so every FASTA comes
+# from a row. A genome other than the two human ones needs a dataset row to be planned at all,
+# and the shipped dataset table is human, so GEN_COPY is the shipped script with one dataset
+# row appended for a made-up genome and nothing else changed.
+TABLE_HEADER='species	assembly	cache_version	fasta	json_cache'
+HUMAN_ROWS='homo_sapiens	GRCh37	116	reference/grch37/genome.fa	caches/vep-rs/grch37
+homo_sapiens	GRCh38	116	reference/grch38/genome.fa	caches/vep-rs/grch38'
+MADE_UP_ROW='made_up_species	ASM1	63	reference/asm1/made_up.fa	caches/vep-rs/asm1'
+write_table() { # write_table <path> <rows...>: the header, then each argument as its lines
+    local path="$1"
+    shift
+    {
+        printf '%s\n' "$TABLE_HEADER"
+        [[ $# -eq 0 ]] || printf '%s\n' "$@"
+    } >"$path"
+}
+run_gen_table() { # run_gen_table <script> <table> <extra args...>
+    local script="$1" table="$2"
+    shift 2
+    VEP_HARNESS_GENOMES="$table" bash "$script" --data-dir "$DATA" --perl-cache-dir "$CACHE" \
+        --snp-indel-gt-dir "$SNP_GT" --sv-gt-dir "$SV_GT" "$@"
+}
+# mounts <output-file> <host fasta>: how many planned commands mount that file as the FASTA.
+mounts() {
+    local n
+    n=$(grep -c -- "-v $2:/work/ref.fa:ro " "$1") || n=0
+    echo "$n"
+}
+build_made_up_genome() {
+    mkdir -p "$DATA/reference/asm1" "$DATA/vcf/asm1/all_variants_canonical" "$CACHE/made_up_species/63_ASM1/I"
+    printf '>I\nNNNN\n' >"$DATA/reference/asm1/made_up.fa"
+    printf 'I\t4\t3\t4\t5\n' >"$DATA/reference/asm1/made_up.fa.fai"
+    write_vcf "$TMP/plain.vcf" 3
+    gzip -c "$TMP/plain.vcf" >"$DATA/vcf/asm1/all_variants_canonical/made_up.canonical.vcf.gz"
+}
+
+GT="$TMP/genome_table"
+mkdir -p "$GT/copy"
+GEN_COPY="$GT/copy/generate_reference_output.sh"
+awk '{ print } /^s08:SV_GRCh38:GRCh38:sv:-:homo_sapiens$/ { print "s90:Made_up:ASM1:snp_indel:made_up:made_up_species" }' "$GEN" >"$GEN_COPY"
+cp "$HERE/harness_genomes.sh" "$GT/copy/"
+# diff exits 1 on files that differ, so its output goes to a file and not through a pipe.
+diff "$GEN" "$GEN_COPY" >"$GT/copy.diff"
+_added=$(grep -c '^[<>]' "$GT/copy.diff") || _added=0
+[[ "$_added" -eq 1 && "$(grep '^>' "$GT/copy.diff")" == "> s90:Made_up:ASM1:snp_indel:made_up:made_up_species" ]] &&
+    ok "the copy under test is the shipped script plus one dataset row for the made-up genome" ||
+    bad "the copy differs from the shipped script by $_added line(s); expected the one dataset row"
+
+build_tree
+run_gen_table "$GEN" "$HERE/harness_genomes.tsv" --dry-run >"$GT/human.out" 2>"$GT/human.err"
+rc=$?
+[[ "$rc" -eq 0 && "$(count_docker_cmds "$GT/human.out")" -eq 10 ]] &&
+    ok "the committed table plans the ten human commands with no --fasta-for" || {
+    bad "committed table, no --fasta-for: rc=$rc commands=$(count_docker_cmds "$GT/human.out")"
+    head -3 "$GT/human.err" | sed 's/^/         /'
+}
+[[ "$(mounts "$GT/human.out" "$DATA/reference/grch37/genome.fa")" -eq 5 && "$(mounts "$GT/human.out" "$DATA/reference/grch38/genome.fa")" -eq 5 ]] &&
+    ok "each human command mounts the fasta of its genome's row, a path under --data-dir (5 and 5)" ||
+    bad "the human rows' FASTAs are mounted by $(mounts "$GT/human.out" "$DATA/reference/grch37/genome.fa") and $(mounts "$GT/human.out" "$DATA/reference/grch38/genome.fa") commands, expected 5 and 5"
+n=$(grep -c -- '--cache_version 116 --species homo_sapiens ' "$GT/human.out") || n=0
+[[ "$n" -eq 10 ]] && ok "each human command passes its row's cache_version, 116" || bad "$n of 10 human commands pass --cache_version 116"
+# The run's opening line names the cache version each planned genome is read under, each
+# version once: the two human rows share 116.
+grep -q ' cache_version=116 fork=16 ' "$GT/human.out" &&
+    ok "the opening line names the one cache version of the two human genomes once" ||
+    bad "the opening line of the human run names '$(grep -m1 -o ' cache_version=[^ ]*' "$GT/human.out")', expected cache_version=116"
+
+# A row is the genome's own: another FASTA and another cache version on the GRCh38 row move
+# the GRCh38 commands and leave the GRCh37 ones.
+mkdir -p "$DATA/alt"
+cp "$DATA/reference/grch38/genome.fa" "$DATA/alt/other.fa"
+cp "$DATA/reference/grch38/genome.fa.fai" "$DATA/alt/other.fa.fai"
+cp -R "$CACHE/homo_sapiens/116_GRCh38" "$CACHE/homo_sapiens/117_GRCh38"
+write_table "$GT/moved.tsv" "$HUMAN_ROWS" 'homo_sapiens	GRCh38	117	alt/other.fa	caches/vep-rs/grch38'
+run_gen_table "$GEN" "$GT/moved.tsv" --dry-run >"$GT/moved.out" 2>"$GT/moved.err"
+rc=$?
+n38=$(grep -- '--assembly GRCh38 ' "$GT/moved.out" | grep -c -- '--cache_version 117 ') || n38=0
+n37=$(grep -- '--assembly GRCh37 ' "$GT/moved.out" | grep -c -- '--cache_version 116 ') || n37=0
+[[ "$rc" -eq 0 && "$(mounts "$GT/moved.out" "$DATA/alt/other.fa")" -eq 5 && "$n38" -eq 5 && "$n37" -eq 5 ]] &&
+    ok "the last row for GRCh38 gives its five commands that row's FASTA and cache version and leaves GRCh37 at 116" ||
+    bad "moved GRCh38 row: rc=$rc mounts=$(mounts "$GT/moved.out" "$DATA/alt/other.fa") GRCh38 at 117=$n38 GRCh37 at 116=$n37"
+grep -q "all 25 primary contigs present under $CACHE/homo_sapiens/117_GRCh38" "$GT/moved.out" &&
+    ok "the slice checked is the one under the row's cache version" ||
+    bad "the GRCh38 slice was not checked under 117_GRCh38"
+grep -q ' cache_version=116,117 fork=16 ' "$GT/moved.out" &&
+    ok "the opening line names both cache versions, in the order their genomes are planned" ||
+    bad "the opening line of the moved-row run names '$(grep -m1 -o ' cache_version=[^ ]*' "$GT/moved.out")', expected cache_version=116,117"
+run_gen_table "$GEN" "$GT/moved.tsv" --dry-run --cache-version 116 >"$GT/flag.out" 2>/dev/null
+n=$(grep -c -- '--cache_version 116 ' "$GT/flag.out") || n=0
+[[ "$n" -eq 10 ]] && ok "--cache-version names the cache version of every genome, whatever the rows say" || bad "$n of 10 commands pass --cache_version 116 under --cache-version 116"
+VEP_PERL_CACHE_VERSION=116 run_gen_table "$GEN" "$GT/moved.tsv" --dry-run >"$GT/env.out" 2>/dev/null
+n=$(grep -c -- '--cache_version 116 ' "$GT/env.out") || n=0
+[[ "$n" -eq 10 ]] && ok "VEP_PERL_CACHE_VERSION names the cache version of every genome, whatever the rows say" || bad "$n of 10 commands pass --cache_version 116 under VEP_PERL_CACHE_VERSION=116"
+VEP_FASTA_GRCH38="$DATA/reference/grch38/genome.fa" run_gen_table "$GEN" "$GT/moved.tsv" --dry-run >"$GT/envfa.out" 2>/dev/null
+[[ "$(mounts "$GT/envfa.out" "$DATA/reference/grch38/genome.fa")" -eq 5 && "$(mounts "$GT/envfa.out" "$DATA/alt/other.fa")" -eq 0 ]] &&
+    ok "VEP_FASTA_GRCH38 replaces the GRCh38 row's FASTA" ||
+    bad "VEP_FASTA_GRCH38 over a row: $(mounts "$GT/envfa.out" "$DATA/reference/grch38/genome.fa") commands mount it, expected 5"
+VEP_FASTA_GRCH38="$TMP/none.fa" run_gen_table "$GEN" "$GT/moved.tsv" --dry-run --fasta-for "homo_sapiens:GRCh38=$DATA/reference/grch38/genome.fa" >"$GT/forfa.out" 2>/dev/null
+[[ "$(mounts "$GT/forfa.out" "$DATA/reference/grch38/genome.fa")" -eq 5 ]] &&
+    ok "a --fasta-for line replaces both the row and VEP_FASTA_GRCH38" ||
+    bad "--fasta-for over a row and VEP_FASTA_GRCH38: $(mounts "$GT/forfa.out" "$DATA/reference/grch38/genome.fa") commands mount it, expected 5"
+
+# The made-up genome: a table row and a dataset row, no --fasta-for and no other line.
+build_made_up_genome
+write_table "$GT/made_up.tsv" "$HUMAN_ROWS" "$MADE_UP_ROW"
+run_gen_table "$GEN_COPY" "$GT/made_up.tsv" --dry-run --datasets s90 >"$GT/made_up.out" 2>"$GT/made_up.err"
+rc=$?
+cmd=$(grep '^docker run ' "$GT/made_up.out")
+[[ "$rc" -eq 0 && "$(count_docker_cmds "$GT/made_up.out")" -eq 1 ]] &&
+    ok "a made-up genome with a table row plans its command with no --fasta-for" || {
+    bad "made-up genome with a row: rc=$rc commands=$(count_docker_cmds "$GT/made_up.out")"
+    head -3 "$GT/made_up.err" | sed 's/^/         /'
+}
+[[ "$cmd" == *" -v $DATA/reference/asm1/made_up.fa:/work/ref.fa:ro -v $DATA/reference/asm1/made_up.fa.fai:/work/ref.fa.fai:ro "* ]] &&
+    ok "its command mounts the row's fasta, under --data-dir, with the index beside it" ||
+    bad "the made-up genome's command does not mount $DATA/reference/asm1/made_up.fa: $cmd"
+[[ "$cmd" == *" --offline --cache --dir_cache /work/cache --cache_version 63 --species made_up_species --assembly ASM1 --format vcf "* ]] &&
+    ok "its command passes the row's cache_version, 63, with the dataset row's species and assembly" ||
+    bad "the made-up genome's command does not carry --cache_version 63 --species made_up_species --assembly ASM1: $cmd"
+grep -q "perl cache check (made_up_species ASM1): 1 chromosome directories under $CACHE/made_up_species/63_ASM1;" "$GT/made_up.out" &&
+    ok "its slice is checked under <species>/<the row's cache version>_<assembly>" ||
+    bad "the made-up genome's slice was not checked under made_up_species/63_ASM1"
+grep -q ' cache_version=63 fork=16 ' "$GT/made_up.out" &&
+    ok "the opening line names the row's cache version, 63, for a run of that genome alone" ||
+    bad "the opening line of the made-up genome's run names '$(grep -m1 -o ' cache_version=[^ ]*' "$GT/made_up.out")', expected cache_version=63"
+grep -q 'a slice of a species other than homo_sapiens is checked to hold at least one$' "$GT/made_up.out" &&
+    ok "the log line says what is checked for a species other than homo_sapiens" ||
+    bad "the cache check line of another species does not say what is checked"
+
+# No row: the run stops at preflight, before any command is planned, and names the genome
+# and the table that lacks it.
+run_gen_table "$GEN_COPY" "$HERE/harness_genomes.tsv" --dry-run --datasets s90 >"$GT/norow.out" 2>"$GT/norow.err"
+rc=$?
+[[ "$rc" -eq 1 && "$(count_docker_cmds "$GT/norow.out")" -eq 0 ]] &&
+    ok "a genome with no row fails before any command is planned" ||
+    bad "genome with no row: rc=$rc commands=$(count_docker_cmds "$GT/norow.out")"
+grep -q -x "ERROR: \[generate_reference_output\] no FASTA named for made_up_species:ASM1" "$GT/norow.err" &&
+    grep -q -x "  Add the genome's row to $HERE/harness_genomes.tsv, or pass --fasta-for made_up_species:ASM1=<path> (or --fasta with a single --assembly)." "$GT/norow.err" &&
+    ok "the refusal names the genome and the table that has no row for it" ||
+    bad "the no-row refusal does not name made_up_species:ASM1 and $HERE/harness_genomes.tsv: $(head -2 "$GT/norow.err")"
+
+# --fasta-for replaces a row, and stands in for one: a genome with no row then reads the
+# default cache version.
+mkdir -p "$DATA/alt"
+cp "$DATA/reference/asm1/made_up.fa" "$DATA/alt/made_up_other.fa"
+cp "$DATA/reference/asm1/made_up.fa.fai" "$DATA/alt/made_up_other.fa.fai"
+run_gen_table "$GEN_COPY" "$GT/made_up.tsv" --dry-run --datasets s90 --fasta-for "made_up_species:ASM1=$DATA/alt/made_up_other.fa" >"$GT/for.out" 2>/dev/null
+rc=$?
+[[ "$rc" -eq 0 && "$(mounts "$GT/for.out" "$DATA/alt/made_up_other.fa")" -eq 1 && "$(mounts "$GT/for.out" "$DATA/reference/asm1/made_up.fa")" -eq 0 ]] &&
+    ok "a --fasta-for line replaces the row's FASTA" ||
+    bad "--fasta-for over the made-up row: rc=$rc mounts=$(mounts "$GT/for.out" "$DATA/alt/made_up_other.fa")"
+grep -q -- '--cache_version 63 --species made_up_species ' "$GT/for.out" &&
+    ok "and leaves the row's cache version in place" ||
+    bad "--fasta-for over the made-up row moved its cache version"
+run_gen_table "$GEN_COPY" "$GT/made_up.tsv" --dry-run --datasets s90 --assembly ASM1 --fasta "$DATA/alt/made_up_other.fa" >"$GT/single.out" 2>/dev/null
+rc=$?
+[[ "$rc" -eq 0 && "$(mounts "$GT/single.out" "$DATA/alt/made_up_other.fa")" -eq 1 ]] &&
+    ok "--fasta with a single --assembly names the FASTA of the species the dataset table gives that assembly" ||
+    bad "--fasta under --assembly ASM1: rc=$rc mounts=$(mounts "$GT/single.out" "$DATA/alt/made_up_other.fa")"
+mkdir -p "$CACHE/made_up_species/116_ASM1/I"
+run_gen_table "$GEN_COPY" "$HERE/harness_genomes.tsv" --dry-run --datasets s90 --fasta-for "made_up_species:ASM1=$DATA/alt/made_up_other.fa" >"$GT/for_norow.out" 2>/dev/null
+rc=$?
+[[ "$rc" -eq 0 ]] && grep -q -- '--cache_version 116 --species made_up_species --assembly ASM1 ' "$GT/for_norow.out" &&
+    ok "a genome with no row and a --fasta-for line runs under the default cache version, 116" ||
+    bad "genome with no row and --fasta-for: rc=$rc $(grep -c -- '--cache_version 116 ' "$GT/for_norow.out") command(s) at 116"
+
+# A table the reader refuses stops the run with the reader's line, before any command.
+table_refused() { # table_refused <name> <table> <expected stderr line>
+    local name="$1" table="$2" expected="$3" rc
+    run_gen_table "$GEN" "$table" --dry-run >"$GT/refused.out" 2>"$GT/refused.err"
+    rc=$?
+    if [[ "$rc" -eq 1 && "$(cat "$GT/refused.err")" == "$expected" && ! -s "$GT/refused.out" ]]; then
+        ok "$name"
+    else
+        bad "$name: rc=$rc stdout $(wc -c <"$GT/refused.out" | tr -d ' ') byte(s), stderr '$(cat "$GT/refused.err")'"
+    fi
+}
+table_refused "a table that is no file stops the run and is named" "$GT/absent.tsv" \
+    "ERROR: [generate_reference_output] the genome table cannot be read: $GT/absent.tsv"
+printf 'genome\tfasta\nhomo_sapiens\tgenome.fa\n' >"$GT/nokey.tsv"
+table_refused "a table with no species and assembly columns stops the run" "$GT/nokey.tsv" \
+    "ERROR: [generate_reference_output] the genome table names no genome under a species and an assembly column: $GT/nokey.tsv"
+write_table "$GT/header_only.tsv"
+table_refused "a table with a header and no row stops the run" "$GT/header_only.tsv" \
+    "ERROR: [generate_reference_output] the genome table names no genome under a species and an assembly column: $GT/header_only.tsv"
+write_table "$GT/short.tsv" "$HUMAN_ROWS" 'made_up_species	ASM1	63	reference/asm1/made_up.fa'
+table_refused "a short row is refused with the reader's own line" "$GT/short.tsv" \
+    "ERROR: [harness_genomes] $GT/short.tsv: line 4 has 4 fields where the header has 5"
+printf 'species\tassembly\tcache_version\nhomo_sapiens\tGRCh38\t116\n' >"$GT/nofasta.tsv"
+table_refused "a table without a fasta column is refused with the reader's own line" "$GT/nofasta.tsv" \
+    "ERROR: [harness_genomes] $GT/nofasta.tsv: no column fasta; the columns are species, assembly, cache_version"
+write_table "$GT/badversion.tsv" "$HUMAN_ROWS" 'made_up_species	ASM1	sixty-three	reference/asm1/made_up.fa	caches/vep-rs/asm1'
+table_refused "a cache_version that is no positive integer stops the run and names its genome" "$GT/badversion.tsv" \
+    "ERROR: [generate_reference_output] the genome table gives made_up_species:ASM1 the cache_version 'sixty-three', which is no positive integer: $GT/badversion.tsv"
+# The same genome above 200 rows whose species names run to 2,000 characters, so that the
+# cache versions are more than a pipe holds (65,536 bytes on Linux) and more than gawk or
+# mawk reads ahead of its first line: the check leaves at that genome's line, and a writer
+# left behind would be ended by the closed pipe, and the run with it, before the refusal is
+# printed.
+LONG_ROWS=$(awk 'BEGIN { pad = sprintf("%2000s", ""); gsub(/ /, "x", pad); for (i = 1; i <= 200; i++) printf "made_up_species_%s_%03d\tASM1\t63\treference/asm1/made_up.fa\tcaches/vep-rs/asm1\n", pad, i }')
+write_table "$GT/badversion_long.tsv" 'made_up_species	ASM1	sixty-three	reference/asm1/made_up.fa	caches/vep-rs/asm1' "$LONG_ROWS"
+table_refused "the same refusal is printed above rows whose cache versions are more than a pipe holds" "$GT/badversion_long.tsv" \
+    "ERROR: [generate_reference_output] the genome table gives made_up_species:ASM1 the cache_version 'sixty-three', which is no positive integer: $GT/badversion_long.tsv"
+# The generator's own text. A writer of several lines is ended at random as well, between
+# two of its writes, so the form is held on every line, whatever the size of its value: no
+# line whose status is a pipeline's (an assignment from it, the pipeline as a statement, a
+# one-line function's body) pipes printf or echo into an awk with a bare exit, a head, a
+# grep -m or a sed that quits.
+STATUS_OF_EARLY_READER='^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=("[^"]*)?[$][(]|([A-Za-z_][A-Za-z0-9_]*[(][)][[:space:]]*[{][[:space:]]*)?)(printf|echo)[[:space:]]([^|$]|[$][^(])*[|][[:space:]]*(awk[[:space:]].*exit[[:space:]]*[;}]|head([[:space:]]|$)|[ef]?grep[[:space:]][^|]*-m[[:space:]]*[0-9]|sed[[:space:]][^|]*[0-9]q)'
+_early=$(grep -nE "$STATUS_OF_EARLY_READER" "$GEN" | cut -d: -f1 | paste -sd, -)
+[[ -z "$_early" ]] &&
+    ok "no line of the generator reads the status of printf or echo piped into a reader that leaves before the end" ||
+    bad "printf or echo piped into a reader that leaves before the end, its status read: generate_reference_output.sh line(s) $_early"
+# An empty fasta field names no FASTA: the genome is refused as one with no row is.
+write_table "$GT/nofield.tsv" "$HUMAN_ROWS" 'made_up_species	ASM1	63		caches/vep-rs/asm1'
+run_gen_table "$GEN_COPY" "$GT/nofield.tsv" --dry-run --datasets s90 >"$GT/nofield.out" 2>"$GT/nofield.err"
+rc=$?
+[[ "$rc" -eq 1 && "$(count_docker_cmds "$GT/nofield.out")" -eq 0 ]] && grep -q -x "ERROR: \[generate_reference_output\] no FASTA named for made_up_species:ASM1" "$GT/nofield.err" &&
+    ok "a row with an empty fasta field names no FASTA for its genome" ||
+    bad "row with an empty fasta field: rc=$rc $(head -1 "$GT/nofield.err")"
+# An empty cache_version field names none: the genome reads the default cache version.
+write_table "$GT/noversion.tsv" "$HUMAN_ROWS" 'made_up_species	ASM1		reference/asm1/made_up.fa	caches/vep-rs/asm1'
+run_gen_table "$GEN_COPY" "$GT/noversion.tsv" --dry-run --datasets s90 >"$GT/noversion.out" 2>/dev/null
+rc=$?
+[[ "$rc" -eq 0 ]] && grep -q -- '--cache_version 116 --species made_up_species --assembly ASM1 ' "$GT/noversion.out" &&
+    ok "a row with an empty cache_version field reads the default cache version, 116" ||
+    bad "row with an empty cache_version field: rc=$rc"
+# The same holds where no row of the table names a cache_version.
+write_table "$GT/onerow.tsv" 'made_up_species	ASM1		reference/asm1/made_up.fa	caches/vep-rs/asm1'
+run_gen_table "$GEN_COPY" "$GT/onerow.tsv" --dry-run --datasets s90 >"$GT/onerow.out" 2>"$GT/onerow.err"
+rc=$?
+[[ "$rc" -eq 0 ]] && grep -q -- '--cache_version 116 --species made_up_species --assembly ASM1 ' "$GT/onerow.out" &&
+    ok "a table whose one row leaves cache_version empty is read, and its genome reads the default cache version, 116" ||
+    bad "one-row table with an empty cache_version field: rc=$rc $(head -1 "$GT/onerow.err")"
+
+# A corpus takes its species, release and FASTA from its manifest and reads no table.
+build_tree
+build_corpus
+VEP_HARNESS_GENOMES="$GT/absent.tsv" run_corpus --dry-run >"$GT/corpus.out" 2>"$GT/corpus.err"
+rc=$?
+[[ "$rc" -eq 0 && "$(count_docker_cmds "$GT/corpus.out")" -eq 4 ]] &&
+    ok "a corpus run reads no genome table: it plans its four commands where the table is absent" ||
+    bad "corpus run with an absent table: rc=$rc commands=$(count_docker_cmds "$GT/corpus.out") $(head -1 "$GT/corpus.err")"
+
+echo
 echo "FLAG: the generator itself never passes --full_cache_dir"
 _bad_live=$(grep -e '--full_cache_dir' "$GEN" | grep -vc '^[[:space:]]*#') || _bad_live=0
 [[ "$_bad_live" -eq 0 ]] && ok "no live --full_cache_dir in generate_reference_output.sh" || bad "$_bad_live live line(s) pass --full_cache_dir"
 _dir_cache=$(grep -e '--dir_cache' "$GEN" | grep -vc '^[[:space:]]*#') || _dir_cache=0
 [[ "$_dir_cache" -ge 1 ]] && ok "the invocation passes --dir_cache" || bad "no live --dir_cache in the generator"
+
+echo
+echo "FILE-CENSUS: the counts and digests of a real run are made by the tree's release build of tools/vep-file-census"
+
+grep -q '^	census_bin="\$root/tools/vep-file-census/target/release/vep-file-census"$' "$SOURCE_GEN" &&
+    ok "the tree's release build of tools/vep-file-census is the script's one candidate" ||
+    bad "the script does not name the tree's release build of tools/vep-file-census"
+_named=$(grep -vE '^[[:space:]]*#' "$SOURCE_GEN" | grep -c -E -e 'sha256sum|shasum|grep -v?c .\^#|gzip -dc "\$1"') || _named=0
+[[ "$_named" -eq 0 ]] &&
+    ok "no live line counts or digests a whole file with grep, gzip or sha256sum" ||
+    bad "$_named live line(s) still count or digest a whole file without the tool"
+# A tree of its own that records every start of the tool, then runs it.
+_ct="$TMP/census_tree"
+mkdir -p "$_ct/scripts/concordance" "$_ct/$(dirname "$CENSUS_REL")"
+cp "$SOURCE_GEN" "$HERE/harness_genomes.sh" "$HERE/harness_genomes.tsv" "$_ct/scripts/concordance/"
+cat >"$_ct/$CENSUS_REL" <<RECORDER
+#!/usr/bin/env bash
+printf '%s\\n' "\$*" >>"$_ct/started"
+exec "$TREE/$CENSUS_REL" "\$@"
+RECORDER
+chmod +x "$_ct/$CENSUS_REL"
+tree_gen() { # tree_gen <tree> <script args...>: run_gen through the copy of the script in the tree
+    local tree="$1"
+    shift
+    bash "$tree/scripts/concordance/generate_reference_output.sh" --data-dir "$DATA" \
+        --perl-cache-dir "$CACHE" \
+        --fasta-for "homo_sapiens:GRCh37=$DATA/reference/grch37/genome.fa" \
+        --fasta-for "homo_sapiens:GRCh38=$DATA/reference/grch38/genome.fa" \
+        --snp-indel-gt-dir "$SNP_GT" --sv-gt-dir "$SV_GT" \
+        "$@"
+}
+build_tree
+_in="$DATA/vcf/grch37/all_variants_canonical/clinvar_grch37.canonical.vcf.gz"
+: >"$_ct/started"
+STUB_ROWS=3 PATH="$STUBDIR:$PATH" tree_gen "$_ct" --datasets s01 >/dev/null 2>"$TMP/fc1.err"
+rc=$?
+_scratch_out=$(sed -n '2p' "$_ct/started" | awk '{print $NF}')
+_want="count --gunzip --not-starting # $_in
+count --not-starting # $_scratch_out
+count --not-starting # $_scratch_out
+digest --algorithm sha256 $_in
+digest --algorithm sha256 $SNP_GT/s01/output.txt"
+[[ "$rc" -eq 0 && "$(cat "$_ct/started")" == "$_want" && "$_scratch_out" == "$SNP_GT"/s01/.generate.*/output.txt ]] &&
+    ok "one default-format dataset: the input's records, the output's rows twice and the two digests, each one start of the tool" ||
+    bad "a default-format dataset did not start the tool as expected (rc=$rc): $(tr '\n' '|' <"$_ct/started")"
+grep -q "\"input_sha256\": \"$(sha256_file "$_in")\"" "$SNP_GT/s01/output.provenance.json" && grep -q "\"output_sha256\": \"$(sha256_file "$SNP_GT/s01/output.txt")\"" "$SNP_GT/s01/output.provenance.json" &&
+    ok "the sidecar's two digests are the sha256 of the input and of the output in place" ||
+    bad "the sidecar's digests are not the files' sha256"
+build_tree
+: >"$_ct/started"
+STUB_ROWS=3 PATH="$STUBDIR:$PATH" tree_gen "$_ct" --datasets s01 --format vcf --flags "--vcf_info_field ANN" >/dev/null 2>"$TMP/fc2.err"
+rc=$?
+[[ "$rc" -eq 0 ]] && grep -q '^count --info-field ANN .*/output\.vcf$' "$_ct/started" &&
+    ok "a VCF-format dataset counts its annotated records by the INFO key the flags name" ||
+    bad "a VCF-format dataset did not count by its INFO key (rc=$rc): $(tr '\n' '|' <"$_ct/started")"
+build_tree
+: >"$_ct/started"
+STUB_ROWS=3 PATH="$STUBDIR:$PATH" tree_gen "$_ct" --datasets s01 --format json >/dev/null 2>"$TMP/fc3.err"
+rc=$?
+[[ "$rc" -eq 0 ]] && grep -q '^count --containing _consequences": .*/output\.jsonl$' "$_ct/started" &&
+    ok "a JSON-format dataset counts the objects that carry a consequences array" ||
+    bad "a JSON-format dataset did not count its consequences arrays (rc=$rc): $(tr '\n' '|' <"$_ct/started")"
+# A tree without the build, with a file that is not executable and with a directory at
+# the build's path: a real run stops on one line before any container, a dry run needs none.
+for _shape in unbuilt inert directory; do
+    _ut="$TMP/census_$_shape"
+    mkdir -p "$_ut/scripts/concordance" "$_ut/$(dirname "$CENSUS_REL")"
+    cp "$SOURCE_GEN" "$HERE/harness_genomes.sh" "$HERE/harness_genomes.tsv" "$_ut/scripts/concordance/"
+    case "$_shape" in
+    inert) : >"$_ut/$CENSUS_REL" ;;
+    directory) mkdir -p "$_ut/$CENSUS_REL" ;;
+    esac
+    build_tree
+    : >"$TMP/stub.log"
+    _out=$(STUB_ROWS=3 STUB_LOG="$TMP/stub.log" PATH="$STUBDIR:$PATH" tree_gen "$_ut" --datasets s01 2>&1 >/dev/null)
+    rc=$?
+    [[ "$rc" -eq 1 && "$_out" == "ERROR: [generate_reference_output] the file census $_ut/$CENSUS_REL is not an executable: build the tool with 'cargo build --release --locked --manifest-path $_ut/tools/vep-file-census/Cargo.toml'" && ! -s "$TMP/stub.log" && ! -e "$SNP_GT/s01" ]] &&
+        ok "a real run in a tree whose build is $_shape: exit 1 on one line naming the build command, no container run, nothing written" ||
+        bad "a real run in a tree whose build is $_shape was not refused before the first container (rc=$rc): $_out"
+done
+_out=$(tree_gen "$TMP/census_unbuilt" --datasets s01 --dry-run 2>&1)
+rc=$?
+[[ "$rc" -eq 0 ]] && grep -q '^docker run ' <<<"$_out" &&
+    ok "a dry run in a tree without the build prints its commands: it reads no whole file" ||
+    bad "a dry run in a tree without the build exited $rc"
+if [[ -L "$TREE/$CENSUS_REL" ]]; then
+    ok "every real run of this file counted and digested through this tree's own release build of tools/vep-file-census"
+else
+    echo "  skip the real runs on the tree's own build: no release build of tools/vep-file-census (a stand-in made of the pipelines ran)"
+fi
 
 echo
 echo "----------------------------------------"

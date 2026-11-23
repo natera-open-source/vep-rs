@@ -5,8 +5,9 @@
 //! select the suffixed species directory of the cache root and the transcript
 //! set the flag names, under `--json_cache` too, and `--all_refseq` keeps every
 //! model. Each test quotes the documentation sentence it proves and cites the
-//! Ensembl VEP source (release/116.2) that sentence describes.
+//! Ensembl VEP source (release/116.3) that sentence describes.
 
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Output, Stdio};
@@ -264,6 +265,180 @@ fn merged_selects_the_merged_species_directory() {
         without_set_columns(&text),
         without_volatile_headers(&reference),
         "--merged keeps every unstamped model"
+    );
+}
+
+/// The golden corpus `name` of release 116.
+fn golden_corpus(name: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/golden/116")
+        .join(name)
+}
+
+/// The cache flags naming `root` in Ensembl VEP's layout for the mouse.
+fn mouse_layout_flags(root: &Path) -> [&str; 9] {
+    [
+        "--cache",
+        "--dir_cache",
+        root.to_str().unwrap(),
+        "--cache_version",
+        "116",
+        "--species",
+        "mus_musculus",
+        "--assembly",
+        "GRCm39",
+    ]
+}
+
+/// Runs the binary on a mouse corpus's own records and reference, writing
+/// `<dir>/<label>.default`, with `cache` naming the cache and `flags` the
+/// transcript set. Nothing is asserted about the exit status.
+fn run_mouse(dir: &Path, label: &str, corpus: &Path, cache: &[&str], flags: &[&str]) -> Output {
+    let mut cmd = common::isolated_vep(dir);
+    cmd.arg("-i")
+        .arg(corpus.join("variants.vcf"))
+        .arg("-o")
+        .arg(dir.join(format!("{label}.default")))
+        .arg("--offline")
+        .args(cache)
+        .args(["--force_overwrite", "--no_stats"])
+        .arg("--fasta")
+        .arg(corpus.join("reference.fa.gz"))
+        .args(flags)
+        .stdin(Stdio::null());
+    cmd.output().unwrap()
+}
+
+/// Asserts the run of `flag` on `corpus` under the layout root `root` reads
+/// the cache at `<root>/<species_dir>/116_GRCm39` and writes the corpus's
+/// expected rows: the same Uploaded_variation, Location, Allele, Gene,
+/// Feature and Feature_type on every row, and the whole row wherever the
+/// manifest lists no documented divergence for its Location, Allele and
+/// Feature.
+fn assert_mouse_rows(dir: &Path, corpus: &Path, root: &Path, flag: &str, species_dir: &str) {
+    let output = run_mouse(dir, "suffixed", corpus, &mouse_layout_flags(root), &[flag]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{flag}: {stderr}");
+    let text = fs::read_to_string(dir.join("suffixed.default")).unwrap();
+    let leaf = root.join(species_dir).join("116_GRCm39");
+    assert!(
+        text.lines()
+            .any(|line| line == format!("## Using cache in {}", leaf.display())),
+        "{flag}: the header names the suffixed directory:\n{text}"
+    );
+
+    let manifest: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(corpus.join("manifest.json")).unwrap()).unwrap();
+    let documented: HashSet<(String, String, String)> = manifest["divergences"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|item| {
+            let cell = |key: &str| item[key].as_str().unwrap().to_string();
+            (cell("location"), cell("allele"), cell("feature"))
+        })
+        .collect();
+    let expected = common::read_expected(corpus, "default.txt");
+    let split = |text: &str| -> (Vec<String>, Vec<String>) {
+        let mut keys = Vec::new();
+        let mut whole = Vec::new();
+        for row in data_lines(text) {
+            let columns: Vec<&str> = row.split('\t').collect();
+            keys.push(columns[..6].join("\t"));
+            let key = (
+                columns[1].to_string(),
+                columns[2].to_string(),
+                columns[4].to_string(),
+            );
+            if !documented.contains(&key) {
+                whole.push(row.to_string());
+            }
+        }
+        keys.sort();
+        whole.sort();
+        (keys, whole)
+    };
+    let (keys, whole) = split(&text);
+    let (expected_keys, expected_whole) = split(&expected);
+    assert!(!keys.is_empty(), "{flag}: the run writes rows");
+    assert_eq!(
+        keys, expected_keys,
+        "{flag}: a row for every row of the reference"
+    );
+    assert_eq!(
+        whole, expected_whole,
+        "{flag}: the rows outside the documented divergences"
+    );
+}
+
+/// `--refseq` selects the `_refseq` species directory of a species other than
+/// human: under `--species mus_musculus` the run reads
+/// `cache_root/mus_musculus_refseq/116_GRCm39` of the mouse RefSeq corpus and
+/// writes that corpus's expected rows, and without the flag the plain species
+/// directory, which the root lacks, is the cache error.
+///
+/// Documented: "Under it the species directory is `--species` (default
+/// `homo_sapiens`, the Latin name only), suffixed `_refseq` or `_merged` under
+/// those flags" (Cache setup, Naming the cache). Ensembl VEP appends the suffix
+/// to whatever species the run names (`CacheDir.pm:312`) and dies when the
+/// directory is absent (`:318`).
+#[test]
+fn refseq_selects_the_refseq_directory_of_another_species() {
+    let dir = tempfile::tempdir().unwrap();
+    let corpus = golden_corpus("GRCm39-mouse-refseq");
+    let root = corpus.join("cache_root");
+    assert_mouse_rows(
+        dir.path(),
+        &corpus,
+        &root,
+        "--refseq",
+        "mus_musculus_refseq",
+    );
+
+    let output = run_mouse(
+        dir.path(),
+        "unsuffixed",
+        &corpus,
+        &mouse_layout_flags(&root),
+        &[],
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "without --refseq: {stderr}");
+    assert!(
+        stderr.lines().any(|line| {
+            line == format!(
+                "ERROR: [cache] Cache directory {} not found",
+                root.join("mus_musculus").display()
+            )
+        }),
+        "without --refseq: {stderr}"
+    );
+}
+
+/// `--merged` selects the `_merged` species directory of a species other than
+/// human (`CacheDir.pm:312`): the mouse merged corpus's cache, placed as
+/// `<root>/mus_musculus_merged/116_GRCm39`, is the cache the run reads under
+/// `--species mus_musculus --merged`, and the run writes that corpus's
+/// expected rows.
+///
+/// Documented: "Under it the species directory is `--species` (default
+/// `homo_sapiens`, the Latin name only), suffixed `_refseq` or `_merged` under
+/// those flags" (Cache setup, Naming the cache).
+#[test]
+fn merged_selects_the_merged_directory_of_another_species() {
+    let dir = tempfile::tempdir().unwrap();
+    let corpus = golden_corpus("GRCm39-mouse-merged");
+    let root = dir.path().join("cache_root");
+    copy_dir(
+        &corpus.join("json_cache"),
+        &root.join("mus_musculus_merged").join("116_GRCm39"),
+    );
+    assert_mouse_rows(
+        dir.path(),
+        &corpus,
+        &root,
+        "--merged",
+        "mus_musculus_merged",
     );
 }
 

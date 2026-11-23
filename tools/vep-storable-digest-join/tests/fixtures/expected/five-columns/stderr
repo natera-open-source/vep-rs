@@ -1,0 +1,1 @@
+ERROR: [compare_storable_cache_versions] malformed dump line in five-columns.tsv: 'ENST00000000007\t1\t5\t6\tabc\n'

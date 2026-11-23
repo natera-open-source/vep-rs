@@ -1,24 +1,24 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --plugin Conservation,{corpus}/plugin_data/gerp.bw --dir_plugins {plugins} [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "none on either side",
  "input": "variants.vcf: 87 chromosome 21 records: 79 with public ClinVar identifiers (INFO dropped), chosen from a class-stratified sample of the chromosome's ClinVar records so that every consequence combination the sample shows appears once, with and without a covered base, and eight hand-built records: a fourteen-base deletion, the chr-prefixed spelling of a covered SNV, a multi-allelic SNV, an SNV and an insertion on bases the bigWig does not cover, an insertion whose two flanking bases straddle the edge of the file's coverage, a deletion spanning that edge, and a deletion over scores of both signs; two deletions of 713 and 815 bases are kept by name. Every multi-base record's largest covered score is at or above zero.",
  "plugin_data": "plugin_data/gerp.bw: Ensembl Compara's gerp_conservation_scores.homo_sapiens.GRCh38.bw, the per-base GERP scores of the GRCh38 mammalian alignment as the LoFTEE GRCh38 data bundle distributes it, cut to the 200 bases either side of every record and written without zoom levels, chromosome 21 kept at its full length",
- "generator": "scripts/golden/build_golden_corpus.py select --k 1 --max-span 0 --family-columns Conservation over the Ensembl VEP default output of the candidate records run with the plugin, then flag-set and classify --field Conservation for the manifest's run and both flag sets; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice of the converted Ensembl VEP cache; scripts/fixtures/cut_plugin_regions.py --gerp <bigWig> --gerp-regions records --record-flank 200; the expected outputs from the release_116.2 image with the corpus invocation of scripts/concordance/generate_reference_output.sh (--fork 1 --buffer_size 5000, headers kept, --stats_text), the corpus mounted read-only as {corpus} and the Ensembl VEP plugin collection at release/116 as {plugins}",
+ "generator": "tools/vep-golden-corpus select --k 1 --max-span 0 --family-columns Conservation over the Ensembl VEP default output of the candidate records run with the plugin, then flag-set and classify --field Conservation for the manifest's run and both flag sets; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice of the converted Ensembl VEP cache; scripts/fixtures/cut_plugin_regions.py --gerp <bigWig> --gerp-regions records --record-flank 200; the expected outputs from the release_116.3 image with the corpus invocation of scripts/concordance/generate_reference_output.sh (--fork 1 --buffer_size 5000, headers kept, --stats_text), the corpus mounted read-only as {corpus} and the Ensembl VEP plugin collection at release/116 as {plugins}. The manifest's datasets entry names the two inputs of that selection, which the corpus does not hold: pre2_avg.txt was the Ensembl VEP default output of the candidate records run with the plugin, and candidates2.vcf the candidate records",
  "expected_outputs": "expected/: the manifest's run (the average score) and the keyed-file flag set, vep-rs's file= spelling of the same run; expected_max/: the max flag set (the maximum score)",
  "sha256": {
-  "default.txt": "a3697ccab8a4ec81de1ac332b1f6f6dcb6ced48735e097af8a262880b114bb38",
-  "tab.txt": "f92c707b450d31f280ed98a28a3da35f11a78790aa13d2c7decb1fa657e12683",
-  "vcf.vcf": "0b6ff37c7410a2cbe65538c4eadfbd1cd3b99e00bc53cd4ed74d8ccebec9393c",
-  "json.jsonl": "9a55ce398f63d0f6a14fcf60026bd6be4e087122db6dcbd0bcd14090a71a48c1",
-  "default.summary.log": "ea53085d081102d54e5ed034c12899ef30f31268fc7e61d7728303ce95b999b9",
-  "tab.summary.log": "abb3422b9a854b35ee2dfc306c11f68ae8221380b55d9b9a450ebcd28e1e4908",
-  "vcf.summary.log": "73ab4fb0ace5929d563ca6c04a05ece7ac40d4a98f975259e928d25fd6c9aeb9",
-  "json.summary.log": "8f50fd4128ba141881834681d2fd7a4c93491bcb50de93745316998fe1d88032"
+  "default.txt": "e07eddf0e8f829aa94a81b5ff96f9781993d67b0b1d5f8fc0676c9979211c137",
+  "tab.txt": "cc6b3afb2dbd35b728aa1796aa6b1b7d844a28b3dcd85060f2945fe304818548",
+  "vcf.vcf": "932bad494ff6e35d12456e4187a71f201d6a1f62ce039523023c57c5a2858047",
+  "json.jsonl": "9ab02207d437b819b2e5ad67bf0e7d54cdb9b04b4745e6366bac57fcdfcb6cbc",
+  "default.summary.log": "2c74644c68e733f1da56454c659d51fd5cfb1785b14ed23577f25cfa1347edb9",
+  "tab.summary.log": "accfcb5f7e207667629e34ca2eef32d9b8dc16936ac2202c9c341e16c4618376",
+  "vcf.summary.log": "9019bfd682e343c0aa1074790e6a2dc3ac3157514dcffe6bef0a438ba3a6cc8b",
+  "json.summary.log": "37c5827741757963b7751647ae3d154b827fabb4fbc447e06e56703fecf28764"
  },
  "variants_vcf_sha256": "64a6def876a25f1175559cc544d649edfec51cd9fdd219ac3d49f186dffb508b",
  "plugin_files": {
@@ -40,26 +40,32 @@
  },
  "flag_sets": {
   "max": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --plugin Conservation,{corpus}/plugin_data/gerp.bw,MAX --dir_plugins {plugins} [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "5460ad538f3740a3e84839e3d6ca7f3cb2bd7ececb7b72376897e1205e4b10df",
+    "tab.txt": "f1a33b9e4cc0151c1c151d2de30b85f656e3a326268fcb2c6b7c722fface7fdc",
+    "vcf.vcf": "1b0acb971240ee7dd8285538a19960bd2158747fac2d0b90c9b4f3125d6f4f94",
+    "json.jsonl": "5d3435d17151e8323988fcafd8c8fd50197cf6839ee52a7e476fa938e04c1a43",
+    "default.summary.log": "a2f4ba6c3b868dabace22b2cc316efcc161d0ccfa154f202a3158e3c5a7672d5",
+    "tab.summary.log": "642307da7706d4126f025e5cbf2ceef5ae67411673c6c309c78de248122f3b1f",
+    "vcf.summary.log": "0fbd977e2cd6c3f29d2014d00535a069ea3232e58ea7364bf7e5d9b43d0ecb37",
+    "json.summary.log": "ca314b0324ec4df2c5add2a34016e6b3ed6dbd87250571c9b3478d2e84431be0"
+   },
    "flags": [
     "--plugin",
     "Conservation,{corpus}/plugin_data/gerp.bw,MAX",
     "--dir_plugins",
     "{plugins}"
    ],
-   "input": "variants.vcf",
    "expected_dir": "expected_max",
-   "perl_mode": "offline",
-   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --plugin Conservation,{corpus}/plugin_data/gerp.bw,MAX --dir_plugins {plugins} [--tab|--vcf|--json]",
-   "sha256": {
-    "default.txt": "6088591f8bdefdaa74ed6ed014af11351a35add3f7b9ff9ed4aece084d06f9ba",
-    "tab.txt": "add7f4f79cec05db4b67efab9446de26f3b73274ec1d6a732649d5bcdfa948ba",
-    "vcf.vcf": "9bd2f94ff3255fddc8941a5958712d459af6d71eb7414d037516e25f152f135d",
-    "json.jsonl": "88554de7f23752bb02318ac82e46ef8fb873f04706fa2468b1ac4a9d261273a9",
-    "default.summary.log": "af8a333cecefe638361cb6ccb086a8c465600bb5ed4b2e4107891d59fb85de36",
-    "tab.summary.log": "2e9fc2644e6f49df5dc36b4bceb845939596cf11df8446626db4dbcea36dfc99",
-    "vcf.summary.log": "4db2d128436d7e14ddf936883b1b2eb9525f2100e8f00d4712836037219239c0",
-    "json.summary.log": "ae74900a9f95652b965c2df5e4311ff52f25f53c7f97a76515f4b41f09c8789e"
-   }
+   "perl_mode": "offline"
   },
   "keyed-file": {
    "flags": [
@@ -73,14 +79,14 @@
    "perl_mode": "offline",
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --plugin Conservation,{corpus}/plugin_data/gerp.bw --dir_plugins {plugins} [--tab|--vcf|--json]",
    "sha256": {
-    "default.txt": "a3697ccab8a4ec81de1ac332b1f6f6dcb6ced48735e097af8a262880b114bb38",
-    "tab.txt": "f92c707b450d31f280ed98a28a3da35f11a78790aa13d2c7decb1fa657e12683",
-    "vcf.vcf": "0b6ff37c7410a2cbe65538c4eadfbd1cd3b99e00bc53cd4ed74d8ccebec9393c",
-    "json.jsonl": "9a55ce398f63d0f6a14fcf60026bd6be4e087122db6dcbd0bcd14090a71a48c1",
-    "default.summary.log": "ea53085d081102d54e5ed034c12899ef30f31268fc7e61d7728303ce95b999b9",
-    "tab.summary.log": "abb3422b9a854b35ee2dfc306c11f68ae8221380b55d9b9a450ebcd28e1e4908",
-    "vcf.summary.log": "73ab4fb0ace5929d563ca6c04a05ece7ac40d4a98f975259e928d25fd6c9aeb9",
-    "json.summary.log": "8f50fd4128ba141881834681d2fd7a4c93491bcb50de93745316998fe1d88032"
+    "default.txt": "e07eddf0e8f829aa94a81b5ff96f9781993d67b0b1d5f8fc0676c9979211c137",
+    "tab.txt": "cc6b3afb2dbd35b728aa1796aa6b1b7d844a28b3dcd85060f2945fe304818548",
+    "vcf.vcf": "932bad494ff6e35d12456e4187a71f201d6a1f62ce039523023c57c5a2858047",
+    "json.jsonl": "9ab02207d437b819b2e5ad67bf0e7d54cdb9b04b4745e6366bac57fcdfcb6cbc",
+    "default.summary.log": "2c74644c68e733f1da56454c659d51fd5cfb1785b14ed23577f25cfa1347edb9",
+    "tab.summary.log": "accfcb5f7e207667629e34ca2eef32d9b8dc16936ac2202c9c341e16c4618376",
+    "vcf.summary.log": "9019bfd682e343c0aa1074790e6a2dc3ac3157514dcffe6bef0a438ba3a6cc8b",
+    "json.summary.log": "37c5827741757963b7751647ae3d154b827fabb4fbc447e06e56703fecf28764"
    },
    "reference": "the manifest's run: Ensembl VEP's Conservation plugin reads its parameters by position alone, so the file= spelling is vep-rs's own and compares against the same outputs"
   }

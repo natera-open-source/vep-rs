@@ -1,7 +1,7 @@
 entry = "json_summary_without_consequence"
 page = "docs/divergences/json-summary-without-term.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
 input_class_basis = "2 · 2.0 per million · 0 flag sets, 3 corpora"
 notes = "A non-variant record kept by --allow_non_variant has no consequence; under --most_severe Ensembl VEP's JSON run dies on it (Can't use an undefined value as an ARRAY reference) and writes no object, where vep-rs writes the record's object with most_severe_consequence ?."
@@ -30,3 +30,10 @@ where = { id = "nonvariant_site" }
 ensembl_vep_exit = 255
 ensembl_vep = []
 vep_rs = ["nonvariant_site"]
+
+[implementation]
+code = ["crates/vep-io/src/output/json.rs::JsonOutputFormatter::format_record_value"]
+tests = [
+    "crates/vep-cli/src/pick.rs::tests::summary_of_a_record_without_rows_is_a_row_with_no_term",
+    "crates/vep-cli/tests/individuals.rs::most_severe_writes_a_row_for_a_copy_with_no_consequence",
+]

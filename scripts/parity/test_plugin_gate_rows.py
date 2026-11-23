@@ -92,13 +92,13 @@ def tsv_rows(path: Path) -> tuple[str, list[dict]]:
     return comment.removeprefix("# support_table_sha256: "), [dict(zip(header.split("\t"), line.split("\t"))) for line in lines]
 
 
-def test_the_trees_table_gives_57_rows_over_31_plugins() -> None:
+def test_the_trees_table_gives_58_rows_over_31_plugins() -> None:
     rows, _block, _digest, errors = pgr.derive(ROOT)
     assert errors == []
-    assert len(rows) == 57
+    assert len(rows) == 58
     assert len({row["plugin"] for row in rows}) == 31
     kinds = [row["scored_on"] for row in rows]
-    assert (kinds.count("clinvar"), kinds.count("committed_table"), kinds.count("synthetic_fixture")) == (35, 2, 20)
+    assert (kinds.count("clinvar"), kinds.count("committed_table"), kinds.count("synthetic_fixture")) == (36, 2, 20)
 
 
 def test_the_trees_rows_name_the_two_clinvar_datasets_and_22_committed_corpora() -> None:
@@ -127,11 +127,23 @@ def test_the_trees_cadd_structural_variant_corpus_is_a_row_under_its_label() -> 
     rows, _block, _digest, _errors = pgr.derive(ROOT)
     cadd = [(row["assembly"], row["dataset_or_corpus"], row["label"]) for row in rows if row["plugin"] == "CADD"]
     assert cadd == [
-        ("GRCh37", "GRCh37-plugin-cadd", "CADD"),
-        ("GRCh38", "GRCh38-plugin-cadd", "CADD"),
-        ("GRCh38", "GRCh38-plugin-cadd-sv", "CADD (structural variants)"),
+        ("GRCh37", "GRCh37-plugin-cadd-fixture", "CADD"),
+        ("GRCh38", "GRCh38-plugin-cadd-fixture", "CADD"),
+        ("GRCh38", "GRCh38-plugin-cadd-sv-fixture", "CADD (structural variants)"),
     ]
-    assert [row["label"] for row in rows if row["label"] != row["plugin"]] == ["CADD (structural variants)"]
+    assert [row["label"] for row in rows if row["label"] != row["plugin"]] == [
+        "CADD (structural variants)",
+        "LoFTEE (synthetic conservation data)",
+    ]
+
+
+def test_the_trees_loftee_row_of_grch37_is_scored_on_clinvar_under_its_label() -> None:
+    rows, _block, _digest, _errors = pgr.derive(ROOT)
+    assert [tuple(row.values()) for row in rows if row["plugin"] == "LoFTEE"] == [
+        ("LoFTEE", "GRCh37", "clinvar", "clinvar_grch37", "LoFTEE (synthetic conservation data)"),
+        ("LoFTEE", "GRCh38", "clinvar", "clinvar_grch38", "LoFTEE"),
+    ]
+    assert pgr.CLINVAR_LABELS == {("LoFTEE", "GRCh37"): "LoFTEE (synthetic conservation data)"}
 
 
 def test_the_trees_transcript_annotator_is_scored_on_its_committed_table() -> None:
@@ -256,7 +268,7 @@ def test_the_three_outputs_carry_the_same_rows_digest_and_groups(tmp_path: Path,
     code, rows_path, not_ported_path, record_path = write_all(ROOT, tmp_path / "out")
     assert code == 0
     assert capsys.readouterr().out == (
-        "plugin gate rows: 57 rows over 31 plugins (35 clinvar, 20 synthetic_fixture, 2 committed_table); "
+        "plugin gate rows: 58 rows over 31 plugins (36 clinvar, 20 synthetic_fixture, 2 committed_table); "
         "56 of 87 plugins not ported, in 7 groups\n"
     )
     digest, rows = tsv_rows(rows_path)
@@ -267,14 +279,14 @@ def test_the_three_outputs_carry_the_same_rows_digest_and_groups(tmp_path: Path,
     assert record["not_ported"] == not_ported
     assert list(not_ported) == ["of", "groups"]
     assert all(list(group) == ["label", "count", "plugins"] for group in not_ported["groups"])
-    assert len(record["rows"]) == len(rows) == 57
+    assert len(record["rows"]) == len(rows) == 58
     for written, row in zip(record["rows"], rows):
         assert list(written) == ["plugin", "assembly", "scored_on", "dataset_or_corpus"]
         assert written["plugin"] == row["label"]
         for key in ("assembly", "scored_on", "dataset_or_corpus"):
             assert written[key] == row[key]
     labelled = [written["plugin"] for written, row in zip(record["rows"], rows) if row["label"] != row["plugin"]]
-    assert labelled == ["CADD (structural variants)"]
+    assert labelled == ["CADD (structural variants)", "LoFTEE (synthetic conservation data)"]
 
 
 def test_the_digest_is_of_the_tables_lines_alone(tmp_path: Path) -> None:

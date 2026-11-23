@@ -1,10 +1,10 @@
 [VEP run statistics]
-VEP version (API)	 116.2 (116)
+VEP version (API)	 116.3 (116)
 Annotation sources	Cache: /work/cache/mus_musculus/116_GRCm39
 Species	mus_musculus
 Command line options	vep --assembly GRCm39 --cache --cache_version 116 --database 0 --dir_cache [PATH]/cache --dir_plugins /plugins --fasta [PATH]/ref.fa --force_overwrite --fork --format vcf --hgvs --input_file [PATH]/input.vcf --offline --output_file [PATH]/default.txt --quiet --sift b --species mus_musculus --stats_text
-Start time	2026-10-28 18:21:44
-End time	2026-10-28 18:21:50
+Start time	2026-11-20 13:20:11
+End time	2026-11-20 13:20:17
 Run time	6 seconds
 Input file	/work/input.vcf
 Output file	/work/perl_out/default.txt
@@ -116,22 +116,22 @@ deleterious	75
 
 [Variants by chromosome]
 19	371
-GL456221.1	10
-GL456239.1	1
-GL456219.1	5
-GL456372.1	2
-GL456212.1	3
-GL456381.1	1
-GL456385.1	1
-GL456354.1	8
-GL456210.1	5
 GL456211.1	2
-JH584304.1	11
-JH584299.1	24
-JH584296.1	9
-JH584297.1	5
-JH584298.1	2
+GL456219.1	5
+GL456239.1	1
+GL456221.1	10
+GL456354.1	8
+GL456212.1	3
+GL456385.1	1
+GL456210.1	5
+GL456381.1	1
+GL456372.1	2
 JH584303.1	1
+JH584304.1	11
+JH584296.1	9
+JH584298.1	2
+JH584297.1	5
+JH584299.1	24
 MT	41
 
 [Distribution of variants on chromosome 19]

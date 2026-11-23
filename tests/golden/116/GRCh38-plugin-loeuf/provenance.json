@@ -1,53 +1,65 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "none on either side",
  "input": "variants.vcf: hand-placed records named by their design, nine on chromosome 21: an intergenic substitution; an exonic substitution in APP; a substitution upstream of BACH1's canonical transcript and inside its longer transcripts; an exonic substitution in BACH1; a 260-base deletion covering the single-exon transcript of KRTAP20-4 whole and a substitution inside that exon; a substitution 2,000 bases upstream of SOD1 and one in each of its second exon and an intron. Reference alleles read from the GRCh38 primary assembly. APP, BACH1 and SOD1 have several transcripts with distinct LOEUF values, BACH1 and KRTAP20-4 transcripts with the value NA, so the gene minimum, the per-transcript value as written and the exclusion of upstream and downstream rows are each exercised.",
  "sha256": {
-  "default.txt": "f8f4d25e80e539e6e4c2aea2d90354a152ad503b9821fa9c9466c494313196f3",
-  "tab.txt": "0f8fab9e003e56827cc33f623d90e37834776095a59233099ac262dea839d76a",
-  "vcf.vcf": "2258d7e735f50b135cc520a28f1ca703a05c8f141b5a2d7e0e60f134ca2bfa53",
-  "json.jsonl": "3930e2866ff05573c2d969e898711805f735bbd9407938c450a9716925f136d6"
+  "default.txt": "9acb35d93a1c0e49d143948c2637a510ad06e37e7e50ccb4065e4d933e4a42f6",
+  "tab.txt": "2faa2f11ac9c0ce137a7c7edf256d4e673546595a212dc5449a067a4f0feb7dd",
+  "vcf.vcf": "db0f7b443e7ce098da6bb0743dfdeaf11e2c3aa38fa5a5793d82524edfc9c4fb",
+  "json.jsonl": "63a84ab79936b16877657fc3ea62cc1f09a1f55c4174b680c5f4fbd0941c4f79"
  },
  "variants_vcf_sha256": "5c5d63178da6e47c325f7d6eb72dcf5d2347be48763d6b50a3b96b74d0b2979d",
  "flag_sets": {
   "match-by-gene": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {corpus}/data --plugin LOEUF,file={corpus}/data/loeuf_dataset_grch38.tsv.gz,match_by=gene [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "54964a50c7e481cb4d0756b987dcdb7c97e692c11028ef6219172b8615ba4b36",
+    "tab.txt": "2844e548551b350563f1074a716afc754b56e263f156af843aec40d811bd81a1",
+    "vcf.vcf": "331a2156e05adfb2c1f9e22b7a5ea6244e8c84c6b53237d6ad9dbee941e79513",
+    "json.jsonl": "4d840f50461aa49b247bb88065c8c6ffb972301cd81c8c4f0d13d2945d30f33e"
+   },
    "flags": [
     "--dir_plugins",
     "{corpus}/data",
     "--plugin",
     "LOEUF,file={corpus}/data/loeuf_dataset_grch38.tsv.gz,match_by=gene"
    ],
-   "input": "variants.vcf",
-   "expected_dir": "expected_match-by-gene",
-   "sha256": {
-    "default.txt": "9daf8d226d55bcac595adce9f48ff67ecd4804cd3ec6d36c19f53f1bc8b12fca",
-    "tab.txt": "d3ed8de58443d5196a9f4ab3c0725b5caf6fa503a3edb91a2d4cdff7108b3d49",
-    "vcf.vcf": "2fc981825ffc49dbab9488b754efc3f5438a89c696b70e9deee7e5be20355fd7",
-    "json.jsonl": "2a84ccbce0dcb7d9a1a27224e398edf75b4f59743023b9c804d3b36912822a54"
-   }
+   "expected_dir": "expected_match-by-gene"
   },
   "match-by-transcript": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {corpus}/data --plugin LOEUF,file={corpus}/data/loeuf_dataset_grch38.tsv.gz,match_by=transcript [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "432efe160e08a7155af5fdcaa65ea79691e3002e936c2b1847f7e49d4b8dd28a",
+    "tab.txt": "3479d4a62b58f54c9be4694b4ed76b839dd60d7e40d0ad612b8fde50d4dc6ede",
+    "vcf.vcf": "9051e70202f644d604aaff7fc0d44a48fce702e83446e1b82979d836e6672367",
+    "json.jsonl": "3d6668ff587ba406b6e4289ab61cc207d70a2a4fdb4df2e89d49848bddb02a52"
+   },
    "flags": [
     "--dir_plugins",
     "{corpus}/data",
     "--plugin",
     "LOEUF,file={corpus}/data/loeuf_dataset_grch38.tsv.gz,match_by=transcript"
    ],
-   "input": "variants.vcf",
-   "expected_dir": "expected_match-by-transcript",
-   "sha256": {
-    "default.txt": "173c76fcad13aecfe0fb2de5d755445e7bdb9c57e2287662b0816ec188cb08de",
-    "tab.txt": "145949de2d8aa979fa6fe9618b5ed4ad99c99829723a4baa70adccdde92307a4",
-    "vcf.vcf": "689914de0d6ab88768cc258f6efc9afc233da6c366bd5d7bbde20d8e76ce8878",
-    "json.jsonl": "ba19e232c8b09e6c38dab68d7a70e7656fee7558519763f4cfd41e9f4cb27f1d"
-   }
+   "expected_dir": "expected_match-by-transcript"
   }
  },
  "data": {
@@ -60,5 +72,5 @@
    "data/loeuf_dataset_grch38.tsv.gz.tbi": "1cf33ba5c28b666a088bbdc3bf30ebf9fa209110b20b14c32749f63605e19730"
   }
  },
- "generator": "manifest: scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite plugin-loeuf=<reference>=<candidates> --k 3 --seed 1 --include <each record's ID> --covers LOEUF --matrix tests/parity/matrix.tsv, then flag-set for each flag_sets entry; json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice of the vep-rs JSON conversion of the Ensembl VEP 116 GRCh38 cache; expected outputs: scripts/concordance/generate_reference_output.sh --corpus for the default run and, per flag set, for a copy of the corpus carrying the set's flags as its own, whose outputs and record are the set's"
+ "generator": "manifest: tools/vep-golden-corpus select --release 116 --assembly GRCh38 --dataset plugin-loeuf=<reference>=<candidates> --k 3 --seed 1 --include <each record's ID> --covers LOEUF --matrix tests/parity/matrix.tsv, then flag-set for each flag_sets entry; json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice of the vep-rs JSON conversion of the Ensembl VEP 116 GRCh38 cache; expected outputs: scripts/concordance/generate_reference_output.sh --corpus for the default run and, per flag set, for a copy of the corpus carrying the set's flags as its own, whose outputs and record are the set's"
 }

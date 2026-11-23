@@ -1,18 +1,17 @@
 entry = "refseq_edited_model_opening_bases_insertion_hgvsp"
 page = "docs/divergences/refseq-edited-model-opening-bases-insertion-hgvsp.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
 input_class_basis = "seen in the ClinVar GRCh37 and GRCh38 files annotated on the RefSeq caches: 1 of the 49 rows of the 12 records written between the two genomic neighbours of a model's added bases, record 768677 on NM_001288959.2"
-notes = "ClinVar record 768677 inserts 18 bases between 14:94582130 and 14:94582131, where the forward-strand model NM_001288959.2 carries the insertion edit `97 96` of nine bases, its coding positions 1 to 9; the 18 bases are those nine twice. The genome's 3' shift moves the insertion three places. Both engines print cDNA 97-105 and CDS ?-9. Ensembl VEP reads the protein notation at the shifted point and, the row carrying start_lost, prints the two residues beside that point with `?` between the positions 5 and 4; vep-rs reads the row where the record is written and writes the duplication of residues 2 to 4. No committed cache holds the model, so the prepare steps copy the one region file of the Ensembl VEP RefSeq GRCh37 cache that holds it and convert it with the Perl of the image, which the run therefore needs, and write a chromosome 14 FASTA from the model's own sequence."
+notes = "ClinVar record 768677 inserts 18 bases between 14:94582130 and 14:94582131, where the forward-strand model NM_001288959.2 carries the insertion edit `97 96` of nine bases, its coding positions 1 to 9; the 18 bases are those nine twice. The genome's 3' shift moves the insertion three places. Both engines print cDNA 97-105 and CDS ?-9. Ensembl VEP reads the protein notation at the shifted point and, the row carrying start_lost, prints the two residues beside that point with `?` between the positions 5 and 4; vep-rs reads the row where the record is written and writes the duplication of residues 2 to 4. No committed cache holds the model, so the prepare steps copy the one region file of the Ensembl VEP RefSeq GRCh37 cache that holds it and convert it with tools/vep-storable-to-json, and write a chromosome 14 FASTA from the model's own sequence."
 # The region file 14/94000001-95000000 of the Ensembl VEP RefSeq cache, converted into the cache vep-rs reads, and a
 # chromosome 14 FASTA of 95,000,000 bases that holds the 494 genomic bases of the model's four exons and N elsewhere.
 prepare = [
-  '''[ -n "$IMAGE" ] || { echo "the region file is converted with the Perl of the image: pass --image" >&2; exit 1; }
-mkdir -p "$STAGE/perl-cut/14" "$STAGE/json-cache"
+  '''mkdir -p "$STAGE/perl-cut/14" "$STAGE/json-cache"
 cp "$PERL_CACHE/info.txt" "$PERL_CACHE/chr_synonyms.txt" "$STAGE/perl-cut/"
 cp "$PERL_CACHE/14/94000001-95000000.gz" "$STAGE/perl-cut/14/"
-docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$STAGE/perl-cut:/input:ro" -v "$REPO/scripts/data:/scripts:ro" -v "$STAGE/json-cache:/output" "$IMAGE" perl /scripts/storable_to_json.pl /input /output 14 > "$STAGE/convert.log" 2>&1''',
+cargo run --release --locked --quiet --manifest-path "$REPO/tools/vep-storable-to-json/Cargo.toml" -- "$STAGE/perl-cut" "$STAGE/json-cache" 14 > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
   '''python3 - "$STAGE/json-cache/transcripts/14/94000001-95000000.json" "$STAGE/chr14_exon_window.fa" <<'PY'
 import json
 import sys
@@ -63,4 +62,14 @@ ensembl_vep = [
 ]
 vep_rs = [
   "768677 | 97-105 | ?-9 | ?-3 | NP_001275888.1:p.His2_Gly4dup",
+]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/coding.rs::hgvs_protein_where_written",
+    "crates/vep-effects/src/coding.rs::span_on_opening_coding_bases",
+    "crates/vep-effects/src/hgvs.rs::hgvsp_at",
+]
+tests = [
+    "crates/vep-effects/src/consequences.rs::tests::insertion_the_shift_moves_off_bases_that_open_the_coding_sequence_has_its_hgvsp_read_there",
 ]

@@ -8,15 +8,20 @@
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use super::manifest::{check_previous_output, remove_previous_output, PreviousOutput};
 
 /// The longest file name the common file systems take, in bytes.
 const NAME_MAX: usize = 255;
 
+/// The most symbolic links `located` follows on one path, the bound Linux
+/// puts on a path's resolution.
+const LINK_HOPS: usize = 40;
+
 /// Why a run's output did not replace what was at its destination.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum PublishError {
     /// Something is at the destination that the run may not replace. The
     /// destination is as it was.
@@ -54,17 +59,30 @@ pub enum PublishError {
     },
 }
 
+/// Where a path leads against the destination of a run's output.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Place {
+    /// The destination itself.
+    Destination,
+    /// A place under the destination.
+    Inside,
+    /// Neither.
+    Outside,
+}
+
 /// The directories of one run's output: the destination the run names, the
 /// temporary directory beside it that the run writes, and the name the previous
 /// output takes while the temporary directory is moved into place. Both names
 /// carry the destination's file name and the run's identifier, in the
 /// destination's own directory, so each move is a rename within one directory
-/// and two runs never share a name; a destination that cannot be renamed (a
-/// mount point) ends a run under `replace` at publication with
-/// [`PublishError::Io`], the destination as it was. A run that ends before
-/// [`Self::publish`] has moved the temporary directory removes that directory
-/// and leaves the destination alone: through [`Self::discard`], which returns
-/// the removal's error, or when the value is dropped, which cannot.
+/// and two runs never share a name. Linux refuses the rename of a mount
+/// point, so [`Self::create`] refuses a destination it finds to be one before
+/// anything is written; any other destination that cannot be renamed ends a
+/// run under `replace` at publication with [`PublishError::Io`], the
+/// destination as it was. A run that ends before [`Self::publish`] has moved
+/// the temporary directory removes that directory and leaves the destination
+/// alone: through [`Self::discard`], which returns the removal's error, or
+/// when the value is dropped, which cannot.
 #[derive(Debug)]
 pub struct UnpublishedOutput {
     /// The output path as the run names it, which a trailing separator makes
@@ -99,12 +117,67 @@ impl UnpublishedOutput {
         &self.temporary
     }
 
+    /// Whether `path` leads to the destination itself, read as
+    /// [`Self::holds`] reads a path.
+    pub fn is_named_by(&self, path: &Path) -> bool {
+        self.place_of(path) == Place::Destination
+    }
+
+    /// Whether `path` leads to a place under the destination, each read
+    /// through the symbolic links on the way and whether or not anything is
+    /// there. A file a run writes at the destination or under it stands
+    /// there when [`Self::publish`] checks the destination, and that check
+    /// takes only what the Parquet writer wrote. Names are compared as
+    /// written, so on a file system that folds letter case a differently
+    /// cased spelling of the directory is not found under it. Under an
+    /// output path that cannot be read as the run names it, for any reason
+    /// but its absence, no path is under the destination: nothing can be
+    /// written under it, and [`Self::create`] refuses the run.
+    pub fn holds(&self, path: &Path) -> bool {
+        self.place_of(path) == Place::Inside
+    }
+
+    /// Where `path` leads against the destination, each read as `located`
+    /// reads a path.
+    fn place_of(&self, path: &Path) -> Place {
+        let destination = located(&self.destination);
+        let path = located(path);
+        if path == destination {
+            Place::Destination
+        } else if self.unreadable().is_none() && path.starts_with(&destination) {
+            Place::Inside
+        } else {
+            Place::Outside
+        }
+    }
+
     /// The error of reading the output path as the run names it; `None` when
     /// the path reads or nothing is there.
     fn unreadable(&self) -> Option<io::Error> {
         fs::symlink_metadata(&self.output)
             .err()
             .filter(|error| error.kind() != io::ErrorKind::NotFound)
+    }
+
+    /// Whether a directory or a regular file at the destination is a mount
+    /// point: on Linux it stands on another mount of the caller's own mount
+    /// namespace than the directory that holds its name, a bind mount of
+    /// that directory's own file system included; on another Unix system it
+    /// stands on another device. A symbolic link there is none, nor is a
+    /// destination whose mount cannot be read, which leaves
+    /// [`Self::publish`] to meet the rename.
+    fn destination_is_a_mount_point(&self) -> bool {
+        let Ok(named) = fs::symlink_metadata(&self.destination) else {
+            return false;
+        };
+        if !named.is_dir() && !named.is_file() {
+            return false;
+        }
+        let directory = match self.destination.parent() {
+            Some(parent) if !parent.as_os_str().is_empty() => parent,
+            _ => Path::new("."),
+        };
+        on_another_mount(&self.destination, directory).unwrap_or(false)
     }
 
     /// Checks, removing nothing, that the run may replace what is at the
@@ -126,10 +199,16 @@ impl UnpublishedOutput {
     /// error, before anything is created: the temporary name is made from the
     /// destination's file name, cut to fit, so its creation would succeed
     /// beside a regular file named with a trailing separator and beside a
-    /// name longer than the file system takes.
+    /// name longer than the file system takes. A destination found to be a
+    /// mount point is the error as well, before anything is created: Linux
+    /// refuses the rename that moves it aside at publication, which a run
+    /// would first meet once every record is annotated.
     pub fn create(&mut self) -> io::Result<()> {
         if let Some(error) = self.unreadable() {
             return Err(error);
+        }
+        if self.destination_is_a_mount_point() {
+            return Err(io::ErrorKind::ResourceBusy.into());
         }
         fs::create_dir(&self.temporary)?;
         self.created = true;
@@ -210,6 +289,71 @@ impl Drop for UnpublishedOutput {
     }
 }
 
+/// Whether the directory or regular file at `path` stands on another mount
+/// than `directory`; `None` where the system does not tell. On Linux the
+/// mount is one the caller's mount namespace lists: a path through another
+/// process's root reaches a mount of that process's namespace, which Linux
+/// renames for the caller.
+fn on_another_mount(path: &Path, directory: &Path) -> Option<bool> {
+    #[cfg(target_os = "linux")]
+    {
+        let mount = mount_id(path)?;
+        if mount == mount_id(directory)? {
+            return Some(false);
+        }
+        let mounts = fs::read_to_string("/proc/self/mountinfo").ok()?;
+        Some(lists_mount(&mounts, mount))
+    }
+    #[cfg(all(unix, not(target_os = "linux")))]
+    {
+        Some(device(path)? != device(directory)?)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (path, directory);
+        None
+    }
+}
+
+/// The identifier of the mount that `path` resolves on, read from the record
+/// procfs keeps of a descriptor opened on it; `None` where `path` cannot be
+/// opened for reading or the record cannot be read.
+#[cfg(target_os = "linux")]
+fn mount_id(path: &Path) -> Option<u64> {
+    use std::os::fd::AsRawFd;
+    let opened = fs::File::open(path).ok()?;
+    let record = fs::read_to_string(format!("/proc/self/fdinfo/{}", opened.as_raw_fd())).ok()?;
+    mount_id_in(&record)
+}
+
+/// The mount identifier a descriptor's procfs record states on its `mnt_id`
+/// line.
+#[cfg(target_os = "linux")]
+fn mount_id_in(record: &str) -> Option<u64> {
+    record
+        .lines()
+        .find_map(|line| line.strip_prefix("mnt_id:")?.trim().parse().ok())
+}
+
+/// Whether `mounts`, the text of a process's `mountinfo`, lists the mount
+/// `id`, the first field of a mount's line.
+#[cfg(target_os = "linux")]
+fn lists_mount(mounts: &str, id: u64) -> bool {
+    mounts.lines().any(|line| {
+        line.split_ascii_whitespace()
+            .next()
+            .and_then(|field| field.parse().ok())
+            == Some(id)
+    })
+}
+
+/// The device that holds what is at `path`, a symbolic link followed.
+#[cfg(all(unix, any(test, not(target_os = "linux"))))]
+fn device(path: &Path) -> Option<u64> {
+    use std::os::unix::fs::MetadataExt;
+    Some(fs::metadata(path).ok()?.dev())
+}
+
 /// Gives the directory at `path` the bits of `permissions` without following
 /// a symbolic link: a `path` that is not a directory itself is the error, and
 /// what a link there points at keeps its bits. On Unix the bits go on a
@@ -232,6 +376,47 @@ fn set_directory_permissions(path: &Path, permissions: fs::Permissions) -> io::R
     }
     #[cfg(not(unix))]
     fs::set_permissions(path, permissions)
+}
+
+/// The place `path` names, absolute and free of `.`, `..` and symbolic links,
+/// whether or not anything is there: a relative `path` starts at the working
+/// directory, a name that is a symbolic link is replaced by the link's
+/// target, a dangling one too, `..` leaves the directory reached so far, as
+/// the file system resolves it, and any other name is taken as written. Past
+/// `LINK_HOPS` links the names left are taken as written. Where the working
+/// directory cannot be read, a relative `path` is walked from an empty start
+/// and its place stays relative.
+fn located(path: &Path) -> PathBuf {
+    let absolute = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
+    // The stretches of path still to walk, the next one last.
+    let mut pending = vec![absolute];
+    let mut place = PathBuf::new();
+    let mut hops = 0;
+    while let Some(stretch) = pending.pop() {
+        let mut components = stretch.components();
+        let Some(first) = components.next() else {
+            continue;
+        };
+        pending.push(components.as_path().to_path_buf());
+        match first {
+            Component::Prefix(_) | Component::RootDir => place.push(first.as_os_str()),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                place.pop();
+            }
+            Component::Normal(name) => {
+                place.push(name);
+                if hops < LINK_HOPS {
+                    if let Ok(target) = fs::read_link(&place) {
+                        hops += 1;
+                        place.pop();
+                        pending.push(target);
+                    }
+                }
+            }
+        }
+    }
+    place
 }
 
 /// The name of a directory beside an output named `name`:
@@ -265,7 +450,6 @@ mod tests {
     use crate::output::parquet::{
         InputOrder, Manifest, ParquetDirectoryWriter, ParquetOutputFormatter, MANIFEST_NAME,
     };
-    use std::sync::Arc;
 
     /// A run's output with no rows written into `dir`, its manifest naming
     /// the run `run_id`.
@@ -275,16 +459,10 @@ mod tests {
             ("vep_rs_version".to_string(), "0.0.0".to_string()),
             ("run_id".to_string(), run_id.to_string()),
         ];
-        ParquetDirectoryWriter::create(
-            dir,
-            Arc::clone(formatter.schema()),
-            kv,
-            InputOrder::Unchecked,
-            None,
-        )
-        .unwrap()
-        .close()
-        .unwrap();
+        ParquetDirectoryWriter::create(dir, &formatter, kv, InputOrder::Unchecked, None)
+            .unwrap()
+            .close()
+            .unwrap();
     }
 
     /// An output of the run `run_id` beside `destination`, written.
@@ -345,6 +523,151 @@ mod tests {
                 "{nameless:?}"
             );
         }
+    }
+
+    /// Whether `path` leads to the destination of `unpublished` or inside it.
+    fn holds(unpublished: &UnpublishedOutput, path: &Path) -> bool {
+        unpublished.place_of(path) != Place::Outside
+    }
+
+    /// A path is placed by where it leads: at the destination under each of
+    /// its spellings, inside it for every name under it, spelled with `.`
+    /// and `..` or from the root, and outside it for a name that only opens
+    /// with the destination's or that steps out of it.
+    #[test]
+    fn a_path_is_placed_at_inside_or_outside_the_destination_however_it_is_spelled() {
+        let dir = tempfile::tempdir().unwrap();
+        let at = |name: &str| dir.path().join(name);
+        for existing in [false, true] {
+            if existing {
+                fs::create_dir(at("out.parquet")).unwrap();
+            }
+            let unpublished = UnpublishedOutput::beside(&at("out.parquet/"), "1a").unwrap();
+            for spelling in ["out.parquet", "out.parquet/", "./absent/../out.parquet/."] {
+                assert_eq!(
+                    unpublished.place_of(&at(spelling)),
+                    Place::Destination,
+                    "{spelling} (existing: {existing})"
+                );
+            }
+            for held in [
+                "out.parquet/summary.html",
+                "out.parquet/chrom=21/notes.txt",
+                "./out.parquet/./summary.html",
+                "absent/../out.parquet/summary.html",
+                "out.parquet/../out.parquet/summary.html",
+            ] {
+                assert!(
+                    holds(&unpublished, &at(held)),
+                    "{held} (existing: {existing})"
+                );
+            }
+            for beside in [
+                "out.parquet_summary.html",
+                "out.parquet.files/summary.html",
+                "out.parquet/../summary.html",
+                "out.parque",
+                "summary.html",
+                "",
+            ] {
+                assert!(
+                    !holds(&unpublished, &at(beside)),
+                    "{beside} (existing: {existing})"
+                );
+            }
+        }
+        // A relative name starts at the working directory, as the destination
+        // does.
+        let relative = UnpublishedOutput::beside(Path::new("results/out.parquet"), "1a").unwrap();
+        let working = std::env::current_dir().unwrap();
+        assert_eq!(
+            relative.place_of(Path::new("./results/out.parquet/summary.html")),
+            Place::Inside
+        );
+        assert_eq!(
+            relative.place_of(&working.join("results/out.parquet/summary.html")),
+            Place::Inside
+        );
+        assert_eq!(
+            relative.place_of(&working.join("results/../results/out.parquet/")),
+            Place::Destination
+        );
+        assert_eq!(
+            relative.place_of(Path::new("out.parquet/summary.html")),
+            Place::Outside
+        );
+    }
+
+    /// An output path that cannot be read as the run names it holds no path
+    /// under it and is still named by its own spellings: a regular file named
+    /// with a trailing separator and a name longer than the file system
+    /// takes, which the creation refuses.
+    #[test]
+    fn no_path_is_placed_in_an_output_path_that_cannot_be_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("file");
+        fs::write(&file, "text\n").unwrap();
+        let long = dir.path().join("n".repeat(300));
+        for (output, inside) in [
+            (file.join(""), file.join("_warnings.txt")),
+            (long.clone(), long.join("summary.html")),
+        ] {
+            let mut unpublished = UnpublishedOutput::beside(&output, "1a").unwrap();
+            assert_eq!(unpublished.place_of(&inside), Place::Outside);
+            assert_eq!(unpublished.place_of(&output), Place::Destination);
+            assert!(unpublished.create().is_err());
+        }
+        // The same file named without the separator is a destination.
+        let named = UnpublishedOutput::beside(&file, "1a").unwrap();
+        assert_eq!(named.place_of(&file), Place::Destination);
+    }
+
+    /// A symbolic link on the way is followed, a dangling one too, and `..`
+    /// after a link leaves the directory the link led into; a link that
+    /// names itself ends the walk.
+    #[cfg(unix)]
+    #[test]
+    fn a_path_is_placed_through_the_symbolic_links_on_its_way() {
+        use std::os::unix::fs::symlink;
+        let dir = tempfile::tempdir().unwrap();
+        let at = |name: &str| dir.path().join(name);
+        fs::create_dir(at("out.parquet")).unwrap();
+        fs::create_dir_all(at("deep/inner")).unwrap();
+        symlink("out.parquet", at("results")).unwrap();
+        symlink(at("out.parquet/summary.html"), at("report.html")).unwrap();
+        symlink("deep/inner", at("jump")).unwrap();
+        symlink("../../out.parquet", at("deep/inner/back")).unwrap();
+        symlink("circle", at("circle")).unwrap();
+        let unpublished = UnpublishedOutput::beside(&at("out.parquet"), "1a").unwrap();
+        for spelling in ["results", "deep/inner/back", "jump/back/."] {
+            assert_eq!(
+                unpublished.place_of(&at(spelling)),
+                Place::Destination,
+                "{spelling}"
+            );
+        }
+        for held in [
+            "results/summary.html",
+            "report.html",
+            "jump/back/summary.html",
+        ] {
+            assert!(holds(&unpublished, &at(held)), "{held}");
+        }
+        for beside in [
+            "jump/../out.parquet/summary.html",
+            "results/../summary.html",
+            "jump/summary.html",
+            "circle/summary.html",
+        ] {
+            assert!(!holds(&unpublished, &at(beside)), "{beside}");
+        }
+        // The destination is read the same way: a run that names the link
+        // holds what stands under the link's target.
+        let linked = UnpublishedOutput::beside(&at("results"), "1a").unwrap();
+        assert_eq!(
+            linked.place_of(&at("out.parquet/summary.html")),
+            Place::Inside
+        );
     }
 
     /// A name at the file system's limit is cut to leave room for the run's
@@ -710,6 +1033,82 @@ mod tests {
         assert_eq!(mode(&out), 0o555, "the new directory takes the bits");
         for directory in [&aside, &out] {
             fs::set_permissions(directory, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+    }
+
+    /// The mount identifier is the number on the `mnt_id` line of a
+    /// descriptor's record, and a record without such a number gives none.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn the_mount_identifier_is_the_number_on_a_descriptor_records_mount_line() {
+        let record = "pos:\t0\nflags:\t0100000\nmnt_id:\t29\nino:\t1047\n";
+        assert_eq!(mount_id_in(record), Some(29));
+        assert_eq!(mount_id_in("pos:\t0\nflags:\t0100000\n"), None);
+        assert_eq!(mount_id_in("mnt_id:\tnone\n"), None);
+        assert_eq!(mount_id_in(""), None);
+    }
+
+    /// A mount is listed where its identifier opens a line of the mount
+    /// list, whatever number another field of a line holds.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_mount_is_listed_where_its_identifier_opens_a_line_of_the_mount_list() {
+        let mounts = "22 28 0:21 / /proc rw,nosuid shared:5 - proc proc rw\n\
+                      617 588 0:53 / /work/out rw,relatime - tmpfs none rw\n";
+        assert!(lists_mount(mounts, 22));
+        assert!(lists_mount(mounts, 617));
+        assert!(!lists_mount(mounts, 28));
+        assert!(!lists_mount(mounts, 588));
+        assert!(!lists_mount(mounts, 61));
+        assert!(!lists_mount("", 22));
+    }
+
+    /// The mount of procfs stands on another mount, and on another device,
+    /// than the root directory that holds its name; a directory made inside
+    /// another stands on that directory's mount and device.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_mount_point_stands_on_another_mount_than_the_directory_that_names_it() {
+        let (root, procfs) = (Path::new("/"), Path::new("/proc"));
+        assert_eq!(on_another_mount(procfs, root), Some(true));
+        assert_ne!(device(procfs).unwrap(), device(root).unwrap());
+        let dir = tempfile::tempdir().unwrap();
+        let inner = dir.path().join("inner");
+        fs::create_dir(&inner).unwrap();
+        assert_eq!(on_another_mount(&inner, dir.path()), Some(false));
+        assert_eq!(device(&inner).unwrap(), device(dir.path()).unwrap());
+        assert_eq!(
+            on_another_mount(&dir.path().join("absent"), dir.path()),
+            None
+        );
+    }
+
+    /// A destination that is a mount point fails the creation as a resource
+    /// that is busy, before the temporary directory is made. A directory that
+    /// is none, a symbolic link to a mount point and a path nothing stands at
+    /// are no mount points.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_destination_that_is_a_mount_point_fails_the_creation_before_anything_is_made() {
+        let mut onto_a_mount = UnpublishedOutput::beside(Path::new("/proc"), "run").unwrap();
+        assert!(onto_a_mount.destination_is_a_mount_point());
+        let error = onto_a_mount.create().unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::ResourceBusy, "{error}");
+        assert!(!onto_a_mount.path().exists());
+
+        let dir = tempfile::tempdir().unwrap();
+        let plain = dir.path().join("plain");
+        fs::create_dir(&plain).unwrap();
+        let link = dir.path().join("link");
+        std::os::unix::fs::symlink("/proc", &link).unwrap();
+        for destination in [plain, link, dir.path().join("absent")] {
+            let mut unpublished = UnpublishedOutput::beside(&destination, "run").unwrap();
+            assert!(
+                !unpublished.destination_is_a_mount_point(),
+                "{}",
+                destination.display()
+            );
+            unpublished.create().unwrap();
         }
     }
 }

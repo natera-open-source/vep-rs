@@ -297,9 +297,13 @@ impl TranscriptLookup {
     fn entries_of(&self, chromosome: usize) -> Result<Vec<Entry>, String> {
         let chr = &self.chromosomes[chromosome];
         if let Some(index) = self.indexes.get(chr) {
+            // The cache's transcripts alone: Ensembl VEP resolves a notation
+            // through the core transcript adaptor (`Parser/HGVS.pm:174`), which
+            // a gene-model file's source is no part of.
             return Ok(index
                 .transcripts()
                 .iter()
+                .filter(|transcript| !crate::gene_model::is_from_file(transcript))
                 .map(|transcript| Entry::of(transcript, chromosome))
                 .collect());
         }
@@ -339,7 +343,8 @@ impl TranscriptLookup {
             .get(chr)
             .and_then(|index| {
                 index.transcripts().iter().find(|transcript| {
-                    transcript.stable_id == entry.stable_id
+                    !crate::gene_model::is_from_file(transcript)
+                        && transcript.stable_id == entry.stable_id
                         && transcript.version == entry.version
                         && transcript.gene_stable_id == entry.gene_stable_id
                 })
@@ -451,8 +456,9 @@ mod tests {
 
     /// The index keeps identifiers alone: over the corpus cache (chromosomes
     /// 21 and MT) a stable id's lookup leaves every chromosome unmaterialized
-    /// but the one the hit is on, and a miss on every reference sequence reads
-    /// the alternate tier without materializing anything.
+    /// but the one the hit is on, and a miss on every reference sequence
+    /// materializes nothing (the cache holds no alternate sequence, so no
+    /// alternate tier is read).
     #[test]
     fn a_lookup_materializes_the_hit_chromosome_alone() {
         let cache = concat!(
@@ -533,11 +539,9 @@ mod tests {
         assert_eq!(lookup.by_stable_id("ENST1").unwrap_err(), refusal);
         assert_eq!(lookup.by_translation_id("ENSP1").unwrap_err(), refusal);
 
-        let context = ParserContext {
-            fasta: Some(Arc::new(NoGenome)),
-            transcripts: Some(Arc::clone(&lookup) as Arc<dyn TranscriptSource>),
-            ..Default::default()
-        };
+        let mut context = ParserContext::default();
+        context.fasta = Some(Arc::new(NoGenome));
+        context.transcripts = Some(Arc::clone(&lookup) as Arc<dyn TranscriptSource>);
         let mut parser = HgvsParser::new(std::io::Cursor::new("ENST1:c.1A>G\n"), &context, false);
         let Some(Err(vep_io::IoError::CacheUnreadable(message))) = parser.next_variant() else {
             panic!("the notation must fail with the cache's refusal");
@@ -549,12 +553,11 @@ mod tests {
     }
 
     fn transcript(stable_id: &str, version: u32, db_id: u64, chr: &str, gene: &str) -> Transcript {
-        Transcript {
-            version: Some(version),
-            db_id: Some(db_id),
-            gene_symbol: Some(Arc::from("GENE")),
-            ..make_runner_test_transcript(stable_id, gene, chr, 1_000)
-        }
+        let mut transcript = make_runner_test_transcript(stable_id, gene, chr, 1_000);
+        transcript.version = Some(version);
+        transcript.db_id = Some(db_id);
+        transcript.gene_symbol = Some(Arc::from("GENE"));
+        transcript
     }
 
     fn lookup(by_chr: Vec<(&str, Vec<Transcript>)>, contig_order: &[&str]) -> TranscriptLookup {
@@ -579,10 +582,9 @@ mod tests {
     }
 
     fn refseq(stable_id: &str, db_id: u64, gene: &str) -> Transcript {
-        Transcript {
-            source: "RefSeq".to_string(),
-            ..transcript(stable_id, 1, db_id, "21", gene)
-        }
+        let mut model = transcript(stable_id, 1, db_id, "21", gene);
+        model.source = "RefSeq".to_string();
+        model
     }
 
     /// A stable id finds its transcript whatever the chromosome; one written
@@ -634,29 +636,28 @@ mod tests {
     #[test]
     fn translation_id_resolves_as_fetch_by_translation_stable_id_does() {
         use vep_core::transcript::Translation;
-        let translated =
-            |stable_id: &str, protein: &str, version: Option<u32>, db_id: u64| Transcript {
-                translation: Some(Translation {
-                    stable_id: protein.to_string(),
-                    version,
-                    db_id: None,
-                    start: 1,
-                    end: 30,
-                    start_exon_index: 0,
-                    end_exon_index: 0,
-                    seq: None,
-                }),
-                ..transcript(stable_id, 1, db_id, "21", "ENSG1")
-            };
+        let translated = |stable_id: &str, protein: &str, version: Option<u32>, db_id: u64| {
+            let mut model = transcript(stable_id, 1, db_id, "21", "ENSG1");
+            model.translation = Some(Translation {
+                stable_id: protein.to_string(),
+                version,
+                db_id: None,
+                start: 1,
+                end: 30,
+                seq: None,
+            });
+            model
+        };
         let lookup = lookup(
             vec![(
                 "21",
                 vec![
                     translated("ENST1", "ENSP1", Some(2), 10),
                     translated("ENST2", "ENSP2", None, 11),
-                    Transcript {
-                        protein_id: Some(Arc::from("ENSP3")),
-                        ..transcript("ENST3", 1, 12, "21", "ENSG1")
+                    {
+                        let mut model = transcript("ENST3", 1, 12, "21", "ENSG1");
+                        model.protein_id = Some(Arc::from("ENSP3"));
+                        model
                     },
                     transcript("ENST4", 1, 13, "21", "ENSG1"),
                 ],

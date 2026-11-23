@@ -11,7 +11,7 @@
 //! and annotated against its release-116 GRCh38 cache. The HGVS nomenclature
 //! gives a deletion that extends beyond the transcribed region to the genomic
 //! description alone (DNA deletion, "deletions extending beyond the
-//! transcribed region"), where Ensembl VEP 116.2 clamps the span onto the
+//! transcribed region"), where Ensembl VEP 116.3 clamps the span onto the
 //! transcript and reads the whole alternate allele against the bases inside
 //! (`docs/divergences/hgvs-clipped-reference-against-whole-alternate.md`).
 
@@ -167,7 +167,7 @@ fn assert_no_notation_where_hgvs_shifts(records: &str, consequence: &str, sites:
 /// beyond the transcribed region, the HGVS nomenclature describes it with
 /// genomic coordinates alone (DNA deletion, "deletions extending beyond the
 /// transcribed region"), and the row carries its consequence with no HGVSc,
-/// no `HGVS_OFFSET` and neither field of HGVSIntronOffset. Ensembl VEP 116.2
+/// no `HGVS_OFFSET` and neither field of HGVSIntronOffset. Ensembl VEP 116.3
 /// does not shift an allele of such a record
 /// (TranscriptVariationAllele.pm:120-123), clamps the end outside onto the
 /// transcript's first base (:2732-2733) and reads the whole alternate allele
@@ -203,7 +203,7 @@ fn a_kept_allele_deleting_over_the_first_base_has_no_hgvsc() {
 /// bases and the base after them, and keeps a base before them, a base after
 /// them or one on each side. The three cannot be carried 5' to lie wholly
 /// inside the transcript, so the deletion runs past the last base wherever it
-/// is placed: the row carries no notation. Ensembl VEP 116.2
+/// is placed: the row carries no notation. Ensembl VEP 116.3
 /// clamps the end outside onto the transcript's last base
 /// (TranscriptVariationAllele.pm:2732-2733) and reads the whole alternate
 /// allele against the bases inside (:1474-1483). Under `--shift_hgvs 0` the
@@ -324,7 +324,7 @@ fn a_deletion_a_run_carries_inside_the_transcript_keeps_its_notation() {
 
 /// A record of one alternate that deletes the base before a transcript's
 /// first base and the first base itself is minimised by the reader into a
-/// plain deletion, which is clamped onto the transcript as Ensembl VEP 116.2
+/// plain deletion, which is clamped onto the transcript as Ensembl VEP 116.3
 /// clamps it (TranscriptVariationAllele.pm:2732-2733): the first base is
 /// described as deleted. The first deleted base differs from the base after
 /// the second, so the deletion does not shift.

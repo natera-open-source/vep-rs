@@ -1,0 +1,8 @@
+# Crates outside the workspace and the standard library whose types a documented signature may name.
+# One line a crate, named as rustdoc names the crate that defines the type, a tab, and why its types stand in the interface.
+anyhow	`anyhow::Result` is what the fallible calls of the vep-cli library and `vep_cache_builder::gene_model::read` return
+indexmap	`indexmap::IndexMap`, an insertion-ordered map, is the type of the plugin and custom-annotation maps (`PluginRecord`, `CustomRecord::fields`) and what `TabixRecord::extract_fields` returns
+rayon_core	defines `rayon::ThreadPool`, the pool `build_thread_pool` returns and `Annotator::new`, `Annotator::from_config_with_pool` and `ParquetDirectoryWriter::encode_on_own_thread` take
+serde_core	defines serde's `Serialize` and `Deserialize`, which the cache records of vep-core and the Parquet manifest of vep-io implement
+serde_json	`serde_json::Value` is what `JsonOutputFormatter::format_record_value` and `format_variant_value` return
+smallvec	`vep_core::consequence::ConsequenceList` is a `smallvec::SmallVec`

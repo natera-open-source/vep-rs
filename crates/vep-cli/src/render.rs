@@ -165,11 +165,16 @@ pub(crate) fn render_default_record<'a>(
     // those rows write the columns themselves rather than copying the allele's
     // first row.
     let shifted_rows = plan.options.shift_3prime && plan.options.shift_genomic;
+    let custom_column = custom_source_names_a_fixed_column(plan);
     for &(variant, tc) in rows.iter() {
         let allele = record
             .iter()
             .position(|v| std::ptr::eq(*v, variant))
             .expect("row allele belongs to its record");
+        if custom_column {
+            write_columns_from_field_table(out, variant, tc, plan);
+            continue;
+        }
         if tc.is_none() && variant.summary_terms.is_some() {
             // The `--summary` or `--most_severe` row: the record's hash alone
             // (`VariationFeature_to_output_hash`), so every allele and feature
@@ -312,11 +317,23 @@ pub(crate) fn render_default_record<'a>(
     Ok(())
 }
 
+/// Whether a `--custom` source declares a key named as one of the thirteen
+/// columns. The line hash holds the column and the key as one cell
+/// (`VEP_output.pm:104` reads the hash by the column's name), so every row of
+/// such a run takes its columns from the field table, the `--summary` or
+/// `--most_severe` row included.
+fn custom_source_names_a_fixed_column(plan: &ExtraFieldsPlan) -> bool {
+    plan.custom_keys
+        .iter()
+        .any(|key| DEFAULT_OUTPUT_COLS.contains(&key.as_str()))
+}
+
 /// A row whose plugin wrote a key named as one of the thirteen columns
-/// ([`plugin_names_a_fixed_column`]): every column through the field table,
-/// which prints the plugin's value, `-` where a column has no value
-/// ([`empty_value_is_written`]), then the Extra column, which leaves the
-/// thirteen names out.
+/// ([`plugin_names_a_fixed_column`]), or any row of a run whose `--custom`
+/// source declares such a key (`custom_source_names_a_fixed_column`): every
+/// column through the field table, which prints the plugin's or the source's
+/// value, `-` where a column has no value ([`empty_value_is_written`]), then
+/// the Extra column, which leaves the thirteen names out.
 fn write_columns_from_field_table(
     out: &mut Vec<u8>,
     variant: &InputVariant,
@@ -370,11 +387,13 @@ mod tests {
     use std::sync::Arc;
 
     use vep_core::consequence::{FeatureType, Impact, TranscriptConsequence};
+    use vep_core::custom_annotation::{CustomAnnotations, CustomRecord};
     use vep_core::terms::Vocabulary;
     use vep_core::transcript::Transcript;
     use vep_core::variant::{ColocatedVariant, MatchedAllele, VariantClass};
     use vep_io::output::fields::{
-        extra_keys_with, field_value, rendered_terms, version_suffix, ClinSigAllele, FieldOptions,
+        extra_keys_with, field_value, rendered_terms, version_suffix, ClinSigAllele,
+        CustomSourceInfo, FieldOptions,
     };
 
     // A second implementation of the default-format renderer, the oracle the
@@ -436,7 +455,9 @@ mod tests {
                 .position(|v| std::ptr::eq(*v, variant))
                 .expect("row allele belongs to its record");
             let summary_row = tc.is_none() && variant.summary_terms.is_some();
-            if !summary_row && plugin_names_a_fixed_column(variant, tc) {
+            if custom_source_names_a_fixed_column(plan)
+                || (!summary_row && plugin_names_a_fixed_column(variant, tc))
+            {
                 let cells: Vec<String> = DEFAULT_OUTPUT_COLS
                     .iter()
                     .map(|column| {
@@ -650,53 +671,52 @@ mod tests {
         terms: &[Consequence],
         impact: Impact,
     ) -> TranscriptConsequence {
-        TranscriptConsequence {
-            transcript: Some(Arc::new(Transcript {
-                stable_id: Arc::from(transcript),
-                gene_stable_id: Arc::from(gene),
-                gene_symbol: Some(Arc::from("SOD1")),
-                flags: Arc::from(["cds_end_NF".to_string(), "basic".to_string()]),
-                version: Some(4),
-                gene_version: Some(12),
-                ..Transcript::default()
-            })),
-            consequences: terms.iter().copied().collect(),
-            impact,
-            strand: if rank.is_multiple_of(2) { 1 } else { -1 },
-            feature_start: 1_000,
-            feature_end: 2_000,
-            id_rank: rank,
-            ..TranscriptConsequence::default()
-        }
+        let mut consequence = TranscriptConsequence::default();
+        consequence.transcript = Some(Arc::new({
+            let mut model = Transcript::default();
+            model.stable_id = Arc::from(transcript);
+            model.gene_stable_id = Arc::from(gene);
+            model.gene_symbol = Some(Arc::from("SOD1"));
+            model.flags = Arc::from(["cds_end_NF".to_string(), "basic".to_string()]);
+            model.version = Some(4);
+            model.gene_version = Some(12);
+            model
+        }));
+        consequence.consequences = terms.iter().copied().collect();
+        consequence.impact = impact;
+        consequence.strand = if rank.is_multiple_of(2) { 1 } else { -1 };
+        consequence.feature_start = 1_000;
+        consequence.feature_end = 2_000;
+        consequence.id_rank = rank;
+        consequence
     }
 
     /// A known variant matched on `matched` (input allele, record allele) with
     /// clinical significance, phenotype and frequency data.
     fn known(id: &str, matched: &[(&str, &str)], frequencies: &[(&str, &str)]) -> ColocatedVariant {
-        ColocatedVariant {
-            id: id.to_string(),
-            allele_string: Some("A/G/T".to_string()),
-            strand: 1,
-            clin_sig: Some("pathogenic,likely_pathogenic".to_string()),
-            somatic: false,
-            phenotype: true,
-            pubmed: Some("123,456".to_string()),
-            matched_alleles: matched
-                .iter()
-                .enumerate()
-                .map(|(i, (input, record))| MatchedAllele {
-                    input_allele: input.to_string(),
-                    input_index: i,
-                    record_allele: record.to_string(),
-                    record_index: i,
-                })
-                .collect(),
-            frequency_strings: frequencies
-                .iter()
-                .map(|(column, text)| (column.to_string(), text.to_string()))
-                .collect(),
-            ..Default::default()
-        }
+        let mut colocated = ColocatedVariant::default();
+        colocated.id = id.to_string();
+        colocated.allele_string = Some("A/G/T".to_string());
+        colocated.strand = 1;
+        colocated.clin_sig = Some("pathogenic,likely_pathogenic".to_string());
+        colocated.somatic = false;
+        colocated.phenotype = true;
+        colocated.pubmed = Some("123,456".to_string());
+        colocated.matched_alleles = matched
+            .iter()
+            .enumerate()
+            .map(|(i, (input, record))| MatchedAllele {
+                input_allele: input.to_string(),
+                input_index: i,
+                record_allele: record.to_string(),
+                record_index: i,
+            })
+            .collect();
+        colocated.frequency_strings = frequencies
+            .iter()
+            .map(|(column, text)| (column.to_string(), text.to_string()))
+            .collect();
+        colocated
     }
 
     /// Three alleles split from one `chr21` record: two with several transcripts
@@ -823,82 +843,83 @@ mod tests {
     /// Every optional field group on at once, both id versions and the position
     /// totals included.
     fn every_group() -> FieldOptions {
-        FieldOptions {
-            individual: true,
-            individual_zyg: true,
-            process_ref_homs: true,
-            allele_number: true,
-            show_ref_allele: true,
-            uploaded_allele: true,
-            include_pick: true,
-            variant_class: true,
-            minimal: true,
-            clinvar_somatic_classification: true,
-            symbol: true,
-            biotype: true,
-            canonical: true,
-            mane_select: true,
-            mane: true,
-            mane_plus_clinical: true,
-            tsl: true,
-            gencode_primary: true,
-            appris: true,
-            ccds: true,
-            protein: true,
-            uniprot: true,
-            xref_refseq: true,
-            gene_phenotype: true,
-            sift: true,
-            polyphen: true,
-            numbers: true,
-            domains: true,
-            mirna: true,
-            hgvs: true,
-            hgvsg: true,
-            spdi: true,
-            ga4gh_vrs: true,
-            af: true,
-            af_1kg: true,
-            af_gnomad: false,
-            af_gnomade: true,
-            af_gnomadg: true,
-            max_af: true,
-            check_frequency: true,
-            check_existing: true,
-            pubmed: true,
-            check_svs: true,
-            dont_skip: true,
-            overlaps: true,
-            nearest: true,
-            shift_length: true,
-            refseq: true,
-            merged: true,
-            use_transcript_ref: true,
-            bam_edited: true,
-            custom_sources: Vec::new(),
-            shift_3prime: true,
-            shift_genomic: true,
-            var_synonyms: true,
-            regulatory: true,
-            cell_type: true,
-            transcript_version: true,
-            gene_version: true,
-            ambiguity: true,
-            no_escape: false,
-            terms: Vocabulary::So,
-            total_length: true,
-            positions_of_own_span: false,
-            clin_sig_allele: ClinSigAllele::PerAllele,
-            plugin_row_kinds: Arc::default(),
-            plugin_fields: Arc::default(),
-            unflagged_plugin_fields: Arc::default(),
-        }
+        let mut options = FieldOptions::default();
+        options.individual = true;
+        options.individual_zyg = true;
+        options.process_ref_homs = true;
+        options.allele_number = true;
+        options.show_ref_allele = true;
+        options.uploaded_allele = true;
+        options.include_pick = true;
+        options.variant_class = true;
+        options.minimal = true;
+        options.clinvar_somatic_classification = true;
+        options.symbol = true;
+        options.biotype = true;
+        options.canonical = true;
+        options.mane_select = true;
+        options.mane = true;
+        options.mane_plus_clinical = true;
+        options.tsl = true;
+        options.gencode_primary = true;
+        options.appris = true;
+        options.ccds = true;
+        options.protein = true;
+        options.uniprot = true;
+        options.xref_refseq = true;
+        options.gene_phenotype = true;
+        options.sift = true;
+        options.polyphen = true;
+        options.numbers = true;
+        options.domains = true;
+        options.mirna = true;
+        options.hgvs = true;
+        options.hgvsg = true;
+        options.spdi = true;
+        options.ga4gh_vrs = true;
+        options.af = true;
+        options.af_1kg = true;
+        options.af_gnomad = false;
+        options.af_gnomade = true;
+        options.af_gnomadg = true;
+        options.max_af = true;
+        options.check_frequency = true;
+        options.check_existing = true;
+        options.pubmed = true;
+        options.check_svs = true;
+        options.dont_skip = true;
+        options.overlaps = true;
+        options.nearest = true;
+        options.shift_length = true;
+        options.refseq = true;
+        options.merged = true;
+        options.use_transcript_ref = true;
+        options.bam_edited = true;
+        options.custom_sources = Vec::new();
+        options.shift_3prime = true;
+        options.shift_genomic = true;
+        options.var_synonyms = true;
+        options.regulatory = true;
+        options.cell_type = true;
+        options.transcript_version = true;
+        options.gene_version = true;
+        options.ambiguity = true;
+        options.no_escape = false;
+        options.terms = Vocabulary::So;
+        options.total_length = true;
+        options.summary_rows = false;
+        options.positions_of_own_span = false;
+        options.clin_sig_allele = ClinSigAllele::PerAllele;
+        options.plugin_row_kinds = Arc::default();
+        options.plugin_fields = Arc::default();
+        options.unflagged_plugin_fields = Arc::default();
+        options
     }
 
     /// A record inside a regulatory feature and no transcript writes its
     /// `RegulatoryFeature` row with `-` in the Gene cell and then its intergenic
     /// companion row with `-` in the Gene, Feature and Feature_type cells and
-    /// `intergenic_variant` as its consequence (`OutputFactory.pm:1986-2000`
+    /// `intergenic_variant` as its consequence (`OutputFactory.pm:1995-2009`
     /// sets no Gene, Feature or Feature_type key on the intergenic hash and
     /// `VEP_output.pm` prints `-` for an absent key; `VariationFeature.pm:822-867`
     /// orders the companion row last), in both renderers, byte for byte.
@@ -906,22 +927,22 @@ mod tests {
     fn intergenic_companion_row_prints_dashes_in_the_default_format() {
         let mut variant = InputVariant::new("21".into(), 110, 110, b"A".to_vec(), b"G".to_vec());
         variant.id = Some("reg".to_string());
-        variant.transcript_consequences.push(TranscriptConsequence {
-            feature_id: Some("ENSR_FIXTURE".into()),
-            feature_biotype: Some("enhancer".into()),
-            feature_type: FeatureType::RegulatoryFeature,
-            consequences: std::iter::once(Consequence::RegulatoryRegionVariant).collect(),
-            impact: Impact::MODIFIER,
-            feature_start: 100,
-            feature_end: 120,
-            ..Default::default()
+        variant.transcript_consequences.push({
+            let mut consequence = TranscriptConsequence::default();
+            consequence.feature_id = Some("ENSR_FIXTURE".into());
+            consequence.feature_biotype = Some("enhancer".into());
+            consequence.feature_type = FeatureType::RegulatoryFeature;
+            consequence.consequences =
+                std::iter::once(Consequence::RegulatoryRegionVariant).collect();
+            consequence.impact = Impact::MODIFIER;
+            consequence.feature_start = 100;
+            consequence.feature_end = 120;
+            consequence
         });
         variant.intergenic_overlap = true;
         variant.most_severe_consequence = Some(Consequence::RegulatoryRegionVariant);
-        let options = FieldOptions {
-            regulatory: true,
-            ..Default::default()
-        };
+        let mut options = FieldOptions::default();
+        options.regulatory = true;
         let (strings, bytes) = render_both(std::slice::from_ref(&variant), options);
         assert_eq!(bytes, strings);
         let rows: Vec<Vec<&str>> = bytes
@@ -985,13 +1006,11 @@ mod tests {
                 tc.plugin_data.clear();
             }
         }
-        let options = FieldOptions {
-            symbol: true,
-            hgvs: true,
-            af: true,
-            check_existing: true,
-            ..Default::default()
-        };
+        let mut options = FieldOptions::default();
+        options.symbol = true;
+        options.hgvs = true;
+        options.af = true;
+        options.check_existing = true;
         let (strings, bytes) = render_both(&no_plugin, options);
         assert_eq!(bytes, strings);
         assert!(strings.contains(";SYMBOL=SOD1;"));
@@ -1111,6 +1130,67 @@ mod tests {
         );
     }
 
+    /// A `--custom` key named as one of the thirteen columns prints in that
+    /// column and never in Extra (`VEP_output.pm:104-109` reads the line hash
+    /// by the column's name): every row of such a run takes its columns from
+    /// the field table, the `--summary` row included, and both renderers agree
+    /// byte for byte. A whole record's values stand under `Gene` on a row that
+    /// names no transcript, and a transcript's row holds its own gene.
+    #[test]
+    fn a_custom_key_named_as_a_fixed_column_prints_in_the_column_on_every_row() {
+        let mut options = FieldOptions::default();
+        options.custom_sources = vec![{
+            let mut source = CustomSourceInfo::default();
+            source.file = "/data/sites.bed.gz".to_string();
+            source.short_name = "Gene".to_string();
+            source
+        }];
+        let sourced = |mut record: Vec<InputVariant>| {
+            for v in &mut record {
+                v.custom_annotations = vec![CustomAnnotations::new(
+                    Arc::from("Gene"),
+                    vec![CustomRecord::new(
+                        "overlap_1".to_string(),
+                        None,
+                        Default::default(),
+                        None,
+                    )],
+                    true,
+                    None,
+                )];
+            }
+            record
+        };
+        let record_rows = sourced(record());
+        let (strings, bytes) = render_both(&record_rows, options.clone());
+        assert_eq!(bytes, strings);
+        assert_eq!(strings.lines().count(), 5);
+        for line in strings.lines() {
+            let cells: Vec<&str> = line.split('\t').collect();
+            assert_eq!(cells.len(), 14, "{line}");
+            if cells[5] == "Transcript" {
+                assert!(cells[3].starts_with("ENSG00000"), "{line}");
+            } else {
+                assert_eq!(cells[3], "overlap_1", "{line}");
+            }
+            assert!(!cells[13].contains("Gene="), "{line}");
+        }
+
+        let mut summary = record();
+        for v in &mut summary {
+            v.transcript_consequences.clear();
+            v.most_severe_consequence = None;
+        }
+        summary[0].most_severe_consequence = Some(Consequence::MissenseVariant);
+        summary[0].summary_terms = Some(smallvec::smallvec![Consequence::MissenseVariant]);
+        let (strings, bytes) = render_both(&sourced(summary), options);
+        assert_eq!(bytes, strings);
+        assert_eq!(
+            strings,
+            "rs1\tchr21:10500\t-\toverlap_1\t-\t-\tmissense_variant\t-\t-\t-\t-\t-\t-\t-\n"
+        );
+    }
+
     /// A structural row's Extra column carries OverlapBP and OverlapPC after the
     /// flag fields when `--overlaps` is off and in their flag position when it is
     /// on, as the owned-string renderer writes them.
@@ -1120,14 +1200,12 @@ mod tests {
         let (strings, bytes) = render_both(&record, FieldOptions::default());
         assert_eq!(bytes, strings);
         assert!(strings.contains("STRAND=-1;FLAGS=cds_end_NF;OverlapBP=101;OverlapPC=10.09\n"));
-        let (strings, bytes) = render_both(
-            &record,
-            FieldOptions {
-                overlaps: true,
-                symbol: true,
-                ..Default::default()
-            },
-        );
+        let (strings, bytes) = render_both(&record, {
+            let mut options = FieldOptions::default();
+            options.overlaps = true;
+            options.symbol = true;
+            options
+        });
         assert_eq!(bytes, strings);
         assert!(strings.contains(";FLAGS=cds_end_NF;SYMBOL=SOD1;OverlapBP=101;OverlapPC=10.09\n"));
     }
@@ -1177,10 +1255,8 @@ mod tests {
                 "rs1\tchr21:10500\t-\t-\t-\t-\tmissense_variant,splice_region_variant,intron_variant\t-\t-\t-\t-\t-\t-\t"
             ));
         }
-        let display = FieldOptions {
-            terms: Vocabulary::Display,
-            ..every_group()
-        };
+        let mut display = every_group();
+        display.terms = Vocabulary::Display;
         let (strings, bytes) = render_both(&record, display);
         assert_eq!(bytes, strings);
         assert!(strings.contains("\tNON_SYNONYMOUS_CODING,SPLICE_SITE,INTRONIC\t"));
@@ -1220,11 +1296,9 @@ mod tests {
         record[1].transcript_consequences = vec![unshifted];
         record[2].most_severe_consequence = Some(Consequence::IntergenicVariant);
         record[2].intergenic_shift = Some(1);
-        let options = FieldOptions {
-            shift_3prime: true,
-            shift_genomic: true,
-            ..Default::default()
-        };
+        let mut options = FieldOptions::default();
+        options.shift_3prime = true;
+        options.shift_genomic = true;
         let (strings, bytes) = render_both(&record, options);
         assert_eq!(bytes, strings);
         // The shifted row moves two bases down its reverse-strand transcript and
@@ -1267,10 +1341,8 @@ mod tests {
             Impact::MODIFIER,
         );
         non_coding.shift_length = 1;
-        let options = FieldOptions {
-            shift_3prime: true,
-            ..Default::default()
-        };
+        let mut options = FieldOptions::default();
+        options.shift_3prime = true;
         for rows in [
             vec![coding.clone(), non_coding.clone()],
             vec![non_coding.clone(), coding.clone()],
@@ -1296,11 +1368,9 @@ mod tests {
             tc.used_ref = Some(Arc::from("A"));
         }
         record[0].transcript_consequences[0].used_ref = Some(Arc::from("C"));
-        let options = FieldOptions {
-            use_transcript_ref: true,
-            process_ref_homs: true,
-            ..Default::default()
-        };
+        let mut options = FieldOptions::default();
+        options.use_transcript_ref = true;
+        options.process_ref_homs = true;
         let (strings, bytes) = render_both(&record, options);
         assert_eq!(bytes, strings);
         assert!(strings.contains("rs1\tchr21:10500\tA\tENSG00000100\tENST00000010\t"));
@@ -1362,9 +1432,10 @@ mod tests {
     /// (`VEP_output.pm:117` prints every key the record hash holds).
     #[test]
     fn nearest_prints_in_extra_on_every_row_and_empty_as_a_bare_key() {
-        let plan = ExtraFieldsPlan::new(FieldOptions {
-            nearest: true,
-            ..Default::default()
+        let plan = ExtraFieldsPlan::new({
+            let mut options = FieldOptions::default();
+            options.nearest = true;
+            options
         });
         let render = |v: &InputVariant| {
             let mut rows = Vec::new();
@@ -1403,30 +1474,27 @@ mod tests {
     }
 
     /// The default format's Gene and Feature columns carry `.<version>` under
-    /// `--gene_version` and `--transcript_version` (OutputFactory.pm:1465, 1469
-    /// at release/116.2: `ENSG00000160194.20` and `ENST00000354250.7` on the
-    /// NDUFV3 row Ensembl VEP 116.2 writes for `21 42893293 C T`), the bare ids
+    /// `--gene_version` and `--transcript_version` (OutputFactory.pm:1474, 1478
+    /// at release/116.3: `ENSG00000160194.20` and `ENST00000354250.7` on the
+    /// NDUFV3 row Ensembl VEP 116.3 writes for `21 42893293 C T`), the bare ids
     /// without the flags, and an id already versioned or a transcript without a
     /// version stays as it is.
     #[test]
     fn default_format_appends_the_versions_under_their_flags() {
         const GENE: usize = 3;
         const FEATURE: usize = 4;
-        let tc = TranscriptConsequence {
-            transcript: Some(Arc::new(Transcript {
-                stable_id: Arc::from("ENST00000354250"),
-                gene_stable_id: Arc::from("ENSG00000160194"),
-                version: Some(7),
-                gene_version: Some(20),
-                ..Transcript::default()
-            })),
-            ..Default::default()
-        };
-        let both = FieldOptions {
-            gene_version: true,
-            transcript_version: true,
-            ..Default::default()
-        };
+        let mut tc = TranscriptConsequence::default();
+        tc.transcript = Some(Arc::new({
+            let mut transcript = Transcript::default();
+            transcript.stable_id = Arc::from("ENST00000354250");
+            transcript.gene_stable_id = Arc::from("ENSG00000160194");
+            transcript.version = Some(7);
+            transcript.gene_version = Some(20);
+            transcript
+        }));
+        let mut both = FieldOptions::default();
+        both.gene_version = true;
+        both.transcript_version = true;
         let columns = default_row_columns(both.clone(), tc.clone());
         assert_eq!(columns[GENE], "ENSG00000160194.20");
         assert_eq!(columns[FEATURE], "ENST00000354250.7");
@@ -1466,11 +1534,12 @@ mod tests {
             "rs1\t21:100\t-\t-\t-\t-\tmissense_variant\t-\t-\t-\t-\t-\t-\t-\n"
         );
         let mut out = Vec::new();
-        let plan = ExtraFieldsPlan::new(FieldOptions {
-            variant_class: true,
-            symbol: true,
-            check_existing: true,
-            ..Default::default()
+        let plan = ExtraFieldsPlan::new({
+            let mut options = FieldOptions::default();
+            options.variant_class = true;
+            options.symbol = true;
+            options.check_existing = true;
+            options
         });
         render_default_record(&mut out, &[&v], &plan, &mut rows).unwrap();
         assert_eq!(

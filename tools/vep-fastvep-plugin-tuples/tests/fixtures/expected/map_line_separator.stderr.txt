@@ -1,0 +1,1 @@
+ERROR: [fastvep_plugin_tuples] tests/fixtures/maps/line_separator.tsv:2: 6 columns, not 8

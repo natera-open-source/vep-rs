@@ -1,0 +1,8 @@
+assembly,n,"multi
+line",note
+
+GRCh37,1
+GRCh38,2,"x
+y",z,extra,more
+mouse,"3"tail,"q""q",'single'
+"last, row",4,"open quote runs to the end

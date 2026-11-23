@@ -1,7 +1,7 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "divergences_classified_against": {
   "engine": "vep-rs",
@@ -10,16 +10,16 @@
   "arch": "arm64",
   "flags_passed": []
  },
- "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --grch37 [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh37",
  "fasta": "none on either side",
  "input": "variants.vcf: records from ClinVar GRCh37 (ID the ClinVar VariationID; every chromosome), 1000 Genomes phase 3 chromosome 21 (sequence and structural variants; rsID, ID-less, or the call set's SV ID), gnomAD v2.1.1 chromosome 21, gnomAD-SV v2.1 chromosome 21, and hand-built structural-variant records named synth_* (symbolic deletions, duplications, inversions, insertions and copy-number alleles, breakend pairs, multi-allelic and complex shapes); the manifest's records list carries every line",
- "generator": "scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; scripts/golden/build_golden_corpus.py classify",
+ "generator": "scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; tools/vep-golden-corpus classify",
  "sha256": {
-  "default.txt": "08adac35bdb1dd7f51e450b0ffd7c59d8d081ac3ed2e4fb28f2b016647967039",
-  "tab.txt": "c3c71ac3452a4f84f929ca9c2e3df4ad1523c06ec90f54bbed835edf7228a2a0",
-  "vcf.vcf": "06404ee5bdf50b12ef8d4daade85ef74bb532faab1055d1c394ac4b65dbf7c0f",
-  "json.jsonl": "6ea392485c12bbdac9f37b9b5ae9ccd40b69f3e9e7d300c6eaaa27033ce8d128"
+  "default.txt": "0c183866259e5a90afd79a0e60e8dbdb274563f3c78b86bfd49463235136d4dd",
+  "tab.txt": "bbbb09929f5433c0a8399c593597eb8153656204a285fb98474632e340aa4acd",
+  "vcf.vcf": "9a7d3eafcb579c44654e2b12163d9c931272eab79b28c4492ffeeaf73b611bbf",
+  "json.jsonl": "55d9e80b7ad16758be1c35099be85009ac5dc4077e1f72b355f109c2757a59f1"
  },
  "variants_vcf_sha256": "3f879f671744354bb672900a35240ea132caf0411bc4f5bdf3b9d10bb684d849",
  "pruned_cache": {
@@ -79,18 +79,23 @@
  },
  "flag_sets": {
   "overlaps": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
-   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --overlaps [--tab|--vcf]",
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --grch37 --overlaps [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh37",
    "fasta": "none on either side",
    "input": "variants.vcf",
    "sha256": {
-    "tab.txt": "e53e9e031dc19f18151f12541ab448e0b97bb2d5a5c1d60c42d92957dafbcada",
-    "vcf.vcf": "68bcddfc600fb93ade7baeed803046520d2bb62013f15878b28601a6298f6af2"
-   }
+    "tab.txt": "a23aa8ba88e2423f9375f2b7b1ac4ed6da521760903a787b0e0dcf7cd1791ce7",
+    "vcf.vcf": "f9463f7ea8318b00de0867286f31f81df00e9b8b36e2d9d96ab55bfac83eec14"
+   },
+   "flags": [
+    "--grch37",
+    "--overlaps"
+   ],
+   "expected_dir": "expected_overlaps"
   }
  }
 }

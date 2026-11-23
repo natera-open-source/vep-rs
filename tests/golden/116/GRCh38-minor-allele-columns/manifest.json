@@ -13,7 +13,7 @@
  "covers": [
   "minor-allele-columns"
  ],
- "suites": {
+ "datasets": {
   "ma": {
    "reference": "candidates.txt",
    "input": "candidates.vcf",
@@ -214,63 +214,63 @@
  },
  "records": [
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t18262789\t.\tAGGTAT\tA\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t18267967\t.\tA\tAC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t18279035\t.\tG\tGA\t.\t.\t.",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t18294314\t.\tG\tA\t.\t.\t.",
    "combinations": [
     "synonymous_variant"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t18294613\t.\tA\tG,T\t.\t.\t.",
    "combinations": [
     "stop_gained"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t18294614\t.\tCACT\tC\t.\t.\t.",
    "combinations": [
     "inframe_deletion"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t18297804\t.\tA\tC\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t18297829\t.\tC\tA\t.\t.\t.",
    "combinations": [
     "splice_region_variant,synonymous_variant"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t18315144\t.\tA\tG,T\t.\t.\t.",
    "combinations": [],
    "strata": [
@@ -278,49 +278,49 @@
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t18326575\t.\tG\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t18329296\t.\tT\tA,C\t.\t.\t.",
    "combinations": [
     "splice_acceptor_variant"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t18341410\t.\tT\tC,G\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_donor_region_variant"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t18343656\t.\tC\tA,T\t.\t.\t.",
    "combinations": [
     "splice_region_variant,stop_gained"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t18343953\t.\tA\tG\t.\t.\t.",
    "combinations": [
     "splice_donor_variant"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t18353051\t.\tA\tT\t.\t.\t.",
    "combinations": [
     "missense_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t18353758\t.\tG\tA,C\t.\t.\t.",
    "combinations": [],
    "strata": [
@@ -328,35 +328,35 @@
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t18353862\t.\tAG\tA\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t18365141\t.\tG\tA\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,incomplete_terminal_codon_variant"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t18372228\t.\tC\tT\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t18372324\t.\tC\tT\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t18404183\t.\tT\tA,C\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -364,105 +364,105 @@
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t20609999\t.\tC\tA,T\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t22009153\t.\tC\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t23984325\t.\tC\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t25639732\t.\tG\tC,T\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,NMD_transcript_variant"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t25661884\t.\tA\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t25683934\t.\tC\tA,T\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t25683946\t.\tA\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t25683949\t.\tG\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t25689864\t.\tA\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t25689894\t.\tG\tA,C\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,synonymous_variant"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t25689920\t.\tG\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,stop_gained"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t25702172\t.\tA\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,splice_region_variant,synonymous_variant"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t25702217\t.\tAGCCCGC\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_deletion"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t25702271\t.\tT\tG\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t25702272\t.\tA\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_donor_region_variant",
@@ -471,21 +471,21 @@
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t25705981\t.\tG\tA\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t25706031\t.\tG\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t25706084\t.\tC\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant",
@@ -493,7 +493,7 @@
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t25709431\t.\tT\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant",
@@ -501,28 +501,28 @@
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t25712374\t.\tA\tC\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t25714641\t.\tA\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "ma",
+   "dataset": "ma",
    "vcf": "21\t27492190\t.\tC\tT\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant"
    ]
   }
  ],
- "multi_allelic_per_suite": 2,
+ "multi_allelic_per_dataset": 2,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "divergences": [],

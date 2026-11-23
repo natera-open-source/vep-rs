@@ -1,22 +1,22 @@
 # An infinite or not-a-number value written as a bare token in the JSON output
 
-**The defect in one sentence.** In the JSON output format, Ensembl VEP 116.2 turns every value its number test admits into a Perl number before encoding, and the encoder writes an infinite or not-a-number double as the bare token `inf`, `-inf` or `nan`. A plugin or annotation value spelling an infinity (`Inf`, `Infinity`), a not-a-number (`NaN`) or a number past the double's range (`1e400`, or an integer of 310 or more digits) therefore leaves the record's line outside the JSON grammar. vep-rs writes such a value as a JSON string holding the cell's text.
+**The defect in one sentence.** In the JSON output format, Ensembl VEP 116.3 turns every value its number test admits into a Perl number before encoding, and the encoder writes an infinite or not-a-number double as the bare token `inf`, `-inf` or `nan`. A plugin or annotation value spelling an infinity (`Inf`, `Infinity`), a not-a-number (`NaN`) or a number past the double's range (`1e400`, or an integer of 310 or more digits) therefore leaves the record's line outside the JSON grammar. vep-rs writes such a value as a JSON string holding its text.
 
 **Why this is a defect.** The JSON grammar has no infinity and no not-a-number: RFC 8259 section 6 permits no numeric value outside its grammar and names those two. The encoder's own documentation says such values "cannot be represented in JSON, and it is an error to pass those in", and advises against numifying a value that merely looks like a number "(including infinities/NaN), without validating". Ensembl VEP numifies on the number test alone.
 
-A reader that follows the grammar refuses the whole line, so every field of the record is lost to it, not the one value. The token also loses the text: `Infinity` and `1e400` both become `inf`, and `-NaN` becomes `nan`. The default, tab and VCF outputs of the same run print the cell as the table wrote it.
+A reader that follows the grammar refuses the whole line, so every field of the record is lost to it, not the one value. The token also loses the text: `Infinity` and `1e400` both become `inf`, and `-NaN` becomes `nan`. The default, tab and VCF outputs of the same run print the text itself, a cell as the table wrote it and a score as the plugin printed it.
 
-**What vep-rs does instead.** vep-rs writes the value as a JSON string holding the cell's text, `"Inf"`, `"NaN"` or `"1e400"`, the text its default, tab and VCF outputs print, and every line it writes is a JSON document. A value whose double is finite is a number in both engines, with the blanks and the forms [the JSON page](../output/json.md#field-details) describes.
+**What vep-rs does instead.** vep-rs writes the value as a JSON string holding its text, `"Inf"`, `"NaN"` or `"1e400"`, the text its default, tab and VCF outputs print, and every line it writes is a JSON document. A value whose double is finite is a number in both engines, with the blanks and the forms [the JSON page](../output/json.md#field-details) describes.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2; the `JSON` 4.11 and `JSON::XS` 4.04 modules its image carries):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3; the `JSON` 4.11 and `JSON::XS` 4.04 modules its image carries):
 
 - `Bio/EnsEMBL/VEP/OutputFactory/JSON.pm`, line 288, `get_all_output_hashes_by_InputBuffer`: `numberify($hash, \%NUMBERIFY_EXEMPT)` runs over every output hash before it is encoded; lines 114-121 exempt the identifier keys alone; lines 195-196 encode the hash with a plain `JSON->new`.
 - `Bio/EnsEMBL/VEP/Utils.pm`, lines 221-247, `numberify`: a hash value (line 231) or an array element (line 241) that `looks_like_number` admits is replaced by itself plus zero. Perl's number test admits an infinity and a not-a-number in any letter case with an optional sign, the `1.#INF` and `1.#IND` spellings, and any decimal or exponent form, and the addition makes an infinite double of a number past the double's range.
 - `JSON::XS`, the backend `JSON` selects: a floating-point value is written through the C library's `%g` conversion with no check that it is finite. That conversion prints an infinite double `inf` or `-inf` and a not-a-number `nan`, in lower case where Perl's own text for the same values is `Inf`, `-Inf` and `NaN`. The module's documentation of its number mapping (`JSON/XS.pm`, "PERL -> JSON") states the values cannot be represented and are an error to pass in.
 
-**What correcting it would change.** Every line of the JSON output would be a JSON document whatever a plugin's table holds, and the value would need a representation the grammar has: the text as a string, as vep-rs writes it, or `null`.
+**What correcting it would change.** Every line of the JSON output would be a JSON document whatever a plugin's table holds or a plugin prints, and the value would need a representation the grammar has: the text as a string, as vep-rs writes it, or `null`.
 
-**The class it produces.** `json_non_finite_number_token`, documented: in the JSON format, a member whose value Ensembl VEP writes as the bare token `inf`, `-inf` or `nan` and vep-rs as a string. The row's plugin or custom-annotation cell spells an infinity, a not-a-number, or a number whose double overflows. No committed table carries such a cell, so no manifest names the class and no comparator applies it; the concordance figures score consequence sets and never see the field. The default, tab and VCF outputs carry no difference.
+**The class it produces.** `json_non_finite_number_token`, documented: in the JSON format, a member whose value Ensembl VEP writes as the bare token `inf`, `-inf` or `nan` and vep-rs as a string. The row's plugin or custom-annotation value, a table's cell or a score the plugin prints, spells an infinity, a not-a-number, or a number whose double overflows. No committed table carries such a cell and no committed run prints such a score, so no manifest names the class and no comparator applies it; the concordance figures score consequence sets and never see the field. The default, tab and VCF outputs carry no difference.
 
 Tuple, pair, set aside, charged and the other scoring terms are defined in [How to read the counts](../intended-divergences.md#how-to-read-the-counts).
 
@@ -28,7 +28,7 @@ Tuple, pair, set aside, charged and the other scoring terms are defined in [How 
 
 In the JSON format both engines write a value that reads as a number as a JSON number, `0.5` for a `0.5` cell and `93` for a `93 ` cell, and anything else as a string. Ensembl VEP decides with Perl's `looks_like_number`, which admits every spelling Perl's own numeric conversion accepts. Besides integers, decimals and exponent forms, those are the words `Inf`, `Infinity` and `NaN` in any letter case with an optional sign, and the ten bytes `0 but true`, Perl's idiom for a true zero. vep-rs reads the same spellings and asks one more question, whether the number is finite.
 
-ClinPred's plugin writes its table's fifth cell as the row's `ClinPred` value without reading it as a number (`ClinPred.pm` lines 127 and 133), so the table decides the spelling the JSON writer meets. Any plugin or custom annotation whose cell reaches the output as text has the same path.
+ClinPred's plugin writes its table's fifth cell as the row's `ClinPred` value without reading it as a number (`ClinPred.pm` lines 127 and 133), so the table decides the spelling the JSON writer meets. Any plugin or custom annotation whose cell reaches the output as text has the same path. So does a score a plugin prints: MaxEntScan writes `Inf`, `-Inf` or `NaN` for a score over a matrix entry that is an infinity or a not-a-number (`MaxEntScan.pm` line 245), and Ensembl VEP writes `"maxentscan_ref":inf` where vep-rs writes `"maxentscan_ref":"Inf"`.
 
 ### 1.2 The record
 
@@ -62,7 +62,7 @@ Both engines run `--plugin ClinPred,file=<table> --json` with the corpus's cache
 
 The `clinpred` member of each transcript entry, by record and allele:
 
-| Record and allele | Cell | Ensembl VEP 116.2 | vep-rs |
+| Record and allele | Cell | Ensembl VEP 116.3 | vep-rs |
 | --- | --- | --- | --- |
 | `stop_lost_rev`, `A` | `Inf` | `"clinpred":inf` | `"clinpred":"Inf"` |
 | `missense_rev`, `C` | `-Inf` | `"clinpred":-inf` | `"clinpred":"-Inf"` |
@@ -93,7 +93,7 @@ Before a record's hash is encoded, `numberify` visits every value and replaces e
 
 `JSON::XS` then encodes the hash. A string value is quoted; a double is handed to the C library's `%g` conversion, which has no notion of the JSON grammar and prints `inf`, `-inf` or `nan`. The output factory passes a plain `JSON->new` with no option that would refuse or convert such a value, and nothing between the plugin's cell and the printed line reads the text back.
 
-Source (`ensembl-vep` at release/116.2):
+Source (`ensembl-vep` at release/116.3):
 
 - `Bio/EnsEMBL/VEP/OutputFactory/JSON.pm`, lines 114-121: the exempt keys; line 288: the `numberify` call; lines 195-196: the encoder.
 - `Bio/EnsEMBL/VEP/Utils.pm`, lines 231 and 241: the `+ 0` on every value `looks_like_number` admits.
@@ -116,4 +116,4 @@ Ensembl VEP's lines for five of the seven records are refused by any reader that
 
 ### 1.7 How the comparator treats this class
 
-No comparator applies the class. No committed table carries a cell spelling an infinity, a not-a-number or an overflowing number, so no committed flag set meets the shape and no manifest names the class. The concordance figures score consequence sets and never see a plugin field.
+No comparator applies the class. No committed table carries a cell spelling an infinity, a not-a-number or an overflowing number, and no committed run prints such a score, so no committed flag set meets the shape and no manifest names the class. The concordance figures score consequence sets and never see a plugin field.

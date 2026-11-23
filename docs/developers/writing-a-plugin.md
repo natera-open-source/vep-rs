@@ -157,9 +157,9 @@ is optional.
 extern "C" fn() -> u32
 ```
 
-Returns `2`; any other value is a load error. A library built against version 1
-is refused with `incompatible plugin ABI version: expected 2, got 1`. Version 1
-had no header symbol and skipped `init` when no parameter was given.
+Returns `2`; any other value is a load error. A library built against interface
+number 1 is refused with `incompatible plugin ABI version: expected 2, got 1`.
+That interface had no header symbol and skipped `init` without a parameter.
 
 #### `vep_plugin_create`
 
@@ -221,7 +221,7 @@ return or text that is not such an array is a load error.
 
 The keys may come in any order. The host sorts each plugin's keys and lists
 plugins in load order, as Ensembl VEP's `get_plugin_headers` does
-(`OutputFactory.pm` lines 2407-2421). The built-in plugins come before the
+(`OutputFactory.pm` lines 2416-2430). The built-in plugins come before the
 shared libraries whatever the `--plugin` order; Ensembl VEP, with one kind of
 plugin, follows the command line throughout.
 
@@ -255,7 +255,7 @@ included.
 The feature type is the one interest check a shared library has. Ensembl VEP
 also asks each plugin whether it takes the variant's kind, `VariationFeature` or
 `StructuralVariationFeature` (`check_variant_feature_type`, `OutputFactory.pm`
-line 2220). The ABI has no such declaration, so a shared library sees sequence
+line 2229). The ABI has no such declaration, so a shared library sees sequence
 and structural variants alike and reads `is_structural` in the variant document
 when it wants one kind.
 
@@ -291,7 +291,7 @@ overlapping no transcript, with or without regulatory or motif entries. There
 the consequence document is `null`. A plugin that listed `Transcript` alone
 never sees a regulatory, motif or intergenic row. This is the
 `check_feature_type` gate of `OutputFactory.pm` `run_plugins` (lines
-2220-2223), where a feature-less row is checked as `Intergenic`.
+2229-2232), where a feature-less row is checked as `Intergenic`.
 
 The two JSON documents are the serde serialization of `TranscriptConsequence`
 and `InputVariant`.
@@ -418,7 +418,7 @@ The sequence-variant fields:
 | `minimised`, `original_allele_string`, `original_start`, `original_end` | Whether the record was minimised under `--minimal`, and the alleles and coordinates before it; on an allele of a split multi-allelic record the record's span |                                                           |
 | `rejoin_key_prefix`                                                   | On an allele after the first of a `--minimal` split, the trimmed allele string and `_` the output sorts its rows by; present only then | `"-/A_"`                                                 |
 | `intergenic_shift`                                                    | The bases `--shift_3prime 1` moved an insertion or deletion that overlaps no transcript; present only then |                                             |
-| `raw_input`, `input_record`                                           | The input line as [the JSON output's `input`](../output/json.md#the-record-object) stores it (trailing empty columns dropped, a structural record's QUAL, FILTER and INFO filled with `.`), and the ordinal of the record it came from | |
+| `raw_input`, `input_record`                                           | The input line as [the JSON output's `input`](../output/json.md#the-record-object) stores it (trailing empty columns dropped, a structural record's QUAL, FILTER and INFO filled with `.`), and a number the alleles of one record share: for a VCF or Ensembl-format record, the line number the run's warnings give it | |
 | `summary_terms`                                                       | The `--summary` or `--most_severe` row's terms; present on the one allele of a record that carries that row |                                            |
 | `intergenic_pick`                                                     | Whether a `--flag_pick` variant marked the allele's intergenic row                          | `true`                                                    |
 | `uploaded_allele_string`, `record_allele_string_multi`, `input_line_name` | The `Uploaded_variation` helpers; see below                                             |                                                           |
@@ -454,11 +454,11 @@ and is absent for a sequence variant.
 
 ### What `run` returns, and where it lands
 
-The returned string must be a JSON object. Each entry becomes one field on that
-row. A string value is stored verbatim and any other value as its JSON text
-(`0.42`, `null`). A key already present, from a built-in or an earlier shared
-library, is overwritten. On a consequence row the fields are the consequence's;
-on an intergenic row they are the variant's, which that row prints.
+The returned string must be a JSON object, one field per entry. A string is
+stored verbatim, another value as JSON text (`0.42`, `null`). An empty string
+prints as the undefined value (`KEY=`, tab `-`, no JSON key). A key a built-in
+or earlier library wrote is overwritten. On a consequence row the fields are
+the consequence's; on an intergenic row, the variant's, which that row prints.
 
 The fields appear in the Extra column of the default output format and in the
 per-consequence objects of `--json`. There, as for every other field, the key is
@@ -475,11 +475,11 @@ column and `--json` only.
 A key a plugin returns that names a column or field of the output (`Codons`,
 `TSL`, `SYMBOL`) replaces that value on the row in every format, as Ensembl
 VEP's `$line_hash->{$key} = $plugin_results->{$key}` (`OutputFactory.pm` line
-2231) does after the core fields set theirs. A declared flag field the plugin
+2240) does after the core fields set theirs. A declared flag field the plugin
 did not write keeps the row's own value under its flag and is empty without it.
-A Parquet column keeps the type its name gives it
-([Parquet output](../output/parquet.md)), so a value outside that type, a list
-in the INT32 `TSL` column, is stored NULL. Keys carrying the plugin's name, as
+In Parquet a declared key is a STRING column that keeps a list as written
+([Parquet output](../output/parquet.md)); an undeclared `TSL` stays INT32,
+where a list is stored NULL. Keys carrying the plugin's name, as
 the canonical plugins' do (`CADD_PHRED`, `SpliceAI_pred`), collide with nothing.
 
 #### When a `run` call fails
@@ -490,11 +490,11 @@ plugin's fields alone and writes the warning `Plugin '<name>' went wrong:
 return a hashref, output ignored!` and is dropped the same way. The row is kept,
 the plugins after it still run on it, and the run goes on, as Ensembl VEP keeps
 the line when a plugin returns something other than a hash or dies
-(`OutputFactory.pm` lines 2226-2245). A warning text is written once per run,
+(`OutputFactory.pm` lines 2235-2254). A warning text is written once per run,
 so a plugin that fails the same way on every row draws one line.
 
 Ensembl VEP reads a plugin's `undef` return as a request to drop the line from
-the output (`OutputFactory.pm` lines 2238-2240, the `BaseVepFilterPlugin`
+the output (`OutputFactory.pm` lines 2247-2249, the `BaseVepFilterPlugin`
 mechanism). The ABI has no filter return, so a shared library cannot remove a
 row, and a defect in one costs its own fields rather than the run.
 
@@ -562,7 +562,7 @@ its own, the retry therefore only counts.
 
 `run_batch()` runs every row and reports the first failure after the loop.
 Ensembl VEP's per-line `eval` of each plugin's `run` (`OutputFactory.pm` lines
-2225-2245) likewise costs a dying line its fields alone.
+2234-2254) likewise costs a dying line its fields alone.
 
 The run ends with one `Plugin '<Name>' went wrong: <reason>; <footprint>; <N>
 variants affected` line per failed plugin, from its first failing batch. After a
@@ -611,6 +611,9 @@ use indexmap::IndexMap;
 
 pub struct MyPlugin { /* fields */ }
 
+// The trait is closed to this crate; this line admits the type
+impl crate::traits::sealed::Sealed for MyPlugin {}
+
 impl BuiltinPlugin for MyPlugin {
     fn name(&self) -> &str { "MyPlugin" }
     fn header_info(&self) -> Vec<(String, String)> {
@@ -628,6 +631,7 @@ impl BuiltinPlugin for MyPlugin {
         // Return key-value pairs for the Extra column
         Ok(IndexMap::new())
     }
+    // run_naming_empty_strings() names the fields run() leaves as empty strings
     // Tabix plugins add prefetch() and annotate() for batch I/O; see below
 }
 ```
@@ -657,9 +661,9 @@ nothing on a structural variant's rows.
 store as built. `TabixAnnotator::keeping_trailing_whitespace` removes each
 record line's line end alone, as Ensembl VEP's tabix iterator does, so an empty
 or whitespace trailing cell stays a cell. Every store-backed built-in passes it,
-gnomADc included, so a row reads alike through the table and a store. The
-trimming reader (`TabixAnnotator::open_plugin_table`) suits a plugin reading
-through tabix alone that never prints a row's last cell (LOEUF).
+gnomADc included, so a row reads alike through the table and a store. LOEUF,
+reading through tabix alone, sets it on its own reader
+(`TabixAnnotator::open_plugin_table`); no built-in takes the trimming default.
 
 ```rust
 use crate::annotation_store::{open_best_store_with, AnnotationStore};
@@ -764,21 +768,22 @@ With `--plugins` set, the harness:
   argument strings, the data directory and a size-and-mtime fingerprint of its
   files. Cached outputs from another plugin configuration or parameter are
   therefore not reused.
-- after the consequence comparison, runs `compare_plugin_outputs.py` per plugin
-  and writes `reports/plugin_concordance.json` (per plugin: `match`, `mismatch`,
-  unrounded `concordance_pct`, plus `tolerance`, `min_annotated`, `file_count`
-  and per-file `results`).
+- after the consequence comparison, runs `vep-plugin-pairs compare` and writes
+  `reports/plugin_concordance.json` (per plugin: `match`, `mismatch`, unrounded
+  `concordance_pct`, plus `tolerance`, `min_annotated`, `file_count` and
+  per-file `results`).
 
 A failing plugin makes the harness exit non-zero. Unless `--no-perf` is passed,
 a baseline vep-rs run without plugins is also timed on the first prepared input.
 `reports/perf/plugin_timing.json` records the plugin overhead and the wall time
 of Ensembl VEP with plugins over that of vep-rs with plugins.
 
-`compare_plugin_outputs.py` also runs standalone on two default-format outputs:
+`vep-plugin-pairs compare` also runs standalone on two default-format outputs:
 
 ```bash
-python3 scripts/concordance/compare_plugin_outputs.py \
-    --perl-output perl_vep_with_cadd.txt \
+cargo run -q --release --locked \
+    --manifest-path tools/vep-plugin-pairs/Cargo.toml -- compare \
+    --perl-output ensembl_vep_with_cadd.txt \
     --rust-output rust_vep_with_cadd.txt \
     --plugins CADD \
     --fields CADD_PHRED,CADD_RAW
@@ -809,8 +814,8 @@ plugin the bgzipped `human_ancestor.fa.gz` (vep-rs reads either form).
 compressed copy and all three indexes are present.
 
 The `END_TRUNC` cutoff differs in sign between the two upstream branches (`-58`
-on `grch38`, `+180` on `master`). vep-rs derives it from `--assembly`, so pass
-that flag rather than `gerp_end_trunc_cutoff=`. Compare `LoF` and `LoF_filter`
+on `grch38`, `+180` on `master`). vep-rs derives it from the run's assembly, so
+pass `--assembly`, not `gerp_end_trunc_cutoff=`. Compare `LoF` and `LoF_filter`
 only (`--fields LoF,LoF_filter --tolerance 0`): `LoF_info` and `LoF_flags` match
 on GRCh38 without bigWig zoom levels; with them `GERP_DIST` differs.
 

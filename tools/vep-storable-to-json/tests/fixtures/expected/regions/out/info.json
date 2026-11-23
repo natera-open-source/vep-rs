@@ -1,0 +1,11 @@
+{
+   "assembly" : "ASM1",
+   "contig_order" : [
+      "1",
+      "2",
+      "MT",
+      "scaffold_a"
+   ],
+   "source_versions" : {},
+   "species" : "made_up"
+}

@@ -1,0 +1,5 @@
+location	allele	feature	consequence_set	source	file_name	mismatch_type
+1:11	A	T1	x	extra_in_rust	o.txt	true_extra
+1:12	A	T2	x	extra_in_rust	o.txt	true_extra
+1:13	A	T3	x	extra_in_rust		true_extra
+1:14	A	T4	x	missing_in_rust	p.txt	true_missing

@@ -1,0 +1,14 @@
+shape	pos	ref	alts	location	allele	read	bases
+three bases replaced by five	100998	ACG	GTTCA	7:100998-101000	GTTCA	yes	ACG
+three bases replaced by five behind a shared first base	100997	TACG	TGTTCA	7:100998-101000	GTTCA	yes	ACG
+one base replaced by one	101000	A	G	7:101000	G	yes	A
+the second of two alternates	100998	ACG	TTT,GTTCA	7:100998-101000	GTTCA	yes	ACG
+a pure insertion	100999	A	AGTT	7:100999-101000	GTT	yes	
+a pure insertion behind two shared bases	100998	AC	ACGTT	7:100999-101000	GTT	yes	
+a deletion	100997	TACG	T	7:100998-101000	-	yes	ACG
+lower-case alleles	100998	acg	gttca	7:100998-101000	GTTCA	yes	ACG
+an alternate that writes no such row	100998	ACG	GTTCAT	7:100998-101000	GTTCA	no	
+a Location past the record's bases	100998	ACG	GTTCA	7:100999-101001	GTTCA	no	
+two alternates that read the row differently	100999	AC	GTT,AGTTC	7:100999-101000	GTT	no	
+an allele that is not a sequence	100998	ACG	<DEL>	7:100998-101000	deletion	no	
+a Location that names no whole positions	100998	ACG	GTTCA	7:100998-101000.5	GTTCA	no	

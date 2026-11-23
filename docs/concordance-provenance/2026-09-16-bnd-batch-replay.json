@@ -128,7 +128,7 @@
     ],
     "max_sv_size_default": 10000000
   },
-  "purpose": "Show that Perl VEP's annotation of a breakend spanning more than its --max_sv_size default depends on the other records in its batch and on --fork, by annotating one such record under controlled batch compositions.",
+  "purpose": "Show that Ensembl VEP's annotation of a breakend spanning more than its --max_sv_size default depends on the other records in its batch and on --fork, by annotating one such record under controlled batch compositions.",
   "reading": "Alone, the record yields 0 rows: VEP skips a variant longer than --max_sv_size unless another variant of the same batch has already loaded overlapping transcripts. Inside its 82-record neighbourhood it yields 22, and with --max_sv_size raised above its span 1281, which is every transcript it overlaps. On the whole file the count follows the fork setting, 649 at --fork 1, 224 at --fork 4 and 50 at --fork 16, because forking partitions the batch and each partition loads its own transcripts. vep-rs's independence from batch composition on this shape is asserted by test_annotate_batch_large_bnd_is_batch_independent in crates/vep-cli/src/runner.rs, which annotates a breakend of this span alone and with a neighbour and requires the same transcript set; this record measures VEP only.",
   "record": "giant_breakend_batch_replay",
   "variant": {

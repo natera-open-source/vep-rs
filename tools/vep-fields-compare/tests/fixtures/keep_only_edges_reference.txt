@@ -1,0 +1,7 @@
+#Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	Extra
+rs100	1:100	T	ENSG1	ENST1	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1
+r1	1:700	T	-	ENSR1	RegulatoryFeature	regulatory_region_variant	-	-	-	-	-	-	BIOTYPE=promoter
+m1	1:700	T	-	ENSM1	 MotifFeature 	TF_binding_site_variant	-	-	-	-	-	-	MOTIF_POS=3
+r2	1:800	T	-	ENSR2	regulatoryfeature	regulatory_region_variant	-	-	-	-	-	-	BIOTYPE=promoter
+r3	1:900	T	-	ENSR3	RegulatoryFeature
+r4	1:950	T	-	ENSR4	RegulatoryFeature	regulatory_region_variant

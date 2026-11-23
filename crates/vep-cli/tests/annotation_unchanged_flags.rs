@@ -31,7 +31,7 @@ const RECORDS: &str = "\
 
 /// The columns `--regulatory` declares, the `regulatory` entry of `@FLAG_FIELDS`
 /// (`Constants.pm:136`): `BIOTYPE`, filled only under `--biotype`
-/// (`OutputFactory.pm:1580`), then the motif columns.
+/// (`OutputFactory.pm:1589`), then the motif columns.
 const REGULATORY_COLUMNS: [&str; 6] = [
     "BIOTYPE",
     "MOTIF_NAME",

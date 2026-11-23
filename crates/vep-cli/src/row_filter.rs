@@ -5,7 +5,7 @@
 //! record once every allele of it is annotated and before the pick family.
 //!
 //! Ensembl VEP applies both inside `get_all_VariationFeatureOverlapAlleles`
-//! (`OutputFactory.pm:477-516` at release/116.2) and its structural-variant
+//! (`OutputFactory.pm:477-516` at release/116.3) and its structural-variant
 //! twin (`:534-561`), before the pick family runs over what is left (`:514`,
 //! `:560`): a record that overlaps no transcript has no row at all under
 //! `--no_intergenic` (`:482`, `:540`), and under `--coding_only` every overlap
@@ -16,7 +16,7 @@
 //!
 //! A `--minimal` split record passes the filters twice: once per split feature
 //! over its own span, as the rejoin builds each feature's rows before it merges
-//! them (`:2289`, `:2303`), and again as the rejoined record. The second pass
+//! them (`:2298`, `:2312`), and again as the rejoined record. The second pass
 //! decides the rows and reads the CDS coordinates cached on each transcript
 //! overlap, which the default and tab factories clear after the rejoin
 //! (`:297-302`), so they are mapped again over the record's restored span, and
@@ -26,8 +26,9 @@
 //! cached the `REF_ALLELE` every row of the record prints (`:1357`,
 //! VariationFeature.pm:1533-1539).
 //!
-//! Perl citations name modules of ensembl-vep release/116.2 (`Bio/EnsEMBL/VEP/...`)
-//! and of ensembl-variation release/116 (`Bio/EnsEMBL/Variation/...`).
+//! Ensembl VEP source citations name modules of ensembl-vep release/116.3
+//! (`Bio/EnsEMBL/VEP/...`) and of ensembl-variation release/116
+//! (`Bio/EnsEMBL/Variation/...`).
 
 use vep_core::consequence::{Consequence, FeatureType, TranscriptConsequence};
 use vep_core::variant::InputVariant;
@@ -35,6 +36,7 @@ use vep_core::variant::InputVariant;
 /// The two row filters, each a command-line flag, and the span a row of a
 /// `--minimal` split answers `affects_cds` over, which follows the output format.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct RowFilters {
     pub coding_only: bool,
     pub no_intergenic: bool,
@@ -46,7 +48,7 @@ pub struct RowFilters {
 
 impl RowFilters {
     /// Whether either filter changes a record.
-    pub fn any_active(self) -> bool {
+    pub(crate) fn any_active(self) -> bool {
         self.coding_only || self.no_intergenic
     }
 }
@@ -56,7 +58,7 @@ impl RowFilters {
 /// (`:490-502`). A `--minimal` split record also learns whether its first
 /// feature wrote a row before the rejoin
 /// ([`InputVariant::split_first_feature_rowless`]).
-pub fn apply_to_record(record: &mut [InputVariant], filters: RowFilters) {
+pub(crate) fn apply_to_record(record: &mut [InputVariant], filters: RowFilters) {
     if !filters.any_active() {
         return;
     }
@@ -113,7 +115,7 @@ pub fn apply_to_record(record: &mut [InputVariant], filters: RowFilters) {
 /// overlap that cannot answer `affects_cds`, `:494-495`); under `--coding_only` a
 /// reference row of a feature with no alternate writes none and any other allele
 /// needs a transcript row that `affects_cds`. The first pass over a split
-/// feature (`OutputFactory.pm:2289`) is this with `own_span` set.
+/// feature (`OutputFactory.pm:2298`) is this with `own_span` set.
 fn writes_a_row(
     variant: &InputVariant,
     has_alternate: bool,
@@ -223,7 +225,7 @@ const CODING_TERMS: [Consequence; 13] = [
 /// ([`TranscriptConsequence::own_span_positions`]). The frameshift-intron test
 /// reads the intron effects cached on the allele's own span either way
 /// (`:656-665`), so the coding term stands for it on both.
-pub fn affects_cds(
+pub(crate) fn affects_cds(
     variant_start: u64,
     variant_end: u64,
     tc: &TranscriptConsequence,
@@ -269,21 +271,18 @@ mod tests {
         cds_position: Option<&str>,
         cds_length: Option<u32>,
     ) -> TranscriptConsequence {
-        let mut transcript = Transcript {
-            stable_id: id.into(),
-            gene_stable_id: "ENSG1".into(),
-            ..Transcript::default()
-        };
+        let mut transcript = Transcript::default();
+        transcript.stable_id = id.into();
+        transcript.gene_stable_id = "ENSG1".into();
         crate::runner::set_lengths(&mut transcript, cds_length, 900);
-        TranscriptConsequence {
-            transcript: Some(Arc::new(transcript)),
-            consequences,
-            impact: Impact::MODIFIER,
-            cds_position: cds_position.map(str::to_string),
-            feature_start: 1000,
-            feature_end: 5000,
-            ..Default::default()
-        }
+        let mut consequence = TranscriptConsequence::default();
+        consequence.transcript = Some(Arc::new(transcript));
+        consequence.consequences = consequences;
+        consequence.impact = Impact::MODIFIER;
+        consequence.cds_position = cds_position.map(str::to_string);
+        consequence.feature_start = 1000;
+        consequence.feature_end = 5000;
+        consequence
     }
 
     /// An allele at 21:3000 with the rows `tcs`, intergenic when `tcs` is empty.
@@ -453,7 +452,7 @@ mod tests {
     /// for a frameshift intron inside the coding region) reach the row with no
     /// CDS_position and a coding term: `coding_sequence_variant` where no
     /// specific predicate fires, else the specific term alone, as Ensembl VEP
-    /// 116.2 writes `start_lost,…,stop_retained_variant,5_prime_UTR_variant,
+    /// 116.3 writes `start_lost,…,stop_retained_variant,5_prime_UTR_variant,
     /// 3_prime_UTR_variant,intron_variant` with CDS_position `-` for a deletion
     /// from one untranslated exon segment to another, and keeps the row under
     /// `--coding_only`.
@@ -533,7 +532,7 @@ mod tests {
     /// `Utils/VariationEffect.pm:169-178`) has a CDS coordinate for every CDS
     /// exon when the transcript is translated, and none when it is not
     /// (`TranscriptMapper::genomic2cds` returns one gap for a transcript with no
-    /// coding start), so Ensembl VEP 116.2 keeps `transcript_ablation`,
+    /// coding start), so Ensembl VEP 116.3 keeps `transcript_ablation`,
     /// `transcript_amplification` and `coding_transcript_variant` rows of a
     /// protein-coding transcript under `--coding_only` and drops those of a
     /// lncRNA.
@@ -627,7 +626,7 @@ mod tests {
     /// for the default and tab factories and over its own for the VCF and JSON
     /// ones: of a record whose first allele is an intronic SNV two bases before a
     /// coding exon and whose second is a deletion reaching the CDS, as Ensembl
-    /// VEP 116.2 writes `21 10542393 GTACG CTACG,G` under `--minimal
+    /// VEP 116.3 writes `21 10542393 GTACG CTACG,G` under `--minimal
     /// --coding_only`, both rows stay in the default output and the deletion's
     /// alone in the VCF. The SNV's feature, judged on its own span, wrote no row
     /// before the rejoin, so every row of the record is marked for the record's

@@ -1,0 +1,22 @@
+##fileformat=VCFv4.2
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+7	100998	made_up_0	ACG	GTTCA	.	.	.
+chr7	200997	made_up_1	TACG	TGTTCA	.	.	.
+7	300999	made_up_2	A	AGTT	.	.	.
+7	400997	made_up_3	TACG	T	.	.	.
+7	500999	made_up_4	AC	GTT	.	.	.
+7	500999	made_up_5	A	AGTT	.	.	.
+7	700998	made_up_6	ACG	TTT,GTTCA	.	.	.
+7	800998	made_up_7	ACG	GTTCA	.	.	.
+7	800998	made_up_8	ACG	TTT,GTTCA	.	.	.
+7	900999	made_up_9	A	AA	.	.	.
+7	900999	made_up_10	AC	A	.	.	.
+7	950999	made_up_11	AC	GTT	.	.	.
+7	950999	made_up_11	A	AGTT	.	.	.
+7	960999	made_up_12;made_up_13	AC	GTT	.	.	.
+7	960999	made_up_14	A	AGTT	.	.	.
+7	970999	made_up_15	AC	GTT	.	.	.
+7	970999	made_up_15	AC	TTT,GTT	.	.	.
+7	970999	made_up_16	A	AGTT	.	.	.
+7	980999	.	AC	GTT	.	.	.
+7	980999	made_up_17	A	AGTT	.	.	.

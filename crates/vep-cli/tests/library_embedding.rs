@@ -8,8 +8,8 @@
 
 mod common;
 
-use vep_cli::vcf_parser::parse_vcf_line;
-use vep_cli::{Annotator, Config, InputVariant, JsonOutputFormatter};
+use vep_cli::vcf_parser::{parse_vcf_line, VcfParse};
+use vep_cli::{parse_vcf_line_with, Annotator, Config, InputVariant, JsonOutputFormatter};
 use vep_io::output::fields::FieldOptions;
 
 use common::{corpora, default_run, input_records, output_path, run_vep};
@@ -163,6 +163,252 @@ fn annotator_json_rows_equal_the_vep_binarys_json_output_with_the_loftee_plugin(
     assert_eq!(library_rows, binary_rows);
 }
 
+/// The same proof over a run that reads two gene-model files beside the cache,
+/// a `--gtf` and a `--custom` GFF3: the library joins each file's transcripts
+/// to the cache's before it indexes a chromosome, the binary as it loads one,
+/// and the rows of a record, the cache's and each file's under its `source`,
+/// are the same bytes in the same order.
+#[test]
+fn annotator_json_rows_equal_the_vep_binarys_json_output_beside_gene_model_files() {
+    let corpora = corpora();
+    let corpus = corpora
+        .iter()
+        .find(|c| c.release == "116" && c.name == "GRCh38-gene-model-beside-cache")
+        .expect("tests/golden/116/GRCh38-gene-model-beside-cache");
+    let file = |name: &str| corpus.dir.join(name).display().to_string();
+    let mut run = default_run(corpus);
+    run.flags = vec![
+        "--gtf".to_string(),
+        file("chr21_genes.gtf.gz"),
+        "--custom".to_string(),
+        format!(
+            "file={},format=gff,short_name=novel",
+            file("novel_models.gff3.gz")
+        ),
+    ];
+    let out_dir = tempfile::tempdir().unwrap();
+    let binary_rows = run_vep(&run, "json", out_dir.path(), &[]);
+
+    let mut argv = vec!["vep".to_string(), "--offline".to_string()];
+    argv.extend(corpus.cache_args());
+    argv.extend([
+        "--species".to_string(),
+        "homo_sapiens".to_string(),
+        "--assembly".to_string(),
+        corpus.assembly.clone(),
+    ]);
+    argv.extend(run.flags.iter().cloned());
+    argv.extend(["--fasta".to_string(), file("reference.fa.gz")]);
+    let config = Config::from_argv(argv).unwrap();
+    let annotator = Annotator::from_config(&config).unwrap();
+    let formatter = JsonOutputFormatter::new(
+        {
+            let mut options = FieldOptions::default();
+            options.custom_sources = annotator.resources().custom_source_infos.clone();
+            options
+        },
+        annotator.plugin_header_fields(),
+        Some(corpus.assembly.clone()),
+    );
+
+    let records = input_records(corpus);
+    let mut library_rows = String::new();
+    for line in &records {
+        let mut record = parse_vcf_line(line, true).unwrap();
+        annotator.annotate_batch(&mut record);
+        let alleles: Vec<&InputVariant> = record.iter().collect();
+        let value = formatter.format_record_value(&alleles);
+        library_rows.push_str(&serde_json::to_string(&value).unwrap());
+        library_rows.push('\n');
+    }
+    assert_eq!(library_rows.lines().count(), records.len());
+    for source in ["\"source\":\"chr21_genes.gtf.gz\"", "\"source\":\"novel\""] {
+        assert!(
+            library_rows.contains(source),
+            "the library wrote no {source} row"
+        );
+    }
+
+    let differing = library_rows
+        .lines()
+        .zip(binary_rows.lines())
+        .enumerate()
+        .filter(|(_, (library_row, binary_row))| library_row != binary_row)
+        .map(|(i, (library_row, binary_row))| {
+            format!("row {i}\n  library: {library_row}\n  binary:  {binary_row}")
+        })
+        .take(3)
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(differing.is_empty(), "{differing}");
+    assert_eq!(library_rows, binary_rows);
+}
+
+/// Installs, once for this test binary, a global default subscriber that
+/// enables nothing and answers every callsite with `Interest::sometimes`, so
+/// the subscriber of the emitting thread decides each event. `tracing` caches
+/// a callsite's interest when a thread first reaches it, from that thread's
+/// dispatcher while one scoped subscriber is registered: a test building an
+/// annotator with no subscriber on its thread would cache the callsite as
+/// never enabled, and [`info_messages_of`] on another thread would lose the
+/// same line.
+fn leave_callsite_interest_to_the_thread() {
+    use tracing::level_filters::LevelFilter;
+    use tracing::span::{Attributes, Id, Record};
+    use tracing::subscriber::Interest;
+    use tracing::{Event, Metadata, Subscriber};
+
+    struct Sink;
+
+    impl Subscriber for Sink {
+        fn register_callsite(&self, _: &'static Metadata<'static>) -> Interest {
+            Interest::sometimes()
+        }
+
+        fn max_level_hint(&self) -> Option<LevelFilter> {
+            Some(LevelFilter::OFF)
+        }
+
+        fn enabled(&self, _: &Metadata<'_>) -> bool {
+            false
+        }
+
+        fn new_span(&self, _: &Attributes<'_>) -> Id {
+            Id::from_u64(1)
+        }
+
+        fn record(&self, _: &Id, _: &Record<'_>) {}
+
+        fn record_follows_from(&self, _: &Id, _: &Id) {}
+
+        fn event(&self, _: &Event<'_>) {}
+
+        fn enter(&self, _: &Id) {}
+
+        fn exit(&self, _: &Id) {}
+    }
+
+    static SINK: std::sync::Once = std::sync::Once::new();
+    SINK.call_once(|| {
+        let _ = tracing::subscriber::set_global_default(Sink);
+    });
+}
+
+/// The messages of the `INFO` events `work` emits on this thread, in order.
+fn info_messages_of(work: impl FnOnce()) -> Vec<String> {
+    use std::sync::{Arc, Mutex};
+    use tracing::field::{Field, Visit};
+    use tracing_subscriber::layer::{Context, Layer, SubscriberExt};
+
+    leave_callsite_interest_to_the_thread();
+
+    struct Capture(Arc<Mutex<Vec<String>>>);
+    struct Message(String);
+    impl Visit for Message {
+        fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+            if field.name() == "message" {
+                self.0 = format!("{value:?}");
+            }
+        }
+    }
+    impl<S: tracing::Subscriber> Layer<S> for Capture {
+        fn on_event(&self, event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
+            if *event.metadata().level() != tracing::Level::INFO {
+                return;
+            }
+            let mut message = Message(String::new());
+            event.record(&mut message);
+            self.0.lock().unwrap().push(message.0);
+        }
+    }
+    let lines = Arc::new(Mutex::new(Vec::new()));
+    let subscriber = tracing_subscriber::registry().with(Capture(Arc::clone(&lines)));
+    tracing::subscriber::with_default(subscriber, work);
+    let captured = lines.lock().unwrap().clone();
+    captured
+}
+
+/// The status lines the library writes as it loads the cache and the two
+/// gene-model files of the test above, whole. The files' transcripts join the
+/// load before its lines are written, so the line of chromosome 21 counts the
+/// cache's 188 transcripts and the 59 of each file together, and it is the
+/// line the binary writes for that chromosome under `--verbose`.
+#[test]
+fn annotator_status_lines_count_gene_model_transcripts_as_the_vep_binarys_do() {
+    let corpora = corpora();
+    let corpus = corpora
+        .iter()
+        .find(|c| c.release == "116" && c.name == "GRCh38-gene-model-beside-cache")
+        .expect("tests/golden/116/GRCh38-gene-model-beside-cache");
+    let file = |name: &str| corpus.dir.join(name).display().to_string();
+    let (gtf, gff, fasta) = (
+        file("chr21_genes.gtf.gz"),
+        file("novel_models.gff3.gz"),
+        file("reference.fa.gz"),
+    );
+    let mut args = vec!["--offline".to_string()];
+    args.extend(corpus.cache_args());
+    args.extend(
+        [
+            "--species",
+            "homo_sapiens",
+            "--assembly",
+            &corpus.assembly,
+            "--gtf",
+            &gtf,
+            "--custom",
+            &format!("file={gff},format=gff,short_name=novel"),
+            "--fasta",
+            &fasta,
+        ]
+        .map(str::to_string),
+    );
+
+    let config = Config::from_argv(std::iter::once("vep".to_string()).chain(args.clone())).unwrap();
+    let library_lines = info_messages_of(|| {
+        Annotator::from_config(&config).unwrap();
+    });
+    let chromosome_line = "  chromosome 21: 306 transcripts";
+    assert_eq!(
+        library_lines,
+        [
+            format!("Using reference FASTA: {fasta}"),
+            format!(
+                "Loading transcripts from JSON cache: {}",
+                corpus.cache_dir().display()
+            ),
+            format!("Gene-model source novel: {gff} (gff), 59 transcripts"),
+            format!(
+                "Skipped the feature types five_prime_utr (44), start_codon (26), \
+                 three_prime_utr (25) of {gtf}: not read as a gene, transcript, exon or CDS"
+            ),
+            format!("Gene-model source chr21_genes.gtf.gz: {gtf} (gtf), 59 transcripts"),
+            "Loaded transcripts for 1 chromosome".to_string(),
+            chromosome_line.to_string(),
+            "Building transcript index".to_string(),
+        ]
+    );
+
+    let out_dir = tempfile::tempdir().unwrap();
+    let output = common::isolated_vep(out_dir.path())
+        .args(&args)
+        .arg("-i")
+        .arg(corpus.dir.join("variants.vcf"))
+        .arg("-o")
+        .arg(out_dir.path().join("out.txt"))
+        .args(["--verbose", "--fork", "1", "--no_stats"])
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stderr}");
+    let binary_lines: Vec<&str> = stderr
+        .lines()
+        .filter_map(|line| line.split_once(" INFO vep_cli::transcript_index: "))
+        .map(|(_, message)| message)
+        .collect();
+    assert_eq!(binary_lines, [chromosome_line], "{stderr}");
+}
+
 /// The corpus whose cache names the alignment file its models were edited
 /// against: resolving it switches `--use_transcript_ref` and the `BAM_EDIT`
 /// field on, on the annotator's copy of the configuration. The caller's
@@ -210,11 +456,12 @@ fn annotator_returns_the_flags_a_bam_edited_cache_settles() {
     let records = input_records(corpus);
     let rows_under = |use_transcript_ref: bool, bam_edited: bool| {
         let formatter = JsonOutputFormatter::new(
-            FieldOptions {
-                refseq: config.refseq,
-                use_transcript_ref,
-                bam_edited,
-                ..Default::default()
+            {
+                let mut options = FieldOptions::default();
+                options.refseq = config.refseq;
+                options.use_transcript_ref = use_transcript_ref;
+                options.bam_edited = bam_edited;
+                options
             },
             annotator.plugin_header_fields(),
             Some(corpus.assembly.clone()),
@@ -259,4 +506,23 @@ fn annotator_returns_the_flags_a_bam_edited_cache_settles() {
             "the caller's own flags write {key}"
         );
     }
+}
+
+/// A program that parses a VCF data line under its own settings builds them
+/// with `VcfParse::default_run` and assigns the public fields. Unassigned, the
+/// settings parse a line as `parse_vcf_line` does; with `minimal` assigned the
+/// parser trims the record and marks it.
+#[test]
+fn a_callers_own_line_settings_start_from_the_default_run_and_reach_the_parser() {
+    let line = "21\t25585733\t.\tCA\tCT\t.\t.\t.";
+    let mut settings = VcfParse::default_run(false);
+    let as_built = parse_vcf_line_with(line, &settings).unwrap();
+    let by_default = parse_vcf_line(line, false).unwrap();
+    assert_eq!(format!("{as_built:?}"), format!("{by_default:?}"));
+    assert!(as_built.iter().all(|allele| !allele.minimised));
+
+    settings.minimal = true;
+    let minimal = parse_vcf_line_with(line, &settings).unwrap();
+    assert!(!minimal.is_empty());
+    assert!(minimal.iter().all(|allele| allele.minimised));
 }

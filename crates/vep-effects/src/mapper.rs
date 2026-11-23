@@ -11,17 +11,17 @@
 //! Key functions:
 //! - [`map_genomic_to_transcript`]: classify a single genomic position
 //! - [`map_genomic_span_to_cds_bounds`]: derive CDS/peptide bounds for a variant span
-//! - [`map_genomic_span_to_cds_projection`]: Perl-parity segment-vector projection
+//! - `map_genomic_span_to_cds_projection`: Ensembl VEP-parity segment-vector projection
 //!   (Coordinate/Gap shapes) for the `spans_non_coding` frameshift gate
 //!
-//! Perl citations name modules of ensembl-variation release/115
-//! (`Bio/EnsEMBL/Variation/...`); `TranscriptMapper` is in ensembl core
-//! release/115.
+//! Ensembl VEP source citations name modules of ensembl-variation release/116
+//! (`Bio/EnsEMBL/Variation/...`); `TranscriptMapper` and the `Mapper` modules are in ensembl core
+//! release/116.
 
 use vep_core::coordinate::Strand;
 use vep_core::transcript::{ExonCoordMapper, MapperPair, Transcript};
 
-/// Perl-style CDS/peptide bounds for a variant span.
+/// Ensembl VEP-style CDS/peptide bounds for a variant span.
 ///
 /// Ensembl VEP derives these via `TranscriptMapper->genomic2cds()` / `genomic2pep()`
 /// on the full variant interval, then takes the first/last mapped coordinates:
@@ -34,6 +34,7 @@ use vep_core::transcript::{ExonCoordMapper, MapperPair, Transcript};
 /// - converting cDNA -> CDS using `cdna_coding_start` + `start_phase` offset
 /// - preserving insertion semantics (`start == end + 1`) so `cds_end - cds_start + 1 == 0`
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct CdsSpanBounds {
     /// 1-based CDS start (can be > cds_end for insertions).
     pub cds_start: u64,
@@ -45,19 +46,19 @@ pub struct CdsSpanBounds {
     pub translation_end: u64,
 }
 
-/// One segment of a CDS-projected variant span, matching Perl's `cds_coords`
+/// One segment of a CDS-projected variant span, matching Ensembl VEP's `cds_coords`
 /// return values (lists of `Bio::EnsEMBL::Mapper::Coordinate` and
 /// `Bio::EnsEMBL::Mapper::Gap` objects).
 ///
 /// The shape of the segment vector encodes whether each endpoint landed in the
-/// CDS (`Coordinate`) or in a non-CDS region (`Gap`, which in Perl covers both
-/// intronic gaps and UTR extensions at the edges; see Perl
-/// `TranscriptMapper::genomic2cds` lines 442-476).
+/// CDS (`Coordinate`) or in a non-CDS region (`Gap`, which in Ensembl VEP covers both
+/// intronic gaps and UTR extensions at the edges; see Ensembl VEP
+/// `TranscriptMapper::genomic2cds` lines 434-478).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MapperSegment {
+pub(crate) enum MapperSegment {
     /// Portion of the span that maps to a CDS region.
     ///
-    /// `cds_start <= cds_end` always (forward-normalized). Perl stores the
+    /// `cds_start <= cds_end` always (forward-normalized). Ensembl VEP stores the
     /// coordinate with its original strand; callers that need strand-aware
     /// ordering can read the `strand` field.
     Coordinate {
@@ -70,7 +71,7 @@ pub enum MapperSegment {
     },
     /// Portion of the span that does not map to CDS.
     ///
-    /// In Perl this covers three cases (intronic span, 5' UTR spillover, 3'
+    /// In Ensembl VEP this covers three cases (intronic span, 5' UTR spillover, 3'
     /// UTR spillover) without distinguishing them. The endpoint-class fields
     /// on `CdsSpanProjection` carry the finer-grained classification when
     /// consumers need it.
@@ -84,16 +85,19 @@ pub enum MapperSegment {
 ///
 /// This carries the finer-grained "is this endpoint in the CDS, in an intron,
 /// in the 5' UTR exon/intron, in the 3' UTR exon/intron, or outside the
-/// transcript" distinction that Perl's `_bvfo_preds` uses to set the
+/// transcript" distinction that Ensembl VEP's `_bvfo_preds` uses to set the
 /// `coding` / `non_coding` / `utr` predicates.
 ///
-/// The frameshift gate at `VariationEffect.pm::1446` requires both endpoints
-/// to resolve to `InCds`: any other class means Perl's `cds_start` or
-/// `cds_end` (derived from first/last `Coordinate` at
-/// `BaseTranscriptVariation.pm::264-265`) comes back `undef` and the
-/// predicate short-circuits.
+/// For a span of one base or more, the frameshift gate at
+/// `VariationEffect.pm::1551` requires both endpoints to resolve to `InCds`:
+/// any other class means Ensembl VEP's `cds_start` or `cds_end` (derived from
+/// first/last `Coordinate` at `BaseTranscriptVariation.pm::263-264`) comes
+/// back `undef` and the predicate short-circuits. Where an insertion has one
+/// flank in an exon and the other in an intron, the intronic flank leaves
+/// neither bound undefined: `Mapper::map_insert` keeps the exonic flank's
+/// coordinate and drops the Gap (ensembl core's `Mapper.pm:522-542`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EndpointClass {
+pub(crate) enum EndpointClass {
     /// Endpoint lies within a CDS exon at the given CDS coordinate.
     InCds { cds_pos: u64 },
     /// Endpoint lies within an intron.
@@ -113,21 +117,24 @@ pub enum EndpointClass {
     OutsideTranscript { distance_bp: i64 },
 }
 
-/// Perl-parity segment-vector projection of a genomic span into CDS space.
+/// Ensembl VEP-parity segment-vector projection of a genomic span into CDS space.
 ///
 /// Models the return value of `Bio::EnsEMBL::Variation::BaseTranscriptVariation::cds_coords`
 /// plus the auxiliary metadata that `_pre_consequence_predicates` exposes.
 ///
-/// The frameshift predicate at `VariationEffect.pm::1446` requires both
-/// endpoints to resolve to `InCds` (so Perl's `cds_start` / `cds_end` come
-/// back defined). Mixed shapes like `[Coordinate, Gap]` or `[Gap, Coordinate]`
+/// For a span of one base or more, the frameshift predicate at
+/// `VariationEffect.pm::1551` requires both endpoints to resolve to `InCds`
+/// (so Ensembl VEP's `cds_start` / `cds_end` come back defined); an insertion
+/// with one flank in an exon and the other in an intron is the case
+/// `EndpointClass` sets apart. Mixed shapes like `[Coordinate, Gap]` or
+/// `[Gap, Coordinate]` of a span of one base or more
 /// have one endpoint in a Gap and block frameshift. The interesting case for
 /// this API is `[Coordinate, Gap, Coordinate]` (a deletion spanning an intron
-/// with both endpoints in CDS exons): both endpoints are `InCds`, both Perl
+/// with both endpoints in CDS exons): both endpoints are `InCds`, both Ensembl VEP
 /// `cds_start` / `cds_end` are defined, and frameshift can fire, even though
 /// the span is not "wholly in a single exon".
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CdsSpanProjection {
+pub(crate) struct CdsSpanProjection {
     /// Segments in transcript order (5' -> 3' on the transcript).
     pub segments: Vec<MapperSegment>,
     /// Classification of the span's start endpoint.
@@ -146,23 +153,16 @@ pub struct CdsSpanProjection {
 }
 
 impl CdsSpanProjection {
-    /// Number of `Coordinate` segments in the projection.
-    pub fn coordinate_count(&self) -> usize {
-        self.segments
-            .iter()
-            .filter(|s| matches!(s, MapperSegment::Coordinate { .. }))
-            .count()
-    }
-
     /// Sum of lengths of all `Coordinate` segments.
     ///
-    /// This is the Rust equivalent of Perl's `var_len = cds_end - cds_start + 1`
+    /// This is the Rust equivalent of Ensembl VEP's `var_len = cds_end - cds_start + 1`
     /// only when the projection is `[Coordinate]` (single segment). For shapes
     /// like `[Coordinate, Gap, Coordinate]` the sum equals the CDS-mapped
     /// portion of the variant span, not the `(first_coord.cds_start,
-    /// last_coord.cds_end)` Perl-style bounds. The frameshift gate
+    /// last_coord.cds_end)` Ensembl VEP-style bounds. The frameshift gate
     /// uses the first/last rule directly via `coordinate_bounds()` below.
-    pub fn coordinate_length_sum(&self) -> u64 {
+    #[cfg(test)]
+    pub(crate) fn coordinate_length_sum(&self) -> u64 {
         self.segments
             .iter()
             .filter_map(|s| match s {
@@ -174,13 +174,16 @@ impl CdsSpanProjection {
             .sum()
     }
 
-    /// Perl-style `(cds_start, cds_end)` derived from the first and last
+    /// Ensembl VEP-style `(cds_start, cds_end)` derived from the first and last
     /// `Coordinate` segments (matching `BaseTranscriptVariation.pm::253-265`).
     ///
     /// Returns `None` when there are no `Coordinate` segments at all (the
-    /// whole span is in a Gap; Perl's `cds_start`/`cds_end` would both be
-    /// `undef` and `_bvfo_preds` would set `non_coding = 1`).
-    pub fn coordinate_bounds(&self) -> Option<(u64, u64)> {
+    /// whole span is in a Gap; Ensembl VEP's `cds_start`/`cds_end` would both be
+    /// `undef`). For such a span that overlaps the transcript, `_bvfo_preds`
+    /// sets `utr` where it overlaps no base of the coding range and
+    /// `non_coding` where it lies in an intron of that range
+    /// (`BaseVariationFeatureOverlapAllele.pm:523-525`, `535-537`).
+    pub(crate) fn coordinate_bounds(&self) -> Option<(u64, u64)> {
         let first = self.segments.iter().find_map(|s| match s {
             MapperSegment::Coordinate { cds_start, .. } => Some(*cds_start),
             _ => None,
@@ -192,21 +195,22 @@ impl CdsSpanProjection {
         Some((first, last))
     }
 
-    /// True when both endpoints resolve to `InCds`, matching the condition
+    /// True when both endpoints resolve to `InCds`, which for a span of one
+    /// base or more matches the condition
     /// `defined $bvfo->cds_start && defined $bvfo->cds_end` at
-    /// `VariationEffect.pm::1446`.
-    pub fn both_endpoints_in_cds(&self) -> bool {
+    /// `VariationEffect.pm::1551`.
+    pub(crate) fn both_endpoints_in_cds(&self) -> bool {
         matches!(self.start_endpoint_class, EndpointClass::InCds { .. })
             && matches!(self.end_endpoint_class, EndpointClass::InCds { .. })
     }
 }
 
-/// Build a [`CdsSpanProjection`] for a genomic span, mirroring Perl's
+/// Build a `CdsSpanProjection` for a genomic span, mirroring Ensembl VEP's
 /// `TranscriptMapper::genomic2cds`.
 ///
 /// Returns `None` when the transcript has no coding model (no translation or
-/// missing CDS bounds), matching Perl's behavior in `genomic2cds` at line 426
-/// where a pseudogene without `cdna_coding_start` returns a single `Gap`.
+/// missing CDS bounds), matching Ensembl VEP's behavior in `genomic2cds` at lines
+/// 425-427 where a pseudogene without `cdna_coding_start` returns a single `Gap`.
 ///
 /// The walking logic:
 /// 1. Determine each endpoint's `EndpointClass` (InCds / InIntron / UTR exon /
@@ -218,10 +222,10 @@ impl CdsSpanProjection {
 ///    edges when an endpoint is in a Gap region.
 ///
 /// The authoritative reference for the API shape, and for the truth table mapping
-/// span shapes to Perl's cds_start / cds_end / coding predicate outputs, is
+/// span shapes to the engine's cds_start / cds_end / coding predicate outputs, is
 /// Ensembl VEP's own `TranscriptVariationAllele` and `VariationEffect` sources;
 /// the unit tests below pin each span shape this function must reproduce.
-pub fn map_genomic_span_to_cds_projection(
+pub(crate) fn map_genomic_span_to_cds_projection(
     span_start: u64,
     span_end: u64,
     transcript: &Transcript,
@@ -233,7 +237,7 @@ pub fn map_genomic_span_to_cds_projection(
         return None;
     }
 
-    // Perl returns a single Gap for a pseudogene; `None` here lets callers
+    // Ensembl VEP returns a single Gap for a pseudogene; `None` here makes callers
     // early-out to CodingSequenceVariant.
     let has_coding_model = transcript.translation.is_some()
         && mapper.cdna_coding_start > 0
@@ -268,7 +272,9 @@ pub fn map_genomic_span_to_cds_projection(
         &transcript.introns
     };
 
-    // A VEP-convention insertion (start = end+1) collapses to a point.
+    // An insertion written with its start one above its end is walked as its two flanking
+    // bases: the swap of `Mapper::map_insert` (ensembl core's `Mapper.pm:488-489`), without
+    // that function's later adjustment of the mapped pair.
     let (genomic_lo, genomic_hi) = if span_start <= span_end {
         (span_start, span_end)
     } else {
@@ -347,7 +353,9 @@ pub fn map_genomic_span_to_cds_projection(
         }
     }
 
-    // Perl's cds_coords emits no consecutive Gaps for composite non-CDS regions.
+    // Neighbouring Gaps are merged into one, which is this function's own: Ensembl VEP's
+    // `genomic2cds` pushes each Gap as it comes, an intron's and a UTR's side by side
+    // (ensembl core's `TranscriptMapper.pm:434-475`).
     let mut collapsed: Vec<MapperSegment> = Vec::with_capacity(segments.len());
     for seg in segments {
         match (collapsed.last_mut(), seg) {
@@ -362,7 +370,7 @@ pub fn map_genomic_span_to_cds_projection(
     }
     let segments = collapsed;
 
-    // A span overlapping no exon or intron is a single Gap, as in Perl.
+    // A span overlapping no exon or intron is a single Gap, as in Ensembl VEP.
     let segments = if segments.is_empty() {
         vec![MapperSegment::Gap {
             length: genomic_hi.saturating_sub(genomic_lo) + 1,
@@ -374,7 +382,7 @@ pub fn map_genomic_span_to_cds_projection(
     let cds_start_nf = transcript_has_flag(transcript, "cds_start_NF");
     let cds_end_nf = transcript_has_flag(transcript, "cds_end_NF");
 
-    // Perl's `translation_start` is the first `genomic2pep` element in transcript
+    // Ensembl VEP's `translation_start` is the first `genomic2pep` element in transcript
     // order (`BaseTranscriptVariation.pm:365-380`), defined only when the span's
     // transcript-5' base, its start on the forward strand and its end on the
     // reverse, lies in the coding sequence.
@@ -404,12 +412,12 @@ pub fn map_genomic_span_to_cds_projection(
 /// `0 < length(_translateable_seq) - (translation_start * 3 - 3) < 3`.
 ///
 /// `translation_start` is the peptide position of the span's first base in
-/// transcript order, `None` where Perl's is undefined: that base lies outside the
+/// transcript order, `None` where Ensembl VEP's is undefined: that base lies outside the
 /// coding sequence (in a UTR, an intron or beyond the transcript), so the span's
 /// `genomic2pep` list opens with a gap and the predicate is false before any
 /// arithmetic. The coding sequence length is the transcript's `translateable_seq`;
 /// a transcript without one reads as length 0, as Perl's `length` of an undefined
-/// string does in the subtraction, so `last_codon_length` is at most zero and the
+/// string does in Ensembl VEP's subtraction, so `last_codon_length` is at most zero and the
 /// predicate is false.
 pub(crate) fn partial_codon(transcript: &Transcript, translation_start: Option<u64>) -> bool {
     let Some(translation_start) = translation_start else {
@@ -425,7 +433,7 @@ pub(crate) fn partial_codon(transcript: &Transcript, translation_start: Option<u
     last_codon_length < 3 && last_codon_length > 0
 }
 
-/// Classify a single genomic endpoint for [`CdsSpanProjection`].
+/// Classify a single genomic endpoint for `CdsSpanProjection`.
 fn classify_endpoint_for_projection(genomic_pos: u64, transcript: &Transcript) -> EndpointClass {
     // Out-of-transcript check: signed distance (negative = before start,
     // positive = after end, 0 = within transcript span).
@@ -531,16 +539,18 @@ fn transcript_has_flag(transcript: &Transcript, flag: &str) -> bool {
     transcript.flags.iter().any(|f| f.as_str() == flag)
 }
 
-/// Map a genomic interval to Perl-style cDNA bounds (`cdna_start`, `cdna_end`),
+/// Map a genomic interval to Ensembl VEP-style cDNA bounds (`cdna_start`, `cdna_end`),
 /// snapping intronic endpoints to the nearest exon boundary.
 ///
 /// Unlike [`map_genomic_span_to_cds_bounds`], this does not clamp to coding
 /// bounds or incorporate `start_phase_offset`: it returns the raw
-/// `(min, max)` cDNA window that Perl's `$bvfo->cdna_start` / `$bvfo->cdna_end`
-/// would report. The result is suitable for predicates such as
-/// `_ins_del_start_altered` which anchor the edit at `cdna_start - 1` in the
-/// combined `5'UTR || CDS` string.
-pub fn map_genomic_span_to_cdna_bounds(
+/// `(min, max)` cDNA window that Ensembl VEP's `$bvfo->cdna_start` / `$bvfo->cdna_end`
+/// would report for exonic endpoints. An intronic endpoint takes the snapped
+/// boundary; for a span of one base or more Ensembl VEP leaves that bound
+/// undefined (`BaseTranscriptVariation.pm:147-148`). The result is suitable for
+/// predicates such as `_ins_del_start_altered` which anchor the edit at
+/// `cdna_start - 1` in the combined `5'UTR || CDS` string.
+pub(crate) fn map_genomic_span_to_cdna_bounds(
     span_start: u64,
     span_end: u64,
     transcript: &Transcript,
@@ -557,7 +567,7 @@ pub fn map_genomic_span_to_cdna_bounds(
     Some((cdna_a.min(cdna_b), cdna_a.max(cdna_b)))
 }
 
-/// Map a genomic interval to Perl-style CDS/peptide bounds.
+/// Map a genomic interval to Ensembl VEP-style CDS/peptide bounds.
 ///
 /// Returns `None` when the transcript has no coding model, when an endpoint maps to no
 /// exon boundary, or when the snapped cDNA window lies wholly outside the coding region.
@@ -580,9 +590,12 @@ pub fn map_genomic_span_to_cds_bounds(
         return None;
     }
 
-    // An intronic endpoint snaps to the nearest exon boundary: Perl's
-    // `genomic2cds()` maps partial overlaps to the closest exon edge, which is
-    // what gives splice-boundary insertions CDS-aware frameshift classification.
+    // An intronic endpoint snaps to the nearest exon boundary, which is what gives
+    // splice-boundary insertions CDS-aware frameshift classification. The snap is
+    // this function's own. For a span of one base or more Ensembl VEP's
+    // `genomic2cds()` returns a Gap there and the bound stays undefined
+    // (`BaseTranscriptVariation.pm:263-264`); for an insertion with one exonic
+    // flank `Mapper::map_insert` keeps that flank's coordinate and drops the Gap.
     let cdna_a = genomic_to_cdna_or_nearest_boundary(span_start, ecm)?;
     let cdna_b = genomic_to_cdna_or_nearest_boundary(span_end, ecm)?;
 
@@ -596,31 +609,33 @@ pub fn map_genomic_span_to_cds_bounds(
     }
 
     // Clamp to the coding bounds so CDS-overlap alleles that extend into UTR still
-    // produce a CDS span (Perl parity for stop_lost/stop_gained checks).
+    // produce a CDS span (Ensembl VEP parity for stop_lost/stop_gained checks).
     let cdna_a_clamped = cdna_a.clamp(coding_start, coding_end);
     let cdna_b_clamped = cdna_b.clamp(coding_start, coding_end);
 
-    // Incorporate start-phase offset in CDS numbering (Perl adds start exon phase).
+    // Incorporate start-phase offset in CDS numbering (Ensembl VEP adds start exon phase).
     let start_phase_offset = u64::try_from(mapper.start_phase).unwrap_or(0);
     let cds_a = cdna_a_clamped - coding_start + 1 + start_phase_offset;
     let cds_b = cdna_b_clamped - coding_start + 1 + start_phase_offset;
 
     // Preserve insertion semantics: `start == end + 1` in this representation.
-    // Perl uses `cds_start > cds_end` for insertions so that `vf_nt_len` evaluates to 0.
+    // Ensembl VEP uses `cds_start > cds_end` for insertions so that `vf_nt_len` evaluates to 0.
     let is_insertion_coords = span_start == span_end.saturating_add(1);
     let translation_a = (cds_a - 1) / 3 + 1;
     let translation_b = (cds_b - 1) / 3 + 1;
     let (cds_start, cds_end, translation_start, translation_end) = if is_insertion_coords {
         // Both flanks of an insertion normally map to adjacent CDS positions, so
-        // max() yields Perl's cds_start. When one flank is intronic the snap puts
-        // both on the same exon-boundary position and max() under-reports Perl's
-        // cds_start by 1; the collapsed pair is kept in the insertion shape `(hi, hi - 1)`.
+        // max() yields Ensembl VEP's cds_start. When one flank is intronic the snap puts
+        // both on the same exon-boundary position: where Ensembl VEP has a cds_start,
+        // max() equals it before an exon's first base in transcript order and is one
+        // under it after an exon's last base (ensembl core's `Mapper.pm:522-542`); the
+        // collapsed pair is kept in the insertion shape `(hi, hi - 1)`.
         let hi = cds_a.max(cds_b);
         let lo = hi.saturating_sub(1);
         // translation_start/end derive from cds_start/cds_end after the insertion
-        // reordering: Perl computes tl_start = ceil(cds_start/3) with cds_start >
-        // cds_end, which condition 2 of ref_eq_alt_sequence
-        // (VariationEffect.pm:1353) reads as a substr offset.
+        // reordering: Ensembl VEP computes tl_start = ceil(cds_start/3) with cds_start >
+        // cds_end, which condition 1 of ref_eq_alt_sequence
+        // (VariationEffect.pm:1347, 1357) reads as a substr offset.
         let tl_start = (hi - 1) / 3 + 1;
         let tl_end = if lo == 0 { 0 } else { (lo - 1) / 3 + 1 };
         (hi, lo, tl_start, tl_end)
@@ -643,6 +658,7 @@ pub fn map_genomic_span_to_cds_bounds(
 
 /// Result of mapping a genomic position to transcript coordinates.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum TranscriptPosition {
     /// Variant is upstream of transcript (5' considering strand).
     Upstream { distance: u64 },
@@ -818,7 +834,7 @@ fn genomic_to_cdna(genomic_pos: u64, pairs: &[MapperPair]) -> Option<u64> {
 /// so the worst case is "no speedup", never "wrong answer".
 fn genomic_to_cdna_indexed(genomic_pos: u64, ecm: &ExonCoordMapper) -> Option<u64> {
     let pairs = &ecm.pairs;
-    let idx = &ecm.by_genomic_start;
+    let idx = ecm.by_genomic_start();
     if idx.len() != pairs.len() {
         return genomic_to_cdna(genomic_pos, pairs);
     }
@@ -843,10 +859,12 @@ fn genomic_to_cdna_indexed(genomic_pos: u64, ecm: &ExonCoordMapper) -> Option<u6
 ///
 /// When `genomic_to_cdna()` returns `None` (the position is in an intron/gap),
 /// this function finds the mapper pair whose genomic boundary is closest to
-/// `genomic_pos` and returns the cDNA coordinate of that boundary.  This
-/// mirrors Perl's `genomic2cds()` behaviour for partial mappings, where one
-/// endpoint of a variant span is intronic and the mapper resolves it to the
-/// nearest exon edge.
+/// `genomic_pos` and returns the cDNA coordinate of that boundary.  The snap
+/// is this function's own. For a span of one base or more, Ensembl VEP's
+/// `TranscriptMapper::genomic2cds` resolves an intronic endpoint to no exon
+/// edge: it returns a `Gap` for the intronic part of the span (lines 435-436),
+/// and the bound read from that `Gap` stays undefined
+/// (`BaseTranscriptVariation.pm:263-264`).
 fn genomic_to_cdna_or_nearest_boundary(genomic_pos: u64, ecm: &ExonCoordMapper) -> Option<u64> {
     if let Some(cdna) = genomic_to_cdna_indexed(genomic_pos, ecm) {
         return Some(cdna);
@@ -991,7 +1009,11 @@ fn find_intron_position(
     // RefSeq deletion edit): the cache's mapper pairs it with no cDNA base, so
     // it carries no transcript coordinate; its warning carries the model and no
     // position, so the sink, which writes a text once, warns once per model.
-    // Outside every exon the model is incomplete.
+    // Outside every exon span the base lies between two parts of the model
+    // that no intron of the loop above holds, as where the cached intron
+    // between parts on both strands has its start above its end. Ensembl VEP
+    // passes over such an intron (`BaseTranscriptVariation.pm:894` and `:1014`)
+    // and raises no warning for the base, so none is raised here.
     let inside_exon_span = vefc
         .sorted_exons
         .iter()
@@ -1002,12 +1024,6 @@ fn find_intron_position(
              a variant inside them takes the term of the transcript region whose \
              span holds it",
             transcript.stable_id
-        );
-    } else {
-        tracing::warn!(
-            genomic_pos,
-            transcript = %transcript.stable_id,
-            "Position within transcript span but not in any known intron; possible incomplete model"
         );
     }
     TranscriptPosition::unmapped(total_introns)
@@ -1271,7 +1287,7 @@ mod tests {
         let span_end = 25_000_059; // CDS pos 10
         let bounds = map_genomic_span_to_cds_bounds(span_start, span_end, &tx).unwrap();
         assert_eq!(bounds.cds_start, 11);
-        assert_eq!(bounds.cds_end, 10); // cds_end = cds_start - 1 => vf_nt_len == 0 in Perl
+        assert_eq!(bounds.cds_end, 10); // cds_end = cds_start - 1 => vf_nt_len == 0 in Ensembl VEP
         assert_eq!(bounds.translation_start, 4);
         assert_eq!(bounds.translation_end, 4);
     }
@@ -1332,17 +1348,18 @@ mod tests {
             "insertion at boundary should return bounds"
         );
         let b = bounds.unwrap();
-        // Both endpoints resolve to cDNA 300 because the intronic flank is snapped
-        // onto the exonic flank, so CDS = 250 for both: the collapsed behaviour this
-        // asserts. Perl's `genomic2cds` does not collapse; it reports the adjacent
-        // pair (250, 251).
+        // The helper's own pair, not Ensembl VEP's. Both flanks map to cDNA 300
+        // (CDS 250) because the intronic flank snaps onto the exon's last base, and
+        // the helper returns that position in the insertion shape `(hi, hi - 1)`.
+        // Ensembl VEP's `genomic2cds` returns `cds_start` 251 and `cds_end` 250, since
+        // `Mapper::map_insert` increments the exonic coordinate's start; that pair is
+        // what `coding::perl_span` returns.
         assert_eq!(b.cds_start, 250);
         assert_eq!(b.cds_end, 249);
-        // With the collapsed anchor, tl_start = (250-1)/3+1 = 84 and
-        // tl_end = (249-1)/3+1 = 83, so they differ and the boundary-insertion
-        // predicate reads true; Perl, deriving translation bounds from an
-        // independent genomic2pep mapping, reports a single Protein_position here
-        // (cds_end 250, 250 % 3 == 1), so its predicate is false.
+        // The helper's peptide bounds follow its pair: (250-1)/3+1 = 84 and
+        // (249-1)/3+1 = 83, which differ, so `is_boundary_insertion` (`coding.rs`)
+        // reads true on them. Ensembl VEP's `genomic2pep` gives 84 for both ends of
+        // its pair, a single Protein_position.
         assert_eq!(b.translation_start, 84);
         assert_eq!(b.translation_end, 83);
     }
@@ -1451,9 +1468,9 @@ mod tests {
     fn test_projection_exon_to_intron_endpoint_shape_is_coordinate_gap() {
         let tx = make_test_transcript();
         // Start in exon 1 CDS (genomic 25_000_200 = cDNA 201 = CDS 151),
-        // end in intron 1 (genomic 25_000_500, intronic → snaps).
-        // The intronic endpoint snaps to the nearest cDNA boundary (cDNA 300), so
-        // the walk over [201, 300] yields one Coordinate segment while
+        // end in intron 1 (genomic 25_000_500).
+        // The exon's part of the span, cDNA 201 to 300, yields one Coordinate
+        // segment and the intron's part one Gap after it, while
         // `end_endpoint_class` records InIntron.
         let proj = map_genomic_span_to_cds_projection(25_000_200, 25_000_500, &tx).unwrap();
         // Endpoint classification is the ground truth for the frameshift gate.
@@ -1524,7 +1541,7 @@ mod tests {
         );
 
         // Verify coordinate_bounds returns the (first_coord.cds_start,
-        // last_coord.cds_end) which Perl would use for var_len.
+        // last_coord.cds_end) which Ensembl VEP would use for var_len.
         let (first, last) = proj.coordinate_bounds().unwrap();
         assert_eq!(first, 151, "first Coord starts at CDS 151");
         assert_eq!(last, 351, "last Coord ends at CDS 351");
@@ -1608,7 +1625,7 @@ mod tests {
         ));
         assert!(
             !proj.both_endpoints_in_cds(),
-            "CDS→3'UTR has `cds_end=undef` in Perl (last seg is Gap for UTR)"
+            "CDS→3'UTR has `cds_end=undef` in Ensembl VEP (last seg is Gap for UTR)"
         );
     }
 
@@ -1680,17 +1697,18 @@ mod tests {
 
     #[test]
     fn test_projection_partial_terminal_codon_detection_mid_cds() {
-        // partial_codon per Perl VariationEffect.pm:1480 checks whether this
-        // variant's translation_start sits in the partial terminal codon of
-        // the CDS. For a variant in the middle of the CDS, partial_codon =
-        // false even if the transcript's CDS length is not a multiple of 3.
+        // partial_codon per Ensembl VEP VariationEffect.pm:1588-1613 (release/116)
+        // checks whether this variant's translation_start sits in the partial
+        // terminal codon of the CDS. For a variant in the middle of the CDS,
+        // partial_codon = false even if the transcript's CDS length is not a
+        // multiple of 3.
         //
         // Test fixture CDS length is 850 (cDNA 51..900, length 850). 850 %
         // 3 = 1 so the last codon is a 1-base partial codon at cds_pos 850
         // (translation_pos 284).
         //
-        // This variant is at CDS 151..251 (translation 51..84), nowhere
-        // near the partial terminal codon.
+        // This span starts at CDS 151 (translation_start 51), nowhere near
+        // the partial terminal codon.
         let tx = make_test_transcript();
         let proj = map_genomic_span_to_cds_projection(25_000_200, 25_000_300, &tx).unwrap();
         assert!(
@@ -1733,7 +1751,7 @@ mod tests {
 
     #[test]
     fn test_projection_frameshift_var_len_parity_with_perl() {
-        // Verify the CGC shape gives the correct var_len for Perl's frameshift
+        // Verify the CGC shape gives the correct var_len for Ensembl VEP's frameshift
         // gate: var_len = cds_end - cds_start + 1 where cds_start is first
         // coord's start and cds_end is last coord's end.
         //
@@ -1741,10 +1759,10 @@ mod tests {
         //   genomic 25_000_249 (CDS 200) to genomic 25_002_049 (CDS 300).
         //   cDNA 250..350. CDS 200..300.
         //   Shape [C(200..250), G, C(251..300)]. First=200, Last=300.
-        //   Perl var_len = 300 - 200 + 1 = 101.
+        //   Ensembl VEP var_len = 300 - 200 + 1 = 101.
         //   ref_allele for deletion = 1801 bp (big genomic span).
-        //   For a 1-bp deletion (alt_allele=""), alt_len=0, diff=101, 101%3=2 → frameshift.
-        //   For a 3-bp deletion (alt_allele has 98bp), alt_len=98, diff=3, 3%3=0 → inframe.
+        //   For a pure deletion (alt_allele=""), alt_len=0, diff=101, 101%3=2 → frameshift.
+        //   For a 98-bp alternate allele, alt_len=98, diff=3, 3%3=0 → inframe.
         let tx = make_test_transcript();
         let proj = map_genomic_span_to_cds_projection(25_000_249, 25_002_049, &tx).unwrap();
         let (first, last) = proj.coordinate_bounds().unwrap();
@@ -1862,12 +1880,12 @@ mod tests {
         // deserialized or hand-built without going through ::new) must still
         // return correct results via the linear fallback.
         let pairs = build_pairs(&[(1000, 1099), (2000, 2099)], 1);
-        let ecm = ExonCoordMapper {
-            pair_count: pairs.len(),
-            pairs,
-            by_genomic_start: Vec::new(), // index absent -> fallback
-        };
-        assert!(ecm.by_genomic_start.len() != ecm.pairs.len());
+        let mut ecm = ExonCoordMapper::new(pairs);
+        // The index, rebuilt over no pairs, is empty; the pair count stays as `new` set it.
+        let pairs = std::mem::take(&mut ecm.pairs);
+        ecm.rebuild_genomic_index();
+        ecm.pairs = pairs; // index absent -> fallback
+        assert!(ecm.by_genomic_start().len() != ecm.pairs.len());
         assert_eq!(genomic_to_cdna_indexed(1000, &ecm), Some(1));
         assert_eq!(genomic_to_cdna_indexed(2050, &ecm), Some(151));
         assert_eq!(genomic_to_cdna_indexed(1500, &ecm), None);

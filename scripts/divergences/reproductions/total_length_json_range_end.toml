@@ -1,0 +1,49 @@
+entry = "total_length_json_range_end"
+page = "docs/divergences/total-length-json-range-end.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "observed"
+input_class_basis = "2 · 112,464 per million · 1 flag set, 142 corpora"
+notes = "Two deletions of four bases on ENST00000298232, a reverse-strand transcript. The first is the record of the GRCh37-output-flags corpus, inside one exon: cDNA 484-487. The second is made up: it removes two intron bases and the exon's first two, so its first position is unknown and its last is cDNA 435."
+
+[input]
+format = "vcf"
+text = """
+21	10970008	rs11184139	CCTTT	C	.	.	.
+21	10970060	del_over_exon_start	GGACT	G	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh37"
+json_cache = "tests/golden/116/GRCh37-output-flags/json_cache"
+fasta = "tests/golden/116/GRCh37-hgvs/reference.fa.gz"
+
+[run]
+flags = ["--total_length"]
+
+[compare]
+kind = "json"
+path = "transcript_consequences[transcript_id=ENST00000298232].cdna_end"
+where = { id = ["rs11184139", "del_over_exon_start"] }
+
+[expected]
+ensembl_vep = ["484"]
+vep_rs = ["435/2674", "487/2674"]
+
+[implementation]
+code = [
+    "crates/vep-io/src/output/json.rs::position_bounds",
+    "crates/vep-io/src/output/json.rs::position_value",
+]
+tests = [
+    "crates/vep-cli/tests/total_length_json_range_end.rs::a_range_end_under_total_length_holds_the_last_position_and_the_total",
+    "crates/vep-cli/tests/total_length_json_range_end.rs::a_range_of_unknown_start_writes_its_end_key_alone_under_total_length",
+    "crates/vep-cli/tests/total_length_json_range_end.rs::the_reproduction_records_the_end_keys_vep_rs_writes",
+    "crates/vep-io/src/output/json.rs::tests::total_length_forms_keep_the_end_of_a_range",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/total_length.rs::total_length_range_end_pair",
+    "tools/vep-golden-corpus/src/classify/total_length.rs::documents_range_ends",
+    "tools/vep-golden-corpus/src/classify/total_length.rs::range_end",
+]

@@ -1,0 +1,24 @@
+[package]
+name = "vep-gtf-tags-compare"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.89"
+license = "Apache-2.0"
+description = "Per-code agreement between the transcript tags of a GTF and the transcript attributes of a JSON cache"
+publish = false
+
+[dependencies]
+# The zlib-rs backend refuses the deflate streams zlib refuses; the default backend takes
+# some of them.
+flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
+memchr = "2"
+
+# Its own Cargo root: the repository workspace's commands do not reach this package, and
+# a cargo command for it names this manifest.
+[workspace]
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"

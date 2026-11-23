@@ -89,7 +89,10 @@
   "species-arabidopsis-tair10",
   "genetic-code-tables"
  ],
- "suites": {
+ "masks": [
+  "start_codon_kept_without_five_prime_utr"
+ ],
+ "datasets": {
   "1001g_chr4": {
    "reference": "default.txt",
    "input": "variants.vcf",
@@ -541,7 +544,7 @@
  },
  "records": [
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t89918\tENSVATH04300150\tA\tATT,AT\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [],
    "strata": [
@@ -549,315 +552,315 @@
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t117692\ttmp_4_117693_C_CTCA\tA\tATCA\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [
     "inframe_insertion,stop_gained"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t146786\tENSVATH09748904\tTGCAGTG\tT\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "5_prime_UTR_variant,intron_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t374346\tENSVATH02606147\tA\tT\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "splice_acceptor_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t374392\ttmp_4_374392_G_A\tG\tA\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t585707\tchr4_del3_585707_ATGA_A\tATGA\tA\t.\t.\t.",
    "combinations": [
     "inframe_deletion,start_lost,start_retained_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t587845\tENSVATH04301639\tGATATAT\tGAT,G,GATAT,GATATATAT\t.\t.\tThe 1001 Genomes Project_2016;TSA=sequence_alteration",
    "combinations": [
     "3_prime_UTR_variant,stop_retained_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t609955\tENSVATH10070497\tG\tGTATATATTA\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [
     "inframe_insertion,splice_region_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t801707\ttmp_4_801707_CTTTTGTTAACCGG_C\tCTTTTGTTAACCGG\tC\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "3_prime_UTR_variant,stop_lost"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t1014681\ttmp_4_1014682_A_AATAATC\tT\tTATAATC\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [
     "inframe_insertion,stop_retained_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t1491254\tchr4_ins1_1491254_T_TA\tT\tTA\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t1491254\tchr4_ins3_1491254_T_TACG\tT\tTACG\t.\t.\t.",
    "combinations": [
     "protein_altering_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t1505247\tchr4_del3_1505247_TTCC_T\tTTCC\tT\t.\t.\t.",
    "combinations": [
     "inframe_deletion,splice_region_variant,stop_gained"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t1529590\tENSVATH04305196\tTTAGGA\tT,TGGA\t.\t.\tThe 1001 Genomes Project_2016;TSA=sequence_alteration",
    "combinations": [
     "frameshift_variant,stop_lost"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t1543505\ttmp_4_1543506_GACC_AACC,G\tGGACC\tGAACC,GG\t.\t.\tThe 1001 Genomes Project_2016;TSA=indel",
    "combinations": [
     "inframe_deletion"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t1593203\tchr4_ins3_1593203_T_TACG\tT\tTACG\t.\t.\t.",
    "combinations": [
     "protein_altering_variant,splice_region_variant,stop_gained"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t1597864\tENSVATH02634282\tC\tA\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "missense_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t1756916\ttmp_4_1756916_T_C\tT\tC\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t1972592\tENSVATH00460364\tT\tC\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "start_lost"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t1982016\ttmp_4_1982016_ATAGG_A\tATAGG\tA\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t2036278\tENSVATH04306289\tC\tCT\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [
     "non_coding_transcript_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t2055349\ttmp_4_2055349_TTGTAGGAG_T\tTTGTAGGAG\tT\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "coding_sequence_variant,intron_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t2095513\tENSVATH06460075\tG\tA\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "non_coding_transcript_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t2095516\tENSVATH06460076\tA\tG\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_donor_region_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t2133679\ttmp_4_2133679_CCGT_C\tCCGT\tC\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "inframe_deletion,splice_region_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t2164706\tENSVATH08960811\tT\tG\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "intron_variant,splice_donor_5th_base_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t2194313\tENSVATH06465132\tC\tT\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t2204174\tENSVATH02652127\tG\tA\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "synonymous_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t2274508\tENSVATH00462999\tG\tT,A\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t2354830\ttmp_4_2354830_G_A\tG\tA\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "synonymous_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t2417927\ttmp_4_2417928_AAAGGTTTGAGACTT_CAAGGTTTGAGACTT,A\tAAAAGGTTTGAGACTT\tACAAGGTTTGAGACTT,AA\t.\t.\tThe 1001 Genomes Project_2016;TSA=indel",
    "combinations": [
     "5_prime_UTR_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t2527160\tENSVATH06477951\tCC\tCA,CT,CCA\t.\t.\tThe 1001 Genomes Project_2016;TSA=indel",
    "combinations": [
     "frameshift_variant,splice_region_variant,stop_gained"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t2577447\tENSVATH04308351\tA\tATTTAA\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [
     "frameshift_variant,start_lost,start_retained_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t2609439\tENSVATH04308570\tA\tACTA\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [
     "inframe_insertion,splice_region_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t2614318\tENSVATH06480602\tC\tT\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "splice_region_variant,synonymous_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t2628685\tchr4_mnv2_2628685_TT_AA\tTT\tAA\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,start_lost"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t2789680\tENSVATH09895642\tTA\tT\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "mature_miRNA_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t2808803\tENSVATH04309387\tC\tCTCA,CTGA\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [
     "inframe_insertion,stop_gained"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t2991944\ttmp_4_2991944_G_A\tG\tA\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "splice_region_variant,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t3318340\tchr4_ins3_3318340_T_TACG\tT\tTACG\t.\t.\t.",
    "combinations": [
     "inframe_insertion,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t3318340\tchr4_del2_3318340_TCC_T\tTCC\tT\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t3318340\tchr4_del4_3318340_TCCTT_T\tTCCTT\tT\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,intron_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t3666984\ttmp_4_3666984_C_A\tC\tA\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "intron_variant,splice_donor_5th_base_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t3759869\tENSVATH10967545\tC\tT\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "coding_sequence_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t3921724\tENSVATH10995274\tG\tA\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "missense_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t3929162\ttmp_4_3929163_AG_CG,A\tCAG\tCCG,CA\t.\t.\tThe 1001 Genomes Project_2016;TSA=indel",
    "combinations": [],
    "strata": [
@@ -865,56 +868,56 @@
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t3939534\tENSVATH06526552\tC\tT\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "non_coding_transcript_exon_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t3939853\tENSVATH00472330\tA\tG\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_donor_5th_base_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t3939934\ttmp_4_3939934_C_G\tC\tG\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t3939954\tENSVATH10999416\tT\tC\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "intron_variant,non_coding_transcript_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t3940240\ttmp_4_3940241_TGTA_GGTA,T\tGTGTA\tGGGTA,GT\t.\t.\tThe 1001 Genomes Project_2016;TSA=indel",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_donor_5th_base_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t3940247\ttmp_4_3940247_C_A\tC\tA\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "non_coding_transcript_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t4358701\tENSVATH02714359\tTC\tTCG,TCA,TT\t.\t.\tThe 1001 Genomes Project_2016;TSA=indel",
    "combinations": [
     "frameshift_variant,stop_gained"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t4449088\tENSVATH11105106\tG\tA,T\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [],
    "strata": [
@@ -922,70 +925,70 @@
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t4660347\tENSVATH06541541\tG\tA\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "stop_retained_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t4668038\tENSVATH02721610\tG\tA\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t4867002\tENSVATH11177789\tT\tC\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "non_coding_transcript_exon_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t4867712\ttmp_4_4867713_C_CCTTGA\tT\tTCTTGA\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t4867716\ttmp_4_4867716_CAG_C\tCAG\tC\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "non_coding_transcript_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t4868103\ttmp_4_4868103_A_G\tA\tG\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t5004615\tENSVATH11208257\tC\tA,T\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "splice_region_variant,stop_gained"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t5004618\tENSVATH06555167\tG\tA,T\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "splice_donor_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t5005023\ttmp_4_5005023_G_A\tG\tA\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "splice_region_variant,stop_gained"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t5160003\ttmp_4_5160003_T_G,A\tT\tG,A\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [],
    "strata": [
@@ -993,14 +996,14 @@
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t5188364\ttmp_4_5188364_T_G\tT\tG\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "splice_region_variant,start_lost"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t5279081\tENSVATH11264341\tG\tA,C\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [],
    "strata": [
@@ -1008,35 +1011,35 @@
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t5302972\ttmp_4_5302973_CTT_ATT,C\tACTT\tAATT,AC\t.\t.\tThe 1001 Genomes Project_2016;TSA=indel",
    "combinations": [
     "coding_sequence_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t5325336\tchr4_del4_5325336_ACCCA_A\tACCCA\tA\t.\t.\t.",
    "combinations": [
     "frameshift_variant,start_retained_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t5331766\tENSVATH04312883\tCTTTTAA\tC\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "3_prime_UTR_variant,stop_retained_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t5419421\tENSVATH10037539\tGTATGCTACA\tG\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "intron_variant,splice_donor_5th_base_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t5423833\tENSVATH02745767\tTT\tTA,TTGC\t.\t.\tThe 1001 Genomes Project_2016;TSA=indel",
    "combinations": [],
    "strata": [
@@ -1044,434 +1047,434 @@
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t5426446\tENSVATH02745918\tG\tA\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "splice_region_variant,synonymous_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t5444886\ttmp_4_5444887_G_GGTGAGATCA\tA\tAGTGAGATCA\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [
     "inframe_insertion,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t5599199\tchr4_mnv2_5599199_TG_AT\tTG\tAT\t.\t.\t.",
    "combinations": [
     "stop_gained"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t5615061\ttmp_4_5615061_TATAGGTAACA_T\tTATAGGTAACA\tT\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "coding_sequence_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t5648432\ttmp_4_5648432_C_A\tC\tA\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "splice_region_variant,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t5659169\tchr4_mnv2_5659169_TC_AG\tTC\tAG\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t5659169\tchr4_del3_5659169_TCTA_T\tTCTA\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t5683217\tENSVATH02753830\tGG\tGGT,GA,GGTTT\t.\t.\tThe 1001 Genomes Project_2016;TSA=indel",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t5730987\ttmp_4_5730988_A_AATT\tT\tTATT\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [
     "inframe_insertion,stop_retained_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t5770493\tENSVATH04314299\tA\tATAA\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [
     "inframe_insertion,stop_retained_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t5792397\tENSVATH06583926\tC\tT\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "coding_sequence_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t5820497\tENSVATH02757445\tA\tG\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "5_prime_UTR_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t5848873\ttmp_4_5848874_G_GGTAA\tA\tAGTAA\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [
     "frameshift_variant,splice_region_variant,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t5937751\tchr4_snv_5937751_G_T\tG\tT\t.\t.\t.",
    "combinations": [
     "start_lost,start_retained_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t5941744\ttmp_4_5941744_TACAG_T\tTACAG\tT\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "intron_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t6016562\tENSVATH11377396\tAG\tAA,AGTTGTGC\t.\t.\tThe 1001 Genomes Project_2016;TSA=indel",
    "combinations": [
     "inframe_insertion,splice_region_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t6143098\ttmp_4_6143098_ATTTCTTTACCTG_A\tATTTCTTTACCTG\tA\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "coding_sequence_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t6149593\ttmp_4_6149593_TA_T\tTA\tT\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t6239860\tENSVATH06597299\tT\tC\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "splice_region_variant,start_lost"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t6390796\tENSVATH00485774\tTC\tTT,TCGTTCATTGCAAATT,TCGTTCATTCAAATT\t.\t.\tThe 1001 Genomes Project_2016;TSA=indel",
    "combinations": [
     "intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t6448070\ttmp_4_6448070_ACC_A\tACC\tA\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "5_prime_UTR_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t6520029\tENSVATH04317146\tAATAACCTTT\tA\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "5_prime_UTR_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t6550979\ttmp_4_6550980_GA_AA,GAA,G\tTGA\tTAA,TGAA,TG\t.\t.\tThe 1001 Genomes Project_2016;TSA=indel",
    "combinations": [
     "frameshift_variant,start_retained_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t6572772\tENSVATH00487219\tT\tG\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "splice_region_variant,synonymous_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t6573267\ttmp_4_6573268_G_GT\tG\tGT\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [
     "frameshift_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t6585750\ttmp_4_6585751_CAAGTTA_AAAGTTA,C\tACAAGTTA\tAAAAGTTA,AC\t.\t.\tThe 1001 Genomes Project_2016;TSA=indel",
    "combinations": [
     "inframe_deletion,stop_lost"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t6664433\tENSVATH00488029\tG\tA\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "3_prime_UTR_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t6693434\ttmp_4_6693434_TACATAGGC_T\tTACATAGGC\tT\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "3_prime_UTR_variant,intron_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t6694000\ttmp_4_6694001_A_AT\tT\tTT\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [
     "stop_retained_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t6733338\tENSVATH10108505\tT\tTTGATAATTCA\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [
     "frameshift_variant,splice_region_variant,stop_gained"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t6733758\tENSVATH04318036\tGA\tG\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "intron_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t6759379\tENSVATH11485564\tAG\tA\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "frameshift_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t7064466\tchr4_del3_7064466_TTTC_T\tTTTC\tT\t.\t.\t.",
    "combinations": [
     "inframe_deletion,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t7090453\tchr4_del3_7090453_ATCA_A\tATCA\tA\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,start_lost,start_retained_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t7138360\tENSVATH10129779\tA\tATGA\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [
     "start_lost,start_retained_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t7186405\tchr4_mnv2_7186405_GT_TA\tGT\tTA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,coding_sequence_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t7204233\ttmp_4_7204234_A_T,AAGG\tCA\tCT,CAAGG\t.\t.\tThe 1001 Genomes Project_2016;TSA=indel",
    "combinations": [
     "inframe_insertion,splice_region_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t7254073\tENSVATH04320736\tCAT\tC\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "5_prime_UTR_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t7318396\ttmp_4_7318396_C_T\tC\tT\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "missense_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t7328416\ttmp_4_7328416_GTTCCTTA_G\tGTTCCTTA\tG\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "intron_variant,splice_donor_5th_base_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t7349795\ttmp_4_7349796_CAA_AAA,CA,C\tACAA\tAAAA,ACA,AC\t.\t.\tThe 1001 Genomes Project_2016;TSA=indel",
    "combinations": [
     "3_prime_UTR_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t7365307\ttmp_4_7365307_C_T\tC\tT\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "3_prime_UTR_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t7401855\tENSVATH10144373\tAT\tA\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "frameshift_variant,start_lost,start_retained_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t7410389\tENSVATH00495651\tA\tT,C\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "5_prime_UTR_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t7434610\tENSVATH02804588\tTA\tT\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "intron_variant,splice_donor_5th_base_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t7434612\ttmp_4_7434612_A_G\tA\tG\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "intron_variant,splice_donor_region_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t7480787\ttmp_4_7480787_AGT_AT,A\tAGT\tAT,A\t.\t.\tThe 1001 Genomes Project_2016;TSA=sequence_alteration",
    "combinations": [
     "5_prime_UTR_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t7544822\ttmp_4_7544823_C_CT\tT\tTT\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [
     "frameshift_variant,splice_region_variant,stop_gained"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t7669164\tENSVATH08990304\tC\tCTC\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [
     "frameshift_variant,start_retained_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t7728885\tENSVATH04322846\tTAGGTAAGGAA\tT\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "intron_variant,non_coding_transcript_exon_variant,splice_donor_5th_base_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t7843615\ttmp_4_7843615_AACGG_A\tAACGG\tA\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "non_coding_transcript_exon_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t7893287\ttmp_4_7893288_CG_TG,C\tACG\tATG,AC\t.\t.\tThe 1001 Genomes Project_2016;TSA=indel",
    "combinations": [
     "coding_sequence_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t7973644\tENSVATH00500313\tT\tC\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "splice_region_variant,stop_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t7973901\tchr4_snv_7973901_A_C\tA\tC\t.\t.\t.",
    "combinations": [
     "splice_region_variant,stop_lost"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t8021972\tENSVATH06653573\tT\tC\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "splice_donor_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t8021975\tENSVATH08337225\tT\tA\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "intron_variant,splice_donor_5th_base_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t8046367\tENSVATH08993294\tA\tAAAAGAAGCGGTG\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [
     "inframe_insertion,stop_gained"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t8062237\tENSVATH04324684\tATGCACTG\tA\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "5_prime_UTR_variant,intron_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t8113291\tENSVATH04324973\tC\tCTT\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [
     "frameshift_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t8114099\ttmp_4_8114100_C_CCCT\tA\tACCT\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [
     "inframe_insertion,splice_region_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t8126807\tENSVATH04325019\tCAAGT\tC\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "5_prime_UTR_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t8149925\tENSVATH08338290\tAC\tAA,ACT\t.\t.\tThe 1001 Genomes Project_2016;TSA=indel",
    "combinations": [],
    "strata": [
@@ -1479,35 +1482,35 @@
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t8183590\ttmp_4_8183591_ATACTAAGG_GTACTAAGG,A\tCATACTAAGG\tCGTACTAAGG,CA\t.\t.\tThe 1001 Genomes Project_2016;TSA=indel",
    "combinations": [
     "3_prime_UTR_variant,stop_lost"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t8243803\ttmp_4_8243804_A_AT\tC\tCT\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [
     "frameshift_variant,splice_region_variant,start_lost"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t8297302\tENSVATH02830680\tTA\tTG,TATTG\t.\t.\tThe 1001 Genomes Project_2016;TSA=indel",
    "combinations": [
     "protein_altering_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t8298358\ttmp_4_8298358_TAAATCA_T\tTAAATCA\tT\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "3_prime_UTR_variant,stop_lost"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t8312820\tENSVATH15361292\tTAA\tT,TA\t.\t.\tThe 1001 Genomes Project_2016;TSA=sequence_alteration",
    "combinations": [],
    "strata": [
@@ -1515,70 +1518,70 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t8335830\tchr4_ins3_8335830_T_TACG\tT\tTACG\t.\t.\t.",
    "combinations": [
     "protein_altering_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t8397799\tchr4_del1_8397799_AA_A\tAA\tA\t.\t.\t.",
    "combinations": [
     "frameshift_variant,start_lost,start_retained_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t8397799\tchr4_mnv2_8397799_AA_CC\tAA\tCC\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,start_lost"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t8646599\ttmp_4_8646600_ACTC_CCTC,A\tTACTC\tTCCTC,TA\t.\t.\tThe 1001 Genomes Project_2016;TSA=indel",
    "combinations": [
     "inframe_deletion"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t8850471\tENSVATH04328321\tATT\tAT,A,ATTT\t.\t.\tThe 1001 Genomes Project_2016;TSA=sequence_alteration",
    "combinations": [
     "5_prime_UTR_variant,start_lost,start_retained_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t9084003\tENSVATH06684098\tG\tA\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "intron_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t9087177\ttmp_4_9087177_ACGGATCAG_A\tACGGATCAG\tA\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "3_prime_UTR_variant,stop_lost"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t9207165\ttmp_4_9207165_C_T\tC\tT\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "splice_region_variant,stop_retained_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t9280536\ttmp_4_9280536_AAATG_A\tAAATG\tA\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "inframe_deletion,stop_retained_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t9281890\tENSVATH06689160\tC\tT,G\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [],
    "strata": [
@@ -1586,35 +1589,35 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t9307344\tchr4_ins3_9307344_T_TACG\tT\tTACG\t.\t.\t.",
    "combinations": [
     "protein_altering_variant,splice_region_variant,stop_gained"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t9318766\ttmp_4_9318767_TC_CC,T\tATC\tACC,AT\t.\t.\tThe 1001 Genomes Project_2016;TSA=indel",
    "combinations": [
     "coding_sequence_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t9398819\tENSVATH15363431\tTGGA\tT\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "inframe_deletion,start_lost,start_retained_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t9483001\tENSVATH08347142\tAC\tAT,ACAAGATAGGA\t.\t.\tThe 1001 Genomes Project_2016;TSA=indel",
    "combinations": [
     "inframe_insertion"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t9488427\tENSVATH10218235\tA\tAAATAAAAT,AATAAAAT,AAAATAAAAT,ATAAAAT\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [],
    "strata": [
@@ -1622,161 +1625,161 @@
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t9557579\tENSVATH10224189\tT\tTAAATT\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [
     "coding_sequence_variant,inframe_insertion"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t9586704\ttmp_4_9586704_T_A\tT\tA\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "3_prime_UTR_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t9591202\tchr4_del3_9591202_GTTG_G\tGTTG\tG\t.\t.\t.",
    "combinations": [
     "inframe_deletion,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t9767114\tchr4_del3_9767114_TCAG_T\tTCAG\tT\t.\t.\t.",
    "combinations": [
     "inframe_deletion,stop_lost"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t9786643\tENSVATH02866949\tA\tG\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "splice_region_variant,start_lost"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t9834662\tENSVATH09005660\tAT\tATT,A,ATTT\t.\t.\tThe 1001 Genomes Project_2016;TSA=sequence_alteration",
    "combinations": [
     "frameshift_variant,start_lost,start_retained_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t9855220\ttmp_4_9855220_ATATAT_A,AATAT\tATATAT\tA,AATAT\t.\t.\tThe 1001 Genomes Project_2016;TSA=sequence_alteration",
    "combinations": [
     "frameshift_variant,stop_lost"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t9866524\ttmp_4_9866524_G_C\tG\tC\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "splice_region_variant,stop_lost"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t10096286\ttmp_4_10096286_A_G\tA\tG\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "missense_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t10522736\tchr4_del4_10522736_AGGAA_A\tAGGAA\tA\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t10523299\tENSVATH09624086\tGGT\tG,GGTGT\t.\t.\tThe 1001 Genomes Project_2016;TSA=sequence_alteration",
    "combinations": [
     "frameshift_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t10537929\tENSVATH06724230\tT\tC\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "splice_acceptor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t10768613\tchr4_del2_10768613_ATT_A\tATT\tA\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t10768613\tchr4_del3_10768613_ATTG_A\tATTG\tA\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,start_lost,start_retained_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t10768613\tchr4_del4_10768613_ATTGT_A\tATTGT\tA\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,start_lost,start_retained_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t10816646\tENSVATH02889011\tCC\tCA,CCACAATA\t.\t.\tThe 1001 Genomes Project_2016;TSA=indel",
    "combinations": [
     "inframe_insertion"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t10832726\tENSVATH09485823\tTG\tTGTT,TA\t.\t.\tThe 1001 Genomes Project_2016;TSA=indel",
    "combinations": [
     "frameshift_variant,start_retained_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t10953870\tENSVATH09649816\tG\tGAGT\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [
     "protein_altering_variant,stop_gained"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t11207902\ttmp_4_11207903_T_TC\tG\tGC\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t11375390\tENSVATH14271657\tA\tG\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "mature_miRNA_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t11447356\ttmp_4_11447356_CCACTTGAGCTCAT_CGACACTTGAGCTCAT,C\tCCACTTGAGCTCAT\tCGACACTTGAGCTCAT,C\t.\t.\tThe 1001 Genomes Project_2016;TSA=sequence_alteration",
    "combinations": [
     "frameshift_variant,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t11486254\tchr4_del3_11486254_TCAG_T\tTCAG\tT\t.\t.\t.",
    "combinations": [
     "inframe_deletion,splice_region_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t11604283\ttmp_4_11604284_ATT_ATTT,ATTTT,ATTTTT,TTT,AT,A\tCATT\tCATTT,CATTTT,CATTTTT,CTTT,CAT,CA\t.\t.\tThe 1001 Genomes Project_2016;TSA=indel",
    "combinations": [
     "5_prime_UTR_variant,start_lost",
@@ -1784,105 +1787,105 @@
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t11648311\ttmp_4_11648311_AT_ATTT,ATTTT,A\tAT\tATTT,ATTTT,A\t.\t.\tThe 1001 Genomes Project_2016;TSA=sequence_alteration",
    "combinations": [
     "start_lost,start_retained_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t11762293\ttmp_4_11762293_TG_T\tTG\tT\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "frameshift_variant,start_retained_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t11852085\ttmp_4_11852085_G_T\tG\tT\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "intron_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t11914024\tENSVATH02909900\tCT\tCTAATCTTACTCC,CTAATCTTACACC,CC\t.\t.\tThe 1001 Genomes Project_2016;TSA=indel",
    "combinations": [
     "inframe_insertion,stop_retained_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t11924035\tchr4_del4_11924035_GCCCT_G\tGCCCT\tG\t.\t.\t.",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t11937468\tENSVATH15369156\tTGAA\tT\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "inframe_deletion,start_lost,start_retained_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t12007993\tchr4_mnv2_12007993_TC_AG\tTC\tAG\t.\t.\t.",
    "combinations": [
     "splice_region_variant,synonymous_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t12215889\tchr4_mnv2_12215889_TT_AA\tTT\tAA\t.\t.\t.",
    "combinations": [
     "splice_region_variant,stop_gained"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t12218524\ttmp_4_12218524_GC_G\tGC\tG\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "frameshift_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t12258067\ttmp_4_12258067_A_G\tA\tG\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "intron_variant,splice_donor_region_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t12301640\ttmp_4_12301640_TGA_T\tTGA\tT\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "frameshift_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t12427056\tchr4_snv_12427056_T_A\tT\tA\t.\t.\t.",
    "combinations": [
     "splice_region_variant,start_lost"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t12819736\ttmp_4_12819736_TTATC_T\tTTATC\tT\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "3_prime_UTR_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t12935230\tENSVATH15094817\tGA\tG\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "stop_retained_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t12980983\ttmp_4_12980984_C_CT,CTT\tA\tAT,ATT\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [],
    "strata": [
@@ -1890,49 +1893,49 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t13229382\tchr4_ins3_13229382_C_CACG\tC\tCACG\t.\t.\t.",
    "combinations": [
     "protein_altering_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t13282028\tchr4_snv_13282028_G_T\tG\tT\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t13540218\tENSVATH06782452\tT\tA\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "splice_region_variant,start_lost"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t13566242\tENSVATH04344955\tG\tGTGA\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [
     "inframe_insertion,splice_region_variant,stop_gained"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t14244507\ttmp_4_14244508_G_GTATA\tG\tGTATA\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [
     "frameshift_variant,splice_region_variant,stop_gained"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t14354864\tENSVATH15114200\tAT\tA\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "frameshift_variant,start_lost,start_retained_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t14407590\ttmp_4_14407591_T_TTA,TTATA\tA\tATA,ATATA\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [],
    "strata": [
@@ -1940,224 +1943,224 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t14422785\tchr4_del3_14422785_TCAG_T\tTCAG\tT\t.\t.\t.",
    "combinations": [
     "inframe_deletion,splice_region_variant,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t14484754\tchr4_ins3_14484754_C_CACG\tC\tCACG\t.\t.\t.",
    "combinations": [
     "protein_altering_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t14910541\tchr4_del2_14910541_TTA_T\tTTA\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_donor_region_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t14910541\tchr4_del4_14910541_TTACA_T\tTTACA\tT\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,intron_variant,splice_donor_region_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t15059506\ttmp_4_15059506_G_T\tG\tT\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "splice_region_variant,synonymous_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t15090451\tchr4_del2_15090451_ATA_A\tATA\tA\t.\t.\t.",
    "combinations": [
     "frameshift_variant,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t15230381\tchr4_ins3_15230381_A_AACG\tA\tAACG\t.\t.\t.",
    "combinations": [
     "inframe_insertion,stop_retained_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t15344029\ttmp_4_15344029_TGAAACTTAACG_T\tTGAAACTTAACG\tT\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "3_prime_UTR_variant,stop_lost"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t15516406\ttmp_4_15516406_CATTGCATG_C\tCATTGCATG\tC\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "5_prime_UTR_variant,start_lost,start_retained_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t16135751\tENSVATH09776729\tA\tAATCTCTA\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [
     "coding_sequence_variant,inframe_insertion"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t16368283\ttmp_4_16368284_CGT_TGT,C\tACGT\tATGT,AC\t.\t.\tThe 1001 Genomes Project_2016;TSA=indel",
    "combinations": [
     "coding_sequence_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t16508584\ttmp_4_16508584_TCTAG_T\tTCTAG\tT\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "inframe_deletion,stop_retained_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t16601091\tENSVATH06825315\tC\tT\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "missense_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t16650902\tENSVATH06826052\tG\tC\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "3_prime_UTR_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t16677657\tchr4_del4_16677657_ACAAG_A\tACAAG\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t16737627\tchr4_del3_16737627_AAAT_A\tAAAT\tA\t.\t.\t.",
    "combinations": [
     "inframe_deletion,splice_region_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t16738531\ttmp_4_16738532_G_GTTA\tA\tATTA\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [
     "inframe_insertion,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t16953519\tchr4_del4_16953519_TTACC_T\tTTACC\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,intron_variant,splice_donor_region_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t16995498\tchr4_del2_16995498_GTT_G\tGTT\tG\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_region_variant,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t17707142\tchr4_mnv2_17707142_TA_AC\tTA\tAC\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t17707142\tchr4_del4_17707142_TATGA_T\tTATGA\tT\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t17801775\ttmp_4_17801776_G_GTTA\tC\tCTTA\t.\t.\tThe 1001 Genomes Project_2016;TSA=insertion",
    "combinations": [
     "inframe_insertion,splice_region_variant,stop_gained"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t18161111\tENSVATH04355055\tTTCTTGTTAGGTAC\tT\t.\t.\tThe 1001 Genomes Project_2016;TSA=deletion",
    "combinations": [
     "5_prime_UTR_variant,intron_variant,splice_donor_region_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "4\t18210890\tchr4_del4_18210890_AAGTA_A\tAAGTA\tA\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,intron_variant,splice_donor_region_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "1001g_chr4",
+   "dataset": "1001g_chr4",
    "vcf": "4\t18397393\ttmp_4_18397393_A_G\tA\tG\t.\t.\tThe 1001 Genomes Project_2016;TSA=SNV",
    "combinations": [
     "splice_region_variant,stop_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t273\tmt_snv_273_T_A\tT\tA\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t273\tmt_snv_273_T_C\tT\tC\t.\t.\t.",
    "combinations": [
     "stop_retained_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t274\tmt_snv_274_T_C\tT\tC\t.\t.\t.",
    "combinations": [
     "stop_retained_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t276\tmt_snv_276_A_C\tA\tC\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t276\tmt_snv_276_A_G\tA\tG\t.\t.\t.",
    "combinations": [
     "synonymous_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t282\tmt_snv_282_A_T\tA\tT\t.\t.\t.",
    "combinations": [
     "stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t383\tpt_snv_383_T_A\tT\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2166,7 +2169,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t383\tpt_snv_383_T_C\tT\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2175,7 +2178,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t386\tpt_snv_386_T_A\tT\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2184,7 +2187,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t387\tpt_snv_387_C_A\tC\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2193,7 +2196,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t388\tpt_snv_388_C_A\tC\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2202,49 +2205,49 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t732\tmt_snv_732_C_A\tC\tA\t.\t.\t.",
    "combinations": [
     "start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t732\tmt_snv_732_C_T\tC\tT\t.\t.\t.",
    "combinations": [
     "start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t733\tmt_snv_733_A_G\tA\tG\t.\t.\t.",
    "combinations": [
     "start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t734\tmt_snv_734_T_A\tT\tA\t.\t.\t.",
    "combinations": [
     "start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t734\tmt_snv_734_T_C\tT\tC\t.\t.\t.",
    "combinations": [
     "start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t734\tmt_snv_734_T_G\tT\tG\t.\t.\t.",
    "combinations": [
     "start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t1160\tpt_del3_1160_TGGG_T\tTGGG\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2253,7 +2256,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t1442\tpt_snv_1442_C_A\tC\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2262,7 +2265,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t1442\tpt_snv_1442_C_G\tC\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2271,7 +2274,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t1442\tpt_snv_1442_C_T\tC\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2280,7 +2283,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t1443\tpt_snv_1443_A_G\tA\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2289,7 +2292,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t1444\tpt_snv_1444_T_A\tT\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2298,7 +2301,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t1444\tpt_snv_1444_T_C\tT\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2307,7 +2310,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t1444\tpt_snv_1444_T_G\tT\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2316,7 +2319,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t3074\tpt_ins3_3074_T_TACG\tT\tTACG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2326,7 +2329,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t5284\tpt_snv_5284_G_A\tG\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2335,7 +2338,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t6147\tpt_snv_6147_A_C\tA\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2344,7 +2347,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t6148\tpt_ins3_6148_C_CACG\tC\tCACG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2353,7 +2356,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t6148\tpt_mnv2_6148_CG_GT\tCG\tGT\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,splice_donor_variant",
@@ -2362,7 +2365,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t7018\tpt_del1_7018_TG_T\tTG\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2371,7 +2374,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t7018\tpt_del3_7018_TGCT_T\tTGCT\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2380,28 +2383,28 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t10759\tmt_mnv2_10759_CT_GA\tCT\tGA\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t11919\tmt_snv_11919_T_G\tT\tG\t.\t.\t.",
    "combinations": [
     "start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t11919\tmt_ins1_11919_T_TA\tT\tTA\t.\t.\t.",
    "combinations": [
     "frameshift_variant,start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t11919\tmt_del1_11919_TG_T\tTG\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2410,7 +2413,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t11919\tmt_del3_11919_TGTT_T\tTGTT\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2419,7 +2422,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t11948\tmt_ins3_11948_A_AACG\tA\tAACG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2428,7 +2431,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t12238\tmt_del4_12238_GTAAA_G\tGTAAA\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,stop_retained_variant",
@@ -2437,35 +2440,35 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t16878\tmt_ins3_16878_T_TACG\tT\tTACG\t.\t.\t.",
    "combinations": [
     "protein_altering_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t17131\tmt_snv_17131_C_G\tC\tG\t.\t.\t.",
    "combinations": [
     "synonymous_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t17215\tmt_snv_17215_G_A\tG\tA\t.\t.\t.",
    "combinations": [
     "stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t17226\tmt_del3_17226_ACTG_A\tACTG\tA\t.\t.\t.",
    "combinations": [
     "inframe_deletion,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t23664\tmt_del2_23664_TAT_T\tTAT\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2474,7 +2477,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t23664\tmt_del3_23664_TATC_T\tTATC\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2483,7 +2486,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t27078\tmt_snv_27078_A_C\tA\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2492,7 +2495,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t28657\tmt_snv_28657_C_A\tC\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2501,77 +2504,77 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t34191\tmt_del3_34191_TGGC_T\tTGGC\tT\t.\t.\t.",
    "combinations": [
     "inframe_deletion,start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t34423\tmt_snv_34423_T_A\tT\tA\t.\t.\t.",
    "combinations": [
     "stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t34423\tmt_del3_34423_TGAT_T\tTGAT\tT\t.\t.\t.",
    "combinations": [
     "inframe_deletion"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t40602\tmt_snv_40602_T_G\tT\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t41928\tmt_snv_41928_C_A\tC\tA\t.\t.\t.",
    "combinations": [
     "splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t41931\tmt_snv_41931_G_C\tG\tC\t.\t.\t.",
    "combinations": [
     "missense_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t42050\tmt_ins3_42050_G_GACG\tG\tGACG\t.\t.\t.",
    "combinations": [
     "inframe_insertion"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t42311\tmt_del3_42311_TGAG_T\tTGAG\tT\t.\t.\t.",
    "combinations": [
     "inframe_deletion,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t48285\tmt_del3_48285_TTGA_T\tTTGA\tT\t.\t.\t.",
    "combinations": [
     "inframe_deletion"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t51591\tmt_ins3_51591_T_TACG\tT\tTACG\t.\t.\t.",
    "combinations": [
     "protein_altering_variant,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t59247\tpt_ins1_59247_A_AA\tA\tAA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2580,14 +2583,14 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t59247\tpt_ins3_59247_A_AACG\tA\tAACG\t.\t.\t.",
    "combinations": [
     "start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t60320\tpt_del4_60320_ATTTT_A\tATTTT\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2596,14 +2599,14 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t61306\tmt_ins3_61306_G_GACG\tG\tGACG\t.\t.\t.",
    "combinations": [
     "inframe_insertion"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t63539\tpt_del3_63539_TACA_T\tTACA\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2612,7 +2615,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t63800\tpt_del4_63800_TTTCT_T\tTTTCT\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,stop_retained_variant",
@@ -2621,14 +2624,14 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t69252\tmt_ins2_69252_A_AAC\tA\tAAC\t.\t.\t.",
    "combinations": [
     "frameshift_variant,start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t74182\tpt_ins3_74182_G_GACG\tG\tGACG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2637,7 +2640,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t79740\tmt_snv_79740_C_A\tC\tA\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,incomplete_terminal_codon_variant",
@@ -2646,21 +2649,21 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t79740\tmt_snv_79740_C_G\tC\tG\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,incomplete_terminal_codon_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t79740\tmt_snv_79740_C_T\tC\tT\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,incomplete_terminal_codon_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t79741\tmt_snv_79741_C_A\tC\tA\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,incomplete_terminal_codon_variant",
@@ -2669,42 +2672,42 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t79741\tmt_snv_79741_C_G\tC\tG\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,incomplete_terminal_codon_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t79741\tmt_snv_79741_C_T\tC\tT\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,incomplete_terminal_codon_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t80127\tmt_del3_80127_ATTA_A\tATTA\tA\t.\t.\t.",
    "combinations": [
     "inframe_deletion,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t81113\tmt_ins3_81113_A_AACG\tA\tAACG\t.\t.\t.",
    "combinations": [
     "protein_altering_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t82389\tmt_ins3_82389_C_CACG\tC\tCACG\t.\t.\t.",
    "combinations": [
     "protein_altering_variant,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t84282\tpt_snv_84282_A_T\tA\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2713,7 +2716,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t84283\tpt_snv_84283_C_G\tC\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2722,7 +2725,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t84283\tpt_snv_84283_C_T\tC\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2731,196 +2734,196 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t89726\tmt_ins3_89726_C_CACG\tC\tCACG\t.\t.\t.",
    "combinations": [
     "protein_altering_variant,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t89726\tmt_del3_89726_CCAT_C\tCCAT\tC\t.\t.\t.",
    "combinations": [
     "inframe_deletion,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t90052\tmt_snv_90052_C_A\tC\tA\t.\t.\t.",
    "combinations": [
     "start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t91002\tmt_del1_91002_TG_T\tTG\tT\t.\t.\t.",
    "combinations": [
     "frameshift_variant,start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t91002\tmt_del3_91002_TGAT_T\tTGAT\tT\t.\t.\t.",
    "combinations": [
     "inframe_deletion,start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t91118\tmt_snv_91118_A_C\tA\tC\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t91292\tmt_ins3_91292_T_TACG\tT\tTACG\t.\t.\t.",
    "combinations": [
     "protein_altering_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t91379\tmt_del3_91379_CCCT_C\tCCCT\tC\t.\t.\t.",
    "combinations": [
     "inframe_deletion,stop_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t91379\tmt_del4_91379_CCCTG_C\tCCCTG\tC\t.\t.\t.",
    "combinations": [
     "frameshift_variant,stop_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t103324\tpt_snv_103324_A_C\tA\tC\t.\t.\t.",
    "combinations": [
     "upstream_gene_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t103565\tpt_snv_103565_A_C\tA\tC\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t103702\tpt_snv_103702_A_C\tA\tC\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t103704\tpt_del2_103704_TGG_T\tTGG\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_donor_region_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t103704\tpt_del4_103704_TGGGT_T\tTGGGT\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_donor_5th_base_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t103711\tpt_snv_103711_T_G\tT\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t103820\tpt_snv_103820_C_A\tC\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t104951\tmt_del3_104951_GGCC_G\tGGCC\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,stop_retained_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t104955\tmt_snv_104955_T_G\tT\tG\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t109405\tpt_snv_109405_G_A\tG\tA\t.\t.\t.",
    "combinations": [
     "start_lost,start_retained_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t112142\tmt_snv_112142_G_T\tG\tT\t.\t.\t.",
    "combinations": [
     "synonymous_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t112868\tmt_del4_112868_AATCT_A\tAATCT\tA\t.\t.\t.",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t116578\tmt_snv_116578_G_C\tG\tC\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t116754\tmt_mnv2_116754_AA_CC\tAA\tCC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,coding_sequence_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t118378\tpt_mnv2_118378_TA_AC\tTA\tAC\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t128653\tpt_snv_128653_G_A\tG\tA\t.\t.\t.",
    "combinations": [
     "stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t129244\tpt_snv_129244_C_T\tC\tT\t.\t.\t.",
    "combinations": [
     "start_lost,start_retained_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t130384\tmt_ins2_130384_G_GAC\tG\tGAC\t.\t.\t.",
    "combinations": [
     "stop_retained_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t130384\tmt_ins3_130384_G_GACG\tG\tGACG\t.\t.\t.",
    "combinations": [
     "inframe_insertion,stop_retained_variant",
@@ -2928,7 +2931,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t132211\tmt_del3_132211_CCAG_C\tCCAG\tC\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,splice_donor_variant",
@@ -2937,49 +2940,49 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t132216\tmt_snv_132216_G_A\tG\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_donor_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t133852\tpt_snv_133852_T_C\tT\tC\t.\t.\t.",
    "combinations": [
     "upstream_gene_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t134774\tmt_snv_134774_T_A\tT\tA\t.\t.\t.",
    "combinations": [
     "splice_region_variant,synonymous_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t135082\tpt_del3_135082_CGTG_C\tCGTG\tC\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Pt\t135082\tpt_del4_135082_CGTGA_C\tCGTGA\tC\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_exon_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t137894\tmt_snv_137894_C_A\tC\tA\t.\t.\t.",
    "combinations": [
     "splice_region_variant,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t154744\tmt_ins1_154744_A_AA\tA\tAA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -2988,133 +2991,133 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t155667\tmt_snv_155667_A_T\tA\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t164140\tmt_del3_164140_GGGC_G\tGGGC\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_donor_region_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t177026\tmt_snv_177026_A_G\tA\tG\t.\t.\t.",
    "combinations": [
     "start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t182635\tmt_snv_182635_G_A\tG\tA\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t202095\tmt_snv_202095_T_A\tT\tA\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t202156\tmt_snv_202156_C_T\tC\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t204305\tmt_del3_204305_ACGC_A\tACGC\tA\t.\t.\t.",
    "combinations": [
     "inframe_deletion,start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t207553\tmt_del3_207553_TTAG_T\tTTAG\tT\t.\t.\t.",
    "combinations": [
     "inframe_deletion,stop_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t207553\tmt_del4_207553_TTAGC_T\tTTAGC\tT\t.\t.\t.",
    "combinations": [
     "frameshift_variant,stop_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t207698\tmt_del2_207698_TCA_T\tTCA\tT\t.\t.\t.",
    "combinations": [
     "frameshift_variant,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t207872\tmt_del3_207872_TCAC_T\tTCAC\tT\t.\t.\t.",
    "combinations": [
     "inframe_deletion,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t209496\tmt_del4_209496_GAGAT_G\tGAGAT\tG\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,coding_sequence_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t209583\tmt_ins1_209583_T_TA\tT\tTA\t.\t.\t.",
    "combinations": [
     "frameshift_variant,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t218421\tmt_snv_218421_T_C\tT\tC\t.\t.\t.",
    "combinations": [
     "synonymous_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t218602\tmt_mnv2_218602_CT_GA\tCT\tGA\t.\t.\t.",
    "combinations": [
     "stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t219008\tmt_ins3_219008_G_GACG\tG\tGACG\t.\t.\t.",
    "combinations": [
     "inframe_insertion"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t222024\tmt_del3_222024_AAGC_A\tAAGC\tA\t.\t.\t.",
    "combinations": [
     "inframe_deletion,start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t227708\tmt_mnv2_227708_TT_AA\tTT\tAA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,coding_sequence_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t234900\tmt_mnv2_234900_TC_AG\tTC\tAG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -3123,35 +3126,35 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t241860\tmt_del3_241860_GTGT_G\tGTGT\tG\t.\t.\t.",
    "combinations": [
     "inframe_deletion"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t251401\tmt_del2_251401_CAT_C\tCAT\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,stop_retained_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t251403\tmt_snv_251403_T_G\tT\tG\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t251801\tmt_snv_251801_A_T\tA\tT\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t257475\tmt_snv_257475_A_T\tA\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -3160,7 +3163,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t257476\tmt_snv_257476_C_A\tC\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -3169,7 +3172,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t257476\tmt_snv_257476_C_T\tC\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -3178,42 +3181,42 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t270251\tmt_ins3_270251_C_CACG\tC\tCACG\t.\t.\t.",
    "combinations": [
     "protein_altering_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t270280\tmt_ins3_270280_C_CACG\tC\tCACG\t.\t.\t.",
    "combinations": [
     "protein_altering_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t270386\tmt_snv_270386_A_C\tA\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t272945\tmt_snv_272945_C_T\tC\tT\t.\t.\t.",
    "combinations": [
     "stop_retained_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t273238\tmt_ins2_273238_G_GAC\tG\tGAC\t.\t.\t.",
    "combinations": [
     "frameshift_variant,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t278893\tmt_del2_278893_GAA_G\tGAA\tG\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,start_lost",
@@ -3222,126 +3225,126 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t278893\tmt_del3_278893_GAAT_G\tGAAT\tG\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t278893\tmt_del4_278893_GAATG_G\tGAATG\tG\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t278951\tmt_del1_278951_AG_A\tAG\tA\t.\t.\t.",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t288431\tmt_snv_288431_G_C\tG\tC\t.\t.\t.",
    "combinations": [
     "intron_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t289043\tmt_ins3_289043_T_TACG\tT\tTACG\t.\t.\t.",
    "combinations": [
     "protein_altering_variant,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t289082\tmt_snv_289082_G_T\tG\tT\t.\t.\t.",
    "combinations": [
     "start_lost,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t289333\tmt_ins3_289333_A_AACG\tA\tAACG\t.\t.\t.",
    "combinations": [
     "inframe_insertion"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t289396\tmt_snv_289396_G_C\tG\tC\t.\t.\t.",
    "combinations": [
     "stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t289420\tmt_ins3_289420_T_TACG\tT\tTACG\t.\t.\t.",
    "combinations": [
     "protein_altering_variant,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t293237\tmt_snv_293237_T_C\tT\tC\t.\t.\t.",
    "combinations": [
     "synonymous_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t293335\tmt_ins1_293335_C_CA\tC\tCA\t.\t.\t.",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t294292\tmt_del3_294292_AGCA_A\tAGCA\tA\t.\t.\t.",
    "combinations": [
     "inframe_deletion,start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t296844\tmt_del3_296844_CAAG_C\tCAAG\tC\t.\t.\t.",
    "combinations": [
     "inframe_deletion,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t297115\tmt_snv_297115_G_A\tG\tA\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t310880\tmt_ins2_310880_T_TAC\tT\tTAC\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t310880\tmt_del3_310880_TGAT_T\tTGAT\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,stop_retained_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t312736\tmt_del3_312736_AGAT_A\tAGAT\tA\t.\t.\t.",
    "combinations": [
     "inframe_deletion"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t318389\tmt_snv_318389_G_A\tG\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -3349,119 +3352,119 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t325302\tmt_snv_325302_G_A\tG\tA\t.\t.\t.",
    "combinations": [
     "start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t326279\tmt_del3_326279_TTTG_T\tTTTG\tT\t.\t.\t.",
    "combinations": [
     "inframe_deletion,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t328077\tmt_del4_328077_AATAG_A\tAATAG\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_exon_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t329730\tmt_del3_329730_GCCC_G\tGCCC\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_donor_region_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t332941\tmt_snv_332941_G_A\tG\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_donor_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t347072\tmt_ins3_347072_C_CACG\tC\tCACG\t.\t.\t.",
    "combinations": [
     "protein_altering_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t347188\tmt_del4_347188_CGCTT_C\tCGCTT\tC\t.\t.\t.",
    "combinations": [
     "frameshift_variant,stop_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t347304\tmt_ins3_347304_T_TACG\tT\tTACG\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t347304\tmt_del2_347304_TTT_T\tTTT\tT\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t347305\tmt_snv_347305_T_C\tT\tC\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t361050\tmt_ins1_361050_C_CA\tC\tCA\t.\t.\t.",
    "combinations": [
     "frameshift_variant,start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t361050\tmt_del1_361050_CA_C\tCA\tC\t.\t.\t.",
    "combinations": [
     "frameshift_variant,start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t361050\tmt_del2_361050_CAT_C\tCAT\tC\t.\t.\t.",
    "combinations": [
     "frameshift_variant,start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t361050\tmt_del3_361050_CATT_C\tCATT\tC\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,coding_sequence_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t364037\tmt_del3_364037_ACGT_A\tACGT\tA\t.\t.\t.",
    "combinations": [
     "inframe_deletion,stop_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mt\t364037\tmt_del4_364037_ACGTA_A\tACGTA\tA\t.\t.\t.",
    "combinations": [
     "frameshift_variant,stop_lost"
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "flag_sets": [
@@ -3484,7 +3487,8 @@
     "human-only-flags-on-another-species"
    ],
    "masks": [
-    "regulatory_feature_rows"
+    "regulatory_feature_rows",
+    "start_codon_kept_without_five_prime_utr"
    ],
    "divergences": [
     {
@@ -3511,7 +3515,7 @@
      ],
      "vep_consequence_set": "frameshift_variant,splice_donor_variant",
      "vep_rs_consequence_sets": [
-      "frameshift_variant"
+      "frameshift_variant,splice_region_variant"
      ],
      "expected_divergence": "splice_term_past_the_record_span"
     },
@@ -3654,6 +3658,20 @@
       "start_retained_variant"
      ],
      "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "4:11762294",
+     "allele": "-",
+     "feature": "AT4G22230.2",
+     "feature_type": "Transcript",
+     "record_indices": [
+      177
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_codon_kept_without_five_prime_utr"
     },
     {
      "location": "4:11937469-11937471",
@@ -4090,6 +4108,34 @@
      "expected_divergence": "stop_retained_without_stop_codon_test"
     },
     {
+     "location": "Mt:257475",
+     "allele": "T",
+     "feature": "ATMG00960.1",
+     "feature_type": "Transcript",
+     "record_indices": [
+      359
+     ],
+     "vep_consequence_set": "start_lost",
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "start_codon_overlap_without_start_codon"
+    },
+    {
+     "location": "Mt:257476",
+     "allele": "A",
+     "feature": "ATMG00960.1",
+     "feature_type": "Transcript",
+     "record_indices": [
+      360
+     ],
+     "vep_consequence_set": "start_lost",
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "start_codon_overlap_without_start_codon"
+    },
+    {
      "location": "Mt:257476",
      "allele": "T",
      "feature": "ATMG00960.1",
@@ -4099,9 +4145,37 @@
      ],
      "vep_consequence_set": "start_lost,start_retained_variant",
      "vep_rs_consequence_sets": [
-      "start_retained_variant"
+      "missense_variant"
      ],
-     "expected_divergence": "start_cooccurrence_swap"
+     "expected_divergence": "start_codon_overlap_without_start_codon"
+    },
+    {
+     "location": "Mt:289082",
+     "allele": "T",
+     "feature": "ATMG01120.1",
+     "feature_type": "Transcript",
+     "record_indices": [
+      373
+     ],
+     "vep_consequence_set": "start_lost,stop_gained",
+     "vep_rs_consequence_sets": [
+      "stop_gained"
+     ],
+     "expected_divergence": "start_codon_overlap_without_start_codon"
+    },
+    {
+     "location": "Mt:294293-294295",
+     "allele": "-",
+     "feature": "ATMG01150.1",
+     "feature_type": "Transcript",
+     "record_indices": [
+      379
+     ],
+     "vep_consequence_set": "inframe_deletion,start_lost",
+     "vep_rs_consequence_sets": [
+      "inframe_deletion,start_retained_variant"
+     ],
+     "expected_divergence": "start_codon_kept_without_five_prime_utr"
     },
     {
      "location": "Mt:310881-310883",
@@ -4127,9 +4201,9 @@
      ],
      "vep_consequence_set": "start_lost,start_retained_variant",
      "vep_rs_consequence_sets": [
-      "start_retained_variant"
+      "missense_variant"
      ],
-     "expected_divergence": "start_cooccurrence_swap"
+     "expected_divergence": "start_codon_overlap_without_start_codon"
     },
     {
      "location": "Pt:109405",
@@ -4205,10 +4279,12 @@
    "vep_rs_only_tuples": [],
    "divergence_summary": {
     "splice_term_past_the_record_span": 2,
-    "start_cooccurrence_swap": 41,
+    "start_cooccurrence_swap": 39,
+    "start_codon_kept_without_five_prime_utr": 2,
     "stop_codon_overlap_insertion_range": 2,
     "stop_codon_removed_without_stop_codon_test": 2,
-    "stop_retained_without_stop_codon_test": 4
+    "stop_retained_without_stop_codon_test": 4,
+    "start_codon_overlap_without_start_codon": 5
    },
    "vep_rs_only_summary": {},
    "fields_compared": [
@@ -4659,7 +4735,7 @@
      ],
      "vep_consequence_set": "frameshift_variant,splice_donor_variant",
      "vep_rs_consequence_sets": [
-      "frameshift_variant"
+      "frameshift_variant,splice_region_variant"
      ],
      "expected_divergence": "splice_term_past_the_record_span"
     },
@@ -4802,6 +4878,20 @@
       "start_retained_variant"
      ],
      "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "4:11762294",
+     "allele": "-",
+     "feature": "AT4G22230.2",
+     "feature_type": "Transcript",
+     "record_indices": [
+      177
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_codon_kept_without_five_prime_utr"
     },
     {
      "location": "4:11937469-11937471",
@@ -5238,6 +5328,34 @@
      "expected_divergence": "stop_retained_without_stop_codon_test"
     },
     {
+     "location": "Mt:257475",
+     "allele": "T",
+     "feature": "ATMG00960.1",
+     "feature_type": "Transcript",
+     "record_indices": [
+      359
+     ],
+     "vep_consequence_set": "start_lost",
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "start_codon_overlap_without_start_codon"
+    },
+    {
+     "location": "Mt:257476",
+     "allele": "A",
+     "feature": "ATMG00960.1",
+     "feature_type": "Transcript",
+     "record_indices": [
+      360
+     ],
+     "vep_consequence_set": "start_lost",
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "start_codon_overlap_without_start_codon"
+    },
+    {
      "location": "Mt:257476",
      "allele": "T",
      "feature": "ATMG00960.1",
@@ -5247,9 +5365,37 @@
      ],
      "vep_consequence_set": "start_lost,start_retained_variant",
      "vep_rs_consequence_sets": [
-      "start_retained_variant"
+      "missense_variant"
      ],
-     "expected_divergence": "start_cooccurrence_swap"
+     "expected_divergence": "start_codon_overlap_without_start_codon"
+    },
+    {
+     "location": "Mt:289082",
+     "allele": "T",
+     "feature": "ATMG01120.1",
+     "feature_type": "Transcript",
+     "record_indices": [
+      373
+     ],
+     "vep_consequence_set": "start_lost,stop_gained",
+     "vep_rs_consequence_sets": [
+      "stop_gained"
+     ],
+     "expected_divergence": "start_codon_overlap_without_start_codon"
+    },
+    {
+     "location": "Mt:294293-294295",
+     "allele": "-",
+     "feature": "ATMG01150.1",
+     "feature_type": "Transcript",
+     "record_indices": [
+      379
+     ],
+     "vep_consequence_set": "inframe_deletion,start_lost",
+     "vep_rs_consequence_sets": [
+      "inframe_deletion,start_retained_variant"
+     ],
+     "expected_divergence": "start_codon_kept_without_five_prime_utr"
     },
     {
      "location": "Mt:310881-310883",
@@ -5275,9 +5421,9 @@
      ],
      "vep_consequence_set": "start_lost,start_retained_variant",
      "vep_rs_consequence_sets": [
-      "start_retained_variant"
+      "missense_variant"
      ],
-     "expected_divergence": "start_cooccurrence_swap"
+     "expected_divergence": "start_codon_overlap_without_start_codon"
     },
     {
      "location": "Pt:109405",
@@ -5353,10 +5499,12 @@
    "vep_rs_only_tuples": [],
    "divergence_summary": {
     "splice_term_past_the_record_span": 2,
-    "start_cooccurrence_swap": 41,
+    "start_cooccurrence_swap": 39,
+    "start_codon_kept_without_five_prime_utr": 2,
     "stop_codon_overlap_insertion_range": 2,
     "stop_codon_removed_without_stop_codon_test": 2,
-    "stop_retained_without_stop_codon_test": 4
+    "stop_retained_without_stop_codon_test": 4,
+    "start_codon_overlap_without_start_codon": 5
    },
    "vep_rs_only_summary": {},
    "fields_compared": [
@@ -6111,6 +6259,34 @@
      "expected_divergence": "stop_retained_without_stop_codon_test"
     },
     {
+     "location": "Mt:257475",
+     "allele": "T",
+     "feature": "ATMG00960.1",
+     "feature_type": "Transcript",
+     "record_indices": [
+      359
+     ],
+     "vep_consequence_set": "start_lost",
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "start_codon_overlap_without_start_codon"
+    },
+    {
+     "location": "Mt:257476",
+     "allele": "A",
+     "feature": "ATMG00960.1",
+     "feature_type": "Transcript",
+     "record_indices": [
+      360
+     ],
+     "vep_consequence_set": "start_lost",
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "start_codon_overlap_without_start_codon"
+    },
+    {
      "location": "Mt:257476",
      "allele": "T",
      "feature": "ATMG00960.1",
@@ -6120,9 +6296,37 @@
      ],
      "vep_consequence_set": "start_lost,start_retained_variant",
      "vep_rs_consequence_sets": [
-      "start_retained_variant"
+      "missense_variant"
      ],
-     "expected_divergence": "start_cooccurrence_swap"
+     "expected_divergence": "start_codon_overlap_without_start_codon"
+    },
+    {
+     "location": "Mt:289082",
+     "allele": "T",
+     "feature": "ATMG01120.1",
+     "feature_type": "Transcript",
+     "record_indices": [
+      373
+     ],
+     "vep_consequence_set": "start_lost,stop_gained",
+     "vep_rs_consequence_sets": [
+      "stop_gained"
+     ],
+     "expected_divergence": "start_codon_overlap_without_start_codon"
+    },
+    {
+     "location": "Mt:294293-294295",
+     "allele": "-",
+     "feature": "ATMG01150.1",
+     "feature_type": "Transcript",
+     "record_indices": [
+      379
+     ],
+     "vep_consequence_set": "inframe_deletion,start_lost",
+     "vep_rs_consequence_sets": [
+      "inframe_deletion,start_retained_variant"
+     ],
+     "expected_divergence": "start_codon_kept_without_five_prime_utr"
     },
     {
      "location": "Mt:310881-310883",
@@ -6148,9 +6352,9 @@
      ],
      "vep_consequence_set": "start_lost,start_retained_variant",
      "vep_rs_consequence_sets": [
-      "start_retained_variant"
+      "missense_variant"
      ],
-     "expected_divergence": "start_cooccurrence_swap"
+     "expected_divergence": "start_codon_overlap_without_start_codon"
     },
     {
      "location": "Pt:109405",
@@ -6225,10 +6429,12 @@
    ],
    "vep_rs_only_tuples": [],
    "divergence_summary": {
-    "start_cooccurrence_swap": 23,
+    "start_cooccurrence_swap": 21,
     "stop_codon_overlap_insertion_range": 2,
     "stop_codon_removed_without_stop_codon_test": 2,
-    "stop_retained_without_stop_codon_test": 4
+    "stop_retained_without_stop_codon_test": 4,
+    "start_codon_overlap_without_start_codon": 5,
+    "start_codon_kept_without_five_prime_utr": 1
    },
    "vep_rs_only_summary": {}
   }
@@ -6258,7 +6464,7 @@
    ],
    "vep_consequence_set": "frameshift_variant,splice_donor_variant",
    "vep_rs_consequence_sets": [
-    "frameshift_variant"
+    "frameshift_variant,splice_region_variant"
    ],
    "expected_divergence": "splice_term_past_the_record_span"
   },
@@ -6401,6 +6607,20 @@
     "start_retained_variant"
    ],
    "expected_divergence": "start_cooccurrence_swap"
+  },
+  {
+   "location": "4:11762294",
+   "allele": "-",
+   "feature": "AT4G22230.2",
+   "feature_type": "Transcript",
+   "record_indices": [
+    177
+   ],
+   "vep_consequence_set": "frameshift_variant,start_lost",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,start_retained_variant"
+   ],
+   "expected_divergence": "start_codon_kept_without_five_prime_utr"
   },
   {
    "location": "4:11937469-11937471",
@@ -6837,6 +7057,34 @@
    "expected_divergence": "stop_retained_without_stop_codon_test"
   },
   {
+   "location": "Mt:257475",
+   "allele": "T",
+   "feature": "ATMG00960.1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    359
+   ],
+   "vep_consequence_set": "start_lost",
+   "vep_rs_consequence_sets": [
+    "missense_variant"
+   ],
+   "expected_divergence": "start_codon_overlap_without_start_codon"
+  },
+  {
+   "location": "Mt:257476",
+   "allele": "A",
+   "feature": "ATMG00960.1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    360
+   ],
+   "vep_consequence_set": "start_lost",
+   "vep_rs_consequence_sets": [
+    "missense_variant"
+   ],
+   "expected_divergence": "start_codon_overlap_without_start_codon"
+  },
+  {
    "location": "Mt:257476",
    "allele": "T",
    "feature": "ATMG00960.1",
@@ -6846,9 +7094,37 @@
    ],
    "vep_consequence_set": "start_lost,start_retained_variant",
    "vep_rs_consequence_sets": [
-    "start_retained_variant"
+    "missense_variant"
    ],
-   "expected_divergence": "start_cooccurrence_swap"
+   "expected_divergence": "start_codon_overlap_without_start_codon"
+  },
+  {
+   "location": "Mt:289082",
+   "allele": "T",
+   "feature": "ATMG01120.1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    373
+   ],
+   "vep_consequence_set": "start_lost,stop_gained",
+   "vep_rs_consequence_sets": [
+    "stop_gained"
+   ],
+   "expected_divergence": "start_codon_overlap_without_start_codon"
+  },
+  {
+   "location": "Mt:294293-294295",
+   "allele": "-",
+   "feature": "ATMG01150.1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    379
+   ],
+   "vep_consequence_set": "inframe_deletion,start_lost",
+   "vep_rs_consequence_sets": [
+    "inframe_deletion,start_retained_variant"
+   ],
+   "expected_divergence": "start_codon_kept_without_five_prime_utr"
   },
   {
    "location": "Mt:310881-310883",
@@ -6874,9 +7150,9 @@
    ],
    "vep_consequence_set": "start_lost,start_retained_variant",
    "vep_rs_consequence_sets": [
-    "start_retained_variant"
+    "missense_variant"
    ],
-   "expected_divergence": "start_cooccurrence_swap"
+   "expected_divergence": "start_codon_overlap_without_start_codon"
   },
   {
    "location": "Pt:109405",
@@ -6952,10 +7228,12 @@
  "vep_rs_only_tuples": [],
  "divergence_summary": {
   "splice_term_past_the_record_span": 2,
-  "start_cooccurrence_swap": 41,
+  "start_cooccurrence_swap": 39,
+  "start_codon_kept_without_five_prime_utr": 2,
   "stop_codon_overlap_insertion_range": 2,
   "stop_codon_removed_without_stop_codon_test": 2,
-  "stop_retained_without_stop_codon_test": 4
+  "stop_retained_without_stop_codon_test": 4,
+  "start_codon_overlap_without_start_codon": 5
  },
  "vep_rs_only_summary": {}
 }

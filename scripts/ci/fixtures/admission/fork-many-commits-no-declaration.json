@@ -1408,13 +1408,13 @@
    "deletions": 0
   },
   {
-   "filename": "scripts/data/storable_to_json.pl",
+   "filename": "tools/vep-storable-to-json/src/main.rs",
    "status": "modified",
    "additions": 96,
    "deletions": 7
   },
   {
-   "filename": "scripts/data/test_storable_to_json.sh",
+   "filename": "tools/vep-storable-to-json/tests/golden.rs",
    "status": "modified",
    "additions": 169,
    "deletions": 10

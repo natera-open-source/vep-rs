@@ -1,0 +1,5 @@
+{
+  "transcripts": {"match_rate": {"é": [1, 2.50, [], {}, {"k": [null, true, "a\"b\\c\/d\u0000😀\ud800"]}], "n": -0, "z": -0.0, "e": 1e16, "small": 1E-7}},
+  "variations": {"match_rate": [NaN, Infinity, -Infinity, 1e400, 340282366920938463463374607431768211456, 0.30000000000000004]},
+  "info_json": {"matches": "yes", "matches": "no"}
+}

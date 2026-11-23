@@ -69,6 +69,10 @@ Every row is one (allele, feature) pair, the rows of each input record in the ro
 
 Each is a nullable column of the type below.
 
+No two columns share a name, in any letter case. A tab column named as a key column is stored as `tab_<name>`: the `ref` and `alt` columns the committed synthetic dbNSFP fixture declares under `ALL` are `tab_ref` and `tab_alt`, each holding the plugin's own cell beside the record's key columns. A tab column whose name is a key column's behind one or more `tab_` gains one more, so `tab_ref` is stored as `tab_tab_ref`.
+
+A tab column whose name an earlier column carries in other letters is stored behind `tab_` too, as many times as give a name no earlier column carries. A `--custom` source named `REF` is stored as `tab_REF`, and the `CADD_phred` column of the committed synthetic dbNSFP fixture, loaded after the CADD plugin's `CADD_PHRED`, as `tab_CADD_phred`. DuckDB and Spark compare column names without regard to case. The footer's [`tab_columns`](#footer-metadata) key states the `--tab` name of every column, and the [round trip](#round-trip-to---tab) prints each column under it.
+
 ## The cell contract
 
 Every tab column has a type with two functions, `parse(text)` from the `--tab` cell to the stored value and `to_tab_text(value)` back. For every cell the tab format writes, `to_tab_text(parse(t))` is `t`, except that a DOUBLE prints as its shortest round-trip decimal. `0.0950` is stored as 0.095 and prints `0.095`.
@@ -89,6 +93,8 @@ A reader that projects a row through `to_tab_text` column by column gets the `--
 | `MANE`, `Consequence`, `CLIN_SIG`, `PUBMED`, `FLAGS`, `TRANSCRIPTION_FACTORS`                    | LIST\<STRING\>                                 | the cell split on `,`; it prints the elements `,`-joined                                                                                                                                                                                           |
 | `EXON`, `INTRON`, `cDNA_position`, `CDS_position`, `Protein_position`                            | STRUCT\<start INT32, end INT32, total INT32\>  | `[span][/total]`: `span` is `start`, `start-end`, `start-?`, `?-end` or `-`, a `?` or `-` member NULL and a single position setting `start` and `end` alike; `total` is the `--total_length` suffix. It prints `start` when the two agree, `start-end` otherwise, `?` for a NULL member beside a set one, `-` for neither, then `/total` when set |
 | every other column: the identifiers, HGVS notations, codons, `IMPACT`, `IND`, `ZYG`, plugin and custom fields | STRING                             | the cell as written, each invalid UTF-8 sequence replaced by U+FFFD                                                                                                                                                                                 |
+
+A field that a plugin or a `--custom` source declares is a STRING whatever its name. A plugin's `TSL` field is a string column with `--tsl` and without it, and so is a `--custom` key that spells a frequency column, such as `gnomADg_AF`.
 
 A `-` cell is NULL, and NULL prints `-`, in every column but the allele columns `Allele`, `GIVEN_REF` and `USED_REF`. There `-` is an empty allele (a deletion's alternate allele, an insertion's reference allele) and is stored as the text `-`. A cell the tab format prints empty is stored as the empty string. A token outside its column's grammar, such as letters in an integer column, is stored as NULL.
 
@@ -141,8 +147,8 @@ hits = (
         pl.col("Consequence").list.contains("missense_variant")
         & (pl.col("IMPACT") == "MODERATE")
     )
-    .select("chrom", "pos", "ref", "alt", "Feature", "Consequence")
     .sort("contig_index", "pos")
+    .select("chrom", "pos", "ref", "alt", "Feature", "Consequence")
     .collect()
 )
 ```
@@ -217,15 +223,20 @@ Athena reads the parts under the location, the `chrom=` directories of a partiti
 
 ## Round-trip to `--tab`
 
-`scripts/adapters/parquet_to_vep_tab.py` is the cell contract's inverse in Python, on `pyarrow`. It prints the `#` header line of the tab columns, then one line per row through `to_tab_text`. It reads one part, a directory of parts or a `--parquet_partition chrom` directory. The `##` meta lines of a live run are not stored in Parquet and are not reproduced, and the rows come out in file order. So compare against a `--tab` file as a multiset of lines.
+`tools/vep-parquet-to-tab` is the cell contract's inverse as a tool of its own, built with cargo. It prints the `#` header line of the tab columns, then one line per row through `to_tab_text`. It reads one part, a directory of parts or a `--parquet_partition chrom` directory. The `##` meta lines of a live run are not stored in Parquet and are not reproduced, and the rows come out in file order. So compare against a `--tab` file as a multiset of lines.
 
 ```bash
-scripts/adapters/parquet_to_vep_tab.py out.parquet [--output out.tab]
-scripts/adapters/parquet_to_vep_tab.py --canonical out.parquet
-scripts/adapters/parquet_to_vep_tab.py --canonical out.tab
+cargo build --release --locked \
+  --manifest-path tools/vep-parquet-to-tab/Cargo.toml
+to_tab=tools/vep-parquet-to-tab/target/release/vep-parquet-to-tab
+"$to_tab" out.parquet [--output out.tab]
+"$to_tab" --canonical out.parquet
+"$to_tab" --canonical --types-of out.parquet out.tab
 ```
 
-`--canonical` prints the canonical form, the header then the data lines sorted with every DOUBLE cell as its shortest round-trip decimal and every INT32 cell as its integer. It takes a `--tab` output (plain or gzip) as well. Two outputs with equal canonical forms hold the same rows. `parquet_round_trips_to_the_tab_output` in `crates/vep-cli/tests/format_parity.rs` asserts that equality on every golden corpus, through the crate's own reader.
+`--canonical` prints the canonical form, the header then the data lines sorted with every DOUBLE cell as its shortest round-trip decimal and every INT32 cell as its integer. A cell of a STRING column stays as stored.
+
+It takes a `--tab` output (plain or gzip) as well. `--types-of` names the Parquet output a `--tab` output is compared with, so that a column the Parquet output stores as a STRING stays as written. Two outputs with equal canonical forms hold the same rows. `parquet_round_trips_to_the_tab_output` in `crates/vep-cli/tests/format_parity.rs` asserts that equality on every golden corpus, through the crate's own reader.
 
 ## Row order and the ordering precondition
 
@@ -233,7 +244,7 @@ Every row group is sorted by (`contig_index`, `pos`). `contig_index` ranks the c
 
 1. the chromosome list of the cache's own metadata, in its karyotype's order (for a human cache the autosomes by number, then X, Y and MT);
 2. the cache's other chromosomes, by the same rule;
-3. under `--fasta`, the reference's other sequences in its index's order.
+3. under `--fasta`, the reference's other sequences in its index's order. A sequence the cache holds under another name, a chromosome synonym or the `chr` spelling, is the chromosome already listed and adds no entry.
 
 A chromosome in none of those lists shares the rank after the last listed one, and its rows are told apart by their `chrom` spelling. `ORDER BY contig_index, pos` is genome order whatever the input's chromosome spellings.
 
@@ -241,7 +252,7 @@ The writer checks every row's record against the rows before it. A chromosome's 
 
 The first record that breaks this ends the run with exit 1. The run leaves the output path [as it was](#overwriting-an-output): no directory at a new path, the earlier output where one stood. The error names the record's line and the two positions: `ERROR: [parquet] input is not sorted by chromosome and position at line 2 (21:50 after 21:100); sort the input or pass --no_check_variants_order`.
 
-A refused run's warnings file holds the warnings of every input batch (`--buffer_size` records) read through the one that holds the refused record, in input order and at any worker count. `--pipeline_mode batched` adds those of the later batches it had read.
+A refused run's warnings file holds the warnings of every input batch (`--buffer_size` records) read through the one that holds the refused record, in input order, at any worker count and under either `--pipeline_mode`.
 
 The check reads the written position rather than the stored `pos`, which is the annotated span's start. A VCF deletion's start is one past its POS once the anchor base is trimmed. A file sorted by POS therefore steps back in `pos` between a deletion and a substitution at the same POS, and `--minimal` trims further.
 
@@ -262,7 +273,7 @@ vep-rs checks the Parquet output alone, strictly per record, and exempts the sam
 - no row group declares a sort;
 - the footer's `sort` key is `none`.
 
-The run writes one warning to standard error and the warnings file: `WARNING: input order not checked: Parquet row groups are not sorted and parts are not rolled at contig boundaries`.
+The run writes one warning to standard error and the warnings file: `WARNING: input order not checked: Parquet row groups are not sorted and parts are not rolled at contig boundaries`. Under `--parquet_partition chrom` the line is `WARNING: input order not checked: Parquet row groups are not sorted and a part closes at every change of chromosome spelling`. An input in one of the four exempt formats is written the same way and draws the same warning.
 
 ## Writer options
 
@@ -295,6 +306,7 @@ Each part's footer carries the run's identity in its key-value metadata, the sam
 | `layout`                                | `flat`: one row per (allele, feature) pair                                                                                                       |
 | `sort`                                  | `contig_index,pos`, `contig_index,pos within each row group`, or `none` when the order was not checked                                           |
 | `run_id`                                | an identifier unique to the run, equal in every part and in the manifest                                                                         |
+| `tab_columns`                           | the `--tab` column names in column order, joined by tabs: the name each column after the six key columns prints under                            |
 
 ## Overwriting an output
 
@@ -304,11 +316,15 @@ A run that fails or is refused removes its temporary directory, naming it in its
 
 An interrupted run can leave the temporary directory beside the output, where no later run reads or removes it. Its leading dot keeps it out of a shell glob over the output's directory and out of a `pyarrow` dataset opened there. DuckDB's glob matches it.
 
-The temporary directory is created beside the output and renamed over it. So the output's parent directory must be writable and the output path cannot be a mount point. Under `--force_overwrite`, a run into a mount point ends at its last step with `ERROR: [output] Could not write to output file <path>`, the path as it was.
+The temporary directory is created beside the output and renamed over it. So the output's parent directory must be writable and the output path cannot be a mount point. Under `--force_overwrite`, a run into a mount point is refused before it reads its first record, with `ERROR: [output] Could not write to output file <path>`. It creates no temporary directory and empties no statistics report, and the path is as it was. Name a directory inside the mount instead.
+
+On Linux a path is a mount point where it stands on another mount of the run's own mount namespace than the directory that holds it, a bind mount included, which the run reads from `/proc`. On another Unix system it is one where it stands on another device. Where the run cannot read this, it ends at its last step with the same line, the path as it was.
 
 ### Warnings, skipped-variants and statistics files
 
-Name the warnings file, the skipped-variants file and the statistics report outside the output directory. A new path has no such directory until the run has succeeded. A file written into an earlier output is an entry vep-rs did not write, which refuses that replacement at its last step and every later one. An output path written with a trailing separator (`out.parquet/`) places their default names inside it, so write the path without one.
+Name the warnings file, the skipped-variants file and the statistics report outside the output directory. A run whose warnings file, skipped-variants file or report would be written inside it is refused before it opens its input, with exit 1. Nothing at the output path or inside it is created or changed; a warnings file outside it still takes a warning raised before the refusal. The line names the file and the flag that places it: `ERROR: [parquet] statistics report <file> lies inside the output directory <path>; name it outside that directory with --stats_file`. A file named as the output path is refused as `is the output path itself; name another file with --stats_file`.
+
+The run reads each name as the file system resolves it, through a symbolic link and a `..` step, so a file that only another spelling places in the directory is refused as well. An output path written with a trailing separator (`out.parquet/`), or with a `.` step after it, names its default report and warnings file as the same path without them does, beside the directory: `out.parquet_summary.html` and `out.parquet_warnings.txt`.
 
 ### Replacing an earlier output
 
@@ -318,7 +334,7 @@ An existing output refuses the run, as every output file does. `--force_overwrit
 ERROR: [parquet] output directory contains files vep-rs did not write
 ```
 
-The earlier output stays in place until the new one is complete, so a failed or refused replacement leaves it untouched. The statistics report beside it is a file of its own, emptied as a replacement starts. The warnings file is rewritten once the replacement draws a warning.
+The earlier output stays in place until the new one is complete, so a failed or refused replacement leaves it untouched. The statistics report beside it is a file of its own, emptied before the run reads its first record, once the tests it makes of the report, the output, a `--warning_file` and the skipped-variants file have passed. The warnings file is rewritten once the replacement draws a warning.
 
 Once the run has succeeded it:
 

@@ -113,7 +113,7 @@
    "vep_rs_only_summary": {}
   }
  ],
- "suites": {
+ "datasets": {
   "GRCh38-colocated": {
    "reference": "grch38-default.txt",
    "input": "grch38.vcf",
@@ -187,147 +187,147 @@
  },
  "records": [
   {
-   "suite": "GRCh38-colocated",
+   "dataset": "GRCh38-colocated",
    "vcf": "21\t5029945\t.\tGG\tG\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-colocated",
+   "dataset": "GRCh38-colocated",
    "vcf": "21\t5030192\t.\tA\tG\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-colocated",
+   "dataset": "GRCh38-colocated",
    "vcf": "21\t5030287\t.\tA\tT\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-colocated",
+   "dataset": "GRCh38-colocated",
    "vcf": "21\t5030482\t.\tGGGAGGGGTGG\tGG\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-colocated",
+   "dataset": "GRCh38-colocated",
    "vcf": "21\t5030602\t.\tA\tAA\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-colocated",
+   "dataset": "GRCh38-colocated",
    "vcf": "21\t5030602\t.\tA\tAA,G\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-colocated",
+   "dataset": "GRCh38-colocated",
    "vcf": "21\t5030602\t.\tA\tC\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-colocated",
+   "dataset": "GRCh38-colocated",
    "vcf": "21\t5030602\t.\tA\tG,AA\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-colocated",
+   "dataset": "GRCh38-colocated",
    "vcf": "21\t5030625\t.\tGCAT\tG\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-colocated",
+   "dataset": "GRCh38-colocated",
    "vcf": "21\t5030633\t.\tC\tT\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-colocated",
+   "dataset": "GRCh38-colocated",
    "vcf": "21\t5030664\t.\tA\tT\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-colocated",
+   "dataset": "GRCh38-colocated",
    "vcf": "21\t5031926\t.\tT\tA\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-colocated",
+   "dataset": "GRCh38-colocated",
    "vcf": "21\t5032970\t.\tT\tTCAGTGAG\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-colocated",
+   "dataset": "GRCh38-colocated",
    "vcf": "21\t5033370\t.\tC\tCA,CT\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-colocated",
+   "dataset": "GRCh38-colocated",
    "vcf": "21\t5131441\t.\tT\tC\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-colocated",
+   "dataset": "GRCh38-colocated",
    "vcf": "21\t5131480\t.\tA\tG\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-colocated",
+   "dataset": "GRCh38-colocated",
    "vcf": "21\t5161864\t.\tG\tA\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-colocated",
+   "dataset": "GRCh38-colocated",
    "vcf": "21\t5230609\t.\tA\tAT,C\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant"
    ]
   },
   {
-   "suite": "GRCh38-colocated",
+   "dataset": "GRCh38-colocated",
    "vcf": "21\t5230609\t.\tA\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant"
    ]
   },
   {
-   "suite": "GRCh38-colocated",
+   "dataset": "GRCh38-colocated",
    "vcf": "21\t5230609\t.\tA\tC,AT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant"
    ]
   },
   {
-   "suite": "GRCh38-colocated",
+   "dataset": "GRCh38-colocated",
    "vcf": "21\t6138391\t.\tG\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -335,21 +335,21 @@
    ]
   },
   {
-   "suite": "GRCh38-colocated",
+   "dataset": "GRCh38-colocated",
    "vcf": "21\t7759128\t.\tT\tA,G\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-colocated",
+   "dataset": "GRCh38-colocated",
    "vcf": "21\t9040338\t.\tT\tA,C\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant"
    ]
   },
   {
-   "suite": "GRCh38-colocated",
+   "dataset": "GRCh38-colocated",
    "vcf": "21\t10503115\t.\tA\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -357,7 +357,7 @@
    ]
   },
   {
-   "suite": "GRCh38-colocated",
+   "dataset": "GRCh38-colocated",
    "vcf": "21\t10541121\t.\tG\tA,T\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,synonymous_variant",
@@ -366,7 +366,7 @@
    ]
   },
   {
-   "suite": "GRCh38-colocated",
+   "dataset": "GRCh38-colocated",
    "vcf": "21\t10602054\t.\tATA\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant",
@@ -374,14 +374,14 @@
    ]
   },
   {
-   "suite": "GRCh38-colocated",
+   "dataset": "GRCh38-colocated",
    "vcf": "21\t13610458\t.\tC\tA,G,T\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "GRCh38-colocated",
+   "dataset": "GRCh38-colocated",
    "vcf": "21\t14967531\t.\tT\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -391,7 +391,7 @@
    ]
   },
   {
-   "suite": "GRCh38-colocated",
+   "dataset": "GRCh38-colocated",
    "vcf": "21\t14981488\t.\tA\tC,G,T\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -399,7 +399,7 @@
    ]
   },
   {
-   "suite": "GRCh38-colocated",
+   "dataset": "GRCh38-colocated",
    "vcf": "21\t38403526\t.\tT\tTTCC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -409,7 +409,7 @@
    ]
   },
   {
-   "suite": "GRCh38-colocated",
+   "dataset": "GRCh38-colocated",
    "vcf": "21\t44195140\t.\tG\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -419,7 +419,7 @@
    ]
   },
   {
-   "suite": "GRCh38-colocated",
+   "dataset": "GRCh38-colocated",
    "vcf": "21\t44195140\t.\tG\tA,C\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -429,7 +429,7 @@
    ]
   },
   {
-   "suite": "GRCh38-colocated",
+   "dataset": "GRCh38-colocated",
    "vcf": "21\t44293150\t.\tTGTGTGTG\tTGTGTG\t.\t.\t.",
    "combinations": [
     "frameshift_variant",
@@ -437,7 +437,7 @@
    ]
   }
  ],
- "multi_allelic_per_suite": 0,
+ "multi_allelic_per_dataset": 0,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "divergences": [],

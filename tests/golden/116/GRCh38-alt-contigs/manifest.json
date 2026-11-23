@@ -11,7 +11,7 @@
   "flag_matrix_concordance",
   "engine_identity_lines"
  ],
- "suites": {
+ "datasets": {
   "alt": {
    "reference": "candidates.vep.txt",
    "input": "candidates.vcf",
@@ -549,651 +549,651 @@
  },
  "records": [
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "LRG_1\t5127\t.\tATGT\tA\t.\t.\t.",
    "combinations": [
     "inframe_deletion,start_lost"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "LRG_1\t5128\t.\tT\tTGCT\t.\t.\t.",
    "combinations": [
     "inframe_insertion,start_retained_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "LRG_1\t7414\t.\tA\tC\t.\t.\t.",
    "combinations": [
     "splice_region_variant,synonymous_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "LRG_1\t8854\t.\tGG\tTT\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "LRG_1\t9577\t.\tG\tGA\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "LRG_1\t11074\t.\tG\tGA\t.\t.\t.",
    "combinations": [
     "splice_donor_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "LRG_1\t11161\t.\tGGGA\tG\t.\t.\t.",
    "combinations": [
     "inframe_deletion,splice_region_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "KI270728.1\t17264\t.\tA\tAA\t.\t.\t.",
    "combinations": [
     "frameshift_variant,start_lost,start_retained_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "KI270728.1\t17420\t.\tT\tC\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "LRG_1\t17871\t.\tT\tTA\t.\t.\t.",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "LRG_1\t18657\t.\tG\tGGCT\t.\t.\t.",
    "combinations": [
     "inframe_insertion,splice_region_variant,stop_gained"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "LRG_1\t20620\t.\tTTCG\tT\t.\t.\t.",
    "combinations": [
     "inframe_deletion,splice_region_variant,stop_gained"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "LRG_1\t21136\t.\tT\tTA\t.\t.\t.",
    "combinations": [
     "stop_retained_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t23246\t.\tCT\tGA\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HSCHR17_1_CTG1\t46754\t.\tC\tCGCT\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HSCHR17_1_CTG1\t78910\t.\tG\tGGCT\t.\t.\t.",
    "combinations": [
     "protein_altering_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t86611\t.\tCACC\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_deletion,splice_region_variant,stop_lost"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t88136\t.\tATCT\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,stop_lost"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HSCHR17_1_CTG1\t89186\t.\tCAGG\tC\t.\t.\t.",
    "combinations": [
     "inframe_deletion,stop_gained"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "KI270728.1\t91493\t.\tAGGG\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HSCHR17_1_CTG1\t120410\t.\tATGC\tA\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,start_lost"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t124147\t.\tAT\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant,start_lost,start_retained_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t124147\t.\tATTT\tA\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,NMD_transcript_variant,start_lost,start_retained_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t132563\t.\tTATT\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,stop_retained_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t133612\t.\tC\tCA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t133613\t.\tC\tCA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t133684\t.\tCTGA\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t134745\t.\tTC\tAG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t134746\t.\tCT\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t135456\t.\tTT\tAA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t135457\t.\tT\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,stop_lost"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t135544\t.\tAAAA\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t136272\t.\tA\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t136278\t.\tA\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t136278\t.\tACCT\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,coding_sequence_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t136279\t.\tC\tCGCT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_insertion,splice_region_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t136280\t.\tC\tCGCT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_insertion,splice_region_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t136280\t.\tCTTC\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_deletion,splice_region_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t136522\t.\tTC\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t136544\t.\tT\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,stop_gained"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t136545\t.\tT\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,synonymous_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t136551\t.\tA\tAGCT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,protein_altering_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t136559\t.\tG\tGGCT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t140482\t.\tCT\tGA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,splice_region_variant,synonymous_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t141615\t.\tTT\tAA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t141615\t.\tTTAA\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_deletion,splice_region_variant,stop_gained"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t141753\t.\tT\tTA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t144892\t.\tGCAT\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t144955\t.\tG\tGGCT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,protein_altering_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t144957\t.\tCA\tGC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t144992\t.\tTACA\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t145280\t.\tACCT\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t145874\t.\tCTTT\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant,stop_lost"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t145876\t.\tTTCA\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,splice_region_variant,stop_lost"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t145877\t.\tTC\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,stop_retained_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t145931\t.\tC\tCGCT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_insertion"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t145988\t.\tCC\tGG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,coding_sequence_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t149397\t.\tTTTC\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_deletion"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t150536\t.\tG\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t154014\t.\tTCTA\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_deletion,stop_gained"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t156471\t.\tCATA\tC\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,splice_region_variant,start_lost"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t156472\t.\tAT\tCA\t.\t.\t.",
    "combinations": [
     "splice_region_variant,start_lost"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t158022\t.\tT\tTGCT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_insertion,stop_retained_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t158023\t.\tTATA\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_deletion,stop_lost"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t158169\t.\tC\tCGCT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,splice_region_variant,stop_gained"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t158888\t.\tC\tCA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant,start_lost"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t158889\t.\tAT\tCA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,start_lost"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t158890\t.\tTG\tAT\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,NMD_transcript_variant,start_lost"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t158938\t.\tTC\tAG\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,NMD_transcript_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t160029\t.\tC\tCGCT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_donor_region_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t160034\t.\tCC\tGG\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,NMD_transcript_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t160046\t.\tC\tCGCT\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,NMD_transcript_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t160047\t.\tC\tCGCT\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,NMD_transcript_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t160047\t.\tCT\tGA\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,NMD_transcript_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t166936\t.\tG\tGGCT\t.\t.\t.",
    "combinations": [
     "inframe_insertion,stop_gained"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t167081\t.\tGTAA\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_donor_region_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t167082\t.\tTAAG\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_donor_5th_base_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t167085\t.\tG\tGGCT\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_donor_region_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HSCHR17_1_CTG1\t167107\t.\tCTGG\tC\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t172323\t.\tA\tAGCT\t.\t.\t.",
    "combinations": [
     "protein_altering_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t172358\t.\tG\tGGCT\t.\t.\t.",
    "combinations": [
     "inframe_insertion,splice_region_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t180428\t.\tA\tC\t.\t.\t.",
    "combinations": [
     "missense_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HSCHR17_1_CTG1\t198741\t.\tG\tGGCT\t.\t.\t.",
    "combinations": [
     "incomplete_terminal_codon_variant,inframe_insertion"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HSCHR17_1_CTG1\t198764\t.\tGT\tTA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,coding_sequence_variant,incomplete_terminal_codon_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HSCHR17_1_CTG1\t198812\t.\tC\tCA\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,incomplete_terminal_codon_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "KI270728.1\t213723\t.\tG\tGGCT\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "KI270728.1\t213724\t.\tG\tGGCT\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t220348\t.\tGT\tTA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,coding_sequence_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t221030\t.\tA\tC\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t224585\t.\tTG\tAT\t.\t.\t.",
    "combinations": [
     "splice_region_variant,stop_gained"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t224793\t.\tGA\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "KI270728.1\t226211\t.\tGGCA\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_donor_region_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t239224\t.\tCC\tGG\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,splice_donor_variant",
@@ -1201,294 +1201,294 @@
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HSCHR17_1_CTG1\t251223\t.\tT\tTGCT\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,incomplete_terminal_codon_variant,inframe_insertion"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HSCHR17_1_CTG1\t251224\t.\tCT\tGA\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,missense_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HSCHR17_1_CTG1\t298964\t.\tGATG\tG\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,coding_sequence_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HSCHR17_1_CTG1\t299014\t.\tTC\tAG\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t309622\t.\tC\tCGCT\t.\t.\t.",
    "combinations": [
     "start_lost"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t309623\t.\tATGG\tA\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,start_lost,start_retained_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t337379\t.\tCC\tC\t.\t.\t.",
    "combinations": [
     "splice_acceptor_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HSCHR17_1_CTG1\t359243\t.\tG\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HSCHR17_1_CTG1\t359250\t.\tC\tCA\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HSCHR17_1_CTG1\t359251\t.\tC\tCA\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HSCHR17_1_CTG1\t359279\t.\tT\tTA\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t446063\t.\tA\tAGCT\t.\t.\t.",
    "combinations": [
     "stop_gained"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t446155\t.\tC\tT\t.\t.\t.",
    "combinations": [
     "intron_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t447295\t.\tGAAG\tG\t.\t.\t.",
    "combinations": [
     "inframe_deletion"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "HG1012_PATCH\t447335\t.\tC\tCGCT\t.\t.\t.",
    "combinations": [
     "protein_altering_variant,stop_gained"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "KI270728.1\t896471\t.\tTC\tAG\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "KI270728.1\t896472\t.\tC\tCGCT\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "KI270728.1\t910650\t.\tC\tCGCT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "KI270728.1\t926044\t.\tG\tA\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "KI270728.1\t933861\t.\tAA\tCC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "KI270728.1\t934882\t.\tTTAA\tT\t.\t.\t.",
    "combinations": [
     "inframe_deletion,stop_lost"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "KI270728.1\t934883\t.\tT\tTGCT\t.\t.\t.",
    "combinations": [
     "inframe_insertion,stop_retained_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "KI270728.1\t934884\t.\tA\tG\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "KI270728.1\t936211\t.\tG\tA\t.\t.\t.",
    "combinations": [
     "synonymous_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "KI270728.1\t936435\t.\tA\tAA\t.\t.\t.",
    "combinations": [
     "frameshift_variant,start_lost"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "KI270728.1\t1125386\t.\tGTGG\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_donor_region_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "KI270728.1\t1134016\t.\tT\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "KI270728.1\t1140966\t.\tC\tCA\t.\t.\t.",
    "combinations": [
     "frameshift_variant,stop_lost"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "KI270728.1\t1141457\t.\tCCTA\tC\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "KI270728.1\t1144083\t.\tCCCT\tC\t.\t.\t.",
    "combinations": [
     "inframe_deletion,splice_donor_5th_base_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "KI270728.1\t1144087\t.\tT\tA\t.\t.\t.",
    "combinations": [
     "splice_donor_region_variant,stop_gained"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "KI270728.1\t1144088\t.\tTCAG\tT\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "KI270728.1\t1147427\t.\tT\tTA\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_donor_region_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "KI270728.1\t1270984\t.\tG\tGGCT\t.\t.\t.",
    "combinations": [
     "start_lost,stop_gained"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "KI270728.1\t1271058\t.\tT\tTGCT\t.\t.\t.",
    "combinations": [
     "inframe_insertion"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "KI270728.1\t1426286\t.\tTAAG\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_donor_5th_base_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "KI270728.1\t1436678\t.\tT\tTA\t.\t.\t.",
    "combinations": [
     "upstream_gene_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "KI270728.1\t1536571\t.\tGG\tTT\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "KI270728.1\t1536653\t.\tGCTG\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "KI270728.1\t1695478\t.\tTC\tAG\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "alt",
+   "dataset": "alt",
    "vcf": "KI270728.1\t1796406\t.\tCC\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant"
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "divergences": [
@@ -2039,6 +2039,48 @@
    "expected_divergence": "start_cooccurrence_swap"
   },
   {
+   "location": "KI270728.1:1140966-1140967",
+   "allele": "A",
+   "feature": "ENST00000611339",
+   "feature_type": "Transcript",
+   "record_indices": [
+    120
+   ],
+   "vep_consequence_set": "frameshift_variant,stop_lost",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant"
+   ],
+   "expected_divergence": "stop_codon_overlap_without_stop_codon"
+  },
+  {
+   "location": "KI270728.1:1140966-1140967",
+   "allele": "A",
+   "feature": "ENST00000613216",
+   "feature_type": "Transcript",
+   "record_indices": [
+    120
+   ],
+   "vep_consequence_set": "frameshift_variant,stop_lost",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant"
+   ],
+   "expected_divergence": "stop_codon_overlap_without_stop_codon"
+  },
+  {
+   "location": "KI270728.1:1270984-1270985",
+   "allele": "GCT",
+   "feature": "ENST00000611746",
+   "feature_type": "Transcript",
+   "record_indices": [
+    126
+   ],
+   "vep_consequence_set": "start_lost,stop_gained",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,stop_gained"
+   ],
+   "expected_divergence": "start_codon_overlap_without_start_codon"
+  },
+  {
    "location": "KI270728.1:17264-17265",
    "allele": "A",
    "feature": "ENST00000616638",
@@ -2056,7 +2098,9 @@
  "vep_rs_only_tuples": [],
  "divergence_summary": {
   "start_cooccurrence_swap": 38,
-  "stop_retained_without_stop_codon_test": 2
+  "stop_retained_without_stop_codon_test": 2,
+  "stop_codon_overlap_without_stop_codon": 2,
+  "start_codon_overlap_without_start_codon": 1
  },
  "vep_rs_only_summary": {}
 }

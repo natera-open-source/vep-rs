@@ -1,0 +1,89 @@
+{
+ "plugin_fixtures": {
+  "generator": "scripts/fixtures/cut_plugin_regions.py",
+  "flank": 5000,
+  "record_flank": 2000,
+  "exon_flank": 50,
+  "gerp_regions": "exons",
+  "tools": {
+   "bgzip": "bgzip (htslib) 1.9"
+  },
+  "files": {
+   "reference.fa.fai": "5d65b2e4950ef0c49546436a7427a6c9e82b42bdc8acd19667f830a235bcebd3",
+   "reference.fa.gz": "3ee6d29e82ed853b403b4d7e710c89c65375db235779a9dacf502e141a0f29f4",
+   "reference.fa.gz.fai": "5d65b2e4950ef0c49546436a7427a6c9e82b42bdc8acd19667f830a235bcebd3",
+   "reference.fa.gz.gzi": "3180d982d180683cad72f63e4d5aceb976348e2d5f52727ca7950354d560831c"
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species danio_rerio --assembly GRCz11 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "danio_rerio/116_GRCz11",
+ "fasta": "the three sequences the records and the pruned cache's transcripts sit on (chromosome 25, the mitochondrial genome MT and the unplaced scaffold KN150614.1) at their full length from Danio_rerio.GRCz11.dna.chromosome.25.fa, Danio_rerio.GRCz11.dna.chromosome.MT.fa and Danio_rerio.GRCz11.dna.nonchromosomal.fa of Ensembl release 116, each file held to the directory's CHECKSUMS, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
+ "input": "variants.vcf: 375 records on chromosome 25, the mitochondrial genome and the unplaced scaffold KN150614.1. 305 are generated records (tools/vep-seeded-variants, seed 1, --records wide, every reference allele read from the genome), their IDs naming the category and an ordinal, twelve a category where the three sequences give twelve places: under the standard code and under the vertebrate mitochondrial code a start codon, a stop gained and a stop lost (nine under the mitochondrial code), and a codon the mitochondrial code reads differently; a record on the first and on the last sequence (two on the last), on the organelle and on a sequence named by a synonym; a missense and a synonymous change on each strand; a splice donor and an acceptor; both untranslated regions, an intron, upstream, downstream and between genes; a frameshift insertion, a frameshift deletion and an in-frame deletion; the first and the last base of each sequence. The cache flags no sequence circular, so no record crosses an origin. 70 are known variants of the cache's own variation data on chromosome 25, single-base substitutions under their rs identifiers whose reference allele is the genome's base, drawn from 300 sampled with seed 1: 60 named at an even stride and 10 chosen as exemplars. Twelve records name their sequence by a synonym of the cache's chr_synonyms.txt (CM002909.2 and NC_007136.7 for chromosome 25, NW_008805563.1 for the scaffold). Beyond the named records the selection keeps two exemplars per consequence-set combination the two references show, stratified by variant class and strand, six per combination carrying a protein-level term",
+ "sha256": {
+  "default.txt": "d5191a9f86fd523a8130173f471e29a956db0bd9ce8c3c5994103e74d1013f99",
+  "tab.txt": "bc0a5097d7dc2c8c9e12285878cd960c9e497a9873e00c7bccb17013fbd4a650",
+  "vcf.vcf": "7f56c27c4e4cfa8d582bff6e9534ffa947db2cc9090c6f16babdd3ba3f4e1ea0",
+  "json.jsonl": "f7fdf8b86396bd670ce23011a718f4db0cd92fa9a587c998fc4a7b3b873801ee"
+ },
+ "variants_vcf_sha256": "de92466bc59804b1d6a4e38ce9bd9fe3acb632f008880b47199ae085f86fb322",
+ "flag_sets": {
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species danio_rerio --assembly GRCz11 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "danio_rerio/116_GRCz11",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "0cdf135091f407e976f513682c1d997af8cad15eef7e7f951916541066a0e8a5",
+    "tab.txt": "029ff4978c7f061f3383ea9828f98f3ed448768aa6e12ac30b5d026b66058e45",
+    "vcf.vcf": "436c879b8924b0814851f0bf833974638b9c6d0a280b20324f5133eff7b31a46",
+    "json.jsonl": "6da0a6e1c640c22ba8318a8153f02b7136324af554bc996a8bd08e38772e643d"
+   },
+   "flags": [
+    "--everything"
+   ],
+   "expected_dir": "expected_everything"
+  },
+  "hgvs-sift": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species danio_rerio --assembly GRCz11 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs --sift b [--tab|--vcf|--json]",
+   "perl_cache": "danio_rerio/116_GRCz11",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "75469a2e754ae3881f8c0ecc60dd51102533e9dd7f082bc2744d4db929a20591",
+    "tab.txt": "3c65879db707374137414d49496e0bf323533b5ff9ce60c7f5434cb3cb0f0eda",
+    "vcf.vcf": "0e2241a88e9b2db0fb29361fb44ef7be2207e4da9f3db958135b87caa2bafd27",
+    "json.jsonl": "4dd11eb3a8037915ca41b0aba5cb7f7e5741ea0db73a6a5c778b338da9969c3c"
+   },
+   "flags": [
+    "--hgvs",
+    "--sift",
+    "b"
+   ],
+   "expected_dir": "expected_hgvs-sift"
+  }
+ },
+ "generator": "tools/vep-seeded-variants --cache <converted cache> --seed 1 --records wide --fasta <genome> --sequence 25 --sequence MT --sequence KN150614.1; 300 single-base substitutions sampled with seed 1 from <converted cache>/variations of those sequences; Ensembl VEP over the two inputs under the corpus flags; tools/vep-golden-corpus select --release 116 --assembly GRCz11 --species danio_rerio --dataset wide=<reference>=<the generated records> --dataset known=<reference>=<the sampled known variants> --k 2 --seed 1 --max-span 1000000 --max-records 500 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 6 --include <the named records> --covers species-zebrafish-grcz11 --covers genetic-code-tables --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --flank 5000 --gzip --drop sorted_exons --drop protein_function_predictions --drop-except <the transcripts on which a record changes one residue, the rows SIFT scores> --perl-info <cache>/info.txt --cache-version 116 --variations <converted cache>/variations over the whole cache tools/vep-storable-to-json converts from the Ensembl VEP 116 GRCz11 cache (protein features kept for the DOMAINS column of the everything set; the variation slices hold the known variants within one base of a record); scripts/fixtures/cut_plugin_regions.py --reference <genome> --flank 5000 --record-flank 2000; tools/vep-golden-corpus flag-set (everything, hgvs-sift); scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; tools/vep-golden-corpus classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp --field SIFT for the hgvs-sift set)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "25": 602,
+   "KN150614.1": 2,
+   "MT": 37
+  },
+  "shards": 40,
+  "synonym_lines": 4,
+  "matrices_kept_on": 118,
+  "variation_slices": "the known variants within one base of a record under variations/<chr>/all_vars.gz with its .csi, as the Ensembl VEP cache lays them out: 79 on chromosome 25; the mitochondrion and the scaffold carry the empty indexed file of a chromosome with no variant near a record"
+ }
+}

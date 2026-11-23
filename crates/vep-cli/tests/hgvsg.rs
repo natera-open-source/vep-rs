@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 //! `--hgvsg` through the `vep` binary: the refusal without a reference FASTA,
-//! and the HGVSg strings Ensembl VEP 116.2 writes on the GRCh37 golden corpus's
+//! and the HGVSg strings Ensembl VEP 116.3 writes on the GRCh37 golden corpus's
 //! reference, for records of the corpus and for multi-allelic records built on
 //! it, in every output format; the name `--hgvsg_use_accession` prints for
 //! three spellings of one chromosome and for an unplaced scaffold; and the
@@ -45,7 +45,7 @@ fn hgvsg_without_fasta_exits_with_vep_message() {
 }
 
 /// Records of `tests/golden/116/GRCh37-hgvs/variants.vcf` (CHROM, POS, ID, REF,
-/// ALT) with the HGVSg Ensembl VEP 116.2 writes for each under `--hgvsg --fasta`
+/// ALT) with the HGVSg Ensembl VEP 116.3 writes for each under `--hgvsg --fasta`
 /// on the corpus's chromosome 21 reference: a substitution; deletions where the
 /// record sits (`190797`, `2878128`) and moved 3' along a repeat (`1299494`,
 /// `2505239`); an insertion where the record sits (`3653535`), one of 68 bases
@@ -86,7 +86,7 @@ const RECORDS: &[(&str, &str)] = &[
 ];
 
 /// Multi-allelic records on the corpus reference (none sits in the corpus itself)
-/// with the HGVSg Ensembl VEP 116.2 writes for each allele: `34775849 CAT C,CGT`
+/// with the HGVSg Ensembl VEP 116.3 writes for each allele: `34775849 CAT C,CGT`
 /// (alleles `AT/-/GT` at 34775850-34775851 once the shared `C` is chopped) and
 /// `34775850 AT AG,GT` (no indel, so nothing is chopped). An allele that trims to
 /// a substitution is written as a deletion-insertion of the bases the record
@@ -307,9 +307,9 @@ fn assert_every_allele_seen(id: &str, seen: &[&str], format: &str) {
 
 /// Under `--minimal` each allele of a multi-allelic record is annotated on its
 /// trimmed span, but its HGVSg is the record's: the rejoin restores the record's
-/// allele string and span before the rows are built (OutputFactory.pm:2291-2293)
+/// allele string and span before the rows are built (OutputFactory.pm:2300-2302)
 /// and the notation is looked up under the allele as the record writes it, by
-/// its allele number (:1386-1390). Ensembl VEP 116.2 prints the strings of the
+/// its allele number (:1386-1390). Ensembl VEP 116.3 prints the strings of the
 /// table above with or without the flag: `21:g.34775850_34775851del` and
 /// `21:g.34775850delinsGT` for `ma1`, whose rows print the trimmed alleles `-`
 /// and `G`; `21:g.34775851delinsAG` and `21:g.34775850delinsGT` for `ma2`,
@@ -511,7 +511,7 @@ fn grch37_hgvs_corpus_carries_a_full_flank_shift_record() {
 
 /// The rows of the record `intron_snv_1` of the `GRCh38-identifiers` golden
 /// corpus under `--hgvsg --hgvsg_use_accession`, `{name}` standing for the
-/// chromosome name the input writes. Ensembl VEP 116.2 writes them offline
+/// chromosome name the input writes. Ensembl VEP 116.3 writes them offline
 /// for `21` and `chr21`, which the synonyms table pairs with `NC_000021.9`,
 /// and with a database connection (`--database --db_version 116`) for `Chr21`,
 /// a spelling the cache resolves and the table does not hold.
@@ -528,7 +528,7 @@ const ACCESSION_ROWS: &[&str] = &[
 ];
 
 /// `--hgvsg_use_accession` names the accession of the chromosome a name
-/// resolves to: `Chr21` prints the rows of Ensembl VEP 116.2's run with a
+/// resolves to: `Chr21` prints the rows of Ensembl VEP 116.3's run with a
 /// database connection, field for field, where its offline run ends on the
 /// record (OutputFactory.pm 1368-1372 reads the synonyms of the name as written
 /// alone), and `21` and `chr21` print the rows of its offline run.
@@ -578,7 +578,7 @@ fn hgvsg_use_accession_names_the_resolved_chromosome() {
 
 /// The row of the record at `KI270728.1:17420` of the GRCh38-alt-contigs corpus,
 /// under an identifier of its own, with `--hgvsg --hgvsg_use_accession`: the
-/// one row Ensembl VEP 116.2 writes for it with a database connection under
+/// one row Ensembl VEP 116.3 writes for it with a database connection under
 /// each of the scaffold's three names. `{name}` stands for the name as the
 /// input writes it.
 const SCAFFOLD_ACCESSION_ROW: &str = "scaffold_snv\t{name}:17420\tC\tENSG00000274175\tENST00000616638\tTranscript\tmissense_variant\t187\t157\t53\tS/P\tTcg/Ccg\t-\tIMPACT=MODERATE;STRAND=1;HGVSg=NT_187383.1:g.17420T>C";
@@ -586,7 +586,7 @@ const SCAFFOLD_ACCESSION_ROW: &str = "scaffold_snv\t{name}:17420\tC\tENSG0000027
 /// A sequence with no `NC_` synonym takes its RefSeq name: the unplaced
 /// scaffold `KI270728.1` prints `NT_187383.1` under its Ensembl name, its UCSC
 /// name and the RefSeq name itself, the slice's `RefSeq_genomic` synonym
-/// Ensembl VEP 116.2 prints with a database connection (ensembl-variation
+/// Ensembl VEP 116.3 prints with a database connection (ensembl-variation
 /// VariationFeature.pm 1912-1916); offline its lookup reads `NC_` names alone
 /// (OutputFactory.pm 1369-1370). The synonyms file holds the three lines
 /// Ensembl's table has for the scaffold, and the FASTA is a stand-in with the
@@ -662,7 +662,7 @@ fn hgvsg_use_accession_names_a_scaffold_by_its_refseq_name() {
 /// A sequence the synonyms table gives no RefSeq name is printed under
 /// `--hgvsg_use_accession` by the cache's name for it, whatever the input
 /// writes: the cache's name itself, a synonym the table pairs with it, or a
-/// spelling the `chr` rule resolves. Ensembl VEP 116.2 prints the slice's own
+/// spelling the `chr` rule resolves. Ensembl VEP 116.3 prints the slice's own
 /// name for such a sequence with a database connection (ensembl-variation
 /// VariationFeature.pm 1916); offline it has no output for the record
 /// (OutputFactory.pm 1368-1372). The table is built here: one line pairing
@@ -857,7 +857,7 @@ fn hgvsg_use_accession_takes_the_versioned_form_of_an_accession_listed_twice() {
 /// Where the table lists two versions of one accession for a sequence, the
 /// higher is the one printed, whichever the table lists first and whichever of
 /// the three names the input writes. A cache's table links the previous
-/// assembly's version of a sequence to it, and Ensembl VEP 116.2 with a
+/// assembly's version of a sequence to it, and Ensembl VEP 116.3 with a
 /// database connection prints the version of the assembly the run reads, the
 /// higher (the slice's own `RefSeq_genomic` synonym, ensembl-variation
 /// VariationFeature.pm 1912-1916). The tables are built here, one for an

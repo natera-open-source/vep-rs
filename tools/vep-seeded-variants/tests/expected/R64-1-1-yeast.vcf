@@ -1,0 +1,34 @@
+##fileformat=VCFv4.2
+##source=vep-seeded-variants generator_version=5
+##seed=1
+##records=light
+##reference_alleles=cache
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+X	9031	first_sequence_1	C	T	.	.	.
+I	1	first_base_1	A	G	.	.	.
+I	79963	frameshift_deletion_1	ACT	A	.	.	.
+I	84670	code1_start_codon_1	T	G	.	.	.
+I	183606	upstream_1	C	G	.	.	.
+II	164031	intergenic_1	G	C	.	.	.
+II	679944	splice_acceptor_1	G	A	.	.	.
+III	294268	intron_1	C	T	.	.	.
+IV	1501735	synonymous_reverse_1	A	T	.	.	.
+IX	950	inframe_deletion_1	CAAC	C	.	.	.
+IX	333350	code1_stop_lost_1	T	A	.	.	.
+IX	340369	synonymous_forward_1	T	G	.	.	.
+Mito	16576	code3_stop_gained_1	T	A	.	.	.
+Mito	36635	code3_made_codon_synonymous_1	G	A	.	.	.
+Mito	36955	splice_donor_1	C	A	.	.	.
+Mito	38577	code3_stop_lost_1	T	A	.	.	.
+Mito	65589	downstream_1	C	T	.	.	.
+Mito	67469	organelle_1	A	T	.	.	.
+Mito	73759	code3_start_codon_1	T	G	.	.	.
+Mito	75948	code3_changed_codon_1	A	T	.	.	.
+Mito	85606	code3_made_codon_missense_1	G	T	.	.	.
+Mito	85708	code3_made_codon_stop_1	A	G	.	.	.
+V	441676	missense_reverse_1	C	A	.	.	.
+XII	590086	missense_forward_1	T	A	.	.	.
+BK006947.3	781997	synonym_1	C	A	.	.	.
+XV	789646	code1_stop_gained_1	G	T	.	.	.
+XVI	54966	frameshift_insertion_1	G	GT	.	.	.
+XVI	673766	last_sequence_1	C	A	.	.	.

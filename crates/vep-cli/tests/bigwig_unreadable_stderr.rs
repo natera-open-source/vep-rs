@@ -141,7 +141,7 @@ fn conservation_text_file_draws_the_refusal_alone() {
     plugin_refusal_alone_on_standard_error(
         "GRCh38-plugin-conservation",
         "Conservation,{text}",
-        "Failed to instantiate plugin Conservation: Conservation: {text} is not a readable \
+        "Failed to instantiate plugin Conservation: {text} is not a readable \
          bigWig: {reason}",
     );
 }

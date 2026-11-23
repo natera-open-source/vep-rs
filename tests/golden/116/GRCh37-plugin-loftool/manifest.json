@@ -57,7 +57,7 @@
    "plugin_data/LoFtool_scores.txt"
   ]
  },
- "suites": {
+ "datasets": {
   "plugin-loftool": {
    "reference": "default.txt",
    "input": "candidates.vcf",
@@ -118,14 +118,14 @@
  },
  "records": [
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t9411211\trs1316595271\tA\tG\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t10934956\trs756480967\tA\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -134,7 +134,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t10942923\trs76723236\tGCCT\tG\t.\t.\t.",
    "combinations": [
     "inframe_deletion",
@@ -142,21 +142,21 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t14741950\trs778529572\tA\tAC\t.\t.\t.",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t14743856\trs748474711\tC\tG\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t15538764\trs148005597\tT\tG\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -164,7 +164,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t15561439\trs558374953\tA\tACCC\t.\t.\t.",
    "combinations": [
     "inframe_insertion",
@@ -172,7 +172,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t18939304\trs450291\tG\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -181,7 +181,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t18939973\trs1391552427\tCA\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -190,7 +190,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t19641995\trs901869869\tGTAAT\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -198,28 +198,28 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t19670110\trs961872693\tA\tG\t.\t.\t.",
    "combinations": [
     "synonymous_variant"
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t27142278\trs1178628159\tA\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant"
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t27143567\trs142668569\tATGTG\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant"
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t27253518\trs1318312697\tGC\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -227,28 +227,28 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t27284129\trs200922667\tT\tC\t.\t.\t.",
    "combinations": [
     "synonymous_variant"
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t30302306\t.\tTTTA\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant"
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t30324501\trs781274168\tG\tA\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t33036111\trs1489004175\tT\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -258,7 +258,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t33041011\trs11930\tCAG\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -268,7 +268,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t33372433\trs1297242070\tG\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -277,7 +277,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t33373432\trs1177719319\tA\tAG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -285,7 +285,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t36162874\trs1200148922\tCAGT\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -293,7 +293,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t36163344\trs775216896\tT\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -301,7 +301,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t37414130\trs377114074\tTA\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -311,7 +311,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t37418081\trs1432883305\tG\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -321,7 +321,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t38524242\trs776938033\tCA\tC\t.\t.\t.",
    "combinations": [
     "frameshift_variant",
@@ -330,7 +330,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t38525336\trs376072057\tC\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -340,49 +340,49 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t38868430\trs1464801426\tTG\tT\t.\t.\t.",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t38877762\trs55854596\tT\tC\t.\t.\t.",
    "combinations": [
     "synonymous_variant"
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t38987545\trs1276501450\tTC\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant"
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t38988895\trs200708241\tA\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant"
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t41384834\trs11451228\tC\tCTTTTT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant"
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t41457647\trs186088474\tG\tC\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "flag_sets": [

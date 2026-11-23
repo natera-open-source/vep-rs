@@ -1,0 +1,34 @@
+shape	first_column	location	allele	feature_type	reference_cdna	candidate_cdna	reference_cds	candidate_cds	reference_terms	candidate_terms	reference_amino_acids	candidate_amino_acids	codons	taken
+the first codon with the alleles in the first column	21_44817965_ACAT/A	21:44817966-44817968	-	Transcript	1-3	1-3	1-3	1-3	inframe_deletion	start_lost,inframe_deletion	M/-	M/-	ATG/-	yes
+the first codon under an identifier	1696377	6:35452546-35452548	-	Transcript	1-3	1-3	1-3	1-3	inframe_deletion	start_lost,inframe_deletion	M/-	M/-	ATG/-	yes
+two codons under an identifier	1696377	6:35452546-35452551	-	Transcript	1-6	1-6	1-6	1-6	inframe_deletion	start_lost,inframe_deletion	MA/-	MA/-	ATGGCG/-	yes
+beside a term of both rows	1696377	6:35452546-35452551	-	Transcript	1-6	1-6	1-6	1-6	inframe_deletion,NMD_transcript_variant	start_lost,inframe_deletion,NMD_transcript_variant	MA/-	MA/-	ATGGCG/-	yes
+beside a splice region term of both rows	438410	1:17053948-17053959	-	Transcript	1-12	1-12	1-12	1-12	inframe_deletion,splice_region_variant	start_lost,inframe_deletion,splice_region_variant	MASL/-	MASL/-	ATGGCGAGCCTG/-	yes
+beside splice and intron terms of both rows	3780919	7:5999108-5999319	-	Transcript	1-12	1-12	1-12	1-12	splice_acceptor_variant,splice_donor_variant,inframe_deletion,splice_donor_5th_base_variant,intron_variant	splice_acceptor_variant,splice_donor_variant,start_lost,inframe_deletion,splice_donor_5th_base_variant,intron_variant	MASL/-	MASL/-	ATGGCGAGCCTG/-	yes
+a total on both rows	1696377	6:35452546-35452548	-	Transcript	1-3/2674	1-3/2674	1-3/900	1-3/900	inframe_deletion	start_lost,inframe_deletion	M/-	M/-	ATG/-	yes
+a total on the row of vep-rs alone	1696377	6:35452546-35452548	-	Transcript	1-3	1-3/2674	1-3	1-3/900	inframe_deletion	start_lost,inframe_deletion	M/-	M/-	ATG/-	yes
+a first codon read as another residue	mt_del3	MT:9543-9545	-	Transcript	1-3	1-3	1-3	1-3	inframe_deletion	start_lost,inframe_deletion	I/-	I/-	ATT/-	yes
+a further term on the row of vep-rs	1696377	6:35452546-35452548	-	Transcript	1-3	1-3	1-3	1-3	inframe_deletion	start_lost,inframe_deletion,NMD_transcript_variant	M/-	M/-	ATG/-	no
+a term of the reference gone	1696377	6:35452546-35452548	-	Transcript	1-3	1-3	1-3	1-3	inframe_deletion,splice_region_variant	start_lost,inframe_deletion	M/-	M/-	ATG/-	no
+a retained start on both rows	1696377	6:35452546-35452548	-	Transcript	1-3	1-3	1-3	1-3	inframe_deletion,start_retained_variant	start_lost,inframe_deletion,start_retained_variant	M/-	M/-	ATG/-	no
+the terms the other way round	1696377	6:35452546-35452548	-	Transcript	1-3	1-3	1-3	1-3	start_lost,inframe_deletion	inframe_deletion	M/-	M/-	ATG/-	no
+a frameshift in place of the inframe deletion	1696377	6:35452546-35452548	-	Transcript	1-3	1-3	1-3	1-3	frameshift_variant	start_lost,frameshift_variant	M/-	M/-	ATG/-	no
+a protein altering term in place of the inframe deletion	1696377	6:35452546-35452548	-	Transcript	1-3	1-3	1-3	1-3	protein_altering_variant	start_lost,protein_altering_variant	M/-	M/-	ATG/-	no
+a 5' UTR before the coding sequence	1696377	6:35452546-35452548	-	Transcript	101-103	101-103	1-3	1-3	inframe_deletion	start_lost,inframe_deletion	M/-	M/-	ATG/-	no
+a removal after the first codon	1696377	6:35452546-35452548	-	Transcript	4-6	4-6	4-6	4-6	inframe_deletion	start_lost,inframe_deletion	A/-	A/-	GCG/-	no
+a CDS start after the first coding base	1696377	6:35452546-35452548	-	Transcript	1-3	1-3	4-6	4-6	inframe_deletion	start_lost,inframe_deletion	M/-	M/-	ATG/-	no
+a start whose first digit is 1	1696377	6:35452546-35452548	-	Transcript	11-13	11-13	11-13	11-13	inframe_deletion	start_lost,inframe_deletion	M/-	M/-	ATG/-	no
+a start that maps to no transcript base	1696377	6:35452546-35452548	-	Transcript	?-3	?-3	?-3	?-3	inframe_deletion	start_lost,inframe_deletion	M/-	M/-	ATG/-	no
+one position alone	1696377	6:35452546-35452548	-	Transcript	1	1	1	1	inframe_deletion	start_lost,inframe_deletion	M/-	M/-	ATG/-	no
+an end that maps to no transcript base	1696377	6:35452546-35452548	-	Transcript	1-?	1-?	1-?	1-?	inframe_deletion	start_lost,inframe_deletion	M/-	M/-	ATG/-	no
+no CDS position	1696377	6:35452546-35452548	-	Transcript	1-3	1-3	-	-	inframe_deletion	start_lost,inframe_deletion	M/-	M/-	ATG/-	no
+no cDNA position	1696377	6:35452546-35452548	-	Transcript	-	-	1-3	1-3	inframe_deletion	start_lost,inframe_deletion	M/-	M/-	ATG/-	no
+cDNA positions that differ between the rows	1696377	6:35452546-35452548	-	Transcript	1-3	1-6	1-3	1-3	inframe_deletion	start_lost,inframe_deletion	M/-	M/-	ATG/-	no
+CDS positions that differ between the rows	1696377	6:35452546-35452548	-	Transcript	1-3	1-3	1-3	1-6	inframe_deletion	start_lost,inframe_deletion	M/-	M/-	ATG/-	no
+an alternate residue on both rows	1696377	6:35452549-35452551	-	Transcript	1-3	1-3	1-3	1-3	inframe_deletion	start_lost,inframe_deletion	MA/M	MA/M	ATGGCG/ATG	no
+an alternate residue on the row of vep-rs	1696377	6:35452546-35452548	-	Transcript	1-3	1-3	1-3	1-3	inframe_deletion	start_lost,inframe_deletion	M/-	M/X	ATG/-	no
+an alternate residue on the row of the reference	1696377	6:35452546-35452548	-	Transcript	1-3	1-3	1-3	1-3	inframe_deletion	start_lost,inframe_deletion	M/X	M/-	ATG/-	no
+no residues on either row	1696377	6:35452546-35452548	-	Transcript	1-3	1-3	1-3	1-3	inframe_deletion	start_lost,inframe_deletion	-	-	ATG/-	no
+no residues on the row of the reference	1696377	6:35452546-35452548	-	Transcript	1-3	1-3	1-3	1-3	inframe_deletion	start_lost,inframe_deletion	-	M/-	ATG/-	no
+no residues on the row of vep-rs	1696377	6:35452546-35452548	-	Transcript	1-3	1-3	1-3	1-3	inframe_deletion	start_lost,inframe_deletion	M/-	-	ATG/-	no
+a regulatory feature	1696377	6:35452546-35452548	-	RegulatoryFeature	1-3	1-3	1-3	1-3	inframe_deletion	start_lost,inframe_deletion	M/-	M/-	ATG/-	no

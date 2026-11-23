@@ -1,13 +1,24 @@
 // Copyright (c) 2026-present Natera, Inc.
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-//! Tuple concordance between two VEP default-format output directories, byte-identical
-//! to `scripts/concordance/compare_vep_outputs.py` in its three modes: `compare` (the
-//! default), `--by-consequence-class` and `--pool-consequence-class`.
+//! Tuple concordance between two VEP default-format output directories, in three modes:
+//! `compare` (the default), `--by-consequence-class` and `--pool-consequence-class`. The
+//! README's Contract section states the bytes of the reports.
 
 mod classes;
+/// The shapes of the class `alternate_codon_past_the_coding_end`: a source file of
+/// `tools/vep-formats-compare`, which `rules::coding_ends` asks by this name.
+#[path = "../../vep-formats-compare/src/rules/coding_end.rs"]
+mod coding_end;
 mod compare;
 mod csv;
+mod dbid_replay;
+/// The genetic codes `coding_end` translates under, a source file of the same tool. A root
+/// that exports nothing reads the names of that tool's public items by the lints of private
+/// ones.
+#[allow(dead_code)]
+#[path = "../../vep-formats-compare/src/genetic_codes.rs"]
+mod genetic_codes;
 mod input;
 mod merge;
 mod partition;
@@ -26,12 +37,13 @@ use std::process::ExitCode;
 
 const PROG: &str = "vep-outputs-compare";
 
-const REFERENCE_RELEASES: [&str; 2] = ["115.2", "116.2"];
-const DEFAULT_REFERENCE_RELEASE: &str = "116.2";
+const REFERENCE_RELEASES: [&str; 3] = ["115.2", "116.2", "116.3"];
+const DEFAULT_REFERENCE_RELEASE: &str = "116.3";
 const ENGINES: [&str; 2] = ["vep-rs", "fastvep"];
 
-/// `--canonical-contigs`: off, bare (the human set when `--assembly` names a human one) or a
-/// file or comma-separated list naming the set.
+/// `--canonical-contigs`: off, bare (the human set when `--assembly` names a human one, else
+/// the `contig_order` of the `--json-cache` directory) or a file or comma-separated list
+/// naming the set.
 pub enum ContigsFlag {
     Off,
     Bare,
@@ -76,19 +88,32 @@ pub struct Args {
     pub glob: String,
     pub input_dir: Option<PathBuf>,
     pub input_vcf: Option<PathBuf>,
+    /// The candidate's converted cache directory: read for the `contig_order` of its
+    /// `info.json` under an assembly that is not a human one, for the transcripts of its region
+    /// files where the reference ran under `--merged`, and under every assembly for the
+    /// transcripts of the sequences on which a pair reaches a rule that asks the coding ends
+    /// of its transcript.
+    pub json_cache: Option<PathBuf>,
     pub summary_json: String,
     pub summary_md: String,
     pub discordant_tsv: String,
     pub fail_below_f1: Option<f64>,
     pub assembly: Option<String>,
     pub canonical_contigs: ContigsFlag,
+    /// The reference sequence the candidate was run on, which one shape of row at a
+    /// completed stop codon asks.
+    pub reference_fasta: Option<PathBuf>,
+    /// The Ensembl VEP cache directory the reference run read, the one that holds a
+    /// directory a sequence: read for those names and for its `chr_synonyms.txt`.
+    pub ensembl_cache: Option<PathBuf>,
     pub reference_release: String,
     /// The worker-thread bound, from the environment and not the command line.
     pub threads: usize,
 }
 
-/// The long options in argparse's order, with whether each takes a value.
-const OPTIONS: [(&str, bool); 29] = [
+/// The long options, with whether each takes a value, in the order the error for an
+/// ambiguous prefix lists them.
+const OPTIONS: [(&str, bool); 32] = [
     ("--by-consequence-class", false),
     ("--pool-consequence-class", false),
     ("--perl-dir", true),
@@ -110,6 +135,7 @@ const OPTIONS: [(&str, bool); 29] = [
     ("--glob", true),
     ("--input-dir", true),
     ("--input-vcf", true),
+    ("--json-cache", true),
     ("--summary-json", true),
     ("--summary-md", true),
     ("--discordant-tsv", true),
@@ -117,6 +143,8 @@ const OPTIONS: [(&str, bool); 29] = [
     ("--assembly", true),
     ("--canonical-contigs", false),
     ("--no-canonical-contigs", false),
+    ("--reference-fasta", true),
+    ("--ensembl-cache", true),
     ("--reference-release", true),
 ];
 
@@ -181,12 +209,15 @@ fn parse_args(argv: Vec<OsString>) -> Result<Args, String> {
         glob: "*.txt".to_string(),
         input_dir: None,
         input_vcf: None,
+        json_cache: None,
         summary_json: "summary.json".to_string(),
         summary_md: "summary.md".to_string(),
         discordant_tsv: "discordant.tsv".to_string(),
         fail_below_f1: None,
         assembly: None,
         canonical_contigs: ContigsFlag::Bare,
+        reference_fasta: None,
+        ensembl_cache: None,
         reference_release: DEFAULT_REFERENCE_RELEASE.to_string(),
         threads: 1,
     };
@@ -252,6 +283,7 @@ fn parse_args(argv: Vec<OsString>) -> Result<Args, String> {
             "--glob" => args.glob = text_of(&value()?),
             "--input-dir" => args.input_dir = Some(path_of(&value()?)),
             "--input-vcf" => args.input_vcf = Some(path_of(&value()?)),
+            "--json-cache" => args.json_cache = Some(path_of(&value()?)),
             "--summary-json" => args.summary_json = text_of(&value()?),
             "--summary-md" => args.summary_md = text_of(&value()?),
             "--discordant-tsv" => args.discordant_tsv = text_of(&value()?),
@@ -274,11 +306,14 @@ fn parse_args(argv: Vec<OsString>) -> Result<Args, String> {
                 };
             }
             "--no-canonical-contigs" => args.canonical_contigs = ContigsFlag::Off,
+            "--reference-fasta" => args.reference_fasta = Some(path_of(&value()?)),
+            "--ensembl-cache" => args.ensembl_cache = Some(path_of(&value()?)),
             "--reference-release" => {
                 let release = text_of(&value()?);
                 if !REFERENCE_RELEASES.contains(&release.as_str()) {
                     return Err(format!(
-                        "argument --reference-release: invalid choice: '{release}' (choose from 115.2, 116.2)"
+                        "argument --reference-release: invalid choice: '{release}' (choose from {})",
+                        REFERENCE_RELEASES.join(", ")
                     ));
                 }
                 args.reference_release = release;
@@ -296,6 +331,30 @@ fn parse_args(argv: Vec<OsString>) -> Result<Args, String> {
             return Err(format!(
                 "--input-dir {} is not a directory",
                 input_dir.display()
+            ));
+        }
+    }
+    if let Some(json_cache) = &args.json_cache {
+        if !json_cache.is_dir() {
+            return Err(format!(
+                "--json-cache {} is not a directory",
+                json_cache.display()
+            ));
+        }
+    }
+    if let Some(reference_fasta) = &args.reference_fasta {
+        if !reference_fasta.is_file() {
+            return Err(format!(
+                "--reference-fasta {} is not a file",
+                reference_fasta.display()
+            ));
+        }
+    }
+    if let Some(ensembl_cache) = &args.ensembl_cache {
+        if !ensembl_cache.is_dir() {
+            return Err(format!(
+                "--ensembl-cache {} is not a directory",
+                ensembl_cache.display()
             ));
         }
     }
@@ -515,7 +574,8 @@ fn main() -> ExitCode {
         }
     };
     if let Err(message) = require_mode_args(&args) {
-        // `raise SystemExit("error: ...")` exits 1, unlike argparse's own usage errors.
+        // A missing mode argument ends the run with exit code 1, where a usage error ends it
+        // with 2.
         eprintln!("{message}");
         return ExitCode::from(1);
     }
@@ -539,3 +599,11 @@ fn main() -> ExitCode {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "main_mode_arguments_tests.rs"]
+mod mode_arguments_tests;
+
+#[cfg(test)]
+#[path = "main_reference_release_tests.rs"]
+mod reference_release_tests;

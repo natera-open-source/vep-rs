@@ -1,7 +1,7 @@
 entry = "plugins_assembly_before_cache"
 page = "docs/plugins.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the Ensembl VEP documentation, \"Running Ensembl VEP\", --assembly (default: the assembly found); not seen in the measured datasets; classed by its most reachable shape, PrimateAI with no --assembly: REVEL without it breaks \"The --assembly flag is required to use this plugin\" (the REVEL plugin's header)"
 notes = "REVEL, the first plugin the entry names, with no --assembly on either command line; the cache names GRCh37."
@@ -29,3 +29,16 @@ where = { record = "3623575", feature = "ENST00000291582" }
 [expected]
 ensembl_vep = ["-"]
 vep_rs = ["0.496"]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/cadd.rs::CaddPlugin::open_source",
+    "crates/vep-builtins/src/plugins/revel.rs::RevelPlugin::init",
+    "crates/vep-cli/src/annotator.rs::RunAssembly::of",
+    "crates/vep-cli/src/annotator.rs::resolve_assembly",
+]
+tests = [
+    "crates/vep-builtins/src/plugins/cadd.rs::tests::rejects_a_data_file_from_the_other_assembly",
+    "crates/vep-builtins/src/plugins/revel.rs::tests::grch37_reads_the_hg19_position_column",
+    "crates/vep-cli/src/cache_resolve.rs::tests::assembly_inferred_from_cache_feeds_plugin_hint",
+]

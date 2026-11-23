@@ -232,7 +232,7 @@ fn column_descriptions_comparator_reports_each_difference() {
 fn plugin_descriptions_compare_with_their_paths_masked() {
     let tab = |description: &str, identity: bool| {
         let mut lines = vec![
-            "## ENSEMBL VARIANT EFFECT PREDICTOR v116.2".to_string(),
+            "## ENSEMBL VARIANT EFFECT PREDICTOR v116.3".to_string(),
             "## Column descriptions:".to_string(),
             format!("## AA : Ancestral allele from {description}"),
             "#Uploaded_variation\tLocation".to_string(),

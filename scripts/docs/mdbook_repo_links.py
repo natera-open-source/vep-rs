@@ -87,6 +87,8 @@ def read_repo_file(root, name):
             return f.read()
     except FileNotFoundError:
         sys.exit(f"mdbook_repo_links: {name} is missing from {root}")
+    except UnicodeDecodeError as error:
+        sys.exit(f"mdbook_repo_links: {name} in {root} is not UTF-8: byte {error.start} does not decode")
 
 
 def link_label(text, url):

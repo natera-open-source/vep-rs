@@ -1,0 +1,40 @@
+[package]
+name = "vep-formats-compare"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.89"
+license = "Apache-2.0"
+description = "Per-column comparison of a reference and a candidate VEP output in the default, tab, VCF, JSON and Parquet formats and of two recoder outputs"
+publish = false
+
+[lib]
+name = "vep_formats_compare"
+path = "src/lib.rs"
+# The documentation carries indented text that is not Rust.
+doctest = false
+
+[[bin]]
+name = "vep-formats-compare"
+path = "src/main.rs"
+
+[dependencies]
+fancy-regex = "0.20"
+# The zlib-rs backend refuses the deflate streams zlib refuses; the default backend takes
+# some of them.
+flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
+indexmap = "2"
+memchr = "2"
+# A Parquet output is read column by column, without Arrow, under each page codec the
+# adapter's reader takes: `vep` writes ZSTD pages and another writer its own default.
+parquet = { version = "60", default-features = false, features = ["brotli", "flate2-zlib-rs", "lz4", "snap", "zstd"] }
+regex = "1"
+twox-hash = { version = "2", default-features = false, features = ["std", "xxhash3_128"] }
+
+# Its own Cargo root: the repository workspace's commands do not reach this package, and
+# a cargo command for it names this manifest.
+[workspace]
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = "symbols"

@@ -12,11 +12,14 @@
   "tandem-repeats-cnv-tr",
   "fileformat-version-check"
  ],
+ "masks": [
+  "cnv_tr_symbolic_loss_named_a_gain"
+ ],
  "reference_warnings": [
   "could not fetch sequence for tandem repeats; consequence calculation for tandem repeats is less precise when using --offline without --fasta",
   "found tandem repeats with different references per alternative allele: SVLEN=9,6; only using reference with largest size"
  ],
- "suites": {
+ "datasets": {
   "GRCh38-vcf-tandem-repeats": {
    "reference": "default.txt",
    "input": "variants.vcf",
@@ -36,7 +39,7 @@
  },
  "records": [
   {
-   "suite": "GRCh38-vcf-tandem-repeats",
+   "dataset": "GRCh38-vcf-tandem-repeats",
    "vcf": "21\t13620283\ttr_gain\tG\t<CNV:TR>\t.\t.\tSVLEN=9;RN=1;RUS=TCA;RUC=4",
    "combinations": [
     "coding_sequence_variant,feature_elongation",
@@ -44,7 +47,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-tandem-repeats",
+   "dataset": "GRCh38-vcf-tandem-repeats",
    "vcf": "21\t13620283\ttr_loss\tG\t<CNV:TR>\t.\t.\tSVLEN=9;RN=1;RUS=TCA;RUC=2",
    "combinations": [
     "coding_sequence_variant,feature_elongation",
@@ -52,7 +55,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-tandem-repeats",
+   "dataset": "GRCh38-vcf-tandem-repeats",
    "vcf": "21\t13620283\ttr_same\tG\t<CNV:TR>\t.\t.\tSVLEN=9;RN=1;RUS=TCA;RUC=3",
    "combinations": [
     "coding_sequence_variant,feature_elongation",
@@ -60,7 +63,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-tandem-repeats",
+   "dataset": "GRCh38-vcf-tandem-repeats",
    "vcf": "21\t13620283\ttr_rb\tG\t<CNV:TR>\t.\t.\tSVLEN=9;RUS=TCA;RB=12",
    "combinations": [
     "coding_sequence_variant,feature_elongation",
@@ -68,7 +71,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-tandem-repeats",
+   "dataset": "GRCh38-vcf-tandem-repeats",
    "vcf": "21\t13620283\ttr_no_rn\tG\t<CNV:TR>\t.\t.\tSVLEN=9;RUS=TCA;RUC=5",
    "combinations": [
     "coding_sequence_variant,feature_elongation",
@@ -76,7 +79,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-tandem-repeats",
+   "dataset": "GRCh38-vcf-tandem-repeats",
    "vcf": "21\t13620283\ttr_multi\tG\t<CNV:TR>,<CNV:TR>\t.\t.\tSVLEN=9,9;RN=1,1;RUS=TCA,TCA;RUC=4,2",
    "combinations": [
     "coding_sequence_variant,feature_elongation",
@@ -84,7 +87,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-tandem-repeats",
+   "dataset": "GRCh38-vcf-tandem-repeats",
    "vcf": "21\t13620283\ttr_two_svlen\tG\t<CNV:TR>,<CNV:TR>\t.\t.\tSVLEN=9,6;RN=1,1;RUS=TCA,TCA;RUC=4,1",
    "combinations": [
     "coding_sequence_variant,feature_elongation",
@@ -92,7 +95,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-tandem-repeats",
+   "dataset": "GRCh38-vcf-tandem-repeats",
    "vcf": "21\t13620283\ttr_ciruc\tG\t<CNV:TR>\t.\t.\tSVLEN=9;RN=1;RUS=TCA;RUC=4;CIRUC=3,5",
    "combinations": [
     "coding_sequence_variant,feature_elongation",
@@ -100,7 +103,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-tandem-repeats",
+   "dataset": "GRCh38-vcf-tandem-repeats",
    "vcf": "21\t13620283\ttr_no_rus\tG\t<CNV:TR>\t.\t.\tSVLEN=9",
    "combinations": [
     "coding_sequence_variant,feature_elongation",
@@ -108,7 +111,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-tandem-repeats",
+   "dataset": "GRCh38-vcf-tandem-repeats",
    "vcf": "21\t13620283\ttr_frac\tG\t<CNV:TR>\t.\t.\tSVLEN=9;RN=1;RUS=TCA;RUC=4.9",
    "combinations": [
     "coding_sequence_variant,feature_elongation",
@@ -116,7 +119,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-tandem-repeats",
+   "dataset": "GRCh38-vcf-tandem-repeats",
    "vcf": "21\t13620283\ttr_lower_rus\tG\t<CNV:TR>\t.\t.\tSVLEN=9;RN=1;RUS=tca;RUC=4",
    "combinations": [
     "coding_sequence_variant,feature_elongation",
@@ -124,7 +127,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-tandem-repeats",
+   "dataset": "GRCh38-vcf-tandem-repeats",
    "vcf": "21\t13620283\ttr_end_only\tG\t<CNV:TR>\t.\t.\tEND=13620292;RN=1;RUS=TCA;RUC=4",
    "combinations": [
     "coding_sequence_variant,feature_elongation",
@@ -132,7 +135,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-tandem-repeats",
+   "dataset": "GRCh38-vcf-tandem-repeats",
    "vcf": "21\t13620283\ttr_two_seqs\tG\t<CNV:TR>\t.\t.\tSVLEN=9;RN=2;RUS=TCA,TC;RUC=3,1",
    "combinations": [
     "coding_sequence_variant,feature_elongation",
@@ -140,7 +143,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-tandem-repeats",
+   "dataset": "GRCh38-vcf-tandem-repeats",
    "vcf": "21\t13620283\ttr_dot_rus\tG\t<CNV:TR>\t.\t.\tSVLEN=9;RN=1;RUS=.;RUC=4",
    "combinations": [
     "coding_sequence_variant,feature_elongation",
@@ -148,7 +151,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-tandem-repeats",
+   "dataset": "GRCh38-vcf-tandem-repeats",
    "vcf": "21\t13620283\ttr_svtype\tG\t<CNV:TR>\t.\t.\tSVTYPE=CNV;SVLEN=9;RN=1;RUS=TCA;RUC=4",
    "combinations": [
     "coding_sequence_variant,feature_elongation",
@@ -182,6 +185,7 @@
    "covers": [
     "tandem-repeats-cnv-tr"
    ],
+   "masks": [],
    "reference_warnings": [
     "found tandem repeats with different references per alternative allele: SVLEN=9,6; only using reference with largest size",
     "CIRUC and CIRB INFO fields are ignored when calculating alternative alleles in tandem repeats"
@@ -216,18 +220,97 @@
    "covers": [
     "tandem-repeats-cnv-tr"
    ],
+   "masks": [
+    "cnv_tr_symbolic_loss_named_a_gain"
+   ],
    "reference_warnings": [
     "found tandem repeats with different references per alternative allele: SVLEN=9,6; only using reference with largest size",
     "CIRUC and CIRB INFO fields are ignored when calculating alternative alleles in tandem repeats"
    ],
-   "divergences": [],
+   "divergences": [
+    {
+     "location": "21:13620284-13620292",
+     "allele": "tandem_repeat",
+     "feature": "ENST00000299443",
+     "feature_type": "Transcript",
+     "record_indices": [
+      5,
+      6
+     ],
+     "vep_consequence_set": "coding_sequence_variant,feature_elongation",
+     "vep_rs_consequence_sets": [
+      "coding_sequence_variant,feature_elongation",
+      "coding_sequence_variant,feature_truncation"
+     ],
+     "expected_divergence": "cnv_tr_symbolic_loss_named_a_gain"
+    },
+    {
+     "location": "21:13620284-13620292",
+     "allele": "tandem_repeat",
+     "feature": "ENST00000620442",
+     "feature_type": "Transcript",
+     "record_indices": [
+      5,
+      6
+     ],
+     "vep_consequence_set": "coding_sequence_variant,feature_elongation",
+     "vep_rs_consequence_sets": [
+      "coding_sequence_variant,feature_elongation",
+      "coding_sequence_variant,feature_truncation"
+     ],
+     "expected_divergence": "cnv_tr_symbolic_loss_named_a_gain"
+    }
+   ],
    "vep_rs_only_tuples": [],
-   "divergence_summary": {},
+   "divergence_summary": {
+    "cnv_tr_symbolic_loss_named_a_gain": 2
+   },
    "vep_rs_only_summary": {}
   }
  ],
- "divergences": [],
+ "divergences": [
+  {
+   "location": "21:13620284-13620292",
+   "allele": "tandem_repeat",
+   "feature": "ENST00000299443",
+   "feature_type": "Transcript",
+   "record_indices": [
+    1,
+    2,
+    5,
+    6
+   ],
+   "vep_consequence_set": "coding_sequence_variant,feature_elongation",
+   "vep_rs_consequence_sets": [
+    "coding_sequence_variant",
+    "coding_sequence_variant,feature_elongation",
+    "coding_sequence_variant,feature_truncation"
+   ],
+   "expected_divergence": "cnv_tr_symbolic_loss_named_a_gain"
+  },
+  {
+   "location": "21:13620284-13620292",
+   "allele": "tandem_repeat",
+   "feature": "ENST00000620442",
+   "feature_type": "Transcript",
+   "record_indices": [
+    1,
+    2,
+    5,
+    6
+   ],
+   "vep_consequence_set": "coding_sequence_variant,feature_elongation",
+   "vep_rs_consequence_sets": [
+    "coding_sequence_variant",
+    "coding_sequence_variant,feature_elongation",
+    "coding_sequence_variant,feature_truncation"
+   ],
+   "expected_divergence": "cnv_tr_symbolic_loss_named_a_gain"
+  }
+ ],
  "vep_rs_only_tuples": [],
- "divergence_summary": {},
+ "divergence_summary": {
+  "cnv_tr_symbolic_loss_named_a_gain": 2
+ },
  "vep_rs_only_summary": {}
 }

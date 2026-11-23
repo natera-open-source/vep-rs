@@ -1,0 +1,89 @@
+{
+ "plugin_fixtures": {
+  "generator": "scripts/fixtures/cut_plugin_regions.py",
+  "flank": 5000,
+  "record_flank": 2000,
+  "exon_flank": 50,
+  "gerp_regions": "exons",
+  "tools": {
+   "bgzip": "bgzip (htslib) 1.9"
+  },
+  "files": {
+   "reference.fa.fai": "dd8638311ad622c0f1222225a520c7e8fbec6ec1b304cf6aeb1daa1934cbb395",
+   "reference.fa.gz": "834afe90dc3a4ad9fddc65b9b1001f65dead9bb8c70325672043def90a85aa21",
+   "reference.fa.gz.fai": "dd8638311ad622c0f1222225a520c7e8fbec6ec1b304cf6aeb1daa1934cbb395",
+   "reference.fa.gz.gzi": "3539e5c5bf17d3c04965f89058664c8cfa204f0c966054d1f7353e22e9081a64"
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 63,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species anopheles_gambiae --assembly AgamP4 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "anopheles_gambiae/63_AgamP4",
+ "fasta": "the three sequences the records sit on (X, Mt and Y_unplaced) at their full length, from Anopheles_gambiae.AgamP4.dna.chromosome.X.fa, Anopheles_gambiae.AgamP4.dna.chromosome.Mt.fa and the Y_unplaced record of Anopheles_gambiae.AgamP4.dna.nonchromosomal.fa of Ensembl Metazoa release 63 (Ensembl Genomes release 63), each file held to the sum line of the directory's CHECKSUMS; every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
+ "input": "variants.vcf: 329 records, 218 on chromosome X (6 of them named by its synonym CM000360.1), 77 on the mitochondrion Mt (6 of them named by its synonym L20934.1) and 34 on the unplaced sequence Y_unplaced. 296 are the seeded records tools/vep-seeded-variants writes for the three sequences under --records wide with seed 1, read from the converted cache and the genome sequence, their IDs the category and an ordinal: twelve a category (missense and synonymous changes on each strand, splice donor and acceptor, both untranslated regions, intron, upstream, downstream, intergenic, frameshift insertion and deletion, in-frame deletion, start codon, stop gained and stop lost under genetic code 1, the first sequence, the organelle, a synonym's name), nine each for the codon genetic code 5 reads differently and for a start codon, a stop gained and a stop lost under code 5 (the mitochondrion's 13 coding transcripts), three each at the first and at the last base of a sequence and two on the last sequence; the generator writes no record across an origin, since the cache marks no sequence circular. 33 are known variants of the Ensembl Metazoa release 63 variation set of Anopheles gambiae, their IDs the cache's: single-base substitutions sampled with seed 1 from the cache's variation files of the three sequences (300 candidates, 100 a sequence, each with the genome's base as its reference allele), of which ten a sequence are kept by name, evenly spaced, and three more by the sampling. Two exemplars per consequence-set combination the two references show, stratified by variant class and strand, six per combination carrying a protein-level term, plus the records the manifest's included_records name (326). Mt translates under genetic code table 5 and the other sequences under table 1, each transcript's codon_table in the cache",
+ "sha256": {
+  "default.txt": "502d68841546b710f6a30cb851d8782d1d58a098dfc67778ec3d2795eaeef246",
+  "tab.txt": "b4afa3b374ea6d2f33e6b5bfb1c5f631efd3125da91b093629d588f4571fa891",
+  "vcf.vcf": "f94b0e1fa93803c76f088827a2b78a41e3f020e212412e249a5b4109da4e770f",
+  "json.jsonl": "392147946636e49a9d6743d24b16520be936d75b74a7e29de7cff58b6430309b"
+ },
+ "variants_vcf_sha256": "6d32993837014547dbd27737098a3472fe6345fec7fb3fa344e14bd8d75a8113",
+ "flag_sets": {
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species anopheles_gambiae --assembly AgamP4 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "anopheles_gambiae/63_AgamP4",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "0c1de203a0c3967fbaab0fd929848a5ca01162a62599b3096de4986293b19726",
+    "tab.txt": "9e62a1abee7ad7fa0536dcd1f90f21e16dd3a34f358dd73e0dc202ff92890a25",
+    "vcf.vcf": "736189fd7bcce7785ae5067e80b914e2acc9e2f558f971feeb7d5a99549c3511",
+    "json.jsonl": "6fc87b0cac79c88c822b727a9caa262980f70ea1d8f4bcf2100706b47afe1380"
+   },
+   "flags": [
+    "--everything"
+   ],
+   "expected_dir": "expected_everything"
+  },
+  "hgvs-sift": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species anopheles_gambiae --assembly AgamP4 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs --sift b [--tab|--vcf|--json]",
+   "perl_cache": "anopheles_gambiae/63_AgamP4",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "3cb687355fc52bd7e3cca0c84119d32abb50101b11fb10d091eb39392f137ba4",
+    "tab.txt": "e2e610f2c82a103eafda8f37879de229ae475e83c868a425cc86ba054105e797",
+    "vcf.vcf": "3bb6e24a54a12766528eae9d8ecb0f88b66b6e3620741c8f28fe1bafeb16d763",
+    "json.jsonl": "e1b5d2ac0dd7ae9888a6aa64e62274a8eb17550fec71d5b834d9f290bbaffe36"
+   },
+   "flags": [
+    "--hgvs",
+    "--sift",
+    "b"
+   ],
+   "expected_dir": "expected_hgvs-sift"
+  }
+ },
+ "generator": "tools/vep-seeded-variants --cache <converted cache> --seed 1 --records wide --fasta <genome sequence> --sequence Mt --sequence X --sequence Y_unplaced, and a seeded sample of the known single-base substitutions in <converted cache>/variations of the same sequences; Ensembl VEP over the two inputs under the corpus flags; tools/vep-golden-corpus select --release 63 --assembly AgamP4 --species anopheles_gambiae --dataset wide=<reference>=<the seeded records> --dataset known=<reference>=<the sampled known variants> --k 2 --seed 1 --max-span 1000000 --max-records 500 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 6 --include <the named records> --covers species-anopheles-agamp4 --covers genetic-code-tables --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_function_predictions --drop-except <the transcripts on which a record changes one residue, the rows SIFT scores> --perl-info <cache>/info.txt --cache-version 63 --variations <converted cache>/variations over the whole cache tools/vep-storable-to-json converts from the Ensembl Metazoa release 63 AgamP4 cache (protein features kept for the DOMAINS column of the everything set; the variation slices hold the known variants within one base of a record); scripts/fixtures/cut_plugin_regions.py --reference <genome sequence> --flank 5000 --record-flank 2000, a record named by a synonym cut on the sequence chr_synonyms.txt links its name to; scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; tools/vep-golden-corpus flag-set (everything, hgvs-sift) and classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp --field SIFT for the hgvs-sift set)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "Mt": 37,
+   "X": 413,
+   "Y_unplaced": 2
+  },
+  "shards": 27,
+  "synonym_lines": 2,
+  "matrices_kept_on": 135,
+  "variation_slices": "the known variants within one base of a record under variations/<chr>/all_vars.gz with its .csi, as the Ensembl VEP cache lays them out: 136 on X, 11 on Mt and 15 on Y_unplaced"
+ }
+}

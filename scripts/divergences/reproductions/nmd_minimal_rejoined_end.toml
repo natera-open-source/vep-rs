@@ -1,9 +1,9 @@
 entry = "nmd_minimal_rejoined_end"
 page = "docs/divergences/nmd-minimal-rejoined-end.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 121.0 per million · 0 flag sets, 24 corpora"
+input_class_basis = "2 · 121.0 per million · 0 flag sets, 27 corpora"
 
 # Two records on CBR1 (ENST00000290349, forward strand; exons 36070024-36070404, 36070950-36071057,
 # 36072446-36073164), each split by --minimal into alleles of different spans. In acgta_agta_acgtc the
@@ -43,4 +43,13 @@ vep_rs = [
   "21:36070216-36070217 | - | ENST00000290349 | frameshift_variant | 101-102 | 1 | NMD_escaping_variant",
   "21:36070216-36070217 | - | ENST00000290349 | frameshift_variant | 101-102 | 2 | -",
   "21:36071004-36071007 | - | ENST00000290349 | frameshift_variant | 344-347 | 1 | -",
+]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/nmd.rs::cds_end",
+    "crates/vep-builtins/src/plugins/nmd.rs::escapes_nmd",
+]
+tests = [
+    "crates/vep-builtins/src/plugins/nmd.rs::tests::a_minimal_split_allele_is_judged_over_its_own_cds_span",
 ]

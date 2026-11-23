@@ -1,0 +1,44 @@
+entry = "clin_sig_allele_value_cut_at_semicolon"
+page = "docs/divergences/clin-sig-allele-value-cut-at-semicolon.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "observed"
+input_class_basis = "seen in the ClinVar records of Ensembl's human variation database of release 116 on GRCh38: on chromosomes 1 to 22, X, Y and MT, 120 germline records of 107 variants hold a significance of two or more classifications, and 98 pairs of an allele and a classification stand in no other record"
+notes = "Ensembl VEP reads the known variant rs74315447 from its own cache of release 116, whose dump cut the ClinVar significance `uncertain significance; risk factor` of one of the variant's eight records at the semicolon; vep-rs reads it from a cache the prepare steps build with vep-cache-builder from the committed rows of the same release's tables, which holds a pair for each classification. The value compared is the known variant's clin_sig_allele string in the JSON format, the cell as each cache holds it; in the other formats the record's rows list the allele's terms from it under CLIN_SIG, four on Ensembl VEP's rows and five on vep-rs's."
+
+prepare = [
+  "cp -r \"$REPO/crates/vep-cli/tests/fixtures/clinvar-several-classifications\" \"$STAGE/variation\"",
+  "bgzip \"$STAGE/variation/homo_sapiens-chr21.vcf\"",
+  "\"$VEP_CACHE_BUILDER\" --species homo_sapiens --assembly GRCh38 --release 116 --gff3 \"$REPO/crates/vep-cache-builder/tests/fixtures/grch38_chr21/slice.gff3\" --fasta \"$REPO/crates/vep-cache-builder/tests/fixtures/grch38_chr21/peptides.fa\" --include-variations --variation-vcf-dir \"$STAGE/variation\" --variation-dumps \"$STAGE/variation\" --output-dir \"$STAGE/json_cache\"",
+]
+
+[input]
+text = """
+21	34370639	kcne2_two_classifications	T	C	.	.	.
+"""
+
+[cache]
+assembly = "GRCh38"
+json_cache = "{stage}/json_cache"
+
+[run]
+flags = ["--check_existing"]
+
+[compare]
+kind = "json"
+path = "colocated_variants[id=rs74315447].clin_sig_allele"
+where = { record = "kcne2_two_classifications" }
+
+[expected]
+ensembl_vep = ["C:likely_benign;C:uncertain_significance;C:not_provided;C:likely_pathogenic"]
+vep_rs = ["C:uncertain_significance;C:risk_factor;C:likely_pathogenic;C:not_provided;C:likely_benign"]
+
+[implementation]
+code = [
+    "crates/vep-cache-builder/src/variation.rs::ClinVarAttribs::apply",
+    "crates/vep-cache-builder/src/variation.rs::classifications",
+]
+tests = [
+    "crates/vep-cache-builder/tests/variation_cache_from_dumps.rs::a_clinvar_significance_of_several_classifications_gives_a_pair_for_each",
+    "crates/vep-cli/tests/clinvar_significance_of_several_classifications_on_a_native_cache.rs::each_classification_of_a_clinvar_significance_is_a_term_of_the_alleles_row",
+]

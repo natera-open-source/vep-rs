@@ -1,7 +1,7 @@
 entry = "minimal_same_trimmed_allele"
 page = "docs/divergences/minimal-same-trimmed-allele.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the VCF 4.2 specification, section 1.4.1 \"Fixed fields\" (REF and ALT: a multi-allelic record of distinct multi-base alleles) and the Ensembl VEP documentation, \"Running Ensembl VEP\", --minimal; not seen in the measured datasets"
 notes = "The second and third alternate alleles trim to the allele string T at different positions and share Ensembl VEP's rejoin key, so the third allele's rows replace the second's, its stop_gained among them."
@@ -36,3 +36,7 @@ vep_rs = [
   "21:10542414-10542415 | T | ENST00000622113 | stop_gained | 2",
   "21:10542414-10542415 | T | ENST00000622113 | missense_variant | 3",
 ]
+
+[implementation]
+code = ["crates/vep-cli/src/vcf_parser.rs::split_minimal_record"]
+tests = ["crates/vep-cli/src/vcf_parser.rs::tests::minimal_per_alt_trim_multi_allelic"]

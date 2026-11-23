@@ -1,0 +1,6 @@
+shape	regions	span	intron_start	intron_end	forward	wide_exons	reference_terms	candidate_terms
+two runs, the first in a window of the region term and the last in none	5,5;8,10	8	-1	98	yes	no	intron_variant	splice_region_variant,intron_variant
+two runs, the last in a window of the region term and the first in none	2,2;8,10	8	-85	14	yes	no	splice_region_variant,splice_polypyrimidine_tract_variant,intron_variant	splice_region_variant,splice_polypyrimidine_tract_variant,intron_variant
+five runs in a twenty-base intron, the last in a window	0,0;2,2;4,4;6,6;8,10	8	-6	13	yes	no	splice_region_variant,splice_polypyrimidine_tract_variant,intron_variant	splice_region_variant,splice_polypyrimidine_tract_variant,intron_variant
+the same five runs before the tract of a longer intron, the last in no window	0,0;2,2;4,4;6,6;8,10	8	-6	24	yes	no	splice_polypyrimidine_tract_variant,intron_variant	splice_region_variant,intron_variant
+a run on the intron's first two bases between two runs in a window, the donor term withholding the region term	0,0;2,2;6,8	6	2	101	yes	no	splice_donor_variant,splice_donor_5th_base_variant,intron_variant	splice_donor_variant,splice_donor_region_variant,intron_variant

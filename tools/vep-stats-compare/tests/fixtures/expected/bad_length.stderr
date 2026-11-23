@@ -1,0 +1,1 @@
+ERROR: [compare_vep_stats] cannot read tests/fixtures/bad_length.summary.log.gz: Incorrect length of data produced

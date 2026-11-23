@@ -1,0 +1,3483 @@
+{
+ "release": "63",
+ "species": "candida_albicans",
+ "assembly": "GCA000182965v3",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 2,
+ "focus_terms": [
+  "frameshift_variant",
+  "incomplete_terminal_codon_variant",
+  "inframe_deletion",
+  "inframe_insertion",
+  "missense_variant",
+  "protein_altering_variant",
+  "start_lost",
+  "start_retained_variant",
+  "stop_gained",
+  "stop_lost",
+  "stop_retained_variant",
+  "synonymous_variant"
+ ],
+ "focus_exemplars_per_combination": 6,
+ "included_records": {
+  "designed": [
+   "code12_alters_residue_1",
+   "code12_alters_residue_2",
+   "code12_alters_residue_3",
+   "code12_alters_residue_4",
+   "code12_alters_residue_5",
+   "code12_alters_residue_6",
+   "code12_keeps_residue_1",
+   "code12_keeps_residue_2",
+   "code12_keeps_residue_3",
+   "code12_keeps_residue_4",
+   "code12_keeps_residue_5",
+   "code12_keeps_residue_6",
+   "code12_makes_codon_1",
+   "code12_makes_codon_2",
+   "code12_makes_codon_3",
+   "code12_makes_codon_4",
+   "code12_makes_codon_5",
+   "code12_makes_codon_6",
+   "code12_stop_codon_1",
+   "code12_stop_codon_2",
+   "code12_stop_codon_3",
+   "code12_stop_codon_4",
+   "code12_stop_codon_5",
+   "code12_stop_codon_6"
+  ],
+  "wide": [
+   "code12_changed_codon_1",
+   "code12_changed_codon_10",
+   "code12_changed_codon_11",
+   "code12_changed_codon_12",
+   "code12_changed_codon_2",
+   "code12_changed_codon_3",
+   "code12_changed_codon_4",
+   "code12_changed_codon_5",
+   "code12_changed_codon_6",
+   "code12_changed_codon_7",
+   "code12_changed_codon_8",
+   "code12_changed_codon_9",
+   "code12_start_codon_1",
+   "code12_start_codon_10",
+   "code12_start_codon_11",
+   "code12_start_codon_12",
+   "code12_start_codon_2",
+   "code12_start_codon_3",
+   "code12_start_codon_4",
+   "code12_start_codon_5",
+   "code12_start_codon_6",
+   "code12_start_codon_7",
+   "code12_start_codon_8",
+   "code12_start_codon_9",
+   "code12_stop_gained_1",
+   "code12_stop_gained_10",
+   "code12_stop_gained_11",
+   "code12_stop_gained_12",
+   "code12_stop_gained_2",
+   "code12_stop_gained_3",
+   "code12_stop_gained_4",
+   "code12_stop_gained_5",
+   "code12_stop_gained_6",
+   "code12_stop_gained_7",
+   "code12_stop_gained_8",
+   "code12_stop_gained_9",
+   "code12_stop_lost_1",
+   "code12_stop_lost_10",
+   "code12_stop_lost_11",
+   "code12_stop_lost_12",
+   "code12_stop_lost_2",
+   "code12_stop_lost_3",
+   "code12_stop_lost_4",
+   "code12_stop_lost_5",
+   "code12_stop_lost_6",
+   "code12_stop_lost_7",
+   "code12_stop_lost_8",
+   "code12_stop_lost_9",
+   "code4_changed_codon_1",
+   "code4_changed_codon_10",
+   "code4_changed_codon_11",
+   "code4_changed_codon_12",
+   "code4_changed_codon_2",
+   "code4_changed_codon_3",
+   "code4_changed_codon_4",
+   "code4_changed_codon_5",
+   "code4_changed_codon_6",
+   "code4_changed_codon_7",
+   "code4_changed_codon_8",
+   "code4_changed_codon_9",
+   "code4_start_codon_1",
+   "code4_start_codon_10",
+   "code4_start_codon_11",
+   "code4_start_codon_12",
+   "code4_start_codon_2",
+   "code4_start_codon_3",
+   "code4_start_codon_4",
+   "code4_start_codon_5",
+   "code4_start_codon_6",
+   "code4_start_codon_7",
+   "code4_start_codon_8",
+   "code4_start_codon_9",
+   "code4_stop_gained_1",
+   "code4_stop_gained_10",
+   "code4_stop_gained_11",
+   "code4_stop_gained_12",
+   "code4_stop_gained_2",
+   "code4_stop_gained_3",
+   "code4_stop_gained_4",
+   "code4_stop_gained_5",
+   "code4_stop_gained_6",
+   "code4_stop_gained_7",
+   "code4_stop_gained_8",
+   "code4_stop_gained_9",
+   "code4_stop_lost_1",
+   "code4_stop_lost_10",
+   "code4_stop_lost_11",
+   "code4_stop_lost_12",
+   "code4_stop_lost_2",
+   "code4_stop_lost_3",
+   "code4_stop_lost_4",
+   "code4_stop_lost_5",
+   "code4_stop_lost_6",
+   "code4_stop_lost_7",
+   "code4_stop_lost_8",
+   "code4_stop_lost_9",
+   "downstream_1",
+   "downstream_10",
+   "downstream_11",
+   "downstream_12",
+   "downstream_2",
+   "downstream_3",
+   "downstream_4",
+   "downstream_5",
+   "downstream_6",
+   "downstream_7",
+   "downstream_8",
+   "downstream_9",
+   "first_base_1",
+   "first_base_2",
+   "first_sequence_1",
+   "first_sequence_10",
+   "first_sequence_11",
+   "first_sequence_12",
+   "first_sequence_2",
+   "first_sequence_3",
+   "first_sequence_4",
+   "first_sequence_5",
+   "first_sequence_6",
+   "first_sequence_7",
+   "first_sequence_8",
+   "first_sequence_9",
+   "frameshift_deletion_1",
+   "frameshift_deletion_10",
+   "frameshift_deletion_11",
+   "frameshift_deletion_12",
+   "frameshift_deletion_2",
+   "frameshift_deletion_3",
+   "frameshift_deletion_4",
+   "frameshift_deletion_5",
+   "frameshift_deletion_6",
+   "frameshift_deletion_7",
+   "frameshift_deletion_8",
+   "frameshift_deletion_9",
+   "frameshift_insertion_1",
+   "frameshift_insertion_10",
+   "frameshift_insertion_11",
+   "frameshift_insertion_12",
+   "frameshift_insertion_2",
+   "frameshift_insertion_3",
+   "frameshift_insertion_4",
+   "frameshift_insertion_5",
+   "frameshift_insertion_6",
+   "frameshift_insertion_7",
+   "frameshift_insertion_8",
+   "frameshift_insertion_9",
+   "inframe_deletion_1",
+   "inframe_deletion_10",
+   "inframe_deletion_11",
+   "inframe_deletion_12",
+   "inframe_deletion_2",
+   "inframe_deletion_3",
+   "inframe_deletion_4",
+   "inframe_deletion_5",
+   "inframe_deletion_6",
+   "inframe_deletion_7",
+   "inframe_deletion_8",
+   "inframe_deletion_9",
+   "intergenic_1",
+   "intergenic_2",
+   "intron_1",
+   "intron_10",
+   "intron_11",
+   "intron_12",
+   "intron_2",
+   "intron_3",
+   "intron_4",
+   "intron_5",
+   "intron_6",
+   "intron_7",
+   "intron_8",
+   "intron_9",
+   "last_sequence_1",
+   "last_sequence_10",
+   "last_sequence_11",
+   "last_sequence_12",
+   "last_sequence_2",
+   "last_sequence_3",
+   "last_sequence_4",
+   "last_sequence_5",
+   "last_sequence_6",
+   "last_sequence_7",
+   "last_sequence_8",
+   "last_sequence_9",
+   "missense_forward_1",
+   "missense_forward_10",
+   "missense_forward_11",
+   "missense_forward_12",
+   "missense_forward_2",
+   "missense_forward_3",
+   "missense_forward_4",
+   "missense_forward_5",
+   "missense_forward_6",
+   "missense_forward_7",
+   "missense_forward_8",
+   "missense_forward_9",
+   "missense_reverse_1",
+   "missense_reverse_10",
+   "missense_reverse_11",
+   "missense_reverse_12",
+   "missense_reverse_2",
+   "missense_reverse_3",
+   "missense_reverse_4",
+   "missense_reverse_5",
+   "missense_reverse_6",
+   "missense_reverse_7",
+   "missense_reverse_8",
+   "missense_reverse_9",
+   "organelle_1",
+   "organelle_10",
+   "organelle_11",
+   "organelle_12",
+   "organelle_2",
+   "organelle_3",
+   "organelle_4",
+   "organelle_5",
+   "organelle_6",
+   "organelle_7",
+   "organelle_8",
+   "organelle_9",
+   "splice_acceptor_1",
+   "splice_acceptor_10",
+   "splice_acceptor_11",
+   "splice_acceptor_12",
+   "splice_acceptor_2",
+   "splice_acceptor_3",
+   "splice_acceptor_4",
+   "splice_acceptor_5",
+   "splice_acceptor_6",
+   "splice_acceptor_7",
+   "splice_acceptor_8",
+   "splice_acceptor_9",
+   "splice_donor_1",
+   "splice_donor_10",
+   "splice_donor_11",
+   "splice_donor_12",
+   "splice_donor_2",
+   "splice_donor_3",
+   "splice_donor_4",
+   "splice_donor_5",
+   "splice_donor_6",
+   "splice_donor_7",
+   "splice_donor_8",
+   "splice_donor_9",
+   "synonym_1",
+   "synonym_10",
+   "synonym_11",
+   "synonym_12",
+   "synonym_2",
+   "synonym_3",
+   "synonym_4",
+   "synonym_5",
+   "synonym_6",
+   "synonym_7",
+   "synonym_8",
+   "synonym_9",
+   "synonymous_forward_1",
+   "synonymous_forward_10",
+   "synonymous_forward_11",
+   "synonymous_forward_12",
+   "synonymous_forward_2",
+   "synonymous_forward_3",
+   "synonymous_forward_4",
+   "synonymous_forward_5",
+   "synonymous_forward_6",
+   "synonymous_forward_7",
+   "synonymous_forward_8",
+   "synonymous_forward_9",
+   "synonymous_reverse_1",
+   "synonymous_reverse_10",
+   "synonymous_reverse_11",
+   "synonymous_reverse_12",
+   "synonymous_reverse_2",
+   "synonymous_reverse_3",
+   "synonymous_reverse_4",
+   "synonymous_reverse_5",
+   "synonymous_reverse_6",
+   "synonymous_reverse_7",
+   "synonymous_reverse_8",
+   "synonymous_reverse_9",
+   "three_prime_utr_1",
+   "three_prime_utr_2",
+   "upstream_1",
+   "upstream_10",
+   "upstream_11",
+   "upstream_12",
+   "upstream_2",
+   "upstream_3",
+   "upstream_4",
+   "upstream_5",
+   "upstream_6",
+   "upstream_7",
+   "upstream_8",
+   "upstream_9"
+  ]
+ },
+ "max_span": 1000000,
+ "cache_cost_flank": 5000,
+ "fasta": "reference.fa.gz",
+ "covers": [
+  "species-candida-gca000182965v3",
+  "genetic-code-tables"
+ ],
+ "datasets": {
+  "wide": {
+   "reference": "pool_wide.default.txt",
+   "input": "pool_wide.vcf",
+   "rows": 6264,
+   "combinations": 17
+  },
+  "designed": {
+   "reference": "pool_designed.default.txt",
+   "input": "pool_designed.vcf",
+   "rows": 145,
+   "combinations": 5
+  }
+ },
+ "combinations": {
+  "3_prime_UTR_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 2
+  },
+  "downstream_gene_variant": {
+   "observed_rows": 2858,
+   "exemplar_records": 296
+  },
+  "frameshift_variant": {
+   "observed_rows": 72,
+   "exemplar_records": 27
+  },
+  "inframe_deletion": {
+   "observed_rows": 36,
+   "exemplar_records": 15
+  },
+  "intergenic_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 2
+  },
+  "intron_variant": {
+   "observed_rows": 65,
+   "exemplar_records": 20
+  },
+  "missense_variant": {
+   "observed_rows": 230,
+   "exemplar_records": 82
+  },
+  "non_coding_transcript_exon_variant": {
+   "observed_rows": 53,
+   "exemplar_records": 20
+  },
+  "non_coding_transcript_variant,splice_acceptor_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "non_coding_transcript_variant,splice_donor_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "splice_acceptor_variant": {
+   "observed_rows": 39,
+   "exemplar_records": 12
+  },
+  "splice_donor_variant": {
+   "observed_rows": 35,
+   "exemplar_records": 12
+  },
+  "start_lost": {
+   "observed_rows": 68,
+   "exemplar_records": 27
+  },
+  "stop_gained": {
+   "observed_rows": 72,
+   "exemplar_records": 29
+  },
+  "stop_lost": {
+   "observed_rows": 65,
+   "exemplar_records": 33
+  },
+  "synonymous_variant": {
+   "observed_rows": 121,
+   "exemplar_records": 46
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 2689,
+   "exemplar_records": 293
+  }
+ },
+ "variant_classes": {
+  "deletion": 144,
+  "insertion": 66,
+  "mnv_or_complex": 74,
+  "snv": 2253
+ },
+ "records": [
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t1\tfirst_base_1\tG\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t1\tfirst_base_2\tT\tC\t.\t.\t.",
+   "combinations": [
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t988\tlast_sequence_1\tT\tA\t.\t.\t.",
+   "combinations": [
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t988\torganelle_1\tT\tA\t.\t.\t.",
+   "combinations": [
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t1120\tsynonymous_reverse_1\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "designed",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t2310\tcode12_makes_codon_1\tT\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "designed",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t2422\tcode12_keeps_residue_1\tTC\tCT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "designed",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t2703\tcode12_alters_residue_1\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "designed",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t2747\tcode12_stop_codon_4\tTTA\tCAG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "designed",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t2767\tcode12_stop_codon_1\tTAA\tCTG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "designed",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t3102\tcode12_keeps_residue_4\tGA\tAG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t3218\tlast_sequence_2\tA\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t3218\torganelle_2\tA\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "designed",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t3263\tcode12_alters_residue_4\tC\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t3276\tcode4_start_codon_1\tT\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "start_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t3317\tcode4_stop_gained_1\tC\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_gained",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "designed",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t3407\tcode12_makes_codon_4\tA\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t3677\tmissense_reverse_1\tC\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t3690\tlast_sequence_3\tA\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t3690\torganelle_3\tA\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t3981\tcode4_changed_codon_1\tG\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t4048\tlast_sequence_4\tC\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t4061\tcode4_stop_lost_1\tT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant",
+    "stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t4131\tcode4_start_codon_2\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "start_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t4162\tcode4_stop_gained_2\tT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_gained",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t4166\torganelle_4\tT\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t4570\tcode4_stop_lost_2\tA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t4571\tcode4_start_codon_3\tA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "start_lost",
+    "stop_lost"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t5150\tcode4_stop_gained_3\tG\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_gained"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t5367\tcode4_changed_codon_2\tG\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t5452\tlast_sequence_5\tA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t5452\torganelle_5\tA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t5524\tcode4_stop_lost_3\tG\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_lost"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t6353\tframeshift_deletion_1\tAG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "frameshift_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t6525\tcode12_stop_lost_1\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t7607\tcode12_changed_codon_1\tC\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t8914\tmissense_reverse_2\tT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t9931\tcode4_stop_lost_4\tA\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t10056\tcode4_changed_codon_3\tC\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t10329\tcode4_stop_gained_4\tA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_gained",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t10342\tlast_sequence_6\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t10738\tcode4_start_codon_4\tT\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "start_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t10832\tlast_sequence_7\tC\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t10832\torganelle_6\tC\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t11557\tlast_sequence_8\tC\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t11557\torganelle_7\tC\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t11636\tlast_sequence_9\tT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t11636\torganelle_8\tT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t11741\tlast_sequence_10\tA\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t11821\tlast_sequence_11\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t11821\torganelle_9\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t11860\tlast_sequence_12\tC\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t11860\torganelle_10\tC\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t12469\tcode4_stop_lost_5\tC\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t12474\torganelle_11\tC\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t12686\tcode4_stop_gained_5\tA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_gained",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t12699\tcode4_start_codon_5\tT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "start_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t12897\tcode4_stop_lost_6\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t12938\torganelle_12\tA\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t13088\tcode4_stop_gained_6\tA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_gained",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t13469\tcode4_changed_codon_4\tC\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t13635\tcode4_start_codon_6\tT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "start_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t13761\tcode4_stop_lost_7\tT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t13882\tcode4_changed_codon_5\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t13883\tcode4_stop_gained_7\tA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_gained",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t13905\tcode4_start_codon_7\tA\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "start_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t14358\tmissense_forward_1\tG\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t14542\tcode12_changed_codon_2\tC\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t14772\tcode4_start_codon_8\tT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "start_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t14773\tcode4_start_codon_9\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "start_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t14773\tcode4_start_codon_10\tG\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "start_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t14790\tcode4_changed_codon_6\tG\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t14791\tcode4_changed_codon_7\tA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t15688\tcode4_stop_gained_8\tT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant",
+    "stop_gained",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t16088\tsplice_donor_1\tT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "splice_donor_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t16110\tintron_1\tA\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t16145\tsplice_acceptor_1\tA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "splice_acceptor_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t16263\tcode4_stop_lost_8\tA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant",
+    "stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t16514\tcode4_stop_gained_9\tT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_gained",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t16522\tcode4_changed_codon_8\tT\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t16547\tcode4_stop_gained_10\tT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_gained",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t16704\tcode4_stop_gained_11\tC\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant",
+    "stop_gained",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t17196\tcode4_changed_codon_9\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t17256\tcode12_start_codon_1\tT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "start_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t17624\tcode4_stop_lost_9\tA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant",
+    "stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t18297\tcode12_stop_lost_2\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "CalbSC5314_Chr7\t18477\tsynonym_1\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t18625\tcode4_changed_codon_10\tG\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t18734\tmissense_reverse_3\tT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t18979\tcode4_stop_lost_10\tA\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant",
+    "stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t20120\tcode4_stop_lost_11\tA\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant",
+    "stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t20145\tmissense_reverse_4\tT\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t20555\tcode4_stop_gained_12\tA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_gained",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t20772\tupstream_1\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t20926\tcode4_stop_lost_12\tA\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t21074\tcode12_start_codon_2\tG\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "start_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t21423\tcode4_start_codon_11\tT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant",
+    "start_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t21545\tsynonymous_forward_1\tT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t22045\tcode4_changed_codon_11\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t22325\tmissense_forward_2\tG\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t22851\tcode4_start_codon_12\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "start_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t22910\tcode4_changed_codon_12\tG\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t23423\tdownstream_1\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t26824\tfirst_sequence_1\tG\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "CalbSC5314_Chr7\t27654\tsynonym_2\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "CalbSC5314_Chr7\t29794\tsynonym_3\tC\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t31098\tmissense_forward_3\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "CalbSC5314_Chr7\t33083\tsynonym_4\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chrM_C_albicans_SC5314\t34058\torganelle_31\tT\tA\t.\t.\t.",
+   "combinations": [
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t34452\tcode12_stop_lost_3\tT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t34874\tinframe_deletion_1\tATGC\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "inframe_deletion",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t35844\tinframe_deletion_2\tATAA\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "inframe_deletion",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t38063\tcode12_changed_codon_3\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t42120\tsynonymous_forward_2\tT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t43652\tsplice_acceptor_2\tC\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "splice_acceptor_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t43687\tintron_2\tA\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t43715\tsplice_donor_2\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "splice_donor_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t46311\tcode12_start_codon_3\tG\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "start_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t47044\tframeshift_deletion_2\tGAT\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "frameshift_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t47060\tfirst_sequence_2\tA\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t47451\tcode12_stop_gained_1\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_gained",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t48705\tcode12_changed_codon_4\tA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t49477\tmissense_reverse_5\tT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t50023\tcode12_stop_gained_2\tT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_gained",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t52550\tfirst_sequence_3\tT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t57788\tupstream_2\tT\tA\t.\t.\t.",
+   "combinations": [
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t58689\tupstream_3\tG\tA\t.\t.\t.",
+   "combinations": [
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t58799\tupstream_4\tC\tT\t.\t.\t.",
+   "combinations": [
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t59193\tframeshift_deletion_3\tTGT\tT\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t59396\tcode12_changed_codon_5\tT\tC\t.\t.\t.",
+   "combinations": [
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t60606\tcode12_stop_gained_3\tG\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_gained",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t61980\tframeshift_deletion_4\tCC\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "frameshift_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t64239\tmissense_forward_4\tT\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t64753\tframeshift_deletion_5\tCT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "frameshift_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t67901\tframeshift_insertion_1\tT\tTA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "frameshift_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t69330\tsynonymous_reverse_2\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t69537\tcode12_start_codon_4\tC\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "start_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t70142\tupstream_5\tT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t72733\tcode12_changed_codon_6\tC\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t72936\tmissense_reverse_6\tC\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t73936\tsplice_acceptor_3\tC\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "splice_acceptor_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t74138\tintron_3\tA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t74298\tsplice_donor_3\tA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "splice_donor_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t76266\tmissense_forward_5\tA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t79185\tupstream_6\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t81174\tcode12_stop_lost_4\tT\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t81366\tsynonymous_reverse_3\tA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t81596\tmissense_forward_6\tC\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t81905\tcode12_start_codon_5\tT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "start_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t87601\tcode12_stop_gained_4\tT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_gained",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t88682\tcode12_stop_lost_5\tC\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t91078\tcode12_start_codon_6\tC\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "start_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t91197\tdownstream_2\tC\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t96044\tcode12_stop_lost_6\tT\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t97026\tframeshift_insertion_2\tC\tCC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "frameshift_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "CalbSC5314_Chr7\t98135\tsynonym_5\tT\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t98592\tmissense_reverse_7\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t98929\tframeshift_deletion_6\tTA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "frameshift_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t99193\tinframe_deletion_3\tATTT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "inframe_deletion",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t100542\tframeshift_deletion_7\tACT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "frameshift_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t101463\tupstream_7\tT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t103805\tcode12_stop_lost_7\tA\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t103979\tcode12_stop_lost_8\tA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t105412\tsplice_acceptor_4\tC\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "splice_acceptor_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t105434\tintron_4\tT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t105601\tsplice_donor_4\tC\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "splice_donor_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t106445\tmissense_reverse_8\tT\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t106529\tfirst_sequence_4\tT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t114474\tcode12_stop_lost_9\tA\tT\t.\t.\t.",
+   "combinations": [
+    "stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t115832\tdownstream_3\tT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t117792\tsynonymous_forward_3\tT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t124348\tcode12_stop_gained_5\tG\tT\t.\t.\t.",
+   "combinations": [
+    "stop_gained",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t126013\tframeshift_deletion_8\tGCA\tG\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t126723\tmissense_forward_7\tT\tA\t.\t.\t.",
+   "combinations": [
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t128357\tupstream_8\tA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t131589\tsplice_donor_5\tT\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "splice_donor_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t131630\tintron_5\tT\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t131659\tsplice_acceptor_5\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "splice_acceptor_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t132009\tdownstream_4\tA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t132567\tcode12_start_codon_7\tA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "start_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "CalbSC5314_Chr7\t133577\tsynonym_6\tG\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t135512\tcode12_start_codon_8\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "start_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t140502\tcode12_changed_codon_7\tT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t143556\tsplice_donor_6\tG\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "splice_donor_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t143583\tintron_6\tA\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t143677\tsplice_acceptor_6\tA\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "splice_acceptor_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t144568\tcode12_start_codon_9\tA\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "start_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t150179\tfirst_sequence_5\tA\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t151509\tcode12_changed_codon_8\tG\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t152046\tsplice_acceptor_7\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "splice_acceptor_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t152119\tsplice_donor_7\tT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "splice_donor_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t152141\tintron_7\tA\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t153495\tmissense_reverse_9\tT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t156207\tcode12_stop_gained_6\tA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_gained",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t157694\tsynonymous_reverse_4\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t159739\tmissense_reverse_10\tT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t171800\tcode12_stop_gained_7\tT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_gained",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t172015\tfirst_sequence_6\tC\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t175693\tcode12_changed_codon_9\tC\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t186956\tdownstream_5\tT\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t188694\tframeshift_deletion_9\tCAG\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "frameshift_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t190219\tmissense_reverse_11\tT\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t190429\tcode12_stop_gained_8\tG\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_gained",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t190754\tcode12_changed_codon_10\tG\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t191813\tsynonymous_reverse_5\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t196110\tfirst_sequence_7\tG\tC\t.\t.\t.",
+   "combinations": [
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t197377\tcode12_stop_gained_9\tG\tT\t.\t.\t.",
+   "combinations": [
+    "stop_gained",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t197954\tupstream_9\tT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t198775\tmissense_forward_8\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t199473\tframeshift_deletion_10\tAC\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "frameshift_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t202256\tfirst_sequence_8\tA\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t202264\tsplice_donor_8\tG\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "splice_donor_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t202332\tintron_8\tA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t202690\tsplice_acceptor_8\tA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "splice_acceptor_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t202834\tmissense_forward_9\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t208085\tupstream_10\tC\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t209670\tmissense_forward_10\tA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "CalbSC5314_Chr7\t210218\tsynonym_7\tA\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t211120\tcode12_stop_lost_10\tT\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t212406\tmissense_forward_11\tG\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t213902\tsynonymous_forward_4\tT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t213968\tinframe_deletion_4\tACCA\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "inframe_deletion",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t214158\tdownstream_6\tG\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t214215\tupstream_11\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t214421\tsynonymous_reverse_6\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t214799\tdownstream_7\tA\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t214960\tinframe_deletion_5\tGTTT\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "inframe_deletion",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t220074\tcode12_changed_codon_11\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t220970\tupstream_12\tT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t222498\tcode12_stop_gained_10\tC\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_gained",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "CalbSC5314_Chr7\t222791\tsynonym_8\tC\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t222982\tframeshift_deletion_11\tTT\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "frameshift_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t225446\tinframe_deletion_6\tAAAA\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "inframe_deletion",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t225679\tframeshift_deletion_12\tGGC\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "frameshift_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t226558\tsplice_acceptor_9\tT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "splice_acceptor_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t226598\tintron_9\tG\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t226629\tsplice_donor_9\tC\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "splice_donor_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t243466\tdownstream_8\tT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t245216\tmissense_forward_12\tC\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t245582\tmissense_reverse_12\tG\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t248251\tcode12_start_codon_10\tT\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "start_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t248576\tinframe_deletion_7\tGGAT\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "inframe_deletion",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t249860\tcode12_start_codon_11\tA\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "start_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t254244\tdownstream_9\tT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t254739\tcode12_changed_codon_12\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t255339\tfirst_sequence_9\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t255339\tcode12_stop_lost_11\tA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t258441\tsplice_donor_10\tT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "splice_donor_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t258502\tintron_10\tT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t258698\tsplice_acceptor_10\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "splice_acceptor_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t261180\tdownstream_10\tC\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "designed",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t261260\tcode12_stop_codon_5\tTCA\tCAG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t261481\tcode12_stop_gained_11\tC\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_gained",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "designed",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t261786\tcode12_keeps_residue_5\tGA\tAG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "designed",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t261977\tcode12_alters_residue_5\tC\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t262346\tfirst_sequence_10\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "designed",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t262514\tcode12_makes_codon_5\tT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t265039\tcode12_stop_gained_12\tA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_gained",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t266120\tcode12_start_codon_12\tT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "start_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t267485\tframeshift_insertion_3\tG\tGG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "frameshift_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "CalbSC5314_Chr7\t274017\tsynonym_9\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t276268\tinframe_deletion_8\tTAAT\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "inframe_deletion",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t278941\tframeshift_insertion_4\tA\tAGT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "frameshift_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t279122\tfirst_sequence_11\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t286283\tinframe_deletion_9\tCAAT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "inframe_deletion"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t286775\tcode12_stop_lost_12\tT\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_lost"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t287449\tinframe_deletion_10\tCTAA\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "inframe_deletion",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t289092\tcode12_start_codon_15\tA\tT\t.\t.\t.",
+   "combinations": [
+    "start_lost"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t290384\tsynonymous_reverse_7\tT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t295834\tcode12_stop_lost_13\tA\tG\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t297141\tdownstream_11\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t302680\tframeshift_deletion_15\tTAG\tT\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t304243\tsynonymous_reverse_8\tA\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t307213\tfirst_sequence_12\tC\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_gained",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t309978\tsplice_acceptor_11\tC\tG\t.\t.\t.",
+   "combinations": [
+    "splice_acceptor_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t310012\tintron_11\tG\tT\t.\t.\t.",
+   "combinations": [
+    "intron_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t310051\tsplice_donor_11\tA\tT\t.\t.\t.",
+   "combinations": [
+    "splice_donor_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t310093\tsynonymous_reverse_9\tA\tT\t.\t.\t.",
+   "combinations": [
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t312051\tdownstream_12\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t312662\tsynonymous_forward_5\tC\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t317558\tframeshift_insertion_5\tT\tTAC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "frameshift_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t321358\tsynonymous_forward_6\tT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "designed",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t325325\tcode12_makes_codon_2\tT\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "designed",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t325656\tcode12_keeps_residue_2\tCT\tTC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "designed",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t325658\tcode12_alters_residue_2\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "designed",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t326691\tcode12_stop_codon_2\tTGA\tCTG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t337042\tinframe_deletion_11\tAACC\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "inframe_deletion",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t339086\tsynonymous_reverse_10\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t341642\tsynonymous_forward_7\tT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t345026\tframeshift_insertion_6\tC\tCA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "frameshift_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t346300\tsynonymous_forward_8\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "CalbSC5314_Chr7\t347248\tsynonym_10\tG\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t347269\tsplice_donor_12\tT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "splice_donor_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t347316\tintron_12\tT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t347337\tsplice_acceptor_12\tA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "splice_acceptor_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t351714\tsynonymous_forward_9\tT\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t354659\tframeshift_insertion_7\tG\tGCT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "frameshift_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "CalbSC5314_Chr7\t359221\tsynonym_11\tA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t359626\tsynonymous_forward_10\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t364103\tframeshift_insertion_8\tA\tACG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "frameshift_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t364473\tcode12_start_codon_17\tC\tA\t.\t.\t.",
+   "combinations": [
+    "start_lost"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t369695\tframeshift_insertion_9\tC\tCGT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "frameshift_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t371586\tframeshift_insertion_10\tA\tAAC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "frameshift_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "CalbSC5314_Chr7\t372465\tsynonym_12\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t372509\tsynonymous_forward_11\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t374126\tinframe_deletion_12\tTCTC\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "inframe_deletion",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "CalbSC5314_Chr7\t379259\tsynonym_13\tG\tA\t.\t.\t.",
+   "combinations": [
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t382239\tframeshift_insertion_11\tT\tTC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "frameshift_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t384580\tsynonymous_reverse_11\tT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t390820\tsynonymous_forward_12\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t396057\tframeshift_insertion_12\tC\tCTA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "frameshift_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t484307\tsynonymous_reverse_12\tT\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "CalbSC5314_Chr7\t513643\tsynonym_17\tC\tA\t.\t.\t.",
+   "combinations": [
+    "missense_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t517703\tinframe_deletion_18\tAGTA\tA\t.\t.\t.",
+   "combinations": [
+    "inframe_deletion"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t519339\tinframe_deletion_19\tCTGG\tC\t.\t.\t.",
+   "combinations": [
+    "inframe_deletion"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t559007\tthree_prime_utr_1\tT\tG\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t572185\tframeshift_insertion_22\tA\tAAG\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t578808\tintergenic_1\tC\tT\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t586264\tthree_prime_utr_2\tA\tC\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "designed",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t605383\tcode12_keeps_residue_3\tTC\tCT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "designed",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t605406\tcode12_makes_codon_3\tC\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "designed",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t605457\tcode12_alters_residue_3\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "designed",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t606049\tcode12_stop_codon_3\tTAA\tCTG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "CalbSC5314_Chr7\t635352\tsynonym_20\tA\tG\t.\t.\t.",
+   "combinations": [
+    "missense_variant"
+   ]
+  },
+  {
+   "dataset": "designed",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t644349\tcode12_stop_codon_6\tTA\tAG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "designed",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t646931\tcode12_alters_residue_6\tC\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "designed",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t647433\tcode12_keeps_residue_6\tGA\tAG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "designed",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t647693\tcode12_makes_codon_6\tT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "CalbSC5314_Chr7\t659520\tsynonym_21\tT\tA\t.\t.\t.",
+   "combinations": [
+    "stop_gained"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "CalbSC5314_Chr7\t699952\tsynonym_22\tA\tT\t.\t.\t.",
+   "combinations": [
+    "stop_gained",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t763647\tframeshift_insertion_29\tC\tCG\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "CalbSC5314_Chr7\t778418\tsynonym_25\tA\tG\t.\t.\t.",
+   "combinations": [
+    "missense_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t789796\tinframe_deletion_25\tCAAT\tC\t.\t.\t.",
+   "combinations": [
+    "inframe_deletion"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "CalbSC5314_Chr7\t814972\tsynonym_28\tA\tC\t.\t.\t.",
+   "combinations": [
+    "stop_gained"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "CalbSC5314_Chr7\t854505\tsynonym_30\tA\tG\t.\t.\t.",
+   "combinations": [
+    "synonymous_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "CalbSC5314_Chr7\t860808\tsynonym_32\tG\tA\t.\t.\t.",
+   "combinations": [
+    "synonymous_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t865917\tsplice_acceptor_23\tA\tC\t.\t.\t.",
+   "combinations": [
+    "non_coding_transcript_variant,splice_acceptor_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t865945\tsplice_donor_23\tA\tG\t.\t.\t.",
+   "combinations": [
+    "non_coding_transcript_variant,splice_donor_variant"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t918813\tcode12_start_codon_36\tT\tG\t.\t.\t.",
+   "combinations": [
+    "start_lost"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "CalbSC5314_Chr7\t941128\tsynonym_36\tA\tT\t.\t.\t.",
+   "combinations": [
+    "stop_gained"
+   ]
+  },
+  {
+   "dataset": "wide",
+   "vcf": "Ca22chr7A_C_albicans_SC5314\t948583\tintergenic_2\tT\tC\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  }
+ ],
+ "multi_allelic_per_dataset": 4,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "flag_sets": [
+  {
+   "name": "everything",
+   "flags": [
+    "--everything"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_everything",
+   "covers": [
+    "human-only-flags-on-another-species"
+   ],
+   "masks": [
+    "regulatory_feature_rows"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {},
+   "fields_compared": [
+    "HGVSc",
+    "HGVSp",
+    "HGVS_OFFSET"
+   ],
+   "field_divergences": [],
+   "field_divergence_summary": {}
+  },
+  {
+   "name": "hgvs",
+   "flags": [
+    "--hgvs"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_hgvs",
+   "covers": [
+    "hgvs",
+    "genetic-code-tables"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {},
+   "fields_compared": [
+    "HGVSc",
+    "HGVSp",
+    "HGVS_OFFSET"
+   ],
+   "field_divergences": [],
+   "field_divergence_summary": {}
+  }
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {}
+}

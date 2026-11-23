@@ -1,9 +1,9 @@
 entry = "conservation_short_name_spelling"
 page = "docs/divergences/phylop-short-name.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 1 of 392 flag sets · 1 flag set, 1 corpus"
+input_class_basis = "2 · 1 of 511 flag sets · 1 flag set, 1 corpus"
 notes = "The header line of the --phyloP 100 source; the row's Extra item carries the same key over the same value, -0.980000019073486, and the phastCons100way key agrees everywhere."
 
 [input]
@@ -30,3 +30,15 @@ mask_paths = false
 [expected]
 ensembl_vep = ["## phlyoP100way : [PATH]/hg38.phyloP100way.bw"]
 vep_rs = ["## phyloP100way : [PATH]/hg38.phyloP100way.bw"]
+
+[implementation]
+code = ["crates/vep-cli/src/config.rs::custom_sources"]
+tests = [
+    "crates/vep-cli/src/config.rs::tests::phylop_expands_one_bigwig_source_per_instance_with_the_corrected_short_name",
+    "crates/vep-cli/tests/documented_subsets.rs::conservation_exclusions_are_documented",
+    "crates/vep-cli/tests/golden.rs::conservation_short_name_spelling_mask_respells_the_reference_key",
+]
+rules = [
+    "tools/vep-formats-compare/src/parse/mod.rs::conservation_keys_respelt",
+    "tools/vep-formats-compare/src/remainder/mod.rs::hand_over",
+]

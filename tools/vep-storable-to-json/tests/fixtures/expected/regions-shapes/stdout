@@ -1,0 +1,38 @@
+Processing 33 chromosomes
+  chrcircular_absent: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chrcircular_empty_string: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chrcircular_reference: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chrcircular_undef: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chrcircular_word: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chrcircular_zero_point_zero_string: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chrcircular_zero_string: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chrfirst_earlier_shard: 2 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chrfirst_later_shard: 2 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chrfirst_of_three: 1 files, 3 transcripts, 0 variation files, 0 regulatory files
+  chrfirst_second_transcript: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chrlength_absent: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chrlength_exponent: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chrlength_final_newline: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chrlength_flagged_string: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chrlength_integer: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chrlength_leading_zero: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chrlength_negative: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chrlength_reference: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chrlength_string: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chrlength_two_newlines: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chrlength_undef: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chrlength_wide_digit: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chrlength_zero: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chrnative_fraction: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chrnative_true_length: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chrnative_whole_double: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chrslice_absent: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chrslice_array: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chrslice_class_zero: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chrslice_plain_hash: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chrslice_string: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chrslice_undef: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+Wrote regions-shapes.out/sequence_regions.tsv (19 sequences)
+Wrote regions-shapes.out/info.json
+
+Done. Converted: 35 / 35 files, 67 total transcripts, 0 variation files copied, 0 regulatory files

@@ -1,6 +1,6 @@
 # `--check_svs` in an offline run
 
-**The defect in one sentence.** Ensembl VEP 116.2 reads the known structural variants that `--check_svs` reports from its variation database alone, although Ensembl publishes the same variants with each release as an indexed VCF. It declares `--check_svs` and `--offline` a pair of flags that cannot be combined, and ends an offline run under the flag before it reads a record, with `Can't use --check_svs and --offline together`. Under `--safe`, which skips the check of such pairs, the offline run declares the `SV` field in its header and fills it on no row. vep-rs writes offline what Ensembl VEP writes with a database connection, wherever Ensembl's file holds the database's mapping.
+**The defect in one sentence.** Ensembl VEP 116.3 reads the known structural variants that `--check_svs` reports from its variation database alone, although Ensembl publishes the same variants with each release as an indexed VCF. It declares `--check_svs` and `--offline` a pair of flags that cannot be combined, and ends an offline run under the flag before it reads a record, with `Can't use --check_svs and --offline together`. Under `--safe`, which skips the check of such pairs, the offline run declares the `SV` field in its header and fills it on no row. vep-rs writes offline what Ensembl VEP writes with a database connection, wherever Ensembl's file holds the database's mapping.
 
 **Why this is a defect.** Ensembl VEP's documentation states the limit: the flag needs database access. The limit comes from where the data is kept and not from the question asked. The names of the structural variants over a record are fixed by the release, and Ensembl's own file of them holds what the database query returns, apart from three kinds of mapping named below. So a run that may not reach a database cannot have the field, on a record whose answer the release's files hold.
 
@@ -10,7 +10,7 @@ The refusal is no sound guard either. `--safe`, the flag that makes a plugin's f
 
 The file lacks three kinds of mapping the database holds: a variant on a scaffold or patch, a further location of a variant mapped to several locations, and a variant that starts at the first base of its chromosome. On a record one of them reaches, vep-rs's offline row lacks a name the connected run writes ([Known variants](../output/known-variants.md#sv)).
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2, `Bio/EnsEMBL/VEP/` unless a path says otherwise):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3, `Bio/EnsEMBL/VEP/` unless a path says otherwise):
 
 - `Config.pm`, line 125: `check_svs` is declared without a value.
 - `vep`, the launcher, line 30: an argument left over after the options ends the run with `Unexpected extra command-line parameter(s)`, so a file after the flag is refused.
@@ -22,11 +22,11 @@ The file lacks three kinds of mapping the database holds: a variant on a scaffol
 
 **The class it produces.** `check_svs_refused_offline`: the `SV` field, and the JSON `colocated_structural_variants` list, of every record of an offline run under `--check_svs`. The reference, Ensembl VEP's side of a comparison, ends before its output opens, with exit status 2, or under `--safe` writes its rows without the field, where the candidate, vep-rs's side, carries it. No comparator codes the class. The two committed flag sets that pass the flag are compared with a reference Ensembl VEP wrote with a connection to its database.
 
-**How often the shape occurs.** Tier 2, see [Intended divergences from Ensembl VEP](../intended-divergences.md): the shape is a run under `--check_svs`, whatever its records. Of the 392 committed flag sets, 2 pass the flag, both of the `GRCh38-checksvs` golden corpus.
+**How often the shape occurs.** Tier 2, see [Intended divergences from Ensembl VEP](../intended-divergences.md): the shape is a run under `--check_svs`, whatever its records. Of the 511 committed flag sets, 2 pass the flag, both of the `GRCh38-checksvs` golden corpus.
 
 ## 1. One substitution under six structural variants
 
-**In short.** The record `21 5047000 T A` lies inside six known structural variants of Ensembl release 116. Ensembl VEP 116.2 declares `--check_svs` and `--offline` a pair that cannot be combined: offline it refuses the flag with `Can't use --check_svs and --offline together` and exit status 2, and writes no output. `--safe` skips that check, and the offline run then exits 0 with the `SV` field declared in its header, no value on the row and nothing on standard error. vep-rs, given the flag with Ensembl's structural-variant file, writes `SV=nsv2770691,nsv3109934,nsv3163927,nsv3167562,nsv533679,nsv6146554`, the six names Ensembl VEP writes for the record with a connection to its database.
+**In short.** The record `21 5047000 T A` lies inside six known structural variants of Ensembl release 116. Ensembl VEP 116.3 declares `--check_svs` and `--offline` a pair that cannot be combined: offline it refuses the flag with `Can't use --check_svs and --offline together` and exit status 2, and writes no output. `--safe` skips that check, and the offline run then exits 0 with the `SV` field declared in its header, no value on the row and nothing on standard error. vep-rs, given the flag with Ensembl's structural-variant file, writes `SV=nsv2770691,nsv3109934,nsv3163927,nsv3167562,nsv533679,nsv6146554`, the six names Ensembl VEP writes for the record with a connection to its database.
 
 ### 1.1 What a reader needs to know first
 
@@ -53,7 +53,7 @@ Every run is offline. Ensembl VEP is run without `--safe` and with it, and vep-r
 
 ### 1.3 What each engine writes
 
-Ensembl VEP 116.2, run without `--safe`, writes no output file and this line to standard error, and exits with status 2:
+Ensembl VEP 116.3, run without `--safe`, writes no output file and this line to standard error, and exits with status 2:
 
 ```
 ERROR: Can't use --check_svs and --offline together
@@ -80,7 +80,7 @@ Neither engine takes the other's form of the flag. Given a file after `--check_s
 
 Ensembl VEP checks its flags against a table of pairs that cannot be combined before it opens the input. The table pairs `check_svs` with `offline`, so the run ends there. The check sits inside a test of `--safe` and is skipped under that flag. The pairing states a fact about the source: the one structural-variant source Ensembl VEP has asks the variation database for the variants over each buffer, and the cache has no file it could read in the database's place.
 
-Source (`ensembl-vep` at release/116.2, `Bio/EnsEMBL/VEP/`):
+Source (`ensembl-vep` at release/116.3, `Bio/EnsEMBL/VEP/`):
 
 - `Config.pm`, line 628: the pair. Lines 959-964: the check and the message; line 961: the test of `--safe` around it.
 - `AnnotationSourceAdaptor.pm`, lines 202-206: the source is built from a database adaptor alone.
@@ -97,7 +97,7 @@ vep -i record.vcf -o out.txt --offline --json_cache <corpus>/json_cache \
   --check_svs <corpus>/structural_variants.vcf.gz
 ```
 
-vep-rs writes its row of 1.3. Ensembl VEP 116.2 takes `--check_svs` alone, with the cache options of [Reproducing these examples](reproducing.md). With `--offline` it ends with the message of 1.3, and with `--offline --safe` it writes its row without the field. With `--cache` and a connection to Ensembl's public database it writes vep-rs's row.
+vep-rs writes its row of 1.3. Ensembl VEP 116.3 takes `--check_svs` alone, with the cache options of [Reproducing these examples](reproducing.md). With `--offline` it ends with the message of 1.3, and with `--offline --safe` it writes its row without the field. With `--cache` and a connection to Ensembl's public database it writes vep-rs's row.
 
 ### 1.7 How the comparator treats this class
 

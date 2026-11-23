@@ -4,7 +4,7 @@
 //! How the `vep` binary writes HGVSc for a deletion that covers a whole
 //! transcript: the `transcript_ablation` row carries the notation clamped onto
 //! the transcript's first and last bases.
-//! Every expected value is Ensembl VEP 116.2's output for the same record on
+//! Every expected value is Ensembl VEP 116.3's output for the same record on
 //! the release-116 GRCh38 cache and the chromosome 21 reference the corpus
 //! carries.
 
@@ -64,9 +64,9 @@ fn row_cells(rows: &[String], record: &str, transcript: &str) -> [String; 3] {
 }
 
 /// A deletion covering a whole transcript is `within_feature`
-/// (BaseVariationFeatureOverlapAllele.pm:480), so Ensembl VEP 116.2 asks
-/// `hgvs_transcript` for its `transcript_ablation` row (OutputFactory.pm:1721,
-/// 1750-1754): `_var2transcript_slice_coords` refuses only a span with both
+/// (BaseVariationFeatureOverlapAllele.pm:480), so Ensembl VEP 116.3 asks
+/// `hgvs_transcript` for its `transcript_ablation` row (OutputFactory.pm:1730,
+/// 1759-1763): `_var2transcript_slice_coords` refuses only a span with both
 /// ends outside on one side and clamps each end onto the transcript
 /// (TranscriptVariationAllele.pm:2729-2733), so at a zero 3' shift the row
 /// reads `n.1_<length>del`, or `c.-N_*Mdel` on a coding transcript, and no

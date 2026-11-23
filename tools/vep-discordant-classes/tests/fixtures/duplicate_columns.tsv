@@ -1,0 +1,5 @@
+file_name	source	location	allele	feature	consequence_set	allele	_start	location	note	_start
+o.txt	missing_in_rust	first	first	T1	x	A	read	1:100-200	n	read
+o.txt	extra_in_rust	first	other	T1	x	A	read	1:100-300	n	read
+o.txt	missing_in_rust	first	first	T2	x	A	read	2:5
+o.txt	extra_in_rust	second	first	T2	y	A	read	2:5	n

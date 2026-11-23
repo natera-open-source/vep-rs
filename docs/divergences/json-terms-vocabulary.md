@@ -1,12 +1,12 @@
 # A JSON output under `--terms display` or `--terms NCBI`
 
-**The defect in one sentence.** Under `--terms display` or `--terms NCBI`, Ensembl VEP 116.2's JSON writer ranks a record's terms by looking each printed term up in a table keyed by SO term. A record with two or more terms, one of them a label of the vocabulary, finds no entry for the label, and the run ends there, with nothing of that record's buffer written. vep-rs ranks each consequence by its SO term and writes the record, its terms printed in the vocabulary asked for.
+**The defect in one sentence.** Under `--terms display` or `--terms NCBI`, Ensembl VEP 116.3's JSON writer ranks a record's terms by looking each printed term up in a table keyed by SO term. A record with two or more terms, one of them a label of the vocabulary, finds no entry for the label, and the run ends there, with nothing of that record's buffer written. vep-rs ranks each consequence by its SO term and writes the record, its terms printed in the vocabulary asked for.
 
 **Why this is a defect.** `display` and `NCBI` are two of the three values `--terms` accepts, and the default, tab and VCF outputs write a run under either. The JSON writer needs a rank for one member, `most_severe_consequence`. Ensembl VEP's own `--most_severe` finds that rank under any vocabulary: it ranks the consequences themselves and prints the first one's label. The JSON writer ranks the printed text instead, which is an SO term under the default vocabulary alone. The run dies on the first such record, and its output holds only the buffers written before that record's.
 
 **What vep-rs does instead.** vep-rs ranks every consequence by its SO term and prints it in the vocabulary asked for. A JSON output under `display` or `NCBI` carries each entry's `consequence_terms` and the record's `most_severe_consequence` as labels.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2, `Bio/EnsEMBL/VEP/`; `ensembl-variation` at release/116):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3, `Bio/EnsEMBL/VEP/`; `ensembl-variation` at release/116):
 
 - `Config.pm`, line 598: `terms` takes `SO`, `display` or `NCBI`, and lines 945-955 refuse any other value.
 - `OutputFactory.pm`, lines 1340-1341: an entry's terms are printed through the vocabulary's method, `display_term` or `NCBI_term`, and a consequence without a label there prints its SO term.
@@ -18,11 +18,11 @@
 
 **The class it produces.** `json_terms_label_without_rank`: a JSON output under `--terms display` or `--terms NCBI`, without `--most_severe`, whose input holds a record with two or more terms, one of them a label of the vocabulary. The reference stops before that record's buffer, with a non-zero exit status, where the candidate has one object per record. The class is documented only: Ensembl VEP writes no whole JSON output to compare under either vocabulary, and no committed flag set asks for one.
 
-**How often the shape occurs.** Tier 3: the shape is a JSON output under one of the two vocabularies, without `--most_severe`. Of the 392 committed flag sets, 2 pass `--terms` with one of them, `terms-display` and `terms-ncbi` of the `GRCh37-output-flags` golden corpus, and both compare the default, tab and VCF formats alone.
+**How often the shape occurs.** Tier 3: the shape is a JSON output under one of the two vocabularies, without `--most_severe`. Of the 511 committed flag sets, 2 pass `--terms` with one of them, `terms-display` and `terms-ncbi` of the `GRCh37-output-flags` golden corpus, and both compare the default, tab and VCF formats alone.
 
 ## 1. A record with six terms
 
-**In short.** The record `21 45573402 C T` has five transcript entries carrying six terms, the most severe a `5_prime_UTR_variant`. Under `--terms display --json`, Ensembl VEP 116.2 ends with the message `Can't call method "rank" on an undefined value` and a non-zero exit status, and writes no object. vep-rs writes the record's object, with `"most_severe_consequence":"5PRIME_UTR"`. In the tab format under the same vocabulary both engines print the same labels, and under `--most_severe` both print `5PRIME_UTR`.
+**In short.** The record `21 45573402 C T` has five transcript entries carrying six terms, the most severe a `5_prime_UTR_variant`. Under `--terms display --json`, Ensembl VEP 116.3 ends with the message `Can't call method "rank" on an undefined value` and a non-zero exit status, and writes no object. vep-rs writes the record's object, with `"most_severe_consequence":"5PRIME_UTR"`. In the tab format under the same vocabulary both engines print the same labels, and under `--most_severe` both print `5PRIME_UTR`.
 
 ### 1.1 What a reader needs to know first
 
@@ -46,7 +46,7 @@ It lies in the 5' untranslated region of ENST00000859469, in the one intron of t
 
 ### 1.3 What each engine writes
 
-Ensembl VEP 116.2 leaves its output file empty and writes this line to standard error:
+Ensembl VEP 116.3 leaves its output file empty and writes this line to standard error:
 
 ```
 Can't call method "rank" on an undefined value at /opt/vep/src/ensembl-vep/modules/Bio/EnsEMBL/VEP/OutputFactory/JSON.pm line 388, <__ANONIO__> line 3.
@@ -57,7 +57,7 @@ Run with `--fork 1`, as the reproduction runs it, the line `Died in forked proce
 vep-rs writes the record's object:
 
 ```
-{"allele_string":"C/T","assembly_name":"GRCh38","end":45573402,"id":"utr_and_intron","input":"21\t45573402\tutr_and_intron\tC\tT\t.\t.\t.","most_severe_consequence":"5PRIME_UTR","seq_region_name":"21","start":45573402,"strand":1,"transcript_consequences":[{"consequence_terms":["UPSTREAM"],"gene_id":"ENSG00000173638","impact":"MODIFIER","strand":-1,"transcript_id":"ENST00000651099","variant_allele":"T"},{"consequence_terms":["UPSTREAM"],"gene_id":"ENSG00000299414","impact":"MODIFIER","strand":1,"transcript_id":"ENST00000763267","variant_allele":"T"},{"consequence_terms":["INTRONIC","WITHIN_NON_CODING_GENE"],"gene_id":"ENSG00000299414","impact":"MODIFIER","strand":1,"transcript_id":"ENST00000763268","variant_allele":"T"},{"consequence_terms":["UPSTREAM"],"gene_id":"ENSG00000299414","impact":"MODIFIER","strand":1,"transcript_id":"ENST00000763269","variant_allele":"T"},{"cdna_end":163,"cdna_start":163,"consequence_terms":["5PRIME_UTR"],"gene_id":"ENSG00000173638","impact":"MODIFIER","strand":-1,"transcript_id":"ENST00000859469","variant_allele":"T"}],"vep_rs_version":"0.6.0"}
+{"allele_string":"C/T","assembly_name":"GRCh38","end":45573402,"id":"utr_and_intron","input":"21\t45573402\tutr_and_intron\tC\tT\t.\t.\t.","most_severe_consequence":"5PRIME_UTR","seq_region_name":"21","start":45573402,"strand":1,"transcript_consequences":[{"consequence_terms":["UPSTREAM"],"gene_id":"ENSG00000173638","impact":"MODIFIER","strand":-1,"transcript_id":"ENST00000651099","variant_allele":"T"},{"consequence_terms":["UPSTREAM"],"gene_id":"ENSG00000299414","impact":"MODIFIER","strand":1,"transcript_id":"ENST00000763267","variant_allele":"T"},{"consequence_terms":["INTRONIC","WITHIN_NON_CODING_GENE"],"gene_id":"ENSG00000299414","impact":"MODIFIER","strand":1,"transcript_id":"ENST00000763268","variant_allele":"T"},{"consequence_terms":["UPSTREAM"],"gene_id":"ENSG00000299414","impact":"MODIFIER","strand":1,"transcript_id":"ENST00000763269","variant_allele":"T"},{"cdna_end":163,"cdna_start":163,"consequence_terms":["5PRIME_UTR"],"gene_id":"ENSG00000173638","impact":"MODIFIER","strand":-1,"transcript_id":"ENST00000859469","variant_allele":"T"}],"vep_rs_version":"1.0.0"}
 ```
 
 Under `--terms NCBI` Ensembl VEP exits the same way, and vep-rs writes `"most_severe_consequence":"untranslated_5"`. Without `--terms` both engines write `"most_severe_consequence":"5_prime_UTR_variant"`. In the tab format under `--terms display`, both print `UPSTREAM` on three rows, `INTRONIC,WITHIN_NON_CODING_GENE` on one and `5PRIME_UTR` on one, and with `--most_severe` added both print the one row `5PRIME_UTR`. With `--most_severe` added to the JSON run both engines write `"most_severe_consequence":"5PRIME_UTR"`, since each record then has one term; with `--summary` Ensembl VEP ends as above.
@@ -72,7 +72,7 @@ Each entry's terms reach the JSON writer already printed in the vocabulary asked
 
 A list of one term is never sorted, since Perl's `sort` compares nothing for a single element, so a record with one term passes. So does a record whose every term printed as its SO term, which the table holds.
 
-Source (`ensembl-vep` at release/116.2, `Bio/EnsEMBL/VEP/`):
+Source (`ensembl-vep` at release/116.3, `Bio/EnsEMBL/VEP/`):
 
 - `OutputFactory.pm`, lines 1340-1341: the terms are printed through the vocabulary's method.
 - `OutputFactory/JSON.pm`, line 374: the printed terms are collected.
@@ -89,7 +89,7 @@ vep -i record.vcf -o out.jsonl --offline --json_cache <corpus>/json_cache \
   --species homo_sapiens --assembly GRCh38 --json --terms display
 ```
 
-vep-rs writes the object of 1.3. Ensembl VEP 116.2 takes the same two flags with the cache options of [Reproducing these examples](reproducing.md) and ends with the message of 1.3, its output empty.
+vep-rs writes the object of 1.3. Ensembl VEP 116.3 takes the same two flags with the cache options of [Reproducing these examples](reproducing.md) and ends with the message of 1.3, its output empty.
 
 ### 1.7 How the comparator treats this class
 

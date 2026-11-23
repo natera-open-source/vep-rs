@@ -1,0 +1,72 @@
+S	slice	slice	<none>	slice: the chromosome is the shard directory and no slice field is read
+S	slice.start	slice.start	slice	slice: the chromosome is the shard directory and no slice field is read
+S	slicer	slicer	<none>	<none>
+S	slice\n	slice\n	<none>	slice: the chromosome is the shard directory and no slice field is read
+S	_gene	_gene	<none>	gene object: its stable_id and version are carried by the _gene_* renames; start, end and strand are read by nothing at run time
+S	_gene.stable_id	_gene.stable_id	_gene	gene object: its stable_id and version are carried by the _gene_* renames; start, end and strand are read by nothing at run time
+S	_gene_stable_id	gene_stable_id	<none>	<none>
+S	_vep_lazy_loaded	_vep_lazy_loaded	<none>	runtime flag set by the Perl cache loader
+S	_vep_lazy_loaded.x	_vep_lazy_loaded.x	_vep_lazy_loaded	<none>
+S	translation.start_exon	translation.start_exon	translation	translation exons: derivable from exons and the translation start and end
+S	translation.end_exon.start	translation.end_exon.start	translation.end_exon	translation exons: derivable from exons and the translation start and end
+S	translation.start_exons	translation.start_exons	translation	<none>
+S	translation.transcript	translation.transcript	translation	back-reference to the enclosing transcript
+S	translation.transcript.x	translation.transcript.x	translation.transcript	<none>
+S	_variation_effect_feature_cache.mapper.exon_coord_mapper	variation_effect_feature_cache.mapper.exon_coord_mapper	_variation_effect_feature_cache.mapper	exon coordinate mapper: replaced by mapper.pairs
+S	_variation_effect_feature_cache.mapper.exon_coord_mapper._pair_cdna.CDNA[]	variation_effect_feature_cache.mapper.exon_coord_mapper._pair_cdna.CDNA[]	_variation_effect_feature_cache.mapper.exon_coord_mapper._pair_cdna	exon coordinate mapper: replaced by mapper.pairs
+S	_variation_effect_feature_cache.mapper.exon_coord_mapper2	variation_effect_feature_cache.mapper.exon_coord_mapper2	_variation_effect_feature_cache.mapper	<none>
+S	_trans_exon_array[].strand	exons[].strand	_trans_exon_array[]	exon strand: the transcript strand
+S	_variation_effect_feature_cache.sorted_exons[].strand	variation_effect_feature_cache.sorted_exons[].strand	_variation_effect_feature_cache.sorted_exons[]	exon strand: the transcript strand
+S	_trans_exon_array[].strand.x	exons[].strand.x	_trans_exon_array[].strand	<none>
+S	_trans_exon_array.strand	exons.strand	_trans_exon_array	<none>
+S	_variation_effect_feature_cache.introns[].strand	variation_effect_feature_cache.introns[].strand	_variation_effect_feature_cache.introns[]	intron strand: the transcript strand
+S	_variation_effect_feature_cache.introns[].prev	variation_effect_feature_cache.introns[].prev	_variation_effect_feature_cache.introns[]	intron exon references: the flanking exons are the exons array
+S	_variation_effect_feature_cache.introns[].next.start	variation_effect_feature_cache.introns[].next.start	_variation_effect_feature_cache.introns[].next	intron exon references: the flanking exons are the exons array
+S	_variation_effect_feature_cache.introns[].previous	variation_effect_feature_cache.introns[].previous	_variation_effect_feature_cache.introns[]	<none>
+S	_variation_effect_feature_cache.introns[].slice.coord_system	variation_effect_feature_cache.introns[].slice.coord_system	_variation_effect_feature_cache.introns[].slice	intron slice: the chromosome is the shard directory and no slice field is read
+S	_variation_effect_feature_cache.seq_edits[].description	variation_effect_feature_cache.seq_edits[].description	_variation_effect_feature_cache.seq_edits[]	sequence edit description: read by nothing at run time
+S	_variation_effect_feature_cache.protein_function_predictions.sift.matrix_compressed	variation_effect_feature_cache.protein_function_predictions.sift.matrix_compressed	_variation_effect_feature_cache.protein_function_predictions.sift	matrix_compressed: constant, every exported predictions_data is the gzip blob
+S	_variation_effect_feature_cache.protein_function_predictions.a-b.matrix_compressed	variation_effect_feature_cache.protein_function_predictions.a-b.matrix_compressed	_variation_effect_feature_cache.protein_function_predictions.a-b	<none>
+S	_variation_effect_feature_cache.protein_function_predictions.x.y.matrix_compressed	variation_effect_feature_cache.protein_function_predictions.x.y.matrix_compressed	_variation_effect_feature_cache.protein_function_predictions.x.y	<none>
+S	_variation_effect_feature_cache.protein_function_predictions.matrix_compressed	variation_effect_feature_cache.protein_function_predictions.matrix_compressed	_variation_effect_feature_cache.protein_function_predictions	<none>
+S	_variation_effect_feature_cache.five_prime_utr.seq	variation_effect_feature_cache.five_prime_utr.seq	_variation_effect_feature_cache.five_prime_utr	UTR object flattened to its sequence string
+S	_variation_effect_feature_cache.three_prime_utr.x.y	variation_effect_feature_cache.three_prime_utr.x.y	_variation_effect_feature_cache.three_prime_utr.x	UTR object flattened to its sequence string
+S	_variation_effect_feature_cache.three_prime_utr	variation_effect_feature_cache.three_prime_utr	_variation_effect_feature_cache	<none>
+S	_variation_effect_feature_cache.four_prime_utr.seq	variation_effect_feature_cache.four_prime_utr.seq	_variation_effect_feature_cache.four_prime_utr	<none>
+S	stable_id	stable_id	<none>	<none>
+S	biotype	biotype	<none>	<none>
+S	_ccds	ccds	<none>	<none>
+S	_trans_exon_array	exons	<none>	<none>
+S	_trans_exon_array[]	exons[]	<none>	<none>
+S	_trans_exon_array[].start	exons[].start	_trans_exon_array[]	<none>
+S	_trans_exon_array[][]	_trans_exon_array[][]	<none>	<none>
+S	_variation_effect_feature_cache.peptide	variation_effect_feature_cache.peptide	_variation_effect_feature_cache	<none>
+S	_variation_effect_feature_cache.protein_function_predictions.sift.matrix	variation_effect_feature_cache.protein_function_predictions.sift.predictions_data	_variation_effect_feature_cache.protein_function_predictions.sift	<none>
+S	_variation_effect_feature_cache.protein_function_predictions.sift.matrix.x	variation_effect_feature_cache.protein_function_predictions.sift.matrix.x	_variation_effect_feature_cache.protein_function_predictions.sift.matrix	<none>
+S	_variation_effect_feature_cache.protein_function_predictions.a-b.matrix	variation_effect_feature_cache.protein_function_predictions.a-b.matrix	_variation_effect_feature_cache.protein_function_predictions.a-b	<none>
+S	_variation_effect_feature_cache.protein_function_predictions.matrix	variation_effect_feature_cache.protein_function_predictions.matrix	_variation_effect_feature_cache.protein_function_predictions	<none>
+S	a.	a	<none>	<none>
+S	a..b	a..b	a.	<none>
+S	.a	.a	<empty>	<none>
+S	<empty>	<empty>	<none>	<none>
+S	a.b.	a.b	<none>	<none>
+S	_ccds.	ccds	<none>	<none>
+S	_cc ds	_cc ds	<none>	<none>
+S	_ccds\n	ccds	<none>	<none>
+S	_ccds[]x	_ccds[]x	<none>	<none>
+S	x._ccds	x._ccds	x	<none>
+S	0	0	<none>	<none>
+S	0.a	0.a	0	<none>
+S	_variation_effect_feature_cache.protein_function_predictions.sift.matrix\n	variation_effect_feature_cache.protein_function_predictions.sift.predictions_data\n	_variation_effect_feature_cache.protein_function_predictions.sift	<none>
+J	variation_effect_feature_cache.mapper.pairs	pair list taken from mapper.pairs or computed from sorted_exons
+J	variation_effect_feature_cache.mapper.pairs[]	pair list taken from mapper.pairs or computed from sorted_exons
+J	variation_effect_feature_cache.mapper.pairs[][]	pair list taken from mapper.pairs or computed from sorted_exons
+J	variation_effect_feature_cache.mapper.pairs.x	pair list taken from mapper.pairs or computed from sorted_exons
+J	variation_effect_feature_cache.mapper.pairsx	<none>
+J	variation_effect_feature_cache.mapper.pair_count	length of mapper.pairs
+J	variation_effect_feature_cache.mapper.pair_count.x	<none>
+J	variation_effect_feature_cache.seq_edits	seq_edits: written as [] when the transcript has no translation
+J	variation_effect_feature_cache.seq_edits[]	<none>
+J	variation_effect_feature_cache.seq_edits[].length_diff	seq_edits length_diff: computed from start, end and alt_seq as SeqEdit::length_diff does
+J	variation_effect_feature_cache.seq_edits[].start	<none>
+J	mapper.pairs	<none>

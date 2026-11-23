@@ -1,0 +1,2 @@
+del_two_genes	21:5001-5002	-	-	ENST1	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;SYMBOL=GENEA;SpliceAI_pred=GENEA|0.15|0.08|0.06|0.17|-6|-41|-17|-9;SpliceAI_cutoff=FAIL
+del_two_genes	21:5001-5002	-	-	ENST2	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;SYMBOL=GENEB;SpliceAI_pred=GENEB|0.00|1.00|0.10|0.05|-25|-23|37|17;SpliceAI_cutoff=PASS

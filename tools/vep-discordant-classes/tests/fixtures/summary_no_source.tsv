@@ -1,0 +1,7 @@
+location	allele	feature	consequence_set	file_name	source
+1:11	A	T1	x	o.txt
+1:12	A	T2	x	o.txt	extra_in_rust
+1:13	A	T3	x	o.txt	extra_in_rust
+1:14	A	T4	x	o.txt	missing_in_rust
+1:15	A	T5	x	o.txt	missing_in_rust
+1:16	A	T6	x	p.txt	only_perl

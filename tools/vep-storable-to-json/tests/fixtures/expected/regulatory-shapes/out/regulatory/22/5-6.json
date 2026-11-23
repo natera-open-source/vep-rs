@@ -1,0 +1,1 @@
+[{"activity":"--A--I","biotype":"promoter","dbid":41,"end":1050,"feature_type":"RegulatoryFeature","stable_id":"ENSR_N1","start":1000},{"dbid":42,"end":2001,"feature_type":"MotifFeature","matrix":"ENSPFM0003","score":0.333333333333333,"seq":"AC","stable_id":"ENSM_N1","start":2000,"strand":-1}]

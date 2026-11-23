@@ -1,0 +1,15 @@
+rs_ins	21:100-101	A	ENSG1	ENST1	Transcript	non_coding_transcript_exon_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;HGVSc=ENST1.1:n.15dup;HGVS_OFFSET=17
+rs_del	21:200-201	-	ENSG1	ENST1	Transcript	non_coding_transcript_exon_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;HGVSc=ENST1.1:n.5_25del;HGVS_OFFSET=33
+rs_last	21:300-301	-	ENSG1	ENST1	Transcript	non_coding_transcript_exon_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;HGVSc=ENST1.1:c.*2333_*2540del;HGVS_OFFSET=74;HGVS_IntronStartOffset=0;HGVS_IntronEndOffset=0
+rs_sub	21:400-401	A	ENSG1	ENST1	Transcript	non_coding_transcript_exon_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;HGVSc=ENST1.1:n.16A>T;HGVS_OFFSET=17
+rs_nooff	21:500-501	A	ENSG1	ENST1	Transcript	non_coding_transcript_exon_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;HGVSc=ENST1.1:n.15dup
+rs_clamp	21:600-601	-	ENSG1	ENST1	Transcript	non_coding_transcript_exon_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;HGVSc=ENST1.1:n.23_43del;HGVS_OFFSET=33
+rs_utr	21:700-701	-	ENSG1	ENST1	Transcript	non_coding_transcript_exon_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;HGVSc=ENST1.1:c.-361_-327del;HGVS_OFFSET=6
+rs_intron	21:800-801	-	ENSG1	ENST1	Transcript	non_coding_transcript_exon_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;HGVSc=ENST1.1:c.-307_-228+19del;HGVS_OFFSET=6
+rs_one	21:900-901	-	ENSG1	ENST1	Transcript	non_coding_transcript_exon_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;HGVSc=ENST1.1:n.13_14del;HGVS_OFFSET=13
+rs_end	21:1000-1001	-	ENSG1	ENST1	Transcript	non_coding_transcript_exon_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;HGVSc=ENST1.1:n.23_42del;HGVS_OFFSET=33
+rs_later	21:1100-1101	-	ENSG1	ENST1	Transcript	non_coding_transcript_exon_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;HGVSc=ENST1.1:n.35_43del;HGVS_OFFSET=33
+rs_cold	21:1200-1201	-	ENSG1	ENST1	Transcript	non_coding_transcript_exon_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;HGVSc=ENST1.1:n.23_43del
+rs_other	21:1300-1301	A	ENSG1	ENST1	Transcript	non_coding_transcript_exon_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;HGVSc=ENST2.1:n.15dup;HGVS_OFFSET=17
+rs_outside	21:1400-1401	A	ENSG1	ENST1	Transcript	upstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;HGVSc=ENST1.1:n.15dup;HGVS_OFFSET=17
+rs_insdel	21:1500-1501	A	ENSG1	ENST1	Transcript	non_coding_transcript_exon_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;HGVSc=ENST1.1:n.23_43del;HGVS_OFFSET=33

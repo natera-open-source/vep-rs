@@ -6,7 +6,7 @@
 
 **What vep-rs does instead.** `vep filter` takes the entries from every INFO item whose key is exactly the field's name and whose value holds an entry, splits each value on `,`, and under `--only_matched` rewrites each such item to its own passing entries. A line with no such item is evaluated on its columns and INFO keys and counted among the lines without the field, wherever an empty entry sits.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3):
 
 - `filter_vep`, line 261: `while($line =~ m/($vcf_info_field)\=(.+?)(\;|$|\s)/g)`, unanchored, the value one or more characters. Lines 262-265 split each match on `,` and parse every chunk gathered so far again, so the entries before a second match are evaluated twice.
 - `filter_vep`, lines 267-271: a line the pattern matches nowhere is evaluated on its own hash and counted as lacking the field, which is how an empty entry at the end of a line reads.
@@ -47,4 +47,4 @@ vep-rs       OLD_CSQ=G|stop_gained|HIGH|S1|;CSQ=G|intron_variant|MODIFIER|S1|
 
 With the keys in the other order, `CSQ=G|intron_variant|MODIFIER|S1|;OLD_CSQ=G|stop_gained|HIGH|S1|`, `--only_matched --filter "IMPACT is HIGH"` makes `filter_vep` pass the line on `OLD_CSQ`'s entry and write the real field emptied, `CSQ=;OLD_CSQ=G|stop_gained|HIGH|S1|`. `vep filter` writes no line. A key the name is a prefix of, `CSQX`, is read as the field by neither engine, since `=` must follow the name.
 
-To reproduce: the `ensemblorg/ensembl-vep:release_116.2` image's `filter_vep` and `vep filter` on the records above, under a header declaring `DP`, `OLD_CSQ` and the `CSQ` format quoted, with the flags quoted; neither tool needs a cache.
+To reproduce: the `ensemblorg/ensembl-vep:release_116.3` image's `filter_vep` and `vep filter` on the records above, under a header declaring `DP`, `OLD_CSQ` and the `CSQ` format quoted, with the flags quoted; neither tool needs a cache.

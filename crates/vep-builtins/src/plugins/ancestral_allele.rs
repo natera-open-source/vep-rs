@@ -146,6 +146,8 @@ impl AncestralAllelePlugin {
     }
 }
 
+impl crate::traits::sealed::Sealed for AncestralAllelePlugin {}
+
 impl BuiltinPlugin for AncestralAllelePlugin {
     fn name(&self) -> &str {
         NAME
@@ -154,7 +156,7 @@ impl BuiltinPlugin for AncestralAllelePlugin {
     /// The Ensembl VEP module declares `['Feature', 'Intergenic']`
     /// (`AncestralAllele.pm:105-106`): every row, the intergenic row included.
     fn feature_types(&self) -> &[RowKind] {
-        &RowKind::ALL
+        RowKind::ALL
     }
 
     fn header_info(&self) -> Vec<(String, String)> {
@@ -194,7 +196,7 @@ impl BuiltinPlugin for AncestralAllelePlugin {
             .filter(|variant| !variant.variant_class.is_structural())
         {
             let value = source.ancestral_allele(variant);
-            variant.plugin_data.insert(FIELD.to_string(), value);
+            variant.set_plugin_value(FIELD.to_string(), value, false, self.feature_types());
         }
         Ok(())
     }

@@ -2,19 +2,25 @@
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 //! Runs the binary over the fixture directories in its three modes and compares every report
-//! file and stdout byte for byte with the goldens `scripts/concordance/compare_vep_outputs.py`
-//! wrote over the same fixtures. The goldens carry `{{TOKENS}}` for the values that depend on
+//! file and stdout byte for byte with the goldens under `tests/fixtures/`, the tool's
+//! contract on those fixtures. The goldens carry `{{TOKENS}}` for the values that depend on
 //! the checkout and the run: the resolved fixture and report directories and the timestamp.
 //! Every configuration runs on one thread, on two and on the host's default, and a generated
 //! pair of output directories larger than one read of the input is compared across thread
 //! counts. A run whose sorted keys do not ascend is held to end with an error and no result
-//! file and to keep the key files it stopped on; every other run is held to remove them.
+//! file, to keep the key files it stopped on and to name one file and pair of lines, and no
+//! key, under every thread bound; every other run is held to remove them. A run that stops while it
+//! compares is held to set its discordant rows aside, and an output that is gone when the
+//! row-aware pair rules read it again to be named in the last line.
 //! Synthetic output pairs hold the class of a record the reference skipped to the record's
-//! name: a row is set aside only where no reference row names its record.
+//! name: a row is set aside only where no reference row names its record. A pair whose rows
+//! write a number past 128 bits where a row-aware pair rule reads one is held to stay a
+//! difference.
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
+use std::sync::mpsc;
 
 const BIN: &str = env!("CARGO_BIN_EXE_vep-outputs-compare");
 const ROOT: &str = env!("CARGO_MANIFEST_DIR");
@@ -161,7 +167,7 @@ const ALL_FILES: [&str; 4] = [
 ];
 
 #[test]
-fn compare_under_the_116_2_reference_matches_the_python_goldens() {
+fn compare_under_the_default_release_matches_the_goldens() {
     for threads in THREAD_BOUNDS {
         let scratch = Scratch::new(&tagged("c116", threads));
         let report = scratch.report_dir();
@@ -213,6 +219,59 @@ fn compare_under_the_115_2_reference_keeps_the_published_shape() {
         assert_eq!(output.status.code(), Some(0), "{}", stderr(&output));
         assert_compare_run("c115", &scratch, &output, &ALL_FILES);
         assert!(stderr(&output).is_empty(), "{}", stderr(&output));
+    }
+}
+
+/// 116.3 is scored under the rules of 116.2: over the fixture directories the two runs differ
+/// in the one place of each report that states the release, and in no count, row or class.
+#[test]
+fn a_run_naming_116_3_writes_the_counts_of_a_run_naming_116_2_and_reports_116_3() {
+    let scratch = Scratch::new("c116_3");
+    let report = scratch.report_dir();
+    let report_files: Vec<PathBuf> = ALL_FILES.iter().map(|file| report.join(file)).collect();
+    let reports_under = |release: &str| {
+        run_reports(
+            None,
+            &[
+                "--perl-dir",
+                "tests/fixtures/perl",
+                "--rust-dir",
+                "tests/fixtures/rust",
+                "--assembly",
+                "GRCh38",
+                "--input-dir",
+                "tests/fixtures/input",
+                "--reference-release",
+                release,
+                "--report-dir",
+                report.to_str().unwrap(),
+            ],
+            &report_files,
+        )
+    };
+    let mut expected = reports_under("116.2");
+    let written = reports_under("116.3");
+    // Stdout, `summary.json` and `summary.md`, by their place in the list `run_reports` returns.
+    let statements = [
+        (0, "reference release: RELEASE\n"),
+        (2, "\"reference_release\": \"RELEASE\""),
+        (3, "- Reference release: Ensembl VEP RELEASE\n"),
+    ];
+    for (index, statement) in statements {
+        let under_116_2 = statement.replace("RELEASE", "116.2");
+        assert_eq!(
+            expected[index].matches(&under_116_2).count(),
+            1,
+            "output {index} states its release once"
+        );
+        expected[index] =
+            expected[index].replace(&under_116_2, &statement.replace("RELEASE", "116.3"));
+    }
+    for (index, (expected, written)) in expected.iter().zip(&written).enumerate() {
+        assert!(
+            expected == written,
+            "output {index} under 116.3 differs from 116.2's in more than the release it states"
+        );
     }
 }
 
@@ -271,7 +330,7 @@ fn by_class(threads: Option<&str>, scratch: &Scratch, discordant: &str, extra: &
 }
 
 #[test]
-fn per_class_modes_match_the_python_goldens() {
+fn per_class_modes_match_the_goldens() {
     for threads in THREAD_BOUNDS {
         per_class_modes_match_on(threads);
     }
@@ -426,6 +485,27 @@ fn a_missing_mode_argument_fails_naming_the_mode() {
 }
 
 #[test]
+fn a_fourth_release_is_refused_naming_the_three_accepted() {
+    let output = run(&[
+        "--perl-dir",
+        "x",
+        "--rust-dir",
+        "y",
+        "--report-dir",
+        "z",
+        "--reference-release",
+        "116.1",
+    ]);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(stdout(&output).is_empty(), "{}", stdout(&output));
+    assert_eq!(
+        stderr(&output),
+        "usage: vep-outputs-compare [options]\nvep-outputs-compare: error: argument \
+         --reference-release: invalid choice: '116.1' (choose from 115.2, 116.2, 116.3)\n"
+    );
+}
+
+#[test]
 fn a_thread_bound_that_is_not_a_count_is_refused() {
     for bound in ["0", "many", "-2"] {
         let output = run_on(
@@ -536,8 +616,9 @@ const EXCHANGE_LAST_KEYS_ENV: &str = "VEP_OUTPUTS_COMPARE_DEBUG_EXCHANGE_LAST_KE
 /// holds the first of them, so that the exchange leaves the third key of the faulty side
 /// below its second and the other side in order. The run keeps the directory of its key
 /// files and names it: on one thread the two sorted key files, on more the two streams of
-/// the partition that stopped, whose sorted keys are held in memory until then. Only a debug
-/// build reads the variable, so the test is one of a debug build.
+/// the partition that stopped, whose sorted keys are held in memory until then. Its error
+/// reads the same under every thread bound. Only a debug build reads the variable, so the
+/// test is one of a debug build.
 #[cfg(debug_assertions)]
 #[test]
 fn a_run_whose_keys_do_not_ascend_ends_with_an_error_and_no_result_file() {
@@ -583,23 +664,23 @@ fn a_run_whose_keys_do_not_ascend_ends_with_an_error_and_no_result_file() {
                 Some(bound) => bound == "1",
                 None => std::thread::available_parallelism().map_or(1, |cores| cores.get()) == 1,
             };
-            let place = match one_thread {
-                true => "key 3",
-                false => "key 3 of partition 1",
-            };
             let kept: Vec<String> = entries(&report)
                 .into_iter()
                 .filter(|name| name.starts_with("compare_vep_tmp_"))
                 .collect();
             assert_eq!(kept.len(), 1, "{faulty} {threads:?}: {kept:?}");
             let key_files = report.join(&kept[0]);
+            // The exchange leaves the key of the row on `t2`, the fourth line of the faulty
+            // side's file, below the key of the row on `t3`, its fifth line.
             assert_eq!(
                 stderr(&output),
                 format!(
                     "ERROR: [vep-outputs-compare] pair.txt: the sorted keys of the {option} side \
-                     do not ascend at {place}; the comparison needs each side's keys in order \
+                     do not ascend: the key of line 4 of {} does not sort after the key of line \
+                     5, which stands before it; the comparison needs each side's keys in order \
                      with every key once; the key files are kept in {} and the rows written \
                      before the stop in {}\n",
+                    scratch.0.join(faulty).join("pair.txt").display(),
                     key_files.display(),
                     report.join("discordant.tsv.partial").display()
                 ),
@@ -646,6 +727,300 @@ fn a_run_whose_keys_do_not_ascend_ends_with_an_error_and_no_result_file() {
                 files
             });
         }
+    }
+}
+
+/// The stop on keys out of order names the faulty side's output file and, for the key below
+/// the one before it and for that key before it, the line of the file that first writes it,
+/// under every thread bound alike. It names no key: no Location, allele, feature or
+/// consequence term of a row stands in the error. Every line of the file is counted: the
+/// faulty side's rows stand in another order than their keys, behind two `#` lines, a short
+/// row and an empty line, the first row ends in a carriage return and a line feed, and the
+/// key the stop is on is written twice. The exchange of the context-collapsed keys alone
+/// stops the second comparison of the pair, whose keys lack the transcript-context term.
+#[cfg(debug_assertions)]
+#[test]
+fn a_stop_on_keys_out_of_order_names_one_file_and_pair_of_lines_and_no_key_under_every_thread_bound(
+) {
+    let header = "## generated\n#Uploaded_variation\tLocation\tAllele\tGene\tFeature\n";
+    let terms = "intron_variant,non_coding_transcript_variant";
+    let row = |feature: &str, ending: &str| {
+        format!("v1\t7:500\tk\tg1\t{feature}\tTranscript\t{terms}\t-{ending}")
+    };
+    let faulty_rows = format!(
+        "{header}{}short\trow\n{}\n{}{}",
+        row("t3", "\r\n"),
+        row("t1", "\n"),
+        row("t2", "\n"),
+        row("t2", "\n")
+    );
+    let other_rows = format!("{header}{}", row("t1", "\n"));
+    for (exchange, keys) in [("1", "keys"), ("collapsed", "context-collapsed keys")] {
+        for (faulty, option) in [("perl", "--perl-dir"), ("rust", "--rust-dir")] {
+            for threads in THREAD_BOUNDS {
+                let tag = format!("stop-line-{exchange}-{faulty}");
+                let scratch = Scratch::new(&tagged(&tag, threads));
+                for side in ["perl", "rust"] {
+                    let rows = match side == faulty {
+                        true => &faulty_rows,
+                        false => &other_rows,
+                    };
+                    fs::create_dir_all(scratch.0.join(side)).unwrap();
+                    fs::write(scratch.0.join(side).join("pair.txt"), rows).unwrap();
+                }
+                let (perl_dir, rust_dir) = (scratch.0.join("perl"), scratch.0.join("rust"));
+                let report = scratch.report_dir();
+                let args = [
+                    "--perl-dir",
+                    perl_dir.to_str().unwrap(),
+                    "--rust-dir",
+                    rust_dir.to_str().unwrap(),
+                    "--assembly",
+                    "GRCh38",
+                    "--report-dir",
+                    report.to_str().unwrap(),
+                ];
+                let output = command_on(threads, &args)
+                    .env(EXCHANGE_LAST_KEYS_ENV, exchange)
+                    .output()
+                    .unwrap();
+                let run = format!("{exchange} {faulty} {threads:?}");
+                assert_eq!(output.status.code(), Some(1), "{run}");
+                let kept: Vec<String> = entries(&report)
+                    .into_iter()
+                    .filter(|name| name.starts_with("compare_vep_tmp_"))
+                    .collect();
+                assert_eq!(kept.len(), 1, "{run}: {kept:?}");
+                // The key of the rows on `t2`, first written on the seventh line, lies below
+                // the key of the row on `t3`, the third line.
+                let error = stderr(&output);
+                assert_eq!(
+                    error,
+                    format!(
+                        "ERROR: [vep-outputs-compare] pair.txt: the sorted {keys} of the {option} \
+                         side do not ascend: the key of line 7 of {} does not sort after the key \
+                         of line 3, which stands before it; the comparison needs each side's \
+                         keys in order with every key once; the key files are kept in {} and \
+                         the rows written before the stop in {}\n",
+                        scratch.0.join(faulty).join("pair.txt").display(),
+                        report.join(&kept[0]).display(),
+                        report.join("discordant.tsv.partial").display()
+                    ),
+                    "{run}"
+                );
+                for cell in ["7:500", "Transcript", "intron_variant"] {
+                    assert!(!error.contains(cell), "{run}: {cell} in {error}");
+                }
+            }
+        }
+    }
+}
+
+/// A stop that is not one of key order leaves the discordant rows incomplete as well. The
+/// scored side of the second paired file cannot be read, so the run ends after it wrote the
+/// rows of the first: they stand under the `.partial` name alone, which the error names, and
+/// no file of the report directory carries a name read as a result.
+#[test]
+fn a_run_stopped_by_a_file_it_cannot_read_sets_its_discordant_rows_aside() {
+    for threads in THREAD_BOUNDS {
+        let scratch = Scratch::new(&tagged("unreadable-partial", threads));
+        let (perl_dir, rust_dir) = (scratch.0.join("perl"), scratch.0.join("rust"));
+        fs::create_dir_all(&perl_dir).unwrap();
+        fs::create_dir_all(rust_dir.join("b.txt")).unwrap();
+        let written = |rows: String| format!("{OUTPUT_COLUMNS}{rows}");
+        let reference = output_row("v1", "21:100", "-", "T1");
+        let scored = output_row("v1", "21:100", "-", "T2");
+        fs::write(perl_dir.join("a.txt"), written(reference)).unwrap();
+        fs::write(rust_dir.join("a.txt"), written(scored)).unwrap();
+        let second = output_row("v2", "21:200", "-", "T1");
+        fs::write(perl_dir.join("b.txt"), written(second)).unwrap();
+        let report = scratch.report_dir();
+        let output = run_on(
+            threads,
+            &[
+                "--perl-dir",
+                perl_dir.to_str().unwrap(),
+                "--rust-dir",
+                rust_dir.to_str().unwrap(),
+                "--assembly",
+                "GRCh38",
+                "--report-dir",
+                report.to_str().unwrap(),
+            ],
+        );
+        assert_eq!(output.status.code(), Some(1), "{threads:?}");
+        assert_eq!(entries(&report), ["discordant.tsv.partial"], "{threads:?}");
+        let partial = report.join("discordant.tsv.partial");
+        assert_eq!(
+            read(&partial),
+            "file_name\tsource\tlocation\tallele\tfeature\tfeature_type\tconsequence_set\n\
+             a.txt\tmissing_in_rust\t21:100\t-\tT1\tTranscript\tfeature_truncation\n\
+             a.txt\textra_in_rust\t21:100\t-\tT2\tTranscript\tfeature_truncation\n",
+            "{threads:?}"
+        );
+        let error = stderr(&output);
+        assert_eq!(error.lines().count(), 1, "{threads:?}: {error}");
+        assert!(
+            error.starts_with("ERROR: [vep-outputs-compare] b.txt: "),
+            "{threads:?}: {error}"
+        );
+        assert!(
+            error.ends_with(&format!(
+                "; the rows written before the stop are kept in {}\n",
+                partial.display()
+            )),
+            "{threads:?}: {error}"
+        );
+    }
+}
+
+/// A region file of the converted cache that the replay of the reference's `dbID` pass
+/// cannot read stops the run while it compares the paired files: the rows written before the
+/// stop stand under the `.partial` name alone, and the error names the region file, then
+/// that report.
+#[test]
+fn a_run_stopped_by_a_region_file_its_replay_cannot_read_sets_its_discordant_rows_aside() {
+    for threads in THREAD_BOUNDS {
+        let scratch = Scratch::new(&tagged("unread-region-partial", threads));
+        let (perl_dir, rust_dir) = (scratch.0.join("perl"), scratch.0.join("rust"));
+        let cache = scratch.0.join("cache");
+        let regions = cache.join("transcripts").join("21");
+        for directory in [&perl_dir, &rust_dir, &regions] {
+            fs::create_dir_all(directory).unwrap();
+        }
+        let region = regions.join("1-1000000.json");
+        fs::write(&region, "[{").unwrap();
+        let reference = format!(
+            "## VEP command-line: vep --cache --merged --offline\n{OUTPUT_COLUMNS}{}",
+            output_row("v1", "21:100", "G", "T1")
+        );
+        fs::write(perl_dir.join("a.txt"), reference).unwrap();
+        let scored = format!("{OUTPUT_COLUMNS}{}", output_row("v1", "21:100", "G", "T2"));
+        fs::write(rust_dir.join("a.txt"), scored).unwrap();
+        let records = scratch.0.join("a.vcf");
+        fs::write(&records, "21\t100\tv1\tA\tG\t.\t.\t.\n").unwrap();
+        let report = scratch.report_dir();
+        let output = run_on(
+            threads,
+            &[
+                "--perl-dir",
+                perl_dir.to_str().unwrap(),
+                "--rust-dir",
+                rust_dir.to_str().unwrap(),
+                "--assembly",
+                "GRCh38",
+                "--input-vcf",
+                records.to_str().unwrap(),
+                "--json-cache",
+                cache.to_str().unwrap(),
+                "--report-dir",
+                report.to_str().unwrap(),
+            ],
+        );
+        assert_eq!(output.status.code(), Some(1), "{threads:?}");
+        assert_eq!(entries(&report), ["discordant.tsv.partial"], "{threads:?}");
+        let partial = report.join("discordant.tsv.partial");
+        assert_eq!(
+            read(&partial),
+            "file_name\tsource\tlocation\tallele\tfeature\tfeature_type\tconsequence_set\n\
+             a.txt\tmissing_in_rust\t21:100\tG\tT1\tTranscript\tfeature_truncation\n\
+             a.txt\textra_in_rust\t21:100\tG\tT2\tTranscript\tfeature_truncation\n",
+            "{threads:?}"
+        );
+        let error = stderr(&output);
+        assert_eq!(error.lines().count(), 1, "{threads:?}: {error}");
+        assert!(
+            error.starts_with(&format!(
+                "ERROR: [vep-outputs-compare] {}: ",
+                region.display()
+            )),
+            "{threads:?}: {error}"
+        );
+        assert!(
+            error.ends_with(&format!(
+                "; the rows written before the stop are kept in {}\n",
+                partial.display()
+            )),
+            "{threads:?}: {error}"
+        );
+    }
+}
+
+/// An output that is gone when the row-aware pair rules read the two outputs again ends the
+/// run on a line that names that output. The first paired file holds one pair no pair rule
+/// takes, and the input VCF of the second is a named pipe, at whose open the run waits: by
+/// then it has compared the first file, so the reference's first output is removed there
+/// and the pipe closed.
+#[test]
+fn an_output_gone_before_the_row_aware_rules_read_it_again_names_itself_in_the_last_line() {
+    for threads in THREAD_BOUNDS {
+        let scratch = Scratch::new(&tagged("output-gone", threads));
+        let dir = |name: &str| {
+            let path = scratch.0.join(name);
+            fs::create_dir_all(&path).unwrap();
+            path
+        };
+        let (perl_dir, rust_dir, input_dir) = (dir("perl"), dir("rust"), dir("input"));
+        let written = |term: &str| {
+            let row = stop_codon_row("-", term, "?-7057", "-", "19:13208046-13208050");
+            format!("{ROW_COLUMNS}{row}")
+        };
+        fs::write(perl_dir.join("a.txt"), written("stop_retained_variant")).unwrap();
+        fs::write(rust_dir.join("a.txt"), written("stop_lost")).unwrap();
+        for directory in [&perl_dir, &rust_dir] {
+            fs::write(directory.join("b.txt"), written("intron_variant")).unwrap();
+        }
+        let pipe = input_dir.join("b.vcf");
+        let made = Command::new("mkfifo").arg(&pipe).status().unwrap();
+        assert!(made.success(), "mkfifo {}", pipe.display());
+        let report = scratch.report_dir();
+        let run = command_on(
+            threads,
+            &[
+                "--perl-dir",
+                perl_dir.to_str().unwrap(),
+                "--rust-dir",
+                rust_dir.to_str().unwrap(),
+                "--assembly",
+                "GRCh38",
+                "--input-dir",
+                input_dir.to_str().unwrap(),
+                "--report-dir",
+                report.to_str().unwrap(),
+            ],
+        )
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+        let gone = perl_dir.join("a.txt");
+        let (removed, was_removed) = mpsc::channel();
+        let (at_the_pipe, output_to_remove) = (pipe.clone(), gone.clone());
+        std::thread::spawn(move || {
+            // The open for writing returns once the run has opened the pipe for reading.
+            let writer = fs::OpenOptions::new()
+                .write(true)
+                .open(&at_the_pipe)
+                .unwrap();
+            fs::remove_file(&output_to_remove).unwrap();
+            // A later open of the input VCF finds an empty file and waits for no writer.
+            fs::remove_file(&at_the_pipe).unwrap();
+            fs::write(&at_the_pipe, "").unwrap();
+            removed.send(()).unwrap();
+            drop(writer);
+        });
+        let output = run.wait_with_output().unwrap();
+        assert!(
+            was_removed.try_recv().is_ok(),
+            "{threads:?}: the run ended without opening the input VCF of the second file"
+        );
+        assert_eq!(output.status.code(), Some(1), "{threads:?}");
+        let missing = fs::File::open(&gone).unwrap_err();
+        assert_eq!(
+            stderr(&output).lines().last(),
+            Some(&format!("ERROR: [vep-outputs-compare] {}: {missing}", gone.display())[..]),
+            "{threads:?}"
+        );
     }
 }
 
@@ -1452,6 +1827,227 @@ row_pair_rule_tests!(
     stop_codon_overlap_insertion_range_case()
 );
 
+/// A row at two neighbouring positions is an insertion's where its record's alleles place the
+/// Allele between them. A first column that spells a padded insertion places it with and
+/// without the input records. Under an identifier the input records place an insertion of two
+/// bases, which stays a difference without them, and show two bases replaced by three, which
+/// are set aside without them alone. An insertion before its record's first base is placed by
+/// no record: its row is read by its Allele, and stays a difference beside a record that
+/// replaces the same two bases by the same Allele.
+#[test]
+fn the_record_tells_the_insertion_range_class_an_insertion_from_replaced_bases() {
+    let bucket = "stop_codon_overlap_insertion_range";
+    let pair = |name: &str, allele: &str| {
+        let row = |term: &str| {
+            format!(
+                "{name}\t19:13208046-13208047\t{allele}\tENSG1\tENST00000635895\tTranscript\t\
+                 inframe_insertion,{term}\t7054-7055\t6977-6978\t-\t-\t-\t-\t\
+                 IMPACT=LOW;STRAND=-1\n"
+            )
+        };
+        (row("coding_sequence_variant"), row("stop_retained_variant"))
+    };
+    let line = |position: &str, name: &str, reference_allele: &str, alternate: &str| {
+        format!("19\t{position}\t{name}\t{reference_allele}\t{alternate}\t.\t.\t.\n")
+    };
+    let run = |tag: &str, rows: &(String, String), lines: Option<&str>| {
+        let records = lines.map(|lines| {
+            format!("##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n{lines}")
+        });
+        let (statistics, f1, open_rows) =
+            row_pair_rule_beside_input(tag, bucket, &rows.0, &rows.1, records.as_deref());
+        (statistics, f1 == "1.0", open_rows.len())
+    };
+    let (set_aside, a_difference) = (([1, 1], true, 0), ([0, 0], false, 2));
+
+    let padded = pair("19_13208045_TA/TATGA", "TGA");
+    assert_eq!(run("insertion-padded-no-input", &padded, None), set_aside);
+    let its_record = line("13208045", ".", "TA", "TATGA");
+    assert_eq!(
+        run("insertion-padded-record", &padded, Some(&its_record)),
+        set_aside
+    );
+
+    let two_bases = pair("1993671", "CG");
+    assert_eq!(
+        run("insertion-two-bases-no-input", &two_bases, None),
+        a_difference
+    );
+    for (tag, position, reference_allele, alternate) in [
+        ("insertion-two-bases-record", "13208046", "A", "ACG"),
+        (
+            "insertion-two-bases-padded-record",
+            "13208045",
+            "TA",
+            "TACG",
+        ),
+    ] {
+        let its_record = line(position, "1993671", reference_allele, alternate);
+        assert_eq!(run(tag, &two_bases, Some(&its_record)), set_aside, "{tag}");
+    }
+
+    let three_bases = pair("1993671", "CGT");
+    assert_eq!(
+        run("insertion-replaced-no-input", &three_bases, None),
+        set_aside
+    );
+    let replacing = line("13208046", "1993671", "AC", "CGT");
+    assert_eq!(
+        run("insertion-replaced-record", &three_bases, Some(&replacing)),
+        a_difference
+    );
+
+    let unplaced = line("13208047", "1993671", "A", "CGTA");
+    assert_eq!(
+        run("insertion-unplaced-record", &three_bases, Some(&unplaced)),
+        set_aside
+    );
+    let beside = format!("{}{unplaced}", line("13208046", "1993672", "AC", "CGT"));
+    assert_eq!(
+        run("insertion-unplaced-beside", &three_bases, Some(&beside)),
+        a_difference
+    );
+}
+
+const SETTLED_STOP_CLASS: &str = "stop_codon_settled_before_unknown_bases";
+
+/// One fabricated row of an insertion of ten bases, a sense codon, a stop codon and four
+/// unknown bases, with its CDS position, its Amino_acids and its Codons.
+fn settled_stop_row(terms: &str, cds: &str, amino_acids: &str, codons: &str) -> String {
+    format!(
+        "1993671\t21:10567700-10567701\tGAATAGNNNN\tENSG1\tENST00000622113\tTranscript\t\
+         {terms}\t775-776\t{cds}\t-\t{amino_acids}\t{codons}\t-\tIMPACT=HIGH;STRAND=1\n"
+    )
+}
+
+/// The reference's row of the class, without residues, and vep-rs's, whose residues hold
+/// their stop at the place of the stop codon the Codons cell settles.
+fn settled_stop_rows(cds: &str, amino_acids: &str, codons: &str) -> (String, String) {
+    (
+        settled_stop_row("frameshift_variant", cds, "-", codons),
+        settled_stop_row("stop_gained,frameshift_variant", cds, amino_acids, codons),
+    )
+}
+
+fn stop_codon_settled_before_unknown_bases_case() -> RowPairRuleCase {
+    let (reference, candidate) = settled_stop_rows("423-424", "-/E*XX", "-/GAATAGNNNN");
+    RowPairRuleCase {
+        bucket: SETTLED_STOP_CLASS,
+        reference,
+        candidate,
+        further_term: settled_stop_row(
+            "stop_gained,frameshift_variant,stop_lost",
+            "423-424",
+            "-/E*XX",
+            "-/GAATAGNNNN",
+        ),
+        other_column: settled_stop_rows("423-?", "-/E*XX", "-/GAATAGNNNN"),
+    }
+}
+row_pair_rule_tests!(
+    stop_codon_settled_before_unknown_bases,
+    stop_codon_settled_before_unknown_bases_case()
+);
+
+/// The class reads the Codons and the Amino_acids of both rows: a Codons cell that settles
+/// no stop codon before its unknown bases, residues whose first stop stands at another
+/// place than the stop codon's, and rows that end at their ninth column each leave the pair
+/// a difference.
+#[test]
+fn the_settled_stop_class_holds_a_pair_to_the_codons_and_residues_of_its_rows() {
+    let cut = |row: &String| {
+        let cells: Vec<&str> = row.trim_end_matches('\n').split('\t').collect();
+        cells[..9].join("\t") + "\n"
+    };
+    let whole = settled_stop_rows("423-424", "-/E*XX", "-/GAATAGNNNN");
+    let (statistics, f1, open_rows) =
+        row_pair_rule("settled-stop-whole", SETTLED_STOP_CLASS, &whole.0, &whole.1);
+    assert_eq!((statistics, f1.as_str()), ([1, 1], "1.0"));
+    assert!(open_rows.is_empty(), "{open_rows:?}");
+    for (tag, (reference, candidate)) in [
+        (
+            "settled-stop-no-stop-codon",
+            settled_stop_rows("423-424", "-/E*XX", "-/GAAGCTNNNN"),
+        ),
+        (
+            "settled-stop-other-place",
+            settled_stop_rows("423-424", "-/EE*X", "-/GAATAGNNNN"),
+        ),
+        ("settled-stop-nine-columns", (cut(&whole.0), cut(&whole.1))),
+    ] {
+        let (statistics, f1, open_rows) =
+            row_pair_rule(tag, SETTLED_STOP_CLASS, &reference, &candidate);
+        assert_eq!((statistics, open_rows.len()), ([0, 0], 2), "{tag}");
+        assert_ne!(f1, "1.0", "{tag}");
+    }
+}
+
+const HELD_STOP_CLASS: &str = "frameshift_inside_a_held_stop_codon";
+
+/// One fabricated row of a base lost from inside the codon of a stop the peptide holds, with
+/// its terms, its Amino_acids and its Codons.
+fn held_stop_row(terms: &str, amino_acids: &str, codons: &str) -> String {
+    format!(
+        "a_base_lost_inside_the_stop_codon\t1:136\t-\tENSG00000000001\tENST00000000010\t\
+         Transcript\t{terms}\t36\t30\t10\t{amino_acids}\t{codons}\t-\tIMPACT=HIGH;STRAND=1\n"
+    )
+}
+
+/// The reference's row of the class, which holds `coding_sequence_variant`, and vep-rs's,
+/// which holds `frameshift_variant` in its place, both with the same residues and codons.
+fn held_stop_rows(amino_acids: &str, codons: &str) -> (String, String) {
+    (
+        held_stop_row("coding_sequence_variant", amino_acids, codons),
+        held_stop_row("frameshift_variant", amino_acids, codons),
+    )
+}
+
+fn frameshift_inside_a_held_stop_codon_case() -> RowPairRuleCase {
+    let (reference, candidate) = held_stop_rows("*/X", "tgA/tg");
+    RowPairRuleCase {
+        bucket: HELD_STOP_CLASS,
+        reference,
+        candidate,
+        further_term: held_stop_row("stop_gained,frameshift_variant", "*/X", "tgA/tg"),
+        other_column: held_stop_rows("*/X", "tGa/tAa"),
+    }
+}
+row_pair_rule_tests!(
+    frameshift_inside_a_held_stop_codon,
+    frameshift_inside_a_held_stop_codon_case()
+);
+
+/// The class reads the Amino_acids and the Codons of both rows: reference residues that
+/// open with another residue than a stop, an alternate half without the unknown residue, a
+/// Codons cell whose halves differ by three bases, and rows that end at their ninth column
+/// each leave the pair a difference.
+#[test]
+fn the_held_stop_class_holds_a_pair_to_the_residues_and_codons_of_its_rows() {
+    let cut = |row: &String| {
+        let cells: Vec<&str> = row.trim_end_matches('\n').split('\t').collect();
+        cells[..9].join("\t") + "\n"
+    };
+    let whole = held_stop_rows("*/X", "tgA/tg");
+    let (statistics, f1, open_rows) =
+        row_pair_rule("held-stop-whole", HELD_STOP_CLASS, &whole.0, &whole.1);
+    assert_eq!((statistics, f1.as_str()), ([1, 1], "1.0"));
+    assert!(open_rows.is_empty(), "{open_rows:?}");
+    for (tag, (reference, candidate)) in [
+        ("held-stop-no-stop", held_stop_rows("L/X", "tgA/tg")),
+        (
+            "held-stop-no-unknown-residue",
+            held_stop_rows("*/L", "tgA/tg"),
+        ),
+        ("held-stop-three-bases", held_stop_rows("*/X", "tgAGCT/tgt")),
+        ("held-stop-nine-columns", (cut(&whole.0), cut(&whole.1))),
+    ] {
+        let (statistics, f1, open_rows) =
+            row_pair_rule(tag, HELD_STOP_CLASS, &reference, &candidate);
+        assert_eq!((statistics, open_rows.len()), ([0, 0], 2), "{tag}");
+        assert_ne!(f1, "1.0", "{tag}");
+    }
+}
+
 fn splice_term_past_the_record_span_case() -> RowPairRuleCase {
     let row = |terms: &str, cdna: &str, cds: &str| {
         position_row(
@@ -1486,6 +2082,191 @@ row_pair_rule_tests!(
     splice_term_past_the_record_span,
     splice_term_past_the_record_span_case()
 );
+
+const REMOVED_START_CLASS: &str = "start_codon_removed_without_five_prime_utr";
+
+/// One fabricated row of a deletion of the first codon of a transcript with no 5' UTR, with
+/// its two position columns and its Amino_acids.
+fn removed_start_row(terms: &str, cdna: &str, cds: &str, amino_acids: &str) -> String {
+    format!(
+        "21_44817965_ACAT/A\t21:44817966-44817968\t-\tENSG1\tENST00000397893\tTranscript\t\
+         {terms}\t{cdna}\t{cds}\t1\t{amino_acids}\tATG/-\t-\tIMPACT=MODERATE;STRAND=-1\n"
+    )
+}
+
+/// The reference's row of the class and vep-rs's, whose terms hold `start_lost` as well,
+/// both with the positions `cdna` and `cds` and the residues `amino_acids`.
+fn removed_start_rows(cdna: &str, cds: &str, amino_acids: &str) -> (String, String) {
+    (
+        removed_start_row("inframe_deletion", cdna, cds, amino_acids),
+        removed_start_row("start_lost,inframe_deletion", cdna, cds, amino_acids),
+    )
+}
+
+fn start_codon_removed_without_five_prime_utr_case() -> RowPairRuleCase {
+    let (reference, candidate) = removed_start_rows("1-3", "1-3", "M/-");
+    RowPairRuleCase {
+        bucket: REMOVED_START_CLASS,
+        reference,
+        candidate,
+        further_term: removed_start_row(
+            "start_lost,inframe_deletion,stop_lost",
+            "1-3",
+            "1-3",
+            "M/-",
+        ),
+        other_column: removed_start_rows("101-103", "1-3", "M/-"),
+    }
+}
+row_pair_rule_tests!(
+    start_codon_removed_without_five_prime_utr,
+    start_codon_removed_without_five_prime_utr_case()
+);
+
+/// The class reads the two position columns and the Amino_acids of both rows: a CDS position
+/// that opens after the first coding base, residues with an alternate half other than `-`
+/// and rows that end at their ninth column each leave the pair a difference.
+#[test]
+fn the_removed_start_class_holds_a_pair_to_the_positions_and_residues_of_its_rows() {
+    let cut = |row: &String| {
+        let cells: Vec<&str> = row.trim_end_matches('\n').split('\t').collect();
+        cells[..9].join("\t") + "\n"
+    };
+    let whole = removed_start_rows("1-3", "1-3", "M/-");
+    let (statistics, f1, open_rows) = row_pair_rule(
+        "removed-start-whole",
+        REMOVED_START_CLASS,
+        &whole.0,
+        &whole.1,
+    );
+    assert_eq!((statistics, f1.as_str()), ([1, 1], "1.0"));
+    assert!(open_rows.is_empty(), "{open_rows:?}");
+    for (tag, (reference, candidate)) in [
+        (
+            "removed-start-later-codon",
+            removed_start_rows("4-6", "4-6", "A/-"),
+        ),
+        (
+            "removed-start-alternate-residue",
+            removed_start_rows("1-6", "1-6", "MA/M"),
+        ),
+        ("removed-start-nine-columns", (cut(&whole.0), cut(&whole.1))),
+    ] {
+        let (statistics, f1, open_rows) =
+            row_pair_rule(tag, REMOVED_START_CLASS, &reference, &candidate);
+        assert_eq!((statistics, open_rows.len()), ([0, 0], 2), "{tag}");
+        assert_ne!(f1, "1.0", "{tag}");
+    }
+}
+
+const KEPT_START_CLASS: &str = "start_codon_kept_without_five_prime_utr";
+
+/// One fabricated row of a deletion of ten bases from the third base of a transcript, with
+/// its terms and its two position columns.
+fn kept_start_row(terms: &str, cdna: &str, cds: &str) -> String {
+    position_row("21:30001-30010", "-", "ENST90000000002", terms, cdna, cds)
+}
+
+/// The reference's row of the class, whose terms hold `start_lost`, and vep-rs's, whose
+/// terms hold `start_retained_variant` in its place, both with the positions `cdna` and
+/// `cds`.
+fn kept_start_rows(cdna: &str, cds: &str) -> (String, String) {
+    (
+        kept_start_row("frameshift_variant,start_lost", cdna, cds),
+        kept_start_row("frameshift_variant,start_retained_variant", cdna, cds),
+    )
+}
+
+fn start_codon_kept_without_five_prime_utr_case() -> RowPairRuleCase {
+    let (reference, candidate) = kept_start_rows("3-12", "3-12");
+    RowPairRuleCase {
+        bucket: KEPT_START_CLASS,
+        reference,
+        candidate,
+        further_term: kept_start_row(
+            "frameshift_variant,start_retained_variant,stop_lost",
+            "3-12",
+            "3-12",
+        ),
+        other_column: kept_start_rows("104-113", "3-12"),
+    }
+}
+row_pair_rule_tests!(
+    start_codon_kept_without_five_prime_utr,
+    start_codon_kept_without_five_prime_utr_case()
+);
+
+/// The class takes both forms of the term difference and holds a pair to the positions of
+/// its rows. An insertion of whole codons on which the reference's row holds neither start
+/// term is set aside, as are the rows of the first form cut after their ninth column. A
+/// span that opens on the fourth coding base, a row of vep-rs that keeps `start_lost` and
+/// a row without a term of an insertion or a deletion each leave the pair a difference.
+#[test]
+fn the_kept_start_class_holds_a_pair_to_its_two_forms_and_the_positions_of_its_rows() {
+    let inserted = |terms: &str| {
+        position_row(
+            "21:30000-30001",
+            "GCA",
+            "ENST90000000002",
+            terms,
+            "2-3",
+            "2-3",
+        )
+    };
+    let cut = |row: &String| {
+        let cells: Vec<&str> = row.trim_end_matches('\n').split('\t').collect();
+        cells[..9].join("\t") + "\n"
+    };
+    let whole = kept_start_rows("3-12", "3-12");
+    for (tag, (reference, candidate)) in [
+        (
+            "kept-start-second-form",
+            (
+                inserted("inframe_insertion"),
+                inserted("inframe_insertion,start_retained_variant"),
+            ),
+        ),
+        (
+            "kept-start-first-form-insertion",
+            (
+                inserted("inframe_insertion,start_lost"),
+                inserted("inframe_insertion,start_retained_variant"),
+            ),
+        ),
+        ("kept-start-nine-columns", (cut(&whole.0), cut(&whole.1))),
+    ] {
+        let (statistics, f1, open_rows) =
+            row_pair_rule(tag, KEPT_START_CLASS, &reference, &candidate);
+        assert_eq!((statistics, f1.as_str()), ([1, 1], "1.0"), "{tag}");
+        assert!(open_rows.is_empty(), "{tag}: {open_rows:?}");
+    }
+    for (tag, (reference, candidate)) in [
+        ("kept-start-fourth-base", kept_start_rows("4-13", "4-13")),
+        (
+            "kept-start-lost-start-kept",
+            (
+                whole.0.clone(),
+                kept_start_row(
+                    "frameshift_variant,start_lost,start_retained_variant",
+                    "3-12",
+                    "3-12",
+                ),
+            ),
+        ),
+        (
+            "kept-start-no-length-term",
+            (
+                kept_start_row("start_lost", "3-12", "3-12"),
+                kept_start_row("start_retained_variant", "3-12", "3-12"),
+            ),
+        ),
+    ] {
+        let (statistics, f1, open_rows) =
+            row_pair_rule(tag, KEPT_START_CLASS, &reference, &candidate);
+        assert_eq!((statistics, open_rows.len()), ([0, 0], 2), "{tag}");
+        assert_ne!(f1, "1.0", "{tag}");
+    }
+}
 
 /// Under an identifier, a row at two neighbouring positions is the row of two replaced bases
 /// and of an insertion between them alike: the input record tells which, so the pair is set
@@ -1760,4 +2541,107 @@ fn a_mate_position_in_other_digits_than_0_to_9_names_no_breakend_mate() {
     let (statistics, _) =
         one_sided_class("other-digits-own-end", "bnd_synonym_mate_rows_lost", &files);
     assert_eq!(statistics, [0; 5]);
+}
+
+/// A number past 128 bits that ends in `tail`: a one before forty digits.
+fn past_128_bits(tail: u32) -> String {
+    format!("1{tail:040}")
+}
+
+/// The numbers a row-aware pair rule reads of a row are read within 128 bits, and past that
+/// bound a number reads as no number. Each pair is set aside where its numbers lie within
+/// the bound, and where its Location, its cDNA positions or the position its generated name
+/// spells lies past it the class counts nothing and both rows stay in `discordant_open.tsv`.
+#[test]
+fn a_pair_whose_rows_write_a_number_past_128_bits_stays_a_difference() {
+    let named_row = |name: &str, location: &str, allele: &str, terms: &str, cdna: &str| {
+        format!(
+            "{name}\t{location}\t{allele}\tENSG1\tENST90000000001\tTranscript\t{terms}\t{cdna}\t-\t-\t-\t-\t-\tIMPACT=LOW;STRAND=-1\n"
+        )
+    };
+    let inserted = |location: &str| {
+        let row = |term: &str| {
+            let terms = format!("inframe_insertion,{term}");
+            stop_codon_row("TTGA", &terms, "7054-7055", "6977-6978", location)
+        };
+        (row("coding_sequence_variant"), row("stop_retained_variant"))
+    };
+    let longer = |name: &str, location: &str, donor_terms: &str, cdna: &str| {
+        let row = |terms: &str| named_row(name, location, "GTGTG", terms, cdna);
+        (
+            row(donor_terms),
+            row("frameshift_variant,splice_region_variant"),
+        )
+    };
+    let (without_record, beside_record) = (
+        "splice_donor_variant,frameshift_variant",
+        "splice_donor_variant,frameshift_variant,splice_donor_region_variant,intron_variant",
+    );
+    let (identifier, generated) = ("1993671", "7_100999_TA/GTGTG");
+    let far = past_128_bits;
+    let far_span = |start: u32, end: u32| format!("{}-{}", far(start), far(end));
+    let insertion_range = "stop_codon_overlap_insertion_range";
+    let past_the_span = "splice_term_past_the_record_span";
+    let shapes = [
+        (
+            "insertion-location",
+            insertion_range,
+            inserted("19:13208046-13208047"),
+            inserted(&format!("19:{}", far_span(13208046, 13208047))),
+        ),
+        (
+            "longer-location",
+            past_the_span,
+            longer(identifier, "7:100998-101000", without_record, "998-1000"),
+            longer(
+                identifier,
+                &format!("7:{}", far_span(100998, 101000)),
+                without_record,
+                "998-1000",
+            ),
+        ),
+        (
+            "longer-positions",
+            past_the_span,
+            longer(identifier, "7:100998-101000", without_record, "998-1000"),
+            longer(
+                identifier,
+                "7:100998-101000",
+                without_record,
+                &far_span(998, 1000),
+            ),
+        ),
+        (
+            "record-positions",
+            past_the_span,
+            longer(generated, "7:100999-101000", beside_record, "999-1000"),
+            longer(
+                generated,
+                "7:100999-101000",
+                beside_record,
+                &far_span(999, 1000),
+            ),
+        ),
+        (
+            "record-name",
+            past_the_span,
+            longer(generated, "7:100999-101000", beside_record, "999-1000"),
+            longer(
+                &format!("7_{}_TA/GTGTG", far(100999)),
+                "7:100999-101000",
+                beside_record,
+                "999-1000",
+            ),
+        ),
+    ];
+    for (shape, bucket, within, past) in shapes {
+        let (statistics, f1, open_rows) =
+            row_pair_rule(&format!("within-{shape}"), bucket, &within.0, &within.1);
+        assert_eq!((statistics, f1.as_str()), ([1, 1], "1.0"), "{shape}");
+        assert!(open_rows.is_empty(), "{shape}: {open_rows:?}");
+        let (statistics, f1, open_rows) =
+            row_pair_rule(&format!("past-{shape}"), bucket, &past.0, &past.1);
+        assert_eq!((statistics, open_rows.len()), ([0, 0], 2), "{shape}");
+        assert_ne!(f1, "1.0", "{shape}");
+    }
 }

@@ -5,14 +5,17 @@
 //! summary lines.
 
 use crate::merge::{FieldStats, MergeResult, PLAIN_FIELDS};
-use crate::pyfmt::{push_json_str, py_float_repr, py_grouped, py_round6};
+use crate::pyfmt::{push_json_os_str, push_json_str, py_float_repr, py_grouped, py_round6};
 use std::fmt::Write;
 
+#[derive(Debug, PartialEq)]
 pub enum Json {
     Null,
     Int(u64),
     Float(f64),
     Str(String),
+    /// A command-line argument as given, which need not be UTF-8.
+    OsStr(Vec<u8>),
     Array(Vec<Json>),
     Object(Vec<(String, Json)>),
 }
@@ -37,6 +40,7 @@ fn write_value(value: &Json, level: usize, out: &mut String) {
         Json::Int(n) => write!(out, "{n}").unwrap(),
         Json::Float(x) => out.push_str(&py_float_repr(*x)),
         Json::Str(s) => push_json_str(out, s),
+        Json::OsStr(bytes) => push_json_os_str(out, bytes),
         Json::Array(items) => {
             if items.is_empty() {
                 out.push_str("[]");
@@ -114,12 +118,14 @@ fn field_block(stats: &FieldStats, examples: i64) -> Json {
     ])
 }
 
-/// The report object in the Python's key order.
+/// The report object, its keys in the order the report fixes; `keep_only` is its last key
+/// and is written only when the option was given.
 pub fn build(
     result: &MergeResult,
     examples: i64,
-    reference_input: &str,
-    scored_input: &str,
+    reference_input: &[u8],
+    scored_input: &[u8],
+    keep_only: Option<&str>,
 ) -> Json {
     let totals = &result.totals;
     let totals_block = Json::Object(vec![
@@ -147,15 +153,15 @@ pub fn build(
         .iter()
         .map(|(key, stats)| (text(key), field_block(stats, examples)))
         .collect();
-    Json::Object(vec![
+    let mut report = vec![
         ("totals".into(), totals_block),
         ("fields".into(), Json::Object(fields)),
         ("extra".into(), Json::Object(extra)),
         (
             "inputs".into(),
             Json::Object(vec![
-                ("reference".into(), Json::Str(reference_input.to_string())),
-                ("scored".into(), Json::Str(scored_input.to_string())),
+                ("reference".into(), Json::OsStr(reference_input.to_vec())),
+                ("scored".into(), Json::OsStr(scored_input.to_vec())),
             ]),
         ),
         (
@@ -177,7 +183,11 @@ pub fn build(
             "comparison".into(),
             Json::Str("verbatim per field on tuples both sides emit under the same key".into()),
         ),
-    ])
+    ];
+    if let Some(class) = keep_only {
+        report.push(("keep_only".into(), Json::Str(class.to_string())));
+    }
+    Json::Object(report)
 }
 
 /// The stdout lines: the key totals, then one row per plain field and per `Extra:<key>`.

@@ -83,9 +83,8 @@ Done when the unit tests pass and `cargo test -p vep-builtins -p vep-cli` is gre
 
 ## 6. The corpus and the concordance case
 
-The golden corpus is `tests/golden/116/<assembly>-plugin-<name>` (a new corpus over synthetic data
-takes a `-fixture` suffix; the corpora of CADD, CADD-SV, dbNSFP, dbscSNV, SpliceAI and AVI,
-synthetic as well, keep their names), with the plugin's flags as a flag set and the fixture under
+The golden corpus is `tests/golden/116/<assembly>-plugin-<name>` (a corpus over synthetic data
+takes a `-fixture` suffix), with the plugin's flags as a flag set and the fixture under
 `plugin_data/`. Ensembl VEP's expected outputs come from
 `scripts/concordance/generate_reference_output.sh --corpus <dir> --flag-set <name> --dir-plugins
 <modules>`, which needs Docker and an Ensembl VEP 116 cache; follow
@@ -95,7 +94,7 @@ vep-cli --test golden --test format_parity` then compares every field of every f
 
 A plugin whose open data file the harness prepares has a row in `scripts/data/plugin_data_layout.sh`
 (`scripts/data/test_plugin_data_layout.sh` proves it, with its floor in `ci.yml`) and runs through
-`scripts/concordance/run_concordance.sh --plugins <Name>`, whose `compare_plugin_outputs.py` report
+`scripts/concordance/run_concordance.sh --plugins <Name>`, whose `vep-plugin-pairs compare` report
 is the concordance case; the pull request quotes it or states that it was not run and why.
 
 Done when the golden tests pass over the new corpus and the matrix row names its tests.

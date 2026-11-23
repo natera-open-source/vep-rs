@@ -24,10 +24,12 @@ use tracing::{debug, warn};
 use crate::annotation_store::{check_table_or_store, open_best_store_with, AnnotationStore};
 use crate::params::PluginParams;
 use crate::tabix::{
-    allele_match, lossy_text, BatchQueryResult, BoundedLines, TabixAnnotator, TabixConfig,
-    TabixRecord,
+    allele_match, lossy_text, table_contig, BatchQueryResult, BoundedLines, TabixAnnotator,
+    TabixConfig, TabixRecord,
 };
 use crate::traits::{BuiltinPlugin, PluginError, PrefetchData};
+use vep_core::allele_trim::CaseRule;
+use vep_core::assembly::Assembly;
 use vep_core::consequence::{RowKind, TranscriptConsequence};
 use vep_core::variant::InputVariant;
 use vep_core::vcf_header::fileformat_refusal;
@@ -100,6 +102,9 @@ struct GroupFilter {
 /// gnomADMt plugin.
 pub struct GnomadMtPlugin {
     store: Option<Box<dyn AnnotationStore>>,
+    /// The run's assembly, which decides the name a record is given to its
+    /// table ([`table_contig`]).
+    assembly: Option<Assembly>,
     /// The data file, as the failure on one of its rows names it.
     file: String,
     /// The selected fields in the order given, each once.
@@ -119,6 +124,7 @@ impl GnomadMtPlugin {
     pub fn new() -> Self {
         Self {
             store: None,
+            assembly: None,
             file: String::new(),
             fields: Vec::new(),
             haplogroups: None,
@@ -279,7 +285,13 @@ impl GnomadMtPlugin {
                 return Err(allele_match::undefined_allele_row(NAME, &self.file, record));
             }
             if allele_match::matched_variant_alleles(
-                &allele_match::vcf_adjusted_row(record, POS_COL, REF_COL, ALT_COL),
+                &allele_match::vcf_adjusted_row(
+                    record,
+                    POS_COL,
+                    REF_COL,
+                    ALT_COL,
+                    CaseRule::EitherCase,
+                ),
                 variant,
                 POS_COL,
                 REF_COL,
@@ -449,6 +461,8 @@ fn header_pairs(body: &str) -> Vec<(&str, String)> {
     pairs
 }
 
+impl crate::traits::sealed::Sealed for GnomadMtPlugin {}
+
 impl BuiltinPlugin for GnomadMtPlugin {
     fn name(&self) -> &str {
         NAME
@@ -457,7 +471,7 @@ impl BuiltinPlugin for GnomadMtPlugin {
     /// The Ensembl VEP module declares `['Feature', 'Intergenic']`
     /// (`gnomADMt.pm:213-214`): every row, the intergenic row included.
     fn feature_types(&self) -> &[RowKind] {
-        &RowKind::ALL
+        RowKind::ALL
     }
 
     fn header_info(&self) -> Vec<(String, String)> {
@@ -465,6 +479,16 @@ impl BuiltinPlugin for GnomadMtPlugin {
             .iter()
             .map(|field| (field.key.clone(), field.description.clone()))
             .collect()
+    }
+
+    fn set_assembly(&mut self, assembly: Option<Assembly>) {
+        self.assembly = assembly;
+    }
+
+    fn set_reference_fasta(&mut self, fasta: Option<std::sync::Arc<vep_fasta::IndexedFasta>>) {
+        if let Some(store) = self.store.as_mut() {
+            store.set_reference_fasta(fasta);
+        }
     }
 
     fn init(&mut self, params: &[String]) -> Result<(), PluginError> {
@@ -563,15 +587,20 @@ impl BuiltinPlugin for GnomadMtPlugin {
         // A row keeps the whitespace before its line end, which Ensembl VEP's
         // `split /\t/` leaves on the INFO column and its `split /=/` on the
         // value of the column's last pair (`:304`, `:327-329`).
-        // Opened on no assembly, so a mitochondrial record reads the table under
-        // every spelling: the module itself names such a record `M` to its table
-        // (gnomADMt.pm:256-261).
-        self.store = Some(open_best_store_with(
+        // The module names every mitochondrial record `M` to its table
+        // (gnomADMt.pm:256-261), so on GRCh37 `M` is the first name tried; a
+        // contig of the other pair of names than the record's is read where
+        // the table's rows state the reference bases (`MitochondrialFrame`).
+        let mut store = open_best_store_with(
             Path::new(file),
             config,
-            None,
+            self.assembly,
             TabixAnnotator::keeping_trailing_whitespace,
-        )?);
+        )?;
+        if let Some(frame) = store.mitochondrial_frame_mut() {
+            frame.set_first_name("M");
+        }
+        self.store = Some(store);
         self.file = file.to_string();
         debug!(
             file,
@@ -593,7 +622,7 @@ impl BuiltinPlugin for GnomadMtPlugin {
             .filter(|v| self.annotates_variant(v))
             .map(|v| {
                 let (low, high) = Self::window(v);
-                (v.chr.as_str(), low, high)
+                (table_contig(v, self.assembly), low, high)
             })
             .collect();
         Ok(Some(PrefetchData::new(store.query_batch(&regions)?)))
@@ -611,12 +640,16 @@ impl BuiltinPlugin for GnomadMtPlugin {
         let mut failure = None;
         for variant in variants.iter_mut().filter(|v| self.annotates_variant(v)) {
             let (low, high) = Self::window(variant);
-            let records = batch.lookup(&variant.chr, low, high);
+            let records = batch.lookup(table_contig(variant, self.assembly), low, high);
             if records.is_empty() {
                 continue;
             }
             match self.matching_values(&records, variant) {
-                Ok(Some(values)) => variant.plugin_data.extend(values),
+                Ok(Some(values)) => {
+                    for (key, value) in values {
+                        variant.set_plugin_value(key, value, false, self.feature_types());
+                    }
+                }
                 Ok(None) => {}
                 Err(error) => {
                     failure.get_or_insert(error);
@@ -1054,7 +1087,7 @@ mod tests {
         assert!(plugin.haplogroups.is_none());
     }
 
-    /// Ensembl VEP 116.2 reads `hap_filter=all` and `pop_filter=all` as every
+    /// Ensembl VEP 116.3 reads `hap_filter=all` and `pop_filter=all` as every
     /// group the file's order list states, in file order, before any name is
     /// validated (`gnomADMt.pm:82`, called from `:174` and `:195`), so the
     /// values keep their order and the descriptions are rewritten with the
@@ -1184,6 +1217,85 @@ mod tests {
         assert!(variants[0].plugin_data.is_empty());
     }
 
+    /// The module names every mitochondrial record `M` (`:256-261`). On
+    /// GRCh37, with the run's reference sequence, a file naming the contig
+    /// `chrM` is read for a record on `MT` or `chrMT` when its rows state the
+    /// reference bases at their own positions, and not when they state the
+    /// bases one position on, where the row at the record's site carries the
+    /// record's alleles because the reference repeats its base there. A
+    /// record written `chrM` reads either file.
+    #[test]
+    fn on_grch37_a_file_named_chrm_is_read_for_a_record_on_mt_only_when_its_rows_state_the_reference(
+    ) {
+        use crate::test_fixtures::{
+            made_up_alternate, made_up_reference, made_up_rows, repeated_base,
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let (reference, bases) = made_up_reference(dir.path(), 1600);
+        let site = repeated_base(&bases, 100);
+        let base = bases[site - 1];
+        let header: Vec<String> = rows()
+            .into_iter()
+            .filter(|line| line.starts_with('#'))
+            .collect();
+        let record = |chr: &str| {
+            variant(
+                chr,
+                site as u64,
+                site as u64,
+                &(base as char).to_string(),
+                &(made_up_alternate(base) as char).to_string(),
+            )
+        };
+        for (frame, offset, expected) in [
+            ("stating_the_reference", 0, Some(site.to_string())),
+            ("one_position_on", 1, None),
+        ] {
+            let mut lines = header.clone();
+            lines.extend(made_up_rows(
+                "chrM",
+                &bases,
+                10..1590,
+                offset,
+                |contig, position, reference, alt| {
+                    format!(
+                        "{contig}\t{position}\t.\t{reference}\t{alt}\t.\tPASS\tAC_hom={position}"
+                    )
+                },
+            ));
+            let refs: Vec<&str> = lines.iter().map(String::as_str).collect();
+            let file = write_tabix_fixture(
+                dir.path(),
+                &format!("{frame}_synthetic.vcf.bgz"),
+                &refs,
+                IndexSpec::standard(),
+            );
+            let mut plugin = GnomadMtPlugin::new();
+            plugin.set_assembly(Some(Assembly::Grch37));
+            plugin
+                .init(&[
+                    format!("file={}", file.display()),
+                    "fields=AC_hom".to_string(),
+                ])
+                .unwrap();
+            plugin.set_reference_fasta(Some(std::sync::Arc::clone(&reference)));
+            for chr in ["MT", "chrMT"] {
+                let variants = annotate(&plugin, vec![record(chr)]);
+                assert_eq!(
+                    value(&variants[0], "gnomAD_AC_hom"),
+                    expected,
+                    "{frame}, record {chr}"
+                );
+            }
+            let variants = annotate(&plugin, vec![record("chrM")]);
+            assert_eq!(
+                value(&variants[0], "gnomAD_AC_hom"),
+                Some(site.to_string()),
+                "{frame}: a record of the file's own pair"
+            );
+        }
+    }
+
     /// A deletion `AT>A` at 21 and an insertion `T>TC` at 42 are written with
     /// the shared base before them; the record's own trimmed alleles match
     /// them (`:306-314`), and an allele the file lacks matches nothing.
@@ -1216,7 +1328,7 @@ mod tests {
         );
     }
 
-    /// Ensembl VEP 116.2 trims the record's alleles as well as the row's inside
+    /// Ensembl VEP 116.3 trims the record's alleles as well as the row's inside
     /// `get_matched_variant_alleles` (ensembl-variation Utils/Sequence.pm:1199-1208
     /// and :1223-1232), so the substitution at 3 written with its unchanged
     /// neighbour on either side (`AT/AC` at 2, `TC/CC` at 3) takes the `T C`
@@ -1237,7 +1349,7 @@ mod tests {
         assert_eq!(ac, [Some("19".to_string()), Some("19".to_string()), None]);
     }
 
-    /// Ensembl VEP 116.2 strips a row's shared first base, when its alleles
+    /// Ensembl VEP 116.3 strips a row's shared first base, when its alleles
     /// differ in length, before `get_matched_variant_alleles` reads the row
     /// (gnomADMt.pm:306-314), so the row `AA A` at 500 is `A/-` at 501, which
     /// the deletion at 501 takes and the deletion at 500 does not, and the row
@@ -1277,12 +1389,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let plugin = init_with(dir.path(), &[]).unwrap();
         let mut with_rows = variant("MT", 3, 3, "T", "C");
-        with_rows
-            .transcript_consequences
-            .push(TranscriptConsequence {
-                feature_type: FeatureType::Transcript,
-                ..TranscriptConsequence::default()
-            });
+        with_rows.transcript_consequences.push({
+            let mut consequence = TranscriptConsequence::default();
+            consequence.feature_type = FeatureType::Transcript;
+            consequence
+        });
         let variants = annotate(&plugin, vec![variant("MT", 3, 3, "T", "C"), with_rows]);
         assert_eq!(
             value(&variants[0], "gnomAD_hap_AC_hom").as_deref(),
@@ -1397,10 +1508,10 @@ mod tests {
         assert!(!is_group_field("hapmax_AF_hom", "hap_"));
     }
 
-    /// Ensembl VEP 116.2 never hands gnomADMt a structural variant: the module
+    /// Ensembl VEP 116.3 never hands gnomADMt a structural variant: the module
     /// keeps the default `variant_feature_types` of `['VariationFeature']`
     /// (BaseVepPlugin.pm:100), which the dispatch checks before running a
-    /// plugin on a line (OutputFactory.pm:2220). A `<DEL>` over the file's
+    /// plugin on a line (OutputFactory.pm:2229). A `<DEL>` over the file's
     /// records gets no field, and nor does a matching substitution carrying the
     /// structural mark, which pins the gate rather than the allele match; the
     /// plain substitution is annotated.

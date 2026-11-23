@@ -15,7 +15,6 @@ import unittest
 from pathlib import Path
 
 from reference_release import (
-    CACHE_VERSION_RELEASE,
     REFERENCE_RELEASES,
     main,
     provenance_file,
@@ -28,16 +27,21 @@ HERE = Path(__file__).resolve().parent
 
 
 class ReleaseFromImageTests(unittest.TestCase):
-    def test_the_two_registry_releases_are_read_from_the_tag(self) -> None:
-        self.assertEqual(release_from_image("ensemblorg/ensembl-vep:release_116.2"), "116.2")
-        self.assertEqual(release_from_image("ensemblorg/ensembl-vep:release_115.2"), "115.2")
-        self.assertEqual(REFERENCE_RELEASES, ("115.2", "116.2"))
+    def test_each_accepted_release_is_read_from_its_own_tag(self) -> None:
+        for release in ("115.2", "116.2", "116.3"):
+            with self.subTest(release=release):
+                self.assertEqual(release_from_image(f"ensemblorg/ensembl-vep:release_{release}"), release)
+        self.assertEqual(REFERENCE_RELEASES, ("115.2", "116.2", "116.3"))
 
     def test_a_release_without_a_registry_is_refused_not_guessed(self) -> None:
         """116.1 shares 116.2's skip and overlap semantics, but the registries are named by
         the release they were verified against; the caller chooses with --reference-release."""
         with self.assertRaisesRegex(ValueError, "116.1"):
             release_from_image("ensemblorg/ensembl-vep:release_116.1")
+
+    def test_a_release_outside_the_list_is_refused_naming_it_and_the_list(self) -> None:
+        with self.assertRaisesRegex(ValueError, r"names release 114\.2, .* \(one of 115\.2, 116\.2, 116\.3\)"):
+            release_from_image("ensemblorg/ensembl-vep:release_114.2")
 
     def test_a_digest_only_or_untagged_image_names_no_release(self) -> None:
         with self.assertRaises(ValueError):
@@ -74,6 +78,17 @@ class ReleaseFromProvenanceTests(unittest.TestCase):
             release_from_provenance({"vep_command": "vep -i in.vcf --offline --cache --cache_version 115 --tab"}), "115.2"
         )
 
+    def test_a_116_3_reference_is_named_by_its_image_version_line_or_prefix(self) -> None:
+        """Cache version 116 alone names 116.2, so a 116.3 record resolves through a source
+        read before the cache version: the image tag, the reported version line or the prefix."""
+        image = {"perl_image": "ensemblorg/ensembl-vep:release_116.3", "cache_version": 116}
+        self.assertEqual(release_from_provenance(image), "116.3")
+        reported = {"vep_version_reported": "ensembl-vep          : 116.3", "cache_version": 116}
+        self.assertEqual(release_from_provenance(reported), "116.3")
+        prefix = {"prefix": "population_r116.3_c116_fixture", "cache_version": 116}
+        self.assertEqual(release_from_provenance(prefix), "116.3")
+        self.assertEqual(release_from_provenance({"cache_version": 116}), "116.2")
+
     def test_a_perl_reference_block_resolves_by_image_then_prefix_then_cache_version(self) -> None:
         block = {"image": "ensemblorg/ensembl-vep:release_116.2", "digest": "sha256:abc",
                  "cache_version": 116, "prefix": "population_r116.2_c116_fixture"}
@@ -91,19 +106,20 @@ class ReleaseFromProvenanceTests(unittest.TestCase):
             release_from_provenance({"cache_version": 114})
 
     def test_a_golden_corpus_provenance_resolves(self) -> None:
-        """A golden corpus records its reference as a digest-only image and a command line;
-        the command's --cache_version names the release, and it must be the release the
-        corpus directory is named for (`tests/golden/<major>/`). Skipped in a tree without
-        the corpora."""
+        """A golden corpus records the image tag its reference was generated with; the
+        release the tag names is one the comparators have a registry for, of the major
+        release the corpus directory is named for (`tests/golden/<major>/`). Skipped in
+        a tree without the corpora."""
         corpora = sorted((HERE.parent.parent / "tests" / "golden").glob("*/GRCh37/provenance.json"))
         if not corpora:
             self.skipTest("no golden corpus is in this tree")
         for corpus in corpora:
             with self.subTest(corpus=corpus.parent.parent.name):
-                self.assertEqual(
-                    release_from_provenance(json.loads(corpus.read_text())),
-                    CACHE_VERSION_RELEASE[corpus.parent.parent.name],
-                )
+                record = json.loads(corpus.read_text())
+                release = release_from_provenance(record)
+                self.assertEqual(release, release_from_image(record["vep_image_tag"]))
+                self.assertIn(release, REFERENCE_RELEASES)
+                self.assertEqual(release.split(".")[0], corpus.parent.parent.name)
 
 
 class ProvenanceDirAndConstantsTests(unittest.TestCase):
@@ -117,14 +133,14 @@ class ProvenanceDirAndConstantsTests(unittest.TestCase):
 
     def test_the_three_ground_truth_layouts(self) -> None:
         """A reference set is laid out one of three ways: one record at the set root over
-        suite directories holding only outputs (`<set>/provenance.json`, `<set>/<suite>/output.txt`);
-        a sidecar beside each output (`<set>/<suite>/output.provenance.json`); or neither, which
+        dataset directories holding only outputs (`<set>/provenance.json`, `<set>/<dataset>/output.txt`);
+        a sidecar beside each output (`<set>/<dataset>/output.provenance.json`); or neither, which
         names no release and must fail rather than fall through to a guess."""
         with tempfile.TemporaryDirectory() as d:
             root = Path(d) / "canonical_set"
-            for suite in ("clinvar_a", "clinvar_b", "gnomad_a"):
-                (root / suite).mkdir(parents=True)
-                (root / suite / "output.txt").write_text("#header\n")
+            for dataset in ("clinvar_a", "clinvar_b", "gnomad_a"):
+                (root / dataset).mkdir(parents=True)
+                (root / dataset / "output.txt").write_text("#header\n")
             (root / "provenance.json").write_text(
                 json.dumps({"perl_image": "ensemblorg/ensembl-vep:release_115.2", "cache_version": 115})
             )
@@ -134,7 +150,7 @@ class ProvenanceDirAndConstantsTests(unittest.TestCase):
                 json.dumps({"perl_image": "ensemblorg/ensembl-vep:release_116.2", "cache_version": 116})
             )
             self.assertEqual(provenance_file(root / "gnomad_a"), root / "gnomad_a" / "output.provenance.json",
-                             "a suite's own sidecar wins over the set record")
+                             "a dataset's own sidecar wins over the set record")
             bare = Path(d) / "bare_set"
             (bare / "clinvar_a").mkdir(parents=True)
             (bare / "clinvar_a" / "output.txt").write_text("#header\n")
@@ -154,12 +170,15 @@ class ProvenanceDirAndConstantsTests(unittest.TestCase):
 
 
 class CommandLineTests(unittest.TestCase):
-    def test_prints_the_release_and_exits_zero(self) -> None:
-        out = subprocess.run(
-            [sys.executable, str(HERE / "reference_release.py"), "--image", "ensemblorg/ensembl-vep:release_116.2"],
-            capture_output=True, text=True,
-        )
-        self.assertEqual((out.returncode, out.stdout.strip()), (0, "116.2"))
+    def test_prints_each_accepted_release_and_exits_zero(self) -> None:
+        for release in ("115.2", "116.2", "116.3"):
+            with self.subTest(release=release):
+                image = f"ensemblorg/ensembl-vep:release_{release}"
+                out = subprocess.run(
+                    [sys.executable, str(HERE / "reference_release.py"), "--image", image],
+                    capture_output=True, text=True, check=False,
+                )
+                self.assertEqual((out.returncode, out.stdout.strip()), (0, release))
 
     def test_a_failure_is_one_error_line_on_stderr_and_exit_one(self) -> None:
         with tempfile.TemporaryDirectory() as d:

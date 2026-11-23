@@ -29,7 +29,11 @@ A gVCF variant site (`A G,<NON_REF>`) is its real alleles: `<NON_REF>` beside an
 
 ### Records that name no allele
 
-A trailing empty ALT field (`G,`, `<DEL>,`) names no allele, as Ensembl VEP's `split` drops it. A record whose ALT column is `.` is dropped with no warning whatever INFO/SVTYPE says, and kept as a non-variant record under `--allow_non_variant`. A record whose every ALT is `*` (`N *`, `*,*`) names no allele whatever INFO/SVTYPE says. It gets no row in the default and tab outputs, its VCF line is carried without CSQ, and its JSON object holds the record's `id`, coordinates, `allele_string` (`N/*`) and `"most_severe_consequence":"?"`, as Ensembl VEP writes the record without `SVTYPE`.
+A trailing empty ALT field (`G,`, `<DEL>,`) names no allele, as Ensembl VEP's `split` drops it. A record whose ALT column is `.` is dropped whatever INFO/SVTYPE says, and kept as a non-variant record under `--allow_non_variant`. A record whose every ALT is `*` (`N *`, `*,*`) names no allele whatever INFO/SVTYPE says. It gets no row in the default and tab outputs, its VCF line is carried without CSQ, and its JSON object holds the record's `id`, coordinates, `allele_string` (`N/*`) and `"most_severe_consequence":"?"`, as Ensembl VEP writes the record without `SVTYPE`.
+
+| Record | vep-rs | Ensembl VEP |
+| --- | --- | --- |
+| ALT `.` under a true INFO/SVTYPE | no allele: dropped, or a non-variant record under `--allow_non_variant`; either way one warning names the record's line | a structural variant, annotated from INFO alone with or without `--allow_non_variant` ([Defect J](../divergences/defect-j.md)) |
 
 ## Spans
 
@@ -55,7 +59,7 @@ A multi-allelic record is one variant, as in Ensembl VEP without `--minimal`: no
 
 Under `--minimal` every bi-allelic sequence record is trimmed from both ends and marked `MINIMISED`, as `minimise_alleles` trims it (`Parser.pm` lines 964-1019). A multi-allelic record one of whose alleles trims is split as `split_variants` splits it (`InputBuffer.pm` lines 638-718). Each allele is annotated on its own trimmed span and numbered by its written position. A repeated ALT writes its own rows, and an allele equal to the reference once trimmed writes none.
 
-The rows of a split record are rejoined as Ensembl VEP rejoins them (`OutputFactory.pm` lines 2272-2354). Location and the JSON `start` and `end` keep the record's span, `UPLOADED_ALLELE` prints the record's chopped string and `REF_ALLELE` the first allele's trimmed reference. The rows sort by allele: a later allele's rows are keyed by its trimmed string, `_` and the feature's key ([Row order](vep-and-tab.md#row-order)). An allele whose string sorts before the letters of a stable id (`-/A`, `A/G`) comes ahead of the first allele's transcript and regulatory rows. One opening with `-` comes ahead of the first allele's motif rows too, whose key is the motif's database id.
+The rows of a split record are rejoined as Ensembl VEP rejoins them (`OutputFactory.pm` lines 2281-2363). Location and the JSON `start` and `end` keep the record's span, `UPLOADED_ALLELE` prints the record's chopped string and `REF_ALLELE` the first allele's trimmed reference. The rows sort by allele: a later allele's rows are keyed by its trimmed string, `_` and the feature's key ([Row order](vep-and-tab.md#row-order)). An allele whose string sorts before the letters of a stable id (`-/A`, `A/G`) comes ahead of the first allele's transcript and regulatory rows. One opening with `-` comes ahead of the first allele's motif rows too, whose key is the motif's database id.
 
 A record none of whose alleles trims is annotated as it stands.
 
@@ -63,7 +67,7 @@ A record none of whose alleles trims is annotated as it stands.
 
 A record with more than one ALT and a symbolic allele among them has one class for the whole record, read from its ALTs joined by `/` as Ensembl VEP 116 reads them. Identical symbolic ALTs collapse to their type: `<INS>,<INS>` is an `insertion`, `<DEL>,<DEL>` a `deletion`. A DEL beside a DUP in either order, `<DEL>,<DUP:TANDEM>` included, is a `copy_number_variation`, and so is `<CN0>,<CN2>`. A sequence ALT beside a symbolic one (`G,<INV>` with `SVTYPE=DEL`) takes the type INFO/SVTYPE names.
 
-Every ALT then gets its own row for each transcript, labelled with the class term as its Allele. So the rows of one transcript repeat per ALT and differ only in `ALLELE_NUM`, which numbers the parts of Ensembl VEP's allele string from 1. A breakpoint record's reference base is part 1, so a bare `<BND>` prints 2. A record with parsed breakends prints 0 for its own breakend and numbers its mates from 1. A list Ensembl VEP has no type for (`<INS>,<DEL>`, `<INV>,<DUP>`) keeps one row per ALT under each ALT's own class and the unsupported-type treatment of the [next section](#skipped-records).
+Every ALT gets its own row for each transcript, its Allele the class term. One transcript's rows differ only in `ALLELE_NUM`, which numbers the parts of Ensembl VEP's allele string from 1, and, for a [stated `<CNV:TR>` length](../divergences/cnv-tr-symbolic-loss-named-a-gain.md), in Consequence and IMPACT. A breakpoint record's reference base is part 1, so a bare `<BND>` prints 2. A record with parsed breakends prints 0 for its own breakend and numbers its mates from 1. A list Ensembl VEP has no type for (`<INS>,<DEL>`, `<INV>,<DUP>`) keeps one row per ALT under each ALT's own class and the unsupported-type treatment of the [next section](#skipped-records).
 
 A `*` or `.` beside another ALT under a true INFO/SVTYPE is a part like any other. It writes its own row of the record's class, numbered at its written place, as Ensembl VEP writes it. So `C G,*` and `C G,.` with `SVTYPE=DEL` each write two deletion rows per transcript, `ALLELE_NUM` 1 and 2.
 
@@ -125,9 +129,9 @@ Its [How to read the counts](../intended-divergences.md#how-to-read-the-counts)
 defines the terms.
 
 The class carries its tier under that page's rule: tier 1 is a shape the
-chromosome 21 population cuts carry with no flag, tier 2 one that needs a flag
+chromosome 21 cuts carry with no flag, tier 2 one that needs a flag
 or plugin on ordinary data, tier 3 one ordinary data does not carry. The counts are
-over the cuts' 15,646,481 records, the 111 golden corpora and their 392 flag
+over the cuts' 15,646,481 records, the 152 golden corpora and their 511 flag
 sets. A cut is the chromosome 21 part of a public population dataset, a golden
 corpus is a test input kept in the repository with Ensembl VEP's output for it,
 and a flag set is one set of options a corpus is run with.
@@ -150,11 +154,19 @@ exon the variant overlaps, which its `max_overlap` parameter tests. The uORF
 effects the row then reports describe a change no allele of the record makes.
 
 **What vep-rs does instead.** vep-rs annotates a structural allele from what
-its record states. A symbolic deletion whose stated span lies inside one exon of
-the 5' UTR is the sequence deletion of that span. The plugin's analyses read the
-number of removed bases and the reference UTR, never a letter of the deleted
-allele, so the row carries the two fields the same deletion gets when its record
-spells the bases out.
+its record states:
+
+| Allele | What vep-rs annotates |
+| --- | --- |
+| a symbolic deletion whose stated span lies inside one exon of the 5' UTR | the sequence deletion of that span |
+| the loss alternate (`<DEL>`, `<CN0>`, `<CN=0>`) of a record with several alternates that writes `END`, its span inside one exon of the 5' UTR | the deletion of the record's span |
+| an inversion that states one place inside one exon of the 5' UTR | its span replaced by its reverse complement; a span equal to its own reverse complement reports nothing |
+| a plain insertion, `<INS>`, that states its length at one point | the frameshift that length decides |
+| every other structural allele | `-` in both fields |
+
+The plugin's analyses read the number of removed bases and the reference UTR,
+never a letter of the deleted allele, so a deletion's row carries the two fields
+the same deletion gets when its record spells the bases out.
 
 A plain insertion, `<INS>`, states a length and no bases. Where the length is
 no multiple of three and the point lies inside a uORF or an overlapping ORF, the
@@ -190,12 +202,14 @@ for a gained start codon. It reports
 when several find an effect. It writes the annotation's `key=value` pairs in
 [hash order](../divergences/utrannotator-annotation-pair-order.md).
 
-vep-rs leaves `-` in both fields where the record states neither one deletion
-of UTR bases nor one such insertion. A deletion that ends outside the 5' UTR,
-or in another of its exons, removes bases the spliced UTR does not hold. A
-record marked `IMPRECISE`, or with `CIPOS` or `CIEND` other than `0,0`, admits
-other places, at which another analysis can fire. A record with several
-alternates states more than one allele, and vep-rs annotates none of them.
+vep-rs leaves `-` in both fields where the record states no change of the
+table above. A
+deletion or an inversion that ends outside the 5' UTR, or in another of its
+exons, changes bases the spliced UTR does not hold. A record marked
+`IMPRECISE`, or with `CIPOS` or `CIEND` other than `0,0`, admits other places,
+at which another analysis can fire. In a record with several alternates vep-rs
+takes the loss alternate's span from `END` alone, never from a list of
+lengths, whose span is the first alternate's. Every other alternate keeps `-`.
 
 A mobile element's insertion keeps `-`: its stated length need not count the
 target-site duplication the element brings. An insertion under any other text,
@@ -207,10 +221,10 @@ shift.
 
 vep-rs analyses no duplication. A plain duplication's record does not say where
 the copy lies. A tandem duplication's record does, and its row keeps `-` all
-the same. Nor does it analyse an inversion, which removes no base.
+the same.
 
 **Where it is in Ensembl VEP's source** (`VEP_plugins` at release/116,
-`ensembl-vep` at release/116.2, `ensembl-variation` at release/116):
+`ensembl-vep` at release/116.3, `ensembl-variation` at release/116):
 
 - `UTRAnnotator.pm`, lines 80-82, `variant_feature_types`: structural variants
   are accepted; lines 151-153, `run`: `$ref` is the first allele of the allele
@@ -225,10 +239,11 @@ the same. Nor does it analyse an inversion, which removes no base.
   923, `uFrameshift`: the length difference, five, decides the frame.
 
 **What correcting it would change.** A structural deletion inside one exon of
-the 5' UTR would get the uORF effect of the span its record states, as vep-rs
-writes it. A plain insertion would get at most the frameshift its length
-decides. Every other structural allele would get none, and the five-base
-reading would vanish.
+the 5' UTR, a loss alternate among several included, would get the uORF effect
+of the span its record states, as vep-rs writes it, and an inversion that of
+its reverse complement. A plain insertion
+would get at most the frameshift its length decides. Every other structural
+allele would get none, and the five-base reading would vanish.
 
 **The class it produces.** `utrannotator_structural_allele_text`: a
 `5UTR_consequence` or `5UTR_annotation` (JSON `5utr_consequence`,
@@ -239,26 +254,33 @@ a structural record's class is named by but a breakpoint's, `Alu_insertion` or
 the bases removed, twelve for `<INS:ME:ALU>`, and a record with two symbolic
 alternates is read by its first text on both of its rows.
 
-The format comparator's rule (`scripts/concordance/compare_vep_formats.py`,
+The format comparator's rule (`tools/vep-formats-compare`,
 `structural_allele_text_row`) sets both fields aside on such a row where
 Ensembl VEP's `5UTR_consequence` is one of the plugin's five terms and vep-rs's
 row fills neither field. The plugin class table
 (`scripts/concordance/plugin_class_table.tsv`) declares the class, so
-`score_plugin_tuples.py` sets the same rows aside. Each row is judged against one
-row of vep-rs under the same Location, `Allele` and Feature, so the two rows of
-a record with two alternates are set aside one by one.
+`vep-plugin-pairs score` sets the same rows aside. Each row is judged against one
+row of vep-rs under the same Location, `Allele` and Feature. Rows that share
+all three are paired in file order, and both engines write a record's rows in
+the order of its alternates, so each of the two rows of a record with two
+alternates meets the row of its own alternate.
 
-Where vep-rs fills the two fields, two more rules read the row's own columns in
-the default and tab formats. `structural_deletion_span_row` takes a deletion's
-class word whose Location spans the distance between the row's two cDNA
-positions and whose Consequence names `5_prime_UTR_variant` beside, at most,
-`feature_truncation` and `NMD_transcript_variant`. vep-rs's term is one a
-deletion can fire: any but the gained stop, and the frameshift only on a span
-that is no multiple of three. `structural_insertion_length_row` takes the
-`Allele` `insertion` whose Consequence names `5_prime_UTR_variant` and whose
-Location's span is no multiple of three, with the frameshift as vep-rs's term
-and, in each effect, the six keys read from the reference UTR, with or without
-`alt_type=uORF`, and no `alt_type_length`.
+Where vep-rs fills the two fields, four more rules read the row's own columns
+in the default and tab formats:
+
+| Row's `Allele` | The row's own columns | vep-rs's term, where Ensembl VEP's is one of the five or both its fields are empty | The record's alternates, where the comparison is handed the record |
+| --- | --- | --- | --- |
+| a deletion's class word (`structural_deletion_span_row`) | the Location spans the distance between the row's two cDNA positions; the Consequence names `5_prime_UTR_variant` beside, at most, `feature_truncation` and `NMD_transcript_variant` | one a deletion can fire: any but the gained stop, and the frameshift only on a span that is no multiple of three | not read |
+| `copy_number_variation` | the Location spans that distance; the Consequence names `5_prime_UTR_variant` beside nothing but `NMD_transcript_variant` | one a deletion can fire, as on a deletion's row | two or more, the row's own with the text `<DEL>`, `<CN0>` or `<CN=0>` |
+| `inversion` | the Location spans that distance; the Consequence names `5_prime_UTR_variant` beside nothing but `NMD_transcript_variant` | the gained start, the lost start, the gained stop or the lost stop; the frameshift is refused | `<INV>` alone |
+| `insertion` (`structural_insertion_length_row`) | the Location's span is no multiple of three; the Consequence names `5_prime_UTR_variant` | the frameshift, each effect holding the six keys read from the reference UTR, with or without `alt_type=uORF`, and no `alt_type_length` | not read |
+
+The comparison is handed a row's record, the input line of `--input`, when it
+also names a class that reads records, such as
+`utrannotator_gained_start_window`. The row's own alternate is its place among
+Ensembl VEP's rows of the record on its transcript, which must be as many as
+the alternates. Without a record that states its alternates, the row's own
+columns decide.
 
 On such a row the class sets aside each of the two fields that differs from
 Ensembl VEP's or that Ensembl VEP leaves `-`. A difference UTRAnnotator's
@@ -268,7 +290,7 @@ that class.
 The class takes nothing else. A sequence allele's row, a row whose `Allele` is
 a breakend's own string or a word outside those terms and a difference in the
 three `Existing_` counts each stay a difference. So does a row vep-rs fills
-outside the two rules, and any filled row of the VCF or JSON format, which
+outside those rules, and any filled row of the VCF or JSON format, which
 names no Location.
 
 A `chromosome_breakpoint` row stays a difference too. For a breakpoint record
@@ -281,15 +303,15 @@ cases apart, so the class takes neither. The
 substitutions, insertions and deletions alone, so no row of their four
 comparison cases is set aside.
 
-**How often the shape occurs.** Tier 2: 756 of the population cuts' records (48
+**How often the shape occurs.** Tier 2: 756 of the cuts' records (48
 per million) carry a symbolic allele; the rows differ where it falls in a uORF
-of a 5' UTR. 28 corpora carry the shape and 4 flag sets run the plugin.
+of a 5' UTR. 29 corpora carry the shape and 4 flag sets run the plugin.
 
 ### A 40-base `<DEL>` in a 5' UTR
 
 **In short.** The record `21 10524588 . N <DEL> . . END=10524628` deletes 40
 bases inside one exon of the 5' UTR of `ENST00000427445`, from three bases past
-the `ATG` of a uORF. Ensembl VEP 116.2 removes five bases there, the length of
+the `ATG` of a uORF. Ensembl VEP 116.3 removes five bases there, the length of
 the text `<DEL>`, finds the uORF's frame shifted by two and writes
 `5UTR_consequence=5_prime_UTR_uORF_frameshift_variant;5UTR_annotation=alt_type_length=39:KozakContext=AGAATGT:KozakStrength=Moderate:ref_type_length=51:ref_type=uORF:alt_type=uORF:Evidence=False:ref_StartDistanceToCDS=207`.
 vep-rs removes the 40 bases, finds the frame shifted by one and writes the same
@@ -308,12 +330,22 @@ five-base deletion at the same start, `GGACCG>G`, gives Ensembl VEP the
 `5UTR_annotation` it writes for the symbolic record on every transcript.
 
 A constructed record, `21 10524588 . N <INS> . . END=10524588;SVLEN=4`, inserts
-four unstated bases at the same place. Ensembl VEP 116.2 writes for it, on all
+four unstated bases at the same place. Ensembl VEP 116.3 writes for it, on all
 nine rows, the five plugin fields it writes for the `<DEL>` record. vep-rs
 writes the frameshift with
 `5UTR_annotation=Evidence=False:KozakContext=AGAATGT:KozakStrength=Moderate:alt_type=uORF:ref_StartDistanceToCDS=207:ref_type=uORF:ref_type_length=51`
 on `ENST00000427445`. `alt_type=uORF` stands because a stop codon further on
 ends the shifted frame whatever is inserted.
+
+### An inverted start codon, and a loss beside a gain
+
+Two constructed records, one for each:
+
+| Constructed record | What it states | Ensembl VEP 116.3, under `PERL_HASH_SEED=0` with `PERL_PERTURB_KEYS=0` | vep-rs |
+| --- | --- | --- | --- |
+| `21 14210904 utr_inv_start_codon N <INV> . . SVTYPE=INV;END=14210907;SVLEN=3`, on `ENST00000400211`, one of six transcripts whose rows differ the same way | The `ATG` 48 bases from the cap of this reverse-strand transcript becomes `CAT`: `CCTCAATGAGTT` becomes `CCTCACATAGTT`. The `TAG` that opens there, 60 bases before the coding sequence, ends in frame the ORF that begins 87 bases before it. `21 14210905 CAT ATG`, the same change with explicit alleles, gets vep-rs's pairs from Ensembl VEP. | `5UTR_annotation=alt_type_length=48:KozakContext=GTGATGA:KozakStrength=Moderate:ref_type_length=1215:ref_type=InFrame_oORF:alt_type=uORF:Evidence=False:ref_StartDistanceToCDS=87;5UTR_consequence=5_prime_UTR_uORF_frameshift_variant` | `5UTR_annotation=Evidence=False:KozakContext=GTGATGA:KozakStrength=Moderate:newSTOPDistanceToCDS=60:ref_StartDistanceToCDS=87:ref_type=InFrame_oORF;5UTR_consequence=5_prime_UTR_uORF_stop_codon_gain_variant` |
+| `21 10524588 utr_loss_beside_gain N <CN0>,<CN2> . . SVTYPE=CNV;END=10524590`, on `ENST00000427445`, one of nine such transcripts: the loss alternate's row | `END` states a two-base span, where Ensembl VEP removes five bases, the length of the text `<CN0>`. `21 10524588 GGA G`, the same deletion with explicit alleles, gets vep-rs's pairs from Ensembl VEP. | `5UTR_annotation=alt_type_length=39:KozakContext=AGAATGT:KozakStrength=Moderate:ref_type_length=51:ref_type=uORF:alt_type=uORF:Evidence=False:ref_StartDistanceToCDS=207;5UTR_consequence=5_prime_UTR_uORF_frameshift_variant` | `5UTR_annotation=Evidence=False:KozakContext=AGAATGT:KozakStrength=Moderate:alt_type=uORF:alt_type_length=42:ref_StartDistanceToCDS=207:ref_type=uORF:ref_type_length=51;5UTR_consequence=5_prime_UTR_uORF_frameshift_variant` |
+| the same record, the other alternate's row | no sequence | the same two fields | `5UTR_annotation=-;5UTR_consequence=-` |
 
 ## Where next
 

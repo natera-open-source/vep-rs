@@ -1,7 +1,7 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "perl_cache": "none: variant_recoder reads the Ensembl database (--db_version 116)",
  "fasta": "none on the Ensembl VEP side (the slice sequence comes from the database); reference.fa.gz on the vep-rs side",
@@ -10,49 +10,49 @@
  "vep_rs_command": "vep recode -i <input> --json_cache json_cache --fasta reference.fa.gz --synonyms chr_synonyms.txt <the case's args>",
  "tool_cases_generator": "scripts/concordance/generate_reference_output.sh --corpus tests/golden/116/GRCh38-recoder --tool variant_recoder; every case connects variant_recoder to the public Ensembl database (its perl_args, --db_version 116), the mode the tool runs in by construction",
  "reference": "reference.fa.gz is GRCh38 chromosome 21 (Ensembl release 116 primary assembly) with every base outside 2,000 bases of a record of variants.recode.vcf or of the GRCh38-input-id corpus's variants.vcf masked to N, bgzip-compressed with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form",
- "chr_synonyms": "chr_synonyms.txt: the six lines of the Ensembl GRCh38 cache's chr_synonyms.txt that link chromosome 21's names (21, chr21, NC_000021.9, CM000683.2) to one another, copied whole; the GRCh38-input-id cache carries no synonyms file, and the accession is what HGVSg, SPDI and the GA4GH VRS allele are named by",
+ "chr_synonyms": "chr_synonyms.txt: the six lines of the Ensembl GRCh38 cache's chr_synonyms.txt that link chromosome 21's names (21, chr21, NC_000021.9, CM000683.2) to one another, copied whole; json_cache holds no chr_synonyms.txt of its own (the one the prune command writes beside the shards is left out), so the cases of crates/vep-cli/tests/recode_tool.rs that pass no --synonyms read a cache without one, and the accession is what HGVSg, SPDI and the GA4GH VRS allele are named by",
  "cache": "json_cache: the GRCh38-input-id corpus's transcripts, pruned to the records of both corpora, with a variation slice of the Ensembl release-116 GRCh38 cache",
  "sha256": {
-  "recoder/vcf.json": "f6db52458419b313b36fc8aef563b311f15f4ca3eb00d9dad24e18c1586343c0",
-  "recoder/spdi.json": "d7000e14311104166655e93e50d63949a45d141fdf8743066953e7fba64f8b88",
-  "recoder/id.json": "15cc1999b307f8bff40663bdbb3cb4e57bd816d45820a2e758938889b1fde1ee",
-  "recoder/hgvs.json": "55cf170db842c8bead6e4abcb38f080ce1b2dbad1457c0d3880a1250fed2507a"
+  "recoder/vcf.json": "3476fc6669c3b971c33b3769e7ecafccdf4a35b12577a73cac5be7f41e77c6ec",
+  "recoder/spdi.json": "c85766c2d96a2d7a2f20ef6d289d2b64929717446c3bb02d914ed5ea1145f53b",
+  "recoder/id.json": "b2bf72e29bee48879b4388c7ae8e5d1ddb8cf51d13b78b0cf4f79f93b373d6cf",
+  "recoder/hgvs.json": "c9672b2ed9118b8029683887bcf81a1080dec43734b8fc5928a3646e03ad53fd"
  },
  "tool": "variant_recoder",
- "tool_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "tool_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "tool_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "tool_image_tag": "ensemblorg/ensembl-vep:release_116.3",
  "tool_cases": {
   "vcf": {
    "input": "variants.recode.vcf",
    "command": "variant_recoder -i variants.recode.vcf --vcf_string --mane_select --ga4gh_vrs --pretty --db_version 116",
    "expected": "expected/recoder/vcf.json",
-   "sha256": "f6db52458419b313b36fc8aef563b311f15f4ca3eb00d9dad24e18c1586343c0",
+   "sha256": "3476fc6669c3b971c33b3769e7ecafccdf4a35b12577a73cac5be7f41e77c6ec",
    "data_lines": 1167,
-   "wall_seconds": 1584
+   "wall_seconds": 1619
   },
   "spdi": {
    "input": "variants.spdi.txt",
    "command": "variant_recoder -i variants.spdi.txt --vcf_string --var_synonyms --mane_select --ga4gh_vrs --pretty --db_version 116",
    "expected": "expected/recoder/spdi.json",
-   "sha256": "d7000e14311104166655e93e50d63949a45d141fdf8743066953e7fba64f8b88",
+   "sha256": "c85766c2d96a2d7a2f20ef6d289d2b64929717446c3bb02d914ed5ea1145f53b",
    "data_lines": 1069,
-   "wall_seconds": 1481
+   "wall_seconds": 1534
   },
   "id": {
    "input": "variants.id.txt",
    "command": "variant_recoder -i variants.id.txt --vcf_string --var_synonyms --mane_select --ga4gh_vrs --pretty --db_version 116",
    "expected": "expected/recoder/id.json",
-   "sha256": "15cc1999b307f8bff40663bdbb3cb4e57bd816d45820a2e758938889b1fde1ee",
-   "data_lines": 1214,
-   "wall_seconds": 1585
+   "sha256": "b2bf72e29bee48879b4388c7ae8e5d1ddb8cf51d13b78b0cf4f79f93b373d6cf",
+   "data_lines": 1213,
+   "wall_seconds": 1653
   },
   "hgvs": {
    "input": "variants.hgvs.txt",
    "command": "variant_recoder -i variants.hgvs.txt --vcf_string --var_synonyms --mane_select --ga4gh_vrs --pretty --db_version 116",
    "expected": "expected/recoder/hgvs.json",
-   "sha256": "55cf170db842c8bead6e4abcb38f080ce1b2dbad1457c0d3880a1250fed2507a",
+   "sha256": "c9672b2ed9118b8029683887bcf81a1080dec43734b8fc5928a3646e03ad53fd",
    "data_lines": 1961,
-   "wall_seconds": 1932
+   "wall_seconds": 1982
   }
  },
  "variation_slice": {
@@ -71,5 +71,5 @@
    "all_vars.gz.csi": "22ef4b0715428c9cde64e7ceb64f60802aac7618a26a246252ccc5e22d7bc6ed"
   }
  },
- "comparison": "scripts/concordance/compare_vep_formats.py --format recoder --masks refseq_transcript_entries,lrg_transcript_entries,archive_dbsnp_synonyms,identifier_indel_transcript_notations; the last two name the Archive dbSNP synonyms the cache's column never holds and the transcript notations variant_recoder leaves unshifted for an identifier input's insertions and deletions"
+ "comparison": "tools/vep-formats-compare --format recoder --masks refseq_transcript_entries,lrg_transcript_entries,archive_dbsnp_synonyms,identifier_indel_transcript_notations; the last two name the Archive dbSNP synonyms the cache's column never holds and the transcript notations variant_recoder leaves unshifted for an identifier input's insertions and deletions"
 }

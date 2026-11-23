@@ -1,17 +1,17 @@
 # The inserted bases of a shifted insertion's HGVSc on a RefSeq model edited to the genome
 
-**The defect in one sentence.** Under `--hgvs`, Ensembl VEP 116.2 describes an insertion on a transcript model carrying an `_rna_edit` attribute (`BAM_EDIT=OK`) at its 3'-shifted coordinates but spells the inserted bases as the record wrote them, rotating them only on a coding row under `--shift_3prime 1`. `21 35467700 T TGA` on `NM_006933.7` is written `c.204_205insGA`, where the shifted insertion is `c.204_205insAG`, the notation vep-rs writes.
+**The defect in one sentence.** Under `--hgvs`, Ensembl VEP 116.3 describes an insertion on a transcript model carrying an `_rna_edit` attribute (`BAM_EDIT=OK`) at its 3'-shifted coordinates but spells the inserted bases as the record wrote them, rotating them only on a coding row under `--shift_3prime 1`. `21 35467700 T TGA` on `NM_006933.7` is written `c.204_205insGA`, where the shifted insertion is `c.204_205insAG`, the notation vep-rs writes.
 
 **Why this is a defect.** An insertion's notation names the two bases it falls between and the bases inserted there. The record inserts `GA` after c.203 of `CTGGC`, so the cDNA reads `CTG AG GC` under either description of it. Written as given it is `c.203_204insGA`; shifted one base 3', past the `G` at c.204 that it repeats, it is `c.204_205insAG`, that `G` moved from the front of the inserted sequence to its back. `c.204_205insGA` reads `CTG GA GC`, a sequence the variant does not produce. The 3' rule moves the description and never the bases, and Ensembl VEP writes the rotated bases itself on an unedited model and, on an edited one, on a coding row under `--shift_3prime 1`.
 
 **What vep-rs does instead.** vep-rs spells a shifted insertion's bases as the shift rotates them on every model, with or without `--shift_3prime 1`, so an edited model's HGVSc reads as its unedited sibling's does.
 
-**Where it is in Ensembl VEP's source** (`ensembl-variation` at release/116, `ensembl-vep` at release/116.2):
+**Where it is in Ensembl VEP's source** (`ensembl-variation` at release/116, `ensembl-vep` at release/116.3):
 
 - `Bio/EnsEMBL/Variation/TranscriptVariationAllele.pm`, lines 1441-1444 and 1474-1483, `hgvs_transcript`: the 3' shift is computed, and `hgvs_variant_notation` receives the shift hash's `hgvs_allele_string`, the inserted bases rotated along the shift, with the shifted coordinates.
 - The same file, lines 1508-1513: on a transcript with an `_rna_edit` attribute the notation's reference and alternate alleles are overwritten with the allele objects' `feature_seq`, the alleles as the record wrote them, read on the transcript's strand.
 - The same file, lines 813-820 and 1330-1348, `codon` and `shift_feature_seqs`: `feature_seq` is rotated when the allele carries a shift hash as its codons are computed, which only a coding row does (line 815 returns before the rotation without a translation position). `TranscriptVariation.pm` line 134 attaches that hash under `--shift_3prime 1` alone (`Bio/EnsEMBL/VEP/AnnotationType/Transcript.pm` line 162), and the hash `hgvs_transcript` builds for itself is deleted at line 1449 before the alleles are read.
-- The same file, lines 1774-1778, `hgvs_protein`: the other caller of `shift_feature_seqs`, run after `hgvs_transcript` has read the alleles (`Bio/EnsEMBL/VEP/OutputFactory.pm` lines 1751 and 1760).
+- The same file, lines 1774-1778, `hgvs_protein`: the other caller of `shift_feature_seqs`, run after `hgvs_transcript` has read the alleles (`Bio/EnsEMBL/VEP/OutputFactory.pm` lines 1760 and 1769).
 
 **What correcting it would change.** The notation would carry the rotated bases `hgvs_variant_notation` was given, as it does on an unedited model, and `c.204_205insGA` would read `c.204_205insAG`.
 
@@ -63,13 +63,13 @@ On a non-coding row of the same model both engines print the `Allele` column as 
 
 `feature_seq` is the allele as the record wrote it, read on the transcript's strand. It is rotated by `shift_feature_seqs`, which `codon` runs when the allele carries a shift hash and the row has a translation position: a coding row under `--shift_3prime 1`, where the hash is attached as the transcript variation is built. `hgvs_protein` runs the rotation too, but after `hgvs_transcript` has read the alleles. Without the flag `hgvs_transcript` builds its own hash for the shift and deletes it before the alleles are read, so the overwrite restores the unrotated `GA` at the shifted coordinates; on a non-coding row it does so under the flag as well.
 
-Source (`ensembl-variation` at release/116, `ensembl-vep` at release/116.2):
+Source (`ensembl-variation` at release/116, `ensembl-vep` at release/116.3):
 
 - `Bio/EnsEMBL/Variation/TranscriptVariationAllele.pm`, lines 1441-1449: `_return_3prime(1)`, the rotated `hgvs_allele_string` taken for an insertion, and the hash deleted when `hgvs_transcript` built it.
 - The same file, lines 1474-1483: `hgvs_variant_notation` on the rotated allele at the shifted coordinates.
 - The same file, lines 1508-1513: the alleles overwritten from `feature_seq` on a model with an `_rna_edit` attribute.
 - The same file, lines 798-820 and 1330-1348: `codon` runs `shift_feature_seqs` when the allele carries a shift hash and the row has a translation position (line 815), rotating `feature_seq` by the shift. `Bio/EnsEMBL/Variation/TranscriptVariation.pm`, lines 132-135, attaches the hash under `--shift_3prime 1`, which `Bio/EnsEMBL/VEP/AnnotationType/Transcript.pm`, line 162, passes as `-no_shift`.
-- The same file, lines 1774-1778: `hgvs_protein` runs `shift_feature_seqs` as well, after `hgvs_transcript` has read the alleles (`Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 1751 and 1760).
+- The same file, lines 1774-1778: `hgvs_protein` runs `shift_feature_seqs` as well, after `hgvs_transcript` has read the alleles (`Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 1760 and 1769).
 - `Bio/EnsEMBL/Variation/VariationFeatureOverlapAllele.pm`, lines 246-264, `feature_seq`: the stored allele, complemented onto the transcript's strand when the record's strand differs.
 
 ### 1.5 Why vep-rs's row is the correct one
@@ -82,11 +82,12 @@ The model's cDNA at c.202-c.206 is `CTGGC`, the genome's bases at `21:35467699-3
 printf '##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n' > ins.vcf
 printf '21\t35467700\tins_cds\tT\tTGA\t.\t.\t.\n' >> ins.vcf
 printf '21\t35471002\tutr3_ins\tT\tTGA\t.\t.\t.\n' >> ins.vcf
+printf '21\t16031362\tutr5_ins\tC\tCTC\t.\t.\t.\n' >> ins.vcf
 vep -i ins.vcf -o out.txt --offline --cache \
   --dir_cache tests/golden/116/GRCh37-refseq/cache_root --cache_version 116 \
   --species homo_sapiens --grch37 --refseq --hgvs \
   --fasta tests/golden/116/GRCh37-refseq/reference.fa.gz --force_overwrite --no_stats --quiet
-grep NM_006933.7 out.txt | grep -o 'HGVSc=[^;]*'
+grep -E 'NM_006933.7|NM_001395858.1' out.txt | grep -o 'HGVSc=[^;]*'
 ```
 
 | Run | Ensembl VEP | vep-rs |
@@ -95,11 +96,12 @@ grep NM_006933.7 out.txt | grep -o 'HGVSc=[^;]*'
 | `--refseq --hgvs --shift_3prime 1` | `c.204_205insAG` | `c.204_205insAG` |
 | `--hgvs` on `ENST00000608209`, either run | `c.204_205insAG` | `c.204_205insAG` |
 | `21 35471002 T TGA` (3' UTR), either run | `c.*1349_*1350insGA` | `c.*1349_*1350insAG` |
+| `21 16031362 C CTC` (5' UTR of `NM_001395858.1`, reverse strand), either run | `c.-57_-56insGA` | `c.-57_-56insAG` |
 
 The Ensembl rows come from the `GRCh37` golden corpus's cache (`tests/golden/116/GRCh37/json_cache`) with the same reference FASTA.
 
 ### 1.7 How the comparator treats this class
 
-The format comparator (`scripts/concordance/compare_vep_formats.py`) applies `refseq_edited_model_shifted_insertion_bases` when a comparison case names it in `masks`. A differing `HGVSc` (the JSON `hgvsc`) is accepted on an insertion's row carrying `BAM_EDIT=OK` whose `HGVS_OFFSET` is one non-zero integer on both sides. Both notations must be insertions of the row's transcript, in one numbering, at one coordinate pair. Ensembl VEP's bases must be the row's `Allele` read on the transcript's strand: as written where `STRAND` is 1, reverse-complemented where it is -1, either reading on a row without `STRAND`. vep-rs's bases must be those bases turned towards the transcript's 3' end, the first bases moved to the end, by the offset modulo their length.
+The format comparator (`tools/vep-formats-compare`) applies `refseq_edited_model_shifted_insertion_bases` when a comparison case names it in `masks`. A differing `HGVSc` (the JSON `hgvsc`) is accepted on an insertion's row carrying `BAM_EDIT=OK` whose `HGVS_OFFSET` is one non-zero integer on both sides. Both notations must be insertions of the row's transcript, in one numbering, at one coordinate pair. Ensembl VEP's bases must be the row's `Allele` read on the transcript's strand: as written where `STRAND` is 1, reverse-complemented where it is -1, either reading on a row without `STRAND`. vep-rs's bases must be those bases turned towards the transcript's 3' end, the first bases moved to the end, by the offset modulo their length.
 
 So `c.204_205insGA` against `c.204_205insAG` under `HGVS_OFFSET=1` compares equal, and other coordinates, other bases, a duplication, a longer insertion, a missing or differing offset, or the two sides reversed do not. Each accepted row is counted once in every format, under `--hgvs` alone and, on the non-coding rows that keep the written bases, under `--shift_3prime 1`. No committed record is an insertion the shift rotates on an edited model, so no comparison case or corpus manifest names the class.

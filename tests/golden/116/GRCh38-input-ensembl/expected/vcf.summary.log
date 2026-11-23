@@ -1,10 +1,10 @@
 [VEP run statistics]
-VEP version (API)	 116.2 (116)
+VEP version (API)	 116.3 (116)
 Annotation sources	Cache: [PATH]/116_GRCh38
 Species	homo_sapiens
 Command line options	vep --assembly GRCh38 --cache --cache_version 116 --database 0 --dir_cache [PATH]/cache --dir_plugins /plugins --force_overwrite --fork --format vcf --input_file [PATH]/input.vcf --mask_header_cache_path --offline --output_file [PATH]/vcf.vcf --quiet --stats_text --uploaded_allele --variant_class --vcf
-Start time	2026-10-28 17:24:01
-End time	2026-10-28 17:24:01
+Start time	2026-11-20 13:23:25
+End time	2026-11-20 13:23:25
 Run time	0 seconds
 Input file	/work/input.vcf
 Output file	/work/perl_out/vcf.vcf

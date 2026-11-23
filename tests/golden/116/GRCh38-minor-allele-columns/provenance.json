@@ -1,20 +1,20 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --check_existing --af_1kg [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "none on either side",
  "input": "variants.vcf: 43 chromosome 21 records, one exemplar per consequence combination that Ensembl VEP 116.2 wrote for a pool of candidate records over the CHODL, TMPRSS15 and JAM2 transcripts and their flanks, three non-coding genes and eight intergenic positions, plus two multi-allelic records; each record's position and alleles are a release-116 cache variant's, its identifier is . and no identifier of that cache is carried",
  "sha256": {
-  "default.txt": "b2536887861168c93c556098b801a34fe6679443216ee6d9f4a1cd9ab6eeed0b",
-  "tab.txt": "85c027aa069b0c31cf8ede3eb9076550e5d8613d76f7cce0b45da802497738b4",
-  "vcf.vcf": "5ddc229c4392c33a44112748711d5f15da9fb38a78992460c7b0026dcf2078ee",
-  "json.jsonl": "b9ea1826e72d7e96fead054cb5f8138dcae82e404820881bdd5b408774dd62d8"
+  "default.txt": "cc74795fe20d458c573a407b51e905609c0c776f4db8b3e1b3dd9fb9776f1aad",
+  "tab.txt": "2db3326dcd06a65572f66c897f6db5fea3d88b873d7f2c3cd2ea7b314aeff122",
+  "vcf.vcf": "78a1d8a43663920bc7ba55a4a1f66d8cae93aa35c35a774cd01ec863a3a99644",
+  "json.jsonl": "303a2047e454f0f6355448ead3ad78e79e5da60851fc50af89a6d0eda00efd95"
  },
  "variants_vcf_sha256": "5a55b9fdf4d253a1e8eece837587e183c34c77815f431783d720740adaccf71c",
- "generator": "scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite ma=<reference>=<candidates> --k 1 --seed 1 --multi-allelic-per-suite 2 --cache tests/golden/116/GRCh38-release116/json_cache --covers minor-allele-columns --matrix tests/parity/matrix.tsv --flag=--check_existing --flag=--af_1kg; scripts/golden/prune_json_cache.py --cache tests/golden/116/GRCh38-release116/json_cache --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <the release-116 GRCh38 cache's info.txt with variation_cols extended by the two columns> --cache-version 116 --variations <a directory holding the slice committed as json_cache/variations/21/all_vars.gz>; scripts/concordance/generate_reference_output.sh --corpus; scripts/golden/build_golden_corpus.py classify",
+ "generator": "tools/vep-golden-corpus select --release 116 --assembly GRCh38 --dataset ma=<reference>=<candidates> --k 1 --seed 1 --multi-allelic-per-dataset 2 --cache tests/golden/116/GRCh38-release116/json_cache --covers minor-allele-columns --matrix tests/parity/matrix.tsv --flag=--check_existing --flag=--af_1kg; scripts/golden/prune_json_cache.py --cache tests/golden/116/GRCh38-release116/json_cache --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <the release-116 GRCh38 cache's info.txt with variation_cols extended by the two columns> --cache-version 116 --variations <a directory holding the slice committed as json_cache/variations/21/all_vars.gz>; scripts/concordance/generate_reference_output.sh --corpus; tools/vep-golden-corpus classify",
  "pruned_cache": {
   "source": "tests/golden/116/GRCh38-release116/json_cache, cut to the transcripts within 5,000 bases of a record",
   "transcripts_per_chromosome": {

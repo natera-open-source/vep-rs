@@ -17,15 +17,15 @@ The reference peptide is the translation of that window. Every predicate that co
 - `Utils/VariationEffect.pm`, lines 1178 and 1185, `inframe_deletion`: the two ways the predicate accepts. Line 1178 accepts where the reference codons begin or end with the alternate codons. Line 1185 reads the two strings after the routine trims them, as section 1.5 shows on the worked row. It accepts where the alternate is empty and the length of the reference is a multiple of three.
 - `TranscriptVariationAllele.pm`, lines 1916 and 1926, `_get_hgvs_protein_format`: on a row that passes `stop_lost`, a notation of type `del` or `>` is written with a stop-lost extension.
 - `Utils/Constants.pm`, line 752, the definition of `stop_lost`: "A sequence variant where at least one base of the terminator codon (stop) is changed, resulting in an elongated transcript".
-- The entry [`refseq_edited_model_deleted_span_codons`](refseq-edited-model-deleted-span-codons.md) names the same two places, line 459 and the write over the coding span, for another shape: a deletion over the bases a model's alignment deleted. That entry covers the `Codons` cell alone.
+- The entry [`refseq_edited_model_deleted_span_codons`](refseq-edited-model-deleted-span-codons.md) names the same two places, line 459 and the write over the coding span, for another shape: a deletion over the bases a model's alignment deleted. That entry covers the `Codons` cell and, beside it, the `Amino_acids` cell and one pair of terms.
 
 **What correcting it would change.** This is shown in full on the worked row of section 1. Fed the model's own codon window, the same lines give the row vep-rs writes there. The reference peptide holds no stop, so there is no `stop_lost`. `inframe_deletion` stands in place of `protein_altering_variant`, and the protein notation is a plain deletion with no extension. For the coding terms alone, the check of section 2.1 gives the same result on eleven rows: fed the model's reference peptide, ports of the predicates return the coding terms vep-rs writes.
 
-**The class it produces.** None. In [the index](../intended-divergences.md) a class is the name a comparison counts an entry's rows under. This entry has no comparison rule, class or predicate, and no row is set aside. Nothing the comparisons read holds a row of the shape. The datasets behind the concordance figures run on Ensembl caches, which hold no model with an `_rna_edit` attribute, and the committed corpora hold no row of the shape. The fifteen rows of this page come from a pairing that none of these makes: genome-wide ClinVar under `--refseq`.
+**The class it produces.** `refseq_edited_model_intron_span_coding_reference`. In [the index](../intended-divergences.md) a class is the name a comparison counts an entry's rows under. The golden harness and the format comparator set the worked row of section 1 aside under it, in the corpus `GRCh38-refseq-intron-span`; section 1.7 gives the shape they read. The datasets behind the concordance figures run on Ensembl caches, which hold no model with an `_rna_edit` attribute, so their comparison has no rule for the shape and sets no row aside. The fifteen rows of this page come from a pairing those datasets do not make: genome-wide ClinVar under `--refseq`.
 
-**How often the shape occurs.** Tier 3 of [Intended divergences from Ensembl VEP](../intended-divergences.md): the data that page counts does not carry the shape. The shape is a record whose reference, as the engines parse it, has two or more bases, with both ends on coding bases of an edited model and one or more whole introns inside. A scan of genome-wide ClinVar against the whole RefSeq cache of each assembly finds fifteen rows of the shape, a row being one record on one model. There are 3 on GRCh38, from 3 records, and 12 on GRCh37, from 9 records. Section 2 lists them.
+**How often the shape occurs.** Tier 3 of [Intended divergences from Ensembl VEP](../intended-divergences.md): ordinary data, as that page defines it, does not carry the shape. The shape is a record whose reference, as the engines parse it, has two or more bases, with both ends on coding bases of an edited model and one or more whole introns inside. A scan of genome-wide ClinVar against the whole RefSeq cache of each assembly finds fifteen rows of the shape, a row being one record on one model. There are 3 on GRCh38, from 3 records, and 12 on GRCh37, from 9 records. Section 2 lists them.
 
-Of the 77,675 transcripts of the committed caches, 61, in 4 corpora, are coding models with an RNA edit and an intron between two bases of their coding sequence, the models that can carry the shape. That count is an upper bound on what can carry the shape, not a count of records that show it: no committed record does, which is why the entry is tier 3.
+Of the 116,165 transcripts of the committed caches, 65, in 7 corpora, are coding models with an RNA edit and an intron between two bases of their coding sequence, the models that can carry the shape. That count is an upper bound on what can carry the shape, not a count of records that show it. One committed record shows it: the worked record of section 1, which the corpus `GRCh38-refseq-intron-span` holds for this entry. The cuts that page counts hold none, and a corpus record of a kind the cuts can carry is not ordinary data there, which is why the entry is tier 3.
 
 The reference halves of `Codons` and `Amino_acids` differ between the engines on all fifteen. The coding terms of `Consequence`, the impact and the protein notation are equal on ten rows. On the other five a term or the notation differs: the term on 3 of them, the protein notation on all 5 and the impact on none.
 
@@ -38,7 +38,7 @@ The reference halves of `Codons` and `Amino_acids` differ between the engines on
 
 ## 1. ClinVar record 2530348: 693 bases deleted across intron 1 of `NM_000555.3`
 
-**In short.** ClinVar record 2530348 on GRCh38 deletes the 693 bases `X:111410073-111410765`: the last 12 bases of exon 1 of `NM_000555.3`, the 333 bases of intron 1 and the first 348 bases of exon 2. On the model that is 360 coding bases, 120 codons in frame, and both engines place the deletion at residues 72 to 191. vep-rs writes `inframe_deletion` and a plain deletion in the protein notation. Ensembl VEP 116.2 translates intron bases inside its reference half and finds two stops there. It writes `stop_lost,protein_altering_variant` and adds a stop-lost extension to the notation. The model's stop codon is codon 442, and the deletion touches no base of it.
+**In short.** ClinVar record 2530348 on GRCh38 deletes the 693 bases `X:111410073-111410765`: the last 12 bases of exon 1 of `NM_000555.3`, the 333 bases of intron 1 and the first 348 bases of exon 2. On the model that is 360 coding bases, 120 codons in frame, and both engines place the deletion at residues 72 to 191. vep-rs writes `inframe_deletion` and a plain deletion in the protein notation. Ensembl VEP 116.3 translates intron bases inside its reference half and finds two stops there. It writes `stop_lost,protein_altering_variant` and adds a stop-lost extension to the notation. The model's stop codon is codon 442, and the deletion touches no base of it.
 
 ### 1.1 What a reader needs to know first
 
@@ -66,7 +66,7 @@ Both engines run `--refseq --hgvs` on the RefSeq cache of release 116. GRCh37 ho
 
 The table gives the row of `NM_000555.3` cell by cell. The halves of `Codons` and `Amino_acids` are given by their lengths and places.
 
-| Cell | Ensembl VEP 116.2 | vep-rs |
+| Cell | Ensembl VEP 116.3 | vep-rs |
 | --- | --- | --- |
 | `cDNA_position`, `CDS_position`, `Protein_position` | 382-741, 210-569, 70-190 | the same |
 | `USED_REF` | 693 bases | 693 bases |
@@ -117,13 +117,22 @@ vep -i record.txt -o out.txt --offline --format region \
   --refseq --hgvs
 ```
 
-`<json_cache>` is the conversion of the RefSeq GRCh38 cache of release 116. The reproduction copies the one region file of that cache that holds the model and converts it in the Ensembl VEP image. The reproduction lists `--refseq`, `--hgvs` and the FASTA file as its flags and gives the format, the cache, the species and the assembly as fields of their own. The runner that reads it passes `--offline`. Ensembl VEP 116.2 takes the same flags with the cache options of [Reproducing these examples](reproducing.md) and its `homo_sapiens_refseq` cache.
+`<json_cache>` is the conversion of the RefSeq GRCh38 cache of release 116. The reproduction copies the one region file of that cache that holds the model and converts it with `tools/vep-storable-to-json`. The reproduction lists `--refseq`, `--hgvs` and the FASTA file as its flags and gives the format, the cache, the species and the assembly as fields of their own. The runner that reads it passes `--offline`. Ensembl VEP 116.3 takes the same flags with the cache options of [Reproducing these examples](reproducing.md) and its `homo_sapiens_refseq` cache.
 
-On the row of `NM_000555.3` the reproduction compares `Consequence`, the three position cells and `HGVSp`, and it expects from each engine the values of section 1.3. The notation it expects from vep-rs is `NP_000546.2:p.His72_Ser191del`. From Ensembl VEP 116.2 it expects the same notation followed by `extTer?`. It does not compare the reference halves of `Codons` and `Amino_acids`.
+On the row of `NM_000555.3` the reproduction compares `Consequence`, the three position cells, `Amino_acids`, `Codons` and `HGVSp`, and it expects from each engine the values of section 1.3. The notation it expects from vep-rs is `NP_000546.2:p.His72_Ser191del`. From Ensembl VEP 116.3 it expects the same notation followed by `extTer?`. It holds each engine's `Amino_acids` and `Codons` cells whole.
 
 ### 1.7 How the comparator treats this row
 
-Nothing is set aside: no comparison tool has a rule, a class or a predicate for the shape. Neither the datasets behind the concordance figures nor the committed corpora hold a row of it. The reproduction of section 1.6 holds both engines' rows and shows that the difference is present. It sets nothing aside either.
+The corpus `GRCh38-refseq-intron-span` holds this record twice, as a VCF line and as the region line of section 1.6, with Ensembl VEP's output of each run. Its manifest names the class and documents the row of `NM_000555.3` under it, with the coding terms vep-rs writes. The golden harness holds vep-rs to those terms.
+
+The format comparator's built-in class of the same name reads the shape from the row alone. The row is a `Transcript` row that carries `BAM_EDIT=OK` in both engines, the same `CDS_position` range and the same `USED_REF`, which has more bases than the range. Both engines write `splice_acceptor_variant`, `splice_donor_variant` and `intron_variant` on it. On such a row the class sets four cells aside and compares every other field:
+
+- `Consequence`, where Ensembl VEP alone writes `stop_lost` and `protein_altering_variant` and vep-rs alone writes `inframe_deletion`.
+- `Codons`, where the alternate halves are equal, the reference halves have one length, and Ensembl VEP's upper-case bases spell, on the model's strand, the leading bases of `USED_REF` or of a `GIVEN_REF` of its length.
+- `Amino_acids`, where the alternate halves are equal and each engine's reference half is the translation of its own reference codons.
+- `HGVSp`, where Ensembl VEP's value is vep-rs's followed by `extTer?`.
+
+A protein notation that differs in another way stays a difference, as on the three rows of section 2.2 beyond record 2530348. The comparison behind the concordance figures has no rule for the shape, and its datasets hold no row of it. The reproduction of section 1.6 holds both engines' rows and sets nothing aside.
 
 ## 2. The fifteen rows of genome-wide ClinVar
 

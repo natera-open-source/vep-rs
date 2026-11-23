@@ -1,12 +1,12 @@
 # An HGVSc naming a change of a base to itself on an edited RefSeq model
 
-**The defect in one sentence.** On a RefSeq transcript model whose alignment to the genome substituted a base, Ensembl VEP 116.2 writes, under `--hgvs`, an HGVSc for an alternate allele equal to the model's own base at that position: `NR_048535.1:n.2023T>T`, a substitution of a base by itself. vep-rs writes no HGVSc for such an allele.
+**The defect in one sentence.** On a RefSeq transcript model whose alignment to the genome substituted a base, Ensembl VEP 116.3 writes, under `--hgvs`, an HGVSc for an alternate allele equal to the model's own base at that position: `NR_048535.1:n.2023T>T`, a substitution of a base by itself. vep-rs writes no HGVSc for such an allele.
 
 **Why this is a defect.** An HGVS description names a difference between a sequence and its reference. An allele equal to the reference is no difference: the nomenclature has no `T>T` form, and Ensembl VEP's own notation builder returns nothing when the two alleles it compares are equal. On an edited model the builder compares the alternate with the genome's base, which differs, and only afterwards are both alleles respelled against the model, where they agree. The row's other cells already say so: `USED_REF` is the allele itself.
 
 **What vep-rs does instead.** vep-rs compares the alternate allele with the reference allele the row was analysed against, the model's edited base when the transcript's reference is in force, and writes no HGVSc when they are equal, as it writes none for any allele equal to its reference. Every other cell of the row agrees with Ensembl VEP's, and an alternate that differs from the edited base gets the same notation in both engines.
 
-**Where it is in Ensembl VEP's source** (`ensembl-variation` at release/116, `ensembl-vep` at release/116.2):
+**Where it is in Ensembl VEP's source** (`ensembl-variation` at release/116, `ensembl-vep` at release/116.3):
 
 - `Bio/EnsEMBL/VEP/CacheDir.pm`, lines 411-416: a cache built with a BAM switches the transcript's reference on unless `--use_given_ref` is given. `Bio/EnsEMBL/Variation/TranscriptVariation.pm`, lines 441-468, `_get_ref_allele`: with it on, the reference allele is cut from the model's edited cDNA, so at an edited position it is the edited base, the `USED_REF` cell, and not the genome's.
 - `Bio/EnsEMBL/Variation/VariationFeatureOverlap.pm`, line 481: an alternate allele is dropped only when it equals the given reference, so an alternate equal to the transcript-derived reference keeps its row.
@@ -38,7 +38,7 @@ The model's edit, from the cache record of `NR_048535.1`: `_rna_edit` `2023 2023
 
 ### 1.3 What each engine writes
 
-The `NR_048535.1` rows in the default format. Ensembl VEP 116.2:
+The `NR_048535.1` rows in the default format. Ensembl VEP 116.3:
 
 ```
 edit_base	21:42849245	A	10785	NR_048535.1	Transcript	non_coding_transcript_exon_variant	2023	-	-	-	-	-	IMPACT=MODIFIER;STRAND=-1;GIVEN_REF=C;USED_REF=A;BAM_EDIT=OK;HGVSc=NR_048535.1:n.2023T>T
@@ -72,7 +72,7 @@ vep -i record.vcf -o out.txt --offline --cache --dir_cache <corpus>/cache_root \
   --fasta <corpus>/reference.fa.gz
 ```
 
-vep-rs writes the rows of 1.3 with no HGVSc on the `edit_base` row. Ensembl VEP 116.2 writes `HGVSc=NR_048535.1:n.2023T>T` there. Adding `--use_given_ref` makes the engines agree, `n.2023G>T` on both.
+vep-rs writes the rows of 1.3 with no HGVSc on the `edit_base` row. Ensembl VEP 116.3 writes `HGVSc=NR_048535.1:n.2023T>T` there. Adding `--use_given_ref` makes the engines agree, `n.2023G>T` on both.
 
 ### 1.7 How the comparator treats this class
 

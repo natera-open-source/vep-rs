@@ -1,7 +1,7 @@
 entry = "individual_zyg_list_order"
 page = "docs/divergences/individual-zyg-order.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
 input_class_basis = "2 · 280 of 373 records with sample columns · 4 flag sets, 2 corpora"
 notes = "Ensembl VEP's ZYG list follows the key order of a hash of the eight sample names under the fixed seed; vep-rs follows the header's column order."
@@ -29,3 +29,13 @@ where = { record = "21:14221174:T:G", feature = "ENST00000400577" }
 [expected]
 ensembl_vep = ["S7:HET,S4:HET,S2:HET,S3:HOM,S8:HET,S6:HET,S5:HOMREF,S1:HOMREF"]
 vep_rs = ["S1:HOMREF,S2:HET,S3:HOM,S4:HET,S5:HOMREF,S6:HET,S7:HET,S8:HET"]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/individuals.rs::IndividualRequest::resolve",
+    "crates/vep-cli/src/individuals.rs::zygosity_record",
+]
+tests = [
+    "crates/vep-cli/src/vcf_parser.rs::tests::individual_zyg_keeps_one_variant_with_a_zyg_entry_per_sample",
+    "crates/vep-cli/tests/individuals.rs::individual_zyg_writes_one_record_with_a_zygosity_list_in_every_format",
+]

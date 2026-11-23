@@ -4,7 +4,7 @@
 //! `--nearest`: the protein-coding transcription start sites nearest a variant
 //! and the identifiers reported for them, as Ensembl VEP's `TranscriptTree`
 //! finds them (`TranscriptTree.pm:222-254`, `AnnotationType/Transcript.pm:700-715`
-//! at release/116.2).
+//! at release/116.3).
 //!
 //! Ensembl VEP keeps every protein-coding transcript's start site in an interval
 //! tree, one point per transcript, and asks the tree for one site on each side of
@@ -13,6 +13,19 @@
 //! variant (`_get_dist`, `:303-317`); every candidate at the minimum is reported,
 //! the one found below the end first. Here the sites are the chromosome's sorted
 //! [`TssPoint`] table and the two searches are binary searches.
+//!
+//! A third candidate joins Ensembl VEP's two: the lowest site at or above the
+//! start, as the search below the end takes the highest at or below it. Ensembl
+//! VEP's search above the start passes over a site on the start and a site one
+//! base above it. Its tree holds a site at `tss` as the half-open interval
+//! `[tss - 1, tss)` (`:165`), the search is given the 1-based start (`:235`),
+//! and the library returns only an interval that begins above its query, so it
+//! returns the lowest site at or above `start + 2`. A one-base variant one base
+//! below a start site is then given a farther site, or none where neither
+//! search returns one (`:239`), and a longer variant whose first base is a
+//! start site another site it covers. With the third candidate
+//! the passed-over site is named where it is as near, and no site Ensembl VEP
+//! names at the smallest distance is lost.
 //!
 //! Where several transcripts start at the winning coordinate, Ensembl VEP reports
 //! the one its tree happens to hold first, which depends on the order its cache
@@ -31,6 +44,7 @@ use crate::transcript_index::{LazyTranscriptIndexes, TssPoint};
 /// The identifier `--nearest` reports for a transcription start site
 /// (`Config.pm:602`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum NearestType {
     /// The transcript stable id.
     Transcript,
@@ -67,24 +81,27 @@ impl FromStr for NearestType {
 
 /// The sites nearest the span `[start, end]` (either order) among `points`,
 /// which are sorted by coordinate: every transcript at each winning coordinate,
-/// in stable-id order, the candidate found below the end before the one found
-/// above the start (`TranscriptTree.pm:233-236` lists them in that order, and
-/// both can lie inside a span).
+/// in stable-id order, the candidate found below the end before the ones found
+/// above the start (`TranscriptTree.pm:233-236` lists its two in that order,
+/// and all can lie inside a span).
 ///
-/// The tree holds a site at `tss` as the half-open interval `[tss - 1, tss)`.
-/// `fetch_nearest_down(end)` returns the interval with the highest upper bound
-/// at or below `end`, so the highest site at or below the span's end;
-/// `fetch_nearest_up(start)` returns the interval with the lowest lower bound
-/// above `start`, so the lowest site at or above `start + 2`: a site at
-/// `start + 1` is the interval `[start, start + 1)`, which contains the query
-/// and is never returned. Each candidate's distance is the smaller of its
-/// differences to the two ends; both are kept when they tie.
-pub fn nearest_points(points: &[TssPoint], start: u64, end: u64) -> Vec<&TssPoint> {
+/// The candidate below is the highest site at or below the span's end, the
+/// site `fetch_nearest_down(end)` returns. Ensembl VEP's
+/// `fetch_nearest_up(start)` returns the lowest site at or above `start + 2`,
+/// since a site at `start + 1` is the interval `[start, start + 1)` of its
+/// tree, which holds the query, and a site at `start` is the interval that
+/// ends at it. That site is a candidate here too, after the lowest site at or
+/// above `start`, which that search passes over. Each candidate's distance is
+/// the smaller of its differences to the two ends; all at the smallest are
+/// kept.
+pub(crate) fn nearest_points(points: &[TssPoint], start: u64, end: u64) -> Vec<&TssPoint> {
     let (low, high) = (start.min(end), start.max(end));
     let down = points[..points.partition_point(|p| p.tss <= high)].last();
-    let up = points.get(points.partition_point(|p| p.tss < low.saturating_add(2)));
-    let mut candidates: Vec<u64> = Vec::with_capacity(2);
-    for site in down.into_iter().chain(up) {
+    let lowest_from = |from: u64| points.get(points.partition_point(|p| p.tss < from));
+    let up = lowest_from(low);
+    let above = low.checked_add(2).and_then(lowest_from);
+    let mut candidates: Vec<u64> = Vec::with_capacity(3);
+    for site in down.into_iter().chain(up).chain(above) {
         if !candidates.contains(&site.tss) {
             candidates.push(site.tss);
         }
@@ -109,7 +126,7 @@ pub fn nearest_points(points: &[TssPoint], start: u64, end: u64) -> Vec<&TssPoin
 /// `AnnotationType/Transcript.pm:707-712`). A structural variant's span runs to
 /// its `END`. Empty on a chromosome with no protein-coding transcription start
 /// site, which Ensembl VEP writes as an empty list.
-pub fn nearest_values(
+pub(crate) fn nearest_values(
     points: &[TssPoint],
     variant: &InputVariant,
     kind: NearestType,
@@ -133,7 +150,7 @@ pub fn nearest_values(
 /// first alternate allele writes no row, when the first feature's span is
 /// measured ([`rowless_first_feature`]); `runner::apply_record_rules` then gives
 /// every allele of the record the first feature's list, the one Ensembl VEP's
-/// rows print (OutputFactory.pm:2286-2296, :1017).
+/// rows print (OutputFactory.pm:2295-2305, :1017).
 pub(crate) fn annotate(
     variant: &mut InputVariant,
     transcripts: &LazyTranscriptIndexes,
@@ -229,7 +246,7 @@ mod tests {
             ["GENE2", "ENSG_3"]
         );
         // Two sites inside one span, each 5 from its nearer end: the highest site
-        // at or below the end (5005) before the lowest at or above start + 2 (4995).
+        // at or below the end (5005) before the lowest above the start (4995).
         let inside = vec![
             point(4995, "ENST_LOW", "G", "G"),
             point(5005, "ENST_HIGH", "G", "G"),
@@ -241,7 +258,7 @@ mod tests {
     }
 
     /// A site the span covers is found by `down` when it is the highest at or
-    /// below the end and by `up` when it is the lowest at or above `start + 2`;
+    /// below the end and by `up` when it is the lowest at or above the start;
     /// its distance is the smaller gap to the two ends, zero on an end.
     #[test]
     fn a_site_the_span_covers_is_reported() {
@@ -264,23 +281,127 @@ mod tests {
         assert_eq!(ids(&nearest_points(&ends, 5000, 5010)), ["ENST_END"]);
     }
 
-    /// The tree holds a site at `t` as `[t - 1, t)`, and `fetch_nearest_up(s)`
-    /// skips the interval containing `s`: a site at `s + 1` is never the `up`
-    /// candidate, so a variant one base below a start site reports the site
-    /// below it instead.
+    /// A site one base above the start is the `up` candidate, at distance one
+    /// from a one-base variant. Ensembl VEP's tree holds a site at `t` as
+    /// `[t - 1, t)` and is asked `fetch_nearest_up(s)` with the 1-based start
+    /// (`TranscriptTree.pm:235`), which passes over the interval holding `s`,
+    /// so it reports the site below instead, 3999 bases away in this table.
     #[test]
-    fn a_site_one_base_above_the_start_is_not_the_up_candidate() {
+    fn a_site_one_base_above_the_start_is_the_up_candidate() {
         let table = table();
-        // 4999: the site at 5000 is [4999, 5000), which contains 4999; the up
-        // candidate is 9000 and the down candidate 1000 (distance 3999) wins.
-        assert_eq!(
-            ids(&nearest_points(&table, 4999, 4999)),
-            ["ENST_A", "ENST_B"]
-        );
-        // 4998: the site at 5000 is above 4998 + 1 and wins at distance 2.
+        // 4999: the site at 5000 is one base away and the site at 1000 3999.
+        assert_eq!(ids(&nearest_points(&table, 4999, 4999)), ["ENST_R"]);
+        // 4998: the site at 5000 wins at distance 2.
         assert_eq!(ids(&nearest_points(&table, 4998, 4998)), ["ENST_R"]);
         // A two-base span ending at 5000 reaches the site from below.
         assert_eq!(ids(&nearest_points(&table, 4999, 5000)), ["ENST_R"]);
+        // Sites one base below and one base above a variant tie.
+        let beside = vec![
+            point(4998, "ENST_BELOW", "G", "G"),
+            point(5000, "ENST_ABOVE", "G", "G"),
+            point(9000, "ENST_FAR", "G", "G"),
+        ];
+        assert_eq!(
+            ids(&nearest_points(&beside, 4999, 4999)),
+            ["ENST_BELOW", "ENST_ABOVE"]
+        );
+        // A site on the variant is at distance zero and beats the site above it.
+        let on = vec![
+            point(4999, "ENST_ON", "G", "G"),
+            point(5000, "ENST_ABOVE", "G", "G"),
+        ];
+        assert_eq!(ids(&nearest_points(&on, 4999, 4999)), ["ENST_ON"]);
+        // Inside a span the site at start + 1 is one base from the start and
+        // beats a higher site six bases from it.
+        let inside = vec![
+            point(4991, "ENST_BY_START", "G", "G"),
+            point(4996, "ENST_HIGHER", "G", "G"),
+        ];
+        assert_eq!(ids(&nearest_points(&inside, 4990, 5010)), ["ENST_BY_START"]);
+    }
+
+    /// A site on the first base of a span of two or more positions is the `up`
+    /// candidate, at distance zero. Ensembl VEP's `fetch_nearest_up(s)` returns
+    /// the lowest site at or above `s + 2` (`TranscriptTree.pm:235`), and its
+    /// search below the end reaches the site on the first base only where the
+    /// span covers no higher site, so it names a covered site farther from
+    /// both ends, or one of two sites that both lie at distance zero.
+    #[test]
+    fn a_site_on_the_first_base_is_the_up_candidate() {
+        // Sites on both positions of a two-position span, which an insertion
+        // between them has too: both at distance zero, the one found below
+        // the end first.
+        let adjacent = vec![
+            point(5000, "ENST_LOW", "G", "G"),
+            point(5001, "ENST_HIGH", "G", "G"),
+            point(9000, "ENST_FAR", "G", "G"),
+        ];
+        assert_eq!(
+            ids(&nearest_points(&adjacent, 5000, 5001)),
+            ["ENST_HIGH", "ENST_LOW"]
+        );
+        assert_eq!(
+            ids(&nearest_points(&adjacent, 5001, 5000)),
+            ["ENST_HIGH", "ENST_LOW"]
+        );
+        // A site on the first base is at distance zero and beats a covered
+        // site five bases below the end.
+        let inside = vec![
+            point(5000, "ENST_FIRST", "G", "G"),
+            point(5030, "ENST_INSIDE", "G", "G"),
+            point(9000, "ENST_FAR", "G", "G"),
+        ];
+        assert_eq!(ids(&nearest_points(&inside, 5000, 5035)), ["ENST_FIRST"]);
+        // With a covered site on the last base too, the two ends tie.
+        assert_eq!(
+            ids(&nearest_points(&inside, 5000, 5030)),
+            ["ENST_INSIDE", "ENST_FIRST"]
+        );
+        // The only site a span covers, on its first base, is found below the
+        // end as well.
+        let lone = vec![
+            point(5000, "ENST_FIRST", "G", "G"),
+            point(9000, "ENST_FAR", "G", "G"),
+        ];
+        assert_eq!(ids(&nearest_points(&lone, 5000, 5003)), ["ENST_FIRST"]);
+        // A span that starts one base above the lower site covers the higher
+        // site alone, and every search returns the covered site, as Ensembl
+        // VEP's do: a site below the span is no candidate beside it.
+        assert_eq!(ids(&nearest_points(&inside, 5001, 5033)), ["ENST_INSIDE"]);
+    }
+
+    /// Ensembl VEP's own candidate above the start stays a candidate. A span
+    /// whose one covered site is on its second base, with a site one base
+    /// above its end: `fetch_nearest_up(s)` passes over the covered site and
+    /// returns the outer one (`TranscriptTree.pm:235`), both lie one base from
+    /// an end, and both are named, the covered site first.
+    #[test]
+    fn ensembl_veps_candidate_above_the_start_is_kept() {
+        let outer = vec![
+            point(5001, "ENST_SECOND", "G", "G"),
+            point(5011, "ENST_OUTER", "G", "G"),
+        ];
+        assert_eq!(
+            ids(&nearest_points(&outer, 5000, 5010)),
+            ["ENST_SECOND", "ENST_OUTER"]
+        );
+        // One base longer, the outer site is covered, on the last base.
+        assert_eq!(ids(&nearest_points(&outer, 5000, 5011)), ["ENST_OUTER"]);
+        // One base shorter, the outer site lies two bases above the end.
+        assert_eq!(ids(&nearest_points(&outer, 5000, 5009)), ["ENST_SECOND"]);
+        // A site on the first base is nearer than both.
+        let first = vec![
+            point(5000, "ENST_FIRST", "G", "G"),
+            point(5001, "ENST_SECOND", "G", "G"),
+            point(5011, "ENST_OUTER", "G", "G"),
+        ];
+        assert_eq!(ids(&nearest_points(&first, 5000, 5010)), ["ENST_FIRST"]);
+        // The last coordinate has no base two above it.
+        let last = vec![point(u64::MAX, "ENST_LAST", "G", "G")];
+        assert_eq!(
+            ids(&nearest_points(&last, u64::MAX - 1, u64::MAX)),
+            ["ENST_LAST"]
+        );
     }
 
     /// The table is built from protein-coding transcripts alone, so a chromosome
@@ -374,11 +495,12 @@ mod tests {
         assert_eq!(nearest_values(&table, &sv, NearestType::Gene), ["ENSG_2"]);
     }
 
-    /// The deletion `TC>T` trims to `C/-` at 1021, a span that ends one base
-    /// below the site at 1022 and so reaches the site at 996 alone. As the
-    /// first feature of `TC>T,AC` it is measured there; as the second feature of
-    /// `TC>TC,T`, whose first feature `-/-` at 1022-1021 writes no row, it is
-    /// measured at that feature's span, which the site at 1022 ends.
+    /// The deletion `TC>T` trims to `C/-` at 1021, five bases above the site at
+    /// 1016 and six below the site at 1027, so it reports the site at 1016
+    /// alone. As the first feature of `TC>T,AC` it is measured there; as the
+    /// second feature of `TC>TC,T`, whose first feature `-/-` at 1022-1021
+    /// writes no row, it is measured at that feature's span, whose end at 1022
+    /// is five bases below the site at 1027, so the two sites tie.
     #[test]
     fn a_rowless_first_feature_lends_its_span_to_the_record() {
         use std::collections::HashMap;
@@ -396,7 +518,7 @@ mod tests {
         by_chr.insert(
             "21".to_string(),
             TranscriptIndex::new(
-                vec![coding("ENST_BELOW", 996), coding("ENST_AT", 1022)],
+                vec![coding("ENST_BELOW", 1016), coding("ENST_ABOVE", 1027)],
                 5000,
                 5000,
             ),
@@ -422,7 +544,10 @@ mod tests {
             (1021, 1021, "C/-")
         );
         annotate(&mut deletion, &transcripts, kind);
-        assert_eq!(deletion.nearest, Some(vec!["ENST_AT".to_string()]));
+        assert_eq!(
+            deletion.nearest,
+            Some(vec!["ENST_BELOW".to_string(), "ENST_ABOVE".to_string()])
+        );
     }
 
     #[test]

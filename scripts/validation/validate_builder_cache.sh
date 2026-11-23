@@ -3,8 +3,8 @@ set -euo pipefail
 
 # validate_builder_cache.sh
 #
-# Validates the vep-cache-builder output against either captured fixtures or a
-# Perl-derived cache.
+# Validates the vep-cache-builder output against either captured fixtures or an
+# Ensembl VEP-derived cache.
 #
 # Usage:
 #   scripts/validation/validate_builder_cache.sh --fixture-mode
@@ -155,6 +155,15 @@ if [[ ! -x "$BUILDER_BINARY" ]]; then
 	exit 1
 fi
 echo "  Binary: $BUILDER_BINARY"
+
+# The structural comparison of Step 3 is this tree's tools/vep-cache-diff, built here through
+# cargo as the builder is, so that a build that fails stops the script before a cache is generated.
+CACHE_DIFF_MANIFEST="${VEP_RS_DIR}/tools/vep-cache-diff/Cargo.toml"
+if ! cargo build -q --release --locked --manifest-path "${CACHE_DIFF_MANIFEST}"; then
+	echo "ERROR: [validate_builder_cache] the cache comparison tools/vep-cache-diff did not build: repair 'cargo build --release --locked --manifest-path ${CACHE_DIFF_MANIFEST}'" >&2
+	exit 1
+fi
+CACHE_DIFF=(cargo run -q --release --locked --manifest-path "${CACHE_DIFF_MANIFEST}" --)
 echo ""
 
 # Step 2: Generate cache for test region
@@ -224,7 +233,7 @@ if [[ "$FIXTURE_MODE" -eq 1 ]]; then
 
 	REFERENCE_DIR="$FIXTURE_DIR"
 else
-	# Baseline mode: compare against Perl-derived cache
+	# Baseline mode: compare against Ensembl VEP-derived cache
 	if [[ ! -d "$BASELINE_CACHE" ]]; then
 		echo "ERROR: [validate_builder_cache] baseline cache not found: $BASELINE_CACHE" >&2
 		exit 1
@@ -235,7 +244,7 @@ fi
 echo "  Reference: $REFERENCE_DIR"
 echo "  Builder:   $BUILDER_OUTPUT"
 
-python3 "${SCRIPT_DIR}/diff_caches.py" \
+"${CACHE_DIFF[@]}" \
 	--baseline-dir "$REFERENCE_DIR" \
 	--builder-dir "$BUILDER_OUTPUT" \
 	--output-report "${WORK_DIR}/validation_diff.json"

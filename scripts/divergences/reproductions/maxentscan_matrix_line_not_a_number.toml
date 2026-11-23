@@ -1,0 +1,50 @@
+entry = "maxentscan_matrix_line_not_a_number"
+page = "docs/divergences/maxentscan-matrix-line-not-a-number.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "malformed"
+input_class_basis = "the plugin multiplies every matrix line it reads as a number (MaxEntScan.pm:689 and 860) under `use warnings` (MaxEntScan.pm:75), and Perl's `isn't numeric` warning names a text that is not one: the made-up line `0.5x` raises it"
+notes = "One line of a made-up matrix directory reads `0.5x`, the line of `me2x3acc1` that the acceptor window of this record reads. Ensembl VEP multiplies it as 0.5 under the warning and scores the row; vep-rs refuses the plugin by the file and the line, and the row carries no MaxEntScan field."
+# The matrix directory of the MaxEntScan fixture corpora in its plain spelling, a made-up directory, with line 1024 of
+# `me2x3acc1` written as a number followed by a letter.
+prepare = [
+  "python3 \"$REPO/scripts/fixtures/maxentscan_fixture_matrices.py\" --seed 1 --plain-lines --out \"$STAGE/fordownload_synthetic\" > /dev/null",
+  "sed '1024s/.*/0.5x/' \"$STAGE/fordownload_synthetic/splicemodels/me2x3acc1\" > \"$STAGE/me2x3acc1\"",
+  "mv \"$STAGE/me2x3acc1\" \"$STAGE/fordownload_synthetic/splicemodels/me2x3acc1\"",
+]
+
+# The first exonic base after intron 1 of ENST00000400577, inside the intron's acceptor window.
+[input]
+format = "vcf"
+text = """
+21	14219563	acceptor_exon_base	G	A	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-maxentscan-fixture/json_cache"
+fasta = "tests/golden/116/GRCh38-plugin-maxentscan-fixture/reference.fa.gz"
+
+[run]
+flags = ["--plugin", "MaxEntScan,{stage}/fordownload_synthetic"]
+
+[compare]
+kind = "field"
+field = "MaxEntScan_ref"
+where = { record = "acceptor_exon_base", feature = "ENST00000400577" }
+
+[expected]
+ensembl_vep = ["-0.860"]
+vep_rs = ["-"]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/perl_format.rs::PerlNumber::from_text",
+    "crates/vep-builtins/src/plugins/maxentscan.rs::read_numbers",
+]
+tests = [
+    "crates/vep-builtins/src/perl_format.rs::tests::perl_number_reads_a_text_as_perls_arithmetic_does",
+    "crates/vep-builtins/src/plugins/maxentscan.rs::tests::a_line_perl_reads_under_a_warning_is_refused_by_its_line",
+    "crates/vep-builtins/src/plugins/maxentscan.rs::tests::matrices_with_wrong_line_counts_are_an_init_error",
+]

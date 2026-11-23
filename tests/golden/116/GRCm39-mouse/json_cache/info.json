@@ -22,7 +22,7 @@
     "JH584304.1"
   ],
   "polyphen": "",
-  "regulatory": true,
+  "regulatory": false,
   "sift": "b",
   "source_versions": {
     "assembly": "GRCm39",

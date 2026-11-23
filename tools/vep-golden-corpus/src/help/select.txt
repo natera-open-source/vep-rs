@@ -1,0 +1,96 @@
+usage: vep-golden-corpus select [-h] --release RELEASE --assembly ASSEMBLY
+                                [--species SPECIES] --dataset DATASET
+                                --out OUT [--k K] [--seed SEED]
+                                [--max-records MAX_RECORDS]
+                                [--multi-allelic-per-dataset MULTI_ALLELIC_PER_DATASET]
+                                [--max-span MAX_SPAN]
+                                [--focus-term FOCUS_TERM] [--focus-k FOCUS_K]
+                                [--include SID=NAME] [--keep-records]
+                                [--cache CACHE] [--flank FLANK]
+                                [--covers COVERS]
+                                [--family-columns FAMILY_COLUMNS]
+                                [--keep-samples KEEP_SAMPLES]
+                                [--genotype-exemplars GENOTYPE_EXEMPLARS]
+                                [--require-genotype-class CLASS]
+                                [--record-classes KEY]
+                                [--record-class-exemplars RECORD_CLASS_EXEMPLARS]
+                                [--matrix MATRIX]
+                                [--drop-reference-statements] [--flag FLAG]
+                                [--fasta-name FASTA_NAME]
+
+options:
+  -h, --help            show this help message and exit
+  --release RELEASE
+  --assembly ASSEMBLY
+  --species SPECIES     the Ensembl species of the corpus, written to the
+                        manifest (default: an existing manifest's, else
+                        homo_sapiens)
+  --dataset DATASET     sid=reference.txt=input.vcf[.gz]
+  --out OUT
+  --k K
+  --seed SEED
+  --max-records MAX_RECORDS
+  --multi-allelic-per-dataset MULTI_ALLELIC_PER_DATASET
+                        multi-allelic sequence records sampled per dataset and
+                        stratum (SNV-only, indel)
+  --max-span MAX_SPAN   prefer exemplars no wider than this many bases; 0
+                        disables the preference
+  --focus-term FOCUS_TERM
+                        a consequence term; combinations containing it take
+                        --focus-k exemplars
+  --focus-k FOCUS_K     exemplars per focus combination
+  --include SID=NAME    a record of dataset SID's input, by its ID or VEP's
+                        name for an ID-less record, carried whatever the
+                        sampling chooses (repeatable), recorded as
+                        `included_records`
+  --keep-records        keep every record of the manifest being regenerated,
+                        resolved and rowed again from its dataset; the count
+                        is recorded as `kept_records`
+  --cache CACHE         the JSON cache the fixture cache is pruned from;
+                        exemplars whose transcripts add fewer bytes to it come
+                        first, ahead of the flag and position preferences
+  --flank FLANK         the transcript flank the pruner keeps around each
+                        record, in bases (its --flank)
+  --covers COVERS       a parity-matrix row the corpus exercises (repeatable),
+                        recorded as `covers`; required unless the manifest
+                        being regenerated already carries a list
+  --family-columns FAMILY_COLUMNS
+                        Extra columns of the family key, comma-separated: NAME
+                        stratifies by presence, NAME= by value,
+                        custom_match=EXACT/OVERLAP by how a --custom file's
+                        exact and overlap sources answered, A/B by whether two
+                        columns agree; every stratum seen keeps an exemplar
+  --keep-samples KEEP_SAMPLES
+                        keep FORMAT and the first N sample columns of every
+                        record and of the #CHROM header (default: none), and
+                        sample records by the genotype classes those samples
+                        show
+  --genotype-exemplars GENOTYPE_EXEMPLARS
+                        records showing each genotype class the inputs show
+                        among the kept samples, when they have that many
+  --require-genotype-class CLASS
+                        a genotype class the corpus must carry, shown by the
+                        inputs or not (repeatable; one of het, hom_alt,
+                        hom_ref, missing, partially_missing, haploid, star,
+                        multi_allelic, all_missing, no_carrier,
+                        one_hom_ref_rest_missing)
+  --record-classes KEY  class every record by its reference rows under this
+                        key (one of regulatory_class) and add records until
+                        every class the references show has --record-class-
+                        exemplars records
+  --record-class-exemplars RECORD_CLASS_EXEMPLARS
+                        records showing each record class the references show,
+                        when they have that many
+  --matrix MATRIX       the parity matrix whose `item` column every `covers`
+                        name must be in
+  --drop-reference-statements
+                        discard the divergences entries that carry the hand-
+                        written
+                        vep_rs_consequence_sets_with_reference_sequence, each
+                        named on standard error; without the option such an
+                        entry stops the run before anything is written
+  --flag FLAG           a command-line flag both engines ran with, written
+                        --flag=--hgvs (repeatable), recorded as `flags`
+  --fasta-name FASTA_NAME
+                        file name of the gzipped reference beside the
+                        manifest, recorded as `fasta`

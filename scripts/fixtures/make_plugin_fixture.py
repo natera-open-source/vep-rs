@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Write a synthetic plugin data file for dbNSFP or dbscSNV at a corpus's own sites.
 
-dbNSFP is free for academic use and needs a paid agreement for commercial use, and dbscSNV
-publishes no licence text. Neither data file is redistributed here, so their plugins are verified
-on made-up fixtures: a file with the layout's
+Ensembl VEP's dbNSFP plugin documents two branches of its files, one for academic and one for
+commercial use (dbNSFP.pm:54-55), and its dbscSNV plugin states no terms for its file, its
+licence header covering the module alone (dbscSNV.pm:1-16). Neither data file is redistributed
+here, so their plugins are verified on made-up fixtures: a file with the layout's
 header and column order, prepared, sorted and indexed as Ensembl VEP's plugin documents for
 the assembly (dbNSFP.pm:62-74, dbscSNV.pm:49-59), whose values are fabricated from a seed.
 The rows sit at the corpus's own
@@ -38,9 +39,6 @@ Layouts (`--layout`), each prepared for `--assembly GRCh37` or `GRCh38`:
                 corpus coordinates in `chr`/`pos` and is indexed `tabix -s 1 -b 2 -e 2 -c c`;
                 the GRCh38 file carries them in `hg38_chr`/`hg38_pos`, is sorted on those and
                 indexed `tabix -s 5 -b 6 -e 6 -c c`.
-    cadd_snv, cadd_indel, cadd_sv, spliceai_snv, spliceai_indel
-                registered names whose writers are not implemented here; asking for one is an
-                error naming it.
 
 A site is every record of the VCF whose REF and ALT are single bases (one per ALT of a
 multi-allelic record); a record of any other shape writes nothing. A site named by
@@ -226,8 +224,7 @@ TRANSCRIPT_FILLERS = (
     "Polyphen2_HDIV_pred", "Polyphen2_HVAR_score", "Polyphen2_HVAR_pred", "FATHMM_score",
     "FATHMM_pred", "PROVEAN_score", "PROVEAN_pred", "VEST4_score", "REVEL_score", "MVP_score",
 )
-SPLICEAI_AND_CADD = ("cadd_snv", "cadd_indel", "cadd_sv", "spliceai_snv", "spliceai_indel")
-LAYOUTS = ("dbnsfp", "dbscsnv", *SPLICEAI_AND_CADD)
+LAYOUTS = ("dbnsfp", "dbscsnv")
 
 
 def fail(message: str) -> SystemExit:
@@ -264,7 +261,7 @@ def preparation(layout: str, assembly: str) -> Preparation:
         if assembly == "GRCh37":
             return Preparation(header, 0, 1, 4, 5, ("-s", "1", "-b", "2", "-e", "2", "-c", "c"), "\r\n")
         return Preparation(header, 4, 5, 0, 1, ("-s", "5", "-b", "6", "-e", "6", "-c", "c"), "\r\n")
-    raise fail(f"layout {layout} is registered but has no writer here")
+    raise fail(f"unknown layout {layout}")
 
 
 @dataclass(frozen=True)
@@ -763,8 +760,6 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--force", action="store_true", help="overwrite an existing output")
     args = ap.parse_args(argv)
 
-    if args.layout in SPLICEAI_AND_CADD:
-        raise fail(f"layout {args.layout} is registered but has no writer here")
     for path in (args.vcf, args.reference):
         if not path.is_file():
             raise fail(f"input file not found: {path}")

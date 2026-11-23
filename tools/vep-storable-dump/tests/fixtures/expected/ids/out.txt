@@ -1,0 +1,26 @@
+### ENST00000000001
+{
+  'stable_id' => 'ENST00000000001.12'
+}
+
+### ENST00000000005.x
+{
+  'end' => 8,
+  'stable_id' => 'ENST00000000005.x',
+  'start' => 7
+}
+
+### ENST00000000006
+{
+  'end' => 12,
+  'stable_id' => 'ENST00000000006.1',
+  'start' => 11
+}
+
+### ENSTé
+{
+  'end' => 14,
+  'stable_id' => "ENST\x{e9}.7",
+  'start' => 13
+}
+

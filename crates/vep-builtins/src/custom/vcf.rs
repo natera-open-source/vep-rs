@@ -38,7 +38,7 @@ use super::source::{
     RecordGroup, TabixSource, Verdict,
 };
 use super::CustomRunOptions;
-use crate::tabix::allele_match::{dashed, trim_directions, trim_sequences};
+use crate::tabix::allele_match::{dashed, trim_directions, trim_sequences, KeyPosition};
 use crate::tabix::{lossy_text, BoundedLines, TabixRecord};
 use crate::traits::PrefetchData;
 
@@ -81,6 +81,7 @@ impl VcfMetadata {
 
     /// The metadata of the given header lines, or the refusal of a
     /// `##fileformat` line among them.
+    #[cfg(test)]
     pub fn parse_lines<'a>(lines: impl IntoIterator<Item = &'a str>) -> Result<Self, String> {
         let mut metadata = VcfMetadata::default();
         for line in lines {
@@ -180,7 +181,7 @@ impl VcfSource {
         synonyms: Arc<ChromosomeSynonyms>,
         options: CustomRunOptions,
     ) -> Result<Self, CustomError> {
-        let base = TabixSource::open(spec, synonyms)?;
+        let base = TabixSource::open(spec, synonyms, options.assembly)?;
         let metadata = VcfMetadata::read(Path::new(&base.spec().file))?;
         let descriptions_apply = vcf_named(&base.spec().file);
         let keys = InfoKeys::new(base.spec().fields.as_deref().unwrap_or(&[]));
@@ -191,11 +192,6 @@ impl VcfSource {
             descriptions_apply,
             keys,
         })
-    }
-
-    /// The file's `##` metadata.
-    pub fn metadata(&self) -> &VcfMetadata {
-        &self.metadata
     }
 
     /// `_get_record_name` (`VCF.pm:283-297`): the first `;`-separated ID
@@ -301,19 +297,16 @@ impl VcfSource {
         match matches {
             Some(matches) => matches
                 .iter()
-                .map(|(index, variant)| CustomRecord {
-                    name: name.clone(),
-                    allele: Some(variant.alt_allele().to_vec()),
-                    fields: fields(Some(*index)),
-                    score: score.clone(),
+                .map(|(index, variant)| {
+                    CustomRecord::new(
+                        name.clone(),
+                        Some(variant.alt_allele().to_vec()),
+                        fields(Some(*index)),
+                        score.clone(),
+                    )
                 })
                 .collect(),
-            None => vec![CustomRecord {
-                name,
-                allele: None,
-                fields: fields(None),
-                score,
-            }],
+            None => vec![CustomRecord::new(name, None, fields(None), score)],
         }
     }
 }
@@ -332,16 +325,9 @@ struct Candidate<'a> {
 }
 
 impl<'a> Candidate<'a> {
-    /// `pos` is the record's `POS` and `end_of` reads its `END`: each as Perl
-    /// reads the cell ([`TabixSource::start_of`], [`perl_end`]) or, for an
-    /// `exact` source, in whole numbers ([`TabixSource::keyed_start_of`],
-    /// [`whole_end`]).
-    fn of(
-        record: &'a TabixRecord,
-        keys: &InfoKeys,
-        pos: Coordinate,
-        end_of: fn(&str) -> Coordinate,
-    ) -> Self {
+    /// `pos` is the record's `POS` as Perl reads the cell
+    /// ([`TabixSource::start_of`]).
+    fn of(record: &'a TabixRecord, keys: &InfoKeys, pos: Coordinate) -> Self {
         let line = VcfLine {
             pos,
             ..VcfLine::of(record)
@@ -350,7 +336,7 @@ impl<'a> Candidate<'a> {
         let alts = line.alternatives();
         let structural = line.structural_shape();
         let start = line.feature_start(&alts, structural);
-        let end = line.feature_end(start, &info, structural, end_of);
+        let end = line.feature_end(start, &info, structural);
         Candidate {
             line,
             info,
@@ -451,17 +437,7 @@ impl FormatRules for VcfSource {
     /// plus one (`File.pm:333-335`).
     fn match_record(&self, record: &TabixRecord, group: &RecordGroup<'_>, scores: bool) -> Verdict {
         let spec = self.base.spec();
-        // An `exact` source reads a row in whole numbers: its key is the
-        // integer that leads the raw `POS` Ensembl VEP hands the allele match
-        // (`VCF.pm:416`), and the walk to the row and its name take that key.
-        let candidate = if spec.match_type == MatchType::Exact {
-            let Some(key) = self.base.keyed_start_of(record) else {
-                return Verdict::NoMatch;
-            };
-            Candidate::of(record, &self.keys, Coordinate::Whole(key), whole_end)
-        } else {
-            Candidate::of(record, &self.keys, self.base.start_of(record), perl_end)
-        };
+        let candidate = Candidate::of(record, &self.keys, self.base.start_of(record));
         if candidate.start.is_past(group.end as i64 + 1) {
             return Verdict::PastEnd;
         }
@@ -557,9 +533,11 @@ impl FormatRules for VcfSource {
 /// empty.
 struct VcfLine<'a> {
     chr: &'a str,
-    /// `POS` as Perl reads the column or, for an `exact` source, the integer
-    /// that leads it, the source's key.
+    /// `POS` as Perl reads the column.
     pos: Coordinate,
+    /// `POS` as the column writes it, the text an `exact` match keys the row
+    /// by (`VCF.pm:416`).
+    raw_pos: &'a str,
     id: &'a str,
     reference: &'a str,
     alt: &'a str,
@@ -574,6 +552,7 @@ impl<'a> VcfLine<'a> {
         VcfLine {
             chr: &record.chr,
             pos: whole_number(record.start),
+            raw_pos: column(1),
             id: column(2),
             reference: column(3),
             alt: column(4),
@@ -615,8 +594,9 @@ impl<'a> VcfLine<'a> {
             Some(text[after + 1..item_end].split('=').next().unwrap_or(""))
         };
         // Whether `key`, ending at `after`, is an item's: the item ends there
-        // or its value follows. Perl's `split` drops the trailing empty items,
-        // so the empty key names one only when a non-empty item follows it.
+        // or its value follows. Perl's `split` in Ensembl VEP drops the trailing
+        // empty items, so the empty key names one only when a non-empty item
+        // follows it.
         let closes = |key: &[u8], after: usize| {
             (after == info.len() || matches!(info[after], b';' | b'='))
                 && (!key.is_empty() || info[after..].iter().any(|&b| b != b';'))
@@ -665,14 +645,14 @@ impl<'a> VcfLine<'a> {
     }
 
     /// `get_end` (`BaseVCF4.pm:297-317`): the start plus the first `SVLEN`'s
-    /// magnitude less one, else `END` as `end_of` reads it, else the start of
-    /// a structural record, else `POS` plus the reference's length less one.
+    /// magnitude less one, else `END` as Perl reads it ([`perl_end`]), else
+    /// the start of a structural record, else `POS` plus the reference's
+    /// length less one.
     fn feature_end(
         &self,
         start: Coordinate,
         info: &InfoValues<'_>,
         structural: bool,
-        end_of: fn(&str) -> Coordinate,
     ) -> Coordinate {
         if let Some(Some(svlen)) = info.svlen {
             // `(split(',', $svlen))[0]`: the text before the first `,`.
@@ -687,7 +667,7 @@ impl<'a> VcfLine<'a> {
             };
         }
         if let Some(Some(end)) = info.end {
-            return end_of(end);
+            return perl_end(end);
         }
         if structural {
             return start;
@@ -725,20 +705,15 @@ impl<'a> VcfLine<'a> {
 }
 
 /// An `END` as Perl reads it: a plain whole number as it stands, any other
-/// cell the number Perl reads from it, the whole number of its float
-/// ([`whole_end`]) for an infinity or a text that is no number.
+/// cell the number Perl reads from it, the whole number of its float, held at
+/// the ends of the 64-bit range, for an infinity or a text that is no number.
 fn perl_end(end: &str) -> Coordinate {
     match end.parse() {
         Ok(whole) => Coordinate::Whole(whole),
-        Err(_) => Coordinate::read(end).unwrap_or_else(|| whole_end(end)),
+        Err(_) => {
+            Coordinate::read(end).unwrap_or_else(|| Coordinate::Whole(perl_number(end) as i64))
+        }
     }
-}
-
-/// An `END` in whole numbers, as an `exact` source reads it: the whole number
-/// of the float Perl reads from the cell, held at the ends of the 64-bit
-/// range.
-fn whole_end(end: &str) -> Coordinate {
-    Coordinate::Whole(perl_number(end) as i64)
 }
 
 /// `/[<\[\]][^\*]+[>\]\[]|^\.\w+|\w+\.$/` (`VCF.pm:385`): a bracketed form
@@ -768,6 +743,10 @@ fn record_so_term(alts: &[&str]) -> Option<&'static str> {
     sv_so_term_and_class(&sv_type_abbreviation(&joined, None)).map(|(term, _)| term)
 }
 
+/// The variants of one input record under each trimmed pair of reference and
+/// alternate, each with the start its trim leaves, in the record's order.
+type StartsByForm<'a> = HashMap<(Vec<u8>, Vec<u8>), Vec<(u64, &'a InputVariant)>>;
+
 /// `get_matched_variant_alleles` (`Utils/Sequence.pm:1144-1245`) between the
 /// variant's alternates and the record's: each pair of reference and
 /// alternate is trimmed to its minimal form from the left then the right and,
@@ -776,16 +755,21 @@ fn record_so_term(alts: &[&str]) -> Option<&'static str> {
 /// trimmed form and its start agree. The variant's alleles are read on the
 /// forward strand (`:1182, 1196`). Each matched record alternate is returned
 /// with its index in the ALT column and the variant it matched, in ALT order.
+///
+/// The record's start is its `POS` as text (`VCF.pm:416`), which the key of a
+/// trimmed form holds as written until a shared leading base moves it
+/// ([`KeyPosition`]): `+100`, `100.5`, `1e2` and `0100` are no variant's
+/// start, while `+100` moved one base is 101. A `POS` Perl reads as false, `0`
+/// or empty, matches nothing (`:1173`).
 fn exact_matches<'a>(
     line: &VcfLine<'_>,
     alts: &[&str],
     group: &RecordGroup<'a>,
 ) -> Vec<(usize, &'a InputVariant)> {
-    let pos = line.pos.whole();
-    if pos == 0 {
+    if !truthy(line.raw_pos) {
         return Vec::new();
     }
-    let mut by_minimal_form: HashMap<(Vec<u8>, Vec<u8>, i64), &'a InputVariant> = HashMap::new();
+    let mut by_minimal_form: StartsByForm<'a> = HashMap::new();
     for variant in &group.alleles {
         if variant.start == 0 {
             continue;
@@ -793,16 +777,30 @@ fn exact_matches<'a>(
         let (reference, alt) = variant.forward_strand_alleles();
         let (reference, alt) = (dashed(&reference), dashed(&alt));
         for end_first in trim_directions(&reference, &alt) {
-            let form = trim_sequences(&reference, &alt, variant.start as i64, *end_first);
-            by_minimal_form.insert(form, variant);
+            let (reference, alt, moved) = trim_sequences(&reference, &alt, 0, *end_first);
+            by_minimal_form
+                .entry((reference, alt))
+                .or_default()
+                .push((variant.start + moved as u64, variant));
         }
     }
     let mut matches = Vec::new();
     for (index, alt) in alts.iter().enumerate() {
         let (reference, alt) = (line.reference.as_bytes(), alt.as_bytes());
         for end_first in trim_directions(reference, alt) {
-            let form = trim_sequences(reference, alt, pos, *end_first);
-            if let Some(variant) = by_minimal_form.get(&form) {
+            let (reference, alt, moved) = trim_sequences(reference, alt, 0, *end_first);
+            let position = KeyPosition::Cell {
+                text: line.raw_pos,
+                moved: moved as u64,
+            };
+            // A later variant under one key replaces an earlier (`:1207`).
+            let matched = by_minimal_form.get(&(reference, alt)).and_then(|starts| {
+                starts
+                    .iter()
+                    .rev()
+                    .find(|(start, _)| position.equals(KeyPosition::Number(*start)))
+            });
+            if let Some((_, variant)) = matched {
                 matches.push((index, *variant));
                 break;
             }
@@ -961,10 +959,7 @@ mod tests {
         assert_eq!((info.svlen, info.end, info.svtype), (None, None, None));
         assert!(!line.structural_shape());
         assert_eq!(line.feature_start(&line.alternatives(), false).whole(), 100);
-        assert_eq!(
-            line.feature_end(100.into(), &info, false, perl_end).whole(),
-            100
-        );
+        assert_eq!(line.feature_end(100.into(), &info, false).whole(), 100);
         let structural = record("N", "<DEL>", "SVTYPE=DEL;END=150;SVLEN=-50");
         let line = VcfLine::of(&structural);
         let keys: Vec<String> = ["END", "SVTYPE", "XEND", "END;SVTYPE"]
@@ -978,10 +973,7 @@ mod tests {
             [Some(Some("150")), Some(Some("DEL")), None, None]
         );
         assert!(line.structural_shape());
-        assert_eq!(
-            line.feature_end(101.into(), &info, true, perl_end).whole(),
-            150
-        );
+        assert_eq!(line.feature_end(101.into(), &info, true).whole(), 150);
         assert!(line.routes_to_structural(&info));
 
         // `END` against a column, and the fields `` and `0` against it.
@@ -1189,7 +1181,7 @@ mod tests {
     /// says, so a variant inside the `END` span but past the reference does
     /// not overlap it; the record's name and the walk still read ensembl-io's
     /// coordinates (`BaseVCF4.pm:255-317`): a deletion's name opens one past
-    /// `POS`, and `SVLEN` sets the end before `END` does (`:302-308`).
+    /// `POS`, and `SVLEN` sets the end before `END` does (`:302-309`).
     #[test]
     fn ins_records_end_at_pos_plus_ref_length() {
         let dir = tempfile::tempdir().unwrap();
@@ -1227,7 +1219,7 @@ mod tests {
     /// upper end of the 64-bit range before the one comes off: a length of
     /// 9223372036854775807 from a start of 101 ends at 9223372036854775806.
     /// A start with a fraction adds in the float: a deletion at `POS` 100.5
-    /// with `SVLEN=-50` spans 101.5 to 150.5, which Ensembl VEP 116.2 lists
+    /// with `SVLEN=-50` spans 101.5 to 150.5, which Ensembl VEP 116.3 lists
     /// on the pinned image from 101 to 150 for the record at base 101, 1
     /// percent of it covered, and not for the record at base 100, whose end
     /// plus one its start lies past (`File.pm:333-335`).
@@ -1265,7 +1257,7 @@ mod tests {
     /// float: the record at the start of a deletion at `POS` 100 lists it as
     /// `21:101-9223372036854775807` for `END=inf`, the upper end of the 64-bit
     /// range, and lists nothing for `END=nan`, which ends it at 0. Ensembl VEP
-    /// 116.2 lists neither row, its reader returning each for no query
+    /// 116.3 lists neither row, its reader returning each for no query
     /// (`tabix_row_with_an_end_below_its_start`).
     #[test]
     fn an_end_perl_reads_as_an_infinity_or_as_no_number_is_the_whole_number_of_its_float() {
@@ -1292,7 +1284,7 @@ mod tests {
     /// (`END=x`, `END=.`, `END=`), spans its reference allele, as htslib 1.11
     /// and later span it, so a variant inside that allele is matched by
     /// `overlap` and the row's own deletion by `exact`; the two well-formed
-    /// rows are the controls. Ensembl VEP 116.2's reader (htslib 1.9,
+    /// rows are the controls. Ensembl VEP 116.3's reader (htslib 1.9,
     /// `tbx.c:133`, `hts.c:2645`) gives such a row a span that ends before it
     /// starts and returns it for no query over its bases
     /// (`tabix_row_with_an_end_below_its_start`).
@@ -1357,7 +1349,7 @@ mod tests {
     }
 
     /// A row whose `POS` is a minus sign and digits (`-5`) is matched as
-    /// Ensembl VEP 116.2 matches it. `tabix` indexes it from the first base
+    /// Ensembl VEP 116.3 matches it. `tabix` indexes it from the first base
     /// over the length of its reference allele (htslib 1.9 `tbx.c:99`, `:123`)
     /// and Ensembl VEP reads the `POS` written (`BaseVCF4.pm:244-247`): under
     /// `overlap` a row at `-5` whose reference allele is ten bases spans -5 to
@@ -1422,12 +1414,13 @@ mod tests {
         );
     }
 
-    /// Under `exact` a row is keyed by the leading integer of its `POS`
-    /// ([`TabixSource::keyed_start_of`]): a row at `0.5e1`, which the reader
-    /// places at base 0 and Perl reads as 5, matches no record, so the record
-    /// at base 5 that its trimmed alleles spell lists the row at `5` alone.
+    /// Under `exact` a row is keyed by the text of its `POS` (`VCF.pm:416`):
+    /// a row at `0.5e1`, which the reader places at base 0 and Perl reads as
+    /// 5 for the walk to it, is no record's start, so the record at base 5
+    /// that its trimmed alleles spell lists the row at `5` alone, as Ensembl
+    /// VEP 116.3 lists it.
     #[test]
-    fn exact_keys_a_row_by_the_leading_integer_of_its_pos() {
+    fn exact_keys_a_row_by_the_text_of_its_pos() {
         let dir = tempfile::tempdir().unwrap();
         let file = fixture(
             dir.path(),
@@ -1447,14 +1440,15 @@ mod tests {
         assert_eq!(listed(&batch[0]), [named("plain", &[("AF", "0.3")])]);
     }
 
-    /// An `exact` source reads a row in whole numbers from the integer that
-    /// leads its `POS`: rows at `1e2` and `2000e-1` are listed for the records
-    /// at bases 1 and 2000 and named by those integers, rows at `+100` and
-    /// `100.5` for the record at base 100, and the record at base 200, the
-    /// number Perl reads from `2000e-1`, lists nothing. A deletion row at
-    /// `1e2` whose `END` is `300.5` is the deletion of bases 2 to 300.
+    /// An `exact` source walks to a row by the number Perl reads from its
+    /// `POS` and keys its alleles by the text, as Ensembl VEP 116.3 does: rows
+    /// at `1e2`, `+100`, `100.5` and `2000e-1` are no record's start, so the
+    /// records at bases 1, 100 and 2000 list the plain rows alone and the
+    /// record at base 200, the number Perl reads from `2000e-1`, lists
+    /// nothing. A deletion row at `1e2` whose `END` is `300.5` spans 101 to
+    /// 300.5 and is not the deletion of bases 2 to 300.
     #[test]
-    fn an_exact_source_reads_a_row_by_the_integer_that_leads_its_pos() {
+    fn an_exact_source_keys_a_row_by_the_text_of_its_pos_and_walks_by_its_number() {
         let dir = tempfile::tempdir().unwrap();
         let file = fixture(
             dir.path(),
@@ -1496,29 +1490,113 @@ mod tests {
         assert_eq!(
             names_under("0"),
             [
-                vec!["plain1", "exp"],
-                vec!["plain100", "plus", "frac"],
+                vec!["plain1"],
+                vec!["plain100"],
                 vec![],
-                vec!["plain2000", "negexp"],
-                vec!["del"],
+                vec!["plain2000"],
+                vec![],
             ]
         );
         assert_eq!(
             names_under("1"),
             [
-                vec!["21:1-1"; 2],
-                vec!["21:100-100"; 3],
+                vec!["21:1-1"],
+                vec!["21:100-100"],
                 vec![],
-                vec!["21:2000-2000"; 2],
-                vec!["21:2-300"],
+                vec!["21:2000-2000"],
+                vec![],
             ]
+        );
+    }
+
+    /// A row whose `POS` is `-0` is listed as Ensembl VEP 116.3 lists it. The
+    /// text is true in Perl and no record's start, so the row as written
+    /// lists nowhere; once a shared leading base moves its start the key
+    /// holds the number, 0 plus the base (`Utils/Sequence.pm:971, 1013`), and
+    /// the record at base 1 that the trimmed alleles spell lists the row,
+    /// named `21:0-1` under `coords`. A row at `0`, which Perl reads as
+    /// false, lists nowhere whatever its alleles (`:1173`).
+    #[test]
+    fn an_exact_source_lists_a_row_under_minus_zero_as_ensembl_vep_does() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = fixture(
+            dir.path(),
+            "minus_zero.vcf.gz",
+            &HEADER,
+            &[
+                "21\t-0\tminus_zero\tA\tG\t.\t.\tAF=0.1",
+                "21\t-0\tshared_base\tAC\tAT\t.\t.\tAF=0.2",
+                "21\t0\tzero\tAC\tAT\t.\t.\tAF=0.3",
+                "21\t1\tplain\tA\tG\t.\t.\tAF=0.4",
+            ],
+        );
+        let listed_under = |coords: &str| -> Vec<Vec<Named>> {
+            let sources = sources(
+                &format!("file={file},format=vcf,type=exact,coords={coords},fields=AF"),
+                CustomRunOptions::default(),
+            );
+            let mut batch = records(vec![allele(1, 1, "A", "G"), allele(1, 1, "C", "T")]);
+            annotate(&sources, &mut batch);
+            batch.iter().map(listed).collect()
+        };
+        let frequency = |name: &str, frequency: &str| vec![named(name, &[("AF", frequency)])];
+        assert_eq!(
+            listed_under("0"),
+            [frequency("plain", "0.4"), frequency("shared_base", "0.2")]
+        );
+        assert_eq!(
+            listed_under("1"),
+            [frequency("21:1-1", "0.4"), frequency("21:0-1", "0.2")]
+        );
+    }
+
+    /// An `exact` source lists a row where the number Perl reads from its
+    /// `POS` places it, as Ensembl VEP 116.3 does: a deletion row at `1e2`
+    /// whose `END` is 300 is the deletion of bases 101 to 300
+    /// (`File.pm:523, 572`), and a row at `+100` whose alleles share their
+    /// first base is keyed at 101 beside the plain row at `100`, where a row
+    /// at `100.5` is keyed at 101.5 and lists nowhere.
+    #[test]
+    fn an_exact_source_lists_a_row_where_the_number_of_its_pos_places_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = fixture(
+            dir.path(),
+            "placed.vcf.gz",
+            &HEADER,
+            &[
+                "21\t1e2\tdel\tN\t<DEL>\t.\t.\tSVTYPE=DEL;END=300",
+                "21\t100\tplain\tAC\tAT\t.\t.\tAF=0.1",
+                "21\t+100\tplus\tAC\tAT\t.\t.\tAF=0.2",
+                "21\t100.5\tfrac\tAC\tAT\t.\t.\tAF=0.3",
+            ],
+        );
+        let names_under = |coords: &str| -> Vec<Vec<String>> {
+            let sources = sources(
+                &format!("file={file},format=vcf,type=exact,coords={coords}"),
+                CustomRunOptions::default(),
+            );
+            let mut deletion = allele(101, 300, "N", "<DEL>");
+            deletion.is_structural = true;
+            deletion.variant_class = VariantClass::StructuralDeletion;
+            deletion.record_so_term = Some(deletion.variant_class.so_term().to_string());
+            let mut batch = records(vec![deletion, allele(101, 101, "C", "T")]);
+            annotate(&sources, &mut batch);
+            batch
+                .iter()
+                .map(|variant| listed(variant).into_iter().map(|(name, _)| name).collect())
+                .collect()
+        };
+        assert_eq!(names_under("0"), [vec!["del"], vec!["plain", "plus"]]);
+        assert_eq!(
+            names_under("1"),
+            [vec!["21:101-300"], vec!["21:100-101"; 2]]
         );
     }
 
     /// A row whose `POS` is the lowest integer and whose reference cell is
     /// empty ends a base below its `POS` (`VCF.pm:391`), where no integer
     /// lies: its end saturates, so under `overlap` the record at base 1,
-    /// which the index hands the row to, lists nothing, as Ensembl VEP 116.2
+    /// which the index hands the row to, lists nothing, as Ensembl VEP 116.3
     /// lists nothing for it.
     #[test]
     fn a_row_at_the_lowest_integer_with_no_reference_base_matches_nothing() {
@@ -1827,7 +1905,7 @@ mod tests {
         );
         let multi_allelic = CustomRunOptions {
             multi_allelic: true,
-            suppress_filter: false,
+            ..CustomRunOptions::default()
         };
         assert_eq!(
             values(multi_allelic, "exact"),
@@ -1903,8 +1981,8 @@ mod tests {
             let sources = sources(
                 &format!("file={file},short_name=S,format=vcf,type=exact{fields}"),
                 CustomRunOptions {
-                    multi_allelic: false,
                     suppress_filter: suppress,
+                    ..CustomRunOptions::default()
                 },
             );
             let mut batch = vec![allele(100, 100, "A", "G"), allele(200, 200, "A", "G")];
@@ -2027,12 +2105,12 @@ mod tests {
     /// a `##fileformat` line naming a major version other than 4 ends the run
     /// as the source opens, with `BaseVCF4.pm:125`'s text, and a value with no
     /// `<digits>.<digits>` with `:129`'s; a `VCFv4.5` line and a file with no
-    /// `##fileformat` line are read (measured on 116.2 with each shape as the
+    /// `##fileformat` line are read (measured on 116.3 with each shape as the
     /// first header line of the sites file: exit 2 and no output for `VCFv3.3`
     /// and `VCFv4`, the annotated row for `VCFv4.5` and the line's absence).
     /// htslib hands each header line over less its `\n` or `\r\n`, so
     /// `##fileformat=\r\n` is read as an empty value and `##fileformat=\r\r\n`
-    /// refused, its value the second `\r` (both measured on 116.2).
+    /// refused, its value the second `\r` (both measured on 116.3).
     #[test]
     fn a_fileformat_line_outside_vcf_4_refuses_the_source_at_open() {
         let dir = tempfile::tempdir().unwrap();
@@ -2172,7 +2250,7 @@ mod tests {
 
     /// `InputBuffer.pm:638-710` splits a multi-allelic record under `--minimal`
     /// into one feature per allele once the trimming moved one, and the rejoin
-    /// (`OutputFactory.pm:2282-2340`) copies the later features' transcript
+    /// (`OutputFactory.pm:2291-2349`) copies the later features' transcript
     /// variations alone, so the record's custom annotations are the first
     /// feature's: the record `ATG/ACG/A` at 100, split to `T/C` at 101 and
     /// `TG/-` at 101-102, lists the record its first allele matches and not

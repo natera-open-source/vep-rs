@@ -1,0 +1,1 @@
+ERROR: [storable_to_json] sereal-info uses the sereal serialiser; only a Storable cache converts

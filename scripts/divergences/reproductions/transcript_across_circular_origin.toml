@@ -1,0 +1,65 @@
+entry = "transcript_across_circular_origin"
+page = "docs/divergences/transcript-across-circular-origin.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "observed"
+input_class_basis = "seen in the Ensembl Genomes release 63 cache of Synechocystis sp. PCC 6803: 5 of 3,614 transcripts, one on the chromosome and one on each of four plasmids"
+notes = "A synthetic cache of one circular sequence, ring, 12,000 bases long, with one forward protein-coding gene of 150 bases across its origin: its first 90 bases are the last 90 of the sequence, 11,911 to 12,000, and its last 60 the first 60. The cache holds the transcript as an Ensembl cache dump stores one of this shape: start -89, end 60, a mapper pair that runs from 11,911 to 60, a slice flagged circular. Four substitutions of one base: at base 31, the 121st coding base and the first base of codon 41; at base 60, the gene's last base and the third base of its stop codon; at base 11,000, 911 bases before the gene's first base; and at base 11,950, the 40th coding base and the first base of codon 14. Ensembl VEP writes intergenic_variant on the transcript's own row for the first two, beside a cDNA position that is no position on the second, and no row of the transcript for the other two; vep-rs writes the two missense changes, the kept stop codon and the upstream row. inputs/transcript_across_circular_origin/make_cache.pl builds the cache in the Ensembl VEP image; vep-rs reads the committed json_cache beside it, which a prepare step holds to the conversion of that cache by tools/vep-storable-to-json."
+
+prepare = [
+  '''[ -n "$IMAGE" ] || { echo "the synthetic cache is built in the Ensembl VEP image: give --image" >&2; exit 1; }''',
+  '''docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$REPO/scripts/divergences/reproductions/inputs/transcript_across_circular_origin:/inputs:ro" -v "$STAGE:/stage" "$IMAGE" perl /inputs/make_cache.pl /stage/perl-cache > "$STAGE/build.log" 2>&1 || { tail -n 1 "$STAGE/build.log" >&2; exit 1; }''',
+  '''cargo run --release --locked --quiet --manifest-path "$REPO/tools/vep-storable-to-json/Cargo.toml" -- "$STAGE/perl-cache/circular_example/116_RING1" "$STAGE/json-converted" > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
+  '''for f in info.json transcripts/ring/1-1000000.json; do cmp -s "$STAGE/json-converted/$f" "$JSON_CACHE/$f" || { echo "the committed json_cache is not the conversion of the cache make_cache.pl builds: copy $STAGE/json-converted over it" >&2; exit 1; }; done''',
+]
+
+[input]
+format = "vcf"
+text = """
+ring	31	low_side_31	A	G	.	.	.
+ring	60	last_gene_base_60	A	G	.	.	.
+ring	11000	before_the_gene_11000	A	G	.	.	.
+ring	11950	high_side_11950	A	G	.	.	.
+"""
+
+[cache]
+species = "circular_example"
+assembly = "RING1"
+json_cache = "scripts/divergences/reproductions/inputs/transcript_across_circular_origin/json_cache"
+perl_cache = "{stage}/perl-cache"
+
+[run]
+flags = []
+
+[compare]
+kind = "rows"
+where = { record = ["low_side_31", "last_gene_base_60", "before_the_gene_11000", "high_side_11950"] }
+columns = ["Uploaded_variation", "Location", "Feature", "Feature_type", "Consequence", "cDNA_position", "CDS_position", "Protein_position", "Amino_acids"]
+
+[expected]
+ensembl_vep = [
+  "before_the_gene_11000 | ring:11000 | - | - | intergenic_variant | - | - | - | -",
+  "high_side_11950 | ring:11950 | - | - | intergenic_variant | - | - | - | -",
+  "last_gene_base_60 | ring:60 | RINGT1 | Transcript | intergenic_variant | ?--11850 | - | - | -",
+  "low_side_31 | ring:31 | RINGT1 | Transcript | intergenic_variant | - | - | - | -",
+]
+vep_rs = [
+  "before_the_gene_11000 | ring:11000 | RINGT1 | Transcript | upstream_gene_variant | - | - | - | -",
+  "high_side_11950 | ring:11950 | RINGT1 | Transcript | missense_variant | 40 | 40 | 14 | I/V",
+  "last_gene_base_60 | ring:60 | RINGT1 | Transcript | stop_retained_variant | 150 | 150 | 50 | *",
+  "low_side_31 | ring:31 | RINGT1 | Transcript | missense_variant | 121 | 121 | 41 | T/A",
+]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/json_cache.rs::place_across_origin",
+    "crates/vep-cli/src/runner.rs::annotate_variant",
+    "crates/vep-cli/src/runner.rs::one_turn_on",
+    "crates/vep-cli/src/transcript_index.rs::TranscriptIndex::origin_shift",
+]
+tests = [
+    "crates/vep-cli/src/json_cache.rs::tests::a_transcript_stored_across_the_origin_runs_on_past_the_last_base",
+    "crates/vep-cli/src/transcript_index.rs::tests::a_span_among_the_first_bases_reaches_a_transcript_across_the_origin_one_turn_on",
+    "crates/vep-cli/tests/transcript_across_circular_origin.rs::a_transcript_stored_across_the_origin_is_annotated_on_both_sides_of_it",
+    "crates/vep-cli/tests/transcript_across_circular_origin.rs::the_reproduction_records_the_rows_vep_rs_writes",
+]

@@ -1,0 +1,17 @@
+{
+  "assembly": "GCA000497125v2",
+  "cache_version": 63,
+  "contig_order": [
+    "AUWU02000032",
+    "CM035318",
+    "CM035324"
+  ],
+  "polyphen": "",
+  "regulatory": false,
+  "sift": "",
+  "source_versions": {
+    "assembly": "GCA000497125v2",
+    "genebuild": "VEuPathDB-2022-09-26"
+  },
+  "species": "spironucleus_salmonicida"
+}

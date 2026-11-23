@@ -1,0 +1,11 @@
+#!genome-build TEST
+#!genome-version TEST1
+21	src	gene	100	900	.	+	.	gene_id "G1"; gene_version "1"; tag "basic";
+21	src	transcript	100	900	.	+	.	gene_id "G1"; gene_version "1"; transcript_id "T1"; transcript_version "3"; gene_name "ONE"; tag "basic"; tag "Ensembl_canonical"; transcript_support_level "1";
+21	src	exon	100	900	.	+	.	gene_id "G1"; transcript_id "T1"; exon_number "1"; tag "basic"; tag "cds_start_NF";
+21	src	transcript	100	900	.	+	.	gene_id "G1"; transcript_id "T2.7"; tag "gencode_basic"; tag "gencode_primary";
+21	src	transcript	100	900	.	+	.	gene_id "G2"; transcript_id "T3"; tag "cds_start_NF"; tag "cds_end_NF"; tag "mRNA_start_NF";
+21	src	transcript	100	900	.	+	.	gene_id "G2"; transcript_id "T4";
+21	src	transcript	100	900	.	+	.	gene_id "G2"; transcript_id "T5"; tag "gencode_primary"
+21	src	transcript	100	900	.	+	.	gene_id "G2"; transcript_id "T5"; tag "basic";
+21	src	transcript	100	900	.	+	.

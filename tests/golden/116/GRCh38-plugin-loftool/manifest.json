@@ -53,7 +53,7 @@
    "plugin_data/LoFtool_scores.txt"
   ]
  },
- "suites": {
+ "datasets": {
   "plugin-loftool": {
    "reference": "default.txt",
    "input": "candidates.vcf",
@@ -174,7 +174,7 @@
  },
  "records": [
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t10552715\t4286137\tGAGTAAGTCAGTTTGA\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,coding_sequence_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
@@ -183,7 +183,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t10567789\t4453221\tG\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant,splice_region_variant",
@@ -192,7 +192,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t14166443\t3017215\tT\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -203,7 +203,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t14189118\t1535925\tA\tACCC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_insertion",
@@ -213,7 +213,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t17561425\t4453310\tG\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -224,21 +224,21 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t18332125\t2192887\tC\tT\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t18341479\t4771428\tCAT\tC\t.\t.\t.",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t25729680\t4177830\tT\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -249,7 +249,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t25758072\t3280382\tA\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -259,7 +259,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t25975112\t2966107\tG\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -271,7 +271,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t26021865\t339641\tT\tTGTG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_insertion",
@@ -282,7 +282,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t28883046\t2318179\tA\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -292,14 +292,14 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t28931172\t982962\tAT\tA\t.\t.\t.",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t28959568\t3541202\tT\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -310,7 +310,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t31667290\t14766\tA\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -324,7 +324,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t31667341\t1495024\tCAGG\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -337,7 +337,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t31990151\t2652590\tG\tA\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -346,7 +346,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t34799450\t1057196\tA\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -354,7 +354,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t34834518\t2799017\tG\tGC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -366,7 +366,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t36043946\t3160667\tG\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -381,7 +381,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t37164161\t2517938\tG\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -391,7 +391,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t37188594\t4286181\tCG\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant",
@@ -403,7 +403,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t37493077\t1722317\tT\tTA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -413,7 +413,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t37505310\t426400\tC\tT\t.\t.\t.",
    "combinations": [
     "missense_variant",
@@ -421,7 +421,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t37714697\t189255\tC\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -431,7 +431,7 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t37714853\t3340942\tCTG\tC\t.\t.\t.",
    "combinations": [
     "frameshift_variant",
@@ -441,28 +441,28 @@
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t40167233\t3239443\tG\tC\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t40187178\t981300\tCCATCAAA\tC\t.\t.\t.",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "plugin-loftool",
+   "dataset": "plugin-loftool",
    "vcf": "21\t43403420\t1879543\tG\tA\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "flag_sets": [

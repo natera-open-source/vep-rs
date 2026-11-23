@@ -1,0 +1,403 @@
+CLIPPED_NOTATION_RE.pattern	[]	"(?P<numbering>[cn])\\.(?P<start>\\*?-?\\d+(?:[+-]\\d+)?)(?:_(?P<end>\\*?-?\\d+(?:[+-]\\d+)?))?(?:[ACGTN]>(?P<alternate_base>[ACGT])|(?P<kind>delins|ins)(?P<bases>[ACGT]+)|(?P<plain>inv|del|dup))"
+CLIPPED_NOTATION_RE.flags	[]	32
+coordinate_intron_offset	["-103"]	"0"
+exonic_run	["-103", "-103"]	1
+exonic_run	["-103", "-95"]	9
+exonic_run	["-103", "-49-1"]	null
+exonic_run	["-103", "-5+2"]	null
+exonic_run	["-103", "-1"]	103
+exonic_run	["-103", "1"]	null
+exonic_run	["-103", "14"]	null
+exonic_run	["-103", "20+6"]	null
+exonic_run	["-103", "21-9"]	null
+exonic_run	["-103", "300"]	null
+exonic_run	["-103", "*1"]	null
+exonic_run	["-103", "*5"]	null
+exonic_run	["-103", "*9"]	null
+exonic_run	["-103", "*12-3"]	null
+coordinate_intron_offset	["-95"]	"0"
+exonic_run	["-95", "-103"]	-7
+exonic_run	["-95", "-95"]	1
+exonic_run	["-95", "-49-1"]	null
+exonic_run	["-95", "-5+2"]	null
+exonic_run	["-95", "-1"]	95
+exonic_run	["-95", "1"]	null
+exonic_run	["-95", "14"]	null
+exonic_run	["-95", "20+6"]	null
+exonic_run	["-95", "21-9"]	null
+exonic_run	["-95", "300"]	null
+exonic_run	["-95", "*1"]	null
+exonic_run	["-95", "*5"]	null
+exonic_run	["-95", "*9"]	null
+exonic_run	["-95", "*12-3"]	null
+coordinate_intron_offset	["-49-1"]	"-1"
+exonic_run	["-49-1", "-103"]	null
+exonic_run	["-49-1", "-95"]	null
+exonic_run	["-49-1", "-49-1"]	null
+exonic_run	["-49-1", "-5+2"]	null
+exonic_run	["-49-1", "-1"]	null
+exonic_run	["-49-1", "1"]	null
+exonic_run	["-49-1", "14"]	null
+exonic_run	["-49-1", "20+6"]	null
+exonic_run	["-49-1", "21-9"]	null
+exonic_run	["-49-1", "300"]	null
+exonic_run	["-49-1", "*1"]	null
+exonic_run	["-49-1", "*5"]	null
+exonic_run	["-49-1", "*9"]	null
+exonic_run	["-49-1", "*12-3"]	null
+coordinate_intron_offset	["-5+2"]	"2"
+exonic_run	["-5+2", "-103"]	null
+exonic_run	["-5+2", "-95"]	null
+exonic_run	["-5+2", "-49-1"]	null
+exonic_run	["-5+2", "-5+2"]	null
+exonic_run	["-5+2", "-1"]	null
+exonic_run	["-5+2", "1"]	null
+exonic_run	["-5+2", "14"]	null
+exonic_run	["-5+2", "20+6"]	null
+exonic_run	["-5+2", "21-9"]	null
+exonic_run	["-5+2", "300"]	null
+exonic_run	["-5+2", "*1"]	null
+exonic_run	["-5+2", "*5"]	null
+exonic_run	["-5+2", "*9"]	null
+exonic_run	["-5+2", "*12-3"]	null
+coordinate_intron_offset	["-1"]	"0"
+exonic_run	["-1", "-103"]	-101
+exonic_run	["-1", "-95"]	-93
+exonic_run	["-1", "-49-1"]	null
+exonic_run	["-1", "-5+2"]	null
+exonic_run	["-1", "-1"]	1
+exonic_run	["-1", "1"]	null
+exonic_run	["-1", "14"]	null
+exonic_run	["-1", "20+6"]	null
+exonic_run	["-1", "21-9"]	null
+exonic_run	["-1", "300"]	null
+exonic_run	["-1", "*1"]	null
+exonic_run	["-1", "*5"]	null
+exonic_run	["-1", "*9"]	null
+exonic_run	["-1", "*12-3"]	null
+coordinate_intron_offset	["1"]	"0"
+exonic_run	["1", "-103"]	null
+exonic_run	["1", "-95"]	null
+exonic_run	["1", "-49-1"]	null
+exonic_run	["1", "-5+2"]	null
+exonic_run	["1", "-1"]	null
+exonic_run	["1", "1"]	1
+exonic_run	["1", "14"]	14
+exonic_run	["1", "20+6"]	null
+exonic_run	["1", "21-9"]	null
+exonic_run	["1", "300"]	300
+exonic_run	["1", "*1"]	null
+exonic_run	["1", "*5"]	null
+exonic_run	["1", "*9"]	null
+exonic_run	["1", "*12-3"]	null
+coordinate_intron_offset	["14"]	"0"
+exonic_run	["14", "-103"]	null
+exonic_run	["14", "-95"]	null
+exonic_run	["14", "-49-1"]	null
+exonic_run	["14", "-5+2"]	null
+exonic_run	["14", "-1"]	null
+exonic_run	["14", "1"]	-12
+exonic_run	["14", "14"]	1
+exonic_run	["14", "20+6"]	null
+exonic_run	["14", "21-9"]	null
+exonic_run	["14", "300"]	287
+exonic_run	["14", "*1"]	null
+exonic_run	["14", "*5"]	null
+exonic_run	["14", "*9"]	null
+exonic_run	["14", "*12-3"]	null
+coordinate_intron_offset	["20+6"]	"6"
+exonic_run	["20+6", "-103"]	null
+exonic_run	["20+6", "-95"]	null
+exonic_run	["20+6", "-49-1"]	null
+exonic_run	["20+6", "-5+2"]	null
+exonic_run	["20+6", "-1"]	null
+exonic_run	["20+6", "1"]	null
+exonic_run	["20+6", "14"]	null
+exonic_run	["20+6", "20+6"]	null
+exonic_run	["20+6", "21-9"]	null
+exonic_run	["20+6", "300"]	null
+exonic_run	["20+6", "*1"]	null
+exonic_run	["20+6", "*5"]	null
+exonic_run	["20+6", "*9"]	null
+exonic_run	["20+6", "*12-3"]	null
+coordinate_intron_offset	["21-9"]	"-9"
+exonic_run	["21-9", "-103"]	null
+exonic_run	["21-9", "-95"]	null
+exonic_run	["21-9", "-49-1"]	null
+exonic_run	["21-9", "-5+2"]	null
+exonic_run	["21-9", "-1"]	null
+exonic_run	["21-9", "1"]	null
+exonic_run	["21-9", "14"]	null
+exonic_run	["21-9", "20+6"]	null
+exonic_run	["21-9", "21-9"]	null
+exonic_run	["21-9", "300"]	null
+exonic_run	["21-9", "*1"]	null
+exonic_run	["21-9", "*5"]	null
+exonic_run	["21-9", "*9"]	null
+exonic_run	["21-9", "*12-3"]	null
+coordinate_intron_offset	["300"]	"0"
+exonic_run	["300", "-103"]	null
+exonic_run	["300", "-95"]	null
+exonic_run	["300", "-49-1"]	null
+exonic_run	["300", "-5+2"]	null
+exonic_run	["300", "-1"]	null
+exonic_run	["300", "1"]	-298
+exonic_run	["300", "14"]	-285
+exonic_run	["300", "20+6"]	null
+exonic_run	["300", "21-9"]	null
+exonic_run	["300", "300"]	1
+exonic_run	["300", "*1"]	null
+exonic_run	["300", "*5"]	null
+exonic_run	["300", "*9"]	null
+exonic_run	["300", "*12-3"]	null
+coordinate_intron_offset	["*1"]	"0"
+exonic_run	["*1", "-103"]	null
+exonic_run	["*1", "-95"]	null
+exonic_run	["*1", "-49-1"]	null
+exonic_run	["*1", "-5+2"]	null
+exonic_run	["*1", "-1"]	null
+exonic_run	["*1", "1"]	null
+exonic_run	["*1", "14"]	null
+exonic_run	["*1", "20+6"]	null
+exonic_run	["*1", "21-9"]	null
+exonic_run	["*1", "300"]	null
+exonic_run	["*1", "*1"]	1
+exonic_run	["*1", "*5"]	5
+exonic_run	["*1", "*9"]	9
+exonic_run	["*1", "*12-3"]	null
+coordinate_intron_offset	["*5"]	"0"
+exonic_run	["*5", "-103"]	null
+exonic_run	["*5", "-95"]	null
+exonic_run	["*5", "-49-1"]	null
+exonic_run	["*5", "-5+2"]	null
+exonic_run	["*5", "-1"]	null
+exonic_run	["*5", "1"]	null
+exonic_run	["*5", "14"]	null
+exonic_run	["*5", "20+6"]	null
+exonic_run	["*5", "21-9"]	null
+exonic_run	["*5", "300"]	null
+exonic_run	["*5", "*1"]	-3
+exonic_run	["*5", "*5"]	1
+exonic_run	["*5", "*9"]	5
+exonic_run	["*5", "*12-3"]	null
+coordinate_intron_offset	["*9"]	"0"
+exonic_run	["*9", "-103"]	null
+exonic_run	["*9", "-95"]	null
+exonic_run	["*9", "-49-1"]	null
+exonic_run	["*9", "-5+2"]	null
+exonic_run	["*9", "-1"]	null
+exonic_run	["*9", "1"]	null
+exonic_run	["*9", "14"]	null
+exonic_run	["*9", "20+6"]	null
+exonic_run	["*9", "21-9"]	null
+exonic_run	["*9", "300"]	null
+exonic_run	["*9", "*1"]	-7
+exonic_run	["*9", "*5"]	-3
+exonic_run	["*9", "*9"]	1
+exonic_run	["*9", "*12-3"]	null
+coordinate_intron_offset	["*12-3"]	"-3"
+exonic_run	["*12-3", "-103"]	null
+exonic_run	["*12-3", "-95"]	null
+exonic_run	["*12-3", "-49-1"]	null
+exonic_run	["*12-3", "-5+2"]	null
+exonic_run	["*12-3", "-1"]	null
+exonic_run	["*12-3", "1"]	null
+exonic_run	["*12-3", "14"]	null
+exonic_run	["*12-3", "20+6"]	null
+exonic_run	["*12-3", "21-9"]	null
+exonic_run	["*12-3", "300"]	null
+exonic_run	["*12-3", "*1"]	null
+exonic_run	["*12-3", "*5"]	null
+exonic_run	["*12-3", "*9"]	null
+exonic_run	["*12-3", "*12-3"]	null
+SpliceWindows.holds	["ENST1", 1, [[101, 200], [202, 301]], 150, 349]	[199, 200, 201, 202, 203]
+SpliceWindows.holds	["ENST1", 1, [[101, 200], [203, 302]], 150, 349]	[200, 201, 202, 203]
+SpliceWindows.holds	["ENST1", 1, [[101, 200], [204, 303]], 150, 349]	[201, 202, 203]
+SpliceWindows.holds	["ENST1", 1, [[101, 200], [205, 304]], 150, 349]	[202, 203]
+SpliceWindows.holds	["ENST1", 1, [[101, 200], [206, 305]], 150, 349]	[203]
+SpliceWindows.holds	["ENST1", 1, [[101, 200], [207, 306]], 150, 349]	[]
+SpliceWindows.holds	["ENST1", -1, [[202, 301], [101, 200]], 150, 349]	[199, 200, 201, 202, 203]
+SpliceWindows.holds	["ENST1", -1, [[203, 302], [101, 200]], 150, 349]	[200, 201, 202, 203]
+SpliceWindows.holds	["ENST1", -1, [[204, 303], [101, 200]], 150, 349]	[201, 202, 203]
+SpliceWindows.holds	["ENST1", -1, [[205, 304], [101, 200]], 150, 349]	[202, 203]
+SpliceWindows.holds	["ENST1", -1, [[206, 305], [101, 200]], 150, 349]	[203]
+SpliceWindows.holds	["ENST1", -1, [[207, 306], [101, 200]], 150, 349]	[]
+INTRON_END_COPY_RE.pattern	[]	"c\\.([1-9]\\d*)-1dup"
+INTRON_END_DUPLICATION_RE.pattern	[]	"c\\.([1-9]\\d*)([+-])([1-9]\\d*)_([1-9]\\d*)-1dup"
+INTRON_END_INSERTION_RE.pattern	[]	"c\\.([1-9]\\d*)-1_([1-9]\\d*)ins([A-Z]+)"
+INTRON_END_PAIRS	[]	["AC", "AG"]
+SHORT_INTRON_BASES	[]	13
+transcript_intron_end_gaps	[{"stable_id": "ENST00000000001", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 11000, "end": 11099}, {"start": 11200, "end": 11299}, {"start": 11500, "end": 11599}]}]	[11199, 11499]
+transcript_intron_end_gaps	[{"stable_id": "ENST00000000002", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 21000, "end": 21099}, {"start": 21200, "end": 21299}, {"start": 21500, "end": 21599}]}]	[21199, 21499]
+transcript_intron_end_gaps	[{"stable_id": "ENST00000000003", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 31000, "end": 31099}, {"start": 31200, "end": 31299}, {"start": 31500, "end": 31599}]}]	[31199, 31499]
+transcript_intron_end_gaps	[{"stable_id": "ENST00000000004", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 41000, "end": 41099}, {"start": 41200, "end": 41299}, {"start": 41500, "end": 41599}]}]	[41199, 41499]
+transcript_intron_end_gaps	[{"stable_id": "ENST00000000005", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 51000, "end": 51099}, {"start": 51200, "end": 51299}, {"start": 51500, "end": 51599}]}]	[51199, 51499]
+transcript_intron_end_gaps	[{"stable_id": "ENST00000000006", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 61000, "end": 61099}, {"start": 61200, "end": 61299}, {"start": 61500, "end": 61599}]}]	[61199, 61499]
+transcript_intron_end_gaps	[{"stable_id": "ENST00000000007", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 71000, "end": 71099}, {"start": 71200, "end": 71299}, {"start": 71500, "end": 71599}]}]	[71199, 71499]
+transcript_intron_end_gaps	[{"stable_id": "ENST00000000008", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 81000, "end": 81099}, {"start": 81200, "end": 81299}, {"start": 81500, "end": 81599}]}]	[81199, 81499]
+transcript_intron_end_gaps	[{"stable_id": "ENST00000000009", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 91000, "end": 91099}, {"start": 91200, "end": 91299}, {"start": 91500, "end": 91599}]}]	[91199, 91499]
+transcript_intron_end_gaps	[{"stable_id": "ENST00000000010", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 101000, "end": 101099}, {"start": 101200, "end": 101299}, {"start": 101500, "end": 101599}]}]	[101199, 101499]
+transcript_intron_end_gaps	[{"stable_id": "ENST00000000011", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 111000, "end": 111099}, {"start": 111200, "end": 111299}, {"start": 111500, "end": 111599}]}]	[111199, 111499]
+transcript_intron_end_gaps	[{"stable_id": "ENST00000000012", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 121000, "end": 121099}, {"start": 121200, "end": 121299}, {"start": 121500, "end": 121599}]}]	[121199, 121499]
+transcript_intron_end_gaps	[{"stable_id": "ENST00000000013", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 131000, "end": 131099}, {"start": 131200, "end": 131299}, {"start": 131500, "end": 131599}]}]	[131199, 131499]
+transcript_intron_end_gaps	[{"stable_id": "ENST00000000014", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 141000, "end": 141099}, {"start": 141200, "end": 141299}, {"start": 141500, "end": 141599}]}]	[141199, 141499]
+transcript_intron_end_gaps	[{"stable_id": "ENST00000000021", "strand": -1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 211500, "end": 211599}, {"start": 211200, "end": 211299}, {"start": 211000, "end": 211099}]}]	[211099, 211299]
+transcript_intron_end_gaps	[{"stable_id": "ENST00000000022", "strand": 1, "cdna_coding_start": 151, "cdna_coding_end": 250, "exons": [{"start": 221000, "end": 221099}, {"start": 221200, "end": 221299}, {"start": 221400, "end": 221499}, {"start": 221600, "end": 221699}]}]	[221399]
+transcript_intron_end_gaps	[{"stable_id": "ENST00000000023", "strand": 1, "cdna_coding_start": 1, "cdna_coding_end": 371, "exons": [{"start": 231000, "end": 231099}, {"start": 231113, "end": 231199}, {"start": 231202, "end": 231299}, {"start": 231314, "end": 231399}]}]	[231313]
+transcript_intron_end_gaps	[{"stable_id": "ENST00000000024", "strand": 1, "cdna_coding_start": 1, "cdna_coding_end": 371, "exons": [{"start": 241000, "end": 241099}, {"start": 241113, "end": 241199}, {"start": 241202, "end": 241299}, {"start": 241314, "end": 241399}]}]	[241313]
+intron_end_insertion_form	["c.51-1dup"]	"copy"
+intron_end_insertion_form	["c.51-3_51-1dup"]	"duplication"
+intron_end_insertion_form	["c.50+7_51-1dup"]	"duplication"
+intron_end_insertion_form	["c.51-1_51insT"]	"insertion"
+intron_end_insertion_form	["c.51-1_51insTAT"]	"insertion"
+intron_end_insertion_form	["c.51-1_51insTAG"]	"pair"
+intron_end_insertion_form	["c.51-1_51insTAC"]	"pair"
+intron_end_insertion_form	["c.51-1_51-1dup"]	null
+intron_end_insertion_form	["c.49+7_51-1dup"]	null
+intron_end_insertion_form	["c.-50-1dup"]	null
+intron_end_insertion_form	["c.*51-1dup"]	null
+intron_end_insertion_form	["c.100dup"]	null
+intron_end_insertion_form	["n.51-1dup"]	null
+copy_of_the_intron_last_base	["c.51-1dup"]	true
+copy_of_the_intron_last_base	["c.51-3_51-1dup"]	false
+copy_of_the_intron_last_base	["c.50+7_51-1dup"]	false
+copy_of_the_intron_last_base	["c.51-1_51insT"]	false
+copy_of_the_intron_last_base	["c.51-1_51insTAT"]	false
+copy_of_the_intron_last_base	["c.51-1_51insTAG"]	false
+copy_of_the_intron_last_base	["c.51-1_51insTAC"]	false
+copy_of_the_intron_last_base	["c.51-1_51-1dup"]	false
+copy_of_the_intron_last_base	["c.49+7_51-1dup"]	false
+copy_of_the_intron_last_base	["c.-50-1dup"]	false
+copy_of_the_intron_last_base	["c.*51-1dup"]	false
+copy_of_the_intron_last_base	["c.100dup"]	false
+copy_of_the_intron_last_base	["n.51-1dup"]	false
+duplication_of_the_intron_last_bases	["c.51-1dup"]	false
+duplication_of_the_intron_last_bases	["c.51-3_51-1dup"]	true
+duplication_of_the_intron_last_bases	["c.50+7_51-1dup"]	true
+duplication_of_the_intron_last_bases	["c.51-1_51insT"]	false
+duplication_of_the_intron_last_bases	["c.51-1_51insTAT"]	false
+duplication_of_the_intron_last_bases	["c.51-1_51insTAG"]	false
+duplication_of_the_intron_last_bases	["c.51-1_51insTAC"]	false
+duplication_of_the_intron_last_bases	["c.51-1_51-1dup"]	false
+duplication_of_the_intron_last_bases	["c.49+7_51-1dup"]	false
+duplication_of_the_intron_last_bases	["c.-50-1dup"]	false
+duplication_of_the_intron_last_bases	["c.*51-1dup"]	false
+duplication_of_the_intron_last_bases	["c.100dup"]	false
+duplication_of_the_intron_last_bases	["n.51-1dup"]	false
+insertion_that_cannot_end_the_intron	["c.51-1dup"]	false
+insertion_that_cannot_end_the_intron	["c.51-3_51-1dup"]	false
+insertion_that_cannot_end_the_intron	["c.50+7_51-1dup"]	false
+insertion_that_cannot_end_the_intron	["c.51-1_51insT"]	true
+insertion_that_cannot_end_the_intron	["c.51-1_51insTAT"]	true
+insertion_that_cannot_end_the_intron	["c.51-1_51insTAG"]	false
+insertion_that_cannot_end_the_intron	["c.51-1_51insTAC"]	false
+insertion_that_cannot_end_the_intron	["c.51-1_51-1dup"]	false
+insertion_that_cannot_end_the_intron	["c.49+7_51-1dup"]	false
+insertion_that_cannot_end_the_intron	["c.-50-1dup"]	false
+insertion_that_cannot_end_the_intron	["c.*51-1dup"]	false
+insertion_that_cannot_end_the_intron	["c.100dup"]	false
+insertion_that_cannot_end_the_intron	["n.51-1dup"]	false
+insertion_that_ends_in_an_intron_end_pair	["c.51-1dup"]	false
+insertion_that_ends_in_an_intron_end_pair	["c.51-3_51-1dup"]	false
+insertion_that_ends_in_an_intron_end_pair	["c.50+7_51-1dup"]	false
+insertion_that_ends_in_an_intron_end_pair	["c.51-1_51insT"]	false
+insertion_that_ends_in_an_intron_end_pair	["c.51-1_51insTAT"]	false
+insertion_that_ends_in_an_intron_end_pair	["c.51-1_51insTAG"]	true
+insertion_that_ends_in_an_intron_end_pair	["c.51-1_51insTAC"]	true
+insertion_that_ends_in_an_intron_end_pair	["c.51-1_51-1dup"]	false
+insertion_that_ends_in_an_intron_end_pair	["c.49+7_51-1dup"]	false
+insertion_that_ends_in_an_intron_end_pair	["c.-50-1dup"]	false
+insertion_that_ends_in_an_intron_end_pair	["c.*51-1dup"]	false
+insertion_that_ends_in_an_intron_end_pair	["c.100dup"]	false
+insertion_that_ends_in_an_intron_end_pair	["n.51-1dup"]	false
+INTRON_START_INSERTION_RE.pattern	[]	"c\\.([1-9]\\d*)_([1-9]\\d*)\\+1ins([A-Z]+)"
+coding_transcript_exons	[{"stable_id": "ENST00000000001", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 11000, "end": 11099}, {"start": 11200, "end": 11299}, {"start": 11500, "end": 11599}]}]	[true, [[11000, 11099], [11200, 11299], [11500, 11599]], 11050, 11549]
+transcript_intron_start_gaps	[{"stable_id": "ENST00000000001", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 11000, "end": 11099}, {"start": 11200, "end": 11299}, {"start": 11500, "end": 11599}]}]	[11099, 11299]
+coding_transcript_exons	[{"stable_id": "ENST00000000002", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 21000, "end": 21099}, {"start": 21200, "end": 21299}, {"start": 21500, "end": 21599}]}]	[true, [[21000, 21099], [21200, 21299], [21500, 21599]], 21050, 21549]
+transcript_intron_start_gaps	[{"stable_id": "ENST00000000002", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 21000, "end": 21099}, {"start": 21200, "end": 21299}, {"start": 21500, "end": 21599}]}]	[21099, 21299]
+coding_transcript_exons	[{"stable_id": "ENST00000000003", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 31000, "end": 31099}, {"start": 31200, "end": 31299}, {"start": 31500, "end": 31599}]}]	[true, [[31000, 31099], [31200, 31299], [31500, 31599]], 31050, 31549]
+transcript_intron_start_gaps	[{"stable_id": "ENST00000000003", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 31000, "end": 31099}, {"start": 31200, "end": 31299}, {"start": 31500, "end": 31599}]}]	[31099, 31299]
+coding_transcript_exons	[{"stable_id": "ENST00000000004", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 41000, "end": 41099}, {"start": 41200, "end": 41299}, {"start": 41500, "end": 41599}]}]	[true, [[41000, 41099], [41200, 41299], [41500, 41599]], 41050, 41549]
+transcript_intron_start_gaps	[{"stable_id": "ENST00000000004", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 41000, "end": 41099}, {"start": 41200, "end": 41299}, {"start": 41500, "end": 41599}]}]	[41099, 41299]
+coding_transcript_exons	[{"stable_id": "ENST00000000005", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 51000, "end": 51099}, {"start": 51200, "end": 51299}, {"start": 51500, "end": 51599}]}]	[true, [[51000, 51099], [51200, 51299], [51500, 51599]], 51050, 51549]
+transcript_intron_start_gaps	[{"stable_id": "ENST00000000005", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 51000, "end": 51099}, {"start": 51200, "end": 51299}, {"start": 51500, "end": 51599}]}]	[51099, 51299]
+coding_transcript_exons	[{"stable_id": "ENST00000000006", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 61000, "end": 61099}, {"start": 61200, "end": 61299}, {"start": 61500, "end": 61599}]}]	[true, [[61000, 61099], [61200, 61299], [61500, 61599]], 61050, 61549]
+transcript_intron_start_gaps	[{"stable_id": "ENST00000000006", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 61000, "end": 61099}, {"start": 61200, "end": 61299}, {"start": 61500, "end": 61599}]}]	[61099, 61299]
+coding_transcript_exons	[{"stable_id": "ENST00000000007", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 71000, "end": 71099}, {"start": 71200, "end": 71299}, {"start": 71500, "end": 71599}]}]	[true, [[71000, 71099], [71200, 71299], [71500, 71599]], 71050, 71549]
+transcript_intron_start_gaps	[{"stable_id": "ENST00000000007", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 71000, "end": 71099}, {"start": 71200, "end": 71299}, {"start": 71500, "end": 71599}]}]	[71099, 71299]
+coding_transcript_exons	[{"stable_id": "ENST00000000008", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 81000, "end": 81099}, {"start": 81200, "end": 81299}, {"start": 81500, "end": 81599}]}]	[true, [[81000, 81099], [81200, 81299], [81500, 81599]], 81050, 81549]
+transcript_intron_start_gaps	[{"stable_id": "ENST00000000008", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 81000, "end": 81099}, {"start": 81200, "end": 81299}, {"start": 81500, "end": 81599}]}]	[81099, 81299]
+coding_transcript_exons	[{"stable_id": "ENST00000000009", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 91000, "end": 91099}, {"start": 91200, "end": 91299}, {"start": 91500, "end": 91599}]}]	[true, [[91000, 91099], [91200, 91299], [91500, 91599]], 91050, 91549]
+transcript_intron_start_gaps	[{"stable_id": "ENST00000000009", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 91000, "end": 91099}, {"start": 91200, "end": 91299}, {"start": 91500, "end": 91599}]}]	[91099, 91299]
+coding_transcript_exons	[{"stable_id": "ENST00000000010", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 101000, "end": 101099}, {"start": 101200, "end": 101299}, {"start": 101500, "end": 101599}]}]	[true, [[101000, 101099], [101200, 101299], [101500, 101599]], 101050, 101549]
+transcript_intron_start_gaps	[{"stable_id": "ENST00000000010", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 101000, "end": 101099}, {"start": 101200, "end": 101299}, {"start": 101500, "end": 101599}]}]	[101099, 101299]
+coding_transcript_exons	[{"stable_id": "ENST00000000011", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 111000, "end": 111099}, {"start": 111200, "end": 111299}, {"start": 111500, "end": 111599}]}]	[true, [[111000, 111099], [111200, 111299], [111500, 111599]], 111050, 111549]
+transcript_intron_start_gaps	[{"stable_id": "ENST00000000011", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 111000, "end": 111099}, {"start": 111200, "end": 111299}, {"start": 111500, "end": 111599}]}]	[111099, 111299]
+coding_transcript_exons	[{"stable_id": "ENST00000000012", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 121000, "end": 121099}, {"start": 121200, "end": 121299}, {"start": 121500, "end": 121599}]}]	[true, [[121000, 121099], [121200, 121299], [121500, 121599]], 121050, 121549]
+transcript_intron_start_gaps	[{"stable_id": "ENST00000000012", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 121000, "end": 121099}, {"start": 121200, "end": 121299}, {"start": 121500, "end": 121599}]}]	[121099, 121299]
+coding_transcript_exons	[{"stable_id": "ENST00000000013", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 131000, "end": 131099}, {"start": 131200, "end": 131299}, {"start": 131500, "end": 131599}]}]	[true, [[131000, 131099], [131200, 131299], [131500, 131599]], 131050, 131549]
+transcript_intron_start_gaps	[{"stable_id": "ENST00000000013", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 131000, "end": 131099}, {"start": 131200, "end": 131299}, {"start": 131500, "end": 131599}]}]	[131099, 131299]
+coding_transcript_exons	[{"stable_id": "ENST00000000014", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 141000, "end": 141099}, {"start": 141200, "end": 141299}, {"start": 141500, "end": 141599}]}]	[true, [[141000, 141099], [141200, 141299], [141500, 141599]], 141050, 141549]
+transcript_intron_start_gaps	[{"stable_id": "ENST00000000014", "strand": 1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 141000, "end": 141099}, {"start": 141200, "end": 141299}, {"start": 141500, "end": 141599}]}]	[141099, 141299]
+coding_transcript_exons	[{"stable_id": "ENST00000000021", "strand": -1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 211500, "end": 211599}, {"start": 211200, "end": 211299}, {"start": 211000, "end": 211099}]}]	[false, [[211000, 211099], [211200, 211299], [211500, 211599]], 211050, 211549]
+transcript_intron_start_gaps	[{"stable_id": "ENST00000000021", "strand": -1, "cdna_coding_start": 51, "cdna_coding_end": 250, "exons": [{"start": 211500, "end": 211599}, {"start": 211200, "end": 211299}, {"start": 211000, "end": 211099}]}]	[211199, 211499]
+coding_transcript_exons	[{"stable_id": "ENST00000000022", "strand": 1, "cdna_coding_start": 151, "cdna_coding_end": 250, "exons": [{"start": 221000, "end": 221099}, {"start": 221200, "end": 221299}, {"start": 221400, "end": 221499}, {"start": 221600, "end": 221699}]}]	[true, [[221000, 221099], [221200, 221299], [221400, 221499], [221600, 221699]], 221250, 221449]
+transcript_intron_start_gaps	[{"stable_id": "ENST00000000022", "strand": 1, "cdna_coding_start": 151, "cdna_coding_end": 250, "exons": [{"start": 221000, "end": 221099}, {"start": 221200, "end": 221299}, {"start": 221400, "end": 221499}, {"start": 221600, "end": 221699}]}]	[221299]
+coding_transcript_exons	[{"stable_id": "ENST00000000023", "strand": 1, "cdna_coding_start": 1, "cdna_coding_end": 371, "exons": [{"start": 231000, "end": 231099}, {"start": 231113, "end": 231199}, {"start": 231202, "end": 231299}, {"start": 231314, "end": 231399}]}]	[true, [[231000, 231099], [231113, 231199], [231202, 231299], [231314, 231399]], 231000, 231399]
+transcript_intron_start_gaps	[{"stable_id": "ENST00000000023", "strand": 1, "cdna_coding_start": 1, "cdna_coding_end": 371, "exons": [{"start": 231000, "end": 231099}, {"start": 231113, "end": 231199}, {"start": 231202, "end": 231299}, {"start": 231314, "end": 231399}]}]	[231099, 231199, 231299]
+coding_transcript_exons	[{"stable_id": "ENST00000000024", "strand": 1, "cdna_coding_start": 1, "cdna_coding_end": 371, "exons": [{"start": 241000, "end": 241099}, {"start": 241113, "end": 241199}, {"start": 241202, "end": 241299}, {"start": 241314, "end": 241399}]}]	[true, [[241000, 241099], [241113, 241199], [241202, 241299], [241314, 241399]], 241000, 241399]
+transcript_intron_start_gaps	[{"stable_id": "ENST00000000024", "strand": 1, "cdna_coding_start": 1, "cdna_coding_end": 371, "exons": [{"start": 241000, "end": 241099}, {"start": 241113, "end": 241199}, {"start": 241202, "end": 241299}, {"start": 241314, "end": 241399}]}]	[241099, 241199, 241299]
+insertion_after_the_exon_last_base	["c.50_50+1insT"]	true
+insertion_after_the_exon_last_base	["c.50_50+1insTAT"]	true
+insertion_after_the_exon_last_base	["c.50_51+1insTAT"]	false
+insertion_after_the_exon_last_base	["c.49_50insTAT"]	false
+insertion_after_the_exon_last_base	["c.50dup"]	false
+insertion_after_the_exon_last_base	["c.-51_-51+1insTAT"]	false
+insertion_after_the_exon_last_base	["c.*50_*50+1insTAT"]	false
+insertion_after_the_exon_last_base	["c.50_50+2insTAT"]	false
+insertion_after_the_exon_last_base	["c.50-1_50insTAT"]	false
+insertion_after_the_exon_last_base	["n.50_50+1insTAT"]	false
+held_insertion_gaps	[100, 1, "GTAT", "TAT", "1"]	[100]
+held_insertion_gaps	[100, 1, "TATG", "TAT", "1"]	[99]
+held_insertion_gaps	[100, 1, "GATA", "TAT", "-1"]	[100]
+held_insertion_gaps	[100, 1, "GATA", "TAT", "-"]	[100]
+held_insertion_gaps	[100, 1, "GATA", "TAT", "1"]	[]
+held_insertion_gaps	[100, 1, "GGGG", "GGG", "1"]	[99, 100]
+held_insertion_gaps	[100, 2, "CGTAT", "TAT", "1"]	[101]
+held_insertion_gaps	[100, 1, "GTAT", "T", "1"]	[]
+held_insertion_gaps	[100, 1, "TAT", "TAT", "1"]	[]
+held_insertion_gaps	[100, 1, "GTAT", "", "1"]	[]
+reverse_complement	["TAT"]	"ATA"
+reverse_complement	["GTAT"]	"ATAC"
+reverse_complement	["GGGG"]	"CCCC"
+reverse_complement	["CGTAT"]	"ATACG"
+notation_inserted_bases	["INTRON_END_INSERTION_RE", "c.51-1_51insTAT"]	"TAT"
+notation_inserted_bases	["INTRON_END_INSERTION_RE", "c.50_50+1insT"]	""
+notation_inserted_bases	["INTRON_END_INSERTION_RE", "c.51-1dup"]	""
+notation_inserted_bases	["INTRON_END_INSERTION_RE", "c.50dup"]	""
+notation_inserted_bases	["INTRON_START_INSERTION_RE", "c.51-1_51insTAT"]	""
+notation_inserted_bases	["INTRON_START_INSERTION_RE", "c.50_50+1insT"]	"T"
+notation_inserted_bases	["INTRON_START_INSERTION_RE", "c.51-1dup"]	""
+notation_inserted_bases	["INTRON_START_INSERTION_RE", "c.50dup"]	""
+lone_insertion_gaps	[100, 1, "TAT", "TAT"]	[99, 100]
+lone_insertion_gaps	[100, 1, "ATA", "TAT"]	[99, 100]
+lone_insertion_gaps	[100, 3, "TAT", "TAT"]	[99, 100, 101, 102]
+lone_insertion_gaps	[100, 1, "CCG", "TAT"]	[]
+lone_insertion_gaps	[100, 1, "TAT", "TTA", 0, 2]	[99, 100]
+lone_insertion_gaps	[100, 1, "TAT", "TTA", 0, -5]	[99, 100]
+lone_insertion_gaps	[100, 1, "TAT", "TAT", 0, 2]	[99, 100]
+lone_insertion_gaps	[100, 1, "ATA", "TAT", 0, -2]	[99, 100]
+lone_insertion_gaps	[100, 1, "ATT", "TTA", 0, 2]	[]
+lone_insertion_gaps	[100, 1, "CAG", "", 3]	[99, 100]
+lone_insertion_gaps	[100, 1, "CAG", "", 1]	[]
+lone_insertion_gaps	[100, 1, "CAG", "", 3, 1]	[]
+lone_insertion_gaps	[100, 0, "TAT", "TAT"]	[]
+lone_insertion_gaps	[100, 1, "DELETION", "", 8]	[]
+lone_insertion_gaps	[100, 1, "-", "", 1]	[]
+notation_duplicated_positions	["c.51-1dup"]	1
+notation_duplicated_positions	["c.51-3_51-1dup"]	3
+notation_duplicated_positions	["c.50+7_51-1dup"]	0
+notation_duplicated_positions	["c.51+3_51-1dup"]	0
+notation_duplicated_positions	["c.52-3_51-1dup"]	0
+notation_duplicated_positions	["c.51-1_51insTAT"]	0
+notation_duplicated_positions	["c.50_50+1insTAT"]	0

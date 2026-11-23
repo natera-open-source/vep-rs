@@ -1,9 +1,9 @@
 entry = "revel_sibling_allele_rows"
 page = "docs/plugins/annotation-store.md#9-revel-the-score-of-a-sibling-allele-on-a-multi-allelic-record"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 405.6 per million · 6 flag sets, 64 corpora"
+input_class_basis = "2 · 405.6 per million · 6 flag sets, 80 corpora"
 
 # Two alleles of one codon that both give leucine; the table's rows at the position are A C M L 0.025, A G M V 0.043, A T M L 0.027.
 [input]
@@ -34,4 +34,14 @@ ensembl_vep = [
 vep_rs = [
   "21:13610388 | C | ENST00000299443 | M/L | 0.025",
   "21:13610388 | T | ENST00000299443 | M/L | 0.027",
+]
+
+[implementation]
+code = ["crates/vep-builtins/src/plugins/revel.rs::RevelPlugin::candidate_records"]
+tests = [
+    "crates/vep-cli/tests/plugin_documented_rows.rs::a_revel_score_is_read_from_the_table_row_of_its_own_allele",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/revel.rs::sibling_allele_value",
+    "tools/vep-plugin-pairs/src/rules/sibling.rs::sibling_allele_value",
 ]

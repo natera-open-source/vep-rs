@@ -1,0 +1,5 @@
+  Consequence F1: 1.000000 (gate >= 0.999) PASS
+  Total annotations delta: 0.000000 (200000 vs 200000) (gate < 0.001) PASS
+  Co-located variant delta: 0.000000 (150000 vs 150000) (gate < 0.01) PASS
+  Frequency field max delta: 0.000000 (gate < 0.01) PASS
+  Per-consequence max delta: 0.000000 (gate < 0.01) PASS

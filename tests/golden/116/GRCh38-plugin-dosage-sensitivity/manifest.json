@@ -23,7 +23,7 @@
  "covers": [
   "DosageSensitivity"
  ],
- "suites": {
+ "datasets": {
   "plugin-dosage": {
    "reference": "cand38_dosage.vep.txt",
    "input": "cand38_dosage.vcf",
@@ -91,14 +91,14 @@
  },
  "records": [
   {
-   "suite": "plugin-dosage",
+   "dataset": "plugin-dosage",
    "vcf": "21\t20000000\tintergenic\tA\tG\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "plugin-dosage",
+   "dataset": "plugin-dosage",
    "vcf": "21\t26112000\tapp_exon\tG\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,synonymous_variant",
@@ -108,7 +108,7 @@
    ]
   },
   {
-   "suite": "plugin-dosage",
+   "dataset": "plugin-dosage",
    "vcf": "21\t29297800\tbach1_upstream_in_gene\tC\tT\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -116,7 +116,7 @@
    ]
   },
   {
-   "suite": "plugin-dosage",
+   "dataset": "plugin-dosage",
    "vcf": "21\t29321300\tbach1_exon\tC\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -124,7 +124,7 @@
    ]
   },
   {
-   "suite": "plugin-dosage",
+   "dataset": "plugin-dosage",
    "vcf": "21\t30620600\tkrtap20_4_deletion\tTTCAAACTGAGAAAAATAATTCCCTGATCCACAACTGAAACATCCACTTCTGAACACCATGTCCTACTACAGCCATCTTTCTGGTGGCCTGGGCTGCGGCTTGGCTGTGGCTGTGACTATGGGAAGGACTGTGGCTGTGGCTGAGTATGGCAGGTGCAGACATGGCTGCCACTCATCTTACTCTGCCAGGTAATGACACCATGGATTCCACTGAGGAACACCTAGAGCAGTTCAGTCTACTGCACTCCTCCAGCTTGATTT\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -132,7 +132,7 @@
    ]
   },
   {
-   "suite": "plugin-dosage",
+   "dataset": "plugin-dosage",
    "vcf": "21\t30620700\tkrtap20_4_snv\tT\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -140,7 +140,7 @@
    ]
   },
   {
-   "suite": "plugin-dosage",
+   "dataset": "plugin-dosage",
    "vcf": "21\t31657693\tsod1_upstream\tC\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -149,7 +149,7 @@
    ]
   },
   {
-   "suite": "plugin-dosage",
+   "dataset": "plugin-dosage",
    "vcf": "21\t31663800\tsod1_exon2\tG\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -163,7 +163,7 @@
    ]
   },
   {
-   "suite": "plugin-dosage",
+   "dataset": "plugin-dosage",
    "vcf": "21\t31665000\tsod1_intron\tG\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -173,7 +173,7 @@
    ]
   },
   {
-   "suite": "plugin-dosage",
+   "dataset": "plugin-dosage",
    "vcf": "22\t17124700\tlinc01664_exon\tA\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -182,7 +182,7 @@
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "flag_sets": [

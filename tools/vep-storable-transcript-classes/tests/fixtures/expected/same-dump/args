@@ -1,0 +1,10 @@
+--version-a
+x
+--dump-a
+a.txt
+--version-b
+y
+--dump-b
+a.txt
+--out-dir
+out

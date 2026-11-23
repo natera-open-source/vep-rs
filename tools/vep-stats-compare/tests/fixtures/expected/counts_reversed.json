@@ -1,0 +1,144 @@
+{
+ "mode": "stats",
+ "format": "stats",
+ "verdict": "red",
+ "reasons": [
+  "[Counts]: 17 differences"
+ ],
+ "tolerance": 0,
+ "masked_rows": [
+  "Command line options",
+  "End time",
+  "Input data",
+  "Input file",
+  "Output file",
+  "Run time",
+  "Start time"
+ ],
+ "sections": {
+  "expected": [
+   "VEP run statistics",
+   "Counts",
+   "Masked chart"
+  ],
+  "actual": [
+   "VEP run statistics",
+   "Counts",
+   "Masked chart"
+  ],
+  "order_agrees": true
+ },
+ "compared": {
+  "sections": 3,
+  "rows": 25
+ },
+ "documented": [],
+ "differences": {
+  "Counts": [
+   {
+    "kind": "count",
+    "row": "negative",
+    "expected": -2,
+    "actual": -3
+   },
+   {
+    "kind": "count",
+    "row": "big",
+    "expected": 340282366920938463463374607431768211457,
+    "actual": 340282366920938463463374607431768211456
+   },
+   {
+    "kind": "count",
+    "row": "float",
+    "expected": "7.00",
+    "actual": "7.0"
+   },
+   {
+    "kind": "count",
+    "row": "close",
+    "expected": 101,
+    "actual": 100
+   },
+   {
+    "kind": "count",
+    "row": "far",
+    "expected": 104,
+    "actual": 100
+   },
+   {
+    "kind": "count",
+    "row": "mixed",
+    "expected": "seven",
+    "actual": 7
+   },
+   {
+    "kind": "count",
+    "row": "separator",
+    "expected": "\u001f7",
+    "actual": 7
+   },
+   {
+    "kind": "missing",
+    "row": "only_actual_small",
+    "expected": 1,
+    "actual": null
+   },
+   {
+    "kind": "missing",
+    "row": "only_actual_big",
+    "expected": 9,
+    "actual": null
+   },
+   {
+    "kind": "missing",
+    "row": "only_actual_zero",
+    "expected": 0,
+    "actual": null
+   },
+   {
+    "kind": "missing",
+    "row": "only_actual_text",
+    "expected": "1e3",
+    "actual": null
+   },
+   {
+    "kind": "missing",
+    "row": "only_actual_none",
+    "expected": null,
+    "actual": null
+   },
+   {
+    "kind": "unexpected",
+    "row": "only_expected_small",
+    "expected": null,
+    "actual": 1
+   },
+   {
+    "kind": "unexpected",
+    "row": "only_expected_big",
+    "expected": null,
+    "actual": 9
+   },
+   {
+    "kind": "unexpected",
+    "row": "only_expected_negative",
+    "expected": null,
+    "actual": -4
+   },
+   {
+    "kind": "unexpected",
+    "row": "only_expected_text",
+    "expected": null,
+    "actual": "x"
+   },
+   {
+    "kind": "unexpected",
+    "row": "only_expected_none",
+    "expected": null,
+    "actual": null
+   }
+  ]
+ },
+ "expected": "tests/fixtures/counts_actual.summary.log",
+ "actual": "tests/fixtures/counts_expected.summary.log"
+}

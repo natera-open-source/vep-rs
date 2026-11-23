@@ -1,0 +1,52 @@
+entry = "clin_sig_allele_list_order"
+page = "docs/divergences/clin-sig-allele-list-order.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "observed"
+input_class_basis = "seen in the variation files of the human caches of release 116: one span on GRCh38 holds two known variants that give one allele different lists, none on GRCh37"
+notes = "Every identifier is invented. The known variants rs9920000001 and rs9920000002 at 21:500 both carry ClinVar entries for the allele G: the first one term, the second that term and another. The first step copies the Ensembl VEP cache by hard links and replaces the chromosome 21 variation file with those two rows, in the column order of the cache's info.txt; the second builds vep-rs's cache with the same rows. Ensembl VEP joins the two lists in the key order of a hash (OutputFactory.pm:1143-1144): the longer list first under the fixed seed of this run, and either order under Perl's own seed. vep-rs lists them in the order of the row's known variants."
+
+prepare = [
+  '''mkdir -p "$STAGE/perl-cache/homo_sapiens" && cp -al "$PERL_CACHE" "$STAGE/perl-cache/homo_sapiens/116_GRCh38"
+dir="$STAGE/perl-cache/homo_sapiens/116_GRCh38/21"
+rm -f "$dir/all_vars.gz" "$dir/all_vars.gz.csi" "$dir/all_vars.gz.tbi"
+row() { awk -F '\t' '$1 == "variation_cols" { print $2 }' "$PERL_CACHE/info.txt" | awk -F, -v OFS='\t' -v name="$1" -v alleles="$2" -v terms="$3" -v entries="$4" '{ for (i = 1; i <= NF; i++) { cell = "."; if ($i == "chr") cell = "21"; if ($i == "variation_name") cell = name; if ($i == "start") cell = "500"; if ($i == "allele_string") cell = alleles; if ($i == "clin_sig") cell = terms; if ($i == "phenotype_or_disease") cell = "1"; if ($i == "clin_sig_allele") cell = entries; if ($i == "clin_sig_ref_allele") cell = "A"; $i = cell } print }'; }
+{ row rs9920000001 A/G likely_pathogenic 'G:likely_pathogenic'; row rs9920000002 A/G/T likely_pathogenic,pathogenic 'G:likely_pathogenic;G:pathogenic'; } | bgzip > "$dir/all_vars.gz"
+tabix -C -s 1 -b 5 -e 5 "$dir/all_vars.gz"''',
+  '''mkdir -p "$STAGE/json-cache/transcripts/21" "$STAGE/json-cache/variations/21"
+printf '[]' > "$STAGE/json-cache/transcripts/21/1-1000000.json"
+{ printf 'rs9920000001 . . 500 . A/G . likely_pathogenic 1 G:likely_pathogenic A . . .\n'; printf 'rs9920000002 . . 500 . A/G/T . likely_pathogenic,pathogenic 1 G:likely_pathogenic;G:pathogenic A . . .\n'; } | gzip -n > "$STAGE/json-cache/variations/21/1-1000000_var.gz"
+printf '{"assembly": "GRCh38", "source_versions": {"dbSNP": "156"}, "variation_cols": ["variation_name", "failed", "somatic", "start", "end", "allele_string", "strand", "clin_sig", "phenotype_or_disease", "clin_sig_allele", "clin_sig_ref_allele", "clinical_impact", "pubmed", "var_synonyms"]}\n' > "$STAGE/json-cache/info.json"''',
+]
+
+[input]
+format = "vcf"
+text = """
+21	500	.	A	G	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "{stage}/json-cache"
+perl_cache = "{stage}/perl-cache"
+
+[run]
+flags = ["--check_existing"]
+format = "default"
+
+[compare]
+kind = "field"
+field = "CLIN_SIG"
+where = { location = "21:500" }
+
+[expected]
+ensembl_vep = ["likely_pathogenic,pathogenic%3Blikely_pathogenic"]
+vep_rs = ["likely_pathogenic%3Blikely_pathogenic,pathogenic"]
+
+[implementation]
+code = ["crates/vep-io/src/output/fields.rs::clin_sig_column"]
+tests = [
+    "crates/vep-cli/tests/colocated_list_fields.rs::clin_sig_lists_of_two_known_variants_stand_in_the_variants_order",
+]
+rules = ["tools/vep-formats-compare/src/lists.rs::clin_sig_list_separator"]

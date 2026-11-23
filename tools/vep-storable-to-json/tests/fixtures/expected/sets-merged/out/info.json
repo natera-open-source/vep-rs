@@ -1,0 +1,10 @@
+{
+   "assembly" : "GRCh38",
+   "cache_version" : 84,
+   "contig_order" : [
+      "21"
+   ],
+   "source_type" : "merged",
+   "source_versions" : {},
+   "species" : "homo_sapiens"
+}

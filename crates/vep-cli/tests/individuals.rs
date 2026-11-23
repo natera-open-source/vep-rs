@@ -228,7 +228,7 @@ fn individual_all_writes_one_copy_per_individual_in_every_format() {
 /// A non-variant record whose ALT list holds a real allele after the leading
 /// `.` (`.,TA`, a non-variant to `Parser/VCF.pm:259`) is copied per individual
 /// from the alleles each genotype names (`:627-639`): the `0/2` individual
-/// carries `TA`, which Ensembl VEP 116.2 annotates on the three transcripts
+/// carries `TA`, which Ensembl VEP 116.3 annotates on the three transcripts
 /// of the check-ref corpus cache at 21:30601300 as a `3_prime_UTR_variant`, an
 /// `upstream_gene_variant` and an `intron_variant,non_coding_transcript_variant`
 /// (its tab output on this input, the rows below), while the `0/0` individual
@@ -318,18 +318,18 @@ fn individual_carrying_the_allele_after_a_leading_dot_is_annotated() {
 /// alleles is named from the copy's own allele string as written, before
 /// `validate_vf` upper-cases it (Parser/VCF.pm:627-650 builds the copy's string
 /// from the alleles its genotype names, Parser.pm:462-467 names it, `:554`
-/// upper-cases): Ensembl VEP 116.2's JSON `id` values on `21 30337048 0 c t,g`
+/// upper-cases): Ensembl VEP 116.3's JSON `id` values on `21 30337048 0 c t,g`
 /// with genotypes `0/0 0/1 1/2 2/2` are `21_30337048_c`, `21_30337048_c/t`, a
 /// `c`, `g`, `t` name and `21_30337048_c/g`, and on `21 30319403 0 tca t,tcg`
 /// with `0/1 0/0 2/2 1/2` `21_30319404_ca/-`, `21_30319404_ca`,
 /// `21_30319404_ca/cg` and a `ca`, `-`, `cg` name, each with the upper-cased
 /// `allele_string`; under `--process_ref_homs` the `0/0` copies are
 /// `21_30337048_c/c` and `21_30319404_ca/ca`. The two-allele copies' names
-/// list the alleles in Ensembl VEP's hash order, which its two runs spelled
-/// `c/g/t` and `ca/cg/-` then `ca/-/cg`; vep-rs lists them in the record's order.
+/// list the alleles in Ensembl VEP's hash order, which differs from run to
+/// run; vep-rs lists them in the record's order.
 /// Under `--individual_zyg S1` the record S1 is reference-homozygous for is the
 /// written reference twice, `21_30337048_c/c`, and the other keeps the record's
-/// own string, `21_30319404_ca/-/cg` (Ensembl VEP 116.2's ids on this input).
+/// own string, `21_30319404_ca/-/cg` (Ensembl VEP 116.3's ids on this input).
 /// The default and tab `Uploaded_variation` print the same names
 /// (OutputFactory.pm:899-902 prints the copy's `variation_name` where it differs
 /// from the upper-cased one built at output): `21_30337048_c/t` for S2's `0/1`
@@ -635,7 +635,7 @@ fn process_ref_homs_adds_a_ref_allele_row_per_feature_without_individual() {
 /// row has the other rows of its feature beside it; within them, the
 /// `ALLELE_NUM` 0 row carries its `ALLELE_NUM` 1 row's `HGVSg` on a bi-allelic
 /// record and no `HGVSg` on a multi-allelic one, and two reference rows carry
-/// the values Ensembl VEP 116.2 writes for their alternates.
+/// the values Ensembl VEP 116.3 writes for their alternates.
 #[test]
 fn reference_row_prints_the_alternate_hgvsg_on_a_bi_allelic_record_alone() {
     let dir = tempfile::tempdir().unwrap();
@@ -735,7 +735,7 @@ fn reference_row_prints_the_alternate_hgvsg_on_a_bi_allelic_record_alone() {
     assert_eq!(reference_hgvsg("3653535"), ["21:g.36259299_36259300insT"]);
 }
 
-/// The rows Ensembl VEP 116.2 writes for `21 14375818 craftWrong C A` with the
+/// The rows Ensembl VEP 116.3 writes for `21 14375818 craftWrong C A` with the
 /// genotypes `0|0` (S1) and `0|1` (S2) under `--individual all --process_ref_homs
 /// --lookup_ref --allele_number --show_ref_allele --uploaded_allele` over a
 /// reference reading `T` at the site, in its order.
@@ -773,7 +773,7 @@ craftWrong	21:14375818	A	ENSG00000155304	ENST00001131802	Transcript	splice_regio
 /// alleles after the first (Parser.pm:582, :645), `T/C` for the `C/C` copy over a
 /// `T`, and the overlap-allele rule numbers the written `C` 1 beside the
 /// reference `T` numbered 0 (VariationFeatureOverlap.pm:469-489), both rows
-/// `ZYG=HOMREF` (OutputFactory.pm:976). The rows are Ensembl VEP 116.2's for the
+/// `ZYG=HOMREF` (OutputFactory.pm:976). The rows are Ensembl VEP 116.3's for the
 /// record over the identifiers corpus reference, which reads `T` at 21:14375818:
 /// a `T` and a `C` row per transcript for S1, a `T` and an `A` row for S2, 24 in
 /// all, and the S1 VCF line carries both alleles' CSQ entries; without
@@ -835,7 +835,7 @@ fn lookup_ref_keeps_a_hom_ref_copys_written_reference_as_an_alternate_row() {
 
     // Under `--spdi` the rewritten strings `T/C` and `T/A` list the reference
     // once, so each written allele's row carries its notation and no reference
-    // row carries one (OutputFactory.pm:1396-1400): the 116.2 rows with
+    // row carries one (OutputFactory.pm:1396-1400): the 116.3 rows with
     // `;SPDI=21:14375817:T:<allele>` closing each `ALLELE_NUM=1` row.
     let text = run_lookup(
         "spdi.txt",
@@ -1221,13 +1221,13 @@ fn individual_zyg_writes_one_record_with_a_zygosity_list_in_every_format() {
 /// `length($alt_allele) != length($ref)`), so `GA/GT` reaches `--minimal` whole
 /// and is trimmed to `A/T` one base on (Parser.pm:852, `$vfs =
 /// $self->minimise_alleles($vfs) if $self->{minimal};`) before the genotypes are
-/// read (Parser/VCF.pm:362-364). Ensembl VEP 116.2 then compares each sample's
+/// read (Parser/VCF.pm:362-364). Ensembl VEP 116.3 then compares each sample's
 /// chop-level alleles with the minimised reference: `my @alleles = split '\/',
 /// $vf->{allele_string}; my $ref = $alleles[0];` (`:691-692`, the `A`), `my @bits
 /// = map { $allele_map->{$_} } split /\||\/|\\/, $gt;` (`:716`, the `GA`), `my
 /// %non_ref = map {$_ => 1} grep {$_ ne $ref && $_ !~ /\*/} @bits;` (`:720`), and
 /// `GA ne A` leaves a `0/0` sample with a non-reference allele. With that sample
-/// alone named, Ensembl VEP 116.2 prints the alternate row, Allele `T`,
+/// alone named, Ensembl VEP 116.3 prints the alternate row, Allele `T`,
 /// `ZYG=S1:HOM` (OutputFactory.pm:985, one distinct allele and no
 /// `hom_ref_samples`), `ALLELE_NUM=1` (`--minimal` sets `allele_number`,
 /// Config.pm:525-527), `MINIMISED=1`. vep-rs compares the chopped alleles with
@@ -1273,7 +1273,7 @@ fn individual_zyg_reads_a_minimal_trimmed_same_length_record_as_reference_homozy
 /// `ATT/AT` as `TT/T` and `ATTGG/ATG` as `TTGG/TG` (Parser/VCF.pm:295-336),
 /// Parser.pm:860-881 pass an indel to `minimise_alleles` whatever the flags, and
 /// `trim_sequences` (a shared prefix, then a shared suffix) leaves `T/-` and
-/// `TG/-`. Ensembl VEP 116.2 takes the minimised `T` or `TG` as `$ref`
+/// `TG/-`. Ensembl VEP 116.3 takes the minimised `T` or `TG` as `$ref`
 /// (Parser/VCF.pm:691-692) and maps a `1/1` sample's bits to the chopped
 /// alternate, the same string (`:716`), so `grep {$_ ne $ref && $_ !~ /\*/}`
 /// (`:720`) keeps nothing, the sample is marked reference-homozygous
@@ -1391,14 +1391,14 @@ fn coding_only_drops_the_reference_row_of_a_record_with_no_alternate_allele() {
 
 /// Under `--minimal` a record that splits writes the reference row of every
 /// feature (VariationFeatureOverlap.pm:469-481 per feature, carried into the
-/// record by OutputFactory.pm:2299-2340), the feature of a `*` or `<DEL:*>`
+/// record by OutputFactory.pm:2308-2349), the feature of a `*` or `<DEL:*>`
 /// allele included, whose alternate writes no row (`:484`); the allele equal to
 /// the reference writes its feature's row `-` alone, and `REF_ALLELE` is the
 /// first feature's trimmed reference. Under `--coding_only` a feature with no
 /// alternate loses its rows (`affects_cds` asks the alternates,
 /// BaseTranscriptVariation.pm:662-665), so the `*` feature's and the `-/-`
 /// feature's go, and `REF_ALLELE` is the record's reference where the first
-/// feature built no row: the rows Ensembl VEP 116.2 writes on ENST00000427445
+/// feature built no row: the rows Ensembl VEP 116.3 writes on ENST00000427445
 /// for `A A,G`, `A T,AG,*` and `A T,AG,<DEL:*>` at the minimal corpus's site.
 #[test]
 fn minimal_split_writes_the_reference_row_of_every_feature() {
@@ -1493,7 +1493,7 @@ fn minimal_split_writes_the_reference_row_of_every_feature() {
 /// alternate alleles (InputBuffer.pm:648, `.+/.+/.+`). A copy carrying one
 /// alternate allele of a multi-allelic record, or two bits naming one allele,
 /// keeps the record's chopped alleles with no `MINIMISED` and the record's
-/// string as `UPLOADED_ALLELE`: Ensembl VEP 116.2 writes `CGCAA` as a
+/// string as `UPLOADED_ALLELE`: Ensembl VEP 116.3 writes `CGCAA` as a
 /// `substitution` over `AGCAA` for the `0/1` carrier of `AGCAA CGCAA,A`, `A` as
 /// an `indel` for its `2/2` carrier, and `CGG` as a `substitution` over `CCG`
 /// for every carrier of `CCG CGG,CGG`, `1/2` read as `HOM`. The `1/2` carrier of
@@ -1554,7 +1554,7 @@ fn safe_individual_minimal_keeps_a_bi_allelic_copy_of_a_multi_allelic_record() {
     let row = |cells: [&str; 8]| -> [String; 8] { cells.map(str::to_string) };
     let (text, stderr, ok) = run_with_cache(dir.path(), &input, &cache, &flags);
     assert!(ok, "{stderr}");
-    // Ensembl VEP 116.2's rows, column for column, codons and peptides included.
+    // Ensembl VEP 116.3's rows, column for column, codons and peptides included.
     let het_carrier = row([
         "CGCAA",
         "synonymous_variant",
@@ -1833,7 +1833,7 @@ fn sample_names_follow_ensembl_ios_header_reading() {
 #[cfg(feature = "parquet")]
 #[test]
 fn parquet_rows_of_a_per_individual_run_equal_the_tab_rows() {
-    use vep_io::output::parquet::{canonical_tab_text, column_type, tab_rows};
+    use vep_io::output::parquet::{canonical_tab_text, tab_column_types, tab_rows};
     let dir = tempfile::tempdir().unwrap();
     let input = write_input(dir.path(), "in.vcf", &format!("{HEADER}{RECORDS}"));
     let flags = [
@@ -1877,13 +1877,22 @@ fn parquet_rows_of_a_per_individual_run_equal_the_tab_rows() {
         .trim_start_matches('#')
         .split('\t')
         .collect();
+    // Each tab cell in the form of the type the part stores its column under.
+    let stored = tab_column_types(&parquet_dir).unwrap();
+    assert_eq!(
+        stored
+            .iter()
+            .map(|(name, _)| name.as_str())
+            .collect::<Vec<_>>(),
+        columns
+    );
     let mut expected: Vec<String> = tab
         .lines()
         .filter(|l| !l.starts_with('#'))
         .map(|line| {
             line.split('\t')
-                .zip(&columns)
-                .map(|(cell, column)| canonical_tab_text(column_type(column), cell))
+                .zip(&stored)
+                .map(|(cell, (_, column_type))| canonical_tab_text(*column_type, cell))
                 .collect::<Vec<_>>()
                 .join("\t")
         })
@@ -1907,7 +1916,7 @@ fn parquet_rows_of_a_per_individual_run_equal_the_tab_rows() {
 /// ($line =~ /^#\s*(.+)$/) { $self->{'metadata'}->{'header'} =
 /// [split("\t",$1)];`) and names its samples from that line (`:805-808`). With
 /// the eight-sample header of the GRCh38-individual corpus, a `#note` line and
-/// its `hb_multi` record, Ensembl VEP 116.2 names no sample: `--individual all`
+/// its `hb_multi` record, Ensembl VEP 116.3 names no sample: `--individual all`
 /// writes 0 rows (exit 0), `--individual S1` dies `Sample IDs given (S1) do not
 /// match samples from VCF ()` (Parser/VCF.pm:612-617), `--individual_zyg all`
 /// writes the eight rows without `ZYG`, and its VCF output prints `#note` where

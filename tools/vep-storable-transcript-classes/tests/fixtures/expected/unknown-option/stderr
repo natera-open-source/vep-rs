@@ -1,0 +1,2 @@
+usage: vep-storable-transcript-classes [-h] --version-a VERSION_A --dump-a DUMP_A --version-b VERSION_B --dump-b DUMP_B --out-dir OUT_DIR [--json-cache JSON_CACHE] [--json-cache-label JSON_CACHE_LABEL]
+vep-storable-transcript-classes: error: unrecognized arguments: --verbose

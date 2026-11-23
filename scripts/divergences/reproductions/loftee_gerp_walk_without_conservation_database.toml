@@ -1,15 +1,15 @@
 entry = "loftee_gerp_walk_without_conservation_database"
 page = "docs/divergences/loftee-gerp-walk-without-the-conservation-database.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
-input_class = "unobserved"
-input_class_basis = "well-formed under the parameters of the LoF plugin that Ensembl VEP runs for LoFTEE on GRCh37, whose module defaults conservation_file to the word false and whose basic usage line names no such file; not seen in the measured datasets"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "observed"
+input_class_basis = "2 · 4 of 511 flag sets · 4 flag sets, 1 corpus"
 notes = "Ensembl VEP's LoF plugin on GRCh37 is the LOFTEE repository's master branch, outside the VEP_plugins checkout: the run needs --extra-dir loftee_grch37=<checkout of that branch>. The GERP table is built by the prepare steps (bgzip and tabix on the host) and scores every base 1, so a GERP total is the number of bases summed. The walk crosses a whole exon on the three three-exon coding transcripts of CBR1, whose second exon is coding, and on CLDN8's ENST00000286809, whose second exon is untranslated; it crosses none on the two-exon ENST00000439427 and the single-exon ENST00000399899, whose rows both engines write alike."
 
 # A GERP table in the layout of the plugin's own GRCh37 file (chromosome, position, score), over the two genes.
 prepare = [
-  '''{ seq 31586001 31589000; seq 37442001 37446000; } | awk -v OFS='\t' '{ print 21, $1, 1 }' | bgzip > "$STAGE/GERP_scores.txt.gz"''',
-  'tabix -s 1 -b 2 -e 2 "$STAGE/GERP_scores.txt.gz"',
+  '''{ seq 31586001 31589000; seq 37442001 37446000; } | awk -v OFS='\t' '{ print 21, $1, 1 }' | bgzip > "$STAGE/GERP_scores.synthetic.txt.gz"''',
+  'tabix -s 1 -b 2 -e 2 "$STAGE/GERP_scores.synthetic.txt.gz"',
 ]
 
 # A frameshift and a stop gain in the coding exon of CLDN8, and a stop gain in the first exon of CBR1.
@@ -29,7 +29,7 @@ json_cache = "tests/golden/116/GRCh37/json_cache"
 [run]
 flags = [
   "--dir_plugins", "{loftee_grch37}",
-  "--plugin", "LoF,loftee_path:{loftee_grch37},gerp_file:{stage}/GERP_scores.txt.gz,human_ancestor_fa:false,run_splice_predictions:0",
+  "--plugin", "LoF,loftee_path:{loftee_grch37},gerp_file:{stage}/GERP_scores.synthetic.txt.gz,human_ancestor_fa:false,run_splice_predictions:0",
 ]
 
 [compare]
@@ -57,4 +57,18 @@ vep_rs = [
   "frameshift_before_utr_exon | ENST00000399899 | frameshift_variant | HC | - | SINGLE_EXON | GERP_DIST:516,BP_DIST:515,PERCENTILE:0.240412979351032,DIST_FROM_LAST_EXON:-310,50_BP_RULE:FAIL",
   "stop_before_utr_exon | ENST00000286809 | stop_gained | HC | - | - | GERP_DIST:1499,BP_DIST:1497,PERCENTILE:0.238938053097345,DIST_FROM_LAST_EXON:711,50_BP_RULE:PASS",
   "stop_before_utr_exon | ENST00000399899 | stop_gained | HC | - | SINGLE_EXON | GERP_DIST:517,BP_DIST:516,PERCENTILE:0.238938053097345,DIST_FROM_LAST_EXON:-309,50_BP_RULE:FAIL",
+]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/loftee.rs::LofteePlugin::exon_totals",
+    "crates/vep-builtins/src/plugins/loftee.rs::gerp_weighted_dist",
+]
+tests = [
+    "crates/vep-builtins/src/plugins/loftee.rs::tests::whole_exon_totals_come_from_the_database",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/loftee.rs::gerp_walk_the_candidate_alone_finished",
+    "tools/vep-golden-corpus/src/classify/loftee.rs::gerp_walk_without_conservation_database",
+    "tools/vep-plugin-pairs/src/rules/loftee.rs::gerp_walk_without_conservation_database",
 ]

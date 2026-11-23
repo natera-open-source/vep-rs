@@ -29,7 +29,7 @@
  "covers": [
   "Conservation"
  ],
- "suites": {
+ "datasets": {
   "conservation": {
    "reference": "pre2_avg.txt",
    "input": "candidates2.vcf",
@@ -476,21 +476,21 @@
  },
  "records": [
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t18383705\t4764123\tGTTC\tG\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t18397945\t2120186\tA\tG\t.\t.\t.",
    "combinations": [
     "missense_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t25975100\tuncovered_snv\tG\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -502,7 +502,7 @@
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t25975100\tuncovered_insertion\tG\tGT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -514,7 +514,7 @@
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t25975130\tcoverage_edge_deletion\tATTGAGCATGG\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -526,7 +526,7 @@
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t25975135\tcoverage_edge_insertion\tG\tGA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -538,7 +538,7 @@
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t25975137\tmixed_sign_deletion\tATGGCT\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -550,14 +550,14 @@
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t32639127\t2028980\tTA\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t32657088\tdeletion_15bp\tGAAAACTAGCATTTA\tG\t.\t.\t.",
    "combinations": [
     "frameshift_variant",
@@ -566,35 +566,35 @@
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t33288101\t862421\tC\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t33288255\t1486790\tGAA\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t33325119\t1420808\tTCCGCAG\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_deletion"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t33353790\t2032982\tT\tC\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t33355545\t1299494\tTATGACC\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,stop_lost",
@@ -602,7 +602,7 @@
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t33548991\t996849\tTCAGAAAAGTAGTAGTCTCCAGGTTAACTGTTTTATGAAAAATAGTTTATTTGGTAACTTTTAATTTAACGTGAGGTGTTATACTGTGGGGTTTTTTTTTTTTTTTGAGACAGAGTCTTGCTCTGTTGCCTAGGCTGGAGTACAGTGGTGCAATTTCAGCTCACTGAAACCTCGACCTACTGGGTTCAAGTGATCCGCCTCAGCCTCCCAAATAGCTGGGACTACAGGTGCGCGTCACCATGCCTGGCTAATTTTTGTATTTTTAGTAGAGATGGGGTTTCACCATGCTGGCCAGGCTGGTTTTGAACTCCTGACCTCATGATCCACCTGCCTTGGCCTCTCAGAGTGCTAAGATTACAGGCGTGAGCCACTGTACTTGGCCTGTACTAAGGTGTTTTAACATGGAATGTAAATATGGGTTTATATGATTTAATCTAACTCTACTTTGGGGAATGTCTGACAAAATTAATTTCTATTACTTTTAGACTTGAAAGAGGGCTCCAGAAAAAGTAGA\tGTTG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
@@ -610,7 +610,7 @@
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t33553688\t3959662\tGAA\tATTAAATATGAAAGATAT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,protein_altering_variant,stop_gained",
@@ -618,35 +618,35 @@
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t33553749\t3254950\tATTGCATTCAGGTGAAGAA\tTGCATGCAGCATT\t.\t.\t.",
    "combinations": [
     "protein_altering_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t33579330\t1638149\tG\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t33582215\t3638160\tT\tTA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t33584724\t1896621\tG\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t33755392\t3899426\tTAAC\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_deletion,splice_region_variant",
@@ -654,56 +654,56 @@
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t33781546\t4077336\tAC\tCA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t33818432\t1209862\tT\tTA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant,stop_gained"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t33823507\t3773994\tT\tTA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t34799296\t1005132\tC\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t34880551\t561241\tA\tACGTACCTCTTCCACTTCGAC\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_donor_region_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t34886950\t1052786\tGCACCTC\tG\t.\t.\t.",
    "combinations": [
     "inframe_deletion"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t34887050\t239043\tG\tA\t.\t.\t.",
    "combinations": [
     "synonymous_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t36936556\tmulti_allelic_snv\tG\tA,C\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -717,21 +717,21 @@
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t36937357\t3685200\tT\tA\t.\t.\t.",
    "combinations": [
     "stop_gained"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t37160858\t4454217\tG\tA\t.\t.\t.",
    "combinations": [
     "splice_region_variant,synonymous_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t37478163\t510639\tCT\tC\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -739,7 +739,7 @@
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t37490461\t435011\tGGTAA\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_donor_region_variant,splice_donor_variant",
@@ -747,35 +747,35 @@
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t37493077\t1722317\tT\tTA\t.\t.\t.",
    "combinations": [
     "frameshift_variant,stop_gained"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t37493157\t280588\tCAATGAGGTA\tC\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_exon_variant,splice_donor_region_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t37493163\t2441083\tG\tGGT\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t37496265\t2157190\tTA\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t37505282\t977903\tG\tGTAA\t.\t.\t.",
    "combinations": [
     "inframe_insertion,splice_region_variant,stop_gained",
@@ -783,35 +783,35 @@
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t38400559\t4286184\tGGGGTGTTTTCGTACCT\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_exon_variant,splice_donor_5th_base_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t39270434\t4454351\tC\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t39391752\t4454383\tC\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t42219222\t3059271\tCCCG\tC\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,NMD_transcript_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t42863432\t3336333\tCCACCTA\tACACCTG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_donor_variant",
@@ -820,7 +820,7 @@
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t43063077\t2691710\tA\tATCTGCAGAGGGCGCGGCTTCAGGGCTCAAGGCCAGCAAAAGCCCCACCTGGATGATCCACCCCAGTGT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant",
@@ -830,21 +830,21 @@
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t43066288\t1535052\tGC\tAA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,synonymous_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t43068505\t2844087\tTCA\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_donor_region_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t43072192\t196204\tA\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,start_lost",
@@ -852,35 +852,35 @@
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t43402564\t2652716\tCG\tC\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t43417647\t1377349\tGC\tAA\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t43419102\t971830\tGCGTGT\tCTCCTAGG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t43421010\t641577\tC\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t43750485\t2652725\tCCGCCTGTCTTCCAGGTTACTGAGTGGCCGGAAGATCCAC\tGCA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant",
@@ -888,7 +888,7 @@
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t43774637\t161421\tCTCCTGAGGCCCACACTCTA\tTT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_donor_5th_base_variant,splice_donor_variant",
@@ -896,42 +896,42 @@
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t44236861\t1352125\tT\tC\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_donor_region_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t44291213\t966540\tGAG\tTAT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_donor_5th_base_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t44292400\t1933702\tCG\tTC\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t44330921\t1157070\tTGA\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t44910763\t859721\tG\tT\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t45182750\t2443915\tTAAAG\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,splice_donor_variant",
@@ -941,28 +941,28 @@
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t45478329\t1573334\tC\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,splice_region_variant,stop_gained"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t45480523\t1950035\tG\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_donor_region_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t45482823\t4455249\tT\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t45494579\t1960492\tG\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -970,14 +970,14 @@
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t45505383\t1470557\tC\tCCCCCCTGGGCCCCCTGGG\t.\t.\t.",
    "combinations": [
     "inframe_insertion"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t45505952\t1348869\tTTCCGGAAGGTCCAGGTGAGCGCTCTGTGTGACGGGTTCTGGACCCGTGGAAGGGCCGAAGCCGCCTCCTGGGGCTTAAGGAAGGCGAGAGGCTCAGGCCCCGGACAGGGATGGGAGCAGGTGGCAGCCAGCGCTTCTTAAACTTTCAAACTTTTGGTAAAGTTTAGTAAAATACTTTTGTGAGCAGTTTTGGGTTTAAAGAAAAGTGAGCTCAAGCTTCTGAAAGTGGATGAACACATGGCGTGTGAGGGGCTCCTGGTGGGTCATGTCACAGTGAACGTTTACAAAGATAAATGTCACCTCACACACCCGATAATAAGACAAGGCGCCTGACGGGACGAGGCGGCAGGGGGGCTCAGGCCCTCCAGGGCCACGTGACGTCCACAGCACGGCCCCGGCTGGGGGGCAGGCTGTCCCGTGGCTCTGCACCCCGCGTTATAAACACCAAGGTGGGATGAAATGCATCCTCTCTGCTTAGCACGGGCCTTGCTCACCAGCCTGGCTCCTCAGACACACCTGGGATTGCCCCTTCCAGGACAGGCCAGCCCCTTTCCTGCTTTCCCAAAATGGTCTGGGTGGCAGGAGTGGCCGCTCTGATCCAGGTGGGTGCGGCCATGCTTGCAGGGCCCCGGGAAGGTTTACCTTCGTGTGGCAAAGGTGAGGACGGGTAGAAGCCCCATGCCGCCGAAACGGCCTGTGACATCCGTGGGAGCC\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
@@ -992,28 +992,28 @@
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t45531527\t1347303\tA\tACCACAGGCGCAGCTGCGGCCG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_insertion"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t45982742\t4078372\tTCATCGACA\tCCT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,protein_altering_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t45990416\t1525215\tCGTGAAGGTGACTGGGGGGAGATAGGATGGACGGGGAGGGACGAGGAGGAATGGGGCGAGATGGGGAGGGACGGAGTGGACGGCGTGAAGGTGACCCGGGGAGGGATGGGGTGGACAGTGTGAAGGTGACCAGGGGAAGGACGGGGAGGGACGGGGAGGGATGGGGTGAGGTGATCCCGGCAGGAGGGACAGGGAGGAGTGGGGTGGACGGT\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,coding_sequence_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t46111587\t1324140\tCCCAGGTG\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,coding_sequence_variant,intron_variant,splice_donor_region_variant,splice_donor_variant",
@@ -1021,7 +1021,7 @@
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t46112404\t842566\tCGCGAGGAGGGCATCCGGCTCTTCGCCGTGGCCCCCAACCAGAACCTGAAGGAGCAGGGCCTGCGGGACATCGCCAGCACGCCGCACGAGCTCTACCGCAACGACTACGCCACCATGCTGCCCGACTCCACCGAGATCGACCAGGACACCATCAACCGCATCATCAAGGTCATGGTGAGCCGCGGGCGGGAGCACCGTCCACGCGCCAGGGGTGGCCACGGTGGGCCGTCCACCCACTCCGGGCCTCACTTTACCCCTCTGTGAGTGCGGAGGCCGAAGGAGGAAGCTCCGGGCAGGGCCTGGGCCACTCAGGTGTCCCTCCATCCCCACCCAGACTCGAGGTGCAGCCGCCCCAGGTCTCGAGGCACACGGCTAACCAGCATGTCTGTCTTTTCTGCAGAAACACGAAGCCTACGGAGAGGTGAGTGGCGCTTCCCTTCCTGCCAGTGCTGGCCGGCAGCTGACCCAGCAGAGATGACCGCGCCAGGCTGCCGACTCCTGGCGCCTCCAGGCTGGAACAGATGAGAGGAGAGGGAGTCACCTGCTCCATGTTGGACCTGAGGCCTTGGAGTCTGGAGAAAGGGCTCCCAGCCAAAGCTAGGCTGTTTAGATCCCGTGAGGGTCAGCGTTAGGGTCACCCACAGAGCACGTGTTACAAGGAGAGGTCGAGGGTCTGGCCTCCGGGCAGGTGGGATCCATCCACCCTGGACTCGAGGCCCGAGCCCAGCCCAGCAGGTCAGGGGAGAAGGAACTGACATCATCGGGGTCCATGACATCCCCACCTCCCTGTGTGTCCCAGCTCCAGCTCTCAGGAAG\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant",
@@ -1034,14 +1034,14 @@
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t46115925\t3683221\tG\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,splice_region_variant,synonymous_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t46116370\t4717423\tCCCCCAGGGCGTTCCTGG\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,coding_sequence_variant,intron_variant,splice_acceptor_variant",
@@ -1049,7 +1049,7 @@
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t46116767\t572066\tCAG\tAA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant",
@@ -1058,7 +1058,7 @@
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t46117398\t499723\tAG\tCT\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_acceptor_variant",
@@ -1066,91 +1066,91 @@
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t46122897\t476455\tTGAAAGGAGAACCTGGGAGGAAAGGAGA\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,stop_retained_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t46125466\t3367036\tCTG\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t46125908\t3896823\tCGGGC\tTAGGT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,stop_gained"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t46132536\t689371\tTCCG\tACCA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t46132550\t3633868\tT\tTAGC\t.\t.\t.",
    "combinations": [
     "inframe_insertion,stop_retained_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t46283830\t2018450\tTTAGAGAATC\tT\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t46284076\t3713914\tTTCTC\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t46346958\t2765220\tGGA\tG\t.\t.\t.",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t46412072\t4455556\tG\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_donor_5th_base_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t46428590\t2791067\tGGT\tG\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t46430233\t3587745\tG\tA\t.\t.\t.",
    "combinations": [
     "splice_donor_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "21\t46444812\t1336314\tGTAC\tG\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant"
    ]
   },
   {
-   "suite": "conservation",
+   "dataset": "conservation",
    "vcf": "chr21\t34880704\tprefixed_chromosome_snv\tG\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -1159,7 +1159,7 @@
    ]
   }
  ],
- "multi_allelic_per_suite": 2,
+ "multi_allelic_per_dataset": 2,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "plugin_files": {

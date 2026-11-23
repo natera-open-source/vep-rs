@@ -1,0 +1,45 @@
+{
+ "mode": "stats",
+ "format": "stats",
+ "verdict": "green",
+ "reasons": [],
+ "tolerance": 0,
+ "masked_rows": [
+  "Command line options",
+  "End time",
+  "Input data",
+  "Input file",
+  "Output file",
+  "Run time",
+  "Start time"
+ ],
+ "sections": {
+  "expected": [
+   "VEP run statistics",
+   "General statistics",
+   "Variant classes"
+  ],
+  "actual": [
+   "VEP run statistics",
+   "General statistics",
+   "Variant classes"
+  ],
+  "order_agrees": true
+ },
+ "compared": {
+  "sections": 3,
+  "rows": 17
+ },
+ "documented": [
+  {
+   "class": "stats_existing_variants_check_frequency",
+   "section": "General statistics",
+   "row": "Novel / existing variants",
+   "expected": "0 (0.0) / 11 (100.0)",
+   "actual": "1 (9.1) / 10 (90.9)"
+  }
+ ],
+ "differences": {},
+ "expected": "tests/fixtures/frequency_expected.summary.log",
+ "actual": "tests/fixtures/frequency_actual.summary.log"
+}

@@ -1,0 +1,10 @@
+{
+   "assembly" : "GRCh38",
+   "contig_order" : [
+      "1",
+      "2",
+      "3"
+   ],
+   "source_versions" : {},
+   "species" : "homo_sapiens"
+}

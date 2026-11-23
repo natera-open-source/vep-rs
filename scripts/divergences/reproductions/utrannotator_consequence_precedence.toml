@@ -1,9 +1,9 @@
 entry = "utrannotator_consequence_precedence"
 page = "docs/divergences/utrannotator-consequence-precedence.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 999,950 per million · 4 flag sets, 109 corpora"
+input_class_basis = "2 · 999,950 per million · 4 flag sets, 149 corpora"
 notes = "The substitution destroys a uORF's ATG and removes an overlapping ORF's stop codon, so uAUG_lost and uSTOP_lost both fire. Ensembl VEP writes the flag its hash lists last: under PERL_HASH_SEED=0 that is uSTOP_lost, vep-rs's value; the seed given here lists the five keys uSTOP_gained, uSTOP_lost, uAUG_gained, uFrameshift, uAUG_lost and writes the start-codon loss."
 
 [input]
@@ -30,3 +30,14 @@ where = { record = "rs1396983766", feature = "ENST00000399295" }
 [expected]
 ensembl_vep = ["5_prime_UTR_premature_start_codon_loss_variant"]
 vep_rs = ["5_prime_UTR_uORF_stop_codon_loss_variant"]
+
+[implementation]
+code = ["crates/vep-builtins/src/plugins/utr_annotator.rs::UtrAnnotatorPlugin::first_analysis"]
+tests = [
+    "crates/vep-builtins/src/plugins/utr_annotator.rs::tests::insertion_before_a_start_codon_inside_a_stop_codon_reports_the_lost_stop",
+    "crates/vep-builtins/src/plugins/utr_annotator.rs::tests::two_analyses_choose_the_fixed_precedence",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/utrannotator.rs::utrannotator_precedence_row",
+    "tools/vep-plugin-pairs/src/rules/utrannotator.rs::consequence_precedence",
+]

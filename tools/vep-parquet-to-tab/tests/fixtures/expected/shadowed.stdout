@@ -1,0 +1,4 @@
+#Feature	ref	MAX_AF	alt	CANONICAL	TSL	pos	LAST
+f1	plugin-ref-1	0.5	-	YES	1	plugin-pos-1	last-1
+f2	-	-	plugin-alt-2	-	-	plugin-pos-2	last-2
+-	plugin-ref-3	0.25	plugin-alt-3	-	3	plugin-pos-3	last-3

@@ -1,0 +1,5 @@
+file_name	source	location	allele	feature	consequence_set	allele	_start	location	note	_start	mismatch_type
+o.txt	missing_in_rust	1:100-200	A	T1	x	A	100	1:100-200	n	100	coordinate_only
+o.txt	extra_in_rust	1:100-300	A	T1	x	A	100	1:100-300	n	100	coordinate_only
+o.txt	missing_in_rust	2:5	A	T2	x	A	5	2:5		5	consequence_swap
+o.txt	extra_in_rust	2:5	A	T2	y	A	5	2:5	n	5	consequence_swap

@@ -1,0 +1,47 @@
+usage: vep-prepare-benchmark-vcfs [-h] --input-dir INPUT_DIR
+                                  --output-dir OUTPUT_DIR
+                                  [--chrom-mode {auto,keep,strip,add}]
+                                  [--cache-dir CACHE_DIR]
+                                  [--max-variants MAX_VARIANTS]
+                                  [--assembly ASSEMBLY]
+                                  [--canonical-contigs [FILE_OR_LIST]]
+                                  [--no-canonical-contigs]
+
+Prepare benchmark VCF inputs
+
+options:
+  -h, --help            show this help message and exit
+  --input-dir INPUT_DIR
+                        Directory containing benchmark .vcf.gz or .vcf files
+  --output-dir OUTPUT_DIR
+                        Directory to write prepared .vcf files
+  --chrom-mode {auto,keep,strip,add}
+                        Chromosome normalization mode (default: auto).
+                        Independent of the canonical-contigs filter; if
+                        --canonical-contigs is active, UCSC-style inputs are
+                        auto-stripped regardless of this mode.
+  --cache-dir CACHE_DIR
+                        Converted JSON cache directory (used only by --chrom-
+                        mode auto)
+  --max-variants MAX_VARIANTS
+                        If set, keep only first N variant lines per input file
+  --assembly ASSEMBLY   Reference assembly metadata (recorded in manifest).
+                        Absent, GRCh37 or GRCh38 selects the human canonical
+                        set for a bare --canonical-contigs; another assembly's
+                        set is named with --canonical-contigs <file or list>,
+                        and a bare flag under it switches the filter off with
+                        a warning.
+  --canonical-contigs [FILE_OR_LIST]
+                        Filter input VCFs to canonical contigs (DEFAULT).
+                        Bare, the universal Ensembl-style human set
+                        (1-22,X,Y,MT); with a value, the comma-separated names
+                        given or the names in the file named, one per line or
+                        comma-separated, `#` lines ignored (a cache's
+                        info.json contig_order). UCSC-style chr-prefix inputs
+                        are auto-stripped at filter time. Drops variants on
+                        alt contigs (NT_*, NW_*, decoys), so that asymmetric
+                        alt-contig handling between engines cannot inflate F1
+                        divergences.
+  --no-canonical-contigs
+                        Opt out of canonical-contigs filtering and annotate
+                        every contig the input carries, alt contigs included.

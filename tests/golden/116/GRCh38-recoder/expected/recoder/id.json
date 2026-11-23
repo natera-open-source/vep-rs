@@ -1,24 +1,86 @@
 [
    {
       "-" : {
-         "input" : "rs886039732",
+         "hgvsp" : [
+            "ENSP00000349903.3:p.Gln248ProfsTer27",
+            "ENSP00000371931.4:p.Gln248ProfsTer27",
+            "ENSP00000413649.1:p.Gln248ProfsTer27",
+            "ENSP00000487560.1:p.Gln248ProfsTer27",
+            "ENSP00000501504.1:p.Gln248ProfsTer27",
+            "ENSP00000501426.1:p.Gln248ProfsTer27",
+            "ENSP00000501530.1:p.Gln248ProfsTer27",
+            "ENSP00000572303.1:p.Gln248ProfsTer27",
+            "ENSP00000572304.1:p.Gln248ProfsTer27",
+            "ENSP00000633131.1:p.Gln248ProfsTer27",
+            "ENSP00000704104.1:p.Gln248ProfsTer27",
+            "ENSP00000744957.1:p.Gln248ProfsTer27",
+            "ENSP00000780248.1:p.Gln248ProfsTer27",
+            "NP_001153774.1:p.Gln248ProfsTer27",
+            "NP_001153778.1:p.Gln248ProfsTer27",
+            "NP_003886.3:p.Gln287ProfsTer27",
+            "NP_982271.3:p.Gln248ProfsTer27",
+            "XP_016883984.1:p.Gln287ProfsTer27",
+            "XP_016883986.1:p.Gln287ProfsTer27",
+            "XP_016883988.1:p.Gln287ProfsTer27",
+            "XP_047296990.1:p.Gln287ProfsTer27",
+            "XP_047296991.1:p.Gln287ProfsTer27",
+            "XP_047296992.1:p.Gln287ProfsTer27",
+            "XP_047296993.1:p.Gln287ProfsTer27",
+            "XP_047296994.1:p.Gln287ProfsTer27",
+            "XP_047296995.1:p.Gln248ProfsTer27",
+            "XP_047296996.1:p.Gln248ProfsTer27",
+            "XP_047296997.1:p.Gln130ProfsTer27",
+            "XP_047296998.1:p.Gln287ProfsTer27",
+            "XP_047296999.1:p.Gln287ProfsTer27",
+            "XP_047297000.1:p.Gln287ProfsTer27",
+            "XP_047297001.1:p.Gln287ProfsTer27",
+            "XP_047297002.1:p.Gln287ProfsTer27",
+            "XP_047297003.1:p.Gln287ProfsTer27",
+            "XP_047297004.1:p.Gln287ProfsTer27",
+            "XP_047297005.1:p.Gln248ProfsTer27",
+            "XP_047297006.1:p.Gln248ProfsTer27"
+         ],
          "ga4gh_vrs" : [
             {
+               "state" : {
+                  "type" : "SequenceState",
+                  "sequence" : ""
+               },
                "location" : {
+                  "sequence_id" : "refseq:NC_000021.9",
                   "interval" : {
                      "start" : "32694271",
                      "type" : "SimpleInterval",
                      "end" : 32694276
                   },
-                  "type" : "SequenceLocation",
-                  "sequence_id" : "refseq:NC_000021.9"
-               },
-               "state" : {
-                  "type" : "SequenceState",
-                  "sequence" : ""
+                  "type" : "SequenceLocation"
                },
                "type" : "Allele"
             }
+         ],
+         "mane_select" : [
+            {
+               "hgvsg" : "NC_000021.9:g.32694272_32694276del",
+               "hgvsp" : "ENSP00000501530.1:p.Gln248ProfsTer27",
+               "hgvsc" : "ENST00000674351.1:c.741_745del"
+            },
+            {
+               "hgvsg" : "NC_000021.9:g.32694272_32694276del",
+               "hgvsc" : "NM_203446.3:c.741_745del",
+               "hgvsp" : "NP_982271.3:p.Gln248ProfsTer27"
+            }
+         ],
+         "spdi" : [
+            "NC_000021.9:32694271:TTTGT:"
+         ],
+         "id" : [
+            "rs886039732"
+         ],
+         "var_synonyms" : [
+            "ClinVar: RCV000255996,VCV000265687"
+         ],
+         "hgvsg" : [
+            "NC_000021.9:g.32694272_32694276del"
          ],
          "hgvsc" : [
             "ENST00000357345.9:c.741_745del",
@@ -59,105 +121,17 @@
             "XM_047441049.1:c.741_745del",
             "XM_047441050.1:c.741_745del"
          ],
-         "mane_select" : [
-            {
-               "hgvsp" : "ENSP00000501530.1:p.Gln248ProfsTer27",
-               "hgvsg" : "NC_000021.9:g.32694272_32694276del",
-               "hgvsc" : "ENST00000674351.1:c.741_745del"
-            },
-            {
-               "hgvsp" : "NP_982271.3:p.Gln248ProfsTer27",
-               "hgvsg" : "NC_000021.9:g.32694272_32694276del",
-               "hgvsc" : "NM_203446.3:c.741_745del"
-            }
-         ],
-         "spdi" : [
-            "NC_000021.9:32694271:TTTGT:"
-         ],
-         "hgvsp" : [
-            "ENSP00000349903.3:p.Gln248ProfsTer27",
-            "ENSP00000371931.4:p.Gln248ProfsTer27",
-            "ENSP00000413649.1:p.Gln248ProfsTer27",
-            "ENSP00000487560.1:p.Gln248ProfsTer27",
-            "ENSP00000501504.1:p.Gln248ProfsTer27",
-            "ENSP00000501426.1:p.Gln248ProfsTer27",
-            "ENSP00000501530.1:p.Gln248ProfsTer27",
-            "ENSP00000572303.1:p.Gln248ProfsTer27",
-            "ENSP00000572304.1:p.Gln248ProfsTer27",
-            "ENSP00000633131.1:p.Gln248ProfsTer27",
-            "ENSP00000704104.1:p.Gln248ProfsTer27",
-            "ENSP00000744957.1:p.Gln248ProfsTer27",
-            "ENSP00000780248.1:p.Gln248ProfsTer27",
-            "NP_001153774.1:p.Gln248ProfsTer27",
-            "NP_001153778.1:p.Gln248ProfsTer27",
-            "NP_003886.3:p.Gln287ProfsTer27",
-            "NP_982271.3:p.Gln248ProfsTer27",
-            "XP_016883984.1:p.Gln287ProfsTer27",
-            "XP_016883986.1:p.Gln287ProfsTer27",
-            "XP_016883988.1:p.Gln287ProfsTer27",
-            "XP_047296990.1:p.Gln287ProfsTer27",
-            "XP_047296991.1:p.Gln287ProfsTer27",
-            "XP_047296992.1:p.Gln287ProfsTer27",
-            "XP_047296993.1:p.Gln287ProfsTer27",
-            "XP_047296994.1:p.Gln287ProfsTer27",
-            "XP_047296995.1:p.Gln248ProfsTer27",
-            "XP_047296996.1:p.Gln248ProfsTer27",
-            "XP_047296997.1:p.Gln130ProfsTer27",
-            "XP_047296998.1:p.Gln287ProfsTer27",
-            "XP_047296999.1:p.Gln287ProfsTer27",
-            "XP_047297000.1:p.Gln287ProfsTer27",
-            "XP_047297001.1:p.Gln287ProfsTer27",
-            "XP_047297002.1:p.Gln287ProfsTer27",
-            "XP_047297003.1:p.Gln287ProfsTer27",
-            "XP_047297004.1:p.Gln287ProfsTer27",
-            "XP_047297005.1:p.Gln248ProfsTer27",
-            "XP_047297006.1:p.Gln248ProfsTer27"
-         ],
-         "var_synonyms" : [
-            "ClinVar: VCV000265687,RCV000255996"
-         ],
-         "hgvsg" : [
-            "NC_000021.9:g.32694272_32694276del"
-         ],
          "vcf_string" : [
             "21-32694271-ATTTGT-A"
          ],
-         "id" : [
-            "rs886039732"
-         ]
+         "input" : "rs886039732"
       }
    },
    {
       "T" : {
-         "ga4gh_vrs" : [
-            {
-               "location" : {
-                  "type" : "SequenceLocation",
-                  "sequence_id" : "refseq:NC_000021.9",
-                  "interval" : {
-                     "end" : 33543119,
-                     "type" : "SimpleInterval",
-                     "start" : "33543119"
-                  }
-               },
-               "type" : "Allele",
-               "state" : {
-                  "type" : "SequenceState",
-                  "sequence" : "T"
-               }
-            }
-         ],
-         "mane_select" : [
-            {
-               "hgvsg" : "NC_000021.9:g.33543119dup",
-               "hgvsp" : "ENSP00000348984.4:p.Arg10Ter",
-               "hgvsc" : "ENST00000356577.10:c.27dup"
-            },
-            {
-               "hgvsp" : "NP_620305.3:p.Arg10Ter",
-               "hgvsg" : "NC_000021.9:g.33543119dup",
-               "hgvsc" : "NM_138927.4:c.27dup"
-            }
+         "input" : "rs1601245742",
+         "vcf_string" : [
+            "21-33543119-T-TT"
          ],
          "hgvsc" : [
             "ENST00000300278.9:c.27dup",
@@ -183,9 +157,44 @@
             "NM_138927.4:c.27dup",
             "NR_103797.2:n.82dup"
          ],
-         "input" : "rs1601245742",
-         "vcf_string" : [
-            "21-33543119-T-TT"
+         "hgvsg" : [
+            "NC_000021.9:g.33543119dup"
+         ],
+         "var_synonyms" : [
+            "ClinVar: RCV001008718,VCV000817560"
+         ],
+         "spdi" : [
+            "NC_000021.9:33543119::T"
+         ],
+         "ga4gh_vrs" : [
+            {
+               "type" : "Allele",
+               "location" : {
+                  "type" : "SequenceLocation",
+                  "interval" : {
+                     "type" : "SimpleInterval",
+                     "end" : 33543119,
+                     "start" : "33543119"
+                  },
+                  "sequence_id" : "refseq:NC_000021.9"
+               },
+               "state" : {
+                  "type" : "SequenceState",
+                  "sequence" : "T"
+               }
+            }
+         ],
+         "mane_select" : [
+            {
+               "hgvsc" : "ENST00000356577.10:c.27dup",
+               "hgvsp" : "ENSP00000348984.4:p.Arg10Ter",
+               "hgvsg" : "NC_000021.9:g.33543119dup"
+            },
+            {
+               "hgvsg" : "NC_000021.9:g.33543119dup",
+               "hgvsp" : "NP_620305.3:p.Arg10Ter",
+               "hgvsc" : "NM_138927.4:c.27dup"
+            }
          ],
          "hgvsp" : [
             "ENSP00000300278.2:p.Arg10Ter",
@@ -204,26 +213,11 @@
             "NP_001278341.1:p.Arg10Ter",
             "NP_115571.3:p.Arg10Ter",
             "NP_620305.3:p.Arg10Ter"
-         ],
-         "spdi" : [
-            "NC_000021.9:33543119::T"
-         ],
-         "var_synonyms" : [
-            "ClinVar: RCV001008718,VCV000817560"
-         ],
-         "hgvsg" : [
-            "NC_000021.9:g.33543119dup"
          ]
       }
    },
    {
       "A" : {
-         "vcf_string" : [
-            "21-33553711-C-A"
-         ],
-         "id" : [
-            "rs779189159"
-         ],
          "hgvsp" : [
             "ENSP00000300278.2:p.Gln1494Lys",
             "ENSP00000348984.4:p.Gln1494Lys",
@@ -238,29 +232,44 @@
          "spdi" : [
             "NC_000021.9:33553710:C:A"
          ],
-         "var_synonyms" : [
-            "ClinVar: RCV002288430,VCV001709146"
-         ],
-         "hgvsg" : [
-            "NC_000021.9:g.33553711C>A"
+         "mane_select" : [
+            {
+               "hgvsg" : "NC_000021.9:g.33553711C>A",
+               "hgvsc" : "ENST00000356577.10:c.4480C>A",
+               "hgvsp" : "ENSP00000348984.4:p.Gln1494Lys"
+            },
+            {
+               "hgvsp" : "NP_620305.3:p.Gln1494Lys",
+               "hgvsc" : "NM_138927.4:c.4480C>A",
+               "hgvsg" : "NC_000021.9:g.33553711C>A"
+            }
          ],
          "ga4gh_vrs" : [
             {
-               "type" : "Allele",
                "state" : {
-                  "type" : "SequenceState",
-                  "sequence" : "A"
+                  "sequence" : "A",
+                  "type" : "SequenceState"
                },
                "location" : {
+                  "sequence_id" : "refseq:NC_000021.9",
                   "interval" : {
-                     "start" : "33553710",
                      "end" : 33553711,
-                     "type" : "SimpleInterval"
+                     "type" : "SimpleInterval",
+                     "start" : "33553710"
                   },
-                  "type" : "SequenceLocation",
-                  "sequence_id" : "refseq:NC_000021.9"
-               }
+                  "type" : "SequenceLocation"
+               },
+               "type" : "Allele"
             }
+         ],
+         "var_synonyms" : [
+            "ClinVar: RCV002288430,VCV001709146"
+         ],
+         "id" : [
+            "rs779189159"
+         ],
+         "hgvsg" : [
+            "NC_000021.9:g.33553711C>A"
          ],
          "hgvsc" : [
             "ENST00000300278.9:c.4480C>A",
@@ -280,51 +289,12 @@
             "NM_138927.4:c.4480C>A",
             "NR_103797.2:n.4535C>A"
          ],
-         "mane_select" : [
-            {
-               "hgvsc" : "ENST00000356577.10:c.4480C>A",
-               "hgvsp" : "ENSP00000348984.4:p.Gln1494Lys",
-               "hgvsg" : "NC_000021.9:g.33553711C>A"
-            },
-            {
-               "hgvsc" : "NM_138927.4:c.4480C>A",
-               "hgvsp" : "NP_620305.3:p.Gln1494Lys",
-               "hgvsg" : "NC_000021.9:g.33553711C>A"
-            }
+         "vcf_string" : [
+            "21-33553711-C-A"
          ],
          "input" : "rs779189159"
       },
       "G" : {
-         "ga4gh_vrs" : [
-            {
-               "location" : {
-                  "sequence_id" : "refseq:NC_000021.9",
-                  "type" : "SequenceLocation",
-                  "interval" : {
-                     "type" : "SimpleInterval",
-                     "end" : 33553711,
-                     "start" : "33553710"
-                  }
-               },
-               "state" : {
-                  "type" : "SequenceState",
-                  "sequence" : "G"
-               },
-               "type" : "Allele"
-            }
-         ],
-         "mane_select" : [
-            {
-               "hgvsg" : "NC_000021.9:g.33553711C>G",
-               "hgvsp" : "ENSP00000348984.4:p.Gln1494Glu",
-               "hgvsc" : "ENST00000356577.10:c.4480C>G"
-            },
-            {
-               "hgvsp" : "NP_620305.3:p.Gln1494Glu",
-               "hgvsg" : "NC_000021.9:g.33553711C>G",
-               "hgvsc" : "NM_138927.4:c.4480C>G"
-            }
-         ],
          "hgvsc" : [
             "ENST00000300278.9:c.4480C>G",
             "ENST00000356577.10:c.4480C>G",
@@ -347,11 +317,38 @@
          "vcf_string" : [
             "21-33553711-C-G"
          ],
-         "id" : [
-            "rs779189159"
-         ],
          "spdi" : [
             "NC_000021.9:33553710:C:G"
+         ],
+         "mane_select" : [
+            {
+               "hgvsp" : "ENSP00000348984.4:p.Gln1494Glu",
+               "hgvsc" : "ENST00000356577.10:c.4480C>G",
+               "hgvsg" : "NC_000021.9:g.33553711C>G"
+            },
+            {
+               "hgvsc" : "NM_138927.4:c.4480C>G",
+               "hgvsp" : "NP_620305.3:p.Gln1494Glu",
+               "hgvsg" : "NC_000021.9:g.33553711C>G"
+            }
+         ],
+         "ga4gh_vrs" : [
+            {
+               "type" : "Allele",
+               "state" : {
+                  "sequence" : "G",
+                  "type" : "SequenceState"
+               },
+               "location" : {
+                  "interval" : {
+                     "start" : "33553710",
+                     "end" : 33553711,
+                     "type" : "SimpleInterval"
+                  },
+                  "type" : "SequenceLocation",
+                  "sequence_id" : "refseq:NC_000021.9"
+               }
+            }
          ],
          "hgvsp" : [
             "ENSP00000300278.2:p.Gln1494Glu",
@@ -369,68 +366,14 @@
          ],
          "var_synonyms" : [
             "ClinVar: RCV002288430,VCV001709146"
+         ],
+         "id" : [
+            "rs779189159"
          ]
       }
    },
    {
       "T" : {
-         "id" : [
-            "rs797045539"
-         ],
-         "vcf_string" : [
-            "21-37505341-G-GT"
-         ],
-         "var_synonyms" : [
-            "ClinVar: RCV000194800,VCV000210890"
-         ],
-         "hgvsg" : [
-            "NC_000021.9:g.37505341_37505342insT"
-         ],
-         "spdi" : [
-            "NC_000021.9:37505341::T"
-         ],
-         "hgvsp" : [
-            "ENSP00000342690.3:p.Pro434ThrfsTer15",
-            "ENSP00000381929.2:p.Pro434ThrfsTer15",
-            "ENSP00000381932.2:p.Pro434ThrfsTer15",
-            "ENSP00000495596.1:p.Pro396ThrfsTer?",
-            "ENSP00000493627.1:p.Pro425ThrfsTer15",
-            "ENSP00000493653.1:p.Pro396ThrfsTer?",
-            "ENSP00000494544.1:p.Pro434ThrfsTer15",
-            "ENSP00000494897.1:p.Pro434ThrfsTer15",
-            "ENSP00000494536.1:p.Pro450ThrfsTer15",
-            "ENSP00000495632.1:p.Pro434ThrfsTer15",
-            "ENSP00000495908.1:p.Pro425ThrfsTer15",
-            "ENSP00000494572.1:p.Pro425ThrfsTer15",
-            "ENSP00000496748.1:p.Pro425ThrfsTer15",
-            "ENSP00000495571.1:p.Pro396ThrfsTer15",
-            "ENSP00000535155.1:p.Pro434ThrfsTer15",
-            "ENSP00000535156.1:p.Pro425ThrfsTer15",
-            "ENSP00000535157.1:p.Pro434ThrfsTer15",
-            "ENSP00000535158.1:p.Pro425ThrfsTer15",
-            "ENSP00000535159.1:p.Pro425ThrfsTer15",
-            "ENSP00000589191.1:p.Pro425ThrfsTer15",
-            "ENSP00000815041.1:p.Pro425ThrfsTer15",
-            "NP_001334650.1:p.Pro425ThrfsTer15",
-            "NP_001334651.1:p.Pro425ThrfsTer15",
-            "NP_001334652.1:p.Pro396ThrfsTer15",
-            "NP_001387.2:p.Pro434ThrfsTer15",
-            "NP_567824.1:p.Pro434ThrfsTer15",
-            "NP_569120.1:p.Pro425ThrfsTer15",
-            "NP_569122.1:p.Pro434ThrfsTer15"
-         ],
-         "mane_select" : [
-            {
-               "hgvsc" : "ENST00000647188.2:c.1271_1272insT",
-               "hgvsp" : "ENSP00000494572.1:p.Pro425ThrfsTer15",
-               "hgvsg" : "NC_000021.9:g.37505341_37505342insT"
-            },
-            {
-               "hgvsc" : "NM_001347721.2:c.1271_1272insT",
-               "hgvsg" : "NC_000021.9:g.37505341_37505342insT",
-               "hgvsp" : "NP_001334650.1:p.Pro425ThrfsTer15"
-            }
-         ],
          "hgvsc" : [
             "ENST00000338785.9:c.1298_1299insT",
             "ENST00000398956.2:c.1298_1299insT",
@@ -465,35 +408,145 @@
             "NM_130436.2:c.1271_1272insT",
             "NM_130438.2:c.1298_1299insT"
          ],
+         "vcf_string" : [
+            "21-37505341-G-GT"
+         ],
+         "input" : "rs797045539",
+         "hgvsp" : [
+            "ENSP00000342690.3:p.Pro434ThrfsTer15",
+            "ENSP00000381929.2:p.Pro434ThrfsTer15",
+            "ENSP00000381932.2:p.Pro434ThrfsTer15",
+            "ENSP00000495596.1:p.Pro396ThrfsTer?",
+            "ENSP00000493627.1:p.Pro425ThrfsTer15",
+            "ENSP00000493653.1:p.Pro396ThrfsTer?",
+            "ENSP00000494544.1:p.Pro434ThrfsTer15",
+            "ENSP00000494897.1:p.Pro434ThrfsTer15",
+            "ENSP00000494536.1:p.Pro450ThrfsTer15",
+            "ENSP00000495632.1:p.Pro434ThrfsTer15",
+            "ENSP00000495908.1:p.Pro425ThrfsTer15",
+            "ENSP00000494572.1:p.Pro425ThrfsTer15",
+            "ENSP00000496748.1:p.Pro425ThrfsTer15",
+            "ENSP00000495571.1:p.Pro396ThrfsTer15",
+            "ENSP00000535155.1:p.Pro434ThrfsTer15",
+            "ENSP00000535156.1:p.Pro425ThrfsTer15",
+            "ENSP00000535157.1:p.Pro434ThrfsTer15",
+            "ENSP00000535158.1:p.Pro425ThrfsTer15",
+            "ENSP00000535159.1:p.Pro425ThrfsTer15",
+            "ENSP00000589191.1:p.Pro425ThrfsTer15",
+            "ENSP00000815041.1:p.Pro425ThrfsTer15",
+            "NP_001334650.1:p.Pro425ThrfsTer15",
+            "NP_001334651.1:p.Pro425ThrfsTer15",
+            "NP_001334652.1:p.Pro396ThrfsTer15",
+            "NP_001387.2:p.Pro434ThrfsTer15",
+            "NP_567824.1:p.Pro434ThrfsTer15",
+            "NP_569120.1:p.Pro425ThrfsTer15",
+            "NP_569122.1:p.Pro434ThrfsTer15"
+         ],
          "ga4gh_vrs" : [
             {
-               "state" : {
-                  "type" : "SequenceState",
-                  "sequence" : "T"
-               },
-               "type" : "Allele",
                "location" : {
-                  "sequence_id" : "refseq:NC_000021.9",
-                  "type" : "SequenceLocation",
                   "interval" : {
                      "end" : 37505341,
                      "type" : "SimpleInterval",
                      "start" : "37505341"
-                  }
-               }
+                  },
+                  "type" : "SequenceLocation",
+                  "sequence_id" : "refseq:NC_000021.9"
+               },
+               "state" : {
+                  "type" : "SequenceState",
+                  "sequence" : "T"
+               },
+               "type" : "Allele"
             }
          ],
-         "input" : "rs797045539"
+         "mane_select" : [
+            {
+               "hgvsg" : "NC_000021.9:g.37505341_37505342insT",
+               "hgvsp" : "ENSP00000494572.1:p.Pro425ThrfsTer15",
+               "hgvsc" : "ENST00000647188.2:c.1271_1272insT"
+            },
+            {
+               "hgvsg" : "NC_000021.9:g.37505341_37505342insT",
+               "hgvsp" : "NP_001334650.1:p.Pro425ThrfsTer15",
+               "hgvsc" : "NM_001347721.2:c.1271_1272insT"
+            }
+         ],
+         "spdi" : [
+            "NC_000021.9:37505341::T"
+         ],
+         "id" : [
+            "rs797045539"
+         ],
+         "var_synonyms" : [
+            "ClinVar: RCV000194800,VCV000210890"
+         ],
+         "hgvsg" : [
+            "NC_000021.9:g.37505341_37505342insT"
+         ]
       }
    },
    {
+      "C" : {
+         "hgvsc" : [
+            "ENST00000644251.1:c.429-6910G>C",
+            "ENST00000645487.1:c.*202-2031G>C",
+            "ENST00000646873.1:c.313-12773G>C"
+         ],
+         "vcf_string" : [
+            "21-44195140-G-C"
+         ],
+         "input" : "rs2838519",
+         "ga4gh_vrs" : [
+            {
+               "state" : {
+                  "type" : "SequenceState",
+                  "sequence" : "C"
+               },
+               "location" : {
+                  "sequence_id" : "refseq:NC_000021.9",
+                  "type" : "SequenceLocation",
+                  "interval" : {
+                     "end" : 44195140,
+                     "type" : "SimpleInterval",
+                     "start" : "44195139"
+                  }
+               },
+               "type" : "Allele"
+            }
+         ],
+         "spdi" : [
+            "NC_000021.9:44195139:G:C"
+         ],
+         "id" : [
+            "rs2838519"
+         ],
+         "var_synonyms" : [
+            "Archive dbSNP: rs60296503,rs60222796,rs56429244,rs17181160"
+         ],
+         "hgvsg" : [
+            "NC_000021.9:g.44195140G>C"
+         ]
+      },
       "A" : {
+         "var_synonyms" : [
+            "Archive dbSNP: rs60296503,rs60222796,rs56429244,rs17181160"
+         ],
+         "id" : [
+            "rs2838519"
+         ],
+         "hgvsg" : [
+            "NC_000021.9:g.44195140G>A"
+         ],
+         "spdi" : [
+            "NC_000021.9:44195139:G:A"
+         ],
          "ga4gh_vrs" : [
             {
                "type" : "Allele",
                "state" : {
-                  "type" : "SequenceState",
-                  "sequence" : "A"
+                  "sequence" : "A",
+                  "type" : "SequenceState"
                },
                "location" : {
                   "interval" : {
@@ -509,189 +562,165 @@
          "vcf_string" : [
             "21-44195140-G-A"
          ],
+         "input" : "rs2838519",
          "hgvsc" : [
             "ENST00000644251.1:c.429-6910G>A",
             "ENST00000645487.1:c.*202-2031G>A",
             "ENST00000646873.1:c.313-12773G>A"
-         ],
-         "id" : [
-            "rs2838519"
-         ],
-         "spdi" : [
-            "NC_000021.9:44195139:G:A"
-         ],
-         "var_synonyms" : [
-            "Archive dbSNP: rs60296503,rs17181160,rs56429244,rs60222796"
-         ],
-         "input" : "rs2838519",
-         "hgvsg" : [
-            "NC_000021.9:g.44195140G>A"
          ]
-      },
+      }
+   },
+   {
       "C" : {
-         "spdi" : [
-            "NC_000021.9:44195139:G:C"
+         "hgvsc" : [
+            "ENST00000644251.1:c.429-6910G>C",
+            "ENST00000645487.1:c.*202-2031G>C",
+            "ENST00000646873.1:c.313-12773G>C"
          ],
-         "var_synonyms" : [
-            "Archive dbSNP: rs60296503,rs17181160,rs56429244,rs60222796"
-         ],
-         "input" : "rs2838519",
-         "hgvsg" : [
-            "NC_000021.9:g.44195140G>C"
-         ],
+         "input" : "RS2838519",
          "vcf_string" : [
             "21-44195140-G-C"
          ],
          "ga4gh_vrs" : [
             {
+               "state" : {
+                  "sequence" : "C",
+                  "type" : "SequenceState"
+               },
                "location" : {
-                  "sequence_id" : "refseq:NC_000021.9",
                   "type" : "SequenceLocation",
                   "interval" : {
+                     "start" : "44195139",
                      "end" : 44195140,
-                     "type" : "SimpleInterval",
-                     "start" : "44195139"
-                  }
+                     "type" : "SimpleInterval"
+                  },
+                  "sequence_id" : "refseq:NC_000021.9"
                },
-               "type" : "Allele",
-               "state" : {
-                  "type" : "SequenceState",
-                  "sequence" : "C"
-               }
+               "type" : "Allele"
             }
+         ],
+         "spdi" : [
+            "NC_000021.9:44195139:G:C"
+         ],
+         "hgvsg" : [
+            "NC_000021.9:g.44195140G>C"
          ],
          "id" : [
             "rs2838519"
          ],
-         "hgvsc" : [
-            "ENST00000644251.1:c.429-6910G>C",
-            "ENST00000645487.1:c.*202-2031G>C",
-            "ENST00000646873.1:c.313-12773G>C"
+         "var_synonyms" : [
+            "Archive dbSNP: rs17181160,rs56429244,rs60222796,rs60296503"
          ]
-      }
-   },
-   {
+      },
       "A" : {
          "hgvsc" : [
             "ENST00000644251.1:c.429-6910G>A",
             "ENST00000645487.1:c.*202-2031G>A",
             "ENST00000646873.1:c.313-12773G>A"
          ],
-         "id" : [
-            "rs2838519"
+         "input" : "RS2838519",
+         "vcf_string" : [
+            "21-44195140-G-A"
+         ],
+         "spdi" : [
+            "NC_000021.9:44195139:G:A"
          ],
          "ga4gh_vrs" : [
             {
-               "type" : "Allele",
                "state" : {
-                  "sequence" : "A",
-                  "type" : "SequenceState"
+                  "type" : "SequenceState",
+                  "sequence" : "A"
                },
                "location" : {
+                  "type" : "SequenceLocation",
                   "interval" : {
                      "start" : "44195139",
                      "type" : "SimpleInterval",
                      "end" : 44195140
                   },
-                  "sequence_id" : "refseq:NC_000021.9",
-                  "type" : "SequenceLocation"
-               }
+                  "sequence_id" : "refseq:NC_000021.9"
+               },
+               "type" : "Allele"
             }
          ],
-         "vcf_string" : [
-            "21-44195140-G-A"
-         ],
-         "var_synonyms" : [
-            "Archive dbSNP: rs56429244,rs17181160,rs60296503,rs60222796"
-         ],
-         "input" : "RS2838519",
          "hgvsg" : [
             "NC_000021.9:g.44195140G>A"
          ],
-         "spdi" : [
-            "NC_000021.9:44195139:G:A"
-         ]
-      },
-      "C" : {
-         "hgvsc" : [
-            "ENST00000644251.1:c.429-6910G>C",
-            "ENST00000645487.1:c.*202-2031G>C",
-            "ENST00000646873.1:c.313-12773G>C"
+         "var_synonyms" : [
+            "Archive dbSNP: rs17181160,rs56429244,rs60222796,rs60296503"
          ],
-         "ga4gh_vrs" : [
-            {
-               "type" : "Allele",
-               "state" : {
-                  "sequence" : "C",
-                  "type" : "SequenceState"
-               },
-               "location" : {
-                  "sequence_id" : "refseq:NC_000021.9",
-                  "type" : "SequenceLocation",
-                  "interval" : {
-                     "start" : "44195139",
-                     "end" : 44195140,
-                     "type" : "SimpleInterval"
-                  }
-               }
-            }
-         ],
-         "input" : "RS2838519",
          "id" : [
             "rs2838519"
-         ],
-         "vcf_string" : [
-            "21-44195140-G-C"
-         ],
-         "var_synonyms" : [
-            "Archive dbSNP: rs56429244,rs17181160,rs60296503,rs60222796"
-         ],
-         "hgvsg" : [
-            "NC_000021.9:g.44195140G>C"
-         ],
-         "spdi" : [
-            "NC_000021.9:44195139:G:C"
          ]
       }
    },
    {
       "-" : {
-         "id" : [
-            "rs759281545"
-         ],
-         "vcf_string" : [
-            "21-44293155-GTG-G",
-            "LRG_18-12276-GTG-G"
-         ],
-         "var_synonyms" : [
-            "ClinVar: RCV001906291,VCV001401394",
-            "ClinVar: VCV001401394,RCV001906291"
-         ],
-         "hgvsg" : [
-            "NC_000021.9:g.44293156_44293157del",
-            "LRG_18:g.12277_12278del"
-         ],
-         "spdi" : [
-            "NC_000021.9:44293155:TG:",
-            "LRG_18:12276:TG:"
-         ],
          "hgvsp" : [
             "ENSP00000291582.5:p.Val420GlyfsTer3",
             "ENSP00000636237.1:p.Val419GlyfsTer3",
             "NP_000374.1:p.Val420GlyfsTer3",
             "LRG_18p1:p.Val420GlyfsTer3"
          ],
+         "ga4gh_vrs" : [
+            {
+               "location" : {
+                  "sequence_id" : "refseq:NC_000021.9",
+                  "interval" : {
+                     "start" : "44293155",
+                     "end" : 44293157,
+                     "type" : "SimpleInterval"
+                  },
+                  "type" : "SequenceLocation"
+               },
+               "state" : {
+                  "type" : "SequenceState",
+                  "sequence" : ""
+               },
+               "type" : "Allele"
+            },
+            {
+               "state" : {
+                  "type" : "SequenceState",
+                  "sequence" : ""
+               },
+               "location" : {
+                  "interval" : {
+                     "end" : 44293157,
+                     "type" : "SimpleInterval",
+                     "start" : "44293155"
+                  },
+                  "type" : "SequenceLocation",
+                  "sequence_id" : "refseq:NC_000021.9"
+               },
+               "type" : "Allele"
+            }
+         ],
          "mane_select" : [
             {
                "hgvsp" : "ENSP00000291582.5:p.Val420GlyfsTer3",
-               "hgvsg" : "NC_000021.9:g.44293156_44293157del",
-               "hgvsc" : "ENST00000291582.6:c.1259_1260del"
+               "hgvsc" : "ENST00000291582.6:c.1259_1260del",
+               "hgvsg" : "NC_000021.9:g.44293156_44293157del"
             },
             {
-               "hgvsp" : "NP_000374.1:p.Val420GlyfsTer3",
                "hgvsg" : "NC_000021.9:g.44293156_44293157del",
-               "hgvsc" : "NM_000383.4:c.1259_1260del"
+               "hgvsc" : "NM_000383.4:c.1259_1260del",
+               "hgvsp" : "NP_000374.1:p.Val420GlyfsTer3"
             }
+         ],
+         "spdi" : [
+            "NC_000021.9:44293155:TG:",
+            "LRG_18:12276:TG:"
+         ],
+         "id" : [
+            "rs759281545"
+         ],
+         "var_synonyms" : [
+            "ClinVar: VCV001401394,RCV001906291"
+         ],
+         "hgvsg" : [
+            "NC_000021.9:g.44293156_44293157del",
+            "LRG_18:g.12277_12278del"
          ],
          "hgvsc" : [
             "ENST00000291582.6:c.1259_1260del",
@@ -703,75 +732,15 @@
             "NM_000383.4:c.1259_1260del",
             "LRG_18t1:c.1259_1260del"
          ],
-         "ga4gh_vrs" : [
-            {
-               "location" : {
-                  "type" : "SequenceLocation",
-                  "sequence_id" : "refseq:NC_000021.9",
-                  "interval" : {
-                     "start" : "44293155",
-                     "type" : "SimpleInterval",
-                     "end" : 44293157
-                  }
-               },
-               "state" : {
-                  "type" : "SequenceState",
-                  "sequence" : ""
-               },
-               "type" : "Allele"
-            },
-            {
-               "location" : {
-                  "interval" : {
-                     "end" : 44293157,
-                     "type" : "SimpleInterval",
-                     "start" : "44293155"
-                  },
-                  "sequence_id" : "refseq:NC_000021.9",
-                  "type" : "SequenceLocation"
-               },
-               "state" : {
-                  "sequence" : "",
-                  "type" : "SequenceState"
-               },
-               "type" : "Allele"
-            }
+         "vcf_string" : [
+            "21-44293155-GTG-G",
+            "LRG_18-12276-GTG-G"
          ],
          "input" : "rs759281545"
       }
    },
    {
       "GCGGGGC" : {
-         "ga4gh_vrs" : [
-            {
-               "location" : {
-                  "sequence_id" : "refseq:NC_000021.9",
-                  "type" : "SequenceLocation",
-                  "interval" : {
-                     "start" : "45510104",
-                     "end" : 45510122,
-                     "type" : "SimpleInterval"
-                  }
-               },
-               "state" : {
-                  "sequence" : "GCGGGGC",
-                  "type" : "SequenceState"
-               },
-               "type" : "Allele"
-            }
-         ],
-         "mane_select" : [
-            {
-               "hgvsg" : "NC_000021.9:g.45510112_45510122del",
-               "hgvsp" : "ENSP00000498485.1:p.Ile1182ArgfsTer62",
-               "hgvsc" : "ENST00000651438.1:c.3544_3554del"
-            },
-            {
-               "hgvsp" : "NP_001366429.1:p.Ile1182ArgfsTer62",
-               "hgvsg" : "NC_000021.9:g.45510112_45510122del",
-               "hgvsc" : "NM_001379500.1:c.3544_3554del"
-            }
-         ],
          "hgvsc" : [
             "ENST00000342220.9:c.1588_1598del",
             "ENST00000355480.11:c.4084_4094del",
@@ -824,16 +793,10 @@
             "XM_047440963.1:c.1294-7146_1294-7136del",
             "XM_047440964.1:c.1294-7146_1294-7136del"
          ],
-         "input" : "rs1160505542",
          "vcf_string" : [
             "21-45510105-GCGGGGCATCCG-G"
          ],
-         "id" : [
-            "rs1160505542"
-         ],
-         "spdi" : [
-            "NC_000021.9:45510104:GCGGGGCATCCGCGGGGC:GCGGGGC"
-         ],
+         "input" : "rs1160505542",
          "hgvsp" : [
             "ENSP00000339118.5:p.Ile530ArgfsTer62",
             "ENSP00000347665.5:p.Ile1362ArgfsTer62",
@@ -870,75 +833,51 @@
             "NP_085059.2:p.Ile1362ArgfsTer62",
             "NP_569711.2:p.Ile1597ArgfsTer62"
          ],
+         "spdi" : [
+            "NC_000021.9:45510104:GCGGGGCATCCGCGGGGC:GCGGGGC"
+         ],
+         "mane_select" : [
+            {
+               "hgvsg" : "NC_000021.9:g.45510112_45510122del",
+               "hgvsc" : "ENST00000651438.1:c.3544_3554del",
+               "hgvsp" : "ENSP00000498485.1:p.Ile1182ArgfsTer62"
+            },
+            {
+               "hgvsp" : "NP_001366429.1:p.Ile1182ArgfsTer62",
+               "hgvsc" : "NM_001379500.1:c.3544_3554del",
+               "hgvsg" : "NC_000021.9:g.45510112_45510122del"
+            }
+         ],
+         "ga4gh_vrs" : [
+            {
+               "state" : {
+                  "type" : "SequenceState",
+                  "sequence" : "GCGGGGC"
+               },
+               "location" : {
+                  "sequence_id" : "refseq:NC_000021.9",
+                  "interval" : {
+                     "start" : "45510104",
+                     "type" : "SimpleInterval",
+                     "end" : 45510122
+                  },
+                  "type" : "SequenceLocation"
+               },
+               "type" : "Allele"
+            }
+         ],
          "var_synonyms" : [
-            "ClinVar: VCV002893121,RCV003732692"
+            "ClinVar: RCV003732692,VCV002893121"
+         ],
+         "id" : [
+            "rs1160505542"
          ],
          "hgvsg" : [
             "NC_000021.9:g.45510112_45510122del"
          ]
       },
       "GCGGGGCATCCGCGGGGCATCCGCGGGGC" : {
-         "var_synonyms" : [
-            "ClinVar: VCV002893121,RCV003732692"
-         ],
-         "hgvsg" : [
-            "NC_000021.9:g.45510112_45510122dup"
-         ],
-         "spdi" : [
-            "NC_000021.9:45510104:GCGGGGCATCCGCGGGGC:GCGGGGCATCCGCGGGGCATCCGCGGGGC"
-         ],
-         "hgvsp" : [
-            "ENSP00000339118.5:p.Asp534SerfsTer69",
-            "ENSP00000347665.5:p.Asp1366SerfsTer69",
-            "ENSP00000352798.4:p.Asp1601SerfsTer69",
-            "ENSP00000415692.1:p.Asp171SerfsTer69",
-            "ENSP00000498485.1:p.Asp1186SerfsTer69",
-            "ENSP00000529118.1:p.Asp1174SerfsTer69",
-            "ENSP00000529119.1:p.Asp1197SerfsTer69",
-            "ENSP00000529120.1:p.Asp1139SerfsTer69",
-            "ENSP00000529121.1:p.Asp1330SerfsTer69",
-            "ENSP00000529122.1:p.Asp1204SerfsTer69",
-            "ENSP00000529123.1:p.Asp1157SerfsTer69",
-            "ENSP00000529124.1:p.Asp1133SerfsTer69",
-            "ENSP00000529125.1:p.Asp1178SerfsTer69",
-            "ENSP00000529126.1:p.Asp1176SerfsTer69",
-            "ENSP00000529127.1:p.Asp1206SerfsTer69",
-            "ENSP00000529128.1:p.Asp1209SerfsTer69",
-            "ENSP00000600653.1:p.Asp1121SerfsTer69",
-            "ENSP00000600654.1:p.Asp1165SerfsTer69",
-            "ENSP00000600655.1:p.Asp1140SerfsTer69",
-            "ENSP00000600656.1:p.Asp1177SerfsTer69",
-            "ENSP00000600657.1:p.Asp1113SerfsTer69",
-            "ENSP00000600658.1:p.Asp1086SerfsTer69",
-            "ENSP00000600659.1:p.Asp1115SerfsTer69",
-            "ENSP00000600660.1:p.Asp1168SerfsTer69",
-            "ENSP00000600661.1:p.Asp1268SerfsTer69",
-            "ENSP00000640156.1:p.Asp1177SerfsTer69",
-            "ENSP00000640157.1:p.Asp1144SerfsTer69",
-            "ENSP00000640158.1:p.Asp1183SerfsTer69",
-            "ENSP00000640159.1:p.Asp808SerfsTer69",
-            "ENSP00000705727.1:p.Arg1178IlefsTer159",
-            "ENSP00000815196.1:p.Asp1186SerfsTer69",
-            "NP_001366429.1:p.Asp1186SerfsTer69",
-            "NP_085059.2:p.Asp1366SerfsTer69",
-            "NP_569711.2:p.Asp1601SerfsTer69"
-         ],
-         "id" : [
-            "rs1160505542"
-         ],
          "input" : "rs1160505542",
-         "mane_select" : [
-            {
-               "hgvsg" : "NC_000021.9:g.45510112_45510122dup",
-               "hgvsp" : "ENSP00000498485.1:p.Asp1186SerfsTer69",
-               "hgvsc" : "ENST00000651438.1:c.3554_3555insATCCGCGGGGC"
-            },
-            {
-               "hgvsc" : "NM_001379500.1:c.3554_3555insATCCGCGGGGC",
-               "hgvsp" : "NP_001366429.1:p.Asp1186SerfsTer69",
-               "hgvsg" : "NC_000021.9:g.45510112_45510122dup"
-            }
-         ],
          "hgvsc" : [
             "ENST00000342220.9:c.1598_1599insATCCGCGGGGC",
             "ENST00000355480.11:c.4094_4095insATCCGCGGGGC",
@@ -991,40 +930,92 @@
             "XM_047440963.1:c.1294-7136_1294-7135insGGATGCCCCGC",
             "XM_047440964.1:c.1294-7136_1294-7135insGGATGCCCCGC"
          ],
+         "hgvsg" : [
+            "NC_000021.9:g.45510112_45510122dup"
+         ],
+         "id" : [
+            "rs1160505542"
+         ],
+         "var_synonyms" : [
+            "ClinVar: RCV003732692,VCV002893121"
+         ],
+         "mane_select" : [
+            {
+               "hgvsp" : "ENSP00000498485.1:p.Asp1186SerfsTer69",
+               "hgvsc" : "ENST00000651438.1:c.3554_3555insATCCGCGGGGC",
+               "hgvsg" : "NC_000021.9:g.45510112_45510122dup"
+            },
+            {
+               "hgvsc" : "NM_001379500.1:c.3554_3555insATCCGCGGGGC",
+               "hgvsp" : "NP_001366429.1:p.Asp1186SerfsTer69",
+               "hgvsg" : "NC_000021.9:g.45510112_45510122dup"
+            }
+         ],
          "ga4gh_vrs" : [
             {
-               "type" : "Allele",
-               "state" : {
-                  "type" : "SequenceState",
-                  "sequence" : "GCGGGGCATCCGCGGGGCATCCGCGGGGC"
-               },
                "location" : {
                   "interval" : {
                      "start" : "45510104",
                      "type" : "SimpleInterval",
                      "end" : 45510122
                   },
-                  "sequence_id" : "refseq:NC_000021.9",
-                  "type" : "SequenceLocation"
-               }
+                  "type" : "SequenceLocation",
+                  "sequence_id" : "refseq:NC_000021.9"
+               },
+               "state" : {
+                  "sequence" : "GCGGGGCATCCGCGGGGCATCCGCGGGGC",
+                  "type" : "SequenceState"
+               },
+               "type" : "Allele"
             }
+         ],
+         "spdi" : [
+            "NC_000021.9:45510104:GCGGGGCATCCGCGGGGC:GCGGGGCATCCGCGGGGCATCCGCGGGGC"
+         ],
+         "hgvsp" : [
+            "ENSP00000339118.5:p.Asp534SerfsTer69",
+            "ENSP00000347665.5:p.Asp1366SerfsTer69",
+            "ENSP00000352798.4:p.Asp1601SerfsTer69",
+            "ENSP00000415692.1:p.Asp171SerfsTer69",
+            "ENSP00000498485.1:p.Asp1186SerfsTer69",
+            "ENSP00000529118.1:p.Asp1174SerfsTer69",
+            "ENSP00000529119.1:p.Asp1197SerfsTer69",
+            "ENSP00000529120.1:p.Asp1139SerfsTer69",
+            "ENSP00000529121.1:p.Asp1330SerfsTer69",
+            "ENSP00000529122.1:p.Asp1204SerfsTer69",
+            "ENSP00000529123.1:p.Asp1157SerfsTer69",
+            "ENSP00000529124.1:p.Asp1133SerfsTer69",
+            "ENSP00000529125.1:p.Asp1178SerfsTer69",
+            "ENSP00000529126.1:p.Asp1176SerfsTer69",
+            "ENSP00000529127.1:p.Asp1206SerfsTer69",
+            "ENSP00000529128.1:p.Asp1209SerfsTer69",
+            "ENSP00000600653.1:p.Asp1121SerfsTer69",
+            "ENSP00000600654.1:p.Asp1165SerfsTer69",
+            "ENSP00000600655.1:p.Asp1140SerfsTer69",
+            "ENSP00000600656.1:p.Asp1177SerfsTer69",
+            "ENSP00000600657.1:p.Asp1113SerfsTer69",
+            "ENSP00000600658.1:p.Asp1086SerfsTer69",
+            "ENSP00000600659.1:p.Asp1115SerfsTer69",
+            "ENSP00000600660.1:p.Asp1168SerfsTer69",
+            "ENSP00000600661.1:p.Asp1268SerfsTer69",
+            "ENSP00000640156.1:p.Asp1177SerfsTer69",
+            "ENSP00000640157.1:p.Asp1144SerfsTer69",
+            "ENSP00000640158.1:p.Asp1183SerfsTer69",
+            "ENSP00000640159.1:p.Asp808SerfsTer69",
+            "ENSP00000705727.1:p.Arg1178IlefsTer159",
+            "ENSP00000815196.1:p.Asp1186SerfsTer69",
+            "NP_001366429.1:p.Asp1186SerfsTer69",
+            "NP_085059.2:p.Asp1366SerfsTer69",
+            "NP_569711.2:p.Asp1601SerfsTer69"
          ]
       }
    },
    {
       "-" : {
          "input" : "rs398123645",
-         "mane_select" : [
-            {
-               "hgvsp" : "ENSP00000300527.4:p.Ser488LeufsTer57",
-               "hgvsg" : "NC_000021.9:g.46121558del",
-               "hgvsc" : "ENST00000300527.9:c.1461del"
-            },
-            {
-               "hgvsp" : "NP_001840.3:p.Ser488LeufsTer57",
-               "hgvsg" : "NC_000021.9:g.46121558del",
-               "hgvsc" : "NM_001849.4:c.1461del"
-            }
+         "vcf_string" : [
+            "21-46121557-GA-G",
+            "LRG_476-28439-GA-G"
          ],
          "hgvsc" : [
             "ENST00000300527.9:c.1461del",
@@ -1100,51 +1091,66 @@
             "NM_058175.3:c.1461del",
             "LRG_476t1:c.1461del"
          ],
-         "ga4gh_vrs" : [
-            {
-               "type" : "Allele",
-               "state" : {
-                  "type" : "SequenceState",
-                  "sequence" : ""
-               },
-               "location" : {
-                  "sequence_id" : "refseq:NC_000021.9",
-                  "type" : "SequenceLocation",
-                  "interval" : {
-                     "type" : "SimpleInterval",
-                     "end" : 46121558,
-                     "start" : "46121557"
-                  }
-               }
-            },
-            {
-               "location" : {
-                  "sequence_id" : "refseq:NC_000021.9",
-                  "type" : "SequenceLocation",
-                  "interval" : {
-                     "type" : "SimpleInterval",
-                     "end" : 46121558,
-                     "start" : "46121557"
-                  }
-               },
-               "type" : "Allele",
-               "state" : {
-                  "sequence" : "",
-                  "type" : "SequenceState"
-               }
-            }
-         ],
-         "var_synonyms" : [
-            "ClinVar: RCV000599098,RCV002515767,RCV001231224,RCV005415404,VCV000093907",
-            "ClinVar: RCV000599098,RCV002515767,RCV005415404,RCV001231224,VCV000093907"
-         ],
          "hgvsg" : [
             "NC_000021.9:g.46121558del",
             "LRG_476:g.28440del"
          ],
+         "var_synonyms" : [
+            "ClinVar: RCV005415404,RCV002515767,RCV001231224,RCV000599098,VCV000093907",
+            "ClinVar: RCV001231224,RCV000599098,VCV000093907,RCV005415404,RCV002515767"
+         ],
+         "id" : [
+            "rs398123645"
+         ],
          "spdi" : [
             "NC_000021.9:46121557:A:",
             "LRG_476:28439:A:"
+         ],
+         "mane_select" : [
+            {
+               "hgvsg" : "NC_000021.9:g.46121558del",
+               "hgvsc" : "ENST00000300527.9:c.1461del",
+               "hgvsp" : "ENSP00000300527.4:p.Ser488LeufsTer57"
+            },
+            {
+               "hgvsc" : "NM_001849.4:c.1461del",
+               "hgvsp" : "NP_001840.3:p.Ser488LeufsTer57",
+               "hgvsg" : "NC_000021.9:g.46121558del"
+            }
+         ],
+         "ga4gh_vrs" : [
+            {
+               "state" : {
+                  "sequence" : "",
+                  "type" : "SequenceState"
+               },
+               "location" : {
+                  "type" : "SequenceLocation",
+                  "interval" : {
+                     "start" : "46121557",
+                     "end" : 46121558,
+                     "type" : "SimpleInterval"
+                  },
+                  "sequence_id" : "refseq:NC_000021.9"
+               },
+               "type" : "Allele"
+            },
+            {
+               "location" : {
+                  "sequence_id" : "refseq:NC_000021.9",
+                  "interval" : {
+                     "type" : "SimpleInterval",
+                     "end" : 46121558,
+                     "start" : "46121557"
+                  },
+                  "type" : "SequenceLocation"
+               },
+               "state" : {
+                  "type" : "SequenceState",
+                  "sequence" : ""
+               },
+               "type" : "Allele"
+            }
          ],
          "hgvsp" : [
             "ENSP00000300527.4:p.Ser488LeufsTer57",
@@ -1201,13 +1207,6 @@
             "NP_478054.2:p.Ser488LeufsTer57",
             "NP_478055.2:p.Ser488LeufsTer57",
             "LRG_476p1:p.Ser488LeufsTer57"
-         ],
-         "id" : [
-            "rs398123645"
-         ],
-         "vcf_string" : [
-            "21-46121557-GA-G",
-            "LRG_476-28439-GA-G"
          ]
       }
    }

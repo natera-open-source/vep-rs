@@ -1,14 +1,14 @@
 # The order of the `DOMAINS` list on a transcript stored in two region files
 
-**The defect in one sentence.** Ensembl VEP's cache stores a transcript that reaches across a region boundary once in each region file, and two copies can hold the transcript's protein features in different orders. Ensembl VEP 116.2 writes `DOMAINS` in the order of whichever copy its buffer reads first, so one record gets two orders, decided by the other records of the run and by `--fork`. On a cache converted from Ensembl VEP's, vep-rs writes the order of the lowest region file's copy for every record, at every thread count.
+**The defect in one sentence.** Ensembl VEP's cache stores a transcript that reaches across a region boundary once in each region file, and two copies can hold the transcript's protein features in different orders. Ensembl VEP 116.3 writes `DOMAINS` in the order of whichever copy its buffer reads first, so one record gets two orders, decided by the other records of the run and by `--fork`. On a cache converted from Ensembl VEP's, vep-rs writes the order of the lowest region file's copy for every record, at every thread count.
 
 **Why this is a defect.** The record, the flags and the cache fix the entries of a `DOMAINS` value. Their order in Ensembl VEP's output comes from the region file the run read the transcript from. One record of a ClinVar file is written with one order when the file is annotated without `--fork` or under `--fork 4`, and with the other under `--fork 8` or `--fork 16`. A record annotated alone and the same record after an earlier one differ the same way. Two runs of one input therefore differ byte for byte, and `--fork`, an option for speed, changes what is written.
 
 **What vep-rs does instead.** A cache converted from Ensembl VEP's holds both copies. vep-rs reads a chromosome's region files in order of their start position and keeps the first copy of each transcript. It writes the order of the lowest region file's copy for every record, whatever else the input holds and at every thread count. A native cache stores each transcript once, its protein features in order of their identifiers ([Cache setup](../cache-setup.md)).
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2, `Bio/EnsEMBL/VEP/`; `ensembl-variation` and `ensembl` at release/116):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3, `Bio/EnsEMBL/VEP/`; `ensembl-variation` and `ensembl` at release/116):
 
-- `OutputFactory.pm`, lines 1494-1512: the value is one label per feature of `get_overlapping_ProteinFeatures`, in that list's order. `BaseTranscriptVariation.pm` of `ensembl-variation`, lines 639-643, filters the transcript's stored `protein_features` array by overlap and keeps its order. Nothing sorts either list.
+- `OutputFactory.pm`, lines 1503-1521: the value is one label per feature of `get_overlapping_ProteinFeatures`, in that list's order. `BaseTranscriptVariation.pm` of `ensembl-variation`, lines 639-643, filters the transcript's stored `protein_features` array by overlap and keeps its order. Nothing sorts either list.
 - `AnnotationSource/Database/Transcript.pm`, lines 459-480: the cache dumper stores the array `get_all_ProteinFeatures` returns. `Translation.pm` of `ensembl`, lines 772-819, groups a translation's features by analysis and joins the groups in the order of a hash's keys (lines 817-819), so two fetches of one transcript can return two orders.
 - `AnnotationSource.pm`, lines 109-143 and 168-262: a buffer's region files are listed in the order of its records, each record reaching 5,000 bases either side. The features of files held in memory come first, then those read from disk (`AnnotationSource/Cache/BaseSerialized.pm`, lines 243-270).
 - `AnnotationType/Transcript.pm`, lines 266-299, `merge_features`: the first record of each transcript identifier is kept and every later one dropped.
@@ -18,13 +18,13 @@
 
 **The class it produces.** `domains_order_region_file_copy`: the `DOMAINS` value (JSON `domains`) of a coding row on a transcript the cache stores in two or more region files with its protein features in different orders. Both engines list the same entries. The format comparator and the golden harness compare a `DOMAINS` value as a multiset of its items in a run that names their built-in class `order_only`. Such a run reports no row of this shape, and nothing is counted under the entry's own name. A run that does not name `order_only` reports the row as a difference in `DOMAINS`.
 
-**How often the shape occurs.** Tier 2, see [Intended divergences from Ensembl VEP](../intended-divergences.md): the divergence needs `--domains`, or `--everything`, which switches it on, and a transcript stored twice in two orders. The committed caches hold one such transcript, in one corpus, and 7 committed flag sets pass `--domains` or `--everything`.
+**How often the shape occurs.** Tier 2, see [Intended divergences from Ensembl VEP](../intended-divergences.md): the divergence needs `--domains`, or `--everything`, which switches it on, and a transcript stored twice in two orders. The committed caches hold eight such transcripts, in eight corpora, and 41 committed flag sets pass `--domains` or `--everything`.
 
 The release-116 GRCh38 cache stores 57,293 of its 669,092 transcripts in more than one region file. 24 of them have copies in different orders, and 23 of the 24 show it at some residue. In the release-116 GRCh37 cache, read through its conversion, the figures are 14,677 of 238,823, then 4 and 4. On the chromosome 2 records of the ClinVar GRCh38 file, 40 rows of 10,835,497 differ under `--fork 8` or `--fork 16`, and none without `--fork` or under `--fork 4`.
 
 ## 1. One ClinVar record written in two orders
 
-**In short.** `2 1209204 750974 G A`, a ClinVar record, is a synonymous change at codon 231 of ENST00000308624 (SNTG2, forward strand). Under `--domains` both engines list the same three entries on its row. Ensembl VEP 116.2 writes the PANTHER entry first when the record is annotated alone, and the Superfamily entry first when an earlier record of the buffer lies in the region file below. Over the chromosome's ClinVar records its output under `--fork 8` differs from its own output without `--fork` on 40 rows. vep-rs writes the Superfamily entry first on every run.
+**In short.** `2 1209204 750974 G A`, a ClinVar record, is a synonymous change at codon 231 of ENST00000308624 (SNTG2, forward strand). Under `--domains` both engines list the same three entries on its row. Ensembl VEP 116.3 writes the PANTHER entry first when the record is annotated alone, and the Superfamily entry first when an earlier record of the buffer lies in the region file below. Over the chromosome's ClinVar records its output under `--fork 8` differs from its own output without `--fork` on 40 rows. vep-rs writes the Superfamily entry first on every run.
 
 ### 1.1 What a reader needs to know first
 
@@ -51,7 +51,7 @@ The third input is the chromosome 2 records of the ClinVar GRCh38 file, 384,041 
 
 ### 1.3 What each engine writes
 
-The record alone, in the default format. Ensembl VEP 116.2:
+The record alone, in the default format. Ensembl VEP 116.3:
 
 ```
 750974	2:1209204	A	ENSG00000172554	ENST00000308624	Transcript	synonymous_variant	841	693	231	R	agG/agA	-	IMPACT=LOW;STRAND=1;DOMAINS=PANTHER:PTHR10554,Superfamily:SSF50729,AFDB-ENSP_mappings:AF-Q9NY99-F1
@@ -84,7 +84,7 @@ Under `--fork` the buffer is cut into slices, and each worker lists the region f
 
 At 8 forks the second slice starts at record 313 and at 16 forks the third does. Neither holds a record that reaches the first region file, so its worker reads the second copy. Without `--fork` the buffer holds records 1 to 5,000, and at 4 forks the first slice holds records 1 to 625. Both hold record 261, so the first copy is read.
 
-Source (`ensembl-vep` at release/116.2, `Bio/EnsEMBL/VEP/`):
+Source (`ensembl-vep` at release/116.3, `Bio/EnsEMBL/VEP/`):
 
 - `AnnotationSource.pm`, lines 109-143: the region list, the features in its order and the call of `merge_features`.
 - `AnnotationType/Transcript.pm`, lines 283-286: a transcript identifier already seen is skipped.
@@ -104,7 +104,7 @@ vep -i record.vcf -o out.txt --offline \
   --species homo_sapiens --assembly GRCh38 --domains
 ```
 
-vep-rs writes the Superfamily entry first for the one-record and the two-record input. Ensembl VEP 116.2 takes `--domains` with the cache options of [Reproducing these examples](reproducing.md). It writes PANTHER first for the one-record input, Superfamily first for the two-record input, and PANTHER first for the two-record input under `--buffer_size 1`.
+vep-rs writes the Superfamily entry first for the one-record and the two-record input. Ensembl VEP 116.3 takes `--domains` with the cache options of [Reproducing these examples](reproducing.md). It writes PANTHER first for the one-record input, Superfamily first for the two-record input, and PANTHER first for the two-record input under `--buffer_size 1`.
 
 For the fork counts, run Ensembl VEP over the chromosome 2 records of the ClinVar GRCh38 file with `--tab --domains`, once without `--fork` and once with `--fork 8`. The two outputs differ on 40 rows.
 
@@ -114,9 +114,13 @@ The reproduction `scripts/divergences/reproductions/domains_order_region_file_co
 
 The class covers the order of a `DOMAINS` list on a transcript whose stored copies differ in order. The golden harness and the format comparator compare the value as a multiset of its items where a run names their built-in class `order_only`. A list whose items differ is reported like any other field.
 
+In the JSON format the `domains` array is built from the list in its order. Both engines re-split each entry into `db` and `name` with the pattern `(\w+):(\w+)` (`OutputFactory/JSON.pm`, lines 363-371). An entry the pattern does not match, such as `Low_complexity_(Seg):seg`, repeats the object of the last entry that matched, and adds none where no earlier entry matched. Two orders of one list can therefore give two arrays of the same objects that differ in the object repeated or in the number of objects.
+
+Under `order_only` the format comparator accepts two arrays that one list gives in two orders. The golden harness compares the array's objects as a multiset.
+
 ## 2. A record on a committed cache
 
-**In short.** `21 26170588 740728 G A`, a ClinVar record, is a synonymous change at codon 11 of ENST00000348990 (APP, reverse strand). The transcript is stored in two region files of chromosome 21, and the two copies place one of its 49 protein features differently. Annotated alone, the record gets that feature before the AFDB-ENSP mapping from Ensembl VEP 116.2 and after it from vep-rs. The cache of the `GRCh38-everything` golden corpus holds both copies, so vep-rs's side of the reproduction runs on committed files.
+**In short.** `21 26170588 740728 G A`, a ClinVar record, is a synonymous change at codon 11 of ENST00000348990 (APP, reverse strand). The transcript is stored in two region files of chromosome 21, and the two copies place one of its 49 protein features differently. Annotated alone, the record gets that feature before the AFDB-ENSP mapping from Ensembl VEP 116.3 and after it from vep-rs. The cache of the `GRCh38-everything` golden corpus holds both copies, so vep-rs's side of the reproduction runs on committed files.
 
 ### 2.1 The two copies
 
@@ -139,7 +143,7 @@ Both engines run `--domains` on GRCh38. Ensembl VEP reads its release-116 cache,
 
 ### 2.3 What each engine writes
 
-The record alone, the row of ENST00000348990 in the default format. Ensembl VEP 116.2:
+The record alone, the row of ENST00000348990 in the default format. Ensembl VEP 116.3:
 
 ```
 740728	21:26170588	A	ENSG00000142192	ENST00000348990	Transcript	synonymous_variant	243	33	11	A	gcC/gcT	-	IMPACT=LOW;STRAND=-1;DOMAINS=Low_complexity_(Seg):seg,Cleavage_site_(Signalp):SignalP-noTM,PANTHER:PTHR23103,Phobius:SIGNAL_PEPTIDE,Phobius:SIGNAL_PEPTIDE_H_REGION,SignalP_GRAM_POSITIVE:SignalP-TM,AFDB-ENSP_mappings:AF-P05067-F1
@@ -163,4 +167,4 @@ vep -i record.vcf -o out.txt --offline \
   --species homo_sapiens --assembly GRCh38 --domains
 ```
 
-vep-rs writes the AFDB-ENSP mapping before the `SignalP_GRAM_POSITIVE` entry on the row. Ensembl VEP 116.2 takes `--domains` with the cache options of [Reproducing these examples](reproducing.md) and writes the two entries the other way round for the record alone. The reproduction of section 1.7 is this record: `scripts/divergences/reevaluate.py` runs it on both engines and holds each value to the recorded one.
+vep-rs writes the AFDB-ENSP mapping before the `SignalP_GRAM_POSITIVE` entry on the row. Ensembl VEP 116.3 takes `--domains` with the cache options of [Reproducing these examples](reproducing.md) and writes the two entries the other way round for the record alone. The reproduction of section 1.7 is this record: `tools/vep-divergence-reevaluate` runs it on both engines and holds each value to the recorded one.

@@ -17,15 +17,15 @@ set -euo pipefail
 # upstream sources only (all aws calls are skipped).
 #
 # Covers both structural variant (SV) and all-variant (SNP/indel/multi-allelic)
-# test suites for GRCh37 and GRCh38 assemblies, all filtered to chr21 except the
+# test datasets for GRCh37 and GRCh38 assemblies, all filtered to chr21 except the
 # two genome-wide ClinVar files.
 #
 # NOT produced here, and derived from these files by the caller:
 #   <asm>/all_variants_canonical/<base>.canonical.vcf.gz   Ensembl-style contigs
-#       (prepare_benchmark_vcfs.py, or bcftools view -t), the inputs the
+#       (tools/vep-prepare-benchmark-vcfs, or bcftools view -t), the inputs the
 #       measurement harness and the reference generator read;
 #   the sites-only and genotype-carrying forms of the two 1000 Genomes files
-#       (bcftools view -G drops genotypes) under the names the harness's suite
+#       (bcftools view -G drops genotypes) under the names the harness's dataset
 #       table gives them: 1kg_integrated_chr21_sitesonly and 1kg_highcov_chr21
 #       (sites-only), 1kg_integrated_chr21 and 1kg_highcov_chr21_multisample
 #       (with genotypes).
@@ -153,9 +153,9 @@ count_variants() {
 # Helper: detect chromosome naming convention in a VCF
 detect_chr21_name() {
     local vcf="$1"
-    if bcftools view -h "$vcf" 2>/dev/null | grep -qE '##contig=<ID=chr21'; then
+    if bcftools view -h "$vcf" 2>/dev/null | grep -E '##contig=<ID=chr21' >/dev/null; then
         echo "chr21"
-    elif bcftools view -h "$vcf" 2>/dev/null | grep -qE '##contig=<ID=21[,>]'; then
+    elif bcftools view -h "$vcf" 2>/dev/null | grep -E '##contig=<ID=21[,>]' >/dev/null; then
         echo "21"
     else
         local first_chr

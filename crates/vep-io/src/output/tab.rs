@@ -151,18 +151,20 @@ mod tests {
     fn variant() -> InputVariant {
         let mut v = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
         v.id = Some("rs1".into());
-        v.transcript_consequences = vec![TranscriptConsequence {
-            transcript: Some(Arc::new(Transcript {
-                stable_id: "ENST1".into(),
-                gene_stable_id: "ENSG1".into(),
-                flags: Arc::from(["cds_end_NF".to_string()]),
-                ..Transcript::default()
-            })),
-            consequences: smallvec![Consequence::UpstreamGeneVariant],
-            impact: Impact::MODIFIER,
-            distance: Some(42),
-            strand: -1,
-            ..Default::default()
+        v.transcript_consequences = vec![{
+            let mut consequence = TranscriptConsequence::default();
+            consequence.transcript = Some(Arc::new({
+                let mut transcript = Transcript::default();
+                transcript.stable_id = "ENST1".into();
+                transcript.gene_stable_id = "ENSG1".into();
+                transcript.flags = Arc::from(["cds_end_NF".to_string()]);
+                transcript
+            }));
+            consequence.consequences = smallvec![Consequence::UpstreamGeneVariant];
+            consequence.impact = Impact::MODIFIER;
+            consequence.distance = Some(42);
+            consequence.strand = -1;
+            consequence
         }];
         v
     }
@@ -231,7 +233,7 @@ mod tests {
         assert!(lines[0].ends_with("\tcds_end_NF\t-"), "{}", lines[0]);
     }
 
-    /// Ensembl VEP 116.2 writes the AncestralAllele plugin's `AA` as the string
+    /// Ensembl VEP 116.3 writes the AncestralAllele plugin's `AA` as the string
     /// the FASTA index returns for the record's span, empty for a span past the
     /// record's end (AncestralAllele.pm:136-137, :151), so the tab cell is
     /// empty, not the `-` of an undefined value (`Tab.pm:128`); a record the
@@ -261,7 +263,7 @@ mod tests {
     /// A plugin column named as a core field (dbNSFP's `TSL`) is one the run
     /// produces without the core flag: the plugin's value where it wrote one,
     /// `-` on a row it left alone, never the cache's value, which the core hash
-    /// carries only under `--tsl` (OutputFactory.pm:1609, :2231); under `--tsl`
+    /// carries only under `--tsl` (OutputFactory.pm:1618, :2240); under `--tsl`
     /// the one `TSL` column prints the plugin's value over the cache's.
     #[test]
     fn a_plugin_column_named_as_a_core_field_prints_the_plugins_value() {
@@ -329,7 +331,7 @@ mod tests {
         assert!(lines[0].ends_with("\tcds_end_NF\t-\t-"), "{}", lines[0]);
     }
 
-    /// Ensembl VEP 116.2 under `--tab --fields ""` writes the header block, a bare
+    /// Ensembl VEP 116.3 under `--tab --fields ""` writes the header block, a bare
     /// `#` column line and no data line: its output loop (`Runner.pm` `run`) ends at
     /// the first line that is the empty string, which an empty field list makes of
     /// every row (`Tab.pm` `output_hash_to_line`).

@@ -8,16 +8,16 @@ An entry with no value, `CSQ=`, gives those characters nothing of their own to m
 
 vep-rs splits INFO on `;`, removes the first entry under the key whatever its value, and keeps every other field. For `CSQ=;DP=4`, `DP=4;CSQ=;AF=0.5` and `DP=4;CSQ=` it writes `DP=4;CSQ=...`, `DP=4;AF=0.5;CSQ=...` and `DP=4;CSQ=...`. An entry with a value is removed alike by both engines: `CSQ=G|old;DP=4` becomes `DP=4;CSQ=...` in each.
 
-An INFO column that begins with `;`, which VCF does not allow, keeps that `;` here. Ensembl VEP 116.2 drops it when, and only when, it removed an entry under the field's name (`OutputFactory/VCF.pm` line 330): `;DP=13;CSQ=G|old` becomes `DP=13;CSQ=...` there and `;DP=13;CSQ=...` here, while `;DP=13` alone keeps its `;` in both engines.
+An INFO column that begins with `;`, which VCF does not allow, keeps that `;` here. Ensembl VEP 116.3 drops it when, and only when, it removed an entry under the field's name (`OutputFactory/VCF.pm` line 330): `;DP=13;CSQ=G|old` becomes `DP=13;CSQ=...` there and `;DP=13;CSQ=...` here, while `;DP=13` alone keeps its `;` in both engines.
 
 Under `--keep_csq` neither engine removes anything: both write the INFO as read, `CSQ=;DP=4`, and append the new entry after a `;` when the record has consequences.
 
 The records are `21 5030602 empty_csq A G . . CSQ=;DP=4`, intergenic on GRCh38, and the non-variant line `21 30643020 nonvar_empty TTG . . . CSQ=;DP=4`. Both engines run with `--vcf --allow_non_variant` against the release-116 GRCh38 cache. The INFO column each engine writes, the new entry's empty fields elided:
 
 ```
-Ensembl VEP 116.2   empty_csq     CSQ=G|intergenic_variant|MODIFIER|...
+Ensembl VEP 116.3   empty_csq     CSQ=G|intergenic_variant|MODIFIER|...
 vep-rs              empty_csq     DP=4;CSQ=G|intergenic_variant|MODIFIER|...
-Ensembl VEP 116.2   nonvar_empty  .
+Ensembl VEP 116.3   nonvar_empty  .
 vep-rs              nonvar_empty  DP=4
 ```
 
@@ -44,4 +44,4 @@ Ensembl VEP interpolates the field name unescaped into the header test (`OutputF
 
 A dot is the one metacharacter a VCF INFO key admits. A value that is not a key (a letter or underscore, then letters, digits, underscores or dots, or the reserved `1000G`), the empty string and `0` included, is an argument syntax error here (exit 2). Ensembl VEP accepts it, declares the given name in the `##INFO` line and, for a name Perl reads as false, keys the entry `CSQ` (lines 219 and 312).
 
-To reproduce: Ensembl VEP 116.2 with the GRCh38 cache and [the command of the closing section](reproducing.md#reproducing-these-examples), adding `--vcf --allow_non_variant` for the first two records and `--vcf --vcf_info_field ANN` for the third. The dotted name takes `--vcf --vcf_info_field A.N`; vep-rs runs with the same flags over the same cache.
+To reproduce: Ensembl VEP 116.3 with the GRCh38 cache and [the command of the closing section](reproducing.md#reproducing-these-examples), adding `--vcf --allow_non_variant` for the first two records and `--vcf --vcf_info_field ANN` for the third. The dotted name takes `--vcf --vcf_info_field A.N`; vep-rs runs with the same flags over the same cache.

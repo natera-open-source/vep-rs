@@ -1,17 +1,17 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {corpus}/plugin_data --plugin REVEL,file={corpus}/plugin_data/revel.tsv.gz [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "none on either side",
  "input": "16 ClinVar records on chromosome 21 (public ClinVar identifiers; INFO dropped) chosen from a REVEL run over the whole chromosome, plus one two-allele record at a further position, each allele of which has a row in the committed REVEL table, and one substitution written with an unchanged leading base (`GG/GA` for a `G/A` row, the alleles both engines trim before the match): missense substitutions every transcript row of which REVEL scores, records whose transcripts the REVEL rows name in part (the other rows unscored unless no_match), records whose transcripts give different amino-acid changes (the aaalt test), a missense substitution REVEL has no row for, a synonymous, a stop-gained, a frameshift, an intronic and a splice-region record the plugin leaves alone, and a reverse-strand gene",
  "sha256": {
-  "default.txt": "894ddfae47b7986b6a2521567bbc98efcba5359d748dbc283fe7cdaf00a6fb69",
-  "tab.txt": "4c108517bcc357bb31e0ef22bbe496a3b4f84e676c767751a8c2b51c4aa96850",
-  "vcf.vcf": "ad80b3f9ee47fdbc3b10542ea31a29ffa09e33da5abcfe8b8a0da7b656215c27",
-  "json.jsonl": "6c1194f1df4a6570fd1408fc4f262e9164cfbd9eb5fae89bacf74a4a015f55ff"
+  "default.txt": "7578628ef6a49255ffda1da021b579cf03324a2152698e540c5b8eb127dfdccb",
+  "tab.txt": "deb0c6af66f2c9c9d27fd693c196ccdec0de01b7c744389c29900114ef5f83a6",
+  "vcf.vcf": "cacb2fedcca1ebb9f2b3ad19dcb0deffa5fb56170264a729429a13574be59f19",
+  "json.jsonl": "9f28c01c15fa20f9d51f593ef483cb2452c4bd463707c79c3052ecb9b072319f"
  },
  "variants_vcf_sha256": "ba7ffb6a04b94ed921297e1c6f1b3c28f974127989bfb081cf2a171e19476af8",
  "plugin_files": {
@@ -20,36 +20,62 @@
  },
  "flag_sets": {
   "revel-no-match": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {corpus}/plugin_data --plugin REVEL,file={corpus}/plugin_data/revel.tsv.gz,no_match=1 [--tab|--vcf|--json]",
-   "formats_compared": [
-    "default",
-    "tab",
-    "vcf",
-    "json"
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "00cf9e18cfe3c952e107ebf9112e7d492ca8dd985da8931e471fc8dfb20cb3c7",
+    "tab.txt": "8a9d0b24c65c75f5c6104222d31cdcfc28491939a1ccd4707272da0075ae8b97",
+    "vcf.vcf": "b54144a68ed0d357f1029bf72f97b668b0ef6ac6dd50153e413e03d48e192db4",
+    "json.jsonl": "ce952778dc591455763479360059d733f696e851ab8f78f5045db9b4aeeb7d9e"
+   },
+   "flags": [
+    "--dir_plugins",
+    "{corpus}/plugin_data",
+    "--plugin",
+    "REVEL,file={corpus}/plugin_data/revel.tsv.gz,no_match=1"
    ],
    "expected_dir": "expected_revel-no-match",
-   "sha256": {
-    "default.txt": "53bf2691b819f19168cc24596b55d6a11aa17f4f144722ce062fe86d33970457",
-    "tab.txt": "bd6af7ea80551f99a1ee99f7ab65c18c7694fa50d5d082d67d07bb84b19c225f",
-    "vcf.vcf": "994071b64d3f73b14b32a6e59460d1921b874da5fa2d2ee865d57838d49cab5b",
-    "json.jsonl": "c127a54f85627db9bc6a9f3780bcd5362e3c95f58b535cbc53e1316d8b3f03c7"
-   }
-  },
-  "revel-positional-no-match": {
-   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {corpus}/plugin_data --plugin REVEL,{corpus}/plugin_data/revel.tsv.gz,1 [--tab|--vcf|--json]",
    "formats_compared": [
     "default",
     "tab",
     "vcf",
     "json"
+   ]
+  },
+  "revel-positional-no-match": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {corpus}/plugin_data --plugin REVEL,{corpus}/plugin_data/revel.tsv.gz,1 [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "f2aa617d222e68d2bc1776f6635a8321f1a5819d69ab7e1eea151654b0fecff1",
+    "tab.txt": "f3c2d72689d9154a5a152037fc44ff3a5de0728d0794fb0252c3b8507428e0af",
+    "vcf.vcf": "485ac596e30208b938717d0b654e7399b1944a9e8d7f6f06b134b819771c305e",
+    "json.jsonl": "3874ac8ca42904449fdd07a8aaec3922510f47580a215d1ad11761cb68d7bd76"
+   },
+   "flags": [
+    "--dir_plugins",
+    "{corpus}/plugin_data",
+    "--plugin",
+    "REVEL,{corpus}/plugin_data/revel.tsv.gz,1"
    ],
    "expected_dir": "expected_revel-positional-no-match",
-   "sha256": {
-    "default.txt": "16c380aa99730bcd4d097850b846dc3d4c0d88e76fbe0f3e35c83c1a4fffd42b",
-    "tab.txt": "5173e8a2352b08761385d0eb6483737e75553c395d6876bb4118068e7ca4a13e",
-    "vcf.vcf": "9f06307364e62a7c9c77ed9c549b3eb011217c71cdac236e309aacd144ff4007",
-    "json.jsonl": "92a5029762159775bcc2d762daa256ae733f65b47a4d589fa409f514633add73"
-   }
+   "formats_compared": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ]
   }
  },
  "plugin_fixtures": {
@@ -67,5 +93,5 @@
    }
   }
  },
- "generator": "plugin_data/revel.tsv.gz: a tabix cut of the published REVEL file to the records' spans (plugin_fixtures); json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice scripts/data/storable_to_json.pl converted from the Ensembl VEP 116 GRCh38 cache; expected outputs: scripts/concordance/generate_reference_output.sh --corpus --dir-plugins <VEP_plugins checkout> for the manifest's run, and one Ensembl VEP 116.2 container run per format for each flag set from the vep command recorded under its flag_sets entry, the corpus mounted read-only at /work/corpus as the working directory and the REVEL plugin read from the container's plugin directory, whose module text equals the VEP_plugins release/116 checkout's; manifest: scripts/golden/build_golden_corpus.py select --include for every record, flag-set, then classify for the manifest's run and each flag set against the committed tree's binary"
+ "generator": "plugin_data/revel.tsv.gz: a tabix cut of the published REVEL file to the records' spans (plugin_fixtures); json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice tools/vep-storable-to-json converts from the Ensembl VEP 116 GRCh38 cache; expected outputs: scripts/concordance/generate_reference_output.sh --corpus --dir-plugins <VEP_plugins checkout> for the manifest's run, and one Ensembl VEP 116.3 container run per format for each flag set from the vep command recorded under its flag_sets entry, the corpus mounted read-only at /work/corpus as the working directory and the REVEL plugin read from the container's plugin directory, whose module text equals the VEP_plugins release/116 checkout's; manifest: tools/vep-golden-corpus select --include for every record, flag-set, then classify for the manifest's run and each flag set against the committed tree's binary"
 }

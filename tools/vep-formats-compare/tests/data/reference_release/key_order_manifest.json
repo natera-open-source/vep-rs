@@ -1,0 +1,120 @@
+{
+ "verdict": "green",
+ "reasons": [],
+ "counts": {
+  "expected_entries": 2,
+  "actual_entries": 4,
+  "compared": 2,
+  "documented_divergences_skipped": 0,
+  "record_entries_on_reference_skipped_records": 1,
+  "individual_entries_reordered": 0,
+  "registry_pairs_set_aside": 0
+ },
+ "one_sided": {
+  "expected_only": 0,
+  "actual_only": 0
+ },
+ "missing": {},
+ "unexpected": {},
+ "columns": {
+  "colocated_variants": {
+   "expected_populated": 1,
+   "actual_populated": 2,
+   "differing": 0,
+   "pairs_accepted": 0,
+   "nearest_accepted": 0,
+   "order_only": 0,
+   "individual_allele_order": 0,
+   "motif_score_reverse_strand_mnv": 0,
+   "floor": null,
+   "floor_met": null
+  },
+  "consequence_terms": {
+   "expected_populated": 1,
+   "actual_populated": 2,
+   "differing": 0,
+   "pairs_accepted": 0,
+   "nearest_accepted": 0,
+   "order_only": 0,
+   "individual_allele_order": 0,
+   "motif_score_reverse_strand_mnv": 0,
+   "floor": null,
+   "floor_met": null
+  },
+  "id": {
+   "expected_populated": 1,
+   "actual_populated": 2,
+   "differing": 0,
+   "pairs_accepted": 0,
+   "nearest_accepted": 0,
+   "order_only": 0,
+   "individual_allele_order": 0,
+   "motif_score_reverse_strand_mnv": 0,
+   "floor": null,
+   "floor_met": null
+  },
+  "most_severe_consequence": {
+   "expected_populated": 1,
+   "actual_populated": 2,
+   "differing": 0,
+   "pairs_accepted": 0,
+   "nearest_accepted": 0,
+   "order_only": 0,
+   "individual_allele_order": 0,
+   "motif_score_reverse_strand_mnv": 0,
+   "floor": null,
+   "floor_met": null
+  },
+  "transcript_id": {
+   "expected_populated": 1,
+   "actual_populated": 2,
+   "differing": 0,
+   "pairs_accepted": 0,
+   "nearest_accepted": 0,
+   "order_only": 0,
+   "individual_allele_order": 0,
+   "motif_score_reverse_strand_mnv": 0,
+   "floor": null,
+   "floor_met": null
+  },
+  "variant_allele": {
+   "expected_populated": 1,
+   "actual_populated": 2,
+   "differing": 0,
+   "pairs_accepted": 0,
+   "nearest_accepted": 0,
+   "order_only": 0,
+   "individual_allele_order": 0,
+   "motif_score_reverse_strand_mnv": 0,
+   "floor": null,
+   "floor_met": null
+  }
+ },
+ "mask_examples": {},
+ "floors_not_applicable": [],
+ "stale_divergences": [],
+ "order": null,
+ "mode": "compare",
+ "format": "json",
+ "expected": "kept.expected.jsonl",
+ "actual": "kept.actual.jsonl",
+ "masks": {
+  "requested": [
+   "frequency_filter_allele_key_order"
+  ],
+  "applied": {
+   "frequency_filter_allele_key_order": 1
+  },
+  "unused": [],
+  "available": {
+   "frequency_filter_allele_key_order": 1
+  }
+ },
+ "field_pairs": {},
+ "nearest_sites": null,
+ "json_cache_transcripts": null,
+ "unordered": false,
+ "keep_only": null,
+ "manifest_run": null,
+ "reference_sequence": null
+}

@@ -1,0 +1,3 @@
+[
+{"stable_id": "TWO_RECORDS", "start": 5001, "end": 5024, "strand": 1, "cdna_coding_start": 7, "cdna_coding_end": 18, "exons": [{"start": 5001, "end": 5024}], "variation_effect_feature_cache": {"translateable_seq": "ATGGCTGGATAA", "mapper": {"start_phase": 0, "cdna_coding_start": 7, "cdna_coding_end": 18, "pairs": [{"from_start": 1, "from_end": 24, "to_start": 5001, "to_end": 5024, "ori": 1}]}}}
+]

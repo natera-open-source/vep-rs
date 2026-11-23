@@ -23,7 +23,7 @@ Tuple, pair, set aside, charged and the other scoring terms are defined in [How 
 
 ### 1.1 What a reader needs to know first
 
-`--phyloP <N>` and `--phastCons <N>` are shortcuts for a `--custom` bigWig source of `type=exact`. Each expands into one source whose file lies in a UCSC tree, `<root>/<assembly>/phyloP<N>way/<assembly>.phyloP<N>way.bw`, where `--ucsc_assembly` names `<assembly>` and `--ucsc_data_root` names `<root>`. vep-rs reads the tree from a local directory alone, as [bigWig sources and conservation shortcuts](../output/custom-bigwig.md) describes.
+`--phyloP <N>` and `--phastCons <N>` are shortcuts for a `--custom` bigWig source of `type=exact`. Each expands into one source whose file lies in a UCSC tree, `<root>/<assembly>/phyloP<N>way/<assembly>.phyloP<N>way.bw` for `--phyloP` and `<root>/<assembly>/phastCons<N>way/<assembly>.phastCons<N>way.bw` for `--phastCons`, where `--ucsc_assembly` names `<assembly>` and `--ucsc_data_root` names `<root>`. vep-rs reads the tree from a local directory alone, as [bigWig sources and conservation shortcuts](../output/custom-bigwig.md) describes.
 
 A custom source's short name is its key in every format. In the default format it heads the `## <key> : <file>` header line and the `<key>=<value>` item of `Extra`; in the tab format it names a column. In the VCF it names a field of the CSQ list and its `##INFO=<ID=<key>` line, and in the JSON it names a member of the record's `custom_annotations` object. A score the source holds at the variant's position is the value under the key.
 
@@ -111,7 +111,7 @@ Naming the same file as a plain `--custom` source with the short name `phyloP100
 
 ### 1.7 How the comparator treats this class
 
-The golden harness (`crates/vep-cli/tests/common/mod.rs`, `masked_reference_text`) and the format comparator (`scripts/concordance/compare_vep_formats.py`, `reference_text_masked`) apply the class `conservation_short_name_spelling` when a corpus flag set or a comparison case names it in `masks`. Under the class every `phlyoP<N>way` in the reference text, a digit run between the prefix and `way`, is read as `phyloP<N>way` before the header lines are compared and the rows are parsed. The comparator counts each rewritten occurrence under the class in its report. Nothing else changes: a value under the key compares as any other value, and the file name, spelt correctly on both sides, is untouched.
+The golden harness (`crates/vep-cli/tests/common/mod.rs`, `masked_reference_text`) and the format comparator (`tools/vep-formats-compare`, `reference_text_masked`) apply the class `conservation_short_name_spelling` when a corpus flag set or a comparison case names it in `masks`. Under the class every `phlyoP<N>way` in the reference text, a digit run between the prefix and `way`, is read as `phyloP<N>way` before the header lines are compared and the rows are parsed. The comparator counts each rewritten occurrence under the class in its report. Nothing else changes: a value under the key compares as any other value, and the file name, spelt correctly on both sides, is untouched.
 
 A comparison case's floor on the source's column is read under the renamed key whichever spelling names it, so the default, tab and VCF formats count the annotated rows on both sides. The JSON format carries the source once per record under `custom_annotations`, so the floor is not applicable there and the text formats of the case check it.
 

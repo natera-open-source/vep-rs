@@ -13,7 +13,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.6.0"
+version = "1.0.0"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/natera-open-source/vep-rs"
@@ -37,13 +37,14 @@ rust-version = "1.89"
 # needs a version on every dependency of a published crate; the `=` pin makes a
 # workspace version bump that misses these lines fail to resolve, so the published
 # crates always depend on their own release's siblings.
-vep-core = { path = "crates/vep-core", version = "=0.6.0" }
-vep-effects = { path = "crates/vep-effects", version = "=0.6.0" }
-vep-io = { path = "crates/vep-io", version = "=0.6.0", default-features = false }
-vep-plugin = { path = "crates/vep-plugin", version = "=0.6.0" }
-vep-builtins = { path = "crates/vep-builtins", version = "=0.6.0" }
-vep-fasta = { path = "crates/vep-fasta", version = "=0.6.0" }
-vep-cli = { path = "crates/vep-cli", version = "=0.6.0" }
+vep-core = { path = "crates/vep-core", version = "=1.0.0" }
+vep-effects = { path = "crates/vep-effects", version = "=1.0.0" }
+vep-io = { path = "crates/vep-io", version = "=1.0.0", default-features = false }
+vep-plugin = { path = "crates/vep-plugin", version = "=1.0.0" }
+vep-builtins = { path = "crates/vep-builtins", version = "=1.0.0" }
+vep-fasta = { path = "crates/vep-fasta", version = "=1.0.0" }
+vep-cli = { path = "crates/vep-cli", version = "=1.0.0" }
+vep-cache-builder = { path = "crates/vep-cache-builder", version = "=1.0.0", default-features = false }
 
 # Serialization / cache
 memmap2 = "0.9"
@@ -72,6 +73,10 @@ noodles-bgzf = { version = "0.51", features = ["libdeflate"] }
 # `read` feature is enabled: drops the `cli` (clap) and `remote` (attohttpc
 # network stack) + `write` features for a minimal local-file-read dependency.
 bigtools = { version = "0.5", default-features = false, features = ["read"] }
+# SQLite reader for the optional LoFTEE plugin's `conservation_file` database.
+# `bundled` compiles SQLite's own C source into the crate, so no system library
+# is linked; no default feature is enabled, which leaves out the statement cache.
+rusqlite = { version = "0.43", default-features = false, features = ["bundled"] }
 
 # CLI
 clap = { version = "4", features = ["derive", "env", "string"] }

@@ -1,0 +1,81 @@
+### ENST00000000001
+{
+  '_gene_version' => '3',
+  'biotype' => 'protein_coding',
+  'dbID' => 7,
+  '_variation_effect_feature_cache' => {
+    'peptide' => 'MKG',
+    'protein_features' => [
+      bless( {
+        'dbID' => '8',
+        'end' => 34,
+        'hseqname' => 'PF00001',
+        'start' => '12'
+      }, 'Bio::EnsEMBL::ProteinFeature' ),
+    ],
+    'protein_function_predictions' => {
+      'sift' => 'matrix:1234 md5:abcdef'
+    },
+    'translateable_seq' => 'ATGAAAGGG'
+  },
+  'stable_id' => 'x',
+}
+
+### ENST00000000002
+{
+  '_gene_version' => '3',
+  'biotype' => 'protein_coding',
+  'dbID' => 7,
+  '_variation_effect_feature_cache' => {
+    'peptide' => 'LKG',
+    'protein_features' => [
+      bless( {
+        'dbID' => '8',
+        'end' => 34,
+        'hseqname' => 'PF00001',
+        'start' => '12'
+      }, 'Bio::EnsEMBL::ProteinFeature' ),
+    ],
+    'protein_function_predictions' => {
+      'sift' => 'matrix:1234 md5:abcdef'
+    },
+    'translateable_seq' => 'ATGAAAGGG'
+  },
+  'stable_id' => 'x',
+}
+
+### ENST00000000003
+{
+  '_gene_version' => '3',
+  'biotype' => 'protein_coding',
+  'dbID' => 7,
+  '_variation_effect_feature_cache' => {
+    'peptide' => 'MKG',
+    'protein_features' => [
+      bless( {
+        'dbID' => '8',
+        'end' => 34,
+        'hseqname' => 'PF00001',
+        'start' => '12'
+      }, 'Bio::EnsEMBL::ProteinFeature' ),
+      bless( {
+        'dbID' => '8',
+        'end' => 34,
+        'hseqname' => 'PF00002',
+        'start' => '12'
+      }, 'Bio::EnsEMBL::ProteinFeature' ),
+    ],
+    'protein_function_predictions' => {
+      'sift' => 'matrix:1234 md5:abcdef'
+    },
+    'translateable_seq' => 'ATGAAAGGG'
+  },
+  'stable_id' => 'x',
+}
+
+### ENST00000000091
+{}
+
+### ENST0000000009'
+{}
+

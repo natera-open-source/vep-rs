@@ -18,7 +18,11 @@ them: the engines give a model the HGNC id of a same-symbol model of its region 
 (`AnnotationType/Transcript.pm:290, 305`), so a merged cache's RefSeq models print an id their
 records alone would never pull into the slice. Chromosome directories with no
 surviving transcript are omitted. The summary printed at the end counts, per chromosome,
-the transcripts kept and the spans searched: one span per record, one per breakend mate and
+the transcript records written (`transcripts_per_chromosome`: a transcript kept in two shards
+is counted in both), the transcripts those records are (`distinct_transcripts_per_chromosome`:
+each counted once, under the key the runtime loads a transcript once on, its source cache and
+`dbID`, or its stable id and version where a record has no `dbID`) and the spans searched:
+one span per record, one per breakend mate and
 one per same-chromosome breakend pair covering both ends, so a chromosome's spans outnumber
 its records whenever it carries breakends. `--gzip` writes each shard as
 `<start>-<end>.json.gz`, and `--drop <key>` removes a `variation_effect_feature_cache` entry
@@ -51,8 +55,9 @@ record span is written into a shard named as in the source, with `regulatory/bin
 cut to the matrices the kept motifs name, so a slice carries the regulatory and motif features
 its records reach and `info.json` declares `regulatory` (with the regulatory schema and cell-type
 list, taken from the source cache's own `info.json` when `--perl-info` supplies the rest, since an
-Ensembl VEP `info.txt` carries neither) only when the output holds such a shard; an `--info-only`
-refresh over a directory holding regulatory shards keeps the two from the metadata it replaces.
+Ensembl VEP `info.txt` carries no schema and its `cell_types` line cannot be split into a list)
+only when the output holds such a shard; an `--info-only` refresh over a directory holding
+regulatory shards keeps the two from the metadata it replaces.
 
 `info.json` is the cache metadata vep-rs prints in its output headers. It is built from the
 Ensembl VEP cache's `info.txt` when `--perl-info` names one (every `source_<key>` line
@@ -178,7 +183,28 @@ def prune(cache: Path, out: Path, spans: dict[str, list[tuple[int, int]]], flank
                 without_id.add(symbol)
         return without_id - with_id
 
+    def number_of(value) -> int | str | None:
+        """A record's number as the runtime reads it: none for null or an empty string, a string
+        as the number it holds, a fraction as its whole part and a number below zero as zero; a
+        value that holds no number stands as its text."""
+        if value is None or value == "":
+            return None
+        try:
+            return max(int(value), 0)
+        except (TypeError, ValueError, OverflowError):
+            return str(value)
+
+    def identity_of(transcript: dict) -> tuple:
+        """The key the runtime loads a transcript once on: its source cache and `dbID`, or
+        without a `dbID` its stable id and version, each number read as `number_of` reads it."""
+        source = transcript.get("source_cache")
+        db_id = number_of(transcript.get("dbID"))
+        if db_id is not None:
+            return (source, db_id)
+        return (source, transcript.get("stable_id"), number_of(transcript.get("version")))
+
     kept: dict[str, int] = {}
+    identities: dict[str, set[tuple]] = {}
     shards_written = 0
     donors = 0
     for chrom, chrom_spans in sorted(spans.items()):
@@ -215,8 +241,11 @@ def prune(cache: Path, out: Path, spans: dict[str, list[tuple[int, int]]], flank
             else:
                 dst.write_text(payload, encoding="utf-8")
             kept[chrom] = kept.get(chrom, 0) + len(survivors)
+            identities.setdefault(chrom, set()).update(identity_of(t) for t in survivors)
             shards_written += 1
-    return {"transcripts_per_chromosome": kept, "shards": shards_written, "hgnc_donors": donors}
+    distinct = {chrom: len(keys) for chrom, keys in identities.items()}
+    return {"transcripts_per_chromosome": kept, "distinct_transcripts_per_chromosome": distinct,
+            "shards": shards_written, "hgnc_donors": donors}
 
 
 BINDING_MATRICES = "binding_matrices.json"
@@ -528,8 +557,9 @@ def prune_variations(src: Path, out: Path, spans: dict[str, list[tuple[int, int]
 
 LIST_KEYS = ("variation_cols",)
 FLAG_KEYS = ("regulatory",)
-# Cell-type names contain commas, so the line cannot be split into a list; VEP stores it as
-# one string and vep-rs does not read it.
+# Cell-type names contain commas, so the line cannot be split into a list; Ensembl VEP stores
+# it as one string. The line is dropped, and the cell-type list the runtime reads comes from
+# the converted cache's info.json.
 SKIP_KEYS = ("cell_types",)
 # The runtime reads the regulatory schema as a whole number and refuses a string, where every
 # other scalar line stays the text it is.
@@ -821,7 +851,7 @@ def main(argv: list[str] | None = None) -> int:
     if synonyms_src.is_file():
         synonym_lines = synonyms_src.read_text(encoding="utf-8").splitlines()
     # Ensembl VEP reads a --synonyms file instead of the cache's chr_synonyms.txt
-    # (CacheDir.pm:254 at release/116.2), so the records resolve through the run's file alone.
+    # (CacheDir.pm:254 at release/116.3), so the records resolve through the run's file alone.
     resolving_lines = synonym_lines
     if args.synonyms is not None:
         try:

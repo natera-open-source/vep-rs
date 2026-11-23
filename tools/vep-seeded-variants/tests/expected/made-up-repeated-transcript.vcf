@@ -1,0 +1,30 @@
+##fileformat=VCFv4.2
+##source=vep-seeded-variants generator_version=5
+##seed=1
+##records=light
+##reference_alleles=cache
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+short	150	missense_forward_1	A	T	.	.	.
+short	593	code11_stop_gained_1	G	T	.	.	.
+short	1326	frameshift_insertion_1	C	CTG	.	.	.
+short	1335	synonymous_reverse_1	G	A	.	.	.
+short	1387	missense_reverse_1	C	A	.	.	.
+short	1497	code11_changed_codon_1	C	A	.	.	.
+short	1602	code11_start_codon_1	T	C	.	.	.
+short	2029	first_sequence_1	A	T	.	.	.
+short	2056	synonymous_forward_1	A	T	.	.	.
+short	2199	code11_stop_lost_1	A	G	.	.	.
+long	1	first_base_1	A	T	.	.	.
+long	358	inframe_deletion_1	GAAT	G	.	.	.
+long	493	code4_made_codon_synonymous_1	G	A	.	.	.
+long	587	last_sequence_1	A	C	.	.	.
+long	593	frameshift_deletion_1	GA	G	.	.	.
+long	5685	downstream_1	A	C	.	.	.
+long	887297	intergenic_1	A	C	.	.	.
+long	1000902	code4_stop_lost_1	A	T	.	.	.
+long	1001059	organelle_1	G	A	.	.	.
+long	1001112	code4_made_codon_missense_1	T	A	.	.	.
+long	1001201	code4_stop_gained_1	A	T	.	.	.
+long	1001497	code4_start_codon_1	C	G	.	.	.
+long	1001689	upstream_1	A	G	.	.	.
+long	1002400	last_base_1	G	C	.	.	.

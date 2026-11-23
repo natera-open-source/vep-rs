@@ -1,6 +1,6 @@
 # A GFF3 transcript whose `Parent` list opens with an empty field
 
-**The defect in one sentence.** Ensembl VEP 116.2's `--gff` source links a record to every set identifier in its `Parent` list but keeps the record at the top level whenever the list's first field is empty. A transcript line written `Parent=,gene:X` is therefore visited twice, as the gene's child and as a record of its own, and its gene identifier, symbol and gene version are those of whichever visit comes last in Perl's hash order.
+**The defect in one sentence.** Ensembl VEP 116.3's `--gff` source links a record to every set identifier in its `Parent` list but keeps the record at the top level whenever the list's first field is empty. A transcript line written `Parent=,gene:X` is therefore visited twice, as the gene's child and as a record of its own, and its gene identifier, symbol and gene version are those of whichever visit comes last in Perl's hash order.
 
 **Why this is a defect.** The line names its gene, and the source reads the name: the link step splits the list on commas, skips the empty field and files the record under `gene:X`. The prune step that decides which records stand at the top level then reads the first field alone, so the same record is both a child and a top-level record.
 
@@ -8,9 +8,9 @@ Each top-level record is handed to the transcript list, and a child's gene is se
 
 **What vep-rs does instead.** vep-rs reads a transcript line whose `Parent` list opens with an empty field as the transcript of the gene line a later field names, once, and gives it that gene's identifier, symbol and version. A list that opens with an empty field and names no gene line of the file leaves the record a record of its own, as it is in Ensembl VEP, and a list that opens with an empty field and names nothing set, `Parent=,0`, likewise. A GTF transcript line with `gene_id ",X"` prints `,X` as its gene in both engines, since the printed identifier is the line's own attribute, so only the GFF3 form shows the difference.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3):
 
-- `Bio/EnsEMBL/VEP/AnnotationSource/File/GFF.pm`, lines 242-256, `_record_get_parent_ids`: `split(',', $parents)` keeps a leading empty field, so `Parent=,gene:X` reads as the two fields `''` and `gene:X`.
+- `Bio/EnsEMBL/VEP/AnnotationSource/File/GFF.pm`, lines 243-257, `_record_get_parent_ids`: `split(',', $parents)` keeps a leading empty field, so `Parent=,gene:X` reads as the two fields `''` and `gene:X`.
 - `Bio/EnsEMBL/VEP/AnnotationSource/File/BaseGXF.pm`, lines 385-401, `_get_parent_child_structure`: line 389 skips an empty parent, line 391 files the record under `gene:X`, and line 400 enters every record into the top-level hash.
 - `BaseGXF.pm`, lines 430-435: the prune deletes a record from the top-level hash only when its parent list is non-empty and its first field is not the empty string, so the record stays.
 - `BaseGXF.pm`, lines 311-345, `_create_transcripts`: line 320 walks the top-level hash in hash order; a gene record hands over its children with that gene (lines 325-330 and 336), and a non-gene record hands over itself with no gene (lines 331-333 and 336). The same record hash is handed over twice, and line 336 overwrites its gene on the second visit.
@@ -25,7 +25,7 @@ Each top-level record is handed to the transcript list, and a child's gene is se
 
 ## 1. A TMPRSS3 transcript whose `Parent` list opens with an empty field
 
-**In short.** The GRCh38 release-116 GFF3 lines of the gene TMPRSS3 and its transcript `ENST00001113783`, with the transcript's `Parent=gene:ENSG00000160183` rewritten `Parent=,gene:ENSG00000160183`, make a one-transcript file. On the record `1995820`, `21 42395417 T>C`, a `start_lost` on that transcript, vep-rs writes `ENSG00000160183.19` and `SYMBOL=TMPRSS3`. Ensembl VEP 116.2 reading the file through `--gff` writes the same row under one hash seed and a row with `-` for the gene and no `SYMBOL` under another, with a Perl warning about an undefined value.
+**In short.** The GRCh38 release-116 GFF3 lines of the gene TMPRSS3 and its transcript `ENST00001113783`, with the transcript's `Parent=gene:ENSG00000160183` rewritten `Parent=,gene:ENSG00000160183`, make a one-transcript file. On the record `1995820`, `21 42395417 T>C`, a `start_lost` on that transcript, vep-rs writes `ENSG00000160183.19` and `SYMBOL=TMPRSS3`. Ensembl VEP 116.3 reading the file through `--gff` writes the same row under one hash seed and a row with `-` for the gene and no `SYMBOL` under another, with a Perl warning about an undefined value.
 
 ### 1.1 What a reader needs to know first
 
@@ -50,13 +50,13 @@ Both engines run `--symbol --biotype --canonical --mane --tsl --protein --protei
 
 ### 1.3 What each engine writes
 
-Ensembl VEP 116.2 under `PERL_HASH_SEED=0`, and under sixteen of the twenty other seeds from 1 to 20:
+Ensembl VEP 116.3 under `PERL_HASH_SEED=0`, and under sixteen of the twenty other seeds from 1 to 20:
 
 ```
 1995820	21:42395417	C	ENSG00000160183.19	ENST00001113783.1	Transcript	start_lost	233	1	1	M/V	Atg/Gtg	-	IMPACT=HIGH;STRAND=-1;SYMBOL=TMPRSS3;BIOTYPE=protein_coding;ENSP=ENSP00000783588.1;SOURCE=tmprss3_parent.gff3.gz
 ```
 
-Ensembl VEP 116.2 under `PERL_HASH_SEED=11`, and under seeds 12, 17 and 19:
+Ensembl VEP 116.3 under `PERL_HASH_SEED=11`, and under seeds 12, 17 and 19:
 
 ```
 1995820	21:42395417	C	-	ENST00001113783.1	Transcript	start_lost	233	1	1	M/V	Atg/Gtg	-	IMPACT=HIGH;STRAND=-1;BIOTYPE=protein_coding;ENSP=ENSP00000783588.1;SOURCE=tmprss3_parent.gff3.gz
@@ -96,7 +96,7 @@ vep -i record.vcf -o out.txt --offline --json_cache cache \
   --gene_version --transcript_version
 ```
 
-vep-rs writes `ENSG00000160183.19` and `SYMBOL=TMPRSS3`. Ensembl VEP 116.2 with `--gff tmprss3_parent.gff3.gz`, the file bgzipped and indexed, writes the same under `PERL_HASH_SEED=0` and the gene-less row under `PERL_HASH_SEED=11`. Restoring `Parent=gene:ENSG00000160183` makes the engines agree under every seed.
+vep-rs writes `ENSG00000160183.19` and `SYMBOL=TMPRSS3`. Ensembl VEP 116.3 with `--gff tmprss3_parent.gff3.gz`, the file bgzipped and indexed, writes the same under `PERL_HASH_SEED=0` and the gene-less row under `PERL_HASH_SEED=11`. Restoring `Parent=gene:ENSG00000160183` makes the engines agree under every seed.
 
 ### 1.7 How the comparator treats this class
 

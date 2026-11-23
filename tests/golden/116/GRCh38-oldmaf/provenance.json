@@ -1,20 +1,20 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "none on either side",
  "input": "variants.vcf",
  "sha256": {
-  "default.txt": "cef3d07c782e1e3e1eb5e0b5de2f1cb22bec7944b0ae814544cf4b00ba53d938",
-  "tab.txt": "c7f05608f3841fdf1f7e55ab1ee03f9e7e4e5fd8aa3b759b4d963ff022b49b50",
-  "vcf.vcf": "0c4e746abbf37a5138664e4602cc1a0e6af27d6cef58c308774b0ef6ff06fedc",
-  "json.jsonl": "4cab0e56558826391570ecf8ef58833154d02580e5bf69b5438bf8f2331f2763"
+  "default.txt": "597c217bd969eccc6cbebfcba8ddc861aa39164a0f8c17a27683394b7d976d12",
+  "tab.txt": "bf7e2b2cfd5a7290119a0eb5835ba2935ad445dc5f66c079b226e7ef2f0a2909",
+  "vcf.vcf": "44547df438b0b29c8c02156c23ca26b0112fcad7754a7a6db21b00b50c42e4e8",
+  "json.jsonl": "be1505edb0e2c4dc8cb84165fac875cb387c876add0129dbbe83f9590e15e0b7"
  },
  "variants_vcf_sha256": "a0c2c6606b7f4da5dcc412fc91484a0fa360391f515655a5f931087f95606a02",
- "generator": "scripts/golden/build_golden_corpus.py select; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 --variations <cache> --exclude-variation '^COSV\\d' --exclude-variation '^(C[A-Z]|BM|HM)\\d{6}'; scripts/concordance/generate_reference_output.sh --corpus; scripts/golden/build_golden_corpus.py classify",
+ "generator": "tools/vep-golden-corpus select; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 --variations <cache> --exclude-variation '^COSV\\d' --exclude-variation '^(C[A-Z]|BM|HM)\\d{6}'; scripts/concordance/generate_reference_output.sh --corpus; tools/vep-golden-corpus classify",
  "variation_slice": {
   "source": "homo_sapiens/116_GRCh38/21/all_vars.gz of the Ensembl VEP release-116 indexed cache",
   "window": "records whose start lies within one base of an input record's span",
@@ -29,23 +29,30 @@
    "all_vars.gz": "96c1c73712827dc5216b26ddf57775eaf21b0efa3a35fa1e11d10653d45f151a",
    "all_vars.gz.csi": "a184bf4686e17c71a597d37a6ce9b5e78a3ab6cc51bb98d4003c64899ae0c01f"
   },
-  "slice_check": "Ensembl VEP 116.2 run on this slice and on the full cache with --check_existing --af_1kg --old_maf wrote identical default-format output for every record"
+  "slice_check": "Ensembl VEP 116.3 run on this slice and on the full cache with --check_existing --af_1kg --old_maf wrote identical default-format output for every record"
  },
  "flag_sets": {
   "oldmaf": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --check_existing --af_1kg --old_maf [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "fbe8e370c59071cd00760523b92cb6f2f240efb89a3c36cf746651a5321b4615",
+    "tab.txt": "ec990b3b521a8fe97e21a73c159c053beb5bba685e45f9361ac0d061c23d13b4",
+    "vcf.vcf": "5eeb6b4084dc300278adb97225bb9dc4e3ecad3b34c96cbe46d09bfdf7787353",
+    "json.jsonl": "1c6e575d5bbfc93f7bcac73101e9f5de305d00cea4432f22c4560967a2694e0a"
+   },
    "flags": [
     "--check_existing",
     "--af_1kg",
     "--old_maf"
    ],
-   "input": "variants.vcf",
-   "expected_dir": "expected_oldmaf",
-   "sha256": {
-    "default.txt": "2870046aefcd2fc84d34ddd6f5c11cd0e6ea23f14b786f6094dd8a6981d71b29",
-    "tab.txt": "3b592e577892849ecc4daf30a40a87da2e4f101e67b3643d55414ec88f4499f5",
-    "vcf.vcf": "087d2b79a042338fce06f1678e1b681ca3a531061a517b7062952db8fa4299bf",
-    "json.jsonl": "eca1a39ede48fab0407c438e83d5140987f67980ccbe514f208fbce533e1ab44"
-   }
+   "expected_dir": "expected_oldmaf"
   }
  }
 }

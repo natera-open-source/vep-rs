@@ -1,0 +1,133 @@
+{
+  "verdict": "FAIL",
+  "gates": [
+    {
+      "gate": "consequence_f1",
+      "threshold": 0.999,
+      "actual": 0.999,
+      "passed": true
+    },
+    {
+      "gate": "total_annotations_delta",
+      "threshold": 0.001,
+      "baseline": 200000,
+      "builder": 200200,
+      "actual": 0.001,
+      "passed": false
+    },
+    {
+      "gate": "colocated_variant_delta",
+      "threshold": 0.01,
+      "baseline": 150000,
+      "builder": 151500,
+      "actual": 0.01,
+      "passed": false
+    },
+    {
+      "gate": "frequency_field_delta",
+      "threshold": 0.01,
+      "actual": 0.01,
+      "details": {
+        "AF": {
+          "baseline": 20000,
+          "builder": 20200,
+          "delta": 0.01
+        },
+        "AFR_AF": {
+          "baseline": 20000,
+          "builder": 20000,
+          "delta": 0.0
+        },
+        "AMR_AF": {
+          "baseline": 20000,
+          "builder": 20000,
+          "delta": 0.0
+        },
+        "EAS_AF": {
+          "baseline": 20000,
+          "builder": 20000,
+          "delta": 0.0
+        },
+        "EUR_AF": {
+          "baseline": 20000,
+          "builder": 20000,
+          "delta": 0.0
+        },
+        "MAX_AF": {
+          "baseline": 70000,
+          "builder": 70000,
+          "delta": 0.0
+        },
+        "SAS_AF": {
+          "baseline": 0,
+          "builder": 0,
+          "delta": 0.0
+        },
+        "gnomADe_AF": {
+          "baseline": 60000,
+          "builder": 60000,
+          "delta": 0.0
+        },
+        "gnomADg_AF": {
+          "baseline": 50000,
+          "builder": 50000,
+          "delta": 0.0
+        }
+      },
+      "passed": false
+    },
+    {
+      "gate": "per_consequence_type_delta",
+      "threshold": 0.01,
+      "actual": 0.01,
+      "details": {
+        "downstream_gene_variant": {
+          "baseline": 20000,
+          "builder": 20000,
+          "delta": 0.0
+        },
+        "frameshift_variant": {
+          "baseline": 2000,
+          "builder": 2000,
+          "delta": 0.0
+        },
+        "intron_variant": {
+          "baseline": 90000,
+          "builder": 90900,
+          "delta": 0.01
+        },
+        "missense_variant": {
+          "baseline": 40000,
+          "builder": 40000,
+          "delta": 0.0
+        },
+        "start_lost": {
+          "baseline": 100,
+          "builder": 100,
+          "delta": 0.0
+        },
+        "stop_gained": {
+          "baseline": 3000,
+          "builder": 3000,
+          "delta": 0.0
+        },
+        "synonymous_variant": {
+          "baseline": 30000,
+          "builder": 30000,
+          "delta": 0.0
+        },
+        "upstream_gene_variant": {
+          "baseline": 15000,
+          "builder": 15000,
+          "delta": 0.0
+        }
+      },
+      "passed": false
+    }
+  ],
+  "cache_diff_summary": {
+    "transcript_match_rate": 1.0,
+    "variation_match_rate": 1.0,
+    "info_json_matches": true
+  }
+}

@@ -6,7 +6,7 @@
 
 **What vep-rs does instead.** vep-rs reads such a row where its record is written, on the model's first coding bases, in the frame the cache gives the model. Its `HGVSp` names the change the record makes to the model's protein: on the record of section 1, a `dup` of residues 2 to 4. The row's `HGVSc` and its absent `HGVS_OFFSET` are read at the same place, as the entry [`refseq_edited_model_seam_shift_and_duplication_hgvs`](refseq-edited-model-seam-shift-and-duplication-hgvs.md) describes.
 
-**Where it is in Ensembl VEP's source** (`ensembl-variation` at release/116, as the Ensembl VEP 116.2 image holds it):
+**Where it is in Ensembl VEP's source** (`ensembl-variation` at release/116, as the Ensembl VEP 116.3 image holds it):
 
 - `Bio/EnsEMBL/Variation/TranscriptVariationAllele.pm`, lines 1441 and 1711: `hgvs_transcript` and `hgvs_protein` each call `_return_3prime` before a notation is made, and the insertion is moved 3' along the genome.
 - Lines 1474-1478 of the same module: the coding notation is typed on the transcript's genomic slice at the shifted point, where the two positions are neighbours and the model's added bases do not exist.
@@ -21,7 +21,7 @@
 
 The counts behind that statement are three. With this reading of the protein notation and without it, vep-rs writes the same output on all 2,168 outputs of the 479 committed runs of 109 corpora. It does so on all 306 comparison cases, 199 of the fixture tier and 107 of the population tier. And every concordance dataset is annotated on a cache whose models hold no base the genome lacks: 0 of 238,823 models on GRCh37 and 0 of 669,092 on GRCh38.
 
-**How often the shape occurs.** Tier 3, see [Intended divergences from Ensembl VEP](../intended-divergences.md): the shape is an insertion written on the added bases that open a RefSeq model's coding sequence, in a run under `--hgvs` with the default 3' shift of the notation. The committed caches hold 33 models with bases the genome lacks, in 3 corpora, and on none of the 33 do those bases open the coding sequence. One committed flag set runs a RefSeq or merged cache under `--hgvs`.
+**How often the shape occurs.** Tier 3, see [Intended divergences from Ensembl VEP](../intended-divergences.md): the shape is an insertion written on the added bases that open a RefSeq model's coding sequence, in a run under `--hgvs` with the default 3' shift of the notation. The committed caches hold 49 models with bases the genome lacks, in 7 corpora, and on none of the 49 do those bases open the coding sequence. Seven committed flag sets run a RefSeq or merged cache under `--hgvs`.
 
 Real data carries the shape once. The ClinVar files hold 12 records written between the two genomic neighbours of a RefSeq model's added bases, 9 on GRCh37 and 3 on GRCh38. Under `--refseq --hgvs` they give 39 and 10 rows. With this reading vep-rs writes one of the 49 otherwise than without it: the row of section 1, in its `HGVSp` alone.
 
@@ -29,7 +29,7 @@ Tuple, pair, set aside, charged and the other scoring terms are defined in [How 
 
 ## 1. Eighteen bases inserted on the nine bases that open the coding sequence of `NM_001288959.2`
 
-**In short.** The record with ID `768677` of the ClinVar GRCh37 VCF inserts 18 bases between 14:94582130 and 14:94582131. The forward-strand RefSeq model `NM_001288959.2` holds nine bases at that point that the genome lacks, its coding positions 1 to 9, and the 18 bases are those nine twice. The genome's 3' shift moves the insertion three places. Both engines print `CDS_position` `?-9`, the start unknown because the record's left neighbour lies in the 5' UTR. Under `--hgvs`, Ensembl VEP 116.2 writes the `HGVSp` `p.GlyCys5_?4`: two residue names, the position 5, `_?` and the position 4. vep-rs writes `p.His2_Gly4dup`, a `dup` of residues 2 to 4.
+**In short.** The record with ID `768677` of the ClinVar GRCh37 VCF inserts 18 bases between 14:94582130 and 14:94582131. The forward-strand RefSeq model `NM_001288959.2` holds nine bases at that point that the genome lacks, its coding positions 1 to 9, and the 18 bases are those nine twice. The genome's 3' shift moves the insertion three places. Both engines print `CDS_position` `?-9`, the start unknown because the record's left neighbour lies in the 5' UTR. Under `--hgvs`, Ensembl VEP 116.3 writes the `HGVSp` `p.GlyCys5_?4`: two residue names, the position 5, `_?` and the position 4. vep-rs writes `p.His2_Gly4dup`, a `dup` of residues 2 to 4.
 
 ### 1.1 What a reader needs to know first
 
@@ -59,15 +59,15 @@ The `?` comes from the record's left neighbour. 14:94582130 is cDNA 96, the last
 
 Five fields differ:
 
-| Field | Ensembl VEP 116.2 | vep-rs |
+| Field | Ensembl VEP 116.3 | vep-rs |
 | --- | --- | --- |
 | `HGVSp` | `p.GlyCys5_?4`: two residue names, the position 5, `_?` and the position 4 | `p.His2_Gly4dup`, a `dup` of residues 2 to 4 |
 | `HGVSc` | an `ins` of the 18 bases as written between coding positions 12 and 13 | `c.4_12dup`, a `dup` of coding positions 4 to 12 |
 | `HGVS_OFFSET` | 3 | none |
-| `Consequence` | `start_lost,start_retained_variant,5_prime_UTR_variant` | `start_retained_variant,5_prime_UTR_variant` |
-| `IMPACT` | HIGH | LOW |
+| `Consequence` | `start_lost,start_retained_variant,5_prime_UTR_variant` | `coding_sequence_variant,5_prime_UTR_variant` |
+| `IMPACT` | HIGH | MODIFIER |
 
-The `HGVSp` is this entry. The `HGVSc` and `HGVS_OFFSET` differ as the entry [`refseq_edited_model_seam_shift_and_duplication_hgvs`](refseq-edited-model-seam-shift-and-duplication-hgvs.md) describes: vep-rs reads the row where its record is written, so it reports no places moved, and its `dup` is placed by the 3' rule on the model's sequence. That entry's rows print the span of the added bases in all three position columns. On this row the left neighbour lies outside the coding sequence, so the `CDS_position` starts with `?`. The terms and `IMPACT` differ as class 3 of [Defect B](defect-b.md) describes, `start_cooccurrence_swap`.
+The `HGVSp` is this entry. The `HGVSc` and `HGVS_OFFSET` differ as the entry [`refseq_edited_model_seam_shift_and_duplication_hgvs`](refseq-edited-model-seam-shift-and-duplication-hgvs.md) describes: vep-rs reads the row where its record is written, so it reports no places moved, and its `dup` is placed by the 3' rule on the model's sequence. That entry's rows print the span of the added bases in all three position columns. On this row the left neighbour lies outside the coding sequence, so the `CDS_position` starts with `?`. The terms and `IMPACT` differ as [`start_codon_overlap_without_start_codon`](start-codon-overlap-without-start-codon.md) describes: the cached coding start holds no start codon (1.2), so vep-rs writes no start term.
 
 ### 1.4 Why Ensembl VEP writes that
 
@@ -100,10 +100,10 @@ vep -i record.vcf -o out.txt --offline \
 grep NM_001288959.2 out.txt | grep -o 'HGVS[^;]*'
 ```
 
-`<cache>` is the conversion of Ensembl VEP's RefSeq GRCh37 cache ([Cache conversion](../cache-conversion.md)). The last command prints the row's HGVS items. vep-rs prints `c.4_12dup` and `p.His2_Gly4dup`, and no `HGVS_OFFSET`. Ensembl VEP 116.2 takes the same flags with the cache options of [Reproducing these examples](reproducing.md) and its RefSeq cache, and prints the three HGVS values of its column in 1.3.
+`<cache>` is the conversion of Ensembl VEP's RefSeq GRCh37 cache ([Cache conversion](../cache-conversion.md)). The last command prints the row's HGVS items. vep-rs prints `c.4_12dup` and `p.His2_Gly4dup`, and no `HGVS_OFFSET`. Ensembl VEP 116.3 takes the same flags with the cache options of [Reproducing these examples](reproducing.md) and its RefSeq cache, and prints the three HGVS values of its column in 1.3.
 
 ### 1.7 How the comparator treats this class
 
-Nothing is built for this class. The format comparator (`scripts/concordance/compare_vep_formats.py`) has no class of this shape and no test for it, because no comparison case and no row the concordance figures score reaches a row of the shape. The counts stand under "The class it produces" above.
+Nothing is built for this class. The format comparator (`tools/vep-formats-compare`) has no class of this shape and no test for it, because no comparison case and no row the concordance figures score reaches a row of the shape. The counts stand under "The class it produces" above.
 
-On the row of this section, a comparison case whose `masks` name `start_cooccurrence_swap` reads no field. Ensembl VEP writes both start terms there and vep-rs one, so the comparator sets the pair aside whole, its `HGVSp` with it. A comparison case that names no class reports the five fields of the table in 1.3 as differences, charged to vep-rs.
+On the row of this section Ensembl VEP writes both start terms and vep-rs neither, the pair of [`start_codon_overlap_without_start_codon`](start-codon-overlap-without-start-codon.md). A comparison that names that class and is given the candidate's cache sets aside the `Consequence` and the `IMPACT` that follows it, and the `HGVSp` stays a difference charged to vep-rs. A comparison case that names no class reports the five fields of the table in 1.3 as differences, charged to vep-rs.

@@ -12,6 +12,7 @@ use arrow_array::cast::AsArray;
 use arrow_array::types::Int32Type;
 
 use super::rows::RowBatch;
+use super::writer::Partition;
 
 /// Whether the writer checks the order of its input.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,12 +30,29 @@ pub enum InputOrder {
     Unchecked,
 }
 
-/// The warning a run that does not check its input order writes once.
-pub const UNCHECKED_ORDER_WARNING: &str = "input order not checked: Parquet row groups are not sorted and parts are not rolled at contig boundaries";
+/// The warning a run that does not check its input order writes once where its
+/// parts are not partitioned.
+const UNCHECKED_ORDER_WARNING: &str = "input order not checked: Parquet row groups are not sorted and parts are not rolled at contig boundaries";
+
+/// The warning a run that does not check its input order writes once under
+/// [`Partition::Chrom`], where a part closes at every change of spelling
+/// whether or not the order is checked.
+const UNCHECKED_PARTITIONED_ORDER_WARNING: &str = "input order not checked: Parquet row groups are not sorted and a part closes at every change of chromosome spelling";
+
+/// The warning a run that does not check its input order writes once, by the
+/// layout of its parts.
+#[doc(hidden)]
+pub fn unchecked_order_warning(partition: Option<Partition>) -> &'static str {
+    match partition {
+        Some(Partition::Chrom) => UNCHECKED_PARTITIONED_ORDER_WARNING,
+        None => UNCHECKED_ORDER_WARNING,
+    }
+}
 
 /// A record out of chromosome and position order: the first row that broke
 /// the precondition, as the run refuses it.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct UnsortedInput {
     /// The record's number in the input, as the skip warnings count records.
     pub line: u64,
@@ -62,6 +80,7 @@ impl std::error::Error for UnsortedInput {}
 
 /// The chromosome the rows are on and how far along it they have come.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Current {
     /// The chromosome's `contig_index`.
     pub rank: i32,
@@ -280,5 +299,20 @@ mod tests {
         let error = monitor.observe(&batch(&[("21", 119, 3)])).unwrap_err();
         assert_eq!(error.line, 3);
         assert_eq!(error.previous_position, 120);
+    }
+
+    /// Each layout has the warning that is true of it: parts that are not
+    /// partitioned close at no chromosome boundary without the check, and a
+    /// partitioned output closes one at every change of spelling.
+    #[test]
+    fn the_unchecked_order_warning_is_the_one_of_the_layout() {
+        assert_eq!(
+            unchecked_order_warning(None),
+            "input order not checked: Parquet row groups are not sorted and parts are not rolled at contig boundaries"
+        );
+        assert_eq!(
+            unchecked_order_warning(Some(Partition::Chrom)),
+            "input order not checked: Parquet row groups are not sorted and a part closes at every change of chromosome spelling"
+        );
     }
 }

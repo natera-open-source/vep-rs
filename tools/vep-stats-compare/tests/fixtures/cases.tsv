@@ -1,0 +1,78 @@
+case	exit	check	arguments
+candidate_is_green	0	bytes	--expected	tests/fixtures/reference.summary.log	--actual	tests/fixtures/candidate.summary.log	--report	{report}
+one_value_is_red	1	bytes	--expected	tests/fixtures/reference.summary.log	--actual	tests/fixtures/one_value.summary.log
+mask_row_sets_a_value_aside	0	bytes	--expected	tests/fixtures/reference.summary.log	--actual	tests/fixtures/one_value.summary.log	--mask-row	Variants processed
+missing_actual	2	bytes	--expected	tests/fixtures/reference.summary.log	--actual	tests/fixtures/none.txt	--report	{report}
+negative_tolerance	2	bytes	--expected	tests/fixtures/reference.summary.log	--actual	tests/fixtures/one_value.summary.log	--tolerance	-1	--report	{report}
+gzip_expected	0	bytes	--expected	tests/fixtures/reference.summary.log.gz	--actual	tests/fixtures/reference.summary.log	--report	{report}
+corrupt_gzip	2	bytes	--expected	tests/fixtures/corrupt.summary.log.gz	--actual	tests/fixtures/reference.summary.log	--report	{report}
+rows	1	bytes	--expected	tests/fixtures/reference.summary.log	--actual	tests/fixtures/rows.summary.log	--report	{report}
+rows_reversed	1	bytes	--expected	tests/fixtures/rows.summary.log	--actual	tests/fixtures/reference.summary.log	--report	{report}
+rows_tolerance_1	1	bytes	--expected	tests/fixtures/reference.summary.log	--actual	tests/fixtures/rows.summary.log	--tolerance	1	--report	{report}
+rows_tolerance_5	1	bytes	--expected	tests/fixtures/reference.summary.log	--actual	tests/fixtures/rows.summary.log	--tolerance	5	--report	{report}
+rows_masked	1	bytes	--expected	tests/fixtures/reference.summary.log	--actual	tests/fixtures/rows.summary.log	--mask-row	Species	--mask-row	SNV	--mask-row	No such row	--mask-row	Species	--mask-row	Run time	--mask-row	Élan 🧬	--mask-row=sift	--report	{report}
+sections	1	bytes	--expected	tests/fixtures/reference.summary.log	--actual	tests/fixtures/sections.summary.log	--report	{report}
+sections_reversed	1	bytes	--expected	tests/fixtures/sections.summary.log	--actual	tests/fixtures/reference.summary.log	--report	{report}
+predictions	1	bytes	--expected	tests/fixtures/reference.summary.log	--actual	tests/fixtures/predictions.summary.log	--report	{report}
+predictions_reversed	1	bytes	--expected	tests/fixtures/predictions.summary.log	--actual	tests/fixtures/reference.summary.log	--report	{report}
+counts	1	bytes	--expected	tests/fixtures/counts_expected.summary.log	--actual	tests/fixtures/counts_actual.summary.log	--report	{report}
+counts_reversed	1	bytes	--expected	tests/fixtures/counts_actual.summary.log	--actual	tests/fixtures/counts_expected.summary.log	--report	{report}
+counts_tolerance_1	1	bytes	--expected	tests/fixtures/counts_expected.summary.log	--actual	tests/fixtures/counts_actual.summary.log	--tolerance	1	--report	{report}
+counts_tolerance_5	1	bytes	--expected	tests/fixtures/counts_expected.summary.log	--actual	tests/fixtures/counts_actual.summary.log	--tolerance	5	--report	{report}
+counts_tolerance_spelled	1	bytes	--expected	tests/fixtures/counts_expected.summary.log	--actual	tests/fixtures/counts_actual.summary.log	--tolerance	 +1_0 	--report	{report}
+counts_tolerance_huge	1	bytes	--expected	tests/fixtures/counts_expected.summary.log	--actual	tests/fixtures/counts_actual.summary.log	--tolerance	340282366920938463463374607431768211456	--report	{report}
+counts_masked_to_green	0	bytes	--expected	tests/fixtures/counts_expected.summary.log	--actual	tests/fixtures/counts_actual.summary.log	--tolerance	9	--mask-row	float	--mask-row	mixed	--mask-row	separator	--mask-row	only_expected_text	--mask-row	only_expected_none	--mask-row	only_actual_text	--mask-row	only_actual_none	--report	{report}
+unicode	1	bytes	--expected	tests/fixtures/unicode_expected.summary.log	--actual	tests/fixtures/unicode_actual.summary.log	--report	{report}
+mixed_newlines	0	bytes	--expected	tests/fixtures/reference.summary.log	--actual	tests/fixtures/mixed_newlines.summary.log	--report	{report}
+empty_reports	1	bytes	--expected	tests/fixtures/empty.summary.log	--actual	tests/fixtures/empty.summary.log	--report	{report}
+blank_against_reference	1	bytes	--expected	tests/fixtures/blank.summary.log	--actual	tests/fixtures/reference.summary.log	--report	{report}
+reference_against_empty_gzip	1	bytes	--expected	tests/fixtures/reference.summary.log	--actual	tests/fixtures/empty.summary.log.gz	--report	{report}
+not_a_report_expected	2	bytes	--expected	tests/fixtures/not_a_report.txt	--actual	tests/fixtures/reference.summary.log	--report	{report}
+not_a_report_actual	2	bytes	--expected	tests/fixtures/reference.summary.log	--actual	tests/fixtures/not_a_report.txt
+not_a_report_both	2	bytes	--expected	tests/fixtures/not_a_report.txt	--actual	tests/fixtures/byte_order_mark.summary.log
+byte_order_mark	2	bytes	--expected	tests/fixtures/reference.summary.log	--actual	tests/fixtures/byte_order_mark.summary.log
+negative_tolerance_before_not_a_report	2	bytes	--expected	tests/fixtures/not_a_report.txt	--actual	tests/fixtures/reference.summary.log	--tolerance	-2
+unreadable_before_negative_tolerance	2	bytes	--expected	tests/fixtures/reference.summary.log	--actual	tests/fixtures/invalid_utf8.summary.log	--tolerance	-2
+unreadable_actual_before_not_a_report_expected	2	bytes	--expected	tests/fixtures/not_a_report.txt	--actual	tests/fixtures/truncated_utf8.summary.log
+missing_expected_is_named_first	2	bytes	--expected	tests/fixtures/none.txt	--actual	tests/fixtures/also none.txt
+invalid_utf8	2	bytes	--expected	tests/fixtures/invalid_utf8.summary.log	--actual	tests/fixtures/reference.summary.log
+truncated_utf8	2	bytes	--expected	tests/fixtures/reference.summary.log	--actual	tests/fixtures/truncated_utf8.summary.log
+directory_as_input	2	bytes	--expected	tests/fixtures	--actual	tests/fixtures/reference.summary.log
+quoted_missing_name	2	bytes	--expected	tests/fixtures/reference.summary.log	--actual	tests/fixtures/it's "not" here\t.txt
+two_gzip_members	0	bytes	--expected	tests/fixtures/two_members.summary.log.gz	--actual	tests/fixtures/reference.summary.log.gz	--report	{report}
+truncated_gzip	2	bytes	--expected	tests/fixtures/truncated.summary.log.gz	--actual	tests/fixtures/reference.summary.log
+truncated_gzip_header	2	bytes	--expected	tests/fixtures/reference.summary.log	--actual	tests/fixtures/truncated_header.summary.log.gz
+bad_crc	2	bytes	--expected	tests/fixtures/bad_crc.summary.log.gz	--actual	tests/fixtures/reference.summary.log
+bad_length	2	bytes	--expected	tests/fixtures/bad_length.summary.log.gz	--actual	tests/fixtures/reference.summary.log
+not_gzip	2	bytes	--expected	tests/fixtures/not_gzip.summary.log.gz	--actual	tests/fixtures/reference.summary.log
+trailing_bytes	2	bytes	--expected	tests/fixtures/trailing_bytes.summary.log.gz	--actual	tests/fixtures/reference.summary.log
+unknown_method	2	bytes	--expected	tests/fixtures/unknown_method.summary.log.gz	--actual	tests/fixtures/reference.summary.log
+distance_too_far_back	2	bytes	--expected	tests/fixtures/distance_too_far_back.summary.log.gz	--actual	tests/fixtures/reference.summary.log
+invalid_distance_code	2	bytes	--expected	tests/fixtures/reference.summary.log	--actual	tests/fixtures/invalid_distance_code.summary.log.gz
+invalid_length_code	2	bytes	--expected	tests/fixtures/invalid_length_code.summary.log.gz	--actual	tests/fixtures/reference.summary.log
+invalid_utf8_in_gzip	2	bytes	--expected	tests/fixtures/invalid_utf8.summary.log.gz	--actual	tests/fixtures/reference.summary.log
+bad_crc_before_invalid_utf8	2	bytes	--expected	tests/fixtures/invalid_utf8_bad_crc.summary.log.gz	--actual	tests/fixtures/reference.summary.log
+report_under_a_file	2	bytes	--expected	tests/fixtures/reference.summary.log	--actual	tests/fixtures/candidate.summary.log	--report	tests/fixtures/reference.summary.log/stats.json
+report_is_a_directory	2	bytes	--expected	tests/fixtures/reference.summary.log	--actual	tests/fixtures/candidate.summary.log	--report	tests/fixtures/
+paths_are_normalised	0	bytes	--expected	./tests//fixtures/reference.summary.log/	--actual	tests/fixtures/./candidate.summary.log/.	--report	{report}
+abbreviated_options	1	bytes	--exp	tests/fixtures/reference.summary.log	--act=tests/fixtures/rows.summary.log	--tol=1	--mask	Species	--rep	{report}
+last_of_a_repeated_option	0	bytes	--expected	tests/fixtures/none.txt	--expected	tests/fixtures/reference.summary.log	--actual	tests/fixtures/candidate.summary.log	--tolerance	9	--tolerance	0	--report	{report}
+values_that_start_with_a_dash	0	bytes	--expected	tests/fixtures/reference.summary.log	--actual	tests/fixtures/candidate.summary.log	--mask-row	-5	--mask-row	-x y	--mask-row=-x	--mask-row		--mask-row	-	--report	{report}
+frequency_check_sets_the_row_aside	0	bytes	--expected	tests/fixtures/frequency_expected.summary.log	--actual	tests/fixtures/frequency_actual.summary.log	--report	{report}
+frequency_check_holds_the_row_to_the_processed_count	1	bytes	--expected	tests/fixtures/frequency_expected.summary.log	--actual	tests/fixtures/frequency_wrong_sum.summary.log	--report	{report}
+all_existing_row_without_a_frequency_check	1	bytes	--expected	tests/fixtures/frequency_off_expected.summary.log	--actual	tests/fixtures/frequency_actual.summary.log	--report	{report}
+custom_key_named_consequence_sets_the_name_aside	0	bytes	--expected	tests/fixtures/consequence_key_expected.summary.log	--actual	tests/fixtures/consequence_key_actual.summary.log	--report	{report}
+custom_key_named_consequence_holds_a_term_line	1	bytes	--expected	tests/fixtures/consequence_key_expected.summary.log	--actual	tests/fixtures/consequence_key_term_missing.summary.log	--report	{report}
+record_name_line_without_a_source_keyed_consequence	1	bytes	--expected	tests/fixtures/consequence_key_off_expected.summary.log	--actual	tests/fixtures/consequence_key_actual.summary.log	--report	{report}
+no_arguments	2	exit
+actual_not_given	2	exit	--expected	tests/fixtures/reference.summary.log
+unknown_option	2	exit	--expected	tests/fixtures/reference.summary.log	--actual	tests/fixtures/candidate.summary.log	--bogus
+extra_argument	2	exit	--expected	tests/fixtures/reference.summary.log	--actual	tests/fixtures/candidate.summary.log	extra
+tolerance_not_an_integer	2	exit	--expected	tests/fixtures/reference.summary.log	--actual	tests/fixtures/candidate.summary.log	--tolerance	1.5
+tolerance_without_a_value	2	exit	--expected	tests/fixtures/reference.summary.log	--actual	tests/fixtures/candidate.summary.log	--tolerance
+dash_value_refused	2	exit	--expected	tests/fixtures/reference.summary.log	--actual	tests/fixtures/candidate.summary.log	--mask-row	-x
+double_dash	2	exit	--expected	tests/fixtures/reference.summary.log	--actual	tests/fixtures/candidate.summary.log	--
+ambiguous_prefix	2	exit	--expected	tests/fixtures/reference.summary.log	--actual	tests/fixtures/candidate.summary.log	--=x
+help	0	exit	-h
+help_before_a_fault	0	exit	--bogus	--help
+help_after_a_fault	2	exit	--tolerance	x	-h

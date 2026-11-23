@@ -21,6 +21,7 @@ vep-cli (runner.rs)
   |     |     +-- prefetch() + annotate()  <-- two-phase: parallel I/O, then sequential writes
   |     |     +-- run_batch()              <-- single-phase fallback, once per buffer
   |     |     +-- run()                    <-- per-transcript-consequence fallback
+  |     |     +-- run_naming_empty_strings()  <-- run() with the fields whose empty value is the empty string
   |     |
   |     +-- AnnotationStore trait (one query interface over two backends)
   |     |     +-- TabixAnnotator: noodles::tabix + CSI binning index over `.tsv.gz`
@@ -28,8 +29,9 @@ vep-cli (runner.rs)
   |     |     |   by `open_backend` when a `.vpd` sits beside the `.tsv.gz`
   |     |     |   (`vep-cache-converter convert-plugin-data` writes it) and its
   |     |     |   index records the columns the plugin reads and the SHA256 and
-  |     |     |   length the table and the `.vpd` have; a store refused on any of
-  |     |     |   them leaves the table read, with a warning
+  |     |     |   length the table and the `.vpd` have, and ends with the SHA256
+  |     |     |   of its own bytes; a store refused on any of them leaves the
+  |     |     |   table read through its `.tbi`, with a warning
   |     |     +-- Batch region merging (1000 bp gap)
   |     |     +-- Allele matching & normalization
   |     |
@@ -89,12 +91,15 @@ LoFtool and pLI are keyed by gene symbol, so one data file serves both assemblie
 given no file, each reads the copy bundled beside Ensembl VEP's plugin modules
 from the `--dir_plugins` directory.
 LoFTEE reads GERP from a tabix TSV on GRCh37 (`gerp_tabix=`) and from a bigWig on
-GRCh38 (`gerp_bigwig=`), the two forms its upstream bundles ship, or, when no GERP
+GRCh38 (`gerp_bigwig=`), the form each branch of Ensembl VEP's plugin reads
+(`LoF.pm` lines 138-141 of `master`, line 130 of `grch38`), or, when no GERP
 word is given, from the path Ensembl VEP's plugin derives (`loftee_path` followed
 by the GRCh38 bigWig's upstream name; a fixed path on GRCh37). A GRCh37 run also
 passes `run_splice_predictions=0`: Ensembl VEP's plugin for that assembly runs its
 splice-prediction layer by default, which is not ported, and a run that leaves it
-on is refused. Conservation reads any bigWig of per-base scores; Ensembl Compara
+on is refused. Under `conservation_file=` LoFTEE reads the SQLite database of
+Ensembl VEP's plugin: the PhyloCSF items on both assemblies and, on GRCh37, the
+GERP total of each whole exon. Conservation reads any bigWig of per-base scores; Ensembl Compara
 publishes one for GRCh38 alone, so no GRCh37 file is staged for it.
 
 A built-in plugin writes on the row kinds its `feature_types()` names and, through

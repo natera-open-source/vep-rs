@@ -6,10 +6,10 @@
 //!
 //! Ensembl VEP reads the structural variants overlapping each variant from its
 //! variation database (`AnnotationSource/Database/StructuralVariation.pm:82-91`
-//! at release/116.2) and refuses the flag offline, the cache holding none
+//! at release/116.3) and refuses the flag offline, the cache holding none
 //! (`AnnotationSourceAdaptor.pm:203-206`, `Config.pm:628`). The release dump
-//! `homo_sapiens_structural_variations.vcf.gz` is written from the query that
-//! source runs (ensembl-variation release/116 `scripts/export/release/dump_gvf.pl:261`
+//! `<species>_structural_variations.vcf.gz` (`homo_sapiens_structural_variations.vcf.gz`
+//! for human) is written from the query that source runs (ensembl-variation release/116 `scripts/export/release/dump_gvf.pl:261`
 //! fetches with `fetch_all_by_Slice($slice, 1)`, whose constraint,
 //! `DBSQL/StructuralVariationFeatureAdaptor.pm:167-175`, leaves out failed and
 //! somatic records and the probe class and keeps the supporting evidence), so the
@@ -52,6 +52,15 @@ const ID_COLUMN: usize = 2;
 const REF_COLUMN: usize = 3;
 const INFO_COLUMN: usize = 7;
 
+/// The line a run under `--check_svs` prints once on standard error unless
+/// `--quiet`: the three kinds of mapping Ensembl's database holds and its dump
+/// lacks.
+pub(crate) const DUMP_LACKS_NOTICE: &str =
+    "INFO: --check_svs reads names from the file it is given; \
+    Ensembl's structural variation file lacks three kinds its database holds: variants on \
+    scaffolds and patches, the further locations of a variant mapped to several places, and \
+    variants that start at base 1";
+
 /// Bases between two windows of a batch below which one read covers both. A
 /// read costs a fixed part the index charges whatever the window (the seek and
 /// the blocks it inflates), worth the parse of about five thousand records,
@@ -88,24 +97,36 @@ pub struct SvSource {
 }
 
 impl SvSource {
-    /// Opens the indexed VCF at `path` (`<path>.csi` or `<path>.tbi` beside it);
-    /// nothing but the index and the header is read here.
-    pub fn open(path: &Path) -> anyhow::Result<Self> {
+    /// Opens the indexed VCF at `path` (`<path>.csi` or `<path>.tbi` beside it)
+    /// on the run's `assembly`; nothing but the index and the header is read
+    /// here.
+    ///
+    /// A record is looked up under the cache's name of its chromosome, which
+    /// the reader tries under its other spellings when the file lacks it. On
+    /// GRCh37, where `MT` and `chrMT` name the assembly's mitochondrial
+    /// sequence and `chrM` and `M` another one, the cache's `MT` is tried as
+    /// `MT` and `chrMT` alone, so a file's `chrM` or `M` records are not read
+    /// for it.
+    pub fn open(
+        path: &Path,
+        assembly: Option<vep_core::assembly::Assembly>,
+    ) -> anyhow::Result<Self> {
         if !path.is_file() {
             anyhow::bail!("{} is not a file", path.display());
         }
-        let config = TabixConfig {
-            file_path: path.to_path_buf(),
-            chr_col: 0,
-            start_col: 1,
-            end_col: Some(INFO_COLUMN),
-            ref_col: Some(REF_COLUMN),
-            alt_col: None,
-            zero_based: false,
-        };
-        let handle = TabixAnnotator::open(config)
+        let mut config = TabixConfig::default();
+        config.file_path = path.to_path_buf();
+        config.chr_col = 0;
+        config.start_col = 1;
+        config.end_col = Some(INFO_COLUMN);
+        config.ref_col = Some(REF_COLUMN);
+        config.alt_col = None;
+        config.zero_based = false;
+        let mut handle = TabixAnnotator::open(config)
             .map_err(engine_error)
-            .with_context(|| format!("opening {}", path.display()))?;
+            .with_context(|| format!("opening {}", path.display()))?
+            .on_assembly(assembly);
+        handle.frame_mut().keep_to_own_pair();
         Ok(Self {
             path: path.to_path_buf(),
             handle,
@@ -368,6 +389,7 @@ fn engine_error(error: PluginError) -> anyhow::Error {
     match error {
         PluginError::Init(message) | PluginError::Run(message) => anyhow::anyhow!(message),
         PluginError::Io(error) => error.into(),
+        other => anyhow::anyhow!(other.detail()),
     }
 }
 
@@ -389,8 +411,9 @@ mod tests {
     const MIN_SHIFT: u8 = 14;
     const DEPTH: u8 = 5;
 
-    /// Writes the dump's header and `records` (chromosome 21, sorted by `POS`)
-    /// as a bgzip file with the `.csi` `tabix -C -p vcf` builds: each record
+    /// Writes the dump's header and `records` (one chromosome, the first
+    /// record's, sorted by `POS`; chromosome 21 without a record) as a bgzip
+    /// file with the `.csi` `tabix -C -p vcf` builds: each record
     /// binned by `POS` to its INFO `END`, and each leaf bin's offset that of the
     /// first record reaching its window, a long record of a parent bin included
     /// (htslib's linear index; the indexer here sets it from the bin's own
@@ -434,7 +457,16 @@ mod tests {
             .set_reference_sequence_name_index(0)
             .set_start_position_index(1)
             .set_end_position_index(None)
-            .set_reference_sequence_names([b"21".as_slice().into()].into_iter().collect())
+            .set_reference_sequence_names(
+                [records
+                    .first()
+                    .and_then(|line| line.split('\t').next())
+                    .unwrap_or("21")
+                    .as_bytes()
+                    .into()]
+                .into_iter()
+                .collect(),
+            )
             .build();
         let binned = indexer.set_header(header.clone()).build(1);
         let built = &binned.reference_sequences()[0];
@@ -452,7 +484,35 @@ mod tests {
 
     /// A dump slice with `records`, indexed, opened as a source.
     fn source(dir: &Path, records: &[&str]) -> SvSource {
-        SvSource::open(&write_dump(dir, records)).unwrap()
+        SvSource::open(&write_dump(dir, records), None).unwrap()
+    }
+
+    /// On GRCh37 `MT` and `chrMT` name the assembly's mitochondrial sequence
+    /// and `chrM` and `M` another one: a record on the cache's `MT` reads a
+    /// file naming the contig `chrMT` and no file naming it `chrM`. On GRCh38,
+    /// and in a run without an assembly, the four names are one sequence and
+    /// the file naming `chrM` is read.
+    #[test]
+    fn on_grch37_a_file_naming_the_other_pair_is_not_read_for_the_caches_mitochondrial_name() {
+        use vep_core::assembly::Assembly;
+        let overlapping = |contig: &str, assembly: Option<Assembly>| -> Vec<String> {
+            let dir = tempfile::tempdir().unwrap();
+            let record =
+                format!("{contig}\t100\tnsv1\tN\t<deletion>\t.\t.\tSVTYPE=deletion;END=200");
+            let path = write_dump(dir.path(), &[&record]);
+            SvSource::open(&path, assembly)
+                .unwrap()
+                .overlapping("MT", 150, 150)
+                .unwrap()
+        };
+        let grch37 = Some(Assembly::Grch37);
+        assert!(overlapping("chrM", grch37).is_empty());
+        assert!(overlapping("M", grch37).is_empty());
+        assert_eq!(overlapping("chrMT", grch37), ["nsv1"]);
+        assert_eq!(overlapping("MT", grch37), ["nsv1"]);
+        for assembly in [Some(Assembly::Grch38), None] {
+            assert_eq!(overlapping("chrM", assembly), ["nsv1"], "{assembly:?}");
+        }
     }
 
     /// Supporting-evidence records (`Parent`) and the `probe` class are left
@@ -474,6 +534,30 @@ mod tests {
         assert_eq!(
             source.overlapping("21", 5030500, 5030500).unwrap(),
             ["esv1", "nsv1"]
+        );
+    }
+
+    /// The file is read under the name it is given: no part of the reader keys
+    /// on a species, so the dump of any species Ensembl publishes one for
+    /// (`<species>_structural_variations.vcf.gz`) answers as the human one does.
+    #[test]
+    fn a_dump_of_another_species_is_read_under_its_own_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let written = write_dump(
+            dir.path(),
+            &["21\t5030000\tnsv9\tN\t<deletion>\t.\t.\tSVTYPE=deletion;END=5030010"],
+        );
+        let named = dir.path().join("bos_taurus_structural_variations.vcf.gz");
+        std::fs::rename(&written, &named).unwrap();
+        std::fs::rename(
+            format!("{}.csi", written.display()),
+            format!("{}.csi", named.display()),
+        )
+        .unwrap();
+        let source = SvSource::open(&named, None).unwrap();
+        assert_eq!(
+            source.overlapping("21", 5030001, 5030001).unwrap(),
+            ["nsv9"]
         );
     }
 
@@ -707,7 +791,7 @@ mod tests {
             dir.path(),
             &lines.iter().map(String::as_str).collect::<Vec<_>>(),
         );
-        let source = SvSource::open(&path).unwrap();
+        let source = SvSource::open(&path, None).unwrap();
         let mut windows: Vec<(u64, u64)> = (0..2 * READS_PER_RUN as u64)
             .map(|i| (at(i, 0), at(i, 10)))
             .collect();
@@ -780,8 +864,8 @@ mod tests {
     }
 
     /// The reader's subset of the database source is stated where the `SV`
-    /// column is described: the file's provenance, the records left out and the
-    /// mappings the dump lacks.
+    /// column is described: the file's provenance, the records left out, the
+    /// mappings the dump lacks and the line a run prints about them.
     #[test]
     fn documented_exclusion_is_stated() {
         let page = std::fs::read_to_string(format!(
@@ -806,6 +890,8 @@ mod tests {
             "mapped to several locations",
             "covers the 25 chromosomes",
             "starting at the first base of its chromosome is absent from the dump",
+            "a run under `--check_svs` names them in one `INFO:` line on standard error unless \
+             `--quiet` is given",
             "`POS + 1` to `END`",
             "a breakend allele's mate position is read as well",
         ] {
@@ -819,7 +905,7 @@ mod tests {
     fn missing_file_or_index_is_an_error() {
         let dir = tempfile::tempdir().unwrap();
         let missing = dir.path().join("none.vcf.gz");
-        let error = format!("{:#}", SvSource::open(&missing).err().unwrap());
+        let error = format!("{:#}", SvSource::open(&missing, None).err().unwrap());
         assert!(
             error.contains("none.vcf.gz") && error.contains("not a file"),
             "{error}"
@@ -827,7 +913,7 @@ mod tests {
 
         let unindexed = dir.path().join("svs.vcf.gz");
         std::fs::write(&unindexed, b"").unwrap();
-        let error = format!("{:#}", SvSource::open(&unindexed).err().unwrap());
+        let error = format!("{:#}", SvSource::open(&unindexed, None).err().unwrap());
         assert!(error.contains("index not found"), "{error}");
     }
 }

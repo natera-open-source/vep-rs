@@ -1,0 +1,5 @@
+#Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	IMPACT	DISTANCE	STRAND	FLAGS	FV_X	FV_Y	FV_Z
+v1	21:1000	G	g	ENST1	Transcript	missense_variant	10	10	4	A/T	gcc/Acc	-	MODERATE	-	1	-	G|one||3,G|one|two&2|3,|two	G|plain|plain,G|(0.5)|w()	G|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20|21|22|23|24|25|26|27|28|29|30|31|32|33|34|35|36|37|38|39|40|41|42|43|44|45|46|47|48|49|50|51|52|53|54|55|56|57|58|59|60|61|62|63|64|65|66|67|68|69|70
+v1	21:1000	G	g	ENST2	Transcript	missense_variant	10	10	4	A/T	gcc/Acc	-	MODERATE	-	1	-	G|one||3,G|one|two&2|3,|two	G|plain|plain,G|(0.5)|w()	G|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20|21|22|23|24|25|26|27|28|29|30|31|32|33|34|35|36|37|38|39|40|41|42|43|44|45|46|47|48|49|50|51|52|53|54|55|56|57|58|59|60|61|62|63|64|65|66|67|68|69|70
+v2	21:2000	T	g	ENST1	Transcript	missense_variant	10	10	4	A/T	gcc/Acc	-	MODERATE	-	1	-	,	T|a(b)(c)|a)(b)	T||||||x
+v3	21:3000	C	g	ENST1	Transcript	missense_variant	10	10	4	A/T	gcc/Acc	-	MODERATE	-	1	-	C	C||	-

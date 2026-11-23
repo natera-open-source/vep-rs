@@ -38,4 +38,4 @@ Under `--shift_3prime 1 --hgvs`, the two engines write for the first record:
 
 ENST00000360731 is the transcript with no 5' UTR. For the second record Ensembl VEP writes `splice_acceptor_variant,start_retained_variant` on the fifteen transcripts whose coding sequence the deletion reaches, `stop_retained_variant` added on the two whose stop codon it reaches; vep-rs writes `splice_acceptor_variant,coding_sequence_variant` and `splice_acceptor_variant,stop_retained_variant`. The rows of the transcripts the deletion meets in a 3' UTR or an intron agree, as do positions, codons and the other columns, and the rows of both records without the flag.
 
-To reproduce: Ensembl VEP 116.2 with the GRCh38 cache and [the command of the closing section](reproducing.md#reproducing-these-examples), adding `--shift_3prime 1 --hgvs`; vep-rs with the same flags over the same cache and FASTA.
+To reproduce: Ensembl VEP 116.3 with the GRCh38 cache and [the command of the closing section](reproducing.md#reproducing-these-examples), adding `--shift_3prime 1 --hgvs`; vep-rs with the same flags over the same cache and FASTA.

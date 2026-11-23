@@ -1,7 +1,7 @@
 entry = "tabix_window_below_position_one"
 page = "docs/divergences/tabix-window-below-position-one.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the VCF 4.2 specification, section 1.4.1 \"Fixed fields\", POS, which counts the 1st base as position 1, so a record at position 1 or 2 is legal; not seen in the measured datasets"
 notes = "Ensembl VEP's warnings file carries `Plugin 'CADD' went wrong: You must specify a region in the format chr, chr:start or chr:start-end` for pos1 and `Plugin 'CADD' went wrong: ERROR: No start specified` for pos2; CADD stands for the seven plugins the page names."
@@ -23,7 +23,7 @@ text = """
 [cache]
 species = "homo_sapiens"
 assembly = "GRCh38"
-json_cache = "tests/golden/116/GRCh38-plugin-cadd/json_cache"
+json_cache = "tests/golden/116/GRCh38-plugin-cadd-fixture/json_cache"
 
 [run]
 flags = ["--plugin", "CADD,snv={stage}/cadd_pos_synthetic.tsv.gz"]
@@ -44,4 +44,17 @@ vep_rs = [
   "21:1 | G | - | intergenic_variant | 39.801 | 9.984677",
   "21:2 | G | - | intergenic_variant | 22.363 | 7.465190",
   "21:3 | G | - | intergenic_variant | 3.312 | 1.239896",
+]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/alpha_missense.rs::AlphaMissensePlugin::window",
+    "crates/vep-builtins/src/plugins/cadd.rs::VariantSide::region",
+    "crates/vep-builtins/src/plugins/transcript_annotator.rs::TranscriptAnnotatorPlugin::window",
+    "crates/vep-builtins/src/tabix.rs::TabixAnnotator::query_tabix_region",
+]
+tests = [
+    "crates/vep-builtins/src/plugins/alpha_missense.rs::tests::the_window_is_clamped_at_position_one",
+    "crates/vep-builtins/src/plugins/cadd.rs::tests::indel_rows_at_position_one_are_read_for_records_starting_at_two",
+    "crates/vep-builtins/src/plugins/cadd.rs::tests::records_at_the_first_two_positions_of_a_chromosome_are_scored",
 ]

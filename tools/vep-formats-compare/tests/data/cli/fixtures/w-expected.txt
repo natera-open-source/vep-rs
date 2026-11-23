@@ -1,0 +1,3 @@
+WARNING: line 12 skipped (some text): unsupported record at /data/in.vcf
+WARNING: only here on line 3
+WARNING: 4711 : WARNING: relayed text

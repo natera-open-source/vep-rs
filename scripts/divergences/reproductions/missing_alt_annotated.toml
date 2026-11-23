@@ -1,7 +1,7 @@
 entry = "missing_alt_annotated"
 page = "docs/divergences/defect-j.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the VCF 4.4 and 4.5 specifications, the versions that admit the shape: ALT takes the MISSING value, alone or in a list (section 1.6.1 \"Fixed fields\"), and SVTYPE is a deprecated key under no rule beside it (section 3 \"INFO keys used for structural variants\"), where section 5.4 of VCF 4.2 and 4.3 makes an SVTYPE=BND record a breakend; not seen in the measured datasets; classed by its most reachable shape, MISSING beside SVTYPE=BND: beside SVTYPE=DEL the END value is not the final base of REF, which INFO END requires (VCF 4.5, section 1.6.1)"
 notes = "An ALT column of the missing value names no allele; with SVTYPE=BND in INFO Ensembl VEP routes the line to its structural path and annotates a chromosome_breakpoint at POS + 1 from INFO alone, while vep-rs passes the record over, as Ensembl VEP's own sequence path does without SVTYPE."
@@ -31,3 +31,8 @@ ensembl_vep = [
   "21:30425651 | chromosome_breakpoint | ENST00000390690 | coding_sequence_variant",
 ]
 vep_rs = []
+
+[implementation]
+code = ["crates/vep-cli/src/vcf_parser.rs::columns_are_non_variant"]
+tests = ["crates/vep-cli/src/vcf_parser.rs::tests::non_variant_is_the_first_alt_alone"]
+rules = ["tools/vep-sv-compare/src/masks/one_sided.rs::filter_missing_alt_annotated"]

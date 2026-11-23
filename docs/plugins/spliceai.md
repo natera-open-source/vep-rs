@@ -10,7 +10,7 @@ plugin.
 The plugin's documentation lists the Illumina SNV and indel score files for
 both assemblies on BaseSpace (`SpliceAI.pm` lines 101-112). They are for
 academic use only under Illumina's terms, so the project does not redistribute
-them. The Ensembl MANE SNV file for GRCh38 (no licence text published) is passed
+them. Ensembl's GRCh38 MANE SNV file (terms not stated by the plugin) is passed
 under `snv=`.
 
 ## Parameters and data {#spliceai}
@@ -26,7 +26,7 @@ under `snv=`.
 | ------------------ | --------------------------------------------------------------------------------------------- |
 | `snv=<path>`       | The SNV score VCF.                                                                            |
 | `indel=<path>`     | The indel score VCF. At least one of the two files is given; both are read for every record. |
-| `cutoff=<number>`  | A value in 0 to 1 as Ensembl VEP reads it; `cutoff=` sets no cutoff. Adds `SpliceAI_cutoff`: `PASS` when the largest of the four delta scores reaches the cutoff, `FAIL` otherwise. No record is dropped. `cutoff=0` adds the flag too, `PASS` on every scored record, as `cutoff=0.0` does in both engines. Ensembl VEP 116.2 accepts the literal `0` in its range check and then reads it as no cutoff, since the string `0` is false in Perl (`SpliceAI.pm`, lines 165-170, 222, 295 and 335 of the `VEP_plugins` release/116 branch): it writes neither the `SpliceAI_cutoff` header line nor the flag. No committed run passes the value (tier 3 of [Intended divergences from Ensembl VEP](../intended-divergences.md); 8 flag sets run the plugin). |
+| `cutoff=<number>`  | A value in 0 to 1 as Ensembl VEP reads it; `cutoff=` sets no cutoff. Adds `SpliceAI_cutoff`: `PASS` when the largest delta score of the row's entries reaches the cutoff, `FAIL` otherwise. No record is dropped. `cutoff=0` adds the flag too, `PASS` on every scored record, as `cutoff=0.0` does in both engines. Ensembl VEP 116.3 accepts the literal `0` in its range check and then reads it as no cutoff, since the string `0` is false in Perl (`SpliceAI.pm`, lines 165-170, 222, 295 and 335 of the `VEP_plugins` release/116 branch): it writes neither the `SpliceAI_cutoff` header line nor the flag. No committed run passes the value (tier 3 of [Intended divergences from Ensembl VEP](../intended-divergences.md); 8 flag sets run the plugin). |
 | `split_output=1`   | Print the nine fields in every output format.                                                 |
 
 Every parameter is `key=value`; a file given without its key is refused, as
@@ -68,7 +68,7 @@ loss) and the four positions of the largest change relative to the variant.
 Each header description opens with the tool version the first file's `##INFO`
 line names, which the plugin reads at `SpliceAI.pm` lines 195-203
 (`SpliceAI (v1.3)` for the committed files); a file whose header names
-no version gets the descriptions without it. There Ensembl VEP 116.2 prints the
+no version gets the descriptions without it. There Ensembl VEP 116.3 prints the
 parentheses empty: `SpliceAI () predicted effect on splicing` for the merged
 field. In the VCF format and under `split_output=1` it prints
 `SpliceAI () gene symbol` and the eight other split descriptions the same way.
@@ -89,13 +89,14 @@ nothing. When several score rows of one gene match a variant, the last one in
 the file wins. The Ensembl VEP plugin's hash of score rows by gene keeps the
 same one.
 
-Where a score row stands more than once at an allele, a row carries its
-gene's entry once. Where the score rows at an allele give a gene entries that
-differ, a row carries the entry of the last one that names its gene.
+A row carries every entry of its score row that names its gene
+([worked example](../divergences/spliceai-several-entries-of-one-gene.md)).
+Where score rows at an allele stand again or differ, the row's score row is
+the last one that names its gene.
 
 ## Two genes in one record
 
-**In short.** Ensembl VEP 116.2's SpliceAI plugin reads a score row's INFO
+**In short.** Ensembl VEP 116.3's SpliceAI plugin reads a score row's INFO
 cell as one entry. A cell that joins two genes' entries with a comma gives the
 first gene the whole cell as its value and the second gene nothing. vep-rs
 reads each entry under its own gene.
@@ -114,13 +115,13 @@ substitution as one score row for each alternate base.
 
 ### What each engine writes for a two-gene deletion
 
-In `GRCh37-plugin-spliceai` the record
+In `GRCh37-plugin-spliceai-fixture` the record
 `21 15482000 del_two_genes GCA G` lies inside AP001347.6 and LIPI. The
 synthetic score row `21 15482000 . GCA G . .` has the INFO cell
 `SpliceAI=G|AP001347.6|0.03|0.12|0.15|0.11|-37|-17|-20|-13,G|LIPI|0.06|0.10|0.16|0.09|-22|33|12|35`.
 The two engines write different rows.
 
-From that synthetic cell, Ensembl VEP 116.2 writes
+From that synthetic cell, Ensembl VEP 116.3 writes
 `SpliceAI_pred=AP001347.6|0.03|0.12|0.15|0.11|-37|-17|-20|-13,G|LIPI|0.06|0.10|0.16|0.09|-22|33|12|35`
 on `ENST00000428809` and `ENST00000432621`, the AP001347.6 rows, and no
 SpliceAI field on `ENST00000344577` and `ENST00000536861`, the LIPI rows. In
@@ -137,28 +138,28 @@ on the LIPI rows in every format, `DP_DL` as `-13` and `35`. Under
 `cutoff=0.5` it flags all four rows `FAIL`, the largest delta scores being 0.15
 and 0.16.
 
-In `GRCh38-plugin-spliceai` the record `21 17620000 del_two_genes CTT C` lies
+In `GRCh38-plugin-spliceai-fixture` the record `21 17620000 del_two_genes CTT C` lies
 inside BTG3-AS1 and CXADR, and its synthetic score row joins BTG3-AS1's entry and
-CXADR's. Ensembl VEP 116.2 writes the whole cell on the three BTG3-AS1 rows,
+CXADR's. Ensembl VEP 116.3 writes the whole cell on the three BTG3-AS1 rows,
 `ENST00000626994`, `ENST00000701920` and `ENST00000807308`, and no SpliceAI
 field on `ENST00001128578`, the CXADR row. vep-rs writes each gene's own entry,
 and under `cutoff=0.5` flags the BTG3-AS1 rows `PASS` and the CXADR row `FAIL`.
 
 ### What each engine writes for a two-gene substitution
 
-A two-gene substitution takes the same course. In `GRCh37-plugin-spliceai` the
+A two-gene substitution takes the same course. In `GRCh37-plugin-spliceai-fixture` the
 record `21 15481500 snv_two_genes T C` lies inside the same two genes. The
 synthetic score row `21 15481500 . T C . .` has the INFO cell
 `SpliceAI=C|AP001347.6|0.15|0.08|0.06|0.17|-6|-41|-17|-9,C|LIPI|0.02|0.12|0.10|0.05|-25|-23|37|17`.
-Ensembl VEP 116.2 writes
+Ensembl VEP 116.3 writes
 `SpliceAI_pred=AP001347.6|0.15|0.08|0.06|0.17|-6|-41|-17|-9,C|LIPI|0.02|0.12|0.10|0.05|-25|-23|37|17`
 on the AP001347.6 rows and no SpliceAI field on the LIPI rows. vep-rs writes
 `SpliceAI_pred=AP001347.6|0.15|0.08|0.06|0.17|-6|-41|-17|-9` on the AP001347.6
 rows and `SpliceAI_pred=LIPI|0.02|0.12|0.10|0.05|-25|-23|37|17` on the LIPI
 rows.
 
-In `GRCh38-plugin-spliceai` the record `21 17619500 snv_two_genes A G` has a
-synthetic score row that joins BTG3-AS1's entry and CXADR's. Ensembl VEP 116.2 writes
+In `GRCh38-plugin-spliceai-fixture` the record `21 17619500 snv_two_genes A G` has a
+synthetic score row that joins BTG3-AS1's entry and CXADR's. Ensembl VEP 116.3 writes
 the whole cell on the three BTG3-AS1 rows and no SpliceAI field on the CXADR
 row. vep-rs writes each gene's own entry, and under `cutoff=0.5` flags the
 BTG3-AS1 rows `FAIL` and the CXADR row `PASS`.
@@ -177,7 +178,7 @@ transcript therefore finds no score row (lines 313-316). A cutoff reads the
 first gene's four scores (lines 336-338).
 
 An INFO key written after the `SpliceAI` value lands inside the ninth part the
-same way. Ensembl VEP 116.2 prints the key with the ninth value, its
+same way. Ensembl VEP 116.3 prints the key with the ninth value, its
 `;` escaped (`SpliceAI.pm` lines 328-331 and 287); vep-rs, reading the
 `SpliceAI` field alone, prints the value.
 
@@ -203,10 +204,10 @@ these holds:
 
 - An entry there names the row's gene.
 - A score row that holds such an entry holds several entries.
-- vep-rs writes the entry of the last score row that names the gene.
+- vep-rs writes the gene's entries of the last score row that names it.
 - Ensembl VEP writes the value of the last score row the gene's entry leads,
-  that score row's cell behind its first allele. Its cutoff flag is the same as
-  vep-rs's. Where the gene's entry leads no score row, it writes no SpliceAI
+  that score row's cell behind its first allele. One cutoff gives both
+  flags. Where the gene's entry leads no score row, it writes no SpliceAI
   field.
 
 The row's gene is its `SYMBOL` where the row writes one, else its transcript's
@@ -217,15 +218,15 @@ nothing is set aside.
 
 ### How often a cell holds several entries
 
-50 of the 141 rows of the four committed score files hold several entries.
+86 of the 177 rows of the four committed score files hold several entries.
 The four files are synthetic, and a row of a synthetic table is not ordinary
 data, so the entry stands at tier 3 of
 [Intended divergences from Ensembl VEP](../intended-divergences.md); 8 flag
 sets run the plugin and both corpora carry such rows. Each corpus's
 manifest documents the four rows of `del_two_genes`, of `snv_two_genes`, of
-`snv_two_genes_line_twice`, of `snv_two_genes_line_thrice` and of
-`snv_two_genes_lines_differ` under the class,
-and the plugin gate's eight SpliceAI runs hand the scorer the corpus's score
+`snv_two_genes_line_twice`, of `snv_two_genes_line_thrice`, of
+`snv_two_genes_lines_differ` and of the worked example's six records under it,
+and the plugin gate's eight SpliceAI runs hand the scorer the score
 files. The
 [index of differences](../intended-divergences.md#differences-outside-the-classes)
 lists it.
@@ -235,7 +236,7 @@ lists it.
 **In short.** `21 17619600 A G` on GRCh38 lies inside BTG3-AS1 and CXADR. The
 GRCh38 SpliceAI golden corpus's synthetic SNV file holds the score row of the two
 genes' entries twice for that allele. vep-rs writes each gene's rows its own
-entry once. Ensembl VEP 116.2 writes the whole cell once on the three BTG3-AS1
+entry once. Ensembl VEP 116.3 writes the whole cell once on the three BTG3-AS1
 rows and no SpliceAI field on the CXADR row, as it does where the score row
 stands once.
 
@@ -251,7 +252,7 @@ entries with commas in one INFO cell, the shape
 
 The record `snv_two_genes_line_twice` of the GRCh38 SpliceAI golden corpus,
 against the corpus's own synthetic files
-(`tests/golden/116/GRCh38-plugin-spliceai/plugin_data/`). The SNV file
+(`tests/golden/116/GRCh38-plugin-spliceai-fixture/plugin_data/`). The SNV file
 holds the record's score row twice, one copy after the other:
 
 ```
@@ -270,7 +271,7 @@ corpus's reference FASTA.
 
 The record has four transcript rows: `ENST00000626994`, `ENST00000701920` and
 `ENST00000807308` of BTG3-AS1, and `ENST00001128578` of CXADR. Ensembl VEP
-116.2 writes the score row's whole cell on a BTG3-AS1 row and no SpliceAI field
+116.3 writes the score row's whole cell on a BTG3-AS1 row and no SpliceAI field
 on the CXADR row:
 
 ```
@@ -287,7 +288,7 @@ snv_two_genes_line_twice	21:17619600	G	ENSG00000154639	ENST00001128578	Transcrip
 
 The record `snv_two_genes_line_thrice` (`21 17619800 A G`) has a synthetic score row of three
 entries that stands three times: BTG3-AS1's, CXADR's and one naming `DECOY`, a
-symbol no transcript carries. Ensembl VEP 116.2 writes the three-entry cell
+symbol no transcript carries. Ensembl VEP 116.3 writes the three-entry cell
 once on the BTG3-AS1 rows and nothing on the CXADR row. vep-rs writes
 `SpliceAI_pred=BTG3-AS1|0.63|0.75|0.78|0.67|-30|-31|7|32` on the BTG3-AS1 rows
 and `SpliceAI_pred=CXADR|0.11|0.05|0.08|0.16|-2|16|-14|24` on the CXADR row.
@@ -296,7 +297,7 @@ the cell the BTG3-AS1 rows carry. The GRCh37 corpus's records of the same names
 behave the same way on AP001347.6 and LIPI.
 
 The record `snv_two_genes_lines_differ` (`21 17619900 G A`) is scored by two
-score rows of the same two genes whose scores differ. Ensembl VEP 116.2 writes
+score rows of the same two genes whose scores differ. Ensembl VEP 116.3 writes
 the second score row's whole cell on the BTG3-AS1 rows and nothing on the CXADR
 row. vep-rs writes each gene's rows its entry of the second score row.
 
@@ -328,7 +329,7 @@ vep -i <corpus>/variants.vcf -o out.txt --offline \
 ```
 
 On the rows of `snv_two_genes_line_twice` vep-rs writes the two values above.
-Ensembl VEP 116.2, run with the same plugin words, writes the whole cell on the
+Ensembl VEP 116.3, run with the same plugin words, writes the whole cell on the
 BTG3-AS1 rows alone.
 
 #### 2.7 How the comparator treats this class
@@ -336,7 +337,7 @@ BTG3-AS1 rows alone.
 The comparison tools read every score row at a differing row's allele, in file
 order. They set the row aside under `spliceai_multi_entry_cell` where an entry
 names the row's gene. A score row that holds such an entry must hold several
-entries. vep-rs must write the entry of the last score row that names the gene.
+entries. vep-rs must write the gene's entries of the last such score row.
 Ensembl VEP's value must be that of the last score row the gene's entry leads,
 or no field where it leads none.
 
@@ -360,14 +361,14 @@ a reference, so the comparison covers the indel records.
 An Ensembl-format or region record given on strand -1 is matched to the score
 file on its forward-strand alleles, as every tabix-backed plugin matches it. A
 reverse-strand indel therefore scores the row its forward-strand twin scores.
-Ensembl VEP 116.2's SpliceAI plugin complements such an indel twice. It reads
+Ensembl VEP 116.3's SpliceAI plugin complements such an indel twice. It reads
 the forward-strand alleles `to_VCF_record` writes (`VariationFeature.pm` line
 2376), then reverse-complements them again (`SpliceAI.pm` lines 259-271 of the
 `VEP_plugins` release/116 branch). The alleles it compares are the
 reverse-strand ones, and no row of the file matches.
 
 Take `21 26021981 26021980 -/CTT -1` against a made-up score file holding the forward-strand
-insertion `G GAAG` at 26021980. Ensembl VEP 116.2 writes no SpliceAI field on
+insertion `G GAAG` at 26021980. Ensembl VEP 116.3 writes no SpliceAI field on
 any of the record's 57 rows, and vep-rs scores that row on every transcript row.
 
 A reverse-strand SNV is complemented once by vep-rs, by Ensembl VEP's SpliceAI
@@ -383,7 +384,7 @@ lists it.
 Both engines read a VCF record whose alternate alleles all share the reference's
 first base and include a deletion or insertion, such as `GC G,GA`, with that
 base removed. The example becomes `C/-/A` one position on (`Bio/EnsEMBL/VEP/Parser/VCF.pm`, lines
-300-323). Ensembl VEP 116.2's SpliceAI plugin, seeing the `-`, rebuilds the
+300-323). Ensembl VEP 116.3's SpliceAI plugin, seeing the `-`, rebuilds the
 whole record with its anchor base before matching (`SpliceAI.pm`, lines 259-266,
 VEP_plugins at release/116; `Bio/EnsEMBL/Variation/VariationFeature.pm`, lines
 2400-2420). The substitution allele is then compared as `GC GA` at the anchor's
@@ -396,14 +397,14 @@ of its shared leading base. The substitution therefore scores, and the deletion
 scores when the indel file holds its row.
 
 For `21 26965499 GC G,GA` against the GRCh38 SpliceAI golden corpus's synthetic files,
-Ensembl VEP 116.2 writes no SpliceAI field on any of the record's twelve rows.
+Ensembl VEP 116.3 writes no SpliceAI field on any of the record's twelve rows.
 vep-rs writes `SpliceAI_pred=ADAMTS5|0.05|0.71|0.72|0.66|-47|-14|3|17`, the
 file's `26965500 C A` row, on the six `A` rows. The deletion rows carry nothing
 in both engines, since the indel file holds no row for it. A record whose
 alleles share no first base, such as `C A,G` or `A G,AC`, is kept unchopped and
 matches alike in both engines.
 
-The shape is rare. 1 of the 15,646,481 records of the chromosome 21 population
+The shape is rare. 1 of the 15,646,481 records of the chromosome 21
 cuts is a multi-allelic record whose alleles share the anchor and, chopped, mix
 an empty allele with a substitution. That is tier 2 of
 [Intended divergences from Ensembl VEP](../intended-divergences.md), and 8 flag
@@ -411,7 +412,7 @@ sets run the plugin. The
 [index of differences](../intended-divergences.md#differences-outside-the-classes)
 lists it.
 
-The format comparator (`scripts/concordance/compare_vep_formats.py`) applies the
+The format comparator (`tools/vep-formats-compare`) applies the
 class `spliceai_chopped_multiallelic` when a comparison case names it. It sets
 aside a `SpliceAI_` field, or the JSON `spliceai` object, where vep-rs alone
 fills it on a substitution allele's row. The record's rows must carry an allele
@@ -431,7 +432,7 @@ reference base the change leaves as it is. `TG` to `AG` at 18353100 and `T` to
 `A` at 18353100 produce one sequence. The reference carries `G` at
 18353101 and the row keeps it.
 
-Ensembl VEP 116.2 scores the row for a record spelled as the row is, so the
+Ensembl VEP 116.3 scores the row for a record spelled as the row is, so the
 row's values are the values of that change. The same change spelled with its
 one changed base finds no row. The plugin
 resolves a second spelling for an insertion or deletion, whose record it
@@ -466,7 +467,7 @@ the shape is reported as a difference and charged to vep-rs. The concordance
 figures score consequence sets and never read a plugin field.
 
 **How often the shape occurs.** Tier 3, see
-[Intended divergences from Ensembl VEP](../intended-divergences.md): 2 of the 141
+[Intended divergences from Ensembl VEP](../intended-divergences.md): 2 of the 177
 rows of the four committed score files, which are synthetic, share a base at an
 end, beyond the one leading base that anchors an insertion or deletion. Each is
 the substitution
@@ -481,7 +482,7 @@ whose rows spell every substitution with its changed bases alone holds none.
 site of the GRCh38 SpliceAI golden corpus's record `TG T,AG`. The corpus's synthetic
 indel file scores that record's `AG` allele as the row `TG AG`, the same change with
 the reference `G` at 18353101 appended. On ENST00000284885, vep-rs writes the
-row's `TMPRSS15|0.82|0.64|0.86|0.67|-25|-36|-29|-20`. Ensembl VEP 116.2 writes no
+row's `TMPRSS15|0.82|0.64|0.86|0.67|-25|-36|-29|-20`. Ensembl VEP 116.3 writes no
 SpliceAI field, and writes the row's values once the record is spelled `TG AG`.
 
 #### 1.1 What a reader needs to know first
@@ -495,7 +496,7 @@ spelled as the corpus's record spells it, beside the record's own rows.
 
 A substitution at the site of the GRCh38 SpliceAI golden corpus's record
 `multi_deletion_unanchored` (`21 18353100 TG T,AG`), against the corpus's own
-synthetic files (`tests/golden/116/GRCh38-plugin-spliceai/plugin_data/`). The reference is
+synthetic files (`tests/golden/116/GRCh38-plugin-spliceai-fixture/plugin_data/`). The reference is
 `TG` at 18353100-18353101, and the indel file holds the record's two rows:
 
 ```
@@ -513,7 +514,7 @@ corpus's reference FASTA.
 #### 1.3 What each engine writes
 
 The record has one transcript row, ENST00000284885 of TMPRSS15. Ensembl VEP
-116.2 writes it without a SpliceAI field:
+116.3 writes it without a SpliceAI field:
 
 ```
 shared_trailing_base	21:18353100	A	ENSG00000154646	ENST00000284885	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=-1
@@ -530,7 +531,7 @@ row is. It gets the synthetic row's `SpliceAI_pred=TMPRSS15|0.82|0.64|0.86|0.67|
 transcript row in both engines, the rows identical. On GRCh37, `21 18919100 C G`
 against the GRCh37 corpus's `CA GA` row behaves the same way on the six CXADR
 rows. They carry `SpliceAI_pred=CXADR|0.20|0.08|0.14|0.08|29|46|27|-19` in
-vep-rs and no field in Ensembl VEP 116.2.
+vep-rs and no field in Ensembl VEP 116.3.
 
 #### 1.4 Why Ensembl VEP writes that
 
@@ -544,7 +545,7 @@ the record's spelling, is not entered for a substitution.
 
 The row's REF `TG` and ALT `AG` share their `G`, the reference base at
 18353101. The row therefore states the change of 18353100 from `T` to `A` and nothing
-else. The record states that change. Ensembl VEP 116.2 scores the row when the
+else. The record states that change. Ensembl VEP 116.3 scores the row when the
 record repeats the row's spelling, so the values are agreed to belong to the
 change. vep-rs writes them for the change in either spelling.
 
@@ -562,13 +563,13 @@ vep -i record.vcf -o out.txt --offline --json_cache <corpus>/json_cache \
 
 vep-rs writes the synthetic row's
 `SpliceAI_pred=TMPRSS15|0.82|0.64|0.86|0.67|-25|-36|-29|-20` on
-the record's one row; Ensembl VEP 116.2 writes no SpliceAI field. Spelling the
+the record's one row; Ensembl VEP 116.3 writes no SpliceAI field. Spelling the
 record `TG AG` makes Ensembl VEP write vep-rs's row.
 
 #### 1.7 How the comparator treats this class
 
 Nothing is set aside. The format comparator
-(`scripts/concordance/compare_vep_formats.py`) has no class of this shape, and
+(`tools/vep-formats-compare`) has no class of this shape, and
 the golden harness compares the two SpliceAI corpora's fields as written, which
 their records, spelled as their rows are, never put to the test.
 

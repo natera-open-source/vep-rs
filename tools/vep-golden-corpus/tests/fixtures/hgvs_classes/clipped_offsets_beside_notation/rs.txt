@@ -1,0 +1,10 @@
+rs_star	21:100-104	TGCAT	ENSG1	ENST1	Transcript	3_prime_UTR_variant	553-?	-	-	-	-	-	IMPACT=MODIFIER;STRAND=-1
+rs_turned	21:200-204	TGCAT	ENSG1	ENST1	Transcript	3_prime_UTR_variant	553-?	-	-	-	-	-	IMPACT=MODIFIER;STRAND=-1
+rs_dup	21:300-304	TGCAT	ENSG1	ENST1	Transcript	3_prime_UTR_variant	553-?	-	-	-	-	-	IMPACT=MODIFIER;STRAND=-1
+rs_other_way	21:400-404	TGCAT	ENSG1	ENST1	Transcript	3_prime_UTR_variant	553-?	-	-	-	-	-	IMPACT=MODIFIER;STRAND=-1
+rs_closed	21:500-504	TGCAT	ENSG1	ENST1	Transcript	3_prime_UTR_variant	553-557	-	-	-	-	-	IMPACT=MODIFIER;STRAND=-1
+rs_written	21:600-604	TGCAT	ENSG1	ENST1	Transcript	3_prime_UTR_variant	553-?	-	-	-	-	-	IMPACT=MODIFIER;STRAND=-1;HGVS_IntronEndOffset=0
+rs_delins	21:700-704	TGCAT	ENSG1	ENST1	Transcript	3_prime_UTR_variant	553-?	-	-	-	-	-	IMPACT=MODIFIER;STRAND=-1
+rs_shorter_delins	21:800-804	TG	ENSG1	ENST1	Transcript	3_prime_UTR_variant	553-?	-	-	-	-	-	IMPACT=MODIFIER;STRAND=-1
+rs_shorter_del	21:900-904	TG	ENSG1	ENST1	Transcript	3_prime_UTR_variant	553-?	-	-	-	-	-	IMPACT=MODIFIER;STRAND=-1
+rs_shorter_del_other_way	21:1000-1004	TG	ENSG1	ENST1	Transcript	3_prime_UTR_variant	553-?	-	-	-	-	-	IMPACT=MODIFIER;STRAND=-1

@@ -39,7 +39,7 @@
  "covers": [
   "AlphaMissense"
  ],
- "suites": {
+ "datasets": {
   "GRCh37-plugin-alphamissense": {
    "reference": "default.txt",
    "input": "variants.vcf",
@@ -116,7 +116,7 @@
  },
  "records": [
   {
-   "suite": "GRCh37-plugin-alphamissense",
+   "dataset": "GRCh37-plugin-alphamissense",
    "vcf": "21\t14982700\ttwo_alts_14982700\tG\tA,T\t.\t.\t.",
    "combinations": [
     "missense_variant"
@@ -126,7 +126,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-alphamissense",
+   "dataset": "GRCh37-plugin-alphamissense",
    "vcf": "21\t34100257\t1024247\tC\tT\t.\t.\t.",
    "combinations": [
     "missense_variant,splice_region_variant",
@@ -134,7 +134,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-alphamissense",
+   "dataset": "GRCh37-plugin-alphamissense",
    "vcf": "21\t34882174\t2588930\tA\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -143,7 +143,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-alphamissense",
+   "dataset": "GRCh37-plugin-alphamissense",
    "vcf": "21\t34925078\t1935264\tG\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -153,7 +153,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-alphamissense",
+   "dataset": "GRCh37-plugin-alphamissense",
    "vcf": "21\t34963484\t4656931\tA\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -165,14 +165,14 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-alphamissense",
+   "dataset": "GRCh37-plugin-alphamissense",
    "vcf": "21\t35821893\t3373883\tT\tG\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "GRCh37-plugin-alphamissense",
+   "dataset": "GRCh37-plugin-alphamissense",
    "vcf": "21\t36259238\t14469\tG\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -181,7 +181,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-alphamissense",
+   "dataset": "GRCh37-plugin-alphamissense",
    "vcf": "21\t38850621\t2976772\tT\tC\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -189,14 +189,14 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-alphamissense",
+   "dataset": "GRCh37-plugin-alphamissense",
    "vcf": "21\t38877680\t4293986\tC\tCAT\t.\t.\t.",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "GRCh37-plugin-alphamissense",
+   "dataset": "GRCh37-plugin-alphamissense",
    "vcf": "21\t40571256\t3825765\tC\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -205,7 +205,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-alphamissense",
+   "dataset": "GRCh37-plugin-alphamissense",
    "vcf": "21\t40717127\t4035633\tT\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -215,7 +215,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-alphamissense",
+   "dataset": "GRCh37-plugin-alphamissense",
    "vcf": "21\t44479390\t1376358\tC\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -225,7 +225,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-alphamissense",
+   "dataset": "GRCh37-plugin-alphamissense",
    "vcf": "21\t44488650\t3652518\tA\tT\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant",
@@ -234,7 +234,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-alphamissense",
+   "dataset": "GRCh37-plugin-alphamissense",
    "vcf": "21\t45706585\t68224\tT\tG\t.\t.\t.",
    "combinations": [
     "missense_variant",
@@ -243,7 +243,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-alphamissense",
+   "dataset": "GRCh37-plugin-alphamissense",
    "vcf": "21\t46330258\t938232\tC\tT\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -254,7 +254,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-alphamissense",
+   "dataset": "GRCh37-plugin-alphamissense",
    "vcf": "21\t46685470\t3216214\tG\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -265,7 +265,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-alphamissense",
+   "dataset": "GRCh37-plugin-alphamissense",
    "vcf": "21\t47538559\t1998862\tC\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -274,7 +274,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-alphamissense",
+   "dataset": "GRCh37-plugin-alphamissense",
    "vcf": "21\t47539708\tshared_base_47539708\tAG\tAC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -283,7 +283,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-alphamissense",
+   "dataset": "GRCh37-plugin-alphamissense",
    "vcf": "21\t47539709\t662099\tG\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -292,7 +292,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-alphamissense",
+   "dataset": "GRCh37-plugin-alphamissense",
    "vcf": "21\t48083392\t3218915\tC\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -302,7 +302,7 @@
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "flag_sets": [

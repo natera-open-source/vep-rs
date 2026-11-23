@@ -1,0 +1,74 @@
+{
+  "generated_at_utc": "{{GENERATED_AT}}",
+  "input_dir": "{{INPUT_DIR}}",
+  "output_dir": "{{OUTPUT_DIR}}",
+  "requested_chrom_mode": "auto",
+  "cache_dir": null,
+  "max_variants": 200,
+  "assembly": null,
+  "canonical_contigs_policy": "disabled",
+  "canonical_contigs_filter_active": false,
+  "canonical_contigs_set": null,
+  "files": [
+    {
+      "input_file": "{{INPUT_DIR}}/block_length_past_the_block.vcf.gz",
+      "output_file": "{{OUTPUT_DIR}}/block_length_past_the_block.vcf",
+      "detected_input_chrom_style": "chr",
+      "detected_cache_chrom_style": "unknown",
+      "normalization_mode": "keep",
+      "headers_written": 3,
+      "variants_written": 3,
+      "variants_dropped_non_canonical": 0,
+      "output_sha256": "667366390fed6b3a6256facd5154c6bf4265b74441f258fc8a0fb86d5611d2f6",
+      "chr_stripped": false
+    },
+    {
+      "input_file": "{{INPUT_DIR}}/blocks.vcf.gz",
+      "output_file": "{{OUTPUT_DIR}}/blocks.vcf",
+      "detected_input_chrom_style": "chr",
+      "detected_cache_chrom_style": "unknown",
+      "normalization_mode": "keep",
+      "headers_written": 3,
+      "variants_written": 200,
+      "variants_dropped_non_canonical": 0,
+      "output_sha256": "d6e76ab6c794533356d4f36f1cd7496422da74659266c5ed5eae3e7efe7ca1f3",
+      "chr_stripped": false
+    },
+    {
+      "input_file": "{{INPUT_DIR}}/blocks_then_member.vcf.gz",
+      "output_file": "{{OUTPUT_DIR}}/blocks_then_member.vcf",
+      "detected_input_chrom_style": "chr",
+      "detected_cache_chrom_style": "unknown",
+      "normalization_mode": "keep",
+      "headers_written": 3,
+      "variants_written": 7,
+      "variants_dropped_non_canonical": 0,
+      "output_sha256": "b56841c96f82b46e8c508a753065f5c7c167dd97abe7bd231abeb0635acc23a6",
+      "chr_stripped": false
+    },
+    {
+      "input_file": "{{INPUT_DIR}}/headers_only.vcf.gz",
+      "output_file": "{{OUTPUT_DIR}}/headers_only.vcf",
+      "detected_input_chrom_style": "unknown",
+      "detected_cache_chrom_style": "unknown",
+      "normalization_mode": "keep",
+      "headers_written": 3,
+      "variants_written": 0,
+      "variants_dropped_non_canonical": 0,
+      "output_sha256": "963a844169966954dc41a6f213ec7e31405c7247ac173a15f530810882bac280",
+      "chr_stripped": false
+    },
+    {
+      "input_file": "{{INPUT_DIR}}/members.vcf.gz",
+      "output_file": "{{OUTPUT_DIR}}/members.vcf",
+      "detected_input_chrom_style": "plain",
+      "detected_cache_chrom_style": "unknown",
+      "normalization_mode": "keep",
+      "headers_written": 3,
+      "variants_written": 9,
+      "variants_dropped_non_canonical": 0,
+      "output_sha256": "2a9b80ee796ad3af21813462da19fdc124c887d7161b9e25d64f424cc82aa233",
+      "chr_stripped": false
+    }
+  ]
+}

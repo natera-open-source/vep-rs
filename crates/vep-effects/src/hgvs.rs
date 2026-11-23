@@ -7,8 +7,10 @@
 //! the Human Genome Variation Society nomenclature conventions, matching
 //! Ensembl VEP's output.
 //!
-//! Perl citations name modules of ensembl-variation release/116
-//! (`Bio/EnsEMBL/Variation/...`).
+//! Ensembl VEP source citations name modules of ensembl-variation release/116
+//! (`Bio/EnsEMBL/Variation/...`); `OutputFactory.pm`, `BaseRunner.pm` and
+//! `Pipeline/DumpVEP/Dumper/Core.pm` are in ensembl-vep release/116.3
+//! (`Bio/EnsEMBL/VEP/...`), and `Exon` is in ensembl core release/116.
 //!
 //! The port describes the transcripts the cache holds, every notation naming
 //! the cached identifiers; on a model whose alignment to the genome inserted or
@@ -20,11 +22,16 @@
 //! and corrects an exonic position on an `NM_` or `XM_` model alone by the
 //! misalignment offset (TranscriptVariationAllele.pm 1507-1526, 1594-1624);
 //! vep-rs keeps that offset as the `REFSEQ_OFFSET` column and documents the
-//! numbering as an intended divergence. Three paths of `hgvs_transcript` and
+//! numbering as an intended divergence. Two paths of `hgvs_transcript` and
 //! `hgvs_protein` stay out: the second shift along a RefSeq transcript's own
-//! edited sequence (the tail of `_return_3prime`, 147-258), the GenBank protein
-//! name of such a transcript (1750-1757) and the LRG reference names, which
-//! carry no version (1500, 1747-1760). An edited transcript's HGVSc spells a
+//! edited sequence (the tail of `_return_3prime`, 211-256) and the GenBank
+//! protein name of such a transcript (1750-1756). Away from a transcript's last
+//! bases and its edited bases Ensembl VEP returns before that shift, copying
+//! a shift it already has (182-187). The port shifts an insertion or a deletion
+//! on an edited transcript 3' along the genome (`hgvs_shift`), and along the
+//! model's own sequence only on or beside bases the model holds and the genome
+//! lacks (`place_3prime_on_model`). An LRG reference name carries no version,
+//! as there (1500, 1758-1760). An edited transcript's HGVSc spells a
 //! shifted insertion's bases as the shift rotates them, the rotation
 //! `shift_feature_seqs` (1330-1345) gives `feature_seq` on a coding row under
 //! `--shift_3prime 1` (`codon`, 813-820); on every other row `hgvs_transcript`
@@ -41,7 +48,7 @@ use vep_core::transcript::{BamEditStatus, MapperPair, Transcript};
 use vep_core::variant::{InputVariant, VariantClass};
 
 /// Convert a single-letter amino acid code to its three-letter abbreviation.
-pub fn amino_acid_three_letter(one_letter: u8) -> &'static str {
+pub(crate) fn amino_acid_three_letter(one_letter: u8) -> &'static str {
     match one_letter {
         b'A' => "Ala",
         b'R' => "Arg",
@@ -74,7 +81,7 @@ pub fn amino_acid_three_letter(one_letter: u8) -> &'static str {
     }
 }
 
-/// The 3'-shifted span of an insertion or deletion, Perl's `_return_3prime(1)`
+/// The 3'-shifted span of an insertion or deletion, Ensembl VEP's `_return_3prime(1)`
 /// (TranscriptVariationAllele.pm 109): along the genome in the transcript's 3'
 /// direction, whatever `--shift_3prime` says, when a reference FASTA is present
 /// and the shift moves the variant. `None` under `--shift_hgvs 0`, which
@@ -92,12 +99,16 @@ fn hgvs_shift(
     crate::consequences::shift_indel_3prime_coords(variant, transcript, fasta)
 }
 
-/// The span the HGVSc of a variant is described at: its most 3' placement on
-/// the transcript's strand, which the HGVS 3' rule assigns the change to. For
-/// an insertion whose run of placements is longer than `perform_shift` reads
-/// (`shifted` stands where that roll stops), the placement the run ends at;
-/// `shifted` for every other variant, and under `--shift_3prime 1`, where the
-/// row is annotated at the span `perform_shift` reaches.
+/// The span both notations of a variant are described at, its HGVSc and its
+/// HGVSp: its most 3' placement on the transcript's strand, which the HGVS
+/// 3' rule assigns the change to. For an insertion whose run of placements
+/// is longer than `perform_shift` reads (`shifted` stands where that roll
+/// stops), the placement the run ends at, or the first one wholly past the
+/// transcript's last base where the run goes on beyond it, which has no
+/// notation as every later one has none; `shifted` for every other variant,
+/// and under `--shift_3prime 1`, where the row is annotated at the span
+/// `perform_shift` reaches. Ensembl VEP reads both notations at `shifted`
+/// (TranscriptVariationAllele.pm 1441-1446, 1711-1720).
 fn hgvsc_shift(
     variant: &InputVariant,
     transcript: &Transcript,
@@ -151,13 +162,25 @@ pub(crate) fn shifted_variant(
         .unwrap_or_else(|| b"-".to_vec());
     let alt_allele = shifted_feature_alt(variant, input_strand, transcript.strand, Some(shifted))
         .unwrap_or_else(|| b"-".to_vec());
-    Some(InputVariant::new(
-        variant.chr.clone(),
-        start,
-        end,
-        ref_allele,
-        alt_allele,
-    ))
+    let mut moved = InputVariant::new(variant.chr.clone(), start, end, ref_allele, alt_allele);
+    // The alleles as the record writes them, which an allele of unknown
+    // bases is held to wherever it is read
+    // (`PerlCodingEval::reading_unknown_bases`): the row's own two, or every
+    // allele of a record of several alternate alleles.
+    moved.original_allele_string =
+        Some(variant.original_allele_string.clone().unwrap_or_else(|| {
+            let alternates: Vec<&[u8]> = if variant.alt_alleles.len() > 1 {
+                variant.alt_alleles.iter().map(Vec::as_slice).collect()
+            } else {
+                vec![variant.alt_allele()]
+            };
+            std::iter::once(variant.ref_allele.as_slice())
+                .chain(alternates)
+                .map(String::from_utf8_lossy)
+                .collect::<Vec<_>>()
+                .join("/")
+        }));
+    Some(moved)
 }
 
 /// The inserted allele of a shifted insertion as the codons and `hgvs_protein`
@@ -229,7 +252,7 @@ fn shift_feature_seq(
     between_strands(&written)
 }
 
-/// The transcript's genomic span read in transcript orientation (Perl's
+/// The transcript's genomic span read in transcript orientation (Ensembl VEP's
 /// transcript feature slice): position 1 is the transcript's first base on its
 /// own strand. Bases come from the reference FASTA, complemented on the reverse
 /// strand; without a FASTA nothing can be read.
@@ -264,7 +287,7 @@ impl TranscriptSlice<'_> {
         }
     }
 
-    /// Perl `substr($slice->seq, $start - 1, $len)`, or `None` when the FASTA is
+    /// Ensembl VEP `substr($slice->seq, $start - 1, $len)`, or `None` when the FASTA is
     /// absent or the span leaves the slice.
     fn substr(&self, start: i64, len: usize) -> Option<Vec<u8>> {
         let fasta = self.fasta?;
@@ -302,7 +325,7 @@ impl TranscriptSlice<'_> {
     }
 }
 
-/// Perl's HGVS variant type (`hgvs_variant_notation`, Utils/Sequence.pm 493).
+/// Ensembl VEP's HGVS variant type (`hgvs_variant_notation`, Utils/Sequence.pm 493).
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum HgvscKind {
     Del,
@@ -315,7 +338,7 @@ enum HgvscKind {
     Multiple(usize),
 }
 
-/// Perl's `$hgvs_notation` hash for a transcript-level description.
+/// Ensembl VEP's `$hgvs_notation` hash for a transcript-level description.
 struct HgvscNotation {
     start: i64,
     end: i64,
@@ -335,7 +358,7 @@ enum DupLookup {
 
 /// `hgvs_variant_notation` (Utils/Sequence.pm 493): the type and displayed span
 /// of `alt_seq` replacing slice positions `ref_start..=ref_end`. `None` where
-/// Perl returns `undef` (the alleles are equal) or the reference bases cannot be
+/// Ensembl VEP returns `undef` (the alleles are equal) or the reference bases cannot be
 /// read.
 fn hgvs_variant_notation(
     slice: &TranscriptSlice<'_>,
@@ -536,20 +559,6 @@ fn exonic_cdna_position(
     Some((index, cdna))
 }
 
-/// The exon holding slice position `pos`, as its index in `exons`, and the
-/// position's cDNA coordinate there; `None` for a position off the exons.
-fn exonic_cdna(slice: &TranscriptSlice<'_>, exons: &[ExonSpan], pos: i64) -> Option<(usize, i64)> {
-    let g = slice.genomic(pos);
-    let index = exons.iter().position(|e| e.start <= g && g <= e.end)?;
-    let exon = &exons[index];
-    let cdna = if slice.reverse {
-        exon.cdna_start + (exon.end - g)
-    } else {
-        exon.cdna_start + (g - exon.start)
-    };
-    Some((index, cdna))
-}
-
 /// The model's bases between slice position `pos` and the position after it,
 /// when both are exonic and the model numbers them more than one apart: the
 /// mapper pairs fold such bases in between the two. Their exon is the exon
@@ -658,8 +667,8 @@ fn model_span_across_model_bases(
     last: i64,
 ) -> Option<ModelBases> {
     model_bases_within(transcript, slice, exons, first, last)?;
-    let (_, span_first) = exonic_cdna(slice, exons, first)?;
-    let (_, span_last) = exonic_cdna(slice, exons, last)?;
+    let (_, span_first) = exonic_cdna_position(slice, exons, first)?;
+    let (_, span_last) = exonic_cdna_position(slice, exons, last)?;
     let (start, end) = (slice.genomic(first), slice.genomic(last));
     let (exon_first, exon_last) =
         exon_cdna_bounds(transcript, exons, start.min(end), start.max(end))?;
@@ -1017,7 +1026,9 @@ fn duplication_across_model_bases(
             (n.start, n.end) = (first, last);
             return Some(false);
         };
-        let Some((_, beside)) = exonic_cdna(slice, exons, if before { last } else { first }) else {
+        let Some((_, beside)) =
+            exonic_cdna_position(slice, exons, if before { last } else { first })
+        else {
             continue;
         };
         let (model_first, model_last) = if before {
@@ -1094,12 +1105,12 @@ fn hgvsc_clip_alleles(n: &mut HgvscNotation) {
 }
 
 /// Drops from a pair of alleles respelled relative to the transcript the
-/// `front` leading and `back` trailing bases the notation's span lost, to the
-/// clamp onto the transcript and to `_clip_alleles`
-/// (TranscriptVariationAllele.pm 2188), where the pair shares them at both
-/// ends. A pair that does not share them stays whole, as `hgvs_transcript`
-/// writes it (1510-1513), and a base the pair shares inside the span stays
-/// too: the notation's positions still name it.
+/// `front` leading and `back` trailing bases the notation's span lost to
+/// `_clip_alleles` (TranscriptVariationAllele.pm 2188), where the pair
+/// shares them at both ends; the bases the clamp onto the transcript cut are
+/// gone before it. A pair that does not share them stays whole, as
+/// `hgvs_transcript` writes it (1510-1513), and a base the pair shares
+/// inside the span stays too: the notation's positions still name it.
 fn clip_respelled_alleles(ref_seq: &mut Vec<u8>, alt_seq: &mut Vec<u8>, front: usize, back: usize) {
     let lost = front + back;
     if lost == 0 || ref_seq.len() < lost || alt_seq.len() < lost {
@@ -1270,8 +1281,19 @@ fn shared_ends_aligned_3prime(alt: &[u8], reference: &[u8]) -> (usize, usize) {
 /// alone (DNA deletion, "deletions extending beyond the transcribed
 /// region"): the transcript has no description of it. A deletion with a
 /// window wholly inside the transcript keeps its row.
+///
+/// `base_at` reads the base at a slice position of a transcript of `tr_len`
+/// bases, along the chromosome past either end of it too, and each walk ends
+/// where the answer is settled. The window is carried towards the 3' end only
+/// where the clamp cut bases before the first base, until its first base is
+/// the transcript's first, and towards the 5' end only where the clamp cut
+/// bases past the last base, until its last base is the transcript's last: a
+/// window carried that far does not run over that base, and none carried
+/// farther does. So each walk makes at most as many moves as the clamp cut
+/// bases at that end, two bases read a move, however long the run is.
 fn kept_allele_deletes_over_a_transcript_end(
-    slice: &TranscriptSlice<'_>,
+    tr_len: i64,
+    base_at: impl Fn(i64) -> Option<u8>,
     reference: &[u8],
     alt: &[u8],
     raw_start: i64,
@@ -1290,19 +1312,23 @@ fn kept_allele_deletes_over_a_transcript_end(
         if (raw_start..=raw_end).contains(&pos) {
             Some(reference[(pos - raw_start) as usize])
         } else {
-            slice.base_at(pos)
+            base_at(pos)
         }
     };
     let (first, last) = (raw_start + lead as i64, raw_end - tail as i64);
+    let to_the_first_base = if front_cut > 0 { 1 - first } else { 0 };
     let mut towards_3prime = 0;
-    while base(first + towards_3prime)
-        .is_some_and(|leaving| base(last + towards_3prime + 1) == Some(leaving))
+    while towards_3prime < to_the_first_base
+        && base(first + towards_3prime)
+            .is_some_and(|leaving| base(last + towards_3prime + 1) == Some(leaving))
     {
         towards_3prime += 1;
     }
+    let to_the_last_base = if back_cut > 0 { last - tr_len } else { 0 };
     let mut towards_5prime = 0;
-    while base(last - towards_5prime)
-        .is_some_and(|leaving| base(first - towards_5prime - 1) == Some(leaving))
+    while towards_5prime < to_the_last_base
+        && base(last - towards_5prime)
+            .is_some_and(|leaving| base(first - towards_5prime - 1) == Some(leaving))
     {
         towards_5prime += 1;
     }
@@ -1311,8 +1337,8 @@ fn kept_allele_deletes_over_a_transcript_end(
     let over_the_first_base =
         front_cut > 0 && innermost_at_the_first_base.0 < 1 && innermost_at_the_first_base.1 >= 1;
     let over_the_last_base = back_cut > 0
-        && innermost_at_the_last_base.0 <= slice.len()
-        && innermost_at_the_last_base.1 > slice.len();
+        && innermost_at_the_last_base.0 <= tr_len
+        && innermost_at_the_last_base.1 > tr_len;
     over_the_first_base || over_the_last_base
 }
 
@@ -1320,8 +1346,18 @@ fn kept_allele_deletes_over_a_transcript_end(
 /// of points at which they give the same sequence reaches the transcript's
 /// first or last base, with the bases the rule carries them from `point`.
 /// `inserted` stands on the transcript's strand directly after slice position
-/// `point`; the run is read along the chromosome, past either end of the
-/// transcript, as far as it goes each way.
+/// `point` of a transcript of `tr_len` bases; the run is read through
+/// `base_at`, the base at a slice position along the chromosome, past either
+/// end of the transcript.
+///
+/// Each walk ends where the answer is settled. A run that passes the point
+/// directly after the last base has no description here wherever it ends, so
+/// the walk towards the 3' end reads no base beyond the one directly past the
+/// last base. Whether the run starts at or before the first base, and whether
+/// a whole copy of the added bases lies between its first point and its last,
+/// read the same for every first point as many bases before the first base as
+/// the allele adds or farther, so the walk towards the 5' end reads no more
+/// bases before the first base than the allele adds.
 ///
 /// A run whose most 3' point lies directly past the last base, the added
 /// bases repeating the transcript's last bases, is a duplication of those
@@ -1334,21 +1370,25 @@ fn kept_allele_deletes_over_a_transcript_end(
 /// whose copied bases start before the first base and one that runs past
 /// the last base.
 fn added_bases_at_a_transcript_end(
-    slice: &TranscriptSlice<'_>,
+    tr_len: i64,
+    base_at: impl Fn(i64) -> Option<u8>,
     point: i64,
     inserted: &[u8],
 ) -> Option<(HgvscNotation, i64)> {
     let len = inserted.len() as i64;
-    let tr_len = slice.len();
-    if len == 0 || slice.fasta.is_none() {
+    if len == 0 {
         return None;
     }
     let mut carried = 0;
-    while slice.base_at(point + carried + 1) == Some(inserted[(carried % len) as usize]) {
+    while point + carried <= tr_len
+        && base_at(point + carried + 1) == Some(inserted[(carried % len) as usize])
+    {
         carried += 1;
     }
     let mut back = 0;
-    while slice.base_at(point - back) == Some(inserted[(len - 1 - back % len) as usize]) {
+    while point - back > -len
+        && base_at(point - back) == Some(inserted[(len - 1 - back % len) as usize])
+    {
         back += 1;
     }
     let (first_point, last_point) = (point - back, point + carried);
@@ -1408,7 +1448,7 @@ struct ExonSpan {
 }
 
 impl ExonSpan {
-    /// The mapper's exon pairs sorted by genomic start, Perl's `_sorted_exons`.
+    /// The mapper's exon pairs sorted by genomic start, Ensembl VEP's `_sorted_exons`.
     /// On a model with an `_rna_edit` that inserts or deletes bases the cached
     /// pairs fold the edit (an exon split around it, the pairs downstream
     /// renumbered), so the walk gives the edited model's numbering, where
@@ -1416,7 +1456,7 @@ impl ExonSpan {
     /// 2881-2905) give the unedited one: `Exon::cdna_start` maps through a
     /// transcript mapper built at run time, and the cache dumper dropped the
     /// transcript's `edits_enabled` and `transcript_mapper`
-    /// (`Pipeline/DumpVEP/Dumper/Core.pm` 155-173, ensembl-vep release/116.2).
+    /// (`Pipeline/DumpVEP/Dumper/Core.pm` 155-173, ensembl-vep release/116.3).
     fn in_genomic_order(pairs: &[MapperPair]) -> Vec<ExonSpan> {
         let mut exons: Vec<ExonSpan> = pairs
             .iter()
@@ -1429,6 +1469,103 @@ impl ExonSpan {
             .collect();
         exons.sort_by_key(|e| e.start);
         exons
+    }
+}
+
+/// The numbering of an HGVSc on a model the genome is the reference of
+/// (`coding::genome_is_reference`): each exon's bases counted along the genome
+/// alone, and the coding bounds at the genomic bases the cached ones map to.
+/// The `_rna_edit` such a model keeps marks a base that translation reads
+/// twice or passes over. It adds no base to the transcript and takes none
+/// out, so a position past it is counted as the transcript's own sequence
+/// holds it, where the cached mapper pairs fold the edit in. Ensembl VEP
+/// numbers a one-base coding substitution there at the row's CDS start
+/// (TranscriptVariationAllele.pm 1519-1522) and any other notation along the
+/// exons plus the misalignment offset (1524-1525, 1594-1624), each of which
+/// counts the edit.
+struct GenomeCount {
+    exons: Vec<ExonSpan>,
+    coding: Option<(i64, i64)>,
+}
+
+impl GenomeCount {
+    fn of(
+        transcript: &Transcript,
+        cached: &[ExonSpan],
+        coding: Option<(i64, i64)>,
+        reverse: bool,
+    ) -> Self {
+        let mut spans: Vec<(i64, i64)> = transcript
+            .exons
+            .iter()
+            .map(|exon| (exon.start as i64, exon.end as i64))
+            .collect();
+        spans.sort_by_key(|(start, _)| *start);
+        if reverse {
+            spans.reverse();
+        }
+        let mut counted = 0;
+        let mut exons: Vec<ExonSpan> = spans
+            .into_iter()
+            .map(|(start, end)| {
+                let span = ExonSpan {
+                    start,
+                    end,
+                    cdna_start: counted + 1,
+                    cdna_end: counted + (end - start + 1),
+                };
+                counted = span.cdna_end;
+                span
+            })
+            .collect();
+        exons.sort_by_key(|e| e.start);
+        let mut count = GenomeCount {
+            exons,
+            coding: None,
+        };
+        count.coding = coding.map(|(start, end)| {
+            (
+                count.number(cached, start, reverse),
+                count.number(cached, end, reverse),
+            )
+        });
+        count
+    }
+
+    /// The count of the genomic base the cached cDNA position `cdna` maps to.
+    /// A position the cached pairs give no genomic base, the one an edit
+    /// adds, stands for the base of the next cached position, read once more.
+    fn number(&self, cached: &[ExonSpan], cdna: i64, reverse: bool) -> i64 {
+        let holding = cached
+            .iter()
+            .find(|e| e.cdna_start <= cdna && cdna <= e.cdna_end);
+        let next = || {
+            cached
+                .iter()
+                .filter(|e| e.cdna_start > cdna)
+                .min_by_key(|e| e.cdna_start)
+        };
+        let Some((pair, cached_cdna)) = holding
+            .map(|pair| (pair, cdna))
+            .or_else(|| next().map(|pair| (pair, pair.cdna_start)))
+        else {
+            return cdna;
+        };
+        let genomic = if reverse {
+            pair.end - (cached_cdna - pair.cdna_start)
+        } else {
+            pair.start + (cached_cdna - pair.cdna_start)
+        };
+        self.exons
+            .iter()
+            .find(|e| e.start <= genomic && genomic <= e.end)
+            .map_or(cdna, |e| {
+                if reverse {
+                    e.cdna_start + (e.end - genomic)
+                } else {
+                    e.cdna_start + (genomic - e.start)
+                }
+            })
     }
 }
 
@@ -1492,7 +1629,7 @@ fn perl_cdna_position(
             coord -= stop_codon;
             prefix = "*";
         } else if coord == stop_codon && offset.is_some() {
-            // Perl drops the coordinate and the `+` here: the stop codon's last base
+            // Ensembl VEP drops the coordinate and the `+` here: the stop codon's last base
             // plus an intronic distance prints as `*` and the bare distance.
             prefix = "*";
             offset_text = offset_text.map(|t| t.replace('+', ""));
@@ -1509,7 +1646,7 @@ fn perl_cdna_position(
     ))
 }
 
-/// The `(exon coordinate, intron offset)` pair Perl reads back from an HGVS
+/// The `(exon coordinate, intron offset)` pair Ensembl VEP reads back from an HGVS
 /// coordinate string with `m/(\-?[0-9]+)\+?(\-?[0-9]+)?/`: the first signed
 /// integer (a `*` prefix is skipped) and the signed integer after it, if any.
 fn hgvs_coordinate_parts(text: &str) -> (i64, i64) {
@@ -1589,6 +1726,7 @@ fn versioned_reference_name(stable_id: &str, version: Option<u32>) -> String {
 
 /// The flags that shape the HGVS notations of a run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct HgvsOptions {
     /// `--shift_hgvs`: describe an insertion or deletion in HGVSc and HGVSp at its
     /// most 3' position on the transcript (on by default); off, the notations
@@ -1605,12 +1743,12 @@ pub struct HgvsOptions {
     pub remove_hgvsp_version: bool,
     /// `--shift_3prime 1`: the consequences were computed on the shifted allele,
     /// so the row has a notation when the shifted span overlaps the transcript
-    /// (OutputFactory.pm's `within_feature`, 1721), and `hgvs_transcript` clears
+    /// (OutputFactory.pm's `within_feature`, 1730), and `hgvs_transcript` clears
     /// the predicate cache once the shift moved it (TranscriptVariationAllele.pm
     /// 1469), so `hgvs_protein` reads `stop_lost`, `start_lost` and the
     /// frameshift guards on the shifted allele too; off, both read the allele as
     /// the input placed it, and `coding::perl_hgvs_protein` the shifted one where
-    /// the input placed it in an intron.
+    /// the input placed it in an intron or before the coding start.
     pub shift_3prime: bool,
 }
 
@@ -1627,6 +1765,7 @@ impl Default for HgvsOptions {
 
 /// The HGVS output of one variant-transcript pair under `--hgvs`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct HgvsNotation {
     /// HGVSc, `generate_hgvsc`.
     pub hgvsc: Option<String>,
@@ -1648,7 +1787,7 @@ pub struct HgvsNotation {
     /// VEP's `REFSEQ_OFFSET`: the misalignment offset `hgvs_transcript` computed
     /// for an `NM_` or `XM_` model with an `_rna_edit` (`refseq_misalignment_offset`,
     /// TranscriptVariationAllele.pm 1516-1517, 1621), when it is not 0
-    /// (OutputFactory.pm:1769).
+    /// (OutputFactory.pm:1778).
     pub refseq_offset: Option<i64>,
     /// The intron offsets of the HGVSc start and end coordinates
     /// (`_hgvs_intron_start_offset`, `_hgvs_intron_end_offset`,
@@ -1697,7 +1836,7 @@ fn annotated_outside(
 
 /// Whether a row outside the transcript can carry an HGVSc: its allele adds
 /// bases, which the 3' rule may place on the transcript.
-pub fn adds_bases(variant: &InputVariant) -> bool {
+pub(crate) fn adds_bases(variant: &InputVariant) -> bool {
     let alt = variant.alt_allele();
     let reference = variant.ref_allele.as_slice();
     alt != b"-" && (reference == b"-" || alt.len() > reference.len())
@@ -1712,6 +1851,18 @@ pub fn adds_bases(variant: &InputVariant) -> bool {
 /// HGVSp read there too and reports no offset: neither notation moved. Where
 /// those bases open the coding sequence the HGVSp reads their own coding
 /// span (`coding::hgvs_protein_where_written`).
+///
+/// Both notations are read at one span, the one `hgvsc_shift` gives. An
+/// insertion whose run of placements is longer than `perform_shift` walks
+/// has its HGVSp read at the run's last placement, where its HGVSc is
+/// described: none where that placement lies in an intron, in a UTR or past
+/// the transcript's last base, and the notation `coding::perl_hgvs_protein`
+/// gives the insertion there where it lies between two coding bases.
+/// Ensembl VEP's `hgvs_protein` reads the span its own walk reaches
+/// (TranscriptVariationAllele.pm 1711, 1715-1721) and has no notation where
+/// that span has no translation start or end (1730-1738), so the walk's
+/// bound, a count that is no property of the sequence, decides whether its
+/// row carries one.
 ///
 /// A record that does not shift, whose HGVSc the 3' rule moves along the
 /// genome's bases all the same (`inserted_at_model_bases_on_the_genome`,
@@ -1729,17 +1880,19 @@ pub fn generate_hgvs(
     let shifted = hgvs_shift(variant, transcript, reference_fasta, options.shift_hgvs);
     let described_at = hgvsc_shift(variant, transcript, reference_fasta, shifted, options);
     let hgvsc = hgvsc_at(variant, transcript, reference_fasta, described_at, options);
-    let shifted = shifted.filter(|_| !hgvsc.read_where_written);
+    // An insertion the HGVSc reads where its record writes it is read there
+    // by both notations.
+    let described_at = described_at.filter(|_| !hgvsc.read_where_written);
     // A row outside the transcript has no protein notation, whatever the
     // 3' rule makes of its HGVSc.
-    let hgvsp = if annotated_outside(variant, transcript, shifted, options) {
+    let hgvsp = if annotated_outside(variant, transcript, described_at, options) {
         None
     } else {
         hgvsp_at(
             variant,
             transcript,
             reference_fasta,
-            shifted,
+            described_at,
             hgvsc.read_where_written,
             options,
         )
@@ -1751,14 +1904,11 @@ pub fn generate_hgvs(
             length
         }
     };
-    // The offset is the HGVSc's where one is written, the bases the 3' rule
-    // moved it; a row with an HGVSp alone carries the shift `hgvs_protein` read.
-    let offset = if hgvsc.notation.is_some() {
-        described_at.filter(|_| !hgvsc.read_where_written)
-    } else {
-        shifted.filter(|_| hgvsp.is_some())
-    }
-    .map(|(start, _)| along_the_transcript(start.abs_diff(variant.start) as i64));
+    // The offset is the bases the 3' rule moves the span both notations are
+    // read at, on a row that carries either of them.
+    let offset = described_at
+        .filter(|_| hgvsc.notation.is_some() || hgvsp.is_some())
+        .map(|(start, _)| along_the_transcript(start.abs_diff(variant.start) as i64));
     let offset_of_hgvsc_alone = offset.is_none() && hgvsc.moved_on_the_genome != 0;
     HgvsNotation {
         hgvsc: hgvsc.notation,
@@ -1815,7 +1965,9 @@ pub fn generate_hgvs(
 /// (1519-1522). An insertion written on bases such a model holds and the
 /// genome lacks is described on them, where it is written even when the
 /// genome's shift moves it past them, and a duplication the genome shows
-/// across such bases is numbered from the model's own.
+/// across such bases is numbered from the model's own. A model the genome is
+/// the reference of (`coding::genome_is_reference`) is numbered along the
+/// genome's exons instead, that substitution with it (`GenomeCount`).
 pub fn generate_hgvsc(
     variant: &InputVariant,
     transcript: &Transcript,
@@ -1860,8 +2012,10 @@ fn hgvsc_at(
 /// `undef`, with the bases the 3' rule moves it where the record itself
 /// does not shift (`inserted_at_model_bases_on_the_genome`), 0 anywhere
 /// else; what else the row carries is left in `found`.
-/// `found.refseq_offset` is set as soon as the misalignment offset is
-/// computed, so it survives a position lookup that yields no notation;
+/// `found.refseq_offset` is set once the whole alternate allele is known to
+/// differ from the bases of the clamped span, before the notation is typed,
+/// so it stands on a row whose cut alleles or position lookup yield no
+/// notation;
 /// `found.intron_offsets` is set once both cDNA positions are known, which is
 /// exactly when a notation follows; `found.read_where_written` is set as soon
 /// as the shift is set aside, whether or not a notation follows.
@@ -1915,7 +2069,7 @@ fn hgvsc_notation(
         allele
     };
 
-    // OutputFactory.pm asks for HGVS only `within_feature` (1721), the overlap of
+    // OutputFactory.pm asks for HGVS only `within_feature` (1730), the overlap of
     // the transcript with the span the row was annotated at: under
     // `--shift_3prime 1` the shifted span, which `_bvfo_preds` moves before the
     // test (BaseVariationFeatureOverlapAllele.pm 460-481), otherwise the span as
@@ -1996,7 +2150,7 @@ fn hgvsc_notation(
     } else {
         (slice.position(hgvs_start), slice.position(hgvs_end))
     };
-    // An empty slice has no base to describe, which Perl never checks.
+    // An empty slice has no base to describe, which Ensembl VEP never checks.
     let tr_len = slice.len();
     if tr_len < 1 {
         return None;
@@ -2008,15 +2162,18 @@ fn hgvsc_notation(
     // coordinate one past the last base where the span ends on it and one
     // before the first base where the span starts before it (2802,
     // 2820-2827).
+    let base_at = |pos: i64| slice.base_at(pos);
     let carried_to_an_end = (options.shift_hgvs && shifted.is_none() && !has_an_edit)
         .then(|| bases_added_to_a_kept_reference(&fallback_ref, &alt_seq, raw_start))
         .flatten()
-        .and_then(|(point, inserted)| added_bases_at_a_transcript_end(&slice, point, inserted));
+        .and_then(|(point, inserted)| {
+            added_bases_at_a_transcript_end(tr_len, base_at, point, inserted)
+        });
     // Of the rows outside, one whose added bases stand, as the record's own
     // shift leaves them, at the point the rule gives them.
     if outside && carried_to_an_end.is_none() {
         let placed_by_the_shift = fallback_ref.is_empty()
-            && added_bases_at_a_transcript_end(&slice, raw_end, &alt_seq)
+            && added_bases_at_a_transcript_end(tr_len, base_at, raw_end, &alt_seq)
                 .is_some_and(|(_, carried)| carried == 0);
         if !placed_by_the_shift {
             return None;
@@ -2042,13 +2199,49 @@ fn hgvsc_notation(
     let (slice_start, slice_end) = (raw_start.max(1), raw_end.min(tr_len));
     let front_cut = (slice_start - raw_start) as usize;
     let back_cut = (raw_end - slice_end) as usize;
+    // The misalignment offset of an `NM_` or `XM_` model, the length change
+    // of the indel edits at or before the allele's cDNA start
+    // (`get_misalignment_offset`, TranscriptVariationAllele.pm 1517,
+    // 1594-1624). Ensembl VEP computes it once the whole alternate allele,
+    // read against the bases of the clamped span (1474-1483), gives a
+    // notation, so it stands on a row whose bases inside the transcript are
+    // unchanged while a base outside changes, where the alternate cut as the
+    // clamp cut the reference types none below. An alternate that equals the
+    // bases of the clamped span has no offset.
+    if let Some(alignment) = transcript.refseq_alignment().filter(|_| has_an_edit) {
+        if transcript.stable_id.starts_with("NM_") || transcript.stable_id.starts_with("XM_") {
+            let inside =
+                match slice.substr(slice_start, (slice_end - slice_start + 1).max(0) as usize) {
+                    Some(inside) => Some(inside),
+                    None if slice.fasta.is_none() => fallback_ref
+                        .get(front_cut..fallback_ref.len().saturating_sub(back_cut))
+                        .map(<[u8]>::to_vec),
+                    None => None,
+                };
+            if inside.is_some_and(|inside| inside != alt_seq) {
+                let cdna_start = crate::display::genomic2cdna(
+                    mapper,
+                    vf_start,
+                    vf_end,
+                    transcript.strand.as_i8(),
+                )
+                .first()
+                .and_then(|segment| match segment {
+                    crate::display::Segment::Coord { start, .. } => Some(*start),
+                    crate::display::Segment::Gap { .. } => None,
+                });
+                found.refseq_offset = Some(alignment.misalignment_offset(cdna_start));
+            }
+        }
+    }
     // A deletion that runs over the transcript's first or last base and has
     // no window wholly inside it has no description on the transcript.
     // Ensembl VEP clamps the span and describes the bases inside
     // (`docs/divergences/hgvs-clipped-reference-against-whole-alternate.md`).
     if options.shift_hgvs
         && kept_allele_deletes_over_a_transcript_end(
-            &slice,
+            tr_len,
+            base_at,
             &fallback_ref,
             &alt_seq,
             raw_start,
@@ -2133,15 +2326,24 @@ fn hgvsc_notation(
     // adds it (1524-1525): the cached mapper pairs already fold the edits.
     let mut clipped_alt = None;
     let mut numbered_on_model = false;
-    if let Some(alignment) = transcript
-        .refseq_alignment()
-        .filter(|alignment| alignment.first_edit_bases.is_some())
-    {
+    if has_an_edit {
         n.ref_seq = feature_seq(variant.ref_allele.clone(), variant.strand);
         clipped_alt = Some(std::mem::replace(
             &mut n.alt_seq,
             feature_seq(described_alt, described_alt_strand),
         ));
+        // A base the clamp cut from the span is no base of the transcript,
+        // whether or not the alternate changes it: the respelled pair loses
+        // those bases as the notation's own alleles do
+        // (`alt_cut_as_reference`), which leaves the clip below the bases
+        // `_clip_alleles` took. Ensembl VEP writes the whole pair over the
+        // clamped span (1510-1513).
+        if front_cut + back_cut > 0 && n.ref_seq.len() >= front_cut + back_cut {
+            let whole_alt = std::mem::take(&mut n.alt_seq);
+            n.alt_seq = alt_cut_as_reference(whole_alt, &n.ref_seq, front_cut, back_cut);
+            n.ref_seq.truncate(n.ref_seq.len() - back_cut);
+            n.ref_seq.drain(..front_cut);
+        }
         match n.kind {
             HgvscKind::Dup => {}
             // A substitution names one base a side (Utils/Sequence.pm 656).
@@ -2223,17 +2425,12 @@ fn hgvsc_notation(
                     n.kind = replacement_kind(&n.ref_seq, n.ref_seq.len(), &n.alt_seq);
                 }
             }
-            _ => clip_respelled_alleles(&mut n.ref_seq, &mut n.alt_seq, lost_front, lost_back),
-        }
-        if transcript.stable_id.starts_with("NM_") || transcript.stable_id.starts_with("XM_") {
-            let cdna_start =
-                crate::display::genomic2cdna(mapper, vf_start, vf_end, transcript.strand.as_i8())
-                    .first()
-                    .and_then(|segment| match segment {
-                        crate::display::Segment::Coord { start, .. } => Some(*start),
-                        crate::display::Segment::Gap { .. } => None,
-                    });
-            found.refseq_offset = Some(alignment.misalignment_offset(cdna_start));
+            _ => clip_respelled_alleles(
+                &mut n.ref_seq,
+                &mut n.alt_seq,
+                lost_front - front_cut,
+                lost_back - back_cut,
+            ),
         }
     }
 
@@ -2394,10 +2591,38 @@ fn hgvsc_notation(
     let exonic = exons
         .iter()
         .any(|e| vf_start.min(vf_end) <= e.end && vf_start.max(vf_end) >= e.start);
+    // A model the genome is the reference of is numbered along the genome's
+    // exons, the transcript's own bases; every other model, and one whose
+    // record holds no exon list, on the cached pairs.
+    let genome_count = (on_the_genome && !transcript.exons.is_empty())
+        .then(|| GenomeCount::of(transcript, &exons, coding, reverse));
+    let (numbered_exons, numbered_coding) = match &genome_count {
+        Some(count) => (count.exons.as_slice(), count.coding),
+        None => (exons.as_slice(), coding),
+    };
+    let numbered = |cdna: i64| {
+        genome_count
+            .as_ref()
+            .map_or(cdna, |count| count.number(&exons, cdna, reverse))
+    };
+    // The CDS start counts what the cached pairs count: on a model numbered
+    // along the genome it moves by what the count differs by at the row's
+    // cDNA start, less what it differs by at the coding start.
     let cds_snp_position = if is_snp && exonic && coding.is_some() {
         crate::coding::perl_span(transcript, variant.start, variant.end)
-            .and_then(|s| s.cds_start.zip(s.cds_end))
-            .map(|(cds_start, _)| cds_start)
+            .and_then(|s| {
+                s.cds_start
+                    .zip(s.cds_end)
+                    .map(|(cds, _)| (cds, s.cdna_start))
+            })
+            .map(
+                |(cds_start, cdna_start)| match (cdna_start, coding, numbered_coding) {
+                    (Some(cdna), Some((cached_start, _)), Some((counted_start, _))) => {
+                        cds_start - (cdna - numbered(cdna)) + (cached_start - counted_start)
+                    }
+                    _ => cds_start,
+                },
+            )
     } else {
         None
     };
@@ -2407,22 +2632,26 @@ fn hgvsc_notation(
     let (start, end) = match (&on_model_bases, cds_snp_position) {
         (Some(bases), _) if in_walk_positions => {
             let coordinate = |pos: i64| match bases.place(pos) {
-                WalkPlace::Cdna(cdna) => Some(exonic_hgvs_coordinate(coding, cdna)),
-                WalkPlace::Intron(pos) => perl_cdna_position(&slice, &exons, coding, pos),
+                WalkPlace::Cdna(cdna) => {
+                    Some(exonic_hgvs_coordinate(numbered_coding, numbered(cdna)))
+                }
+                WalkPlace::Intron(pos) => {
+                    perl_cdna_position(&slice, numbered_exons, numbered_coding, pos)
+                }
             };
             (coordinate(n.start)?, coordinate(n.end)?)
         }
         _ if numbered_on_model => (
-            exonic_hgvs_coordinate(coding, n.start),
-            exonic_hgvs_coordinate(coding, n.end),
+            exonic_hgvs_coordinate(numbered_coding, numbered(n.start)),
+            exonic_hgvs_coordinate(numbered_coding, numbered(n.end)),
         ),
         (_, Some(cds_start)) => (cds_start.to_string(), cds_start.to_string()),
         (_, None) => {
-            let start = perl_cdna_position(&slice, &exons, coding, n.start)?;
+            let start = perl_cdna_position(&slice, numbered_exons, numbered_coding, n.start)?;
             let end = if same_pos {
                 start.clone()
             } else {
-                perl_cdna_position(&slice, &exons, coding, n.end)?
+                perl_cdna_position(&slice, numbered_exons, numbered_coding, n.end)?
             };
             (start, end)
         }
@@ -2508,13 +2737,17 @@ fn rotate_sequence_for_transcript_3prime(
 /// `hgvs_protein` (`coding::perl_hgvs_protein`) behind the `ENSP...:p.` prefix.
 ///
 /// Returns `None` when the transcript has no coding model or protein id, the
-/// alternate allele carries a character outside `ACGT-`, the row is the
+/// alternate allele is no DNA (`vep_core::codon::seq_is_dna`), the row is the
 /// reference allele's, or `coding::perl_hgvs_protein` has no notation for the
 /// span. An insertion or deletion is first shifted to its most 3' position on
 /// the transcript strand
-/// (Perl's `_return_3prime(1)`, applied for HGVS whatever `--shift_3prime`
+/// (Ensembl VEP's `_return_3prime(1)`, applied for HGVS whatever `--shift_3prime`
 /// says) when a reference FASTA is available; the shifted alleles are the
-/// deleted reference bases at the new position and the rotated insertion.
+/// deleted reference bases at the shifted position and the rotated insertion.
+/// An insertion whose run of placements is longer than that walk is read at
+/// the run's last placement, the span its HGVSc is described at
+/// (`hgvsc_shift`), where `_return_3prime(1)` stops short of it
+/// (TranscriptVariationAllele.pm 303-306).
 pub fn generate_hgvsp(
     variant: &InputVariant,
     transcript: &Transcript,
@@ -2523,7 +2756,9 @@ pub fn generate_hgvsp(
     generate_hgvs(variant, transcript, reference_fasta, HgvsOptions::default()).hgvsp
 }
 
-/// `generate_hgvsp` with the 3' shift already computed. `hgvs_protein` reads the
+/// `generate_hgvsp` read at `described_at`, the span the HGVSc of the same
+/// pair is described at (`hgvsc_shift`); `None` reads the allele where the
+/// input placed it. `hgvs_protein` reads the
 /// allele as `feature_seq`, on the transcript's strand
 /// (VariationFeatureOverlapAllele.pm 253-256), so an allele given on the reverse
 /// strand is taken on the forward strand. The reference name carries the
@@ -2531,13 +2766,13 @@ pub fn generate_hgvsp(
 /// 1759-1760), and `hgvsp_use_prediction` wraps the description after `p.` in
 /// parentheses (1908, 2040); the `=` of a synonymous description is escaped by the
 /// output layer afterwards, so it prints as `p.(Ala2%3D)`. `read_where_written`
-/// is `Hgvsc::read_where_written` of the same pair, whose `shifted` is then
-/// `None`.
+/// is `Hgvsc::read_where_written` of the same pair, whose `described_at` is
+/// then `None`.
 fn hgvsp_at(
     variant: &InputVariant,
     transcript: &Transcript,
     reference_fasta: Option<&vep_fasta::IndexedFasta>,
-    shifted: Option<(u64, u64)>,
+    described_at: Option<(u64, u64)>,
     read_where_written: bool,
     options: HgvsOptions,
 ) -> Option<String> {
@@ -2556,11 +2791,11 @@ fn hgvsp_at(
         return None;
     }
 
+    // An alternate allele that is no DNA has no notation; one that holds
+    // unknown bases has the notation `coding::hgvs_protein` reads where its
+    // known bases settle a stop codon before the first of them.
     let alt_allele = variant.alt_allele();
-    if alt_allele
-        .iter()
-        .any(|b| !matches!(b.to_ascii_uppercase(), b'A' | b'C' | b'G' | b'T' | b'-'))
-    {
+    if !alt_allele.is_empty() && !vep_core::codon::seq_is_dna(alt_allele) {
         return None;
     }
     // `hgvs_protein` returns nothing for the reference allele's object
@@ -2578,7 +2813,7 @@ fn hgvsp_at(
     };
     let ref_name = versioned_reference_name(protein_id, version);
 
-    let shifted_variant = shifted
+    let shifted_variant = described_at
         .and_then(|span| shifted_variant(variant, input_strand, transcript, span, reference_fasta));
     let notation = if read_where_written {
         crate::coding::hgvs_protein_where_written(variant, transcript, reference_fasta)
@@ -2619,6 +2854,119 @@ mod tests {
         ..SHIFTED
     };
 
+    /// The count along the genome's exons of a model the genome is the
+    /// reference of, for the two shapes of edit such a model keeps. A forward
+    /// model of exons 101-200 and 301-500 whose cached pairs hold one position
+    /// the genome lacks, cDNA 151: a position before it keeps its number, the
+    /// extra position stands for the base after it, and a position past it,
+    /// the coding end with it, counts one lower. A reverse model of the same
+    /// exons whose cached pairs pass over the genomic base 450: a position
+    /// past it, the coding end with it, counts one higher.
+    #[test]
+    fn a_model_the_genome_is_the_reference_of_is_counted_along_its_exons() {
+        use vep_core::transcript::{Exon, MapperPair};
+        let exon = |start, end, rank| Exon {
+            start,
+            end,
+            rank,
+            phase: -1,
+            end_phase: -1,
+        };
+        let pair = |from_start, from_end, to_start, to_end, ori| MapperPair {
+            from_start,
+            from_end,
+            to_start,
+            to_end,
+            ori,
+        };
+        let mut model = make_test_transcript();
+        model.exons = vec![exon(101, 200, 1), exon(301, 500, 2)];
+
+        let cached = ExonSpan::in_genomic_order(&[
+            pair(1, 100, 101, 200, 1),
+            pair(101, 150, 301, 350, 1),
+            pair(152, 301, 351, 500, 1),
+        ]);
+        let count = GenomeCount::of(&model, &cached, Some((21, 261)), false);
+        let numbers = |cdna: &[i64], reverse: bool, count: &GenomeCount, cached: &[ExonSpan]| {
+            cdna.iter()
+                .map(|&position| count.number(cached, position, reverse))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            numbers(&[1, 100, 101, 150, 151, 152, 301], false, &count, &cached),
+            [1, 100, 101, 150, 151, 151, 300]
+        );
+        assert_eq!(count.coding, Some((21, 260)));
+        let counted: Vec<_> = count
+            .exons
+            .iter()
+            .map(|e| (e.start, e.end, e.cdna_start, e.cdna_end))
+            .collect();
+        assert_eq!(counted, [(101, 200, 1, 100), (301, 500, 101, 300)]);
+
+        model.exons = vec![exon(301, 500, 1), exon(101, 200, 2)];
+        let cached = ExonSpan::in_genomic_order(&[
+            pair(1, 50, 451, 500, -1),
+            pair(51, 199, 301, 449, -1),
+            pair(200, 299, 101, 200, -1),
+        ]);
+        let count = GenomeCount::of(&model, &cached, Some((11, 250)), true);
+        assert_eq!(
+            numbers(&[1, 50, 51, 199, 200, 299], true, &count, &cached),
+            [1, 50, 52, 200, 201, 300]
+        );
+        assert_eq!(count.coding, Some((11, 251)));
+        let counted: Vec<_> = count
+            .exons
+            .iter()
+            .map(|e| (e.start, e.end, e.cdna_start, e.cdna_end))
+            .collect();
+        assert_eq!(counted, [(101, 200, 201, 300), (301, 500, 1, 200)]);
+    }
+
+    /// A model the genome is the reference of whose record holds no exon list
+    /// has no exons to count along and is numbered on the cached pairs: a
+    /// deletion in the 5' UTR and a substitution in the 3' UTR keep the
+    /// notations the model takes with its exon list.
+    #[test]
+    fn a_failed_edit_model_without_an_exon_list_is_numbered_on_the_cached_pairs() {
+        let mut model = make_test_transcript();
+        model.bam_edit_status = Some(BamEditStatus::Failed);
+        let records = [
+            InputVariant::new(
+                "21".into(),
+                25_000_010,
+                25_000_010,
+                b"A".to_vec(),
+                b"-".to_vec(),
+            ),
+            InputVariant::new(
+                "21".into(),
+                25_005_000,
+                25_005_000,
+                b"A".to_vec(),
+                b"C".to_vec(),
+            ),
+        ];
+        let notations = |model: &Transcript| {
+            records
+                .each_ref()
+                .map(|record| generate_hgvsc(record, model, None))
+        };
+        let with_the_list = notations(&model);
+        assert_eq!(
+            with_the_list,
+            [
+                Some("ENST00000000001.1:c.-40del".to_string()),
+                Some("ENST00000000001.1:c.*701A>C".to_string()),
+            ]
+        );
+        model.exons.clear();
+        model.derived = Default::default();
+        assert_eq!(notations(&model), with_the_list);
+    }
+
     /// `shift_feature_seqs` on the inserted allele `CAG` (forward strand), as
     /// it is left for the codons and HGVSp: read on the transcript's strand the
     /// allele turns one base per step of the shift, so along a forward
@@ -2626,7 +2974,7 @@ mod tests {
     /// transcript the other way, a shift of the allele's length or of a
     /// multiple leaves it as written, a shift of four turns a three-base allele
     /// as a shift of one does, and the reverse-strand spelling `CTG` of the same
-    /// insertion gives the same forward-strand bases. Ensembl VEP 116.2 counts
+    /// insertion gives the same forward-strand bases. Ensembl VEP 116.3 counts
     /// the turns from the transcript's strand alone, `seq_length -
     /// shift_length` of them on a reverse-strand transcript
     /// (TranscriptVariationAllele.pm:1337-1339), so it turns nothing once the
@@ -3087,7 +3435,7 @@ mod tests {
 
     /// A substitution given with its unchanged flanks, running over a
     /// transcript's edge with every base inside unchanged, changes no base of the
-    /// transcript and has no HGVSc. Ensembl VEP 116.2 reads the whole alternate
+    /// transcript and has no HGVSc. Ensembl VEP 116.3 reads the whole alternate
     /// allele against the bases inside (TranscriptVariationAllele.pm 1474-1483,
     /// Utils/Sequence.pm 526), strips the shared bases and writes the outside
     /// bases as an insertion at the coordinate `_get_cDNA_position` gives a
@@ -3141,7 +3489,7 @@ mod tests {
     /// bases that change inside the transcript: the alternate allele loses the
     /// bases the clamp cut from the reference, position by position, and
     /// `hgvs_variant_notation` and the clip read the pair inside. Ensembl VEP
-    /// 116.2 reads the whole alternate allele against the clamped reference
+    /// 116.3 reads the whole alternate allele against the clamped reference
     /// and writes a `delins` of every alternate base over the bases inside,
     /// `ENST00000290239.6:c.-49_-47delinsTGCTGGGC` for
     /// `21 34915345 TGCTGGGAGCC TGCTGGGCGCC`, whose one changed base is c.-47,
@@ -3222,7 +3570,7 @@ mod tests {
     /// with an unchanged outside base, loses that base from its alternate allele
     /// where the alternate begins with it, so the change inside is described as
     /// the minimised record's would be: an inserted `C` after c.-50 is
-    /// `c.-50_-49insC`, a deleted c.-49 is `c.-49del`. Ensembl VEP 116.2 keeps
+    /// `c.-50_-49insC`, a deleted c.-49 is `c.-49del`. Ensembl VEP 116.3 keeps
     /// the outside base in the alternate and writes `insAC` for the insertion
     /// and the substitution `c.-49C>A` for the deletion (the pair `AC` against
     /// `AA` inside). A change straddling the first base has its alternate bases
@@ -3281,7 +3629,7 @@ mod tests {
     /// lies outside the transcript and has no notation, as both engines write
     /// none for the minimised record (`21 27087234 TCC TC` is
     /// `downstream_gene_variant` on ENST00000312957, whose last base 27087235
-    /// is a `C` followed by a `C`, and Ensembl VEP 116.2 writes no HGVSc for
+    /// is a `C` followed by a `C`, and Ensembl VEP 116.3 writes no HGVSc for
     /// the alleles of `21 27087234 TCC TC,TCCC` either). A deletion reaching
     /// past the last base deletes the bases inside it, `c.*1701del` for two
     /// `C` deleted from a run of three, and one whose deleted base is inside,
@@ -3341,7 +3689,7 @@ mod tests {
     /// placement; `AGTC`/`AC` at 6099-6102 deletes 6100-6101, and 6100
     /// differs from 6102 and 6101 from 6099. Each record
     /// runs over the first base of one fixture and the last base of the
-    /// other. Ensembl VEP 116.2 clamps the span onto the transcript
+    /// other. Ensembl VEP 116.3 clamps the span onto the transcript
     /// (TranscriptVariationAllele.pm 2732-2733) and reads the whole alternate
     /// allele against the bases inside (1474-1483). The allele is no
     /// insertion or deletion record, so `--shift_3prime 1` reads it the same
@@ -3442,7 +3790,7 @@ mod tests {
     /// the last base, the last base again. The reverse fixture ends at genomic
     /// 100, where 99-103 are laid as `AGTCA`: `GTC`/`GGTC` and `GTC`/`GTGTC`
     /// at 100-102 add its last base and its last two. Nothing moves, so no
-    /// offset is reported. Ensembl VEP 116.2 does not shift an allele of such
+    /// offset is reported. Ensembl VEP 116.3 does not shift an allele of such
     /// a record (TranscriptVariationAllele.pm 120-123) and its clip leaves an
     /// insertion (2204-2284) past the last base, which has a coordinate only
     /// on a reverse-strand transcript, one base off the last (2802,
@@ -3493,7 +3841,7 @@ mod tests {
     /// run carries three bases to the last base, `n.2601dup`, and `CC`/`CCCC`
     /// at 6097-6098, the span twice, moves two bases to `n.2600_2601dup`.
     /// Reverse, 99-105 laid as `AGGGGCT`: `CT`/`GCT` at 104-105 adds a `C` of
-    /// the transcript's strand that moves four bases. Ensembl VEP 116.2
+    /// the transcript's strand that moves four bases. Ensembl VEP 116.3
     /// leaves each where its record's span ends, `n.2598_2599insC` and
     /// `n.2598_2599dup` on the forward fixture and `n.2597_2598insC` on the
     /// reverse one, as the notations read under `--shift_hgvs 0`.
@@ -3559,7 +3907,7 @@ mod tests {
     /// at 6098-6101, the placements of `GTC`/`GTCC` go on past the last base
     /// and it has no notation. An allele whose placements all lie inside the
     /// transcript, `GC`/`GCC` at 5000-5001 before a second `C`, keeps the
-    /// insertion where its span ends, `n.1502_1503insC`, as Ensembl VEP 116.2
+    /// insertion where its span ends, `n.1502_1503insC`, as Ensembl VEP 116.3
     /// writes it.
     #[test]
     fn added_bases_beside_the_last_base_that_are_no_duplication_keep_their_row() {
@@ -3600,7 +3948,7 @@ mod tests {
     /// placements run from the point before n.1 to the point after n.3 and
     /// copy nothing, `n.3_4insCCGT`. Reverse, n.1 at genomic 6100: the first
     /// layout's reverse complement at 6095-6104 gives `n.4_5dup` with offset
-    /// -2. Ensembl VEP 116.2 leaves each allele where its record's span ends
+    /// -2. Ensembl VEP 116.3 leaves each allele where its record's span ends
     /// (TranscriptVariationAllele.pm 120-123, 2204-2284), as the notations
     /// read under `--shift_hgvs 0`.
     #[test]
@@ -3705,7 +4053,7 @@ mod tests {
     /// of its placements goes: the HGVS 3' rule assigns the change to the most
     /// 3' position possible. `perform_shift` reads 1,000 bases of flank
     /// (TranscriptVariationAllele.pm 427-437) and stops where they end
-    /// (303-306), so Ensembl VEP 116.2 describes an insertion whose run is
+    /// (303-306), so Ensembl VEP 116.3 describes an insertion whose run is
     /// longer where that roll stops. The compact fixture's reference is `T`
     /// throughout; with an `A` at 299 and at 2500 a `T` inserted after 300,
     /// n.201, has placements up to the point after 2499, the hundredth base of
@@ -3765,6 +4113,152 @@ mod tests {
         assert_eq!(carried.intron_offsets, Some((0, 0)));
     }
 
+    /// A made-up reference for a walk along a transcript: the run of `CAG`
+    /// over the slice positions `run`, a `T` at every other position, and
+    /// the positions a walk read from it.
+    struct RunSource {
+        run: std::ops::RangeInclusive<i64>,
+        read: std::cell::RefCell<Vec<i64>>,
+    }
+
+    impl RunSource {
+        fn over(run: std::ops::RangeInclusive<i64>) -> Self {
+            Self {
+                run,
+                read: Default::default(),
+            }
+        }
+
+        /// The base the run holds at `pos`, whether or not it reaches there.
+        fn run_base(pos: i64) -> u8 {
+            b"CAG"[pos.rem_euclid(3) as usize]
+        }
+
+        /// The bases the run holds at `first..=last`.
+        fn run_bases(first: i64, last: i64) -> Vec<u8> {
+            (first..=last).map(Self::run_base).collect()
+        }
+
+        fn base_at(&self, pos: i64) -> Option<u8> {
+            self.read.borrow_mut().push(pos);
+            Some(if self.run.contains(&pos) {
+                Self::run_base(pos)
+            } else {
+                b'T'
+            })
+        }
+
+        /// The count of the bases read, with the lowest and the highest
+        /// position among them; `None` when nothing was read.
+        fn reads(&self) -> Option<(usize, i64, i64)> {
+            let read = self.read.borrow();
+            Some((read.len(), *read.iter().min()?, *read.iter().max()?))
+        }
+    }
+
+    /// The window a kept allele deletes is carried along a run only as far
+    /// as the transcript end it runs over, where the answer is settled, with
+    /// at most two bases read for each base the clamp cut. The made-up
+    /// reference is one run of `CAG`, 100,000 bases each way around a
+    /// transcript of 600 bases. Eight bases of the run with three of them
+    /// deleted, written at -6 to 1 over the first base, have a window wholly
+    /// inside the transcript two moves on, at 1 to 3; written at 599 to 606
+    /// over the last base, they have one six moves back, at 598 to 600: both
+    /// keep their row. Where the run stops at slice position 2, or starts at
+    /// 599, the window cannot be carried inside, and the deletion runs over
+    /// that end however it is written.
+    #[test]
+    fn a_deleted_window_is_carried_no_farther_than_the_transcript_end_it_runs_over() {
+        const TR_LEN: i64 = 600;
+        let runs_over_an_end = |source: &RunSource, raw_start: i64, cut: (usize, usize)| {
+            let reference = RunSource::run_bases(raw_start, raw_start + 7);
+            kept_allele_deletes_over_a_transcript_end(
+                TR_LEN,
+                |pos| source.base_at(pos),
+                &reference,
+                &reference[..5],
+                raw_start,
+                cut.0,
+                cut.1,
+            )
+        };
+        let (at_the_first_base, at_the_last_base) = ((-6, (7, 0)), (599, (0, 6)));
+        let cases = [
+            (-100_000..=100_000, at_the_first_base, false),
+            (-100_000..=100_000, at_the_last_base, false),
+            (-100_000..=2, at_the_first_base, true),
+            (599..=100_000, at_the_last_base, true),
+        ]
+        .map(|(run, (raw_start, cut), over_the_end)| {
+            let source = RunSource::over(run);
+            assert_eq!(
+                runs_over_an_end(&source, raw_start, cut),
+                over_the_end,
+                "{:?} at {raw_start}",
+                source.run
+            );
+            (source, raw_start, cut)
+        });
+        // A walk takes in one base beyond the span a move: after it towards the
+        // 3' end, before it towards the 5' end.
+        for (source, raw_start, (front_cut, back_cut)) in cases {
+            let (count, lowest, highest) = source.reads().expect("the walk reads the run");
+            let farthest_before = raw_start - back_cut as i64;
+            let farthest_after = raw_start + 7 + front_cut as i64;
+            assert!(
+                count <= 2 * (front_cut + back_cut)
+                    && farthest_before <= lowest
+                    && highest <= farthest_after,
+                "{count} bases read from {lowest} to {highest} at {raw_start}"
+            );
+        }
+    }
+
+    /// The walks that carry added bases along a run end where the
+    /// description is settled: the one towards the 3' end at the base
+    /// directly past the transcript's last base, the one towards the 5' end
+    /// as many bases before its first base as the allele adds. The made-up
+    /// reference is one run of `CAG` from 100,000 bases before a transcript
+    /// of 600 bases. Three bases added after slice position 300 that
+    /// continue the run have no description where the run goes on 100,000
+    /// bases past the last base; where it stops at the last base they
+    /// duplicate the last three bases, carried 300 bases; where it stops at
+    /// slice position 450 they duplicate 448 to 450, carried 150. A source
+    /// that holds no base gives no description at any point.
+    #[test]
+    fn added_bases_on_a_long_run_are_read_no_farther_than_the_transcript_ends() {
+        const TR_LEN: i64 = 600;
+        let inserted = RunSource::run_bases(301, 303);
+        let described = |source: &RunSource| {
+            added_bases_at_a_transcript_end(TR_LEN, |pos| source.base_at(pos), 300, &inserted)
+                .map(|(n, carried)| (n.start, n.end, n.kind, n.alt_seq, carried))
+        };
+        let duplication =
+            |start, end, carried| Some((start, end, HgvscKind::Dup, inserted.clone(), carried));
+        let cases = [
+            (-100_000..=100_000, None),
+            (-100_000..=TR_LEN, duplication(598, 600, 300)),
+            (-100_000..=450, duplication(448, 450, 150)),
+        ]
+        .map(|(run, description)| {
+            let source = RunSource::over(run);
+            assert_eq!(described(&source), description, "{:?}", source.run);
+            source
+        });
+        for source in cases {
+            let (count, lowest, highest) = source.reads().expect("the walk reads the run");
+            let added = inserted.len() as i64;
+            assert!(
+                count as i64 <= TR_LEN + added + 1 && -added < lowest && highest <= TR_LEN + 1,
+                "{count} bases read from {lowest} to {highest} on {:?}",
+                source.run
+            );
+        }
+        for point in [0, 300, TR_LEN] {
+            assert!(added_bases_at_a_transcript_end(TR_LEN, |_| None, point, &inserted).is_none());
+        }
+    }
+
     /// Inserted bases written directly past a transcript's last base that
     /// repeat its last bases are a duplication of those bases, though the row
     /// is annotated outside the transcript: the description of a change does
@@ -3774,8 +4268,8 @@ mod tests {
     /// `n.2600_2601dup`; on `AGT` at 99-101 a `G` written before 100, the
     /// reverse fixture's n.2601, is the transcript strand's `C` after its last
     /// base. The pair of intron offsets is 0 and 0 and nothing moved, so no
-    /// offset is reported, and a row outside has no HGVSp. Ensembl VEP 116.2
-    /// asks for no notation on a row outside (OutputFactory.pm 1721). Under
+    /// offset is reported, and a row outside has no HGVSp. Ensembl VEP 116.3
+    /// asks for no notation on a row outside (OutputFactory.pm 1730). Under
     /// `--shift_3prime 1` and under `--shift_hgvs 0` the row has no notation.
     #[test]
     fn bases_written_past_the_last_base_that_repeat_it_are_a_duplication_of_the_last_bases() {
@@ -4459,7 +4953,7 @@ mod tests {
     /// NM_006933.7's bases around
     /// c.203, `CTGGCA` (GRCh37 21:35467699-35467704), on c.202-c.207 of a
     /// substitution-edited model: `GA` inserted after c.203 shifts one base and
-    /// both runs write `c.204_205insAG`, the notation Ensembl VEP 116.2 writes
+    /// both runs write `c.204_205insAG`, the notation Ensembl VEP 116.3 writes
     /// for `21 35467700 T TGA` on that model under `--refseq --hgvs
     /// --shift_3prime 1`; its run without the flag writes `c.204_205insGA`, the
     /// sequence `CTG GA GC`, which the variant (`CTG AG GC`) does not produce.
@@ -4503,7 +4997,7 @@ mod tests {
     /// reference is no change. The compact model's edit `70 70 T` puts `T` at
     /// c.20 (genomic 169) over a genome `G`: `T/T` writes nothing, `T/A` writes
     /// `c.20T>A`, and the given reference `G/T` writes `c.20G>T`. Ensembl VEP
-    /// 116.2 compares the alternate with the genome's base, finds `G` and `T`
+    /// 116.3 compares the alternate with the genome's base, finds `G` and `T`
     /// different, then respells both alleles from `feature_seq`
     /// (TranscriptVariationAllele.pm 1474-1483, 1508-1514) and writes `c.20T>T`,
     /// the documented class `edited_model_no_change_hgvsc`.
@@ -4521,6 +5015,134 @@ mod tests {
         assert_eq!(hgvsc(b"T", b"T"), None);
         assert_eq!(hgvsc(b"T", b"A").as_deref(), Some("NM_000001.1:c.20T>A"));
         assert_eq!(hgvsc(b"G", b"T").as_deref(), Some("NM_000001.1:c.20G>T"));
+    }
+
+    /// On a model with an `_rna_edit`, an allele whose span runs over the
+    /// transcript's first or last base is described by the bases that change
+    /// inside the transcript, as on a model without one: the pair respelled
+    /// relative to the transcript loses the bases the clamp cut from the
+    /// span, whatever they are. The forward fixture's first base is c.-50 and
+    /// its last c.*1701. `AA` to `CG` over the last base and the base after
+    /// it changes c.*1701 from `A` to `C`; `AA` to `GC` over the base before
+    /// the first base and the first base changes c.-50 from `A` to `C`; `AAA`
+    /// to `CGC` over the last two bases and the base after them puts `CG` in
+    /// place of c.*1700 and c.*1701; `AAA` to `ACG` there keeps c.*1700 and
+    /// changes c.*1701 from `A` to `C`; `AA` to `G` over the last base and
+    /// the base after it puts `G` in place of c.*1701; and `AA` to `CA`,
+    /// whose outside base is unchanged, is the substitution of c.*1701 alone.
+    /// The reverse fixture's last base, c.*1701, is its genomic start, where
+    /// the forward strand's `AA` to `CG` over the base before it and that
+    /// base changes the transcript's `T` to `C`. Ensembl VEP 116.3 reads the
+    /// whole alternate allele against the bases inside
+    /// (TranscriptVariationAllele.pm 1474-1483) and writes both alleles over
+    /// whole (1508-1514): `c.*1701delinsCG` for the first record.
+    #[test]
+    fn edited_model_hgvsc_of_an_allele_over_an_edge_names_the_bases_inside() {
+        use crate::concordance_tests::make_descending_reverse_strand_transcript;
+        let hgvsc = |model: &Transcript, start: u64, end: u64, reference: &[u8], alt: &[u8]| {
+            let variant =
+                InputVariant::new("21".into(), start, end, reference.to_vec(), alt.to_vec());
+            generate_hgvsc(&variant, model, None).unwrap_or_default()
+        };
+        let edited = substitution_edited_model(make_test_transcript(), "NM_000001.1");
+        let reverse =
+            substitution_edited_model(make_descending_reverse_strand_transcript(), "NM_000002.1");
+        // The model without the edit takes the same notation.
+        let unedited = make_test_transcript();
+        assert_eq!(
+            [
+                hgvsc(&edited, 25_006_000, 25_006_001, b"AA", b"CG"),
+                hgvsc(&edited, 24_999_999, 25_000_000, b"AA", b"GC"),
+                hgvsc(&edited, 25_005_999, 25_006_001, b"AAA", b"CGC"),
+                hgvsc(&edited, 25_005_999, 25_006_001, b"AAA", b"ACG"),
+                hgvsc(&edited, 25_006_000, 25_006_001, b"AA", b"G"),
+                hgvsc(&edited, 25_006_000, 25_006_001, b"AA", b"CA"),
+                hgvsc(&reverse, 24_999_999, 25_000_000, b"AA", b"CG"),
+                hgvsc(&unedited, 25_006_000, 25_006_001, b"AA", b"CG"),
+            ],
+            [
+                "NM_000001.1:c.*1701A>C",
+                "NM_000001.1:c.-50A>C",
+                "NM_000001.1:c.*1700_*1701delinsCG",
+                "NM_000001.1:c.*1701A>C",
+                "NM_000001.1:c.*1701A>G",
+                "NM_000001.1:c.*1701A>C",
+                "NM_000002.1:c.*1701T>C",
+                "ENST00000000001.1:c.*1701A>C",
+            ]
+        );
+    }
+
+    /// The misalignment offset of an `NM_` model stands where the whole
+    /// alternate allele differs from the bases of the clamped span
+    /// (`get_misalignment_offset`, TranscriptVariationAllele.pm 1517,
+    /// 1594-1624, reached once 1474-1483 type a notation), whether or not an
+    /// HGVSc follows. The fixture's alignment added `AAA` after cDNA 9
+    /// (`_rna_edit` `10 9 AAA`), so its mapper numbers the last base 2604,
+    /// c.*1701 past the coding end 903, and an allele from cDNA 10 on carries
+    /// 3. `AA` to `AG` over the last base and the base after it changes no
+    /// base of the model: no notation, offset 3. `AAA` to `A` over the last
+    /// base and the two after it keeps the base inside, and its alternate
+    /// equals that base: no notation and no offset, as Ensembl VEP writes
+    /// neither. `AA` to `CA` writes `c.*1701A>C` beside the offset, the base
+    /// after the last base alone lies outside the model and carries neither,
+    /// and the same model under an `ENST` name has no offset. Ensembl VEP
+    /// 116.3 writes the offset of the first record beside an `ins` of the
+    /// alternate's bases past the last base, the whole alternate read against
+    /// the base inside (1474-1483).
+    #[test]
+    fn edited_model_refseq_offset_stands_on_a_row_without_a_notation() {
+        use vep_core::transcript::{Attribute, ExonCoordMapper, MapperPair};
+        let insertion_edited = |stable_id: &str| {
+            let mut model = make_test_transcript();
+            model.stable_id = stable_id.into();
+            model.attributes.push(Attribute {
+                code: "_rna_edit".into(),
+                value: "10 9 AAA".to_string(),
+            });
+            let mapper = model.vefc.as_mut().unwrap().mapper.as_mut().unwrap();
+            mapper.cdna_coding_start = 54;
+            mapper.cdna_coding_end = 903;
+            let pair = |from_start, from_end, to_start, to_end| MapperPair {
+                from_start,
+                from_end,
+                to_start,
+                to_end,
+                ori: 1,
+            };
+            mapper.exon_coord_mapper = ExonCoordMapper::new(vec![
+                pair(1, 9, 25_000_000, 25_000_008),
+                pair(13, 303, 25_000_009, 25_000_299),
+                pair(304, 603, 25_002_000, 25_002_299),
+                pair(604, 2604, 25_004_000, 25_006_000),
+            ]);
+            model.derived = Default::default();
+            model
+        };
+        let hgvs = |model: &Transcript, start: u64, end: u64, reference: &[u8], alt: &[u8]| {
+            let variant =
+                InputVariant::new("21".into(), start, end, reference.to_vec(), alt.to_vec());
+            let hgvs = generate_hgvs(&variant, model, None, SHIFTED);
+            (hgvs.hgvsc.unwrap_or_default(), hgvs.refseq_offset)
+        };
+        let refseq = insertion_edited("NM_000003.1");
+        let ensembl = insertion_edited("ENST00000000003");
+        assert_eq!(
+            [
+                hgvs(&refseq, 25_006_000, 25_006_001, b"AA", b"AG"),
+                hgvs(&refseq, 25_006_000, 25_006_002, b"AAA", b"A"),
+                hgvs(&refseq, 25_006_000, 25_006_001, b"AA", b"CA"),
+                hgvs(&refseq, 25_006_001, 25_006_001, b"A", b"G"),
+                hgvs(&ensembl, 25_006_000, 25_006_001, b"AA", b"AG"),
+            ],
+            [
+                (String::new(), Some(3)),
+                (String::new(), None),
+                ("NM_000003.1:c.*1701A>C".to_string(), Some(3)),
+                (String::new(), None),
+                (String::new(), None),
+            ]
+        );
     }
 
     /// The same insertion on a reverse-strand edited model: the bases `CTGGCA`
@@ -4561,12 +5183,79 @@ mod tests {
         );
     }
 
+    /// A row in an untranslated region of an edited model carries the rotated
+    /// bases as a coding row does, under `--shift_3prime 1` too. Ensembl VEP
+    /// 116.3 keeps the bases as written there in both runs: `codon` returns
+    /// before `shift_feature_seqs` on a row without a translation position
+    /// (TranscriptVariationAllele.pm 815-820), and `hgvs_transcript` writes
+    /// the unrotated `feature_seq` over the shifted notation (1513). The
+    /// forward-strand fixture lays NM_006933.7's bases around c.*1349,
+    /// `CTGTGT` (GRCh37 21:35471001-35471006), on c.*1347-c.*1352 (genomic 4399
+    /// plus the distance past the stop codon): `GA` inserted after c.*1348
+    /// shifts one base and reads `c.*1349_*1350insAG`, where Ensembl VEP writes
+    /// `c.*1349_*1350insGA` for `21 35471002 T TGA` on that model. The
+    /// reverse-strand fixture lays the forward-strand bases around
+    /// NM_001395858.1's c.-57, `GGCAAT` (GRCh37 21:16031360-16031365), at
+    /// genomic 6084-6089 of the 5' UTR (genomic 6050 plus the distance before
+    /// the start codon): the forward-strand `TC` between 6086 and 6087 is the
+    /// transcript's `GA` after c.-37, both runs write `c.-36_-35insAG`, and
+    /// Ensembl VEP writes `c.-57_-56insGA` for `21 16031362 C CTC` on that
+    /// model where the rotated bases read `c.-57_-56insAG`.
+    #[test]
+    fn edited_model_hgvsc_rotates_a_shifted_insertion_on_an_untranslated_row() {
+        use crate::concordance_tests::{
+            bases_from, compact_on_chr1, hgvsc_fasta_fixture, make_compact_test_transcript,
+            make_descending_reverse_strand_transcript,
+        };
+        let forward = substitution_edited_model(make_compact_test_transcript(), "NM_000001.1");
+        let reverse = substitution_edited_model(
+            compact_on_chr1(make_descending_reverse_strand_transcript()),
+            "NM_000002.1",
+        );
+        let three_prime = InputVariant::new("1".into(), 5748, 5747, b"-".to_vec(), b"GA".to_vec());
+        let five_prime = InputVariant::new("1".into(), 6087, 6086, b"-".to_vec(), b"TC".to_vec());
+        let rows = [
+            (
+                &three_prime,
+                &forward,
+                bases_from(5746, "CTGTGT"),
+                "NM_000001.1:c.*1349_*1350insAG",
+                1,
+                "NM_000001.1:c.*1348_*1349insGA",
+            ),
+            (
+                &five_prime,
+                &reverse,
+                bases_from(6084, "GGCAAT"),
+                "NM_000002.1:c.-36_-35insAG",
+                -1,
+                "NM_000002.1:c.-37_-36insGA",
+            ),
+        ];
+        for (insertion, edited, bases, shifted, offset, as_written) in rows {
+            let (_dir, fasta) = hgvsc_fasta_fixture(&bases);
+            for options in [SHIFTED, SHIFT_3PRIME] {
+                let notation = generate_hgvs(insertion, edited, Some(&fasta), options);
+                assert_eq!(notation.hgvsc.as_deref(), Some(shifted), "{options:?}");
+                assert_eq!(notation.offset, Some(offset), "{options:?}");
+            }
+            assert_eq!(
+                generate_hgvs(insertion, edited, Some(&fasta), UNSHIFTED)
+                    .hgvsc
+                    .as_deref(),
+                Some(as_written)
+            );
+        }
+    }
+
     /// The module documentation names what the HGVS port leaves out of Ensembl
     /// VEP's `hgvs_transcript` and `hgvs_protein`: the second shift along an
-    /// edited RefSeq transcript's own sequence, its GenBank protein name and
-    /// LRG reference names; and what it covers of an edited model's HGVSc, the
-    /// misalignment offset and the `shift_feature_seqs` rotation of a shifted
-    /// insertion's bases.
+    /// edited RefSeq transcript's own sequence and its GenBank protein name;
+    /// where Ensembl VEP itself returns before that shift, and where the port
+    /// shifts along the genome and where along the model's own sequence;
+    /// that an LRG reference name takes no version (`versioned_reference_name`);
+    /// and what it covers of an edited model's HGVSc, the misalignment offset
+    /// and the `shift_feature_seqs` rotation of a shifted insertion's bases.
     #[test]
     fn documented_subset_names_the_refseq_edited_transcript_paths() {
         let module_docs: String = include_str!("hgvs.rs")
@@ -4577,16 +5266,27 @@ mod tests {
             .collect::<Vec<_>>()
             .join(" ");
         for phrase in [
+            "Two paths of `hgvs_transcript` and `hgvs_protein` stay out: the second shift along a RefSeq transcript's own edited sequence (the tail of `_return_3prime`, 211-256) and the GenBank protein name of such a transcript (1750-1756).",
+            "Away from a transcript's last bases and its edited bases Ensembl VEP returns before that shift, copying a shift it already has (182-187).",
+            "The port shifts an insertion or a deletion on an edited transcript 3' along the genome (`hgvs_shift`), and along the model's own sequence only on or beside bases the model holds and the genome lacks (`place_3prime_on_model`).",
             "edited sequence",
             "`_return_3prime`",
             "GenBank",
-            "LRG",
+            "An LRG reference name carries no version, as there",
             "cached identifiers",
             "misalignment offset",
             "`shift_feature_seqs`",
         ] {
             assert!(module_docs.contains(phrase), "{phrase}: {module_docs}");
         }
+        assert!(
+            !module_docs.contains("and the LRG reference names"),
+            "the LRG rule is ported, not left out: {module_docs}"
+        );
+        assert!(
+            !module_docs.contains("147-258"),
+            "the second shift is lines 211-256 of the sub's tail: {module_docs}"
+        );
     }
 
     /// A slice with no FASTA: `substr` reads nothing, so the reference comes from
@@ -4691,6 +5391,58 @@ mod tests {
         assert_eq!(n.kind, HgvscKind::Del);
     }
 
+    /// An equal-length record whose alleles differ at two places with a base
+    /// they share between them is one `delins` over its whole span, as Ensembl
+    /// VEP writes it: `hgvs_variant_notation` classes alleles of one length,
+    /// two bases or more and no inversion, as a `delins`
+    /// (Utils/Sequence.pm:548-566), and `_clip_alleles` strips the bases they
+    /// share from the two ends alone (TranscriptVariationAllele.pm:2203-2242),
+    /// so the shared base stays in the notation. The protein notation follows
+    /// the residues: a pair inside one codon is a substitution, and a pair
+    /// that changes two neighbouring residues is one `delins` over both
+    /// (TranscriptVariationAllele.pm:2075-2077).
+    #[test]
+    fn two_changes_a_base_apart_are_written_as_one_deletion_insertion() {
+        let tx = make_test_transcript();
+        for (place, start, reference, alt, hgvsc, hgvsp) in [
+            (
+                "bases 4 and 6 of intron 1",
+                25_000_303,
+                b"ACA",
+                b"GCT",
+                "ENST00000000001.1:c.250+4_250+6delinsGCT",
+                None,
+            ),
+            (
+                "bases 1 and 3 of codon 4",
+                25_000_059,
+                b"AAA",
+                b"GAC",
+                "ENST00000000001.1:c.10_12delinsGAC",
+                Some("ENSP00000000001.1:p.Lys4Asp"),
+            ),
+            (
+                "base 3 of codon 4 and base 2 of codon 5",
+                25_000_061,
+                b"ATT",
+                b"CTC",
+                "ENST00000000001.1:c.12_14delinsCTC",
+                Some("ENSP00000000001.1:p.Lys4_Phe5delinsAsnSer"),
+            ),
+        ] {
+            let variant = InputVariant::new(
+                "21".into(),
+                start,
+                start + 2,
+                reference.to_vec(),
+                alt.to_vec(),
+            );
+            let notation = generate_hgvs(&variant, &tx, None, SHIFTED);
+            assert_eq!(notation.hgvsc.as_deref(), Some(hgvsc), "{place}");
+            assert_eq!(notation.hgvsp.as_deref(), hgvsp, "{place}");
+        }
+    }
+
     #[test]
     fn test_format_hgvs_string_bodies() {
         let n = |kind: HgvscKind, r: &[u8], a: &[u8]| HgvscNotation {
@@ -4781,9 +5533,9 @@ mod tests {
     /// `_get_hgvs_protein_format` opens a parenthesis right after `p.` and closes
     /// it after the whole description when asked for the predicted format
     /// (TranscriptVariationAllele.pm 1908, 2040), which `--hgvsp_use_prediction`
-    /// passes down (OutputFactory.pm 1760). A synonymous description keeps its `=`
+    /// passes down (OutputFactory.pm 1769). A synonymous description keeps its `=`
     /// inside the parentheses here; the output layer escapes it afterwards
-    /// (OutputFactory.pm 1764), so the text formats print `p.(Ala2%3D)`.
+    /// (OutputFactory.pm 1773), so the text formats print `p.(Ala2%3D)`.
     #[test]
     fn hgvsp_prediction_format_wraps_the_description() {
         let tx = make_test_transcript();
@@ -5008,6 +5760,37 @@ mod tests {
         assert_eq!(
             generate_hgvsp(&variant, &tx, None).as_deref(),
             Some("ENSP00000000001.1:p.Ter283TyrextTer?")
+        );
+    }
+
+    /// A shifted allele keeps the two alleles as the record writes them: the
+    /// row's own where the record's were not cut, the kept string otherwise.
+    #[test]
+    fn a_shifted_allele_carries_the_alleles_as_the_record_writes_them() {
+        let tx = make_test_transcript();
+        let insertion = InputVariant::new(
+            "21".into(),
+            25_000_059,
+            25_000_058,
+            b"-".to_vec(),
+            b"TAANNN".to_vec(),
+        );
+        let moved = shifted_variant(
+            &insertion,
+            Strand::Forward,
+            &tx,
+            (25_000_061, 25_000_060),
+            None,
+        )
+        .expect("an insertion has a shifted allele");
+        assert_eq!(moved.original_allele_string.as_deref(), Some("-/TAANNN"));
+        let mut cut = insertion.clone();
+        cut.original_allele_string = Some("GGA/NNNTTAGGA".to_string());
+        let moved = shifted_variant(&cut, Strand::Forward, &tx, (25_000_061, 25_000_060), None)
+            .expect("an insertion has a shifted allele");
+        assert_eq!(
+            moved.original_allele_string.as_deref(),
+            Some("GGA/NNNTTAGGA")
         );
     }
 }

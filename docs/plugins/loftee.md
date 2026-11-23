@@ -8,10 +8,10 @@ from Ensembl VEP's LoF plugin.
 
 | Property      | Value                                                                                                                                                                  |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Builds        | GRCh38, verified on real data; the GRCh37 bundle is read, but its GERP table carries no licence text, so GRCh37 verdicts are unverified                                |
+| Builds        | GRCh38, verified on real data; on GRCh37 the comparison with Ensembl VEP runs on genome-wide ClinVar, gnomAD v2.1.1 and 1000 Genomes Phase 3 with a synthetic GERP table and a synthetic conservation database, because the bundle's GERP table is not redistributed here |
 | Matches       | consequence filter over the transcript model, `--fasta` splice motifs, GERP                                                                                            |
 | Output fields | `LoF`, `LoF_filter`, `LoF_flags`, `LoF_info`                                                                                                                           |
-| Data source   | [LoFTEE data](https://personal.broadinstitute.org/konradk/loftee_data/), per assembly: `GRCh38/` (GERP bigWig) or `GRCh37/` (GERP tabix TSV), plus human_ancestor.fa |
+| Data source   | [LoFTEE data](https://personal.broadinstitute.org/konradk/loftee_data/), per assembly: `GRCh38/` (GERP bigWig) or `GRCh37/` (GERP table), plus human_ancestor.fa     |
 
 **Data files.** Both upstream bundles are published under
 <https://personal.broadinstitute.org/konradk/loftee_data/>, one directory per
@@ -22,11 +22,12 @@ assembly; the files below are what each assembly needs.
 | GRCh38   | `GRCh38/` | `human_ancestor.fa.gz` with its `.fai` and `.gzi`; `gerp_conservation_scores.homo_sapiens.GRCh38.bw` | `human_ancestor_fa=`, `gerp_bigwig=` |
 | GRCh37   | `GRCh37/` | `human_ancestor.fa.gz` with its `.fai` and `.gzi`; `GERP_scores.final.sorted.txt.gz` with its `.tbi` | `human_ancestor_fa=`, `gerp_tabix=`, `run_splice_predictions=0` |
 
-Every file is used as shipped. vep-rs reads the bgzipped `human_ancestor.fa.gz`
-through the `.fai` and `.gzi` beside it. It reads the GERP bigWig on GRCh38 and
-the tabix-indexed GERP TSV with its `.tbi` on GRCh37. The PhyloCSF databases of
-the same directories (`loftee.sql.gz` on GRCh38, `phylocsf_gerp.sql.gz` on
-GRCh37) feed `conservation_file`, which vep-rs refuses, and are not needed.
+None of these files needs converting. vep-rs reads the bgzipped
+`human_ancestor.fa.gz` through the `.fai` and `.gzi` beside it. It reads the
+GERP bigWig on GRCh38 and the tabix-indexed GERP TSV with its `.tbi` on GRCh37.
+The PhyloCSF databases of the same directories (`loftee.sql.gz` on GRCh38,
+`phylocsf_gerp.sql.gz` on GRCh37) feed `conservation_file` once unpacked; a run
+without the key needs neither.
 
 A plain `human_ancestor.fa` with its own `.fai` works the same (the bundle's
 `.gzi` belongs to the compressed file alone):
@@ -46,8 +47,8 @@ samtools faidx human_ancestor.fa
 --plugin LoFTEE,human_ancestor_fa=$LOFTEE/human_ancestor.fa,\
 gerp_bigwig=$LOFTEE/gerp_conservation_scores.homo_sapiens.GRCh38.bw
 
-# GRCh37: upstream ships GERP as a tabix per-base TSV instead, and a run
-# names run_splice_predictions=0 or is refused
+# GRCh37: the master branch reads its GERP file with tabix (LoF.pm lines
+# 138-141), and a run names run_splice_predictions=0 or is refused
 --plugin LoFTEE,human_ancestor_fa=$LOFTEE/human_ancestor.fa,\
 gerp_tabix=$LOFTEE/GERP_scores.final.sorted.txt.gz,\
 run_splice_predictions=0
@@ -68,20 +69,21 @@ names: `--plugin LoF,...`, the Ensembl VEP plugin's name, and
 
 | Parameter | Read on | Meaning |
 | --- | --- | --- |
-| `human_ancestor_fa` | both | Indexed FASTA, plain (`.fa` + `.fai`) or bgzipped (`.fa.gz` + `.fai` + `.gzi`, the form the upstream bundle ships). Enables the `ANC_ALLELE` filter (SNP-only). |
+| `human_ancestor_fa` | both | Indexed FASTA, plain (`.fa` + `.fai`), bgzipped (`.fa.gz` + `.fai` + `.gzi`, the form the upstream bundle ships) or razip-compressed (`.fa.rz` + `.fai`). Enables the `ANC_ALLELE` filter (SNP-only). On GRCh37 a run without the key reads `human_ancestor.fa.rz` from the working directory when the file and its `.fai` are there, the `master` branch's default (`LoF.pm` line 77); `human_ancestor_fa=false` leaves the filter off ([LoFTEE on GRCh37](loftee-grch37.md#what-the-master-branch-does-besides)). |
 | `gerp_bigwig` | both | GERP conservation bigWig, as shipped in the upstream `grch38` bundle. Enables the default GERP-weighted `END_TRUNC` filter. |
-| `gerp_tabix` | both | GERP as a tabix-indexed per-base TSV, as shipped in the upstream `master`/GRCh37 bundle (`GERP_scores.final.sorted.txt.gz` + `.tbi`). Same filter, different on-disk format. Alias `gerp_scores`. Alias `gerp_file`, the `master` branch's own key. |
+| `gerp_tabix` | both | GERP as a tabix-indexed TSV with its `.tbi` beside it, read as the `master` branch reads its GERP file with `tabix`: the third tab-separated field of each row a region returns is one base's score (`LoF.pm` lines 138-141; `gerp_dist.pl` lines 92-96 and 119-121). That file's default name is `GERP_scores.final.sorted.txt.gz` (`LoF.pm` line 132). Same filter, different on-disk format. Alias `gerp_scores`. Alias `gerp_file`, the `master` branch's own key. |
 | `gerp` | both | Assembly-agnostic spelling of the GERP source; classifies the file by its extension. |
 | `loftee_path` | both | The LoFTEE directory. When no GERP source is named, the GRCh38 default is `gerp_conservation_scores.homo_sapiens.GRCh38.bw` appended to this value as given (`LoF.pm` lines 83 and 130; `/vep/loftee/` when absent), so the value ends with a slash; on GRCh37 the default is the `master` branch's fixed `/vep/loftee/GERP_scores.final.sorted.txt.gz`. An unreadable default is refused at plugin initialization like any GERP path. |
-| `use_gerp_end_trunc` | GRCh38 | Default `true`. With no GERP source, `use_gerp_end_trunc=false` selects the 5%-percentile `END_TRUNC` fallback, which needs no data file. Ensembl VEP's plugin reads the word `false` as on and switches the GERP rule off under `0` alone ([section 3](#3-use_gerp_end_truncfalse-keeps-the-gerp-rule)). On GRCh37 the key is logged and not read: the `master` branch never reads it and has no percentile rule (`LoF.pm` lines 79 and 253), so a GRCh37 run needs its GERP file. |
-| `gerp_end_trunc_cutoff` | GRCh38 | Default `-58`, the `grch38` branch's. On GRCh37 the key is logged and not read: the `master` branch compares with a fixed `+180` (`LoF.pm` line 268), a cutoff of the opposite sign. |
+| `use_gerp_end_trunc` | GRCh38 | Default `true`. With no GERP source, `use_gerp_end_trunc=false` selects the 5%-percentile `END_TRUNC` fallback, which needs no data file. Ensembl VEP's plugin reads the word `false` as on and switches the GERP rule off under `0` alone ([section 3](#3-use_gerp_end_truncfalse-keeps-the-gerp-rule)). On GRCh37 the key is not read: the `master` branch never reads it and has no percentile rule (`LoF.pm` lines 79 and 253), so a GRCh37 run needs its GERP file. |
+| `gerp_end_trunc_cutoff` | GRCh38 | Default `-58`, the `grch38` branch's. On GRCh37 the key is not read: the `master` branch compares with a fixed `+180` (`LoF.pm` line 268), a cutoff of the opposite sign. |
 | `min_intron_size` | both | Default `15`. Tunable, as in Ensembl VEP's plugin. |
-| `filter_position` | GRCh38 | Default `0.05`, the percentile rule's cutoff. Tunable, as in Ensembl VEP's plugin. On GRCh37 the key is logged and not read, the `master` branch having no percentile rule. |
+| `filter_position` | GRCh38 | Default `0.05`, the percentile rule's cutoff. Tunable, as in Ensembl VEP's plugin. On GRCh37 the key is not read, the `master` branch having no percentile rule. |
 | `check_complete_cds` | both | Default `false`. Under `true`, `INCOMPLETE_CDS` filters the transcripts the cache marks `cds_start_NF` or `cds_end_NF`; Ensembl VEP's plugin filters every multi-exon transcript ([section 2](#2-check_complete_cds-filters-every-multi-exon-transcript)). |
-| `skip_lof_info` | GRCh37 | Any value but `0` or an empty one, true by Perl's string truth, drops `LoF_info` from every row and leaves `LoF`, `LoF_filter` and `LoF_flags`, as the `master` branch does (`LoF.pm` lines 243 and 339). On GRCh38, whose branch has no such key, the word is logged as unknown and changes nothing. |
-| `tabix_path` | GRCh37 | Accepted and unused: the `master` branch names its `tabix` program with it (`LoF.pm` lines 130 and 141), and vep-rs reads the GERP file itself. On GRCh38, whose branch has no such key, the word is logged as unknown. |
+| `skip_lof_info` | GRCh37 | Any value but `0` or an empty one, true by Perl's string truth, drops `LoF_info` from every row and leaves `LoF`, `LoF_filter` and `LoF_flags`, as the `master` branch does (`LoF.pm` lines 243 and 339). On GRCh38, whose branch has no such key, the word is not read and changes nothing. |
+| `tabix_path` | GRCh37 | Accepted and unused: the `master` branch names its `tabix` program with it (`LoF.pm` lines 130 and 141), and vep-rs reads the GERP file itself. On GRCh38, whose branch has no such key, the word is not read. |
+| a key of the other assembly | both | `use_gerp_end_trunc`, `gerp_end_trunc_cutoff` and `filter_position` on GRCh37, `skip_lof_info` and `tabix_path` on GRCh38: the key changes no row and raises no warning, as Ensembl VEP's LoF plugin stores the word and prints nothing for it (`LoF.pm` lines 67-72). vep-rs names it in a status line on standard error, which `--quiet` drops, and never in the warnings file. |
 | `run_splice_predictions` | both | `0` switches the splice-prediction layer off and is accepted silently, so an Ensembl VEP `LoF` argument string is reused as given. A value true by Perl's string truth asks for the layer, which vep-rs does not implement, and is refused at plugin initialization. An empty value leaves the branch's default, as an absent key does: the layer off on GRCh38 and on on GRCh37, where a run whose key's last value is not `0` is refused the same way ([LoFTEE on GRCh37](loftee-grch37.md)). |
-| `conservation_file` | both | `false` in any letter case, or an empty value, leaves the PhyloCSF lookup off, as the plugin's default does. Any other value names the database Ensembl VEP's plugin reads for the PhyloCSF items ([What LoFTEE annotates](#what-loftee-annotates)), which vep-rs does not compute, and is refused at plugin initialization: the plugin is dropped under `LoFTEE: conservation_file=<value> asks for the PhyloCSF items of LoF_flags and LoF_info, which vep-rs does not compute`, and under `--safe` the run stops with it, as for a true `run_splice_predictions`. On GRCh37 the `master` branch also takes whole-exon GERP totals from this database, which vep-rs sums from the GERP file ([LoFTEE on GRCh37](loftee-grch37.md#what-the-master-branch-does-besides)). |
+| `conservation_file` | both | `false` in any letter case, or an empty value, leaves the PhyloCSF lookup off, as the plugin's default does. Any other value names the SQLite database Ensembl VEP's plugin reads for the PhyloCSF items ([What LoFTEE annotates](#what-loftee-annotates)) and, on GRCh37, for whole-exon GERP totals ([LoFTEE on GRCh37](loftee-grch37.md#what-the-master-branch-does-besides)); vep-rs opens it read-only. A value naming no file, or a file that is no SQLite database, is refused at plugin initialization. So is the word `mysql`, under which Ensembl VEP's plugin opens a database connection (`LoF.pm` line 122): the plugin is dropped under `LoFTEE: conservation_file=mysql asks for a database connection, which vep-rs does not open: pass the database file's path under conservation_file`, and under `--safe` the run stops with it, as for a true `run_splice_predictions`. |
 | `apply_all`, `fast_length_calculation`, `debug` | neither | Accepted with a warning naming the key, and not implemented. Under `apply_all` set to any word but `false`, Ensembl VEP's plugin writes `LoF` with an empty value, and its `LoF_info` items, on every protein-coding row (`LoF.pm` lines 131 and 227); vep-rs writes the `LoF` fields on loss-of-function rows alone. |
 
 ### How a parameter word is read
@@ -141,8 +143,8 @@ The MaxEntScan + logistic-regression + de-novo-donor-SVM splice-prediction layer
 and the `OS` confidence class, off by default on the `grch38` branch, are not
 implemented.
 
-The PhyloCSF items below are not computed. None is a filter, so none changes the
-`HC` or `LC` call.
+Under a `conservation_file` naming a database, the PhyloCSF items below are read
+from it. None is a filter, so none changes the `HC` or `LC` call.
 
 | Item | Field | Written by Ensembl VEP's plugin (`LoF.pm` lines 274-285) |
 | --- | --- | --- |
@@ -150,14 +152,19 @@ The PhyloCSF items below are not computed. None is a filter, so none changes the
 | `PHYLOCSF_TOO_SHORT` | `LoF_info` | On such a row whose exon the database lacks. |
 | `PHYLOCSF_WEAK`, `PHYLOCSF_UNLIKELY_ORF` | `LoF_flags` | When the annotated frame's score is negative: `PHYLOCSF_UNLIKELY_ORF` if the highest score is positive, `PHYLOCSF_WEAK` otherwise. |
 
+| Assembly | Table read | Its exon column | A database without the table |
+| --- | --- | --- | --- |
+| GRCh38 | `phylocsf_summary` (`LoF.pm` line 556) | `exon` | Each stop-gained or frameshift row with an exon number fails and keeps no LoF field, as in Ensembl VEP. |
+| GRCh37 | `phylocsf_data` (the `master` branch's `LoF.pm` line 570) | `exon_number` | The same. |
+
 ## Where LoFTEE differs from Ensembl VEP's LoF plugin
 
-Five behaviours of the LoF plugin Ensembl VEP 116.2 runs for LoFTEE, the
+Six behaviours of the LoF plugin Ensembl VEP 116.3 runs for LoFTEE, the
 `grch38` branch, are not reproduced. Each is a documented class whose section
 names the rows a comparison sets aside. The format comparator codes those of
-sections 1, 4 and 5 and no tool the other two. No committed row falls under any,
-as [Intended divergences from Ensembl VEP](../intended-divergences.md) lists
-them. Its [How to read the
+sections 1, 4, 5 and 6 and no tool the other two. No committed corpus row falls
+under any, as [Intended divergences from Ensembl
+VEP](../intended-divergences.md) lists them. Its [How to read the
 counts](../intended-divergences.md#how-to-read-the-counts) defines the format
 comparator and the comparison case the sections name.
 
@@ -167,10 +174,10 @@ against the GRCh38 LoFTEE golden corpus's cache, reference and data files
 (`tests/golden/116/GRCh38-plugin-loftee/`).
 
 Each class carries its tier under the rule of [Intended divergences from Ensembl
-VEP](../intended-divergences.md). Tier 1 is a shape the chromosome 21 population
+VEP](../intended-divergences.md). Tier 1 is a shape the chromosome 21
 cuts carry with no flag. Tier 2 is one that needs a flag or plugin on ordinary
 data. Tier 3 is one ordinary data does not carry. The counts are over the cuts'
-15,646,481 records, the 111 golden corpora and their 392 flag sets.
+15,646,481 records, the 152 golden corpora and their 511 flag sets.
 
 ### 1. The GC-to-GT donor filter judged by a record's first alternate allele
 
@@ -221,10 +228,10 @@ No row on the committed corpora: the LoFTEE golden corpus holds no multi-allelic
 record (0 of 25). The class therefore applies to 0 rows of its 16 compared
 formats, and no comparison case loads the plugin.
 
-**How often the shape occurs.** Tier 2: 3,506 of the population cuts' records
+**How often the shape occurs.** Tier 2: 3,506 of the cuts' records
 (224 per million) are multi-allelic substitutions whose alleles differ in being
 `T`, or `A` on the reverse strand; the transcript decides whether a `GC` donor
-is reached. 56 corpora carry the shape and 4 flag sets run the plugin.
+is reached. 72 corpora carry the shape and 10 flag sets run the plugin.
 
 #### 1.1 A second alternate allele at a GC donor
 
@@ -285,7 +292,7 @@ corpus's four runs pass no `check_complete_cds`, and no comparison case loads
 the plugin.
 
 **How often the shape occurs.** Tier 3: the shape is the parameter
-`check_complete_cds:true` itself, which none of the 392 flag sets passes; 4 of
+`check_complete_cds:true` itself, which none of the 511 flag sets passes; 10 of
 them run the plugin. Every multi-exon stop-gained or frameshift row then carries
 the filter, so the defect needs no particular record.
 
@@ -294,11 +301,16 @@ the filter, so the defect needs no particular record.
 **In short.** The GRCh38 record `21 42076175 4454616 G T`
 (`tests/golden/116/GRCh38-plugin-loftee/variants.vcf`) is a stop gain on four
 UMODL1 transcripts, none marked `cds_start_NF` or `cds_end_NF`. Run with
-`check_complete_cds:true`, Ensembl VEP 116.2 writes
+`check_complete_cds:true`, Ensembl VEP 116.3 writes
 `LoF=LC;LoF_filter=INCOMPLETE_CDS` on all four; vep-rs writes `LoF=HC` with the
 same `LoF_info`, as both engines do without the parameter. Over the corpus's 25
-records Ensembl VEP filters 53 rows and vep-rs 7. The 7 are the frameshift rows
-of transcripts flagged `cds_end_NF`, where the two engines agree.
+records Ensembl VEP filters 53 rows and vep-rs 7. The 7 are among the corpus's
+10 frameshift rows of `cds_end_NF` transcripts, where the engines agree:
+
+| Rows | Exon number | Both engines, under `check_complete_cds:true` |
+| --- | --- | --- |
+| 7 | carried | `LoF=LC;LoF_filter=INCOMPLETE_CDS` |
+| 3, all of record `977916` | none: an insertion just before an exon's first base, a span that overlaps no exon (`BaseTranscriptVariation.pm`, lines 690-693) | `LoF=HC;LoF_flags=NO_EXON_NUMBER`: line 262 of `LoF.pm` asks for an exon number before the check of line 268 |
 
 ### 3. `use_gerp_end_trunc:false` keeps the GERP rule
 
@@ -347,14 +359,14 @@ the plugin.
 
 **How often the shape occurs.** Tier 3: the shape is the parameter
 `use_gerp_end_trunc` spelt with an off word Perl reads as true, which none of
-the 392 flag sets passes. 4 of them run the plugin.
+the 511 flag sets passes. 10 of them run the plugin.
 
 #### 3.1 A stop gain in the single exon of CLDN8
 
 **In short.** The GRCh38 record `21 30215764 64605 G T`
 (`tests/golden/116/GRCh38-plugin-loftee/variants.vcf`) is a stop gain in the
 single exon of CLDN8, 23.9 percent into the coding sequence. Run with
-`use_gerp_end_trunc:false`, Ensembl VEP 116.2 writes the GERP rule's row
+`use_gerp_end_trunc:false`, Ensembl VEP 116.3 writes the GERP rule's row
 unchanged,
 `LoF=LC;LoF_filter=END_TRUNC;LoF_flags=SINGLE_EXON;LoF_info=PERCENTILE:0.238938053097345,GERP_DIST:-204.02089612931,BP_DIST:516,DIST_FROM_LAST_EXON:-333,50_BP_RULE:FAIL`;
 vep-rs writes
@@ -387,17 +399,22 @@ own. A one-base substitution whose base equals the ancestral base at its
 position is filtered `ANC_ALLELE`, whatever its siblings are. That is the call
 Ensembl VEP gives the allele on a line of its own.
 
-**Where it is in Ensembl VEP's source** (`LoF.pm`, the `grch38` branch;
-`ensembl-vep` at release/116.2):
+**Where it is in Ensembl VEP's source** (`LoF.pm`, the `grch38` and `master`
+branches; `ensembl-vep` at release/116.3):
 
-- `LoF.pm`, lines 312-313, `run`: `ANC_ALLELE` is pushed when
-  `check_for_ancestral_allele` holds for the allele, under any
-  `human_ancestor_fa` but the word `false` in any letter case. vep-rs reads that
-  off word the same way.
-- `LoF.pm`, line 531, `check_for_ancestral_allele`: `return 0` when the
-  variation feature's allele string matches `/-/` or its length is not 3. Lines
-  535-544: the allele's own sequence is compared with the one base
-  `samtools faidx` reads from the ancestral FASTA at the record's position.
+| The same statement of `LoF.pm` | On the `grch38` branch | On the `master` branch, which Ensembl VEP runs on GRCh37 |
+| --- | --- | --- |
+| `run` pushes `ANC_ALLELE` | lines 312-313 | lines 326-327 |
+| `check_for_ancestral_allele` tests the allele string | line 531 | line 545 |
+| It compares the allele with the ancestral base | lines 535-544 | lines 549-558 |
+
+- `run`: `ANC_ALLELE` is pushed when `check_for_ancestral_allele` holds for the
+  allele, under any `human_ancestor_fa` but the word `false` in any letter case.
+  vep-rs reads that off word the same way.
+- `check_for_ancestral_allele`: `return 0` when the variation feature's allele
+  string matches `/-/` or its length is not 3. Past that test, the allele's own
+  sequence is compared with the one base `samtools faidx` reads from the
+  ancestral FASTA at the record's position.
 - `Bio/EnsEMBL/VEP/Parser/VCF.pm`, line 342: the variation feature's allele
   string is the REF and every ALT joined by `/`. Every allele of the record
   shares that one string.
@@ -421,11 +438,11 @@ Against the `ensemblorg/ensembl-vep` image, which ships no `samtools`, the
 plugin applies the filter to no record at all. A comparison with that image's
 output therefore never reaches the class.
 
-**How often the shape occurs.** Tier 2: 3,892 of the population cuts' records
+**How often the shape occurs.** Tier 2: 3,892 of the cuts' records
 (249 per million) are multi-allelic records of one-base alleles, whose allele
 string is longer than three characters. The transcript and the ancestral
 sequence decide whether an allele is a loss of function equal to the ancestral
-base. 61 corpora carry the shape and 4 flag sets run the plugin.
+base. 77 corpora carry the shape and 10 flag sets run the plugin.
 
 #### 4.1 A stop gain whose base is the ancestral one, alone and beside a sibling
 
@@ -509,14 +526,14 @@ so the 197 LoF rows of its default output are byte-identical. The class applies
 to 0 rows of its 16 compared formats, and no comparison case loads the plugin.
 
 **How often the shape occurs.** Tier 3: the shape is a GERP bigWig carrying a
-zoom level, which none of the 392 flag sets passes. 4 of them run the plugin,
-each with the corpus's zoom-free file.
+zoom level, which none of the 511 flag sets passes. 10 of them run the plugin,
+each with its corpus's zoom-free file.
 
 The upstream GRCh38 bundle's `gerp_conservation_scores.homo_sapiens.GRCh38.bw`,
 the file [Parameters and data](#loftee) names, carries ten zoom levels, the
 smallest spanning 40 bases. Under it every exon interval of 80 bases or more is
 read from a zoom level. With the corpus's values rebuilt into a bigWig carrying
-zoom levels, Ensembl VEP 116.2's `GERP_DIST` differs from vep-rs's on every
+zoom levels, Ensembl VEP 116.3's `GERP_DIST` differs from vep-rs's on every
 stop-gained and frameshift row with a `LoF` field, 76 of 83, and `LoF`,
 `LoF_filter` and `LoF_flags` on none: no record's two totals straddle the
 cutoff.
@@ -531,7 +548,7 @@ therefore the 517 bases from the stop codon to the variant,
 engines write
 `LoF=LC;LoF_filter=END_TRUNC;LoF_flags=SINGLE_EXON;LoF_info=PERCENTILE:0.238938053097345,GERP_DIST:-204.02089612931,BP_DIST:516,DIST_FROM_LAST_EXON:-333,50_BP_RULE:FAIL`.
 With the same per-base values rebuilt into a bigWig carrying zoom levels of 10,
-40, 160, 640 and 2,560 bases, Ensembl VEP 116.2 writes
+40, 160, 640 and 2,560 bases, Ensembl VEP 116.3 writes
 `GERP_DIST:-283.796467024088` and vep-rs `GERP_DIST:-204.02089612931`, the row
 otherwise unchanged; the reproduction
 `scripts/divergences/reproductions/loftee_gerp_zoom_level_summary.toml` rebuilds
@@ -550,18 +567,20 @@ the plugin's own expression yields on the zoom-free file. The upstream bundle's
 file reads `-282.329269599915` for the same interval, whose per-base values
 there also sum to `-204.02089612931`; its bins fall on other boundaries.
 
-### A sixth behaviour, without a class
+### 6. The `NAGNAG_SITE` context read on the first transcript's strand
 
-**The strand of the `NAGNAG_SITE` context.** `LoF.pm`, lines 489-494, reads the
-nine bases around a splice-acceptor variant once per record, oriented to the
-strand of the first transcript that asks. It keeps that sequence for the
-record's other transcripts. A second protein-coding transcript whose acceptor is
-the same base on the other strand is therefore tested in the first transcript's
-orientation, and `AG.AG` is not its own reverse complement, so its flag follows
-the order of the transcripts. vep-rs orients the nine bases to each transcript's
-own strand.
+**The defect in one sentence.** Ensembl VEP's LoF plugin reads the nine bases
+around a splice-acceptor variant once per record, on the strand of the first
+transcript it tests, and keeps them for the record's other transcripts
+(`LoF.pm`, lines 489-494). A protein-coding transcript whose acceptor is the
+same base on the other strand is tested in the first transcript's orientation,
+so its flag follows the order of the transcripts. vep-rs orients the nine bases
+to each row's own transcript.
 
-The committed caches hold no acceptor base shared by protein-coding transcripts on both strands, so the behaviour has no class.
+**The class it produces.** `loftee_nagnag_site_first_transcript_strand`, tier 3:
+no committed cache holds such a base. [Its
+page](../divergences/loftee-nagnag-site-first-transcript-strand.md) gives a
+fabricated record, both engines' rows and the comparator's rule.
 
 ## Where next
 

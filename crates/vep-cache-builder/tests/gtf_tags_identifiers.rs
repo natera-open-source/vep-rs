@@ -5,7 +5,10 @@
 //! the `transcript` line that names it whole: transcripts whose identifiers
 //! share a first component (`T1.1`, `T1.2`) each take their own line's, and
 //! a line that carries a version, as `transcript_version` or inside its
-//! `transcript_id`, tags the model of that version alone.
+//! `transcript_id`, tags the model of that version alone. A line states its
+//! identifier and its version apart, so a version written both ways names
+//! the line once, and a model at version 1 (`T1`) and a sibling written
+//! `T1.1` each take their own line.
 
 use std::collections::BTreeMap;
 use std::process::Command;
@@ -164,4 +167,93 @@ fn a_gtf_line_tags_the_model_of_its_version() {
         attribute_codes(&model(&["T1.3"], None), &gtf_line("T1", Some(3), &tag)),
         one("T1.3", &["cds_start_NF"])
     );
+}
+
+/// A GTF line that writes its version twice, inside its `transcript_id` and
+/// as `transcript_version` (`T1.3` at version 3), is the line of `T1` at
+/// version 3: it tags that model, the model written `T1.3` at that version or
+/// at none, and no model of another version.
+#[test]
+fn a_version_written_twice_names_the_line_once() {
+    let tag = ["cds_start_NF"];
+    let twice = gtf_line("T1.3", Some(3), &tag);
+
+    assert_eq!(
+        attribute_codes(&model(&["T1"], Some(3)), &twice),
+        one("T1", &tag)
+    );
+    assert_eq!(
+        attribute_codes(&model(&["T1.3"], Some(3)), &twice),
+        one("T1.3", &tag)
+    );
+    assert_eq!(
+        attribute_codes(&model(&["T1.3"], None), &twice),
+        one("T1.3", &tag)
+    );
+
+    assert_eq!(
+        attribute_codes(&model(&["T1"], Some(4)), &twice),
+        one("T1", &[])
+    );
+    assert_eq!(
+        attribute_codes(&model(&["T1"], None), &twice),
+        one("T1", &[])
+    );
+    assert_eq!(
+        attribute_codes(&model(&["T1.3"], Some(4)), &twice),
+        one("T1.3", &[])
+    );
+}
+
+/// The transcript `T1` at version 1 and its sibling written `T1.1` each carry
+/// the kept tags of their own GTF line, in either order of the lines: the
+/// line that states `T1` at version 1 beside the line written `T1.1`, with a
+/// version of its own or without; the line written `T1` beside the line
+/// written `T1.1` in a file that writes no version; and the line written
+/// `T1.1` beside the line written `T1.1.1` in a file that writes each version
+/// inside the identifier. Where the file holds the line written `T1.1` alone,
+/// it is the sibling's, whose identifier it is as written, and `T1` carries
+/// no tag.
+#[test]
+fn a_versioned_model_and_a_dotted_sibling_keep_their_own_tags() {
+    let siblings = model(&["T1", "T1.1"], Some(1));
+    let first = ["cds_start_NF"];
+    let second = ["cds_end_NF"];
+    let own = BTreeMap::from([
+        ("T1".to_string(), vec!["cds_start_NF".to_string()]),
+        ("T1.1".to_string(), vec!["cds_end_NF".to_string()]),
+    ]);
+
+    for lines in [
+        [
+            gtf_line("T1", Some(1), &first),
+            gtf_line("T1.1", None, &second),
+        ],
+        [
+            gtf_line("T1.1", None, &second),
+            gtf_line("T1", Some(1), &first),
+        ],
+        [
+            gtf_line("T1", Some(1), &first),
+            gtf_line("T1.1", Some(1), &second),
+        ],
+        [
+            gtf_line("T1", None, &first),
+            gtf_line("T1.1", None, &second),
+        ],
+        [
+            gtf_line("T1.1", None, &first),
+            gtf_line("T1.1.1", None, &second),
+        ],
+    ] {
+        assert_eq!(
+            attribute_codes(&siblings, &lines.concat()),
+            own,
+            "{lines:?}"
+        );
+    }
+
+    let alone = attribute_codes(&siblings, &gtf_line("T1.1", None, &second));
+    assert!(alone["T1"].is_empty(), "{alone:?}");
+    assert_eq!(alone["T1.1"], ["cds_end_NF"]);
 }

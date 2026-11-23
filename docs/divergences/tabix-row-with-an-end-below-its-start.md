@@ -1,12 +1,12 @@
 # A VCF source row whose `END` lies below its position
 
-**The defect in one sentence.** Ensembl VEP 116.2 reads a `--custom` VCF source, and a plugin's VCF table, through the tabix reader of htslib 1.9, which spans a row from its position to the value of its INFO `END` key. A row whose `END` lies below its position, or whose `END` is not a number (`END=x`, `END=.`, `END=`), gets a span that ends before it starts, and no query over the row's own bases returns it. A variant inside the row's reference allele carries none of the source's fields. vep-rs matches such a variant against the row as against any other row and fills the source's field.
+**The defect in one sentence.** Ensembl VEP 116.3 reads a `--custom` VCF source, and a plugin's VCF table, through the tabix reader of htslib 1.9, which spans a row from its position to the value of its INFO `END` key. A row whose `END` lies below its position, or whose `END` is not a number (`END=x`, `END=.`, `END=`), gets a span that ends before it starts, and no query over the row's own bases returns it. A variant inside the row's reference allele carries none of the source's fields. vep-rs matches such a variant against the row as against any other row and fills the source's field.
 
 **Why this is a defect.** The VCF specification defines `END` as the end of the record's reference allele, so an `END` below the position or one that is no number is a malformed tag, a dot the missing value, and the row still spans the allele in its `REF` column. The reader keeps such a value in place of the allele's end and hands every query an interval that ends before it starts. htslib 1.11 and later ignore such a tag with a warning and span the row by its reference allele. Ensembl VEP's own overlap test spans a row by its reference allele too, so the reader drops rows the engine would have matched.
 
 **What vep-rs does instead.** vep-rs's `--custom` reader and its gnomADMt reader read an INFO `END` to its leading digits and keep it when it lies at or past the row's position. Otherwise the row spans its reference allele, as htslib 1.11 and later span it. Its SpliceAI reader reads no `END` and places every row at its position. Either way a variant inside the row is matched against it as against any other.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2, `ensembl-io` at release/116, `ensembl-variation` at release/116, Bio::DB::HTS 2.11, htslib 1.9):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3, `ensembl-io` at release/116, `ensembl-variation` at release/116, Bio::DB::HTS 2.11, htslib 1.9):
 
 - `Bio/EnsEMBL/VEP/AnnotationSource/File.pm`, line 321: a `--custom` source is asked for each variant's window, `seek(chr, start - 1, end + 1)`. `Bio/EnsEMBL/IO/TabixParser.pm`, line 89: the seek is `Bio::DB::HTS::Tabix->query("chr:start-end")`. A plugin's table takes the same route through `Bio/EnsEMBL/Variation/Utils/BaseVepTabixPlugin.pm`, lines 596-602, `_get_data_hts`.
 - `Bio/DB/HTS/Tabix/Iterator.pm`, line 57: each row of the answer is read with htslib's `tbx_iter_next`.
@@ -55,7 +55,7 @@ Both engines run `--custom file=span.vcf.gz,short_name=SPAN,format=vcf,type=over
 
 ### 1.3 What each engine writes
 
-The rows in the default format. Ensembl VEP 116.2:
+The rows in the default format. Ensembl VEP 116.3:
 
 ```
 in_ctrl_no_end	21:5029102	G	-	-	-	intergenic_variant	-	-	-	-	-	-	IMPACT=MODIFIER;SPAN=ctrl_no_end
@@ -96,7 +96,7 @@ vep -i record.vcf -o out.txt --offline --json_cache <cache> --assembly GRCh38 \
   --custom file=span.vcf.gz,short_name=SPAN,format=vcf,type=overlap,coords=0
 ```
 
-vep-rs writes a `SPAN` item on all six rows. Ensembl VEP 116.2 writes one on the rows for `in_ctrl_no_end` and `in_ctrl_end` alone. Setting those four rows' `END` to the end of their reference allele, or removing it, makes the engines agree.
+vep-rs writes a `SPAN` item on all six rows. Ensembl VEP 116.3 writes one on the rows for `in_ctrl_no_end` and `in_ctrl_end` alone. Setting those four rows' `END` to the end of their reference allele, or removing it, makes the engines agree.
 
 ### 1.7 How the comparator treats this class
 

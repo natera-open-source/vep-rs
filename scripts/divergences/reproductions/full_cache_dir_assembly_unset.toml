@@ -1,7 +1,7 @@
 entry = "full_cache_dir_assembly_unset"
 page = "docs/output/json.md#the-record-object"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the option list of Bio::EnsEMBL::VEP::Config, which accepts --full_cache_dir, and the --assembly contract, \"If not specified and you have only 1 assembly version installed, this will be chosen by default\" (Ensembl VEP documentation, \"Running Ensembl VEP\", --assembly); not seen in the measured datasets"
 notes = "Neither engine receives --assembly. Ensembl VEP takes the cache through --full_cache_dir, which skips the directory scan that would set its assembly parameter; vep-rs reads the assembly from the cache's info.json."
@@ -35,3 +35,14 @@ where = { id = "4725737" }
 [expected]
 ensembl_vep = ["null"]
 vep_rs = ["GRCh38"]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/cache_resolve.rs::resolve",
+    "crates/vep-cli/src/runner.rs::Runner::assembly_name",
+]
+tests = [
+    "crates/vep-cli/tests/cli_input.rs::full_cache_dir_json_names_the_caches_assembly_without_the_flag",
+    "crates/vep-cli/tests/cli_run_control.rs::fasta_dir_filters_on_the_cache_assembly_without_assembly_flag",
+    "crates/vep-cli/tests/documented_subsets.rs::fasta_exclusion_is_documented",
+]

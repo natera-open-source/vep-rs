@@ -3,7 +3,7 @@
 
 //! Copy number variation (`<CNV>`, `<CN0>`–`<CN9>`, `<CPX>`) consequence calculation.
 //!
-//! Ensembl VEP's `VCF.pm` classifies CN alleles by their structural effect:
+//! Ensembl VEP's `Parser.pm:702-709` classifies CN alleles by their structural effect:
 //!
 //! - **CN0** → deletion class: transcript_ablation if fully contained, otherwise
 //!   feature_truncation + regional consequences (like `<DEL>`).
@@ -12,15 +12,14 @@
 //! - **CN1, CN3–CN9, generic `<CNV>`** → copy_number_variation class: regional
 //!   overlap consequences only. No feature_truncation/elongation/amplification/ablation.
 //!
-//! `VCF.pm` is `Bio/EnsEMBL/VEP/Parser/VCF.pm` in ensembl-vep release/115; the other
-//! Perl citations name modules of ensembl-variation release/115
+//! `Parser.pm` is `Bio/EnsEMBL/VEP/Parser.pm` in ensembl-vep release/116; the other
+//! Ensembl VEP source citations name modules of ensembl-variation release/116
 //! (`Bio/EnsEMBL/Variation/...`, `Config.pm` being `Utils/Config.pm`).
 
 use super::{
     engulfed_transcript_row_terms, frameshift_intron_span, is_mature_mirna_sv, overlaps_any_exon,
     overlaps_any_intron_trimmed, overlaps_cds_exon, overlaps_five_prime_utr,
-    overlaps_polypyrimidine_tract, overlaps_three_prime_utr, perl_coding_pre_predicate,
-    perl_partial_codon,
+    overlaps_polypyrimidine_tract, overlaps_three_prime_utr, structural_stop_lost,
 };
 use smallvec::{smallvec, SmallVec};
 use std::sync::Arc;
@@ -30,7 +29,7 @@ use vep_core::transcript::Transcript;
 use vep_core::variant::InputVariant;
 
 /// Structural effect class inferred from the ALT allele, matching Ensembl VEP's
-/// `VCF.pm` classification of CN alleles.
+/// `Parser.pm` classification of CN alleles.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CopyNumberClass {
     /// CN0: deletion (0 copies), same behavior as `<DEL>`
@@ -89,7 +88,7 @@ fn parse_copy_number(variant: &InputVariant) -> CopyNumberClass {
 ///
 /// CNVs use span-based overlap (start to sv_end) like deletions/duplications.
 /// The specific consequences depend on the inferred copy number class.
-pub fn calculate(
+pub(crate) fn calculate(
     variant: &InputVariant,
     transcript: &Arc<Transcript>,
     upstream_distance: u64,
@@ -111,12 +110,12 @@ pub fn calculate(
 
     let fully_contains = sv_start <= tx_start && sv_end >= tx_end;
 
-    // mature_miRNA_variant is tier 2 in Perl's OverlapConsequence table
+    // mature_miRNA_variant is tier 2 in Ensembl VEP's OverlapConsequence table
     // (Config.pm rank 24). For a complete-overlap SV `_bvfo_preds`
     // (BaseVariationFeatureOverlapAllele.pm:465-477) sets only
     // `complete_overlap`/`within_feature`/<biotype>, so the miRNA predicate is
     // never skipped, and `get_all_OverlapConsequences` (lines 267/277-279)
-    // records `assigned_tier = 2` and stops before every tier-3 term: Perl
+    // records `assigned_tier = 2` and stops before every tier-3 term: Ensembl VEP
     // emits mature_miRNA_variant alone for a CNV containing a miRNA transcript.
     if is_mature_mirna_sv(transcript, sv_start, sv_end) {
         return Some(build_consequence(
@@ -146,7 +145,7 @@ pub fn calculate(
     }
 
     // For generic CNVs (CN1, CN3–CN9, <CNV>, <CPX>) that fully contain the
-    // transcript, Perl runs only the biotype-gated context predicates.
+    // transcript, Ensembl VEP runs only the biotype-gated context predicates.
     if fully_contains {
         let consequences = engulfed_transcript_row_terms(transcript, sv_start, sv_end);
         let impact = consequences
@@ -189,30 +188,16 @@ pub fn calculate(
         consequences.push(Consequence::FeatureElongation);
     }
 
-    if is_deletion {
-        if let (Some(cds_start), Some(cds_end)) =
-            (transcript.coding_region_start, transcript.coding_region_end)
-        {
-            let (stop_start, stop_end) = match transcript.strand {
-                Strand::Forward => (cds_end.saturating_sub(2), cds_end),
-                Strand::Reverse => (cds_start, cds_start + 2),
-            };
-            // `stop_lost` carries `include {coding => 1}`, so the codon window is
-            // tested only for a span the `coding` pre-predicate admits: one that
-            // overlaps the coding region and an exon. A deletion inside an intron
-            // that splits the stop codon reaches the window but is `non_coding`.
-            // Perl's structural `stop_lost` reads no `cds_start_NF` or `cds_end_NF`
-            // flag: `partial_codon` (`perl_partial_codon`, release/116) is its only
-            // completeness test, so a `<CN0>` over the complete last codon of an
-            // open-ended coding sequence keeps the term.
-            if sv_start <= stop_end
-                && sv_end >= stop_start
-                && perl_coding_pre_predicate(transcript, sv_start, sv_end)
-                && !perl_partial_codon(transcript, sv_start, sv_end)
-            {
-                consequences.push(Consequence::StopLost);
-            }
-        }
+    // `stop_lost` carries `include {coding => 1}`, so the codon window is tested
+    // only for a span the `coding` pre-predicate admits: one that overlaps the
+    // coding region and an exon. A deletion inside an intron that splits the
+    // stop codon reaches the window but is `non_coding`. Ensembl VEP's
+    // structural `stop_lost` reads no flag and no base, `partial_codon` being
+    // its only completeness test (`Utils/VariationEffect.pm:1240, 1268-1280`);
+    // here a `<CN0>` loses a stop codon only where one stands at the coding end
+    // and the span takes a base of it (`structural_stop_lost`).
+    if is_deletion && structural_stop_lost(transcript, sv_start, sv_end) {
+        consequences.push(Consequence::StopLost);
     }
 
     let is_coding = transcript.has_cds();
@@ -256,12 +241,12 @@ pub fn calculate(
         consequences.push(Consequence::SplicePolypyrimidineTractVariant);
     }
 
-    // Context term for a non-coding, non-NMD transcript, added beside intron_variant and
-    // the splice terms and withheld when non_coding_transcript_exon_variant or
-    // mature_miRNA_variant is present: Ensembl VEP's `within_non_coding_gene`
-    // (`Utils/VariationEffect.pm:495-500`) excludes the mature miRNA and non-coding exon hits.
+    // Context term for a transcript without a translation, whatever its biotype, added
+    // beside intron_variant and the splice terms and withheld when
+    // non_coding_transcript_exon_variant or mature_miRNA_variant is present: Ensembl VEP's
+    // `within_non_coding_gene` (`Utils/VariationEffect.pm:495-500`) excludes the mature
+    // miRNA and non-coding exon hits.
     if !is_coding
-        && !transcript.facts().is_nmd
         && !consequences.iter().any(|c| {
             matches!(
                 c,
@@ -348,12 +333,11 @@ fn build_consequence(
     impact: Impact,
     distance: Option<u64>,
 ) -> TranscriptConsequence {
-    TranscriptConsequence {
-        consequences,
-        impact,
-        distance,
-        ..TranscriptConsequence::for_transcript(transcript)
-    }
+    let mut consequence = TranscriptConsequence::for_transcript(transcript);
+    consequence.consequences = consequences;
+    consequence.impact = impact;
+    consequence.distance = distance;
+    consequence
 }
 
 #[cfg(test)]
@@ -366,7 +350,7 @@ mod tests {
     use vep_core::consequence::FeatureType;
     use vep_core::variant::VariantClass;
 
-    /// [`super::calculate`] on a transcript the test owns: the row shares a copy of
+    /// `super::calculate` on a transcript the test owns: the row shares a copy of
     /// it, as the index shares its handle.
     fn calculate(
         variant: &InputVariant,
@@ -407,7 +391,7 @@ mod tests {
     /// A generic `<CNV>` that fully contains a miRNA transcript must produce
     /// `mature_miRNA_variant` alone, not `non_coding_transcript_variant`.
     ///
-    /// Perl mechanism: `mature_miRNA_variant` is tier 2 (Config.pm rank 24). For a
+    /// Ensembl VEP mechanism: `mature_miRNA_variant` is tier 2 (Config.pm rank 24). For a
     /// complete-overlap SV, `_bvfo_preds`
     /// (BaseVariationFeatureOverlapAllele.pm:465-477) emits only
     /// `complete_overlap`/`within_feature`/<biotype>, so the miRNA predicate is not
@@ -423,7 +407,7 @@ mod tests {
             tc.consequences.to_vec(),
             vec![Consequence::MatureMirnaVariant],
             "CNV fully containing a mature miRNA must be mature_miRNA_variant ALONE \
-             (Perl tier-2 short-circuit), got: {:?}",
+             (Ensembl VEP tier-2 short-circuit), got: {:?}",
             tc.consequences
         );
         assert!(
@@ -436,7 +420,7 @@ mod tests {
     /// The miRNA tier-2 short-circuit, CN0 (deletion-class) variant.
     ///
     /// The tier-2 miRNA short-circuit outranks even `transcript_ablation` (tier 1
-    /// but gated on `deletion => 1, complete_overlap => 1`): Perl's output
+    /// but gated on `deletion => 1, complete_overlap => 1`): Ensembl VEP's output
     /// for a CN0 fully covering a mature miRNA is `mature_miRNA_variant`, because
     /// the miRNA OC is reached and pins the tier before the ablation candidate is
     /// accepted for a non-coding feature.
@@ -477,7 +461,7 @@ mod tests {
         );
     }
 
-    /// A generic `<CNV>` engulfing a translated `IG_V_gene` transcript lands on Perl's
+    /// A generic `<CNV>` engulfing a translated `IG_V_gene` transcript lands on Ensembl VEP's
     /// `intergenic_variant` fallthrough; the transcript row is still written.
     #[test]
     fn test_generic_cnv_engulfing_translated_ig_v_gene_is_intergenic_variant() {
@@ -530,9 +514,9 @@ mod tests {
     }
 
     /// A `<CN0>` allele of a `copy_number_variation` record keeps the record's
-    /// reading: Perl's `deletion` predicate tests the record's `class_SO_term`
+    /// reading: Ensembl VEP's `deletion` predicate tests the record's `class_SO_term`
     /// alone (VariationEffect.pm `deletion`, `copy_number_loss`), so the allele's
-    /// own copy number never makes it a deletion. Ensembl VEP 116.2 writes
+    /// own copy number never makes it a deletion. Ensembl VEP 116.3 writes
     /// `coding_sequence_variant,3_prime_UTR_variant` and `IMPACT=MODIFIER` on both
     /// rows of `21 30165840 multi_cn0_cn2 N <CN0>,<CN2>` against ENST00000286808 in
     /// the GRCh38-release116 golden corpus, never `feature_truncation`.
@@ -819,8 +803,8 @@ mod tests {
 
     #[test]
     fn test_cn0_overlapping_stop_codon_has_stop_lost() {
-        let tx = make_test_transcript();
-        // CDS end at 25_004_299 => stop codon ~25_004_297-25_004_299
+        let tx = crate::concordance_tests::make_transcript_with_terminal_stop();
+        // The coding region ends at 25_004_298 on a stop codon, 25_004_296-25_004_298.
         let v = make_cnv(b"<CN0>", 25_004_200, 25_005_000);
         let result = calculate(&v, &tx, 5000, 5000);
         assert!(result.is_some());
@@ -895,24 +879,13 @@ mod tests {
         assert_eq!(tc.distance, Some(2000));
     }
 
-    /// A `<CN0>` loss inside the intron that splits the stop codon (the coding
-    /// region moved to end on the first base of exon 3, cDNA 601): no `stop_lost`,
-    /// because the span overlaps no exon and Perl's `coding` pre-predicate, which
+    /// A `<CN0>` loss inside the intron that splits the stop codon (cDNA 599..601,
+    /// the coding region ending on the first base of exon 3): no `stop_lost`,
+    /// because the span overlaps no exon and Ensembl VEP's `coding` pre-predicate, which
     /// `stop_lost` requires, is unset; reaching the exonic codon base sets it.
     #[test]
     fn test_cn0_in_intron_splitting_stop_codon_has_no_stop_lost() {
-        let mut tx = make_test_transcript();
-        if let Some(vefc) = tx.vefc.as_mut() {
-            if let Some(seq) = vefc.translateable_seq.as_mut() {
-                seq.truncate(551);
-            }
-            if let Some(mapper) = vefc.mapper.as_mut() {
-                mapper.cdna_coding_end = 601;
-            }
-        }
-        tx.cdna_coding_end = Some(601);
-        tx.coding_region_end = Some(25_004_000);
-        tx.translation_end = Some(25_004_000);
+        let tx = crate::sv::deletion::tx_with_stop_codon_split_by_intron_2();
 
         let v = make_cnv(b"<CN0>", 25_003_900, 25_003_999);
         let tc = calculate(&v, &tx, 5000, 5000).unwrap();
@@ -932,12 +905,14 @@ mod tests {
     }
 
     /// A `<CN0>` over the last base of a `cds_end_NF` segment whose 12 coding bases end
-    /// on a codon boundary, running off the 3' end: Perl's `stop_lost` reads no
-    /// completeness flag and `partial_codon` is false (a three-base last codon), so the
-    /// positional test keeps `stop_lost` beside `3_prime_UTR_variant`,
-    /// `coding_sequence_variant` and `feature_truncation`, as it does for a `<DEL>`.
+    /// on a codon boundary, running off the 3' end: no stop codon stands at that
+    /// coding end, so the row is `3_prime_UTR_variant`, `coding_sequence_variant` and
+    /// `feature_truncation` without `stop_lost`, as for a `<DEL>`. Ensembl VEP's
+    /// `stop_lost` reads no completeness flag and `partial_codon` is false (a
+    /// three-base last codon), so its positional test writes the term
+    /// (`Utils/VariationEffect.pm:1268-1280`).
     #[test]
-    fn cn0_keeps_stop_lost_on_the_complete_last_codon_of_an_open_ended_segment() {
+    fn cn0_loses_no_stop_codon_on_the_last_codon_of_an_open_ended_segment_that_names_a_residue() {
         let tx = crate::test_helpers::make_open_ended_segment(Strand::Forward, "ACTGGGGGATAC");
         assert_eq!(tx.coding_region_end, Some(40_000_042));
         let v = make_cnv(b"<CN0>", 40_000_042, 40_001_000);
@@ -948,7 +923,6 @@ mod tests {
                 "3_prime_UTR_variant",
                 "coding_sequence_variant",
                 "feature_truncation",
-                "stop_lost",
             ],
         );
     }
@@ -972,7 +946,7 @@ mod tests {
     }
 
     /// A `cds_start_NF` transcript with a complete stop codon (15 coding bases ending in
-    /// `TAG`): the flag is no part of Perl's `stop_lost`, and `partial_codon` is false
+    /// `TAG`): the flag is no part of Ensembl VEP's `stop_lost`, and `partial_codon` is false
     /// for the span's first coding base, CDS 13, so a `<CN0>` over the stop codon keeps
     /// `stop_lost`.
     #[test]
@@ -996,7 +970,7 @@ mod tests {
         );
     }
 
-    /// A copy-number span wholly inside a frameshift intron. Ensembl VEP 116.2 writes
+    /// A copy-number span wholly inside a frameshift intron. Ensembl VEP 116.3 writes
     /// `coding_sequence_variant` for `<CNV>`, `<CN1>` and `<CN3>` over GRCh37
     /// `21:38600094-38600097` on ENST00000288304 (a 4-base intron inside its coding
     /// region) and `intron_variant` for the same alleles in an ordinary intron; the
@@ -1036,6 +1010,66 @@ mod tests {
         // Nine bases inside an ordinary intron keep the intronic reading.
         for alt in [&b"<CNV>"[..], b"<CN0>", b"<CN2>"] {
             assert_eq!(terms(alt, 25_001_000, 25_001_008), ["intron_variant"]);
+        }
+    }
+
+    /// The sorted term names of a `<CN0>` over `start..=end` on `tx`.
+    fn loss_terms(tx: &Transcript, start: u64, end: u64) -> Vec<String> {
+        let tc = calculate(&make_cnv(b"<CN0>", start, end), tx, 5000, 5000).unwrap();
+        let mut terms: Vec<String> = tc.consequences.iter().map(|c| c.to_string()).collect();
+        terms.sort();
+        terms
+    }
+
+    /// A `<CN0>` over the last coding bases of a transcript takes `stop_lost`
+    /// only where a stop codon stands at the coding end, as a `<DEL>` does:
+    /// none where the last codon names a residue, with `cds_end_NF` or
+    /// without it; a stop codon that the last coding base begins stands on
+    /// a record that shows polyadenylation completes it, where it is read at
+    /// that base and lost, and on no other record. Ensembl VEP's structural
+    /// arm reads neither a flag nor a base (VariationEffect.pm:1268-1280).
+    #[test]
+    fn cn0_loses_a_stop_codon_only_where_one_stands_at_the_coding_end() {
+        use crate::test_helpers::make_single_exon_transcript;
+        let kept = [
+            "3_prime_UTR_variant",
+            "coding_sequence_variant",
+            "feature_truncation",
+        ];
+        let lost = [
+            "3_prime_UTR_variant",
+            "coding_sequence_variant",
+            "feature_truncation",
+            "stop_lost",
+        ];
+        // Four codons, the last naming Tyr: coding bases 40_000_031 to
+        // 40_000_042, the transcript's last.
+        let residue = ["ATG", "GCT", "GCT", "TAC"].concat();
+        let unflagged = make_single_exon_transcript(Strand::Forward, &residue, "");
+        let mut flagged = unflagged.clone();
+        flagged.flags = vec!["cds_end_NF".to_string()].into();
+        assert_eq!(loss_terms(&unflagged, 40_000_040, 40_001_000), kept);
+        assert_eq!(loss_terms(&flagged, 40_000_040, 40_001_000), kept);
+        // The same four codons closed by a stop codon.
+        let closed = ["ATG", "GCT", "GCT", "TAC", "TAA"].concat();
+        let closed = make_single_exon_transcript(Strand::Forward, &closed, "");
+        assert_eq!(loss_terms(&closed, 40_000_043, 40_001_000), lost);
+        // Four codons and the first base of a stop codon, coding base 13 at
+        // 40_000_043.
+        let begun = ["ATG", "GCT", "GCT", "CCA", "T"].concat();
+        let not_shown = make_single_exon_transcript(Strand::Forward, &begun, "");
+        let mut shown = not_shown.clone();
+        shown.vefc.as_mut().unwrap().codon_table = 2;
+        assert_eq!(loss_terms(&shown, 40_000_043, 40_001_000), lost);
+        assert_eq!(loss_terms(&not_shown, 40_000_043, 40_001_000), kept);
+        assert_eq!(loss_terms(&shown, 40_000_041, 40_001_000), lost);
+        assert_eq!(loss_terms(&not_shown, 40_000_041, 40_001_000), kept);
+        // The last base of the last whole codon alone.
+        for tx in [&shown, &not_shown] {
+            assert_eq!(
+                loss_terms(tx, 40_000_042, 40_000_042),
+                ["coding_sequence_variant", "feature_truncation"]
+            );
         }
     }
 }

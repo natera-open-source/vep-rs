@@ -1,9 +1,9 @@
 entry = "nearest_exon_jb_shifted_span"
 page = "docs/divergences/nearest-exon-jb-shifted-span.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 137,702 per million · 0 flag sets, 104 corpora"
+input_class_basis = "2 · 137,702 per million · 0 flag sets, 144 corpora"
 notes = "The deletion of the last base of ENSE00003584551 (ENST00000338785, forward strand), whose next base repeats it, so the shift carries the deletion one base into the intron. Ensembl VEP's plugin reads the exon set at the shifted span and writes nothing on the splice-donor rows; vep-rs reads it at the record's span, from which both engines measure the distance."
 
 [input]
@@ -29,3 +29,13 @@ columns = ["Consequence", "SHIFT_LENGTH", "NearestExonJB"]
 [expected]
 ensembl_vep = ["splice_donor_variant | 1 | -"]
 vep_rs = ["splice_donor_variant | 1 | ENSE00003584551|0|end|189"]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/nearest_exon_jb.rs::overlapped_exons",
+    "crates/vep-builtins/src/plugins/nearest_exon_jb.rs::plugin_span",
+]
+tests = [
+    "crates/vep-builtins/src/plugins/nearest_exon_jb.rs::tests::a_shifted_indel_reads_the_exon_set_at_the_record_span",
+]
+rules = ["tools/vep-plugin-pairs/src/rules/nearest_exon.rs::shifted_span"]

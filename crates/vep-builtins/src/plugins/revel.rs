@@ -200,11 +200,13 @@ impl RevelPlugin {
         }
     }
 
-    /// Header name of the position column for the requested assembly.
-    fn position_column_for(assembly: Assembly) -> &'static str {
+    /// Header name of the position column for the requested assembly, `None`
+    /// for an assembly the table carries no position column for.
+    fn position_column_for(assembly: Assembly) -> Option<&'static str> {
         match assembly {
-            Assembly::Grch37 => HG19_POS_COLUMN,
-            Assembly::Grch38 => GRCH38_POS_COLUMN,
+            Assembly::Grch37 => Some(HG19_POS_COLUMN),
+            Assembly::Grch38 => Some(GRCH38_POS_COLUMN),
+            _ => None,
         }
     }
 
@@ -323,6 +325,8 @@ impl RevelPlugin {
     }
 }
 
+impl crate::traits::sealed::Sealed for RevelPlugin {}
+
 impl BuiltinPlugin for RevelPlugin {
     fn name(&self) -> &str {
         NAME
@@ -383,12 +387,16 @@ impl BuiltinPlugin for RevelPlugin {
             ))
         })?;
 
-        let Some(assembly) = self.assembly else {
+        // An assembly the table carries no position column for is refused as a
+        // run without an assembly is.
+        let position = self
+            .assembly
+            .and_then(|assembly| Some((assembly, Self::position_column_for(assembly)?)));
+        let Some((assembly, wanted)) = position else {
             return Err(PluginError::Init(format!(
                 "{NAME}: specify assembly using --assembly GRCh37 or --assembly GRCh38"
             )));
         };
-        let wanted = Self::position_column_for(assembly);
         let start_col = resolve_indexed_position_column(path, &header, wanted).map_err(
             |error| match error {
                 PluginError::Init(message) => PluginError::Init(format!(
@@ -412,12 +420,16 @@ impl BuiltinPlugin for RevelPlugin {
         // (`REVEL.pm:207`), its trailing whitespace included: the score of an
         // eight-column file is written with it, and the transcript cell of a
         // nine-column file holding whitespace alone is a cell that matches no id.
-        self.store = Some(open_best_store_with(
+        let mut store = open_best_store_with(
             path,
             config,
             self.assembly,
             TabixAnnotator::keeping_trailing_whitespace,
-        )?);
+        )?;
+        if let Some(frame) = store.mitochondrial_frame_mut() {
+            frame.set_allele_column(header.iter().position(|name| name == "ref"));
+        }
+        self.store = Some(store);
         // After the index check, as `REVEL.pm:115-146` orders them.
         if self.other_transcript_set && !self.no_match {
             warn_on_stderr(
@@ -430,6 +442,12 @@ impl BuiltinPlugin for RevelPlugin {
 
     fn set_assembly(&mut self, assembly: Option<Assembly>) {
         self.assembly = assembly;
+    }
+
+    fn set_reference_fasta(&mut self, fasta: Option<std::sync::Arc<vep_fasta::IndexedFasta>>) {
+        if let Some(store) = self.store.as_mut() {
+            store.set_reference_fasta(fasta);
+        }
     }
 
     fn set_transcript_set(&mut self, refseq: bool, merged: bool) {
@@ -490,7 +508,7 @@ impl BuiltinPlugin for RevelPlugin {
                         tc.plugin_data
                             .insert(FIELD.to_string(), score.text.to_string());
                         // A later plugin's value replaces an earlier one under
-                        // the same key (OutputFactory.pm:2230-2231), its mark
+                        // the same key (OutputFactory.pm:2239-2240), its mark
                         // too.
                         tc.plugin_empty_strings.retain(|key| key != FIELD);
                         if score.empty_string {
@@ -566,15 +584,15 @@ mod tests {
 
     /// A missense row of `transcript_id` whose amino-acid change is `amino_acids`.
     fn missense_row(transcript_id: &str, amino_acids: &str) -> TranscriptConsequence {
-        TranscriptConsequence {
-            transcript: Some(Arc::new(Transcript {
-                stable_id: transcript_id.into(),
-                ..Transcript::default()
-            })),
-            consequences: smallvec![Consequence::MissenseVariant],
-            amino_acids: Some(amino_acids.to_string()),
-            ..Default::default()
-        }
+        let mut consequence = TranscriptConsequence::default();
+        consequence.transcript = Some(Arc::new({
+            let mut transcript = Transcript::default();
+            transcript.stable_id = transcript_id.into();
+            transcript
+        }));
+        consequence.consequences = smallvec![Consequence::MissenseVariant];
+        consequence.amino_acids = Some(amino_acids.to_string());
+        consequence
     }
 
     fn variant(chr: &str, pos: u64, r: &[u8], a: &[u8]) -> InputVariant {
@@ -619,6 +637,18 @@ mod tests {
         assert!(!plugin.no_match);
     }
 
+    /// Every assembly `Assembly::ALL` lists has its position column, so none
+    /// is refused as an assembly the table carries no column for.
+    #[test]
+    fn every_listed_assembly_has_its_position_column() {
+        for &assembly in Assembly::ALL {
+            assert!(
+                RevelPlugin::position_column_for(assembly).is_some(),
+                "{assembly}"
+            );
+        }
+    }
+
     /// `REVEL.pm:156` names the one field `REVEL`.
     #[test]
     fn header_info_field_is_revel() {
@@ -657,14 +687,16 @@ mod tests {
             .push(missense_row("ENST00000400002", "Q/L"));
         v.transcript_consequences
             .push(missense_row("ENST00000400001", "Q/L"));
-        v.transcript_consequences.push(TranscriptConsequence {
-            transcript: Some(Arc::new(Transcript {
-                stable_id: "ENST00000400001".into(),
-                ..Transcript::default()
-            })),
-            consequences: smallvec![Consequence::SynonymousVariant],
-            amino_acids: Some("Q".to_string()),
-            ..Default::default()
+        v.transcript_consequences.push({
+            let mut consequence = TranscriptConsequence::default();
+            consequence.transcript = Some(Arc::new({
+                let mut transcript = Transcript::default();
+                transcript.stable_id = "ENST00000400001".into();
+                transcript
+            }));
+            consequence.consequences = smallvec![Consequence::SynonymousVariant];
+            consequence.amino_acids = Some("Q".to_string());
+            consequence
         });
         assert_eq!(
             scores(&plugin, v),
@@ -1507,14 +1539,16 @@ mod tests {
         );
         let plugin = loaded(Assembly::Grch38, &[&path]);
         let mut v = variant("21", 500600, b"A", b"G");
-        v.transcript_consequences.push(TranscriptConsequence {
-            transcript: Some(Arc::new(Transcript {
-                stable_id: "ENST00000400001".into(),
-                ..Transcript::default()
-            })),
-            consequences: smallvec![Consequence::SynonymousVariant],
-            amino_acids: Some("Q".to_string()),
-            ..Default::default()
+        v.transcript_consequences.push({
+            let mut consequence = TranscriptConsequence::default();
+            consequence.transcript = Some(Arc::new({
+                let mut transcript = Transcript::default();
+                transcript.stable_id = "ENST00000400001".into();
+                transcript
+            }));
+            consequence.consequences = smallvec![Consequence::SynonymousVariant];
+            consequence.amino_acids = Some("Q".to_string());
+            consequence
         });
         assert_eq!(scores(&plugin, v), [None]);
     }

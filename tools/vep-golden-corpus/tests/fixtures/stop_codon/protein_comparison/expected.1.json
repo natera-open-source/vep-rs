@@ -1,0 +1,1290 @@
+{
+ "records": [
+  {
+   "dataset": "pool",
+   "vcf": "21\t100\trs0\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t200\trs1\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t300\trs2\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t400\trs3\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t500\trs4\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t600\trs5\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t700\trs6\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t800\trs7\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t900\trs8\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t1000\trs9\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t1100\trs10\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t1200\trs11\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t1300\trs12\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t1400\trs13\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t1500\trs14\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t1600\trs15\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t1700\trs16\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t1800\trs17\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t1900\trs18\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t2000\trs19\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t2100\trs20\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t2200\trs21\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t2300\trs22\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t2400\trs23\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t2500\trs24\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t2600\trs25\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t2700\trs26\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t2800\trs27\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t2900\trs28\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t3000\trs29\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t3100\trs30\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t3200\trs31\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t3300\trs32\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t3400\trs33\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t3500\trs34\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t3600\trs35\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t3700\trs36\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t3800\trs37\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t3900\trs38\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t4000\trs39\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t4100\trs40\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t4200\trs41\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t4300\trs42\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t4400\trs43\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t4500\trs44\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t4600\trs45\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t4700\trs46\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t4800\trs47\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t4900\trs48\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t5000\trs49\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t5100\trs50\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t5200\trs51\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t5300\trs52\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t5400\trs53\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t5500\trs54\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t5600\trs55\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t5700\trs56\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t5800\trs57\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t5900\trs58\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t6000\trs59\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t6100\trs60\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t6200\trs61\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t6300\trs62\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t6400\trs63\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t6500\trs64\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t6600\trs65\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t6700\trs66\tAC\tA\t.\tPASS\t.",
+   "combinations": []
+  }
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {},
+ "fields_compared": [
+  "HGVSp"
+ ],
+ "field_divergences": [
+  {
+   "location": "21:1001",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    9
+   ],
+   "consequence_set": "inframe_insertion",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Asp283_Ter284insHis",
+   "vep_rs": "ENSP1.1:p.Ter284HisextTer1",
+   "expected_divergence": "hgvsp_stop_codon_protein_comparison"
+  },
+  {
+   "location": "21:101",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "inframe_insertion,stop_retained_variant",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter284delinsTer",
+   "vep_rs": "ENSP1.1:p.Ter284%3D",
+   "expected_divergence": "hgvsp_stop_codon_protein_comparison"
+  },
+  {
+   "location": "21:1101",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    10
+   ],
+   "consequence_set": "inframe_insertion",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Asp283_Ter284insHisHisAsxGly",
+   "vep_rs": "ENSP1.1:p.Ter284HisextTer4",
+   "expected_divergence": "hgvsp_stop_codon_protein_comparison"
+  },
+  {
+   "location": "21:1201",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    11
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter284%3D",
+   "vep_rs": "ENSP1.1:p.Ter284LysextTer47",
+   "expected_divergence": "hgvsp_stop_codon_protein_comparison"
+  },
+  {
+   "location": "21:1301",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    12
+   ],
+   "consequence_set": "NMD_transcript_variant,stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter284%3D",
+   "vep_rs": "ENSP1.1:p.Ter284LysextTer?",
+   "expected_divergence": "hgvsp_stop_codon_protein_comparison"
+  },
+  {
+   "location": "21:1401",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    13
+   ],
+   "consequence_set": "NMD_transcript_variant,protein_altering_variant,stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Trp283_Ter284delinsAsx",
+   "vep_rs": "ENSP1.1:p.Trp283AsxfsTer4",
+   "expected_divergence": "hgvsp_stop_codon_protein_comparison"
+  },
+  {
+   "location": "21:1501",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    14
+   ],
+   "consequence_set": "protein_altering_variant,stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Trp283_Ter284delinsAsx",
+   "vep_rs": "ENSP1.1:p.Trp283AsxfsTer?",
+   "expected_divergence": "hgvsp_stop_codon_protein_comparison"
+  },
+  {
+   "location": "21:1601",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    15
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Trp281_Ter284delinsAsxGlyHis",
+   "vep_rs": "ENSP1.1:p.Trp281AsxfsTer24",
+   "expected_divergence": "hgvsp_stop_codon_protein_comparison"
+  },
+  {
+   "location": "21:1701",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    16
+   ],
+   "consequence_set": "inframe_deletion,stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Trp281_Ter284delinsAsxGlyHis",
+   "vep_rs": "ENSP1.1:p.Trp281AsxfsTer9",
+   "expected_divergence": "hgvsp_stop_codon_protein_comparison"
+  },
+  {
+   "location": "21:1801",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    17
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter557AlaextTer?",
+   "vep_rs": "ENSP1.1:p.Ter557AlaextTer35",
+   "expected_divergence": "hgvsp_stop_codon_protein_comparison"
+  },
+  {
+   "location": "21:1901",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    18
+   ],
+   "consequence_set": "NMD_transcript_variant,stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter591AlaextTer?",
+   "vep_rs": "ENSP1.1:p.Ter591AlaextTer1",
+   "expected_divergence": "hgvsp_stop_codon_protein_comparison"
+  },
+  {
+   "location": "21:2001",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    19
+   ],
+   "consequence_set": "inframe_deletion,stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter284delextTer12",
+   "vep_rs": "ENSP1.1:p.Ter284LysextTer12",
+   "expected_divergence": "hgvsp_stop_codon_protein_comparison"
+  },
+  {
+   "location": "21:201",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    1
+   ],
+   "consequence_set": "stop_retained_variant",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter291delinsTer",
+   "vep_rs": "ENSP1.1:p.Ter291%3D",
+   "expected_divergence": "hgvsp_stop_codon_protein_comparison"
+  },
+  {
+   "location": "21:2101",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    20
+   ],
+   "consequence_set": "NMD_transcript_variant,stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter230delextTer11",
+   "vep_rs": "ENSP1.1:p.Ter230ArgextTer11",
+   "expected_divergence": "hgvsp_stop_codon_protein_comparison"
+  },
+  {
+   "location": "21:2201",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    21
+   ],
+   "consequence_set": "inframe_deletion,stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter220delextTer?",
+   "vep_rs": "ENSP1.1:p.Ter220ArgextTer?",
+   "expected_divergence": "hgvsp_stop_codon_protein_comparison"
+  },
+  {
+   "location": "21:2301",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    22
+   ],
+   "consequence_set": "inframe_insertion,stop_retained_variant",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Asp282_Trp283insTrpTer",
+   "vep_rs": "ENSP1.1:p.Ter284%3D",
+   "expected_divergence": "hgvsp_stop_codon_protein_comparison"
+  },
+  {
+   "location": "21:2401",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    23
+   ],
+   "consequence_set": "inframe_insertion,stop_retained_variant",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter284%3D",
+   "vep_rs": "ENSP1.1:p.Ter284delinsTer",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:2501",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    24
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter284IleextTer22",
+   "vep_rs": "ENSP1.1:p.Ter284delinsIleTer",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:2601",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    25
+   ],
+   "consequence_set": "inframe_insertion,stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter284AsxextTer10",
+   "vep_rs": "ENSP1.1:p.Ter284delinsAsxSerGlxTrpArgPheGlyAspValHisTer",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:2701",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    26
+   ],
+   "consequence_set": "inframe_insertion",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter284HisextTer1",
+   "vep_rs": "ENSP1.1:p.Asp283_Ter284insHis",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:2801",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    27
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter284LysextTer47",
+   "vep_rs": "ENSP1.1:p.Ter284%3D",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:2901",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    28
+   ],
+   "consequence_set": "stop_retained_variant",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter284delinsTer",
+   "vep_rs": "ENSP1.1:p.Ter285%3D",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:3001",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    29
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter284delinsIleTer",
+   "vep_rs": "ENSP1.1:p.Ter284%3D",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:301",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    2
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter284delinsIleTer",
+   "vep_rs": "ENSP1.1:p.Ter284IleextTer22",
+   "expected_divergence": "hgvsp_stop_codon_protein_comparison"
+  },
+  {
+   "location": "21:3101",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    30
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter284delinsIleTer",
+   "vep_rs": "ENSP1.1:p.Ter284LeuextTer22",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:3201",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    31
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter284delinsIleTer",
+   "vep_rs": "ENSP1.1:p.Ter285IleextTer22",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:3301",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    32
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter284delinsIleLeuValProTer",
+   "vep_rs": "ENSP1.1:p.Ter284IleextTer3",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:3401",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    33
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter284delinsAsxSerGlxTrpArgPheGlyAspValHisTer",
+   "vep_rs": "ENSP1.1:p.Ter284AsxextTer9",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:3501",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    34
+   ],
+   "consequence_set": "inframe_insertion",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Asp283_Ter284insHisHisAsxGly",
+   "vep_rs": "ENSP1.1:p.Ter284HisextTer5",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:3601",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    35
+   ],
+   "consequence_set": "inframe_insertion",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Asp283_Ter284insHisHisAsxGly",
+   "vep_rs": "ENSP1.1:p.Ter284GlnextTer4",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:3701",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    36
+   ],
+   "consequence_set": "inframe_insertion",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Asp282_Ter284insHisHisAsxGly",
+   "vep_rs": "ENSP1.1:p.Ter284HisextTer4",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:3801",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    37
+   ],
+   "consequence_set": "splice_acceptor_variant,stop_retained_variant",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter284%3D",
+   "vep_rs": "ENSP1.1:p.Ter284LysextTer47",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:3901",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    38
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter284%3D",
+   "vep_rs": "ENSP1.1:p.Ter284LysextTer?",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:4001",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    39
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter284%3D",
+   "vep_rs": "ENSP1.1:p.Ter284LysextTer?",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:401",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    3
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter284delinsIleTer",
+   "vep_rs": "ENSP1.1:p.Ter284IleextTer?",
+   "expected_divergence": "hgvsp_stop_codon_protein_comparison"
+  },
+  {
+   "location": "21:4101",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    40
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter1%3D",
+   "vep_rs": "ENSP1.1:p.Ter1LysextTer5",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:4201",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    41
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "-",
+   "vep_rs": "ENSP1.1:p.Ter284LysextTer12",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:4301",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    42
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Asp283_Ter284delinsPhePro",
+   "vep_rs": "ENSP1.1:p.Asp283ProfsTer9",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:4401",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    43
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter284LysextTer12",
+   "vep_rs": "ENSP1.1:p.Ter284LysextTer13",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:4501",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    44
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter284delinsIleTerTer",
+   "vep_rs": "ENSP1.1:p.Ter284IleextTer2",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:4601",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    45
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Trp283AsxfsTer4",
+   "vep_rs": "ENSP1.1:p.Trp283_Ter284delinsAsx",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:4701",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    46
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Trp283_Ter284delinsAsx",
+   "vep_rs": "ENSP1.1:p.Trp282AsxfsTer4",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:4801",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    47
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Trp283_Ter284delinsAsx",
+   "vep_rs": "ENSP1.1:p.Pro283AsxfsTer4",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:4901",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    48
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Trp281_Ter284delinsAsxGlyHis",
+   "vep_rs": "ENSP1.1:p.Trp281GlyfsTer24",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:5001",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    49
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Trp281_Ter284delinsAsxGlyHis",
+   "vep_rs": "ENSP1.1:p.Trp281AsxfsTer3",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:501",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    4
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter284delinsIleLeuValProTer",
+   "vep_rs": "ENSP1.1:p.Ter284IleextTer?",
+   "expected_divergence": "hgvsp_stop_codon_protein_comparison"
+  },
+  {
+   "location": "21:5101",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    50
+   ],
+   "consequence_set": "inframe_deletion,stop_retained_variant",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Trp283_Ter284delinsAsx",
+   "vep_rs": "ENSP1.1:p.Trp283AsxfsTer4",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:5201",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    51
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Trp283_Ter284delinsAsxTer",
+   "vep_rs": "ENSP1.1:p.Trp283AsxfsTer2",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:5301",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    52
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Trp283_Ter284delinsAsx",
+   "vep_rs": "ENSP1.1:p.Trp283AsxfsTer4",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:5401",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    53
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Trp284_Ter284delinsAsx",
+   "vep_rs": "ENSP1.1:p.Trp284AsxfsTer4",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:5501",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    54
+   ],
+   "consequence_set": "inframe_deletion,stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Trp281_Ter284delinsAsxGlyHis",
+   "vep_rs": "ENSP1.1:p.Trp281AsxfsTer4",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:5601",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    55
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Trp283_Ter284delinsAsx",
+   "vep_rs": "ENSP1.1:p.Trp283AsxfsTer2",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:5701",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    56
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter557AlaextTer35",
+   "vep_rs": "ENSP1.1:p.Ter557AlaextTer?",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:5801",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    57
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter557AlaextTer?",
+   "vep_rs": "ENSP1.1:p.Ter557GlxextTer35",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:5901",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    58
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter557AlaextTer?",
+   "vep_rs": "ENSP1.1:p.Ter558AlaextTer35",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:6001",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    59
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter557AlaextTer?",
+   "vep_rs": "ENSP1.1:p.Ter557AlaextTer35",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:601",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    5
+   ],
+   "consequence_set": "inframe_insertion,stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter284delinsIleLeuValPro",
+   "vep_rs": "ENSP1.1:p.Ter284IleextTer9",
+   "expected_divergence": "hgvsp_stop_codon_protein_comparison"
+  },
+  {
+   "location": "21:6101",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    60
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter557AlaextTer?",
+   "vep_rs": "ENSP1.1:p.Ter557AlaextTer35",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:6201",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    61
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter230ArgextTer11",
+   "vep_rs": "ENSP1.1:p.Ter230delextTer11",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:6301",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    62
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter230delextTer11",
+   "vep_rs": "ENSP1.1:p.Ter230ArgextTer12",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:6401",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    63
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter230delextTer?",
+   "vep_rs": "ENSP1.1:p.Ter230ArgextTer11",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:6501",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    64
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter230delextTer11",
+   "vep_rs": "ENSP1.1:p.Ter231ArgextTer11",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:6601",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    65
+   ],
+   "consequence_set": "inframe_deletion",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter230delextTer11",
+   "vep_rs": "ENSP1.1:p.Ter230ArgextTer11",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:6701",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    66
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter230del",
+   "vep_rs": "ENSP1.1:p.Ter230ArgextTer11",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:701",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    6
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter284delinsIleLeuValPro",
+   "vep_rs": "ENSP1.1:p.Ter284IleextTer4",
+   "expected_divergence": "hgvsp_stop_codon_protein_comparison"
+  },
+  {
+   "location": "21:801",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    7
+   ],
+   "consequence_set": "inframe_insertion,stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter284delinsAsxSerGlxTrpArgPheGlyAspValHisTer",
+   "vep_rs": "ENSP1.1:p.Ter284AsxextTer10",
+   "expected_divergence": "hgvsp_stop_codon_protein_comparison"
+  },
+  {
+   "location": "21:901",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    8
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP1.1:p.Ter284delinsAsxTer",
+   "vep_rs": "ENSP1.1:p.Ter284AsxextTer1",
+   "expected_divergence": "hgvsp_stop_codon_protein_comparison"
+  }
+ ],
+ "field_divergence_summary": {
+  "hgvsp_stop_codon_protein_comparison": 23,
+  "unexplained_residual": 44
+ }
+}

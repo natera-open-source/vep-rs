@@ -1,0 +1,729 @@
+{
+  "baseline_dir": "{{FIXTURES}}/caches/transcripts/baseline",
+  "builder_dir": "{{FIXTURES}}/caches/variations/builder",
+  "transcripts": {
+    "total_baseline": 114,
+    "total_builder": 1,
+    "shared": 0,
+    "only_baseline": 114,
+    "only_builder": 1,
+    "matched": 0,
+    "differed": 0,
+    "field_mismatches": {},
+    "match_rate": 0.0,
+    "regions_with_diffs": [
+      {
+        "region": ".hidden.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "H1"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "1/1-1000000.json",
+        "baseline_count": 0,
+        "builder_count": 1,
+        "shared": 0,
+        "only_baseline": [],
+        "only_builder": [
+          "V1"
+        ],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "21/1-1000000.json",
+        "baseline_count": 26,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "ONLY_B00",
+          "ONLY_B01",
+          "ONLY_B02",
+          "ONLY_B03",
+          "ONLY_B04",
+          "ONLY_B05",
+          "ONLY_B06",
+          "ONLY_B07",
+          "ONLY_B08",
+          "ONLY_B09"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "21/1000001-2000000.json",
+        "baseline_count": 3,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "T_GZIPPED_FILE",
+          "T_NAN",
+          "T_NAN_IN_A_LIST"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "22/1-1000000.json",
+        "baseline_count": 2,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "W1",
+          "W2"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "X/1-1000000.json",
+        "baseline_count": 2,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "K1",
+          "K2"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "Y/1-1000000.json",
+        "baseline_count": 2,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "Y1",
+          "Y2"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "deep/er/still/1.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "T_DEEP"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "escapes/1.json",
+        "baseline_count": 8,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "A/",
+          "del\u007f",
+          "lone\ud800",
+          "pair\ud83d\ude00",
+          "quote\"back\\slash",
+          "tab\there",
+          "\u00e9t\u00e9",
+          "\udc00low"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/000.json",
+        "baseline_count": 2,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N000",
+          "N000_B"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/001.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N001"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/002.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N002"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/003.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N003"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/004.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N004"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/005.json",
+        "baseline_count": 2,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N005",
+          "N005_B"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/006.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N006"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/007.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N007"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/008.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N008"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/009.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N009"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/010.json",
+        "baseline_count": 2,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N010",
+          "N010_B"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/011.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N011"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/012.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N012"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/013.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N013"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/014.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N014"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/015.json",
+        "baseline_count": 2,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N015",
+          "N015_B"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/016.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N016"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/017.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N017"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/018.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N018"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/019.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N019"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/020.json",
+        "baseline_count": 2,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N020",
+          "N020_B"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/021.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N021"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/022.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N022"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/023.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N023"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/024.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N024"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/025.json",
+        "baseline_count": 2,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N025",
+          "N025_B"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/026.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N026"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/027.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N027"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/028.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N028"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/029.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N029"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/030.json",
+        "baseline_count": 2,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N030",
+          "N030_B"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/031.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N031"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/032.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N032"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/033.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N033"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/034.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N034"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/035.json",
+        "baseline_count": 2,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N035",
+          "N035_B"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/036.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N036"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/037.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N037"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/038.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N038"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/039.json",
+        "baseline_count": 1,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N039"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "many/040.json",
+        "baseline_count": 2,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "N040",
+          "N040_B"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      }
+    ]
+  },
+  "variations": {
+    "total_baseline": 0,
+    "total_builder": 33,
+    "shared": 0,
+    "only_baseline": 0,
+    "only_builder": 33,
+    "matched": 0,
+    "differed": 0,
+    "field_mismatches": {},
+    "frequency_columns_compared": [],
+    "match_rate": 0.0
+  },
+  "info_json": {
+    "matches": false,
+    "diffs": [
+      {
+        "field": "assembly",
+        "baseline": "A1",
+        "builder": "None"
+      },
+      {
+        "field": "cache_version",
+        "baseline": "116",
+        "builder": "None"
+      },
+      {
+        "field": "control",
+        "baseline": "None",
+        "builder": "a\u0007\n\u007f"
+      },
+      {
+        "field": "long",
+        "baseline": "None",
+        "builder": "['xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      {
+        "field": "nan",
+        "baseline": "None",
+        "builder": "nan"
+      },
+      {
+        "field": "nested",
+        "baseline": "{'a': [1, 2.0], 'b': None}",
+        "builder": "{'a': None, 'b': [True, False], 'c': {'d': 'say \"it\"'}}"
+      },
+      {
+        "field": "nested_unicode",
+        "baseline": "None",
+        "builder": "[]"
+      },
+      {
+        "field": "numbers",
+        "baseline": "None",
+        "builder": "[1, 1.5, 1e+16, 1e-07, 0.0, 12345678901234567890124]"
+      },
+      {
+        "field": "only_builder",
+        "baseline": "None",
+        "builder": ""
+      },
+      {
+        "field": "same",
+        "baseline": "None",
+        "builder": "{'x': [1.0, 2]}"
+      },
+      {
+        "field": "unicode",
+        "baseline": "None",
+        "builder": "e"
+      },
+      {
+        "field": "var_type",
+        "baseline": "None",
+        "builder": "tabix"
+      },
+      {
+        "field": "variation_cols",
+        "baseline": "None",
+        "builder": "['variation_name', 'chr', 'start', 'end', 'allele_string', 'failed', 'somatic', 'strand', 'clin_sig', 'phenotype_or_disease', 'clin_sig_allele', 'clin_sig_ref_allele', 'clinical_impact', 'pubmed', 'va"
+      }
+    ]
+  }
+}

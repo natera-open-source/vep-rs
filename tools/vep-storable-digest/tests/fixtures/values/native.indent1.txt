@@ -1,0 +1,17 @@
+{
+  'big' => 4294967296,
+  'decimal' => '1.5',
+  'fifteen' => '0.3',
+  'huge_double' => '1e+20',
+  'integer' => 42,
+  'list' => [
+    1,
+    '2.5',
+    'x'
+  ],
+  'minus_zero' => 0,
+  'negative' => '-4294967297',
+  'string' => 'text',
+  'tiny' => '1e-07',
+  'whole_double' => 3
+}

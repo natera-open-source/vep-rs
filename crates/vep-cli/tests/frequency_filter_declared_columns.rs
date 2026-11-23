@@ -3,10 +3,12 @@
 
 //! The `--check_frequency` filter on a cache whose `info.json` declares
 //! `variation_cols` while its variation files are absent, held to what Ensembl
-//! VEP 116.2 writes on the same cache.
+//! VEP 116.3 writes on the same cache.
 
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
+
+mod common;
 
 const INCLUDE: &[&str] = &[
     "--check_frequency",
@@ -136,7 +138,7 @@ fn run(
 ) -> PathBuf {
     let out = dir.join("out.txt");
     let _ = std::fs::remove_file(&out);
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_vep"));
+    let mut cmd = common::isolated_vep(dir);
     cmd.stdin(Stdio::null())
         .arg("-i")
         .arg(corpus_dir(corpus).join(input))
@@ -218,9 +220,9 @@ fn control_rows(dir: &Path, corpus: &Corpus, cache: &Path) -> Vec<String> {
 /// filter runs, as Ensembl VEP builds its variation source from the declared
 /// columns (CacheDir.pm:179) and reads no known variant from an absent file
 /// (VariationTabix.pm:156 and 270): no record has frequency data, so `include` drops
-/// every record (BaseCacheVariation.pm:319-322), each counted as filtered out
-/// (:362-373), and `exclude`, which `--filter_common` sets, keeps every record
-/// as the control writes it (:340-345).
+/// every record (BaseCacheVariation.pm:320-323), each counted as filtered out
+/// (:363-374), and `exclude`, which `--filter_common` sets, keeps every record
+/// as the control writes it (:341-346).
 fn assert_filter_runs_without_variation_files(corpus: &Corpus) {
     let dir = tempfile::tempdir().unwrap();
     let cache = cache_without_variation_files(dir.path(), corpus);
@@ -249,7 +251,7 @@ fn assert_filter_runs_without_variation_files(corpus: &Corpus) {
     }
 }
 
-/// Ensembl VEP 116.2 writes 0 of the 15 records of the GRCh38-freqfilter corpus
+/// Ensembl VEP 116.3 writes 0 of the 15 records of the GRCh38-freqfilter corpus
 /// under `include`, its summary counting 15 filtered out, and all 15 (291 rows)
 /// under `exclude` and `--filter_common`.
 #[test]
@@ -257,7 +259,7 @@ fn frequency_filter_runs_on_declared_columns_without_variation_files_human() {
     assert_filter_runs_without_variation_files(&HUMAN);
 }
 
-/// Ensembl VEP 116.2 writes 0 of the 263 records of the yeast corpus under
+/// Ensembl VEP 116.3 writes 0 of the 263 records of the yeast corpus under
 /// `include`, its summary counting 263 filtered out, and all 263 (1,733 rows)
 /// under `exclude` and `--filter_common`.
 #[test]
@@ -273,10 +275,10 @@ fn minimal<'a>(flags: &[&'a str]) -> Vec<&'a str> {
 }
 
 /// Under `--minimal` each alternate allele of a multi-allelic record is a
-/// feature of its own, judged alone (BaseCacheVariation.pm:315), so the filter
+/// feature of its own, judged alone (BaseCacheVariation.pm:316), so the filter
 /// judges a split record without a variation source too. On the
 /// GRCh38-freqfilter corpus's `minimal.vcf` (15 records, two of them with two
-/// alternate alleles) Ensembl VEP 116.2 writes 341 rows under
+/// alternate alleles) Ensembl VEP 116.3 writes 341 rows under
 /// `--check_existing`, none under `include`, its summary counting 17 features
 /// filtered out, and the 341 under `exclude` and `--filter_common`.
 #[test]
@@ -309,7 +311,7 @@ fn frequency_filter_judges_split_records_without_variation_files() {
 /// A split record whose first alternate allele writes no row (`*` before an
 /// allele that writes rows) has a first feature no allele stands for, judged
 /// with the others; without a variation source none has frequency data. On
-/// one such record Ensembl VEP 116.2 writes 16 rows under `--check_existing`,
+/// one such record Ensembl VEP 116.3 writes 16 rows under `--check_existing`,
 /// none under `include`, its summary counting 2 features filtered out, and the
 /// 16 under `exclude` and `--filter_common`.
 #[test]
@@ -350,7 +352,7 @@ fn frequency_filter_judges_a_rowless_first_feature_without_variation_files() {
 /// source (CacheDir.pm:179), so no filter runs: `include`, `exclude` and
 /// `--filter_common` each keep all 15 records (291 rows) of the
 /// GRCh38-freqfilter corpus and all 263 (1,733 rows) of the yeast corpus, as
-/// Ensembl VEP 116.2 writes them.
+/// Ensembl VEP 116.3 writes them.
 #[test]
 fn frequency_filter_is_inactive_without_declared_columns() {
     let dir = tempfile::tempdir().unwrap();

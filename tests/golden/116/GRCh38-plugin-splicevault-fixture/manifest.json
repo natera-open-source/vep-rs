@@ -29,7 +29,7 @@
  "covers": [
   "SpliceVault"
  ],
- "suites": {
+ "datasets": {
   "GRCh38-plugin-splicevault-fixture": {
    "reference": "default.txt",
    "input": "variants.vcf",
@@ -78,7 +78,7 @@
  },
  "records": [
   {
-   "suite": "GRCh38-plugin-splicevault-fixture",
+   "dataset": "GRCh38-plugin-splicevault-fixture",
    "vcf": "21\t13618457\tdonor_fwd_two_transcripts\tT\tC\t.\t.\t.",
    "combinations": [
     "splice_donor_variant",
@@ -86,7 +86,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-splicevault-fixture",
+   "dataset": "GRCh38-plugin-splicevault-fixture",
    "vcf": "21\t13628452\tdonor_fwd_deletion\tGGC\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -94,7 +94,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-splicevault-fixture",
+   "dataset": "GRCh38-plugin-splicevault-fixture",
    "vcf": "21\t13629855\tacceptor_fwd_decoy_only\tG\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -102,7 +102,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-splicevault-fixture",
+   "dataset": "GRCh38-plugin-splicevault-fixture",
    "vcf": "21\t13629903\tdonor_region_fwd_insertion\tA\tAT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -110,77 +110,77 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-splicevault-fixture",
+   "dataset": "GRCh38-plugin-splicevault-fixture",
    "vcf": "21\t13630940\tacceptor_fwd_snv\tG\tT\t.\t.\t.",
    "combinations": [
     "splice_acceptor_variant"
    ]
   },
   {
-   "suite": "GRCh38-plugin-splicevault-fixture",
+   "dataset": "GRCh38-plugin-splicevault-fixture",
    "vcf": "21\t13630943\texon_fwd_snv\tT\tC\t.\t.\t.",
    "combinations": [
     "splice_region_variant,synonymous_variant"
    ]
   },
   {
-   "suite": "GRCh38-plugin-splicevault-fixture",
+   "dataset": "GRCh38-plugin-splicevault-fixture",
    "vcf": "21\t13631108\tdonor_fwd_snv\tG\tA\t.\t.\t.",
    "combinations": [
     "splice_donor_variant"
    ]
   },
   {
-   "suite": "GRCh38-plugin-splicevault-fixture",
+   "dataset": "GRCh38-plugin-splicevault-fixture",
    "vcf": "21\t13639639\tdonor_fwd_unscored\tG\tC\t.\t.\t.",
    "combinations": [
     "splice_donor_variant"
    ]
   },
   {
-   "suite": "GRCh38-plugin-splicevault-fixture",
+   "dataset": "GRCh38-plugin-splicevault-fixture",
    "vcf": "21\t18294269\tdonor_rev_snv\tC\tA\t.\t.\t.",
    "combinations": [
     "splice_donor_variant"
    ]
   },
   {
-   "suite": "GRCh38-plugin-splicevault-fixture",
+   "dataset": "GRCh38-plugin-splicevault-fixture",
    "vcf": "21\t18297830\tacceptor_rev_snv\tC\tG\t.\t.\t.",
    "combinations": [
     "splice_acceptor_variant"
    ]
   },
   {
-   "suite": "GRCh38-plugin-splicevault-fixture",
+   "dataset": "GRCh38-plugin-splicevault-fixture",
    "vcf": "21\t18312942\tdonor_rev_deletion\tTAC\tT\t.\t.\t.",
    "combinations": [
     "splice_donor_variant"
    ]
   },
   {
-   "suite": "GRCh38-plugin-splicevault-fixture",
+   "dataset": "GRCh38-plugin-splicevault-fixture",
    "vcf": "21\t18315257\tacceptor_rev_lowercase\tc\ta\t.\t.\t.",
    "combinations": [
     "splice_acceptor_variant"
    ]
   },
   {
-   "suite": "GRCh38-plugin-splicevault-fixture",
+   "dataset": "GRCh38-plugin-splicevault-fixture",
    "vcf": "21\t18326431\tdonor_rev_insertion\tC\tCG\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "GRCh38-plugin-splicevault-fixture",
+   "dataset": "GRCh38-plugin-splicevault-fixture",
    "vcf": "21\t19268555\tintergenic_snv\tC\tT\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-plugin-splicevault-fixture",
+   "dataset": "GRCh38-plugin-splicevault-fixture",
    "vcf": "21\t40353744\tacceptor_rev_two_transcripts\tC\tA\t.\t.\t.",
    "combinations": [
     "splice_acceptor_variant",
@@ -188,7 +188,7 @@
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "flag_sets": [

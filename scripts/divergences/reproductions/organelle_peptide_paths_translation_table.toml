@@ -1,9 +1,9 @@
 entry = "organelle_peptide_paths_translation_table"
 page = "docs/divergences/organelle-peptide-translation-table.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 247 of 487 MT records · 23 flag sets, 7 corpora"
+input_class_basis = "2 · 298 of 2,173 records on a sequence region under another codon table · 95 flag sets, 21 corpora"
 notes = "The frameshift path, the first of the entry's four: deleting the eighth base of MT-ND1 turns codon 3 into AGG, a stop under the vertebrate mitochondrial code (table 2) and arginine under the standard one."
 
 [input]
@@ -29,3 +29,21 @@ columns = ["Consequence", "Protein_position", "Amino_acids", "Codons", "HGVSp"]
 [expected]
 ensembl_vep = ["frameshift_variant | 3 | M/X | aTg/ag | ENSP00000354687.2:p.Met3ArgfsTer12"]
 vep_rs = ["frameshift_variant | 3 | M/X | aTg/ag | ENSP00000354687.2:p.Met3Ter"]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/coding.rs::hgvsp_check_duplication",
+    "crates/vep-effects/src/coding.rs::hgvsp_del_peptides",
+    "crates/vep-effects/src/coding.rs::hgvsp_fs_peptides",
+    "crates/vep-effects/src/coding.rs::hgvsp_stop_loss_extra_aa",
+]
+tests = [
+    "crates/vep-effects/src/concordance_tests.rs::concordance_hgvsp_h23_mitochondrial_frameshift_peptides_follow_the_codon_table",
+    "crates/vep-effects/src/concordance_tests.rs::concordance_hgvsp_h24_mitochondrial_codon_duplication_reads_the_codon_table",
+    "crates/vep-effects/src/concordance_tests.rs::concordance_hgvsp_h25_mitochondrial_stop_loss_extension_counts_to_the_tables_stop",
+    "crates/vep-effects/src/concordance_tests.rs::concordance_hgvsp_h26_invertebrate_mitochondrial_table_drives_the_peptide_paths",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/downstream.rs::organelle_peptide_path",
+    "tools/vep-golden-corpus/src/classify/organelle.rs::organelle_peptide_paths_translation_table",
+]

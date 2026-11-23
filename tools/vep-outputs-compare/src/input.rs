@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 //! One side of the comparison: records, lossy UTF-8 decoding and the five-column tuple key
-//! `iter_vep_key_lines` yields (Location with bare coordinates, Allele, Feature,
+//! of an output row (Location with bare coordinates, Allele, Feature,
 //! Feature_type, the normalised consequence set), under the canonical-contig filter; and the
 //! reader of an input VCF, plain or gzipped.
 
@@ -26,19 +26,47 @@ pub const TRANSCRIPT_CONTEXT_TERMS: [&str; 3] = [
 /// The consequence set of a key whose every term was a transcript-context term.
 pub const CONTEXT_ONLY: &str = "__context_only__";
 
+/// The assemblies whose sequence names this tool holds itself: a run that names any other, or
+/// none, takes its names from a named set or a converted cache.
+pub const HUMAN_ASSEMBLIES: [&str; 2] = ["GRCh37", "GRCh38"];
+
 /// The human canonical contig set, Ensembl-style, the same for GRCh37 and GRCh38; `M` and
-/// `MT` are equivalent mitochondrial names.
+/// `MT` are equivalent mitochondrial names. It is the bare flag's set under an assembly of
+/// `HUMAN_ASSEMBLIES` and under no other.
 pub const CANONICAL_CONTIGS: [&str; 26] = [
     "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17",
     "18", "19", "20", "21", "22", "X", "Y", "MT", "M",
 ];
 
-/// The names the Ensembl caches file chromosomes under, for the breakend synonym test: a mate
-/// written `M` is a synonym of `MT` there, as any other name is.
+/// The names the human Ensembl caches file chromosomes under, for the breakend synonym test:
+/// a mate written `M` is a synonym of `MT` there, as any other name is.
 pub const CACHE_CONTIG_NAMES: [&str; 25] = [
     "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17",
     "18", "19", "20", "21", "22", "X", "Y", "MT",
 ];
+
+/// The names the run's cache files its sequences under, as the breakend synonym test reads
+/// them.
+pub enum CacheContigNames {
+    /// `CACHE_CONTIG_NAMES`, under an assembly of `HUMAN_ASSEMBLIES`.
+    Human,
+    /// The names the run gives: a converted cache's `contig_order`, or the set a
+    /// `--canonical-contigs` value names.
+    Named(HashSet<String>),
+    /// The run gives no names, so no name can be told from a synonym.
+    Unknown,
+}
+
+impl CacheContigNames {
+    /// Whether the cache files a sequence under `name`; `None` where the run gives no names.
+    pub fn holds(&self, name: &str) -> Option<bool> {
+        match self {
+            CacheContigNames::Human => Some(CACHE_CONTIG_NAMES.contains(&name)),
+            CacheContigNames::Named(names) => Some(names.contains(name)),
+            CacheContigNames::Unknown => None,
+        }
+    }
+}
 
 /// Calls `f` with each record of `reader` without its terminator. `\n`, `\r\n` and a lone
 /// `\r` each end a record, as Python's universal-newlines text mode reads them; a final
@@ -129,7 +157,7 @@ pub fn for_each_record_in(
     Ok(())
 }
 
-/// `canonical_location`: each coordinate of `chrom:start-end` written as its number, so a
+/// The Location of a key: each coordinate of `chrom:start-end` written as its number, so a
 /// leading `+` or leading zeros on an ASCII-digit coordinate are dropped; a coordinate
 /// that is not a run of ASCII digits, and a Location without `:`, stay as written.
 pub fn push_canonical_location(location: &str, out: &mut Vec<u8>) {
@@ -211,13 +239,18 @@ pub fn for_each_record_name<R: Read>(
     })
 }
 
-/// Calls `f` with the key [`KeyPrep::prepare`] writes and the first nine columns, white
-/// space stripped, of every row of `reader` it keys at one of `locations`, each a Location
-/// with bare coordinates; the columns are `None` for a row of fewer than nine.
+/// The first nine columns of an output row, Uploaded_variation to CDS_position, and its
+/// tenth to twelfth, Protein_position, Amino_acids and Codons, where the row has all three.
+pub type RowColumns<'a> = ([&'a str; 9], Option<[&'a str; 3]>);
+
+/// Calls `f` with the key [`KeyPrep::prepare`] writes and the first twelve columns
+/// ([`RowColumns`]), white space stripped, of every row of `reader` it keys at one of
+/// `locations`, each a Location with bare coordinates; the columns are `None` for a row of
+/// fewer than nine.
 pub fn for_each_row_at<R: Read>(
     reader: R,
     locations: &HashSet<&[u8]>,
-    mut f: impl FnMut(&[u8], Option<[&str; 9]>),
+    mut f: impl FnMut(&[u8], Option<RowColumns<'_>>),
 ) -> io::Result<()> {
     let mut prep = KeyPrep::default();
     let mut key = Vec::new();
@@ -254,7 +287,14 @@ pub fn for_each_row_at<R: Read>(
                 }
             }
         }
-        f(&key, complete.then_some(columns));
+        let mut cells = [""; 3];
+        let mut held = 0;
+        for (cell, field) in cells.iter_mut().zip(&mut fields) {
+            *cell = py_strip(field);
+            held += 1;
+        }
+        let cells = (held == cells.len()).then_some(cells);
+        f(&key, complete.then_some((columns, cells)));
         Ok(())
     })
 }
@@ -350,7 +390,7 @@ pub fn push_collapsed_key(key: &[u8], out: &mut Vec<u8>) {
     }
 }
 
-/// `normalize_consequence_set`, then `collapse_transcript_context_terms` when asked: split
+/// The consequence set of a key, less the transcript-context terms under `collapse`: split
 /// on `,`, strip each term, drop empty terms, dedupe, sort by code point (byte order of the
 /// UTF-8), join with `,`.
 fn push_consequence_set(
@@ -382,3 +422,11 @@ fn push_consequence_set(
         out.extend_from_slice(&s.as_bytes()[a..b]);
     }
 }
+
+#[cfg(test)]
+#[path = "input_ten_digits_tests.rs"]
+mod ten_digits_tests;
+
+#[cfg(test)]
+#[path = "input_location_numbers_tests.rs"]
+mod location_numbers_tests;

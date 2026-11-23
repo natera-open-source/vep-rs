@@ -1,9 +1,9 @@
 entry = "utrannotator_structural_allele_text"
 page = "docs/output/structural-variants.md#utrannotator-on-a-symbolic-allele-the-text-del-scored-as-a-five-base-deletion"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 48.3 per million · 4 flag sets, 28 corpora"
+input_class_basis = "2 · 48.3 per million · 4 flag sets, 29 corpora"
 notes = "The record deletes 40 bases inside one exon of the 5' UTR of ENST00000427445, from three bases past a uORF's ATG; Ensembl VEP removes the five characters of `<DEL>` and reports a uORF frameshift with the alternative ORF 39 bases long, the 40 deleted bases unread; vep-rs removes the 40 bases and reports the frameshift with the alternative ORF 66 bases long. Both engines write the same `5UTR_consequence`, `Existing_*` counts and `Allele` `deletion`."
 
 [input]
@@ -30,3 +30,22 @@ where = { record = "sv_del_40", feature = "ENST00000427445" }
 [expected]
 ensembl_vep = ["alt_type_length=39:KozakContext=AGAATGT:KozakStrength=Moderate:ref_type_length=51:ref_type=uORF:alt_type=uORF:Evidence=False:ref_StartDistanceToCDS=207"]
 vep_rs = ["Evidence=False:KozakContext=AGAATGT:KozakStrength=Moderate:alt_type=uORF:alt_type_length=66:ref_StartDistanceToCDS=207:ref_type=uORF:ref_type_length=51"]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/utr_annotator.rs::UtrAnnotatorPlugin::annotate",
+    "crates/vep-builtins/src/plugins/utr_annotator.rs::UtrAnnotatorPlugin::frameshift_by_length",
+    "crates/vep-builtins/src/plugins/utr_annotator.rs::stated_deletion",
+    "crates/vep-builtins/src/plugins/utr_annotator.rs::stated_insertion",
+]
+tests = [
+    "crates/vep-builtins/src/plugins/utr_annotator.rs::tests::a_symbolic_deletion_inside_one_utr_exon_is_the_sequence_deletion_of_its_span",
+    "crates/vep-builtins/src/plugins/utr_annotator.rs::tests::a_symbolic_insertion_gets_the_frameshift_its_length_decides",
+    "crates/vep-builtins/src/plugins/utr_annotator.rs::tests::every_other_symbolic_allele_gets_the_counts_alone",
+    "crates/vep-cli/tests/utrannotator_symbolic_deletion.rs::a_symbolic_deletion_inside_one_utr_exon_carries_the_row_of_its_explicit_form",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/utrannotator.rs::structural_allele_text_row",
+    "tools/vep-formats-compare/src/rules/utrannotator.rs::structural_deletion_span_row",
+    "tools/vep-plugin-pairs/src/rules/utrannotator.rs::structural_allele_text",
+]

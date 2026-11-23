@@ -113,7 +113,7 @@ fn tabix_query(path: &Path, region: &str) -> Vec<String> {
 
 /// The module's command line under the corpus flags and `--vcf` writes a BGZF
 /// VCF that tabix indexes, and the record a region query returns is the line
-/// Ensembl VEP 116.2 wrote for it (`expected/vcf.vcf.gz` of the corpus).
+/// Ensembl VEP 116.3 wrote for it (`expected/vcf.vcf.gz` of the corpus).
 #[test]
 fn ensemblvep_vep_script_writes_a_tabix_indexed_vcf_of_the_reference_records() {
     let corpus = run_control_corpus();

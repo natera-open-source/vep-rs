@@ -1,7 +1,7 @@
 entry = "gnomadmt_info_value_second_equals"
 page = "docs/plugins/annotation-store.md#11-gnomadmt-an-info-value-that-holds--is-cut-at-that-sign"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
 input_class_basis = "2 · 47 of 373 table rows · 5 flag sets, 1 corpus"
 
@@ -28,3 +28,9 @@ where = { record = "nd1_3441_A_G", feature = "ENST00000361390" }
 [expected]
 ensembl_vep = ["G|synonymous_variant|LOW|MT-ND1|ENSG00000198888|Transcript|ENST00000361390|protein_coding|1/1||ENST00000361390.2:c.135A>G|ENSP00000354687.2:p.Leu45"]
 vep_rs = ["G|synonymous_variant|LOW|MT-ND1|ENSG00000198888|Transcript|ENST00000361390|protein_coding|1/1||ENST00000361390.2:c.135A>G|ENSP00000354687.2:p.Leu45=|135|135|45|L|ctA/ctG|1||1|SNV||HGNC|HGNC:7455|YES||P1||ENSP00000354687||||1|||ENSP_mappings:5xtc&ENSP_mappings:5xtd&HAMAP:MF_01350&PANTHER:PTHR11432&PANTHER:PTHR11432&PROSITE_patterns:PS00667&Pfam:PF00146|||||||||"]
+
+[implementation]
+code = ["crates/vep-builtins/src/plugins/gnomadmt.rs::split_info_pair"]
+tests = [
+    "crates/vep-cli/tests/plugin_documented_rows.rs::a_gnomadmt_info_value_holding_an_equals_sign_is_written_whole",
+]

@@ -38,12 +38,13 @@ format, and compare the files. The default and tab headers carry an `## Output p
 the VCF header a `time="..."` attribute, both set at run time; mask those two before comparing, and
 nothing else. The headers also echo the command line with the output file's name, so both sides
 write to one file name in two directories. A Parquet output carries a run identifier in every part,
-so it is compared through its `--tab` projection.
+so it is compared through its `--tab` projection. Cargo reads `.cargo/config.toml` from the
+directory a build is started in and its parent directories, so each tree is built from inside it.
 
 ```bash
 cargo build --release --locked                                   # the branch: target/release/vep
 mkdir -p /tmp/vep-main && git archive origin/main | tar -x -C /tmp/vep-main    # main's tree, built apart
-cargo build --release --locked --manifest-path /tmp/vep-main/Cargo.toml --target-dir /tmp/vep-main/target
+(cd /tmp/vep-main && cargo build --release --locked)             # main: /tmp/vep-main/target/release/vep
 mkdir -p /tmp/identity/main /tmp/identity/branch
 mask() { sed -E 's/^## Output produced at .*/## Output produced at <time>/; s/ time="[^"]*"/ time="<time>"/'; }
 field() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get(sys.argv[2], sys.argv[3]))' "$@"; }
@@ -70,7 +71,7 @@ manifest's `generated` block writes, and under `--fasta` when the manifest names
 the cache. Repeat the loop with those flags, and with the flags of every `flag_sets` entry whose run
 the change can touch (a plugin change with the plugin's flags, a structural-variant change under
 `--max_sv_size`), and over the corpora the loop skips with the input and cache their manifests name.
-Compare Parquet with `python3 scripts/adapters/parquet_to_vep_tab.py --canonical` on both sides.
+Compare Parquet with the release build of `tools/vep-parquet-to-tab`, `--canonical` on both sides.
 Then run the golden harness: `cargo test -p vep-cli --test golden --test format_parity`, which holds
 every committed run to Ensembl VEP's output.
 
@@ -124,5 +125,8 @@ made for speed states truthfully: it touches no entry of the index, and one that
 performance change. The admission check refuses that statement to a change that edits a page an
 index row links (`docs/cache-setup.md` and several pages under `docs/output/` among them): a change that
 must edit such a page checks the second statement instead and names the page's entries one line
-each, as the index names them, each kept. Done when every command passes and its output is quoted
+each, as the index names them, each kept. The check refuses the first statement as well to a change
+that touches a line of an item a reproduction record lists in its `implementation` table (the
+function that holds an entry's behaviour, or a test that pins it): such a change names that entry
+under the second statement, kept. Done when every command passes and its output is quoted
 under Verification.

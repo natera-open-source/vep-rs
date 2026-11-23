@@ -1,0 +1,619 @@
+### ENST00000000001
+{
+  '_gene_version' => '3',
+  'biotype' => 'protein_coding',
+  'dbID' => 7,
+  '_variation_effect_feature_cache' => {
+    'peptide' => 'MKG',
+    'protein_features' => [
+      bless( {
+        'dbID' => '8',
+        'end' => 34,
+        'hseqname' => 'PF00001',
+        'start' => '12'
+      }, 'Bio::EnsEMBL::ProteinFeature' ),
+    ],
+    'protein_function_predictions' => {
+      'sift' => 'matrix:1234 md5:abcdef'
+    },
+    'translateable_seq' => 'ATGAAAGGG'
+  },
+  'stable_id' => 'x',
+}
+
+### ENST00000000002
+{
+  '_gene_version' => '3',
+  'biotype' => 'protein_coding',
+  'dbID' => 7,
+  '_variation_effect_feature_cache' => {
+    'peptide' => 'LKG',
+    'protein_features' => [
+      bless( {
+        'dbID' => '8',
+        'end' => 34,
+        'hseqname' => 'PF00001',
+        'start' => '12'
+      }, 'Bio::EnsEMBL::ProteinFeature' ),
+    ],
+    'protein_function_predictions' => {
+      'sift' => 'matrix:1234 md5:abcdef'
+    },
+    'translateable_seq' => 'ATGAAAGGG'
+  },
+  'stable_id' => 'x',
+}
+
+### ENST00000000003
+{
+  '_gene_version' => '3',
+  'biotype' => 'protein_coding',
+  'dbID' => 7,
+  '_variation_effect_feature_cache' => {
+    'peptide' => 'MKG',
+    'protein_features' => [
+      bless( {
+        'dbID' => '8',
+        'end' => 34,
+        'hseqname' => 'PF00001',
+        'start' => '12'
+      }, 'Bio::EnsEMBL::ProteinFeature' ),
+      bless( {
+        'dbID' => '8',
+        'end' => 34,
+        'hseqname' => 'PF00002',
+        'start' => '12'
+      }, 'Bio::EnsEMBL::ProteinFeature' ),
+    ],
+    'protein_function_predictions' => {
+      'sift' => 'matrix:1234 md5:abcdef'
+    },
+    'translateable_seq' => 'ATGAAAGGG'
+  },
+  'stable_id' => 'x',
+}
+
+### ENST00000000004
+{
+  '_gene_version' => '3',
+  'biotype' => 'protein_coding',
+  'dbID' => 7,
+  '_variation_effect_feature_cache' => {
+    'peptide' => 'MKG',
+    'protein_features' => [
+      bless( {
+        'dbID' => '8',
+        'end' => 34,
+        'hseqname' => 'PF00001',
+        'start' => '12'
+      }, 'Bio::EnsEMBL::ProteinFeature' ),
+    ],
+    'protein_function_predictions' => {
+      'sift' => 'matrix:1234 md5:abcdef'
+    },
+    'translateable_seq' => 'ATGAAAGGG'
+  },
+  'source' => 'havana',
+  'end' => 9,
+  'stable_id' => 'x',
+}
+
+### ENST00000000005
+{
+  '_gene_version' => '3',
+  'biotype' => 'protein_coding',
+  'dbID' => 7,
+  '_variation_effect_feature_cache' => {
+    'peptide' => 'MK*',
+    'protein_features' => [
+      bless( {
+        'dbID' => '8',
+        'end' => 34,
+        'hseqname' => 'PF00001',
+        'start' => '12'
+      }, 'Bio::EnsEMBL::ProteinFeature' ),
+    ],
+    'protein_function_predictions' => {
+      'sift' => 'matrix:1234 md5:abcdef'
+    },
+    'translateable_seq' => 'ATGAAAGGG'
+  },
+  'stable_id' => 'x',
+}
+
+### ENST00000000006
+[
+--removed 'biotype' => 1
+  'kept',
+]
+
+### ENST00000000007
+[
+  'one',
+  'two'
+]
+
+### ENST00000000008
+{
+  {
+    'hseqname' => 'PF00000',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00001',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00002',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00003',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00004',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00005',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00006',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00007',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00008',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00009',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00010',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00011',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00012',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00013',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00014',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00015',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00016',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00017',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00018',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00019',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00020',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00021',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00022',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00023',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00024',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00025',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00026',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00027',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00028',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00029',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00030',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00031',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00032',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00033',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00034',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00035',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00036',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00037',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00038',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00039',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00040',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00041',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00042',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00043',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00044',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00045',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00046',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00047',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00048',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00049',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00050',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00051',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00052',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00053',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00054',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00055',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00056',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00057',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00058',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00059',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00060',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00061',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00062',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00063',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00064',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00065',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00066',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00067',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00068',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00069',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00070',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00071',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00072',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00073',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00074',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00075',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00076',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00077',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00078',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00079',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00080',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00081',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00082',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00083',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00084',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00085',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00086',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00087',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00088',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00089',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00090',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00091',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00092',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00093',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00094',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00095',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00096',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00097',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00098',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00099',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00100',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00101',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00102',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00103',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00104',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00105',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00106',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00107',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00108',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00109',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00110',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00111',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00112',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00113',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00114',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00115',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00116',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00117',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00118',
+    'score' => '1',
+  },
+  {
+    'hseqname' => 'PF00119',
+    'score' => '1',
+  },
+}
+

@@ -1,0 +1,1 @@
+ERROR: [fastvep_plugin_tuples] tests/fixtures/maps/bad_part.tsv:2: part "fir'st" is not N, N-M, N.word or N.score

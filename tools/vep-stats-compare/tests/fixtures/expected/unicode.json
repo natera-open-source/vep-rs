@@ -1,0 +1,81 @@
+{
+ "mode": "stats",
+ "format": "stats",
+ "verdict": "red",
+ "reasons": [
+  "section [Only \u00e9 expected] only in the expected file",
+  "section [Only \ud83d\ude00 actual] only in the actual file",
+  "[VEP run statistics]: 2 differences",
+  "[Cons\u00e9quences \ud83e\uddec]: 2 differences"
+ ],
+ "tolerance": 0,
+ "masked_rows": [
+  "Command line options",
+  "End time",
+  "Input data",
+  "Input file",
+  "Output file",
+  "Run time",
+  "Start time"
+ ],
+ "sections": {
+  "expected": [
+   "VEP run statistics",
+   "Cons\u00e9quences \ud83e\uddec",
+   "Only \u00e9 expected"
+  ],
+  "actual": [
+   "VEP run statistics",
+   "Cons\u00e9quences \ud83e\uddec",
+   "Only \ud83d\ude00 actual"
+  ],
+  "order_agrees": true
+ },
+ "compared": {
+  "sections": 2,
+  "rows": 6
+ },
+ "documented": [],
+ "differences": {
+  "Only \u00e9 expected": [
+   {
+    "kind": "section_missing"
+   }
+  ],
+  "Only \ud83d\ude00 actual": [
+   {
+    "kind": "section_unexpected"
+   }
+  ],
+  "VEP run statistics": [
+   {
+    "kind": "value",
+    "row": "Esp\u00e8ce",
+    "expected": "homo_sapiens",
+    "actual": "mus_musculus"
+   },
+   {
+    "kind": "value",
+    "row": "Annotation sources",
+    "expected": "Cache: [PATH];\u00a0Custom:\u2003[PATH]\u00a0(vcf); db on host",
+    "actual": "Cache: [PATH];\u00a0Custom:\u2003[PATH]\u00a0(tabix); db on host"
+   }
+  ],
+  "Cons\u00e9quences \ud83e\uddec": [
+   {
+    "kind": "count",
+    "row": "faux-sens \u00ab x \u00bb",
+    "expected": 3,
+    "actual": 4
+   },
+   {
+    "kind": "count",
+    "row": "control \u001f\u007f",
+    "expected": 5,
+    "actual": "cinq"
+   }
+  ]
+ },
+ "expected": "tests/fixtures/unicode_expected.summary.log",
+ "actual": "tests/fixtures/unicode_actual.summary.log"
+}

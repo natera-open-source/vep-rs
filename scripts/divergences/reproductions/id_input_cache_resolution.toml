@@ -1,7 +1,7 @@
 entry = "id_input_cache_resolution"
 page = "docs/divergences/id-input.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the variant identifier input format (Ensembl VEP documentation, \"Data formats\", Variant identifiers); not seen in the measured datasets"
 notes = "The first mechanism of the entry: an identifier list given to both engines offline. Ensembl VEP refuses the format offline (`Cannot use ID format in offline mode`) and writes no row; vep-rs resolves the name from the cache's variation files. The VCF line of a COSMIC or HGMD identifier needs Ensembl VEP's database and is not run here."
@@ -25,3 +25,17 @@ where = { record = "rs267606642", feature = "ENST00000291582" }
 ensembl_vep_exit = 2
 ensembl_vep = []
 vep_rs = ["21:44286663 | G | ENST00000291582 | missense_variant"]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/runner.rs::Runner::resolve_identifiers",
+    "crates/vep-cli/src/variation_name_index.rs::resolve_names",
+    "crates/vep-io/src/input/id.rs::mapping_variants",
+    "crates/vep-io/src/output/vcf_output.rs::to_vcf_record",
+]
+tests = [
+    "crates/vep-cli/src/variation_name_index.rs::tests::resolves_names_over_every_file_in_karyotype_order",
+    "crates/vep-cli/tests/documented_subsets.rs::id_input_exclusion_is_documented",
+    "crates/vep-cli/tests/input_id.rs::identifier_list_annotates_as_its_vcf_twins",
+    "crates/vep-io/src/input/id.rs::tests::mapping_alleles_are_post_processed_as_ensembl_vep_does",
+]

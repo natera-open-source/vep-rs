@@ -1,0 +1,12 @@
+--version-a
+115
+--dump-a
+b.txt
+--version-b
+113
+--dump-b
+a.txt
+--out-dir
+out
+--json-cache
+json_cache

@@ -13,7 +13,7 @@ use crate::config::ReaderCoreReservation;
 /// moved and the ones it could not (gone by the time they were named, or
 /// refused by the kernel).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct Applied {
+pub(crate) struct Applied {
     pub reader_pinned: bool,
     pub moved: usize,
     pub failed: usize,
@@ -31,7 +31,7 @@ pub fn allowed_cpus() -> Option<Vec<usize>> {
 /// own only once the rest of the run has left it. A thread created afterwards
 /// inherits its creator's set, so a thread the reader creates runs on the
 /// reader's CPU and one any other thread creates on the rest.
-pub fn apply(reservation: &ReaderCoreReservation) -> Applied {
+pub(crate) fn apply(reservation: &ReaderCoreReservation) -> Applied {
     platform::apply(reservation)
 }
 

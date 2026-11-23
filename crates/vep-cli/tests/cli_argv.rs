@@ -3,7 +3,7 @@
 
 //! The command line as the `vep` binary reads it: `VEP_*` environment
 //! variables behind the command line (`Config.pm:707-708, 1127-1168` at
-//! release/116.2), long options abbreviated to a unique prefix, written after
+//! release/116.3), long options abbreviated to a unique prefix, written after
 //! one dash or in another case (Getopt::Long's defaults, `Config.pm:62`), and
 //! the short flags, which clap reads.
 //!
@@ -228,6 +228,73 @@ fn vep_env_unknown_key_is_ignored() {
     assert!(output.stderr.is_empty(), "{}", text(&output.stderr));
 }
 
+/// No `VEP_*` variable names `--phyloP` or `--phastCons`, the two flags spelled
+/// with a capital letter: the name is lower-cased (`Config.pm:1140`) and
+/// `phylop` names nothing, so `VEP_PHYLOP=100` and `VEP_PHASTCONS=100` add no
+/// source and the run is not held to `--ucsc_assembly`, where `--phyloP 100`
+/// typed without it is refused (`Config.pm:609, 970-972`). Ensembl VEP 116.3
+/// stores each variable under its lower-cased key (`:1158`), which the option
+/// sets of `:553` and `:560` never read. The two are the only long names with
+/// a capital letter among the parser's and those of `@VEP_PARAMS`.
+#[test]
+fn vep_env_names_no_flag_spelled_with_a_capital_letter() {
+    let mut command = Args::command_with_error_table();
+    command.build();
+    let mut capital: Vec<String> = parser_options(&command)
+        .into_iter()
+        .flat_map(|option| option.names)
+        .chain(VEP_PARAMS.iter().flat_map(|spec| {
+            let names = spec.split(['=', ':', '!', '+']).next().unwrap_or(spec);
+            names.split('|').map(str::to_string)
+        }))
+        .filter(|name| name.len() > 1 && name.chars().any(|c| c.is_ascii_uppercase()))
+        .collect();
+    capital.sort();
+    capital.dedup();
+    assert_eq!(capital, ["phastCons", "phyloP"]);
+
+    let home = tempfile::tempdir().unwrap();
+    let out = home.path().join("out.txt");
+    let mut args = corpus_args();
+    args.extend(["-o".to_string(), out.display().to_string()]);
+
+    let typed = vep(home.path())
+        .args(&args)
+        .args(["--phyloP", "100"])
+        .output()
+        .unwrap();
+    assert_eq!(typed.status.code(), Some(1));
+    assert_eq!(
+        text(&typed.stderr),
+        "ERROR: [cli] You must set --ucsc_assembly to use --phyloP\n"
+    );
+
+    // `--quiet` withholds every notice and status line, so the variables are
+    // read by a run without it.
+    let from_environment = vep(home.path())
+        .args(args.iter().filter(|arg| *arg != "--quiet"))
+        .env("VEP_PHYLOP", "100")
+        .env("VEP_PHASTCONS", "100")
+        .output()
+        .unwrap();
+    let stderr = text(&from_environment.stderr);
+    assert_eq!(from_environment.status.code(), Some(0), "{stderr}");
+    // The status lines name the corpus and the output file by their paths.
+    let printed = stderr
+        .replace(env!("CARGO_MANIFEST_DIR"), "")
+        .replace(&home.path().display().to_string(), "")
+        .to_ascii_lowercase();
+    assert!(
+        !printed.contains("phylop") && !printed.contains("phastcons"),
+        "{stderr}"
+    );
+    let written = fs::read_to_string(&out).unwrap();
+    assert!(
+        !written.contains("100way"),
+        "a variable added a conservation source"
+    );
+}
+
 /// A unique prefix of a long option names it, as Getopt::Long's `auto_abbrev`
 /// does (`Config.pm:62`): `--show_cache_i`, `--offl`, `--json_c` read as the
 /// full flags, `--bio` is `--biotype` and adds the tab column, and `--force`
@@ -384,7 +451,7 @@ fn every_perl_unique_prefix_resolves_the_same() {
         .collect();
     assert!(
         unresolved.is_empty(),
-        "Perl-unique spellings vep-rs does not resolve:\n  {}",
+        "Ensembl VEP's unique spellings vep-rs does not resolve:\n  {}",
         listed.join("\n  ")
     );
 }
@@ -687,7 +754,7 @@ fn vep_ini_is_read_through_the_binary() {
 
 /// A repeatable key alone on its line of a `--config` file (`plugin`,
 /// `custom`, `transcript_filter`) is dropped here (`read_config_file` in
-/// `argv.rs`), where Ensembl VEP 116.2 keeps the empty string for it
+/// `argv.rs`), where Ensembl VEP 116.3 keeps the empty string for it
 /// (`Config.pm:1094-1097`, `my $value = join(' ', @split);` then
 /// `push @{$config->{$key}}, $value;`): a bare `plugin` line reaches
 /// `my ($module, @params) = split /,/, $plugin_config;` and the `use $module`
@@ -737,7 +804,7 @@ fn a_repeatable_key_alone_on_its_config_line_is_dropped() {
 /// A `--config` value carrying the literal text `___SPACE___` is read as
 /// written (`split_config_line` in `argv.rs` keeps a quoted blank by counting
 /// quotes and has no placeholder), so `output_file <dir>/Q___SPACE___out.txt`
-/// writes that file. Ensembl VEP 116.2's `read_config_from_file` substitutes
+/// writes that file. Ensembl VEP 116.3's `read_config_from_file` substitutes
 /// that text for each blank inside double quotes (`Config.pm:1082`) and then
 /// restores every occurrence of it in the values (`:1089`, `s/___SPACE___/ /g
 /// for @split;`), a literal one included, so the same file writes `Q out.txt`
@@ -795,7 +862,7 @@ fn a_literal_placeholder_in_a_config_value_stays_as_written() {
 /// flag the error table refuses before parsing, which `key_storage` in `argv.rs`
 /// stores under its own name and `tokens_of` lays out as the switch `--af_exac`
 /// for the scan in `config::parse_command_line`. `VEP_AF_EXAC=0` adds nothing,
-/// a switch set to a false value. Ensembl VEP 116.2 ignores the variable:
+/// a switch set to a false value. Ensembl VEP 116.3 ignores the variable:
 /// `read_config_from_environment` keeps a key only when `is_valid_param`
 /// matches it to an option of `@VEP_PARAMS` (Config.pm:1143-1147), which has no
 /// `af_exac`.
@@ -824,4 +891,36 @@ fn vep_env_af_exac_reaches_the_refusal() {
         "the run fails later, on its cache: {stderr}"
     );
     assert!(!stderr.contains("af_exac"), "{stderr}");
+}
+
+/// Every other test file of this directory starts the binary through
+/// `common::isolated_vep` or `common::isolated_vep_anywhere`, which keep the
+/// machine's `VEP_*` variables and its `vep.ini` from the run. A file that
+/// names the binary's path itself starts it under the caller's environment,
+/// where one such variable changes the rows its tests read.
+#[test]
+fn no_other_test_file_starts_the_binary_by_its_path() {
+    let tests = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
+    let mut by_path: Vec<String> = fs::read_dir(&tests)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.extension().is_some_and(|extension| extension == "rs"))
+        .filter(|path| path.file_name().is_some_and(|name| name != "cli_argv.rs"))
+        // A dot-named entry is no test target, and an editor's lock of that
+        // shape is a link to no file.
+        .filter(|path| !path.file_name().unwrap().to_string_lossy().starts_with('.'))
+        .filter(|path| {
+            fs::read_to_string(path)
+                .unwrap()
+                .contains("CARGO_BIN_EXE_vep")
+        })
+        .map(|path| path.file_name().unwrap().to_string_lossy().into_owned())
+        .collect();
+    by_path.sort();
+    assert_eq!(
+        by_path,
+        Vec::<String>::new(),
+        "start `vep` through `common::isolated_vep` in these files of {}",
+        tests.display()
+    );
 }

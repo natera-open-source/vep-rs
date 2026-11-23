@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate ALL test VCFs in the vep-rs SV validation test suite.
+"""Validate ALL test VCFs in the vep-rs SV validation test set.
 
 Checks:
   1. REF allele correctness (requires FASTA + samtools)
@@ -654,7 +654,7 @@ def print_human_report(
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Validate all test VCFs in the vep-rs SV validation suite."
+        description="Validate all test VCFs in the vep-rs SV validation test set."
     )
     parser.add_argument(
         "--fasta-grch37",

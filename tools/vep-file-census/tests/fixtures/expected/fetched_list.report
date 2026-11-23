@@ -1,0 +1,13 @@
+data/one.txt	4	md5
+data/two.txt	8	multipart-md5 8
+three.txt	6	sha256
+data/empty.bin	0	md5
+data/two words.txt	10	md5
+data/one.txt	4	bytes-alone
+data/one.txt	4	bytes-alone
+data/two.txt	8	DIFFERS
+data/two.txt	7	DIFFERS
+data/missing.txt	4	DIFFERS
+data	4	DIFFERS
+three.txt	6	DIFFERS
+three.txt	6	DIFFERS

@@ -1,0 +1,89 @@
+{
+ "plugin_fixtures": {
+  "generator": "scripts/fixtures/cut_plugin_regions.py",
+  "flank": 5000,
+  "record_flank": 2000,
+  "exon_flank": 50,
+  "gerp_regions": "exons",
+  "tools": {
+   "bgzip": "bgzip (htslib) 1.9"
+  },
+  "files": {
+   "reference.fa.fai": "f66cca632acf2fcdaf5beef2fe30e9b4f074fe024c302486f84e218ca9e36816",
+   "reference.fa.gz": "82fdadc92037fc4b4b13a0e3ed791132fae6ce5a3af85db1b6f3bdb5cf3f082b",
+   "reference.fa.gz.fai": "f66cca632acf2fcdaf5beef2fe30e9b4f074fe024c302486f84e218ca9e36816",
+   "reference.fa.gz.gzi": "ffdb380f4c1e0a6f684551423a6d230252165c6595793951361077b93284db31"
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species capra_hircus --assembly ARS1 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "capra_hircus/116_ARS1",
+ "fasta": "reference.fa.gz",
+ "input": "variants.vcf",
+ "sha256": {
+  "default.txt": "6206ce7518a418df5f0096eacb3d99954dd7cf5c3610c0dd49ce1c699ea3e1f1",
+  "tab.txt": "996e9177821f26f1f7e3ab8fe8fbd3df47bcecb3e2974ddfa854d9ca1e5f6581",
+  "vcf.vcf": "bb3330dc4c7c7ff7b5d7fabb4b8e2f23f583aba3869efdaf62f67c758409a84f",
+  "json.jsonl": "c82bc6a14c6a95790588f5dc7f4b8bfd4c99c92ba3771512a16fbfdd2196c2ac"
+ },
+ "variants_vcf_sha256": "2506eaf36d86310f348213454daa6f1d637544e7464bfc040c52472e5c3bc233",
+ "flag_sets": {
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species capra_hircus --assembly ARS1 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "capra_hircus/116_ARS1",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "f0532685d0b7ccc909a7315311b41f0550f90768f4b56ba66cba4c72e25a2843",
+    "tab.txt": "e05b8d61d06d365bcbff2fad7a8b7dd393c95fef57b044f0f6521fa3638a3a11",
+    "vcf.vcf": "a2dfc5f0cbdcc745e6e0a51d3dd39d09da1b4e2d7b604242240a2908f32794c9",
+    "json.jsonl": "75ad24757aee320fea25b0c29f623fdfaa2f49d765f76d33945f98700dc8545b"
+   },
+   "flags": [
+    "--everything"
+   ],
+   "expected_dir": "expected_everything"
+  },
+  "hgvs-sift": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species capra_hircus --assembly ARS1 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs --sift b [--tab|--vcf|--json]",
+   "perl_cache": "capra_hircus/116_ARS1",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "b6603399e576621063d54680923dacd08a935db7d8daeba6cf33716573780d6e",
+    "tab.txt": "7f584389abaa335abf27486fa809f1e83acc4ed2b5845f66da92bc69bfb971b8",
+    "vcf.vcf": "c9bb3e5caad9bdb7df18370ca3884850fa7e41ed30568d8a840e60a663b43400",
+    "json.jsonl": "a9fb52e53850b5ce3ffa6c57bf4b86d50da0bdfcc95ea3ef539f790438a0671d"
+   },
+   "flags": [
+    "--hgvs",
+    "--sift",
+    "b"
+   ],
+   "expected_dir": "expected_hgvs-sift"
+  }
+ },
+ "generator": "tools/vep-storable-to-json over the Ensembl VEP 116 ARS1 cache; a survey of the converted cache's sequences, which chose MT (genetic code table 2), 25 (the shortest sequence holding at least 300 coding transcripts with some on each strand) and LWLT01020929.1 (the shortest unplaced scaffold holding coding transcripts on both strands); the genome sequence of the three from Ensembl release 116 (Capra_hircus.ARS1.dna.chromosome.25.fa.gz, Capra_hircus.ARS1.dna.chromosome.MT.fa.gz and the scaffold's record of Capra_hircus.ARS1.dna.nonchromosomal.fa.gz, each file checked against the directory's CHECKSUMS); tools/vep-seeded-variants --seed 1 --records wide --per-category 120 --fasta <genome> --sequence MT --sequence 25 --sequence LWLT01020929.1 (2,492 records) and 300 single-base substitutions sampled with seed 1 from the cache's known variants on those sequences, each with the genome's base as its reference allele; Ensembl VEP over the two inputs under the default flags with --fasta <genome>; tools/vep-golden-corpus select --release 116 --assembly ARS1 --species capra_hircus --dataset wide=<reference>=<the seeded records> --dataset known=<reference>=<the known variants> --k 7 --seed 1 --max-span 1000000 --max-records 500 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 21 --include <the named records> --covers species-goat-ars1 --covers genetic-code-tables --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_function_predictions --drop-except <the transcripts on which a record changes one residue, the rows SIFT scores> --perl-info <cache>/info.txt --cache-version 116 --variations <converted cache>/variations; scripts/fixtures/cut_plugin_regions.py --reference <genome> --flank 5000 --record-flank 2000, a record named by a synonym read under its cache name through chr_synonyms.txt; tools/vep-golden-corpus flag-set (everything, hgvs-sift); scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; tools/vep-golden-corpus classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp --field SIFT for the hgvs-sift set)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "25": 387,
+   "LWLT01020929.1": 2,
+   "MT": 37
+  },
+  "shards": 42,
+  "synonym_lines": 5,
+  "matrices_kept_on": 125,
+  "variation_slices": "the known variants within one base of a record under variations/<chr>/all_vars.gz with its .csi, as the Ensembl VEP cache lays them out: fifteen on 25; MT and the scaffold carry the empty indexed file, since no known variant lies within one base of their records"
+ }
+}

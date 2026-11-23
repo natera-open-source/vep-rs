@@ -1,17 +1,17 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {plugins} --plugin LOEUF,file={corpus}/plugin_data/loeuf_dataset_grch38.tsv.gz,match_by=gene --plugin DosageSensitivity,file={corpus}/plugin_data/Collins_rCNV_2022.dosage_sensitivity_scores.tsv.gz --plugin NMD --plugin gnomADc,{corpus}/plugin_data/gnomad.coverage.tsv.gz [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "none on either side",
  "input": "variants.vcf: the 54 distinct records of the four GRCh38 single-plugin corpora of the plugins the run stacks, one copy of each, in position order: the nine hand-placed chromosome 21 records of the LOEUF and DosageSensitivity corpora (an intergenic substitution, exonic substitutions in APP and BACH1, a substitution upstream of BACH1's canonical transcript, a 260-base deletion covering the single-exon transcript of KRTAP20-4 and a substitution inside it, a substitution upstream of SOD1 and one in each of its second exon and an intron) with the DosageSensitivity corpus's chromosome 22 record in an exon of LINC01664, the gene whose stable id the plugin maps to the table's clone-based symbol; the thirty hand-built NMD records (stop-gained and frameshift calls in the last, penultimate and first exons of CBR1 and PSMG1 on both strands, the single-exon KRTAP25-1, a donor substitution and a junction deletion in each penultimate exon); and the fourteen gnomAD v4.1 records of the gnomADc corpus (public rs identifiers; substitutions, three-base deletions and insertions at covered and uncovered positions). Every record carries the reference allele its source corpus carries. Together the records give every plugin rows to annotate in one batch: LOEUF on the APP, BACH1, SOD1, CBR1 and PSMG1 transcripts among others, pHaplo and pTriplo on the transcripts of every record with a scored symbol, NMD on the escaping calls, the coverage fields on every chromosome 21 record the cut covers; and the four plugins' fields on each row equal the single-plugin corpora's fields on the same row.",
  "sha256": {
-  "default.txt": "6e6b08c55e0ad3ab1f5e2a82980d668aaddf1dbe4b385bad0096066897fb6912",
-  "tab.txt": "e0e10cc117ce215f3e2a362275b516c9992fc69fd942784032c7e100aa2f6de8",
-  "vcf.vcf": "90c9e004af29202a4f256976adbd33c52d0d3275a94e511c0a838e83a908eb0c",
-  "json.jsonl": "06edf007cd213f47c62034717225d9e75f1671c76c1d1b4b0f2dd83424bb4607"
+  "default.txt": "524b98f5c75fa96a5f1f25df065930219af58a69b3f876b2aa18819ed8b4d774",
+  "tab.txt": "b5e85e31df8c50f37aea16dcf91a1110b2d2d2b57b90e33347bcd02a0846b393",
+  "vcf.vcf": "662220e6949f944799cf587c72ff9a454583f5216e069de4626a12feaee0820a",
+  "json.jsonl": "f6d1de83cad33d3d47920804333c6ff30d592b0fa2190211d9dbd7985a0df9fd"
  },
  "variants_vcf_sha256": "8ca56a1b0eaeba5efbefeb879d70f9cb1ac8bb95b2808ffe8bda065f51a72449",
  "plugin_files": {
@@ -23,19 +23,19 @@
  },
  "flag_sets": {
   "reverse-order": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {plugins} --plugin gnomADc,{corpus}/plugin_data/gnomad.coverage.tsv.gz --plugin NMD --plugin DosageSensitivity,file={corpus}/plugin_data/Collins_rCNV_2022.dosage_sensitivity_scores.tsv.gz --plugin LOEUF,file={corpus}/plugin_data/loeuf_dataset_grch38.tsv.gz,match_by=gene [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
    "fasta": "none on either side",
    "input": "variants.vcf",
    "sha256": {
-    "default.txt": "a0d23f305dc3e8ce279403f73703a573180a479ec096c6cdbba1148e72cc65b2",
-    "tab.txt": "dcf2a8ec9ad51d6e14b76ef2e7a15427c025692deb859b0b95d992d83039f98d",
-    "vcf.vcf": "b61c355fdc42fa9b12fd5df242e1ccc48a4cd6e3ff097d694603d86e31f5b8a7",
-    "json.jsonl": "fdce2f2b54183d2c45af0c2e8bc1e81071e4bf17e54446b11197c70efc1903df"
+    "default.txt": "786f9bdd05163c2143017fedb58b10fa14027e6ae9d03033da5dcf44a0921679",
+    "tab.txt": "08ea4b680552916b1b5805a7ffb6dc93bd2db5ee9b4980f8254742ab0cecb7e0",
+    "vcf.vcf": "3977ab36bfeabfaa76751a3a9eafaad4e7423a0d805bac7e042df031f311b98e",
+    "json.jsonl": "79ef88a3d52186e4d23dd05c55a36bf882e9250342fa6b692b61602f38e74077"
    },
    "flags": [
     "--dir_plugins",
@@ -148,7 +148,7 @@
    "plugin_data/loeuf_dataset_grch38.tsv.gz.tbi": "e68459b57f8f4790aa32ceeb44121a2e0bca771860a129c3fbedf8080f3a18fc"
   }
  },
- "generator": "manifest: scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite plugin-stack=<reference>=<candidates> --k 3 --seed 1 --include plugin-stack=<each record's ID> --covers api-prefetch-batching --matrix tests/parity/matrix.tsv --cache <cache> --flag=<each flag word>, then flag-set for the reverse-order entry; json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 and 22 slices of the vep-rs JSON conversion of the Ensembl VEP 116 GRCh38 cache; expected outputs and this record: scripts/concordance/generate_reference_output.sh --corpus --no-stats --dir-plugins <the VEP_plugins checkout at release/116> for the manifest's own run and --flag-set reverse-order for the flag set",
+ "generator": "manifest: tools/vep-golden-corpus select --release 116 --assembly GRCh38 --dataset plugin-stack=<reference>=<candidates> --k 3 --seed 1 --include plugin-stack=<each record's ID> --covers api-prefetch-batching --matrix tests/parity/matrix.tsv --cache <cache> --flag=<each flag word>, then flag-set for the reverse-order entry; json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 and 22 slices of the vep-rs JSON conversion of the Ensembl VEP 116 GRCh38 cache; expected outputs and this record: scripts/concordance/generate_reference_output.sh --corpus --no-stats --dir-plugins <the VEP_plugins checkout at release/116> for the manifest's own run and --flag-set reverse-order for the flag set",
  "pruned_cache": {
   "transcripts_per_chromosome": {
    "21": 427,

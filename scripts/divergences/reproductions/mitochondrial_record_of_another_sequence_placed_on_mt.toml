@@ -1,0 +1,109 @@
+entry = "mitochondrial_record_of_another_sequence_placed_on_mt"
+page = "docs/divergences/mitochondrial-record-of-another-sequence-placed-on-mt.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "unobserved"
+input_class_basis = "well-formed under the --fasta contract, \"a FASTA file or a directory containing FASTA files\", which sets no rule on the sequences a file holds (Ensembl VEP documentation, \"Running Ensembl VEP\", --fasta); not seen in the measured datasets"
+notes = "The cache slice is GRCh37's MT with a synonym table that links MT to chrM. The prepared FASTA holds one record, chrM, of 16,571 bases: the made-up reference of 16,569 bases with its first two bases put in front once more, so its base at a position is the reference's base two positions back and the cached coding sequence of ENST00000361390 stands in it two positions on. Every record is written chrM or M, the names of the prepared record's own pair. Ensembl VEP places the record written chrM on the cache's MT through the synonym and writes the transcript's row at the record's number, a codon two positions from the bases the record changes on its own sequence; vep-rs reads the name as a sequence the cache does not hold and skips the record with a warning. The record written M overlaps nothing in Ensembl VEP and gets one intergenic row. The further runs give the page its other cells: vep-rs's warning lines, and the one intergenic row Ensembl VEP writes for each record under --lookup_ref and, where the record's REF is the prepared record's base, under --check_ref."
+# The made-up reference renamed chrM with two bases in front, and the index line samtools faidx writes for it.
+prepare = [
+  "{ echo '>chrM'; grep -v '^>' \"$REPO/crates/vep-cli/tests/fixtures/mitochondrial-frame-check/reference_synthetic.fa\" | tr -d '\\n' | awk '{ print substr($0, 1, 2) $0 }' | fold -w 60; } > \"$STAGE/chrM_two_bases_longer_synthetic.fa\"",
+  "printf 'chrM\\t16571\\t6\\t60\\t61\\n' > \"$STAGE/chrM_two_bases_longer_synthetic.fa.fai\"",
+]
+
+[input]
+format = "vcf"
+text = """
+chrM	3349	named_chrm_other_base	A	C	.	.	.
+chrM	3350	named_chrm_same_base	T	A	.	.	.
+M	3349	named_m_other_base	A	C	.	.	.
+M	3350	named_m_same_base	T	A	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh37"
+json_cache = "crates/vep-cli/tests/fixtures/bayesdel-mitochondrial-contig/json_cache"
+fasta = "{stage}/chrM_two_bases_longer_synthetic.fa"
+# Ensembl VEP places the records written chrM on the cache's MT, under the name the input writes.
+chromosomes = ["MT"]
+
+[run]
+flags = []
+
+[compare]
+kind = "rows"
+where = { record = ["named_chrm_other_base", "named_m_other_base"], feature = ["ENST00000361390", "-"] }
+columns = ["Location", "Allele", "Feature", "Consequence", "Codons"]
+
+[expected]
+ensembl_vep = [
+    "M:3349 | C | - | intergenic_variant | -",
+    "chrM:3349 | C | ENST00000361390 | missense_variant | Atc/Ctc",
+]
+vep_rs = []
+
+[[also]]
+notes = "The warnings file of the same run: vep-rs's skip line for each record, where Ensembl VEP writes none."
+
+[also.compare]
+kind = "warnings"
+pattern = "named_"
+
+[also.expected]
+ensembl_vep = []
+vep_rs = [
+    "WARNING: line 1 skipped (chrM 3349 named_chrm_other_base A C . . .): Chromosome chrM is the FASTA record chrM of 16571 bases, another sequence than the cache's MT of 16569 bases, and is read as no chromosome of the cache",
+    "WARNING: line 2 skipped (chrM 3350 named_chrm_same_base T A . . .): Chromosome chrM is the FASTA record chrM of 16571 bases, another sequence than the cache's MT of 16569 bases, and is read as no chromosome of the cache",
+    "WARNING: line 3 skipped (M 3349 named_m_other_base A C . . .): Chromosome M is the FASTA record chrM of 16571 bases, another sequence than the cache's MT of 16569 bases, and is read as no chromosome of the cache",
+    "WARNING: line 4 skipped (M 3350 named_m_same_base T A . . .): Chromosome M is the FASTA record chrM of 16571 bases, another sequence than the cache's MT of 16569 bases, and is read as no chromosome of the cache",
+]
+
+[[also]]
+notes = "Under --lookup_ref Ensembl VEP gives each record the prepared record's base and writes one intergenic row for it."
+
+[also.run]
+flags = ["--lookup_ref", "--show_ref_allele"]
+
+[also.compare]
+kind = "rows"
+where = { record = ["named_chrm_other_base", "named_m_other_base"] }
+columns = ["Location", "Allele", "Feature", "Consequence", "REF_ALLELE"]
+
+[also.expected]
+ensembl_vep = [
+    "M:3349 | C | - | intergenic_variant | G",
+    "chrM:3349 | C | - | intergenic_variant | G",
+]
+vep_rs = []
+
+[[also]]
+notes = "Under --check_ref Ensembl VEP admits the records whose REF is the prepared record's base and writes one intergenic row for each."
+
+[also.run]
+flags = ["--check_ref"]
+
+[also.compare]
+kind = "rows"
+where = { record = ["named_chrm_same_base", "named_m_same_base"] }
+columns = ["Location", "Allele", "Feature", "Consequence"]
+
+[also.expected]
+ensembl_vep = [
+    "M:3350 | A | - | intergenic_variant",
+    "chrM:3350 | A | - | intergenic_variant",
+]
+vep_rs = []
+
+[implementation]
+code = [
+    "crates/vep-cli/src/pipeline.rs::KeptOffTheCache::skip_description",
+    "crates/vep-cli/src/pipeline.rs::kept_off_the_cache",
+    "crates/vep-cli/src/pipeline.rs::record_naming",
+    "crates/vep-cli/src/validate.rs::SkipRules::validate",
+    "crates/vep-fasta/src/lib.rs::IndexedFasta::mitochondrial_record_of_another_sequence",
+]
+tests = [
+    "crates/vep-cli/tests/mitochondrial_record_named_for_another_sequence.rs::a_record_named_for_another_mitochondrial_sequence_is_kept_off_the_cache",
+    "crates/vep-fasta/src/lib.rs::tests::on_grch37_a_chrm_of_another_length_is_named_as_another_sequence",
+]

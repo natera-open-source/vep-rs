@@ -10,13 +10,27 @@ rust-version.workspace = true
 keywords.workspace = true
 categories = ["science::bioinformatics", "command-line-utilities"]
 description = "Builds the transcript cache of vep-rs, a Rust reimplementation of Ensembl VEP, from Ensembl GFF3, protein FASTA and variation VCF release files"
+exclude = ["tests/"]
+
+[lib]
+name = "vep_cache_builder"
+path = "src/lib.rs"
 
 [[bin]]
 name = "vep-cache-builder"
 path = "src/main.rs"
+required-features = ["build"]
+
+[features]
+default = ["build"]
+# The command-line build: argument parsing, downloads from the Ensembl site and
+# the reads of Ensembl's MySQL server. Off, the crate is the library alone, the
+# GFF3 and GTF readers and the transcript records built from them, which link
+# no TLS library.
+build = ["dep:clap", "dep:reqwest", "dep:mysql", "dep:tracing-subscriber"]
 
 [dependencies]
-clap = { workspace = true }
+clap = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 flate2 = { workspace = true }
@@ -25,19 +39,22 @@ base64 = { workspace = true }
 # native-tls (OpenSSL on Linux) without ALPN, so a download speaks HTTP/1.1
 # over TLS (reqwest's `native-tls` feature offers ALPN and so HTTP/2). The
 # other features are reqwest's defaults, plus `blocking`.
-reqwest = { version = "0.13", default-features = false, features = [
+reqwest = { version = "0.13", default-features = false, optional = true, features = [
     "blocking", "charset", "http2", "native-tls-no-alpn", "system-proxy",
 ] }
 noodles = { workspace = true }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
+tracing-subscriber = { workspace = true, optional = true }
 rayon = { workspace = true }
 anyhow = { workspace = true }
 vep-fasta = { workspace = true }
 vep-core = { workspace = true }
-mysql = { version = "28", default-features = false, features = ["default-rust"] }
+mysql = { version = "28", default-features = false, optional = true, features = ["default-rust"] }
 md5 = "0.8"
 
 [dev-dependencies]
 tempfile = { workspace = true }
-vep-cli = { workspace = true }
+# By path alone: vep-cli depends on this crate's library, and a dev-dependency
+# without a version is left out of the published manifest, so the two crates
+# publish in dependency order.
+vep-cli = { path = "../vep-cli" }

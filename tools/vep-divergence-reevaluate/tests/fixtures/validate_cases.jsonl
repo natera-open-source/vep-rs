@@ -1,0 +1,249 @@
+{"edits":[],"errors":[]}
+{"edits":[["entry","\"other\""]],"errors":["entry is 'other', the file is x.toml"]}
+{"edits":[["image","\"ensemblorg/ensembl-vep:release_116.2\""]],"errors":["image is not pinned by digest"]}
+{"edits":[["input.path","\"b\""],["input.text","\"a\""]],"errors":["input needs exactly one of text and path"]}
+{"edits":[["input.text","<delete>"]],"errors":["input needs exactly one of text and path"]}
+{"edits":[["cache.assembly","<delete>"]],"errors":["cache.assembly is missing"]}
+{"edits":[["cache.json_cache","<delete>"]],"errors":["cache needs json_cache or gxf"]}
+{"edits":[["cache.json_cache","<delete>"],["cache.gxf","\"{corpus}/genes.gtf.gz\""]],"errors":[]}
+{"edits":[["cache.source","\"other\""]],"errors":["cache.source is not ensembl, merged or refseq"]}
+{"edits":[["cache.prepare","[\"x\"]"]],"errors":["unknown key cache.prepare"]}
+{"edits":[["colour","\"x\""]],"errors":["unknown key colour"]}
+{"edits":[["compare.kind","\"flow\""]],"errors":["compare.kind 'flow' is not one of rows, field, count, header, lines, warnings, stderr, stdout, exit, stats, json, vcf","compare.where has keys record that compare.kind flow does not read"]}
+{"edits":[["compare.field","<delete>"]],"errors":["compare.kind field needs compare.field"]}
+{"edits":[["compare.kind","\"header\""],["compare.field","<delete>"]],"errors":["compare.kind header needs compare.pattern","compare.where has keys record that compare.kind header does not read"]}
+{"edits":[["compare.kind","\"json\""],["compare.field","<delete>"]],"errors":["compare.kind json needs compare.path"]}
+{"edits":[["compare.kind","\"stats\""],["compare.field","<delete>"]],"errors":["compare.kind stats needs compare.section","compare.where has keys record that compare.kind stats does not read"]}
+{"edits":[["compare.where","{colour = \"x\"}"]],"errors":["compare.where has keys colour that compare.kind field does not read"]}
+{"edits":[["compare.kind","\"rows\""],["compare.field","<delete>"],["compare.where","{id = \"x\"}"]],"errors":["compare.where has keys id that compare.kind rows does not read"]}
+{"edits":[["compare.kind","\"vcf\""],["compare.where","{gene = \"x\"}"]],"errors":["compare.where has keys gene that compare.kind vcf does not read"]}
+{"edits":[["compare.kind","\"exit\""],["compare.field","<delete>"]],"errors":["compare.where has keys record that compare.kind exit does not read"]}
+{"edits":[["compare.kind","\"json\""],["compare.field","<delete>"],["compare.path","\"x\""],["compare.where","{input = \"l\", id = \"r\"}"]],"errors":[]}
+{"edits":[["compare.kind","\"vcf\""],["compare.field","<delete>"],["compare.line","true"],["compare.where","{id = \"r\", feature = \"ENST1\"}"]],"errors":["compare.where has keys feature that compare.kind vcf does not read"]}
+{"edits":[["expected.ensembl_vep","\"a\""],["expected.vep_rs","[\"a\"]"]],"errors":["expected.ensembl_vep equals expected.vep_rs: the entry records no divergence"]}
+{"edits":[["expected.ensembl_vep","\"a\""],["expected.vep_rs","<delete>"]],"errors":["expected needs ensembl_vep and vep_rs"]}
+{"edits":[["run.format","\"csv\""]],"errors":["run.format 'csv' is not one of default, tab, vcf, json"]}
+{"edits":[["run.tool","\"grep\""]],"errors":["run.tool 'grep' is not one of vep, filter, recode","a tool run needs run.args"]}
+{"edits":[["run.tool","\"filter\""]],"errors":["a tool run needs run.args"]}
+{"edits":[["run.tool","\"filter\""],["run.args","[\"-i\", \"{input}\"]"],["cache.assembly","<delete>"],["cache.json_cache","<delete>"]],"errors":[]}
+{"edits":[["prepare","[1]"]],"errors":["prepare is not a list of strings"]}
+{"edits":[["prepare","5"]],"errors":["prepare is not a list of strings"]}
+{"edits":[["input.format","[\"vcf\"]"]],"errors":["input.format is not a string"]}
+{"edits":[["run.tool","[\"filter\"]"],["compare.kind","[\"rows\"]"]],"errors":["run.tool is not a string","compare.kind is not a string"]}
+{"edits":[["compare.field","<delete>"],["compare.line","true"]],"errors":["compare.kind field needs compare.field"]}
+{"edits":[["compare.kind","\"vcf\""],["compare.field","<delete>"],["compare.line","true"],["compare.where","{id = \"r\"}"]],"errors":[]}
+{"edits":[["image","5"]],"errors":["image is missing"]}
+{"edits":[["run.flags","\"--hgvs\""]],"errors":["run.flags is not a list of strings"]}
+{"edits":[["run.flags","[\"--distance\", 500]"]],"errors":["run.flags is not a list of strings"]}
+{"edits":[["cache.chromosomes","[21]"]],"errors":["cache.chromosomes is not a list of strings"]}
+{"edits":[["prepare","\"true\""]],"errors":["prepare is not a list of strings"]}
+{"edits":[["expected.ensembl_vep","\"a\""],["expected.vep_rs","\"b\""],["expected.ensembl_vep_exit","\"2\""]],"errors":["expected.ensembl_vep_exit is not an integer"]}
+{"edits":[["cache.json_cache","5"]],"errors":["cache.json_cache is not a string"]}
+{"edits":[["cache","\"x\""]],"errors":["cache is not a table"]}
+{"edits":[["compare","3"]],"errors":["compare is not a table"]}
+{"edits":[["input.text","5"]],"errors":["input.text is not a string"]}
+{"edits":[["expected.ensembl_vep","\"a\""],["expected.vep_rs","\"b\""],["expected.ensembl_vep_exit","2"]],"errors":[]}
+{"edits":[["compare.kind","\"lines\""],["compare.field","<delete>"],["compare.where","<delete>"],["compare.pattern","\"(\""]],"errors":["compare.pattern is not a regular expression: missing ), unterminated subpattern at position 0"]}
+{"edits":[["compare.where","{pattern = \"[\"}"]],"errors":["compare.where.pattern is not a regular expression: unterminated character set at position 0"]}
+{"edits":[["compare.mask","[\"ok\", \"(?P<x\"]"]],"errors":["compare.mask is not a regular expression: missing >, unterminated name at position 4"]}
+{"edits":[["compare.where","\"rec\""]],"errors":["compare.where is not a table"]}
+{"edits":[["input_class","<delete>"]],"errors":["input_class is missing"]}
+{"edits":[["input_class_basis","<delete>"]],"errors":["input_class_basis is missing"]}
+{"edits":[["input_class","<delete>"],["input_class_basis","<delete>"]],"errors":["input_class is missing","input_class_basis is missing"]}
+{"edits":[["input_class","\"\""],["input_class_basis","\" \""]],"errors":["input_class is missing","input_class_basis is missing"]}
+{"edits":[["input_class","3"],["input_class_basis","[\"a\"]"]],"errors":["input_class is missing","input_class_basis is missing"]}
+{"edits":[["input_class","\"synthetic\""]],"errors":["input_class 'synthetic' is not one of observed, unobserved, malformed"]}
+{"edits":[["input_class","\"Malformed\""]],"errors":["input_class 'Malformed' is not one of observed, unobserved, malformed"]}
+{"edits":[["input_class","\"tier 3\""]],"errors":["input_class 'tier 3' is not one of observed, unobserved, malformed"]}
+{"edits":[["input_class_basis","\"well-formed under VCF 4.2;\\nnot seen in the measured datasets\""]],"errors":["input_class_basis is not one line"]}
+{"edits":[["input_class_basis","\"well-formed under VCF 4.2;\\rnot seen in the measured datasets\""]],"errors":["input_class_basis is not one line"]}
+{"edits":[["input_class_basis","\"well-formed under VCF 4.2;\u2028not seen in the measured datasets\""]],"errors":["input_class_basis is not one line"]}
+{"edits":[["input_class_basis","\"well-formed under VCF 4.2; not seen in the measured datasets\\n\""]],"errors":["input_class_basis is not one line"]}
+{"edits":[["input_class_basis","\"allowed by VCF 4.2\""]],"errors":["input_class_basis of an unobserved entry does not read `well-formed under <format or option contract>; not seen in the measured datasets`"]}
+{"edits":[["input_class_basis","\"well-formed under VCF 4.2\""]],"errors":["input_class_basis of an unobserved entry does not read `well-formed under <format or option contract>; not seen in the measured datasets`"]}
+{"edits":[["input_class_basis","\"allowed by VCF 4.2; not seen in the measured datasets\""]],"errors":["input_class_basis of an unobserved entry does not read `well-formed under <format or option contract>; not seen in the measured datasets`"]}
+{"edits":[["input_class_basis","\"well-formed under ; not seen in the measured datasets\""]],"errors":["input_class_basis of an unobserved entry does not read `well-formed under <format or option contract>; not seen in the measured datasets`"]}
+{"edits":[["input_class_basis","\"well-formed under \\t ; not seen in the measured datasets\""]],"errors":["input_class_basis of an unobserved entry does not read `well-formed under <format or option contract>; not seen in the measured datasets`"]}
+{"edits":[["input_class_basis","\"well-formed under VCF 4.2; not seen in the measured datasets; classed by its most reachable shape, a bracket mate: a mate position that is no number breaks the VCF 4.2 specification, section 5.4\""]],"errors":[]}
+{"edits":[["input_class","\"observed\""],["input_class_basis","\"1 \u00b7 7.3 per million \u00b7 no flag needed\""]],"errors":[]}
+{"edits":[["input_class","\"observed\""],["input_class_basis","\"2 \u00b7 156.8 per million \u00b7 0 flag sets, 28 corpora\""]],"errors":[]}
+{"edits":[["input_class","\"observed\""],["input_class_basis","\"seen in a structural-variant file of a population dataset: 4,158 pairs\""]],"errors":[]}
+{"edits":[["input_class","\"observed\""],["input_class_basis","\"seen in a file (region 21:1-100) of a population dataset: 4,158 pairs: two of them on one record\""]],"errors":[]}
+{"edits":[["input_class","\"observed\""],["input_class_basis","\"3 \u00b7 none on the cuts \u00b7 9 flag sets, 2 corpora\""]],"errors":["input_class_basis of an observed entry is neither a tier 1 or tier 2 `Tier and count` cell nor `seen in <the real data its page names>: <the figure its page measures there>`"]}
+{"edits":[["input_class","\"observed\""],["input_class_basis","\"4,158 pairs in a population dataset\""]],"errors":["input_class_basis of an observed entry is neither a tier 1 or tier 2 `Tier and count` cell nor `seen in <the real data its page names>: <the figure its page measures there>`"]}
+{"edits":[["input_class","\"observed\""],["input_class_basis","\"a population dataset: 4,158 pairs\""]],"errors":["input_class_basis of an observed entry is neither a tier 1 or tier 2 `Tier and count` cell nor `seen in <the real data its page names>: <the figure its page measures there>`"]}
+{"edits":[["input_class","\"observed\""],["input_class_basis","\"Seen in a population dataset: 4,158 pairs\""]],"errors":["input_class_basis of an observed entry is neither a tier 1 or tier 2 `Tier and count` cell nor `seen in <the real data its page names>: <the figure its page measures there>`"]}
+{"edits":[["input_class","\"observed\""],["input_class_basis","\"seen in a population dataset\""]],"errors":["input_class_basis of an observed entry is neither a tier 1 or tier 2 `Tier and count` cell nor `seen in <the real data its page names>: <the figure its page measures there>`"]}
+{"edits":[["input_class","\"observed\""],["input_class_basis","\"seen in : 4,158 pairs\""]],"errors":["input_class_basis of an observed entry is neither a tier 1 or tier 2 `Tier and count` cell nor `seen in <the real data its page names>: <the figure its page measures there>`"]}
+{"edits":[["input_class","\"observed\""],["input_class_basis","\"seen in : 4,158 pairs: two of them on one record\""]],"errors":["input_class_basis of an observed entry is neither a tier 1 or tier 2 `Tier and count` cell nor `seen in <the real data its page names>: <the figure its page measures there>`"]}
+{"edits":[["input_class","\"observed\""],["input_class_basis","\"seen in :4,158 pairs: two of them on one record\""]],"errors":["input_class_basis of an observed entry is neither a tier 1 or tier 2 `Tier and count` cell nor `seen in <the real data its page names>: <the figure its page measures there>`"]}
+{"edits":[["input_class","\"observed\""],["input_class_basis","\"seen in  a population dataset: 4,158 pairs\""]],"errors":["input_class_basis of an observed entry is neither a tier 1 or tier 2 `Tier and count` cell nor `seen in <the real data its page names>: <the figure its page measures there>`"]}
+{"edits":[["input_class","\"observed\""],["input_class_basis","\"seen in a population dataset:  4,158 pairs\""]],"errors":["input_class_basis of an observed entry is neither a tier 1 or tier 2 `Tier and count` cell nor `seen in <the real data its page names>: <the figure its page measures there>`"]}
+{"edits":[["input_class","\"observed\""],["input_class_basis","\"seen in a population dataset: \""]],"errors":["input_class_basis of an observed entry is neither a tier 1 or tier 2 `Tier and count` cell nor `seen in <the real data its page names>: <the figure its page measures there>`"]}
+{"edits":[["input_class","\"observed\""],["input_class_basis","\"seen in a population dataset:4,158 pairs\""]],"errors":["input_class_basis of an observed entry is neither a tier 1 or tier 2 `Tier and count` cell nor `seen in <the real data its page names>: <the figure its page measures there>`"]}
+{"edits":[["input_class","\"observed\""],["input_class_basis","\"seen in a population dataset : 4,158 pairs\""]],"errors":["input_class_basis of an observed entry is neither a tier 1 or tier 2 `Tier and count` cell nor `seen in <the real data its page names>: <the figure its page measures there>`"]}
+{"edits":[["input_class","\"observed\""],["input_class_basis","\"seen in a population dataset : 4,158 pairs: two of them on one record\""]],"errors":["input_class_basis of an observed entry is neither a tier 1 or tier 2 `Tier and count` cell nor `seen in <the real data its page names>: <the figure its page measures there>`"]}
+{"edits":[["input_class","\"malformed\""],["input_class_basis","\"POS is an Integer (VCF 4.2 specification, section 1.4.1 \\\"Fixed fields\\\"): the POS is text that is no number\""]],"errors":[]}
+{"edits":[["input_class","\"malformed\""],["input_class_basis","\"well-formed under VCF 4.2; not seen in the measured datasets\""]],"errors":["input_class_basis of a malformed entry reads as the basis of another class, not as the rule the input breaks"]}
+{"edits":[["input_class","\"malformed\""],["input_class_basis","\"well-formed under VCF 4.2\""]],"errors":["input_class_basis of a malformed entry reads as the basis of another class, not as the rule the input breaks"]}
+{"edits":[["input_class","\"malformed\""],["input_class_basis","\"seen in a structural-variant file of a population dataset: 4,158 pairs\""]],"errors":["input_class_basis of a malformed entry reads as the basis of another class, not as the rule the input breaks"]}
+{"edits":[["input_class","\"malformed\""],["input_class_basis","\"3 \u00b7 none on the cuts \u00b7 9 flag sets, 2 corpora\""]],"errors":["input_class_basis of a malformed entry reads as the basis of another class, not as the rule the input breaks"]}
+{"edits":[["input_class","\"malformed\""],["input_class_basis","\"2 \u00b7 156.8 per million \u00b7 0 flag sets, 28 corpora\""]],"errors":["input_class_basis of a malformed entry reads as the basis of another class, not as the rule the input breaks"]}
+{"edits":[["entry","5"]],"errors":["entry is 5, the file is x.toml"]}
+{"edits":[["entry","1.5"]],"errors":["entry is 1.5, the file is x.toml"]}
+{"edits":[["entry","true"]],"errors":["entry is True, the file is x.toml"]}
+{"edits":[["entry","[1, 'a']"]],"errors":["entry is [1, 'a'], the file is x.toml"]}
+{"edits":[["entry","{a = 1}"]],"errors":["entry is {'a': 1}, the file is x.toml"]}
+{"edits":[["entry","1979-05-27"]],"errors":["entry is datetime.date(1979, 5, 27), the file is x.toml"]}
+{"edits":[["entry","1979-05-27T07:32:00Z"]],"errors":["entry is datetime.datetime(1979, 5, 27, 7, 32, tzinfo=datetime.timezone.utc), the file is x.toml"]}
+{"edits":[["entry","07:32:00"]],"errors":["entry is datetime.time(7, 32), the file is x.toml"]}
+{"edits":[["entry","<delete>"]],"errors":["entry is None, the file is x.toml"]}
+{"edits":[["entry","\"it's\""]],"errors":["entry is \"it's\", the file is x.toml"]}
+{"edits":[["entry","\"say \\\"x\\\"\""]],"errors":["entry is 'say \"x\"', the file is x.toml"]}
+{"edits":[["entry","\"tab\\there\""]],"errors":["entry is 'tab\\there', the file is x.toml"]}
+{"edits":[["page","\"\""]],"errors":["page is missing"]}
+{"edits":[["page","<delete>"]],"errors":["page is missing"]}
+{"edits":[["verified_against","116.2"]],"errors":["verified_against is missing"]}
+{"edits":[["verified_against","<delete>"]],"errors":["verified_against is missing"]}
+{"edits":[["image","<delete>"]],"errors":["image is missing"]}
+{"edits":[["image","\"\""]],"errors":["image is missing","image is not pinned by digest"]}
+{"edits":[["notes","5"]],"errors":["notes is not a string"]}
+{"edits":[["notes","\"fine\""]],"errors":[]}
+{"edits":[["input","\"x\""]],"errors":["input is not a table"]}
+{"edits":[["run","3"]],"errors":["run is not a table"]}
+{"edits":[["expected","[]"]],"errors":["expected is not a table"]}
+{"edits":[["compare","<delete>"]],"errors":["compare is missing"]}
+{"edits":[["expected","<delete>"]],"errors":["expected needs ensembl_vep and vep_rs"]}
+{"edits":[["input","<delete>"]],"errors":["input needs exactly one of text and path"]}
+{"edits":[["cache","<delete>"]],"errors":["cache.assembly is missing","cache needs json_cache or gxf"]}
+{"edits":[["run","<delete>"]],"errors":[]}
+{"edits":[["input","{}"]],"errors":["input needs exactly one of text and path"]}
+{"edits":[["cache","{}"]],"errors":["cache.assembly is missing","cache needs json_cache or gxf"]}
+{"edits":[["run","{}"]],"errors":[]}
+{"edits":[["compare","{}"]],"errors":["compare.kind None is not one of rows, field, count, header, lines, warnings, stderr, stdout, exit, stats, json, vcf"]}
+{"edits":[["expected","{}"]],"errors":["expected needs ensembl_vep and vep_rs"]}
+{"edits":[["input.colour","1"]],"errors":["unknown key input.colour"]}
+{"edits":[["run.colour","1"]],"errors":["unknown key run.colour"]}
+{"edits":[["compare.colour","1"]],"errors":["unknown key compare.colour"]}
+{"edits":[["expected.colour","1"]],"errors":["unknown key expected.colour"]}
+{"edits":[["b","1"],["a","2"]],"errors":["unknown key b","unknown key a"]}
+{"edits":[["input.format","\"bed\""]],"errors":["input.format 'bed' is not one of vcf, ensembl, hgvs, spdi, region, id, guess"]}
+{"edits":[["input.format","\"hgvs\""]],"errors":[]}
+{"edits":[["input.header","\"x\""]],"errors":["input.header is not a list of strings"]}
+{"edits":[["input.samples","[1]"]],"errors":["input.samples is not a list of strings"]}
+{"edits":[["input.name","5"]],"errors":["input.name is not a string"]}
+{"edits":[["input.path","\"x\""],["input.text","<delete>"]],"errors":[]}
+{"edits":[["cache.species","5"]],"errors":["cache.species is not a string"]}
+{"edits":[["cache.assembly","\"\""]],"errors":["cache.assembly is missing"]}
+{"edits":[["cache.version","116"]],"errors":["cache.version is not a string"]}
+{"edits":[["cache.source","\"merged\""]],"errors":[]}
+{"edits":[["cache.source","\"refseq\""]],"errors":[]}
+{"edits":[["cache.writable","\"yes\""]],"errors":[]}
+{"edits":[["cache.gxf","\"\""],["cache.json_cache","\"\""]],"errors":["cache needs json_cache or gxf"]}
+{"edits":[["cache.fasta","true"]],"errors":["cache.fasta is not a string"]}
+{"edits":[["cache.corpus","[]"]],"errors":["cache.corpus is not a string"]}
+{"edits":[["cache.gxf_kind","1"]],"errors":["cache.gxf_kind is not a string"]}
+{"edits":[["cache.perl_cache","2.5"]],"errors":["cache.perl_cache is not a string"]}
+{"edits":[["run.tool","\"recode\""],["run.args","[]"]],"errors":["a tool run needs run.args"]}
+{"edits":[["run.tool","\"recode\""],["run.args","[\"x\"]"]],"errors":[]}
+{"edits":[["run.tool","\"vep\""],["cache.assembly","<delete>"]],"errors":["cache.assembly is missing"]}
+{"edits":[["run.perl_mode","\"remote\""]],"errors":["run.perl_mode is not offline or database"]}
+{"edits":[["run.perl_mode","\"database\""]],"errors":[]}
+{"edits":[["run.perl_hash_seed","0"]],"errors":["run.perl_hash_seed is not a string"]}
+{"edits":[["run.format","\"tab\""]],"errors":[]}
+{"edits":[["run.format","\"\""]],"errors":["run.format '' is not one of default, tab, vcf, json"]}
+{"edits":[["run.stats","\"x\""]],"errors":[]}
+{"edits":[["run.buffer_size","\"x\""]],"errors":[]}
+{"edits":[["run.ensembl_vep_flags","[true]"]],"errors":["run.ensembl_vep_flags is not a list of strings"]}
+{"edits":[["run.vep_rs_flags","\"x\""]],"errors":["run.vep_rs_flags is not a list of strings"]}
+{"edits":[["run.args","[1]"]],"errors":["run.args is not a list of strings"]}
+{"edits":[["run.tools","\"samtools\""]],"errors":["run.tools is not a list of strings"]}
+{"edits":[["run.tools","[\"samtools\"]"]],"errors":[]}
+{"edits":[["compare.kind","<delete>"]],"errors":["compare.kind None is not one of rows, field, count, header, lines, warnings, stderr, stdout, exit, stats, json, vcf","compare.where has keys record that compare.kind None does not read"]}
+{"edits":[["compare.kind","<delete>"],["compare.where","<delete>"]],"errors":["compare.kind None is not one of rows, field, count, header, lines, warnings, stderr, stdout, exit, stats, json, vcf"]}
+{"edits":[["compare.kind","\"\""]],"errors":["compare.kind '' is not one of rows, field, count, header, lines, warnings, stderr, stdout, exit, stats, json, vcf","compare.where has keys record that compare.kind  does not read"]}
+{"edits":[["compare.kind","\"field\""],["compare.field","\"\""]],"errors":["compare.kind field needs compare.field"]}
+{"edits":[["compare.kind","\"vcf\""],["compare.field","<delete>"]],"errors":["compare.kind vcf needs compare.field"]}
+{"edits":[["compare.kind","\"vcf\""],["compare.field","<delete>"],["compare.line","0"]],"errors":["compare.kind vcf needs compare.field"]}
+{"edits":[["compare.kind","\"vcf\""],["compare.field","<delete>"],["compare.line","\"x\""]],"errors":[]}
+{"edits":[["compare.kind","\"lines\""],["compare.field","<delete>"],["compare.where","<delete>"]],"errors":["compare.kind lines needs compare.pattern"]}
+{"edits":[["compare.kind","\"warnings\""],["compare.pattern","\"\""],["compare.where","<delete>"]],"errors":["compare.kind warnings needs compare.pattern"]}
+{"edits":[["compare.kind","\"stderr\""],["compare.pattern","\"x\""]],"errors":["compare.where has keys record that compare.kind stderr does not read"]}
+{"edits":[["compare.kind","\"stdout\""],["compare.pattern","\"x\""],["compare.where","<delete>"]],"errors":[]}
+{"edits":[["compare.kind","\"json\""],["compare.path","\"\""],["compare.where","<delete>"]],"errors":["compare.kind json needs compare.path"]}
+{"edits":[["compare.kind","\"stats\""],["compare.section","\"[x]\""],["compare.where","<delete>"]],"errors":[]}
+{"edits":[["compare.kind","\"count\""],["compare.where","{record = \"r\", location = \"1:2\", allele = \"A\", gene = \"g\", feature = \"f\", feature_type = \"t\", consequence = \"c\", pattern = \"p\"}"]],"errors":[]}
+{"edits":[["compare.kind","\"rows\""],["compare.where","{chrom = \"1\", pos = \"2\", input = \"x\", id = \"y\"}"]],"errors":["compare.where has keys chrom, pos, input, id that compare.kind rows does not read"]}
+{"edits":[["compare.kind","\"json\""],["compare.path","\"a\""],["compare.where","{record = \"r\", id = \"i\", chrom = \"1\", pos = \"2\", location = \"1:2\", pattern = \"p\", input = \"x\", feature = \"f\", allele = \"A\"}"]],"errors":["compare.where has keys feature, allele that compare.kind json does not read"]}
+{"edits":[["compare.kind","\"vcf\""],["compare.where","{record = \"r\", id = \"i\", chrom = \"1\", pos = \"2\", location = \"1:2\", pattern = \"p\", feature = \"f\", allele = \"A\", input = \"x\"}"]],"errors":["compare.where has keys input that compare.kind vcf does not read"]}
+{"edits":[["compare.kind","\"vcf\""],["compare.line","true"],["compare.where","{record = \"r\", allele = \"A\", feature = \"f\", input = \"x\"}"]],"errors":["compare.where has keys allele, feature, input that compare.kind vcf does not read"]}
+{"edits":[["compare.kind","\"exit\""],["compare.where","<delete>"]],"errors":[]}
+{"edits":[["compare.kind","\"header\""],["compare.pattern","\"^#\""],["compare.where","{}"]],"errors":[]}
+{"edits":[["compare.where","[1]"]],"errors":["compare.where is not a table"]}
+{"edits":[["compare.where","5"]],"errors":["compare.where is not a table"]}
+{"edits":[["compare.where","{record = [\"a\", \"b\"]}"]],"errors":[]}
+{"edits":[["compare.where","{record = 5, feature = [1, 2.5, true]}"]],"errors":[]}
+{"edits":[["compare.where","{pattern = 5}"]],"errors":["compare.where.pattern is not a regular expression: first argument must be string or compiled pattern"]}
+{"edits":[["compare.where","{pattern = true}"]],"errors":["compare.where.pattern is not a regular expression: first argument must be string or compiled pattern"]}
+{"edits":[["compare.where","{pattern = 1.5}"]],"errors":["compare.where.pattern is not a regular expression: first argument must be string or compiled pattern"]}
+{"edits":[["compare.where","{pattern = [\"a\"]}"]],"errors":["compare.where.pattern is not a regular expression: cannot use 'tuple' as a dict key (unhashable type: 'list')"]}
+{"edits":[["compare.where","{pattern = {a = 1}}"]],"errors":["compare.where.pattern is not a regular expression: cannot use 'tuple' as a dict key (unhashable type: 'dict')"]}
+{"edits":[["compare.where","{pattern = 1979-05-27}"]],"errors":["compare.where.pattern is not a regular expression: first argument must be string or compiled pattern"]}
+{"edits":[["compare.where","{pattern = \"ok\"}"]],"errors":[]}
+{"edits":[["compare.pattern","\"*\""],["compare.where","{pattern = \"a{2,1}\"}"],["compare.mask","[\"[b-a]\", \"x\", \"(?P<n>a)(?P<n>b)\", \"\\\\q\", \"a\\nb(\"]"]],"errors":["compare.pattern is not a regular expression: nothing to repeat at position 0","compare.where.pattern is not a regular expression: min repeat greater than max repeat at position 2","compare.mask is not a regular expression: bad character range b-a at position 1","compare.mask is not a regular expression: redefinition of group name 'n' as group 2; was group 1 at position 12","compare.mask is not a regular expression: bad escape \\q at position 0","compare.mask is not a regular expression: missing ), unterminated subpattern at position 3 (line 2, column 2)"]}
+{"edits":[["compare.mask","\"x\""]],"errors":["compare.mask is not a list of strings"]}
+{"edits":[["compare.mask","[1]"]],"errors":["compare.mask is not a list of strings"]}
+{"edits":[["compare.mask","[]"]],"errors":[]}
+{"edits":[["compare.mask","[\"(?<=a+)b\", \"(?i)ok\", \"a(?i)b\", \"\\\\1\"]"]],"errors":["compare.mask is not a regular expression: look-behind requires fixed-width pattern","compare.mask is not a regular expression: global flags not at the start of the expression at position 1","compare.mask is not a regular expression: invalid group reference 1 at position 1"]}
+{"edits":[["compare.columns","\"Location\""]],"errors":["compare.columns is not a list of strings"]}
+{"edits":[["compare.columns","[\"Location\"]"]],"errors":[]}
+{"edits":[["compare.with_key","\"yes\""]],"errors":[]}
+{"edits":[["compare.sorted","0"]],"errors":[]}
+{"edits":[["compare.strip","false"]],"errors":[]}
+{"edits":[["compare.mask_paths","false"]],"errors":[]}
+{"edits":[["compare.info","5"]],"errors":["compare.info is not a string"]}
+{"edits":[["compare.section","[1]"]],"errors":["compare.section is not a string"]}
+{"edits":[["compare.path","true"]],"errors":["compare.path is not a string"]}
+{"edits":[["expected.ensembl_vep","<delete>"]],"errors":["expected needs ensembl_vep and vep_rs"]}
+{"edits":[["expected.vep_rs","<delete>"],["expected.ensembl_vep","<delete>"]],"errors":["expected needs ensembl_vep and vep_rs"]}
+{"edits":[["expected.ensembl_vep","1"],["expected.vep_rs","\"1\""]],"errors":["expected.ensembl_vep equals expected.vep_rs: the entry records no divergence"]}
+{"edits":[["expected.ensembl_vep","[1, 2]"],["expected.vep_rs","[\"1\", \"2\"]"]],"errors":["expected.ensembl_vep equals expected.vep_rs: the entry records no divergence"]}
+{"edits":[["expected.ensembl_vep","[]"],["expected.vep_rs","[]"]],"errors":["expected.ensembl_vep equals expected.vep_rs: the entry records no divergence"]}
+{"edits":[["expected.ensembl_vep","true"],["expected.vep_rs","\"True\""]],"errors":["expected.ensembl_vep equals expected.vep_rs: the entry records no divergence"]}
+{"edits":[["expected.ensembl_vep","1.0"],["expected.vep_rs","\"1.0\""]],"errors":["expected.ensembl_vep equals expected.vep_rs: the entry records no divergence"]}
+{"edits":[["expected.ensembl_vep","1979-05-27"],["expected.vep_rs","\"1979-05-27\""]],"errors":["expected.ensembl_vep equals expected.vep_rs: the entry records no divergence"]}
+{"edits":[["expected.ensembl_vep","{a = 1}"],["expected.vep_rs","\"{'a': 1}\""]],"errors":["expected.ensembl_vep equals expected.vep_rs: the entry records no divergence"]}
+{"edits":[["expected.ensembl_vep_exit","true"]],"errors":[]}
+{"edits":[["expected.vep_rs_exit","2.0"]],"errors":["expected.vep_rs_exit is not an integer"]}
+{"edits":[["expected.vep_rs_exit","[2]"]],"errors":["expected.vep_rs_exit is not an integer"]}
+{"edits":[["expected.vep_rs_exit","255"],["expected.ensembl_vep_exit","-1"]],"errors":[]}
+{"edits":[["cache","\"x\""],["compare","3"],["run","[1]"],["colour","1"]],"errors":["unknown key colour","cache is not a table","run is not a table","compare is not a table"]}
+{"edits":[["input_class","\"observed\""],["input_class_basis","\"1 \u00b7 x \u00b7 y\""]],"errors":[]}
+{"edits":[["input_class","\"observed\""],["input_class_basis","\"3 \u00b7 x \u00b7 y\""]],"errors":["input_class_basis of an observed entry is neither a tier 1 or tier 2 `Tier and count` cell nor `seen in <the real data its page names>: <the figure its page measures there>`"]}
+{"edits":[["input_class","\"observed\""],["input_class_basis","\"4 \u00b7 x \u00b7 y\""]],"errors":["input_class_basis of an observed entry is neither a tier 1 or tier 2 `Tier and count` cell nor `seen in <the real data its page names>: <the figure its page measures there>`"]}
+{"edits":[["input_class","\"unobserved\""],["input_class_basis","\"well-formed under x; not seen in the measured datasetsand more\""]],"errors":[]}
+{"edits":[["input_class","\"malformed\""],["input_class_basis","\"well-formed under\""]],"errors":[]}
+{"edits":[["input_class","\"malformed\""],["input_class_basis","\"1 \u00b7 x \u00b7 y\""]],"errors":["input_class_basis of a malformed entry reads as the basis of another class, not as the rule the input breaks"]}
+{"edits":[["input_class","\" observed \""],["input_class_basis","\"x\""]],"errors":["input_class ' observed ' is not one of observed, unobserved, malformed"]}
+{"edits":[["input_class","\"observed\""],["input_class_basis","\"seen in a: b\\fc\""]],"errors":["input_class_basis is not one line"]}
+{"edits":[["input_class","\"observed\""],["input_class_basis","\"seen in a\\tb: c\""]],"errors":[]}
+{"edits":[["implementation","{ code = [\"crates/a/src/b.rs::Type::method\"], tests = [\"crates/a/tests/c.rs::pins_it\"], rules = [\"tools/t/src/r.rs::rule\"] }"]],"errors":[]}
+{"edits":[["implementation","{ none = \"The row is the ordinary one.\", tests = [\"crates/a/tests/c.rs::pins_it\"] }"]],"errors":[]}
+{"edits":[["implementation","{ none = \"The row is the ordinary one.\" }"]],"errors":["implementation needs tests"]}
+{"edits":[["implementation","{ none = \"The row is the ordinary one.\", tests = [] }"]],"errors":["implementation needs tests"]}
+{"edits":[["implementation","{ code = [\"crates/a/src/b.rs::method\"] }"]],"errors":["implementation needs tests"]}
+{"edits":[["implementation","{ tests = [\"crates/a/tests/c.rs::pins_it\"] }"]],"errors":["implementation needs code or none"]}
+{"edits":[["implementation","{ code = [], tests = [\"crates/a/tests/c.rs::pins_it\"] }"]],"errors":["implementation needs code or none"]}
+{"edits":[["implementation","{}"]],"errors":["implementation needs code or none","implementation needs tests"]}
+{"edits":[["implementation","{ code = [\"crates/a/src/b.rs::Type::method\"], tests = [\"crates/a/tests/c.rs::pins_it\"], rules = [\"tools/t/src/r.rs::rule\"] }"],["implementation.none","\"The row is the ordinary one.\""]],"errors":["implementation holds code and none: none is for an entry with no code of its own"]}
+{"edits":[["implementation","{ code = [\"crates/a/src/b.rs::Type::method\"], tests = [\"crates/a/tests/c.rs::pins_it\"], rules = [\"tools/t/src/r.rs::rule\"] }"],["implementation.code","[\"crates/a/src/b.rs\"]"]],"errors":["implementation.code names 'crates/a/src/b.rs', which is not <path>::<item>"]}
+{"edits":[["implementation","{ code = [\"crates/a/src/b.rs::Type::method\"], tests = [\"crates/a/tests/c.rs::pins_it\"], rules = [\"tools/t/src/r.rs::rule\"] }"],["implementation.tests","[\"crates/a/tests/c.rs::pins_it\", \"/crates/a/tests/c.rs::pins_it\", \"crates/../c.rs::pins_it\"]"]],"errors":["implementation.tests names '/crates/a/tests/c.rs::pins_it', which is not <path>::<item>","implementation.tests names 'crates/../c.rs::pins_it', which is not <path>::<item>"]}
+{"edits":[["implementation","{ code = [\"crates/a/src/b.rs::Type::method\"], tests = [\"crates/a/tests/c.rs::pins_it\"], rules = [\"tools/t/src/r.rs::rule\"] }"],["implementation.rules","[\"tools/t/src/r.rs::\", \"tools/t/src/r.rs::Rule<T>::holds\"]"]],"errors":["implementation.rules names 'tools/t/src/r.rs::', which is not <path>::<item>","implementation.rules names 'tools/t/src/r.rs::Rule<T>::holds', which is not <path>::<item>"]}
+{"edits":[["implementation","{ none = \"The row is the ordinary one.\", tests = [\"crates/a/tests/c.rs::pins_it\"] }"],["implementation.none","\"\""]],"errors":["implementation.none is not one line of text"]}
+{"edits":[["implementation","{ none = \"The row is the ordinary one.\", tests = [\"crates/a/tests/c.rs::pins_it\"] }"],["implementation.none","\"first\\nsecond\""]],"errors":["implementation.none is not one line of text"]}
+{"edits":[["implementation","\"crates/a/src/b.rs::method\""]],"errors":["implementation is not a table"]}
+{"edits":[["implementation","{ code = [\"crates/a/src/b.rs::Type::method\"], tests = [\"crates/a/tests/c.rs::pins_it\"], rules = [\"tools/t/src/r.rs::rule\"] }"],["implementation.code","\"crates/a/src/b.rs::method\""]],"errors":["implementation.code is not a list of strings"]}
+{"edits":[["implementation","{ code = [\"crates/a/src/b.rs::Type::method\"], tests = [\"crates/a/tests/c.rs::pins_it\"], rules = [\"tools/t/src/r.rs::rule\"] }"],["implementation.tests","[1]"]],"errors":["implementation.tests is not a list of strings"]}
+{"edits":[["implementation","{ none = \"The row is the ordinary one.\", tests = [\"crates/a/tests/c.rs::pins_it\"] }"],["implementation.none","3"]],"errors":["implementation.none is not a string"]}
+{"edits":[["implementation","{ code = [\"crates/a/src/b.rs::Type::method\"], tests = [\"crates/a/tests/c.rs::pins_it\"], rules = [\"tools/t/src/r.rs::rule\"] }"],["implementation.files","[\"crates/a/src/b.rs\"]"]],"errors":["unknown key implementation.files"]}
+{"edits":[["implementation","{ code = [\"crates/a/src/b.rs::Type::method\"], tests = [\"crates/a/tests/c.rs::pins_it\"], rules = [\"tools/t/src/r.rs::rule\"] }"],["compare.field","<delete>"]],"errors":["compare.kind field needs compare.field"]}

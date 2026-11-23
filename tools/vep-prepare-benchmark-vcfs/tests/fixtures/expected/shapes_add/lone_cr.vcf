@@ -1,0 +1,5 @@
+##fileformat=VCFv4.2
+##source=made-up records
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+5	100	.	A	G	.	PASS	.
+6	300	.	A	C	.	PASS	.

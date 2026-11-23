@@ -7,7 +7,11 @@ commit the whole files, so it commits a cut: the same contigs at their full
 length, so every coordinate stays genomic, with the bases a run never reads
 masked to `N` or left out of the bigWig. The regions come from the corpus itself:
 the transcripts of its `json_cache` (spans and exons) and the records of its
-`variants.vcf`.
+`variants.vcf`. A record on a sequence the cache holds no transcript of keeps
+its own region of that sequence's contig: the contig is looked up under the
+record's name in the reference's index, else in the ancestral FASTA's index,
+else among the contigs the bigWig declares, and is written under the name it
+has there.
 
     reference.fa.gz (+ .fa.gz.fai, .fa.gz.gzi, .fa.fai)
         the run's reference, `--reference` with every base outside each transcript
@@ -27,17 +31,26 @@ the transcripts of its `json_cache` (spans and exons) and the records of its
         `gerp_conservation_scores.homo_sapiens.GRCh38.bw`
 
 Each of the three source files is optional and only the ones given are cut; a
-corpus whose plugin reads the bigWig alone passes `--gerp` alone. The contig
-lengths come from the reference's index, or from the bigWig when no reference is
-given.
+corpus whose plugin reads the bigWig alone passes `--gerp` alone. Each masked
+FASTA keeps the contig lengths of its own index. The cut bigWig declares the
+contig lengths of the reference's index, else of the ancestral FASTA's index,
+else the lengths the source bigWig declares. A cut of the reference alone, the
+cut of a corpus that reads no plugin data, writes no `plugin_data` directory and
+runs without `bigtools`.
 
 The FASTA indexes are written in samtools' format (name, length, offset, bases
 per line, bytes per line) for the plain and the bgzipped file, and `bgzip -i`
 writes the `.gzi`. The bigWig is cut with `bigtools bigwigtobedgraph` over the
 region list and rebuilt with `bigtools bedgraphtobigwig --nzooms 0`. The versions
-the tools report and the sha256 of every file written go under `plugin_fixtures`
-in the corpus's `provenance.json`, every other key of which is kept; an existing
-fixture file is overwritten only under `--force`.
+the tools of a cut report (`bgzip` where a FASTA is given, `bigtools` where the
+bigWig is) and the sha256 of every file written go under `plugin_fixtures`
+in the corpus's `provenance.json`, beside the entries other generators record
+there under a file's name; those entries and every other key of the record are
+kept. An existing fixture file is overwritten only under `--force`. A run prints
+one JSON line: the transcripts and records it read, the bases the masked
+reference keeps (`reference_bases_kept`) and the bases of the regions the bigWig
+is cut to (`gerp_bases`), each 0 for a file the run does not cut, and the files
+written.
 
 Usage:
     cut_plugin_regions.py --corpus tests/golden/116/<corpus> [--reference <genome.fa>]
@@ -130,14 +143,35 @@ def read_records(vcf: Path) -> dict[str, list[tuple[int, int]]]:
     return spans
 
 
-def cache_chromosome(chrom: str, transcripts: dict[str, list[dict]]) -> str | None:
-    """The cache's name for a record's chromosome: as written, else less a leading `chr`
-    in any case, else with `chr` in front, the spellings both engines resolve."""
-    candidates = [chrom]
+def read_synonyms(cache: Path) -> dict[str, list[str]]:
+    """The names a JSON cache's `chr_synonyms.txt` links to each name, in file order; none
+    for a cache without the file."""
+    linked: dict[str, list[str]] = {}
+    path = cache / "chr_synonyms.txt"
+    if path.is_file():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            names = line.split()
+            for synonym in names[1:]:
+                linked.setdefault(names[0], []).append(synonym)
+                linked.setdefault(synonym, []).append(names[0])
+    return linked
+
+
+def spellings(chrom: str, linked: dict[str, list[str]]) -> list[str]:
+    """The names a record's chromosome may stand under, in the order they are tried: as
+    written, each name the cache's synonyms file links to it, less a leading `chr` in any
+    case, with `chr` in front, the spellings both engines resolve."""
+    candidates = [chrom, *linked.get(chrom, [])]
     if chrom[:3].lower() == "chr":
         candidates.append(chrom[3:])
     candidates.append(f"chr{chrom}")
-    return next((name for name in candidates if name in transcripts), None)
+    return candidates
+
+
+def cache_chromosome(chrom: str, transcripts: dict[str, list[dict]], linked: dict[str, list[str]]) -> str | None:
+    """The cache's name for a record's chromosome: the first of its spellings the cache
+    holds a transcript under."""
+    return next((name for name in spellings(chrom, linked) if name in transcripts), None)
 
 
 def contig_name(chrom: str, index: dict[str, tuple[int, int, int, int]], label: str) -> str:
@@ -202,6 +236,16 @@ def tool_version(tool: str) -> str:
     return (out.stdout or out.stderr).strip().splitlines()[0]
 
 
+def tools_of(args: argparse.Namespace) -> list[str]:
+    """The tools the given files are cut with: `bgzip` for either FASTA, `bigtools` for the bigWig."""
+    tools = []
+    if args.reference is not None or args.ancestor is not None:
+        tools.append("bgzip")
+    if args.gerp is not None:
+        tools.append("bigtools")
+    return tools
+
+
 def write_gerp(source: Path, out: Path, regions: dict[str, list[tuple[int, int]]], sizes: dict[str, int]) -> None:
     """`out` holds the values of `source` inside `regions` alone, no zoom levels."""
     chroms = sorted(regions, key=lambda c: (len(c), c))
@@ -209,7 +253,7 @@ def write_gerp(source: Path, out: Path, regions: dict[str, list[tuple[int, int]]
         scratch = Path(scratch_name)
         bed = scratch / "regions.bed"
         bed.write_text(
-            "".join(f"{chrom}\t{start - 1}\t{end}\n" for chrom in chroms for start, end in merge(regions[chrom])),
+            "".join(f"{chrom}\t{max(start, 1) - 1}\t{end}\n" for chrom in chroms for start, end in merge(regions[chrom])),
             encoding="utf-8",
         )
         bedgraph = scratch / "gerp.bedgraph"
@@ -256,17 +300,25 @@ def sha256(path: Path) -> str:
 
 
 def update_provenance(corpus: Path, files: list[Path], versions: dict[str, str], args: argparse.Namespace) -> None:
+    """Rewrites the cut's own keys of `plugin_fixtures` in the corpus's provenance.json and
+    keeps every other key there, each another generator's entry for one file, and every
+    other key of the record."""
     path = corpus / "provenance.json"
     record = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
-    record["plugin_fixtures"] = {
-        "generator": "scripts/fixtures/cut_plugin_regions.py",
-        "flank": args.flank,
-        "record_flank": args.record_flank,
-        "exon_flank": args.exon_flank,
-        "gerp_regions": args.gerp_regions,
-        "tools": versions,
-        "files": {str(f.relative_to(corpus)): sha256(f) for f in sorted(files)},
-    }
+    earlier = record.get("plugin_fixtures")
+    fixtures = earlier if isinstance(earlier, dict) else {}
+    fixtures.update(
+        {
+            "generator": "scripts/fixtures/cut_plugin_regions.py",
+            "flank": args.flank,
+            "record_flank": args.record_flank,
+            "exon_flank": args.exon_flank,
+            "gerp_regions": args.gerp_regions,
+            "tools": versions,
+            "files": {str(f.relative_to(corpus)): sha256(f) for f in sorted(files)},
+        }
+    )
+    record["plugin_fixtures"] = fixtures
     path.write_text(json.dumps(record, indent=1) + "\n", encoding="utf-8")
 
 
@@ -321,7 +373,8 @@ def main(argv: list[str] | None = None) -> int:
     existing = [p for p in outputs if p.exists()]
     if existing and not args.force:
         raise fail(f"{existing[0]} exists; pass --force to overwrite the fixtures")
-    plugin_data.mkdir(exist_ok=True)
+    if args.ancestor is not None or args.gerp is not None:
+        plugin_data.mkdir(exist_ok=True)
 
     transcripts = read_transcripts(cache)
     records = read_records(vcf)
@@ -333,12 +386,15 @@ def main(argv: list[str] | None = None) -> int:
             fasta, label = args.ancestor, "the ancestral FASTA"
         fasta_index = read_fai(Path(f"{fasta}.fai"))
         sizes = {chrom: fasta_index[contig_name(chrom, fasta_index, label)][0] for chrom in transcripts}
+        lengths = {name: entry[0] for name, entry in fasta_index.items()}
+        cut_from = {contig_name(chrom, fasta_index, label): chrom for chrom in transcripts}
     else:
-        declared = bigwig_sizes(args.gerp)
+        lengths, label = bigwig_sizes(args.gerp), "the bigWig"
         for chrom in transcripts:
-            if chrom not in declared:
+            if chrom not in lengths:
                 raise fail(f"the bigWig has no contig named {chrom}")
-        sizes = {chrom: declared[chrom] for chrom in transcripts}
+        sizes = {chrom: lengths[chrom] for chrom in transcripts}
+        cut_from = {chrom: chrom for chrom in transcripts}
     span_regions: dict[str, list[tuple[int, int]]] = {}
     exon_regions: dict[str, list[tuple[int, int]]] = {}
     for chrom, items in transcripts.items():
@@ -347,10 +403,19 @@ def main(argv: list[str] | None = None) -> int:
             for exon in t.get("exons") or []:
                 exon_regions.setdefault(chrom, []).append((int(exon["start"]) - args.exon_flank, int(exon["end"]) + args.exon_flank))
     record_regions: dict[str, list[tuple[int, int]]] = {}
+    linked = read_synonyms(cache)
     for record_chrom, spans in records.items():
-        chrom = cache_chromosome(record_chrom, transcripts)
+        chrom = cache_chromosome(record_chrom, transcripts, linked)
         if chrom is None:
-            raise fail(f"variants.vcf names chromosome {record_chrom}, which the cache does not hold")
+            # The cache holds no transcript under any spelling of the record's sequence. The
+            # record's region is cut on the contig that the first spelling found in the file of
+            # the contig lengths names there: a cache chromosome where that contig is the one
+            # the chromosome is cut from, else a contig of its own under the file's name.
+            contig = next((name for name in spellings(record_chrom, linked) if name in lengths), None)
+            if contig is None:
+                raise fail(f"variants.vcf names chromosome {record_chrom}, which the cache does not hold and {label} has no contig for")
+            chrom = cut_from.get(contig, contig)
+            sizes.setdefault(chrom, lengths[contig])
         for start, end in spans:
             region = (start - args.record_flank, end + args.record_flank)
             span_regions.setdefault(chrom, []).append(region)
@@ -366,9 +431,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.gerp is not None:
         write_gerp(args.gerp, gerp_out, gerp_regions, sizes)
 
-    versions = {tool: tool_version(tool) for tool in ("bgzip", "bigtools")}
+    versions = {tool: tool_version(tool) for tool in tools_of(args)}
     update_provenance(corpus, outputs, versions, args)
-    kept = count_bases(span_regions, sizes)
+    kept = count_bases(span_regions, sizes) if args.reference is not None else 0
     gerp_bases = count_bases(gerp_regions, sizes) if args.gerp is not None else 0
     print(json.dumps({"transcripts": sum(len(v) for v in transcripts.values()), "records": sum(len(v) for v in records.values()),
                       "reference_bases_kept": kept, "gerp_bases": gerp_bases, "files": [str(p.relative_to(corpus)) for p in outputs]}))

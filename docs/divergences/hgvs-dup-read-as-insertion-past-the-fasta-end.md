@@ -1,6 +1,6 @@
 # The HGVSc of a duplication on a reference FASTA that ends inside the transcript
 
-**The defect in one sentence.** Under `--hgvs`, on a reference FASTA whose chromosome ends before the end of a transcript, Ensembl VEP 116.2 fetches the sequence past the file's last base as a single `N` and keeps the transcript's sequence that many bases short. An insertion that duplicates the bases beside it is then written as an insertion, `c.745_746insTGC`, where the complete chromosome gives `c.743_745dup`. vep-rs writes the duplication on either reference.
+**The defect in one sentence.** Under `--hgvs`, on a reference FASTA whose chromosome ends before the end of a transcript, Ensembl VEP 116.3 fetches the sequence past the file's last base as a single `N` and keeps the transcript's sequence that many bases short. An insertion that duplicates the bases beside it is then written as an insertion, `c.745_746insTGC`, where the complete chromosome gives `c.743_745dup`. vep-rs writes the duplication on either reference.
 
 **Why this is a defect.** The notation of an insertion depends on the bases beside the insertion point and on nothing else. Those bases lie inside the file: here the reference ends 144 bases past the insertion, and only the transcript's far end, 21,170 bases on, lies beyond it. Ensembl VEP writes the duplication for the same record on the complete chromosome, and the shorter file changes no base the notation reads.
 

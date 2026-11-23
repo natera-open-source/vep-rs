@@ -1,0 +1,1893 @@
+{
+ "release": "116",
+ "species": "homo_sapiens",
+ "assembly": "GRCh37",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 100,
+ "included_records": {
+  "loftee": [
+   "single_exon_stop"
+  ]
+ },
+ "max_span": 1000000,
+ "flags": [
+  "--mask_header_cache_path",
+  "--dir_plugins",
+  "{plugins}",
+  "--plugin",
+  "LoF,loftee_path:{plugins},human_ancestor_fa:{corpus}/plugin_data/human_ancestor.fa.gz,gerp_file:{corpus}/plugin_data/GERP_scores.synthetic.txt.gz,run_splice_predictions:0"
+ ],
+ "fasta": "reference.fa.gz",
+ "covers": [
+  "LoFTEE"
+ ],
+ "masks": [
+  "loftee_gerp_walk_without_conservation_database"
+ ],
+ "plugin_files": {
+  "LoFTEE": [
+   "plugin_data/human_ancestor.fa.gz",
+   "plugin_data/human_ancestor.fa.gz.fai",
+   "plugin_data/human_ancestor.fa.gz.gzi",
+   "plugin_data/GERP_scores.synthetic.txt.gz",
+   "plugin_data/GERP_scores.synthetic.txt.gz.tbi",
+   "plugin_data/phylocsf_gerp.synthetic.sql"
+  ]
+ },
+ "datasets": {
+  "loftee": {
+   "reference": "default.txt",
+   "input": "variants.vcf",
+   "rows": 100,
+   "combinations": 20
+  }
+ },
+ "combinations": {
+  "3_prime_UTR_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 3
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,frameshift_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "coding_sequence_variant,intron_variant,splice_acceptor_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "downstream_gene_variant": {
+   "observed_rows": 11,
+   "exemplar_records": 8
+  },
+  "frameshift_variant": {
+   "observed_rows": 12,
+   "exemplar_records": 9
+  },
+  "frameshift_variant,splice_region_variant": {
+   "observed_rows": 7,
+   "exemplar_records": 2
+  },
+  "frameshift_variant,stop_gained": {
+   "observed_rows": 7,
+   "exemplar_records": 2
+  },
+  "intron_variant,splice_donor_5th_base_variant,splice_donor_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "missense_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "non_coding_transcript_exon_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 5
+  },
+  "non_coding_transcript_variant,splice_acceptor_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "non_coding_transcript_variant,splice_donor_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "non_coding_transcript_variant,splice_region_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "splice_acceptor_variant": {
+   "observed_rows": 5,
+   "exemplar_records": 4
+  },
+  "splice_donor_variant": {
+   "observed_rows": 11,
+   "exemplar_records": 6
+  },
+  "stop_gained": {
+   "observed_rows": 16,
+   "exemplar_records": 9
+  },
+  "synonymous_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 3
+  }
+ },
+ "variant_classes": {
+  "deletion": 17,
+  "insertion": 27,
+  "snv": 56
+ },
+ "records": [
+  {
+   "dataset": "loftee",
+   "vcf": "21\t19647591\t2420761\tG\tA\t.\t.\t.",
+   "combinations": [
+    "stop_gained"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t19647609\t1251988\tA\tATGAT\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t19647635\t3657821\tAAT\tA\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t19653355\t3687853\tA\tG\t.\t.\t.",
+   "combinations": [
+    "splice_donor_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t19666604\t3678958\tG\tA\t.\t.\t.",
+   "combinations": [
+    "synonymous_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t19666762\t1984367\tC\tT\t.\t.\t.",
+   "combinations": [
+    "splice_acceptor_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t19666968\t3668282\tGACTGTA\tG\t.\t.\t.",
+   "combinations": [
+    "coding_sequence_variant,intron_variant,splice_acceptor_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t19670148\t3719588\tT\tC\t.\t.\t.",
+   "combinations": [
+    "splice_acceptor_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t19687567\t3458849\tC\tA\t.\t.\t.",
+   "combinations": [
+    "missense_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t19713781\t1028048\tTC\tT\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t19715900\t1323696\tC\tCT\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t19755942\t2701041\tA\tG\t.\t.\t.",
+   "combinations": [
+    "splice_donor_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t31538602\tsingle_exon_stop\tC\tA\t.\t.\t.",
+   "combinations": [
+    "stop_gained"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t31588082\t64605\tG\tT\t.\t.\t.",
+   "combinations": [
+    "stop_gained",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t34660560\t1486790\tGAA\tG\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "NMD_transcript_variant,frameshift_variant",
+    "downstream_gene_variant",
+    "frameshift_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t34668515\t1038371\tAC\tA\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "frameshift_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t34668654\t1040010\tC\tT\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant",
+    "stop_gained"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t36171597\t3766477\tC\tCTTGAT\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant",
+    "frameshift_variant,splice_region_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t38128859\t203770\tG\tA\t.\t.\t.",
+   "combinations": [
+    "stop_gained"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t38437978\t1388806\tG\tGT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "frameshift_variant,stop_gained",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t38997758\t1309037\tG\tGT\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant,stop_gained"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t38997769\t1319207\tG\tA\t.\t.\t.",
+   "combinations": [
+    "stop_gained"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t39213012\t4454292\tC\tA\t.\t.\t.",
+   "combinations": [
+    "splice_acceptor_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t44473970\t4454804\tA\tT\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant",
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant",
+    "splice_donor_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t44836800\t4734568\tG\tGC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "frameshift_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t44841249\t2726461\tT\tC\t.\t.\t.",
+   "combinations": [
+    "non_coding_transcript_variant,splice_acceptor_variant",
+    "splice_acceptor_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t45649955\t3673399\tGACTC\tG\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t45714387\t2086804\tG\tA\t.\t.\t.",
+   "combinations": [
+    "non_coding_transcript_variant,splice_donor_variant",
+    "splice_donor_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t45919695\t4768083\tA\tAG\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t45924725\t4081843\tA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_gained",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t45950924\t1506041\tG\tA\t.\t.\t.",
+   "combinations": [
+    "splice_donor_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t46131337\t2159187\tCCCTGCCTTA\tC\t.\t.\t.",
+   "combinations": [
+    "intron_variant,splice_donor_5th_base_variant,splice_donor_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t47410741\t2138404\tG\tGT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "splice_donor_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t47412707\t1073927\tG\tT\t.\t.\t.",
+   "combinations": [
+    "stop_gained"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t47546147\t1993997\tC\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_gained"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t47858076\t3348455\tG\tGA\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant,splice_region_variant",
+    "non_coding_transcript_variant,splice_region_variant",
+    "upstream_gene_variant"
+   ]
+  }
+ ],
+ "multi_allelic_per_dataset": 4,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "flag_sets": [
+  {
+   "name": "loftee-key-value",
+   "flags": [
+    "--mask_header_cache_path",
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "LoFTEE,loftee_path={plugins},human_ancestor_fa={corpus}/plugin_data/human_ancestor.fa.gz,gerp_tabix={corpus}/plugin_data/GERP_scores.synthetic.txt.gz,run_splice_predictions=0"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected",
+   "covers": [
+    "LoFTEE"
+   ],
+   "masks": [
+    "loftee_gerp_walk_without_conservation_database"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {},
+   "fields_compared": [
+    "LoF",
+    "LoF_filter",
+    "LoF_flags",
+    "LoF_info"
+   ],
+   "field_divergences": [
+    {
+     "location": "21:19713782",
+     "allele": "-",
+     "feature": "ENST00000284885",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "frameshift_variant",
+     "field": "LoF",
+     "vep": "-",
+     "vep_rs": "HC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:19713782",
+     "allele": "-",
+     "feature": "ENST00000284885",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "frameshift_variant",
+     "field": "LoF_info",
+     "vep": "-",
+     "vep_rs": "GERP_DIST:1499.59,BP_DIST:1536,PERCENTILE:0.494117647058824,DIST_FROM_LAST_EXON:1381,50_BP_RULE:PASS",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:19715900-19715901",
+     "allele": "T",
+     "feature": "ENST00000284885",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "frameshift_variant",
+     "field": "LoF",
+     "vep": "-",
+     "vep_rs": "HC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:19715900-19715901",
+     "allele": "T",
+     "feature": "ENST00000284885",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "frameshift_variant",
+     "field": "LoF_info",
+     "vep": "-",
+     "vep_rs": "GERP_DIST:1678.43,BP_DIST:1697,PERCENTILE:0.441176470588235,DIST_FROM_LAST_EXON:1542,50_BP_RULE:PASS",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:31588082",
+     "allele": "T",
+     "feature": "ENST00000286809",
+     "feature_type": "Transcript",
+     "record_indices": [
+      13
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF",
+     "vep": "-",
+     "vep_rs": "HC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:31588082",
+     "allele": "T",
+     "feature": "ENST00000286809",
+     "feature_type": "Transcript",
+     "record_indices": [
+      13
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF_info",
+     "vep": "-",
+     "vep_rs": "GERP_DIST:1421.56,BP_DIST:1497,PERCENTILE:0.238938053097345,DIST_FROM_LAST_EXON:711,50_BP_RULE:PASS",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47412707",
+     "allele": "T",
+     "feature": "ENST00000361866",
+     "feature_type": "Transcript",
+     "record_indices": [
+      33
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF",
+     "vep": "-",
+     "vep_rs": "HC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47412707",
+     "allele": "T",
+     "feature": "ENST00000361866",
+     "feature_type": "Transcript",
+     "record_indices": [
+      33
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF_info",
+     "vep": "-",
+     "vep_rs": "GERP_DIST:1780.24,BP_DIST:1753,PERCENTILE:0.426951733074182,DIST_FROM_LAST_EXON:1131,50_BP_RULE:PASS",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47546147",
+     "allele": "A",
+     "feature": "ENST00000300527",
+     "feature_type": "Transcript",
+     "record_indices": [
+      34
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF",
+     "vep": "-",
+     "vep_rs": "HC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47546147",
+     "allele": "A",
+     "feature": "ENST00000300527",
+     "feature_type": "Transcript",
+     "record_indices": [
+      34
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF_info",
+     "vep": "-",
+     "vep_rs": "GERP_DIST:659.23,BP_DIST:640,PERCENTILE:0.790196078431373,DIST_FROM_LAST_EXON:42,50_BP_RULE:FAIL",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47546147",
+     "allele": "A",
+     "feature": "ENST00000310645",
+     "feature_type": "Transcript",
+     "record_indices": [
+      34
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF",
+     "vep": "-",
+     "vep_rs": "LC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47546147",
+     "allele": "A",
+     "feature": "ENST00000310645",
+     "feature_type": "Transcript",
+     "record_indices": [
+      34
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF_filter",
+     "vep": "-",
+     "vep_rs": "END_TRUNC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47546147",
+     "allele": "A",
+     "feature": "ENST00000310645",
+     "feature_type": "Transcript",
+     "record_indices": [
+      34
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF_info",
+     "vep": "-",
+     "vep_rs": "GERP_DIST:80.21,BP_DIST:67,PERCENTILE:0.972255729794934,DIST_FROM_LAST_EXON:42,50_BP_RULE:FAIL",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47546147",
+     "allele": "A",
+     "feature": "ENST00000357838",
+     "feature_type": "Transcript",
+     "record_indices": [
+      34
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF",
+     "vep": "-",
+     "vep_rs": "HC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47546147",
+     "allele": "A",
+     "feature": "ENST00000357838",
+     "feature_type": "Transcript",
+     "record_indices": [
+      34
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF_info",
+     "vep": "-",
+     "vep_rs": "GERP_DIST:336.93,BP_DIST:337,PERCENTILE:0.877040261153428,DIST_FROM_LAST_EXON:42,50_BP_RULE:FAIL",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47546147",
+     "allele": "A",
+     "feature": "ENST00000397763",
+     "feature_type": "Transcript",
+     "record_indices": [
+      34
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF",
+     "vep": "-",
+     "vep_rs": "HC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47546147",
+     "allele": "A",
+     "feature": "ENST00000397763",
+     "feature_type": "Transcript",
+     "record_indices": [
+      34
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF_info",
+     "vep": "-",
+     "vep_rs": "GERP_DIST:336.93,BP_DIST:337,PERCENTILE:0.877040261153428,DIST_FROM_LAST_EXON:42,50_BP_RULE:FAIL",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47546147",
+     "allele": "A",
+     "feature": "ENST00000409416",
+     "feature_type": "Transcript",
+     "record_indices": [
+      34
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF",
+     "vep": "-",
+     "vep_rs": "LC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47546147",
+     "allele": "A",
+     "feature": "ENST00000409416",
+     "feature_type": "Transcript",
+     "record_indices": [
+      34
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF_filter",
+     "vep": "-",
+     "vep_rs": "END_TRUNC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47546147",
+     "allele": "A",
+     "feature": "ENST00000409416",
+     "feature_type": "Transcript",
+     "record_indices": [
+      34
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF_info",
+     "vep": "-",
+     "vep_rs": "GERP_DIST:80.21,BP_DIST:67,PERCENTILE:0.972255729794934,DIST_FROM_LAST_EXON:42,50_BP_RULE:FAIL",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47858076-47858077",
+     "allele": "A",
+     "feature": "ENST00000359568",
+     "feature_type": "Transcript",
+     "record_indices": [
+      35
+     ],
+     "consequence_set": "frameshift_variant,splice_region_variant",
+     "field": "LoF",
+     "vep": "-",
+     "vep_rs": "HC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47858076-47858077",
+     "allele": "A",
+     "feature": "ENST00000359568",
+     "feature_type": "Transcript",
+     "record_indices": [
+      35
+     ],
+     "consequence_set": "frameshift_variant,splice_region_variant",
+     "field": "LoF_flags",
+     "vep": "-",
+     "vep_rs": "NO_EXON_NUMBER",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47858076-47858077",
+     "allele": "A",
+     "feature": "ENST00000359568",
+     "feature_type": "Transcript",
+     "record_indices": [
+      35
+     ],
+     "consequence_set": "frameshift_variant,splice_region_variant",
+     "field": "LoF_info",
+     "vep": "-",
+     "vep_rs": "GERP_DIST:881.78,BP_DIST:905,PERCENTILE:0.908900209769254",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47858076-47858077",
+     "allele": "A",
+     "feature": "ENST00000418394",
+     "feature_type": "Transcript",
+     "record_indices": [
+      35
+     ],
+     "consequence_set": "frameshift_variant,splice_region_variant",
+     "field": "LoF",
+     "vep": "-",
+     "vep_rs": "HC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47858076-47858077",
+     "allele": "A",
+     "feature": "ENST00000418394",
+     "feature_type": "Transcript",
+     "record_indices": [
+      35
+     ],
+     "consequence_set": "frameshift_variant,splice_region_variant",
+     "field": "LoF_flags",
+     "vep": "-",
+     "vep_rs": "NO_EXON_NUMBER",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47858076-47858077",
+     "allele": "A",
+     "feature": "ENST00000418394",
+     "feature_type": "Transcript",
+     "record_indices": [
+      35
+     ],
+     "consequence_set": "frameshift_variant,splice_region_variant",
+     "field": "LoF_info",
+     "vep": "-",
+     "vep_rs": "GERP_DIST:666.77,BP_DIST:640,PERCENTILE:0.0612244897959184",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    }
+   ],
+   "field_divergence_summary": {
+    "loftee_gerp_walk_without_conservation_database": 26
+   }
+  },
+  {
+   "name": "lof-skip-lof-info",
+   "flags": [
+    "--mask_header_cache_path",
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "LoF,loftee_path:{plugins},human_ancestor_fa:{corpus}/plugin_data/human_ancestor.fa.gz,gerp_file:{corpus}/plugin_data/GERP_scores.synthetic.txt.gz,run_splice_predictions:0,skip_lof_info:1"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_lof-skip-lof-info",
+   "covers": [
+    "LoFTEE"
+   ],
+   "masks": [
+    "loftee_gerp_walk_without_conservation_database"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {},
+   "fields_compared": [
+    "LoF",
+    "LoF_filter",
+    "LoF_flags",
+    "LoF_info"
+   ],
+   "field_divergences": [
+    {
+     "location": "21:19713782",
+     "allele": "-",
+     "feature": "ENST00000284885",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "frameshift_variant",
+     "field": "LoF",
+     "vep": "-",
+     "vep_rs": "HC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:19715900-19715901",
+     "allele": "T",
+     "feature": "ENST00000284885",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "frameshift_variant",
+     "field": "LoF",
+     "vep": "-",
+     "vep_rs": "HC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:31588082",
+     "allele": "T",
+     "feature": "ENST00000286809",
+     "feature_type": "Transcript",
+     "record_indices": [
+      13
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF",
+     "vep": "-",
+     "vep_rs": "HC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47412707",
+     "allele": "T",
+     "feature": "ENST00000361866",
+     "feature_type": "Transcript",
+     "record_indices": [
+      33
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF",
+     "vep": "-",
+     "vep_rs": "HC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47546147",
+     "allele": "A",
+     "feature": "ENST00000300527",
+     "feature_type": "Transcript",
+     "record_indices": [
+      34
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF",
+     "vep": "-",
+     "vep_rs": "HC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47546147",
+     "allele": "A",
+     "feature": "ENST00000310645",
+     "feature_type": "Transcript",
+     "record_indices": [
+      34
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF",
+     "vep": "-",
+     "vep_rs": "LC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47546147",
+     "allele": "A",
+     "feature": "ENST00000310645",
+     "feature_type": "Transcript",
+     "record_indices": [
+      34
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF_filter",
+     "vep": "-",
+     "vep_rs": "END_TRUNC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47546147",
+     "allele": "A",
+     "feature": "ENST00000357838",
+     "feature_type": "Transcript",
+     "record_indices": [
+      34
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF",
+     "vep": "-",
+     "vep_rs": "HC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47546147",
+     "allele": "A",
+     "feature": "ENST00000397763",
+     "feature_type": "Transcript",
+     "record_indices": [
+      34
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF",
+     "vep": "-",
+     "vep_rs": "HC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47546147",
+     "allele": "A",
+     "feature": "ENST00000409416",
+     "feature_type": "Transcript",
+     "record_indices": [
+      34
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF",
+     "vep": "-",
+     "vep_rs": "LC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47546147",
+     "allele": "A",
+     "feature": "ENST00000409416",
+     "feature_type": "Transcript",
+     "record_indices": [
+      34
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF_filter",
+     "vep": "-",
+     "vep_rs": "END_TRUNC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47858076-47858077",
+     "allele": "A",
+     "feature": "ENST00000359568",
+     "feature_type": "Transcript",
+     "record_indices": [
+      35
+     ],
+     "consequence_set": "frameshift_variant,splice_region_variant",
+     "field": "LoF",
+     "vep": "-",
+     "vep_rs": "HC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47858076-47858077",
+     "allele": "A",
+     "feature": "ENST00000359568",
+     "feature_type": "Transcript",
+     "record_indices": [
+      35
+     ],
+     "consequence_set": "frameshift_variant,splice_region_variant",
+     "field": "LoF_flags",
+     "vep": "-",
+     "vep_rs": "NO_EXON_NUMBER",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47858076-47858077",
+     "allele": "A",
+     "feature": "ENST00000418394",
+     "feature_type": "Transcript",
+     "record_indices": [
+      35
+     ],
+     "consequence_set": "frameshift_variant,splice_region_variant",
+     "field": "LoF",
+     "vep": "-",
+     "vep_rs": "HC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47858076-47858077",
+     "allele": "A",
+     "feature": "ENST00000418394",
+     "feature_type": "Transcript",
+     "record_indices": [
+      35
+     ],
+     "consequence_set": "frameshift_variant,splice_region_variant",
+     "field": "LoF_flags",
+     "vep": "-",
+     "vep_rs": "NO_EXON_NUMBER",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    }
+   ],
+   "field_divergence_summary": {
+    "loftee_gerp_walk_without_conservation_database": 15
+   }
+  },
+  {
+   "name": "lof-conservation-file-false",
+   "flags": [
+    "--mask_header_cache_path",
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "LoF,loftee_path:{plugins},human_ancestor_fa:{corpus}/plugin_data/human_ancestor.fa.gz,gerp_file:{corpus}/plugin_data/GERP_scores.synthetic.txt.gz,run_splice_predictions:0,conservation_file:false"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected",
+   "covers": [
+    "LoFTEE"
+   ],
+   "masks": [
+    "loftee_gerp_walk_without_conservation_database"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {},
+   "fields_compared": [
+    "LoF",
+    "LoF_filter",
+    "LoF_flags",
+    "LoF_info"
+   ],
+   "field_divergences": [
+    {
+     "location": "21:19713782",
+     "allele": "-",
+     "feature": "ENST00000284885",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "frameshift_variant",
+     "field": "LoF",
+     "vep": "-",
+     "vep_rs": "HC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:19713782",
+     "allele": "-",
+     "feature": "ENST00000284885",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "frameshift_variant",
+     "field": "LoF_info",
+     "vep": "-",
+     "vep_rs": "GERP_DIST:1499.59,BP_DIST:1536,PERCENTILE:0.494117647058824,DIST_FROM_LAST_EXON:1381,50_BP_RULE:PASS",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:19715900-19715901",
+     "allele": "T",
+     "feature": "ENST00000284885",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "frameshift_variant",
+     "field": "LoF",
+     "vep": "-",
+     "vep_rs": "HC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:19715900-19715901",
+     "allele": "T",
+     "feature": "ENST00000284885",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "frameshift_variant",
+     "field": "LoF_info",
+     "vep": "-",
+     "vep_rs": "GERP_DIST:1678.43,BP_DIST:1697,PERCENTILE:0.441176470588235,DIST_FROM_LAST_EXON:1542,50_BP_RULE:PASS",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:31588082",
+     "allele": "T",
+     "feature": "ENST00000286809",
+     "feature_type": "Transcript",
+     "record_indices": [
+      13
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF",
+     "vep": "-",
+     "vep_rs": "HC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:31588082",
+     "allele": "T",
+     "feature": "ENST00000286809",
+     "feature_type": "Transcript",
+     "record_indices": [
+      13
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF_info",
+     "vep": "-",
+     "vep_rs": "GERP_DIST:1421.56,BP_DIST:1497,PERCENTILE:0.238938053097345,DIST_FROM_LAST_EXON:711,50_BP_RULE:PASS",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47412707",
+     "allele": "T",
+     "feature": "ENST00000361866",
+     "feature_type": "Transcript",
+     "record_indices": [
+      33
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF",
+     "vep": "-",
+     "vep_rs": "HC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47412707",
+     "allele": "T",
+     "feature": "ENST00000361866",
+     "feature_type": "Transcript",
+     "record_indices": [
+      33
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF_info",
+     "vep": "-",
+     "vep_rs": "GERP_DIST:1780.24,BP_DIST:1753,PERCENTILE:0.426951733074182,DIST_FROM_LAST_EXON:1131,50_BP_RULE:PASS",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47546147",
+     "allele": "A",
+     "feature": "ENST00000300527",
+     "feature_type": "Transcript",
+     "record_indices": [
+      34
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF",
+     "vep": "-",
+     "vep_rs": "HC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47546147",
+     "allele": "A",
+     "feature": "ENST00000300527",
+     "feature_type": "Transcript",
+     "record_indices": [
+      34
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF_info",
+     "vep": "-",
+     "vep_rs": "GERP_DIST:659.23,BP_DIST:640,PERCENTILE:0.790196078431373,DIST_FROM_LAST_EXON:42,50_BP_RULE:FAIL",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47546147",
+     "allele": "A",
+     "feature": "ENST00000310645",
+     "feature_type": "Transcript",
+     "record_indices": [
+      34
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF",
+     "vep": "-",
+     "vep_rs": "LC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47546147",
+     "allele": "A",
+     "feature": "ENST00000310645",
+     "feature_type": "Transcript",
+     "record_indices": [
+      34
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF_filter",
+     "vep": "-",
+     "vep_rs": "END_TRUNC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47546147",
+     "allele": "A",
+     "feature": "ENST00000310645",
+     "feature_type": "Transcript",
+     "record_indices": [
+      34
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF_info",
+     "vep": "-",
+     "vep_rs": "GERP_DIST:80.21,BP_DIST:67,PERCENTILE:0.972255729794934,DIST_FROM_LAST_EXON:42,50_BP_RULE:FAIL",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47546147",
+     "allele": "A",
+     "feature": "ENST00000357838",
+     "feature_type": "Transcript",
+     "record_indices": [
+      34
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF",
+     "vep": "-",
+     "vep_rs": "HC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47546147",
+     "allele": "A",
+     "feature": "ENST00000357838",
+     "feature_type": "Transcript",
+     "record_indices": [
+      34
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF_info",
+     "vep": "-",
+     "vep_rs": "GERP_DIST:336.93,BP_DIST:337,PERCENTILE:0.877040261153428,DIST_FROM_LAST_EXON:42,50_BP_RULE:FAIL",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47546147",
+     "allele": "A",
+     "feature": "ENST00000397763",
+     "feature_type": "Transcript",
+     "record_indices": [
+      34
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF",
+     "vep": "-",
+     "vep_rs": "HC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47546147",
+     "allele": "A",
+     "feature": "ENST00000397763",
+     "feature_type": "Transcript",
+     "record_indices": [
+      34
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF_info",
+     "vep": "-",
+     "vep_rs": "GERP_DIST:336.93,BP_DIST:337,PERCENTILE:0.877040261153428,DIST_FROM_LAST_EXON:42,50_BP_RULE:FAIL",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47546147",
+     "allele": "A",
+     "feature": "ENST00000409416",
+     "feature_type": "Transcript",
+     "record_indices": [
+      34
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF",
+     "vep": "-",
+     "vep_rs": "LC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47546147",
+     "allele": "A",
+     "feature": "ENST00000409416",
+     "feature_type": "Transcript",
+     "record_indices": [
+      34
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF_filter",
+     "vep": "-",
+     "vep_rs": "END_TRUNC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47546147",
+     "allele": "A",
+     "feature": "ENST00000409416",
+     "feature_type": "Transcript",
+     "record_indices": [
+      34
+     ],
+     "consequence_set": "stop_gained",
+     "field": "LoF_info",
+     "vep": "-",
+     "vep_rs": "GERP_DIST:80.21,BP_DIST:67,PERCENTILE:0.972255729794934,DIST_FROM_LAST_EXON:42,50_BP_RULE:FAIL",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47858076-47858077",
+     "allele": "A",
+     "feature": "ENST00000359568",
+     "feature_type": "Transcript",
+     "record_indices": [
+      35
+     ],
+     "consequence_set": "frameshift_variant,splice_region_variant",
+     "field": "LoF",
+     "vep": "-",
+     "vep_rs": "HC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47858076-47858077",
+     "allele": "A",
+     "feature": "ENST00000359568",
+     "feature_type": "Transcript",
+     "record_indices": [
+      35
+     ],
+     "consequence_set": "frameshift_variant,splice_region_variant",
+     "field": "LoF_flags",
+     "vep": "-",
+     "vep_rs": "NO_EXON_NUMBER",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47858076-47858077",
+     "allele": "A",
+     "feature": "ENST00000359568",
+     "feature_type": "Transcript",
+     "record_indices": [
+      35
+     ],
+     "consequence_set": "frameshift_variant,splice_region_variant",
+     "field": "LoF_info",
+     "vep": "-",
+     "vep_rs": "GERP_DIST:881.78,BP_DIST:905,PERCENTILE:0.908900209769254",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47858076-47858077",
+     "allele": "A",
+     "feature": "ENST00000418394",
+     "feature_type": "Transcript",
+     "record_indices": [
+      35
+     ],
+     "consequence_set": "frameshift_variant,splice_region_variant",
+     "field": "LoF",
+     "vep": "-",
+     "vep_rs": "HC",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47858076-47858077",
+     "allele": "A",
+     "feature": "ENST00000418394",
+     "feature_type": "Transcript",
+     "record_indices": [
+      35
+     ],
+     "consequence_set": "frameshift_variant,splice_region_variant",
+     "field": "LoF_flags",
+     "vep": "-",
+     "vep_rs": "NO_EXON_NUMBER",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    },
+    {
+     "location": "21:47858076-47858077",
+     "allele": "A",
+     "feature": "ENST00000418394",
+     "feature_type": "Transcript",
+     "record_indices": [
+      35
+     ],
+     "consequence_set": "frameshift_variant,splice_region_variant",
+     "field": "LoF_info",
+     "vep": "-",
+     "vep_rs": "GERP_DIST:666.77,BP_DIST:640,PERCENTILE:0.0612244897959184",
+     "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+    }
+   ],
+   "field_divergence_summary": {
+    "loftee_gerp_walk_without_conservation_database": 26
+   }
+  },
+  {
+   "name": "conservation-database",
+   "flags": [
+    "--mask_header_cache_path",
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "LoF,loftee_path:{plugins},human_ancestor_fa:{corpus}/plugin_data/human_ancestor.fa.gz,gerp_file:{corpus}/plugin_data/GERP_scores.synthetic.txt.gz,run_splice_predictions:0,conservation_file:{corpus}/plugin_data/phylocsf_gerp.synthetic.sql"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_conservation-database",
+   "covers": [
+    "LoFTEE"
+   ],
+   "masks": [],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {},
+   "fields_compared": [
+    "LoF",
+    "LoF_filter",
+    "LoF_flags",
+    "LoF_info"
+   ],
+   "field_divergences": [],
+   "field_divergence_summary": {}
+  }
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {},
+ "fields_compared": [
+  "LoF",
+  "LoF_filter",
+  "LoF_flags",
+  "LoF_info"
+ ],
+ "field_divergences": [
+  {
+   "location": "21:19713782",
+   "allele": "-",
+   "feature": "ENST00000284885",
+   "feature_type": "Transcript",
+   "record_indices": [
+    9
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "LoF",
+   "vep": "-",
+   "vep_rs": "HC",
+   "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+  },
+  {
+   "location": "21:19713782",
+   "allele": "-",
+   "feature": "ENST00000284885",
+   "feature_type": "Transcript",
+   "record_indices": [
+    9
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "LoF_info",
+   "vep": "-",
+   "vep_rs": "GERP_DIST:1499.59,BP_DIST:1536,PERCENTILE:0.494117647058824,DIST_FROM_LAST_EXON:1381,50_BP_RULE:PASS",
+   "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+  },
+  {
+   "location": "21:19715900-19715901",
+   "allele": "T",
+   "feature": "ENST00000284885",
+   "feature_type": "Transcript",
+   "record_indices": [
+    10
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "LoF",
+   "vep": "-",
+   "vep_rs": "HC",
+   "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+  },
+  {
+   "location": "21:19715900-19715901",
+   "allele": "T",
+   "feature": "ENST00000284885",
+   "feature_type": "Transcript",
+   "record_indices": [
+    10
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "LoF_info",
+   "vep": "-",
+   "vep_rs": "GERP_DIST:1678.43,BP_DIST:1697,PERCENTILE:0.441176470588235,DIST_FROM_LAST_EXON:1542,50_BP_RULE:PASS",
+   "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+  },
+  {
+   "location": "21:31588082",
+   "allele": "T",
+   "feature": "ENST00000286809",
+   "feature_type": "Transcript",
+   "record_indices": [
+    13
+   ],
+   "consequence_set": "stop_gained",
+   "field": "LoF",
+   "vep": "-",
+   "vep_rs": "HC",
+   "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+  },
+  {
+   "location": "21:31588082",
+   "allele": "T",
+   "feature": "ENST00000286809",
+   "feature_type": "Transcript",
+   "record_indices": [
+    13
+   ],
+   "consequence_set": "stop_gained",
+   "field": "LoF_info",
+   "vep": "-",
+   "vep_rs": "GERP_DIST:1421.56,BP_DIST:1497,PERCENTILE:0.238938053097345,DIST_FROM_LAST_EXON:711,50_BP_RULE:PASS",
+   "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+  },
+  {
+   "location": "21:47412707",
+   "allele": "T",
+   "feature": "ENST00000361866",
+   "feature_type": "Transcript",
+   "record_indices": [
+    33
+   ],
+   "consequence_set": "stop_gained",
+   "field": "LoF",
+   "vep": "-",
+   "vep_rs": "HC",
+   "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+  },
+  {
+   "location": "21:47412707",
+   "allele": "T",
+   "feature": "ENST00000361866",
+   "feature_type": "Transcript",
+   "record_indices": [
+    33
+   ],
+   "consequence_set": "stop_gained",
+   "field": "LoF_info",
+   "vep": "-",
+   "vep_rs": "GERP_DIST:1780.24,BP_DIST:1753,PERCENTILE:0.426951733074182,DIST_FROM_LAST_EXON:1131,50_BP_RULE:PASS",
+   "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+  },
+  {
+   "location": "21:47546147",
+   "allele": "A",
+   "feature": "ENST00000300527",
+   "feature_type": "Transcript",
+   "record_indices": [
+    34
+   ],
+   "consequence_set": "stop_gained",
+   "field": "LoF",
+   "vep": "-",
+   "vep_rs": "HC",
+   "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+  },
+  {
+   "location": "21:47546147",
+   "allele": "A",
+   "feature": "ENST00000300527",
+   "feature_type": "Transcript",
+   "record_indices": [
+    34
+   ],
+   "consequence_set": "stop_gained",
+   "field": "LoF_info",
+   "vep": "-",
+   "vep_rs": "GERP_DIST:659.23,BP_DIST:640,PERCENTILE:0.790196078431373,DIST_FROM_LAST_EXON:42,50_BP_RULE:FAIL",
+   "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+  },
+  {
+   "location": "21:47546147",
+   "allele": "A",
+   "feature": "ENST00000310645",
+   "feature_type": "Transcript",
+   "record_indices": [
+    34
+   ],
+   "consequence_set": "stop_gained",
+   "field": "LoF",
+   "vep": "-",
+   "vep_rs": "LC",
+   "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+  },
+  {
+   "location": "21:47546147",
+   "allele": "A",
+   "feature": "ENST00000310645",
+   "feature_type": "Transcript",
+   "record_indices": [
+    34
+   ],
+   "consequence_set": "stop_gained",
+   "field": "LoF_filter",
+   "vep": "-",
+   "vep_rs": "END_TRUNC",
+   "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+  },
+  {
+   "location": "21:47546147",
+   "allele": "A",
+   "feature": "ENST00000310645",
+   "feature_type": "Transcript",
+   "record_indices": [
+    34
+   ],
+   "consequence_set": "stop_gained",
+   "field": "LoF_info",
+   "vep": "-",
+   "vep_rs": "GERP_DIST:80.21,BP_DIST:67,PERCENTILE:0.972255729794934,DIST_FROM_LAST_EXON:42,50_BP_RULE:FAIL",
+   "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+  },
+  {
+   "location": "21:47546147",
+   "allele": "A",
+   "feature": "ENST00000357838",
+   "feature_type": "Transcript",
+   "record_indices": [
+    34
+   ],
+   "consequence_set": "stop_gained",
+   "field": "LoF",
+   "vep": "-",
+   "vep_rs": "HC",
+   "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+  },
+  {
+   "location": "21:47546147",
+   "allele": "A",
+   "feature": "ENST00000357838",
+   "feature_type": "Transcript",
+   "record_indices": [
+    34
+   ],
+   "consequence_set": "stop_gained",
+   "field": "LoF_info",
+   "vep": "-",
+   "vep_rs": "GERP_DIST:336.93,BP_DIST:337,PERCENTILE:0.877040261153428,DIST_FROM_LAST_EXON:42,50_BP_RULE:FAIL",
+   "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+  },
+  {
+   "location": "21:47546147",
+   "allele": "A",
+   "feature": "ENST00000397763",
+   "feature_type": "Transcript",
+   "record_indices": [
+    34
+   ],
+   "consequence_set": "stop_gained",
+   "field": "LoF",
+   "vep": "-",
+   "vep_rs": "HC",
+   "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+  },
+  {
+   "location": "21:47546147",
+   "allele": "A",
+   "feature": "ENST00000397763",
+   "feature_type": "Transcript",
+   "record_indices": [
+    34
+   ],
+   "consequence_set": "stop_gained",
+   "field": "LoF_info",
+   "vep": "-",
+   "vep_rs": "GERP_DIST:336.93,BP_DIST:337,PERCENTILE:0.877040261153428,DIST_FROM_LAST_EXON:42,50_BP_RULE:FAIL",
+   "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+  },
+  {
+   "location": "21:47546147",
+   "allele": "A",
+   "feature": "ENST00000409416",
+   "feature_type": "Transcript",
+   "record_indices": [
+    34
+   ],
+   "consequence_set": "stop_gained",
+   "field": "LoF",
+   "vep": "-",
+   "vep_rs": "LC",
+   "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+  },
+  {
+   "location": "21:47546147",
+   "allele": "A",
+   "feature": "ENST00000409416",
+   "feature_type": "Transcript",
+   "record_indices": [
+    34
+   ],
+   "consequence_set": "stop_gained",
+   "field": "LoF_filter",
+   "vep": "-",
+   "vep_rs": "END_TRUNC",
+   "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+  },
+  {
+   "location": "21:47546147",
+   "allele": "A",
+   "feature": "ENST00000409416",
+   "feature_type": "Transcript",
+   "record_indices": [
+    34
+   ],
+   "consequence_set": "stop_gained",
+   "field": "LoF_info",
+   "vep": "-",
+   "vep_rs": "GERP_DIST:80.21,BP_DIST:67,PERCENTILE:0.972255729794934,DIST_FROM_LAST_EXON:42,50_BP_RULE:FAIL",
+   "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+  },
+  {
+   "location": "21:47858076-47858077",
+   "allele": "A",
+   "feature": "ENST00000359568",
+   "feature_type": "Transcript",
+   "record_indices": [
+    35
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant",
+   "field": "LoF",
+   "vep": "-",
+   "vep_rs": "HC",
+   "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+  },
+  {
+   "location": "21:47858076-47858077",
+   "allele": "A",
+   "feature": "ENST00000359568",
+   "feature_type": "Transcript",
+   "record_indices": [
+    35
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant",
+   "field": "LoF_flags",
+   "vep": "-",
+   "vep_rs": "NO_EXON_NUMBER",
+   "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+  },
+  {
+   "location": "21:47858076-47858077",
+   "allele": "A",
+   "feature": "ENST00000359568",
+   "feature_type": "Transcript",
+   "record_indices": [
+    35
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant",
+   "field": "LoF_info",
+   "vep": "-",
+   "vep_rs": "GERP_DIST:881.78,BP_DIST:905,PERCENTILE:0.908900209769254",
+   "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+  },
+  {
+   "location": "21:47858076-47858077",
+   "allele": "A",
+   "feature": "ENST00000418394",
+   "feature_type": "Transcript",
+   "record_indices": [
+    35
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant",
+   "field": "LoF",
+   "vep": "-",
+   "vep_rs": "HC",
+   "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+  },
+  {
+   "location": "21:47858076-47858077",
+   "allele": "A",
+   "feature": "ENST00000418394",
+   "feature_type": "Transcript",
+   "record_indices": [
+    35
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant",
+   "field": "LoF_flags",
+   "vep": "-",
+   "vep_rs": "NO_EXON_NUMBER",
+   "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+  },
+  {
+   "location": "21:47858076-47858077",
+   "allele": "A",
+   "feature": "ENST00000418394",
+   "feature_type": "Transcript",
+   "record_indices": [
+    35
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant",
+   "field": "LoF_info",
+   "vep": "-",
+   "vep_rs": "GERP_DIST:666.77,BP_DIST:640,PERCENTILE:0.0612244897959184",
+   "expected_divergence": "loftee_gerp_walk_without_conservation_database"
+  }
+ ],
+ "field_divergence_summary": {
+  "loftee_gerp_walk_without_conservation_database": 26
+ }
+}

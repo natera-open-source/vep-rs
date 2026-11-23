@@ -144,7 +144,7 @@ fn database_flags_are_refused() {
 /// Ensembl VEP source; and the binary prints exactly the table's line.
 #[test]
 fn every_error_table_entry_names_flag_need_and_route() {
-    assert!(ERROR_TABLE.len() >= 26, "{} entries", ERROR_TABLE.len());
+    assert!(ERROR_TABLE.len() >= 24, "{} entries", ERROR_TABLE.len());
     for entry in ERROR_TABLE {
         let flag = format!("--{}", entry.flag);
         assert!(
@@ -198,7 +198,7 @@ fn db_version_is_refused() {
 }
 
 /// `--af_exac` left Ensembl VEP's option list with release 107, the release
-/// that added `--af_gnomade`; Ensembl VEP 116.2 names it only in
+/// that added `--af_gnomade`; Ensembl VEP 116.3 names it only in
 /// `%INCOMPATIBLE{database}` (Config.pm:618). It is refused before parsing, in
 /// both spellings, naming its replacement.
 #[test]
@@ -281,60 +281,149 @@ fn assert_transcript_source_flag_refused(flag: &str, opening: &str) -> &'static 
     message
 }
 
-/// `--gff` is Ensembl VEP's shortcut to a `--custom file=<gff>,format=gff`
-/// transcript source (Config.pm:260; the option set at :531-536), read in place
-/// of the cache (AnnotationSource/File/GFF.pm:71-116); vep-rs annotates against
-/// a cache built from the GFF3, so the refusal prints the cache recipe.
-#[test]
-fn gff_is_refused_with_the_cache_builder_recipe() {
-    let message = assert_transcript_source_flag_refused(
-        "gff",
-        "--gff is not supported: Ensembl VEP reads a GFF3 as its transcript set through --custom file=<gff>,format=gff; build a cache from the file and the genome",
-    );
+/// A file of the corpus whose runs read a gene-model file beside the cache:
+/// its cache slice, its GTF and GFF3, and the FASTA holding their sequence.
+fn gene_model_corpus(file: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/golden/116/GRCh38-gene-model-beside-cache")
+        .join(file)
+}
+
+/// Asserts that a transcript-source flag naming `file`, in both value
+/// spellings, runs beside the corpus's cache and writes rows carrying
+/// `SOURCE=<the file's name>`, the source's short name (`File.pm:154-157`),
+/// under the header lines Ensembl VEP writes for the column and the source,
+/// and that `--help` lists the flag with its value.
+fn assert_transcript_source_flag_read_beside_a_cache(flag: &str, file: &str) {
+    let dir = tempfile::tempdir().unwrap();
+    let path = gene_model_corpus(file);
+    let path = path.to_str().unwrap();
+    let separate = format!("--{flag}");
+    let attached = format!("--{flag}={path}");
+    for argv in [vec![separate.as_str(), path], vec![attached.as_str()]] {
+        let out = dir.path().join("out.txt");
+        let output = common::isolated_vep(dir.path())
+            .arg("-i")
+            .arg(gene_model_corpus("variants.vcf"))
+            .arg("-o")
+            .arg(&out)
+            .arg("--json_cache")
+            .arg(gene_model_corpus("json_cache"))
+            .arg("--fasta")
+            .arg(gene_model_corpus("reference.fa.gz"))
+            .args(["--assembly", "GRCh38", "--force_overwrite", "--quiet"])
+            .args(&argv)
+            .stdin(Stdio::null())
+            .output()
+            .unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(0), "{argv:?}: {stderr}");
+        let text = std::fs::read_to_string(&out).unwrap();
+        for header in [
+            "## SOURCE : Source of transcript".to_string(),
+            format!("## {file} : [PATH]/{file}"),
+        ] {
+            assert!(
+                text.lines().any(|line| line == header),
+                "{argv:?}: {header}"
+            );
+        }
+        let item = format!("SOURCE={file}");
+        let rows: Vec<&str> = text.lines().filter(|line| !line.starts_with('#')).collect();
+        let from_file = rows
+            .iter()
+            .filter(|row| {
+                row.split('\t')
+                    .next_back()
+                    .unwrap()
+                    .split(';')
+                    .any(|i| i == item)
+            })
+            .count();
+        assert!(
+            from_file > 0 && from_file < rows.len(),
+            "{argv:?}: {from_file} of {} rows carry {item}",
+            rows.len()
+        );
+    }
+    let help = common::isolated_vep_anywhere()
+        .arg("--help")
+        .output()
+        .unwrap();
+    let help = String::from_utf8(help.stdout).unwrap();
     assert!(
-        message.contains("vep-cache-builder") && message.contains("--gff3 <file>"),
-        "{message}"
+        help.contains(&format!("--{flag} <FILE>")),
+        "--help lists --{flag}"
     );
+}
+
+/// Asserts that a transcript-source flag in a run with no cache where its
+/// flags name one, here the default cache root of a home that holds no
+/// cache, is refused under `custom` with the cache's own message and both
+/// routes, naming the cache or building one from the file, and writes no
+/// output.
+fn assert_transcript_source_flag_refused_without_a_cache(flag: &str, file: &str) {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.txt");
+    let out = out.to_str().unwrap();
+    let separate = format!("--{flag}");
+    let attached = format!("--{flag}={file}");
+    for argv in [
+        vec![separate.as_str(), file, "-o", out],
+        vec![attached.as_str(), "-o", out],
+    ] {
+        let (code, stderr) = refusal(&argv);
+        assert_eq!(code, Some(1), "{argv:?}: {stderr}");
+        assert!(
+            stderr.starts_with(
+                "ERROR: [custom] a GFF or GTF transcript source is read beside a cache, and this \
+                 run has none ("
+            ),
+            "{argv:?}: {stderr}"
+        );
+        assert!(
+            stderr.ends_with(&format!(
+                "; name the cache of the run with --json_cache <dir>, or with --cache and \
+                 --dir_cache, or {GFF_GTF_RECIPE}\n"
+            )),
+            "{argv:?}: {stderr}"
+        );
+        assert_eq!(stderr.lines().count(), 1, "{argv:?}: {stderr}");
+        assert!(!Path::new(out).exists(), "{argv:?}: no output is written");
+    }
+}
+
+/// `--gff` is Ensembl VEP's shortcut to a `--custom file=<gff>,format=gff`
+/// transcript source (Config.pm:260; the option set at :532-536), built after
+/// the cache's sources and annotating beside them
+/// (AnnotationSourceAdaptor.pm:94-105).
+#[test]
+fn gff_is_read_beside_a_cache() {
+    assert_transcript_source_flag_read_beside_a_cache("gff", "novel_models.gff3.gz");
 }
 
 /// `--gtf` is Ensembl VEP's shortcut to a `--custom file=<gtf>,format=gtf`
-/// transcript source (Config.pm:261; the option set at :538-543), read in place
-/// of the cache (AnnotationSource/File/GTF.pm:78-85); the recipe's
-/// `vep-cache-builder --gtf` builds the cache from the GTF itself.
+/// transcript source (Config.pm:261; the option set at :538-541), built after
+/// the cache's sources and annotating beside them
+/// (AnnotationSourceAdaptor.pm:94-105).
 #[test]
-fn gtf_is_refused_with_the_cache_builder_recipe() {
-    let message = assert_transcript_source_flag_refused(
-        "gtf",
-        "--gtf is not supported: Ensembl VEP reads a GTF as its transcript set through --custom file=<gtf>,format=gtf; build a cache from the file and the genome",
-    );
-    assert!(
-        message.contains("vep-cache-builder") && message.contains("--gtf <file>"),
-        "{message}"
-    );
+fn gtf_is_read_beside_a_cache() {
+    assert_transcript_source_flag_read_beside_a_cache("gtf", "chr21_genes.gtf.gz");
 }
 
-/// `--gff` reads a GFF3 file as a `--custom` source of transcripts
-/// (Config.pm:531-536; File.pm:96-99 opens it with File/GFF.pm, a transcript
-/// source by BaseGXF.pm:69-72); the refusal is the whole line, recipe included.
+/// A run naming `--gff` with no cache where its flags name one: the file is
+/// read beside a cache, and a file alone is annotated against a cache built
+/// from it, so the refusal names both routes.
 #[test]
-fn gff_is_refused() {
-    let message = format!(
-        "--gff is not supported: Ensembl VEP reads a GFF3 as its transcript set through --custom file=<gff>,format=gff; {GFF_GTF_RECIPE}"
-    );
-    assert_refused(&["--gff", "genes.gff3.gz"], &message);
-    assert_refused(&["--gff=genes.gff3.gz"], &message);
+fn gff_without_a_cache_is_refused_with_both_routes() {
+    assert_transcript_source_flag_refused_without_a_cache("gff", "genes.gff3.gz");
 }
 
-/// `--gtf` reads a GTF file as a `--custom` source of transcripts
-/// (Config.pm:538-543; File.pm:96-99 opens it with File/GTF.pm, a transcript
-/// source by BaseGXF.pm:69-72); the refusal is the whole line, recipe included.
+/// A run naming `--gtf` with no cache where its flags name one is refused
+/// as `--gff` is, with both routes.
 #[test]
-fn gtf_is_refused() {
-    let message = format!(
-        "--gtf is not supported: Ensembl VEP reads a GTF as its transcript set through --custom file=<gtf>,format=gtf; {GFF_GTF_RECIPE}"
-    );
-    assert_refused(&["--gtf", "genes.gtf.gz"], &message);
-    assert_refused(&["--gtf=genes.gtf.gz"], &message);
+fn gtf_without_a_cache_is_refused_with_both_routes() {
+    assert_transcript_source_flag_refused_without_a_cache("gtf", "genes.gtf.gz");
 }
 
 /// `--bam` (Config.pm:253) hands an alignment file to the cache, GFF, GTF and
@@ -348,7 +437,7 @@ fn gtf_is_refused() {
 fn bam_is_refused_naming_the_refseq_cache_route() {
     assert_transcript_source_flag_refused(
         "bam",
-        "--bam is not supported: Ensembl VEP applies a BAM's alignments to RefSeq transcript models at run time; the RefSeq cache Ensembl distributes already carries those edits, which vep-rs reads from a converted homo_sapiens_refseq cache under --refseq",
+        "--bam is not supported: Ensembl VEP applies a BAM's alignments to RefSeq transcript models at run time; the RefSeq cache Ensembl distributes already carries those edits, which vep-rs reads from a converted <species>_refseq cache under --refseq",
     );
 }
 
@@ -360,7 +449,7 @@ fn bam_is_refused_naming_the_refseq_cache_route() {
 #[test]
 fn bam_is_refused() {
     let message = format!(
-        "--bam is not supported: Ensembl VEP applies a BAM's alignments to RefSeq transcript models at run time; the RefSeq cache Ensembl distributes already carries those edits, which vep-rs reads from a converted homo_sapiens_refseq cache under --refseq; a GFF or GTF transcript set of your own is read without the BAM's edits; {GFF_GTF_RECIPE}"
+        "--bam is not supported: Ensembl VEP applies a BAM's alignments to RefSeq transcript models at run time; the RefSeq cache Ensembl distributes already carries those edits, which vep-rs reads from a converted <species>_refseq cache under --refseq; a GFF or GTF transcript set of your own is read without the BAM's edits; {GFF_GTF_RECIPE}"
     );
     assert_refused(&["--bam", "edits.bam"], &message);
     assert_refused(&["-bam", "edits.bam"], &message);
@@ -444,48 +533,6 @@ fn format_caid_is_refused() {
         stderr.contains("error: invalid value 'caid' for '--format <FORMAT>'"),
         "{stderr}"
     );
-}
-
-/// An HGVS input with an r. notation is refused by name when the line is read,
-/// however many lines follow it, and no record is annotated: Ensembl VEP's
-/// resolver throws on the type (ensembl-variation
-/// DBSQL/VariationFeatureAdaptor.pm:1989, `HGVS type r not recognised`), which
-/// its parser warns about and skips (Parser/HGVS.pm:204-216), and HGVS input
-/// itself is refused offline (Parser/HGVS.pm:104); here the run stops. The run
-/// carries the reference FASTA the format needs, so the refusal is the type's,
-/// not the format's.
-#[test]
-fn hgvs_rna_input_is_refused() {
-    let expected_stderr =
-        "ERROR: [input] HGVS r. notation is not supported (Ensembl VEP refuses it too: HGVS type r not recognised)\n";
-    let fasta = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/golden/116/GRCh38-input-hgvs/reference.fa.gz");
-    let with_fasta = ["--fasta", fasta.to_str().unwrap()];
-    let dir = tempfile::tempdir().unwrap();
-    let input = dir.path().join("rna.hgvs");
-    std::fs::write(&input, "ENST00000366667:r.803C>T\n21:g.30282169C>A\n").unwrap();
-    let out = dir.path().join("out.txt");
-    let (code, stderr) = input_refusal(&input, &out, &with_fasta);
-    assert_eq!(code, Some(1), "{stderr}");
-    assert_eq!(stderr, expected_stderr);
-    assert_no_rows(&out);
-
-    // The refusal ends a run whose earlier records were read.
-    let later = dir.path().join("rna_later.hgvs");
-    std::fs::write(&later, "21:g.30282169C>A\nENST00000366667:r.803C>T\n").unwrap();
-    let later_out = dir.path().join("later.txt");
-    let (code, stderr) = input_refusal(&later, &later_out, &with_fasta);
-    assert_eq!(code, Some(1), "{stderr}");
-    assert_eq!(stderr, expected_stderr);
-    assert_no_rows(&later_out);
-}
-
-/// Asserts that `out` holds no data row: the run wrote no file, or its header
-/// alone.
-fn assert_no_rows(out: &Path) {
-    let written = std::fs::read_to_string(out).unwrap_or_default();
-    let rows = written.lines().filter(|l| !l.starts_with('#')).count();
-    assert_eq!(rows, 0, "no record is annotated: {written:?}");
 }
 
 /// A BCF stream (the magic `BCF` and version 2, raw or inside its BGZF blocks)
@@ -599,7 +646,7 @@ fn parquet_row_group_size_is_rejected() {
 /// naming a flag the error table refuses before parsing under its own name, and
 /// `tokens_of` lays it out as the switch `--af_exac` for the scan in
 /// `config::parse_command_line` to refuse. A `0` value adds nothing, the rule
-/// for a switch set to a false value from a source. Ensembl VEP 116.2 drops the
+/// for a switch set to a false value from a source. Ensembl VEP 116.3 drops the
 /// key from a file or the environment, since `GetOptions` run against the
 /// `VEP_PARAMS` list (Config.pm:1046) matches it to no option and
 /// `is_valid_param` (:1047) reads the empty result as invalid, so

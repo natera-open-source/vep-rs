@@ -1,7 +1,7 @@
 entry = "plugin_unknown_mode_word_refused"
 page = "docs/divergences/plugin-unknown-mode-word-refused.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the Conservation plugin's header, which names the MAX parameter and sets no rule for a word after it; not seen in the measured datasets; classed by its most reachable shape, a word after MAX: a LOEUF match_by of another word breaks \"matching by either transcript or gene\" (the LOEUF plugin's header)"
 notes = "LOEUF under `match_by=exon`, a word outside its set: Ensembl VEP stores the word, loads the plugin and prints its header line, then returns nothing on every row; vep-rs refuses the plugin with `LOEUF: match_by must be gene or transcript, not 'exon'` and prints no header line. The same shape under pLI's mode word (`pLI,<file>,exon`) and under a word after Conservation's `MAX` (`Conservation,<file>,MAX,foo`) is on the page."
@@ -27,3 +27,16 @@ pattern = "^## LOEUF : "
 [expected]
 ensembl_vep = ["## LOEUF : Loss-of-function observed/expected upper bound fraction"]
 vep_rs = []
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/conservation.rs::ConservationPlugin::init",
+    "crates/vep-builtins/src/plugins/loeuf.rs::LoeufPlugin::init",
+    "crates/vep-builtins/src/plugins/pli.rs::PliPlugin::init",
+]
+tests = [
+    "crates/vep-builtins/src/plugins/loeuf.rs::tests::match_by_outside_gene_or_transcript_is_an_init_error",
+    "crates/vep-cli/tests/plugin_unknown_mode_word.rs::conservation_word_after_max_is_refused",
+    "crates/vep-cli/tests/plugin_unknown_mode_word.rs::loeuf_match_by_outside_gene_and_transcript_is_refused",
+    "crates/vep-cli/tests/plugin_unknown_mode_word.rs::pli_mode_outside_gene_and_transcript_is_refused",
+]

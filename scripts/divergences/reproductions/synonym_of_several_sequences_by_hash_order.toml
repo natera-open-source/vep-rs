@@ -1,0 +1,54 @@
+entry = "synonym_of_several_sequences_by_hash_order"
+page = "docs/divergences/synonym-of-several-sequences-by-hash-order.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "observed"
+input_class_basis = "seen in the chr_synonyms.txt of four ready-made Ensembl Metazoa caches of cache version 63 (Anopheles coluzzii AcolN3, Anopheles funestus idAnoFuneDA-416_04, Anopheles gambiae GCA943734735v2, Drosophila miranda D.miranda_PacBio2.1): 351 of 518, 581 of 1,322, 166 of 576 and 212 of 527 names given to two or more sequences the cache holds"
+notes = "The name shared_name is invented. The synonyms file gives it to chromosomes 21 and X, both of which the cache holds, and the record is the corpus's substitution rs575418327 of chromosome 21 written under it. BaseVEP.pm:711-716 takes the first key of the name's synonyms that the cache holds, in the order `keys` returns them: X under PERL_HASH_SEED=0 PERL_PERTURB_KEYS=0, the seed of this record, whose 2 rows are those of chromosome X at the position, and 21 under PERL_HASH_SEED=11 PERL_PERTURB_KEYS=0, which gives the 13 rows the corpus's expected output holds for the same position named chr21. vep-rs reads the name as neither chromosome: it writes the output with no data row, exits 0 and skips the record with a warning that names both."
+
+prepare = [
+  "printf '21\\tshared_name\\nX\\tshared_name\\n' > \"$STAGE/synonyms.txt\"",
+]
+
+[input]
+format = "vcf"
+text = """
+shared_name	28885369	shared_name_record	C	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-synonyms/json_cache"
+chromosomes = ["21", "X"]
+
+[run]
+flags = ["--synonyms", "{stage}/synonyms.txt"]
+perl_hash_seed = "0"
+
+[compare]
+kind = "rows"
+where = { record = "shared_name_record" }
+columns = ["Location", "Feature", "Consequence"]
+
+[expected]
+ensembl_vep = [
+    "shared_name:28885369 | ENST00000378993 | intron_variant",
+    "shared_name:28885369 | ENST00001135211 | intron_variant",
+]
+vep_rs = []
+
+[implementation]
+code = [
+    "crates/vep-cli/src/pipeline.rs::cache_chr_name",
+    "crates/vep-core/src/synonyms.rs::ChromosomeSynonyms::held_synonyms",
+    "crates/vep-core/src/synonyms.rs::ChromosomeSynonyms::sequence_chr_name",
+]
+tests = [
+    "crates/vep-cli/tests/synonym_of_several_sequences.rs::a_name_the_synonyms_give_to_two_sequences_is_read_as_neither",
+    "crates/vep-core/src/synonyms.rs::tests::a_name_given_to_several_held_sequences_is_read_as_none_of_them",
+    "crates/vep-core/src/synonyms.rs::tests::a_name_given_to_several_held_sequences_lists_each_in_file_order",
+]
+rules = [
+    "tools/vep-outputs-compare/src/rules/shared_synonym.rs::apply_shared_synonym_rule",
+]

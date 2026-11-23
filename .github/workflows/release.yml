@@ -140,6 +140,12 @@ jobs:
           tar --zstd -xf "$RUNNER_TEMP"/pkg-*.tar.zst -C "$RUNNER_TEMP/openssl" lib include
           echo "$(echo "$TARGET" | tr 'a-z-' 'A-Z_')_OPENSSL_DIR=$RUNNER_TEMP/openssl" >> "$GITHUB_ENV"
 
+      # The allocator's C source writes its compile date and time into the
+      # binary. With the build clock at the commit's time, two builds of one
+      # commit by this recipe carry the same date and time.
+      - name: Set the build clock to the commit's time
+        run: echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
+
       # Each Linux build targets the CPU floor its archive name states; each
       # macOS build takes the target-cpu .cargo/config.toml sets. RUSTFLAGS
       # replaces that file's target rustflags rather than adding to them.
@@ -341,7 +347,7 @@ jobs:
       # A draft: visible to write-holders only until a maintainer publishes it.
       - name: Create the draft release
         if: github.event_name == 'push'
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           draft: true
           name: vep-rs ${{ steps.meta.outputs.version }}

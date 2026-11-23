@@ -1,9 +1,9 @@
 entry = "hgvs_shifted_insertion_clamped_end"
 page = "docs/divergences/hgvs-shifted-insertion-clamped-end.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 63,698 per million · 1 flag set, 93 corpora"
+input_class_basis = "2 · 63,698 per million · 1 flag set, 132 corpora"
 notes = "An A inserted after the base before the first base of ENST00000731401, a forward-strand transcript opening with four As and then a C; the shift carries it four bases into exon 1."
 
 [input]
@@ -29,3 +29,13 @@ columns = ["Consequence", "cDNA_position", "SHIFT_LENGTH", "HGVSc", "HGVS_OFFSET
 [expected]
 ensembl_vep = ["non_coding_transcript_exon_variant | 4-5 | 4 | ENST00000731401.1:n.5C>A | 4"]
 vep_rs = ["non_coding_transcript_exon_variant | 4-5 | 4 | ENST00000731401.1:n.4dup | 4"]
+
+[implementation]
+code = ["crates/vep-effects/src/hgvs.rs::hgvsc_notation"]
+tests = [
+    "crates/vep-effects/src/consequences.rs::tests::an_insertion_shifted_into_exon_1_carries_hgvsc_and_the_offset",
+    "crates/vep-effects/src/hgvs.rs::tests::an_insertion_carried_along_a_longer_run_duplicates_the_runs_last_base",
+    "crates/vep-effects/src/hgvs.rs::tests::an_insertion_the_shift_carries_into_a_reverse_strand_exon_1_is_described_as_forward",
+    "crates/vep-effects/src/hgvs.rs::tests::an_insertion_the_shift_carries_into_exon_1_is_the_duplication_the_sequence_shows",
+]
+rules = ["tools/vep-formats-compare/src/rules/term_pairs.rs::clamped_insertion_position"]

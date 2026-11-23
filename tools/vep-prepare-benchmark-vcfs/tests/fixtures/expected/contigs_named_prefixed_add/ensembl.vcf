@@ -1,0 +1,8 @@
+##fileformat=VCFv4.2
+##source=made-up records
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+chr1	1000	.	A	T	.	PASS	.
+2	1010	.	G	T	.	PASS	.
+chr22	1020	.	A	C	.	PASS	.
+chrX	1030	.	G	A	.	PASS	.
+chr1	1110	.	G	A	.	PASS	.

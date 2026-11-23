@@ -1,0 +1,16 @@
+##fileformat=VCFv4.2
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+21	47612516	frameshift_intron_symbolic_breakend_mate_in_transcript	G	<BND>	.	.	SVTYPE=BND;CHR2=21;END2=47612600
+21	47612516	frameshift_intron_copy_number_zero	G	<CN0>	.	.	SVTYPE=CNV;END=47612517
+21	47612516	frameshift_intron_copy_number_two	G	<CN2>	.	.	SVTYPE=CNV;END=47612517
+21	47612516	frameshift_intron_tandem_repeat	G	<CNV:TR>	.	.	SVTYPE=CNV;END=47612517
+21	47612516	frameshift_intron_copy_number_variation	G	<CNV>	.	.	SVTYPE=CNV;END=47612517
+21	47612516	frameshift_intron_mobile_element_del	G	<DEL:ME>	.	.	SVTYPE=DEL;END=47612517
+21	47612516	frameshift_intron_del	G	<DEL>	.	.	SVTYPE=DEL;END=47612517
+21	47612516	frameshift_intron_tandem_dup	G	<DUP:TANDEM>	.	.	SVTYPE=DUP;END=47612517
+21	47612516	frameshift_intron_dup	G	<DUP>	.	.	SVTYPE=DUP;END=47612517
+21	47612516	frameshift_intron_mobile_element_ins	G	<INS:ME>	.	.	SVTYPE=INS;END=47612517
+21	47612516	frameshift_intron_ins	G	<INS>	.	.	SVTYPE=INS;END=47612517
+21	47612516	frameshift_intron_inv	G	<INV>	.	.	SVTYPE=INV;END=47612517
+21	47612516	frameshift_intron_single_breakend	G	G.	.	.	SVTYPE=BND
+21	47612516	frameshift_intron_breakend_mate_in_transcript	G	G[21:47612600[	.	.	SVTYPE=BND

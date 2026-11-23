@@ -1,0 +1,9 @@
+Processing 4 chromosomes
+  chr1: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chr2: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chrMT: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chrscaffold_a: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+Wrote regions.out/sequence_regions.tsv (3 sequences)
+Wrote regions.out/info.json
+
+Done. Converted: 4 / 4 files, 8 total transcripts, 0 variation files copied, 0 regulatory files

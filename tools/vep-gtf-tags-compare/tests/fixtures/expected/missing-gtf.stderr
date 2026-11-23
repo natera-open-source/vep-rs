@@ -1,0 +1,1 @@
+ERROR: [compare_gtf_tags_to_cache] --gtf must be a file and --cache a directory

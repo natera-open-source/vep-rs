@@ -1,0 +1,102 @@
+{
+ "plugin_fixtures": {
+  "generator": "scripts/fixtures/cut_plugin_regions.py",
+  "flank": 5000,
+  "record_flank": 2000,
+  "exon_flank": 50,
+  "gerp_regions": "exons",
+  "tools": {
+   "bgzip": "bgzip (htslib) 1.21"
+  },
+  "files": {
+   "reference.fa.fai": "887d65f20a940b57ab0ccbb128b5fe08e5fd4a96e95d5b13becbf214402ab478",
+   "reference.fa.gz": "fcab8fd917099232c016f990ed449258d82829d47814dff6d262c787221230cd",
+   "reference.fa.gz.fai": "887d65f20a940b57ab0ccbb128b5fe08e5fd4a96e95d5b13becbf214402ab478",
+   "reference.fa.gz.gzi": "48b5bea4bcb53b5b1e7a91ca7147b81c6012b2c9c16d1dfbc584dc8058b08ced"
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --refseq --hgvs [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens_refseq/116_GRCh38",
+ "fasta": "reference.fa.gz beside this file: GRCh38 chromosome X at its full length from Homo_sapiens.GRCh38.dna.primary_assembly.fa, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and the record with 2,000) masked to N, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta and vep-rs the compressed one; the region run reads the record's reference allele from it",
+ "input": "variants.vcf: one record, ClinVar variation 2530348 on GRCh38, the deletion of the 693 bases X:111410073-111410765 written as a VCF line (POS 111410072, a reference allele of 694 bases read from Homo_sapiens.GRCh38.dna.primary_assembly.fa, an alternate allele of one base); variants.region.txt, the input of the flag set region, writes the same deletion as one region line, which holds no base. On the edited RefSeq model NM_000555.3 the span is the last 12 bases of exon 1, the 333 bases of intron 1 and the first 348 bases of exon 2; docs/divergences/refseq-edited-model-intron-span-coding-reference.md works the record through",
+ "sha256": {
+  "default.txt": "52039bd671481644a85c78e7400c084e2115f0192ac667dd5c3d9751c212b601",
+  "tab.txt": "6e458dda9d39174a07d8ab941bfb45a08d3791e818dc2f536ab654239934c5c5",
+  "vcf.vcf": "5c6cf2178fe6f6fcd0f68795fa46cec45c4fad54f71d1459957650d38dfcd3d6",
+  "json.jsonl": "d7bcdfb54bcac56b6d202cb0458756e70fdc69bb53b91b084f98840e4043b865"
+ },
+ "variants_vcf_sha256": "45a7601965baf4ad4b27663b81e69ed8fcdf37c3c676067ec489e6b8de250767",
+ "flag_sets": {
+  "region": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.region.txt -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --refseq --hgvs --format region [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens_refseq/116_GRCh38",
+   "fasta": "reference.fa.gz",
+   "input": "variants.region.txt",
+   "sha256": {
+    "default.txt": "d5b6a6b939f42ca9e8bef71772efad1c2521d69e309e7ab246b9d4bd37d923e4",
+    "tab.txt": "8507dba285a22476735236a24908bf8c802fce6a207e36c984a8a5a0fe3b4a46",
+    "vcf.vcf": "91211abfcd4978b4c060eee0eddd2ee72c12769791a8b242e4e9d0bc7ddf4fef",
+    "json.jsonl": "123fecec88a7004ccab2db9520e7778da12cc986b5707f301af0738723edbe65"
+   },
+   "flags": [
+    "--refseq",
+    "--hgvs",
+    "--format",
+    "region"
+   ],
+   "expected_dir": "expected_region"
+  }
+ },
+ "source_cache": {
+  "tarball": "homo_sapiens_refseq_vep_116_GRCh38.tar.gz under pub/release-116/variation/indexed_vep_cache/ of the Ensembl FTP site",
+  "source_type": "refseq",
+  "bam": "GCF_000001405.40_GRCh38.p14_knownrefseq_alns.bam",
+  "refseq_annotation": "GCF_000001405.40-RS_2025_08 - GCF_000001405.40_GRCh38.p14_genomic.gff",
+  "region_file": "X/111000001-112000000.gz, the one region file of the source cache that holds the record's transcripts",
+  "converter": {
+   "tool": "tools/vep-storable-to-json",
+   "repository": "github.com/natera-open-source/vep-rs",
+   "build": "the release build of the tree this corpus is committed with"
+  },
+  "chromosome_x_slice_models": {
+   "bam_edit_status": {
+    "absent": 16,
+    "ok": 1
+   },
+   "with_an_rna_edit": [
+    "NM_000555.3"
+   ]
+  }
+ },
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "X": 17
+  },
+  "shards": 1,
+  "spans_by_chromosome": {
+   "X": 1
+  },
+  "method": "scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --flank 5000 over the conversion of that region file; info.json is the converted cache's own (source_type, bam and the source versions)"
+ },
+ "generator": "Ensembl VEP 116.3 over the one record under --refseq --hgvs; tools/vep-golden-corpus select --release 116 --assembly GRCh38 --dataset clinvar_grch38=<reference>=<candidates> --k 1 --seed 1 --cache <converted cache> --flank 5000 --family-columns BAM_EDIT= --covers refseq --covers hgvs --covers bam-edit-status-rna-edit --matrix tests/parity/matrix.tsv --flag=--refseq --flag=--hgvs --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py (see pruned_cache); scripts/fixtures/cut_plugin_regions.py --reference <Homo_sapiens.GRCh38.dna.primary_assembly.fa> (recorded under plugin_fixtures); tools/vep-golden-corpus flag-set --name region --flag=--refseq --flag=--hgvs --flag=--format --flag=region --input variants.region.txt --covers region-input-format; scripts/concordance/generate_reference_output.sh --corpus <this directory> --no-stats, and again with --flag-set region; tools/vep-golden-corpus classify --field HGVSc --field HGVSp --field HGVS_OFFSET on the manifest's own run (the region set carries no entries of its own and takes the manifest's: the same key on the same record); tools/vep-golden-corpus identifiers, then identifiers --check",
+ "divergences_classified_against": {
+  "engine": "vep-rs",
+  "source": "the tree this corpus is committed with",
+  "binary_md5": "4272063d77da53cca1a33edc4146dc6b",
+  "arch": "aarch64",
+  "flags_passed": [
+   "--refseq",
+   "--hgvs",
+   "--fasta",
+   "reference.fa.gz"
+  ]
+ }
+}

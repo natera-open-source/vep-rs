@@ -1,0 +1,78 @@
+entry = "custom_key_named_ensp_under_protein_version"
+page = "docs/divergences/custom-key-named-ensp-under-protein-version.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "unobserved"
+input_class_basis = "well-formed under the --custom short_name contract, \"any string without commas\" (Ensembl VEP documentation, \"Custom annotations\", short_name), and the --protein_version flag; not seen in the measured datasets"
+notes = "Line 42 of the GRCh38-custom corpus's input, under the corpus's site file as an exact VCF source named ENSP, whose record at the position names the input record's allele, and under --protein_version without --protein. Ensembl VEP pushes the record's name onto a list under the key on each row (OutputFactory.pm:1426-1435, :1301) and, on a row whose transcript's translation has a version, appends a dot and the version to the key (:1569-1574), which turns the list into the text of its memory address: 13 of the 16 rows. The address changes with every run, so the comparison reads it as one masked word. vep-rs writes the source's record name on all 16 rows. Without the flag, with --protein, under --summary or --most_severe and in JSON the engines agree; an overlap source and the default and VCF formats show the same 13 cells."
+
+[input]
+format = "vcf"
+text = """
+21	33549625	rs2145814066	C	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-custom/json_cache"
+
+[run]
+flags = ["--custom", "file={corpus}/custom/sites.vcf.gz,short_name=ENSP,format=vcf,type=exact,fields=AF%CLASS", "--protein_version"]
+format = "tab"
+
+[compare]
+kind = "field"
+field = "ENSP"
+with_key = true
+where = { record = "rs2145814066" }
+mask = ['ARRAY\(0x[0-9a-f]+\)']
+
+[expected]
+ensembl_vep = [
+    "ENST00000290239=multi_7",
+    "ENST00000300278=<masked>.2",
+    "ENST00000356577=<masked>.4",
+    "ENST00000381679=<masked>.4",
+    "ENST00000381692=<masked>.2",
+    "ENST00000436227=<masked>.1",
+    "ENST00000455528=<masked>.1",
+    "ENST00000475072=multi_7",
+    "ENST00000492229=multi_7",
+    "ENST00000695559=<masked>.1",
+    "ENST00000704334=<masked>.1",
+    "ENST00001036731=<masked>.1",
+    "ENST00001036732=<masked>.1",
+    "ENST00001129604=<masked>.1",
+    "ENST00001129605=<masked>.1",
+    "ENST00001131645=<masked>.1",
+]
+vep_rs = [
+    "ENST00000290239=multi_7",
+    "ENST00000300278=multi_7",
+    "ENST00000356577=multi_7",
+    "ENST00000381679=multi_7",
+    "ENST00000381692=multi_7",
+    "ENST00000436227=multi_7",
+    "ENST00000455528=multi_7",
+    "ENST00000475072=multi_7",
+    "ENST00000492229=multi_7",
+    "ENST00000695559=multi_7",
+    "ENST00000704334=multi_7",
+    "ENST00001036731=multi_7",
+    "ENST00001036732=multi_7",
+    "ENST00001129604=multi_7",
+    "ENST00001129605=multi_7",
+    "ENST00001131645=multi_7",
+]
+
+[implementation]
+code = [
+    "crates/vep-io/src/output/fields.rs::write_row_field_value",
+]
+tests = [
+    "crates/vep-cli/tests/custom_key_named_ensp_under_the_protein_version_flag.rs::a_custom_key_named_ensp_keeps_the_sources_values_under_the_protein_version_flag",
+    "crates/vep-cli/tests/custom_key_named_ensp_under_the_protein_version_flag.rs::a_whole_record_source_named_ensp_keeps_its_values_on_every_row",
+    "crates/vep-cli/tests/custom_key_named_ensp_under_the_protein_version_flag.rs::the_parquet_cell_of_a_custom_key_named_ensp_is_the_tab_cell",
+    "crates/vep-cli/tests/custom_key_named_ensp_under_the_protein_version_flag.rs::the_row_pick_keeps_holds_the_sources_value_under_the_key",
+]

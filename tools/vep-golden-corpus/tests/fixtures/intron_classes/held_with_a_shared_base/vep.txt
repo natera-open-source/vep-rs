@@ -1,0 +1,6 @@
+rec_start_held	1:11099	GTAT	ENSG1	ENST00000000001	Transcript	frameshift_variant,splice_region_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1;HGVSc=ENST00000000001.1:c.50_50+1insTAT;HGVSp=ENSP00000000001.1:p.Gly17ArgfsTer5
+rec_start_beside_no_gap	1:21097	GTAT	ENSG1	ENST00000000002	Transcript	frameshift_variant,splice_region_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1;HGVSc=ENST00000000002.1:c.50_50+1insTAT;HGVSp=ENSP00000000001.1:p.Gly17ArgfsTer5
+rec_start_count	1:31099	GTAT	ENSG1	ENST00000000003	Transcript	frameshift_variant,splice_region_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1;HGVSc=ENST00000000003.1:c.50_50+1insT;HGVSp=ENSP00000000001.1:p.Gly17ArgfsTer5
+rec_end_held	1:211299	GATA	ENSG1	ENST00000000021	Transcript	frameshift_variant,splice_region_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=-1;HGVSc=ENST00000000021.1:c.51-1_51insTAT;HGVSp=ENSP00000000001.1:p.Gly17ArgfsTer5
+rec_end_beside_no_gap	1:211298	GATA	ENSG1	ENST00000000021	Transcript	frameshift_variant,splice_region_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=-1;HGVSc=ENST00000000021.1:c.51-1_51insTAT;HGVSp=ENSP00000000001.1:p.Gly17ArgfsTer5
+rec_end_count	1:211099	GATA	ENSG1	ENST00000000021	Transcript	frameshift_variant,splice_region_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=-1;HGVSc=ENST00000000021.1:c.151-1_151insT;HGVSp=ENSP00000000001.1:p.Gly17ArgfsTer5

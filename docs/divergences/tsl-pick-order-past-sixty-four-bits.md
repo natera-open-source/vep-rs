@@ -1,12 +1,12 @@
 # Two support levels past 64 bits in the pick order
 
-**The defect in one sentence.** Ensembl VEP 116.2's pick order compares two transcript support levels with Perl's `<=>`, which holds a level past 64 bits as a double and rounds a 64-bit integer within one step of it to the same double. The two levels tie, and the stable sort keeps whichever row was listed first. vep-rs orders the levels by their exact values and keeps the lower level whatever the row order.
+**The defect in one sentence.** Ensembl VEP 116.3's pick order compares two transcript support levels with Perl's `<=>`, which holds a level past 64 bits as a double and rounds a 64-bit integer within one step of it to the same double. The two levels tie, and the stable sort keeps whichever row was listed first. vep-rs orders the levels by their exact values and keeps the lower level whatever the row order.
 
 **Why this is a defect.** The `tsl` category of the pick order ranks the candidates by their level as a number, the lower the better. A level that fits 64 bits is an integer to Perl and two such levels compare exactly. A level past 64 bits is a double, and a comparison between a double and an integer converts the integer to a double as well. Two integers one apart therefore compare unequal against each other yet equal against the same double, so the comparison is not an order. The row a sort over it leaves first depends on the order the rows entered the sort, not on the levels alone.
 
 **What vep-rs does instead.** vep-rs orders two levels by their exact values: two levels within 64 bits as integers, a level past 64 bits after every integer, and two levels past 64 bits as doubles. The lower level wins whatever the row order, and the order is the same for every pair, so the pick is well defined. Wherever Ensembl VEP's comparison is consistent, every level within 64 bits or every level past them, the two engines pick the same row.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2, `Bio/EnsEMBL/VEP/OutputFactory.pm`; `ensembl-variation` at release/116, `Bio/EnsEMBL/Variation/DBSQL/VariationFeatureAdaptor.pm`):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3, `Bio/EnsEMBL/VEP/OutputFactory.pm`; `ensembl-variation` at release/116, `Bio/EnsEMBL/Variation/DBSQL/VariationFeatureAdaptor.pm`):
 
 - `OutputFactory.pm` line 726: the `tsl` category defaults to the number 100.
 - Lines 751-753, `pick_worst_VariationFeatureOverlapAllele`: the level is `$1` of `m/tsl(\d+)/` over the `TSL` attribute, kept as the matched string when it is true.
@@ -19,11 +19,11 @@
 
 **The class it produces.** `tsl_pick_order_past_sixty_four_bits`: the row kept under `--pick`, `--pick_allele`, `--per_gene`, `--pick_allele_gene` or their flagging variants with `tsl` in the pick order, or the transcript a gene name resolves to in an HGVS input. The shape is two candidates whose levels have twenty or more digits and lie within one rounding step of each other across 2^64, the double's row listed first. Ensembl VEP keeps the row listed first; vep-rs keeps the lower level. The class is documented only: no comparator codes it, since no committed flag set reaches it.
 
-**How often the shape occurs.** Tier 3: the shape is a transcript support level of twenty or more digits, which no Ensembl gene set carries (`tsl1` to `tsl5` and `tslNA`) and which reaches a cache only through a GTF or GFF3 given to `vep-cache-builder` or through an edited cache. Of the 392 committed flag sets, 14 pass a pick-family flag with `tsl` in the order and none passes such a level; no committed HGVS input names a gene.
+**How often the shape occurs.** Tier 3: the shape is a transcript support level of twenty or more digits, which no Ensembl gene set carries (`tsl1` to `tsl5` and `tslNA`) and which reaches a cache only through a GTF or GFF3 given to `vep-cache-builder` or through an edited cache. Of the 511 committed flag sets, 14 pass a pick-family flag with `tsl` in the order and none passes such a level; no committed HGVS input names a gene.
 
 ## 1. Two levels that straddle 2^64 on one gene
 
-**In short.** The record `tsl_seam`, `21 42395417 T>C`, lies in two TMPRSS3 transcripts, ENST00001110244 and ENST00001113783, whose GTF lines carry the levels `18446744073709551616` (2^64) and `18446744073709551615` (one below it). Both engines print the two rows with each level as written. Under `--pick --pick_order tsl`, Ensembl VEP 116.2 keeps ENST00001110244, the row listed first; vep-rs keeps ENST00001113783, the lower level.
+**In short.** The record `tsl_seam`, `21 42395417 T>C`, lies in two TMPRSS3 transcripts, ENST00001110244 and ENST00001113783, whose GTF lines carry the levels `18446744073709551616` (2^64) and `18446744073709551615` (one below it). Both engines print the two rows with each level as written. Under `--pick --pick_order tsl`, Ensembl VEP 116.3 keeps ENST00001110244, the row listed first; vep-rs keeps ENST00001113783, the lower level.
 
 ### 1.1 What a reader needs to know first
 
@@ -48,7 +48,7 @@ tsl_seam	21:42395417	C	ENSG00000160183	ENST00001110244	Transcript	start_lost	IMP
 tsl_seam	21:42395417	C	ENSG00000160183	ENST00001113783	Transcript	start_lost	IMPACT=HIGH;STRAND=-1;TSL=18446744073709551615
 ```
 
-Ensembl VEP's rows end in `SOURCE=` with the GTF's file name as well, the documented [`file_cache_writes_no_source_field`](file-cache-writes-no-source-field.md) difference; the position, amino-acid and codon columns left out above agree. Under `--pick --pick_order tsl`, Ensembl VEP 116.2 keeps the first row, ENST00001110244 with `TSL=18446744073709551616`; vep-rs keeps the second, ENST00001113783 with `TSL=18446744073709551615`.
+Ensembl VEP's rows end in `SOURCE=` with the GTF's file name as well, the documented [`file_cache_writes_no_source_field`](file-cache-writes-no-source-field.md) difference; the position, amino-acid and codon columns left out above agree. Under `--pick --pick_order tsl`, Ensembl VEP 116.3 keeps the first row, ENST00001110244 with `TSL=18446744073709551616`; vep-rs keeps the second, ENST00001113783 with `TSL=18446744073709551615`.
 
 ### 1.4 Why Ensembl VEP writes that
 
@@ -68,7 +68,7 @@ vep -i record.vcf -o out.txt --offline --json_cache json_cache \
   --species homo_sapiens --assembly GRCh38 --tsl --pick --pick_order tsl
 ```
 
-vep-rs writes the ENST00001113783 row. Ensembl VEP 116.2 over the same GTF, `--gtf tmprss3_tsl_seam.gtf.gz --fasta <corpus>/reference.fa.gz --tsl --pick --pick_order tsl`, writes the ENST00001110244 row. Without `--pick` both write both rows.
+vep-rs writes the ENST00001113783 row. Ensembl VEP 116.3 over the same GTF, `--gtf tmprss3_tsl_seam.gtf.gz --fasta <corpus>/reference.fa.gz --tsl --pick --pick_order tsl`, writes the ENST00001110244 row. Without `--pick` both write both rows.
 
 ### 1.7 How the comparator treats this class
 

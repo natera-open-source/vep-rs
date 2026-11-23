@@ -1,7 +1,7 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "divergences_classified_against": {
   "engine": "vep-rs",
@@ -13,13 +13,13 @@
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "none on either side",
- "input": "exemplar records selected from the Ensembl VEP 116.2 reference outputs of the suites listed in manifest.json (ClinVar GRCh38, gnomAD v4.1 chromosome 21, 1000 Genomes high-coverage chromosome 21, the structural-variant set), two per consequence-set combination, with --cache ordering the candidates by the bytes their transcripts add to the pruned cache, cheapest first, and one exemplar of every variant class the references show",
- "generator": "scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite <id>=<reference>=<input> (one per entry of the manifest's suites table) --k 2 --seed 1 --max-span 1000000 --multi-allelic-per-suite 4 --cache <json cache> --out tests/golden/116/GRCh38; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; scripts/golden/build_golden_corpus.py classify",
+ "input": "exemplar records selected from the Ensembl VEP 116.2 reference outputs of the datasets listed in manifest.json (ClinVar GRCh38, gnomAD v4.1 chromosome 21, 1000 Genomes high-coverage chromosome 21, the structural-variant set), two per consequence-set combination, with --cache ordering the candidates by the bytes their transcripts add to the pruned cache, cheapest first, and one exemplar of every variant class the references show",
+ "generator": "tools/vep-golden-corpus select --release 116 --assembly GRCh38 --dataset <id>=<reference>=<input> (one per entry of the manifest's datasets table) --k 2 --seed 1 --max-span 1000000 --multi-allelic-per-dataset 4 --cache <json cache> --out tests/golden/116/GRCh38; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; tools/vep-golden-corpus classify",
  "sha256": {
-  "default.txt": "6547fea7308e66f223c429c7470eea8a6bb7a88a71a8841a799f6eeb36b96685",
-  "tab.txt": "ebeb7957e78cd2e1ae3f984add9dcbc2ca26d874ce2e3c1ae6b4128ca3838046",
-  "vcf.vcf": "432168e6ede78d986c4133ee3657e7ba3f5d6b3e84290a32771869bd4c11d7f8",
-  "json.jsonl": "97ac1c9151b5e7e6cea0c55573ae5a163e876d49f5fb67495530967e0a01d947"
+  "default.txt": "8df6462988fea7bba04a7d619db2881dc65d36ad16d765d0906e80a29e3dd829",
+  "tab.txt": "84c5e97d6744c3e24d35f969aa7990a9069066028779ffd4efdd04366672ac66",
+  "vcf.vcf": "3ef47ac10e1db8423991a5b14d303dc5d74762cbbc1fa380c3001101756deffe",
+  "json.jsonl": "d8f749de1d97e711d2d00fe172aed36247e95bec7ac86a8316c226f881e06d20"
  },
  "variants_vcf_sha256": "ca155257893e0ea3036147298c86581179444715027b916454dcf8cfdb7a6167",
  "pruned_cache": {
@@ -79,18 +79,22 @@
  },
  "flag_sets": {
   "overlaps": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
-   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --overlaps [--tab|--vcf]",
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --overlaps [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
    "fasta": "none on either side",
    "input": "variants.vcf",
    "sha256": {
-    "tab.txt": "6a74af00516fa478b10f4d11189048c503c392efb5106525054f04bcb2551883",
-    "vcf.vcf": "a4e81700e41154a7817098f0da6bb7de7ef5c241f9acdedc4bbe358af964c2e4"
-   }
+    "tab.txt": "827d26256fc4f45845dea0ec17fc323b71f82d308210ed7602c22ea7ffda0591",
+    "vcf.vcf": "bf25f771d059ad280566035d84fb84a74c026680db436d92bfe10810d3f43090"
+   },
+   "flags": [
+    "--overlaps"
+   ],
+   "expected_dir": "expected_overlaps"
   }
  }
 }

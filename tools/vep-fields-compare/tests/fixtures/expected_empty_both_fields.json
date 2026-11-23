@@ -1,0 +1,90 @@
+{
+  "totals": {
+    "reference_keys": 0,
+    "scored_keys": 0,
+    "intersection": 0,
+    "reference_only": 0,
+    "scored_only": 0,
+    "reference_duplicate_keys": 0,
+    "scored_duplicate_keys": 0
+  },
+  "fields": {
+    "Uploaded_variation": {
+      "compared": 0,
+      "equal": 0,
+      "differ": 0,
+      "agreement": null,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "Gene": {
+      "compared": 0,
+      "equal": 0,
+      "differ": 0,
+      "agreement": null,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "cDNA_position": {
+      "compared": 0,
+      "equal": 0,
+      "differ": 0,
+      "agreement": null,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "CDS_position": {
+      "compared": 0,
+      "equal": 0,
+      "differ": 0,
+      "agreement": null,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "Protein_position": {
+      "compared": 0,
+      "equal": 0,
+      "differ": 0,
+      "agreement": null,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "Amino_acids": {
+      "compared": 0,
+      "equal": 0,
+      "differ": 0,
+      "agreement": null,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "Codons": {
+      "compared": 0,
+      "equal": 0,
+      "differ": 0,
+      "agreement": null,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "Existing_variation": {
+      "compared": 0,
+      "equal": 0,
+      "differ": 0,
+      "agreement": null,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    }
+  },
+  "extra": {},
+  "inputs": {
+    "reference": "tests/fixtures/empty.txt",
+    "scored": "tests/fixtures/empty.txt"
+  },
+  "key": [
+    "Location",
+    "Allele",
+    "Feature",
+    "Feature_type",
+    "consequence_set"
+  ],
+  "comparison": "verbatim per field on tuples both sides emit under the same key"
+}

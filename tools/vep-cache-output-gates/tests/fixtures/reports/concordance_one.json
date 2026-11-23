@@ -1,0 +1,12 @@
+{
+  "glob": "*.txt",
+  "missing_rust_pairs": [],
+  "aggregate": {
+    "perl_tuple_count": 3,
+    "rust_tuple_count": 3,
+    "intersection_count": 3,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0
+  }
+}

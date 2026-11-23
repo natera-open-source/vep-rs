@@ -1,0 +1,7 @@
+#Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	Extra
+rs100	1:100	T	ENSG1	ENST1	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=LOW;ONLY_SCO=2
+rs200	1:200	T	ENSG1	ENST1	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=LOW
+rs300	1:300	T	ENSG1	ENST1	Transcript	intron_variant	-	-	-	-	-	-	-
+rs400	1:400	T	ENSG1	ENST1	Transcript	intron_variant	-	-	-	-	-	-	A=2;FLAG=;=y;B=b=c
+rs500	1:500	T	ENSG1	ENST1	Transcript	intron_variant	-	-	-	-	-	-	 X=1 
+rs600	1:600	T	ENSG1	ENST1	Transcript	intron_variant	-	-	-	-	-	-	-

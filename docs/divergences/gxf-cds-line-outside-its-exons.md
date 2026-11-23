@@ -1,10 +1,10 @@
 # A GFF3 or GTF CDS line outside its transcript's exons
 
-On three files whose CDS line puts the translation's start in no exon, Ensembl VEP 116.2 writes `5_prime_UTR_variant` for a base the line covers or moves a coding row 28 codons; vep-rs refuses to build a cache from each file at the line. This page holds one section of the divergence [`gxf_malformed_coordinate_line_refused`](gxf-malformed-coordinate-line-refused.md). That entry's page states the defect, the class and the sections before this one, and its row of the index covers this section.
+On three files whose CDS line puts the translation's start in no exon, Ensembl VEP 116.3 writes `5_prime_UTR_variant` for a base the line covers or moves a coding row 28 codons; vep-rs refuses to build a cache from each file at the line. This page holds one section of the divergence [`gxf_malformed_coordinate_line_refused`](gxf-malformed-coordinate-line-refused.md). That entry's page states the defect, the class and the sections before this one, and its row of the index covers this section.
 
 ## 9. A CDS line that sets the translation's start or end in no exon
 
-**In short.** The released lines of section 1 with one CDS line moved off its exon, three ways, each putting the translation's start in no exon. The first CDS line of PWP2's `ENST00000456705` starts 13 bases before its exon. The first CDS line in transcript order of TMPRSS3's `ENST00001113783` ends 32 bases past its exon. That same line lies in the intron, in no exon. `tabix` indexes each file in silence and Ensembl VEP 116.2 reads it without a message, exit 0: it writes `5_prime_UTR_variant` for a base the moved line covers, or moves a coding row 28 codons. vep-rs refuses to build a cache from each file at the line.
+**In short.** The released lines of section 1 with one CDS line moved off its exon, three ways, each putting the translation's start in no exon. The first CDS line of PWP2's `ENST00000456705` starts 13 bases before its exon. The first CDS line in transcript order of TMPRSS3's `ENST00001113783` ends 32 bases past its exon. That same line lies in the intron, in no exon. `tabix` indexes each file in silence and Ensembl VEP 116.3 reads it without a message, exit 0: it writes `5_prime_UTR_variant` for a base the moved line covers, or moves a coding row 28 codons. vep-rs refuses to build a cache from each file at the line.
 
 ### 9.1 What a reader needs to know first
 
@@ -37,7 +37,7 @@ The input and the flags are those of section 1.2; the files are `cds_starts_befo
 
 ### 9.3 What each engine writes
 
-Ensembl VEP 116.2 on the line that starts before its exon, the forward strand, exit 0:
+Ensembl VEP 116.3 on the line that starts before its exon, the forward strand, exit 0:
 
 ```
 pwp2_codon3	21:44107424	C	ENSG00000241945	ENST00000456705	Transcript	5_prime_UTR_variant	52	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;SYMBOL=PWP2;SOURCE=cds_starts_before_its_exon.gff3.gz;HGVSc=ENST00000456705.1:c.-11T>C
@@ -65,7 +65,7 @@ ERROR: [cache-builder] Failed to build cache: cds_in_no_exon.gff3 line 6: CDS 42
 
 Each build exits 1 and writes no cache. Further shapes, each measured as a GFF3 and as a GTF, with equal rows unless the row says otherwise; the last two leave both ends of the translation inside an exon:
 
-| The line | Ensembl VEP 116.2 | vep-rs |
+| The line | Ensembl VEP 116.3 | vep-rs |
 | --- | --- | --- |
 | the last CDS line in transcript order of the reverse-strand transcript, starting before its exon | leaves the line out, so a coding base of it is a `3_prime_UTR_variant` | refuses the line: the translation ends in no exon |
 | the last CDS line of the forward-strand transcript, ending past its exon | writes the released rows: the end it takes passes the exon, where the spliced sequence stops | refuses the line: the translation ends in no exon |
@@ -73,10 +73,11 @@ Each build exits 1 and writes no cache. Further shapes, each measured as a GFF3 
 | a transcript's only CDS line, in no exon | writes `intergenic_variant` with `n.52T>C` for `pwp2_codon3` | refuses the line |
 | exon lines: a GFF3's last two coding exons with their `rank` values exchanged, against position | places each exon at its `rank` (`BaseGXF.pm`, line 574), exit 0 without a message: on the forward strand a base of the last exon is `missense_variant`, `c.380C>T`, where the file ranked by position gives `synonymous_variant`, `c.516C>T`; on the reverse strand, in a transcript of three coding exons, 6 of 8 rows change and the coding bases of one exon read `intron_variant`. Neither engine reads a GTF's `exon_number`: both write the rows of the position order | refuses the GFF3: `<file> line <n>: CDS <start>-<end> of transcript <id> ends the translation at base <offset> of the <length>-base exon <start>-<end>, the last in transcript order that the coding sequence overlaps` |
 | exon lines: one more exon nested in the last coding exon, ranked after it in a GFF3 | as a GFF3, places it at its `rank`: on the forward strand a base in both exons is `coding_sequence_variant` at cDNA `560-605`, and on the reverse strand the run dies, `First part of exon maps into gap`, exit 2; as a GTF, warns `Failed to add exon to transcript <id>` and writes `intergenic_variant` for the transcript's records, exit 0 | refuses the model with the same line where the nested exon comes last in transcript order: by its `rank` on either strand, by position on the forward strand |
+| exon ranks: a GFF3's three exons ranked 1, 3, 2 against position, every CDS line in an exon and the translation ending inside the exon ranked last | places each exon at its `rank`, exit 0 without a message, on either strand: the bases of the exon ranked last read `intron_variant` beside their coding or UTR term, and a base of the exon ranked second is a `3_prime_UTR_variant` whose HGVSc is a coding position. As a GTF both engines write the rows of the position order | refuses the GFF3: `<file>: exon <start>-<end> of transcript <id>, ranked <n>, starts before exon <start>-<end>, ranked <m>: the exon ranks run against position` (`starts after` on the reverse strand), a transcript of no CDS line included |
 | one more CDS line in an intron beside the released ones | writes the released rows: the line is given to no exon and sets neither end of the translation | matched: builds the cache of the released lines |
 | one CDS line across the first intron in place of the two it spans | writes the released rows: the line's start, the released one, sets the translation's start, and its end is not read | matched: builds the cache of the released lines |
 
-In the two rows of exon lines every CDS line lies inside an exon, and the exon the translation's end is counted in does not hold that end. No build writes a translation offset outside the exon it is counted in, so a further malformed shape either builds offsets inside their exons or is refused.
+In the two rows of exon lines every CDS line lies inside an exon, and the exon the translation's end is counted in does not hold that end. No build writes a translation offset outside the exon it is counted in, so a further malformed shape either builds offsets inside their exons or is refused. In the row of exon ranks both offsets lie inside their exons, and the order itself is refused: Ensembl VEP reads the introns between neighbours in rank order, so an exon inside one reads as intron.
 
 ### 9.4 Why Ensembl VEP writes that
 
@@ -98,7 +99,7 @@ vep-cache-builder --species homo_sapiens --assembly GRCh38 --release 116 \
   --output-dir cache
 ```
 
-vep-rs's cache builder refuses the file at its sixth line with the error above and writes no cache. Ensembl VEP 116.2 with `--gff cds_ends_past_its_exon.gff3.gz`, the file sorted, bgzipped and indexed as in section 1.6, writes `c.100C>T`. Restoring the line's end makes vep-rs build the cache and both engines write `c.17C>T`.
+vep-rs's cache builder refuses the file at its sixth line with the error above and writes no cache. Ensembl VEP 116.3 with `--gff cds_ends_past_its_exon.gff3.gz`, the file sorted, bgzipped and indexed as in section 1.6, writes `c.100C>T`. Restoring the line's end makes vep-rs build the cache and both engines write `c.17C>T`.
 
 ### 9.7 How the comparator treats this section
 

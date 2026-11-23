@@ -19,7 +19,7 @@
   ],
   "reason": "COSMIC and HGMD-PUBLIC identifiers are not redistributed; the input records are chosen so that Ensembl VEP matches none of them"
  },
- "suites": {
+ "datasets": {
   "GRCh38-freqfilter": {
    "reference": "grch38-freqfilter-default.txt",
    "input": "grch38-freqfilter.vcf",
@@ -63,7 +63,7 @@
  },
  "records": [
   {
-   "suite": "GRCh38-freqfilter",
+   "dataset": "GRCh38-freqfilter",
    "vcf": "21\t25992449\t.\tATA\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -73,21 +73,21 @@
    ]
   },
   {
-   "suite": "GRCh38-freqfilter",
+   "dataset": "GRCh38-freqfilter",
    "vcf": "21\t26865061\t.\tTT\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant"
    ]
   },
   {
-   "suite": "GRCh38-freqfilter",
+   "dataset": "GRCh38-freqfilter",
    "vcf": "21\t30107044\t.\tT\tC\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-freqfilter",
+   "dataset": "GRCh38-freqfilter",
    "vcf": "21\t30806721\t.\tC\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -95,14 +95,14 @@
    ]
   },
   {
-   "suite": "GRCh38-freqfilter",
+   "dataset": "GRCh38-freqfilter",
    "vcf": "21\t31148973\t.\tGG\tG\t.\t.\t.",
    "combinations": [
     "intron_variant"
    ]
   },
   {
-   "suite": "GRCh38-freqfilter",
+   "dataset": "GRCh38-freqfilter",
    "vcf": "21\t32288094\t.\tA\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -110,7 +110,7 @@
    ]
   },
   {
-   "suite": "GRCh38-freqfilter",
+   "dataset": "GRCh38-freqfilter",
    "vcf": "21\t32803915\t.\tC\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -119,7 +119,7 @@
    ]
   },
   {
-   "suite": "GRCh38-freqfilter",
+   "dataset": "GRCh38-freqfilter",
    "vcf": "21\t33030010\t.\tA\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -128,7 +128,7 @@
    ]
   },
   {
-   "suite": "GRCh38-freqfilter",
+   "dataset": "GRCh38-freqfilter",
    "vcf": "21\t38441162\t.\tA\tG\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -136,7 +136,7 @@
    ]
   },
   {
-   "suite": "GRCh38-freqfilter",
+   "dataset": "GRCh38-freqfilter",
    "vcf": "21\t42029386\t.\tGTG\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -145,7 +145,7 @@
    ]
   },
   {
-   "suite": "GRCh38-freqfilter",
+   "dataset": "GRCh38-freqfilter",
    "vcf": "21\t42507853\t.\tC\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -153,7 +153,7 @@
    ]
   },
   {
-   "suite": "GRCh38-freqfilter",
+   "dataset": "GRCh38-freqfilter",
    "vcf": "21\t44206463\t.\tG\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -163,14 +163,14 @@
    ]
   },
   {
-   "suite": "GRCh38-freqfilter",
+   "dataset": "GRCh38-freqfilter",
    "vcf": "21\t45394866\t.\tA\tT\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-freqfilter",
+   "dataset": "GRCh38-freqfilter",
    "vcf": "21\t45409802\t.\tA\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -180,7 +180,7 @@
    ]
   },
   {
-   "suite": "GRCh38-freqfilter",
+   "dataset": "GRCh38-freqfilter",
    "vcf": "21\t45450351\t.\tG\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -189,7 +189,7 @@
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "flag_sets": [

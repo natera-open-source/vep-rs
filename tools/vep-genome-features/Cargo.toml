@@ -1,0 +1,24 @@
+[package]
+name = "vep-genome-features"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.89"
+license = "Apache-2.0"
+description = "Reader of a converted Ensembl VEP cache that states the genome's features: genetic codes, biotypes, incomplete coding sequences, sequences, synonyms and the data the cache carries"
+publish = false
+
+[dependencies]
+flate2 = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+vep-seeded-variants = { path = "../vep-seeded-variants" }
+
+# Its own Cargo root: the repository workspace's commands do not reach this package, and
+# a cargo command for it names this manifest.
+[workspace]
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"

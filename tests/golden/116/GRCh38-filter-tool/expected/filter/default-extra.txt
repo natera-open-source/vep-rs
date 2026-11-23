@@ -1,9 +1,9 @@
-## ENSEMBL VARIANT EFFECT PREDICTOR v116.2
+## ENSEMBL VARIANT EFFECT PREDICTOR v116.3
 ## Output produced at [TIME]
-## Using cache in /cache/homo_sapiens/116_GRCh38
+## Using cache in /work/cache/homo_sapiens/116_GRCh38
 ## Using API version 116, DB version ?
 ## ensembl version 116.0d85231
-## ensembl-compara version 116.dc107cc
+## ensembl-compara version 116.4038708
 ## ensembl-funcgen version 116.90049ea
 ## ensembl-io version 116.6afb5dc
 ## ensembl-variation version 116.db7394a
@@ -52,7 +52,7 @@
 ## CLIN_SIG : ClinVar clinical significance of the dbSNP variant
 ## SOMATIC : Somatic status of existing variant
 ## PHENO : Indicates if existing variant(s) is associated with a phenotype, disease or trait; multiple values correspond to multiple variants
-## VEP command-line: vep --af --assembly GRCh38 --biotype --cache --cache_version 116 --canonical --database 0 --dir_cache /cache --dir_plugins /plugins --force_overwrite --fork --format vcf --input_file [PATH]/variants.vcf --max_af --no_stats --numbers --offline --output_file [PATH]/annotated.txt --quiet --symbol
+## VEP command-line: vep --af --assembly GRCh38 --biotype --cache --cache_version 116 --canonical --database 0 --dir_cache [PATH]/cache --dir_plugins /plugins --force_overwrite --fork --format vcf --input_file [PATH]/variants.vcf --max_af --no_stats --numbers --offline --output_file [PATH]/annotated.txt --quiet --symbol
 #Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	Extra
 ENST00000285667_multi	21:14381504	A	ENSG00000155304	ENST00000285667	Transcript	missense_variant	92	65	22	A/V	gCa/gTa	rs1984167618	IMPACT=MODERATE;STRAND=-1;SYMBOL=HSPA13;SYMBOL_SOURCE=HGNC;HGNC_ID=HGNC:11375;BIOTYPE=protein_coding;CANONICAL=YES;EXON=2/5;MAX_AF=0;MAX_AF_POPS=gnomADe_AFR,gnomADe_AMR,gnomADe_ASJ,gnomADe_EAS,gnomADe_FIN,gnomADe_MID,gnomADe_NFE,gnomADe_REMAINING,gnomADe_SAS
 ENST00000285667_multi	21:14381504	C	ENSG00000155304	ENST00000285667	Transcript	missense_variant	92	65	22	A/G	gCa/gGa	-	IMPACT=MODERATE;STRAND=-1;SYMBOL=HSPA13;SYMBOL_SOURCE=HGNC;HGNC_ID=HGNC:11375;BIOTYPE=protein_coding;CANONICAL=YES;EXON=2/5

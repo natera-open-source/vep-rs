@@ -190,7 +190,7 @@ fn latin1_data_line_is_annotated() {
 }
 
 /// A data line that is not UTF-8 is written to the VCF output from the columns
-/// Ensembl VEP stores, its bytes kept: Ensembl VEP 116.2 splits the bytes it
+/// Ensembl VEP stores, its bytes kept: Ensembl VEP 116.3 splits the bytes it
 /// read, dropping a trailing empty column (ensembl-io ColumnBasedParser.pm:250),
 /// fills a structural record's QUAL, FILTER and INFO with `.` where empty or
 /// `0` (Parser/VCF.pm:464-466) and prints `.` for an absent column

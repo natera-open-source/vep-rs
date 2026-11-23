@@ -1,28 +1,28 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --dir_plugins {plugins} --plugin gnomADc,plugin_data/gnomad.coverage.tsv.gz [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh37",
  "fasta": "none on either side",
  "input": "variants.vcf: 11 gnomAD v2.1.1 records on chromosome 21 (public rs identifiers where the release carries one, one record without an identifier; INFO dropped), every position covered by the genome coverage file: five substitutions, intergenic, intronic, upstream and downstream of a gene; three three-base deletions, each averaged over the three records of its deleted bases; three insertions, each reading the record after the insertion point alone while the base before it is covered too. Reference alleles are the records' own.",
  "sha256": {
-  "default.txt": "8bb872091cf8e8600407416d19214c67eb73d15b1043aef2e630b742a1f16a1f",
-  "tab.txt": "7cb658449dab78ead0c2774e5f71fac73fc1ee261b6a91836cab2b75e2b79bd2",
-  "vcf.vcf": "23aff67bb5e03a2031b235d1f8e67544e205129f912f6b42c06668c82b351994",
-  "json.jsonl": "77607ab3cea0fdcb30310a6b03ffc697345c262c4ce0a261c321401acd9c043d",
-  "default.summary.log": "d759f1388bcb510d33dfbabf2752fcd2e8d3a0174c34c1453629762e73ae56d0",
-  "tab.summary.log": "74df0e316f79259f301ffe9e5b3402f4f1841a63caa4d1213d76929d67af3471",
-  "vcf.summary.log": "c363ed3ce452469392a5d75e53bb0d64add64a33df686b5850319e5f18c98e44",
-  "json.summary.log": "008dd3c89452b7d04444791d3152ab478f4b267023856f7566b5d5e6a1ec474a"
+  "default.txt": "fbd85c8cf79a78ab2ebe4ccc4f8dc22cec1230dbb4eeeb8bb3e5b6849c88a57f",
+  "tab.txt": "1e991de26b18a7b595627d1b2d778faea74c502ae0e95f50ca3eaf74ece42a7f",
+  "vcf.vcf": "9dadb070424eaa598d5149398ab0272b6fc2930fd01150ca0fe7a37662db7563",
+  "json.jsonl": "a6cddd4788a684200d84317b0b0ece3464f7bdae19136f856fd016a8ba8a5ab1",
+  "default.summary.log": "90e14fb5ca5634152d6dde3c3dc133a73b6e9333dae052d3cc1288d1a7310055",
+  "tab.summary.log": "e22a8e92d9838b68b74ad024bc74a5d2d554717903bfda62276aa790ef537b29",
+  "vcf.summary.log": "ef82bb6f5b4b043a361b3f8b7839bd37b0dc58a533bded0824cd1f7be1cc2b7f",
+  "json.summary.log": "6ea76fe0a03a4813501bcf833f740a899e14b22682ab07a3da965aad3846b129"
  },
  "variants_vcf_sha256": "186c0d4da98ea8d97385add515c5c1c089a0e4941e5756b2ce907588257fcb3e",
  "plugin_files": {
   "plugin_data/gnomad.coverage.tsv.gz": "bc17ba597ff58ef04f21967c9b351ff6b22dcd5d3239cbcde0072d5ca9a3a96e",
   "plugin_data/gnomad.coverage.tsv.gz.tbi": "a972a4610ad4e8a088a51922deb7b5b44f1aafdb566a184e3937cf1649638b99"
  },
- "generator": "manifest: scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh37 --suite gnomadc=<reference>=<candidates> --k 100 --max-records 100 --include <each record> --covers gnomADc --matrix tests/parity/matrix.tsv --flag=--dir_plugins --flag={plugins} --flag=--plugin --flag=gnomADc,plugin_data/gnomad.coverage.tsv.gz --cache <cache>, then plugin_files added; json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --assembly GRCh37 --cache-version 116 over the chromosome 21 slice converted from the Ensembl VEP 116 GRCh37 cache; expected and this record: scripts/concordance/generate_reference_output.sh --corpus --format all --dir-plugins <the VEP_plugins checkout at release/116>",
+ "generator": "manifest: tools/vep-golden-corpus select --release 116 --assembly GRCh37 --dataset gnomadc=<reference>=<candidates> --k 100 --max-records 100 --include <each record> --covers gnomADc --matrix tests/parity/matrix.tsv --flag=--dir_plugins --flag={plugins} --flag=--plugin --flag=gnomADc,plugin_data/gnomad.coverage.tsv.gz --cache <cache>, then plugin_files added; json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --assembly GRCh37 --cache-version 116 over the chromosome 21 slice converted from the Ensembl VEP 116 GRCh37 cache; expected and this record: scripts/concordance/generate_reference_output.sh --corpus --format all --dir-plugins <the VEP_plugins checkout at release/116>",
  "plugin_fixtures": {
   "description": "plugin_data/gnomad.coverage.tsv.gz: a cut of the real coverage file, the records within two bases before and six bases after each input record, so the fixture carries every record a span reads and its neighbours; identical on both sides",
   "source": "gnomAD v2.1 genome coverage summary (gnomad.genomes.coverage.summary.tsv.bgz, https://gnomad.broadinstitute.org/downloads), prepared as the Ensembl VEP plugin documents: the header prefixed with #, bgzip-compressed and indexed with tabix -s 1 -b 2 -e 2; thirteen columns, contigs named 1 to 22 and X",

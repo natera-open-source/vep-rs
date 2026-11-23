@@ -25,6 +25,7 @@ use vep_core::cache_info::REGULATORY_SCHEMA;
 
 use crate::builder::BuildStats;
 use crate::core_dumps::{id_to_name, read_table};
+use crate::count::counted;
 
 /// The `info.json` object the builder writes.
 #[derive(Serialize)]
@@ -44,6 +45,11 @@ pub struct CacheInfoJson {
     /// only when the tree was written.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub regulatory_schema: Option<u32>,
+    /// The cell types every regulatory feature's activity string follows, in
+    /// its order, present only when the tree was baked with an activity file
+    /// ([`RegulatoryStats::cell_types`](crate::regulatory::RegulatoryStats::cell_types)).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cell_types: Option<Vec<String>>,
     /// The columns of the variation files, present only when the files were
     /// written.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -53,8 +59,13 @@ pub struct CacheInfoJson {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub var_type: Option<String>,
     pub source_versions: BTreeMap<String, String>,
-    /// The chromosome directories written, in [`karyotype_order`].
+    /// The chromosome directories written, in `karyotype_order`.
     pub contig_order: Vec<String>,
+    /// What the build left out of the cache, each a name of
+    /// `vep_core::cache_info::left_out`; present only when the build left
+    /// something out.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub left_out: Vec<String>,
 }
 
 impl CacheInfoJson {
@@ -62,7 +73,7 @@ impl CacheInfoJson {
     /// matrix of that tool was written, `variation_cols` and `var_type` are
     /// present only when variation files were (`variation_cols` names their
     /// columns), and `contig_order` lists the chromosomes the build wrote in
-    /// [`karyotype_order`], the karyotype's order when the core dumps give one
+    /// `karyotype_order`, the karyotype's order when the core dumps give one
     /// ([`CoreDumps::karyotype_ranks`](crate::core_dumps::CoreDumps::karyotype_ranks)).
     pub fn new(
         species: &str,
@@ -82,19 +93,36 @@ impl CacheInfoJson {
             polyphen: marker(stats.polyphen_matrices),
             regulatory: false,
             regulatory_schema: None,
+            cell_types: None,
             var_type: variation_cols.is_some().then(|| "tabix".to_string()),
             variation_cols,
             source_versions,
             contig_order: karyotype_order(stats.chromosomes.iter().cloned(), karyotype_ranks),
+            left_out: Vec::new(),
         }
     }
 
+    /// The metadata with the names of what the build left out, which a run
+    /// reads to say what its command asks for and the cache does not carry.
+    pub fn with_left_out(mut self, names: &[&str]) -> Self {
+        self.left_out = names.iter().map(|name| name.to_string()).collect();
+        self
+    }
+
     /// The metadata with the regulatory markers a written tree needs:
-    /// `regulatory` and the shard schema, and no `cell_types`, since a tree
-    /// baked from GFF files carries no epigenome activity.
+    /// `regulatory` and the shard schema. The cell types of a tree baked
+    /// with an activity file are [`Self::with_cell_types`]'s.
     pub fn with_regulatory(mut self, written: bool) -> Self {
         self.regulatory = written;
         self.regulatory_schema = written.then_some(REGULATORY_SCHEMA);
+        self
+    }
+
+    /// The metadata with `cell_types`, the names the activity string of
+    /// every regulatory feature of the tree follows; `None`, for a tree
+    /// baked from the GFF files alone, writes no such key.
+    pub fn with_cell_types(mut self, cell_types: Option<Vec<String>>) -> Self {
+        self.cell_types = cell_types;
         self
     }
 
@@ -112,7 +140,7 @@ impl CacheInfoJson {
 /// Chromosome names in the order a cache lists them when no karyotype is
 /// known: autosomes by number, then X, Y and MT, then every other contig by
 /// name, the converter's order.
-pub fn contig_order(names: impl IntoIterator<Item = String>) -> Vec<String> {
+pub(crate) fn contig_order(names: impl IntoIterator<Item = String>) -> Vec<String> {
     karyotype_order(names, None)
 }
 
@@ -121,7 +149,7 @@ pub fn contig_order(names: impl IntoIterator<Item = String>) -> Vec<String> {
 /// lists the assembly's chromosomes in (`SliceAdaptor.pm:1271-1314`), then
 /// every other name in [`contig_order`]. Without ranks the whole list follows
 /// [`contig_order`].
-pub fn karyotype_order(
+fn karyotype_order(
     names: impl IntoIterator<Item = String>,
     karyotype_ranks: Option<&HashMap<String, u64>>,
 ) -> Vec<String> {
@@ -157,7 +185,7 @@ pub fn karyotype_order(
 /// distinct linked names, ordered within the pair and here across the lines.
 /// `seq_region.txt` and `seq_region_synonym.txt` (or their `.gz`) are read
 /// from `dumps_dir`.
-pub fn chr_synonym_pairs(dumps_dir: &Path) -> Result<Vec<(String, String)>> {
+fn chr_synonym_pairs(dumps_dir: &Path) -> Result<Vec<(String, String)>> {
     let region_names = id_to_name(dumps_dir, "seq_region", 4)?;
     let mut rows: Vec<(u64, String, String)> = read_table(dumps_dir, "seq_region_synonym", 4)?
         .map(|row| {
@@ -217,7 +245,11 @@ pub fn write_chr_synonyms(output_dir: &Path, dumps_dir: &Path) -> Result<usize> 
     let text: String = pairs.iter().map(|(a, b)| format!("{a}\t{b}\n")).collect();
     let path = output_dir.join("chr_synonyms.txt");
     std::fs::write(&path, text).with_context(|| format!("Failed to write {}", path.display()))?;
-    info!("Wrote {} ({} synonym pairs)", path.display(), pairs.len());
+    info!(
+        "Wrote {} ({})",
+        path.display(),
+        counted(pairs.len(), "synonym pair")
+    );
     Ok(pairs.len())
 }
 
@@ -356,6 +388,7 @@ mod tests {
             chromosomes: contig_order(names.iter().cloned()),
             sift_matrices: 0,
             polyphen_matrices: 0,
+            unnamed_translations: 0,
         };
         let info = CacheInfoJson::new(
             "drosophila_melanogaster",
@@ -403,8 +436,9 @@ mod tests {
 
     /// `sift` and `polyphen` read `b` only for a tool whose matrices were
     /// written, `variation_cols` and `var_type tabix` are present only with
-    /// variation files, and the species, assembly, version, source versions
-    /// and contig order are written as given.
+    /// variation files, `left_out` only with the names of what the build
+    /// left out, and the species, assembly, version, source versions and
+    /// contig order are written as given.
     #[test]
     fn info_json_markers_follow_the_build() {
         let dir = tempfile::tempdir().unwrap();
@@ -419,6 +453,7 @@ mod tests {
             chromosomes: vec!["21".to_string(), "MT".to_string()],
             sift_matrices: 3,
             polyphen_matrices: 0,
+            unnamed_translations: 0,
         };
         CacheInfoJson::new("homo_sapiens", "GRCh38", 116, &stats, None, versions, None)
             .write(dir.path())
@@ -437,6 +472,7 @@ mod tests {
         assert_eq!(parsed["source_versions"]["assembly"], "GRCh38.p14");
         assert_eq!(parsed["source_versions"]["gencode"], "GENCODE 50");
         assert_eq!(parsed["contig_order"], serde_json::json!(["21", "MT"]));
+        assert!(parsed.get("left_out").is_none());
 
         let stats = BuildStats {
             sift_matrices: 0,
@@ -459,5 +495,53 @@ mod tests {
         assert_eq!(parsed["polyphen"], "b");
         assert_eq!(parsed["var_type"], "tabix");
         assert_eq!(parsed["variation_cols"], serde_json::json!(columns));
+        assert!(parsed.get("left_out").is_none());
+
+        let stating = with_variations.with_left_out(&["core_tables", "source"]);
+        let parsed = serde_json::to_value(&stating).unwrap();
+        assert_eq!(
+            parsed["left_out"],
+            serde_json::json!(["core_tables", "source"])
+        );
+    }
+
+    /// `cell_types` is written for a tree baked with an activity file alone,
+    /// as the list given, beside the two markers of a written tree; a tree
+    /// baked without one has the markers and no such key.
+    #[test]
+    fn info_json_lists_the_cell_types_of_a_tree_baked_with_an_activity_file() {
+        let stats = BuildStats {
+            transcript_count: 0,
+            chromosome_count: 1,
+            region_file_count: 0,
+            chromosomes: vec!["21".to_string()],
+            sift_matrices: 0,
+            polyphen_matrices: 0,
+            unnamed_translations: 0,
+        };
+        let record = |cell_types: Option<Vec<String>>| {
+            let info = CacheInfoJson::new(
+                "homo_sapiens",
+                "GRCh38",
+                116,
+                &stats,
+                None,
+                BTreeMap::new(),
+                None,
+            );
+            serde_json::to_value(info.with_regulatory(true).with_cell_types(cell_types)).unwrap()
+        };
+        let names = vec![
+            "cell_line_one".to_string(),
+            "tissue_one_(f,_30_y)".to_string(),
+        ];
+        let with_activity = record(Some(names.clone()));
+        assert_eq!(with_activity["cell_types"], serde_json::json!(names));
+        let without = record(None);
+        assert!(without.get("cell_types").is_none());
+        for parsed in [with_activity, without] {
+            assert_eq!(parsed["regulatory"], true);
+            assert_eq!(parsed["regulatory_schema"], REGULATORY_SCHEMA);
+        }
     }
 }

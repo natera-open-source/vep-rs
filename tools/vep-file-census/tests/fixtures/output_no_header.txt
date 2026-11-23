@@ -1,0 +1,8 @@
+rs1	1:100	G	ENSG01	ENST01	Transcript	missense_variant,splice_region_variant	10	10	4	K/R	aAg/aGg	rs1	IMPACT=MODERATE;CLIN_SIG=benign;AF=0.5;HGVSc=ENST01:c.10A>G;HGVSp=ENSP01:p.Lys4Arg
+v2	1:200	T	ENSG01	ENST01	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;gnomADe_AF=0.01;AF=
+v3	2:300	A	-	-	-	intergenic_variant	-	-	-	-	-	-	-
+v4	2:400	C	ENSG02	ENST02	Transcript	 missense_variant , ,intron_variant	5	5	2	A/T	Gcc/Acc	rs4,som_1	IMPACT=MODERATE;CLIN_SIG=;MAX_AF=0.2;EUR_AF=0.1;AF=0.3;AF=0.4
+v5	X:500	T	ENSG03	ENST03	Transcript	upstream_gene_variant	-	-	-	-	-	 	XCLIN_SIG=1;IMPACT=MODIFIER;gnomADg_AF=0.5;SAS_AF=0.1;EAS_AF=0.1;AMR_AF=0.1;AFR_AF=0.1
+short	1:5	A	-	-	-
+v6	MT:600	C	ENSG04	ENST04	Transcript	missense_variant	7	7	3	G/A	gGc/gCc	-	HGVSc=ENST04:c.7G>C
+v7	1:700	C	ENSG01	ENST01	Transcript	intron_variant	-	-	-	-	-	rs7	IMPACT=MODIFIER;CLIN_SIG=pathogenic;HGVSp

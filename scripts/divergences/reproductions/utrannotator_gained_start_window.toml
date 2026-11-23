@@ -1,9 +1,9 @@
 entry = "utrannotator_gained_start_window"
 page = "docs/plugins/transcript-model.md#1-utrannotator-the-window-of-the-gained-start-test"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 137,713 per million · 4 flag sets, 104 corpora"
+input_class_basis = "2 · 137,713 per million · 4 flag sets, 144 corpora"
 notes = "The constructed record inserts the three bases of a start codon after the first base of the uORF's start codon at cDNA 64 (5' UTR index 63) of this reverse-strand transcript, giving `CCCATAAATGTGCATTGC`: the codon at index 63 is parted and lost, and the inserted bases stand as a start codon at index 64. Ensembl VEP's four-base window ends one base short of the gained codon's third base. The FASTA named covers the transcript's whole 5' UTR."
 
 [input]
@@ -29,3 +29,18 @@ where = { record = "utr_ins", feature = "ENST00000924761" }
 [expected]
 ensembl_vep = ["5_prime_UTR_premature_start_codon_loss_variant"]
 vep_rs = ["5_prime_UTR_premature_start_codon_gain_variant"]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/utr_annotator.rs::MutatedUtr::uaug_gained",
+    "crates/vep-builtins/src/plugins/utr_annotator.rs::atg_window",
+]
+tests = [
+    "crates/vep-builtins/src/plugins/utr_annotator.rs::tests::atg_window_is_sized_by_the_alternate_allele",
+    "crates/vep-builtins/src/plugins/utr_annotator.rs::tests::start_codon_made_inside_a_start_codon_is_a_gain",
+    "crates/vep-cli/tests/utrannotator_insertion_at_start_codon.rs::start_codon_made_inside_a_start_codon_is_reported_gained",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/utrannotator.rs::gained_start_window_row",
+    "tools/vep-plugin-pairs/src/rules/utrannotator.rs::gained_start_window_row",
+]

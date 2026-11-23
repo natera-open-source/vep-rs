@@ -1,0 +1,8 @@
+#Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	Extra
+a	b	c	d	e	f
+rs1	1:100	T	ENSG1	ENST1	Transcript	intron_variant
+rs2	1:200	T	ENSG1	ENST1	Transcript	intron_variant	7	8
+rs300	1:300	T	ENSG1	ENST1	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1	fifteenth	sixteenth
+
+#comment in the middle
+						

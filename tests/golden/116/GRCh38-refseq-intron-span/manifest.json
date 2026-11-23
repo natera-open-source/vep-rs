@@ -1,0 +1,116 @@
+{
+ "release": "116",
+ "species": "homo_sapiens",
+ "assembly": "GRCh38",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 1,
+ "max_span": 1000000,
+ "cache_cost_flank": 5000,
+ "flags": [
+  "--refseq",
+  "--hgvs"
+ ],
+ "fasta": "reference.fa.gz",
+ "covers": [
+  "refseq",
+  "hgvs",
+  "bam-edit-status-rna-edit"
+ ],
+ "masks": [
+  "refseq_edited_model_intron_span_coding_reference"
+ ],
+ "datasets": {
+  "clinvar_grch38": {
+   "reference": "clinvar_refseq.reference.txt",
+   "input": "candidates.vcf",
+   "rows": 11,
+   "combinations": 2
+  }
+ },
+ "combinations": {
+  "5_prime_UTR_variant,coding_sequence_variant,intron_variant,splice_acceptor_variant": {
+   "observed_rows": 10,
+   "exemplar_records": 1
+  },
+  "intron_variant,protein_altering_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  }
+ },
+ "variant_classes": {
+  "deletion": 2
+ },
+ "family_columns": [
+  "BAM_EDIT="
+ ],
+ "family_strata": {
+  "BAM_EDIT=-;deletion": 1,
+  "BAM_EDIT=OK;deletion": 1
+ },
+ "records": [
+  {
+   "dataset": "clinvar_grch38",
+   "vcf": "X\t111410072\t2530348\tTCCATCAATGGTGTAAATGTAACGCACTCCCTGAGGCAGGTTGATGTTGTCAGACAGAGATCGCGTCAGGTCAGCCAGCAAGGCGTCAAAGCTGCGAAAACGGTCAGAGGACACAGCGTACACAATCCCCTTGAAGTAGCGGTCCCCATTGCGGTAGAAACGTACCTTCTTGGCTTTCTTCTCATTACTCAGTGCCTGCAAGGTTCTGGTTCGGTAGAAGCTACAGTGGGCGCTGTGAGTGGGGCTAGGCAACCCATTCATCCGGGAGCCTCGCATGTTCCTGGATGTCTTATCTCTTTCGTCAAAGTGTCCAAAATCAAGTTCCATATTTTGGTGGAACCTCAGAGACCTGAGCGTGGGAGAAAGGGATGGGGGTGAAGAGAGGCAAAAACAAAAAGGGACAAGGAGAAGGAAAAAAGAAGGGATTTTAAATATTAGCCAGATCCAGATCTGCAATCTGCTGCTTGTGAAAAGAACTGGTTGAAAAAAGCCTGTGACCCATCTGCTGCTTGCCCCTGACCTGCAGGAATATTGATCTTAATAGAGAAGAAGGAGGGGCTGGGCGGGGGTGCTGGTGGTTGTGGGGGTTGGGAGTAAGAGATAGAGAGGGAGGCACTCTTGGCACTGTTCCAGACAGAGGAGAAGGGGAGATTTTGAAATAGCTGAAAATCCTGAGACTTACTGACAGTGGCTC\tT\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant,coding_sequence_variant,intron_variant,splice_acceptor_variant",
+    "intron_variant,protein_altering_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ]
+  }
+ ],
+ "multi_allelic_per_dataset": 4,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "flag_sets": [
+  {
+   "name": "region",
+   "flags": [
+    "--refseq",
+    "--hgvs",
+    "--format",
+    "region"
+   ],
+   "input": "variants.region.txt",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_region",
+   "covers": [
+    "region-input-format"
+   ]
+  }
+ ],
+ "divergences": [
+  {
+   "location": "X:111410073-111410765",
+   "allele": "-",
+   "feature": "NM_000555.3",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost",
+   "vep_rs_consequence_sets": [
+    "inframe_deletion,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant"
+   ],
+   "expected_divergence": "refseq_edited_model_intron_span_coding_reference"
+  }
+ ],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {
+  "refseq_edited_model_intron_span_coding_reference": 1
+ },
+ "vep_rs_only_summary": {},
+ "fields_compared": [
+  "HGVSc",
+  "HGVSp",
+  "HGVS_OFFSET"
+ ],
+ "field_divergences": [],
+ "field_divergence_summary": {}
+}

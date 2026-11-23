@@ -1,0 +1,84 @@
+[VEP run statistics]
+VEP version (API)	 116.3 (116)
+Annotation sources	Cache: /work/cache/homo_sapiens/116_GRCh38
+Species	homo_sapiens
+Command line options	vep --assembly GRCh38 --cache --cache_version 116 --database 0 --dir_cache [PATH]/cache --dir_plugins [PATH]/plugins --force_overwrite --fork --format vcf --input_file [PATH]/input.vcf --offline --output_file [PATH]/default.txt --plugin CADD,snv=[PATH]/whole_genome_SNVs_synthetic.tsv.gz,indels=[PATH]/gnomad.genomes.r4.0.indel.synthetic.tsv.gz --quiet --stats_text
+Start time	2026-11-20 13:15:37
+End time	2026-11-20 13:15:38
+Run time	1 seconds
+Input file	/work/input.vcf
+Output file	/work/perl_out/default.txt
+
+[Data version]
+1000genomes	phase3
+COSMIC	102
+ClinVar	202509
+HGMD-PUBLIC	20204
+assembly	GRCh38.p14
+dbSNP	156
+gencode	GENCODE 50
+genebuild	GENCODE50
+gnomADe	v4.1
+gnomADg	v4.1
+polyphen	2.2.3
+regbuild	1.0
+sift	6.2.1
+
+[General statistics]
+Lines of input read	16
+Variants processed	16
+Variants filtered out	0
+Novel / existing variants	-
+Overlapped genes	5
+Overlapped transcripts	5
+Overlapped regulatory features	-
+
+[Variant classes]
+insertion	1
+deletion	2
+substitution	2
+SNV	11
+
+[Consequences (most severe)]
+stop_gained	2
+frameshift_variant	2
+stop_lost	1
+start_lost	2
+missense_variant	4
+synonymous_variant	2
+intron_variant	1
+intergenic_variant	2
+
+[Consequences (all)]
+stop_gained	2
+frameshift_variant	2
+stop_lost	1
+start_lost	2
+missense_variant	5
+synonymous_variant	2
+intron_variant	1
+non_coding_transcript_variant	1
+intergenic_variant	2
+
+[Coding consequences]
+stop_gained	2
+frameshift_variant	2
+stop_lost	1
+start_lost	2
+missense_variant	5
+synonymous_variant	2
+
+[Variants by chromosome]
+21	16
+
+[Position in protein]
+00-10%	12
+10-20%	0
+20-30%	0
+30-40%	0
+40-50%	0
+50-60%	0
+60-70%	0
+70-80%	0
+80-90%	0
+90-100%	2

@@ -1,0 +1,6 @@
+rs_edited	21:100-101	GCG	ENSG1	NM_1.1	Transcript	inframe_insertion	-	-	-	-	-	-	IMPACT=MODERATE;STRAND=1;BAM_EDIT=OK;HGVSc=NM_1.1:c.986_988dup;HGVS_OFFSET=21
+rs_plain	21:200-201	GCG	ENSG1	NM_2.1	Transcript	inframe_insertion	-	-	-	-	-	-	IMPACT=MODERATE;STRAND=1;BAM_EDIT=OK;HGVSc=NM_1.1:c.986_988dup;HGVS_OFFSET=21
+rs_zero	21:300-301	GCG	ENSG1	NM_1.1	Transcript	inframe_insertion	-	-	-	-	-	-	IMPACT=MODERATE;STRAND=1;BAM_EDIT=OK;HGVSc=NM_1.1:c.986_988dup;HGVS_OFFSET=0
+rs_text	21:400-401	GCG	ENSG1	NM_1.1	Transcript	inframe_insertion	-	-	-	-	-	-	IMPACT=MODERATE;STRAND=1;BAM_EDIT=OK;HGVSc=NM_1.1:c.986_988dup;HGVS_OFFSET=dup
+rs_both	21:500-501	GCG	ENSG1	NM_1.1	Transcript	inframe_insertion	-	-	-	-	-	-	IMPACT=MODERATE;STRAND=1;BAM_EDIT=OK;HGVSc=NM_1.1:c.986_988dup;HGVS_OFFSET=21
+rs_minus	21:600-601	GCG	ENSG1	NM_1.1	Transcript	inframe_insertion	-	-	-	-	-	-	IMPACT=MODERATE;STRAND=1;BAM_EDIT=OK;HGVSc=NM_1.1:c.986_988dup;HGVS_OFFSET=-7

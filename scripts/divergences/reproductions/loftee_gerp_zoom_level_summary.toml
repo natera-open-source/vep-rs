@@ -1,7 +1,7 @@
 entry = "loftee_gerp_zoom_level_summary"
 page = "docs/plugins/loftee.md#5-gerp-totals-read-from-the-bigwigs-zoom-levels"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
 input_class_basis = "seen in gerp_conservation_scores.homo_sapiens.GRCh38.bw, the GERP bigWig of the upstream GRCh38 LoFTEE bundle: ten zoom levels"
 notes = "Ensembl VEP's LoF plugin is the LOFTEE repository's grch38 branch, outside the VEP_plugins checkout: the run needs --extra-dir loftee=<LOFTEE checkout>. The corpus bigWig carries no zoom level, so the prepare steps rebuild it with five (bigtools on the host); both files hold the same per-base values, and on the corpus file the two engines' rows are identical."
@@ -40,3 +40,14 @@ columns = ["Feature", "Consequence", "LoF", "LoF_filter", "LoF_flags", "LoF_info
 [expected]
 ensembl_vep = ["ENST00000399899 | stop_gained | LC | END_TRUNC | SINGLE_EXON | PERCENTILE:0.238938053097345,GERP_DIST:-283.796467024088,BP_DIST:516,DIST_FROM_LAST_EXON:-333,50_BP_RULE:FAIL"]
 vep_rs = ["ENST00000399899 | stop_gained | LC | END_TRUNC | SINGLE_EXON | PERCENTILE:0.238938053097345,GERP_DIST:-204.02089612931,BP_DIST:516,DIST_FROM_LAST_EXON:-333,50_BP_RULE:FAIL"]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/loftee.rs::GerpSummer::sum_interval",
+    "crates/vep-builtins/src/plugins/loftee.rs::gerp_weighted_dist",
+]
+tests = ["crates/vep-cli/tests/plugin_documented_rows.rs::loftee_sums_gerp_per_base_on_a_bigwig_with_zoom_levels"]
+rules = [
+    "tools/vep-formats-compare/src/rules/loftee.rs::gerp_totals",
+    "tools/vep-plugin-pairs/src/rules/loftee.rs::gerp_zoom_level_summary",
+]

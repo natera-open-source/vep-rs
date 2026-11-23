@@ -1,9 +1,9 @@
 entry = "minimal_no_intergenic"
 page = "docs/divergences/minimal-no-intergenic.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 121.0 per million · 0 flag sets, 24 corpora"
+input_class_basis = "2 · 121.0 per million · 0 flag sets, 27 corpora"
 
 [input]
 format = "vcf"
@@ -28,3 +28,12 @@ columns = ["Location", "Allele", "Feature", "Consequence", "DISTANCE"]
 [expected]
 ensembl_vep = []
 vep_rs = ["21:8885976 | A | ENST00000624291 | downstream_gene_variant | 5000"]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/row_filter.rs::apply_to_record",
+    "crates/vep-cli/src/row_filter.rs::overlaps_a_transcript",
+]
+tests = [
+    "crates/vep-cli/src/row_filter.rs::tests::a_split_whose_first_feature_is_intergenic_cached_no_reference",
+]

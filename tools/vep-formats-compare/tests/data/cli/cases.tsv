@@ -1,0 +1,137 @@
+case	group	exit	env	argv	stdout	stderr	report
+help-columns-unset	parser	0		--help	<<help>>		-
+help-short-h	parser	0		-h	<<help>>		-
+help-columns-0	parser	0	COLUMNS=0	--help	<<help>>		-
+help-columns-not-a-number	parser	0	COLUMNS=wide	--help	<<help>>		-
+error-before-help	parser	2		--format xml --help		<<usage>><<prog>>: error: argument --format: invalid choice: 'xml' (choose from 'default', 'tab', 'vcf', 'json', 'parquet', 'recoder')\n	-
+help-before-error	parser	0		--help --format xml	<<help>>		-
+unknown-then-error-then-help	parser	2		--bogus-first --format xml --help		<<usage>><<prog>>: error: argument --format: invalid choice: 'xml' (choose from 'default', 'tab', 'vcf', 'json', 'parquet', 'recoder')\n	-
+unknown-then-help	parser	0		--bogus-first --help	<<help>>		-
+help-abbreviated	parser	0		--he	<<help>>		-
+no-arguments	parser	2				ERROR: [compare_vep_formats] --format, --expected and --actual are required\n	-
+unknown-option	parser	2		--bogus		<<usage>><<prog>>: error: unrecognized arguments: --bogus\n	-
+unknown-option-with-valid	parser	2		--format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz --bogus value		<<usage>><<prog>>: error: unrecognized arguments: --bogus value\n	-
+unknown-short-option	parser	2		-x		<<usage>><<prog>>: error: unrecognized arguments: -x\n	-
+stray-positional	parser	2		stray		<<usage>><<prog>>: error: unrecognized arguments: stray\n	-
+two-stray-positionals	parser	2		--format default one two		<<usage>><<prog>>: error: unrecognized arguments: one two\n	-
+double-dash-then-positional	parser	2		--format default -- --expected		<<usage>><<prog>>: error: unrecognized arguments: -- --expected\n	-
+missing-value-at-end	parser	2		--format		<<usage>><<prog>>: error: argument --format: expected one argument\n	-
+missing-value-before-option	parser	2		--format --expected <<G>>/expected/default.txt.gz		<<usage>><<prog>>: error: argument --format: expected one argument\n	-
+missing-value-path-option	parser	2		--expected		<<usage>><<prog>>: error: argument --expected: expected one argument\n	-
+missing-value-append-option	parser	2		--field-pairs		<<usage>><<prog>>: error: argument --field-pairs: expected one argument\n	-
+missing-value-int-option	parser	2		--examples		<<usage>><<prog>>: error: argument --examples: expected one argument\n	-
+value-that-looks-negative	compare	0		--examples -1 --format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz	default: green\n		-
+value-that-looks-like-option	parser	2		--masks -x		<<usage>><<prog>>: error: argument --masks: expected one argument\n	-
+empty-value	parser	2		--format \e		<<usage>><<prog>>: error: argument --format: invalid choice: '' (choose from 'default', 'tab', 'vcf', 'json', 'parquet', 'recoder')\n	-
+empty-path-value	compare	2		--format default --expected \e --actual <<G>>/expected/default.txt.gz		ERROR: [compare_vep_formats] cannot read .: Is a directory\n	-
+invalid-choice-format	parser	2		--format xml		<<usage>><<prog>>: error: argument --format: invalid choice: 'xml' (choose from 'default', 'tab', 'vcf', 'json', 'parquet', 'recoder')\n	-
+invalid-choice-format-case	parser	2		--format Default		<<usage>><<prog>>: error: argument --format: invalid choice: 'Default' (choose from 'default', 'tab', 'vcf', 'json', 'parquet', 'recoder')\n	-
+invalid-choice-keep-only	parser	2		--keep-only rows		<<usage>><<prog>>: error: argument --keep-only: invalid choice: 'rows' (choose from 'regulatory_feature_rows')\n	-
+invalid-choice-reference-sequence	parser	2		--reference-sequence maybe		<<usage>><<prog>>: error: argument --reference-sequence: invalid choice: 'maybe' (choose from 'present', 'absent')\n	-
+invalid-choice-reference-release	parser	2		--reference-release 116.4		<<usage>><<prog>>: error: argument --reference-release: invalid choice: '116.4' (choose from '115.2', '116.2', '116.3')\n	-
+abbreviation-ambiguous-reference	parser	2		--reference 116.3		<<usage>><<prog>>: error: ambiguous option: --reference could match --reference-sequence, --reference-release, --reference-fasta\n	-
+invalid-choice-equals-form	parser	2		--format=xml		<<usage>><<prog>>: error: argument --format: invalid choice: 'xml' (choose from 'default', 'tab', 'vcf', 'json', 'parquet', 'recoder')\n	-
+abbreviation-ambiguous-act	parser	2		--form default --expected <<G>>/expected/default.txt.gz --act <<G>>/expected/default.txt.gz		<<usage>><<prog>>: error: ambiguous option: --act could match --actual, --actual-skipped\n	-
+abbreviation-unique	compare	0		--fo default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz --exa 2 --unord --rep <<T>>/abbreviated.json --i <<G>>/variants.vcf --man <<G>>/manifest.json --mas order_only	default: green\n		<<T>>/abbreviated.json
+abbreviation-ambiguous-f	parser	2		--f default		<<usage>><<prog>>: error: ambiguous option: --f could match --format, --floors, --field-pairs\n	-
+abbreviation-ambiguous-ma	parser	2		--ma x		<<usage>><<prog>>: error: ambiguous option: --ma could match --manifest, --masks\n	-
+abbreviation-ambiguous-s	parser	2		--s		<<usage>><<prog>>: error: ambiguous option: --s could match --self-parity, --spliceai-table\n	-
+abbreviation-ambiguous-u	parser	2		--u		<<usage>><<prog>>: error: ambiguous option: --u could match --utrannotator-sweep, --unordered\n	-
+abbreviation-h-is-help	parser	0		--h	<<help>>		-
+abbreviation-ambiguous-e	parser	2		--e x		<<usage>><<prog>>: error: ambiguous option: --e could match --expected, --expected-skipped, --examples\n	-
+abbreviation-ambiguous-re	parser	2		--re x		<<usage>><<prog>>: error: ambiguous option: --re could match --reference-sequence, --reference-release, --reference-fasta, --revel-table, --revel-no-match, --report\n	-
+abbreviation-ambiguous-j	parser	2		--j x		<<usage>><<prog>>: error: ambiguous option: --j could match --json-cache, --json\n	-
+abbreviation-exact-wins-over-longer	compare	0		--format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz --json <<G>>/expected/default.txt.gz	default: green\n		-
+abbreviation-expected-s	warnings	0		--warnings --expected <<T>>/w.txt --actual <<T>>/w.txt --expected-s <<T>>/w.txt --actual-s <<T>>/w.txt	warnings: green\n		-
+abbreviation-with-equals	parser	2		--form=default --exp=<<G>>/expected/default.txt.gz --act=<<G>>/expected/default.txt.gz		<<usage>><<prog>>: error: ambiguous option: --exp=<<G>>/expected/default.txt.gz could match --expected, --expected-skipped\n	-
+abbreviation-of-flag	parser	2		--self		ERROR: [compare_vep_formats] --self-parity needs --default, --tab, --vcf, --json\n	-
+abbreviation-ambiguous-with-equals	parser	2		--re=x		<<usage>><<prog>>: error: ambiguous option: --re=x could match --reference-sequence, --reference-release, --reference-fasta, --revel-table, --revel-no-match, --report\n	-
+abbreviation-single-dash	parser	2		-format default		<<usage>><<prog>>: error: unrecognized arguments: -format default\n	-
+equals-form	compare	0		--format=default --expected=<<G>>/expected/default.txt.gz --actual=<<G>>/expected/default.txt.gz	default: green\n		-
+equals-form-int	compare	0		--format=default --expected=<<G>>/expected/default.txt.gz --actual=<<G>>/expected/default.txt.gz --examples=2	default: green\n		-
+equals-form-empty-value	parser	2		--format=		<<usage>><<prog>>: error: argument --format: invalid choice: '' (choose from 'default', 'tab', 'vcf', 'json', 'parquet', 'recoder')\n	-
+equals-form-on-flag	parser	2		--self-parity=1		<<usage>><<prog>>: error: argument --self-parity: ignored explicit argument '1'\n	-
+equals-form-on-flag-empty	parser	2		--unordered=		<<usage>><<prog>>: error: argument --unordered: ignored explicit argument ''\n	-
+equals-form-value-with-equals	compare	0		--format=default --expected=<<G>>/expected/default.txt.gz --actual=<<G>>/expected/default.txt.gz --field-pairs=IMPACT=HIGH=>LOW	default: green\n		-
+repeated-last-wins	compare	0		--format tab --format default --expected <<T>>/none --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz	default: green\n		-
+repeated-append	compare	0		--format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz --field-pairs IMPACT=HIGH=>LOW --field-pairs IMPACT=LOW=>HIGH;SYMBOL=a=>b	default: green\n		-
+repeated-flag	compare	0		--unordered --unordered --format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz	default: green\n		-
+repeated-mode-flag	warnings	0		--warnings --warnings --expected <<T>>/w.txt --actual <<T>>/w.txt	warnings: green\n		-
+both-mode-flags	parser	2		--self-parity --warnings		<<usage>><<prog>>: error: argument --warnings: not allowed with argument --self-parity\n	-
+both-mode-flags-reversed	parser	2		--warnings --self-parity		<<usage>><<prog>>: error: argument --self-parity: not allowed with argument --warnings\n	-
+type-error-examples-x	parser	2		--examples x		<<usage>><<prog>>: error: argument --examples: invalid int value: 'x'\n	-
+type-error-examples-float	parser	2		--examples 1.5		<<usage>><<prog>>: error: argument --examples: invalid int value: '1.5'\n	-
+type-error-examples-empty	parser	2		--examples \e		<<usage>><<prog>>: error: argument --examples: invalid int value: ''\n	-
+type-error-examples-quote	parser	2		--examples it's		<<usage>><<prog>>: error: argument --examples: invalid int value: "it's"\n	-
+type-error-examples-newline	parser	2		--examples a\nb		<<usage>><<prog>>: error: argument --examples: invalid int value: 'a\\nb'\n	-
+type-error-examples-non-ascii	parser	2		--examples \xc3\xa9		<<usage>><<prog>>: error: argument --examples: invalid int value: '\xc3\xa9'\n	-
+type-ok-examples-padded	compare	0		--format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz --examples \x203\x20	default: green\n		-
+type-ok-examples-underscore	compare	0		--format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz --examples 1_0	default: green\n		-
+type-ok-examples-plus	compare	0		--format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz --examples +3	default: green\n		-
+type-ok-examples-fullwidth-digit	compare	0		--format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz --examples \xef\xbc\x93	default: green\n		-
+type-ok-examples-huge	compare	0		--format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz --examples 99999999999999999999999999	default: green\n		-
+own-keep-only-with-warnings	parser	2		--keep-only regulatory_feature_rows --warnings		ERROR: [compare_vep_formats] --keep-only is available only in --format comparison mode\n	-
+own-keep-only-with-self-parity	parser	2		--keep-only regulatory_feature_rows --self-parity		ERROR: [compare_vep_formats] --keep-only is available only in --format comparison mode\n	-
+own-warnings-needs-both	parser	2		--warnings --expected <<T>>/w.txt		ERROR: [compare_vep_formats] --warnings needs --expected and --actual\n	-
+own-self-parity-needs-all	parser	2		--self-parity		ERROR: [compare_vep_formats] --self-parity needs --default, --tab, --vcf, --json\n	-
+own-self-parity-needs-two	parser	2		--self-parity --default <<G>>/expected/default.txt.gz --vcf <<G>>/expected/vcf.vcf.gz		ERROR: [compare_vep_formats] --self-parity needs --tab, --json\n	-
+own-format-required	parser	2		--expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz		ERROR: [compare_vep_formats] --format, --expected and --actual are required\n	-
+own-cannot-read	compare	2		--format default --expected <<T>>/absent.txt --actual <<G>>/expected/default.txt.gz		ERROR: [compare_vep_formats] cannot read <<T>>/absent.txt: No such file or directory\n	-
+own-cannot-read-normalised-path	compare	2		--format default --expected ./<<T>>//absent.txt --actual <<G>>/expected/default.txt.gz		ERROR: [compare_vep_formats] cannot read <<T->>/absent.txt: No such file or directory\n	-
+own-cannot-read-relative-dot	compare	2		--format default --expected ./absent/../absent.txt --actual <<G>>/expected/default.txt.gz		ERROR: [compare_vep_formats] cannot read absent/../absent.txt: No such file or directory\n	-
+own-cannot-read-directory	compare	2		--format default --expected <<T>> --actual <<G>>/expected/default.txt.gz		ERROR: [compare_vep_formats] cannot read <<T>>: Is a directory\n	-
+own-floors-bad	compare	2		--format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz --floors IMPACT=x		ERROR: [compare_vep_formats] --floors expects COL=MIN with a non-negative integer, got 'IMPACT=x'\n	-
+own-field-pairs-bad	compare	2		--format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz --field-pairs IMPACT=HIGH		ERROR: [compare_vep_formats] --field-pairs expects COL=EXPECTED=>ACTUAL, got 'IMPACT=HIGH'\n	-
+own-manifest-not-json	compare	2		--format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz --manifest <<T>>/w.txt		ERROR: [compare_vep_formats] <<T>>/w.txt is not JSON: Expecting value: line 1 column 1 (char 0)\n	-
+own-manifest-not-object	compare	2		--format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz --manifest <<T>>/list.json		ERROR: [compare_vep_formats] <<T>>/list.json is not a manifest object\n	-
+own-green-default	compare	0		--format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz --report <<T>>/green-default.json	default: green\n		<<T>>/green-default.json
+own-green-no-report	compare	0		--format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz	default: green\n		-
+own-red-default	compare	1		--format default --expected <<G>>/expected/default.txt.gz --actual <<T>>/default-one-row-less.txt --report <<T>>/red-default.json	default: red\n  missing in the candidate: 1 entries\n		<<T>>/red-default.json
+own-self-parity-green	self-parity	0		--self-parity --default <<G>>/expected/default.txt.gz --tab <<G>>/expected/tab.txt.gz --vcf <<G>>/expected/vcf.vcf.gz --json <<G>>/expected/json.jsonl.gz --input <<G>>/variants.vcf --report <<T>>/self-parity.json	self-parity: green\n		<<T>>/self-parity.json
+own-warnings-green	warnings	0		--warnings --expected <<T>>/w.txt --actual <<T>>/w.txt --report <<T>>/warnings.json	warnings: green\n		<<T>>/warnings.json
+own-report-is-directory	compare	2		--format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz --report <<T>>		ERROR: [compare_vep_formats] cannot write <<T>>: Is a directory\n	-
+own-report-parent-is-file	compare	2		--format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz --report <<T>>/w.txt/report.json		ERROR: [compare_vep_formats] cannot write <<T>>/w.txt/report.json: File exists\n	-
+own-report-unwritable	compare	2		--format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz --report <<T>>/readonly/report.json		ERROR: [compare_vep_formats] cannot write <<T>>/readonly/report.json: Permission denied\n	-
+own-report-unwritable-file	compare	2		--format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz --report <<T>>/readonly-file.json		ERROR: [compare_vep_formats] cannot write <<T>>/readonly-file.json: Permission denied\n	-
+own-report-nested-new-directories	compare	0		--format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz --report <<T>>/new/a/b/report.json	default: green\n		<<T>>/new/a/b/report.json
+own-report-empty-path	compare	2		--format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz --report \e		ERROR: [compare_vep_formats] cannot write .: Is a directory\n	-
+help-short-with-tail	parser	0		-hx	<<help>>		-
+help-single-dash-word	parser	0		-help	<<help>>		-
+help-short-equals	parser	2		-h=1		<<usage>><<prog>>: error: argument -h/--help: ignored explicit argument '1'\n	-
+help-long-equals	parser	2		--help=1		<<usage>><<prog>>: error: argument -h/--help: ignored explicit argument '1'\n	-
+help-twice-short	parser	0		-hh	<<help>>		-
+value-with-space-looks-like-option	compare	0		--masks -x\x20y --format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz	default: green\n		-
+value-single-dash	compare	2		--format default --expected - --actual <<G>>/expected/default.txt.gz		ERROR: [compare_vep_formats] cannot read -: No such file or directory\n	-
+value-double-dash	parser	2		--masks -- --format default		<<usage>><<prog>>: error: argument --masks: expected one argument\n	-
+value-negative-number-like	compare	0		--masks -1x --format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz	default: green\n		-
+double-dash-before-value	parser	2		--format -- default		<<usage>><<prog>>: error: argument --format: expected one argument\n	-
+traceback-floors-superscript	compare	1		--format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz --floors IMPACT=\xc2\xb2		ERROR: [compare_vep_formats] invalid literal for int() with base 10: '\xc2\xb2'\n	-
+own-floors-forms	compare	1		--format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz --floors IMPACT=1,,Gene=0007,\x20SYMBOL=\xd9\xa3\x20,ZZZ=5 --field-pairs IMPACT=HIGH=>LOW;;IMPACT=A=>B;\x20B==> --field-pairs SYMBOL=a=>b --report <<T>>/floors-forms.json	default: red\n  floor SYMBOL=3: expected populated 0, actual populated 0\n  floor ZZZ=5: expected populated 0, actual populated 0\n		<<T>>/floors-forms.json
+own-floors-no-name	compare	2		--format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz --floors =3		ERROR: [compare_vep_formats] --floors expects COL=MIN with a non-negative integer, got '=3'\n	-
+own-floors-spaces-inside	compare	2		--format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz --floors IMPACT\x20=\x201		ERROR: [compare_vep_formats] --floors expects COL=MIN with a non-negative integer, got 'IMPACT = 1'\n	-
+own-floors-empty	compare	0		--format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz --floors ,	default: green\n		-
+own-field-pairs-no-name	compare	2		--format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz --field-pairs =x=>y		ERROR: [compare_vep_formats] --field-pairs expects COL=EXPECTED=>ACTUAL, got '=x=>y'\n	-
+own-field-pairs-no-arrow	compare	2		--format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz --field-pairs A=>y		ERROR: [compare_vep_formats] --field-pairs expects COL=EXPECTED=>ACTUAL, got 'A=>y'\n	-
+own-field-pairs-quote-in-item	compare	2		--format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz --field-pairs it's		ERROR: [compare_vep_formats] --field-pairs expects COL=EXPECTED=>ACTUAL, got "it's"\n	-
+own-red-examples-0	compare	1		--format default --expected <<G>>/expected/default.txt.gz --actual <<T>>/default-one-row-less.txt --examples 0 --report <<T>>/red-examples-0.json	default: red\n  missing in the candidate: 1 entries\n		<<T>>/red-examples-0.json
+own-red-examples-negative	compare	1		--format default --expected <<G>>/expected/default.txt.gz --actual <<T>>/default-one-row-less.txt --examples -1 --report <<T>>/red-examples-negative.json	default: red\n  missing in the candidate: 1 entries\n		<<T>>/red-examples-negative.json
+own-self-parity-path-forms	self-parity	0		--self-parity --default <<G>>/expected/./default.txt.gz --tab <<G>>/expected//tab.txt.gz --vcf <<G>>/expected/../expected/vcf.vcf.gz --json /<<G>>/expected/json.jsonl.gz --report <<T>>/self-parity-path-forms.json	self-parity: green\n		<<T>>/self-parity-path-forms.json
+own-warnings-non-ascii-path	warnings	0		--warnings --expected <<T>>/w\xc3\xa4rn.txt --actual <<T>>/w\xff.txt --report <<T>>/warnings-non-ascii-path.json	warnings: green\n		<<T>>/warnings-non-ascii-path.json
+own-cannot-read-non-utf8-path	warnings	2		--warnings --expected <<T>>/absent\xff.txt --actual <<T>>/w.txt		ERROR: [compare_vep_formats] cannot read <<T>>/absent\\udcff.txt: No such file or directory\n	-
+own-report-parent-of-parent-is-file	compare	2		--format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz --report <<T>>/w.txt/a/report.json		ERROR: [compare_vep_formats] cannot write <<T>>/w.txt/a/report.json: Not a directory\n	-
+own-report-name-too-long	compare	2		--format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz --report <<T>>/nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn.json		ERROR: [compare_vep_formats] cannot write <<T>>/nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn.json: File name too long\n	-
+own-expected-skipped-alone	warnings	2		--warnings --expected <<T>>/w.txt --actual <<T>>/w.txt --expected-skipped <<T>>/w.txt		ERROR: [compare_vep_formats] --expected-skipped and --actual-skipped go together\n	-
+own-keep-only-conflicts-mask	compare	2		--format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz --keep-only regulatory_feature_rows --masks regulatory_feature_rows		ERROR: [compare_vep_formats] --keep-only regulatory_feature_rows conflicts with --masks regulatory_feature_rows\n	-
+own-recoder-keep-only	compare	2		--format recoder --expected <<T>>/absent.json --actual <<T>>/absent.json --keep-only regulatory_feature_rows		ERROR: [compare_vep_formats] the recoder format has no regulatory rows to keep or drop\n	-
+own-edge-window-needs-cache	compare	2		--format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz --masks hgvs_shift_sequence_edge_window --reference-fasta <<T>>/absent.fa		ERROR: [compare_vep_formats] --masks hgvs_shift_sequence_edge_window with --reference-fasta needs --json-cache, the candidate JSON cache\n	-
+own-intron-classes-need-cache	compare	2		--format default --expected <<G>>/expected/default.txt.gz --actual <<G>>/expected/default.txt.gz --masks hgvsp_intron_start_insertion,\x20hgvsp_intron_end_insertion		ERROR: [compare_vep_formats] --masks hgvsp_intron_end_insertion,hgvsp_intron_start_insertion needs --json-cache, the candidate JSON cache\n	-
+own-vcf-without-input	compare	2		--format vcf --expected <<G>>/expected/vcf.vcf.gz --actual <<G>>/expected/vcf.vcf.gz		ERROR: [compare_vep_formats] --format vcf needs --input, the input VCF\n	-
+own-warnings-red	warnings	1		--warnings --expected <<T>>/w-expected.txt --actual <<T>>/w-actual.txt --report <<T>>/warnings-red.json	warnings: red\n  warnings: 2 entries only in the expected file\n  warnings: 2 entries only in the actual file\n		<<T>>/warnings-red.json
+own-warnings-red-masks	warnings	1		--warnings --expected <<T>>/w-expected.txt --actual <<T>>/w-actual.txt --masks \x20fork_warning_pid_prefix\x20,regulatory_feature_rows,, --expected-skipped <<T>>/w-actual.txt --actual-skipped <<T>>/w-expected.txt --report <<T>>/warnings-red-masks.json	warnings: red\n  warnings: 2 entries only in the expected file\n  warnings: 2 entries only in the actual file\n  warnings: the regulatory notice is missing from the actual file\n  skipped: 2 entries only in the expected file\n  skipped: 2 entries only in the actual file\n		<<T>>/warnings-red-masks.json
+value-is-the-help-option	parser	2		--format default --expected --help --actual <<G>>/expected/default.txt.gz		<<usage>><<prog>>: error: argument --expected: expected one argument\n	-
+value-is-an-abbreviation	parser	2		--masks --fo		<<usage>><<prog>>: error: argument --masks: expected one argument\n	-
+value-is-an-unknown-option	parser	2		--masks --zzz		<<usage>><<prog>>: error: argument --masks: expected one argument\n	-
+value-with-equals-is-an-option	parser	2		--masks --format=default		<<usage>><<prog>>: error: argument --masks: expected one argument\n	-
+other-mode-option-not-read	warnings	0		--warnings --expected <<T>>/w.txt --actual <<T>>/w.txt --floors nonsense --field-pairs nonsense --examples -7 --format default	warnings: green\n		-
+other-mode-reference-release-read	warnings	0		--warnings --expected <<T>>/w.txt --actual <<T>>/w.txt --reference-release 115.2 --masks frequency_filter_zero_value	warnings: green\n		-
+other-mode-option-still-checked	parser	2		--warnings --expected <<T>>/w.txt --actual <<T>>/w.txt --format xml		<<usage>><<prog>>: error: argument --format: invalid choice: 'xml' (choose from 'default', 'tab', 'vcf', 'json', 'parquet', 'recoder')\n	-

@@ -1,0 +1,154 @@
+[
+  {
+    "attributes": [],
+    "biotype": "lncRNA",
+    "end": 900,
+    "exons": [
+      {
+        "end": 900,
+        "stable_id": "ED01",
+        "start": 100
+      }
+    ],
+    "stable_id": "D01",
+    "start": 100,
+    "strand": 1,
+    "version": 1
+  },
+  {
+    "attributes": [],
+    "biotype": "lncRNA",
+    "end": 900,
+    "exons": [
+      {
+        "end": 900,
+        "stable_id": "ED02",
+        "start": 100
+      }
+    ],
+    "stable_id": "D02",
+    "start": 100,
+    "strand": 1,
+    "version": 1
+  },
+  {
+    "attributes": [],
+    "biotype": "lncRNA",
+    "end": 900,
+    "exons": [
+      {
+        "end": 900,
+        "stable_id": "ED03",
+        "start": 100
+      }
+    ],
+    "stable_id": "D03",
+    "start": 100,
+    "strand": 1,
+    "version": 1
+  },
+  {
+    "attributes": [],
+    "biotype": "lncRNA",
+    "end": 900,
+    "exons": [
+      {
+        "end": 900,
+        "stable_id": "ED04",
+        "start": 100
+      }
+    ],
+    "stable_id": "D04",
+    "start": 100,
+    "strand": 1,
+    "version": 1
+  },
+  {
+    "attributes": [
+      {
+        "code": "gencode_basic",
+        "name": "GENCODE basic annotation",
+        "value": "GENCODE basic"
+      }
+    ],
+    "biotype": "lncRNA",
+    "end": 900,
+    "exons": [
+      {
+        "end": 900,
+        "stable_id": "ED05",
+        "start": 100
+      }
+    ],
+    "stable_id": "D05",
+    "start": 100,
+    "strand": 1,
+    "version": 1
+  },
+  {
+    "attributes": [
+      {
+        "code": "gencode_basic",
+        "name": "GENCODE basic annotation",
+        "value": "GENCODE basic"
+      }
+    ],
+    "biotype": "lncRNA",
+    "end": 900,
+    "exons": [
+      {
+        "end": 900,
+        "stable_id": "ED06",
+        "start": 100
+      }
+    ],
+    "stable_id": "D06",
+    "start": 100,
+    "strand": 1,
+    "version": 1
+  },
+  {
+    "attributes": [
+      {
+        "code": "gencode_basic",
+        "name": "GENCODE basic annotation",
+        "value": "GENCODE basic"
+      }
+    ],
+    "biotype": "lncRNA",
+    "end": 900,
+    "exons": [
+      {
+        "end": 900,
+        "stable_id": "ED07",
+        "start": 100
+      }
+    ],
+    "stable_id": "D07",
+    "start": 100,
+    "strand": 1,
+    "version": 1
+  },
+  {
+    "attributes": [
+      {
+        "code": "gencode_basic",
+        "name": "GENCODE basic annotation",
+        "value": "GENCODE basic"
+      }
+    ],
+    "biotype": "lncRNA",
+    "end": 900,
+    "exons": [
+      {
+        "end": 900,
+        "stable_id": "ECACHE_ONLY_1",
+        "start": 100
+      }
+    ],
+    "stable_id": "CACHE_ONLY_1",
+    "start": 100,
+    "strand": 1,
+    "version": 1
+  }
+]

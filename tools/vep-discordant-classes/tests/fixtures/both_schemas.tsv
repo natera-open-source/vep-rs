@@ -1,0 +1,4 @@
+source	file_name	consequence_set	source_file	variant_type	direction	location	allele	feature	feature_type	consequence
+missing_in_rust	tuple.txt	x	sv_a	DEL	only_rust	1:100-200	deletion	T1	Transcript	y
+extra_in_rust	tuple.txt	x	sv_a	DEL	only_perl	1:100-300	deletion	T1	Transcript	y
+missing_in_rust	tuple.txt	x	sv_b	DEL	only_rust	2:5	deletion	T2	Transcript	y

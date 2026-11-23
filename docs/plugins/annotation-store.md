@@ -4,9 +4,9 @@ The parameters, commands and data preparation of CADD, REVEL, gnomADc,
 AlphaMissense, dbscSNV, AVI, OpenTargets, SpliceVault, TranscriptAnnotator,
 gnomADMt and LOEUF.
 
-An annotation-store plugin reads a bgzipped, tabix-indexed data file, or the
-`.vpd` binary store built from it. It matches records by position and then by
-whatever its Matches row adds.
+An annotation-store plugin reads a bgzipped, tabix-indexed data file or, LOEUF
+excepted, the `.vpd` binary store built from it. It matches records by position
+and then by whatever its Matches row adds.
 
 Pass `--assembly` whenever one of these plugins is enabled. CADD, REVEL, dbscSNV
 and AlphaMissense use it to refuse a data file built on the other assembly.
@@ -60,8 +60,8 @@ name `whole_genome_SNVs.tsv.gz`, `InDels.tsv.gz` and `1000G_phase3_SVs.tsv.gz`
 (lines 31-33). vep-rs reads a structural-variant file's index as the index
 declares it.
 
-Under `--assembly`, a file whose header lines do not name the assembly is
-refused, as Ensembl VEP's plugin refuses it (`CADD.pm` lines 151-157).
+A file whose header does not name the run's assembly is refused, as Ensembl
+VEP's plugin refuses it under `--assembly` (`CADD.pm` lines 151-157).
 
 ## REVEL {#revel}
 
@@ -123,7 +123,7 @@ tabix -f -s 1 -b 3 -e 3 new_tabbed_revel_grch38.tsv.gz
 
 One download serves both assemblies, indexed on column 2 for GRCh37 and column 3
 for GRCh38. The run's assembly selects the column, from `--assembly` or else the
-cache, and the plugin is refused when neither names one. Ensembl VEP 116.2
+cache, and the plugin is refused when neither names one. Ensembl VEP 116.3
 builds its plugins before it reads the cache (`Runner.pm` lines 125-128). A run
 without `--assembly` therefore drops REVEL there with a warning (`REVEL.pm`
 lines 132-133), or ends under `--safe`.
@@ -183,7 +183,7 @@ missense transcript consequences of a variant, as Ensembl VEP's
 | Property      | Value                                                                                                                   |
 | ------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | Builds        | GRCh37, GRCh38                                                                                                          |
-| Matches       | missense rows only: a record from two bases before the variant's start to its end whose alleles, trimmed of the bases they share, are the variant's at its position, and the first and last letters of the record's `protein_variant` equal to the row's reference and alternate amino acids; the record's transcript equal to the row's under `transcript_match=1`. On a multi-allelic record each allele's rows are matched against that allele alone, where Ensembl VEP 116.2 matches every allele of the record ([The AlphaMissense prediction of a sibling allele on a multi-allelic record](../divergences/alphamissense-sibling-allele-rows.md)) |
+| Matches       | missense rows only: a record from two bases before the variant's start to its end whose alleles, trimmed of the bases they share, are the variant's at its position, and the first and last letters of the record's `protein_variant` equal to the row's reference and alternate amino acids; the record's transcript equal to the row's under `transcript_match=1`. On a multi-allelic record each allele's rows are matched against that allele alone, where Ensembl VEP 116.3 matches every allele of the record ([The AlphaMissense prediction of a sibling allele on a multi-allelic record](../divergences/alphamissense-sibling-allele-rows.md)) |
 | Output fields | `am_pathogenicity`, `am_class` by default; any column of the file under `cols`, each named with the `am_` prefix          |
 | Data source   | [AlphaMissense data](https://console.cloud.google.com/storage/browser/dm_alphamissense)                                |
 
@@ -191,8 +191,8 @@ Every parameter is `key=value`; a file given by position is refused.
 
 | Parameter                  | Meaning                                                                                                          |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `file=<path>`              | The prediction file (mandatory). The published tables name the mitochondrial contig `chrM`; vep-rs reads them for a record spelt `MT`, `chrM` or `chrMT`, where Ensembl VEP 116.2 reaches them from a record spelt `chrM` or `M` alone ([A mitochondrial record against a plugin's file naming the contig under another spelling](../divergences/plugin-contig-mitochondrial-spelling.md)). |
-| `cols=<name>[:<name>...]`  | The columns written, by their output names or the file's own; `cols=all` writes every column. A name the header lacks is refused with the valid names listed; Ensembl VEP 116.2 tests each name as a pattern ([a documented class](../divergences/plugin-cols-names-matched-exactly.md)). |
+| `file=<path>`              | The prediction file (mandatory). The published tables name the mitochondrial contig `chrM`; vep-rs reads them for a record spelt `MT`, `chrM` or `chrMT` (on GRCh37 under `--fasta`), where Ensembl VEP 116.3 reaches them from a record spelt `chrM` or `M` alone ([A mitochondrial record against a plugin's file naming the contig under another spelling](../divergences/plugin-contig-mitochondrial-spelling.md)). |
+| `cols=<name>[:<name>...]`  | The columns written, by their output names or the file's own; `cols=all` writes every column. A name the header lacks is refused with the valid names listed; Ensembl VEP 116.3 tests each name as a pattern ([a documented class](../divergences/plugin-cols-names-matched-exactly.md)). |
 | `transcript_match=<value>` | Write a prediction only when its transcript is the row's; every value but an empty one and `0` sets it.          |
 
 ```bash
@@ -215,8 +215,8 @@ printed on standard error, under `--quiet` too, and never written to the
 warnings file, as Ensembl VEP prints it.
 
 **Preparing the data.** AlphaMissense publishes one file per assembly, and every
-data row names its assembly in the `genome` column. A file whose rows name the
-other assembly is refused under `--assembly`.
+data row names its assembly in the `genome` column. A file whose rows name
+another assembly than the run's is refused.
 
 ## dbscSNV {#dbscsnv}
 
@@ -252,14 +252,14 @@ reads `pos` under GRCh37 and `hg38_pos` under GRCh38 (`dbscSNV.pm` lines
 215-219), and `ada_score` and `rf_score` by header name.
 
 The two preparations share the header and differ in their index (`dbscSNV.pm`
-lines 51-59). vep-rs therefore checks that the index was built on the
-assembly's position column and refuses the other preparation, naming both
-columns. A file that keeps only the columns the plugin reads
+lines 51-59). vep-rs therefore refuses a file indexed on the other assembly's
+position column, naming both. A file cut to the plugin's columns
 (`chr pos ref alt ada_score rf_score`, or `hg38_chr hg38_pos ...` for GRCh38)
-is read the same way.
+is read; Ensembl VEP 116.3 refuses it ([a documented
+class](../divergences/dbscsnv-file-without-gene-column.md)).
 
 The assembly comes from the second parameter, else `--assembly`, else the cache;
-a run naming none is refused. Ensembl VEP 116.2 builds the plugin before it
+a run naming none is refused. Ensembl VEP 116.3 builds the plugin before it
 reads the cache (`Runner.pm` lines 125-128). A run without the flag or the
 parameter is therefore refused there (`dbscSNV.pm` line 226) and the plugin
 dropped with a warning.
@@ -332,9 +332,9 @@ credible set the variant leads, and the gene and biosample of each QTL.
 | Parameter                | Meaning                                                                                                                                                                                                      |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `file=<path>`            | The tabix-indexed export, with its header line commented (`#`).                                                                                                                                              |
-| `cols=<a:b:c>`           | The header columns to write, `:`-separated, or `all`. Default: `gwasLocusToGeneScore`, `gwasGeneId` and `gwasDiseases` when GWAS study types are selected, `qtlGeneId` and `qtlBiosampleName` when QTL types are. A name the header lacks is refused with the valid names listed; Ensembl VEP 116.2 tests each name as a pattern, so `cols=gwasGeneI.` loads there with every value `NA` ([a documented class](../divergences/plugin-cols-names-matched-exactly.md)). |
-| `study_types=<list>`     | `all` (default), `gwas`, `QTL` (every study type ending in `qtl`) or a `:`-separated list of such names, `eqtl:pqtl` among them. A list naming a QTL type beside `QTL` is refused. A list naming `QTL` twice, which Ensembl VEP 116.2 dies on, is [a documented class](../divergences/opentargets-duplicate-study-type-and-missing-islead.md). |
-| `lead_variants_only=0|1` | `1` (default) keeps the records whose `isLead` is `true`. An export whose header lacks `isLead` (or lacks `studyType` under a `study_types` filter) is refused at load, where Ensembl VEP 116.2 prints the header lines and annotates nothing: [the same class](../divergences/opentargets-duplicate-study-type-and-missing-islead.md). |
+| `cols=<a:b:c>`           | The header columns to write, `:`-separated, or `all`. Default: `gwasLocusToGeneScore`, `gwasGeneId` and `gwasDiseases` when GWAS study types are selected, `qtlGeneId` and `qtlBiosampleName` when QTL types are. A name the header lacks is refused with the valid names listed; Ensembl VEP 116.3 tests each name as a pattern, so `cols=gwasGeneI.` loads there with every value `NA` ([a documented class](../divergences/plugin-cols-names-matched-exactly.md)). |
+| `study_types=<list>`     | `all` (default), `gwas`, `QTL` (every study type ending in `qtl`) or a `:`-separated list of such names, `eqtl:pqtl` among them. A list naming a QTL type beside `QTL` is refused. A list naming `QTL` twice, which Ensembl VEP 116.3 dies on, is [a documented class](../divergences/opentargets-duplicate-study-type-and-missing-islead.md). |
+| `lead_variants_only=0|1` | `1` (default) keeps the records whose `isLead` is `true`. An export whose header lacks `isLead` (or lacks `studyType` under a `study_types` filter) is refused at load, where Ensembl VEP 116.3 prints the header lines and annotates nothing: [the same class](../divergences/opentargets-duplicate-study-type-and-missing-islead.md). |
 
 ```bash
 --plugin OpenTargets,file=/path/to/open_targets_vep_full.tsv.gz
@@ -353,7 +353,7 @@ anchor base shared by both alleles) matches the variant as the input states it.
 An export holding one family alone, the Platform's `open_targets_vep_gwas.tsv.gz`
 or `open_targets_vep_qtl.tsv.gz` or a file split as Ensembl VEP's plugin
 documents, loads under the default `study_types` with that family's default
-columns. Ensembl VEP 116.2's OpenTargets plugin selects both families
+columns. Ensembl VEP 116.3's OpenTargets plugin selects both families
 whatever the header carries and asks for both families' default columns
 (`OpenTargets.pm`, lines 202-205 and 273-278 of the `VEP_plugins` release/116
 branch). It drops the plugin, writing
@@ -361,12 +361,12 @@ branch). It drops the plugin, writing
 to its warnings file (lines 227-228) and every row without an `OpenTargets_`
 field; there, `study_types=all` or the family's own name loads it.
 
-`lead_variants_only` takes `1` or `0`, and `0` switches the filter off in both
-engines. vep-rs drops the plugin at load on any other value, with the warning
-`lead_variants_only must be 0 or 1, not '<value>'`. Ensembl VEP's plugin reads
-the value by Perl truth (`OpenTargets.pm`, lines 262-267 and 352).
-`lead_variants_only=false` is therefore a true string there and keeps the filter
-on without a warning. Neither shape is on a committed dataset (tier 3 of
+`lead_variants_only` takes `1` or `0`; `0` or an empty value switches the filter
+off in both engines. vep-rs drops the plugin at load on any other value, with
+the warning `lead_variants_only must be 0 or 1, not '<value>'`. Ensembl VEP's
+plugin reads it by Perl truth (`OpenTargets.pm`, lines 262-267 and 352), so
+`lead_variants_only=false`, a true string, keeps the filter on there without a
+warning. Neither shape is on a committed dataset (tier 3 of
 [Intended divergences from Ensembl VEP](../intended-divergences.md); 4 flag sets
 run the plugin).
 
@@ -455,8 +455,8 @@ does.
 
 | Parameter       | Meaning                                                                                                                             |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `file=<path>`   | The table (mandatory): chromosome, position, reference allele, alternate allele and transcript id, then the columns to append, named by the table's last header line. A header line without a leading `#` (a table indexed with `tabix -S 1`) names the columns too; Ensembl VEP 116.2 reads the header through `tabix -h`, which prints `#` lines alone, so such a table gives it no column names and no output fields (`TranscriptAnnotator.pm` lines 99-105). |
-| `cols=<a:b>`    | The columns written, `:`-separated; every column after the fifth by default. A name is matched to the header names exactly; Ensembl VEP 116.2 tests each name as a pattern and keeps it as typed, so `SIFT_.core` heads an empty column there ([a documented class](../divergences/plugin-cols-names-matched-exactly.md)). |
+| `file=<path>`   | The table (mandatory): chromosome, position, reference allele, alternate allele and transcript id, then the columns to append, named by the table's last header line. A header line without a leading `#` (a table indexed with `tabix -S 1`) names the columns too; Ensembl VEP 116.3 reads the header through `tabix -h`, which prints `#` lines alone, so such a table gives it no column names and no output fields (`TranscriptAnnotator.pm` lines 99-105). |
+| `cols=<a:b>`    | The columns written, `:`-separated; every column after the fifth by default. A name is matched to the header names exactly; Ensembl VEP 116.3 tests each name as a pattern and keeps it as typed, so `SIFT_.core` heads an empty column there ([a documented class](../divergences/plugin-cols-names-matched-exactly.md)). |
 | `prefix=<text>` | The field prefix; the file's name without its extensions by default, and `prefix=0` writes the column names bare.                   |
 | `trim=<0 or 1>` | `1`, the default, removes the whitespace around every header name and cell before it is read; `0` keeps the cells as written. |
 
@@ -466,7 +466,7 @@ does.
 cols=SIFT_score:Comment,prefix=my
 ```
 
-`trim` and `cols` are read by their truth, as Ensembl VEP 116.2 reads them
+`trim` and `cols` are read by their truth, as Ensembl VEP 116.3 reads them
 (`TranscriptAnnotator.pm` lines 132 and 164). Only `0` and an empty value are
 false. `trim=yes` trims, `trim=` does not, and `cols=0` writes every column.
 
@@ -476,9 +476,9 @@ An empty cell is an empty value and a missing column an absent one
 The rows from two bases before the record's span to its end are read. The span
 runs from its lower to its higher coordinate, so that an insertion's start lies
 inside it. The first row whose transcript and alleles match the transcript row's
-is written on it. Ensembl VEP 116.2 reads from two bases before the record's
+is written on it. Ensembl VEP 116.3 reads from two bases before the record's
 start to its end (`TranscriptAnnotator.pm` line 218), a two-base window for an
-insertion. 996,643 of the chromosome 21 population cuts' records have that shape
+insertion. 996,643 of the chromosome 21 cuts' records have that shape
 ([the insertion-window class, section
 10](#10-transcriptannotator-a-table-row-written-at-an-insertions-start)).
 
@@ -497,9 +497,9 @@ VCF, as `gnomADMt.pm` does.
 
 | Parameter             | Meaning                                                                                                                        |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `file=<path>`         | The sites VCF (mandatory); a `##fileformat` not naming major version 4 is refused. Its contig may be named `MT`, `M`, `chrM` or `chrMT`; Ensembl VEP 116.2 reads a `chrM`- or `M`-named one only ([A gnomADMt data file whose contig is named `MT`](../divergences/gnomadmt-mt-named-contig.md)). |
+| `file=<path>`         | The sites VCF (mandatory); a `##fileformat` not naming major version 4 is refused. Its contig may be named `MT`, `M`, `chrM` or `chrMT`; Ensembl VEP 116.3 reads a `chrM`- or `M`-named one only ([A gnomADMt data file whose contig is named `MT`](../divergences/gnomadmt-mt-named-contig.md)). |
 | `fields=<a:b>`        | The INFO fields written, `:`-separated by their names in the file, or `all`.                                                   |
-| `hap_filter=<a:b>`    | The haplogroups kept, in the order named, in every per-haplogroup field; `all` keeps every one in the file's order. On a file whose `hap_AN` description states no order list the filter is refused at plugin initialization, `all` included; Ensembl VEP 116.2 refuses a named filter but loads `all` with a warning and writes every per-haplogroup field empty (`gnomADMt.pm` lines 82, 114 and 347). The gnomAD chrM sites file states the list. |
+| `hap_filter=<a:b>`    | The haplogroups kept, in the order named, in every per-haplogroup field; `all` keeps every one in the file's order. On a file whose `hap_AN` description states no order list the filter is refused at plugin initialization, `all` included; Ensembl VEP 116.3 refuses a named filter but loads `all` with a warning and writes every per-haplogroup field empty (`gnomADMt.pm` lines 82, 114 and 347). The gnomAD chrM sites file states the list. |
 | `pop_filter=<a:b>`    | The populations kept, in the order named, in every per-population field; `all` keeps every one in the file's order. A file whose `pop_AN` description states no order list is read as `hap_filter` reads `hap_AN`. |
 
 ```bash
@@ -526,7 +526,7 @@ a transcript, or the minimum over its gene's transcripts, as Ensembl VEP's
 | Builds        | GRCh37 (the gnomAD v2.1.1 table by transcript), GRCh38 (the gnomAD v4 table with gene coordinates appended)                              |
 | Matches       | transcript rows of sequence variants, never an `upstream_gene_variant` or `downstream_gene_variant` row: the table rows whose gene span covers the variant, then the row naming the transcript, or every row naming the gene |
 | Output fields | `LOEUF`                                                                                                                                |
-| Data source   | the gnomAD constraint tables, tabix-indexed on their gene coordinate columns as Ensembl VEP's plugin documents; the prepared GRCh38 table is on the Ensembl FTP site under `pub/current/variation/LOEUF/` |
+| Data source   | the gnomAD constraint tables, tabix-indexed on their gene coordinate columns as Ensembl VEP's plugin documents; the prepared GRCh38 table is on the Ensembl FTP site under `pub/current/variation/LOEUF/`; for GRCh37 the plugin's documentation names the table by gene (`LOEUF.pm` lines 51 and 56), while its header check, which vep-rs makes too, passes only a table with the column names listed below at their fixed positions (lines 84-92 and 126-143), and the table to prepare is the one by transcript that the Builds row names |
 
 Both parameters are required.
 
@@ -548,7 +548,7 @@ the tabix index declares.
 
 ## Where these plugins differ from Ensembl VEP
 
-Eight behaviours of Ensembl VEP 116.2's plugins are not reproduced, each a
+Eight behaviours of Ensembl VEP 116.3's plugins are not reproduced, each a
 walkthrough of one record on
 [Where the annotation-store plugins differ from Ensembl VEP](annotation-store-divergences.md):
 
@@ -562,8 +562,10 @@ walkthrough of one record on
 8. [OpenTargets: a cell of `0`](annotation-store-divergences.md#8-opentargets-a-cell-of-0)
 
 The comparison tools set six aside; the gnomADMt and OpenTargets ones are
-documented only. Eight more follow, three below, five on their own pages:
+documented only. Nine more follow, three below, six on their own pages:
 
+- [dbscSNV's file without
+  `Ensembl_gene`](../divergences/dbscsnv-file-without-gene-column.md)
 - [the `MT`-named gnomADMt file](../divergences/gnomadmt-mt-named-contig.md)
 - [the TranscriptAnnotator record at position 1 of contig
   `1`](../divergences/transcript-annotator-header-from-record.md)
@@ -576,14 +578,14 @@ documented only. Eight more follow, three below, five on their own pages:
 
 Each names its rows; the format comparator sets aside the three below,
 AlphaMissense's and REVEL's. [Intended divergences from Ensembl
-VEP](../intended-divergences.md) indexes all sixteen.
+VEP](../intended-divergences.md) indexes all seventeen.
 
 Each of the three carries its tier under that page's rule. Tier 1 is a shape the
-chromosome 21 population cuts carry with no flag. Tier 2 is one that needs a
+chromosome 21 cuts carry with no flag. Tier 2 is one that needs a
 flag or plugin on ordinary data. Tier 3 is one ordinary data does not carry.
 
-The counts are over the cuts' 15,646,481 records, the 111 golden corpora and
-their 392 flag sets. Every row below is in the default output format.
+The counts are over the cuts' 15,646,481 records, the 152 golden corpora and
+their 511 flag sets. Every row below is in the default format.
 
 ### 9. REVEL: the score of a sibling allele on a multi-allelic record
 
@@ -623,9 +625,9 @@ two-allele record, `G A,T`, whose alleles give different amino acids. The class
 therefore applies to 0 rows of their 24 compared outputs (6 flag sets, four
 formats) and of the four comparison cases that run them.
 
-**How often the shape occurs.** Tier 2: 6,347 of the population cuts' records
+**How often the shape occurs.** Tier 2: 6,347 of the cuts' records
 (406 per million) carry two or more sequence alleles. The codon decides whether
-two give one amino acid. 64 corpora carry the shape and 6 flag sets run the
+two give one amino acid. 80 corpora carry the shape and 6 flag sets run the
 plugin.
 
 #### 9.1 Two alleles of one codon that both give leucine
@@ -684,7 +686,7 @@ is therefore set aside. No comparison case loads the plugin.
 **How often the shape occurs.** Tier 3: the shape is a table row written at an
 insertion's start with reference `-`. None of the 18 rows of the two committed
 tables has one, and 5 flag sets run the plugin. Pure insertions themselves are
-common, 996,643 of the population cuts' records (63,698 per million). A table of
+common, 996,643 of the cuts' records (63,698 per million). A table of
 the user's own therefore reaches the shape as soon as it names one that way.
 
 #### 10.1 A one-base insertion against a row written at its start
@@ -694,7 +696,7 @@ print the allele at `21:10541124-10541125`. A table row
 `21 10541125 - A ENST00000618007 0.42 Tolerated VEPstyleIns` names that start.
 vep-rs writes `ins_vepstyle_SIFT_score=0.42`, `ins_vepstyle_SIFT_pred=Tolerated`
 and `ins_vepstyle_Comment=VEPstyleIns` on the `ENST00000618007` row; Ensembl
-VEP 116.2 writes nothing on it, its window being 10541123-10541124. The same row
+VEP 116.3 writes nothing on it, its window being 10541123-10541124. The same row
 written as `21 10541124 T TA ENST00000618007 0.43 Tolerated VCFstyleIns` is
 inside both windows, and both engines write its three fields.
 

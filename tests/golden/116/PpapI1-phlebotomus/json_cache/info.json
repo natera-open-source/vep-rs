@@ -1,0 +1,40 @@
+{
+  "assembly": "PpapI1",
+  "cache_version": 63,
+  "contig_order": [
+    "AJVK01020912.1",
+    "JH660948.1",
+    "JH660949.1",
+    "JH660950.1",
+    "JH660959.1",
+    "JH660960.1",
+    "JH667840.1"
+  ],
+  "polyphen": "",
+  "regulatory": false,
+  "sift": "b",
+  "source_versions": {
+    "assembly": "PpapI1",
+    "genebuild": "PpapI1.6",
+    "sift": "sift5.2.2"
+  },
+  "species": "phlebotomus_papatasi",
+  "var_type": "tabix",
+  "variation_cols": [
+    "chr",
+    "variation_name",
+    "failed",
+    "somatic",
+    "start",
+    "end",
+    "allele_string",
+    "strand",
+    "clin_sig",
+    "phenotype_or_disease",
+    "clin_sig_allele",
+    "clin_sig_ref_allele",
+    "clinical_impact",
+    "pubmed",
+    "var_synonyms"
+  ]
+}

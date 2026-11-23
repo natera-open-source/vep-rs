@@ -1,20 +1,19 @@
 entry = "hgvsp_coding_test_widened_by_a_short_intron"
 page = "docs/divergences/hgvsp-coding-test-widened-by-a-short-intron.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 57 of 77,675 cache transcripts · 23 flag sets, 9 corpora"
-notes = "Two records written for the entry, on GRCh37. The first inserts one base between 21:38610911 and 21:38610912, a copy of the last base of an intron of 1,886 bases on the reverse-strand ENST00000288304, one base from the intron's end. The second inserts three bases between 7:100333339 and 7:100333340, a copy of the last three bases of an intron of 1,498 bases on the forward-strand ENST00000538115, three bases from its end. The two bases beside each insertion are intron bases, and both engines write a duplication of intron positions as HGVSc, c.76-1dup and c.54-3_54-1dup, with splice and intron terms and no CDS or protein position. ENST00000288304 has introns of 4 and 2 bases, the nearer 10,266 positions from the first base of the exon after the insertion, and ENST00000538115, ENST00000542585 and ENST00000546292 have an intron of 2 bases 38,133 positions from theirs. On such a transcript Ensembl VEP widens every exon by 12 bases in its exon test (BaseTranscriptVariation.pm:861-866, 1032-1035), sets `coding` (BaseVariationFeatureOverlapAllele.pm:511-516, 540, 555-557) and writes the HGVSp of the inserted bases taken as the exon's first bases (TranscriptVariationAllele.pm:1730-1738): a frameshift at residue 26 and a duplication of residue 18. On these two records vep-rs tests the two bases themselves, both intron bases, and writes none. ENST00000309117 and ENST00000348028 hold the same two junctions and no intron of 13 bases or fewer, and neither engine writes an HGVSp there; ENST00000546213 has the 2-base intron and holds the junction in its 5' UTR, and neither writes one. No committed cache holds the chromosome 7 transcripts, so the first prepare step copies info.txt, chr_synonyms.txt and two region files from the Ensembl VEP GRCh37 cache under the --perl-cache-dir roots and the second converts them with scripts/data/storable_to_json.pl in the image the run names; both engines use that cut. --hgvs needs a FASTA offline: the run needs --extra-dir grch37_fasta=<a directory holding Ensembl's GRCh37 primary assembly as Homo_sapiens.GRCh37.75.dna.primary_assembly.fa with its .fai>."
+input_class_basis = "2 · 250 of 116,165 cache transcripts · 95 flag sets, 32 corpora"
+notes = "Two records written for the entry, on GRCh37. The first inserts one base between 21:38610911 and 21:38610912, a copy of the last base of an intron of 1,886 bases on the reverse-strand ENST00000288304, one base from the intron's end. The second inserts three bases between 7:100333339 and 7:100333340, a copy of the last three bases of an intron of 1,498 bases on the forward-strand ENST00000538115, three bases from its end. The two bases beside each insertion are intron bases, and both engines write a duplication of intron positions as HGVSc, c.76-1dup and c.54-3_54-1dup, with splice and intron terms and no CDS or protein position. ENST00000288304 has introns of 4 and 2 bases, the nearer 10,266 positions from the first base of the exon after the insertion, and ENST00000538115, ENST00000542585 and ENST00000546292 have an intron of 2 bases 38,133 positions from theirs. On such a transcript Ensembl VEP widens every exon by 12 bases in its exon test (BaseTranscriptVariation.pm:861-866, 1032-1035), sets `coding` (BaseVariationFeatureOverlapAllele.pm:511-516, 540, 555-557) and writes the HGVSp of the inserted bases taken as the exon's first bases (TranscriptVariationAllele.pm:1730-1738): a frameshift at residue 26 and a duplication of residue 18. On these two records vep-rs tests the two bases themselves, both intron bases, and writes none. ENST00000309117 and ENST00000348028 hold the same two junctions and no intron of 13 bases or fewer, and neither engine writes an HGVSp there; ENST00000546213 has the 2-base intron and holds the junction in its 5' UTR, and neither writes one. No committed cache holds the chromosome 7 transcripts, so the first prepare step copies info.txt, chr_synonyms.txt and two region files from the Ensembl VEP GRCh37 cache under the --perl-cache-dir roots and the second converts them with tools/vep-storable-to-json; both engines use that cut. --hgvs needs a FASTA offline: the run needs --extra-dir grch37_fasta=<a directory holding Ensembl's GRCh37 primary assembly as Homo_sapiens.GRCh37.75.dna.primary_assembly.fa with its .fai>."
 
 prepare = [
-  '''[ -n "$IMAGE" ] || { echo "the cut of the cache is converted in the Ensembl VEP image: give --image" >&2; exit 1; }
-[ -n "$PERL_CACHE" ] || { echo "no homo_sapiens/116_GRCh37 with chromosomes 7 and 21 under the --perl-cache-dir roots" >&2; exit 1; }
+  '''[ -n "$PERL_CACHE" ] || { echo "no homo_sapiens/116_GRCh37 with chromosomes 7 and 21 under the --perl-cache-dir roots" >&2; exit 1; }
 cut="$STAGE/perl-cache/homo_sapiens/116_GRCh37"
 mkdir -p "$cut/7" "$cut/21"
 cp "$PERL_CACHE/info.txt" "$PERL_CACHE/chr_synonyms.txt" "$cut/"
 cp "$PERL_CACHE/7/100000001-101000000.gz" "$cut/7/"
 cp "$PERL_CACHE/21/38000001-39000000.gz" "$cut/21/"''',
-  '''docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$REPO/scripts/data:/scripts:ro" -v "$STAGE:/stage" "$IMAGE" perl /scripts/storable_to_json.pl /stage/perl-cache/homo_sapiens/116_GRCh37 /stage/json-cache 7,21 > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
+  '''cargo run --release --locked --quiet --manifest-path "$REPO/tools/vep-storable-to-json/Cargo.toml" -- "$STAGE/perl-cache/homo_sapiens/116_GRCh37" "$STAGE/json-cache" 7,21 > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
 ]
 
 [input]
@@ -59,4 +58,14 @@ vep_rs = [
   "intron_end_dup_7_100333339 | ENST00000542585 | splice_region_variant,intron_variant | - | - | ENST00000542585.1:c.54-3_54-1dup | -",
   "intron_end_dup_7_100333339 | ENST00000546213 | splice_region_variant,intron_variant | - | - | ENST00000546213.1:c.-4216-3_-4216-1dup | -",
   "intron_end_dup_7_100333339 | ENST00000546292 | splice_region_variant,intron_variant | - | - | ENST00000546292.1:c.54-3_54-1dup | -",
+]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/coding.rs::coding_span_pred",
+    "crates/vep-effects/src/coding.rs::hgvs_protein",
+    "crates/vep-effects/src/coding.rs::inserted_at_the_end_of_an_intron",
+]
+tests = [
+    "crates/vep-effects/src/concordance_tests.rs::concordance_hgvsp_h19l_insertion_carried_to_the_exon_edge_on_a_transcript_with_a_frameshift_intron",
 ]

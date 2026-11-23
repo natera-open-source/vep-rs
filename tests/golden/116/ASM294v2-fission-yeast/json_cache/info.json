@@ -1,0 +1,35 @@
+{
+  "assembly": "ASM294v2",
+  "cache_version": 63,
+  "contig_order": [
+    "MT",
+    "AB325691",
+    "III"
+  ],
+  "polyphen": "",
+  "regulatory": false,
+  "sift": "",
+  "source_versions": {
+    "assembly": "ASM294v2",
+    "genebuild": "31_56"
+  },
+  "species": "schizosaccharomyces_pombe",
+  "var_type": "tabix",
+  "variation_cols": [
+    "chr",
+    "variation_name",
+    "failed",
+    "somatic",
+    "start",
+    "end",
+    "allele_string",
+    "strand",
+    "clin_sig",
+    "phenotype_or_disease",
+    "clin_sig_allele",
+    "clin_sig_ref_allele",
+    "clinical_impact",
+    "pubmed",
+    "var_synonyms"
+  ]
+}

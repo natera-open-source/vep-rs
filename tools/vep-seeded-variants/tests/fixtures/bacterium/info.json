@@ -1,0 +1,15 @@
+{
+  "assembly": "MADE1",
+  "cache_version": 63,
+  "contig_order": [
+    "Chromosome",
+    "pMADE"
+  ],
+  "polyphen": "",
+  "sift": "",
+  "source_versions": {
+    "assembly": "MADE1",
+    "genebuild": "made-up"
+  },
+  "species": "made_up_bacterium"
+}

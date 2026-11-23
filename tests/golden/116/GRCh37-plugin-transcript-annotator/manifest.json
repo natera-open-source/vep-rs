@@ -23,7 +23,7 @@
  "covers": [
   "TranscriptAnnotator"
  ],
- "suites": {
+ "datasets": {
   "ta": {
    "reference": "reference.txt",
    "input": "candidates.vcf",
@@ -68,7 +68,7 @@
  },
  "records": [
   {
-   "suite": "ta",
+   "dataset": "ta",
    "vcf": "21\t30248729\trs759450394\tA\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -76,7 +76,7 @@
    ]
   },
   {
-   "suite": "ta",
+   "dataset": "ta",
    "vcf": "21\t30248750\trs1337170643\tG\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -84,7 +84,7 @@
    ]
   },
   {
-   "suite": "ta",
+   "dataset": "ta",
    "vcf": "21\t30250578\trs1158883572\tCA\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -92,7 +92,7 @@
    ]
   },
   {
-   "suite": "ta",
+   "dataset": "ta",
    "vcf": "21\t30400257\trs373447233\tG\tT\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -102,7 +102,7 @@
    ]
   },
   {
-   "suite": "ta",
+   "dataset": "ta",
    "vcf": "21\t30400274\trs539744325\tG\tA\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -112,7 +112,7 @@
    ]
   },
   {
-   "suite": "ta",
+   "dataset": "ta",
    "vcf": "21\t30400274\trs539744325\tG\tT\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -122,7 +122,7 @@
    ]
   },
   {
-   "suite": "ta",
+   "dataset": "ta",
    "vcf": "21\t30419039\trs146351448\tA\tAT\t.\t.\t.",
    "combinations": [
     "frameshift_variant",
@@ -130,7 +130,7 @@
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "divergences": [],

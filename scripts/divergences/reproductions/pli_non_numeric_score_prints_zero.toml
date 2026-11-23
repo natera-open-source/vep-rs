@@ -1,7 +1,7 @@
 entry = "pli_non_numeric_score_prints_zero"
 page = "docs/plugins/flat-file.md#6-pli-a-table-cell-that-is-not-a-number"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the pLI plugin's header, which names the gnomAD v4 constraint table as a source for the values file, a table whose pLI column writes NA where a gene has no estimate; not seen in the measured datasets"
 # The corpus table with CXADR's cell written NA.
@@ -31,3 +31,13 @@ where = { record = "4453310", feature = "ENST00000284878" }
 [expected]
 ensembl_vep = ["0.00"]
 vep_rs = ["-"]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/gene_scores.rs::ScoreTable::load",
+    "crates/vep-builtins/src/plugins/pli.rs::PliPlugin::init",
+]
+tests = [
+    "crates/vep-builtins/src/plugins/gene_scores.rs::tests::a_bare_key_follows_the_modules_split",
+    "crates/vep-builtins/src/plugins/gene_scores.rs::tests::lines_without_a_numeric_score_are_no_entry_and_a_word_is_warned_about",
+]

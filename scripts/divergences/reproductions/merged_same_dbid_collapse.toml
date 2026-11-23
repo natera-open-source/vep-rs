@@ -1,0 +1,64 @@
+entry = "merged_same_dbid_collapse"
+page = "docs/divergences/merged-same-dbid-collapse.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "observed"
+input_class_basis = "seen in Ensembl's release 116 merged cache of the great tit: 1,398 dbIDs are carried on one sequence by a transcript of each set that a run under --merged reads, and one region file holds both transcripts of 54 of them"
+notes = "A synthetic merged cache of one sequence, contig, with four single-exon non-coding transcripts. XR_000001.1 (RefSeq set) and ENSEXT00000000001 (Ensembl set) overlap in the region file 1-1000000 and both carry dbID 7; ENSEXT00000000002 (Ensembl set, the same region file) and XR_000002.1 (RefSeq set, the region file 3000001-4000000) both carry dbID 9. The three records are one buffer: Ensembl VEP keeps the transcript of each dbID it reads first, so the record on both transcripts of dbID 7 loses the Ensembl-set row, and the record on XR_000002.1, whose dbID the second record's region file gave to ENSEXT00000000002, is written as intergenic_variant. vep-rs writes the four transcript rows. No committed cache holds the shape under the flags of a committed run: the two sets of the human merged caches number their transcripts in ranges that do not meet, and in each pair of the committed cattle and mouse merged caches the RefSeq-set transcript, whose identifier is no RefSeq accession, is read under --all_refseq alone. So inputs/merged_same_dbid_collapse/make_cache.pl builds the cache in the Ensembl VEP image and vep-rs reads the committed json_cache beside it, the conversion of that cache."
+
+prepare = [
+  '''[ -n "$IMAGE" ] || { echo "the synthetic cache is built in the Ensembl VEP image: give --image" >&2; exit 1; }''',
+  '''docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$REPO/scripts/divergences/reproductions/inputs/merged_same_dbid_collapse:/inputs:ro" -v "$STAGE:/stage" "$IMAGE" perl /inputs/make_cache.pl /stage/perl-cache > "$STAGE/build.log" 2>&1 || { tail -n 1 "$STAGE/build.log" >&2; exit 1; }''',
+]
+
+[input]
+format = "vcf"
+text = """
+contig	101500	shared_locus	A	G	.	.	.
+contig	501000	first_of_far_pair	A	G	.	.	.
+contig	3201000	second_of_far_pair	A	G	.	.	.
+"""
+
+[cache]
+species = "two_set_example"
+assembly = "EXAMPLE1"
+source = "merged"
+json_cache = "scripts/divergences/reproductions/inputs/merged_same_dbid_collapse/json_cache"
+perl_cache = "{stage}/perl-cache"
+
+[run]
+flags = ["--merged"]
+
+[compare]
+kind = "rows"
+where = { record = ["shared_locus", "first_of_far_pair", "second_of_far_pair"] }
+columns = ["Uploaded_variation", "Location", "Feature", "Consequence", "SOURCE"]
+
+[expected]
+ensembl_vep = [
+  "first_of_far_pair | contig:501000 | ENSEXT00000000002 | non_coding_transcript_exon_variant | Ensembl",
+  "second_of_far_pair | contig:3201000 | - | intergenic_variant | -",
+  "shared_locus | contig:101500 | XR_000001.1 | non_coding_transcript_exon_variant | RefSeq",
+]
+vep_rs = [
+  "first_of_far_pair | contig:501000 | ENSEXT00000000002 | non_coding_transcript_exon_variant | Ensembl",
+  "second_of_far_pair | contig:3201000 | XR_000002.1 | non_coding_transcript_exon_variant | RefSeq",
+  "shared_locus | contig:101500 | ENSEXT00000000001 | non_coding_transcript_exon_variant | Ensembl",
+  "shared_locus | contig:101500 | XR_000001.1 | non_coding_transcript_exon_variant | RefSeq",
+]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/json_cache.rs::TranscriptKey",
+    "crates/vep-cli/src/json_cache.rs::load_transcripts_in_set_with",
+]
+tests = [
+    "crates/vep-cli/src/json_cache.rs::tests::merged_cache_duplicates_are_keyed_by_source_and_db_id",
+    "crates/vep-cli/tests/merged_cache_shared_dbid.rs::the_rows_do_not_change_with_the_buffer_size",
+    "crates/vep-cli/tests/merged_cache_shared_dbid.rs::two_sets_sharing_a_dbid_in_one_region_file_are_both_annotated",
+    "crates/vep-cli/tests/merged_cache_shared_dbid.rs::two_sets_sharing_a_dbid_in_two_region_files_are_both_annotated",
+]
+rules = [
+    "tools/vep-outputs-compare/src/dbid_replay.rs::dropped_rows",
+    "tools/vep-outputs-compare/src/rules/shared_dbid.rs::apply_shared_dbid_rule",
+]

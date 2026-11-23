@@ -1,7 +1,7 @@
 entry = "non_numeric_pos_numified"
 page = "docs/divergences/defect-n.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "malformed"
 input_class_basis = "POS is \"The reference position, with the 1st base having position 1\", \"(Integer, Required)\" (VCF 4.2 specification, section 1.4.1 \"Fixed fields\", POS): the record's POS is the missing value, an empty column, text that is not an integer, or a negative number"
 notes = "A `<DEL>` whose POS is `.`: the structural path's `$start++` numifies the text to 1, so Ensembl VEP annotates a deletion from base 1 to the END (3,254 transcript rows under --max_sv_size -1, one shown); vep-rs refuses the line and writes no row."
@@ -33,3 +33,19 @@ columns = ["Location", "Allele", "Feature", "Consequence", "OverlapPC"]
 [expected]
 ensembl_vep = ["21:1-30425949 | deletion | ENST00000262354 | transcript_ablation | 100.00"]
 vep_rs = []
+
+[implementation]
+code = [
+    "crates/vep-cli/src/pipeline.rs::refused_record",
+    "crates/vep-cli/src/validate.rs::invalid_vcf_coordinate",
+    "crates/vep-cli/src/validate.rs::looks_like_number",
+]
+tests = [
+    "crates/vep-cli/src/validate.rs::tests::non_numeric_coords",
+    "crates/vep-cli/tests/documented_subsets.rs::anchor_chopped_indel_with_non_numeric_pos_is_refused",
+    "crates/vep-cli/tests/documented_subsets.rs::validate_vf_checks_exclusion_is_documented",
+]
+rules = [
+    "tools/vep-outputs-compare/src/rules/one_sided.rs::dot_breakend_and_coordinate_rows",
+    "tools/vep-sv-compare/src/masks/one_sided.rs::filter_non_numeric_pos_numified",
+]

@@ -24,10 +24,10 @@ use super::{encoding_of, io_error, sibling, Encoding, FastaError, IndexedFasta, 
 /// `<fasta>.vep.lock` left by an indexing run that did not finish removes the
 /// indexes beside the file (`:315-321`), and when none of `.fai`, `.index` and
 /// `.gzi` is there the lock is written for the time the indexes take
-/// (`:323-338`, `:356`). A directory, a gzip file that is not BGZF and a file
-/// with both its indexes are left as they are. A file that cannot be indexed
-/// is refused with no lock and no part of an index left beside it but what
-/// could not be removed or is another run's.
+/// (`:323-338`, `:356`). A directory, a gzip file that is not BGZF, a RAZF
+/// file and a file with both its indexes are left as they are. A file that
+/// cannot be indexed is refused with no lock and no part of an index left
+/// beside it but what could not be removed or is another run's.
 pub fn index_if_missing(fasta: &Path) -> Result<(), FastaError> {
     write_missing(fasta, true)
 }
@@ -81,7 +81,9 @@ fn write_missing(fasta: &Path, lock_is_left_behind: bool) -> Result<(), FastaErr
         }
     }
     let encoding = encoding_of(fasta)?;
-    if encoding == Encoding::Gzip {
+    // No writer here counts a RAZF file's `.fai`, so the open names the index
+    // it lacks.
+    if matches!(encoding, Encoding::Gzip | Encoding::Razf) {
         return Ok(());
     }
     let fai = sibling(fasta, "fai");
@@ -1248,6 +1250,21 @@ mod tests {
             assert!(matches!(error, FastaError::NotBgzf(_)), "{error:?}");
             assert_eq!(names_in(dir.path()), ["ref.fa.gz"]);
         }
+    }
+
+    /// A RAZF file is not indexed: nothing is written beside one given
+    /// without its `.fai`, and the open names the index it lacks.
+    #[test]
+    fn a_razf_file_is_left_without_an_index() {
+        use crate::tests::razf;
+        let dir = tempfile::tempdir().unwrap();
+        let fa = dir.path().join("ref.fa.rz");
+        std::fs::write(&fa, razf(PLAIN)).unwrap();
+        index_if_missing(&fa).unwrap();
+        assert_eq!(names_in(dir.path()), ["ref.fa.rz"]);
+        let error = open_indexed(&fa).unwrap_err();
+        assert!(matches!(error, FastaError::MissingFai(_)), "{error:?}");
+        assert_eq!(names_in(dir.path()), ["ref.fa.rz"]);
     }
 
     /// A BGZF file whose first block holds no data gets the `.gzi` `samtools

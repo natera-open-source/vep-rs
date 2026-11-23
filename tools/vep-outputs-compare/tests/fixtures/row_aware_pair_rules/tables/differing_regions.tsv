@@ -1,0 +1,8 @@
+shape	reference	allele	regions
+every index differs and the longer allele runs on	ACG	GTTCA	0,4
+two indices alike before the longer allele runs on	ACGT	ACTTAG	2,2;4,5
+three runs of indices	ACGTAC	ATGTCCGG	1,1;4,4;6,7
+a shorter allele	ACGT	AT	1,3
+one reference base	A	GTT	0,0
+an allele of one base	ACG	T	0,2
+two alleles alike	ACG	ACG	0,2

@@ -1,0 +1,13 @@
+{
+   "assembly" : "EXAMPLE1",
+   "cache_version" : 116,
+   "contig_order" : [
+      "contig"
+   ],
+   "source_type" : "ensembl",
+   "source_versions" : {
+      "assembly" : "EXAMPLE1",
+      "genebuild" : "synthetic"
+   },
+   "species" : "nuclear_code_example"
+}

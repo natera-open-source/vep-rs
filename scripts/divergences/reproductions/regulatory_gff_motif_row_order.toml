@@ -1,7 +1,7 @@
 entry = "regulatory_gff_motif_row_order"
 page = "docs/divergences/regulatory-gff-motif-rows.md#1-two-motif-rows-of-one-record-in-the-order-of-a-read-counter"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
 input_class_basis = "2 · 4,425 of 13,577 table rows · 6 flag sets, 1 corpus"
 notes = "A variant inside the motif pair ENSM00000574660 and ENSM00000574661 (21:5014058-5014072), the ninth and tenth motif records read for their region: Ensembl VEP sorts the rows by the text of that counter, 10 before 9; vep-rs by the stable id. The two rows are compared in the order written."
@@ -35,4 +35,15 @@ ensembl_vep = [
 vep_rs = [
   "21:5014060 | A | ENSM00000574660 | TF_binding_site_variant | 1 | 3",
   "21:5014060 | A | ENSM00000574661 | TF_binding_site_variant | -1 | 13",
+]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/regulatory/index.rs::motif_ranks",
+    "crates/vep-core/src/consequence.rs::TranscriptConsequence::ensembl_vep_key",
+    "crates/vep-io/src/output/fields.rs::orderable_rank",
+]
+tests = [
+    "crates/vep-cli/src/regulatory/index.rs::tests::motifs_rank_by_their_database_ids_as_strings",
+    "crates/vep-core/src/consequence.rs::tests::ensembl_vep_key_is_the_stable_id_with_the_database_id",
 ]

@@ -1,0 +1,1 @@
+ERROR: [compare_vep_stats] cannot read tests/fixtures/trailing_bytes.summary.log.gz: Not a gzipped file (b'\'"')

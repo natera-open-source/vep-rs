@@ -1,0 +1,3 @@
+stats: red
+  the expected file carries no [section] header
+  the actual file carries no [section] header

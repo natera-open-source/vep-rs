@@ -1,0 +1,25 @@
+[package]
+name = "vep-fastvep-plugin-tuples"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.89"
+license = "Apache-2.0"
+description = "Plugin tuples from the supplementary columns of fastVEP's tab output, through a field map, fixed to the byte"
+publish = false
+
+[dependencies]
+memchr = "2"
+
+# The tests of the shipped field map read the gzipped references of the golden corpora.
+[dev-dependencies]
+flate2 = "1"
+
+# Its own Cargo root: the repository workspace's commands do not reach this package, and
+# a cargo command for it names this manifest.
+[workspace]
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"

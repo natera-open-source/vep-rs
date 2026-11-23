@@ -1,0 +1,472 @@
+{
+ "records": [
+  {
+   "dataset": "pool",
+   "vcf": "1\t11099\trec_gap\tG\tGT\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "1\t21097\trec_carried\tG\tGTAT\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "1\t211499\trec_reverse\tG\tGATA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "1\t211201\trec_reverse_carried\tG\tGA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "1\t231099\trec_13_bases\tG\tGT\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "1\t231199\trec_2_bases\tG\tGTAT\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "1\t31099\trec_both_notations\tG\tGTAT\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "1\t41099\trec_no_reference\tG\tGTAT\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "1\t51099\trec_duplication\tG\tGG\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "1\t61099\trec_coding_positions\tG\tGTAT\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "1\t71099\trec_two_numbers\tG\tGTAT\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "1\t221099\trec_utr5\tG\tGTAT\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "1\t221499\trec_utr3\tG\tGTAT\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "1\t81099\trec_two_notations\tG\tGTAT\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "1\t91097\trec_offsets_differ\tG\tGTAT\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "1\t101099\trec_zero_offset\tG\tGTAT\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "1\t111097\trec_inside_exon\tG\tGTAT\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "1\t121199\trec_intron_end\tG\tGTAT\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "1\t221099\trec_utr_exon_end\tG\tGT\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "1\t991099\trec_absent\tG\tGTAT\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "1\t131099\trec_wide\tG\tGTAT\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "1\t141099\trec_located_at_gap\tG\tGTAT\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "1\t211199\trec_reverse_located_at_gap\tG\tGATA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "1\t141095\trec_fits_neither\tG\tGT\t.\tPASS\t.",
+   "combinations": []
+  }
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {},
+ "fields_compared": [
+  "HGVSp"
+ ],
+ "field_divergences": [
+  {
+   "location": "1:101099-101100",
+   "allele": "TAT",
+   "feature": "ENST00000000010",
+   "feature_type": "Transcript",
+   "record_indices": [
+    15
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant",
+   "field": "HGVSp",
+   "vep": "ENSP00000000001.1:p.Gly17ArgfsTer5",
+   "vep_rs": "-",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:11099-11100",
+   "allele": "T",
+   "feature": "ENST00000000001",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant",
+   "field": "HGVSp",
+   "vep": "ENSP00000000001.1:p.Gly17ArgfsTer5",
+   "vep_rs": "-",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:111097-111098",
+   "allele": "TAT",
+   "feature": "ENST00000000011",
+   "feature_type": "Transcript",
+   "record_indices": [
+    16
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant",
+   "field": "HGVSp",
+   "vep": "ENSP00000000001.1:p.Gly17ArgfsTer5",
+   "vep_rs": "-",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:121199-121200",
+   "allele": "TAT",
+   "feature": "ENST00000000012",
+   "feature_type": "Transcript",
+   "record_indices": [
+    17
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant",
+   "field": "HGVSp",
+   "vep": "ENSP00000000001.1:p.Gly17ArgfsTer5",
+   "vep_rs": "-",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:131101-131103",
+   "allele": "TAT",
+   "feature": "ENST00000000013",
+   "feature_type": "Transcript",
+   "record_indices": [
+    20
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant",
+   "field": "HGVSp",
+   "vep": "ENSP00000000001.1:p.Gly17ArgfsTer5",
+   "vep_rs": "-",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:141095-141096",
+   "allele": "T",
+   "feature": "ENST00000000014",
+   "feature_type": "Transcript",
+   "record_indices": [
+    23
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant",
+   "field": "HGVSp",
+   "vep": "ENSP00000000001.1:p.Gly17ArgfsTer5",
+   "vep_rs": "-",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:141099-141100",
+   "allele": "TAT",
+   "feature": "ENST00000000014",
+   "feature_type": "Transcript",
+   "record_indices": [
+    21
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant",
+   "field": "HGVSp",
+   "vep": "ENSP00000000001.1:p.Gly17ArgfsTer5",
+   "vep_rs": "-",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:21097-21098",
+   "allele": "TAT",
+   "feature": "ENST00000000002",
+   "feature_type": "Transcript",
+   "record_indices": [
+    1
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant",
+   "field": "HGVSp",
+   "vep": "ENSP00000000001.1:p.Gly17ArgfsTer5",
+   "vep_rs": "-",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:211199-211200",
+   "allele": "ATA",
+   "feature": "ENST00000000021",
+   "feature_type": "Transcript",
+   "record_indices": [
+    22
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant",
+   "field": "HGVSp",
+   "vep": "ENSP00000000001.1:p.Gly17ArgfsTer5",
+   "vep_rs": "-",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:211201-211202",
+   "allele": "A",
+   "feature": "ENST00000000021",
+   "feature_type": "Transcript",
+   "record_indices": [
+    3
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant",
+   "field": "HGVSp",
+   "vep": "ENSP00000000001.1:p.Gly17ArgfsTer5",
+   "vep_rs": "-",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:211499-211500",
+   "allele": "ATA",
+   "feature": "ENST00000000021",
+   "feature_type": "Transcript",
+   "record_indices": [
+    2
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant",
+   "field": "HGVSp",
+   "vep": "ENSP00000000001.1:p.Gly17ArgfsTer5",
+   "vep_rs": "-",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:221099-221100",
+   "allele": "T",
+   "feature": "ENST00000000022",
+   "feature_type": "Transcript",
+   "record_indices": [
+    18
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant",
+   "field": "HGVSp",
+   "vep": "ENSP00000000001.1:p.Gly17ArgfsTer5",
+   "vep_rs": "-",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:221099-221100",
+   "allele": "TAT",
+   "feature": "ENST00000000022",
+   "feature_type": "Transcript",
+   "record_indices": [
+    11
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant",
+   "field": "HGVSp",
+   "vep": "ENSP00000000001.1:p.Gly17ArgfsTer5",
+   "vep_rs": "-",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:221499-221500",
+   "allele": "TAT",
+   "feature": "ENST00000000022",
+   "feature_type": "Transcript",
+   "record_indices": [
+    12
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant",
+   "field": "HGVSp",
+   "vep": "ENSP00000000001.1:p.Gly17ArgfsTer5",
+   "vep_rs": "-",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:231099-231100",
+   "allele": "T",
+   "feature": "ENST00000000023",
+   "feature_type": "Transcript",
+   "record_indices": [
+    4
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant",
+   "field": "HGVSp",
+   "vep": "ENSP00000000001.1:p.Gly17ArgfsTer5",
+   "vep_rs": "-",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:231199-231200",
+   "allele": "TAT",
+   "feature": "ENST00000000023",
+   "feature_type": "Transcript",
+   "record_indices": [
+    5
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant",
+   "field": "HGVSp",
+   "vep": "ENSP00000000001.1:p.Gly17ArgfsTer5",
+   "vep_rs": "-",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:31099-31100",
+   "allele": "TAT",
+   "feature": "ENST00000000003",
+   "feature_type": "Transcript",
+   "record_indices": [
+    6
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant",
+   "field": "HGVSp",
+   "vep": "ENSP00000000001.1:p.Gly17ArgfsTer5",
+   "vep_rs": "ENSP00000000001.1:p.Gly17ArgfsTer9",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:41099-41100",
+   "allele": "TAT",
+   "feature": "ENST00000000004",
+   "feature_type": "Transcript",
+   "record_indices": [
+    7
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant",
+   "field": "HGVSp",
+   "vep": "-",
+   "vep_rs": "ENSP00000000001.1:p.Gly17ArgfsTer5",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:51099-51100",
+   "allele": "G",
+   "feature": "ENST00000000005",
+   "feature_type": "Transcript",
+   "record_indices": [
+    8
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant",
+   "field": "HGVSp",
+   "vep": "ENSP00000000001.1:p.Gly17ArgfsTer5",
+   "vep_rs": "-",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:61099-61100",
+   "allele": "TAT",
+   "feature": "ENST00000000006",
+   "feature_type": "Transcript",
+   "record_indices": [
+    9
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant",
+   "field": "HGVSp",
+   "vep": "ENSP00000000001.1:p.Gly17ArgfsTer5",
+   "vep_rs": "-",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:71099-71100",
+   "allele": "TAT",
+   "feature": "ENST00000000007",
+   "feature_type": "Transcript",
+   "record_indices": [
+    10
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant",
+   "field": "HGVSp",
+   "vep": "ENSP00000000001.1:p.Gly17ArgfsTer5",
+   "vep_rs": "-",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:81099-81100",
+   "allele": "TAT",
+   "feature": "ENST00000000008",
+   "feature_type": "Transcript",
+   "record_indices": [
+    13
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant",
+   "field": "HGVSp",
+   "vep": "ENSP00000000001.1:p.Gly17ArgfsTer5",
+   "vep_rs": "-",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:91097-91098",
+   "allele": "TAT",
+   "feature": "ENST00000000009",
+   "feature_type": "Transcript",
+   "record_indices": [
+    14
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant",
+   "field": "HGVSp",
+   "vep": "ENSP00000000001.1:p.Gly17ArgfsTer5",
+   "vep_rs": "-",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:991099-991100",
+   "allele": "TAT",
+   "feature": "ENST00000000099",
+   "feature_type": "Transcript",
+   "record_indices": [
+    19
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant",
+   "field": "HGVSp",
+   "vep": "ENSP00000000001.1:p.Gly17ArgfsTer5",
+   "vep_rs": "-",
+   "expected_divergence": "unexplained_residual"
+  }
+ ],
+ "field_divergence_summary": {
+  "unexplained_residual": 24
+ }
+}

@@ -7126,7 +7126,7 @@
     "worst_cell_user_cpu_ratio_deviation": 0.0111,
     "worst_cell_wall_ratio_deviation": 0.0278
   },
-  "scope": "vep-rs alone: the released version's concordance on the cells s01, s02, s07, s08, s09, s10 against Ensembl VEP 116.2's archived output (perl_reference names the sets) and its own wall times on both architectures, stated in the README beside the paper's figures, which do not change. Perl VEP and fastVEP are not re-measured here, and no ratio against the paper's medians is stated: the release protocol deletes the discarded warmup's output before the timed run and the paper's did not. The same-day control below is the comparison the README cites.",
+  "scope": "vep-rs alone: the released version's concordance on the cells s01, s02, s07, s08, s09, s10 against Ensembl VEP 116.2's archived output (perl_reference names the sets) and its own wall times on both architectures, stated in the README beside the paper's figures, which do not change. Ensembl VEP and fastVEP are not re-measured here, and no ratio against the paper's medians is stated: the release protocol deletes the discarded warmup's output before the timed run and the paper's did not. The same-day control below is the comparison the README cites.",
   "sites_only_note": "Every timed input is sites-only; s09 and s10 are pointer suites into the per-file structural-variant results of s07 and s08.",
   "source_commit": "72ce119be0bd365639c88b864fe049c1303a0d93",
   "source_tree": "public",

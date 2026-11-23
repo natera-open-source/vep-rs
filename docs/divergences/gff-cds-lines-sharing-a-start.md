@@ -1,12 +1,12 @@
 # Two CDS lines of one GFF3 transcript sharing a start
 
-**The defect in one sentence.** Ensembl VEP 116.2's `--gff` source stores a transcript's CDS lines in a hash keyed by their start, so when two CDS lines of one transcript share a start one replaces the other. The later line of the file is kept when the two follow their transcript line, as a sorted file reads them. Everything the dropped line alone stated is lost without a warning: its protein identifier and version when the pair opens the coding sequence, and its end when the pair closes it.
+**The defect in one sentence.** Ensembl VEP 116.3's `--gff` source stores a transcript's CDS lines in a hash keyed by their start, so when two CDS lines of one transcript share a start one replaces the other. The later line of the file is kept when the two follow their transcript line, as a sorted file reads them. Everything the dropped line alone stated is lost without a warning: its protein identifier and version when the pair opens the coding sequence, and its end when the pair closes it.
 
 **Why this is a defect.** The file states two coding segments at that start, and a reader that keeps one of them reads a coding sequence the file does not describe. Which segment survives depends on the order the two lines stand in the file, and on whether their transcript line precedes them, not on anything either line says. When the pair closes the coding sequence and the line it keeps ends first, the bases between the two ends are coding by the file and untranslated to Ensembl VEP. A variant there is `3_prime_UTR_variant` with no protein change, where the file's coding sequence gives a `missense_variant`. Nothing in the output or on standard error says a line was dropped.
 
 **What vep-rs does instead.** vep-rs reads every CDS line of the transcript: the coding span is the union of the lines, so a base any line calls coding is coding. The translation's identifier and version come from the line that opens the coding sequence, the lowest start on the forward strand and the highest on the reverse. Where two lines share that start, the forward strand takes the earlier line in the file and the reverse strand the later, the same line for a file however many times it is read. The lines sharing a start are never both dropped and never read as two translations.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3):
 
 - `Bio/EnsEMBL/VEP/AnnotationSource/File/BaseGXF.pm`, lines 385-401, `_get_parent_child_structure`: a record's children are pushed in the order the records were read, the file's order within the region.
 - `BaseGXF.pm`, lines 504-519, `_create_transcript`: line 511 stores each `CDS` or `stop_codon` child under its start, `$cdss{$child->{start}} = $child`, so a later child at the same start replaces the earlier one. Lines 544-556 collect the stored records exon by exon into the ordered list; a start is one key, so one record.
@@ -21,7 +21,7 @@
 
 ## 1. A PWP2 transcript whose first and last CDS lines are each written twice
 
-**In short.** The GRCh38 release-116 GFF3 lines of the gene PWP2 and its transcript `ENST00000456705`, on the forward strand, beside the lines of TMPRSS3 and its transcript `ENST00001113783` as released. The transcript's first CDS line, `44107417-44107434`, is followed by a copy naming the protein `ENSP00000411750` version 2. Its last CDS line, `44115691-44115744`, is followed by a copy naming the same protein and ending at `44115738`, six bases earlier. On `pwp2_codon3`, `21 44107424 T>C`, Ensembl VEP 116.2 reading the file through `--gff` writes `ENSP00000411750.2` and `ENSP00000411750.2:p.Phe3Ser`, vep-rs `ENSP00000411749.1` and `ENSP00000411749.1:p.Phe3Ser`. On `pwp2_codon186`, `21 44115741 G>A`, between the two ends, Ensembl VEP writes `3_prime_UTR_variant` and `c.*3G>A` with no HGVSp, vep-rs `missense_variant`, `c.557G>A` and `p.Arg186His`.
+**In short.** The GRCh38 release-116 GFF3 lines of the gene PWP2 and its transcript `ENST00000456705`, on the forward strand, beside the lines of TMPRSS3 and its transcript `ENST00001113783` as released. The transcript's first CDS line, `44107417-44107434`, is followed by a copy naming the protein `ENSP00000411750` version 2. Its last CDS line, `44115691-44115744`, is followed by a copy naming the same protein and ending at `44115738`, six bases earlier. On `pwp2_codon3`, `21 44107424 T>C`, Ensembl VEP 116.3 reading the file through `--gff` writes `ENSP00000411750.2` and `ENSP00000411750.2:p.Phe3Ser`, vep-rs `ENSP00000411749.1` and `ENSP00000411749.1:p.Phe3Ser`. On `pwp2_codon186`, `21 44115741 G>A`, between the two ends, Ensembl VEP writes `3_prime_UTR_variant` and `c.*3G>A` with no HGVSp, vep-rs `missense_variant`, `c.557G>A` and `p.Arg186His`.
 
 ### 1.1 What a reader needs to know first
 
@@ -54,7 +54,7 @@ Both engines run `--hgvs --protein --protein_version --symbol`. Ensembl VEP read
 
 ### 1.3 What each engine writes
 
-Ensembl VEP 116.2:
+Ensembl VEP 116.3:
 
 ```
 pwp2_codon3	21:44107424	C	ENSG00000241945	ENST00000456705	Transcript	missense_variant	52	8	3	F/S	tTc/tCc	-	IMPACT=MODERATE;STRAND=1;SYMBOL=PWP2;ENSP=ENSP00000411750.2;SOURCE=pwp2_cds_shared_start.gff3.gz;HGVSc=ENST00000456705.1:c.8T>C;HGVSp=ENSP00000411750.2:p.Phe3Ser
@@ -95,7 +95,7 @@ vep -i records.vcf -o out.txt --offline --json_cache cache \
   --hgvs --protein --protein_version --symbol
 ```
 
-vep-rs writes `ENSP00000411749.1` on both PWP2 rows and `missense_variant` for `pwp2_codon186`. Ensembl VEP 116.2 with `--gff pwp2_cds_shared_start.gff3.gz`, the file bgzipped and indexed, writes `ENSP00000411750.2` and `3_prime_UTR_variant`. Removing the two copies makes the engines agree on every row.
+vep-rs writes `ENSP00000411749.1` on both PWP2 rows and `missense_variant` for `pwp2_codon186`. Ensembl VEP 116.3 with `--gff pwp2_cds_shared_start.gff3.gz`, the file bgzipped and indexed, writes `ENSP00000411750.2` and `3_prime_UTR_variant`. Removing the two copies makes the engines agree on every row.
 
 ### 1.7 How the comparator treats this class
 

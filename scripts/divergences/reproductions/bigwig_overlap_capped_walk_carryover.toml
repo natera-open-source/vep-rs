@@ -1,9 +1,9 @@
 entry = "bigwig_overlap_capped_walk_carryover"
 page = "docs/output/custom-bigwig.md#a-bigwig-record-listed-twice-after-a-neighbouring-variants-capped-walk"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 2,356 per million · 0 flag sets, 41 corpora"
+input_class_basis = "2 · 2,356 per million · 0 flag sets, 45 corpora"
 notes = "inputs/bigwig_overlap_capped_walk_carryover/dense.bw holds 150 one-base intervals at 21:5028900-5029049 with the values 0.001 to 0.150. The deletion's window holds 102 of them, more than the default num_records of 50, so its walk stops early and the substitution at the last base of its span reads the queued interval at 5029000 before its own."
 
 [input]
@@ -32,3 +32,13 @@ where = { record = "21_5029000_A/G" }
 [expected]
 ensembl_vep = ["0.101000003516674,0.101000003516674"]
 vep_rs = ["0.101000003516674"]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/custom/bigwig.rs::BigWigSource::annotate_clusters",
+    "crates/vep-builtins/src/custom/bigwig.rs::BigWigSource::annotate_window",
+]
+tests = [
+    "crates/vep-builtins/src/custom/bigwig.rs::tests::clustered_reads_equal_one_query_per_variant",
+    "crates/vep-builtins/src/custom/bigwig.rs::tests::coords_percentage_and_record_cap_follow_file_pm",
+]

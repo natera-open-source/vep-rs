@@ -1,7 +1,7 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "divergences_classified_against": {
   "engine": "vep-rs",
@@ -10,70 +10,116 @@
   "arch": "arm64",
   "flags_passed": []
  },
- "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --fasta reference.fa [<the flag set's flags>] [--tab|--vcf|--json]",
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --fasta ../GRCh37-hgvs/reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh37",
  "fasta": "GRCh37 chromosome 21, the GRCh37-hgvs corpus's reference.fa.gz decompressed, passed to both engines on every run",
  "input": "variants.vcf: 25 chromosome 21 records of the GRCh37-hgvs corpus (ClinVar GRCh37 and gnomAD v2.1.1; INFO, QUAL and FILTER dropped; records that corpus documents as diverging left out): the first record carrying each of the 30 consequence terms that corpus's reference produces (21 records), two more synonymous records and two more multi-base coding deletions, plus five records built a few bases past chosen ones with the reference base read from the FASTA: two and three alternate SNV alleles, an SNV beside an insertion, an alternate allele beside a `*`, and two deletions of different lengths",
- "generator": "scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh37 --suite flags=<reference>=<input> --k 100 --seed 1 --covers numbers --covers variant_class --covers show_ref_allele --covers allele_number --matrix tests/parity/matrix.tsv --fasta-name ../GRCh37-hgvs/reference.fa.gz --out tests/golden/116/GRCh37-output-flags; build_golden_corpus.py flag-set (five sets); scripts/data/storable_to_json.pl <cache> <json> 21; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; build_golden_corpus.py classify (the default run and each flag set)",
- "terms_json": "Ensembl VEP 116.2 exits on --terms display or NCBI with --json (`Can't call method \"rank\" on an undefined value at OutputFactory/JSON.pm line 388`) for every record with two or more distinct terms, so the terms sets compare default, tab and vcf",
+ "generator": "tools/vep-golden-corpus select --release 116 --assembly GRCh37 --dataset flags=<reference>=<input> --k 100 --seed 1 --covers numbers --covers variant_class --covers show_ref_allele --covers allele_number --matrix tests/parity/matrix.tsv --fasta-name ../GRCh37-hgvs/reference.fa.gz --out tests/golden/116/GRCh37-output-flags; vep-golden-corpus flag-set (five sets); tools/vep-storable-to-json <cache> <json> 21; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; vep-golden-corpus classify (the default run and each flag set)",
+ "terms_json": "Ensembl VEP 116.3 exits on --terms display or NCBI with --json (`Can't call method \"rank\" on an undefined value at OutputFactory/JSON.pm line 388`) for every record with two or more distinct terms, so the terms sets compare default, tab and vcf",
  "sha256": {
-  "default.txt": "ab04e9dbf414df85753b86509092c70c2c5af5dc370ae13ff1b1f3960a0b5cfc",
-  "tab.txt": "518f0f048da5bc6534b39dc8de0ed686c3b3dec76a4d7e2f13a400560d69a52c",
-  "vcf.vcf": "79665f6eb2a13e4a832c79779e2ff14724cb3987615ecba8a3c372ec5e9d7ce0",
-  "json.jsonl": "58ff461609a0815d79f42774cd49f23deb2473230ac1fdb7425a46631baa14a1"
+  "default.txt": "b503ee24c6014a32ba8f2d3108645b7681c721d4dc9a85af53a6975c8d693b7e",
+  "tab.txt": "2d1285b33d28fbd59dbdbc54d01cc26fb81623c049d21b4d6e91d84641b27dfe",
+  "vcf.vcf": "181f24afe72e9d182577cf57595bb13d20b3fbdaa3ae946b883c601e6aa71eff",
+  "json.jsonl": "102057e8d67ef09d28570662ba06ed02d7a5cd92de5f1e413648bfbacd2d39b8"
  },
  "variants_vcf_sha256": "b4887248b74f457307b95dd20a16dda5322b95c4339292e28e65ce13056cf62d",
  "flag_sets": {
   "terms-display": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --fasta ../GRCh37-hgvs/reference.fa --no_stats --quiet --force_overwrite --terms display [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh37",
+   "fasta": "../GRCh37-hgvs/reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "6de23d537ee0a986390bd2784700d11304d378c5864d4e109403a9be9e965b00",
+    "tab.txt": "863f12e1708e6961149d84bc981e140aae20e3d0d737e743fab49b487fa3daa4",
+    "vcf.vcf": "2ebdd49299f593de7b816783703c9b2c5d73e1beaeb0ce4017298da84f1d0557"
+   },
    "flags": [
     "--terms",
     "display"
    ],
-   "expected_dir": "expected_terms-display",
-   "sha256": {
-    "default.txt": "80ed28081f8a2e733651c6c57e1e2830e9d114c4c31ffbb7391ac834d51be6d4",
-    "tab.txt": "1b8d7a12c95fb77e45d399f3a87081222bef74f2eb68f4dac3220c45a56ea1be",
-    "vcf.vcf": "b10874c4a6d81799bc6da0ec4d6cf5b7d12ff8ee16de546a4302067317d83512"
-   }
+   "expected_dir": "expected_terms-display"
   },
   "terms-ncbi": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --fasta ../GRCh37-hgvs/reference.fa --no_stats --quiet --force_overwrite --terms NCBI [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh37",
+   "fasta": "../GRCh37-hgvs/reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "5c98a2eb48a2143e2723c53768b06281880d5848f8ece66b5952256e40a141b8",
+    "tab.txt": "098141dc1bbaee2cc1a09502d6eaaa3b1a500da20cc1951bfd7a78544020799d",
+    "vcf.vcf": "d57cd2389f98732f37949a1c590910aaecd77d03ce3ded733308f11de8250b07"
+   },
    "flags": [
     "--terms",
     "NCBI"
    ],
-   "expected_dir": "expected_terms-ncbi",
-   "sha256": {
-    "default.txt": "a2f6857b203914702d9b1a588cea3cd6c5c1af94899a2fc818a342315b4bb8f6",
-    "tab.txt": "8e828ddfed6cec1cebd7784c48c89d8bd724658426e0e5f475c7410d1fc4053c",
-    "vcf.vcf": "16f3ad8311a3dd261fff9403f223bb710da49fe04c43c7e5ac42e75ec5d8770b"
-   }
+   "expected_dir": "expected_terms-ncbi"
   },
   "total-length": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --fasta ../GRCh37-hgvs/reference.fa --no_stats --quiet --force_overwrite --total_length [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh37",
+   "fasta": "../GRCh37-hgvs/reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "6c74ccdad32623bd8188426670aa5202eaa96af222595f315e3c24547d114296",
+    "tab.txt": "72be9d65a8ffa5895ee1d016ae40c64ce14b8084ab4225e7819dd057ca5d7ac8",
+    "vcf.vcf": "513f7f9478c60ab3dc0331b8294f0ba822e09582c2d05b8e2eb31836d5f7a131",
+    "json.jsonl": "8df92d2ef716770bfa5789cc1d7b7ac25c6ac8b9714e725a588693f1ae90ba8b"
+   },
    "flags": [
     "--total_length"
    ],
-   "expected_dir": "expected_total-length",
-   "sha256": {
-    "default.txt": "4af0cd96570a6c5a6e3ef81c980d57be4988ff6aa5390cf1b14296cf9cfaa558",
-    "tab.txt": "7aa2a05900976835952fcd7dcf7f958dfb1c0001b8d3335c87f8dfee599bb3fd",
-    "vcf.vcf": "b8257ca186ffac039eee4e910ed32cb2b3a50632278d2d3e96beb525a8d2bf1d",
-    "json.jsonl": "b376a6732f2bfc6a986bcdfa91d86501ad11c164fc49987ad86dbebdc8726794"
-   }
+   "expected_dir": "expected_total-length"
   },
   "no-escape": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --fasta ../GRCh37-hgvs/reference.fa --no_stats --quiet --force_overwrite --hgvs --no_escape [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh37",
+   "fasta": "../GRCh37-hgvs/reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "c05b75d251d84ddd0a491f4bc62ea97e23d1ba35e99a83c5fd9254a75f036089",
+    "tab.txt": "48cf5dd2e7a43fd5a41e84cc89cbc789983cf9d113f0e235b6d1aec07db9e22a",
+    "vcf.vcf": "baafda5ab44931b28064235ff863a3f2685616a144b16ad54503999f3dc3ae3f",
+    "json.jsonl": "63e00b484486607aeb67be58d324e5c71889796d82551959000bdff22509418e"
+   },
    "flags": [
     "--hgvs",
     "--no_escape"
    ],
-   "expected_dir": "expected_no-escape",
-   "sha256": {
-    "default.txt": "32edc608d7710c03408cfd770b186752c5f1f17899caf11cf4882b809e8fe452",
-    "tab.txt": "d90840d30eb4a32786dbd4e12763290fdb75a925ab2cc5834c15d62dd0408317",
-    "vcf.vcf": "58faedeb4a697b315c715d093a316ab746dcc68e496c9581a0401060bd8b0023",
-    "json.jsonl": "63536a010aec712af92b7e73e09e92b5dc0600e13937f8378a1e496fc3e69c59"
-   }
+   "expected_dir": "expected_no-escape"
   },
   "allele-flags": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --fasta ../GRCh37-hgvs/reference.fa --no_stats --quiet --force_overwrite --allele_number --show_ref_allele --uploaded_allele --ambiguity --variant_class --numbers [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh37",
+   "fasta": "../GRCh37-hgvs/reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "50b45ac08e9287f9872f1b65f1dfa55b0b97ca87a241622afe559ce09c0b2c44",
+    "tab.txt": "d6afff028ebce200a82efa77ae457886b71a311760c67371aaa1687e00774661",
+    "vcf.vcf": "299e568b8043632490c211cc1ad9099dd6a19b5528a971e919fb750bd437572b",
+    "json.jsonl": "1763240c3dce3b7cf6fcfef32c9b31a239dd51eaeb9c4fdab8bcf460d151e4f5"
+   },
    "flags": [
     "--allele_number",
     "--show_ref_allele",
@@ -82,13 +128,7 @@
     "--variant_class",
     "--numbers"
    ],
-   "expected_dir": "expected_allele-flags",
-   "sha256": {
-    "default.txt": "20026d1d43330e0a9f69290da672e37eb609740c847d52d758a34a43aa0802e8",
-    "tab.txt": "85f3d12d4e05300a7414fff329ef123b906dea10a9f551607b792fcca145e547",
-    "vcf.vcf": "a0fdfbbb340870bfe7c94b3d0d5a79ae2ba03f765021def6c9d94f89538515c5",
-    "json.jsonl": "79f69922c2bbb1f7e5c93a807be1910a433d2de4bd178aeca7d73118dd1c810e"
-   }
+   "expected_dir": "expected_allele-flags"
   }
  },
  "pruned_cache": {

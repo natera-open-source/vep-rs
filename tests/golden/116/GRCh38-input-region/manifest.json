@@ -62,7 +62,7 @@
    ]
   }
  ],
- "suites": {
+ "datasets": {
   "GRCh38-input-region": {
    "reference": "default.txt",
    "input": "variants.vcf",
@@ -227,7 +227,7 @@
  },
  "records": [
   {
-   "suite": "GRCh38-input-region",
+   "dataset": "GRCh38-input-region",
    "vcf": "21\t10521699\tintron_hp_del\tGC\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_donor_region_variant",
@@ -235,7 +235,7 @@
    ]
   },
   {
-   "suite": "GRCh38-input-region",
+   "dataset": "GRCh38-input-region",
    "vcf": "21\t10538885\tintron_snv_colon\tA\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -243,7 +243,7 @@
    ]
   },
   {
-   "suite": "GRCh38-input-region",
+   "dataset": "GRCh38-input-region",
    "vcf": "21\t10542415\tcds_mnv\tAA\tGG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -252,7 +252,7 @@
    ]
   },
   {
-   "suite": "GRCh38-input-region",
+   "dataset": "GRCh38-input-region",
    "vcf": "21\t10542415\tcds_mnv_rev_strand\tAA\tTG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -261,7 +261,7 @@
    ]
   },
   {
-   "suite": "GRCh38-input-region",
+   "dataset": "GRCh38-input-region",
    "vcf": "21\t10552677\tcds_delins\tAG\tGTA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -270,7 +270,7 @@
    ]
   },
   {
-   "suite": "GRCh38-input-region",
+   "dataset": "GRCh38-input-region",
    "vcf": "21\t10559999\tsv_del\tC\t<DEL>\t.\t.\tSVTYPE=DEL;END=10570000",
    "combinations": [
     "3_prime_UTR_variant,coding_sequence_variant,feature_truncation,intron_variant,stop_lost",
@@ -280,7 +280,7 @@
    ]
   },
   {
-   "suite": "GRCh38-input-region",
+   "dataset": "GRCh38-input-region",
    "vcf": "21\t10592341\tcds_hp_ins\tG\tGA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -289,21 +289,21 @@
    ]
   },
   {
-   "suite": "GRCh38-input-region",
+   "dataset": "GRCh38-input-region",
    "vcf": "21\t13608999\tsv_del_lower_case\tG\t<DEL>\t.\t.\tSVTYPE=DEL;END=13610500",
    "combinations": [
     "5_prime_UTR_variant,coding_sequence_variant,feature_truncation"
    ]
   },
   {
-   "suite": "GRCh38-input-region",
+   "dataset": "GRCh38-input-region",
    "vcf": "21\t13615721\tintron_snv_strand_colon\tA\tC\t.\t.\t.",
    "combinations": [
     "intron_variant"
    ]
   },
   {
-   "suite": "GRCh38-input-region",
+   "dataset": "GRCh38-input-region",
    "vcf": "21\t13620283\tcds_tri_ins\tG\tGTCA\t.\t.\t.",
    "combinations": [
     "inframe_insertion",
@@ -311,14 +311,14 @@
    ]
   },
   {
-   "suite": "GRCh38-input-region",
+   "dataset": "GRCh38-input-region",
    "vcf": "21\t13630971\tcds_del24\tAATCCTGTGGGATTACCAGAAAACC\tA\t.\t.\t.",
    "combinations": [
     "inframe_deletion"
    ]
   },
   {
-   "suite": "GRCh38-input-region",
+   "dataset": "GRCh38-input-region",
    "vcf": "21\t14144642\tcds_mnv_chr_prefix\tAT\tCT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -329,7 +329,7 @@
    ]
   },
   {
-   "suite": "GRCh38-input-region",
+   "dataset": "GRCh38-input-region",
    "vcf": "21\t14181865\tintron_hp_del_rev_strand\tAA\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant",
@@ -338,7 +338,7 @@
    ]
   },
   {
-   "suite": "GRCh38-input-region",
+   "dataset": "GRCh38-input-region",
    "vcf": "21\t14210832\tcds_hp_ins_rev_strand\tA\tAA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -347,7 +347,7 @@
    ]
   },
   {
-   "suite": "GRCh38-input-region",
+   "dataset": "GRCh38-input-region",
    "vcf": "21\t14220999\tsv_dup\tA\t<DUP>\t.\t.\tSVTYPE=DUP;END=14222000",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant,feature_elongation,intron_variant",
@@ -360,7 +360,7 @@
    ]
   },
   {
-   "suite": "GRCh38-input-region",
+   "dataset": "GRCh38-input-region",
    "vcf": "21\t14221106\tsv_alu_insertion\tG\t<INS:ME:ALU>\t.\t.\tSVTYPE=INS;END=14221107",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,feature_elongation",
@@ -371,7 +371,7 @@
    ]
   },
   {
-   "suite": "GRCh38-input-region",
+   "dataset": "GRCh38-input-region",
    "vcf": "21\t14221107\tcds_snv\tC\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -383,7 +383,7 @@
    ]
   },
   {
-   "suite": "GRCh38-input-region",
+   "dataset": "GRCh38-input-region",
    "vcf": "21\t14512455\tcds_snv_strand_one\tT\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -394,7 +394,7 @@
    ]
   },
   {
-   "suite": "GRCh38-input-region",
+   "dataset": "GRCh38-input-region",
    "vcf": "21\t14964727\tcds_snv_rev_strand\tC\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -402,7 +402,7 @@
    ]
   },
   {
-   "suite": "GRCh38-input-region",
+   "dataset": "GRCh38-input-region",
    "vcf": "21\t15826987\tcds_snv_plus_one_lower_case\tC\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -412,7 +412,7 @@
    ]
   },
   {
-   "suite": "GRCh38-input-region",
+   "dataset": "GRCh38-input-region",
    "vcf": "21\t16218276\tlong_ins55\tA\tATTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -420,25 +420,42 @@
    ]
   },
   {
-   "suite": "GRCh38-input-region",
+   "dataset": "GRCh38-input-region",
    "vcf": "21\t20006769\tintergenic_snv\tT\tA\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-input-region",
+   "dataset": "GRCh38-input-region",
    "vcf": "21\t30000000\tintergenic_del25\tGCCCACTTTTACTTACTCACGTCTTT\tG\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
- "divergences": [],
+ "divergences": [
+  {
+   "location": "21:10560000-10570000",
+   "allele": "deletion",
+   "feature": "ENST00000612957",
+   "feature_type": "Transcript",
+   "record_indices": [
+    5
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,coding_sequence_variant,feature_truncation,intron_variant,stop_lost",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,coding_sequence_variant,feature_truncation,intron_variant"
+   ],
+   "expected_divergence": "structural_deletion_stop_lost_without_stop_codon"
+  }
+ ],
  "vep_rs_only_tuples": [],
- "divergence_summary": {},
+ "divergence_summary": {
+  "structural_deletion_stop_lost_without_stop_codon": 1
+ },
  "vep_rs_only_summary": {}
 }

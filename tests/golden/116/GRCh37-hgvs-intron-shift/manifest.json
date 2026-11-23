@@ -14,7 +14,7 @@
   "hgvs",
   "hgvs-offset-field"
  ],
- "suites": {
+ "datasets": {
   "shift": {
    "reference": "expected.default.out",
    "input": "design-variants.vcf",
@@ -50,7 +50,7 @@
  },
  "records": [
   {
-   "suite": "shift",
+   "dataset": "shift",
    "vcf": "21\t47613087\texon_first_base_del\tAC\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -60,7 +60,7 @@
    ]
   },
   {
-   "suite": "shift",
+   "dataset": "shift",
    "vcf": "21\t47613088\tintron_del_shifted_into_cds\tCC\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -70,7 +70,7 @@
    ]
   },
   {
-   "suite": "shift",
+   "dataset": "shift",
    "vcf": "21\t47613089\tintron_ins_shifted_into_cds\tC\tCC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -80,7 +80,7 @@
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "divergences": [],

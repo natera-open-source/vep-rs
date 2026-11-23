@@ -1,0 +1,6 @@
+##fileformat=VCFv4.2
+##source=tests/golden/116/GRCh38-plugin-loftee/variants.vcf
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+21	30215764	64605	G	T	.	.	.
+21	40052109	3349942	T	C	.	.	.
+21	44711463	984376	G	GGCCGGGGGCC	.	.	.

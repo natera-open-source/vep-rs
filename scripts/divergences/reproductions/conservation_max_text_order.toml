@@ -1,9 +1,9 @@
 entry = "conservation_max_text_order"
 page = "docs/plugins/conservation.md#where-max-differs-from-ensembl-vep"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 137,763 per million · 3 flag sets, 105 corpora"
+input_class_basis = "2 · 137,763 per million · 3 flag sets, 146 corpora"
 notes = "A two-base substitution over 21:18383679-18383680, whose scores in the corpus bigWig are -3.29 and -4.96: as text -4.96 sorts last, as numbers -3.29 is the maximum."
 
 [input]
@@ -28,3 +28,7 @@ where = { record = "all_negative_span", feature = "ENST00000284885" }
 [expected]
 ensembl_vep = ["-4.960"]
 vep_rs = ["-3.290"]
+
+[implementation]
+code = ["crates/vep-builtins/src/plugins/conservation.rs::score"]
+tests = ["crates/vep-cli/tests/plugin_documented_rows.rs::a_conservation_maximum_over_negative_scores_is_the_numeric_maximum"]

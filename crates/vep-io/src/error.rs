@@ -5,6 +5,7 @@
 
 /// Errors that can occur during I/O operations.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum IoError {
     /// An underlying I/O error.
     #[error("I/O error: {0}")]

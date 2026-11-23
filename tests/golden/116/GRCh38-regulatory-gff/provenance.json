@@ -1,83 +1,101 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "reference.fa.gz beside this file: GRCh38 chromosome 21 at its full length from Homo_sapiens.GRCh38.dna.primary_assembly.fa, every base more than 2,000 bases from a record span masked to N, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for the plain one",
  "input": "43 records on chromosome 21: 28 records of ClinVar chromosome 21 (the chromosome 21 ClinVar release the concordance datasets use) chosen for the release 116 regulatory annotation features they lie in, three to four per kind (a promoter core, a base inside a promoter's extended bounds and outside its core, a CTCF binding site with and without a motif, an open chromatin region, an enhancer with a motif, with an EMAR and alone, a motif in no regulatory feature, an EMAR in no regulatory feature), and 15 synthetic records: a deletion covering a CTCF binding site and its motif whole, a deletion covering two motifs of one matrix on both strands, insertions on either side of a motif's first base and of an enhancer's last base, one-base substitutions at a promoter's extended start, at the base before it, at the base before the core and at the core's first base, substitutions on both sides of the 1 Mb region boundary an enhancer straddles, a two-allele record and a three-base substitution inside the motif pair, and a record in no feature",
  "sha256": {
-  "default.txt": "0cb2064c9f7373901bb73772fa35c555da29a2a441b4db367e1690e8dfe4766a",
-  "tab.txt": "59849b3d018bf3a437b4adddfeb89f1ea23ab8ec06df9ea78cd595a7aaac3a15",
-  "vcf.vcf": "d13f1553eb5ace16734b4a18d091585e89bd182828b3e6771b6c6de4122d4644",
-  "json.jsonl": "0fb363b278d61d68ce83cf6a6882d587252c14b44648b43b78557ca122b20909"
+  "default.txt": "a99264c5648f1e10a08adb404abf6000bf456d0b25120f7397112f296548982a",
+  "tab.txt": "9523f03c71c20c2e1815c03df19efb1656021f4cb0dd9ed30576611a8de14c8a",
+  "vcf.vcf": "4e469b6706ec92229f83d2ea393ea1e93f47b2e87ad161be048e437f3eee9bee",
+  "json.jsonl": "5166e67d64353fb3e6cfb0afb3a6fffa710e1c5d113bc55d6fd8399cbbfd62da"
  },
  "variants_vcf_sha256": "dcf49ec413eb9c53eb38a26a072d97e91f547e16fcccd9bd2fbb6855954e25b2",
  "structural_vcf_sha256": "738ad350355879d0f71ae6fb184893872fa24bceae48c383e843a4b6f19c0325",
  "flag_sets": {
   "regulatory-gff": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --regulatory_gff file={corpus}/gff/regulatory_features.gff3.gz,motifs={corpus}/gff/motif_features.gff3.gz,emars={corpus}/gff/EMARs.gff.gz [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "0ccab22621c242cc343fee2ac333da1f6773cf0138f20d689dd56c25ec8785fe",
+    "tab.txt": "2ff0a753d710ddd0ba80d37e4e118524bc54e638a45bec5c0615b8f798113715",
+    "vcf.vcf": "a7bb1c06383af96be40c47cf09b1cf8cf12774d7201591c7556e58d905fdd57c",
+    "json.jsonl": "cfa7cb65272063be7bff4369b021b2e051dfcc727de081ec5cbc3b059c5e81ce"
+   },
    "flags": [
     "--regulatory_gff",
     "file={corpus}/gff/regulatory_features.gff3.gz,motifs={corpus}/gff/motif_features.gff3.gz,emars={corpus}/gff/EMARs.gff.gz"
    ],
-   "input": "variants.vcf",
-   "expected_dir": "expected_regulatory-gff",
-   "sha256": {
-    "default.txt": "daae9880f0bdc89812d8e88ed0c335c02d04437bb44aeb3fabf95be1db12687f",
-    "tab.txt": "e1a659ae35f27c20265c1f79c3807a2dd8ca7e00900e87e766d8ad19c5fcc692",
-    "vcf.vcf": "b213fe262a0830c35488fd76b04cbfa395b117a8947490dc23010f299b8eadd5",
-    "json.jsonl": "f7938b3e912c206a8fb795d9b8d41535e2cf178a5f24a3a836100b12c589af3c"
-   },
-   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --regulatory_gff file={corpus}/gff/regulatory_features.gff3.gz,motifs={corpus}/gff/motif_features.gff3.gz,emars={corpus}/gff/EMARs.gff.gz [--tab|--vcf|--json]"
+   "expected_dir": "expected_regulatory-gff"
   },
   "regulatory-gff-extended": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --regulatory_gff file={corpus}/gff/regulatory_features.gff3.gz,motifs={corpus}/gff/motif_features.gff3.gz,emars={corpus}/gff/EMARs.gff.gz --extended_promoters [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "734c8e48283ce671d52012e04d9b6b1b6c41544ca688488afde575c04c09d6e7",
+    "tab.txt": "c8ada5cc917b3c768864fe6621ca7212b5a0a9519d85d7f1430ff0324fc86798",
+    "vcf.vcf": "5a8018fe4f3b067517c6b93038d26cc4709dbb67aabd1a57b23036e8eb0dd265",
+    "json.jsonl": "55ed6db993a97ef57d2c758fc31eb9feb83d09fb07f6217cfb0dbb7422f627b0"
+   },
    "flags": [
     "--regulatory_gff",
     "file={corpus}/gff/regulatory_features.gff3.gz,motifs={corpus}/gff/motif_features.gff3.gz,emars={corpus}/gff/EMARs.gff.gz",
     "--extended_promoters"
    ],
-   "input": "variants.vcf",
-   "expected_dir": "expected_regulatory-gff-extended",
-   "sha256": {
-    "default.txt": "137699a1581b1b25c0fe6851c2d8eb5497db66c8f01faf2a06ed51cb22bfa615",
-    "tab.txt": "5e902e0881ccbcb0c7dd8a08d8bf1ffccd3d294c3d32600b4041c6ebb0d99c68",
-    "vcf.vcf": "92fe6daa9c334b52d1e2d1a605f75ac18de6e3146ba30e64d595075870be5574",
-    "json.jsonl": "7f468dc1ddac15f85eb544a4d045ec7d2119ac48b30fad60dd1f863efff1b250"
-   },
-   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --regulatory_gff file={corpus}/gff/regulatory_features.gff3.gz,motifs={corpus}/gff/motif_features.gff3.gz,emars={corpus}/gff/EMARs.gff.gz --extended_promoters [--tab|--vcf|--json]"
+   "expected_dir": "expected_regulatory-gff-extended"
   },
   "regulatory-gff-cell-type": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --regulatory_gff file={corpus}/gff/regulatory_features.gff3.gz,motifs={corpus}/gff/motif_features.gff3.gz,emars={corpus}/gff/EMARs.gff.gz --cell_type astrocyte [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "4f39f5b93add1f5c90e54f0b2f8d7819c8284eaebd2b3fa8b9bf63758b2d9d66",
+    "tab.txt": "f78cec259f8a46336bec7b546ffdf9d8c22a22a7e0872d59280ad8e6c5b2cba0",
+    "vcf.vcf": "d2c3258c2d13b080a6ae5c0374e270d84ba459624675b1dacc9bc2b26d0e9d89",
+    "json.jsonl": "8e909b79864d517d93572c170eb0934ba06095699699b273ab943b895923eef2"
+   },
    "flags": [
     "--regulatory_gff",
     "file={corpus}/gff/regulatory_features.gff3.gz,motifs={corpus}/gff/motif_features.gff3.gz,emars={corpus}/gff/EMARs.gff.gz",
     "--cell_type",
     "astrocyte"
    ],
-   "input": "variants.vcf",
-   "expected_dir": "expected_regulatory-gff-cell-type",
-   "sha256": {
-    "default.txt": "940da61547662a06f177033342ba39c6259182f6cb4eded5be0316bb8f174a8f",
-    "tab.txt": "6e89982e4f9ac1881a0ad400e02060a0638ac55c4c17654caf48dc3cff9390b6",
-    "vcf.vcf": "da4c9c58624a05e32fed362e3fe14a6486c735d0719207bed78d1168c99ba46d",
-    "json.jsonl": "5fdf4b954734e64c3b34d3337c1398b549b7186ec07aa8649d5ccde24732c472"
-   },
-   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --regulatory_gff file={corpus}/gff/regulatory_features.gff3.gz,motifs={corpus}/gff/motif_features.gff3.gz,emars={corpus}/gff/EMARs.gff.gz --cell_type astrocyte [--tab|--vcf|--json]"
+   "expected_dir": "expected_regulatory-gff-cell-type"
   },
   "regulatory-gff-unnamed-chr21": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --regulatory_gff file={corpus}/gff/regulatory_features.unnamed-chr21.gff3.gz [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
    "fasta": "reference.fa.gz",
    "input": "variants.vcf",
    "sha256": {
-    "default.txt": "9f9b6e5378a8beabeb79c7ed8df5dbacbb34e084523138d3d2b6599c8b67ff20",
-    "tab.txt": "78184a8518e8db7529e14224cb6d44579e539557bb8dbbcc9d2bfcfdff5ed670",
-    "vcf.vcf": "2b3c3bc0dbabdc58f48d8ac531ba866b877b24cda7000789bee644d7940db810",
-    "json.jsonl": "788f4ef5e84ebaa5433af1cd4c05d838c731d31bc6d138977ecad0964eceff5f"
+    "default.txt": "8b0d558093382d980f94aa52b7169bacce3b9f9879c38dc26b112406f8933df9",
+    "tab.txt": "a4e6417e5461f86729a4386202a1a8626a4631b1cbbc6a3201f767fd0bf399da",
+    "vcf.vcf": "7255c6ba40cc5336b1b5a0922fa5fd3b696e99a59dc42f294290653a93acb522",
+    "json.jsonl": "d9c0d18aa8ed637614065141a3bd11be7587138116c9b97b1cad9344d2bb66ba"
    },
    "flags": [
     "--regulatory_gff",
@@ -86,19 +104,19 @@
    "expected_dir": "expected_regulatory-gff-unnamed-chr21"
   },
   "regulatory-gff-structural": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i structural.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --regulatory_gff file={corpus}/gff/regulatory_features.gff3.gz,motifs={corpus}/gff/motif_features.gff3.gz,emars={corpus}/gff/EMARs.gff.gz [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
    "fasta": "reference.fa.gz",
    "input": "structural.vcf",
    "sha256": {
-    "default.txt": "2b0b5ded70522318a422b967ba6f212dd3654d55a14fbaebf75cb7ad156df8e7",
-    "tab.txt": "f9e69645f20cd6016bfbe9aecee236750345ea7bac457fe38bbc7555b1ada438",
-    "vcf.vcf": "562f40e2347a8ceca354d1727717ce75fe2e552090ae9cbe19e84db045553bf3",
-    "json.jsonl": "26898dcd0da13104d24936a7c3aa14f66ee48585d217540a7e2526628c33284d"
+    "default.txt": "94a22321587ed1ad0d692e85e57d901076ac33b3736c11e99bfe56e2cf186315",
+    "tab.txt": "a03208772021559fb08311509c5d170735536a8d43c3c17dd91e1595db855bf1",
+    "vcf.vcf": "41f05943dd647255fda3fd154c9f2adb5d79f1e645ebbacc1f5de364710f0ccd",
+    "json.jsonl": "562bfaf8d8a5f99eaa9495d7935ab39dea7020cdc53cb24defb2eab6f20782f1"
    },
    "flags": [
     "--regulatory_gff",
@@ -107,19 +125,19 @@
    "expected_dir": "expected_regulatory-gff-structural"
   },
   "regulatory-gff-structural-pick": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i structural.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --regulatory_gff file={corpus}/gff/regulatory_features.gff3.gz,motifs={corpus}/gff/motif_features.gff3.gz,emars={corpus}/gff/EMARs.gff.gz --pick [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
    "fasta": "reference.fa.gz",
    "input": "structural.vcf",
    "sha256": {
-    "default.txt": "d48d2d5ad61c3667ecc08555b846dcc07013b2dbab0f420a23848d8b09ffb622",
-    "tab.txt": "93c31cea686655c7f70718951ed45df2fcceff9208bad151b2338310ea3864d3",
-    "vcf.vcf": "86d86437028064d5c1b37f2b2344eb96fee12e9915fc9e1d1e9964b884a756f3",
-    "json.jsonl": "11b3e9e4db8b4d3678f8d9bc659c97ac611f01e336d6a5410c1c8eb7799272d5"
+    "default.txt": "0ca3a3c3fc3943f3d7a73cc29e33588c26566a2b2d6eb6435738c5d4f32261a3",
+    "tab.txt": "4acd8645ab060b259942c060b17c06950f1dfef0ee8b51c0d7406b03d1cf9884",
+    "vcf.vcf": "bf9af844e2d5fd1cc376d91f6d470ac7ea87adcb43989a51dcc650cf17c825a8",
+    "json.jsonl": "f636134becb5f6291e5755ce2ffed7593210367f960cf7e42c6c079a6417685a"
    },
    "flags": [
     "--regulatory_gff",
@@ -148,8 +166,8 @@
   },
   "note": "the chromosome 21 records of the three release 116 GRCh38 regulation annotation files of the Ensembl site (regulation/homo_sapiens/GRCh38/annotation/, CHECKSUMS sums 43906 6125, 14259 21844 and 52522 3119), each cut with awk on the first column, bgzip-compressed and indexed with tabix -p gff; the index of each is beside it"
  },
- "perl_cache_note": "the chromosome 21 slice of the homo_sapiens/116_GRCh38 cache with its regulatory files, the other primary contig directories present and empty; every record lies on chromosome 21, and the cache's regulatory data is ignored under --regulatory_gff with the warning both engines write",
- "generator": "candidate records chosen as described under input, annotated with Ensembl VEP with no regulatory flag, then scripts/golden/build_golden_corpus.py select --fasta-name reference.fa.gz --release 116 --assembly GRCh38 --suite reg=<reference>=<candidates> --k 2000 --seed 1 --multi-allelic-per-suite 40 --covers regulatory_gff --covers extended_promoters --covers emars --matrix tests/parity/matrix.tsv; scripts/golden/build_golden_corpus.py flag-set (regulatory-gff: --regulatory_gff file=,motifs=,emars= over gff/; regulatory-gff-extended: the same with --extended_promoters; regulatory-gff-cell-type: the same with --cell_type astrocyte); scripts/golden/prune_json_cache.py --gzip --regulatory --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <info.txt> --cache-version 116 --vcf variants.vcf over the chromosome 21 slice scripts/data/storable_to_json.pl and vep-cache-converter wrote from the Ensembl VEP 116 GRCh38 cache with its regulatory tree; scripts/concordance/generate_reference_output.sh --corpus --no-stats (the manifest's run, and each flag set as a corpus of its own whose expected files move to expected_<name>); scripts/golden/build_golden_corpus.py classify (the manifest's run and each flag set): no row diverges on any run",
+ "perl_cache_note": "the whole homo_sapiens/116_GRCh38 cache with its regulatory files; every record lies on chromosome 21, and the cache's regulatory data is ignored under --regulatory_gff with the warning both engines write",
+ "generator": "candidate records chosen as described under input, annotated with Ensembl VEP with no regulatory flag, then tools/vep-golden-corpus select --fasta-name reference.fa.gz --release 116 --assembly GRCh38 --dataset reg=<reference>=<candidates> --k 2000 --seed 1 --multi-allelic-per-dataset 40 --covers regulatory_gff --covers extended_promoters --covers emars --matrix tests/parity/matrix.tsv; tools/vep-golden-corpus flag-set (regulatory-gff: --regulatory_gff file=,motifs=,emars= over gff/; regulatory-gff-extended: the same with --extended_promoters; regulatory-gff-cell-type: the same with --cell_type astrocyte); scripts/golden/prune_json_cache.py --gzip --regulatory --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <info.txt> --cache-version 116 --vcf variants.vcf over the chromosome 21 slice tools/vep-storable-to-json and vep-cache-converter write from the Ensembl VEP 116 GRCh38 cache with its regulatory tree; scripts/concordance/generate_reference_output.sh --corpus --no-stats (the manifest's run, and each flag set as a corpus of its own whose expected files move to expected_<name>); tools/vep-golden-corpus classify (the manifest's run and each flag set): no row diverges on any run",
  "pruned_cache": {
   "transcripts_per_chromosome": {
    "21": 743

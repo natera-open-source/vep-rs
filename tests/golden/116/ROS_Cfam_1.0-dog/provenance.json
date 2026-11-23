@@ -1,0 +1,88 @@
+{
+ "plugin_fixtures": {
+  "generator": "scripts/fixtures/cut_plugin_regions.py",
+  "flank": 5000,
+  "record_flank": 2000,
+  "exon_flank": 50,
+  "gerp_regions": "exons",
+  "tools": {
+   "bgzip": "bgzip (htslib) 1.9"
+  },
+  "files": {
+   "reference.fa.fai": "51fc67e09b3e0c1a1b67769169f8f9886a416f45279305ddebd7422bd48d8314",
+   "reference.fa.gz": "b3003ffae420a57faec6d8d80882c1ce4d73eafb0d8a9e2aefc781e8fab830c6",
+   "reference.fa.gz.fai": "51fc67e09b3e0c1a1b67769169f8f9886a416f45279305ddebd7422bd48d8314",
+   "reference.fa.gz.gzi": "573952700aa120bd8178d4b95d2b39924a359916d849a96407239f2b3850d1d0"
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species canis_lupus_familiaris --assembly ROS_Cfam_1.0 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "canis_lupus_familiaris/116_ROS_Cfam_1.0",
+ "fasta": "the two sequences the records and the pruned cache's transcripts sit on (chromosome 38 and the unplaced scaffold JAAUVH010000248.1) at their full length from Canis_lupus_familiaris.ROS_Cfam_1.0.dna.primary_assembly.38.fa and Canis_lupus_familiaris.ROS_Cfam_1.0.dna.nonchromosomal.fa of Ensembl release 116, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
+ "input": "variants.vcf: 324 records on chromosome 38 and the unplaced scaffold JAAUVH010000248.1. 256 are seeded records that tools/vep-seeded-variants wrote from the converted cache and the two sequences (--records wide, seed 1), their IDs a category and an ordinal: twelve each of a start codon change, a stop gained and a stop lost under genetic code 1, an exon record on the first and on the last of the two sequences, a record whose sequence is written by a synonym, a missense and a synonymous change on each strand, a splice donor and a splice acceptor, both untranslated regions, an intron, upstream, downstream and intergenic records, a frameshift insertion, a frameshift deletion and an in-frame deletion, and the first and the last base of each of the two sequences. 68 are known variants of the cache's own variation files, single-base substitutions sampled with the same seed, their IDs the cache's identifiers. The twelve synonym records name chromosome 38 by its GenBank and RefSeq accessions and the scaffold by its RefSeq accession and its assembly name. The cache names no organelle sequence, no circular sequence and no genetic code other than 1 (its survey: 146 sequences with a transcript, every coding transcript on code 1), so the corpus holds no organelle record, no record across an origin and no record under another code.",
+ "sha256": {
+  "default.txt": "28e14a311287ef73d7fa498de4254d1a3fa26555af63cf263fc8d89d4f699425",
+  "tab.txt": "ec1a7bf372f9e65b45b69f0fb59d2062439701b51a3349f49b88d70744c21936",
+  "vcf.vcf": "d0a90ec8be7162190ecbf2005572545484755b9371c36651d167f8b3732a3b42",
+  "json.jsonl": "d7d6cb11b29479835b5c648b1208a3e32501c48c358ddc01d3fdeb2ae65a7eda"
+ },
+ "variants_vcf_sha256": "bef6047887e197236880b257161a4a8c6e28f04c5bc3c31f17d8a08ce7560277",
+ "flag_sets": {
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species canis_lupus_familiaris --assembly ROS_Cfam_1.0 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "canis_lupus_familiaris/116_ROS_Cfam_1.0",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "cb2286b1799401e4d48660fafc50b2e0d5b323bdd6379c46045194f5b94d480c",
+    "tab.txt": "c30ef5f2c07971ad6927b5fe94d643fbdb4d4fb23bee6c36f0233ee08dec5268",
+    "vcf.vcf": "85d6182ed6e633c955c5b8b5b3e18a0a4691f4771d420dda3c5bd7c27360fb9a",
+    "json.jsonl": "d70864d666af2f0815c61d595decc2af9b37a4bd3ad7936d7172fdbd22043d3d"
+   },
+   "flags": [
+    "--everything"
+   ],
+   "expected_dir": "expected_everything"
+  },
+  "hgvs-sift": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species canis_lupus_familiaris --assembly ROS_Cfam_1.0 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs --sift b [--tab|--vcf|--json]",
+   "perl_cache": "canis_lupus_familiaris/116_ROS_Cfam_1.0",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "13acadff7761c138eacd2544e4af98e3402e7680766b17593bd61930e1ec1221",
+    "tab.txt": "bd78954d9dcc0ed0b84c1460cf208c0ff3fd7c90be17b08024bab980d1f70a10",
+    "vcf.vcf": "62c68423f586cfe666457fc586010971fd63001b914c8506d26eb8a294589a0f",
+    "json.jsonl": "5ff374f3f7694a68a9097feeb59362f2b5d3b1eebcf30165e82a859b17d9dacb"
+   },
+   "flags": [
+    "--hgvs",
+    "--sift",
+    "b"
+   ],
+   "expected_dir": "expected_hgvs-sift"
+  }
+ },
+ "generator": "tools/vep-seeded-variants --records wide --seed 1 --fasta <the two sequences> --sequence 38 --sequence JAAUVH010000248.1 over the converted cache, less its twelve organelle records, which stand on the shorter nuclear sequence where a cache names no organelle; a seeded sample of 300 known single-base substitutions from the converted cache's variation files of the two sequences; Ensembl VEP over the two inputs under the corpus flags; tools/vep-golden-corpus select --release 116 --assembly ROS_Cfam_1.0 --species canis_lupus_familiaris --dataset wide=<reference>=<the seeded records> --dataset known=<reference>=<the known variants> --k 2 --seed 1 --max-span 1000000 --max-records 500 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 6 --include <every seeded record and 62 of the known variants> --covers species-dog-ros-cfam1 --covers genetic-code-tables --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --flank 5000 --gzip --drop sorted_exons --drop protein_function_predictions --drop-except <the transcripts on which a record changes one residue, the rows SIFT scores> --perl-info <cache>/info.txt --cache-version 116 --variations <converted cache>/variations over the whole cache tools/vep-storable-to-json converts from the Ensembl VEP 116 ROS_Cfam_1.0 cache (protein features kept for the DOMAINS column of the everything set; the variation slices hold the known variants within one base of a record); scripts/fixtures/cut_plugin_regions.py --reference <the two sequences> --flank 5000 --record-flank 2000 over a copy of the records that names each sequence as the cache does, since twelve records name theirs by a synonym; tools/vep-golden-corpus flag-set (everything, hgvs-sift); scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; tools/vep-golden-corpus classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp --field SIFT for the hgvs-sift set)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "38": 412,
+   "JAAUVH010000248.1": 87
+  },
+  "shards": 28,
+  "synonym_lines": 4,
+  "matrices_kept_on": 100,
+  "variation_slices": "the known variants within one base of a record under variations/<chr>/all_vars.gz with its .csi, as the Ensembl VEP cache lays them out: 89 on chromosome 38 and 32 on the scaffold"
+ }
+}

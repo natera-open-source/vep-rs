@@ -1,0 +1,3 @@
+WARNING: line 12 skipped (other text): unsupported record at ~/x/in.vcf
+WARNING: only there
+Line 9	some	skipped text ./a/b

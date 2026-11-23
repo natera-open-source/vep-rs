@@ -1,15 +1,16 @@
 entry = "refseq_edited_model_hgvsc_offset"
 page = "docs/divergences/refseq-edited-model-hgvsc.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 124 of 77,675 cache transcripts · 1 flag set, 4 corpora"
-notes = "A 31-base deletion over a COL18A1 donor site, shifted seven bases, on NM_030582.4, whose alignment deleted nine bases upstream; the intronic distance is counted from the unedited exon end."
+input_class_basis = "2 · 147 of 116,165 cache transcripts · 11 flag sets, 9 corpora"
+notes = "A 31-base deletion over a COL18A1 donor site, shifted seven bases, on NM_030582.4, whose alignment deleted nine bases upstream; the intronic distance is counted from the unedited exon end. The seventeen-base deletion rs1179352929 holds the nine bases whole: Ensembl VEP closes its span nine positions later than the eight model bases removed."
 
 [input]
 format = "vcf"
 text = """
 21	45505272	rs2037126010	AGGCAGAGTAAGTCAGTGGGGAGTGGGCCCCG	A	.	.	.
+21	45504518	rs1179352929	CCAGGCCCCCCAGGCCCA	C	.	.	.
 """
 
 [cache]
@@ -24,9 +25,34 @@ flags = ["--refseq", "--hgvs"]
 
 [compare]
 kind = "rows"
-where = { record = "rs2037126010", feature = "NM_030582.4" }
+where = { record = ["rs2037126010", "rs1179352929"], feature = "NM_030582.4" }
 columns = ["cDNA_position", "REFSEQ_OFFSET", "BAM_EDIT", "HGVSc", "HGVS_OFFSET"]
 
 [expected]
-ensembl_vep = ["3548-? | -9 | OK | NM_030582.4:c.3546_3553+23del | 7"]
-vep_rs = ["3548-? | -9 | OK | NM_030582.4:c.3544+2_3544+32del | 7"]
+ensembl_vep = [
+  "3380-3387 | - | OK | NM_030582.4:c.3372_3388del | 1",
+  "3548-? | -9 | OK | NM_030582.4:c.3546_3553+23del | 7",
+]
+vep_rs = [
+  "3380-3387 | - | OK | NM_030582.4:c.3372_3379del | 1",
+  "3548-? | -9 | OK | NM_030582.4:c.3544+2_3544+32del | 7",
+]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/hgvs.rs::ExonSpan::in_genomic_order",
+    "crates/vep-effects/src/hgvs.rs::hgvsc_notation",
+    "crates/vep-effects/src/hgvs.rs::perl_cdna_position",
+]
+tests = [
+    "crates/vep-cli/tests/edited_model_deletion_across_deleted_bases.rs::a_deletion_across_the_deleted_bases_is_written_over_the_model_bases_it_removes",
+    "crates/vep-cli/tests/edited_model_hgvsc_reach.rs::every_documented_row_is_a_renumbered_hgvsc_on_a_model_whose_edit_changes_its_length",
+    "crates/vep-effects/src/consequences.rs::tests::ensembl_model_with_an_indel_edit_is_numbered_against_the_edited_model",
+    "crates/vep-effects/src/consequences.rs::tests::hgvsc_of_an_edited_model_is_numbered_against_the_edited_model",
+    "crates/vep-effects/src/consequences.rs::tests::reverse_strand_edited_model_is_numbered_against_the_edited_model",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/edited_model.rs::cdna_pair_spans",
+    "tools/vep-formats-compare/src/rules/edited_model.rs::deletion_across_lacked_bases",
+    "tools/vep-golden-corpus/src/classify/hgvs.rs::refseq_edited_model_hgvsc_offset",
+]

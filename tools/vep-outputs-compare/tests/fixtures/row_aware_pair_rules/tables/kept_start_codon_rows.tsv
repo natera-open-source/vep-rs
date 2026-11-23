@@ -1,0 +1,37 @@
+shape	first_column	location	allele	feature_type	reference_cdna	candidate_cdna	reference_cds	candidate_cds	reference_terms	candidate_terms	taken
+a frameshift deletion with the alleles in the first column	21_30000_CTGAACCGTAA/C	21:30001-30010	-	Transcript	3-12	3-12	3-12	3-12	frameshift_variant,start_lost	frameshift_variant,start_retained_variant	yes
+a frameshift deletion under an identifier	2750113	21:30001-30010	-	Transcript	3-12	3-12	3-12	3-12	frameshift_variant,start_lost	frameshift_variant,start_retained_variant	yes
+a frameshift deletion of one base	2750114	21:30001	-	Transcript	3	3	3	3	frameshift_variant,start_lost	frameshift_variant,start_retained_variant	yes
+a frameshift insertion beside a term of both rows	2750115	21:30000-30001	G	Transcript	2-3	2-3	2-3	2-3	frameshift_variant,start_lost,NMD_transcript_variant	frameshift_variant,start_retained_variant,NMD_transcript_variant	yes
+a frameshift insertion after the first coding base	2750116	21:29999-30000	GTTAC	Transcript	1-2	1-2	1-2	1-2	frameshift_variant,start_lost	frameshift_variant,start_retained_variant	yes
+a frameshift without a start term on the row of the reference	2750113	21:30001-30010	-	Transcript	3-12	3-12	3-12	3-12	frameshift_variant	frameshift_variant,start_retained_variant	yes
+a deletion of whole codons	2750117	21:30001-30003	-	Transcript	3-5	3-5	3-5	3-5	start_lost,inframe_deletion	inframe_deletion,start_retained_variant	yes
+a deletion of whole codons without a start term on the row of the reference	2750117	21:30001-30003	-	Transcript	3-5	3-5	3-5	3-5	inframe_deletion	inframe_deletion,start_retained_variant	yes
+an insertion of whole codons	2750118	21:30000-30001	GCA	Transcript	2-3	2-3	2-3	2-3	inframe_insertion	inframe_insertion,start_retained_variant	yes
+an insertion of whole codons beside a term of both rows	2750118	21:30000-30001	GCA	Transcript	2-3	2-3	2-3	2-3	inframe_insertion,NMD_transcript_variant	inframe_insertion,start_retained_variant,NMD_transcript_variant	yes
+an insertion of whole codons with a lost start on the row of the reference	2750118	21:30000-30001	GCA	Transcript	2-3	2-3	2-3	2-3	inframe_insertion,start_lost	inframe_insertion,start_retained_variant	yes
+beside splice and intron terms of both rows	2750119	21:29999-31858	-	Transcript	1-250	1-250	1-250	1-250	splice_acceptor_variant,splice_donor_variant,frameshift_variant,start_lost,splice_donor_5th_base_variant,intron_variant	splice_acceptor_variant,splice_donor_variant,frameshift_variant,splice_donor_5th_base_variant,start_retained_variant,intron_variant	yes
+a total on both rows	2750113	21:30001-30010	-	Transcript	3-12/2674	3-12/2674	3-12/900	3-12/900	frameshift_variant,start_lost	frameshift_variant,start_retained_variant	yes
+a total on the row of vep-rs alone	2750113	21:30001-30010	-	Transcript	3-12	3-12/2674	3-12	3-12/900	frameshift_variant,start_lost	frameshift_variant,start_retained_variant	yes
+a 5' UTR before the coding sequence	2750113	21:30001-30010	-	Transcript	104-113	104-113	3-12	3-12	frameshift_variant,start_lost	frameshift_variant,start_retained_variant	no
+a 5' UTR of one base	2750113	21:30001-30010	-	Transcript	4-13	4-13	3-12	3-12	frameshift_variant,start_lost	frameshift_variant,start_retained_variant	no
+a span that opens on the fourth coding base	2750113	21:30001-30010	-	Transcript	4-13	4-13	4-13	4-13	frameshift_variant,start_lost	frameshift_variant,start_retained_variant	no
+a span that opens on a later base whose first digit is 1	2750113	21:30001-30010	-	Transcript	12-21	12-21	12-21	12-21	frameshift_variant,start_lost	frameshift_variant,start_retained_variant	no
+one position after the start codon whose first digit is 3	2750114	21:30001	-	Transcript	31	31	31	31	frameshift_variant,start_lost	frameshift_variant,start_retained_variant	no
+a start that maps to no transcript base	2750113	21:30001-30010	-	Transcript	?-3	?-3	?-3	?-3	frameshift_variant,start_lost	frameshift_variant,start_retained_variant	no
+an end that maps to no transcript base	2750113	21:30001-30010	-	Transcript	2-?	2-?	2-?	2-?	frameshift_variant,start_lost	frameshift_variant,start_retained_variant	no
+an end written with a leading zero	2750113	21:30001-30010	-	Transcript	3-012	3-012	3-012	3-012	frameshift_variant,start_lost	frameshift_variant,start_retained_variant	no
+no CDS position	2750113	21:30001-30010	-	Transcript	3-12	3-12	-	-	frameshift_variant,start_lost	frameshift_variant,start_retained_variant	no
+no cDNA position	2750113	21:30001-30010	-	Transcript	-	-	3-12	3-12	frameshift_variant,start_lost	frameshift_variant,start_retained_variant	no
+no position	2750113	21:30001-30010	-	Transcript	-	-	-	-	frameshift_variant,start_lost	frameshift_variant,start_retained_variant	no
+cDNA positions that differ between the rows	2750113	21:30001-30010	-	Transcript	3-12	3-13	3-12	3-12	frameshift_variant,start_lost	frameshift_variant,start_retained_variant	no
+CDS positions that differ between the rows	2750113	21:30001-30010	-	Transcript	3-12	3-12	3-12	3-13	frameshift_variant,start_lost	frameshift_variant,start_retained_variant	no
+a further term on the row of vep-rs	2750113	21:30001-30010	-	Transcript	3-12	3-12	3-12	3-12	frameshift_variant,start_lost	frameshift_variant,start_retained_variant,NMD_transcript_variant	no
+a term of the reference gone	2750113	21:30001-30010	-	Transcript	3-12	3-12	3-12	3-12	frameshift_variant,start_lost,NMD_transcript_variant	frameshift_variant,start_retained_variant	no
+a lost start kept on the row of vep-rs	2750113	21:30001-30010	-	Transcript	3-12	3-12	3-12	3-12	frameshift_variant,start_lost	frameshift_variant,start_lost,start_retained_variant	no
+the terms the other way round	2750113	21:30001-30010	-	Transcript	3-12	3-12	3-12	3-12	frameshift_variant,start_retained_variant	frameshift_variant,start_lost	no
+a lost stop in the place of the lost start	2750113	21:30001-30010	-	Transcript	3-12	3-12	3-12	3-12	frameshift_variant,stop_lost	frameshift_variant,start_retained_variant	no
+no term of an insertion or a deletion	2750120	21:30000	A	Transcript	2	2	2	2	start_lost	start_retained_variant	no
+a protein altering term in the place of the length term	2750113	21:30001-30010	-	Transcript	3-12	3-12	3-12	3-12	protein_altering_variant,start_lost	protein_altering_variant,start_retained_variant	no
+a coding sequence term in the place of the length term	2750113	21:30001-30010	-	Transcript	3-12	3-12	3-12	3-12	coding_sequence_variant,start_lost	coding_sequence_variant,start_retained_variant	no
+a regulatory feature	2750113	21:30001-30010	-	RegulatoryFeature	3-12	3-12	3-12	3-12	frameshift_variant,start_lost	frameshift_variant,start_retained_variant	no

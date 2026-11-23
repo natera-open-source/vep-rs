@@ -1,0 +1,75 @@
+entry = "alternate_codon_past_the_coding_end"
+page = "docs/divergences/alternate-codon-past-the-coding-end.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "observed"
+input_class_basis = "seen in the six whole-genome datasets: 51 rows, 25 in genome-wide ClinVar and 26 in the four population datasets"
+notes = "Four records on the cache of the GRCh37 corpus, written by the prepare step from the corpus's own input. ClinVar variation 4047389 is a substitution of the first base of the last codon of ENST00000434274, whose coding sequence of 62 bases ends on that codon's second base before a 3' UTR; the two records named other_alternate are the two other substitutions of that base, made up. ClinVar variation 4533193 deletes 116 of the 117 coding bases of three transcripts. Ensembl VEP's alternate codon ends on the UTR's first base for the substitutions and is that base alone for the deletion, where vep-rs's holds coding bases; the UTR of ENST00000442249 opens with the base the deletion leaves, so its row agrees. For the made-up substitution whose bases the UTR base completes to a stop codon Ensembl VEP adds stop_gained. The masks stand for the 116 deleted bases and for the 38 residues before the stop."
+
+prepare = [
+  '''corpus="$REPO/tests/golden/116/GRCh37/variants.vcf"
+{
+  printf '##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n'
+  awk -F'\t' -v OFS='\t' '$3 == "4047389" || $3 == "4533193" { print $1, $2, $3, $4, $5, ".", ".", "." }' "$corpus"
+  awk -F'\t' -v OFS='\t' '$3 == "4047389" {
+    n = split("A C G T", base, " ")
+    for (i = 1; i <= n; i++)
+      if (base[i] != $4 && base[i] != $5)
+        print $1, $2, "other_alternate_" base[i], $4, base[i], ".", ".", "."
+  }' "$corpus"
+} > "$STAGE/records.vcf"
+[ "$(grep -vc '^#' "$STAGE/records.vcf")" = 4 ] || { echo "the corpus lacks one of the two records" >&2; exit 1; }''',
+]
+
+[input]
+format = "vcf"
+path = "{stage}/records.vcf"
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh37"
+json_cache = "tests/golden/116/GRCh37/json_cache"
+chromosomes = ["2", "3"]
+
+[run]
+flags = []
+
+[compare]
+kind = "rows"
+where = { feature = ["ENST00000434274", "ENST00000442249", "ENST00000454028", "ENST00000457004"] }
+columns = ["Uploaded_variation", "Feature", "Consequence", "CDS_position", "Protein_position", "Amino_acids", "Codons"]
+mask = ["[ACGT]{20,}", "[A-Z]{20,}"]
+
+[expected]
+ensembl_vep = [
+  "4047389 | ENST00000434274 | incomplete_terminal_codon_variant,coding_sequence_variant,NMD_transcript_variant | 61 | 21 | X/K | Ga/Aag",
+  "4533193 | ENST00000442249 | frameshift_variant,stop_lost,start_lost,splice_region_variant,NMD_transcript_variant | 1-116 | 1-39 | <masked>*/X | <masked>a/a",
+  "4533193 | ENST00000454028 | frameshift_variant,stop_lost,start_lost,splice_region_variant,NMD_transcript_variant | 1-116 | 1-39 | <masked>*/X | <masked>a/t",
+  "4533193 | ENST00000457004 | frameshift_variant,stop_lost,start_lost,splice_region_variant,NMD_transcript_variant | 1-116 | 1-39 | <masked>*/X | <masked>a/t",
+  "other_alternate_C | ENST00000434274 | incomplete_terminal_codon_variant,coding_sequence_variant,NMD_transcript_variant | 61 | 21 | X/Q | Ga/Cag",
+  "other_alternate_T | ENST00000434274 | stop_gained,incomplete_terminal_codon_variant,coding_sequence_variant,NMD_transcript_variant | 61 | 21 | X/* | Ga/Tag",
+]
+vep_rs = [
+  "4047389 | ENST00000434274 | incomplete_terminal_codon_variant,coding_sequence_variant,NMD_transcript_variant | 61 | 21 | X | Ga/Aa",
+  "4533193 | ENST00000442249 | frameshift_variant,stop_lost,start_lost,splice_region_variant,NMD_transcript_variant | 1-116 | 1-39 | <masked>*/X | <masked>a/a",
+  "4533193 | ENST00000454028 | frameshift_variant,stop_lost,start_lost,splice_region_variant,NMD_transcript_variant | 1-116 | 1-39 | <masked>*/X | <masked>a/a",
+  "4533193 | ENST00000457004 | frameshift_variant,stop_lost,start_lost,splice_region_variant,NMD_transcript_variant | 1-116 | 1-39 | <masked>*/X | <masked>a/a",
+  "other_alternate_C | ENST00000434274 | incomplete_terminal_codon_variant,coding_sequence_variant,NMD_transcript_variant | 61 | 21 | X | Ga/Ca",
+  "other_alternate_T | ENST00000434274 | incomplete_terminal_codon_variant,coding_sequence_variant,NMD_transcript_variant | 61 | 21 | X | Ga/Ta",
+]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/display.rs::codon",
+]
+tests = [
+    "crates/vep-effects/src/display.rs::tests::a_deletion_that_leaves_under_three_coding_bases_reads_those_bases",
+    "crates/vep-effects/src/display.rs::tests::a_substitution_in_a_one_base_last_codon_reads_no_utr_base",
+    "crates/vep-effects/src/display.rs::tests::a_substitution_in_a_partial_last_codon_keeps_the_alternate_codon_partial",
+    "crates/vep-effects/src/display.rs::tests::an_indel_in_a_partial_last_codon_reads_the_alternate_coding_bases_alone",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/coding_end.rs::codons_read_past_the_coding_end",
+    "tools/vep-formats-compare/src/rules/coding_end.rs::residues_read_past_the_coding_end",
+    "tools/vep-golden-corpus/src/classify/fields.rs::alternate_codon_past_the_coding_end",
+]

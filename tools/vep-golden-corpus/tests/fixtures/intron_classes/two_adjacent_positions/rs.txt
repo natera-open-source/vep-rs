@@ -1,0 +1,8 @@
+rec_end_after_the_span	1:231312-231313	TAT	ENSG1	ENST00000000023	Transcript	frameshift_variant,splice_region_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1;HGVSc=ENST00000000023.1:c.286-1_286insTAT
+rec_end_before_the_span	1:241314-241315	TAT	ENSG1	ENST00000000024	Transcript	frameshift_variant,splice_region_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1;HGVSc=ENST00000000024.1:c.286-1_286insTAT
+rec_start_after_the_span	1:11098-11099	TAT	ENSG1	ENST00000000001	Transcript	frameshift_variant,splice_region_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1;HGVSc=ENST00000000001.1:c.50_50+1insTAT
+rec_start_before_the_span	1:21100-21101	TAT	ENSG1	ENST00000000002	Transcript	frameshift_variant,splice_region_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1;HGVSc=ENST00000000002.1:c.50_50+1insTAT
+rec_start_moved	1:31096-31097	TTA	ENSG1	ENST00000000003	Transcript	frameshift_variant,splice_region_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1;HGVSc=ENST00000000003.1:c.50_50+1insTTA;HGVS_OFFSET=2
+rec_end_no_gap	1:231310-231311	TAT	ENSG1	ENST00000000023	Transcript	frameshift_variant,splice_region_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1;HGVSc=ENST00000000023.1:c.286-1_286insTAT
+rec_start_no_gap	1:41101-41102	TAT	ENSG1	ENST00000000004	Transcript	frameshift_variant,splice_region_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1;HGVSc=ENST00000000004.1:c.50_50+1insTAT
+rec_start_other_bases	1:51098-51099	CCG	ENSG1	ENST00000000005	Transcript	frameshift_variant,splice_region_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1;HGVSc=ENST00000000005.1:c.50_50+1insTAT

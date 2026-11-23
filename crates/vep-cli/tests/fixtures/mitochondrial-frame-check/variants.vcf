@@ -1,0 +1,4 @@
+##fileformat=VCFv4.2
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+MT	3556	same_next	A	C	.	.	.
+MT	3557	other_next	A	C	.	.	.

@@ -36,6 +36,7 @@ use crate::tabix::{
     split_field_count, table_contig, BatchQueryResult, TabixAnnotator, TabixConfig, TabixRecord,
 };
 use crate::traits::{BuiltinPlugin, PluginError, PrefetchData};
+use vep_core::allele_trim::{strip_shared_first_base, trim_directions, trim_sequences, CaseRule};
 use vep_core::assembly::Assembly;
 use vep_core::consequence::{RowKind, TranscriptConsequence};
 use vep_core::sv_routing::perl_true;
@@ -243,6 +244,12 @@ fn cell(record: &TabixRecord, present: usize, index: usize) -> Option<&str> {
     }
 }
 
+/// How an export row's alleles are compared with the record's: in either
+/// letter case, where Ensembl VEP's key is compared as written
+/// (Utils/Sequence.pm:1207, 1232; the documented class
+/// `tabix_allele_case_insensitive_match`).
+const TABLE_ALLELE_CASE: CaseRule = CaseRule::EitherCase;
+
 /// A record's alleles and start as Ensembl VEP compares them (`parse_data`,
 /// OpenTargets.pm:394-411): a VCF-style insertion or deletion, whose alleles
 /// differ in length and share their first base, loses that base and starts one
@@ -259,23 +266,14 @@ fn record_alleles(record: &TabixRecord) -> Option<(&[u8], &[u8], Cow<'_, str>)> 
     let (reference, alt) = allele_match::defined_alleles(record, REF_COLUMN, ALT_COLUMN)?;
     let (reference, alt) = (reference.as_bytes(), alt.as_bytes());
     let cell = record.columns.get(POS_COLUMN).map_or("", String::as_str);
-    if reference.len() != alt.len() && reference.first().is_some_and(|b| alt.first() == Some(b)) {
+    if let Some((reference, alt)) = strip_shared_first_base(reference, alt, TABLE_ALLELE_CASE) {
         return Some((
-            or_dash(&reference[1..]),
-            or_dash(&alt[1..]),
+            reference,
+            alt,
             Cow::Owned(allele_match::perl_increment(cell)),
         ));
     }
     Some((reference, alt, Cow::Borrowed(cell)))
-}
-
-/// `-`, the empty allele's spelling, for an allele with no base left.
-fn or_dash(allele: &[u8]) -> &[u8] {
-    if allele.is_empty() {
-        b"-"
-    } else {
-        allele
-    }
 }
 
 /// The reference and alternate allele with the bases they share trimmed away
@@ -289,51 +287,26 @@ fn trimmed<'a>(
     start: KeyPosition<'a>,
     right_first: bool,
 ) -> (Vec<u8>, Vec<u8>, KeyPosition<'a>) {
-    let mut reference = reference;
-    let mut alt = alt;
-    let mut start = start;
-    let trim_left = |reference: &mut &[u8], alt: &mut &[u8], start: &mut KeyPosition<'a>| {
-        while let (Some(r), Some(a)) = (reference.first(), alt.first()) {
-            if r != a {
-                break;
-            }
-            *reference = &reference[1..];
-            *alt = &alt[1..];
-            *start = start.moved();
-        }
-    };
-    let trim_right = |reference: &mut &[u8], alt: &mut &[u8]| {
-        while let (Some(r), Some(a)) = (reference.last(), alt.last()) {
-            if r != a {
-                break;
-            }
-            *reference = &reference[..reference.len() - 1];
-            *alt = &alt[..alt.len() - 1];
-        }
-    };
-    if right_first {
-        trim_right(&mut reference, &mut alt);
-        trim_left(&mut reference, &mut alt, &mut start);
-    } else {
-        trim_left(&mut reference, &mut alt, &mut start);
-        trim_right(&mut reference, &mut alt);
-    }
-    (or_dash(reference).to_vec(), or_dash(alt).to_vec(), start)
+    let trimmed = trim_sequences(reference, alt, right_first, TABLE_ALLELE_CASE);
+    (
+        trimmed.reference.to_vec(),
+        trimmed.alt.to_vec(),
+        start.moved_by(trimmed.left as u64),
+    )
 }
 
 /// The trimmed forms of a pair of alleles: left end first, and right end first
 /// when either allele is longer than one base (`_get_trim_directions`,
-/// Utils/Sequence.pm:1218-1225).
+/// Utils/Sequence.pm:1250-1258).
 fn trimmed_forms<'a>(
     reference: &[u8],
     alt: &[u8],
     start: KeyPosition<'a>,
 ) -> Vec<(Vec<u8>, Vec<u8>, KeyPosition<'a>)> {
-    let mut forms = vec![trimmed(reference, alt, start, false)];
-    if reference.len() > 1 || alt.len() > 1 {
-        forms.push(trimmed(reference, alt, start, true));
-    }
-    forms
+    trim_directions(reference, alt)
+        .iter()
+        .map(|right_first| trimmed(reference, alt, start, *right_first))
+        .collect()
 }
 
 /// The alternate alleles of the whole input record on the forward strand: the
@@ -360,7 +333,7 @@ fn record_alternate_alleles(variant: &InputVariant) -> Vec<Vec<u8>> {
 }
 
 /// Whether a record's alleles name an allele of the input record
-/// (`get_matched_variant_alleles`, Utils/Sequence.pm:1144-1216): a trimmed
+/// (`get_matched_variant_alleles`, Utils/Sequence.pm:1144-1247): a trimmed
 /// form of the record's alleles and start equals one of the variant's, the
 /// variant's alleles read on the forward strand and the starts compared as
 /// the key holds them ([`KeyPosition::equals`]). A record whose position is
@@ -405,8 +378,8 @@ fn alleles_match(
             variant_forms
                 .iter()
                 .any(|(variant_reference, variant_alt, variant_start)| {
-                    variant_reference == reference
-                        && variant_alt == alt
+                    TABLE_ALLELE_CASE.same_allele(variant_reference, reference)
+                        && TABLE_ALLELE_CASE.same_allele(variant_alt, alt)
                         && start.equals(*variant_start)
                 })
         })
@@ -602,9 +575,11 @@ impl OpenTargetsPlugin {
             records.push(object);
         }
         for (slot, &index) in selected.iter().enumerate() {
-            variant.plugin_data.insert(
+            variant.set_plugin_value(
                 self.record_keys[index].clone(),
                 std::mem::take(&mut joined[slot]),
+                false,
+                self.feature_types(),
             );
         }
         variant
@@ -612,6 +587,8 @@ impl OpenTargetsPlugin {
             .insert(PLUGIN_NAME.to_string(), records);
     }
 }
+
+impl crate::traits::sealed::Sealed for OpenTargetsPlugin {}
 
 impl BuiltinPlugin for OpenTargetsPlugin {
     fn name(&self) -> &str {
@@ -621,10 +598,10 @@ impl BuiltinPlugin for OpenTargetsPlugin {
     /// The Ensembl VEP module declares `['Feature', 'Intergenic']`
     /// (`OpenTargets.pm:291-292`): every row, the intergenic row included.
     fn feature_types(&self) -> &[RowKind] {
-        &RowKind::ALL
+        RowKind::ALL
     }
 
-    /// Every selected key is "column from <file>"; the locus-to-gene score
+    /// Every selected key is `column from <file>`; the locus-to-gene score
     /// says what it is first (`get_header_info`, OpenTargets.pm:295-311).
     fn header_info(&self) -> Vec<(String, String)> {
         let column = format!("column from {}", self.file_name);
@@ -645,6 +622,12 @@ impl BuiltinPlugin for OpenTargetsPlugin {
 
     fn set_assembly(&mut self, assembly: Option<Assembly>) {
         self.assembly = assembly;
+    }
+
+    fn set_reference_fasta(&mut self, fasta: Option<std::sync::Arc<vep_fasta::IndexedFasta>>) {
+        if let Some(store) = self.store.as_mut() {
+            store.set_reference_fasta(fasta);
+        }
     }
 
     fn init(&mut self, params: &[String]) -> Result<(), PluginError> {
@@ -680,7 +663,7 @@ impl BuiltinPlugin for OpenTargetsPlugin {
         // A row keeps the whitespace before its line end, which Ensembl VEP's
         // `split /\t/` leaves on the line's last cell (`parse_data`,
         // OpenTargets.pm:396), so a whitespace-only last cell is a value.
-        let store = open_best_store_with(
+        let mut store = open_best_store_with(
             Path::new(file),
             config,
             self.assembly,
@@ -690,6 +673,9 @@ impl BuiltinPlugin for OpenTargetsPlugin {
             PluginError::Init(message) => PluginError::Init(format!("{PLUGIN_NAME}: {message}")),
             other => other,
         })?;
+        if let Some(frame) = store.mitochondrial_frame_mut() {
+            frame.set_allele_column(Some(REF_COLUMN));
+        }
         let header = store.header().ok_or_else(|| {
             PluginError::Init(format!("{PLUGIN_NAME}: no header line found in {file}"))
         })?;
@@ -966,6 +952,36 @@ mod tests {
         let other_allele = annotated(&plugin, snv("21", 5030000, "A", "T"));
         assert!(other_allele.plugin_data.is_empty());
         assert!(other_allele.plugin_records.is_empty());
+    }
+
+    /// A cell holding a literal `0` is a value: the text formats print `0` and
+    /// the JSON record holds it. Ensembl VEP's text branch prints `NA` for it
+    /// (`OpenTargets.pm:339`, a truth test) while its JSON branch keeps the `0`
+    /// (`OpenTargets.pm:330-334`).
+    #[test]
+    fn a_zero_cell_is_printed_as_a_zero() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = export_with(
+            dir.path(),
+            "zero_cell.tsv.gz",
+            RECORDS.len(),
+            &[
+                "21\t5030030\tC\tA\t21_5030030_C_A\tGCST5\tgwas\tloc7\t2.0\t-9\t0.1\ttrue\ttrue\
+                 \t1.0\tPICS\ttrue\tENSG00000000007\t0\tEFO_0000004\t\t",
+            ],
+        );
+        let plugin = loaded(&file, &[]);
+
+        let variant = annotated(&plugin, snv("21", 5030030, "C", "A"));
+        assert_eq!(variant.plugin_data["OpenTargets_gwasLocusToGeneScore"], "0");
+        assert_eq!(
+            variant.plugin_data["OpenTargets_gwasGeneId"],
+            "ENSG00000000007"
+        );
+        assert_eq!(
+            variant.plugin_records["OpenTargets"][0]["OpenTargets_gwasLocusToGeneScore"].as_deref(),
+            Some("0")
+        );
     }
 
     /// `cols=all` writes every header column after the four variant columns,
@@ -1323,6 +1339,56 @@ mod tests {
         assert!(annotated(&plugin, other_insertion).plugin_data.is_empty());
     }
 
+    /// A record whose allele cells are written in lower case matches the
+    /// upper-case variant it describes, where Ensembl VEP's key is compared as
+    /// written (`get_matched_variant_alleles`, Utils/Sequence.pm:1207, 1232, on
+    /// the cells `parse_data` hands it, OpenTargets.pm:376-388, 396): a
+    /// substitution, and a VCF-style deletion whose shared first base is found
+    /// in either case. The cells print as the file writes them.
+    #[test]
+    fn a_record_with_lower_case_alleles_matches_its_variant() {
+        let dir = tempfile::tempdir().unwrap();
+        let record = |position: u64, reference: &str, alt: &str, gene: &str| {
+            format!(
+                "21\t{position}\t{reference}\t{alt}\t21_{position}_{reference}_{alt}\tGCST9\tgwas\
+                 \tloc9\t6.331\t-11\t-0.448027\ttrue\ttrue\t1.0\tPICS\ttrue\t{gene}\t0.55\
+                 \tEFO_0004527\t\t"
+            )
+        };
+        let rows = [
+            record(5030040, "c", "t", "ENSG00000000008"),
+            record(5030050, "at", "A", "ENSG00000000009"),
+        ];
+        let rows: Vec<&str> = rows.iter().map(String::as_str).collect();
+        let plugin = loaded(
+            &export_with(
+                dir.path(),
+                "open_targets_vep_lower_case.tsv.gz",
+                RECORDS.len(),
+                &rows,
+            ),
+            &["cols=variantId:gwasGeneId"],
+        );
+        let substitution = annotated(&plugin, snv("21", 5030040, "C", "T"));
+        assert_eq!(
+            substitution.plugin_data["OpenTargets_gwasGeneId"],
+            "ENSG00000000008"
+        );
+        assert_eq!(
+            substitution.plugin_data["OpenTargets_variantId"],
+            "21_5030040_c_t"
+        );
+        let deletion =
+            InputVariant::new("21".into(), 5030051, 5030051, b"T".to_vec(), b"-".to_vec());
+        assert_eq!(
+            annotated(&plugin, deletion).plugin_data["OpenTargets_gwasGeneId"],
+            "ENSG00000000009"
+        );
+        assert!(annotated(&plugin, snv("21", 5030040, "C", "G"))
+            .plugin_data
+            .is_empty());
+    }
+
     /// Ensembl VEP puts every record its filters keep to the allele match
     /// (`run`, OpenTargets.pm:375-390), which dies on a record whose reference
     /// or alternate cell lies past the line's last filled cell, the undefined
@@ -1674,10 +1740,10 @@ mod tests {
         assert!(perl_split("", ':').is_empty());
     }
 
-    /// Ensembl VEP 116.2 never hands OpenTargets a structural variant: the
+    /// Ensembl VEP 116.3 never hands OpenTargets a structural variant: the
     /// module keeps the default `variant_feature_types` of
     /// `['VariationFeature']` (BaseVepPlugin.pm:100), which the dispatch checks
-    /// before running a plugin on a line (OutputFactory.pm:2220). A `<DEL>`
+    /// before running a plugin on a line (OutputFactory.pm:2229). A `<DEL>`
     /// over the export's records gets no field, and nor does a matching
     /// substitution carrying the structural mark, which pins the gate rather
     /// than the allele match; the plain substitution is annotated.

@@ -1,9 +1,9 @@
 entry = "hgnc_id_copy"
 page = "docs/divergences/hgnc-id-copy.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 7,574 of 77,675 cache transcripts · 381 flag sets, 52 corpora"
+input_class_basis = "2 · 18,469 of 116,165 cache transcripts · 500 flag sets, 89 corpora"
 notes = "The merged-cache mechanism of the entry: a RefSeq SAMSN1 transcript spanning the 16,000,000 region boundary, annotated alone, so no same-named HGNC transcript reaches the buffer; vep-rs lends the id as the shard holding both is loaded."
 
 [input]
@@ -30,3 +30,14 @@ where = { record = "samsn1_refseq_alone", feature = "NM_001395857.1" }
 [expected]
 ensembl_vep = ["-"]
 vep_rs = ["10528"]
+
+[implementation]
+code = [
+    "crates/vep-cache-builder/src/builder.rs::copy_hgnc_ids_by_symbol",
+    "crates/vep-cli/src/json_cache.rs::copy_hgnc_ids_to_refseq_models",
+]
+tests = [
+    "crates/vep-cache-builder/src/builder.rs::tests::hgnc_id_is_copied_once_from_the_start_region",
+    "crates/vep-cli/src/json_cache.rs::tests::merged_cache_refseq_models_take_the_hgnc_id_of_a_same_symbol_model",
+]
+rules = ["tools/vep-formats-compare/src/rules/downstream.rs::hgnc_id_copy_pair"]

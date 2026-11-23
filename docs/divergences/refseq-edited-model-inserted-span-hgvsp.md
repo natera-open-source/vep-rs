@@ -23,7 +23,7 @@ Ensembl VEP's notation on the five rows of this page is a `delins` of residues 4
 
 **The class it produces.** None. A class is a named shape of difference that the comparator sets aside and counts under its name (section 1.7), and the comparator holds none for this entry. `refseq_edited_model_inserted_span_hgvsp` is the entry's name in the index, and no comparison counts rows under it. The entry is the `HGVSp` of the row of an insertion that the 3' shift moves onto bases a RefSeq model carrying an `_rna_edit` attribute holds and the genome lacks, inside its coding sequence.
 
-**How often the shape occurs.** Tier 3, see [Intended divergences from Ensembl VEP](../intended-divergences.md): the shape is an insertion that the 3' shift of a run under `--hgvs` moves onto bases a RefSeq model holds and the genome lacks, inside its coding sequence.
+**How often the shape occurs.** Tier 2, see [Intended divergences from Ensembl VEP](../intended-divergences.md): the shape is an insertion that the 3' shift of a run under `--hgvs` moves onto bases a RefSeq model holds and the genome lacks, inside its coding sequence. The committed caches of `AaegL5-aedes`, `AgamP4-anopheles`, `GRCm39-mouse-merged` and `GRCm39-mouse-refseq` hold 6, 4, 3 and 3 models with such bases inside their coding sequence, the 16 the tier counts.
 
 No row of the concordance datasets reaches the mechanism. Those datasets are annotated on two caches, one for each assembly, and neither holds a model with bases the genome lacks: none of the 238,823 models of the GRCh37 cache and none of the 669,092 of the GRCh38 cache.
 
@@ -35,7 +35,7 @@ All of this rests on one record. Its five rows are on five models of one gene, e
 
 ## 1. ClinVar variation 768677 on five RefSeq models of one gene
 
-**In short.** On GRCh37, ClinVar variation 768677 is an insertion of 18 bases between 14:94582130 and 14:94582131. Five RefSeq models of one gene hold 9 bases the genome lacks three bases further on, at their coding positions 129 to 137. Under `--refseq --hgvs` the 3' shift moves the insertion onto those 9 bases, and both engines print `HGVS_OFFSET=3` on the five rows. Ensembl VEP 116.2 writes a `delins` of residues 44 to 46 that names there the models' residues 47 and 49; vep-rs writes the `dup` of residues 44 to 46, which names the models' own residues.
+**In short.** On GRCh37, ClinVar variation 768677 is an insertion of 18 bases between 14:94582130 and 14:94582131. Five RefSeq models of one gene hold 9 bases the genome lacks three bases further on, at their coding positions 129 to 137. Under `--refseq --hgvs` the 3' shift moves the insertion onto those 9 bases, and both engines print `HGVS_OFFSET=3` on the five rows. Ensembl VEP 116.3 writes a `delins` of residues 44 to 46 that names there the models' residues 47 and 49; vep-rs writes the `dup` of residues 44 to 46, which names the models' own residues.
 
 ### 1.1 What a reader needs to know first
 
@@ -69,7 +69,7 @@ Both engines are run under `--refseq --hgvs` and no other annotation flag.
 
 On the row of `NM_001130080.3` the engines differ in two cells, `HGVSp` and `HGVSc`, and agree in every other. The table gives `HGVSp` and seven of the cells they agree in, each by its positions, lengths and type. The `HGVSc` is another entry's subject, named below the table.
 
-| Cell | Ensembl VEP 116.2 | vep-rs |
+| Cell | Ensembl VEP 116.3 | vep-rs |
 | --- | --- | --- |
 | `Consequence` | `inframe_insertion` | `inframe_insertion` |
 | `cDNA_position` | 245-246 | 245-246 |
@@ -133,14 +133,14 @@ vep -i record.vcf -o out.txt --offline --refseq --hgvs \
 grep NM_001130080.3 out.txt | grep -o 'HGVSp=[^;]*'
 ```
 
-The cache is the conversion of Ensembl's RefSeq GRCh37 cache of release 116 ([RefSeq and merged caches](../cache-setup.md#refseq-and-merged-caches)). The last line prints vep-rs's notation, a `dup` of residues 44 to 46. Ensembl VEP 116.2 takes `--refseq --hgvs` with the cache options of [Reproducing these examples](reproducing.md), its cache root holding `homo_sapiens_refseq/116_GRCh37`, and prints a `delins` of residues 44 to 46.
+The cache is the conversion of Ensembl's RefSeq GRCh37 cache of release 116 ([RefSeq and merged caches](../cache-setup.md#refseq-and-merged-caches)). The last line prints vep-rs's notation, a `dup` of residues 44 to 46. Ensembl VEP 116.3 takes `--refseq --hgvs` with the cache options of [Reproducing these examples](reproducing.md), its cache root holding `homo_sapiens_refseq/116_GRCh37`, and prints a `delins` of residues 44 to 46.
 
 The reproduction `scripts/divergences/reproductions/refseq_edited_model_inserted_span_hgvsp.toml` runs the record on both engines. It holds the five rows to their recorded values in six columns: `Feature`, `Consequence`, `CDS_position`, `Protein_position`, `HGVS_OFFSET` and `HGVSp`. It is given Ensembl's RefSeq GRCh37 cache and the directory of the GRCh37 FASTA, and it writes the record's line itself, from the cached model.
 
 ### 1.7 How the comparator treats these rows
 
-The format comparator (`scripts/concordance/compare_vep_formats.py`) compares the two engines' outputs field by field. A class of the comparator is a named shape of difference that it sets aside: it counts the row under the class's name and does not report the difference. It holds no class for this entry, so nothing is set aside, and it reports the `HGVSp` of each of the five rows as a difference between the engines.
+The format comparator (`tools/vep-formats-compare`) compares the two engines' outputs field by field. A class of the comparator is a named shape of difference that it sets aside: it counts the row under the class's name and does not report the difference. It holds no class for this entry, so nothing is set aside, and it reports the `HGVSp` of each of the five rows as a difference between the engines.
 
 Eight classes the comparator holds for other shapes were tried on the rows, and none sets either of their two differences aside. Each of the five rows was compared alone ten times: with no class applied, with each of the eight applied in turn, and with all eight applied together. All 50 comparisons report both `HGVSp` and `HGVSc` as differences. That includes the comparisons under `refseq_edited_model_seam_insertion_hgvsc`, the class of the entry whose mechanism the rows' `HGVSc` reaches through the shift: that class does not set these rows aside. The eight classes are `start_cooccurrence_swap`, `refseq_edited_model_seam_insertion_hgvsc`, `refseq_edited_model_shifted_insertion_bases`, `refseq_edited_model_hgvsc_offset`, `refseq_edited_model_hgvs_offset`, `refseq_edited_model_tail_term`, `refseq_edited_model_deleted_span_term` and `refseq_edited_model_deleted_span_codons`.
 
-`refseq_edited_model_inserted_span_codons`, the entry of the same cut, is no class of the comparator. Its page says that a row of a record which only the `--hgvs` shift moves onto such bases is equal in `Codons` and `Amino_acids`, and it does not name `HGVSp`. The five rows are of that kind. Their `Codons` and `Amino_acids` are read at the written point and are equal in the two engines. The cut shows in the protein notation, whose reference peptide is read again at the shifted span.
+`refseq_edited_model_inserted_span_codons`, the class of the entry of the same cut, takes `Codons` and `Amino_acids` alone. Its page says that a row of a record which only the `--hgvs` shift moves onto such bases is equal in both columns, and it does not name `HGVSp`. The five rows are of that kind. Their `Codons` and `Amino_acids` are read at the written point and are equal in the two engines. The cut shows in the protein notation, whose reference peptide is read again at the shifted span.

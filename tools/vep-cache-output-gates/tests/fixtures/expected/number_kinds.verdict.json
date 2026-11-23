@@ -1,0 +1,193 @@
+{
+  "verdict": "FAIL",
+  "gates": [
+    {
+      "gate": "consequence_f1",
+      "threshold": 0.999,
+      "actual": 1.0,
+      "passed": true
+    },
+    {
+      "gate": "total_annotations_delta",
+      "threshold": 0.001,
+      "baseline": 3.0,
+      "builder": 4,
+      "actual": 0.333333,
+      "passed": false
+    },
+    {
+      "gate": "colocated_variant_delta",
+      "threshold": 0.01,
+      "baseline": true,
+      "builder": 3,
+      "actual": 2.0,
+      "passed": false
+    },
+    {
+      "gate": "frequency_field_delta",
+      "threshold": 0.01,
+      "actual": 2.0,
+      "details": {
+        "bool": {
+          "baseline": true,
+          "builder": false,
+          "delta": 1.0
+        },
+        "builder_alone": {
+          "baseline": 0,
+          "builder": 0,
+          "delta": 0.0
+        },
+        "exponent": {
+          "baseline": 100.0,
+          "builder": 101,
+          "delta": 0.01
+        },
+        "float": {
+          "baseline": 0.3,
+          "builder": 0.1,
+          "delta": 0.666667
+        },
+        "infinite": {
+          "baseline": Infinity,
+          "builder": 1,
+          "delta": NaN
+        },
+        "negative": {
+          "baseline": -5,
+          "builder": 9,
+          "delta": 1.0
+        },
+        "negative_zero": {
+          "baseline": -0.0,
+          "builder": 0,
+          "delta": 0.0
+        },
+        "not_a_number": {
+          "baseline": NaN,
+          "builder": 1,
+          "delta": 1.0
+        },
+        "past_53_bits": {
+          "baseline": 90071992547409931,
+          "builder": 90071992547409933,
+          "delta": 0.0
+        },
+        "past_64_bits": {
+          "baseline": 36893488147419103231,
+          "builder": 18446744073709551617,
+          "delta": 0.5
+        },
+        "tiny": {
+          "baseline": 1e-300,
+          "builder": 3e-300,
+          "delta": 2.0
+        },
+        "twice": {
+          "baseline": 4,
+          "builder": 5,
+          "delta": 0.25
+        },
+        "zero_float": {
+          "baseline": 0.0,
+          "builder": false,
+          "delta": 0.0
+        },
+        "\u00e9tude": {
+          "baseline": 3,
+          "builder": 3.0,
+          "delta": 0.0
+        },
+        "\ud83d\ude00": {
+          "baseline": 2,
+          "builder": 2,
+          "delta": 0.0
+        }
+      },
+      "passed": false
+    },
+    {
+      "gate": "per_consequence_type_delta",
+      "threshold": 0.01,
+      "actual": 1.0,
+      "details": {
+        "\u0001": {
+          "baseline": 1,
+          "builder": 1,
+          "delta": 0.0
+        },
+        "/slash": {
+          "baseline": 1,
+          "builder": 1.0,
+          "delta": 0.0
+        },
+        "q\"uote\\": {
+          "baseline": 7,
+          "builder": 7.0,
+          "delta": 0.0
+        },
+        "tab\tname": {
+          "baseline": 1,
+          "builder": 1,
+          "delta": 0.0
+        },
+        "\u007f": {
+          "baseline": 1,
+          "builder": true,
+          "delta": 0.0
+        },
+        "\ud800": {
+          "baseline": 1,
+          "builder": 1,
+          "delta": 0.0
+        },
+        "\udc00\ud800": {
+          "baseline": 0,
+          "builder": 0,
+          "delta": 0.0
+        },
+        "\uffff": {
+          "baseline": 2,
+          "builder": 0,
+          "delta": 1.0
+        },
+        "\ud83d\ude00": {
+          "baseline": 3,
+          "builder": 3,
+          "delta": 0.0
+        }
+      },
+      "passed": false
+    }
+  ],
+  "cache_diff_summary": {
+    "transcript_match_rate": {
+      "\u00e9": [
+        1,
+        2.5,
+        [],
+        {},
+        {
+          "k": [
+            null,
+            true,
+            "a\"b\\c/d\u0000\ud83d\ude00\ud800"
+          ]
+        }
+      ],
+      "n": 0,
+      "z": -0.0,
+      "e": 1e+16,
+      "small": 1e-07
+    },
+    "variation_match_rate": [
+      NaN,
+      Infinity,
+      -Infinity,
+      Infinity,
+      340282366920938463463374607431768211456,
+      0.30000000000000004
+    ],
+    "info_json_matches": "no"
+  }
+}

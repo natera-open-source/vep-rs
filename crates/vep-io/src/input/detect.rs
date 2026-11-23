@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 //! Input format detection from the first data line, as Ensembl VEP's
-//! `Parser.pm` `detect_format` (release/116.2, lines 368-435) does over
+//! `Parser.pm` `detect_format` (release/116.3, lines 368-435) does over
 //! `check_format` (ensembl-variation `Utils/VEP.pm`, release/116, lines 395-450).
 //!
 //! `#` lines and lines with no field are skipped. The delimiter starts as a tab
@@ -26,6 +26,7 @@ use super::{read_until_bounded, Delimiter};
 /// The input formats Ensembl VEP's `%FORMAT_MAP` names (Parser.pm:88-96), in
 /// the lower-case spelling `--format` takes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum InputFormat {
     Vcf,
     Ensembl,
@@ -37,6 +38,17 @@ pub enum InputFormat {
 }
 
 impl InputFormat {
+    /// Every format, in the order the enum declares them.
+    pub const ALL: &'static [InputFormat] = &[
+        InputFormat::Vcf,
+        InputFormat::Ensembl,
+        InputFormat::Id,
+        InputFormat::Hgvs,
+        InputFormat::Region,
+        InputFormat::Spdi,
+        InputFormat::Caid,
+    ];
+
     /// The format's name as `--format` takes it and `detect_format` returns it.
     pub fn as_str(self) -> &'static str {
         match self {
@@ -66,6 +78,22 @@ impl InputFormat {
     }
 }
 
+// The patterns are the entries of `InputFormat::ALL`, so a format the list
+// lacks leaves the match short of an arm and the crate does not build.
+const _: () = {
+    assert!(InputFormat::ALL.len() == 7);
+    const FIRST: InputFormat = InputFormat::ALL[0];
+    const SECOND: InputFormat = InputFormat::ALL[1];
+    const THIRD: InputFormat = InputFormat::ALL[2];
+    const FOURTH: InputFormat = InputFormat::ALL[3];
+    const FIFTH: InputFormat = InputFormat::ALL[4];
+    const SIXTH: InputFormat = InputFormat::ALL[5];
+    const SEVENTH: InputFormat = InputFormat::ALL[6];
+    match FIRST {
+        FIRST | SECOND | THIRD | FOURTH | FIFTH | SIXTH | SEVENTH => {}
+    }
+};
+
 impl fmt::Display for InputFormat {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
@@ -77,6 +105,7 @@ impl fmt::Display for InputFormat {
 /// be replayed ahead of the rest of the input, and the delimiter the line was
 /// split on, which Ensembl VEP keeps for the parser it then builds
 /// (Parser.pm:414-415 store it; :159 hands it on).
+#[non_exhaustive]
 pub struct Detection {
     pub format: Option<InputFormat>,
     pub consumed: Vec<u8>,
@@ -92,7 +121,7 @@ pub fn detect_format<R: BufRead>(reader: &mut R) -> io::Result<Detection> {
     let mut consumed = Vec::new();
     let mut line = Vec::new();
     let mut line_number = 0;
-    // Kept across lines, as Perl's `$delimiter` is (Parser.pm:387).
+    // Kept across lines, as Ensembl VEP's `$delimiter` is (Parser.pm:387).
     let mut delimiter = Delimiter::Tab;
     loop {
         line.clear();
@@ -135,8 +164,8 @@ pub fn detect_line(line: &str) -> Option<InputFormat> {
     check_format(&fields)
 }
 
-/// `s/\r|(?>\v|\x0D\x0A).+//` (Parser.pm:398) on the line's bytes, as Perl runs
-/// it on the bytes it read: at the first vertical whitespace byte (`\v` on a
+/// `s/\r|(?>\v|\x0D\x0A).+//` (Parser.pm:398) on the line's bytes, as Ensembl VEP
+/// runs it on the bytes it read: at the first vertical whitespace byte (`\v` on a
 /// byte string is 0x0A to 0x0D and 0x85), a `\r` is removed by itself and any
 /// other one together with everything after it, when something follows.
 fn without_vertical_whitespace(line: &[u8]) -> Cow<'_, [u8]> {
@@ -260,7 +289,7 @@ mod tests {
     use super::*;
     use std::io::{Cursor, Read};
 
-    /// The format cases of Ensembl VEP's `t/Parser.t` (release/116.2, lines
+    /// The format cases of Ensembl VEP's `t/Parser.t` (release/116.3, lines
     /// 240-302), one line each, with the format the test there expects: the
     /// Windows-newline case is the first line of its `t/testdata/input/windows.vcf`
     /// without the `\n`, and the `incomplete` line detects nothing. The last case
@@ -489,5 +518,17 @@ mod tests {
         }
         assert_eq!(InputFormat::from_flag("VCF"), Some(InputFormat::Vcf));
         assert_eq!(InputFormat::from_flag("guess"), None);
+    }
+
+    #[test]
+    fn all_lists_the_formats_in_declaration_order() {
+        let names: Vec<&str> = InputFormat::ALL
+            .iter()
+            .map(|format| format.as_str())
+            .collect();
+        assert_eq!(
+            names,
+            ["vcf", "ensembl", "id", "hgvs", "region", "spdi", "caid"]
+        );
     }
 }

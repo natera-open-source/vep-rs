@@ -28,9 +28,9 @@ impl PluginRegistry {
     ///
     /// Each argument has the format `"PluginName,param1,param2"` or
     /// `"/path/to/plugin.so,param1,param2"`. The first comma-separated token
-    /// is the plugin name or path; the rest are init parameters, read as Perl
-    /// reads the list ([`split_plugin_arg`]) and passed to `vep_plugin_init` on
-    /// every load, an empty list included.
+    /// is the plugin name or path; the rest are init parameters, read as Ensembl
+    /// VEP reads the list ([`split_plugin_arg`]) and passed to `vep_plugin_init`
+    /// on every load, an empty list included.
     ///
     /// `plugin_dirs` are the directories a name is searched for in, in order,
     /// the first holding the library winning.
@@ -244,7 +244,7 @@ mod tests {
     }
 
     /// A token holding a path separator or a suffix is written as a file; a bare
-    /// word is a plugin name, the only token Ensembl VEP 116.2's `use $module`
+    /// word is a plugin name, the only token Ensembl VEP 116.3's `use $module`
     /// compiles (Runner.pm:931-933).
     #[test]
     fn names_a_file_tells_a_path_or_a_suffixed_name_from_a_bare_name() {
@@ -263,7 +263,7 @@ mod tests {
     }
 
     /// A bare name is never read against the working directory, where Ensembl VEP
-    /// 116.2 never looks for a module (`@INC` holds the plugins directories
+    /// 116.3 never looks for a module (`@INC` holds the plugins directories
     /// alone, Runner.pm:921): the crate's own `src` directory, an entry of the
     /// test process's working directory, resolves to nothing, while a file name
     /// written with its suffix beside it resolves to that file under `./`, the

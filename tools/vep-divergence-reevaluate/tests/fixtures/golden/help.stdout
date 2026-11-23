@@ -1,0 +1,53 @@
+usage: vep-divergence-reevaluate [-h] [--image IMAGE]
+                                 [--ensembl-vep ENSEMBL_VEP] [--vep VEP]
+                                 [--perl-cache-dir PERL_CACHE_DIR]
+                                 [--plugins-dir PLUGINS_DIR]
+                                 [--tool-dir TOOL_DIRS]
+                                 [--extra-dir NAME=PATH] [--entry ENTRY]
+                                 [--jobs JOBS] [--work-dir WORK_DIR] [--keep]
+                                 [--timeout TIMEOUT] [--expect-all-present]
+                                 [--json JSON] [--check]
+                                 [--reference REFERENCE] [--page PAGE]
+                                 [--reproductions REPRODUCTIONS] [--list]
+
+Re-run every intended divergence on Ensembl VEP and vep-rs and say whether
+each is still present.
+
+options:
+  -h, --help            show this help message and exit
+  --image IMAGE         the Ensembl VEP image, a tag or a digest
+  --ensembl-vep ENSEMBL_VEP
+                        a local Ensembl VEP command to run in place of the
+                        image (`vep`, `filter_vep` and `variant_recoder`
+                        beside it)
+  --vep VEP             the vep-rs binary
+  --perl-cache-dir PERL_CACHE_DIR
+                        a root holding
+                        <species>[_merged|_refseq]/<version>_<assembly>/
+                        (repeatable, searched in order)
+  --plugins-dir PLUGINS_DIR
+                        the Ensembl VEP plugin modules (the VEP_plugins
+                        checkout)
+  --tool-dir TOOL_DIRS  a directory holding a tool a reproduction's run.tools
+                        names (repeatable); put first on Ensembl VEP's PATH
+  --extra-dir NAME=PATH
+                        a directory a reproduction names as {NAME}
+                        (repeatable), such as a plugin repository outside the
+                        plugin modules
+  --entry ENTRY         run this entry alone (repeatable)
+  --jobs JOBS           entries run at once
+  --work-dir WORK_DIR   where the engines write (default: a temporary
+                        directory)
+  --keep                keep the engines' outputs
+  --timeout TIMEOUT     seconds allowed for one engine run
+  --expect-all-present  exit 1 unless every entry is still-present
+  --json JSON           write the results as JSON here
+  --check               check the page against the reproductions and run
+                        nothing
+  --reference REFERENCE
+                        the Ensembl VEP release every entry is verified
+                        against (--check)
+  --page PAGE           the index page (--check)
+  --reproductions REPRODUCTIONS
+                        the reproduction directory
+  --list                list the reproductions and run nothing

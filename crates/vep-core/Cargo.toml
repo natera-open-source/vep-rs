@@ -9,6 +9,7 @@ rust-version.workspace = true
 keywords.workspace = true
 categories.workspace = true
 description = "Data model of vep-rs, a Rust reimplementation of Ensembl VEP: variant, transcript, consequence and coordinate types"
+exclude = ["tests/"]
 
 [dependencies]
 thiserror = { workspace = true }

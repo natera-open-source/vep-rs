@@ -6,7 +6,7 @@
 //!
 //! A converted cache carries, under `variations/<chr>/`, the files the Ensembl
 //! VEP dumper writes (`Pipeline/DumpVEP/Dumper/Variation.pm:98-135, 211-270` at
-//! release/116.2): `all_vars.gz`, one tab-delimited bgzip file per chromosome
+//! release/116.3): `all_vars.gz`, one tab-delimited bgzip file per chromosome
 //! with the chromosome first and `.` for an empty cell, indexed by `tabix -C` on
 //! the start column alone, or, for a cache dumped without the conversion step,
 //! `<start>-<end>_var.gz`, one gzip file per region, space-delimited, with empty
@@ -22,7 +22,7 @@
 //! Every file is checked against the cache's checksum manifest: an index and
 //! a region file as they are read whole, `all_vars.gz` by its listing and by
 //! reaching past the last block its index names, and a file streamed start to
-//! end ([`VariationSource::open_whole`]) by the digest of the whole stream. A
+//! end (`VariationSource::open_whole`) by the digest of the whole stream. A
 //! failure is reported by its message alone; the callers put it under the
 //! `cache` component.
 
@@ -48,7 +48,7 @@ use vep_core::variation::{perl_number_string, perl_numeric, CachedVariation, Cli
 use vep_io::input::{read_until_bounded, LineTooLong, MAX_LINE_BYTES};
 
 /// The populations whose values `--old_maf` rewrites
-/// (`BaseCacheVariation.pm:132` at release/116.2).
+/// (`BaseCacheVariation.pm:132` at release/116.3).
 const OLD_MAF_POPULATIONS: [&str; 4] = ["AFR", "AMR", "ASN", "EUR"];
 
 /// Chromosome handles kept at once. A handle holds the chromosome's parsed
@@ -80,7 +80,7 @@ type ParsedRegion = (PathBuf, Arc<Vec<CachedVariation>>);
 /// [`VariationSource::install`] makes it the one the lookups answer from: the
 /// indexed layout's windows and records per chromosome, or the region layout's
 /// parsed region files.
-pub struct Prefetch {
+pub(crate) struct Prefetch {
     indexed: FxHashMap<String, PrefetchedChromosome>,
     regions: Vec<ParsedRegion>,
 }
@@ -222,6 +222,7 @@ impl VariationSource {
     /// its checksum manifest, demanding every file it lists, and reading its
     /// `info.json` for the layout and the columns; a cache without an
     /// `info.json` declares no columns and so has no variation source.
+    #[doc(hidden)]
     pub fn open_json_cache(json_cache_dir: &str, old_maf: bool) -> anyhow::Result<Option<Self>> {
         let dir = Path::new(json_cache_dir);
         let manifest = CacheManifest::load(dir)?;
@@ -244,7 +245,7 @@ impl VariationSource {
     /// Opens the variation file at `path` to be read start to end; the bytes
     /// are hashed as they are read and [`WholeFile::finish`] checks the digest
     /// against the manifest.
-    pub fn open_whole<'a>(&'a self, path: &'a Path) -> anyhow::Result<WholeFile<'a>> {
+    pub(crate) fn open_whole<'a>(&'a self, path: &'a Path) -> anyhow::Result<WholeFile<'a>> {
         let file = fs::File::open(path)
             .with_context(|| format!("opening the variation file {}", path.display()))?;
         Ok(WholeFile {
@@ -266,11 +267,12 @@ impl VariationSource {
     }
 
     /// The column map the records are parsed by.
-    pub fn columns(&self) -> &VariationColumns {
+    pub(crate) fn columns(&self) -> &VariationColumns {
         &self.columns
     }
 
     /// The chromosomes whose variation files have been opened so far.
+    #[doc(hidden)]
     pub fn opened_chromosomes(&self) -> Vec<String> {
         self.opened.lock().unwrap().iter().cloned().collect()
     }
@@ -278,14 +280,14 @@ impl VariationSource {
     /// Whether the files are the start-indexed layout (`all_vars.gz`,
     /// tab-delimited, the chromosome first) rather than the region layout
     /// (`<start>-<end>_var.gz`, space-delimited, no chromosome column).
-    pub fn is_tabix(&self) -> bool {
+    pub(crate) fn is_tabix(&self) -> bool {
         self.tabix
     }
 
     /// Every variation file with its chromosome, for a pass over the whole
     /// cache: the chromosomes in karyotype order (`karyotype_rank`) and, on
     /// the region layout, a chromosome's files by their start.
-    pub fn files(&self) -> Vec<(&str, &Path)> {
+    pub(crate) fn files(&self) -> Vec<(&str, &Path)> {
         let mut chromosomes: Vec<&str> = self.chromosomes.keys().map(String::as_str).collect();
         chromosomes.sort_by_key(|&chr| karyotype_rank(chr));
         chromosomes
@@ -306,7 +308,7 @@ impl VariationSource {
     /// per variant) can reach, so that the batch's lookups are answered from
     /// memory, and releases the previous batch's: [`Self::fetch`] then
     /// [`Self::install`].
-    pub fn prefetch<'a>(
+    pub(crate) fn prefetch<'a>(
         &self,
         spans: impl IntoIterator<Item = (&'a str, u64, u64)>,
     ) -> anyhow::Result<()> {
@@ -322,7 +324,7 @@ impl VariationSource {
     /// one variant's lookup costs as much as a batch's when the batch's
     /// variants share bins. On the region layout the region files the batch
     /// touches are parsed once, the ones already held reused.
-    pub fn fetch<'a>(
+    pub(crate) fn fetch<'a>(
         &self,
         spans: impl IntoIterator<Item = (&'a str, u64, u64)>,
     ) -> anyhow::Result<Prefetch> {
@@ -377,7 +379,7 @@ impl VariationSource {
     /// previous batch's: on the region layout the files it holds replace the
     /// kept set, as Ensembl VEP keeps the regions its buffer touches
     /// (`AnnotationSource.pm:109-145`, `:392-411`).
-    pub fn install(&self, prefetch: Prefetch) {
+    pub(crate) fn install(&self, prefetch: Prefetch) {
         let Prefetch { indexed, regions } = prefetch;
         if self.tabix {
             *self.prefetched.write().unwrap() = indexed;
@@ -435,6 +437,7 @@ impl VariationSource {
     /// covering that window (`AnnotationSource.pm:168-202`, with the variant's
     /// one-base margin of `AnnotationType/Variation.pm:243-245`) whose own span
     /// overlaps the variant's as `InputBuffer.pm:286-324` tests it.
+    #[doc(hidden)]
     pub fn records_overlapping(
         &self,
         chr: &str,
@@ -462,7 +465,7 @@ impl VariationSource {
     /// their start) before keeping the ones whose span overlaps a variant. On
     /// the region layout these are the records of the regions covering
     /// `low..=high` whose start lies in it.
-    pub fn records_starting_within(
+    pub(crate) fn records_starting_within(
         &self,
         chr: &str,
         low: u64,
@@ -556,15 +559,14 @@ impl VariationSource {
             return Ok(Arc::clone(handle));
         }
         self.check_indexed_file(path)?;
-        let config = TabixConfig {
-            file_path: path.to_path_buf(),
-            chr_col: 0,
-            start_col: self.columns.position("start").expect("checked at open"),
-            end_col: None,
-            ref_col: None,
-            alt_col: None,
-            zero_based: false,
-        };
+        let mut config = TabixConfig::default();
+        config.file_path = path.to_path_buf();
+        config.chr_col = 0;
+        config.start_col = self.columns.position("start").expect("checked at open");
+        config.end_col = None;
+        config.ref_col = None;
+        config.alt_col = None;
+        config.zero_based = false;
         let handle = Arc::new(TabixAnnotator::open(config).map_err(|error| {
             cache_file_error(
                 error,
@@ -702,6 +704,7 @@ fn cache_file_error(error: PluginError, context: String) -> anyhow::Error {
     let message = match error {
         PluginError::Init(message) | PluginError::Run(message) => message,
         PluginError::Io(error) => error.to_string(),
+        other => other.detail(),
     };
     anyhow::anyhow!(message).context(context)
 }
@@ -739,7 +742,7 @@ fn index_extent(index_path: &Path, bytes: &[u8]) -> std::io::Result<u64> {
 }
 
 /// A variation file read start to end, hashed as it goes.
-pub struct WholeFile<'a> {
+pub(crate) struct WholeFile<'a> {
     reader: HashingReader<fs::File>,
     path: &'a Path,
     manifest: &'a CacheManifest,
@@ -841,7 +844,7 @@ fn region_span(name: &str) -> Option<(u64, u64)> {
 }
 
 /// Parses one record's fields into a variant, as
-/// `BaseCacheVariation.pm::parse_variation` (`:115-145` at release/116.2) does:
+/// `BaseCacheVariation.pm::parse_variation` (`:115-145` at release/116.3) does:
 /// field `i` is column `i` of `columns`, a `.` is unset and so is an empty
 /// field (other than `clin_sig_allele` and `clinical_impact`, see below),
 /// `failed`, `somatic` and `phenotype_or_disease` default to 0, `end` to
@@ -858,15 +861,13 @@ fn region_span(name: &str) -> Option<(u64, u64)> {
 /// record lacks (`Dumper/Variation.pm:245-261`), as the defined `''`; the output
 /// tests these two columns with `defined` (OutputFactory.pm:1093, 1097), where
 /// every other column is tested for truth.
-pub fn parse_record(
+pub(crate) fn parse_record(
     columns: &VariationColumns,
     fields: &[&str],
     old_maf: bool,
 ) -> Option<CachedVariation> {
-    let mut record = CachedVariation {
-        strand: 1,
-        ..CachedVariation::default()
-    };
+    let mut record = CachedVariation::default();
+    record.strand = 1;
     let mut clinvar = ClinVarDetail::default();
     let mut start = None;
     let mut end = None;
@@ -887,7 +888,7 @@ pub fn parse_record(
             "failed" => record.failed = value.parse().unwrap_or(0),
             "somatic" => record.somatic = value.parse().unwrap_or(0),
             "start" => start = value.parse().ok(),
-            // Perl's `||=` reads a `0` as unset, like an empty cell.
+            // Perl's `||=` in Ensembl VEP reads a `0` as unset, like an empty cell.
             "end" => end = value.parse().ok().filter(|&end| end != 0),
             "allele_string" => record.allele_string = value.to_string(),
             "strand" => {
@@ -925,7 +926,7 @@ pub fn parse_record(
 }
 
 /// The `--old_maf` rewrite of one population value
-/// (`BaseCacheVariation.pm:133-135` at release/116.2): the text up to and
+/// (`BaseCacheVariation.pm:133-135` at release/116.3): the text up to and
 /// including the first `:` goes, then the text from the first `,`, and a value
 /// that holds a digit and exceeds 0.5 becomes `1 - value`, printed as Perl
 /// prints a number. The first regex needs a character before its `:` and the
@@ -961,6 +962,55 @@ mod tests {
     use noodles::csi::binning_index::Indexer;
     use std::io::Write;
 
+    /// The order of a genome whose chromosomes are named otherwise than a
+    /// human's: a number first, then a name spelled `X`, `Y` or `MT`, then
+    /// every other name by byte, none renamed. Yeast's `X`, its tenth
+    /// chromosome, sorts before `I`; the fly's arms follow `4`, `X` and `Y`;
+    /// a mitochondrion named `Mito`, `mitochondrion_genome` or `Mt` sorts
+    /// among the other names. The order ranks, in the Parquet footer, the
+    /// chromosomes a cache's own `contig_order` leaves out, and lists a
+    /// name's mappings on several chromosomes.
+    #[test]
+    fn karyotype_rank_orders_another_genomes_names_by_number_then_by_name() {
+        let ordered = |names: &[&'static str]| {
+            let mut names = names.to_vec();
+            names.sort_by_key(|&name| karyotype_rank(name));
+            names
+        };
+        assert_eq!(
+            ordered(&["Mito", "XVI", "X", "IX", "V", "I", "IV", "II", "III"]),
+            ["X", "I", "II", "III", "IV", "IX", "Mito", "V", "XVI"]
+        );
+        assert_eq!(
+            ordered(&[
+                "mitochondrion_genome",
+                "3R",
+                "Y",
+                "2L",
+                "X",
+                "4",
+                "rDNA",
+                "3L",
+                "2R"
+            ]),
+            [
+                "4",
+                "X",
+                "Y",
+                "2L",
+                "2R",
+                "3L",
+                "3R",
+                "mitochondrion_genome",
+                "rDNA"
+            ]
+        );
+        assert_eq!(
+            ordered(&["Pt", "Mt", "5", "1", "MT"]),
+            ["1", "5", "MT", "Mt", "Pt"]
+        );
+    }
+
     /// The `variation_cols` line of the release-116 caches, which both carry
     /// 42 columns; the gnomAD genome populations come in different orders.
     const GRCH38_COLS: &str = "chr,variation_name,failed,somatic,start,end,allele_string,strand,clin_sig,phenotype_or_disease,clin_sig_allele,clin_sig_ref_allele,clinical_impact,pubmed,var_synonyms,AF,AFR,AMR,EAS,EUR,SAS,gnomADe,gnomADe_AFR,gnomADe_AMR,gnomADe_ASJ,gnomADe_EAS,gnomADe_FIN,gnomADe_NFE,gnomADe_REMAINING,gnomADe_SAS,gnomADe_MID,gnomADg,gnomADg_AFR,gnomADg_AMI,gnomADg_AMR,gnomADg_ASJ,gnomADg_EAS,gnomADg_FIN,gnomADg_MID,gnomADg_NFE,gnomADg_REMAINING,gnomADg_SAS";
@@ -986,11 +1036,10 @@ mod tests {
     }
 
     fn info(cols: &str, var_type: Option<&str>) -> CacheInfo {
-        CacheInfo {
-            variation_cols: cols.split(',').map(str::to_string).collect(),
-            var_type: var_type.map(str::to_string),
-            ..Default::default()
-        }
+        let mut info = CacheInfo::default();
+        info.variation_cols = cols.split(',').map(str::to_string).collect();
+        info.var_type = var_type.map(str::to_string);
+        info
     }
 
     /// [`VariationSource::open`] under a manifest that checks nothing, for the
@@ -1887,7 +1936,7 @@ mod tests {
         assert_eq!(grch37.frequencies["gnomADg_SAS"], "A:0,C:2.481e-05");
         assert_eq!(grch37.frequencies["gnomADg_NFE"], "A:0,C:0");
         assert_eq!(grch37.frequencies["gnomADg_AMI"], "A:0,C:0");
-        // Shorter lists read fewer columns, as Perl's map over the shorter of
+        // Shorter lists read fewer columns, as Ensembl VEP's map over the shorter of
         // the two lengths does.
         let nine: Vec<String> = GRCH38_COLS.split(',').take(9).map(str::to_string).collect();
         let nine = parse_record(&VariationColumns::new(nine), &fields, false).unwrap();
@@ -2126,7 +2175,7 @@ mod tests {
         assert_eq!(record.clin_sig_allele_entries(), Vec::<(&str, &str)>::new());
     }
 
-    /// Expected values are the output of the Perl rewrite
+    /// Expected values are the output of the Ensembl VEP rewrite
     /// (`s/^.+?\://; s/\,.+//g; 1 - $v if /\d+/ && $v > 0.5`) on each input.
     #[test]
     fn old_maf_rewrites_legacy_1kg_columns() {

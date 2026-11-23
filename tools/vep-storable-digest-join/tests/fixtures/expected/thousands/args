@@ -1,0 +1,10 @@
+--version-a
+1
+--dump-a
+many.tsv
+--version-b
+2
+--dump-b
+many-b.tsv
+--out-dir
+out

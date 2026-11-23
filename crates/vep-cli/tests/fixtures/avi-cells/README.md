@@ -11,10 +11,10 @@ five cells, with no PHRED cell; a row at `chr21:5030664` for `A>T` scored
 intergenic in the corpus cache.
 
 `AVI.pm` line 161 splits a row into six variables with a limit of seven, so
-Perl keeps a trailing empty cell as the empty string, and line 163 returns
+Ensembl VEP keeps a trailing empty cell as the empty string, and line 163 returns
 nothing for a row lacking its sixth cell, which is then never matched.
 
-Ensembl VEP 116.2 wrote, on this fixture under `raw=1,links=1`: for the two
+Ensembl VEP 116.3 wrote, on this fixture under `raw=1,links=1`: for the two
 rows whose sixth cell is empty, `AVI_PHRED=` in the default format, an empty
 cell in the tab format, an empty CSQ field in the VCF format and
 `"avi_phred": ""` in JSON, with the raw score and the link beside it; for the

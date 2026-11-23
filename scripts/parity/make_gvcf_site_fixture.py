@@ -5,7 +5,7 @@ usage: make_gvcf_site_fixture.py --vep BIN --json-cache DIR --out TSV [--seed N]
 
 A gVCF variant site lists `<NON_REF>` beside its real alleles (`A G,<NON_REF>`). vep-rs reads
 the site on its sequence path, and the comparators predict the (Location, Allele) it writes for
-each real allele (`gvcf_site_rows` in scripts/concordance/compare_vep_outputs.py). This fixture
+each real allele (`gvcf_site_rows` in tools/vep-outputs-compare/src/rules/gvcf.rs). This fixture
 holds what the binary wrote for generated sites, so the test of that prediction holds it to the
 binary without running one.
 

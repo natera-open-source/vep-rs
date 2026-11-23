@@ -3,7 +3,7 @@
 
 //! The `--custom` argument grammar, read as Ensembl VEP reads it
 //! (`AnnotationSourceAdaptor.pm:327-460` and `AnnotationSource/File.pm:143-197`
-//! at release/116.2).
+//! at release/116.3).
 //!
 //! A string in the keyed form, `file=<f>,format=<fmt>,short_name=<n>,...`, or the
 //! positional form, `<file>,<short_name>,<format>,<type>,<coords>,<field>,...`
@@ -11,9 +11,10 @@
 //! file, the short name the output keys carry, the format, the matching rule and
 //! the reporting options, each defaulted as Ensembl VEP defaults it. A malformed
 //! string is refused with Ensembl VEP's own text, and a string naming what
-//! vep-rs does not read (a remote file; a GFF or GTF transcript source) with a
-//! text of its own. A file holding `###CHR###` expands to one specification per
-//! chromosome whose file exists ([`expand_chr_placeholder`]).
+//! vep-rs does not read (a remote file) with a text of its own. A GFF or GTF
+//! transcript model parses to a source of transcripts
+//! ([`CustomSpec::is_transcript_source`]). A file holding `###CHR###` expands to one specification per
+//! chromosome whose file exists (`expand_chr_placeholder`).
 
 use std::fmt;
 use std::path::Path;
@@ -21,7 +22,7 @@ use std::path::Path;
 use indexmap::IndexMap;
 
 /// The keys the keyed form accepts (`AnnotationSourceAdaptor.pm:332-346`).
-pub const VALID_OPTIONS: [&str; 13] = [
+pub(crate) const VALID_OPTIONS: [&str; 13] = [
     "file",
     "format",
     "short_name",
@@ -39,38 +40,38 @@ pub const VALID_OPTIONS: [&str; 13] = [
 
 /// The placeholder a file name carries to stand for each chromosome
 /// (`AnnotationSourceAdaptor.pm:438`).
-pub const CHR_PLACEHOLDER: &str = "###CHR###";
+pub(crate) const CHR_PLACEHOLDER: &str = "###CHR###";
 
 /// Records a source lists per variant when `num_records` is not given
 /// (`AnnotationSourceAdaptor.pm:409`).
-pub const DEFAULT_NUM_RECORDS: u64 = 50;
+pub(crate) const DEFAULT_NUM_RECORDS: u64 = 50;
 
 /// The `gff_type` a GFF source takes when none is given
-/// (`AnnotationSourceAdaptor.pm:392`): the source is a transcript model, which
-/// vep-rs reads from its cache alone.
-pub const GFF_TYPE_TRANSCRIPT: &str = "transcript";
+/// (`AnnotationSourceAdaptor.pm:392`): the source is a transcript model, whose
+/// transcripts are annotated beside the cache's.
+pub(crate) const GFF_TYPE_TRANSCRIPT: &str = "transcript";
 
 /// The `gff_type` of a GFF of GENCODE promoter windows, the one mode that
-/// overlays its records on the input (`GFF.pm:161-163`).
-pub const GFF_TYPE_GENCODE_PROMOTER: &str = "gencode_promoter";
+/// overlays its records on the input (`GFF.pm:162-164`).
+pub(crate) const GFF_TYPE_GENCODE_PROMOTER: &str = "gencode_promoter";
 
 /// The short name of a `gff_type=gencode_promoter` source without one of its own
 /// (`File.pm:154-157`).
-pub const GENCODE_PROMOTER_SHORT_NAME: &str = "GENCODE_PROMOTER";
+pub(crate) const GENCODE_PROMOTER_SHORT_NAME: &str = "GENCODE_PROMOTER";
 
 /// The fields of a `gencode_promoter` source, whatever its string names
 /// (`File.pm:172-174`).
-pub const GENCODE_PROMOTER_FIELDS: [&str; 3] = ["type", "feature_id", "associated_gene"];
+pub(crate) const GENCODE_PROMOTER_FIELDS: [&str; 3] = ["type", "feature_id", "associated_gene"];
 
-/// The mode of a GFF source (`gff_type`, `GFF.pm:154-164`).
+/// The mode of a GFF source (`gff_type`, `GFF.pm:155-165`).
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum GffType {
-    /// A transcript model, which Ensembl VEP reads in place of its cache and
-    /// vep-rs from its cache alone: the grammar refuses the mode with
-    /// [`GFF_GTF_RECIPE`].
+    /// A transcript model: the file's transcripts are annotated beside the
+    /// cache's ([`CustomSpec::is_transcript_source`]).
     Transcript,
     /// GENCODE promoter windows, overlaid on the input as plain records
-    /// ([`super::gff_overlay`]).
+    /// (`super::gff_overlay`).
     GencodePromoter,
     /// Any other value: Ensembl VEP opens the source and annotates nothing
     /// from it, as vep-rs does.
@@ -87,8 +88,10 @@ impl GffType {
     }
 }
 
-/// How a GFF or GTF transcript model is annotated against: Ensembl VEP reads
-/// the file in place of its cache, vep-rs builds a cache from it first.
+/// How a GFF or GTF transcript model is annotated against without another
+/// cache in the run: a cache is built from the file first. A run that names a
+/// cache reads the file beside it.
+#[doc(hidden)]
 pub const GFF_GTF_RECIPE: &str =
     "build a cache from the file and the genome, then annotate against it: \
      vep-cache-builder --species <species> --assembly <assembly> --release <N> --gtf <file> \
@@ -96,16 +99,19 @@ pub const GFF_GTF_RECIPE: &str =
      vep -i <in> -o <out> --offline --json_cache <dir> --fasta <genome.fa>; \
      the page docs/cache-from-gtf-or-gff3.md states the route";
 
-/// The formats a source file is read as (`File.pm:96-102`). `gtf` is in Ensembl
-/// VEP's map too; a GTF is a transcript model in every mode, so the grammar
-/// refuses it with [`GFF_GTF_RECIPE`] and no specification carries it.
+/// The formats a source file is read as (`File.pm:96-102`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum CustomFormat {
     Vcf,
     Bed,
     BigWig,
-    /// A GFF in an overlay mode (`gff_type` other than `transcript`).
+    /// A GFF: a transcript model under `gff_type=transcript`, an overlay of
+    /// promoter windows under `gencode_promoter` ([`GffType`]).
     Gff,
+    /// A GTF, a transcript model whatever its `gff_type` (`GTF.pm` has no
+    /// other mode).
+    Gtf,
 }
 
 impl CustomFormat {
@@ -116,6 +122,7 @@ impl CustomFormat {
             CustomFormat::Bed => "bed",
             CustomFormat::BigWig => "bigwig",
             CustomFormat::Gff => "gff",
+            CustomFormat::Gtf => "gtf",
         }
     }
 }
@@ -123,6 +130,7 @@ impl CustomFormat {
 /// How a record of the source and an input variant must lie to match
 /// (`File.pm:104-109`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum MatchType {
     /// The two spans share a base.
     Overlap,
@@ -159,6 +167,7 @@ impl MatchType {
 /// A statistic `summary_stats` can ask for over a variant's records
 /// (`AnnotationSourceAdaptor.pm:423`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum SummaryStat {
     Min,
     Max,
@@ -169,7 +178,7 @@ pub enum SummaryStat {
 
 impl SummaryStat {
     /// The statistics in the order Ensembl VEP's refusal lists them.
-    pub const ALL: [SummaryStat; 5] = [
+    pub(crate) const ALL: [SummaryStat; 5] = [
         SummaryStat::Min,
         SummaryStat::Max,
         SummaryStat::Mean,
@@ -195,6 +204,7 @@ impl SummaryStat {
 
 /// How many matching records a source lists per variant (`num_records`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum RecordLimit {
     /// At most this many, then one `...` record (`File.pm:436-440`); a
     /// fractional or negative value is read as its integer part, at least 0,
@@ -207,11 +217,12 @@ pub enum RecordLimit {
 /// One `--custom` source as Ensembl VEP configures it, every option resolved
 /// to its default where the string left it out.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct CustomSpec {
     /// The file as given; a local path.
     pub file: String,
     /// The key the source's values carry in the output: as given, else the
-    /// file's last path segment, or [`GENCODE_PROMOTER_SHORT_NAME`] for a
+    /// file's last path segment, or `GENCODE_PROMOTER_SHORT_NAME` for a
     /// `gencode_promoter` GFF (`File.pm:154-157`).
     pub short_name: String,
     pub format: CustomFormat,
@@ -223,7 +234,7 @@ pub struct CustomSpec {
     pub overlap_cutoff: f64,
     /// `distance`: the bases either end of a record may lie from the variant's;
     /// `None` when not given.
-    pub distance: Option<f64>,
+    pub distance: Option<Distance>,
     /// `same_type`: match only records of the variant's own class.
     pub same_type: bool,
     /// `reciprocal`: the overlap percentage is the variant's share covered,
@@ -240,17 +251,111 @@ pub struct CustomSpec {
     pub gff_type: GffType,
     /// The fields reported beside the identifier (`fields=A%B`, or the
     /// positional form's trailing items); `None` when none are named. A
-    /// `gencode_promoter` GFF's are [`GENCODE_PROMOTER_FIELDS`] whatever the
+    /// `gencode_promoter` GFF's are `GENCODE_PROMOTER_FIELDS` whatever the
     /// string names (`File.pm:172-174`).
     pub fields: Option<Vec<String>>,
 }
 
 impl CustomSpec {
     /// Whether the file stands for one file per chromosome, to be expanded
-    /// over the run's chromosomes by [`expand_chr_placeholder`].
+    /// over the run's chromosomes by `expand_chr_placeholder`.
     pub fn has_chr_placeholder(&self) -> bool {
         self.file.contains(CHR_PLACEHOLDER)
     }
+
+    /// Whether the file is a transcript model, read as a source of
+    /// transcripts and annotating no record of its own: a GTF, or a GFF in
+    /// its default `transcript` mode (`GFF.pm:155-164`; `GTF.pm` inherits
+    /// `BaseGXF.pm`'s transcript annotation alone).
+    pub fn is_transcript_source(&self) -> bool {
+        match self.format {
+            CustomFormat::Gtf => true,
+            CustomFormat::Gff => self.gff_type == GffType::Transcript,
+            CustomFormat::Vcf | CustomFormat::Bed | CustomFormat::BigWig => false,
+        }
+    }
+}
+
+/// `distance` as Perl reads the option's text where a difference is tested
+/// against it (`File.pm:547-548`): an integer for digits alone and for an
+/// exponent form whose value is whole (`1e3`), each with nothing but blanks
+/// around it and inside the unsigned 64-bit range, and a float for every other
+/// text, a point without an exponent (`10.0`) and trailing text (`10abc`)
+/// among them.
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
+pub enum Distance {
+    /// A whole number Perl holds as an integer.
+    Whole(u64),
+    /// Any other number Perl reads from the text (`perl_number`), a number
+    /// below zero among them, which admits nothing.
+    Float(f64),
+}
+
+impl Distance {
+    /// The distance Perl reads from `text`.
+    pub(crate) fn read(text: &str) -> Self {
+        /// 2^64, one past the unsigned 64-bit range.
+        const RANGE_END: f64 = 18_446_744_073_709_551_616.0;
+        let number = perl_number(text);
+        let text = text.trim_matches([' ', '\t', '\n', '\x0b', '\x0c', '\r']);
+        let unsigned = text.strip_prefix(['+', '-']).unwrap_or(text);
+        let magnitude = if !unsigned.is_empty() && all_digits(unsigned) {
+            unsigned.parse::<u64>().ok()
+        } else if spells_an_exponent(unsigned) && number.fract() == 0.0 && number.abs() < RANGE_END
+        {
+            Some(number.abs() as u64)
+        } else {
+            None
+        };
+        match magnitude {
+            Some(magnitude) if magnitude == 0 || !text.starts_with('-') => {
+                Distance::Whole(magnitude)
+            }
+            _ => Distance::Float(number),
+        }
+    }
+
+    /// Whether two whole ends `difference` bases apart lie within the
+    /// distance: an exact test against an integer, and against any other
+    /// number a test in floats, where a difference past 2^53 rounds.
+    pub(crate) fn admits(self, difference: u64) -> bool {
+        match self {
+            Distance::Whole(whole) => difference <= whole,
+            Distance::Float(number) => difference as f64 <= number,
+        }
+    }
+
+    /// Whether two ends `difference` apart, one of them a float, lie within
+    /// the distance: Perl tests a float difference in floats, where an
+    /// integer distance past 2^53 rounds.
+    pub(crate) fn admits_float(self, difference: f64) -> bool {
+        match self {
+            Distance::Whole(whole) => difference <= whole as f64,
+            Distance::Float(number) => difference <= number,
+        }
+    }
+}
+
+/// Whether every byte of `text` is a decimal digit.
+fn all_digits(text: &str) -> bool {
+    text.bytes().all(|byte| byte.is_ascii_digit())
+}
+
+/// Whether `text`, its sign taken off, spells a number with an exponent and
+/// nothing else: digits with or without a point, `e` or `E`, an optional sign
+/// and digits.
+fn spells_an_exponent(text: &str) -> bool {
+    let Some((mantissa, exponent)) = text.split_once(['e', 'E']) else {
+        return false;
+    };
+    let (whole, fraction) = mantissa.split_once('.').unwrap_or((mantissa, ""));
+    let exponent = exponent.strip_prefix(['+', '-']).unwrap_or(exponent);
+    all_digits(whole)
+        && all_digits(fraction)
+        && !(whole.is_empty() && fraction.is_empty())
+        && !exponent.is_empty()
+        && all_digits(exponent)
 }
 
 /// A `--custom` string that is refused: Ensembl VEP's text, less its own
@@ -380,6 +485,7 @@ fn record_count(value: &str, file: &str) -> (u64, Option<String>) {
 }
 
 /// Whether `file` names a remote resource: a URL scheme before `://`.
+#[doc(hidden)]
 pub fn is_remote(file: &str) -> bool {
     let Some((scheme, _)) = file.split_once("://") else {
         return false;
@@ -405,8 +511,8 @@ impl<'a> Options<'a> {
         let mut positional_fields = Vec::new();
         if argument.contains('=') {
             for param in perl_split(argument, ',') {
-                // Perl's `my ($key, $val) = split('=', $param)` keeps at most
-                // the two first `=`-separated pieces.
+                // Ensembl VEP's `my ($key, $val) = split('=', $param)` keeps at
+                // most the two first `=`-separated pieces.
                 let mut pieces = param.split('=');
                 let key = pieces.next().unwrap_or_default();
                 let Some(value) = pieces.next() else {
@@ -467,7 +573,7 @@ impl<'a> Options<'a> {
 const NO_FORMAT: &str = "No format specified for custom annotation source.";
 
 /// Parses one `--custom` string. A string with a `###CHR###` file comes back
-/// with the placeholder in place; [`expand_chr_placeholder`] resolves it.
+/// with the placeholder in place; `expand_chr_placeholder` resolves it.
 pub fn parse_custom(argument: &str) -> Result<CustomSpec, GrammarError> {
     let options = Options::parse(argument)?;
     let option = |key: &str| options.get(key);
@@ -552,20 +658,16 @@ pub fn parse_custom(argument: &str) -> Result<CustomSpec, GrammarError> {
         "vcf" => CustomFormat::Vcf,
         "bed" => CustomFormat::Bed,
         "bigwig" => CustomFormat::BigWig,
-        "gff" if gff_type != GffType::Transcript => CustomFormat::Gff,
-        "gff" | "gtf" => {
-            return Err(GrammarError::new(format!(
-                "a GFF or GTF source in transcript mode is not read; {GFF_GTF_RECIPE}"
-            )));
-        }
+        "gff" => CustomFormat::Gff,
+        "gtf" => CustomFormat::Gtf,
         other => {
             return Err(GrammarError::new(format!(
                 "Unknown or unsupported format {other}"
             )));
         }
     };
-    // `BaseGXF.pm:109`: a GFF source never matches exactly.
-    if format == CustomFormat::Gff && match_type == MatchType::Exact {
+    // `BaseGXF.pm:109`: a GFF or GTF source never matches exactly.
+    if matches!(format, CustomFormat::Gff | CustomFormat::Gtf) && match_type == MatchType::Exact {
         return Err(GrammarError::new(
             "GXF annotation sources cannot be used as \"exact\" custom annotation type",
         ));
@@ -580,7 +682,7 @@ pub fn parse_custom(argument: &str) -> Result<CustomSpec, GrammarError> {
         overlap_cutoff: option("overlap_cutoff")
             .filter(|value| truthy(value))
             .map_or(0.0, perl_number),
-        distance: option("distance").map(perl_number),
+        distance: option("distance").map(Distance::read),
         same_type: option("same_type").is_some_and(truthy),
         reciprocal: option("reciprocal").is_some_and(truthy),
         num_records,
@@ -593,6 +695,7 @@ pub fn parse_custom(argument: &str) -> Result<CustomSpec, GrammarError> {
 
 /// The chromosomes a `###CHR###` file stands for when the run has no reference
 /// sequence names (`AnnotationSourceAdaptor.pm:440`).
+#[doc(hidden)]
 pub fn default_chromosomes() -> Vec<String> {
     (1..=22)
         .map(|n| n.to_string())
@@ -606,7 +709,7 @@ pub fn default_chromosomes() -> Vec<String> {
 /// placeholder comes back as itself. A short name the string did not give
 /// follows each expanded file. No file at all is refused with Ensembl VEP's
 /// text, less its `Error: ` prefix.
-pub fn expand_chr_placeholder(
+pub(crate) fn expand_chr_placeholder(
     spec: CustomSpec,
     chromosomes: &[String],
 ) -> Result<Vec<CustomSpec>, GrammarError> {
@@ -700,7 +803,7 @@ mod tests {
         assert_eq!(full.match_type, MatchType::Within);
         assert!(full.report_coords);
         assert_eq!(full.overlap_cutoff, 50.0);
-        assert_eq!(full.distance, Some(10.0));
+        assert_eq!(full.distance, Some(Distance::Whole(10)));
         assert!(full.same_type && full.reciprocal);
         assert_eq!(full.num_records, RecordLimit::All);
         assert_eq!(
@@ -843,10 +946,10 @@ mod tests {
         assert_eq!(default_chromosomes()[22..], ["X", "Y", "MT"]);
     }
 
-    /// A file behind a URL scheme is refused where Ensembl VEP's `--no_remote`
-    /// refuses an `http` or `ftp` one (`AnnotationSourceAdaptor.pm:378`), once
-    /// the file and the format are present and before the type is read; without
-    /// the flag Ensembl VEP reads the file over the network.
+    /// A file behind a URL scheme is refused, once the file and the format are
+    /// present and before the type is read. Ensembl VEP refuses an `http` or
+    /// `ftp` one only under a `no_remote` option that no flag sets
+    /// (`AnnotationSourceAdaptor.pm:378`), so it reads the file over the network.
     #[test]
     fn remote_url_is_refused() {
         for url in [
@@ -863,32 +966,49 @@ mod tests {
     }
 
     /// A GTF, and a GFF in its default `transcript` mode, are transcript models
-    /// Ensembl VEP reads in place of its cache (`GFF.pm:154-156`, `GTF.pm`
-    /// through `BaseGXF.pm`); the refusal prints the two-step recipe. A GFF in
-    /// another mode is a source, refused as `exact` as `BaseGXF.pm:109` refuses
-    /// it; in `gencode_promoter` mode its fields are `type`, `feature_id` and
+    /// (`GFF.pm:159-161`, `GTF.pm` through `BaseGXF.pm`): each parses to a
+    /// source of transcripts under its short name, the file's last path
+    /// segment when none is given (`File.pm:154-157`). Either is refused as
+    /// `exact`, as `BaseGXF.pm:109` refuses it. A GFF in `gencode_promoter`
+    /// mode is an overlay whose fields are `type`, `feature_id` and
     /// `associated_gene` whatever the string names (`File.pm:172-174`), and a
     /// mode Ensembl VEP does not know is kept as given (`:168`).
     #[test]
-    fn gff_transcript_mode_prints_the_recipe() {
+    fn gff_and_gtf_transcript_models_parse_as_transcript_sources() {
+        let gtf = spec("file=dir/a.gtf.gz,format=gtf");
+        assert_eq!(gtf.format, CustomFormat::Gtf);
+        assert_eq!(gtf.gff_type, GffType::Transcript);
+        assert_eq!(gtf.short_name, "a.gtf.gz");
+        assert_eq!(gtf.fields, None);
+        assert!(gtf.is_transcript_source());
+        let gff = spec("file=a.gff.gz,format=GFF,gff_type=transcript,short_name=models");
+        assert_eq!(gff.format, CustomFormat::Gff);
+        assert_eq!(gff.short_name, "models");
+        assert!(gff.is_transcript_source());
+        assert!(spec("a.gff.gz,models,gff").is_transcript_source());
+        // `GTF.pm` knows no overlay mode: the file is a transcript model under
+        // any `gff_type`, with the name and fields `File.pm:154-174` gives it.
+        let named_promoter = spec("file=a.gtf.gz,format=gtf,gff_type=gencode_promoter");
+        assert!(named_promoter.is_transcript_source());
+        assert_eq!(named_promoter.short_name, "GENCODE_PROMOTER");
         for argument in [
-            "file=a.gtf.gz,format=gtf",
-            "file=a.gff.gz,format=gff",
-            "file=a.gff.gz,format=GFF,gff_type=transcript",
-            "file=a.gtf.gz,format=gtf,gff_type=gencode_promoter",
+            "file=a.gtf.gz,format=gtf,type=exact",
+            "file=a.gff.gz,format=gff,type=exact",
         ] {
-            let message = error(argument);
-            assert!(
-                message.starts_with("a GFF or GTF source in transcript mode is not read; "),
-                "{argument}: {message}"
+            assert_eq!(
+                error(argument),
+                "GXF annotation sources cannot be used as \"exact\" custom annotation type",
+                "{argument}"
             );
-            assert!(message.contains(GFF_GTF_RECIPE), "{argument}: {message}");
-            assert!(
-                message.contains("vep-cache-builder --species <species>")
-                    && message.contains("--gff3 <file> for a GFF3")
-                    && message.contains("docs/cache-from-gtf-or-gff3.md"),
-                "{argument}: {message}"
-            );
+        }
+        for argument in [
+            "file=a.vcf.gz,format=vcf",
+            "file=a.bed.gz,format=bed",
+            "file=a.bw,format=bigwig",
+            "file=a.gff.gz,format=gff,gff_type=gencode_promoter",
+            "file=a.gff.gz,format=gff,gff_type=enhancer_window",
+        ] {
+            assert!(!spec(argument).is_transcript_source(), "{argument}");
         }
         let promoter = spec("file=a.gff.gz,format=gff,gff_type=gencode_promoter");
         assert_eq!(promoter.format, CustomFormat::Gff);
@@ -960,7 +1080,7 @@ mod tests {
         assert_eq!(spec("file=a.vcf.gz,format=vcf,fields=0").fields, None);
         assert_eq!(
             spec("file=a.vcf.gz,format=vcf,distance=").distance,
-            Some(0.0)
+            Some(Distance::Float(0.0))
         );
         assert_eq!(
             spec("file=a.vcf.gz,format=vcf,num_records=abc").num_records,
@@ -968,7 +1088,47 @@ mod tests {
         );
     }
 
-    /// Ensembl VEP 116.2 keeps a `num_records` text and compares the record
+    /// A `distance` is an integer where Perl holds one for the text: digits
+    /// alone, with blanks or a `+` around them, and an exponent form whose
+    /// value is whole, up to 2^64 - 1. A point without an exponent, trailing
+    /// text, a fraction, a number below zero or past the range and a text
+    /// with no number are floats.
+    #[test]
+    fn a_distance_is_whole_where_perl_holds_an_integer() {
+        use Distance::{Float, Whole};
+        for (text, read) in [
+            ("10", Whole(10)),
+            (" +10 ", Whole(10)),
+            ("0009007199254740992", Whole(1 << 53)),
+            ("18446744073709551615", Whole(u64::MAX)),
+            ("1e3", Whole(1000)),
+            ("1E+3", Whole(1000)),
+            ("1.5e1", Whole(15)),
+            ("10.e0", Whole(10)),
+            (".1e2", Whole(10)),
+            ("9.007199254740992e15", Whole(1 << 53)),
+            ("9.223372036854775808e18", Whole(1 << 63)),
+            ("-0", Whole(0)),
+            ("10.0", Float(10.0)),
+            ("10.", Float(10.0)),
+            ("10abc", Float(10.0)),
+            ("1e3x", Float(1000.0)),
+            ("10e", Float(10.0)),
+            ("15e-1", Float(1.5)),
+            ("-5", Float(-5.0)),
+            ("-1e3", Float(-1000.0)),
+            ("18446744073709551616", Float(18_446_744_073_709_551_616.0)),
+            ("1.8446744073709552e19", Float(18_446_744_073_709_551_616.0)),
+            ("", Float(0.0)),
+            ("abc", Float(0.0)),
+            ("inf", Float(f64::INFINITY)),
+        ] {
+            assert_eq!(Distance::read(text), read, "{text:?}");
+        }
+        assert!(matches!(Distance::read("nan"), Float(number) if number.is_nan()));
+    }
+
+    /// Ensembl VEP 116.3 keeps a `num_records` text and compares the record
     /// count with it as a number (`File.pm:337`, `:436-439`), so `2.5` lists
     /// three records and `-1` none; vep-rs reads the integer part, at least 0,
     /// and the source carries one warning naming the value and the reading. A

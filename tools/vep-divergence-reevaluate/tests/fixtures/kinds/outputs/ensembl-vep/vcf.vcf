@@ -1,0 +1,5 @@
+##fileformat=VCFv4.2
+##INFO=<ID=CSQ,Number=.,Type=String,Description="Consequence annotations from Ensembl VEP. Format: Allele|Consequence|Feature|HGVSp">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+21	100	rec1	G	A	.	.	DP=4;CSQ=A|missense_variant|ENST1|ENSP1:p.Leu4Pro,A|intron_variant|ENST2|
+21	300	rec2	G	C	.	.	.

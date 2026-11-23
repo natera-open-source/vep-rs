@@ -1,0 +1,37 @@
+======================================================================
+DISCORDANT CLASSIFICATION SUMMARY
+======================================================================
+
+Total discordants: 25
+
+By mismatch type:
+  consequence_swap                10 ( 40.0%)
+  coordinate_only                  4 ( 16.0%)
+  true_missing                     4 ( 16.0%)
+  true_extra                       4 ( 16.0%)
+  transcript_selection             3 ( 12.0%)
+
+By mismatch type + direction:
+  consequence_swap          missing_in_rust        5
+  consequence_swap          extra_in_rust        4
+  true_missing              missing_in_rust        4
+  true_extra                extra_in_rust        4
+  coordinate_only           missing_in_rust        2
+  coordinate_only           extra_in_rust        2
+  transcript_selection      extra_in_rust        2
+  transcript_selection      missing_in_rust        1
+  consequence_swap          other               1
+
+By file + mismatch type (top 30):
+  chr4.txt                            consequence_swap                 6 ( 24.0%)
+  chr2.txt                            transcript_selection             3 ( 12.0%)
+  chr1.txt                            coordinate_only                  2 (  8.0%)
+  chr1.txt                            consequence_swap                 2 (  8.0%)
+  chr3.txt                            true_missing                     2 (  8.0%)
+  chr3.txt                            true_extra                       2 (  8.0%)
+  chr3.txt                            coordinate_only                  2 (  8.0%)
+  chr3.txt                            consequence_swap                 2 (  8.0%)
+  chr2.txt                            true_missing                     1 (  4.0%)
+  chr2.txt                            true_extra                       1 (  4.0%)
+  chr4.txt                            true_missing                     1 (  4.0%)
+  chr4.txt                            true_extra                       1 (  4.0%)

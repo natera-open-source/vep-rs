@@ -1,9 +1,9 @@
 entry = "motif_score_reverse_strand_mnv"
 page = "docs/divergences/motif-score-reverse-strand.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 48.3 per million · 19 flag sets, 49 corpora"
+input_class_basis = "2 · 48.3 per million · 54 flag sets, 54 corpora"
 notes = "Two-base alleles over the reverse-strand motif ENSM00000574815 (positions 5090723 to 5090738): one inside it, one over its last two positions."
 
 [input]
@@ -34,4 +34,15 @@ ensembl_vep = [
 vep_rs = [
   "rev_mnv_inside | ENSM00000574815 | 9 | -0.136",
   "rev_mnv_start | ENSM00000574815 | 16 | 0.044",
+]
+
+[implementation]
+code = ["crates/vep-effects/src/regulatory.rs::motif_score_delta"]
+tests = [
+    "crates/vep-cli/tests/regulatory.rs::reverse_strand_mnv_scores_where_the_allele_lies",
+    "crates/vep-effects/src/regulatory.rs::tests::motif_score_delta_cases",
+]
+rules = [
+    "tools/vep-formats-compare/src/compare.rs::reverse_motif_score_accepts",
+    "tools/vep-golden-corpus/src/classify/fields.rs::motif_score_reverse_strand_mnv",
 ]

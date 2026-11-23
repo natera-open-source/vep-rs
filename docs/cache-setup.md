@@ -2,26 +2,63 @@
 
 The JSON transcript cache vep-rs annotates from is built with `vep-cache-builder` or converted from an Ensembl VEP cache ([Cache conversion](cache-conversion.md)).
 
-[Cache checksum manifest](cache-checksums.md) covers integrity checks, [SIFT and PolyPhen predictions](cache-predictions.md) the prediction matrices.
+[Cache checksum manifest](cache-checksums.md) covers integrity checks, [SIFT and PolyPhen predictions](cache-predictions.md) the prediction matrices and [Variation data in a native cache](cache-variation-data.md) the variation files.
 
-The cache is a directory holding `info.json` and `transcripts/`, the release directory itself (`$HOME/.vep/homo_sapiens/116_GRCh38`). `--json_cache` names it, or Ensembl VEP's cache flags find it ([Naming the cache](#naming-the-cache)). [Other species](cache-species.md) covers the genomes beside human, the four compared with Ensembl VEP among them.
+The cache is a directory holding `info.json` and `transcripts/`, the release directory itself (`$HOME/.vep/homo_sapiens/116_GRCh38`). `--json_cache` names it, or Ensembl VEP's cache flags find it ([Naming the cache](#naming-the-cache)). [Other species](cache-species.md) covers the genomes beside human, those compared with Ensembl VEP among them.
 
 ## Build a cache
 
-`vep-cache-builder` builds a cache natively, with no Perl dependency, and one command installs a release. `--auto` fetches every input from the Ensembl site, checks each against its directory's `CHECKSUMS` file, builds the cache as `<dir_cache>/<species>/<release>_<assembly>` and places the indexed genome FASTA inside it:
+`vep-cache-builder` builds a cache with no Perl dependency, and one command installs a release. `--auto` fetches every input from the Ensembl site, checks each against its directory's `CHECKSUMS` file, builds the cache as `<dir_cache>/<species>/<release>_<assembly>` and places the indexed genome FASTA inside it:
 
 ```bash
 target/release/vep-cache-builder --auto homo_sapiens GRCh38 --release 116 \
   --dir_cache $HOME/.vep
 ```
 
-The inputs are the release's GFF3, GTF, protein FASTA, core and variation table dumps and genome FASTA: the `dna_index/` file with its published `.fai` and `.gzi`, else the `dna/` file, recompressed to bgzip and indexed by the builder. A file whose BSD `sum` differs from its `CHECKSUMS` line stops the installation, naming the file. The downloads land under `<dir_cache>/tmp/` and go once the cache is in place; an existing release directory is never written into.
+The inputs are the release's GFF3, GTF, protein FASTA, core and variation table dumps, the files of the parts below and genome FASTA: the `dna_index/` file with its published `.fai` and `.gzi`, else the `dna/` file, recompressed unless already BGZF, and indexed by the builder. A file whose BSD `sum` differs from its `CHECKSUMS` line stops the installation, naming the file.
 
-`--include-predictions` adds the SIFT and PolyPhen matrices ([SIFT and PolyPhen predictions](cache-predictions.md)), `--include-variations` the variation data below. `--site` names another server or a local directory holding the site's `pub/release-<N>/` tree. For GRCh37 the same command reads `pub/grch37/release-<N>/`, whose gene set is the release-87 one Ensembl publishes from release 88 onward. The cache is built from the release files, never from Ensembl VEP's prebuilt cache archive, whose Storable format `vep` does not read.
+The downloads, about 32 GB for GRCh38 and 16 GB for GRCh37, land under `<dir_cache>/tmp/` and go once the cache is in place; an existing release directory is never written into. `--chromosomes` narrows the variation VCFs and not the table dumps. A species with one variation VCF also fetches the `variation_feature` table for a sequence of its cache that file holds no record on.
+
+Beside the transcripts the installation brings, with no switch, each part of Ensembl VEP's own cache that a file of the release carries for the genome:
+
+| Part, or cell of the part above | Read from | Left out |
+| --- | --- | --- |
+| The known variants with their ClinVar columns ([Variation data in a native cache](cache-variation-data.md)) | The variation VCFs and the variation database's table dumps; its `variation_feature` table for a sequence on which the one VCF of a species other than human holds no record | Where the tree publishes no variation VCF of the genome |
+| Their 1000 Genomes frequencies | `1000GENOMES-phase_3.vcf.gz`, a file of human on GRCh38 alone | On GRCh37, whose tree lists no such file |
+| Their PubMed identifiers and synonyms | The variation database's `variation`, `variation_citation`, `publication`, `variation_synonym` and `source` tables | On GRCh37, whose tree lists no `variation` table |
+| The failed variants and their flag | The failed-variants GVF and the `failed_variation` table | Where the tree lists neither |
+| Their gnomAD frequencies | No file of the release | In every installation |
+| The SIFT and PolyPhen matrices ([SIFT and PolyPhen predictions](cache-predictions.md)) | The variation database's table dumps, for any species whose database holds them | On GRCh37 without `--include-predictions` |
+| The regulatory and motif features ([Regulatory and motif features](regulatory.md#baking-the-files-into-a-cache)) | The regulatory-feature and motif-feature GFF3 files | For a genome without a regulation directory; the motif features where the directory lists no motif file |
+| The regulatory features' activity by cell type | The activity file beside the GFF3 files | Where their directory lists no such file |
+| The motif features' `HIGH_INF_POS` and `MOTIF_SCORE_CHANGE` | The funcgen database's `binding_matrix` and `binding_matrix_frequencies` tables | Where the tree publishes no funcgen database that lists both tables |
+
+A part the site publishes no file of for the genome is left out without an error. A build with `--output-dir` and none of `--include-variations`, `--include-predictions`, `--regulatory-gff` and `--motif-gff` builds a cache without the parts. `--include-variations` changes nothing beside `--auto`, and `--regulatory-gff`, `--emars-gff` and `--motif-gff` are refused beside it.
+
+The installation ends on one line saying the cache holds each of those parts, or on one warning for each part left out: `No <part> in the cache of <species> <assembly>: <reason>`. Warnings of the same form name each cell left out; a converted cache holds them ([Cache conversion](cache-conversion.md)). One more names the sequences of the cache that hold no known variant.
+
+`--site` names another server or a local directory holding the site's `pub/release-<N>/` tree. The cache is built from the release files, never from Ensembl VEP's prebuilt cache archive, whose Storable format `vep` does not read.
+
+The release's species list says where a species is published and names its core database, so no flag picks the site:
+
+| Genome | Where it is published | What `--auto` does |
+| --- | --- | --- |
+| A vertebrate | The Ensembl release, `pub/release-<N>/` | Installs it |
+| Human on GRCh37 | `pub/grch37/release-<N>/`, whose gene set is the release-87 one Ensembl publishes from release 88 onward | Installs it |
+| A species of the Ensembl Genomes plants, metazoa, fungi or protists division with a core database of its own | The division's tree on the Ensembl Genomes site, under the Ensembl Genomes release, 63 beside Ensembl release 116 | Installs it, `--release` being the Ensembl Genomes release |
+| A genome of a collection: every bacterium and archaeon, and the fungi and protists published in collections | The collection's directories in its division's tree, with one core database for all its genomes | Refuses before any download, naming the shared database and [Cache conversion](cache-conversion.md) |
+| A human pangenome assembly, named as Ensembl VEP's cache names it (`homo_sapiens_gca009914755v4`) | The rapid-release tree, which has no table dumps | Refuses before any download, naming the tree and [Cache conversion](cache-conversion.md) |
+
+A plant of release 63:
+
+```bash
+target/release/vep-cache-builder --auto arabidopsis_thaliana TAIR10 \
+  --release 63 --dir_cache $HOME/.vep
+```
 
 ### A build from local copies
 
-Local copies build the same cache into `--output-dir`, one input per flag. The model is the release's Ensembl GFF3, downloaded or passed with `--gff3`, or any local GFF3 or GTF ([A GTF or GFF3 as the transcript model](cache-from-gtf-or-gff3.md)). The peptides come from the release's protein FASTA, downloaded or passed with `--fasta`.
+Local copies build the same transcripts into `--output-dir`, one input per flag, and the other parts under the flags that name them. The model is the release's Ensembl GFF3, downloaded or passed with `--gff3`, or any local GFF3 or GTF ([A GTF or GFF3 as the transcript model](cache-from-gtf-or-gff3.md)). The peptides come from the release's protein FASTA, downloaded or passed with `--fasta`.
 
 A GRCh37 build from local copies:
 
@@ -35,7 +72,7 @@ target/release/vep-cache-builder \
   --output-dir $HOME/.vep/homo_sapiens/116_GRCh37
 ```
 
-The downloads are about 1.6 GB for GRCh38 and 2.6 GB for GRCh37 (its `phenotype_feature.txt` is published uncompressed). The tables are read in about half a minute and 3 GB of memory.
+The downloads of such a build are about 1.6 GB for GRCh38 and 2.6 GB for GRCh37 (its `phenotype_feature.txt` is published uncompressed). The tables are read in about half a minute and 3 GB of memory.
 
 ### What each input supplies
 
@@ -50,9 +87,22 @@ The Ensembl GFF3 alone gives each transcript:
 
 With the release's protein FASTA or core dumps, the builder drops `artifact` and readthrough transcripts, as Ensembl VEP's dumper does. Three more inputs decide the rest:
 
-- `--core-dumps` is a directory of the release's core and variation MySQL table dumps (a missing table is downloaded into it). It supplies what the GFF3 lacks: the columns below, each sequence region's codon table ([below](#the-codon-table-of-each-sequence-region)), the headers' `source_versions` and the translation's sequence edits.
+- `--core-dumps` is a directory of the release's core and variation MySQL table dumps (a missing table is downloaded into it). It supplies what the GFF3 lacks: the columns below, each sequence region's codon table ([below](#the-codon-table-of-each-sequence-region)), the headers' `source_versions` and the translation's sequence edits. It also places a one-exon transcript's coding sequence where its row of the `translation` table does, as Ensembl VEP's cache holds it, when the GFF3's `CDS` lines place it otherwise, and counts such transcripts in one line.
 
-  Without it the `SYMBOL_SOURCE`, `HGNC_ID`, `MANE_SELECT`, `MANE_PLUS_CLINICAL`, `APPRIS`, `miRNA`, `RefSeq`, `SWISSPROT`, `TREMBL`, `UNIPARC`, `UNIPROT_ISOFORM`, `DOMAINS` and `GENE_PHENO` columns are empty on a native cache, and on GRCh37, whose release-87 GFF3 carries no `transcript_support_level` and no `Ensembl_canonical` tag, so are `TSL` and `CANONICAL`. `DOMAINS` may list a translation's protein features in another order. A native cache orders them by feature identifier, Ensembl VEP by [the region-file copy its run reads](divergences/domains-order-region-file-copy.md). In the JSON `domains` array an entry outside Ensembl VEP's `(\w+):(\w+)` pattern (`Low_complexity_(Seg):seg`) repeats the last matched entry's `db` and `name`. It is dropped when none precedes it.
+  Without it the `SYMBOL_SOURCE`, `HGNC_ID`, `MANE_SELECT`, `MANE_PLUS_CLINICAL`, `APPRIS`, `miRNA`, `RefSeq`, `SWISSPROT`, `TREMBL`, `UNIPARC`, `UNIPROT_ISOFORM`, `DOMAINS` and `GENE_PHENO` columns are empty on a native cache, and on GRCh37, whose release-87 GFF3 carries no `Ensembl_canonical` tag, so is `CANONICAL`. `TSL` is empty on GRCh37 with or without it: that gene set carries no level. The build's closing lines name the columns, as does a run that asks for one.
+
+  `DOMAINS` may list a translation's protein features in another order. A native cache orders them by feature identifier, Ensembl VEP by [the region-file copy its run reads](divergences/domains-order-region-file-copy.md). In the JSON `domains` array an entry outside Ensembl VEP's `(\w+):(\w+)` pattern (`Low_complexity_(Seg):seg`) repeats the last matched entry's `db` and `name`. It is dropped when none precedes it.
+
+  A native cache holds each row of the release's `protein_feature` table once, so `DOMAINS` can also name other features than Ensembl VEP names on a cache Ensembl publishes. Ensembl's API joins each feature to the `interpro` table by its hit name (`ProteinFeatureAdaptor.pm`, lines 289-291), and such a cache lists a feature once for each row the join returns. Three hits of `saccharomyces_cerevisiae` stand twice at release 116. A cache Ensembl publishes can also hold the features of another release's table. The Ensembl site's release 116 cache of `saccharomyces_cerevisiae` holds those of release 115, which differ from the release's own on 2,392 of 6,600 translations; the Ensembl Genomes site's cache of the same release holds the release's own.
+
+  A cache Ensembl publishes can also name an analysis by another label than the release's `analysis_description` table:
+
+  | Analysis of `arabidopsis_thaliana` at release 63 | `DOMAINS` on a native cache | `DOMAINS` on the Ensembl Genomes site's cache | Rows of the 2,396 that `--everything` writes for `tests/golden/116/TAIR10-arabidopsis` |
+  | --- | --- | --- | --- |
+  | `alphafold` | `AFDB-ENSP_mappings` | `AFDB-ENSP_mapping` | 302 |
+  | `signalp_gp` | `SIGNALP_GP`, each hit once | `SignalP_GRAM_POSITIVE`, each hit twice | 13 |
+  | `signalp_gn` | `SignalP_GN`, each hit once | `SignalP_GRAM_NEGATIVE`, each hit twice | 1 |
+  | Any of the three | | | 303 |
 
   A native cache lists `cds_start_NF` before `cds_end_NF` on every transcript carrying both, whatever order the core dumps or the GTF carried. The Ensembl cache keeps the order its database returned, `cds_end_NF` first on 7 of the 2,946 GRCh38 transcripts that carry both at release 116, and Ensembl VEP prints that order.
 - `--gtf`, beside the Ensembl GFF3, is the Ensembl GTF of the same release. It supplies the `cds_start_NF` and `cds_end_NF` transcript attributes (the `FLAGS` output field) when no core dumps are read; the GFF3 does not carry them. Its header also supplies the `assembly` and `genebuild` source versions the output headers print. Without `--gff3`, the GTF is the transcript model itself ([A GTF or GFF3 as the transcript model](cache-from-gtf-or-gff3.md)).
@@ -64,31 +114,24 @@ With the release's protein FASTA or core dumps, the builder drops `artifact` and
 
 Each transcript's `codon_table` is the genetic code its consequences and peptide are read under. It is its sequence region's `codon_table` attribute in the core dumps, as Ensembl VEP's dumper reads it from the slice. A region without the attribute is table 1, the nuclear code, as the dumper writes it.
 
-Without `--core-dumps` nothing states an organelle genome's table, so `--codon-table <region>=<table>` names it, repeatable or comma-joined. The region is spelled as the GFF3 or GTF spells it (`chrM` and `chrMT` read as `MT`). The table is one of the genetic codes `Bio::Tools::CodonTable` ships:
+Without `--core-dumps` nothing states an organelle genome's table, so `--codon-table <region>=<table>` names it, repeatable or comma-joined. The region is spelled as the GFF3 or GTF spells it (`chrM` and `chrMT` read as `MT`). The table is a genetic code `Bio::Tools::CodonTable` ships, or 26:
 
 ```bash
 --codon-table MT=2                   # a vertebrate's mitochondrion, no dumps
 --codon-table Mito=3                 # yeast
 --codon-table mitochondrion_genome=5 # the fly
 --codon-table Pt=11,Mt=1             # the Arabidopsis plastid and mitochondrion
+--codon-table scaffold_1=26          # NCBI's code 26, which the module lacks
 ```
 
-A region named like an organelle genome, in any letter case, whose table neither the dumps nor the flag states stops the build before any shard is written. The line is `ERROR: [cache-builder] codon table of sequence region <name> unknown: pass --core-dumps or --codon-table <name>=<n>`. The names are:
+A region named like an organelle genome, in any letter case, whose table neither the dumps nor the flag states stops the build before any shard is written. The line is `ERROR: [cache-builder] codon table of sequence region <name> unknown: pass --core-dumps or --codon-table <name>=<n>`. The names are these, and any name that holds `mito`, `chloro` or `plastid` (`OVOC_MITOCHONDRIAL`):
 
-- `MT`
-- `chrM`
-- `chrMT`
-- `Mito`
-- `MtDNA`
-- `mitochondrion_genome`
-- `Mt`
-- `Pt`
-- `ChrC`
-- `ChrM`
-- `chloroplast`
-- `plastid`
+```text
+MT  M  chrM  chrMT  Mito  MtDNA  mitochondrion_genome
+Mt  Pt  ChrC  ChrM  chloroplast  plastid
+```
 
-A region the dumps and the flag give two different tables stops the build too. So does a table the module lacks (7, 8, 17 to 20 and anything past 24).
+A region the dumps and the flag give two different tables stops the build too. So does any other table (7, 8, 17 to 20, 25 and anything past 26).
 
 The release 116 core dumps carry the attribute for the human and the fly mitochondrion (`MT` 2, `mitochondrion_genome` 5). So a build with `--core-dumps` needs no flag for them. Where the dumps carry no attribute for an organelle-named region, the build stops the same way and the line names the flag alone.
 
@@ -100,6 +143,7 @@ A failed build prints one `ERROR: [cache-builder] <message>` line and exits 1, w
 | --- | --- |
 | A file from which no transcript is read | refused before the build writes anything: `No transcript was read from <file>` |
 | A file whose every transcript is `artifact` or readthrough, on a build that reads a protein FASTA or core dumps | refused before the build writes anything: `No transcript was kept from <file>: <n> read, <a> set aside as artifact and <r> as readthrough, as Ensembl VEP's cache holds neither`; a build from the genome alone keeps both kinds |
+| On GRCh37, a mitochondrial region none of whose tested coding transcripts, one or more, reads as a coding sequence on the genome FASTA record it is cut from ([the test](cache-from-gtf-or-gff3.md#what-the-run-reads)) | refused before the build writes anything: `sequence region <region> of <file> does not fit the genome FASTA: of <n> coding transcripts read from the FASTA record <record>, <length> bases long, under codon table <table>, none opens on a start codon and runs to its last codon without a stop codon`, then the two mitochondrial sequences GRCh37 has in use and the two remedies: a genome FASTA that holds the sequence the model counts on, or a model without the region's lines |
 | A line that is not UTF-8 | refused: `<file> line <n>: GFF3 line is not UTF-8` (`GTF` for a GTF; a protein FASTA's `FASTA line is not UTF-8`) |
 | A line that is no comment and ends before its fourth column, the start | refused: `<file> line <n>: GFF3 line ends at column <k>, before its start` (`GTF` for a GTF), as the index build fails such a line; a blank line is skipped, a GFF3's `##FASTA` directive is a comment, and nothing is read from the first line that begins with `>` and has a sequence behind it, the next line that is neither blank nor a comment having fewer than four columns, or a start or end the index build fails (a line longer than 16777216 bytes, only where no tab stands in it, its 16777217th byte aside), to the file's end, a line the log names; a `>` line before a line of four or more columns whose start and end the index build parses, or with nothing behind it, is read as any other line |
 | A record inside a GFF3's sequence section, nine or more columns whose fourth and fifth are whole numbers, neither a comment nor led by `>` | refused: `<file> line <n>: GFF3 annotation after the sequence section, which opens at line <m>`; the section ends the annotation, so the record would go unread |
@@ -118,6 +162,7 @@ A failed build prints one `ERROR: [cache-builder] <message>` line and exits 1, w
 | A translation that starts or ends in no exon of its transcript, on either strand: its start is the 5' end of the first CDS line in transcript order and its end the 3' end of the last, a GTF's `stop_codon` lines counted with its CDS lines | refused before the build writes anything: `<file> line <n>: CDS <start>-<end> of transcript <id> starts the translation at <base>, in no exon of the transcript` or `... ends the translation at <base>, in no exon of the transcript`; the line and the span are those of the CDS line that sets the base; a CDS line that leaves its exon between the two ends is read as written; Ensembl VEP builds without the line or on its span as written, a documented intended divergence, [`gxf_malformed_coordinate_line_refused`](divergences/gxf-cds-line-outside-its-exons.md) |
 | A transcript whose exon `rank` values run against its strand, its coding sequence opening before the exon ranked first | refused before the build writes anything: `<file> line <n>: the coding sequence of transcript <id>, <start>-<end>, starts before <start>-<end>, the first exon in transcript order that it overlaps` (`ends after` on the reverse strand); the line is the CDS line's that opens the coding sequence and the first span the whole coding sequence's |
 | A transcript whose translation's end would be counted outside its exon: exon `rank` values that run against position at the translation's end, or an exon nested in the last coding exon and coming after it | refused before the build writes anything: `<file> line <n>: CDS <start>-<end> of transcript <id> ends the translation at base <offset> of the <length>-base exon <start>-<end>, the last in transcript order that the coding sequence overlaps`; the line and the span are those of the CDS line that sets the translation's end |
+| A reverse-strand transcript whose translation ends in an exon nested in the exon it starts in, the nested exon coming after that exon by `rank`, so that the coding sequence's last base would be placed before its first | refused before the build writes anything: `<file> line <n>: CDS <start>-<end> of transcript <id> ends the translation in exon <start>-<end>, which lies inside exon <start>-<end>, where the translation starts`; the line and the span are those of the CDS line that sets the translation's end; the same lines without a `rank`, or as a GTF, put the nested exon first in transcript order and are refused with `<file> line <n>: the coding sequence of transcript <id>, <start>-<end>, ends after <start>-<end>, the first exon in transcript order that it overlaps` |
 | A transcript whose exons mix ranked and unranked lines | its exons are ordered by start |
 | A line of a type outside the [transcript-model page](cache-from-gtf-or-gff3.md)'s list (`five_prime_UTR`, `biological_region`, `start_codon`) | skipped, unless no number leads its start or end or its end is below zero (the row of a start or end that is not a number); the skipped types are logged once with their counts |
 | A record whose parent list (`Parent`, or a GTF's `gene_id` or `transcript_id`) opens with a parent in no line that was read | placed as its other parents place it, else dropped with its children; a warning names the parents |
@@ -129,58 +174,15 @@ A failed build prints one `ERROR: [cache-builder] <message>` line and exits 1, w
 
 ### A GTF or another GFF3 as the transcript model
 
-`vep --gff <file>` and `vep --gtf <file>`, which Ensembl VEP reads as an annotation source in place of its cache, have no in-process counterpart. vep-rs reads transcripts from its cache alone. The same annotation is a `vep-cache-builder` run on the file and the genome, then a `vep` run against that cache. [A GTF or GFF3 as the transcript model](cache-from-gtf-or-gff3.md) gives the commands and the cache's contents.
+`vep --gff <file>` and `vep --gtf <file>` read a GTF or GFF3 beside a cache in the same run; a run with the file alone builds its cache first ([A GTF or GFF3 as the transcript model](cache-from-gtf-or-gff3.md)).
 
 ### Variation data
 
-Variation data, which `--check_existing` and the `--af*` flags read, is optional (`--include-variations`). The builder downloads Ensembl's variation VCFs from this directory (`pub/grch37/release-116/` for GRCh37), or reads local copies under the same names from `--variation-vcf-dir`:
-
-```
-https://ftp.ensembl.org/pub/release-116/variation/vcf/homo_sapiens/
-```
-
-The files are the per-chromosome germline files `homo_sapiens-chr<N>.vcf.gz` and four genome-wide files, each with its `.csi`. The download covers chromosomes 1-22, X, Y and MT under `homo_sapiens` unless `--chromosomes` narrows it. For another species it covers its GFF3's `##sequence-region` names. A GTF declares none, so a GTF-only species names its chromosomes with `--chromosomes` or the build stops. From a local directory every `*-chr*.vcf.gz` is read; a `##fileformat` outside major version 4 stops the build.
-
-The four genome-wide files:
-
-| Genome-wide file | Contents |
-| --- | --- |
-| `homo_sapiens_somatic.vcf.gz` | every record flagged `somatic` |
-| `homo_sapiens_phenotype_associated.vcf.gz` | records the per-chromosome files already carry at release 116; a record found only there is added |
-| `homo_sapiens_clinically_associated.vcf.gz` | records the per-chromosome files already carry at release 116; a record found only there is added |
-| `1000GENOMES-phase_3.vcf.gz` | the 1000 Genomes frequencies |
-
-A genome-wide file the directory or the site lacks is left out with a warning naming what the cache then lacks.
-
-The records are written per chromosome as `variations/<chr>/all_vars.gz` with a `.csi` on the start column, the file Ensembl VEP's own cache carries. So `--check_existing` and the frequency flags read a native cache exactly as a converted one.
-
-#### The form of a record
-
-Each record takes the form the variation database holds, as far as the export (Ensembl's variation VCFs) preserves it. A deletion's alleles have the anchor base the export prepended removed, with `-` for the emptied allele. An insertion the export marks `TSA=insertion` sits two bases after the base its VCF line names (`start` one past `end`), where the Ensembl cache places it.
-
-An indel (`TSA=indel`, every allele non-empty) keeps the alleles the export wrote, at the line's `POS`. The export prepends an anchor only to alleles that do not share a first base. So an `A/AA` record stays `A/AA`, while a `CC/CTTCT` line, whose alleles differ once the shared base goes, is the database's `C/TTCT` one base on.
-
-A COSMIC variant without alleles is written as `COSMIC_MUTATION` on its span. Every HGMD-PUBLIC variant, alleles or not, is written as `HGMD_MUTATION`, the string the variation database holds for that source. `clin_sig` comes from the record's `CLIN_<term>` flags (a term the export declares no flag for, `likely_risk_allele`, is absent) and `phenotype_or_disease` from `E_Phenotype_or_Disease`.
-
-#### An indel that can shift along a run
-
-The Ensembl cache keeps dbSNP's alleles over the whole run an indel can shift along (`CCCCC/CCCC` at 5030241-5030245), which the export trims to `CC/C` at 5030241. Such records are 5 of every 100 of chromosome 21's `indel` records. A native cache holds the trimmed form, which minimises from the right end to the same alleles and position as the Ensembl cache's record. So an input spelled at the left end of the run (the VCF convention, `AC/A` at 5030240) co-locates with it exactly as Ensembl VEP co-locates it.
-
-An input anchored on the run's first base (`CC/C` at 5030241) minimises to the record's second base. The trimmed form also reaches that base and the Ensembl cache's record does not, so the input co-locates with the native record alone. An input spelled at the run's right end co-locates with neither, its start lying outside the one-base window the start-indexed files answer.
-
-#### What a native cache lacks
-
-A native cache carries no `failed` flag. The export leaves the failed variants out, the `dbSNP_novariation` records among them, and the few it keeps are written unflagged. The cache carries no `pubmed` or `var_synonyms` (the export carries none) and no gnomAD frequency. Ensembl publishes no gnomAD VCF for release 116, so gnomAD frequencies come from the Ensembl variation cache, by conversion. A native cache built by a vep-rs release before 0.5.0 holds JSON variation files that nothing reads; build it again.
-
-#### The 1000 Genomes frequencies
-
-The 1000 Genomes file exists for GRCh38 only, so a GRCh37 native cache has no frequency column. Where it is read, the `AFR`, `AMR`, `EAS`, `EUR` and `SAS` columns hold each allele's continental frequency as the file gives it, and `AF` the whole panel's. The file states no panel-wide frequency, so `AF` is the allele's count over the panel's 5,008 chromosomes. Each population's count is recovered from its frequency and sample count with two chromosomes per sample (an approximation on X and Y). A population the file gives no value for drops out of both the count and the total.
-
-An allele whose frequency is 0 in every population gets no entry. The release file lists no frequency for an allele absent from its call set, and the export does not tell such an allele from one the release lists with a count of 0. For the latter the Ensembl cache prints `0` (among the 1,106,899 chromosome 21 records the Ensembl cache holds frequencies for). The release's own panel-wide frequency, which the Ensembl cache prints, differs from the recovered count's for 443 of those records, 315 of them by one unit in the last significant digit.
+`--include-variations` adds the variation data to a build with `--output-dir` ([Variation data in a native cache](cache-variation-data.md)).
 
 ### Regulatory data
 
-`--regulatory-gff`, `--emars-gff` and `--motif-gff` bake the Ensembl regulatory annotation files into the cache's regulatory tree ([Regulatory features from GFF files](regulatory.md#regulatory-features-from-gff-files)); `--extended-promoters` widens the promoters:
+In a build with `--output-dir`, `--regulatory-gff`, `--emars-gff` and `--motif-gff` bake the Ensembl regulatory annotation files into the cache's regulatory tree ([Regulatory features from GFF files](regulatory.md#regulatory-features-from-gff-files)); `--extended-promoters` widens the promoters:
 
 ```bash
 target/release/vep-cache-builder --release 116 --assembly GRCh38 \
@@ -193,11 +195,11 @@ target/release/vep-cache-builder --release 116 --assembly GRCh38 \
 
 ### Checking a cache
 
-`scripts/validation/compare_gtf_tags_to_cache.py` compares the four attributes a GTF yields with a cache's and lists every disagreement. `scripts/validation/diff_caches.py` compares two caches' transcripts, variation files and `info.json`.
+`tools/vep-gtf-tags-compare` compares the four attributes a GTF yields with a cache's and lists every disagreement. `tools/vep-cache-diff` compares two caches' transcripts, variation files and `info.json`.
 
 ## Convert an existing Ensembl VEP cache
 
-[Cache conversion](cache-conversion.md) describes the converter, `scripts/data/storable_to_json.pl`, which converts an Ensembl VEP Storable cache to this layout, what it carries and the caches the published figures were measured on. The corpora under `tests/golden/116/` compare both engines on converted mouse, fruit fly, Arabidopsis and yeast caches ([Other species](cache-species.md)).
+[Cache conversion](cache-conversion.md) describes the converter, `tools/vep-storable-to-json`, which converts an Ensembl VEP Storable cache to this layout, what it carries and the caches the published figures were measured on. The corpora under `tests/golden/116/` compare both engines on converted caches of other species, mouse, fruit fly, Arabidopsis and yeast among them ([Other species](cache-species.md)).
 
 ### RefSeq and merged caches
 
@@ -205,17 +207,18 @@ Ensembl also ships a RefSeq and a merged cache. Each converts with that converte
 
 ```bash
 tar -xzf homo_sapiens_refseq_vep_116_GRCh38.tar.gz
-docker run --rm -v $(pwd):/input:ro -v $HOME/.vep:/output \
-  -v $(pwd)/scripts/data:/scripts:ro \
-  ensemblorg/ensembl-vep:release_116.2 \
-  perl /scripts/storable_to_json.pl \
-  /input/homo_sapiens_refseq/116_GRCh38 /output/homo_sapiens_refseq/116_GRCh38
+cargo build --release --locked \
+  --manifest-path tools/vep-storable-to-json/Cargo.toml
+tools/vep-storable-to-json/target/release/vep-storable-to-json \
+  homo_sapiens_refseq/116_GRCh38 $HOME/.vep/homo_sapiens_refseq/116_GRCh38
 vep -i input.vcf -o output.txt --offline --cache --refseq \
   --dir_cache $HOME/.vep --cache_version 116 --assembly GRCh38 \
   --fasta Homo_sapiens.GRCh38.dna.primary_assembly.fa
 ```
 
 `--refseq` annotates the RefSeq accessions alone, `--merged` every Ensembl model plus the RefSeq accessions among the RefSeq-sourced ones, and `--all_refseq` every model ([Filtering, picking and transcript sets](cli/filtering-picking.md#transcript-sets)). Both are BAM-edited, so a run needs `--fasta` without `--use_given_ref` ([Cache conversion](cache-conversion.md#refseq-and-merged-caches)). vep-rs builds no RefSeq model natively and produces no merged cache.
+
+The RefSeq and merged caches Ensembl ships for other species convert the same way under the species' name, the mouse's into `mus_musculus_refseq/116_GRCm39` and `mus_musculus_merged/116_GRCm39` and cattle's merged cache into `bos_taurus_merged/116_ARS-UCD2.0`; the corpora `tests/golden/116/GRCm39-mouse-refseq`, `tests/golden/116/GRCm39-mouse-merged` and `tests/golden/116/ARS-UCD2.0-cattle-merged` compare both engines on them ([Other species](cache-species.md)).
 
 ## Naming the cache
 
@@ -225,9 +228,11 @@ The cache flags select the directory as Ensembl VEP does ([Cache, species and ru
 2. Under it the species directory is `--species` (default `homo_sapiens`, the Latin name only), suffixed `_refseq` or `_merged` under those flags.
 3. Under that sits `<cache_version>_<assembly>`, where `--cache_version` defaults to the VEP release.
 
+An Ensembl Genomes cache sits under its division's own release number: Arabidopsis is `arabidopsis_thaliana/63_TAIR10`, which `--cache_version 63` selects. A human pangenome assembly's cache has a species directory of its own, `homo_sapiens_gca009914755v4/107_T2T-CHM13v2.0`, which `--species homo_sapiens_gca009914755v4 --cache_version 107` selects.
+
 When one directory of that version exists, it is the cache and its assembly is read from its name; when several exist, `--assembly` chooses. An `--assembly` that disagrees with the directory name, or either disagreeing with the cache's `info.json`, is an error.
 
-Every failure to resolve a cache exits 1 before the input is opened with one `ERROR: [cache] ...` line, in Ensembl VEP's words where it has them. Those words are `Cache directory <dir> not found`, `No cache found for homo_sapiens, version 116` and `Multiple assemblies found for cache version 116 ...`, the assemblies in name order. The metadata mismatch names `info.json`, a JSON cache's counterpart of `info.txt`.
+Every failure to resolve a cache exits 1 before the input is opened with one `ERROR: [<component>] ...` line, in Ensembl VEP's words where it has them. Those words are `Cache directory <dir> not found`, `No cache found for homo_sapiens, version 116` and `Multiple assemblies found for cache version 116 ...`, the assemblies in name order. The metadata mismatch names `info.json`, a JSON cache's counterpart of `info.txt`. The line's component is `config` for a `--synonyms` file that cannot be read, `custom` where a run that names a GFF or GTF transcript source has no cache at the configured path, and `cache` otherwise.
 
 `--json_cache <dir>` (alias `--full_cache_dir`) names the cache directory itself instead, whatever `--dir_cache`, `--species` and `--cache_version` say. Only `--assembly` is checked against its `info.json`. Either way the directory must hold `transcripts/` and `info.json`, so a Storable cache or a mistyped path fails instead of annotating nothing. `transcripts/` must also hold a shard under some chromosome directory: a cache with none is refused, where Ensembl VEP writes every record as `intergenic_variant` ([A cache holding no transcript shard](divergences/damaged-cache-shard.md#a-cache-holding-no-transcript-shard)).
 
@@ -240,13 +245,17 @@ Every failure to resolve a cache exits 1 before the input is opened with one `ER
 vep -i input.vcf -o output.txt --offline --cache \
   --dir_cache $HOME/.vep --cache_version 116 --assembly GRCh38
 
+# An Ensembl Genomes cache: $HOME/.vep/arabidopsis_thaliana/63_TAIR10
+vep -i input.vcf -o output.txt --offline --cache --dir_cache $HOME/.vep \
+  --species arabidopsis_thaliana --cache_version 63
+
 # The directory itself
 vep -i input.vcf -o output.txt --offline --json_cache /path/to/116_GRCh38
 ```
 
 ## Reference FASTA
 
-`--fasta` takes a plain FASTA with its `.fai`, or a `bgzip`-compressed FASTA with its `.fai` and `.gzi`, the shape of Ensembl's `dna_index/` files and of the file `vep-cache-builder --auto` places in the cache directory. An index the file lacks is written beside it as `samtools faidx` writes it, as Ensembl VEP writes it. Three files are refused at open: a gzip file that is not BGZF, whose `.fai` offsets need the whole file inflated; a `.gzi` that does not match the file's blocks, recompressed and not re-indexed; an `.fai` naming more bases than the file holds. So is a BGZF file holding a malformed block.
+`--fasta` takes a plain FASTA with its `.fai`, or a `bgzip`-compressed FASTA with its `.fai` and `.gzi`, the shape of Ensembl's `dna_index/` files and of the file `vep-cache-builder --auto` places in the cache directory. An index the file lacks is written beside it as `samtools faidx` writes it, as Ensembl VEP writes it. Three files are refused at open: a gzip file other than BGZF or RAZF, whose `.fai` offsets need the whole file inflated; a `.gzi` that does not match the file's blocks, recompressed and not re-indexed; an `.fai` naming more bases than the file holds. So are malformed BGZF blocks and unreadable RAZF files.
 
 | Beside the plain or BGZF file as a run starts | What the run does |
 | --- | --- |
@@ -265,20 +274,25 @@ vep -i input.vcf -o output.txt --offline --json_cache /path/to/116_GRCh38
 
 | Condition | Line printed |
 | --- | --- |
-| A gzip file that is not BGZF | `ERROR: [fasta] <file> is gzip but not BGZF: recompress with bgzip and index with samtools faidx` |
+| A gzip file that is neither BGZF nor RAZF, the output of samtools 0.1's `razip`, which is read through its `.fai` | `ERROR: [fasta] <file> is gzip but not BGZF: recompress with bgzip and index with samtools faidx` |
 | A `.gzi` that does not describe the file's blocks | `ERROR: [fasta] BGZF index <file>.gzi does not describe <file> (<the first disagreement>): index the file again with samtools faidx` |
 | An `.fai` naming bases past the file's end | `ERROR: [fasta] FASTA index names <n> bases beyond the end of <file>` |
 | A BGZF block declaring more than 65,536 uncompressed bytes, the most a block holds | `ERROR: [fasta] malformed BGZF block at offset <n> in <file>`, `<n>` the block's byte offset in the file |
+| A RAZF file cut short, or one whose header, index or closing lengths do not describe its bytes or whose first block does not inflate to its length | `ERROR: [fasta] <file> is not a readable RAZF file (<the first fault>): recompress the FASTA with bgzip and index it with samtools faidx` |
 | `--fasta 0` or `--fasta ''`, a value Ensembl VEP reads as the flag unset ([compatibility page](cli/compatibility.md#where-configpm-is-not-followed)) | `ERROR: [fasta] Specified FASTA file/directory <value> not found` |
 | `--hgvs` or `--hgvsg` with no FASTA in reach | `ERROR: [fasta] Cannot generate HGVS coordinates (--hgvs and --hgvsg) in offline mode without a FASTA file (see --fasta)` |
 | `--check_ref` without a FASTA | `ERROR: [fasta] Cannot check reference sequences (--check_ref) without a FASTA file (see --fasta)` |
 | `--lookup_ref` without a FASTA | `ERROR: [fasta] Cannot look up reference sequences (--lookup_ref) without a FASTA file (see --fasta)` |
 | `--use_transcript_ref` without a FASTA, which it reads a non-coding transcript's cDNA from | `ERROR: [fasta] Cannot use transcript reference sequences (--use_transcript_ref) without a FASTA file (see --fasta); you may wish to use --use_given_ref` |
 | `--shift_3prime 1` without a FASTA, since the shift reads the reference | `ERROR: [fasta] Cannot shift variants (--shift_3prime 1) without a FASTA file (see --fasta)` |
+| A `.fa` or `.fa.gz` in the cache directory without the index it needs, when neither `--fasta` nor `--no_fasta` is given (withheld under `--quiet`) | `INFO: FASTA file <file> in the cache directory was passed over (<what the file lacks and what mends it>); the run has no reference FASTA`, ending `; the run's reference FASTA is <file>` when another file there is indexed |
+| The same in a `--fasta` directory (withheld under `--quiet`) | `INFO: FASTA file <file> in the --fasta directory was passed over (<the same>); its sequences are not read` |
 | `--everything` without a FASTA | `INFO: Disabling --hgvs; using --offline and no FASTA file found` |
 | `--fasta_dir` holding no compatible file | `WARNING: No compatible FASTA files found in <dir>` |
 
 The tables' `ERROR:` lines exit 1. `--everything` without a FASTA prints its INFO line on standard error (withheld under `--quiet`) and drops the HGVS notations it enabled, as in Ensembl VEP. An explicit `--hgvsg` beside it is refused after that line.
+
+Where Ensembl publishes no primary assembly file for a genome, its `toplevel` file is the reference. Arabidopsis has `Arabidopsis_thaliana.TAIR10.dna.toplevel.fa.gz` where human has `Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz`.
 
 ### A `--fasta` directory
 
@@ -298,16 +312,27 @@ Two files tied on both preferences are ordered by name, the first taken, where E
 
 ### A contig the FASTA lacks
 
-Under `--lookup_ref` a contig the FASTA lacks skips the record at every position with the could-not-fetch warning, where Ensembl VEP's one-base placeholder slice (`BaseVEP.pm` lines 424-434) gives a one-base record at position 1 the reference `N`. Under `--check_ref` the same contig skips the record at every position with the sub-slice warning and then the mismatch warning; an insertion, naming no reference base, passes under either flag in both engines (`Parser.pm` lines 600-602 and 636). So Ensembl VEP annotates a one-base record there whose reference is written `N`, and refuses one written otherwise with the mismatch warning alone (`Parser.pm` lines 614-631).
+Under `--lookup_ref` vep-rs skips the record at every position of a contig the FASTA lacks with the could-not-fetch warning, where Ensembl VEP's one-base placeholder slice (`BaseVEP.pm` lines 424-434) gives a one-base record at position 1 the reference `N`. Under `--check_ref` vep-rs skips the record at every position of that contig with the sub-slice warning and then the mismatch warning; an insertion, naming no reference base, passes under either flag in both engines (`Parser.pm` lines 600-602 and 636). So Ensembl VEP annotates a one-base record at position 1 whose reference is written `N`, and refuses one written otherwise with the mismatch warning alone (`Parser.pm` lines 614-631).
 
-Under `--hgvs` the same contig gives these notations; neither engine warns:
+Under `--hgvs` and `--hgvsg` that contig gives these; neither engine warns, and each table ends on a notice, an `INFO:` line no warnings file holds:
 
 | Record on the contig under `--hgvs` | Ensembl VEP, whose transcript slice reads `N` per base there (`Utils/FastaSequence.pm` lines 597-601) | vep-rs, which reads no reference base there |
 | --- | --- | --- |
-| A substitution | `c.764N>T`, the `N` standing for the genome's `G` | no HGVSc |
+| A substitution | `c.764N>T`, the `N` standing for the `G` of the genome, a FASTA that holds the contig | no HGVSc |
 | A deletion | `c.632del`, as over the genome | no HGVSc |
-| An insertion | `c.307_308insC` | `c.307_308insC` |
-| HGVSp | as over the genome | as over the genome |
+| An insertion | `c.307_308insC` | `c.307_308insC`, written where the record places the insertion: no base is read to find a copy of the inserted bases beside it or to shift it 3'. So the made-up insertion at `MT` 755 of the table below, a copy of the base before it, gets `n.108_109insG` where the genome gives `n.108dup` |
+| An insertion written outside a transcript, before its first base or directly after its last | no HGVSc: a row outside a transcript is asked for none (`OutputFactory.pm` line 1730) | no HGVSc. Over a contig the FASTA holds, the 3' rule places such bases on the transcript where the sequence lets it ([`hgvs_added_bases_written_outside_the_transcript`](divergences/hgvs-added-bases-written-outside-the-transcript.md)); here no base is read to place them by |
+| HGVSp | as over the genome | as over the genome, except that an insertion or a deletion the 3' shift moves over the genome is read where its record writes it, no base being read to shift it. Over a FASTA made up without chromosome 21, line 46 of `tests/golden/116/GRCh38-identifiers/variants.vcf`, a deletion the shift carries into an intron, gets `p.Lys392AsnfsTer17` on three rows and `p.Lys6AsnfsTer17` on a fourth, where the corpus's own FASTA gives the four no HGVSp |
+| A notice at the end of a run that keeps a row on the contig whose HGVSc could not be read for want of a reference base, withheld under `--quiet` | none | `INFO: The FASTA holds no sequence for chromosome <name>, which the input has records on: a substitution or a deletion there gets no HGVSc, nor does an insertion written outside a transcript`; several chromosomes are counted and listed in the one line. The line is read from the rows the output keeps. A row counts where it has no HGVSc and its record's own bases give it one over a FASTA that holds the contig. A row without an HGVSc counts as well where its notation turns on bases beside the record: bases added before a transcript's first base or directly after its last that some sequence places on the transcript, and a deletion over a transcript's first or last base, by an allele that keeps bases of its reference, that some sequence lets be written wholly inside the transcript. The sequence alone could tell whether such a row owes a notation, so it counts whichever way the contig's bases would settle it. Neither counts under `--shift_hgvs 0`, and added bases count on no RefSeq model that carries an edit. Under `--shift_3prime 1` a row outside its transcript counts for nothing: the record's own shift reads the contig's bases too, so the record is annotated where it is written. No line names HGVSc where `--chr` or a filter leaves no such row, where the rows kept are of insertions written within their transcripts alone, under `--most_severe` or `--summary`, or in a tab or a VCF output whose `--fields` list leaves `HGVSc` out |
+
+| Record on the contig under `--hgvsg` | Ensembl VEP, which reads `N` per base there (`Utils/FastaSequence.pm` lines 597-601) | vep-rs, which reads no reference base there |
+| --- | --- | --- |
+| A substitution within a transcript or its upstream or downstream distance | `MT:m.700N>C` for `MT 700 A C`, where a FASTA that holds the contig gives `MT:m.700A>C`: the record takes the transcript's slice (`AnnotationType/Transcript.pm` line 122), and the `N` stands for the reference base `A`, which the FASTA does not hold | no HGVSg: the notation names the reference base, which is read from the FASTA and not from the record. By a rule of vep-rs's own a notation is written only where the FASTA holds the bases at both ends of the record, for an insertion the two bases beside it, so no record on the contig gets one |
+| A deletion in the same reach whose next base differs from the deleted one | `MT:m.714del` for `MT 713 CA C`, the notation a FASTA that holds the contig gives: it names no reference base, and the deletion stands at its last possible position | no HGVSg, by that rule. Ensembl VEP's value is the correct one here |
+| A deletion in the same reach whose next base equals the deleted one | `MT:m.736del` for `MT 735 AC A`, where a FASTA that holds the contig gives `MT:m.737del`: Ensembl VEP moves a deletion on while the next base it read equals the deleted base, which it takes from the record (`VariationFeature.pm` lines 1992 and 2000-2003, `Utils/Sequence.pm` lines 805-820), and the `N` it read is not the record's `C` | no HGVSg, by that rule. Ensembl VEP's value is not the correct one here |
+| An insertion in the same reach that copies neither base beside it | `MT:m.745_746insC` for `MT 745 A AC`, the notation a FASTA that holds the contig gives | no HGVSg, by that rule. Ensembl VEP's value is the correct one here |
+| An insertion in the same reach of a copy of the base before it | `MT:m.755_756insG` for `MT 755 G GG`, where a FASTA that holds the contig gives `MT:m.755dup`: Ensembl VEP looks for the copy in the bases it read (`Utils/Sequence.pm` lines 577-588), which are `N` | no HGVSg, by that rule. Ensembl VEP's value is not the correct one here |
+| A notice at the end of a run that keeps a row on the contig without its HGVSg because no reference base could be read, withheld under `--quiet` | none | `INFO: The FASTA holds no sequence for chromosome <name>, which the input has records on: a record there gets no HGVSg`; where rows kept on the contig count for HGVSc as well, as the notice row of the table above says, the one line ends `a record there gets no HGVSg, and a substitution or a deletion no HGVSc, nor does an insertion written outside a transcript`. Contigs whose kept rows are without different notations draw a line each. The line is read from the rows the output keeps. No line names HGVSg where `--chr` or a filter leaves no row on the contig, under `--most_severe` or `--summary`, or in a tab or a VCF output whose `--fields` list leaves `HGVSg` out |
 
 ### A `Y` read on a FASTA without `X`
 
@@ -315,20 +340,26 @@ With the pseudoautosomal redirect in force and no `X` in the FASTA, a `Y` read's
 
 ## Chromosome names
 
-An input may name a chromosome as the cache does (`21`), with a `chr` prefix (`chr21`), or by an accession (`NC_000021.9`, `CM000683.2`). Each name is resolved to the cache's own before any lookup, as Ensembl VEP's `get_source_chr_name` resolves it, in this order:
+An input may name a chromosome as the cache does (`21`), with a `chr` prefix (`chr21`), or by an accession (`NC_000021.9`, `CM000683.2`). Each name is resolved to the cache's own before any lookup, in the order of Ensembl VEP's `get_source_chr_name`:
 
 1. the name itself, when the cache holds it;
-2. else a synonym of it the cache holds;
+2. else its one synonym the cache holds ([two or more skip the record](divergences/synonym-of-several-sequences-by-hash-order.md));
 3. else the name with a leading `chr` removed or added, when the cache holds that;
 4. else a bare `M` as the cache's `MT`, under whatever name the cache holds it.
 
+The names are each cache's own, and another genome's differ. Yeast's cache names its chromosomes `I` to `XVI` and `Mito`: an input's `chrI` is reached with its `chr` removed, and its `MT`, `M` or `chrM` not at all ([Other species](cache-species.md)).
+
 A name that resolves to nothing skips the record with Ensembl VEP's warning (`Chromosome NC_000022.11 not found in annotation sources or synonyms`). Not so when a `--custom` or `--regulatory_gff` file [lists it](custom-annotation.md#chromosomes).
+
+On GRCh37 a `chrM` or `M` resolves to nothing as well where the reference FASTA holds, under that name, a record of another length than 16,569: [the record is on another sequence](divergences/mitochondrial-record-of-another-sequence-placed-on-mt.md).
 
 The output keeps the input's spelling in `Location`, the JSON `seq_region_name` and a VCF input's `CHROM` column. A bare `M` the sources know as `MT` but not as `M` or `chrM` prints `MT` in `Location` and `seq_region_name`, as Ensembl VEP renames it. [A bare `M` under a cache whose synonyms name `chrM`](divergences/bare-m-chromosome.md) describes where the engines then differ.
 
 ### The synonyms file
 
 The synonyms come from the cache's `chr_synonyms.txt`, copied from the Ensembl VEP cache by the converter. The native builder writes it from the core `seq_region_synonym` table with `--core-dumps`. `--synonyms <file>` replaces the cache's file rather than extending it. Each line holds one chromosome's whitespace-separated names, the reference name first, then its synonyms, in both directions.
+
+The fruit fly's cache names its mitochondrion `mitochondrion_genome`, and its file links `chrM` to that name but not `MT`. So an input that says `MT` needs a `--synonyms` file holding the line `mitochondrion_genome MT`, beside every other synonym the input needs.
 
 An unreadable file is `ERROR: [config] Could not read synonyms file <file>: <reason>` for a `--synonyms` file and `ERROR: [cache] ...` for the cache's own (a directory included, which Ensembl VEP opens as an empty table, `BaseVEP.pm` line 644). A file holding a byte that is not UTF-8 is refused the same way, the reason `stream did not contain valid UTF-8`, where Ensembl VEP reads the file as bytes.
 
@@ -346,14 +377,16 @@ The first is a bare `M` on a cache whose file links `chrM` but not `M`. The seco
 
 A reference FASTA named by accession is read under the cache's names through the same table. So `--fasta` may name a RefSeq or GenBank assembly beside an Ensembl cache.
 
-Beyond the table, a record is reached by its name with the prefix `chr` added or removed and, for a record named `MT`, `M`, `chrM` or `chrMT`, by any of the four names, matched in any letter case: aliases vep-rs builds in. Ensembl VEP tries the exact name, a synonym and the `chr` variants alone (`BaseVEP.pm` lines 413 and 689-738, `Utils/FastaSequence.pm` lines 380-389), so a cache's `MT` over a FASTA record named `chrM`, with no synonym linking the two, reaches no sequence there. That chromosome gets the one-base placeholder slice described above (`BaseVEP.pm` lines 425-426), so under `--check_ref` a record such as `MT 3308 T G` is skipped with the sub-slice and mismatch warnings, where vep-rs annotates it.
+Beyond the table, a record is reached by its name with the prefix `chr` added or removed and, for a record named `MT`, `M`, `chrM` or `chrMT`, by any of the four names outside GRCh37, matched in any letter case: aliases vep-rs builds in. On GRCh37 all four reach only a record of the assembly's 16,569 bases. A record of another length is taken for [another sequence](divergences/fasta-synonym-reads-another-mitochondrial-sequence.md), which no name of the other pair reaches (`MT` pairs with `chrMT`, `M` with `chrM`).
+
+Ensembl VEP tries the exact name, a synonym and the `chr` variants alone (`BaseVEP.pm` lines 413 and 689-738, `Utils/FastaSequence.pm` lines 380-389), so a cache's `MT` over a FASTA record named `chrM`, with no synonym linking the two, reaches no sequence there. That chromosome gets the one-base placeholder slice described above (`BaseVEP.pm` lines 425-426), so under `--check_ref` a record such as `MT 3308 T G` is skipped with the sub-slice and mismatch warnings, where vep-rs annotates it wherever `MT` reaches the `chrM` record.
 
 ## What `info.json` carries
 
 `info.json` carries `species` and `assembly` in every cache the converter and the builder write; the resolver compares `--assembly` with `assembly`. Its other keys:
 
-- `sift` and `polyphen`, markers written only for a tool whose matrices the cache holds. A converted cache keeps a marker only beside the tool's `source_versions` entry ([SIFT and PolyPhen predictions](cache-predictions.md)).
-- `source_versions`: on a native cache the core `meta` table's `assembly`, `gencode` and `genebuild`, or the GTF header's. The dbSNP, ClinVar, COSMIC and gnomAD versions an Ensembl cache's `info.txt` lists come from the variation database. The builder takes no version from it, so a native cache's headers print none.
+- `sift` and `polyphen`, markers written only for a tool whose matrices the cache holds ([SIFT and PolyPhen predictions](cache-predictions.md)).
+- `source_versions`: on a native cache the core `meta` table's `assembly`, `gencode` and `genebuild`, or the GTF header's, and an installation's `regbuild`; [no version of the variation database](cache-variation-data.md#what-a-native-cache-lacks).
 - `variation_cols` and `var_type tabix`, only when the cache holds variation files; `variation_cols` names their columns.
 - `contig_order`: the chromosome directories: autosomes by number, X, Y, MT, then every other contig by name; a `--core-dumps` build lists the dumps' karyotype first, by rank.
-- `regulatory`, `regulatory_schema` and `cell_types`, only with a regulatory tree: shards under `regulatory/<chr>/` beside the table `regulatory/binding_matrices.json` ([Regulatory and motif features](regulatory.md)).
+- `regulatory`, `regulatory_schema` and, with cell-type activity, `cell_types`, only with a regulatory tree: shards under `regulatory/<chr>/` beside the table `regulatory/binding_matrices.json` ([Regulatory and motif features](regulatory.md)).

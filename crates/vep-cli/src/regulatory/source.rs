@@ -432,7 +432,7 @@ impl RegulatorySource {
                 return Err(CliError::new(
                     "cache",
                     format!(
-                        "regulatory shards of {} predate the current converter: reconvert the cache",
+                        "regulatory shards of {} declare no schema; this build reads schema {REGULATORY_SCHEMA}: reconvert the cache",
                         cache.dir
                     ),
                 )
@@ -539,6 +539,19 @@ impl RegulatorySource {
         }
     }
 
+    /// Puts every record of the GFF files of `--regulatory_gff` through the
+    /// refusals of a chromosome's read, on every chromosome the files list,
+    /// keeping no feature and drawing no warning
+    /// ([`GffRegulatorySource::check_records`]); every chromosome stays
+    /// unloaded. The cache's tree is not read: its shards load as a variant
+    /// first names their chromosome, as transcript shards do.
+    pub(crate) fn check_gff_records(&self) -> anyhow::Result<()> {
+        match &self.backing {
+            Backing::Shards { .. } => Ok(()),
+            Backing::Gff(gff) => gff.check_records(),
+        }
+    }
+
     /// Loads every chromosome, in name order, so a corrupt shard or record
     /// anywhere in the source fails here and no later lookup meets a cold
     /// chromosome.
@@ -584,11 +597,13 @@ impl RegulatorySource {
             Backing::Gff(gff) => Index::build(gff.read_chromosome(&chromosome.name)?),
         };
         tracing::debug!(
-            "  chr{}: {} regulatory and motif features from {} shards in {:.1} ms",
-            chromosome.name,
-            index.len(),
-            chromosome.shards.len(),
-            started.elapsed().as_secs_f64() * 1e3
+            "{}",
+            loaded_line(
+                &chromosome.name,
+                index.len(),
+                chromosome.shards.len(),
+                started.elapsed().as_secs_f64() * 1e3
+            )
         );
         let _ = chromosome.index.set(index);
         Ok(())
@@ -603,6 +618,17 @@ impl RegulatorySource {
     pub fn features(&self, chr: &str) -> Option<&[Feature]> {
         self.index(chr).map(Index::features)
     }
+}
+
+/// The DEBUG line of one chromosome's load: its name as the backing spells it,
+/// with nothing put before it, its feature and shard counts and the time taken.
+fn loaded_line(chromosome: &str, features: usize, shards: usize, elapsed_ms: f64) -> String {
+    format!(
+        "  chromosome {chromosome}: {features} regulatory and motif feature{} from {shards} \
+         shard{} in {elapsed_ms:.1} ms",
+        if features == 1 { "" } else { "s" },
+        if shards == 1 { "" } else { "s" }
+    )
 }
 
 /// Each feature once, in shard order: a converted cache's overlapping shards
@@ -714,6 +740,21 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("parsing"));
+    }
+
+    /// The DEBUG line of a load names the chromosome as the backing spells it and
+    /// counts one feature and one shard in the singular.
+    #[test]
+    fn the_load_line_names_a_chromosome_as_the_cache_spells_it() {
+        assert_eq!(
+            loaded_line("rDNA", 1, 1, 0.5),
+            "  chromosome rDNA: 1 regulatory and motif feature from 1 shard in 0.5 ms"
+        );
+        assert_eq!(
+            loaded_line("mitochondrion_genome", 3, 2, 12.25),
+            "  chromosome mitochondrion_genome: 3 regulatory and motif features from 2 shards \
+             in 12.2 ms"
+        );
     }
 
     /// A `.json.gz` shard loads as a `.json` shard does, through the transcript
@@ -859,7 +900,7 @@ mod tests {
         assert_eq!(
             error.to_string(),
             format!(
-                "ERROR: [cache] regulatory shards of {} predate the current converter: reconvert the cache",
+                "ERROR: [cache] regulatory shards of {} declare no schema; this build reads schema 1: reconvert the cache",
                 dir.path().display()
             )
         );

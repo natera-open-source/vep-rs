@@ -1,0 +1,8 @@
+### ENST00000000040
+{
+  '_variation_effect_feature_cache' => {},
+  'end' => 2,
+  'stable_id' => 'ENST00000000040.1',
+  'start' => 1
+}
+

@@ -1,0 +1,20 @@
+usage: vep-golden-corpus generated [-h] --corpus CORPUS [--check]
+                                   [--command ...]
+
+Write or check the generated block of the corpus manifest: the command that
+writes the files the corpus does not commit and the sha256 of each file it
+writes, by its path under the directory written.
+
+options:
+  -h, --help       show this help message and exit
+  --corpus CORPUS
+  --check          run the manifest's own command and write nothing; fail,
+                   naming each path, when a file's digest differs from the
+                   recorded one, a recorded file is not written or a written
+                   file is not recorded
+  --command ...    the command and its arguments, as the last option: every
+                   word after it is the command's. It is run from the
+                   repository root with {generated} replaced by a temporary
+                   directory and {corpus} by the corpus directory, and
+                   recorded as given with the digest of every file under that
+                   directory

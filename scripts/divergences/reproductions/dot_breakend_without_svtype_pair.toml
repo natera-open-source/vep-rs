@@ -1,7 +1,7 @@
 entry = "dot_breakend_without_svtype_pair"
 page = "docs/divergences/defect-i.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the VCF 4.4 specification, section 5.4.9 \"Single breakends\" (whose own example writes a dot-notation breakend with an empty INFO) and the Ensembl VEP documentation, \"Data formats\", \"Structural variant types\" (single breakends in ALT); not seen in the measured datasets"
 notes = "A dot-notation single breakend whose INFO carries no SVTYPE takes Ensembl VEP's sequence rules for its coordinates, the pair POS-(POS+1) with an insertion's positions; vep-rs reads the point after POS. The same record with SVTYPE=BND is the point in both engines."
@@ -28,3 +28,17 @@ columns = ["Location", "Allele", "Feature", "Consequence", "cDNA_position", "CDS
 [expected]
 ensembl_vep = ["21:30425650-30425651 | chromosome_breakpoint | ENST00000390690 | coding_sequence_variant | 276-277 | 262-263"]
 vep_rs = ["21:30425651 | chromosome_breakpoint | ENST00000390690 | coding_sequence_variant | 276 | 262"]
+
+[implementation]
+code = [
+    "crates/vep-core/src/sv_span.rs::structural_end",
+    "crates/vep-core/src/sv_span.rs::structural_start",
+]
+tests = [
+    "crates/vep-core/src/sv_span.rs::tests::a_breakpoint_reads_no_end_unless_it_is_empty_or_zero",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/structural.rs::filter_dot_breakend_pairs",
+    "tools/vep-outputs-compare/src/rules/one_sided.rs::dot_breakend_and_coordinate_rows",
+    "tools/vep-sv-compare/src/masks/one_sided.rs::filter_dot_breakend_pairs",
+]

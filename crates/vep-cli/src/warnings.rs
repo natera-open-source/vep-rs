@@ -7,12 +7,18 @@
 //!
 //! Every warning of a run goes through one [`Sink`]: the `warn!` events of every
 //! crate, routed here by [`WarningLayer`], and the skipped-variant events the
-//! pipeline raises. A warning is written as `WARNING: <text>` to the warnings
+//! pipeline raises. An event raised while a record is annotated is held for
+//! the record (`holding_events`) and reaches the sink with the record's
+//! other warnings, as does one a plugin or a `--custom` source raises while a
+//! whole batch is annotated (`vep_core::warning_hold`). A warning is written
+//! as `WARNING: <text>` to the warnings
 //! file (`--warning_file`, default `<output_file>_warnings.txt`, the literal
 //! `STDERR` in any case for standard error) and echoed on standard error unless
 //! `--quiet`, so a standard-error target carries it twice; a text seen before, a
 //! trailing `line N` set aside, is written once. The warnings file is opened at
-//! the first warning, so a run without one leaves no file. A run that carries
+//! the first warning, so a run without one leaves no file. A process that never
+//! configures the sink, a program embedding the library, gets each warning once
+//! on standard error: the echo is a configured run's. A run that carries
 //! its warnings in its own output (`vep recode`) targets the sink's memory and
 //! reads them back when it ends. A built-in plugin's failures are held through
 //! the run and written at its end as one `Plugin '<name>' went wrong` line per
@@ -35,11 +41,12 @@ use std::sync::{LazyLock, Mutex, MutexGuard};
 use tracing::field::{Field, Visit};
 use tracing::{Event, Level, Subscriber};
 use tracing_subscriber::layer::{Context, Layer};
+use vep_core::warning_hold::RECORD_FIELD;
 
 use crate::config::CliError;
 
 /// The line shown in a skipped-variant warning is cut past this many bytes:
-/// `$maxChar = 50` (BaseVEP.pm:848) measured by `length` on a line Perl reads
+/// `$maxChar = 50` (BaseVEP.pm:848) measured by `length` on a line Ensembl VEP reads
 /// with no encoding layer, so it counts bytes.
 const QUOTED_LINE_BYTES: usize = 50;
 
@@ -49,7 +56,8 @@ const SKIPPED_LINE_WIDTH: usize = 40;
 /// Where warnings are written.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Target {
-    /// Standard error alone: `--warning_file STDERR`, or no run configured yet.
+    /// Standard error alone: `--warning_file STDERR`, which carries a warning
+    /// twice unless `--quiet`, or no run configured yet, which carries it once.
     Stderr,
     /// A file, opened at the first warning.
     File(PathBuf),
@@ -73,7 +81,13 @@ struct State {
     file: Option<File>,
     /// Why the warnings file could not be opened, kept for the run to fail on.
     failure: Option<String>,
-    quiet: bool,
+    /// The run tests a file target before its first record, as a file that
+    /// `--warning_file` names is tested; the file under the default name is
+    /// first met by the first warning.
+    file_tested: bool,
+    /// A warning is written to standard error as well as to the target: a
+    /// configured run without `--quiet`, never a sink no run configured.
+    echo: bool,
     /// `--input_data` is given: a skip names no line number.
     input_data: bool,
     seen: HashSet<String>,
@@ -103,13 +117,15 @@ struct PluginFailureCount {
 }
 
 impl Default for State {
-    /// Standard error, not quiet, nothing seen or skipped.
+    /// Standard error with no echo, so a process that never configures the
+    /// sink reads each warning once; nothing seen or skipped.
     fn default() -> Self {
         State {
             target: Target::Stderr,
             file: None,
             failure: None,
-            quiet: false,
+            file_tested: false,
+            echo: false,
             input_data: false,
             seen: HashSet::new(),
             skipped: Vec::new(),
@@ -132,7 +148,7 @@ impl Default for Sink {
 }
 
 impl Sink {
-    /// A sink writing to standard error, not quiet.
+    /// A sink no run has configured: each warning goes to standard error once.
     pub fn new() -> Self {
         Sink {
             state: Mutex::new(State::default()),
@@ -145,12 +161,20 @@ impl Sink {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
+    /// Puts the sink back as a process starts it: standard error with no echo,
+    /// nothing seen, skipped, collected or held, no file open.
+    #[cfg(test)]
+    fn forget_every_run(&self) {
+        *self.lock() = State::default();
+    }
+
     /// Points the sink at a run's target before the run starts; the state of an
-    /// earlier run (its seen set and skips) is dropped.
+    /// earlier run (its seen set and skips) is dropped. Unless `quiet`, the
+    /// configured sink echoes every warning on standard error.
     pub fn configure(&self, target: Target, quiet: bool, input_data: bool) {
         *self.lock() = State {
             target,
-            quiet,
+            echo: !quiet,
             input_data,
             ..State::default()
         };
@@ -160,7 +184,8 @@ impl Sink {
     /// already opens with `warn` in any case, a newline is appended unless present,
     /// a text seen before with the same dedup key is dropped, and the text goes to
     /// the target and to standard error unless quiet, so a standard-error target
-    /// carries it twice, as `print $fh` (:819) then `warn` (:821) write it.
+    /// carries it twice, as `print $fh` (:819) then `warn` (:821) write it. A
+    /// sink no run configured writes it to standard error once.
     pub fn warn(&self, text: &str) {
         self.warn_about_line(text, None);
     }
@@ -172,9 +197,10 @@ impl Sink {
     }
 
     /// Writes one warning text, finished ([`finished_text`]) and not seen before
-    /// (BaseVEP.pm:810-813), to the target, then to standard error unless quiet,
-    /// a standard-error target included; a text seen before is dropped. A file
-    /// that cannot be created or written is kept as the run's failure
+    /// (BaseVEP.pm:810-813), to the target, then to standard error in a
+    /// configured run that is not quiet, a standard-error target included; a
+    /// text seen before is dropped, and a sink no run configured echoes
+    /// none. A file that cannot be created or written is kept as the run's failure
     /// ([`Sink::failure`], the `ERROR: [output]` line the run ends with); the
     /// standard-error echo follows `--quiet` all the same. In the `vep`
     /// binary a text standard error refuses, as the target or as the echo,
@@ -203,7 +229,7 @@ impl Sink {
                 }
             }
         }
-        if !state.quiet {
+        if state.echo {
             crate::stderr::write(format_args!("{text}"));
         }
     }
@@ -235,6 +261,49 @@ impl Sink {
                 description: description.to_string(),
             });
         }
+    }
+
+    /// The file the warnings go to, created at the first warning; `None`
+    /// under any other target.
+    #[cfg(feature = "parquet")]
+    pub(crate) fn file(&self) -> Option<PathBuf> {
+        match &self.lock().target {
+            Target::File(path) => Some(path.clone()),
+            Target::Stderr | Target::Memory => None,
+        }
+    }
+
+    /// Has the run test the warnings file before it reads its first record
+    /// (`file_to_test`), as it tests the other files it names: asked, after
+    /// [`Sink::configure`], which withdraws the request, for a file that
+    /// `--warning_file` names. The file under the default name is left to
+    /// the first warning, which opens either file in Ensembl VEP
+    /// (BaseVEP.pm:817 calls `warning_fh`, 878-901), so a run that draws no
+    /// warning never meets it.
+    pub fn test_file_before_first_record(&self) {
+        self.lock().file_tested = true;
+    }
+
+    /// The warnings file the run tests before its first record: the file of
+    /// a sink asked to have it tested ([`Sink::test_file_before_first_record`])
+    /// while no warning has opened it. `None` under any other target, for a
+    /// file no caller asked the test for, once a warning opened the file, and
+    /// once one could not.
+    pub(crate) fn file_to_test(&self) -> Option<PathBuf> {
+        let state = self.lock();
+        match &state.target {
+            Target::File(path)
+                if state.file_tested && state.file.is_none() && state.failure.is_none() =>
+            {
+                Some(path.clone())
+            }
+            _ => None,
+        }
+    }
+
+    /// The skipped-variants file reserved for this run, written at its end.
+    pub(crate) fn skipped_variants_file(&self) -> Option<PathBuf> {
+        self.lock().skipped_file.clone()
     }
 
     /// The warnings-file failure of this run, if the file could not be written:
@@ -286,7 +355,7 @@ impl Sink {
     /// order (a built-in loaded twice is two plugins of one name, each with its
     /// own line, as Ensembl VEP loads one instance per `--plugin` argument),
     /// `reason` its error text and `failed_variants` the batch's variants it
-    /// annotated nothing on (OutputFactory.pm:2243-2245: `Plugin '<Class>' went
+    /// annotated nothing on (OutputFactory.pm:2252-2254: `Plugin '<Class>' went
     /// wrong: $@`, one `warning_msg` per failing line, which the seen set leaves
     /// as one line for a plugin dying the same way on every line). The
     /// failures of an instance are held and written at the run's end
@@ -369,9 +438,19 @@ impl Sink {
     }
 }
 
+/// The `output` component's error for a warnings file that cannot be created
+/// or written, with Ensembl VEP's text (BaseVEP.pm:894): the refusal of a run
+/// that tests the file before a warning opens it.
+pub(crate) fn warnings_file_unwritable(path: &Path) -> CliError {
+    CliError::new(
+        "output",
+        format!("Could not write to warnings file {}", path.display()),
+    )
+}
+
 /// The `output` component's error for a skipped-variants file that cannot be
 /// created or written, with Ensembl VEP's text.
-fn skipped_file_unwritable(path: &Path) -> CliError {
+pub(crate) fn skipped_file_unwritable(path: &Path) -> CliError {
     CliError::new(
         "output",
         format!(
@@ -490,37 +569,101 @@ fn skipped_row(skip: &Skipped) -> String {
 static GLOBAL: LazyLock<Sink> = LazyLock::new(Sink::new);
 
 /// The process's sink: configured by the binary for its run, written by every
-/// warning event and skip, standard error alone until configured.
+/// warning event and skip, and until configured standard error alone, one
+/// copy of each warning.
 pub fn global() -> &'static Sink {
+    // A unit test that reaches the sink with no guard can write into the
+    // warnings file of the test that holds one.
+    #[cfg(test)]
+    assert!(
+        under_sink_test_guard(),
+        "a unit test that reaches the process-wide sink holds `sink_test_guard`"
+    );
     &GLOBAL
 }
 
-/// The guard a test that reads the process-wide sink, or reserves its
-/// skipped-variants file, holds for its run, so such tests run in turn. A test
-/// that only reads what one record reports gives it a [`Sink`] of its own
-/// instead, which no other test can reach.
+/// The lock [`sink_test_guard`] hands out.
+#[cfg(test)]
+static SINK_TESTS: Mutex<()> = Mutex::new(());
+
+/// The thread of the test that took [`sink_test_guard`] last.
+#[cfg(test)]
+static SINK_TEST_THREAD: Mutex<Option<std::thread::ThreadId>> = Mutex::new(None);
+
+/// The guard a test holds for its run when it, or the code it runs, reaches
+/// the process-wide sink: to write a warning or a skip, to write the plugin
+/// failures the sink holds, to read what the sink holds or to reserve its
+/// skipped-variants file. Such tests run in turn, and [`global`] panics in a
+/// test that reaches the sink without the guard. The holder finds the sink as
+/// a process starts it, whatever the holder before it left there, so no test
+/// puts the sink back. A test that only reads what one record reports gives
+/// it a [`Sink`] of its own instead, which no other test can reach.
 #[cfg(test)]
 pub(crate) fn sink_test_guard() -> MutexGuard<'static, ()> {
-    static SINK_TESTS: Mutex<()> = Mutex::new(());
-    SINK_TESTS
+    let guard = SINK_TESTS
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    *SINK_TEST_THREAD
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(std::thread::current().id());
+    GLOBAL.forget_every_run();
+    guard
+}
+
+/// Whether the caller reaches the process-wide sink under [`sink_test_guard`]:
+/// a test holds the guard, and a caller on a test's own thread, which the
+/// test harness names `<module>::tests::<test>`, is that test. A thread a test
+/// starts carries no such name and is taken for the holder's.
+#[cfg(test)]
+fn under_sink_test_guard() -> bool {
+    if !matches!(
+        SINK_TESTS.try_lock(),
+        Err(std::sync::TryLockError::WouldBlock)
+    ) {
+        return false;
+    }
+    let caller = std::thread::current();
+    let on_a_test_thread = caller.name().is_some_and(|name| name.contains("::tests::"));
+    let holder = *SINK_TEST_THREAD
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    !on_a_test_thread || holder == Some(caller.id())
+}
+
+/// Runs `work` with every `WARN` event this thread raises kept from the sink,
+/// and returns those events, in the order raised, beside what `work` returned
+/// (`vep_core::warning_hold::holding`, the record each event names set
+/// aside). The caller reports them where the work stands among the run's
+/// warnings: a record's with the record's other warnings, so a warning the
+/// annotation of a record raises is listed in input order and never for a
+/// batch the run did not reach. An event another thread raises is not held; a
+/// call inside another holds its own events and leaves the outer call's as
+/// they were; the events of work that unwinds are dropped with it.
+pub(crate) fn holding_events<T>(work: impl FnOnce() -> T) -> (T, Vec<String>) {
+    let (result, held) = vep_core::warning_hold::holding(work);
+    (result, held.into_iter().map(|held| held.text).collect())
 }
 
 /// The `tracing` layer that hands every `WARN` event to the global sink as one
-/// line: the message, then every other field as ` name=value`.
+/// line, the message, then every other field as ` name=value`, or to the hold
+/// the thread raising it is inside (`vep_core::warning_hold`). The field
+/// [`RECORD_FIELD`] names the input record the event is about: it travels
+/// with a held event and is no part of the line.
 pub struct WarningLayer;
 
 #[derive(Default)]
 struct EventText {
     message: String,
     fields: Vec<(String, String)>,
+    input_record: u64,
 }
 
 impl EventText {
     fn record(&mut self, field: &Field, value: String) {
         if field.name() == "message" {
             self.message = value;
+        } else if field.name() == RECORD_FIELD {
+            self.input_record = value.parse().unwrap_or(0);
         } else {
             self.fields.push((field.name().to_string(), value));
         }
@@ -545,12 +688,12 @@ impl Visit for EventText {
     }
 }
 
-/// One event as a warning line: its message, then every other field as
-/// ` name=value`.
-fn event_line(event: &Event<'_>) -> String {
+/// One event as the input record it names (0 for none) and its warning line:
+/// its message, then every other field as ` name=value`.
+fn event_line(event: &Event<'_>) -> (u64, String) {
     let mut text = EventText::default();
     event.record(&mut text);
-    text.line()
+    (text.input_record, text.line())
 }
 
 impl<S: Subscriber> Layer<S> for WarningLayer {
@@ -558,18 +701,21 @@ impl<S: Subscriber> Layer<S> for WarningLayer {
         if *event.metadata().level() != Level::WARN {
             return;
         }
-        global().warn(&event_line(event));
+        let (input_record, line) = event_line(event);
+        if let Err(line) = vep_core::warning_hold::offer(input_record, line) {
+            global().warn(&line);
+        }
     }
 }
 
 /// The path of the warnings file beside an output file: `<output_file>_warnings.txt`
 /// (BaseVEP.pm:890), `STDOUT_warnings.txt` for `-o STDOUT` as the user spelled it.
-pub fn default_warning_file(output_file: &str) -> String {
+pub(crate) fn default_warning_file(output_file: &str) -> String {
     format!("{output_file}_warnings.txt")
 }
 
 /// The target a `--warning_file` value names: standard error for the literal
-/// `stderr` in any case (BaseVEP.pm:884), else the file.
+/// `stderr` in any case (BaseVEP.pm:885), else the file.
 pub fn target_for(warning_file: &str) -> Target {
     if warning_file.eq_ignore_ascii_case("stderr") {
         Target::Stderr
@@ -684,6 +830,37 @@ mod tests {
         assert!(!path.exists());
         sink.warn("now");
         assert!(path.is_file());
+    }
+
+    /// The run is handed a warnings file to test before its first record only
+    /// where the sink was asked to have it tested, as a file `--warning_file`
+    /// names is: the file under the default name is left to the first warning
+    /// (BaseVEP.pm:817), and a file a warning opened, or could not open, is
+    /// not handed over again. Configuring the sink for another run withdraws
+    /// the request.
+    #[test]
+    fn the_warnings_file_is_handed_to_the_test_only_where_it_was_asked_for() {
+        let dir = tempfile::tempdir().unwrap();
+        let (sink, path) = file_sink(dir.path());
+        assert_eq!(sink.file_to_test(), None);
+        sink.test_file_before_first_record();
+        assert_eq!(sink.file_to_test(), Some(path.clone()));
+        sink.warn("now");
+        assert!(path.is_file());
+        assert_eq!(sink.file_to_test(), None);
+
+        let unwritable = dir.path().join("absent").join("w.txt");
+        sink.configure(Target::File(unwritable.clone()), true, false);
+        assert_eq!(sink.file_to_test(), None);
+        sink.test_file_before_first_record();
+        assert_eq!(sink.file_to_test(), Some(unwritable));
+        sink.warn("now");
+        assert!(sink.failure().is_some());
+        assert_eq!(sink.file_to_test(), None);
+
+        sink.configure(Target::Stderr, true, false);
+        sink.test_file_before_first_record();
+        assert_eq!(sink.file_to_test(), None);
     }
 
     /// `skipped_variant_msg`: the line collapsed to single spaces and cut to 46
@@ -857,9 +1034,24 @@ mod tests {
         }
     }
 
-    /// `quoted_line` counts bytes, as `length` and `substr` do on Perl's undecoded
-    /// line (BaseVEP.pm:848-850): a 60-byte line of `é`s (two bytes each) is cut at
-    /// byte 46, 23 characters, plus `...`; a line whose byte 46 falls inside a
+    /// A sink no run configured echoes no warning beside its standard-error
+    /// copy; a configured one echoes each unless `--quiet`, whatever its target.
+    #[test]
+    fn only_a_configured_sink_that_is_not_quiet_echoes() {
+        let sink = Sink::new();
+        assert_eq!(sink.lock().target, Target::Stderr);
+        assert!(!sink.lock().echo);
+        for target in [Target::Stderr, Target::Memory] {
+            sink.configure(target.clone(), false, false);
+            assert!(sink.lock().echo, "{target:?}");
+            sink.configure(target.clone(), true, false);
+            assert!(!sink.lock().echo, "{target:?} under --quiet");
+        }
+    }
+
+    /// `quoted_line` counts bytes, as `length` and `substr` do on Ensembl VEP's
+    /// undecoded line (BaseVEP.pm:848-850): a 60-byte line of `é`s (two bytes each) is
+    /// cut at byte 46, 23 characters, plus `...`; a line whose byte 46 falls inside a
     /// character is cut at the boundary before it, where Perl's `substr` keeps the
     /// character's lone lead byte (`docs/divergences/skipped-variants-file-header.md`);
     /// 50 bytes pass whole.
@@ -880,7 +1072,8 @@ mod tests {
         );
         // A VCF record whose ID is `xy` and twenty `é`s collapses to 59 bytes, byte 46
         // the second byte of the nineteenth `é`: eighteen are kept, where Perl's
-        // `substr` writes the nineteenth's lead byte before the ellipsis.
+        // `substr` in Ensembl VEP writes the nineteenth's lead byte before the
+        // ellipsis.
         let split_id = format!("21\t100\txy{}\tA\tG\t.\t.\t.", "é".repeat(20));
         assert_eq!(split_id.replace('\t', " ").len(), 59);
         assert_eq!(
@@ -928,7 +1121,7 @@ mod tests {
         struct Capture(std::sync::Arc<Mutex<Vec<String>>>);
         impl<S: Subscriber> Layer<S> for Capture {
             fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
-                self.0.lock().unwrap().push(event_line(event));
+                self.0.lock().unwrap().push(event_line(event).1);
             }
         }
         use tracing_subscriber::layer::SubscriberExt;
@@ -942,6 +1135,139 @@ mod tests {
             lines.lock().unwrap().as_slice(),
             ["could not read x chr=21 pos=100", "plain"]
         );
+    }
+
+    /// Runs `work` under a subscriber that is [`WarningLayer`] alone, with the
+    /// process-wide sink holding its warnings in memory, and returns what the
+    /// sink took.
+    fn sink_lines_of(work: impl FnOnce()) -> Vec<String> {
+        use tracing_subscriber::layer::SubscriberExt;
+        global().configure(Target::Memory, true, false);
+        tracing::subscriber::with_default(tracing_subscriber::registry().with(WarningLayer), work);
+        global()
+            .take_collected()
+            .into_iter()
+            .map(|(_, text)| text)
+            .collect()
+    }
+
+    /// The events a thread raises inside [`holding_events`] come back from the
+    /// call in the order raised, fields rendered, and none reaches the sink;
+    /// the events before and after the call reach it as they are raised.
+    #[test]
+    fn held_events_are_returned_in_order_and_kept_from_the_sink() {
+        let _guard = sink_test_guard();
+        let mut held = None;
+        let sink = sink_lines_of(|| {
+            tracing::warn!("before");
+            held = Some(holding_events(|| {
+                tracing::warn!("first");
+                tracing::warn!(model = "NM_1.1", "second");
+                tracing::info!("not a warning");
+                7
+            }));
+            tracing::warn!("after");
+        });
+        assert_eq!(
+            held.unwrap(),
+            (
+                7,
+                vec!["first".to_string(), "second model=NM_1.1".to_string()]
+            )
+        );
+        assert_eq!(sink, ["WARNING: before\n", "WARNING: after\n"]);
+    }
+
+    /// The field that names an event's input record is no part of its line,
+    /// held or written: a held event carries the record beside its text, in
+    /// the order raised, and an event raised outside a hold reaches the sink
+    /// as its message and its other fields.
+    #[test]
+    fn the_record_field_travels_with_a_held_event_and_is_never_written() {
+        use vep_core::warning_hold::{holding, Held};
+        let _guard = sink_test_guard();
+        let mut held = Vec::new();
+        let sink = sink_lines_of(|| {
+            ((), held) = holding(|| {
+                tracing::warn!(input_record = 12u64, "of record twelve");
+                tracing::warn!("of no record");
+                tracing::warn!(input_record = 3u64, file = "x.gff", "of record three");
+            });
+            tracing::warn!(input_record = 5u64, file = "x.gff", "outside a hold");
+        });
+        let held_as = |input_record: u64, text: &str| Held {
+            input_record,
+            text: text.to_string(),
+        };
+        assert_eq!(
+            held,
+            [
+                held_as(12, "of record twelve"),
+                held_as(0, "of no record"),
+                held_as(3, "of record three file=x.gff"),
+            ]
+        );
+        assert_eq!(sink, ["WARNING: outside a hold file=x.gff\n"]);
+    }
+
+    /// A call inside another holds its own events and leaves the outer call's
+    /// as they were, whether it returns or unwinds; the events of a call that
+    /// unwinds are dropped, and once the outermost call has ended, by either
+    /// way, an event reaches the sink again.
+    #[test]
+    fn a_hold_inside_another_keeps_its_own_events() {
+        let _guard = sink_test_guard();
+        let mut outer = Vec::new();
+        let mut inner = Vec::new();
+        let sink = sink_lines_of(|| {
+            ((), outer) = holding_events(|| {
+                tracing::warn!("outer first");
+                ((), inner) = holding_events(|| tracing::warn!("inner"));
+                let unwound = std::panic::catch_unwind(|| {
+                    holding_events(|| {
+                        tracing::warn!("dropped");
+                        panic!("the held work unwinds");
+                    })
+                });
+                assert!(unwound.is_err());
+                tracing::warn!("outer second");
+            });
+            let unwound = std::panic::catch_unwind(|| {
+                holding_events(|| {
+                    tracing::warn!("dropped too");
+                    panic!("the held work unwinds");
+                })
+            });
+            assert!(unwound.is_err());
+            tracing::warn!("after");
+        });
+        assert_eq!(inner, ["inner"]);
+        assert_eq!(outer, ["outer first", "outer second"]);
+        assert_eq!(sink, ["WARNING: after\n"]);
+    }
+
+    /// An event another thread raises while this one is inside
+    /// [`holding_events`] is not held: it reaches the sink.
+    #[test]
+    fn another_threads_event_is_not_held() {
+        use tracing_subscriber::layer::SubscriberExt;
+        let _guard = sink_test_guard();
+        let mut held = Vec::new();
+        let sink = sink_lines_of(|| {
+            ((), held) = holding_events(|| {
+                tracing::warn!("this thread");
+                std::thread::scope(|scope| {
+                    scope.spawn(|| {
+                        tracing::subscriber::with_default(
+                            tracing_subscriber::registry().with(WarningLayer),
+                            || tracing::warn!("another thread"),
+                        );
+                    });
+                });
+            });
+        });
+        assert_eq!(held, ["this thread"]);
+        assert_eq!(sink, ["WARNING: another thread\n"]);
     }
 
     /// A warnings file that cannot be created is the run's failure, surfaced by
@@ -972,5 +1298,70 @@ mod tests {
         assert_eq!(target_for("stderr"), Target::Stderr);
         assert_eq!(target_for("StdErr"), Target::Stderr);
         assert_eq!(target_for("w.txt"), Target::File(PathBuf::from("w.txt")));
+    }
+
+    /// A unit test that holds no guard cannot reach the process-wide sink,
+    /// whether or not another test holds one; the test that holds the guard
+    /// reaches it, and so does a thread that test starts.
+    #[test]
+    fn a_test_without_the_guard_cannot_reach_the_process_wide_sink() {
+        let reaches_the_sink = || {
+            global();
+        };
+        assert!(std::panic::catch_unwind(reaches_the_sink).is_err());
+
+        let _in_turn = sink_test_guard();
+        reaches_the_sink();
+        std::thread::spawn(reaches_the_sink).join().unwrap();
+        let another_test = std::thread::Builder::new()
+            .name("module::tests::another_test".to_string())
+            .spawn(reaches_the_sink)
+            .unwrap();
+        assert!(another_test.join().is_err());
+    }
+
+    /// The holder of the guard finds the process-wide sink as a process starts
+    /// it, whatever the holder before it left there: a target in memory or in
+    /// a file, an echo, a warnings file open or one that could not be opened,
+    /// a reserved skipped-variants file, and warnings, skips and plugin
+    /// failures held.
+    #[test]
+    fn the_guard_hands_over_the_process_wide_sink_as_a_process_starts_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let skipped_file = dir.path().join("skipped.txt");
+        let leave_a_run_behind = |target: Target| {
+            let _earlier = sink_test_guard();
+            let sink = global();
+            sink.configure(target, false, true);
+            sink.reserve_skipped_variants_file(skipped_file.to_str().unwrap(), false)
+                .unwrap();
+            sink.warn("left behind");
+            sink.skipped_variant("left behind", Some(3), Some("21 100"));
+            sink.plugin_failure("Left", 0, "behind", 1);
+        };
+        for target in [
+            Target::Memory,
+            Target::File(dir.path().join("warnings.txt")),
+            Target::File(dir.path().join("absent").join("warnings.txt")),
+        ] {
+            leave_a_run_behind(target.clone());
+            let _guard = sink_test_guard();
+            let state = global().lock();
+            assert_eq!(state.target, Target::Stderr, "after {target:?}");
+            assert!(!state.echo && !state.input_data, "after {target:?}");
+            assert!(
+                state.file.is_none() && state.failure.is_none(),
+                "after {target:?}"
+            );
+            assert!(
+                state.seen.is_empty() && state.collected.is_empty(),
+                "after {target:?}"
+            );
+            assert!(
+                state.skipped.is_empty() && state.skipped_file.is_none(),
+                "after {target:?}"
+            );
+            assert!(state.plugin_failures.is_empty(), "after {target:?}");
+        }
     }
 }

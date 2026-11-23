@@ -1,12 +1,12 @@
 # A stop codon written as retained although the protein before it changes
 
-**The defect in one sentence.** For an insertion or deletion at a stop codon, Ensembl VEP 116.2 writes the allele into the coding sequence and the 3' UTR after it and reads three bases alone: the ones that then stand where the stop codon stood, the old stop position. Where they spell a stop codon, as when a deletion brings bases of the 3' UTR there, the row is written `stop_retained_variant`, although a residue before it changes or an earlier stop codon ends the protein. On such a row vep-rs writes `coding_sequence_variant`, or `frameshift_variant`, with `stop_gained` where the changed peptide gains a stop.
+**The defect in one sentence.** For an insertion or deletion at a stop codon, Ensembl VEP 116.3 writes the allele into the coding sequence and the 3' UTR after it and reads three bases alone: the ones that then stand where the stop codon stood, the old stop position. Where they spell a stop codon, as when a deletion brings bases of the 3' UTR there, the row is written `stop_retained_variant`, although a residue before it changes or an earlier stop codon ends the protein. On such a row vep-rs writes `coding_sequence_variant`, or `frameshift_variant`, with `stop_gained` where the changed peptide gains a stop.
 
 **Why this is a defect.** `stop_retained_variant` says that the stop codon stays, and Ensembl VEP keeps `frameshift_variant`, `stop_gained` and `coding_sequence_variant` off a row that carries it. On these rows the edited sequence does not give the reference protein. All but 2 are rows of deletions and of replacements, records that delete bases and insert another number in their place: 101 rows of the genome-wide ClinVar dataset on GRCh38 and 27 on GRCh37. On 99 of the 101 and on all 27, the record's span holds the whole stop codon and ends in the 3' UTR. There the stop codon the row calls retained is deleted, and the one the test finds is made of 3' UTR bases.
 
-**What vep-rs does instead.** vep-rs makes the same test and asks one thing more: whether every codon before the old stop position reads the reference's residue in the edited sequence. It writes `stop_retained_variant` only where both hold. Elsewhere the row carries the terms that Ensembl VEP's other tests give once the stop codon is not read as retained: `coding_sequence_variant`, or `frameshift_variant`, with `stop_gained` where the changed peptide gains a stop.
+**What vep-rs does instead.** On a transcript whose stop codon stands, vep-rs makes the same test and asks one thing more: whether every codon before the old stop position reads the reference's residue in the edited sequence. It writes `stop_retained_variant` only where both hold. Elsewhere the row carries the terms that Ensembl VEP's other tests give once the stop codon is not read as retained: `coding_sequence_variant`, or `frameshift_variant`, with `stop_gained` where the changed peptide gains a stop.
 
-**Where it is in Ensembl VEP's source** (`ensembl-variation` at release/116, the module the Ensembl VEP 116.2 image holds):
+**Where it is in Ensembl VEP's source** (`ensembl-variation` at release/116, the module the Ensembl VEP 116.3 image holds):
 
 - `Bio/EnsEMBL/Variation/Utils/VariationEffect.pm`, lines 1313-1318, `stop_retained`: where the alternate peptide is undefined, empty or holds an `X`, the term is written for an allele that changes the length, overlaps the stop codon and passes `!_ins_del_stop_altered_cil(@_)`.
 - The same file, lines 1488-1539, `_ins_del_stop_altered_cil`: line 1508 makes the test only for a span with both cDNA coordinates and a CDS start. Line 1521 writes the allele into the coding sequence followed by the 3' UTR.
@@ -26,7 +26,7 @@ In the genome-wide ClinVar dataset the two engines' rows differ in this way on 1
 
 The rows by the terms that differ:
 
-| Ensembl VEP 116.2 | vep-rs | GRCh38 | GRCh37 |
+| Ensembl VEP 116.3 | vep-rs | GRCh38 | GRCh37 |
 | --- | --- | --- | --- |
 | `stop_retained_variant` | `coding_sequence_variant` | 99 | 27 |
 | `stop_retained_variant` | `frameshift_variant` | 1 | 0 |
@@ -34,17 +34,17 @@ The rows by the terms that differ:
 | `inframe_insertion,stop_retained_variant` | `stop_gained,frameshift_variant` | 1 | 0 |
 | `protein_altering_variant,stop_retained_variant` | `stop_gained,frameshift_variant` | 1 | 0 |
 
-The committed golden corpora hold 37 rows of the class, in seven corpora. The worked record below is one of them.
+Nine committed golden corpora record rows of the class, the worked record's row among them.
 
 Tuple, pair, set aside, charged and the other scoring terms are defined in [How to read the counts](../intended-divergences.md#how-to-read-the-counts).
 
 ## 1. A deletion of the last sense codon and the stop codon's first base, on ENST00001021815
 
-**In short.** `21 26841549 rs761640407 CATTT C` on GRCh38 deletes the four bases 21:26841550-26841553 from the reverse-strand transcript ENST00001021815. They are the last sense codon, c.1228-1230, and the first base of the stop codon, c.1231. In the edited sequence residue 410 reads glutamate where the reference reads lysine, and the three bases after it are 3' UTR bases that spell a stop codon. Ensembl VEP 116.2 reads those three bases alone and writes `inframe_deletion,stop_retained_variant,NMD_transcript_variant` with `IMPACT=MODERATE`. vep-rs writes `frameshift_variant,NMD_transcript_variant` with `IMPACT=HIGH`. Every other column of the row is equal.
+**In short.** `21 26841549 rs761640407 CATTT C` on GRCh38 deletes the four bases 21:26841550-26841553 from the reverse-strand transcript ENST00001021815. They are the last sense codon, c.1228-1230, and the first base of the stop codon, c.1231. In the edited sequence residue 410 reads glutamate where the reference reads lysine, and the three bases after it are 3' UTR bases that spell a stop codon. Ensembl VEP 116.3 reads those three bases alone and writes `inframe_deletion,stop_retained_variant,NMD_transcript_variant` with `IMPACT=MODERATE`. vep-rs writes `frameshift_variant,NMD_transcript_variant` with `IMPACT=HIGH`. Every other column of the row is equal.
 
 ### 1.1 What a reader needs to know first
 
-A transcript's coding sequence ends with its stop codon, the three bases at which translation ends. The bases after it are the 3' UTR. A coding base is counted from the first base of the coding sequence, and residue n is translated from coding bases 3n - 2 to 3n. This page calls the last three coding positions of the reference the old stop position: after an insertion or deletion, other bases can stand there.
+A transcript's complete coding sequence ends with its stop codon, the three bases at which translation ends. The bases after it are the 3' UTR. A coding base is counted from the first base of the coding sequence, and residue n is translated from coding bases 3n - 2 to 3n. This page calls the last three coding positions of the reference the old stop position: after an insertion or deletion, other bases can stand there.
 
 `stop_retained_variant` says that the stop codon stays: the variant touches the codon, and the edited sequence gives the reference protein residue for residue.
 
@@ -79,7 +79,7 @@ The record needs no flag beyond the cache.
 
 ### 1.3 What each engine writes
 
-The row on ENST00001021815 in the default format. Ensembl VEP 116.2:
+The row on ENST00001021815 in the default format. Ensembl VEP 116.3:
 
 ```
 rs761640407	21:26841550-26841553	-	ENSG00000154734	ENST00001021815	Transcript	inframe_deletion,stop_retained_variant,NMD_transcript_variant	1683-1686	1228-1231	410-411	K*/X	AAATga/ga	-	IMPACT=MODERATE;STRAND=-1
@@ -132,15 +132,15 @@ vep -i record.vcf -o out.txt --offline \
 grep ENST00001021815 out.txt
 ```
 
-The committed GRCh38 cache holds the transcript. vep-rs writes `frameshift_variant,NMD_transcript_variant` and `IMPACT=HIGH`. Ensembl VEP 116.2 takes the record with the cache options of [Reproducing these examples](reproducing.md) and its GRCh38 cache, with no further flag. It writes `inframe_deletion,stop_retained_variant,NMD_transcript_variant` and `IMPACT=MODERATE`.
+The committed GRCh38 cache holds the transcript. vep-rs writes `frameshift_variant,NMD_transcript_variant` and `IMPACT=HIGH`. Ensembl VEP 116.3 takes the record with the cache options of [Reproducing these examples](reproducing.md) and its GRCh38 cache, with no further flag. It writes `inframe_deletion,stop_retained_variant,NMD_transcript_variant` and `IMPACT=MODERATE`.
 
 The entry's reproduction, `scripts/divergences/reproductions/stop_retained_three_base_stop_codon_test.toml`, runs the record on both engines. It holds the row's location, terms, three positions and impact to their recorded values.
 
 ### 1.7 How the comparator treats this class
 
-The golden corpora record the class. The golden corpus builder (`scripts/golden/build_golden_corpus.py`) classes a corpus row of the shape under the entry's name. The manifests of seven golden corpora list 37 such rows in their `divergences`, each with the terms vep-rs writes. The golden harness and the format comparator check vep-rs's row against a listed row in place of Ensembl VEP's, as [How to read the counts](../intended-divergences.md#how-to-read-the-counts) describes.
+The golden corpora record the class. The golden corpus builder (`tools/vep-golden-corpus`) classes a corpus row of the shape under the entry's name. The manifests of nine golden corpora list 42 such rows in their `divergences`, each with the terms vep-rs writes. Of the 42, 33 are rows of the corpora's default runs, and 9 are rows that four flag sets of three of those corpora write for the same records. The golden harness and the format comparator check vep-rs's row against a listed row in place of Ensembl VEP's, as [How to read the counts](../intended-divergences.md#how-to-read-the-counts) describes.
 
-The format comparator (`scripts/concordance/compare_vep_formats.py`) compares one Ensembl VEP output with one vep-rs output, every field of every row. A comparison case is one such comparison: an input, the flags and the classes it applies. Where a comparison case names the class `stop_retained_three_base_stop_codon_test`, the comparator sets a row of the class aside and counts it once under that name. The class's predicate, `stop_retained_three_base_stop_codon_test_pair`, recognises the row's shape. Of the columns that differ, the predicate reads the `Consequence` alone. Of Ensembl VEP 116.2's rows against vep-rs's for the genome-wide ClinVar dataset, the class sets aside 103 rows on GRCh38 and 27 on GRCh37.
+The format comparator (`tools/vep-formats-compare`) compares one Ensembl VEP output with one vep-rs output, every field of every row. A comparison case is one such comparison: an input, the flags and the classes it applies. Where a comparison case names the class `stop_retained_three_base_stop_codon_test`, the comparator sets a row of the class aside and counts it once under that name. The class's predicate, `stop_retained_three_base_stop_codon_test_pair`, recognises the row's shape. Of the columns that differ, the predicate reads the `Consequence` alone. Of Ensembl VEP 116.3's rows against vep-rs's for the genome-wide ClinVar dataset, the class sets aside 103 rows on GRCh38 and 27 on GRCh37.
 
 On a row the class sets aside, the comparator also sets aside the fields that follow the two sets of terms, by the rule `term_pair_following_cell`. The rule takes a field when its two values are the ones the two sets of terms give, so that the terms explain the field's difference.
 
@@ -167,10 +167,16 @@ The fields set aside on the 103 and 27 rows of `stop_retained_three_base_stop_co
 
 On the 92 and 21 rows the impacts are `LOW` in Ensembl VEP's row against `MODIFIER` in vep-rs's on 88 and 21. On GRCh38 they are also `LOW` against `HIGH` on 1 row and `MODERATE` against `HIGH` on 3. On the other 11 and 6 rows of the class the two impacts are equal. The rule names no other field. Every other field of the row is compared, and a difference in one is reported.
 
-Rows beside the shape are no part of this entry. A row whose stop codon test is not made is the shape of [`stop_retained_without_stop_codon_test`](stop-retained-without-stop-codon-test.md). A row whose span holds the whole stop codon and lacks a cDNA position or a CDS start is the shape of [`stop_codon_removed_without_stop_codon_test`](stop-codon-removed-without-stop-codon-test.md). A substitution's row, a row on which vep-rs keeps the term, and a row with any other differing term are reported as differences.
+Rows beside the shape are no part of this entry. A row whose stop codon test is not made is the shape of [`stop_retained_without_stop_codon_test`](stop-retained-without-stop-codon-test.md), or of [`stop_codon_settled_before_unknown_bases`](stop-codon-settled-before-unknown-bases.md) where vep-rs writes `stop_gained`. A row whose span holds the whole stop codon and lacks a cDNA position or a CDS start is the shape of [`stop_codon_removed_without_stop_codon_test`](stop-codon-removed-without-stop-codon-test.md). A row on a transcript that shows no stop codon is the shape of [`stop_codon_overlap_without_stop_codon`](stop-codon-overlap-without-stop-codon.md). A substitution's row, a row on which vep-rs keeps the term, and a row with any other differing term are reported as differences.
 
-The SNP/indel comparator (`scripts/concordance/compare_vep_outputs.py`) compares tuples: a row's Location, Allele, Feature, Feature_type and set of `Consequence` terms. Two tuples, one from each engine, that differ in the set of terms alone are a pair. The comparator's 116.2 registry holds a pair rule under the class's name, with the same predicate, `stop_retained_three_base_stop_codon_test_pair`. The rule sets aside both tuples of a pair whose sets differ in one of two ways. Ensembl VEP's holds `stop_retained_variant` where vep-rs's holds `coding_sequence_variant`, or Ensembl VEP's holds it, alone or beside an in-frame or protein-altering term, where vep-rs's holds `frameshift_variant` with or without `stop_gained`.
+A comparison that is given the cache vep-rs annotated with, the candidate's cache, reads the row's transcript there too. The class then takes a row only where that record holds a whole stop codon at the coding end. It takes none where polyadenylation completes the stop codon, where no stop codon stands, or where the cache gives no record for the row. A comparison that is given no cache reads the two rows alone.
+
+The SNP/indel comparator (`tools/vep-outputs-compare`) compares tuples: a row's Location, Allele, Feature, Feature_type and set of `Consequence` terms. Two tuples, one from each engine, that differ in the set of terms alone are a pair. The comparator's 116.3 registry holds a pair rule under the class's name, with the same predicate, `stop_retained_three_base_stop_codon_test_pair`. The rule sets aside both tuples of a pair whose sets differ in one of two ways. Ensembl VEP's holds `stop_retained_variant` where vep-rs's holds `coding_sequence_variant`, or Ensembl VEP's holds it, alone or beside an in-frame or protein-altering term, where vep-rs's holds `frameshift_variant` with or without `stop_gained`.
 
 A tuple carries no cDNA or CDS position, so the rule reads the rows of the two outputs that carry the pair's two tuples. The Allele, the record's alleles in the first column and the Location show whether the pair is an insertion's or a deletion's. `cDNA_position` and `CDS_position` show a row's cDNA positions and its CDS start. The pair is set aside when it is an insertion's or a deletion's and every such row shows that the test is made: both cDNA positions, a CDS start and an allele of `-` or the four bases alone.
 
-`tools/vep-outputs-compare`, the Rust build of this comparator, applies the same rule to the same rows. The structural-variant comparator (`scripts/validation/compare_sv_concordance.py`) applies it to the pairs of the structural-variant sets.
+Where the first column spells alleles and none of them is the row's Allele, the Location decides as it does under an identifier: the row is an insertion's or a deletion's when its Allele has another length than the Location's span.
+
+Given the candidate's cache, the rule sets the pair aside only where the transcript's record holds a whole stop codon at the coding end.
+
+The structural-variant comparator (`tools/vep-sv-compare`) applies it to the pairs of the structural-variant sets.

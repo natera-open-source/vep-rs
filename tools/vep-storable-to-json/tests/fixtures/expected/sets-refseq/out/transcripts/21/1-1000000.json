@@ -1,0 +1,1 @@
+[{"biotype":"protein_coding","dbID":1,"end":2000,"gene_hgnc_id":"HGNC:1","gene_stable_id":"ENSG00000000001","gene_symbol":"GENE1","gene_symbol_source":"HGNC","source":"ensembl","stable_id":"ENST00000000001","start":1000,"strand":1,"variation_effect_feature_cache":{"codon_table":1,"seq_edits":[]},"version":1}]

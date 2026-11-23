@@ -6,11 +6,11 @@
 
 **What vep-rs does instead.** vep-rs hands each split allele its own trimmed span and alleles in every output format, so a split record's rows carry what each allele would carry as a record of its own.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2, `VEP_plugins` at release/116):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3, `VEP_plugins` at release/116):
 
 - `Bio/EnsEMBL/VEP/InputBuffer.pm`, lines 638-718, `split_variants`: a multi-allelic record one of whose alleles trims becomes one feature per allele on its trimmed span, the first marked `first`, the others `merge_with`.
-- `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 2272-2354, `rejoin_variants_in_InputBuffer`: lines 2289 and 2303 build each split feature's rows once, a pass whose plugin results are discarded. Lines 2291-2293 restore the first feature's allele string, start and end to the record's. Line 2314 points every later allele's transcript, regulatory and motif overlaps at that feature, and lines 2323-2338 its intergenic overlap alleles.
-- `Bio/EnsEMBL/VEP/OutputFactory.pm`, line 2226, `run_plugins`: the output pass hands each plugin the overlap allele, whose variation feature is now the rejoined one.
+- `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 2281-2363, `rejoin_variants_in_InputBuffer`: lines 2298 and 2312 build each split feature's rows once, a pass whose plugin results are discarded. Lines 2300-2302 restore the first feature's allele string, start and end to the record's. Line 2323 points every later allele's transcript, regulatory and motif overlaps at that feature, and lines 2332-2347 its intergenic overlap alleles.
+- `Bio/EnsEMBL/VEP/OutputFactory.pm`, line 2235, `run_plugins`: the output pass hands each plugin the overlap allele, whose variation feature is now the rejoined one.
 - `AVI.pm`, lines 129-134, `run`: the plugin reads `start`, `end` and `ref_allele_string` from that feature and returns nothing unless the span is one base.
 - `OpenTargets.pm`, lines 348-381, `run`: the plugin reads the feature's `alt_alleles` (line 349), its window (line 350) and its `ref_allele_string` and `start` (lines 378-380), and matches an export row against them.
 - The same read sits in the other ported plugins. In `AlphaMissense.pm` it is lines 245-268, `BayesDel.pm` lines 127-144, `CADD.pm` lines 203-213, `ClinPred.pm` lines 108-120, `dbNSFP.pm` lines 294-336, `dbscSNV.pm` lines 146-166, `DosageSensitivity.pm` lines 156-163 and `LOEUF.pm` lines 171-187. In `MaxEntScan.pm` it is lines 259-265, `PrimateAI.pm` lines 158-178, `REVEL.pm` lines 164-181, `SpliceAI.pm` lines 231-268, `SpliceVault.pm` lines 155-170, `TranscriptAnnotator.pm` lines 212-229 and `UTRAnnotator.pm` lines 147-153.
@@ -22,11 +22,11 @@
 
 Two sibling classes describe the same rejoin through other reads: [`minimal_plugin_value_follows_first_allele`](../plugins/ancestral-allele.md#1-the-ancestral-allele-printed-for-a-later-allele-of-a---minimal-split-record), a value cached on the first allele's feature, and [`nmd_minimal_rejoined_end`](nmd-minimal-rejoined-end.md), the rejoined end a rule tests.
 
-**How often the shape occurs.** Tier 2: 1,422 of the population cuts' records (91 per million) are multi-allelic records one of whose alleles trims beyond the anchor, so that `--minimal` splits and rejoins them; the plugin's table or rule decides whether the record's reading and the allele's differ. 19 corpora carry the shape and one committed flag set runs a covered plugin under `--minimal`, the coverage dataset's gnomADc run, which reaches it on two records.
+**How often the shape occurs.** Tier 2: 1,422 of the cuts' records (91 per million) are multi-allelic records one of whose alleles trims beyond the anchor, so that `--minimal` splits and rejoins them; the plugin's table or rule decides whether the record's reading and the allele's differ. 22 corpora carry the shape and one committed flag set runs a covered plugin under `--minimal`, the coverage dataset's gnomADc run, which reaches it on two records.
 
 ## 1. AVI on a split record of two one-base substitutions
 
-**In short.** The record `21 5030191 avi_aa_ag_at AA AG,AT`, written over the AVI dataset's synthetic table (`tests/golden/116/GRCh38-plugin-avi/`), has two alleles that each trim to a one-base substitution at 21:5030192 under `--minimal`, `A>G` and `A>T`. The table scores both. vep-rs writes each allele's row with its score and link; Ensembl VEP 116.2 writes both rows without an AVI field, since the rejoined record spans two bases. Without `--minimal` neither engine scores the record, its alleles being two bases long, and a bi-allelic `AA AG` under `--minimal` is scored by both.
+**In short.** The record `21 5030191 avi_aa_ag_at AA AG,AT`, written over the AVI dataset's synthetic table (`tests/golden/116/GRCh38-plugin-avi-fixture/`), has two alleles that each trim to a one-base substitution at 21:5030192 under `--minimal`, `A>G` and `A>T`. The table scores both. vep-rs writes each allele's row with its score and link; Ensembl VEP 116.3 writes both rows without an AVI field, since the rejoined record spans two bases. Without `--minimal` neither engine scores the record, its alleles being two bases long, and a bi-allelic `AA AG` under `--minimal` is scored by both.
 
 ### 1.1 What a reader needs to know first
 
@@ -42,7 +42,7 @@ Both engines run `--minimal --plugin AVI,file=<table>,raw=1,links=1` against the
 
 ### 1.3 What each engine writes
 
-Ensembl VEP 116.2, default format:
+Ensembl VEP 116.3, default format:
 
 ```
 avi_aa_ag_at	21:5030191-5030192	G	-	-	-	intergenic_variant	-	-	-	-	-	-	ALLELE_NUM=1;IMPACT=MODIFIER;MINIMISED=1
@@ -74,7 +74,7 @@ vep -i record.vcf -o out.txt --offline --json_cache <corpus>/json_cache \
   --plugin AVI,file=<corpus>/avi_scores.synthetic.tsv.gz,raw=1,links=1
 ```
 
-From the synthetic table, vep-rs writes `AVI_PHRED=3.993` on the `G` row and `AVI_PHRED=2.071` on the `T` row. Ensembl VEP 116.2 writes neither. Dropping `--minimal`, or writing the record with one alternate allele, makes the engines agree.
+From the synthetic table, vep-rs writes `AVI_PHRED=3.993` on the `G` row and `AVI_PHRED=2.071` on the `T` row. Ensembl VEP 116.3 writes neither. Dropping `--minimal`, or writing the record with one alternate allele, makes the engines agree.
 
 ### 1.7 How the comparator treats this class
 
@@ -82,7 +82,7 @@ The reproduction `scripts/divergences/reproductions/minimal_plugin_sees_the_rejo
 
 ## 2. OpenTargets on a split record with one matching allele
 
-**In short.** The record `21 14640467 ot_gaat_g_ga GAAT G,GA`, written over the OpenTargets dataset's export (`tests/golden/116/GRCh38-plugin-opentargets/`), carries the export's lead GWAS deletion `GAAT>G` as its first allele and a shorter deletion as its second. Under `--minimal` Ensembl VEP 116.2 writes the association's five fields on all six rows of the record; vep-rs writes them on the first allele's three rows alone. Written as a record of its own, the second allele gets no field from either engine, with or without the flag.
+**In short.** The record `21 14640467 ot_gaat_g_ga GAAT G,GA`, written over the OpenTargets dataset's export (`tests/golden/116/GRCh38-plugin-opentargets/`), carries the export's lead GWAS deletion `GAAT>G` as its first allele and a shorter deletion as its second. Under `--minimal` Ensembl VEP 116.3 writes the association's five fields on all six rows of the record; vep-rs writes them on the first allele's three rows alone. Written as a record of its own, the second allele gets no field from either engine, with or without the flag.
 
 ### 2.1 What a reader needs to know first
 
@@ -100,7 +100,7 @@ Both engines run `--minimal --plugin OpenTargets,file=<export>` against the data
 
 ### 2.3 What each engine writes
 
-Ensembl VEP 116.2 writes six rows, three transcripts for each allele, every one carrying the five fields; the second allele's row on ENST00000647101:
+Ensembl VEP 116.3 writes six rows, three transcripts for each allele, every one carrying the five fields; the second allele's row on ENST00000647101:
 
 ```
 ot_gaat_g_ga	21:14640468-14640470	-	ENSG00000155307	ENST00000647101	Transcript	intron_variant	-	-	-	-	-	-	ALLELE_NUM=2;IMPACT=MODIFIER;STRAND=-1;MINIMISED=1;OpenTargets_gwasDiseases=OBA_2041707;OpenTargets_gwasGeneId=ENSG00000155307;OpenTargets_gwasLocusToGeneScore=0.5601661801338196;OpenTargets_qtlBiosampleName=NA;OpenTargets_qtlGeneId=NA
@@ -132,7 +132,7 @@ vep -i record.vcf -o out.txt --offline --json_cache <corpus>/json_cache \
   --plugin OpenTargets,file=<corpus>/open_targets_vep.slice.tsv.gz
 ```
 
-vep-rs writes `OpenTargets_gwasGeneId=ENSG00000155307` on the three `ALLELE_NUM=1` rows and no OpenTargets field on the `ALLELE_NUM=2` rows. Ensembl VEP 116.2 writes it on all six. Dropping `--minimal` makes the engines agree on all six rows; writing `GAAT GA` alone makes both engines write no OpenTargets field on any row.
+vep-rs writes `OpenTargets_gwasGeneId=ENSG00000155307` on the three `ALLELE_NUM=1` rows and no OpenTargets field on the `ALLELE_NUM=2` rows. Ensembl VEP 116.3 writes it on all six. Dropping `--minimal` makes the engines agree on all six rows; writing `GAAT GA` alone makes both engines write no OpenTargets field on any row.
 
 ### 2.7 How the comparator treats this class
 

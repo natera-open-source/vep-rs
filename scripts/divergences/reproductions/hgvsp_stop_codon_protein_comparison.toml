@@ -1,20 +1,23 @@
 entry = "hgvsp_stop_codon_protein_comparison"
 page = "docs/divergences/hgvsp-stop-codon-protein-comparison.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 999,950 per million · 23 flag sets, 109 corpora"
-notes = "Five records written for the entry, on GRCh37, each a change in the stop codon of one transcript that keeps every residue of the reference protein: three bases inserted after 1:90470803, a copy of 1:90470804 to 1:90470806, which the 3' shift carries three bases on, to between the second and third base of the stop codon of the forward-strand ENST00000361911, and which leave a stop at residue 71; one base inserted between 1:17345377 and 1:17345378, after the first base of the stop codon of the reverse-strand ENST00000375499, with the next stop codon 22 residues on in the 3' UTR; 1:2238202 deleted, the first base of the stop codon of the forward-strand ENST00000378536, with the next stop codon 47 residues on; 1:26142208 substituted, the second base of the stop codon of the forward-strand ENST00000374315, whose peptide reads the stop codon at residue 428 as a residue, with the next stop codon 35 residues on; and 7:151292535 to 7:151292537 deleted, the stop codon of the reverse-strand ENST00000488258, with the next stop codon 11 residues on. Both engines write the same consequence terms, CDS and protein positions and HGVSc on every row. Ensembl VEP writes the stop replaced by a stop, as a deletion-insertion, on the three-base insertion, the stop replaced by one residue and a stop on the one-base insertion, the stop unchanged on the one-base deletion, an extension with an unknown count on the substitution and the stop deleted before the count on the deletion of the stop codon; vep-rs writes the stop unchanged on the three-base insertion and, on the other four, an extension named at the stop with its first new residue and the count of residues added."
+input_class_basis = "2 · 999,950 per million · 95 flag sets, 149 corpora"
+notes = "Seven records written for the entry, on GRCh37. Five are each a change in the stop codon of one transcript that keeps every residue of the reference protein: three bases inserted after 1:90470803, a copy of 1:90470804 to 1:90470806, which the 3' shift carries three bases on, to between the second and third base of the stop codon of the forward-strand ENST00000361911, and which leave a stop at residue 71; one base inserted between 1:17345377 and 1:17345378, after the first base of the stop codon of the reverse-strand ENST00000375499, with the next stop codon 22 residues on in the 3' UTR; 1:2238202 deleted, the first base of the stop codon of the forward-strand ENST00000378536, with the next stop codon 47 residues on; 1:26142208 substituted, the second base of the stop codon of the forward-strand ENST00000374315, whose peptide reads the stop codon at residue 428 as a residue, with the next stop codon 35 residues on; and 7:151292535 to 7:151292537 deleted, the stop codon of the reverse-strand ENST00000488258, with the next stop codon 11 residues on. Two are each an insertion inside the last residue's codon that leaves the protein as it was, the first inserted base completing that codon to the same residue and the next three a stop codon at the stop's own residue: six bases inserted between 21:19638351 and 21:19638352, the second and third base of the codon of residue 273 of the forward-strand ENST00000299295, whose stop is residue 274; and five bases inserted between 21:27096954 and 21:27096955, the third and second base of the codon of residue 116 of the reverse-strand ENST00000457143, whose stop is residue 117. Both engines write the same consequence terms, CDS and protein positions and HGVSc on every row. Ensembl VEP writes the stop replaced by a stop, as a deletion-insertion, on the three-base insertion, the stop replaced by one residue and a stop on the one-base insertion, the stop unchanged on the one-base deletion, an extension with an unknown count on the substitution and the stop deleted before the count on the deletion of the stop codon, and no HGVSp on the two insertions inside the last residue's codon; vep-rs writes the stop unchanged on the three-base insertion and on those two and, on the other four, an extension named at the stop with its first new residue and the count of residues added. Four more records are each a one-base substitution that changes a stop on a polymorphic pseudogene, whose peptide holds a stop and names the residues after it: 4:100268190, the one stop the peptide of the reverse-strand ENST00000515683 holds, residue 78, with the next stop the stop codon that closes the coding sequence, 298 residues on; 12:6940463 and 12:6942946, the stops of residues 356 and 435 of the forward-strand ENST00000606935, whose peptide holds 18 stops, with the next stops 79 and 5 residues on; and 18:61390631, the stop codon that closes the coding sequence of the forward-strand ENST00000382749, whose peptide holds a stop at residue 90, with the next stop 43 residues on in the 3' UTR. On each Ensembl VEP writes the extension with an unknown count and vep-rs the same extension with the count of residues from the lost stop to the next stop. Three more records are each a deletion of two codons that takes a stop on one of those three transcripts: 4:100268188 to 4:100268193 deleted, the codons of residue 77 and of the stop of residue 78 of ENST00000515683, after which the stop codon that closes the coding sequence stands 296 places after the lost stop's; 12:6940461 to 12:6940466, the codons of the stop of residue 356 and of residue 357 of ENST00000606935, after which the stop of residue 435 stands 77 places on; and 18:61390628 to 18:61390633, the codons of residue 392 and of the closing stop of ENST00000382749, after which the stop of the 3' UTR stands 41 places on. On each Ensembl VEP writes the deletion with an unknown extension count and vep-rs the same deletion with that count."
 
 prepare = [
-  '''[ -n "$IMAGE" ] || { echo "the cut of the cache is converted in the Ensembl VEP image: give --image" >&2; exit 1; }
-[ -n "$PERL_CACHE" ] || { echo "no homo_sapiens/116_GRCh37 with chromosomes 1 and 7 under the --perl-cache-dir roots" >&2; exit 1; }
+  '''[ -n "$PERL_CACHE" ] || { echo "no homo_sapiens/116_GRCh37 with chromosomes 1, 4, 7, 12, 18 and 21 under the --perl-cache-dir roots" >&2; exit 1; }
 cut="$STAGE/perl-cache/homo_sapiens/116_GRCh37"
-mkdir -p "$cut/1" "$cut/7"
+mkdir -p "$cut/1" "$cut/4" "$cut/7" "$cut/12" "$cut/18" "$cut/21"
 cp "$PERL_CACHE/info.txt" "$PERL_CACHE/chr_synonyms.txt" "$cut/"
 cp "$PERL_CACHE/1/2000001-3000000.gz" "$PERL_CACHE/1/17000001-18000000.gz" "$PERL_CACHE/1/26000001-27000000.gz" "$PERL_CACHE/1/90000001-91000000.gz" "$cut/1/"
-cp "$PERL_CACHE/7/151000001-152000000.gz" "$cut/7/"''',
-  '''docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$REPO/scripts/data:/scripts:ro" -v "$STAGE:/stage" "$IMAGE" perl /scripts/storable_to_json.pl /stage/perl-cache/homo_sapiens/116_GRCh37 /stage/json-cache 1,7 > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
+cp "$PERL_CACHE/4/100000001-101000000.gz" "$cut/4/"
+cp "$PERL_CACHE/7/151000001-152000000.gz" "$cut/7/"
+cp "$PERL_CACHE/12/6000001-7000000.gz" "$cut/12/"
+cp "$PERL_CACHE/18/61000001-62000000.gz" "$cut/18/"
+cp "$PERL_CACHE/21/19000001-20000000.gz" "$PERL_CACHE/21/27000001-28000000.gz" "$cut/21/"''',
+  '''cargo run --release --locked --quiet --manifest-path "$REPO/tools/vep-storable-to-json/Cargo.toml" -- "$STAGE/perl-cache/homo_sapiens/116_GRCh37" "$STAGE/json-cache" 1,4,7,12,18,21 > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
 ]
 
 [input]
@@ -24,7 +27,16 @@ text = """
 1	17345377	stop_codon_one_base_insertion_1_17345377	T	TA	.	.	.
 1	26142208	stop_codon_second_base_substitution_1_26142208	A	C	.	.	.
 1	90470803	stop_codon_three_base_insertion_1_90470803	G	GGTA	.	.	.
+4	100268187	held_stop_deletion_4_100268187	CTCAAAC	C	.	.	.
+4	100268190	held_stop_substitution_4_100268190	A	C	.	.	.
 7	151292534	stop_codon_deletion_7_151292534	TCTA	T	.	.	.
+12	6940460	held_stop_opening_deletion_12_6940460	CTGAACC	C	.	.	.
+12	6940463	held_stop_substitution_12_6940463	A	G	.	.	.
+12	6942946	held_stop_substitution_12_6942946	A	C	.	.	.
+18	61390627	closing_stop_deletion_behind_a_held_stop_18_61390627	TCCCTAA	T	.	.	.
+18	61390631	closing_stop_behind_a_held_stop_18_61390631	T	G	.	.	.
+21	19638351	last_codon_six_base_insertion_21_19638351	T	TCTGAGG	.	.	.
+21	27096954	last_codon_five_base_insertion_21_27096954	G	GCTCAT	.	.	.
 """
 
 [cache]
@@ -41,11 +53,20 @@ flags = [
 
 [compare]
 kind = "rows"
-where = { record = ["stop_codon_first_base_deletion_1_2238201", "stop_codon_one_base_insertion_1_17345377", "stop_codon_second_base_substitution_1_26142208", "stop_codon_three_base_insertion_1_90470803", "stop_codon_deletion_7_151292534"], feature = ["ENST00000361911", "ENST00000374315", "ENST00000375499", "ENST00000378536", "ENST00000488258"] }
+where = { record = ["stop_codon_first_base_deletion_1_2238201", "stop_codon_one_base_insertion_1_17345377", "stop_codon_second_base_substitution_1_26142208", "stop_codon_three_base_insertion_1_90470803", "stop_codon_deletion_7_151292534", "last_codon_six_base_insertion_21_19638351", "last_codon_five_base_insertion_21_27096954", "held_stop_substitution_4_100268190", "held_stop_substitution_12_6940463", "held_stop_substitution_12_6942946", "closing_stop_behind_a_held_stop_18_61390631", "held_stop_deletion_4_100268187", "held_stop_opening_deletion_12_6940460", "closing_stop_deletion_behind_a_held_stop_18_61390627"], feature = ["ENST00000361911", "ENST00000374315", "ENST00000375499", "ENST00000378536", "ENST00000488258", "ENST00000299295", "ENST00000457143", "ENST00000515683", "ENST00000606935", "ENST00000382749"] }
 columns = ["Uploaded_variation", "Feature", "Consequence", "CDS_position", "Protein_position", "HGVSc", "HGVSp"]
 
 [expected]
 ensembl_vep = [
+  "closing_stop_behind_a_held_stop_18_61390631 | ENST00000382749 | stop_lost | 1177 | 393 | ENST00000382749.5:c.1177T>G | ENSP00000421854.1:p.Ter393GluextTer?",
+  "closing_stop_deletion_behind_a_held_stop_18_61390627 | ENST00000382749 | stop_lost,inframe_deletion | 1174-1179 | 392-393 | ENST00000382749.5:c.1174_1179del | ENSP00000421854.1:p.Pro392_Ter393delextTer?",
+  "held_stop_deletion_4_100268187 | ENST00000515683 | stop_lost,inframe_deletion | 229-234 | 77-78 | ENST00000515683.1:c.230_235del | ENSP00000426083.1:p.Val77_Ter78delextTer?",
+  "held_stop_opening_deletion_12_6940460 | ENST00000606935 | stop_lost,inframe_deletion | 1066-1071 | 356-357 | ENST00000606935.1:c.1066_1071del | ENSP00000475535.1:p.Ter356_Thr357delextTer?",
+  "held_stop_substitution_12_6940463 | ENST00000606935 | stop_lost | 1068 | 356 | ENST00000606935.1:c.1068A>G | ENSP00000475535.1:p.Ter356TrpextTer?",
+  "held_stop_substitution_12_6942946 | ENST00000606935 | stop_lost | 1305 | 435 | ENST00000606935.1:c.1305A>C | ENSP00000475535.1:p.Ter435CysextTer?",
+  "held_stop_substitution_4_100268190 | ENST00000515683 | stop_lost | 232 | 78 | ENST00000515683.1:c.232T>G | ENSP00000426083.1:p.Ter78GlyextTer?",
+  "last_codon_five_base_insertion_21_27096954 | ENST00000457143 | inframe_insertion,stop_retained_variant | 347-348 | 116 | ENST00000457143.2:c.347_348insATGAG | -",
+  "last_codon_six_base_insertion_21_19638351 | ENST00000299295 | inframe_insertion,stop_retained_variant | 818-819 | 273 | ENST00000299295.2:c.818_819insCTGAGG | -",
   "stop_codon_deletion_7_151292534 | ENST00000488258 | stop_lost,NMD_transcript_variant | 688-690 | 230 | ENST00000488258.1:c.688_690del | ENSP00000420783.1:p.Ter230delextTer11",
   "stop_codon_first_base_deletion_1_2238201 | ENST00000378536 | stop_lost | 2185 | 729 | ENST00000378536.4:c.2185del | ENSP00000367797.4:p.Ter729%3D",
   "stop_codon_one_base_insertion_1_17345377 | ENST00000375499 | stop_lost | 841-842 | 281 | ENST00000375499.3:c.841dup | ENSP00000364649.3:p.Ter281delinsLeuTer",
@@ -53,9 +74,59 @@ ensembl_vep = [
   "stop_codon_three_base_insertion_1_90470803 | ENST00000361911 | inframe_insertion,stop_retained_variant | 209-210 | 70 | ENST00000361911.5:c.210_212dup | ENSP00000355318.5:p.Ter71delinsTer",
 ]
 vep_rs = [
+  "closing_stop_behind_a_held_stop_18_61390631 | ENST00000382749 | stop_lost | 1177 | 393 | ENST00000382749.5:c.1177T>G | ENSP00000421854.1:p.Ter393GluextTer43",
+  "closing_stop_deletion_behind_a_held_stop_18_61390627 | ENST00000382749 | stop_lost,inframe_deletion | 1174-1179 | 392-393 | ENST00000382749.5:c.1174_1179del | ENSP00000421854.1:p.Pro392_Ter393delextTer41",
+  "held_stop_deletion_4_100268187 | ENST00000515683 | stop_lost,inframe_deletion | 229-234 | 77-78 | ENST00000515683.1:c.230_235del | ENSP00000426083.1:p.Val77_Ter78delextTer296",
+  "held_stop_opening_deletion_12_6940460 | ENST00000606935 | stop_lost,inframe_deletion | 1066-1071 | 356-357 | ENST00000606935.1:c.1066_1071del | ENSP00000475535.1:p.Ter356_Thr357delextTer77",
+  "held_stop_substitution_12_6940463 | ENST00000606935 | stop_lost | 1068 | 356 | ENST00000606935.1:c.1068A>G | ENSP00000475535.1:p.Ter356TrpextTer79",
+  "held_stop_substitution_12_6942946 | ENST00000606935 | stop_lost | 1305 | 435 | ENST00000606935.1:c.1305A>C | ENSP00000475535.1:p.Ter435CysextTer5",
+  "held_stop_substitution_4_100268190 | ENST00000515683 | stop_lost | 232 | 78 | ENST00000515683.1:c.232T>G | ENSP00000426083.1:p.Ter78GlyextTer298",
+  "last_codon_five_base_insertion_21_27096954 | ENST00000457143 | inframe_insertion,stop_retained_variant | 347-348 | 116 | ENST00000457143.2:c.347_348insATGAG | ENSP00000389649.2:p.Ter117%3D",
+  "last_codon_six_base_insertion_21_19638351 | ENST00000299295 | inframe_insertion,stop_retained_variant | 818-819 | 273 | ENST00000299295.2:c.818_819insCTGAGG | ENSP00000299295.2:p.Ter274%3D",
   "stop_codon_deletion_7_151292534 | ENST00000488258 | stop_lost,NMD_transcript_variant | 688-690 | 230 | ENST00000488258.1:c.688_690del | ENSP00000420783.1:p.Ter230LysextTer11",
   "stop_codon_first_base_deletion_1_2238201 | ENST00000378536 | stop_lost | 2185 | 729 | ENST00000378536.4:c.2185del | ENSP00000367797.4:p.Ter729ArgextTer47",
   "stop_codon_one_base_insertion_1_17345377 | ENST00000375499 | stop_lost | 841-842 | 281 | ENST00000375499.3:c.841dup | ENSP00000364649.3:p.Ter281LeuextTer22",
   "stop_codon_second_base_substitution_1_26142208 | ENST00000374315 | stop_lost | 1670 | 557 | ENST00000374315.1:c.1670A>C | ENSP00000363434.1:p.Ter557SerextTer35",
   "stop_codon_three_base_insertion_1_90470803 | ENST00000361911 | inframe_insertion,stop_retained_variant | 209-210 | 70 | ENST00000361911.5:c.210_212dup | ENSP00000355318.5:p.Ter71%3D",
+]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/coding.rs::PerlCodingEval::residues_a_deletion_adds_past_a_lost_stop_the_peptide_holds",
+    "crates/vep-effects/src/coding.rs::PerlCodingEval::residues_from_a_lost_stop_past_stops_the_peptide_holds",
+    "crates/vep-effects/src/coding.rs::PerlCodingEval::stop_codon_change",
+    "crates/vep-effects/src/coding.rs::hgvsp_at_stop_codon",
+    "crates/vep-effects/src/coding.rs::hgvsp_frameshift_through_the_stop",
+    "crates/vep-effects/src/coding.rs::hgvsp_the_proteins_bear_out",
+]
+tests = [
+    "crates/vep-cli/tests/deletion_extension_count_from_a_lost_stop_the_peptide_holds.rs::a_deletion_through_a_stop_the_peptide_holds_counts_to_the_first_stop_after_the_change",
+    "crates/vep-cli/tests/extension_count_from_a_lost_stop_the_peptide_holds.rs::a_lost_stop_on_a_peptide_that_holds_a_stop_counts_to_the_next_stop_of_the_frame",
+    "crates/vep-effects/src/lost_stop_deletion_count_tests.rs::a_deletion_counts_past_the_stop_the_peptide_holds_before_it",
+    "crates/vep-effects/src/lost_stop_deletion_count_tests.rs::a_deletion_of_the_stop_alone_counts_to_the_next_stop_the_peptide_holds",
+    "crates/vep-effects/src/lost_stop_deletion_count_tests.rs::a_deletion_that_opens_at_a_stop_counts_to_the_next_stop_the_peptide_holds",
+    "crates/vep-effects/src/lost_stop_deletion_count_tests.rs::a_deletion_that_opens_at_the_peptides_first_residue_counts_as_any_other",
+    "crates/vep-effects/src/lost_stop_deletion_count_tests.rs::a_deletion_through_a_stop_the_peptide_holds_counts_to_the_stop_codon_that_closes_the_coding_sequence",
+    "crates/vep-effects/src/lost_stop_deletion_count_tests.rs::a_deletion_through_the_closing_stop_behind_a_stop_the_peptide_holds_counts_into_the_three_prime_utr",
+    "crates/vep-effects/src/lost_stop_deletion_count_tests.rs::a_methionine_written_over_another_first_codon_keeps_the_count",
+    "crates/vep-effects/src/lost_stop_deletion_count_tests.rs::the_count_runs_from_the_lost_stop_and_not_from_the_peptides_last_residue",
+    "crates/vep-effects/src/lost_stop_extension_count_tests.rs::a_later_lost_stop_counts_past_the_stop_the_peptide_holds_before_it",
+    "crates/vep-effects/src/lost_stop_extension_count_tests.rs::a_lost_closing_stop_behind_a_stop_the_peptide_holds_counts_into_the_three_prime_utr",
+    "crates/vep-effects/src/lost_stop_extension_count_tests.rs::a_lost_stop_at_the_peptides_first_residue_counts_as_any_other",
+    "crates/vep-effects/src/lost_stop_extension_count_tests.rs::a_lost_stop_counts_to_the_next_stop_the_peptide_holds",
+    "crates/vep-effects/src/lost_stop_extension_count_tests.rs::a_lost_stop_the_peptide_holds_counts_to_the_stop_codon_that_closes_the_coding_sequence",
+    "crates/vep-effects/src/lost_stop_extension_count_tests.rs::the_count_runs_from_the_lost_stop_and_not_from_the_peptides_last_residue",
+    "crates/vep-effects/src/stop_codon_tests.rs::deletion_in_the_stop_codon_that_loses_the_stop_is_an_extension",
+    "crates/vep-effects/src/stop_codon_tests.rs::insertion_in_the_stop_codon_that_leaves_the_protein_unchanged_is_the_stop_unchanged",
+    "crates/vep-effects/src/stop_codon_tests.rs::insertion_of_residues_whose_own_stop_stands_at_the_stops_residue_is_the_stop_unchanged",
+    "crates/vep-effects/src/stop_codon_tests.rs::stop_codon_deleted_before_residues_of_the_utr_is_an_extension_with_its_first_residue",
+    "crates/vep-effects/src/stop_codon_tests.rs::stop_replaced_by_residues_up_to_a_stop_of_the_utr_is_an_extension",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/hgvsp_stop.rs::extension_counted_from_a_stop_the_peptide_holds",
+    "tools/vep-formats-compare/src/rules/hgvsp_stop.rs::stop_codon_protein_comparison",
+    "tools/vep-formats-compare/src/rules/hgvsp_stop.rs::stop_unchanged_where_inserted_residues_keep_the_protein",
+    "tools/vep-golden-corpus/src/classify/protein.rs::deletion_counted_from_a_stop_the_peptide_holds_pair",
+    "tools/vep-golden-corpus/src/classify/protein.rs::inserted_residues_keep_the_protein_pair",
+    "tools/vep-golden-corpus/src/classify/protein.rs::stop_codon_protein_comparison_pair",
 ]

@@ -33,8 +33,8 @@ __pycache__/
 # No trailing slash, so a symlink is ignored as well as a directory.
 tests/sv_validation/*/real_world
 
-# Cached Perl VEP outputs used as concordance ground truth. Large and specific to
-# one cache release, so not committed; produce them with
+# Cached Ensembl VEP outputs used as concordance ground truth. Large and specific
+# to one cache release, so not committed; produce them with
 # scripts/concordance/run_concordance.sh --perl-vep-mode docker.
 tests/concordance_fixtures/
 

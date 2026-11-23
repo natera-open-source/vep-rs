@@ -3,7 +3,7 @@
 
 //! Co-located variant matching: the `--check_existing` stage.
 //!
-//! Ports Ensembl VEP release/116.2's matching of an input variant against the
+//! Ports Ensembl VEP release/116.3's matching of an input variant against the
 //! known variants of its window: `AnnotationSource/Cache/VariationTabix.pm`
 //! `_annotate_pm` (the walk, the failed filter, one entry per name),
 //! `AnnotationType/Variation.pm` `compare_existing` (span matches, the allele
@@ -14,6 +14,7 @@
 
 use std::borrow::Cow;
 
+use vep_core::allele_trim::{trim_directions, trim_sequences, CaseRule};
 use vep_core::consequence::FeatureType;
 use vep_core::coordinate::Strand;
 use vep_core::minimal::rowless_first_feature;
@@ -29,6 +30,7 @@ use crate::variation_source::{ReadFailure, VariationSource};
 /// input variant (`AnnotationType/Variation.pm:146-166, 224-227`); the default is
 /// Ensembl VEP's: alleles checked, null alleles kept, `failed` 0.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ColocationRules {
     /// `--no_check_alleles`: a known variant matches on its start and end alone and
     /// prints on every allele's row.
@@ -44,7 +46,7 @@ pub struct ColocationRules {
 
 impl ColocationRules {
     /// The rules a run's configuration asks for.
-    pub fn from_config(config: &crate::config::Config) -> Self {
+    pub(crate) fn from_config(config: &crate::config::Config) -> Self {
         Self {
             no_check_alleles: config.no_check_alleles,
             exclude_null_alleles: config.exclude_null_alleles,
@@ -116,7 +118,7 @@ pub(crate) fn existing_variation_names(
 /// record is matched by its own trimmed pair at its trimmed span, the feature
 /// `split_variants` makes of it before the sources run (InputBuffer.pm:265,
 /// 658-676).
-pub fn find_colocated_variants(
+pub(crate) fn find_colocated_variants(
     variant: &InputVariant,
     candidates: Vec<CachedVariation>,
     rules: &ColocationRules,
@@ -201,7 +203,7 @@ fn compare_existing(
 /// A variant as `get_matched_variant_alleles` takes it: its allele string,
 /// reference first, its start and its strand.
 #[derive(Debug, Clone, Copy)]
-pub struct AlleleSet<'a> {
+pub(crate) struct AlleleSet<'a> {
     pub allele_string: &'a str,
     pub pos: u64,
     pub strand: i8,
@@ -229,7 +231,10 @@ fn split_allele_string(allele_string: &str) -> Option<(&str, std::str::Split<'_,
 /// equals a trimmed form of `a` (the later of `a`'s alleles owning a shared form).
 /// Returns one match per matching allele of `b`, in `b`'s order; a position of 0
 /// or an unusable allele string matches nothing.
-pub fn get_matched_variant_alleles(a: &AlleleSet<'_>, b: &AlleleSet<'_>) -> Vec<MatchedAllele> {
+pub(crate) fn get_matched_variant_alleles(
+    a: &AlleleSet<'_>,
+    b: &AlleleSet<'_>,
+) -> Vec<MatchedAllele> {
     let (Some((a_ref, a_alts)), Some((b_ref, b_alts))) = (
         split_allele_string(a.allele_string),
         split_allele_string(b.allele_string),
@@ -247,19 +252,19 @@ pub fn get_matched_variant_alleles(a: &AlleleSet<'_>, b: &AlleleSet<'_>) -> Vec<
         .collect();
 
     // Every trimmed form of an input allele with the allele as written; a later
-    // allele with the same form replaces an earlier one, as the Perl hash does, so
-    // a lookup reads the list from its end.
+    // allele with the same form replaces an earlier one, as the Ensembl VEP hash does,
+    // so a lookup reads the list from its end.
     let mut minimised: Vec<(TrimmedAlleles<'_>, &str)> = Vec::with_capacity(a_alts.len() * 2);
     for (orig_alt, alt) in &a_alts {
-        for &end_first in trim_directions(&a_ref, orig_alt) {
-            minimised.push((trim_sequences(&a_ref, alt, a.pos, end_first), *orig_alt));
+        for &end_first in trim_directions(a_ref.as_bytes(), orig_alt.as_bytes()) {
+            minimised.push((trimmed_at(&a_ref, alt, a.pos, end_first), *orig_alt));
         }
     }
 
     let mut matches = Vec::new();
     for (index, orig_alt) in b_alts.enumerate() {
-        for &end_first in trim_directions(b_ref, orig_alt) {
-            let trimmed = trim_sequences(b_ref, orig_alt, b.pos, end_first);
+        for &end_first in trim_directions(b_ref.as_bytes(), orig_alt.as_bytes()) {
+            let trimmed = trimmed_at(b_ref, orig_alt, b.pos, end_first);
             let found = minimised
                 .iter()
                 .rev()
@@ -285,66 +290,27 @@ pub fn get_matched_variant_alleles(a: &AlleleSet<'_>, b: &AlleleSet<'_>) -> Vec<
     matches
 }
 
-/// The trimming orders tried for an allele pair: left end first, and right end
-/// first too when either allele is longer than one base
-/// (`Utils/Sequence.pm:1250-1258`).
-fn trim_directions(reference: &str, alt: &str) -> &'static [bool] {
-    if reference.len() > 1 || alt.len() > 1 {
-        &[false, true]
-    } else {
-        &[false]
-    }
-}
-
 /// A reference-alternate pair as `trim_sequences` leaves it: the trimmed
 /// reference, the trimmed alternate and the new start.
 type TrimmedAlleles<'s> = (&'s [u8], &'s [u8], u64);
 
-/// `trim_sequences` for a forward-strand pair (`Utils/Sequence.pm:965-1038`):
-/// bytes shared at one end are removed while both alleles are Perl-true
-/// (non-empty and not `0`), the left end first and then the right unless
-/// `end_first`, the start moving up by one per byte trimmed from the left, as
-/// Perl's `substr` moves it over an undecoded string; an emptied allele reads
-/// `-`. The returned alleles are slices of the inputs.
-fn trim_sequences<'s>(
+/// `trim_sequences` for a forward-strand pair at `start`
+/// (`Utils/Sequence.pm:965-1038`), compared as written: the pair as
+/// [`trim_sequences`] leaves it, the start moved up by one per byte trimmed
+/// from the left. The returned alleles are slices of the inputs.
+fn trimmed_at<'s>(
     reference: &'s str,
     alt: &'s str,
-    mut start: u64,
+    start: u64,
     end_first: bool,
 ) -> TrimmedAlleles<'s> {
-    let mut trim_left = |mut reference: &'s [u8], mut alt: &'s [u8]| {
-        while perl_true_bytes(reference) && perl_true_bytes(alt) && reference[0] == alt[0] {
-            reference = &reference[1..];
-            alt = &alt[1..];
-            start += 1;
-        }
-        (reference, alt)
-    };
-    let trim_right = |mut reference: &'s [u8], mut alt: &'s [u8]| {
-        while perl_true_bytes(reference)
-            && perl_true_bytes(alt)
-            && reference[reference.len() - 1] == alt[alt.len() - 1]
-        {
-            reference = &reference[..reference.len() - 1];
-            alt = &alt[..alt.len() - 1];
-        }
-        (reference, alt)
-    };
-    let (reference, alt) = if end_first {
-        let (reference, alt) = trim_right(reference.as_bytes(), alt.as_bytes());
-        trim_left(reference, alt)
-    } else {
-        let (reference, alt) = trim_left(reference.as_bytes(), alt.as_bytes());
-        trim_right(reference, alt)
-    };
-    let dash = |allele: &'s [u8]| if allele.is_empty() { b"-" } else { allele };
-    (dash(reference), dash(alt), start)
-}
-
-/// Perl's truth of an allele while it is trimmed: the empty string and `0` are
-/// false, so trimming stops at either.
-fn perl_true_bytes(allele: &[u8]) -> bool {
-    !allele.is_empty() && allele != b"0"
+    let trimmed = trim_sequences(
+        reference.as_bytes(),
+        alt.as_bytes(),
+        end_first,
+        CaseRule::AsWritten,
+    );
+    (trimmed.reference, trimmed.alt, start + trimmed.left as u64)
 }
 
 /// [`reverse_comp`] of `sequence` when `flip`, else `sequence` as written.
@@ -362,22 +328,22 @@ fn cached_to_colocated(
     cv: CachedVariation,
     matched_alleles: Vec<MatchedAllele>,
 ) -> ColocatedVariant {
-    ColocatedVariant {
-        chr: cv.chr,
-        id: cv.variation_name,
-        start: cv.start,
-        end: cv.end,
-        allele_string: Some(cv.allele_string).filter(|s| !s.is_empty()),
-        strand: cv.strand,
-        somatic: cv.somatic != 0,
-        clin_sig: cv.clin_sig,
-        phenotype: cv.phenotype_or_disease != 0,
-        pubmed: cv.pubmed,
-        matched_alleles,
-        frequency_strings: cv.frequencies,
-        clinvar: cv.clinvar,
-        var_synonyms: cv.var_synonyms,
-    }
+    let mut colocated = ColocatedVariant::default();
+    colocated.chr = cv.chr;
+    colocated.id = cv.variation_name;
+    colocated.start = cv.start;
+    colocated.end = cv.end;
+    colocated.allele_string = Some(cv.allele_string).filter(|s| !s.is_empty());
+    colocated.strand = cv.strand;
+    colocated.somatic = cv.somatic != 0;
+    colocated.clin_sig = cv.clin_sig;
+    colocated.phenotype = cv.phenotype_or_disease != 0;
+    colocated.pubmed = cv.pubmed;
+    colocated.matched_alleles = matched_alleles;
+    colocated.frequency_strings = cv.frequencies;
+    colocated.clinvar = cv.clinvar;
+    colocated.var_synonyms = cv.var_synonyms;
+    colocated
 }
 
 /// Appends the `Extra` column of one default-format row: `KEY=VALUE` pairs
@@ -399,7 +365,7 @@ fn cached_to_colocated(
 /// custom data that is not structural and carries no unflagged `BAM_EDIT` has
 /// the plan's flag fields alone (a transcript row without the five motif fields
 /// and `CELL_TYPE`), so its key list is not rebuilt.
-pub fn write_extra_fields(
+pub(crate) fn write_extra_fields(
     variant: &InputVariant,
     tc: Option<&vep_core::consequence::TranscriptConsequence>,
     plan: &vep_io::output::fields::ExtraFieldsPlan,
@@ -410,7 +376,7 @@ pub fn write_extra_fields(
     let has_custom_data = !variant.custom_annotations.is_empty();
     let summary_row = tc.is_none() && variant.summary_terms.is_some();
     let transcript_row = tc.is_none_or(|t| t.feature_type == FeatureType::Transcript);
-    // `BAM_EDIT` is set with no flag check (OutputFactory.pm:1551-1553), so an
+    // `BAM_EDIT` is set with no flag check (OutputFactory.pm:1560-1562), so an
     // edited transcript's row carries it with the `bam_edited` group off.
     let unflagged_bam_edit =
         !plan.options.bam_edited && tc.is_some_and(|t| t.bam_edit_status.is_some());
@@ -530,14 +496,13 @@ mod tests {
     /// chromosome 21 cache (`chr variation_name failed somatic start end allele_string
     /// strand`): the cited records are quoted from that file.
     fn record(name: &str, start: u64, end: u64, allele_string: &str) -> CachedVariation {
-        CachedVariation {
-            variation_name: name.to_string(),
-            start,
-            end,
-            allele_string: allele_string.to_string(),
-            strand: 1,
-            ..Default::default()
-        }
+        let mut variation = CachedVariation::default();
+        variation.variation_name = name.to_string();
+        variation.start = start;
+        variation.end = end;
+        variation.allele_string = allele_string.to_string();
+        variation.strand = 1;
+        variation
     }
 
     fn somatic(mut record: CachedVariation) -> CachedVariation {
@@ -573,24 +538,24 @@ mod tests {
 
     /// `21 14109044 G A` against the record set at 14109044 as the release-116
     /// cache holds it: an HGMD null-allele record, a COSMIC somatic null-allele
-    /// record and `rs7278737` (`G/A/T`); Ensembl VEP 116.2 prints the three in the
+    /// record and `rs7278737` (`G/A/T`); Ensembl VEP 116.3 prints the three in the
     /// order dbSNP, HGMD, COSMIC, and with ALT `C` the dbSNP record falls away and
     /// the two null-allele records stay. The COSMIC and HGMD names here are
     /// stand-ins of the real records' prefix classes.
     #[test]
     fn snv_with_different_alt_does_not_match() {
         let candidates = [
-            record("CM990001", 14109044, 14109044, "HGMD_MUTATION"),
-            somatic(record("COSV9900001", 14109044, 14109044, "COSMIC_MUTATION")),
+            record("CM000000", 14109044, 14109044, "HGMD_MUTATION"),
+            somatic(record("COSV0000000", 14109044, 14109044, "COSMIC_MUTATION")),
             record("rs7278737", 14109044, 14109044, "G/A/T"),
         ];
         assert_eq!(
             existing("21\t14109044\t.\tG\tA\t.\t.\t.", &candidates, &DEFAULT),
-            ["rs7278737", "CM990001", "COSV9900001"]
+            ["rs7278737", "CM000000", "COSV0000000"]
         );
         assert_eq!(
             existing("21\t14109044\t.\tG\tC\t.\t.\t.", &candidates, &DEFAULT),
-            ["CM990001", "COSV9900001"]
+            ["CM000000", "COSV0000000"]
         );
         let variant = &parsed("21\t14109044\t.\tG\tA\t.\t.\t.")[0];
         let colocated = find_colocated_variants(variant, candidates.to_vec(), &DEFAULT);
@@ -612,7 +577,7 @@ mod tests {
     /// The cache keeps `rs2123010281` untrimmed as `GG/G` at 5029945-5029946.
     /// `21 5029945 GG G` minimises to `G/-` at 5029946 and matches it by trimming the
     /// record from the left; `21 5029944 NG N` is `G/-` at 5029945 and matches it by
-    /// trimming from the right, the second order tried. Ensembl VEP 116.2 prints
+    /// trimming from the right, the second order tried. Ensembl VEP 116.3 prints
     /// `rs2123010281` for both. With `--no_check_alleles` neither matches: no record
     /// spans exactly 5029945-5029945 or 5029946-5029946, and Ensembl VEP prints `-`.
     #[test]
@@ -637,7 +602,7 @@ mod tests {
     /// `rs71668025` is `TT/T/TTT` at 28382673-28382674. `21 28382673 TT T,TTTT` is
     /// the record `T/-/TTT` at 28382674: the deletion matches the record's `T`, the
     /// three-base insertion matches nothing (the record's `TTT` is a one-base
-    /// insertion), so Ensembl VEP 116.2 prints `rs71668025` on the `-` row and `-`
+    /// insertion), so Ensembl VEP 116.3 prints `rs71668025` on the `-` row and `-`
     /// on the `TTT` row.
     #[test]
     fn insertion_length_decides_the_match_of_a_multi_allelic_record() {
@@ -662,7 +627,7 @@ mod tests {
     }
 
     /// The records at 38383755 are two COSMIC somatic null alleles then
-    /// `rs2516998629` (`T/C`, somatic) in file order; Ensembl VEP 116.2 prints the
+    /// `rs2516998629` (`T/C`, somatic) in file order; Ensembl VEP 116.3 prints the
     /// dbSNP name first, then the two COSMIC names in file order, for
     /// `21 38383755 T C`. At 14109044 the non-somatic HGMD record and `rs7278737`
     /// precede the somatic COSMIC record, and the dbSNP name precedes the HGMD
@@ -671,30 +636,35 @@ mod tests {
     #[test]
     fn existing_variation_sorted_non_somatic_then_prefix_rank() {
         let candidates = [
-            somatic(record("COSV9900002", 38383755, 38383755, "COSMIC_MUTATION")),
-            somatic(record("COSV9900003", 38383755, 38383755, "COSMIC_MUTATION")),
+            somatic(record("COSV0000000", 38383755, 38383755, "COSMIC_MUTATION")),
+            somatic(record(
+                "COSV00000000",
+                38383755,
+                38383755,
+                "COSMIC_MUTATION",
+            )),
             somatic(record("rs2516998629", 38383755, 38383755, "T/C")),
         ];
         assert_eq!(
             existing("21\t38383755\t.\tT\tC\t.\t.\t.", &candidates, &DEFAULT),
-            ["rs2516998629", "COSV9900002", "COSV9900003"]
+            ["rs2516998629", "COSV0000000", "COSV00000000"]
         );
         let mixed = [
-            record("CM990001", 14109044, 14109044, "HGMD_MUTATION"),
-            somatic(record("COSV9900001", 14109044, 14109044, "COSMIC_MUTATION")),
+            record("CM000000", 14109044, 14109044, "HGMD_MUTATION"),
+            somatic(record("COSV0000000", 14109044, 14109044, "COSMIC_MUTATION")),
             record("rs7278737", 14109044, 14109044, "G/A/T"),
-            record("CD990002", 14109044, 14109044, "HGMD_MUTATION"),
+            record("CD000000", 14109044, 14109044, "HGMD_MUTATION"),
             record("TMP_1", 14109044, 14109044, "G/A"),
         ];
         assert_eq!(
             existing("21\t14109044\t.\tG\tA\t.\t.\t.", &mixed, &DEFAULT),
-            ["rs7278737", "CM990001", "CD990002", "TMP_1", "COSV9900001"]
+            ["rs7278737", "CM000000", "CD000000", "TMP_1", "COSV0000000"]
         );
         let variant = &parsed("21\t14109044\t.\tG\tA\t.\t.\t.")[0];
         let colocated = find_colocated_variants(variant, mixed.to_vec(), &DEFAULT);
         assert_eq!(
             names(&colocated),
-            ["CM990001", "COSV9900001", "rs7278737", "CD990002", "TMP_1"],
+            ["CM000000", "COSV0000000", "rs7278737", "CD000000", "TMP_1"],
             "the record keeps the cache's order"
         );
     }
@@ -790,7 +760,7 @@ mod tests {
     }
 
     /// `21 14109044 G A,C`: `rs7278737` (`G/A/T`) matches the record through `A`
-    /// alone, so Ensembl VEP 116.2 prints it on the `A` row and not on the `C` row,
+    /// alone, so Ensembl VEP 116.3 prints it on the `A` row and not on the `C` row,
     /// while the two null-allele records (HGMD and COSMIC stand-ins) print on both.
     /// Every allele carries the record's whole match list.
     #[test]
@@ -799,8 +769,8 @@ mod tests {
         let source = region_source(
             dir.path(),
             &[
-                "CM990001\t0\t0\t14109044\t\tHGMD_MUTATION\t1\t\t1\t\t\t\t\t",
-                "COSV9900001\t0\t1\t14109044\t\tCOSMIC_MUTATION\t1\t\t1\t\t\t\t\t",
+                "CM000000\t0\t0\t14109044\t\tHGMD_MUTATION\t1\t\t1\t\t\t\t\t",
+                "COSV0000000\t0\t1\t14109044\t\tCOSMIC_MUTATION\t1\t\t1\t\t\t\t\t",
                 "rs7278737\t0\t0\t14109044\t\tG/A/T\t1\tbenign\t1\tT:benign\tG\t\t\t",
             ],
         );
@@ -812,21 +782,21 @@ mod tests {
         assert_eq!(alleles[0].display_allele(), "A");
         assert_eq!(
             alleles[0].existing_variation,
-            ["rs7278737", "CM990001", "COSV9900001"]
+            ["rs7278737", "CM000000", "COSV0000000"]
         );
         assert_eq!(alleles[1].display_allele(), "C");
-        assert_eq!(alleles[1].existing_variation, ["CM990001", "COSV9900001"]);
+        assert_eq!(alleles[1].existing_variation, ["CM000000", "COSV0000000"]);
         for variant in &alleles {
             assert_eq!(
                 names(&variant.colocated_variants),
-                ["CM990001", "COSV9900001", "rs7278737"]
+                ["CM000000", "COSV0000000", "rs7278737"]
             );
         }
     }
 
     /// Under `--no_check_alleles` a record matches on its start and end alone and
     /// carries no matched alleles: `21 38383755 T G` gains `rs2516998629` (`T/C`),
-    /// `21 40000000 A G` gains `rs775128082` (`T/C`), as Ensembl VEP 116.2 prints;
+    /// `21 40000000 A G` gains `rs775128082` (`T/C`), as Ensembl VEP 116.3 prints;
     /// a record spanning one base more does not match.
     #[test]
     fn no_check_alleles_matches_on_start_and_end_only() {
@@ -854,11 +824,11 @@ mod tests {
     #[test]
     fn null_allele_record_matches_on_span_unless_excluded() {
         let candidates = [
-            somatic(record("COSV9900001", 14109044, 14109044, "COSMIC_MUTATION")),
+            somatic(record("COSV0000000", 14109044, 14109044, "COSMIC_MUTATION")),
             somatic(record("COSVWIDE", 14109044, 14109045, "COSMIC_MUTATION")),
         ];
         let line = "21\t14109044\t.\tG\tC\t.\t.\t.";
-        assert_eq!(existing(line, &candidates, &DEFAULT), ["COSV9900001"]);
+        assert_eq!(existing(line, &candidates, &DEFAULT), ["COSV0000000"]);
         let exclude = ColocationRules {
             exclude_null_alleles: true,
             ..DEFAULT
@@ -868,7 +838,7 @@ mod tests {
             no_check_alleles: true,
             ..DEFAULT
         };
-        assert_eq!(existing(line, &candidates, &no_check), ["COSV9900001"]);
+        assert_eq!(existing(line, &candidates, &no_check), ["COSV0000000"]);
         let both = ColocationRules {
             no_check_alleles: true,
             exclude_null_alleles: true,
@@ -878,7 +848,7 @@ mod tests {
     }
 
     /// `rs1979841086` at 5230609 is `dbSNP_novariation` with `failed` 1 beside
-    /// `rs373402393` (`A/C`): Ensembl VEP 116.2 prints `rs373402393` for
+    /// `rs373402393` (`A/C`): Ensembl VEP 116.3 prints `rs373402393` for
     /// `21 5230609 A C` and `rs1979841086,rs373402393` under `--failed 1`.
     #[test]
     fn failed_threshold_admits_failed_records() {
@@ -955,7 +925,7 @@ mod tests {
     #[test]
     fn trim_sequences_follows_perl_in_both_orders() {
         let trimmed = |r: &str, a: &str, start: u64, end_first: bool| {
-            let (r, a, pos) = trim_sequences(r, a, start, end_first);
+            let (r, a, pos) = trimmed_at(r, a, start, end_first);
             (
                 String::from_utf8_lossy(r).into_owned(),
                 String::from_utf8_lossy(a).into_owned(),
@@ -971,11 +941,11 @@ mod tests {
         assert_eq!(trimmed("AC", "AC", 100, false), t("-", "-", 102));
         assert_eq!(trimmed("0", "0", 100, false), t("0", "0", 100));
         assert_eq!(trimmed("A0", "A0", 100, false), t("0", "0", 101));
-        // Perl trims the bytes of an undecoded string: a two-byte character shared
-        // at the left moves the start by two.
+        // Ensembl VEP trims the bytes of an undecoded string: a two-byte character
+        // shared at the left moves the start by two.
         assert_eq!(trimmed("\u{e9}A", "\u{e9}C", 100, false), t("A", "C", 102));
-        assert_eq!(trim_directions("A", "G"), &[false]);
-        assert_eq!(trim_directions("AT", "A"), &[false, true]);
+        assert_eq!(trim_directions(b"A", b"G"), &[false]);
+        assert_eq!(trim_directions(b"AT", b"A"), &[false, true]);
     }
 
     /// `get_matched_variant_alleles` on the shapes `Utils/Sequence.pm:1151-1173`
@@ -1020,7 +990,7 @@ mod tests {
     }
 
     /// Every allele of the three committed co-location corpora against the slice
-    /// committed beside it: `Existing_variation` as Ensembl VEP 116.2 wrote it for
+    /// committed beside it: `Existing_variation` as Ensembl VEP 116.3 wrote it for
     /// each `Uploaded_variation` and `Allele` under the flags named here, `-` for
     /// none. The two `colocated` corpora are matched under `--failed 1`; among their
     /// rows the record the window misses (`21_5030482_GGGAGGGGTGG/GG` trims to
@@ -1236,11 +1206,11 @@ mod tests {
 
     /// Under `--minimal` every row of a split record prints the co-located
     /// variants of the record's first feature, each row keeping the names
-    /// matched on its own allele, as Ensembl VEP 116.2 prints on the GRCh38 cache
+    /// matched on its own allele, as Ensembl VEP 116.3 prints on the GRCh38 cache
     /// under `--check_existing --minimal --failed 1` (`split_variants` runs before
     /// the sources, InputBuffer.pm:265, 658-676; the rejoin leaves `existing` on
     /// each feature and the rows read the first feature's, OutputFactory.pm:
-    /// 2272-2353, 1046, 1081-1083):
+    /// 2281-2362, 1046, 1081-1083):
     ///
     /// * `21 5030602 A AA,G`: the first feature `-/A` at 5030603 matches
     ///   rs1370167485 (`A/AA` at 5030602); the A row prints it, the G row `-`.
@@ -1326,7 +1296,7 @@ mod tests {
     }
 
     /// An empty input allele (`A//G` splits to `A`, an empty string and `G`) is
-    /// stored under its trimmed form but never matched: Perl tests the allele it
+    /// stored under its trimmed form but never matched: Ensembl VEP tests the allele it
     /// finds for truth (`Utils/Sequence.pm:1232`), and the empty string is false, so
     /// a record `A/-`, whose own form is the same `A`, `-`, matches nothing of it.
     #[test]
@@ -1367,28 +1337,26 @@ mod tests {
             encoder.finish().unwrap();
         }
         std::fs::write(region_dir.join("1-50000000_var.gz"), body).unwrap();
-        let info = vep_core::cache_info::CacheInfo {
-            variation_cols: [
-                "variation_name",
-                "failed",
-                "somatic",
-                "start",
-                "end",
-                "allele_string",
-                "strand",
-                "clin_sig",
-                "phenotype_or_disease",
-                "clin_sig_allele",
-                "clin_sig_ref_allele",
-                "clinical_impact",
-                "pubmed",
-                "var_synonyms",
-            ]
-            .iter()
-            .map(|name| name.to_string())
-            .collect(),
-            ..Default::default()
-        };
+        let mut info = vep_core::cache_info::CacheInfo::default();
+        info.variation_cols = [
+            "variation_name",
+            "failed",
+            "somatic",
+            "start",
+            "end",
+            "allele_string",
+            "strand",
+            "clin_sig",
+            "phenotype_or_disease",
+            "clin_sig_allele",
+            "clin_sig_ref_allele",
+            "clinical_impact",
+            "pubmed",
+            "var_synonyms",
+        ]
+        .iter()
+        .map(|name| name.to_string())
+        .collect();
         VariationSource::open(
             dir,
             &info,
@@ -1399,10 +1367,10 @@ mod tests {
         .expect("a region file is a variation source")
     }
 
-    // The `-o vep` path streams the Extra column straight into the writer, and
-    // the end-to-end concordance comparison exercises only the no-flag workload,
-    // so these tests pin the bytes of every branch: VEP's key order, the `;`
-    // separator, the `-` placeholder, and the `;`-only escaping.
+    // The `--output_format vep` path streams the Extra column straight into the
+    // writer; these tests pin the bytes of every branch: Ensembl VEP's key order,
+    // the `;` separator, the `-` placeholder, and the escaping of `;` and of
+    // control bytes.
 
     use vep_core::consequence::{Impact, TranscriptConsequence};
     use vep_io::output::fields::{ExtraFieldsPlan, FieldOptions};
@@ -1422,11 +1390,9 @@ mod tests {
     #[test]
     fn default_row_carries_impact_and_strand() {
         let variant = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
-        let tc = TranscriptConsequence {
-            impact: Impact::MODERATE,
-            strand: -1,
-            ..Default::default()
-        };
+        let mut tc = TranscriptConsequence::default();
+        tc.impact = Impact::MODERATE;
+        tc.strand = -1;
         assert_eq!(
             extra(&variant, Some(&tc), &FieldOptions::default()),
             "IMPACT=MODERATE;STRAND=-1"
@@ -1434,25 +1400,21 @@ mod tests {
     }
 
     /// `BAM_EDIT` is set on every row of a transcript carrying an edit status
-    /// with no flag check (OutputFactory.pm:1551-1553), so with the `bam_edited`
+    /// with no flag check (OutputFactory.pm:1560-1562), so with the `bam_edited`
     /// group off (`--use_given_ref` on a BAM-edited cache) the key still follows
     /// the flag fields in `Extra`, on the fast path and beside other groups
     /// alike; an untouched transcript's row is unchanged.
     #[test]
     fn unflagged_bam_edit_reaches_the_extra_column() {
         let variant = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
-        let edited = TranscriptConsequence {
-            bam_edit_status: Some(vep_core::transcript::BamEditStatus::Ok),
-            ..Default::default()
-        };
+        let mut edited = TranscriptConsequence::default();
+        edited.bam_edit_status = Some(vep_core::transcript::BamEditStatus::Ok);
         assert_eq!(
             extra(&variant, Some(&edited), &FieldOptions::default()),
             "IMPACT=MODIFIER;STRAND=1;BAM_EDIT=OK"
         );
-        let with_symbol = FieldOptions {
-            symbol: true,
-            ..Default::default()
-        };
+        let mut with_symbol = FieldOptions::default();
+        with_symbol.symbol = true;
         assert_eq!(
             extra(&variant, Some(&edited), &with_symbol),
             "IMPACT=MODIFIER;STRAND=1;BAM_EDIT=OK"
@@ -1467,20 +1429,19 @@ mod tests {
     #[test]
     fn distance_precedes_strand_and_flags_follow_it() {
         let variant = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
-        let tc = TranscriptConsequence {
-            transcript: Some(Arc::new(Transcript {
-                flags: Arc::from([
-                    "cds_start_NF".to_string(),
-                    "cds_end_NF".to_string(),
-                    "gencode_basic".to_string(),
-                ]),
-                ..Transcript::default()
-            })),
-            impact: Impact::MODIFIER,
-            strand: 1,
-            distance: Some(2500),
-            ..Default::default()
-        };
+        let mut tc = TranscriptConsequence::default();
+        tc.transcript = Some(Arc::new({
+            let mut transcript = Transcript::default();
+            transcript.flags = Arc::from([
+                "cds_start_NF".to_string(),
+                "cds_end_NF".to_string(),
+                "gencode_basic".to_string(),
+            ]);
+            transcript
+        }));
+        tc.impact = Impact::MODIFIER;
+        tc.strand = 1;
+        tc.distance = Some(2500);
         assert_eq!(
             extra(&variant, Some(&tc), &FieldOptions::default()),
             "IMPACT=MODIFIER;DISTANCE=2500;STRAND=1;FLAGS=cds_start_NF,cds_end_NF"
@@ -1495,29 +1456,33 @@ mod tests {
     #[test]
     fn transcript_rows_keep_the_fast_path_under_the_regulatory_group_alone() {
         let variant = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
-        let transcript = TranscriptConsequence {
-            transcript: Some(Arc::new(Transcript {
-                biotype: "protein_coding".into(),
-                ..Transcript::default()
-            })),
-            impact: Impact::MODIFIER,
-            strand: 1,
-            consequences: std::iter::once(vep_core::consequence::Consequence::UpstreamGeneVariant)
-                .collect(),
-            distance: Some(120),
-            ..Default::default()
+        let transcript = {
+            let mut row = TranscriptConsequence::default();
+            row.transcript = Some(Arc::new({
+                let mut transcript = Transcript::default();
+                transcript.biotype = "protein_coding".into();
+                transcript
+            }));
+            row.impact = Impact::MODIFIER;
+            row.strand = 1;
+            row.consequences =
+                std::iter::once(vep_core::consequence::Consequence::UpstreamGeneVariant).collect();
+            row.distance = Some(120);
+            row
         };
-        let regulatory = FieldOptions {
-            regulatory: true,
-            ..Default::default()
+        let regulatory = {
+            let mut options = FieldOptions::default();
+            options.regulatory = true;
+            options
         };
         let plan = ExtraFieldsPlan::new(regulatory.clone());
         assert!(plan.any_optional_group && plan.transcript_fast_path);
         assert!(
-            !ExtraFieldsPlan::new(FieldOptions {
-                regulatory: true,
-                biotype: true,
-                ..Default::default()
+            !ExtraFieldsPlan::new({
+                let mut options = FieldOptions::default();
+                options.regulatory = true;
+                options.biotype = true;
+                options
             })
             .transcript_fast_path
         );
@@ -1527,42 +1492,38 @@ mod tests {
         );
         assert_eq!(extra(&variant, None, &regulatory), "IMPACT=MODIFIER");
         assert_eq!(
-            extra(
-                &variant,
-                Some(&transcript),
-                &FieldOptions {
-                    regulatory: true,
-                    biotype: true,
-                    ..Default::default()
-                }
-            ),
+            extra(&variant, Some(&transcript), &{
+                let mut options = FieldOptions::default();
+                options.regulatory = true;
+                options.biotype = true;
+                options
+            }),
             "IMPACT=MODIFIER;DISTANCE=120;STRAND=1;BIOTYPE=protein_coding"
         );
-        let motif = TranscriptConsequence {
-            feature_id: Some("ENSM1".into()),
-            feature_type: FeatureType::MotifFeature,
-            impact: Impact::MODIFIER,
-            strand: -1,
-            motif: Some(Box::new(vep_core::consequence::MotifFields {
-                name: "ENSPFM1".into(),
-                pos: Some(3),
-                high_inf_pos: Some(true),
-                score_change: Some(-0.0124),
-                factors: ["A".into(), "B".into()].into(),
-            })),
-            ..Default::default()
+        let motif = {
+            let mut row = TranscriptConsequence::default();
+            row.feature_id = Some("ENSM1".into());
+            row.feature_type = FeatureType::MotifFeature;
+            row.impact = Impact::MODIFIER;
+            row.strand = -1;
+            row.motif = Some(Box::new(vep_core::consequence::MotifFields::new(
+                "ENSPFM1".into(),
+                Some(3),
+                Some(true),
+                Some(-0.0124),
+                ["A".into(), "B".into()].into(),
+            )));
+            row
         };
         assert_eq!(
             extra(&variant, Some(&motif), &regulatory),
             "IMPACT=MODIFIER;STRAND=-1;MOTIF_NAME=ENSPFM1;MOTIF_POS=3;HIGH_INF_POS=Y;MOTIF_SCORE_CHANGE=-0.012;TRANSCRIPTION_FACTORS=A,B"
         );
-        let enhancer = TranscriptConsequence {
-            feature_id: Some("ENSR1".into()),
-            feature_biotype: Some("enhancer".into()),
-            feature_type: FeatureType::RegulatoryFeature,
-            impact: Impact::MODIFIER,
-            ..Default::default()
-        };
+        let mut enhancer = TranscriptConsequence::default();
+        enhancer.feature_id = Some("ENSR1".into());
+        enhancer.feature_biotype = Some("enhancer".into());
+        enhancer.feature_type = FeatureType::RegulatoryFeature;
+        enhancer.impact = Impact::MODIFIER;
         assert_eq!(
             extra(&variant, Some(&enhancer), &regulatory),
             "IMPACT=MODIFIER;BIOTYPE=enhancer"
@@ -1575,28 +1536,24 @@ mod tests {
     #[test]
     fn a_flag_with_a_control_byte_is_encoded_on_both_paths() {
         let variant = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
-        let tc = TranscriptConsequence {
-            transcript: Some(Arc::new(Transcript {
-                flags: Arc::from(["cds_\tx".to_string(), "cds_end_NF\n".to_string()]),
-                ..Transcript::default()
-            })),
-            impact: Impact::MODIFIER,
-            strand: 1,
-            ..Default::default()
-        };
+        let mut tc = TranscriptConsequence::default();
+        tc.transcript = Some(Arc::new({
+            let mut transcript = Transcript::default();
+            transcript.flags = Arc::from(["cds_\tx".to_string(), "cds_end_NF\n".to_string()]);
+            transcript
+        }));
+        tc.impact = Impact::MODIFIER;
+        tc.strand = 1;
         let fast = extra(&variant, Some(&tc), &FieldOptions::default());
         assert_eq!(
             fast,
             "IMPACT=MODIFIER;STRAND=1;FLAGS=cds_%09x,cds_end_NF%0A"
         );
-        let general = extra(
-            &variant,
-            Some(&tc),
-            &FieldOptions {
-                symbol: true,
-                ..Default::default()
-            },
-        );
+        let general = extra(&variant, Some(&tc), &{
+            let mut options = FieldOptions::default();
+            options.symbol = true;
+            options
+        });
         assert_eq!(general, fast);
     }
 
@@ -1614,37 +1571,34 @@ mod tests {
     #[test]
     fn optional_groups_follow_vep_order() {
         let mut variant = InputVariant::new("21".into(), 100, 101, b"AC".to_vec(), b"-".to_vec());
-        variant.colocated_variants.push(ColocatedVariant {
-            id: "rs123".to_string(),
-            allele_string: Some("AC/-".to_string()),
-            clin_sig: Some("pathogenic,likely_pathogenic".to_string()),
-            somatic: true,
-            phenotype: false,
-            matched_alleles: vec![MatchedAllele {
+        variant.colocated_variants.push({
+            let mut colocated = ColocatedVariant::default();
+            colocated.id = "rs123".to_string();
+            colocated.allele_string = Some("AC/-".to_string());
+            colocated.clin_sig = Some("pathogenic,likely_pathogenic".to_string());
+            colocated.somatic = true;
+            colocated.phenotype = false;
+            colocated.matched_alleles = vec![MatchedAllele {
                 input_allele: "-".to_string(),
                 input_index: 0,
                 record_allele: "-".to_string(),
                 record_index: 0,
-            }],
-            frequency_strings: [("AF".to_string(), "-:0.003".to_string())].into(),
-            ..Default::default()
+            }];
+            colocated.frequency_strings = [("AF".to_string(), "-:0.003".to_string())].into();
+            colocated
         });
-        let tc = TranscriptConsequence {
-            impact: Impact::HIGH,
-            strand: 1,
-            hgvsc: Some("ENST00000366667.4:c.428C>T".to_string()),
-            hgvsp: Some("ENSP00000355627.3:p.Ala143=".to_string()),
-            sift: Some("deleterious(0.01)".to_string()),
-            ..Default::default()
-        };
-        let options = FieldOptions {
-            variant_class: true,
-            hgvs: true,
-            sift: true,
-            af: true,
-            check_existing: true,
-            ..Default::default()
-        };
+        let mut tc = TranscriptConsequence::default();
+        tc.impact = Impact::HIGH;
+        tc.strand = 1;
+        tc.hgvsc = Some("ENST00000366667.4:c.428C>T".to_string());
+        tc.hgvsp = Some("ENSP00000355627.3:p.Ala143=".to_string());
+        tc.sift = Some("deleterious(0.01)".to_string());
+        let mut options = FieldOptions::default();
+        options.variant_class = true;
+        options.hgvs = true;
+        options.sift = true;
+        options.af = true;
+        options.check_existing = true;
         assert_eq!(
             extra(&variant, Some(&tc), &options),
             "IMPACT=HIGH;STRAND=1;VARIANT_CLASS=deletion;SIFT=deleterious(0.01);HGVSc=ENST00000366667.4:c.428C>T;HGVSp=ENSP00000355627.3:p.Ala143%3D;AF=0.0030;CLIN_SIG=pathogenic,likely_pathogenic;SOMATIC=1"
@@ -1654,11 +1608,9 @@ mod tests {
     #[test]
     fn plugin_keys_follow_flag_fields_alphabetically_and_escape_semicolons_only() {
         let variant = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
-        let mut tc = TranscriptConsequence {
-            impact: Impact::LOW,
-            strand: 1,
-            ..Default::default()
-        };
+        let mut tc = TranscriptConsequence::default();
+        tc.impact = Impact::LOW;
+        tc.strand = 1;
         tc.plugin_data
             .insert("ZPlugin".to_string(), "a=b;c".to_string());
         tc.plugin_data
@@ -1670,7 +1622,7 @@ mod tests {
     }
 
     /// Ensembl VEP sets the identifier keys only for a cache value other than
-    /// `-` (OutputFactory.pm:1534-1574 at release/116.2), so the Extra column of
+    /// `-` (OutputFactory.pm:1543-1583 at release/116.3), so the Extra column of
     /// a transcript with no CCDS, RefSeq or UniProt cross-reference carries no
     /// `CCDS=-`, `RefSeq=-`, `SWISSPROT=-`, `TREMBL=-`, `UNIPARC=-` or
     /// `UNIPROT_ISOFORM=-`; the values present print in VEP's key order, lists
@@ -1678,26 +1630,23 @@ mod tests {
     #[test]
     fn extra_column_skips_the_dash_sentinel() {
         let variant = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
-        let tc = TranscriptConsequence {
-            transcript: Some(Arc::new(Transcript {
-                ccds: Some("-".to_string()),
-                refseq: Some("-".to_string()),
-                swissprot: Some("-".to_string()),
-                trembl: Some("L7XE61_HUMAN,L7XCZ9_HUMAN".to_string()),
-                uniparc: Some("UPI000002DB1C".to_string()),
-                uniprot_isoform: Some("-".to_string()),
-                ..Transcript::default()
-            })),
-            impact: Impact::LOW,
-            strand: 1,
-            ..Default::default()
-        };
-        let options = FieldOptions {
-            ccds: true,
-            uniprot: true,
-            xref_refseq: true,
-            ..Default::default()
-        };
+        let mut tc = TranscriptConsequence::default();
+        tc.transcript = Some(Arc::new({
+            let mut transcript = Transcript::default();
+            transcript.ccds = Some("-".to_string());
+            transcript.refseq = Some("-".to_string());
+            transcript.swissprot = Some("-".to_string());
+            transcript.trembl = Some("L7XE61_HUMAN,L7XCZ9_HUMAN".to_string());
+            transcript.uniparc = Some("UPI000002DB1C".to_string());
+            transcript.uniprot_isoform = Some("-".to_string());
+            transcript
+        }));
+        tc.impact = Impact::LOW;
+        tc.strand = 1;
+        let mut options = FieldOptions::default();
+        options.ccds = true;
+        options.uniprot = true;
+        options.xref_refseq = true;
         assert_eq!(
             extra(&variant, Some(&tc), &options),
             "IMPACT=LOW;STRAND=1;TREMBL=L7XE61_HUMAN,L7XCZ9_HUMAN;UNIPARC=UPI000002DB1C"
@@ -1706,7 +1655,7 @@ mod tests {
 
     /// A co-located variant whose `clinical_impact` is the defined empty string
     /// (a region file's empty cell) writes `CLINVAR_SOMATIC_CLASSIFICATION=` under
-    /// `--clinvar_somatic_classification`, the key Ensembl VEP 116.2 sets to `''`
+    /// `--clinvar_somatic_classification`, the key Ensembl VEP 116.3 sets to `''`
     /// (OutputFactory.pm:1093) and its default writer prints (VEP_output.pm:117),
     /// and nothing without the flag or with the cell unset.
     #[test]
@@ -1714,35 +1663,31 @@ mod tests {
         use vep_core::variation::ClinVarDetail;
 
         let mut variant = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
-        let mut known = ColocatedVariant {
-            id: "rs1".into(),
-            start: 100,
-            end: 100,
-            allele_string: Some("A/G".into()),
-            strand: 1,
-            ..ColocatedVariant::default()
-        };
+        let mut known = ColocatedVariant::default();
+        known.id = "rs1".into();
+        known.start = 100;
+        known.end = 100;
+        known.allele_string = Some("A/G".into());
+        known.strand = 1;
         variant.colocated_variants = vec![known.clone()];
-        let options = FieldOptions {
-            check_existing: true,
-            clinvar_somatic_classification: true,
-            ..Default::default()
-        };
+        let mut options = FieldOptions::default();
+        options.check_existing = true;
+        options.clinvar_somatic_classification = true;
         assert_eq!(extra(&variant, None, &options), "IMPACT=MODIFIER");
-        known.clinvar = Some(Box::new(ClinVarDetail {
-            clin_sig_allele: Some(String::new()),
-            clin_sig_ref_allele: None,
-            clinical_impact: Some(String::new()),
+        known.clinvar = Some(Box::new({
+            let mut detail = ClinVarDetail::default();
+            detail.clin_sig_allele = Some(String::new());
+            detail.clin_sig_ref_allele = None;
+            detail.clinical_impact = Some(String::new());
+            detail
         }));
         variant.colocated_variants = vec![known];
         assert_eq!(
             extra(&variant, None, &options),
             "IMPACT=MODIFIER;CLINVAR_SOMATIC_CLASSIFICATION="
         );
-        let without = FieldOptions {
-            check_existing: true,
-            ..Default::default()
-        };
+        let mut without = FieldOptions::default();
+        without.check_existing = true;
         assert_eq!(extra(&variant, None, &without), "IMPACT=MODIFIER");
     }
 
@@ -1759,11 +1704,9 @@ mod tests {
         variant
             .plugin_data
             .insert("gnomAD_AC_hom".to_string(), "19".to_string());
-        let mut tc = TranscriptConsequence {
-            impact: Impact::LOW,
-            strand: 1,
-            ..Default::default()
-        };
+        let mut tc = TranscriptConsequence::default();
+        tc.impact = Impact::LOW;
+        tc.strand = 1;
         tc.plugin_data
             .insert("scores_Comment".to_string(), String::new());
         assert_eq!(

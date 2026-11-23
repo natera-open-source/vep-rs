@@ -30,11 +30,10 @@ use tracing::debug;
 use crate::annotation_store::AnnotationStore;
 use crate::params::PluginParams;
 use crate::tabix::{
-    check_plugin_table, find_index_path, load_index, split_field_count, table_contig,
-    BatchQueryResult, TabixAnnotator, TabixConfig, TabixRecord,
+    check_plugin_table, indexed_table_config, split_field_count, table_contig, BatchQueryResult,
+    TabixAnnotator, TabixConfig, TabixRecord,
 };
 use crate::traits::{BuiltinPlugin, PluginError, PrefetchData};
-use noodles::csi::binning_index::index::header::format::CoordinateSystem;
 use vep_core::assembly::Assembly;
 use vep_core::consequence::{Consequence, TranscriptConsequence};
 use vep_core::variant::InputVariant;
@@ -138,23 +137,12 @@ impl LoeufPlugin {
     /// (`tabix -s`, `-b`, `-e`): the columns Ensembl VEP's `tabix` call
     /// queries on, whatever the table's own header says.
     fn indexed_config(path: &Path) -> Result<TabixConfig, PluginError> {
-        let index_path = find_index_path(path)?;
-        let index = load_index(&index_path)?;
-        let header = index.header().ok_or_else(|| {
-            PluginError::Init(format!(
+        indexed_table_config(path, |index_path| {
+            format!(
                 "LOEUF: index {} carries no tabix header, so its coordinate columns are \
                  unknown; index the file with tabix",
                 index_path.display()
-            ))
-        })?;
-        Ok(TabixConfig {
-            file_path: path.to_path_buf(),
-            chr_col: header.reference_sequence_name_index(),
-            start_col: header.start_position_index(),
-            end_col: header.end_position_index(),
-            ref_col: None,
-            alt_col: None,
-            zero_based: header.format().coordinate_system() == CoordinateSystem::Bed,
+            )
         })
     }
 
@@ -190,7 +178,7 @@ impl LoeufPlugin {
                     let Some(text) = cell(record, layout.loeuf) else {
                         continue;
                     };
-                    let Ok(number) = text.parse::<f64>() else {
+                    let Some(number) = number_of(text) else {
                         continue;
                     };
                     if minimum.is_none_or(|(least, _)| number < least) {
@@ -201,6 +189,14 @@ impl LoeufPlugin {
             }
         }
     }
+}
+
+/// The cell's number where Perl's `looks_like_number` reads one
+/// (`LOEUF.pm:192`), which allows white space on either side of the number.
+fn number_of(text: &str) -> Option<f64> {
+    text.trim_matches(|c: char| matches!(c, ' ' | '\t' | '\n' | '\r' | '\x0b' | '\x0c'))
+        .parse()
+        .ok()
 }
 
 /// The record's cell at a 0-based column, `None` past its last tab.
@@ -219,6 +215,8 @@ fn is_flanking_row(tc: &TranscriptConsequence) -> bool {
     })
 }
 
+impl crate::traits::sealed::Sealed for LoeufPlugin {}
+
 impl BuiltinPlugin for LoeufPlugin {
     fn name(&self) -> &str {
         "LOEUF"
@@ -233,6 +231,12 @@ impl BuiltinPlugin for LoeufPlugin {
 
     fn set_assembly(&mut self, assembly: Option<Assembly>) {
         self.assembly = assembly;
+    }
+
+    fn set_reference_fasta(&mut self, fasta: Option<std::sync::Arc<vep_fasta::IndexedFasta>>) {
+        if let Some(store) = self.store.as_mut() {
+            store.set_reference_fasta(fasta);
+        }
     }
 
     fn init(&mut self, params: &[String]) -> Result<(), PluginError> {
@@ -266,11 +270,12 @@ impl BuiltinPlugin for LoeufPlugin {
 
         // `add_file` runs before the index is read (LOEUF.pm:110).
         check_plugin_table(path)?;
-        // Not `open_best_store`: the table's coordinate columns are read from
-        // its tabix index (the `-s 114 -b 115 -e 116` of LOEUF.pm:66), which a
-        // `.vpd` store beside the table does not carry.
+        // Not `open_best_store`: the table is read through tabix alone, by the
+        // coordinate columns its tabix index names (the `-s 114 -b 115 -e 116`
+        // of LOEUF.pm:66).
         let store: Box<dyn AnnotationStore> = Box::new(
             TabixAnnotator::open_plugin_table(Self::indexed_config(path)?)?
+                .keeping_trailing_whitespace()
                 .on_assembly(self.assembly),
         );
         let header = store.header().ok_or_else(|| {
@@ -527,15 +532,15 @@ mod tests {
     }
 
     fn consequence(transcript: &str, gene: &str, terms: &[Consequence]) -> TranscriptConsequence {
-        TranscriptConsequence {
-            transcript: Some(Arc::new(Transcript {
-                stable_id: transcript.into(),
-                gene_stable_id: gene.into(),
-                ..Transcript::default()
-            })),
-            consequences: terms.iter().copied().collect(),
-            ..Default::default()
-        }
+        let mut consequence = TranscriptConsequence::default();
+        consequence.transcript = Some(Arc::new({
+            let mut model = Transcript::default();
+            model.stable_id = transcript.into();
+            model.gene_stable_id = gene.into();
+            model
+        }));
+        consequence.consequences = terms.iter().copied().collect();
+        consequence
     }
 
     /// A chromosome 21 SNV with one row per `(transcript, gene, terms)`.
@@ -795,6 +800,72 @@ mod tests {
             .is_empty());
     }
 
+    /// The plugin is handed each line with the white space before its line end
+    /// (`BaseVepTabixPlugin.pm:605-606`, `:628-629`; the `tabix` command route
+    /// removes the line end and one carriage return alone, `:655-656`), splits
+    /// it on tabs (`LOEUF.pm:215`) and returns the cell (`:181`). On a table
+    /// whose last column is the LOEUF column, a space after the value is
+    /// printed under `match_by=transcript`; under `match_by=gene` the cell is a
+    /// number to `looks_like_number` (`:192`) and the minimum is printed as
+    /// its cell is written (`:204`).
+    #[test]
+    fn a_space_after_a_last_loeuf_cell_is_printed() {
+        let dir = tempfile::tempdir().unwrap();
+        let header = row(
+            94,
+            &[
+                (0, "#gene"),
+                (1, "gene_id"),
+                (2, "transcript"),
+                (3, "chrom"),
+                (4, "start"),
+                (5, "end"),
+                (93, "lof.oe_ci.upper"),
+            ],
+        );
+        let sod1 = |transcript: &str, loeuf: &str| {
+            row(
+                94,
+                &[
+                    (0, "SOD1"),
+                    (1, SOD1),
+                    (2, transcript),
+                    (3, "21"),
+                    (4, "31659666"),
+                    (5, "31668931"),
+                    (93, loeuf),
+                ],
+            )
+        };
+        let lines = [
+            header.as_str(),
+            &sod1("ENST00000389995", "9.0772e-01 "),
+            &sod1("ENST00000270142", "9.9000e-01"),
+        ];
+        let path = write_tabix_fixture(
+            dir.path(),
+            "loeuf_synthetic_narrow.tsv.gz",
+            &lines,
+            IndexSpec::standard().with_span_cols(4, 5, 6),
+        );
+        let rows: &[(&str, &str, &[Consequence])] = &[
+            ("ENST00000389995", SOD1, MISSENSE),
+            ("ENST00000270142", SOD1, MISSENSE),
+        ];
+
+        let mut variants = vec![variant(31660000, rows)];
+        plugin(&path, "transcript")
+            .run_batch(&mut variants)
+            .unwrap();
+        assert_eq!(loeuf_of(&variants, 0, 0), Some("9.0772e-01 "));
+        assert_eq!(loeuf_of(&variants, 0, 1), Some("9.9000e-01"));
+
+        let mut variants = vec![variant(31660000, rows)];
+        plugin(&path, "gene").run_batch(&mut variants).unwrap();
+        assert_eq!(loeuf_of(&variants, 0, 0), Some("9.0772e-01 "));
+        assert_eq!(loeuf_of(&variants, 0, 1), Some("9.0772e-01 "));
+    }
+
     /// `LOEUF.pm:169`: a row carrying `upstream_gene_variant` or
     /// `downstream_gene_variant` gets no value, under either `match_by`, even
     /// when the variant lies inside the table's gene span (the table's span is
@@ -885,5 +956,65 @@ mod tests {
         assert_eq!(loeuf_of(&variants, 0, 0), None);
         let tc = consequence("ENST00000270142", SOD1, &[Consequence::MissenseVariant]);
         assert!(plugin.run(&tc, &variants[0]).unwrap().is_empty());
+    }
+
+    /// LOEUF reads its table through tabix alone: a `.vpd` store beside the
+    /// table is not read, though it is bound to the table's content and built
+    /// for the columns the table's index names, so it opens for that table.
+    /// The store's one row holds another value than the table's, and the
+    /// plugin prints the table's.
+    #[test]
+    fn a_store_beside_a_loeuf_table_is_not_read() {
+        use crate::binary_store::{BinaryAnnotator, BinaryStoreWriter, ContentIdentity};
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = v4_fixture(dir.path());
+        let cells = row(
+            116,
+            &[
+                (0, "SOD1"),
+                (1, SOD1),
+                (2, "ENST00000389995"),
+                (93, "1.1111e-01"),
+                (113, "21"),
+                (114, "31659666"),
+                (115, "31668931"),
+            ],
+        );
+        let header: Arc<Vec<String>> = Arc::new((0..116).map(|i| format!("c{i}")).collect());
+        let record = TabixRecord {
+            chr: "21".to_string(),
+            start: 31659666,
+            end: 31668931,
+            columns: cells.split('\t').map(str::to_string).collect(),
+            header: Some(Arc::clone(&header)),
+        };
+        let layout = LoeufPlugin::indexed_config(&path).unwrap();
+        let vpd = crate::annotation_store::find_binary_store_path(&path);
+        assert_eq!(vpd, None, "the fixture has no store");
+        let vpd = dir.path().join("loeuf_dataset_grch38.tsv.vpd");
+        BinaryStoreWriter::new(vpd.clone())
+            .write(
+                &header,
+                &[("21".to_string(), vec![record])],
+                &layout,
+                &ContentIdentity::of_file(&path).unwrap(),
+            )
+            .unwrap();
+        assert_eq!(
+            crate::annotation_store::find_binary_store_path(&path),
+            Some(vpd.clone()),
+            "the store lies where a plugin looks for one"
+        );
+        let store = BinaryAnnotator::open(&vpd, &layout).unwrap();
+        assert_eq!(
+            store.query("21", 31660000, 31660000).unwrap()[0].columns[93],
+            "1.1111e-01"
+        );
+
+        let v4 = plugin(&path, "transcript");
+        let mut variants = vec![variant(31660000, &[("ENST00000389995", SOD1, MISSENSE)])];
+        v4.run_batch(&mut variants).unwrap();
+        assert_eq!(loeuf_of(&variants, 0, 0), Some("9.5524e-01"));
     }
 }

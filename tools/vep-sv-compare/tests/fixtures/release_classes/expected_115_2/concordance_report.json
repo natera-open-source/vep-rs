@@ -1,0 +1,313 @@
+{
+  "overall": {
+    "total_input": 25,
+    "perl_variants": 2,
+    "rust_variants": 2,
+    "perl_tuples": 27,
+    "rust_tuples": 37,
+    "intersection": 11,
+    "only_perl": 16,
+    "only_rust": 26,
+    "precision": 0.297297,
+    "recall": 0.407407,
+    "f1": 0.34375,
+    "perl_tuples_union": 26,
+    "rust_tuples_union": 36,
+    "intersection_union": 10,
+    "cross_file_duplicate_perl": 1,
+    "cross_file_duplicate_rust": 1
+  },
+  "per_file": {
+    "01_breakends": {
+      "total_input": 6,
+      "perl_variants": 1,
+      "rust_variants": 1,
+      "perl_tuples": 9,
+      "rust_tuples": 14,
+      "intersection": 8,
+      "only_perl": 1,
+      "only_rust": 6,
+      "precision": 0.571429,
+      "recall": 0.888889,
+      "f1": 0.695652
+    },
+    "02_one_sided": {
+      "total_input": 12,
+      "perl_variants": 1,
+      "rust_variants": 1,
+      "perl_tuples": 11,
+      "rust_tuples": 11,
+      "intersection": 1,
+      "only_perl": 10,
+      "only_rust": 10,
+      "precision": 0.090909,
+      "recall": 0.090909,
+      "f1": 0.090909
+    },
+    "03_tandem_repeats": {
+      "total_input": 6,
+      "perl_variants": 0,
+      "rust_variants": 0,
+      "perl_tuples": 5,
+      "rust_tuples": 10,
+      "intersection": 1,
+      "only_perl": 4,
+      "only_rust": 9,
+      "precision": 0.1,
+      "recall": 0.2,
+      "f1": 0.133333
+    },
+    "04_small_variants": {
+      "total_input": 1,
+      "perl_variants": 0,
+      "rust_variants": 0,
+      "perl_tuples": 2,
+      "rust_tuples": 2,
+      "intersection": 1,
+      "only_perl": 1,
+      "only_rust": 1,
+      "precision": 0.5,
+      "recall": 0.5,
+      "f1": 0.5
+    }
+  },
+  "per_variant_type": {
+    "BND": {
+      "total_input": 7,
+      "perl_variants": 1,
+      "rust_variants": 1,
+      "perl_tuples": 11,
+      "rust_tuples": 16,
+      "intersection": 8,
+      "only_perl": 3,
+      "only_rust": 8,
+      "precision": 0.5,
+      "recall": 0.727273,
+      "f1": 0.592593
+    },
+    "Multi_allelic": {
+      "total_input": 2,
+      "perl_variants": 0,
+      "rust_variants": 1,
+      "perl_tuples": 2,
+      "rust_tuples": 5,
+      "intersection": 0,
+      "only_perl": 2,
+      "only_rust": 5,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    "RefOnly": {
+      "total_input": 1,
+      "perl_variants": 0,
+      "rust_variants": 0,
+      "perl_tuples": 1,
+      "rust_tuples": 0,
+      "intersection": 0,
+      "only_perl": 1,
+      "only_rust": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    "SNV": {
+      "total_input": 1,
+      "perl_variants": 1,
+      "rust_variants": 0,
+      "perl_tuples": 1,
+      "rust_tuples": 0,
+      "intersection": 0,
+      "only_perl": 1,
+      "only_rust": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    "Small_INS": {
+      "total_input": 1,
+      "perl_variants": 0,
+      "rust_variants": 0,
+      "perl_tuples": 2,
+      "rust_tuples": 2,
+      "intersection": 1,
+      "only_perl": 1,
+      "only_rust": 1,
+      "precision": 0.5,
+      "recall": 0.5,
+      "f1": 0.5
+    },
+    "Spanning": {
+      "total_input": 1,
+      "perl_variants": 0,
+      "rust_variants": 0,
+      "perl_tuples": 2,
+      "rust_tuples": 0,
+      "intersection": 0,
+      "only_perl": 2,
+      "only_rust": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    "Symbolic_CNV": {
+      "total_input": 4,
+      "perl_variants": 0,
+      "rust_variants": 0,
+      "perl_tuples": 2,
+      "rust_tuples": 6,
+      "intersection": 0,
+      "only_perl": 2,
+      "only_rust": 6,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    "Symbolic_DEL": {
+      "total_input": 8,
+      "perl_variants": 1,
+      "rust_variants": 0,
+      "perl_tuples": 6,
+      "rust_tuples": 7,
+      "intersection": 1,
+      "only_perl": 5,
+      "only_rust": 6,
+      "precision": 0.142857,
+      "recall": 0.166667,
+      "f1": 0.153846
+    }
+  },
+  "adjusted": {
+    "total_input": 25,
+    "perl_variants": 2,
+    "rust_variants": 2,
+    "perl_tuples": 22,
+    "rust_tuples": 32,
+    "intersection": 11,
+    "only_perl": 11,
+    "only_rust": 21,
+    "precision": 0.34375,
+    "recall": 0.5,
+    "f1": 0.407407,
+    "perl_tuples_union": 21,
+    "rust_tuples_union": 31,
+    "intersection_union": 10,
+    "cross_file_duplicate_perl": 1,
+    "cross_file_duplicate_rust": 1,
+    "excluded_divergences": 5,
+    "excluded_rust_extra": 5,
+    "excluded_perl_extra": 5,
+    "excluded_cnvtr_rust": 3,
+    "excluded_cnvtr_perl": 3,
+    "excluded_transcript_selection_rust": 0,
+    "excluded_transcript_selection_perl": 0,
+    "transcript_selection_cnvtr_overlap_rust": 0,
+    "cnvtr_swap_pairs_total_rust": 9,
+    "cnvtr_swap_pairs_total_perl": 4,
+    "excluded_cross_chromosome_perl": 0,
+    "excluded_cross_chromosome_rust": 0,
+    "excluded_transcript_selection_mate_rust": 0,
+    "excluded_registry_swap_rust": 1,
+    "excluded_registry_swap_perl": 1,
+    "excluded_registry_swap_by_bucket": {
+      "start_cooccurrence_swap": 1,
+      "covered_splice_region_swap": 0
+    },
+    "excluded_non_ref_batch_rust": 0,
+    "excluded_non_ref_batch_perl": 0,
+    "excluded_breakend_mate_local_read_rust": 1,
+    "excluded_breakend_mate_local_read_perl": 1,
+    "excluded_breakend_mate_local_read_by_kind": {
+      "cross_chromosome": 1,
+      "same_chromosome": 0
+    },
+    "transcript_selection_cross_chromosome_overlap_perl": 0,
+    "cross_chromosome_check_ran": true,
+    "scored_engine": "vep-rs",
+    "scored_engine_transcripts_absent_from_cache": 0,
+    "excluded_cross_chromosome_by_file": {},
+    "excluded_cnvtr_by_file": {
+      "03_tandem_repeats": 3
+    },
+    "excluded_transcript_selection_by_file": {},
+    "cnvtr_swap_pairs_total_by_file": {
+      "03_tandem_repeats": {
+        "rust": 9,
+        "perl": 4
+      }
+    },
+    "excluded_cross_chromosome_rust_by_file": {},
+    "excluded_transcript_selection_mate_by_file": {},
+    "excluded_registry_swap_by_file": {
+      "02_one_sided": {
+        "rust": 1,
+        "perl": 1,
+        "start_cooccurrence_swap": 1,
+        "covered_splice_region_swap": 0
+      }
+    },
+    "excluded_non_ref_batch_by_file": {},
+    "excluded_breakend_mate_local_read_by_file": {
+      "01_breakends": {
+        "rust": 1,
+        "perl": 1,
+        "cross_chromosome": 1,
+        "same_chromosome": 0
+      }
+    }
+  },
+  "per_file_adjusted": {
+    "01_breakends": {
+      "total_input": 6,
+      "perl_variants": 1,
+      "rust_variants": 1,
+      "perl_tuples": 8,
+      "rust_tuples": 13,
+      "intersection": 8,
+      "only_perl": 0,
+      "only_rust": 5,
+      "precision": 0.615385,
+      "recall": 1.0,
+      "f1": 0.761905
+    },
+    "02_one_sided": {
+      "total_input": 12,
+      "perl_variants": 1,
+      "rust_variants": 1,
+      "perl_tuples": 10,
+      "rust_tuples": 10,
+      "intersection": 1,
+      "only_perl": 9,
+      "only_rust": 9,
+      "precision": 0.1,
+      "recall": 0.1,
+      "f1": 0.1
+    },
+    "03_tandem_repeats": {
+      "total_input": 6,
+      "perl_variants": 0,
+      "rust_variants": 0,
+      "perl_tuples": 2,
+      "rust_tuples": 7,
+      "intersection": 1,
+      "only_perl": 1,
+      "only_rust": 6,
+      "precision": 0.142857,
+      "recall": 0.5,
+      "f1": 0.222222
+    },
+    "04_small_variants": {
+      "total_input": 1,
+      "perl_variants": 0,
+      "rust_variants": 0,
+      "perl_tuples": 2,
+      "rust_tuples": 2,
+      "intersection": 1,
+      "only_perl": 1,
+      "only_rust": 1,
+      "precision": 0.5,
+      "recall": 0.5,
+      "f1": 0.5
+    }
+  }
+}

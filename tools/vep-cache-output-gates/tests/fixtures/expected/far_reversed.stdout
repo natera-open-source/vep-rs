@@ -1,0 +1,8 @@
+  Consequence F1: 1.000000 (gate >= 0.999) PASS
+  Total annotations delta: 0.004975 (201000 vs 200000) (gate < 0.001) FAIL
+  Co-located variant delta: 0.013514 (148000 vs 150000) (gate < 0.01) FAIL
+  Frequency field max delta: 1.000000 (gate < 0.01) FAIL
+  Per-consequence max delta: 1.000000 (gate < 0.01) FAIL
+
+  Verdict: FAIL
+  Report:  verdict.json

@@ -1,9 +1,9 @@
 entry = "regulatory_structural_row_order"
 page = "docs/divergences/regulatory-structural-rows.md#1-a-structural-variants-rows-in-the-order-its-input-reaches-each-1-mb-region"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 0.83 per million · 25 flag sets, 8 corpora"
+input_class_basis = "2 · 0.83 per million · 60 flag sets, 8 corpora"
 notes = "A deletion over the 6 Mb boundary of chromosome 21 behind a breakend whose mate lies past it: the mate puts the later 1 Mb region on the buffer's list first, so Ensembl VEP lists the later region's regulatory rows before the earlier region's; vep-rs writes the files' order. The four rows are compared in the order written."
 
 [input]
@@ -40,4 +40,17 @@ vep_rs = [
   "21:5972901-6016000 | deletion | ENSR21_94DGM | regulatory_region_ablation,regulatory_region_variant | 404",
   "21:5972901-6016000 | deletion | ENSR00001793255 | regulatory_region_ablation,regulatory_region_variant | 493",
   "21:5972901-6016000 | deletion | ENSR00001793257 | regulatory_region_ablation,regulatory_region_variant | 404",
+]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/regulatory/index.rs::met_ranks",
+    "crates/vep-core/src/consequence.rs::TranscriptConsequence::structural_feature_order",
+    "crates/vep-io/src/output/fields.rs::transcript_order",
+]
+tests = [
+    "crates/vep-cli/src/regulatory/gff.rs::tests::structural_rows_come_in_the_sources_met_order",
+    "crates/vep-cli/src/regulatory/index.rs::tests::features_rank_by_their_file_and_their_place_in_it",
+    "crates/vep-cli/src/regulatory/source.rs::tests::converted_shard_orders_a_structural_variants_rows_as_the_cache_lists_them",
+    "crates/vep-io/src/output/fields.rs::tests::structural_gff_rows_follow_the_sources_met_order",
 ]

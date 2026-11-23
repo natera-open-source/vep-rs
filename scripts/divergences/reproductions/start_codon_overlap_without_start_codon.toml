@@ -1,0 +1,100 @@
+entry = "start_codon_overlap_without_start_codon"
+page = "docs/divergences/start-codon-overlap-without-start-codon.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "observed"
+input_class_basis = "1 · 999,998 per million · no flag needed"
+notes = "Thirteen made-up records on GRCh37, each on a transcript that carries no cds_start_NF and shows no start codon: its first codon is whole and is no start codon of the standard code, its recorded translation opens with the residue that codon names, and its record carries no consensus coding sequence id. Ensembl VEP reads the first three coding positions of every transcript without the flag as the start codon (VariationEffect.pm:975-986) and writes start_lost or start_retained_variant from tests that hold the edited bases against the standard start codon, the codon of Met (:941, :1022, :1065) or the residues at position 1 against each other (:878-882); vep-rs writes neither term, and the row carries the terms the sequence supports. Nine records lie on ENST00000420031, a reverse-strand transcript of NBPF1 whose coding sequence opens at cDNA 19, 1:16901033, behind a 5' UTR of 18 bases, on a codon of Ile at 1:16901033-16901031. residue_kept changes the codon's third base and keeps Ile: start_lost,synonymous_variant against synonymous_variant. residue_changed changes the first base, Ile to Val: start_lost against missense_variant. standard_start_codon_made changes the third base so that the three bases are the standard start codon, Ile to Met: start_lost,start_retained_variant against missense_variant. one_base_deleted removes the first coding base: frameshift_variant,start_lost against frameshift_variant. one_base_deleted_start_codon_made removes the second coding base, after which the three bases at the old coding start are the standard start codon: frameshift_variant,start_retained_variant against frameshift_variant. first_codon_deleted removes the three bases: start_lost,inframe_deletion against inframe_deletion. three_bases_inserted adds three bases between the second and the third coding base, Ile to Ile and Ala: start_lost against inframe_insertion. deleted_from_5_prime_utr removes the last two bases of the 5' UTR and the first coding base: start_lost,5_prime_UTR_variant against coding_sequence_variant,5_prime_UTR_variant. symbolic_deletion is a <DEL> of 1:16901025-16901040, both ends in the first exon: Ensembl VEP writes start_lost (:886-896) and start_retained_variant (:961 through :1037) beside frameshift_variant,feature_truncation,5_prime_UTR_variant, and vep-rs those three terms alone. Three records lie on ENST00000600312, a forward-strand transcript with no 5' UTR whose first base, 21:37402368, opens a codon of Leu that is no start codon. residue_changed_at_first_base changes that base, Leu to Val: start_lost against missense_variant, the term coming from the residues (:878-882), since the test of :941 returns at :926 on a transcript without a 5' UTR. one_base_deleted_at_first_codon removes the second coding base: frameshift_variant,start_lost against frameshift_variant. symbolic_deletion_at_first_base is a <DEL> of 21:37402368-37402373: start_lost and start_retained_variant beside feature_truncation,inframe_deletion against those two terms alone. stop_codon_made_at_first_codon lies on ENST00000601068, a reverse-strand transcript with no 5' UTR that opens on a codon of Cys at 21:47190005-47190003, and changes the codon's third base into a stop codon's: stop_gained,start_lost against stop_gained. Each record writes the same number of rows in both engines, and one row differs, the one compared here, in the Consequence and, where the most severe term changes, in IMPACT. The committed GRCh37 cache holds the three transcripts and no flag is needed. No committed cache holds a transcript whose first codon the start exon's phase pads while its record carries no cds_start_NF, nor one whose coding start an edit of the model touches, so the record has no line of either kind."
+
+[input]
+format = "vcf"
+text = """
+1	16901031	residue_kept_1_16901031	A	T	.	.	.
+1	16901033	residue_changed_1_16901033	T	C	.	.	.
+1	16901031	standard_start_codon_made_1_16901031	A	C	.	.	.
+1	16901032	one_base_deleted_1_16901033	AT	A	.	.	.
+1	16901031	one_base_deleted_start_codon_made_1_16901032	AA	A	.	.	.
+1	16901030	first_codon_deleted_1_16901031	CAAT	C	.	.	.
+1	16901031	three_bases_inserted_1_16901031	A	AGCG	.	.	.
+1	16901032	deleted_from_5_prime_utr_1_16901033	ATGA	A	.	.	.
+1	16901024	symbolic_deletion_1_16901025	N	<DEL>	.	.	SVTYPE=DEL;END=16901040
+21	37402368	residue_changed_at_first_base_21_37402368	C	G	.	.	.
+21	37402368	one_base_deleted_at_first_codon_21_37402369	CT	C	.	.	.
+21	37402367	symbolic_deletion_at_first_base_21_37402368	N	<DEL>	.	.	SVTYPE=DEL;END=37402373
+21	47190003	stop_codon_made_at_first_codon_21_47190003	A	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh37"
+json_cache = "tests/golden/116/GRCh37/json_cache"
+
+[run]
+flags = []
+
+[compare]
+kind = "rows"
+where = { record = ["residue_kept_1_16901031", "residue_changed_1_16901033", "standard_start_codon_made_1_16901031", "one_base_deleted_1_16901033", "one_base_deleted_start_codon_made_1_16901032", "first_codon_deleted_1_16901031", "three_bases_inserted_1_16901031", "deleted_from_5_prime_utr_1_16901033", "symbolic_deletion_1_16901025", "residue_changed_at_first_base_21_37402368", "one_base_deleted_at_first_codon_21_37402369", "symbolic_deletion_at_first_base_21_37402368", "stop_codon_made_at_first_codon_21_47190003"], feature = ["ENST00000420031", "ENST00000600312", "ENST00000601068"] }
+columns = ["Uploaded_variation", "Location", "Feature", "Consequence", "cDNA_position", "CDS_position", "Protein_position", "IMPACT"]
+
+[expected]
+ensembl_vep = [
+  "deleted_from_5_prime_utr_1_16901033 | 1:16901033-16901035 | ENST00000420031 | start_lost,5_prime_UTR_variant | 17-19 | ?-1 | ?-1 | HIGH",
+  "first_codon_deleted_1_16901031 | 1:16901031-16901033 | ENST00000420031 | start_lost,inframe_deletion | 19-21 | 1-3 | 1 | HIGH",
+  "one_base_deleted_1_16901033 | 1:16901033 | ENST00000420031 | frameshift_variant,start_lost | 19 | 1 | 1 | HIGH",
+  "one_base_deleted_at_first_codon_21_37402369 | 21:37402369 | ENST00000600312 | frameshift_variant,start_lost | 2 | 2 | 1 | HIGH",
+  "one_base_deleted_start_codon_made_1_16901032 | 1:16901032 | ENST00000420031 | frameshift_variant,start_retained_variant | 20 | 2 | 1 | HIGH",
+  "residue_changed_1_16901033 | 1:16901033 | ENST00000420031 | start_lost | 19 | 1 | 1 | HIGH",
+  "residue_changed_at_first_base_21_37402368 | 21:37402368 | ENST00000600312 | start_lost | 1 | 1 | 1 | HIGH",
+  "residue_kept_1_16901031 | 1:16901031 | ENST00000420031 | start_lost,synonymous_variant | 21 | 3 | 1 | HIGH",
+  "standard_start_codon_made_1_16901031 | 1:16901031 | ENST00000420031 | start_lost,start_retained_variant | 21 | 3 | 1 | HIGH",
+  "stop_codon_made_at_first_codon_21_47190003 | 21:47190003 | ENST00000601068 | stop_gained,start_lost | 3 | 3 | 1 | HIGH",
+  "symbolic_deletion_1_16901025 | 1:16901025-16901040 | ENST00000420031 | frameshift_variant,start_lost,feature_truncation,start_retained_variant,5_prime_UTR_variant | 12-27 | ?-9 | ?-3 | HIGH",
+  "symbolic_deletion_at_first_base_21_37402368 | 21:37402368-37402373 | ENST00000600312 | start_lost,feature_truncation,inframe_deletion,start_retained_variant | 1-6 | 1-6 | 1-2 | HIGH",
+  "three_bases_inserted_1_16901031 | 1:16901031-16901032 | ENST00000420031 | start_lost | 20-21 | 2-3 | 1 | HIGH",
+]
+vep_rs = [
+  "deleted_from_5_prime_utr_1_16901033 | 1:16901033-16901035 | ENST00000420031 | coding_sequence_variant,5_prime_UTR_variant | 17-19 | ?-1 | ?-1 | MODIFIER",
+  "first_codon_deleted_1_16901031 | 1:16901031-16901033 | ENST00000420031 | inframe_deletion | 19-21 | 1-3 | 1 | MODERATE",
+  "one_base_deleted_1_16901033 | 1:16901033 | ENST00000420031 | frameshift_variant | 19 | 1 | 1 | HIGH",
+  "one_base_deleted_at_first_codon_21_37402369 | 21:37402369 | ENST00000600312 | frameshift_variant | 2 | 2 | 1 | HIGH",
+  "one_base_deleted_start_codon_made_1_16901032 | 1:16901032 | ENST00000420031 | frameshift_variant | 20 | 2 | 1 | HIGH",
+  "residue_changed_1_16901033 | 1:16901033 | ENST00000420031 | missense_variant | 19 | 1 | 1 | MODERATE",
+  "residue_changed_at_first_base_21_37402368 | 21:37402368 | ENST00000600312 | missense_variant | 1 | 1 | 1 | MODERATE",
+  "residue_kept_1_16901031 | 1:16901031 | ENST00000420031 | synonymous_variant | 21 | 3 | 1 | LOW",
+  "standard_start_codon_made_1_16901031 | 1:16901031 | ENST00000420031 | missense_variant | 21 | 3 | 1 | MODERATE",
+  "stop_codon_made_at_first_codon_21_47190003 | 21:47190003 | ENST00000601068 | stop_gained | 3 | 3 | 1 | HIGH",
+  "symbolic_deletion_1_16901025 | 1:16901025-16901040 | ENST00000420031 | frameshift_variant,feature_truncation,5_prime_UTR_variant | 12-27 | ?-9 | ?-3 | HIGH",
+  "symbolic_deletion_at_first_base_21_37402368 | 21:37402368-37402373 | ENST00000600312 | feature_truncation,inframe_deletion | 1-6 | 1-6 | 1-2 | HIGH",
+  "three_bases_inserted_1_16901031 | 1:16901031-16901032 | ENST00000420031 | inframe_insertion | 20-21 | 2-3 | 1 | MODERATE",
+]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/coding.rs::PerlCodingEval::overlaps_start_codon",
+    "crates/vep-effects/src/coding.rs::replicate_ins_del_start_altered",
+    "crates/vep-effects/src/coding.rs::start_codon_opens",
+    "crates/vep-effects/src/coding.rs::start_codon_stands_at_the_coding_start",
+    "crates/vep-effects/src/sv/deletion.rs::calculate",
+    "crates/vep-effects/src/sv/insertion.rs::structural_start_lost",
+]
+tests = [
+    "crates/vep-cli/tests/start_codon_terms_where_no_start_codon_stands.rs::substitution_that_keeps_the_first_residue_of_a_cached_model_with_no_start_codon_is_synonymous_alone",
+    "crates/vep-effects/src/start_codon_tests.rs::change_from_the_5_prime_utr_into_a_coding_sequence_no_start_codon_opens_is_a_coding_sequence_variant",
+    "crates/vep-effects/src/start_codon_tests.rs::frameshift_in_the_first_codon_where_no_start_codon_stands_loses_no_start",
+    "crates/vep-effects/src/start_codon_tests.rs::frameshift_on_a_first_codon_the_start_phase_pads_loses_no_start_without_the_flag",
+    "crates/vep-effects/src/start_codon_tests.rs::in_frame_change_in_the_first_codon_where_no_start_codon_stands_has_no_start_term",
+    "crates/vep-effects/src/start_codon_tests.rs::substitution_that_changes_the_first_residue_where_no_start_codon_stands_is_missense",
+    "crates/vep-effects/src/start_codon_tests.rs::substitution_that_keeps_the_first_residue_where_no_start_codon_stands_is_synonymous",
+    "crates/vep-effects/src/start_codon_tests.rs::substitution_that_makes_the_usual_start_triplet_where_no_start_codon_stands_is_missense",
+    "crates/vep-effects/src/sv/deletion.rs::tests::structural_deletion_over_the_first_coding_bases_is_start_lost_only_where_a_start_codon_stands",
+    "crates/vep-effects/src/sv/insertion.rs::tests::structural_start_lost_needs_a_start_codon_at_the_coding_start",
+]
+rules = [
+    "tools/vep-formats-compare/src/coding_end_terms.rs::CodingEndClass::takes",
+    "tools/vep-formats-compare/src/coding_end_terms.rs::class_of_pair",
+    "tools/vep-formats-compare/src/coding_end_terms.rs::expected_terms",
+    "tools/vep-formats-compare/src/rules/coding_end_pairs.rs::start_codon_overlap_without_start_codon_pair",
+    "tools/vep-outputs-compare/src/rules/row.rs::start_codon_overlap_without_start_codon_pair",
+    "tools/vep-plugin-pairs/src/rules/coding_end.rs::coding_end_class",
+]

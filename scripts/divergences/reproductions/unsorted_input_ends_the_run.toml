@@ -1,7 +1,7 @@
 entry = "unsorted_input_ends_the_run"
 page = "docs/divergences/unsorted-input.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under Ensembl VEP's default input format, which states no order of lines (Ensembl VEP documentation, \"Data formats\", Default Ensembl VEP input); not seen in the measured datasets; classed by its most reachable shape, a default-format file in descending order: a VCF in that order breaks \"Positions are sorted numerically, in increasing order, within each reference sequence CHROM\" (VCF 4.2 specification, section 1.4.1 \"Fixed fields\")"
 notes = "The prepare step writes the 237 single-base chromosome 21 records of the GRCh38-statistics corpus in Ensembl VEP's default format, last record first, so 108 lines lie more than 100 bases before the line above them. Ensembl VEP counts such lines within one buffer fill and ends the run past 100 of them (InputBuffer.pm:216-220, 240-250, 258-263), writing no row; vep-rs writes the 3,136 rows Ensembl VEP writes for the same file under `--no_check_variants_order` or `--buffer_size 1`."
@@ -30,3 +30,7 @@ kind = "count"
 ensembl_vep_exit = 25
 ensembl_vep = "0"
 vep_rs = "3136"
+
+[implementation]
+none = "The text-format readers of vep-rs count no out-of-order record, so an input in any order is read and annotated by the ordinary path, and the stop is Ensembl VEP's alone."
+tests = ["crates/vep-cli/tests/cli_noops.rs::unsorted_input_is_annotated_in_input_order"]

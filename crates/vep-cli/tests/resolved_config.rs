@@ -6,7 +6,8 @@
 //! reader-core and prewarm knobs as configured) and the input's shape, one
 //! `<name>\t<value>` line each, then exits 0 without opening the output or
 //! annotating; a named input file that is not there is refused as a run refuses
-//! it.
+//! it. `Config::default()` holds what a command line without a flag resolves to,
+//! field by field, but for the fields that resolution reads from the host.
 
 mod common;
 
@@ -17,6 +18,7 @@ use vep_cli::config::{
     COMPRESSION_THREADS_AUTO_CAP, DECOMPRESSION_THREADS_AUTO_CAP,
 };
 use vep_cli::input_shape::physical_cores;
+use vep_cli::Config;
 
 use common::{corpora, isolated_vep_anywhere, Corpus};
 
@@ -313,4 +315,85 @@ fn resolved_config_reads_no_shape_under_input_data() {
     );
     assert!(stdout.contains("input_shape\tunknown\n"), "{stdout}");
     assert!(!out.exists());
+}
+
+/// The fields of `config` in declaration order, each with the text its pretty
+/// `Debug` form prints for it: a field opens on a line indented by one step and
+/// holds every deeper line up to the next field.
+fn fields_of(config: &Config) -> Vec<(String, String)> {
+    let mut fields: Vec<(String, String)> = Vec::new();
+    for line in format!("{config:#?}").lines() {
+        let Some(indented) = line.strip_prefix("    ") else {
+            continue;
+        };
+        let opens_a_field = indented.split_once(": ").filter(|(name, _)| {
+            !name.is_empty() && name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
+        });
+        match (opens_a_field, fields.last_mut()) {
+            (Some((name, value)), _) => fields.push((name.to_string(), value.to_string())),
+            (None, Some((_, value))) => {
+                value.push('\n');
+                value.push_str(indented);
+            }
+            (None, None) => panic!("no field opens before {line:?}"),
+        }
+    }
+    fields
+}
+
+/// The fields `Config::default()` is not compared in, each with why the
+/// resolution of a command line gives a value of the host there.
+const READ_FROM_THE_HOST: [(&str, &str); 4] = [
+    ("dir", "the `~` of `~/.vep` is expanded under `HOME`"),
+    ("dir_cache", "it is `dir`, expanded under `HOME`"),
+    (
+        "dir_plugins",
+        "`<dir>/Plugins` is expanded under `HOME` and each match is tested for a directory",
+    ),
+    (
+        "compression_threads",
+        "the count of the `0` rule is lowered to the host's processors",
+    ),
+];
+
+/// `vep` requires no flag, so the program name alone is the smallest command
+/// line the parser accepts. Every field of the default equals the one that
+/// command line resolves to, the fields read from the `Debug` text so that
+/// none is named here, except the fields of `READ_FROM_THE_HOST`, where the
+/// default holds a value that is the same on every machine.
+#[test]
+fn default_configuration_is_what_a_command_line_without_a_flag_resolves_to() {
+    let resolved = fields_of(&Config::from_argv(["vep"]).expect("the program name alone parses"));
+    let default = fields_of(&Config::default());
+    let names = |fields: &[(String, String)]| -> Vec<String> {
+        fields.iter().map(|(name, _)| name.clone()).collect()
+    };
+    assert_eq!(names(&default), names(&resolved));
+    assert!(default.len() > 150, "{} fields read", default.len());
+    for (field, why) in READ_FROM_THE_HOST {
+        assert!(
+            default.iter().any(|(name, _)| name == field),
+            "{field} is no field of the configuration ({why})"
+        );
+    }
+    let differing: Vec<String> = default
+        .iter()
+        .zip(&resolved)
+        .filter(|((name, _), _)| !READ_FROM_THE_HOST.iter().any(|(field, _)| field == name))
+        .filter(|((_, default), (_, resolved))| default != resolved)
+        .map(|((name, default), (_, resolved))| {
+            format!(
+                "{name}: the default holds {default} and the command line resolves to {resolved}"
+            )
+        })
+        .collect();
+    assert!(differing.is_empty(), "{}", differing.join("\n"));
+
+    let config = Config::default();
+    assert_eq!(config.dir, "~/.vep");
+    assert_eq!(config.dir_cache, "~/.vep");
+    assert_eq!(config.dir_plugins.pattern, "~/.vep/Plugins");
+    assert!(config.dir_plugins.dirs.is_empty());
+    assert!(config.dir_plugins.not_found.is_empty());
+    assert_eq!(config.compression_threads, 4);
 }

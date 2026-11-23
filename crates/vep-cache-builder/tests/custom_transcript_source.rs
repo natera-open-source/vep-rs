@@ -497,7 +497,7 @@ fn an_unlisted_ensembl_type_is_absent_from_a_genome_only_build() {
         "{log}"
     );
     assert!(
-        log.contains("1 parent identifiers name a line of")
+        log.contains("1 parent identifier names a line of")
             && log.contains(&format!(
                 "of a type not read; {ORPHAN_RULE}: transcript:ENST00000000005"
             )),
@@ -666,7 +666,7 @@ fn a_gtf_ccds_id_is_the_cache_ccds() {
 /// Ensembl VEP's `--gff` source gives a translation the `version` of its
 /// first CDS line, else 1 (`BaseGXF.pm` `_add_translation`), and prints that
 /// version after the protein identifier under `--protein_version`
-/// (`OutputFactory.pm` lines 1560-1565) and in `HGVSp`
+/// (`OutputFactory.pm` lines 1569-1574) and in `HGVSp`
 /// (`TranscriptVariationAllele.pm` lines 1759-1760). A cache built from the
 /// genome and an Ensembl GFF3 whose CDS lines carry no `version`, the shape
 /// of the GRCh37 release-87 file, prints the same `.1` as one built from the
@@ -787,12 +787,22 @@ fn a_protein_fasta_short_of_a_transcript_is_named_in_the_log() {
         .collect();
     assert_eq!(one.matches('>').count(), 1);
     let none = ">NP_000000004.1 some protein\nMKV\n";
-    let short = "translated transcripts have no record in the protein FASTA";
+    let short = "no record in the protein FASTA";
     let no_record = "holds no record naming a transcript (`transcript:` token) with a sequence";
     let cases: [(&str, &str, Option<&str>, bool); 3] = [
         ("both", both.as_str(), None, false),
-        ("one", one.as_str(), Some("1 of 2"), false),
-        ("none", none, Some("2 of 2"), true),
+        (
+            "one",
+            one.as_str(),
+            Some("1 of 2 translated transcripts has"),
+            false,
+        ),
+        (
+            "none",
+            none,
+            Some("2 of 2 translated transcripts have"),
+            true,
+        ),
     ];
     for (name, proteins, short_count, no_record_expected) in cases {
         let path = dir.path().join(format!("{name}.pep.fa"));

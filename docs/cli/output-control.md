@@ -1,12 +1,12 @@
 # Output control
 
-These flags choose which annotation fields appear in the output. `--everything` switches on exactly Ensembl VEP's `--everything` set, listed under [option sets](../cli-reference.md#option-sets-configpm351-593).
+These flags choose which annotation fields appear in the output, report the known variants co-located with each input variant, and drop the rows outside a coding sequence or outside every transcript. `--everything` switches on exactly Ensembl VEP's `--everything` set, listed under [option sets](../cli-reference.md#option-sets-configpm351-593).
 
-## Flags
+## Annotation fields
 
 | Flag | Type | Default | Description |
 | --- | --- | --- | --- |
-| `--everything`, `-e` | bool | false | Shorthand for Ensembl VEP's `--everything` set: `--sift` b, `--polyphen` b, `--ccds`, `--hgvs`, `--symbol`, `--numbers`, `--domains`, `--regulatory`, `--canonical`, `--protein`, `--biotype`, `--af`, `--af_1kg`, `--af_gnomade`, `--af_gnomadg`, `--max_af`, `--pubmed`, `--uniprot`, `--mane`, `--tsl`, `--appris`, `--variant_class`, `--gene_phenotype` and `--mirna`, each overriding an explicit value as in Ensembl VEP. `--regulatory` in the set writes the regulatory and motif rows of a cache converted with its regulatory features, every motif field included; CELL\_TYPE is added by `--cell_type` beside the set |
+| `--everything`, `-e` | bool | false | Shorthand for Ensembl VEP's `--everything` set: `--sift` b, `--polyphen` b, `--ccds`, `--hgvs`, `--symbol`, `--numbers`, `--domains`, `--regulatory`, `--canonical`, `--protein`, `--biotype`, `--af`, `--af_1kg`, `--af_gnomade`, `--af_gnomadg`, `--max_af`, `--pubmed`, `--uniprot`, `--mane`, `--tsl`, `--appris`, `--variant_class`, `--gene_phenotype` and `--mirna`, each overriding an explicit value as in Ensembl VEP. `--regulatory` in the set writes the regulatory and motif rows of a cache that carries regulatory features, every motif field included where the cache carries the binding matrices' counts; CELL\_TYPE is added by `--cell_type` beside the set where it carries cell-type activity |
 | `--symbol` | bool | false | Add gene symbol to output |
 | `--biotype` | bool | false | Add transcript biotype to output |
 | `--canonical` | bool | false | Flag canonical transcripts |
@@ -28,8 +28,8 @@ These flags choose which annotation fields appear in the output. `--everything` 
 | `--ga4gh_vrs` | bool | false | Add the GA4GH\_VRS column: the allele's SPDI as a GA4GH Variation Representation Specification Allele object on the sequence refseq:\<NC\_ accession\>, the accession being the first NC\_ synonym of the cache's chromosome name in the chromosome synonyms table, in its latest form where the table lists it in more than one (Ensembl VEP writes the object only where its SPDI is named by an NC\_ accession: with a database, or on a row overlapping no transcript whose FASTA record carries that name; a chromosome with no NC\_ synonym gets none); JSON-encoded in the text outputs, nested in the JSON output. Cannot be combined with `--vcf` |
 | `--hgvsp_use_prediction` | bool | false | Write HGVSp in the predicted form, the description after p. in parentheses (ENSP00000286808.3:p.(Arg97Ter)); the = of a synonymous description is still escaped as %3D in the text formats |
 | `--remove_hgvsp_version` | bool | false | Leave the translation version off the HGVSp reference name (ENSP00000286808:p.Arg97Ter); HGVSc keeps its version |
-| `--sift` | `s`, `p`, `b` | none | Add the SIFT column on every single-residue substitution inside the coding sequence (start\_lost included, a stop change never): p the prediction, s the score, b both as prediction(score). Needs a cache whose metadata names a SIFT version; a cache without one stops the run, or under `--everything` or `--safe` drops the flag with an INFO line (a native cache carries the matrices only when built with `--include-predictions`) |
-| `--polyphen` | `s`, `p`, `b` | none | Add the PolyPhen column on every single-residue substitution inside the coding sequence (start\_lost included, a stop change never): p the prediction, s the score, b both as prediction(score). Needs a cache whose metadata names a PolyPhen version; a cache without one stops the run, or under `--everything` or `--safe` drops the flag with an INFO line (a native cache carries the matrices only when built with `--include-predictions`) |
+| `--sift` | `s`, `p`, `b` | none | Add the SIFT column on every single-residue substitution inside the coding sequence (start\_lost included, a stop change never): p the prediction, s the score, b both as prediction(score). Needs a cache whose metadata names a SIFT version; a cache without one stops the run, or under `--everything` or `--safe` drops the flag with an INFO line (a native cache carries the matrices when its build read them: an `--auto` installation where the release publishes them, or `--include-predictions`) |
+| `--polyphen` | `s`, `p`, `b` | none | Add the PolyPhen column on every single-residue substitution inside the coding sequence (start\_lost included, a stop change never): p the prediction, s the score, b both as prediction(score). Needs a cache whose metadata names a PolyPhen version; a cache without one stops the run, or under `--everything` or `--safe` drops the flag with an INFO line (a native cache carries the matrices when its build read them: an `--auto` installation where the release publishes them, or `--include-predictions`) |
 | `--humdiv` | bool | false | Read the PolyPhen column from the HumDiv-trained matrix instead of the default HumVar one; a cache without the HumDiv matrix prints an empty column with no error, as in Ensembl VEP |
 | `--condel` | String | none | Accepted without effect: Ensembl VEP declares it and reads nothing from it |
 | `--nearest` | `transcript`, `gene`, `symbol` | none | Add the NEAREST column: the protein-coding transcription start site(s) nearest each variant as a transcript stable id, gene stable id or gene symbol; the site above the variant and the site below are measured to the nearer end of the variant, both are reported when they tie, and every transcript starting at a reported site is listed in stable-id order where Ensembl VEP lists one |
@@ -41,6 +41,13 @@ These flags choose which annotation fields appear in the output. `--everything` 
 | `--extended_promoters` | bool | false | Use the extended boundaries of promoter features when annotating with `--regulatory_gff`: the extended\_start and extended\_end attributes, which are never inside the core region, so the flag only ever adds annotation. Affects promoter features only, and changes nothing without `--regulatory_gff` |
 | `--variant_class` | bool | false | Add variant class from SO |
 | `--overlaps` | bool | false | Add the OverlapBP and OverlapPC columns to the tab, VCF and Parquet outputs: the bases of a structural variant inside the transcript and the percentage of the transcript they cover (also reported for cached regulatory and motif features) |
+| `--hgnc` | bool | false | Accepted without effect: Ensembl VEP declares it and reads nothing from it |
+| `--mirna` | bool | false | Add the miRNA column: the secondary-structure elements of a miRNA transcript the variant overlaps, as the SO terms miRNA\_stem and miRNA\_loop (a native cache carries the structure only when built with `--core-dumps`) |
+
+## Co-located variants
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
 | `--check_existing` | bool | false | Check for co-located known variants |
 | `--no_check_alleles` | bool | false | Report a known variant as co-located when its start and end equal the input variant's, whatever its alleles; such a variant prints on every allele's row |
 | `--exclude_null_alleles` | bool | false | Never report a known variant whose alleles the cache does not hold (COSMIC and HGMD records, dbSNP records without variation); without the flag such a variant is reported when its start and end equal the input variant's |
@@ -48,8 +55,12 @@ These flags choose which annotation fields appear in the output. `--everything` 
 | `--clin_sig_allele` | i64 | 1 | Report the ClinVar significance of the row's own allele where a co-located variant carries allele-specific entries (1, the default); 0 reports every variant's significance whatever the allele |
 | `--clinvar_somatic_classification` | bool | false | Add the ClinVar somatic classification of co-located variants (CLINVAR\_SOMATIC\_CLASSIFICATION), the cache's string as written |
 | `--var_synonyms` | bool | false | Add the known synonyms of co-located variants and their sources (VAR\_SYNONYMS); switches on `--check_existing` |
-| `--check_svs` | String | none | Report the known structural variants overlapping each variant (SV) from Ensembl's indexed structural-variant VCF (homo\_sapiens\_structural\_variations.vcf.gz with its .csi or .tbi beside it), Ensembl's dump of the database Ensembl VEP reads them from; Ensembl VEP takes the flag without a value and refuses it offline |
+| `--check_svs` | String | none | Report the known structural variants overlapping each variant (SV) from Ensembl's indexed structural-variant VCF of the species (\<species\>\_structural\_variations.vcf.gz, for human homo\_sapiens\_structural\_variations.vcf.gz, with its .csi or .tbi beside it), Ensembl's dump of the database Ensembl VEP reads them from; the file is read under whatever name it is given; Ensembl VEP takes the flag without a value and refuses it offline |
+
+## Dropped rows
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
 | `--coding_only` | bool | false | Keep only the rows whose allele lies in a transcript's coding sequence (a CDS position or a coding consequence term, a variant covering a translated transcript whole included); intergenic and non-coding rows go, and a record left with no row is written as an unannotated one |
 | `--no_intergenic` | bool | false | Write no row for a record that overlaps no transcript: no intergenic row in the default and tab formats, the VCF line without a CSQ entry, and in JSON a most\_severe\_consequence of "?" with no intergenic\_consequences |
-| `--hgnc` | bool | false | Accepted without effect: Ensembl VEP declares it and reads nothing from it |
 

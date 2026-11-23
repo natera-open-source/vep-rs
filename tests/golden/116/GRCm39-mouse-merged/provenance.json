@@ -1,0 +1,84 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species mus_musculus --assembly GRCm39 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --merged [--tab|--vcf|--json]",
+ "perl_cache": "mus_musculus_merged/116_GRCm39",
+ "fasta": "the eleven contigs the records and the pruned cache's transcripts sit on (19, MT and nine unplaced scaffolds) at their full length from Mus_musculus.GRCm39.dna.primary_assembly.fa, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
+ "input": "variants.vcf: 151 of the 502 records of the mouse corpus (tests/golden/116/GRCm39-mouse/variants.vcf): 121 on chromosome 19, 3 on the mitochondrion and 27 on nine unplaced scaffolds, each an exemplar of a consequence-set combination or of a stratum of the family key REFSEQ_MATCH=,SOURCE=,BAM_EDIT=,GIVEN_REF/USED_REF in Ensembl VEP's output over those records under --merged --hgvs (the RefSeq models' columns, with --hgvs for REFSEQ_OFFSET), one exemplar a combination. Twelve of the 502 were left out of the selection pool: the records that change or delete the one stop base the genome holds of the RefSeq mitochondrial models COX3, ND4 and CYTB, or insert before it. An RNA edit completes the stop codon of each, Ensembl VEP reads the held base at the completed codon's last base (the documented difference refseq_edited_model_appended_edit_pairs), and the corpus tool has no class for those rows. The chromosome names are the cache's on both sides and no synonyms file is needed",
+ "sha256": {
+  "default.txt": "5cb0c89e940c13231d9f1bd4e930748c0b46f5315cc0865740ce924233357e51",
+  "tab.txt": "642e21eeeb4b00eb8e41ee309524297206295cecaabbe9c305ce42f49d0fb0bb",
+  "vcf.vcf": "e6385e1d437433aa24c0fa453a5ecdd335521610d1c71d6675c5887ee2da97c8",
+  "json.jsonl": "041ac334d3f2ef6e5451bbab05fc1c7d2ab2b1be19a08cd767ff44609ff1cc79"
+ },
+ "variants_vcf_sha256": "0add7ca68397a4a4fbe3d181a38ec2a58e62d2750dc6c9d77567cfa237f8566e",
+ "flag_sets": {
+  "hgvs": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species mus_musculus --assembly GRCm39 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --merged --hgvs [--tab|--vcf|--json]",
+   "perl_cache": "mus_musculus_merged/116_GRCm39",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "4b54e6685c2fd0fb1bdab4518cc700f9acb176bd6ffff6ec52d64d34eccd55b1",
+    "tab.txt": "fff11c5594bb8250a6dbf1c900b73f4933b68cc88716c5c302e2b0d577821b76",
+    "vcf.vcf": "d83868622fc92133174576ed00ef4db3645ec2bb0a25e055d3e7b6e234795849",
+    "json.jsonl": "9f916c06edac25203598b47e6abad2122b318e448e0b94e918196e22cb4531ac"
+   },
+   "flags": [
+    "--merged",
+    "--hgvs"
+   ],
+   "expected_dir": "expected_hgvs"
+  }
+ },
+ "source_cache": {
+  "tarball": "mus_musculus_merged_vep_116_GRCm39.tar.gz under pub/release-116/variation/indexed_vep_cache/ of the Ensembl FTP site",
+  "source_type": "merged",
+  "bam": "none: info.txt names no alignment file",
+  "refseq_annotation": "GCF_000001635.27-RS_2024_02 - GCF_000001635.27_GRCm39_genomic.gff",
+  "converter": {
+   "tool": "tools/vep-storable-to-json",
+   "repository": "github.com/natera-open-source/vep-rs",
+   "build": "the release build of the tree this corpus is committed with",
+   "sequences": "the eighteen sequences of the mouse corpus's records, named in the converter's third argument"
+  },
+  "converted_models": {
+   "bam_edit_status": {
+    "absent": 233121
+   },
+   "rna_edit": "three mitochondrial RefSeq models (COX3, ND4, CYTB), each an edit that replaces the last base of the model by its whole stop codon",
+   "source_cache": {
+    "-": 1,
+    "Ensembl": 14973,
+    "RefSeq": 218147
+   }
+  },
+  "rseq_attributes": "none: no model of the converted sequences carries an rseq_* attribute, so REFSEQ_MATCH is empty on every row of both engines"
+ },
+ "pruned_cache": {
+  "layout": "json_cache",
+  "transcripts": 9040,
+  "transcripts_per_chromosome": {
+   "19": 8158,
+   "MT": 70,
+   "GL456210.1": 31,
+   "GL456219.1": 19,
+   "GL456221.1": 58,
+   "GL456354.1": 6,
+   "GL456372.1": 5,
+   "JH584296.1": 6,
+   "JH584299.1": 11,
+   "JH584303.1": 1,
+   "JH584304.1": 675
+  },
+  "shards": 58,
+  "method": "scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --flank 5000 over the converted sequences of the source cache; info.json is the converted cache's own (source_type and the source versions)"
+ },
+ "generator": "Ensembl VEP 116.3 over the mouse corpus's records under --merged --hgvs; tools/vep-golden-corpus select --release 116 --assembly GRCm39 --species mus_musculus --dataset mouse=<reference>=<the records> --k 1 --seed 1 --multi-allelic-per-dataset 1 --max-span 1000000 --cache <converted cache> --flank 5000 --family-columns REFSEQ_MATCH=,SOURCE=,BAM_EDIT=,GIVEN_REF/USED_REF --covers merged --covers source-cache --matrix tests/parity/matrix.tsv --flag=--merged --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py (see pruned_cache); the FASTA masked by scripts/fixtures/cut_plugin_regions.py --flank 5000 --record-flank 2000; tools/vep-golden-corpus flag-set (hgvs (--merged --hgvs)); scripts/concordance/generate_reference_output.sh --corpus --no-stats (the manifest's run and --flag-set hgvs); tools/vep-golden-corpus classify (the manifest's run, and the hgvs set with --field HGVSc --field HGVSp --field HGVS_OFFSET)"
+}

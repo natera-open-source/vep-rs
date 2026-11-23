@@ -1,7 +1,7 @@
 entry = "filter_vep_consequence_field_pattern"
 page = "docs/divergences/filter-vep-consequence-field-pattern.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the VCF 4.2 specification, section 1.4.1 \"Fixed fields\", INFO (\"Arbitrary keys are permitted\"); not seen in the measured datasets; classed by its most reachable shape, a key ending in the field's name; its other shape is an entry whose value is empty"
 notes = "The first shape of the entry: an empty CSQ entry before DP=4. filter_vep reads `;DP=4` as the one entry, so Allele is defined and the line passes; vep filter reads no entry and fails it. The second shape, a key ending in CSQ, is on the page."
@@ -35,3 +35,14 @@ ensembl_vep = [
   "21\t300\tr3\tG\tA\t.\t.\tDP=4;CSQ=A|intron_variant|MODIFIER|S3|",
 ]
 vep_rs = ["21\t300\tr3\tG\tA\t.\t.\tDP=4;CSQ=A|intron_variant|MODIFIER|S3|"]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/filter_input.rs::ParsedLine::only_matched",
+    "crates/vep-cli/src/filter_input.rs::parse_vcf_line",
+]
+tests = [
+    "crates/vep-cli/src/filter_input.rs::tests::vcf_line_reads_every_item_under_the_field_name",
+    "crates/vep-cli/tests/filter_tool.rs::keep_csq_output_is_filtered_on_every_consequence_item",
+    "crates/vep-cli/tests/filter_tool.rs::only_matched_rewrites_each_item_to_its_own_passing_entries",
+]

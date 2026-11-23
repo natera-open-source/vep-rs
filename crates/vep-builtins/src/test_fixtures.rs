@@ -5,7 +5,7 @@
 //! and a subscriber that collects the messages of `warn!` events.
 //!
 //! The fixture helpers write genuine bgzip-compressed, tabix-indexed files so tests
-//! exercise the bgzf + CSI read path in [`crate::tabix`], the path every tabix
+//! exercise the bgzf and `.tbi` read path in [`crate::tabix`], the path every tabix
 //! plugin runs through. Two defect classes live only there and are invisible to
 //! a test built on in-memory strings:
 //!
@@ -32,8 +32,10 @@ use noodles::tabix;
 
 /// Collects the message of every `warn!` event raised while it is the
 /// thread's default subscriber (`tracing::subscriber::with_default`), so a
-/// test reads the warnings a plugin writes at load or match time.
-pub struct Warnings(pub Mutex<Vec<String>>);
+/// test reads the warnings a plugin writes at load or match time; the second
+/// list holds, for each event, the input record it names through the field
+/// `input_record` (0 for none).
+pub struct Warnings(pub Mutex<Vec<String>>, pub Mutex<Vec<u64>>);
 
 impl Default for Warnings {
     /// Installs [`Interested`] as the test binary's global default subscriber
@@ -44,7 +46,7 @@ impl Default for Warnings {
         INSTALLED.call_once(|| {
             let _ = tracing::subscriber::set_global_default(Interested);
         });
-        Warnings(Mutex::new(Vec::new()))
+        Warnings(Mutex::new(Vec::new()), Mutex::new(Vec::new()))
     }
 }
 
@@ -103,17 +105,23 @@ impl tracing::Subscriber for Warnings {
     fn record_follows_from(&self, _: &tracing::span::Id, _: &tracing::span::Id) {}
 
     fn event(&self, event: &tracing::Event<'_>) {
-        struct Message(String);
+        struct Message(String, u64);
         impl tracing::field::Visit for Message {
             fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
                 if field.name() == "message" {
                     self.0 = format!("{value:?}");
                 }
             }
+            fn record_u64(&mut self, field: &tracing::field::Field, value: u64) {
+                if field.name() == vep_core::warning_hold::RECORD_FIELD {
+                    self.1 = value;
+                }
+            }
         }
-        let mut message = Message(String::new());
+        let mut message = Message(String::new(), 0);
         event.record(&mut message);
         self.0.lock().unwrap().push(message.0);
+        self.1.lock().unwrap().push(message.1);
     }
 
     fn enter(&self, _: &tracing::span::Id) {}
@@ -188,6 +196,97 @@ impl IndexSpec {
         self.comment_prefix = None;
         self
     }
+}
+
+/// The four bases a made-up sequence is drawn from.
+pub const BASES: [u8; 4] = *b"ACGT";
+
+/// A made-up mitochondrial reference of `length` bases under the name
+/// `MT`, written into `dir` with its index, and its bases: each drawn from
+/// a fixed linear congruential sequence, so the file is the same on every
+/// run and copies no published sequence.
+pub fn made_up_reference(
+    dir: &Path,
+    length: usize,
+) -> (std::sync::Arc<vep_fasta::IndexedFasta>, Vec<u8>) {
+    made_up_reference_named(dir, "MT", length)
+}
+
+/// [`made_up_reference`] with its one sequence named `name`.
+pub fn made_up_reference_named(
+    dir: &Path,
+    name: &str,
+    length: usize,
+) -> (std::sync::Arc<vep_fasta::IndexedFasta>, Vec<u8>) {
+    let mut state: u64 = 37;
+    let bases: Vec<u8> = (0..length)
+        .map(|_| {
+            state = state
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            BASES[(state >> 33) as usize % 4]
+        })
+        .collect();
+    let path = dir.join(format!("reference_{name}_synthetic.fa"));
+    let mut text = format!(">{name}\n").into_bytes();
+    let offset = text.len();
+    text.extend_from_slice(&bases);
+    text.push(b'\n');
+    std::fs::write(&path, text).unwrap();
+    std::fs::write(
+        dir.join(format!("reference_{name}_synthetic.fa.fai")),
+        format!("{name}\t{length}\t{offset}\t{length}\t{}\n", length + 1),
+    )
+    .unwrap();
+    (
+        std::sync::Arc::new(vep_fasta::IndexedFasta::from_path(&path).unwrap()),
+        bases,
+    )
+}
+
+/// The alternate allele a made-up row gives beside `reference`: the base that
+/// follows it in [`BASES`], the first after the last.
+pub fn made_up_alternate(reference: u8) -> u8 {
+    let place = BASES
+        .iter()
+        .position(|base| *base == reference)
+        .expect("a made-up base");
+    BASES[(place + 1) % 4]
+}
+
+/// One made-up table row for each of `positions`, 1-based, written by `line`
+/// from the contig, the position, the row's reference allele and its
+/// alternate ([`made_up_alternate`]). The reference allele of the row at a
+/// position is the base `bases` holds `offset` positions on: `offset` 0 is a
+/// table that counts on the sequence of `bases`, 1 a table whose rows state
+/// the bases one position on.
+pub fn made_up_rows(
+    contig: &str,
+    bases: &[u8],
+    positions: impl Iterator<Item = usize>,
+    offset: usize,
+    line: impl Fn(&str, usize, char, char) -> String,
+) -> Vec<String> {
+    positions
+        .map(|position| {
+            let reference = bases[position - 1 + offset];
+            line(
+                contig,
+                position,
+                reference as char,
+                made_up_alternate(reference) as char,
+            )
+        })
+        .collect()
+}
+
+/// The first 1-based position from `from` on whose base `bases` repeats one
+/// position on: there a row of a table one position on carries the alleles of
+/// a record on the sequence of `bases`.
+pub fn repeated_base(bases: &[u8], from: usize) -> usize {
+    (from..bases.len())
+        .find(|position| bases[position - 1] == bases[*position])
+        .expect("a made-up sequence repeats a base")
 }
 
 /// Write `body` as a bgzip-compressed file at `dir/file_name`, with no index:

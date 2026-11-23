@@ -1,25 +1,25 @@
 # The `FREQS` list order under `--check_frequency`
 
-**The defect in one sentence.** Under `--check_frequency`, Ensembl VEP 116.2 keeps the frequency it judged each alternate allele by in a hash keyed by allele, and writes the `FREQS` list from that hash's keys. The items of a record with two or more alternate alleles come in Perl's hash order, which changes from one run to the next. vep-rs lists the items in the order of the record's alternate alleles, the same on every run.
+**The defect in one sentence.** Under `--check_frequency`, Ensembl VEP 116.3 keeps the frequency it judged each alternate allele by in a hash keyed by allele, and writes the `FREQS` list from that hash's keys. The items of a record with two or more alternate alleles come in Perl's hash order, which changes from one run to the next. vep-rs lists the items in the order of the record's alternate alleles, the same on every run.
 
 **Why this is a defect.** The record and the cache fix the list's items, one `POPULATION:ALLELE:frequency` per alternate allele. Their order in Ensembl VEP's output comes from neither. The same input, flags and cache give `AF:G:1,AF:A:NA` on one run and `AF:A:NA,AF:G:1` on another, so two runs of one command differ byte for byte. The filter visits the alleles in the record's order, and the hash it stores them in discards that order.
 
 **What vep-rs does instead.** vep-rs lists the items in the order of the record's alternate alleles, so every run of an input writes the same list.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2, `Bio/EnsEMBL/VEP/`):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3, `Bio/EnsEMBL/VEP/`):
 
-- `AnnotationSource/Cache/BaseCacheVariation.pm`, lines 404-440, `_add_check_freq_data_to_vf`: the alternate alleles are walked in the record's order (line 410). Each allele's frequency, or `NA`, is stored in the hash `%used_freqs` under the allele (line 434), and the hash is kept on the variant under the population's name (line 440).
+- `AnnotationSource/Cache/BaseCacheVariation.pm`, lines 405-441, `_add_check_freq_data_to_vf`: the alternate alleles are walked in the record's order (line 411). Each allele's frequency, or `NA`, is stored in the hash `%used_freqs` under the allele (line 435), and the hash is kept on the variant under the population's name (line 441).
 - `OutputFactory.pm`, lines 1149-1163: the `FREQS` list is built by walking `keys` of the population hash and, inside it, `keys` of the allele hash (lines 1152-1153).
 
 **What correcting it would change.** Walking the record's alternate alleles in place of the hash's keys would write the items in one order on every run, the order vep-rs writes.
 
 **The class it produces.** `check_frequency_freqs_list_order`: the `FREQS` value of a record with two or more alternate alleles and frequency data, under `--check_frequency` or `--filter_common`. The reference's items are the candidate's, in an order the run's hash seed decided. The golden harness and the format comparator compare a `FREQS` value as a multiset of its items, so no comparison reports the order and nothing is counted under the class.
 
-**How often the shape occurs.** Tier 2: the shape is a record with two or more distinct alternate alleles, 405.6 per million records of the cuts. 5 committed flag sets pass `--check_frequency` or `--filter_common`, and 64 corpora hold a record of the shape. The rate is an upper bound, since the cache decides whether a known variant gives a record frequency data. Every `FREQS` value in the committed reference outputs lists one item.
+**How often the shape occurs.** Tier 2: the shape is a record with two or more distinct alternate alleles, 405.6 per million records of the cuts. 5 committed flag sets pass `--check_frequency` or `--filter_common`, and 80 corpora hold a record of the shape. The rate is an upper bound, since the cache decides whether a known variant gives a record frequency data. Every `FREQS` value in the committed reference outputs lists one item.
 
 ## 1. Two alleles listed in two orders
 
-**In short.** The record `21 7759128 T A,G` lies on the known variant rs1555870136, whose `AF` frequency for `G` is 1. Under `--check_frequency --freq_pop AF --freq_freq 0.01 --freq_gt_lt gt --freq_filter exclude`, allele `G` passes and is dropped, and allele `A`'s row carries the list. Ensembl VEP 116.2 prints `FREQS=AF:G:1,AF:A:NA` under a hash seed fixed at 0, and either order under Perl's own seed. vep-rs prints `FREQS=AF:A:NA,AF:G:1`, the record's order, on every run.
+**In short.** The record `21 7759128 T A,G` lies on the known variant rs1555870136, whose `AF` frequency for `G` is 1. Under `--check_frequency --freq_pop AF --freq_freq 0.01 --freq_gt_lt gt --freq_filter exclude`, allele `G` passes and is dropped, and allele `A`'s row carries the list. Ensembl VEP 116.3 prints `FREQS=AF:G:1,AF:A:NA` under a hash seed fixed at 0, and either order under Perl's own seed. vep-rs prints `FREQS=AF:A:NA,AF:G:1`, the record's order, on every run.
 
 ### 1.1 What a reader needs to know first
 
@@ -43,7 +43,7 @@ Both engines take the default format and these flags:
 
 ### 1.3 What each engine writes
 
-The record's one row. Ensembl VEP 116.2, run with `PERL_HASH_SEED=0` and `PERL_PERTURB_KEYS=0`:
+The record's one row. Ensembl VEP 116.3, run with `PERL_HASH_SEED=0` and `PERL_PERTURB_KEYS=0`:
 
 ```
 two_alts	21:7759128	A	-	-	-	intergenic_variant	-	-	-	-	-	rs1555870136	IMPACT=MODIFIER;FREQS=AF:G:1,AF:A:NA
@@ -65,9 +65,9 @@ The frequency filter takes the record's alternate alleles in order and, for each
 
 That order is the hash's own. It depends on where the seeded hash function places each key and on the order the keys were stored in, and by default Perl also perturbs it at random as keys are stored. Under that default a seed is drawn per process, so the order moves from run to run. Nothing sorts the keys, and the order in which the filter visited the alleles is not kept.
 
-Source (`ensembl-vep` at release/116.2, `Bio/EnsEMBL/VEP/`):
+Source (`ensembl-vep` at release/116.3, `Bio/EnsEMBL/VEP/`):
 
-- `AnnotationSource/Cache/BaseCacheVariation.pm`, lines 410 and 434: the walk over the alternate alleles and the store into the hash.
+- `AnnotationSource/Cache/BaseCacheVariation.pm`, lines 411 and 435: the walk over the alternate alleles and the store into the hash.
 - `OutputFactory.pm`, lines 1152-1153: the two `keys` walks that build the list.
 
 ### 1.5 Why vep-rs's row is the correct one
@@ -83,7 +83,7 @@ vep -i record.vcf -o out.txt --offline --json_cache <corpus>/json_cache \
   --freq_gt_lt gt --freq_filter exclude
 ```
 
-vep-rs writes `FREQS=AF:A:NA,AF:G:1`. Ensembl VEP 116.2 takes the same flags with the cache options of [Reproducing these examples](reproducing.md). With `PERL_HASH_SEED=0` and `PERL_PERTURB_KEYS=0` in its environment it writes `FREQS=AF:G:1,AF:A:NA`; without them, repeated runs write both orders.
+vep-rs writes `FREQS=AF:A:NA,AF:G:1`. Ensembl VEP 116.3 takes the same flags with the cache options of [Reproducing these examples](reproducing.md). With `PERL_HASH_SEED=0` and `PERL_PERTURB_KEYS=0` in its environment it writes `FREQS=AF:G:1,AF:A:NA`; without them, repeated runs write both orders.
 
 ### 1.7 How the comparator treats this class
 

@@ -20,13 +20,15 @@
 
 Four committed flag sets of the golden corpora run the plugin, two in each UTRAnnotator corpus, and the committed reference outputs of those two corpora hold such values, 87 and 40 under their default runs.
 
-On the chromosome 21 records of the ClinVar GRCh38 dataset, 596 rows of 160 records carry the field. Over ten runs of Ensembl VEP 116.2 every one of them changed its text between two runs: 571 in the order of their pairs alone, and 25 because the plugin also reported another effect ([its own page](utrannotator-consequence-precedence.md)). On the 63 rows whose value has two or more groups, the groups changed their order as well.
+On the chromosome 21 records of the ClinVar GRCh38 dataset, Ensembl VEP 116.3 writes the field on 598 rows of 161 records. Over ten runs every one of them changed its text between two runs: 572 in the order of their pairs alone, and 26 because the plugin also reported another effect ([its own page](utrannotator-consequence-precedence.md)). On the 63 rows whose value has two or more groups in every run, the groups changed their order as well.
+
+vep-rs writes the field on 596 of those rows, on 160 records. The other two are the rows of one deletion, on which Ensembl VEP alone reports a gained start ([the window of the gained-start test](../plugins/transcript-model.md#1-utrannotator-the-window-of-the-gained-start-test)).
 
 Tuple, pair, set aside, charged and the other scoring terms are defined in [How to read the counts](../intended-divergences.md#how-to-read-the-counts).
 
 ## 1. A substitution that destroys an upstream start codon
 
-**In short.** ClinVar variation 4159501 is a substitution at `21:14516984`, cDNA position 410 of `ENST00000619120`, the last base of an upstream ORF's start codon. Both engines report that one lost start codon with the same seven pairs. Ensembl VEP 116.2 wrote the pairs in ten different orders over ten runs of one command; vep-rs writes them in byte order of their keys on every run.
+**In short.** ClinVar variation 4159501 is a substitution at `21:14516984`, cDNA position 410 of `ENST00000619120`, the last base of an upstream ORF's start codon. Both engines report that one lost start codon with the same seven pairs. Ensembl VEP 116.3 wrote the pairs in ten different orders over ten runs of one command; vep-rs writes them in byte order of their keys on every run.
 
 ### 1.1 What a reader needs to know first
 
@@ -48,16 +50,16 @@ Both engines run `--plugin UTRAnnotator,file=uORF_5UTR_GRCh38_PUBLIC.txt` with `
 
 ### 1.3 What each engine writes
 
-The row on `ENST00000619120`. Ensembl VEP 116.2, run with `PERL_HASH_SEED=0` and `PERL_PERTURB_KEYS=0`:
+The row on `ENST00000619120`. Ensembl VEP 116.3, run with `PERL_HASH_SEED=0` and `PERL_PERTURB_KEYS=0`:
 
 ```
 4159501	21:14516984	G	ENSG00000155307	ENST00000619120	Transcript	5_prime_UTR_variant	410	-	-	-	-	-	IMPACT=MODIFIER;STRAND=-1;5UTR_annotation=KozakContext=ATAATGG:type=OutOfFrame_oORF:KozakStrength=Strong:DistanceToStop=24:DistanceToCDS=23:CapDistanceToStart=407:Evidence=False;5UTR_consequence=5_prime_UTR_premature_start_codon_loss_variant;Existing_InFrame_oORFs=0;Existing_OutOfFrame_oORFs=4;Existing_uORFs=3
 ```
 
-Ensembl VEP 116.2 with the two variables unset, one run of ten:
+Ensembl VEP 116.3 with the two variables unset, one run of ten:
 
 ```
-4159501	21:14516984	G	ENSG00000155307	ENST00000619120	Transcript	5_prime_UTR_variant	410	-	-	-	-	-	IMPACT=MODIFIER;STRAND=-1;5UTR_annotation=DistanceToStop=24:CapDistanceToStart=407:KozakContext=ATAATGG:KozakStrength=Strong:DistanceToCDS=23:Evidence=False:type=OutOfFrame_oORF;5UTR_consequence=5_prime_UTR_premature_start_codon_loss_variant;Existing_InFrame_oORFs=0;Existing_OutOfFrame_oORFs=4;Existing_uORFs=3
+4159501	21:14516984	G	ENSG00000155307	ENST00000619120	Transcript	5_prime_UTR_variant	410	-	-	-	-	-	IMPACT=MODIFIER;STRAND=-1;5UTR_annotation=KozakStrength=Strong:Evidence=False:KozakContext=ATAATGG:type=OutOfFrame_oORF:CapDistanceToStart=407:DistanceToStop=24:DistanceToCDS=23;5UTR_consequence=5_prime_UTR_premature_start_codon_loss_variant;Existing_InFrame_oORFs=0;Existing_OutOfFrame_oORFs=4;Existing_uORFs=3
 ```
 
 vep-rs, in every run:
@@ -99,11 +101,11 @@ vep -i record.vcf -o out.txt --offline \
   --plugin UTRAnnotator,file=<corpus>/data/uORF_5UTR_GRCh38_PUBLIC.chr21.txt
 ```
 
-`<corpus>` is `tests/golden/116/GRCh38-plugin-utr-annotator`: its cache holds the transcript, and its table is the chromosome 21 rows of the published one. vep-rs writes the seven pairs in key order on the row of `ENST00000619120`. Ensembl VEP 116.2 takes the same plugin flag with the cache options of [Reproducing these examples](reproducing.md). With `PERL_HASH_SEED=0` and `PERL_PERTURB_KEYS=0` in its environment it writes the first row of 1.3 on every run; without them, repeated runs write other orders.
+`<corpus>` is `tests/golden/116/GRCh38-plugin-utr-annotator`: its cache holds the transcript, and its table is the chromosome 21 rows of the published one. vep-rs writes the seven pairs in key order on the row of `ENST00000619120`. Ensembl VEP 116.3 takes the same plugin flag with the cache options of [Reproducing these examples](reproducing.md). With `PERL_HASH_SEED=0` and `PERL_PERTURB_KEYS=0` in its environment it writes the first row of 1.3 on every run; without them, repeated runs write other orders.
 
 ### 1.7 How the comparator treats this class
 
-The format comparator (`scripts/concordance/compare_vep_formats.py`) applies `utrannotator_annotation_pair_order` when a comparison case, one run of both engines over one input, names it. A `5UTR_annotation` is set aside, and counted once per row under the class, when its two values carry the same groups of the same pairs and differ in the order of the groups or of the pairs inside a group. A value with a pair changed, missing or added, a value one engine alone writes, and the row's other fields stay differences.
+The format comparator (`tools/vep-formats-compare`) applies `utrannotator_annotation_pair_order` when a comparison case, one run of both engines over one input, names it. A `5UTR_annotation` is set aside, and counted once per row under the class, when its two values carry the same groups of the same pairs and differ in the order of the groups or of the pairs inside a group. A value with a pair changed, missing or added, a value one engine alone writes, and the row's other fields stay differences.
 
 The class also asks that vep-rs's pairs stand in byte order of their keys inside every group. It documents Ensembl VEP's changing order against vep-rs's fixed one, so a vep-rs value out of key order is a difference of vep-rs's own. It is reported, never set aside, even when its pairs are Ensembl VEP's.
 

@@ -1,0 +1,11 @@
+rs_inside	21:100-109	ACGTACGTAGACGTACGTAG	ENSG1	ENST1	Transcript	5_prime_UTR_variant	?-7	-	-	-	-	-	IMPACT=MODIFIER;STRAND=-1
+rs_forward_end	21:200-209	ACGTACGTAGACGTACGTAG	ENSG1	ENST1	Transcript	5_prime_UTR_variant	7-?	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1
+rs_genomic_start	21:300-309	ACGTACGTAGACGTACGTAG	ENSG1	ENST1	Transcript	5_prime_UTR_variant	?-7	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1
+rs_del	21:400-409	ACGTACGTAGACGTACGTAG	ENSG1	ENST1	Transcript	5_prime_UTR_variant	?-7	-	-	-	-	-	IMPACT=MODIFIER;STRAND=-1
+rs_fewer	21:500-509	ACGTACGTAGACGTACGTAG	ENSG1	ENST1	Transcript	5_prime_UTR_variant	?-7	-	-	-	-	-	IMPACT=MODIFIER;STRAND=-1
+rs_past_the_end	21:600-609	ACGTACGTAGACGTACGTAG	ENSG1	ENST1	Transcript	5_prime_UTR_variant	?-7	-	-	-	-	-	IMPACT=MODIFIER;STRAND=-1
+rs_offset	21:700-709	ACGTACGTAGACGTACGTAG	ENSG1	ENST1	Transcript	5_prime_UTR_variant	?-7	-	-	-	-	-	IMPACT=MODIFIER;STRAND=-1
+rs_both	21:800-806	ACGTACGACGTACG	ENSG1	ENST1	Transcript	5_prime_UTR_variant	?-2	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;HGVSc=ENST1.1:c.-529-1_-529insACGTACGTACGT;HGVS_IntronStartOffset=0;HGVS_IntronEndOffset=-1
+rs_both_turned	21:900-906	ACGTACGACGTACG	ENSG1	ENST1	Transcript	5_prime_UTR_variant	?-2	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;HGVSc=ENST1.1:c.-529-1_-529insACGTACGTACGT;HGVS_IntronStartOffset=-1;HGVS_IntronEndOffset=1
+rs_both_dup	21:1000-1006	ACGTACGACGTACG	ENSG1	ENST1	Transcript	5_prime_UTR_variant	?-2	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;HGVSc=ENST1.1:c.-529-1dup;HGVS_IntronStartOffset=-1;HGVS_IntronEndOffset=-1
+rs_both_del	21:1100-1106	ACGTACGACGTACG	ENSG1	ENST1	Transcript	5_prime_UTR_variant	?-2	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;HGVSc=ENST1.1:c.-529-1_-529insACGTACGTACGT;HGVS_IntronStartOffset=0;HGVS_IntronEndOffset=-1

@@ -1,0 +1,138 @@
+{
+ "plugin_fixtures": {
+  "generator": "scripts/fixtures/cut_plugin_regions.py",
+  "flank": 5000,
+  "record_flank": 2000,
+  "exon_flank": 50,
+  "gerp_regions": "exons",
+  "tools": {
+   "bgzip": "bgzip (htslib) 1.9"
+  },
+  "files": {
+   "reference.fa.fai": "156aed361d6fe9caae0d4e51d824abea1967bbc447997c96b9129c5ee9ec2734",
+   "reference.fa.gz": "080ae3602786445226ec1687d7dd95da3043e5f3c6f00c6424e1bf61627acc6e",
+   "reference.fa.gz.fai": "156aed361d6fe9caae0d4e51d824abea1967bbc447997c96b9129c5ee9ec2734",
+   "reference.fa.gz.gzi": "a33afbb59e35ae89bcd346def837c41f3fdc08bcb41d75fd887c737866e61777"
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 63,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species aedes_aegypti_lvpagwg --assembly AaegL5 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "aedes_aegypti_lvpagwg/63_AaegL5",
+ "fasta": "the 25 contigs the records and the pruned cache's transcripts sit on (MT and 24 unplaced scaffolds) at their full length from Aedes_aegypti_lvpagwg.AaegL5.dna.chromosome.MT.fa and Aedes_aegypti_lvpagwg.AaegL5.dna.nonchromosomal.fa of Ensembl Metazoa release 63, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
+ "input": "variants.vcf: 388 records, 61 on the mitochondrion MT and 327 on 24 unplaced scaffolds; the three chromosomes, 310 to 474 million bases each, are left out so that the reference stays small. 316 are designed records written by tools/vep-seeded-variants (generator version 2, seed 1, --records wide over MT and the 24 scaffolds that hold the most coding transcripts, 317 coding transcripts in all), their IDs naming the situation and an ordinal: twelve a situation, fewer where the sequences give fewer places. Among them, on the mitochondrion under genetic code table 5, a codon the table reads differently from the standard code, a start codon changed, a stop codon made and a stop codon lost, eight records each, and the deletion written across its origin; the first and the last base of twelve sequences; and twelve records whose sequence is written by a synonym of the cache's chr_synonyms.txt. Every designed record is kept by name. 72 are single-base substitutions from the variation files the Ensembl Metazoa release 63 cache carries for those sequences, their IDs the cache's: of 300 sampled with seed 1, sixty evenly spaced are kept by name and the others stand for the consequence-set combinations the sample shows, two exemplars per combination, stratified by variant class and strand, and six per combination carrying a protein-level term. The manifest's included_records name every record kept by name. MT translates under genetic code table 5 and every scaffold under table 1, each transcript's codon_table in the cache",
+ "sha256": {
+  "default.txt": "22c17cd41edd5cc07bb1caa4c9c579bdf7ec67a9d02ab7d243897e6c7676946e",
+  "tab.txt": "3c0918bb9257d15409f74ea444263f6956fc1e33cd7a6a06b52a7afe3ad327a0",
+  "vcf.vcf": "f6cfcd50ee1847b5ea02d64cfd124aced7fb277b94c9cd0ff79a56bd0e44b966",
+  "json.jsonl": "6f562ffcf8c9e80ecdfb39f8d34a0da1250b649b08c5e935c4705c3438f8cb2a"
+ },
+ "variants_vcf_sha256": "e70c80bc0de217db678e4cd921891a25a33e5621bddb2557cb22e100e3d91782",
+ "flag_sets": {
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species aedes_aegypti_lvpagwg --assembly AaegL5 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "aedes_aegypti_lvpagwg/63_AaegL5",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "b39ebc74ad68fc0b0b17c68740c8351b5ec30d6cbd7448492b39a23b95215a6d",
+    "tab.txt": "7585bd6bbb9ff19aafc3aee19f148960d1897df14bfe18d7fb81f2ebda0592a9",
+    "vcf.vcf": "df6c20c1e42b44ad70ee003bfb56b545363cfb6b81d8dbec05394d7488f91dbf",
+    "json.jsonl": "95fa7a16fa5446dd617d63213ddd80d26dd5055c6dd0ae725d307d2a0b055d68"
+   },
+   "flags": [
+    "--everything"
+   ],
+   "expected_dir": "expected_everything"
+  },
+  "hgvs-sift": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species aedes_aegypti_lvpagwg --assembly AaegL5 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs --sift b [--tab|--vcf|--json]",
+   "perl_cache": "aedes_aegypti_lvpagwg/63_AaegL5",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "22ef129b505cbeeedafcd6ed008fc9dd4d4e2da4b5085ba965354d204a9c7114",
+    "tab.txt": "432a7405ddfa44c5a5f7e7a6d4276c63f935d3ce753efac681494ae53f5569f5",
+    "vcf.vcf": "2c5c91e2815c0aa9f5201365f087380d21b8741582ce977252f9e8dbef27c9c7",
+    "json.jsonl": "c71b6c3aa083c17068bd57b419c28be7022b7e8ace1891819f9c22282a94f3a7"
+   },
+   "flags": [
+    "--hgvs",
+    "--sift",
+    "b"
+   ],
+   "expected_dir": "expected_hgvs-sift"
+  }
+ },
+ "generator": "tools/vep-seeded-variants --cache <converted cache> --seed 1 --records wide --fasta <genome> --sequence <each of the 25 sequences> for the designed records, and up to 300 single-base substitutions sampled with seed 1 from the cache's variation files of those sequences for the known variants; Ensembl VEP over the two inputs under default flags; tools/vep-golden-corpus select --release 63 --assembly AaegL5 --species aedes_aegypti_lvpagwg --dataset wide=<reference>=<the designed records> --dataset known=<reference>=<the sampled known variants> --k 2 --seed 1 --max-span 1000000 --max-records 500 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 6 --include <every designed record and sixty of the sampled known variants> --covers species-aedes-aaegl5 --covers genetic-code-tables --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_function_predictions --drop-except <the transcripts on which a record changes one residue, the rows SIFT scores> --perl-info <cache>/info.txt --cache-version 63 --variations <cache>/variations over the whole cache tools/vep-storable-to-json converts from the Ensembl Metazoa release 63 AaegL5 cache (protein features kept for the DOMAINS column of the everything set; the variation slices hold the known variants within one base of a record); scripts/fixtures/cut_plugin_regions.py --reference <genome> --flank 5000 --record-flank 2000 over the corpus with each record's sequence written by the cache's name; scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; tools/vep-golden-corpus flag-set (everything, hgvs-sift) and classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp --field HGVS_OFFSET for the everything set and the same with --field SIFT for the hgvs-sift set)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "MT": 38,
+   "NIGP01000077": 11,
+   "NIGP01000101": 6,
+   "NIGP01000154": 15,
+   "NIGP01000184": 25,
+   "NIGP01000470": 7,
+   "NIGP01000602": 12,
+   "NIGP01000709": 14,
+   "NIGP01000761": 9,
+   "NIGP01000807": 29,
+   "NIGP01000813": 12,
+   "NIGP01000819": 22,
+   "NIGP01000892": 8,
+   "NIGP01000968": 12,
+   "NIGP01000988": 28,
+   "NIGP01001080": 9,
+   "NIGP01001397": 9,
+   "NIGP01001712": 12,
+   "NIGP01001717": 4,
+   "NIGP01001837": 8,
+   "NIGP01001870": 11,
+   "NIGP01002026": 11,
+   "NIGP01002103": 12,
+   "NIGP01002221": 9,
+   "NIGP01002263": 7
+  },
+  "shards": 25,
+  "synonym_lines": 75,
+  "matrices_kept_on": 99,
+  "variation_records_per_chromosome": {
+   "MT": 0,
+   "NIGP01000077": 0,
+   "NIGP01000101": 0,
+   "NIGP01000154": 27,
+   "NIGP01000184": 0,
+   "NIGP01000470": 3,
+   "NIGP01000602": 0,
+   "NIGP01000709": 0,
+   "NIGP01000761": 0,
+   "NIGP01000807": 0,
+   "NIGP01000813": 0,
+   "NIGP01000819": 0,
+   "NIGP01000892": 6,
+   "NIGP01000968": 21,
+   "NIGP01000988": 0,
+   "NIGP01001080": 0,
+   "NIGP01001397": 0,
+   "NIGP01001712": 6,
+   "NIGP01001717": 0,
+   "NIGP01001837": 18,
+   "NIGP01001870": 0,
+   "NIGP01002026": 0,
+   "NIGP01002103": 0,
+   "NIGP01002221": 0,
+   "NIGP01002263": 0
+  },
+  "variation_slices": "the known variants within one base of a record under variations/<chr>/all_vars.gz with its .csi, as the Ensembl VEP cache lays them out; a sequence with no known variant beside a record carries the empty indexed file"
+ }
+}

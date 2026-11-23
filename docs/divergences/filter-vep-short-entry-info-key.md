@@ -6,7 +6,7 @@
 
 **What vep-rs does instead.** `vep filter` reads a consequence field the entry lacks as undefined, whatever the line's INFO column holds. An INFO key is a field of every entry on its line, read when the filter names a key outside the `Format` list; a name in the `Format` list is answered from the entry alone. So `AF exists` fails a short entry beside `AF=0.5`, and `AF nex` passes it.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3):
 
 - `filter_vep`, lines 252-257: every INFO item but the literal `CSQ` is keyed into the line's hash by the text before its first `=`.
 - `filter_vep`, line 389: `my %data = %{$main_data || {}};`, each entry's hash begins as a copy of the line's hash, INFO keys included.
@@ -43,4 +43,4 @@ AF is 0.5    s1            none
 
 Only `s1` differs: `filter_vep` evaluates the input's `AF=0.5` as the consequence field `AF`, so `AF > 0.1`, `AF exists` and `AF is 0.5` pass it and `AF nex` fails it. On `s3`, whose `AF` position is present and empty, both engines read undefined, and so on `s4`, short on a line without the key; `s2` reads its own `0.01` on both, the INFO value ignored. Under `AF exists`, `--count` prints `2` in `filter_vep` and `1` in `vep filter`, and `--soft_filter` marks `s1` `filter_vep_pass` there and `filter_vep_fail` here.
 
-To reproduce: the `ensemblorg/ensembl-vep:release_116.2` image's `filter_vep` and `vep filter` on the records above, under a header declaring `AF` and the two `CSQ` formats quoted, with `--filter` as quoted and `--no_missing_consequence_warning`; neither tool needs a cache.
+To reproduce: the `ensemblorg/ensembl-vep:release_116.3` image's `filter_vep` and `vep filter` on the records above, under a header declaring `AF` and the two `CSQ` formats quoted, with `--filter` as quoted and `--no_missing_consequence_warning`; neither tool needs a cache.

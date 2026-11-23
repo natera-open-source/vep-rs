@@ -4,7 +4,7 @@
 //! Chromosome synonyms: the names a chromosome goes by in an input, a cache or
 //! a FASTA (`21`, `chr21`, `NC_000021.9`, `CM000683.2`), read from a synonyms
 //! file as Ensembl VEP reads it (`BaseVEP.pm` `chromosome_synonyms`,
-//! release/116.2 lines 637-665) and applied to a source's own chromosome names
+//! release/116.3 lines 637-665) and applied to a source's own chromosome names
 //! as `get_source_chr_name` applies them (lines 689-738).
 
 use std::collections::HashMap;
@@ -70,6 +70,31 @@ impl ChromosomeSynonyms {
     /// table does not know.
     pub fn synonyms_of(&self, chr: &str) -> &[String] {
         self.synonyms.get(chr).map(Vec::as_slice).unwrap_or(&[])
+    }
+
+    /// The synonyms of `chr` a source holds, in the order the file first names
+    /// them; none for a name the source holds itself. Two or more show a name
+    /// that picks out no one sequence of the source: Ensembl VEP then takes the
+    /// first in the order `keys` returns the name's synonyms (`BaseVEP.pm:711-716`),
+    /// which changes between runs of one command.
+    pub fn held_synonyms(&self, chr: &str, holds: impl Fn(&str) -> bool) -> Vec<&str> {
+        if holds(chr) {
+            return Vec::new();
+        }
+        let listed = self.synonyms_of(chr).iter();
+        listed.map(String::as_str).filter(|s| holds(s)).collect()
+    }
+
+    /// [`Self::source_chr_name`] for a source whose names are distinct sequences,
+    /// a cache's chromosomes: a name the table gives to two or more of them
+    /// ([`Self::held_synonyms`]) stays as written, since the table does not say
+    /// which of them it stands for, and so matches none.
+    pub fn sequence_chr_name(&self, chr: &str, holds: impl Fn(&str) -> bool) -> String {
+        let mut held = self.synonyms_of(chr).iter().filter(|s| holds(s));
+        if !holds(chr) && held.nth(1).is_some() {
+            return chr.to_string();
+        }
+        self.source_chr_name(chr, holds)
     }
 
     /// Whether the table records any synonym.
@@ -260,6 +285,39 @@ mod tests {
         assert_eq!(table.source_chr_name("chr21", ensembl_cache), "KI270728.1");
     }
 
+    /// A file that gives one name to two sequences a source holds: the name's held
+    /// synonyms are both, in the order the file first names them, and a name the
+    /// source holds, or one the file gives to one held sequence, has no such pair.
+    /// Ensembl VEP's dumper writes such a file where a synonym several sequences
+    /// share links their other names (`BaseVEP.pm:599-618`).
+    #[test]
+    fn a_name_given_to_several_held_sequences_lists_each_in_file_order() {
+        let table = ChromosomeSynonyms::parse("X\tshared\n21\tshared\n22\tshared\n21\tonly_21\n");
+        assert_eq!(
+            table.held_synonyms("shared", ensembl_cache),
+            ["X", "21", "22"]
+        );
+        assert_eq!(table.held_synonyms("only_21", ensembl_cache), ["21"]);
+        assert_eq!(table.held_synonyms("shared", |name| name == "22"), ["22"]);
+        assert!(table.held_synonyms("unlisted", ensembl_cache).is_empty());
+        assert!(table.held_synonyms("21", |name| name == "21").is_empty());
+    }
+
+    /// Among a cache's chromosomes a name given to two or more of them is read as
+    /// none and stays as written; a name given to one is read as it, a held name
+    /// as itself, and the `chr` rule still follows the synonyms.
+    #[test]
+    fn a_name_given_to_several_held_sequences_is_read_as_none_of_them() {
+        let table = ChromosomeSynonyms::parse("X\tshared\n21\tshared\n21\tonly_21\n");
+        assert_eq!(table.sequence_chr_name("shared", ensembl_cache), "shared");
+        assert_eq!(table.source_chr_name("shared", ensembl_cache), "X");
+        assert_eq!(table.sequence_chr_name("only_21", ensembl_cache), "21");
+        assert_eq!(table.sequence_chr_name("shared", |name| name == "21"), "21");
+        assert_eq!(table.sequence_chr_name("X", ensembl_cache), "X");
+        assert_eq!(table.sequence_chr_name("chr22", ensembl_cache), "22");
+        assert_eq!(table.sequence_chr_name("M", ensembl_cache), "MT");
+    }
+
     /// The queries that reach a FASTA record (`FastaSequence.pm:380-389`): a
     /// record `NC_000021.9` is found from `21` (its synonym) and from `chr21`
     /// (stripped to `21`, whose synonyms hold it); a record `21` from `chr21`,
@@ -303,5 +361,300 @@ mod tests {
         assert_eq!(table.synonyms_of("MT"), ["chrM", "NC_012920.1"]);
         let missing = ChromosomeSynonyms::load_from_file(&dir.path().join("absent.txt"));
         assert_eq!(missing.unwrap_err().kind(), std::io::ErrorKind::NotFound);
+    }
+
+    /// Organelle sequence names in Ensembl release 116 and Ensembl Genomes
+    /// release 63 caches.
+    const ORGANELLES: [&str; 15] = [
+        "MT",
+        "Mt",
+        "Mito",
+        "MtDNA",
+        "mitochondrion_genome",
+        "Pt",
+        "Chloro",
+        "chloroplast",
+        "OVOC_MITOCHONDRIAL",
+        "SRAE_MITOCHONDRIAL",
+        "SM_V7_MITO",
+        "TMUE_MITO",
+        "mito_A_fumigatus_Af293",
+        "mito_C_glabrata_CBS138",
+        "mito_C_parapsilosis_CDC317",
+    ];
+
+    /// A cache name of each shape beside one synonym of it. The accessions are
+    /// the ones `docs/cache-species.md` lists for the name; `chrUn_GL456210v1`,
+    /// the bacterial names (a chromosome named by a word, plasmids named with a
+    /// dot or a hyphen) and every `SYN` synonym are made up in the shapes such
+    /// caches carry.
+    const NAME_SHAPES: [(&str, &str, &str); 15] = [
+        ("a number", "4", "NC_003075.7"),
+        ("a roman numeral", "I", "BK006935.2"),
+        ("a chromosome arm", "2L", "AE014134.6"),
+        ("a long digit run", "211000022278760", "SYN_SCAFFOLD_760"),
+        (
+            "an accession with a version",
+            "GL456210.1",
+            "chrUn_GL456210v1",
+        ),
+        (
+            "a name with underscores",
+            "Unmapped_Scaffold_8_D1580_D1567",
+            "SYN_SCAFFOLD_8.1",
+        ),
+        (
+            "a chromosome named by a word",
+            "Chromosome",
+            "NZ_SYN000000.1",
+        ),
+        ("a plasmid", "pSYN1", "NZ_SYN000001.1"),
+        ("a plasmid with a dot", "pSYN1.2", "NZ_SYN000002.1"),
+        ("a plasmid with a hyphen", "pSYN-b", "NZ_SYN000003.1"),
+        ("a mitochondrion", "MT", "NC_005089.1"),
+        ("a plant mitochondrion", "Mt", "NC_001284.2"),
+        ("a chloroplast", "Pt", "NC_000932.1"),
+        ("a yeast mitochondrion", "Mito", "AJ011856.1"),
+        ("a fly mitochondrion", "mitochondrion_genome", "NC_024511.2"),
+    ];
+
+    /// A synonym line links its two names both ways (`BaseVEP.pm:652-655`), so
+    /// for every name shape a record written with the synonym resolves to the
+    /// cache's name, and a source named by the synonym, a reference or a custom
+    /// file, is reached from the cache's name (`:706-716` over that source's own
+    /// names). Without the line neither name reaches the other, and two
+    /// synonyms of one name do not reach each other.
+    #[test]
+    fn every_name_shape_resolves_through_a_synonym_in_both_directions() {
+        let organelles: Vec<(String, String)> = ORGANELLES
+            .iter()
+            .enumerate()
+            .map(|(i, name)| (name.to_string(), format!("SYN_ORGANELLE_{i}.1")))
+            .collect();
+        let pairs = NAME_SHAPES
+            .iter()
+            .map(|&(shape, cache, synonym)| (shape, cache, synonym))
+            .chain(
+                organelles
+                    .iter()
+                    .map(|(cache, synonym)| ("an organelle", cache.as_str(), synonym.as_str())),
+            );
+        let none = ChromosomeSynonyms::new();
+        for (shape, cache, synonym) in pairs {
+            let table = ChromosomeSynonyms::parse(&format!("{cache}\t{synonym}\n"));
+            let cache_holds = |name: &str| name == cache;
+            let source_holds = |name: &str| name == synonym;
+            assert_eq!(
+                table.source_chr_name(synonym, cache_holds),
+                cache,
+                "{shape}"
+            );
+            assert_eq!(
+                table.source_chr_name(cache, source_holds),
+                synonym,
+                "{shape}"
+            );
+            assert_eq!(
+                none.source_chr_name(synonym, cache_holds),
+                synonym,
+                "{shape}"
+            );
+            assert_eq!(none.source_chr_name(cache, source_holds), cache, "{shape}");
+        }
+
+        let table = ChromosomeSynonyms::parse("4\tCP002687.1\tNC_003075.7\n");
+        let cache_holds = |name: &str| name == "4";
+        assert_eq!(table.source_chr_name("CP002687.1", cache_holds), "4");
+        assert_eq!(table.source_chr_name("NC_003075.7", cache_holds), "4");
+        assert_eq!(
+            table.source_chr_name("CP002687.1", |name| name == "NC_003075.7"),
+            "CP002687.1"
+        );
+    }
+
+    /// A sequence whose own name begins with `chr`, in any case, is returned
+    /// as it is when the source holds it (`BaseVEP.pm:706`), also where the
+    /// source holds the stripped spelling too. On a miss the name is stripped
+    /// (`:722-726`) and never prefixed, since `:728` is the `elsif` of the
+    /// strip; a record written with `chr` before the whole name reaches it by
+    /// the strip; and the stripped spelling reaches it only where the name
+    /// opens with a lower-case `chr`, the one prefix `:728` adds. A synonym the
+    /// source holds wins over the stripped and the prefixed spelling
+    /// (`:711-716` runs first).
+    #[test]
+    fn a_name_that_itself_begins_with_chr_is_held_before_the_chr_rule() {
+        let none = ChromosomeSynonyms::new();
+        for name in [
+            "chromosome",
+            "Chromosome",
+            "CHROMOSOME",
+            "chr_1",
+            "Chr1",
+            "CHR_I",
+            "chrUn_scaffold_7",
+        ] {
+            let stripped = &name[3..];
+            let prefixed = format!("chr{name}");
+            assert_eq!(none.source_chr_name(name, |held| held == name), name);
+            assert_eq!(
+                none.source_chr_name(name, |held| held == name || held == stripped),
+                name
+            );
+            assert_eq!(
+                none.source_chr_name(name, |held| held == stripped),
+                stripped
+            );
+            assert_eq!(none.source_chr_name(name, |held| held == prefixed), name);
+            assert_eq!(none.source_chr_name(&prefixed, |held| held == name), name);
+            let reached = if name.starts_with("chr") {
+                name
+            } else {
+                stripped
+            };
+            assert_eq!(
+                none.source_chr_name(stripped, |held| held == name),
+                reached,
+                "{name}"
+            );
+            assert_eq!(
+                none.source_chr_name(stripped, |held| held == name || held == stripped),
+                stripped,
+                "{name}"
+            );
+        }
+
+        let table = ChromosomeSynonyms::parse("Chromosome\tNZ_SYN000000.1\n");
+        assert_eq!(
+            table.source_chr_name("Chromosome", |held| {
+                held == "NZ_SYN000000.1" || held == "omosome"
+            }),
+            "NZ_SYN000000.1"
+        );
+        let table = ChromosomeSynonyms::parse("pSYN1\tNZ_SYN000001.1\n");
+        assert_eq!(
+            table.source_chr_name("pSYN1", |held| {
+                held == "NZ_SYN000001.1" || held == "chrpSYN1"
+            }),
+            "NZ_SYN000001.1"
+        );
+    }
+
+    /// An organelle is reached under its own name (`BaseVEP.pm:706`), under that
+    /// name behind `chr` (`:722-726`) and under a name a synonym line links to
+    /// it (`:711-716`), and under no other: without a line, `MT`, `M`, `chrM`
+    /// and `chrMT` each stay as written, and a line linking one of them reaches
+    /// the organelle from that spelling alone, since the `chr` rule tests the
+    /// source's own names and never a synonym of the stripped spelling. The
+    /// lookup reads a bare `M` as `MT` only where the source holds `MT` itself;
+    /// a record's `M` is renamed before the lookup also where `MT` is a synonym
+    /// of a held name (`Parser.pm:794-796` over the set `:782` widens). Where
+    /// the source holds `MT`, `chrMT` strips to it, `chrM` strips to an `M` the
+    /// source lacks, and a name differing in case is another name.
+    #[test]
+    fn an_organelle_is_reached_by_its_own_name_or_a_synonym_and_by_nothing_else() {
+        const SPELLINGS: [&str; 4] = ["MT", "M", "chrM", "chrMT"];
+        let none = ChromosomeSynonyms::new();
+        for organelle in ORGANELLES {
+            let holds = |name: &str| name == organelle || name == "1";
+            assert_eq!(none.source_chr_name(organelle, holds), organelle);
+            for prefix in ["chr", "Chr", "CHR"] {
+                assert_eq!(
+                    none.source_chr_name(&format!("{prefix}{organelle}"), holds),
+                    organelle
+                );
+            }
+            if organelle == "MT" {
+                continue;
+            }
+            for spelling in SPELLINGS {
+                assert_eq!(
+                    none.source_chr_name(spelling, holds),
+                    spelling,
+                    "{spelling} on {organelle}"
+                );
+                let table = ChromosomeSynonyms::parse(&format!("{organelle}\t{spelling}\n"));
+                assert_eq!(
+                    table.source_chr_name(spelling, holds),
+                    organelle,
+                    "{spelling} linked to {organelle}"
+                );
+                for other in SPELLINGS.into_iter().filter(|other| *other != spelling) {
+                    assert_eq!(
+                        table.source_chr_name(other, holds),
+                        other,
+                        "{other} where {spelling} is linked to {organelle}"
+                    );
+                }
+            }
+        }
+
+        let holds = |name: &str| name == "MT" || name == "1";
+        assert_eq!(none.source_chr_name("M", holds), "MT");
+        assert_eq!(none.source_chr_name("chrMT", holds), "MT");
+        assert_eq!(none.source_chr_name("chrM", holds), "chrM");
+        for other_case in ["Mt", "mt", "m", "chrm"] {
+            assert_eq!(none.source_chr_name(other_case, holds), other_case);
+        }
+    }
+
+    /// The names listed for a reference record (`FastaSequence.pm:380-389`),
+    /// for a plasmid and for each organelle name: without a synonym, the
+    /// record's name behind `chr` and behind `CHR`, two spellings of the prefix
+    /// `:381-382` strips from a query; with one, a record named as the cache
+    /// names it also lists the synonym and the synonym behind `chr`, or without
+    /// its own `chr` where it opens with one (`:386`), and a record named by
+    /// the synonym lists the cache's name and that name behind `chr`.
+    #[test]
+    fn the_reference_reader_aliases_cover_each_shape() {
+        let none = ChromosomeSynonyms::new();
+        assert_eq!(none.aliases_of("pSYN1.2"), ["chrpSYN1.2", "CHRpSYN1.2"]);
+        for organelle in ORGANELLES {
+            assert_eq!(
+                none.aliases_of(organelle),
+                [format!("chr{organelle}"), format!("CHR{organelle}")]
+            );
+        }
+
+        let table = ChromosomeSynonyms::parse(
+            "pSYN1.2\tNZ_SYN000002.1\nMito\tAJ011856.1\nMT\tchrM\nMT\tNC_005089.1\n",
+        );
+        assert_eq!(
+            table.aliases_of("pSYN1.2"),
+            [
+                "chrpSYN1.2",
+                "CHRpSYN1.2",
+                "NZ_SYN000002.1",
+                "chrNZ_SYN000002.1"
+            ]
+        );
+        assert_eq!(
+            table.aliases_of("NZ_SYN000002.1"),
+            [
+                "chrNZ_SYN000002.1",
+                "CHRNZ_SYN000002.1",
+                "pSYN1.2",
+                "chrpSYN1.2"
+            ]
+        );
+        assert_eq!(
+            table.aliases_of("Mito"),
+            ["chrMito", "CHRMito", "AJ011856.1", "chrAJ011856.1"]
+        );
+        assert_eq!(
+            table.aliases_of("AJ011856.1"),
+            ["chrAJ011856.1", "CHRAJ011856.1", "Mito", "chrMito"]
+        );
+        assert_eq!(
+            table.aliases_of("MT"),
+            [
+                "chrMT",
+                "CHRMT",
+                "chrM",
+                "M",
+                "NC_005089.1",
+                "chrNC_005089.1"
+            ]
+        );
+        assert_eq!(table.aliases_of("Pt"), ["chrPt", "CHRPt"]);
     }
 }

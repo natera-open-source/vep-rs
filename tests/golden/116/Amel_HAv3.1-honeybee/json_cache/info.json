@@ -1,0 +1,17 @@
+{
+  "assembly": "Amel_HAv3.1",
+  "cache_version": 63,
+  "contig_order": [
+    "CM009946.2",
+    "CM009947.2",
+    "QIUM02000090.1"
+  ],
+  "polyphen": "",
+  "regulatory": false,
+  "sift": "",
+  "source_versions": {
+    "assembly": "Amel_HAv3.1",
+    "genebuild": "AmelHAv3v1.0"
+  },
+  "species": "apis_mellifera"
+}

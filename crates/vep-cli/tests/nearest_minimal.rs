@@ -16,17 +16,24 @@ fn corpus() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden/116/GRCh38-identifiers")
 }
 
-/// Records at 21:29940020 whose alleles trim to different spans under
-/// `--minimal`: `TC>T` trims to the deletion of 29940021, whose span sees the
-/// site at 29939996 (ENST00000327783) and not the site at 29940022, one base
-/// past its end; `TC>AC` trims to the substitution at 29940020, whose span sees
-/// the site at 29940022 (ENST00000389125 among its transcripts) at distance 2;
-/// `TC>TC` trims to the empty pair at 29940022-29940021, which writes no row and
-/// whose span sees the site at 29940022 (ENST00001131791 among its transcripts).
+/// Records whose alleles trim to different spans under `--minimal`. Of those
+/// at 21:29940020, `TC>T` trims to the deletion of 29940021, one base below the
+/// site at 29940022 (ENST00000389125 and ENST00001131791 among its transcripts)
+/// and 25 above the site at 29939996 (ENST00000327783); `TC>AC` trims to the
+/// substitution at 29940020, two bases below the upper site; `TC>TC` trims to
+/// the empty pair at 29940022-29940021, which writes no row and ends on the
+/// upper site. Those at 21:29940008 lie between the two sites, where each span
+/// has its own answer: the deletion of 29940009 is 13 bases from either site,
+/// so the two tie; the substitution at 29940008 is 12 bases from the lower site
+/// and 14 from the upper; the empty pair at 29940010-29940009 ends 12 bases
+/// from the upper site and starts 13 from the lower.
 const RECORDS: &[&str] = &[
     "21\t29940020\tmulti_del_first\tTC\tT,AC",
     "21\t29940020\tmulti_snv_first\tTC\tAC,T",
     "21\t29940020\tref_first\tTC\tTC,T",
+    "21\t29940008\tbetween_del_first\tTC\tT,AC",
+    "21\t29940008\tbetween_snv_first\tTC\tAC,T",
+    "21\t29940008\tbetween_ref_first\tTC\tTC,T",
 ];
 
 /// Runs the binary on the records in `format` and returns the output's lines,
@@ -161,15 +168,21 @@ fn assert_one_list(
 
 /// Under `--minimal` Ensembl VEP annotates each split allele on its trimmed
 /// span and keeps the first split feature as the record, so every row prints
-/// that feature's `nearest` (OutputFactory.pm:2286-2296 restores its string
+/// that feature's `nearest` (OutputFactory.pm:2295-2305 restores its string
 /// and span, :1017 prints it), the first feature's whether or not it writes a
-/// row of its own. Ensembl VEP 116.2 prints `NEAREST=ENST00000327783` on every
+/// row of its own. Ensembl VEP 116.3 prints `NEAREST=ENST00000327783` on every
 /// row of `21 29940020 TC T,AC`, the deletion allele's site, the 29940022 site
 /// on every row of `21 29940020 TC AC,T`, the substitution allele's, and the
 /// same site on every row of `21 29940020 TC TC,T`, whose first allele equals
 /// the reference and writes no row; where it names one transcript of the site
 /// vep-rs lists them all (`docs/divergences/nearest-shared-site.md`); the JSON
-/// record's `nearest` is the same list.
+/// record's `nearest` is the same list. On the first record vep-rs names the
+/// 29940022 site, one base above the deletion allele's span, which Ensembl
+/// VEP's search passes over
+/// (`docs/divergences/nearest-start-site-one-base-above.md`). The three records
+/// at 21:29940008 tell the spans apart: the deletion allele's rows carry both
+/// sites, the lower first, the substitution allele's the lower site, and the
+/// rows of the record whose first allele writes no row the upper site.
 #[test]
 fn minimal_record_rows_carry_the_first_allele_nearest_site() {
     let dir = tempfile::tempdir().unwrap();
@@ -180,12 +193,26 @@ fn minimal_record_rows_carry_the_first_allele_nearest_site() {
             && transcripts.contains(&"ENST00001131791")
             && !transcripts.contains(&"ENST00000327783")
     };
+    let both_sites = |nearest: &str| {
+        let transcripts: Vec<&str> = nearest.split(',').collect();
+        transcripts.first() == Some(&"ENST00000327783")
+            && transcripts.contains(&"ENST00000389125")
+            && transcripts.contains(&"ENST00001131791")
+    };
     let both = ["-", "A"];
     let mut second_site_lists: Vec<(String, String)> = Vec::new();
     for format in ["default", "tab"] {
         let rows = annotate(dir.path(), format);
         let del = text_rows(&rows, "multi_del_first", format);
-        assert_one_list(&del, "multi_del_first", format, &both, first_site);
+        let list = assert_one_list(&del, "multi_del_first", format, &both, second_site);
+        second_site_lists.push((format.to_string(), list));
+        let between = text_rows(&rows, "between_del_first", format);
+        assert_one_list(&between, "between_del_first", format, &both, both_sites);
+        let between = text_rows(&rows, "between_snv_first", format);
+        assert_one_list(&between, "between_snv_first", format, &both, first_site);
+        let between = text_rows(&rows, "between_ref_first", format);
+        let list = assert_one_list(&between, "between_ref_first", format, &["-"], second_site);
+        second_site_lists.push((format.to_string(), list));
         let snv = text_rows(&rows, "multi_snv_first", format);
         let list = assert_one_list(&snv, "multi_snv_first", format, &both, second_site);
         second_site_lists.push((format.to_string(), list));
@@ -194,10 +221,22 @@ fn minimal_record_rows_carry_the_first_allele_nearest_site() {
         second_site_lists.push((format.to_string(), list));
     }
     let rows = annotate(dir.path(), "vcf");
-    let del = vcf_rows(&rows, "multi_del_first");
-    assert_one_list(&del, "multi_del_first", "vcf", &both, first_site);
     let snv = vcf_rows(&rows, "multi_snv_first");
     let vcf_list = assert_one_list(&snv, "multi_snv_first", "vcf", &both, second_site);
+    let del = vcf_rows(&rows, "multi_del_first");
+    assert_eq!(
+        assert_one_list(&del, "multi_del_first", "vcf", &both, second_site),
+        vcf_list
+    );
+    let between = vcf_rows(&rows, "between_del_first");
+    let vcf_tie = assert_one_list(&between, "between_del_first", "vcf", &both, both_sites);
+    let between = vcf_rows(&rows, "between_snv_first");
+    assert_one_list(&between, "between_snv_first", "vcf", &both, first_site);
+    let between = vcf_rows(&rows, "between_ref_first");
+    assert_eq!(
+        assert_one_list(&between, "between_ref_first", "vcf", &["-"], second_site),
+        vcf_list
+    );
     let rowless_first = vcf_rows(&rows, "ref_first");
     assert_eq!(
         assert_one_list(&rowless_first, "ref_first", "vcf", &["-"], second_site),
@@ -223,7 +262,10 @@ fn minimal_record_rows_carry_the_first_allele_nearest_site() {
             .collect::<Vec<_>>()
             .join(",")
     };
-    assert_eq!(nearest_of("multi_del_first"), "ENST00000327783");
+    assert_eq!(nearest_of("multi_del_first"), vcf_list);
+    assert_eq!(nearest_of("between_del_first"), vcf_tie);
+    assert_eq!(nearest_of("between_snv_first"), "ENST00000327783");
+    assert_eq!(nearest_of("between_ref_first"), vcf_list);
     assert_eq!(nearest_of("multi_snv_first"), vcf_list);
     assert_eq!(nearest_of("ref_first"), vcf_list);
     for (format, list) in &second_site_lists {

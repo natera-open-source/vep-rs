@@ -2,22 +2,24 @@
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 //! The list-valued columns of a co-located variant in every output format,
-//! held to what Ensembl VEP 116.2 writes for the same stored values.
+//! held to what Ensembl VEP 116.3 writes for the same stored values.
 //!
 //! Each test stores one shape in one column of a known variant at `21:500` and
 //! annotates `21 500 A G` against it. The expected values are the ones Ensembl
-//! VEP 116.2 wrote for that stored value; every identifier is invented.
+//! VEP 116.3 wrote for that stored value; every identifier is invented.
 //!
 //! The tests of a `pubmed` or `var_synonyms` value the cache cut at 1,024
 //! bytes hold vep-rs to the stored list without its cut last item, where
-//! Ensembl VEP 116.2 prints that item as an id.
+//! Ensembl VEP 116.3 prints that item as an id.
 
 use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
 use serde_json::{json, Value};
+
+mod common;
 
 /// The columns of the test cache's variation file, in file order.
 const COLUMNS: &[&str] = &[
@@ -119,9 +121,8 @@ fn annotate(dir: &Path, cache: &Path, format: &str, extra: &[&str]) -> PathBuf {
     )
     .unwrap();
     let out = dir.join(format!("out.{format}"));
-    let output = Command::new(env!("CARGO_BIN_EXE_vep"))
+    let output = common::isolated_vep(dir)
         .stdin(Stdio::null())
-        .env("HOME", dir)
         .arg("-i")
         .arg(&input)
         .arg("-o")
@@ -212,6 +213,9 @@ struct Written {
     /// The Parquet row as `--tab` cells by column name.
     #[cfg(feature = "parquet")]
     parquet: BTreeMap<String, String>,
+    /// The type the Parquet output stores each tab column under, by column name.
+    #[cfg(feature = "parquet")]
+    parquet_types: BTreeMap<String, vep_io::output::parquet::ColumnType>,
     /// The Parquet row's `PUBMED` and `CLIN_SIG` lists.
     #[cfg(feature = "parquet")]
     parquet_lists: BTreeMap<&'static str, Option<Vec<String>>>,
@@ -237,13 +241,13 @@ impl Written {
             "{field} in the default, tab and VCF formats"
         );
         // A typed Parquet cell prints as its type's canonical text: a DOUBLE
-        // as its shortest decimal, where the tab format keeps `0.2500`.
+        // as its shortest decimal, where the tab format keeps `0.2500`. The
+        // type is the one the output stores the column under.
         #[cfg(feature = "parquet")]
         assert_eq!(
             cell(&self.parquet, "-"),
             value.map(|value| {
-                use vep_io::output::parquet::{canonical_tab_text, column_type};
-                canonical_tab_text(column_type(field), value)
+                vep_io::output::parquet::canonical_tab_text(self.parquet_types[field], value)
             }),
             "{field} in the Parquet format"
         );
@@ -307,19 +311,30 @@ fn written(known: &[Known], extra: &[&str]) -> Written {
         .unwrap_or(Value::Null);
 
     #[cfg(feature = "parquet")]
-    let (parquet, parquet_lists) = {
+    let (parquet, parquet_types, parquet_lists) = {
         let out = annotate(dir, &cache, "parquet", extra);
         let rows = vep_io::output::parquet::tab_rows(&out).unwrap();
         assert_eq!(rows.len(), 1, "one Parquet row");
+        let stored = vep_io::output::parquet::tab_column_types(&out).unwrap();
+        assert_eq!(
+            stored
+                .iter()
+                .map(|(name, _)| name.as_str())
+                .collect::<Vec<_>>(),
+            column_names(&tab_text).collect::<Vec<_>>(),
+            "{} holds the tab columns in the tab order",
+            out.display()
+        );
         let cells = column_names(&tab_text)
             .zip(rows[0].split('\t'))
             .map(|(name, cell)| (name.to_string(), cell.to_string()))
             .collect();
+        let types = stored.into_iter().collect();
         let lists = ["PUBMED", "CLIN_SIG"]
             .into_iter()
             .map(|column| (column, parquet_list(&out, column)))
             .collect();
-        (cells, lists)
+        (cells, types, lists)
     };
 
     Written {
@@ -330,6 +345,8 @@ fn written(known: &[Known], extra: &[&str]) -> Written {
         #[cfg(feature = "parquet")]
         parquet,
         #[cfg(feature = "parquet")]
+        parquet_types,
+        #[cfg(feature = "parquet")]
         parquet_lists,
     }
 }
@@ -337,7 +354,7 @@ fn written(known: &[Known], extra: &[&str]) -> Written {
 /// A `pubmed` value ending in `,` lists its ids and no empty one after them:
 /// Perl's `split(',', $ex->{pubmed})` drops every trailing empty field
 /// (OutputFactory.pm:1126 for the row formats, OutputFactory/JSON.pm:469 for
-/// JSON). Ensembl VEP 116.2 writes `PUBMED=99000001,99000002` and
+/// JSON). Ensembl VEP 116.3 writes `PUBMED=99000001,99000002` and
 /// `"pubmed":[99000001,99000002]` for the stored `99000001,99000002,`.
 #[test]
 fn pubmed_ending_in_a_comma_lists_no_empty_id() {
@@ -348,7 +365,7 @@ fn pubmed_ending_in_a_comma_lists_no_empty_id() {
 }
 
 /// A `clin_sig` value ending in `,` lists its terms and no empty one after
-/// them (OutputFactory.pm:1125, OutputFactory/JSON.pm:469). Ensembl VEP 116.2
+/// them (OutputFactory.pm:1125, OutputFactory/JSON.pm:469). Ensembl VEP 116.3
 /// writes `CLIN_SIG=benign,likely_benign` and
 /// `"clin_sig":["benign","likely_benign"]` for the stored
 /// `benign,likely_benign,`.
@@ -362,7 +379,7 @@ fn clin_sig_ending_in_a_comma_lists_no_empty_term() {
 
 /// The lists of two co-located variants join with nothing between them when
 /// the first one's stored value ends in `,` (OutputFactory.pm:1125-1126 push
-/// each variant's fields onto one list). Ensembl VEP 116.2 writes
+/// each variant's fields onto one list). Ensembl VEP 116.3 writes
 /// `PUBMED=99000001,99000002,99000003` and `CLIN_SIG=benign,pathogenic`.
 #[test]
 fn lists_of_two_variants_join_with_no_empty_element() {
@@ -382,7 +399,7 @@ fn lists_of_two_variants_join_with_no_empty_element() {
 }
 
 /// A leading or a middle empty element is kept, as Perl's `split` keeps it.
-/// Ensembl VEP 116.2 writes `PUBMED=,99000001` with `"pubmed":["",99000001]`
+/// Ensembl VEP 116.3 writes `PUBMED=,99000001` with `"pubmed":["",99000001]`
 /// for the stored `,99000001`, and `CLIN_SIG=benign,,pathogenic` with
 /// `"clin_sig":["benign","","pathogenic"]` for the stored
 /// `benign,,pathogenic`.
@@ -402,7 +419,7 @@ fn leading_and_middle_empty_elements_are_kept() {
 /// A value of separators alone is a list of no element: the row formats write
 /// no field (the pushed list is empty and OutputFactory.pm:1136-1138 deletes
 /// it), and JSON writes the empty list `split` returns (JSON.pm:469). Ensembl
-/// VEP 116.2 writes no `PUBMED` or `CLIN_SIG` and `"pubmed":[]`,
+/// VEP 116.3 writes no `PUBMED` or `CLIN_SIG` and `"pubmed":[]`,
 /// `"clin_sig":[]` for the stored `,,` and `,`.
 #[test]
 fn separators_alone_are_a_list_of_no_element() {
@@ -416,7 +433,7 @@ fn separators_alone_are_a_list_of_no_element() {
 
 /// A value Perl reads as false is no list in any format: `0` is neither pushed
 /// (`if $ex->{pubmed}`, OutputFactory.pm:1125-1126) nor kept by the JSON
-/// factory (JSON.pm:433-435). Ensembl VEP 116.2 writes no `PUBMED`, no
+/// factory (JSON.pm:433-435). Ensembl VEP 116.3 writes no `PUBMED`, no
 /// `CLIN_SIG` and neither JSON key for the stored `0`.
 #[test]
 fn a_value_of_zero_is_no_list() {
@@ -430,7 +447,7 @@ fn a_value_of_zero_is_no_list() {
 /// A list none of whose elements Perl reads as true prints no field in the
 /// row formats (OutputFactory.pm:1136-1138 deletes it), while JSON, which
 /// tests the whole stored value (JSON.pm:433-435), lists its elements.
-/// Ensembl VEP 116.2 writes no `PUBMED` or `CLIN_SIG` with `"pubmed":[0,0]`
+/// Ensembl VEP 116.3 writes no `PUBMED` or `CLIN_SIG` with `"pubmed":[0,0]`
 /// and `"clin_sig":["","",0]` for the stored `0,0` and `,,0`, and
 /// `PUBMED=0,99000001` once one element is true.
 #[test]
@@ -449,7 +466,7 @@ fn a_list_of_false_elements_prints_no_row_field() {
 /// A frequency pair is read as two scalars, `my ($a, $f) = split(':', $pair)`
 /// (OutputFactory.pm:1218): the value is the text between the pair's first and
 /// second `:`, so a pair ending in `:` or carrying a third field prints its
-/// frequency alone. Ensembl VEP 116.2 writes `AFR_AF=0.25`,
+/// frequency alone. Ensembl VEP 116.3 writes `AFR_AF=0.25`,
 /// `gnomADe_AFR_AF=0.25` and `MAX_AF=0.25` for the stored `G:0.25:` and
 /// `G:0.25:9`.
 #[test]
@@ -470,7 +487,7 @@ fn frequency_value_ends_at_the_pairs_second_colon() {
 }
 
 /// A frequency column ending in `,` holds no empty pair after its last one
-/// (`split(',', $ex->{$key})`, OutputFactory.pm:1217). Ensembl VEP 116.2
+/// (`split(',', $ex->{$key})`, OutputFactory.pm:1217). Ensembl VEP 116.3
 /// writes `AF=0.2500`, `AFR_AF=0.25` and `gnomADe_AF=0.125` for the stored
 /// `G:0.25,`, `G:0.25,` and `G:0.125,`.
 #[test]
@@ -496,7 +513,7 @@ fn frequency_column_ending_in_a_comma_prints_its_pairs() {
 /// allele string is `/G` has an empty first allele; with the stored `AF` of
 /// `G:0.3,` that allele is the one no pair names, so the record's `AF` is
 /// interpolated for it and the row of `G` prints its own (OutputFactory.pm:
-/// 1214-1243). Ensembl VEP 116.2 writes `AF=0.3000` under
+/// 1214-1243). Ensembl VEP 116.3 writes `AF=0.3000` under
 /// `--no_check_alleles`, which prints a known variant matched on its span.
 #[test]
 fn frequency_column_ending_in_a_comma_names_no_empty_allele() {
@@ -511,7 +528,7 @@ fn frequency_column_ending_in_a_comma_names_no_empty_allele() {
 /// The frequency filter reads a column the same way (`split(',', $tmp)` then
 /// `my ($a, $f) = split(':', $a_f)`, BaseCacheVariation.pm:234-235): a column
 /// ending in `,` holds no empty pair, and a pair ending in `:` or carrying a
-/// third field gives its frequency alone. Ensembl VEP 116.2 keeps the record
+/// third field gives its frequency alone. Ensembl VEP 116.3 keeps the record
 /// and writes `FREQS=1KG_AFR:G:0.25` for each of the stored `G:0.25,`,
 /// `G:0.25:`, `G:0.25:9` and `G:0.25:,` when the filter includes a 1000
 /// Genomes African frequency above 0.2.
@@ -536,7 +553,7 @@ fn frequency_filter_reads_a_column_ending_in_a_separator() {
 
 /// `var_synonyms` is written whole by the row formats (OutputFactory.pm:1090)
 /// and split by the JSON factory on `--`, `::` and `,` (JSON.pm:452-456), each
-/// split dropping its trailing empty fields. Ensembl VEP 116.2 writes
+/// split dropping its trailing empty fields. Ensembl VEP 116.3 writes
 /// `VAR_SYNONYMS=ClinVar::RCV999000001,VCV999000002--` and
 /// `"var_synonyms":{"ClinVar":["RCV999000001","VCV999000002"]}` for a stored
 /// value ending in `--`, and one id for a group ending in `,`.
@@ -573,7 +590,7 @@ fn var_synonyms_ending_in_a_separator_nest_no_empty_entry() {
 
 /// `clin_sig_allele` is split on `;` for the row formats' `CLIN_SIG`
 /// (OutputFactory.pm:1106) and written whole in JSON, which lists no such
-/// field among those it splits (JSON.pm:123-128). Ensembl VEP 116.2 writes
+/// field among those it splits (JSON.pm:123-128). Ensembl VEP 116.3 writes
 /// `CLIN_SIG=benign` and `"clin_sig_allele":"G:benign;"` for the stored
 /// `G:benign;`.
 #[test]
@@ -591,9 +608,83 @@ fn clin_sig_allele_ending_in_a_semicolon_names_no_empty_entry() {
     assert_eq!(out.json[0]["clin_sig"], json!(["benign"]));
 }
 
+/// Two known variants that carry different term lists for the row's allele give the row
+/// formats' `CLIN_SIG` both lists, `;`-joined, in the order the variants stand in
+/// `Existing_variation`, each list once. Ensembl VEP 116.3 keeps the lists as the keys of a
+/// hash (OutputFactory.pm:1120) and joins them in the order `keys` returns
+/// (OutputFactory.pm:1143-1144), which changes from row to row: for these two variants it
+/// writes `CLIN_SIG=likely_pathogenic,pathogenic%3Blikely_pathogenic` under a fixed hash
+/// seed and either order under its own (`clin_sig_allele_list_order`). JSON has no joined
+/// cell: each variant carries its own `clin_sig`.
+#[test]
+fn clin_sig_lists_of_two_known_variants_stand_in_the_variants_order() {
+    let one_term: Known = &[
+        ("clin_sig", "likely_pathogenic"),
+        ("phenotype_or_disease", "1"),
+        ("clin_sig_allele", "G:likely_pathogenic"),
+        ("clin_sig_ref_allele", "A"),
+    ];
+    let two_terms: Known = &[
+        ("allele_string", "A/G/T"),
+        ("clin_sig", "likely_pathogenic,pathogenic"),
+        ("phenotype_or_disease", "1"),
+        ("clin_sig_allele", "G:likely_pathogenic;G:pathogenic"),
+        ("clin_sig_ref_allele", "A"),
+    ];
+
+    // The whole default-format row of the entry's own record.
+    let tmp = tempfile::tempdir().unwrap();
+    let cache = cache(tmp.path(), &[one_term, two_terms]);
+    let text = std::fs::read_to_string(annotate(tmp.path(), &cache, "vep", &[])).unwrap();
+    let rows: Vec<&str> = text.lines().filter(|l| !l.starts_with('#')).collect();
+    assert_eq!(
+        rows,
+        [
+            "21_500_A/G\t21:500\tG\t-\t-\t-\tintergenic_variant\t-\t-\t-\t-\t-\t\
+          rs9920000001,rs9920000002\t\
+          IMPACT=MODIFIER;CLIN_SIG=likely_pathogenic%3Blikely_pathogenic,pathogenic;PHENO=1,1"
+        ]
+    );
+
+    let out = written(&[one_term, two_terms], &[]);
+    assert_eq!(
+        out.tab["CLIN_SIG"],
+        "likely_pathogenic;likely_pathogenic,pathogenic"
+    );
+    assert_eq!(
+        out.vcf["CLIN_SIG"],
+        "likely_pathogenic%3Blikely_pathogenic&pathogenic"
+    );
+    #[cfg(feature = "parquet")]
+    assert_eq!(out.parquet["CLIN_SIG"], out.tab["CLIN_SIG"]);
+    assert_eq!(out.json[0]["clin_sig"], json!(["likely_pathogenic"]));
+    assert_eq!(
+        out.json[1]["clin_sig"],
+        json!(["likely_pathogenic", "pathogenic"])
+    );
+
+    // The variants in the other order in the cache: the lists follow them.
+    let out = written(&[two_terms, one_term], &[]);
+    assert_eq!(
+        out.default["CLIN_SIG"],
+        "likely_pathogenic,pathogenic%3Blikely_pathogenic"
+    );
+    assert_eq!(
+        out.tab["CLIN_SIG"],
+        "likely_pathogenic,pathogenic;likely_pathogenic"
+    );
+
+    // A third variant with the first one's list adds none.
+    let out = written(&[one_term, two_terms, one_term], &[]);
+    assert_eq!(
+        out.default["CLIN_SIG"],
+        "likely_pathogenic%3Blikely_pathogenic,pathogenic"
+    );
+}
+
 /// `clinical_impact` is written whole in every format (OutputFactory.pm:1094;
 /// JSON.pm:444-447 renames it before the list loop reaches it), the default
-/// and VCF formats escaping its `;`. Ensembl VEP 116.2 writes
+/// and VCF formats escaping its `;`. Ensembl VEP 116.3 writes
 /// `CLINVAR_SOMATIC_CLASSIFICATION=Neoplasm(Tier_I_-_Strong)%3B` and
 /// `"clinvar_somatic_classification":"Neoplasm(Tier_I_-_Strong);"` for the
 /// stored `Neoplasm(Tier_I_-_Strong);`.
@@ -616,7 +707,7 @@ fn clinical_impact_ending_in_a_semicolon_is_written_whole() {
 
 /// An allele string ending in `/` names no empty allele (`split('/', ...)`,
 /// OutputFactory.pm:1191), so the record still matches the input's `G`, and
-/// JSON writes the string whole. Ensembl VEP 116.2 writes `AF=0.2500` and
+/// JSON writes the string whole. Ensembl VEP 116.3 writes `AF=0.2500` and
 /// `"allele_string":"A/G/"` for the stored `A/G/` with `AF` `G:0.25`.
 #[test]
 fn allele_string_ending_in_a_slash_names_no_empty_allele() {
@@ -660,7 +751,7 @@ fn json_ids<'a>(out: &'a Written, source: &str) -> &'a Vec<Value> {
 
 /// A `pubmed` value the cache cut inside an id is written without that id.
 /// The stored value is 113 ids and the first seven digits of another, 1,024
-/// bytes in all; Ensembl VEP 116.2 prints the seven digits as a 114th id
+/// bytes in all; Ensembl VEP 116.3 prints the seven digits as a 114th id
 /// (`split(',', $ex->{pubmed})`, OutputFactory.pm:1126 and
 /// OutputFactory/JSON.pm:469), and vep-rs writes the 113.
 #[test]
@@ -806,7 +897,7 @@ fn a_short_list_is_written_whole() {
 }
 
 /// A `var_synonyms` value the cache cut inside an id is written without that
-/// id and the `,` before it. Ensembl VEP 116.2 prints the stored value whole
+/// id and the `,` before it. Ensembl VEP 116.3 prints the stored value whole
 /// in the row formats (OutputFactory.pm:1090) and lists the fragment as an id
 /// in JSON (OutputFactory/JSON.pm:452-456).
 #[test]
@@ -832,7 +923,7 @@ fn synonyms_at_the_cap_lose_a_last_id_of_whole_length() {
 /// What each format writes for a `var_synonyms` value of 1,024 bytes cut
 /// inside the only id of its last group, `--OMIM::6059`, with the text
 /// before that group. A source whose only id is the cut one goes with its
-/// id, so no format writes a source name without an id: Ensembl VEP 116.2
+/// id, so no format writes a source name without an id: Ensembl VEP 116.3
 /// prints none from a whole list, and a reader of the field expects the pair.
 fn only_id_of_its_source_cut() -> (Written, String) {
     let (stored, body) = synonyms_ending("--OMIM::6059");
@@ -880,11 +971,14 @@ fn a_source_whose_only_id_is_cut_goes_in_json() {
 #[cfg(feature = "parquet")]
 #[test]
 fn a_source_whose_only_id_is_cut_goes_in_parquet() {
-    use vep_io::output::parquet::{canonical_tab_text, column_type};
+    use vep_io::output::parquet::canonical_tab_text;
     let (out, body) = only_id_of_its_source_cut();
     assert_eq!(
         out.parquet.get("VAR_SYNONYMS"),
-        Some(&canonical_tab_text(column_type("VAR_SYNONYMS"), &body))
+        Some(&canonical_tab_text(
+            out.parquet_types["VAR_SYNONYMS"],
+            &body
+        ))
     );
 }
 

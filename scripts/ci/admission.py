@@ -20,7 +20,9 @@ that declares nothing; the description carries the template's three text section
 `## Intended divergences` section with one of the
 three statements checked (none of the index's entries touched, which the change may not claim while it
 edits the index, a page the index links or the reproduction registry under
-`scripts/divergences/reproductions/`, its README excepted; existing entries touched, one line per
+`scripts/divergences/reproductions/`, its README excepted, nor while a line it changes lies in an
+item a record of that registry names as an entry's code, test or comparison rule; existing entries
+touched, one line per
 entry naming it as the index's first column does and saying what the change does to it and why; a
 new intended divergence proposed, with its description), the first statement excluding the other
 two; a crate change adds a line under `## [Unreleased]` of CHANGELOG.md, or under a release heading
@@ -37,6 +39,15 @@ tip and at the pull request's head: the first cell of each table row that links 
 prefix and any fragment, so an entry the pull request itself adds resolves and the check keeps working
 when the index is regrouped. The index's own path, with or without the `docs/` prefix, resolves too,
 for a change to its text or order that no row names.
+
+The items that implement an entry are read from the `implementation` table of each record of the
+registry at the base tip and at the head, each row a `<path>::<item>`: an entry the pull request
+adds counts from the head and a table it removes still counts from the base. A changed line lands
+in an item when it lies between the item's first and last line in the file on its own side of the
+change, the merge base's for a removed line and the head's for an added one; a file renamed by the
+change is followed by its previous name, a file the API lists without a patch counts as changed
+throughout, and an item the file's text does not define, or a path that is no Rust file, spans the
+whole file.
 
 The issues job reads the `Intended divergences` choice an issue form writes under its `### ` heading
 and the entries or description under the next one, checks the named entries against the index on the
@@ -55,12 +66,14 @@ One comment per pull request, edited in place on every run, states each miss wit
 the pull request unless its author is a maintainer (a CODEOWNERS entry for `*`) or a bot, the
 `admission-override` label is set, the pull request is a draft, or it was opened before this workflow
 first landed on the base branch; the divergences miss alone is reported without a close on a pull
-request opened before that rule landed, whose template had no such section; the author reopens a
-closed pull request once it is fixed and the check runs again. The
+request opened before that rule landed, whose template had no such section, and so is a first
+statement refused for a mapped item alone on a pull request opened before that rule landed; the
+author reopens a closed pull request once it is fixed and the check runs again. The
 newest commit that declares a model sets the `model: <name>` label (at most two names; none when
 the commits declare more). Before the comment and the close are written the pull request's head and the comment
-are read again, so a push in between or a run of the other job loses nothing. Exit 1 only when the run
-closes the pull request, 0 otherwise, 2 on a usage or environment error.
+are read again, so a push in between or a run of the other job loses nothing. Exit 1 when the run
+closes the pull request or a `--local` run finds a miss, 0 otherwise, 2 on a usage or
+environment error.
 """
 
 from __future__ import annotations
@@ -80,6 +93,11 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from typing import NamedTuple
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python before 3.11, where the records' tables are not read.
+    tomllib = None
 
 MARKER = "<!-- admission -->"
 OVERRIDE_LABEL = "admission-override"
@@ -102,6 +120,14 @@ DIVERGENCE_REGISTRY = "scripts/divergences/reproductions/"
 REGISTRY_PAGE = DIVERGENCE_REGISTRY + "README.md"
 # The rule's own landing date: the oldest base-branch commit touching a file that arrived with it.
 DIVERGENCE_LANDING_PATH = "scripts/ci/fixtures/admission/divergences-none-clean.json"
+# A record of the registry: `<entry>.toml`, directly in it, named in characters a batch read takes.
+REGISTRY_RECORD_RE = re.compile(re.escape(DIVERGENCE_REGISTRY) + r"([A-Za-z0-9_.-]+)\.toml")
+# The lists of a record's `implementation` table: the code that holds the entry's behaviour, the
+# tests that pin vep-rs's row and the comparison rules that recognise the difference.
+IMPLEMENTATION_TABLE = "implementation"
+IMPLEMENTATION_LISTS = ("code", "tests", "rules")
+# The landing date of the rule that refuses the first statement on a change to a mapped item.
+IMPLEMENTATION_LANDING_PATH = "scripts/ci/fixtures/admission/divergences-none-changes-a-mapped-item.json"
 # The three statements, told apart by a word each alone carries; the order breaks a tie in a
 # reworded line.
 STATEMENT_WORDS = (
@@ -158,8 +184,10 @@ CRATE_MANIFEST_RE = re.compile(r"^crates/[^/]+/Cargo\.toml$")
 MOD_DECL_TEMPLATE = r"^\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+{name}\s*;"
 HUNK_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 SIGNOFF_RE = re.compile(r"^Signed-off-by:\s*(.*?)\s*<([^<>]+)>\s*$", re.MULTILINE | re.IGNORECASE)
-# The blanks after the key stay on its line, so a key without a value reads nothing.
-DECLARATION_RE = re.compile(r"^Co-Authored-By:[^\S\n]*(.+?)\s*$", re.MULTILINE | re.IGNORECASE)
+# The blanks after the key stay on its line, so a key without a value reads nothing. The value is
+# read whole and stripped by the caller: a lazy value before trailing blanks is quadratic on a run
+# of blanks.
+DECLARATION_RE = re.compile(r"^Co-Authored-By:[^\S\n]*(.+)$", re.MULTILINE | re.IGNORECASE)
 MODEL_VALUE_RE = re.compile(r"[^<>]*[^<>\s]\s*<no-?reply@([^<>@\s]+)>", re.IGNORECASE)
 # Every address on this domain is a GitHub account's, whatever its mailbox.
 ACCOUNT_DOMAIN = "users.noreply.github.com"
@@ -215,6 +243,12 @@ ITEM_KEYWORDS = frozenset(
 VISIBILITY_KEYWORD = "pub"
 # A weak keyword opens an item only with an item's shape after it: `union U`, `macro_rules!`.
 WEAK_ITEM_RES = {"union": re.compile(r"\s+[^\W\d]"), "macro_rules": re.compile(r"\s*!")}
+# What `rust_items` reads of an item's header: the characters of a word, the words that may stand
+# before the item's own keyword, and the words of an implemented type that are no part of its name.
+ITEM_WORD_STARTS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_")
+ITEM_WORD_CHARS = ITEM_WORD_STARTS | frozenset("0123456789")
+ITEM_MODIFIERS = frozenset(("pub", "async", "unsafe", "default", "auto", "safe"))
+IMPL_TYPE_QUALIFIERS = frozenset(("mut", "dyn", "const", "unsafe", "!"))
 LABEL_CHARS_RE = re.compile(r"[^A-Za-z0-9 ._+/-]")
 
 
@@ -226,6 +260,8 @@ class Finding(NamedTuple):
     check: str
     text: str
     closes: bool = True
+    # Why a finding that does not close is reported only, where the check's usual reason is not it.
+    reported_only: str | None = None
 
 
 def code(value: str, limit: int = 120) -> str:
@@ -547,6 +583,293 @@ def tree_regions(read: Callable[[str], str | None], path: str) -> list[tuple[int
     return rust_test_regions(text)
 
 
+# --- the items of a Rust file --------------------------------------------------------------------
+
+
+def skip_string_literal(text: str, at: int) -> int:
+    """The index after a string literal whose opening quote stands at `at`."""
+    n = len(text)
+    j = at + 1
+    while j < n:
+        if text[j] == "\\":
+            j += 2
+            continue
+        if text[j] == '"':
+            return j + 1
+        j += 1
+    return n
+
+
+def skip_raw_string_literal(text: str, at: int) -> int:
+    """The index after a raw string literal whose hashes or opening quote stand at `at`, or after
+    the hashes alone where no quote follows them, as in a raw identifier."""
+    n = len(text)
+    j = at
+    hashes = 0
+    while j < n and text[j] == "#":
+        hashes += 1
+        j += 1
+    if j >= n or text[j] != '"':
+        return j
+    end = text.find('"' + "#" * hashes, j + 1)
+    return n if end < 0 else end + 1 + hashes
+
+
+def implemented_type(words: list[tuple[str, int]]) -> str | None:
+    """The name of the type an `impl` header implements, from the words after `impl`: the last word
+    of the type's path, outside its generic brackets and before any `where`."""
+    outer = [word for word, angle in words if angle == 0]
+    if "where" in outer:
+        outer = outer[: outer.index("where")]
+    if "for" in outer:
+        outer = outer[outer.index("for") + 1 :]
+    names = [word for word in outer if word not in IMPL_TYPE_QUALIFIERS]
+    return names[-1] if names else None
+
+
+def classify_item(words: list[tuple[str, int]]) -> tuple[str, str | None]:
+    """What the words of an item's header make it and its name where it has one. The kind is
+    `container` (a module, a trait, an `impl` block or an `extern` block, whose braces hold items),
+    `statement` (a constant, a static, a type alias or an import, which ends at its semicolon
+    whatever braces its value holds) or `block` (a function, a type or a macro, which ends at its
+    closing brace or its semicolon)."""
+
+    def word_at(index: int) -> str | None:
+        return words[index][0] if index < len(words) else None
+
+    def named(name: str | None) -> str | None:
+        return None if name == "!" else name
+
+    index = 0
+    while index < len(words):
+        word = words[index][0]
+        following = word_at(index + 1)
+        if word in ITEM_MODIFIERS:
+            pass
+        elif word == "extern":
+            if following == "crate":
+                return "statement", None
+            if following is None:
+                return "container", None
+        elif word == "const":
+            if following not in ("fn", "unsafe", "async", "extern"):
+                return "statement", named(following)
+        elif word == "static":
+            return "statement", named(word_at(index + 2) if following == "mut" else following)
+        elif word == "type":
+            return "statement", named(following)
+        elif word == "use":
+            return "statement", None
+        elif word in ("fn", "struct", "enum", "union"):
+            return "block", named(following)
+        elif word in ("mod", "trait"):
+            return "container", named(following)
+        elif word == "impl":
+            return "container", implemented_type(words[index + 1 :])
+        elif word == "macro_rules":
+            return "block", named(word_at(index + 2) if following == "!" else None)
+        else:
+            return "block", None
+        index += 1
+    return "block", None
+
+
+def rust_items(text: str) -> list[tuple[str, int, int]]:
+    """Every named item of a Rust source text that its top level reaches through modules, traits and
+    `impl` blocks, as (name, first line, last line), in the order the items end. A name is the chain
+    from the top level joined by `::`: `function`, `Type::method` for a method of any `impl` block of
+    the type, `Trait::method`, `tests::function`. An item's first line is that of its first doc
+    comment or attribute, its last that of its closing brace or semicolon. Lines are counted by line
+    feeds. The reader is lexical and reads what `items` of
+    `tools/vep-divergence-reevaluate/src/item.rs` reads; that tool's
+    `tests/fixtures/item_span_cases.jsonl` holds the two to one answer."""
+    n = len(text)
+    found: list[tuple[str, int, int]] = []
+    # The open modules, traits and `impl` blocks: the name, the brace depth of the items inside,
+    # and the first line. The first one is the file.
+    containers: list[tuple[str | None, int, int]] = [(None, 0, 1)]
+    # Open braces that hold no items: the brace depth outside them and, where they end an item,
+    # its name and first line (None where the item goes on after them, to its semicolon).
+    body: tuple[int, tuple[str | None, int] | None] | None = None
+    depth = 0
+    line = 1
+    # The header of the item being read: its first line, its words outside parentheses with the
+    # generic brackets open around each, and the parentheses and generic brackets open in it.
+    start: int | None = None
+    words: list[tuple[str, int]] = []
+    parens = 0
+    angle = 0
+    i = 0
+
+    def record(name: str | None, first: int, last: int) -> None:
+        if name is None or name == "_":
+            return
+        chain = [container[0] for container in containers[1:]]
+        if any(part is None for part in chain):
+            return
+        found.append(("::".join([*chain, name]), first, last))
+
+    while i < n:
+        ch = text[i]
+        if ch == "\n":
+            line += 1
+            i += 1
+        elif text.startswith("//", i):
+            outer_doc = text.startswith("///", i) and not text.startswith("////", i)
+            if outer_doc and body is None and start is None:
+                start = line
+            end = text.find("\n", i)
+            i = n if end < 0 else end
+        elif text.startswith("/*", i):
+            outer_doc = text.startswith("/**", i) and not text.startswith(("/***", "/**/"), i)
+            if outer_doc and body is None and start is None:
+                start = line
+            level = 1
+            j = i + 2
+            while j < n and level:
+                if text.startswith("/*", j):
+                    level += 1
+                    j += 2
+                elif text.startswith("*/", j):
+                    level -= 1
+                    j += 2
+                else:
+                    j += 1
+            j = min(j, n)
+            line += text.count("\n", i, j)
+            i = j
+        elif ch == '"':
+            j = skip_string_literal(text, i)
+            line += text.count("\n", i, j)
+            i = j
+        elif ch == "'":
+            if i + 1 < n and text[i + 1] == "\\":
+                # An escaped character: the quote that closes it stands after the escape.
+                end = text.find("'", i + 3)
+                j = n if end < 0 else end + 1
+                line += text.count("\n", i, j)
+                i = j
+            elif i + 2 < n and text[i + 2] == "'":
+                line += text.count("\n", i, i + 3)
+                i += 3
+            else:
+                # A lifetime or a label: its name is no word of the header.
+                i += 1
+                while i < n and text[i] in ITEM_WORD_CHARS:
+                    i += 1
+        elif ch in ITEM_WORD_STARTS:
+            j = i
+            while j < n and text[j] in ITEM_WORD_CHARS:
+                j += 1
+            word = text[i:j]
+            if word in STRING_PREFIXES and j < n and text[j] in '"#':
+                if word in ("b", "c"):
+                    after = skip_string_literal(text, j) if text[j] == '"' else j
+                else:
+                    after = skip_raw_string_literal(text, j)
+                if after > j:
+                    line += text.count("\n", i, after)
+                    i = after
+                    continue
+            if body is None:
+                if start is None:
+                    start = line
+                if parens == 0:
+                    words.append((word, angle))
+            i = j
+        elif ch == "#" and (text.startswith("#[", i) or text.startswith("#![", i)):
+            inner = text[i + 1] == "!"
+            j = i + (3 if inner else 2)
+            level = 1
+            while j < n and level:
+                if text[j] == '"':
+                    j = skip_string_literal(text, j)
+                    continue
+                if text[j] == "[":
+                    level += 1
+                elif text[j] == "]":
+                    level -= 1
+                j += 1
+            if not inner and body is None and start is None:
+                start = line
+            j = min(j, n)
+            line += text.count("\n", i, j)
+            i = j
+        elif ch == "{":
+            if body is not None:
+                pass
+            elif parens > 0 or angle > 0:
+                # A block inside the header's parentheses or generic brackets is a constant
+                # expression, not the item's body.
+                body = (depth, None)
+            else:
+                kind, name = classify_item(words)
+                first = line if start is None else start
+                if kind == "container":
+                    containers.append((name, depth + 1, first))
+                    start, words, parens, angle = None, [], 0, 0
+                elif kind == "statement":
+                    body = (depth, None)
+                else:
+                    body = (depth, (name, first))
+            depth += 1
+            i += 1
+        elif ch == "}":
+            i += 1
+            if depth == 0:
+                continue
+            depth -= 1
+            ended = False
+            if body is not None:
+                if depth == body[0]:
+                    ends = body[1]
+                    body = None
+                    if ends is not None:
+                        record(ends[0], ends[1], line)
+                        ended = True
+            elif len(containers) > 1 and depth < containers[-1][1]:
+                name, _depth, first = containers.pop()
+                record(name, first, line)
+                ended = True
+            if ended:
+                start, words, parens, angle = None, [], 0, 0
+        elif ch == ";":
+            if body is None and parens == 0:
+                if start is not None:
+                    record(classify_item(words)[1], start, line)
+                start, words, angle = None, [], 0
+            i += 1
+        else:
+            if body is None:
+                if ch in "([":
+                    parens += 1
+                elif ch in ")]":
+                    parens = max(parens - 1, 0)
+                elif ch == "<" and parens == 0:
+                    angle += 1
+                elif ch == ">" and parens == 0 and angle > 0 and i > 0 and text[i - 1] not in "-=":
+                    angle -= 1
+                elif ch == "!" and parens == 0:
+                    words.append(("!", angle))
+            i += 1
+    return found
+
+
+def rust_item_spans(text: str) -> dict[str, tuple[int, int]]:
+    """The first and the last line of each named item of a Rust source text, the first item of a
+    name where the text defines several."""
+    spans: dict[str, tuple[int, int]] = {}
+    for name, first, last in rust_items(text):
+        spans.setdefault(name, (first, last))
+    return spans
+
+
+def rust_item_span(text: str, item: str) -> tuple[int, int] | None:
+    """The first and the last line of the first item of the name in a Rust source text, or None
+    where the text defines no such item."""
+    return rust_item_spans(text).get(item)
+
+
 # --- the changed files ---------------------------------------------------------------------------
 
 
@@ -731,10 +1054,11 @@ def declared_models(commits: list[dict]) -> list[str]:
     names: list[str] = []
     for commit in commits:
         for match in DECLARATION_RE.finditer(commit["commit"].get("message") or ""):
-            name = re.sub(r"\s+", " ", re.sub(r"<[^>]*>", "", match.group(1))).strip()
+            value = match.group(1).strip()
+            name = re.sub(r"\s+", " ", re.sub(r"<[^>]*>", "", value)).strip()
             if name.lower() == NO_MODEL_DECLARATION.lower():
                 name = NO_MODEL_DECLARATION
-            elif not is_model_line(match.group(1)):
+            elif not is_model_line(value):
                 continue
             if name not in names:
                 names.append(name)
@@ -1031,25 +1355,155 @@ def divergence_artefacts(files: list[dict], index: Index) -> list[str]:
     )
 
 
+class MappedItem(NamedTuple):
+    """One row of a record's `implementation` table: the entry, the path and the item."""
+
+    entry: str
+    path: str
+    item: str
+
+
+# The text of a file on one side of the change, `old` (the merge base) or `new` (the head); None
+# where that side has no such file.
+SourceFor = Callable[[str, str], "str | None"]
+
+
+def read_implementation(records: dict[str, str] | None) -> list[MappedItem]:
+    """The rows of the `implementation` tables of the registry's records, given as each record's
+    path and text: every `<path>::<item>` string of the lists `code`, `tests` and `rules`, under
+    the entry the record's file name gives. A record that is no TOML, has no table or holds
+    another shape in it gives nothing; whether a table is whole is the re-evaluation tool's check."""
+    rows: list[MappedItem] = []
+    if tomllib is None:
+        if records:
+            print(
+                "WARNING: [admission] this Python has no tomllib (3.11 or later has): the items the "
+                "reproduction records map are not read.",
+                file=sys.stderr,
+            )
+        return rows
+    for record_path in sorted(records or {}):
+        named = REGISTRY_RECORD_RE.fullmatch(record_path)
+        if named is None:
+            continue
+        try:
+            table = tomllib.loads(records[record_path]).get(IMPLEMENTATION_TABLE)
+        except (ValueError, RecursionError):
+            # A decode error is a ValueError, and so is an integer too long to convert.
+            continue
+        if not isinstance(table, dict):
+            continue
+        for key in IMPLEMENTATION_LISTS:
+            listed = table.get(key)
+            for row in listed if isinstance(listed, list) else []:
+                path, separator, item = row.partition("::") if isinstance(row, str) else ("", "", "")
+                if separator and path and item:
+                    rows.append(MappedItem(named.group(1), path, item))
+    return rows
+
+
+def count_lines(text: str) -> int:
+    """The lines of a text as a diff numbers them: one for each line feed, and one more for a last
+    line without one."""
+    return text.count("\n") + (1 if text and not text.endswith("\n") else 0)
+
+
+def mapped_span(
+    text: str | None, path: str, item: str, spans: dict[str, tuple[int, int]] | None = None
+) -> tuple[int, int] | None:
+    """The lines of a file's text a mapped item spans: the item's own in a Rust file that defines
+    it, else the whole file. None for a side that has no such file. `spans` holds the items of the
+    text where the caller has read them (`rust_item_spans`)."""
+    if text is None:
+        return None
+    span = None
+    if path.endswith(".rs"):
+        span = (rust_item_spans(text) if spans is None else spans).get(item)
+    return span or (1, max(count_lines(text), 1))
+
+
+def mapped_items_touched(
+    files: list[dict], mapped: list[MappedItem], source_for: SourceFor
+) -> list[tuple[str, str]]:
+    """(entry, path) for each mapped item one of the change's lines lands in, in order. A file is
+    matched under its name and its previous name; a removed line is held to the item's span in the
+    file before the change and an added line to its span after it, a side whose text cannot be
+    read counting as hit by any line of that side; a file listed without a patch counts as changed
+    throughout."""
+    by_path: dict[str, list[MappedItem]] = {}
+    for row in mapped:
+        by_path.setdefault(row.path, []).append(row)
+    touched: set[tuple[str, str]] = set()
+    for entry in files:
+        path = entry.get("filename", "")
+        previous = entry.get("previous_filename") or path
+        rows = [row for name in dict.fromkeys((path, previous)) for row in by_path.get(name, [])]
+        if not rows or not file_changed(entry):
+            continue
+        patch = entry.get("patch")
+        if patch is None:
+            touched.update((row.entry, row.path) for row in rows)
+            continue
+        removed, added = changed_lines(patch)
+        sides = []
+        for changed, side, side_path in ((removed, "old", previous), (added, "new", path)):
+            if not changed:
+                continue
+            text = source_for(side, side_path)
+            # A file's items are read once for all the rows that name it.
+            spans = rust_item_spans(text) if text is not None and side_path.endswith(".rs") else {}
+            sides.append(([number for number, _ in changed], text, side_path, spans))
+        for row in rows:
+            for numbers, text, side_path, spans in sides:
+                span = mapped_span(text, side_path, row.item, spans)
+                if span is None or any(span[0] <= number <= span[1] for number in numbers):
+                    touched.add((row.entry, row.path))
+    return sorted(touched)
+
+
+def listed_mapped(touched: list[tuple[str, str]]) -> str:
+    """The entries a change lands in, each with the paths that map to it, at most five entries."""
+    by_entry: dict[str, list[str]] = {}
+    for entry, path in touched:
+        by_entry.setdefault(entry, []).append(path)
+    names = sorted(by_entry)
+    listed = ", ".join(
+        f"{code(name)} (in {', '.join(code(path) for path in by_entry[name][:3])}"
+        + (f" and {len(by_entry[name]) - 3} more" if len(by_entry[name]) > 3 else "")
+        + ")"
+        for name in names[:5]
+    )
+    more = f" and {len(names) - 5} more" if len(names) > 5 else ""
+    return listed + more
+
+
 def check_divergences(
     body: str | None,
     files: list[dict],
     base_index: str | None,
     head_index: str | None,
     closes: bool = True,
+    mapped: list[MappedItem] | None = None,
+    source_for: SourceFor | None = None,
+    mapped_closes: bool = True,
 ) -> Finding | None:
     """The `## Intended divergences` section carries one of its three statements checked: the first
     (none of the index's entries touched) excludes the other two and is refused while the change
-    edits a divergence artefact; the second needs one line per entry, the entry resolving against
+    edits a divergence artefact or lands in an item of `mapped`, the rows of the records'
+    `implementation` tables at the base tip and the head, read through `source_for`; the second
+    needs one line per entry, the entry resolving against
     the index at the base tip or the head (or naming the index by its path, which only a change that
     edits the index may do) and the line saying what the change does to it; the third needs its
     description. One finding states every problem; `closes` is False for a pull request
-    opened before the rule landed, whose template had no such section."""
+    opened before the rule landed, whose template had no such section, and `mapped_closes` is False
+    for one opened before the mapped items were read, which a mapped item alone then does not close."""
     index = read_index(base_index) | read_index(head_index)
     section_lines = body_sections(body).get(DIVERGENCE_SECTION.lower(), [])
     statements = read_statements(section_lines)
     checked = {kind for kind, (is_checked, _lines) in statements.items() if is_checked}
     problems: list[str] = []
+    # The refusal for a mapped item, kept apart: it alone decides the close by `mapped_closes`.
+    mapped_problem: str | None = None
     if not statements:
         problems.append(
             f"The description lacks the `## {DIVERGENCE_SECTION}` section of the pull request "
@@ -1104,9 +1558,24 @@ def check_divergences(
                     "index's own text or order names the index by its path there), or describe "
                     "the proposed divergence under the third."
                 )
-    if not problems:
+            touched = mapped_items_touched(files, mapped or [], source_for or (lambda _side, _path: None))
+            if touched:
+                mapped_problem = (
+                    f"The first statement of the `## {DIVERGENCE_SECTION}` section (none "
+                    "touched) is checked while the change lands in an item that a reproduction "
+                    f"record names as an entry's implementation: {listed_mapped(touched)}. Name "
+                    "those entries under the second statement and say what the change does to "
+                    "each, or describe the proposed divergence under the third."
+                )
+    if not problems and mapped_problem is None:
         return None
-    return Finding("divergences", " ".join(problems), closes=closes)
+    reported_only = None
+    if mapped_problem is not None:
+        if closes and not problems and not mapped_closes:
+            closes = False
+            reported_only = MAPPED_REPORTED_ONLY
+        problems.append(mapped_problem)
+    return Finding("divergences", " ".join(problems), closes=closes, reported_only=reported_only)
 
 
 def form_fields(body: str | None) -> dict[str, str]:
@@ -1313,6 +1782,11 @@ def predates(created_at: str | None, landed_at: str | None) -> bool:
     return datetime.fromisoformat(created_at) < datetime.fromisoformat(landed_at)
 
 
+# Why a first statement refused for a mapped item alone does not close an older pull request.
+MAPPED_REPORTED_ONLY = (
+    f"the `## {DIVERGENCE_SECTION}` miss is reported only, since the pull request was opened "
+    "before the check read the items the reproduction records name"
+)
 REPORTED_ONLY = (
     (
         "signoff",
@@ -1341,7 +1815,8 @@ def close_footer(
 ) -> tuple[bool, str | None]:
     """(close it, the sentence that ends the comment). Findings on an exempt pull request, and
     findings that are reported only (a sign-off miss; the divergences miss on a pull request older
-    than that rule), are stated with the reason the check does not close."""
+    than that rule, or its mapped-item refusal on one older than the reading of the mapped items),
+    are stated with the reason the check does not close."""
     if not findings:
         return False, None
     if is_maintainer(user, maintainers):
@@ -1356,7 +1831,8 @@ def close_footer(
         return False, "No automatic close: the pull request was opened before the admission check."
     if not any(finding.closes for finding in findings):
         checks = {finding.check for finding in findings}
-        reasons = [reason for check, reason in REPORTED_ONLY if check in checks] or [
+        own = {finding.check: finding.reported_only for finding in findings if finding.reported_only}
+        reasons = [own.get(check, reason) for check, reason in REPORTED_ONLY if check in checks] or [
             "the misses above are reported only"
         ]
         return False, "No automatic close: " + "; ".join(reasons) + "."
@@ -1642,6 +2118,38 @@ class Git:
         proc = self._git("show", f"{rev}:{path}")
         return proc.stdout if proc.returncode == 0 else None
 
+    def registry_records(self, rev: str) -> dict[str, str]:
+        """The path and the text of every record of the reproduction registry at `rev`, read
+        through one `cat-file --batch`; a revision without the registry gives none."""
+        listed = self.run("ls-tree", "--name-only", "-z", rev, DIVERGENCE_REGISTRY, check=False)
+        paths = [name for name in listed.split("\0") if REGISTRY_RECORD_RE.fullmatch(name)]
+        if not paths:
+            return {}
+        proc = subprocess.run(
+            ["git", "-C", str(self.repo_dir), "cat-file", "--batch"],
+            input="".join(f"{rev}:{path}\n" for path in paths).encode(),
+            capture_output=True,
+            check=False,
+        )
+        if proc.returncode != 0:
+            raise AdmissionError(f"git cat-file failed: {proc.stderr.decode(errors='replace')[-300:]}")
+        records: dict[str, str] = {}
+        data = proc.stdout
+        pos = 0
+        for path in paths:
+            header_end = data.index(b"\n", pos)
+            fields = data[pos:header_end].decode(errors="replace").split()
+            pos = header_end + 1
+            if len(fields) != 3:
+                # An object the store lacks at the revision: its line has no body after it.
+                continue
+            size = int(fields[2])
+            # A name that is a directory at the revision is no record: its body is skipped.
+            if fields[1] == "blob":
+                records[path] = data[pos : pos + size].decode(errors="replace")
+            pos += size + 1
+        return records
+
     def fetch_pull_head(self, number: int) -> str:
         """Fetch the pull request's head ref into the object store and return its commit id."""
         ref = f"refs/admission/pull/{number}/head"
@@ -1702,6 +2210,14 @@ class Git:
             )
 
 
+def git_source_for(git: Git, head_sha: str, merge_base: str | None) -> SourceFor:
+    def source_for(side: str, path: str) -> str | None:
+        rev = head_sha if side == "new" else merge_base
+        return git.show(rev, path) if rev else None
+
+    return source_for
+
+
 def git_regions_for(git: Git, head_sha: str, merge_base: str | None) -> RegionsFor:
     def regions_for(side: str, path: str) -> list[tuple[int, int]]:
         rev = head_sha if side == "new" else merge_base
@@ -1733,17 +2249,32 @@ def static_findings(
     base_index: str | None = None,
     head_index: str | None = None,
     divergences_close: bool = True,
+    mapped: list[MappedItem] | None = None,
+    source_for: SourceFor | None = None,
+    mapped_close: bool = True,
 ) -> list[Finding]:
     """The static findings in comment order. `base_index` and `head_index` are the text of
     `docs/intended-divergences.md` at the base tip and the head; `divergences_close` is False for a
-    pull request opened before the divergences rule landed, whose miss is then reported only."""
+    pull request opened before the divergences rule landed, whose miss is then reported only.
+    `mapped` holds the rows of the records' `implementation` tables at the base tip and the head,
+    `source_for` gives a file's text on either side of the change, and `mapped_close` is False for
+    a pull request opened before the mapped items were read."""
     checks = [
         check_contains_base(contains, base_ref),
         check_tests_included(files, labels, regions_for),
         check_signoff(commits),
         check_declaration(models),
         check_body_sections(body),
-        check_divergences(body, files, base_index, head_index, closes=divergences_close),
+        check_divergences(
+            body,
+            files,
+            base_index,
+            head_index,
+            closes=divergences_close,
+            mapped=mapped,
+            source_for=source_for,
+            mapped_closes=mapped_close,
+        ),
         check_changelog(files, head_changelog, regions_for),
         parity,
     ]
@@ -1861,6 +2392,10 @@ def run_event(event: dict, gh: GitHub, git: Git, repo_dir: Path) -> int:
         base_index=git.show(base_tip, INDEX_PATH),
         head_index=git.show(head_sha, INDEX_PATH),
         divergences_close=not opened_before(gh, pr, DIVERGENCE_LANDING_PATH),
+        mapped=read_implementation(git.registry_records(base_tip))
+        + read_implementation(git.registry_records(head_sha)),
+        source_for=git_source_for(git, head_sha, merge_base),
+        mapped_close=not opened_before(gh, pr, IMPLEMENTATION_LANDING_PATH),
     )
     if not is_maintainer(pr.get("user") or {}, maintainers):
         workflows = check_workflow_files(files)
@@ -2051,7 +2586,8 @@ def run_local(repo_dir: Path, base: str, body_file: Path | None) -> int:
     files = local_files(git, merge_base)
     models = declared_models(commits)
     # Without a description to check, the synthesised one fills the text sections and certifies that
-    # the change touches no intended divergence, which the artefact test still holds it to.
+    # the change touches no intended divergence, which the artefact test and the mapped items
+    # still hold it to.
     filled_template = "\n".join(f"## {name}\nx" for name in SECTIONS)
     filled_template += f"\n## {DIVERGENCE_SECTION}\n- [x] {NONE_STATEMENT}\n"
     body = body_file.read_text() if body_file else filled_template
@@ -2068,6 +2604,9 @@ def run_local(repo_dir: Path, base: str, body_file: Path | None) -> int:
         models,
         base_index=git.show(base_sha, INDEX_PATH),
         head_index=git.show(head, INDEX_PATH),
+        mapped=read_implementation(git.registry_records(base_sha))
+        + read_implementation(git.registry_records(head)),
+        source_for=git_source_for(git, head, merge_base),
     )
     report(findings)
     workflows = check_workflow_files(files)

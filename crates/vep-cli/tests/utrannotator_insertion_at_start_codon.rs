@@ -2,30 +2,20 @@
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 //! `--plugin UTRAnnotator` through the `vep` binary on insertions around a
-//! start codon of a 5' UTR. An insertion that only moves the codon on leaves
-//! it whole, as many bases further from the cap as the allele is long, with
-//! every base after it unchanged: the insertion directly before the codon's
-//! first base, and the insertion after its first or second base whose
-//! inserted bases end with that base or those two, which is the same mutated
-//! sequence. The row reports no start codon gained or lost: nothing where no
-//! other analysis fires, the frameshift where the insertion lies inside
-//! another upstream ORF, and the same two fields whichever way the record
-//! writes it. An upstream ORF whose stop codon begins at the moved codon's
-//! second base is left out of the frameshift when the mutated sequence still
-//! reads a stop codon at that index; when none stands there, the length is
-//! no multiple of three and the inserted bases can be written inside that
-//! stop codon, the row reports its lost stop. A start codon the inserted
-//! bases make is reported gained. An
-//! insertion after the codon's first or second base that opens with the
-//! codon's remaining bases, and does not also end with the codon's bases
-//! before it, leaves the codon at its own index, the inserted bases directly
-//! after it: the row reports no gained start for that codon, and the
-//! frameshift analysis reads the insertion directly after the codon; the
-//! other analyses read it where the record writes it. Inserted bases that do
-//! both repeat the codon: the insertion is read as moving the codon on, and
-//! the row reports a gained start at the codon's own index. After any other
-//! insertion that follows the codon's first or second base the lost-start
-//! test fires where the codon's old index reads no start codon.
+//! start codon of a 5' UTR. Inserted bases that repeat the bases beside them
+//! give one mutated sequence at several indices, and every record that gives
+//! that sequence carries the same two fields. An insertion that can be written
+//! directly before the codon only moves it on: the codon stands whole, as many
+//! bases further from the cap as the allele is long, and the row reports no
+//! start codon lost. One that can be written directly after the codon leaves
+//! it at its own index, and the row reports none gained for it. Only an
+//! insertion every writing of which parts the codon loses it. A start codon
+//! the inserted bases make is reported gained, the copy nearer the cap where
+//! the codon is repeated. An upstream ORF whose stop codon begins inside the
+//! codon is left out of the frameshift when it still ends on a stop codon at
+//! that index. Its stop codon is lost when a writing lies inside it, no stop
+//! codon stands at its index, and either every writing lies inside it or the
+//! length is no multiple of three.
 //! Ensembl VEP reports the moved codon lost: it passes an insertion at the
 //! codon's three indices (UTRAnnotator.pm:764-769) and reads the three bases
 //! at the codon's old index alone (UTRAnnotator.pm:776-778).
@@ -628,5 +618,247 @@ fn insertion_that_repeats_a_start_codon_reports_the_gain_at_its_index() {
         for name in [format!("first_{strand}"), format!("second_{strand}")] {
             assert_eq!(row(rows, &name), before, "{name}");
         }
+    }
+}
+
+/// Four bases that repeat the base before a start codon at whose second base
+/// an upstream ORF's stop codon begins give one mutated sequence at four
+/// indices: one before the codon, the codon's first index, and two inside
+/// it, the last of them inside that stop codon. The ORF reads no stop codon
+/// where its own stood. Each record carries the lost stop with the same
+/// group, the one Ensembl VEP writes for the record inside the stop codon
+/// (ENST00001091162, forward strand, the codon at index 360, records at 359
+/// to 362; ENST00000318948, reverse strand, the codon at 493, records at 492
+/// to 495).
+#[test]
+fn insertion_written_before_a_start_codon_it_moves_loses_the_stop_codon_inside_it() {
+    let forward = annotate(
+        &[
+            "21\t10535883\tforward_at_359\tC\tCCATA",
+            "21\t10535884\tforward_at_360\tC\tCATAC",
+            "21\t10535885\tforward_at_361\tA\tATACA",
+            "21\t10535886\tforward_at_362\tT\tTACAT",
+        ],
+        "ENST00001091162",
+    );
+    for name in [
+        "forward_at_359",
+        "forward_at_360",
+        "forward_at_361",
+        "forward_at_362",
+    ] {
+        assert_eq!(
+            row(&forward, name),
+            (LOST_STOP, "AltStop=True:AltStopDistanceToCDS=17:Evidence=False:FrameWithCDS=outOfFrame:KozakContext=TACATGG:KozakStrength=Moderate"),
+            "{name}"
+        );
+    }
+    let reverse = annotate(
+        &[
+            "21\t14968493\treverse_at_492\tC\tCGATC",
+            "21\t14968492\treverse_at_493\tT\tTCGAT",
+            "21\t14968491\treverse_at_494\tA\tATCGA",
+            "21\t14968490\treverse_at_495\tC\tCATCG",
+        ],
+        "ENST00000318948",
+    );
+    for name in [
+        "reverse_at_492",
+        "reverse_at_493",
+        "reverse_at_494",
+        "reverse_at_495",
+    ] {
+        assert_eq!(
+            row(&reverse, name),
+            (LOST_STOP, "AltStop=True:AltStopDistanceToCDS=273:Evidence=False:FrameWithCDS=inFrame:KozakContext=TTAATGG:KozakStrength=Moderate"),
+            "{name}"
+        );
+    }
+}
+
+/// Inserted bases that repeat the base before a start codon and leave a stop
+/// codon at that codon's second base, where an upstream ORF's stop codon
+/// begins. The ORF reads every base before that index unchanged and ends
+/// there: it keeps its length and is listed by no record, written before the
+/// codon or directly before its first base, where UTRAnnotator.pm:921 lists
+/// it for each (ENST00001091162, forward strand, the codon at index 360,
+/// records at 359 and 360; ENST00000318948, reverse strand, the codon at
+/// 493, records at 491 to 493).
+#[test]
+fn insertion_before_a_start_codon_leaves_out_the_orf_that_keeps_its_length() {
+    let forward = annotate(
+        &[
+            "21\t10535883\tforward_at_359\tC\tCCCTAA",
+            "21\t10535884\tforward_at_360\tC\tCCTAAC",
+        ],
+        "ENST00001091162",
+    );
+    for name in ["forward_at_359", "forward_at_360"] {
+        assert_eq!(row(&forward, name), ("-", "-"), "{name}");
+    }
+    let reverse = annotate(
+        &[
+            "21\t14968494\treverse_at_491\tT\tTAGCT",
+            "21\t14968493\treverse_at_492\tC\tCTAGC",
+            "21\t14968492\treverse_at_493\tT\tTCTAG",
+        ],
+        "ENST00000318948",
+    );
+    for name in ["reverse_at_491", "reverse_at_492", "reverse_at_493"] {
+        assert_eq!(row(&reverse, name), ("-", "-"), "{name}");
+    }
+}
+
+/// A duplication of a whole start codon gives one mutated sequence at four
+/// indices: directly before the codon, after its first and its second base,
+/// and directly after it. The mutated 5' UTR holds two equal start codons
+/// where the reference holds one. Each record carries the gained start at
+/// the copy nearer the cap, with the group Ensembl VEP writes for the two
+/// records inside the codon (ENST00000427445, forward strand, the codon at
+/// index 145; ENST00000619120, reverse strand, the codon at 99).
+#[test]
+fn duplicated_start_codon_is_gained_at_the_copy_nearer_the_cap_however_it_is_written() {
+    let forward = annotate(
+        &[
+            "21\t10524582\tforward_at_145\tA\tAATG",
+            "21\t10524583\tforward_at_146\tA\tATGA",
+            "21\t10524584\tforward_at_147\tT\tTGAT",
+            "21\t10524585\tforward_at_148\tG\tGATG",
+        ],
+        "ENST00000427445",
+    );
+    for name in [
+        "forward_at_145",
+        "forward_at_146",
+        "forward_at_147",
+        "forward_at_148",
+    ] {
+        assert_eq!(
+            row(&forward, name),
+            (GAINED_START, "CapDistanceToStart=145:DistanceToCDS=210:DistanceToStop=51:KozakContext=AGAATGA:KozakStrength=Moderate:type=uORF"),
+            "{name}"
+        );
+    }
+    let reverse = annotate(
+        &[
+            "21\t14546261\treverse_at_99\tT\tTCAT",
+            "21\t14546260\treverse_at_100\tA\tATCA",
+            "21\t14546259\treverse_at_101\tC\tCATC",
+            "21\t14546258\treverse_at_102\tG\tGCAT",
+        ],
+        "ENST00000619120",
+    );
+    for name in [
+        "reverse_at_99",
+        "reverse_at_100",
+        "reverse_at_101",
+        "reverse_at_102",
+    ] {
+        assert_eq!(
+            row(&reverse, name),
+            (GAINED_START, "CapDistanceToStart=99:DistanceToCDS=334:DistanceToStop=105:KozakContext=AAAATGA:KozakStrength=Moderate:type=uORF"),
+            "{name}"
+        );
+    }
+}
+
+/// Inserted bases that repeat a start codon's second base and part the codon
+/// can be written after the codon's first base, which is the first base of an
+/// upstream ORF's stop codon, and after its second, inside that stop codon.
+/// One base puts the stop codon, whole one base on, out of frame: both
+/// records carry the lost stop, the row Ensembl VEP writes for the record
+/// inside the stop codon. Three bases leave it in frame: both carry the lost
+/// start, the row Ensembl VEP writes for the record at the stop codon's
+/// first base (ENST00001091162, forward strand, the codon at index 360;
+/// ENST00000318948, reverse strand, the codon at 493).
+#[test]
+fn insertion_that_parts_a_start_codon_inside_a_stop_codon_has_one_term_at_either_index() {
+    let forward_one = annotate(
+        &[
+            "21\t10535885\tforward_one_at_361\tA\tAT",
+            "21\t10535886\tforward_one_at_362\tT\tTT",
+        ],
+        "ENST00001091162",
+    );
+    for name in ["forward_one_at_361", "forward_one_at_362"] {
+        assert_eq!(
+            row(&forward_one, name),
+            (LOST_STOP, "AltStop=True:AltStopDistanceToCDS=17:Evidence=False:FrameWithCDS=outOfFrame:KozakContext=TACATGG:KozakStrength=Moderate"),
+            "{name}"
+        );
+    }
+    let forward_three = annotate(
+        &[
+            "21\t10535885\tforward_three_at_361\tA\tATAC",
+            "21\t10535886\tforward_three_at_362\tT\tTACT",
+        ],
+        "ENST00001091162",
+    );
+    for name in ["forward_three_at_361", "forward_three_at_362"] {
+        assert_eq!(
+            row(&forward_three, name),
+            (LOST_START, "CapDistanceToStart=360:DistanceToCDS=101:DistanceToStop=84:Evidence=False:KozakContext=GCCATGA:KozakStrength=Moderate:type=uORF"),
+            "{name}"
+        );
+    }
+    let reverse_one = annotate(
+        &[
+            "21\t14968491\treverse_one_at_494\tA\tAA",
+            "21\t14968490\treverse_one_at_495\tC\tCA",
+        ],
+        "ENST00000318948",
+    );
+    for name in ["reverse_one_at_494", "reverse_one_at_495"] {
+        assert_eq!(
+            row(&reverse_one, name),
+            (LOST_STOP, "AltStop=True:AltStopDistanceToCDS=273:Evidence=False:FrameWithCDS=inFrame:KozakContext=TTAATGG:KozakStrength=Moderate"),
+            "{name}"
+        );
+    }
+    let reverse_three = annotate(
+        &[
+            "21\t14968491\treverse_three_at_494\tA\tAGTA",
+            "21\t14968490\treverse_three_at_495\tC\tCAGT",
+        ],
+        "ENST00000318948",
+    );
+    for name in ["reverse_three_at_494", "reverse_three_at_495"] {
+        assert_eq!(
+            row(&reverse_three, name),
+            (LOST_START, "CapDistanceToStart=493:DistanceToCDS=300:DistanceToStop=27:Evidence=True:KozakContext=AAGATGA:KozakStrength=Moderate:type=uORF"),
+            "{name}"
+        );
+    }
+}
+
+/// Three inserted bases that can be written at the first base of an upstream
+/// ORF's stop codon and inside it leave that stop codon whole three bases
+/// on, in frame: the ORF gains a codon and ends on it. No record reports
+/// the stop lost, where UTRAnnotator.pm:639-642 report it for a record
+/// written inside the stop codon (ENST00001091162, forward strand, the codon
+/// at index 360, records at 361 to 363; ENST00000285670, reverse strand,
+/// the codon at 64, records at 67 and 68).
+#[test]
+fn in_frame_insertion_writable_at_a_stop_codon_first_base_does_not_lose_it() {
+    let forward = annotate(
+        &[
+            "21\t10535885\tforward_at_361\tA\tATGC",
+            "21\t10535886\tforward_at_362\tT\tTGCT",
+            "21\t10535887\tforward_at_363\tG\tGCTG",
+        ],
+        "ENST00001091162",
+    );
+    for name in ["forward_at_361", "forward_at_362", "forward_at_363"] {
+        assert_eq!(row(&forward, name), ("-", "-"), "{name}");
+    }
+    let reverse = annotate(
+        &[
+            "21\t14583335\treverse_at_67\tA\tATGA",
+            "21\t14583334\treverse_at_68\tT\tTATG",
+        ],
+        "ENST00000285670",
+    );
+    for name in ["reverse_at_67", "reverse_at_68"] {
+        assert_eq!(row(&reverse, name), ("-", "-"), "{name}");
     }
 }

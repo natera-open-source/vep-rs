@@ -1,75 +1,75 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "none",
- "input": "the GRCh38-writers corpus's variants.vcf, 32 records at 32 chromosome 21 loci, annotated by Ensembl VEP 116.2 into annotated.vcf (--vcf), annotated.tab.gz (--tab) and annotated.txt.gz (the default format), both gzipped; the time token of each header is replaced by [TIME] and the container's work directory in the command line by [PATH]. The annotation's cache filled the Existing_variation field of one record with an identifier under restricted redistribution terms; the committed files carry the fabricated identifier COSV00000000, of the same shape, in its place.",
+ "input": "the GRCh38-writers corpus's variants.vcf, 32 records at 32 chromosome 21 loci, annotated by Ensembl VEP 116.3 into annotated.vcf (--vcf), annotated.tab.gz (--tab) and annotated.txt.gz (the default format), both gzipped; the time token of each header is replaced by [TIME] and the container's work directory in the command line by [PATH]. The annotation's cache filled the Existing_variation field of one record with an identifier under restricted redistribution terms; the committed files carry the fabricated identifier COSV00000000, of the same shape, in its place.",
  "annotation_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --symbol --biotype --canonical --numbers --af --max_af [--vcf|--tab]",
  "inputs_sha256": {
-  "annotated.vcf": "c247f9135a84b8cae34e2dc893a74d016af399c6f620a075be338979f2f6f605",
-  "annotated.tab.gz (uncompressed bytes)": "57dd6a2213b722351b2920f502fcdc103fdf2c5221a9117c0a7078d013ed7586",
-  "annotated.txt.gz (uncompressed bytes)": "275c673630bc34c29a7e7752ee77bde4fab13c077932880709f482efba0fc087"
+  "annotated.vcf": "90e3bd15ba7ea478d7dbad443eddb85ec50ba5d0ea15a45b58777b7f82eb6510",
+  "annotated.tab.gz (uncompressed bytes)": "86e0c1784b9f48964158dc6e8742b9ca74128ce7b1cf18f759d0ab086c62bdd3",
+  "annotated.txt.gz (uncompressed bytes)": "944cc6351701301a7a97cc47bcda61f70a82670ff5b9b752cd33c6082d48e740"
  },
  "tool_cases_generator": "scripts/concordance/generate_reference_output.sh --corpus tests/golden/116/GRCh38-filter-tool --tool filter_vep; the ontology case connects filter_vep to the public Ensembl database (its perl_args, --version 116) for the Sequence Ontology terms",
  "sha256": {
-  "filter/vcf.vcf": "96a8f6b5a24275e276b19c885b485faec41c67ad94267f83ea4a84b3aedf9a92",
-  "filter/only-matched.vcf": "31e3902420ce7bc245999f328a4a9976448c3092507a588876ebdda10343490a",
-  "filter/soft-filter.vcf": "869d8df285ca213ad520ac75ebd780651d6d535e6456dc927813f7b94c86e1c7",
+  "filter/vcf.vcf": "0f90f788e25a2b1f9655a52b4d3db5817fad8f172d1efdeaf39cef9e9f379317",
+  "filter/only-matched.vcf": "9c5f390430d964867197bbd31de463b11466ae87590d394a7fdca9fa2039ea7f",
+  "filter/soft-filter.vcf": "76abe57d1645dfb480a85ca853939b84648d0dcb453f57c8d1edf00d7aa19645",
   "filter/count.txt": "10159baf262b43a92d95db59dae1f72c645127301661e0a3ce4e38b295a97c58",
   "filter/list-vcf.txt": "39fd55cda63732993f9b27040110b95bcabd6064c5f6e08697c12abe0bd6736a",
-  "filter/in-list.vcf": "96a8f6b5a24275e276b19c885b485faec41c67ad94267f83ea4a84b3aedf9a92",
-  "filter/not-and-numeric.vcf": "1b6fd58df58968157033a03cdc03bfcf9ab74c0c38f75e07d5778fff8b5eae6f",
-  "filter/parens-or.vcf": "058d6b5454b2330bbef0e6118c2c53f60ff280bda669d32e2006ae8435fb03c8",
-  "filter/start-limit.vcf": "bf26e16d9755cca853302d6cb36c38e0605bd957eb0ff2eb39329b4788af1605",
+  "filter/in-list.vcf": "0f90f788e25a2b1f9655a52b4d3db5817fad8f172d1efdeaf39cef9e9f379317",
+  "filter/not-and-numeric.vcf": "43d1aaf80e3345f36a8449d2d8193de9d9a20c1872862351a8d4ebef7b19eb01",
+  "filter/parens-or.vcf": "e8f028bd1ba3fc3984911d2ab9a008f7307fdb9cd56b4aaf0e840f2ab55f34f2",
+  "filter/start-limit.vcf": "77e65718511a1a211eebbf158c30cc829e0c3a4feae688a72625635bf5658480",
   "filter/test-count.txt": "f0b5c2c2211c8d67ed15e75e656c7862d086e9245420892a7de62cd9ec582a06",
-  "filter/synonym-case.vcf": "5fc213425ec4ee8ace2f13ed28b7a284cd96d05c09034ed16f59c7e94e8f728e",
-  "filter/info-key.vcf": "f595b546839deec331ad0db7fe4baa0a356696693c2041846d4a28807300ed2f",
-  "filter/field-value.vcf": "2c176158e5ef05ad4ff387d86ec40a1191764db965625c5d574bfb5001d3b232",
-  "filter/max-af.vcf": "5460d93639b0a1101673d4ed40e308c26cb0afeecb1486688a4fa74a75d9da29",
-  "filter/allele-dash.vcf": "aaa579f75fd03df7ff9a0d2c9c1718f2050a7d40e051f461b9b60389a1aeff40",
-  "filter/canonical-nex.vcf": "ea4549b900554fe44ca1eeaed35e14decf389be0055c07c4da3d5de079dff167",
-  "filter/regex.vcf": "3258687580037ecf8d7b04d3c59895c329b49d61b27bd187881993500e372dfb",
-  "filter/two-filters.vcf": "f1769f2641939e3b07105db27b417e1d84174ff245c555424c0e26effda3a405",
-  "filter/tab.tab": "68c41e10532b7175e5348e0e121f3303e5c995aae981e0412674d5056c33b20e",
-  "filter/tab-symbol.tab": "c8f26a130c927e397f8efa8edbe71ba6b34b22f300c6d6e81282be50e8ed9820",
+  "filter/synonym-case.vcf": "3d02c56ae85cb5c2235cedbde5fb936de77f1a79511487dd185908a8d5a2ade2",
+  "filter/info-key.vcf": "0155bcf0ce5466619023adf6a5b9299417f6c37a9d0a0c2aa1a8f1e061a65a5f",
+  "filter/field-value.vcf": "8bfcff42860d621489931b91e89c6edfa833ea48a907cea55909693219158899",
+  "filter/max-af.vcf": "d28992e05007fda16c46ebe7c9ecffd7c5637045b64c3d6451f4005509836990",
+  "filter/allele-dash.vcf": "4864a50c43c889021a9604948b86ec31b4f4503e6725be0e83a5ed151a553bc2",
+  "filter/canonical-nex.vcf": "15bf49173dc5dde5a800c37f2feee49b8a77b48203584462c308a4113c94a104",
+  "filter/regex.vcf": "ab76af9ee31bd55621deda0ffa5433ae3e6f2cbef1e48c6d23e8eb74bdf430b8",
+  "filter/two-filters.vcf": "ddb4e8b56160cd1a31a52ba488517d99a84027ffbedfa0e62de2ec97c9ce7bdc",
+  "filter/tab.tab": "0eeaa82c0d8a19944257425fc29b3d65738d7fd7f1947c9d38075aebd83b5df3",
+  "filter/tab-symbol.tab": "d94a8c52c5137b2548d419cb49f4c4ece501a6fab0b0937c56aeefcd90a7d169",
   "filter/tab-count.txt": "6d57b664a1e6a401b8352095ad40cb5f8a5b95f32786bed036895569bcbdf2b8",
   "filter/list-tab.txt": "e9f1949c1e0fcb34c9f90846e3fc2ea98af9c231eed60ec499d8a41cdc388296",
-  "filter/tab-start-limit.tab": "c657f0642551439a0f16b6b693fb5c7f3ec95db8d02246e0488879d68b8235be",
-  "filter/tab-numeric.tab": "2fa3ee20a2d39ec05d407cad5e85da7e1b7d4213c5851cfe13389550210f6d2c",
-  "filter/default-extra.txt": "70c7d49768fda9115afc860e9e5c0f2db90aa45c5db78179344418b5a8262312",
+  "filter/tab-start-limit.tab": "6f9e0402d388ee11b473ba561dc5769e02bfa18bbc876cc9691f2c6e3affb430",
+  "filter/tab-numeric.tab": "28f144895eda6237bf95d5c996e3be861bf11dfc7b5ecf0dcdea52afdda058d1",
+  "filter/default-extra.txt": "344fd37fe34f14d178f7f9a0bd08cc6fe8c15aece185a61eb09e3d3cbbda53d1",
   "filter/default-extra-count.txt": "f10f7170eeb4986f69d764a4cb97c3f8e9337963222188a647fc4c0ac289d0e4",
   "filter/list-default.txt": "d58905a5f5bf1e0dfccd5d20f99aee382750482538ca87e4ff9312987cfb34b5",
-  "filter/ontology.vcf": "e2c65db8d7cfa8588e49506277638142580d595d0d0e7d30c2a2486d17bd14f8"
+  "filter/ontology.vcf": "23609fa81f772fd827341b8f1fdc2a30e357c3fe3d8d4dd360fe1e19817aa572"
  },
  "tool": "filter_vep",
- "tool_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "tool_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "tool_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "tool_image_tag": "ensemblorg/ensembl-vep:release_116.3",
  "tool_cases": {
   "vcf": {
    "input": "annotated.vcf",
    "command": "filter_vep -i annotated.vcf --filter 'Consequence is missense_variant and IMPACT is MODERATE'",
    "expected": "expected/filter/vcf.vcf",
-   "sha256": "96a8f6b5a24275e276b19c885b485faec41c67ad94267f83ea4a84b3aedf9a92",
+   "sha256": "0f90f788e25a2b1f9655a52b4d3db5817fad8f172d1efdeaf39cef9e9f379317",
    "data_lines": 7,
-   "wall_seconds": 1
+   "wall_seconds": 3
   },
   "only-matched": {
    "input": "annotated.vcf",
    "command": "filter_vep -i annotated.vcf --only_matched --filter 'Consequence is missense_variant and IMPACT is MODERATE'",
    "expected": "expected/filter/only-matched.vcf",
-   "sha256": "31e3902420ce7bc245999f328a4a9976448c3092507a588876ebdda10343490a",
+   "sha256": "9c5f390430d964867197bbd31de463b11466ae87590d394a7fdca9fa2039ea7f",
    "data_lines": 7,
-   "wall_seconds": 1
+   "wall_seconds": 2
   },
   "soft-filter": {
    "input": "annotated.vcf",
    "command": "filter_vep -i annotated.vcf --soft_filter --filter 'Consequence is missense_variant and IMPACT is MODERATE'",
    "expected": "expected/filter/soft-filter.vcf",
-   "sha256": "869d8df285ca213ad520ac75ebd780651d6d535e6456dc927813f7b94c86e1c7",
+   "sha256": "76abe57d1645dfb480a85ca853939b84648d0dcb453f57c8d1edf00d7aa19645",
    "data_lines": 32,
-   "wall_seconds": 1
+   "wall_seconds": 5
   },
   "count": {
    "input": "annotated.vcf",
@@ -77,7 +77,7 @@
    "expected": "expected/filter/count.txt",
    "sha256": "10159baf262b43a92d95db59dae1f72c645127301661e0a3ce4e38b295a97c58",
    "data_lines": 1,
-   "wall_seconds": 1
+   "wall_seconds": 2
   },
   "list-vcf": {
    "input": "annotated.vcf",
@@ -85,13 +85,13 @@
    "expected": "expected/filter/list-vcf.txt",
    "sha256": "39fd55cda63732993f9b27040110b95bcabd6064c5f6e08697c12abe0bd6736a",
    "data_lines": 40,
-   "wall_seconds": 1
+   "wall_seconds": 3
   },
   "in-list": {
    "input": "annotated.vcf",
    "command": "filter_vep -i annotated.vcf --filter 'Consequence in missense_variant,synonymous_variant,stop_gained'",
    "expected": "expected/filter/in-list.vcf",
-   "sha256": "96a8f6b5a24275e276b19c885b485faec41c67ad94267f83ea4a84b3aedf9a92",
+   "sha256": "0f90f788e25a2b1f9655a52b4d3db5817fad8f172d1efdeaf39cef9e9f379317",
    "data_lines": 7,
    "wall_seconds": 1
   },
@@ -99,15 +99,15 @@
    "input": "annotated.vcf",
    "command": "filter_vep -i annotated.vcf --filter 'not Consequence match intron and DISTANCE > 1000'",
    "expected": "expected/filter/not-and-numeric.vcf",
-   "sha256": "1b6fd58df58968157033a03cdc03bfcf9ab74c0c38f75e07d5778fff8b5eae6f",
+   "sha256": "43d1aaf80e3345f36a8449d2d8193de9d9a20c1872862351a8d4ebef7b19eb01",
    "data_lines": 12,
-   "wall_seconds": 0
+   "wall_seconds": 3
   },
   "parens-or": {
    "input": "annotated.vcf",
    "command": "filter_vep -i annotated.vcf --filter 'Feature is ENST00000427445 or (IMPACT is HIGH and BIOTYPE is protein_coding)'",
    "expected": "expected/filter/parens-or.vcf",
-   "sha256": "058d6b5454b2330bbef0e6118c2c53f60ff280bda669d32e2006ae8435fb03c8",
+   "sha256": "e8f028bd1ba3fc3984911d2ab9a008f7307fdb9cd56b4aaf0e840f2ab55f34f2",
    "data_lines": 10,
    "wall_seconds": 1
   },
@@ -115,9 +115,9 @@
    "input": "annotated.vcf",
    "command": "filter_vep -i annotated.vcf --start 3 --limit 4 --filter 'Consequence match variant'",
    "expected": "expected/filter/start-limit.vcf",
-   "sha256": "bf26e16d9755cca853302d6cb36c38e0605bd957eb0ff2eb39329b4788af1605",
+   "sha256": "77e65718511a1a211eebbf158c30cc829e0c3a4feae688a72625635bf5658480",
    "data_lines": 4,
-   "wall_seconds": 1
+   "wall_seconds": 2
   },
   "test-count": {
    "input": "annotated.vcf",
@@ -125,21 +125,21 @@
    "expected": "expected/filter/test-count.txt",
    "sha256": "f0b5c2c2211c8d67ed15e75e656c7862d086e9245420892a7de62cd9ec582a06",
    "data_lines": 1,
-   "wall_seconds": 1
+   "wall_seconds": 2
   },
   "synonym-case": {
    "input": "annotated.vcf",
    "command": "filter_vep -i annotated.vcf --filter 'symbol is TPTE and biotype is protein_coding'",
    "expected": "expected/filter/synonym-case.vcf",
-   "sha256": "5fc213425ec4ee8ace2f13ed28b7a284cd96d05c09034ed16f59c7e94e8f728e",
+   "sha256": "3d02c56ae85cb5c2235cedbde5fb936de77f1a79511487dd185908a8d5a2ade2",
    "data_lines": 1,
-   "wall_seconds": 1
+   "wall_seconds": 3
   },
   "info-key": {
    "input": "annotated.vcf",
    "command": "filter_vep -i annotated.vcf --filter 'DP > 50 and dp < 80'",
    "expected": "expected/filter/info-key.vcf",
-   "sha256": "f595b546839deec331ad0db7fe4baa0a356696693c2041846d4a28807300ed2f",
+   "sha256": "0155bcf0ce5466619023adf6a5b9299417f6c37a9d0a0c2aa1a8f1e061a65a5f",
    "data_lines": 4,
    "wall_seconds": 1
   },
@@ -147,23 +147,23 @@
    "input": "annotated.vcf",
    "command": "filter_vep -i annotated.vcf --filter 'CDS_position lt #cDNA_position'",
    "expected": "expected/filter/field-value.vcf",
-   "sha256": "2c176158e5ef05ad4ff387d86ec40a1191764db965625c5d574bfb5001d3b232",
+   "sha256": "8bfcff42860d621489931b91e89c6edfa833ea48a907cea55909693219158899",
    "data_lines": 21,
-   "wall_seconds": 1
+   "wall_seconds": 2
   },
   "max-af": {
    "input": "annotated.vcf",
    "command": "filter_vep -i annotated.vcf --filter 'MAX_AF > 0.01'",
    "expected": "expected/filter/max-af.vcf",
-   "sha256": "5460d93639b0a1101673d4ed40e308c26cb0afeecb1486688a4fa74a75d9da29",
+   "sha256": "d28992e05007fda16c46ebe7c9ecffd7c5637045b64c3d6451f4005509836990",
    "data_lines": 1,
-   "wall_seconds": 1
+   "wall_seconds": 2
   },
   "allele-dash": {
    "input": "annotated.vcf",
    "command": "filter_vep -i annotated.vcf --filter 'Allele is - and Consequence match frameshift'",
    "expected": "expected/filter/allele-dash.vcf",
-   "sha256": "aaa579f75fd03df7ff9a0d2c9c1718f2050a7d40e051f461b9b60389a1aeff40",
+   "sha256": "4864a50c43c889021a9604948b86ec31b4f4503e6725be0e83a5ed151a553bc2",
    "data_lines": 3,
    "wall_seconds": 1
   },
@@ -171,41 +171,41 @@
    "input": "annotated.vcf",
    "command": "filter_vep -i annotated.vcf --filter 'CANONICAL is YES and Existing_variation nex'",
    "expected": "expected/filter/canonical-nex.vcf",
-   "sha256": "ea4549b900554fe44ca1eeaed35e14decf389be0055c07c4da3d5de079dff167",
+   "sha256": "15bf49173dc5dde5a800c37f2feee49b8a77b48203584462c308a4113c94a104",
    "data_lines": 27,
-   "wall_seconds": 1
+   "wall_seconds": 2
   },
   "regex": {
    "input": "annotated.vcf",
    "command": "filter_vep -i annotated.vcf --filter 'HGVSc match c\\.[0-9]+[ACGT]>[ACGT] and HGVSp nre Ter'",
    "expected": "expected/filter/regex.vcf",
-   "sha256": "3258687580037ecf8d7b04d3c59895c329b49d61b27bd187881993500e372dfb",
+   "sha256": "ab76af9ee31bd55621deda0ffa5433ae3e6f2cbef1e48c6d23e8eb74bdf430b8",
    "data_lines": 0,
-   "wall_seconds": 1
+   "wall_seconds": 2
   },
   "two-filters": {
    "input": "annotated.vcf",
    "command": "filter_vep -i annotated.vcf --filter 'BIOTYPE is protein_coding' --filter 'not IMPACT is MODIFIER'",
    "expected": "expected/filter/two-filters.vcf",
-   "sha256": "f1769f2641939e3b07105db27b417e1d84174ff245c555424c0e26effda3a405",
+   "sha256": "ddb4e8b56160cd1a31a52ba488517d99a84027ffbedfa0e62de2ec97c9ce7bdc",
    "data_lines": 23,
-   "wall_seconds": 1
+   "wall_seconds": 2
   },
   "tab": {
    "input": "annotated.tab.gz",
    "command": "filter_vep -i annotated.tab.gz --filter 'SYMBOL match ^BRCA'",
    "expected": "expected/filter/tab.tab",
-   "sha256": "68c41e10532b7175e5348e0e121f3303e5c995aae981e0412674d5056c33b20e",
+   "sha256": "0eeaa82c0d8a19944257425fc29b3d65738d7fd7f1947c9d38075aebd83b5df3",
    "data_lines": 0,
-   "wall_seconds": 1
+   "wall_seconds": 3
   },
   "tab-symbol": {
    "input": "annotated.tab.gz",
    "command": "filter_vep -i annotated.tab.gz --filter 'SYMBOL is TPTE and IMPACT is MODERATE'",
    "expected": "expected/filter/tab-symbol.tab",
-   "sha256": "c8f26a130c927e397f8efa8edbe71ba6b34b22f300c6d6e81282be50e8ed9820",
+   "sha256": "d94a8c52c5137b2548d419cb49f4c4ece501a6fab0b0937c56aeefcd90a7d169",
    "data_lines": 16,
-   "wall_seconds": 1
+   "wall_seconds": 3
   },
   "tab-count": {
    "input": "annotated.tab.gz",
@@ -213,7 +213,7 @@
    "expected": "expected/filter/tab-count.txt",
    "sha256": "6d57b664a1e6a401b8352095ad40cb5f8a5b95f32786bed036895569bcbdf2b8",
    "data_lines": 1,
-   "wall_seconds": 1
+   "wall_seconds": 2
   },
   "list-tab": {
    "input": "annotated.tab.gz",
@@ -221,13 +221,13 @@
    "expected": "expected/filter/list-tab.txt",
    "sha256": "e9f1949c1e0fcb34c9f90846e3fc2ea98af9c231eed60ec499d8a41cdc388296",
    "data_lines": 32,
-   "wall_seconds": 0
+   "wall_seconds": 3
   },
   "tab-start-limit": {
    "input": "annotated.tab.gz",
    "command": "filter_vep -i annotated.tab.gz --start 2 --limit 2 --filter 'Consequence match variant'",
    "expected": "expected/filter/tab-start-limit.tab",
-   "sha256": "c657f0642551439a0f16b6b693fb5c7f3ec95db8d02246e0488879d68b8235be",
+   "sha256": "6f9e0402d388ee11b473ba561dc5769e02bfa18bbc876cc9691f2c6e3affb430",
    "data_lines": 2,
    "wall_seconds": 1
   },
@@ -235,17 +235,17 @@
    "input": "annotated.tab.gz",
    "command": "filter_vep -i annotated.tab.gz --filter 'DISTANCE > 2000 or Protein_position > 100'",
    "expected": "expected/filter/tab-numeric.tab",
-   "sha256": "2fa3ee20a2d39ec05d407cad5e85da7e1b7d4213c5851cfe13389550210f6d2c",
+   "sha256": "28f144895eda6237bf95d5c996e3be861bf11dfc7b5ecf0dcdea52afdda058d1",
    "data_lines": 10,
-   "wall_seconds": 1
+   "wall_seconds": 3
   },
   "default-extra": {
    "input": "annotated.txt.gz",
    "command": "filter_vep -i annotated.txt.gz --filter 'IMPACT is MODERATE and STRAND is -1'",
    "expected": "expected/filter/default-extra.txt",
-   "sha256": "70c7d49768fda9115afc860e9e5c0f2db90aa45c5db78179344418b5a8262312",
+   "sha256": "344fd37fe34f14d178f7f9a0bd08cc6fe8c15aece185a61eb09e3d3cbbda53d1",
    "data_lines": 14,
-   "wall_seconds": 1
+   "wall_seconds": 2
   },
   "default-extra-count": {
    "input": "annotated.txt.gz",
@@ -253,7 +253,7 @@
    "expected": "expected/filter/default-extra-count.txt",
    "sha256": "f10f7170eeb4986f69d764a4cb97c3f8e9337963222188a647fc4c0ac289d0e4",
    "data_lines": 1,
-   "wall_seconds": 1
+   "wall_seconds": 3
   },
   "list-default": {
    "input": "annotated.txt.gz",
@@ -261,15 +261,15 @@
    "expected": "expected/filter/list-default.txt",
    "sha256": "d58905a5f5bf1e0dfccd5d20f99aee382750482538ca87e4ff9312987cfb34b5",
    "data_lines": 33,
-   "wall_seconds": 1
+   "wall_seconds": 2
   },
   "ontology": {
    "input": "annotated.vcf",
    "command": "filter_vep -i annotated.vcf --ontology --filter 'Consequence is coding_sequence_variant' --version 116",
    "expected": "expected/filter/ontology.vcf",
-   "sha256": "e2c65db8d7cfa8588e49506277638142580d595d0d0e7d30c2a2486d17bd14f8",
+   "sha256": "23609fa81f772fd827341b8f1fdc2a30e357c3fe3d8d4dd360fe1e19817aa572",
    "data_lines": 19,
-   "wall_seconds": 171
+   "wall_seconds": 178
   }
  }
 }

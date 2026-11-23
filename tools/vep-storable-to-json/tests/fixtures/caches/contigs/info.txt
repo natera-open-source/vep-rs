@@ -1,0 +1,4 @@
+species	homo_sapiens
+assembly	GRCh38
+var_type	tabix
+variation_cols	chr,variation_name,,failed,

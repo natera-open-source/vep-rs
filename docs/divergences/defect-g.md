@@ -10,7 +10,7 @@ Ensembl VEP adds the flank to every coordinate of the buffer when it chooses the
 
 **Where it is in Ensembl VEP's source** (`ensembl-vep`, `Bio/EnsEMBL/VEP/AnnotationSource.pm`):
 - line 190: `get_regions_from_coords` adds the `--distance` flank to each coordinate it is given when it chooses the cache regions and the buffer's bounds.
-- lines 251-254: `get_all_regions_by_InputBuffer` hands it every breakend's mate position, beside every record's start and end.
+- lines 251-257: `get_all_regions_by_InputBuffer` hands it every breakend's mate position, beside every record's start and end.
 - lines 306-309: `_check_overlap` keeps a transcript only when it overlaps the bounds with the flank added again.
 
 **What correcting it would change.** The buffer's records would keep their transcript rows and the breakend its own-end rows, as vep-rs writes them; [class 14](#14-a-coordinate-at-or-past-2147478648-a-breakend-mate-a-span-end-or-the-records-own-position-turns-the-references-buffer-intergenic) would vanish.
@@ -36,11 +36,11 @@ The boundary follows the flank exactly: with the default flank the first positio
 21	30425650	end2_2147478648	N	<BND>	.	.	SVTYPE=BND;CHR2=21;END2=2147478648
 ```
 
-Executed with Ensembl VEP 116.2 (`ensemblorg/ensembl-vep:release_116.2`, the 116 GRCh38 cache, `--offline --cache --allele_number`).
+Executed with Ensembl VEP 116.3 (`ensemblorg/ensembl-vep:release_116.3`, the 116 GRCh38 cache, `--offline --cache --allele_number`).
 
 ### 14.3 What each engine writes
 
-Ensembl VEP 116.2, three rows, every one intergenic, one column per row:
+Ensembl VEP 116.3, three rows, every one intergenic, one column per row:
 
 | Column | `control_dup` | `end2_2147478648`, allele `N.` | `end2_2147478648`, mate allele |
 | --- | --- | --- | --- |
@@ -109,9 +109,9 @@ The breakend's own-end allele `N.` on ENST00000390690:
 
 Both engines write no row under the mate allele for a mate this far from any transcript, at 2,147,478,646 as at 46,709,983 or 1,000,000,000; the difference is the transcript rows of the whole buffer.
 
-A span's end or a record's own position past the bound turns the buffer the same way. Under `--max_sv_size -1`, `21 30425650 x N <DEL> . . SVTYPE=DEL;END=2147483647` is one row in Ensembl VEP 116.2 (`SVLEN=2147483647` in place of the `END` gives `21:30425651-2177909297 deletion - intergenic_variant`) and 5,074 transcript rows in vep-rs. The vep-rs rows are every transcript from 30425651 to the end of the chromosome.
+A span's end or a record's own position past the bound turns the buffer the same way. Under `--max_sv_size -1`, `21 30425650 x N <DEL> . . SVTYPE=DEL;END=2147483647` is one row in Ensembl VEP 116.3 (`SVLEN=2147483647` in place of the `END` gives `21:30425651-2177909297 deletion - intergenic_variant`) and 5,074 transcript rows in vep-rs. The vep-rs rows are every transcript from 30425651 to the end of the chromosome.
 
-Ensembl VEP 116.2, one row, and vep-rs (1 of 5,074 rows), the differing cells in bold:
+Ensembl VEP 116.3, one row, and vep-rs (1 of 5,074 rows), the differing cells in bold:
 
 | Column | Ensembl VEP | vep-rs |
 | --- | --- | --- |
@@ -124,9 +124,9 @@ Ensembl VEP 116.2, one row, and vep-rs (1 of 5,074 rows), the differing cells in
 | Consequence | **`intergenic_variant`** | **`transcript_ablation`** |
 | Extra | **`ALLELE_NUM=1;IMPACT=MODIFIER`** | not shown |
 
-The breakend `21 2147483648 x N N[21:30425700[ . . SVTYPE=BND`, whose own position is past the bound, is two intergenic rows in Ensembl VEP 116.2, one per allele. vep-rs writes the mate allele's rows at the mate (its own end, at 2,147,483,649, reaches no transcript on either side).
+The breakend `21 2147483648 x N N[21:30425700[ . . SVTYPE=BND`, whose own position is past the bound, is two intergenic rows in Ensembl VEP 116.3, one per allele. vep-rs writes the mate allele's rows at the mate (its own end, at 2,147,483,649, reaches no transcript on either side).
 
-Ensembl VEP 116.2, two rows, one per allele, and vep-rs, two rows, both under the mate allele. The own-end allele `N.`:
+Ensembl VEP 116.3, two rows, one per allele, and vep-rs, two rows, both under the mate allele. The own-end allele `N.`:
 
 | Column | Ensembl VEP | vep-rs |
 | --- | --- | --- |
@@ -156,7 +156,7 @@ At POS 2147483647 the breakend's own position plus the flank also passes 2^31 an
 
 ### 14.4 Why Ensembl VEP writes that
 
-`AnnotationSource.pm` `get_regions_from_coords` (line 190) adds the `--distance` flank to each coordinate it is given when it chooses the cache regions and the buffer's bounds. `get_all_regions_by_InputBuffer` hands it every record's start and end and every breakend's mate position (lines 251-254 for the mates). `_check_overlap` (lines 306-309) then keeps a transcript only when it overlaps the bounds with the flank added again.
+`AnnotationSource.pm` `get_regions_from_coords` (line 190) adds the `--distance` flank to each coordinate it is given when it chooses the cache regions and the buffer's bounds. `get_all_regions_by_InputBuffer` hands it every record's start and end and every breakend's mate position (lines 251-257 for the mates). `_check_overlap` (lines 306-309) then keeps a transcript only when it overlaps the bounds with the flank added again.
 
 The buffer's largest coordinate plus the flank is where the behaviour turns, whichever record supplies it and whether it is a mate position, a span's end or a start. The measurements of [14.1](#141-what-a-reader-needs-to-know-first) place the turn at 2^31 for both flank sizes, the bound of a signed 32-bit integer, and past it every record of the buffer is written as intergenic.
 
@@ -168,7 +168,7 @@ A record's annotation depends on its own coordinates and the transcripts it over
 
 ```bash
 printf '##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n21\t30425650\tcontrol_dup\tN\t<DUP>\t.\t.\tSVTYPE=DUP;END=30425899\n21\t30425650\tend2_2147478648\tN\t<BND>\t.\t.\tSVTYPE=BND;CHR2=21;END2=2147478648\n' > overflow.vcf
-docker run --rm -v "$PWD":/work -v /path/to/vep-cache:/cache ensemblorg/ensembl-vep:release_116.2 \
+docker run --rm -v "$PWD":/work -v /path/to/vep-cache:/cache ensemblorg/ensembl-vep:release_116.3 \
   vep -i /work/overflow.vcf -o /work/overflow.perl.txt --offline --cache --dir_cache /cache --cache_version 116 \
   --assembly GRCh38 --species homo_sapiens --allele_number --no_stats
 vep -i overflow.vcf -o overflow.vep-rs.txt --offline --json_cache tests/golden/116/GRCh38-release116/json_cache --assembly GRCh38 --allele_number --no_stats
@@ -178,7 +178,7 @@ Changing `END2` to `2147478646` restores the transcript rows in Ensembl VEP's ou
 
 ### 14.7 How the comparator treats this class
 
-The class is `bnd_mate_32bit_buffer_intergenic` in the 116.2 registry of both comparators, counted and never set aside. The records it damages beyond the record's own are its neighbours in a buffer whose boundaries the outputs do not record, so no tuple can be attributed to it with certainty, and crediting vep-rs for an unattributable row is not done.
+The class is `bnd_mate_32bit_buffer_intergenic` in the 116.3 registry of both comparators, counted and never set aside. The records it damages beyond the record's own are its neighbours in a buffer whose boundaries the outputs do not record, so no tuple can be attributed to it with certainty, and crediting vep-rs for an unattributable row is not done.
 
 The SNP/indel comparator counts the reference's rows at the Location of a record whose bracket allele names a mate at or past 2,147,478,648.
 

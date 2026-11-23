@@ -1,9 +1,9 @@
 entry = "hgvs_shift_shared_across_alleles"
 page = "docs/divergences/multiallelic-hgvs-shift.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 98.6 per million · 23 flag sets, 21 corpora"
+input_class_basis = "2 · 98.6 per million · 95 flag sets, 24 corpora"
 notes = "Two insertion alleles at the stop codon of ENSMUST00000405524 on one record; the second allele's row is read at the positions the first allele's shift left cached."
 
 [input]
@@ -29,3 +29,11 @@ columns = ["Consequence", "Protein_position", "Amino_acids", "Codons", "HGVSc", 
 [expected]
 ensembl_vep = ["frameshift_variant,NMD_transcript_variant | - | - | - | ENSMUST00000405524.1:c.207_*1insAAGA | 1"]
 vep_rs = ["inframe_insertion,stop_retained_variant,NMD_transcript_variant | 69 | */*KX | taa/taAAAGa | ENSMUST00000405524.1:c.207_*1insAAGA | 1"]
+
+[implementation]
+none = "vep-rs computes the 3' shift and the coding and protein positions of each allele separately and keeps no positions shared between the alleles of a record, so its ordinary path annotates a later allele at its own positions; the difference is the positions Ensembl VEP leaves cached on the object the alleles share."
+tests = ["crates/vep-cli/tests/consequence_documented_rows.rs::a_later_insertion_allele_is_read_at_its_own_positions"]
+rules = [
+    "tools/vep-formats-compare/src/rules/downstream.rs::later_allele_shared_shift",
+    "tools/vep-plugin-pairs/src/rules/downstream/classes.rs::later_allele_shared_shift",
+]

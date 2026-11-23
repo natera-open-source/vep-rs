@@ -1,0 +1,76 @@
+{
+ "plugin_fixtures": {
+  "generator": "scripts/fixtures/cut_plugin_regions.py",
+  "flank": 5000,
+  "record_flank": 2000,
+  "exon_flank": 50,
+  "gerp_regions": "exons",
+  "tools": {
+   "bgzip": "bgzip (htslib) 1.21"
+  },
+  "files": {
+   "reference.fa.fai": "9a25d871c398f70f3d22d9542105e1c9b3dc8fdaa887e3331965b350ec77582d",
+   "reference.fa.gz": "a92f35d011a8ba362da2916faf9e25a1a5107d49293e40d449f9604ecedceb58",
+   "reference.fa.gz.fai": "9a25d871c398f70f3d22d9542105e1c9b3dc8fdaa887e3331965b350ec77582d",
+   "reference.fa.gz.gzi": "ab12771b269d3d4cd7e8329b261d4e42ec231b806ee70ca4b7f4bae98bdddc59"
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "reference.fa.gz beside this file: GRCh38 chromosome 21 at its full length from Homo_sapiens.GRCh38.dna.primary_assembly.fa, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta and vep-rs the compressed one; it holds the reference allele of each of the 204 records",
+ "input": "the 204 small-variant records of the GRCh38-everything corpus on chromosome 21, its variants.vcf byte for byte; that corpus's record says how they were chosen. This corpus runs them with a reference sequence, which that corpus's own run goes without, so its rows carry HGVSc, HGVSp and HGVS_OFFSET: 4,808, 2,457 and 685 of the 5,847 default-format rows, every other column of each row equal to that corpus's",
+ "sha256": {
+  "default.txt": "75543f8dd3a5a48df33f877da4b5a11d545a2e5e24e494480cb9a31fdc6d9c82",
+  "tab.txt": "07951c055dd5a3f23fcdf6636cdd2925bba5220018cbfe4d48dad3da526c9e92",
+  "vcf.vcf": "3891563e4ac2a26c612ce1429e1b1eb130bbf4d71632b2076e22f3162c1f55ad",
+  "json.jsonl": "8636d40a77df2ac618d473a572f440c32df93fcb80b9561bfafc556aea729ee2"
+ },
+ "variants_vcf_sha256": "ab966378311fe097af6d6976997cfd7dff055083099efae7f7c930ac98e43554",
+ "generator": "scripts/golden/prune_json_cache.py --gzip --regulatory --perl-info <cache>/info.txt --cache-version 116 --variations <cache> --exclude-variation '^COSV\\d' --exclude-variation '^(C[A-Z]|BM|HM)\\d{6}' over the json_cache of GRCh38-everything, whose transcripts carry that corpus's --drop choices (the same records reach the same transcripts, regulatory features and variation records, so the output equals that cache file for file); scripts/fixtures/cut_plugin_regions.py --reference <Homo_sapiens.GRCh38.dna.primary_assembly.fa> (the reference cut to the regions a run reads, recorded under plugin_fixtures); tools/vep-golden-corpus select --release 116 --assembly GRCh38 --dataset everything=<reference>=<candidates> --k 1 --seed 1 --keep-records --covers hgvs --covers hgvs-offset-field --matrix tests/parity/matrix.tsv --family-columns MAX_AF,AF,CLIN_SIG,PUBMED,SOMATIC,miRNA,GENE_PHENO,DOMAINS,SIFT,MANE_PLUS_CLINICAL --flag=--everything --fasta-name reference.fa.gz over a copy of the GRCh38-everything manifest, whose 204 records it keeps and whose covers it carries, run once on that corpus's default-format reference, so that the generator reads the flags and the reference file's name, and once more on this corpus's own; scripts/concordance/generate_reference_output.sh --corpus --no-stats between the two; tools/vep-golden-corpus identifiers, which replaced nothing; tools/vep-golden-corpus classify --field HIGH_INF_POS --field MOTIF_SCORE_CHANGE --field HGVSc --field HGVSp --field HGVS_OFFSET over the whole reference, its RegulatoryFeature and MotifFeature rows included; HGVS_OFFSET is among the fields because the classes of an insertion at an intron's end or start and of a shifted insertion or deletion read each row's offset",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "21": 1713
+  },
+  "shards": 28,
+  "spans_by_chromosome": {
+   "21": 204
+  },
+  "transcripts_with_prediction_matrices": 359,
+  "regulatory_features_per_chromosome": {
+   "21": 1121
+  },
+  "regulatory_shards": 26,
+  "binding_matrices": 46
+ },
+ "variation_slice": {
+  "source": "homo_sapiens/116_GRCh38/21/all_vars.gz of the Ensembl VEP release-116 indexed cache",
+  "window": "records whose start lies within one base of an input record's span",
+  "windows": 191,
+  "records_kept": 1813,
+  "records_excluded": 227,
+  "excludes": [
+   "^COSV\\d",
+   "^(C[A-Z]|BM|HM)\\d{6}"
+  ],
+  "sha256": {
+   "all_vars.gz": "06cc9ba041daebba6ba7d0a91caba2d2307e3ce93d7230ffc892dde4b0b49e49",
+   "all_vars.gz.csi": "16bbbf9b7db5a3478c2b43c7e733bb9b43832ed559aaaf02e62d976abd9a9b5a"
+  },
+  "slice_check": "the golden comparison: vep-rs on this slice writes the Existing_variation, frequency, CLIN_SIG, PHENO and PUBMED values Ensembl VEP 116.3 wrote on the full cache for every record"
+ },
+ "divergences_classified_against": {
+  "engine": "vep-rs",
+  "source": "the tree this corpus is committed with",
+  "binary_md5": "aa4e30dc0d6b2c58ddf19f3bbd0b76a3",
+  "arch": "aarch64",
+  "flags_passed": [
+   "--everything",
+   "--fasta",
+   "reference.fa.gz"
+  ]
+ }
+}

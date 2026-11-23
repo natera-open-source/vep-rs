@@ -27,7 +27,7 @@ Of the GRCh37 and GRCh38 rows of this class and `downstream_utr_frame_past_codin
 
 ## 1. A one-base deletion that changes the codon it starts in
 
-**In short.** `21 37512050 2081367 AC A`, a ClinVar record, deletes the last base of codon 604 of ENST00000398960 (DYRK1A, forward strand). The next base completes the codon as `AAA`: asparagine becomes lysine and the frame shifts, `p.Asn604LysfsTer52` on both engines. vep-rs writes the 51 residues from that lysine to the new stop. Ensembl VEP 116.2 writes the last 50 of them: its `DownstreamProtein` opens at codon 605 and lacks the first residue the variant changes.
+**In short.** `21 37512050 2081367 AC A`, a ClinVar record, deletes the last base of codon 604 of ENST00000398960 (DYRK1A, forward strand). The next base completes the codon as `AAA`: asparagine becomes lysine and the frame shifts, `p.Asn604LysfsTer52` on both engines. vep-rs writes the 51 residues from that lysine to the new stop. Ensembl VEP 116.3 writes the last 50 of them: its `DownstreamProtein` opens at codon 605 and lacks the first residue the variant changes.
 
 ### 1.1 What a reader needs to know first
 
@@ -47,7 +47,7 @@ The record deletes the `C` at 21:37512051, coding base 1812, the third base of c
 
 `<50 residues>` and `<51 residues>` stand for the residues of `DownstreamProtein`, which this page gives by their count. vep-rs's 51 are `K`, the lysine of codon 604, and then the 50 that Ensembl VEP writes. The command of 1.6 writes vep-rs's row whole, and the corpus's `expected/` directory holds Ensembl VEP's.
 
-Ensembl VEP 116.2, default format:
+Ensembl VEP 116.3, default format:
 
 ```
 2081367	21:37512051	-	ENSG00000157540	ENST00000398960	Transcript	frameshift_variant	1912	1812	604	N/X	aaC/aa	-	IMPACT=HIGH;STRAND=1;HGVSc=ENST00000398960.8:c.1812del;HGVSp=ENSP00000381932.2:p.Asn604LysfsTer52;DownstreamProtein=<50 residues>;HGVS_IntronEndOffset=0;HGVS_IntronStartOffset=0;NearestExonJB=ENSE00003827888|140|start|14448;ProteinLengthChange=-109
@@ -78,7 +78,7 @@ vep -i variants.vcf -o out.txt --offline --json_cache json_cache \
   --assembly GRCh38 --fasta reference.fa.gz --hgvs --plugin Downstream
 ```
 
-vep-rs writes a `DownstreamProtein` of 51 residues that opens `KVPITITT` on the row. The corpus's `expected/` directory holds Ensembl VEP 116.2's four outputs of the same records under the corpus's flags, with the 50 residues that open `VPITITT`.
+vep-rs writes a `DownstreamProtein` of 51 residues that opens `KVPITITT` on the row. The corpus's `expected/` directory holds Ensembl VEP 116.3's four outputs of the same records under the corpus's flags, with the 50 residues that open `VPITITT`.
 
 ### 1.7 How the comparator treats this class
 

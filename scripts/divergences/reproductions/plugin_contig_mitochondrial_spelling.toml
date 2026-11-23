@@ -1,9 +1,9 @@
 entry = "plugin_contig_mitochondrial_spelling"
 page = "docs/divergences/plugin-contig-mitochondrial-spelling.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 334 of 487 MT records · 80 flag sets, 10 corpora"
+input_class_basis = "2 · 1,045 of 1,198 MT records · 80 flag sets, 29 corpora"
 notes = "ClinPred against a one-row table whose contig is named chrM; the record is spelt MT, as the cache and ClinVar spell it."
 prepare = [
   "printf '#chr\\tStart\\tRef\\tAlt\\tClinPred_Score\\nchrM\\t3460\\tG\\tA\\t0.5\\n' | bgzip > \"$STAGE/clinpred_chrM.synthetic.tsv.gz\"",
@@ -33,3 +33,16 @@ where = { record = "rs199476118", feature = "ENST00000361390" }
 [expected]
 ensembl_vep = ["-"]
 vep_rs = ["0.5"]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/tabix.rs::chromosome_query_candidates",
+    "crates/vep-builtins/src/tabix.rs::plugin_table_candidates",
+    "crates/vep-builtins/src/tabix.rs::table_contig",
+]
+tests = [
+    "crates/vep-builtins/src/plugins/clinpred.rs::tests::a_mitochondrial_record_reads_a_file_under_any_of_the_four_contig_spellings",
+    "crates/vep-builtins/src/plugins/clinpred.rs::tests::off_grch37_a_mitochondrial_record_reads_every_spelling_of_the_table",
+    "crates/vep-builtins/src/tabix.rs::tests::a_mitochondrial_name_stays_in_its_pair_on_grch37",
+]
+rules = ["tools/vep-plugin-pairs/src/rules/mitochondrial.rs::contig_mitochondrial_spelling"]

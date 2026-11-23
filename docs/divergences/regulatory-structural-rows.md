@@ -1,8 +1,8 @@
 # A structural variant's regulatory and motif rows: their order and the `--pick` row
 
-One behaviour of Ensembl VEP 116.2's regulatory and motif rows for a structural variant is not reproduced: it writes them in the order the input reaches each 1 Mb region, which also sets the `--pick` row; vep-rs writes one order for every input. It is a documented class, which no comparison tool applies: no committed dataset carries a row of it. [Intended divergences from Ensembl VEP](../intended-divergences.md) lists it; its [How to read the counts](../intended-divergences.md#how-to-read-the-counts) defines the terms. The rows below are in the default output format, against the Ensembl 116 GRCh38 cache of chromosome 21 and the GRCh38 regulatory GFF dataset's three files. The rows themselves and their other fields are the same on both engines ([Regulatory and motif features](../regulatory.md)).
+One behaviour of Ensembl VEP 116.3's regulatory and motif rows for a structural variant is not reproduced: it writes them in the order the input reaches each 1 Mb region, which also sets the `--pick` row; vep-rs writes one order for every input. It is a documented class, which no comparison tool applies: no committed dataset carries a row of it. [Intended divergences from Ensembl VEP](../intended-divergences.md) lists it; its [How to read the counts](../intended-divergences.md#how-to-read-the-counts) defines the terms. The rows below are in the default output format, against the Ensembl 116 GRCh38 cache of chromosome 21 and the GRCh38 regulatory GFF dataset's three files. The rows themselves and their other fields are the same on both engines ([Regulatory and motif features](../regulatory.md)).
 
-The class carries its tier under that page's rule: tier 1 is a shape the chromosome 21 population cuts carry with no flag, tier 2 one that needs a flag or plugin on ordinary data, tier 3 one ordinary data does not carry. The counts are over the cuts' 15,646,481 records, the 111 golden corpora and their 392 flag sets.
+The class carries its tier under that page's rule: tier 1 is a shape the chromosome 21 cuts carry with no flag, tier 2 one that needs a flag or plugin on ordinary data, tier 3 one ordinary data does not carry. The counts are over the cuts' 15,646,481 records, the 152 golden corpora and their 511 flag sets.
 
 ## 1. A structural variant's rows in the order its input reaches each 1 Mb region
 
@@ -12,7 +12,7 @@ The class carries its tier under that page's rule: tier 1 is a shape the chromos
 
 **What vep-rs does instead.** A `--regulatory_gff` run's rows come source by source (`file`, `emars`, `motifs`) and in file order within a source. A cache's rows come in the cache's order, region by region ascending ([VEP default and tab](../output/vep-and-tab.md#row-order)). Both orders are the same for every input, buffer size and thread count, and on a full `--pick` tie the first row in that order is kept.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2, `ensembl-variation` at release/116):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3, `ensembl-variation` at release/116):
 
 - `Bio/EnsEMBL/VEP/AnnotationSource.pm`, lines 119-134: the features of every region already in the source's memory cache first, then the uncached regions' features; line 136 and lines 392-411: `clean_cache` keeps the current buffer's regions alone. Line 235: the buffer's records in input order; lines 190-200: each record's 1 Mb regions ascending, a region once; lines 250-257: a breakend's mate regions after its own.
 - `Bio/EnsEMBL/VEP/AnnotationSource/File/RegFeat.pm`, lines 245-269: the regions read from the file in the order given; lines 291-329: file order within a region; lines 628-640: a record read in two regions kept at its first.
@@ -28,13 +28,13 @@ The golden harness and the format comparator check that the entries both engines
 
 Every committed comparison orders such rows alike: the 43 structural records of the GRCh38 regulatory GFF dataset are position-sorted, none spans a 1 Mb region boundary and none is a breakend, so both engines reach their regions in ascending order, which is file order. The one record of the shape in the datasets run under `--regulatory`, a breakend whose mate lies two regions ahead, meets a regulatory feature at its own position alone, so one region's row is written on both engines.
 
-**How often the shape occurs.** Tier 2: the shape is a symbolic structural record spanning a 1 Mb region boundary, or a breakend whose own-chromosome mate lies in another region. A mate in an earlier region puts the breakend's own region first by itself; otherwise the input's order, a neighbour's mate, `--fork` and the buffer fill decide whether a later region is reached first. 13 of the cuts' 15,646,481 records carry the shape, every one a symbolic record of the 1000 Genomes cut spanning a boundary; 8 corpora carry it, and 25 flag sets run `--regulatory` or `--regulatory_gff`.
+**How often the shape occurs.** Tier 2: the shape is a symbolic structural record spanning a 1 Mb region boundary, or a breakend whose own-chromosome mate lies in another region. A mate in an earlier region puts the breakend's own region first by itself; otherwise the input's order, a neighbour's mate, `--fork` and the buffer fill decide whether a later region is reached first. 13 of the cuts' 15,646,481 records carry the shape, every one a symbolic record of the 1000 Genomes cut spanning a boundary; 8 corpora carry it, and 60 flag sets run `--regulatory` or `--regulatory_gff`.
 
 ### 1.1 A 43 kb deletion over the 6 Mb boundary behind a breakend whose mate lies past it
 
 **In short.** The records `21 4500000 bnd_mate_in_region6 N N[21:6500000[ . . SVTYPE=BND` and `21 5972900 sv_del_over_6mb N <DEL> . . SVTYPE=DEL;END=6016000`, position-sorted, with the GRCh38 regulatory GFF dataset's three files (`tests/golden/116/GRCh38-regulatory-gff/gff/`) and FASTA, under `--regulatory_gff file=<regulatory>,motifs=<motifs>,emars=<EMARs>`. The deletion covers the enhancer `ENSR21_94D2C` (5972926-5973418) and its EMAR `ENSR00001793255` in the region 5000001-6000000, and the enhancer `ENSR21_94DGM` (6015540-6015943), its EMAR `ENSR00001793257` and the motifs `ENSM00000575084` and `ENSM00000575085` in the region 6000001-7000000. Both engines write the same seven rows for it: four `RegulatoryFeature` rows with `regulatory_region_ablation,regulatory_region_variant`, two `MotifFeature` rows with `TFBS_ablation,TF_binding_site_variant`, and the intergenic row, every field equal. The regulatory rows differ in order alone:
 
-| Input | Ensembl VEP 116.2 | vep-rs |
+| Input | Ensembl VEP 116.3 | vep-rs |
 | --- | --- | --- |
 | the deletion alone | `ENSR21_94D2C`, `ENSR21_94DGM`, `ENSR00001793255`, `ENSR00001793257` | the same |
 | the deletion, then `21 6500000 snv_in_region6 A C` | the same | the same |

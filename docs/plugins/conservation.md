@@ -55,14 +55,14 @@ and asks for the path of a local bigWig.
 Two malformed invocations are refused when the plugin loads. Each is a warning,
 or the run's error under `--safe`, and the run goes on without the plugin.
 `--plugin Conservation` with no parameter is refused with
-`Failed to instantiate plugin Conservation: Conservation: no bigWig file given; use Conservation,<file.bw> or Conservation,<file.bw>,MAX`.
+`Failed to instantiate plugin Conservation: no bigWig file given; use Conservation,<file.bw> or Conservation,<file.bw>,MAX`.
 Ensembl VEP's plugin loads with a warning and writes the header line, its unset
 method read as `average`, but never a value. Under `--tab` the
 `Conservation` column therefore holds `-` on every row (`Conservation.pm`, lines 77-80,
 140 and 153; VEP_plugins at release/116).
 
 A first parameter naming a local file that is not a bigWig is refused with
-`Failed to instantiate plugin Conservation: Conservation: <path> is not a readable bigWig: <reason>`,
+`Failed to instantiate plugin Conservation: <path> is not a readable bigWig: <reason>`,
 the reason being the reader's. Ensembl VEP's plugin opens the file on every
 row inside `run` (line 195). The library that reads bigWigs ends the
 process there with `<path> is not a big wig file`. The plugin's own
@@ -184,7 +184,7 @@ The two per-base values can be read from the bigWig with
 
 ### 1.7 How the comparator treats this class
 
-The format comparator (`scripts/concordance/compare_vep_formats.py`) applies
+The format comparator (`tools/vep-formats-compare`) applies
 `conservation_max_text_order` when a comparison case names it. A
 `Conservation` value (the JSON `conservation`) that differs is set aside when
 both values are numbers and the reference's lies below the candidate's, which

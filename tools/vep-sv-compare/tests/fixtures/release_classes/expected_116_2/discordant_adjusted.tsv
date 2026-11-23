@@ -1,0 +1,7 @@
+source_file	variant_type	direction	location	allele	feature	feature_type	consequence
+01_breakends	BND	only_rust	21:26037668	N.	ENST21_FAR	Transcript	upstream_gene_variant
+02_one_sided	Symbolic_DEL	only_perl	21:36000001-36000100	deletion	-	-	intergenic_variant
+02_one_sided	Symbolic_DEL	only_rust	21:36000001-36000100	deletion	ENST21_F1	Transcript	feature_truncation
+02_one_sided	Symbolic_DEL	only_rust	21:36000001-36000100	deletion	ENST21_F2	Transcript	intron_variant
+03_tandem_repeats	Symbolic_CNV	only_perl	21:2997-3000	-	ENST21_B	Transcript	intron_variant,start_lost
+03_tandem_repeats	Symbolic_CNV	only_rust	21:2985-3000	tandem_repeat	ENST21_B	Transcript	feature_truncation,intron_variant

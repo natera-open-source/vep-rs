@@ -1,0 +1,37 @@
+{
+  "assembly": "GRCz11",
+  "cache_version": 116,
+  "contig_order": [
+    "25",
+    "MT",
+    "KN150614.1"
+  ],
+  "polyphen": "",
+  "regulatory": false,
+  "sift": "b",
+  "source_versions": {
+    "assembly": "GRCz11",
+    "dbSNP": "150",
+    "genebuild": "ENS01",
+    "sift": "sift6.2.1"
+  },
+  "species": "danio_rerio",
+  "var_type": "tabix",
+  "variation_cols": [
+    "chr",
+    "variation_name",
+    "failed",
+    "somatic",
+    "start",
+    "end",
+    "allele_string",
+    "strand",
+    "clin_sig",
+    "phenotype_or_disease",
+    "clin_sig_allele",
+    "clin_sig_ref_allele",
+    "clinical_impact",
+    "pubmed",
+    "var_synonyms"
+  ]
+}

@@ -11,10 +11,16 @@
 //! reads it. A file whose digest differs from its entry and a file the manifest
 //! does not list are the same refusal, [`ManifestError::Mismatch`]. A cache
 //! without the file is a manifest that is not present: every check passes.
+//!
+//! A build marks its directory before the first file it writes there
+//! ([`CacheManifest::mark_unfinished`]): the manifest then holds one line
+//! that lists no file, and the list replaces it as the build's last write. A
+//! directory whose manifest is that line is one a build left early,
+//! and loading it is refused by name ([`ManifestError::Unfinished`]).
 
 use std::collections::BTreeMap;
 use std::fs::{self, File};
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 use std::path::{Component, Path, PathBuf};
 
 use sha2::{Digest as _, Sha256};
@@ -25,6 +31,11 @@ pub const MANIFEST_FILE: &str = "CHECKSUMS.sha256";
 /// A 32-byte SHA256 digest, the value a manifest line records.
 pub type Digest = [u8; 32];
 
+/// The whole manifest of a directory a build is writing
+/// ([`CacheManifest::mark_unfinished`]): one line that is no `sha256sum`
+/// line, so `sha256sum --check` fails on it too.
+const UNFINISHED: &str = "the build of this cache directory did not finish\n";
+
 /// Directory levels the writer descends below the cache directory before it
 /// treats the tree as a symbolic-link loop; a cache is three levels deep.
 const MAX_DEPTH: usize = 16;
@@ -33,6 +44,7 @@ const MAX_DEPTH: usize = 16;
 const READ_CHUNK: usize = 1 << 20;
 
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum ManifestError {
     /// The bytes of `relative` differ from its entry, or the manifest has no
     /// entry for it.
@@ -48,6 +60,12 @@ pub enum ManifestError {
         reason: String,
     },
 
+    /// The manifest is the line a build writes before its first file
+    /// ([`CacheManifest::mark_unfinished`]): the build ended before it listed
+    /// the directory.
+    #[error("{dir} holds a cache whose build did not finish: build it again")]
+    Unfinished { dir: String },
+
     /// A path to verify does not lie under the cache directory.
     #[error("{path} is not under the cache directory {dir}")]
     Outside { path: String, dir: String },
@@ -60,7 +78,7 @@ pub enum ManifestError {
     #[error("{path}: {source}")]
     Io { path: String, source: io::Error },
 
-    /// The writer descended more than [`MAX_DEPTH`] directory levels.
+    /// The writer descended more than `MAX_DEPTH` directory levels.
     #[error("{path}: directories nest more than {MAX_DEPTH} levels deep")]
     TooDeep { path: String },
 }
@@ -80,7 +98,9 @@ pub struct CacheManifest {
 
 impl CacheManifest {
     /// Reads `<dir>/CHECKSUMS.sha256`; a directory without the file gives a
-    /// manifest that [`Self::is_present`] denies and whose checks all pass.
+    /// manifest that [`Self::is_present`] denies and whose checks all pass,
+    /// and one a build left early ([`Self::mark_unfinished`]) is
+    /// [`ManifestError::Unfinished`].
     pub fn load(dir: impl AsRef<Path>) -> Result<Self, ManifestError> {
         let dir = dir.as_ref().to_path_buf();
         let path = dir.join(MANIFEST_FILE);
@@ -89,6 +109,11 @@ impl CacheManifest {
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Self::absent(dir)),
             Err(error) => return Err(io_error(&path)(error)),
         };
+        if text == UNFINISHED {
+            return Err(ManifestError::Unfinished {
+                dir: dir.display().to_string(),
+            });
+        }
         let entries = parse(&text, &path)?;
         Ok(Self {
             dir,
@@ -203,6 +228,16 @@ impl CacheManifest {
             relative,
             dir: self.dir.display().to_string(),
         }
+    }
+
+    /// Marks `dir` as a directory a build is writing: `<dir>/CHECKSUMS.sha256`
+    /// becomes the one line that lists no file, replacing any earlier
+    /// manifest, until [`Self::write`] replaces it with the list. A build
+    /// calls this before the first file it writes into `dir`, so a build that
+    /// ends early leaves a directory [`Self::load`] refuses.
+    pub fn mark_unfinished(dir: impl AsRef<Path>) -> Result<(), ManifestError> {
+        let manifest = dir.as_ref().join(MANIFEST_FILE);
+        fs::write(&manifest, UNFINISHED).map_err(io_error(&manifest))
     }
 
     /// Hashes every regular file under `dir`, the manifest itself excepted,
@@ -408,10 +443,43 @@ impl<R: Read> Read for HashingReader<R> {
     }
 }
 
+/// A writer that hashes every byte its inner writer accepts, for a file
+/// written whole; [`Self::finish`] hands the inner writer back with the
+/// digest of all it took.
+pub struct HashingWriter<W> {
+    inner: W,
+    hasher: Sha256,
+}
+
+impl<W: Write> HashingWriter<W> {
+    pub fn new(inner: W) -> Self {
+        Self {
+            inner,
+            hasher: Sha256::new(),
+        }
+    }
+
+    /// The inner writer and the digest of every byte written through `self`.
+    pub fn finish(self) -> (W, Digest) {
+        (self.inner, self.hasher.finalize().into())
+    }
+}
+
+impl<W: Write> Write for HashingWriter<W> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let written = self.inner.write(buf)?;
+        self.hasher.update(&buf[..written]);
+        Ok(written)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.inner.flush()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
 
     /// A cache directory of three files in two levels.
     fn cache() -> tempfile::TempDir {
@@ -681,6 +749,35 @@ mod tests {
         );
     }
 
+    /// A directory marked as a build under way is refused by name when its
+    /// manifest is loaded, an earlier manifest replaced by the mark; the list
+    /// a finished build writes replaces the mark, and the directory loads.
+    #[test]
+    fn a_directory_a_build_left_early_is_refused_by_name() {
+        let dir = cache();
+        CacheManifest::write(dir.path()).unwrap();
+        CacheManifest::mark_unfinished(dir.path()).unwrap();
+        let error = CacheManifest::load(dir.path()).unwrap_err();
+        assert!(matches!(error, ManifestError::Unfinished { .. }), "{error}");
+        assert_eq!(
+            error.to_string(),
+            format!(
+                "{} holds a cache whose build did not finish: build it again",
+                dir.path().display()
+            )
+        );
+        let marked = fs::read_to_string(dir.path().join(MANIFEST_FILE)).unwrap();
+        assert!(
+            parse(&marked, Path::new(MANIFEST_FILE)).is_err(),
+            "{marked}"
+        );
+
+        assert_eq!(CacheManifest::write(dir.path()).unwrap(), 3);
+        let manifest = CacheManifest::load(dir.path()).unwrap();
+        assert!(manifest.is_present());
+        assert_eq!(manifest.len(), 3);
+    }
+
     /// The reader's digest covers every byte of the stream, those its consumer
     /// read and those `digest_to_end` reads after it stopped.
     #[test]
@@ -696,6 +793,22 @@ mod tests {
         std::io::copy(&mut whole, &mut sink).unwrap();
         assert_eq!(sink, data);
         assert_eq!(whole.digest_to_end().unwrap(), sha256(&data));
+    }
+
+    /// The writer's digest covers every byte the inner writer took, in
+    /// whatever pieces they were written, and the inner writer holds them.
+    #[test]
+    fn hashing_writer_digests_what_it_passes_on() {
+        let data: Vec<u8> = (0..300_000u32).map(|i| (i % 253) as u8).collect();
+        let mut writer = HashingWriter::new(Vec::new());
+        for piece in data.chunks(977) {
+            writer.write_all(piece).unwrap();
+        }
+        writer.flush().unwrap();
+        let (written, digest) = writer.finish();
+        assert_eq!(written, data);
+        assert_eq!(digest, sha256(&data));
+        assert_eq!(HashingWriter::new(Vec::new()).finish().1, sha256(b""));
     }
 
     /// A file hashed in chunks has the digest of its bytes.

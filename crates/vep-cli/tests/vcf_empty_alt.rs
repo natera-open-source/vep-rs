@@ -69,7 +69,7 @@ fn run(dir: &Path, corpus: &Corpus, extra: &[&str]) -> Vec<String> {
 /// allele string `C/G//T`, which the JSON `allele_string` prints, where :316 would
 /// have written `-` for a part the chop emptied. The empty part is the allele `-`
 /// to every overlap (VariationFeatureOverlap.pm:462), numbered 2 between `G` and
-/// `T` (:483). Ensembl VEP 116.2 writes `"allele_string":"C/G//T"` and three rows
+/// `T` (:483). Ensembl VEP 116.3 writes `"allele_string":"C/G//T"` and three rows
 /// on ENST00000416044: `G` (`stop_lost`), `-` and `T` (`stop_retained_variant`),
 /// each named `21_30289183_C/G//T` with `UPLOADED_ALLELE=C/G//T`.
 #[test]

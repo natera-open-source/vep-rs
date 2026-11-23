@@ -1,0 +1,105 @@
+entry = "custom_key_named_as_a_plain_value_field"
+page = "docs/divergences/custom-key-named-as-a-plain-value-field.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "unobserved"
+input_class_basis = "well-formed under the --custom short_name contract, \"any string without commas\" (Ensembl VEP documentation, \"Custom annotations\", short_name), and the --variant_class flag; not seen in the measured datasets"
+notes = "Line 9 of the GRCh38-custom corpus's input, under the corpus's site file as an exact VCF source named VARIANT that asks for CLASS, which declares the key VARIANT_CLASS, and under --variant_class, which sets that field. Ensembl VEP sets the field as a plain string on the record (OutputFactory.pm:967), copies it into each row (:391) and pushes the CLASS of the record that names the row's allele under the same key (:1426-1435, :1303), which dies under `strict`: `Can't use string (\"SNV\") as an ARRAY ref`, exit status 255 under the runner's `--fork 1`, its header written and no row. vep-rs writes both rows: the class and the source's value after it on the row of the allele the source's record names, the class alone on the other. Without --variant_class, and in JSON, the engines agree."
+
+[input]
+format = "vcf"
+text = """
+21	5380280	rs1444031311	A	C,G	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-custom/json_cache"
+
+[run]
+flags = ["--custom", "file={corpus}/custom/sites.vcf.gz,short_name=VARIANT,format=vcf,type=exact,fields=AF%CLASS", "--variant_class"]
+format = "tab"
+
+[compare]
+kind = "field"
+field = "VARIANT_CLASS"
+where = { record = "rs1444031311" }
+
+[expected]
+ensembl_vep_exit = 255
+ensembl_vep = []
+vep_rs = ["SNV", "SNV,exact"]
+
+[[also]]
+notes = "The source named Location, one of the three columns that name a row. Ensembl VEP holds Location as a plain string on the record (OutputFactory.pm:931), copies it into each row (:391) and pushes the name of the record that names the row's allele under the same key (:1426-1435, :1301), which dies as the record's own run does. vep-rs writes both rows: the location and the record's name after it on the row of the allele the record names, the location alone on the other."
+
+[also.run]
+flags = ["--custom", "file={corpus}/custom/sites.vcf.gz,short_name=Location,format=vcf,type=exact,fields=AF%CLASS"]
+format = "tab"
+
+[also.compare]
+kind = "field"
+field = "Location"
+where = { record = "rs1444031311" }
+
+[also.expected]
+ensembl_vep_exit = 255
+ensembl_vep = []
+vep_rs = ["21:5380280", "21:5380280,exact_2"]
+
+[[also]]
+notes = "The source named Uploaded_variation under type=overlap, whose record names no allele: Ensembl VEP holds Uploaded_variation as a plain string on the record (OutputFactory.pm:895) and pushes the record's name under the same key into the record's hash (:1004-1014, :1301), before any row is built. vep-rs writes the identifier and the record's name after it on both rows."
+
+[also.run]
+flags = ["--custom", "file={corpus}/custom/sites.vcf.gz,short_name=Uploaded_variation,format=vcf,type=overlap,fields=AF%CLASS"]
+format = "tab"
+
+[also.compare]
+kind = "field"
+field = "Uploaded_variation"
+where = { location = "21:5380280" }
+
+[also.expected]
+ensembl_vep_exit = 255
+ensembl_vep = []
+vep_rs = ["rs1444031311,exact_2", "rs1444031311,exact_2"]
+
+[[also]]
+notes = "The source named Allele. The row assigns Allele as a plain string (OutputFactory.pm:1347) over the values of the whole record and before the name of the record that names its allele is pushed under the same key (:1426-1435, :1301). vep-rs writes the row's allele and the record's name after it on the row of the allele the record names, the allele alone on the other."
+
+[also.run]
+flags = ["--custom", "file={corpus}/custom/sites.vcf.gz,short_name=Allele,format=vcf,type=exact,fields=AF%CLASS"]
+format = "tab"
+
+[also.compare]
+kind = "field"
+field = "Allele"
+where = { record = "rs1444031311" }
+
+[also.expected]
+ensembl_vep_exit = 255
+ensembl_vep = []
+vep_rs = ["C,exact_2", "G"]
+
+[implementation]
+code = [
+    "crates/vep-io/src/output/fields.rs::custom_headers",
+    "crates/vep-io/src/output/fields.rs::custom_items_pushed_after_a_statistic",
+    "crates/vep-io/src/output/fields.rs::pushed_after_a_plain_value",
+    "crates/vep-io/src/output/fields.rs::pushes_after_a_naming_column",
+    "crates/vep-io/src/output/fields.rs::write_naming_column_then_pushed_values",
+    "crates/vep-io/src/output/fields.rs::write_values_pushed_after_a_plain_value",
+]
+tests = [
+    "crates/vep-cli/tests/custom_key_named_as_a_column_that_names_the_row.rs::a_key_named_as_the_allele_column_holds_the_rows_allele_then_the_names_of_its_records",
+    "crates/vep-cli/tests/custom_key_named_as_a_column_that_names_the_row.rs::a_key_named_as_the_identifier_column_holds_the_identifier_then_the_sources_names",
+    "crates/vep-cli/tests/custom_key_named_as_a_column_that_names_the_row.rs::a_key_named_as_the_location_column_holds_the_location_then_the_sources_names",
+    "crates/vep-cli/tests/custom_key_named_as_a_plain_value_field.rs::a_custom_key_named_as_a_plain_value_field_prints_the_fields_value_then_the_sources",
+    "crates/vep-cli/tests/custom_key_named_as_a_source_statistic.rs::a_custom_key_named_as_a_statistic_prints_the_statistic_then_the_records_of_the_rows_allele",
+    "crates/vep-cli/tests/custom_key_one_source_declares_twice.rs::a_key_declared_as_a_field_and_a_statistic_is_listed_once_with_both_texts",
+    "crates/vep-cli/tests/custom_key_one_source_declares_twice.rs::a_key_holds_the_field_where_no_statistic_is_assigned_and_its_line_names_both",
+    "crates/vep-io/src/output/fields.rs::tests::a_custom_key_named_as_a_plain_value_field_carries_the_fields_value_then_the_sources_values",
+    "crates/vep-io/src/output/fields.rs::tests::a_custom_key_named_as_a_statistic_carries_the_statistic_then_the_rows_allele_records",
+    "crates/vep-io/src/output/fields.rs::tests::a_key_one_custom_source_declares_twice_is_listed_once_with_each_declarations_text",
+]

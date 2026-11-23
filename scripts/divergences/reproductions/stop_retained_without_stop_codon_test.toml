@@ -1,7 +1,7 @@
 entry = "stop_retained_without_stop_codon_test"
 page = "docs/divergences/stop-retained-without-stop-codon-test.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
 input_class_basis = "1 · 137,713 per million · no flag needed"
 notes = "A deletion of six bases, 6:57193930-57193935, on ENST00000987744, a reverse-strand transcript of RAB23 whose stop codon is c.403-405 at 57193930-57193928. The span takes the last base of the intron before the exon that holds the stop codon, that exon's first four bases, c.399-402, and the stop codon's first base, c.403. Its first base on the transcript is an intron base, so the row's cDNA position is ?-1043 and its CDS position ?-403. Ensembl VEP's stop codon test returns before it edits anything for want of the cDNA start (VariationEffect.pm:1508), its caller reads the 0 as a stop codon kept (:1318), and the row carries stop_retained_variant. vep-rs writes the term only where the test is made and finds a stop codon behind unchanged residues; it writes coding_sequence_variant on this row. Every other column of the row is equal in the two engines."
@@ -28,3 +28,23 @@ columns = ["Location", "Feature", "Consequence", "cDNA_position", "CDS_position"
 [expected]
 ensembl_vep = ["6:57193930-57193935 | ENST00000987744 | splice_acceptor_variant,stop_retained_variant,NMD_transcript_variant | ?-1043 | ?-403 | ?-135 | HIGH"]
 vep_rs = ["6:57193930-57193935 | ENST00000987744 | splice_acceptor_variant,coding_sequence_variant,NMD_transcript_variant | ?-1043 | ?-403 | ?-135 | HIGH"]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/coding.rs::PerlCodingEval::edited_stop_codon",
+    "crates/vep-effects/src/coding.rs::PerlCodingEval::edited_stop_codon_kept_cil",
+    "crates/vep-effects/src/coding.rs::PerlCodingEval::stop_retained",
+]
+tests = [
+    "crates/vep-cli/tests/sequence_edges.rs::a_reference_allele_running_past_the_last_base_is_treated_as_ensembl_vep_treats_it",
+    "crates/vep-effects/src/concordance_tests.rs::an_inserted_allele_with_a_letter_that_names_no_base_is_tested_on_the_bases_read",
+]
+rules = [
+    "tools/vep-formats-compare/src/coding_end_terms.rs::landed_rule_may_take",
+    "tools/vep-formats-compare/src/rules/term_pairs.rs::stop_retained_without_stop_codon_test_pair_at",
+    "tools/vep-formats-compare/src/shared.rs::stop_retained_without_stop_codon_test_pair",
+    "tools/vep-outputs-compare/src/rules/row.rs::stop_retained_without_stop_codon_test_pair",
+    "tools/vep-outputs-compare/src/rules/row.rs::stop_retained_without_stop_codon_test_pair_at",
+    "tools/vep-plugin-pairs/src/rules/coding_end.rs::landed_rule_takes_beside_a_cache",
+    "tools/vep-plugin-pairs/src/rules/term_pair.rs::stop_retained_without_stop_codon_test_pair",
+]

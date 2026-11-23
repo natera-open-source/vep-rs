@@ -1,0 +1,12 @@
+transcripts: gtf 39 cache 38 shared 35 gtf_only 4 cache_only 3
+  gencode_basic    agree        29  disagree       6  present gtf        8 cache        4
+    B\S: gtf=True cache=False
+    CD: gtf=True cache=False
+    DEL: gtf=True cache=False
+    ESC_é中😀: gtf=False cache=True
+    Q"B: gtf=True cache=False
+  gencode_primary  agree        33  disagree       2  present gtf        3 cache        3
+    ESC_é中😀: gtf=True cache=False
+    UNI_é中😀: gtf=False cache=True
+  cds_start_NF     agree        35  disagree       0  present gtf        1 cache        1
+  cds_end_NF       agree        35  disagree       0  present gtf        4 cache        4

@@ -3,12 +3,12 @@
 
 //! Regulatory and motif features read at run time from the GFF files the
 //! Ensembl site distributes (`--regulatory_gff`), as
-//! `AnnotationSource/File/RegFeat.pm` reads them at release/116.2: each file
+//! `AnnotationSource/File/RegFeat.pm` reads them at release/116.3: each file
 //! bgzip-compressed with its tabix index, one source per key of the flag
 //! (`file`, `emars`, `motifs`), a regulatory file yielding regulatory features
 //! of the eight accepted types and a motif file motif features whose binding
 //! matrix is a stub known by its id, span and factors alone, so the motif rows
-//! carry no HIGH_INF_POS or MOTIF_SCORE_CHANGE (`OutputFactory.pm:1935`).
+//! carry no HIGH_INF_POS or MOTIF_SCORE_CHANGE (`OutputFactory.pm:1944`).
 //!
 //! Ensembl VEP reads a file region by region, padding each query by 10 kb
 //! under `--extended_promoters` so a promoter whose extended bounds reach into
@@ -27,7 +27,8 @@ use noodles::bgzf;
 use noodles::core::region::Interval;
 use noodles::csi::BinningIndex;
 use rustc_hash::{FxHashMap, FxHashSet};
-use vep_builtins::tabix::{find_index_path, load_index, Index as TabixIndex, MAX_LINE_BYTES};
+use vep_builtins::tabix::{find_index_path, MAX_LINE_BYTES};
+use vep_builtins::PluginError;
 use vep_core::binding_matrix::BindingMatrix;
 use vep_core::regulatory_gff::{
     decode_attribute, decode_type, duplicate_identifier_warning, feature_id, ignored_bound_warning,
@@ -38,6 +39,7 @@ use vep_core::synonyms::ChromosomeSynonyms;
 
 use super::source::{Feature, FeatureKind};
 use crate::config::{CliError, RegulatoryGff};
+use crate::input_shape::{load_index, TabixIndex};
 
 /// The warning `--cell_type` draws from a regulatory GFF source
 /// (`RegFeat.pm:179-184`), written once however many regulatory files the flag
@@ -100,9 +102,11 @@ pub(super) struct GffRegulatorySource {
 impl GffRegulatorySource {
     /// Opens every file the flag names, under the `cli` component: a file that
     /// does not exist (`AnnotationSourceAdaptor.pm:266`), a remote URL, which
-    /// vep-rs never reads, and a file without its `.tbi` or `.csi` index are
-    /// refused by key and name. `cell_type_given` draws
-    /// [`CELL_TYPE_WARNING`] when a regulatory file is among them.
+    /// vep-rs never reads, a file without its `.tbi` or `.csi` index and a
+    /// file whose index cannot be read or carries no tabix header are refused
+    /// by key and name, written `<key>=<path>`, a bare file name under the key
+    /// `file`. `cell_type_given` draws [`CELL_TYPE_WARNING`] when a
+    /// regulatory file is among them.
     pub(super) fn open(
         spec: &RegulatoryGff,
         extended_promoters: bool,
@@ -113,26 +117,27 @@ impl GffRegulatorySource {
         for (key, file) in spec.sources() {
             if is_remote(file) {
                 return Err(CliError::cli(format!(
-                    "--regulatory_gff {key} file {file} is a remote URL; vep-rs reads a local file alone"
+                    "--regulatory_gff {key}={file} is a remote URL; vep-rs reads a local file alone"
                 )));
             }
             let path = Path::new(file);
             if !path.is_file() {
                 return Err(CliError::cli(format!(
-                    "--regulatory_gff {key} file {file} not found"
+                    "--regulatory_gff {key}={file} not found"
                 )));
             }
             let index_path = find_index_path(path).map_err(|_| {
-                CliError::cli(format!(
-                    "--regulatory_gff {key} file {file} has no tabix index"
-                ))
+                CliError::cli(format!("--regulatory_gff {key}={file} has no tabix index"))
             })?;
             let index = load_index(&index_path).map_err(|error| {
-                CliError::cli(format!("--regulatory_gff {key} file {file}: {error}"))
+                CliError::cli(format!(
+                    "--regulatory_gff {key}={file}: {}",
+                    engine_error_text(error)
+                ))
             })?;
             if index.header().is_none() {
                 return Err(CliError::cli(format!(
-                    "--regulatory_gff {key} file {file}: index {} carries no tabix header, so its records cannot be mapped to chromosomes; index the file with tabix",
+                    "--regulatory_gff {key}={file}: index {} carries no tabix header, so its records cannot be mapped to chromosomes; index the file with tabix",
                     index_path.display()
                 )));
             }
@@ -186,9 +191,23 @@ impl GffRegulatorySource {
             let file_chr = self
                 .synonyms
                 .source_chr_name(name, |candidate| names.contains(candidate));
-            file.read_chromosome(&file_chr, &mut read)?;
+            file.read_chromosome(&file_chr, Some(&mut read))?;
         }
         Ok(read.features)
+    }
+
+    /// Puts every record of every file through the refusals of a chromosome's
+    /// read ([`GffFile::read_chromosome`]), file by file in the flag's source
+    /// order and, within a file, chromosome by chromosome in its index's
+    /// order, and returns the first refusal. No feature is kept and no warning
+    /// drawn: a chromosome's warnings come with its read.
+    pub(super) fn check_records(&self) -> anyhow::Result<()> {
+        for file in &self.files {
+            for name in file.header().reference_sequence_names() {
+                file.read_chromosome(&String::from_utf8_lossy(name.as_ref()), None)?;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -229,8 +248,15 @@ impl GffFile {
 
     /// Reads every record of `file_chr`, the file's own spelling of the
     /// chromosome, through the index's chunks for the whole sequence; a file
-    /// whose index lacks the name contributes none.
-    fn read_chromosome(&self, file_chr: &str, read: &mut ChromosomeRead) -> anyhow::Result<()> {
+    /// whose index lacks the name contributes none. Without a `read` to fill,
+    /// each line meets the length limit and its record's refusals
+    /// ([`Self::record`]) and nothing else: the file's identifiers stay as
+    /// they are.
+    fn read_chromosome(
+        &self,
+        file_chr: &str,
+        mut read: Option<&mut ChromosomeRead>,
+    ) -> anyhow::Result<()> {
         let names = self.header().reference_sequence_names();
         let Some(reference_sequence_id) = names.get_index_of(file_chr.as_bytes()) else {
             return Ok(());
@@ -265,8 +291,12 @@ impl GffFile {
                 if text.is_empty() || text[0] == b'#' {
                     continue;
                 }
-                self.record(text, file_chr, read, &mut seen)?;
+                let kept = read.as_deref_mut().map(|read| (read, &mut seen));
+                self.record(text, file_chr, kept)?;
             }
+        }
+        if read.is_none() {
+            return Ok(());
         }
         // An identifier another chromosome of the file already used is a
         // collision too (`RegFeat.pm:485`, one set per source over the run).
@@ -317,34 +347,61 @@ impl GffFile {
         ));
     }
 
+    /// The refusal of a line of `file_chr`'s read whose `name` column, the
+    /// start or the end, holds `value`, no whole number; `record` names the
+    /// line ([`record_name`]).
+    fn not_a_whole_number(
+        &self,
+        name: &str,
+        value: &[u8],
+        record: &str,
+        file_chr: &str,
+    ) -> anyhow::Error {
+        anyhow::anyhow!(
+            "{}: the {name} of {record} of chromosome {file_chr} is not a whole number: {}",
+            self.path.display(),
+            String::from_utf8_lossy(value)
+        )
+    }
+
     /// One record as `_record_to_regfeat` builds it (`RegFeat.pm:349-385`): a
-    /// line of another chromosome, which a chunk's bounds alone do not keep
-    /// out, is skipped; the type is the column with its `%XX` escapes decoded
+    /// line whose first column is not the chromosome's name, which a chunk's
+    /// bounds alone do not keep out, is skipped where `tabix` indexes its
+    /// start and its end and refused where it does not, as a line of any
+    /// type is, so a line that opens with a tab refuses the read for the
+    /// type that stands where a start is read; the type is the column with its
+    /// `%XX` escapes decoded
     /// (`:312`, `get_type` of `GFF3.pm:161-164`), and a type the file does not
     /// accept is warned about once and skipped (`:314-323`), its start and end
     /// read no further than whether `tabix` indexes them
     /// ([`unindexed_coordinate`]): one it does not refuses the line as a kept
     /// line's does, where Ensembl VEP's query ends at a line whose end fails
     /// the parse and loses the records after it (`:311`; htslib 1.9
-    /// `tbx.c:174-175`, `hts.c:2643`); a promoter is widened to its extended
-    /// bounds
+    /// `tbx.c:174-175`, `hts.c:2643`); `tabix` ends a column at a NUL byte
+    /// as at a tab, so a line of any type that holds one is held to the
+    /// start and the end `tabix` reads in it, as the cache builder's bake
+    /// of the same file holds it, and a NUL byte in a sequence name, in a
+    /// source or inside a type refuses the read for the type, or its tail,
+    /// that stands where a start is read; a promoter is widened to its
+    /// extended bounds
     /// under `--extended_promoters` (`:360-365`), a bound that is not a whole
     /// number ignored with a warning; a motif's strand is the
     /// column's, `0` when it holds none (`:369-370`), and a regulatory
     /// feature's is `0` as the cache's are, since no output reads it
-    /// (`OutputFactory.pm:1867-1884` sets no STRAND); the identifier is `ID`,
+    /// (`OutputFactory.pm:1876-1893` sets no STRAND); the identifier is `ID`,
     /// else `Name`, else the file's own spelling of the chromosome with the
     /// coordinates and type (`:575-584`, `$chr` the region name
     /// `AnnotationSource.pm:179,198` mapped onto the file's spelling); a record the
     /// file holds twice is kept once (`:628-640`), and a distinct record under
     /// an identifier the file already used is kept with the collision warned
-    /// about (`:478-497`).
+    /// about (`:478-497`). With nothing `kept`, the read state and the records
+    /// seen, the record meets its refusals alone: it draws no warning and
+    /// builds no feature.
     fn record(
         &self,
         text: &[u8],
         file_chr: &str,
-        read: &mut ChromosomeRead,
-        seen: &mut SeenRecords,
+        kept: Option<(&mut ChromosomeRead, &mut SeenRecords)>,
     ) -> anyhow::Result<()> {
         let mut columns = text.split(|byte| *byte == b'\t');
         let mut column = |name: &str| {
@@ -357,7 +414,16 @@ impl GffFile {
             })
         };
         if column("sequence")? != file_chr.as_bytes() {
-            return Ok(());
+            // The index build files a line whose start it cannot parse among
+            // the lines of the sequence before it (htslib 1.9 `tbx.c:235-236`).
+            let Some((name, value)) = unindexed_coordinate(text) else {
+                return Ok(());
+            };
+            let mut columns = text.split(|byte| *byte == b'\t').skip(2);
+            let feature_type = decode_type(columns.next().unwrap_or_default());
+            let attributes = Attributes::parse(columns.nth(5).unwrap_or_default());
+            let record = record_name(&feature_type, attributes.get("ID").as_deref());
+            return Err(self.not_a_whole_number(name, value, &record, file_chr));
         }
         column("source")?;
         let feature_type = decode_type(column("type")?).into_owned();
@@ -373,21 +439,15 @@ impl GffFile {
         let attributes = Attributes::parse(column("attributes")?);
         // The record's name is built only on a refusal, never for a record the
         // reader keeps.
-        let record = || match attributes.get("ID").as_deref() {
-            None | Some("") => format!("a record of type {feature_type}"),
-            Some(id) => format!("{feature_type} record {id}"),
-        };
-        let not_a_whole_number = |name: &str, value: &[u8]| {
-            anyhow::anyhow!(
-                "{}: the {name} of {} of chromosome {file_chr} is not a whole number: {}",
-                self.path.display(),
-                record(),
-                String::from_utf8_lossy(value)
-            )
-        };
+        let record = || record_name(&feature_type, attributes.get("ID").as_deref());
+        let not_a_whole_number =
+            |name: &str, value: &[u8]| self.not_a_whole_number(name, value, &record(), file_chr);
         if !self.kind.accepted_types().contains(&feature_type.as_str()) {
             if let Some((name, value)) = unindexed_coordinate(text) {
                 return Err(not_a_whole_number(name, value));
+            }
+            if kept.is_none() {
+                return Ok(());
             }
             let mut warned = self
                 .warned_types
@@ -400,6 +460,14 @@ impl GffFile {
                 ));
             }
             return Ok(());
+        }
+        // A NUL byte ends a column to `tabix` alone, so only a line that
+        // holds one can have a start and an end there that the columns
+        // read below do not hold.
+        if text.contains(&0) {
+            if let Some((name, value)) = unindexed_coordinate(text) {
+                return Err(not_a_whole_number(name, value));
+            }
         }
         let id = attributes.get("ID");
         let coordinate = |name: &str, text: &[u8]| -> anyhow::Result<u64> {
@@ -420,6 +488,9 @@ impl GffFile {
                 record()
             );
         }
+        let Some((read, seen)) = kept else {
+            return Ok(());
+        };
         // The file is sorted by the start column, the key of the duplicate
         // check, which runs before any widening.
         if !seen.insert(start, text) {
@@ -489,6 +560,15 @@ impl GffFile {
             kind,
         });
         Ok(())
+    }
+}
+
+/// The name a refusal gives a line: its type and its `ID`, its type alone
+/// when it has none or an empty one.
+fn record_name(feature_type: &str, id: Option<&str>) -> String {
+    match id {
+        None | Some("") => format!("a record of type {feature_type}"),
+        Some(id) => format!("{feature_type} record {id}"),
     }
 }
 
@@ -612,6 +692,16 @@ impl SeenRecords {
     }
 }
 
+/// The engine's error reduced to its text: the engine names a plugin, and the
+/// file is a regulatory file.
+fn engine_error_text(error: PluginError) -> String {
+    match error {
+        PluginError::Init(message) | PluginError::Run(message) => message,
+        PluginError::Io(error) => error.to_string(),
+        other => other.detail(),
+    }
+}
+
 /// `line` without its line end, `\n` or `\r\n`.
 fn trim_line_end(line: &[u8]) -> &[u8] {
     let line = line.strip_suffix(b"\n").unwrap_or(line);
@@ -683,11 +773,17 @@ mod tests {
 
     /// [`write_indexed_gff`] over lines given as bytes, so a line can carry a
     /// value that is not UTF-8; the first, fourth and fifth columns are UTF-8.
+    /// A line is filed by the columns `tabix` reads, which end at a tab or a
+    /// NUL byte, and one whose first column is empty or blank, or whose
+    /// start or end `tabix` fails, under the sequence of the line before
+    /// it, where `tabix` files a line it cannot parse (htslib 1.9
+    /// `tbx.c:235-236`); a file's first line is filed under its own name.
     fn write_indexed_gff_bytes(dir: &Path, name: &str, lines: &[&[u8]]) -> String {
         let path = dir.join(name);
         let mut writer = bgzf::io::Writer::new(fs::File::create(&path).unwrap());
         let mut indexer = tabix::index::Indexer::default();
         indexer.set_header(header::Builder::gff().build());
+        let mut sequence = "";
         for line in lines {
             let start = writer.virtual_position();
             writer.write_all(line).unwrap();
@@ -696,8 +792,7 @@ mod tests {
             if line.starts_with(b"#") {
                 continue;
             }
-            let columns: Vec<&str> = line
-                .split(|byte| *byte == b'\t')
+            let columns: Vec<&str> = vep_core::regulatory_gff::index_columns(line)
                 .map(|column| std::str::from_utf8(column).unwrap_or(""))
                 .collect();
             // A column that is no one-based position is indexed as the first
@@ -708,9 +803,13 @@ mod tests {
                 _ => Position::MIN,
             };
             let (first, second) = (position(columns[3]), position(columns[4]));
+            let parsed = sequence.is_empty() || unindexed_coordinate(line).is_none();
+            if !columns[0].trim().is_empty() && parsed {
+                sequence = columns[0];
+            }
             indexer
                 .add_record(
-                    columns[0],
+                    sequence,
                     first.min(second),
                     first.max(second),
                     Chunk::new(start, end),
@@ -1068,7 +1167,7 @@ mod tests {
     /// line's for a coordinate that is not a whole number, naming the file,
     /// the column, the record by its type and `ID` (its type alone without
     /// one), the chromosome and the text. Past such an end (`xyz`, `-9`)
-    /// Ensembl VEP 116.2 writes the rows of the records before the line and
+    /// Ensembl VEP 116.3 writes the rows of the records before the line and
     /// none for those after it in the region it reads, with exit 0: its query
     /// ends at the line (`RegFeat.pm:311`; htslib 1.9 `tbx.c:106` and `:142`
     /// fail the parse, `:174-175` hand the iterator no sequence id). Over
@@ -1120,7 +1219,7 @@ mod tests {
     /// an end below its start, trailing text, a start below zero, a blank, a
     /// hexadecimal prefix, a `+`, zero padding, an empty start before its end
     /// and an end that reads zero after its minus sign are columns `tabix`
-    /// indexes, and Ensembl VEP 116.2 reads a file holding one with the rows
+    /// indexes, and Ensembl VEP 116.3 reads a file holding one with the rows
     /// of every record. Each gives, on either sequence, the features of the
     /// file without the line and the one warning about its type. The same
     /// start on a line the file yields refuses the read.
@@ -1185,6 +1284,284 @@ mod tests {
                 "{path}: the start of enhancer record ENSR_BELOW_ZERO of chromosome 21 is not a \
                  whole number: -5"
             )
+        );
+    }
+
+    /// A line that opens with a tab, or with white space and a tab, holds
+    /// its type where `tabix` reads a start: the index build fails it and
+    /// files it among the lines of the sequence before it (htslib 1.9
+    /// `tbx.c:96`, `:235-236`). The read of that sequence refuses the line
+    /// as the cache builder's bake of the file does, naming the type as the
+    /// start and the record by its third column as written, whether the
+    /// record's own type is one the file yields or not; Ensembl VEP passes
+    /// over the line with exit 0 and writes no row for its record
+    /// (`RegFeat.pm:311`). The other sequence is read whole. A line so led
+    /// whose type a number leads is one `tabix` indexes, as a sequence of its
+    /// own, and is passed over.
+    #[test]
+    fn a_line_that_opens_with_a_tab_is_refused_for_the_type_where_a_start_is_read() {
+        let _guard = sink_test_guard();
+        global().configure(Target::Memory, true, false);
+        let dir = tempfile::tempdir().unwrap();
+        for (lead, feature_type) in [("\t", "enhancer"), ("\t", "exon"), (" \t", "enhancer")] {
+            for (chr, other) in [("20", "21"), ("21", "20")] {
+                let led = format!(
+                    "{lead}{chr}\tEnsembl\t{feature_type}\t5012000\t5012100\t.\t.\t.\tID=LED{chr}"
+                );
+                let (source, path) = open_with_a_skipped_line(dir.path(), chr, &led);
+                assert_eq!(
+                    format!("{:#}", source.prewarm(chr).unwrap_err()),
+                    format!(
+                        "{path}: the start of a record of type Ensembl of chromosome {chr} is \
+                         not a whole number: {feature_type}"
+                    ),
+                    "{lead:?} {feature_type} on {chr}"
+                );
+                assert_eq!(
+                    spans(&source, other).len(),
+                    3,
+                    "{lead:?} {feature_type} on {chr}"
+                );
+            }
+        }
+        let led = "\t21\tEnsembl\t5_region\t5012000\t5012100\t.\t.\t.\tID=LED21";
+        let (source, _) = open_with_a_skipped_line(dir.path(), "21", led);
+        assert_eq!(spans(&source, "21").len(), 3);
+        assert!(global().take_collected().is_empty());
+    }
+
+    /// A NUL byte behind the end column, or one that ends the type, leaves
+    /// `tabix` the record's own start and end and is a byte of the column
+    /// it stands in, as it is to Ensembl VEP, whose rows carry it: an
+    /// attribute value holds it, a type that ends in one is no accepted
+    /// type and is skipped with its warning (`RegFeat.pm:314-322`), and a
+    /// score, a strand or a phase that ends in one changes nothing, a
+    /// motif's strand so written being neither `+` nor `-` (`:369-370`).
+    #[test]
+    fn a_nul_byte_in_a_record_is_read_as_ensembl_vep_reads_it() {
+        let _guard = sink_test_guard();
+        global().configure(Target::Memory, true, false);
+        let dir = tempfile::tempdir().unwrap();
+        let regulatory = write_indexed_gff_bytes(
+            dir.path(),
+            "features.gff3.gz",
+            &[
+                b"21\tEnsembl\tenhancer\t1000\t1200\t.\t.\t.\tID=ENSR\0_INSIDE;color=#faca00",
+                b"21\tEnsembl\tenhancer\t2000\t2200\t.\t.\t.\tID=ENSR_VALUE_END\0;color=#faca00",
+                b"21\tEnsembl\tenhancer\t3000\t3200\t.\t.\t.\tcolor=#faca00\0;ID=ENSR_OTHER_VALUE",
+                b"21\tEnsembl\tenhancer\t4000\t4200\t.\t.\t.\tID=ENSR_COLUMN_END;color=#faca00\0",
+                b"21\tEnsembl\tenhancer\0\t5000\t5200\t.\t.\t.\tID=ENSR_TYPE_END",
+                b"21\tEnsembl\tenhancer\t6000\t6200\t.\0\t.\t.\tID=ENSR_SCORE_END",
+                b"21\tEnsembl\tCTCF_binding_site\t7000\t7200\t.\t-\0\t.\tID=ENSR_STRAND_END",
+                b"21\tEnsembl\tenhancer\t8000\t8200\t.\t.\t.\0\tID=ENSR_PHASE_END",
+            ],
+        );
+        let motifs = write_indexed_gff_bytes(
+            dir.path(),
+            "motifs.gff3.gz",
+            &[b"21\tEnsembl\tTF_binding_site\t9000\t9013\t.\t-\0\t.\tID=ENSM_STRAND_END;binding_matrix_id=M;transcription_factor=TF"],
+        );
+        let source = open(
+            &RegulatoryGff {
+                file: Some(regulatory.clone()),
+                emars: None,
+                motifs: Some(motifs),
+            },
+            false,
+        );
+        let read: Vec<(&str, u64, i8)> = source
+            .features("21")
+            .unwrap()
+            .iter()
+            .map(|feature| (feature.stable_id.as_ref(), feature.start, feature.strand))
+            .collect();
+        assert_eq!(
+            read,
+            [
+                ("ENSR\0_INSIDE", 1000, 0),
+                ("ENSR_VALUE_END\0", 2000, 0),
+                ("ENSR_OTHER_VALUE", 3000, 0),
+                ("ENSR_COLUMN_END", 4000, 0),
+                ("ENSR_SCORE_END", 6000, 0),
+                ("ENSR_STRAND_END", 7000, 0),
+                ("ENSR_PHASE_END", 8000, 0),
+                ("ENSM_STRAND_END", 9000, 0),
+            ]
+        );
+        let warnings: Vec<String> = global()
+            .take_collected()
+            .into_iter()
+            .map(|(_, text)| text)
+            .collect();
+        assert_eq!(
+            warnings,
+            [format!("WARNING: Ignoring 'enhancer\0' feature type from {regulatory}; not a supported regulatory feature type\n")]
+        );
+    }
+
+    /// A start or an end that holds a NUL byte, behind its digits or among
+    /// them, is not a whole number, and its record refuses the read as one
+    /// with any other text behind its digits does. Ensembl VEP reads the
+    /// digits before a byte that ends the cell, with Perl's `isn't numeric`
+    /// warning (`RegFeat.pm:311`, `AnnotationSource.pm:306-309`), and writes
+    /// no row for a record with the byte among the digits: its index, which
+    /// ends a column at the byte (`tbx.c` `tbx_parse1`), returns the record
+    /// to no query. A NUL byte that leads the cell leaves `tabix` an empty
+    /// column whose reading stops at the byte: the record is refused for
+    /// that column, as the cache builder's bake refuses it.
+    #[test]
+    fn a_nul_byte_in_a_start_or_an_end_is_not_a_whole_number() {
+        let dir = tempfile::tempdir().unwrap();
+        for (start, end, column, value) in [
+            ("5012000\0", "5012100", "start", "5012000\0"),
+            ("5012000\x0077", "5012100", "start", "5012000\x0077"),
+            ("5012000", "5012100\0", "end", "5012100\0"),
+            ("5012000", "5012\x00100", "end", "5012\x00100"),
+            ("\x005012000", "5012100", "start", ""),
+            ("5012000", "\x005012100", "end", ""),
+        ] {
+            let kept = format!("21\tEnsembl\tenhancer\t{start}\t{end}\t.\t.\t.\tID=ENSR_NUL");
+            let (source, path) = open_with_a_skipped_line(dir.path(), "21", &kept);
+            assert_eq!(
+                format!("{:#}", source.prewarm("21").unwrap_err()),
+                format!(
+                    "{path}: the {column} of enhancer record ENSR_NUL of chromosome 21 is not a \
+                     whole number: {value}"
+                ),
+                "{start:?} {end:?}"
+            );
+        }
+    }
+
+    /// `tabix` ends a column at a NUL byte as at a tab (`tbx.c:89`), so one
+    /// in a sequence name or a source, or inside a type, puts the type or
+    /// its tail where `tabix` reads a start, and the index build fails the
+    /// line (`tbx.c:96`). The read of the sequence the line is filed under
+    /// refuses it as the cache builder's bake of the file does, naming that
+    /// text as the start, whether the record's type is one the file yields
+    /// or not; Ensembl VEP reads no such line from its index and writes no
+    /// row for its record. The other sequence is read whole. A line whose
+    /// every column a NUL byte ends is one `tabix` indexes where its start
+    /// and its end are numbers: it names no sequence of the index and is
+    /// passed over, and one whose start no number leads is refused.
+    #[test]
+    fn a_nul_byte_before_the_start_column_refuses_the_read_for_the_start_tabix_reads() {
+        let _guard = sink_test_guard();
+        global().configure(Target::Memory, true, false);
+        let dir = tempfile::tempdir().unwrap();
+        let rest = "5012000\t5012100\t.\t.\t.\tID=ENSR_NUL";
+        for (columns, record, start) in [
+            (
+                "21\0\tEnsembl\tenhancer",
+                "enhancer record ENSR_NUL",
+                "enhancer",
+            ),
+            (
+                "2\x001\tEnsembl\tenhancer",
+                "enhancer record ENSR_NUL",
+                "enhancer",
+            ),
+            (
+                "21\tEnsembl\0\tenhancer",
+                "enhancer record ENSR_NUL",
+                "enhancer",
+            ),
+            (
+                "21\tEns\0embl\tenhancer",
+                "enhancer record ENSR_NUL",
+                "enhancer",
+            ),
+            (
+                "21\tEnsembl\tenh\0ancer",
+                "enh\0ancer record ENSR_NUL",
+                "ancer",
+            ),
+            ("21\0\tEnsembl\texon", "exon record ENSR_NUL", "exon"),
+            ("21\tEnsembl\0\texon", "exon record ENSR_NUL", "exon"),
+            ("21\tEns\0embl\texon", "exon record ENSR_NUL", "exon"),
+            ("21\tEnsembl\tex\0on", "ex\0on record ENSR_NUL", "on"),
+        ] {
+            let line = format!("{columns}\t{rest}");
+            let (source, path) = open_with_a_skipped_line(dir.path(), "21", &line);
+            assert_eq!(
+                format!("{:#}", source.prewarm("21").unwrap_err()),
+                format!(
+                    "{path}: the start of {record} of chromosome 21 is not a whole number: {start}"
+                ),
+                "{columns:?}"
+            );
+            assert_eq!(spans(&source, "20").len(), 3, "{columns:?}");
+        }
+        let sound: Vec<(String, u64, u64)> = ENHANCER_SPANS
+            .into_iter()
+            .map(|(start, end)| (format!("ENSR21_{start}"), start, end))
+            .collect();
+        for feature_type in ["enhancer", "exon"] {
+            let nul_ended = format!("21\tEnsembl\t{feature_type}\t{rest}").replace('\t', "\0");
+            let (source, _) = open_with_a_skipped_line(dir.path(), "21", &nul_ended);
+            assert_eq!(spans(&source, "21"), sound, "{feature_type}");
+            let no_number = nul_ended.replace("5012000", "abc");
+            let (source, path) = open_with_a_skipped_line(dir.path(), "21", &no_number);
+            // The line has no third column for a type to be read from.
+            assert_eq!(
+                format!("{:#}", source.prewarm("21").unwrap_err()),
+                format!(
+                    "{path}: the start of a record of type  of chromosome 21 is not a whole \
+                     number: abc"
+                ),
+                "{feature_type}"
+            );
+        }
+        assert!(global().take_collected().is_empty());
+    }
+
+    /// The check of every record refuses what the read of the record's
+    /// chromosome refuses, in the read's own words, and loads nothing: a
+    /// record without its attributes column, an end that is not a whole
+    /// number, a pair that is not ordered, a skipped line `tabix` does not
+    /// index. Over a file it refuses nothing of, it draws no warning, and the
+    /// read that follows draws the skipped type's warning once.
+    #[test]
+    fn the_check_of_every_record_refuses_as_a_read_does_and_draws_no_warning() {
+        let _guard = sink_test_guard();
+        global().configure(Target::Memory, true, false);
+        let dir = tempfile::tempdir().unwrap();
+        for refused in [
+            "21\tEnsembl\tenhancer\t5012000\t5012100\t.\t.\t.",
+            "21\tEnsembl\tenhancer\t5012000\txyz\t.\t.\t.\tID=ENSR_END",
+            "21\tEnsembl\tenhancer\t5012100\t5012000\t.\t.\t.\tID=ENSR_SWAPPED",
+            "21\tEnsembl\texon\t5012000\txyz\t.\t.\t.\tID=SKIP",
+        ] {
+            let (source, path) = open_with_a_skipped_line(dir.path(), "21", refused);
+            let checked = format!("{:#}", source.check_gff_records().unwrap_err());
+            assert!(checked.starts_with(&format!("{path}: ")), "{checked}");
+            assert!(source.features("20").is_none() && source.features("21").is_none());
+            assert_eq!(
+                checked,
+                format!("{:#}", source.prewarm("21").unwrap_err()),
+                "{refused}"
+            );
+        }
+        assert!(global().take_collected().is_empty());
+
+        let dir = tempfile::tempdir().unwrap();
+        let skipped = "21\tEnsembl\texon\t5012000\t5012100\t.\t.\t.\tID=SKIP";
+        let (source, path) = open_with_a_skipped_line(dir.path(), "21", skipped);
+        source.check_gff_records().unwrap();
+        assert!(global().take_collected().is_empty());
+        assert!(source.features("20").is_none() && source.features("21").is_none());
+        assert_eq!(spans(&source, "21").len(), 3);
+        let warnings: Vec<String> = global()
+            .take_collected()
+            .into_iter()
+            .map(|(_, text)| text)
+            .collect();
+        assert_eq!(
+            warnings,
+            [format!(
+                "WARNING: Ignoring 'exon' feature type from {path}; not a supported regulatory \
+                 feature type\n"
+            )]
         );
     }
 
@@ -1271,7 +1648,7 @@ mod tests {
     /// names the feature `ESC;APE,1>2`, a `transcription_factor` list is split
     /// on its written commas before its members are decoded, so `A%2cB,C` lists
     /// `A,B` and `C`, a `%` not followed by two hexadecimal digits stays
-    /// written, and `%252C` reads `%2C`. Ensembl VEP 116.2 prints each value as
+    /// written, and `%252C` reads `%2C`. Ensembl VEP 116.3 prints each value as
     /// written (`GFF3.pm:190-198`), the registered class.
     #[test]
     fn every_escape_of_a_read_value_is_decoded_in_either_case() {
@@ -1741,7 +2118,7 @@ mod tests {
     /// whole number is ignored, the promoter keeping its own bound while the
     /// record's other bound still widens it, and is warned about once, naming
     /// the record and the attribute, however many times the file is read.
-    /// Ensembl VEP 116.2 compares the value as a number (`RegFeat.pm:363-364`),
+    /// Ensembl VEP 116.3 compares the value as a number (`RegFeat.pm:363-364`),
     /// so `x` reads as 0 there and the promoter starts at the chromosome's
     /// first base. Without the flag no bound is read and nothing is warned,
     /// and a type other than promoter never reads the attributes (`:106-108`).
@@ -1802,7 +2179,7 @@ mod tests {
     /// A motif's matrix is a stub of its `binding_matrix_id`, span and
     /// `transcription_factor` list (`RegFeat.pm:431-444`): the row carries
     /// MOTIF_NAME, MOTIF_POS along the motif's strand and the factors, and no
-    /// HIGH_INF_POS or MOTIF_SCORE_CHANGE (`OutputFactory.pm:1935-1940`); motifs
+    /// HIGH_INF_POS or MOTIF_SCORE_CHANGE (`OutputFactory.pm:1944-1949`); motifs
     /// naming one matrix share one stub.
     #[test]
     fn motif_stub_omits_high_inf_pos_and_score_change() {
@@ -1908,8 +2285,9 @@ mod tests {
     /// one and none when it does not; `--cell_type` draws the source's
     /// warning once for any number of regulatory files and not for a motif
     /// file alone, and every row then carries the empty `CELL_TYPE` list; a
-    /// missing file, a file without an index and a remote URL are refused by
-    /// key and name.
+    /// missing file, a file without an index, a remote URL, a file whose
+    /// index cannot be read and one whose index carries no tabix header are
+    /// refused by key and name, an unreadable index with no word of a plugin.
     #[test]
     fn gff_wins_over_cache_shards_with_the_warning() {
         let _guard = sink_test_guard();
@@ -1941,8 +2319,8 @@ mod tests {
         let with_cell_type = RegulatorySource::open_gff(&spec, false, true, &without).unwrap();
         // No cache source is built under the flag, so no name is checked
         // against a list (`CacheDir.pm:156-176`), and every regulatory and
-        // motif row carries CELL_TYPE as the empty list (OutputFactory.pm:1879,
-        // 1927, 1959-1969: a GFF feature has no activity map).
+        // motif row carries CELL_TYPE as the empty list (OutputFactory.pm:1888,
+        // 1936, 1968-1978: a GFF feature has no activity map).
         assert!(with_cell_type.reads_gff());
         let cell_types = super::super::CellTypes::resolve(Some("HUVEC"), Some(&with_cell_type))
             .unwrap()
@@ -1987,14 +2365,14 @@ mod tests {
                 emars: Some(missing.clone()),
                 ..Default::default()
             }),
-            format!("ERROR: [cli] --regulatory_gff emars file {missing} not found")
+            format!("ERROR: [cli] --regulatory_gff emars={missing} not found")
         );
         let unindexed = bare.path().join("unindexed.gff3.gz");
         fs::copy(fixture("EMARs.gff.gz"), &unindexed).unwrap();
         assert_eq!(
             refused(file_spec(unindexed.to_string_lossy().into_owned())),
             format!(
-                "ERROR: [cli] --regulatory_gff file file {} has no tabix index",
+                "ERROR: [cli] --regulatory_gff file={} has no tabix index",
                 unindexed.display()
             )
         );
@@ -2003,7 +2381,45 @@ mod tests {
                 motifs: Some("https://example.org/motifs.gff3.gz".into()),
                 ..Default::default()
             }),
-            "ERROR: [cli] --regulatory_gff motifs file https://example.org/motifs.gff3.gz is a remote URL; vep-rs reads a local file alone"
+            "ERROR: [cli] --regulatory_gff motifs=https://example.org/motifs.gff3.gz is a remote URL; vep-rs reads a local file alone"
+        );
+
+        // The index reader's errors display with a sentence on a plugin before
+        // their text (`PluginError`); the refusal carries the text alone.
+        let unreadable = bare.path().join("unreadable.gff3.gz");
+        fs::copy(fixture("EMARs.gff.gz"), &unreadable).unwrap();
+        let unreadable_index = format!("{}.tbi", unreadable.display());
+        fs::write(&unreadable_index, b"").unwrap();
+        assert_eq!(
+            refused(file_spec(unreadable.to_string_lossy().into_owned())),
+            format!(
+                "ERROR: [cli] --regulatory_gff file={}: tabix index {unreadable_index} is malformed: the index ends inside its magic",
+                unreadable.display()
+            )
+        );
+        fs::write(&unreadable_index, b"not a compressed index").unwrap();
+        let message = refused(file_spec(unreadable.to_string_lossy().into_owned()));
+        assert!(
+            message.starts_with(&format!(
+                "ERROR: [cli] --regulatory_gff file={}: failed to read tabix index {unreadable_index}: ",
+                unreadable.display()
+            )) && !message.contains("plugin"),
+            "{message}"
+        );
+
+        let headerless = bare.path().join("headerless.gff3.gz");
+        fs::copy(fixture("EMARs.gff.gz"), &headerless).unwrap();
+        let headerless_index = format!("{}.csi", headerless.display());
+        noodles::csi::fs::write(&headerless_index, &noodles::csi::Index::default()).unwrap();
+        assert_eq!(
+            refused(RegulatoryGff {
+                emars: Some(headerless.to_string_lossy().into_owned()),
+                ..Default::default()
+            }),
+            format!(
+                "ERROR: [cli] --regulatory_gff emars={}: index {headerless_index} carries no tabix header, so its records cannot be mapped to chromosomes; index the file with tabix",
+                headerless.display()
+            )
         );
     }
 
@@ -2012,7 +2428,7 @@ mod tests {
     /// (`RegFeat.pm:296`, `BaseVEP.pm:689-738`); a record of another
     /// chromosome inside a shared block is not read; a record the file holds
     /// twice is indexed once (`:628-640`), and a distinct record under the
-    /// same identifier is indexed too, with Ensembl VEP 116.2's collision
+    /// same identifier is indexed too, with Ensembl VEP 116.3's collision
     /// warning once for the identifier (`RegFeat.pm:485-494`; the byte-identical
     /// copy shares its digest and draws none, `:487`).
     #[test]
@@ -2164,7 +2580,7 @@ mod tests {
 
     /// Two distinct records of one file sharing an identifier are one feature
     /// to a sequence variant: inside both it gets one `RegulatoryFeature` row,
-    /// the record later in the file (Ensembl VEP 116.2 keys the variant's
+    /// the record later in the file (Ensembl VEP 116.3 keys the variant's
     /// regulatory overlaps on the stable id and the later feature's write
     /// wins, `VariationFeature.pm:913-919`, the features arriving in file
     /// order), inside one alone that record's row; a structural variant over
@@ -2305,7 +2721,7 @@ mod tests {
     /// The record later in the file keeps the row even when the index's sort
     /// by start puts it first: a promoter widened under `--extended_promoters`
     /// to a start below an earlier record's sorts before that record, while
-    /// Ensembl VEP 116.2 reads the records in file order whatever the widening
+    /// Ensembl VEP 116.3 reads the records in file order whatever the widening
     /// (`RegFeat.pm:312-328`) and the later write wins
     /// (`VariationFeature.pm:918`), so the promoter's row is the one written,
     /// on the file route and from a baked cache alike: each baked element
@@ -2482,7 +2898,7 @@ mod tests {
 
     /// An identifier repeated on two chromosomes of one file is a collision
     /// too, warned about once whichever chromosome is read first: Ensembl VEP
-    /// 116.2 keeps one identifier set per source over the run
+    /// 116.3 keeps one identifier set per source over the run
     /// (`RegFeat.pm:485`), and both features stay indexed.
     #[test]
     fn identifier_repeated_across_chromosomes_warns_once() {
@@ -2519,7 +2935,7 @@ mod tests {
     }
 
     /// Two distinct motif records sharing an identifier draw the collision
-    /// warning once and keep both rows: Ensembl VEP 116.2 keys a variant's
+    /// warning once and keep both rows: Ensembl VEP 116.3 keys a variant's
     /// motif overlaps on the per-record database id, not the stable id
     /// (`MotifFeatureVariation.pm:70-76`, `RegFeat.pm:452`), while
     /// `_check_id_collision` runs for a motif source too (`RegFeat.pm:382`).

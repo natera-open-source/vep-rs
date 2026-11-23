@@ -4,8 +4,8 @@
 //! One side of the comparison: records, lossy UTF-8 decoding, the prepared row (five key
 //! columns, nine value columns) and the child `sort` that orders the rows bytewise.
 
+use crate::gzip::GzMembers;
 use crate::pyfmt::py_strip;
-use flate2::read::MultiGzDecoder;
 use memchr::{memchr, memchr2, memchr_iter};
 use std::ffi::OsStr;
 use std::fs::File;
@@ -22,6 +22,37 @@ const KEY_COLUMNS: [usize; 4] = [1, 2, 4, 5];
 const CONSEQUENCE_COLUMN: usize = 6;
 /// The value columns: `merge::PLAIN_FIELDS` in order, then Extra.
 const VALUE_COLUMNS: [usize; 9] = [0, 3, 7, 8, 9, 10, 11, 12, 13];
+const FEATURE_TYPE_COLUMN: usize = 5;
+
+/// A row class `--keep-only` names: the rows of both inputs outside it are dropped before
+/// sorting, so they reach no key total, duplicate count or field comparison.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum KeepOnly {
+    /// Rows whose stripped Feature_type is `RegulatoryFeature` or `MotifFeature`.
+    RegulatoryFeatureRows,
+}
+
+impl KeepOnly {
+    /// The class a `--keep-only` value names, matched verbatim.
+    pub fn from_name(name: &str) -> Option<KeepOnly> {
+        (name == KeepOnly::RegulatoryFeatureRows.name()).then_some(KeepOnly::RegulatoryFeatureRows)
+    }
+
+    /// The name on the command line and under the report's `keep_only` key.
+    pub fn name(self) -> &'static str {
+        match self {
+            KeepOnly::RegulatoryFeatureRows => "regulatory_feature_rows",
+        }
+    }
+
+    fn keeps(self, feature_type: &str) -> bool {
+        match self {
+            KeepOnly::RegulatoryFeatureRows => {
+                matches!(feature_type, "RegulatoryFeature" | "MotifFeature")
+            }
+        }
+    }
+}
 
 /// Calls `f` with each record of `reader` without its terminator. `\n`, `\r\n` and a lone
 /// `\r` each end a record, as Python's universal-newlines text mode reads them; a final
@@ -77,24 +108,37 @@ fn for_each_record_buffered<R: Read>(
     }
 }
 
-/// Scratch space for preparing rows; one per input thread.
+/// The row filter and the scratch space for preparing rows; one per input thread.
 #[derive(Default)]
 pub struct RowPrep {
+    keep_only: Option<KeepOnly>,
     bounds: Vec<(usize, usize)>,
     terms: Vec<(usize, usize)>,
 }
 
 impl RowPrep {
+    pub fn new(keep_only: Option<KeepOnly>) -> RowPrep {
+        RowPrep {
+            keep_only,
+            ..RowPrep::default()
+        }
+    }
+
     /// Appends the prepared row of one record to `out` without a newline: the five key
-    /// columns, then the nine value columns, tab-joined. A `#` line or a row under seven
-    /// columns appends nothing; a row of 7 to 13 columns pads the missing values with `""`.
+    /// columns, then the nine value columns, tab-joined. A `#` line, a row under seven
+    /// columns or a row outside the `--keep-only` class appends nothing; a row of 7 to 13
+    /// columns pads the missing values with `""`.
     pub fn prepare(&mut self, record: &[u8], out: &mut Vec<u8>) {
         if record.first() == Some(&b'#') {
             return;
         }
         let text = String::from_utf8_lossy(record);
         let s: &str = &text;
-        let RowPrep { bounds, terms } = self;
+        let RowPrep {
+            keep_only,
+            bounds,
+            terms,
+        } = self;
         bounds.clear();
         let mut field_start = 0;
         for tab in memchr_iter(b'\t', s.as_bytes()) {
@@ -111,6 +155,9 @@ impl RowPrep {
                 None => "",
             }
         };
+        if keep_only.is_some_and(|class| !class.keeps(py_strip(field(FEATURE_TYPE_COLUMN)))) {
+            return;
+        }
         for i in KEY_COLUMNS {
             out.extend_from_slice(py_strip(field(i)).as_bytes());
             out.push(b'\t');
@@ -123,8 +170,9 @@ impl RowPrep {
     }
 }
 
-/// `normalize_consequence_set`: strip, split on `,`, drop empty terms, dedupe, sort by code
-/// point (byte order of the UTF-8), join with `,`.
+/// The consequence set of the key: strip, split on `,`, drop empty terms, dedupe, sort by
+/// code point (byte order of the UTF-8), join with `,`. A blank inside the column stays in
+/// its term.
 fn push_consequence_set(terms: &mut Vec<(usize, usize)>, raw: &str, out: &mut Vec<u8>) {
     let s = py_strip(raw);
     if memchr(b',', s.as_bytes()).is_none() {
@@ -152,21 +200,20 @@ fn push_consequence_set(terms: &mut Vec<(usize, usize)>, raw: &str, out: &mut Ve
     }
 }
 
-/// Prepares every row of `input` and writes them to `sorted`, one per line in bytewise
-/// order, through a child `sort -S 20%` under `LC_ALL=C`; the child inherits `TMPDIR`.
-pub fn prepare_sorted(input: &Path, sorted: &Path) -> Result<(), String> {
+/// Prepares every row of `input` that `keep_only` keeps and writes them to `sorted`, one per
+/// line in bytewise order, through a child `sort -S 20%` under `LC_ALL=C`; the child inherits
+/// `TMPDIR`.
+pub fn prepare_sorted(
+    input: &Path,
+    sorted: &Path,
+    keep_only: Option<KeepOnly>,
+) -> Result<(), String> {
     let on_input = |e: io::Error| format!("{}: {e}", input.display());
     let file = File::open(input).map_err(on_input)?;
-    let reader: Box<dyn Read> = if input.extension() != Some(OsStr::new("gz")) {
-        Box::new(file)
-    } else if file.metadata().map_err(on_input)?.len() == 0 {
-        // Python's `gzip.open` reads a zero-byte file as an empty stream; the decoder
-        // would report a truncated header.
-        Box::new(io::empty())
+    let reader: Box<dyn Read> = if input.extension() == Some(OsStr::new("gz")) {
+        Box::new(GzMembers::new(BufReader::with_capacity(READ_BUF, file)))
     } else {
-        Box::new(MultiGzDecoder::new(BufReader::with_capacity(
-            READ_BUF, file,
-        )))
+        Box::new(file)
     };
     let out_file = File::create(sorted).map_err(|e| format!("{}: {e}", sorted.display()))?;
     let spawned = Command::new("sort")
@@ -178,15 +225,19 @@ pub fn prepare_sorted(input: &Path, sorted: &Path) -> Result<(), String> {
         .stderr(Stdio::piped())
         .spawn();
     match spawned {
-        Ok(child) => feed_sort(reader, child),
-        Err(e) if e.kind() == io::ErrorKind::NotFound => sort_in_process(reader, sorted),
+        Ok(child) => feed_sort(reader, child, keep_only),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => sort_in_process(reader, sorted, keep_only),
         Err(e) => Err(format!("sort: {e}")),
     }
 }
 
-fn feed_sort(reader: impl Read, mut child: Child) -> Result<(), String> {
+fn feed_sort(
+    reader: impl Read,
+    mut child: Child,
+    keep_only: Option<KeepOnly>,
+) -> Result<(), String> {
     let mut stdin = BufWriter::with_capacity(PIPE_BUF, child.stdin.take().expect("piped stdin"));
-    let mut prep = RowPrep::default();
+    let mut prep = RowPrep::new(keep_only);
     let mut row = Vec::with_capacity(1024);
     let fed = for_each_record(reader, |record| {
         row.clear();
@@ -215,8 +266,12 @@ fn feed_sort(reader: impl Read, mut child: Child) -> Result<(), String> {
 }
 
 /// The in-memory fallback for a host without `sort`: the same bytewise order.
-fn sort_in_process(reader: impl Read, sorted: &Path) -> Result<(), String> {
-    let mut prep = RowPrep::default();
+fn sort_in_process(
+    reader: impl Read,
+    sorted: &Path,
+    keep_only: Option<KeepOnly>,
+) -> Result<(), String> {
+    let mut prep = RowPrep::new(keep_only);
     let mut rows: Vec<Vec<u8>> = Vec::new();
     for_each_record(reader, |record| {
         let mut row = Vec::new();
@@ -237,6 +292,10 @@ fn sort_in_process(reader: impl Read, sorted: &Path) -> Result<(), String> {
     }
     out.flush().map_err(on_path)
 }
+
+#[cfg(test)]
+#[path = "input_consequence_set_tests.rs"]
+mod consequence_set_tests;
 
 #[cfg(test)]
 mod tests {
@@ -295,6 +354,34 @@ mod tests {
     }
 
     #[test]
+    fn keep_only_drops_every_row_outside_its_class_before_the_key_is_built() {
+        let kept = |feature_type: &str| -> bool {
+            let record = format!("id\t1:700\tT\t-\tF1\t{feature_type}\tsome_variant");
+            let mut out = Vec::new();
+            RowPrep::new(Some(KeepOnly::RegulatoryFeatureRows))
+                .prepare(record.as_bytes(), &mut out);
+            !out.is_empty()
+        };
+        assert!(kept("RegulatoryFeature"));
+        assert!(kept("MotifFeature"));
+        assert!(kept(" MotifFeature\u{a0}"));
+        assert!(!kept("Transcript"));
+        assert!(!kept("regulatoryfeature"));
+        assert!(!kept("RegulatoryFeature,MotifFeature"));
+        assert!(!kept(""));
+        assert_eq!(
+            KeepOnly::from_name("regulatory_feature_rows"),
+            Some(KeepOnly::RegulatoryFeatureRows)
+        );
+        assert_eq!(KeepOnly::from_name("Regulatory_feature_rows"), None);
+        assert_eq!(KeepOnly::from_name(""), None);
+        assert_eq!(
+            KeepOnly::RegulatoryFeatureRows.name(),
+            "regulatory_feature_rows"
+        );
+    }
+
+    #[test]
     fn lossy_decoding_replaces_each_maximal_invalid_subpart() {
         let decoded =
             String::from_utf8_lossy(b"\xe2\x82A\xf4\x90\x80\x80\xed\xa0\x80\xc0\x80z\xe2\x82");
@@ -312,7 +399,7 @@ mod tests {
         let out = dir.join("sorted");
         let input: &[u8] =
             b"#h\nrs2\t1:200\tA\tG\tT\tTranscript\tx\nrs1\t1:100\tA\tG\tT\tTranscript\tx\tV\n";
-        sort_in_process(input, &out).unwrap();
+        sort_in_process(input, &out, None).unwrap();
         assert_eq!(
             std::fs::read_to_string(&out).unwrap(),
             "1:100\tA\tT\tTranscript\tx\trs1\tG\tV\t\t\t\t\t\t\n1:200\tA\tT\tTranscript\tx\trs2\tG\t\t\t\t\t\t\t\n"

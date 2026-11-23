@@ -1,9 +1,9 @@
 entry = "splicevault_sibling_allele_rows"
 page = "docs/plugins/annotation-store-divergences.md#3-splicevault-the-table-row-of-a-sibling-allele"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 405.6 per million · 4 flag sets, 64 corpora"
+input_class_basis = "2 · 405.6 per million · 4 flag sets, 80 corpora"
 notes = "The corpus's fixture table holds a row for each allele on ENST00000299443: the `C` row's delta is 0.51, the `G` row's 0.24. The `C` allele's rows agree between the engines."
 
 [input]
@@ -28,3 +28,13 @@ where = { record = "sibling", allele = "G", feature = "ENST00000299443" }
 [expected]
 ensembl_vep = ["0.51"]
 vep_rs = ["0.24"]
+
+[implementation]
+code = ["crates/vep-builtins/src/plugins/splicevault.rs::SpliceVaultPlugin::allele_matches"]
+tests = [
+    "crates/vep-cli/tests/plugin_documented_rows.rs::a_splicevault_row_is_written_on_the_allele_it_names",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/revel.rs::sibling_allele_value",
+    "tools/vep-plugin-pairs/src/rules/sibling.rs::sibling_allele_value",
+]

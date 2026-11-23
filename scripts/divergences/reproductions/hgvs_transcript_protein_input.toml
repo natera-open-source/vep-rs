@@ -1,7 +1,7 @@
 entry = "hgvs_transcript_protein_input"
 page = "docs/divergences/hgvs-transcript-input.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the HGVS input format (Ensembl VEP documentation, \"Data formats\", HGVS identifiers); not seen in the measured datasets"
 notes = "The first mechanism of the entry: a transcript and a protein notation of CRYAA given to both engines offline. Ensembl VEP refuses the format offline (`Cannot use HGVS format in offline mode`) and writes no row; vep-rs resolves both from the transcript cache and the reference FASTA. The five transcript-branch and six protein-branch readings that differ need Ensembl VEP's database and are not run here."
@@ -30,4 +30,18 @@ ensembl_vep = []
 vep_rs = [
   "ENST00000291554:c.3G>A | 21:43169102 | A | ENST00000291554 | start_lost",
   "ENSP00000291554:p.Thr4Ala | 21:43169109 | G | ENST00000291554 | missense_variant",
+]
+
+[implementation]
+code = [
+    "crates/vep-io/src/input/hgvs/protein.rs::variant",
+    "crates/vep-io/src/input/hgvs/transcript.rs::genomic_position",
+    "crates/vep-io/src/input/hgvs/transcript.rs::resolve",
+    "crates/vep-io/src/input/hgvs/transcript.rs::variant",
+]
+tests = [
+    "crates/vep-cli/tests/documented_subsets.rs::hgvs_transcript_input_exclusion_is_documented",
+    "crates/vep-cli/tests/input_hgvs.rs::transcript_notations_resolve_through_the_cache_and_warn_about_gene_names",
+    "crates/vep-cli/tests/input_hgvs.rs::unresolvable_notations_are_skipped_with_the_warning",
+    "crates/vep-cli/tests/input_hgvs_protein.rs::protein_notations_resolve_to_ensembl_veps_nucleotide_changes",
 ]

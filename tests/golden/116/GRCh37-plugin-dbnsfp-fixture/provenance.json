@@ -1,0 +1,222 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh37",
+ "fasta": "none on either side",
+ "input": "15 hand-built VCF records on chromosome 21 of the release-116 GRCh37 cache: an intergenic and an intronic single-base substitution; synonymous substitutions on each strand (one lower-case); stop lost and start lost on a forward-strand transcript, start lost and stop gained on a reverse-strand one; missense substitutions on a reverse-strand transcript, at a site whose transcripts show two amino acid changes and on a forward-strand transcript with two alternate alleles; a two-base substitution, a deletion and an insertion; and a missense substitution the data file leaves out",
+ "sha256": {
+  "default.txt": "3fe59e6326c856e22dbf774ff42328c5c173a025106d30d01816646b0d7030f3",
+  "tab.txt": "ea362fdb058c67784bd1eba20babf659ad94f9d1c901896638ff021faa1d3045",
+  "vcf.vcf": "21b62a057b561ffe0d9021736f6cce1ab3a06ac79f569dd38253f326510dd7c2",
+  "json.jsonl": "9bcd0c4d1c48b7508728affaf5b39dbecb3a93249390a00c31807f1c79913cec"
+ },
+ "variants_vcf_sha256": "2652842f4ac038c67b9a57ece99ff3b373a52fd69559b6c44548901627187c4b",
+ "plugin_fixtures": {
+  "dbNSFP4.9a_grch37_synthetic.gz": {
+   "generator": "scripts/fixtures/make_plugin_fixture.py",
+   "layout": "dbnsfp",
+   "assembly": "GRCh37",
+   "seed": 38,
+   "preparation": {
+    "index": "tabix -s 8 -b 9 -e 9",
+    "coordinate_columns": [
+     "hg19_chr",
+     "hg19_pos(1-based)"
+    ],
+    "other_assembly_columns": [
+     "chr",
+     "pos(1-based)"
+    ],
+    "other_assembly_shift": 100000,
+    "line_end": "LF",
+    "columns": 458
+   },
+   "misses": [
+    "21:43505455"
+   ],
+   "rows": {
+    "own_allele": 8,
+    "fabricated": 26,
+    "planted": 1,
+    "miss": 1
+   },
+   "tools": {
+    "bgzip": "bgzip (htslib) 1.22.1",
+    "tabix": "tabix (htslib) 1.22.1"
+   },
+   "planted_row": {
+    "chr": "1",
+    "pos": 1045000,
+    "ref": "A",
+    "alt": "G",
+    "transcripts": [
+     "ENST00000900001",
+     "ENST00000900002"
+    ],
+    "region": "1:1008170-1082927"
+   },
+   "spec": "plugin_data/dbNSFP4.9a_grch37_synthetic.gz.spec.json",
+   "files": {
+    "plugin_data/dbNSFP4.9a_grch37_synthetic.gz": "b7055c3378305c3e1b7c87ddec07b254bc97f6bbe12cb172cad5703a6489a575",
+    "plugin_data/dbNSFP4.9a_grch37_synthetic.gz.tbi": "ab11cda353e91a9afe5aa92af7c7a02c771e02817265271362923eaf766d2630",
+    "plugin_data/dbNSFP4.9a_grch37_synthetic.gz.spec.json": "6829d23185f10b86d827a61f9dee83d2e0827cec65b9de1179dd6fadc07d39c2"
+   }
+  }
+ },
+ "flag_sets": {
+  "dbnsfp": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {plugins} --plugin dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch37_synthetic.gz,SIFT_score,Polyphen2_HDIV_score [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh37",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "b51ae2a98974100ed3d3c90fb17f30fa51132a8e42abeabf96dc44850c3f6962",
+    "tab.txt": "a2003f51b1cdf2a51e7e80f3805aca2a85b1b192d4c2211bd847031999af8b6a",
+    "vcf.vcf": "af4c0845dcd5d3dcc5310e8d8a47af3f03baa1ea646884cc3440cbd56c5573ba",
+    "json.jsonl": "527b98ad99c45a6e570c8902bb606d448f2bd7d4d59e2575fdee8808197c7b38"
+   },
+   "flags": [
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch37_synthetic.gz,SIFT_score,Polyphen2_HDIV_score"
+   ],
+   "expected_dir": "expected_dbnsfp",
+   "formats_compared": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ]
+  },
+  "dbnsfp-consequence-all": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {plugins} --plugin dbNSFP,consequence=ALL,pep_match=0,{corpus}/plugin_data/dbNSFP4.9a_grch37_synthetic.gz,SIFT_score,Polyphen2_HDIV_score [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh37",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "c668875db38e98270b35fd7403ddaa9555a2ba098ec9ba2729b90ffe6869b806",
+    "tab.txt": "0df342885da5e97c45e0ca50ca0c98aaf7e7b11185e15236915a43ac1cd8b275",
+    "vcf.vcf": "9f5cfd47602f44efe98660db37504b59d23bd0c747b4245e8fcaa5cec1bd5571",
+    "json.jsonl": "cdbd49b54de1c92650b2a52fc79991424aeb7c93713ef698622c5a5590812f4b"
+   },
+   "flags": [
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "dbNSFP,consequence=ALL,pep_match=0,{corpus}/plugin_data/dbNSFP4.9a_grch37_synthetic.gz,SIFT_score,Polyphen2_HDIV_score"
+   ],
+   "expected_dir": "expected_dbnsfp-consequence-all",
+   "formats_compared": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ]
+  },
+  "dbnsfp-transcript-match": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {plugins} --plugin dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch37_synthetic.gz,transcript_match=1,SIFT_score,SIFT_pred,MutationTaster_score,GERP++_RS [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh37",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "0e6dbc6e53c0b62c93096c4f17b962451e5726eb1cb9c048a26ee18e986581ba",
+    "tab.txt": "ae7b8aa403125c6420fe21aa1afe04fab17d2dbd0ec3865497f0eca8a3b6eb52",
+    "vcf.vcf": "1b2881c775c181d3ebc6147d6a2743ce15e4324e718fb7fcfe0cb524b16de03b",
+    "json.jsonl": "8afa7b4c7c9374c2028b96c9e2cacb6d68657dc3cd4663607ee40da580ab5de3"
+   },
+   "flags": [
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch37_synthetic.gz,transcript_match=1,SIFT_score,SIFT_pred,MutationTaster_score,GERP++_RS"
+   ],
+   "expected_dir": "expected_dbnsfp-transcript-match",
+   "formats_compared": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ]
+  },
+  "dbnsfp-output-prefix": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {plugins} --plugin dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch37_synthetic.gz,output_prefix=1,pep_match=0,SIFT_score,Polyphen2_HDIV_score [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh37",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "b65afa24be6229758e7756ff2c93613ca4ab6eb81ec836f48185f94502645b05",
+    "tab.txt": "6d0eb83a283bf693bd53e076fd23f4efb96f3c057e89e403d522accb9d72ab1e",
+    "vcf.vcf": "5f6e291fe361e8d2c21963e71a2cf1cb415b3e487a014793c272d4d551323a04",
+    "json.jsonl": "b509555dea50ae14c0d44468d8a622073ae985a9695d2ac857e6c3427acad7e9"
+   },
+   "flags": [
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch37_synthetic.gz,output_prefix=1,pep_match=0,SIFT_score,Polyphen2_HDIV_score"
+   ],
+   "expected_dir": "expected_dbnsfp-output-prefix",
+   "formats_compared": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ]
+  },
+  "dbnsfp-replacement-logic": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {plugins} --plugin dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch37_synthetic.gz,{corpus}/plugin_data/dbNSFP_replacement_logic,Interpro_domain,clinvar_trait,SIFT_score [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh37",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "5c85b93ba422b1a1ef690ecb83849809dba818fbc7904d5e920042dbe8c229e5",
+    "tab.txt": "2e8504d2265e323940fb6de155c49159cb8f3a4b729340355280b40e86d2acda",
+    "vcf.vcf": "73ffca2cb29a245dbc3c574c476537447669c03d7d8c8e83b573a7e1dcaf9566",
+    "json.jsonl": "26fee5e26d62c969dc96d0c6fa0195212180746a79c60a5e4f20e633f30bcae6"
+   },
+   "flags": [
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch37_synthetic.gz,{corpus}/plugin_data/dbNSFP_replacement_logic,Interpro_domain,clinvar_trait,SIFT_score"
+   ],
+   "expected_dir": "expected_dbnsfp-replacement-logic",
+   "formats_compared": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ]
+  }
+ },
+ "plugin_files": {
+  "plugin_data/dbNSFP4.9a_grch37_synthetic.gz": "b7055c3378305c3e1b7c87ddec07b254bc97f6bbe12cb172cad5703a6489a575",
+  "plugin_data/dbNSFP4.9a_grch37_synthetic.gz.tbi": "ab11cda353e91a9afe5aa92af7c7a02c771e02817265271362923eaf766d2630",
+  "plugin_data/dbNSFP_replacement_logic": "69627ab629801cd9137c39650a0a406d08038ab1a5fa811c2cd4b685d0f362a7"
+ },
+ "generator": "plugin_data/<file>: scripts/fixtures/make_plugin_fixture.py --layout dbnsfp from variants.vcf and expected/default.txt.gz, a made-up file in that layout with fabricated values, one row per alternate base at every single-base site (the rows of the input's own allele carry the amino acid changes and transcripts the reference shows), no row at the unscored site, one row planted in the detection region, bgzip and tabix as the plugin's documentation prepares the assembly (dbNSFP.pm:73-74; seed, preparation and digests in the spec beside the file and under plugin_fixtures); plugin_data/dbNSFP_replacement_logic: the file Ensembl VEP ships beside the plugin; json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions over the chromosome 21 (and, on GRCh38, the mitochondrial) slice tools/vep-storable-to-json converts from the Ensembl VEP 116 cache; expected outputs: scripts/concordance/generate_reference_output.sh --corpus for the manifest's run, and one Ensembl VEP 116.3 container run per format for each flag set from the vep command recorded under its flag_sets entry, the corpus mounted read-only at /work/corpus as the working directory and the plugin module read from the VEP_plugins checkout mounted at /work/plugins; manifest: tools/vep-golden-corpus select --include for every record, flag-set, then classify for the manifest's run and each flag set"
+}

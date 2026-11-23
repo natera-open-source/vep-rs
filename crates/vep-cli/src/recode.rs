@@ -3,7 +3,7 @@
 
 //! `vep recode`: a variant translated between its identifiers and notations,
 //! as Ensembl VEP's `variant_recoder` translates it (`VariantRecoder.pm` at
-//! release/116.2, whose line numbers the citations below name), from the cache
+//! release/116.3, whose line numbers the citations below name), from the cache
 //! alone.
 //!
 //! The tool is an annotation run under a fixed configuration (96-150):
@@ -40,6 +40,25 @@
 //! The variant's own synonyms and its co-located variants' are the cache's
 //! `var_synonyms` column; Ensembl VEP reads its database for them (`:427`,
 //! `OutputFactory.pm:955-957`).
+//!
+//! A run that completes writes one `INFO:` line to standard error (`notice`),
+//! naming what the recoder's database gives and the cache read does not.
+//! Before it stand the lines the annotation run, being quiet, keeps for the
+//! tool (`Runner::holding_own_notices`), in the order `vep` prints them: one
+//! for each part the cache's record names as left out that the run asks for
+//! or reads (`cache_left_out::notices`); one
+//! for each FASTA file passed over for want of its index; one for each of
+//! `_source_cache` and `dbID` that a `--transcript_filter` names over a cache
+//! whose transcripts lack it; one naming each chromosome on which an entry
+//! the run writes, as a field or in a `mane_select` triple, is without an
+//! `hgvsg` or an `hgvsc` that takes the sequence the FASTA does not hold to
+//! write (`Fields::hgvsg_rows`, `Fields::hgvsc_rows`); and,
+//! in a run that writes `hgvsc`, one counting the
+//! insertion and deletion alleles with a written `hgvsc` on a transcript
+//! edited away from the genome (`Fields::hgvsc_rows`). Between those lines
+//! and the tool's own stands the tool's line of a cache without variation
+//! data, in a run whose fields read known variants
+//! (`Lookups::no_variation_data_notice`).
 
 use std::collections::{BTreeSet, HashMap};
 use std::ffi::OsString;
@@ -61,10 +80,11 @@ use vep_io::input::ReferenceSequence;
 use vep_io::output::vcf_output::to_vcf_record;
 
 use crate::argv;
+use crate::cache_left_out;
 use crate::cache_resolve;
 use crate::config::{CliError, Config, ParseFailure};
 use crate::recode_cli::RecodeArgs;
-use crate::runner::{self, Runner};
+use crate::runner::{self, NotationRows, Runner};
 use crate::variation_matcher::{find_colocated_variants, ColocationRules};
 use crate::variation_source::VariationSource;
 use crate::warnings::{self, Target};
@@ -91,6 +111,11 @@ const REGION_SIZE: u64 = 1_000_000;
 
 fn error(message: impl Into<String>) -> CliError {
     CliError::new(COMPONENT, message)
+}
+
+/// The refusal of a `--warning_file` that cannot be created or written.
+fn warnings_file_unwritable(path: &str) -> CliError {
+    error(format!("Could not write to warnings file {path}"))
 }
 
 /// Runs the tool for `args`, writing the JSON array to `out`.
@@ -137,8 +162,22 @@ pub fn run(args: RecodeArgs, out: &mut dyn Write) -> Result<(), CliError> {
         }
     }
     let lookups = Lookups::open(&config, &fields, args.failed.unwrap_or(1))?;
-    Runner::new(config)
-        .and_then(|runner| runner.run())
+    let merged_set = config.merged;
+    let run_notices = Runner::new(config)
+        .map(|runner| {
+            runner
+                .holding_own_notices()
+                .writing_hgvsc_of(fields.hgvsc_rows())
+                .writing_hgvsg_of(fields.hgvsg_rows())
+        })
+        // The file is written once the annotation has ended, so the run
+        // tests the name with its own files, before its first record.
+        .map(|runner| match &args.warning_file {
+            Some(path) => runner
+                .testing_a_file_of_the_caller(PathBuf::from(path), warnings_file_unwritable(path)),
+            None => runner,
+        })
+        .and_then(|runner| runner.run().map(|()| runner.take_own_notices()))
         .map_err(|e| match e.downcast::<CliError>() {
             Ok(refusal) => refusal,
             Err(other) => error(format!("{other:#}")),
@@ -150,19 +189,57 @@ pub fn run(args: RecodeArgs, out: &mut dyn Write) -> Result<(), CliError> {
     if let Some(path) = &args.warning_file {
         if !collected.is_empty() {
             let text: String = collected.iter().map(|(_, text)| text.as_str()).collect();
-            fs::write(path, text)
-                .map_err(|_| error(format!("Could not write to warnings file {path}")))?;
+            fs::write(path, text).map_err(|_| warnings_file_unwritable(path))?;
         }
     }
     let buffer_size = args.buffer_size.unwrap_or(DEFAULT_BUFFER_SIZE).max(1);
     let results = regroup(&records, &lines, &fields, &lookups, &collected, buffer_size)?;
+    // The annotation run is quiet, as the recoder's is (107), and prints no
+    // notice of its own, so the lines it owes for what it gives less of are
+    // written here, before the tool's; a run that was refused or could not
+    // write its warnings file has ended above.
+    for line in &run_notices {
+        crate::stderr::write(format_args!("{line}\n"));
+    }
+    if let Some(line) = lookups.no_variation_data_notice(&fields) {
+        crate::stderr::write(format_args!("{line}\n"));
+    }
+    crate::stderr::write(format_args!(
+        "{}\n",
+        notice(merged_set, fields.var_synonyms)
+    ));
     write_json(out, &Value::Array(results), args.pretty).map_err(|e| error(e.to_string()))
+}
+
+/// The line a completed run writes to standard error, naming what the recoder
+/// reads from the Ensembl database and the cache does not give. The preset
+/// `lrg` (99) maps a variant between its sequence and an LRG, either way
+/// (`Parser.pm:901-944`), through the database alone (`Runner.pm:766`). Where
+/// `var_synonyms` is written, the `Archive dbSNP` source is named: the dump
+/// leaves it out of the cache's column
+/// (`Pipeline/DumpVEP/InitDump.pm:263-266`). A cache read as the Ensembl
+/// transcript set (`merged_set` false) is named as that, with the merged cache
+/// as the one carrying the RefSeq models the preset `merged` (98) reads.
+fn notice(merged_set: bool, var_synonyms: bool) -> String {
+    let set = if merged_set {
+        ""
+    } else {
+        "this cache is read as the Ensembl transcript set, and RefSeq notation is written from a \
+         merged cache; "
+    };
+    let database = if var_synonyms {
+        "no variant is mapped to an LRG and no Archive dbSNP synonym is written, which need the \
+         Ensembl database"
+    } else {
+        "no variant is mapped to an LRG, which needs the Ensembl database"
+    };
+    format!("INFO: {set}{database}")
 }
 
 /// The keys the fields name, settled as `new` settles them (111-150): the fields
 /// list with the appended keys, and which flags the annotation run needs.
 struct Fields {
-    /// The keys read from each allele's consequence entries (272).
+    /// The keys read from each allele's consequence entries (271, read at 468).
     want: BTreeSet<String>,
     /// The keys the entries do not carry, attached per allele (275-287).
     id: bool,
@@ -187,7 +264,7 @@ impl Fields {
             .collect();
         // 120-122: the flags switched on by the fields named alone. A field
         // starting with `hgvs` sets the configuration key of its own name, and
-        // the output reads `hgvsc` and `hgvsp` (`OutputFactory.pm:1750`, `:1758`),
+        // the output reads `hgvsc` and `hgvsp` (`OutputFactory.pm:1759`, `:1767`),
         // which `hgvs` sets both of (`Config.pm:383-386`); `hgvs_offset` sets a
         // key nothing reads, so it switches no notation on.
         let mut hgvsc = fields
@@ -214,7 +291,7 @@ impl Fields {
         }
         let mut want: BTreeSet<String> = fields.into_iter().collect();
         // The offset is written beside the transcript notation alone: the
-        // protein branch (`OutputFactory.pm:1758-1767`) reads an offset only
+        // protein branch (`OutputFactory.pm:1767-1776`) reads an offset only
         // `hgvs_transcript` sets (`TranscriptVariationAllele.pm:1447`), since
         // `hgvs_protein` drops the shift it made (`:1796`), so without `hgvsc`
         // switched on no entry carries the key.
@@ -242,6 +319,35 @@ impl Fields {
             hgvs,
             hgvsg,
             spdi,
+        }
+    }
+
+    /// The consequence entries whose `hgvsc` the output writes: every entry
+    /// where the keys read hold `hgvsc` (271, read at 468), the MANE Select
+    /// entries alone where `mane_select` writes their triples without it
+    /// (439-463), and none otherwise. A field named `hgvs` switches the
+    /// notation on and reads a key no entry carries.
+    fn hgvsc_rows(&self) -> NotationRows {
+        self.rows_of("hgvsc")
+    }
+
+    /// The consequence entries whose `hgvsg` the output writes, settled as
+    /// [`Self::hgvsc_rows`] settles those of `hgvsc`: every entry where the
+    /// keys read hold `hgvsg`, the MANE Select entries alone where
+    /// `mane_select` writes their triples without it, and none otherwise.
+    fn hgvsg_rows(&self) -> NotationRows {
+        self.rows_of("hgvsg")
+    }
+
+    /// The consequence entries whose `key` the output writes, `key` being a
+    /// notation of the `mane_select` triple.
+    fn rows_of(&self, key: &str) -> NotationRows {
+        if self.want.contains(key) {
+            NotationRows::Every
+        } else if self.mane_select {
+            NotationRows::ManeSelect
+        } else {
+            NotationRows::None
         }
     }
 }
@@ -370,9 +476,19 @@ fn inner_config(
             ..config
         }),
         Err(ParseFailure::Refused(refusal)) => Err(refusal),
-        Err(ParseFailure::Usage(usage)) => Err(error(format!(
-            "the annotation run refused its arguments: {usage}"
-        ))),
+        // The tool's own parser holds a value to the list the annotation run's
+        // parser declares, and each value is handed on joined to its option, so
+        // this arm is for arguments built in code, which can carry a value
+        // outside a list: the refusal is the first line of the parser's text,
+        // which names the value.
+        Err(ParseFailure::Usage(usage)) => {
+            let text = usage.to_string();
+            let named = text.lines().next().unwrap_or_default();
+            Err(error(format!(
+                "the annotation run refused its arguments: {}",
+                named.strip_prefix("error: ").unwrap_or(named)
+            )))
+        }
     }
 }
 
@@ -442,7 +558,11 @@ fn named_merged_cache(config: &Config) -> Option<MergedCache> {
 
 /// The annotation run's command line: the forced configuration (96-129), the
 /// flags the fields need, `--merged` when `merged`, `--assembly` as given or
-/// else as `assembly`, and the other options forwarded as given.
+/// else as `assembly`, and the other options forwarded as given. Each value is
+/// handed on joined to its option (`--option=value`), so the run's parser
+/// reads it as that option's value whatever its first characters are: a
+/// transcript filter, an input or a path that begins with a hyphen names no
+/// option of the run.
 fn inner_argv(
     args: &RecodeArgs,
     fields: &Fields,
@@ -457,11 +577,9 @@ fn inner_argv(
         "--hgvsg_use_accession".into(),
         "--no_stats".into(),
         "--quiet".into(),
-        "--distance".into(),
-        "0".into(),
+        "--distance=0".into(),
         "--force_overwrite".into(),
-        "--output_file".into(),
-        output.to_string_lossy().into_owned(),
+        format!("--output_file={}", output.to_string_lossy()),
     ];
     let mut push_switch = |flag: &str, on: bool| {
         if on {
@@ -500,21 +618,17 @@ fn inner_argv(
     ];
     for (flag, value) in valued {
         if let Some(value) = value {
-            argv.push(format!("--{flag}"));
-            argv.push(value.to_string());
+            argv.push(format!("--{flag}={value}"));
         }
     }
     if let Some(version) = args.cache_version {
-        argv.push("--cache_version".into());
-        argv.push(version.to_string());
+        argv.push(format!("--cache_version={version}"));
     }
     if let Some(size) = args.buffer_size {
-        argv.push("--buffer_size".into());
-        argv.push(size.to_string());
+        argv.push(format!("--buffer_size={size}"));
     }
     for filter in &args.transcript_filter {
-        argv.push("--transcript_filter".into());
-        argv.push(filter.clone());
+        argv.push(format!("--transcript_filter={filter}"));
     }
     argv.into_iter().map(OsString::from).collect()
 }
@@ -526,6 +640,9 @@ fn inner_argv(
 struct Lookups {
     reference: Option<Arc<vep_fasta::IndexedFasta>>,
     variations: Option<VariationSource>,
+    /// The cache's directory where the fields read known variants and the
+    /// cache holds no variation data.
+    no_variation_data_under: Option<String>,
     synonyms: Arc<ChromosomeSynonyms>,
     /// The co-location rules of the run: alleles checked, null alleles kept,
     /// `--failed` as given (the recoder's default includes failed variants).
@@ -545,6 +662,7 @@ impl Lookups {
             return Ok(Lookups {
                 reference: None,
                 variations: None,
+                no_variation_data_under: None,
                 synonyms: Arc::new(ChromosomeSynonyms::default()),
                 rules,
                 #[cfg(test)]
@@ -569,14 +687,35 @@ impl Lookups {
         } else {
             None
         };
+        let reads_known_variants = fields.var_synonyms || fields.id;
+        let no_variation_data_under =
+            (reads_known_variants && variations.is_none()).then(|| cache.dir.clone());
         Ok(Lookups {
             reference,
             variations,
+            no_variation_data_under,
             synonyms: Arc::clone(&cache.synonyms),
             rules,
             #[cfg(test)]
             rows: Vec::new(),
         })
+    }
+
+    /// The line of a run whose fields read known variants over a cache
+    /// without variation data, naming those fields
+    /// (`cache_left_out::no_variation_data_recode_notice`): the tool opens
+    /// the variation files itself and its annotation run, which never asks
+    /// for known variants, raises no warning there. `None` over a cache that
+    /// holds variation data and in a run whose fields read none.
+    fn no_variation_data_notice(&self, fields: &Fields) -> Option<String> {
+        let cache_dir = self.no_variation_data_under.as_deref()?;
+        let read: Vec<&str> = [("id", fields.id), ("var_synonyms", fields.var_synonyms)]
+            .into_iter()
+            .filter_map(|(field, read)| read.then_some(field))
+            .collect();
+        Some(cache_left_out::no_variation_data_recode_notice(
+            &read, cache_dir,
+        ))
     }
 
     /// The cache's variation rows a database-backed Ensembl VEP reads for the
@@ -637,16 +776,25 @@ impl Lookups {
     }
 }
 
-/// The `var_synonyms` column of the row of `rows` named `id` in any case, the
-/// cache's spelling of a name the input or a co-located variant gave, as
+/// The `var_synonyms` column of the row of `rows` named `id`, as
 /// [`written_synonyms`](vep_core::variant::written_synonyms) reads it; none
-/// for an empty name.
+/// for an empty name. The row is the one spelled as `id` is, else the first
+/// named `id` in another case, the cache's spelling of a name the input gave.
+/// The recoder fetches the variant by `v.name = ?` (`VariationAdaptor.pm:544`
+/// of ensembl-variation, from 427 and `Parser/ID.pm:162`) over a column that
+/// holds each name once (`sql/table.sql:77`): a database that compares names
+/// without regard to case holds one row for the name, and one that holds two
+/// spellings of it returns the row spelled as asked.
 fn synonyms_of(rows: &[CachedVariation], id: &str) -> Option<String> {
     if id.is_empty() {
         return None;
     }
     rows.iter()
-        .find(|row| row.variation_name.eq_ignore_ascii_case(id))
+        .find(|row| row.variation_name == id)
+        .or_else(|| {
+            rows.iter()
+                .find(|row| row.variation_name.eq_ignore_ascii_case(id))
+        })
         .and_then(|row| vep_core::variant::written_synonyms(row.var_synonyms.as_deref()))
         .map(str::to_string)
 }
@@ -1504,10 +1652,64 @@ mod tests {
         assert!(fields.var_synonyms && !fields.want.contains("var_synonyms"));
     }
 
-    /// `--fields hgvs_offset` switches no HGVS notation on: Ensembl VEP 116.2
+    /// The notice has four forms: the clause on the transcript set stands for
+    /// a cache read as the Ensembl set alone, and the synonyms are named where
+    /// `var_synonyms` is written alone.
+    #[test]
+    fn notice_names_the_set_read_and_the_synonyms_written() {
+        let set = "this cache is read as the Ensembl transcript set, and RefSeq notation is \
+                   written from a merged cache; ";
+        let lrg = "no variant is mapped to an LRG, which needs the Ensembl database";
+        let lrg_and_synonyms = "no variant is mapped to an LRG and no Archive dbSNP synonym is \
+                                written, which need the Ensembl database";
+        assert_eq!(notice(false, false), format!("INFO: {set}{lrg}"));
+        assert_eq!(
+            notice(false, true),
+            format!("INFO: {set}{lrg_and_synonyms}")
+        );
+        assert_eq!(notice(true, false), format!("INFO: {lrg}"));
+        assert_eq!(notice(true, true), format!("INFO: {lrg_and_synonyms}"));
+    }
+
+    /// The line of a cache without variation data is drawn where the tool
+    /// found none for fields that read known variants, naming `id`,
+    /// `var_synonyms` or both as the fields are settled; a run that found the
+    /// data, or whose fields read none, draws no line.
+    #[test]
+    fn the_line_of_a_cache_without_variation_data_names_the_fields_that_read_it() {
+        let lookups = |under: Option<&str>| Lookups {
+            reference: None,
+            variations: None,
+            no_variation_data_under: under.map(str::to_string),
+            synonyms: Arc::new(ChromosomeSynonyms::default()),
+            rules: ColocationRules::default(),
+            rows: Vec::new(),
+        };
+        let line = |fields: &[&str]| {
+            Some(cache_left_out::no_variation_data_recode_notice(
+                fields, "/c",
+            ))
+        };
+        let id = Fields::settle(&args(&["--id", "rs699", "--fields", "id"]));
+        let both = Fields::settle(&args(&["--id", "rs699", "--var_synonyms"]));
+        let synonyms = Fields::settle(&args(&["--id", "rs699", "--fields", "var_synonyms"]));
+        let without = lookups(Some("/c"));
+        assert_eq!(without.no_variation_data_notice(&id), line(&["id"]));
+        assert_eq!(
+            without.no_variation_data_notice(&both),
+            line(&["id", "var_synonyms"])
+        );
+        assert_eq!(
+            without.no_variation_data_notice(&synonyms),
+            line(&["var_synonyms"])
+        );
+        assert_eq!(lookups(None).no_variation_data_notice(&both), None);
+    }
+
+    /// `--fields hgvs_offset` switches no HGVS notation on: Ensembl VEP 116.3
     /// sets the configuration key of each field starting with `hgvs`
     /// (`VariantRecoder.pm:120`), and the output reads `hgvsc` and `hgvsp`
-    /// alone (`OutputFactory.pm:1750`, `:1758`), so `hgvs_offset` names a key
+    /// alone (`OutputFactory.pm:1759`, `:1767`), so `hgvs_offset` names a key
     /// nothing reads, while `hgvs` sets both (`Config.pm:383-386`). The key is
     /// wanted only beside `hgvsc`: the protein branch reads an offset only
     /// `hgvs_transcript` sets (`TranscriptVariationAllele.pm:1447`, `:1796`).
@@ -1534,6 +1736,40 @@ mod tests {
             "--mane_select",
         ]));
         assert!(fields.want.contains("hgvs_offset"));
+    }
+
+    /// The entries whose `hgvsc` the output writes follow the keys read, not
+    /// the HGVS flag: every entry under the default fields and under `hgvsc`,
+    /// with `--mane_select` as without; none under `hgvsp`, under `hgvs`,
+    /// which is a key no entry carries, and under fields that need no HGVS
+    /// flag; and the MANE Select entries alone where `--mane_select` writes
+    /// its triples beside fields without `hgvsc`.
+    #[test]
+    fn fields_settle_the_entries_whose_hgvsc_is_written() {
+        let rows = |more: &[&str]| {
+            Fields::settle(&args(&[&["--id", "rs699"][..], more].concat())).hgvsc_rows()
+        };
+        assert_eq!(rows(&[]), NotationRows::Every);
+        assert_eq!(rows(&["--fields", "hgvsc"]), NotationRows::Every);
+        assert_eq!(rows(&["--fields", "id,hgvsc,hgvsp"]), NotationRows::Every);
+        assert_eq!(
+            rows(&["--fields", "hgvsc", "--mane_select"]),
+            NotationRows::Every
+        );
+        for fields in [
+            "hgvsp",
+            "hgvs",
+            "hgvs,hgvs_offset",
+            "id,hgvsp,spdi",
+            "hgvsg",
+        ] {
+            assert_eq!(rows(&["--fields", fields]), NotationRows::None, "{fields}");
+            assert_eq!(
+                rows(&["--fields", fields, "--mane_select"]),
+                NotationRows::ManeSelect,
+                "{fields}"
+            );
+        }
     }
 
     /// `find_in_ref` collects a wanted key's scalars from an entry, from a
@@ -1612,7 +1848,7 @@ mod tests {
     /// `ga4gh_vrs_from_spdi` writes the interval start as the SPDI's text and
     /// the end as a number, the deleted length from the sequence or the count,
     /// and nothing for an SPDI not on an `NC_` accession or not in SPDI form,
-    /// as Ensembl VEP 116.2 returns the empty list for them
+    /// as Ensembl VEP 116.3 returns the empty list for them
     /// (`Variation/Utils/Sequence.pm:1433-1434`, `:1438`).
     #[test]
     fn ga4gh_vrs_follows_the_spdi_and_is_nothing_off_an_nc_accession() {
@@ -1647,6 +1883,7 @@ mod tests {
         let lookups = Lookups {
             reference: None,
             variations: None,
+            no_variation_data_under: None,
             synonyms: Arc::new(ChromosomeSynonyms::parse(
                 "21\tNC_000021\n21\tNC_000021.8\nNC_000021\tNC_000021.8\n",
             )),
@@ -1671,6 +1908,7 @@ mod tests {
         let lookups = Lookups {
             reference: None,
             variations: None,
+            no_variation_data_under: None,
             synonyms: Arc::new(ChromosomeSynonyms::parse(
                 "21\tNC_000021.7\n21\tNC_000021.8\nNC_000021.7\tNC_000021.8\n",
             )),
@@ -1688,7 +1926,7 @@ mod tests {
 
     /// An allele whose SPDI stays on a chromosome name with no `NC_` synonym
     /// carries `ga4gh_vrs` as an empty list, and an allele with no SPDI carries
-    /// no key: Ensembl VEP 116.2 skips an allele without `spdi` and pushes
+    /// no key: Ensembl VEP 116.3 skips an allele without `spdi` and pushes
     /// the empty list `ga4gh_vrs_from_spdi` returns for the SPDI onto the list
     /// the push itself makes (`VariantRecoder.pm:476-479`).
     #[test]
@@ -1755,6 +1993,7 @@ mod tests {
         let lookups = Lookups {
             reference: None,
             variations: None,
+            no_variation_data_under: None,
             synonyms: Arc::new(synonyms),
             rules: ColocationRules {
                 failed: 1,
@@ -1767,15 +2006,14 @@ mod tests {
 
     /// A cache variation row of chromosome 21.
     fn row(name: &str, start: u64, end: u64, allele_string: &str) -> CachedVariation {
-        CachedVariation {
-            chr: Some("21".to_string()),
-            variation_name: name.to_string(),
-            start,
-            end,
-            allele_string: allele_string.to_string(),
-            strand: 1,
-            ..CachedVariation::default()
-        }
+        let mut variation = CachedVariation::default();
+        variation.chr = Some("21".to_string());
+        variation.variation_name = name.to_string();
+        variation.start = start;
+        variation.end = end;
+        variation.allele_string = allele_string.to_string();
+        variation.strand = 1;
+        variation
     }
 
     fn id_fields() -> Fields {
@@ -1957,13 +2195,11 @@ mod tests {
         };
         write_region(1, 1_000_000, "rs_before   1000000 1000002 GAC/GA");
         write_region(1_000_001, 2_000_000, "rs_here   1000001 1000002 AC/A");
-        let info = vep_core::cache_info::CacheInfo {
-            variation_cols: "variation_name,failed,somatic,start,end,allele_string,strand"
-                .split(',')
-                .map(str::to_string)
-                .collect(),
-            ..Default::default()
-        };
+        let mut info = vep_core::cache_info::CacheInfo::default();
+        info.variation_cols = "variation_name,failed,somatic,start,end,allele_string,strand"
+            .split(',')
+            .map(str::to_string)
+            .collect();
         let manifest = vep_core::cache_manifest::CacheManifest::absent(cache.path());
         let source = VariationSource::open(cache.path(), &info, false, Arc::new(manifest))
             .unwrap()
@@ -1989,6 +2225,7 @@ mod tests {
         let lookups = Lookups {
             reference: None,
             variations: Some(source),
+            no_variation_data_under: None,
             synonyms: Arc::new(ChromosomeSynonyms::default()),
             rules: ColocationRules {
                 failed: 1,
@@ -2063,6 +2300,7 @@ mod tests {
         let lookups = Lookups {
             reference: None,
             variations: None,
+            no_variation_data_under: None,
             synonyms: Arc::new(ChromosomeSynonyms::default()),
             rules: ColocationRules::default(),
             rows: Vec::new(),
@@ -2088,6 +2326,7 @@ mod tests {
         let lookups = Lookups {
             reference: None,
             variations: None,
+            no_variation_data_under: None,
             synonyms: Arc::new(ChromosomeSynonyms::default()),
             rules: ColocationRules::default(),
             rows: Vec::new(),
@@ -2219,6 +2458,83 @@ mod tests {
         assert_eq!(
             String::from_utf8(compact).unwrap(),
             "[{\"T\":{\"id\":[\"rs1\"],\"input\":\"rs1\",\"n\":[]}}]"
+        );
+    }
+
+    /// The input of a run, given as a string.
+    fn staged(data: &str) -> StagedInput {
+        StagedInput {
+            input_file: None,
+            input_data: Some(data.to_string()),
+            _stdin_copy: None,
+        }
+    }
+
+    /// Each value reaches the annotation run joined to its option, so that
+    /// run's parser takes a value that begins with a hyphen as the value it
+    /// is: the input, the species, a transcript filter and the output path.
+    #[test]
+    fn values_reach_the_annotation_run_joined_to_their_options() {
+        let args = args(&[
+            "--id=--help",
+            "--species=-s",
+            "--transcript_filter",
+            "-x is 1",
+            "--cache_version",
+            "116",
+            "--buffer_size",
+            "2",
+        ]);
+        let fields = Fields::settle(&args);
+        let input = staged("--help");
+        let output = Path::new("-out.json");
+        let argv: Vec<String> = inner_argv(&args, &fields, &input, output, false, None)
+            .iter()
+            .map(|token| token.to_string_lossy().into_owned())
+            .collect();
+        for joined in [
+            "--distance=0",
+            "--output_file=-out.json",
+            "--input_data=--help",
+            "--species=-s",
+            "--cache_version=116",
+            "--buffer_size=2",
+            "--transcript_filter=-x is 1",
+        ] {
+            assert!(
+                argv.iter().any(|token| token == joined),
+                "{joined}: {argv:?}"
+            );
+        }
+        let config = inner_config(&args, &fields, &input, output, false, None).unwrap();
+        assert_eq!(config.input_data.as_deref(), Some("--help"));
+        assert_eq!(config.species, "-s");
+        assert_eq!(config.transcript_filter, ["-x is 1"]);
+        assert_eq!(config.output_file, "-out.json");
+        assert_eq!(config.buffer_size, 2);
+    }
+
+    /// Arguments built in code can carry a value outside its option's list,
+    /// which the tool's own parser refuses on a command line: the annotation
+    /// run's refusal of it is one line that names the value.
+    #[test]
+    fn a_value_set_in_code_that_the_annotation_run_refuses_is_refused_in_one_line() {
+        let mut args = args(&["--id", "rs699"]);
+        args.format = Some("foo".to_string());
+        let fields = Fields::settle(&args);
+        let refusal = inner_config(
+            &args,
+            &fields,
+            &staged("rs699"),
+            Path::new("out.json"),
+            false,
+            None,
+        )
+        .unwrap_err();
+        assert_eq!(
+            refusal.to_string(),
+            "ERROR: [recode] the annotation run refused its arguments: invalid value 'foo' for \
+             '--format <FORMAT>'"
         );
     }
 }

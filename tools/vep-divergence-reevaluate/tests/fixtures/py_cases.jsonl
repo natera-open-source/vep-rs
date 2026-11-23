@@ -1,0 +1,574 @@
+{"kind":"str","s":"\u0000","repr":"'\\x00'","strip":"\u0000","rstrip":"\u0000","lstrip":"\u0000","splitlines":["\u0000"],"quote":"'\u0000'","isspace":false}
+{"kind":"str","s":"\u0001","repr":"'\\x01'","strip":"\u0001","rstrip":"\u0001","lstrip":"\u0001","splitlines":["\u0001"],"quote":"'\u0001'","isspace":false}
+{"kind":"str","s":"\u0002","repr":"'\\x02'","strip":"\u0002","rstrip":"\u0002","lstrip":"\u0002","splitlines":["\u0002"],"quote":"'\u0002'","isspace":false}
+{"kind":"str","s":"\u0003","repr":"'\\x03'","strip":"\u0003","rstrip":"\u0003","lstrip":"\u0003","splitlines":["\u0003"],"quote":"'\u0003'","isspace":false}
+{"kind":"str","s":"\u0004","repr":"'\\x04'","strip":"\u0004","rstrip":"\u0004","lstrip":"\u0004","splitlines":["\u0004"],"quote":"'\u0004'","isspace":false}
+{"kind":"str","s":"\u0005","repr":"'\\x05'","strip":"\u0005","rstrip":"\u0005","lstrip":"\u0005","splitlines":["\u0005"],"quote":"'\u0005'","isspace":false}
+{"kind":"str","s":"\u0006","repr":"'\\x06'","strip":"\u0006","rstrip":"\u0006","lstrip":"\u0006","splitlines":["\u0006"],"quote":"'\u0006'","isspace":false}
+{"kind":"str","s":"\u0007","repr":"'\\x07'","strip":"\u0007","rstrip":"\u0007","lstrip":"\u0007","splitlines":["\u0007"],"quote":"'\u0007'","isspace":false}
+{"kind":"str","s":"\b","repr":"'\\x08'","strip":"\b","rstrip":"\b","lstrip":"\b","splitlines":["\b"],"quote":"'\b'","isspace":false}
+{"kind":"str","s":"\t","repr":"'\\t'","strip":"","rstrip":"","lstrip":"","splitlines":["\t"],"quote":"'\t'","isspace":true}
+{"kind":"str","s":"\n","repr":"'\\n'","strip":"","rstrip":"","lstrip":"","splitlines":[""],"quote":"'\n'","isspace":true}
+{"kind":"str","s":"\u000b","repr":"'\\x0b'","strip":"","rstrip":"","lstrip":"","splitlines":[""],"quote":"'\u000b'","isspace":true}
+{"kind":"str","s":"\f","repr":"'\\x0c'","strip":"","rstrip":"","lstrip":"","splitlines":[""],"quote":"'\f'","isspace":true}
+{"kind":"str","s":"\r","repr":"'\\r'","strip":"","rstrip":"","lstrip":"","splitlines":[""],"quote":"'\r'","isspace":true}
+{"kind":"str","s":"\u000e","repr":"'\\x0e'","strip":"\u000e","rstrip":"\u000e","lstrip":"\u000e","splitlines":["\u000e"],"quote":"'\u000e'","isspace":false}
+{"kind":"str","s":"\u000f","repr":"'\\x0f'","strip":"\u000f","rstrip":"\u000f","lstrip":"\u000f","splitlines":["\u000f"],"quote":"'\u000f'","isspace":false}
+{"kind":"str","s":"\u0010","repr":"'\\x10'","strip":"\u0010","rstrip":"\u0010","lstrip":"\u0010","splitlines":["\u0010"],"quote":"'\u0010'","isspace":false}
+{"kind":"str","s":"\u0011","repr":"'\\x11'","strip":"\u0011","rstrip":"\u0011","lstrip":"\u0011","splitlines":["\u0011"],"quote":"'\u0011'","isspace":false}
+{"kind":"str","s":"\u0012","repr":"'\\x12'","strip":"\u0012","rstrip":"\u0012","lstrip":"\u0012","splitlines":["\u0012"],"quote":"'\u0012'","isspace":false}
+{"kind":"str","s":"\u0013","repr":"'\\x13'","strip":"\u0013","rstrip":"\u0013","lstrip":"\u0013","splitlines":["\u0013"],"quote":"'\u0013'","isspace":false}
+{"kind":"str","s":"\u0014","repr":"'\\x14'","strip":"\u0014","rstrip":"\u0014","lstrip":"\u0014","splitlines":["\u0014"],"quote":"'\u0014'","isspace":false}
+{"kind":"str","s":"\u0015","repr":"'\\x15'","strip":"\u0015","rstrip":"\u0015","lstrip":"\u0015","splitlines":["\u0015"],"quote":"'\u0015'","isspace":false}
+{"kind":"str","s":"\u0016","repr":"'\\x16'","strip":"\u0016","rstrip":"\u0016","lstrip":"\u0016","splitlines":["\u0016"],"quote":"'\u0016'","isspace":false}
+{"kind":"str","s":"\u0017","repr":"'\\x17'","strip":"\u0017","rstrip":"\u0017","lstrip":"\u0017","splitlines":["\u0017"],"quote":"'\u0017'","isspace":false}
+{"kind":"str","s":"\u0018","repr":"'\\x18'","strip":"\u0018","rstrip":"\u0018","lstrip":"\u0018","splitlines":["\u0018"],"quote":"'\u0018'","isspace":false}
+{"kind":"str","s":"\u0019","repr":"'\\x19'","strip":"\u0019","rstrip":"\u0019","lstrip":"\u0019","splitlines":["\u0019"],"quote":"'\u0019'","isspace":false}
+{"kind":"str","s":"\u001a","repr":"'\\x1a'","strip":"\u001a","rstrip":"\u001a","lstrip":"\u001a","splitlines":["\u001a"],"quote":"'\u001a'","isspace":false}
+{"kind":"str","s":"\u001b","repr":"'\\x1b'","strip":"\u001b","rstrip":"\u001b","lstrip":"\u001b","splitlines":["\u001b"],"quote":"'\u001b'","isspace":false}
+{"kind":"str","s":"\u001c","repr":"'\\x1c'","strip":"","rstrip":"","lstrip":"","splitlines":[""],"quote":"'\u001c'","isspace":true}
+{"kind":"str","s":"\u001d","repr":"'\\x1d'","strip":"","rstrip":"","lstrip":"","splitlines":[""],"quote":"'\u001d'","isspace":true}
+{"kind":"str","s":"\u001e","repr":"'\\x1e'","strip":"","rstrip":"","lstrip":"","splitlines":[""],"quote":"'\u001e'","isspace":true}
+{"kind":"str","s":"\u001f","repr":"'\\x1f'","strip":"","rstrip":"","lstrip":"","splitlines":["\u001f"],"quote":"'\u001f'","isspace":true}
+{"kind":"str","s":" ","repr":"' '","strip":"","rstrip":"","lstrip":"","splitlines":[" "],"quote":"' '","isspace":true}
+{"kind":"str","s":"!","repr":"'!'","strip":"!","rstrip":"!","lstrip":"!","splitlines":["!"],"quote":"'!'","isspace":false}
+{"kind":"str","s":"\"","repr":"'\"'","strip":"\"","rstrip":"\"","lstrip":"\"","splitlines":["\""],"quote":"'\"'","isspace":false}
+{"kind":"str","s":"#","repr":"'#'","strip":"#","rstrip":"#","lstrip":"#","splitlines":["#"],"quote":"'#'","isspace":false}
+{"kind":"str","s":"$","repr":"'$'","strip":"$","rstrip":"$","lstrip":"$","splitlines":["$"],"quote":"'$'","isspace":false}
+{"kind":"str","s":"%","repr":"'%'","strip":"%","rstrip":"%","lstrip":"%","splitlines":["%"],"quote":"%","isspace":false}
+{"kind":"str","s":"&","repr":"'&'","strip":"&","rstrip":"&","lstrip":"&","splitlines":["&"],"quote":"'&'","isspace":false}
+{"kind":"str","s":"'","repr":"\"'\"","strip":"'","rstrip":"'","lstrip":"'","splitlines":["'"],"quote":"''\"'\"''","isspace":false}
+{"kind":"str","s":"(","repr":"'('","strip":"(","rstrip":"(","lstrip":"(","splitlines":["("],"quote":"'('","isspace":false}
+{"kind":"str","s":")","repr":"')'","strip":")","rstrip":")","lstrip":")","splitlines":[")"],"quote":"')'","isspace":false}
+{"kind":"str","s":"*","repr":"'*'","strip":"*","rstrip":"*","lstrip":"*","splitlines":["*"],"quote":"'*'","isspace":false}
+{"kind":"str","s":"+","repr":"'+'","strip":"+","rstrip":"+","lstrip":"+","splitlines":["+"],"quote":"+","isspace":false}
+{"kind":"str","s":",","repr":"','","strip":",","rstrip":",","lstrip":",","splitlines":[","],"quote":",","isspace":false}
+{"kind":"str","s":"-","repr":"'-'","strip":"-","rstrip":"-","lstrip":"-","splitlines":["-"],"quote":"-","isspace":false}
+{"kind":"str","s":".","repr":"'.'","strip":".","rstrip":".","lstrip":".","splitlines":["."],"quote":".","isspace":false}
+{"kind":"str","s":"/","repr":"'/'","strip":"/","rstrip":"/","lstrip":"/","splitlines":["/"],"quote":"/","isspace":false}
+{"kind":"str","s":"0","repr":"'0'","strip":"0","rstrip":"0","lstrip":"0","splitlines":["0"],"quote":"0","isspace":false}
+{"kind":"str","s":"1","repr":"'1'","strip":"1","rstrip":"1","lstrip":"1","splitlines":["1"],"quote":"1","isspace":false}
+{"kind":"str","s":"2","repr":"'2'","strip":"2","rstrip":"2","lstrip":"2","splitlines":["2"],"quote":"2","isspace":false}
+{"kind":"str","s":"3","repr":"'3'","strip":"3","rstrip":"3","lstrip":"3","splitlines":["3"],"quote":"3","isspace":false}
+{"kind":"str","s":"4","repr":"'4'","strip":"4","rstrip":"4","lstrip":"4","splitlines":["4"],"quote":"4","isspace":false}
+{"kind":"str","s":"5","repr":"'5'","strip":"5","rstrip":"5","lstrip":"5","splitlines":["5"],"quote":"5","isspace":false}
+{"kind":"str","s":"6","repr":"'6'","strip":"6","rstrip":"6","lstrip":"6","splitlines":["6"],"quote":"6","isspace":false}
+{"kind":"str","s":"7","repr":"'7'","strip":"7","rstrip":"7","lstrip":"7","splitlines":["7"],"quote":"7","isspace":false}
+{"kind":"str","s":"8","repr":"'8'","strip":"8","rstrip":"8","lstrip":"8","splitlines":["8"],"quote":"8","isspace":false}
+{"kind":"str","s":"9","repr":"'9'","strip":"9","rstrip":"9","lstrip":"9","splitlines":["9"],"quote":"9","isspace":false}
+{"kind":"str","s":":","repr":"':'","strip":":","rstrip":":","lstrip":":","splitlines":[":"],"quote":":","isspace":false}
+{"kind":"str","s":";","repr":"';'","strip":";","rstrip":";","lstrip":";","splitlines":[";"],"quote":"';'","isspace":false}
+{"kind":"str","s":"<","repr":"'<'","strip":"<","rstrip":"<","lstrip":"<","splitlines":["<"],"quote":"'<'","isspace":false}
+{"kind":"str","s":"=","repr":"'='","strip":"=","rstrip":"=","lstrip":"=","splitlines":["="],"quote":"=","isspace":false}
+{"kind":"str","s":">","repr":"'>'","strip":">","rstrip":">","lstrip":">","splitlines":[">"],"quote":"'>'","isspace":false}
+{"kind":"str","s":"?","repr":"'?'","strip":"?","rstrip":"?","lstrip":"?","splitlines":["?"],"quote":"'?'","isspace":false}
+{"kind":"str","s":"@","repr":"'@'","strip":"@","rstrip":"@","lstrip":"@","splitlines":["@"],"quote":"@","isspace":false}
+{"kind":"str","s":"A","repr":"'A'","strip":"A","rstrip":"A","lstrip":"A","splitlines":["A"],"quote":"A","isspace":false}
+{"kind":"str","s":"B","repr":"'B'","strip":"B","rstrip":"B","lstrip":"B","splitlines":["B"],"quote":"B","isspace":false}
+{"kind":"str","s":"C","repr":"'C'","strip":"C","rstrip":"C","lstrip":"C","splitlines":["C"],"quote":"C","isspace":false}
+{"kind":"str","s":"D","repr":"'D'","strip":"D","rstrip":"D","lstrip":"D","splitlines":["D"],"quote":"D","isspace":false}
+{"kind":"str","s":"E","repr":"'E'","strip":"E","rstrip":"E","lstrip":"E","splitlines":["E"],"quote":"E","isspace":false}
+{"kind":"str","s":"F","repr":"'F'","strip":"F","rstrip":"F","lstrip":"F","splitlines":["F"],"quote":"F","isspace":false}
+{"kind":"str","s":"G","repr":"'G'","strip":"G","rstrip":"G","lstrip":"G","splitlines":["G"],"quote":"G","isspace":false}
+{"kind":"str","s":"H","repr":"'H'","strip":"H","rstrip":"H","lstrip":"H","splitlines":["H"],"quote":"H","isspace":false}
+{"kind":"str","s":"I","repr":"'I'","strip":"I","rstrip":"I","lstrip":"I","splitlines":["I"],"quote":"I","isspace":false}
+{"kind":"str","s":"J","repr":"'J'","strip":"J","rstrip":"J","lstrip":"J","splitlines":["J"],"quote":"J","isspace":false}
+{"kind":"str","s":"K","repr":"'K'","strip":"K","rstrip":"K","lstrip":"K","splitlines":["K"],"quote":"K","isspace":false}
+{"kind":"str","s":"L","repr":"'L'","strip":"L","rstrip":"L","lstrip":"L","splitlines":["L"],"quote":"L","isspace":false}
+{"kind":"str","s":"M","repr":"'M'","strip":"M","rstrip":"M","lstrip":"M","splitlines":["M"],"quote":"M","isspace":false}
+{"kind":"str","s":"N","repr":"'N'","strip":"N","rstrip":"N","lstrip":"N","splitlines":["N"],"quote":"N","isspace":false}
+{"kind":"str","s":"O","repr":"'O'","strip":"O","rstrip":"O","lstrip":"O","splitlines":["O"],"quote":"O","isspace":false}
+{"kind":"str","s":"P","repr":"'P'","strip":"P","rstrip":"P","lstrip":"P","splitlines":["P"],"quote":"P","isspace":false}
+{"kind":"str","s":"Q","repr":"'Q'","strip":"Q","rstrip":"Q","lstrip":"Q","splitlines":["Q"],"quote":"Q","isspace":false}
+{"kind":"str","s":"R","repr":"'R'","strip":"R","rstrip":"R","lstrip":"R","splitlines":["R"],"quote":"R","isspace":false}
+{"kind":"str","s":"S","repr":"'S'","strip":"S","rstrip":"S","lstrip":"S","splitlines":["S"],"quote":"S","isspace":false}
+{"kind":"str","s":"T","repr":"'T'","strip":"T","rstrip":"T","lstrip":"T","splitlines":["T"],"quote":"T","isspace":false}
+{"kind":"str","s":"U","repr":"'U'","strip":"U","rstrip":"U","lstrip":"U","splitlines":["U"],"quote":"U","isspace":false}
+{"kind":"str","s":"V","repr":"'V'","strip":"V","rstrip":"V","lstrip":"V","splitlines":["V"],"quote":"V","isspace":false}
+{"kind":"str","s":"W","repr":"'W'","strip":"W","rstrip":"W","lstrip":"W","splitlines":["W"],"quote":"W","isspace":false}
+{"kind":"str","s":"X","repr":"'X'","strip":"X","rstrip":"X","lstrip":"X","splitlines":["X"],"quote":"X","isspace":false}
+{"kind":"str","s":"Y","repr":"'Y'","strip":"Y","rstrip":"Y","lstrip":"Y","splitlines":["Y"],"quote":"Y","isspace":false}
+{"kind":"str","s":"Z","repr":"'Z'","strip":"Z","rstrip":"Z","lstrip":"Z","splitlines":["Z"],"quote":"Z","isspace":false}
+{"kind":"str","s":"[","repr":"'['","strip":"[","rstrip":"[","lstrip":"[","splitlines":["["],"quote":"'['","isspace":false}
+{"kind":"str","s":"\\","repr":"'\\\\'","strip":"\\","rstrip":"\\","lstrip":"\\","splitlines":["\\"],"quote":"'\\'","isspace":false}
+{"kind":"str","s":"]","repr":"']'","strip":"]","rstrip":"]","lstrip":"]","splitlines":["]"],"quote":"']'","isspace":false}
+{"kind":"str","s":"^","repr":"'^'","strip":"^","rstrip":"^","lstrip":"^","splitlines":["^"],"quote":"'^'","isspace":false}
+{"kind":"str","s":"_","repr":"'_'","strip":"_","rstrip":"_","lstrip":"_","splitlines":["_"],"quote":"_","isspace":false}
+{"kind":"str","s":"`","repr":"'`'","strip":"`","rstrip":"`","lstrip":"`","splitlines":["`"],"quote":"'`'","isspace":false}
+{"kind":"str","s":"a","repr":"'a'","strip":"a","rstrip":"a","lstrip":"a","splitlines":["a"],"quote":"a","isspace":false}
+{"kind":"str","s":"b","repr":"'b'","strip":"b","rstrip":"b","lstrip":"b","splitlines":["b"],"quote":"b","isspace":false}
+{"kind":"str","s":"c","repr":"'c'","strip":"c","rstrip":"c","lstrip":"c","splitlines":["c"],"quote":"c","isspace":false}
+{"kind":"str","s":"d","repr":"'d'","strip":"d","rstrip":"d","lstrip":"d","splitlines":["d"],"quote":"d","isspace":false}
+{"kind":"str","s":"e","repr":"'e'","strip":"e","rstrip":"e","lstrip":"e","splitlines":["e"],"quote":"e","isspace":false}
+{"kind":"str","s":"f","repr":"'f'","strip":"f","rstrip":"f","lstrip":"f","splitlines":["f"],"quote":"f","isspace":false}
+{"kind":"str","s":"g","repr":"'g'","strip":"g","rstrip":"g","lstrip":"g","splitlines":["g"],"quote":"g","isspace":false}
+{"kind":"str","s":"h","repr":"'h'","strip":"h","rstrip":"h","lstrip":"h","splitlines":["h"],"quote":"h","isspace":false}
+{"kind":"str","s":"i","repr":"'i'","strip":"i","rstrip":"i","lstrip":"i","splitlines":["i"],"quote":"i","isspace":false}
+{"kind":"str","s":"j","repr":"'j'","strip":"j","rstrip":"j","lstrip":"j","splitlines":["j"],"quote":"j","isspace":false}
+{"kind":"str","s":"k","repr":"'k'","strip":"k","rstrip":"k","lstrip":"k","splitlines":["k"],"quote":"k","isspace":false}
+{"kind":"str","s":"l","repr":"'l'","strip":"l","rstrip":"l","lstrip":"l","splitlines":["l"],"quote":"l","isspace":false}
+{"kind":"str","s":"m","repr":"'m'","strip":"m","rstrip":"m","lstrip":"m","splitlines":["m"],"quote":"m","isspace":false}
+{"kind":"str","s":"n","repr":"'n'","strip":"n","rstrip":"n","lstrip":"n","splitlines":["n"],"quote":"n","isspace":false}
+{"kind":"str","s":"o","repr":"'o'","strip":"o","rstrip":"o","lstrip":"o","splitlines":["o"],"quote":"o","isspace":false}
+{"kind":"str","s":"p","repr":"'p'","strip":"p","rstrip":"p","lstrip":"p","splitlines":["p"],"quote":"p","isspace":false}
+{"kind":"str","s":"q","repr":"'q'","strip":"q","rstrip":"q","lstrip":"q","splitlines":["q"],"quote":"q","isspace":false}
+{"kind":"str","s":"r","repr":"'r'","strip":"r","rstrip":"r","lstrip":"r","splitlines":["r"],"quote":"r","isspace":false}
+{"kind":"str","s":"s","repr":"'s'","strip":"s","rstrip":"s","lstrip":"s","splitlines":["s"],"quote":"s","isspace":false}
+{"kind":"str","s":"t","repr":"'t'","strip":"t","rstrip":"t","lstrip":"t","splitlines":["t"],"quote":"t","isspace":false}
+{"kind":"str","s":"u","repr":"'u'","strip":"u","rstrip":"u","lstrip":"u","splitlines":["u"],"quote":"u","isspace":false}
+{"kind":"str","s":"v","repr":"'v'","strip":"v","rstrip":"v","lstrip":"v","splitlines":["v"],"quote":"v","isspace":false}
+{"kind":"str","s":"w","repr":"'w'","strip":"w","rstrip":"w","lstrip":"w","splitlines":["w"],"quote":"w","isspace":false}
+{"kind":"str","s":"x","repr":"'x'","strip":"x","rstrip":"x","lstrip":"x","splitlines":["x"],"quote":"x","isspace":false}
+{"kind":"str","s":"y","repr":"'y'","strip":"y","rstrip":"y","lstrip":"y","splitlines":["y"],"quote":"y","isspace":false}
+{"kind":"str","s":"z","repr":"'z'","strip":"z","rstrip":"z","lstrip":"z","splitlines":["z"],"quote":"z","isspace":false}
+{"kind":"str","s":"{","repr":"'{'","strip":"{","rstrip":"{","lstrip":"{","splitlines":["{"],"quote":"'{'","isspace":false}
+{"kind":"str","s":"|","repr":"'|'","strip":"|","rstrip":"|","lstrip":"|","splitlines":["|"],"quote":"'|'","isspace":false}
+{"kind":"str","s":"}","repr":"'}'","strip":"}","rstrip":"}","lstrip":"}","splitlines":["}"],"quote":"'}'","isspace":false}
+{"kind":"str","s":"~","repr":"'~'","strip":"~","rstrip":"~","lstrip":"~","splitlines":["~"],"quote":"'~'","isspace":false}
+{"kind":"str","s":"\u007f","repr":"'\\x7f'","strip":"\u007f","rstrip":"\u007f","lstrip":"\u007f","splitlines":["\u007f"],"quote":"'\u007f'","isspace":false}
+{"kind":"str","s":"\u0080","repr":"'\\x80'","strip":"\u0080","rstrip":"\u0080","lstrip":"\u0080","splitlines":["\u0080"],"quote":"'\u0080'","isspace":false}
+{"kind":"str","s":"\u0081","repr":"'\\x81'","strip":"\u0081","rstrip":"\u0081","lstrip":"\u0081","splitlines":["\u0081"],"quote":"'\u0081'","isspace":false}
+{"kind":"str","s":"\u0082","repr":"'\\x82'","strip":"\u0082","rstrip":"\u0082","lstrip":"\u0082","splitlines":["\u0082"],"quote":"'\u0082'","isspace":false}
+{"kind":"str","s":"\u0083","repr":"'\\x83'","strip":"\u0083","rstrip":"\u0083","lstrip":"\u0083","splitlines":["\u0083"],"quote":"'\u0083'","isspace":false}
+{"kind":"str","s":"\u0084","repr":"'\\x84'","strip":"\u0084","rstrip":"\u0084","lstrip":"\u0084","splitlines":["\u0084"],"quote":"'\u0084'","isspace":false}
+{"kind":"str","s":"\u0085","repr":"'\\x85'","strip":"","rstrip":"","lstrip":"","splitlines":[""],"quote":"'\u0085'","isspace":true}
+{"kind":"str","s":"\u0086","repr":"'\\x86'","strip":"\u0086","rstrip":"\u0086","lstrip":"\u0086","splitlines":["\u0086"],"quote":"'\u0086'","isspace":false}
+{"kind":"str","s":"\u0087","repr":"'\\x87'","strip":"\u0087","rstrip":"\u0087","lstrip":"\u0087","splitlines":["\u0087"],"quote":"'\u0087'","isspace":false}
+{"kind":"str","s":"\u0088","repr":"'\\x88'","strip":"\u0088","rstrip":"\u0088","lstrip":"\u0088","splitlines":["\u0088"],"quote":"'\u0088'","isspace":false}
+{"kind":"str","s":"\u0089","repr":"'\\x89'","strip":"\u0089","rstrip":"\u0089","lstrip":"\u0089","splitlines":["\u0089"],"quote":"'\u0089'","isspace":false}
+{"kind":"str","s":"\u008a","repr":"'\\x8a'","strip":"\u008a","rstrip":"\u008a","lstrip":"\u008a","splitlines":["\u008a"],"quote":"'\u008a'","isspace":false}
+{"kind":"str","s":"\u008b","repr":"'\\x8b'","strip":"\u008b","rstrip":"\u008b","lstrip":"\u008b","splitlines":["\u008b"],"quote":"'\u008b'","isspace":false}
+{"kind":"str","s":"\u008c","repr":"'\\x8c'","strip":"\u008c","rstrip":"\u008c","lstrip":"\u008c","splitlines":["\u008c"],"quote":"'\u008c'","isspace":false}
+{"kind":"str","s":"\u008d","repr":"'\\x8d'","strip":"\u008d","rstrip":"\u008d","lstrip":"\u008d","splitlines":["\u008d"],"quote":"'\u008d'","isspace":false}
+{"kind":"str","s":"\u008e","repr":"'\\x8e'","strip":"\u008e","rstrip":"\u008e","lstrip":"\u008e","splitlines":["\u008e"],"quote":"'\u008e'","isspace":false}
+{"kind":"str","s":"\u008f","repr":"'\\x8f'","strip":"\u008f","rstrip":"\u008f","lstrip":"\u008f","splitlines":["\u008f"],"quote":"'\u008f'","isspace":false}
+{"kind":"str","s":"\u0090","repr":"'\\x90'","strip":"\u0090","rstrip":"\u0090","lstrip":"\u0090","splitlines":["\u0090"],"quote":"'\u0090'","isspace":false}
+{"kind":"str","s":"\u0091","repr":"'\\x91'","strip":"\u0091","rstrip":"\u0091","lstrip":"\u0091","splitlines":["\u0091"],"quote":"'\u0091'","isspace":false}
+{"kind":"str","s":"\u0092","repr":"'\\x92'","strip":"\u0092","rstrip":"\u0092","lstrip":"\u0092","splitlines":["\u0092"],"quote":"'\u0092'","isspace":false}
+{"kind":"str","s":"\u0093","repr":"'\\x93'","strip":"\u0093","rstrip":"\u0093","lstrip":"\u0093","splitlines":["\u0093"],"quote":"'\u0093'","isspace":false}
+{"kind":"str","s":"\u0094","repr":"'\\x94'","strip":"\u0094","rstrip":"\u0094","lstrip":"\u0094","splitlines":["\u0094"],"quote":"'\u0094'","isspace":false}
+{"kind":"str","s":"\u0095","repr":"'\\x95'","strip":"\u0095","rstrip":"\u0095","lstrip":"\u0095","splitlines":["\u0095"],"quote":"'\u0095'","isspace":false}
+{"kind":"str","s":"\u0096","repr":"'\\x96'","strip":"\u0096","rstrip":"\u0096","lstrip":"\u0096","splitlines":["\u0096"],"quote":"'\u0096'","isspace":false}
+{"kind":"str","s":"\u0097","repr":"'\\x97'","strip":"\u0097","rstrip":"\u0097","lstrip":"\u0097","splitlines":["\u0097"],"quote":"'\u0097'","isspace":false}
+{"kind":"str","s":"\u0098","repr":"'\\x98'","strip":"\u0098","rstrip":"\u0098","lstrip":"\u0098","splitlines":["\u0098"],"quote":"'\u0098'","isspace":false}
+{"kind":"str","s":"\u0099","repr":"'\\x99'","strip":"\u0099","rstrip":"\u0099","lstrip":"\u0099","splitlines":["\u0099"],"quote":"'\u0099'","isspace":false}
+{"kind":"str","s":"\u009a","repr":"'\\x9a'","strip":"\u009a","rstrip":"\u009a","lstrip":"\u009a","splitlines":["\u009a"],"quote":"'\u009a'","isspace":false}
+{"kind":"str","s":"\u009b","repr":"'\\x9b'","strip":"\u009b","rstrip":"\u009b","lstrip":"\u009b","splitlines":["\u009b"],"quote":"'\u009b'","isspace":false}
+{"kind":"str","s":"\u009c","repr":"'\\x9c'","strip":"\u009c","rstrip":"\u009c","lstrip":"\u009c","splitlines":["\u009c"],"quote":"'\u009c'","isspace":false}
+{"kind":"str","s":"\u009d","repr":"'\\x9d'","strip":"\u009d","rstrip":"\u009d","lstrip":"\u009d","splitlines":["\u009d"],"quote":"'\u009d'","isspace":false}
+{"kind":"str","s":"\u009e","repr":"'\\x9e'","strip":"\u009e","rstrip":"\u009e","lstrip":"\u009e","splitlines":["\u009e"],"quote":"'\u009e'","isspace":false}
+{"kind":"str","s":"\u009f","repr":"'\\x9f'","strip":"\u009f","rstrip":"\u009f","lstrip":"\u009f","splitlines":["\u009f"],"quote":"'\u009f'","isspace":false}
+{"kind":"str","s":"\u00a0","repr":"'\\xa0'","strip":"","rstrip":"","lstrip":"","splitlines":["\u00a0"],"quote":"'\u00a0'","isspace":true}
+{"kind":"str","s":"\u00a1","repr":"'\u00a1'","strip":"\u00a1","rstrip":"\u00a1","lstrip":"\u00a1","splitlines":["\u00a1"],"quote":"'\u00a1'","isspace":false}
+{"kind":"str","s":"\u00a2","repr":"'\u00a2'","strip":"\u00a2","rstrip":"\u00a2","lstrip":"\u00a2","splitlines":["\u00a2"],"quote":"'\u00a2'","isspace":false}
+{"kind":"str","s":"\u00a3","repr":"'\u00a3'","strip":"\u00a3","rstrip":"\u00a3","lstrip":"\u00a3","splitlines":["\u00a3"],"quote":"'\u00a3'","isspace":false}
+{"kind":"str","s":"\u00a4","repr":"'\u00a4'","strip":"\u00a4","rstrip":"\u00a4","lstrip":"\u00a4","splitlines":["\u00a4"],"quote":"'\u00a4'","isspace":false}
+{"kind":"str","s":"\u00a5","repr":"'\u00a5'","strip":"\u00a5","rstrip":"\u00a5","lstrip":"\u00a5","splitlines":["\u00a5"],"quote":"'\u00a5'","isspace":false}
+{"kind":"str","s":"\u00a6","repr":"'\u00a6'","strip":"\u00a6","rstrip":"\u00a6","lstrip":"\u00a6","splitlines":["\u00a6"],"quote":"'\u00a6'","isspace":false}
+{"kind":"str","s":"\u00a7","repr":"'\u00a7'","strip":"\u00a7","rstrip":"\u00a7","lstrip":"\u00a7","splitlines":["\u00a7"],"quote":"'\u00a7'","isspace":false}
+{"kind":"str","s":"\u00a8","repr":"'\u00a8'","strip":"\u00a8","rstrip":"\u00a8","lstrip":"\u00a8","splitlines":["\u00a8"],"quote":"'\u00a8'","isspace":false}
+{"kind":"str","s":"\u00a9","repr":"'\u00a9'","strip":"\u00a9","rstrip":"\u00a9","lstrip":"\u00a9","splitlines":["\u00a9"],"quote":"'\u00a9'","isspace":false}
+{"kind":"str","s":"\u00aa","repr":"'\u00aa'","strip":"\u00aa","rstrip":"\u00aa","lstrip":"\u00aa","splitlines":["\u00aa"],"quote":"'\u00aa'","isspace":false}
+{"kind":"str","s":"\u00ab","repr":"'\u00ab'","strip":"\u00ab","rstrip":"\u00ab","lstrip":"\u00ab","splitlines":["\u00ab"],"quote":"'\u00ab'","isspace":false}
+{"kind":"str","s":"\u00ac","repr":"'\u00ac'","strip":"\u00ac","rstrip":"\u00ac","lstrip":"\u00ac","splitlines":["\u00ac"],"quote":"'\u00ac'","isspace":false}
+{"kind":"str","s":"\u00ad","repr":"'\\xad'","strip":"\u00ad","rstrip":"\u00ad","lstrip":"\u00ad","splitlines":["\u00ad"],"quote":"'\u00ad'","isspace":false}
+{"kind":"str","s":"\u00ae","repr":"'\u00ae'","strip":"\u00ae","rstrip":"\u00ae","lstrip":"\u00ae","splitlines":["\u00ae"],"quote":"'\u00ae'","isspace":false}
+{"kind":"str","s":"\u00af","repr":"'\u00af'","strip":"\u00af","rstrip":"\u00af","lstrip":"\u00af","splitlines":["\u00af"],"quote":"'\u00af'","isspace":false}
+{"kind":"str","s":"\u00b0","repr":"'\u00b0'","strip":"\u00b0","rstrip":"\u00b0","lstrip":"\u00b0","splitlines":["\u00b0"],"quote":"'\u00b0'","isspace":false}
+{"kind":"str","s":"\u00b1","repr":"'\u00b1'","strip":"\u00b1","rstrip":"\u00b1","lstrip":"\u00b1","splitlines":["\u00b1"],"quote":"'\u00b1'","isspace":false}
+{"kind":"str","s":"\u00b2","repr":"'\u00b2'","strip":"\u00b2","rstrip":"\u00b2","lstrip":"\u00b2","splitlines":["\u00b2"],"quote":"'\u00b2'","isspace":false}
+{"kind":"str","s":"\u00b3","repr":"'\u00b3'","strip":"\u00b3","rstrip":"\u00b3","lstrip":"\u00b3","splitlines":["\u00b3"],"quote":"'\u00b3'","isspace":false}
+{"kind":"str","s":"\u00b4","repr":"'\u00b4'","strip":"\u00b4","rstrip":"\u00b4","lstrip":"\u00b4","splitlines":["\u00b4"],"quote":"'\u00b4'","isspace":false}
+{"kind":"str","s":"\u00b5","repr":"'\u00b5'","strip":"\u00b5","rstrip":"\u00b5","lstrip":"\u00b5","splitlines":["\u00b5"],"quote":"'\u00b5'","isspace":false}
+{"kind":"str","s":"\u00b6","repr":"'\u00b6'","strip":"\u00b6","rstrip":"\u00b6","lstrip":"\u00b6","splitlines":["\u00b6"],"quote":"'\u00b6'","isspace":false}
+{"kind":"str","s":"\u00b7","repr":"'\u00b7'","strip":"\u00b7","rstrip":"\u00b7","lstrip":"\u00b7","splitlines":["\u00b7"],"quote":"'\u00b7'","isspace":false}
+{"kind":"str","s":"\u00b8","repr":"'\u00b8'","strip":"\u00b8","rstrip":"\u00b8","lstrip":"\u00b8","splitlines":["\u00b8"],"quote":"'\u00b8'","isspace":false}
+{"kind":"str","s":"\u00b9","repr":"'\u00b9'","strip":"\u00b9","rstrip":"\u00b9","lstrip":"\u00b9","splitlines":["\u00b9"],"quote":"'\u00b9'","isspace":false}
+{"kind":"str","s":"\u00ba","repr":"'\u00ba'","strip":"\u00ba","rstrip":"\u00ba","lstrip":"\u00ba","splitlines":["\u00ba"],"quote":"'\u00ba'","isspace":false}
+{"kind":"str","s":"\u00bb","repr":"'\u00bb'","strip":"\u00bb","rstrip":"\u00bb","lstrip":"\u00bb","splitlines":["\u00bb"],"quote":"'\u00bb'","isspace":false}
+{"kind":"str","s":"\u00bc","repr":"'\u00bc'","strip":"\u00bc","rstrip":"\u00bc","lstrip":"\u00bc","splitlines":["\u00bc"],"quote":"'\u00bc'","isspace":false}
+{"kind":"str","s":"\u00bd","repr":"'\u00bd'","strip":"\u00bd","rstrip":"\u00bd","lstrip":"\u00bd","splitlines":["\u00bd"],"quote":"'\u00bd'","isspace":false}
+{"kind":"str","s":"\u00be","repr":"'\u00be'","strip":"\u00be","rstrip":"\u00be","lstrip":"\u00be","splitlines":["\u00be"],"quote":"'\u00be'","isspace":false}
+{"kind":"str","s":"\u00bf","repr":"'\u00bf'","strip":"\u00bf","rstrip":"\u00bf","lstrip":"\u00bf","splitlines":["\u00bf"],"quote":"'\u00bf'","isspace":false}
+{"kind":"str","s":"\u00c0","repr":"'\u00c0'","strip":"\u00c0","rstrip":"\u00c0","lstrip":"\u00c0","splitlines":["\u00c0"],"quote":"'\u00c0'","isspace":false}
+{"kind":"str","s":"\u00c1","repr":"'\u00c1'","strip":"\u00c1","rstrip":"\u00c1","lstrip":"\u00c1","splitlines":["\u00c1"],"quote":"'\u00c1'","isspace":false}
+{"kind":"str","s":"\u00c2","repr":"'\u00c2'","strip":"\u00c2","rstrip":"\u00c2","lstrip":"\u00c2","splitlines":["\u00c2"],"quote":"'\u00c2'","isspace":false}
+{"kind":"str","s":"\u00c3","repr":"'\u00c3'","strip":"\u00c3","rstrip":"\u00c3","lstrip":"\u00c3","splitlines":["\u00c3"],"quote":"'\u00c3'","isspace":false}
+{"kind":"str","s":"\u00c4","repr":"'\u00c4'","strip":"\u00c4","rstrip":"\u00c4","lstrip":"\u00c4","splitlines":["\u00c4"],"quote":"'\u00c4'","isspace":false}
+{"kind":"str","s":"\u00c5","repr":"'\u00c5'","strip":"\u00c5","rstrip":"\u00c5","lstrip":"\u00c5","splitlines":["\u00c5"],"quote":"'\u00c5'","isspace":false}
+{"kind":"str","s":"\u00c6","repr":"'\u00c6'","strip":"\u00c6","rstrip":"\u00c6","lstrip":"\u00c6","splitlines":["\u00c6"],"quote":"'\u00c6'","isspace":false}
+{"kind":"str","s":"\u00c7","repr":"'\u00c7'","strip":"\u00c7","rstrip":"\u00c7","lstrip":"\u00c7","splitlines":["\u00c7"],"quote":"'\u00c7'","isspace":false}
+{"kind":"str","s":"\u00c8","repr":"'\u00c8'","strip":"\u00c8","rstrip":"\u00c8","lstrip":"\u00c8","splitlines":["\u00c8"],"quote":"'\u00c8'","isspace":false}
+{"kind":"str","s":"\u00c9","repr":"'\u00c9'","strip":"\u00c9","rstrip":"\u00c9","lstrip":"\u00c9","splitlines":["\u00c9"],"quote":"'\u00c9'","isspace":false}
+{"kind":"str","s":"\u00ca","repr":"'\u00ca'","strip":"\u00ca","rstrip":"\u00ca","lstrip":"\u00ca","splitlines":["\u00ca"],"quote":"'\u00ca'","isspace":false}
+{"kind":"str","s":"\u00cb","repr":"'\u00cb'","strip":"\u00cb","rstrip":"\u00cb","lstrip":"\u00cb","splitlines":["\u00cb"],"quote":"'\u00cb'","isspace":false}
+{"kind":"str","s":"\u00cc","repr":"'\u00cc'","strip":"\u00cc","rstrip":"\u00cc","lstrip":"\u00cc","splitlines":["\u00cc"],"quote":"'\u00cc'","isspace":false}
+{"kind":"str","s":"\u00cd","repr":"'\u00cd'","strip":"\u00cd","rstrip":"\u00cd","lstrip":"\u00cd","splitlines":["\u00cd"],"quote":"'\u00cd'","isspace":false}
+{"kind":"str","s":"\u00ce","repr":"'\u00ce'","strip":"\u00ce","rstrip":"\u00ce","lstrip":"\u00ce","splitlines":["\u00ce"],"quote":"'\u00ce'","isspace":false}
+{"kind":"str","s":"\u00cf","repr":"'\u00cf'","strip":"\u00cf","rstrip":"\u00cf","lstrip":"\u00cf","splitlines":["\u00cf"],"quote":"'\u00cf'","isspace":false}
+{"kind":"str","s":"\u00d0","repr":"'\u00d0'","strip":"\u00d0","rstrip":"\u00d0","lstrip":"\u00d0","splitlines":["\u00d0"],"quote":"'\u00d0'","isspace":false}
+{"kind":"str","s":"\u00d1","repr":"'\u00d1'","strip":"\u00d1","rstrip":"\u00d1","lstrip":"\u00d1","splitlines":["\u00d1"],"quote":"'\u00d1'","isspace":false}
+{"kind":"str","s":"\u00d2","repr":"'\u00d2'","strip":"\u00d2","rstrip":"\u00d2","lstrip":"\u00d2","splitlines":["\u00d2"],"quote":"'\u00d2'","isspace":false}
+{"kind":"str","s":"\u00d3","repr":"'\u00d3'","strip":"\u00d3","rstrip":"\u00d3","lstrip":"\u00d3","splitlines":["\u00d3"],"quote":"'\u00d3'","isspace":false}
+{"kind":"str","s":"\u00d4","repr":"'\u00d4'","strip":"\u00d4","rstrip":"\u00d4","lstrip":"\u00d4","splitlines":["\u00d4"],"quote":"'\u00d4'","isspace":false}
+{"kind":"str","s":"\u00d5","repr":"'\u00d5'","strip":"\u00d5","rstrip":"\u00d5","lstrip":"\u00d5","splitlines":["\u00d5"],"quote":"'\u00d5'","isspace":false}
+{"kind":"str","s":"\u00d6","repr":"'\u00d6'","strip":"\u00d6","rstrip":"\u00d6","lstrip":"\u00d6","splitlines":["\u00d6"],"quote":"'\u00d6'","isspace":false}
+{"kind":"str","s":"\u00d7","repr":"'\u00d7'","strip":"\u00d7","rstrip":"\u00d7","lstrip":"\u00d7","splitlines":["\u00d7"],"quote":"'\u00d7'","isspace":false}
+{"kind":"str","s":"\u00d8","repr":"'\u00d8'","strip":"\u00d8","rstrip":"\u00d8","lstrip":"\u00d8","splitlines":["\u00d8"],"quote":"'\u00d8'","isspace":false}
+{"kind":"str","s":"\u00d9","repr":"'\u00d9'","strip":"\u00d9","rstrip":"\u00d9","lstrip":"\u00d9","splitlines":["\u00d9"],"quote":"'\u00d9'","isspace":false}
+{"kind":"str","s":"\u00da","repr":"'\u00da'","strip":"\u00da","rstrip":"\u00da","lstrip":"\u00da","splitlines":["\u00da"],"quote":"'\u00da'","isspace":false}
+{"kind":"str","s":"\u00db","repr":"'\u00db'","strip":"\u00db","rstrip":"\u00db","lstrip":"\u00db","splitlines":["\u00db"],"quote":"'\u00db'","isspace":false}
+{"kind":"str","s":"\u00dc","repr":"'\u00dc'","strip":"\u00dc","rstrip":"\u00dc","lstrip":"\u00dc","splitlines":["\u00dc"],"quote":"'\u00dc'","isspace":false}
+{"kind":"str","s":"\u00dd","repr":"'\u00dd'","strip":"\u00dd","rstrip":"\u00dd","lstrip":"\u00dd","splitlines":["\u00dd"],"quote":"'\u00dd'","isspace":false}
+{"kind":"str","s":"\u00de","repr":"'\u00de'","strip":"\u00de","rstrip":"\u00de","lstrip":"\u00de","splitlines":["\u00de"],"quote":"'\u00de'","isspace":false}
+{"kind":"str","s":"\u00df","repr":"'\u00df'","strip":"\u00df","rstrip":"\u00df","lstrip":"\u00df","splitlines":["\u00df"],"quote":"'\u00df'","isspace":false}
+{"kind":"str","s":"\u00e0","repr":"'\u00e0'","strip":"\u00e0","rstrip":"\u00e0","lstrip":"\u00e0","splitlines":["\u00e0"],"quote":"'\u00e0'","isspace":false}
+{"kind":"str","s":"\u00e1","repr":"'\u00e1'","strip":"\u00e1","rstrip":"\u00e1","lstrip":"\u00e1","splitlines":["\u00e1"],"quote":"'\u00e1'","isspace":false}
+{"kind":"str","s":"\u00e2","repr":"'\u00e2'","strip":"\u00e2","rstrip":"\u00e2","lstrip":"\u00e2","splitlines":["\u00e2"],"quote":"'\u00e2'","isspace":false}
+{"kind":"str","s":"\u00e3","repr":"'\u00e3'","strip":"\u00e3","rstrip":"\u00e3","lstrip":"\u00e3","splitlines":["\u00e3"],"quote":"'\u00e3'","isspace":false}
+{"kind":"str","s":"\u00e4","repr":"'\u00e4'","strip":"\u00e4","rstrip":"\u00e4","lstrip":"\u00e4","splitlines":["\u00e4"],"quote":"'\u00e4'","isspace":false}
+{"kind":"str","s":"\u00e5","repr":"'\u00e5'","strip":"\u00e5","rstrip":"\u00e5","lstrip":"\u00e5","splitlines":["\u00e5"],"quote":"'\u00e5'","isspace":false}
+{"kind":"str","s":"\u00e6","repr":"'\u00e6'","strip":"\u00e6","rstrip":"\u00e6","lstrip":"\u00e6","splitlines":["\u00e6"],"quote":"'\u00e6'","isspace":false}
+{"kind":"str","s":"\u00e7","repr":"'\u00e7'","strip":"\u00e7","rstrip":"\u00e7","lstrip":"\u00e7","splitlines":["\u00e7"],"quote":"'\u00e7'","isspace":false}
+{"kind":"str","s":"\u00e8","repr":"'\u00e8'","strip":"\u00e8","rstrip":"\u00e8","lstrip":"\u00e8","splitlines":["\u00e8"],"quote":"'\u00e8'","isspace":false}
+{"kind":"str","s":"\u00e9","repr":"'\u00e9'","strip":"\u00e9","rstrip":"\u00e9","lstrip":"\u00e9","splitlines":["\u00e9"],"quote":"'\u00e9'","isspace":false}
+{"kind":"str","s":"\u00ea","repr":"'\u00ea'","strip":"\u00ea","rstrip":"\u00ea","lstrip":"\u00ea","splitlines":["\u00ea"],"quote":"'\u00ea'","isspace":false}
+{"kind":"str","s":"\u00eb","repr":"'\u00eb'","strip":"\u00eb","rstrip":"\u00eb","lstrip":"\u00eb","splitlines":["\u00eb"],"quote":"'\u00eb'","isspace":false}
+{"kind":"str","s":"\u00ec","repr":"'\u00ec'","strip":"\u00ec","rstrip":"\u00ec","lstrip":"\u00ec","splitlines":["\u00ec"],"quote":"'\u00ec'","isspace":false}
+{"kind":"str","s":"\u00ed","repr":"'\u00ed'","strip":"\u00ed","rstrip":"\u00ed","lstrip":"\u00ed","splitlines":["\u00ed"],"quote":"'\u00ed'","isspace":false}
+{"kind":"str","s":"\u00ee","repr":"'\u00ee'","strip":"\u00ee","rstrip":"\u00ee","lstrip":"\u00ee","splitlines":["\u00ee"],"quote":"'\u00ee'","isspace":false}
+{"kind":"str","s":"\u00ef","repr":"'\u00ef'","strip":"\u00ef","rstrip":"\u00ef","lstrip":"\u00ef","splitlines":["\u00ef"],"quote":"'\u00ef'","isspace":false}
+{"kind":"str","s":"\u00f0","repr":"'\u00f0'","strip":"\u00f0","rstrip":"\u00f0","lstrip":"\u00f0","splitlines":["\u00f0"],"quote":"'\u00f0'","isspace":false}
+{"kind":"str","s":"\u00f1","repr":"'\u00f1'","strip":"\u00f1","rstrip":"\u00f1","lstrip":"\u00f1","splitlines":["\u00f1"],"quote":"'\u00f1'","isspace":false}
+{"kind":"str","s":"\u00f2","repr":"'\u00f2'","strip":"\u00f2","rstrip":"\u00f2","lstrip":"\u00f2","splitlines":["\u00f2"],"quote":"'\u00f2'","isspace":false}
+{"kind":"str","s":"\u00f3","repr":"'\u00f3'","strip":"\u00f3","rstrip":"\u00f3","lstrip":"\u00f3","splitlines":["\u00f3"],"quote":"'\u00f3'","isspace":false}
+{"kind":"str","s":"\u00f4","repr":"'\u00f4'","strip":"\u00f4","rstrip":"\u00f4","lstrip":"\u00f4","splitlines":["\u00f4"],"quote":"'\u00f4'","isspace":false}
+{"kind":"str","s":"\u00f5","repr":"'\u00f5'","strip":"\u00f5","rstrip":"\u00f5","lstrip":"\u00f5","splitlines":["\u00f5"],"quote":"'\u00f5'","isspace":false}
+{"kind":"str","s":"\u00f6","repr":"'\u00f6'","strip":"\u00f6","rstrip":"\u00f6","lstrip":"\u00f6","splitlines":["\u00f6"],"quote":"'\u00f6'","isspace":false}
+{"kind":"str","s":"\u00f7","repr":"'\u00f7'","strip":"\u00f7","rstrip":"\u00f7","lstrip":"\u00f7","splitlines":["\u00f7"],"quote":"'\u00f7'","isspace":false}
+{"kind":"str","s":"\u00f8","repr":"'\u00f8'","strip":"\u00f8","rstrip":"\u00f8","lstrip":"\u00f8","splitlines":["\u00f8"],"quote":"'\u00f8'","isspace":false}
+{"kind":"str","s":"\u00f9","repr":"'\u00f9'","strip":"\u00f9","rstrip":"\u00f9","lstrip":"\u00f9","splitlines":["\u00f9"],"quote":"'\u00f9'","isspace":false}
+{"kind":"str","s":"\u00fa","repr":"'\u00fa'","strip":"\u00fa","rstrip":"\u00fa","lstrip":"\u00fa","splitlines":["\u00fa"],"quote":"'\u00fa'","isspace":false}
+{"kind":"str","s":"\u00fb","repr":"'\u00fb'","strip":"\u00fb","rstrip":"\u00fb","lstrip":"\u00fb","splitlines":["\u00fb"],"quote":"'\u00fb'","isspace":false}
+{"kind":"str","s":"\u00fc","repr":"'\u00fc'","strip":"\u00fc","rstrip":"\u00fc","lstrip":"\u00fc","splitlines":["\u00fc"],"quote":"'\u00fc'","isspace":false}
+{"kind":"str","s":"\u00fd","repr":"'\u00fd'","strip":"\u00fd","rstrip":"\u00fd","lstrip":"\u00fd","splitlines":["\u00fd"],"quote":"'\u00fd'","isspace":false}
+{"kind":"str","s":"\u00fe","repr":"'\u00fe'","strip":"\u00fe","rstrip":"\u00fe","lstrip":"\u00fe","splitlines":["\u00fe"],"quote":"'\u00fe'","isspace":false}
+{"kind":"str","s":"\u00ff","repr":"'\u00ff'","strip":"\u00ff","rstrip":"\u00ff","lstrip":"\u00ff","splitlines":["\u00ff"],"quote":"'\u00ff'","isspace":false}
+{"kind":"str","s":"\u0100","repr":"'\u0100'","strip":"\u0100","rstrip":"\u0100","lstrip":"\u0100","splitlines":["\u0100"],"quote":"'\u0100'","isspace":false}
+{"kind":"str","s":"\u0131","repr":"'\u0131'","strip":"\u0131","rstrip":"\u0131","lstrip":"\u0131","splitlines":["\u0131"],"quote":"'\u0131'","isspace":false}
+{"kind":"str","s":"\u017f","repr":"'\u017f'","strip":"\u017f","rstrip":"\u017f","lstrip":"\u017f","splitlines":["\u017f"],"quote":"'\u017f'","isspace":false}
+{"kind":"str","s":"\u02c6","repr":"'\u02c6'","strip":"\u02c6","rstrip":"\u02c6","lstrip":"\u02c6","splitlines":["\u02c6"],"quote":"'\u02c6'","isspace":false}
+{"kind":"str","s":"\u0300","repr":"'\u0300'","strip":"\u0300","rstrip":"\u0300","lstrip":"\u0300","splitlines":["\u0300"],"quote":"'\u0300'","isspace":false}
+{"kind":"str","s":"\u0345","repr":"'\u0345'","strip":"\u0345","rstrip":"\u0345","lstrip":"\u0345","splitlines":["\u0345"],"quote":"'\u0345'","isspace":false}
+{"kind":"str","s":"\u03a3","repr":"'\u03a3'","strip":"\u03a3","rstrip":"\u03a3","lstrip":"\u03a3","splitlines":["\u03a3"],"quote":"'\u03a3'","isspace":false}
+{"kind":"str","s":"\u0600","repr":"'\\u0600'","strip":"\u0600","rstrip":"\u0600","lstrip":"\u0600","splitlines":["\u0600"],"quote":"'\u0600'","isspace":false}
+{"kind":"str","s":"\u061c","repr":"'\\u061c'","strip":"\u061c","rstrip":"\u061c","lstrip":"\u061c","splitlines":["\u061c"],"quote":"'\u061c'","isspace":false}
+{"kind":"str","s":"\u0661","repr":"'\u0661'","strip":"\u0661","rstrip":"\u0661","lstrip":"\u0661","splitlines":["\u0661"],"quote":"'\u0661'","isspace":false}
+{"kind":"str","s":"\u07c0","repr":"'\u07c0'","strip":"\u07c0","rstrip":"\u07c0","lstrip":"\u07c0","splitlines":["\u07c0"],"quote":"'\u07c0'","isspace":false}
+{"kind":"str","s":"\u085f","repr":"'\\u085f'","strip":"\u085f","rstrip":"\u085f","lstrip":"\u085f","splitlines":["\u085f"],"quote":"'\u085f'","isspace":false}
+{"kind":"str","s":"\u1680","repr":"'\\u1680'","strip":"","rstrip":"","lstrip":"","splitlines":["\u1680"],"quote":"'\u1680'","isspace":true}
+{"kind":"str","s":"\u180e","repr":"'\\u180e'","strip":"\u180e","rstrip":"\u180e","lstrip":"\u180e","splitlines":["\u180e"],"quote":"'\u180e'","isspace":false}
+{"kind":"str","s":"\u2000","repr":"'\\u2000'","strip":"","rstrip":"","lstrip":"","splitlines":["\u2000"],"quote":"'\u2000'","isspace":true}
+{"kind":"str","s":"\u200a","repr":"'\\u200a'","strip":"","rstrip":"","lstrip":"","splitlines":["\u200a"],"quote":"'\u200a'","isspace":true}
+{"kind":"str","s":"\u200b","repr":"'\\u200b'","strip":"\u200b","rstrip":"\u200b","lstrip":"\u200b","splitlines":["\u200b"],"quote":"'\u200b'","isspace":false}
+{"kind":"str","s":"\u200e","repr":"'\\u200e'","strip":"\u200e","rstrip":"\u200e","lstrip":"\u200e","splitlines":["\u200e"],"quote":"'\u200e'","isspace":false}
+{"kind":"str","s":"\u2028","repr":"'\\u2028'","strip":"","rstrip":"","lstrip":"","splitlines":[""],"quote":"'\u2028'","isspace":true}
+{"kind":"str","s":"\u2029","repr":"'\\u2029'","strip":"","rstrip":"","lstrip":"","splitlines":[""],"quote":"'\u2029'","isspace":true}
+{"kind":"str","s":"\u202f","repr":"'\\u202f'","strip":"","rstrip":"","lstrip":"","splitlines":["\u202f"],"quote":"'\u202f'","isspace":true}
+{"kind":"str","s":"\u205f","repr":"'\\u205f'","strip":"","rstrip":"","lstrip":"","splitlines":["\u205f"],"quote":"'\u205f'","isspace":true}
+{"kind":"str","s":"\u2060","repr":"'\\u2060'","strip":"\u2060","rstrip":"\u2060","lstrip":"\u2060","splitlines":["\u2060"],"quote":"'\u2060'","isspace":false}
+{"kind":"str","s":"\u20ac","repr":"'\u20ac'","strip":"\u20ac","rstrip":"\u20ac","lstrip":"\u20ac","splitlines":["\u20ac"],"quote":"'\u20ac'","isspace":false}
+{"kind":"str","s":"\u2160","repr":"'\u2160'","strip":"\u2160","rstrip":"\u2160","lstrip":"\u2160","splitlines":["\u2160"],"quote":"'\u2160'","isspace":false}
+{"kind":"str","s":"\u2460","repr":"'\u2460'","strip":"\u2460","rstrip":"\u2460","lstrip":"\u2460","splitlines":["\u2460"],"quote":"'\u2460'","isspace":false}
+{"kind":"str","s":"\u3000","repr":"'\\u3000'","strip":"","rstrip":"","lstrip":"","splitlines":["\u3000"],"quote":"'\u3000'","isspace":true}
+{"kind":"str","s":"\u3007","repr":"'\u3007'","strip":"\u3007","rstrip":"\u3007","lstrip":"\u3007","splitlines":["\u3007"],"quote":"'\u3007'","isspace":false}
+{"kind":"str","s":"\u4e00","repr":"'\u4e00'","strip":"\u4e00","rstrip":"\u4e00","lstrip":"\u4e00","splitlines":["\u4e00"],"quote":"'\u4e00'","isspace":false}
+{"kind":"str","s":"\ud7ff","repr":"'\\ud7ff'","strip":"\ud7ff","rstrip":"\ud7ff","lstrip":"\ud7ff","splitlines":["\ud7ff"],"quote":"'\ud7ff'","isspace":false}
+{"kind":"str","s":"\ue000","repr":"'\\ue000'","strip":"\ue000","rstrip":"\ue000","lstrip":"\ue000","splitlines":["\ue000"],"quote":"'\ue000'","isspace":false}
+{"kind":"str","s":"\uf8ff","repr":"'\\uf8ff'","strip":"\uf8ff","rstrip":"\uf8ff","lstrip":"\uf8ff","splitlines":["\uf8ff"],"quote":"'\uf8ff'","isspace":false}
+{"kind":"str","s":"\ufeff","repr":"'\\ufeff'","strip":"\ufeff","rstrip":"\ufeff","lstrip":"\ufeff","splitlines":["\ufeff"],"quote":"'\ufeff'","isspace":false}
+{"kind":"str","s":"\ufffd","repr":"'\ufffd'","strip":"\ufffd","rstrip":"\ufffd","lstrip":"\ufffd","splitlines":["\ufffd"],"quote":"'\ufffd'","isspace":false}
+{"kind":"str","s":"\uffff","repr":"'\\uffff'","strip":"\uffff","rstrip":"\uffff","lstrip":"\uffff","splitlines":["\uffff"],"quote":"'\uffff'","isspace":false}
+{"kind":"str","s":"\ud800\udc00","repr":"'\ud800\udc00'","strip":"\ud800\udc00","rstrip":"\ud800\udc00","lstrip":"\ud800\udc00","splitlines":["\ud800\udc00"],"quote":"'\ud800\udc00'","isspace":false}
+{"kind":"str","s":"\ud835\udfce","repr":"'\ud835\udfce'","strip":"\ud835\udfce","rstrip":"\ud835\udfce","lstrip":"\ud835\udfce","splitlines":["\ud835\udfce"],"quote":"'\ud835\udfce'","isspace":false}
+{"kind":"str","s":"\ud83d\ude00","repr":"'\ud83d\ude00'","strip":"\ud83d\ude00","rstrip":"\ud83d\ude00","lstrip":"\ud83d\ude00","splitlines":["\ud83d\ude00"],"quote":"'\ud83d\ude00'","isspace":false}
+{"kind":"str","s":"\udb40\udc01","repr":"'\\U000e0001'","strip":"\udb40\udc01","rstrip":"\udb40\udc01","lstrip":"\udb40\udc01","splitlines":["\udb40\udc01"],"quote":"'\udb40\udc01'","isspace":false}
+{"kind":"str","s":"\udb80\udc00","repr":"'\\U000f0000'","strip":"\udb80\udc00","rstrip":"\udb80\udc00","lstrip":"\udb80\udc00","splitlines":["\udb80\udc00"],"quote":"'\udb80\udc00'","isspace":false}
+{"kind":"str","s":"\udbff\udffd","repr":"'\\U0010fffd'","strip":"\udbff\udffd","rstrip":"\udbff\udffd","lstrip":"\udbff\udffd","splitlines":["\udbff\udffd"],"quote":"'\udbff\udffd'","isspace":false}
+{"kind":"str","s":"\udbff\udfff","repr":"'\\U0010ffff'","strip":"\udbff\udfff","rstrip":"\udbff\udfff","lstrip":"\udbff\udfff","splitlines":["\udbff\udfff"],"quote":"'\udbff\udfff'","isspace":false}
+{"kind":"str","s":"\u0378","repr":"'\\u0378'","strip":"\u0378","rstrip":"\u0378","lstrip":"\u0378","splitlines":["\u0378"],"quote":"'\u0378'","isspace":false}
+{"kind":"str","s":"\u2fe0","repr":"'\\u2fe0'","strip":"\u2fe0","rstrip":"\u2fe0","lstrip":"\u2fe0","splitlines":["\u2fe0"],"quote":"'\u2fe0'","isspace":false}
+{"kind":"str","s":"\ud83f\udffe","repr":"'\\U0001fffe'","strip":"\ud83f\udffe","rstrip":"\ud83f\udffe","lstrip":"\ud83f\udffe","splitlines":["\ud83f\udffe"],"quote":"'\ud83f\udffe'","isspace":false}
+{"kind":"str","s":"","repr":"''","strip":"","rstrip":"","lstrip":"","splitlines":[],"quote":"''","isspace":null}
+{"kind":"str","s":"a","repr":"'a'","strip":"a","rstrip":"a","lstrip":"a","splitlines":["a"],"quote":"a","isspace":false}
+{"kind":"str","s":"it's","repr":"\"it's\"","strip":"it's","rstrip":"it's","lstrip":"it's","splitlines":["it's"],"quote":"'it'\"'\"'s'","isspace":null}
+{"kind":"str","s":"say \"hi\"","repr":"'say \"hi\"'","strip":"say \"hi\"","rstrip":"say \"hi\"","lstrip":"say \"hi\"","splitlines":["say \"hi\""],"quote":"'say \"hi\"'","isspace":null}
+{"kind":"str","s":"it's \"both\"","repr":"'it\\'s \"both\"'","strip":"it's \"both\"","rstrip":"it's \"both\"","lstrip":"it's \"both\"","splitlines":["it's \"both\""],"quote":"'it'\"'\"'s \"both\"'","isspace":null}
+{"kind":"str","s":"tab\there","repr":"'tab\\there'","strip":"tab\there","rstrip":"tab\there","lstrip":"tab\there","splitlines":["tab\there"],"quote":"'tab\there'","isspace":null}
+{"kind":"str","s":"line\nbreak","repr":"'line\\nbreak'","strip":"line\nbreak","rstrip":"line\nbreak","lstrip":"line\nbreak","splitlines":["line","break"],"quote":"'line\nbreak'","isspace":null}
+{"kind":"str","s":"cr\rlf\r\n","repr":"'cr\\rlf\\r\\n'","strip":"cr\rlf","rstrip":"cr\rlf","lstrip":"cr\rlf\r\n","splitlines":["cr","lf"],"quote":"'cr\rlf\r\n'","isspace":null}
+{"kind":"str","s":"back\\slash","repr":"'back\\\\slash'","strip":"back\\slash","rstrip":"back\\slash","lstrip":"back\\slash","splitlines":["back\\slash"],"quote":"'back\\slash'","isspace":null}
+{"kind":"str","s":"ENSP1:p.Leu4%3D","repr":"'ENSP1:p.Leu4%3D'","strip":"ENSP1:p.Leu4%3D","rstrip":"ENSP1:p.Leu4%3D","lstrip":"ENSP1:p.Leu4%3D","splitlines":["ENSP1:p.Leu4%3D"],"quote":"ENSP1:p.Leu4%3D","isspace":null}
+{"kind":"str","s":"21:100 | A | ENST1 | x","repr":"'21:100 | A | ENST1 | x'","strip":"21:100 | A | ENST1 | x","rstrip":"21:100 | A | ENST1 | x","lstrip":"21:100 | A | ENST1 | x","splitlines":["21:100 | A | ENST1 | x"],"quote":"'21:100 | A | ENST1 | x'","isspace":null}
+{"kind":"str","s":"\u00e9\u0301","repr":"'\u00e9\u0301'","strip":"\u00e9\u0301","rstrip":"\u00e9\u0301","lstrip":"\u00e9\u0301","splitlines":["\u00e9\u0301"],"quote":"'\u00e9\u0301'","isspace":null}
+{"kind":"str","s":"a b","repr":"'a b'","strip":"a b","rstrip":"a b","lstrip":"a b","splitlines":["a b"],"quote":"'a b'","isspace":null}
+{"kind":"str","s":"a  b ","repr":"'a  b '","strip":"a  b","rstrip":"a  b","lstrip":"a  b ","splitlines":["a  b "],"quote":"'a  b '","isspace":null}
+{"kind":"str","s":" lead","repr":"' lead'","strip":"lead","rstrip":" lead","lstrip":"lead","splitlines":[" lead"],"quote":"' lead'","isspace":null}
+{"kind":"str","s":"trail \t\n","repr":"'trail \\t\\n'","strip":"trail","rstrip":"trail","lstrip":"trail \t\n","splitlines":["trail \t"],"quote":"'trail \t\n'","isspace":null}
+{"kind":"str","s":"\u001c\u001d\u001e\u001f x \u0085\u00a0","repr":"'\\x1c\\x1d\\x1e\\x1f x \\x85\\xa0'","strip":"x","rstrip":"\u001c\u001d\u001e\u001f x","lstrip":"x \u0085\u00a0","splitlines":["","","","\u001f x ","\u00a0"],"quote":"'\u001c\u001d\u001e\u001f x \u0085\u00a0'","isspace":null}
+{"kind":"str","s":"a\u000bb\fc\u001cd\u001de\u001ef\u0085g\u2028h\u2029i","repr":"'a\\x0bb\\x0cc\\x1cd\\x1de\\x1ef\\x85g\\u2028h\\u2029i'","strip":"a\u000bb\fc\u001cd\u001de\u001ef\u0085g\u2028h\u2029i","rstrip":"a\u000bb\fc\u001cd\u001de\u001ef\u0085g\u2028h\u2029i","lstrip":"a\u000bb\fc\u001cd\u001de\u001ef\u0085g\u2028h\u2029i","splitlines":["a","b","c","d","e","f","g","h","i"],"quote":"'a\u000bb\fc\u001cd\u001de\u001ef\u0085g\u2028h\u2029i'","isspace":null}
+{"kind":"str","s":"\n","repr":"'\\n'","strip":"","rstrip":"","lstrip":"","splitlines":[""],"quote":"'\n'","isspace":true}
+{"kind":"str","s":"\r\n\r\n","repr":"'\\r\\n\\r\\n'","strip":"","rstrip":"","lstrip":"","splitlines":["",""],"quote":"'\r\n\r\n'","isspace":null}
+{"kind":"str","s":"a\n\nb\n","repr":"'a\\n\\nb\\n'","strip":"a\n\nb","rstrip":"a\n\nb","lstrip":"a\n\nb\n","splitlines":["a","","b"],"quote":"'a\n\nb\n'","isspace":null}
+{"kind":"str","s":"no end","repr":"'no end'","strip":"no end","rstrip":"no end","lstrip":"no end","splitlines":["no end"],"quote":"'no end'","isspace":null}
+{"kind":"str","s":"end\r","repr":"'end\\r'","strip":"end","rstrip":"end","lstrip":"end\r","splitlines":["end"],"quote":"'end\r'","isspace":null}
+{"kind":"str","s":"@%+=:,./-_ok","repr":"'@%+=:,./-_ok'","strip":"@%+=:,./-_ok","rstrip":"@%+=:,./-_ok","lstrip":"@%+=:,./-_ok","splitlines":["@%+=:,./-_ok"],"quote":"@%+=:,./-_ok","isspace":null}
+{"kind":"str","s":"needs space","repr":"'needs space'","strip":"needs space","rstrip":"needs space","lstrip":"needs space","splitlines":["needs space"],"quote":"'needs space'","isspace":null}
+{"kind":"str","s":"semi;colon","repr":"'semi;colon'","strip":"semi;colon","rstrip":"semi;colon","lstrip":"semi;colon","splitlines":["semi;colon"],"quote":"'semi;colon'","isspace":null}
+{"kind":"str","s":"$var","repr":"'$var'","strip":"$var","rstrip":"$var","lstrip":"$var","splitlines":["$var"],"quote":"'$var'","isspace":null}
+{"kind":"str","s":"a'b'c","repr":"\"a'b'c\"","strip":"a'b'c","rstrip":"a'b'c","lstrip":"a'b'c","splitlines":["a'b'c"],"quote":"'a'\"'\"'b'\"'\"'c'","isspace":null}
+{"kind":"str","s":"~user","repr":"'~user'","strip":"~user","rstrip":"~user","lstrip":"~user","splitlines":["~user"],"quote":"'~user'","isspace":null}
+{"kind":"str","s":"*","repr":"'*'","strip":"*","rstrip":"*","lstrip":"*","splitlines":["*"],"quote":"'*'","isspace":false}
+{"kind":"str","s":"x=y","repr":"'x=y'","strip":"x=y","rstrip":"x=y","lstrip":"x=y","splitlines":["x=y"],"quote":"x=y","isspace":null}
+{"kind":"str","s":"path/to/file.txt","repr":"'path/to/file.txt'","strip":"path/to/file.txt","rstrip":"path/to/file.txt","lstrip":"path/to/file.txt","splitlines":["path/to/file.txt"],"quote":"path/to/file.txt","isspace":null}
+{"kind":"str","s":"\u00e9","repr":"'\u00e9'","strip":"\u00e9","rstrip":"\u00e9","lstrip":"\u00e9","splitlines":["\u00e9"],"quote":"'\u00e9'","isspace":false}
+{"kind":"str","s":"\u65e5\u672c","repr":"'\u65e5\u672c'","strip":"\u65e5\u672c","rstrip":"\u65e5\u672c","lstrip":"\u65e5\u672c","splitlines":["\u65e5\u672c"],"quote":"'\u65e5\u672c'","isspace":null}
+{"kind":"str","s":"--flag","repr":"'--flag'","strip":"--flag","rstrip":"--flag","lstrip":"--flag","splitlines":["--flag"],"quote":"--flag","isspace":null}
+{"kind":"str","s":"-","repr":"'-'","strip":"-","rstrip":"-","lstrip":"-","splitlines":["-"],"quote":"-","isspace":false}
+{"kind":"str","s":"{corpus}/x","repr":"'{corpus}/x'","strip":"{corpus}/x","rstrip":"{corpus}/x","lstrip":"{corpus}/x","splitlines":["{corpus}/x"],"quote":"'{corpus}/x'","isspace":null}
+{"kind":"list","items":["a","it's","x\ty"],"repr":"['a', \"it's\", 'x\\ty']","join":"a 'it'\"'\"'s' 'x\ty'"}
+{"kind":"list","items":[],"repr":"[]","join":""}
+{"kind":"list","items":["/usr/bin/env","/t/vep","-i","","a b","--plugin","LoF,loftee_path:/x,human_ancestor_fa:/y z"],"repr":"['/usr/bin/env', '/t/vep', '-i', '', 'a b', '--plugin', 'LoF,loftee_path:/x,human_ancestor_fa:/y z']","join":"/usr/bin/env /t/vep -i '' 'a b' --plugin 'LoF,loftee_path:/x,human_ancestor_fa:/y z'"}
+{"kind":"split","text":"vep","words":["vep"]}
+{"kind":"split","text":"/usr/bin/env /t/vep","words":["/usr/bin/env","/t/vep"]}
+{"kind":"split","text":"  a   b  ","words":["a","b"]}
+{"kind":"split","text":"a 'b c' d","words":["a","b c","d"]}
+{"kind":"split","text":"a \"b c\" d","words":["a","b c","d"]}
+{"kind":"split","text":"a\\ b","words":["a b"]}
+{"kind":"split","text":"\"a\\\"b\"","words":["a\"b"]}
+{"kind":"split","text":"'a\\'","words":["a\\"]}
+{"kind":"split","text":"\"a\\nb\"","words":["a\\nb"]}
+{"kind":"split","text":"a''b","words":["ab"]}
+{"kind":"split","text":"''","words":[""]}
+{"kind":"split","text":"\"\"","words":[""]}
+{"kind":"split","text":"a '' b","words":["a","","b"]}
+{"kind":"split","text":"a\tb\nc\rd","words":["a","b","c","d"]}
+{"kind":"split","text":"a #b","words":["a","#b"]}
+{"kind":"split","text":"#","words":["#"]}
+{"kind":"split","text":"","words":[]}
+{"kind":"split","text":"   ","words":[]}
+{"kind":"split","text":"a\\","error":"No escaped character"}
+{"kind":"split","text":"'open","error":"No closing quotation"}
+{"kind":"split","text":"\"open","error":"No closing quotation"}
+{"kind":"split","text":"a\"b\"c'd'e","words":["abcde"]}
+{"kind":"split","text":"\\'","words":["'"]}
+{"kind":"split","text":"\"\\\\\"","words":["\\"]}
+{"kind":"split","text":"a\\\nb","words":["a\nb"]}
+{"kind":"split","text":"\"a\\\nb\"","words":["a\\\nb"]}
+{"kind":"split","text":"\u00e9 \u00fc","words":["\u00e9","\u00fc"]}
+{"kind":"split","text":"a\u2028b","words":["a\u2028b"]}
+{"kind":"split","text":"x 'y'z \"w\"v","words":["x","yz","wv"]}
+{"kind":"split","text":"'a'\"b\"","words":["ab"]}
+{"kind":"split","text":"\\\\","words":["\\"]}
+{"kind":"utf8","hex":"","backslashreplace":"","strict":""}
+{"kind":"utf8","hex":"706c61696e","backslashreplace":"plain","strict":"plain"}
+{"kind":"utf8","hex":"c3a9e697a5f09f9880","backslashreplace":"\u00e9\u65e5\ud83d\ude00","strict":"\u00e9\u65e5\ud83d\ude00"}
+{"kind":"utf8","hex":"ff","backslashreplace":"\\xff","error":"'utf-8' codec can't decode byte 0xff in position 0: invalid start byte"}
+{"kind":"utf8","hex":"61ff62","backslashreplace":"a\\xffb","error":"'utf-8' codec can't decode byte 0xff in position 1: invalid start byte"}
+{"kind":"utf8","hex":"c080","backslashreplace":"\\xc0\\x80","error":"'utf-8' codec can't decode byte 0xc0 in position 0: invalid start byte"}
+{"kind":"utf8","hex":"c3","backslashreplace":"\\xc3","error":"'utf-8' codec can't decode byte 0xc3 in position 0: unexpected end of data"}
+{"kind":"utf8","hex":"78c3","backslashreplace":"x\\xc3","error":"'utf-8' codec can't decode byte 0xc3 in position 1: unexpected end of data"}
+{"kind":"utf8","hex":"c328","backslashreplace":"\\xc3(","error":"'utf-8' codec can't decode byte 0xc3 in position 0: invalid continuation byte"}
+{"kind":"utf8","hex":"e08080","backslashreplace":"\\xe0\\x80\\x80","error":"'utf-8' codec can't decode byte 0xe0 in position 0: invalid continuation byte"}
+{"kind":"utf8","hex":"e0a0","backslashreplace":"\\xe0\\xa0","error":"'utf-8' codec can't decode bytes in position 0-1: unexpected end of data"}
+{"kind":"utf8","hex":"e0a078","backslashreplace":"\\xe0\\xa0x","error":"'utf-8' codec can't decode bytes in position 0-1: invalid continuation byte"}
+{"kind":"utf8","hex":"e282","backslashreplace":"\\xe2\\x82","error":"'utf-8' codec can't decode bytes in position 0-1: unexpected end of data"}
+{"kind":"utf8","hex":"e28278","backslashreplace":"\\xe2\\x82x","error":"'utf-8' codec can't decode bytes in position 0-1: invalid continuation byte"}
+{"kind":"utf8","hex":"e228a1","backslashreplace":"\\xe2(\\xa1","error":"'utf-8' codec can't decode byte 0xe2 in position 0: invalid continuation byte"}
+{"kind":"utf8","hex":"eda080","backslashreplace":"\\xed\\xa0\\x80","error":"'utf-8' codec can't decode byte 0xed in position 0: invalid continuation byte"}
+{"kind":"utf8","hex":"ed9fbf","backslashreplace":"\ud7ff","strict":"\ud7ff"}
+{"kind":"utf8","hex":"f09080","backslashreplace":"\\xf0\\x90\\x80","error":"'utf-8' codec can't decode bytes in position 0-2: unexpected end of data"}
+{"kind":"utf8","hex":"f0908078","backslashreplace":"\\xf0\\x90\\x80x","error":"'utf-8' codec can't decode bytes in position 0-2: invalid continuation byte"}
+{"kind":"utf8","hex":"f0808080","backslashreplace":"\\xf0\\x80\\x80\\x80","error":"'utf-8' codec can't decode byte 0xf0 in position 0: invalid continuation byte"}
+{"kind":"utf8","hex":"f09f98","backslashreplace":"\\xf0\\x9f\\x98","error":"'utf-8' codec can't decode bytes in position 0-2: unexpected end of data"}
+{"kind":"utf8","hex":"f09f","backslashreplace":"\\xf0\\x9f","error":"'utf-8' codec can't decode bytes in position 0-1: unexpected end of data"}
+{"kind":"utf8","hex":"f0","backslashreplace":"\\xf0","error":"'utf-8' codec can't decode byte 0xf0 in position 0: unexpected end of data"}
+{"kind":"utf8","hex":"f4908080","backslashreplace":"\\xf4\\x90\\x80\\x80","error":"'utf-8' codec can't decode byte 0xf4 in position 0: invalid continuation byte"}
+{"kind":"utf8","hex":"f48fbfbf","backslashreplace":"\udbff\udfff","strict":"\udbff\udfff"}
+{"kind":"utf8","hex":"f5808080","backslashreplace":"\\xf5\\x80\\x80\\x80","error":"'utf-8' codec can't decode byte 0xf5 in position 0: invalid start byte"}
+{"kind":"utf8","hex":"f888808080","backslashreplace":"\\xf8\\x88\\x80\\x80\\x80","error":"'utf-8' codec can't decode byte 0xf8 in position 0: invalid start byte"}
+{"kind":"utf8","hex":"80","backslashreplace":"\\x80","error":"'utf-8' codec can't decode byte 0x80 in position 0: invalid start byte"}
+{"kind":"utf8","hex":"bfbf","backslashreplace":"\\xbf\\xbf","error":"'utf-8' codec can't decode byte 0xbf in position 0: invalid start byte"}
+{"kind":"utf8","hex":"656e747279203d2022636166e9220a","backslashreplace":"entry = \"caf\\xe9\"\n","error":"'utf-8' codec can't decode byte 0xe9 in position 12: invalid continuation byte"}
+{"kind":"utf8","hex":"6f6be282ace282","backslashreplace":"ok\u20ac\\xe2\\x82","error":"'utf-8' codec can't decode bytes in position 5-6: unexpected end of data"}
+{"kind":"utf8","hex":"61f09f988062f09f98","backslashreplace":"a\ud83d\ude00b\\xf0\\x9f\\x98","error":"'utf-8' codec can't decode bytes in position 6-8: unexpected end of data"}
+{"kind":"utf8","hex":"c2a0c2","backslashreplace":"\u00a0\\xc2","error":"'utf-8' codec can't decode byte 0xc2 in position 2: unexpected end of data"}
+{"kind":"utf8","hex":"efbbbf626f6d","backslashreplace":"\ufeffbom","strict":"\ufeffbom"}
+{"kind":"utf8","hex":"f1808028","backslashreplace":"\\xf1\\x80\\x80(","error":"'utf-8' codec can't decode bytes in position 0-2: invalid continuation byte"}
+{"kind":"utf8","hex":"f1802880","backslashreplace":"\\xf1\\x80(\\x80","error":"'utf-8' codec can't decode bytes in position 0-1: invalid continuation byte"}
+{"kind":"utf8","hex":"f1288080","backslashreplace":"\\xf1(\\x80\\x80","error":"'utf-8' codec can't decode byte 0xf1 in position 0: invalid continuation byte"}
+{"kind":"utf8","hex":"e18028","backslashreplace":"\\xe1\\x80(","error":"'utf-8' codec can't decode bytes in position 0-1: invalid continuation byte"}
+{"kind":"utf8","hex":"df","backslashreplace":"\\xdf","error":"'utf-8' codec can't decode byte 0xdf in position 0: unexpected end of data"}
+{"kind":"utf8","hex":"df00","backslashreplace":"\\xdf\u0000","error":"'utf-8' codec can't decode byte 0xdf in position 0: invalid continuation byte"}
+{"kind":"json","text":"null","repr":"None","str":"None","compact":"null","indented":"null","truthy":false}
+{"kind":"json","text":"true","repr":"True","str":"True","compact":"true","indented":"true","truthy":true}
+{"kind":"json","text":"false","repr":"False","str":"False","compact":"false","indented":"false","truthy":false}
+{"kind":"json","text":"0","repr":"0","str":"0","compact":"0","indented":"0","truthy":false}
+{"kind":"json","text":"-0","repr":"0","str":"0","compact":"0","indented":"0","truthy":false}
+{"kind":"json","text":"1","repr":"1","str":"1","compact":"1","indented":"1","truthy":true}
+{"kind":"json","text":"-1","repr":"-1","str":"-1","compact":"-1","indented":"-1","truthy":true}
+{"kind":"json","text":"123456789012345678901234567890","repr":"123456789012345678901234567890","str":"123456789012345678901234567890","compact":"123456789012345678901234567890","indented":"123456789012345678901234567890","truthy":true}
+{"kind":"json","text":"1.0","repr":"1.0","str":"1.0","compact":"1.0","indented":"1.0","truthy":true}
+{"kind":"json","text":"1.5","repr":"1.5","str":"1.5","compact":"1.5","indented":"1.5","truthy":true}
+{"kind":"json","text":"-1.5e3","repr":"-1500.0","str":"-1500.0","compact":"-1500.0","indented":"-1500.0","truthy":true}
+{"kind":"json","text":"1e5","repr":"100000.0","str":"100000.0","compact":"100000.0","indented":"100000.0","truthy":true}
+{"kind":"json","text":"1E-5","repr":"1e-05","str":"1e-05","compact":"1e-05","indented":"1e-05","truthy":true}
+{"kind":"json","text":"1e400","repr":"inf","str":"inf","compact":"Infinity","indented":"Infinity","truthy":true}
+{"kind":"json","text":"-1e400","repr":"-inf","str":"-inf","compact":"-Infinity","indented":"-Infinity","truthy":true}
+{"kind":"json","text":"0.1","repr":"0.1","str":"0.1","compact":"0.1","indented":"0.1","truthy":true}
+{"kind":"json","text":"1e16","repr":"1e+16","str":"1e+16","compact":"1e+16","indented":"1e+16","truthy":true}
+{"kind":"json","text":"1e-5","repr":"1e-05","str":"1e-05","compact":"1e-05","indented":"1e-05","truthy":true}
+{"kind":"json","text":"0.0001","repr":"0.0001","str":"0.0001","compact":"0.0001","indented":"0.0001","truthy":true}
+{"kind":"json","text":"123456789.123456789","repr":"123456789.12345679","str":"123456789.12345679","compact":"123456789.12345679","indented":"123456789.12345679","truthy":true}
+{"kind":"json","text":"2.5e-320","repr":"2.5e-320","str":"2.5e-320","compact":"2.5e-320","indented":"2.5e-320","truthy":true}
+{"kind":"json","text":"NaN","repr":"nan","str":"nan","compact":"NaN","indented":"NaN","truthy":true}
+{"kind":"json","text":"Infinity","repr":"inf","str":"inf","compact":"Infinity","indented":"Infinity","truthy":true}
+{"kind":"json","text":"-Infinity","repr":"-inf","str":"-inf","compact":"-Infinity","indented":"-Infinity","truthy":true}
+{"kind":"json","text":"\"s\"","repr":"'s'","str":"s","compact":"\"s\"","indented":"\"s\"","truthy":true}
+{"kind":"json","text":"\"\u00e9\"","repr":"'\u00e9'","str":"\u00e9","compact":"\"\\u00e9\"","indented":"\"\\u00e9\"","truthy":true}
+{"kind":"json","text":"\"\\u00e9\"","repr":"'\u00e9'","str":"\u00e9","compact":"\"\\u00e9\"","indented":"\"\\u00e9\"","truthy":true}
+{"kind":"json","text":"\"\\ud83d\\ude00\"","repr":"'\ud83d\ude00'","str":"\ud83d\ude00","compact":"\"\\ud83d\\ude00\"","indented":"\"\\ud83d\\ude00\"","truthy":true}
+{"kind":"json","text":"\"\\n\\t\\\"\\\\\\/\\b\\f\\r\"","repr":"'\\n\\t\"\\\\/\\x08\\x0c\\r'","str":"\n\t\"\\/\b\f\r","compact":"\"\\n\\t\\\"\\\\/\\b\\f\\r\"","indented":"\"\\n\\t\\\"\\\\/\\b\\f\\r\"","truthy":true}
+{"kind":"json","text":"[]","repr":"[]","str":"[]","compact":"[]","indented":"[]","truthy":false}
+{"kind":"json","text":"{}","repr":"{}","str":"{}","compact":"{}","indented":"{}","truthy":false}
+{"kind":"json","text":"[1, 2]","repr":"[1, 2]","str":"[1, 2]","compact":"[1,2]","indented":"[\n 1,\n 2\n]","truthy":true}
+{"kind":"json","text":"{\"a\": 1, \"b\": [true, null]}","repr":"{'a': 1, 'b': [True, None]}","str":"{'a': 1, 'b': [True, None]}","compact":"{\"a\":1,\"b\":[true,null]}","indented":"{\n \"a\": 1,\n \"b\": [\n  true,\n  null\n ]\n}","truthy":true}
+{"kind":"json","text":"{\"b\": 1, \"a\": 2, \"b\": 3}","repr":"{'b': 3, 'a': 2}","str":"{'b': 3, 'a': 2}","compact":"{\"a\":2,\"b\":3}","indented":"{\n \"b\": 3,\n \"a\": 2\n}","truthy":true}
+{"kind":"json","text":" {\"a\" : {\"c\": {}, \"b\": []}} ","repr":"{'a': {'c': {}, 'b': []}}","str":"{'a': {'c': {}, 'b': []}}","compact":"{\"a\":{\"b\":[],\"c\":{}}}","indented":"{\n \"a\": {\n  \"c\": {},\n  \"b\": []\n }\n}","truthy":true}
+{"kind":"json","text":"[1.0, 2.50, 1e2, \"x\ty\", {\"k\": \"\u00e9\"}]","refused":true}
+{"kind":"json","text":"{\"id\": \"rec\", \"start\": 100, \"nested\": {\"z\": [1, {\"y\": null}], \"a\": 0.5}}","repr":"{'id': 'rec', 'start': 100, 'nested': {'z': [1, {'y': None}], 'a': 0.5}}","str":"{'id': 'rec', 'start': 100, 'nested': {'z': [1, {'y': None}], 'a': 0.5}}","compact":"{\"id\":\"rec\",\"nested\":{\"a\":0.5,\"z\":[1,{\"y\":null}]},\"start\":100}","indented":"{\n \"id\": \"rec\",\n \"start\": 100,\n \"nested\": {\n  \"z\": [\n   1,\n   {\n    \"y\": null\n   }\n  ],\n  \"a\": 0.5\n }\n}","truthy":true}
+{"kind":"json","text":"","refused":true}
+{"kind":"json","text":" ","refused":true}
+{"kind":"json","text":"nul","refused":true}
+{"kind":"json","text":"tru","refused":true}
+{"kind":"json","text":"01","refused":true}
+{"kind":"json","text":"1.","refused":true}
+{"kind":"json","text":".5","refused":true}
+{"kind":"json","text":"1e","refused":true}
+{"kind":"json","text":"+1","refused":true}
+{"kind":"json","text":"--1","refused":true}
+{"kind":"json","text":"-","refused":true}
+{"kind":"json","text":"0x10","refused":true}
+{"kind":"json","text":"1_000","refused":true}
+{"kind":"json","text":"[1,]","refused":true}
+{"kind":"json","text":"[,1]","refused":true}
+{"kind":"json","text":"{,}","refused":true}
+{"kind":"json","text":"{\"a\":1,}","refused":true}
+{"kind":"json","text":"{\"a\"}","refused":true}
+{"kind":"json","text":"{'a': 1}","refused":true}
+{"kind":"json","text":"{a: 1}","refused":true}
+{"kind":"json","text":"\"unterminated","refused":true}
+{"kind":"json","text":"\"bad \\x escape\"","refused":true}
+{"kind":"json","text":"\"\\u12\"","refused":true}
+{"kind":"json","text":"\"\\u12g4\"","refused":true}
+{"kind":"json","text":"\"tab\there\"","refused":true}
+{"kind":"json","text":"\"nl\nhere\"","refused":true}
+{"kind":"json","text":"[1 2]","refused":true}
+{"kind":"json","text":"[1], 2","refused":true}
+{"kind":"json","text":"{\"a\": 1} x","refused":true}
+{"kind":"json","text":"nan","refused":true}
+{"kind":"json","text":"inf","refused":true}
+{"kind":"json","text":"Infinit","refused":true}
+{"kind":"json","text":"-Inf","refused":true}
+{"kind":"json","text":"[NaN, Infinity, -Infinity]","repr":"[nan, inf, -inf]","str":"[nan, inf, -inf]","compact":"[NaN,Infinity,-Infinity]","indented":"[\n NaN,\n Infinity,\n -Infinity\n]","truthy":true}
+{"kind":"json","text":"\ufeff1","refused":true}
+{"kind":"json","text":"1 2","refused":true}
+{"kind":"json","text":"[[[[[]]]]]","repr":"[[[[[]]]]]","str":"[[[[[]]]]]","compact":"[[[[[]]]]]","indented":"[\n [\n  [\n   [\n    []\n   ]\n  ]\n ]\n]","truthy":true}
+{"kind":"json","text":"\"a\\u0000b\"","repr":"'a\\x00b'","str":"a\u0000b","compact":"\"a\\u0000b\"","indented":"\"a\\u0000b\"","truthy":true}
+{"kind":"json","text":"{\"\": 0}","repr":"{'': 0}","str":"{'': 0}","compact":"{\"\":0}","indented":"{\n \"\": 0\n}","truthy":true}
+{"kind":"json","text":"[[], {}, [[]]]","repr":"[[], {}, [[]]]","str":"[[], {}, [[]]]","compact":"[[],{},[[]]]","indented":"[\n [],\n {},\n [\n  []\n ]\n]","truthy":true}
+{"kind":"json","text":"1e0","repr":"1.0","str":"1.0","compact":"1.0","indented":"1.0","truthy":true}
+{"kind":"json","text":"-0.0","repr":"-0.0","str":"-0.0","compact":"-0.0","indented":"-0.0","truthy":false}
+{"kind":"json","text":"0e0","repr":"0.0","str":"0.0","compact":"0.0","indented":"0.0","truthy":false}
+{"kind":"json","text":"0.000001","repr":"1e-06","str":"1e-06","compact":"1e-06","indented":"1e-06","truthy":true}
+{"kind":"json","text":"1e-7","repr":"1e-07","str":"1e-07","compact":"1e-07","indented":"1e-07","truthy":true}
+{"kind":"json","text":"1.7976931348623157e308","repr":"1.7976931348623157e+308","str":"1.7976931348623157e+308","compact":"1.7976931348623157e+308","indented":"1.7976931348623157e+308","truthy":true}
+{"kind":"json","text":"5e-324","repr":"5e-324","str":"5e-324","compact":"5e-324","indented":"5e-324","truthy":true}
+{"kind":"json","text":"100000000000000000000.0","repr":"1e+20","str":"1e+20","compact":"1e+20","indented":"1e+20","truthy":true}
+{"kind":"json","text":"1e22","repr":"1e+22","str":"1e+22","compact":"1e+22","indented":"1e+22","truthy":true}
+{"kind":"json","text":"1e23","repr":"1e+23","str":"1e+23","compact":"1e+23","indented":"1e+23","truthy":true}
+{"kind":"path","path":"a","str":"a","name":"a","parent":".","suffix":"","stem":"a","joins":[["b","a/b"],["/abs","/abs"],["","a"],["c/d","a/c/d"],["../e","a/../e"],["x/","a/x"]],"with_name":[["filter_vep","filter_vep",null],["x/y",null,"Invalid name 'x/y'"],["",null,"Invalid name ''"],[".",null,"Invalid name '.'"]]}
+{"kind":"path","path":"a/b","str":"a/b","name":"b","parent":"a","suffix":"","stem":"b","joins":[["b","a/b/b"],["/abs","/abs"],["","a/b"],["c/d","a/b/c/d"],["../e","a/b/../e"],["x/","a/b/x"]],"with_name":[["filter_vep","a/filter_vep",null],["x/y",null,"Invalid name 'x/y'"],["",null,"Invalid name ''"],[".",null,"Invalid name '.'"]]}
+{"kind":"path","path":"/a/b","str":"/a/b","name":"b","parent":"/a","suffix":"","stem":"b","joins":[["b","/a/b/b"],["/abs","/abs"],["","/a/b"],["c/d","/a/b/c/d"],["../e","/a/b/../e"],["x/","/a/b/x"]],"with_name":[["filter_vep","/a/filter_vep",null],["x/y",null,"Invalid name 'x/y'"],["",null,"Invalid name ''"],[".",null,"Invalid name '.'"]]}
+{"kind":"path","path":"/","str":"/","name":"","parent":"/","suffix":"","stem":"","joins":[["b","/b"],["/abs","/abs"],["","/"],["c/d","/c/d"],["../e","/../e"],["x/","/x"]],"with_name":[["filter_vep",null,"PosixPath('/') has an empty name"],["x/y",null,"Invalid name 'x/y'"],["",null,"Invalid name ''"],[".",null,"Invalid name '.'"]]}
+{"kind":"path","path":".","str":".","name":"","parent":".","suffix":"","stem":"","joins":[["b","b"],["/abs","/abs"],["","."],["c/d","c/d"],["../e","../e"],["x/","x"]],"with_name":[["filter_vep",null,"PosixPath('.') has an empty name"],["x/y",null,"Invalid name 'x/y'"],["",null,"Invalid name ''"],[".",null,"Invalid name '.'"]]}
+{"kind":"path","path":"","str":".","name":"","parent":".","suffix":"","stem":"","joins":[["b","b"],["/abs","/abs"],["","."],["c/d","c/d"],["../e","../e"],["x/","x"]],"with_name":[["filter_vep",null,"PosixPath('.') has an empty name"],["x/y",null,"Invalid name 'x/y'"],["",null,"Invalid name ''"],[".",null,"Invalid name '.'"]]}
+{"kind":"path","path":"..","str":"..","name":"..","parent":".","suffix":"","stem":"..","joins":[["b","../b"],["/abs","/abs"],["",".."],["c/d","../c/d"],["../e","../../e"],["x/","../x"]],"with_name":[["filter_vep","filter_vep",null],["x/y",null,"Invalid name 'x/y'"],["",null,"Invalid name ''"],[".",null,"Invalid name '.'"]]}
+{"kind":"path","path":"./a//b/","str":"a/b","name":"b","parent":"a","suffix":"","stem":"b","joins":[["b","a/b/b"],["/abs","/abs"],["","a/b"],["c/d","a/b/c/d"],["../e","a/b/../e"],["x/","a/b/x"]],"with_name":[["filter_vep","a/filter_vep",null],["x/y",null,"Invalid name 'x/y'"],["",null,"Invalid name ''"],[".",null,"Invalid name '.'"]]}
+{"kind":"path","path":"//x","str":"//x","name":"x","parent":"//","suffix":"","stem":"x","joins":[["b","//x/b"],["/abs","/abs"],["","//x"],["c/d","//x/c/d"],["../e","//x/../e"],["x/","//x/x"]],"with_name":[["filter_vep","//filter_vep",null],["x/y",null,"Invalid name 'x/y'"],["",null,"Invalid name ''"],[".",null,"Invalid name '.'"]]}
+{"kind":"path","path":"///x","str":"/x","name":"x","parent":"/","suffix":"","stem":"x","joins":[["b","/x/b"],["/abs","/abs"],["","/x"],["c/d","/x/c/d"],["../e","/x/../e"],["x/","/x/x"]],"with_name":[["filter_vep","/filter_vep",null],["x/y",null,"Invalid name 'x/y'"],["",null,"Invalid name ''"],[".",null,"Invalid name '.'"]]}
+{"kind":"path","path":"a/./b","str":"a/b","name":"b","parent":"a","suffix":"","stem":"b","joins":[["b","a/b/b"],["/abs","/abs"],["","a/b"],["c/d","a/b/c/d"],["../e","a/b/../e"],["x/","a/b/x"]],"with_name":[["filter_vep","a/filter_vep",null],["x/y",null,"Invalid name 'x/y'"],["",null,"Invalid name ''"],[".",null,"Invalid name '.'"]]}
+{"kind":"path","path":"a/b/.","str":"a/b","name":"b","parent":"a","suffix":"","stem":"b","joins":[["b","a/b/b"],["/abs","/abs"],["","a/b"],["c/d","a/b/c/d"],["../e","a/b/../e"],["x/","a/b/x"]],"with_name":[["filter_vep","a/filter_vep",null],["x/y",null,"Invalid name 'x/y'"],["",null,"Invalid name ''"],[".",null,"Invalid name '.'"]]}
+{"kind":"path","path":"x/../y","str":"x/../y","name":"y","parent":"x/..","suffix":"","stem":"y","joins":[["b","x/../y/b"],["/abs","/abs"],["","x/../y"],["c/d","x/../y/c/d"],["../e","x/../y/../e"],["x/","x/../y/x"]],"with_name":[["filter_vep","x/../filter_vep",null],["x/y",null,"Invalid name 'x/y'"],["",null,"Invalid name ''"],[".",null,"Invalid name '.'"]]}
+{"kind":"path","path":"/a","str":"/a","name":"a","parent":"/","suffix":"","stem":"a","joins":[["b","/a/b"],["/abs","/abs"],["","/a"],["c/d","/a/c/d"],["../e","/a/../e"],["x/","/a/x"]],"with_name":[["filter_vep","/filter_vep",null],["x/y",null,"Invalid name 'x/y'"],["",null,"Invalid name ''"],[".",null,"Invalid name '.'"]]}
+{"kind":"path","path":"a.toml","str":"a.toml","name":"a.toml","parent":".","suffix":".toml","stem":"a","joins":[["b","a.toml/b"],["/abs","/abs"],["","a.toml"],["c/d","a.toml/c/d"],["../e","a.toml/../e"],["x/","a.toml/x"]],"with_name":[["filter_vep","filter_vep",null],["x/y",null,"Invalid name 'x/y'"],["",null,"Invalid name ''"],[".",null,"Invalid name '.'"]]}
+{"kind":"path","path":".toml","str":".toml","name":".toml","parent":".","suffix":"","stem":".toml","joins":[["b",".toml/b"],["/abs","/abs"],["",".toml"],["c/d",".toml/c/d"],["../e",".toml/../e"],["x/",".toml/x"]],"with_name":[["filter_vep","filter_vep",null],["x/y",null,"Invalid name 'x/y'"],["",null,"Invalid name ''"],[".",null,"Invalid name '.'"]]}
+{"kind":"path","path":"a.b.toml","str":"a.b.toml","name":"a.b.toml","parent":".","suffix":".toml","stem":"a.b","joins":[["b","a.b.toml/b"],["/abs","/abs"],["","a.b.toml"],["c/d","a.b.toml/c/d"],["../e","a.b.toml/../e"],["x/","a.b.toml/x"]],"with_name":[["filter_vep","filter_vep",null],["x/y",null,"Invalid name 'x/y'"],["",null,"Invalid name ''"],[".",null,"Invalid name '.'"]]}
+{"kind":"path","path":"a..gz","str":"a..gz","name":"a..gz","parent":".","suffix":".gz","stem":"a.","joins":[["b","a..gz/b"],["/abs","/abs"],["","a..gz"],["c/d","a..gz/c/d"],["../e","a..gz/../e"],["x/","a..gz/x"]],"with_name":[["filter_vep","filter_vep",null],["x/y",null,"Invalid name 'x/y'"],["",null,"Invalid name ''"],[".",null,"Invalid name '.'"]]}
+{"kind":"path","path":"x.","str":"x.","name":"x.","parent":".","suffix":".","stem":"x","joins":[["b","x./b"],["/abs","/abs"],["","x."],["c/d","x./c/d"],["../e","x./../e"],["x/","x./x"]],"with_name":[["filter_vep","filter_vep",null],["x/y",null,"Invalid name 'x/y'"],["",null,"Invalid name ''"],[".",null,"Invalid name '.'"]]}
+{"kind":"path","path":"dir/ref.fa.gz","str":"dir/ref.fa.gz","name":"ref.fa.gz","parent":"dir","suffix":".gz","stem":"ref.fa","joins":[["b","dir/ref.fa.gz/b"],["/abs","/abs"],["","dir/ref.fa.gz"],["c/d","dir/ref.fa.gz/c/d"],["../e","dir/ref.fa.gz/../e"],["x/","dir/ref.fa.gz/x"]],"with_name":[["filter_vep","dir/filter_vep",null],["x/y",null,"Invalid name 'x/y'"],["",null,"Invalid name ''"],[".",null,"Invalid name '.'"]]}
+{"kind":"path","path":"/t/vep","str":"/t/vep","name":"vep","parent":"/t","suffix":"","stem":"vep","joins":[["b","/t/vep/b"],["/abs","/abs"],["","/t/vep"],["c/d","/t/vep/c/d"],["../e","/t/vep/../e"],["x/","/t/vep/x"]],"with_name":[["filter_vep","/t/filter_vep",null],["x/y",null,"Invalid name 'x/y'"],["",null,"Invalid name ''"],[".",null,"Invalid name '.'"]]}
+{"kind":"path","path":"vep","str":"vep","name":"vep","parent":".","suffix":"","stem":"vep","joins":[["b","vep/b"],["/abs","/abs"],["","vep"],["c/d","vep/c/d"],["../e","vep/../e"],["x/","vep/x"]],"with_name":[["filter_vep","filter_vep",null],["x/y",null,"Invalid name 'x/y'"],["",null,"Invalid name ''"],[".",null,"Invalid name '.'"]]}
+{"kind":"path","path":"/t/x/..","str":"/t/x/..","name":"..","parent":"/t/x","suffix":"","stem":"..","joins":[["b","/t/x/../b"],["/abs","/abs"],["","/t/x/.."],["c/d","/t/x/../c/d"],["../e","/t/x/../../e"],["x/","/t/x/../x"]],"with_name":[["filter_vep","/t/x/filter_vep",null],["x/y",null,"Invalid name 'x/y'"],["",null,"Invalid name ''"],[".",null,"Invalid name '.'"]]}
+{"kind":"path","path":"a/","str":"a","name":"a","parent":".","suffix":"","stem":"a","joins":[["b","a/b"],["/abs","/abs"],["","a"],["c/d","a/c/d"],["../e","a/../e"],["x/","a/x"]],"with_name":[["filter_vep","filter_vep",null],["x/y",null,"Invalid name 'x/y'"],["",null,"Invalid name ''"],[".",null,"Invalid name '.'"]]}
+{"kind":"toml","text":"v = \"s\"","repr":"'s'","str":"s","truthy":true,"as_list":["s"]}
+{"kind":"toml","text":"v = 1","repr":"1","str":"1","truthy":true,"as_list":["1"]}
+{"kind":"toml","text":"v = -1","repr":"-1","str":"-1","truthy":true,"as_list":["-1"]}
+{"kind":"toml","text":"v = 0","repr":"0","str":"0","truthy":false,"as_list":["0"]}
+{"kind":"toml","text":"v = +7","repr":"7","str":"7","truthy":true,"as_list":["7"]}
+{"kind":"toml","text":"v = 1_000","repr":"1000","str":"1000","truthy":true,"as_list":["1000"]}
+{"kind":"toml","text":"v = 0x1F","repr":"31","str":"31","truthy":true,"as_list":["31"]}
+{"kind":"toml","text":"v = 0o17","repr":"15","str":"15","truthy":true,"as_list":["15"]}
+{"kind":"toml","text":"v = 0b101","repr":"5","str":"5","truthy":true,"as_list":["5"]}
+{"kind":"toml","text":"v = 1.5","repr":"1.5","str":"1.5","truthy":true,"as_list":["1.5"]}
+{"kind":"toml","text":"v = -0.0","repr":"-0.0","str":"-0.0","truthy":false,"as_list":["-0.0"]}
+{"kind":"toml","text":"v = 1e3","repr":"1000.0","str":"1000.0","truthy":true,"as_list":["1000.0"]}
+{"kind":"toml","text":"v = 6.02E23","repr":"6.02e+23","str":"6.02e+23","truthy":true,"as_list":["6.02e+23"]}
+{"kind":"toml","text":"v = 1e-7","repr":"1e-07","str":"1e-07","truthy":true,"as_list":["1e-07"]}
+{"kind":"toml","text":"v = inf","repr":"inf","str":"inf","truthy":true,"as_list":["inf"]}
+{"kind":"toml","text":"v = -inf","repr":"-inf","str":"-inf","truthy":true,"as_list":["-inf"]}
+{"kind":"toml","text":"v = nan","repr":"nan","str":"nan","truthy":true,"as_list":["nan"]}
+{"kind":"toml","text":"v = true","repr":"True","str":"True","truthy":true,"as_list":["True"]}
+{"kind":"toml","text":"v = false","repr":"False","str":"False","truthy":false,"as_list":["False"]}
+{"kind":"toml","text":"v = \"\"","repr":"''","str":"","truthy":false,"as_list":[""]}
+{"kind":"toml","text":"v = []","repr":"[]","str":"[]","truthy":false,"as_list":[]}
+{"kind":"toml","text":"v = {}","repr":"{}","str":"{}","truthy":false,"as_list":["{}"]}
+{"kind":"toml","text":"v = [1, 'a', [true]]","repr":"[1, 'a', [True]]","str":"[1, 'a', [True]]","truthy":true,"as_list":["1","a","[True]"]}
+{"kind":"toml","text":"v = {a = 1, b = {c = 'x'}}","repr":"{'a': 1, 'b': {'c': 'x'}}","str":"{'a': 1, 'b': {'c': 'x'}}","truthy":true,"as_list":["{'a': 1, 'b': {'c': 'x'}}"]}
+{"kind":"toml","text":"v = 1979-05-27T07:32:00Z","repr":"datetime.datetime(1979, 5, 27, 7, 32, tzinfo=datetime.timezone.utc)","str":"1979-05-27 07:32:00+00:00","truthy":true,"as_list":["1979-05-27 07:32:00+00:00"]}
+{"kind":"toml","text":"v = 1979-05-27T00:32:00-07:00","repr":"datetime.datetime(1979, 5, 27, 0, 32, tzinfo=datetime.timezone(datetime.timedelta(days=-1, seconds=61200)))","str":"1979-05-27 00:32:00-07:00","truthy":true,"as_list":["1979-05-27 00:32:00-07:00"]}
+{"kind":"toml","text":"v = 1979-05-27T00:32:00.999999-07:00","repr":"datetime.datetime(1979, 5, 27, 0, 32, 0, 999999, tzinfo=datetime.timezone(datetime.timedelta(days=-1, seconds=61200)))","str":"1979-05-27 00:32:00.999999-07:00","truthy":true,"as_list":["1979-05-27 00:32:00.999999-07:00"]}
+{"kind":"toml","text":"v = 1979-05-27 07:32:00","repr":"datetime.datetime(1979, 5, 27, 7, 32)","str":"1979-05-27 07:32:00","truthy":true,"as_list":["1979-05-27 07:32:00"]}
+{"kind":"toml","text":"v = 1979-05-27T07:32:00.5","repr":"datetime.datetime(1979, 5, 27, 7, 32, 0, 500000)","str":"1979-05-27 07:32:00.500000","truthy":true,"as_list":["1979-05-27 07:32:00.500000"]}
+{"kind":"toml","text":"v = 1979-05-27","repr":"datetime.date(1979, 5, 27)","str":"1979-05-27","truthy":true,"as_list":["1979-05-27"]}
+{"kind":"toml","text":"v = 07:32:00","repr":"datetime.time(7, 32)","str":"07:32:00","truthy":true,"as_list":["07:32:00"]}
+{"kind":"toml","text":"v = 00:32:00.999999","repr":"datetime.time(0, 32, 0, 999999)","str":"00:32:00.999999","truthy":true,"as_list":["00:32:00.999999"]}
+{"kind":"toml","text":"v = 0001-01-01","repr":"datetime.date(1, 1, 1)","str":"0001-01-01","truthy":true,"as_list":["0001-01-01"]}
+{"kind":"toml","text":"v = 1979-05-27T07:32:00+00:00","repr":"datetime.datetime(1979, 5, 27, 7, 32, tzinfo=datetime.timezone.utc)","str":"1979-05-27 07:32:00+00:00","truthy":true,"as_list":["1979-05-27 07:32:00+00:00"]}
+{"kind":"toml","text":"v = 1979-05-27T07:32:00+05:30","repr":"datetime.datetime(1979, 5, 27, 7, 32, tzinfo=datetime.timezone(datetime.timedelta(seconds=19800)))","str":"1979-05-27 07:32:00+05:30","truthy":true,"as_list":["1979-05-27 07:32:00+05:30"]}
+{"kind":"toml","text":"v = 1979-05-27T07:32:05Z","repr":"datetime.datetime(1979, 5, 27, 7, 32, 5, tzinfo=datetime.timezone.utc)","str":"1979-05-27 07:32:05+00:00","truthy":true,"as_list":["1979-05-27 07:32:05+00:00"]}
+{"kind":"toml","text":"v = 1979-05-27T07:32:00.000001Z","repr":"datetime.datetime(1979, 5, 27, 7, 32, 0, 1, tzinfo=datetime.timezone.utc)","str":"1979-05-27 07:32:00.000001+00:00","truthy":true,"as_list":["1979-05-27 07:32:00.000001+00:00"]}
+{"kind":"toml","text":"v = 00:00:00","repr":"datetime.time(0, 0)","str":"00:00:00","truthy":true,"as_list":["00:00:00"]}
+{"kind":"toml","text":"v = 23:59:59.1","repr":"datetime.time(23, 59, 59, 100000)","str":"23:59:59.100000","truthy":true,"as_list":["23:59:59.100000"]}
+{"kind":"toml","text":"v = 1979-12-31T23:59:59.123456789Z","repr":"datetime.datetime(1979, 12, 31, 23, 59, 59, 123456, tzinfo=datetime.timezone.utc)","str":"1979-12-31 23:59:59.123456+00:00","truthy":true,"as_list":["1979-12-31 23:59:59.123456+00:00"]}
+{"kind":"toml","text":"v = 1979-05-27T07:32:00-00:00","repr":"datetime.datetime(1979, 5, 27, 7, 32, tzinfo=datetime.timezone.utc)","str":"1979-05-27 07:32:00+00:00","truthy":true,"as_list":["1979-05-27 07:32:00+00:00"]}
+{"kind":"toml","text":"v = 1979-05-27T07:32:00+12:45","repr":"datetime.datetime(1979, 5, 27, 7, 32, tzinfo=datetime.timezone(datetime.timedelta(seconds=45900)))","str":"1979-05-27 07:32:00+12:45","truthy":true,"as_list":["1979-05-27 07:32:00+12:45"]}
+{"kind":"toml","text":"v = \"it's\"","repr":"\"it's\"","str":"it's","truthy":true,"as_list":["it's"]}
+{"kind":"toml","text":"v = 'lit\\eral'","repr":"'lit\\\\eral'","str":"lit\\eral","truthy":true,"as_list":["lit\\eral"]}
+{"kind":"toml","text":"v = \"tab\\there\\u00e9\\U0001F600\"","repr":"'tab\\there\u00e9\ud83d\ude00'","str":"tab\there\u00e9\ud83d\ude00","truthy":true,"as_list":["tab\there\u00e9\ud83d\ude00"]}
+{"kind":"toml","text":"v = \"\"\"\nmulti\nline\"\"\"","repr":"'multi\\nline'","str":"multi\nline","truthy":true,"as_list":["multi\nline"]}
+{"kind":"toml","text":"v = '''\nraw\n'''","repr":"'raw\\n'","str":"raw\n","truthy":true,"as_list":["raw\n"]}
+{"kind":"toml","text":"v = \"a\\\\b\"","repr":"'a\\\\b'","str":"a\\b","truthy":true,"as_list":["a\\b"]}
+{"kind":"toml","text":"v = [ 1979-01-01, 1.0, {} ]","repr":"[datetime.date(1979, 1, 1), 1.0, {}]","str":"[datetime.date(1979, 1, 1), 1.0, {}]","truthy":true,"as_list":["1979-01-01","1.0","{}"]}
+{"kind":"toml","text":"v = 9223372036854775807","repr":"9223372036854775807","str":"9223372036854775807","truthy":true,"as_list":["9223372036854775807"]}
+{"kind":"toml","text":"v = -9223372036854775808","repr":"-9223372036854775808","str":"-9223372036854775808","truthy":true,"as_list":["-9223372036854775808"]}

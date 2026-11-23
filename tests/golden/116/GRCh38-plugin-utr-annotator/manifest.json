@@ -48,7 +48,7 @@
    "vep_rs_only_summary": {}
   }
  ],
- "suites": {
+ "datasets": {
   "utr": {
    "reference": "default.txt",
    "input": "variants.vcf",
@@ -98,14 +98,9 @@
    "exemplar_records": 12
   }
  },
- "variant_classes": {
-  "deletion": 33,
-  "insertion": 40,
-  "snv": 85
- },
  "records": [
   {
-   "suite": "utr",
+   "dataset": "utr",
    "vcf": "21\t10524584\tuaug_lost_snv_fwd_ENST00000427445_146\tT\tC\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -113,7 +108,7 @@
    ]
   },
   {
-   "suite": "utr",
+   "dataset": "utr",
    "vcf": "21\t10524586\tuframeshift_del_fwd_ENST00000427445_149\tTT\tT\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -121,7 +116,7 @@
    ]
   },
   {
-   "suite": "utr",
+   "dataset": "utr",
    "vcf": "21\t10524587\tustop_gained_snv_fwd_ENST00000427445_149\tT\tA\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -129,7 +124,7 @@
    ]
   },
   {
-   "suite": "utr",
+   "dataset": "utr",
    "vcf": "21\t10524587\tuframeshift_ins_fwd_ENST00000427445_150\tT\tTC\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -137,7 +132,7 @@
    ]
   },
   {
-   "suite": "utr",
+   "dataset": "utr",
    "vcf": "21\t10524633\tustop_lost_snv_fwd_ENST00000427445_195\tA\tC\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -145,21 +140,21 @@
    ]
   },
   {
-   "suite": "utr",
+   "dataset": "utr",
    "vcf": "21\t13609783\tuaug_gained_snv_fwd_ENST00000299443_6\tT\tA\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant"
    ]
   },
   {
-   "suite": "utr",
+   "dataset": "utr",
    "vcf": "21\t13609888\tuaug_gained_ins_junction_fwd_ENST00000299443_112\tT\tTG\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant"
    ]
   },
   {
-   "suite": "utr",
+   "dataset": "utr",
    "vcf": "21\t14210930\tuaug_lost_oorf_snv_rev_ENST00000400211_25\tC\tT\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -167,7 +162,7 @@
    ]
   },
   {
-   "suite": "utr",
+   "dataset": "utr",
    "vcf": "21\t14546302\tustop_lost_snv_ev_rev_ENST00000619120_58\tT\tG\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -178,7 +173,7 @@
    ]
   },
   {
-   "suite": "utr",
+   "dataset": "utr",
    "vcf": "21\t14546344\tustop_gained_snv_ev_rev_ENST00000619120_16\tG\tT\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -188,7 +183,7 @@
    ]
   },
   {
-   "suite": "utr",
+   "dataset": "utr",
    "vcf": "21\t14546347\tuframeshift_del_ev_rev_ENST00000619120_12\tCA\tC\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -198,7 +193,7 @@
    ]
   },
   {
-   "suite": "utr",
+   "dataset": "utr",
    "vcf": "21\t14546351\tuaug_lost_snv_ev_rev_ENST00000619120_9\tA\tG\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -208,7 +203,7 @@
    ]
   },
   {
-   "suite": "utr",
+   "dataset": "utr",
    "vcf": "21\t14582488\tustop_lost_snv_rev_ENST00000285670_83\tT\tG\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,splice_region_variant",
@@ -219,7 +214,7 @@
    ]
   },
   {
-   "suite": "utr",
+   "dataset": "utr",
    "vcf": "21\t14583335\tustop_gained_mnv_rev_ENST00000285670_66\tAC\tCA\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -229,7 +224,7 @@
    ]
   },
   {
-   "suite": "utr",
+   "dataset": "utr",
    "vcf": "21\t14583337\tuaug_lost_snv_rev_ENST00000285670_65\tA\tG\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -240,7 +235,7 @@
    ]
   },
   {
-   "suite": "utr",
+   "dataset": "utr",
    "vcf": "21\t14583349\tuframeshift_ins_rev_ENST00000285670_53\tA\tAG\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -251,7 +246,7 @@
    ]
   },
   {
-   "suite": "utr",
+   "dataset": "utr",
    "vcf": "21\t14583349\tustop_gained_snv_rev_ENST00000285670_53\tA\tC\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -262,7 +257,7 @@
    ]
   },
   {
-   "suite": "utr",
+   "dataset": "utr",
    "vcf": "21\t14583349\tuframeshift_del_rev_ENST00000285670_52\tAT\tA\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -272,7 +267,7 @@
    ]
   },
   {
-   "suite": "utr",
+   "dataset": "utr",
    "vcf": "21\t14658815\tuaug_gained_snv_rev_ENST00000647101_6\tG\tC\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -280,14 +275,14 @@
    ]
   },
   {
-   "suite": "utr",
+   "dataset": "utr",
    "vcf": "21\t14658815\tuaug_gained_ins_junction_rev_ENST00000647101_6\tG\tGC\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant"
    ]
   },
   {
-   "suite": "utr",
+   "dataset": "utr",
    "vcf": "21\t14968482\tustop_gained_mnv_ev_rev_ENST00000400199_428\tTC\tCA\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -297,7 +292,7 @@
    ]
   },
   {
-   "suite": "utr",
+   "dataset": "utr",
    "vcf": "21\t18027934\tuframeshift_oorf_ins_fwd_ENST00000400127_124\tG\tGT\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -306,14 +301,14 @@
    ]
   },
   {
-   "suite": "utr",
+   "dataset": "utr",
    "vcf": "21\t44261259\twhole_utr_exon_del_rev_ENST00000431166_143\tTGGGGATG\tT\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "utr",
+   "dataset": "utr",
    "vcf": "21\t44456633\twhole_utr_exon_del_fwd_ENST00000885221_184\tGGTCAGGTCAGG\tG\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -322,7 +317,7 @@
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "divergences": [],

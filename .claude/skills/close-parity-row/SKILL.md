@@ -26,15 +26,17 @@ Done when you can state the row's `target`, its `perl_reference` and its `interi
 ## 2. Read the reference
 
 Open the `perl_reference` module and find the code that implements the item. Read it from GitHub at
-the pinned tag, `https://raw.githubusercontent.com/Ensembl/ensembl-vep/release/116.2/<path>`, or from
-the image with `docker run --rm ensemblorg/ensembl-vep:release_116.2 cat /opt/vep/src/ensembl-vep/<path>`:
+the pinned tag, `https://raw.githubusercontent.com/Ensembl/ensembl-vep/release/116.3/<path>`, or from
+the image with `docker run --rm ensemblorg/ensembl-vep:release_116.3 cat /opt/vep/src/ensembl-vep/<path>`:
 
 | `perl_reference` | `<path>` |
 | --- | --- |
 | a VEP module (`Config.pm`, `Parser/VCF.pm`) | `modules/Bio/EnsEMBL/VEP/<module>` |
-| `vep`, `INSTALL.pl` | the name itself |
+| a script (`vep`, `INSTALL.pl`, `filter_vep`) | the name itself |
 | `Variation/<module>` | `Bio/EnsEMBL/Variation/<module>` in the image; in `Ensembl/ensembl-variation` at `modules/Bio/EnsEMBL/Variation/<module>`, branch `release/116` |
-| a plugin (`<Name>.pm`) | `<Name>.pm` in `Ensembl/VEP_plugins`, branch `release/116` |
+| `IO/<module>` | `Bio/EnsEMBL/IO/<module>` in the image; in `Ensembl/ensembl-io` at `modules/Bio/EnsEMBL/IO/<module>`, branch `release/116` |
+| `Bio::Tools::CodonTable` | `Bio/Tools/CodonTable.pm` in the image, a BioPerl module |
+| a plugin (`<Name>.pm`) | `<Name>.pm` in `Ensembl/VEP_plugins`, branch `release/116`; where the branch lacks the module, the plugin's row of the support table of `docs/plugins.md` says so |
 
 Write down the behaviour vep-rs must match, each claim cited as `Module.pm:line`: for an `error` or
 `accepted_noop` row, where Ensembl VEP declares the flag and what it does with it; for the other
@@ -53,7 +55,7 @@ for an entry to go needs the newer Ensembl VEP behaviour stated in plain words, 
 shows it; a new difference the row uncovers is proposed there, with the input, both engines' rows
 and why vep-rs's row is the one to keep.
 
-Done when every claim has a citation you read yourself at `release/116.2`.
+Done when every claim has a citation you read yourself at `release/116.3`.
 
 ## 3. Write Test 1 red
 
@@ -62,7 +64,7 @@ The test lives in the crate the behaviour lives in. Follow the pattern already u
 | `target` | Test 1 | Pattern |
 | --- | --- | --- |
 | `error` | The refusal fires with its message, exit code 1 | `assert_refused` in `crates/vep-cli/tests/cli_errors.rs` |
-| `accepted_noop` | Output is byte-identical with and without the flag | `assert_no_effect` in `crates/vep-cli/tests/cli_noops.rs` |
+| `accepted_noop` | Output is the same with and without the flag, apart from the header lines that record the command line and the time of the run | `assert_no_effect` in `crates/vep-cli/tests/cli_noops.rs` |
 | `removed` | The flag is rejected and `args.rs` does not declare it | `crates/vep-cli/tests/cli_errors.rs` |
 | `implemented` | The effect on a hand-built variant and transcript, the expected value taken from Ensembl VEP's output on the same input and cited | the owning crate's unit tests |
 | `documented_subset` | The subset's effect, plus a test that the page states the exclusion | the `implemented` pattern, plus `crates/vep-cli/tests/documented_subsets.rs` |

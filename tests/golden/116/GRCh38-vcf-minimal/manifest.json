@@ -11,7 +11,7 @@
  "covers": [
   "minimal"
  ],
- "suites": {
+ "datasets": {
   "GRCh38-vcf-minimal": {
    "reference": "default.txt",
    "input": "variants.vcf",
@@ -79,7 +79,7 @@
  },
  "records": [
   {
-   "suite": "GRCh38-vcf-minimal",
+   "dataset": "GRCh38-vcf-minimal",
    "vcf": "21\t10542415\tsnv\tA\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -88,7 +88,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-minimal",
+   "dataset": "GRCh38-vcf-minimal",
    "vcf": "21\t10542414\tmnp_two_sided\tAAAG\tAGGG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -97,7 +97,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-minimal",
+   "dataset": "GRCh38-vcf-minimal",
    "vcf": "21\t10542414\tmnp_left\tAAA\tAGG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -106,7 +106,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-minimal",
+   "dataset": "GRCh38-vcf-minimal",
    "vcf": "21\t10542415\tmnp_right\tAAG\tGGG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -115,7 +115,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-minimal",
+   "dataset": "GRCh38-vcf-minimal",
    "vcf": "21\t10542414\tins_padded\tA\tAT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -124,7 +124,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-minimal",
+   "dataset": "GRCh38-vcf-minimal",
    "vcf": "21\t10542414\tdel_padded\tAAA\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -133,7 +133,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-minimal",
+   "dataset": "GRCh38-vcf-minimal",
    "vcf": "21\t10542414\tmulti_snv_ins\tA\tT,AG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -144,7 +144,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-minimal",
+   "dataset": "GRCh38-vcf-minimal",
    "vcf": "21\t10542414\tmulti_no_change\tA\tT,C\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -155,7 +155,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-minimal",
+   "dataset": "GRCh38-vcf-minimal",
    "vcf": "21\t10542414\tmulti_mnp_two\tAAA\tAGG,AAG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -166,7 +166,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-minimal",
+   "dataset": "GRCh38-vcf-minimal",
    "vcf": "21\t10542415\tmulti_eq_ref_first\tA\tA,G\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -175,7 +175,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-minimal",
+   "dataset": "GRCh38-vcf-minimal",
    "vcf": "21\t10542415\tmulti_eq_ref_second\tA\tG,A\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -184,7 +184,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-minimal",
+   "dataset": "GRCh38-vcf-minimal",
    "vcf": "21\t10542414\tmulti_dup_trimmable\tAAA\tAGA,AGA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -193,7 +193,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-minimal",
+   "dataset": "GRCh38-vcf-minimal",
    "vcf": "21\t10542414\tmulti_dup_plus_ins\tA\tT,T,AG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -204,7 +204,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-minimal",
+   "dataset": "GRCh38-vcf-minimal",
    "vcf": "21\t10542414\tmulti_star_ins\tA\tAG,*\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -213,7 +213,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-minimal",
+   "dataset": "GRCh38-vcf-minimal",
    "vcf": "21\t10542414\tmulti_three\tAAAG\tAGAG,AAGG,A\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_deletion",
@@ -226,7 +226,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-minimal",
+   "dataset": "GRCh38-vcf-minimal",
    "vcf": "21\t10542414\tlower_mnp\taaag\taggg\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -235,7 +235,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-minimal",
+   "dataset": "GRCh38-vcf-minimal",
    "vcf": "21\t10542414\tmixed_case_mnp\tAAAG\tAGGg\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -244,7 +244,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-minimal",
+   "dataset": "GRCh38-vcf-minimal",
    "vcf": "21\t10542415\tsnv_star\tA\tG,*\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -253,7 +253,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-minimal",
+   "dataset": "GRCh38-vcf-minimal",
    "vcf": "21\t10542414\tmulti_delstar\tA\tAG,<DEL:*>\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -262,7 +262,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-minimal",
+   "dataset": "GRCh38-vcf-minimal",
    "vcf": "21\t10542414\t.\tA\tT,AG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -273,7 +273,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-minimal",
+   "dataset": "GRCh38-vcf-minimal",
    "vcf": "21\t14512454\trev_mnp\tCTGT\tCAGT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -284,7 +284,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-minimal",
+   "dataset": "GRCh38-vcf-minimal",
    "vcf": "21\t14512454\trev_multi\tCTGT\tCAGT,CTGTA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -297,7 +297,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-minimal",
+   "dataset": "GRCh38-vcf-minimal",
    "vcf": "21\t20000326\tinter_multi\tTT\tTA,TTAA\t.\t.\t.",
    "combinations": [
     "intergenic_variant"

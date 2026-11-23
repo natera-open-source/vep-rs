@@ -29,7 +29,7 @@
   "gnomADMt",
   "api-plugin-licence-headers"
  ],
- "suites": {
+ "datasets": {
   "mt": {
    "reference": "reference.txt",
    "input": "candidates.vcf",
@@ -62,7 +62,7 @@
  },
  "records": [
   {
-   "suite": "mt",
+   "dataset": "mt",
    "vcf": "MT\t3\t.\tT\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -70,7 +70,7 @@
    ]
   },
   {
-   "suite": "mt",
+   "dataset": "mt",
    "vcf": "MT\t6\t.\tC\tCCTCAA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -78,7 +78,7 @@
    ]
   },
   {
-   "suite": "mt",
+   "dataset": "mt",
    "vcf": "MT\t21\t.\tAT\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -86,7 +86,7 @@
    ]
   },
   {
-   "suite": "mt",
+   "dataset": "mt",
    "vcf": "MT\t42\t.\tT\tTC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -94,7 +94,7 @@
    ]
   },
   {
-   "suite": "mt",
+   "dataset": "mt",
    "vcf": "MT\t60\t.\tT\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -102,7 +102,7 @@
    ]
   },
   {
-   "suite": "mt",
+   "dataset": "mt",
    "vcf": "MT\t1555\trs267606617\tA\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -111,7 +111,7 @@
    ]
   },
   {
-   "suite": "mt",
+   "dataset": "mt",
    "vcf": "MT\t3243\trs199474657\tA\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -120,7 +120,7 @@
    ]
   },
   {
-   "suite": "mt",
+   "dataset": "mt",
    "vcf": "MT\t3460\trs199476118\tG\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -129,7 +129,7 @@
    ]
   },
   {
-   "suite": "mt",
+   "dataset": "mt",
    "vcf": "MT\t8993\trs199476133\tT\tG,C\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -141,7 +141,7 @@
    ]
   },
   {
-   "suite": "mt",
+   "dataset": "mt",
    "vcf": "MT\t11778\trs199476112\tG\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -150,7 +150,7 @@
    ]
   },
   {
-   "suite": "mt",
+   "dataset": "mt",
    "vcf": "MT\t14484\trs199476104\tT\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -159,7 +159,7 @@
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "flag_sets": [

@@ -1,0 +1,91 @@
+{
+ "pull_request": {
+  "number": 0,
+  "state": "open",
+  "draft": false,
+  "title": "Title",
+  "body": "## Summary\n\nSummary text.\n\n## Verification\n\nVerification text.\n\n## Upgrade impact\n\nUpgrade impact text.\n\n- [x] Every commit is signed off.\n\n## Intended divergences\n<!-- Check what applies. One entry per line, for example:\n- `A`: keeps it, because the index's reasoning is wrong for this case in the way stated here. -->\n- [x] This change touches none of the intended divergences.\n- [ ] This change touches these existing entries, one line each:\n- [ ] This change proposes a new intended divergence, described below:\n",
+  "user": {
+   "login": "contributor-one",
+   "type": "User"
+  },
+  "author_association": "CONTRIBUTOR",
+  "labels": [],
+  "head": {
+   "sha": "0000000000000000000000000000000000000003",
+   "ref": "topic",
+   "repo": {
+    "fork": true,
+    "owner": {
+     "login": "contributor-one"
+    }
+   }
+  },
+  "base": {
+   "sha": "0000000000000000000000000000000000000002",
+   "ref": "main"
+  }
+ },
+ "commits": [
+  {
+   "sha": "0000000000000000000000000000000000000003",
+   "parents": [
+    {
+     "sha": "0000000000000000000000000000000000000002"
+    }
+   ],
+   "commit": {
+    "message": "Subject line 1\n\nCo-Authored-By: Example Model 1 <noreply@example.org>\nSigned-off-by: Person 1 <person1@example.org>\n",
+    "author": {
+     "name": "Person 1",
+     "email": "person1@example.org"
+    }
+   }
+  }
+ ],
+ "files": [
+  {
+   "filename": "crates/vep-effects/src/distance.rs",
+   "status": "modified",
+   "additions": 1,
+   "deletions": 1,
+   "patch": "@@ -5,5 +5,5 @@\n x\n x\n x\n-x\n+x\n x",
+   "regions": {
+    "new": [],
+    "old": []
+   }
+  },
+  {
+   "filename": "crates/vep-effects/tests/flank_rows.rs",
+   "status": "modified",
+   "additions": 6,
+   "deletions": 0
+  },
+  {
+   "filename": "CHANGELOG.md",
+   "status": "modified",
+   "additions": 1,
+   "deletions": 0,
+   "patch": "@@ -6,2 +6,3 @@\n \n+- Entry (#0)\n \n"
+  }
+ ],
+ "contains_base_tip": true,
+ "head_changelog": "# Changelog\n\n## [Unreleased]\n\n### Fixed\n\n- Entry (#0)\n",
+ "base_index_file": "index-sample-main.md",
+ "head_index_file": "index-sample-main.md",
+ "base_records": {
+  "scripts/divergences/reproductions/bare_m_chromosome.toml": "entry = \"bare_m_chromosome\"\npage = \"docs/divergences/bare-m-chromosome.md\"\n\n[implementation]\ncode = [\"crates/vep-effects/src/distance.rs::flank_distance\"]\ntests = [\"crates/vep-effects/tests/distance.rs::the_distance_is_measured_from_the_feature_end\"]\n"
+ },
+ "head_records": {
+  "scripts/divergences/reproductions/bare_m_chromosome.toml": "entry = \"bare_m_chromosome\"\npage = \"docs/divergences/bare-m-chromosome.md\"\n\n[implementation]\ncode = [\"crates/vep-effects/src/distance.rs::flank_distance\"]\ntests = [\"crates/vep-effects/tests/distance.rs::the_distance_is_measured_from_the_feature_end\"]\n"
+ },
+ "sources": {
+  "old": {
+   "crates/vep-effects/src/distance.rs": "//! Distances between a variant and a feature.\n\n/// The distance from a position to the nearest end of a feature.\npub fn flank_distance(start: u64, end: u64, position: u64) -> u64 {\n    if position < start {\n        start - position\n    } else {\n        position.saturating_sub(end)\n    }\n}\n\n/// Whether a position lies inside a feature.\npub fn inside(start: u64, end: u64, position: u64) -> bool {\n    start <= position && position <= end\n}\n"
+  },
+  "new": {
+   "crates/vep-effects/src/distance.rs": "//! Distances between a variant and a feature.\n\n/// The distance from a position to the nearest end of a feature.\npub fn flank_distance(start: u64, end: u64, position: u64) -> u64 {\n    if position < start {\n        start - position\n    } else {\n        position.saturating_sub(end) + 1\n    }\n}\n\n/// Whether a position lies inside a feature.\npub fn inside(start: u64, end: u64, position: u64) -> bool {\n    start <= position && position <= end\n}\n"
+  }
+ },
+ "opened_before_mapped_items_rule": true
+}

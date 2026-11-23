@@ -1,0 +1,123 @@
+entry = "stop_codon_settled_before_unknown_bases"
+page = "docs/divergences/stop-codon-settled-before-unknown-bases.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "observed"
+input_class_basis = "1 · 0.26 per million · no flag needed"
+notes = "Five insertions written for the entry after 21:10567700, the last base of codon 141 of the forward-strand ENST00000622113. Three hold four unknown bases after a sense codon and a stop codon: one of ten bases, one of twelve, and one whose first four bases equal the four reference bases after the point, so that its last placement is four bases 3'. The fourth is the twelve-base insertion with its unknown bases completed, on which the engines agree. The fifth holds its unknown bases after two sense codons, so no stop codon is settled, and the engines agree on it too. Two more insert thirteen bases between 21:30165951 and 21:30165952, six coding bases before the stop codon of the one-exon reverse-strand ENST00000286808: a sense codon, a stop codon, a third codon and four bases, unknown in the sixth record and known in the seventh. On the sixth Ensembl VEP writes stop_retained_variant, for an overlap it reads with the insertion's start moved by the inserted length and a stop codon test it does not make; on the seventh the engines agree. Eight more keep the stop codon: a stop codon and four unknown bases, of seven bases and of nine, and each with its unknown bases completed, inserted after 21:10605549, between the last sense codon and the stop codon of ENST00000622113, and, as their reverse complement, after 21:14108995, between the stop codon and the last sense codon of the reverse-strand ENST00000681601. On the completed records the engines differ by older entries alone: the HGVSp of a kept stop codon (`hgvsp_stop_codon_protein_comparison`) and, on the forward strand, the terms of the seven-base insertion (`stop_codon_overlap_insertion_range`). Six more are written in an intron, three bases before a coding exon, and open with the four bases after their point, so the 3' rule places them inside the exon: four after 21:10542391 on ENST00000622113, placed between codons 22 and 23, and two after 21:14166454 on ENST00000681601, placed after the second base of codon 215. At that placement the known bases read a glutamate codon and a stop codon before four unknown bases (one record of whole codons and one frameshift on the forward strand, one frameshift on the reverse strand); one forward record holds its unknown bases before any stop codon, and the engines agree on it; and a completion of each strand's frameshift differs by the older entry `hgvsp_shifted_indel_written_span_gate` alone."
+
+[input]
+format = "vcf"
+text = """
+21	10567700	stop_then_unknown_frameshift	C	CGAATAGNNNN	.	.	.
+21	10567700	stop_then_unknown_inframe	C	CGAATAGNNNNCA	.	.	.
+21	10567700	stop_then_unknown_shifted	C	CATTTAGNNNNCA	.	.	.
+21	10567700	stop_then_completed_inframe	C	CGAATAGAAAACA	.	.	.
+21	10567700	unknown_before_any_stop	C	CGAAGCTNNNNCA	.	.	.
+21	30165951	stop_then_unknown_before_the_stop_codon	A	ANNNNGTGCTATTC	.	.	.
+21	30165951	stop_then_completed_before_the_stop_codon	A	ATTTTGTGCTATTC	.	.	.
+21	10605549	kept_stop_then_unknown_frameshift	T	TTAGNNNN	.	.	.
+21	10605549	kept_stop_then_unknown_inframe	T	TTAGNNNNCA	.	.	.
+21	10605549	kept_stop_then_completed_frameshift	T	TTAGAAAA	.	.	.
+21	10605549	kept_stop_then_completed_inframe	T	TTAGAAAACA	.	.	.
+21	14108995	reverse_kept_stop_then_unknown_frameshift	A	ANNNNCTA	.	.	.
+21	14108995	reverse_kept_stop_then_unknown_inframe	A	ATGNNNNCTA	.	.	.
+21	14108995	reverse_kept_stop_then_completed_frameshift	A	ATTTTCTA	.	.	.
+21	14108995	reverse_kept_stop_then_completed_inframe	A	ATGTTTTCTA	.	.	.
+21	10542391	intron_stop_then_unknown_inframe	C	CTAGTGAATAGNNNNC	.	.	.
+21	10542391	intron_stop_then_unknown_frameshift	C	CTAGTGAATAGNNNN	.	.	.
+21	10542391	intron_stop_then_completed_frameshift	C	CTAGTGAATAGAAAA	.	.	.
+21	10542391	intron_unknown_before_any_stop	C	CTAGTGAANNNNTAGC	.	.	.
+21	14166454	reverse_intron_stop_then_unknown	G	GGNNNNCTATTCCCCTG	.	.	.
+21	14166454	reverse_intron_stop_then_completed	G	GGTTTTCTATTCCCCTG	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-identifiers/json_cache"
+fasta = "tests/golden/116/GRCh38-identifiers/reference.fa.gz"
+
+[run]
+flags = ["--hgvs"]
+
+[compare]
+kind = "rows"
+where = { record = ["stop_then_unknown_frameshift", "stop_then_unknown_inframe", "stop_then_unknown_shifted", "stop_then_completed_inframe", "unknown_before_any_stop", "stop_then_unknown_before_the_stop_codon", "stop_then_completed_before_the_stop_codon", "kept_stop_then_unknown_frameshift", "kept_stop_then_unknown_inframe", "kept_stop_then_completed_frameshift", "kept_stop_then_completed_inframe", "reverse_kept_stop_then_unknown_frameshift", "reverse_kept_stop_then_unknown_inframe", "reverse_kept_stop_then_completed_frameshift", "reverse_kept_stop_then_completed_inframe", "intron_stop_then_unknown_inframe", "intron_stop_then_unknown_frameshift", "intron_stop_then_completed_frameshift", "intron_unknown_before_any_stop", "reverse_intron_stop_then_unknown", "reverse_intron_stop_then_completed"], feature = ["ENST00000622113", "ENST00000286808", "ENST00000681601"] }
+columns = ["Uploaded_variation", "Consequence", "IMPACT", "Amino_acids", "Codons", "HGVSc", "HGVSp", "HGVS_OFFSET"]
+
+[expected]
+ensembl_vep = [
+    "stop_then_unknown_frameshift | frameshift_variant | HIGH | - | -/GAATAGNNNN | - | - | -",
+    "stop_then_unknown_inframe | coding_sequence_variant | MODIFIER | - | -/GAATAGNNNNCA | - | - | -",
+    "stop_then_unknown_shifted | coding_sequence_variant | MODIFIER | - | -/ATTTAGNNNNCA | - | - | -",
+    "stop_then_completed_inframe | stop_gained,inframe_insertion | HIGH | -/E*KT | -/GAATAGAAAACA | ENST00000622113.4:c.423_424insGAATAGAAAACA | ENSP00000482040.1:p.Asn141_Ile142insGluTer | -",
+    "unknown_before_any_stop | coding_sequence_variant | MODIFIER | - | -/GAAGCTNNNNCA | - | - | -",
+    "stop_then_unknown_before_the_stop_codon | stop_retained_variant | LOW | - | -/GAATAGCACNNNN | - | - | -",
+    "stop_then_completed_before_the_stop_codon | stop_gained,frameshift_variant | HIGH | -/E*HKX | -/GAATAGCACAAAA | ENST00000286808.5:c.666_667insGAATAGCACAAAA | ENSP00000286808.3:p.Tyr223GlufsTer2 | -",
+    "kept_stop_then_unknown_frameshift | frameshift_variant | HIGH | - | -/TAGNNNN | - | - | -",
+    "kept_stop_then_unknown_inframe | coding_sequence_variant | MODIFIER | - | -/TAGNNNNCA | - | - | -",
+    "kept_stop_then_completed_frameshift | stop_gained,frameshift_variant | HIGH | -/*KX | -/TAGAAAA | ENST00000622113.4:c.1601_1602insGAAAATA | ENSP00000482040.1:p.Ter534%3D | 2",
+    "kept_stop_then_completed_inframe | inframe_insertion,stop_retained_variant | MODERATE | -/*KT | -/TAGAAAACA | ENST00000622113.4:c.1601_1602insGAAAACATA | ENSP00000482040.1:p.Ter534delinsTer | 2",
+    "reverse_kept_stop_then_unknown_frameshift | stop_retained_variant | LOW | - | -/TAGNNNN | - | - | -",
+    "reverse_kept_stop_then_unknown_inframe | stop_retained_variant | LOW | - | -/TAGNNNNCA | - | - | -",
+    "reverse_kept_stop_then_completed_frameshift | inframe_insertion,stop_retained_variant | MODERATE | -/*KX | -/TAGAAAA | ENST00000681601.1:c.1382_1383insGAAAATA | ENSP00000505323.1:p.Ter461delinsTer | -2",
+    "reverse_kept_stop_then_completed_inframe | inframe_insertion,stop_retained_variant | MODERATE | -/*KT | -/TAGAAAACA | ENST00000681601.1:c.1382_1383insGAAAACATA | ENSP00000505323.1:p.Ter461delinsTer | -2",
+    "intron_stop_then_unknown_inframe | splice_region_variant,splice_polypyrimidine_tract_variant,intron_variant | LOW | - | - | - | - | -",
+    "intron_stop_then_unknown_frameshift | splice_region_variant,splice_polypyrimidine_tract_variant,intron_variant | LOW | - | - | - | - | -",
+    "intron_stop_then_completed_frameshift | splice_region_variant,splice_polypyrimidine_tract_variant,intron_variant | LOW | - | - | ENST00000622113.4:c.66_67insGAATAGAAAATAGT | - | 4",
+    "intron_unknown_before_any_stop | splice_region_variant,splice_polypyrimidine_tract_variant,intron_variant | LOW | - | - | - | - | -",
+    "reverse_intron_stop_then_unknown | splice_region_variant,splice_polypyrimidine_tract_variant,intron_variant | LOW | - | - | - | - | -",
+    "reverse_intron_stop_then_completed | splice_region_variant,splice_polypyrimidine_tract_variant,intron_variant | LOW | - | - | ENST00000681601.1:c.644_645insGGAATAGAAAACCAGG | - | -4",
+]
+vep_rs = [
+    "stop_then_unknown_frameshift | stop_gained,frameshift_variant | HIGH | -/E*XX | -/GAATAGNNNN | - | ENSP00000482040.1:p.Ile142GlufsTer2 | -",
+    "stop_then_unknown_inframe | stop_gained,inframe_insertion | HIGH | -/E*XX | -/GAATAGNNNNCA | - | ENSP00000482040.1:p.Asn141_Ile142insGluTer | -",
+    "stop_then_unknown_shifted | stop_gained,inframe_insertion | HIGH | -/I*XX | -/ATTTAGNNNNCA | - | ENSP00000482040.1:p.Ile142_Leu143insTer | 4",
+    "stop_then_completed_inframe | stop_gained,inframe_insertion | HIGH | -/E*KT | -/GAATAGAAAACA | ENST00000622113.4:c.423_424insGAATAGAAAACA | ENSP00000482040.1:p.Asn141_Ile142insGluTer | -",
+    "unknown_before_any_stop | coding_sequence_variant | MODIFIER | - | -/GAAGCTNNNNCA | - | - | -",
+    "stop_then_unknown_before_the_stop_codon | stop_gained,frameshift_variant | HIGH | -/E*HXX | -/GAATAGCACNNNN | - | ENSP00000286808.3:p.Tyr223GlufsTer2 | -",
+    "stop_then_completed_before_the_stop_codon | stop_gained,frameshift_variant | HIGH | -/E*HKX | -/GAATAGCACAAAA | ENST00000286808.5:c.666_667insGAATAGCACAAAA | ENSP00000286808.3:p.Tyr223GlufsTer2 | -",
+    "kept_stop_then_unknown_frameshift | inframe_insertion,stop_retained_variant | MODERATE | -/*XX | -/TAGNNNN | - | ENSP00000482040.1:p.Ter534%3D | 2",
+    "kept_stop_then_unknown_inframe | inframe_insertion,stop_retained_variant | MODERATE | -/*XX | -/TAGNNNNCA | - | ENSP00000482040.1:p.Ter534%3D | 2",
+    "kept_stop_then_completed_frameshift | inframe_insertion,stop_retained_variant | MODERATE | -/*KX | -/TAGAAAA | ENST00000622113.4:c.1601_1602insGAAAATA | ENSP00000482040.1:p.Ter534%3D | 2",
+    "kept_stop_then_completed_inframe | inframe_insertion,stop_retained_variant | MODERATE | -/*KT | -/TAGAAAACA | ENST00000622113.4:c.1601_1602insGAAAACATA | ENSP00000482040.1:p.Ter534%3D | 2",
+    "reverse_kept_stop_then_unknown_frameshift | inframe_insertion,stop_retained_variant | MODERATE | -/*XX | -/TAGNNNN | - | ENSP00000505323.1:p.Ter461%3D | -2",
+    "reverse_kept_stop_then_unknown_inframe | inframe_insertion,stop_retained_variant | MODERATE | -/*XX | -/TAGNNNNCA | - | ENSP00000505323.1:p.Ter461%3D | -2",
+    "reverse_kept_stop_then_completed_frameshift | inframe_insertion,stop_retained_variant | MODERATE | -/*KX | -/TAGAAAA | ENST00000681601.1:c.1382_1383insGAAAATA | ENSP00000505323.1:p.Ter461%3D | -2",
+    "reverse_kept_stop_then_completed_inframe | inframe_insertion,stop_retained_variant | MODERATE | -/*KT | -/TAGAAAACA | ENST00000681601.1:c.1382_1383insGAAAACATA | ENSP00000505323.1:p.Ter461%3D | -2",
+    "intron_stop_then_unknown_inframe | splice_region_variant,splice_polypyrimidine_tract_variant,intron_variant | LOW | - | - | - | ENSP00000482040.1:p.Ser22_Pro23insGluTer | 4",
+    "intron_stop_then_unknown_frameshift | splice_region_variant,splice_polypyrimidine_tract_variant,intron_variant | LOW | - | - | - | ENSP00000482040.1:p.Pro23GlufsTer2 | 4",
+    "intron_stop_then_completed_frameshift | splice_region_variant,splice_polypyrimidine_tract_variant,intron_variant | LOW | - | - | ENST00000622113.4:c.66_67insGAATAGAAAATAGT | ENSP00000482040.1:p.Pro23GlufsTer2 | 4",
+    "intron_unknown_before_any_stop | splice_region_variant,splice_polypyrimidine_tract_variant,intron_variant | LOW | - | - | - | - | -",
+    "reverse_intron_stop_then_unknown | splice_region_variant,splice_polypyrimidine_tract_variant,intron_variant | LOW | - | - | - | ENSP00000505323.1:p.Leu216GlufsTer2 | -4",
+    "reverse_intron_stop_then_completed | splice_region_variant,splice_polypyrimidine_tract_variant,intron_variant | LOW | - | - | ENST00000681601.1:c.644_645insGGAATAGAAAACCAGG | ENSP00000505323.1:p.Leu216GlufsTer2 | -4",
+]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/coding.rs::PerlCodingEval::gains_a_stop_codon_before_unknown_bases",
+    "crates/vep-effects/src/coding.rs::PerlCodingEval::keeps_a_stop_codon_before_unknown_bases",
+    "crates/vep-effects/src/coding.rs::PerlCodingEval::reading_unknown_bases",
+    "crates/vep-effects/src/coding.rs::PerlCodingEval::span_where_the_proteins_compare",
+    "crates/vep-effects/src/coding.rs::hgvs_protein",
+    "crates/vep-effects/src/coding.rs::stop_codon_before_unknown_bases",
+    "crates/vep-effects/src/coding.rs::shared_ends_cut_at_known_bases",
+    "crates/vep-effects/src/coding.rs::shift_passes_an_unknown_base",
+    "crates/vep-effects/src/coding.rs::unknown_bases_allele_is_translated",
+]
+tests = [
+    "crates/vep-cli/tests/stop_codon_before_unknown_bases.rs::a_stop_codon_settled_before_the_unknown_bases_is_a_gained_stop",
+    "crates/vep-cli/tests/stop_codon_before_unknown_bases.rs::each_row_is_the_row_every_completion_of_the_unknown_bases_shares",
+    "crates/vep-cli/tests/stop_codon_kept_before_unknown_bases.rs::a_stop_codon_kept_before_the_unknown_bases_reads_its_insertion",
+    "crates/vep-cli/tests/stop_codon_kept_before_unknown_bases.rs::each_kept_stop_row_is_the_row_every_completion_of_the_unknown_bases_shares",
+    "crates/vep-cli/tests/unknown_bases_notation_at_the_shifted_placement.rs::a_stop_codon_settled_at_the_shifted_placement_gives_the_intron_row_its_notation",
+    "crates/vep-cli/tests/unknown_bases_notation_at_the_shifted_placement.rs::each_notation_is_the_one_every_completion_of_the_unknown_bases_shares",
+    "crates/vep-effects/src/concordance_tests.rs::an_inserted_allele_with_a_letter_that_names_no_base_is_tested_on_the_bases_read",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/settled_stop.rs::carried_insertion_cell",
+    "tools/vep-formats-compare/src/rules/settled_stop.rs::stop_codon_settled_before_unknown_bases_pair",
+    "tools/vep-outputs-compare/src/rules/row.rs::stop_codon_settled_before_unknown_bases_pair",
+    "tools/vep-plugin-pairs/src/rules/term_pair.rs::stop_codon_settled_before_unknown_bases_pair",
+]

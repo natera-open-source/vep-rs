@@ -1,0 +1,3 @@
+prepared ucsc.vcf -> ucsc.vcf (mode=add, variants=16, headers=4)
+prepared ensembl.vcf.gz -> ensembl.vcf (mode=add, variants=15, headers=3)
+wrote manifest: {{OUTPUT_DIR}}/manifest.json

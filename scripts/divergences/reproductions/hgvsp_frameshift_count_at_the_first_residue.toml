@@ -1,0 +1,78 @@
+entry = "hgvsp_frameshift_count_at_the_first_residue"
+page = "docs/divergences/hgvsp-frameshift-count-at-the-first-residue.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "observed"
+input_class_basis = "2 · 108,184 per million · 95 flag sets, 142 corpora"
+notes = "Four made-up records on transcripts of ITSN1 in the committed GRCh37 cache, under --hgvs. The first deletes the two bases that open the coding sequence of ENST00000415023, which is flagged cds_start_NF: the first changed residue is residue 1 and the new frame meets a stop codon at coding bases 12 to 14, its fourth codon. Ensembl VEP writes the unknown count there and vep-rs the count of 4. On ENST00000420666 and ENST00000381318 the same residue is numbered 2 and 1394, and both engines write the count of 4. The second record deletes the first two bases of the second codon of ENST00000415023: the first changed residue is residue 2, and both engines count 3 to the same stop codon. The third deletes one base before the first base of ENST00000419241, flagged cds_start_NF, and its first three coding bases; the same deletion can be written one base on, at coding bases 1 to 4, both engines print HGVS_OFFSET=1 and read the protein notation there, and both write coding_sequence_variant and 5_prime_UTR_variant. Ensembl VEP writes the unknown count and vep-rs the count of 30, which both write on ENST00000381318 at residue 710. The HGVSc of that row differs as well, as hgvs_shifted_deletion_clamped_span documents, and is not among the compared columns. The fourth inserts a copy of the first base of the start codon of ENST00000381318 before it. A start codon stands there, the edited transcript holds it whole behind a 5' UTR one base longer, and both engines write the unknown count."
+
+[input]
+format = "vcf"
+text = """
+21	35247663	first_codon_two_bases_deleted	GGA	G	.	.	.
+21	35247666	second_codon_two_bases_deleted	AAA	A	.	.	.
+21	35169856	deletion_from_before_the_first_base	TCCAT	T	.	.	.
+21	35091133	base_inserted_before_a_start_codon	C	CA	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh37"
+json_cache = "tests/golden/116/GRCh37-hgvs/json_cache"
+fasta = "tests/golden/116/GRCh37-hgvs/reference.fa.gz"
+
+[run]
+flags = ["--hgvs"]
+
+[compare]
+kind = "rows"
+where = { record = ["base_inserted_before_a_start_codon", "deletion_from_before_the_first_base", "first_codon_two_bases_deleted", "second_codon_two_bases_deleted"], feature = ["ENST00000381318", "ENST00000415023", "ENST00000419241", "ENST00000420666"] }
+columns = ["Uploaded_variation", "Feature", "Consequence", "CDS_position", "Protein_position", "HGVSp", "HGVS_OFFSET"]
+
+[expected]
+ensembl_vep = [
+  "base_inserted_before_a_start_codon | ENST00000381318 | 5_prime_UTR_variant | - | - | ENSP00000370719.3:p.Met1AsnfsTer? | 1",
+  "deletion_from_before_the_first_base | ENST00000381318 | frameshift_variant | 2127-2130 | 709-710 | ENSP00000370719.3:p.His710AsnfsTer30 | 1",
+  "deletion_from_before_the_first_base | ENST00000419241 | coding_sequence_variant,5_prime_UTR_variant,NMD_transcript_variant | ?-3 | ?-1 | ENSP00000415302.1:p.His1AsnfsTer? | 1",
+  "first_codon_two_bases_deleted | ENST00000381318 | frameshift_variant | 4180-4181 | 1394 | ENSP00000370719.3:p.Glu1394LysfsTer4 | -",
+  "first_codon_two_bases_deleted | ENST00000415023 | frameshift_variant | 1-2 | 1 | ENSP00000409800.1:p.Glu1LysfsTer? | -",
+  "first_codon_two_bases_deleted | ENST00000420666 | frameshift_variant,NMD_transcript_variant | 4-5 | 2 | ENSP00000408319.1:p.Glu2LysfsTer4 | -",
+  "second_codon_two_bases_deleted | ENST00000381318 | frameshift_variant | 4183-4184 | 1395 | ENSP00000370719.3:p.Asn1395HisfsTer3 | -",
+  "second_codon_two_bases_deleted | ENST00000415023 | frameshift_variant | 4-5 | 2 | ENSP00000409800.1:p.Asn2HisfsTer3 | -",
+  "second_codon_two_bases_deleted | ENST00000420666 | frameshift_variant,NMD_transcript_variant | 7-8 | 3 | ENSP00000408319.1:p.Asn3HisfsTer3 | -",
+]
+vep_rs = [
+  "base_inserted_before_a_start_codon | ENST00000381318 | 5_prime_UTR_variant | - | - | ENSP00000370719.3:p.Met1AsnfsTer? | 1",
+  "deletion_from_before_the_first_base | ENST00000381318 | frameshift_variant | 2127-2130 | 709-710 | ENSP00000370719.3:p.His710AsnfsTer30 | 1",
+  "deletion_from_before_the_first_base | ENST00000419241 | coding_sequence_variant,5_prime_UTR_variant,NMD_transcript_variant | ?-3 | ?-1 | ENSP00000415302.1:p.His1AsnfsTer30 | 1",
+  "first_codon_two_bases_deleted | ENST00000381318 | frameshift_variant | 4180-4181 | 1394 | ENSP00000370719.3:p.Glu1394LysfsTer4 | -",
+  "first_codon_two_bases_deleted | ENST00000415023 | frameshift_variant | 1-2 | 1 | ENSP00000409800.1:p.Glu1LysfsTer4 | -",
+  "first_codon_two_bases_deleted | ENST00000420666 | frameshift_variant,NMD_transcript_variant | 4-5 | 2 | ENSP00000408319.1:p.Glu2LysfsTer4 | -",
+  "second_codon_two_bases_deleted | ENST00000381318 | frameshift_variant | 4183-4184 | 1395 | ENSP00000370719.3:p.Asn1395HisfsTer3 | -",
+  "second_codon_two_bases_deleted | ENST00000415023 | frameshift_variant | 4-5 | 2 | ENSP00000409800.1:p.Asn2HisfsTer3 | -",
+  "second_codon_two_bases_deleted | ENST00000420666 | frameshift_variant,NMD_transcript_variant | 7-8 | 3 | ENSP00000408319.1:p.Asn3HisfsTer3 | -",
+]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/coding.rs::hgvsp_frameshift_count_from_residue_1",
+]
+tests = [
+    "crates/vep-cli/tests/frameshift_count_at_the_first_residue.rs::a_frameshift_named_at_residue_1_is_counted_only_where_no_start_codon_stands",
+    "crates/vep-cli/tests/frameshift_count_at_the_first_residue.rs::two_bases_deleted_from_the_first_codon_of_a_flagged_transcript_count_to_the_new_stop_codon",
+    "crates/vep-effects/src/start_codon_tests.rs::allele_moved_into_a_start_codon_it_leaves_whole_is_notated_as_the_first_residue_unchanged",
+    "crates/vep-effects/src/start_codon_tests.rs::extension_named_at_residue_1_for_a_frameshift_has_an_unknown_count",
+    "crates/vep-effects/src/start_codon_tests.rs::frameshift_in_a_start_codon_that_stands_keeps_the_lost_start_notation",
+    "crates/vep-effects/src/start_codon_tests.rs::frameshift_named_at_a_later_residue_keeps_its_count",
+    "crates/vep-effects/src/start_codon_tests.rs::frameshift_named_at_residue_1_counts_the_residues_to_the_stop_codon_of_its_frame",
+    "crates/vep-effects/src/start_codon_tests.rs::frameshift_named_at_residue_1_that_meets_no_stop_codon_has_an_unknown_count",
+    "crates/vep-effects/src/start_codon_tests.rs::frameshift_named_at_residue_1_under_cds_start_nf_is_counted_on_the_start_triplet_too",
+    "crates/vep-effects/src/start_codon_tests.rs::frameshift_term_beside_a_retained_start_codon_is_notated_as_the_first_residue_unchanged",
+]
+rules = [
+    "tools/vep-formats-compare/src/coding_end_terms.rs::CountedAtTheFirstResidue",
+    "tools/vep-formats-compare/src/coding_end_terms.rs::count_alone_differs_at_the_first_residue",
+    "tools/vep-formats-compare/src/coding_end_terms.rs::frameshift_counted_at_the_first_residue",
+    "tools/vep-formats-compare/src/rules/coding_end_pairs.rs::frameshift_count_at_the_first_residue",
+    "tools/vep-golden-corpus/src/classify/protein.rs::frameshift_count_at_the_first_residue_pair",
+]

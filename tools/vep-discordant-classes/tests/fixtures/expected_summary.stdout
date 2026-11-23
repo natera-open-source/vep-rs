@@ -1,0 +1,48 @@
+======================================================================
+DISCORDANT CLASSIFICATION SUMMARY
+======================================================================
+
+Total discordants: 400
+
+By mismatch type:
+  true_missing                   205 ( 51.2%)
+  true_extra                     195 ( 48.8%)
+
+By mismatch type + direction:
+  true_missing              missing_in_rust      125
+  true_missing              only_perl          80
+  true_extra                only_rust          68
+  true_extra                extra_in_rust       65
+  true_extra                scored_engine_only       62
+
+By file + mismatch type (top 30):
+  output_00.txt                       true_missing                    36 (  9.0%)
+  output_00.txt                       true_extra                      36 (  9.0%)
+  output_01.txt                       true_missing                    21 (  5.2%)
+  output_01.txt                       true_extra                      21 (  5.2%)
+  output_02.txt                       true_missing                    19 (  4.8%)
+  output_02.txt                       true_extra                      17 (  4.2%)
+  a_file_name_that_is_longer_than_thirty_five_characters.txt true_extra                      15 (  3.8%)
+  a_file_name_that_is_longer_than_thirty_five_characters.txt true_missing                    15 (  3.8%)
+  output_04.txt                       true_missing                    15 (  3.8%)
+  output_04.txt                       true_extra                      13 (  3.2%)
+  données_françaises.txt              true_extra                      11 (  2.8%)
+  output_06.txt                       true_extra                      11 (  2.8%)
+  données_françaises.txt              true_missing                    11 (  2.8%)
+  output_06.txt                       true_missing                    11 (  2.8%)
+                                      true_missing                     9 (  2.2%)
+  output_08.txt                       true_missing                     9 (  2.2%)
+  with space.txt                      true_missing                     9 (  2.2%)
+                                      true_extra                       9 (  2.2%)
+  output_08.txt                       true_extra                       9 (  2.2%)
+  with space.txt                      true_extra                       9 (  2.2%)
+  output_10.txt                       true_extra                       7 (  1.8%)
+  日本語.txt                             true_extra                       7 (  1.8%)
+  output_12.txt                       true_extra                       7 (  1.8%)
+  output_10.txt                       true_missing                     7 (  1.8%)
+  日本語.txt                             true_missing                     7 (  1.8%)
+  output_12.txt                       true_missing                     7 (  1.8%)
+  output_13.txt                       true_missing                     7 (  1.8%)
+  output_14.txt                       true_missing                     5 (  1.2%)
+  output_15.txt                       true_missing                     5 (  1.2%)
+  output_16.txt                       true_missing                     5 (  1.2%)

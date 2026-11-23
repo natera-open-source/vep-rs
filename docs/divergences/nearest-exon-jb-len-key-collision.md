@@ -23,7 +23,7 @@ Tuple, pair, set aside, charged and the other scoring terms are defined in [How 
 
 ## 1. A deletion 23 bases into an exon under `max_range=len`
 
-**In short.** `21 36896882 1069237 TG T` on GRCh38 deletes the base at 36896883, 23 bases from the start of ENSE00001282176, an exon of 272 bases on ENST00000336648. Under the default range both engines write `ENSE00001282176|23|start|272` on that row. Under `--plugin NearestExonJB,max_range=len`, Ensembl VEP 116.2 writes `ENSE00001282176|len|272|272` and vep-rs writes nothing.
+**In short.** `21 36896882 1069237 TG T` on GRCh38 deletes the base at 36896883, 23 bases from the start of ENSE00001282176, an exon of 272 bases on ENST00000336648. Under the default range both engines write `ENSE00001282176|23|start|272` on that row. Under `--plugin NearestExonJB,max_range=len`, Ensembl VEP 116.3 writes `ENSE00001282176|len|272|272` and vep-rs writes nothing.
 
 ### 1.1 What a reader needs to know first
 
@@ -47,7 +47,7 @@ The row on ENST00000336648 in the default format. Under the default range, both 
 1069237	21:36896883	-	ENSG00000159267	ENST00000336648	Transcript	frameshift_variant	1899	1428	476	P/X	ccC/cc	-	IMPACT=HIGH;STRAND=-1;NearestExonJB=ENSE00001282176|23|start|272
 ```
 
-Under `max_range=len`, Ensembl VEP 116.2:
+Under `max_range=len`, Ensembl VEP 116.3:
 
 ```
 1069237	21:36896883	-	ENSG00000159267	ENST00000336648	Transcript	frameshift_variant	1899	1428	476	P/X	ccC/cc	-	IMPACT=HIGH;STRAND=-1;NearestExonJB=ENSE00001282176|len|272|272
@@ -80,8 +80,8 @@ vep -i record.vcf -o out.txt --offline --json_cache <cache> --assembly GRCh38 \
   --plugin NearestExonJB,max_range=len
 ```
 
-vep-rs writes the `## NearestExonJB` header line, one warning and no `NearestExonJB` value on any row. Ensembl VEP 116.2 writes `NearestExonJB=ENSE00001282176|len|272|272` on the row of ENST00000336648 and an item of the same shape on every row with an overlapped exon. Running both engines with `max_range=abc` shows them agree: no value on any row.
+vep-rs writes the `## NearestExonJB` header line, one warning and no `NearestExonJB` value on any row. Ensembl VEP 116.3 writes `NearestExonJB=ENSE00001282176|len|272|272` on the row of ENST00000336648 and an item of the same shape on every row with an overlapped exon. Running both engines with `max_range=abc` shows them agree: no value on any row.
 
 ### 1.7 How the comparator treats this class
 
-Nothing is set aside. The format comparator (`scripts/concordance/compare_vep_formats.py`) has no class of this shape, and the golden harness compares the `GRCh38-plugin-computed` corpus's `NearestExonJB` cells under its committed flag sets, none of which passes `max_range=len`. A disagreement of the shape would be reported as a difference and charged to vep-rs.
+Nothing is set aside. The format comparator (`tools/vep-formats-compare`) has no class of this shape, and the golden harness compares the `GRCh38-plugin-computed` corpus's `NearestExonJB` cells under its committed flag sets, none of which passes `max_range=len`. A disagreement of the shape would be reported as a difference and charged to vep-rs.

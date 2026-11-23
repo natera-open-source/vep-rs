@@ -53,7 +53,7 @@
  "covers": [
   "GWAS"
  ],
- "suites": {
+ "datasets": {
   "gwas": {
    "reference": "reference.curated.txt",
    "input": "candidates.vcf",
@@ -102,7 +102,7 @@
  },
  "records": [
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t9053097\trs552964654\tG\tC\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -110,35 +110,35 @@
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t13297803\trs2801270\tA\tG\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t13413825\trs3119481\tG\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant"
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t14482906\trs2822690\tC\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant"
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t14482906\trs2822690\tC\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant"
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t14988523\trs559044903\tA\tG\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -146,7 +146,7 @@
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t14992435\trs2822999\tT\tC,G\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -158,63 +158,63 @@
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t15201802\trs11088317\tC\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant"
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t15201802\trs11088317\tC\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant"
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t15418128\trs2823265\tC\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant"
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t16890453\trs74450405\tA\tG\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t19318417\trs2825516\tA\tC\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t20517528\trs2155889\tC\tA\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t20517528\trs2155889\tC\tT\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t24109380\trs2828827\tG\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant"
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t27428688\trs469709\tC\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -223,21 +223,21 @@
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t30339574\trs2832810\tC\tA\t.\t.\t.",
    "combinations": [
     "upstream_gene_variant"
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t30339574\trs2832810\tC\tT\t.\t.\t.",
    "combinations": [
     "upstream_gene_variant"
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t31350874\trs1783006\tG\tA\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -245,21 +245,21 @@
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t31807059\trs2833522\tG\tA\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t31807059\trs2833522\tG\tC\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t32496173\trs6517101\tT\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -270,7 +270,7 @@
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t33760786\trs2834259\tC\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -279,14 +279,14 @@
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t34036428\trs4817614\tA\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant"
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t34233562\trs149487184\tC\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -295,7 +295,7 @@
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t34279939\trs9978142\tA\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -304,7 +304,7 @@
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t34300618\trs2834439\tA\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -313,7 +313,7 @@
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t34598414\trs12482676\tG\tT\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -321,7 +321,7 @@
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t35598052\trs9976876\tG\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -329,7 +329,7 @@
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t37729637\trs858032\tT\tC\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -337,7 +337,7 @@
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t39375657\trs4818032\tT\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -346,14 +346,14 @@
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t43507135\trs162375\tCCT\tC\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t44928849\t.\tA\tACCCTGGATGCCTGTGGGCT\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -364,7 +364,7 @@
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t44928849\t.\tAGCCTTCCTCACCCTGGATGCCTGTGGGCAG\tA\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -375,7 +375,7 @@
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t45444973\trs10854470\tT\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -384,14 +384,14 @@
    ]
   },
   {
-   "suite": "gwas",
+   "dataset": "gwas",
    "vcf": "21\t45946888\trs434206\tG\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant"
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "plugin_files": {

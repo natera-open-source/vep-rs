@@ -1,20 +1,20 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --plugin NMD [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh37",
  "fasta": "none on either side",
  "input": "hand-built records at chromosome 21 sites of three genes, each record's ID naming its construction: in CBR1 (ENST00000290349, forward strand, three exons) and PSMG1 (ENST00000331573, reverse strand, seven exons) a stop-gained substitution and a one-base deletion in the last exon; a one-base deletion 51 and 52 bases before the penultimate exon's 3' junction and a stop-gained substitution on each side of that window; a one-base deletion of coding base 101 and of 102, a one-base insertion after each, and a stop-gained substitution before and after coding base 101 in the first exon; the first intronic base of the penultimate exon's donor site and a deletion across that junction; in the single-exon KRTAP25-1 (ENST00000416044) a stop-gained substitution and a one-base deletion",
  "sha256": {
-  "default.txt": "59618191dcbb2b511a50ebc5d2672b1cc968ca141078f7a41f1d7a3fe4fc200a",
-  "tab.txt": "6a662fb6763148931ac887d3d7daeb969b2c7afbff4a3178614c6d9d9ab90c00",
-  "vcf.vcf": "b38c3d9566b328d81aae48e6d6016c4bc9524dd883fe4f4f990547e67615d020",
-  "json.jsonl": "58b8128e709c245861a449d0ac2251cf500c61f0888c210ee0e0b90cbf0b71fe"
+  "default.txt": "d25cec0f2e6085a637d162fe7675b83580933b904298881853685bcd14e035c9",
+  "tab.txt": "d9c87f0c3ff9c4d04f91949212a5da10009fd6ba594f7a74647704541e93c0a8",
+  "vcf.vcf": "145a50d818acd679d221a8e5d5121cacb1e92162e47c55661fb6df7be9da54a2",
+  "json.jsonl": "cc89da2abc5ba46feeb943947a4683342ef82d39c1eeb127d37d658e68319e2c"
  },
  "variants_vcf_sha256": "3ceecf4fe1ffac1103b170a618e5eb08572b2c041b753cc9c0c2548ce975b5c3",
- "generator": "json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice scripts/data/storable_to_json.pl converted from the Ensembl VEP 116 GRCh37 cache; expected outputs: scripts/concordance/generate_reference_output.sh --corpus; manifest: scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh37 --suite nmd37=<reference>=variants.vcf --k 200 --seed 1 --include nmd37=<each record's ID> --covers NMD --covers api-plugin-consequence-terms --matrix tests/parity/matrix.tsv --flag=--plugin --flag=NMD, then classify",
+ "generator": "json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice tools/vep-storable-to-json converts from the Ensembl VEP 116 GRCh37 cache; expected outputs: scripts/concordance/generate_reference_output.sh --corpus; manifest: tools/vep-golden-corpus select --release 116 --assembly GRCh37 --dataset nmd37=<reference>=variants.vcf --k 200 --seed 1 --include nmd37=<each record's ID> --covers NMD --covers api-plugin-consequence-terms --matrix tests/parity/matrix.tsv --flag=--plugin --flag=NMD, then classify",
  "divergences_classified_against": {
   "engine": "vep-rs",
   "source": "the tree this corpus is committed with",

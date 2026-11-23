@@ -1,0 +1,10 @@
+closed_fixture	error	no Ensembl VEP cache homo_sapiens/116_GRCh38 with chromosomes 21 under the --perl-cache-dir roots (tried {{ROOT}}/empty/homo_sapiens/116_GRCh38)
+
+| verdict | entries |
+| --- | --- |
+| still-present | 0 |
+| closed | 0 |
+| changed | 0 |
+| error | 1 |
+| total | 1 |
+outputs under {{ROOT}}/work

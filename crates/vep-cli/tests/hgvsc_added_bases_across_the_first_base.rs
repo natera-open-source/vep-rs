@@ -10,7 +10,7 @@
 //! so the notation stands at the last placement: the duplication of the
 //! transcript's bases before it where the added bases copy them, the
 //! insertion of the bases as they read there otherwise.
-//! Ensembl VEP 116.2 does not shift such an allele
+//! Ensembl VEP 116.3 does not shift such an allele
 //! (TranscriptVariationAllele.pm:120-123) and its clip leaves an insertion
 //! where the record's span ends (TranscriptVariationAllele.pm:2204-2284).
 //! The records are made up on the chromosome 21 reference the corpus carries
@@ -150,7 +150,7 @@ fn assert_rows(records: &str, flags: &[&str], expected: &[Expected]) {
 /// Where the added bases are the span's bases inside the transcript over
 /// again (`21 13621575 TTGT TTGTGT,TT`, `21 13644848 GTGG GTGTGG,GT`) the row
 /// is the same duplication at the last placement.
-/// Ensembl VEP 116.2 clamps the start of such a span onto the first base
+/// Ensembl VEP 116.3 clamps the start of such a span onto the first base
 /// (TranscriptVariationAllele.pm:2732-2733) and reads the whole alternate
 /// allele against the bases inside (TranscriptVariationAllele.pm:1474-1483):
 /// an insertion from the position before the first base on a forward-strand
@@ -238,7 +238,7 @@ fn a_copy_added_to_a_span_over_the_first_base_is_a_duplication_at_its_last_place
 /// A span inside the transcript whose added bases have equal placements back
 /// to the point before the first base, or before it, and copy the bases
 /// before their last placement: the row is the duplication of those bases.
-/// Ensembl VEP 116.2's clip leaves an insertion where the record's span ends
+/// Ensembl VEP 116.3's clip leaves an insertion where the record's span ends
 /// (TranscriptVariationAllele.pm:2204-2284).
 /// On the snRNA `21 13621576 TGTG TGTGTG,TG` keeps `n.1` to `n.3` and adds
 /// `TG` at the last placement, `n.2_3dup` with no offset; `TG TGTG,T` keeps
@@ -348,7 +348,7 @@ fn a_copy_added_to_a_span_inside_the_transcript_is_a_duplication_of_the_bases_be
 /// base that precedes `n.1` to after `n.3`, where the bases read `ATGTG`:
 /// `n.3_4insATGTG`, offset 2. On the miRNA `21 13644849 TGG TGGCGTGG,TG` adds
 /// the transcript's `ACGCC` after `n.1`, placed last after `n.3` as `GCCAC`:
-/// `n.3_4insGCCAC`, offset -2. Ensembl VEP 116.2 clamps the span's start onto
+/// `n.3_4insGCCAC`, offset -2. Ensembl VEP 116.3 clamps the span's start onto
 /// the first base and reads the whole alternate allele against the bases
 /// inside (TranscriptVariationAllele.pm:2732-2733, 1474-1483).
 /// `--shift_3prime 1` writes the same rows; under `--shift_hgvs 0` the row is
@@ -606,7 +606,7 @@ fn a_plain_insertion_after_the_first_base_is_described_at_its_last_placement() {
 }
 
 /// Added bases whose placements all lie inside the transcript, away from its
-/// ends, stay where the record's span ends, as Ensembl VEP 116.2 leaves them
+/// ends, stay where the record's span ends, as Ensembl VEP 116.3 leaves them
 /// (TranscriptVariationAllele.pm:120-123, 2204-2284): an insertion with no
 /// `HGVS_OFFSET`, though the run goes on past the span.
 /// `21 13621598 ATC ATCC,AT` adds a `C` after the snRNA's `n.24`, a copy of it

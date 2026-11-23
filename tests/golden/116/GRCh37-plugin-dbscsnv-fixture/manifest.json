@@ -1,0 +1,209 @@
+{
+ "release": "116",
+ "species": "homo_sapiens",
+ "assembly": "GRCh37",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 3,
+ "included_records": {
+  "dbscsnv": [
+   "deletion_fwd",
+   "intron_snv",
+   "missense_fwd_two_alts",
+   "missense_rev",
+   "splice_donor_a",
+   "splice_donor_b",
+   "synonymous_rev"
+  ]
+ },
+ "max_span": 1000000,
+ "covers": [
+  "dbscSNV"
+ ],
+ "plugin_files": {
+  "dbscSNV": [
+   "plugin_data/dbscSNV1.1_synthetic_GRCh37.txt.gz",
+   "plugin_data/dbscSNV1.1_synthetic_GRCh37.txt.gz.tbi"
+  ]
+ },
+ "datasets": {
+  "dbscsnv": {
+   "reference": "default.txt.gz",
+   "input": "GRCh37-plugin-dbscsnv-fixture.input.vcf",
+   "rows": 67,
+   "combinations": 11
+  }
+ },
+ "combinations": {
+  "NMD_transcript_variant,frameshift_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,missense_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,stop_retained_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,synonymous_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 1
+  },
+  "frameshift_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "intron_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "intron_variant,non_coding_transcript_variant": {
+   "observed_rows": 10,
+   "exemplar_records": 1
+  },
+  "missense_variant": {
+   "observed_rows": 13,
+   "exemplar_records": 2
+  },
+  "non_coding_transcript_variant,splice_donor_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "splice_donor_variant": {
+   "observed_rows": 12,
+   "exemplar_records": 2
+  },
+  "synonymous_variant": {
+   "observed_rows": 5,
+   "exemplar_records": 2
+  }
+ },
+ "variant_classes": {
+  "deletion": 10,
+  "snv": 57
+ },
+ "records": [
+  {
+   "dataset": "dbscsnv",
+   "vcf": "21\t10942709\tsplice_donor_a\tA\tC\t.\t.\t.",
+   "combinations": [
+    "non_coding_transcript_variant,splice_donor_variant",
+    "splice_donor_variant"
+   ]
+  },
+  {
+   "dataset": "dbscsnv",
+   "vcf": "21\t17616932\tintron_snv\tG\tA\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "dataset": "dbscsnv",
+   "vcf": "21\t30961158\tsplice_donor_b\tC\tG\t.\t.\t.",
+   "combinations": [
+    "intron_variant",
+    "splice_donor_variant"
+   ]
+  },
+  {
+   "dataset": "dbscsnv",
+   "vcf": "21\t31661647\tsynonymous_rev\tT\tC\t.\t.\t.",
+   "combinations": [
+    "synonymous_variant"
+   ]
+  },
+  {
+   "dataset": "dbscsnv",
+   "vcf": "21\t36252953\tmissense_rev\tC\tT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,stop_retained_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "dataset": "dbscsnv",
+   "vcf": "21\t43505445\tmissense_fwd_two_alts\tC\tG,T\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "NMD_transcript_variant,synonymous_variant",
+    "missense_variant",
+    "synonymous_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "dataset": "dbscsnv",
+   "vcf": "21\t43505446\tdeletion_fwd\tTG\tT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,frameshift_variant",
+    "frameshift_variant"
+   ]
+  }
+ ],
+ "multi_allelic_per_dataset": 4,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "flag_sets": [
+  {
+   "name": "dbscsnv",
+   "flags": [
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "dbscSNV,{corpus}/plugin_data/dbscSNV1.1_synthetic_GRCh37.txt.gz"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_dbscsnv",
+   "covers": [
+    "dbscSNV"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "dbscsnv-assembly-override",
+   "flags": [
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "dbscSNV,{corpus}/plugin_data/dbscSNV1.1_synthetic_GRCh37.txt.gz,GRCh37"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_dbscsnv-assembly-override",
+   "covers": [
+    "dbscSNV"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  }
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {}
+}

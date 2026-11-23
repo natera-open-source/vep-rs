@@ -1,0 +1,21 @@
+[package]
+name = "vep-cache-parity-audit"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.89"
+license = "Apache-2.0"
+description = "Audits the conversion of an Ensembl VEP Storable cache into the JSON cache vep-rs annotates from: every field path of a sample of transcripts, classed against the converter's rules"
+publish = false
+
+[dependencies]
+flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
+
+# Its own Cargo root: the repository workspace's commands do not reach this package, and
+# a cargo command for it names this manifest.
+[workspace]
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"

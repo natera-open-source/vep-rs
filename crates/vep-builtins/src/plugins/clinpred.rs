@@ -148,6 +148,8 @@ impl ClinPredPlugin {
     }
 }
 
+impl crate::traits::sealed::Sealed for ClinPredPlugin {}
+
 impl BuiltinPlugin for ClinPredPlugin {
     fn name(&self) -> &str {
         NAME
@@ -163,6 +165,12 @@ impl BuiltinPlugin for ClinPredPlugin {
 
     fn set_assembly(&mut self, assembly: Option<Assembly>) {
         self.assembly = assembly;
+    }
+
+    fn set_reference_fasta(&mut self, fasta: Option<std::sync::Arc<vep_fasta::IndexedFasta>>) {
+        if let Some(store) = self.store.as_mut() {
+            store.set_reference_fasta(fasta);
+        }
     }
 
     fn init(&mut self, params: &[String]) -> Result<(), PluginError> {
@@ -254,7 +262,7 @@ impl BuiltinPlugin for ClinPredPlugin {
                 if self.scores_row(tc) {
                     tc.plugin_data.insert(FIELD.to_string(), score.clone());
                     // A later plugin's value replaces an earlier one under the
-                    // same key (OutputFactory.pm:2230-2231), its mark too.
+                    // same key (OutputFactory.pm:2239-2240), its mark too.
                     tc.plugin_empty_strings.retain(|key| key != FIELD);
                     if is_empty_string {
                         tc.plugin_empty_strings.push(FIELD.to_string());
@@ -277,15 +285,30 @@ impl BuiltinPlugin for ClinPredPlugin {
         consequence: &TranscriptConsequence,
         variant: &InputVariant,
     ) -> Result<IndexMap<String, String>, PluginError> {
-        let mut result = IndexMap::new();
+        let (fields, _) = self.run_naming_empty_strings(consequence, variant)?;
+        Ok(fields)
+    }
+
+    /// The row's score from one query of its position, with the field named
+    /// where the matched row's score cell is present and empty, the empty
+    /// string `annotate` names in the row's `plugin_empty_strings`; a matched
+    /// row lacking the cell scores as the unnamed empty value
+    /// (`ClinPred.pm:127`).
+    fn run_naming_empty_strings(
+        &self,
+        consequence: &TranscriptConsequence,
+        variant: &InputVariant,
+    ) -> Result<(IndexMap<String, String>, Vec<String>), PluginError> {
+        let mut fields = IndexMap::new();
+        let mut empty_strings = Vec::new();
         let Some(store) = &self.store else {
-            return Ok(result);
+            return Ok((fields, empty_strings));
         };
         if !self.scores_row(consequence) {
-            return Ok(result);
+            return Ok((fields, empty_strings));
         }
         let Some(alt) = Self::scorable_alt(variant) else {
-            return Ok(result);
+            return Ok((fields, empty_strings));
         };
         let records = store.query(
             table_contig(variant, self.assembly),
@@ -293,9 +316,12 @@ impl BuiltinPlugin for ClinPredPlugin {
             variant.start,
         )?;
         if let Some(cell) = Self::matching_score(&records, variant.start, alt) {
-            result.insert(FIELD.to_string(), cell.unwrap_or_default());
+            if cell.as_ref().is_some_and(String::is_empty) {
+                empty_strings.push(FIELD.to_string());
+            }
+            fields.insert(FIELD.to_string(), cell.unwrap_or_default());
         }
-        Ok(result)
+        Ok((fields, empty_strings))
     }
 }
 
@@ -324,10 +350,9 @@ mod tests {
     }
 
     fn row_of(term: Consequence) -> TranscriptConsequence {
-        TranscriptConsequence {
-            consequences: smallvec![term],
-            ..TranscriptConsequence::default()
-        }
+        let mut consequence = TranscriptConsequence::default();
+        consequence.consequences = smallvec![term];
+        consequence
     }
 
     /// A single-base record at `pos` with one transcript row per term.
@@ -442,17 +467,19 @@ mod tests {
                 Consequence::IntronVariant,
             ],
         );
-        variant.transcript_consequences.push(TranscriptConsequence {
-            consequences: smallvec![
+        variant.transcript_consequences.push({
+            let mut consequence = TranscriptConsequence::default();
+            consequence.consequences = smallvec![
                 Consequence::SpliceRegionVariant,
                 Consequence::MissenseVariant
-            ],
-            ..TranscriptConsequence::default()
+            ];
+            consequence
         });
-        variant.transcript_consequences.push(TranscriptConsequence {
-            consequences: smallvec![Consequence::MissenseVariant],
-            feature_type: FeatureType::RegulatoryFeature,
-            ..TranscriptConsequence::default()
+        variant.transcript_consequences.push({
+            let mut consequence = TranscriptConsequence::default();
+            consequence.consequences = smallvec![Consequence::MissenseVariant];
+            consequence.feature_type = FeatureType::RegulatoryFeature;
+            consequence
         });
         let hit = Some("0.5".to_string());
         assert_eq!(
@@ -580,11 +607,12 @@ mod tests {
         );
     }
 
-    /// The record's chromosome is the cache's name, `MT`, and the store tries the
-    /// four spellings of the mitochondrial contig (`chromosome_query_candidates`),
-    /// so a table naming it `MT`, `chrMT`, `M` or `chrM` scores the record.
-    /// Ensembl VEP 116.2's base class tries the record's spelling and its `chr`
-    /// variant alone (`BaseVepTabixPlugin.pm:693-708`), the divergence
+    /// Off GRCh37 the record's chromosome is the cache's name, `MT`, and the
+    /// store tries the four spellings of the mitochondrial contig
+    /// (`chromosome_query_candidates`), so a table naming it `MT`, `chrMT`, `M`
+    /// or `chrM` scores the record. Ensembl VEP 116.3's base class tries the
+    /// record's spelling and its `chr` variant alone
+    /// (`BaseVepTabixPlugin.pm:693-708`), the divergence
     /// `plugin_contig_mitochondrial_spelling` states.
     #[test]
     fn a_mitochondrial_record_reads_a_file_under_any_of_the_four_contig_spellings() {
@@ -619,7 +647,7 @@ mod tests {
         assert_eq!(scores(&plugin, snv(3460, b"G", b"A", &gate)), [None]);
     }
 
-    /// `ClinPred.pm:127` splits the line into five variables, so Perl keeps a
+    /// `ClinPred.pm:127` splits the line into five variables, so Ensembl VEP keeps a
     /// trailing empty cell as the empty string and leaves a missing cell
     /// undefined, and `:116-122` returns the matched row's result either way.
     /// Both print as `ClinPred=` in the default format; the tab format prints
@@ -666,6 +694,91 @@ mod tests {
         assert_eq!(marks(5030003), (Some("0.5".to_string()), vec![]));
     }
 
+    /// The per-row route reads a row's score cell as the batch route does.
+    /// `run` hands the score back and `run_naming_empty_strings` names the
+    /// field of a present empty cell beside it, so the trait's `run_batch`,
+    /// which writes each row from that call, leaves the value and the mark
+    /// the plugin's own batch route leaves: the unmarked empty value for a
+    /// missing cell and the named empty string for an empty one.
+    #[test]
+    fn the_per_row_route_names_an_empty_score_cell_as_the_batch_route_does() {
+        /// The plugin through its per-row methods alone, each row written by
+        /// the trait's `run_batch`.
+        struct PerRow<'a>(&'a ClinPredPlugin);
+
+        impl crate::traits::sealed::Sealed for PerRow<'_> {}
+
+        impl BuiltinPlugin for PerRow<'_> {
+            fn name(&self) -> &str {
+                NAME
+            }
+            fn header_info(&self) -> Vec<(String, String)> {
+                self.0.header_info()
+            }
+            fn init(&mut self, _params: &[String]) -> Result<(), PluginError> {
+                Ok(())
+            }
+            fn run(
+                &self,
+                consequence: &TranscriptConsequence,
+                variant: &InputVariant,
+            ) -> Result<IndexMap<String, String>, PluginError> {
+                self.0.run(consequence, variant)
+            }
+            fn run_naming_empty_strings(
+                &self,
+                consequence: &TranscriptConsequence,
+                variant: &InputVariant,
+            ) -> Result<(IndexMap<String, String>, Vec<String>), PluginError> {
+                self.0.run_naming_empty_strings(consequence, variant)
+            }
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = fixture(
+            dir.path(),
+            "per_row_cells_synthetic.tsv.gz",
+            HEADER,
+            &[
+                "21\t5030000\tA\tG",
+                "21\t5030001\tA\tG\t",
+                "21\t5030002\tA\tG\t\tx",
+                "21\t5030003\tA\tG\t0.5",
+            ],
+        );
+        let plugin = loaded(&[format!("file={path}")]);
+        let gate = [Consequence::MissenseVariant];
+        let left_by = |route: &dyn BuiltinPlugin, pos: u64| {
+            let mut variants = vec![snv(pos, b"A", b"G", &gate)];
+            route.run_batch(&mut variants).unwrap();
+            let row = &variants[0].transcript_consequences[0];
+            (
+                row.plugin_data.get(FIELD).cloned(),
+                row.plugin_empty_strings.clone(),
+            )
+        };
+        let empty = Some(String::new());
+        let named = vec![FIELD.to_string()];
+        for (pos, cells, expected) in [
+            (5030000, "four cells", (empty.clone(), vec![])),
+            (
+                5030001,
+                "five cells, the fifth empty",
+                (empty.clone(), named.clone()),
+            ),
+            (5030002, "six cells, the fifth empty", (empty, named)),
+            (5030003, "a score", (Some("0.5".to_string()), vec![])),
+        ] {
+            assert_eq!(left_by(&PerRow(&plugin), pos), expected, "per row: {cells}");
+            assert_eq!(left_by(&plugin, pos), expected, "batch: {cells}");
+            let record = snv(pos, b"A", b"G", &gate);
+            let fields = plugin
+                .run(&record.transcript_consequences[0], &record)
+                .unwrap();
+            assert_eq!(fields.get(FIELD).cloned(), expected.0, "run: {cells}");
+        }
+    }
+
     /// `ClinPred.pm:127` splits the line htslib hands over, the line end alone
     /// removed, with `split("\t", $line)`, so the score cell keeps the
     /// whitespace before the line end and a whitespace-only cell is the score:
@@ -691,10 +804,10 @@ mod tests {
         );
     }
 
-    /// Ensembl VEP 116.2 never hands ClinPred a structural variant: the module
+    /// Ensembl VEP 116.3 never hands ClinPred a structural variant: the module
     /// keeps the default `variant_feature_types` of `['VariationFeature']`
     /// (BaseVepPlugin.pm:100), which the dispatch checks before running a
-    /// plugin on a line (OutputFactory.pm:2220). A `<DEL>` row gets no score,
+    /// plugin on a line (OutputFactory.pm:2229). A `<DEL>` row gets no score,
     /// and nor does a scored substitution carrying the structural mark, which
     /// pins the gate rather than the allele test; the plain one is scored.
     #[test]
@@ -799,10 +912,11 @@ mod tests {
         scores(&plugin, record)
     }
 
-    /// On GRCh37 a mitochondrial record reads the table under its own spelling
-    /// and its `chr` variant alone, the name `ClinPred.pm:120` hands
-    /// `BaseVepTabixPlugin.pm:693-708`: there `MT` and `chrMT` name the
-    /// assembly's sequence and `chrM` and `M` another one.
+    /// On GRCh37 `MT` and `chrMT` name the assembly's sequence and `chrM` and
+    /// `M` another one. Without a reference sequence the table's rows cannot
+    /// be compared with it, so a mitochondrial record reads the table under
+    /// its own spelling and its `chr` variant alone, the name `ClinPred.pm:120`
+    /// hands `BaseVepTabixPlugin.pm:693-708`.
     #[test]
     fn on_grch37_a_mitochondrial_record_reads_the_table_within_its_pair_of_names() {
         let dir = tempfile::tempdir().unwrap();
@@ -839,6 +953,75 @@ mod tests {
                     );
                 }
             }
+        }
+    }
+
+    /// On GRCh37, with the run's reference sequence, a table naming its
+    /// mitochondrial contig under the other pair of names than the record's
+    /// is read when its rows state the reference bases, and not when they
+    /// state the bases one position on: there the row at the record's site
+    /// carries the record's alleles, the reference repeating its base, and
+    /// its score is the neighbouring base's.
+    #[test]
+    fn on_grch37_a_table_under_the_other_pair_is_read_only_when_its_rows_state_the_reference() {
+        use crate::test_fixtures::{
+            made_up_alternate, made_up_reference, made_up_rows, repeated_base,
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let (reference, bases) = made_up_reference(dir.path(), 1600);
+        let site = repeated_base(&bases, 100);
+        let base = bases[site - 1];
+        for (frame, offset, expected) in [
+            ("stating_the_reference", 0, Some(format!("0.{site}"))),
+            ("one_position_on", 1, None),
+        ] {
+            let rows = made_up_rows(
+                "chrM",
+                &bases,
+                10..1590,
+                offset,
+                |contig, position, reference, alt| {
+                    format!("{contig}\t{position}\t{reference}\t{alt}\t0.{position}")
+                },
+            );
+            let rows: Vec<&str> = rows.iter().map(String::as_str).collect();
+            let path = fixture(
+                dir.path(),
+                &format!("ClinPred_{frame}_synthetic.tsv.gz"),
+                HEADER,
+                &rows,
+            );
+            let mut plugin = ClinPredPlugin::new();
+            plugin.set_assembly(Some(vep_core::assembly::Assembly::Grch37));
+            plugin
+                .init(&[format!("file={path}")])
+                .expect("fixture loads");
+            plugin.set_reference_fasta(Some(std::sync::Arc::clone(&reference)));
+            let record_spelt = |spelling: &str| {
+                let mut record = InputVariant::new(
+                    spelling.into(),
+                    site as u64,
+                    site as u64,
+                    vec![base],
+                    vec![made_up_alternate(base)],
+                );
+                record
+                    .transcript_consequences
+                    .push(row_of(Consequence::MissenseVariant));
+                record
+            };
+            for record in ["MT", "chrMT"] {
+                assert_eq!(
+                    scores(&plugin, record_spelt(record)),
+                    std::slice::from_ref(&expected),
+                    "{frame}, record {record}"
+                );
+            }
+            assert_eq!(
+                scores(&plugin, record_spelt("chrM")),
+                [Some(format!("0.{site}"))],
+                "{frame}: a record of the table's own pair"
+            );
         }
     }
 }

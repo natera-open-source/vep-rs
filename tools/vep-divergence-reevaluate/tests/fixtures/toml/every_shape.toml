@@ -1,0 +1,61 @@
+# Every shape of TOML a record may hold.
+entry = "every_shape"
+page = 'docs/literal.md'
+basic = "tab\there \"quoted\" \\ back é \U0001F600"
+multi = """
+first line
+  second line \
+     joined
+third "" line"""
+literal_multi = '''
+raw \n text
+'''
+integer = 42
+negative = -17
+grouped = 1_000_000
+hexadecimal = 0xDEAD_beef
+octal = 0o755
+binary = 0b1101
+float = 6.626e-34
+fraction = -0.5
+infinity = inf
+flag = true
+other_flag = false
+offset_datetime = 1979-05-27T00:32:00.999999-07:00
+local_datetime = 1979-05-27T07:32:00
+local_date = 1979-05-27
+local_time = 07:32:00.5
+empty_list = []
+mixed = [ 1, "two", [ 3.0, true ], { four = 4 } ]
+inline = { b = 1, a = { z = "last", y = [] } }
+"quoted key" = "value"
+'literal.key' = 1
+dotted.second = 2
+dotted.first = 1
+
+[input]
+text = """
+21	8885975	rec	GT	GA,GTC	.	.	.
+"""
+header = [
+  "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End\">",
+]
+
+[compare.where]
+record = ["a", "b"]
+pattern = 'PICK=1'
+
+[compare]
+kind = "rows"
+
+[[steps]]
+name = "one"
+
+[[steps]]
+name = "two"
+[steps.detail]
+deep = true
+
+[expected]
+ensembl_vep = []
+vep_rs = ["21:8885976 | A | ENST00000624291 | downstream_gene_variant | 5000"]

@@ -1,7 +1,7 @@
 entry = "recode_warnings_and_fields"
 page = "docs/divergences/recode-warnings-and-fields.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the documented options --warning_file and --ga4gh_vrs (Ensembl VEP documentation, \"Running Ensembl VEP\"), both declared by variant_recoder, on input the recoder supports with a warning (\"Variant Recoder\", Output, warnings); not seen in the measured datasets"
 notes = "The first mechanism of the entry: variant_recoder redirects every warning into memory before one is raised, so the file --warning_file names is never opened; vep recode writes the skip warning of the unparsable first line to it. variant_recoder reads the Ensembl database and passes the cache and FASTA arguments vep recode reads through unread, and reads the synonyms file."
@@ -30,3 +30,14 @@ pattern = "Unable to parse HGVS notation"
 [expected]
 ensembl_vep = []
 vep_rs = ["WARNING: line 1 skipped (ZZ:g.100A>G): Unable to parse HGVS notation 'ZZ:g.100A>G': The reference FASTA has no sequence named ZZ"]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/recode.rs::Fields::settle",
+    "crates/vep-cli/src/recode.rs::run",
+]
+tests = [
+    "crates/vep-cli/src/recode.rs::tests::fields_settle_the_flags_the_run_needs",
+    "crates/vep-cli/tests/recode_tool.rs::ga4gh_vrs_follows_each_spdi",
+    "crates/vep-cli/tests/recode_tool.rs::warnings_are_attached_to_their_input",
+]

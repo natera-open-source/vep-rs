@@ -1,9 +1,9 @@
 entry = "stats_variant_classes_minimal"
 page = "docs/divergences/statistics-report-counts.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 106.0 per million · 0 flag sets, 24 corpora"
+input_class_basis = "2 · 106.0 per million · 0 flag sets, 26 corpora"
 notes = "The record overlaps no transcript and --variant_class is off, so Ensembl VEP's class is computed once, when its logger meets the record's restored allele string A/G/AT; the first mechanism of the sentence, the class is the first allele's trimmed pair under --minimal --variant_class in both engines."
 
 [input]
@@ -28,3 +28,7 @@ section = "[Variant classes]"
 [expected]
 ensembl_vep = ["indel\t1"]
 vep_rs = ["SNV\t1"]
+
+[implementation]
+code = ["crates/vep-cli/src/stats.rs::ThreadStats::log_class"]
+tests = ["crates/vep-cli/tests/filter_report_and_run_documented_rows.rs::a_record_minimal_splits_is_counted_under_the_class_of_its_first_allele"]

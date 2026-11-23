@@ -1,0 +1,1 @@
+ERROR: [compare_vep_stats] cannot write tests/fixtures/reference.summary.log/stats.json: File exists

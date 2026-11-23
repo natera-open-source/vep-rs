@@ -1,0 +1,102 @@
+{
+ "plugin_fixtures": {
+  "generator": "scripts/fixtures/cut_plugin_regions.py",
+  "flank": 5000,
+  "record_flank": 2000,
+  "exon_flank": 50,
+  "gerp_regions": "exons",
+  "tools": {
+   "bgzip": "bgzip (htslib) 1.9"
+  },
+  "files": {
+   "reference.fa.fai": "12272ba89f620a0c87f47609c11a584d8b85454ecd4513c584b3f42a77fd4f61",
+   "reference.fa.gz": "6805d0e5b182f6c03fec830483b82661df07203bfcf4f294392f78565c303c66",
+   "reference.fa.gz.fai": "12272ba89f620a0c87f47609c11a584d8b85454ecd4513c584b3f42a77fd4f61",
+   "reference.fa.gz.gzi": "fe7326e810dee480004eed87587e56d16b5c6185bac58c255c02f5fabc1ddb1a"
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 63,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species phlebotomus_papatasi --assembly PpapI1 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "phlebotomus_papatasi/63_PpapI1",
+ "fasta": "reference.fa.gz",
+ "input": "variants.vcf",
+ "sha256": {
+  "default.txt": "6b099237be92ede6366695ad52954d8d32633b3884002e501821be0df7f104d7",
+  "tab.txt": "ba4fd883c18449ef54b662bc08562172fc3446aff21cc04f8db5f468583ebb3e",
+  "vcf.vcf": "96ed5dc1000bdb4d5dd33b32fb7ded3e3b503e3ee331dfd67ce7ad8472bf53a1",
+  "json.jsonl": "66aea206dc2c912e69e99d07f9c85923c3628a397f66212f9bf4e7e7d4f1890f"
+ },
+ "variants_vcf_sha256": "fd33ab3e625f85d0964480d62e90e2fbeb3e24ad517f624c718ae74b84ffc817",
+ "flag_sets": {
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species phlebotomus_papatasi --assembly PpapI1 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "phlebotomus_papatasi/63_PpapI1",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "a3dc4188d2b3bd3ac43278f287fd8dd5074a76693f0d2c94ac0d8ef75aac76e0",
+    "tab.txt": "8db89add74a0ef8f8ee36e97ef60d3e07da7843992ec356f574b7174f402c707",
+    "vcf.vcf": "5a37f444db80a5de1de65d148108e078719f6c631b2e805990adae95ee78a7f0",
+    "json.jsonl": "7e200414b41e9de0bcb26c93d862a6525d566f805902feed4222c42e293181e4"
+   },
+   "flags": [
+    "--everything"
+   ],
+   "expected_dir": "expected_everything"
+  },
+  "hgvs-sift": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species phlebotomus_papatasi --assembly PpapI1 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs --sift b [--tab|--vcf|--json]",
+   "perl_cache": "phlebotomus_papatasi/63_PpapI1",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "ee8fd1d4f5e2bb23d45acc5564370b9aa267c92064693920963ed4440908c543",
+    "tab.txt": "edb9942e6bcf7320d17bf511e8966dc46ee0906906e205a681cd0100fa284294",
+    "vcf.vcf": "8c66a77e7095596678517cad66d085b55cf0a1b470aa8da16a029fdc5969e943",
+    "json.jsonl": "ad004236d6b2202e715f56676c186f7fba45b54cfe8c5a95dd287856839641f2"
+   },
+   "flags": [
+    "--hgvs",
+    "--sift",
+    "b"
+   ],
+   "expected_dir": "expected_hgvs-sift"
+  }
+ },
+ "generator": "tools/vep-storable-to-json over the Ensembl Metazoa release 63 PpapI1 cache; a survey of the converted cache's sequences, every one an unplaced scaffold, which chose the five scaffolds holding the most coding transcripts (JH660959.1, JH660960.1, JH660950.1, JH660949.1 and JH660948.1: 355 coding transcripts, 163 on the forward strand and 192 on the reverse) and the first and the last sequence of the cache's order that hold a transcript (AJVK01020912.1 and JH667840.1); the genome sequence of the seven from Phlebotomus_papatasi.PpapI1.dna.toplevel.fa.gz of Ensembl Metazoa release 63, the file checked against the directory's CHECKSUMS; tools/vep-seeded-variants --seed 1 --records wide --fasta <genome> --sequence <each of the seven> (generator version 3; 247 records, twelve a situation and fewer where the seven sequences give fewer places) and 300 single-base substitutions sampled with seed 1 from the cache's known variants on those sequences, each with the genome's base as its reference allele; Ensembl VEP over the two inputs under the default flags with --fasta <genome>; tools/vep-golden-corpus select --release 63 --assembly PpapI1 --species phlebotomus_papatasi --dataset wide=<reference>=<the seeded records> --dataset known=<reference>=<the known variants> --k 2 --seed 1 --max-span 1000000 --max-records 500 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 6 --include <every seeded record and sixty of the sampled known variants, evenly spaced> --covers species-phlebotomus-ppapi1 --covers genetic-code-tables --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --flank 5000 --gzip --drop sorted_exons --drop protein_function_predictions --drop-except <the transcripts on which a record changes one residue, the rows SIFT scores> --perl-info <cache>/info.txt --cache-version 63 --variations <converted cache>/variations; scripts/fixtures/cut_plugin_regions.py --reference <genome> --flank 5000 --record-flank 2000 over the corpus with each record's sequence written by the cache's name; tools/vep-golden-corpus flag-set (everything, hgvs-sift); scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; tools/vep-golden-corpus classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp --field HGVS_OFFSET for the everything set and the same with --field SIFT for the hgvs-sift set)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "AJVK01020912.1": 3,
+   "JH660948.1": 36,
+   "JH660949.1": 39,
+   "JH660950.1": 43,
+   "JH660959.1": 48,
+   "JH660960.1": 44,
+   "JH667840.1": 2
+  },
+  "shards": 12,
+  "synonym_lines": 14,
+  "matrices_kept_on": 48,
+  "variation_records_per_chromosome": {
+   "AJVK01020912.1": 0,
+   "JH660948.1": 18,
+   "JH660949.1": 19,
+   "JH660950.1": 17,
+   "JH660959.1": 11,
+   "JH660960.1": 13,
+   "JH667840.1": 1
+  },
+  "variation_slices": "the known variants within one base of a record under variations/<chr>/all_vars.gz with its .csi, as the Ensembl VEP cache lays them out; a sequence with no known variant beside a record carries the empty indexed file"
+ }
+}

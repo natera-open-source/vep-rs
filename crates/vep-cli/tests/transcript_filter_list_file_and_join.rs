@@ -3,7 +3,7 @@
 
 //! Two readings of `--transcript_filter` the `vep` binary shares with Ensembl
 //! VEP, run through the binary: the refusal of an `in` list file that exists
-//! and cannot be read (`FilterSet.pm:397` at release/116.2, `open IN, $list or
+//! and cannot be read (`FilterSet.pm:397` at release/116.3, `open IN, $list or
 //! throw("ERROR: Could not read from file $list\n")`), on a path every user is
 //! refused, root included; and the one root under which every filter string and
 //! the predicate `--exclude_predicted` appends are joined, each unit with its
@@ -125,7 +125,7 @@ fn refusal(dir: &Path, filter: &str) -> (Option<i32>, String) {
 /// Both fixtures refuse every user, root included, since neither failure is a
 /// permission check: `open(2)` on a Unix domain socket fails with `ENXIO`, and
 /// `stat(2)` or `open(2)` on a path through a regular file with `ENOTDIR`.
-/// Ensembl VEP 116.2 refuses both paths with the same two messages.
+/// Ensembl VEP 116.3 refuses both paths with the same two messages.
 #[test]
 fn an_in_list_file_that_cannot_be_read_is_refused_under_every_user() {
     let dir = tempfile::tempdir().unwrap();
@@ -168,7 +168,7 @@ fn an_in_list_file_that_cannot_be_read_is_refused_under_every_user() {
 /// applying to the whole `or` ((coding or lncRNA) and not predicted), while the
 /// same predicate written first and the `or` filter second keeps all five, the
 /// second string's `or` unit joining at the root ((not predicted and coding) or
-/// lncRNA). Ensembl VEP 116.2 keeps the same models under each of the five
+/// lncRNA). Ensembl VEP 116.3 keeps the same models under each of the five
 /// command lines.
 #[test]
 fn exclude_predicted_and_the_filter_strings_share_one_root() {

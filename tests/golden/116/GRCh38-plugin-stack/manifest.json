@@ -93,7 +93,7 @@
    "plugin_data/gnomad.coverage.tsv.gz.tbi"
   ]
  },
- "suites": {
+ "datasets": {
   "plugin-stack": {
    "reference": "cand38_stack.vep.txt.gz",
    "input": "cand38_stack.vcf",
@@ -222,21 +222,21 @@
  },
  "records": [
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t13826644\trs1258005577\tAAAG\tA\t.\t.\t.",
    "combinations": [
     "upstream_gene_variant"
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t14011314\trs564579936\tC\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant"
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t18486439\trs1344590079\tGTAT\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -244,21 +244,21 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t20000000\tintergenic\tA\tG\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t24811606\trs980597155\tG\tA\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant"
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t25769399\trs1391930189\tC\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -267,7 +267,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t26112000\tapp_exon\tG\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,synonymous_variant",
@@ -277,7 +277,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t26924283\trs1311362461\tACTT\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -286,7 +286,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t29297800\tbach1_upstream_in_gene\tC\tT\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -294,7 +294,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t29321300\tbach1_exon\tC\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -302,21 +302,21 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t30289340\tsingle_exon_fs\tAG\tA\t.\t.\t.",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t30289362\tsingle_exon_stop\tG\tT\t.\t.\t.",
    "combinations": [
     "stop_gained"
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t30620600\tkrtap20_4_deletion\tTTCAAACTGAGAAAAATAATTCCCTGATCCACAACTGAAACATCCACTTCTGAACACCATGTCCTACTACAGCCATCTTTCTGGTGGCCTGGGCTGCGGCTTGGCTGTGGCTGTGACTATGGGAAGGACTGTGGCTGTGGCTGAGTATGGCAGGTGCAGACATGGCTGCCACTCATCTTACTCTGCCAGGTAATGACACCATGGATTCCACTGAGGAACACCTAGAGCAGTTCAGTCTACTGCACTCCTCCAGCTTGATTT\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -324,7 +324,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t30620700\tkrtap20_4_snv\tT\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -332,7 +332,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t30806881\trs35442370\tG\tGAAA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -340,7 +340,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t31657693\tsod1_upstream\tC\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -349,7 +349,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t31663800\tsod1_exon2\tG\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -363,7 +363,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t31665000\tsod1_intron\tG\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -373,14 +373,14 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t32699959\trs2042341561\tG\tA\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t33324525\trs967312417\tCGGA\tC\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -389,7 +389,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t36070204\tfwd_first_exon_stop_le101\tC\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,stop_gained",
@@ -400,7 +400,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t36070215\tfwd_first_exon_cds101_fs\tGT\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -411,7 +411,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t36070216\tfwd_first_exon_ins_after_101\tT\tTA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -422,7 +422,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t36070216\tfwd_first_exon_cds102_fs\tTG\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -433,7 +433,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t36070217\tfwd_first_exon_ins_after_102\tG\tGA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -444,7 +444,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t36070245\tfwd_first_exon_stop_gt101\tC\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,stop_gained",
@@ -455,7 +455,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t36070994\tfwd_penult_outside_stop\tA\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -466,7 +466,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t36071004\tfwd_penult_52_fs\tTC\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -477,7 +477,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t36071005\tfwd_penult_51_fs\tCT\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -488,7 +488,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t36071015\tfwd_penult_window_stop\tC\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -499,7 +499,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t36071055\tfwd_penult_junction_del\tAAGGT\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,splice_donor_variant",
@@ -512,7 +512,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t36071058\tfwd_penult_donor_snv\tG\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,splice_donor_variant",
@@ -524,7 +524,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t36072460\tfwd_last_exon_fs\tGT\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -535,7 +535,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t36072481\tfwd_last_exon_stop\tA\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -546,7 +546,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t36170554\trs1280472312\tC\tCCA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -557,7 +557,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t39175646\trev_last_exon_stop\tC\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -568,7 +568,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t39175648\trev_last_exon_fs\tGT\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -579,7 +579,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t39177432\trev_penult_junction_del\tTACCT\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -589,7 +589,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t39177434\trev_penult_donor_snv\tC\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -599,7 +599,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t39177485\trev_penult_window_stop\tC\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -608,7 +608,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t39177485\trev_penult_51_fs\tCC\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -617,7 +617,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t39177486\trev_penult_52_fs\tCA\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -626,7 +626,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t39177502\trev_penult_outside_stop\tA\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -635,7 +635,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t39183280\trev_first_exon_stop_gt101\tC\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,splice_region_variant,stop_gained",
@@ -646,7 +646,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t39183283\trev_first_exon_ins_after_102\tT\tTA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -656,7 +656,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t39183283\trev_first_exon_cds102_fs\tTG\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -666,7 +666,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t39183284\trev_first_exon_ins_after_101\tG\tGA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -676,7 +676,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t39183284\trev_first_exon_cds101_fs\tGT\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -686,7 +686,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t39183289\trev_first_exon_stop_le101\tC\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,stop_gained",
@@ -696,7 +696,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t39212646\trs1460677935\tAACC\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -707,7 +707,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t39217042\trs2032950535\tT\tTAA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -717,7 +717,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t43332022\trs1392062079\tT\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -726,7 +726,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "21\t45073962\trs988209446\tG\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -737,7 +737,7 @@
    ]
   },
   {
-   "suite": "plugin-stack",
+   "dataset": "plugin-stack",
    "vcf": "22\t17124700\tlinc01664_exon\tA\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -746,7 +746,7 @@
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "flag_sets": [

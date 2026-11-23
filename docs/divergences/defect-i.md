@@ -9,7 +9,7 @@ Its start is POS + 1 when the ALT's length differs from REF's and POS when it do
 **What vep-rs does instead.** vep-rs reads every breakpoint record's span by the breakpoint rule, `SVTYPE` or not: the single base at POS + 1 unless `SVLEN` gives a span. When INFO names a mate through `CHR2` and `END2`, the `N.` row and the bracket row are both written at the point.
 
 **Where it is in Ensembl VEP's source** (`ensembl-io` and `ensembl-vep`):
-- `ensembl-io`, `BaseVCF4.pm`, `get_start`, lines 255-275: adds one to POS for a symbolic ALT or an ALT whose length differs from REF's, and leaves POS alone when the lengths are equal, as a two-base REF's is against `N.`.
+- `ensembl-io`, `BaseVCF4.pm`, `get_start`, lines 255-276: adds one to POS for a symbolic ALT or an ALT whose length differs from REF's, and leaves POS alone when the lengths are equal, as a two-base REF's is against `N.`.
 - `ensembl-io`, `BaseVCF4.pm`, `get_end`, lines 297-317: ends a record without `SVLEN` or `END` at the start only when the raw INFO carries `SVTYPE` or the ALT carries `<`, `[` or `]`. A dot breakend carries none, so the last branch gives POS plus the length of REF minus one: POS for a one-base REF, POS + 1 for two bases, POS + 2 for three.
 - `ensembl-vep`, `Bio/EnsEMBL/VEP/Parser/VCF.pm`, lines 237-245: the line is still routed to the structural path (`^\.\w+|\w+\.$`), and `get_SO_term` reads `BND` from the dot, so the record is a `chromosome_breakpoint` with a sequence record's coordinates.
 
@@ -39,11 +39,11 @@ When INFO names a mate through `CHR2` and `END2`, still without `SVTYPE`, the ma
 21	30425650	ndot_nosvtype_ref3	NAC	.N	.	.	.
 ```
 
-Executed with Ensembl VEP 116.2 (`ensemblorg/ensembl-vep:release_116.2`, the 116 GRCh38 cache, `--offline --cache --allele_number`).
+Executed with Ensembl VEP 116.3 (`ensemblorg/ensembl-vep:release_116.3`, the 116 GRCh38 cache, `--offline --cache --allele_number`).
 
 ### 16.3 What each engine writes
 
-Ensembl VEP 116.2, for the first record, writes two rows, one per feature, at the pair. Ensembl VEP 116.2 for the same record with `SVTYPE=BND`, and vep-rs for both, write the same two rows at the point. One table per row, the differing cells in bold.
+Ensembl VEP 116.3, for the first record, writes two rows, one per feature, at the pair. Ensembl VEP 116.3 for the same record with `SVTYPE=BND`, and vep-rs for both, write the same two rows at the point. One table per row, the differing cells in bold.
 
 The ENST00000334068 row:
 
@@ -72,7 +72,7 @@ The ENST00000390690 row:
 | CDS_position | **`262-263`** | **`262`** |
 | Protein_position | `88` | `88` |
 
-For the second record, whose INFO names a mate, Ensembl VEP 116.2 writes the pair under both alleles, four rows, and vep-rs the same four alleles at the point, `21:30425651`, with the positions `276`, `262` and `88`. One table per Ensembl VEP row; the vep-rs column points to that sentence.
+For the second record, whose INFO names a mate, Ensembl VEP 116.3 writes the pair under both alleles, four rows, and vep-rs the same four rows at the point, `21:30425651`, with the positions `276`, `262` and `88`. One table per Ensembl VEP row; the vep-rs column points to that sentence.
 
 The `N.` allele on ENST00000334068:
 
@@ -128,7 +128,7 @@ The `N[21:30425700[` allele on ENST00000390690:
 | CDS_position | `262-263` |  |
 | Protein_position | `88` |  |
 
-For the third record, whose REF is three bases, Ensembl VEP 116.2 writes the span that begins at the point, two rows, and vep-rs the point, `21:30425651`, under the same allele on both features. One table per Ensembl VEP row; the vep-rs column points to that sentence.
+For the third record, whose REF is three bases, Ensembl VEP 116.3 writes the span that begins at the point, two rows, and vep-rs the point, `21:30425651`, under the same allele on both features. One table per Ensembl VEP row; the vep-rs column points to that sentence.
 
 The ENST00000334068 row:
 
@@ -156,7 +156,7 @@ The ENST00000390690 row:
 
 ### 16.4 Why Ensembl VEP writes that
 
-`BaseVCF4.pm` `get_start` (lines 255-275) adds one to POS for a symbolic ALT or an ALT whose length differs from REF's and leaves POS alone when the lengths are equal. `get_end` (lines 297-317) ends a record without `SVLEN` or `END` at the start only when the raw INFO carries `SVTYPE` or the ALT carries `<`, `[` or `]`. A dot breakend carries none, so the last branch gives POS plus the length of REF minus one.
+`BaseVCF4.pm` `get_start` (lines 255-276) adds one to POS for a symbolic ALT or an ALT whose length differs from REF's and leaves POS alone when the lengths are equal. `get_end` (lines 297-317) ends a record without `SVLEN` or `END` at the start only when the raw INFO carries `SVTYPE` or the ALT carries `<`, `[` or `]`. A dot breakend carries none, so the last branch gives POS plus the length of REF minus one.
 
 The length of REF therefore sets the span. Against the two-character ALT a one-base REF starts at POS + 1 and ends at POS, a two-base REF starts at POS and ends at POS + 1, and both are written as the pair `POS-(POS+1)`. A REF of three or more bases starts at POS + 1 and ends at POS plus the length of REF minus one, `21:30425651-30425652` for `NAC` against `.N` at 30425650. Against an ALT of its own length it starts at POS, `21:30425650-30425652` for `NAC` against `NA.`.
 
@@ -170,7 +170,7 @@ The dot is the breakend's notation, and the same record with `SVTYPE=BND` is a p
 
 ```bash
 printf '##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n21\t30425650\tndot_nosvtype\tN\tN.\t.\t.\t.\n' > dot.vcf
-docker run --rm -v "$PWD":/work -v /path/to/vep-cache:/cache ensemblorg/ensembl-vep:release_116.2 \
+docker run --rm -v "$PWD":/work -v /path/to/vep-cache:/cache ensemblorg/ensembl-vep:release_116.3 \
   vep -i /work/dot.vcf -o /work/dot.perl.txt --offline --cache --dir_cache /cache --cache_version 116 \
   --assembly GRCh38 --species homo_sapiens --allele_number --no_stats
 vep -i dot.vcf -o dot.vep-rs.txt --offline --json_cache tests/golden/116/GRCh38-release116/json_cache --assembly GRCh38 --no_stats
@@ -178,6 +178,6 @@ vep -i dot.vcf -o dot.vep-rs.txt --offline --json_cache tests/golden/116/GRCh38-
 
 ### 16.7 How the comparator treats this class
 
-The class is `dot_breakend_without_svtype_pair` in the 116.2 registry of both comparators, set aside. The reference's row at a two-coordinate span and vep-rs's row at the point `chr:(P+1)`, on the same feature and under the same allele, are a pair, and both leave the adjusted figure, whatever their consequence sets. The point is the span's start or the base after it. It is the base after the start for a REF of one or two bases (the end of `chr:P-(P+1)`) and for `NAC` against `NA.` (the second base of `21:30425650-30425652`), and the start itself for `NAC` against `.N` (the start of `21:30425651-30425652`).
+The class is `dot_breakend_without_svtype_pair` in the 116.3 registry of both comparators, set aside. The reference's row at a two-coordinate span and vep-rs's row at the point `chr:(P+1)`, on the same feature and under the same allele, are a pair, and both leave the adjusted figure, whatever their consequence sets. The point is the span's start or the base after it. It is the base after the start for a REF of one or two bases (the end of `chr:P-(P+1)`) and for `NAC` against `NA.` (the second base of `21:30425650-30425652`), and the start itself for `NAC` against `.N` (the start of `21:30425651-30425652`).
 
 The allele is the bare `chromosome_breakpoint` of a record without a mate, or the `N.` and `N[21:30425700[` alleles of one whose INFO names a mate. A reference row on a feature vep-rs did not name stays charged.

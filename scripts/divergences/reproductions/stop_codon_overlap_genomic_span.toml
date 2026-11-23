@@ -1,7 +1,7 @@
 entry = "stop_codon_overlap_genomic_span"
 page = "docs/divergences/stop-codon-overlap-genomic-span.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
 input_class_basis = "1 · 137,713 per million · no flag needed"
 notes = "ClinVar record 2673709 on GRCh38: a deletion of one base, 36993663, on ENST00000673897, a forward-strand transcript of MLH1 whose stop codon is c.115-117. The codon's first two bases end exon 1 at 36993662-36993663 and its third opens exon 2 at 37000955, with an intron of 7,291 bases, 36993664-37000954, between them. The deleted base is the codon's second, c.116 at cDNA 133. The last three genomic positions of the coding region are 37000953-37000955, two intron bases and the codon's third base, and the deletion lies 7,290 positions before them."
@@ -28,3 +28,22 @@ columns = ["Location", "Feature", "Consequence", "cDNA_position", "CDS_position"
 [expected]
 ensembl_vep = ["3:36993663 | ENST00000673897 | splice_region_variant,coding_sequence_variant,NMD_transcript_variant | 133 | 116 | LOW"]
 vep_rs = ["3:36993663 | ENST00000673897 | splice_region_variant,stop_retained_variant,NMD_transcript_variant | 133 | 116 | LOW"]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/coding.rs::PerlCodingEval::overlaps_stop_codon_cil",
+    "crates/vep-effects/src/coding.rs::overlaps_stop_codon_bases",
+]
+tests = [
+    "crates/vep-effects/src/coding.rs::tests::a_deletion_in_a_split_stop_codon_is_tested_on_the_codons_own_bases",
+    "crates/vep-effects/src/coding.rs::tests::an_insertion_before_a_stop_codon_an_edit_completes_reads_as_on_its_whole_twin",
+    "crates/vep-effects/src/coding.rs::tests::the_stop_codon_overlap_reads_the_codons_own_bases",
+]
+rules = [
+    "tools/vep-formats-compare/src/coding_end_terms.rs::landed_rule_may_take",
+    "tools/vep-formats-compare/src/rules/term_pairs.rs::stop_codon_overlap_genomic_span_pair_at",
+    "tools/vep-formats-compare/src/shared.rs::stop_codon_overlap_genomic_span_pair",
+    "tools/vep-outputs-compare/src/rules/row.rs::stop_codon_overlap_genomic_span_pair",
+    "tools/vep-outputs-compare/src/rules/row.rs::stop_codon_overlap_genomic_span_pair_at",
+    "tools/vep-plugin-pairs/src/rules/term_pair.rs::stop_codon_overlap_genomic_span_pair",
+]

@@ -1,7 +1,7 @@
 entry = "breakend_mate_beyond_5000"
 page = "docs/divergences/breakend-mate-beyond-5000.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the VCF 4.2 specification, section 5.4 \"Specifying complex rearrangements with breakends\" (a bracket breakend record) and the Ensembl VEP documentation, \"Running Ensembl VEP\", --distance (a distance above the default 5,000); not seen in the measured datasets"
 notes = "The mate lies 5,500 bases above ENST00000286808: within --distance 6000, so Ensembl VEP collects the transcript for the record, but outside the constant 5,000-base admission window, so no allele is admitted and the record writes no row at all; vep-rs admits the mate within the flag's distance."
@@ -28,3 +28,12 @@ columns = ["Location", "Allele", "Feature", "Consequence", "DISTANCE"]
 [expected]
 ensembl_vep = []
 vep_rs = ["21:30180001 | N[21:30172305[ | ENST00000286808 | upstream_gene_variant | 5500"]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/sv/breakend.rs::calculate",
+    "crates/vep-effects/src/sv/breakend.rs::calculate_paired_mate",
+]
+tests = [
+    "crates/vep-effects/src/sv/breakend.rs::tests::test_paired_mate_within_a_widened_distance_gets_the_distance_row",
+]

@@ -15,7 +15,7 @@
   "tab-column-order-and-placeholder",
   "json-output-key-set"
  ],
- "suites": {
+ "datasets": {
   "writers": {
    "reference": "candidates.default.txt",
    "input": "candidates.vcf",
@@ -116,7 +116,7 @@
  },
  "records": [
   {
-   "suite": "writers",
+   "dataset": "writers",
    "vcf": "21\t10541165\tENST00000618007_multi\tG\tA,C\t50\t.\tDP=13",
    "combinations": [
     "NMD_transcript_variant,missense_variant,splice_region_variant"
@@ -126,7 +126,7 @@
    ]
   },
   {
-   "suite": "writers",
+   "dataset": "writers",
    "vcf": "21\t13610293\tENST00000299443_multi\tG\tA,C\t.\tPASS\tDP=20",
    "combinations": [],
    "strata": [
@@ -134,14 +134,14 @@
    ]
   },
   {
-   "suite": "writers",
+   "dataset": "writers",
    "vcf": "21\t14381417\tENST00000285667_del1\tCC\tC\t50\tPASS\tDP=29",
    "combinations": [
     "intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "writers",
+   "dataset": "writers",
    "vcf": "21\t14381504\tENST00000285667_multi\tG\tA,C\t50\t.\tDP=31",
    "combinations": [],
    "strata": [
@@ -149,63 +149,63 @@
    ]
   },
   {
-   "suite": "writers",
+   "dataset": "writers",
    "vcf": "21\t18270149\tENST00000284885_intron\tA\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant"
    ]
   },
   {
-   "suite": "writers",
+   "dataset": "writers",
    "vcf": "21\t26750000\tintergenic1\tA\tT\t50\t.\tDP=49",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "writers",
+   "dataset": "writers",
    "vcf": "21\t30166357\tENST00000286808_ins2\tA\tAAC\t.\t.\tDP=64",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "writers",
+   "dataset": "writers",
    "vcf": "21\t30881313\tENST00000332378_del3\tTAAC\tT\t50\tPASS\tDP=71",
    "combinations": [
     "inframe_deletion"
    ]
   },
   {
-   "suite": "writers",
+   "dataset": "writers",
    "vcf": "21\t30881373\tENST00000332378_del1\tCA\tC\t.\tPASS\tDP=72",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "writers",
+   "dataset": "writers",
    "vcf": "21\t30881493\tENST00000332378_snv0\tG\tA\t.\tPASS\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "writers",
+   "dataset": "writers",
    "vcf": "21\t30883080\tENST00000332378_upstream\tC\tA\t50\tPASS\tDP=75",
    "combinations": [
     "upstream_gene_variant"
    ]
   },
   {
-   "suite": "writers",
+   "dataset": "writers",
    "vcf": "21\t31873935\tENST00000270112_ins2\tG\tGAC\t50\tPASS\tDP=81",
    "combinations": [
     "frameshift_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "writers",
+   "dataset": "writers",
    "vcf": "21\t34419377\tENST00000450895_ins2\tA\tAAC\t50\tPASS\tDP=83",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -213,14 +213,14 @@
    ]
   },
   {
-   "suite": "writers",
+   "dataset": "writers",
    "vcf": "21\t34419426\tENST00000450895_del3\tTTGC\tT\t.\tPASS\tDP=84",
    "combinations": [
     "NMD_transcript_variant,inframe_deletion"
    ]
   },
   {
-   "suite": "writers",
+   "dataset": "writers",
    "vcf": "21\t34419486\tENST00000450895_del1\tCA\tC\t50\t.\tDP=85",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -228,28 +228,28 @@
    ]
   },
   {
-   "suite": "writers",
+   "dataset": "writers",
    "vcf": "21\t34419606\tENST00000450895_snv0\tG\tT\t50\tPASS\tDP=87",
    "combinations": [
     "NMD_transcript_variant,missense_variant"
    ]
   },
   {
-   "suite": "writers",
+   "dataset": "writers",
    "vcf": "21\t34419655\tENST00000450895_intron\tA\tG\t.\t.\tDP=88",
    "combinations": [
     "NMD_transcript_variant,intron_variant"
    ]
   },
   {
-   "suite": "writers",
+   "dataset": "writers",
    "vcf": "21\t37005202\tENST00000329553_upstream\tA\tT\t.\tPASS\t.",
    "combinations": [
     "upstream_gene_variant"
    ]
   },
   {
-   "suite": "writers",
+   "dataset": "writers",
    "vcf": "21\t37006804\tENST00000329553_snv0\tA\tG\t50\t.\tDP=91",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -257,14 +257,14 @@
    ]
   },
   {
-   "suite": "writers",
+   "dataset": "writers",
    "vcf": "21\t37006901\tENST00000329553_intron\tG\tA\t50\tPASS\tDP=93",
    "combinations": [
     "intron_variant"
    ]
   },
   {
-   "suite": "writers",
+   "dataset": "writers",
    "vcf": "21\t37013589\tENST00000329553_del3\tGGGA\tG\t50\tPASS\tDP=95",
    "combinations": [
     "inframe_deletion",
@@ -273,56 +273,56 @@
    ]
   },
   {
-   "suite": "writers",
+   "dataset": "writers",
    "vcf": "21\t37017895\tENST00000329553_ins2\tG\tGAC\t.\tPASS\tDP=96",
    "combinations": [
     "non_coding_transcript_exon_variant"
    ]
   },
   {
-   "suite": "writers",
+   "dataset": "writers",
    "vcf": "21\t39746296\tENST00000380588_snv1\tA\tT\t.\t.\tDP=100",
    "combinations": [
     "missense_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "writers",
+   "dataset": "writers",
    "vcf": "21\t40000000\tintergenic2\tT\tC\t.\tPASS\tDP=104",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "writers",
+   "dataset": "writers",
    "vcf": "21\t42076026\tENST00000408910_snv1\tG\tT\t.\tPASS\tDP=108",
    "combinations": [
     "5_prime_UTR_variant"
    ]
   },
   {
-   "suite": "writers",
+   "dataset": "writers",
    "vcf": "21\t42076138\tENST00000408910_del3\tCCCT\tC\t.\tPASS\t.",
    "combinations": [
     "5_prime_UTR_variant"
    ]
   },
   {
-   "suite": "writers",
+   "dataset": "writers",
    "vcf": "21\t42404043\tENST00000319294_snv1\tT\tC\t.\tPASS\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant"
    ]
   },
   {
-   "suite": "writers",
+   "dataset": "writers",
    "vcf": "21\t42404083\tENST00000319294_intron\tG\tC\t50\t.\tDP=115",
    "combinations": [
     "NMD_transcript_variant,intron_variant"
    ]
   },
   {
-   "suite": "writers",
+   "dataset": "writers",
    "vcf": "21\t42409464\tENST00000319294_del3\tCCCC\tC\t50\tPASS\tDP=117",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -330,28 +330,28 @@
    ]
   },
   {
-   "suite": "writers",
+   "dataset": "writers",
    "vcf": "21\t42409515\tENST00000319294_ins2\tA\tAAC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant"
    ]
   },
   {
-   "suite": "writers",
+   "dataset": "writers",
    "vcf": "21\t42918746\tENST00000447535_ins2\tA\tAAC\t50\tPASS\tDP=119",
    "combinations": [
     "frameshift_variant,stop_gained"
    ]
   },
   {
-   "suite": "writers",
+   "dataset": "writers",
    "vcf": "21\t42919316\tENST00000447535_intron\tA\tG\t.\t.\tDP=124",
    "combinations": [
     "intron_variant"
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "flag_sets": [

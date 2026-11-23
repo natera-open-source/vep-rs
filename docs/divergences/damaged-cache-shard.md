@@ -4,7 +4,7 @@ Three differences in which records are written, on cache states no measured run 
 
 Ensembl VEP's transcript cache holds one Storable file per 1 Mb region, gzip-compressed. A region's file is opened as a region is first asked for, through `PerlIO::gzip`, the `gzip` binary or `Compress::Zlib` (`AnnotationSource/Cache/BaseSerialized.pm` lines 134, 140 and 146), and a file that cannot be opened ends the run with the open's error. The bytes are then handed to Storable's `fd_retrieve` (lines 135, 141 and 155), which dies on a stream whose header is not Storable's, so a file of foreign bytes ends the run too.
 
-A file cut after its header is read differently. `fd_retrieve` wraps the C retrieval in an `eval` and dies only on an exception (`Storable.pm` lines 435 to 449 of the Storable 3.23 in the release 116.2 image). A stream that ends inside the data returns `undef` and raises none, through each of the three decompressors. The caller stores whatever came back as the region's transcripts (`BaseSerialized.pm` lines 261 to 265), and the transcript loader reads `undef` as an empty table (`AnnotationSource/Cache/Transcript.pm` line 236). The region is recorded as holding no transcript, and the run exits 0. When the `gzip` binary is the decompressor its `unexpected end of file` appears on standard error; the other two decompressors report nothing.
+A file cut after its header is read differently. `fd_retrieve` wraps the C retrieval in an `eval` and dies only on an exception (`Storable.pm` lines 435 to 449 of the Storable 3.23 in the release 116.3 image). A stream that ends inside the data returns `undef` and raises none, through each of the three decompressors. The caller stores whatever came back as the region's transcripts (`BaseSerialized.pm` lines 261 to 265), and the transcript loader reads `undef` as an empty table (`AnnotationSource/Cache/Transcript.pm` line 236). The region is recorded as holding no transcript, and the run exits 0. When the `gzip` binary is the decompressor its `unexpected end of file` appears on standard error; the other two decompressors report nothing.
 
 The regulatory tree is read through the same code. A regulatory region file cut after its header returns `undef` likewise, which the regulatory loader iterates as no feature (`AnnotationSource/Cache/RegFeat.pm` line 209). Under `--regulatory` a variant whose regulatory and motif features that file alone held is written without those rows, its `intergenic_variant` row kept, exit 0 and nothing reported.
 
@@ -13,8 +13,9 @@ A variant whose overlapping transcripts the cut file alone held is written as `i
 vep-rs loads every shard of a chromosome when the first record on it arrives. A shard whose bytes cannot be read, inflated or parsed ends the run before any record of that chromosome is annotated, with the chromosome and the loader's own words for the shard, exit 1. The rows of batches on other chromosomes already written stay in the output:
 
 ```
-ERROR: [cache] Cannot read the transcript cache for chr21: Failed to inflate
-<cache>/transcripts/21/42000001-43000000.json.gz: incomplete deflate stream
+ERROR: [cache] Cannot read the transcript cache for chromosome 21:
+Failed to inflate <cache>/transcripts/21/42000001-43000000.json.gz:
+incomplete deflate stream
 ```
 
 The line is wrapped here and is one line on standard error. A `c.`, `n.` or `p.` notation whose lookup reaches the shard first gives the same refusal after `Cannot read the transcript cache for HGVS input: `. A cache that carries its [checksum manifest](../cache-checksums.md) refuses the cut shard earlier, as a checksum mismatch, before any byte of it is inflated.
@@ -28,9 +29,9 @@ ERROR: [cache] Failed to inflate
 
 The line is wrapped here and is one line on standard error; the output file holds its header and no row. A `regulatory/<chromosome>/` directory that holds files but no `<start>-<end>.json` or `.json.gz` shard is refused as the cache opens, `ERROR: [cache] <dir> holds no <start>-<end>.json or .json.gz shard`, exit 1; a file that is not a shard beside the shards is ignored.
 
-Ensembl VEP reads a region file by its computed name, finds none in a directory without `_reg.gz` files (`BaseSerialized.pm` line 263) and writes every record there without regulatory rows, exit 0. An empty regulatory chromosome directory is a chromosome with no regulatory feature on both engines. No measured run reads a damaged regulatory shard (tier 3 of [Intended divergences from Ensembl VEP](../intended-divergences.md); 19 flag sets run `--regulatory`).
+Ensembl VEP reads a region file by its computed name, finds none in a directory without `_reg.gz` files (`BaseSerialized.pm` line 263) and writes every record there without regulatory rows, exit 0. An empty regulatory chromosome directory is a chromosome with no regulatory feature on both engines. No measured run reads a damaged regulatory shard (tier 3 of [Intended divergences from Ensembl VEP](../intended-divergences.md); 54 flag sets run `--regulatory`).
 
-To reproduce in Ensembl VEP 116.2: copy the GRCh38 cache and cut one region file of chromosome 21 short with `head -c` to half its bytes. Run [the command of the closing section](reproducing.md#reproducing-these-examples) over a record more than 5,000 bases inside that region; the record is written as `intergenic_variant`. In vep-rs: copy a JSON cache without its `CHECKSUMS.sha256`, cut one shard of chromosome 21 the same way, and run any record on chromosome 21 over the copy.
+To reproduce in Ensembl VEP 116.3: copy the GRCh38 cache and cut one region file of chromosome 21 short with `head -c` to half its bytes. Run [the command of the closing section](reproducing.md#reproducing-these-examples) over a record more than 5,000 bases inside that region; the record is written as `intergenic_variant`. In vep-rs: copy a JSON cache without its `CHECKSUMS.sha256`, cut one shard of chromosome 21 the same way, and run any record on chromosome 21 over the copy.
 
 ## A cache holding no transcript shard
 
@@ -45,7 +46,7 @@ storable)
 
 The line is one line on standard error, exit 1, and names the serialiser `info.json` declares (`storable` when it declares none). One directory holding no shard beside others that do is a chromosome with no transcripts in both engines, and a record on it is `intergenic_variant` in both.
 
-To reproduce in Ensembl VEP 116.2: a cache directory holding `info.txt` and an empty `21/`; [the command of the closing section](reproducing.md#reproducing-these-examples) writes any record on chromosome 21 as `intergenic_variant`. In vep-rs: a cache directory holding `info.json` and an empty `transcripts/21/`.
+To reproduce in Ensembl VEP 116.3: a cache directory holding `info.txt` and an empty `21/`; [the command of the closing section](reproducing.md#reproducing-these-examples) writes any record on chromosome 21 as `intergenic_variant`. In vep-rs: a cache directory holding `info.json` and an empty `transcripts/21/`.
 
 ## A variation directory whose files are not the form `var_type` names
 
@@ -65,7 +66,7 @@ says var_type (unset)
 
 Each is one line on standard error, exit 1, naming the directory, the form it holds and the key's value. The rule reads `all_vars.gz` alone: a directory holding it under no key, or lacking it under `var_type tabix`, is refused, and a directory holding neither form is a chromosome with no known variant in both engines. A directory holding both forms is read through the key's form by both engines under `var_type tabix`; under no key Ensembl VEP reads its region files and vep-rs refuses it for its `all_vars.gz`.
 
-The check runs only when a run reads co-located variants: `--check_existing` or a flag that implies it (`--everything`, the frequency flags, `--pubmed`, `--check_frequency`, `--filter_common` and `--var_synonyms`), `--format id` input, or `--recode` with `id` or `var_synonyms`. A run without them never opens the variation files. No tool writes the state: `convert_cache.pl` appends the key after writing `all_vars.gz`, `storable_to_json.pl` and `vep-cache-converter` carry the key and the files across together, and `vep-cache-builder` writes both. It comes from a hand-edited metadata file or a partial copy.
+The check runs only when a run reads co-located variants: `--check_existing` or a flag that implies it (`--everything`, the frequency flags, `--pubmed`, `--check_frequency`, `--filter_common` and `--var_synonyms`), `--format id` input, or `--recode` with `id` or `var_synonyms`. A run without them never opens the variation files. No tool writes the state: `convert_cache.pl` appends the key after writing `all_vars.gz`, `vep-storable-to-json` and `vep-cache-converter` carry the key and the files across together, and `vep-cache-builder` writes both. It comes from a hand-edited metadata file or a partial copy.
 
 The column list is checked first. An `all_vars.gz` record starts with its chromosome, so a `var_type tabix` cache whose `variation_cols` does not begin with `chr` is refused as the source opens, exit 1, whatever its directories hold:
 
@@ -84,6 +85,6 @@ ERROR: [cache] variation_cols of <cache>/info.json names no start column
 
 Ensembl VEP reads such a list as written (`CacheDir.pm` line 204), so every known variant has no position and matches no record: each record is written with `Existing_variation` empty, exit 0, and nothing is reported.
 
-To reproduce in Ensembl VEP 116.2: copy the GRCh38 cache's `info.txt` and chromosome 21 directory, remove `21/all_vars.gz` and its `.csi`, and add `21/5000001-6000000_var.gz` holding one line of single-space-delimited cells: `rs_craft`, two empty cells, `5025532`, an empty cell and `G/C`. Run [the command of the closing section](reproducing.md#reproducing-these-examples) with `--check_existing` over `21 5025532 craft1 G C`: the record is written with `Existing_variation` `-`. Remove the `var_type` line and the leading `chr,` of `variation_cols`, and the same run prints `rs_craft`. For the column list: keep `21/all_vars.gz`, its `.csi` and `var_type tabix`, remove the leading `chr,` alone, and the run writes `Existing_variation` `-` with the warning lines above. Rename `start` in the list instead, and it writes `Existing_variation` `-` and nothing else.
+To reproduce in Ensembl VEP 116.3: copy the GRCh38 cache's `info.txt` and chromosome 21 directory, remove `21/all_vars.gz` and its `.csi`, and add `21/5000001-6000000_var.gz` holding one line of single-space-delimited cells: `rs_craft`, two empty cells, `5025532`, an empty cell and `G/C`. Run [the command of the closing section](reproducing.md#reproducing-these-examples) with `--check_existing` over `21 5025532 craft1 G C`: the record is written with `Existing_variation` `-`. Remove the `var_type` line and the leading `chr,` of `variation_cols`, and the same run prints `rs_craft`. For the column list: keep `21/all_vars.gz`, its `.csi` and `var_type tabix`, remove the leading `chr,` alone, and the run writes `Existing_variation` `-` with the warning lines above. Rename `start` in the list instead, and it writes `Existing_variation` `-` and nothing else.
 
 In vep-rs: a JSON cache holding the same `variations/21/` under an `info.json` with `var_type` `tabix` and `chr` first in `variation_cols` is refused with the first line above. Without the key and with `all_vars.gz` in place, it is refused with the second; with the key, `all_vars.gz` and no `chr`, with the third; with `start` renamed, with the fourth.

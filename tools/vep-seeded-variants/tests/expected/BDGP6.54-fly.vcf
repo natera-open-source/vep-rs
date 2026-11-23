@@ -1,0 +1,36 @@
+##fileformat=VCFv4.2
+##source=vep-seeded-variants generator_version=5
+##seed=1
+##records=light
+##reference_alleles=cache
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+4	60270	first_sequence_1	G	A	.	.	.
+4	903340	code1_start_codon_1	C	T	.	.	.
+2L	821284	downstream_1	T	C	.	.	.
+2L	3051037	missense_forward_1	T	C	.	.	.
+2L	5716518	splice_acceptor_1	C	G	.	.	.
+2L	7221114	intron_1	C	G	.	.	.
+2L	7636649	upstream_1	T	G	.	.	.
+2L	8751961	missense_reverse_1	G	T	.	.	.
+2L	9436073	synonymous_forward_1	G	C	.	.	.
+2L	10396784	five_prime_utr_1	A	C	.	.	.
+2L	10848158	code1_stop_gained_1	G	A	.	.	.
+2L	11138094	intergenic_1	A	C	.	.	.
+2L	11342969	frameshift_insertion_1	T	TGG	.	.	.
+2L	12106797	three_prime_utr_1	T	C	.	.	.
+2L	13840838	code1_stop_lost_1	C	A	.	.	.
+2L	14525305	frameshift_deletion_1	GG	G	.	.	.
+2L	14774462	splice_donor_1	A	C	.	.	.
+2L	16472962	inframe_deletion_1	CCGA	C	.	.	.
+2L	21166409	synonymous_reverse_1	C	A	.	.	.
+Unmapped_Scaffold_60_D1601	1	first_base_1	T	C	.	.	.
+mitochondrion_genome	3289	organelle_1	A	G	.	.	.
+mitochondrion_genome	3525	code5_stop_gained_1	C	A	.	.	.
+mitochondrion_genome	5424	code5_made_codon_missense_1	A	T	.	.	.
+mitochondrion_genome	5523	code5_made_codon_stop_1	A	G	.	.	.
+mitochondrion_genome	9812	code5_made_codon_synonymous_1	A	T	.	.	.
+mitochondrion_genome	9834	code5_start_codon_1	A	G	.	.	.
+mitochondrion_genome	11077	code5_changed_codon_1	A	G	.	.	.
+mitochondrion_genome	11723	code5_stop_lost_1	A	T	.	.	.
+rDNA	4798	last_sequence_1	C	G	.	.	.
+NW_007931121	4798	synonym_1	C	G	.	.	.

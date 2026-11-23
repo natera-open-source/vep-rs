@@ -37,7 +37,7 @@
  "covers": [
   "REVEL"
  ],
- "suites": {
+ "datasets": {
   "GRCh37-plugin-revel": {
    "reference": "default.txt",
    "input": "variants.vcf",
@@ -123,7 +123,7 @@
  },
  "records": [
   {
-   "suite": "GRCh37-plugin-revel",
+   "dataset": "GRCh37-plugin-revel",
    "vcf": "21\t14982700\ttwo_alts_14982700\tG\tA,T\t.\t.\t.",
    "combinations": [
     "missense_variant"
@@ -133,7 +133,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-revel",
+   "dataset": "GRCh37-plugin-revel",
    "vcf": "21\t34640722\t339691\tG\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -144,7 +144,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-revel",
+   "dataset": "GRCh37-plugin-revel",
    "vcf": "21\t34927452\t639887\tG\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -154,7 +154,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-revel",
+   "dataset": "GRCh37-plugin-revel",
    "vcf": "21\t34950722\t1950758\tC\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -165,7 +165,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-revel",
+   "dataset": "GRCh37-plugin-revel",
    "vcf": "21\t34955837\t1939062\tT\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -176,14 +176,14 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-revel",
+   "dataset": "GRCh37-plugin-revel",
    "vcf": "21\t35821745\t3374283\tA\tC\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "GRCh37-plugin-revel",
+   "dataset": "GRCh37-plugin-revel",
    "vcf": "21\t36253002\t3948879\tG\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -191,7 +191,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-revel",
+   "dataset": "GRCh37-plugin-revel",
    "vcf": "21\t38439626\t1579956\tG\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -200,7 +200,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-revel",
+   "dataset": "GRCh37-plugin-revel",
    "vcf": "21\t40555192\t4146685\tC\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -210,7 +210,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-revel",
+   "dataset": "GRCh37-plugin-revel",
    "vcf": "21\t40604416\tshared_base_40604416\tCC\tCT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -220,7 +220,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-revel",
+   "dataset": "GRCh37-plugin-revel",
    "vcf": "21\t40604417\t2327814\tC\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -230,7 +230,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-revel",
+   "dataset": "GRCh37-plugin-revel",
    "vcf": "21\t44479061\t2435631\tACACGGAGGTGCCAC\tA\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,coding_sequence_variant",
@@ -241,7 +241,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-revel",
+   "dataset": "GRCh37-plugin-revel",
    "vcf": "21\t44483184\t751541\tA\tATGATCTGCAGAGGGCGCGGCTTCAGGGCTCAAGGCCAGCAAAAGCCCCACCTGGATGATCCACCCCAG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -251,7 +251,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-revel",
+   "dataset": "GRCh37-plugin-revel",
    "vcf": "21\t45706929\t3623575\tC\tT\t.\t.\t.",
    "combinations": [
     "missense_variant",
@@ -260,7 +260,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-revel",
+   "dataset": "GRCh37-plugin-revel",
    "vcf": "21\t46917008\t4455281\tT\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -270,7 +270,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-revel",
+   "dataset": "GRCh37-plugin-revel",
    "vcf": "21\t47537315\t4293351\tG\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -280,7 +280,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-revel",
+   "dataset": "GRCh37-plugin-revel",
    "vcf": "21\t47558436\t1005867\tG\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -290,7 +290,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-revel",
+   "dataset": "GRCh37-plugin-revel",
    "vcf": "21\t47681175\t2989420\tA\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -300,7 +300,7 @@
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "flag_sets": [

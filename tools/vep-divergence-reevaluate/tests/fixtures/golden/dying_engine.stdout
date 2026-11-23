@@ -1,0 +1,10 @@
+still_present_fixture	error	ensembl-vep exited 2: ERROR: [cache] no transcript shards
+
+| verdict | entries |
+| --- | --- |
+| still-present | 0 |
+| closed | 0 |
+| changed | 0 |
+| error | 1 |
+| total | 1 |
+outputs under {{ROOT}}/work

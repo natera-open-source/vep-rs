@@ -1,0 +1,84 @@
+{
+ "mode": "stats",
+ "format": "stats",
+ "verdict": "red",
+ "reasons": [
+  "[Counts]: 7 differences"
+ ],
+ "tolerance": 340282366920938463463374607431768211456,
+ "masked_rows": [
+  "Command line options",
+  "End time",
+  "Input data",
+  "Input file",
+  "Output file",
+  "Run time",
+  "Start time"
+ ],
+ "sections": {
+  "expected": [
+   "VEP run statistics",
+   "Counts",
+   "Masked chart"
+  ],
+  "actual": [
+   "VEP run statistics",
+   "Counts",
+   "Masked chart"
+  ],
+  "order_agrees": true
+ },
+ "compared": {
+  "sections": 3,
+  "rows": 25
+ },
+ "documented": [],
+ "differences": {
+  "Counts": [
+   {
+    "kind": "count",
+    "row": "float",
+    "expected": "7.0",
+    "actual": "7.00"
+   },
+   {
+    "kind": "count",
+    "row": "mixed",
+    "expected": 7,
+    "actual": "seven"
+   },
+   {
+    "kind": "count",
+    "row": "separator",
+    "expected": 7,
+    "actual": "\u001f7"
+   },
+   {
+    "kind": "missing",
+    "row": "only_expected_text",
+    "expected": "x",
+    "actual": null
+   },
+   {
+    "kind": "missing",
+    "row": "only_expected_none",
+    "expected": null,
+    "actual": null
+   },
+   {
+    "kind": "unexpected",
+    "row": "only_actual_text",
+    "expected": null,
+    "actual": "1e3"
+   },
+   {
+    "kind": "unexpected",
+    "row": "only_actual_none",
+    "expected": null,
+    "actual": null
+   }
+  ]
+ },
+ "expected": "tests/fixtures/counts_expected.summary.log",
+ "actual": "tests/fixtures/counts_actual.summary.log"
+}

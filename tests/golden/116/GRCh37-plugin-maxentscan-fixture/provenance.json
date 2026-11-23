@@ -1,7 +1,7 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --dir_plugins <VEP_plugins release/116> --plugin MaxEntScan,<generated>/fordownload_synthetic[,SWA,NCSS[,verbose]] [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh37",
@@ -10,10 +10,10 @@
  "matrices": "the MaxEntScan matrix directory both engines read is not committed: scripts/fixtures/maxentscan_fixture_matrices.py --seed 1 --out <generated>/fordownload_synthetic writes it (the manifest's `generated` block names the command and the sha256 of every file), a made-up directory, fabricated scores in the files MaxEntScan.pm reads from it (MaxEntScan.pm:104-105 and 824-826), the same bytes for the reference run and for every test run",
  "input": "variants.vcf: 21 hand-placed chromosome 21 records: 20 around the splice sites of two protein-coding transcripts, one on each strand: substitutions at the last exonic base and the second intronic base of a donor, at the second-to-last intronic base and the first exonic base of an acceptor, in the middle of an exon, eight bases into an intron and in a last intron; a two-base deletion in a donor, an insertion at an exon's end, a deletion spanning a whole exon, a multi-allelic substitution at an exon's first base, and one substitution upstream of the forward-strand gene; and one substitution in the two-base exon 21:30973548-30973549 of ENST00000309434 and ENST00000535441, inside the acceptor window of the intron before it and the donor window of the intron after it",
  "sha256": {
-  "default.txt": "48643f68166b8e97ff54a6a1733e1a0602c4c55d89414eafad5425e057ad3626",
-  "tab.txt": "08f6e7e4ae04ae9a504381dfa75e355b6f2d04dd33af14431841efbf6a949322",
-  "vcf.vcf": "99836f33135d457599f7fe497be80e970f0169a5495fe2cf2506c27495cde9ad",
-  "json.jsonl": "3ed73c85400493a5108c79ce9e32e6b5b51663d253983224d530464d9cf79ccf"
+  "default.txt": "4b14c83c40b0aeb2462c51f8a31cd6e4800149fec84abddbef998be0b4ea66a7",
+  "tab.txt": "807309119e100158c4756d5e4681b4a983cd97c839a391539e8235dac055bf74",
+  "vcf.vcf": "ed37665a445cb023d2eb3babbe1cc3092e1683b58f320e6e86847fd1e8288ae4",
+  "json.jsonl": "3be2672320a06711c246284b5a9122a6c85e4d38c722868bfdc154b295782322"
  },
  "variants_vcf_sha256": "886acd6bee6fe4ce04817df871d8c34be47de37407e9fd47929fd1b0dcb277d9",
  "flag_sets": {
@@ -26,11 +26,14 @@
    ],
    "expected_dir": "expected_swa-ncss",
    "sha256": {
-    "default.txt": "b1c8be22a4556a50ba5558b103189a62059a9d79799d5431b7a47b2ebcefa5b0",
-    "tab.txt": "3d043036bd804b6737018dfe9ae9db5317caf7a298f760ee047e0c272279d6c3",
-    "vcf.vcf": "3752011dcc2888f304081221ae271445dea2c82d5324cc5d4259a68f9218d831",
-    "json.jsonl": "25427f878a874c47330eed27273ca410c7169537dd57f196f64afa241a77f33d"
-   }
+    "default.txt": "971d95e0ab1ee349f5a3fd6a881a544bacff3e1c39daa8e4ddaf3ac3a7e2a05b",
+    "tab.txt": "0d0484586ebcd0b3c7f30057d2e9081f523a4a9a72ca3973aa9b6715c74a73c5",
+    "vcf.vcf": "b1789e7604fe0421b0e2e07ab9cbb42c38ba7275c5178d6df2e994af2694c695",
+    "json.jsonl": "3ed1e69f9b6d6c3629d5ee393ccb2a284d49af1e2c7c63106e16d24cfc18398b"
+   },
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3"
   },
   "swa-ncss-verbose": {
    "flags": [
@@ -41,11 +44,14 @@
    ],
    "expected_dir": "expected_swa-ncss-verbose",
    "sha256": {
-    "default.txt": "57e7a91ef99feee6d0606d18eb8215b5ea46a81cddc45850efe68f0347705458",
-    "tab.txt": "afb1fe5ff67352067512e3fc8ca93fc1f78515d7bbc8d6856dc7a42f0b17b642",
-    "vcf.vcf": "e75838cb3bd338ea5ddf2a89e4278d34182f11b2a05632d03dbb54f06e569557",
-    "json.jsonl": "72c35882488415f9d14955e002548ff8343d8c046efc4542bbbd64fd43ce174d"
-   }
+    "default.txt": "64277760e8766ccd7c266f67dfec50e37feda456eb43df02b34eaa9d098ceffe",
+    "tab.txt": "a3fe796fa0fa5294a57672daa6a98f183a0d51016fd7b1aa31e5611517aafb9f",
+    "vcf.vcf": "8fcb74675e240bf570e857e1d5560a165df03a9e22aca4e023808604c5b5702a",
+    "json.jsonl": "16c0370184742793bebec7ce914d5b44e9a763053c31b8d41bf82634f3a90fb8"
+   },
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3"
   }
  },
  "divergences_classified_against": {
@@ -60,7 +66,7 @@
    "MaxEntScan,{generated}/fordownload_synthetic"
   ]
  },
- "generator": "candidate records annotated with Ensembl VEP under the corpus flags (the container command above, the matrices generated by scripts/fixtures/maxentscan_fixture_matrices.py --seed 1), then scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh37 --suite mes=<reference>=<candidates> --k 200 --seed 1 --keep-records --include mes=<the record in two windows> --cache <converted slice> --covers MaxEntScan --covers api-params-parsing --matrix tests/parity/matrix.tsv --flag=--dir_plugins --flag={corpus} --flag=--plugin --flag=MaxEntScan,{generated}/fordownload_synthetic --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice scripts/data/storable_to_json.pl converted from the Ensembl VEP 116 GRCh37 cache; the masked reference as described under fasta; the container run for the manifest's run and each flag set in the four formats; scripts/golden/build_golden_corpus.py flag-set (one per flag set) and classify (the manifest's run and each flag set, with --field for MaxEntScan_ref, MaxEntScan_alt and MaxEntScan_diff and, under verbose, MaxEntScan_ref_seq and MaxEntScan_alt_seq); the json.jsonl lines of the 20 chromosome 21 records around the two protein-coding transcripts are the bytes of the run that first wrote them, since Ensembl VEP writes an object's keys in Perl's hash order and a further run writes the same objects in other bytes",
+ "generator": "candidate records annotated with Ensembl VEP under the corpus flags (the container command above, the matrices generated by scripts/fixtures/maxentscan_fixture_matrices.py --seed 1), then tools/vep-golden-corpus select --release 116 --assembly GRCh37 --dataset mes=<reference>=<candidates> --k 200 --seed 1 --keep-records --include mes=<the record in two windows> --cache <converted slice> --covers MaxEntScan --covers api-params-parsing --matrix tests/parity/matrix.tsv --flag=--dir_plugins --flag={corpus} --flag=--plugin --flag=MaxEntScan,{generated}/fordownload_synthetic --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice tools/vep-storable-to-json converts from the Ensembl VEP 116 GRCh37 cache; the masked reference as described under fasta; the container run for the manifest's run and each flag set in the four formats; tools/vep-golden-corpus flag-set (one per flag set) and classify (the manifest's run and each flag set, with --field for MaxEntScan_ref, MaxEntScan_alt and MaxEntScan_diff and, under verbose, MaxEntScan_ref_seq and MaxEntScan_alt_seq)",
  "pruned_cache": {
   "transcripts_per_chromosome": {
    "21": 37

@@ -1,11 +1,11 @@
 [VEP run statistics]
-VEP version (API)	 116.2 (116)
+VEP version (API)	 116.3 (116)
 Annotation sources	Cache: /work/cache/homo_sapiens_merged/116_GRCh37
 Species	homo_sapiens
 Command line options	vep --assembly GRCh37 --cache --cache_version 116 --database 0 --dir_cache [PATH]/cache --dir_plugins /plugins --fasta [PATH]/ref.fa --force_overwrite --fork --format vcf --grch37 --input_file [PATH]/input.vcf --json --merged --offline --output_file [PATH]/json.jsonl --quiet --stats_text
-Start time	2026-10-29 03:58:36
-End time	2026-10-29 03:58:36
-Run time	0 seconds
+Start time	2026-11-20 13:31:19
+End time	2026-11-20 13:31:20
+Run time	1 seconds
 Input file	/work/input.vcf
 Output file	/work/perl_out/json.jsonl
 
@@ -35,12 +35,12 @@ Overlapped transcripts	400
 Overlapped regulatory features	-
 
 [Variant classes]
-copy_number_variation	1
-SVA_insertion	1
 LINE1_insertion	1
+SVA_insertion	1
+copy_number_variation	1
 duplication	2
-sequence_alteration	2
 Alu_insertion	2
+sequence_alteration	2
 indel	6
 insertion	7
 deletion	9

@@ -5,15 +5,15 @@
 # in any output format, or a golden corpus's expected outputs.
 #
 # The measurement harness READS an already-populated data tree (its header documents
-# the layout) and nothing else in this repository writes the Perl ground truth into
+# the layout) and nothing else in this repository writes the Ensembl VEP ground truth into
 # it. This script is that writer. It runs Ensembl VEP in the `ensemblorg/ensembl-vep`
-# Docker image with the exact invocation the harness embeds for its Perl engine, and
+# Docker image with the exact invocation the harness embeds for its Ensembl VEP engine, and
 # writes the outputs where the harness and both comparators expect them:
 #
-#   SNP/indel (s01-s06), one file per suite:
-#     <data>/ground_truth/perl/snp_indel/<suite>/output.txt
+#   SNP/indel (s01-s06), one file per dataset:
+#     <data>/ground_truth/perl/snp_indel/<dataset>/output.txt
 #     from <data>/vcf/<asm>/all_variants_canonical/<base>.canonical.vcf.gz
-#   Structural variants (s07/s08; s09/s10 are the harness's pointer suites), one
+#   Structural variants (s07/s08; s09/s10 are the harness's pointer datasets), one
 #   file per input VCF, 16 per assembly:
 #     <data>/ground_truth/perl/sv_per_vcf/<asm>/<vcf-basename>.txt
 #     from <data>/ground_truth/perl/sv_per_vcf/canonical_inputs/<asm>/*.vcf[.gz]
@@ -26,7 +26,7 @@
 # OUTPUT FORMATS. Ensembl VEP builds one OutputFactory per run from its output_format
 # (Runner.pm:871 get_OutputFactory, OutputFactory.pm:97-102 FORMAT_MAP), so a reference
 # in several formats is one container run per format: --format default|tab|vcf|json|all.
-# In the suite layout the default format keeps the names above and the other formats
+# In the dataset layout the default format keeps the names above and the other formats
 # take their own extension on the same stem (output.tsv, output.vcf, output.jsonl;
 # <vcf-basename>.tsv, .vcf, .jsonl), so a `*.txt` glob still pairs only the default
 # output. --no_headers is passed with the default format alone: the tab output's column
@@ -48,7 +48,7 @@
 # the first --nearest run on a cache goes alone.
 #
 # STATS. --stats keeps Ensembl VEP's statistics report beside each output as
-# <stem>.summary.log instead of passing --no_stats; a suite run drops it unless --stats
+# <stem>.summary.log instead of passing --no_stats; a dataset run drops it unless --stats
 # is passed, a corpus run keeps it unless --no-stats is passed, so every corpus carries
 # the report its expected outputs were written with. The run passes --stats_text, because
 # a run that names neither --stats_text nor --stats_html writes the HTML report alone
@@ -90,9 +90,9 @@
 #
 # A manifest whose flags carry --refseq or --merged annotates against the RefSeq or the
 # merged cache: Ensembl VEP appends `_refseq` and `_merged` to the species directory name
-# (CacheDir.pm:312 at release/116.2), so the slice checked for completeness and recorded
+# (CacheDir.pm:312 at release/116.3), so the slice checked for completeness and recorded
 # as `perl_cache` is <species>_refseq/<version>_<assembly> or <species>_merged/..., and
-# --species stays the species. A suite run passing the flags through --flags reads the
+# --species stays the species. A dataset run passing the flags through --flags reads the
 # same directory.
 #
 # A corpus that runs an Ensembl VEP plugin names the data files the plugin reads under the
@@ -121,7 +121,7 @@
 # and --version, not vep's --db_version); --tool-args "<words>" appends words to every
 # case's command and is recorded with it; --tool-case <name> runs one case (repeatable).
 # filter_vep reads no cache, so --tool needs no --perl-cache-dir; a case's --filter words
-# are the case's and --flags, --format and the suite options are refused.
+# are the case's and --flags, --format and the dataset options are refused.
 # --tool variant_recoder runs Ensembl VEP's variant_recoder the same way over a corpus's
 # `tool_cases` (the `recode_tool` test of crates/vep-cli reads them): each case runs
 #   variant_recoder -i <corpus>/<input> <args...> [<perl_args...>] [<--tool-args words>]
@@ -141,7 +141,7 @@
 # a --tool run, which runs no vep, refuses the option.
 #
 # THE IMAGE DIGEST. Before anything runs, the pulled image's RepoDigests must carry
-# --perl-image-digest (default the release_116.2 tag's manifest-list digest, or
+# --perl-image-digest (default the release_116.3 tag's manifest-list digest, or
 # VEP_PERL_IMAGE_DIGEST), so a moved tag cannot produce a reference under this name.
 # --perl-image and --perl-image-digest move together.
 #
@@ -159,17 +159,17 @@
 #
 # THE FLAG IS `--dir_cache`. `--full_cache_dir` is not a VEP flag: VEP ignores it,
 # finds no annotation source, emits one warning per record and exits 0. The
-# output-volume gate below (rows >= input records per suite or per SV set, the same
+# output-volume gate below (rows >= input records per dataset or per SV set, the same
 # floor the harness's `assert_perl_annotated` applies) makes that failure mode loud
 # here as well.
 #
 # THE CACHE MUST BE THE FULL-GENOME ENSEMBL CACHE. A chromosome-subset cache does not
 # fail a VEP run; it under-annotates every record whose transcripts lie outside the
-# contigs it holds and exits 0. Completeness is asserted on the cache tree
-# itself (all 25 primary contigs under homo_sapiens/<version>_<assembly>/; another
-# species' slice must exist and hold at least one chromosome directory, since its
-# primary set is not known here), before anything runs, the same check the harness's
-# `assert_perl_cache_complete` makes.
+# contigs it holds and exits 0. The cache tree itself is checked before anything runs,
+# as the harness's `assert_perl_cache_complete` checks it: a slice under homo_sapiens
+# holds all 25 primary contigs of its assembly, the set every human dataset here is
+# drawn from, and a slice of another species exists and holds at least one chromosome
+# directory.
 #
 # Obtaining the cache (about 24 GB per assembly, gzip tar), with <v> the Ensembl
 # release, 116:
@@ -179,7 +179,7 @@
 #   homo_sapiens/116_GRCh38/ and homo_sapiens/116_GRCh37/; that directory is
 #   --perl-cache-dir (default <data>/caches/perl/vep-cache). VEP resolves
 #   <species>/<cache_version>_<assembly> beneath the --dir_cache mount from --species,
-#   --cache_version and --assembly (CacheDir.pm:306-329 at release/116.2); another
+#   --cache_version and --assembly (CacheDir.pm:306-329 at release/116.3); another
 #   species' cache tarball extracts beside the human ones. Readiness is an artifact test,
 #   not a log line: count the contig directories and confirm no tar process is still
 #   writing.
@@ -187,12 +187,20 @@
 # The reference FASTA must be the primary assembly the cache was built against
 # (Ensembl's Homo_sapiens.GRCh37.75.dna.primary_assembly.fa and
 # Homo_sapiens.GRCh38.dna.primary_assembly.fa), bgzipped or plain, with a .fai
-# beside it. --fasta-for <species>:<assembly>=<path>, repeatable, names the FASTA of one
-# genome; homo_sapiens:GRCh37 and homo_sapiens:GRCh38 default to
-# <data>/reference/<asm>/genome.fa (VEP_FASTA_GRCH37, VEP_FASTA_GRCH38). VEP receives
-# --fasta on every call: the comparators score against outputs generated WITH --fasta, and
-# an asymmetric run hides UTR-level divergences.
+# beside it. VEP receives --fasta on every call: the comparators score against outputs
+# generated WITH --fasta, and an asymmetric run hides UTR-level divergences.
 # A corpus passes --fasta only when its manifest names one, as the golden tests do.
+#
+# THE GENOME TABLE. A dataset's genome is the species and assembly of its row, and the
+# genome's FASTA and cache version are its row of harness_genomes.tsv beside this script
+# (VEP_HARNESS_GENOMES names another table; harness_genomes.sh reads it): `fasta` is a
+# path under <data> and `cache_version` the number --cache_version takes, since an
+# Ensembl Genomes cache carries its own release number. The two human rows read
+# <data>/reference/<asm>/genome.fa and 116. VEP_FASTA_GRCH37 and VEP_FASTA_GRCH38
+# replace the two human FASTA paths, --fasta-for <species>:<assembly>=<path>,
+# repeatable, the FASTA of one genome, and --cache-version or VEP_PERL_CACHE_VERSION the
+# cache version of every genome. A genome with no row has no FASTA until --fasta-for names
+# one and reads cache version 116. A corpus run reads its manifest and no table.
 #
 # This script downloads no cache, FASTA or input (it pulls the image when the host lacks
 # it, and a tool case in database mode reads the Ensembl database from its container),
@@ -202,10 +210,10 @@
 #
 # Usage:
 #   scripts/concordance/generate_reference_output.sh --data-dir <data> \
-#     [--assembly <assembly>|both] [--suites all|snp-indel|sv|"s01 s07"] \
+#     [--assembly <assembly>|both] [--datasets all|snp-indel|sv|"s01 s07"] \
 #     [--format default|tab|vcf|json|all] [--flags "<vep flags>"] [--stats] \
 #     [--volume-floor records|any] \
-#     [--perl-image ensemblorg/ensembl-vep:release_116.2] [--perl-image-digest sha256:<64 hex>] \
+#     [--perl-image ensemblorg/ensembl-vep:release_116.3] [--perl-image-digest sha256:<64 hex>] \
 #     [--perl-cache-dir <dir>] [--cache-version 116] \
 #     [--fasta <fa>] [--fasta-for <species>:<assembly>=<fa>]... \
 #     [--fork 16] [--sv-fork 4] [--buffer-size 5000] \
@@ -224,16 +232,20 @@
 #   A missing input fails a dry run exactly as it fails a real one.
 set -euo pipefail
 
-# Defaults. The data-tree locations and the VEP_* environment overrides are the same
-# ones run_clone_measurement.sh reads, so a tree generated here is a tree the harness
-# measures without further configuration.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/concordance/harness_genomes.sh
+source "$SCRIPT_DIR/harness_genomes.sh"
+
+# Defaults. The data-tree locations, the genome table and the VEP_* environment overrides
+# are the same ones run_clone_measurement.sh reads, so a tree generated here is a tree the
+# harness measures without further configuration.
 DATA_DIR=""
 ASSEMBLY="both"
 SPECIES="homo_sapiens"
-SUITES_FILTER="all"
+DATASETS_FILTER="all"
 FORMAT=""
 EXTRA_FLAGS=""
-# true under --stats, false under --no-stats; a suite run defaults to false, a corpus run to true.
+# true under --stats, false under --no-stats; a dataset run defaults to false, a corpus run to true.
 KEEP_STATS=""
 VOLUME_FLOOR="records"
 CORPUS_DIR=""
@@ -253,16 +265,18 @@ FLAG_SET=""
 CORPUS_INPUT="variants.vcf"
 CORPUS_EXPECTED_DIR="expected"
 CORPUS_FORMATS=""
-PERL_IMAGE="ensemblorg/ensembl-vep:release_116.2"
+PERL_IMAGE="ensemblorg/ensembl-vep:release_116.3"
 # The tag's manifest-list digest on Docker Hub; the pulled image's RepoDigests must carry it
 # before anything is generated, so a moved tag cannot produce a reference under this name.
-PERL_IMAGE_DIGEST="${VEP_PERL_IMAGE_DIGEST:-sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da}"
+PERL_IMAGE_DIGEST="${VEP_PERL_IMAGE_DIGEST:-sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3}"
 PERL_CACHE_DIR="${VEP_PERL_CACHE_DIR:-}"
 PERL_CACHE_VERSION="${VEP_PERL_CACHE_VERSION:-116}"
 CACHE_VERSION_SEEN=""
+# The genome table: one row a genome, read through harness_genome_field.
+GENOMES_TABLE="${VEP_HARNESS_GENOMES:-$SCRIPT_DIR/harness_genomes.tsv}"
 FASTA_ANY=""
 # The FASTA of each genome, "<species>:<assembly>	<path>" one per line (--fasta-for); the
-# two human genomes default under <data>/reference/ once --data-dir is known.
+# genome table's rows go above these lines once --data-dir is known.
 FASTA_TABLE=""
 FASTA_GRCH37="${VEP_FASTA_GRCH37:-}"
 FASTA_GRCH38="${VEP_FASTA_GRCH38:-}"
@@ -277,8 +291,8 @@ DRY_RUN="false"
 TOOL=""
 TOOL_ARGS=""
 TOOL_CASES=""
-# Options that select or place suite outputs, recorded as seen so --corpus can refuse them.
-SUITE_OPTS_SEEN=""
+# Options that select or place dataset outputs, recorded as seen so --corpus can refuse them.
+DATASET_OPTS_SEEN=""
 
 usage() {
 	cat <<'EOF'
@@ -294,7 +308,7 @@ Required (one of):
 Optional:
   --assembly <A>           The assembly to generate for, or both (default both); every
                            input is human, GRCh37 or GRCh38
-  --suites <filter>        all (default) | snp-indel | sv | space-separated "s01 s07"
+  --datasets <filter>      all (default) | snp-indel | sv | space-separated "s01 s07"
                            (s09/s10 are aliases of s07/s08: the real-world SV VCFs are
                            part of the 16-file per-assembly set)
   --format <F>             Output format: default | tab | vcf | json | all, one
@@ -307,28 +321,33 @@ Optional:
                            --stats_text) instead of --no_stats; a corpus keeps it by default
   --no-stats               Pass --no_stats and keep no report (a corpus's opt-out)
   --volume-floor <mode>    records (default): annotated rows >= input records per
-                           suite or SV set, and every written VCF record or JSON object
+                           dataset or SV set, and every written VCF record or JSON object
                            annotated; any: at least one annotated row, for flags that
                            drop records or rows (--chr, --coding_only, --no_intergenic,
                            --filter_common, --allow_non_variant, --individual,
                            --individual_zyg, --dont_skip) or write one row per record
                            (--pick, --most_severe, --summary) on an input with records
                            vep skips
-  --perl-image <ref>       Docker image (default ensemblorg/ensembl-vep:release_116.2)
+  --perl-image <ref>       Docker image (default ensemblorg/ensembl-vep:release_116.3)
   --perl-image-digest <sha256:hex>  Digest the pulled image must carry (default the
                            pinned tag's manifest-list digest, or VEP_PERL_IMAGE_DIGEST)
   --perl-cache-dir <dir>   Directory holding <species>/<ver>_<asm>/
                            (default <data>/caches/perl/vep-cache)
-  --cache-version <N>      Ensembl cache release (default 116)
+  --cache-version <N>      Ensembl cache release of every genome (default: each
+                           genome's row of the genome table, 116 for a genome with no
+                           row; VEP_PERL_CACHE_VERSION names one for every genome too)
   --fasta <fa>             Reference FASTA; valid only with a single --assembly
   --fasta-for <species>:<assembly>=<fa>
-                           The FASTA of one genome, repeatable; homo_sapiens:GRCh37 and
-                           homo_sapiens:GRCh38 default to <data>/reference/<asm>/genome.fa
-                           (VEP_FASTA_GRCH37, VEP_FASTA_GRCH38)
+                           The FASTA of one genome, repeatable; a genome defaults to the
+                           fasta path of its row of the genome table, under <data>
+                           (harness_genomes.tsv beside this script, or the table
+                           VEP_HARNESS_GENOMES names): <data>/reference/<asm>/genome.fa
+                           for homo_sapiens:GRCh37 and homo_sapiens:GRCh38, which
+                           VEP_FASTA_GRCH37 and VEP_FASTA_GRCH38 replace
   --fork <N>               SNP/indel --fork (default 16; a corpus defaults to 1)
   --sv-fork <N>            SV --fork (default 4; the shipped SV ground truth's setting)
   --buffer-size <N>        --buffer_size for both (default 5000)
-  --snp-indel-gt-dir <dir> Where <suite>/output.txt is written
+  --snp-indel-gt-dir <dir> Where <dataset>/output.txt is written
   --sv-gt-dir <dir>        Where <asm>/<vcf-basename>.txt is written
   --sv-inputs-dir <dir>    Parent of the per-assembly SV input directories
                            (default <sv-gt-dir>/canonical_inputs)
@@ -364,12 +383,12 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--assembly)
 		ASSEMBLY="$2"
-		SUITE_OPTS_SEEN="$SUITE_OPTS_SEEN $1"
+		DATASET_OPTS_SEEN="$DATASET_OPTS_SEEN $1"
 		shift 2
 		;;
-	--suites)
-		SUITES_FILTER="$2"
-		SUITE_OPTS_SEEN="$SUITE_OPTS_SEEN $1"
+	--datasets)
+		DATASETS_FILTER="$2"
+		DATASET_OPTS_SEEN="$DATASET_OPTS_SEEN $1"
 		shift 2
 		;;
 	--format)
@@ -411,7 +430,7 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--fasta)
 		FASTA_ANY="$2"
-		SUITE_OPTS_SEEN="$SUITE_OPTS_SEEN $1"
+		DATASET_OPTS_SEEN="$DATASET_OPTS_SEEN $1"
 		shift 2
 		;;
 	--fasta-for)
@@ -421,7 +440,7 @@ while [[ $# -gt 0 ]]; do
 		}
 		FASTA_TABLE="${FASTA_TABLE}${2%%=*}	${2#*=}
 "
-		SUITE_OPTS_SEEN="$SUITE_OPTS_SEEN $1"
+		DATASET_OPTS_SEEN="$DATASET_OPTS_SEEN $1"
 		shift 2
 		;;
 	--fork)
@@ -430,7 +449,7 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--sv-fork)
 		SV_FORK="$2"
-		SUITE_OPTS_SEEN="$SUITE_OPTS_SEEN $1"
+		DATASET_OPTS_SEEN="$DATASET_OPTS_SEEN $1"
 		shift 2
 		;;
 	--buffer-size)
@@ -439,17 +458,17 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--snp-indel-gt-dir)
 		SNP_INDEL_GT_DIR="$2"
-		SUITE_OPTS_SEEN="$SUITE_OPTS_SEEN $1"
+		DATASET_OPTS_SEEN="$DATASET_OPTS_SEEN $1"
 		shift 2
 		;;
 	--sv-gt-dir)
 		SV_GT_DIR="$2"
-		SUITE_OPTS_SEEN="$SUITE_OPTS_SEEN $1"
+		DATASET_OPTS_SEEN="$DATASET_OPTS_SEEN $1"
 		shift 2
 		;;
 	--sv-inputs-dir)
 		SV_INPUTS_DIR="$2"
-		SUITE_OPTS_SEEN="$SUITE_OPTS_SEEN $1"
+		DATASET_OPTS_SEEN="$DATASET_OPTS_SEEN $1"
 		shift 2
 		;;
 	--dir-plugins)
@@ -508,7 +527,7 @@ log() {
 if [[ -n "$TOOL" ]]; then
 	[[ "$TOOL" == "filter_vep" || "$TOOL" == "variant_recoder" ]] || die "invalid --tool: $TOOL (filter_vep, variant_recoder)"
 	[[ -n "$CORPUS_DIR" ]] || die "--tool runs a corpus's tool_cases; pass --corpus"
-	[[ -z "$SUITE_OPTS_SEEN" ]] || die "--tool runs $TOOL, which takes no suite option; drop$SUITE_OPTS_SEEN"
+	[[ -z "$DATASET_OPTS_SEEN" ]] || die "--tool runs $TOOL, which takes no dataset option; drop$DATASET_OPTS_SEEN"
 	[[ -z "$EXTRA_FLAGS" && -z "$FORMAT" ]] || die "--tool takes each case's words from manifest.json; drop --flags and --format"
 	[[ -z "$KEEP_STATS" ]] || die "--tool runs $TOOL, which writes no statistics; drop --stats and --no-stats"
 	[[ -z "$DIR_PLUGINS" ]] || die "--tool runs $TOOL, which loads no plugin; drop --dir-plugins"
@@ -531,7 +550,7 @@ elif [[ -n "$CORPUS_DIR" ]]; then
 	# relative to the repository root.
 	CORPUS_DIR=$(cd "$CORPUS_DIR" && pwd)
 	[[ -f "$CORPUS_DIR/variants.vcf" && -f "$CORPUS_DIR/manifest.json" ]] || die "corpus needs variants.vcf and manifest.json: $CORPUS_DIR"
-	[[ -z "$SUITE_OPTS_SEEN" ]] || die "--corpus takes its assembly, flags, FASTA and output location from the corpus; drop$SUITE_OPTS_SEEN"
+	[[ -z "$DATASET_OPTS_SEEN" ]] || die "--corpus takes its assembly, flags, FASTA and output location from the corpus; drop$DATASET_OPTS_SEEN"
 	[[ -z "$EXTRA_FLAGS" ]] || die "--corpus takes its flags from manifest.json; drop --flags"
 	if [[ -n "$DIR_PLUGINS" ]]; then
 		[[ -d "$DIR_PLUGINS" ]] || die "--dir-plugins is not a directory: $DIR_PLUGINS"
@@ -548,14 +567,14 @@ else
 		echo "ERROR: [generate_reference_output] --data-dir or --corpus required" >&2
 		usage
 	}
-	[[ -z "$DIR_PLUGINS" ]] || die "--dir-plugins mounts a corpus run's plugin modules; a suite run takes none"
+	[[ -z "$DIR_PLUGINS" ]] || die "--dir-plugins mounts a corpus run's plugin modules; a dataset run takes none"
 	[[ -n "$FORMAT" ]] || FORMAT="default"
 	[[ -n "$FORK" ]] || FORK=16
 	[[ -n "$KEEP_STATS" ]] || KEEP_STATS="false"
 fi
 [[ -z "$DATA_DIR" || -d "$DATA_DIR" ]] || die "data-dir not a directory: $DATA_DIR"
 # An assembly is a directory name under the species directory (CacheDir.pm:329 at
-# release/116.2 matches it after the version prefix), so it takes the characters a name does.
+# release/116.3 matches it after the version prefix), so it takes the characters a name does.
 ASSEMBLY_RE='^[A-Za-z0-9][A-Za-z0-9._-]*$'
 [[ "$ASSEMBLY" == both || "$ASSEMBLY" =~ $ASSEMBLY_RE ]] || die "invalid --assembly: '$ASSEMBLY' (an assembly name, or both)"
 case "$FORMAT" in
@@ -572,33 +591,88 @@ done
 [[ "$PERL_IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || die "--perl-image-digest must be sha256:<64 hex> (got '$PERL_IMAGE_DIGEST')"
 if [[ -n "$FASTA_ANY" ]]; then
 	[[ "$ASSEMBLY" != "both" ]] || die "--fasta needs a single --assembly; use --fasta-for <species>:<assembly>=<path> with --assembly both"
-	FASTA_TABLE="${FASTA_TABLE}${SPECIES}:${ASSEMBLY}	${FASTA_ANY}
-"
 fi
 if [[ "$DRY_RUN" != "true" ]]; then
 	command -v docker >/dev/null 2>&1 || die "docker is required (pass --dry-run to preflight and print the commands without it)"
 fi
 
 [[ -n "$PERL_CACHE_DIR" ]] || PERL_CACHE_DIR="$DATA_DIR/caches/perl/vep-cache"
-[[ -n "$FASTA_GRCH37" ]] || FASTA_GRCH37="$DATA_DIR/reference/grch37/genome.fa"
-[[ -n "$FASTA_GRCH38" ]] || FASTA_GRCH38="$DATA_DIR/reference/grch38/genome.fa"
-# The two human defaults go first and the last line for a genome wins the lookup, so a
-# --fasta-for line replaces a default and a repeated one its predecessor.
-FASTA_TABLE="homo_sapiens:GRCh37	${FASTA_GRCH37}
-homo_sapiens:GRCh38	${FASTA_GRCH38}
+
+# genome_table_lines <column> <prefix>: one "<species>:<assembly>	<prefix><field>" line for
+# every row of the genome table whose <column> field is not empty, in the table's order.
+# Each field is read through harness_genome_field, so a table that reader refuses is
+# refused here with the reader's own line; a table that cannot be read, or that names no
+# genome under a species and an assembly column, returns 1 as well.
+genome_table_lines() {
+	local column="$1" prefix="$2" keys key field
+	[[ -f "$GENOMES_TABLE" && -r "$GENOMES_TABLE" ]] || {
+		echo "ERROR: [generate_reference_output] the genome table cannot be read: $GENOMES_TABLE" >&2
+		return 1
+	}
+	keys=$(awk -F'\t' '
+		NR == 1 {
+			for (i = 1; i <= NF; i++) {
+				if ($i == "species") species_at = i
+				if ($i == "assembly") assembly_at = i
+			}
+			next
+		}
+		species_at && assembly_at { print $species_at ":" $assembly_at }
+	' <"$GENOMES_TABLE")
+	[[ -n "$keys" ]] || {
+		echo "ERROR: [generate_reference_output] the genome table names no genome under a species and an assembly column: $GENOMES_TABLE" >&2
+		return 1
+	}
+	while IFS= read -r key; do
+		field=$(harness_genome_field "$GENOMES_TABLE" "${key%%:*}" "${key#*:}" "$column") || return 1
+		[[ -z "$field" ]] || printf '%s\t%s%s\n' "$key" "$prefix" "$field"
+	done <<<"$keys"
+}
+
+# The cache version of each genome, "<species>:<assembly>	<version>" one per line, from the
+# genome table. --cache-version and VEP_PERL_CACHE_VERSION name one version for every
+# genome and a corpus reads its manifest's release, so each leaves the table unread.
+CACHE_VERSION_TABLE=""
+if [[ -z "$CORPUS_DIR" ]]; then
+	# The table's rows go first and the last line for a genome wins the lookup, so the two
+	# VEP_FASTA_* paths replace a row, a --fasta-for line replaces both, and a repeated
+	# --fasta-for line its predecessor.
+	genome_fastas=$(genome_table_lines fasta "$DATA_DIR/") || exit 1
+	[[ -z "$FASTA_GRCH37" ]] || genome_fastas="${genome_fastas}
+homo_sapiens:GRCh37	${FASTA_GRCH37}"
+	[[ -z "$FASTA_GRCH38" ]] || genome_fastas="${genome_fastas}
+homo_sapiens:GRCh38	${FASTA_GRCH38}"
+	FASTA_TABLE="${genome_fastas}
 ${FASTA_TABLE}"
+	if [[ -z "$CACHE_VERSION_SEEN" && -z "${VEP_PERL_CACHE_VERSION:-}" ]]; then
+		CACHE_VERSION_TABLE=$(genome_table_lines cache_version "") || exit 1
+		# A table that names no cache_version leaves one empty line here, which is no genome.
+		# The table is awk's input as a here-string, here and wherever a reader leaves at
+		# its first match: a pipe's writer that is still writing when its reader leaves is
+		# ended by the closed pipe, which pipefail makes fatal.
+		bad_version=$(awk -F'\t' 'NF && $2 !~ /^[1-9][0-9]*$/ { print $1 " " $2; exit }' <<<"$CACHE_VERSION_TABLE")
+		[[ -z "$bad_version" ]] || die "the genome table gives ${bad_version%% *} the cache_version '${bad_version#* }', which is no positive integer: $GENOMES_TABLE"
+	fi
+fi
 [[ -n "$SNP_INDEL_GT_DIR" ]] || SNP_INDEL_GT_DIR="$DATA_DIR/ground_truth/perl/snp_indel"
 [[ -n "$SV_GT_DIR" ]] || SV_GT_DIR="$DATA_DIR/ground_truth/perl/sv_per_vcf"
 [[ -n "$SV_INPUTS_DIR" ]] || SV_INPUTS_DIR="$SV_GT_DIR/canonical_inputs"
 
 # fasta_for <species> <assembly>: the genome's FASTA from the table, or nothing.
 fasta_for() { printf '%s' "$FASTA_TABLE" | awk -F'\t' -v k="$1:$2" '$1 == k {v = $2} END {if (v != "") print v}'; }
+# cache_version_for <species> <assembly>: the Ensembl cache release the genome is read
+# under: its line of CACHE_VERSION_TABLE, or PERL_CACHE_VERSION for a genome with no line.
+cache_version_for() {
+	local version
+	version=$(printf '%s\n' "$CACHE_VERSION_TABLE" | awk -F'\t' -v k="$1:$2" '$1 == k {v = $2} END {print v}')
+	printf '%s' "${version:-$PERL_CACHE_VERSION}"
+}
 # `${var,,}` is bash 4+ and fails at runtime on macOS bash 3.2 while passing `bash -n`.
 lower() { printf %s "$1" | tr '[:upper:]' '[:lower:]'; }
 
 # The flags this script passes itself. A second copy inside --flags would win or lose
 # by position in Ensembl VEP's option parsing, so it is refused instead. vep reads its
-# options with Getopt::Long's defaults (vep:27, Config.pm:62 at release/116.2), which
+# options with Getopt::Long's defaults (vep:27, Config.pm:62 at release/116.3), which
 # take a single dash or a plus sign, any unambiguous abbreviation and any letter case as
 # the full option, so a word is refused when the lower-cased option name it carries is a
 # prefix of one of these.
@@ -817,18 +891,19 @@ EOF
 	fi
 fi
 check_extra_flags
-# The placeholder names the directory a corpus run mounts; a suite run has none.
+# The placeholder names the directory a corpus run mounts; a dataset run has none.
 CORPUS_PLACEHOLDER='{corpus}'
 CORPUS_MOUNT="/work/corpus"
-[[ -n "$CORPUS_DIR" || "$EXTRA_FLAGS" != *"$CORPUS_PLACEHOLDER"* ]] || die "--flags carries $CORPUS_PLACEHOLDER, which names the corpus directory of a --corpus run; a suite run has no corpus"
-[[ -n "$CORPUS_DIR" || "$EXTRA_FLAGS" != *"$PLUGINS_PLACEHOLDER"* ]] || die "--flags carries $PLUGINS_PLACEHOLDER, which names the plugin directory of a --corpus run; a suite run has no plugin directory"
+[[ -n "$CORPUS_DIR" || "$EXTRA_FLAGS" != *"$CORPUS_PLACEHOLDER"* ]] || die "--flags carries $CORPUS_PLACEHOLDER, which names the corpus directory of a --corpus run; a dataset run has no corpus"
+[[ -n "$CORPUS_DIR" || "$EXTRA_FLAGS" != *"$PLUGINS_PLACEHOLDER"* ]] || die "--flags carries $PLUGINS_PLACEHOLDER, which names the plugin directory of a --corpus run; a dataset run has no plugin directory"
 
-# Suite table: id:name:assembly:type:vcf_base:species -- the SAME rows as
-# run_clone_measurement.sh, minus the pointer rows s09 and s10, which should_run maps onto
+# Dataset table: id:name:assembly:type:vcf_base:species -- the SAME rows as
+# run_clone_measurement.sh, each row's species and assembly naming a genome of the genome
+# table, minus the pointer rows s09 and s10, which should_run maps onto
 # s07 and s08, and minus the sample-scaling rows, which need no Ensembl VEP ground truth of
 # their own: genotypes change no consequence, so the sites-only reference is the reference
 # for both forms, and the genotype matrix's cost is measured separately.
-SUITES="
+DATASETS="
 s01:ClinVar_GRCh37:GRCh37:snp_indel:clinvar_grch37:homo_sapiens
 s02:ClinVar_GRCh38:GRCh38:snp_indel:clinvar_grch38:homo_sapiens
 s03:gnomAD_v2.1.1_chr21:GRCh37:snp_indel:gnomad_genomes_v2.1.1_chr21:homo_sapiens
@@ -838,11 +913,18 @@ s06:1KG_highcov_chr21:GRCh38:snp_indel:1kg_highcov_chr21:homo_sapiens
 s07:SV_GRCh37:GRCh37:sv:-:homo_sapiens
 s08:SV_GRCh38:GRCh38:sv:-:homo_sapiens
 "
+# --fasta names the FASTA of the one assembly selected, under the species the dataset table
+# gives that assembly. Its line goes last, so it replaces a row and a --fasta-for line.
+if [[ -n "$FASTA_ANY" ]]; then
+	fasta_species=$(awk -F: -v asm="$ASSEMBLY" '$3 == asm { print $6; exit }' <<<"$DATASETS")
+	FASTA_TABLE="${FASTA_TABLE}${fasta_species:-$SPECIES}:${ASSEMBLY}	${FASTA_ANY}
+"
+fi
 
-# should_run <suite_id> <stype> <assembly>: honor --suites and --assembly. s09/s10 select
+# should_run <dataset_id> <stype> <assembly>: honor --datasets and --assembly. s09/s10 select
 # the per-assembly SV set they point at.
 should_run() {
-	local sid="$1" stype="$2" asm="$3" f="$SUITES_FILTER"
+	local sid="$1" stype="$2" asm="$3" f="$DATASETS_FILTER"
 	[[ "$ASSEMBLY" == "both" || "$ASSEMBLY" == "$asm" ]] || return 1
 	f="${f// s09/ s07}"
 	f="${f// s10/ s08}"
@@ -868,7 +950,7 @@ formats_selected() {
 	esac
 }
 
-# out_name_for <kind> <base> <format>: the output file name. A suite output keeps the
+# out_name_for <kind> <base> <format>: the output file name. A dataset output keeps the
 # harness's name for the default format and takes the format's extension otherwise; a
 # corpus output takes the names the golden tests read.
 out_name_for() {
@@ -898,40 +980,51 @@ sidecar_stem() {
 }
 
 # headers_for <kind> <format>: whether the run keeps Ensembl VEP's header lines. The
-# harness reads the default suite output without them; every other output keeps them,
+# harness reads the default dataset output without them; every other output keeps them,
 # because the tab column line and the VCF `##INFO` line name the columns.
 headers_for() {
 	if [[ "$1" != "corpus" && "$2" == "default" ]]; then echo "no"; else echo "yes"; fi
 }
 
 # Helpers
-sha256_of() {
-	if command -v sha256sum >/dev/null 2>&1; then
-		sha256sum "$1" | awk '{print $1}'
-	elif command -v shasum >/dev/null 2>&1; then
-		shasum -a 256 "$1" | awk '{print $1}'
+# The counts and the digests of whole inputs and outputs are made by this tree's release
+# build of tools/vep-file-census, across the host's cores. Nothing is built here and no
+# other program runs in its place: a run that reaches a container without the build stops
+# before the first one, and a dry run asks for none.
+FILE_CENSUS=()
+require_file_census() {
+	local root census_bin
+	root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+	census_bin="$root/tools/vep-file-census/target/release/vep-file-census"
+	if [[ -f "$census_bin" && -x "$census_bin" ]]; then
+		FILE_CENSUS=("$census_bin")
 	else
-		echo "unavailable"
+		echo "ERROR: [generate_reference_output] the file census $census_bin is not an executable: build the tool with 'cargo build --release --locked --manifest-path $root/tools/vep-file-census/Cargo.toml'" >&2
+		exit 1
 	fi
+}
+
+sha256_of() {
+	"${FILE_CENSUS[@]}" digest --algorithm sha256 "$1" | awk '{print $1}'
 }
 
 json_escape() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'; }
 
 # count_records <vcf|vcf.gz>: non-header lines. `n=$(...) || n=0`, never `$(... || echo 0)`:
-# grep -c prints 0 AND exits 1 on no match, so the latter yields the two-line string "0\n0"
-# and every later numeric test on it errors into its else branch.
+# the count prints 0 AND exits 1 on no line, as grep -c does, so the latter yields the
+# two-line string "0\n0" and every later numeric test on it errors into its else branch.
 count_records() {
 	local n
 	case "$1" in
-	*.gz) n=$(gzip -dc "$1" | grep -vc '^#') || n=0 ;;
-	*) n=$(grep -vc '^#' "$1") || n=0 ;;
+	*.gz) n=$("${FILE_CENSUS[@]}" count --gunzip --not-starting '#' "$1") || n=0 ;;
+	*) n=$("${FILE_CENSUS[@]}" count --not-starting '#' "$1") || n=0 ;;
 	esac
 	echo "$n"
 }
 
 count_data_lines() {
 	local n
-	n=$(grep -vc '^#' "$1") || n=0
+	n=$("${FILE_CENSUS[@]}" count --not-starting '#' "$1") || n=0
 	echo "$n"
 }
 
@@ -945,15 +1038,15 @@ annotated_units() {
 	local n
 	case "$1" in
 	default | tab) n=$(count_data_lines "$2") ;;
-	vcf) n=$(FIELD="$VCF_INFO_FIELD" awk -F'\t' '!/^#/ && index(";" $8, ";" ENVIRON["FIELD"] "=") {c++} END {print c + 0}' "$2") ;;
-	json) n=$(grep -c '_consequences":' "$2") || n=0 ;;
+	vcf) n=$("${FILE_CENSUS[@]}" count --info-field "$VCF_INFO_FIELD" "$2") ;;
+	json) n=$("${FILE_CENSUS[@]}" count --containing '_consequences":' "$2") || n=0 ;;
 	esac
 	echo "$n"
 }
 
 # cache_species_dir <species>: the directory Ensembl VEP reads under --dir_cache for the
 # species and the run's flags: the species, with `_refseq` and then `_merged` appended for
-# each of --refseq and --merged the flags carry (CacheDir.pm:312 at release/116.2).
+# each of --refseq and --merged the flags carry (CacheDir.pm:312 at release/116.3).
 cache_species_dir() {
 	local dir="$1"
 	has_option --refseq && dir="${dir}_refseq"
@@ -965,18 +1058,20 @@ cache_species_dir() {
 # Ensembl's full GRCh37 cache carries 699 directories, the other 674 being unplaced scaffolds
 # and haplotype contigs no benchmark input reaches, so requiring all 699 would fail a
 # legitimately pruned cache. Requiring the 25 primaries fails every chromosome-subset
-# cache, which is the defect class. The primary set is known for homo_sapiens alone; another
-# species' slice must hold at least one chromosome directory.
+# cache, which is the defect class. The 25 are the human primary set and are required
+# under homo_sapiens; a slice of another species is required to hold at least one
+# chromosome directory.
 assert_cache_complete() {
 	local species="$1" assembly="$2"
-	local species_dir slice
+	local species_dir slice version
 	species_dir=$(cache_species_dir "$species")
-	slice="$PERL_CACHE_DIR/$species_dir/${PERL_CACHE_VERSION}_${assembly}"
+	version=$(cache_version_for "$species" "$assembly")
+	slice="$PERL_CACHE_DIR/$species_dir/${version}_${assembly}"
 	local primaries="1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 X Y MT"
 	local c missing="" n_chrom=0
 	if [[ ! -d "$slice" ]]; then
 		echo "ERROR: [generate_reference_output] Perl cache slice not found: $slice" >&2
-		echo "  Expected $species_dir/${PERL_CACHE_VERSION}_${assembly} under --perl-cache-dir ($PERL_CACHE_DIR)." >&2
+		echo "  Expected $species_dir/${version}_${assembly} under --perl-cache-dir ($PERL_CACHE_DIR)." >&2
 		echo "  See the header of this script for the Ensembl FTP location of the full-genome cache." >&2
 		return 1
 	fi
@@ -988,7 +1083,7 @@ assert_cache_complete() {
 			echo "ERROR: [generate_reference_output] Perl cache slice holds no chromosome directory: $slice" >&2
 			return 1
 		fi
-		log "perl cache check ($species $assembly): $n_chrom chromosome directories under $slice; completeness is asserted for homo_sapiens alone"
+		log "perl cache check ($species $assembly): $n_chrom chromosome directories under $slice; a slice of a species other than homo_sapiens is checked to hold at least one"
 		return 0
 	fi
 	for c in $primaries; do
@@ -1013,7 +1108,7 @@ assert_fasta() {
 	fasta=$(fasta_for "$species" "$assembly")
 	[[ -n "$fasta" ]] || {
 		echo "ERROR: [generate_reference_output] no FASTA named for $species:$assembly" >&2
-		echo "  Pass --fasta-for $species:$assembly=<path> (or --fasta with a single --assembly)." >&2
+		echo "  Add the genome's row to $GENOMES_TABLE, or pass --fasta-for $species:$assembly=<path> (or --fasta with a single --assembly)." >&2
 		return 1
 	}
 	[[ -f "$fasta" ]] || {
@@ -1037,7 +1132,8 @@ assert_fasta() {
 # one function, so the command run and the command recorded cannot drift.
 vep_args() {
 	local species="$1" assembly="$2" fork="$3" format="$4" cache="$5" fasta="$6" headers="$7"
-	local a="--offline --cache --dir_cache $cache --cache_version $PERL_CACHE_VERSION --species $species --assembly $assembly"
+	local a
+	a="--offline --cache --dir_cache $cache --cache_version $(cache_version_for "$species" "$assembly") --species $species --assembly $assembly"
 	# The --flags words name the input format themselves for a non-VCF input.
 	if ! has_option --format; then a="$a --format vcf"; fi
 	a="$a --buffer_size $BUFFER_SIZE --fork $fork"
@@ -1054,7 +1150,7 @@ vep_args() {
 
 # docker_cmd <species> <assembly> <fork> <format> <in.vcf[.gz]> <out_dir> <out_name> <fasta|""> <headers>
 # Prints the exact docker invocation as one shell-quoted line. This is the harness's
-# Perl invocation, flag for flag, so the reference and the timed runs cannot diverge.
+# Ensembl VEP invocation, flag for flag, so the reference and the timed runs cannot diverge.
 docker_cmd() {
 	local species="$1" assembly="$2" fork="$3" format="$4" in_vcf="$5" out_dir="$6" out_name="$7" fasta="$8" headers="$9"
 	local in_mount fasta_in=""
@@ -1129,7 +1225,7 @@ write_provenance() {
   "perl_image_digest": $digest_json,
   "species": "$species",
   "assembly": "$assembly",
-  "cache_version": $PERL_CACHE_VERSION,
+  "cache_version": $(cache_version_for "$species" "$assembly"),
   "cache_dir": "$PERL_CACHE_DIR",
   "fasta": "$(fasta_for "$species" "$assembly")",
   "fork": $fork,
@@ -1152,7 +1248,7 @@ EOF
 # Plan: one line per output, "kind|species|assembly|fork|format|out_dir|input|out_name".
 # Built in full BEFORE anything runs, so every missing input, FASTA, cache slice and output
 # collision is reported together and nothing is generated against a half-valid tree. Lines
-# sharing their first six fields form a GROUP (one SNP/indel suite, or one assembly's 16-file
+# sharing their first six fields form a GROUP (one SNP/indel dataset, or one assembly's 16-file
 # SV set, in one format), which is the unit the output-volume gate below is applied to. A
 # newline-delimited string rather than an array of records keeps this bash-3.2 safe.
 JOBS=""
@@ -1300,6 +1396,7 @@ EOF
 		log "dry run complete: $n_tool command(s) printed, nothing written"
 		exit 0
 	fi
+	require_file_census
 	check_image_digest
 	tool_scratch=$(mktemp -d "$CORPUS_DIR/.generate.XXXXXX")
 	trap 'rm -rf "$tool_scratch"' EXIT
@@ -1412,29 +1509,29 @@ if [[ -n "$CORPUS_DIR" ]]; then
 fi
 while IFS= read -r entry; do
 	[[ -n "$entry" && -z "$CORPUS_DIR" ]] || continue
-	IFS=':' read -r suite_id suite_name asm stype vcf_base species <<<"$entry"
-	should_run "$suite_id" "$stype" "$asm" || continue
+	IFS=':' read -r dataset_id dataset_name asm stype vcf_base species <<<"$entry"
+	should_run "$dataset_id" "$stype" "$asm" || continue
 	n_selected=$((n_selected + 1))
 	preflight_assembly "$species" "$asm"
 	asm_lc=$(lower "$asm")
 	if [[ "$stype" == "snp_indel" ]]; then
 		in_vcf="$DATA_DIR/vcf/$asm_lc/all_variants_canonical/${vcf_base}.canonical.vcf.gz"
 		if [[ ! -f "$in_vcf" ]]; then
-			echo "ERROR: [generate_reference_output] $suite_id ($suite_name): input not found: $in_vcf" >&2
-			echo "  Canonical inputs carry Ensembl-style contigs; derive them with prepare_benchmark_vcfs.py." >&2
+			echo "ERROR: [generate_reference_output] $dataset_id ($dataset_name): input not found: $in_vcf" >&2
+			echo "  Canonical inputs carry Ensembl-style contigs; derive them with tools/vep-prepare-benchmark-vcfs." >&2
 			PREFLIGHT_FAILED=1
 			continue
 		fi
 		for fmt in $(formats_selected); do
 			out_name=$(out_name_for snp_indel output "$fmt")
-			check_output_collision "$SNP_INDEL_GT_DIR/$suite_id/$out_name" || PREFLIGHT_FAILED=1
-			JOBS="${JOBS}snp_indel|$species|$asm|$FORK|$fmt|$SNP_INDEL_GT_DIR/$suite_id|$in_vcf|$out_name
+			check_output_collision "$SNP_INDEL_GT_DIR/$dataset_id/$out_name" || PREFLIGHT_FAILED=1
+			JOBS="${JOBS}snp_indel|$species|$asm|$FORK|$fmt|$SNP_INDEL_GT_DIR/$dataset_id|$in_vcf|$out_name
 "
 		done
 	else
 		in_dir="$SV_INPUTS_DIR/$asm_lc"
 		if [[ ! -d "$in_dir" ]]; then
-			echo "ERROR: [generate_reference_output] $suite_id ($suite_name): SV input directory not found: $in_dir" >&2
+			echo "ERROR: [generate_reference_output] $dataset_id ($dataset_name): SV input directory not found: $in_dir" >&2
 			PREFLIGHT_FAILED=1
 			continue
 		fi
@@ -1454,16 +1551,16 @@ while IFS= read -r entry; do
 			done
 		done
 		if [[ "$n_sv" -eq 0 ]]; then
-			echo "ERROR: [generate_reference_output] $suite_id ($suite_name): no .vcf or .vcf.gz under $in_dir" >&2
+			echo "ERROR: [generate_reference_output] $dataset_id ($dataset_name): no .vcf or .vcf.gz under $in_dir" >&2
 			echo "  An empty input directory would produce an empty reference that scores as a clean cell." >&2
 			PREFLIGHT_FAILED=1
 		fi
 	fi
-done <<<"$SUITES"
+done <<<"$DATASETS"
 
-[[ "$n_selected" -gt 0 ]] || die "no suite matched --suites '$SUITES_FILTER' with --assembly $ASSEMBLY"
+[[ "$n_selected" -gt 0 ]] || die "no dataset matched --datasets '$DATASETS_FILTER' with --assembly $ASSEMBLY"
 [[ "$PREFLIGHT_FAILED" -eq 0 ]] || die "preflight failed; nothing was generated"
-[[ -n "$JOBS" ]] || die "preflight selected $n_selected suite(s) but planned no output"
+[[ -n "$JOBS" ]] || die "preflight selected $n_selected dataset(s) but planned no output"
 bad_record=$(printf '%s' "$JOBS" | awk -F'|' 'NF != 8 && !seen { print; seen = 1 }')
 [[ -z "$bad_record" ]] || die "a planned path holds '|' or a newline, which the plan's record format cannot carry: $bad_record"
 
@@ -1473,8 +1570,21 @@ fasta_for_job() {
 	if [[ "$1" == "corpus" ]]; then echo "$CORPUS_FASTA"; else fasta_for "$2" "$3"; fi
 }
 
+# planned_cache_versions: the cache version each planned genome is read under, in the
+# plan's order, each version once, comma-separated.
+planned_cache_versions() {
+	local kind species asm _rest version genomes="" versions=""
+	while IFS='|' read -r kind species asm _rest; do
+		[[ -n "$kind" && " $genomes " != *" $species:$asm "* ]] || continue
+		genomes="$genomes $species:$asm"
+		version=$(cache_version_for "$species" "$asm")
+		[[ ",$versions," == *",$version,"* ]] || versions="${versions:+$versions,}$version"
+	done <<<"$JOBS"
+	printf '%s' "$versions"
+}
+
 n_jobs=$(printf '%s' "$JOBS" | grep -c '|') || n_jobs=0
-log "generate_reference_output image=$PERL_IMAGE cache_version=$PERL_CACHE_VERSION fork=$FORK sv_fork=$SV_FORK buffer_size=$BUFFER_SIZE format=$FORMAT stats=$KEEP_STATS volume_floor=$VOLUME_FLOOR"
+log "generate_reference_output image=$PERL_IMAGE cache_version=$(planned_cache_versions) fork=$FORK sv_fork=$SV_FORK buffer_size=$BUFFER_SIZE format=$FORMAT stats=$KEEP_STATS volume_floor=$VOLUME_FLOOR"
 [[ -z "$EXTRA_FLAGS" ]] || log "flags: $EXTRA_FLAGS"
 if [[ -n "$CORPUS_DIR" ]]; then
 	log "corpus=$CORPUS_DIR species=$SPECIES assembly=$ASSEMBLY${FLAG_SET:+ flag_set=$FLAG_SET} input=$CORPUS_INPUT expected_dir=$CORPUS_EXPECTED_DIR planned_outputs=$n_jobs dry_run=$DRY_RUN"
@@ -1503,7 +1613,7 @@ fi
 # a partial file at a path the harness would trust.
 #
 # THE OUTPUT-VOLUME GATE is the harness's own floor, applied at the harness's own grain:
-# summed rows >= summed input records, per SNP/indel suite and per assembly's SV set. A
+# summed rows >= summed input records, per SNP/indel dataset and per assembly's SV set. A
 # VEP that cannot reach its cache emits one warning per record, zero annotation rows and
 # exit 0; a working VEP emits at least one row per input record (one per overlapping
 # transcript, or a single intergenic row) and several per record on genome-wide and SV
@@ -1516,6 +1626,7 @@ fi
 # input buffer is absent from both, while a record it could not annotate is present and
 # bare. --volume-floor any lowers every format to one annotated unit per group, for a
 # flag family that drops records or rows.
+require_file_census
 check_image_digest
 
 if [[ -n "$CORPUS_FASTA" && "$CORPUS_FASTA_NAME" == *.gz ]]; then

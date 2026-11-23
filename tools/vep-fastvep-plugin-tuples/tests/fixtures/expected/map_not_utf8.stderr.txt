@@ -1,0 +1,1 @@
+ERROR: [fastvep_plugin_tuples] the field map tests/fixtures/maps/not_utf8.tsv is not UTF-8 text

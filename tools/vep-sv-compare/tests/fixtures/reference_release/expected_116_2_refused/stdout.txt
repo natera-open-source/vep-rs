@@ -1,0 +1,4 @@
+cross-chromosome mask active over 2 chromosomes (13 transcripts)
+Found 1 input VCF files
+  Processing sv...
+    Input=8 Perl=8 Rust=13 Intersect=6 P=0.4615 R=0.7500 F1=0.5714

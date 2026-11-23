@@ -98,86 +98,85 @@ fn build_bench_transcript() -> Transcript {
         },
     ];
 
-    let vefc = TranscriptVEFC {
-        codon_table: 1,
-        five_prime_utr: None,
-        three_prime_utr: None,
-        translateable_seq: Some(cds),
-        peptide: None,
-        spliced_seq: None,
-        introns: introns.clone(),
-        sorted_exons: exons.clone(),
-        mapper: Some(TranscriptMapper {
-            start_phase: 0,
-            cdna_coding_start: 51,
-            cdna_coding_end: 900,
-            exon_coord_mapper: ExonCoordMapper::new(mapper_pairs),
-        }),
-        protein_features: vec![],
-        protein_function_predictions: None,
-        seq_edits: vec![],
-    };
+    let mut vefc = TranscriptVEFC::default();
+    vefc.codon_table = 1;
+    vefc.five_prime_utr = None;
+    vefc.three_prime_utr = None;
+    vefc.translateable_seq = Some(cds);
+    vefc.peptide = None;
+    vefc.spliced_seq = None;
+    vefc.introns = introns.clone();
+    vefc.sorted_exons = exons.clone();
+    vefc.mapper = Some(TranscriptMapper {
+        start_phase: 0,
+        cdna_coding_start: 51,
+        cdna_coding_end: 900,
+        exon_coord_mapper: ExonCoordMapper::new(mapper_pairs),
+    });
+    vefc.protein_features = vec![];
+    vefc.protein_function_predictions = None;
+    vefc.seq_edits = vec![];
 
-    Transcript {
-        stable_id: "ENST00000000001".into(),
+    let mut transcript = Transcript::default();
+    transcript.stable_id = "ENST00000000001".into();
+    transcript.version = Some(1);
+    transcript.db_id = None;
+    transcript.gene_stable_id = "ENSG00000000001".into();
+    transcript.gene_version = None;
+    transcript.chr = "21".into();
+    transcript.start = 25_000_000;
+    transcript.end = 25_006_000;
+    transcript.strand = Strand::Forward;
+    transcript.biotype = "protein_coding".into();
+    transcript.source = "Ensembl".into();
+    transcript.gene_symbol = Some("TEST1".into());
+    transcript.gene_symbol_source = Some("HGNC".into());
+    transcript.gene_symbol_id = None;
+    transcript.hgnc_id = Some("HGNC:0001".into());
+    transcript.gene_phenotype = None;
+    transcript.canonical = true;
+    transcript.mane_select = None;
+    transcript.mane_plus_clinical = None;
+    transcript.tsl = None;
+    transcript.appris = None;
+    transcript.ccds = None;
+    transcript.protein_id = Some("ENSP00000000001".into());
+    transcript.refseq = None;
+    transcript.swissprot = None;
+    transcript.trembl = None;
+    transcript.uniparc = None;
+    transcript.uniprot_isoform = None;
+    transcript.exons = exons.clone();
+    transcript.exon_ids = None;
+    transcript.introns = introns;
+    transcript.cdna_coding_start = Some(51);
+    transcript.cdna_coding_end = Some(900);
+    transcript.coding_region_start = Some(25_000_050);
+    transcript.coding_region_end = Some(25_004_299);
+    transcript.translation_start = Some(25_000_050);
+    transcript.translation_end = Some(25_004_299);
+    transcript.translation = Some(Translation {
+        stable_id: "ENSP00000000001".into(),
         version: Some(1),
         db_id: None,
-        gene_stable_id: "ENSG00000000001".into(),
-        gene_version: None,
-        chr: "21".into(),
-        start: 25_000_000,
-        end: 25_006_000,
-        strand: Strand::Forward,
-        biotype: "protein_coding".into(),
-        source: "Ensembl".into(),
-        gene_symbol: Some("TEST1".into()),
-        gene_symbol_source: Some("HGNC".into()),
-        gene_symbol_id: None,
-        hgnc_id: Some("HGNC:0001".into()),
-        gene_phenotype: None,
-        canonical: true,
-        mane_select: None,
-        mane_plus_clinical: None,
-        tsl: None,
-        appris: None,
-        ccds: None,
-        protein_id: Some("ENSP00000000001".into()),
-        refseq: None,
-        swissprot: None,
-        trembl: None,
-        uniparc: None,
-        uniprot_isoform: None,
-        exons: exons.clone(),
-        exon_ids: None,
-        introns,
-        cdna_coding_start: Some(51),
-        cdna_coding_end: Some(900),
-        coding_region_start: Some(25_000_050),
-        coding_region_end: Some(25_004_299),
-        translation_start: Some(25_000_050),
-        translation_end: Some(25_004_299),
-        translation: Some(Translation {
-            stable_id: "ENSP00000000001".into(),
-            version: Some(1),
-            db_id: None,
-            start: 51,
-            end: 300,
-            start_exon_index: 0,
-            end_exon_index: 2,
-            seq: None,
-        }),
-        cdna_sequence: None,
-        protein_sequence: None,
-        flags: vec![].into(),
-        gencode_basic: false,
-        gencode_primary: false,
-        attributes: vec![],
-        vefc: Some(vefc),
-        source_cache: None,
-        bam_edit_status: None,
-        derived: Default::default(),
-        id_rank: 0,
-    }
+        start: 51,
+        end: 300,
+        seq: None,
+    });
+    transcript.cdna_sequence = None;
+    transcript.protein_sequence = None;
+    transcript.flags = vec![].into();
+    transcript.gencode_basic = false;
+    transcript.gencode_primary = false;
+    transcript.attributes = vec![];
+    transcript.vefc = Some(vefc);
+    transcript.source_cache = None;
+    transcript.bam_edit_status = None;
+    transcript.circular_length = None;
+    transcript.region_files = None;
+    transcript.derived = Default::default();
+    transcript.id_rank = 0;
+    transcript
 }
 
 fn consequence_benchmark(c: &mut Criterion) {

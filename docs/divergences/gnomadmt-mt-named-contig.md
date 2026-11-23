@@ -4,7 +4,7 @@
 
 **Why this is a defect.** The plugin's documentation offers the file's fields for a record on the mitochondrial chromosome, and a tabix-indexed sites file states its own contig name in its records and its header. The rewrite exists because the gnomAD file names the contig `chrM`, which the base class reaches from `M` by adding `chr`; it is applied to the record and never to the file's names. A file written with the Ensembl spelling `MT`, the name the cache and the output use, is therefore unreachable, and a silent empty result is indistinguishable from a site the file lacks.
 
-**What vep-rs does instead.** vep-rs queries the file under the mitochondrial chromosome's four spellings, `MT`, `chrMT`, `M` and `chrM`, and writes the record the file holds at the position, whichever name the file uses.
+**What vep-rs does instead.** vep-rs queries the file under the mitochondrial chromosome's four spellings, `MT`, `chrMT`, `M` and `chrM`, and writes the record the file holds at the position, whichever name the file uses. On GRCh37, where the names are two sequences, a contig of the other pair than the record's is read [where its rows state the reference bases](plugin-contig-mitochondrial-spelling.md).
 
 **Where it is in Ensembl VEP's source** (`VEP_plugins` at release/116, `ensembl-variation` at release/116):
 

@@ -1,9 +1,9 @@
 entry = "hgvs_shifted_deletion_clamped_span"
 page = "docs/divergences/hgvs-shifted-deletion-clamped-span.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 74,050 per million · 23 flag sets, 101 corpora"
+input_class_basis = "2 · 74,050 per million · 95 flag sets, 141 corpora"
 notes = "A twenty-one-base deletion over the first base of ENST00000785034, shifted thirty-three bases into the transcript."
 
 [input]
@@ -29,3 +29,15 @@ columns = ["Consequence", "HGVSc", "HGVS_OFFSET"]
 [expected]
 ensembl_vep = ["non_coding_transcript_exon_variant | ENST00000785034.1:n.34_43del | 33"]
 vep_rs = ["non_coding_transcript_exon_variant | ENST00000785034.1:n.23_43del | 33"]
+
+[implementation]
+code = ["crates/vep-effects/src/hgvs.rs::hgvsc_notation"]
+tests = [
+    "crates/vep-effects/src/hgvs.rs::tests::a_deletion_straddling_a_reverse_strand_first_base_is_described_over_its_shifted_span",
+    "crates/vep-effects/src/hgvs.rs::tests::a_deletion_straddling_the_first_base_is_described_over_the_bases_the_shift_moved_it_to",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/edited_model.rs::shifted_deletion_clamped_span",
+    "tools/vep-golden-corpus/src/classify/hgvs.rs::shifted_deletion_clamped_span",
+    "tools/vep-plugin-pairs/src/rules/hgvs_offsets.rs::shifted_deletion_clamped_span",
+]

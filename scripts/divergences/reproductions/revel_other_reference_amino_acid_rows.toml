@@ -1,7 +1,7 @@
 entry = "revel_other_reference_amino_acid_rows"
 page = "docs/divergences/revel-other-reference-amino-acid-rows.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
 input_class_basis = "2 · 17.4 per million by output rows · 6 flag sets, 0 corpora"
 
@@ -40,4 +40,16 @@ ensembl_vep = [
 ]
 vep_rs = [
   "21:43059244 | G | ENST00000430013 | L/P | -",
+]
+
+[implementation]
+code = ["crates/vep-builtins/src/plugins/revel.rs::RevelPlugin::score_for"]
+tests = [
+    "crates/vep-builtins/src/plugins/revel.rs::tests::a_later_record_of_the_rows_own_pair_scores_past_one_of_another_reference_peptide",
+    "crates/vep-builtins/src/plugins/revel.rs::tests::run_requires_reference_amino_acid_match",
+    "crates/vep-cli/tests/plugins_builtin.rs::revel_requires_the_reference_amino_acid",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/revel.rs::revel_other_reference_amino_acid_row",
+    "tools/vep-plugin-pairs/src/rules/revel.rs::revel_other_reference_amino_acid_row",
 ]

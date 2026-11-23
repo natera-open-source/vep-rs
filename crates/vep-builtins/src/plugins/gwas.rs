@@ -34,6 +34,7 @@ use crate::params::{Grammar, PluginParams};
 use crate::tabix::allele_match::{dashed, minimal_forms};
 use crate::tabix::{lossy_text, BoundedLines};
 use crate::traits::{BuiltinPlugin, PluginError};
+use vep_core::allele_trim::{trim_directions, trim_sequences, CaseRule};
 use vep_core::codon::reverse_complement;
 use vep_core::consequence::{RowKind, TranscriptConsequence};
 use vep_core::coordinate::Strand;
@@ -691,11 +692,24 @@ impl RecordAlleles {
 
     /// Whether a file record at `pos` with `risk_allele` matches: the plugin
     /// lends the record the variant's reference (GWAS.pm:180, 190) and
-    /// compares the minimal forms of that pair with the record's.
+    /// compares the minimal forms of that pair with the record's. The risk
+    /// allele is read in either letter case, where Ensembl VEP's key is
+    /// compared as written (`Utils/Sequence.pm:1207`, `:1232`; the documented
+    /// class `tabix_allele_case_insensitive_match`).
     fn matches(&self, risk_allele: &str, pos: u64) -> bool {
-        minimal_forms(&self.reference, &dashed(risk_allele.as_bytes()), pos as i64)
+        const CASE: CaseRule = CaseRule::EitherCase;
+        let risk_allele = dashed(risk_allele.as_bytes());
+        trim_directions(&self.reference, &risk_allele)
             .iter()
-            .any(|form| self.forms.contains(form))
+            .any(|end_first| {
+                let row = trim_sequences(&self.reference, &risk_allele, *end_first, CASE);
+                let start = pos as i64 + row.left as i64;
+                self.forms.iter().any(|(reference, alt, form_start)| {
+                    *form_start == start
+                        && CASE.same_allele(reference, row.reference)
+                        && CASE.same_allele(alt, row.alt)
+                })
+            })
     }
 }
 
@@ -782,6 +796,8 @@ impl Default for GwasPlugin {
     }
 }
 
+impl crate::traits::sealed::Sealed for GwasPlugin {}
+
 impl BuiltinPlugin for GwasPlugin {
     fn name(&self) -> &str {
         "GWAS"
@@ -790,7 +806,7 @@ impl BuiltinPlugin for GwasPlugin {
     /// The Ensembl VEP module declares `['Feature', 'Intergenic']`: every row,
     /// the intergenic row included.
     fn feature_types(&self) -> &[RowKind] {
-        &RowKind::ALL
+        RowKind::ALL
     }
 
     fn header_info(&self) -> Vec<(String, String)> {
@@ -858,9 +874,12 @@ impl BuiltinPlugin for GwasPlugin {
                 continue;
             };
             for (field, value) in FIELDS.iter().zip(Self::values(&table.source, record)) {
-                variant
-                    .plugin_data
-                    .insert(field.to_string(), value.to_string());
+                variant.set_plugin_value(
+                    field.to_string(),
+                    value.to_string(),
+                    false,
+                    self.feature_types(),
+                );
             }
         }
         Ok(())
@@ -1052,6 +1071,55 @@ mod tests {
         assert_eq!(value(&matched, "GWAS_study"), Some("GCST000001"));
         assert!(annotate(&plugin, variant("21", 33000100, "G", "T")).is_empty());
         assert!(annotate(&plugin, variant("21", 33000101, "G", "A")).is_empty());
+    }
+
+    /// A risk allele written in lower case matches the upper-case alternate
+    /// allele it names, where Ensembl VEP's key is compared as written
+    /// (`Utils/Sequence.pm:1207`, `:1232`, on the allele GWAS.pm:182-194 hands
+    /// it); the field prints the allele as the file writes it, and another
+    /// allele still matches nothing.
+    #[test]
+    fn a_risk_allele_in_lower_case_matches_its_allele() {
+        let dir = tempfile::tempdir().unwrap();
+        let row = ROW.replace("\trs123-A\trs123\t", "\trs123-a\trs123\t");
+        assert_ne!(row, ROW);
+        let path = write(
+            dir.path(),
+            "gwas_catalog_lower_case.tsv",
+            &catalog(&[&row]),
+            false,
+        );
+        let plugin = loaded(&[&format!("file={path}")]);
+        let matched = annotate(&plugin, variant("21", 33000100, "G", "A"));
+        assert_eq!(value(&matched, "GWAS_risk_allele"), Some("a"));
+        assert_eq!(value(&matched, "GWAS_study"), Some("GCST000001"));
+        assert!(annotate(&plugin, variant("21", 33000100, "G", "T")).is_empty());
+    }
+
+    /// Ensembl VEP 116.3 never hands GWAS a structural variant: GWAS.pm
+    /// declares no `variant_feature_types`, so it keeps the default
+    /// `['VariationFeature']` (BaseVepPlugin.pm:100), which the dispatch checks
+    /// before running a plugin on a line (OutputFactory.pm:2229). A symbolic
+    /// deletion over the row's position gets no field, and nor does the
+    /// matching substitution carrying the structural mark, which pins the skip
+    /// rather than the allele match; the plain substitution gets the row's
+    /// fields.
+    #[test]
+    fn a_structural_variant_gets_no_field() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = write(dir.path(), "gwas_catalog.tsv", &catalog(&[ROW]), false);
+        let plugin = loaded(&[&format!("file={path}")]);
+        assert!(!plugin.annotates_structural_variants());
+        let mut deletion = variant("21", 33000050, "N", "<DEL>");
+        deletion.end = 33000150;
+        deletion.is_structural = true;
+        assert!(annotate(&plugin, deletion).is_empty());
+        let mut flagged = variant("21", 33000100, "G", "A");
+        flagged.is_structural = true;
+        assert!(annotate(&plugin, flagged).is_empty());
+        let matched = annotate(&plugin, variant("21", 33000100, "G", "A"));
+        assert_eq!(value(&matched, "GWAS_risk_allele"), Some("A"));
+        assert_eq!(value(&matched, "GWAS_study"), Some("GCST000001"));
     }
 
     /// The rows read for a record lie from two bases before its start to its

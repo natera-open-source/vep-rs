@@ -1,0 +1,4 @@
+{"id": "rec1", "input": "21\t100\trec1\tG\tA", "seq_region_name": "21", "start": 100, "most_severe_consequence": "missense_variant", "transcript_consequences": [{"transcript_id": "ENST1", "hgvsp": "ENSP1:p.Leu4Pro", "consequence_terms": ["missense_variant"], "sift_score": 0.05, "flags": null, "canonical": true}, {"transcript_id": "ENST2", "consequence_terms": ["intron_variant"], "distance": 12}]}
+
+not a record
+{"id": "rec2", "input": "21\t300\trec2\tG\tC", "seq_region_name": "21", "start": 300, "most_severe_consequence": "downstream_gene_variant"}

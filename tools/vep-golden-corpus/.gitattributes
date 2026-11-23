@@ -1,0 +1,3 @@
+# Inputs, goldens and help texts are compared byte for byte: `-text` leaves their line endings alone.
+tests/fixtures/** -text
+src/help/** -text

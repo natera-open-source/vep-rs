@@ -11,17 +11,17 @@
 //!
 //! The format-independent rules of `AnnotationSource/File.pm` live here: the
 //! overlap predicates of `_record_overlaps_VF` (`:534-575`,
-//! [`base_overlap`]), the record list and the statistics one input record
+//! `base_overlap`), the record list and the statistics one input record
 //! gathers over its matching records (`annotate_InputBuffer` `:303-355` and
-//! `annotate_VariationFeature` `:389-443`, [`MatchedRecords`]), and the walk
-//! over a batch's input records ([`TabixSource`]). Ensembl VEP annotates one
+//! `annotate_VariationFeature` `:389-443`, `MatchedRecords`), and the walk
+//! over a batch's input records (`TabixSource`). Ensembl VEP annotates one
 //! feature per input record, every allele at once, so a batch is walked record
 //! group by record group and every allele of a group takes the group's list.
 //!
-//! A bigWig opens as [`BigWigSource`], a `gencode_promoter` GFF as
-//! [`GffOverlaySource`], and a GFF in any other mode as a source that reads no
+//! A bigWig opens as `BigWigSource`, a `gencode_promoter` GFF as
+//! `GffOverlaySource`, and a GFF in any other mode as a source that reads no
 //! record and leaves each variant as it found it, since Ensembl VEP annotates
-//! nothing from one (`GFF.pm:154-164`).
+//! nothing from one (`GFF.pm:155-165`).
 
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -36,6 +36,7 @@ use vep_core::custom_annotation::{
 };
 use vep_core::synonyms::ChromosomeSynonyms;
 use vep_core::variant::InputVariant;
+use vep_core::warning_hold::Held;
 
 use super::bigwig::BigWigSource;
 use super::gff_overlay::GffOverlaySource;
@@ -43,11 +44,13 @@ use super::grammar::{
     perl_number, CustomFormat, CustomSpec, GffType, MatchType, RecordLimit, SummaryStat,
 };
 use super::CustomRunOptions;
+use crate::pool_pass::{collect_in_order, map_in_order, raise_again};
 use crate::tabix::{self, BatchQueryResult, TabixAnnotator, TabixConfig, TabixRecord};
 use crate::traits::{PluginError, PrefetchData};
 
 /// Why a `--custom` source cannot serve a run.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum CustomError {
     /// The file cannot be opened: it is not there, has no index beside it, or
     /// is not of its format.
@@ -105,9 +108,11 @@ pub trait CustomSource: Send + Sync {
     }
 }
 
-/// A source whose file is open and from which nothing is annotated: a GFF in a
-/// mode other than `gencode_promoter`, which Ensembl VEP opens and then passes
-/// over (`GFF.pm:154-164`). The batch passes through unannotated.
+/// A source whose file is open and from which no record is annotated: a GFF
+/// in a mode Ensembl VEP does not know, which it opens and then passes over
+/// (`GFF.pm:155-165`), and a transcript model
+/// ([`CustomSpec::is_transcript_source`]), whose transcripts the run's
+/// transcript index reads. The batch passes through unannotated.
 struct UnreadSource {
     spec: CustomSpec,
     sequence_names: HashSet<String>,
@@ -141,7 +146,7 @@ fn tabix_config(spec: &CustomSpec) -> TabixConfig {
     let (start_col, end_col, ref_col, alt_col, zero_based) = match spec.format {
         CustomFormat::Vcf => (1, Some(7), Some(3), Some(4), false),
         CustomFormat::Bed => (1, Some(2), None, None, true),
-        CustomFormat::Gff => (3, Some(4), None, None, false),
+        CustomFormat::Gff | CustomFormat::Gtf => (3, Some(4), None, None, false),
         CustomFormat::BigWig => unreachable!("a bigWig is not a tabix file"),
     };
     TabixConfig {
@@ -173,7 +178,7 @@ fn skipped(variant: &InputVariant) -> bool {
 /// The input record one source annotates at a time: Ensembl VEP's variation
 /// feature, which the batch holds as the adjacent alleles of one record
 /// ([`InputVariant::same_record`]).
-pub struct RecordGroup<'a> {
+pub(crate) struct RecordGroup<'a> {
     /// The feature's start, `$vf->{start}`: one past its end for an insertion.
     pub start: u64,
     /// The feature's end, `$vf->{end}`.
@@ -184,7 +189,7 @@ pub struct RecordGroup<'a> {
     /// (`$vf->alt_alleles`, `VCF.pm:409`): every alternate of the record, or
     /// the first alone for a `--minimal` split record, whose later split
     /// features lose their custom annotations in the rejoin
-    /// (`OutputFactory.pm:2282-2340` copy the feature variations alone).
+    /// (`OutputFactory.pm:2291-2349` copy the feature variations alone).
     pub alleles: Vec<&'a InputVariant>,
 }
 
@@ -220,7 +225,7 @@ impl<'a> RecordGroup<'a> {
 /// a float, one with a fraction, one past the 64-bit range or a whole number
 /// from 2^53 that a point spells without an exponent.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Coordinate {
+pub(crate) enum Coordinate {
     /// A whole number inside the 64-bit range.
     Whole(i64),
     /// A finite number Perl holds as a float.
@@ -344,9 +349,9 @@ impl Coordinate {
 /// `surrounding`, the share of the record the feature covers, or of the
 /// feature under `reciprocal`, to three decimals (`:552-568`); under `exact`,
 /// which asks for the same start and the same end, `100` (`:571-574`). A
-/// record with a float for an end is tested as Perl tests one
-/// ([`float_overlap`]).
-pub fn base_overlap(
+/// record with a float for an end is tested as Ensembl VEP tests one
+/// (`float_overlap`).
+pub(crate) fn base_overlap(
     spec: &CustomSpec,
     ref_start: impl Into<Coordinate>,
     ref_end: impl Into<Coordinate>,
@@ -374,9 +379,9 @@ pub fn base_overlap(
         return None;
     }
     if let Some(distance) = spec.distance {
-        // Written as Perl tests it (`abs(..) <= $distance`), so a distance that
-        // is not a number admits nothing.
-        let within = |a: i64, b: i64| a.abs_diff(b) as f64 <= distance;
+        // Written as Ensembl VEP tests it (`abs(..) <= $distance`), so a distance
+        // that is not a number admits nothing.
+        let within = |a: i64, b: i64| distance.admits(a.abs_diff(b));
         if !(within(vs, ref_start) && within(ve, ref_end)) {
             return None;
         }
@@ -432,8 +437,13 @@ fn float_overlap(
         return None;
     }
     if let Some(distance) = spec.distance {
-        let within = |a: f64, b: f64| (a - b).abs() <= distance;
-        if !(within(feature_start, start) && within(feature_end, end)) {
+        // Perl subtracts two whole numbers as integers and tests the whole
+        // difference; only a float end makes the difference a float.
+        let within = |feature: i64, bound: Coordinate| match bound {
+            Coordinate::Whole(whole) => distance.admits(feature.abs_diff(whole)),
+            Coordinate::Float(number) => distance.admits_float((feature as f64 - number).abs()),
+        };
+        if !(within(vs, ref_start) && within(ve, ref_end)) {
             return None;
         }
     }
@@ -458,7 +468,7 @@ fn float_overlap(
 
 /// The records and statistics one source gathers for one input record while
 /// its candidate records are walked in file order (`File.pm:303-443`).
-pub struct MatchedRecords<'a> {
+pub(crate) struct MatchedRecords<'a> {
     spec: &'a CustomSpec,
     short_name: &'a Arc<str>,
     /// The entries the sources run before this one left on the input record:
@@ -476,7 +486,7 @@ pub struct MatchedRecords<'a> {
 
 /// What one source's walk of one input record leaves on the record
 /// ([`MatchedRecords::finish`]).
-pub struct Listed {
+pub(crate) struct Listed {
     /// The source's entry: `None` when no record was listed and no statistic
     /// was asked for.
     pub entry: Option<CustomAnnotations>,
@@ -618,14 +628,9 @@ impl<'a> MatchedRecords<'a> {
                 RecordLimit::Count(cap) if self.record_count < cap => {
                     self.records.append(&mut records)
                 }
-                RecordLimit::Count(cap) if self.record_count == cap => {
-                    self.records.push(CustomRecord {
-                        name: "...".to_string(),
-                        allele: None,
-                        fields: IndexMap::new(),
-                        score: None,
-                    })
-                }
+                RecordLimit::Count(cap) if self.record_count == cap => self.records.push(
+                    CustomRecord::new("...".to_string(), None, IndexMap::new(), None),
+                ),
                 RecordLimit::Count(_) => {}
             }
         }
@@ -691,8 +696,8 @@ impl<'a> MatchedRecords<'a> {
             if let (true, Some(sum)) = (self.asks(SummaryStat::Sum), acc.sum) {
                 values.insert("sum".to_string(), CustomValue::Number(sum));
             }
-            // Perl builds the hash through `count`, the `mean` test and the
-            // deletion of an unasked `sum`; `sum` asked for alone, with no
+            // Ensembl VEP builds the hash through `count`, the `mean` test and
+            // the deletion of an unasked `sum`; `sum` asked for alone, with no
             // score to add, leaves it undefined.
             if values.is_empty()
                 && self.asks(SummaryStat::Sum)
@@ -704,11 +709,13 @@ impl<'a> MatchedRecords<'a> {
                 CustomStats::Values(values)
             }
         });
-        let entry = (!self.records.is_empty() || stats.is_some()).then(|| CustomAnnotations {
-            short_name: Arc::clone(self.short_name),
-            records: self.records,
-            matched: self.record_count > 0,
-            stats,
+        let entry = (!self.records.is_empty() || stats.is_some()).then(|| {
+            CustomAnnotations::new(
+                Arc::clone(self.short_name),
+                self.records,
+                self.record_count > 0,
+                stats,
+            )
         });
         Listed {
             entry,
@@ -719,7 +726,7 @@ impl<'a> MatchedRecords<'a> {
 
 /// What one candidate record is to the input record walked
 /// (`annotate_InputBuffer`, `File.pm:333-341`).
-pub enum Verdict {
+pub(crate) enum Verdict {
     /// The record's start, as ensembl-io's `get_start` returns it, lies past
     /// the feature's end plus one: the walk ends here (`File.pm:333-335`).
     PastEnd,
@@ -734,7 +741,7 @@ pub enum Verdict {
 /// How one format reads a record of its file against an input record
 /// (`_record_overlaps_VF` and `_create_records`, which each format class
 /// defines over `File.pm`'s).
-pub trait FormatRules: Send + Sync {
+pub(crate) trait FormatRules: Send + Sync {
     /// The record's verdict against the feature; `scores` asks for the
     /// record's score (`File.pm:399`).
     fn match_record(&self, record: &TabixRecord, group: &RecordGroup<'_>, scores: bool) -> Verdict;
@@ -742,7 +749,7 @@ pub trait FormatRules: Send + Sync {
 
 /// A source over a tabix-indexed file: the engine, the file's sequence names
 /// and the synonyms that map an input chromosome onto them.
-pub struct TabixSource {
+pub(crate) struct TabixSource {
     spec: CustomSpec,
     short_name: Arc<str>,
     annotator: TabixAnnotator,
@@ -824,32 +831,31 @@ fn cell_number(record: &TabixRecord, column: usize, leading: u64) -> Coordinate 
     }
 }
 
-/// The start of `record` in whole numbers, from the cell at `column`: the
-/// reader's 1-based start or, for a row the reader placed at the first base
-/// because a minus sign leads the cell, the integer the sign and its digits
-/// spell ([`tabix::leading_negative_integer`]), one more under a `zero_based`
-/// start. `None` where those digits pass the integer range.
-fn keyed_start(record: &TabixRecord, column: usize, zero_based: bool) -> Option<i64> {
-    match record.columns.get(column) {
-        Some(cell)
-            if record.start == u64::from(zero_based) && tabix::minus_leads_a_number(cell) =>
-        {
-            tabix::leading_negative_integer(cell)
-                .map(|below_zero| below_zero + i64::from(zero_based))
-        }
-        _ => Some(record.start as i64),
-    }
-}
-
 impl TabixSource {
-    pub fn open(spec: CustomSpec, synonyms: Arc<ChromosomeSynonyms>) -> Result<Self, CustomError> {
+    /// Opens the file of `spec` on the run's `assembly`.
+    ///
+    /// The file's name for a record's chromosome is Ensembl VEP's
+    /// (`source_chr_name`); a name the file lacks is then tried under
+    /// its other spellings by the reader. On GRCh37, where `MT` and `chrMT`
+    /// name one mitochondrial sequence and `chrM` and `M` another, the reader
+    /// tries such a name inside its own pair alone, so a contig of the other
+    /// pair is read only under a name `source_chr_name` gives the record: a
+    /// synonym the file lists, or `MT` for a record written bare `M`
+    /// (`Parser.pm:794-796`).
+    pub fn open(
+        spec: CustomSpec,
+        synonyms: Arc<ChromosomeSynonyms>,
+        assembly: Option<vep_core::assembly::Assembly>,
+    ) -> Result<Self, CustomError> {
         let open_error = |reason: String| CustomError::Open {
             file: spec.file.clone(),
             reason,
         };
-        let annotator = TabixAnnotator::open(tabix_config(&spec))
+        let mut annotator = TabixAnnotator::open(tabix_config(&spec))
             .map_err(|e| open_error(tabix_reason(e)))?
-            .reading_rows_as_tabix_indexes_them();
+            .reading_rows_as_tabix_indexes_them()
+            .on_assembly(assembly);
+        annotator.frame_mut().keep_to_own_pair();
         let sequence_names = index_sequence_names(&spec)?;
         Ok(TabixSource {
             short_name: spec.short_name.as_str().into(),
@@ -864,15 +870,14 @@ impl TabixSource {
         &self.spec
     }
 
-    /// The start of `record` as the formats name and match it, an `exact` VCF
-    /// match aside ([`Self::keyed_start_of`]): the number Perl reads from the
-    /// start cell, which the parser of ensembl-io hands Ensembl VEP as written
-    /// (`GXF.pm:163-166`, `BaseVCF4.pm:244-247`), one more for a zero-based
-    /// start (`Bed.pm:159-162`). Ensembl VEP walks to the record, names it and
-    /// matches it by that number (`File.pm:333-335, 489-495, 523`), while the
-    /// index returned the row by the leading integer `tabix` read
-    /// ([`TabixConfig::record_start`]), the first base for a start a minus
-    /// sign leads (htslib 1.9 `tbx.c:99`).
+    /// The start of `record` as the formats name and match it: the number
+    /// Perl reads from the start cell, which the parser of ensembl-io hands
+    /// Ensembl VEP as written (`GXF.pm:163-166`, `BaseVCF4.pm:244-247`), one
+    /// more for a zero-based start (`Bed.pm:159-162`). Ensembl VEP walks to
+    /// the record, names it and matches it by that number
+    /// (`File.pm:333-335, 489-495, 523`), while the index returned the row by
+    /// the leading integer `tabix` read ([`TabixConfig::record_start`]), the
+    /// first base for a start a minus sign leads (htslib 1.9 `tbx.c:99`).
     pub fn start_of(&self, record: &TabixRecord) -> Coordinate {
         let config = self.annotator.config();
         let shift = u64::from(config.zero_based);
@@ -889,15 +894,6 @@ impl TabixSource {
             Some(end_col) => cell_number(record, end_col, record.end),
             None => whole_number(record.end),
         }
-    }
-
-    /// The start of `record` for a match that keys a row by its start cell
-    /// and reads no number from it as Perl does, an `exact` VCF source's: the
-    /// integer that leads the cell, its minus sign included
-    /// ([`keyed_start`]). `None` is a row such a match does not read.
-    pub fn keyed_start_of(&self, record: &TabixRecord) -> Option<i64> {
-        let config = self.annotator.config();
-        keyed_start(record, config.start_col, config.zero_based)
     }
 
     /// `self` reading its file through the reader `configure` returns for the
@@ -979,6 +975,8 @@ impl TabixSource {
     /// current pool: each record's list and statistics (`record_annotation`)
     /// go to every allele of the record, as do the fields its `COSV` records
     /// lend to the namesakes earlier sources listed under the short name.
+    /// The warnings the chunks raise join the hold of the calling thread in
+    /// record order (`vep_core::warning_hold`).
     pub fn annotate(
         &self,
         variants: &mut [InputVariant],
@@ -996,7 +994,7 @@ impl TabixSource {
             slices.push(chunk);
             rest = tail;
         }
-        slices.into_par_iter().for_each(|chunk| {
+        map_in_order(slices, |chunk| {
             for group in chunk.chunk_by_mut(InputVariant::same_record) {
                 if let Some(listed) = self.record_annotation(group, &data, rules) {
                     for variant in group.iter_mut() {
@@ -1085,21 +1083,22 @@ fn open_source(
             Arc::clone(synonyms),
             options,
         )?),
-        CustomFormat::Bed => Box::new(super::bed::BedSource::open(spec, Arc::clone(synonyms))?),
-        CustomFormat::Gff => match spec.gff_type {
-            GffType::GencodePromoter => {
-                Box::new(GffOverlaySource::open(spec, Arc::clone(synonyms))?)
-            }
-            GffType::Transcript | GffType::Other(_) => {
-                TabixAnnotator::open(tabix_config(&spec))
-                    .map_err(|e| open_error(tabix_reason(e)))?;
-                let sequence_names = index_sequence_names(&spec)?;
-                Box::new(UnreadSource {
-                    spec,
-                    sequence_names,
-                })
-            }
-        },
+        CustomFormat::Bed => Box::new(super::bed::BedSource::open(
+            spec,
+            Arc::clone(synonyms),
+            options.assembly,
+        )?),
+        CustomFormat::Gff if spec.gff_type == GffType::GencodePromoter => Box::new(
+            GffOverlaySource::open(spec, Arc::clone(synonyms), options.assembly)?,
+        ),
+        CustomFormat::Gff | CustomFormat::Gtf => {
+            TabixAnnotator::open(tabix_config(&spec)).map_err(|e| open_error(tabix_reason(e)))?;
+            let sequence_names = index_sequence_names(&spec)?;
+            Box::new(UnreadSource {
+                spec,
+                sequence_names,
+            })
+        }
         CustomFormat::BigWig => Box::new(BigWigSource::open(spec, Arc::clone(synonyms))?),
     };
     if let Some(warning) = &source.spec().num_records_warning {
@@ -1109,8 +1108,10 @@ fn open_source(
 }
 
 /// One batch's prefetch results, one per source in the order given
-/// ([`CustomSources::prefetch`]).
-pub struct CustomPrefetch(Vec<Result<PrefetchData, CustomError>>);
+/// ([`CustomSources::prefetch`]), with the warnings the prefetches raised, in
+/// that order, which [`CustomSources::annotate`] raises when the batch is
+/// annotated (`vep_core::warning_hold`).
+pub struct CustomPrefetch(Vec<Result<PrefetchData, CustomError>>, Vec<Held>);
 
 /// The `--custom` sources of one run, in the order given.
 pub struct CustomSources {
@@ -1165,26 +1166,26 @@ impl CustomSources {
     /// pool. The sources read the records' coordinates and the parse's marks
     /// alone, so a batch may be prefetched before it is annotated, and the
     /// result is positional: it is applied to the batch it was read for, in
-    /// the same order and length.
+    /// the same order and length. A warning a prefetch raises is kept with
+    /// the result, so a batch read ahead and never annotated leaves none.
     pub fn prefetch(&self, variants: &[InputVariant]) -> CustomPrefetch {
-        CustomPrefetch(
-            self.sources
-                .par_iter()
-                .map(|source| source.prefetch(variants))
-                .collect(),
-        )
+        let (read, raised) = collect_in_order(&self.sources, |source| source.prefetch(variants));
+        CustomPrefetch(read, raised)
     }
 
     /// Each source's annotate phase in order over its prefetched records; the
     /// first source, in that order, whose prefetch or annotate failed is the
-    /// error.
+    /// error. The warnings `prefetch` carries join the hold of the calling
+    /// thread ahead of those the annotate phases raise.
     pub fn annotate(
         &self,
         variants: &mut [InputVariant],
         prefetch: CustomPrefetch,
     ) -> Result<(), CustomError> {
-        debug_assert_eq!(prefetch.0.len(), self.sources.len());
-        for (source, data) in self.sources.iter().zip(prefetch.0) {
+        let CustomPrefetch(read, raised_ahead) = prefetch;
+        debug_assert_eq!(read.len(), self.sources.len());
+        raise_again(raised_ahead);
+        for (source, data) in self.sources.iter().zip(read) {
             source.annotate(variants, data?)?;
         }
         Ok(())
@@ -1206,12 +1207,7 @@ mod tests {
     }
 
     fn record(name: &str, score: Option<CustomValue>) -> CustomRecord {
-        CustomRecord {
-            name: name.to_string(),
-            allele: None,
-            fields: IndexMap::new(),
-            score,
-        }
+        CustomRecord::new(name.to_string(), None, IndexMap::new(), score)
     }
 
     /// A file that is not there, or has no index beside it, is refused with the
@@ -1254,7 +1250,7 @@ mod tests {
     /// A bgzipped, indexed source opens by its content whatever its name: one
     /// named `sites_plain.vcf` and one named `regions.bed.GZ` annotate the
     /// variant their record overlaps, and a plain-text file with an index
-    /// beside it is refused by its bytes. Ensembl VEP 116.2 tests the name
+    /// beside it is refused by its bytes. Ensembl VEP 116.3 tests the name
     /// alone before opening any tabix source (ensembl-io `TabixParser.pm:52`,
     /// `/\.b?gz$/`), so it reads neither of the two and ends the run, the
     /// documented class `tabix_source_named_without_gz`.
@@ -1330,7 +1326,7 @@ mod tests {
     }
 
     /// The warning a fractional or negative `num_records` earns (Ensembl VEP
-    /// 116.2 compares the text as a number, `File.pm:337`, `:436-439`) is
+    /// 116.3 compares the text as a number, `File.pm:337`, `:436-439`) is
     /// written when the source opens, once per source, and not for a source
     /// that cannot be opened, so a refused run leaves no warnings file.
     #[test]
@@ -1372,10 +1368,10 @@ mod tests {
     /// Indexed VCF, BED and GFF files open under their short names and annotate
     /// in the order given: the VCF, BED and promoter sources annotate the
     /// variant their record overlaps, while a batch passes unchanged through a
-    /// GFF source in a mode Ensembl VEP does not know (`GFF.pm:154-164`
+    /// GFF source in a mode Ensembl VEP does not know (`GFF.pm:155-165`
     /// annotate nothing from one).
     #[test]
-    fn opened_sources_leave_a_batch_as_they_found_it() {
+    fn opened_sources_annotate_in_order_and_an_unknown_gff_mode_leaves_the_batch_as_found() {
         let dir = tempfile::tempdir().unwrap();
         let vcf = write_tabix_fixture(
             dir.path(),
@@ -1462,6 +1458,176 @@ mod tests {
         assert!(open(Vec::new()).unwrap().is_empty());
     }
 
+    /// A source that raises one warning in its prefetch, which runs the longer
+    /// the earlier the source was given, and one in its annotate, about the
+    /// batch's first record: each as the layer that writes a run's warnings
+    /// gives it to the hold of the thread raising it.
+    struct WarningSource {
+        spec: CustomSpec,
+        name: &'static str,
+        prefetch_ms: u64,
+    }
+
+    impl CustomSource for WarningSource {
+        fn spec(&self) -> &CustomSpec {
+            &self.spec
+        }
+
+        fn chromosomes(&self) -> Vec<String> {
+            Vec::new()
+        }
+
+        fn prefetch(&self, _variants: &[InputVariant]) -> Result<PrefetchData, CustomError> {
+            std::thread::sleep(std::time::Duration::from_millis(self.prefetch_ms));
+            let _ = vep_core::warning_hold::offer(0, format!("{} prefetch", self.name));
+            Ok(PrefetchData::new(()))
+        }
+
+        fn annotate(
+            &self,
+            variants: &mut [InputVariant],
+            _data: PrefetchData,
+        ) -> Result<(), CustomError> {
+            let _ = vep_core::warning_hold::offer(
+                variants[0].input_record,
+                format!("{} annotate", self.name),
+            );
+            Ok(())
+        }
+    }
+
+    /// The warnings the sources raise over a batch join the hold of the thread
+    /// that runs the batch in a fixed order, whatever thread ran which
+    /// prefetch and in whatever order they ended: the prefetches' in the order
+    /// the sources were given, then each source's annotate in that order,
+    /// under the record it names. A prefetch read ahead keeps its warnings
+    /// from the hold of the thread that reads ahead, and the annotate phase
+    /// that applies it raises them ahead of its own; one that is dropped
+    /// leaves none.
+    #[test]
+    fn source_warnings_join_the_callers_hold_in_the_order_given() {
+        use vep_core::warning_hold::holding;
+        const NAMES: [&str; 3] = ["first", "second", "third"];
+        let sources = CustomSources {
+            sources: NAMES
+                .iter()
+                .enumerate()
+                .map(|(index, name)| {
+                    Box::new(WarningSource {
+                        spec: spec("file=made_up.bed.gz,short_name=made_up,format=bed"),
+                        name,
+                        prefetch_ms: 20 * (NAMES.len() - index) as u64,
+                    }) as Box<dyn CustomSource>
+                })
+                .collect(),
+        };
+        let held = |input_record: u64, text: String| Held { input_record, text };
+        let prefetches: Vec<Held> = NAMES
+            .iter()
+            .map(|name| held(0, format!("{name} prefetch")))
+            .collect();
+        let annotates: Vec<Held> = NAMES
+            .iter()
+            .map(|name| held(41, format!("{name} annotate")))
+            .collect();
+        let all = [prefetches, annotates].concat();
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(NAMES.len())
+            .build()
+            .unwrap();
+        let mut batch = vec![InputVariant::new(
+            "21".into(),
+            100,
+            100,
+            b"A".to_vec(),
+            b"G".to_vec(),
+        )];
+        batch[0].input_record = 41;
+
+        let (ran, raised) = pool.install(|| holding(|| sources.run_batch(&mut batch)));
+        ran.unwrap();
+        assert_eq!(raised, all);
+
+        let (ahead, raised) = pool.install(|| holding(|| sources.prefetch(&batch)));
+        assert!(raised.is_empty(), "{raised:?}");
+        let (ran, raised) = pool.install(|| holding(|| sources.annotate(&mut batch, ahead)));
+        ran.unwrap();
+        assert_eq!(raised, all);
+
+        let (dropped, raised) = pool.install(|| holding(|| sources.prefetch(&batch)));
+        drop(dropped);
+        assert!(raised.is_empty(), "{raised:?}");
+    }
+
+    /// Rules that match nothing and raise one warning for every record
+    /// walked, about the input record walking it, as the layer that writes a
+    /// run's warnings gives it to the hold of the thread raising it. A walk
+    /// takes long enough for the chunks of a batch to run on several threads.
+    struct WarningRules;
+
+    impl FormatRules for WarningRules {
+        fn match_record(
+            &self,
+            _record: &TabixRecord,
+            group: &RecordGroup<'_>,
+            _scores: bool,
+        ) -> Verdict {
+            std::thread::sleep(std::time::Duration::from_micros(200));
+            let record = group.lead.input_record;
+            let _ = vep_core::warning_hold::offer(record, format!("record {record}"));
+            Verdict::NoMatch
+        }
+    }
+
+    /// A batch of four chunks, matched on a pool of four threads, raises the
+    /// warnings of its records into the hold of the thread that runs the
+    /// batch in record order, each under its record, whatever thread matched
+    /// which chunk.
+    #[test]
+    fn a_batch_matched_in_chunks_raises_its_warnings_in_record_order() {
+        use vep_core::warning_hold::holding;
+        let dir = tempfile::tempdir().unwrap();
+        let bed = write_tabix_fixture(
+            dir.path(),
+            "whole.bed.gz",
+            &["21\t0\t5000\twhole"],
+            IndexSpec::standard(),
+        );
+        let source = TabixSource::open(
+            spec(&format!("file={},format=bed", bed.display())),
+            Arc::default(),
+            None,
+        )
+        .unwrap();
+        let records = 3 * RECORDS_PER_CHUNK as u64 + 10;
+        let mut batch: Vec<InputVariant> = (1..=records)
+            .map(|record| {
+                let mut variant =
+                    InputVariant::new("21".into(), record, record, b"A".to_vec(), b"G".to_vec());
+                variant.input_record = record;
+                variant
+            })
+            .collect();
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(4)
+            .build()
+            .unwrap();
+        let (matched, raised) = pool.install(|| {
+            holding(|| {
+                let data = source.prefetch(&batch)?;
+                source.annotate(&mut batch, data, &WarningRules)
+            })
+        });
+        matched.unwrap();
+        let expected: Vec<Held> = (1..=records)
+            .map(|record| Held {
+                input_record: record,
+                text: format!("record {record}"),
+            })
+            .collect();
+        assert_eq!(raised, expected);
+    }
+
     /// `File.pm:534-569` on a record spanning 100-200: `overlap` admits a
     /// feature sharing a base; `within` (`:541`) a feature holding the whole
     /// record; `surrounding` (`:544`) a feature the record holds; `distance`
@@ -1525,6 +1691,45 @@ mod tests {
         };
         assert_eq!(matched("9223372036854775808"), None);
         assert_eq!(matched("9223372036854784000").as_deref(), Some("0.000"));
+    }
+
+    /// `File.pm:547-548` tests the difference of two whole ends against the
+    /// distance as Perl reads the option's text. Digits alone and an exponent
+    /// form with a whole value are an integer, and the test is exact: a start
+    /// 2^53 + 1 bases from the feature's lies past a distance of 2^53. A point
+    /// without an exponent or trailing text makes the distance a float, which
+    /// the difference rounds to. A record with a float for one end has its
+    /// whole end tested the same exact way, and its float end in floats,
+    /// where an integer distance of 2^53 + 3 rounds to the 2^53 + 4 it admits.
+    #[test]
+    fn a_whole_distance_is_compared_exactly_past_two_to_the_fifty_third() {
+        const TWO_53: i64 = 1 << 53;
+        let record = TWO_53 + 2;
+        let matched = |distance: &str, start: Coordinate, end: Coordinate, feature_start: i64| {
+            let spec = spec(&format!("file=r.bed.gz,format=bed,distance={distance}"));
+            base_overlap(&spec, start, end, feature_start, record).is_some()
+        };
+        let whole = |distance: &str| matched(distance, record.into(), record.into(), 1);
+        assert!(!whole(&TWO_53.to_string()));
+        assert!(whole(&(TWO_53 + 1).to_string()));
+        assert!(!whole(&format!("+{TWO_53}")));
+        assert!(!whole("9.007199254740992e15"));
+        assert!(whole("9007199254740992.0"));
+        assert!(whole("9007199254740992abc"));
+
+        let float_end = Coordinate::Float(record as f64);
+        let mixed = |distance: &str| matched(distance, record.into(), float_end, 1);
+        assert!(!mixed(&TWO_53.to_string()));
+        assert!(mixed(&(TWO_53 + 1).to_string()));
+
+        let float_start = Coordinate::Float((TWO_53 + 4) as f64);
+        let far_end = Coordinate::Whole(TWO_53 + 4);
+        let floats = |distance: &str| {
+            let spec = spec(&format!("file=r.bed.gz,format=bed,distance={distance}"));
+            base_overlap(&spec, float_start, far_end, 0, TWO_53 + 4).is_some()
+        };
+        assert!(floats(&(TWO_53 + 3).to_string()));
+        assert!(!floats(&(TWO_53 + 2).to_string()));
     }
 
     /// A record whose two ends both lie near the lowest integer, as a VCF
@@ -1641,17 +1846,20 @@ mod tests {
         let spec = spec("file=r.vcf.gz,format=vcf,fields=PC,summary_stats=count%max");
         let short_name: Arc<str> = "COSMIC".into();
         let other: Arc<str> = "OTHER".into();
-        let listed_by = |name: &Arc<str>, fields: &[(&str, &str)]| CustomAnnotations {
-            short_name: Arc::clone(name),
-            records: vec![CustomRecord {
-                fields: fields
-                    .iter()
-                    .map(|(k, v)| (k.to_string(), CustomFieldValue::Text(v.to_string())))
-                    .collect(),
-                ..record("COSV1", None)
-            }],
-            matched: true,
-            stats: None,
+        let listed_by = |name: &Arc<str>, fields: &[(&str, &str)]| {
+            CustomAnnotations::new(
+                Arc::clone(name),
+                vec![{
+                    let mut custom_record = record("COSV1", None);
+                    custom_record.fields = fields
+                        .iter()
+                        .map(|(k, v)| (k.to_string(), CustomFieldValue::Text(v.to_string())))
+                        .collect();
+                    custom_record
+                }],
+                true,
+                None,
+            )
         };
         let score = |text: &str| Some(CustomValue::Text(text.to_string()));
         let mut lent_fields = IndexMap::new();
@@ -1664,9 +1872,10 @@ mod tests {
         ];
         let mut matched = MatchedRecords::new(&spec, &short_name, &earlier);
         matched.add(
-            vec![CustomRecord {
-                fields: lent_fields.clone(),
-                ..record("COSV1", score("5"))
+            vec![{
+                let mut custom_record = record("COSV1", score("5"));
+                custom_record.fields = lent_fields.clone();
+                custom_record
             }],
             Some("100.000".into()),
         );
@@ -1872,6 +2081,56 @@ mod tests {
         }
     }
 
+    /// A row that starts below the first base, its start cell `0` or led by a
+    /// minus sign, is listed among the rows written at base 1 in the file's
+    /// order, as Ensembl VEP 116.3 lists it: `tabix` files such a row at the
+    /// first base (htslib 1.9 `tbx.c:99`) and Ensembl VEP walks the rows as
+    /// the index hands them out (`File.pm:333-345`).
+    #[test]
+    fn a_row_below_the_first_base_is_listed_in_the_files_order() {
+        let dir = tempfile::tempdir().unwrap();
+        let listed_from = |name: &str, below: &str| -> Vec<String> {
+            let vcf = write_tabix_fixture(
+                dir.path(),
+                name,
+                &[
+                    "##fileformat=VCFv4.2",
+                    "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO",
+                    "21\t1\tat_one\tA\tG\t.\t.\t.",
+                    below,
+                    "21\t1\tat_one_again\tA\tG\t.\t.\t.",
+                ],
+                IndexSpec::standard(),
+            );
+            let sources = open(vec![spec(&format!(
+                "file={},format=vcf,type=overlap,coords=0",
+                vcf.display()
+            ))])
+            .unwrap();
+            let mut batch = vec![InputVariant::new(
+                "21".into(),
+                1,
+                1,
+                b"A".to_vec(),
+                b"G".to_vec(),
+            )];
+            sources.run_batch(&mut batch).unwrap();
+            batch[0]
+                .custom_annotations
+                .iter()
+                .flat_map(|entry| entry.records.iter().map(|record| record.name.clone()))
+                .collect()
+        };
+        assert_eq!(
+            listed_from("minus.vcf.gz", "21\t-5\tbelow\tAAAAAAAAAA\tA\t.\t.\t."),
+            ["at_one", "below", "at_one_again"]
+        );
+        assert_eq!(
+            listed_from("zero.vcf.gz", "21\t0\tzero\tAA\tA\t.\t.\t."),
+            ["at_one", "zero", "at_one_again"]
+        );
+    }
+
     /// `Coordinate::read` reads a cell as the pinned image's Perl reads the
     /// string: an exponent or a `+` gives the number it spells, a fraction
     /// stays, text after the number is ignored, a hexadecimal prefix reads 0
@@ -1985,7 +2244,7 @@ mod tests {
     }
 
     /// `File.pm:541-566` on a record one of whose ends has a fraction, each
-    /// row as Ensembl VEP 116.2 lists it on the pinned image: a record from
+    /// row as Ensembl VEP 116.3 lists it on the pinned image: a record from
     /// 100.5 to 102 does not surround a feature at 100 or one from 100 to
     /// 102, and a feature at 100 covers 20 percent of it and one at 101 40, so
     /// a cutoff of 35 keeps the second alone; a record from 100 to 102.5 does
@@ -2189,47 +2448,10 @@ mod tests {
         assert_eq!(cell_number(&short, 2, 100), Whole(100));
     }
 
-    /// A keyed start is the integer that leads the cell: the reader's start
-    /// for a cell a digit leads, whatever follows its digits, and for a row
-    /// the reader placed at the first base under a minus sign the integer the
-    /// sign and its digits spell, so `-1e2` is -1 where Perl reads -100. A
-    /// minus sign before digits past the integer range keys no row.
-    #[test]
-    fn a_keyed_start_is_the_integer_that_leads_the_cell() {
-        let key = |start: u64, cell: &str, zero_based: bool| {
-            let record = TabixRecord {
-                chr: "20".to_string(),
-                start,
-                end: start,
-                columns: vec![String::new(), cell.to_string()],
-                header: None,
-            };
-            keyed_start(&record, 1, zero_based)
-        };
-        for (start, cell, keyed) in [
-            (100, "100", Some(100)),
-            (1, "1e2", Some(1)),
-            (2000, "2000e-1", Some(2000)),
-            (100, "+100", Some(100)),
-            (100, "100.5", Some(100)),
-            (0, "0", Some(0)),
-            (0, "-5", Some(-5)),
-            (0, "-5x", Some(-5)),
-            (0, "-1e2", Some(-1)),
-            (0, "-9223372036854775808", Some(i64::MIN)),
-            (0, "-9223372036854775809", None),
-        ] {
-            assert_eq!(key(start, cell, false), keyed, "{cell:?}");
-        }
-        // A zero-based start is one more, and its first base is 1.
-        assert_eq!(key(1, "-5", true), Some(-4));
-        assert_eq!(key(1, "0", true), Some(1));
-    }
-
     /// A record that starts below the 32-bit range is listed by the number
     /// written, here a deletion row whose `POS` is -9223372036854775807: for
     /// every record from the first base to its `END`, under its start of
-    /// -9223372036854775806. Ensembl VEP 116.2 lists it from base 2 alone:
+    /// -9223372036854775806. Ensembl VEP 116.3 lists it from base 2 alone:
     /// the compiled `overlap` its image swaps in
     /// (`Utils/VariationEffect.pm:73-74`) takes each end as a 32-bit `int`
     /// (ensembl-xs 2.3.2 `Bio-EnsEMBL.xs:468-472`) and so reads the start as
@@ -2287,7 +2509,7 @@ mod tests {
     /// Every run of the corner table lists what the table says. Each row is a
     /// `--custom` file of two sequences, one of whose lines spells its start
     /// or end as no plain whole number, read by 40 input records; its listing
-    /// is the one Ensembl VEP 116.2 wrote on the pinned image over the same
+    /// is the one Ensembl VEP 116.3 wrote on the pinned image over the same
     /// lines indexed by the image's `tabix`, for every row the table marks
     /// `matched`: an exponent, a fraction, a `+`, digits below the 64-bit
     /// range, in the start or the end of a GFF window, a BED record or a VCF

@@ -19,10 +19,11 @@
 //! transcript's exon model, as Ensembl VEP reads them through `spliced_seq`
 //! (`Transcript.pm:823-870`, `:903-926`, `:1746-1762`): every UTR exon segment in
 //! transcript order, the coding sequence from the coding start to the coding end
-//! with one `N` per base of the start exon's phase. Without `--fasta` no row is
-//! annotated and the run warns once. Each transcript's sequences and reference
-//! codon scans are read once per batch and shared by every row and allele of that
-//! transcript.
+//! with one `N` per base of the start exon's phase. The plugin cannot annotate
+//! without that reference, so a run that has none refuses it when it loads,
+//! where Ensembl VEP's module prints a notice and runs on (`:88`). Each
+//! transcript's sequences and reference codon scans are read once per batch and
+//! shared by every row and allele of that transcript.
 //!
 //! The uORF evidence file (`file=`) has six tab-separated columns `chr pos gene
 //! strand type stop_pos` with a header (`:98-99`); its chromosome names open with
@@ -44,46 +45,57 @@
 //! order). The window searched for a gained start codon is sized by the alternate
 //! allele (`atg_window`); `:339` sizes it by the reference allele, which misses a
 //! start codon inside an inserted sequence and reports an existing one beside a
-//! deletion. A start codon that an insertion only moves on is reported neither
-//! gained nor lost ([`moved_start_codon`]): it stands whole, every base after
-//! it unchanged, as many bases further from the cap as the allele is long. The
-//! insertion is written directly before the codon, or after its first or second
-//! base when the inserted bases end with those bases, and the stop-codon and
-//! frameshift analyses read it directly before the codon either way. `:764-769`
-//! pass an insertion at the codon's three indices and `:776-778` report the
-//! codon lost from the three bases at its old index. A uORF whose stop codon
-//! begins at the moved codon's second base is shifted only when the mutated
-//! sequence reads no stop codon at that index: one that still ends there keeps
-//! its length and is left out of the frameshift, where `:921` lists it for a
-//! record written directly before the codon. When no stop codon stands at that
-//! index and the same sequence can be written with the insertion after the
-//! moved codon's second base, inside that stop codon, at a length that is no
-//! multiple of three, the stop codon is lost on every one of the three ways of
-//! writing the sequence; `:628-633` read the stop codon's index only when the
-//! record itself writes the insertion inside it. A start codon that an
-//! insertion written inside it leaves at its own index and does not move on,
-//! the inserted bases opening with the codon's remaining bases, is the
-//! reference's own ([`remade_start_codon`]): it is not reported gained, where
-//! `:346-353` name it as the first start codon of the window, and the
-//! frameshift analysis reads the insertion directly after the codon.
+//! deletion.
+//!
+//! An insertion is read from every index at which its mutated sequence can be
+//! written (`insertion_writings`): inserted bases that repeat the bases beside
+//! them give one sequence at several indices. A start codon stands when its
+//! three bases stand whole, at its own index before every writing or moved on
+//! by the allele's length after one of them.
+//! It is reported lost only when every writing parts it, where `:764-769` pass
+//! an insertion at the codon's three indices and `:776-778` report the codon
+//! lost from the three bases at its old index. A start codon that stands at
+//! its own index is not reported gained, where `:346-353` name the first start
+//! codon of the window; of two equal copies of a repeated start codon the
+//! gained one is the copy nearer the cap.
+//!
+//! Where a writing lies at a start codon's three indices or directly after it,
+//! the stop-codon and frameshift analyses read all the writings, so that one
+//! sequence has one row however the record writes it. A uORF is
+//! shifted when a writing lies inside it, after a start codon that stands at
+//! its own index, unless it keeps its length: one that still ends on a stop
+//! codon at its own index, every codon before its last unchanged, is left out,
+//! where `:921` lists it for a record written before that index. A stop codon
+//! is lost when a writing lies inside it and the mutated sequence reads no
+//! stop codon at its index. When another writing lies at or before its first
+//! base, the stop codon stands whole after the inserted bases and is lost only
+//! at a length that is no multiple of three; `:628-633` read the stop codon's
+//! index only when the record itself writes the insertion inside it. Any other
+//! allele is read at the record's own index.
 //!
 //! A symbolic deletion whose stated span lies inside one 5' UTR exon segment is
 //! annotated as the sequence deletion of that span: the analyses read the count
 //! of removed bases and the reference UTR alone (`:1189-1200`), so the row
 //! carries the five keys of the same deletion given with explicit alleles. A
-//! plain symbolic insertion (`<INS>`) that states its length gives no bases:
-//! where the length is no multiple of three and the point lies inside a uORF
-//! or an overlapping ORF, the row carries the frameshift with the keys that
-//! read no inserted base, and `alt_type=uORF` where a stop codon past the
-//! point lands in frame whatever is inserted (`:889`, `:921-923`, `:973-974`);
-//! `alt_type_length` is never written. Every other structural variant's 5'
-//! UTR rows carry the counts and `-` alone: a deletion that ends outside the
-//! UTR or in another exon segment, a record with several alternates, with the
-//! `IMPRECISE` flag or with a confidence interval around its position or its
-//! end, an insertion that writes another end than its position or its
-//! position plus its length, a mobile-element insertion, a duplication, an
-//! inversion. Ensembl VEP reads the symbolic allele's text (`<DEL>`) as a
-//! deleted sequence of its own length (`:151-153`) and analyses that.
+//! record with several alternates states that deletion for the alternate whose
+//! own text is a deletion's (`<DEL>`, `<CN0>`) when it writes `END` as the
+//! span's last base; its other alternates state no sequence. An inversion
+//! whose stated span lies inside one segment is annotated as that span
+//! replaced by its reverse complement, an allele of equal length that the
+//! reference holds. A plain symbolic insertion (`<INS>`) that states its length
+//! gives no bases: where the length is no multiple of three and the point lies
+//! inside a uORF or an overlapping ORF, the row carries the frameshift with the
+//! keys that read no inserted base, and `alt_type=uORF` where a stop codon past
+//! the point lands in frame whatever is inserted (`:889`, `:921-923`,
+//! `:973-974`); `alt_type_length` is never written. Every other structural
+//! variant's 5' UTR rows carry the counts and `-` alone: a deletion or an
+//! inversion that ends outside the UTR or in another exon segment, a record
+//! with the `IMPRECISE` flag or with a confidence interval around its position
+//! or its end, an inversion or an insertion of a record with several
+//! alternates, an insertion that writes another end than its position or its
+//! position plus its length, a mobile-element insertion, a duplication.
+//! Ensembl VEP reads the symbolic allele's text (`<DEL>`) as a deleted sequence
+//! of its own length (`:151-153`) and analyses that.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::BufReader;
@@ -98,6 +110,7 @@ use crate::tabix::BoundedLines;
 use crate::traits::{BuiltinPlugin, PluginError};
 use vep_core::codon::reverse_complement;
 use vep_core::consequence::{Consequence, LofteeContext, TranscriptConsequence};
+use vep_core::sv_routing::classify_symbolic_alt;
 use vep_core::transcript::Exon;
 use vep_core::variant::{InputVariant, VariantClass, WrittenEnd};
 
@@ -235,9 +248,9 @@ impl UtrAnnotatorPlugin {
             return IndexMap::new();
         };
 
-        // A structural variant is analysed as the deletion or the insertion its
-        // record states ([`stated_deletion`], [`stated_insertion`]), or not at
-        // all.
+        // A structural variant is analysed as the deletion, the inversion or the
+        // insertion its record states ([`stated_deletion`], [`stated_inversion`],
+        // [`stated_insertion`]), or not at all.
         let chosen = if !variant.is_structural {
             let ref_len = if variant.ref_allele == b"-" {
                 0
@@ -258,6 +271,44 @@ impl UtrAnnotatorPlugin {
                 // reference UTR holds.
                 .filter(|&(mut_pos, end_pos)| end_pos.checked_sub(mut_pos) == Some(length - 1))
                 .and_then(|span| self.first_analysis(model, chr, &positions, span, length, &[]))
+        } else if let Some(length) = stated_inversion(variant) {
+            positions
+                .allele_span(model.strand, variant.start, length)
+                .filter(|&(mut_pos, end_pos)| end_pos.checked_sub(mut_pos) == Some(length - 1))
+                .and_then(|(mut_pos, end_pos)| {
+                    // The inverted span read along the transcript is the reverse
+                    // complement of the bases the UTR holds there, on either strand.
+                    let reference = model.utr.get(mut_pos..=end_pos)?;
+                    let inverted = reverse_complement(reference);
+                    // A base the inversion leaves as it was at either end of the span
+                    // is no part of the change; a span equal to its own reverse
+                    // complement changes nothing.
+                    let same = |pair: (&u8, &u8)| pair.0 == pair.1;
+                    let before = reference
+                        .iter()
+                        .zip(&inverted)
+                        .take_while(|p| same(*p))
+                        .count();
+                    if before == length {
+                        return None;
+                    }
+                    let after = reference
+                        .iter()
+                        .rev()
+                        .zip(inverted.iter().rev())
+                        .take_while(|p| same(*p))
+                        .count();
+                    let changed = before..length - after;
+                    let span = (mut_pos + changed.start, mut_pos + changed.end - 1);
+                    self.first_analysis(
+                        model,
+                        chr,
+                        &positions,
+                        span,
+                        changed.len(),
+                        &inverted[changed],
+                    )
+                })
         } else if let Some(length) = stated_insertion(variant) {
             positions
                 .allele_span(model.strand, variant.start, 0)
@@ -306,14 +357,15 @@ impl UtrAnnotatorPlugin {
     ) -> Option<Analysis> {
         let mutated = mutated_utr(&model.utr, mut_pos, ref_len, alt_coding);
         let scan = CodonScan::new(&mutated);
-        let moved_start = moved_start_codon(model, &mutated, mut_pos, ref_len, alt_coding.len());
-        // One reference start codon stands for one start codon of the mutated
-        // sequence: a codon that moved on whole is not also read at its old index.
-        let remade_start = if moved_start.is_none() {
-            remade_start_codon(model, &mutated, mut_pos, ref_len, alt_coding.len())
-        } else {
-            None
-        };
+        let writings = (ref_len == 0 && !alt_coding.is_empty())
+            .then(|| insertion_writings(&model.utr, &mutated));
+        let beside_start_codon = writings.filter(|&(first, last)| {
+            model
+                .scan
+                .atgs
+                .iter()
+                .any(|&start_pos| first <= start_pos + 3 && start_pos <= last)
+        });
         let row = MutatedUtr {
             plugin: self,
             chr,
@@ -325,8 +377,8 @@ impl UtrAnnotatorPlugin {
             end_pos,
             ref_len,
             alt_len: alt_coding.len(),
-            moved_start,
-            remade_start,
+            writings,
+            beside_start_codon,
         };
         let analyses = [
             row.uaug_gained(),
@@ -388,6 +440,8 @@ impl Default for UtrAnnotatorPlugin {
         Self::new()
     }
 }
+
+impl crate::traits::sealed::Sealed for UtrAnnotatorPlugin {}
 
 impl BuiltinPlugin for UtrAnnotatorPlugin {
     fn name(&self) -> &str {
@@ -457,10 +511,14 @@ impl BuiltinPlugin for UtrAnnotatorPlugin {
         Ok(())
     }
 
+    /// The 5' UTR and coding sequences come from the reference alone, so the
+    /// registry refuses the plugin in a run without one. Ensembl VEP's module
+    /// prints a notice and runs on (`:88`).
+    fn requires_reference_fasta(&self) -> bool {
+        true
+    }
+
     fn set_reference_fasta(&mut self, fasta: Option<Arc<vep_fasta::IndexedFasta>>) {
-        if fasta.is_none() {
-            warn!("{NAME}: no --fasta; the 5' UTR and coding sequences cannot be read, so no row is annotated");
-        }
         self.reference_fasta = fasta;
     }
 
@@ -494,9 +552,10 @@ impl BuiltinPlugin for UtrAnnotatorPlugin {
                     continue;
                 };
                 let result = self.annotate(model, &variant.chr, variant);
-                variant.transcript_consequences[tc_idx]
-                    .plugin_data
-                    .extend(result);
+                let row = &mut variant.transcript_consequences[tc_idx];
+                for (key, value) in result {
+                    row.set_plugin_value(key, value, false);
+                }
             }
         }
         Ok(())
@@ -525,33 +584,77 @@ fn oriented_alt(alt: &[u8], strand: i8) -> Vec<u8> {
     }
 }
 
-/// Whether a structural variant's record states one allele at one place: it
-/// has a single alternate and marks its place certain, with neither the
-/// `IMPRECISE` flag nor a confidence interval around its position or its end
-/// (`CIPOS`, `CIEND` with a bound other than 0).
-fn states_one_place(variant: &InputVariant) -> bool {
-    let several_alternates = variant
+/// Whether a structural variant's record has several alternates.
+fn several_alternates(variant: &InputVariant) -> bool {
+    variant
         .uploaded_allele_string
         .as_deref()
-        .is_some_and(|alleles| alleles.contains('/'));
-    let uncertain = variant.imprecise
-        || [variant.ci_pos, variant.ci_end]
+        .is_some_and(|alleles| alleles.contains('/'))
+}
+
+/// Whether a structural variant's record marks its place certain, with
+/// neither the `IMPRECISE` flag nor a confidence interval around its position
+/// or its end (`CIPOS`, `CIEND` with a bound other than 0).
+fn states_its_place(variant: &InputVariant) -> bool {
+    !variant.imprecise
+        && [variant.ci_pos, variant.ci_end]
             .into_iter()
             .flatten()
-            .any(|(low, high)| low != 0 || high != 0);
-    !several_alternates && !uncertain
+            .all(|(low, high)| low == 0 && high == 0)
+}
+
+/// Whether a structural variant's record states one allele at one place: it
+/// has a single alternate and marks its place certain ([`states_its_place`]).
+fn states_one_place(variant: &InputVariant) -> bool {
+    !several_alternates(variant) && states_its_place(variant)
+}
+
+/// Whether the alternate of `variant`, one of several of its record, states
+/// the loss of the record's whole span: its own text is a deletion's as a
+/// record with that one alternate is classed (`<DEL>`, `<CN0>`), and the
+/// record writes `END` as the span's last base. A span read from a list of
+/// lengths is the first alternate's, which need not be this one's.
+fn loss_alternate_of_several(variant: &InputVariant) -> bool {
+    let own_text_is_a_deletion = std::str::from_utf8(variant.alt_allele()).is_ok_and(|text| {
+        matches!(
+            classify_symbolic_alt(text, None),
+            VariantClass::StructuralDeletion | VariantClass::MobileElementDeletion
+        )
+    });
+    own_text_is_a_deletion && variant.written_end == WrittenEnd::SpanEnd
 }
 
 /// The number of reference bases a structural variant's record states as
-/// deleted: the length of its stated span when its class is a deletion or a
-/// mobile-element deletion and it states one place ([`states_one_place`]).
-/// `None` for a record that states no span and for every other class.
+/// deleted: the length of its stated span when it marks its place certain
+/// ([`states_its_place`]) and either its class is a deletion or a
+/// mobile-element deletion, or the row's alternate is the loss alternate of a
+/// record with several ([`loss_alternate_of_several`]). `None` for a record
+/// that states no span and for every other class and alternate.
 fn stated_deletion(variant: &InputVariant) -> Option<usize> {
-    let deletion = matches!(
-        variant.variant_class,
-        VariantClass::StructuralDeletion | VariantClass::MobileElementDeletion
-    );
-    if !deletion || !states_one_place(variant) || variant.end < variant.start {
+    let deletion = if several_alternates(variant) {
+        loss_alternate_of_several(variant)
+    } else {
+        matches!(
+            variant.variant_class,
+            VariantClass::StructuralDeletion | VariantClass::MobileElementDeletion
+        )
+    };
+    if !deletion || !states_its_place(variant) || variant.end < variant.start {
+        return None;
+    }
+    usize::try_from(variant.end - variant.start + 1).ok()
+}
+
+/// The number of reference bases a structural variant's record states as
+/// inverted: the length of its stated span when its class is an inversion
+/// and it states one place ([`states_one_place`]). The record then gives the
+/// mutated sequence whole, the span replaced by its reverse complement.
+/// `None` for a record that states no span and for every other class.
+fn stated_inversion(variant: &InputVariant) -> Option<usize> {
+    if variant.variant_class != VariantClass::Inversion
+        || !states_one_place(variant)
+        || variant.end < variant.start
+    {
         return None;
     }
     usize::try_from(variant.end - variant.start + 1).ok()
@@ -930,50 +1033,25 @@ fn atg_window(mutated: &[u8], mut_pos: usize, alt_len: usize) -> (&[u8], usize) 
     (&mutated[first.min(last)..last], first)
 }
 
-/// The reference start codon an insertion only moves on, by its reference
-/// index: the insertion's index lies at one of the codon's three bases
-/// (`:764-769`) and the mutated UTR from the codon's index plus the allele's
-/// length on equals the reference UTR from the codon's index on. The codon then
-/// stands whole, every base after it unchanged, `alt_len` bases further from the
-/// cap. An insertion at the codon's first index always meets this; one after its
-/// first or second base meets it when the inserted bases end with that base or
-/// those two.
-fn moved_start_codon(
-    model: &TranscriptUtr,
-    mutated: &[u8],
-    mut_pos: usize,
-    ref_len: usize,
-    alt_len: usize,
-) -> Option<usize> {
-    if ref_len != 0 || alt_len == 0 {
-        return None;
-    }
-    model.scan.atgs.iter().copied().find(|&start_pos| {
-        (start_pos..=start_pos + 2).contains(&mut_pos)
-            && mutated.get(start_pos + alt_len..) == model.utr.get(start_pos..)
-    })
-}
-
-/// The reference start codon an insertion written inside it leaves at its own
-/// index, by that index: the insertion's index lies at the codon's second or
-/// third base and the mutated UTR reads a start codon at the codon's index,
-/// the inserted bases opening with the codon's last two bases or its last. The
-/// mutated UTR is then the reference UTR with `alt_len` bases directly after
-/// the untouched codon.
-fn remade_start_codon(
-    model: &TranscriptUtr,
-    mutated: &[u8],
-    mut_pos: usize,
-    ref_len: usize,
-    alt_len: usize,
-) -> Option<usize> {
-    if ref_len != 0 || alt_len == 0 {
-        return None;
-    }
-    model.scan.atgs.iter().copied().find(|&start_pos| {
-        (start_pos + 1..=start_pos + 2).contains(&mut_pos)
-            && mutated.get(start_pos..start_pos + 3) == Some(b"ATG".as_slice())
-    })
+/// The first and the last UTR index at which an insertion that turns `utr`
+/// into `mutated` can be written. Inserted bases that repeat the bases beside
+/// them give the same mutated sequence at every index between the two: the
+/// mutated sequence equals the reference up to the last index, and from the
+/// first index plus the allele's length on it equals the reference from the
+/// first index on.
+fn insertion_writings(utr: &[u8], mutated: &[u8]) -> (usize, usize) {
+    let same_before = utr
+        .iter()
+        .zip(mutated)
+        .take_while(|(reference, changed)| reference == changed)
+        .count();
+    let same_after = utr
+        .iter()
+        .rev()
+        .zip(mutated.iter().rev())
+        .take_while(|(reference, changed)| reference == changed)
+        .count();
+    (utr.len() - same_after, same_before)
 }
 
 /// The last UTR index a variant may touch to count as inside the uORF at
@@ -1060,12 +1138,15 @@ struct MutatedUtr<'a> {
     /// The lengths of the reference and alternate alleles, `-` counting as 0.
     ref_len: usize,
     alt_len: usize,
-    /// The reference start codon the allele only moves on
-    /// ([`moved_start_codon`]).
-    moved_start: Option<usize>,
-    /// The reference start codon the allele leaves at its own index
-    /// ([`remade_start_codon`]); `None` beside a `moved_start`.
-    remade_start: Option<usize>,
+    /// The first and the last UTR index at which an insertion's mutated
+    /// sequence can be written ([`insertion_writings`]); `None` for any other
+    /// allele.
+    writings: Option<(usize, usize)>,
+    /// `writings` when one of them lies at one of a reference start codon's
+    /// three indices or directly after the codon. The stop-codon and
+    /// frameshift analyses read such an insertion from all its writings; any
+    /// other allele they read at the record's own index.
+    beside_start_codon: Option<(usize, usize)>,
 }
 
 impl MutatedUtr<'_> {
@@ -1083,77 +1164,58 @@ impl MutatedUtr<'_> {
         stop_positions(&utr_cds)
     }
 
-    /// The UTR indices the stop-codon and frameshift analyses read the allele
-    /// at. An insertion that only moves a start codon on is read at that codon's
-    /// first index, where the same mutated sequence is written directly before
-    /// the codon, so the row does not depend on which of the two ways the record
-    /// writes it. A uORF whose stop codon begins at that codon's second base is
-    /// read from the mutated sequence there ([`Self::stop_inside_moved_start`]):
-    /// left out of the frameshift when a stop codon still stands at that index,
-    /// its stop codon lost when none does, the length is no multiple of three
-    /// and the inserted bases can be written inside that stop codon.
-    fn frame_span(&self) -> (usize, usize) {
-        match self.moved_start {
-            Some(start_pos) => (start_pos, start_pos),
-            None => (self.mut_pos, self.end_pos),
-        }
+    /// Whether an insertion with the writings `first..=last` loses the stop
+    /// codon at `stop_pos`. One writing lies inside the stop codon and the
+    /// mutated UTR reads no stop codon at that index (`:628-642` read those
+    /// three bases only for a record written inside the stop codon). When a
+    /// writing also lies at or before the stop codon's first base, the stop
+    /// codon stands whole as many bases on as the allele is long, so it is
+    /// lost only at a length that is no multiple of three.
+    fn loses_stop_codon(&self, stop_pos: usize, (first, last): (usize, usize)) -> bool {
+        last > stop_pos
+            && first <= stop_pos + 2
+            && !is_stop(self.mutated.get(stop_pos..stop_pos + 3))
+            && (first > stop_pos || !self.alt_len.is_multiple_of(3))
     }
 
-    /// The stop codon's index of the uORF at `start_pos` when that stop codon
-    /// begins at the second base of the start codon the insertion only moves
-    /// on ([`moved_start_codon`]): the inserted bases stand directly before the
-    /// moved codon's first base, the uORF's last base ahead of its stop codon.
-    fn stop_inside_moved_start(&self, start_pos: usize) -> Option<usize> {
-        let stop_pos = *self.model.scan.uorfs.get(&start_pos)?;
-        (self.moved_start? + 1 == stop_pos).then_some(stop_pos)
-    }
-
-    /// Whether the uORF at `start_pos`, whose stop codon begins at the second
-    /// base of a start codon the insertion only moves on, still ends on a stop
-    /// codon at that index of the mutated UTR. Every base of the uORF before
-    /// the moved codon stands at its own index, so the uORF reads on to that
-    /// stop codon and keeps its length: it is not shifted. `:921` holds the
-    /// record's own index against the check point and reads no base of the
-    /// mutated sequence, so it lists such a uORF when the record writes the
-    /// insertion directly before the codon.
-    fn still_ends_inside_moved_start(&self, start_pos: usize) -> bool {
-        self.stop_inside_moved_start(start_pos)
-            .is_some_and(|stop_pos| is_stop(self.mutated.get(stop_pos..stop_pos + 3)))
-    }
-
-    /// Whether the inserted bases can be written inside the stop codon of the
-    /// uORF at `start_pos`, which begins at the second base of a start codon
-    /// the insertion only moves on: the allele's length is no multiple of
-    /// three and the mutated UTR keeps that codon's first two bases at their
-    /// own indices, so the same sequence arises with the insertion written
-    /// directly after the codon's second base, one base inside the stop
-    /// codon. `:628-633` read the three bases at the stop codon's index only
-    /// when the record itself writes the insertion there.
-    fn written_inside_stop_codon(&self, start_pos: usize) -> bool {
-        self.stop_inside_moved_start(start_pos)
-            .is_some_and(|stop_pos| {
-                !self.alt_len.is_multiple_of(3)
-                    && self.mutated.get(stop_pos - 1..stop_pos + 1)
-                        == self.model.utr.get(stop_pos - 1..stop_pos + 1)
-            })
+    /// Whether the uORF at `start_pos` keeps its length under an insertion
+    /// whose last writing is `last`: the mutated UTR reads a stop codon at the
+    /// index of the uORF's own, and the insertion can be written at or after
+    /// that index, or directly before a start codon at whose second base that
+    /// stop codon begins. Every codon of the uORF before its last then stands
+    /// unchanged and the uORF ends where it ended: it is not shifted. `:921`
+    /// holds the record's own index against the check point and reads no base
+    /// of the mutated sequence, so it lists such a uORF for a record written
+    /// before the stop codon.
+    fn keeps_its_length(&self, start_pos: usize, last: usize) -> bool {
+        let Some(&stop_pos) = self.model.scan.uorfs.get(&start_pos) else {
+            return false;
+        };
+        is_stop(self.mutated.get(stop_pos..stop_pos + 3))
+            && (last >= stop_pos
+                || (last + 1 == stop_pos
+                    && self.model.utr.get(last..last + 3) == Some(b"ATG".as_slice())))
     }
 
     /// `uAUG_gained` (`:307-435`): a start codon created by the allele, the
-    /// first of the window. The reference's own start codon is not created:
-    /// the window's start codon at the index of a codon the insertion only
-    /// moves on plus the allele's length, or at the index of a codon it leaves
-    /// in place, is passed over, where `:346-353` name the first start codon of
-    /// the window whatever the reference holds.
+    /// first of the window. An insertion's window is that of its first
+    /// writing, so the codon named does not depend on the index the record
+    /// gives: of two equal copies of a repeated start codon it is the one
+    /// nearer the cap. A reference start codon that stands at its own index
+    /// before every writing is not created and is passed over, where
+    /// `:346-353` name the first start codon of the window whatever the
+    /// reference holds.
     fn uaug_gained(&self) -> Option<Analysis> {
-        let (window, first) = atg_window(&self.mutated, self.mut_pos, self.alt_len);
-        let reference_own = self
-            .moved_start
-            .map(|start_pos| start_pos + self.alt_len)
-            .or(self.remade_start);
+        let window_at = self.writings.map_or(self.mut_pos, |(first, _)| first);
+        let (window, window_first) = atg_window(&self.mutated, window_at, self.alt_len);
         let pos_a = atg_positions(window)
             .into_iter()
-            .map(|at| first + at)
-            .find(|&at| Some(at) != reference_own)?;
+            .map(|at| window_first + at)
+            .find(|&at| {
+                !self
+                    .writings
+                    .is_some_and(|(first, last)| at < first && at + 3 <= last)
+            })?;
         let (context, strength) = kozak(&self.mutated, pos_a);
         // `inFrame_oORF` here, where the other analyses write `InFrame_oORF`.
         let kind = if self.scan.uorfs.contains_key(&pos_a) {
@@ -1222,24 +1284,23 @@ impl MutatedUtr<'_> {
     }
 
     /// `uSTOP_lost` (`:576-715`): the allele removes the stop codon of an existing
-    /// uORF. Beside a start codon the insertion only moves on, the stop codon
-    /// that begins at that codon's second base is lost when the inserted bases
-    /// can be written inside it ([`Self::written_inside_stop_codon`]) and the
-    /// mutated UTR reads no stop codon at its index, whichever of the three
-    /// ways the record writes the sequence.
+    /// uORF. An insertion at or beside a start codon is read from all its
+    /// writings ([`Self::loses_stop_codon`]), whichever of them the record
+    /// gives.
     fn ustop_lost(&self) -> Option<Analysis> {
         let mut effects = Effects::new();
-        let (mut_pos, _) = self.frame_span();
         for (&start_pos, &stop_pos) in &self.model.scan.uorfs {
-            if mut_pos > stop_pos + 2 {
-                continue;
-            }
-            // `$mut_pos + length($ref_coding) - 1 < $stop_pos` (`:631`); the
-            // insertion test at `:633` can never hold.
-            if mut_pos + self.ref_len < stop_pos + 1 && !self.written_inside_stop_codon(start_pos) {
-                continue;
-            }
-            if self.alt_len != 0 && is_stop(self.mutated.get(stop_pos..stop_pos + 3)) {
+            let lost = match self.beside_start_codon {
+                Some(writings) => self.loses_stop_codon(stop_pos, writings),
+                // `$mut_pos + length($ref_coding) - 1 < $stop_pos` (`:631`); the
+                // insertion test at `:633` can never hold.
+                None => {
+                    self.mut_pos <= stop_pos + 2
+                        && self.mut_pos + self.ref_len > stop_pos
+                        && !(self.alt_len != 0 && is_stop(self.mutated.get(stop_pos..stop_pos + 3)))
+                }
+            };
+            if !lost {
                 continue;
             }
             let (context, strength) = kozak(&self.model.utr, start_pos);
@@ -1272,26 +1333,29 @@ impl MutatedUtr<'_> {
     }
 
     /// `uAUG_lost` (`:717-848`): the allele starts inside an existing start codon
-    /// and removes it. An insertion that only moves the codon on removes
-    /// nothing ([`moved_start_codon`]): the codon stands whole after the
-    /// inserted bases, so it is not reported, where `:764-769` pass an insertion
-    /// at the codon's three indices and `:776-778` read the three bases at the
-    /// codon's old index alone.
+    /// and removes it. An insertion removes the codon only when every one of
+    /// its writings parts the codon's three bases. One that can be written
+    /// directly before the codon moves it on whole, and one that can be
+    /// written directly after it leaves it at its own index: neither is
+    /// reported, where `:764-769` pass an insertion at the codon's three
+    /// indices and `:776-778` read the three bases at the codon's old index
+    /// alone.
     fn uaug_lost(&self) -> Option<Analysis> {
         let mut effects = Effects::new();
         for &start_pos in &self.model.scan.atgs {
-            // `:764-769`: the allele starts at one of the codon's three bases (an
-            // allele starting upstream of the codon is skipped even when it covers
-            // it, and `:767` can then never hold).
-            if self.mut_pos > start_pos + 2 || self.mut_pos < start_pos {
-                continue;
-            }
-            if self.moved_start == Some(start_pos) {
-                continue;
-            }
-            if self.alt_len != 0
-                && self.mutated.get(start_pos..start_pos + 3) == Some(b"ATG".as_slice())
-            {
+            let lost = match self.writings {
+                Some((first, last)) => first > start_pos && last < start_pos + 3,
+                // `:764-769`: the allele starts at one of the codon's three bases (an
+                // allele starting upstream of the codon is skipped even when it covers
+                // it, and `:767` can then never hold).
+                None => {
+                    (start_pos..=start_pos + 2).contains(&self.mut_pos)
+                        && !(self.alt_len != 0
+                            && self.mutated.get(start_pos..start_pos + 3)
+                                == Some(b"ATG".as_slice()))
+                }
+            };
+            if !lost {
                 continue;
             }
             let (context, strength) = kozak(&self.model.utr, start_pos);
@@ -1322,30 +1386,34 @@ impl MutatedUtr<'_> {
     }
 
     /// `uFrameshift` (`:850-1018`): an indel inside an existing uORF or overlapping
-    /// ORF whose length is not a multiple of three. An insertion that leaves a
-    /// start codon at its own index is read directly after that codon, where
-    /// the inserted bases stand, so the codon's own ORF is among those it shifts
-    /// unless a stop codon or the UTR's end follows the codon directly; `:921`
-    /// reads it inside the codon and leaves that ORF out. Beside a start codon
-    /// the insertion only moves on, a uORF whose stop codon begins at that
-    /// codon's second base is listed only when the mutated UTR reads no stop
-    /// codon at that index ([`Self::still_ends_inside_moved_start`]).
+    /// ORF whose length is not a multiple of three. An insertion at or beside
+    /// a start codon shifts an ORF when one of its writings lies inside the
+    /// ORF, after a start codon that stands at its own index and at or before
+    /// the check point, unless the ORF keeps its length
+    /// ([`Self::keeps_its_length`]). An ORF whose start codon the insertion
+    /// moves on whole stands unchanged after the inserted bases. `:921` reads
+    /// the record's own index: it leaves out the ORF of a start codon the
+    /// record is written inside, and an ORF whose stop codon begins directly
+    /// after the record's index.
     fn uframeshift(&self) -> Option<Analysis> {
         if self.ref_len == self.alt_len || self.ref_len.abs_diff(self.alt_len).is_multiple_of(3) {
             return None;
         }
-        let (mut_pos, end_pos) = match self.remade_start {
-            Some(start_pos) => (start_pos + 3, start_pos + 3),
-            None => self.frame_span(),
-        };
         let mut alt_overlapping_stops: Option<Vec<usize>> = None;
         let mut effects = Effects::new();
         for &start_pos in &self.model.scan.atgs {
             let check_point = check_point(self.model, start_pos);
-            if mut_pos < start_pos + 3 || end_pos > check_point {
-                continue;
-            }
-            if self.still_ends_inside_moved_start(start_pos) {
+            let shifted = match self.beside_start_codon {
+                Some((first, last)) => {
+                    first > start_pos
+                        && last >= start_pos + 3
+                        && start_pos + 3 <= check_point
+                        && first <= check_point
+                        && !self.keeps_its_length(start_pos, last)
+                }
+                None => self.mut_pos >= start_pos + 3 && self.end_pos <= check_point,
+            };
+            if !shifted {
                 continue;
             }
             let alt_type = orf_type(&self.scan, self.mutated.len(), start_pos);
@@ -1498,19 +1566,20 @@ mod tests {
                 phase: -1,
                 end_phase,
             };
-            LofteeContext {
-                exons: vec![exon(rank1, 1, -1), exon(rank2, 2, 0)],
-                introns: Vec::new(),
-                strand: self.strand,
-                coding_region_start: Some(coding.0),
-                coding_region_end: Some(coding.1),
-                translation_start: None,
-                translation_end: None,
-                cdna_coding_start: Some(UTR.len() as u64 + 1),
-                cdna_coding_end: Some((UTR.len() + CDS.len()) as u64),
-                cds_start_nf: false,
-                cds_end_nf: false,
-            }
+            let mut context =
+                LofteeContext::from_transcript(&vep_core::transcript::Transcript::default());
+            context.exons = vec![exon(rank1, 1, -1), exon(rank2, 2, 0)];
+            context.introns = Vec::new();
+            context.strand = self.strand;
+            context.coding_region_start = Some(coding.0);
+            context.coding_region_end = Some(coding.1);
+            context.translation_start = None;
+            context.translation_end = None;
+            context.cdna_coding_start = Some(UTR.len() as u64 + 1);
+            context.cdna_coding_end = Some((UTR.len() + CDS.len()) as u64);
+            context.cds_start_nf = false;
+            context.cds_end_nf = false;
+            context
         }
 
         /// The genomic position of UTR index `index` in this fixture.
@@ -1539,6 +1608,22 @@ mod tests {
             alternate: &str,
             consequences: &[Consequence],
         ) -> IndexMap<String, String> {
+            let mut variant = self.variant(index, reference, alternate, consequences);
+            self.plugin
+                .run_batch(std::slice::from_mut(&mut variant))
+                .unwrap();
+            variant.transcript_consequences.remove(0).plugin_data
+        }
+
+        /// The record of the allele `reference/alternate` with one 5' UTR row
+        /// of the transcript, placed as [`Self::annotate`] says.
+        fn variant(
+            &self,
+            index: usize,
+            reference: &str,
+            alternate: &str,
+            consequences: &[Consequence],
+        ) -> InputVariant {
             let ref_len = (if reference == "-" { 0 } else { reference.len() }) as u64;
             let (start, end, ref_allele, alt_allele) = if self.strand < 0 {
                 let five_prime = self.genomic(index);
@@ -1578,19 +1663,34 @@ mod tests {
                 }
             };
             let mut variant = InputVariant::new("21".into(), start, end, ref_allele, alt_allele);
-            variant.transcript_consequences.push(TranscriptConsequence {
-                transcript: Some(Arc::new(Transcript {
-                    stable_id: Arc::from("ENST00000000001"),
-                    ..Transcript::default()
-                })),
-                consequences: ConsequenceList::from_slice(consequences),
-                loftee_ctx: Some(Box::new(self.context())),
-                ..TranscriptConsequence::default()
+            variant.transcript_consequences.push({
+                let mut consequence = TranscriptConsequence::default();
+                consequence.transcript = Some(Arc::new({
+                    let mut transcript = Transcript::default();
+                    transcript.stable_id = Arc::from("ENST00000000001");
+                    transcript
+                }));
+                consequence.consequences = ConsequenceList::from_slice(consequences);
+                consequence.loftee_ctx = Some(Box::new(self.context()));
+                consequence
             });
-            self.plugin
-                .run_batch(std::slice::from_mut(&mut variant))
-                .unwrap();
-            variant.transcript_consequences.remove(0).plugin_data
+            variant
+        }
+
+        /// The 5' UTR rows of many insertions, each the bases written before
+        /// its UTR index, annotated as one batch.
+        fn insertion_rows(&self, insertions: &[(usize, String)]) -> Vec<IndexMap<String, String>> {
+            let mut variants: Vec<InputVariant> = insertions
+                .iter()
+                .map(|(index, bases)| {
+                    self.variant(*index, "-", bases, &[Consequence::FivePrimeUtrVariant])
+                })
+                .collect();
+            self.plugin.run_batch(&mut variants).unwrap();
+            variants
+                .into_iter()
+                .map(|mut variant| variant.transcript_consequences.remove(0).plugin_data)
+                .collect()
         }
     }
 
@@ -1628,10 +1728,12 @@ mod tests {
         variant.variant_class = class;
         variant.sv_end = Some(span.1);
         record(&mut variant);
-        variant.transcript_consequences.push(TranscriptConsequence {
-            consequences: ConsequenceList::from_slice(&[Consequence::FivePrimeUtrVariant]),
-            loftee_ctx: Some(Box::new(fixture.context())),
-            ..TranscriptConsequence::default()
+        variant.transcript_consequences.push({
+            let mut consequence = TranscriptConsequence::default();
+            consequence.consequences =
+                ConsequenceList::from_slice(&[Consequence::FivePrimeUtrVariant]);
+            consequence.loftee_ctx = Some(Box::new(fixture.context()));
+            consequence
         });
         fixture
             .plugin
@@ -1699,6 +1801,32 @@ mod tests {
             })
             .collect::<Vec<_>>()
             .join(",")
+    }
+
+    /// `utr` with `bases` in the place of the bases at `at`.
+    fn utr_with(utr: &str, at: std::ops::Range<usize>, bases: &str) -> String {
+        let mut out = utr.to_string();
+        out.replace_range(at, bases);
+        out
+    }
+
+    /// A whole row: the term, its annotation and the reference UTR's counts
+    /// of uORFs, out-of-frame and in-frame overlapping ORFs.
+    fn whole_row(
+        flag: &str,
+        annotation: &str,
+        (uorfs, out_of_frame, in_frame): (&str, &str, &str),
+    ) -> IndexMap<String, String> {
+        IndexMap::from([
+            (CONSEQUENCE_KEY.to_string(), flag.to_string()),
+            (ANNOTATION_KEY.to_string(), annotation.to_string()),
+            (EXISTING_UORFS_KEY.to_string(), uorfs.to_string()),
+            (
+                EXISTING_OUT_OF_FRAME_KEY.to_string(),
+                out_of_frame.to_string(),
+            ),
+            (EXISTING_IN_FRAME_KEY.to_string(), in_frame.to_string()),
+        ])
     }
 
     fn counts_of(out: &IndexMap<String, String>) -> (&str, &str, &str) {
@@ -1878,6 +2006,36 @@ mod tests {
             out[ANNOTATION_KEY],
             "AltStop=False:AltStopDistanceToCDS=NA:Evidence=NA:FrameWithCDS=outOfFrame:KozakContext=CCCATGC:KozakStrength=Weak"
         );
+    }
+
+    /// An allele that begins one base before the `TGA` at 20 and makes the UTR
+    /// three bases longer is read at index 20 of the mutated UTR, where `:639`
+    /// reads it, on either strand. `CTG` at 19 replaced by `GGCCTA` leaves
+    /// `GCC` there: the stop codon is lost though `TAA` stands at 23, the
+    /// alternative stop, 30 bases from the coding sequence. `CT` at 19
+    /// replaced by `GTGAC` writes `TGA` there: nothing is lost though index
+    /// 23, three bases on, reads no stop codon.
+    #[test]
+    fn ustop_lost_reads_the_stop_codons_index_after_a_length_change() {
+        for strand in [1, -1] {
+            let fixture = Fixture::new(strand, &[]);
+            let lost = utr_row(&fixture, 19, "CTG", "GGCCTA");
+            assert_eq!(lost[CONSEQUENCE_KEY], USTOP_LOST_FLAG, "strand {strand}");
+            assert_eq!(
+                lost[ANNOTATION_KEY],
+                "AltStop=True:AltStopDistanceToCDS=30:Evidence=NA:FrameWithCDS=inFrame:KozakContext=GCCATGG:KozakStrength=Strong",
+                "strand {strand}"
+            );
+            let kept = utr_row(&fixture, 19, "CT", "GTGAC");
+            assert_eq!(
+                (
+                    kept[CONSEQUENCE_KEY].as_str(),
+                    kept[ANNOTATION_KEY].as_str()
+                ),
+                (NONE, NONE),
+                "strand {strand}"
+            );
+        }
     }
 
     /// The `G` of `ATG` at 38 deleted: an in-frame overlapping ORF (12 bases to
@@ -2288,35 +2446,164 @@ mod tests {
         }
     }
 
-    /// Inserted bases that repeat the bases before the `ATG` at 16 can also be
-    /// written before that codon's first index, where the insertion touches
-    /// none of the codon's three indices: the row is read at the index the
-    /// record gives, inside the uORF at 5, and reports that uORF's frameshift.
-    /// The first UTR holds `AT` at 14 and takes `AT` at 14 or `TA` at 15; the
-    /// second holds `A` at 15 and takes `AATA` there.
+    /// Two bases that repeat the two before the `ATG` at 16 give one mutated
+    /// sequence at five indices: 14 and 15 before the codon, the codon's
+    /// first index, and 17 and 18 inside it, where 18 lies inside the stop
+    /// codon of the uORF at 5. That uORF reads `TAT` where its stop codon
+    /// stood and meets no other in the mutated UTR. Each of the five records
+    /// carries its lost stop, where `:628-633` read the stop codon for the
+    /// record at 18 alone and `:921` lists a frameshift for those at 14, 15
+    /// and 16.
     #[test]
-    fn insertion_written_before_the_indices_of_a_start_codon_is_read_at_its_own_index() {
-        let mut repeat_two = UTR_OVERLAPS.to_string();
-        repeat_two.replace_range(14..16, "AT");
-        let mut repeat_one = UTR_OVERLAPS.to_string();
-        repeat_one.replace_range(15..16, "A");
+    fn repeated_bases_before_a_start_codon_lose_the_stop_codon_inside_it_at_every_index() {
+        let utr = utr_with(UTR_OVERLAPS, 14..16, "AT");
+        let lost = whole_row(
+            USTOP_LOST_FLAG,
+            "AltStop=False:AltStopDistanceToCDS=NA:Evidence=NA:FrameWithCDS=outOfFrame:KozakContext=GCCATGG:KozakStrength=Strong",
+            ("2", "1", "0"),
+        );
         for strand in [1, -1] {
-            for (utr, index, allele) in [
-                (&repeat_two, 14, "AT"),
-                (&repeat_two, 15, "TA"),
-                (&repeat_one, 15, "AATA"),
-            ] {
-                let fixture = Fixture::with_utr(strand, utr, &[]);
-                let out = utr_row(&fixture, index, "-", allele);
+            let fixture = Fixture::with_utr(strand, &utr, &[]);
+            for (index, allele) in [(14, "AT"), (15, "TA"), (16, "AT"), (17, "TA"), (18, "AT")] {
                 assert_eq!(
-                    out[CONSEQUENCE_KEY], UFRAMESHIFT_FLAG,
-                    "strand {strand}, index {index}, {allele}"
+                    utr_row(&fixture, index, "-", allele),
+                    lost,
+                    "strand {strand}, index {index}"
                 );
-                assert!(
-                    out[ANNOTATION_KEY].contains(":ref_StartDistanceToCDS=45:")
-                        && !out[ANNOTATION_KEY].contains(','),
-                    "strand {strand}, index {index}, {allele}: {}",
-                    out[ANNOTATION_KEY]
+            }
+        }
+    }
+
+    /// Four bases that repeat the base before the `ATG` at 16 and leave a stop
+    /// codon at 17 give one mutated sequence at four indices: 15 before the
+    /// codon, its first index, and 17 and 18 inside it. The uORF at 5 reads
+    /// every base before 17 unchanged and ends on the stop codon there: it
+    /// keeps its length and no record reports it, where `:921` lists it for
+    /// the records at 15 and 16. With a start codon put at 0, whose ORF reads
+    /// through the inserted bases, each record lists that ORF alone.
+    #[test]
+    fn repeated_bases_before_a_start_codon_leave_out_the_orf_that_keeps_its_length_at_every_index()
+    {
+        let alone = utr_with(UTR_OVERLAPS, 15..16, "A");
+        let read_through = alone.replacen("CCG", "ATG", 1);
+        let nothing = whole_row(NONE, NONE, ("2", "1", "0"));
+        let shifted = whole_row(
+            UFRAMESHIFT_FLAG,
+            "Evidence=NA:KozakContext=-:KozakStrength=:alt_type=uORF:alt_type_length=24:ref_StartDistanceToCDS=50:ref_type=OutOfFrame_oORF:ref_type_length=NA",
+            ("2", "2", "0"),
+        );
+        for strand in [1, -1] {
+            for (utr, row) in [(&alone, &nothing), (&read_through, &shifted)] {
+                let fixture = Fixture::with_utr(strand, utr, &[]);
+                for (index, allele) in [(15, "AATA"), (16, "ATAA"), (17, "TAAA"), (18, "AAAT")] {
+                    assert_eq!(
+                        &utr_row(&fixture, index, "-", allele),
+                        row,
+                        "strand {strand}, index {index}"
+                    );
+                }
+            }
+        }
+    }
+
+    /// In [`UTR_OVERLAPS`] the stop codon at 25, which ends the uORF at 16,
+    /// lends its last base to the `ATG` at 27. Two bases that repeat its
+    /// first two give one mutated sequence at 25, directly before the stop
+    /// codon, at 26 inside it, and at 27, the start codon's first index. The
+    /// uORF reads `TGT` where its stop codon stood and runs into the coding
+    /// sequence: each record carries its lost stop, where `:631` skips the
+    /// record at 25.
+    #[test]
+    fn repeated_bases_of_a_stop_codon_that_ends_at_a_start_codon_lose_it_at_every_index() {
+        let lost = whole_row(
+            USTOP_LOST_FLAG,
+            "AltStop=False:AltStopDistanceToCDS=NA:Evidence=NA:FrameWithCDS=inFrame:KozakContext=CCCATGA:KozakStrength=Weak",
+            ("2", "1", "0"),
+        );
+        for strand in [1, -1] {
+            let fixture = Fixture::with_utr(strand, UTR_OVERLAPS, &[]);
+            for (index, allele) in [(25, "TG"), (26, "GT"), (27, "TG")] {
+                assert_eq!(
+                    utr_row(&fixture, index, "-", allele),
+                    lost,
+                    "strand {strand}, index {index}"
+                );
+            }
+        }
+    }
+
+    /// Bases written after the first base of the `ATG` at 16 of
+    /// [`UTR_OVERLAPS`] that open with its last two leave that codon at its
+    /// own index and can be written at 17, the first base of the stop codon
+    /// of the uORF at 5, at 18 inside that stop codon, and at 19 directly
+    /// after the start codon. The stop codon stands whole after the inserted
+    /// bases. Three bases leave it in frame: the uORF gains a codon and ends
+    /// on it, and no record reports anything, where `:639-642` report the
+    /// stop lost for the records at 18 and 19. Four bases put it out of
+    /// frame: each record carries the lost stop, with the next stop codon the
+    /// uORF meets, where `:631` skips the record at 17.
+    #[test]
+    fn insertion_writable_before_and_inside_a_stop_codon_loses_it_only_out_of_frame() {
+        let nothing = whole_row(NONE, NONE, ("2", "1", "0"));
+        let lost = whole_row(
+            USTOP_LOST_FLAG,
+            "AltStop=True:AltStopDistanceToCDS=25:Evidence=NA:FrameWithCDS=outOfFrame:KozakContext=GCCATGG:KozakStrength=Strong",
+            ("2", "1", "0"),
+        );
+        for strand in [1, -1] {
+            let fixture = Fixture::with_utr(strand, UTR_OVERLAPS, &[]);
+            for (index, allele) in [(17, "TGC"), (18, "GCT"), (19, "CTG")] {
+                assert_eq!(
+                    utr_row(&fixture, index, "-", allele),
+                    nothing,
+                    "strand {strand}, index {index}"
+                );
+            }
+            for (index, allele) in [(17, "TGCC"), (18, "GCCT"), (19, "CCTG")] {
+                assert_eq!(
+                    utr_row(&fixture, index, "-", allele),
+                    lost,
+                    "strand {strand}, index {index}"
+                );
+            }
+        }
+    }
+
+    /// Bases that part the `ATG` at 16 of [`UTR_OVERLAPS`] and repeat its
+    /// second base can be written after its first base, at the first base of
+    /// the stop codon of the uORF at 5, and after its second, inside that
+    /// stop codon. The start codon is lost either way. One base puts the stop
+    /// codon, whole one base on, out of frame: both records carry the lost
+    /// stop, first in the fixed order, where `:631` skips the record at 17
+    /// and the lost start is its only term. Three bases leave the stop codon
+    /// in frame: both records carry the lost start, where `:639-642` report
+    /// the stop lost for the record at 18.
+    #[test]
+    fn insertion_that_parts_a_start_codon_inside_a_stop_codon_has_one_term_at_either_index() {
+        let lost_stop = whole_row(
+            USTOP_LOST_FLAG,
+            "AltStop=True:AltStopDistanceToCDS=25:Evidence=NA:FrameWithCDS=outOfFrame:KozakContext=GCCATGG:KozakStrength=Strong",
+            ("2", "1", "0"),
+        );
+        let lost_start = whole_row(
+            UAUG_LOST_FLAG,
+            "CapDistanceToStart=16:DistanceToCDS=34:DistanceToStop=9:Evidence=NA:KozakContext=CCCATGA:KozakStrength=Weak:type=uORF",
+            ("2", "1", "0"),
+        );
+        for strand in [1, -1] {
+            let fixture = Fixture::with_utr(strand, UTR_OVERLAPS, &[]);
+            for (index, allele) in [(17, "T"), (18, "T")] {
+                assert_eq!(
+                    utr_row(&fixture, index, "-", allele),
+                    lost_stop,
+                    "strand {strand}, index {index}"
+                );
+            }
+            for (index, allele) in [(17, "TCC"), (18, "CCT")] {
+                assert_eq!(
+                    utr_row(&fixture, index, "-", allele),
+                    lost_start,
+                    "strand {strand}, index {index}"
                 );
             }
         }
@@ -2496,27 +2783,27 @@ mod tests {
         }
     }
 
-    /// Three bases that leave a start codon at the index of the `ATG` at 38
-    /// and end with that codon's first bases, so that the reference's bases
-    /// stand as a whole start codon at 41 as well, add one start codon to the
-    /// UTR: the same mutated sequence as a start codon written directly
-    /// before the codon. The row reports the gained start at 38 for each of
-    /// the three records written at or inside that codon.
+    /// A duplication of the `ATG` at 38 gives one mutated sequence at four
+    /// indices: directly before the codon, after its first and its second
+    /// base, and directly after it. The mutated UTR holds two equal start
+    /// codons, at 38 and 41, where the reference holds one, and nothing in it
+    /// says which of the two is the added one. Each record names the copy
+    /// nearer the cap, the first start codon of the changed bases, as
+    /// `:346-353` name the first start codon of their window: the gained
+    /// start at 38 with that copy's own context and distances.
     #[test]
-    fn insertion_that_repeats_a_start_codon_gains_the_one_at_its_index() {
+    fn a_duplicated_start_codon_names_one_copy_for_each_way_of_writing_it() {
+        let gained = whole_row(
+            UAUG_GAINED_FLAG,
+            "CapDistanceToStart=38:DistanceToCDS=15:DistanceToStop=102:KozakContext=ACCATGA:KozakStrength=Moderate:type=inFrame_oORF",
+            ("1", "1", "1"),
+        );
         for strand in [1, -1] {
             let fixture = Fixture::new(strand, &[]);
-            let before = utr_row(&fixture, 38, "-", "ATG");
-            assert_eq!(before[CONSEQUENCE_KEY], UAUG_GAINED_FLAG, "strand {strand}");
-            assert!(
-                before[ANNOTATION_KEY].starts_with("CapDistanceToStart=38:"),
-                "strand {strand}: {}",
-                before[ANNOTATION_KEY]
-            );
-            for (index, allele) in [(39, "TGA"), (40, "GAT")] {
+            for (index, allele) in [(38, "ATG"), (39, "TGA"), (40, "GAT"), (41, "ATG")] {
                 assert_eq!(
                     utr_row(&fixture, index, "-", allele),
-                    before,
+                    gained,
                     "strand {strand}, index {index}"
                 );
             }
@@ -2778,14 +3065,17 @@ mod tests {
             whole.into_bytes(),
             b"-".to_vec(),
         );
-        variant.transcript_consequences.push(TranscriptConsequence {
-            transcript: Some(Arc::new(Transcript {
-                stable_id: Arc::from("ENST00000000001"),
-                ..Transcript::default()
-            })),
-            consequences: ConsequenceList::from_slice(&[Consequence::FivePrimeUtrVariant]),
-            loftee_ctx: Some(Box::new(dropped.context())),
-            ..TranscriptConsequence::default()
+        variant.transcript_consequences.push({
+            let mut consequence = TranscriptConsequence::default();
+            consequence.transcript = Some(Arc::new({
+                let mut transcript = Transcript::default();
+                transcript.stable_id = Arc::from("ENST00000000001");
+                transcript
+            }));
+            consequence.consequences =
+                ConsequenceList::from_slice(&[Consequence::FivePrimeUtrVariant]);
+            consequence.loftee_ctx = Some(Box::new(dropped.context()));
+            consequence
         });
         dropped
             .plugin
@@ -2876,7 +3166,9 @@ mod tests {
         assert!(out[ANNOTATION_KEY].contains("CapDistanceToStart=38:"));
     }
 
-    /// Without a reference FASTA no row is annotated.
+    /// A direct caller that hands the plugin no reference gets no row
+    /// annotated; the registry refuses the plugin before any batch
+    /// (`missing_fasta_is_an_init_error`).
     #[test]
     fn no_fasta_annotates_nothing() {
         let fixture = Fixture::new(1, &[]);
@@ -2884,15 +3176,49 @@ mod tests {
         plugin.init(&[]).unwrap();
         plugin.set_reference_fasta(None);
         let mut variant = InputVariant::new("21".into(), 126, 126, b"C".to_vec(), b"T".to_vec());
-        variant.transcript_consequences.push(TranscriptConsequence {
-            consequences: ConsequenceList::from_slice(&[Consequence::FivePrimeUtrVariant]),
-            loftee_ctx: Some(Box::new(fixture.context())),
-            ..TranscriptConsequence::default()
+        variant.transcript_consequences.push({
+            let mut consequence = TranscriptConsequence::default();
+            consequence.consequences =
+                ConsequenceList::from_slice(&[Consequence::FivePrimeUtrVariant]);
+            consequence.loftee_ctx = Some(Box::new(fixture.context()));
+            consequence
         });
         plugin
             .run_batch(std::slice::from_mut(&mut variant))
             .unwrap();
         assert!(variant.transcript_consequences[0].plugin_data.is_empty());
+    }
+
+    /// The registry refuses UTRAnnotator in a run without a reference and
+    /// loads it in a run with one. Ensembl VEP's module prints a notice and
+    /// runs on (UTRAnnotator.pm:88).
+    #[test]
+    fn missing_fasta_is_an_init_error() {
+        let args = ["UTRAnnotator".to_string()];
+        let mut registry = crate::BuiltinRegistry::new();
+        let outcome = registry.load_from_args_with_context(&args, None, None);
+        let [(name, error)] = &outcome.failed[..] else {
+            panic!("one failure, got {:?}", outcome.failed);
+        };
+        assert_eq!(name, "UTRAnnotator");
+        assert_eq!(
+            error.to_string(),
+            "plugin initialization failed: UTRAnnotator: a reference FASTA is needed; pass --fasta"
+        );
+        assert!(registry.is_empty());
+
+        let dir = tempfile::tempdir().unwrap();
+        let fa = dir.path().join("ref.fa");
+        let mut contents = b">21\n".to_vec();
+        contents.extend_from_slice(&[b'C'; 400]);
+        contents.push(b'\n');
+        std::fs::write(&fa, contents).unwrap();
+        std::fs::write(dir.path().join("ref.fa.fai"), "21\t400\t4\t400\t401\n").unwrap();
+        let reference = Arc::new(vep_fasta::IndexedFasta::from_path(&fa).unwrap());
+        let mut registry = crate::BuiltinRegistry::new();
+        let outcome = registry.load_from_args_with_context(&args, Some(reference), None);
+        assert!(outcome.failed.is_empty(), "{:?}", outcome.failed);
+        assert_eq!(registry.plugin_names(), ["UTRAnnotator"]);
     }
 
     /// A symbolic deletion whose stated span lies inside one UTR exon segment
@@ -3105,9 +3431,12 @@ mod tests {
     /// when its point lies in no reading frame or outside the UTR, when its
     /// record marks its place uncertain, states no length, writes another end
     /// or has several alternates, and when its text names a mobile element or
-    /// another kind. A duplication other than a tandem one does not say where
-    /// its copy lies, and no duplication, inversion or other class is
-    /// analysed. The plugin is handed a structural variant at all because
+    /// another kind. A loss alternate of several gets no term when its record
+    /// writes no `END`, and the other alternates of its record never do. A
+    /// duplication other than a tandem one does not say where its copy lies,
+    /// and no duplication or other class is analysed. An inversion gets no
+    /// term when it marks its place uncertain, has several alternates or
+    /// leaves the segment. The plugin is handed a structural variant at all because
     /// UTRAnnotator.pm:80-82 lists `StructuralVariationFeature` among its
     /// `variant_feature_types`.
     #[test]
@@ -3118,6 +3447,8 @@ mod tests {
             let deletion = VariantClass::StructuralDeletion;
             let inside = fixture.span(8, 9);
             let point = (inside.1 + 1, inside.1);
+            // The last two bases of the start codon at 5.
+            let start_codon = fixture.span(6, 7);
             // Each span starts in the first UTR exon unless it says otherwise.
             let (into_intron, into_coding, past_transcript, before_transcript) = if strand < 0 {
                 ((250, 265), (220, 265), (100, 265), (290, 310))
@@ -3179,10 +3510,69 @@ mod tests {
                     }),
                 ),
                 (
-                    "a deletion of a record with several alternates",
-                    symbolic_row(&fixture, deletion, inside, |record| {
-                        record.uploaded_allele_string = Some("<CN0>/<CN2>".into());
-                    }),
+                    "a loss alternate of several whose record writes no end",
+                    symbolic_row(
+                        &fixture,
+                        VariantClass::CopyNumberVariation,
+                        inside,
+                        |record| {
+                            record.alt_alleles = vec![b"<CN0>".to_vec()];
+                            record.uploaded_allele_string = Some("<CN0>/<CN2>".into());
+                        },
+                    ),
+                ),
+                (
+                    "a loss alternate of several whose record writes another end",
+                    symbolic_row(
+                        &fixture,
+                        VariantClass::CopyNumberVariation,
+                        inside,
+                        |record| {
+                            record.alt_alleles = vec![b"<CN0>".to_vec()];
+                            record.uploaded_allele_string = Some("<CN0>/<CN2>".into());
+                            record.written_end = WrittenEnd::Other;
+                        },
+                    ),
+                ),
+                (
+                    "a loss alternate of several marked imprecise",
+                    symbolic_row(
+                        &fixture,
+                        VariantClass::CopyNumberVariation,
+                        inside,
+                        |record| {
+                            record.alt_alleles = vec![b"<CN0>".to_vec()];
+                            record.uploaded_allele_string = Some("<CN0>/<CN2>".into());
+                            record.written_end = WrittenEnd::SpanEnd;
+                            record.imprecise = true;
+                        },
+                    ),
+                ),
+                (
+                    "the gain alternate beside a loss alternate",
+                    symbolic_row(
+                        &fixture,
+                        VariantClass::CopyNumberVariation,
+                        inside,
+                        |record| {
+                            record.alt_alleles = vec![b"<CN2>".to_vec()];
+                            record.uploaded_allele_string = Some("<CN0>/<CN2>".into());
+                            record.written_end = WrittenEnd::SpanEnd;
+                        },
+                    ),
+                ),
+                (
+                    "a copy-number alternate that is neither a loss nor a gain",
+                    symbolic_row(
+                        &fixture,
+                        VariantClass::CopyNumberVariation,
+                        inside,
+                        |record| {
+                            record.alt_alleles = vec![b"<CN1>".to_vec()];
+                            record.uploaded_allele_string = Some("<CN0>/<CN1>".into());
+                            record.written_end = WrittenEnd::SpanEnd;
+                        },
+                    ),
                 ),
                 (
                     "an insertion whose length is a multiple of three",
@@ -3262,8 +3652,39 @@ mod tests {
                     symbolic_row(&fixture, VariantClass::TandemDuplication, inside, |_| {}),
                 ),
                 (
-                    "an inversion",
-                    symbolic_row(&fixture, VariantClass::Inversion, inside, |_| {}),
+                    "an inversion marked imprecise",
+                    symbolic_row(&fixture, VariantClass::Inversion, start_codon, |record| {
+                        record.imprecise = true;
+                    }),
+                ),
+                (
+                    "an inversion with a confidence interval around its end",
+                    symbolic_row(&fixture, VariantClass::Inversion, start_codon, |record| {
+                        record.ci_end = Some((-2, 2));
+                    }),
+                ),
+                (
+                    "an inversion of a record with several alternates",
+                    symbolic_row(&fixture, VariantClass::Inversion, start_codon, |record| {
+                        record.uploaded_allele_string = Some("<INV>/<DUP>".into());
+                    }),
+                ),
+                (
+                    "an inversion from one segment into the next",
+                    symbolic_row(
+                        &fixture,
+                        VariantClass::Inversion,
+                        fixture.span(6, 49),
+                        |_| {},
+                    ),
+                ),
+                (
+                    "an inversion that ends in the intron",
+                    symbolic_row(&fixture, VariantClass::Inversion, into_intron, |_| {}),
+                ),
+                (
+                    "an inversion with no stated end",
+                    symbolic_row(&fixture, VariantClass::Inversion, point, |_| {}),
                 ),
                 (
                     "a copy-number variation",
@@ -3302,6 +3723,194 @@ mod tests {
                 inserted[ANNOTATION_KEY].contains(":alt_type="),
                 "strand {strand}: {}",
                 inserted[ANNOTATION_KEY]
+            );
+        }
+    }
+
+    /// Every way of writing the insertion that turns `utr` into `mutated`: the
+    /// index and the inserted bases of each record that gives that sequence.
+    fn writings(utr: &[u8], mutated: &[u8]) -> Vec<(usize, String)> {
+        let length = mutated.len() - utr.len();
+        (0..utr.len())
+            .filter(|&index| {
+                utr[..index] == mutated[..index] && utr[index..] == mutated[index + length..]
+            })
+            .map(|index| {
+                (
+                    index,
+                    String::from_utf8(mutated[index..index + length].to_vec()).unwrap(),
+                )
+            })
+            .collect()
+    }
+
+    /// Every sequence of `length` bases.
+    fn base_strings(length: usize) -> Vec<String> {
+        let mut out = vec![String::new()];
+        for _ in 0..length {
+            out = out
+                .into_iter()
+                .flat_map(|prefix| ["A", "C", "G", "T"].map(|base| format!("{prefix}{base}")))
+                .collect();
+        }
+        out
+    }
+
+    /// One mutated sequence has one row however a record writes it. For every
+    /// start codon of the fixture UTRs and every insertion of one to six
+    /// bases at one of its three indices or directly after it, every record
+    /// that gives the same mutated sequence ([`writings`]) carries the same
+    /// five keys. Lengths of up to three bases are read on both strands.
+    #[test]
+    fn one_changed_sequence_at_a_start_codon_has_one_row_however_it_is_written() {
+        let utrs = [
+            UTR.to_string(),
+            utr_with_late_stop(),
+            UTR_OVERLAPS.to_string(),
+            UTR_OVERLAPS.replacen("CCG", "ATG", 1),
+            utr_with(UTR_OVERLAPS, 14..16, "AT"),
+            utr_with(UTR_OVERLAPS, 15..16, "A"),
+        ];
+        let mut groups_read = 0usize;
+        let mut several_rows: Vec<String> = Vec::new();
+        for (number, utr) in utrs.iter().enumerate() {
+            let bytes = utr.as_bytes();
+            for (strand, lengths) in [(1, 1..=6), (-1, 1..=3)] {
+                let fixture = Fixture::with_utr(strand, utr, &[]);
+                let mut seen: HashSet<Vec<u8>> = HashSet::new();
+                let mut groups: Vec<Vec<(usize, String)>> = Vec::new();
+                for start_pos in atg_positions(bytes) {
+                    for index in start_pos..=start_pos + 3 {
+                        for length in lengths.clone() {
+                            for bases in base_strings(length) {
+                                let mutated = mutated_utr(bytes, index, 0, bases.as_bytes());
+                                if !seen.insert(mutated.clone()) {
+                                    continue;
+                                }
+                                let ways = writings(bytes, &mutated);
+                                if ways.len() > 1 {
+                                    groups.push(ways);
+                                }
+                            }
+                        }
+                    }
+                }
+                let records: Vec<(usize, String)> = groups.iter().flatten().cloned().collect();
+                let rows = fixture.insertion_rows(&records);
+                let mut next = 0usize;
+                for ways in &groups {
+                    let group = &rows[next..next + ways.len()];
+                    next += ways.len();
+                    if group.iter().any(|row| row != &group[0]) {
+                        let indices: Vec<usize> = ways.iter().map(|(index, _)| *index).collect();
+                        several_rows.push(format!(
+                            "UTR {number}, strand {strand}, {} bases at {indices:?}",
+                            ways[0].1.len()
+                        ));
+                    }
+                }
+                groups_read += groups.len();
+            }
+        }
+        // The fixtures hold over a hundred thousand sequences that two or more
+        // records give; a count far below it means the enumeration lost them.
+        assert!(groups_read > 100_000, "{groups_read} groups");
+        assert!(
+            several_rows.is_empty(),
+            "{} of {groups_read} mutated sequences have several rows, the first: {:?}",
+            several_rows.len(),
+            &several_rows[..several_rows.len().min(10)]
+        );
+    }
+
+    /// An inversion that states one place inside one UTR exon segment gives
+    /// the mutated sequence whole: its span replaced by the reverse complement
+    /// of the bases the UTR holds there. Indices 6 and 7, the last two bases
+    /// of the start codon at 5, read `CA` inverted: the codon is lost. Indices
+    /// 23 and 24 read `TG` inverted, which the `A` at 22 completes to a start
+    /// codon: one is gained there. Each of the two rows is that of the same
+    /// bases given with explicit alleles. Indices 4 to 7 read the same four
+    /// bases inverted: nothing changes, and the row reports nothing.
+    #[test]
+    fn an_inversion_inside_one_utr_exon_is_read_as_its_changed_sequence() {
+        let lost_start = whole_row(
+            UAUG_LOST_FLAG,
+            "CapDistanceToStart=5:DistanceToCDS=45:DistanceToStop=15:Evidence=NA:KozakContext=GCCATGG:KozakStrength=Strong:type=uORF",
+            ("1", "1", "1"),
+        );
+        let gained_start = whole_row(
+            UAUG_GAINED_FLAG,
+            "CapDistanceToStart=22:DistanceToCDS=28:DistanceToStop=NA:KozakContext=CTGATGC:KozakStrength=Weak:type=OutOfFrame_oORF",
+            ("1", "1", "1"),
+        );
+        let nothing = whole_row(NONE, NONE, ("1", "1", "1"));
+        for strand in [1, -1] {
+            let fixture = Fixture::new(strand, &[]);
+            let inversion = |first: usize, last: usize| {
+                symbolic_row(
+                    &fixture,
+                    VariantClass::Inversion,
+                    fixture.span(first, last),
+                    |record| record.alt_alleles = vec![b"<INV>".to_vec()],
+                )
+            };
+            for ((first, last), inverted, row) in
+                [((6, 7), "CA", &lost_start), ((23, 24), "TG", &gained_start)]
+            {
+                let out = inversion(first, last);
+                assert_eq!(&out, row, "strand {strand}, indices {first} to {last}");
+                assert_eq!(
+                    out,
+                    utr_row(&fixture, first, &UTR[first..=last], inverted),
+                    "strand {strand}, indices {first} to {last}"
+                );
+            }
+            assert_eq!(inversion(4, 7), nothing, "strand {strand}");
+        }
+    }
+
+    /// A record with several alternates is handed to the plugin once for each,
+    /// under the record's class. The alternate whose own text is a deletion's
+    /// states the loss of the record's span when the record writes `END` as
+    /// that span's last base: its row is that of the symbolic deletion and of
+    /// the same two bases deleted with explicit alleles, the frameshift of the
+    /// uORF at 5, which meets no stop codon in the mutated UTR.
+    #[test]
+    fn a_loss_alternate_of_several_is_read_as_the_deletion_of_its_span() {
+        let shifted = whole_row(
+            UFRAMESHIFT_FLAG,
+            "Evidence=NA:KozakContext=GCCATGG:KozakStrength=Strong:alt_type=OutOfFrame_oORF:alt_type_length=NA:ref_StartDistanceToCDS=45:ref_type=uORF:ref_type_length=18",
+            ("1", "1", "1"),
+        );
+        for strand in [1, -1] {
+            let fixture = Fixture::new(strand, &[]);
+            for (own_text, alternates) in [
+                ("<CN0>", "<CN0>/<CN2>"),
+                ("<CN0>", "<CN2>/<CN0>"),
+                ("<DEL>", "<DEL>/<DUP>"),
+                ("<CN=0>", "<CN=0>/<CN=2>"),
+            ] {
+                let out = symbolic_row(
+                    &fixture,
+                    VariantClass::CopyNumberVariation,
+                    fixture.span(8, 9),
+                    |record| {
+                        record.alt_alleles = vec![own_text.as_bytes().to_vec()];
+                        record.uploaded_allele_string = Some(alternates.into());
+                        record.written_end = WrittenEnd::SpanEnd;
+                    },
+                );
+                assert_eq!(out, shifted, "strand {strand}, {own_text} of {alternates}");
+            }
+            assert_eq!(
+                symbolic_deletion(&fixture, 8, 9),
+                shifted,
+                "strand {strand}"
+            );
+            assert_eq!(
+                utr_row(&fixture, 8, &UTR[8..=9], "-"),
+                shifted,
+                "strand {strand}"
             );
         }
     }

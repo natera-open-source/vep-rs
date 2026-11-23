@@ -1,0 +1,87 @@
+{
+ "plugin_fixtures": {
+  "generator": "scripts/fixtures/cut_plugin_regions.py",
+  "flank": 5000,
+  "record_flank": 2000,
+  "exon_flank": 50,
+  "gerp_regions": "exons",
+  "tools": {
+   "bgzip": "bgzip (htslib) 1.9"
+  },
+  "files": {
+   "reference.fa.fai": "b7294ee7d45d3b3333833f77674745c65f186d38a01c18b32138c7dee923f72d",
+   "reference.fa.gz": "eb13590488dab697831fc0d93b6a2b182b68ef92455416033fd8a195e426bbf4",
+   "reference.fa.gz.fai": "b7294ee7d45d3b3333833f77674745c65f186d38a01c18b32138c7dee923f72d",
+   "reference.fa.gz.gzi": "7d6f810f0d3269bf7b929262085f0367291ac9e7473a211024f74faee08f223f"
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 63,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species apis_mellifera --assembly Amel_HAv3.1 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "apis_mellifera/63_Amel_HAv3.1",
+ "fasta": "the three sequences the records sit on (CM009946.2, CM009947.2 and QIUM02000090.1) at their full length from the Ensembl Metazoa release 63 files Apis_mellifera.Amel_HAv3.1.dna.primary_assembly.CM009946.2.fa.gz, Apis_mellifera.Amel_HAv3.1.dna.primary_assembly.CM009947.2.fa.gz and Apis_mellifera.Amel_HAv3.1.dna.nonchromosomal.fa.gz, each held to the directory's CHECKSUMS, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
+ "input": "variants.vcf: 233 records, 208 on chromosome CM009946.2 (linkage group 16), 18 on the mitochondrion CM009947.2 and 7 on the unplaced scaffold QIUM02000090.1; 22 name their sequence by a synonym of the cache's chr_synonyms.txt: four by a RefSeq accession without its version (NC_037653 and NC_001566, two each), none by the name of CM009946.2 or of CM009947.2 without its version. All are seeded records of tools/vep-seeded-variants, their IDs the generator's category and ordinal, their reference alleles read from the genome sequence. Eight exemplars per consequence-set combination the reference shows, stratified by variant class and strand, twenty-four per combination carrying a protein-level term, plus the records the manifest's included_records name (16): two each of the mitochondrion's changed codon, start codon, gained stop and lost stop under genetic code table 5, of the organelle records, of the records named by a synonym and of the records at the first and at the last base of a sequence. The cache carries no known variants, so no record comes from a variation set. CM009947.2 translates under genetic code table 5 and every other sequence under table 1, each transcript's codon_table in the cache",
+ "sha256": {
+  "default.txt": "5544ac01be84e1e2c2d61717f8b1657c36d1cf7da14f76cfd80a0f353fa7a03f",
+  "tab.txt": "1036b6614fa37d8b0223b555527297563895f5d2999dface1c67d7ddc503a22b",
+  "vcf.vcf": "6d34133e0ebed0754e16c167e7b43857399bc3838df1c58d78534a5cad34fbd4",
+  "json.jsonl": "27e007aa24f00f9f8cad40ed93e8f765641599c59cb86b1071ddb48e1c5f47c9"
+ },
+ "variants_vcf_sha256": "c28872f81b846c46c3b8da52a2bef3a316d1aca29d33c64f0fe86bc62b299ec4",
+ "flag_sets": {
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species apis_mellifera --assembly Amel_HAv3.1 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "apis_mellifera/63_Amel_HAv3.1",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "baf357e4b42e4483609ffa0cf5c24889b78ae1644c651af099ba57a19f128ab0",
+    "tab.txt": "204765daf1672b0cdcf712575fca8fb5edaeac3e0e3cd7fec445c15377a099ab",
+    "vcf.vcf": "bde65bec9fb87b87811770cbb389c20790285e5d3c2218170960244a817d3e37",
+    "json.jsonl": "639877787ffa88cbd8a0a3746b59f9762a8a1a96d51f0663fc1ce8f7e9fdfd40"
+   },
+   "flags": [
+    "--everything"
+   ],
+   "expected_dir": "expected_everything"
+  },
+  "hgvs": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species apis_mellifera --assembly Amel_HAv3.1 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs [--tab|--vcf|--json]",
+   "perl_cache": "apis_mellifera/63_Amel_HAv3.1",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "1e0f9f9396eb53366b8b3e2b14b3d1b03a2c98567645c9d23174364666603b1f",
+    "tab.txt": "fcc7b931d3aff383d388aa2e4df2e5fdbe02f4090633c3e49f4a5afa82a365ed",
+    "vcf.vcf": "7b14a58666cf4dcc3ffaddc688518d94f05c37c479249e66099f64e36db6d39f",
+    "json.jsonl": "5188f228e1c67dcbb94e25a225655790367c610d8fda7496fd02f65ce948fcc3"
+   },
+   "flags": [
+    "--hgvs"
+   ],
+   "expected_dir": "expected_hgvs"
+  }
+ },
+ "generator": "tools/vep-seeded-variants --seed 1 --records wide --per-category 72 --fasta <genome> --sequence CM009946.2 --sequence CM009947.2 --sequence QIUM02000090.1 over the converted cache (generator version 2; 1,473 records, less the 13 that name CM009946.2 or CM009947.2 without its version); Ensembl VEP over them under the corpus flags; tools/vep-golden-corpus select --release 63 --assembly Amel_HAv3.1 --species apis_mellifera --dataset wide=<reference>=<the seeded records> --k 8 --seed 1 --max-span 1000000 --max-records 500 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 24 --include <the named records> --covers species-honeybee-amel-hav3 --covers genetic-code-tables --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --flank 5000 --gzip --drop sorted_exons --perl-info <cache>/info.txt --cache-version 63 over the whole cache tools/vep-storable-to-json converts from the Ensembl Metazoa release 63 Amel_HAv3.1 cache; scripts/fixtures/cut_plugin_regions.py --reference <genome> --flank 5000 --record-flank 2000 over the records under the cache's own sequence names; tools/vep-golden-corpus flag-set (everything, hgvs); scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; tools/vep-golden-corpus classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp for the hgvs set)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "CM009946.2": 680,
+   "CM009947.2": 37,
+   "QIUM02000090.1": 5
+  },
+  "shards": 10,
+  "synonym_lines": 11,
+  "synonyms": "the cache's lines for the three sequences, less the two that give the name of CM009946.2 or of CM009947.2 without its version",
+  "variation_slices": "none: the cache's info.txt names no variation columns and its variation files hold no record"
+ }
+}

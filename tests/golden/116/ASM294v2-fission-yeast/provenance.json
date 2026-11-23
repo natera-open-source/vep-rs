@@ -1,0 +1,94 @@
+{
+ "plugin_fixtures": {
+  "generator": "scripts/fixtures/cut_plugin_regions.py",
+  "flank": 5000,
+  "record_flank": 2000,
+  "exon_flank": 50,
+  "gerp_regions": "exons",
+  "tools": {
+   "bgzip": "bgzip (htslib) 1.9"
+  },
+  "files": {
+   "reference.fa.fai": "1645811091c2d297c01bfd9d152389823b6add1b0b242661c8689e958761ffad",
+   "reference.fa.gz": "dd689e4bd2e8a2c1323a738b72e1f685b52b5c9f56b8b6ad0b89d7c8459b86b1",
+   "reference.fa.gz.fai": "1645811091c2d297c01bfd9d152389823b6add1b0b242661c8689e958761ffad",
+   "reference.fa.gz.gzi": "3a49f3b42f2a07c0a5ba480f189e700a096ced3f3dda37ddd9fd0e0dd0c85e78"
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 63,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species schizosaccharomyces_pombe --assembly ASM294v2 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "schizosaccharomyces_pombe/63_ASM294v2",
+ "fasta": "the three sequences the records and the pruned cache's transcripts sit on (MT, III and AB325691) at their full length from Schizosaccharomyces_pombe.ASM294v2.dna.chromosome.MT.fa.gz, Schizosaccharomyces_pombe.ASM294v2.dna.chromosome.III.fa.gz and Schizosaccharomyces_pombe.ASM294v2.dna.nonchromosomal.fa.gz of Ensembl Genomes release 63 (Ensembl Fungi), each file held to the sum of the directory's CHECKSUMS; every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
+ "input": "variants.vcf: 295 records on the mitochondrion (MT, 70 records), chromosome III (204) and the unplaced sequence AB325691 (21); eleven of them name their sequence by a synonym the cache's chr_synonyms.txt lists. 226 come from tools/vep-seeded-variants (generator version 2, seed 1, --records wide, one --sequence for each of the three sequences, every reference allele read from the genome file), their IDs naming the category and an ordinal: 29 categories, among them a substitution in the codon genetic code 4 reads differently from the standard code, start and stop codons under codes 1 and 4, a missense and a synonymous change on each strand, both splice sites, both untranslated regions, an intron, upstream, downstream and intergenic positions, a frameshift insertion, a frameshift deletion, an in-frame deletion, the first and the last base of each sequence and a deletion across the origin of the mitochondrion. 69 are known variants of the cache's own variation files: single-base substitutions sampled with seed 1 from all_vars.gz of the three sequences, each under the cache's identifier, in position order; five records are multi-allelic",
+ "sha256": {
+  "default.txt": "8dfee54bb794aa7b5f649dad7fa9ba5d19d5580c974925837f4643bbb9c2df0e",
+  "tab.txt": "64fa1d8feecf3bba5e4aa236eb03f6d7753b0108ff05c611f0fc5eb23a3a831f",
+  "vcf.vcf": "35dc25309b899e3f293106485de7b62a1a6cdab1d989d0c239ab0156c6c82dc5",
+  "json.jsonl": "632e9a90932ce2a1e8dded49d96c7419ecfdac49b90202fac7e40c03ad064083"
+ },
+ "variants_vcf_sha256": "a41315175dabf00283aaeb90f98d773334d0e061944d2c1ad3ebfa7c31a2ef96",
+ "flag_sets": {
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species schizosaccharomyces_pombe --assembly ASM294v2 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "schizosaccharomyces_pombe/63_ASM294v2",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "4420437df42871cd8fd8867fab000e324145bf8885a6d7b55cfc1182fc2ee0d3",
+    "tab.txt": "177106eb59c0cf69ac7c7618465c6678e07f626823ef7647989418b580870e68",
+    "vcf.vcf": "34719a578c680f66981c66194799542a27573407c5b83ebed19b9099a164201b",
+    "json.jsonl": "8944fc40df7573d7c144a6812b83a3322dc9778a91c06eb393462828371f94d6"
+   },
+   "flags": [
+    "--everything"
+   ],
+   "expected_dir": "expected_everything"
+  },
+  "hgvs": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species schizosaccharomyces_pombe --assembly ASM294v2 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs [--tab|--vcf|--json]",
+   "perl_cache": "schizosaccharomyces_pombe/63_ASM294v2",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "5a5ed7c895d0b02687c31cab6f9c5ec50fc71270b54a89f34a7e91fc9ff50138",
+    "tab.txt": "325e64bc1e493546c3040896db9e61ad25ece8ed48aaf7a291622e5af5eed4f6",
+    "vcf.vcf": "6462cd1563a7b387eb6290d1770eddbba3223870cdb451d59a5bf076816d0f5b",
+    "json.jsonl": "da60641a8260fe501e80af49e92f0903ad3a866aa473ffec22a8e997ca5447f2"
+   },
+   "flags": [
+    "--hgvs"
+   ],
+   "expected_dir": "expected_hgvs"
+  }
+ },
+ "generator": "Ensembl VEP over the two record pools under the corpus flags; tools/vep-golden-corpus select --release 63 --assembly ASM294v2 --species schizosaccharomyces_pombe --dataset wide=<reference>=<the generated records> --dataset known=<reference>=<the sampled known variants> --k 2 --seed 1 --max-span 1000000 --max-records 500 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 6 --include <the named records> --covers species-fission-yeast-asm294v2 --covers genetic-code-tables --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --flank 5000 --gzip --drop sorted_exons --perl-info <cache>/info.txt --cache-version 63 --variations <converted cache>/variations over the whole cache tools/vep-storable-to-json converts from the Ensembl Fungi release 63 ASM294v2 cache (the cache carries no SIFT or PolyPhen predictions and no regulatory data); scripts/fixtures/cut_plugin_regions.py --reference <the three sequences> --flank 5000 --record-flank 2000, run over the records with each sequence synonym written as the cache's name; scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; tools/vep-golden-corpus flag-set (everything, hgvs) and classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp for the hgvs set)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "AB325691": 5,
+   "III": 854,
+   "MT": 51
+  },
+  "shards": 5,
+  "synonym_lines": 4,
+  "variation_slices": "all_vars.gz with its index under variations/<sequence>/ for the three sequences, cut from the cache's variation files to the records within one base of a record of the corpus: 90 on III and 15 on MT; AB325691 has none there and carries the empty indexed file"
+ },
+ "genetic_code_check": {
+  "genetic_code": 4,
+  "sequence": "MT",
+  "table": "Bio/Tools/CodonTable.pm of the reference image (/opt/vep/src/ensembl-vep/Bio/Tools/CodonTable.pm): the residues of table 1 on line 229 and of table 4 on line 232, which differ at one codon, the fifteenth in the table's own order; the start codons of table 4 on line 261",
+  "table_sha256": "8b5aba4aafd2058f1a96dc71c646edc23faa5d973243fd8fc9e26da37b0be282",
+  "records": "variants.vcf line 35 (code4_changed_codon_1) and line 51 (code4_changed_codon_2), both on that codon and both kept by name",
+  "checked": "every row of expected/default.txt.gz on MT that prints two whole codons, 44 rows: the Amino_acids column equals the translation of both codons under table 4 as that file gives it; five of the rows sit on the codon the two tables read differently, the rows of the two named records among them"
+ }
+}

@@ -1,0 +1,2 @@
+# Written by scripts/check_public_interface.py --update, which reads the tree; the script's opening comment gives the format.
+library	none

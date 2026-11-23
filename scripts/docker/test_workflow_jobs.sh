@@ -103,10 +103,10 @@ grep -qF '| tee "$RUNNER_TEMP/smoke.log"' <<<"$TREE" && grep -qF "if grep '^  sk
 writers=0
 found=""
 for id in $(jobs); do
-    permissions "$id" | grep -q ': write$' || continue
+    permissions "$id" | grep ': write$' >/dev/null || continue
     writers=$((writers + 1))
     for needle in 'stage_tree.sh' 'release_recipe.sh' 'dtolnay/rust-toolchain' 'cargo' 'rustup' 'zigbuild'; do
-        ! job "$id" | grep -qF -- "$needle" || found+=" $id:[$needle]"
+        ! job "$id" | grep -F -- "$needle" >/dev/null || found+=" $id:[$needle]"
     done
 done
 [[ "$writers" -eq 2 && -z "$found" ]] && ok "no job that declares a write permission builds the tree, installs a toolchain or runs cargo" ||
@@ -155,7 +155,7 @@ lint='        run: docker run --rm -i "$HADOLINT_IMAGE" < docker/Dockerfile'
 builder='        run: docker buildx create --name vep-rs --driver docker-container --driver-opt "image=$BUILDKIT_IMAGE" --use'
 grep -qxF "$lint" <<<"$TREE" && grep -qxF "$lint" <<<"$IMAGE" && grep -qxF "$builder" <<<"$TREE" && grep -qxF "$builder" <<<"$IMAGE" &&
     [[ "$(grep -cE '^  (HADOLINT|BUILDKIT)_IMAGE: [a-z/]+:v[0-9.]+@sha256:[0-9a-f]{64}$' "$WORKFLOW")" -eq 2 ]] &&
-    ! grep -vE '^  (HADOLINT|BUILDKIT)_IMAGE: ' "$WORKFLOW" | grep -qE 'hadolint/hadolint:|moby/buildkit:' &&
+    ! grep -vE '^  (HADOLINT|BUILDKIT)_IMAGE: ' "$WORKFLOW" | grep -E 'hadolint/hadolint:|moby/buildkit:' >/dev/null &&
     ok "both image jobs lint with one pinned hadolint and build on one pinned BuildKit, each stated once" ||
     bad "the lint or builder step differs between the image jobs, or a pinned image is stated twice"
 

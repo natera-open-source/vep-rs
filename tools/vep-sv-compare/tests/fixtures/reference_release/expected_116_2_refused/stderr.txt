@@ -1,0 +1,2 @@
+ERROR: [compare_sv_concordance] skipped-record cross-check: cpx_kept N><CPX> at 21:45716816 is on the unsupported_type route, yet the reference wrote 1 row(s) under its own allele(s) (CPX): a reference run under --dont_skip or another --max_sv_size (pass --reference-max-sv-size)
+ERROR: [compare_sv_concordance] skipped-record cross-check: gvcf_block N><NON_REF> at 21:70001 is on the unsupported_type route, yet the reference wrote 1 row(s) under its own allele(s) (<NON_REF>): a reference run under --dont_skip or another --max_sv_size (pass --reference-max-sv-size)

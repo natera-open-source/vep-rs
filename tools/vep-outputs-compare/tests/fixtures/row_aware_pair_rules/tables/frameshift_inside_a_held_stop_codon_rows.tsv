@@ -1,0 +1,43 @@
+shape	first_column	location	allele	cdna	cds	reference_terms	candidate_terms	reference_amino_acids	candidate_amino_acids	reference_codons	candidate_codons	taken
+a base added inside the stop codon	written_inside_the_stop_codon	1:134-135	T	34-35	28-29	coding_sequence_variant	frameshift_variant	*/LX	*/LX	tga/tTga	tga/tTga	yes
+a base lost inside the stop codon	a_base_lost_inside_the_stop_codon	1:136	-	36	30	coding_sequence_variant	frameshift_variant	*/X	*/X	tgA/tg	tgA/tg	yes
+five bases lost from inside the stop codon, an in-frame deletion to the reference	five_bases_lost_from_inside_the_stop_codon	1:135-139	-	35-39	29-33	inframe_deletion	frameshift_variant	*A/X	*A/X	tGAGCT/t	tGAGCT/t	yes
+four bases added and the stop kept, an in-frame insertion to the reference	four_bases_added_and_the_stop_kept	1:135-136	AATG	35-36	29-30	inframe_insertion,coding_sequence_variant	frameshift_variant	*/*MX	*/*MX	tga/tgAATGa	tga/tgAATGa	yes
+a base lost and the stop kept	a_base_lost_and_the_stop_kept	1:135	-	35	29	coding_sequence_variant	frameshift_variant	*/X	*/X	tGa/ta	tGa/ta	yes
+a term of both rows beside coding_sequence_variant	a_base_lost_inside_the_stop_codon	1:136	-	36	30	coding_sequence_variant,NMD_transcript_variant	frameshift_variant,NMD_transcript_variant	*/X	*/X	tgA/tg	tgA/tg	yes
+a splice term of both rows beside inframe_deletion	five_bases_lost_from_inside_the_stop_codon	1:135-139	-	35-39	29-33	splice_region_variant,inframe_deletion	frameshift_variant,splice_region_variant	*A/X	*A/X	tGAGCT/t	tGAGCT/t	yes
+a term of both rows beside the two terms of an in-frame insertion	four_bases_added_and_the_stop_kept	1:135-136	AATG	35-36	29-30	inframe_insertion,coding_sequence_variant,NMD_transcript_variant	frameshift_variant,NMD_transcript_variant	*/*MX	*/*MX	tga/tgAATGa	tga/tgAATGa	yes
+the Codons in one letter case	written_inside_the_stop_codon	1:134-135	T	34-35	28-29	coding_sequence_variant	frameshift_variant	*/LX	*/LX	TGA/TTGA	TGA/TTGA	yes
+a first column that spells the alleles	1_134_T/TT	1:134-135	T	34-35	28-29	coding_sequence_variant	frameshift_variant	*/LX	*/LX	tga/tTga	tga/tTga	yes
+the same base added, written before the stop codon	written_before_the_stop_codon	1:133-134	T	33-34	27-28	frameshift_variant	frameshift_variant	-/X	-/X	-/T	-/T	no
+a base lost inside the closing stop codon	a_base_lost_inside_the_closing_stop_codon	1:178	-	78	72	stop_lost	stop_lost	*/X	*/X	taG/ta	taG/ta	no
+the terms of the two rows exchanged	a_base_lost_inside_the_stop_codon	1:136	-	36	30	frameshift_variant	coding_sequence_variant	*/X	*/X	tgA/tg	tgA/tg	no
+frameshift_variant on both rows	a_base_lost_inside_the_stop_codon	1:136	-	36	30	frameshift_variant,coding_sequence_variant	frameshift_variant	*/X	*/X	tgA/tg	tgA/tg	no
+no frameshift_variant on the candidate row	a_base_lost_inside_the_stop_codon	1:136	-	36	30	coding_sequence_variant	inframe_deletion	*/X	*/X	tgA/tg	tgA/tg	no
+missense_variant on the reference row	a_base_lost_inside_the_stop_codon	1:136	-	36	30	missense_variant	frameshift_variant	*/X	*/X	tgA/tg	tgA/tg	no
+protein_altering_variant on the reference row	a_base_lost_inside_the_stop_codon	1:136	-	36	30	protein_altering_variant	frameshift_variant	*/X	*/X	tgA/tg	tgA/tg	no
+inframe_insertion without coding_sequence_variant	four_bases_added_and_the_stop_kept	1:135-136	AATG	35-36	29-30	inframe_insertion	frameshift_variant	*/*MX	*/*MX	tga/tgAATGa	tga/tgAATGa	no
+inframe_deletion and coding_sequence_variant both gone	five_bases_lost_from_inside_the_stop_codon	1:135-139	-	35-39	29-33	inframe_deletion,coding_sequence_variant	frameshift_variant	*A/X	*A/X	tGAGCT/t	tGAGCT/t	no
+both in-frame terms on the reference row	five_bases_lost_from_inside_the_stop_codon	1:135-139	-	35-39	29-33	inframe_deletion,inframe_insertion,coding_sequence_variant	frameshift_variant	*A/X	*A/X	tGAGCT/t	tGAGCT/t	no
+the reference row's coding_sequence_variant kept	a_base_lost_inside_the_stop_codon	1:136	-	36	30	coding_sequence_variant	frameshift_variant,coding_sequence_variant	*/X	*/X	tgA/tg	tgA/tg	no
+stop_gained beside the candidate row's frameshift_variant	a_base_lost_inside_the_stop_codon	1:136	-	36	30	coding_sequence_variant	stop_gained,frameshift_variant	*/X	*/X	tgA/tg	tgA/tg	no
+a splice term on the reference row alone	a_base_lost_inside_the_stop_codon	1:136	-	36	30	splice_region_variant,coding_sequence_variant	frameshift_variant	*/X	*/X	tgA/tg	tgA/tg	no
+a splice term on the candidate row alone	a_base_lost_inside_the_stop_codon	1:136	-	36	30	coding_sequence_variant	frameshift_variant,splice_region_variant	*/X	*/X	tgA/tg	tgA/tg	no
+stop_retained_variant on both rows	a_base_lost_inside_the_stop_codon	1:136	-	36	30	stop_retained_variant,coding_sequence_variant	frameshift_variant,stop_retained_variant	*/X	*/X	tgA/tg	tgA/tg	no
+stop_lost on both rows	a_base_lost_inside_the_stop_codon	1:136	-	36	30	stop_lost,coding_sequence_variant	frameshift_variant,stop_lost	*/X	*/X	tgA/tg	tgA/tg	no
+the reference row's stop_lost against frameshift_variant	a_base_lost_inside_the_closing_stop_codon	1:178	-	78	72	stop_lost	frameshift_variant	*/X	*/X	taG/ta	taG/ta	no
+two Amino_acids cells that differ	a_base_lost_inside_the_stop_codon	1:136	-	36	30	coding_sequence_variant	frameshift_variant	*/X	*/LX	tgA/tg	tgA/tg	no
+reference residues that open with another residue than a stop	a_base_lost_inside_the_stop_codon	1:136	-	36	30	coding_sequence_variant	frameshift_variant	L/X	L/X	tgA/tg	tgA/tg	no
+a stop that is not the first reference residue	a_base_lost_inside_the_stop_codon	1:136	-	36	30	coding_sequence_variant	frameshift_variant	A*/X	A*/X	tgA/tg	tgA/tg	no
+no unknown residue in the alternate half	a_base_lost_inside_the_stop_codon	1:136	-	36	30	coding_sequence_variant	frameshift_variant	*/L	*/L	tgA/tg	tgA/tg	no
+the unknown residue in the reference half alone	a_base_lost_inside_the_stop_codon	1:136	-	36	30	coding_sequence_variant	frameshift_variant	*X/L	*X/L	tgA/tg	tgA/tg	no
+no Amino_acids cell	a_base_lost_inside_the_stop_codon	1:136	-	36	30	coding_sequence_variant	frameshift_variant	-	-	tgA/tg	tgA/tg	no
+one half in the Amino_acids cell	a_base_lost_inside_the_stop_codon	1:136	-	36	30	coding_sequence_variant	frameshift_variant	*X	*X	tgA/tg	tgA/tg	no
+two Codons cells that differ	a_base_lost_inside_the_stop_codon	1:136	-	36	30	coding_sequence_variant	frameshift_variant	*/X	*/X	tgA/tg	tGa/ta	no
+two Codons cells that differ in letter case alone	a_base_lost_inside_the_stop_codon	1:136	-	36	30	coding_sequence_variant	frameshift_variant	*/X	*/X	tgA/tg	TGA/TG	no
+three bases added	four_bases_added_and_the_stop_kept	1:135-136	AATG	35-36	29-30	inframe_insertion,coding_sequence_variant	frameshift_variant	*/*MX	*/*MX	tga/tgAATa	tga/tgAATa	no
+six bases lost	five_bases_lost_from_inside_the_stop_codon	1:135-139	-	35-39	29-33	inframe_deletion	frameshift_variant	*A/X	*A/X	tGAGCTG/t	tGAGCTG/t	no
+two halves of one length	a_base_lost_inside_the_stop_codon	1:136	-	36	30	coding_sequence_variant	frameshift_variant	*/X	*/X	tGa/tAa	tGa/tAa	no
+three bases lost and a dash for the alternate half	a_base_lost_inside_the_stop_codon	1:136	-	36	30	coding_sequence_variant	frameshift_variant	*/X	*/X	tga/-	tga/-	no
+no Codons cell	a_base_lost_inside_the_stop_codon	1:136	-	36	30	coding_sequence_variant	frameshift_variant	*/X	*/X	-	-	no
+one half in the Codons cell	a_base_lost_inside_the_stop_codon	1:136	-	36	30	coding_sequence_variant	frameshift_variant	*/X	*/X	tga	tga	no

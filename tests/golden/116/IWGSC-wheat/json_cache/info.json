@@ -1,0 +1,33 @@
+{
+  "assembly": "IWGSC",
+  "cache_version": 63,
+  "contig_order": [
+    "5D"
+  ],
+  "polyphen": "",
+  "regulatory": false,
+  "sift": "b",
+  "source_versions": {
+    "assembly": "IWGSC",
+    "sift": "sift"
+  },
+  "species": "triticum_aestivum",
+  "var_type": "tabix",
+  "variation_cols": [
+    "chr",
+    "variation_name",
+    "failed",
+    "somatic",
+    "start",
+    "end",
+    "allele_string",
+    "strand",
+    "clin_sig",
+    "phenotype_or_disease",
+    "clin_sig_allele",
+    "clin_sig_ref_allele",
+    "clinical_impact",
+    "pubmed",
+    "var_synonyms"
+  ]
+}

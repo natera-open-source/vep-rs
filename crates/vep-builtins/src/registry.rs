@@ -23,10 +23,12 @@ use rayon::prelude::*;
 use tracing::{debug, info};
 
 use crate::plugins;
+use crate::pool_pass::{collect_in_order, map_in_order, raise_again};
 use crate::traits::{BuiltinPlugin, PluginError, PrefetchData, RunContext};
 use vep_core::consequence::RowKind;
 use vep_core::sv_routing::split_plugin_arg;
 use vep_core::variant::InputVariant;
+use vep_core::warning_hold::Held;
 
 /// What one plugin's prefetch returned.
 type Prefetched = Result<Option<PrefetchData>, PluginError>;
@@ -34,18 +36,21 @@ type Prefetched = Result<Option<PrefetchData>, PluginError>;
 /// One batch's prefetch results, one slot per loaded plugin in load order: a
 /// filled slot holds what [`BuiltinPlugin::prefetch`] returned for the batch,
 /// an empty one marks a plugin whose prefetch still has to run, which
-/// [`BuiltinRegistry::annotate_batch`] does once the batch is annotated.
-pub struct PluginPrefetch(Vec<Option<Prefetched>>);
+/// [`BuiltinRegistry::annotate_batch`] does once the batch is annotated. The
+/// warnings the prefetches raised travel with the slots, in load order, and
+/// are raised when the batch is annotated (`vep_core::warning_hold`).
+pub struct PluginPrefetch(Vec<Option<Prefetched>>, Vec<Held>);
 
 impl PluginPrefetch {
     /// Every plugin's prefetch still to run.
     fn unread(plugins: usize) -> Self {
-        Self((0..plugins).map(|_| None).collect())
+        Self((0..plugins).map(|_| None).collect(), Vec::new())
     }
 }
 
 /// Per-plugin timing measurements from a single `run_batch_timed` call.
 #[derive(Debug, Clone, serde::Serialize)]
+#[non_exhaustive]
 pub struct PluginTimings {
     /// Per-plugin prefetch durations: `(plugin_name, milliseconds)`.
     /// For plugins that don't support prefetch, the value is 0.
@@ -60,10 +65,30 @@ pub struct PluginTimings {
     pub total_ms: u64,
 }
 
+impl PluginTimings {
+    /// One call's measurements, from each of its fields.
+    pub fn new(
+        prefetch_ms: Vec<(String, u64)>,
+        annotate_ms: Vec<(String, u64)>,
+        total_prefetch_ms: u64,
+        total_annotate_ms: u64,
+        total_ms: u64,
+    ) -> Self {
+        Self {
+            prefetch_ms,
+            annotate_ms,
+            total_prefetch_ms,
+            total_annotate_ms,
+            total_ms,
+        }
+    }
+}
+
 /// What loading the `--plugin` arguments did not load: the arguments no built-in
 /// claims, as written, and the built-ins whose `init` failed, each with the name
 /// the argument gave and the error.
 #[derive(Debug, Default)]
+#[non_exhaustive]
 pub struct LoadOutcome {
     pub unresolved: Vec<String>,
     pub failed: Vec<(String, PluginError)>,
@@ -76,10 +101,11 @@ pub struct LoadOutcome {
 /// variants it failed on (the whole variant, or the rows it failed on, as the
 /// error's note states): the plugins after it run as if it were absent, as
 /// Ensembl VEP's `run_plugins` catches each plugin's failure per line and goes
-/// on to the next plugin (OutputFactory.pm:2212-2256). Empty when every plugin
+/// on to the next plugin (OutputFactory.pm:2221-2265). Empty when every plugin
 /// annotated every variant.
 #[derive(Debug, Default)]
 #[must_use = "a failed plugin is named here and goes unreported when dropped"]
+#[non_exhaustive]
 pub struct BatchOutcome {
     pub failures: Vec<PluginFailure>,
 }
@@ -87,10 +113,11 @@ pub struct BatchOutcome {
 /// One plugin's failure on a batch: the plugin's name and its place in load
 /// order (a built-in loaded twice is two plugins of one name, each with its own
 /// failures), the error the first variant it failed on met, with the note of
-/// the phase's [`Footprint`] naming that variant, and the number of the batch's
+/// the phase's `Footprint` naming that variant, and the number of the batch's
 /// variants it failed on, which the run's warning sums over the batches into
 /// the one line it writes for the plugin.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct PluginFailure {
     pub plugin: String,
     pub instance: usize,
@@ -176,7 +203,7 @@ impl BuiltinRegistry {
     /// it over the batch when it prefetched nothing. A failure of the batch is
     /// retried variant by variant, each variant prefetched and annotated on its
     /// own, as Ensembl VEP's plugins read each line's own span and lose the
-    /// lines whose span fails alone (OutputFactory.pm:2225-2226, REVEL.pm:168);
+    /// lines whose span fails alone (OutputFactory.pm:2234-2235, REVEL.pm:168);
     /// a batch of one variant is its own retry. After a `run_batch` failure
     /// the batch pass wrote every row but the failed ones ([`Footprint::Rows`]),
     /// so the variants after the first that fails on its own have nothing to
@@ -246,7 +273,7 @@ impl BuiltinRegistry {
     /// Load plugins from `--plugin` argument strings.
     ///
     /// Each argument has the format `"PluginName,param1,param2"`.
-    /// Returns names of plugins that were not found as builtins (for dylib
+    /// Returns the arguments no built-in claims, as written (for dylib
     /// fallback); the first built-in whose `init` fails is the error.
     pub fn load_from_args(&mut self, plugin_args: &[String]) -> Result<Vec<String>, PluginError> {
         let outcome = self.load_from_args_with_context(plugin_args, None, None);
@@ -257,8 +284,9 @@ impl BuiltinRegistry {
     }
 
     /// Load plugins with the shared reference FASTA (from `--fasta`) and the
-    /// target assembly (from `--assembly`), under the default run context: the
-    /// `vep` output format and the Ensembl transcript set.
+    /// target assembly (the cache's own, else the value of `--assembly`), under
+    /// the default run context: the `vep` output format and the Ensembl
+    /// transcript set.
     pub fn load_from_args_with_context(
         &mut self,
         plugin_args: &[String],
@@ -274,8 +302,9 @@ impl BuiltinRegistry {
     }
 
     /// Load plugins with the full pipeline context: the shared reference FASTA
-    /// (from `--fasta`), the target assembly (from `--assembly`) and the run's
-    /// output format and transcript set (`--refseq`, `--merged`).
+    /// (from `--fasta`), the target assembly (the cache's own, else the value of
+    /// `--assembly`) and the run's output format and transcript set (`--refseq`,
+    /// `--merged`).
     ///
     /// The assembly, the format and the transcript set are injected **before**
     /// `init()` so a plugin can use them while opening its data files, as Ensembl
@@ -343,25 +372,26 @@ impl BuiltinRegistry {
     /// ([`BuiltinPlugin::prefetch_reads_consequences`] false), in parallel on
     /// the current rayon pool, over a batch that need not be annotated yet;
     /// the other plugins' slots are left for [`Self::annotate_batch`] to fill.
+    /// A warning a prefetch raises is kept with the read-ahead, so a batch
+    /// read ahead and never annotated leaves none.
     pub fn prefetch_ahead(&self, variants: &[InputVariant]) -> PluginPrefetch {
-        PluginPrefetch(
-            self.plugins
-                .par_iter()
-                .map(|plugin| {
-                    if plugin.prefetch_reads_consequences() {
-                        None
-                    } else {
-                        Some(plugin.prefetch(variants))
-                    }
-                })
-                .collect(),
-        )
+        let (slots, raised) = collect_in_order(&self.plugins, |plugin| {
+            if plugin.prefetch_reads_consequences() {
+                None
+            } else {
+                Some(plugin.prefetch(variants))
+            }
+        });
+        PluginPrefetch(slots, raised)
     }
 
     /// Phase 1 for the plugins whose slot `prefetch` left empty, in parallel, then
     /// phase 2 plugin by plugin in load order; every plugin whose prefetch,
     /// annotate or run_batch failed on a variant after the variant-by-variant
-    /// retry is named in the returned [`BatchOutcome`].
+    /// retry is named in the returned [`BatchOutcome`]. The warnings the
+    /// passes raise join the hold of the calling thread
+    /// (`vep_core::warning_hold`): those `prefetch` carries, then phase 1's
+    /// in load order, then phase 2's.
     pub fn annotate_batch(
         &self,
         variants: &mut [InputVariant],
@@ -371,7 +401,9 @@ impl BuiltinRegistry {
         if self.plugins.is_empty() {
             return outcome;
         }
-        debug_assert_eq!(prefetch.0.len(), self.plugins.len());
+        let PluginPrefetch(slots, raised_ahead) = prefetch;
+        debug_assert_eq!(slots.len(), self.plugins.len());
+        raise_again(raised_ahead);
 
         let batch_size = variants.len();
         let overall_start = Instant::now();
@@ -381,12 +413,10 @@ impl BuiltinRegistry {
         let variants_shared: &[InputVariant] = variants;
         let prefetch_start = Instant::now();
 
-        let prefetched: Vec<Prefetched> = self
-            .plugins
-            .par_iter()
-            .zip(prefetch.0)
-            .map(|(plugin, ahead)| ahead.unwrap_or_else(|| plugin.prefetch(variants_shared)))
-            .collect();
+        let prefetched: Vec<Prefetched> =
+            map_in_order(self.plugins.par_iter().zip(slots), |(plugin, ahead)| {
+                ahead.unwrap_or_else(|| plugin.prefetch(variants_shared))
+            });
 
         let prefetch_elapsed = prefetch_start.elapsed();
         debug!(
@@ -449,16 +479,13 @@ impl BuiltinRegistry {
         let variants_shared: &[InputVariant] = variants;
         let prefetch_wall_start = Instant::now();
 
-        let prefetched: Vec<(Result<Option<PrefetchData>, PluginError>, u64)> = self
-            .plugins
-            .par_iter()
-            .map(|plugin| {
+        let prefetched: Vec<(Result<Option<PrefetchData>, PluginError>, u64)> =
+            map_in_order(&self.plugins, |plugin| {
                 let t = Instant::now();
                 let result = plugin.prefetch(variants_shared);
                 let elapsed_ms = t.elapsed().as_millis() as u64;
                 (result, elapsed_ms)
-            })
-            .collect();
+            });
 
         timings.total_prefetch_ms = prefetch_wall_start.elapsed().as_millis() as u64;
 
@@ -601,9 +628,13 @@ impl Default for BuiltinRegistry {
 /// Hands a created built-in the run's context in the order Ensembl VEP's plugins
 /// read it: the assembly, the output format, the transcript set and the plugins
 /// directories before `init` (their constructors read `$self->{config}`), the
-/// shared FASTA after it. A parameter naming a remote data file under the
-/// plugin's own grammar ([`BuiltinPlugin::remote_data_file`]) is refused
-/// before `init` as the instantiation failure
+/// shared FASTA after it. A plugin that needs the reference or the HGVS
+/// notations of a run that has none is refused before `init`, so it reads no
+/// parameter and logs nothing: MaxEntScan.pm:94 and UTRAnnotator.pm:88 read
+/// the run's reference before their parameters. A parameter naming a remote
+/// data file under the plugin's own grammar
+/// ([`BuiltinPlugin::remote_data_file`]) is refused before `init` as the
+/// instantiation failure
 /// `remote data files are not supported; download <url> and index it locally`:
 /// Ensembl VEP's tabix plugins stream a `://` path through htslib
 /// (`BaseVepTabixPlugin.pm` `check_file`), which vep-rs does not do.
@@ -626,7 +657,6 @@ fn load_builtin(
     plugin.set_output_format(run.output_format);
     plugin.set_transcript_set(run.refseq, run.merged);
     plugin.set_plugin_dirs(run.plugin_dirs);
-    plugin.init(params)?;
     if plugin.requires_reference_fasta() && reference_fasta.is_none() {
         return Err(PluginError::Init(format!(
             "{}: a reference FASTA is needed; pass --fasta",
@@ -639,6 +669,7 @@ fn load_builtin(
             plugin.name()
         )));
     }
+    plugin.init(params)?;
     plugin.set_reference_fasta(reference_fasta);
     Ok(())
 }
@@ -742,7 +773,7 @@ pub const UNPORTED_ENSEMBL_PLUGINS: &[(&str, &str)] = &[
     ),
     (
         "EVE",
-        "Missense-only evolutionary scores, popEVE included since release 116, distributed without stated data terms; AlphaMissense covers missense pathogenicity.",
+        "Missense-only evolutionary scores, popEVE included since release 116; AlphaMissense covers missense pathogenicity.",
     ),
     (
         "Enformer",
@@ -811,7 +842,7 @@ pub const UNPORTED_ENSEMBL_PLUGINS: &[(&str, &str)] = &[
     ),
     (
         "MPC",
-        "GRCh37-only regional missense constraint scores.",
+        "A GRCh37-only missense deleteriousness metric.",
     ),
     ("MTR", "A GRCh37-only missense tolerance ratio."),
     (
@@ -864,7 +895,7 @@ pub const UNPORTED_ENSEMBL_PLUGINS: &[(&str, &str)] = &[
     ),
     (
         "ProtVar",
-        "Structure stability, pocket and interface context from a SQLite database; vep-rs embeds no SQLite.",
+        "Structure stability, pocket and interface context from a SQLite database whose tables vep-rs does not read.",
     ),
     (
         "ProteinSeqs",
@@ -909,7 +940,7 @@ pub const UNPORTED_ENSEMBL_PLUGINS: &[(&str, &str)] = &[
     ("VARITY", "A GRCh37-only rare-missense predictor."),
     (
         "mutfunc",
-        "Protein destabilisation and motif effects from a SQLite database; vep-rs embeds no SQLite.",
+        "Protein destabilisation and motif effects from a SQLite database whose tables vep-rs does not read.",
     ),
     (
         "neXtProt",
@@ -1287,6 +1318,8 @@ mod tests {
         calls: Vec<String>,
     }
 
+    impl crate::traits::sealed::Sealed for ContextOrderPlugin {}
+
     impl BuiltinPlugin for ContextOrderPlugin {
         fn name(&self) -> &str {
             "ContextOrder"
@@ -1378,6 +1411,193 @@ mod tests {
         assert_eq!(registry.plugin_names(), ["HGVSIntronOffset"]);
     }
 
+    /// A plugin that states what it needs of the run and records the calls it
+    /// receives.
+    struct NeedsOfTheRunPlugin {
+        reference: bool,
+        hgvs: bool,
+        calls: Vec<&'static str>,
+    }
+
+    impl crate::traits::sealed::Sealed for NeedsOfTheRunPlugin {}
+
+    impl BuiltinPlugin for NeedsOfTheRunPlugin {
+        fn name(&self) -> &str {
+            "NeedsOfTheRun"
+        }
+        fn header_info(&self) -> Vec<(String, String)> {
+            vec![]
+        }
+        fn init(&mut self, _params: &[String]) -> Result<(), PluginError> {
+            self.calls.push("init");
+            Ok(())
+        }
+        fn requires_reference_fasta(&self) -> bool {
+            self.reference
+        }
+        fn requires_hgvs(&self) -> bool {
+            self.hgvs
+        }
+        fn set_reference_fasta(&mut self, _fasta: Option<Arc<vep_fasta::IndexedFasta>>) {
+            self.calls.push("fasta");
+        }
+    }
+
+    /// A plugin that needs the reference or the HGVS notations of a run that
+    /// has none is refused before its `init`, which therefore reads no
+    /// parameter, opens no file and logs nothing; the reference is named first
+    /// where both are missing. With what it needs, `init` runs.
+    #[test]
+    fn a_plugin_the_run_cannot_serve_is_refused_before_its_init() {
+        let load = |reference: bool, hgvs: bool, run_hgvs: bool| {
+            let mut plugin = NeedsOfTheRunPlugin {
+                reference,
+                hgvs,
+                calls: Vec::new(),
+            };
+            let run = RunContext {
+                hgvs: run_hgvs,
+                ..RunContext::default()
+            };
+            let refusal = load_builtin(&mut plugin, &[], None, None, run)
+                .err()
+                .map(|error| error.to_string());
+            (refusal, plugin.calls)
+        };
+        let no_reference =
+            "plugin initialization failed: NeedsOfTheRun: a reference FASTA is needed; pass --fasta";
+        let no_hgvs =
+            "plugin initialization failed: NeedsOfTheRun: the HGVS notations are needed; \
+                       pass --hgvs";
+        assert_eq!(
+            load(true, false, false),
+            (Some(no_reference.to_string()), vec![])
+        );
+        assert_eq!(
+            load(false, true, false),
+            (Some(no_hgvs.to_string()), vec![])
+        );
+        assert_eq!(
+            load(true, true, false),
+            (Some(no_reference.to_string()), vec![])
+        );
+        assert_eq!(load(false, true, true), (None, vec!["init", "fasta"]));
+    }
+
+    /// The built-ins that need the reference are refused in a run without one
+    /// whatever their parameters say, as their Ensembl VEP modules read the
+    /// run's reference before their parameters (MaxEntScan.pm:94 before `:98`,
+    /// UTRAnnotator.pm:88 before `:90`): a missing matrix directory or a
+    /// `file=` that names no file is not reached.
+    #[test]
+    fn a_missing_reference_is_named_before_a_parameter_fault() {
+        for (arg, name) in [
+            ("MaxEntScan", "MaxEntScan"),
+            ("MaxEntScan,/no/such/directory", "MaxEntScan"),
+            ("UTRAnnotator,file=/no/such/file.txt", "UTRAnnotator"),
+        ] {
+            let mut registry = BuiltinRegistry::new();
+            let outcome = registry.load_from_args_for_run(
+                &[arg.to_string()],
+                None,
+                None,
+                RunContext::default(),
+            );
+            assert!(registry.is_empty(), "{arg}");
+            let [(failed, error)] = &outcome.failed[..] else {
+                panic!("{arg}: one failure, got {:?}", outcome.failed);
+            };
+            assert_eq!(failed, name);
+            assert_eq!(
+                error.to_string(),
+                format!(
+                    "plugin initialization failed: {name}: a reference FASTA is needed; pass --fasta"
+                ),
+                "{arg}"
+            );
+        }
+    }
+
+    /// Two built-in plugins that write one key annotate in load order, so the
+    /// value of the one loaded later stands on a row (OutputFactory.pm:2239-2241).
+    /// TranscriptAnnotator under `prefix=0` with a column headed `BayesDel`
+    /// writes the key on the row its table names, and BayesDel writes it for the
+    /// whole record: loaded second, BayesDel leaves no row with a value of its
+    /// own, so the record's prints on every row; loaded first, the named row
+    /// keeps the table's cell over the record's value.
+    #[test]
+    fn the_later_of_two_plugins_writing_one_key_stands_on_a_row() {
+        use crate::test_fixtures::{write_tabix_fixture, IndexSpec};
+        use vep_core::transcript::Transcript;
+
+        let dir = tempfile::tempdir().unwrap();
+        let scores = write_tabix_fixture(
+            dir.path(),
+            "BayesDel_scores_synthetic.txt.gz",
+            &[
+                "#Chr\tPos\tRef\tAlt\tBayesDel_addAF",
+                "21\t4000001\tC\tT\t0.25",
+            ],
+            IndexSpec::standard(),
+        );
+        let table = write_tabix_fixture(
+            dir.path(),
+            "table.tsv.gz",
+            &[
+                "#Chrom\tPos\tRef\tAlt\tTranscript\tBayesDel",
+                "21\t4000001\tC\tT\tENST00000421485\t0.75",
+            ],
+            IndexSpec::standard(),
+        );
+        let bayesdel = format!("BayesDel,file={}", scores.display());
+        let annotator = format!("TranscriptAnnotator,file={},prefix=0", table.display());
+        let transcript_row = |id: &str| {
+            let mut consequence = TranscriptConsequence::default();
+            consequence.transcript = Some(Arc::new({
+                let mut transcript = Transcript::default();
+                transcript.stable_id = id.into();
+                transcript
+            }));
+            consequence.feature_type = FeatureType::Transcript;
+            consequence
+        };
+        let run = |order: [&String; 2]| {
+            let mut registry = BuiltinRegistry::new();
+            let unresolved = registry.load_from_args(&order.map(String::clone)).unwrap();
+            assert!(unresolved.is_empty(), "{unresolved:?}");
+            let mut variants = vec![InputVariant::new(
+                "21".into(),
+                4000001,
+                4000001,
+                b"C".to_vec(),
+                b"T".to_vec(),
+            )];
+            variants[0].transcript_consequences = vec![
+                transcript_row("ENST00000421485"),
+                transcript_row("ENST00000999999"),
+            ];
+            assert!(registry.run_batch(&mut variants).failures.is_empty());
+            let variant = variants.remove(0);
+            let on_rows: Vec<Option<String>> = variant
+                .transcript_consequences
+                .iter()
+                .map(|tc| tc.plugin_data.get("BayesDel").cloned())
+                .collect();
+            (variant.plugin_data.get("BayesDel").cloned(), on_rows)
+        };
+        assert_eq!(
+            run([&annotator, &bayesdel]),
+            (Some("0.25".to_string()), vec![None, None])
+        );
+        assert_eq!(
+            run([&bayesdel, &annotator]),
+            (
+                Some("0.25".to_string()),
+                vec![Some("0.75".to_string()), None]
+            )
+        );
+    }
+
     /// A mock plugin that supports the two-phase prefetch/annotate protocol.
     /// Tracks call counts to verify the parallel execution path is used.
     struct MockPrefetchPlugin {
@@ -1385,6 +1605,8 @@ mod tests {
         prefetch_count: Arc<AtomicUsize>,
         annotate_count: Arc<AtomicUsize>,
     }
+
+    impl crate::traits::sealed::Sealed for MockPrefetchPlugin {}
 
     impl BuiltinPlugin for MockPrefetchPlugin {
         fn name(&self) -> &str {
@@ -1431,6 +1653,8 @@ mod tests {
     struct MockFallbackPlugin {
         run_batch_count: Arc<AtomicUsize>,
     }
+
+    impl crate::traits::sealed::Sealed for MockFallbackPlugin {}
 
     impl BuiltinPlugin for MockFallbackPlugin {
         fn name(&self) -> &str {
@@ -1675,6 +1899,8 @@ mod tests {
         rendezvous: Arc<Rendezvous>,
     }
 
+    impl crate::traits::sealed::Sealed for RendezvousPlugin {}
+
     impl BuiltinPlugin for RendezvousPlugin {
         fn name(&self) -> &str {
             self.name
@@ -1740,7 +1966,7 @@ mod tests {
     /// three prefetches are in flight together and finish in the order their
     /// data arrives (here the reverse of load order); the annotate phase still
     /// runs the plugins in load order, the order Ensembl VEP's `run_plugins`
-    /// walks `@{$self->{plugins}}` (`OutputFactory.pm:2212-2256`), so the
+    /// walks `@{$self->{plugins}}` (`OutputFactory.pm:2221-2265`), so the
     /// fields land in load order whatever the prefetches' timing. Each
     /// prefetch holds its thread until the others are in flight, so the test
     /// runs on its own pool of one thread per plugin; a pool with fewer
@@ -1776,6 +2002,99 @@ mod tests {
         }
     }
 
+    /// A plugin that raises one warning in its prefetch, which runs the longer
+    /// the earlier the plugin was loaded, and one in its annotate, about the
+    /// batch's first record: each as the layer that writes a run's warnings
+    /// gives it to the hold of the thread raising it.
+    struct WarningPlugin {
+        name: &'static str,
+        prefetch_ms: u64,
+    }
+
+    impl crate::traits::sealed::Sealed for WarningPlugin {}
+
+    impl BuiltinPlugin for WarningPlugin {
+        fn name(&self) -> &str {
+            self.name
+        }
+        fn header_info(&self) -> Vec<(String, String)> {
+            vec![]
+        }
+        fn init(&mut self, _params: &[String]) -> Result<(), PluginError> {
+            Ok(())
+        }
+        fn prefetch(
+            &self,
+            _variants: &[InputVariant],
+        ) -> Result<Option<PrefetchData>, PluginError> {
+            std::thread::sleep(std::time::Duration::from_millis(self.prefetch_ms));
+            let _ = vep_core::warning_hold::offer(0, format!("{} prefetch", self.name));
+            Ok(Some(PrefetchData::new(())))
+        }
+        fn annotate(
+            &self,
+            variants: &mut [InputVariant],
+            _data: PrefetchData,
+        ) -> Result<(), PluginError> {
+            let _ = vep_core::warning_hold::offer(
+                variants[0].input_record,
+                format!("{} annotate", self.name),
+            );
+            Ok(())
+        }
+    }
+
+    /// The warnings the plugins raise over a batch join the hold of the thread
+    /// that runs the batch in a fixed order, whatever thread ran which
+    /// prefetch and in whatever order they ended: the prefetches' in load
+    /// order, then each plugin's annotate in load order, under the record it
+    /// names. A read-ahead keeps its prefetch warnings from the hold of the
+    /// thread that reads ahead, and the annotate phase that takes the
+    /// read-ahead raises them ahead of the annotate warnings; a read-ahead
+    /// that is dropped leaves none.
+    #[test]
+    fn plugin_warnings_join_the_callers_hold_in_load_order() {
+        use vep_core::warning_hold::{holding, Held};
+        const NAMES: [&str; 3] = ["First", "Second", "Third"];
+        let mut registry = BuiltinRegistry::new();
+        for (index, name) in NAMES.iter().enumerate() {
+            registry.plugins.push(Box::new(WarningPlugin {
+                name,
+                prefetch_ms: 20 * (NAMES.len() - index) as u64,
+            }));
+        }
+        let held = |input_record: u64, text: String| Held { input_record, text };
+        let prefetches: Vec<Held> = NAMES
+            .iter()
+            .map(|name| held(0, format!("{name} prefetch")))
+            .collect();
+        let annotates: Vec<Held> = NAMES
+            .iter()
+            .map(|name| held(41, format!("{name} annotate")))
+            .collect();
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(NAMES.len())
+            .build()
+            .unwrap();
+        let mut variants = batch_of(5);
+        variants[0].input_record = 41;
+
+        let (outcome, raised) = pool.install(|| holding(|| registry.run_batch(&mut variants)));
+        assert!(outcome.failures.is_empty(), "{:?}", outcome.failures);
+        assert_eq!(raised, [prefetches.clone(), annotates.clone()].concat());
+
+        let (ahead, raised) = pool.install(|| holding(|| registry.prefetch_ahead(&variants)));
+        assert!(raised.is_empty(), "{raised:?}");
+        let (outcome, raised) =
+            pool.install(|| holding(|| registry.annotate_batch(&mut variants, ahead)));
+        assert!(outcome.failures.is_empty(), "{:?}", outcome.failures);
+        assert_eq!(raised, [prefetches, annotates].concat());
+
+        let (dropped, raised) = pool.install(|| holding(|| registry.prefetch_ahead(&variants)));
+        drop(dropped);
+        assert!(raised.is_empty(), "{raised:?}");
+    }
+
     /// A two-phase plugin that prefetches data for a batch holding a record on
     /// chromosome 21 and, for every other batch, opts out of the two-phase
     /// protocol as the tabix built-ins do for a batch with no region to query;
@@ -1785,6 +2104,8 @@ mod tests {
         annotates: Arc<AtomicUsize>,
         run_batches: Arc<AtomicUsize>,
     }
+
+    impl crate::traits::sealed::Sealed for OptOutPlugin {}
 
     impl BuiltinPlugin for OptOutPlugin {
         fn name(&self) -> &str {
@@ -1891,6 +2212,8 @@ mod tests {
         inner: MockPrefetchPlugin,
     }
 
+    impl crate::traits::sealed::Sealed for MockRowReadingPlugin {}
+
     impl BuiltinPlugin for MockRowReadingPlugin {
         fn name(&self) -> &str {
             self.inner.name()
@@ -1994,6 +2317,8 @@ mod tests {
         annotate_calls: Arc<AtomicUsize>,
     }
 
+    impl crate::traits::sealed::Sealed for StepPlugin {}
+
     impl BuiltinPlugin for StepPlugin {
         fn name(&self) -> &str {
             self.name
@@ -2091,6 +2416,8 @@ mod tests {
         runs: Arc<AtomicUsize>,
     }
 
+    impl crate::traits::sealed::Sealed for RowPlugin {}
+
     impl BuiltinPlugin for RowPlugin {
         fn name(&self) -> &str {
             "Row"
@@ -2116,14 +2443,13 @@ mod tests {
 
     /// A transcript row [`RowPlugin`] `fails` on, or writes on.
     fn transcript_row(fails: bool) -> TranscriptConsequence {
-        TranscriptConsequence {
-            exon: fails.then(|| "fails".to_string()),
-            ..row(FeatureType::Transcript)
-        }
+        let mut consequence = row(FeatureType::Transcript);
+        consequence.exon = fails.then(|| "fails".to_string());
+        consequence
     }
 
     /// Ensembl VEP's `run_plugins` evals each row's plugin call on its own
-    /// (OutputFactory.pm:2225-2244), so a row the plugin fails on loses the
+    /// (OutputFactory.pm:2234-2253), so a row the plugin fails on loses the
     /// plugin's fields alone: the rows before and after it and the other
     /// variant's rows keep the field, in a batch of two (retried variant by
     /// variant) and in a batch of one (its own retry), and the outcome's note
@@ -2198,7 +2524,7 @@ mod tests {
     }
 
     /// `run_plugins` catches a plugin's failure per line and runs the next plugin
-    /// (OutputFactory.pm:2243-2245, 2250): a plugin whose annotate fails on every
+    /// (OutputFactory.pm:2252-2254, 2259): a plugin whose annotate fails on every
     /// variant costs its own fields alone, the plugin after it in load order still
     /// annotates every variant, and the outcome names the failure once, with the
     /// plugin's name, the error, the first variant it failed on and the count of
@@ -2285,6 +2611,8 @@ mod tests {
         prefetches: Arc<AtomicUsize>,
     }
 
+    impl crate::traits::sealed::Sealed for SpanPlugin {}
+
     impl BuiltinPlugin for SpanPlugin {
         fn name(&self) -> &str {
             "Span"
@@ -2365,9 +2693,9 @@ mod tests {
         (reason.clone(), *failed_variants)
     }
 
-    /// Ensembl VEP 116.2's plugins read each line's own span inside `run_plugins`'s
+    /// Ensembl VEP 116.3's plugins read each line's own span inside `run_plugins`'s
     /// per-line `eval` (REVEL.pm:168 `get_data` per variation feature,
-    /// OutputFactory.pm:2225-2226), so a span that cannot be read costs its own
+    /// OutputFactory.pm:2234-2235), so a span that cannot be read costs its own
     /// line the field and no other: a batch whose prefetch fails is retried
     /// variant by variant, the variants whose own span reads keep the field, the
     /// failing one has none, and the outcome names the plugin once with the error
@@ -2509,6 +2837,8 @@ mod tests {
         fields: Vec<(&'static str, &'static str)>,
     }
 
+    impl crate::traits::sealed::Sealed for MockHeaderPlugin {}
+
     impl BuiltinPlugin for MockHeaderPlugin {
         fn name(&self) -> &str {
             self.name
@@ -2537,10 +2867,9 @@ mod tests {
     }
 
     fn row(feature_type: FeatureType) -> TranscriptConsequence {
-        TranscriptConsequence {
-            feature_type,
-            ..TranscriptConsequence::default()
-        }
+        let mut consequence = TranscriptConsequence::default();
+        consequence.feature_type = feature_type;
+        consequence
     }
 
     /// Every built-in whose Ensembl VEP module declares `feature_types` of

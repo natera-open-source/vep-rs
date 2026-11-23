@@ -49,6 +49,8 @@
   "is_single_breakend": false,
   "vep_skip": false,
   "oversize_sv": false,
+  "states_a_loss": false,
+  "states_the_run_length": false,
   "no_allele": false,
   "input_record": 0,
   "uploaded_allele_string": "A/ATT/AG",

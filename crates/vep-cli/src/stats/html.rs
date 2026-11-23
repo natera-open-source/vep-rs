@@ -4,7 +4,10 @@
 //! The HTML statistics report (`Stats.pm` `dump_html` and `stats_html_head`):
 //! one self-contained page with Ensembl VEP's sections, element ids and order,
 //! whose charts are inline SVG drawn here, so the page loads no script, no
-//! remote chart library and no image.
+//! remote chart library and no image. Under each chart's heading a comment
+//! holds the statement Ensembl VEP's page hands its chart library for that
+//! chart (`Stats.pm:955-963`), so a program that reads a chart's counts from
+//! that line of Ensembl VEP's page reads them from this one.
 
 use std::f64::consts::{FRAC_PI_2, TAU};
 use std::fmt::Write as _;
@@ -94,12 +97,23 @@ impl Kind {
             Kind::Area => "area",
         }
     }
+
+    /// The function a chart's statement calls: `draw` and the type with its
+    /// first letter in upper case (`ucfirst`, `Stats.pm:940`).
+    fn drawer(self) -> &'static str {
+        match self {
+            Kind::Pie => "drawPie",
+            Kind::Bar => "drawBar",
+            Kind::Area => "drawArea",
+        }
+    }
 }
 
 /// How `dump_html` draws one chart (`generate_chart_data`, `Stats.pm:505-609`):
 /// its type, the two column headers of its table, its height, whether the table
 /// prints (`no_table` unset), whether the side menu links to it (`no_link`
-/// unset), and the colours its keys name (`colours`).
+/// unset), the colours its keys name (`colours`) and the chart library options
+/// its statement carries (`options`). No chart names both colours and options.
 struct Shape {
     kind: Kind,
     header: [&'static str; 2],
@@ -107,6 +121,7 @@ struct Shape {
     table: bool,
     linked: bool,
     colours: &'static [(&'static str, &'static str)],
+    options: Option<&'static str>,
 }
 
 /// The shape of the chart with element id `id`.
@@ -118,6 +133,7 @@ fn shape(id: &str) -> Shape {
         table: true,
         linked: true,
         colours,
+        options: None,
     };
     match id {
         "var_class" => pie("Variant class", CHART_HEIGHT, &[]),
@@ -133,6 +149,7 @@ fn shape(id: &str) -> Shape {
             table: true,
             linked: true,
             colours: &[],
+            options: Some(r#"{legend: {position: "none"}}"#),
         },
         "protein" => Shape {
             kind: Kind::Bar,
@@ -141,6 +158,9 @@ fn shape(id: &str) -> Shape {
             table: false,
             linked: true,
             colours: &[],
+            options: Some(
+                r#"{hAxis: {title: "Position in protein (percentile)", textStyle: {fontSize: 10}}, legend: {position: "none"}}"#,
+            ),
         },
         // Every other id is a `Distribution of variants on chromosome` chart
         // (`chr_<name>`, `Stats.pm:580-595`).
@@ -151,6 +171,9 @@ fn shape(id: &str) -> Shape {
             table: false,
             linked: false,
             colours: &[],
+            options: Some(
+                r#"{hAxis: {title: "Position (mb)", textStyle: {fontSize: 8}}, legend: {position: "none"}}"#,
+            ),
         },
     }
 }
@@ -239,8 +262,10 @@ fn stats_table<'a>(out: &mut String, rows: impl Iterator<Item = (&'a str, &'a st
     out.push_str("</table>");
 }
 
-/// One chart (`Stats.pm:898-909`): a rule, the titled heading, the chart element
-/// holding the drawing, and the table of its rows unless the chart has none.
+/// One chart (`Stats.pm:898-909`): a rule, the titled heading, the chart's
+/// statement in a comment on a line of its own, the chart element holding the
+/// drawing, and the table of its rows unless the chart has none. The statement,
+/// the drawing and the table are written from the same rows.
 fn chart_section(out: &mut String, chart: &Chart) {
     let shape = shape(&chart.id);
     let _ = write!(
@@ -249,6 +274,10 @@ fn chart_section(out: &mut String, chart: &Chart) {
         chart.id,
         escape(&chart.title)
     );
+    // A program that reads a chart's counts takes them from the first line
+    // that holds the chart's title before the statement, so the statement
+    // shares its line with no heading and no other chart's statement.
+    let _ = write!(out, "\n<!-- {} -->\n", chart_statement(chart, &shape));
     let _ = write!(
         out,
         "<div id=\"{}_{}\" style=\"width: {}px; height: {}px\">",
@@ -289,14 +318,80 @@ fn chart_svg(chart: &Chart, shape: &Shape) -> String {
     svg
 }
 
-/// The colour of the key at `index`: the chart's own for a key it names, else
-/// the palette's, taken in key order.
-fn colour_of(key: &str, index: usize, colours: &[(&'static str, &'static str)]) -> &'static str {
+/// The statement `stats_html_head` writes for one chart (`Stats.pm:955-963`):
+/// the chart element's id, the function of its type, its title, the two column
+/// headers and every row as `['key',count]`, then the chart's options. Nothing
+/// in the page runs it: it stands where a program that collects reports finds
+/// a chart's counts in Ensembl VEP's page.
+fn chart_statement(chart: &Chart, shape: &Shape) -> String {
+    let element = format!("{}_{}", script_text(&chart.id), shape.kind.name());
+    let mut statement = format!(
+        "var {element} = {}('{element}', '{}', google.visualization.arrayToDataTable([['{}','{}'],",
+        shape.kind.drawer(),
+        script_text(&chart.title),
+        shape.header[0],
+        shape.header[1]
+    );
+    for (index, (key, count)) in chart.rows.iter().enumerate() {
+        if index > 0 {
+            statement.push(',');
+        }
+        let _ = write!(statement, "['{}',{count}]", script_text(key));
+    }
+    let _ = write!(statement, "]), {});", statement_options(chart, shape));
+    statement
+}
+
+/// The last argument of a chart's statement (`Stats.pm:942-952, 962`): a
+/// `slices` list with one entry per row for a chart whose keys name colours,
+/// the colour where the chart names the row's key and `{}` where it does not;
+/// else the chart's own options, or `null` for a chart with neither.
+fn statement_options(chart: &Chart, shape: &Shape) -> String {
+    if shape.colours.is_empty() {
+        return shape.options.unwrap_or("null").to_string();
+    }
+    let slices: Vec<String> = chart
+        .rows
+        .iter()
+        .map(|(key, _)| match named_colour(key, shape.colours) {
+            Some(colour) => format!("{{color: \"{colour}\"}}"),
+            None => "{}".to_string(),
+        })
+        .collect();
+    format!("{{slices: [{}]}}", slices.join(", "))
+}
+
+/// `text` as it stands in a chart's statement: a backslash and a single quote
+/// take a backslash, and `<`, `>` and a control character are written as
+/// `\xNN`, which a single-quoted string reads back as the character. So no
+/// text ends the string, the line or the comment its statement stands in.
+fn script_text(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '\'' => out.push_str("\\'"),
+            c if matches!(c, '<' | '>') || c.is_control() => {
+                let _ = write!(out, "\\x{:02x}", u32::from(c));
+            }
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+/// The colour the chart's `colours` give `key`, for a key they name.
+fn named_colour(key: &str, colours: &[(&'static str, &'static str)]) -> Option<&'static str> {
     colours
         .iter()
         .find(|(name, _)| *name == key)
         .map(|(_, colour)| *colour)
-        .unwrap_or(PALETTE[index % PALETTE.len()])
+}
+
+/// The colour of the key at `index`: the chart's own for a key it names, else
+/// the palette's, taken in key order.
+fn colour_of(key: &str, index: usize, colours: &[(&'static str, &'static str)]) -> &'static str {
+    named_colour(key, colours).unwrap_or(PALETTE[index % PALETTE.len()])
 }
 
 /// A pie of the rows' shares, drawn clockwise from the top in row order, with a
@@ -670,20 +765,20 @@ mod tests {
     /// A transcript row with a SIFT and a PolyPhen term in the middle of its
     /// protein.
     fn transcript_row(id: &str) -> TranscriptConsequence {
-        TranscriptConsequence {
-            transcript: Some(Arc::new(Transcript {
-                stable_id: Arc::from(id),
-                gene_stable_id: Arc::from("ENSG1"),
-                ..Transcript::default()
-            })),
-            consequences: smallvec![Consequence::MissenseVariant],
-            feature_type: FeatureType::Transcript,
-            sift_term: Some(PredictionTerm::Deleterious),
-            polyphen_term: Some(PredictionTerm::Benign),
-            protein_start: Some(50),
-            protein_total: Some(100),
-            ..Default::default()
-        }
+        let mut consequence = TranscriptConsequence::default();
+        consequence.transcript = Some(Arc::new({
+            let mut transcript = Transcript::default();
+            transcript.stable_id = Arc::from(id);
+            transcript.gene_stable_id = Arc::from("ENSG1");
+            transcript
+        }));
+        consequence.consequences = smallvec![Consequence::MissenseVariant];
+        consequence.feature_type = FeatureType::Transcript;
+        consequence.sift_term = Some(PredictionTerm::Deleterious);
+        consequence.polyphen_term = Some(PredictionTerm::Benign);
+        consequence.protein_start = Some(50);
+        consequence.protein_total = Some(100);
+        consequence
     }
 
     /// The statistics of three records with two transcript rows each, under
@@ -734,6 +829,222 @@ mod tests {
                 ),
             ],
         }
+    }
+
+    /// The chart table a statement hands the chart library, read back: the two
+    /// column headers, then each row's key and count. A string is single-quoted
+    /// and reads `\\`, `\'` and `\xNN` as one character each.
+    fn read_table(literal: &str) -> ([String; 2], Vec<(String, u64)>) {
+        fn string(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> String {
+            assert_eq!(chars.next(), Some('\''));
+            let mut text = String::new();
+            loop {
+                match chars.next().expect("a string ends at its quote") {
+                    '\'' => return text,
+                    '\\' => match chars.next().expect("an escape names a character") {
+                        'x' => {
+                            let code: String = chars.by_ref().take(2).collect();
+                            text.push(char::from(u8::from_str_radix(&code, 16).unwrap()));
+                        }
+                        c => text.push(c),
+                    },
+                    c => text.push(c),
+                }
+            }
+        }
+        let mut chars = literal.chars().peekable();
+        assert_eq!(chars.next(), Some('['));
+        assert_eq!(chars.next(), Some('['));
+        let first = string(&mut chars);
+        assert_eq!(chars.next(), Some(','));
+        let second = string(&mut chars);
+        assert_eq!(chars.next(), Some(']'));
+        assert_eq!(chars.next(), Some(','));
+        let mut rows = Vec::new();
+        while chars.next_if_eq(&'[').is_some() {
+            let key = string(&mut chars);
+            assert_eq!(chars.next(), Some(','));
+            let mut count = String::new();
+            while let Some(digit) = chars.next_if(char::is_ascii_digit) {
+                count.push(digit);
+            }
+            assert_eq!(chars.next(), Some(']'));
+            rows.push((key, count.parse().unwrap()));
+            chars.next_if_eq(&',');
+        }
+        assert_eq!(chars.next(), Some(']'));
+        assert_eq!(chars.next(), None);
+        ([first, second], rows)
+    }
+
+    /// What a program that collects reports takes for the chart titled `title`:
+    /// the first line of the page that holds the title, then
+    /// `google.visualization`, then a `;`, and in that stretch the text from the
+    /// first `[[` to the last `]]`.
+    fn collected<'a>(html: &'a str, title: &str) -> Option<&'a str> {
+        html.lines().find_map(|line| {
+            let titled = &line[line.find(title)?..];
+            let call = &titled[..titled.rfind(';')?];
+            call[title.len()..].find("google.visualization")?;
+            Some(&call[call.find("[[")?..call.rfind("]]")? + 2])
+        })
+    }
+
+    /// The rows of the chart's table as the page prints them.
+    fn table_rows(html: &str, id: &str) -> Vec<(String, u64)> {
+        let table = &html[html.find(&format!("<table id=\"{id}_table\"")).unwrap()..];
+        let table = &table[..table.find("</table>").unwrap()];
+        table
+            .split("<tr><td>")
+            .skip(1)
+            .map(|row| {
+                let (key, rest) = row.split_once("</td><td>").unwrap();
+                let count = rest.strip_suffix("</td></tr>").unwrap();
+                (key.to_string(), count.parse().unwrap())
+            })
+            .collect()
+    }
+
+    /// `stats_html_head` (`Stats.pm:942-963`): a chart's statement names its
+    /// element twice, the function of its type, its title, its two headers and
+    /// its rows in order, then its options: a `slices` entry per row for a
+    /// chart whose keys name colours, the chart's own options, or `null`.
+    #[test]
+    fn chart_statements_are_the_lines_stats_html_head_writes() {
+        let statement = |chart: &Chart| chart_statement(chart, &shape(&chart.id));
+        let report = fixed_report();
+        let statements: Vec<String> = report.charts.iter().map(statement).collect();
+        assert_eq!(
+            statements,
+            [
+                r##"var var_cons_pie = drawPie('var_cons_pie', 'Consequences (most severe)', google.visualization.arrayToDataTable([['Consequence type','Count'],['missense_variant',3],['intron_variant',5],['other',2]]), {slices: [{color: "#ffd700"}, {color: "#02599c"}, {}]});"##,
+                r##"var chr_bar = drawBar('chr_bar', 'Variants by chromosome', google.visualization.arrayToDataTable([['Chromosome','Count'],['21',7],['X',3]]), {legend: {position: "none"}});"##,
+                r##"var chr_21_area = drawArea('chr_21_area', 'Distribution of variants on chromosome 21', google.visualization.arrayToDataTable([['Position (mb)','Count'],['0',1],['1',0],['2',4],['3',2]]), {hAxis: {title: "Position (mb)", textStyle: {fontSize: 8}}, legend: {position: "none"}});"##,
+            ]
+        );
+        let chart = |id: &str, title: &str, rows: &[(&str, u64)]| Chart {
+            id: id.to_string(),
+            title: title.to_string(),
+            rows: rows.iter().map(|(k, n)| (k.to_string(), *n)).collect(),
+        };
+        assert_eq!(
+            statement(&chart(
+                "var_class",
+                "Variant classes",
+                &[("insertion", 2), ("SNV", 9)]
+            )),
+            "var var_class_pie = drawPie('var_class_pie', 'Variant classes', google.visualization.arrayToDataTable([['Variant class','Count'],['insertion',2],['SNV',9]]), null);"
+        );
+        assert_eq!(
+            statement(&chart(
+                "sift",
+                "SIFT summary",
+                &[
+                    ("tolerated_low_confidence", 1),
+                    ("tolerated", 4),
+                    ("deleterious", 6)
+                ]
+            )),
+            r##"var sift_pie = drawPie('sift_pie', 'SIFT summary', google.visualization.arrayToDataTable([['Prediction','Count'],['tolerated_low_confidence',1],['tolerated',4],['deleterious',6]]), {slices: [{}, {color: "green"}, {color: "red"}]});"##
+        );
+        assert_eq!(
+            statement(&chart(
+                "protein",
+                "Position in protein",
+                &[("00-10%", 4), ("10-20%", 0)]
+            )),
+            r##"var protein_bar = drawBar('protein_bar', 'Position in protein', google.visualization.arrayToDataTable([['Position in protein (percentile)','Count'],['00-10%',4],['10-20%',0]]), {hAxis: {title: "Position in protein (percentile)", textStyle: {fontSize: 10}}, legend: {position: "none"}});"##
+        );
+        // A chart without rows keeps its headers and an empty `slices` list.
+        assert_eq!(
+            statement(&chart("coding", "Coding consequences", &[])),
+            "var coding_pie = drawPie('coding_pie', 'Coding consequences', google.visualization.arrayToDataTable([['Consequence type','Count'],]), {slices: []});"
+        );
+    }
+
+    /// Each chart's heading is followed by its statement in a comment on a line
+    /// of its own, then by its chart element. What a program that collects
+    /// reports takes from that line reads back as the chart's headers and rows,
+    /// which are the rows of its table; and with the statement lines taken out
+    /// the body is the one line of sections it is without them.
+    #[test]
+    fn each_chart_title_is_followed_by_its_counts_as_a_collector_reads_them() {
+        for report in [full_report(), fixed_report()] {
+            let html = report.html();
+            let mut without_statements = html.clone();
+            for chart in &report.charts {
+                let shape = shape(&chart.id);
+                let statement = chart_statement(chart, &shape);
+                assert!(
+                    html.contains(&format!(
+                        "<h3 id=\"{}\">{}</h3>\n<!-- {statement} -->\n<div id=\"{}_{}\"",
+                        chart.id,
+                        escape(&chart.title),
+                        chart.id,
+                        shape.kind.name()
+                    )),
+                    "{}",
+                    chart.id
+                );
+                let (header, rows) = read_table(
+                    collected(&html, &chart.title)
+                        .unwrap_or_else(|| panic!("no statement is read for {}", chart.id)),
+                );
+                assert_eq!(header, shape.header, "{}", chart.id);
+                assert_eq!(rows, chart.rows, "{}", chart.id);
+                if shape.table {
+                    assert_eq!(rows, table_rows(&html, &chart.id), "{}", chart.id);
+                }
+                without_statements =
+                    without_statements.replace(&format!("\n<!-- {statement} -->\n"), "");
+            }
+            let naming_the_library: Vec<&str> = html
+                .lines()
+                .filter(|line| line.contains("google.visualization"))
+                .collect();
+            assert_eq!(naming_the_library.len(), report.charts.len());
+            for line in naming_the_library {
+                assert!(
+                    line.starts_with("<!-- var ") && line.ends_with("); -->"),
+                    "{line}"
+                );
+            }
+            assert!(!without_statements.contains("<!--"));
+            let body = without_statements
+                .strip_prefix(HEAD)
+                .and_then(|rest| rest.strip_suffix("\n</div></body>\n</html>\n"))
+                .unwrap();
+            assert!(!body.contains('\n'));
+        }
+    }
+
+    /// A key that holds a quote, a backslash, a line break or the marks that
+    /// open and close a comment stands in its statement as one string on one
+    /// line and reads back as itself; the page still holds one comment a chart.
+    #[test]
+    fn statement_text_ends_neither_its_string_nor_its_comment() {
+        let keys = ["it's", "a\\b", "x-->y", "<!--", "two\nlines", "a]]b"];
+        let report = Report {
+            charts: vec![Chart {
+                id: "chr".to_string(),
+                title: "Variants by chromosome".to_string(),
+                rows: keys
+                    .iter()
+                    .zip(1..)
+                    .map(|(key, count)| (key.to_string(), count))
+                    .collect(),
+            }],
+            ..fixed_report()
+        };
+        let html = report.html();
+        assert_eq!(html.matches("<!--").count(), 1);
+        assert_eq!(html.matches("-->").count(), 1);
+        let (_, rows) = read_table(collected(&html, "Variants by chromosome").unwrap());
+        assert_eq!(rows, report.charts[0].rows);
+        assert_eq!(
+            script_text("it's <b> \\ \u{7f}\r"),
+            r"it\'s \x3cb\x3e \\ \x7f\x0d"
+        );
     }
 
     /// The page loads nothing: no script, no remote resource; its sections and

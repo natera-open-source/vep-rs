@@ -6,7 +6,7 @@
 //! `--json_cache` (alias `--full_cache_dir`) names the cache directory itself;
 //! otherwise the directory is found in Ensembl VEP's layout under the cache root,
 //! `<dir_cache>/<species>[_refseq|_merged]/<cache_version>_<assembly>`, as
-//! `CacheDir.pm` resolves it (`dir`, release/116.2 lines 298-379). In both cases
+//! `CacheDir.pm` resolves it (`dir`, release/116.3 lines 298-379). In both cases
 //! the directory must hold `transcripts/` and `info.json`, `--assembly` must
 //! agree with the cache (`CacheDir.pm:347` against the directory name, `:404-408`
 //! against the cache's metadata, which the directory name's own assembly must
@@ -22,10 +22,12 @@
 //!
 //! The cache's checksum manifest (`CHECKSUMS.sha256`, [`CacheManifest`]) is
 //! read here, once, before `info.json`, and every cache file the run then reads
-//! whole is checked against it; a cache without one warns once and loads.
+//! whole is checked against it; a cache without one warns once and loads. A
+//! directory whose manifest is the line a build writes before its first file
+//! is one a build left early, refused by name whatever it holds.
 //!
 //! Two settings of the run follow from the metadata, as `CacheDir.pm` settles
-//! them (`info`, release/116.2 lines 395-439, and `source_type`, lines 513-522):
+//! them (`info`, release/116.3 lines 395-439, and `source_type`, lines 513-522):
 //! a cache whose `info.json` names the alignment file its models were edited
 //! against (`bam`) switches `--use_transcript_ref` and the `BAM_EDIT` column on
 //! unless `--use_given_ref` was given, with an `INFO:` line; and the transcript
@@ -46,6 +48,7 @@ use crate::config::{CliError, Config};
 /// The transcript set a run selects: `--merged`, else `--refseq`, else the
 /// Ensembl set (`CacheDir.pm:517`, `grep {$self->param($_)} qw(merged refseq)`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum SourceType {
     Ensembl,
     RefSeq,
@@ -54,7 +57,7 @@ pub enum SourceType {
 
 impl SourceType {
     /// The set the configuration's flags select.
-    pub fn from_flags(config: &Config) -> Self {
+    pub(crate) fn from_flags(config: &Config) -> Self {
         if config.merged {
             SourceType::Merged
         } else if config.refseq {
@@ -66,7 +69,7 @@ impl SourceType {
 
     /// The set's name as the converter writes it under `source_type`, and as
     /// Ensembl VEP spells `source_type`: `ensembl`, `refseq` or `merged`.
-    pub fn key(self) -> &'static str {
+    pub(crate) fn key(self) -> &'static str {
         match self {
             SourceType::Ensembl => "ensembl",
             SourceType::RefSeq => "refseq",
@@ -87,7 +90,7 @@ impl SourceType {
 }
 
 /// The `INFO:` line of a BAM-edited cache (`CacheDir.pm:413`).
-pub const BAM_EDITED_NOTICE: &str =
+pub(crate) const BAM_EDITED_NOTICE: &str =
     "INFO: BAM-edited cache detected, enabling --use_transcript_ref; use --use_given_ref to override this";
 
 /// The cache a run reads, resolved and validated.
@@ -120,12 +123,44 @@ pub struct ResolvedCache {
     pub notices: Vec<&'static str>,
 }
 
-/// Perl's `species` parameter spellings that Ensembl VEP refuses as a species
+/// Ensembl VEP's `species` parameter spellings that it refuses as a species
 /// directory (`CacheDir.pm:310-311`): the suffix comes from `--refseq` or `--merged`.
 const SUFFIXED_SPECIES: [&str; 2] = ["homo_sapiens_refseq", "homo_sapiens_merged"];
 
 fn cache_error(message: impl Into<String>) -> CliError {
     CliError::new("cache", message)
+}
+
+/// A refusal of the cache's resolution, with whether it says that no cache
+/// stands where the run names one: no directory at the path, no cache of the
+/// species, version or assembly under the cache root, or a directory that
+/// holds no cache. Every other refusal is of a cache that stands there (its
+/// manifest, its metadata, its assembly, its transcript set, its synonyms),
+/// of a `--species`, `--assembly` or `--synonyms` value, or of a species
+/// directory that cannot be listed.
+#[derive(Debug)]
+pub(crate) struct Refusal {
+    /// The refusal as the run reports it.
+    pub(crate) error: CliError,
+    /// Whether the refusal says that no cache stands where the run names one.
+    pub(crate) no_cache: bool,
+}
+
+impl From<CliError> for Refusal {
+    fn from(error: CliError) -> Self {
+        Refusal {
+            error,
+            no_cache: false,
+        }
+    }
+}
+
+/// The refusal of a run for which no cache stands where it names one.
+fn no_cache(message: impl Into<String>) -> Refusal {
+    Refusal {
+        error: cache_error(message),
+        no_cache: true,
+    }
 }
 
 /// `hg19` and `hg38` are accepted for `--assembly` as the canonical names they
@@ -143,19 +178,32 @@ pub(crate) fn canonical_assembly(value: &str) -> &str {
 /// switches `use_transcript_ref` and `bam_edited` on and owes the run its
 /// `INFO:` line ([`ResolvedCache::notices`]) unless `--use_given_ref` was
 /// given (`CacheDir.pm:412-416`).
-pub fn resolve(config: &mut Config) -> Result<ResolvedCache, CliError> {
+pub(crate) fn resolve(config: &mut Config) -> Result<ResolvedCache, CliError> {
+    resolve_or_refusal(config).map_err(|refusal| refusal.error)
+}
+
+/// [`resolve`], its refusal kept with whether it says that no cache stands
+/// where the run names one ([`Refusal`]).
+pub(crate) fn resolve_or_refusal(config: &mut Config) -> Result<ResolvedCache, Refusal> {
     let config_assembly = config.assembly.as_deref().map(canonical_assembly);
     let (dir, dir_assembly) = match &config.json_cache {
         Some(dir) => {
             // CacheDir.pm:109.
             if !Path::new(dir).is_dir() {
-                return Err(cache_error(format!("Directory {dir} does not exist")));
+                return Err(no_cache(format!("Directory {dir} does not exist")));
             }
             (dir.clone(), None)
         }
         None => layout_dir(config, config_assembly)?,
     };
-    validate_leaf(&dir)?;
+    if let Err(holds_no_cache) = validate_leaf(&dir) {
+        // A directory a build left early is refused as that, whichever of its
+        // files the build had written.
+        return Err(match CacheManifest::load(&dir) {
+            Err(error @ ManifestError::Unfinished { .. }) => manifest_error(error).into(),
+            _ => holds_no_cache,
+        });
+    }
     let manifest = Arc::new(load_manifest(&dir)?);
     let info = read_info(&dir, &manifest)?;
     // CacheDir.pm:407-408 compares the configuration's assembly after `dir` set it
@@ -168,7 +216,8 @@ pub fn resolve(config: &mut Config) -> Result<ResolvedCache, CliError> {
         if wanted != found {
             return Err(cache_error(format!(
                 "Mismatch in assembly versions from config ({wanted}) and cache info.json file ({found})"
-            )));
+            ))
+            .into());
         }
     }
     let assembly = info
@@ -187,7 +236,8 @@ pub fn resolve(config: &mut Config) -> Result<ResolvedCache, CliError> {
             return Err(cache_error(format!(
                 "{} but {dir}/info.json declares source_type {declared}",
                 source_type.selection()
-            )));
+            ))
+            .into());
         }
     }
     let mut notices = Vec::new();
@@ -290,12 +340,13 @@ fn os_error_text(error: &std::io::Error) -> String {
 fn layout_dir(
     config: &Config,
     config_assembly: Option<&str>,
-) -> Result<(String, Option<String>), CliError> {
+) -> Result<(String, Option<String>), Refusal> {
     let species = config.species.as_str();
     if SUFFIXED_SPECIES.contains(&species) {
         return Err(cache_error(format!(
             "Should not use {species} as --species. Try using flags --refseq or --merged with --species homo_sapiens"
-        )));
+        ))
+        .into());
     }
     let mut species_dir = species.to_string();
     if config.refseq {
@@ -306,7 +357,7 @@ fn layout_dir(
     }
     let dir = collapse_slashes(&format!("{}/{species_dir}", config.dir_cache));
     if !Path::new(&dir).exists() {
-        return Err(cache_error(format!("Cache directory {dir} not found")));
+        return Err(no_cache(format!("Cache directory {dir} not found")));
     }
     let version = config.cache_version.to_string();
     let mut matched: Vec<String> = std::fs::read_dir(&dir)
@@ -318,7 +369,7 @@ fn layout_dir(
     matched.sort();
     let (leaf, dir_assembly) = match matched.as_slice() {
         [] => {
-            return Err(cache_error(format!(
+            return Err(no_cache(format!(
                 "No cache found for {species_dir}, version {version}"
             )))
         }
@@ -328,7 +379,8 @@ fn layout_dir(
                 if wanted != found {
                     return Err(cache_error(format!(
                         "Cache assembly version ({found}) and database or selected assembly version ({wanted}) do not match"
-                    )));
+                    ))
+                    .into());
                 }
             }
             (only.clone(), dir_assembly.map(str::to_string))
@@ -343,12 +395,13 @@ fn layout_dir(
                 return Err(cache_error(format!(
                     "Multiple assemblies found for cache version {version} ({}) - specify one using --assembly [assembly]",
                     possibles.join(", ")
-                )));
+                ))
+                .into());
             }
             Some(wanted) => {
                 let leaf = format!("{version}_{wanted}");
                 if !Path::new(&dir).join(&leaf).exists() {
-                    return Err(cache_error(format!(
+                    return Err(no_cache(format!(
                         "No cache found for {species}, version {version}, assembly {wanted}"
                     )));
                 }
@@ -382,17 +435,15 @@ fn collapse_slashes(path: &str) -> String {
 }
 
 /// A cache directory holds `transcripts/` and `info.json`.
-fn validate_leaf(dir: &str) -> Result<(), CliError> {
+fn validate_leaf(dir: &str) -> Result<(), Refusal> {
     let path = Path::new(dir);
     if !path.join("transcripts").is_dir() {
-        return Err(cache_error(format!(
+        return Err(no_cache(format!(
             "no cache found at {dir}: no transcripts directory"
         )));
     }
     if !path.join("info.json").is_file() {
-        return Err(cache_error(format!(
-            "no cache found at {dir}: no info.json"
-        )));
+        return Err(no_cache(format!("no cache found at {dir}: no info.json")));
     }
     Ok(())
 }
@@ -443,6 +494,25 @@ mod tests {
         for leaf in leaves {
             let info = INFO.replace("GRCh38", assembly_in_name(leaf).unwrap_or("GRCh38"));
             make_leaf(&root.path().join("homo_sapiens").join(leaf), Some(&info));
+        }
+        root
+    }
+
+    /// A cache root holding `<species>/<leaf>` for each leaf name, each leaf's
+    /// `info.json` naming the species, the assembly its directory name carries
+    /// and, as the cache's own version, the number given beside the name.
+    fn make_species_root(species: &str, leaves: &[(&str, u32)]) -> tempfile::TempDir {
+        let root = tempfile::tempdir().unwrap();
+        for (leaf, version) in leaves {
+            let info = serde_json::json!({
+                "species": species,
+                "assembly": assembly_in_name(leaf),
+                "cache_version": version,
+            });
+            make_leaf(
+                &root.path().join(species).join(leaf),
+                Some(&info.to_string()),
+            );
         }
         root
     }
@@ -646,6 +716,288 @@ mod tests {
         );
     }
 
+    /// An Ensembl Genomes cache sits in a directory named for that division's
+    /// release (`63_TAIR10`), so the default version, the Ensembl release
+    /// (`CacheDir.pm:323`), finds no cache under the species (`:336`), and
+    /// `--cache_version 63` resolves it, the assembly read from the directory
+    /// name (`:344-356`).
+    #[test]
+    fn an_ensembl_genomes_cache_needs_its_own_version() {
+        let species = "arabidopsis_thaliana";
+        let root = make_species_root(species, &[("63_TAIR10", 63)]);
+        let root_s = root.path().to_str().unwrap();
+        assert_eq!(
+            error(&["--dir_cache", root_s, "--species", species]),
+            format!(
+                "ERROR: [cache] No cache found for {species}, version {}",
+                vep_core::VEP_VERSION
+            )
+        );
+        let resolved = resolve_flags(&[
+            "--dir_cache",
+            root_s,
+            "--species",
+            species,
+            "--cache_version",
+            "63",
+        ])
+        .unwrap();
+        assert_eq!(
+            resolved.dir,
+            joined(root.path(), "arabidopsis_thaliana/63_TAIR10")
+        );
+        assert_eq!(resolved.assembly.as_deref(), Some("TAIR10"));
+        assert_eq!(resolved.info.cache_version, Some(63));
+    }
+
+    /// A species shipped at both an Ensembl Genomes release and the Ensembl
+    /// release has one directory for each: the default version picks the
+    /// Ensembl one and `--cache_version 63` the other (`CacheDir.pm:323, 329`),
+    /// and neither run asks for `--assembly`, each version matching one
+    /// directory (`:340`).
+    #[test]
+    fn a_species_with_both_versions_resolves_by_the_flag() {
+        let species = "saccharomyces_cerevisiae";
+        let release_leaf = format!("{}_R64-1-1", vep_core::VEP_VERSION);
+        let root = make_species_root(
+            species,
+            &[("63_R64-1-1", 63), (&release_leaf, vep_core::VEP_VERSION)],
+        );
+        let root_s = root.path().to_str().unwrap();
+        let by_default = resolve_flags(&["--dir_cache", root_s, "--species", species]).unwrap();
+        assert_eq!(
+            by_default.dir,
+            joined(root.path(), &format!("{species}/{release_leaf}"))
+        );
+        assert_eq!(by_default.info.cache_version, Some(vep_core::VEP_VERSION));
+        let by_flag = resolve_flags(&[
+            "--dir_cache",
+            root_s,
+            "--species",
+            species,
+            "--cache_version",
+            "63",
+        ])
+        .unwrap();
+        assert_eq!(
+            by_flag.dir,
+            joined(root.path(), &format!("{species}/63_R64-1-1"))
+        );
+        assert_eq!(by_flag.info.cache_version, Some(63));
+        for resolved in [by_default, by_flag] {
+            assert_eq!(resolved.assembly.as_deref(), Some("R64-1-1"));
+        }
+    }
+
+    /// The version selects by prefix: `CacheDir.pm:329` keeps the directory
+    /// names matching `/^$cache_version/`, so `--cache_version 6` finds
+    /// `63_TAIR10`. Where the prefix matches two directories their names are
+    /// listed whole, since `:362` strips `6_` and neither begins with it (in
+    /// name order here, in the order the directory is read there), and
+    /// `--assembly` then names `6_<assembly>` (`:368`), which no directory is
+    /// (`:369`).
+    #[test]
+    fn the_version_is_matched_as_a_prefix_as_ensembl_vep_matches_it() {
+        let species = "arabidopsis_thaliana";
+        let root = make_species_root(species, &[("63_TAIR10", 63)]);
+        let root_s = root.path().to_str().unwrap();
+        let by_prefix = [
+            "--dir_cache",
+            root_s,
+            "--species",
+            species,
+            "--cache_version",
+            "6",
+        ];
+        let resolved = resolve_flags(&by_prefix).unwrap();
+        assert_eq!(
+            resolved.dir,
+            joined(root.path(), "arabidopsis_thaliana/63_TAIR10")
+        );
+        assert_eq!(resolved.assembly.as_deref(), Some("TAIR10"));
+
+        make_leaf(
+            &root.path().join(species).join("64_TAIR11"),
+            Some(r#"{"species":"arabidopsis_thaliana","assembly":"TAIR11","cache_version":64}"#),
+        );
+        assert_eq!(
+            error(&by_prefix),
+            "ERROR: [cache] Multiple assemblies found for cache version 6 (63_TAIR10, 64_TAIR11) - specify one using --assembly [assembly]"
+        );
+        let mut with_assembly = by_prefix.to_vec();
+        with_assembly.extend_from_slice(&["--assembly", "TAIR10"]);
+        assert_eq!(
+            error(&with_assembly),
+            "ERROR: [cache] No cache found for arabidopsis_thaliana, version 6, assembly TAIR10"
+        );
+        let mut whole_version = by_prefix.to_vec();
+        *whole_version.last_mut().unwrap() = "63";
+        assert_eq!(
+            resolve_flags(&whole_version).unwrap().dir,
+            joined(root.path(), "arabidopsis_thaliana/63_TAIR10")
+        );
+    }
+
+    /// `--json_cache` names the cache directory itself, so no version is read
+    /// from the flags (`CacheDir.pm:303`: the layout is resolved only when no
+    /// directory is given): a version-63 cache resolves without
+    /// `--cache_version`, and with one that names another release.
+    #[test]
+    fn json_cache_needs_no_version() {
+        let root = make_species_root("arabidopsis_thaliana", &[("63_TAIR10", 63)]);
+        let leaf = joined(root.path(), "arabidopsis_thaliana/63_TAIR10");
+        let release = vep_core::VEP_VERSION.to_string();
+        for flags in [
+            &["--json_cache", &leaf][..],
+            &["--json_cache", &leaf, "--cache_version", &release][..],
+        ] {
+            let resolved = resolve_flags(flags).unwrap();
+            assert_eq!(resolved.dir, leaf, "{flags:?}");
+            assert_eq!(resolved.assembly.as_deref(), Some("TAIR10"), "{flags:?}");
+            assert_eq!(resolved.info.cache_version, Some(63), "{flags:?}");
+        }
+    }
+
+    /// The version a cache's own metadata states is compared with nothing:
+    /// the directory name alone carries the version (`CacheDir.pm:329`), and
+    /// Ensembl VEP's `info.txt` reader keeps every line it is given without
+    /// reading a version from any (`:454-482`). A cache whose `info.json`
+    /// says 63 inside a directory named for the release resolves by default,
+    /// and `--cache_version 63` finds no cache there.
+    #[test]
+    fn the_caches_own_version_is_not_compared_with_the_flag() {
+        let species = "arabidopsis_thaliana";
+        let release_leaf = format!("{}_TAIR10", vep_core::VEP_VERSION);
+        let root = make_species_root(species, &[(&release_leaf, 63)]);
+        let root_s = root.path().to_str().unwrap();
+        let resolved = resolve_flags(&["--dir_cache", root_s, "--species", species]).unwrap();
+        assert_eq!(
+            resolved.dir,
+            joined(root.path(), &format!("{species}/{release_leaf}"))
+        );
+        assert_eq!(resolved.info.cache_version, Some(63));
+        assert_eq!(
+            error(&[
+                "--dir_cache",
+                root_s,
+                "--species",
+                species,
+                "--cache_version",
+                "63"
+            ]),
+            "ERROR: [cache] No cache found for arabidopsis_thaliana, version 63"
+        );
+    }
+
+    /// A human pangenome cache sits under its own species directory, at the
+    /// version of its own release and under an assembly name that carries a
+    /// hyphen and a dot: `--species` and `--cache_version` resolve it
+    /// (`CacheDir.pm:309-341`), the directory name gives the assembly whole
+    /// (`:344`, `/\d+\_(.+)/`), with `--assembly` or without it, and another
+    /// assembly is refused (`:347-353`). The name is neither human build the
+    /// plugin hint knows, so the plugins get no hint, and the run's assembly
+    /// is read from the flag where the flag is given and from the cache where
+    /// it is not.
+    #[test]
+    fn a_pangenome_cache_resolves_by_its_species_directory_and_version() {
+        let species = "homo_sapiens_gca009914755v4";
+        let root = make_species_root(species, &[("107_T2T-CHM13v2.0", 107)]);
+        let root_s = root.path().to_str().unwrap();
+        let leaf = joined(root.path(), "homo_sapiens_gca009914755v4/107_T2T-CHM13v2.0");
+        let by_name = [
+            "--dir_cache",
+            root_s,
+            "--species",
+            species,
+            "--cache_version",
+            "107",
+        ];
+        let mut with_assembly = by_name.to_vec();
+        with_assembly.extend_from_slice(&["--assembly", "T2T-CHM13v2.0"]);
+        use crate::annotator::RunAssembly;
+        for (flags, read_from) in [
+            (&by_name[..], RunAssembly::Cache("T2T-CHM13v2.0")),
+            (&with_assembly[..], RunAssembly::Flag("T2T-CHM13v2.0")),
+        ] {
+            let mut settled = config(flags);
+            let resolved = resolve(&mut settled).unwrap();
+            assert_eq!(resolved.dir, leaf, "{flags:?}");
+            assert_eq!(
+                resolved.assembly.as_deref(),
+                Some("T2T-CHM13v2.0"),
+                "{flags:?}"
+            );
+            assert_eq!(
+                crate::annotator::resolve_assembly(resolved.assembly.as_deref()),
+                None,
+                "{flags:?}"
+            );
+            assert_eq!(
+                RunAssembly::of(&settled, &resolved),
+                Some(read_from),
+                "{flags:?}"
+            );
+        }
+        let mut other_assembly = by_name.to_vec();
+        other_assembly.extend_from_slice(&["--assembly", "GRCh38"]);
+        assert_eq!(
+            error(&other_assembly),
+            "ERROR: [cache] Cache assembly version (T2T-CHM13v2.0) and database or selected assembly version (GRCh38) do not match"
+        );
+        assert_eq!(
+            error(&by_name[..4]),
+            format!(
+                "ERROR: [cache] No cache found for {species}, version {}",
+                vep_core::VEP_VERSION
+            )
+        );
+        assert_eq!(assembly_in_name("107_T2T-CHM13v2.0"), Some("T2T-CHM13v2.0"));
+    }
+
+    /// The pangenome assemblies ship no RefSeq or merged cache, so `--refseq`
+    /// and `--merged` name a species directory the root lacks and the run
+    /// stops with `Cache directory <dir> not found` (`CacheDir.pm:312-318`).
+    /// The spellings refused as a species are the two human ones alone
+    /// (`:310-311`), so the pangenome name with a set suffix is looked up as
+    /// a directory like any other name.
+    #[test]
+    fn refseq_and_merged_are_refused_by_name_where_the_pangenome_has_no_such_cache() {
+        let species = "homo_sapiens_gca009914755v4";
+        let root = make_species_root(species, &[("107_T2T-CHM13v2.0", 107)]);
+        let root_s = root.path().to_str().unwrap();
+        for set in ["refseq", "merged"] {
+            let not_found = format!(
+                "ERROR: [cache] Cache directory {} not found",
+                joined(root.path(), &format!("{species}_{set}"))
+            );
+            let flag = format!("--{set}");
+            assert_eq!(
+                error(&[
+                    "--dir_cache",
+                    root_s,
+                    "--species",
+                    species,
+                    "--cache_version",
+                    "107",
+                    &flag
+                ]),
+                not_found
+            );
+            let suffixed = format!("{species}_{set}");
+            assert_eq!(
+                error(&[
+                    "--dir_cache",
+                    root_s,
+                    "--species",
+                    &suffixed,
+                    "--cache_version",
+                    "107"
+                ]),
+                not_found
+            );
+        }
+    }
+
     /// `--species` names the directory under the root, suffixed `_refseq` or
     /// `_merged` under those flags (`CacheDir.pm:309-315`).
     #[test]
@@ -696,6 +1048,54 @@ mod tests {
                 )
             );
         }
+    }
+
+    /// The refusal names the two human spellings alone (`CacheDir.pm:310-311`):
+    /// a suffixed name of any other species is a species directory like any
+    /// other, taken as given without a set flag and suffixed again under
+    /// `--refseq` or `--merged` (`:312`), where a missing directory is named
+    /// with both suffixes.
+    #[test]
+    fn a_suffixed_name_of_another_species_is_a_directory_name() {
+        let root = tempfile::tempdir().unwrap();
+        for species in ["mus_musculus_refseq", "mus_musculus_refseq_refseq"] {
+            make_leaf(
+                &root.path().join(species).join("116_GRCm39"),
+                Some(&INFO.replace("GRCh38", "GRCm39")),
+            );
+        }
+        let root_s = root.path().to_str().unwrap();
+        assert_eq!(
+            resolve_flags(&["--dir_cache", root_s, "--species", "mus_musculus_refseq"])
+                .unwrap()
+                .dir,
+            joined(root.path(), "mus_musculus_refseq/116_GRCm39")
+        );
+        assert_eq!(
+            resolve_flags(&[
+                "--dir_cache",
+                root_s,
+                "--species",
+                "mus_musculus_refseq",
+                "--refseq"
+            ])
+            .unwrap()
+            .dir,
+            joined(root.path(), "mus_musculus_refseq_refseq/116_GRCm39")
+        );
+        assert_eq!(
+            error(&[
+                "--dir_cache",
+                root_s,
+                "--species",
+                "mus_musculus_merged",
+                "--merged"
+            ]),
+            format!(
+                "ERROR: [cache] Cache directory {} not found",
+                joined(root.path(), "mus_musculus_merged_merged")
+            )
+        );
     }
 
     /// `--assembly` is compared exactly and case-sensitively: against the directory
@@ -779,7 +1179,9 @@ mod tests {
 
     /// The run's assembly is the cache's: inferred from the directory name under
     /// the layout (`CacheDir.pm:356`) and read from `info.json` under `--json_cache`,
-    /// with no `--assembly`; `hg19` and `hg38` stand for the canonical names.
+    /// with no `--assembly`; `hg19` and `hg38` stand for the canonical names. A
+    /// name the directory or `info.json` gave is read from the cache, and one
+    /// `--assembly` gave from the flag.
     #[test]
     fn assembly_inferred_from_cache_feeds_plugin_hint() {
         let root = make_root(&["116_GRCh37"]);
@@ -798,13 +1200,26 @@ mod tests {
                 .as_deref(),
             Some("GRCh37")
         );
+        use crate::annotator::RunAssembly;
+        for flags in [&["--dir_cache", root_s][..], &["--json_cache", &leaf][..]] {
+            let mut settled = config(flags);
+            let resolved = resolve(&mut settled).unwrap();
+            assert_eq!(
+                RunAssembly::of(&settled, &resolved),
+                Some(RunAssembly::Cache("GRCh37")),
+                "{flags:?}"
+            );
+        }
         for flags in [
             &["--dir_cache", root_s, "--assembly", "hg19"][..],
             &["--json_cache", &leaf, "--assembly", "hg19"][..],
         ] {
+            let mut settled = config(flags);
+            let resolved = resolve(&mut settled).unwrap();
+            assert_eq!(resolved.assembly.as_deref(), Some("GRCh37"), "{flags:?}");
             assert_eq!(
-                resolve_flags(flags).unwrap().assembly.as_deref(),
-                Some("GRCh37"),
+                RunAssembly::of(&settled, &resolved),
+                Some(RunAssembly::Flag("GRCh37")),
                 "{flags:?}"
             );
         }
@@ -885,6 +1300,23 @@ mod tests {
             malformed.starts_with(&format!("ERROR: [cache] {path}/info.json: ")),
             "{malformed}"
         );
+    }
+
+    /// A directory a build left early is refused as that, with `info.json`
+    /// and without it: its manifest is the line a build writes before its
+    /// first file.
+    #[test]
+    fn a_directory_a_build_left_early_is_named_as_one() {
+        let dir = tempfile::tempdir().unwrap();
+        make_leaf(dir.path(), None);
+        CacheManifest::mark_unfinished(dir.path()).unwrap();
+        let path = dir.path().to_str().unwrap();
+        let refusal = format!(
+            "ERROR: [cache] {path} holds a cache whose build did not finish: build it again"
+        );
+        assert_eq!(error(&["--json_cache", path]), refusal);
+        fs::write(dir.path().join("info.json"), INFO).unwrap();
+        assert_eq!(error(&["--json_cache", path]), refusal);
     }
 
     /// A `--json_cache` path that is not a directory is refused with Ensembl VEP's
@@ -1085,8 +1517,8 @@ mod tests {
         assert!(!settled.bam_edited);
         assert!(resolved.notices.is_empty());
 
-        // `$info->{bam}` is tested for Perl truth, so an empty or `0` value is no
-        // alignment file.
+        // Ensembl VEP tests `$info->{bam}` for Perl truth, so an empty or `0` value is
+        // no alignment file.
         for bam in ["", "0"] {
             let falsy = tempfile::tempdir().unwrap();
             make_leaf(

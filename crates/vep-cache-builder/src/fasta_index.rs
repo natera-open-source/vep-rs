@@ -53,7 +53,7 @@ pub fn install_fasta(source: &Path, target: &Path) -> Result<()> {
 
 /// Whether the gzip file at `path` is BGZF: its first member carries the `BC`
 /// extra subfield that states the block size.
-pub fn is_bgzf(path: &Path) -> Result<bool> {
+pub(crate) fn is_bgzf(path: &Path) -> Result<bool> {
     let mut file =
         File::open(path).with_context(|| format!("Failed to open {}", path.display()))?;
     let mut header = [0u8; 18];

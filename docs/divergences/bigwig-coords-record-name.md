@@ -1,12 +1,12 @@
 # The name of a bigWig record under `coords`
 
-**The defect in one sentence.** Under `coords`, Ensembl VEP 116.2's per-record walk names a bigWig record by the file's chromosome name less a leading `chr` and by the interval's 0-based start with its end. A one-base interval at position `5029000` of `chr21` prints as `21:5028999-5029000`. vep-rs prints the same interval as `chr21:5029000-5029000`, the file's chromosome name with the interval's 1-based start and end.
+**The defect in one sentence.** Under `coords`, Ensembl VEP 116.3's per-record walk names a bigWig record by the file's chromosome name less a leading `chr` and by the interval's 0-based start with its end. A one-base interval at position `5029000` of `chr21` prints as `21:5028999-5029000`. vep-rs prints the same interval as `chr21:5029000-5029000`, the file's chromosome name with the interval's 1-based start and end.
 
 **Why this is a defect.** The name has the form of a region, `<chromosome>:<start>-<end>`, and a region Ensembl VEP prints is 1-based and inclusive: the `Location` column is, and so is a BED record's name under `coords`. A bigWig stores an interval 0-based and half-open, and the walk prints the stored start beside the end. The start printed is one below the interval's first base, so a one-base interval reads as two bases and two adjacent intervals read as sharing one. The reader's matching code adds one to that start before it tests the interval, and its span rule prints the start plus one under the file's chromosome name. One source so names its records in two forms.
 
 **What vep-rs does instead.** vep-rs names every record by the file's chromosome name with the interval's 1-based start and end, the form Ensembl VEP's span rule prints, whatever the variant's length. The values, the matching and the statistics agree; the name alone differs.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2, `Bio/EnsEMBL/VEP/AnnotationSource/`; `ensembl-io` at release/116, `Bio/EnsEMBL/IO/`):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3, `Bio/EnsEMBL/VEP/AnnotationSource/`; `ensembl-io` at release/116, `Bio/EnsEMBL/IO/`):
 
 - `File/BigWig.pm`, lines 416-428, `_get_record_name`: under `coords` the name is `sprintf('%s:%i-%i', ...)` over the parser's `get_seqname`, `get_start` and `get_end`.
 - `BigFileParser.pm`, lines 105-108: the file's chromosomes are keyed by their names with `s/^chr//` applied, each key mapped to the file's own name.
@@ -19,11 +19,11 @@
 
 **The class it produces.** `bigwig_coords_record_name`: the `<short_name>` list of a bigWig source read with `coords` on, for a variant the per-record walk reads. The reference names each record with a start one below the candidate's, and without the leading `chr` the candidate prints when the file's chromosome names carry one. The class is documented only: no comparator codes it, since no committed flag set reaches it.
 
-**How often the shape occurs.** Tier 3: the shape is a bigWig source whose `coords` option is on, and every record such a source lists on the walk is named alike. Of the 392 committed flag sets, 4 name a bigWig source and none passes `coords` to one.
+**How often the shape occurs.** Tier 3: the shape is a bigWig source whose `coords` option is on, and every record such a source lists on the walk is named alike. Of the 511 committed flag sets, 4 name a bigWig source and none passes `coords` to one.
 
 ## 1. A one-base interval named as a two-base region
 
-**In short.** The bigWig `named.bw` holds three one-base intervals on `chr21`, at positions `5029000` to `5029002`. Under `--custom file=named.bw,short_name=named,format=bigwig,type=overlap,coords=1`, the record `snv`, `21 5029000 T>G`, overlaps the first. Ensembl VEP 116.2 prints `named=21:5028999-5029000`; vep-rs prints `named=chr21:5029000-5029000`. The record `pair`, a two-base substitution at `21:5029001-5029002`, lists `21:5029000-5029001,21:5029001-5029002` in Ensembl VEP and `chr21:5029001-5029001,chr21:5029002-5029002` in vep-rs.
+**In short.** The bigWig `named.bw` holds three one-base intervals on `chr21`, at positions `5029000` to `5029002`. Under `--custom file=named.bw,short_name=named,format=bigwig,type=overlap,coords=1`, the record `snv`, `21 5029000 T>G`, overlaps the first. Ensembl VEP 116.3 prints `named=21:5028999-5029000`; vep-rs prints `named=chr21:5029000-5029000`. The record `pair`, a two-base substitution at `21:5029001-5029002`, lists `21:5029000-5029001,21:5029001-5029002` in Ensembl VEP and `chr21:5029001-5029001,chr21:5029002-5029002` in vep-rs.
 
 ### 1.1 What a reader needs to know first
 
@@ -56,7 +56,7 @@ Both engines read the cache of the `GRCh38-custom` golden corpus (`tests/golden/
 
 ### 1.3 What each engine writes
 
-The two rows in the default format. Ensembl VEP 116.2:
+The two rows in the default format. Ensembl VEP 116.3:
 
 ```
 snv	21:5029000	G	-	-	-	intergenic_variant	-	-	-	-	-	-	IMPACT=MODIFIER;named=21:5028999-5029000
@@ -78,7 +78,7 @@ The walk builds a record's name from three getters of the bigWig parser. `get_se
 
 The same reader treats that start as 0-based where it matches. Before it tests an interval against the variant it adds one to `get_start`, under the comment `BigWig format is 0-based half-open`. The name is built from the start as stored.
 
-Source (`ensembl-vep` at release/116.2, `ensembl-io` at release/116):
+Source (`ensembl-vep` at release/116.3, `ensembl-io` at release/116):
 
 - `Bio/EnsEMBL/VEP/AnnotationSource/File/BigWig.pm`, lines 416-428: `_get_record_name`.
 - `Bio/EnsEMBL/IO/BigFileParser.pm`, lines 105-108: the chromosome keys.
@@ -100,7 +100,7 @@ vep -i record.vcf -o out.txt --offline --json_cache <corpus>/json_cache \
   --custom file=named.bw,short_name=named,format=bigwig,type=overlap,coords=1
 ```
 
-vep-rs writes `named=chr21:5029000-5029000` for `snv`. Ensembl VEP 116.2 takes the same `--custom` flag with the cache options of [Reproducing these examples](reproducing.md) and writes `named=21:5028999-5029000`.
+vep-rs writes `named=chr21:5029000-5029000` for `snv`. Ensembl VEP 116.3 takes the same `--custom` flag with the cache options of [Reproducing these examples](reproducing.md) and writes `named=21:5028999-5029000`.
 
 ### 1.7 How the comparator treats this class
 

@@ -1,0 +1,2 @@
+#Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	Extra
+v	21:100	-	g1	T1	Transcript	intron_variant

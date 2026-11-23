@@ -36,8 +36,8 @@ use rayon::ThreadPool;
 
 use super::manifest::{Manifest, PartEntry};
 use super::order::{InputOrder, OrderMonitor, UnsortedInput};
-use super::rows::RowBatch;
-use super::{parquet_error, sort_key_columns, BLOOM_FILTER_COLUMNS};
+use super::rows::{ParquetOutputFormatter, RowBatch};
+use super::{parquet_error, sort_key_columns, BLOOM_FILTER_COLUMNS, TAB_COLUMNS_KEY};
 use crate::error::IoError;
 
 /// The most encoded bytes a row group holds before the next one opens.
@@ -77,6 +77,7 @@ const ENCODER_STOPPED: &str = "the Parquet encoder stopped before the rows were 
 
 /// How the parts are laid out under the output directory.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Partition {
     /// One `chrom=<spelling>/` directory per chromosome as the input spells it,
     /// the parts of a spelling inside it (`--parquet_partition chrom`).
@@ -383,21 +384,23 @@ impl Part {
 
 impl ParquetDirectoryWriter {
     /// Creates the output directory `dir`, or takes an empty one, for parts with
-    /// the layout's writer properties and `kv_metadata` in every footer; the
-    /// `sort` key is appended to each as it closes, and the manifest is written
-    /// last. Under [`InputOrder::Checked`] every row group declares the sort,
-    /// the rows pass the order check and a part closes at every chromosome
-    /// boundary; under [`InputOrder::Unchecked`] none of the three. Under
-    /// [`Partition::Chrom`] a part closes at every change of the chromosome's
-    /// spelling and lives in that spelling's directory.
+    /// the layout's writer properties and `kv_metadata` in every footer, with
+    /// the tab column names of `formatter`, whose columns the parts hold, under
+    /// [`TAB_COLUMNS_KEY`]; the `sort` key is appended to each as it closes, and
+    /// the manifest is written last. Under [`InputOrder::Checked`] every row
+    /// group declares the sort, the rows pass the order check and a part closes
+    /// at every chromosome boundary; under [`InputOrder::Unchecked`] none of
+    /// the three. Under [`Partition::Chrom`] a part closes at every change of
+    /// the chromosome's spelling and lives in that spelling's directory.
     pub fn create(
         dir: &Path,
-        schema: SchemaRef,
+        formatter: &ParquetOutputFormatter,
         kv_metadata: Vec<(String, String)>,
         order: InputOrder,
         partition: Option<Partition>,
     ) -> Result<Self, IoError> {
         create_output_directory(dir)?;
+        let schema = Arc::clone(formatter.schema());
         let monitor = match order {
             InputOrder::Checked { unlisted_rank } => Some(OrderMonitor::new(unlisted_rank)),
             InputOrder::Unchecked => None,
@@ -430,6 +433,12 @@ impl ParquetDirectoryWriter {
             .set_key_value_metadata(Some(
                 kv_metadata
                     .into_iter()
+                    .chain(
+                        schema
+                            .metadata()
+                            .get(TAB_COLUMNS_KEY)
+                            .map(|names| (TAB_COLUMNS_KEY.to_string(), names.clone())),
+                    )
                     .map(|(key, value)| KeyValue::new(key, value))
                     .collect(),
             ));
@@ -900,7 +909,8 @@ mod tests {
     use super::*;
     use crate::output::fields::FieldOptions;
     use crate::output::parquet::{
-        part_files, sort_keys, ParquetOutputFormatter, RowBatchBuilder, MANIFEST_NAME,
+        part_files, sort_keys, tab_column_types, tab_rows, ParquetOutputFormatter, RowBatchBuilder,
+        MANIFEST_NAME,
     };
     use parquet::file::reader::FileReader;
     use parquet::file::serialized_reader::SerializedFileReader;
@@ -932,7 +942,7 @@ mod tests {
             ("vep_rs_version".to_string(), "0.0.0".to_string()),
             ("run_id".to_string(), "run".to_string()),
         ];
-        ParquetDirectoryWriter::create(dir, Arc::clone(f.schema()), kv, order, partition).unwrap()
+        ParquetDirectoryWriter::create(dir, f, kv, order, partition).unwrap()
     }
 
     /// One intergenic record per `(chrom, written position, start, end)`, the
@@ -1298,16 +1308,58 @@ mod tests {
         std::fs::create_dir(&taken).unwrap();
         open(&taken, &f, checked(&f), None).close().unwrap();
         assert_eq!(part_names(&taken), ["part-00000.parquet"]);
-        let error = ParquetDirectoryWriter::create(
-            &taken,
-            Arc::clone(f.schema()),
-            vec![],
-            checked(&f),
-            None,
-        )
-        .err()
-        .expect("a directory holding files is refused");
+        let error = ParquetDirectoryWriter::create(&taken, &f, vec![], checked(&f), None)
+            .err()
+            .expect("a directory holding files is refused");
         assert!(error.to_string().contains("exists"), "{error}");
+    }
+
+    /// Every part's footer states the `--tab` column names once under
+    /// `tab_columns`, a plugin's `REF` stored as `tab_REF` under its own name:
+    /// the parts of two chromosomes, the parts of a partitioned output and the
+    /// one part of a run with no rows, each read back under those names.
+    #[test]
+    fn every_part_states_the_tab_column_names_in_its_footer() {
+        let dir = tempfile::tempdir().unwrap();
+        let f = Arc::new(ParquetOutputFormatter::new(
+            FieldOptions::default(),
+            vec!["REF".to_string()],
+            vec!["21".into(), "22".into()],
+        ));
+        assert_eq!(f.schema().fields().last().unwrap().name(), "tab_REF");
+        let names = &f.schema().metadata()[TAB_COLUMNS_KEY];
+        assert!(names.ends_with("\tSTRAND\tFLAGS\tREF"), "{names}");
+        let stated = |part: &Path| -> Vec<String> {
+            let reader = SerializedFileReader::new(File::open(part).unwrap()).unwrap();
+            let footer = reader.metadata().file_metadata();
+            footer
+                .key_value_metadata()
+                .into_iter()
+                .flatten()
+                .filter(|kv| kv.key == TAB_COLUMNS_KEY)
+                .filter_map(|kv| kv.value.clone())
+                .collect()
+        };
+        let records: &[(&str, u64, u64, u64)] = &[("21", 1, 1, 1), ("22", 2, 2, 2)];
+        let outputs = [
+            ("parts", None, records, 2),
+            ("hive", Some(Partition::Chrom), records, 2),
+            ("empty", None, &records[..0], 1),
+        ];
+        for (name, partition, records, parts) in outputs {
+            let out = dir.path().join(name);
+            let mut writer = open(&out, &f, checked(&f), partition);
+            writer.write(batch(&f, records)).unwrap();
+            writer.close().unwrap();
+            let written = part_files(&out).unwrap();
+            assert_eq!(written.len(), parts, "{name}");
+            for part in &written {
+                assert_eq!(stated(part), [names.as_str()], "{}", part.display());
+                let read_back = tab_column_types(part).unwrap();
+                assert_eq!(read_back.last().unwrap().0, "REF", "{}", part.display());
+            }
+            assert_eq!(tab_rows(&out).unwrap().len(), records.len(), "{name}");
+        }
     }
 
     #[test]

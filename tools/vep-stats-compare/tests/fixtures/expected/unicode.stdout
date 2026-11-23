@@ -1,0 +1,5 @@
+stats: red
+  section [Only é expected] only in the expected file
+  section [Only 😀 actual] only in the actual file
+  [VEP run statistics]: 2 differences
+  [Conséquences 🧬]: 2 differences

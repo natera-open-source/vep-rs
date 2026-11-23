@@ -15,9 +15,14 @@
 //! the exponent as `e-5`, so the exponent form is assembled here.
 //!
 //! The text those modules hand `sprintf` is a table cell, which Perl numifies
-//! first: [`numify`] reads a cell as Perl does. A parameter value met in
-//! arithmetic or a numeric comparison is read by [`numify_arithmetic`], which
+//! first: `numify` reads a cell as Perl does. A parameter value met in
+//! arithmetic or a numeric comparison is read by `numify_arithmetic`, which
 //! differs on a few `inf` and `nan` spellings.
+//!
+//! Perl multiplies and divides two integers as integers where the result
+//! allows it, so a product of whole numbers past `2^53` is exact where the
+//! same product in doubles has rounded: `PerlNumber` is an operand of those
+//! two operators, read from a text or carried out of an earlier operation.
 
 /// `sprintf("%g", value)`: six significant digits, trailing zeros dropped.
 pub fn sprintf_g(value: f64) -> String {
@@ -71,13 +76,19 @@ fn perl_space(c: char) -> bool {
     matches!(c, ' ' | '\t' | '\n' | '\x0b' | '\x0c' | '\r')
 }
 
-/// The number Perl makes of `text` in arithmetic or a numeric comparison
-/// (`$v + 0`, `$v == 1`, `$v < 0`): the infinity or not-a-number Perl's
-/// `grok_number` flags from the text after one sign, whatever trails the word
-/// and whether or not the grammar consumed it, else the number [`numify`]
-/// reads; so `qnan`, `1.#QNAN` and `-SNaN` are not a number and `1.#INFI` is
-/// infinite here, where `sprintf` reads `0`, `1`, `0` and `1`. `None` where
-/// nothing numeric leads `text`, which Perl numifies to `0`.
+/// The number Perl makes of `text` as the right operand of an arithmetic
+/// operator or a numeric comparison, or as the left operand beside an
+/// integer (`0.5 + $v`, `$v + 0`, `$v == 1`, `$v < 0`): the infinity or
+/// not-a-number Perl's `grok_number` flags from the text after one sign,
+/// whatever trails the word and whether or not the grammar consumed it, else
+/// the number [`numify`] reads; so `qnan`, `1.#QNAN` and `-SNaN` are not a
+/// number and `1.#INFI` is infinite here, where `sprintf` reads `0`, `1`, `0`
+/// and `1`. A left operand beside a right operand Perl does not read as an
+/// integer, a double such as `0.5`, is converted as `sprintf` converts it:
+/// `$v + 0.5` and `$v < 0.5` take [`numify`]'s reading of those spellings.
+/// `None` where nothing numeric leads `text`, which Perl numifies to `0`.
+/// A zero keeps [`numify`]'s sign: `-0` is negative zero here, and the
+/// integer zero to Perl on the right of an operator or beside an integer.
 pub(crate) fn numify_arithmetic(text: &str) -> Option<f64> {
     let text = text.trim_start_matches(perl_space);
     let (negative, body) = sign(text);
@@ -90,6 +101,334 @@ pub(crate) fn numify_arithmetic(text: &str) -> Option<f64> {
         });
     }
     numify(text).map(|(value, _)| value)
+}
+
+/// `2^53`: every whole number below it is a double, and Perl's operators read a
+/// double out of arithmetic as an integer only below it
+/// (`NV_PRESERVES_UV_BITS`, sv.c `S_sv_2iuv_common`).
+const DOUBLE_INTEGERS: u64 = 1 << 53;
+
+/// The magnitude of the lowest signed 64-bit integer, `2^63`.
+const IV_MIN_MAGNITUDE: u64 = 1 << 63;
+
+/// An operand of Perl's `*` and `/` as Perl 5.34 holds it on a 64-bit build
+/// (`pp_multiply` and `pp_divide`, pp.c, under `PERL_PRESERVE_IVUV`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum PerlNumber {
+    /// An integer of the signed or the unsigned 64-bit range, as its sign and
+    /// its magnitude; a negative one reaches `-2^63`. A zero is negative only
+    /// as the operand of an exponent spelling of negative zero (`-0e0`),
+    /// whose double keeps the sign.
+    Integer { negative: bool, magnitude: u64 },
+    /// A double out of arithmetic, or of a text Perl reads as one. The
+    /// operators read it as an integer where it is a whole number below
+    /// `2^53`.
+    Double(f64),
+    /// The double of a text with a decimal point and no exponent, which the
+    /// operators multiply and divide as a double whatever its value
+    /// (`IS_NUMBER_IN_UV | IS_NUMBER_NOT_INT` sets no public integer flag).
+    Point(f64),
+    /// A text Perl's two converters read differently, such as `qnan`,
+    /// `1.#QNAN` and `-0`: `value` is `grok_number`'s reading, taken for the
+    /// right operand and for the left operand of an integer (`sv_2iv_flags`),
+    /// and `left_of_double` is `my_atof3`'s, taken for the left operand of a
+    /// double (`sv_2nv_flags`).
+    Spelled { value: f64, left_of_double: f64 },
+}
+
+impl PerlNumber {
+    /// The operand Perl makes of a text it reads whole, raising no `isn't
+    /// numeric` warning (`grok_number`, numeric.c): blanks, one sign, then
+    /// digits with at most one point and at least one digit, an exponent that
+    /// carries digits, and blanks to the end; or the ten bytes `0 but true`;
+    /// or an infinity or a not-a-number in a spelling [`infnan_whole`] takes;
+    /// or a `-` and blanks to the end, which `grok_number` returns as a sign
+    /// alone and Perl reads as zero. Digits alone are an integer where they
+    /// fit 64 bits, and so is an exponent spelling whose double is a whole
+    /// number that fits them (`1e3`, `1.5e1`); `None` for a text Perl
+    /// converts only under the warning.
+    pub(crate) fn from_text(text: &str) -> Option<Self> {
+        if text == "0 but true" {
+            return Some(Self::integer(false, 0));
+        }
+        let (negative, body) = sign(text.trim_start_matches(perl_space));
+        if let Some(number) = Self::decimal_whole(negative, body) {
+            return Some(number);
+        }
+        if negative && !body.is_empty() && body.chars().all(perl_space) {
+            return Some(Self::integer(false, 0));
+        }
+        // `grok_number` keeps the sign for an infinity and clears it for a
+        // not-a-number.
+        let value = infnan_whole(body)?;
+        let value = if negative && value.is_infinite() {
+            -value
+        } else {
+            value
+        };
+        // `sv_2nv_flags` hands `my_atof3` the text as a C string, which ends
+        // at its first NUL byte.
+        let c_string = text.split('\0').next().unwrap_or(text);
+        let left_of_double = numify(c_string).map_or(0.0, |(converted, _)| converted);
+        Some(
+            if left_of_double == value || (left_of_double.is_nan() && value.is_nan()) {
+                Self::Double(value)
+            } else {
+                Self::Spelled {
+                    value,
+                    left_of_double,
+                }
+            },
+        )
+    }
+
+    /// The operand of a decimal number that fills `body`, the text after the
+    /// sign, up to trailing blanks; `None` where `body` is not one.
+    fn decimal_whole(negative: bool, body: &str) -> Option<Self> {
+        let bytes = body.as_bytes();
+        let digits_end = |from: usize| {
+            from + bytes[from..]
+                .iter()
+                .take_while(|byte| byte.is_ascii_digit())
+                .count()
+        };
+        let integer_end = digits_end(0);
+        let mut end = integer_end;
+        let point = bytes.get(end) == Some(&b'.');
+        if point {
+            end = digits_end(end + 1);
+            // `5.` and `.5` are numbers; a lone `.` is not.
+            if end == 1 {
+                return None;
+            }
+        }
+        if end == 0 {
+            return None;
+        }
+        let exponent = matches!(bytes.get(end), Some(b'e' | b'E'));
+        if exponent {
+            let exponent_digits = match bytes.get(end + 1) {
+                Some(b'+' | b'-') => end + 2,
+                _ => end + 1,
+            };
+            end = digits_end(exponent_digits);
+            if end == exponent_digits {
+                return None;
+            }
+        }
+        if !body[end..].chars().all(perl_space) {
+            return None;
+        }
+        let signed = |value: f64| if negative { -value } else { value };
+        if !point && !exponent {
+            return Some(match body[..end].parse::<u64>() {
+                // `-0` is the integer zero, and negative zero where
+                // `my_atof3` converts the text.
+                Ok(0) if negative => Self::Spelled {
+                    value: 0.0,
+                    left_of_double: -0.0,
+                },
+                Ok(magnitude) if !negative || magnitude <= IV_MIN_MAGNITUDE => {
+                    Self::integer(negative, magnitude)
+                }
+                Ok(magnitude) => Self::Double(-(magnitude as f64)),
+                Err(_) => Self::Double(signed(body[..end].parse().ok()?)),
+            });
+        }
+        let value = signed(body[..end].parse().ok()?);
+        if !exponent {
+            return Some(Self::Point(value));
+        }
+        // An exponent spelling is an integer where its double is a whole
+        // number of the signed or the unsigned range (`S_sv_2iuv_common` and
+        // `S_sv_2iuv_non_preserve`, sv.c).
+        let fits = value >= -(IV_MIN_MAGNITUDE as f64) && value < 2.0 * IV_MIN_MAGNITUDE as f64;
+        Some(if fits && value == value.trunc() {
+            // The double stays beside the integer, so a negative zero keeps
+            // its sign where the operand is multiplied as a double.
+            Self::Integer {
+                negative: value.is_sign_negative(),
+                magnitude: value.abs() as u64,
+            }
+        } else {
+            Self::Double(value)
+        })
+    }
+
+    /// An integer of the given sign and magnitude, zero never negative.
+    fn integer(negative: bool, magnitude: u64) -> Self {
+        Self::Integer {
+            negative: negative && magnitude != 0,
+            magnitude,
+        }
+    }
+
+    /// The operand as the sign and magnitude of the integer Perl's operators
+    /// read (`SvIV_please_nomg`): an integer, or a double out of arithmetic,
+    /// or `grok_number`'s reading of a text, that is a whole number below
+    /// `2^53`.
+    fn whole(self) -> Option<(bool, u64)> {
+        match self {
+            Self::Integer {
+                negative,
+                magnitude,
+            } => Some((negative && magnitude != 0, magnitude)),
+            Self::Double(value) | Self::Spelled { value, .. }
+                if value.abs() < DOUBLE_INTEGERS as f64 && value == value.trunc() =>
+            {
+                Some((value < 0.0, value.abs() as u64))
+            }
+            Self::Double(_) | Self::Point(_) | Self::Spelled { .. } => None,
+        }
+    }
+
+    /// The operand as a double: an integer rounds to the nearest one.
+    pub(crate) fn double(self) -> f64 {
+        match self {
+            Self::Integer {
+                negative: false,
+                magnitude,
+            } => magnitude as f64,
+            Self::Integer {
+                negative: true,
+                magnitude,
+            } => -(magnitude as f64),
+            Self::Double(value) | Self::Point(value) | Self::Spelled { value, .. } => value,
+        }
+    }
+
+    /// The operand as the double the left side of an operator is where the
+    /// right side is a double: Perl tries the left side as an integer only
+    /// beside an integer, and converts it as a double otherwise.
+    fn double_left_of(self, right: Self) -> f64 {
+        match self {
+            Self::Spelled { left_of_double, .. } if right.whole().is_none() => left_of_double,
+            _ => self.double(),
+        }
+    }
+
+    /// `self * right` (`pp_multiply`): the exact product of two integers
+    /// where it fits the unsigned range, or the signed range for a negative
+    /// product, else the product of the two doubles.
+    pub(crate) fn multiply(self, right: Self) -> Self {
+        if let (Some((right_negative, right)), Some((left_negative, left))) =
+            (right.whole(), self.whole())
+        {
+            if let Some(product) = left.checked_mul(right) {
+                if left_negative == right_negative {
+                    return Self::integer(false, product);
+                }
+                if product <= IV_MIN_MAGNITUDE {
+                    return Self::integer(true, product);
+                }
+            }
+        }
+        Self::Double(self.double_left_of(right) * right.double())
+    }
+
+    /// `self / right` (`pp_divide`): the exact quotient of two integers where
+    /// the dividend is past `2^53` and the divisor divides it, else the
+    /// quotient of the two doubles; `None` for a zero divisor, where Perl
+    /// dies with `Illegal division by zero`.
+    pub(crate) fn divide(self, right: Self) -> Option<Self> {
+        if let (Some((right_negative, divisor)), Some((left_negative, dividend))) =
+            (right.whole(), self.whole())
+        {
+            if divisor == 0 {
+                return None;
+            }
+            if dividend >= divisor && dividend > DOUBLE_INTEGERS && dividend % divisor == 0 {
+                let quotient = dividend / divisor;
+                return Some(if left_negative == right_negative {
+                    Self::integer(false, quotient)
+                } else if quotient <= IV_MIN_MAGNITUDE {
+                    Self::integer(true, quotient)
+                } else {
+                    Self::Double(-(quotient as f64))
+                });
+            }
+        }
+        let divisor = right.double();
+        if divisor == 0.0 {
+            return None;
+        }
+        Some(Self::Double(self.double_left_of(right) / divisor))
+    }
+}
+
+/// The infinity or not-a-number that fills `text`, the text after one sign,
+/// with nothing Perl's own grammar counts as trailing and no warning of its
+/// digit readers (`grok_infnan`, numeric.c, returning no
+/// `IS_NUMBER_TRAILING`). After Visual C's `1.#` or `1#`, or with no prefix:
+/// `inf` or `infinity`, then blanks, zeros standing before them where the
+/// word is Visual C's `inf` (`1.#INF00`); or, after Visual C's prefix alone,
+/// `ind`, then zeros; or `nan` with an optional `q` or `s` before it, then
+/// blanks, or a `q` or `s` and blanks, or a payload in parentheses with
+/// anything after them. A payload is decimal digits, or `0x` and hexadecimal
+/// digits or `0b` and binary digits that name at most `0xffffffff`, one
+/// underscore allowed between two digits. Blanks and zeros run to the end of
+/// the text or to a NUL byte. A second sign is not read.
+fn infnan_whole(text: &str) -> Option<f64> {
+    /// Whether nothing but `skipped` characters stands before the end of
+    /// `rest` or a NUL byte.
+    fn ends_after(rest: &str, skipped: impl Fn(char) -> bool) -> bool {
+        let rest = rest.trim_start_matches(skipped);
+        rest.is_empty() || rest.starts_with('\0')
+    }
+    let (visual_c, word) = match text.strip_prefix('1') {
+        Some(hashed) => (
+            true,
+            hashed
+                .strip_prefix(".#")
+                .or_else(|| hashed.strip_prefix('#'))?,
+        ),
+        None => (false, text),
+    };
+    if let Some(rest) = after(word, "inf") {
+        let rest = match rest.as_bytes().first() {
+            Some(b'i' | b'I') => after(rest, "inity")?,
+            _ if visual_c => rest.trim_start_matches('0'),
+            _ => rest,
+        };
+        return ends_after(rest, perl_space).then_some(f64::INFINITY);
+    }
+    if visual_c {
+        if let Some(rest) = after(word, "ind") {
+            return ends_after(rest, |c| c == '0').then_some(f64::NAN);
+        }
+    }
+    let quiet_or_signalling = ['q', 's', 'Q', 'S'];
+    let unmarked = word.strip_prefix(quiet_or_signalling).unwrap_or(word);
+    let rest = after(unmarked, "nan")?;
+    let tail = rest.strip_prefix(quiet_or_signalling).unwrap_or(rest);
+    let Some(payload) = tail.strip_prefix('(') else {
+        return ends_after(tail, perl_space).then_some(f64::NAN);
+    };
+    // Perl looks for the closing parenthesis from the payload's second
+    // character on, and no further than a NUL byte.
+    let close = payload
+        .char_indices()
+        .skip(1)
+        .take_while(|(_, c)| *c != '\0')
+        .find_map(|(at, c)| (c == ')').then_some(at))?;
+    nan_payload(&payload[..close]).then_some(f64::NAN)
+}
+
+/// Whether Perl reads a not-a-number's payload whole and without a warning:
+/// decimal digits; or `0x` or `0b` and digits of that radix, one underscore
+/// allowed between two of them, naming at most `0xffffffff`, past which
+/// `grok_hex` and `grok_bin` warn that the number is not portable.
+fn nan_payload(payload: &str) -> bool {
+    let radix = match payload.as_bytes() {
+        [b'0', b'x' | b'X', third, ..] if third.is_ascii_hexdigit() => 16,
+        [b'0', b'b' | b'B', b'0' | b'1', ..] => 2,
+        _ => return payload.bytes().all(|byte| byte.is_ascii_digit()),
+    };
+    let digits = &payload[2..];
+    let separated = digits.split('_').all(|run| !run.is_empty());
+    separated
+        && u64::from_str_radix(&digits.replace('_', ""), radix)
+            .is_ok_and(|value| value <= u64::from(u32::MAX))
 }
 
 /// What C's `strtod` reads from the start of `text`: blanks (C's `isspace` in
@@ -357,7 +696,7 @@ fn decimal_prefix(text: &str) -> Option<(f64, &str)> {
 /// significant digits of a double (`27/113` is `0.238938053097345`, `1e15` is
 /// `1e+15`), and `0` for a zero of either sign, which `sprintf("%.15g")` writes
 /// as `-0`.
-pub fn perl_number(value: f64) -> String {
+pub(crate) fn perl_number(value: f64) -> String {
     vep_core::variation::perl_number_string(value)
 }
 
@@ -684,10 +1023,11 @@ mod tests {
         );
     }
 
-    /// In arithmetic Perl takes `grok_number`'s infinity or not-a-number
-    /// whether or not its grammar consumed the text, so the `nan` spellings
-    /// `sprintf` reads as `0` or `1` are not a number here, `1.#INFI` is
-    /// infinite, and every other text reads as the cell does.
+    /// On the right of an arithmetic operator, or on its left beside an
+    /// integer, Perl takes `grok_number`'s infinity or not-a-number whether
+    /// or not its grammar consumed the text, so the `nan` spellings `sprintf`
+    /// reads as `0` or `1` are not a number here, `1.#INFI` is infinite, and
+    /// every other text reads as the cell does.
     #[test]
     fn numify_arithmetic_takes_grok_numbers_inf_and_nan() {
         for text in [
@@ -715,6 +1055,275 @@ mod tests {
         }
         for text in ["", "NA", "sqnan", "---1", "."] {
             assert_eq!(numify_arithmetic(text), None, "{text}");
+        }
+    }
+
+    /// A `PerlNumber` as a `perl` one-liner shows the same operand: `I` and
+    /// the integer, or `N` and the bits of the double in hexadecimal, `nan`
+    /// for a not-a-number.
+    fn shown(number: PerlNumber) -> String {
+        match number {
+            PerlNumber::Integer {
+                negative,
+                magnitude,
+            } => format!("I {}{magnitude}", if negative { "-" } else { "" }),
+            other if other.double().is_nan() => "N nan".to_string(),
+            other => format!("N {:#018x}", other.double().to_bits()),
+        }
+    }
+
+    /// The product of the `*`-joined texts of `factors`, left to right.
+    fn product_of(factors: &str) -> PerlNumber {
+        factors
+            .split('*')
+            .map(|text| PerlNumber::from_text(text).unwrap())
+            .reduce(PerlNumber::multiply)
+            .unwrap()
+    }
+
+    /// The operand of a text, each as Perl 5.34 on a 64-bit build holds the
+    /// product of the text and `"1"` under `use warnings`: an integer for
+    /// digits alone and for an exponent spelling of a whole number, a double
+    /// for a text with a point, for a whole number past 64 bits and for every
+    /// spelling of an infinity or a not-a-number Perl takes whole; and `None`
+    /// for each text the same product raises `isn't numeric` on.
+    #[test]
+    fn perl_number_reads_a_text_as_perls_arithmetic_does() {
+        let one = PerlNumber::from_text("1").unwrap();
+        for (text, expected) in [
+            ("94906267", "I 94906267"),
+            (" 94906267 ", "I 94906267"),
+            ("+94906267", "I 94906267"),
+            ("094906267", "I 94906267"),
+            ("-0", "I 0"),
+            ("18446744073709551615", "I 18446744073709551615"),
+            ("-9223372036854775808", "I -9223372036854775808"),
+            ("3e0", "I 3"),
+            ("+.5e1", "I 5"),
+            ("1.e5", "I 100000"),
+            ("1e17", "I 100000000000000000"),
+            ("1e19", "I 10000000000000000000"),
+            ("72057594037927937e0", "I 72057594037927936"),
+            ("1e-400", "I 0"),
+            ("-1e-400", "I 0"),
+            ("0 but true", "I 0"),
+            ("-\t", "I 0"),
+            ("1.0", "N 0x3ff0000000000000"),
+            ("94906267.", "N 0x4196a09e6c000000"),
+            (".5", "N 0x3fe0000000000000"),
+            ("-0.0", "N 0x8000000000000000"),
+            ("1e20", "N 0x4415af1d78b58c40"),
+            ("18446744073709551616", "N 0x43f0000000000000"),
+            ("-9223372036854775809", "N 0xc3e0000000000000"),
+            ("1.5e0", "N 0x3ff8000000000000"),
+            ("1e400", "N 0x7ff0000000000000"),
+            ("-1e400", "N 0xfff0000000000000"),
+            ("inf", "N 0x7ff0000000000000"),
+            ("-Infinity", "N 0xfff0000000000000"),
+            ("+INF", "N 0x7ff0000000000000"),
+            ("infinity ", "N 0x7ff0000000000000"),
+            ("1.#INF", "N 0x7ff0000000000000"),
+            ("-1.#INF", "N 0xfff0000000000000"),
+            ("1#INF", "N 0x7ff0000000000000"),
+            ("1.#infinity", "N 0x7ff0000000000000"),
+            ("1.#INF0", "N 0x7ff0000000000000"),
+            ("-1#INF00 ", "N 0xfff0000000000000"),
+            ("nan", "N nan"),
+            ("-NaN", "N nan"),
+            ("nan ", "N nan"),
+            ("nanq", "N nan"),
+            ("NaNS", "N nan"),
+            ("qnan", "N nan"),
+            ("sNaN", "N nan"),
+            ("nan(1)", "N nan"),
+            ("nan(0x7ff)", "N nan"),
+            ("nan(0b101)", "N nan"),
+            ("nan(1)x", "N nan"),
+            ("nan(1)(2)", "N nan"),
+            ("1.#IND", "N nan"),
+            ("1.#IND0", "N nan"),
+            ("1.#QNAN", "N nan"),
+            ("1#NAN", "N nan"),
+            ("nan(0xffffffff)", "N nan"),
+            ("nan(0x1_0)", "N nan"),
+        ] {
+            let read = PerlNumber::from_text(text).map(|number| shown(number.multiply(one)));
+            assert_eq!(read.as_deref(), Some(expected), "{text:?}");
+        }
+        for text in [
+            "",
+            " ",
+            "high",
+            "0.5x",
+            "0.5e",
+            "0x10",
+            "1_000",
+            "0,5",
+            "infinite",
+            "nanx",
+            "infx",
+            "infinit",
+            "infinityx",
+            "NaN(",
+            "nan()",
+            "nan(1",
+            "nan(a)",
+            "nan(1.5)",
+            "nan(0x100000000)",
+            "nan(0x1__0)",
+            "1.#INFx",
+            "1.#INF 0",
+            "1.#INF0x",
+            "1.#INFINITY0",
+            "inf0",
+            "1.#INDx",
+            "1.#IND ",
+            "1.#IN",
+            "0 but true ",
+            " 0 but true",
+            "0 BUT TRUE",
+            "+-inf",
+            "--nan",
+            ".",
+            "+",
+            "-",
+            "+ ",
+            "1e",
+            ".e1",
+            "++1",
+            "- 1",
+            "1e5.5",
+            "0.5\0",
+            "\u{a0}0.5",
+        ] {
+            assert_eq!(PerlNumber::from_text(text), None, "{text:?}");
+        }
+        // A point without an exponent stays a double whatever its value, and
+        // an exponent spelling of a whole number is an integer.
+        assert_eq!(PerlNumber::from_text("3.0"), Some(PerlNumber::Point(3.0)));
+        assert_eq!(
+            PerlNumber::from_text("3e0"),
+            Some(PerlNumber::Integer {
+                negative: false,
+                magnitude: 3
+            })
+        );
+        assert_eq!(
+            PerlNumber::from_text("1.5e0"),
+            Some(PerlNumber::Double(1.5))
+        );
+    }
+
+    /// Products and quotients of texts, each as Perl 5.34 on a 64-bit build
+    /// computes it over fresh strings: two integers multiply exactly while
+    /// the product fits the unsigned range, or the signed range when it is
+    /// negative, and as doubles past it; a double out of arithmetic that is a
+    /// whole number below `2^53` is an integer again; a text with a point is
+    /// never one; a quotient is an integer where the dividend is past `2^53`
+    /// and the divisor divides it; and a zero divisor is where Perl dies. A
+    /// spelling Perl's two converters read differently is a not-a-number on
+    /// the right and beside an integer, and `0` (`qnan`) or `1` (`1.#QNAN`)
+    /// on the left of a double, where the text ends at a NUL byte; `-0` is
+    /// negative zero there alone, and an exponent spelling of negative zero
+    /// beside any double.
+    #[test]
+    fn perl_number_multiplies_and_divides_as_perl_does() {
+        for (factors, expected) in [
+            ("300000007*300000007", "I 90000004200000049"),
+            ("3037000500*3037000500", "I 9223372037000250000"),
+            ("4294967295*4294967297", "I 18446744073709551615"),
+            ("4294967296*4294967296", "N 0x43f0000000000000"),
+            ("4294967297*4294967297", "N 0x43f0000000200000"),
+            ("-3037000500*3037000500", "N 0xc3e0000000011578"),
+            ("-4294967296*2147483648", "I -9223372036854775808"),
+            ("-4294967296*2147483649", "N 0xc3e0000000200000"),
+            ("-4294967295*-4294967297", "I 18446744073709551615"),
+            ("300000007*300000007*200", "I 18000000840000009800"),
+            ("300000007*300000007*210", "N 0x43f064a4aaa6a2e2"),
+            ("300000007.0*300000007", "N 0x4373fbe86e81fea3"),
+            ("300000007*300000007.0", "N 0x4373fbe86e81fea3"),
+            ("3.00000007e8*300000007", "I 90000004200000049"),
+            ("300000007e0*300000007e0", "I 90000004200000049"),
+            ("0.5*4*300000007*300000007", "I 180000008400000098"),
+            ("1.5*2*300000007*300000007", "I 270000012600000147"),
+            ("72057594037927937*3", "I 216172782113783811"),
+            ("72057594037927937*1.5", "N 0x4378000000000000"),
+            ("72057594037927937e0*3", "I 216172782113783808"),
+            ("18446744073709551615*1", "I 18446744073709551615"),
+            ("18446744073709551616*1", "N 0x43f0000000000000"),
+            ("-0.0*5", "N 0x8000000000000000"),
+            ("0*-5", "I 0"),
+            ("inf*0", "N nan"),
+            ("nan*2", "N nan"),
+            ("-inf*-1", "N 0x7ff0000000000000"),
+            ("qnan*2", "N nan"),
+            ("qnan*0.5", "N 0x0000000000000000"),
+            ("0.5*qnan", "N nan"),
+            ("snan*0.25*4", "I 0"),
+            ("qnan(1)*0.5", "N nan"),
+            ("1.#QNAN*2", "N nan"),
+            ("1.#QNAN*0.5", "N 0x3fe0000000000000"),
+            ("0.5*1.#QNAN", "N nan"),
+            ("-1.#QNAN*0.5", "N 0xbfe0000000000000"),
+            ("1.#QNAN *0.5", "N nan"),
+            ("1.#NAN*1.5*2", "N 0x4008000000000000"),
+            ("qnan\0*0.5", "N 0x0000000000000000"),
+            ("1.#QNAN\0*0.5", "N 0x3fe0000000000000"),
+            ("qnan\0*2", "N nan"),
+            ("-0e0*5", "I 0"),
+            ("-0e0*0.5", "N 0x8000000000000000"),
+            ("0.5*-0e0", "N 0x8000000000000000"),
+            ("-1e-400*0.5", "N 0x8000000000000000"),
+            ("-0*5", "I 0"),
+            ("0.5*-0", "N 0x0000000000000000"),
+            ("-0*0.5", "N 0x8000000000000000"),
+            ("-5*-0", "I 0"),
+            ("-5*-0*0.5", "N 0x0000000000000000"),
+            ("-00*0.5*2", "I 0"),
+        ] {
+            assert_eq!(shown(product_of(factors)), expected, "{factors}");
+        }
+        for (dividend, divisor, expected) in [
+            ("72057594037927937*3", "3*1", Some("I 72057594037927937")),
+            ("72057594037927937*9", "3*3", Some("I 72057594037927937")),
+            ("72057594037927937*3", "7*1", Some("N 0x435b6db6db6db6db")),
+            ("300000007*300000007", "300000007*1", Some("I 300000007")),
+            ("67108864*134217728", "2*1", Some("N 0x4330000000000000")),
+            ("134217728*67108865", "134217728*1", Some("I 67108865")),
+            ("2*3", "3*1", Some("N 0x4000000000000000")),
+            ("3*1", "72057594037927937*3", Some("N 0x3c70000000000000")),
+            ("-72057594037927937*3", "3*1", Some("I -72057594037927937")),
+            (
+                "18446744073709551615*1",
+                "-1*1",
+                Some("N 0xc3f0000000000000"),
+            ),
+            ("72057594037927937*3", "3.0*1", Some("I 72057594037927937")),
+            ("72057594037927937*3", "1.5*2", Some("I 72057594037927937")),
+            ("4294967296*4294967296", "4*1", Some("N 0x43d0000000000000")),
+            (
+                "-9223372036854775808*1",
+                "-1*1",
+                Some("I 9223372036854775808"),
+            ),
+            (
+                "-9223372036854775808*1",
+                "1*1",
+                Some("I -9223372036854775808"),
+            ),
+            ("5*1", "0*7", None),
+            ("5*1", "0.0*7", None),
+            ("5*1", "-0.0*7", None),
+            ("5*1", "inf*1", Some("N 0x0000000000000000")),
+            ("5*1", "nan*1", Some("N nan")),
+            ("0*1", "5*1", Some("N 0x0000000000000000")),
+            ("inf*1", "inf*1", Some("N nan")),
+            ("8*1", "qnan*0.5", None),
+            ("8*1", "qnan*2", Some("N nan")),
+            ("8*1", "1.#QNAN*0.5", Some("N 0x4030000000000000")),
+        ] {
+            let quotient = product_of(dividend).divide(product_of(divisor)).map(shown);
+            assert_eq!(quotient.as_deref(), expected, "{dividend} / {divisor}");
         }
     }
 

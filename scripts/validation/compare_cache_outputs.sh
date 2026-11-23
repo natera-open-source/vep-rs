@@ -62,17 +62,16 @@ Optional:
   --gate-per-csq-delta <float>  Per-consequence-type delta gate (default: 0.01)
   --help                    Print this help
 
-Environment:
-  VEP_OUTPUTS_COMPARATOR    The tuple comparator of the annotation output comparison.
-                            Unset: the Rust tool this tree builds,
-                            tools/vep-outputs-compare/target/release/vep-outputs-compare
-                            (cargo build --release --locked --manifest-path
-                            tools/vep-outputs-compare/Cargo.toml). `python`:
-                            scripts/concordance/compare_vep_outputs.py, the reference
-                            implementation, which writes the same reports. Any other
-                            value: a comparator binary, as a path or a command on PATH.
-                            A comparator that is not an executable stops the run before
-                            vep-rs runs; nothing is built here.
+Comparator:
+  The annotation output comparison runs this tree's release build of the tuple
+  comparator, tools/vep-outputs-compare/target/release/vep-outputs-compare
+  (cargo build --release --locked --manifest-path tools/vep-outputs-compare/Cargo.toml).
+  A build that is not an executable stops the run before vep-rs runs; nothing is
+  built here. The structural cache comparison runs the release build of
+  tools/vep-cache-diff, found and refused the same way
+  (cargo build --release --locked --manifest-path tools/vep-cache-diff/Cargo.toml),
+  and the gates are scored by the release build of tools/vep-cache-output-gates
+  (cargo build --release --locked --manifest-path tools/vep-cache-output-gates/Cargo.toml).
 
 Outputs:
   <work-dir>/baseline/         Baseline VEP output and metrics
@@ -170,23 +169,40 @@ if [[ -z "$VEP_BINARY" ]]; then
 	exit 1
 fi
 
-# The tuple comparator of Step 4. Unset, VEP_OUTPUTS_COMPARATOR selects the Rust tool this
-# tree builds, tools/vep-outputs-compare; `python` selects compare_vep_outputs.py, the
-# reference implementation; any other value names a comparator binary, a path or a command
-# on PATH (`type -P` resolves it as the exec does). A comparator that is not an executable
-# stops the run here, before vep-rs runs.
-case "${VEP_OUTPUTS_COMPARATOR:-}" in
-python) OUTPUTS_COMPARE=(python3 "${VEP_RS_DIR}/scripts/concordance/compare_vep_outputs.py") ;;
-*)
-	outputs_named="${VEP_OUTPUTS_COMPARATOR:-${VEP_RS_DIR}/tools/vep-outputs-compare/target/release/vep-outputs-compare}"
-	if outputs_bin=$(type -P -- "$outputs_named") && [[ -f "$outputs_bin" && -x "$outputs_bin" ]]; then
-		OUTPUTS_COMPARE=("$outputs_bin")
-	else
-		echo "ERROR: [compare_cache_outputs] the tuple comparator $outputs_named is not an executable: build the tool with 'cargo build --release --locked --manifest-path ${VEP_RS_DIR}/tools/vep-outputs-compare/Cargo.toml' or name a built one in VEP_OUTPUTS_COMPARATOR, or set VEP_OUTPUTS_COMPARATOR=python to score with the Python reference implementation" >&2
-		exit 1
-	fi
-	;;
-esac
+# The tuple comparator of Step 4 is this tree's release build of tools/vep-outputs-compare.
+# Nothing is built here and no other program runs in its place: a build that is not an
+# executable file stops the run here, before vep-rs runs.
+OUTPUTS_COMPARE=()
+outputs_bin="${VEP_RS_DIR}/tools/vep-outputs-compare/target/release/vep-outputs-compare"
+if [[ -f "$outputs_bin" && -x "$outputs_bin" ]]; then
+	OUTPUTS_COMPARE=("$outputs_bin")
+else
+	echo "ERROR: [compare_cache_outputs] the tuple comparator $outputs_bin is not an executable: build the tool with 'cargo build --release --locked --manifest-path ${VEP_RS_DIR}/tools/vep-outputs-compare/Cargo.toml'" >&2
+	exit 1
+fi
+
+# The structural cache comparison of Step 3 is this tree's release build of
+# tools/vep-cache-diff, held to the same rule: found here, before vep-rs runs, or refused.
+CACHE_DIFF=()
+cache_diff_bin="${VEP_RS_DIR}/tools/vep-cache-diff/target/release/vep-cache-diff"
+if [[ -f "$cache_diff_bin" && -x "$cache_diff_bin" ]]; then
+	CACHE_DIFF=("$cache_diff_bin")
+else
+	echo "ERROR: [compare_cache_outputs] the cache comparison $cache_diff_bin is not an executable: build the tool with 'cargo build --release --locked --manifest-path ${VEP_RS_DIR}/tools/vep-cache-diff/Cargo.toml'" >&2
+	exit 1
+fi
+
+# The gates of Step 5 are scored by this tree's release build of
+# tools/vep-cache-output-gates, held to the same rule: found here, before vep-rs runs, or
+# refused.
+OUTPUT_GATES=()
+output_gates_bin="${VEP_RS_DIR}/tools/vep-cache-output-gates/target/release/vep-cache-output-gates"
+if [[ -f "$output_gates_bin" && -x "$output_gates_bin" ]]; then
+	OUTPUT_GATES=("$output_gates_bin")
+else
+	echo "ERROR: [compare_cache_outputs] the gate scorer $output_gates_bin is not an executable: build the tool with 'cargo build --release --locked --manifest-path ${VEP_RS_DIR}/tools/vep-cache-output-gates/Cargo.toml'" >&2
+	exit 1
+fi
 
 if [[ -z "$WORK_DIR" ]]; then
 	WORK_DIR="${VEP_RS_DIR}/tmp/cache_comparison"
@@ -249,7 +265,7 @@ echo ""
 # Step 3: Structural cache diff
 echo "=== Step 3: Structural cache comparison ==="
 
-python3 "${SCRIPT_DIR}/diff_caches.py" \
+"${CACHE_DIFF[@]}" \
 	--baseline-dir "$BASELINE_CACHE" \
 	--builder-dir "$BUILDER_CACHE" \
 	--output-report "${WORK_DIR}/cache_diff.json"
@@ -268,6 +284,10 @@ mkdir -p "$BASELINE_OUT_DIR" "$BUILDER_OUT_DIR" "$REPORT_DIR"
 ln -sf "${WORK_DIR}/baseline/baseline_output.txt" "${BASELINE_OUT_DIR}/output.txt"
 ln -sf "${WORK_DIR}/builder/baseline_output.txt" "${BUILDER_OUT_DIR}/output.txt"
 
+# A comparison that fails writes no summary. A summary an earlier run left in the work
+# directory is removed first, so that Step 5 scores a missing summary and never that one.
+rm -f "${REPORT_DIR}/concordance.json"
+
 "${OUTPUTS_COMPARE[@]}" \
 	--perl-dir "$BASELINE_OUT_DIR" \
 	--rust-dir "$BUILDER_OUT_DIR" \
@@ -280,7 +300,12 @@ echo ""
 # Step 5: Gate checks and verdict
 echo "=== Step 5: Validation gates ==="
 
-python3 - \
+# The tool scores the five gates over the two runs' metrics, the cache comparison and the
+# concordance summary, prints a line a gate and writes verdict.json. It leaves with the
+# verdict: 0 for PASS, 1 for FAIL; any other status is a run that reached no verdict and
+# stops here.
+GATES_STATUS=0
+"${OUTPUT_GATES[@]}" \
 	"${WORK_DIR}/baseline/baseline_metrics.json" \
 	"${WORK_DIR}/builder/baseline_metrics.json" \
 	"${WORK_DIR}/cache_diff.json" \
@@ -290,176 +315,13 @@ python3 - \
 	"$GATE_TOTAL_DELTA" \
 	"$GATE_COLOC_DELTA" \
 	"$GATE_FREQ_DELTA" \
-	"$GATE_PER_CSQ_DELTA" <<'PYEOF'
-import json
-import sys
-from pathlib import Path
+	"$GATE_PER_CSQ_DELTA" || GATES_STATUS=$?
 
-baseline_metrics_path = Path(sys.argv[1])
-builder_metrics_path = Path(sys.argv[2])
-cache_diff_path = Path(sys.argv[3])
-concordance_path = sys.argv[4]  # may be empty string
-verdict_path = Path(sys.argv[5])
-gate_f1 = float(sys.argv[6])
-gate_total_delta = float(sys.argv[7])
-gate_coloc_delta = float(sys.argv[8])
-gate_freq_delta = float(sys.argv[9])
-gate_per_csq_delta = float(sys.argv[10])
-
-with open(baseline_metrics_path) as fh:
-    baseline = json.load(fh)
-with open(builder_metrics_path) as fh:
-    builder = json.load(fh)
-with open(cache_diff_path) as fh:
-    cache_diff = json.load(fh)
-
-concordance = None
-if concordance_path and Path(concordance_path).exists():
-    with open(concordance_path) as fh:
-        concordance = json.load(fh)
-
-gates = []
-all_pass = True
-
-# Gate 1: Consequence F1 (from concordance report)
-if concordance and "aggregate" in concordance:
-    f1 = concordance["aggregate"].get("f1", 0.0)
-    passed = f1 >= gate_f1
-    gates.append({
-        "gate": "consequence_f1",
-        "threshold": gate_f1,
-        "actual": round(f1, 6),
-        "passed": passed,
-    })
-    if not passed:
-        all_pass = False
-    print(f"  Consequence F1: {f1:.6f} (gate >= {gate_f1}) {'PASS' if passed else 'FAIL'}")
-else:
-    gates.append({
-        "gate": "consequence_f1",
-        "threshold": gate_f1,
-        "actual": None,
-        "passed": False,
-        "note": "concordance report not available",
-    })
-    all_pass = False
-    print(f"  Consequence F1: N/A (concordance report missing) FAIL")
-
-# Gate 2: Total annotation line delta
-b_total = baseline.get("total_annotation_lines", 0)
-c_total = builder.get("total_annotation_lines", 0)
-if b_total > 0:
-    delta = abs(c_total - b_total) / b_total
-else:
-    delta = 0.0 if c_total == 0 else 1.0
-passed = delta < gate_total_delta
-gates.append({
-    "gate": "total_annotations_delta",
-    "threshold": gate_total_delta,
-    "baseline": b_total,
-    "builder": c_total,
-    "actual": round(delta, 6),
-    "passed": passed,
-})
-if not passed:
-    all_pass = False
-print(f"  Total annotations delta: {delta:.6f} ({b_total} vs {c_total}) (gate < {gate_total_delta}) {'PASS' if passed else 'FAIL'}")
-
-# Gate 3: Co-located variant match delta
-b_coloc = baseline.get("existing_variation_count", 0)
-c_coloc = builder.get("existing_variation_count", 0)
-if b_coloc > 0:
-    delta = abs(c_coloc - b_coloc) / b_coloc
-else:
-    delta = 0.0 if c_coloc == 0 else 1.0
-passed = delta < gate_coloc_delta
-gates.append({
-    "gate": "colocated_variant_delta",
-    "threshold": gate_coloc_delta,
-    "baseline": b_coloc,
-    "builder": c_coloc,
-    "actual": round(delta, 6),
-    "passed": passed,
-})
-if not passed:
-    all_pass = False
-print(f"  Co-located variant delta: {delta:.6f} ({b_coloc} vs {c_coloc}) (gate < {gate_coloc_delta}) {'PASS' if passed else 'FAIL'}")
-
-# Gate 4: Frequency field population delta
-b_freqs = baseline.get("frequency_field_counts", {})
-c_freqs = builder.get("frequency_field_counts", {})
-max_freq_delta = 0.0
-freq_details = {}
-for field in set(b_freqs) | set(c_freqs):
-    bv = b_freqs.get(field, 0)
-    cv = c_freqs.get(field, 0)
-    if bv > 0:
-        d = abs(cv - bv) / bv
-    else:
-        d = 0.0 if cv == 0 else 1.0
-    freq_details[field] = {"baseline": bv, "builder": cv, "delta": round(d, 6)}
-    max_freq_delta = max(max_freq_delta, d)
-
-passed = max_freq_delta < gate_freq_delta
-gates.append({
-    "gate": "frequency_field_delta",
-    "threshold": gate_freq_delta,
-    "actual": round(max_freq_delta, 6),
-    "details": freq_details,
-    "passed": passed,
-})
-if not passed:
-    all_pass = False
-print(f"  Frequency field max delta: {max_freq_delta:.6f} (gate < {gate_freq_delta}) {'PASS' if passed else 'FAIL'}")
-
-# Gate 5: Per-consequence-type max delta
-b_csq = baseline.get("consequence_counts", {})
-c_csq = builder.get("consequence_counts", {})
-max_csq_delta = 0.0
-csq_details = {}
-for csq_type in set(b_csq) | set(c_csq):
-    bv = b_csq.get(csq_type, 0)
-    cv = c_csq.get(csq_type, 0)
-    if bv > 0:
-        d = abs(cv - bv) / bv
-    else:
-        d = 0.0 if cv == 0 else 1.0
-    csq_details[csq_type] = {"baseline": bv, "builder": cv, "delta": round(d, 6)}
-    max_csq_delta = max(max_csq_delta, d)
-
-passed = max_csq_delta < gate_per_csq_delta
-gates.append({
-    "gate": "per_consequence_type_delta",
-    "threshold": gate_per_csq_delta,
-    "actual": round(max_csq_delta, 6),
-    "details": csq_details,
-    "passed": passed,
-})
-if not passed:
-    all_pass = False
-print(f"  Per-consequence max delta: {max_csq_delta:.6f} (gate < {gate_per_csq_delta}) {'PASS' if passed else 'FAIL'}")
-
-# Verdict
-verdict = {
-    "verdict": "PASS" if all_pass else "FAIL",
-    "gates": gates,
-    "cache_diff_summary": {
-        "transcript_match_rate": cache_diff.get("transcripts", {}).get("match_rate"),
-        "variation_match_rate": cache_diff.get("variations", {}).get("match_rate"),
-        "info_json_matches": cache_diff.get("info_json", {}).get("matches"),
-    },
-}
-
-with open(verdict_path, "w") as fh:
-    json.dump(verdict, fh, indent=2)
-    fh.write("\n")
-
-print()
-print(f"  Verdict: {'PASS' if all_pass else 'FAIL'}")
-print(f"  Report:  {verdict_path}")
-PYEOF
-
-VERDICT=$(python3 -c "import json; print(json.load(open('${WORK_DIR}/verdict.json'))['verdict'])")
+case "$GATES_STATUS" in
+0) VERDICT="PASS" ;;
+1) VERDICT="FAIL" ;;
+*) exit 1 ;;
+esac
 
 echo ""
 echo "============================================"

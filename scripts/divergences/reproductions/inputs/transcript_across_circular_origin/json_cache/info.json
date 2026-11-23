@@ -1,0 +1,13 @@
+{
+   "assembly" : "RING1",
+   "cache_version" : 116,
+   "contig_order" : [
+      "ring"
+   ],
+   "source_type" : "ensembl",
+   "source_versions" : {
+      "assembly" : "RING1",
+      "genebuild" : "synthetic"
+   },
+   "species" : "circular_example"
+}

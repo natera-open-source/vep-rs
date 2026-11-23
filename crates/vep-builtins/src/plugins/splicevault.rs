@@ -302,7 +302,7 @@ impl SpliceVaultPlugin {
     /// `Tab.pm:128` prints as its join, an empty cell when no event is left, so
     /// its field is named whenever its list is empty, the cell present or not. A
     /// later plugin's value replaces an earlier one under the same key
-    /// (OutputFactory.pm:2230-2231), its mark too.
+    /// (OutputFactory.pm:2239-2240), its mark too.
     fn write_fields(record: &TabixRecord, consequence: &mut TranscriptConsequence) {
         consequence
             .plugin_empty_strings
@@ -364,6 +364,8 @@ fn top_events_list(cell: &str) -> String {
         .collect()
 }
 
+impl crate::traits::sealed::Sealed for SpliceVaultPlugin {}
+
 impl BuiltinPlugin for SpliceVaultPlugin {
     fn name(&self) -> &str {
         NAME
@@ -407,6 +409,12 @@ impl BuiltinPlugin for SpliceVaultPlugin {
 
     fn set_assembly(&mut self, assembly: Option<Assembly>) {
         self.assembly = assembly;
+    }
+
+    fn set_reference_fasta(&mut self, fasta: Option<std::sync::Arc<vep_fasta::IndexedFasta>>) {
+        for source in &mut self.sources {
+            source.store.set_reference_fasta(fasta.clone());
+        }
     }
 
     fn init(&mut self, params: &[String]) -> Result<(), PluginError> {
@@ -585,13 +593,13 @@ mod tests {
     }
 
     fn transcript_row(id: &str) -> TranscriptConsequence {
-        TranscriptConsequence {
-            transcript: Some(Arc::new(Transcript {
-                stable_id: id.into(),
-                ..Transcript::default()
-            })),
-            ..TranscriptConsequence::default()
-        }
+        let mut consequence = TranscriptConsequence::default();
+        consequence.transcript = Some(Arc::new({
+            let mut transcript = Transcript::default();
+            transcript.stable_id = id.into();
+            transcript
+        }));
+        consequence
     }
 
     /// A record on chromosome 21 with one transcript row per id.
@@ -899,7 +907,7 @@ mod tests {
         );
     }
 
-    /// Ensembl VEP 116.2 trims the record's alleles as well as the row's inside
+    /// Ensembl VEP 116.3 trims the record's alleles as well as the row's inside
     /// `get_matched_variant_alleles` (ensembl-variation Utils/Sequence.pm:1199-1208
     /// and :1223-1232), so a substitution written with an unchanged leading
     /// base (`GG/GA` at 5029999) or trailing base (`GT/AT` at 5030000) takes
@@ -1046,10 +1054,10 @@ mod tests {
         assert_eq!(values(&plugin, regulatory, "SpliceVault_site_pos"), [None]);
     }
 
-    /// Ensembl VEP 116.2 never hands SpliceVault a structural variant: the
+    /// Ensembl VEP 116.3 never hands SpliceVault a structural variant: the
     /// module keeps the default `variant_feature_types` of
     /// `['VariationFeature']` (BaseVepPlugin.pm:100), which the dispatch checks
-    /// before running a plugin on a line (OutputFactory.pm:2220). A `<DEL>`
+    /// before running a plugin on a line (OutputFactory.pm:2229). A `<DEL>`
     /// row gets no field, and nor does a matching substitution carrying the
     /// structural mark, which pins the gate rather than the allele match; the
     /// plain substitution is annotated.
@@ -1073,7 +1081,7 @@ mod tests {
         assert_eq!(values(&plugin, plain, field), [Some("0.36".to_string())]);
     }
 
-    /// `SpliceVault.pm:201` splits the line into twelve variables, so Perl keeps
+    /// `SpliceVault.pm:201` splits the line into twelve variables, so Ensembl VEP keeps
     /// a trailing empty cell as the empty string and leaves a missing cell
     /// undefined, and `:206-220` write both. Both print as
     /// `SpliceVault_site_max_depth=` in the default format; the tab format

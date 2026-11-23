@@ -1,0 +1,4 @@
+location	allele	transcript_id	consequence_set	ref_codon	alt_codon
+21:1000	A	ENST001	missense_variant	gCa	gTa
+21:1000	A	ENST002	missense_variant,splice_region_variant	aGt
+21:2000	T	ENST003	stop_gained	cGa	tGa

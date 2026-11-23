@@ -1,0 +1,50 @@
+entry = "file_beside_cache_same_id_row_order"
+page = "docs/divergences/file-beside-cache-same-id-row-order.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "observed"
+input_class_basis = "2 · 56 of 964 table rows · 5 flag sets, 1 corpus"
+notes = "A record inside the one exon of ENST00000452969, which the cache and the GTF read beside it both hold, so each engine writes the transcript once per source. Ensembl VEP keys the file's copy by a count of the transcripts the source built before it (BaseGXF.pm:489) and sorts the rows by that key as text: alone, the record's file copy is the first built, its key is the bare identifier and its row comes first. vep-rs writes the cache's row first. The two rows are compared in the order written."
+
+[input]
+format = "vcf"
+text = """
+21	43783348	tmem97p1_exon_snv	A	G	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-gene-model-beside-cache/json_cache"
+fasta = "tests/golden/116/GRCh38-gene-model-beside-cache/reference.fa.gz"
+
+[run]
+flags = ["--gtf", "{corpus}/chr21_genes.gtf.gz"]
+
+[compare]
+kind = "rows"
+where = { record = "tmem97p1_exon_snv", feature = "ENST00000452969" }
+columns = ["Location", "Allele", "Feature", "Consequence", "cDNA_position", "SOURCE"]
+sorted = false
+
+[expected]
+ensembl_vep = [
+  "21:43783348 | G | ENST00000452969 | non_coding_transcript_exon_variant | 226 | chr21_genes.gtf.gz",
+  "21:43783348 | G | ENST00000452969 | non_coding_transcript_exon_variant | 226 | -",
+]
+vep_rs = [
+  "21:43783348 | G | ENST00000452969 | non_coding_transcript_exon_variant | 226 | -",
+  "21:43783348 | G | ENST00000452969 | non_coding_transcript_exon_variant | 226 | chr21_genes.gtf.gz",
+]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/json_cache.rs::perl_transcript_key",
+    "crates/vep-core/src/consequence.rs::TranscriptConsequence::ensembl_vep_key",
+    "crates/vep-core/src/transcript.rs::file_order_key_suffix",
+]
+tests = [
+    "crates/vep-cli/src/transcript_index.rs::tests::file_transcripts_join_the_caches_ranked_after_their_cache_twin",
+    "crates/vep-cli/tests/gene_model_beside_cache.rs::the_cache_row_of_a_shared_transcript_comes_first_whatever_precedes_the_record",
+    "crates/vep-core/src/consequence.rs::tests::a_gene_model_file_transcript_keys_after_the_cache_transcript_of_its_id",
+]

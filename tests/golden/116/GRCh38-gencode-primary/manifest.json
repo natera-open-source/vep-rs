@@ -13,7 +13,7 @@
   "gencode_primary",
   "gencode-flags-in-cache"
  ],
- "suites": {
+ "datasets": {
   "gencode": {
    "reference": "pool.gencode_primary.txt",
    "input": "pool.vcf",
@@ -114,7 +114,7 @@
  },
  "records": [
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t5597440\t.\tA\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -122,7 +122,7 @@
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t7130369\t.\tA\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -130,7 +130,7 @@
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t8208562\t.\tG\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -140,7 +140,7 @@
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t8987026\t.\tAGCCGCGGGGATC\tA\t.\t.\t.",
    "combinations": [
     "mature_miRNA_variant",
@@ -148,7 +148,7 @@
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t9364846\t.\tC\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -157,14 +157,14 @@
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t9530271\t.\tT\tC\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant"
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t9807777\t.\tA\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -173,14 +173,14 @@
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t10414912\t.\tG\tGTGCTTCATCTTC\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t10482800\t.\tG\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -188,14 +188,14 @@
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t10603633\t.\tGTATGAATATAATAGA\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_donor_5th_base_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t13042601\t.\tG\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -204,7 +204,7 @@
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t13843300\t.\tG\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -212,7 +212,7 @@
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t13935585\t.\tT\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -221,7 +221,7 @@
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t14143869\t.\tC\tT,G\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -233,7 +233,7 @@
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t14165216\t.\tC\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -241,35 +241,35 @@
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t14216335\t.\tCAT\tC\t.\t.\t.",
    "combinations": [
     "intron_variant"
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t14622621\t.\tG\tC\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t14740399\t.\tCTAG\tC\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant"
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t15105118\t.\tC\tT\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t15283784\t.\tT\tTA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -277,49 +277,49 @@
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t15477784\t.\tTCA\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_donor_region_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t15575269\t.\tC\tCAG\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t16627199\t.\tA\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant"
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t16629408\t.\tA\tAT\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t16630884\t.\tT\tA\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t16630884\t.\tTTT\tT\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t17608184\t.\tA\tG\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -327,7 +327,7 @@
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t17818023\t.\tT\tC\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -335,14 +335,14 @@
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t18171655\t.\tC\tA\t.\t.\t.",
    "combinations": [
     "intron_variant"
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t18256505\t.\tTCAGGCCA\tT\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -351,14 +351,14 @@
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t18398250\t.\tT\tC\t.\t.\t.",
    "combinations": [
     "synonymous_variant"
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t18918000\t.\tC\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -366,21 +366,21 @@
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t19268555\t.\tC\tT\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t20204701\t.\tT\tC\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant"
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t23432233\t.\tTA\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -388,105 +388,105 @@
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t23473610\t.\tG\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant"
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t28814269\t.\tA\tAT\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t28821939\t.\tA\tC\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t28821939\t.\tATC\tA\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t28837067\t.\tA\tC\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t34645251\t.\tG\tGGCT\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t35064882\t.\tA\tAT\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t35065004\t.\tA\tC\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t35065004\t.\tAGG\tA\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t35065372\t.\tT\tA\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t38989531\t.\tA\tAT\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t38989703\t.\tT\tA\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t38989703\t.\tTTT\tT\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "21\t38990071\t.\tT\tA\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "22\t18110861\t.\tCAGCGATGGTG\tC\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,coding_sequence_variant,intron_variant,splice_donor_region_variant,splice_donor_variant",
@@ -494,14 +494,14 @@
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "22\t20992298\t.\tA\tACTT\t.\t.\t.",
    "combinations": [
     "protein_altering_variant,stop_gained"
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "22\t22893818\t.\tG\tT\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,incomplete_terminal_codon_variant",
@@ -511,7 +511,7 @@
    ]
   },
   {
-   "suite": "gencode",
+   "dataset": "gencode",
    "vcf": "22\t23787169\t.\tAATG\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -519,7 +519,7 @@
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "divergences": [],

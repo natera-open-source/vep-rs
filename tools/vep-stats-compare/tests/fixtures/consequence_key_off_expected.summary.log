@@ -1,0 +1,64 @@
+[VEP run statistics]
+VEP version (API)	 116.3 (116)
+Annotation sources	Cache: /work/cache/homo_sapiens/116_GRCh38; Custom: /work/custom/sites.vcf.gz (exact)
+Species	homo_sapiens
+Command line options	vep --assembly GRCh38 --cache --cache_version 116 --custom file=[PATH]/sites.vcf.gz,short_name=sites,format=vcf,type=exact,fields=AF%CLASS --database 0 --dir_cache /cache --force_overwrite --input_file [PATH]/record.vcf --offline --output_file [PATH]/reference.txt --stats_text --tab
+Start time	2030-01-01 00:00:00
+End time	2030-01-01 00:00:01
+Run time	1 seconds
+Input file	/work/record.vcf
+Output file	/work/reference.txt
+
+[Data version]
+1000genomes	phase3
+COSMIC	102
+ClinVar	202509
+HGMD-PUBLIC	20204
+assembly	GRCh38.p14
+dbSNP	156
+gencode	GENCODE 50
+genebuild	GENCODE50
+gnomADe	v4.1
+gnomADg	v4.1
+polyphen	2.2.3
+regbuild	1.0
+sift	6.2.1
+
+[General statistics]
+Lines of input read	1
+Variants processed	1
+Variants filtered out	0
+Novel / existing variants	-
+Overlapped genes	1
+Overlapped transcripts	9
+Overlapped regulatory features	-
+
+[Variant classes]
+SNV	1
+
+[Consequences (most severe)]
+missense_variant	1
+
+[Consequences (all)]
+exact_3	9
+missense_variant	7
+intron_variant	2
+NMD_transcript_variant	2
+
+[Coding consequences]
+missense_variant	7
+
+[Variants by chromosome]
+21	1
+
+[Position in protein]
+00-10%	7
+10-20%	0
+20-30%	0
+30-40%	0
+40-50%	0
+50-60%	0
+60-70%	0
+70-80%	0
+80-90%	0
+90-100%	0

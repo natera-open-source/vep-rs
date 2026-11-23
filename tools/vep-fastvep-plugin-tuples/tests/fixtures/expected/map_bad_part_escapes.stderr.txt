@@ -1,0 +1,1 @@
+ERROR: [fastvep_plugin_tuples] tests/fixtures/maps/bad_part_escapes.tsv:2: part '1\x7f\\\u200bé' is not N, N-M, N.word or N.score

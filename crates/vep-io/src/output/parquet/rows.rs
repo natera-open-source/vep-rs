@@ -46,6 +46,11 @@ struct ColumnSpec {
 impl ParquetOutputFormatter {
     /// `contig_order` is the chromosome list `contig_index` ranks, in order; a
     /// record on a chromosome outside it ranks after every listed one.
+    ///
+    /// A column that `plugin_fields` or a `--custom` source of `options`
+    /// declares is a string whatever its name, since its cell can be the value
+    /// the plugin or the source wrote, which the grammar of a typed column of
+    /// the same name need not hold; every other column takes [`column_type`].
     pub fn new(
         mut options: FieldOptions,
         plugin_fields: Vec<String>,
@@ -53,10 +58,16 @@ impl ParquetOutputFormatter {
     ) -> Self {
         options.set_plugin_fields(plugin_fields.iter().cloned());
         let tab_columns = fields::tab_columns(&options, &plugin_fields, None);
-        let columns = tab_columns
+        let custom_fields = fields::custom_field_names(&options.custom_sources);
+        let columns: Vec<ColumnSpec> = tab_columns
             .iter()
             .map(|name| ColumnSpec {
-                column_type: column_type(name),
+                column_type: if options.plugin_fields.contains(name) || custom_fields.contains(name)
+                {
+                    ColumnType::Text
+                } else {
+                    column_type(name)
+                },
                 produced: fields::field_is_produced(name, &options),
                 dash_is_a_value: fields::dash_is_a_value(name),
             })
@@ -67,7 +78,12 @@ impl ParquetOutputFormatter {
             .map(|(rank, chr)| (chr.clone(), rank as i32))
             .collect();
         Self {
-            schema: schema(&tab_columns),
+            schema: schema(
+                tab_columns
+                    .iter()
+                    .zip(&columns)
+                    .map(|(name, spec)| (name.as_str(), spec.column_type)),
+            ),
             tab_columns,
             columns,
             options,
@@ -76,7 +92,7 @@ impl ParquetOutputFormatter {
         }
     }
 
-    pub fn schema(&self) -> &SchemaRef {
+    pub(super) fn schema(&self) -> &SchemaRef {
         &self.schema
     }
 
@@ -99,8 +115,9 @@ impl ParquetOutputFormatter {
 /// file's schema, and per row the record's written position and number, which
 /// the order check reads and the file does not store.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct RowBatch {
-    pub rows: RecordBatch,
+    pub(super) rows: RecordBatch,
     /// Per row, [`InputVariant::input_position`].
     pub positions: Vec<u64>,
     /// Per row, [`InputVariant::input_record`].
@@ -351,19 +368,21 @@ mod tests {
     fn variant() -> InputVariant {
         let mut v = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
         v.id = Some("rs1".into());
-        v.transcript_consequences = vec![TranscriptConsequence {
-            transcript: Some(Arc::new(Transcript {
-                stable_id: "ENST1".into(),
-                gene_stable_id: "ENSG1".into(),
-                ..Transcript::default()
-            })),
-            consequences: smallvec![Consequence::MissenseVariant],
-            impact: Impact::MODERATE,
-            cdna_position: Some("44".into()),
-            amino_acids: Some("E/G".into()),
-            codons: Some("gAa/gGa".into()),
-            strand: 1,
-            ..Default::default()
+        v.transcript_consequences = vec![{
+            let mut consequence = TranscriptConsequence::default();
+            consequence.transcript = Some(Arc::new({
+                let mut transcript = Transcript::default();
+                transcript.stable_id = "ENST1".into();
+                transcript.gene_stable_id = "ENSG1".into();
+                transcript
+            }));
+            consequence.consequences = smallvec![Consequence::MissenseVariant];
+            consequence.impact = Impact::MODERATE;
+            consequence.cdna_position = Some("44".into());
+            consequence.amino_acids = Some("E/G".into());
+            consequence.codons = Some("gAa/gGa".into());
+            consequence.strand = 1;
+            consequence
         }];
         v
     }
@@ -443,17 +462,19 @@ mod tests {
             ..Default::default()
         });
         let mut v = InputVariant::new("21".into(), 101, 100, b"-".to_vec(), b"TT".to_vec());
-        v.transcript_consequences = vec![TranscriptConsequence {
-            transcript: Some(Arc::new(Transcript {
-                stable_id: "ENST1".into(),
-                gene_stable_id: "ENSG1".into(),
-                ..Transcript::default()
-            })),
-            consequences: smallvec![Consequence::FrameshiftVariant],
-            impact: Impact::HIGH,
-            strand: 1,
-            used_ref: Some("-".into()),
-            ..Default::default()
+        v.transcript_consequences = vec![{
+            let mut consequence = TranscriptConsequence::default();
+            consequence.transcript = Some(Arc::new({
+                let mut transcript = Transcript::default();
+                transcript.stable_id = "ENST1".into();
+                transcript.gene_stable_id = "ENSG1".into();
+                transcript
+            }));
+            consequence.consequences = smallvec![Consequence::FrameshiftVariant];
+            consequence.impact = Impact::HIGH;
+            consequence.strand = 1;
+            consequence.used_ref = Some("-".into());
+            consequence
         }];
         let batch = batch_of(&f, &v);
         assert_eq!(text_cell(&batch, "GIVEN_REF", 0).as_deref(), Some("-"));
@@ -552,6 +573,166 @@ mod tests {
         v.custom_annotations.truncate(1);
         let batch = batch_of(&f, &v);
         assert_eq!(text_cell(&batch, "cons_min", 0), None);
+    }
+
+    /// A plugin field named `ref` or `alt`, as the synthetic dbNSFP fixture
+    /// declares under `ALL` (every column of the file's header,
+    /// `dbNSFP.pm:233-236`), carries the name of a key column. Each is stored
+    /// behind one `tab_`, as is a column that carries such a name itself, so
+    /// every column name of the schema is distinct: the key columns hold the
+    /// record's alleles, the stored columns the plugin's own cells, and the
+    /// row reads back under the tab columns' names.
+    #[test]
+    fn a_plugin_field_named_as_a_key_column_leaves_every_column_name_unique() {
+        use crate::output::parquet::reader::TabProjection;
+        use std::collections::HashSet;
+
+        let names_of = |f: &ParquetOutputFormatter| -> Vec<String> {
+            f.schema()
+                .fields()
+                .iter()
+                .map(|field| field.name().clone())
+                .collect()
+        };
+        let plugin_fields = ["ref", "alt", "CADD_PHRED"].map(String::from).to_vec();
+        let f = Arc::new(ParquetOutputFormatter::new(
+            FieldOptions::default(),
+            plugin_fields,
+            vec!["21".into()],
+        ));
+        let names = names_of(&f);
+        let distinct: HashSet<&String> = names.iter().collect();
+        assert_eq!(distinct.len(), names.len(), "{names:?}");
+        assert_eq!(
+            &names[..6],
+            ["contig_index", "chrom", "pos", "end", "ref", "alt"]
+        );
+        assert_eq!(
+            &names[names.len() - 3..],
+            ["tab_ref", "tab_alt", "CADD_PHRED"]
+        );
+
+        let mut v = variant();
+        let plugin_data = &mut v.transcript_consequences[0].plugin_data;
+        plugin_data.insert("ref".to_string(), "T".to_string());
+        plugin_data.insert("alt".to_string(), "C,G".to_string());
+        let batch = batch_of(&f, &v);
+        assert_eq!(text_cell(&batch, "ref", 0).as_deref(), Some("A"));
+        assert_eq!(text_cell(&batch, "alt", 0).as_deref(), Some("G"));
+        assert_eq!(text_cell(&batch, "tab_ref", 0).as_deref(), Some("T"));
+        assert_eq!(text_cell(&batch, "tab_alt", 0).as_deref(), Some("C,G"));
+        assert_eq!(text_cell(&batch, "CADD_PHRED", 0), None);
+        let projection = TabProjection::of(&batch);
+        assert_eq!(projection.names().collect::<Vec<_>>(), f.tab_columns);
+        let line = projection.tab_line(&batch, 0);
+        let cells: Vec<&str> = line.split('\t').collect();
+        assert_eq!(&cells[cells.len() - 3..], ["T", "C,G", "-"]);
+
+        let plugin_fields = ["ref", "tab_ref", "tab_tab_alt"].map(String::from).to_vec();
+        let f = Arc::new(ParquetOutputFormatter::new(
+            FieldOptions::default(),
+            plugin_fields,
+            vec!["21".into()],
+        ));
+        let names = names_of(&f);
+        let distinct: HashSet<&String> = names.iter().collect();
+        assert_eq!(distinct.len(), names.len(), "{names:?}");
+        assert_eq!(
+            &names[names.len() - 3..],
+            ["tab_ref", "tab_tab_ref", "tab_tab_tab_alt"]
+        );
+        let mut v = variant();
+        let plugin_data = &mut v.transcript_consequences[0].plugin_data;
+        plugin_data.insert("ref".to_string(), "T".to_string());
+        plugin_data.insert("tab_ref".to_string(), "second".to_string());
+        let batch = batch_of(&f, &v);
+        assert_eq!(text_cell(&batch, "ref", 0).as_deref(), Some("A"));
+        assert_eq!(text_cell(&batch, "tab_ref", 0).as_deref(), Some("T"));
+        assert_eq!(
+            text_cell(&batch, "tab_tab_ref", 0).as_deref(),
+            Some("second")
+        );
+        assert_eq!(text_cell(&batch, "tab_tab_tab_alt", 0), None);
+        let projection = TabProjection::of(&batch);
+        assert_eq!(projection.names().collect::<Vec<_>>(), f.tab_columns);
+    }
+
+    /// A field a plugin or a `--custom` source declares is a string column
+    /// whatever its name. The plugin's `TSL` value over the made-up dbNSFP
+    /// fixture is a `,`-joined list, which the INT32 grammar of the flag's
+    /// `TSL` column does not hold, and a `--custom` source named `gnomADg` with
+    /// the field `AF` declares `gnomADg_AF`, the name of a frequency column.
+    /// With the flags on as with them off, each is a string column holding the
+    /// `--tab` cell, a row the plugin left without a value carrying the flag's
+    /// own value, and a column the flag alone gives keeps the type of its name.
+    #[test]
+    fn a_field_a_plugin_or_a_custom_source_declares_is_a_string_whatever_its_name() {
+        use crate::output::fields::CustomSourceInfo;
+        use crate::output::parquet::reader::TabProjection;
+
+        const FILE_TSL: &str = "5,1,2,3,2,NA";
+        let data_type = |f: &ParquetOutputFormatter, column: &str| {
+            f.schema()
+                .field_with_name(column)
+                .unwrap()
+                .data_type()
+                .clone()
+        };
+        let flags_on = || FieldOptions {
+            tsl: true,
+            af_gnomadg: true,
+            ..Default::default()
+        };
+
+        let by_flag = formatter(flags_on());
+        assert_eq!(data_type(&by_flag, "TSL"), DataType::Int32);
+        assert_eq!(
+            data_type(&by_flag, "gnomADg_AF"),
+            ColumnType::DoubleList.data_type()
+        );
+
+        let gnomad_source = CustomSourceInfo {
+            file: "/data/gnomad.vcf.gz".to_string(),
+            short_name: "gnomADg".to_string(),
+            fields: vec!["AF".to_string()],
+            ..Default::default()
+        };
+        for (options, core_tsl) in [(FieldOptions::default(), None), (flags_on(), Some("1"))] {
+            let declared = Arc::new(ParquetOutputFormatter::new(
+                FieldOptions {
+                    custom_sources: vec![gnomad_source.clone()],
+                    ..options
+                },
+                vec!["TSL".to_string()],
+                vec!["21".into()],
+            ));
+            assert_eq!(data_type(&declared, "TSL"), DataType::Utf8);
+            assert_eq!(data_type(&declared, "gnomADg_AF"), DataType::Utf8);
+            assert_eq!(data_type(&declared, "STRAND"), DataType::Int32);
+            let tsl_column = declared
+                .tab_columns
+                .iter()
+                .position(|name| name == "TSL")
+                .unwrap();
+            let tab_cell = |batch: &RecordBatch| {
+                let line = TabProjection::of(batch).tab_line(batch, 0);
+                line.split('\t').nth(tsl_column).unwrap().to_string()
+            };
+
+            let mut v = variant();
+            let tc = &mut v.transcript_consequences[0];
+            Arc::get_mut(tc.transcript.as_mut().unwrap()).unwrap().tsl = Some("1".to_string());
+            let batch = batch_of(&declared, &v);
+            assert_eq!(text_cell(&batch, "TSL", 0).as_deref(), core_tsl);
+            assert_eq!(tab_cell(&batch), core_tsl.unwrap_or("-"));
+
+            v.transcript_consequences[0]
+                .plugin_data
+                .insert("TSL".to_string(), FILE_TSL.to_string());
+            let batch = batch_of(&declared, &v);
+            assert_eq!(text_cell(&batch, "TSL", 0).as_deref(), Some(FILE_TSL));
+            assert_eq!(tab_cell(&batch), FILE_TSL);
+        }
     }
 
     /// `NEAREST` on a chromosome with no site is an empty value the tab format

@@ -1,6 +1,6 @@
 # `stop_retained_variant` for a span that holds the whole stop codon
 
-**The defect in one sentence.** For an insertion or deletion whose span holds all three bases of the stop codon and lacks a cDNA coordinate, at one end or at both, or a CDS start, Ensembl VEP 116.2 makes no stop codon test. It writes `stop_retained_variant`, which says that a stop codon stays in place, without reading a base. vep-rs reads the sequence the record gives and writes `stop_lost` unless that sequence shows the stop codon kept.
+**The defect in one sentence.** For an insertion or deletion whose span holds the whole stop codon and lacks a cDNA coordinate, at one end or at both, or a CDS start, Ensembl VEP 116.3 makes no stop codon test. It writes `stop_retained_variant`, which says that a stop codon stays in place, without reading a base. vep-rs reads the sequence the record gives and writes `stop_lost` unless that sequence shows the stop codon kept.
 
 **Why this is a defect.** The term states the result of a test that was not made. Two routines of the module return 0 before they build any sequence, because the span has no coordinate to make the edit at. Their callers read the first 0 as a stop codon that is not lost and the second as a stop codon that is kept.
 
@@ -11,14 +11,14 @@ The same module answers the other way elsewhere when it has no sequence to read.
 It asks three things in turn:
 
 1. A deletion whose removed bases repeat the bases beside them can be written at more than one place, and each place gives the same edited genome. Can the deletion be written at a place where it takes no coding base and no stop base? Then the codon is kept, and the row keeps `stop_retained_variant`.
-2. Does an exon base stand at or beside each end of the edit, at one of the places it can be written at? Then the transcript's sequence across the edit is given, and vep-rs reads it at the old stop position, the last three positions of the coding sequence.
+2. Does an exon base stand at or beside each end of the edit, at one of the places it can be written at? Then the transcript's sequence across the edit is given, and vep-rs reads it at the old stop position, the positions of the stop codon.
 3. Otherwise the edit removes a splice site or the transcript's end together with exon bases. Only the exon bases before the edit are given. Where an exon base stands directly before the edit, the alternate bases are given after it as well.
 
 A given sequence that ends before the old stop position, or holds no stop codon there, gives `stop_lost`. One that holds a stop codon there keeps `stop_retained_variant` where every residue before it, each amino acid of the protein, is the one the unedited transcript gives. One that holds a stop codon there behind a changed residue gets neither stop term. Its row carries `coding_sequence_variant` instead, or no term in the stop term's place beside `start_lost`.
 
 vep-rs writes no `frameshift_variant` beside the `stop_lost` of these rows. Ensembl VEP's frameshift test asks for both CDS coordinates (lines 1541-1564, the condition at line 1551), and no row of the class has both. Three bounds are vep-rs's own. It looks for the other places a deletion can be written at up to 10,000 positions each way along the reference sequence. Without a reference file it reads the record's own place alone. A base of that sequence that is not one of the four ends the search.
 
-**Where it is in Ensembl VEP's source** (`ensembl-variation` at release/116, the module the Ensembl VEP 116.2 image holds), all in `Bio/EnsEMBL/Variation/Utils/VariationEffect.pm`:
+**Where it is in Ensembl VEP's source** (`ensembl-variation` at release/116, the module the Ensembl VEP 116.3 image holds), all in `Bio/EnsEMBL/Variation/Utils/VariationEffect.pm`:
 
 - Lines 1234-1288, `stop_lost`: the routine reads the peptide alleles where the allele has some. Otherwise line 1263 takes the answer of `_ins_del_stop_altered`.
 - Lines 1375-1376, `_overlaps_stop_codon`: the routine reads the span's cDNA start and end and returns 0 unless both are set. `_ins_del_stop_altered` returns 0 on that answer at line 1444. Its line 1453 returns 0 unless the cDNA start, the cDNA end and the CDS start are all set.
@@ -33,17 +33,19 @@ vep-rs writes no `frameshift_variant` beside the `stop_lost` of these rows. Ense
 
 **How often the shape occurs.** Tier 1, see [Intended divergences from Ensembl VEP](../intended-divergences.md): ordinary data carries the shape, and the divergence needs no flag or plugin.
 
-Counts are rows of the genome-wide ClinVar dataset, on GRCh38 first and on GRCh37 second. Ensembl VEP 116.2 writes `stop_retained_variant` with no test made on 5,125 and 1,006 rows whose record's span holds all three bases of the stop codon. They are rows of 931 and 451 records on 3,444 and 645 transcripts: 4,532 and 883 are deletions, and 593 and 123 replace the removed bases by other bases. vep-rs writes `stop_lost` on 5,068 and 1,002 of them, the rows of this class. It keeps `stop_retained_variant` on 55 and 4 and writes neither stop term on 2 and 0.
+Counts are rows of the genome-wide ClinVar dataset, on GRCh38 first and on GRCh37 second. Ensembl VEP 116.3 writes `stop_retained_variant` with no test made on 5,125 and 1,006 rows whose record's span holds the whole stop codon. They are rows of 931 and 451 records on 3,444 and 645 transcripts: 4,532 and 883 are deletions, and 593 and 123 replace the removed bases by other bases. vep-rs writes `stop_lost` on 5,068 and 1,002 of them, the rows of this class. It keeps `stop_retained_variant` on 55 and 4 and writes neither stop term on 2 and 0.
 
 Tuple, pair, set aside, charged and the other scoring terms are defined in [How to read the counts](../intended-divergences.md#how-to-read-the-counts).
 
 ## 1. A deletion of the stop codon and the two intron bases before it, on ENST00000635895
 
-**In short.** `19 13208045 1993671 ACTACT A` on GRCh38, ClinVar 1993671, deletes the five bases 19:13208046-13208050. On the reverse-strand transcript ENST00000635895 they are the last two bases of an intron and the stop codon, which opens the last exon. Ensembl VEP 116.2 writes `splice_acceptor_variant,stop_retained_variant`, and vep-rs writes `splice_acceptor_variant,stop_lost`. The span begins in the intron and has no cDNA coordinate there, so Ensembl VEP makes no stop codon test and reads the missing answer as a stop codon kept. The record removes the codon with the splice site before it, and no record gives what the transcript reads next: no stop codon is shown at the old stop position.
+**In short.** `19 13208045 1993671 ACTACT A` on GRCh38, ClinVar 1993671, deletes the five bases 19:13208046-13208050. On the reverse-strand transcript ENST00000635895 they are the last two bases of an intron and the stop codon, which opens the last exon. Ensembl VEP 116.3 writes `splice_acceptor_variant,stop_retained_variant`, and vep-rs writes `splice_acceptor_variant,stop_lost`. The span begins in the intron and has no cDNA coordinate there, so Ensembl VEP makes no stop codon test and reads the missing answer as a stop codon kept. The record removes the codon with the splice site before it, and no record gives what the transcript reads next: no stop codon is shown at the old stop position.
 
 ### 1.1 What a reader needs to know first
 
-A coding transcript ends its coding sequence with a stop codon, three bases that end translation. For a change at that codon Ensembl VEP writes one of two terms. `stop_lost` says that no stop codon stands at the old stop position after the change, and `stop_retained_variant` says that one does. This page calls the last three positions of the coding sequence the old stop position.
+A coding transcript ends its coding sequence with a stop codon, three bases that end translation, where its record shows one there. For a change at that codon Ensembl VEP writes one of two terms. `stop_lost` says that no stop codon stands at the old stop position after the change, and `stop_retained_variant` says that one does. This page calls the positions of that codon the old stop position.
+
+On most transcripts the old stop position is the last three positions of the coding sequence. On some the genome carries only one or two bases of the stop codon. The rest are adenines of the poly(A) tail, or bases that a RefSeq model holds and the genome lacks. There a span that starts before the genome's bases of the codon and holds them holds the whole stop codon. [`stop_codon_completed_by_polyadenylation`](stop-codon-completed-by-polyadenylation.md) says which transcripts the poly(A) tail completes and covers a span that starts inside the codon.
 
 Where an allele has reference and alternate amino acids, Ensembl VEP reads the two terms from them. Where it has none, as on the row of this page, a stop codon test decides. The test edits the coding sequence and the 3' UTR as the record says and reads the three bases at the old stop position.
 
@@ -75,7 +77,7 @@ In the transcript's direction the deleted span begins at 13208050, an intron bas
 
 ### 1.3 What each engine writes
 
-The row on ENST00000635895 in the default format. Ensembl VEP 116.2:
+The row on ENST00000635895 in the default format. Ensembl VEP 116.3:
 
 ```
 1993671	19:13208046-13208050	-	ENSG00000141837	ENST00000635895	Transcript	splice_acceptor_variant,stop_retained_variant	?-7057	?-6786	?-2262	-	-	-	IMPACT=HIGH;STRAND=-1
@@ -126,15 +128,17 @@ vep -i record.vcf -o out.txt --offline \
 grep ENST00000635895 out.txt
 ```
 
-The committed GRCh38 cache holds the transcript. vep-rs writes `splice_acceptor_variant,stop_lost` on the row. Ensembl VEP 116.2 takes the record with the cache options of [Reproducing these examples](reproducing.md) and its GRCh38 cache, and writes `splice_acceptor_variant,stop_retained_variant`. The command passes no reference file, so vep-rs reads the deletion at the record's own place alone, the one place this deletion has.
+The committed GRCh38 cache holds the transcript. vep-rs writes `splice_acceptor_variant,stop_lost` on the row. Ensembl VEP 116.3 takes the record with the cache options of [Reproducing these examples](reproducing.md) and its GRCh38 cache, and writes `splice_acceptor_variant,stop_retained_variant`. The command passes no reference file, so vep-rs reads the deletion at the record's own place alone, the one place this deletion has.
 
 The entry's reproduction, `scripts/divergences/reproductions/stop_codon_removed_without_stop_codon_test.toml`, runs the record on both engines and holds the row to both recorded values.
 
 ### 1.7 How the comparator treats this class
 
-The format comparator (`scripts/concordance/compare_vep_formats.py`) compares one Ensembl VEP output with one vep-rs output, every field of every row. A comparison case is one such comparison: an input, the flags and the classes it applies. Where a comparison case names the class `stop_codon_removed_without_stop_codon_test`, the comparator sets a row of the class aside and counts it once under that name. The rows of the class are the ones its predicate, `stop_codon_removed_without_stop_codon_test_pair`, accepts. It accepts a `Transcript` row of an insertion or deletion whose two term sets are equal but for Ensembl VEP's `stop_retained_variant` against vep-rs's `stop_lost`. Both rows must lack a cDNA position, whole or at one end, or a CDS start.
+The format comparator (`tools/vep-formats-compare`) compares one Ensembl VEP output with one vep-rs output, every field of every row. A comparison case is one such comparison: an input, the flags and the classes it applies. Where a comparison case names the class `stop_codon_removed_without_stop_codon_test`, the comparator sets a row of the class aside and counts it once under that name. The rows of the class are the ones its predicate, `stop_codon_removed_without_stop_codon_test_pair`, accepts. It accepts a `Transcript` row of an insertion or deletion whose two term sets are equal but for Ensembl VEP's `stop_retained_variant` against vep-rs's `stop_lost`. Both rows must lack a cDNA position, whole or at one end, or a CDS start.
 
-Of Ensembl VEP 116.2's rows against vep-rs's for the genome-wide ClinVar dataset, the class sets aside 5,067 rows on GRCh38 and 1,002 on GRCh37.
+A comparison that is given the cache vep-rs annotated with, the candidate's cache, reads the row's transcript there too. The predicate then accepts a row only where that record shows a stop codon at the coding end, a whole one or one that polyadenylation completes. It accepts none where no stop codon stands or where the cache gives no record for the row. A comparison that is given no cache reads the two rows alone.
+
+Of Ensembl VEP 116.3's rows against vep-rs's for the genome-wide ClinVar dataset, the class sets aside 5,067 rows on GRCh38 and 1,002 on GRCh37.
 
 On a row the class sets aside, the comparator also sets aside the fields that follow the two terms, by the rule `term_pair_following_cell`. The rule takes a field when its two values are the ones the two terms give, so that the terms explain the field's difference. The fields are counted in outputs of the same dataset that both engines write with the plugins verified on real data loaded and the HGVS notations on. The class has 5,068 and 1,002 rows there: one more on GRCh38, a row that also differs in a splice term and that the comparison above does not count under this class. On them the rule sets aside one field:
 
@@ -142,12 +146,14 @@ On a row the class sets aside, the comparator also sets aside the fields that fo
 
 The rule takes no field that the two terms do not decide. Every other field of a row the class sets aside is compared, and a difference in it is reported. `HGVSc` is one field that the two terms do not decide. In the same outputs it differs on 548 and 153 rows of the class, and the comparator reports each of those differences.
 
-The golden corpora record each row of the class under its name. The corpus builder (`scripts/golden/build_golden_corpus.py`) writes the name as the row's `expected_divergence` in the corpus manifest. The manifests of 16 committed corpora hold 566 such entries.
+The golden corpora record each row of the class under its name. The corpus builder (`tools/vep-golden-corpus`) writes the name as the row's `expected_divergence` in the corpus manifest. The manifests of 19 committed corpora hold 593 such entries: 490 in the lists of the corpora's own runs and 103 in the lists that their flag sets carry.
 
-Rows beside the shape are no part of this entry. A row with a cDNA position at both ends and a CDS start, a row with another differing term, a row with the two terms the other way round and a substitution's row stay differences. Rows of the same two returns on which vep-rs writes neither `stop_lost` nor `stop_retained_variant` belong to [`stop_retained_without_stop_codon_test`](stop-retained-without-stop-codon-test.md). Their span does not hold the whole stop codon, or the sequence given shows a stop codon behind a changed residue. That entry's class sets aside 308 and 70 rows in all.
+Rows beside the shape are no part of this entry. A row with a cDNA position at both ends and a CDS start, a row with another differing term, a row with the two terms the other way round and a substitution's row stay differences. On a transcript whose stop codon stands, rows of the same two returns on which vep-rs writes neither `stop_lost` nor `stop_retained_variant` belong to [`stop_retained_without_stop_codon_test`](stop-retained-without-stop-codon-test.md). Their span does not hold the whole stop codon, or the sequence given shows a stop codon behind a changed residue. That entry's class sets aside 272 and 62 rows in all. The 36 and 8 on which vep-rs writes `stop_gained` are rows of [`stop_codon_settled_before_unknown_bases`](stop-codon-settled-before-unknown-bases.md).
 
-The SNP/indel comparator (`scripts/concordance/compare_vep_outputs.py`) compares tuples: a row's Location, Allele, Feature, Feature_type and set of `Consequence` terms. Two tuples, one from each engine, that differ in the set of terms alone are a pair. The comparator's 116.2 registry holds a pair rule under the class's name, with the same predicate, `stop_codon_removed_without_stop_codon_test_pair`. The rule sets aside both tuples of a pair whose sets differ by Ensembl VEP's `stop_retained_variant` against vep-rs's `stop_lost` alone.
+On a transcript where no stop codon stands at the coding end, vep-rs writes neither stop term for a span of this shape, and the row belongs to [`stop_codon_overlap_without_stop_codon`](stop-codon-overlap-without-stop-codon.md).
 
-A tuple carries no cDNA or CDS position, so the rule reads the rows of the two outputs that carry the pair's two tuples. The Allele, the record's alleles in the first column and the Location show whether the pair is an insertion's or a deletion's. `cDNA_position` and `CDS_position` show a row's cDNA positions and its CDS start. The pair is set aside when it is an insertion's or a deletion's and every such row lacks a cDNA position, whole or at one end, or a CDS start.
+The SNP/indel comparator (`tools/vep-outputs-compare`) compares tuples: a row's Location, Allele, Feature, Feature_type and set of `Consequence` terms. Two tuples, one from each engine, that differ in the set of terms alone are a pair. The comparator's 116.3 registry holds a pair rule under the class's name, with the same predicate, `stop_codon_removed_without_stop_codon_test_pair`. The rule sets aside both tuples of a pair whose sets differ by Ensembl VEP's `stop_retained_variant` against vep-rs's `stop_lost` alone.
 
-`tools/vep-outputs-compare`, the Rust build of this comparator, applies the same rule to the same rows. The structural-variant comparator (`scripts/validation/compare_sv_concordance.py`) applies it to the pairs of the structural-variant sets.
+A tuple carries no cDNA or CDS position, so the rule reads the rows of the two outputs that carry the pair's two tuples. The Allele, the record's alleles in the first column and the Location show whether the pair is an insertion's or a deletion's. `cDNA_position` and `CDS_position` show a row's cDNA positions and its CDS start. The pair is set aside when it is an insertion's or a deletion's and every such row lacks a cDNA position, whole or at one end, or a CDS start. Given the candidate's cache, the rule sets the pair aside only where the transcript's record shows a stop codon at the coding end.
+
+The structural-variant comparator (`tools/vep-sv-compare`) applies it to the pairs of the structural-variant sets.

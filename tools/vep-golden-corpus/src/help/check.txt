@@ -1,0 +1,17 @@
+usage: vep-golden-corpus check [-h] --corpus CORPUS --dataset DATASET
+                               [--matrix MATRIX]
+                               [--family-columns FAMILY_COLUMNS]
+                               [--require-genotype-class CLASS]
+
+options:
+  -h, --help            show this help message and exit
+  --corpus CORPUS
+  --dataset DATASET
+  --matrix MATRIX       the parity matrix whose `item` column every `covers`
+                        name must be in
+  --family-columns FAMILY_COLUMNS
+                        the family key (see select); every stratum the
+                        datasets show must have an exemplar
+  --require-genotype-class CLASS
+                        a genotype class the corpus must carry, beside the
+                        manifest's required_genotype_classes (repeatable)

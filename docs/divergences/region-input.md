@@ -21,4 +21,4 @@ Can't use an undefined value as an ARRAY reference at
 
 The exit code is 255, and nothing is written for the record, nor for any record of the file the run had not written when it died. vep-rs annotates `21:14221000-14222000/BND` as a `chromosome_breakpoint` over the span, one row per overlapping transcript, 17 rows on the GRCh38 cache, and the run goes on. A `DEL`, `DUP` or `INS:ME:ALU` word, which names no breakend, is annotated alike by both engines.
 
-To reproduce: Ensembl VEP 116.2 with the GRCh38 cache and [the command of the closing section](reproducing.md#reproducing-these-examples), with `--format region --fasta <file>` and, for the first difference, `--minimal --uploaded_allele`; vep-rs with the same flags over the same cache and FASTA.
+To reproduce: Ensembl VEP 116.3 with the GRCh38 cache and [the command of the closing section](reproducing.md#reproducing-these-examples), with `--format region --fasta <file>` and, for the first difference, `--minimal --uploaded_allele`; vep-rs with the same flags over the same cache and FASTA.

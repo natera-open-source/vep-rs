@@ -11,9 +11,11 @@
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output, Stdio};
+use std::process::{Output, Stdio};
 
 use vep_core::cache_manifest::{CacheManifest, MANIFEST_FILE};
+
+mod common;
 
 fn golden(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -48,7 +50,7 @@ fn run(dir: &Path, input: &Path, cache: &Path, assembly: &str, flags: &[&str]) -
     let out = dir.join("out.txt");
     let _ = fs::remove_file(&out);
     let _ = fs::remove_file(warnings_file(dir));
-    Command::new(env!("CARGO_BIN_EXE_vep"))
+    common::isolated_vep(dir)
         .stdin(Stdio::null())
         .arg("-i")
         .arg(input)
@@ -196,6 +198,31 @@ fn intact_cache_annotates_and_a_manifestless_cache_warns_once() {
     );
 }
 
+/// A cache directory whose manifest is the line a build writes before its
+/// first file is one a build left early: the run ends with one line under
+/// the `cache` component that names the directory, whatever the directory
+/// holds.
+#[test]
+fn a_cache_a_build_left_early_is_refused_by_name() {
+    let dir = tempfile::tempdir().unwrap();
+    let cache = cache_copy("GRCh38-colocated", dir.path());
+    let input = golden("GRCh38-colocated").join("variants.vcf");
+    CacheManifest::mark_unfinished(&cache).unwrap();
+    let output = run(dir.path(), &input, &cache, "GRCh38", &COLOCATED_FLAGS);
+    let err = stderr(&output);
+    assert_eq!(output.status.code(), Some(1), "{err}");
+    let error_lines: Vec<&str> = err.lines().filter(|l| l.starts_with("ERROR: [")).collect();
+    assert_eq!(
+        error_lines,
+        [format!(
+            "ERROR: [cache] {} holds a cache whose build did not finish: build it again",
+            cache.display()
+        )
+        .as_str()],
+        "{err}"
+    );
+}
+
 /// A changed byte in a transcript shard, in the variation index, in
 /// `info.json`, a truncated `all_vars.gz` and a shard the manifest does not
 /// list each end the run with the contract's line naming the file.
@@ -246,7 +273,7 @@ fn changed_truncated_and_unlisted_cache_files_are_refused() {
     drop(info);
     let refused = run(dir.path(), &input, &cache, "GRCh38", &COLOCATED_FLAGS);
     assert_mismatch(&refused, "info.json", &cache);
-    let info_run = Command::new(env!("CARGO_BIN_EXE_vep"))
+    let info_run = common::isolated_vep(dir.path())
         .args(["--show_cache_info", "--json_cache", cache.to_str().unwrap()])
         .output()
         .unwrap();
@@ -296,7 +323,7 @@ fn missing_listed_files_are_refused_at_resolution() {
         .as_str()],
         "{err}"
     );
-    let info_run = Command::new(env!("CARGO_BIN_EXE_vep"))
+    let info_run = common::isolated_vep(dir.path())
         .current_dir(dir.path())
         .args(["--show_cache_info", "--json_cache", cache.to_str().unwrap()])
         .output()
@@ -472,7 +499,7 @@ fn show_cache_info_is_unchanged_by_the_manifest() {
     let dir = tempfile::tempdir().unwrap();
     let cache = cache_copy("GRCh38-colocated", dir.path());
     let show = |cache: &Path| {
-        let output = Command::new(env!("CARGO_BIN_EXE_vep"))
+        let output = common::isolated_vep(dir.path())
             .current_dir(dir.path())
             .args(["--show_cache_info", "--json_cache", cache.to_str().unwrap()])
             .output()

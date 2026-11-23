@@ -18,13 +18,17 @@ A converted RefSeq or merged cache carries the attributes Ensembl VEP writes abo
 
 ## HGVSc on an edited model
 
-The HGVSc of a model whose alignment inserted or deleted bases is numbered against the edited model, the transcript the identifier names. An exonic position takes its edited coordinate and an intronic distance counts from the edited exon end. A genomic base the alignment removed from the model is described from the nearest modelled base, as an intronic base is. A single-base substitution in a coding exon takes the CDS coordinate the edited mapper gives.
+The HGVSc of a model whose alignment inserted or deleted bases is numbered against the edited model, the transcript the identifier names. An exonic position takes its edited coordinate and an intronic distance counts from the edited exon end. A genomic base the alignment removed from the model is described from the nearest modelled base, as an intronic base is. A single-base substitution in a coding exon takes the CDS coordinate the edited mapper gives. A model whose correction failed (`BAM_EDIT=FAILED`) keeps none of the alignment's edits, and its HGVSc is counted along the genome's exons ([the position past such a model's own edit](../divergences/refseq-failed-edit-model-hgvsc-offset.md)).
 
 The reference and alternate alleles are spelled relative to the transcript, the reference being the allele the row was analysed against. So under the auto-enabled `--use_transcript_ref` a substitution names the transcript's base where the genome differs.
 
 An alternate allele equal to that base gets no HGVSc, as any allele equal to its reference gets none. Ensembl VEP writes the base changed to itself there (`n.2023T>T`), the documented class [`edited_model_no_change_hgvsc`](../divergences/edited-model-no-change-hgvsc.md).
 
 A shifted insertion's inserted bases are spelled as the shift rotates them, with or without `--shift_3prime 1`. Ensembl VEP spells them as written except on a coding row under that flag. The difference is an intended divergence ([the inserted bases of a shifted insertion's HGVSc on an edited model](../divergences/refseq-edited-model-shifted-insertion-bases.md)).
+
+An insertion or a deletion on such a model is shifted 3' along the genome before its notation is written, and along the model's own sequence only on bases the genome lacks. A run that writes such a notation counts those alleles in one `INFO:` line at its end, withheld under `--quiet`.
+
+Ensembl VEP's source holds a second shift along the edited sequence (`TranscriptVariationAllele.pm` lines 211-256). Away from a transcript's last bases and its edited bases it returns before that shift (lines 182-187), copying a shift it already has ([the HGVS_OFFSET of an insertion or deletion on an edited model](../divergences/refseq-edited-model-hgvs-offset.md)). Its GenBank protein name (lines 1750-1756) needs the transcript's analysis record, which a cache does not carry, so both engines name the cached protein identifier. An LRG name takes no version in either engine.
 
 Ensembl VEP numbers these positions differently. Its cache dumper strips the transcript's edit-aware mapper, so it walks the exons in their unedited numbering and corrects an exonic position on an `NM_` or `XM_` model by the offset above. An intronic allele, which has no offset, is anchored on the unedited exon end, and an Ensembl model with such an edit is never corrected. The difference is an intended divergence ([intended divergences](../intended-divergences.md)); the comparator masks the class.
 
@@ -43,6 +47,8 @@ The difference is an intended divergence ([A variant inside the bases a RefSeq m
 ## The transcript-assembly mismatch warning
 
 An alternate allele equal to the bases of the model's first edit, in a coding exon, is the variant Ensembl VEP reads as invalid. The run then writes `WARNING: Transcript-assembly mismatch in <Uploaded_variation>` to standard error and the warnings file, once per record, for a row the output prints. A marked row that `--pick` or another record-level flag drops draws nothing, as do `--most_severe` and `--summary`, which print no transcript row, and a run under `--use_given_ref`. Ensembl VEP under `--fork` writes the line behind the child process's id, a documented intended divergence, [`fork_warning_pid_prefix`](../divergences/fork-warning-pid-prefix.md).
+
+In a `--json` run Ensembl VEP writes the line with no record name, once for the run or for each forked child. vep-rs names each record in every format, a second documented intended divergence, [`json_mismatch_warning_names_no_record`](../divergences/json-mismatch-warning-names-no-record.md).
 
 ## Where next
 

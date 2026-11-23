@@ -1,9 +1,9 @@
 entry = "minimal_plugin_sees_the_rejoined_record"
 page = "docs/divergences/minimal-plugin-sees-the-rejoined-record.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 90.9 per million · 1 flag set, 19 corpora"
+input_class_basis = "2 · 90.9 per million · 1 flag set, 22 corpora"
 notes = "Of the two plugins the entry measures this reproduces AVI: under --minimal each allele of AA/AG/AT at 21:5030191 trims to a one-base substitution at 21:5030192 the table scores, and the rejoin hands the plugin the record's two-base span, so AVI.pm:134 returns nothing on both allele rows. The OpenTargets shape, a matched export row written on every allele's rows of a split record, is read through the plugin's allele list (OpenTargets.pm:349) and is on the page."
 
 [input]
@@ -15,7 +15,7 @@ text = """
 [cache]
 species = "homo_sapiens"
 assembly = "GRCh38"
-json_cache = "tests/golden/116/GRCh38-plugin-avi/json_cache"
+json_cache = "tests/golden/116/GRCh38-plugin-avi-fixture/json_cache"
 
 [run]
 flags = ["--minimal", "--plugin", "AVI,file={corpus}/avi_scores.synthetic.tsv.gz,raw=1,links=1"]
@@ -28,3 +28,17 @@ where = { record = "avi_aa_ag_at" }
 [expected]
 ensembl_vep = ["-", "-"]
 vep_rs = ["2.071", "3.993"]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/avi.rs::AviPlugin::is_single_base_substitution",
+    "crates/vep-builtins/src/plugins/gnomadc.rs::coverage_span",
+    "crates/vep-builtins/src/plugins/open_targets.rs::record_alternate_alleles",
+    "crates/vep-core/src/minimal.rs::apply_minimal_split",
+]
+tests = [
+    "crates/vep-builtins/src/plugins/conservation.rs::tests::a_split_allele_reads_its_own_span",
+    "crates/vep-builtins/src/plugins/gnomadc.rs::tests::a_split_allele_reads_its_own_span",
+    "crates/vep-core/src/minimal.rs::tests::a_split_allele_takes_its_trimmed_span_and_the_record_s_span_as_its_original",
+]
+rules = ["tools/vep-golden-corpus/src/classify/fields.rs::minimal_plugin_sees_the_rejoined_record"]

@@ -1,0 +1,52 @@
+{
+ "release": "116",
+ "species": "homo_sapiens",
+ "assembly": "GRCh38",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 1,
+ "max_span": 1000000,
+ "covers": [
+  "symbol"
+ ],
+ "datasets": {
+  "pool": {
+   "reference": "ref.txt",
+   "input": "in.vcf",
+   "rows": 2,
+   "combinations": 2
+  }
+ },
+ "combinations": {
+  "intron_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "missense_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  }
+ },
+ "variant_classes": {
+  "snv": 2
+ },
+ "records": [
+  {
+   "dataset": "pool",
+   "vcf": "21\t100\trs1\tA\tG\t.\tPASS\t.",
+   "combinations": [
+    "missense_variant"
+   ]
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t200\trs2\tC\tT\t.\tPASS\t.",
+   "combinations": [
+    "intron_variant"
+   ]
+  }
+ ],
+ "multi_allelic_per_dataset": 0,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": []
+}

@@ -166,7 +166,7 @@ const FORMATS: [(&str, &[&str]); 4] = [
 const WRITER_STRATEGIES: [&str; 3] = ["buffered", "direct", "vectored"];
 
 /// Every format, in both pipeline modes, at every buffer size, is the bytes of
-/// the default run (batched, `--buffer_size 5000`).
+/// the batched `--buffer_size 5000` run.
 #[test]
 fn every_format_is_byte_identical_across_buffer_sizes_and_modes() {
     let tmp = tempfile::tempdir().unwrap();
@@ -176,7 +176,7 @@ fn every_format_is_byte_identical_across_buffer_sizes_and_modes() {
         for (name, flags) in FORMATS {
             let mut reference: Option<Vec<u8>> = None;
             for (mode, mode_flags) in MODES {
-                for buffer in ["5000", "7", "1"] {
+                for buffer in ["5000", "7", "1", "0"] {
                     let out = tmp
                         .path()
                         .join(format!("{}_{name}_{mode}_{buffer}.out", corpus.name));
@@ -662,8 +662,8 @@ fn every_writer_strategy_writes_the_default_bytes() {
 
 /// `--compress_output gzip` and `bgzip`, in both modes and under every writer
 /// strategy, decompress to the bytes of the plain default run in the default and
-/// VCF formats; the compressed bytes themselves follow the encoder's write
-/// boundaries and are not compared.
+/// VCF formats. The compressed streams are not compared: they follow the text,
+/// and each run's header carries its own command line and time.
 #[test]
 fn compressed_output_decompresses_to_the_plain_bytes_in_both_modes() {
     use std::io::Read;
@@ -872,13 +872,16 @@ fn dropped_by_both(corpus: &Corpus) -> BTreeSet<usize> {
 
 /// The corpus VCF with a non-variant (`ALT=.`) copy of every third record
 /// inserted after it, so `.` lines fall on and around batch boundaries at
-/// every small buffer size. A record both engines drop ([`dropped_by_both`])
-/// stays in the input, is expected in no output, and gets no copy.
+/// every small buffer size. A corpus of fewer than three records gets one
+/// copy, after its last record. A record both engines drop
+/// ([`dropped_by_both`]) stays in the input, is expected in no output, and
+/// gets no copy.
 fn with_non_variant_lines(corpus: &Corpus, dir: &Path) -> (std::path::PathBuf, Vec<String>) {
     let text = fs::read_to_string(corpus.dir.join("variants.vcf")).unwrap();
     let dropped = dropped_by_both(corpus);
     let mut out = String::new();
     let mut expected_order: Vec<String> = Vec::new();
+    let records = text.lines().filter(|l| !l.starts_with('#')).count();
     let mut data_seen = 0usize;
     for line in text.lines() {
         if line.starts_with('#') {
@@ -894,7 +897,7 @@ fn with_non_variant_lines(corpus: &Corpus, dir: &Path) -> (std::path::PathBuf, V
             continue;
         }
         expected_order.push(record_key(line));
-        if data_seen.is_multiple_of(3) {
+        if data_seen.is_multiple_of(3) || (records < 3 && data_seen == records) {
             let fields: Vec<&str> = line.split('\t').collect();
             let mut nv = fields.clone();
             nv[2] = "non_variant";
@@ -1116,6 +1119,7 @@ fn bgzipped_input_matches_the_plain_file_under_every_decompression_thread_count(
             DecompressionThreads::Auto => auto_threads,
             DecompressionThreads::HostCapped => host_capped,
             DecompressionThreads::Fixed(count) => count,
+            other => panic!("no count is known here for a default of {other}"),
         };
         let probe = vep(
             &gz,
@@ -1684,7 +1688,7 @@ fn warning_labels(warnings: &str) -> Vec<String> {
 /// annotated in input order, and a streaming run lists them the same way every
 /// time: Ensembl VEP writes `Transcript-assembly mismatch in
 /// <Uploaded_variation>` as it renders each record of the buffer, in buffer
-/// order (OutputFactory.pm:300-303, :1718), and the corpus's stored log holds
+/// order (OutputFactory.pm:300-303, :1727), and the corpus's stored log holds
 /// the two records that draw it in that order. At `--fork 4 --buffer_size 1`
 /// every record is a batch of its own, so a warning written as it was drawn
 /// would land in task-completion order.
@@ -1728,7 +1732,7 @@ fn record_warnings_are_listed_in_input_order_in_both_modes() {
 /// A record's warning keeps its place among the skips in both modes. Ensembl
 /// VEP's parser warns about a skipped record while the buffer fills
 /// (Parser.pm:189, Runner.pm:423) and the renderer warns about a record once
-/// the buffer is annotated (Runner.pm:443, OutputFactory.pm:1718): at
+/// the buffer is annotated (Runner.pm:443, OutputFactory.pm:1727): at
 /// `--buffer_size 1` every record is a buffer, so the two kinds alternate in
 /// input order, and at a buffer size past the input the batch's skip comes
 /// first and the records' warnings follow in record order. Forty copies of the
@@ -1821,7 +1825,10 @@ fn record_warnings_keep_their_place_among_the_skips_in_both_modes() {
 /// nothing after it, as it does for a skip: the RefSeq corpus's first record to
 /// draw `Transcript-assembly mismatch` is the last one written at
 /// `--buffer_size 1`, so a clean run over the records through it is the
-/// reference for both.
+/// reference for both. The warnings file is Linux's `/dev/full`, a device,
+/// which the run does not test before its first record and which fails the
+/// write of the warning.
+#[cfg(target_os = "linux")]
 #[test]
 fn unwritable_warnings_file_ends_both_modes_at_the_record_that_warned() {
     let tmp = tempfile::tempdir().unwrap();
@@ -1843,7 +1850,7 @@ fn unwritable_warnings_file_ends_both_modes_at_the_record_that_warned() {
     lines.extend(data[..=through].iter().map(|l| l.to_string()));
     let clean = tmp.path().join("clean.vcf");
     fs::write(&clean, lines.join("\n") + "\n").unwrap();
-    let warnings = tmp.path().join("missing").join("w.txt");
+    let warnings = Path::new("/dev/full");
     let set_args = corpus.transcript_set_args();
     let set_args: Vec<&str> = set_args.iter().map(String::as_str).collect();
 
@@ -1907,7 +1914,9 @@ fn unwritable_warnings_file_ends_both_modes_at_the_record_that_warned() {
 /// same error line and the same output: the batch whose skip met the failure is
 /// written and nothing after it. The skipped record (a chromosome the cache
 /// lacks) opens the first batch of 10, so a clean run over the nine records
-/// beside it is the reference for both.
+/// beside it is the reference for both. The warnings file is Linux's
+/// `/dev/full`, as in the test above.
+#[cfg(target_os = "linux")]
 #[test]
 fn unwritable_warnings_file_ends_both_modes_at_the_same_batch() {
     let tmp = tempfile::tempdir().unwrap();
@@ -1929,7 +1938,7 @@ fn unwritable_warnings_file_ends_both_modes_at_the_same_batch() {
     lines.extend(data[..30].iter().map(|l| l.to_string()));
     let input = tmp.path().join("skipped_first.vcf");
     fs::write(&input, lines.join("\n") + "\n").unwrap();
-    let warnings = tmp.path().join("missing").join("w.txt");
+    let warnings = Path::new("/dev/full");
 
     let reference_out = tmp.path().join("clean.out");
     let reference = vep(

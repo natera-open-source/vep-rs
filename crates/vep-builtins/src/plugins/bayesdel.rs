@@ -25,10 +25,11 @@
 //! split hands the writers.
 //!
 //! The table's contig is read under the record's name with or without `chr`
-//! (`:144` hands the name to `BaseVepTabixPlugin.pm:693-708`). On GRCh37 a
-//! mitochondrial record reads a contig of its own spelling's pair alone, `MT`
-//! and `chrMT` or `chrM` and `M`, which name two sequences there
-//! ([`table_contig`]).
+//! (`:144` hands the name to `BaseVepTabixPlugin.pm:693-708`). On GRCh37,
+//! where `MT` and `chrMT` name one sequence and `chrM` and `M` another, a
+//! mitochondrial record reads a contig of its own spelling's pair
+//! ([`table_contig`]), and one of the other pair where the table's rows state
+//! the reference bases ([`crate::tabix::MitochondrialFrame`]).
 //!
 //! # Scoring
 //!
@@ -141,6 +142,8 @@ impl BayesDelPlugin {
     }
 }
 
+impl crate::traits::sealed::Sealed for BayesDelPlugin {}
+
 impl BuiltinPlugin for BayesDelPlugin {
     fn name(&self) -> &str {
         NAME
@@ -149,7 +152,7 @@ impl BuiltinPlugin for BayesDelPlugin {
     /// The Ensembl VEP module declares `['Feature', 'Intergenic']`
     /// (`BayesDel.pm:116-117`): every row, the intergenic row included.
     fn feature_types(&self) -> &[RowKind] {
-        &RowKind::ALL
+        RowKind::ALL
     }
 
     fn header_info(&self) -> Vec<(String, String)> {
@@ -158,6 +161,12 @@ impl BuiltinPlugin for BayesDelPlugin {
 
     fn set_assembly(&mut self, assembly: Option<Assembly>) {
         self.assembly = assembly;
+    }
+
+    fn set_reference_fasta(&mut self, fasta: Option<std::sync::Arc<vep_fasta::IndexedFasta>>) {
+        if let Some(store) = self.store.as_mut() {
+            store.set_reference_fasta(fasta);
+        }
     }
 
     fn init(&mut self, params: &[String]) -> Result<(), PluginError> {
@@ -244,15 +253,12 @@ impl BuiltinPlugin for BayesDelPlugin {
             // undefined value, an unmarked empty value here; a present empty
             // cell is its empty string, which the record names (`BayesDel.pm:151`).
             let is_empty_string = cell.as_ref().is_some_and(String::is_empty);
-            variant
-                .plugin_data
-                .insert(FIELD.to_string(), cell.unwrap_or_default());
-            // A later plugin's value replaces an earlier one under the same key
-            // (OutputFactory.pm:2230-2231), its mark too.
-            variant.plugin_empty_strings.retain(|key| key != FIELD);
-            if is_empty_string {
-                variant.plugin_empty_strings.push(FIELD.to_string());
-            }
+            variant.set_plugin_value(
+                FIELD.to_string(),
+                cell.unwrap_or_default(),
+                is_empty_string,
+                self.feature_types(),
+            );
         }
         Ok(())
     }
@@ -390,7 +396,7 @@ mod tests {
         );
     }
 
-    /// Ensembl VEP 116.2 removes one `#` from the last header line and tests
+    /// Ensembl VEP 116.3 removes one `#` from the last header line and tests
     /// that a token is left (`BayesDel.pm:106`, `:111`), so a line of hash
     /// marks alone is a header: its second `#` is the token.
     #[test]
@@ -495,13 +501,15 @@ mod tests {
         assert!(intergenic.transcript_consequences.is_empty());
         let mut genic = variant(19268555, 19268555, b"C", b"T");
         genic.transcript_consequences.extend([
-            TranscriptConsequence {
-                feature_type: FeatureType::Transcript,
-                ..TranscriptConsequence::default()
+            {
+                let mut consequence = TranscriptConsequence::default();
+                consequence.feature_type = FeatureType::Transcript;
+                consequence
             },
-            TranscriptConsequence {
-                feature_type: FeatureType::MotifFeature,
-                ..TranscriptConsequence::default()
+            {
+                let mut consequence = TranscriptConsequence::default();
+                consequence.feature_type = FeatureType::MotifFeature;
+                consequence
             },
         ]);
         let mut variants = vec![intergenic, genic];
@@ -590,7 +598,7 @@ mod tests {
         );
     }
 
-    /// `BayesDel.pm:151` splits the line into five variables, so Perl keeps a
+    /// `BayesDel.pm:151` splits the line into five variables, so Ensembl VEP keeps a
     /// trailing empty cell as the empty string and leaves a missing cell
     /// undefined, and `:146` returns the matched row's result either way. Both
     /// print as `BayesDel=` in the default format; the tab format prints an
@@ -664,10 +672,10 @@ mod tests {
         assert_eq!(score(5030002), None);
     }
 
-    /// Ensembl VEP 116.2 never hands BayesDel a structural variant: the module
+    /// Ensembl VEP 116.3 never hands BayesDel a structural variant: the module
     /// keeps the default `variant_feature_types` of `['VariationFeature']`
     /// (BaseVepPlugin.pm:100), which the dispatch checks before running a
-    /// plugin on a line (OutputFactory.pm:2220). A `<DEL>` gets no score, and
+    /// plugin on a line (OutputFactory.pm:2229). A `<DEL>` gets no score, and
     /// nor does a scored substitution carrying the structural mark, which pins
     /// the gate rather than the allele match; the plain substitution is scored.
     #[test]
@@ -717,7 +725,8 @@ mod tests {
     }
 
     /// On GRCh37 `MT` and `chrMT` name the assembly's mitochondrial sequence
-    /// and `chrM` and `M` another one, so a record reads a table's
+    /// and `chrM` and `M` another one. Without a reference sequence the table's
+    /// rows cannot be compared with it, so a record reads a table's
     /// mitochondrial rows under its own spelling and its `chr` variant alone:
     /// the name `BayesDel.pm:144` hands `BaseVepTabixPlugin.pm:693-708`.
     #[test]
@@ -757,6 +766,72 @@ mod tests {
                     );
                 }
             }
+        }
+    }
+
+    /// On GRCh37, with the run's reference sequence, a table naming its
+    /// mitochondrial contig under the other pair of names than the record's
+    /// is read when its rows state the reference bases, and not when they
+    /// state the bases one position on: there the row at the record's site
+    /// carries the record's alleles, the reference repeating its base, and
+    /// its score is the neighbouring base's.
+    #[test]
+    fn on_grch37_a_table_under_the_other_pair_is_read_only_when_its_rows_state_the_reference() {
+        use crate::test_fixtures::{
+            made_up_alternate, made_up_reference, made_up_rows, repeated_base,
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let (reference, bases) = made_up_reference(dir.path(), 1600);
+        let site = repeated_base(&bases, 100);
+        let base = bases[site - 1];
+        for (frame, offset, expected) in [
+            ("stating_the_reference", 0, Some(format!("0.{site}"))),
+            ("one_position_on", 1, None),
+        ] {
+            let rows = made_up_rows(
+                "M",
+                &bases,
+                10..1590,
+                offset,
+                |contig, position, reference, alt| {
+                    format!("{contig}\t{position}\t{reference}\t{alt}\t0.{position}")
+                },
+            );
+            let rows: Vec<&str> = rows.iter().map(String::as_str).collect();
+            let path = fixture(
+                dir.path(),
+                &format!("scores_{frame}_synthetic.txt.gz"),
+                Some(HEADER),
+                &rows,
+            );
+            let mut plugin = BayesDelPlugin::new();
+            plugin.set_assembly(Some(vep_core::assembly::Assembly::Grch37));
+            plugin
+                .init(&[format!("file={path}")])
+                .expect("fixture loads");
+            plugin.set_reference_fasta(Some(std::sync::Arc::clone(&reference)));
+            for record in ["MT", "chrMT"] {
+                let record = InputVariant::new(
+                    record.into(),
+                    site as u64,
+                    site as u64,
+                    vec![base],
+                    vec![made_up_alternate(base)],
+                );
+                assert_eq!(score(&plugin, record), expected, "{frame}");
+            }
+            let own_pair = InputVariant::new(
+                "M".into(),
+                site as u64,
+                site as u64,
+                vec![base],
+                vec![made_up_alternate(base)],
+            );
+            assert_eq!(
+                score(&plugin, own_pair),
+                Some(format!("0.{site}")),
+                "{frame}: a record of the table's own pair"
+            );
         }
     }
 }

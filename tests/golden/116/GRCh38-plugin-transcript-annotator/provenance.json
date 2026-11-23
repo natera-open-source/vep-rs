@@ -1,60 +1,84 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --plugin TranscriptAnnotator,file=data/transcript_annotator.tsv.gz [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "none on either side",
  "input": "variants.vcf: 12 records at chromosome 21 sites of two genes, one record per allele: a splice-region intronic SNV, an intronic SNV the table does not name, missense SNVs in TPTE named by an Ensembl transcript id and by RefSeq accessions of two isoforms, a missense SNV whose table cells carry surrounding whitespace, three synonymous records at one position of which two are in the table with their own values, a frameshift deletion the table writes with its leading base, a stop gain whose table row is one column short, an inframe deletion the table writes trimmed, and a missense SNV in SAMSN1, on the reverse strand, named by its RefSeq accession",
  "sha256": {
-  "default.txt": "29f3581e937b65d64c80839873a36af4ed48b8446c8e3d93388aba3ca3183292",
-  "tab.txt": "43a335ea3d198e34f78a4988a92efb251f23ea8de2b4c939757f24dfbe96ae64",
-  "vcf.vcf": "f925b50e557f28610ffb37d2beaa06b55eb0515aee541eb6bdfaf5c09f750fbc",
-  "json.jsonl": "bf55fee656a42f0ba98a859a61c7aeedf20a553ac1f1110583a61d249ba5981d"
+  "default.txt": "3f593fafe4ea3c056cad6617a22af27a713006907fcdedfe7ea072a9be941018",
+  "tab.txt": "58ec837ae19e1022353d057d3390358200b6145ab17343e9a70e92bc6da3037e",
+  "vcf.vcf": "4a9ff8828a598c2b29074e0d83d52b5b90d7251748ffd629b4fb0d04fe3df9db",
+  "json.jsonl": "45b043f69e70b20c11f12bc273e054ec7ba6a4d7882026efbcc94ae6e669e4e5"
  },
  "variants_vcf_sha256": "cb65eade58a85588bd5b66608f0bf37d87cfa7f5d5b997424990d19ed1a9d6db",
  "flag_sets": {
   "cols": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --plugin TranscriptAnnotator,file=data/transcript_annotator.tsv.gz,cols=SIFT_score:Comment [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "213df05e7dd8b04066f5bac5e4ad0f6e706352baff9525bef73bde45c940aeb3",
+    "tab.txt": "4e1510f058b7cc402f10ac781a817378a27a15541c96785e7981bc85776e5c31",
+    "vcf.vcf": "8909de1ba121499d098f8a862e01e009843d2ad7f333305f18847393a66e3a0b",
+    "json.jsonl": "3ac4d1e8215df14c9afc6722232833f5acefd9c7fb7b7c785a7275417e96eb3c"
+   },
    "flags": [
     "--plugin",
     "TranscriptAnnotator,file=data/transcript_annotator.tsv.gz,cols=SIFT_score:Comment"
    ],
-   "expected_dir": "expected_cols",
-   "sha256": {
-    "default.txt": "99cbd55f6213cae655aceed86c5b94406dae4de7a75ce951196ff1637b5ca34b",
-    "tab.txt": "4a3ce6e6ac39ec82ffb6ada49f03f00fb70b4a46ab03ad3165475924aa617f01",
-    "vcf.vcf": "fb70cee4250abc02ba2220fe54e55079efb96d0c3b3f0d8a1f032ebbbd8c3ac7",
-    "json.jsonl": "cfb1820be888750de403e82109f0a8e534cd347fa7124b8fe2de4c404d998920"
-   }
+   "expected_dir": "expected_cols"
   },
   "prefix-0": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --plugin TranscriptAnnotator,file=data/transcript_annotator.tsv.gz,prefix=0 [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "c8f8173c2fa3aa514a59246040e00e2f7a47b144e2e7f9718305b4b88eec2201",
+    "tab.txt": "fcf8e9555194326c7740df762dacd7856da6a223b1ca7d715bedd8181bba5649",
+    "vcf.vcf": "3517a44230d5afa90e93a12b1acc5c65b07816f844b9a73242090a363ed9ace9",
+    "json.jsonl": "c0cd48ff66db345d77de7e1e5fcf4eee0540efa599ce65ab739a077476aa8ac0"
+   },
    "flags": [
     "--plugin",
     "TranscriptAnnotator,file=data/transcript_annotator.tsv.gz,prefix=0"
    ],
-   "expected_dir": "expected_prefix-0",
-   "sha256": {
-    "default.txt": "d4d905ae4496db4c4b57d2699f6b25a30cd4545d185be6ee0ac0706202e0e5ad",
-    "tab.txt": "5aeb61df4230eef36082a96b1318d939a8f9dccf9af61ac2b0ece5f6b1b0b669",
-    "vcf.vcf": "fa67f0b2b2f9eb6e449c1d7a5987e0654e69ce642560e78263c2d6e86cc4fbd9",
-    "json.jsonl": "5fadfe735728e0b0f451bc6e16d77f6dcea9006b15827924052490eda48a64af"
-   }
+   "expected_dir": "expected_prefix-0"
   },
   "trim-0": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --plugin TranscriptAnnotator,file=data/transcript_annotator.tsv.gz,trim=0 [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "3e683bc1c1dac2e0617b4d57dd24b4702ec2e639aa0d1836c699b7bb50662ef3",
+    "tab.txt": "cd8afa5f5ad29655fc6af3bce75d54efa80663f25cbb5a65d0491010fbdea09c",
+    "vcf.vcf": "7221fafdafbb4adf2b9b6c9bf15d4a8a9a7d48febdd7451b4269a73a41580b4a",
+    "json.jsonl": "456580304cbb949a7698205ffa5bee559203a47566557b595c27b45a74e96a06"
+   },
    "flags": [
     "--plugin",
     "TranscriptAnnotator,file=data/transcript_annotator.tsv.gz,trim=0"
    ],
-   "expected_dir": "expected_trim-0",
-   "sha256": {
-    "default.txt": "219cbb7657c98e4e9de43b5c6acf66e039997cda139a464be37c666451f3b8b1",
-    "tab.txt": "1e0f98dad7a0719bb29b90310cace3a9ada9fd788195606e9d2c79a4a5a4a3c2",
-    "vcf.vcf": "28c5cf3550f09fd8881221b7302e554bd7b6e9b2652a78bd12543d9a962628af",
-    "json.jsonl": "5f7d019ba73652481175271f9c26722c0c92ce9795769f96eeabdda57df759c4"
-   }
+   "expected_dir": "expected_trim-0"
   }
  },
  "data": "data/transcript_annotator.tsv.gz: the table TranscriptAnnotator reads, authored for the corpus (a preamble line, the header line Chrom Pos Ref Alt Transcript SIFT_score SIFT_pred Comment, 12 rows), bgzip-compressed and indexed with tabix -b2 -e2; the header descriptions repeat the path as the flag spells it, so the flag names the file by its path relative to the corpus directory, where both engines run",
- "generator": "scripts/golden/build_golden_corpus.py select; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; scripts/concordance/generate_reference_output.sh --corpus (the manifest's run and, with the manifest's flags set to each flag set's words in turn, every flag set's run); scripts/golden/build_golden_corpus.py flag-set (one per flag set) and classify (the manifest's run and each flag set)"
+ "generator": "tools/vep-golden-corpus select; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; scripts/concordance/generate_reference_output.sh --corpus (the manifest's run and, with the manifest's flags set to each flag set's words in turn, every flag set's run); tools/vep-golden-corpus flag-set (one per flag set) and classify (the manifest's run and each flag set)"
 }

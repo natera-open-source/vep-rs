@@ -1,7 +1,7 @@
 entry = "one_column_fields_zero_row"
 page = "docs/output/vep-and-tab.md#choosing-the-columns-fields"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the documented value of --fields, a comma-separated list of fields of the tab output, here one field whose flag is on (Ensembl VEP documentation, \"Running Ensembl VEP\", --fields); not seen in the measured datasets"
 notes = "With SHIFT_LENGTH the only column, the first record's rows are the line 0, which Ensembl VEP's output loop reads as the end of the output; the insertion's three rows of 10 are lost with them."
@@ -30,3 +30,7 @@ columns = ["SHIFT_LENGTH"]
 [expected]
 ensembl_vep = []
 vep_rs = ["0", "0", "10", "10", "10"]
+
+[implementation]
+none = "vep-rs writes every row its tab writer builds and never reads a row to decide where the output ends, so a row whose whole line is 0 is written by the ordinary path."
+tests = ["crates/vep-cli/tests/reader_and_writer_documented_rows.rs::a_one_column_tab_row_that_reads_zero_is_written_with_the_rows_after_it"]

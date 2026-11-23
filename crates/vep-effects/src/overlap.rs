@@ -65,57 +65,59 @@ mod tests {
     use vep_core::coordinate::Strand;
 
     fn make_transcript(chr: &str, start: u64, end: u64, strand: Strand) -> Transcript {
-        Transcript {
-            stable_id: "ENST00000000001".into(),
-            version: None,
-            db_id: None,
-            gene_stable_id: "ENSG00000000001".into(),
-            gene_version: None,
-            chr: chr.into(),
-            start,
-            end,
-            strand,
-            biotype: "protein_coding".into(),
-            source: "Ensembl".into(),
-            gene_symbol: None,
-            gene_symbol_source: None,
-            gene_symbol_id: None,
-            hgnc_id: None,
-            gene_phenotype: None,
-            canonical: false,
-            mane_select: None,
-            mane_plus_clinical: None,
-            tsl: None,
-            appris: None,
-            ccds: None,
-            protein_id: None,
-            refseq: None,
-            swissprot: None,
-            trembl: None,
-            uniparc: None,
-            uniprot_isoform: None,
-            exons: vec![],
-            exon_ids: None,
-            introns: vec![],
-            cdna_coding_start: None,
-            cdna_coding_end: None,
-            coding_region_start: None,
-            coding_region_end: None,
-            translation_start: None,
-            translation_end: None,
-            translation: None,
-            cdna_sequence: None,
-            protein_sequence: None,
-            flags: Arc::from([]),
-            gencode_basic: false,
-            gencode_primary: false,
-            attributes: vec![],
-            vefc: None,
-            source_cache: None,
-            bam_edit_status: None,
-            derived: Default::default(),
-            id_rank: 0,
-        }
+        let mut transcript = Transcript::default();
+        transcript.stable_id = "ENST00000000001".into();
+        transcript.version = None;
+        transcript.db_id = None;
+        transcript.gene_stable_id = "ENSG00000000001".into();
+        transcript.gene_version = None;
+        transcript.chr = chr.into();
+        transcript.start = start;
+        transcript.end = end;
+        transcript.strand = strand;
+        transcript.biotype = "protein_coding".into();
+        transcript.source = "Ensembl".into();
+        transcript.gene_symbol = None;
+        transcript.gene_symbol_source = None;
+        transcript.gene_symbol_id = None;
+        transcript.hgnc_id = None;
+        transcript.gene_phenotype = None;
+        transcript.canonical = false;
+        transcript.mane_select = None;
+        transcript.mane_plus_clinical = None;
+        transcript.tsl = None;
+        transcript.appris = None;
+        transcript.ccds = None;
+        transcript.protein_id = None;
+        transcript.refseq = None;
+        transcript.swissprot = None;
+        transcript.trembl = None;
+        transcript.uniparc = None;
+        transcript.uniprot_isoform = None;
+        transcript.exons = vec![];
+        transcript.exon_ids = None;
+        transcript.introns = vec![];
+        transcript.cdna_coding_start = None;
+        transcript.cdna_coding_end = None;
+        transcript.coding_region_start = None;
+        transcript.coding_region_end = None;
+        transcript.translation_start = None;
+        transcript.translation_end = None;
+        transcript.translation = None;
+        transcript.cdna_sequence = None;
+        transcript.protein_sequence = None;
+        transcript.flags = Arc::from([]);
+        transcript.gencode_basic = false;
+        transcript.gencode_primary = false;
+        transcript.attributes = vec![];
+        transcript.vefc = None;
+        transcript.source_cache = None;
+        transcript.bam_edit_status = None;
+        transcript.circular_length = None;
+        transcript.region_files = None;
+        transcript.derived = Default::default();
+        transcript.id_rank = 0;
+        transcript
     }
 
     #[test]

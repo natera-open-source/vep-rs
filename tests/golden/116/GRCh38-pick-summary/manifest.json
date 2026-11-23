@@ -389,6 +389,20 @@
    ],
    "divergences": [
     {
+     "location": "21:29090576-29092574",
+     "allele": "deletion",
+     "feature": "ENST00000419845",
+     "feature_type": "Transcript",
+     "record_indices": [
+      11
+     ],
+     "vep_consequence_set": "3_prime_UTR_variant,coding_sequence_variant,feature_truncation,intron_variant,stop_lost",
+     "vep_rs_consequence_sets": [
+      "3_prime_UTR_variant,coding_sequence_variant,feature_truncation,intron_variant"
+     ],
+     "expected_divergence": "structural_deletion_stop_lost_without_stop_codon"
+    },
+    {
      "location": "21:33912200-33915800",
      "allele": "-",
      "feature": "ENST00001002788",
@@ -419,12 +433,13 @@
    ],
    "vep_rs_only_tuples": [],
    "divergence_summary": {
+    "structural_deletion_stop_lost_without_stop_codon": 1,
     "stop_codon_removed_without_stop_codon_test": 2
    },
    "vep_rs_only_summary": {}
   }
  ],
- "suites": {
+ "datasets": {
   "ps": {
    "reference": "reference.txt",
    "input": "candidates.vcf",
@@ -523,7 +538,7 @@
  },
  "records": [
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t8857289\tps_8857289\tT\tC,A\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -535,7 +550,7 @@
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t9327269\tps_9327269\tC\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -544,14 +559,14 @@
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t11909772\tps_11909772\tT\tC\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t12410040\tps_12410040\tG\tA,C,T\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
@@ -561,35 +576,35 @@
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t15340770\tps_15340770\tA\tG\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t15669400\tps_15669400\tG\tA\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t16640433\tps_16640433\tG\tA\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant"
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t16855367\tps_16855367\tT\tC\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t17604928\tps_17604928\tG\tA,C\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -607,7 +622,7 @@
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t20782376\tps_20782376\tC\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -616,14 +631,14 @@
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t21410367\tps_21410367\tC\tT\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t23432208\tps_23432208\tA\tG,T\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -634,7 +649,7 @@
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t25693624\tps_25693624\tT\tC,A,G\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -647,7 +662,7 @@
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t29091575\tps_29091575\tA\tG\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,splice_region_variant",
@@ -660,7 +675,7 @@
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t31663838\tps_31663838\tG\tA,C\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -677,7 +692,7 @@
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t32270468\tps_32270468\tT\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,synonymous_variant",
@@ -687,7 +702,7 @@
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t33266463\tps_33266463\tT\tC\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -698,7 +713,7 @@
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t33524884\tps_33524884\tT\tC,A\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -713,7 +728,7 @@
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t33765943\tps_33765943\tT\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -725,7 +740,7 @@
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t33917039\tps_33917039\tA\tG,T,C\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -738,7 +753,7 @@
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t36130346\tps_36130346\tT\tC,A\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -751,7 +766,7 @@
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t37036904\tps_37036904\tT\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -760,7 +775,7 @@
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t37208543\tps_37208543\tG\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -769,7 +784,7 @@
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t37840683\tps_37840683\tT\tC,A\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -781,7 +796,7 @@
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t38575746\tps_38575746\tG\tA\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,splice_region_variant",
@@ -789,7 +804,7 @@
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t38734876\tps_38734876\tG\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -798,7 +813,7 @@
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t39410890\tps_39410890\tG\tA,C,T\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -815,7 +830,7 @@
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t42199830\tps_42199830\tT\tC,A\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -826,7 +841,7 @@
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t42485736\tps_42485736\tT\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -836,7 +851,7 @@
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t42843095\tps_42843095\tT\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -845,7 +860,7 @@
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t43100486\tps_43100486\tG\tA,C\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -863,7 +878,7 @@
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t43791391\tps_43791391\tC\tT,G,A\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -880,7 +895,7 @@
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t44459347\tps_44459347\tA\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -889,7 +904,7 @@
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t45291996\tps_45291996\tG\tA,C\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -902,7 +917,7 @@
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t45573402\tps_45573402\tC\tT\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -911,7 +926,7 @@
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t46151781\tps_46151781\tG\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -922,7 +937,7 @@
    ]
   },
   {
-   "suite": "ps",
+   "dataset": "ps",
    "vcf": "21\t46602347\tps_46602347\tT\tC,A\t.\t.\t.",
    "combinations": [
     "synonymous_variant",
@@ -933,7 +948,7 @@
    ]
   }
  ],
- "multi_allelic_per_suite": 40,
+ "multi_allelic_per_dataset": 40,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "divergences": [],

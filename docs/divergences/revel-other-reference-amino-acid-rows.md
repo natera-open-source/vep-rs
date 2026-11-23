@@ -28,7 +28,7 @@ Tuple, pair, set aside, charged and the other scoring terms are defined in [How 
 
 ## 1. A ClinVar substitution on a transcript whose coding start is incomplete
 
-**In short.** The ClinVar record `21 43059244 471355 A G` on the reverse-strand transcript `ENST00000430013`, against the published GRCh38 REVEL table's six rows at the position. The transcript model reads the codon `cTc`, leucine, changed to `cCc`, proline: `Amino_acids` is `L/P`. The table's `A G` row that lists `ENST00000430013` scores serine to proline, `0.033`; its `A G` row for leucine to proline scores `0.419` and lists the gene's complete transcripts. Ensembl VEP 116.2 writes `REVEL=0.033` on the `ENST00000430013` row; vep-rs writes no `REVEL` there. Both engines write `REVEL=0.419` on the rows of the four listed transcripts the cache holds.
+**In short.** The ClinVar record `21 43059244 471355 A G` on the reverse-strand transcript `ENST00000430013`, against the published GRCh38 REVEL table's six rows at the position. The transcript model reads the codon `cTc`, leucine, changed to `cCc`, proline: `Amino_acids` is `L/P`. The table's `A G` row that lists `ENST00000430013` scores serine to proline, `0.033`; its `A G` row for leucine to proline scores `0.419` and lists the gene's complete transcripts. Ensembl VEP 116.3 writes `REVEL=0.033` on the `ENST00000430013` row; vep-rs writes no `REVEL` there. Both engines write `REVEL=0.419` on the rows of the four listed transcripts the cache holds.
 
 ### 1.1 What a reader needs to know first
 
@@ -59,7 +59,7 @@ The cache of the `GRCh38-plugin-revel` golden corpus (`tests/golden/116/GRCh38-p
 
 ### 1.3 What each engine writes
 
-The rows on `ENST00000430013` and on `ENST00000352178`, one of the listed complete transcripts, in the default format. Ensembl VEP 116.2:
+The rows on `ENST00000430013` and on `ENST00000352178`, one of the listed complete transcripts, in the default format. Ensembl VEP 116.3:
 
 ```
 471355	21:43059244	G	ENSG00000160200	ENST00000352178	Transcript	missense_variant	2002	1205	402	L/P	cTc/cCc	-	IMPACT=MODERATE;STRAND=-1;REVEL=0.419
@@ -75,7 +75,7 @@ vep-rs:
 
 The `REVEL` field by transcript:
 
-| Feature | `Amino_acids` | Ensembl VEP 116.2 | vep-rs |
+| Feature | `Amino_acids` | Ensembl VEP 116.3 | vep-rs |
 | --- | --- | --- | --- |
 | `ENST00000352178` | `L/P` | `0.419` | `0.419` |
 | `ENST00000430013` | `L/P` | `0.033` | none |
@@ -107,7 +107,7 @@ Ensembl VEP's `ENST00000430013` row carries `REVEL=0.033` and vep-rs's carries n
 
 ### 1.7 How the comparator treats this class
 
-The format comparator (`scripts/concordance/compare_vep_formats.py`) applies `revel_other_reference_amino_acid_rows` when a comparison case names it and `--revel-table` hands it the table the run's plugin read, with `--revel-no-match` for a run that set `no_match`. Without the table the class sets nothing aside. A `REVEL` field is set aside, counted once per row, where both outputs spell the row's `Amino_acids` alike and Ensembl VEP's value is the score of the table row its walk reaches. That is the first row, in file order, that matches an alternate of the record, lists the row's transcript where transcripts are matched, and names the row's alternate amino acid. It must name another reference amino acid than the row's.
+The format comparator (`tools/vep-formats-compare`) applies `revel_other_reference_amino_acid_rows` when a comparison case names it and `--revel-table` hands it the table the run's plugin read, with `--revel-no-match` for a run that set `no_match`. Without the table the class sets nothing aside. A `REVEL` field is set aside, counted once per row, where both outputs spell the row's `Amino_acids` alike and Ensembl VEP's value is the score of the table row its walk reaches. That is the first row, in file order, that matches an alternate of the record, lists the row's transcript where transcripts are matched, and names the row's alternate amino acid. It must name another reference amino acid than the row's.
 
 vep-rs's field must be what its own walk gives: the score of the first table row of the row's own allele that names both residues and, where transcripts are matched, lists the row's transcript, or nothing where there is none.
 

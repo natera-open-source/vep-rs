@@ -1,7 +1,7 @@
 entry = "spliceai_trimmed_table_row_match"
 page = "docs/plugins/spliceai.md#a-score-row-spelled-with-a-shared-base"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the VCF 4.2 specification, section 1.4.1 \"Fixed fields\", REF and ALT, which admits alleles that share a base at an end, and under the SpliceAI plugin's header, which works with any file the SpliceAI tool writes (SpliceAI.pm line 40); not seen in the measured datasets"
 notes = "The indel fixture's `TG AG` row at 18353100 spells the record's `T A` beside a shared trailing G, the reference base at 18353101; vep-rs trims the shared base and scores the row, Ensembl VEP compares the row as written and scores nothing. The record spelled `TG AG` scores the row in both engines."
@@ -15,8 +15,8 @@ text = """
 [cache]
 species = "homo_sapiens"
 assembly = "GRCh38"
-json_cache = "tests/golden/116/GRCh38-plugin-spliceai/json_cache"
-fasta = "tests/golden/116/GRCh38-plugin-spliceai/reference.fa.gz"
+json_cache = "tests/golden/116/GRCh38-plugin-spliceai-fixture/json_cache"
+fasta = "tests/golden/116/GRCh38-plugin-spliceai-fixture/reference.fa.gz"
 
 [run]
 flags = [
@@ -33,3 +33,12 @@ where = { record = "shared_trailing_base", allele = "A" }
 [expected]
 ensembl_vep = ["ENST00000284885=-"]
 vep_rs = ["ENST00000284885=TMPRSS15|0.82|0.64|0.86|0.67|-25|-36|-29|-20"]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/spliceai.rs::SpliceAiPlugin::is_variant_record",
+    "crates/vep-builtins/src/tabix.rs::allele_match::normalize_alleles",
+]
+tests = [
+    "crates/vep-cli/tests/plugins_builtin.rs::spliceai_scores_a_row_spelled_with_a_shared_trailing_base",
+]

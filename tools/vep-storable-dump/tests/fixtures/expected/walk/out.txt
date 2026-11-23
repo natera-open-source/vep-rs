@@ -1,0 +1,96 @@
+### ENST0000000011
+{
+  '_variation_effect_feature_cache' => {
+    'peptide' => 'MK'
+  },
+  'end' => 2,
+  'stable_id' => 'ENST0000000011',
+  'start' => 1
+}
+
+### ENST0000000012
+{
+  '_variation_effect_feature_cache' => {
+    'peptide' => 'MK'
+  },
+  'end' => 2,
+  'stable_id' => 'ENST0000000012',
+  'start' => 1
+}
+
+### ENST00000000102
+{
+  '_variation_effect_feature_cache' => undef,
+  'end' => 2,
+  'stable_id' => 'ENST00000000102.5',
+  'start' => 1
+}
+
+### ENST00000000012
+{
+  '_variation_effect_feature_cache' => undef,
+  'end' => 2,
+  'stable_id' => 'ENST00000000012',
+  'start' => 1
+}
+
+### ENST0000000019
+{
+  '_variation_effect_feature_cache' => {
+    'peptide' => 'MK'
+  },
+  'end' => 2,
+  'stable_id' => 'ENST0000000019',
+  'start' => 1
+}
+
+### ENST00000000110
+{
+  '_variation_effect_feature_cache' => {
+    'peptide' => 'MK'
+  },
+  'end' => 2,
+  'stable_id' => 'ENST00000000110',
+  'start' => 1
+}
+
+### ENST00000000122
+{
+  '_variation_effect_feature_cache' => {
+    'peptide' => 'MK'
+  },
+  'end' => 2,
+  'stable_id' => 'ENST00000000122',
+  'start' => 1
+}
+
+### ENST000000001X
+{
+  '_variation_effect_feature_cache' => {
+    'peptide' => 'MK'
+  },
+  'end' => 2,
+  'stable_id' => 'ENST000000001X',
+  'start' => 1
+}
+
+### ENST000000001Y
+{
+  '_variation_effect_feature_cache' => {
+    'peptide' => 'MK'
+  },
+  'end' => 2,
+  'stable_id' => 'ENST000000001Y',
+  'start' => 1
+}
+
+### ENST000000001MT
+{
+  '_variation_effect_feature_cache' => {
+    'peptide' => 'MK'
+  },
+  'end' => 2,
+  'stable_id' => 'ENST000000001MT',
+  'start' => 1
+}
+

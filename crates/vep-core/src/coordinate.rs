@@ -74,6 +74,7 @@ impl fmt::Display for Strand {
 
 /// A position on a chromosome, 1-based.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct GenomicPosition {
     pub chr: String,
     pub pos: u64,
@@ -88,6 +89,7 @@ impl fmt::Display for GenomicPosition {
 
 /// A range on a chromosome, 1-based inclusive on both ends.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct GenomicRange {
     pub chr: String,
     pub start: u64,
@@ -210,7 +212,7 @@ mod tests {
         }
     }
 
-    /// Ensembl VEP 116.2 reads `21 3e7 x N <DEL> . . SVTYPE=DEL;END=30425949` as the
+    /// Ensembl VEP 116.3 reads `21 3e7 x N <DEL> . . SVTYPE=DEL;END=30425949` as the
     /// deletion `21:30000001-30425949` and `21 30425949.0 x A G` at 30425949, numifying
     /// the POS text; `30_425_949` numifies to 30 and `0x1D04A1D` and `.` to 0, so those
     /// spellings name no coordinate here, nor does a fraction or a negative number.

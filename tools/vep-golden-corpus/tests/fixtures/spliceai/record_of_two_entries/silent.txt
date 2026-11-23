@@ -1,0 +1,2 @@
+del_two_genes	21:5001-5002	-	-	ENST1	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;SYMBOL=GENEA
+del_two_genes	21:5001-5002	-	-	ENST2	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;SYMBOL=GENEB

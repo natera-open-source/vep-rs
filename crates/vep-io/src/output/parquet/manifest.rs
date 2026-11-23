@@ -29,6 +29,7 @@ const PARTITION_PREFIX: &str = "chrom=";
 /// The output directory's manifest: the run that wrote it and its parts, in
 /// write order, with their row counts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct Manifest {
     /// The footer's `vep_rs_version`.
     pub vep_rs_version: String,
@@ -41,6 +42,7 @@ pub struct Manifest {
 
 /// One part of the output: its path under the directory and its rows.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct PartEntry {
     pub path: String,
     pub rows: u64,
@@ -97,6 +99,7 @@ pub fn is_vep_rs_part(path: &Path) -> bool {
 
 /// Why `--force_overwrite` left a previous output in place.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum PreviousOutput {
     /// The directory holds an entry vep-rs did not write: a file that is not a
     /// part with vep-rs's footer or the manifest, or a directory that is not a
@@ -231,23 +234,16 @@ mod tests {
     use super::*;
     use crate::output::fields::FieldOptions;
     use crate::output::parquet::{InputOrder, ParquetDirectoryWriter, ParquetOutputFormatter};
-    use std::sync::Arc;
 
     /// A run's output with no rows into `dir`: one empty part at the root and
     /// the manifest.
     fn previous_output(dir: &Path) {
         let formatter = ParquetOutputFormatter::new(FieldOptions::default(), vec![], vec![]);
         let kv = vec![(VERSION_KEY.to_string(), "0.0.0".to_string())];
-        ParquetDirectoryWriter::create(
-            dir,
-            Arc::clone(formatter.schema()),
-            kv,
-            InputOrder::Unchecked,
-            None,
-        )
-        .unwrap()
-        .close()
-        .unwrap();
+        ParquetDirectoryWriter::create(dir, &formatter, kv, InputOrder::Unchecked, None)
+            .unwrap()
+            .close()
+            .unwrap();
     }
 
     fn names(dir: &Path) -> Vec<String> {

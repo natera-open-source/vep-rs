@@ -1,9 +1,9 @@
-## ENSEMBL VARIANT EFFECT PREDICTOR v116.2
-## Output produced at 2026-10-08 04:08:47
+## ENSEMBL VARIANT EFFECT PREDICTOR v116.3
+## Output produced at 2026-11-20 13:15:55
 ## Using cache in [PATH]/116_GRCh38
 ## Using API version 116, DB version ?
 ## ensembl version 116.0d85231
-## ensembl-compara version 116.dc107cc
+## ensembl-compara version 116.4038708
 ## ensembl-funcgen version 116.90049ea
 ## ensembl-io version 116.6afb5dc
 ## ensembl-variation version 116.db7394a
@@ -40,7 +40,7 @@
 ## STRAND : Strand of the feature (1/-1)
 ## FLAGS : Transcript quality flags
 ## ENSP : Protein identifer
-## VEP command-line: vep --assembly GRCh38 --cache --cache_version 116 --database 0 --dir_cache /cache --dir_plugins /plugins --force_overwrite --fork --format vcf --input_file [PATH]/variants.vcf --mask_header_cache_path --max_sv_size -1 --no_stats --offline --output_file [PATH]/default.txt --protein --protein_version --quiet
+## VEP command-line: vep --assembly GRCh38 --cache --cache_version 116 --database 0 --dir_cache [PATH]/cache --dir_plugins /plugins --force_overwrite --fork --format vcf --input_file [PATH]/input.vcf --mask_header_cache_path --max_sv_size -1 --no_stats --offline --output_file [PATH]/default.txt --protein --protein_version --quiet
 #Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	Extra
 stop_del2_lost_rev	21:30348410-30348411	-	ENSG00000186980	ENST00000334160	Transcript	stop_lost	196-197	196-197	66	*/X	TAg/g	-	IMPACT=HIGH;STRAND=-1;ENSP=ENSP00000346536.3
 stop_ins5_newstop_fwd	21:30430756-30430757	CCTAA	ENSG00000186971	ENST00000334068	Transcript	stop_lost,inframe_insertion	537-538	481-482	161	*/S*X	taa/tCCTAAaa	-	IMPACT=HIGH;STRAND=1;ENSP=ENSP00000334834.2

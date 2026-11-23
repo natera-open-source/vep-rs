@@ -1,20 +1,20 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --plugin TranscriptAnnotator,file=data/transcript_annotator.tsv.gz [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh37",
  "fasta": "none on either side",
  "input": "variants.vcf: 7 records at chromosome 21 sites of N6AMT1 (reverse strand) and USP16: a missense SNV named by its RefSeq accession, one named by its Ensembl transcript id, a frameshift deletion the table writes with its leading base, a missense SNV the table does not name, two records at one position each in the table with their own values, and an insertion named by its RefSeq accession",
  "sha256": {
-  "default.txt": "b29cea924daf22cd04bee738a73da8e9c4f3417f9a5f9c183579675789081915",
-  "tab.txt": "b4303f6aceca275938556fbddfdbb0492d79d04285b995975a6bb17be6ffd22e",
-  "vcf.vcf": "8207f4909f0fe5826325a45626dc5b84151e0c177f041224f7482903b6016019",
-  "json.jsonl": "f6833fbdffe288840c38b95368a917f262b2fd4d39081f8d69dd59434ecf805f"
+  "default.txt": "ab777f0d86d63438edbc2e6ac84e4b6b86bbabae6e3b8d1b8abd6ca158bc7e62",
+  "tab.txt": "86271ad069bca169d3dad941b7aff9838e6028fa27d4f928543fa1aea994bd7e",
+  "vcf.vcf": "62329afa16e51b3aeb97eea705a0b28b1ea74a8a3fb2c0407c448412796c1476",
+  "json.jsonl": "7e2eba7fe6ad68e6eb2fc6142d22bfddae818cc79f1565b05c843df943624a96"
  },
  "variants_vcf_sha256": "5d6706b4f97950edf8495433f6543b2815f1917f40f7ecdbbd3dc975dbb4ab45",
  "flag_sets": {},
  "data": "data/transcript_annotator.tsv.gz: the table TranscriptAnnotator reads, authored for the corpus (the header line Chrom Pos Ref Alt Transcript SIFT_score SIFT_pred Comment, 6 rows), bgzip-compressed and indexed with tabix -b2 -e2",
- "generator": "scripts/golden/build_golden_corpus.py select; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; scripts/concordance/generate_reference_output.sh --corpus (the manifest's run and, with the manifest's flags set to each flag set's words in turn, every flag set's run); scripts/golden/build_golden_corpus.py flag-set (one per flag set) and classify (the manifest's run and each flag set)"
+ "generator": "tools/vep-golden-corpus select; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; scripts/concordance/generate_reference_output.sh --corpus (the manifest's run and, with the manifest's flags set to each flag set's words in turn, every flag set's run); tools/vep-golden-corpus flag-set (one per flag set) and classify (the manifest's run and each flag set)"
 }

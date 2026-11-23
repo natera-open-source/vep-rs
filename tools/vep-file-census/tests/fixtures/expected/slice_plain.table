@@ -1,0 +1,9 @@
+inputs/chr.vcf	chr1	45	2
+inputs/chr.vcf	chr2	25	2
+inputs/chr.vcf		1	1
+inputs/chr.vcf	  chr2 9000 . C T . PASS leading_blanks	1	1
+inputs/chr.vcf	chr	1	1
+inputs/chr.vcf	 	1	1
+inputs/chr.vcf	3	10	1
+inputs/chr.vcf	chrX	30	1
+inputs/chr.vcf	chrUn_KI270742v1	3	1

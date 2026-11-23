@@ -1,0 +1,12 @@
+#Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	Extra
+dot_bnd	21:32000000-32000001	chromosome_breakpoint	G	ENST21_A	Transcript	upstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+dot_bnd	21:32000000-32000001	chromosome_breakpoint	G	ENST21_B	Transcript	coding_sequence_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+missing_alt	21:33000001	chromosome_breakpoint	G	ENST21_B	Transcript	coding_sequence_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+frac_end	21:34000001-34000299.5	deletion	G	ENST21_A	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+star_alone	21:35000001-35000299	deletion	G	ENST21_A	Transcript	upstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+star_alone	21:35000001-35000299	deletion	G	ENST21_B	Transcript	feature_truncation,coding_sequence_variant,5_prime_UTR_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+neg_pos	21:-5	G	-	-	-	intergenic_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+neg_pos_del	21:-4-295	deletion	-	-	-	intergenic_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+del_fasta	21:36000001-36000100	deletion	-	-	-	intergenic_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+del_kept	21:38000001-38000500	deletion	G	ENST21_A	Transcript	feature_truncation	-	-	-	-	-	-	IMPACT=MODIFIER
+del_start	21:38500001-38500672	deletion	G	ENST21_B	Transcript	5_prime_UTR_variant,feature_truncation,frameshift_variant,start_lost,start_retained_variant	-	-	-	-	-	-	IMPACT=MODIFIER

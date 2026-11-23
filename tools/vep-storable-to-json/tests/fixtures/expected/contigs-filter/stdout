@@ -1,0 +1,9 @@
+Processing 3 chromosomes
+  chr21: 2 files, 3 transcripts, 0 variation files, 0 regulatory files
+  chrMT: 1 files, 1 transcripts, 0 variation files, 0 regulatory files
+  chrX: 1 files, 1 transcripts, 0 variation files, 0 regulatory files
+Wrote contigs-filter.out/chr_synonyms.txt
+Wrote contigs-filter.out/sequence_regions.tsv (0 sequences)
+Wrote contigs-filter.out/info.json
+
+Done. Converted: 4 / 4 files, 5 total transcripts, 0 variation files copied, 0 regulatory files

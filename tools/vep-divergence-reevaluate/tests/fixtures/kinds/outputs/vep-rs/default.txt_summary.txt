@@ -1,0 +1,8 @@
+[General statistics]
+Lines of input read	2
+
+  [Position in protein]  
+00-10%	1
+10-20%	3
+[Other]
+x	1

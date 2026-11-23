@@ -1,0 +1,232 @@
+{
+ "release": "116",
+ "species": "homo_sapiens",
+ "assembly": "GRCh37",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 100,
+ "max_span": 1000000,
+ "flags": [
+  "--hgvs"
+ ],
+ "fasta": "../GRCh37-hgvs/reference.fa.gz",
+ "covers": [
+  "overlapbp-overlappc-sv"
+ ],
+ "datasets": {
+  "structural": {
+   "reference": "expected.default.out",
+   "input": "design-variants.vcf",
+   "rows": 160,
+   "combinations": 9
+  }
+ },
+ "combinations": {
+  "coding_sequence_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 3
+  },
+  "coding_sequence_variant,feature_elongation": {
+   "observed_rows": 6,
+   "exemplar_records": 6
+  },
+  "coding_sequence_variant,feature_truncation": {
+   "observed_rows": 7,
+   "exemplar_records": 5
+  },
+  "downstream_gene_variant": {
+   "observed_rows": 32,
+   "exemplar_records": 14
+  },
+  "feature_elongation,non_coding_transcript_exon_variant": {
+   "observed_rows": 12,
+   "exemplar_records": 6
+  },
+  "feature_truncation,intron_variant": {
+   "observed_rows": 20,
+   "exemplar_records": 2
+  },
+  "feature_truncation,non_coding_transcript_exon_variant": {
+   "observed_rows": 14,
+   "exemplar_records": 5
+  },
+  "intron_variant": {
+   "observed_rows": 60,
+   "exemplar_records": 12
+  },
+  "non_coding_transcript_exon_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 3
+  }
+ },
+ "variant_classes": {
+  "breakend": 20,
+  "single_breakend": 20,
+  "symbolic_chromosome_breakpoint": 10,
+  "symbolic_copy_number_variation": 10,
+  "symbolic_deletion": 20,
+  "symbolic_duplication": 20,
+  "symbolic_insertion": 10,
+  "symbolic_inversion": 10,
+  "symbolic_mobile_element_deletion": 10,
+  "symbolic_mobile_element_insertion": 10,
+  "symbolic_tandem_duplication": 10,
+  "symbolic_tandem_repeat": 10
+ },
+ "records": [
+  {
+   "dataset": "structural",
+   "vcf": "21\t47612516\tframeshift_intron_symbolic_breakend_mate_in_transcript\tG\t<BND>\t.\t.\tSVTYPE=BND;CHR2=21;END2=47612600",
+   "combinations": [
+    "coding_sequence_variant,feature_truncation",
+    "downstream_gene_variant",
+    "feature_truncation,intron_variant",
+    "feature_truncation,non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "dataset": "structural",
+   "vcf": "21\t47612516\tframeshift_intron_copy_number_zero\tG\t<CN0>\t.\t.\tSVTYPE=CNV;END=47612517",
+   "combinations": [
+    "coding_sequence_variant,feature_truncation",
+    "downstream_gene_variant",
+    "feature_truncation,non_coding_transcript_exon_variant",
+    "intron_variant"
+   ]
+  },
+  {
+   "dataset": "structural",
+   "vcf": "21\t47612516\tframeshift_intron_copy_number_two\tG\t<CN2>\t.\t.\tSVTYPE=CNV;END=47612517",
+   "combinations": [
+    "coding_sequence_variant,feature_elongation",
+    "downstream_gene_variant",
+    "feature_elongation,non_coding_transcript_exon_variant",
+    "intron_variant"
+   ]
+  },
+  {
+   "dataset": "structural",
+   "vcf": "21\t47612516\tframeshift_intron_tandem_repeat\tG\t<CNV:TR>\t.\t.\tSVTYPE=CNV;END=47612517",
+   "combinations": [
+    "coding_sequence_variant,feature_elongation",
+    "downstream_gene_variant",
+    "feature_elongation,non_coding_transcript_exon_variant",
+    "intron_variant"
+   ]
+  },
+  {
+   "dataset": "structural",
+   "vcf": "21\t47612516\tframeshift_intron_copy_number_variation\tG\t<CNV>\t.\t.\tSVTYPE=CNV;END=47612517",
+   "combinations": [
+    "coding_sequence_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "dataset": "structural",
+   "vcf": "21\t47612516\tframeshift_intron_mobile_element_del\tG\t<DEL:ME>\t.\t.\tSVTYPE=DEL;END=47612517",
+   "combinations": [
+    "coding_sequence_variant,feature_truncation",
+    "downstream_gene_variant",
+    "feature_truncation,non_coding_transcript_exon_variant",
+    "intron_variant"
+   ]
+  },
+  {
+   "dataset": "structural",
+   "vcf": "21\t47612516\tframeshift_intron_del\tG\t<DEL>\t.\t.\tSVTYPE=DEL;END=47612517",
+   "combinations": [
+    "coding_sequence_variant,feature_truncation",
+    "downstream_gene_variant",
+    "feature_truncation,non_coding_transcript_exon_variant",
+    "intron_variant"
+   ]
+  },
+  {
+   "dataset": "structural",
+   "vcf": "21\t47612516\tframeshift_intron_tandem_dup\tG\t<DUP:TANDEM>\t.\t.\tSVTYPE=DUP;END=47612517",
+   "combinations": [
+    "coding_sequence_variant,feature_elongation",
+    "downstream_gene_variant",
+    "feature_elongation,non_coding_transcript_exon_variant",
+    "intron_variant"
+   ]
+  },
+  {
+   "dataset": "structural",
+   "vcf": "21\t47612516\tframeshift_intron_dup\tG\t<DUP>\t.\t.\tSVTYPE=DUP;END=47612517",
+   "combinations": [
+    "coding_sequence_variant,feature_elongation",
+    "downstream_gene_variant",
+    "feature_elongation,non_coding_transcript_exon_variant",
+    "intron_variant"
+   ]
+  },
+  {
+   "dataset": "structural",
+   "vcf": "21\t47612516\tframeshift_intron_mobile_element_ins\tG\t<INS:ME>\t.\t.\tSVTYPE=INS;END=47612517",
+   "combinations": [
+    "coding_sequence_variant,feature_elongation",
+    "downstream_gene_variant",
+    "feature_elongation,non_coding_transcript_exon_variant",
+    "intron_variant"
+   ]
+  },
+  {
+   "dataset": "structural",
+   "vcf": "21\t47612516\tframeshift_intron_ins\tG\t<INS>\t.\t.\tSVTYPE=INS;END=47612517",
+   "combinations": [
+    "coding_sequence_variant,feature_elongation",
+    "downstream_gene_variant",
+    "feature_elongation,non_coding_transcript_exon_variant",
+    "intron_variant"
+   ]
+  },
+  {
+   "dataset": "structural",
+   "vcf": "21\t47612516\tframeshift_intron_inv\tG\t<INV>\t.\t.\tSVTYPE=INV;END=47612517",
+   "combinations": [
+    "coding_sequence_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "dataset": "structural",
+   "vcf": "21\t47612516\tframeshift_intron_single_breakend\tG\tG.\t.\t.\tSVTYPE=BND",
+   "combinations": [
+    "coding_sequence_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "dataset": "structural",
+   "vcf": "21\t47612516\tframeshift_intron_breakend_mate_in_transcript\tG\tG[21:47612600[\t.\t.\tSVTYPE=BND",
+   "combinations": [
+    "coding_sequence_variant,feature_truncation",
+    "downstream_gene_variant",
+    "feature_truncation,intron_variant",
+    "feature_truncation,non_coding_transcript_exon_variant"
+   ]
+  }
+ ],
+ "multi_allelic_per_dataset": 4,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {},
+ "fields_compared": [
+  "HGVSc",
+  "HGVSp",
+  "HGVS_OFFSET"
+ ],
+ "field_divergences": [],
+ "field_divergence_summary": {}
+}

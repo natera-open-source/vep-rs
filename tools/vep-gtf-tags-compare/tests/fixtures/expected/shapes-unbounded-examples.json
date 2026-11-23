@@ -1,0 +1,82 @@
+{
+ "transcripts": {
+  "gtf": 39,
+  "cache": 38,
+  "shared": 35,
+  "gtf_only": 4,
+  "cache_only": 3
+ },
+ "per_code": {
+  "gencode_basic": {
+   "agree": 29,
+   "disagree": 6,
+   "present_in_gtf": 8,
+   "present_in_cache": 4,
+   "examples": [
+    {
+     "transcript": "B\\S",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "C\u001fD",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "DEL\u007f",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "ESC_\u00e9\u4e2d\ud83d\ude00",
+     "gtf": false,
+     "cache": true
+    },
+    {
+     "transcript": "Q\"B",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "UNI_\u00e9\u4e2d\ud83d\ude00",
+     "gtf": true,
+     "cache": false
+    }
+   ]
+  },
+  "gencode_primary": {
+   "agree": 33,
+   "disagree": 2,
+   "present_in_gtf": 3,
+   "present_in_cache": 3,
+   "examples": [
+    {
+     "transcript": "ESC_\u00e9\u4e2d\ud83d\ude00",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "UNI_\u00e9\u4e2d\ud83d\ude00",
+     "gtf": false,
+     "cache": true
+    }
+   ]
+  },
+  "cds_start_NF": {
+   "agree": 35,
+   "disagree": 0,
+   "present_in_gtf": 1,
+   "present_in_cache": 1,
+   "examples": []
+  },
+  "cds_end_NF": {
+   "agree": 35,
+   "disagree": 0,
+   "present_in_gtf": 4,
+   "present_in_cache": 4,
+   "examples": []
+  }
+ },
+ "exact_agreement": false
+}

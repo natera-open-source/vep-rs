@@ -23,56 +23,56 @@
  ],
  "records": [
   {
-   "suite": "GRCh38-vcf-check-ref",
+   "dataset": "GRCh38-vcf-check-ref",
    "vcf": "21\t30282169\tsnv_ok\tC\tT\t.\t.\t.",
    "combinations": [
     "stop_retained_variant"
    ]
   },
   {
-   "suite": "GRCh38-vcf-check-ref",
+   "dataset": "GRCh38-vcf-check-ref",
    "vcf": "21\t30289183\tsnv_bad\tA\tT\t.\t.\t.",
    "combinations": [],
    "reference_rows": 0,
    "reference_warning": "Specified reference allele A does not match Ensembl reference allele"
   },
   {
-   "suite": "GRCh38-vcf-check-ref",
+   "dataset": "GRCh38-vcf-check-ref",
    "vcf": "21\t30337048\tlower_ok\tc\tt\t.\t.\t.",
    "combinations": [
     "synonymous_variant"
    ]
   },
   {
-   "suite": "GRCh38-vcf-check-ref",
+   "dataset": "GRCh38-vcf-check-ref",
    "vcf": "21\t30813030\t.\tc\tt\t.\t.\t.",
    "combinations": [
     "stop_retained_variant"
    ]
   },
   {
-   "suite": "GRCh38-vcf-check-ref",
+   "dataset": "GRCh38-vcf-check-ref",
    "vcf": "21\t30430756\tn_ref\tN\tC\t.\t.\t.",
    "combinations": [],
    "reference_rows": 0,
    "reference_warning": "Specified reference allele N does not match Ensembl reference allele"
   },
   {
-   "suite": "GRCh38-vcf-check-ref",
+   "dataset": "GRCh38-vcf-check-ref",
    "vcf": "21\t30319403\tdel_ok\tTCA\tT\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-vcf-check-ref",
+   "dataset": "GRCh38-vcf-check-ref",
    "vcf": "21\t34716478\tdel_bad\tAGG\tA\t.\t.\t.",
    "combinations": [],
    "reference_rows": 0,
    "reference_warning": "Specified reference allele GG does not match Ensembl reference allele"
   },
   {
-   "suite": "GRCh38-vcf-check-ref",
+   "dataset": "GRCh38-vcf-check-ref",
    "vcf": "21\t37018203\tins_anchor_bad\tG\tGTT\t.\t.\t.",
    "combinations": [
     "frameshift_variant",
@@ -80,7 +80,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-check-ref",
+   "dataset": "GRCh38-vcf-check-ref",
    "vcf": "21\t25585733\tmnp_ok\tCTT\tGAA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -92,14 +92,14 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-check-ref",
+   "dataset": "GRCh38-vcf-check-ref",
    "vcf": "21\t30348409\tmnp_bad\tCTG\tGAA\t.\t.\t.",
    "combinations": [],
    "reference_rows": 0,
    "reference_warning": "Specified reference allele CTG does not match Ensembl reference allele"
   },
   {
-   "suite": "GRCh38-vcf-check-ref",
+   "dataset": "GRCh38-vcf-check-ref",
    "vcf": "21\t30440739\tmulti_ok\tT\tC,G\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -108,64 +108,64 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-check-ref",
+   "dataset": "GRCh38-vcf-check-ref",
    "vcf": "21\t30592776\tmulti_bad\tA\tC,G\t.\t.\t.",
    "combinations": [],
    "reference_rows": 0,
    "reference_warning": "Specified reference allele A does not match Ensembl reference allele"
   },
   {
-   "suite": "GRCh38-vcf-check-ref",
+   "dataset": "GRCh38-vcf-check-ref",
    "vcf": "Z\t1000\tunknown_chr\tA\tG\t.\t.\t.",
    "combinations": [],
    "reference_rows": 0,
    "reference_warning": "Chromosome Z not found in annotation sources or synonyms; chromosome Z does not overlap any features"
   },
   {
-   "suite": "GRCh38-vcf-check-ref",
+   "dataset": "GRCh38-vcf-check-ref",
    "vcf": "chr21\t30635459\tprefixed\tT\tC\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-vcf-check-ref",
+   "dataset": "GRCh38-vcf-check-ref",
    "vcf": "21\t30165901\tinvalid_alleles\tX\tY\t.\t.\t.",
    "combinations": [],
    "reference_rows": 0,
    "reference_warning": "Invalid allele string X/Y or possible parsing error"
   },
   {
-   "suite": "GRCh38-vcf-check-ref",
+   "dataset": "GRCh38-vcf-check-ref",
    "vcf": "21\t30601265\t.\tTG\t.\t.\t.\t.",
    "combinations": []
   },
   {
-   "suite": "GRCh38-vcf-check-ref",
+   "dataset": "GRCh38-vcf-check-ref",
    "vcf": "21\t30643020\tnonvar_csq\tTTG\t.\t.\t.\tCSQ=old|stuff;DP=4",
    "combinations": []
   },
   {
-   "suite": "GRCh38-vcf-check-ref",
+   "dataset": "GRCh38-vcf-check-ref",
    "vcf": "21\t30755140\tnonvar_bad\tG\t.\t.\t.\t.",
    "combinations": [],
    "reference_rows": 0,
    "reference_warning": "Specified reference allele G does not match Ensembl reference allele"
   },
   {
-   "suite": "GRCh38-vcf-check-ref",
+   "dataset": "GRCh38-vcf-check-ref",
    "vcf": "21\t30601300\tnonvar_first_alt\tTC\t.,TA\t.\t.\t.",
    "combinations": []
   },
   {
-   "suite": "GRCh38-vcf-check-ref",
+   "dataset": "GRCh38-vcf-check-ref",
    "vcf": "21\t30319403\t0\ttca\tt\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-vcf-check-ref",
+   "dataset": "GRCh38-vcf-check-ref",
    "vcf": "Z\t1000\t.\ta\tg\t.\t.\t.",
    "combinations": [],
    "reference_rows": 0,
@@ -302,7 +302,7 @@
    "vep_rs_only_summary": {}
   }
  ],
- "suites": {
+ "datasets": {
   "GRCh38-vcf-check-ref": {
    "reference": "default.txt",
    "input": "variants.vcf",

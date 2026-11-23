@@ -1,0 +1,18 @@
+{
+ "records": [
+  {
+   "dataset": "pool",
+   "vcf": "21\t7000\tsnv_one_gene\tA\tC\t.\t.\t.",
+   "combinations": []
+  }
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {},
+ "fields_compared": [
+  "SpliceAI_pred"
+ ],
+ "field_divergences": [],
+ "field_divergence_summary": {}
+}

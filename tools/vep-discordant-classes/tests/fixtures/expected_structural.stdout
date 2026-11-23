@@ -1,0 +1,31 @@
+======================================================================
+DISCORDANT CLASSIFICATION SUMMARY
+======================================================================
+
+Total discordants: 12
+
+By mismatch type:
+  coordinate_only                  4 ( 33.3%)
+  transcript_selection             3 ( 25.0%)
+  consequence_swap                 2 ( 16.7%)
+  true_extra                       2 ( 16.7%)
+  true_missing                     1 (  8.3%)
+
+By mismatch type + direction:
+  coordinate_only           only_rust           2
+  transcript_selection      only_rust           2
+  true_extra                only_rust           2
+  consequence_swap          only_perl           1
+  consequence_swap          only_rust           1
+  coordinate_only           only_perl           1
+  transcript_selection      only_perl           1
+  true_missing              only_perl           1
+  coordinate_only           missing_in_rust        1
+
+By file + mismatch type (top 30):
+  09_breakends                        transcript_selection             3 ( 25.0%)
+  02_mnp_complex                      consequence_swap                 2 ( 16.7%)
+  04_large_explicit                   coordinate_only                  2 ( 16.7%)
+  12_complex_imprecise                true_extra                       2 ( 16.7%)
+  gnomad_sv                           coordinate_only                  2 ( 16.7%)
+  gnomad_sv                           true_missing                     1 (  8.3%)

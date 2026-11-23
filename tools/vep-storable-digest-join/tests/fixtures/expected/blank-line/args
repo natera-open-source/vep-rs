@@ -1,0 +1,10 @@
+--version-a
+1
+--dump-a
+blank-line.tsv
+--version-b
+2
+--dump-b
+b.tsv
+--out-dir
+out

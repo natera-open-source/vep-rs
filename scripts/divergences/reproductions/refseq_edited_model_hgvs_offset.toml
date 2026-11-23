@@ -1,9 +1,9 @@
 entry = "refseq_edited_model_hgvs_offset"
 page = "docs/divergences/refseq-edited-model-hgvs-offset.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 59 of 77,675 cache transcripts · 1 flag set, 4 corpora"
+input_class_basis = "2 · 60 of 116,165 cache transcripts · 7 flag sets, 5 corpora"
 notes = "A 21-base duplication in the single exon of the edited model NM_198689.3 (KRTAP10-7, forward strand), beside two TSPEAR models on the reverse strand whose zero shift is computed first."
 
 [input]
@@ -30,3 +30,13 @@ columns = ["Consequence", "BAM_EDIT", "HGVSc", "HGVS_OFFSET"]
 [expected]
 ensembl_vep = ["inframe_insertion | OK | NM_198689.3:c.986_1006dup | -"]
 vep_rs = ["inframe_insertion | OK | NM_198689.3:c.986_1006dup | 21"]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/hgvs.rs::generate_hgvs",
+    "crates/vep-effects/src/hgvs.rs::hgvs_shift",
+]
+tests = [
+    "crates/vep-effects/src/hgvs.rs::tests::edited_model_hgvsc_spells_a_shifted_insertion_from_the_rotated_allele",
+]
+rules = ["tools/vep-golden-corpus/src/classify/hgvs.rs::refseq_edited_model_hgvs_offset"]

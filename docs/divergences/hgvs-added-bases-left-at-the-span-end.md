@@ -1,6 +1,6 @@
 # The HGVSc of bases an allele adds to a reference it keeps, at a transcript's end
 
-**The defect in one sentence.** Under `--hgvs`, Ensembl VEP 116.2 moves inserted bases to their most 3' position only on a record classed as an insertion, one whose alleles keep no reference base. The bases that an allele of a multi-allelic record adds to reference bases it keeps stay at the end of the record's span and are written as an insertion there. Where that end is a reverse-strand transcript's last base, the insertion is numbered one base past it, `c.*1871+1_*1871insA`, and the HGVSIntronOffset plugin writes the offsets 1 and 0 beside it. There vep-rs places the added bases by the 3' rule and writes the duplication of the last bases they repeat, `c.*1871dup`, with both offsets 0.
+**The defect in one sentence.** Under `--hgvs`, Ensembl VEP 116.3 moves inserted bases to their most 3' position only on a record classed as an insertion, one whose alleles keep no reference base. The bases that an allele of a multi-allelic record adds to reference bases it keeps stay at the end of the record's span and are written as an insertion there. Where that end is a reverse-strand transcript's last base, the insertion is numbered one base past it, `c.*1871+1_*1871insA`, and the HGVSIntronOffset plugin writes the offsets 1 and 0 beside it. There vep-rs places the added bases by the 3' rule and writes the duplication of the last bases they repeat, `c.*1871dup`, with both offsets 0.
 
 **Why this is a defect.** A record of several alternates can hold an allele that keeps the reference bases and adds bases to them. That allele makes the same sequence as an insertion given in a record of its own, and Ensembl VEP writes two notations for the one change. Given alone, the inserted bases are moved along the run of bases they repeat and named a duplication where they copy the bases before them. Given beside another allele, they are left at the end of the record's span, and named a duplication only where the whole alternate is the kept bases written twice.
 
@@ -27,7 +27,7 @@ The coordinate Ensembl VEP writes past a last base, such as `c.*1871+1`, is an i
 
 **What correcting it would change.** Ensembl VEP would describe the added bases of such an allele as it describes the same bases given alone: at the most 3' point of their run, and as a duplication where they copy the bases before them. No coordinate one base past a last base would be written, and the plugin's start offset 1 would go with it.
 
-**The class it produces.** `hgvs_added_bases_left_at_the_span_end`, on a row whose allele holds more bases than its Location spans, where Ensembl VEP prints an HGVSc of the row's transcript and no `HGVS_OFFSET`. The format comparator holds the rule (`scripts/concordance/compare_vep_formats.py`, `added_bases_left_at_the_span_end`) and judges the two engines' rows together. Three forms are the class:
+**The class it produces.** `hgvs_added_bases_left_at_the_span_end`, on a row whose allele holds more bases than its Location spans, where Ensembl VEP prints an HGVSc of the row's transcript and no `HGVS_OFFSET`. The format comparator holds the rule (`tools/vep-formats-compare`, `added_bases_left_at_the_span_end`) and judges the two engines' rows together. Three forms are the class:
 
 - Past a reverse-strand transcript's last base, against a duplication. Ensembl VEP's notation is an `ins` of the added bases between a coordinate and the same coordinate with `+1`, beside the plugin's pair 1 and 0. vep-rs's is a `dup` of as many bases ending at that coordinate, with no `HGVS_OFFSET` and the pair 0 and 0. The last added base repeats the kept base beside it. The HGVSc and the start offset are set aside.
 - At the same place, against no notation. vep-rs writes no HGVSc, no `HGVS_OFFSET` and neither field, and the last added base does not repeat the kept base beside it. The HGVSc and both fields are set aside.
@@ -39,7 +39,7 @@ A notation of another transcript, numbering or kind stays a difference, and so d
 
 The class is built into the format comparator, and the golden corpus builder and the test harness name it. The plugin tuple scorer's class table declares it for the HGVSIntronOffset plugin's two fields. The concordance figures score consequence sets and never see these fields. No manifest of a committed corpus names the class.
 
-**How often the shape occurs.** Tier 2, `--hgvs` being needed. The shape is a record of several alternates with an allele that keeps its reference bases and adds bases to them. The transcript decides whether the run of the added bases reaches one of its ends. 1,188 of the 15,646,481 records of the chromosome 21 cuts carry the shape, all in the 1000 Genomes Phase 3 cut, the one cut of the five whose records hold several alternates. 22 of the 111 committed corpora hold such a record.
+**How often the shape occurs.** Tier 2, `--hgvs` being needed. The shape is a record of several alternates with an allele that keeps its reference bases and adds bases to them. The transcript decides whether the run of the added bases reaches one of its ends. 1,188 of the 15,646,481 records of the chromosome 21 cuts carry the shape, all in the 1000 Genomes Phase 3 cut, the one cut of the five whose records hold several alternates. 24 of the 152 committed corpora hold such a record.
 
 Counted by row on chromosomes 2, 3, 5, 10, 13, 15, 17 and 19 of 1000 Genomes Phase 3, 27 rows of 19 records are rows of such an allele whose run reaches a transcript's first or last base with a placement inside. 10 lie at a last base and 17 at a first base, and chromosome 13 holds none. On 18 of the 27 the engines differ in one of the class's forms. 3 are an `ins` past a reverse-strand transcript's last base against a `dup`, 7 are carried along a run on a forward-strand transcript, and 8 are an `ins` against a `dup` with nothing moved, on a reverse-strand transcript.
 
@@ -47,7 +47,7 @@ On 8 more of the 27 both engines write the same `dup`, and on 1 Ensembl VEP writ
 
 ## 1. One base added at the last base of ENST00000337288
 
-**In short.** A 1000 Genomes Phase 3 record on GRCh37 at 2:96850596 has three alternates. The first keeps the four reference bases at 96850597 to 96850600 and adds a fifth `T`. ENST00000337288, on the reverse strand, ends at 96850597. Its last eight bases are a run of `T` on the genome, `A` on the transcript's strand. Ensembl VEP 116.2 writes `HGVSc=ENST00000337288.5:c.*1871+1_*1871insA`, `HGVS_IntronStartOffset=1` and `HGVS_IntronEndOffset=0`. vep-rs writes `HGVSc=ENST00000337288.5:c.*1871dup` and both offsets 0.
+**In short.** A 1000 Genomes Phase 3 record on GRCh37 at 2:96850596 has three alternates. The first keeps the four reference bases at 96850597 to 96850600 and adds a fifth `T`. ENST00000337288, on the reverse strand, ends at 96850597. Its last eight bases are a run of `T` on the genome, `A` on the transcript's strand. Ensembl VEP 116.3 writes `HGVSc=ENST00000337288.5:c.*1871+1_*1871insA`, `HGVS_IntronStartOffset=1` and `HGVS_IntronEndOffset=0`. vep-rs writes `HGVSc=ENST00000337288.5:c.*1871dup` and both offsets 0.
 
 ### 1.1 What a reader needs to know first
 
@@ -67,7 +67,7 @@ Both engines run `--hgvs --plugin HGVSIntronOffset` on GRCh37 with a reference F
 
 ### 1.3 What each engine writes
 
-Ensembl VEP 116.2, default format, the first alternate's row on ENST00000337288:
+Ensembl VEP 116.3, default format, the first alternate's row on ENST00000337288:
 
 ```
 2_96850596_CTTTT/CTTTTT/CTTT/C	2:96850597-96850600	TTTTT	ENSG00000084090	ENST00000337288	Transcript	3_prime_UTR_variant	3365-3368	-	-	-	-	-	IMPACT=MODIFIER;STRAND=-1;HGVSc=ENST00000337288.5:c.*1871+1_*1871insA;HGVS_IntronEndOffset=0;HGVS_IntronStartOffset=1
@@ -106,7 +106,7 @@ vep -i record.vcf -o out.txt --offline --json_cache <cache> --fasta <fasta> \
   --assembly GRCh37 --hgvs --plugin HGVSIntronOffset
 ```
 
-vep-rs's row for the five-base allele on ENST00000337288 carries `c.*1871dup` and both offsets 0. Ensembl VEP 116.2's carries the insertion at `c.*1871+1_*1871` and the offsets 1 and 0. The reproduction `scripts/divergences/reproductions/hgvs_added_bases_left_at_the_span_end.toml` runs this record and the record of section 4 on both engines.
+vep-rs's row for the five-base allele on ENST00000337288 carries `c.*1871dup` and both offsets 0. Ensembl VEP 116.3's carries the insertion at `c.*1871+1_*1871` and the offsets 1 and 0. The reproduction `scripts/divergences/reproductions/hgvs_added_bases_left_at_the_span_end.toml` runs this record and the record of section 4 on both engines.
 
 ### 1.7 How the comparator treats this class
 
@@ -114,7 +114,7 @@ On this row the rule accepts the HGVSc and `HGVS_IntronStartOffset`, `hgvs_intro
 
 ## 2. Two and three bases added at the last base of ENST00000578576
 
-**In short.** A 1000 Genomes Phase 3 record on GRCh37 at 17:13399486 has four alternates. Three keep the reference base at 13399487 and add one, two and three bases, each a `T`, and the fourth deletes it. 13399487 is the last base of ENST00000578576, on the reverse strand, and the last of a run of ten, `A` on the transcript's strand. For the alleles that add two and three bases, Ensembl VEP 116.2 writes `c.*27+1_*27insAA` and `c.*27+1_*27insAAA`, each with the offsets 1 and 0. vep-rs writes `c.*26_*27dup` and `c.*25_*27dup` with 0 and 0.
+**In short.** A 1000 Genomes Phase 3 record on GRCh37 at 17:13399486 has four alternates. Three keep the reference base at 13399487 and add one, two and three bases, each a `T`, and the fourth deletes it. 13399487 is the last base of ENST00000578576, on the reverse strand, and the last of a run of ten, `A` on the transcript's strand. For the alleles that add two and three bases, Ensembl VEP 116.3 writes `c.*27+1_*27insAA` and `c.*27+1_*27insAAA`, each with the offsets 1 and 0. vep-rs writes `c.*26_*27dup` and `c.*25_*27dup` with 0 and 0.
 
 ### 2.1 What a reader needs to know first
 
@@ -130,7 +130,7 @@ Both engines run `--hgvs` and the HGVSIntronOffset plugin on GRCh37 with a refer
 
 ### 2.3 What each engine writes
 
-Ensembl VEP 116.2, default format, the alleles of three and four bases on ENST00000578576:
+Ensembl VEP 116.3, default format, the alleles of three and four bases on ENST00000578576:
 
 ```
 17_13399486_AT/ATT/ATTT/ATTTT/A	17:13399487	TTT	ENSG00000153976	ENST00000578576	Transcript	3_prime_UTR_variant	750	-	-	-	-	-	IMPACT=MODIFIER;STRAND=-1;HGVSc=ENST00000578576.1:c.*27+1_*27insAA;AA=T;HGVS_IntronEndOffset=0;HGVS_IntronStartOffset=1;LOEUF=1.1360e+00;NearestExonJB=ENSE00002235077|0|start|649;gnomAD_100x_cov=0.0000;gnomAD_10x_cov=0.9984;gnomAD_15x_cov=0.9642;gnomAD_1x_cov=1.0000;gnomAD_20x_cov=0.8698;gnomAD_25x_cov=0.7209;gnomAD_30x_cov=0.5167;gnomAD_50x_cov=0.0317;gnomAD_5x_cov=1.0000;gnomAD_mean_cov=30.4430;gnomAD_median_cov=30.0000;pHaplo=0.575305175361985;pTriplo=0.198646110735125
@@ -152,7 +152,7 @@ As in section 1, no allele is shifted, the clip strips the kept base, and the tw
 
 ## 3. An added base that repeats nothing at the last base of ENST00000260442
 
-**In short.** A 1000 Genomes Phase 3 record on GRCh37 at 15:52401459 has two alternates. The first keeps the base at 52401460, the last base of the reverse-strand transcript ENST00000260442, and adds one base past it. The added base is not the base at 52401460. Ensembl VEP 116.2 writes `HGVSc=ENST00000260442.3:c.*585+1_*585insT`, `HGVS_IntronStartOffset=1` and `HGVS_IntronEndOffset=0`. vep-rs writes no HGVSc and neither field.
+**In short.** A 1000 Genomes Phase 3 record on GRCh37 at 15:52401459 has two alternates. The first keeps the base at 52401460, the last base of the reverse-strand transcript ENST00000260442, and adds one base past it. The added base is not the base at 52401460. Ensembl VEP 116.3 writes `HGVSc=ENST00000260442.3:c.*585+1_*585insT`, `HGVS_IntronStartOffset=1` and `HGVS_IntronEndOffset=0`. vep-rs writes no HGVSc and neither field.
 
 ### 3.1 What a reader needs to know first
 
@@ -168,7 +168,7 @@ Both engines run `--hgvs` and the HGVSIntronOffset plugin on GRCh37 with a refer
 
 ### 3.3 What each engine writes
 
-Ensembl VEP 116.2, default format, the first alternate's row on ENST00000260442:
+Ensembl VEP 116.3, default format, the first alternate's row on ENST00000260442:
 
 ```
 15_52401459_GT/GAT/G	15:52401460	AT	ENSG00000137875	ENST00000260442	Transcript	3_prime_UTR_variant	1249	-	-	-	-	-	IMPACT=MODIFIER;STRAND=-1;HGVSc=ENST00000260442.3:c.*585+1_*585insT;AA=T;HGVS_IntronEndOffset=0;HGVS_IntronStartOffset=1;LOEUF=1.7350e+00;NearestExonJB=ENSE00001015560|0|start|711;gnomAD_100x_cov=0.0000;gnomAD_10x_cov=0.9992;gnomAD_15x_cov=0.9943;gnomAD_1x_cov=1.0000;gnomAD_20x_cov=0.9626;gnomAD_25x_cov=0.8609;gnomAD_30x_cov=0.6306;gnomAD_50x_cov=0.0407;gnomAD_5x_cov=0.9992;gnomAD_mean_cov=33.2150;gnomAD_median_cov=32.0000;pHaplo=0.416589592254294;pLI_gene_value=0.00;pTriplo=0.14887513770265
@@ -190,7 +190,7 @@ An insertion is named by the two bases it lies between. The Insertion page, `rec
 
 ## 4. A base carried five bases to the last base of ENST00000318578
 
-**In short.** A 1000 Genomes Phase 3 record on GRCh37 at 15:39547041 has two alternates: a substitution of the base there, and an allele that keeps it and adds a `A` after it. ENST00000318578, on the forward strand, ends five bases on, at 39547046, and those five bases are all `A`. Ensembl VEP 116.2 writes `HGVSc=ENST00000318578.3:c.*2154_*2153insA` and no `HGVS_OFFSET`. vep-rs writes `HGVSc=ENST00000318578.3:c.*2158dup` and `HGVS_OFFSET=5`. Both write the offsets 0 and 0.
+**In short.** A 1000 Genomes Phase 3 record on GRCh37 at 15:39547041 has two alternates: a substitution of the base there, and an allele that keeps it and adds a `A` after it. ENST00000318578, on the forward strand, ends five bases on, at 39547046, and those five bases are all `A`. Ensembl VEP 116.3 writes `HGVSc=ENST00000318578.3:c.*2154_*2153insA` and no `HGVS_OFFSET`. vep-rs writes `HGVSc=ENST00000318578.3:c.*2158dup` and `HGVS_OFFSET=5`. Both write the offsets 0 and 0.
 
 ### 4.1 What a reader needs to know first
 
@@ -208,7 +208,7 @@ Both engines run `--hgvs --plugin HGVSIntronOffset` on GRCh37 with a reference F
 
 ### 4.3 What each engine writes
 
-Ensembl VEP 116.2, default format, the second alternate's row on ENST00000318578:
+Ensembl VEP 116.3, default format, the second alternate's row on ENST00000318578:
 
 ```
 15_39547041_T/A/TA	15:39547041	TA	ENSG00000175746	ENST00000318578	Transcript	3_prime_UTR_variant	3073	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;HGVSc=ENST00000318578.3:c.*2154_*2153insA;HGVS_IntronEndOffset=0;HGVS_IntronStartOffset=0
@@ -234,4 +234,4 @@ For a record that is an insertion alone, Ensembl VEP makes the same move. Lines 
 
 ### 4.6 The same run with nothing to move
 
-A record can write the added bases at the last point of their run. At 17:7835440, on GRCh37, an allele keeps the base there, c.-183 of the reverse-strand transcript ENST00000572656, and adds a copy of the base before it, c.-184, the transcript's first base. The run of that base starts before the transcript and ends between c.-184 and c.-183, where the record writes the added base. Ensembl VEP 116.2 writes `c.-184_-183insC`, and vep-rs `c.-184dup`. Neither prints an `HGVS_OFFSET`, and both write the offsets 0 and 0.
+A record can write the added bases at the last point of their run. At 17:7835440, on GRCh37, an allele keeps the base there, c.-183 of the reverse-strand transcript ENST00000572656, and adds a copy of the base before it, c.-184, the transcript's first base. The run of that base starts before the transcript and ends between c.-184 and c.-183, where the record writes the added base. Ensembl VEP 116.3 writes `c.-184_-183insC`, and vep-rs `c.-184dup`. Neither prints an `HGVS_OFFSET`, and both write the offsets 0 and 0.

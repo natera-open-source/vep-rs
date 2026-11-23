@@ -4,7 +4,7 @@
 //! The allele frequency fields of a row: `AF`, the 1000 Genomes continental
 //! and gnomAD population columns, `MAX_AF` and `MAX_AF_POPS`, filled as
 //! `add_colocated_frequency_data` (OutputFactory.pm:1185-1280 at ensembl-vep
-//! release/116.2) fills them from the co-located variants of an input record.
+//! release/116.3) fills them from the co-located variants of an input record.
 //!
 //! A co-located variant stores each population's frequencies as
 //! `allele:frequency` pairs. A row reads the frequency of the record allele
@@ -67,8 +67,8 @@ pub const FREQUENCY_KEYS: &[(&str, &[&str])] = &[
 /// The combined-population columns `MAX_AF` never takes (OutputFactory.pm:1252).
 const COMBINED_POPULATIONS: &[&str] = &["AF", "ExAC", "ExAC_Adj", "gnomADe", "gnomADg"];
 
-/// The population columns `MAX_AF` compares, in the order Perl visits them, each
-/// once: Perl visits a column in two groups twice, and the second visit finds
+/// The population columns `MAX_AF` compares, in the order Ensembl VEP visits them, each
+/// once: Ensembl VEP visits a column in two groups twice, and the second visit finds
 /// the same value already at or below the maximum with its population already
 /// listed.
 static MAX_AF_POPULATIONS: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
@@ -86,6 +86,7 @@ static MAX_AF_POPULATIONS: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
 
 /// Which frequency groups a run reports and whether it reports the maximum.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct FrequencyGroups {
     pub af: bool,
     pub af_1kg: bool,
@@ -160,6 +161,7 @@ fn column_reported(column: &str, groups: &FrequencyGroups) -> bool {
 /// pair's value, borrowed from the record's text or formatted `%.4f` in the
 /// `AF` column, or the remainder of a biallelic record's `AF`.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum Frequency<'a> {
     Stored(Cow<'a, str>),
     Remainder(f64),
@@ -398,26 +400,25 @@ mod tests {
         matched: &[(&str, &str)],
         columns: &[(&str, &str)],
     ) -> ColocatedVariant {
-        ColocatedVariant {
-            id: "rs1".to_string(),
-            allele_string: Some(allele_string.to_string()),
-            strand: 1,
-            matched_alleles: matched
-                .iter()
-                .enumerate()
-                .map(|(i, (input, record))| MatchedAllele {
-                    input_allele: input.to_string(),
-                    input_index: i,
-                    record_allele: record.to_string(),
-                    record_index: i,
-                })
-                .collect(),
-            frequency_strings: columns
-                .iter()
-                .map(|(column, value)| (column.to_string(), value.to_string()))
-                .collect(),
-            ..Default::default()
-        }
+        let mut colocated = ColocatedVariant::default();
+        colocated.id = "rs1".to_string();
+        colocated.allele_string = Some(allele_string.to_string());
+        colocated.strand = 1;
+        colocated.matched_alleles = matched
+            .iter()
+            .enumerate()
+            .map(|(i, (input, record))| MatchedAllele {
+                input_allele: input.to_string(),
+                input_index: i,
+                record_allele: record.to_string(),
+                record_index: i,
+            })
+            .collect();
+        colocated.frequency_strings = columns
+            .iter()
+            .map(|(column, value)| (column.to_string(), value.to_string()))
+            .collect();
+        colocated
     }
 
     /// One allele of an input record carrying the co-located list `known`.
@@ -453,7 +454,7 @@ mod tests {
     }
 
     /// `AF` prints with four decimals (`sprintf("%.4f")`, OutputFactory.pm:1219),
-    /// the other columns as the cache wrote them: Ensembl VEP 116.2 writes
+    /// the other columns as the cache wrote them: Ensembl VEP 116.3 writes
     /// `AF=0.0068;AFR_AF=0.0212` for `21 5131441 T C` of the `GRCh38-colocated`
     /// corpus, whose `rs1555830109` stores `C:0.006789` and `C:0.0212`, and
     /// `gnomADg_AFR_AF=6.875e-05` for `21 5030602 A AA` (`rs1370167485`,
@@ -626,7 +627,7 @@ mod tests {
 
     /// Populations tied at the maximum are all listed, in the order
     /// `sort keys %FREQUENCY_KEYS` then each group's declared order
-    /// (OutputFactory.pm:1210-1211, 1255-1260): Ensembl VEP 116.2 writes
+    /// (OutputFactory.pm:1210-1211, 1255-1260): Ensembl VEP 116.3 writes
     /// `MAX_AF=1;MAX_AF_POPS=AFR,AMR,EAS,EUR,SAS,gnomADg_AFR,gnomADg_AMI,gnomADg_ASJ,gnomADg_FIN,gnomADg_MID,gnomADg_REMAINING,gnomADg_SAS`
     /// for the `G` allele of `21 7759128 T A,G` of the `GRCh38-colocated` corpus
     /// (`rs1555870136`), and across variants an equal maximum appends its
@@ -704,7 +705,7 @@ mod tests {
 
     /// A variant whose population frequencies are all zero sets `MAX_AF=0` and
     /// lists every zero population (OutputFactory.pm:1197, 1257-1260, 1265-1275):
-    /// Ensembl VEP 116.2 writes `MAX_AF=0;MAX_AF_POPS=gnomADg_AFR,gnomADg_AMI,gnomADg_AMR,gnomADg_ASJ,gnomADg_EAS,gnomADg_FIN,gnomADg_MID,gnomADg_NFE,gnomADg_REMAINING,gnomADg_SAS`
+    /// Ensembl VEP 116.3 writes `MAX_AF=0;MAX_AF_POPS=gnomADg_AFR,gnomADg_AMI,gnomADg_AMR,gnomADg_ASJ,gnomADg_EAS,gnomADg_FIN,gnomADg_MID,gnomADg_NFE,gnomADg_REMAINING,gnomADg_SAS`
     /// for `21 5030192 A G` of the `GRCh38-colocated` corpus (`rs1172282560`); a
     /// record with no population column at all sets neither key.
     #[test]
@@ -744,7 +745,7 @@ mod tests {
 
     /// `MAX_AF` scans every group whether requested or not and skips the
     /// combined populations `AF`, `ExAC`, `ExAC_Adj`, `gnomADe` and `gnomADg`
-    /// (OutputFactory.pm:1193, 1252): Ensembl VEP 116.2 writes
+    /// (OutputFactory.pm:1193, 1252): Ensembl VEP 116.3 writes
     /// `MAX_AF=0.0003339;MAX_AF_POPS=gnomADg_NFE` for `21 5030602 A AA` of the
     /// `GRCh38-colocated` corpus (`rs1370167485`, `gnomADg` `0.0001735`,
     /// `gnomADg_NFE` `0.0003339`) and `MAX_AF=0.0212;MAX_AF_POPS=AFR` for
@@ -797,7 +798,7 @@ mod tests {
 
     /// A pair's value is the text between its first and second `:`, as the
     /// two-scalar `split(':', $pair)` reads it (OutputFactory.pm:1218), and a
-    /// column ending in `,` holds no empty pair (:1217). Ensembl VEP 116.2
+    /// column ending in `,` holds no empty pair (:1217). Ensembl VEP 116.3
     /// writes `AFR_AF=0.25` with `MAX_AF=0.25` for the stored `G:0.25:` and
     /// `G:0.25:9`, and `AF=0.3000` for a known variant `/G` storing `G:0.3,`
     /// that is matched on its span: its empty first allele is the one no pair
@@ -835,7 +836,7 @@ mod tests {
     /// minor-allele frequency (`BaseCacheVariation.pm:131-137`), which the
     /// pair split reads as an allele with no value (OutputFactory.pm:1217-1219),
     /// so those three fields print empty while `AF`, `EAS` and `SAS`, whose
-    /// values keep their alleles, print: Ensembl VEP 116.2 writes
+    /// values keep their alleles, print: Ensembl VEP 116.3 writes
     /// `AF=0.5625;EAS_AF=0.4534;SAS_AF=0.5583` and no `AFR_AF`, `AMR_AF` or
     /// `EUR_AF` for `21 44195140 G A` of the `GRCh38-oldmaf` corpus
     /// (`rs2838554`, `AFR` `0.2852` after the rewrite).

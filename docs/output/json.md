@@ -6,7 +6,7 @@ A multi-allelic record is one object whose consequence arrays carry every allele
 
 ## Schema
 
-The two records of the [default format example](vep-and-tab.md#example) as vep-rs writes them, pretty-printed with the keys in reading order. vep-rs itself writes the keys of an object sorted; Ensembl VEP's key order is Perl hash order and varies from object to object. Ensembl VEP 116.2's committed objects (`expected/json.jsonl.gz`) carry the same keys and values except `vep_rs_version`, which only vep-rs writes. The `input` value is the record's own VCF line; the first one's INFO column is abridged here.
+The two records of the [default format example](vep-and-tab.md#example) as vep-rs writes them, pretty-printed with the keys in reading order. vep-rs itself writes the keys of an object sorted; Ensembl VEP's key order is Perl hash order and varies from object to object. Ensembl VEP 116.3's committed objects (`expected/json.jsonl.gz`) carry the same keys and values except `vep_rs_version`, which only vep-rs writes. The `input` value is the record's own VCF line; the first one's INFO column is abridged here.
 
 ```json
 {
@@ -71,7 +71,7 @@ The two records of the [default format example](vep-and-tab.md#example) as vep-r
     }
   ],
   "most_severe_consequence": "missense_variant",
-  "vep_rs_version": "0.6.0"
+  "vep_rs_version": "1.0.0"
 }
 ```
 
@@ -98,7 +98,7 @@ The two records of the [default format example](vep-and-tab.md#example) as vep-r
     }
   ],
   "most_severe_consequence": "intergenic_variant",
-  "vep_rs_version": "0.6.0"
+  "vep_rs_version": "1.0.0"
 }
 ```
 
@@ -183,7 +183,7 @@ Column renames:
 
 A plugin's `chr` key, the chromosome column of the committed synthetic dbNSFP fixture, becomes `seq_region_name` too. `Feature_type` is dropped.
 
-Positions split into `*_start` and `*_end`, each written only when defined: `390-?` gives `cds_start` 390 alone and `?-335` gives `cdna_end` 335 alone, as Ensembl VEP 116 writes them. A single position fills both keys. Under `--total_length` the split is Ensembl VEP's own: a single position with its total is the string `"428/1200"` at both ends. A range with its total (`428-430/1200`) prints its start, `428`, at both ends, because the `/1200` tail of the end is not a plain number.
+Positions split into `*_start` and `*_end`, each written only when defined: `390-?` gives `cds_start` 390 alone and `?-335` gives `cdna_end` 335 alone, as Ensembl VEP 116 writes them. A single position fills both keys. Under `--total_length` a single position with its total is the string `"428/1200"` at both ends, in both engines. A range with its total (`428-430/1200`) prints its start as the number `428` and its end as the string `"430/1200"`. Ensembl VEP prints `428` under both keys, an [intended divergence](../divergences/total-length-json-range-end.md).
 
 ### Numbers and strings
 
@@ -200,6 +200,8 @@ A feature identifier (`transcript_id`, `regulatory_feature_id`, `motif_feature_i
 `--shift_genomic 1` adds a `location` to every transcript object of a sequence variant: the `Location` column, moved under `--shift_3prime 1`. The intergenic object of an insertion or deletion `--shift_3prime 1` analysed gets one too. A structural variant's objects get none, as Ensembl VEP writes none.
 
 A plugin key named as a column the object leaves out (`Uploaded_variation`, `Existing_variation`, or `Location` without `--shift_genomic 1`) joins the object under its lowercased name on the rows the plugin wrote it, as Ensembl VEP keeps every key of a consequence hash. The record object's `id` stays the record's name, and a key of those names the plugin declared but left unwritten on a row adds nothing.
+
+A plugin column whose lower-cased name is a key the object derives from a core field gives way to the core value on a row that carries one. Those keys are the keys of the renamed columns, the two ends of a position and the `_prediction` and `_score` keys of `sift` and `polyphen`. Ensembl VEP does the same: it writes the renamed keys and those of `sift` and `polyphen` after it lower-cases the row's own, and a position's ends over a column already in lower case. So under `--sift b` or `--sift s` a dbNSFP `SIFT_score` column fills `sift_score` on the rows without a core score alone.
 
 The keys Ensembl VEP derives from the variant alone sit on the record object, lower-cased, and on no consequence object:
 
@@ -230,7 +232,8 @@ A `colocated_variants` object is written as Ensembl VEP's JSON factory writes it
 - `clin_sig` and `pubmed` as lists;
 - `somatic` and `phenotype_or_disease` when `1`;
 - `clin_sig_allele`, `clin_sig_ref_allele` and `clinvar_somatic_classification`;
-- `var_synonyms` as `{source: [ids]}`.
+- `var_synonyms` as `{source: [ids]}`;
+- `minor_allele` and `minor_allele_freq`, on a cache whose `variation_cols` declare them.
 
 `frequencies` nests the matched allele's values under each alternate allele with lower-cased population keys. The consequence objects carry none of the co-located variant or frequency keys of the text formats.
 

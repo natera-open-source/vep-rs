@@ -1,0 +1,6 @@
+species	homo_sapiens
+assembly	GRCh38
+sift	b
+polyphen	b
+regulatory	0
+cell_types	A549,HepG2

@@ -1,7 +1,7 @@
 entry = "check_svs_mate_chromosome"
 page = "docs/divergences/check-svs-mate-chromosome.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the VCF 4.2 specification, section 5.4 \"Specifying complex rearrangements with breakends\" (a bracket breakend record whose mate names another chromosome) and the Ensembl VEP documentation, \"Running Ensembl VEP\", --check_svs; not seen in the measured datasets"
 notes = "Ensembl VEP's --check_svs reads the structural variants from its database, so it runs in database mode; vep-rs reads them from the corpus's file. nsv6146554 spans 5029000 to 5047000 on chromosome 21: it lies below the breakend's own breakpoint at 5047002 and holds the mate's number, 5035000, so it names the breakend on Ensembl VEP through the chromosome-blind mate match alone."
@@ -32,3 +32,10 @@ where = { record = "bnd_mate_chr22", allele = "T[22:5035000[" }
 [expected]
 ensembl_vep = ["nsv2770691,nsv3109934,nsv3163927,nsv3167562,nsv533679,nsv6146554"]
 vep_rs = ["nsv2770691,nsv3109934,nsv3163927,nsv3167562,nsv533679"]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/sv_source.rs::mate_span",
+    "crates/vep-cli/src/sv_source.rs::overlapping_names",
+]
+tests = ["crates/vep-cli/src/sv_source.rs::tests::breakend_mate_position_joins_the_names"]

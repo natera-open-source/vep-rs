@@ -1,0 +1,12 @@
+fastvep_column	part	vep_field	source	kind	note	list_separator	reference_set
+FV_X	1	X_ONE	X	text	fabricated	-	-
+FV_X	2	X_LIST	X	text	fabricated	,	-
+FV_X	3	X_BAR	X	text	fabricated	|	expected
+FV_Y	1.word	Y_WORD	Y	text	fabricated	-	-
+FV_Y	1.score	Y_SCORE	Y	number	fabricated	-	-
+FV_Y	2.score	Y_TWO	Y	number	fabricated	-	-
+FV_Z	2-4	Z_RANGE	Z	text	fabricated	-	-
+FV_Z	6	Z_SIX	Z	text	fabricated	-	-
+FV_Z	66.word	Z_FAR	Z	text	fabricated	-	-
+FV_Z	68-70	Z_REST	Z	text	fabricated	-	-
+FV_Z	99999999999999999999	Z_NEVER	Z	text	fabricated	-	-

@@ -12,7 +12,7 @@
  "covers": [
   "mane_select"
  ],
- "suites": {
+ "datasets": {
   "attrs38": {
    "reference": "pool38_mane.mane_select.txt",
    "input": "pool38_mane.vcf",
@@ -129,21 +129,21 @@
  },
  "records": [
   {
-   "suite": "attrs38",
+   "dataset": "attrs38",
    "vcf": "21\t9757444\t.\tG\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant"
    ]
   },
   {
-   "suite": "attrs38",
+   "dataset": "attrs38",
    "vcf": "21\t13644843\t.\tTATG\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant"
    ]
   },
   {
-   "suite": "attrs38",
+   "dataset": "attrs38",
    "vcf": "21\t14740399\t.\tCTAG\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -151,14 +151,14 @@
    ]
   },
   {
-   "suite": "attrs38",
+   "dataset": "attrs38",
    "vcf": "21\t16607064\t.\tG\tA\t.\t.\t.",
    "combinations": [
     "upstream_gene_variant"
    ]
   },
   {
-   "suite": "attrs38",
+   "dataset": "attrs38",
    "vcf": "21\t18686157\t.\tACTA\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -166,7 +166,7 @@
    ]
   },
   {
-   "suite": "attrs38",
+   "dataset": "attrs38",
    "vcf": "21\t25724612\t.\tA\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -177,7 +177,7 @@
    ]
   },
   {
-   "suite": "attrs38",
+   "dataset": "attrs38",
    "vcf": "21\t33642556\t.\tC\tT\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -185,7 +185,7 @@
    ]
   },
   {
-   "suite": "attrs38",
+   "dataset": "attrs38",
    "vcf": "21\t41345735\t.\tT\tTAGACCTTAATTC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_insertion,stop_gained",
@@ -196,28 +196,28 @@
    ]
   },
   {
-   "suite": "attrs38",
+   "dataset": "attrs38",
    "vcf": "21\t43032192\t.\tC\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant"
    ]
   },
   {
-   "suite": "attrs38",
+   "dataset": "attrs38",
    "vcf": "21\t43161261\t.\tG\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "attrs38",
+   "dataset": "attrs38",
    "vcf": "21\t44327046\t.\tA\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant"
    ]
   },
   {
-   "suite": "attrs38",
+   "dataset": "attrs38",
    "vcf": "21\t44958335\t.\tC\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -225,7 +225,7 @@
    ]
   },
   {
-   "suite": "attrs38",
+   "dataset": "attrs38",
    "vcf": "21\t45287816\t.\tG\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -235,14 +235,14 @@
    ]
   },
   {
-   "suite": "attrs38",
+   "dataset": "attrs38",
    "vcf": "21\t46122513\t.\tC\tT\t.\t.\t.",
    "combinations": [
     "synonymous_variant"
    ]
   },
   {
-   "suite": "attrs38",
+   "dataset": "attrs38",
    "vcf": "21\t46124682\t.\tC\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -250,7 +250,7 @@
    ]
   },
   {
-   "suite": "attrs38",
+   "dataset": "attrs38",
    "vcf": "21\t46124902\t.\tT\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,synonymous_variant",
@@ -258,7 +258,7 @@
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "divergences": [],

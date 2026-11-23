@@ -1,0 +1,15 @@
+{
+  "assembly": "T2T-CHM13v2.0",
+  "cache_version": 107,
+  "contig_order": [
+    "21"
+  ],
+  "polyphen": "",
+  "regulatory": false,
+  "sift": "",
+  "source_versions": {
+    "assembly": "T2T-CHM13v2.0",
+    "genebuild": "2022-06"
+  },
+  "species": "homo_sapiens_gca009914755v4"
+}

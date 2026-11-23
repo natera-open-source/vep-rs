@@ -1,0 +1,14 @@
+transcripts: gtf 14 cache 15 shared 12 gtf_only 2 cache_only 3
+  gencode_basic    agree         5  disagree       7  present gtf        7 cache        6
+    D01: gtf=True cache=False
+    D02: gtf=True cache=False
+    D03: gtf=True cache=False
+    D04: gtf=True cache=False
+    D05: gtf=False cache=True
+  gencode_primary  agree        11  disagree       1  present gtf        2 cache        1
+    D08: gtf=True cache=False
+  cds_start_NF     agree         9  disagree       3  present gtf        2 cache        1
+    D09: gtf=True cache=False
+    D11: gtf=True cache=False
+    D12: gtf=False cache=True
+  cds_end_NF       agree        12  disagree       0  present gtf        2 cache        2

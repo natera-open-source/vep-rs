@@ -1,0 +1,21 @@
+[package]
+name = "vep-storable-digest"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.89"
+license = "Apache-2.0"
+description = "One digest line per transcript of an Ensembl VEP Storable cache: the MD5 of its Data::Dumper text, whole and with what a cache build changes left out"
+publish = false
+
+[dependencies]
+flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
+
+# Its own Cargo root: the repository workspace's commands do not reach this package, and
+# a cargo command for it names this manifest.
+[workspace]
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"

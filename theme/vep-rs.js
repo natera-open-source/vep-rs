@@ -567,6 +567,34 @@
             content.insertBefore(note, content.firstChild);
         }
 
+        // The address of the version versions.json lists at `path`: an http or
+        // https address on this page's origin whose path is a listed entry's.
+        // Any other value, a javascript: address or another site among them,
+        // gives null.
+        function listedAddress(channels, path) {
+            let address;
+            try {
+                address = new URL(path, window.location.origin);
+            } catch {
+                return null;
+            }
+            const listed = channels.some(entry => entry.path === address.pathname);
+            return listed && onThisSite(address) ? address : null;
+        }
+
+        function onThisSite(address) {
+            return address.origin === window.location.origin
+                && (address.protocol === 'http:' || address.protocol === 'https:');
+        }
+
+        // The selector's one navigation. Every address it is given comes from
+        // listedAddress; one on another origin or scheme opens nothing.
+        function open(address) {
+            if (onThisSite(address)) {
+                window.location.href = address.href;
+            }
+        }
+
         function selector(channels, release) {
             const byPath = current(channels);
             // A site served at a path versions.json does not list still knows
@@ -586,25 +614,33 @@
             const select = document.createElement('select');
             channels.forEach(entry => {
                 const option = document.createElement('option');
-                option.value = entry.path;
                 option.textContent = entry.name;
                 option.selected = entry === here;
                 select.appendChild(option);
             });
             select.addEventListener('change', () => {
-                if (!byPath) {
-                    window.location.href = select.value;
+                // The options stand in list order, so the chosen entry is read
+                // from the list and no text of the page names the destination.
+                const chosen = channels[select.selectedIndex];
+                const home = chosen ? listedAddress(channels, chosen.path) : null;
+                if (!home) {
                     return;
                 }
-                const page = window.location.pathname.slice(here.path.length);
-                const target = select.value + page + window.location.hash;
-                fetch(select.value + page, { method: 'HEAD' })
+                if (!byPath) {
+                    open(home);
+                    return;
+                }
+                const page = new URL(home.href);
+                page.pathname += window.location.pathname.slice(here.path.length);
+                const hash = window.location.hash;
+                fetch(page.href, { method: 'HEAD' })
                     .then(response => {
-                        window.location.href = response.ok ? target : select.value;
+                        if (response.ok) {
+                            page.hash = hash;
+                        }
+                        open(response.ok ? page : home);
                     })
-                    .catch(() => {
-                        window.location.href = select.value;
-                    });
+                    .catch(() => open(home));
             });
             label.append(text, select);
             buttons.insertBefore(label, buttons.firstChild);
@@ -620,7 +656,8 @@
                 }
                 const channels = Array.isArray(data.channels) ? data.channels : [];
                 const release = channels.find(entry => entry.name === data.release);
-                banner(release ? release.path : parentSiteHref);
+                const releaseAddress = release ? listedAddress(channels, release.path) : null;
+                banner(releaseAddress ? releaseAddress.href : parentSiteHref);
                 selector(channels, release);
             })
             .catch(() => banner(parentSiteHref));

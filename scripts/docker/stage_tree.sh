@@ -5,15 +5,16 @@
 # that workflow by release_recipe.sh: zig and cargo-zigbuild at its versions
 # and the target's conda-forge OpenSSL are installed under <tools-dir>, each
 # download held to the checksum the workflow records, and the three binaries
-# are linked against its glibc floor with the archive's `-C target-cpu`. The
+# are linked against its glibc floor with the archive's `-C target-cpu`, the
+# build clock at the commit's time as the workflow sets it. The
 # release's ELF check (scripts/release/check_glibc_floor.py) holds them to
 # that floor, so they do not depend on the build host's glibc, and they move
 # with LICENSE and NOTICE into <context-dir>. Any failed step exits 1 with
 # nothing at <context-dir>.
 #
 # Usage: scripts/docker/stage_tree.sh <archive> <context-dir> <tools-dir>
-# Needs the recipe's Rust toolchain, curl, unzip, zstd, python3 and a host of
-# the archive's architecture.
+# Needs the recipe's Rust toolchain, git, curl, unzip, zstd, python3 and a
+# host of the archive's architecture.
 set -euo pipefail
 
 usage="usage: stage_tree.sh <archive> <context-dir> <tools-dir>"
@@ -45,6 +46,13 @@ OPENSSL_SHA256="$(value openssl_sha256)"
 host="$(uname -m)"
 [[ "$host" == "${TARGET%%-*}" ]] || fail "$archive needs a host of architecture ${TARGET%%-*}, not $host"
 
+# The build clock is the time of the tree's own commit: a tree unpacked inside
+# another checkout would otherwise read that checkout's. Under
+# log.showSignature git prints a signed commit's signature ahead of its time.
+clock="$(git -C "$ROOT" -c log.showSignature=false log -1 --format=%ct 2>/dev/null)" || clock=""
+[[ "$(git -C "$ROOT" rev-parse --show-toplevel 2>/dev/null)" -ef "$ROOT" && "$clock" =~ ^[0-9]+$ ]] ||
+    fail "the tree at $ROOT has no commit of its own to take the build clock from"
+
 mkdir -p "$tools/zig" "$tools/openssl"
 tools="$(cd "$tools" && pwd)"
 
@@ -70,7 +78,7 @@ openssl_dir="$(echo "$TARGET" | tr 'a-z-' 'A-Z_')_OPENSSL_DIR=$tools/openssl"
 # RUSTFLAGS replaces the target rustflags of .cargo/config.toml, as in
 # release.yml. The installed cargo-zigbuild is run by its path: `cargo
 # zigbuild` runs the first one cargo finds, its own home's before PATH's.
-(cd "$ROOT" && env PATH="$tools/zig:$PATH" "$openssl_dir" RUSTFLAGS="-C target-cpu=$CPU" \
+(cd "$ROOT" && env PATH="$tools/zig:$PATH" "$openssl_dir" RUSTFLAGS="-C target-cpu=$CPU" SOURCE_DATE_EPOCH="$clock" \
     "$tools/cargo/bin/cargo-zigbuild" zigbuild --release --locked --target "$TARGET.$GLIBC_FLOOR" \
     --bin vep --bin vep-cache-builder --bin vep-cache-converter) ||
     fail "cargo could not build the three binaries for $archive"

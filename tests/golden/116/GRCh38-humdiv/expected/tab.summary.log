@@ -1,11 +1,11 @@
 [VEP run statistics]
-VEP version (API)	 116.2 (116)
+VEP version (API)	 116.3 (116)
 Annotation sources	Cache: /work/cache/homo_sapiens/116_GRCh38
 Species	homo_sapiens
 Command line options	vep --assembly GRCh38 --cache --cache_version 116 --database 0 --dir_cache [PATH]/cache --dir_plugins /plugins --force_overwrite --fork --format vcf --humdiv --input_file [PATH]/input.vcf --offline --output_file [PATH]/tab.txt --polyphen b --quiet --stats_text --tab
-Start time	2026-10-28 17:22:36
-End time	2026-10-28 17:22:37
-Run time	1 seconds
+Start time	2026-11-20 13:28:48
+End time	2026-11-20 13:28:48
+Run time	0 seconds
 Input file	/work/input.vcf
 Output file	/work/perl_out/tab.txt
 
@@ -52,8 +52,8 @@ downstream_gene_variant	22
 missense_variant	61
 
 [PolyPhen summary]
-probably_damaging	6
 possibly_damaging	6
+probably_damaging	6
 benign	9
 unknown	10
 

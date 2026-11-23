@@ -1,0 +1,88 @@
+{
+ "plugin_fixtures": {
+  "generator": "scripts/fixtures/cut_plugin_regions.py",
+  "flank": 5000,
+  "record_flank": 2000,
+  "exon_flank": 50,
+  "gerp_regions": "exons",
+  "tools": {
+   "bgzip": "bgzip (htslib) 1.9"
+  },
+  "files": {
+   "reference.fa.fai": "ca2ca9cda44361b4c76cd9b5cbba8d3ae502c90363103f0241dc7ba1409731eb",
+   "reference.fa.gz": "5a431e43ea9da2bb4268c20afdb60ddda166f30a5958585c405c740e97f49095",
+   "reference.fa.gz.fai": "ca2ca9cda44361b4c76cd9b5cbba8d3ae502c90363103f0241dc7ba1409731eb",
+   "reference.fa.gz.gzi": "ad0f7f9c928d50bd2376618abf1517942cfe06f92d7fdd237543f8a9e42b6a2d"
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 107,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 107 --species homo_sapiens_gca009914755v4 --assembly T2T-CHM13v2.0 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens_gca009914755v4/107_T2T-CHM13v2.0",
+ "fasta": "the one sequence the records and the pruned cache's transcripts sit on (chromosome 21) at its full length from Homo_sapiens-GCA_009914755.4-unmasked.fa.gz, the genome file Ensembl's rapid release publishes for the accession GCA_009914755.4, held to the md5sum.txt beside it; its header line names the assembly T2T-CHM13v2.0, which the cache's info.txt states as source_assembly, and its length is the one the cache gives the sequence; every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
+ "input": "variants.vcf: 277 records on chromosome 21 of the human pangenome assembly T2T-CHM13v2.0, every one written by tools/vep-seeded-variants from the converted cache and the genome sequence under seed 1 (generator version 5), its ID naming its category and its ordinal there: start codons, stops gained and lost, missense and synonymous changes on each strand, splice donors and acceptors, both untranslated regions, introns, upstream, downstream and intergenic positions, frameshift insertions and deletions, in-frame deletions, and the first and the last base of the sequence. 21 records name chromosome 21 by a synonym of the cache (CP068257.2, NC_060945.1). The cache ships no known variant: each of its variation files is empty, so no record carries a known identifier",
+ "sha256": {
+  "default.txt": "0c6a96a462f757ef675ac2e18fa7650a872b02710c2b0efd7f52dd51d99af470",
+  "tab.txt": "dc577004322c04211aed03ba322652554a07dc5c627f94a8b3514a5ca5923a58",
+  "vcf.vcf": "aeecc68858b0bfd6345def05b6b3c6f4321a8494db4624f71351033e238c189a",
+  "json.jsonl": "b8bf41e6de610659a913f2d598d73be46da1db56c9db67513d4305eb7d073bcd"
+ },
+ "variants_vcf_sha256": "a85df1274bac5be1f25c3a9c55bdf23b5a734d0e5784d8e65f8cd40908368bf2",
+ "flag_sets": {
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 107,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 107 --species homo_sapiens_gca009914755v4 --assembly T2T-CHM13v2.0 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens_gca009914755v4/107_T2T-CHM13v2.0",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "db96a648e63413ef5b644b1cd6ebd8fbb96b8655ce48516b0ec68641e42e08f9",
+    "tab.txt": "279c576953cee4062d2290ed9c0a74e13be88c75d433c474a263b99905ade5d5",
+    "vcf.vcf": "89e8d1e1ff5fe066b8ff36c192fc73b45101c00b904894e29ccd081fadf84384",
+    "json.jsonl": "c63e210239ebb41faa5099a39fd50338fc3c6be45c207827a8fec95c401b7362"
+   },
+   "flags": [
+    "--everything"
+   ],
+   "expected_dir": "expected_everything"
+  },
+  "hgvs": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 107,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 107 --species homo_sapiens_gca009914755v4 --assembly T2T-CHM13v2.0 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens_gca009914755v4/107_T2T-CHM13v2.0",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "2cf2263ade5fddf4771ec85aa9f2e75a3813a2e253861ba4e37902259f2fa776",
+    "tab.txt": "da1f8c22f400600d0a29ffafc8296f65ca12ff2a78976efc2a31a59e75d3d68c",
+    "vcf.vcf": "e067ced215f2374d60a731b68d450f26ad34fb3892173682ba08dccae1578f64",
+    "json.jsonl": "99a1c95f5997a0b00bfda70726da739e780cdc05e6f9510ebac76abacbf45e41"
+   },
+   "flags": [
+    "--hgvs"
+   ],
+   "expected_dir": "expected_hgvs"
+  }
+ },
+ "generator": "tools/vep-storable-to-json over the Ensembl VEP cache of the human pangenome assembly T2T-CHM13v2.0 (Homo_sapiens-GCA_009914755.4-2022_10.tar.gz of Ensembl's rapid release: homo_sapiens_gca009914755v4/107_T2T-CHM13v2.0, cache version 107); a survey of the converted cache's 24 sequences, the chromosomes 1 to 22, X and Y, each under the standard genetic code, which chose the shortest sequence holding 300 coding transcripts with some on each strand (chromosome 21: 993 coding transcript records, 491 forward and 502 reverse); the cache holds no organelle sequence and no unplaced scaffold; tools/vep-seeded-variants --cache <converted cache> --seed 1 --records wide --per-category 40 --fasta <genome sequence> --sequence 21 (802 seeded records); Ensembl VEP over them under --cache_version 107 --species homo_sapiens_gca009914755v4 --assembly T2T-CHM13v2.0 with the unmasked sequence as --fasta; tools/vep-golden-corpus select --release 107 --assembly T2T-CHM13v2.0 --species homo_sapiens_gca009914755v4 --dataset wide=<reference>=<the seeded records> --k 2 --seed 1 --max-span 1000000 --max-records 500 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 6 --include <the first ten records of every generator category and the records at the sequence's first and last base> --covers species-human-pangenome-caches --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --flank 5000 --gzip --drop sorted_exons --perl-info <cache>/info.txt --cache-version 107, with no --variations, since the cache's variation files hold no record; scripts/fixtures/cut_plugin_regions.py --reference <genome sequence> --flank 5000 --record-flank 2000; tools/vep-golden-corpus flag-set (everything: --everything; hgvs: --hgvs); scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; tools/vep-golden-corpus classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp --field HGVS_OFFSET --reference-fasta <the corpus's reference, decompressed> for each flag set)",
+ "pruned_cache": {
+  "layout": "json_cache",
+  "transcripts_per_chromosome": {
+   "21": 1252
+  },
+  "distinct_transcripts_per_chromosome": {
+   "21": 1056
+  },
+  "shards": 38,
+  "synonym_lines": 2,
+  "variation_slices": "none: every variation file of the Ensembl VEP cache is empty, so the slice holds no variations directory and its info.json names no variation column"
+ }
+}

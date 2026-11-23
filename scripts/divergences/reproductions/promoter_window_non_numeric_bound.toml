@@ -1,7 +1,7 @@
 entry = "promoter_window_non_numeric_bound"
 page = "docs/divergences/defect-n.md#27-a-promoter-whose-extended_start-is-not-a-number-is-widened-to-position-0"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "malformed"
 input_class_basis = "the extended_start and extended_end attributes give a promoter's wider region, which is never smaller than the core region (Ensembl VEP documentation, \"Running Ensembl VEP\", --extended_promoters): the promoter's extended_start is text that is not a whole number, which is no boundary of a region"
 notes = "The promoter ENSR21_B34QG spans 21:5553169-5553746 with extended_start=5553154 in the corpus file; the copy writes the attribute as x, so Ensembl VEP's promoter starts at 0 and reaches every record before it."
@@ -41,3 +41,13 @@ ensembl_vep = [
   "promoter_core_start | 21:5553169 | ENSR21_B34QG | regulatory_region_variant | promoter",
 ]
 vep_rs = ["promoter_core_start | 21:5553169 | ENSR21_B34QG | regulatory_region_variant | promoter"]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/regulatory/gff.rs::GffFile::record",
+    "crates/vep-core/src/regulatory_gff.rs::ignored_bound_warning",
+]
+tests = [
+    "crates/vep-cli/src/regulatory/gff.rs::tests::non_integer_extended_bound_is_ignored_with_one_warning",
+    "crates/vep-core/src/regulatory_gff.rs::tests::bound_and_identifier_warnings_name_the_record_and_the_file",
+]

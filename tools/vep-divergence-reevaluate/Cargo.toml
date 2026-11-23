@@ -1,0 +1,25 @@
+[package]
+name = "vep-divergence-reevaluate"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.89"
+license = "Apache-2.0"
+description = "Re-runs every documented divergence's reproduction on Ensembl VEP and vep-rs and holds the reproductions to the index page"
+publish = false
+
+[dependencies]
+flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
+# 0.22 reads TOML 1.0, the version the reproduction records are written in.
+toml_edit = { version = "0.22", default-features = false, features = ["parse"] }
+unicode-general-category = "1"
+unicode-ident = "1"
+
+# Its own Cargo root: the repository workspace's commands do not reach this package, and
+# a cargo command for it names this manifest.
+[workspace]
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"

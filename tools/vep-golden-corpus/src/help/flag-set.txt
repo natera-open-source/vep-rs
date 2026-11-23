@@ -1,0 +1,58 @@
+usage: vep-golden-corpus flag-set [-h] [--name NAME] [--flag FLAG]
+                                  [--input INPUT] [--stdin] [--unordered]
+                                  [--perl-mode {offline,database,gtf,gff}]
+                                  [--format FORMAT]
+                                  [--expected-dir EXPECTED_DIR]
+                                  [--covers COVERS] [--matrix MATRIX] [--list]
+                                  [--drop-reference-statements]
+                                  corpus
+
+Write one flag_sets entry of the corpus manifest: a run of the corpus under
+its own flags. A set that exists has the keys the options below set rewritten
+and keeps every other key of its entry (its hand-written `masks` and
+`reference_warnings` among them); its divergence keys go, so `classify --flag-
+set` runs after it. A divergences entry of the set that carries the hand-
+written vep_rs_consequence_sets_with_reference_sequence stops the rewrite
+unless --drop-reference-statements is given.
+
+positional arguments:
+  corpus
+
+options:
+  -h, --help            show this help message and exit
+  --name NAME           the set's name; `expected_<name>` holds its outputs
+                        unless --expected-dir
+  --flag FLAG           a command-line flag of the run, written --flag=--pick
+                        (repeatable)
+  --input INPUT         the input file inside the corpus (default:
+                        variants.vcf)
+  --stdin               pipe the input on standard input and pass -i STDIN
+  --unordered           the reference's row order within a record is Ensembl
+                        VEP's hash order (--per_gene gene buckets,
+                        --pick_allele allele buckets), so the runner compares
+                        the entry set and not the order
+  --perl-mode {offline,database,gtf,gff}
+                        how the set's reference was generated: offline
+                        (Ensembl VEP on its cache; the default, which writes
+                        no key, so the set takes the manifest's own mode,
+                        offline when the manifest names none), database
+                        (connected to the Ensembl database, for a column
+                        Ensembl VEP writes only with one; the default and tab
+                        headers then compare by their column descriptions
+                        alone), or gtf or gff (reading its transcripts from
+                        the file given to --gtf or --gff, whose SOURCE column
+                        and header lines the golden harness sets aside)
+  --format FORMAT       the output formats compared, comma-separated (default:
+                        all of default,tab,vcf,json)
+  --expected-dir EXPECTED_DIR
+                        the directory of the set's expected outputs
+  --covers COVERS       a parity-matrix row the set exercises (repeatable)
+  --matrix MATRIX       the parity matrix whose `item` column every `covers`
+                        name must be in (default: tests/parity/matrix.tsv)
+  --list                print the sets, one tab-separated line each
+  --drop-reference-statements
+                        discard the divergences entries that carry the hand-
+                        written
+                        vep_rs_consequence_sets_with_reference_sequence, each
+                        named on standard error; without the option such an
+                        entry stops the run before anything is written

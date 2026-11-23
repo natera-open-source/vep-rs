@@ -27,9 +27,13 @@ pub struct BedSource {
 }
 
 impl BedSource {
-    pub fn open(spec: CustomSpec, synonyms: Arc<ChromosomeSynonyms>) -> Result<Self, CustomError> {
+    pub fn open(
+        spec: CustomSpec,
+        synonyms: Arc<ChromosomeSynonyms>,
+        assembly: Option<vep_core::assembly::Assembly>,
+    ) -> Result<Self, CustomError> {
         Ok(BedSource {
-            base: TabixSource::open(spec, synonyms)?,
+            base: TabixSource::open(spec, synonyms, assembly)?,
         })
     }
 }
@@ -90,12 +94,7 @@ impl FormatRules for BedSource {
             _ => CustomValue::Undefined,
         });
         Verdict::Match(
-            vec![CustomRecord {
-                name,
-                allele: None,
-                fields: IndexMap::new(),
-                score,
-            }],
+            vec![CustomRecord::new(name, None, IndexMap::new(), score)],
             Some(percentage),
         )
     }
@@ -222,7 +221,7 @@ mod tests {
     }
 
     /// A record whose `chromStart` is a minus sign and digits (`-5`) is listed
-    /// as Ensembl VEP 116.2 lists it: for every record from the first base,
+    /// as Ensembl VEP 116.3 lists it: for every record from the first base,
     /// where `tabix` indexes it (htslib 1.9 `tbx.c:99`), to its end and for
     /// none past it, under its fourth column or, without one or under
     /// `coords`, under its coordinates, the start `chromStart + 1` on the
@@ -287,5 +286,109 @@ mod tests {
             listed(&["21\t-5\t10", "21\t99\t110"], ",fields=PC")[1],
             named("21:-4-10", "6.667")
         );
+    }
+
+    /// On GRCh37 `MT` and `chrMT` name the assembly's mitochondrial sequence
+    /// and `chrM` and `M` another one. A file that names the contig `M` is
+    /// read there for a record written `chrM` (the `chr` step of
+    /// `BaseVEP.pm:728-729`) and for none written `MT` or `chrMT`, which
+    /// `BaseVEP.pm:689-738` do not reach from either; the synonym `chrM` that
+    /// a cache's table gives `MT` reaches a file naming `chrM`, as the same
+    /// lines reach it. On GRCh38, and in a run without an assembly, the file
+    /// naming `M` is read for a record written `MT` as well.
+    #[test]
+    fn on_grch37_a_mitochondrial_record_reads_a_file_of_the_other_pair_through_a_synonym_alone() {
+        use vep_core::assembly::Assembly;
+        let dir = tempfile::tempdir().unwrap();
+        let named = |contig: &str| {
+            write_tabix_fixture(
+                dir.path(),
+                &format!("regions_{contig}_synthetic.bed.gz"),
+                &[format!("{contig}\t99\t110\tregion_1\t7")],
+                IndexSpec::standard(),
+            )
+        };
+        let reads = |file: &std::path::Path,
+                     assembly: Option<Assembly>,
+                     synonyms: &str,
+                     record: &str|
+         -> usize {
+            let sources = CustomSources::open(
+                vec![parse_custom(&format!("file={},format=bed", file.display())).unwrap()],
+                Arc::new(ChromosomeSynonyms::parse(synonyms)),
+                CustomRunOptions {
+                    assembly,
+                    ..CustomRunOptions::default()
+                },
+            )
+            .unwrap();
+            let mut batch = vec![InputVariant::new(
+                record.into(),
+                100,
+                100,
+                b"A".to_vec(),
+                b"G".to_vec(),
+            )];
+            sources.run_batch(&mut batch).unwrap();
+            batch[0]
+                .custom_annotations
+                .iter()
+                .map(|annotations| annotations.records.len())
+                .sum()
+        };
+        let grch37 = Some(Assembly::Grch37);
+        let named_m = named("M");
+        for (record, read) in [("MT", 0), ("chrMT", 0), ("chrM", 1), ("M", 1)] {
+            assert_eq!(reads(&named_m, grch37, "", record), read, "{record}");
+        }
+        for assembly in [Some(Assembly::Grch38), None] {
+            assert_eq!(reads(&named_m, assembly, "", "MT"), 1, "{assembly:?}");
+        }
+        let named_chr_m = named("chrM");
+        assert_eq!(reads(&named_chr_m, grch37, "", "MT"), 0);
+        assert_eq!(reads(&named_chr_m, grch37, "MT\tchrM\n", "MT"), 1);
+    }
+
+    /// A record written bare `M` is the one the resolver renames: a file that
+    /// names the contig `MT`, and neither `M` nor `chrM`, is asked for `MT`
+    /// (`Parser.pm:794-796`), with no synonym listed, on GRCh37 as on any
+    /// assembly. A record written `chrM` reaches no such file there.
+    #[test]
+    fn on_grch37_a_record_written_bare_m_reads_a_file_naming_mt_through_the_rename() {
+        use vep_core::assembly::Assembly;
+        let dir = tempfile::tempdir().unwrap();
+        let file = write_tabix_fixture(
+            dir.path(),
+            "regions_MT_synthetic.bed.gz",
+            &["MT\t99\t110\tregion_1\t7"],
+            IndexSpec::standard(),
+        );
+        let reads = |record: &str| -> usize {
+            let sources = CustomSources::open(
+                vec![parse_custom(&format!("file={},format=bed", file.display())).unwrap()],
+                Arc::default(),
+                CustomRunOptions {
+                    assembly: Some(Assembly::Grch37),
+                    ..CustomRunOptions::default()
+                },
+            )
+            .unwrap();
+            let mut batch = vec![InputVariant::new(
+                record.into(),
+                100,
+                100,
+                b"A".to_vec(),
+                b"G".to_vec(),
+            )];
+            sources.run_batch(&mut batch).unwrap();
+            batch[0]
+                .custom_annotations
+                .iter()
+                .map(|annotations| annotations.records.len())
+                .sum()
+        };
+        assert_eq!(reads("M"), 1);
+        assert_eq!(reads("chrM"), 0);
+        assert_eq!(reads("MT"), 1);
     }
 }

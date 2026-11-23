@@ -29,19 +29,34 @@ never opens, some named as a table in a directory the plugin does not read it fr
 values of a seed are the same under every spelling; `--plain-lines` writes the five-place
 decimals alone and nothing beside the eleven tables.
 
+`--whole-numbers` writes every number as a whole number below 2**31, drawn from the seed by
+a generator of its own, and nothing beside the eleven tables. Perl multiplies two whole
+numbers as integers while the product fits 64 bits (`perl_multiply`), so the product of
+MaxEntScan.pm:860 over such a table is exact where the same product in doubles has
+rounded once per factor. The two agree to the last place or the one before it, which
+`%.3f` shows only where a score sits at a rounding boundary: each 23-mer given to
+`--boundary-kmers` gets nine entries, one of them of sixteen digits, found by a seeded
+search so that its score prints one third decimal under Perl's arithmetic and the next
+one under doubles.
+
 The scoring functions are the plugin's (`score5` MaxEntScan.pm:665-696 and 764-797,
 `score3` :698-726 and 803-892), operation for operation: the consensus factor at
 positions 3 and 4 (5') or 18 and 19 (3') over the fixed background and consensus
-tables, the product of the table entries in the plugin's order, `log(x) / log(2)`, and
-`%.3f`. A score closer than 1e-9 to a `%.3f` rounding boundary could print differently
-under a one-unit difference in the last binary place between two engines, so
-`--check-kmers` refuses a fixture whose k-mers, or whose paired differences, sit there.
+tables, the product of the table entries in the plugin's order, multiplied and divided
+as Perl multiplies and divides the text of a line, `log(x) / log(2)`, and `%.3f`. A
+score closer than 1e-9 to a `%.3f` rounding boundary could print differently under a
+one-unit difference in the last binary place between two engines, so `--check-kmers`
+refuses a fixture whose k-mers, or whose paired differences, sit there.
 
 Usage:
     maxentscan_fixture_matrices.py --seed 1 --out <dir> [--force] [--plain-lines]
         writes the directory and prints a JSON summary (seed, line count and sha256 per
         table, size and sha256 per other file); an existing file is overwritten only
         under --force
+    maxentscan_fixture_matrices.py --seed 1 --out <dir> --whole-numbers
+            [--boundary-kmers <23-mer>...]
+        writes the directory with whole numbers, the named 23-mers at a rounding
+        boundary
     maxentscan_fixture_matrices.py --dir <dir> --score <kmer>...
         prints each 9-mer's score5 or 23-mer's score3 as `<kmer>\\t<%.3f>`
     maxentscan_fixture_matrices.py --dir <dir> --check-kmers <file>
@@ -56,7 +71,9 @@ import hashlib
 import json
 import math
 import random
+import re
 import sys
+from functools import reduce
 from pathlib import Path
 
 BASES = "ACGT"
@@ -102,6 +119,19 @@ OTHER_FILES = (
 )
 BOUNDARY_MARGIN = 1e-9
 _LOG2 = math.log(2)
+
+# The whole numbers `--whole-numbers` draws lie in [1, 2**WHOLE_NUMBER_BITS): the product
+# of two can pass 2**53, the last power of two below which every whole number is a double.
+WHOLE_NUMBER_BITS = 31
+_DOUBLE_INTEGERS = 2**53
+_IV_MIN, _UV_MAX = -(2**63), 2**64 - 1
+
+# A boundary k-mer's score lies within this many thousandths of zero, where a double of
+# the score is fine enough to tell two neighbouring doubles of the product apart, and
+# each of its two scores stands at least this far from the boundary between them, more
+# than the last place of a logarithm moves either.
+BOUNDARY_SPAN = 20
+BOUNDARY_CLEARANCE = 3e-17
 
 
 def hashseq(seq: str) -> int:
@@ -175,13 +205,193 @@ def other_files(seed: int) -> dict[str, bytes]:
     return files
 
 
-def write_directory(out: Path, seed: int, force: bool, plain_lines: bool = False) -> dict:
+class PointNumber(float):
+    """The number of a line written with a decimal point and no exponent, which Perl
+    multiplies as a double whatever its value."""
+
+
+def perl_number(text: str) -> int | float:
+    """The number Perl's arithmetic makes of the text of a table line, for the spellings
+    this tool writes: a whole number that fits 64 bits is an integer, and so is an
+    exponent spelling whose double is a whole number that fits them; a spelling with a
+    decimal point and no exponent is a `PointNumber`; any other is a double."""
+    text = text.strip(" \t\n\r\f\v")
+    if re.fullmatch(r"[+-]?[0-9]+", text):
+        value = int(text)
+        return value if _IV_MIN <= value <= _UV_MAX else float(text)
+    value = float(text)
+    if "e" not in text.lower():
+        return PointNumber(value)
+    if math.isfinite(value) and value == int(value) and _IV_MIN <= int(value) <= _UV_MAX:
+        return int(value)
+    return value
+
+
+def _whole(number: float) -> int | None:
+    """`number` as the integer Perl's multiply and divide read it as, or `None` where
+    they read a double: an integer, or a product or quotient in doubles that is a whole
+    number below 2**53."""
+    if isinstance(number, int):
+        return number
+    if isinstance(number, PointNumber) or not math.isfinite(number):
+        return None
+    if abs(number) < _DOUBLE_INTEGERS and number == int(number):
+        return int(number)
+    return None
+
+
+def perl_multiply(left: float, right: float) -> int | float:
+    """`left * right` as Perl computes it: the exact product of two integers where it fits
+    64 bits, signed or unsigned, else the product of the two doubles."""
+    whole_right = _whole(right)
+    whole_left = _whole(left) if whole_right is not None else None
+    if whole_left is not None and whole_right is not None:
+        product = whole_left * whole_right
+        if _IV_MIN <= product <= _UV_MAX:
+            return product
+    return float(left) * float(right)
+
+
+def perl_divide(left: float, right: float) -> int | float:
+    """`left / right` as Perl computes it: the exact quotient of two integers where the
+    dividend is past 2**53 and the divisor divides it, else the quotient of the two
+    doubles; a zero divisor raises `ZeroDivisionError`, where Perl dies."""
+    whole_right = _whole(right)
+    whole_left = _whole(left) if whole_right is not None else None
+    if whole_left is not None and whole_right is not None:
+        if whole_right == 0:
+            raise ZeroDivisionError("Illegal division by zero")
+        if (
+            abs(whole_left) >= abs(whole_right)
+            and abs(whole_left) > _DOUBLE_INTEGERS
+            and whole_left % whole_right == 0
+        ):
+            quotient = whole_left // whole_right
+            return quotient if quotient >= _IV_MIN else float(quotient)
+    return float(left) / float(right)
+
+
+def consensus_factor(seq: str) -> float:
+    """`score3_scoreconsensus` (MaxEntScan.pm:871-892) of a 23-mer: the factor of
+    positions 18 and 19."""
+    return (
+        ACCEPTOR_CONSENSUS_1[seq[18]]
+        * ACCEPTOR_CONSENSUS_2[seq[19]]
+        / (BACKGROUND[seq[18]] * BACKGROUND[seq[19]])
+    )
+
+
+def acceptor_lines(seq: str) -> list[tuple[str, int]]:
+    """The nine lines a 23-mer's `score3` reads, each as its file and its line index
+    (`score3_maxentscore`, MaxEntScan.pm:851-859)."""
+    rest = seq[0:18] + seq[20:23]
+    return [(f"splicemodels/{name}", hashseq(rest[part])) for name, _, part in ACCEPTOR_TABLES]
+
+
+def ratio_as_perl(sc: list[int | float]) -> int | float:
+    """The quotient of MaxEntScan.pm:860 over the nine entries, as Perl computes it."""
+    return perl_divide(reduce(perl_multiply, sc[:5]), reduce(perl_multiply, sc[5:]))
+
+
+def ratio_in_doubles(sc: list[int | float]) -> float:
+    """The quotient of MaxEntScan.pm:860 over the nine entries, every entry a double."""
+    d = [float(entry) for entry in sc]
+    return d[0] * d[1] * d[2] * d[3] * d[4] / (d[5] * d[6] * d[7] * d[8])
+
+
+def _log2_score(consensus: float, ratio: float) -> float:
+    """`log2($a * $c)` of MaxEntScan.pm:719 and 794-797."""
+    return math.log(float(perl_multiply(consensus, ratio))) / _LOG2
+
+
+def whole_number_lines(seed: int) -> dict[str, list[str]]:
+    """The eleven files with every number a whole number in [1, 2**WHOLE_NUMBER_BITS),
+    log-uniform, from a generator of its own; the 7-mers stand in the order `file_lines`
+    gives the seed."""
+    rng = random.Random(f"{seed}/whole numbers")
+    files = file_lines(seed)
+    for name, lines in files.items():
+        if name != SEQUENCES:
+            files[name] = [str(int(2 ** rng.uniform(0, WHOLE_NUMBER_BITS))) for _ in lines]
+    return files
+
+
+def boundary_entries(seed: int, kmer: str, fixed: dict[int, int]) -> list[int]:
+    """Nine whole numbers for the lines `kmer` reads, the entries of `fixed` kept at their
+    places, whose score prints one third decimal with the quotient of MaxEntScan.pm:860
+    computed as Perl computes it and the next one with it computed in doubles. The first
+    entry has sixteen digits, so that the score moves by less than its last place from one
+    candidate to the next; the four after it are small, so that Perl's product stays an
+    integer where the doubles have rounded; the last four are drawn at the size that
+    brings the score near zero."""
+    if 0 in fixed:
+        raise ValueError(f"{kmer}: another boundary k-mer already wrote its first entry")
+    consensus = consensus_factor(kmer)
+    rng = random.Random(f"{seed}/boundary/{kmer}")
+    drawn = [place for place in range(5, 9) if place not in fixed]
+    for _ in range(2000):
+        sc = [0] + [rng.randint(2, 9) for _ in range(4)] + [1] * 4
+        for place, value in fixed.items():
+            sc[place] = value
+        others = float(reduce(perl_multiply, sc[1:5]))
+        # The divisor that puts a first entry of about 2**52.5 at a score of zero, shared
+        # out over the entries of the divisor still to draw.
+        bits = math.log2(consensus * others) + 52.5 - math.log2(float(reduce(perl_multiply, sc[5:])))
+        for place in drawn:
+            sc[place] = max(1, int(2 ** (bits / len(drawn) + rng.uniform(-0.5, 0.5))))
+        divisor = float(reduce(perl_multiply, sc[5:]))
+        for step in range(-BOUNDARY_SPAN, BOUNDARY_SPAN):
+            boundary = (step + 0.5) / 1000.0
+            nearest = round(2.0**boundary * divisor / (consensus * others))
+            if nearest - 2 < _DOUBLE_INTEGERS // 2 or nearest + 2 >= _DOUBLE_INTEGERS:
+                continue
+            for first in range(nearest - 2, nearest + 3):
+                sc[0] = first
+                as_perl = _log2_score(consensus, ratio_as_perl(sc))
+                in_doubles = _log2_score(consensus, ratio_in_doubles(sc))
+                if (
+                    format_score(as_perl) != format_score(in_doubles)
+                    and abs(as_perl - boundary) > BOUNDARY_CLEARANCE
+                    and abs(in_doubles - boundary) > BOUNDARY_CLEARANCE
+                ):
+                    return list(sc)
+    raise ValueError(f"{kmer}: no entries found at a rounding boundary")
+
+
+def with_boundary_kmers(files: dict[str, list[str]], seed: int, kmers: list[str]) -> None:
+    """Rewrites, in `files`, the nine lines each 23-mer of `kmers` reads with its
+    `boundary_entries`; a line an earlier k-mer wrote keeps its number."""
+    written: dict[tuple[str, int], int] = {}
+    for kmer in kmers:
+        if len(kmer) != 23 or set(kmer) - set(BASES):
+            raise ValueError(f"a boundary k-mer is a 23-mer over ACGT, got {kmer!r}")
+        lines = acceptor_lines(kmer)
+        fixed = {place: written[line] for place, line in enumerate(lines) if line in written}
+        for line, value in zip(lines, boundary_entries(seed, kmer, fixed)):
+            written[line] = value
+            files[line[0]][line[1]] = str(value)
+
+
+def write_directory(
+    out: Path,
+    seed: int,
+    force: bool,
+    plain_lines: bool = False,
+    whole_numbers: bool = False,
+    boundary_kmers: list[str] | None = None,
+) -> dict:
     """Writes the directory under `out` and returns the summary: the seed, per table its line
     count and the sha256 of its bytes and, per other file, its size and sha256. Under
-    `plain_lines` every number is its five-place decimal and no other file is written. An
-    existing file stops the write unless `force`."""
-    files = file_lines(seed) if plain_lines else spelled_lines(seed)
-    others = {} if plain_lines else other_files(seed)
+    `plain_lines` every number is its five-place decimal and no other file is written;
+    under `whole_numbers` every number is a whole number, the 23-mers of `boundary_kmers`
+    read the entries `boundary_entries` finds, and no other file is written. An existing
+    file stops the write unless `force`."""
+    if whole_numbers:
+        files = whole_number_lines(seed)
+        with_boundary_kmers(files, seed, boundary_kmers or [])
+    else:
+        files = file_lines(seed) if plain_lines else spelled_lines(seed)
+    others = {} if plain_lines or whole_numbers else other_files(seed)
     if not force:
         present = [name for name in (*files, *others) if (out / name).exists()]
         if present:
@@ -230,7 +440,7 @@ class Tables:
         )
         rest = seq[0:3] + seq[5:9]
         table_score = self.me2x5[self.sequence_index[rest]]
-        return math.log(consensus * table_score) / _LOG2
+        return _log2_score(consensus, table_score)
 
     def score3(self, seq: str) -> float:
         """`score3` (MaxEntScan.pm:698-726) of a 23-mer: the consensus factor of positions
@@ -238,18 +448,18 @@ class Tables:
         seq = seq.upper()
         if len(seq) != 23:
             raise ValueError(f"score3 takes a 23-mer, got {seq!r}")
-        consensus = (
-            ACCEPTOR_CONSENSUS_1[seq[18]]
-            * ACCEPTOR_CONSENSUS_2[seq[19]]
-            / (BACKGROUND[seq[18]] * BACKGROUND[seq[19]])
-        )
-        rest = seq[0:18] + seq[20:23]
-        sc = [
-            table[hashseq(rest[part])]
-            for table, (_, _, part) in zip(self.acceptor, ACCEPTOR_TABLES)
+        return _log2_score(consensus_factor(seq), ratio_as_perl(self.entries(seq)))
+
+    def score3_in_doubles(self, seq: str) -> float:
+        """`score3` with the quotient of MaxEntScan.pm:860 computed in doubles."""
+        seq = seq.upper()
+        return _log2_score(consensus_factor(seq), ratio_in_doubles(self.entries(seq)))
+
+    def entries(self, seq: str) -> list[int | float]:
+        """The nine entries a 23-mer's `score3` reads, in the plugin's order."""
+        return [
+            table[line] for table, (_, line) in zip(self.acceptor, acceptor_lines(seq))
         ]
-        ratio = sc[0] * sc[1] * sc[2] * sc[3] * sc[4] / (sc[5] * sc[6] * sc[7] * sc[8])
-        return math.log(consensus * ratio) / _LOG2
 
     def score(self, kmer: str) -> float:
         """`score5` of a 9-mer, `score3` of a 23-mer."""
@@ -264,8 +474,8 @@ def _lines(path: Path) -> list[str]:
     return path.read_text(encoding="ascii").splitlines()
 
 
-def _numbers(path: Path) -> list[float]:
-    return [float(line) for line in _lines(path)]
+def _numbers(path: Path) -> list[int | float]:
+    return [perl_number(line) for line in _lines(path)]
 
 
 def format_score(score: float) -> str:
@@ -307,6 +517,17 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="write each number as its five-place decimal and no file beside the eleven tables",
     )
+    parser.add_argument(
+        "--whole-numbers",
+        action="store_true",
+        help="write each number as a whole number and no file beside the eleven tables",
+    )
+    parser.add_argument(
+        "--boundary-kmers",
+        nargs="+",
+        metavar="KMER",
+        help="23-mers whose entries --whole-numbers writes at a rounding boundary",
+    )
     parser.add_argument("--dir", type=Path, help="a written directory to score against")
     parser.add_argument("--score", nargs="+", metavar="KMER", help="k-mers to score")
     parser.add_argument("--check-kmers", type=Path, help="k-mers and pairs to check")
@@ -315,9 +536,20 @@ def main(argv: list[str] | None = None) -> int:
     if args.out is not None:
         if args.seed is None:
             parser.error("--out needs --seed")
+        if args.whole_numbers and args.plain_lines:
+            parser.error("--whole-numbers and --plain-lines name two spellings")
+        if args.boundary_kmers and not args.whole_numbers:
+            parser.error("--boundary-kmers needs --whole-numbers")
         try:
-            summary = write_directory(args.out, args.seed, args.force, args.plain_lines)
-        except FileExistsError as e:
+            summary = write_directory(
+                args.out,
+                args.seed,
+                args.force,
+                args.plain_lines,
+                args.whole_numbers,
+                args.boundary_kmers,
+            )
+        except (FileExistsError, ValueError) as e:
             print(f"ERROR: [maxentscan_fixture_matrices] {e}", file=sys.stderr)
             return 1
         json.dump(summary, sys.stdout, indent=1)

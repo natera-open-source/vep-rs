@@ -1,0 +1,2 @@
+WARN: ENST00000000001 differs between two shards of conflict
+[compare_storable_cache_versions] conflict: 2 shard files, 4 transcript records, 2 distinct transcripts, 2 shard-boundary duplicates, 1 conflicting duplicates

@@ -1,0 +1,2 @@
+#Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	IMPACT	DISTANCE	STRAND	FLAGS	FV_PHYLOP	FV_REVEL	FV_PHYLOP	FV_GNOMAD_GENE	FV_REVEL	FV_GNOMAD_GENE	FV_REVEL
+v1	21:1000	G	ENSG1	ENST1	Transcript	missense_variant	10	10	4	A/T	gcc/Acc	-	MODERATE	-	1	-	1	G|0.1	2	G|0.3	G|0.4	G|0.5	G|0.6

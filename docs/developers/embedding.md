@@ -13,11 +13,11 @@ annotator.
 
 ## Adding the crates
 
-The release workflow publishes the workspace's crates to crates.io when a
-maintainer publishes a release page, each under the release's version, so a
-release's version appears there minutes after its page. A program adds `vep-cli` from crates.io
-at a published version, or as a git dependency pinned to a release's tag, the
-form for a release crates.io does not carry:
+The `crates.io` workflow (`.github/workflows/crates-io.yml`) publishes the workspace's crates to
+crates.io when a maintainer publishes a release page, each under the release's version, so a
+release's version is there once a run of that workflow for the release has finished. A program adds
+`vep-cli` from crates.io at a published version, or as a git dependency pinned to a release's tag,
+the form for a release crates.io does not carry:
 
 ```toml
 [dependencies]
@@ -38,14 +38,21 @@ program therefore builds the same sources until its pin changes.
 `vep-cli` re-exports what the embedding path needs, so most programs add it
 alone. `vep-core`, `vep-io`, `vep-effects`, `vep-builtins`, `vep-plugin` and
 `vep-fasta` are added the same way, at the same version, when a program names
-one of their types directly.
+one of their types directly. What the version number promises of a crate is
+its documented part, the items its API documentation shows
+([Versioning and compatibility](../project/versioning.md#the-libraries)).
 
 ## The surface
 
-The surface is the list of `pub use` re-exports at the top of
-`crates/vep-cli/src/lib.rs`. A program that uses one of them is relying on this
-page; everything else in `vep_cli` is a module of the binary, reachable at its
-module path but not bound by this page.
+The surface is what the API documentation of `vep-cli` shows: the items
+re-exported at the root of the crate, the modules `annotator`, `argv`,
+`config`, `pick`, `row_filter`, `runner`, `transcript_index` and `vcf_parser`,
+and the types their signatures and public fields name. A program that uses one
+of them is relying on this page. An item the documentation does not show is
+the binary's own and may change in any release.
+
+The root of the crate re-exports these items (the `pub use` lines of
+`crates/vep-cli/src/lib.rs`):
 
 - From `vep_cli::annotator`:
   - `Annotator`: one loaded cache and its settings, built once and shared.
@@ -53,12 +60,17 @@ module path but not bound by this page.
     serve many threads without a wrapper of their own.
   - `AnnotationResources`, `PredictionConfig`, `build_thread_pool`: the parts
     an annotator is built from by hand, for a program that loads them itself.
+    `AnnotationResources::new` takes the transcript indexes and the effects
+    settings, and the program assigns the other public fields it sets.
   - `RawRow`, `validate_raw_row`, `row_to_input_variant`: the simple-allele
     input, one chromosome, 1-based position, reference and alternate allele
     per row.
   - `AnnotationError`, `AnnotationStats`: the per-row error and the counts an
     annotation returns.
-- From `vep_cli::config`: `Config`, the binary's resolved command line.
+- From `vep_cli::config`: `Config`, the binary's resolved command line, and
+  `resolve_fork`, the thread count a `--fork` value resolves to.
+- From `vep_cli::argv`: `prepass`, which reads the `--config` file, `vep.ini`
+  and the `VEP_*` variables into the command line `Config::from_argv` takes.
 - From `vep_cli::pick` and `vep_cli::row_filter`: `apply_to_batch`,
   `apply_to_record`, `FilterConfig`, `PickCriterion` and `RowFilters`, the
   `--pick` family and the `--coding_only` and `--no_intergenic` filters. The
@@ -66,6 +78,16 @@ module path but not bound by this page.
 - From `vep_cli::transcript_index`: `LazyTranscriptIndexes`,
   `MaterializedTranscriptIndexes`, `TranscriptSet`, the transcript indexes an
   annotator reads.
+- From `vep_cli::vcf_parser`: `parse_vcf_line` and `parse_vcf_line_with`, the
+  readers of a VCF data line.
+- From `vep_cli::runner`: `Runner`, the whole run of the `vep` binary, from
+  the input file to the output file.
+- `VariationSource` and `ColocationRules`, the variation files of a cache and
+  the flags that decide which known variants co-locate with a record, two of
+  the parts `AnnotationResources` holds.
+- `SourceType`, the transcript set a run selects, which a field of
+  `TranscriptSet` names, and `NearestType`, the identifier `--nearest`
+  reports, which a field of `Config` and of `AnnotationResources` names.
 - From `vep-core`: `InputVariant`, the record an annotation fills, and
   `Consequence`, `Impact`, `TranscriptConsequence`, the types of what it
   holds.
@@ -80,7 +102,7 @@ The path is the binary's own, without its reader and writer:
    binary does: the option sets, the refusals and the settings of every flag.
    It reads the flags as typed. The `--config` file, `vep.ini` and the `VEP_*`
    variables are read by the step the binary runs before it,
-   `vep_cli::argv::prepass`, a module path.
+   `vep_cli::prepass`.
 
    ```rust
    let config = Config::from_argv([
@@ -110,9 +132,9 @@ The path is the binary's own, without its reader and writer:
    For a whole VCF record a program builds the record's `InputVariant` values
    itself and calls `annotate_batch(&mut record)`, or `try_annotate_batch`
    for a result per allele. The reader the binary parses a data line with is
-   `vep_cli::vcf_parser::parse_vcf_line`, a module path. Beside it,
-   `parse_vcf_line_with` takes the run's own `--max_sv_size`, `--minimal` and
-   FASTA where the binary's differ from the defaults.
+   `vep_cli::parse_vcf_line`. Beside it, `parse_vcf_line_with` takes the run's
+   own `--max_sv_size`, `--minimal` and FASTA where the binary's differ from
+   the defaults.
 
 4. The output: `JsonOutputFormatter::new(options, plugin_fields, assembly)`
    writes a record as `vep --json` writes it.
@@ -181,9 +203,16 @@ such a stop base then reads otherwise than the binary reads it.
 The binary's notices (`INFO:` lines) are `tracing` events at the `INFO` level
 and its warnings `tracing` events at the `WARN` level. Both go to the
 subscriber the program installs. The warnings the binary writes to its
-warnings file without a `tracing` event go to standard error instead:
+warnings file without a `tracing` event go to standard error instead, each
+once:
 
 - the plugin loader's warnings
+- `Plugin '<name>' went wrong`: a shared-library plugin's failure on a row,
+  and a built-in plugin's failures on a batch, written as the batch ends
+- `Plugin '<name>' did not return a hashref, output ignored!`, for a
+  shared-library plugin's result that is no JSON object
+- the regulatory source's warnings: `--regulatory` on a cache that holds no
+  regulatory data, and those a `--regulatory_gff` file draws
 - the warning of `--check_existing` on a cache that holds no variation files
 - `Unable to assign consequence type`, the line `--summary` and
   `--most_severe` write for a record with no row
@@ -205,8 +234,9 @@ so the comparison proves the annotator and the formatter.
 
 ## Versioning
 
-While the version is 0.y.z, a release that changes any crate's public API,
-this surface included, raises the minor number; a patch release keeps every
-public item's name and signature. A pin moves between patch releases of one
-minor line without a code change; moving it across minor lines starts with
-the [Changelog](../changelog.md) page.
+The [Versioning and compatibility](../project/versioning.md) page says what
+the version number covers. Of the libraries it covers the documented part,
+this surface included. In a release whose major number is 1 or more, a change
+that breaks that part raises the major number, and the
+[Changelog](../changelog.md) page names each such change as a breaking change
+of the libraries.

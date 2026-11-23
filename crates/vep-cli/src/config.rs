@@ -3,8 +3,8 @@
 
 //! Resolved configuration for a VEP run.
 //!
-//! Takes parsed [`Args`] and applies defaults, Ensembl VEP's option sets and
-//! option rules ([`crate::option_rules`]), the error table of flags vep-rs
+//! Takes parsed `Args` and applies defaults, Ensembl VEP's option sets and
+//! option rules (`crate::option_rules`), the error table of flags vep-rs
 //! refuses or accepts without effect, and resolves directory paths. Every
 //! refusal is a [`CliError`], the one shape the binary prints before exiting 1.
 
@@ -22,16 +22,30 @@ use crate::input_shape::{CpuTopology, InputShape};
 use crate::nearest::NearestType;
 use crate::option_rules::{split_list_flag, FlagState, DEPRECATED, OWN_RULES};
 
-/// A refusal under the error contract: printed as one line on standard error,
-/// `ERROR: [<component>] <message>`, and the run exits 1. `<message>` is Ensembl
-/// VEP's text where it has one, without its own `ERROR: ` prefix.
+/// A refusal under the error contract: printed on standard error as
+/// `ERROR: [<component>] <message>`, on one line unless the message carries a
+/// second, and the run exits 1. `<message>` carries
+/// Ensembl VEP's text, without its own `ERROR: ` prefix, where vep-rs quotes
+/// that text, and is in vep-rs's own words elsewhere: for example, the
+/// `--af_exac` refusal of `ERROR_TABLE` names the flag to use, where Ensembl
+/// VEP reports an unexpected parameter. Two refusals carry Ensembl VEP's text
+/// in parentheses after vep-rs's own words, as `(Ensembl VEP: <text>)`: the
+/// `--lrg` refusal of `ERROR_TABLE` and the refusal of a GFF or GTF
+/// transcript source without a FASTA. Outside the companion tools, three
+/// refusals carry a second line, as Ensembl VEP's own messages do: a refused
+/// `--custom` string its `LINE: --custom <string>` where Ensembl VEP prints
+/// it, an unsupported `--regulatory_gff` key the supported keys, and a
+/// `--cell_type` name the cache's regulatory data lacks the cache's cell
+/// types.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct CliError {
     pub component: &'static str,
     pub message: String,
 }
 
 impl CliError {
+    #[doc(hidden)]
     pub fn new(component: &'static str, message: impl Into<String>) -> Self {
         CliError {
             component,
@@ -39,13 +53,15 @@ impl CliError {
         }
     }
 
-    /// A command-line refusal: an unsupported flag or an option-rule violation.
-    pub fn cli(message: impl Into<String>) -> Self {
+    /// A refusal under the `cli` component, whose row of [`COMPONENTS`] lists
+    /// what the component carries.
+    pub(crate) fn cli(message: impl Into<String>) -> Self {
         CliError::new("cli", message)
     }
 
     /// The line an error of the annotation run prints: a [`CliError`] as itself,
     /// any other failure under the `run` component with its cause chain.
+    #[doc(hidden)]
     pub fn from_run(error: &anyhow::Error) -> String {
         match error.downcast_ref::<CliError>() {
             Some(e) => e.to_string(),
@@ -66,9 +82,61 @@ impl std::error::Error for CliError {}
 /// words (exit 2; `--help` and `--version` arrive here too, exit 0), or a
 /// refusal under the error contract (exit 1).
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum ParseFailure {
-    Usage(Box<clap::Error>),
+    Usage(UsageError),
     Refused(CliError),
+}
+
+/// A command line the argument parser did not accept, or one that asks for the
+/// help or the version: the text the parser writes for it, which `Display`
+/// gives, and the way the `vep` binary ends on it.
+pub struct UsageError(Box<clap::Error>);
+
+impl UsageError {
+    /// Writes the text and ends the process, as the `vep` binary does: the
+    /// help or the version on standard output with status 0, any other text on
+    /// standard error with status 2, coloured or not as the parser reads the
+    /// stream it writes to.
+    pub fn exit(&self) -> ! {
+        self.0.exit()
+    }
+
+    /// The status [`UsageError::exit`] ends the process with: 0 for the help
+    /// or the version, 2 for a command line the parser did not accept.
+    pub fn exit_code(&self) -> i32 {
+        self.0.exit_code()
+    }
+
+    /// Whether the command line asked for the help or the version, whose text
+    /// goes to standard output.
+    pub fn is_help_or_version(&self) -> bool {
+        !self.0.use_stderr()
+    }
+
+    /// The parser's class of the error.
+    #[cfg(test)]
+    pub(crate) fn kind(&self) -> clap::error::ErrorKind {
+        self.0.kind()
+    }
+}
+
+impl fmt::Debug for UsageError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&self.0, f)
+    }
+}
+
+impl fmt::Display for UsageError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl std::error::Error for UsageError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.0.source()
+    }
 }
 
 impl fmt::Display for ParseFailure {
@@ -83,6 +151,7 @@ impl fmt::Display for ParseFailure {
 impl std::error::Error for ParseFailure {}
 
 /// How vep-rs treats a flag the error table governs.
+#[doc(hidden)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Treatment {
     /// The flag is refused with this message under this component.
@@ -90,21 +159,23 @@ pub enum Treatment {
         component: &'static str,
         message: &'static str,
     },
-    /// The flag parses and changes nothing, for this reason.
+    /// The flag parses and changes nothing but the command line the run
+    /// records, for this reason; `--debug` also prints one `INFO:` line.
     AcceptedWithoutEffect { reason: &'static str },
 }
 
 /// One row of the error table: a flag of Ensembl VEP's command line that vep-rs
 /// either refuses or accepts without effect, with what Ensembl VEP does with it.
+#[doc(hidden)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ErrorTableEntry {
     /// The long flag, without its dashes.
     pub flag: &'static str,
     /// Whether the parser declares the flag; a flag absent from Ensembl VEP
-    /// 116.2's `@VEP_PARAMS` is caught by a scan of the command line before parsing.
+    /// 116.3's `@VEP_PARAMS` is caught by a scan of the command line before parsing.
     pub declared: bool,
     pub treatment: Treatment,
-    /// What Ensembl VEP does with the flag, cited to its source at release/116.2.
+    /// What Ensembl VEP does with the flag, cited to its source at release/116.3.
     pub ensembl_vep: &'static str,
     /// Where the behaviour lives in vep-rs, or what to use instead.
     pub route: &'static str,
@@ -195,19 +266,14 @@ macro_rules! with_recipe {
     }};
 }
 
-const GFF_MESSAGE: &str = with_recipe!(
-    "--gff is not supported: Ensembl VEP reads a GFF3 as its transcript set through --custom file=<gff>,format=gff; "
-);
-const GTF_MESSAGE: &str = with_recipe!(
-    "--gtf is not supported: Ensembl VEP reads a GTF as its transcript set through --custom file=<gtf>,format=gtf; "
-);
 const BAM_MESSAGE: &str = with_recipe!(
-    "--bam is not supported: Ensembl VEP applies a BAM's alignments to RefSeq transcript models at run time; the RefSeq cache Ensembl distributes already carries those edits, which vep-rs reads from a converted homo_sapiens_refseq cache under --refseq; a GFF or GTF transcript set of your own is read without the BAM's edits; "
+    "--bam is not supported: Ensembl VEP applies a BAM's alignments to RefSeq transcript models at run time; the RefSeq cache Ensembl distributes already carries those edits, which vep-rs reads from a converted <species>_refseq cache under --refseq; a GFF or GTF transcript set of your own is read without the BAM's edits; "
 );
 
 /// The error table: every flag vep-rs refuses, declared or caught before parsing,
 /// and the flags accepted without effect whose rows it owns. Help text, the
 /// refusal and the CLI reference all read it.
+#[doc(hidden)]
 pub const ERROR_TABLE: &[ErrorTableEntry] = &[
     refused(
         "database",
@@ -298,22 +364,10 @@ pub const ERROR_TABLE: &[ErrorTableEntry] = &[
         route: "--af_gnomade",
     },
     refused(
-        "gff",
-        GFF_MESSAGE,
-        "Config.pm:260 (gff=s); the option set at :531-536 sets --custom file=%gff%,format=gff; AnnotationSource/File/GFF.pm:71-116 lists the feature types read",
-        "a cache built from the GFF3 by vep-cache-builder --gff3, read with --json_cache",
-    ),
-    refused(
-        "gtf",
-        GTF_MESSAGE,
-        "Config.pm:261 (gtf=s); the option set at :538-543 sets --custom file=%gtf%,format=gtf; AnnotationSource/File/GTF.pm:78-85 lists the feature types read",
-        "a cache built from the GTF by vep-cache-builder --gtf, read with --json_cache",
-    ),
-    refused(
         "bam",
         BAM_MESSAGE,
         "Config.pm:253 (bam=s); the option set at :573-579 switches on use_transcript_ref and bam_edited; AnnotationType/Transcript.pm:421-631 applies the alignments to each transcript as SeqEdits; CacheDir.pm:412-416 reads a BAM-edited cache's info",
-        "--refseq on a converted homo_sapiens_refseq cache, which carries the edits",
+        "--refseq on a converted <species>_refseq cache, which carries the edits",
     ),
     noop(
         "condel",
@@ -342,7 +396,7 @@ pub const ERROR_TABLE: &[ErrorTableEntry] = &[
     ),
     noop(
         "sereal",
-        "the cache's serialiser is read from its own metadata",
+        "vep-rs reads a cache's JSON shards, whatever serialiser its metadata names",
         "Config.pm:249; CacheDir.pm:147 takes the serialiser from the cache's info file",
     ),
     noop(
@@ -352,8 +406,8 @@ pub const ERROR_TABLE: &[ErrorTableEntry] = &[
     ),
     noop(
         "tmpdir",
-        "no module of Ensembl VEP reads it, and it places no file vep-rs writes",
-        "Config.pm:259 (tmpdir=s), default /tmp at :304, read by no module",
+        "no module of the ensembl-vep repository reads it; Ensembl VEP's FATHMM plugin, which vep-rs does not port, puts its input and output files there; it places no file vep-rs writes",
+        "Config.pm:259 (tmpdir=s), default /tmp at :304, read by no module of the ensembl-vep repository; FATHMM.pm:77, 108 of the `VEP_plugins` repository at release/116 read it, and :109-110 name the plugin's files under it",
     ),
     noop(
         "offline",
@@ -364,22 +418,24 @@ pub const ERROR_TABLE: &[ErrorTableEntry] = &[
 
 /// The value `--cache` carries when given without a directory
 /// ([`Args::cache`]'s `default_missing_value`).
-pub const CACHE_FLAG_ALONE: &str = "1";
+pub(crate) const CACHE_FLAG_ALONE: &str = "1";
 
-/// How a GFF or GTF transcript model is annotated against: the text a
-/// `--custom` string in `format=gff` or `format=gtf` transcript mode is
-/// refused with ([`vep_builtins::custom::GFF_GTF_RECIPE`]).
+/// How a GFF or GTF transcript model is annotated against without another
+/// cache: the route a run naming such a file is refused with when no cache
+/// stands where the run names one ([`vep_builtins::custom::GFF_GTF_RECIPE`]).
+#[doc(hidden)]
 pub const GFF_GTF_RECIPE: &str = vep_builtins::custom::GFF_GTF_RECIPE;
 
 /// The keys a `--regulatory_gff` string takes (`AnnotationSourceAdaptor.pm:77-81`
-/// at release/116.2), in the sorted order its error texts list them.
-pub const REGULATORY_GFF_KEYS: [&str; 3] = ["emars", "file", "motifs"];
+/// at release/116.3), in the sorted order its error texts list them.
+pub(crate) const REGULATORY_GFF_KEYS: [&str; 3] = ["emars", "file", "motifs"];
 
 /// The files `--regulatory_gff` names (`AnnotationSourceAdaptor.pm:227-262`):
 /// `key=value` pairs joined by commas, or a bare file name, which is `file`.
 /// Each file is a bgzip-compressed GFF with its tabix index. A value that is
-/// false in Perl (`0` or empty) names no file.
+/// false in Perl (`0` or empty) names no file, as in Ensembl VEP.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub struct RegulatoryGff {
     /// `file=`: the regulatory features.
     pub file: Option<String>,
@@ -397,7 +453,7 @@ impl RegulatoryGff {
     /// trailing comma is no part), is `key=value` with a non-empty value, every
     /// key is one of [`REGULATORY_GFF_KEYS`], and at least one value is true in
     /// Perl.
-    pub fn parse(spec: &str) -> Result<Self, CliError> {
+    pub(crate) fn parse(spec: &str) -> Result<Self, CliError> {
         if !spec.contains('=') {
             return Ok(Self {
                 file: Some(spec.to_string()),
@@ -452,7 +508,7 @@ impl RegulatoryGff {
 
     /// The files named, each with its key, in the order Ensembl VEP builds its
     /// sources (`AnnotationSourceAdaptor.pm:284-310`): `file`, `emars`, `motifs`.
-    pub fn sources(&self) -> impl Iterator<Item = (&'static str, &str)> {
+    pub(crate) fn sources(&self) -> impl Iterator<Item = (&'static str, &str)> {
         [
             ("file", self.file.as_deref()),
             ("emars", self.emars.as_deref()),
@@ -464,64 +520,67 @@ impl RegulatoryGff {
 }
 
 /// Environment variables vep-rs reads that Ensembl VEP has no counterpart for.
+#[doc(hidden)]
 pub const ENVIRONMENT: &[(&str, &str)] = &[(
     "VEP_FASTA_STORAGE",
-    "how the FASTA is held: `mmap` (default) maps the file and inflates a bgzipped one block by block as queries need them, `memory` reads it into RAM, a bgzipped one inflated whole; any other value is an error",
+    "how a FASTA is held: `mmap` (default; also written `map` or `mapped`) maps the file and inflates a bgzipped one block by block as queries need them, `memory` (also `mem`, `ram` or `owned`) reads it into RAM, a bgzipped one inflated whole. The value is read in any letter case. The variable holds for the reference of `vep` and `vep recode`, the FASTA files the AncestralAllele and LoFTEE plugins read and the genome `vep-cache-builder` reads. A value outside these spellings, an empty one included, is refused where such a file is opened, and in a plugin the refusal fails the plugin's load.",
 )];
 
 /// The components an `ERROR: [<component>]` line names, with their meaning.
+#[doc(hidden)]
 pub const COMPONENTS: &[(&str, &str)] = &[
     (
         "cli",
-        "an unsupported flag, or a combination the option rules refuse",
+        "an unsupported flag, a combination the option rules refuse, or a `--` and what follows it; a `--regulatory_gff` value that is malformed or names a remote URL, a missing file or a file without a usable tabix index; or a `--cell_type` name the cache's regulatory data lacks",
     ),
     (
         "input",
-        "the input: a file that does not exist, standard input without --format, a first data line of no known format, BCF input, CAid input (looked up in the Ensembl variation database, which vep-rs does not reach), an identifier list against a cache without variation files, a region, SPDI or HGVS input without --fasta, or a region input with --check_ref",
+        "the input: an input name that is empty or `0`, a file that does not exist, standard input without --format, an input with no data line or whose first data line is of no known format, a malformed BGZF block, a line longer than 64 MiB, a VCF `##fileformat` line whose version cannot be read or has a major number other than 4, an `--individual` or `--individual_zyg` sample the VCF header lacks, BCF input, CAid input (looked up in the Ensembl variation database, which vep-rs does not reach), an identifier list against a cache without variation files or without their column list, a region, SPDI or HGVS input in a run with no reference FASTA, or a region input with --check_ref",
     ),
     (
         "output",
-        "the output file or format, the warnings file or the skipped-variants file",
+        "the output file or format, the statistics report, the warnings file or the skipped-variants file; each file is tested before the first record is read, a pipe, a device and the default warnings file excepted",
     ),
     (
         "parquet",
-        "the Parquet writer: input out of chromosome and position order without --no_check_variants_order, or an output directory holding files vep-rs did not write",
+        "the Parquet writer: input out of chromosome and position order without --no_check_variants_order; a statistics report, warnings file or skipped-variants file named at the output path or inside the output directory; an output path that is a symbolic link or a file vep-rs did not write; an output directory holding a symbolic link or files vep-rs did not write; or a previous output that cannot be removed or replaced",
     ),
     (
         "plugin",
-        "a `--plugin` naming an Ensembl VEP plugin vep-rs does not provide, or a Perl module (a `.pm` file by path or under the plugins directories), with or without --safe; under --safe, a plugin that cannot be loaded or a plugins directory that does not exist",
+        "a `--plugin` naming an Ensembl VEP plugin vep-rs does not provide, or a Perl module (a file named by path that has the suffix `.pm` or opens with a `package` line, or a `.pm` file under the plugins directories), with or without --safe; under --safe, a plugin that cannot be loaded or a plugins directory that does not exist or is not a directory",
     ),
     (
         "cache",
-        "the cache: nothing resolves at the configured path, its layout or metadata is unusable, a transcript or regulatory shard cannot be read (a transcript an HGVS input names included), or a regulatory chromosome directory holds files but no shard, its assembly disagrees with --assembly or with its own directory name, or a variation file cannot be opened or read",
+        "the cache: nothing resolves at the configured path, `--species` names `homo_sapiens_refseq` or `homo_sapiens_merged`, the cache version has several assemblies and no --assembly names one, its layout or metadata is unusable, its checksum manifest refuses the cache or a file of it, it declares another transcript set than the flags select, it lacks the SIFT or PolyPhen predictions `--sift` or `--polyphen` asks for or the gnomAD exome frequencies `--af_gnomad` asks for, `--check_frequency` names no population or one its variation columns lack, a transcript or regulatory shard cannot be read (a transcript an HGVS input names included), a transcript record holds a value vep-rs refuses, a regulatory chromosome directory holds files but no shard, its `chr_synonyms.txt` or its binding matrices cannot be read, a `--regulatory_gff` file cannot be read after it is opened or holds a record that is refused, its assembly disagrees with --assembly or with its own directory name, or a variation file cannot be opened or read",
     ),
     (
         "fasta",
-        "the reference FASTA: the file or directory named cannot be read as an indexed FASTA, or a flag that reads it (`--hgvs`, `--hgvsg`, `--check_ref`, `--lookup_ref`, `--use_transcript_ref`, `--shift_3prime 1`) was given and none was named or found in the cache directory",
+        "the reference FASTA: the file or directory named, or the FASTA found in the cache directory, cannot be read as an indexed FASTA; an index the file lacks, its `.fai` or a BGZF file's `.gzi`, cannot be written beside it, because the lock file or the index cannot be written there, no `.fai` describes the file's layout, or a BGZF block of it cannot be read; a FASTA is opened while `VEP_FASTA_STORAGE` holds a value that names no storage mode; or none was named or found in the cache directory and a flag reads it (`--hgvs`, `--hgvsg`, `--check_ref`, `--lookup_ref`, `--use_transcript_ref`, `--shift_3prime 1`) or a BAM-edited cache switches `--use_transcript_ref` on",
     ),
     (
         "filter",
-        "a `--transcript_filter` Ensembl VEP would refuse, or whose regular expression is outside the supported dialect",
+        "a `--transcript_filter` Ensembl VEP would refuse, or whose regular expression is outside the supported dialect; or one of three that Ensembl VEP accepts: an `in` list that names a directory, a unit whose first word is `0` and whose second is no operator, or a field prefix that fits two of vep-rs's keys and at most one of Ensembl VEP's",
     ),
     (
         "check_svs",
-        "the `--check_svs` file: it is not a file, has no `.csi` or `.tbi` index beside it, or cannot be read",
+        "the `--check_svs` file: it is not a file, has no `.csi` or `.tbi` index beside it, its index cannot be read or is no tabix index, or the file cannot be read",
     ),
     (
         "custom",
-        "a `--custom` source: its string is malformed (Ensembl VEP's text), it names what vep-rs does not read (a remote URL, or a GFF or GTF source in transcript mode), or its file cannot be opened or read",
+        "a `--custom` source, or the source `--gff`, `--gtf`, `--bigwig`, `--phyloP` or `--phastCons` names: its string is malformed (Ensembl VEP's text), it names what vep-rs does not read (a remote URL, which the default `--ucsc_data_root` of `--phyloP` and `--phastCons` is), no file fits its `###CHR###` pattern, its file cannot be opened or read, or it is a GFF or GTF transcript source in a run where no cache stands at the configured path or that has no FASTA",
     ),
     (
         "config",
-        "the `--config` file, or a `vep.ini` that is a file, cannot be read; or a configuration value the parser accepts but the run cannot use, such as a `--distance` part that is not an integer",
+        "the `--config` file, a `vep.ini` that is a file, or the `--synonyms` file cannot be read; or a `--distance` or `--delimiter` value the parser accepts but the run cannot use, such as a `--distance` part that is not an integer",
     ),
     (
         "run",
-        "any other failure of the annotation run, with its cause chain",
+        "any other failure of the run, with its cause chain, whether the run annotates or prints its resolved settings and ends (`--resolved_config`)",
     ),
 ];
 
 /// The error table's entry for a flag, when it has one.
+#[doc(hidden)]
 pub fn error_table_entry(flag: &str) -> Option<&'static ErrorTableEntry> {
     ERROR_TABLE.iter().find(|e| e.flag == flag)
 }
@@ -529,10 +588,25 @@ pub fn error_table_entry(flag: &str) -> Option<&'static ErrorTableEntry> {
 /// The `--input_data` string the run reads in place of its input file: the
 /// flag's value when it is true in Perl (Runner.pm:818 reads it under `if`), so
 /// an empty string or `0` is no input data and the input file stands.
-pub fn input_data_for(args: &Args) -> Option<&str> {
+pub(crate) fn input_data_for(args: &Args) -> Option<&str> {
     args.input_data
         .as_deref()
         .filter(|data| !data.is_empty() && *data != "0")
+}
+
+/// The value of `--warning_file` when it is true in Perl (BaseVEP.pm:890
+/// `$file ||= ...`): an empty value or `0` names no file and the warnings go
+/// to the default file ([`warning_file_for`]), and `STDERR` is given back as
+/// written, which the sink reads as standard error. The `vep` binary has its
+/// run test a file the flag names before it reads its first record
+/// ([`crate::warnings::Sink::test_file_before_first_record`]); the default
+/// file is first met by the first warning, as Ensembl VEP's is
+/// (BaseVEP.pm:817 calls `warning_fh`, which opens the file at 894).
+#[doc(hidden)]
+pub fn named_warning_file(args: &Args) -> Option<&str> {
+    args.warning_file
+        .as_deref()
+        .filter(|file| crate::argv::truthy(file))
 }
 
 /// Where a command line's warnings go: `--warning_file` when its value is true
@@ -541,26 +615,150 @@ pub fn input_data_for(args: &Args) -> Option<&str> {
 /// (BaseVEP.pm:890 `$file ||= ($self->param('output_file') || 'vep')`, so an
 /// empty value or `0` names no file on either side); readable before the
 /// configuration is resolved, so the sink can take the warnings the resolution
-/// itself raises.
+/// itself raises. The name is the one a text output takes: a Parquet output
+/// makes its default name as [`warning_file_for_parsed`] does.
+#[doc(hidden)]
 pub fn warning_file_for(args: &Args) -> String {
-    match args
-        .warning_file
-        .as_deref()
-        .filter(|file| crate::argv::truthy(file))
-    {
+    warning_file_under(args, false)
+}
+
+/// Where a parsed command line's warnings go: [`warning_file_for`], with the
+/// default name of a Parquet output made from the output path without the
+/// separators and the `.` steps that end it (`default_names_stem`), so that
+/// the file stands beside the output directory. The output format is the one
+/// the option sets leave, as [`Config::from_parsed`] resolves it.
+#[doc(hidden)]
+pub fn warning_file_for_parsed(parsed: &ParsedArgs) -> String {
+    warning_file_under(&parsed.args, writes_parquet(parsed))
+}
+
+/// [`warning_file_for`] for an output that is Parquet or not. A Parquet path
+/// is read for truth in Perl as `default_names_stem` gives it, so `-o 0/`
+/// names `vep_warnings.txt` as `-o 0` does.
+fn warning_file_under(args: &Args, parquet: bool) -> String {
+    match named_warning_file(args) {
         Some(file) => file.to_string(),
         None => {
-            let output_file = match args.output_file.last().map(String::as_str) {
+            let output_file = match args.output_file.last() {
                 None => "variant_effect_output.txt",
-                Some(file) if crate::argv::truthy(file) => file,
-                Some(_) => "vep",
+                Some(file) => match default_names_stem(file, parquet) {
+                    stem if crate::argv::truthy(stem) => stem,
+                    _ => "vep",
+                },
             };
             crate::warnings::default_warning_file(output_file)
         }
     }
 }
 
+/// The name a run's default report and warnings file names are made from:
+/// `output_file`, the last `-o` value as the user spelled it, and for a
+/// Parquet output that value without the separators and the `.` steps that
+/// end it. A Parquet output is a directory, which `out.parquet/` and
+/// `out.parquet/.` name as `out.parquet` does, and a name made from either
+/// spelling as written would lie inside the directory, where the run refuses
+/// every file but the Parquet writer's (`file_in_the_parquet_output`). A
+/// value with no final name (`.`, `..`, a root) stands as spelled, and so
+/// does every value of a text output, whose names are Ensembl VEP's
+/// (BaseVEP.pm:890, BaseRunner.pm:254).
+pub(crate) fn default_names_stem(output_file: &str, parquet: bool) -> &str {
+    if !parquet || std::path::Path::new(output_file).file_name().is_none() {
+        return output_file;
+    }
+    let mut stem = output_file;
+    loop {
+        let unseparated = stem.trim_end_matches(std::path::is_separator);
+        let shorter = match unseparated.strip_suffix('.') {
+            Some(before) if before.ends_with(std::path::is_separator) => before,
+            _ => unseparated,
+        };
+        if shorter.len() == stem.len() {
+            return stem;
+        }
+        stem = shorter;
+    }
+}
+
+/// Whether a parsed command line writes Parquet: the output format the
+/// option sets leave, as [`Config::from_parsed`] resolves it.
+fn writes_parquet(parsed: &ParsedArgs) -> bool {
+    let mut state = parsed.state.clone();
+    if let Some(format) = state.scalar("output_format") {
+        let canonical = canonical_output_format(format);
+        state.set("output_format", &canonical);
+    }
+    state.apply_option_sets();
+    state.scalar("output_format") == Some("parquet")
+}
+
+/// The refusal of a file a Parquet run writes beside its output when the file
+/// is named at the output path or inside the output directory, `None` for a
+/// file outside both: `what` the file is, `flag` the flag that places it,
+/// `output_file` the output path as the run names it. A default name is made
+/// beside the directory (`default_names_stem`), so the file lies there when
+/// a flag or the caller's sink names it there, or when a symbolic link at
+/// its name or at the output path places it there. The publication of the
+/// output takes only what the Parquet writer wrote
+/// (`UnpublishedOutput::publish`), so the file would refuse the run's own
+/// output once every record is annotated.
+#[cfg(feature = "parquet")]
+pub(crate) fn file_in_the_parquet_output(
+    output: &vep_io::output::parquet::UnpublishedOutput,
+    output_file: &str,
+    what: &str,
+    path: &std::path::Path,
+    flag: &str,
+) -> Option<CliError> {
+    let file = path.display();
+    let message = if output.is_named_by(path) {
+        format!("{what} {file} is the output path itself; name another file with {flag}")
+    } else if output.holds(path) {
+        format!(
+            "{what} {file} lies inside the output directory {output_file}; name it outside that directory with {flag}"
+        )
+    } else {
+        return None;
+    };
+    Some(CliError::new("parquet", message))
+}
+
+/// The refusal of a warnings file that a Parquet run names at its output
+/// path or inside its output directory (`file_in_the_parquet_output`), read
+/// from a parsed command line before the line is resolved: `target` is where
+/// the run's warnings go. A warning creates that file, and the resolution of
+/// the command line and of the cache can raise one before the run tests its
+/// other files, so the binary makes this test before it gives the sink its
+/// target. It applies to a Parquet command line alone (`writes_parquet`).
+#[doc(hidden)]
+#[cfg(feature = "parquet")]
+pub fn warnings_file_in_the_parquet_output(
+    parsed: &ParsedArgs,
+    target: &crate::warnings::Target,
+) -> Option<CliError> {
+    let crate::warnings::Target::File(path) = target else {
+        return None;
+    };
+    if !writes_parquet(parsed) {
+        return None;
+    }
+    let output_file = parsed
+        .args
+        .output_file
+        .last()
+        .map_or("variant_effect_output.txt", String::as_str);
+    let output =
+        vep_io::output::parquet::UnpublishedOutput::beside(std::path::Path::new(output_file), "")?;
+    file_in_the_parquet_output(
+        &output,
+        output_file,
+        "warnings file",
+        path,
+        "--warning_file",
+    )
+}
+
 /// A parsed command line: the argument struct and the flag state clap saw.
+#[doc(hidden)]
 pub struct ParsedArgs {
     pub args: Args,
     pub state: FlagState,
@@ -594,6 +792,7 @@ impl ParsedArgs {
 /// `--version` wins over everything else on the line; then a flag the error
 /// table refuses before parsing is reported; then clap's own syntax errors; the
 /// result carries the arguments and the flag state the option rules act on.
+#[doc(hidden)]
 pub fn parse_command_line<I, T>(argv: I) -> Result<ParsedArgs, ParseFailure>
 where
     I: IntoIterator<Item = T>,
@@ -644,7 +843,7 @@ where
             return Err(ParseFailure::Refused(CliError::new(component, message)));
         }
     }
-    let usage = |error: clap::Error| ParseFailure::Usage(Box::new(error));
+    let usage = |error: clap::Error| ParseFailure::Usage(UsageError(Box::new(error)));
     let mut command = Args::command_with_error_table();
     command.build();
     let matches = command
@@ -672,6 +871,7 @@ where
 
 /// Fully resolved configuration for a VEP run.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 #[allow(dead_code)] // Many fields are parsed from CLI args but only consumed by specific code paths
 pub struct Config {
     pub input_file: String,
@@ -705,8 +905,10 @@ pub struct Config {
     /// Print the cache directory in the output headers as `[PATH]/<leaf>`.
     pub mask_header_cache_path: bool,
     /// Where the run's warnings go: the `--warning_file` value, else
-    /// `<output_file>_warnings.txt` with the output file as the user spelled it;
-    /// `stderr` in any case names standard error (BaseVEP.pm:878-897).
+    /// `<output_file>_warnings.txt` with the output file as the user spelled it,
+    /// a Parquet output without the separators and the `.` steps that end it
+    /// (`default_names_stem`); `stderr` in any case names standard error
+    /// (BaseVEP.pm:878-897).
     pub warning_file: String,
     pub skipped_variants_file: Option<String>,
 
@@ -726,7 +928,12 @@ pub struct Config {
     /// an error rather than a warning (Runner.pm:912-916, 929-953).
     pub safe: bool,
     pub cache_version: u32,
-    /// Print the cache's source versions and exit.
+    /// Print the cache's source versions and exit 0; the input is not read and
+    /// no output is opened. Before the print the run ends with exit 1 on a
+    /// transcript filter that does not compile, a prediction tool, gnomAD
+    /// column or `--freq_pop` population the cache lacks, a `--regulatory_gff`
+    /// or `--custom` file that cannot be opened, a malformed `--custom` value,
+    /// a warning its file cannot take and a named input file that is not there.
     pub show_cache_info: bool,
     pub fasta: Option<String>,
     /// A directory of FASTA files to pick the species' and assembly's from.
@@ -761,13 +968,13 @@ pub struct Config {
     /// Parquet outputs, carries its VCF line without consequences and omits it
     /// from the JSON output (`docs/intended-divergences.md`).
     pub max_sv_size: Option<u64>,
-    /// The annotator pool's threads, as `--fork` was given; [`Fork::resolve`]
+    /// The annotator pool's threads, as `--fork` was given; `Fork::resolve`
     /// turns `0` into a count once the input's shape and its inflater count are
     /// known.
     pub fork: Fork,
     /// BGZF decompression worker threads for a BGZF input in any format, as the
     /// flag was given (a plain gzip input decompresses on one thread);
-    /// [`resolve_decompression_threads`] turns it into a count once the input's
+    /// `resolve_decompression_threads` turns it into a count once the input's
     /// shape is known.
     pub decompression_threads: DecompressionThreads,
     /// BGZF deflate worker threads for `--compress_output bgzip`
@@ -780,7 +987,7 @@ pub struct Config {
     /// (`--prewarm_ahead`).
     pub prewarm_ahead: PrewarmAhead,
     /// Whether the reader thread gets a physical core of its own on a host
-    /// with hardware threads (`--reader_core`); [`reserve_reader_core`] decides
+    /// with hardware threads (`--reader_core`); `reserve_reader_core` decides
     /// once the input's record width is known.
     pub reader_core: ReaderCore,
     pub distance: (u64, u64),
@@ -804,7 +1011,7 @@ pub struct Config {
     /// line's own, and the flags of the `--config` file, `vep.ini` and the
     /// `VEP_*` variables that [`crate::argv::prepass`] laid out around them, plus
     /// a `--<flag>=<value>` for each switch a source set to a false value
-    /// ([`ParsedArgs::with_defined_off`]). A token that is not UTF-8 is held with
+    /// (`ParsedArgs::with_defined_off`). A token that is not UTF-8 is held with
     /// each invalid sequence replaced. The `## VEP command-line:` header line is
     /// rendered from this list.
     pub command_line: Vec<String>,
@@ -864,7 +1071,7 @@ pub struct Config {
     /// anything (Config.pm:761; a value of commas alone is an empty list, which
     /// `_is_flag_active` reads as unset, :905); `None` otherwise. The names are
     /// read from it against the cache's list once the cache is resolved
-    /// ([`split_cell_types`]), since an epigenome name may hold a comma.
+    /// (`split_cell_types`), since an epigenome name may hold a comma.
     /// Switches `regulatory` on through the option set (`:427-432`).
     pub cell_type: Option<String>,
     /// `--regulatory_gff` (`Config.pm:210`): the regulatory and motif GFF files
@@ -1036,7 +1243,7 @@ pub struct Config {
 /// The output format as the writers name it: `OutputFactory.pm:229-231` lower-cases
 /// the value and its `%FORMAT_MAP` (`:97-103`) reads `ensembl` as the default `vep`
 /// format.
-pub fn canonical_output_format(value: &str) -> String {
+pub(crate) fn canonical_output_format(value: &str) -> String {
     match value.to_ascii_lowercase().as_str() {
         "ensembl" => "vep".to_string(),
         lower => lower.to_string(),
@@ -1069,7 +1276,7 @@ fn gencode_primary_assembly_warnings(state: &FlagState) -> Vec<String> {
 
 /// `--var_synonyms` switches `check_existing` on when it is off, with the
 /// notice Ensembl VEP's runner prints as it does so (`Runner.pm:117-120` at
-/// release/116.2, a status message `--quiet` withholds); the notice is returned
+/// release/116.3, a status message `--quiet` withholds); the notice is returned
 /// when the flag was switched on here, `None` otherwise, for [`Config::notices`].
 /// The runner tests the flag with `defined`, so a `0` a configuration file or the
 /// environment set it to ([`ParsedArgs::with_defined_off`]) switches
@@ -1082,23 +1289,50 @@ fn var_synonyms_implies_check_existing(state: &mut FlagState) -> Option<&'static
     Some("INFO: Colocated variants will be provided when using --var_synonyms")
 }
 
+/// `--debug` lists nothing in vep-rs. Ensembl VEP reads the flag to print each
+/// plugins directory it adds to its search path and the file each plugin
+/// module is loaded from (`Runner.pm:920, 941` at release/116.3); the notice
+/// that says so is returned while the flag is active, for [`Config::notices`].
+fn debug_lists_nothing(state: &FlagState) -> Option<&'static str> {
+    state.is_active("debug").then_some(
+        "INFO: --debug lists no plugin directories or plugin files, the two things Ensembl VEP prints under it",
+    )
+}
+
 /// The remote root `--phyloP` and `--phastCons` read their bigWigs from by
 /// default (`Config.pm:314`) is refused: the sources are read from a local
-/// copy of the same layout, or named through `--custom`.
+/// copy of the same layout, or named through `--custom`. The refusal names
+/// each shortcut the command line gives and the layout of the file that
+/// shortcut reads (`Config.pm:555` and `Config.pm:562`), `--phyloP` first.
 fn check_ucsc_data_root(state: &FlagState) -> Result<(), CliError> {
-    let shortcut_given = state.is_active("phyloP") || state.is_active("phastCons");
     let remote_root = state
         .scalar("ucsc_data_root")
         .is_some_and(vep_builtins::custom::grammar::is_remote);
-    if shortcut_given && remote_root {
-        return Err(CliError::new(
-            "custom",
-            "--ucsc_data_root must name a local directory laid out as \
-             <root>/<assembly>/phyloP<N>way/<assembly>.phyloP<N>way.bw; the same source is \
-             --custom file=<local>.bw,format=bigwig,type=exact",
-        ));
+    if !remote_root {
+        return Ok(());
     }
-    Ok(())
+    let layout =
+        |track: &str| format!("<root>/<assembly>/{track}<N>way/<assembly>.{track}<N>way.bw");
+    let custom_form = "--custom file=<local>.bw,format=bigwig,type=exact";
+    let one = |shortcut: &str, track: &str| {
+        format!(
+            "{shortcut} needs --ucsc_data_root to name a local directory laid out as {}; the \
+             same source is {custom_form}",
+            layout(track)
+        )
+    };
+    let message = match (state.is_active("phyloP"), state.is_active("phastCons")) {
+        (false, false) => return Ok(()),
+        (true, false) => one("--phyloP", "phyloP"),
+        (false, true) => one("--phastCons", "phastCons"),
+        (true, true) => format!(
+            "--phyloP and --phastCons need --ucsc_data_root to name a local directory laid out \
+             as {} and {}; each is the same source as {custom_form}",
+            layout("phyloP"),
+            layout("phastCons")
+        ),
+    };
+    Err(CliError::new("custom", message))
 }
 
 /// The `--custom` strings the state holds after the option sets, the ones the
@@ -1147,6 +1381,7 @@ impl Config {
     /// Resolves a parsed command line: the error table's refusals first, then
     /// Ensembl VEP's option sets and option rules on the flag state
     /// (`Config.pm:766-769`), then vep-rs's own rules, then the configuration.
+    #[doc(hidden)]
     pub fn from_parsed(parsed: ParsedArgs) -> Result<Self, CliError> {
         let ParsedArgs {
             args,
@@ -1200,9 +1435,10 @@ impl Config {
         // its error alone.
         let notices = var_synonyms_implies_check_existing(&mut state)
             .into_iter()
+            .chain(debug_lists_nothing(&state))
             .collect();
         // Parsed apart from `resolve`, which cannot fail: a value false in Perl
-        // names no file, and any other value must parse.
+        // names no file, as in Ensembl VEP, and any other value must parse.
         let regulatory_gff = state
             .scalar("regulatory_gff")
             .filter(|value| crate::argv::truthy(value))
@@ -1218,9 +1454,18 @@ impl Config {
     /// The root the statistics report files are named from
     /// (`BaseRunner.pm:254`): `--stats_file` when its value is true in Perl, else
     /// `<output>_summary` on the output file as the command line spelled it, so
-    /// `-o stdout` names `stdout_summary` in the working directory.
-    pub fn stats_file_root(&self) -> String {
-        crate::stats::stats_file_root(self.stats_file.as_deref(), &self.output_file_as_spelled)
+    /// `-o stdout` names `stdout_summary` in the working directory. A Parquet
+    /// output is taken without the separators and the `.` steps that end it
+    /// (`default_names_stem`), so `-o out.parquet/` names `out.parquet_summary`
+    /// beside the directory.
+    pub(crate) fn stats_file_root(&self) -> String {
+        crate::stats::stats_file_root(
+            self.stats_file.as_deref(),
+            default_names_stem(
+                &self.output_file_as_spelled,
+                self.output_format == "parquet",
+            ),
+        )
     }
 
     /// Whether the input is standard input: `-i` names `STDIN` in any letter
@@ -1228,7 +1473,7 @@ impl Config {
     /// spelling given, which the statistics report's `Input file` row
     /// (Stats.pm:652) and the skipped-variants file (BaseRunner.pm:371-372)
     /// print.
-    pub fn reads_stdin(&self) -> bool {
+    pub(crate) fn reads_stdin(&self) -> bool {
         self.input_file.eq_ignore_ascii_case("STDIN")
     }
 
@@ -1252,7 +1497,7 @@ impl Config {
             .last()
             .cloned()
             .unwrap_or_else(|| "variant_effect_output.txt".to_string());
-        let warning_file = warning_file_for(&args);
+        let warning_file = warning_file_under(&args, output_format == "parquet");
         let output_file = if output_file_as_spelled.eq_ignore_ascii_case("STDOUT") {
             "STDOUT".to_string()
         } else {
@@ -1262,7 +1507,7 @@ impl Config {
         let dir = expand_tilde(&args.dir);
         // A directory given to --cache stands for --dir_cache when that flag is
         // absent (Config.pm:716-718); any other value of --cache only switches it on.
-        // The bare flag's stand-in value is never a directory: Perl's bare `cache:s`
+        // The bare flag's stand-in value is never a directory: Ensembl VEP's bare `cache:s`
         // is the empty string.
         let cache_dir_value = args
             .cache
@@ -1297,7 +1542,7 @@ impl Config {
         // `shift_hgvs` is a setting only as 0 or 1 (BaseRunner.pm:498), and 0 sets
         // `shift_3prime` to 0 whatever the command line passes (Runner.pm:792-795).
         // Every reader of `shift_3prime` and `shift_genomic` tests the value for
-        // truth (AnnotationType/Transcript.pm:162, OutputFactory.pm:1349, 1992), so
+        // truth (AnnotationType/Transcript.pm:162, OutputFactory.pm:1349, 2001), so
         // any integer but 0 is on.
         let shift_hgvs = args.shift_hgvs.as_deref() != Some("0");
         let is_on = |value: Option<i64>| value.is_some_and(|number| number != 0);
@@ -1484,15 +1729,200 @@ impl Config {
     }
 }
 
-/// Cap for the `0` rule of `--decompression_threads`, the default: decompression
-/// throughput plateaus between 4 and 10 threads and is flat past that, so the
-/// rule stops at 10 rather than oversubscribing large hosts.
+impl Default for Config {
+    /// The configuration [`Config::from_argv`] resolves from a command line
+    /// that gives no flag, with nothing read from the host. Four fields hold a
+    /// fixed value where the resolution of a command line reads the machine:
+    /// `dir` and `dir_cache` hold `~/.vep` with the `~` unexpanded,
+    /// `dir_plugins` holds the pattern `~/.vep/Plugins` with no match listed,
+    /// and `compression_threads` holds the count the `0` rule gives on a host
+    /// that reports no processor count.
+    fn default() -> Self {
+        let output_file = "variant_effect_output.txt";
+        Config {
+            input_file: "STDIN".to_string(),
+            input_data: None,
+            format: "guess".to_string(),
+            delimiter: Delimiter::Tab,
+            output_file: output_file.to_string(),
+            output_file_as_spelled: output_file.to_string(),
+            output_format: "vep".to_string(),
+            compress_output: None,
+            parquet_partition: None,
+            force_overwrite: false,
+            no_headers: false,
+            terms: Vocabulary::So,
+            no_escape: false,
+            mask_header_cache_path: false,
+            warning_file: crate::warnings::default_warning_file(output_file),
+            skipped_variants_file: None,
+            cache: false,
+            offline: false,
+            dir: crate::argv::DEFAULT_DIR.to_string(),
+            dir_cache: crate::argv::DEFAULT_DIR.to_string(),
+            dir_plugins: PluginDirs {
+                pattern: format!("{}/Plugins", crate::argv::DEFAULT_DIR),
+                dirs: Vec::new(),
+                not_found: Vec::new(),
+            },
+            safe: false,
+            cache_version: vep_core::VEP_VERSION,
+            show_cache_info: false,
+            fasta: None,
+            fasta_dir: None,
+            no_fasta: false,
+            synonyms: None,
+            shift_3prime: false,
+            shift_hgvs: true,
+            shift_genomic: false,
+            shift_length: false,
+            species: "homo_sapiens".to_string(),
+            assembly: None,
+            buffer_size: 5000,
+            max_sv_size: Some(vep_core::sv_record::DEFAULT_MAX_SV_SIZE),
+            fork: Fork::Auto,
+            decompression_threads: DECOMPRESSION_THREADS_DEFAULT,
+            compression_threads: resolve_compression_threads_on(0, None),
+            parse_threads: None,
+            prewarm_ahead: PREWARM_AHEAD_DEFAULT,
+            reader_core: ReaderCore::Auto,
+            distance: (5000, 5000),
+            pipeline_mode: PipelineMode::Streaming,
+            pipeline_depth: crate::pipeline::PIPELINE_DEPTH,
+            render_task_records: None,
+            writer_strategy: WriterStrategy::Buffered,
+            output_buffer_size: crate::runner::OUTPUT_BUFFER_BYTES,
+            resolved_config: false,
+            command_line: Vec::new(),
+            everything: false,
+            symbol: false,
+            biotype: false,
+            canonical: false,
+            mane: false,
+            mane_select: false,
+            mane_plus_clinical: false,
+            tsl: false,
+            appris: false,
+            ccds: false,
+            protein: false,
+            protein_version: false,
+            uniprot: false,
+            xref_refseq: false,
+            transcript_version: false,
+            gene_version: false,
+            hgvs: false,
+            hgvsg: false,
+            hgvsg_use_accession: false,
+            spdi: false,
+            spdi_on_the_cache_name: false,
+            ga4gh_vrs: false,
+            hgvsp_use_prediction: false,
+            remove_hgvsp_version: false,
+            sift: None,
+            polyphen: None,
+            humdiv: false,
+            numbers: false,
+            domains: false,
+            regulatory: false,
+            cell_type: None,
+            regulatory_gff: None,
+            extended_promoters: false,
+            variant_class: false,
+            overlaps: false,
+            nearest: None,
+            af: false,
+            af_1kg: false,
+            af_gnomade: false,
+            af_gnomad: false,
+            af_gnomadg: false,
+            max_af: false,
+            pubmed: false,
+            old_maf: false,
+            check_frequency: false,
+            freq_pop: "1KG_ALL".to_string(),
+            freq_freq: 0.01,
+            freq_gt_lt: "gt".to_string(),
+            freq_filter: "exclude".to_string(),
+            gene_phenotype: false,
+            mirna: false,
+            check_existing: false,
+            no_check_alleles: false,
+            exclude_null_alleles: false,
+            failed: 0,
+            clin_sig_allele: true,
+            clinvar_somatic_classification: false,
+            var_synonyms: false,
+            check_svs: None,
+            coding_only: false,
+            no_intergenic: false,
+            pick: false,
+            pick_allele: false,
+            per_gene: false,
+            pick_allele_gene: false,
+            most_severe: false,
+            summary: false,
+            flag_pick: false,
+            flag_pick_allele: false,
+            flag_pick_allele_gene: false,
+            pick_order: None,
+            transcript_filter: Vec::new(),
+            allele_number: false,
+            show_ref_allele: false,
+            uploaded_allele: false,
+            ambiguity: false,
+            minimal: false,
+            total_length: false,
+            no_stats: false,
+            stats_file: None,
+            stats_text: false,
+            stats_html: true,
+            verbose: false,
+            quiet: false,
+            no_progress: false,
+            notices: Vec::new(),
+            plugin: Vec::new(),
+            custom: Vec::new(),
+            custom_multi_allelic: false,
+            custom_suppress_filter: false,
+            refseq: false,
+            merged: false,
+            all_refseq: false,
+            gencode_basic: false,
+            gencode_primary: false,
+            flag_gencode_primary: false,
+            vcf_info_field: "CSQ".to_string(),
+            keep_csq: false,
+            json_cache: None,
+            fields: None,
+            dont_skip: false,
+            allow_non_variant: false,
+            individual: None,
+            individual_zyg: None,
+            process_ref_homs: false,
+            no_check_variants_order: false,
+            chr: None,
+            check_ref: false,
+            lookup_ref: false,
+            use_transcript_ref: false,
+            use_given_ref: false,
+            bam_edited: false,
+        }
+    }
+}
+
+/// Cap for the `0` rule of `--decompression_threads`, the default on a host
+/// that is not aarch64 and the rule `auto` applies to an input that is not
+/// inflate-bound: decompression throughput plateaus between 4 and 10 threads
+/// and is flat past that, so the rule stops at 10 rather than oversubscribing
+/// large hosts.
+#[doc(hidden)]
 pub const DECOMPRESSION_THREADS_AUTO_CAP: usize = 10;
 
 /// Auto-detect cap for `--fork=0`. One reader thread turns the input into
 /// batches and hands them out, so the wall time stops falling past about 32
 /// workers and rises on wider hosts, where the extra workers wait at the batch
 /// barrier and contend for the allocator. User-supplied values are not capped.
+#[doc(hidden)]
 pub const FORK_AUTO_CAP: usize = 32;
 
 /// Resolve the --fork value. `0` means "auto": use the number of available
@@ -1500,7 +1930,7 @@ pub const FORK_AUTO_CAP: usize = 32;
 /// as-is so users can still pin the worker count explicitly.
 ///
 /// The host's rule alone: a run that knows its input's shape resolves `0`
-/// through [`Fork::resolve`], which lowers the count on an inflate-bound
+/// through `Fork::resolve`, which lowers the count on an inflate-bound
 /// input. Public so an embedding consumer of this crate can apply the same
 /// auto-detect default without going through the full `Config::from_argv`
 /// pipeline.
@@ -1511,8 +1941,9 @@ pub fn resolve_fork(raw: usize) -> usize {
 /// The `--fork` value: `0` and an absent flag are `Auto`, resolved from the
 /// host and the input's shape; a positive count is kept as given.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum Fork {
-    /// `0`: [`resolve_fork_auto`]'s rule.
+    /// `0`: `resolve_fork_auto`'s rule.
     #[default]
     Auto,
     /// A positive count, uncapped.
@@ -1521,7 +1952,7 @@ pub enum Fork {
 
 impl Fork {
     /// The flag's value: `0` is `Auto`.
-    pub fn from_raw(raw: usize) -> Self {
+    pub(crate) fn from_raw(raw: usize) -> Self {
         if raw == 0 {
             Fork::Auto
         } else {
@@ -1532,7 +1963,7 @@ impl Fork {
     /// The annotator count for a run over an input of `shape`, read by
     /// `inflaters` block-inflating threads (0 when the input is inflated on the
     /// reader's own thread or not at all), on this host.
-    pub fn resolve(self, shape: &InputShape, inflaters: usize) -> usize {
+    pub(crate) fn resolve(self, shape: &InputShape, inflaters: usize) -> usize {
         match self {
             Fork::Fixed(count) => count,
             Fork::Auto => resolve_fork_auto(shape, inflaters, fork_host_parallelism()),
@@ -1541,7 +1972,7 @@ impl Fork {
 
     /// The annotator count without an input shape, the one an embedding
     /// consumer gets ([`resolve_fork`]).
-    pub fn host_count(self) -> usize {
+    pub(crate) fn host_count(self) -> usize {
         self.resolve(&InputShape::Unknown, 0)
     }
 }
@@ -1560,6 +1991,7 @@ fn fork_host_parallelism() -> usize {
 /// wide as its CPUs ([`INFLATE_BOUND_INFLATERS`] on a 32-CPU aarch64 host),
 /// where the inflaters leave nothing and one annotator would carry the whole
 /// file.
+#[doc(hidden)]
 pub fn resolve_fork_auto(
     shape: &InputShape,
     inflaters: usize,
@@ -1575,12 +2007,13 @@ pub fn resolve_fork_auto(
 
 /// An input whose records inflate to at least this many bytes is bound by
 /// inflation rather than annotation; a wider inflater pool only pays there.
+#[doc(hidden)]
 pub const INFLATE_BOUND_BYTES_PER_RECORD: u64 = 8_000;
 
 /// Whether `shape` is an indexed input whose records inflate to at least
 /// [`INFLATE_BOUND_BYTES_PER_RECORD`] bytes, the shape the `auto` rules of
 /// `--decompression_threads` and `--fork` act on.
-pub fn is_inflate_bound(shape: &InputShape) -> bool {
+pub(crate) fn is_inflate_bound(shape: &InputShape) -> bool {
     matches!(
         shape,
         InputShape::Indexed {
@@ -1591,26 +2024,29 @@ pub fn is_inflate_bound(shape: &InputShape) -> bool {
 }
 
 /// Inflaters for an input bound by inflation on an aarch64 host, before the
-/// host's parallelism caps them: the count past which such an input stopped
-/// gaining.
+/// host's parallelism caps them: the count past which such an input gains
+/// nothing.
+#[doc(hidden)]
 #[cfg(target_arch = "aarch64")]
 pub const INFLATE_BOUND_INFLATERS: usize = 32;
 
 /// Inflaters for an input bound by inflation on any other architecture: on
-/// x86_64 no count above the `0` rule's cap read such an input faster, so the
+/// x86_64 no count above the `0` rule's cap reads such an input faster, so the
 /// `auto` rule keeps that cap there.
+#[doc(hidden)]
 #[cfg(not(target_arch = "aarch64"))]
 pub const INFLATE_BOUND_INFLATERS: usize = DECOMPRESSION_THREADS_AUTO_CAP;
 
 /// The `--decompression_threads` value: the form the flag was given in, resolved
 /// to a count once the input's shape is known.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum DecompressionThreads {
     /// `0`: the host's available parallelism, capped at
-    /// [`DECOMPRESSION_THREADS_AUTO_CAP`].
+    /// `DECOMPRESSION_THREADS_AUTO_CAP`.
     HostCapped,
     /// `auto`: the count the input's shape asks for
-    /// ([`resolve_decompression_threads_auto`]).
+    /// (`resolve_decompression_threads_auto`).
     Auto,
     /// A positive count, lowered to the host's available parallelism.
     Fixed(usize),
@@ -1621,15 +2057,16 @@ pub enum DecompressionThreads {
 /// any other, where [`INFLATE_BOUND_INFLATERS`] is the `0` rule's cap, so `auto`
 /// would read the input's shape to resolve the same count.
 #[cfg(target_arch = "aarch64")]
-pub const DECOMPRESSION_THREADS_DEFAULT: DecompressionThreads = DecompressionThreads::Auto;
+pub(crate) const DECOMPRESSION_THREADS_DEFAULT: DecompressionThreads = DecompressionThreads::Auto;
 
 /// The value an absent `--decompression_threads` takes on a host that is not
 /// aarch64: the `0` rule.
 #[cfg(not(target_arch = "aarch64"))]
-pub const DECOMPRESSION_THREADS_DEFAULT: DecompressionThreads = DecompressionThreads::HostCapped;
+pub(crate) const DECOMPRESSION_THREADS_DEFAULT: DecompressionThreads =
+    DecompressionThreads::HostCapped;
 
 impl Default for DecompressionThreads {
-    /// [`DECOMPRESSION_THREADS_DEFAULT`].
+    /// `DECOMPRESSION_THREADS_DEFAULT`.
     fn default() -> Self {
         DECOMPRESSION_THREADS_DEFAULT
     }
@@ -1670,7 +2107,7 @@ impl fmt::Display for DecompressionThreads {
 
 /// The `--decompression_threads` text, validated as [`DecompressionThreads`]
 /// parses it; the command-line parser's value parser.
-pub fn decompression_threads_text(text: &str) -> Result<String, String> {
+pub(crate) fn decompression_threads_text(text: &str) -> Result<String, String> {
     text.parse::<DecompressionThreads>()
         .map(|_| text.to_string())
 }
@@ -1680,12 +2117,14 @@ pub fn decompression_threads_text(text: &str) -> Result<String, String> {
 const UNREPORTED_HOST_CPUS: usize = 4;
 
 /// The host's logical CPU count, `None` when the host does not report one.
+#[doc(hidden)]
 pub fn reported_parallelism() -> Option<usize> {
     std::thread::available_parallelism().ok().map(|n| n.get())
 }
 
 /// The host's logical CPUs as the decompression rules read them:
 /// `UNREPORTED_HOST_CPUS` when the host does not report a count.
+#[doc(hidden)]
 pub fn host_parallelism() -> usize {
     reported_parallelism().unwrap_or(UNREPORTED_HOST_CPUS)
 }
@@ -1698,7 +2137,10 @@ pub fn host_parallelism() -> usize {
 /// else kept as given; `0` as the host's CPUs capped at
 /// [`DECOMPRESSION_THREADS_AUTO_CAP`]; `auto` by
 /// [`resolve_decompression_threads_auto`].
-pub fn resolve_decompression_threads(value: DecompressionThreads, shape: &InputShape) -> usize {
+pub(crate) fn resolve_decompression_threads(
+    value: DecompressionThreads,
+    shape: &InputShape,
+) -> usize {
     resolve_decompression_threads_on(value, shape, reported_parallelism())
 }
 
@@ -1721,7 +2163,7 @@ fn resolve_decompression_threads_on(
 /// [`INFLATE_BOUND_BYTES_PER_RECORD`] bytes gets [`INFLATE_BOUND_INFLATERS`]
 /// inflaters, capped at `available_parallelism`; any other shape gets the `0`
 /// rule, `available_parallelism` capped at [`DECOMPRESSION_THREADS_AUTO_CAP`].
-pub fn resolve_decompression_threads_auto(
+pub(crate) fn resolve_decompression_threads_auto(
     shape: &InputShape,
     available_parallelism: usize,
 ) -> usize {
@@ -1737,6 +2179,7 @@ pub fn resolve_decompression_threads_auto(
 /// time stops falling once about sixteen workers keep pace with the annotators'
 /// output on a wide host, so the rule stops there rather than starting a deflate
 /// thread per CPU.
+#[doc(hidden)]
 pub const COMPRESSION_THREADS_AUTO_CAP: usize = 16;
 
 /// Resolve the `--compression_threads` value: `0` is the host's available
@@ -1744,7 +2187,7 @@ pub const COMPRESSION_THREADS_AUTO_CAP: usize = 16;
 /// lowered to the host's CPUs when the host reports them (a worker beyond them
 /// deflates nothing more), else kept as given. One is the single-threaded
 /// encoder on the writing thread.
-pub fn resolve_compression_threads(raw: usize) -> usize {
+pub(crate) fn resolve_compression_threads(raw: usize) -> usize {
     resolve_compression_threads_on(raw, reported_parallelism())
 }
 
@@ -1763,8 +2206,9 @@ fn resolve_compression_threads_on(raw: usize, reported: Option<usize>) -> usize 
 /// the inflated input text, is given a physical core no other thread of the
 /// run may use.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum ReaderCore {
-    /// `auto`: a core is reserved by [`reserve_reader_core`]'s rule once the
+    /// `auto`: a core is reserved by `reserve_reader_core`'s rule once the
     /// input's records read as inflate-bound.
     #[default]
     Auto,
@@ -1807,14 +2251,14 @@ impl fmt::Display for ReaderCore {
 
 /// The `--reader_core` text, validated as [`ReaderCore`] parses it; the
 /// command-line parser's value parser.
-pub fn reader_core_text(text: &str) -> Result<String, String> {
+pub(crate) fn reader_core_text(text: &str) -> Result<String, String> {
     text.parse::<ReaderCore>().map(|_| text.to_string())
 }
 
 /// Physical cores a host needs before the `auto` rule reserves one for the
 /// reader: on a smaller host the annotators and the inflaters would lose too
 /// large a share of it.
-pub const READER_CORE_MIN_PHYSICAL_CORES: usize = 8;
+pub(crate) const READER_CORE_MIN_PHYSICAL_CORES: usize = 8;
 
 /// The threads outside the annotator pool and the inflater pool that stay busy
 /// through a run (the reader, the block reader's frame thread and the writer),
@@ -1825,9 +2269,10 @@ const READER_CORE_OTHER_THREADS: usize = 3;
 /// inflated bytes per record to stand for the file (a header's bytes spread
 /// over them move the figure by a few bytes), and few enough that a run of
 /// seconds decides within its first hundredth.
-pub const READER_CORE_DECISION_RECORDS: u64 = 4_096;
+pub(crate) const READER_CORE_DECISION_RECORDS: u64 = 4_096;
 
 /// The CPUs a reserved reader core leaves to each side.
+#[doc(hidden)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReaderCoreReservation {
     /// The CPU the reader runs on.
@@ -1853,6 +2298,7 @@ pub struct ReaderCoreReservation {
 /// core when the CPU and its core's other CPUs are allowed and leave another
 /// CPU for the rest of the run. `none`, a host without a topology, and any
 /// failed test reserve nothing.
+#[doc(hidden)]
 pub fn reserve_reader_core(
     value: ReaderCore,
     topology: Option<&CpuTopology>,
@@ -1908,6 +2354,7 @@ pub fn reserve_reader_core(
 
 /// How the batches move through the pipeline (`--pipeline_mode`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum PipelineMode {
     /// Each batch is parsed, annotated and rendered on the worker pool as a
     /// whole before the next one starts.
@@ -1921,7 +2368,7 @@ pub enum PipelineMode {
 
 impl PipelineMode {
     /// The value as the flag spells it.
-    pub fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             PipelineMode::Batched => "batched",
             PipelineMode::Streaming => "streaming",
@@ -1943,6 +2390,7 @@ impl FromStr for PipelineMode {
 
 /// How rendered output reaches the file or standard output (`--writer_strategy`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum WriterStrategy {
     /// Through a buffer of [`Config::output_buffer_size`] bytes.
     #[default]
@@ -1956,7 +2404,7 @@ pub enum WriterStrategy {
 
 impl WriterStrategy {
     /// The value as the flag spells it.
-    pub fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             WriterStrategy::Buffered => "buffered",
             WriterStrategy::Direct => "direct",
@@ -1980,7 +2428,7 @@ impl FromStr for WriterStrategy {
 
 /// Resolve the `--pipeline_depth` value: `0` is `crate::pipeline::PIPELINE_DEPTH`.
 /// The flag's parser bounds the value, so it fits a `usize` on every target.
-pub fn resolve_pipeline_depth(raw: u64) -> usize {
+pub(crate) fn resolve_pipeline_depth(raw: u64) -> usize {
     if raw == 0 {
         crate::pipeline::PIPELINE_DEPTH
     } else {
@@ -1991,7 +2439,7 @@ pub fn resolve_pipeline_depth(raw: u64) -> usize {
 /// Resolve the `--render_task_records` value: `0` is `None`, the built-in sizing
 /// (per batch from the worker count on the fused path, a fixed chunk on the
 /// plugin path).
-pub fn resolve_render_task_records(raw: u64) -> Option<usize> {
+pub(crate) fn resolve_render_task_records(raw: u64) -> Option<usize> {
     if raw == 0 {
         None
     } else {
@@ -2001,7 +2449,7 @@ pub fn resolve_render_task_records(raw: u64) -> Option<usize> {
 
 /// Resolve the `--output_buffer_size` value: `0` is
 /// `crate::runner::OUTPUT_BUFFER_BYTES`.
-pub fn resolve_output_buffer_size(raw: u64) -> usize {
+pub(crate) fn resolve_output_buffer_size(raw: u64) -> usize {
     if raw == 0 {
         crate::runner::OUTPUT_BUFFER_BYTES
     } else {
@@ -2012,7 +2460,7 @@ pub fn resolve_output_buffer_size(raw: u64) -> usize {
 /// Resolve the `--parse_threads` value: `0` is `None`, the pool's built-in
 /// width (the host's available parallelism), else the thread count the cache
 /// shards parse on. The flag's parser bounds the value, so it fits a `usize`.
-pub fn resolve_parse_threads(raw: u64) -> Option<usize> {
+pub(crate) fn resolve_parse_threads(raw: u64) -> Option<usize> {
     if raw == 0 {
         None
     } else {
@@ -2023,6 +2471,7 @@ pub fn resolve_parse_threads(raw: u64) -> Option<usize> {
 /// The `--prewarm_ahead` value: how far ahead of the reader the prewarm helper
 /// loads the input's chromosomes, in the input index's contig order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum PrewarmAhead {
     /// A count of chromosomes after the one the reader has reached; `0` warms
     /// the reached chromosome alone.
@@ -2034,10 +2483,10 @@ pub enum PrewarmAhead {
 }
 
 /// The chromosomes an absent `--prewarm_ahead` warms ahead of the reader: one.
-pub const PREWARM_AHEAD_DEFAULT: PrewarmAhead = PrewarmAhead::Chromosomes(1);
+pub(crate) const PREWARM_AHEAD_DEFAULT: PrewarmAhead = PrewarmAhead::Chromosomes(1);
 
 impl Default for PrewarmAhead {
-    /// [`PREWARM_AHEAD_DEFAULT`].
+    /// `PREWARM_AHEAD_DEFAULT`.
     fn default() -> Self {
         PREWARM_AHEAD_DEFAULT
     }
@@ -2071,7 +2520,7 @@ impl fmt::Display for PrewarmAhead {
 
 /// The `--prewarm_ahead` text, validated as [`PrewarmAhead`] parses it; the
 /// command-line parser's value parser.
-pub fn prewarm_ahead_text(text: &str) -> Result<String, String> {
+pub(crate) fn prewarm_ahead_text(text: &str) -> Result<String, String> {
     text.parse::<PrewarmAhead>().map(|_| text.to_string())
 }
 
@@ -2112,7 +2561,7 @@ fn parse_distance(s: &str) -> Result<(u64, u64), String> {
 /// nothing more; any other remainder that starts with no name is Ensembl VEP's
 /// refusal (AnnotationType/RegFeat.pm:85-92), naming the remainder up to its
 /// next comma, the piece Ensembl VEP's split would name, over the list.
-pub fn split_cell_types(value: &str, available: &[String]) -> Result<Vec<usize>, CliError> {
+pub(crate) fn split_cell_types(value: &str, available: &[String]) -> Result<Vec<usize>, CliError> {
     let mut names = Vec::new();
     let mut rest = value;
     while !rest.is_empty() {
@@ -2148,9 +2597,10 @@ fn expand_tilde(path: &str) -> String {
 }
 
 /// The plugins directories of a run, from the one value `get_all_Plugins` reads
-/// (Runner.pm:907-923): every path `glob` expands it to ([`crate::glob::expand`],
+/// (Runner.pm:907-923): every path `glob` expands it to (`crate::glob::expand`,
 /// `:908`), each a search directory when it is one and a warning otherwise.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub struct PluginDirs {
     /// The value as given: `--dir_plugins`, else `<dir>/Plugins`.
     pub pattern: String,
@@ -2164,7 +2614,7 @@ pub struct PluginDirs {
 
 impl PluginDirs {
     /// `pattern` expanded under `HOME` (empty when it is unset) and split.
-    pub fn expand(pattern: &str) -> Self {
+    pub(crate) fn expand(pattern: &str) -> Self {
         let home = std::env::var("HOME").unwrap_or_default();
         let mut dirs = Vec::new();
         let mut not_found = Vec::new();
@@ -2187,7 +2637,7 @@ impl PluginDirs {
     /// load plugin` line: the directories searched; with none, the one match
     /// that is no directory, or the value as given when there is no such match
     /// or several.
-    pub fn searched(&self) -> String {
+    pub(crate) fn searched(&self) -> String {
         match (self.dirs.as_slice(), self.not_found.as_slice()) {
             ([], [missing]) => missing.clone(),
             ([], _) => self.pattern.clone(),
@@ -2968,10 +3418,13 @@ mod tests {
     }
 
     /// The `--everything` help, which the CLI reference prints, states what its
-    /// `--regulatory` part writes, the regulatory and motif rows with every
-    /// motif field, and names no exclusion: `--everything` switches on exactly
-    /// Ensembl VEP's set (Config.pm:351-380), `cell_type` outside it on both
-    /// engines, so `CELL_TYPE` comes from `--cell_type` beside the set.
+    /// `--regulatory` part writes, the regulatory and motif rows of a cache
+    /// that carries regulatory features, with every motif field where the
+    /// cache carries the binding matrices' counts, and names no exclusion:
+    /// `--everything` switches on exactly Ensembl VEP's set
+    /// (Config.pm:351-380), `cell_type` outside it on both engines, so
+    /// `CELL_TYPE` comes from `--cell_type` beside the set, on a cache that
+    /// carries cell-type activity.
     #[test]
     fn everything_help_names_no_exclusion() {
         let mut command = Args::command_with_error_table();
@@ -2983,9 +3436,9 @@ mod tests {
             .map(|h| h.to_string())
             .unwrap();
         for phrase in [
-            "regulatory and motif rows",
-            "every motif field included",
-            "CELL_TYPE is added by --cell_type",
+            "regulatory and motif rows of a cache that carries regulatory features",
+            "every motif field included where the cache carries the binding matrices' counts",
+            "CELL_TYPE is added by --cell_type beside the set where it carries cell-type activity",
         ] {
             assert!(help.contains(phrase), "{phrase:?} missing from {help}");
         }
@@ -3096,7 +3549,7 @@ mod tests {
     /// a bare name is the `file`; otherwise comma-separated `key=value` pairs,
     /// refused with its four texts when a pair has no `=` or an empty value, a
     /// key is not `emars`, `file` or `motifs`, or every value is false in Perl.
-    /// A trailing comma is no pair, as Perl's `split` drops it; a later pair
+    /// A trailing comma is no pair, as Perl's `split` in Ensembl VEP drops it; a later pair
     /// overwrites an earlier one with the same key; a value false in Perl
     /// names no file; and the flag's option set switches `--regulatory` on,
     /// except for a value that is itself false.
@@ -3195,7 +3648,7 @@ mod tests {
     /// An option set overwrites an explicit value, as `apply_option_sets` does
     /// (Config.pm:875): `--everything --sift p` runs SIFT in `b` mode.
     #[test]
-    fn option_sets_override_explicit_values_as_perl_does() {
+    fn option_sets_override_explicit_values_as_ensembl_vep_does() {
         let c = config(&["vep", "--everything", "--sift", "p"]);
         assert_eq!(c.sift.as_deref(), Some("b"));
         let c = config(&["vep", "--sift", "p"]);
@@ -3277,7 +3730,7 @@ mod tests {
     /// incompatibility table's order, `json` before `vcf` and `tab`, where Ensembl
     /// VEP iterates a hash (`:962`) and names either flag first from run to run.
     #[test]
-    fn json_with_vcf_or_tab_is_perls_error() {
+    fn json_with_vcf_or_tab_is_ensembl_veps_error() {
         assert_eq!(
             refusal(&["vep", "--json", "--vcf"]),
             "ERROR: [cli] Can't use --json and --vcf together"
@@ -3292,7 +3745,7 @@ mod tests {
     /// `--vcf` refuses `--json` and `--tab` (Config.pm:624). With `--json` the `json`
     /// row of the table fires first, so the line reads `--json and --vcf`.
     #[test]
-    fn vcf_with_json_or_tab_is_perls_error() {
+    fn vcf_with_json_or_tab_is_ensembl_veps_error() {
         assert_eq!(
             refusal(&["vep", "--vcf", "--json"]),
             "ERROR: [cli] Can't use --json and --vcf together"
@@ -3309,7 +3762,7 @@ mod tests {
     /// alone with `--vcf` cannot be reached. The rule keys on the flag: Ensembl VEP
     /// accepts `--output_format vcf --most_severe`, and so does vep-rs.
     #[test]
-    fn vcf_with_most_severe_is_perls_error() {
+    fn vcf_with_most_severe_is_ensembl_veps_error() {
         assert_eq!(
             refusal(&["vep", "--vcf", "--most_severe"]),
             "ERROR: [cli] Can't use --most_severe and --biotype together"
@@ -3327,7 +3780,7 @@ mod tests {
     /// `--tab` refuses `--vcf` and `--json` (Config.pm:625); both other rows precede
     /// the `tab` row, so each line names the other flag first.
     #[test]
-    fn tab_with_vcf_or_json_is_perls_error() {
+    fn tab_with_vcf_or_json_is_ensembl_veps_error() {
         assert_eq!(
             refusal(&["vep", "--tab", "--vcf"]),
             "ERROR: [cli] Can't use --vcf and --tab together"
@@ -3432,11 +3885,11 @@ mod tests {
     }
 
     /// `%VALID` holds `gzip` and `bgzip` for `--compress_output` (Config.pm:603) and
-    /// `check_config` (`:945-957`) refuses another value with Perl's two-line
+    /// `check_config` (`:945-957`) refuses another value with Ensembl VEP's two-line
     /// message; the declared flag carries the same list as a value enumeration, so
     /// on the command line the refusal is the syntax error listing both values.
     #[test]
-    fn compress_output_rejects_unknown_value_with_perls_message() {
+    fn compress_output_rejects_unknown_value_with_ensembl_veps_message() {
         let mut state = FlagState::default();
         state.set("compress_output", "zip");
         assert_eq!(
@@ -3532,7 +3985,7 @@ mod tests {
     }
 
     /// `--var_synonyms` without `--check_existing` switches the latter on and owes
-    /// the notice `Runner.pm:117-120` (release/116.2) prints as it does so; given
+    /// the notice `Runner.pm:117-120` (release/116.3) prints as it does so; given
     /// beside `--check_existing`, or with the flag off, nothing is switched and
     /// no notice is due. The notice is a status message, so `--quiet` withholds
     /// it (BaseVEP.pm:782) while the implication stands. A refused command line
@@ -3594,6 +4047,34 @@ mod tests {
             .with_defined_off([("var_synonyms", "0")]);
         assert!(given.state.is_active("var_synonyms"));
         assert_eq!(given.command_line, ["--var_synonyms"]);
+    }
+
+    /// `--debug` owes the notice that it lists nothing while the flag is
+    /// active, after the notice `--var_synonyms` owes; `--quiet` leaves it in
+    /// the list, which the runner withholds. A run without the flag owes none,
+    /// nor does one where a configuration file or the environment set it to `0`.
+    #[test]
+    fn debug_owes_the_notice_that_it_lists_nothing() {
+        const NOTICE: &str =
+            "INFO: --debug lists no plugin directories or plugin files, the two things Ensembl VEP prints under it";
+        assert_eq!(config(&["vep", "--debug"]).notices, [NOTICE]);
+        assert_eq!(
+            config(&["vep", "--debug", "--quiet"]).notices,
+            [NOTICE],
+            "the runner withholds it"
+        );
+        assert_eq!(
+            config(&["vep", "--debug", "--var_synonyms"]).notices,
+            [
+                "INFO: Colocated variants will be provided when using --var_synonyms",
+                NOTICE
+            ]
+        );
+        assert!(config(&["vep"]).notices.is_empty());
+        let defined_off = parse_command_line(["vep"])
+            .unwrap()
+            .with_defined_off([("debug", "0")]);
+        assert!(Config::from_parsed(defined_off).unwrap().notices.is_empty());
     }
 
     /// `--clin_sig_allele` is Ensembl VEP's `clin_sig_allele=i` (Config.pm:151),
@@ -3745,7 +4226,7 @@ mod tests {
     /// order and count; a token outside the list is refused when the line is
     /// parsed, with the valid values listed, as every `%VALID` flag is.
     #[test]
-    fn pick_order_rejects_a_bad_token_listing_perls_valid_values() {
+    fn pick_order_rejects_a_bad_token_listing_ensembl_veps_valid_values() {
         assert_eq!(
             config(&["vep", "--pick_order", "rank,canonical,length"])
                 .pick_order
@@ -3945,6 +4426,18 @@ mod tests {
         );
     }
 
+    /// `--sereal` selects no reader: a shard is a JSON file whatever
+    /// `serialiser_type` the cache's `info.json` names (`is_shard_path` in
+    /// `json_cache.rs`), and the key is printed in one refusal alone.
+    #[test]
+    fn sereal_help_says_what_a_run_reads() {
+        assert_eq!(
+            error_table_entry("sereal").unwrap().help(),
+            "Accepted without effect: vep-rs reads a cache's JSON shards, whatever serialiser \
+             its metadata names"
+        );
+    }
+
     /// `--convert`'s refusal is Ensembl VEP's deprecation text, the same line
     /// whether the table or the option rules produce it.
     #[test]
@@ -3985,8 +4478,9 @@ mod tests {
     }
 
     /// `custom` is read from the state after the option sets, which the `gff`,
-    /// `gtf`, `bigwig`, `phyloP` and `phastCons` sets append to (Config.pm:531-564);
-    /// `gff` and `gtf` are refused before the sets run, so `bigwig` stands in.
+    /// `gtf`, `bigwig`, `phyloP` and `phastCons` sets append to (Config.pm:531-564):
+    /// each set's string follows the command line's own, in the sets' order,
+    /// so `--gtf` before `--gff` on the command line still lists the GFF first.
     #[test]
     fn custom_follows_the_state_the_option_sets_append_to() {
         let mut parsed = parse_command_line(["vep", "--custom", "x.bed,X,bed"]).unwrap();
@@ -3998,6 +4492,22 @@ mod tests {
             ["y.bed,Y,bed"]
         );
         assert!(config(&["vep"]).custom.is_empty());
+        assert_eq!(
+            config(&[
+                "vep",
+                "--gtf",
+                "genes.gtf.gz",
+                "--custom",
+                "y.bed,Y,bed",
+                "--gff=genes.gff3.gz",
+            ])
+            .custom,
+            [
+                "y.bed,Y,bed",
+                "file=genes.gff3.gz,format=gff",
+                "file=genes.gtf.gz,format=gtf"
+            ]
+        );
     }
 
     /// `--custom_multi_allelic` needs a `--custom` source (`%REQUIRES`,
@@ -4136,17 +4646,33 @@ mod tests {
     }
 
     /// The default root is Ensembl VEP's remote one (`Config.pm:314`), which a
-    /// shortcut refuses with the local tree's layout and the `--custom` form of the
-    /// same source; without a shortcut the default is inert, and an explicit
-    /// remote root is refused the same way.
+    /// shortcut refuses in a line that names the shortcut, the local tree's
+    /// layout of the file it reads and the `--custom` form of the same source;
+    /// a command that gives both is refused in one line that names both,
+    /// `--phyloP` first; without a shortcut the default is inert, and an
+    /// explicit remote root is refused the same way.
     #[test]
     fn ucsc_data_root_default_is_refused_with_a_local_mirror_message() {
-        let message = "ERROR: [custom] --ucsc_data_root must name a local directory laid out as \
-                       <root>/<assembly>/phyloP<N>way/<assembly>.phyloP<N>way.bw; the same \
-                       source is --custom file=<local>.bw,format=bigwig,type=exact";
+        let phylop = "ERROR: [custom] --phyloP needs --ucsc_data_root to name a local \
+                      directory laid out as \
+                      <root>/<assembly>/phyloP<N>way/<assembly>.phyloP<N>way.bw; the same \
+                      source is --custom file=<local>.bw,format=bigwig,type=exact";
+        let phastcons = "ERROR: [custom] --phastCons needs --ucsc_data_root to name a local \
+                         directory laid out as \
+                         <root>/<assembly>/phastCons<N>way/<assembly>.phastCons<N>way.bw; the \
+                         same source is --custom file=<local>.bw,format=bigwig,type=exact";
+        let both = "ERROR: [custom] --phyloP and --phastCons need --ucsc_data_root to name a \
+                    local directory laid out as \
+                    <root>/<assembly>/phyloP<N>way/<assembly>.phyloP<N>way.bw and \
+                    <root>/<assembly>/phastCons<N>way/<assembly>.phastCons<N>way.bw; each is the \
+                    same source as --custom file=<local>.bw,format=bigwig,type=exact";
         assert_eq!(
             refusal(&["vep", "--phyloP", "100", "--ucsc_assembly", "hg38"]),
-            message
+            phylop
+        );
+        assert_eq!(
+            refusal(&["vep", "--phastCons", "100", "--ucsc_assembly", "hg38"]),
+            phastcons
         );
         assert_eq!(
             refusal(&[
@@ -4158,7 +4684,19 @@ mod tests {
                 "--ucsc_data_root",
                 "ftp://mirror.example.org/goldenpath/"
             ]),
-            message
+            phastcons
+        );
+        assert_eq!(
+            refusal(&[
+                "vep",
+                "--phastCons",
+                "30",
+                "--phyloP",
+                "100",
+                "--ucsc_assembly",
+                "hg38"
+            ]),
+            both
         );
         assert!(config(&["vep"]).custom.is_empty());
         assert!(config(&["vep", "--ucsc_data_root", "http://example.org/"])
@@ -4236,6 +4774,94 @@ mod tests {
         );
     }
 
+    /// The default names of a Parquet output are made from the output path
+    /// without the separators and the `.` steps that end it, and from every
+    /// other path as spelled: a name of a text output, a path with no final
+    /// name, and a name that only ends in a dot or holds a `.` step inside.
+    #[test]
+    fn default_names_of_a_parquet_output_leave_out_the_separators_that_end_its_path() {
+        for (spelled, stem) in [
+            ("out.parquet", "out.parquet"),
+            ("out.parquet/", "out.parquet"),
+            ("out.parquet//", "out.parquet"),
+            ("out.parquet/.", "out.parquet"),
+            ("out.parquet/./", "out.parquet"),
+            ("out.parquet/.//./", "out.parquet"),
+            ("./run/out.parquet/", "./run/out.parquet"),
+            ("/data//out.parquet/", "/data//out.parquet"),
+            ("run/./out.parquet", "run/./out.parquet"),
+            ("out./", "out."),
+            (".hidden/", ".hidden"),
+            (".../", "..."),
+            ("out.parquet/..", "out.parquet/.."),
+            ("out.parquet/../", "out.parquet/../"),
+            (".", "."),
+            ("./", "./"),
+            ("..", ".."),
+            ("/", "/"),
+            ("", ""),
+        ] {
+            assert_eq!(default_names_stem(spelled, true), stem, "{spelled:?}");
+            assert_eq!(default_names_stem(spelled, false), spelled, "{spelled:?}");
+        }
+    }
+
+    /// A Parquet command line whose output path ends in a separator names its
+    /// default warnings file and report root beside the directory, before the
+    /// configuration is resolved and after it; a text output keeps Ensembl
+    /// VEP's names on the path as spelled, and a `--warning_file` or
+    /// `--stats_file` value that is true in Perl stands as given. A Parquet
+    /// directory named `0`, which Perl reads as false, names
+    /// `vep_warnings.txt` (BaseVEP.pm:890) with a separator after it as
+    /// without one.
+    #[test]
+    fn a_parquet_output_path_ending_in_a_separator_names_its_default_files_beside_it() {
+        let parquet = ["vep", "--output_format", "parquet", "-o", "out.parquet/"];
+        let parsed = parse_command_line(parquet).unwrap_or_else(|_| panic!("parses"));
+        assert_eq!(warning_file_for_parsed(&parsed), "out.parquet_warnings.txt");
+        assert_eq!(warning_file_for(&parsed.args), "out.parquet/_warnings.txt");
+        let resolved = config(&parquet);
+        assert_eq!(resolved.warning_file, "out.parquet_warnings.txt");
+        assert_eq!(resolved.stats_file_root(), "out.parquet_summary");
+        assert_eq!(resolved.output_file, "out.parquet/");
+        assert_eq!(resolved.output_file_as_spelled, "out.parquet/");
+
+        let text = ["vep", "-o", "out.txt/"];
+        let parsed = parse_command_line(text).unwrap_or_else(|_| panic!("parses"));
+        assert_eq!(warning_file_for_parsed(&parsed), "out.txt/_warnings.txt");
+        let resolved = config(&text);
+        assert_eq!(resolved.warning_file, "out.txt/_warnings.txt");
+        assert_eq!(resolved.stats_file_root(), "out.txt/_summary");
+
+        let named = [&parquet[..], &["--warning_file", "w.txt"][..]].concat();
+        let named = [&named[..], &["--stats_file", "s.html"][..]].concat();
+        let parsed = parse_command_line(named.clone()).unwrap_or_else(|_| panic!("parses"));
+        assert_eq!(warning_file_for_parsed(&parsed), "w.txt");
+        let resolved = config(&named);
+        assert_eq!(resolved.warning_file, "w.txt");
+        assert_eq!(resolved.stats_file_root(), "s.html");
+
+        let unnamed = [&parquet[..], &["--warning_file", "0"][..]].concat();
+        let unnamed = [&unnamed[..], &["--stats_file", "0"][..]].concat();
+        let resolved = config(&unnamed);
+        assert_eq!(resolved.warning_file, "out.parquet_warnings.txt");
+        assert_eq!(resolved.stats_file_root(), "out.parquet_summary");
+
+        for spelled in ["0", "0/", "0//", "0/."] {
+            let zero = ["vep", "--output_format", "parquet", "-o", spelled];
+            let parsed = parse_command_line(zero).unwrap_or_else(|_| panic!("parses"));
+            assert_eq!(
+                warning_file_for_parsed(&parsed),
+                "vep_warnings.txt",
+                "{spelled:?}"
+            );
+            let resolved = config(&zero);
+            assert_eq!(resolved.warning_file, "vep_warnings.txt", "{spelled:?}");
+            assert_eq!(resolved.stats_file_root(), "0_summary", "{spelled:?}");
+        }
+        assert_eq!(config(&["vep", "-o", "0/"]).warning_file, "0/_warnings.txt");
+    }
+
     /// `-o` keeps its last value and `STDOUT` is recognised in any case
     /// (BaseRunner.pm:213 `uc eq 'STDOUT'`).
     #[test]
@@ -4247,7 +4873,7 @@ mod tests {
         assert_eq!(config(&["vep"]).output_file, "variant_effect_output.txt");
     }
 
-    /// Ensembl VEP 116.2 reads `-i` as standard input when its value is `STDIN`
+    /// Ensembl VEP 116.3 reads `-i` as standard input when its value is `STDIN`
     /// in any letter case (`uc($file) eq 'STDIN'`, Parser.pm:235) and keeps the
     /// parameter as given, so `-i stdin` prints `Input file<TAB>stdin` in the
     /// statistics report (Stats.pm:652) and `stdin` in the skipped-variants
@@ -4777,6 +5403,35 @@ mod tests {
         assert_eq!(version_under("{p2,p1}"), "0.1.0");
         assert_eq!(version_under("{p1,p2}"), "0.2.0");
         assert_eq!(version_under("p1"), "0.1.0");
+    }
+
+    /// `--warning_file` names the warnings file only with a value that is true
+    /// in Perl (BaseVEP.pm:890 `$file ||= ...`): without the flag, and under
+    /// an empty value or `0`, the file is the default one. `STDERR` is a
+    /// value like any other here; the sink reads it as standard error.
+    #[test]
+    fn warning_file_names_a_file_only_with_a_value_true_in_perl() {
+        let named = |argv: &[&str]| {
+            let parsed = parse_command_line(argv.iter().copied())
+                .unwrap_or_else(|_| panic!("{argv:?} parses"));
+            named_warning_file(&parsed.args).map(str::to_string)
+        };
+        assert_eq!(named(&["vep", "-o", "x"]), None);
+        assert_eq!(
+            named(&["vep", "-o", "x", "--warning_file", "w.txt"]).as_deref(),
+            Some("w.txt")
+        );
+        assert_eq!(
+            named(&["vep", "--warning_file", "STDERR"]).as_deref(),
+            Some("STDERR")
+        );
+        for false_value in ["", "0"] {
+            assert_eq!(
+                named(&["vep", "-o", "x", "--warning_file", false_value]),
+                None,
+                "{false_value:?}"
+            );
+        }
     }
 
     /// The warnings file is `--warning_file`, else `<output_file>_warnings.txt`

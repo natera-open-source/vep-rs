@@ -1,9 +1,9 @@
 entry = "stop_codon_unshifted_span"
 page = "docs/divergences/stop-codon-unshifted-span.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 137,702 per million · 3 flag sets, 104 corpora"
+input_class_basis = "2 · 137,702 per million · 4 flag sets, 144 corpora"
 notes = "ClinVar variation 38636, a deletion of 3,804 bases that ends six bases before the first base of ENST00001097586 of HBA1; the 513 bases at the start of the deleted span equal the 513 bases after it, so the shift carries it 513 bases on, over the transcript's first exon, its intron and its stop codon at 16:176979-176981."
 
 [input]
@@ -31,3 +31,16 @@ columns = ["Consequence", "cDNA_position", "SHIFT_LENGTH"]
 [expected]
 ensembl_vep = ["splice_acceptor_variant,splice_donor_variant,splice_donor_5th_base_variant,coding_sequence_variant,5_prime_UTR_variant,3_prime_UTR_variant,intron_variant | ?-342 | 513"]
 vep_rs = ["splice_acceptor_variant,splice_donor_variant,splice_donor_5th_base_variant,stop_retained_variant,5_prime_UTR_variant,3_prime_UTR_variant,intron_variant | ?-342 | 513"]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/coding.rs::PerlCodingEval::given_stop_codon",
+    "crates/vep-effects/src/coding.rs::PerlCodingEval::stop_codon_cil_span",
+    "crates/vep-effects/src/consequences.rs::consequences_of_the_record",
+]
+tests = ["crates/vep-cli/tests/consequence_documented_rows.rs::a_deletion_shifted_onto_the_stop_codon_retains_the_stop"]
+rules = [
+    "tools/vep-formats-compare/src/coding_end_terms.rs::landed_rule_may_take",
+    "tools/vep-formats-compare/src/rules/term_pairs.rs::stop_codon_unshifted_span_pair",
+    "tools/vep-formats-compare/src/rules/term_pairs.rs::stop_codon_unshifted_span_pair_at",
+]

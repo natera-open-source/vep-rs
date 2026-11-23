@@ -1,10 +1,10 @@
 entry = "tsl_pick_order_past_sixty_four_bits"
 page = "docs/divergences/tsl-pick-order-past-sixty-four-bits.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the GTF attribute rules, which admit any further attribute after gene_id and transcript_id and set no range for a transcript support level (GTF 2.2 specification, attributes; Ensembl VEP documentation, \"Annotation sources\", GTF format expectations); not seen in the measured datasets"
-notes = "The GRCh38 release-116 GTF lines of TMPRSS3 and its two transcripts ENST00001110244 and ENST00001113783, each given a synthetic transcript_support_level of twenty digits: 18446744073709551616 (2^64) on the first, 18446744073709551615 (2^64 minus 1) on the second. Both engines print the two levels as written (OutputFactory.pm:1611). Under --pick with the order `tsl`, Ensembl VEP's <=> (OutputFactory.pm:789) reads the first as a double, which the second rounds to as well, so the two tie and its stable sort keeps ENST00001110244 first; the eq test (:796) finds the texts unequal, so that row alone is the pick. vep-rs orders the two by exact value, the integer below the double, and picks ENST00001113783. Reachable only through a GTF or GFF3 whose levels pass 64 bits; an Ensembl gene set's levels are 1 to 5."
+notes = "The GRCh38 release-116 GTF lines of TMPRSS3 and its two transcripts ENST00001110244 and ENST00001113783, each given a synthetic transcript_support_level of twenty digits: 18446744073709551616 (2^64) on the first, 18446744073709551615 (2^64 minus 1) on the second. Both engines print the two levels as written (OutputFactory.pm:1620). Under --pick with the order `tsl`, Ensembl VEP's <=> (OutputFactory.pm:789) reads the first as a double, which the second rounds to as well, so the two tie and its stable sort keeps ENST00001110244 first; the eq test (:796) finds the texts unequal, so that row alone is the pick. vep-rs orders the two by exact value, the integer below the double, and picks ENST00001113783. Reachable only through a GTF or GFF3 whose levels pass 64 bits; an Ensembl gene set's levels are 1 to 5."
 prepare = [
   '''zcat "$CORPUS/chr21_genes.gtf.gz" | awk -F'\t' '($3 == "gene" && $9 ~ /gene_id "ENSG00000160183"/) || $9 ~ /transcript_id "ENST0000111(0244|3783)"/' | sed -e '/\ttranscript\t.*transcript_id "ENST00001110244"/ s/$/ transcript_support_level "18446744073709551616";/' -e '/\ttranscript\t.*transcript_id "ENST00001113783"/ s/$/ transcript_support_level "18446744073709551615";/' > "$STAGE/tmprss3_tsl_seam.gtf"''',
   "bgzip -c \"$STAGE/tmprss3_tsl_seam.gtf\" > \"$STAGE/tmprss3_tsl_seam.gtf.gz\" && tabix -p gff \"$STAGE/tmprss3_tsl_seam.gtf.gz\"",
@@ -37,3 +37,12 @@ columns = ["Feature", "Consequence", "TSL"]
 [expected]
 ensembl_vep = ["ENST00001110244 | start_lost | 18446744073709551616"]
 vep_rs = ["ENST00001113783 | start_lost | 18446744073709551615"]
+
+[implementation]
+code = [
+    "crates/vep-core/src/pick.rs::Rank::numeric",
+    "crates/vep-core/src/pick.rs::Rank::numeric_cmp",
+]
+tests = [
+    "crates/vep-core/src/pick.rs::tests::a_run_past_sixty_four_bits_sorts_after_every_integer",
+]

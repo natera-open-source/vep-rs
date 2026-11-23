@@ -1,7 +1,7 @@
 entry = "stats_variants_processed_dont_skip"
 page = "docs/divergences/statistics-report-counts.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the --dont_skip and --max_sv_size options (Ensembl VEP documentation, \"Running Ensembl VEP\"); not seen in the measured datasets; classed by its most reachable shape, a structural variant longer than --max_sv_size: a <DEL> with neither END nor SVLEN breaks \"SVLEN must be specified\" under the VCF 4.4 specification, section 3"
 notes = "The deletion without END or SVLEN is marked for skipping by the parser and kept by --dont_skip; Ensembl VEP's VCF writer passes it through as its input line short of the per-record logger, so the report's Variants processed carries no count. The first mechanism of the sentence, --vcf."
@@ -36,3 +36,7 @@ vep_rs = [
   "Lines of input read\t1", "Variants processed\t1", "Variants filtered out\t0", "Novel / existing variants\t-",
   "Overlapped genes\t0", "Overlapped transcripts\t0", "Overlapped regulatory features\t-",
 ]
+
+[implementation]
+code = ["crates/vep-cli/src/stats.rs::ThreadStats::log_record"]
+tests = ["crates/vep-cli/tests/filter_report_and_run_documented_rows.rs::a_record_dont_skip_keeps_is_counted_as_processed_in_the_vcf_format"]

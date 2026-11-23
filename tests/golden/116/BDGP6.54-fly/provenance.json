@@ -1,54 +1,66 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species drosophila_melanogaster --assembly BDGP6.54 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --synonyms {corpus}/synonyms.txt [--tab|--vcf|--json]",
  "perl_cache": "drosophila_melanogaster/116_BDGP6.54",
  "fasta": "the twelve contigs the records and the pruned cache's transcripts sit on (2L, 4, Y, mitochondrion_genome, rDNA, three unmapped or Y-mapped scaffolds and four numbered scaffolds) at their full length from Drosophila_melanogaster.BDGP6.54.dna.toplevel.fa, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
  "input": "variants.vcf: 270 records, 115 on 2L, 122 on the mitochondrion, 20 on chromosome 4, one on Y, two on rDNA and ten on seven scaffolds. 117 come from the European Variation Archive release 8 set of Drosophila melanogaster variants (assembly GCA_000001215.4), the 115 on 2L and two on MT, their IDs the rs identifiers; the two MT records are that set's only mitochondrial ones. 153 come from designed records derived from the reference FASTA, their IDs naming the set, chromosome, position and alleles: every single-nucleotide substitution of the mitochondrion, a family of deletions of 1 to 4 bases, insertions of 1 to 3 and a two-base substitution every 29th mitochondrial position, and the same single-nucleotide and indel probes at fixed strides across the transcript windows of chromosomes 4 and Y, of rDNA and of every scaffold the cache holds transcripts for. Two exemplars per consequence-set combination the two references show, stratified by variant class and strand, six per combination carrying a protein-level term, plus the records the manifest's included_records name: the genetic code table 5 shapes of the mitochondrion (a TGA codon read as tryptophan, ATA as methionine, AGA and AGG as serine, the non-ATG starts ATT and ATA, a stop lost to TGA, an incomplete terminal codon, a first codon that is no start codon of the table), four mitochondrial records in the exons of non-coding transcripts, the European Variation Archive set's two among them, and records on chromosomes 4 and Y, on rDNA and on six of the seven scaffolds. The mitochondrial records name their chromosome MT and reach the cache's mitochondrion_genome through synonyms.txt, which both engines read as --synonyms",
  "sha256": {
-  "default.txt": "eb52e91c3069d9a1476e0996811df738fa0a2f179c3fff447ea3b90dfa7d8197",
-  "tab.txt": "85cdc0e4fcc9956a04e040b5c2e22ff135e1c5425a927aa8ba0918b1610d95ed",
-  "vcf.vcf": "29d67ecccc630b3fbebf1cd70171f5e85e2cab01b62353c7e896567ca2b932f6",
-  "json.jsonl": "2f98fc6eda405e01f1aa2f064281f7b26d7a874c163633d328c105465aac3e7c"
+  "default.txt": "34c506ded74278aca434822a907b5a5acd8fe6d0f5ca800bf17e64441f1112e3",
+  "tab.txt": "ed73e3eb6a026278701bbf5b7aed7afb8cf74e5c660b620443612dcfcb644374",
+  "vcf.vcf": "3203ce4dacb9ab80e16be020bda6f679e8c10ae12cc9a8984d4f449afc11d20f",
+  "json.jsonl": "feacdb0ce6a930a49d75db0d8bb7d4bb70572d919f130f2d58394813b8647f5a"
  },
  "variants_vcf_sha256": "9dbb4530bc971b47c99bc1e3cf8c7abc72a3897f323b1dcec4abd7f7c15d455a",
  "flag_sets": {
   "everything": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species drosophila_melanogaster --assembly BDGP6.54 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything --synonyms {corpus}/synonyms.txt [--tab|--vcf|--json]",
    "perl_cache": "drosophila_melanogaster/116_BDGP6.54",
-   "fasta": "reference.fa.gz beside this file, decompressed, on both sides",
-   "input": "variants.vcf; the cache carries no SIFT or PolyPhen matrices and names no variant, so Ensembl VEP reports disabling SIFT and PolyPhen and every frequency, identifier, phenotype and prediction column is empty on both sides",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
    "sha256": {
-    "default.txt": "65d56a7158ee3b2fd9c4051647c13b669856db8b0f08b010eef628a05203bca8",
-    "tab.txt": "aca2e6ca508c7b2fb42f29707e660916861066a589e0a331b95f5ecbbc20f18a",
-    "vcf.vcf": "0ef3cc5cca355ec86180b0441c3e87afec221fa9f71281a9a2e243877babe706",
-    "json.jsonl": "f271fc7ca33f9ec6779a3686825f1431ec463cfdeb0e2ec3e0b4622b271846a8"
-   }
+    "default.txt": "3eb852cc0951e9e7a1a326f9388ad2ae12922e55707479d8933978ef11121ca0",
+    "tab.txt": "d7e8a18feaa3d2de29c0c406db69eaa497d85184c9cf10c44306e7bf9a75046e",
+    "vcf.vcf": "e2613d3a8e6c8b7034f58bbc5c289a9337abad47cc0509927978288b7be1346e",
+    "json.jsonl": "af735fabcf77ad44c7904b5aaf44fc9a4a6db2a74102e149cc3073978693e259"
+   },
+   "flags": [
+    "--everything",
+    "--synonyms",
+    "{corpus}/synonyms.txt"
+   ],
+   "expected_dir": "expected_everything"
   },
   "hgvs": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species drosophila_melanogaster --assembly BDGP6.54 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs --synonyms {corpus}/synonyms.txt [--tab|--vcf|--json]",
    "perl_cache": "drosophila_melanogaster/116_BDGP6.54",
-   "fasta": "reference.fa.gz beside this file, decompressed, on both sides",
-   "input": "variants.vcf; the mitochondrial records' HGVSp follow genetic code table 5",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
    "sha256": {
-    "default.txt": "eaf2c1e6a285b2bf53c46cd9fd9d8b4512b15fd902e86ab593f8f7d28bc5761e",
-    "tab.txt": "2467ce41f7873494deca645105e5e4beb6bfd448977fc0b6f903e51a3bcac487",
-    "vcf.vcf": "85bbcb747a373966f0b8cd74ca269c83594671c4342f9bf784528ec7383b23ff",
-    "json.jsonl": "4cf56a8b37cee20e8506c921ccbb25fc01255cad25564b1d2514ca84606bc0d8"
-   }
+    "default.txt": "17893d1fcba5ae721082b14c160f2c5f2453f012db8613315bf1fcce6eb9a3d0",
+    "tab.txt": "5455e017bc7461721bd8baa8f1ae46e22d5faadd70b0eea5772d098fb2c7a72c",
+    "vcf.vcf": "0590b9accdd9d316715a3108fc02933799b34a19b987ebea45f8fe5dc81970fd",
+    "json.jsonl": "003794e8dd0efa1c5d05a712bfff21791dad0c39289f0ce8e0c12692bc650df6"
+   },
+   "flags": [
+    "--hgvs",
+    "--synonyms",
+    "{corpus}/synonyms.txt"
+   ],
+   "expected_dir": "expected_hgvs"
   }
  },
- "generator": "Ensembl VEP over the two inputs under the corpus flags; scripts/golden/build_golden_corpus.py select --release 116 --assembly BDGP6.54 --species drosophila_melanogaster --suite eva8_2L_MT=<reference>=<the 2L and MT records> --suite probe=<reference>=<the designed records> --k 2 --seed 1 --max-span 1000000 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 6 --include <the named records> --covers species-fly-bdgp6 --covers species-harness-parameter --covers genetic-code-tables --covers chromosome-naming-from-cache --matrix tests/parity/matrix.tsv --flag=--synonyms --flag={corpus}/synonyms.txt --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_function_predictions --synonyms synonyms.txt --perl-info <cache>/info.txt --cache-version 116 --variations <cache>/variations over the whole cache scripts/data/storable_to_json.pl converted from the Ensembl VEP 116 BDGP6.54 cache (protein features kept for the DOMAINS column of the everything set; the variation slices are the empty indexed files the cache carries, since it names no variant); scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; scripts/golden/build_golden_corpus.py flag-set (everything, hgvs) and classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp for the hgvs set)",
+ "generator": "Ensembl VEP over the two inputs under the corpus flags; tools/vep-golden-corpus select --release 116 --assembly BDGP6.54 --species drosophila_melanogaster --dataset eva8_2L_MT=<reference>=<the 2L and MT records> --dataset probe=<reference>=<the designed records> --k 2 --seed 1 --max-span 1000000 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 6 --include <the named records> --covers species-fly-bdgp6 --covers species-harness-parameter --covers genetic-code-tables --covers chromosome-naming-from-cache --matrix tests/parity/matrix.tsv --flag=--synonyms --flag={corpus}/synonyms.txt --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_function_predictions --synonyms synonyms.txt --perl-info <cache>/info.txt --cache-version 116 --variations <cache>/variations over the whole cache tools/vep-storable-to-json converts from the Ensembl VEP 116 BDGP6.54 cache (protein features kept for the DOMAINS column of the everything set; the variation slices are the empty indexed files the cache carries, since it names no variant); scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; tools/vep-golden-corpus flag-set (everything, hgvs) and classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp for the hgvs set)",
  "pruned_cache": {
   "transcripts_per_chromosome": {
    "211000022278760": 1,

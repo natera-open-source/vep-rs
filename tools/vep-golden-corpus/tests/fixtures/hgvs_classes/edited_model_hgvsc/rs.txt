@@ -1,0 +1,8 @@
+rs_del	21:101	-	ENSG1	NM_1.1	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;HGVSc=NM_1.1:c.250+601del
+rs_sub	21:200	G	ENSG1	NM_2.1	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;HGVSc=NM_2.1:c.250+601T>A
+rs_plain	21:300	G	ENSG1	NM_3.1	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;HGVSc=NM_3.1:c.250+601T>A
+rs_name	21:400	G	ENSG1	NM_4.1	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;HGVSc=NM_4.2:c.250+601T>A
+rs_allele	21:500	G	ENSG1	NM_5.1	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;HGVSc=NM_5.1:c.250+601T>C
+rs_two	21:600	G	ENSG1	NM_6.1	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;HGVSc=NM_6.1:c.57+4A>G
+rs_off	21:700	G	ENSG1	NM_7.1	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;HGVSc=NM_7.1:c.6A>G
+rs_slide	21:801	-	ENSG1	NM_8.1	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;HGVSc=NM_8.1:c.3544+2_3544+32del

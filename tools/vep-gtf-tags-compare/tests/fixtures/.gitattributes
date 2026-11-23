@@ -1,0 +1,2 @@
+# Fixture bytes are compared as they stand: no line-end conversion.
+* -text

@@ -1,0 +1,18 @@
+##fileformat=VCFv4.2
+##source=made-up records
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+1	1000	.	A	T	.	PASS	.
+2	1010	.	G	T	.	PASS	.
+22	1020	.	A	C	.	PASS	.
+X	1030	.	G	A	.	PASS	.
+Y	1040	.	A	C	.	PASS	.
+MT	1050	.	G	C	.	PASS	.
+M	1060	.	A	G	.	PASS	.
+GL000191.1	1070	.	G	T	.	PASS	.
+HLA-A*01:01	1080	.	A	T	.	PASS	.
+23	1090	.	G	T	.	PASS	.
+x	1100	.	A	C	.	PASS	.
+1	1110	.	G	A	.	PASS	.
+2L	1120	.	A	C	.	PASS	.
+2R	1130	.	G	C	.	PASS	.
+mitochondrion_genome	1140	.	A	G	.	PASS	.

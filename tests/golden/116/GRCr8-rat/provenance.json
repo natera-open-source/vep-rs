@@ -1,0 +1,89 @@
+{
+ "plugin_fixtures": {
+  "generator": "scripts/fixtures/cut_plugin_regions.py",
+  "flank": 5000,
+  "record_flank": 2000,
+  "exon_flank": 50,
+  "gerp_regions": "exons",
+  "tools": {
+   "bgzip": "bgzip (htslib) 1.9"
+  },
+  "files": {
+   "reference.fa.fai": "e453c4ab87cd2b1b97ee7602415cf3a5519ec683c4296b31ff44aef827656145",
+   "reference.fa.gz": "a50889a29330c6465990c25b7056b929e95843ca580d5a6b3025a046d0aa3e48",
+   "reference.fa.gz.fai": "e453c4ab87cd2b1b97ee7602415cf3a5519ec683c4296b31ff44aef827656145",
+   "reference.fa.gz.gzi": "57cda8735b302e475f7b6954e54ac3d1a20766678ea453ebe9a9c04ed8fba69c"
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species rattus_norvegicus --assembly GRCr8 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "rattus_norvegicus/116_GRCr8",
+ "fasta": "the three sequences the records and the pruned cache's transcripts sit on (12, MT and the unplaced scaffold JAXUCZ010000075.1) at their full length from Rattus_norvegicus.GRCr8.dna.primary_assembly.12.fa, Rattus_norvegicus.GRCr8.dna.primary_assembly.MT.fa and Rattus_norvegicus.GRCr8.dna.nonchromosomal.fa of Ensembl release 116, each file held to its line of that directory's CHECKSUMS, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run recorded here",
+ "input": "variants.vcf: 316 records, 285 on chromosome 12, 29 on the mitochondrion and 2 on the unplaced scaffold JAXUCZ010000075.1; 42 of them name their sequence by a synonym of the cache (CM070402.1 and NC_086030.1 for 12, X14848 and AC_000022.2 for MT). 309 are seeded records of tools/vep-seeded-variants (generator version 2, seed 1, 100 records a category on the three sequences, every reference allele read from the genome sequence), their IDs naming the category and its ordinal: a start codon, a gained stop and a lost stop under each genetic code and a codon that code table 2 reads differently on the mitochondrion, a missense and a synonymous change on each strand, a splice donor and an acceptor, both untranslated regions, an intron, upstream, downstream and intergenic positions, a frameshift insertion, a frameshift deletion and an in-frame deletion, the first and the last base of a sequence, and records named by a synonym. The cache calls no sequence circular, so no record crosses an origin. 7 are known variants of the cache, their IDs the rs identifiers, from 300 single-base substitutions sampled under the same seed from the cache's variation files of the three sequences. Nine exemplars per consequence-set combination the two references show, stratified by variant class and strand, 27 per combination carrying a protein-level term, plus the records the manifest's included_records name: the first record of every category of the seeded records that has a row in the reference, and the first two of each category of a genetic code",
+ "sha256": {
+  "default.txt": "34288cf864ccb3fa30a77e7cf61315aedddad4d3bb56c0b620f1742296638497",
+  "tab.txt": "16bcd9c6c444edb47848ef55b364e5c5288c3c9d8cabf7192da2851a06e8ff2a",
+  "vcf.vcf": "66e18b6c13f894859f56096fff8c36b8162a727b57734d4bbc92c5aa66953afc",
+  "json.jsonl": "12512ba25fd0b8400719c20c7cd6b77d43da9d4c834be9b95bb3c6dc0c6ba084"
+ },
+ "variants_vcf_sha256": "5029ee2f58997622f357c3265bb4d57379fa5946f79590397343152a5680889e",
+ "flag_sets": {
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species rattus_norvegicus --assembly GRCr8 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "rattus_norvegicus/116_GRCr8",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "7f95bbd0cc6fe46499b7ea95713ccbac5f9c56be0487b66a4e98ed69c8cae7d4",
+    "tab.txt": "50f0005bdc7abcfa50f3ae6f67fb90b999d8bbc5d6c166a3b778b9d51b14c007",
+    "vcf.vcf": "2bc86ff70c91ad38459c48fec86c3157d397ba7395050ccbd2b3a419b53c7b54",
+    "json.jsonl": "ba70e9407ed86674483ee32d939f8852bc4365a10b994e79aa4c15829d861e7c"
+   },
+   "flags": [
+    "--everything"
+   ],
+   "expected_dir": "expected_everything"
+  },
+  "hgvs-sift": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species rattus_norvegicus --assembly GRCr8 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs --sift b [--tab|--vcf|--json]",
+   "perl_cache": "rattus_norvegicus/116_GRCr8",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "364c165fa93cde468e54c2b20b012fae1456dcdea455aec1783274742a6d99a2",
+    "tab.txt": "8ede9628acade6ef41d09ea2668b74b1ef26fac081bbdfd95bb9a7158019268d",
+    "vcf.vcf": "fd604d677350a788084af9e0494a7703710d584eaa801a9f5052c885707fe484",
+    "json.jsonl": "7fec84adc6a72e1fe4d601f5d3b2b89c86f92e7c72baa04f1510c8b1b8fda93e"
+   },
+   "flags": [
+    "--hgvs",
+    "--sift",
+    "b"
+   ],
+   "expected_dir": "expected_hgvs-sift"
+  }
+ },
+ "generator": "tools/vep-seeded-variants --seed 1 --records wide --per-category 100 --fasta <genome sequence> --sequence MT --sequence 12 --sequence JAXUCZ010000075.1 over the cache tools/vep-storable-to-json converts from the Ensembl VEP 116 GRCr8 cache, and the sampled known variants; Ensembl VEP over the two inputs under the corpus flags; tools/vep-golden-corpus select --release 116 --assembly GRCr8 --species rattus_norvegicus --dataset wide=<reference>=<the seeded records> --dataset known=<reference>=<the known variants> --k 9 --seed 1 --max-span 1000000 --max-records 500 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 27 --include <the named records> --covers species-rat-grcr8 --covers genetic-code-tables --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_function_predictions --drop-except <the transcripts on which a record changes one residue, the rows SIFT scores> --perl-info <cache>/info.txt --cache-version 116 --variations <converted cache>/variations over the whole converted cache (protein features kept for the DOMAINS column of the everything set; the variation slices hold the known variants within one base of a record); scripts/fixtures/cut_plugin_regions.py --reference <genome sequence> --flank 5000 --record-flank 2000 over the records under the cache's own sequence names; tools/vep-golden-corpus flag-set (everything, hgvs-sift); scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; tools/vep-golden-corpus classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp --field HGVS_OFFSET for the everything set and those with --field SIFT for the hgvs-sift set)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "12": 761,
+   "JAXUCZ010000075.1": 1,
+   "MT": 37
+  },
+  "shards": 50,
+  "synonym_lines": 6,
+  "matrices_kept_on": 196,
+  "variation_slices": "the known variants within one base of a record under variations/<chr>/all_vars.gz with its .csi, as the Ensembl VEP cache lays them out: 14 on chromosome 12; the mitochondrion and the scaffold carry the empty indexed file"
+ }
+}

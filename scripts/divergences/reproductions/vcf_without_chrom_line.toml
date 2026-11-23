@@ -1,7 +1,7 @@
 entry = "vcf_without_chrom_line"
 page = "docs/divergences/vcf-without-chrom-line.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "malformed"
 input_class_basis = "a VCF \"contains meta-information lines, a header line, and then data lines\" (VCF 4.2 specification, section 1), the header line being mandatory (VCF 4.5 specification, section 1.5 \"Header line syntax\"): the input's header holds meta-information lines and no #CHROM line"
 notes = "A header of two meta lines and no #CHROM line: Ensembl VEP's VCF output takes the last of them, `##source=probe`, as the column line and prints it after `##VEP-command-line`, so the output has no column line; vep-rs keeps the meta line in the meta block and writes the eight-column line. The three header lines are compared in output order, the command line's text masked."
@@ -32,3 +32,13 @@ mask = ["(?<=^##VEP-command-line=).*"]
 [expected]
 ensembl_vep = ["##VEP-command-line=<masked>", "##source=probe"]
 vep_rs = ["##source=probe", "##VEP-command-line=<masked>", "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/pipeline.rs::push_vcf_header",
+    "crates/vep-cli/src/pipeline.rs::read_vcf_lines",
+]
+tests = [
+    "crates/vep-cli/src/pipeline.rs::tests::read_vcf_writes_the_header_block_for_meta_lines_without_a_chrom_line_or_record",
+    "crates/vep-cli/tests/documented_subsets.rs::vcf_csq_info_header_exclusion_is_documented",
+]

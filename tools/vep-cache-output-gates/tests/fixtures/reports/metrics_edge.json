@@ -1,0 +1,29 @@
+{
+  "total_annotation_lines": 200200,
+  "consequence_counts": {
+    "intron_variant": 90900,
+    "missense_variant": 40000,
+    "synonymous_variant": 30000,
+    "downstream_gene_variant": 20000,
+    "upstream_gene_variant": 15000,
+    "stop_gained": 3000,
+    "frameshift_variant": 2000,
+    "start_lost": 100
+  },
+  "existing_variation_count": 151500,
+  "clin_sig_count": 120000,
+  "hgvsc_count": 0,
+  "hgvsp_count": 0,
+  "frequency_field_counts": {
+    "AF": 20200,
+    "gnomADe_AF": 60000,
+    "gnomADg_AF": 50000,
+    "MAX_AF": 70000,
+    "EUR_AF": 20000,
+    "AFR_AF": 20000,
+    "AMR_AF": 20000,
+    "EAS_AF": 20000,
+    "SAS_AF": 0
+  },
+  "elapsed_seconds": 12
+}

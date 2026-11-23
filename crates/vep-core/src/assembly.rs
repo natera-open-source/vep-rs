@@ -5,24 +5,30 @@
 //!
 //! Several plugins read a single file that carries coordinates for both GRCh37
 //! and GRCh38 in different columns (REVEL, and dbNSFP as `dbNSFP.pm:316-334`
-//! reads it), or read structurally different bundles per assembly (LoFTEE's GERP
-//! data is a tabix
-//! TSV on GRCh37 and a bigWig on GRCh38). Such plugins cannot pick the right
+//! reads it), or read another kind of file per assembly (LoFTEE reads its GERP
+//! scores with `tabix` on GRCh37 and from a bigWig on GRCh38, as each branch of
+//! Ensembl VEP's plugin does: `LoF.pm` lines 138 to 141 of `master`, line 130
+//! of `grch38`). Such plugins cannot pick the right
 //! column or the right reader without knowing which assembly the run targets,
-//! so the resolved assembly is threaded from `--assembly` down into plugin
+//! so the resolved assembly is threaded down into plugin
 //! initialization.
 //!
-//! Ensembl VEP does the same: `REVEL.pm` (Ensembl/VEP_plugins release/115) selects
+//! Ensembl VEP does the same: `REVEL.pm` (Ensembl/VEP_plugins release/116) selects
 //! `hg19_pos` vs `grch38_pos` from `$self->{config}->{assembly}` and dies when the
 //! required column is absent.
+//!
+//! `vep` resolves the assembly from the run's assembly name: the cache's own,
+//! else the value of `--assembly`.
 
 use std::fmt;
 
 /// A reference genome assembly.
 ///
-/// Parsed from the `--assembly` CLI value by its aliases, each whole and in any
-/// case: `GRCh37`/`hg19`/`37` and `GRCh38`/`hg38`/`38`.
+/// Parsed from an assembly name by its aliases, each whole and in any case:
+/// `GRCh37`/`hg19`/`37` and `GRCh38`/`hg38`/`38`. `vep` parses the run's
+/// assembly name: the cache's own, else the value of `--assembly`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum Assembly {
     /// GRCh37, also known as hg19.
     Grch37,
@@ -31,6 +37,9 @@ pub enum Assembly {
 }
 
 impl Assembly {
+    /// Every assembly, in the order the enum declares them.
+    pub const ALL: &'static [Assembly] = &[Assembly::Grch37, Assembly::Grch38];
+
     /// Parse an assembly from a user-supplied string.
     ///
     /// Returns `None` for anything unrecognized, so callers can distinguish
@@ -68,6 +77,17 @@ impl Assembly {
     }
 }
 
+// The patterns are the entries of `Assembly::ALL`, so an assembly the list
+// lacks leaves the match short of an arm and the crate does not build.
+const _: () = {
+    assert!(Assembly::ALL.len() == 2);
+    const FIRST: Assembly = Assembly::ALL[0];
+    const SECOND: Assembly = Assembly::ALL[1];
+    match FIRST {
+        FIRST | SECOND => {}
+    }
+};
+
 impl fmt::Display for Assembly {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
@@ -100,8 +120,9 @@ mod tests {
 
     /// Another species' assembly is unrecognized even when its name carries a
     /// human assembly's digits, as the mouse `GRCm38` does, and so is a human
-    /// name with a patch suffix: a plugin reading the hint gets none rather
-    /// than the wrong human one.
+    /// name with a patch suffix and a human assembly that is neither build, as
+    /// the pangenome's `T2T-CHM13v2.0` is: a plugin reading the hint gets none
+    /// rather than the wrong human one.
     #[test]
     fn unrecognized_and_empty_values_are_none() {
         assert_eq!(Assembly::parse(""), None);
@@ -111,6 +132,7 @@ mod tests {
         assert_eq!(Assembly::parse("BDGP6.54"), None);
         assert_eq!(Assembly::parse("GRCh38.p14"), None);
         assert_eq!(Assembly::parse("T2T-CHM13"), None);
+        assert_eq!(Assembly::parse("T2T-CHM13v2.0"), None);
     }
 
     #[test]
@@ -124,5 +146,10 @@ mod tests {
     #[test]
     fn display_uses_canonical_name() {
         assert_eq!(Assembly::Grch38.to_string(), "GRCh38");
+    }
+
+    #[test]
+    fn all_lists_the_assemblies_in_declaration_order() {
+        assert_eq!(Assembly::ALL, [Assembly::Grch37, Assembly::Grch38]);
     }
 }

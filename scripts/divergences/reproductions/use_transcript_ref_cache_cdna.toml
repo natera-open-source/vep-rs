@@ -1,9 +1,9 @@
 entry = "use_transcript_ref_cache_cdna"
 page = "docs/divergences/use-transcript-ref-cache-cdna.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 999,950 per million · 2 flag sets, 109 corpora"
+input_class_basis = "2 · 999,950 per million · 2 flag sets, 149 corpora"
 notes = "The corpus FASTA is masked to N outside the regions its own runs read, 21:30541662 included; the cache names ENST00000334046's exonic bases there."
 
 [input]
@@ -29,3 +29,13 @@ columns = ["Location", "Allele", "Feature", "Consequence", "Amino_acids", "USED_
 [expected]
 ensembl_vep = ["21:30541663 | - | ENST00000334046 | frameshift_variant | - | N"]
 vep_rs = ["21:30541663 | - | ENST00000334046 | frameshift_variant | F/X | G"]
+
+[implementation]
+code = [
+    "crates/vep-core/src/transcript.rs::Transcript::spliced_seq",
+    "crates/vep-effects/src/consequences.rs::transcript_reference_allele",
+]
+tests = [
+    "crates/vep-effects/src/consequences.rs::tests::used_ref_comes_from_spliced_cdna_inside_exons_and_the_input_elsewhere",
+]
+rules = ["tools/vep-formats-compare/src/rules/transcript_reference.rs::failed_edit_reference_cell"]

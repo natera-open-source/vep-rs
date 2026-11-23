@@ -6,7 +6,7 @@ How to move from Ensembl VEP to vep-rs, a drop-in replacement for Ensembl VEP: w
 
 Three commands cover the move. The first runs once per release and assembly; the other two are your existing command before and after.
 
-**1. Build the cache.** Build the transcript cache, or convert the Ensembl VEP cache you already have with `scripts/data/storable_to_json.pl`. The [Quick start](quick-start.md#2-get-a-transcript-cache) has one `--auto` command that downloads a release's inputs itself and installs the cache with its genome FASTA; the command below builds a cache from a GTF and a genome FASTA you already hold.
+**1. Build the cache.** Build the transcript cache, or convert the Ensembl VEP cache you already have with `tools/vep-storable-to-json`. The [Quick start](quick-start.md#2-get-a-transcript-cache) has one `--auto` command that downloads a release's inputs itself and installs the cache with its genome FASTA, the known variants, the SIFT and PolyPhen matrices and the regulatory and motif features the release publishes. The command below builds a cache from a GTF and a genome FASTA you already hold, without those parts.
 
 ```bash
 vep-cache-builder \
@@ -34,7 +34,7 @@ vep --cache --offline --dir_cache $HOME/.vep --assembly GRCh38 \
   -i input.vcf -o output.txt
 ```
 
-`--json_cache` names the directory holding `info.json` and `transcripts/`, so `116_GRCh38` itself and not its parent. [Cache setup](../cache-setup.md) covers the GRCh37 command and variation data, and [SIFT and PolyPhen predictions](../cache-predictions.md) covers the matrices.
+`--json_cache` names the directory holding `info.json` and `transcripts/`, so `116_GRCh38` itself and not its parent. [Cache setup](../cache-setup.md) covers the GRCh37 command, [Variation data in a native cache](../cache-variation-data.md) the variation data, and [SIFT and PolyPhen predictions](../cache-predictions.md) the matrices.
 
 ## What stays the same
 
@@ -54,11 +54,11 @@ vep-rs takes the same input files and flag names as Ensembl VEP and writes the s
 
 **Flags accepted without effect, and flags refused.** [Compatibility with Ensembl VEP](../cli/compatibility.md) lists every flag.
 
-- `--custom` sources are read ([Custom annotation](../custom-annotation.md)), and the statistics report is written beside the output ([Statistics, verbosity and miscellaneous](../cli/statistics-verbosity-misc.md)).
-- The flags accepted without effect are the ones Ensembl VEP itself reads nothing from (`--condel`, `--hgnc` and `--solr` among them).
+- `--custom` sources are read ([Custom annotation](../custom-annotation.md)), and the statistics report is written beside the output ([Statistics, verbosity and record handling](../cli/statistics-verbosity-misc.md)).
+- Of the flags accepted without effect, Ensembl VEP itself reads nothing from `--condel`, `--hgnc`, `--keep_ann`, `--sereal` and `--solr`, nor from `--tmpdir`, which its FATHMM plugin reads. It reads `--debug`, `--offline` and `--phased`; the compatibility page's table of these flags cites what it does with each.
 - Database flags are refused.
 
-**Consequence terms and input formats.** The six regulatory and motif consequence terms need `--regulatory` and a cache converted with its regulatory features, or `--regulatory_gff`. `--regulatory`, alone or through `--everything`, annotates regulatory and motif features from a converted Ensembl VEP cache, and `--regulatory_gff` from Ensembl's regulatory GFF files. `--cell_type` and `--extended_promoters` work as in Ensembl VEP ([Regulatory and motif features](../regulatory.md)).
+**Consequence terms and input formats.** The six regulatory and motif consequence terms need `--regulatory` and a cache that carries regulatory features, or `--regulatory_gff`. `--regulatory`, alone or through `--everything`, annotates regulatory and motif features from a built or converted cache that carries them, and `--regulatory_gff` from Ensembl's regulatory GFF files. `--cell_type` and `--extended_promoters` work as in Ensembl VEP ([Regulatory and motif features](../regulatory.md)).
 
 `--format` takes `ensembl`, `vcf`, `hgvs`, `id`, `spdi`, `region` and `guess`:
 

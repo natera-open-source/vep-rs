@@ -4,7 +4,7 @@
 //! `--transcript_filter` on the two keys a RefSeq or merged cache's transcripts
 //! carry and an Ensembl cache's lack: `_gene_symbol_id`, the EntrezGene
 //! identifier the symbol of a RefSeq gene is taken from
-//! (`AnnotationSource/Database/Transcript.pm:563` at release/116.2), and
+//! (`AnnotationSource/Database/Transcript.pm:563` at release/116.3), and
 //! `_bam_edit_status`, the outcome of editing a model against the cache's
 //! alignment file (`AnnotationType/Transcript.pm:601, 621`). Ensembl VEP's
 //! filter reads both as exact keys of the transcript hash (`FilterSet.pm:538`)
@@ -169,7 +169,7 @@ fn refseq_cache() -> Vec<String> {
 /// RefSeq cache: `exists` keeps the five models, `is 7031` the TFF1 model
 /// alone, `gene_symbol_id` reaches the key through the `_` rule
 /// (`FilterSet.pm:562-564`), and `_gene_symbol_i`, a prefix of the one key,
-/// keeps the five models too, where Ensembl VEP 116.2 keeps four: its prefix
+/// keeps the five models too, where Ensembl VEP 116.3 keeps four: its prefix
 /// branch reads nothing on the first transcript, the documented divergence
 /// `transcript_filter_abbreviated_fields`
 /// (`docs/divergences/transcript-filter-fields.md`, "An abbreviated field on

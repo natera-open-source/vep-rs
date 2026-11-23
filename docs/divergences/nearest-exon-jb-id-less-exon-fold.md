@@ -17,13 +17,13 @@
 
 **The class it produces.** `nearest_exon_jb_id_less_exon_fold`: a `NearestExonJB` value whose items carry no exon id and that differs between the engines: Ensembl VEP writes one item where vep-rs writes two or more, or where the variant begins in one exon and ends in another. The format comparator sets the value aside where a comparison case names the class, under the test of section 1.7. The committed corpus that runs the plugin annotates from an Ensembl cache, whose exons all carry ids, so no committed row has the shape. The concordance figures score consequence sets and never see the field.
 
-**How often the shape occurs.** Tier 2, see [Intended divergences from Ensembl VEP](../intended-divergences.md): the shape is a transcript with two or more exons lacking a stable id, 675 of the 77,675 transcripts of the committed caches, in 2 corpora. Those are the merged and RefSeq caches, whose aligned RefSeq-source models (biotype `aligned_transcript`, written under `--all_refseq`) carry no exon ids. A record shows it when it overlaps two such exons, or lies in such a transcript's intron under `intronic=1`. Of the committed flag sets, none runs the plugin on a merged or RefSeq cache; the two that run it annotate from an Ensembl cache.
+**How often the shape occurs.** Tier 2, see [Intended divergences from Ensembl VEP](../intended-divergences.md): the shape is a transcript with two or more exons lacking a stable id, 12,512 of the 116,165 transcripts of the committed caches, in 5 corpora. Those are the merged and RefSeq caches, whose aligned RefSeq-source models (biotype `aligned_transcript`, written under `--all_refseq`) carry no exon ids. A record shows it when it overlaps two such exons, or lies in such a transcript's intron under `intronic=1`. Of the committed flag sets, none runs the plugin on a merged or RefSeq cache; the two that run it annotate from an Ensembl cache.
 
 Tuple, pair, set aside, charged and the other scoring terms are defined in [How to read the counts](../intended-divergences.md#how-to-read-the-counts).
 
 ## 1. A deletion across an intron of a transcript whose exons carry no id
 
-**In short.** `21 10578400 idless_two_exons ATAATG…GTTT A` on GRCh38 deletes 10578401-10578530: the last 18 bases of the exon at 10578337-10578418 (82 bases), the 98-base intron and the first 14 bases of the exon at 10578517-10578605 (89 bases) of `compmerge.2.Heart.chr21`, a model whose exons carry no stable id. Both engines run `--merged --all_refseq --use_given_ref --plugin NearestExonJB`. Ensembl VEP 116.2 writes `|64|start|89`, the first exon's distance and junction with the second exon's length; vep-rs writes `|64|start|82`. On the Ensembl transcripts of the same gene, whose exons carry ids, both engines write `ENSE00001659869|64|start|82`.
+**In short.** `21 10578400 idless_two_exons ATAATG…GTTT A` on GRCh38 deletes 10578401-10578530: the last 18 bases of the exon at 10578337-10578418 (82 bases), the 98-base intron and the first 14 bases of the exon at 10578517-10578605 (89 bases) of `compmerge.2.Heart.chr21`, a model whose exons carry no stable id. Both engines run `--merged --all_refseq --use_given_ref --plugin NearestExonJB`. Ensembl VEP 116.3 writes `|64|start|89`, the first exon's distance and junction with the second exon's length; vep-rs writes `|64|start|82`. On the Ensembl transcripts of the same gene, whose exons carry ids, both engines write `ENSE00001659869|64|start|82`.
 
 ### 1.1 What a reader needs to know first
 
@@ -42,7 +42,7 @@ Both engines run `--merged --all_refseq --use_given_ref --plugin NearestExonJB`.
 
 ### 1.3 What each engine writes
 
-The rows on `compmerge.2.Heart.chr21` and on `ENST00000427445`, whose exons `ENSE00001659869` and `ENSE00002240871` span the same two exons with ids, in the default format. Ensembl VEP 116.2 on the first deletion:
+The rows on `compmerge.2.Heart.chr21` and on `ENST00000427445`, whose exons `ENSE00001659869` and `ENSE00002240871` span the same two exons with ids, in the default format. Ensembl VEP 116.3 on the first deletion:
 
 ```
 idless_two_exons	21:10578401-10578530	-	compmerge.2.Heart.chr21	compmerge.2.Heart.chr21	Transcript	splice_acceptor_variant,splice_donor_variant,splice_donor_5th_base_variant,non_coding_transcript_exon_variant,intron_variant	1266-1297	-	-	-	-	-	IMPACT=HIGH;STRAND=1;SOURCE=RefSeq;NearestExonJB=|64|start|89
@@ -56,7 +56,7 @@ idless_two_exons	21:10578401-10578530	-	compmerge.2.Heart.chr21	compmerge.2.Hear
 idless_two_exons	21:10578401-10578530	-	ENSG00000274391	ENST00000427445	Transcript	splice_acceptor_variant,splice_donor_variant,frameshift_variant,splice_donor_5th_base_variant,intron_variant	1159-1190	807-838	269-280	HNVPTLHQMVVF/HX	caTAATGTCCCCACTCTACATCAGATGGTGGTTTTC/catc	-	IMPACT=HIGH;STRAND=1;SOURCE=Ensembl;NearestExonJB=ENSE00001659869|64|start|82
 ```
 
-Ensembl VEP 116.2 on the second deletion, the tie:
+Ensembl VEP 116.3 on the second deletion, the tie:
 
 ```
 idless_two_exons_tie	21:10578401-10578541	-	compmerge.2.Heart.chr21	compmerge.2.Heart.chr21	Transcript	splice_acceptor_variant,splice_donor_variant,splice_donor_5th_base_variant,non_coding_transcript_exon_variant,intron_variant	1266-1308	-	-	-	-	-	IMPACT=HIGH;STRAND=1;SOURCE=RefSeq;NearestExonJB=|64|end|89
@@ -72,7 +72,7 @@ idless_two_exons_tie	21:10578401-10578541	-	ENSG00000274391	ENST00000427445	Tran
 
 Each deletion writes 94 rows on models whose exons carry no id, the same 94 in both engines; 90 of them overlap both exons and 4 the second exon alone. The `NearestExonJB` cell on those rows:
 
-| Record | Rows | Ensembl VEP 116.2 | vep-rs |
+| Record | Rows | Ensembl VEP 116.3 | vep-rs |
 | --- | --- | --- | --- |
 | first deletion, both exons | 90 | `\|64\|start\|82` on 48, `\|64\|start\|89` on 42 | `\|64\|start\|82` on 90 |
 | first deletion, second exon alone | 4 | `\|75\|end\|89` | `\|75\|end\|89` |
@@ -98,17 +98,17 @@ vep -i record.vcf -o out.txt --offline --json_cache <merged cache> --assembly GR
   --merged --all_refseq --use_given_ref --plugin NearestExonJB
 ```
 
-vep-rs writes `NearestExonJB=|64|start|82` on the `compmerge.2.Heart.chr21` row of the first deletion and `|64|start|82,|64|end|89` on the tie's. Ensembl VEP 116.2 writes `|64|start|89` and `|64|end|89`. The `ENST00000427445` rows of the same record carry the per-exon items with their ids in both engines.
+vep-rs writes `NearestExonJB=|64|start|82` on the `compmerge.2.Heart.chr21` row of the first deletion and `|64|start|82,|64|end|89` on the tie's. Ensembl VEP 116.3 writes `|64|start|89` and `|64|end|89`. The `ENST00000427445` rows of the same record carry the per-exon items with their ids in both engines.
 
 ### 1.7 How the comparator treats this class
 
-The format comparator (`scripts/concordance/compare_vep_formats.py`) applies `nearest_exon_jb_id_less_exon_fold` when a comparison case names it. A `NearestExonJB` value is set aside, counted once per row, where both engines fill it with items of an empty exon id and Ensembl VEP's one item has the distance and the side of one of vep-rs's items. The row is one vep-rs gives two or more items, or one whose consequence carries both splice-site terms and whose cDNA position names two positions, a variant that begins in one exon and ends in another.
+The format comparator (`tools/vep-formats-compare`) applies `nearest_exon_jb_id_less_exon_fold` when a comparison case names it. A `NearestExonJB` value is set aside, counted once per row, where both engines fill it with items of an empty exon id and Ensembl VEP's one item has the distance and the side of one of vep-rs's items. The row is one vep-rs gives two or more items, or one whose consequence carries both splice-site terms and whose cDNA position names two positions, a variant that begins in one exon and ends in another.
 
 Any other difference stays one: a value with an exon id on either side, an Ensembl VEP item whose distance and side none of vep-rs's items has, and a deletion over one whole exon. That deletion's row carries both terms, but its cDNA position names no two positions, and it overlaps that exon alone. The golden harness compares the `GRCh38-plugin-computed` corpus's `NearestExonJB` cells as multisets, which that corpus's Ensembl cache, every exon with an id, never puts to the test.
 
 ## 2. An intronic record of such a transcript under `intronic=1`
 
-**In short.** `21 10521800 idless_intronic T A` on GRCh38 lies in the first intron of `compmerge.2.Heart.chr21`, 106 bases past exon 1 (10521560-10521694, 135 bases) and 2,780 bases before exon 2 (10524580-10524688, 109 bases). Under `--plugin NearestExonJB,intronic=1`, Ensembl VEP 116.2 writes one item, `|106|end|109`, exon 1's distance and junction with exon 2's length; vep-rs writes `|106|end|135,|2780|start|109`. Which exon's distance Ensembl VEP prints follows Perl's hash order: under a fixed hash seed every such row printed exon 1's, and in three runs under the default order 55, 54 and 54 of the 114 rows printed exon 1's and the rest `|2780|start|109`.
+**In short.** `21 10521800 idless_intronic T A` on GRCh38 lies in the first intron of `compmerge.2.Heart.chr21`, 106 bases past exon 1 (10521560-10521694, 135 bases) and 2,780 bases before exon 2 (10524580-10524688, 109 bases). Under `--plugin NearestExonJB,intronic=1`, Ensembl VEP 116.3 writes one item, `|106|end|109`, exon 1's distance and junction with exon 2's length; vep-rs writes `|106|end|135,|2780|start|109`. Which exon's distance Ensembl VEP prints follows Perl's hash order: under a fixed hash seed every such row printed exon 1's, and in three runs under the default order 55, 54 and 54 of the 114 rows printed exon 1's and the rest `|2780|start|109`.
 
 ### 2.1 What a reader needs to know first
 
@@ -124,7 +124,7 @@ Both engines run `--merged --all_refseq --use_given_ref --plugin NearestExonJB,i
 
 ### 2.3 What each engine writes
 
-The rows on `compmerge.2.Heart.chr21` and on `ENST00000427445` in the default format. Ensembl VEP 116.2:
+The rows on `compmerge.2.Heart.chr21` and on `ENST00000427445` in the default format. Ensembl VEP 116.3:
 
 ```
 idless_intronic	21:10521800	A	compmerge.2.Heart.chr21	compmerge.2.Heart.chr21	Transcript	intron_variant,non_coding_transcript_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;SOURCE=RefSeq;NearestExonJB=|106|end|109
@@ -155,7 +155,7 @@ vep -i record.vcf -o out.txt --offline --json_cache <merged cache> --assembly GR
   --merged --all_refseq --use_given_ref --plugin NearestExonJB,intronic=1
 ```
 
-vep-rs writes `NearestExonJB=|106|end|135,|2780|start|109` on the `compmerge.2.Heart.chr21` row in every run. Ensembl VEP 116.2 writes `|106|end|109` or `|2780|start|109`, and running it twice shows rows changing between the two.
+vep-rs writes `NearestExonJB=|106|end|135,|2780|start|109` on the `compmerge.2.Heart.chr21` row in every run. Ensembl VEP 116.3 writes `|106|end|109` or `|2780|start|109`, and running it twice shows rows changing between the two.
 
 ### 2.7 How the comparator treats this class
 

@@ -1,0 +1,13 @@
+======================================================================
+DISCORDANT CLASSIFICATION SUMMARY
+======================================================================
+
+Total discordants: 6
+
+By mismatch type:
+  true_extra                       3 ( 50.0%)
+  true_missing                     3 ( 50.0%)
+
+By mismatch type + direction:
+  true_extra                extra_in_rust        2
+  true_missing              missing_in_rust        2

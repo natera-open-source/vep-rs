@@ -1,0 +1,58 @@
+entry = "hgvsp_shifted_indel_written_span_start_test"
+page = "docs/divergences/hgvsp-shifted-indel-written-span-start-test.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "observed"
+input_class_basis = "2 · 137,702 per million · 95 flag sets, 144 corpora"
+notes = "Three made-up records on chromosome 21 of GRCh38, each written before the place the 3' shift moves it to. The first adds one base between the last base of the 5' UTR of the forward-strand ENST00000400183 and its first coding base, which it equals, and shifts one base to the duplication of coding base 1: the whole coding sequence stands after it, Ensembl VEP writes a frameshift at residue 1 with the unknown count and vep-rs the first residue unchanged. The second deletes the base before the first base of the forward-strand ENST00000652508, which has no 5' UTR, and its coding bases 1 to 6, and shifts one base onto coding bases 1 to 7: Ensembl VEP writes the same frameshift form and vep-rs the lost start to residue 3. The third deletes nine bases from the same base on, an in-frame length, and shifts two bases onto coding bases 2 to 10: Ensembl VEP writes a deletion of residues 1 to 3 and vep-rs the lost start over those three residues. On each row both engines write the terms and positions of the allele as written and the same HGVS_OFFSET; the HGVSc of the two deletions differs under hgvs_shifted_deletion_clamped_span."
+
+[input]
+format = "vcf"
+text = """
+21	15730393	inserted_before_the_coding_start	C	CA	.	.	.
+21	46326286	deleted_across_the_first_base	TCATGGTC	T	.	.	.
+21	46326286	deleted_in_frame_across_the_first_base	TCATGGTCCC	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-custom/json_cache"
+fasta = "tests/golden/116/GRCh38-custom/reference.fa.gz"
+
+[run]
+flags = ["--hgvs"]
+
+[compare]
+kind = "rows"
+where = { record = ["inserted_before_the_coding_start", "deleted_across_the_first_base", "deleted_in_frame_across_the_first_base"], feature = ["ENST00000400183", "ENST00000652508"] }
+columns = ["Consequence", "HGVSc", "HGVSp", "HGVS_OFFSET"]
+
+[expected]
+ensembl_vep = [
+  "5_prime_UTR_variant | ENST00000400183.7:c.1dup | ENSP00000383044.2:p.Met1AsnfsTer? | 1",
+  "coding_sequence_variant,5_prime_UTR_variant | ENST00000652508.1:c.2_7del | ENSP00000498568.1:p.Met1ProfsTer? | 1",
+  "coding_sequence_variant,5_prime_UTR_variant | ENST00000652508.1:c.3_10del | ENSP00000498568.1:p.Met1_Pro3del | 2",
+]
+vep_rs = [
+  "5_prime_UTR_variant | ENST00000400183.7:c.1dup | ENSP00000383044.2:p.Met1%3D | 1",
+  "coding_sequence_variant,5_prime_UTR_variant | ENST00000652508.1:c.1_7del | ENSP00000498568.1:p.Met1_?3 | 1",
+  "coding_sequence_variant,5_prime_UTR_variant | ENST00000652508.1:c.2_10del | ENSP00000498568.1:p.MetValPro1_?3 | 2",
+]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/coding.rs::PerlCodingEval::keeps_the_coding_sequence_whole_behind_the_allele",
+    "crates/vep-effects/src/coding.rs::hgvs_protein",
+]
+tests = [
+    "crates/vep-cli/tests/hgvsp_allele_moved_into_the_first_codon.rs::a_deletion_from_before_the_first_base_is_named_as_the_lost_start_at_its_3_prime_place",
+    "crates/vep-cli/tests/hgvsp_allele_moved_into_the_first_codon.rs::a_deletion_of_whole_codons_from_before_the_first_base_is_named_as_at_its_3_prime_place",
+    "crates/vep-cli/tests/hgvsp_allele_moved_into_the_first_codon.rs::an_insertion_before_the_coding_start_gets_the_notations_of_the_insertion_written_at_its_3_prime_place",
+    "crates/vep-cli/tests/hgvsp_allele_moved_into_the_first_codon.rs::the_shift_flag_changes_no_notation_of_an_allele_moved_into_the_first_codon",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/shifted_indel.rs::shifted_indel_written_span_start_test",
+    "tools/vep-formats-compare/src/rules/shifted_start_test.rs::start_test_read_on_the_written_span",
+    "tools/vep-golden-corpus/src/classify/hgvs.rs::shifted_indel_written_span_start_test",
+]

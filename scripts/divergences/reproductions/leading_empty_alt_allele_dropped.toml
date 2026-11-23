@@ -1,7 +1,7 @@
 entry = "leading_empty_alt_allele_dropped"
 page = "docs/divergences/defect-o.md#25-a-sequence-record-whose-first-alt-is-empty"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "malformed"
 input_class_basis = "an ALT allele is a base String, an angle-bracketed ID String or a breakend replacement string, and the missing value stands where a record has no alternate allele (VCF 4.2 specification, section 1.4.1 \"Fixed fields\", ALT): the first of the record's two ALT alleles is empty"
 notes = "The ALT column `,G` has an empty first part: Ensembl VEP minimises the working string `C//G` as the single deletion `C/-` and drops the `G` allele; vep-rs writes both alleles."
@@ -32,3 +32,7 @@ vep_rs = [
   "21:30289183 | - | ENST00000416044 | stop_retained_variant | 1 | C//G | sequence_alteration",
   "21:30289183 | G | ENST00000416044 | stop_lost | 2 | C//G | sequence_alteration",
 ]
+
+[implementation]
+code = ["crates/vep-cli/src/vcf_parser.rs::sequence_variants"]
+tests = ["crates/vep-cli/tests/filter_report_and_run_documented_rows.rs::a_leading_empty_alt_keeps_the_allele_written_after_it"]

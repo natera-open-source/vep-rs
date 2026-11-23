@@ -11,7 +11,7 @@
  "covers": [
   "OpenTargets"
  ],
- "suites": {
+ "datasets": {
   "GRCh38-plugin-opentargets": {
    "reference": "default.txt",
    "input": "variants.vcf",
@@ -51,14 +51,14 @@
  },
  "records": [
   {
-   "suite": "GRCh38-plugin-opentargets",
+   "dataset": "GRCh38-plugin-opentargets",
    "vcf": "21\t5290136\tot_qtl_deletion_lead_sqtl\tGT\tG\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-plugin-opentargets",
+   "dataset": "GRCh38-plugin-opentargets",
    "vcf": "21\t13980370\tot_qtl_comma_biosample\tC\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -67,7 +67,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-opentargets",
+   "dataset": "GRCh38-plugin-opentargets",
    "vcf": "21\t14281918\tot_gwas_three_leads\tG\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -75,7 +75,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-opentargets",
+   "dataset": "GRCh38-plugin-opentargets",
    "vcf": "21\t14640467\tot_gwas_deletion_lead\tGAAT\tG\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -83,7 +83,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-opentargets",
+   "dataset": "GRCh38-plugin-opentargets",
    "vcf": "21\t14824378\tot_gwas_and_eqtl_leads\tC\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -92,7 +92,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-opentargets",
+   "dataset": "GRCh38-plugin-opentargets",
    "vcf": "21\t14881104\tot_gwas_four_leads\tA\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -100,7 +100,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-opentargets",
+   "dataset": "GRCh38-plugin-opentargets",
    "vcf": "21\t14881104\tot_gwas_multiallelic\tA\tG,T\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -108,7 +108,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-opentargets",
+   "dataset": "GRCh38-plugin-opentargets",
    "vcf": "21\t14881110\tot_no_record\tT\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -116,7 +116,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-opentargets",
+   "dataset": "GRCh38-plugin-opentargets",
    "vcf": "21\t14971491\tot_gwas_lead_and_nonlead\tA\tG\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -125,7 +125,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-opentargets",
+   "dataset": "GRCh38-plugin-opentargets",
    "vcf": "21\t14971491\tot_gwas_other_allele\tA\tT\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -134,7 +134,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-opentargets",
+   "dataset": "GRCh38-plugin-opentargets",
    "vcf": "21\t14979687\tot_gwas_insertion_lead\tG\tGT\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -142,7 +142,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-opentargets",
+   "dataset": "GRCh38-plugin-opentargets",
    "vcf": "21\t15067644\tot_gwas_and_eqtl_two_leads\tA\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -151,7 +151,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-opentargets",
+   "dataset": "GRCh38-plugin-opentargets",
    "vcf": "21\t15551809\tot_sqtl_lead_gwas_nonlead_empty_cells\tG\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -159,7 +159,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-opentargets",
+   "dataset": "GRCh38-plugin-opentargets",
    "vcf": "21\t15610527\tot_gwas_nonlead_only\tG\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -167,7 +167,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-opentargets",
+   "dataset": "GRCh38-plugin-opentargets",
    "vcf": "21\t46526393\tot_gwas_insertion_nonlead\tA\tAT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -177,7 +177,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-opentargets",
+   "dataset": "GRCh38-plugin-opentargets",
    "vcf": "21\t46538370\tot_gwas_deletion_nonlead\tGTGTC\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",

@@ -1,0 +1,38 @@
+entry = "clin_sig_allele_term_order"
+page = "docs/divergences/clin-sig-allele-term-order.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "observed"
+input_class_basis = "2 · 9 of 35,796 table rows · 1 flag set, 1 corpus"
+notes = "Ensembl VEP reads the known variant rs1569061768 from its own cache of release 116, whose clin_sig_allele cell its dump joined from the keys of a hash; vep-rs reads it from the committed native cache, which vep-cache-builder built from the same release's ClinVar tables in the order of the records' identifiers. The two cells hold the same four pairs. The row compared is the one of ENST00000300305; the record's other twelve rows carry the same value."
+
+[input]
+text = """
+21	34859477	runx1_two_terms	G	A	.	.	.
+"""
+
+[cache]
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-native-builder/json_cache"
+
+[run]
+flags = ["--check_existing"]
+
+[compare]
+kind = "field"
+field = "CLIN_SIG"
+where = { record = "runx1_two_terms", feature = "ENST00000300305" }
+
+[expected]
+ensembl_vep = ["likely_pathogenic,pathogenic"]
+vep_rs = ["pathogenic,likely_pathogenic"]
+
+[implementation]
+code = [
+    "crates/vep-cache-builder/src/variation.rs::ClinVarAttribs::apply",
+    "crates/vep-cache-builder/src/variation.rs::ClinVarAttribs::load",
+]
+tests = [
+    "crates/vep-cache-builder/tests/variation_cache_from_dumps.rs::clinvar_pairs_stand_in_the_order_of_their_records_identifiers",
+    "crates/vep-cli/tests/clinvar_terms_of_one_allele_on_a_native_cache.rs::the_terms_of_one_allele_stand_in_the_order_of_the_native_cache",
+]

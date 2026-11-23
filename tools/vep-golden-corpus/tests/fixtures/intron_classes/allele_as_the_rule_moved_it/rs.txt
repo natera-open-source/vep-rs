@@ -1,0 +1,6 @@
+rec_forward	1:11097	TTA	ENSG1	ENST00000000001	Transcript	frameshift_variant,splice_region_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1;HGVSc=ENST00000000001.1:c.50_50+1insTTA;HGVS_OFFSET=2
+rec_forward_located_moved	1:21099	TTA	ENSG1	ENST00000000002	Transcript	frameshift_variant,splice_region_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1;HGVSc=ENST00000000002.1:c.50_50+1insTTA;HGVS_OFFSET=2
+rec_reverse	1:211501	TAA	ENSG1	ENST00000000021	Transcript	frameshift_variant,splice_region_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=-1;HGVSc=ENST00000000021.1:c.50_50+1insTTA;HGVS_OFFSET=-2
+rec_reverse_located_moved	1:211499	TAA	ENSG1	ENST00000000021	Transcript	frameshift_variant,splice_region_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=-1;HGVSc=ENST00000000021.1:c.50_50+1insTTA;HGVS_OFFSET=-2
+rec_neither_reading	1:31097	ATT	ENSG1	ENST00000000003	Transcript	frameshift_variant,splice_region_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1;HGVSc=ENST00000000003.1:c.50_50+1insTTA;HGVS_OFFSET=2
+rec_neither_place	1:41095	TTA	ENSG1	ENST00000000004	Transcript	frameshift_variant,splice_region_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1;HGVSc=ENST00000000004.1:c.50_50+1insTTA;HGVS_OFFSET=2

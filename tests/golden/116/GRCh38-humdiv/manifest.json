@@ -14,7 +14,7 @@
  "covers": [
   "humdiv"
  ],
- "suites": {
+ "datasets": {
   "pool38": {
    "reference": "candidates.perl.txt",
    "input": "candidates.vcf",
@@ -68,7 +68,7 @@
  },
  "records": [
   {
-   "suite": "pool38",
+   "dataset": "pool38",
    "vcf": "21\t30590247\t.\tT\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -77,7 +77,7 @@
    ]
   },
   {
-   "suite": "pool38",
+   "dataset": "pool38",
    "vcf": "21\t30590253\t.\tG\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -86,7 +86,7 @@
    ]
   },
   {
-   "suite": "pool38",
+   "dataset": "pool38",
    "vcf": "21\t30590278\t.\tA\tC\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -95,7 +95,7 @@
    ]
   },
   {
-   "suite": "pool38",
+   "dataset": "pool38",
    "vcf": "21\t30598828\t.\tC\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -104,7 +104,7 @@
    ]
   },
   {
-   "suite": "pool38",
+   "dataset": "pool38",
    "vcf": "21\t30616459\t.\tT\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -113,7 +113,7 @@
    ]
   },
   {
-   "suite": "pool38",
+   "dataset": "pool38",
    "vcf": "21\t30620689\t.\tT\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -121,7 +121,7 @@
    ]
   },
   {
-   "suite": "pool38",
+   "dataset": "pool38",
    "vcf": "21\t30620707\t.\tT\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -129,7 +129,7 @@
    ]
   },
   {
-   "suite": "pool38",
+   "dataset": "pool38",
    "vcf": "21\t30620752\t.\tG\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -137,7 +137,7 @@
    ]
   },
   {
-   "suite": "pool38",
+   "dataset": "pool38",
    "vcf": "21\t33027770\t.\tC\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -147,7 +147,7 @@
    ]
   },
   {
-   "suite": "pool38",
+   "dataset": "pool38",
    "vcf": "21\t34419237\t.\tG\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -156,7 +156,7 @@
    ]
   },
   {
-   "suite": "pool38",
+   "dataset": "pool38",
    "vcf": "21\t34419274\t.\tG\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -165,7 +165,7 @@
    ]
   },
   {
-   "suite": "pool38",
+   "dataset": "pool38",
    "vcf": "21\t34419291\t.\tT\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -174,7 +174,7 @@
    ]
   },
   {
-   "suite": "pool38",
+   "dataset": "pool38",
    "vcf": "21\t42893346\t.\tT\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -184,7 +184,7 @@
    ]
   },
   {
-   "suite": "pool38",
+   "dataset": "pool38",
    "vcf": "21\t42893348\t.\tT\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -194,7 +194,7 @@
    ]
   },
   {
-   "suite": "pool38",
+   "dataset": "pool38",
    "vcf": "21\t42893359\t.\tA\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -204,7 +204,7 @@
    ]
   },
   {
-   "suite": "pool38",
+   "dataset": "pool38",
    "vcf": "21\t44774726\t.\tA\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -216,7 +216,7 @@
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "divergences": [],

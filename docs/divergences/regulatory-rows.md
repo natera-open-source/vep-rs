@@ -1,6 +1,6 @@
 # `--regulatory`: the warning, the SPDI chromosome name, the GFF index and five defects
 
-Three differences under `--regulatory`, each outside the flags the measured datasets run with, then five defects of Ensembl VEP 116.2's regulatory file reader and breakend lookup that vep-rs does not reproduce; nothing is set aside in the concordance figures. Ensembl VEP writes no message against vep-rs's warning on a cache without regulatory data, the cache's chromosome name against the FASTA's in a regulatory-only record's `--spdi` rows, and its library's message against an `ERROR` for a `--regulatory_gff` file without an index. It misses a promoter past its seek margin, prints GFF3 escapes, drops a row sharing an identifier, and repeats a breakend's row or adds one for another chromosome's mate; vep-rs writes each row once, decoded, and none for that mate.
+Three differences under `--regulatory`, each outside the flags the measured datasets run with, then five defects of Ensembl VEP 116.3's regulatory file reader and breakend lookup that vep-rs does not reproduce; nothing is set aside in the concordance figures. Ensembl VEP writes no message against vep-rs's warning on a cache without regulatory data, the cache's chromosome name against the FASTA's in a regulatory-only record's `--spdi` rows, and its library's message against an `ERROR` for a `--regulatory_gff` file without an index. It misses a promoter past its seek margin, prints GFF3 escapes, drops a row sharing an identifier, and repeats a breakend's row or adds one for another chromosome's mate; vep-rs writes each row once, decoded, and none for that mate.
 
 ## A cache without regulatory data
 
@@ -16,17 +16,17 @@ A record that overlaps a transcript takes the transcript's slice first on both e
 
 ## The index of a `--regulatory_gff` file
 
-Both engines read a `--regulatory_gff` file through tabix, so each file is bgzip-compressed and tabix-indexed. The regulatory-feature file Ensembl distributes comes without an index, which `tabix -p gff <file>` writes. Ensembl VEP opens the file through its tabix library (`AnnotationSource/File/RegFeat.pm` lines 204 to 209), which ends the run with the library's own message when the index is missing. vep-rs ends the run before any file is read, with `ERROR: [cli] --regulatory_gff <key> file <file> has no tabix index`, naming the key and the file as the other refusals of the flag do.
+Both engines read a `--regulatory_gff` file through tabix, so each file is bgzip-compressed and tabix-indexed. The regulatory-feature file Ensembl distributes comes without an index, which `tabix -p gff <file>` writes. Ensembl VEP opens the file through its tabix library (`AnnotationSource/File/RegFeat.pm` lines 204 to 209), which ends the run with the library's own message when the index is missing. vep-rs ends the run before any file is read, with `ERROR: [cli] --regulatory_gff <key>=<file> has no tabix index`, naming the key and the file as the other refusals of the flag do.
 
 ## The comparator
 
-A golden corpus whose cache holds no regulatory tree compares the two engines with the mask class `regulatory_feature_rows`, which the test runner and `scripts/concordance/compare_vep_formats.py --masks` both apply. The reference's `RegulatoryFeature` and `MotifFeature` rows are set aside, and the `most_severe_consequence` of each JSON record that lost such a row is recomputed from the rows that remain. `--keep-only regulatory_feature_rows` compares those rows alone. Of the committed corpora, four carry the class, each on its `everything` flag set: `BDGP6.54-fly`, `GRCm39-mouse`, `R64-1-1-yeast` and `TAIR10-arabidopsis`, whose converted caches hold no regulatory tree where the reference run's caches did.
+A golden corpus whose cache holds no regulatory tree compares the two engines with the mask class `regulatory_feature_rows`, which the test runner and `tools/vep-formats-compare --masks` both apply. The reference's `RegulatoryFeature` and `MotifFeature` rows are set aside, and the `most_severe_consequence` of each JSON record that lost such a row is recomputed from the rows that remain. `--keep-only regulatory_feature_rows` compares those rows alone. Of the committed corpora, the class is carried by `everything` flag sets alone, each of a corpus whose species directory is not `homo_sapiens` and whose converted cache holds no regulatory tree, whatever the cache of its reference run held.
 
 ## Where the regulatory file reader and the breakend lookup differ from Ensembl VEP
 
-Five behaviours of Ensembl VEP 116.2 are not reproduced. Each is a documented class, which no comparison tool applies: no committed dataset carries a row of it. [Intended divergences from Ensembl VEP](../intended-divergences.md) lists it; its [How to read the counts](../intended-divergences.md#how-to-read-the-counts) defines the terms. Every row below is in the default output format unless the section names another, against the Ensembl 116 GRCh38 cache of chromosome 21 and, for the `--regulatory_gff` examples, a regulatory GFF3 of one or two lines written for the example.
+Five behaviours of Ensembl VEP 116.3 are not reproduced. Each is a documented class, which no comparison tool applies: no committed dataset carries a row of it. [Intended divergences from Ensembl VEP](../intended-divergences.md) lists it; its [How to read the counts](../intended-divergences.md#how-to-read-the-counts) defines the terms. Every row below is in the default output format unless the section names another, against the Ensembl 116 GRCh38 cache of chromosome 21 and, for the `--regulatory_gff` examples, a regulatory GFF3 of one or two lines written for the example.
 
-Each class carries its tier under that page's rule: tier 1 is a shape the chromosome 21 population cuts carry with no flag, tier 2 one that needs a flag or plugin on ordinary data, tier 3 one ordinary data does not carry. The counts are over the cuts' 15,646,481 records, the 111 golden corpora and their 392 flag sets. The regulatory and motif rows themselves, their terms and their fields are otherwise the same on both engines ([Regulatory and motif features](../regulatory.md)). The two field values that differ have their own pages: [the motif score of a multi-base allele on a reverse-strand motif](motif-score-reverse-strand.md) and [`--cell_type` names with a comma](cell-type-comma-names.md), which also carries [the empty `--cell_type` value](cell-type-comma-names.md#an-empty---cell_type-value).
+Each class carries its tier under that page's rule: tier 1 is a shape the chromosome 21 cuts carry with no flag, tier 2 one that needs a flag or plugin on ordinary data, tier 3 one ordinary data does not carry. The counts are over the cuts' 15,646,481 records, the 152 golden corpora and their 511 flag sets. The regulatory and motif rows themselves, their terms and their fields are otherwise the same on both engines ([Regulatory and motif features](../regulatory.md)). The two field values that differ have their own pages: [the motif score of a multi-base allele on a reverse-strand motif](motif-score-reverse-strand.md) and [`--cell_type` names with a comma](cell-type-comma-names.md), which also carries [the empty `--cell_type` value](cell-type-comma-names.md#an-empty---cell_type-value).
 
 ### 1. A promoter whose extension reaches past the seek margin of the next 1 Mb region
 
@@ -36,7 +36,7 @@ Each class carries its tier under that page's rule: tier 1 is a shape the chromo
 
 **What vep-rs does instead.** vep-rs reads each chromosome of the file whole into one index, so a widened promoter is found for every variant its extension covers, whatever the distance from its core and whatever else the buffer holds.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3):
 
 - `Bio/EnsEMBL/VEP/AnnotationSource/File/RegFeat.pm`, lines 110-113: the margin constant and its comment. Lines 301-311, `_get_regfeats_by_coords`: the tabix seek of a 1 Mb region padded by the margin on each side, and the read loop ending at the first record that starts beyond the padded end.
 - The same file, lines 360-365, `_record_to_regfeat`: the widening to `extended_start` and `extended_end`, applied only to the records the padded seek returned. `Bio/EnsEMBL/VEP/AnnotationSource.pm`, lines 190-200, and `Bio/EnsEMBL/VEP/AnnotationType/RegFeat.pm`, lines 165-167, `up_down_size`: the regions read are those of the buffer's variants, with no flank for a regulatory source.
@@ -61,7 +61,7 @@ A core at `21:21000100`, inside the margin, is found by both engines; one at `21
 
 **What vep-rs does instead.** vep-rs decodes every `%XX` escape, in either letter case, in every attribute value it prints, so the identifier, `MOTIF_NAME` and `TRANSCRIPTION_FACTORS` carry the characters the file encodes. The `transcription_factor` list is split on the commas written, as Ensembl VEP splits it, each name decoded after. A promoter's `extended_start` or `extended_end` holding an escape is read, under `--extended_promoters`, as the number it encodes. Ensembl VEP compares the written text as the number 0, so an escaped `extended_start` widens the promoter to the chromosome's start and an escaped `extended_end` leaves its end as written.
 
-**Where it is in Ensembl VEP's source** (`ensembl-io` at release/116, `ensembl-vep` at release/116.2):
+**Where it is in Ensembl VEP's source** (`ensembl-io` at release/116, `ensembl-vep` at release/116.3):
 
 - `Bio/EnsEMBL/IO/Parser/GFF3.pm`, lines 190-198, `get_attributes`: `split(';', ...)` then `split('=', $attr)`, no decoding. Lines 174-183, `get_attribute_by_name`: `decode_string($value)`; lines 151-164, `get_source` and `get_type`: decoded likewise. `Bio/EnsEMBL/IO/Parser/GXF.pm`, lines 303-307, `decode_string`: `uri_unescape`.
 - `Bio/EnsEMBL/VEP/AnnotationSource/File/RegFeat.pm`, line 353: `$parser->get_attributes`. Lines 372, 438 and 441: the `ID` or `Name`, `transcription_factor` and `binding_matrix_id` values read from that hash into the feature.
@@ -84,7 +84,7 @@ A core at `21:21000100`, inside the margin, is found by both engines; one at `21
 
 **What vep-rs does instead.** vep-rs writes one row per record that overlaps the variant, so both features print, each with its own `BIOTYPE`. Two records of one file sharing an identifier are one feature on both engines, the later record's, with Ensembl VEP's warning ([Regulatory features from GFF files](../regulatory.md#regulatory-features-from-gff-files)).
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2, `ensembl-variation` at release/116):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3, `ensembl-variation` at release/116):
 
 - `Bio/EnsEMBL/VEP/AnnotationSourceAdaptor.pm`, lines 272-275 and 284-300, `get_all_regulatory_gff`: the comment quoted above, then the `file` and `emars` instances built in that order.
 - `Bio/EnsEMBL/Variation/VariationFeature.pm`, line 918, `add_RegulatoryFeatureVariation`: `$self->{regulatory_feature_variations}->{$rfv->regulatory_feature_stable_id} = $rfv`, one hash for every source; line 710: the rows written from its keys.
@@ -108,7 +108,7 @@ A core at `21:21000100`, inside the margin, is found by both engines; one at `21
 
 **What vep-rs does instead.** vep-rs writes a feature's row once per allele of the record, however many of the record's positions lie inside the feature.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2, `ensembl-variation` at release/116):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3, `ensembl-variation` at release/116):
 
 - `Bio/EnsEMBL/VEP/InputBuffer.pm`, lines 380-390, `interval_tree`: the variant inserted at its own span and at each breakend position. Lines 320-343, `get_overlapping_vfs`: each fetched copy pushed for its own span and again for each breakend position inside the query.
 - `Bio/EnsEMBL/VEP/AnnotationType/RegFeat.pm`, lines 125-136, `annotate_InputBuffer`: one `StructuralVariationOverlap` per listing, pushed onto `$vf->{regulation_structural_variations}->{$type}`. `Bio/EnsEMBL/Variation/StructuralVariationFeature.pm`, lines 495-502: that array written as it stands.
@@ -118,7 +118,7 @@ A core at `21:21000100`, inside the margin, is found by both engines; one at `21
 
 **The class it produces.** `regulatory_breakend_listing_duplicates`: under `--regulatory`, a `RegulatoryFeature` or `MotifFeature` row of a breakend record (a JSON `regulatory_feature_consequences` or `motif_feature_consequences` entry) that Ensembl VEP writes more than once, byte for byte. The golden harness and the format comparator compare every copy as an entry of its own, so they report the repeats as entries vep-rs lacks. No row on the committed datasets: the two breakends of the GRCh38 regulatory dataset's structural input (`bnd_mate_far`, `bnd_mate_near`) have their mates outside every regulatory feature. The class is documented only.
 
-**How often the shape occurs.** Tier 3: the shape is a bracket breakend whose mate is on its own chromosome; the regulatory build decides whether one feature spans both ends. None of the cuts' 15,646,481 records is one, 9 corpora carry such breakends, and 25 flag sets run `--regulatory`, six of them through `--regulatory_gff`, whose option set switches it on.
+**How often the shape occurs.** Tier 3: the shape is a bracket breakend whose mate is on its own chromosome; the regulatory build decides whether one feature spans both ends. None of the cuts' 15,646,481 records is one, 10 corpora carry such breakends, and 60 flag sets run `--regulatory`, six of them through `--regulatory_gff`, whose option set switches it on.
 
 #### 4.1 A breakend at `21:5040000` whose mate at `21:5040250` lies in the same feature
 
@@ -132,7 +132,7 @@ A core at `21:21000100`, inside the margin, is found by both engines; one at `21
 
 **What vep-rs does instead.** vep-rs looks a mate's position up against the features of the mate's chromosome alone, so a mate on another chromosome adds no row for the record's own chromosome, and a record's rows do not depend on its neighbours in the buffer.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2, `ensembl-variation` at release/116):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3, `ensembl-variation` at release/116):
 
 - `Bio/EnsEMBL/VEP/AnnotationType/RegFeat.pm`, line 125, `annotate_InputBuffer`: `get_overlapping_vfs($rf->{start}, $rf->{end})`, two arguments and no chromosome; `AnnotationType/Transcript.pm`, line 108, passes the transcript's chromosome.
 - `Bio/EnsEMBL/VEP/InputBuffer.pm`, lines 339-341: a variant is listed when a mate's position lies in the query and the chromosome test passes; line 351: that test returns true when the query names no chromosome. Lines 387-389: the tree holds the variant at each mate's position.
@@ -143,7 +143,7 @@ A core at `21:21000100`, inside the margin, is found by both engines; one at `21
 
 **The class it produces.** `regulatory_other_chromosome_mate_row`: under `--regulatory`, a `RegulatoryFeature` or `MotifFeature` row of a paired breakend's own allele (a JSON `regulatory_feature_consequences` or `motif_feature_consequences` entry) that Ensembl VEP alone writes, with `intergenic_variant`. The feature is on the record's chromosome, and the position number of a mate on another chromosome falls in it. The class is documented only. No committed comparison carries such a row: none of the 6 corpora whose breakends name a mate on another chromosome runs `--regulatory`.
 
-**How often the shape occurs.** Tier 3: the shape is a bracket breakend whose mate is on another chromosome; the regulatory build and the buffer's span decide whether the mate's number lands in a feature within 5,000 bases of the record. None of the cuts' 15,646,481 records is one, 6 corpora carry such breakends, and 25 flag sets run `--regulatory`, six of them through `--regulatory_gff`, whose option set switches it on.
+**How often the shape occurs.** Tier 3: the shape is a bracket breakend whose mate is on another chromosome; the regulatory build and the buffer's span decide whether the mate's number lands in a feature within 5,000 bases of the record. None of the cuts' 15,646,481 records is one, 6 corpora carry such breakends, and 60 flag sets run `--regulatory`, six of them through `--regulatory_gff`, whose option set switches it on.
 
 #### 5.1 A breakend at `21:5038000` whose mate is `1:5040100`
 

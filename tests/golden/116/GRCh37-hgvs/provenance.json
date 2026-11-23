@@ -1,7 +1,7 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "divergences_classified_against": {
   "engine": "vep-rs",
@@ -12,22 +12,22 @@
    "--hgvs"
   ]
  },
- "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --hgvs --fasta reference.fa [--tab|--vcf|--json]",
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --stats_text --quiet --force_overwrite --hgvs [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh37",
  "fasta": "GRCh37 chromosome 21, complete, from Homo_sapiens.GRCh37.75.dna.primary_assembly.fa (reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form); Ensembl VEP received it as --fasta, and the golden run of vep-rs reads it with no --fasta as the indexed .fa.gz found in its cache directory, where the golden test runner places the file with its indexes (fasta_in_cache in the manifest)",
- "input": "variants.vcf: chromosome 21 records from ClinVar GRCh37 (ID the ClinVar VariationID) and gnomAD v2.1.1, weighted towards the protein-level consequence terms the manifest's focus_terms name; the manifest's records list carries every line",
- "generator": "scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; scripts/golden/build_golden_corpus.py classify --field HGVSc --field HGVSp",
+ "input": "variants.vcf: chromosome 21 records from ClinVar GRCh37 (ID the ClinVar VariationID) and gnomAD v2.1.1, weighted towards the protein-level consequence terms the manifest's focus_terms name; the manifest's records list carries every line. The source records' own annotation key carried identifiers under restricted redistribution terms in two records; the committed files carry fabricated identifiers of the same shape in their place.",
+ "generator": "scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; tools/vep-golden-corpus classify --field HGVSc --field HGVSp --field HGVS_OFFSET",
  "sha256": {
-  "default.txt": "f582d9768b41457b858743d0b68a400f4409b010a78822f74b207ff8bf4c563e",
-  "tab.txt": "104ed891705a2e2995abbb9b04cdc6d5c269d995fafb64ab36e9d86be20ed483",
-  "vcf.vcf": "3ce30bc1399fb7571486c4224eba3a3611022c9496140d37a2d031ea38e5cef4",
-  "json.jsonl": "54f63fc8c69e4fe45a13adf85ec594dd1e7ecbb117f6763ad86fa76e26c098cf",
-  "default.summary.log": "41fbe4cd9f610d9bc1da6da286bc4118d68c5ec16a0cce3c87bc93c4ab082a5c",
-  "tab.summary.log": "3cff7e3cc0ab5be464213978542de30507d5466d8ce85c809acfe45b0666b8f4",
-  "vcf.summary.log": "6f98598cd6b25d68884af4dd25f9646b4f29a52f18c8a7926b355a6f70d53a57",
-  "json.summary.log": "fbb159d1dc8c0c851a3f95c8490ef1674d0e2f0581b286c4b8859bfd5b256a52"
+  "default.txt": "99d57697c31182a67cc834e691661dc1068838c56fdc93642132de876b238f35",
+  "tab.txt": "b416b46430dfa8c2abe25eca0e94b25362c009339c092eff8a74c6ff36298a20",
+  "vcf.vcf": "d996b19315848b0daf90b756f242878ccfd46f714326cef1a71348ef152102e2",
+  "json.jsonl": "2f0b0a4f9a3e7a7b090456acc6166a8caf4ab68176ab011d650b133ad77c29a0",
+  "default.summary.log": "9af569f0f08d2af8a82a552c46b76dfa0ad5d589993431b012fc9e18146b276d",
+  "tab.summary.log": "8527fd6fb0d004a8d51a3e3366c80aa5f0bd6b2a8c33d7918467bdef6a271e67",
+  "vcf.summary.log": "1e343bd3b1213c12777dbbc517000efd90d6a55e087a1793bf77eefebd0d2087",
+  "json.summary.log": "dfb02070db2bea7e91d6c9fefa80867e483ad0c4910aa58b92ee9c3c3737bc9b"
  },
- "variants_vcf_sha256": "25486466cc68e72290d84b0e26a74869a3c57e3591d380a3360672d904865cde",
+ "variants_vcf_sha256": "fe18003bc27160edd3a7492e3f2ef3d08fb588bf204f9d5628aed0b830eb7ab3",
  "pruned_cache": {
   "transcripts_per_chromosome": {
    "21": 839
@@ -39,20 +39,25 @@
  },
  "flag_sets": {
   "hgvsg": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
-   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --hgvs --hgvsg --fasta reference.fa [--tab|--vcf|--json]",
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs --hgvsg [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh37",
-   "fasta": "reference.fa.gz beside this file, decompressed, on both sides",
+   "fasta": "reference.fa.gz",
    "input": "variants.vcf",
    "sha256": {
-    "default.txt": "238871ec102c61d2ee1c34eaf79181ead6b04459dc3162cc7b573ff6184e99f2",
-    "tab.txt": "f61b72557ab37a6437538b443c49e498a393ed58f2e59b15c685cf231c034616",
-    "vcf.vcf": "40bb7a8cae281f8112d0041af30b2ef3b141a03495038f6eb9fe69bd174d221b",
-    "json.jsonl": "feda83240f92e687fd2c0e9d366cae39a1d123c7483879dc3e4e10d0bb1c68e8"
-   }
+    "default.txt": "2a4115479d9057e8ed50196d5417c3d2e19f63c89f975d31c48c5739bcaf4207",
+    "tab.txt": "31d1f41e20879a8ffe014beab1b0350bb0f3adae3643102bc2f91e49671c1732",
+    "vcf.vcf": "c14369168752005b9d7b9542aa1189aa684d0def1a6a94aa2e295c7bf74e7792",
+    "json.jsonl": "32640fd1ee6db3d3766ca8efe5a97f693f7cedd1a6a4049138ef63ab2b375036"
+   },
+   "flags": [
+    "--hgvs",
+    "--hgvsg"
+   ],
+   "expected_dir": "expected_hgvsg"
   }
  },
  "summary_log": {

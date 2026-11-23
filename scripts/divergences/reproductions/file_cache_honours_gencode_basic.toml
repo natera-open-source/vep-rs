@@ -1,9 +1,9 @@
 entry = "file_cache_honours_gencode_basic"
 page = "docs/divergences/file-cache-honours-gencode-basic.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 876 of 77,675 cache transcripts · 2 flag sets, 2 corpora"
+input_class_basis = "2 · 876 of 116,165 cache transcripts · 2 flag sets, 2 corpora"
 notes = "Ensembl VEP applies --gencode_basic in filter_transcript (AnnotationType/Transcript.pm:223), which only its cache and database sources call (Cache/Transcript.pm:241, Database/Transcript.pm:251), so its --gtf source annotates every transcript under the flag; the cache built from the dataset's GTF drops ENST00000657104, which the file tags gencode_primary and Ensembl_canonical but not gencode_basic. Without the flag both engines write both rows."
 
 [input]
@@ -34,3 +34,14 @@ ensembl_vep = [
   "21:22098664 | C | ENST00000657104 | non_coding_transcript_exon_variant",
 ]
 vep_rs = ["21:22098664 | C | ENST00000419431 | non_coding_transcript_exon_variant"]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/transcript_index.rs::TranscriptSet::accepts_file_transcript",
+    "crates/vep-cli/src/transcript_index.rs::TranscriptSet::accepts_model",
+]
+tests = [
+    "crates/vep-cli/src/gene_model.rs::tests::the_gencode_flags_keep_a_files_tagged_transcripts",
+    "crates/vep-cli/tests/documented_subsets.rs::file_cache_gencode_flags_divergence_is_documented",
+    "crates/vep-cli/tests/gene_model_beside_cache.rs::gencode_basic_filters_a_files_transcripts_as_the_caches",
+]

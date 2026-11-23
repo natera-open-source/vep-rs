@@ -1,7 +1,7 @@
 entry = "non_integer_end_annotated"
 page = "docs/divergences/defect-k.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the VCF 4.2 specification in one shape, an END written with leading zeros or a plus sign, which the entry's page calls the same shape without the arithmetic (Ensembl VEP's Location carries the text, both comparators read it as its number, and the page sets such rows outside the comparator class): the text declares END Type=Integer (section 3 \"INFO keys used for structural variants\") and states no rule of spelling for an Integer; not seen in the measured datasets; classed by that shape: an END, SVLEN or POS text that is a fraction, an exponent or NaN breaks the Integer type (section 3 and section 1.4.1 \"Fixed fields\", POS \"(Integer, Required)\")"
 notes = "The first mechanism of the page, a fractional INFO/END: Ensembl VEP annotates the record with the text in its Location and a fractional DISTANCE; vep-rs refuses the END and writes no row."
@@ -36,3 +36,20 @@ ensembl_vep = [
   "21:30425651-30425949.5 | deletion | ENST00000390690 | feature_truncation,coding_sequence_variant,5_prime_UTR_variant | -",
 ]
 vep_rs = []
+
+[implementation]
+code = [
+    "crates/vep-core/src/coordinate.rs::parse_pos",
+    "crates/vep-core/src/sv_span.rs::structural_end",
+    "crates/vep-core/src/sv_span.rs::svlen_values",
+]
+tests = [
+    "crates/vep-cli/src/pipeline.rs::tests::refused_record_descriptions_follow_perl_order",
+    "crates/vep-cli/tests/documented_subsets.rs::svlen_nan_deletion_exclusion_is_documented",
+    "crates/vep-core/src/coordinate.rs::tests::parse_pos_reads_an_exact_integer_in_any_spelling",
+    "crates/vep-core/src/sv_span.rs::tests::an_end_before_the_start_or_not_a_coordinate_is_refused",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/structural.rs::filter_non_integer_end_rows",
+    "tools/vep-outputs-compare/src/rules/one_sided.rs::dot_breakend_and_coordinate_rows",
+]

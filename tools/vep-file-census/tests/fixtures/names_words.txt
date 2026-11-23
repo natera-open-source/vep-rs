@@ -1,0 +1,4 @@
+'tree/sub/c d.json' tree/a.json
+tree/sub/b.json  "tree/sub.json"
+
+tree/sub/c\ d.json

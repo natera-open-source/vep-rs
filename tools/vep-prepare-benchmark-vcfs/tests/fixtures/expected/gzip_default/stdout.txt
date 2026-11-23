@@ -1,0 +1,6 @@
+prepared block_length_past_the_block.vcf.gz -> block_length_past_the_block.vcf (mode=keep, variants=3, headers=3, canonical_dropped=0 chr_stripped=true)
+prepared blocks.vcf.gz -> blocks.vcf (mode=keep, variants=186, headers=3, canonical_dropped=74 chr_stripped=true)
+prepared blocks_then_member.vcf.gz -> blocks_then_member.vcf (mode=keep, variants=6, headers=3, canonical_dropped=1 chr_stripped=true)
+prepared headers_only.vcf.gz -> headers_only.vcf (mode=keep, variants=0, headers=3, canonical_dropped=0)
+prepared members.vcf.gz -> members.vcf (mode=keep, variants=7, headers=3, canonical_dropped=2 chr_stripped=true)
+wrote manifest: {{OUTPUT_DIR}}/manifest.json

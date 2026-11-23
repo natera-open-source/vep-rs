@@ -1,0 +1,14 @@
+{
+  "total_annotation_lines": 3.0,
+  "existing_variation_count": true,
+  "frequency_field_counts": {
+    "float": 0.3, "bool": true, "zero_float": 0.0, "negative": -5,
+    "past_53_bits": 90071992547409931, "twice": 1, "étude": 3, "😀": 2,
+    "twice": 4, "not_a_number": NaN, "past_64_bits": 36893488147419103231,
+    "infinite": Infinity, "tiny": 1e-300, "exponent": 1E2, "negative_zero": -0.0
+  },
+  "consequence_counts": {
+    "q\"uote\\": 7, "tab\tname": 1, "\u0001": 1, "\ud800": 1, "￿": 2,
+    "😀": 3, "/slash": 1, "\u007f": 1
+  }
+}

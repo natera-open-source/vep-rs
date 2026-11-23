@@ -1,0 +1,10 @@
+--version-a
+vé☺
+--dump-a
+odd-a.txt
+--version-b
+w"\
+--dump-b
+odd-b.txt
+--out-dir
+out

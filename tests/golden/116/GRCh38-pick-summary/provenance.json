@@ -1,7 +1,7 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "divergences_classified_against": {
   "engine": "vep-rs",
@@ -14,33 +14,33 @@
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "none on either side",
  "input": "one SNV record per locus at 37 chromosome 21 loci chosen from the cache's transcript and regulatory sets for the pick family: loci inside an exon of a MANE Select transcript of a gene with three or more isoforms; loci whose 5 kb window holds two or more isoforms of one gene and none canonical, so the pick falls to APPRIS, TSL, biotype, length or the stable-id tie; loci whose window holds three or more genes; loci inside an exon of one isoform and an intron of another; loci with no transcript within 5 kb; and two loci with no transcript within 5 kb inside a regulatory feature of the release 116 regulatory build, one of them inside a transcription-factor binding motif, so that under --most_severe --regulatory the most severe term is a regulatory one. Six further loci lie inside a regulatory feature beside their transcripts. Eleven records carry two alternate alleles and five carry three; the reference base is the GRCh38 primary assembly's",
- "generator": "scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite ps=<reference>=<input> --k 2000 --seed 1 --multi-allelic-per-suite 40 --keep-records --covers pick --covers most_severe --covers summary --matrix tests/parity/matrix.tsv --cache <converted release 116 GRCh38 cache> --out tests/golden/116/GRCh38-pick-summary; scripts/golden/prune_json_cache.py --gzip --regulatory --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 --vcf variants.vcf over chromosome 21 of the converted release 116 GRCh38 cache with its regulatory tree (the regulatory shards as activity codes over the cache's cell-type list, the binding matrices in one table); scripts/golden/build_golden_corpus.py flag-set (one per flag set, --unordered for pick-allele, per-gene and pick-allele-gene, --flag=--regulatory beside --most_severe for most-severe) and classify (the manifest's run and each flag set)",
+ "generator": "tools/vep-golden-corpus select --release 116 --assembly GRCh38 --dataset ps=<reference>=<input> --k 2000 --seed 1 --multi-allelic-per-dataset 40 --keep-records --covers pick --covers most_severe --covers summary --matrix tests/parity/matrix.tsv --cache <converted release 116 GRCh38 cache> --out tests/golden/116/GRCh38-pick-summary; scripts/golden/prune_json_cache.py --gzip --regulatory --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 --vcf variants.vcf over chromosome 21 of the converted release 116 GRCh38 cache with its regulatory tree (the regulatory shards as activity codes over the cache's cell-type list, the binding matrices in one table); tools/vep-golden-corpus flag-set (one per flag set, --unordered for pick-allele, per-gene and pick-allele-gene, --flag=--regulatory beside --most_severe for most-severe) and classify (the manifest's run and each flag set)",
  "sha256": {
-  "default.txt": "4a0e8f325fcf27f2354cb1d119c028cf3ca6291dad9c3144578fd2c99c78c0f0",
-  "tab.txt": "c81be9a7131d0296127370469f8ac1ba5e659ebe99a26ccc05e6070a45c0054e",
-  "vcf.vcf": "8b549d13b3a98311b9ba300842a2430b530c1ea1da5abc3cf1cf4560691fe927",
-  "json.jsonl": "d8633d710bef46aad6fca633c39f9554e7fa04fb79117c57453110ed1e60aacb",
-  "default.summary.log": "0ba1156ede8d9a445cfd386acc4f00d2d9099b31b821ef328b995ef8b42a9197",
-  "tab.summary.log": "1e388341eccdf8d09abedeb1551e2fa8ed65bc61b86aa989549f17f4d3316f61",
-  "vcf.summary.log": "cfdbcf82279375f5f7a9b8dddca7c7374ffde41452a41883e644968eb400a0ec",
-  "json.summary.log": "3d4d788748758f548355899c1f4c142905bfcbc369c7326a31eec1a46b8ea941"
+  "default.txt": "b05ea474c3a4a16b31988bb7257bd7b2846d7fdaf1028bbd7cf7168bb25b983d",
+  "tab.txt": "3bc2a0bd630ef69ebd96ce485f93fad77544cdcc53a13ec01fbf4e7ca55c4a71",
+  "vcf.vcf": "62674ac16a3c4d6e77d7085157d7e7e08bad26427c38b3608ce4f55c7c258faa",
+  "json.jsonl": "16e9ea4e5af3771d185673b618d1c78886f1d37c9c043f13f8acf7567905bbc5",
+  "default.summary.log": "d8238ad2ed37d17807a7222377ddd90dd0c6d8d005597c0b98fe29114b0ea043",
+  "tab.summary.log": "11534d3e1f1226bc26851c2a7987f83c661cf1c6a1921d0c0797f1c2957a27a7",
+  "vcf.summary.log": "935aa4e6ba91d0b9e812de083c35d7495355fea45d2ba5218ef22fa95f62806f",
+  "json.summary.log": "36df8d9c433d9b615be2ea4f15f690287dfdc62eacd13fc22a9fb4ca097c4ace"
  },
  "variants_vcf_sha256": "af3c2967a2bbdaf634f94ecdc88fa6cb80cb5b50e4ee8aee9d7895f898bba0fe",
  "flag_sets": {
   "pick": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --pick [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
    "fasta": "none on either side",
    "input": "variants.vcf",
    "sha256": {
-    "default.txt": "81607e51a1b827c1c59c486eab5f85cb4578e629cf002f42495e50b91d4396fd",
-    "tab.txt": "1f4abb7b6ef828601e1052dd40b0b262102eba2d9b66c66f3e19dc9595477d4f",
-    "vcf.vcf": "41a0439a94df0e1984b6a516917871693095e2811071aef7ef2b74fde7eab36d",
-    "json.jsonl": "405806b40dcc1ff798b31db13b3e31076ad57d002e8f42b025f52eebe79fffd2"
+    "default.txt": "fc20f6b0902c263c477b2dd66d4665cbc412b12bc098d42e7a53bda95d098006",
+    "tab.txt": "32700a77a81a1d02a414f7d890dfac716965608e71467ac8906bc5fd09521827",
+    "vcf.vcf": "774c9dfceb18b1ee0654d27017b193e4eea1d6b62e557884ed511ea53e77f266",
+    "json.jsonl": "e7748f673c5e6e0a77974fcfca6386aa93621a6b6afce742ab78d1eaf3c23745"
    },
    "flags": [
     "--pick"
@@ -48,19 +48,19 @@
    "expected_dir": "expected_pick"
   },
   "pick-allele": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --pick_allele [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
    "fasta": "none on either side",
    "input": "variants.vcf",
    "sha256": {
-    "default.txt": "6ab5b45af8436af1a8ac2a23be12e3c8344054ccb6c4e648bfddb0494da6e91b",
-    "tab.txt": "300eebd9cdd25065a0076471b9a9512e8ddb0e01fb58fce7a9b98576a3432738",
-    "vcf.vcf": "b9cef79e4563b1ccf0ce62147fbf4324b324962b7cdab89408d3839121c62226",
-    "json.jsonl": "f0d21a8848135cb977930cb8a783264005a42d89333d986424e9d0c64fae4a46"
+    "default.txt": "672b275bf58cd73e680715a02de77992798b8e66a315c2eab53c71eb63f79778",
+    "tab.txt": "120f4608fae544030ab654b9243dd41d95bd1e2273a6c36d1589c45e5b0ccb27",
+    "vcf.vcf": "06070469666ebbb64f235d5bffe8c7e1233f5796753f67e474aea8ded35289f9",
+    "json.jsonl": "0db38468c9c62609867b2509f340230048151999d3f53ca8cc00024093113e6e"
    },
    "flags": [
     "--pick_allele"
@@ -68,19 +68,19 @@
    "expected_dir": "expected_pick-allele"
   },
   "per-gene": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --per_gene [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
    "fasta": "none on either side",
    "input": "variants.vcf",
    "sha256": {
-    "default.txt": "81c15f5e563ad58bcbf12612ab3f3b98635fa79b166c80539b42cf913716bb23",
-    "tab.txt": "f8b5b0941ecd1a0a623c20ace4ee3a31ab8535382e8bb53ba780867cba1b9fbd",
-    "vcf.vcf": "0c68e4ec637dd8a1a3dd69b57ed2a4c16bfa32b7d7195481aefedd5ddd2514a1",
-    "json.jsonl": "1d327d545e66e3b56f801810c8b95126c0fd86771185943096506a7f21d46abf"
+    "default.txt": "972d370b361063c16cb932301d232f0fc7fccb08233a347c0af7cc3aa0c480d4",
+    "tab.txt": "04c646fe2e50c7f2282f56f75177c0088cb069d9ea476f1731e395689f291182",
+    "vcf.vcf": "64c228a380bbc3e907b54acdcd67249341c3dca36e565286ae5ea781b70ebdcc",
+    "json.jsonl": "8925190d3eb00dc039e55dfc9edaca2dcd5e51913b02b7be15207509ef1f68a0"
    },
    "flags": [
     "--per_gene"
@@ -88,19 +88,19 @@
    "expected_dir": "expected_per-gene"
   },
   "pick-allele-gene": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --pick_allele_gene [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
    "fasta": "none on either side",
    "input": "variants.vcf",
    "sha256": {
-    "default.txt": "0748d0ec16d7dfd04146c48e82f6f28bac4a53e132443dfda4d76d3a9a78c5d3",
-    "tab.txt": "9039c84da54cfbcc2898a0b734e70e50d5a79e0ef64fa08a41d5ce0f27c087b5",
-    "vcf.vcf": "a1db3ab6e410cc3f8c823e15302b7a71707aead851b61742f7f67f042fcc44a0",
-    "json.jsonl": "972684ea75422d1b8600bf66fe9b32db35669ec4c26dac1b67ce0801563fd46b"
+    "default.txt": "94d3063d8b69fb5a30e8920ffaddcdaa2cc6297b719164ae8189505c2a11a831",
+    "tab.txt": "d333ff8379305fd7f7ad34ab9517100c2abd2fd8854948d6136e3a7a3cc0b080",
+    "vcf.vcf": "ae1c202ab6901aca6f17c203d6a6236a846c81f796212be6d30f401b5862f556",
+    "json.jsonl": "30bf524d481139a410508fb2f0f2b9afa678f35eedd8426fe2ba58e96d9b5bbe"
    },
    "flags": [
     "--pick_allele_gene"
@@ -108,19 +108,19 @@
    "expected_dir": "expected_pick-allele-gene"
   },
   "flag-pick": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --flag_pick [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
    "fasta": "none on either side",
    "input": "variants.vcf",
    "sha256": {
-    "default.txt": "1dffd66c57c55d93402fe4f1a4723b8be48ccc88bcf5b7117c86745452ba741a",
-    "tab.txt": "9d62cb99b332dfd0fc6275b7e8bbdc1274db55ad2957964e4a4a3110586d131d",
-    "vcf.vcf": "37701a6ebc2c3231822d43d0283b6fb5764474024b905ea3e40988f05ec4a371",
-    "json.jsonl": "003956cea3c05ae172ee2d4b501699aafdbeacbf91be5b22e8922a835a22ac88"
+    "default.txt": "03d4450ea4246e921d8cb2ab662523af56af901ac49cf65901d39422a9aeda8f",
+    "tab.txt": "31f78212a2ea2f0e0b32091f27480f5eaf71cbeeae80708472ad22024ca115d7",
+    "vcf.vcf": "607ad8885e19b2c229c15cde396837ba8e5f665ba078291eba0d83aabc2b5230",
+    "json.jsonl": "3ba95a449e16d8b6336172db1e30eacd7eb0257cde74b0d223b3145904d02117"
    },
    "flags": [
     "--flag_pick"
@@ -128,19 +128,19 @@
    "expected_dir": "expected_flag-pick"
   },
   "flag-pick-allele": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --flag_pick_allele [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
    "fasta": "none on either side",
    "input": "variants.vcf",
    "sha256": {
-    "default.txt": "74f028dc66c4ed0554e470f26cedaf85c02470ae6e23e80265f3574bba5f5a68",
-    "tab.txt": "6fb834e7b6e5010575f6385ac1cb788962da2ad0b37c4779ca4cf1ec27a0da93",
-    "vcf.vcf": "fa510782690e0df35503882726b8f6d8739d46c467cd2fe2044dfcf6b8a4f7da",
-    "json.jsonl": "5cf0a73c637521e1faeccf9256df219c755ccb11687ef5f7d7e0e832857ff191"
+    "default.txt": "23d3c19425e6f6904a61ee1a2aa377cbb97b72028e2ebea155a97f19a1b69273",
+    "tab.txt": "e2f8de586bebed12c76461710961ef4b170a2f12da5d88841e7d4d5f9a0f6af1",
+    "vcf.vcf": "b631c0ca2cd8cd8e08f7f3b0cb23334fbef9df64ad1ec7184300db5e21615977",
+    "json.jsonl": "c5e8171bebe88df87b9770addc83b59fd6a33cab2558196360f215eeb61cd5db"
    },
    "flags": [
     "--flag_pick_allele"
@@ -148,19 +148,19 @@
    "expected_dir": "expected_flag-pick-allele"
   },
   "flag-pick-allele-gene": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --flag_pick_allele_gene [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
    "fasta": "none on either side",
    "input": "variants.vcf",
    "sha256": {
-    "default.txt": "7950ca1025fc7ccee872874d7337abb1f529ae72c8bf6d0d95ecf4e3899c16d3",
-    "tab.txt": "9b12cccfc0ce60281e49ac48d527ca246dd4624c9672ddcb738bc36680b86a68",
-    "vcf.vcf": "8ab049711e3f1a761f0fdc6f2e9fdd461f8b3b00e074414401b5776eabd4a54b",
-    "json.jsonl": "13be1f5f1673640466e20c7205a6cfe447f6e286edbe66847a51e6eb4086867b"
+    "default.txt": "b4c17517825cce29308b2bf4f096c124473b398e3851bb373f034c944ecf303c",
+    "tab.txt": "a0fc11fb3faa61efb4ec211e31dd419cea68c0bb917069cbe124a507a7908f24",
+    "vcf.vcf": "f9751fb878cf0f007140333e2215a92f7efe3aac472dcd9c1b478932d1503a02",
+    "json.jsonl": "97697a91d0b29c861c5d32bab1f6dfae31f7f0d4386b71bdef941a00c8a70ad2"
    },
    "flags": [
     "--flag_pick_allele_gene"
@@ -168,19 +168,19 @@
    "expected_dir": "expected_flag-pick-allele-gene"
   },
   "pick-order": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --pick --pick_order rank,canonical,length [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
    "fasta": "none on either side",
    "input": "variants.vcf",
    "sha256": {
-    "default.txt": "1f8e3c8d22a89a22ea6c2e582e5e169d17811d369d1ac765fb8744f2ebb46c2a",
-    "tab.txt": "8bf08e2e2077be23ca7f2615790cb81ff8a0c2f27ec142041e4efa1824db74e5",
-    "vcf.vcf": "4e94119b160799e8f93f40df51f5c1c8c0fbce549d9158a2357d592822bc3f0f",
-    "json.jsonl": "2c47929431ba046382276302f43f655dcd7037ec49b29408373a57cd41938659"
+    "default.txt": "5841d13951760687d7dfc1e2b299ef577748266a46a4f1a350f9c119f9bf342d",
+    "tab.txt": "3dc10a045ee56b05890c4b2199711baa96744e08fa34dfa7c235f4633625b82b",
+    "vcf.vcf": "cb0ad033a4ddaadc42e6c5617fb90917d7e8e62c25df897c9ea5bf684efdb0ef",
+    "json.jsonl": "f90671124e332c9ad9fd9843b3e767f1f9d342425f544806d489f8b05c3558e2"
    },
    "flags": [
     "--pick",
@@ -190,18 +190,18 @@
    "expected_dir": "expected_pick-order"
   },
   "most-severe": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --most_severe --regulatory [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
    "fasta": "none on either side",
    "input": "variants.vcf",
    "sha256": {
-    "default.txt": "07b132649159154c5b734a950e41d8d5f2b4bdd129a738949ae52b9794bfbfdd",
-    "tab.txt": "bef9b29fe0f18f6b03e8b9b0a2211c4af9f849f3dd0cd7b7e317a091afd4b2e7",
-    "json.jsonl": "2da17551b16a45edaac46f416db0100337bb0ace3e34a4dbdbf8fa237566d022"
+    "default.txt": "5c54c9857ba0f9849682eef73542b3795a52d6a13707846ebf545c7aaefb5aaa",
+    "tab.txt": "d78ff36e3edff330d06186adb892fcee17b1a251609479c0fea6ceefad153a1e",
+    "json.jsonl": "2fd22849e8ec18cc349ff1872eec251e786092b9d8be779fa2589f13fe5fd8e1"
    },
    "flags": [
     "--most_severe",
@@ -210,18 +210,18 @@
    "expected_dir": "expected_most-severe"
   },
   "summary": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --summary [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
    "fasta": "none on either side",
    "input": "variants.vcf",
    "sha256": {
-    "default.txt": "1a75f9ff15b0552ce0ce1421795a923f52cb3601a47a8aad0f648d7173ae35b3",
-    "tab.txt": "582317bbd42bdd3ccaace24b9a286146a0a76c2dfb9c80a41437f02fb757b347",
-    "json.jsonl": "81638b78e7bf13d6b299dcaf2e10d5bb6658e2586833541dbcd120e4f5487727"
+    "default.txt": "ff1a1a16cda590f7fd92d7fa91cb75354450a501764d8db2aa0ed4d06afdcb37",
+    "tab.txt": "169eacbc443df34407fb4821ec3ef83410651501f8a81ce5aeb98bd669949f42",
+    "json.jsonl": "3b9b3dc66a59b3442c22c1041db877161ee93eedeacc38d47387652d376cf31c"
    },
    "flags": [
     "--summary"
@@ -229,18 +229,18 @@
    "expected_dir": "expected_summary"
   },
   "per-gene-most-severe": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --per_gene --most_severe [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
    "fasta": "none on either side",
    "input": "variants.vcf",
    "sha256": {
-    "default.txt": "9f8ff6efe8494a9c07eec3847326a8b7e1d5d6f247b8e2d115a78aca855e3f19",
-    "tab.txt": "969d2a0ba9247a126c85fec2d9a40d30942d56329f04ffed8c1b5a110fefd56f",
-    "json.jsonl": "3b238eae6198ca482af2be242b1de158c395e06202a7ec1ac2c725409aff423d"
+    "default.txt": "dd581e5a9f2b903a86b5a6da4f8c2c1cafa6658cce7ce3854921d7a164e42576",
+    "tab.txt": "445e01ec1a9cadbdef26ef154680ce0e4ee08658f3531af60f2f580925fd7e23",
+    "json.jsonl": "d75764dbb67e3c1f467dca5d8c0c32863001d687b8f98c82329800548721bb97"
    },
    "flags": [
     "--per_gene",
@@ -249,18 +249,18 @@
    "expected_dir": "expected_per-gene-most-severe"
   },
   "most-severe-vf-keys": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --most_severe --variant_class [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
    "fasta": "none on either side",
    "input": "variants.vcf",
    "sha256": {
-    "default.txt": "b45428f93561ae62a4be6941c76a8d852761f4f6dce92f55e13aa018dada2c68",
-    "tab.txt": "28fbe252398f2d4a29911795f15a058adeccc61071370981f6da57dad7aefbb7",
-    "json.jsonl": "f54ecca049c403445c7a8c4ef28ef4f1e1f5291040f2c985d40fc2ceae5e12b0"
+    "default.txt": "95ff74953f58fca2b2b7eb1cbdb9fa522bd1f3df9b6759169d0303f5cd5333c4",
+    "tab.txt": "aa9f7d6d884614097c53bb54798807773c60684f010c25178fdc155dbce19db0",
+    "json.jsonl": "5afaf4a2de52c9f356d360eaf3564af74eaf067a04e1f30b6af0d358f7753158"
    },
    "flags": [
     "--most_severe",
@@ -269,19 +269,19 @@
    "expected_dir": "expected_most-severe-vf-keys"
   },
   "coding-only": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --coding_only [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
    "fasta": "none on either side",
    "input": "variants.vcf",
    "sha256": {
-    "default.txt": "f5955b3fa1c131f358b7089b67e93a6cb0873d74e4cd6b4f7ab0e3105a07ee75",
-    "tab.txt": "6d2c1e0b39a9a03006a20d072f092c4283db63c8ef4625a7a3e8ce892e943412",
-    "vcf.vcf": "5afcc6dcf37cdd47f1590e5ffa02da74accd38797f2f1d20e6f81317dc9703a3",
-    "json.jsonl": "52934f0c56658ef992d4198cb77b778e26ef1c2dc832af0d9aa6f24990039dd1"
+    "default.txt": "e6e06396a1b078d7d84d1af18a0a1a22dc648f7f552298ec26eddb05ee1a0388",
+    "tab.txt": "6c66b2606348d5e9f2b4604c6cf8bc2367d5b2394770048f19128a30ead71b94",
+    "vcf.vcf": "d4b30a813e61359ca9394250805e3b0733f568365a109370a6d54d241be2c90e",
+    "json.jsonl": "692ab31584d132ed22cc7be9c2e9e67d02779c38d4ea2356cedfe49c1333c9cb"
    },
    "flags": [
     "--coding_only"
@@ -289,19 +289,19 @@
    "expected_dir": "expected_coding-only"
   },
   "no-intergenic": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --no_intergenic [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
    "fasta": "none on either side",
    "input": "variants.vcf",
    "sha256": {
-    "default.txt": "2824c1c450afd66a26d13e752679304c532b9b95827118a9cf7350b82f00ee44",
-    "tab.txt": "30bc4f34ca1399483e423b9a79e3f1f4835ad1be56f48d586d8ea9c71aba65cd",
-    "vcf.vcf": "bae7bb9bec40669fdc965f95f210d9267e98ffe4af19d0d6de0fc690b8dbcd07",
-    "json.jsonl": "8c8927d04705700e8df74c326f2919775a21e15ff7fb51c137a4483dd56b1ff4"
+    "default.txt": "c4e9cd76b6e369dd0f88b4894be9eb0fadbc9d990ed3b6e43c6448eac74911e7",
+    "tab.txt": "bc6a21f7e521883782c018bca40552c2419ffee886d344791a5f12105fb9f87a",
+    "vcf.vcf": "88edd73d8a216e8fa1f64f0d5812eeb8f6c32823a28997fb3a987b8bc84aaccb",
+    "json.jsonl": "179fd636849a3f0627b56a56eaa20bff64ccbf930874af77a21fa5c27dbb7fae"
    },
    "flags": [
     "--no_intergenic"
@@ -309,19 +309,19 @@
    "expected_dir": "expected_no-intergenic"
   },
   "coding-only-pick": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --coding_only --pick [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
    "fasta": "none on either side",
    "input": "variants.vcf",
    "sha256": {
-    "default.txt": "01d04d1c94ab0dedd7e6cb533798147d9b70de1d6fd57da18e921fbcd492d252",
-    "tab.txt": "68183204e469a8ec7af299796e3b2c47eeacff72346d918776e738628c315eac",
-    "vcf.vcf": "7cf6b6008b790dfc3ca8e368fa08763139fc87c65d5f106fff745f944cfbfd95",
-    "json.jsonl": "06377451daee252f4bfc19ee8848c381a0738fad396534f009a632e97486f9d2"
+    "default.txt": "beb46742acc411440b60d04d107a78d862573ebda5793271afc8918ae4b2b3ba",
+    "tab.txt": "18308655aabd9bd30aec28e9e31514328f71c484f9bd5a8c35acf2dd72c6b1d5",
+    "vcf.vcf": "e865457556f31e8de3241ea640776c342d63b33e382056c1e62cf92977baf907",
+    "json.jsonl": "d68218d84b250ed6204994efe88930507a20585f21cfb1f26f827f2052442855"
    },
    "flags": [
     "--coding_only",
@@ -330,19 +330,19 @@
    "expected_dir": "expected_coding-only-pick"
   },
   "coding-only-structural": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i structural.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --coding_only [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
    "fasta": "none on either side",
    "input": "structural.vcf",
    "sha256": {
-    "default.txt": "efbf20bc4c5a2e19cde86f7d5efff1a34f1963604c6373e17f953c105c042e88",
-    "tab.txt": "f15060c7311bd31569b0a34e0835853237b23c80fbaeb7248f25f9993bf28533",
-    "vcf.vcf": "913ab18cc1f015db3bea9e06f7c49aad8537ccd2f4b0526acdf4cd7792f8aaf9",
-    "json.jsonl": "afcd880f5794ac9bc99794aa2aa26f36071b11abeb86f5713d0568abf5ec02e7"
+    "default.txt": "b7d250278c333db05a7355e476de006806ef682798fd3ac539a80d4899c53bcd",
+    "tab.txt": "eb6b795df88534d83c2138e11d473bcb6ff50d86daa81cc5569e4f2f4eaf8001",
+    "vcf.vcf": "68734c147064c578d141d1c51c6ce6d397ee37a3d6501ca0c3709275ab3ace6e",
+    "json.jsonl": "d244e3a34d3358af288c812405e740f1d113c07e1d1d6cd0e23406ec2c75a214"
    },
    "flags": [
     "--coding_only"

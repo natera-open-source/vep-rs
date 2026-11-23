@@ -1,0 +1,3 @@
+WARNING: line 3 : skipped /host/in.vcf
+note: not a warning
+WARNING: line 4 : kept

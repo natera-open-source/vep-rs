@@ -24,7 +24,7 @@ Tuple, pair, set aside, charged and the other scoring terms are defined in [How 
 
 ## 1. A deletion whose ends lie equally near two exons
 
-**In short.** ClinVar variation 2444492 deletes the 1,783 bases `21:46398011-46399793`. On `ENST00000703224` the deletion starts three bases before a 117-base exon and ends three bases before the last base of a 207-base exon, so both exons lie at the smallest distance, 3, and the value has two items. Ensembl VEP 116.2 writes the 207-base exon first when Perl's hash order is fixed, and either order when it is not. vep-rs writes the 117-base exon first, the transcript's order, on every run.
+**In short.** ClinVar variation 2444492 deletes the 1,783 bases `21:46398011-46399793`. On `ENST00000703224` the deletion starts three bases before a 117-base exon and ends three bases before the last base of a 207-base exon, so both exons lie at the smallest distance, 3, and the value has two items. Ensembl VEP 116.3 writes the 207-base exon first when Perl's hash order is fixed, and either order when it is not. vep-rs writes the 117-base exon first, the transcript's order, on every run.
 
 ### 1.1 What a reader needs to know first
 
@@ -48,7 +48,7 @@ Both engines run `--plugin NearestExonJB` in the default format.
 
 ### 1.3 What each engine writes
 
-The row on `ENST00000703224`. Ensembl VEP 116.2, run with `PERL_HASH_SEED=0` and `PERL_PERTURB_KEYS=0`:
+The row on `ENST00000703224`. Ensembl VEP 116.3, run with `PERL_HASH_SEED=0` and `PERL_PERTURB_KEYS=0`:
 
 ```
 2444492	21:46398011-46399793	-	ENSG00000160299	ENST00000703224	Transcript	splice_acceptor_variant,splice_donor_variant,splice_donor_5th_base_variant,3_prime_UTR_variant,intron_variant,NMD_transcript_variant	?-5034	-	-	-	-	-	IMPACT=HIGH;STRAND=1;NearestExonJB=ENSE00003551868|3|end|207,ENSE00003618058|3|start|117
@@ -91,10 +91,10 @@ vep -i <corpus>/variants.vcf -o out.txt --offline \
   --species homo_sapiens --assembly GRCh38 --plugin NearestExonJB
 ```
 
-`<corpus>` is `tests/golden/116/GRCh38-plugin-computed`. vep-rs writes `NearestExonJB=ENSE00003618058|3|start|117,ENSE00003551868|3|end|207` on the row of `ENST00000703224` at `21:46398011-46399793`. Ensembl VEP 116.2 takes the same plugin flag with the cache options of [Reproducing these examples](reproducing.md). With `PERL_HASH_SEED=0` and `PERL_PERTURB_KEYS=0` in its environment it writes the two items in the other order; without them, repeated runs write both orders.
+`<corpus>` is `tests/golden/116/GRCh38-plugin-computed`. vep-rs writes `NearestExonJB=ENSE00003618058|3|start|117,ENSE00003551868|3|end|207` on the row of `ENST00000703224` at `21:46398011-46399793`. Ensembl VEP 116.3 takes the same plugin flag with the cache options of [Reproducing these examples](reproducing.md). With `PERL_HASH_SEED=0` and `PERL_PERTURB_KEYS=0` in its environment it writes the two items in the other order; without them, repeated runs write both orders.
 
 ### 1.7 How the comparator treats this class
 
-The format comparator (`scripts/concordance/compare_vep_formats.py`) applies `nearest_exon_jb_item_order` when a comparison case, one run of both engines over one input, names it. A `NearestExonJB` whose two values carry the same items, each as often, in different orders is set aside and counted once per row under the class, whatever the format. A value with an item changed, missing or added, a value one engine alone writes, and every other field stay differences.
+The format comparator (`tools/vep-formats-compare`) applies `nearest_exon_jb_item_order` when a comparison case, one run of both engines over one input, names it. A `NearestExonJB` whose two values carry the same items, each as often, in different orders is set aside and counted once per row under the class, whatever the format. A value with an item changed, missing or added, a value one engine alone writes, and every other field stay differences.
 
 A case may name the comparator's built-in class `order_only` instead. That class reads `NearestExonJB`, like the `DOMAINS` and `FREQS` columns, as a multiset of its items and counts the same rows under its own name; the golden harness compares the `GRCh38-plugin-computed` corpus under it. Where a case names both, `order_only` takes the row.

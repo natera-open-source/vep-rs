@@ -282,6 +282,8 @@ impl ConservationPlugin {
     }
 }
 
+impl crate::traits::sealed::Sealed for ConservationPlugin {}
+
 impl BuiltinPlugin for ConservationPlugin {
     fn name(&self) -> &str {
         NAME
@@ -290,7 +292,7 @@ impl BuiltinPlugin for ConservationPlugin {
     /// The Ensembl VEP module declares `['Feature', 'Intergenic']`
     /// (`Conservation.pm:133-134`): every row, the intergenic row included.
     fn feature_types(&self) -> &[RowKind] {
-        &RowKind::ALL
+        RowKind::ALL
     }
 
     fn header_info(&self) -> Vec<(String, String)> {
@@ -371,7 +373,7 @@ impl BuiltinPlugin for ConservationPlugin {
         data: PrefetchData,
     ) -> Result<(), PluginError> {
         for (index, score) in data.downcast::<Scores>()? {
-            variants[index].plugin_data.insert(FIELD.to_string(), score);
+            variants[index].set_plugin_value(FIELD.to_string(), score, false, self.feature_types());
         }
         Ok(())
     }

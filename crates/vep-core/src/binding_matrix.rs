@@ -109,7 +109,7 @@ impl BindingMatrix {
     }
 
     /// Whether the matrix carries counts, the condition for the motif score
-    /// arithmetic (`OutputFactory.pm:1935` writes HIGH_INF_POS and
+    /// arithmetic (`OutputFactory.pm:1944` writes HIGH_INF_POS and
     /// MOTIF_SCORE_CHANGE only for a matrix with elements).
     pub fn has_frequencies(&self) -> bool {
         !self.frequencies.is_empty()

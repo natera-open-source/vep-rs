@@ -1,0 +1,38 @@
+{
+  "baseline_dir": "/caches/baseline",
+  "builder_dir": "/caches/builder",
+  "transcripts": {
+    "total_baseline": 727139,
+    "total_builder": 644427,
+    "shared": 644427,
+    "only_baseline": 82712,
+    "only_builder": 0,
+    "matched": 644426,
+    "differed": 1,
+    "field_mismatches": {
+      "vefc_seq_edits": 1
+    },
+    "match_rate": 0.999998,
+    "regions_with_diffs": []
+  },
+  "variations": {
+    "total_baseline": 9,
+    "total_builder": 0,
+    "shared": 0,
+    "only_baseline": 9,
+    "only_builder": 0,
+    "matched": 0,
+    "differed": 0,
+    "field_mismatches": {},
+    "frequency_columns_compared": [],
+    "match_rate": 0.0
+  },
+  "info_json": {
+    "matches": false,
+    "diffs": [
+      {
+        "key": "assembly"
+      }
+    ]
+  }
+}

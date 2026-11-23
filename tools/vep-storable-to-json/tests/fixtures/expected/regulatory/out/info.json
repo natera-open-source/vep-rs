@@ -1,0 +1,17 @@
+{
+   "assembly" : "GRCh38",
+   "cell_types" : [
+      "A549",
+      "HUVEC",
+      "HepG2",
+      "K562",
+      "adrenal_gland_(96-97_dpf)"
+   ],
+   "contig_order" : [
+      "21"
+   ],
+   "regulatory" : true,
+   "regulatory_schema" : 1,
+   "source_versions" : {},
+   "species" : "homo_sapiens"
+}

@@ -1,9 +1,9 @@
 entry = "nearest_shared_start_site"
 page = "docs/divergences/nearest-shared-site.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 28,753 of 77,675 cache transcripts · 3 flag sets, 103 corpora"
+input_class_basis = "2 · 44,061 of 116,165 cache transcripts · 3 flag sets, 139 corpora"
 notes = "Seven protein-coding transcripts of GRIK1 end at 29940022; the deletion above the site and the substitution two bases below it each receive the one object its own search direction returns. Which of the seven that is follows the line order of the start-site table Ensembl VEP's first run writes into the cache directory, so the run reads a linked copy of the cache, the ids are masked and one id is compared with the list of seven."
 prepare = [
   "mkdir -p \"$STAGE/perl-cache/homo_sapiens\" && cp -al \"$PERL_CACHE\" \"$STAGE/perl-cache/homo_sapiens/116_GRCh38\"",
@@ -38,4 +38,15 @@ ensembl_vep = ["-=<masked>", "<masked>=<masked>"]
 vep_rs = [
   "-=<masked>,<masked>,<masked>,<masked>,<masked>,<masked>,<masked>",
   "<masked>=<masked>,<masked>,<masked>,<masked>,<masked>,<masked>,<masked>",
+]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/nearest.rs::nearest_points",
+    "crates/vep-cli/src/nearest.rs::nearest_values",
+]
+tests = [
+    "crates/vep-cli/src/nearest.rs::tests::genes_sharing_a_site_are_all_reported",
+    "crates/vep-cli/src/nearest.rs::tests::transcripts_sharing_a_tss_are_all_reported_in_stable_id_order",
+    "crates/vep-cli/tests/nearest_minimal.rs::minimal_record_rows_carry_the_first_allele_nearest_site",
 ]

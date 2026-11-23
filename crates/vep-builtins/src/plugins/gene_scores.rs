@@ -65,7 +65,7 @@ impl ScoreTable {
     /// the empty cell, which the list assignment keeps (a CRLF file's bare
     /// `SOD1` line), where a line ending at its key has none
     /// (`missing_cell`). An entry is keyed by its key lower-cased, its score
-    /// read as Perl numifies the cell ([`numify`]) and written by `format`; the
+    /// read as Perl numifies the cell (`numify`) and written by `format`; the
     /// header, whose score is `header_score` (`LoFtool_percentile`,
     /// LoFtool.pm:88; `pLI`, pLI.pm:144), is skipped, and the later of two
     /// lines for one key wins, as the Perl hash assignment keeps the last.
@@ -174,7 +174,7 @@ impl ScoreTable {
 
     /// The score of `key`, matched case-insensitively. The key is lower-cased
     /// on the stack, so a lookup on a transcript row allocates nothing; a key
-    /// over [`STACK_KEY_BYTES`] bytes is lower-cased on the heap.
+    /// over `STACK_KEY_BYTES` bytes is lower-cased on the heap.
     pub fn get(&self, key: &str) -> Option<&str> {
         let mut lowered = [0u8; STACK_KEY_BYTES];
         let score = match lowered.get_mut(..key.len()) {
@@ -196,6 +196,7 @@ impl ScoreTable {
     }
 
     /// Whether the table has no entry.
+    #[cfg(test)]
     pub fn is_empty(&self) -> bool {
         self.scores.is_empty()
     }
@@ -319,7 +320,7 @@ mod tests {
     }
 
     /// A line with one token or a cell with no leading number is no entry, and
-    /// a file with no key at all is refused naming the file. Ensembl VEP 116.2
+    /// a file with no key at all is refused naming the file. Ensembl VEP 116.3
     /// formats such a cell with `sprintf` (pLI.pm:145, LoFtool.pm:89), which
     /// makes `0.00` or `0` of a word or, in pLI, of a missing cell; the cell is
     /// skipped here and reported once, at load, in a warning naming the key and
@@ -454,8 +455,8 @@ mod tests {
 
     /// The later of two lines for one key wins whatever it carries, as the Perl
     /// hash assignment (LoFtool.pm:89, pLI.pm:145) keeps the last: a later cell
-    /// with no leading number, which Perl stores as `0`, takes the earlier score
-    /// away, and a later number replaces an earlier such cell. Each line's
+    /// with no leading number, which Ensembl VEP stores as `0`, takes the earlier
+    /// score away, and a later number replaces an earlier such cell. Each line's
     /// warning says what the key takes from that line alone.
     #[test]
     fn the_later_line_wins_whether_or_not_it_carries_a_number() {
@@ -491,9 +492,9 @@ mod tests {
     }
 
     /// A file whose every cell lacks a leading number loads with no score: the
-    /// Perl hash holds a `0` per key, so `scalar keys %scores` (LoFtool.pm:94,
-    /// pLI.pm:191) is not zero and the plugin runs, writing no field. Only a
-    /// file with no key at all is refused.
+    /// Ensembl VEP hash holds a `0` per key, so `scalar keys %scores`
+    /// (LoFtool.pm:94, pLI.pm:191) is not zero and the plugin runs, writing no
+    /// field. Only a file with no key at all is refused.
     #[test]
     fn a_file_of_only_non_numeric_cells_loads_with_no_score() {
         let dir = tempfile::tempdir().unwrap();

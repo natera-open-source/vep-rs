@@ -1,0 +1,19 @@
+shape	regions	span	intron_start	intron_end	forward	wide_exons	reference_terms	candidate_terms
+an intron right after a span of three	0,5	3	3	102	yes	no	splice_donor_variant,splice_donor_region_variant,intron_variant	splice_region_variant
+the same intron on the reverse strand	0,5	3	3	102	no	no	splice_acceptor_variant,intron_variant	splice_region_variant
+regions that end on the intron's second base, on the reverse strand	0,4	3	3	102	no	no	splice_acceptor_variant	splice_region_variant
+an intron three bases after a span of two	0,5	2	4	103	yes	no	splice_donor_variant	splice_region_variant
+an intron four bases after a span of two	0,5	2	5	104	yes	no		
+the donor region term withheld beside the fifth base term	0,7	2	2	101	yes	no	splice_donor_variant,splice_donor_5th_base_variant,intron_variant	splice_region_variant
+a span on an intron's third and fourth base	0,3	2	-2	97	yes	no	splice_donor_5th_base_variant,intron_variant	splice_donor_region_variant,intron_variant
+a span across an exon's end	0,6	2	1	100	yes	no	splice_donor_variant,splice_donor_5th_base_variant,intron_variant	splice_donor_variant,intron_variant
+a span of two before an intron's 5' end on the reverse strand	0,3	2	-96	3	no	no	splice_donor_variant,splice_donor_region_variant,intron_variant	splice_donor_region_variant,intron_variant
+the tract off the exons	0,14	3	-69	30	yes	no	splice_polypyrimidine_tract_variant,intron_variant	intron_variant
+the same span under the wide exons, twelve bases and more from each	0,14	3	-69	30	yes	yes	splice_polypyrimidine_tract_variant,intron_variant	intron_variant
+a span that ends four bases before an intron's end	0,6	3	-93	6	yes	no	splice_acceptor_variant,splice_polypyrimidine_tract_variant,intron_variant	splice_region_variant,splice_polypyrimidine_tract_variant,intron_variant
+the same span under the wide exons, which hold it	0,6	3	-93	6	yes	yes	splice_acceptor_variant,intron_variant	splice_region_variant,intron_variant
+a short intron whose two ends the span reads	0,23	3	-2	21	yes	no	splice_acceptor_variant,splice_donor_5th_base_variant,splice_polypyrimidine_tract_variant,intron_variant	splice_donor_5th_base_variant,intron_variant
+a frameshift intron, whose regions set nothing	0,5	3	3	10	yes	no		
+an intron of fourteen bases	0,5	3	3	16	yes	no	splice_donor_variant,splice_donor_region_variant,intron_variant	splice_region_variant
+a region before a frameshift intron and one on it	0,2;5,6	3	5	12	yes	no	splice_region_variant	splice_region_variant
+the same two regions beside a long intron	0,2;5,6	3	5	104	yes	no	splice_donor_variant	splice_region_variant

@@ -1,0 +1,32 @@
+{
+  "baseline_dir": "/caches/baseline",
+  "builder_dir": "/caches/builder",
+  "transcripts": {
+    "total_baseline": 3,
+    "total_builder": 3,
+    "shared": 3,
+    "only_baseline": 0,
+    "only_builder": 0,
+    "matched": 3,
+    "differed": 0,
+    "field_mismatches": {},
+    "match_rate": 1.0,
+    "regions_with_diffs": []
+  },
+  "variations": {
+    "total_baseline": 5,
+    "total_builder": 5,
+    "shared": 5,
+    "only_baseline": 0,
+    "only_builder": 0,
+    "matched": 5,
+    "differed": 0,
+    "field_mismatches": {},
+    "frequency_columns_compared": [],
+    "match_rate": 1.0
+  },
+  "info_json": {
+    "matches": true,
+    "diffs": []
+  }
+}

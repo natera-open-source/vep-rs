@@ -1,0 +1,36 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 116,
+ "divergences_classified_against": {
+  "engine": "vep-rs",
+  "source": "the tree this corpus is committed with",
+  "binary_md5": "9674d7365841a1629f2b181225c44e91",
+  "arch": "arm64",
+  "flags_passed": [
+   "--hgvs"
+  ]
+ },
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --fasta ../GRCh37-hgvs/reference.fa --no_stats --quiet --force_overwrite --hgvs [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh37",
+ "fasta": "GRCh37 chromosome 21, the GRCh37-hgvs corpus's reference.fa.gz decompressed, passed to both engines on every run",
+ "input": "variants.vcf: fourteen hand-placed chromosome 21 records, the reference base read from the FASTA, each with the one-base span 47612517, the intron between the second and third exons of ENST00000594486, a reverse-strand protein-coding transcript whose whole cDNA is coding. Ensembl VEP reads an intron of at most 13 bases as a frameshift intron. One record for each of twelve symbolic alleles (<DEL>, <DEL:ME>, <CN0>, <DUP>, <DUP:TANDEM>, <CN2>, <INS>, <INS:ME>, <CNV:TR>, <CNV>, <INV>, <BND>), the <BND> record naming its mate through CHR2 and END2; a bracket breakend with the same mate, a base of the transcript's second exon; and a single breakend in dot notation. On that transcript every row carries coding_sequence_variant and none intron_variant, with feature_truncation for the three deletion alleles and the two breakends that name a mate and feature_elongation for the six gain and insertion alleles",
+ "generator": "candidate records annotated with Ensembl VEP under the corpus flags (the container command above), then tools/vep-golden-corpus select --release 116 --assembly GRCh37 --dataset structural=<reference>=<input> --k 100 --seed 1 --covers overlapbp-overlappc-sv --matrix tests/parity/matrix.tsv --flag=--hgvs --fasta-name ../GRCh37-hgvs/reference.fa.gz --out tests/golden/116/GRCh37-frameshift-intron-structural; tools/vep-storable-to-json <cache> <json> 21; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; scripts/concordance/generate_reference_output.sh --corpus tests/golden/116/GRCh37-frameshift-intron-structural --perl-cache-dir <cache root> --no-stats; tools/vep-golden-corpus classify --field HGVSc --field HGVSp --field HGVS_OFFSET --flag=--hgvs. The reference runs without statistics: with statistics kept, Ensembl VEP adds feature_truncation to the rows of a breakend that names no mate, here the single breakend (docs/divergences/defect-f.md, section 13.3)",
+ "sha256": {
+  "default.txt": "5f5f4675824e792e70c1664ff72926d3026564b7c92574aa82643f0d4a8d6f41",
+  "tab.txt": "489ecfe24d66bf89ae80e85cc7585f1889704b11f7c54499d9201fc128180f44",
+  "vcf.vcf": "1ca4ee8b77c1dcfaa75a343bd4349b38085b7fff2edc8939d326bfbae6123f42",
+  "json.jsonl": "5b9e3fdf66c17a32073461a8f41d0fde6b180f05f7e05acb26e6f1f728059d4f"
+ },
+ "variants_vcf_sha256": "813eb22e5e2fb2e568c221cc742ae7bd61eff9d21e9281398e6e46c14e526083",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "21": 10
+  },
+  "shards": 1,
+  "spans_by_chromosome": {
+   "21": 18
+  }
+ }
+}

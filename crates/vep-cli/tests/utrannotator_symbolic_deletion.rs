@@ -7,8 +7,12 @@
 //! carries the five keys of the same deletion written with explicit alleles.
 //! A plain symbolic insertion whose stated length is no multiple of three, at
 //! a point inside a reading frame of the 5' UTR, carries the frameshift with
-//! the pairs its length and the reference UTR decide. Every other symbolic
-//! allele carries the three counts and `-`. Ensembl VEP reads the allele's
+//! the pairs its length and the reference UTR decide. An inversion whose
+//! stated span lies inside one 5' UTR exon is annotated as that span replaced
+//! by its reverse complement. Of a record with several alternates, the one
+//! whose own text is a deletion's carries the row of the deletion of the
+//! record's span when the record writes `END`. Every other symbolic allele
+//! carries the three counts and `-`. Ensembl VEP reads the allele's
 //! text as the reference allele (UTRAnnotator.pm:151-153) and removes as many
 //! bases of the UTR as the text has characters (UTRAnnotator.pm:1189-1199),
 //! whatever span the record states.
@@ -22,6 +26,7 @@ const GAINED_START: &str = "5_prime_UTR_premature_start_codon_gain_variant";
 const LOST_STOP: &str = "5_prime_UTR_uORF_stop_codon_loss_variant";
 const LOST_START: &str = "5_prime_UTR_premature_start_codon_loss_variant";
 const FRAMESHIFT: &str = "5_prime_UTR_uORF_frameshift_variant";
+const GAINED_STOP: &str = "5_prime_UTR_uORF_stop_codon_gain_variant";
 const NONE: &str = "-";
 
 /// A forward-strand transcript of the corpus's cache whose 5' UTR has four
@@ -106,6 +111,14 @@ fn row_of<'a>(rows: &'a [(String, Keys)], name: &str) -> &'a Keys {
     let (_, keys) = found.next().unwrap_or_else(|| panic!("no row of {name}"));
     assert!(found.next().is_none(), "more than one row of {name}");
     keys
+}
+
+/// Every row of the record named `name`, in output order.
+fn rows_of<'a>(rows: &'a [(String, Keys)], name: &str) -> Vec<&'a Keys> {
+    rows.iter()
+        .filter(|(record, _)| record == name)
+        .map(|(_, keys)| keys)
+        .collect()
 }
 
 /// A symbolic deletion inside one 5' UTR exon, the same deletion written with
@@ -414,15 +427,226 @@ fn an_insertion_with_no_written_end_or_its_span_s_end_carries_the_same_row() {
     assert_eq!(row_of(&rows, "span_as_end"), position_as_end);
 }
 
+/// An inversion inside one 5' UTR exon, the same span written as its reverse
+/// complement with explicit alleles (none where the span is its own reverse
+/// complement), the transcript, and the term and the annotation the rows
+/// carry there.
+struct Inversion {
+    symbolic: &'static str,
+    explicit: Option<&'static str>,
+    feature: &'static str,
+    term: &'static str,
+    annotation: &'static str,
+}
+
+/// On each strand: an inversion of a whole start codon, one that changes no
+/// codon the analyses read, and one whose span is its own reverse complement.
+const INVERSIONS: [Inversion; 6] = [
+    Inversion {
+        symbolic: "21\t10524582\tstart_codon_inverted\tN\t<INV>\t.\t.\tSVTYPE=INV;END=10524585;SVLEN=3",
+        explicit: Some("21\t10524583\tstart_codon_inverted_explicit\tATG\tCAT\t.\t.\t."),
+        feature: FORWARD,
+        term: LOST_START,
+        annotation: "CapDistanceToStart=145:DistanceToCDS=207:DistanceToStop=48:Evidence=False:KozakContext=AGAATGT:KozakStrength=Moderate:type=uORF",
+    },
+    Inversion {
+        symbolic: "21\t10524588\ttwo_bases_inverted\tN\t<INV>\t.\t.\tSVTYPE=INV;END=10524590;SVLEN=2",
+        explicit: Some("21\t10524589\ttwo_bases_inverted_explicit\tGA\tTC\t.\t.\t."),
+        feature: FORWARD,
+        term: NONE,
+        annotation: "-",
+    },
+    Inversion {
+        symbolic: "21\t10524622\town_reverse_complement\tN\t<INV>\t.\t.\tSVTYPE=INV;END=10524626;SVLEN=4",
+        explicit: None,
+        feature: FORWARD,
+        term: NONE,
+        annotation: "-",
+    },
+    Inversion {
+        symbolic: "21\t14210904\tstart_codon_inverted_rev\tN\t<INV>\t.\t.\tSVTYPE=INV;END=14210907;SVLEN=3",
+        explicit: Some("21\t14210905\tstart_codon_inverted_rev_explicit\tCAT\tATG\t.\t.\t."),
+        feature: REVERSE,
+        term: GAINED_STOP,
+        annotation: "Evidence=False:KozakContext=GTGATGA:KozakStrength=Moderate:newSTOPDistanceToCDS=60:ref_StartDistanceToCDS=87:ref_type=InFrame_oORF",
+    },
+    Inversion {
+        symbolic: "21\t14210850\tthree_bases_inverted_rev\tN\t<INV>\t.\t.\tSVTYPE=INV;END=14210853;SVLEN=3",
+        explicit: Some("21\t14210851\tthree_bases_inverted_rev_explicit\tATC\tGAT\t.\t.\t."),
+        feature: REVERSE,
+        term: NONE,
+        annotation: "-",
+    },
+    Inversion {
+        symbolic: "21\t14210892\town_reverse_complement_rev\tN\t<INV>\t.\t.\tSVTYPE=INV;END=14210896;SVLEN=4",
+        explicit: None,
+        feature: REVERSE,
+        term: NONE,
+        annotation: "-",
+    },
+];
+
+/// An inversion that states one place inside one 5' UTR exon gives the
+/// mutated sequence whole, its span replaced by its reverse complement: the
+/// symbolic record's row carries the term and the annotation of the explicit
+/// record's row, which are Ensembl VEP's for the explicit record, and the two
+/// rows agree on all five keys. A span that is its own reverse complement
+/// changes nothing and reports nothing.
+#[test]
+fn an_inversion_inside_one_utr_exon_carries_the_row_of_its_reverse_complement() {
+    for feature in [FORWARD, REVERSE] {
+        let cases: Vec<&Inversion> = INVERSIONS
+            .iter()
+            .filter(|case| case.feature == feature)
+            .collect();
+        let records: Vec<&str> = cases
+            .iter()
+            .flat_map(|case| std::iter::once(case.symbolic).chain(case.explicit))
+            .collect();
+        let rows = annotate(&records, feature);
+        for case in cases {
+            let name = case.symbolic.split('\t').nth(2).unwrap();
+            let symbolic = row_of(&rows, name);
+            assert_eq!(symbolic["5UTR_consequence"], case.term, "{name}");
+            assert_eq!(symbolic["5UTR_annotation"], case.annotation, "{name}");
+            assert_eq!(symbolic.len(), 5, "{name}: {symbolic:?}");
+            if case.explicit.is_some() {
+                let explicit = row_of(&rows, &format!("{name}_explicit"));
+                assert_eq!(symbolic, explicit, "{name}");
+            }
+        }
+    }
+}
+
+/// A record with two alternates of which one is a copy-number loss or a
+/// deletion, the deletion of its span written with explicit alleles, the
+/// transcript, which of the record's two rows is the loss alternate's, and
+/// the term and the annotation that row carries.
+struct LossAlternate {
+    symbolic: &'static str,
+    explicit: &'static str,
+    feature: &'static str,
+    loss: usize,
+    term: &'static str,
+    annotation: &'static str,
+}
+
+/// On each strand, the loss alternate first and second, as `<CN0>`, `<CN=0>`
+/// and `<DEL>`, beside a gain, a duplication and a single copy, over a span
+/// inside a uORF and over a start codon.
+const LOSS_ALTERNATES: [LossAlternate; 7] = [
+    LossAlternate {
+        symbolic: "21\t10524588\tloss_then_gain\tN\t<CN0>,<CN2>\t.\t.\tSVTYPE=CNV;END=10524590",
+        explicit: "21\t10524588\tloss_then_gain_explicit\tGGA\tG\t.\t.\t.",
+        feature: FORWARD,
+        loss: 0,
+        term: FRAMESHIFT,
+        annotation: "Evidence=False:KozakContext=AGAATGT:KozakStrength=Moderate:alt_type=uORF:alt_type_length=42:ref_StartDistanceToCDS=207:ref_type=uORF:ref_type_length=51",
+    },
+    LossAlternate {
+        symbolic: "21\t10524588\tgain_then_loss\tN\t<CN2>,<CN0>\t.\t.\tSVTYPE=CNV;END=10524592",
+        explicit: "21\t10524588\tgain_then_loss_explicit\tGGACC\tG\t.\t.\t.",
+        feature: FORWARD,
+        loss: 1,
+        term: FRAMESHIFT,
+        annotation: "Evidence=False:KozakContext=AGAATGT:KozakStrength=Moderate:alt_type=uORF:alt_type_length=102:ref_StartDistanceToCDS=207:ref_type=uORF:ref_type_length=51",
+    },
+    LossAlternate {
+        symbolic: "21\t10524588\tdeletion_then_duplication\tN\t<DEL>,<DUP>\t.\t.\tSVTYPE=CNV;END=10524592;SVLEN=-4,4",
+        explicit: "21\t10524588\tdeletion_then_duplication_explicit\tGGACC\tG\t.\t.\t.",
+        feature: FORWARD,
+        loss: 0,
+        term: FRAMESHIFT,
+        annotation: "Evidence=False:KozakContext=AGAATGT:KozakStrength=Moderate:alt_type=uORF:alt_type_length=102:ref_StartDistanceToCDS=207:ref_type=uORF:ref_type_length=51",
+    },
+    LossAlternate {
+        symbolic: "21\t10524588\tloss_written_with_an_equals_sign\tN\t<CN=0>,<CN=2>\t.\t.\tSVTYPE=CNV;END=10524592",
+        explicit: "21\t10524588\tloss_written_with_an_equals_sign_explicit\tGGACC\tG\t.\t.\t.",
+        feature: FORWARD,
+        loss: 0,
+        term: FRAMESHIFT,
+        annotation: "Evidence=False:KozakContext=AGAATGT:KozakStrength=Moderate:alt_type=uORF:alt_type_length=102:ref_StartDistanceToCDS=207:ref_type=uORF:ref_type_length=51",
+    },
+    LossAlternate {
+        symbolic: "21\t10524582\tloss_over_a_start_codon\tN\t<CN0>,<CN1>\t.\t.\tSVTYPE=CNV;END=10524585",
+        explicit: "21\t10524582\tloss_over_a_start_codon_explicit\tAATG\tA\t.\t.\t.",
+        feature: FORWARD,
+        loss: 0,
+        term: LOST_START,
+        annotation: "CapDistanceToStart=145:DistanceToCDS=207:DistanceToStop=48:Evidence=False:KozakContext=AGAATGT:KozakStrength=Moderate:type=uORF",
+    },
+    LossAlternate {
+        symbolic: "21\t14210880\tloss_then_gain_rev\tN\t<CN0>,<CN2>\t.\t.\tSVTYPE=CNV;END=14210884",
+        explicit: "21\t14210880\tloss_then_gain_rev_explicit\tTCACC\tT\t.\t.\t.",
+        feature: REVERSE,
+        loss: 0,
+        term: FRAMESHIFT,
+        annotation: "Evidence=False:KozakContext=GTGATGA:KozakStrength=Moderate:alt_type=uORF:alt_type_length=54:ref_StartDistanceToCDS=87:ref_type=InFrame_oORF:ref_type_length=1215,Evidence=False:KozakContext=TCAATGA:KozakStrength=Weak:alt_type=OutOfFrame_oORF:alt_type_length=105:ref_StartDistanceToCDS=62:ref_type=uORF:ref_type_length=33",
+    },
+    LossAlternate {
+        symbolic: "21\t14210904\tdeletion_over_a_start_codon_rev\tN\t<DEL>,<DUP>\t.\t.\tSVTYPE=CNV;END=14210907;SVLEN=-3,3",
+        explicit: "21\t14210904\tdeletion_over_a_start_codon_rev_explicit\tTCAT\tT\t.\t.\t.",
+        feature: REVERSE,
+        loss: 0,
+        term: LOST_START,
+        annotation: "CapDistanceToStart=48:DistanceToCDS=62:DistanceToStop=30:Evidence=False:KozakContext=TCAATGA:KozakStrength=Weak:type=uORF",
+    },
+];
+
+/// A record with several alternates has one row for each. The alternate whose
+/// own text is a deletion's states the loss of the record's span, which the
+/// record's `END` gives: its row carries the term and the annotation of the
+/// same deletion written with explicit alleles, which are Ensembl VEP's for
+/// the explicit record, and the two rows agree on all five keys. The other
+/// alternate states no sequence and carries the counts and `-`.
+#[test]
+fn a_loss_alternate_of_several_carries_the_row_of_the_deletion_of_its_span() {
+    for feature in [FORWARD, REVERSE] {
+        let cases: Vec<&LossAlternate> = LOSS_ALTERNATES
+            .iter()
+            .filter(|case| case.feature == feature)
+            .collect();
+        let records: Vec<&str> = cases
+            .iter()
+            .flat_map(|case| [case.symbolic, case.explicit])
+            .collect();
+        let rows = annotate(&records, feature);
+        for case in cases {
+            let name = case.symbolic.split('\t').nth(2).unwrap();
+            let both = rows_of(&rows, name);
+            assert_eq!(both.len(), 2, "{name}");
+            let explicit = row_of(&rows, &format!("{name}_explicit"));
+            let lost = both[case.loss];
+            assert_eq!(lost["5UTR_consequence"], case.term, "{name}");
+            assert_eq!(lost["5UTR_annotation"], case.annotation, "{name}");
+            assert_eq!(lost, explicit, "{name}");
+            let other = both[1 - case.loss];
+            assert_eq!(other["5UTR_consequence"], NONE, "{name}");
+            assert_eq!(other["5UTR_annotation"], NONE, "{name}");
+            assert_eq!(other.len(), 5, "{name}: {other:?}");
+            for count in [
+                "Existing_uORFs",
+                "Existing_OutOfFrame_oORFs",
+                "Existing_InFrame_oORFs",
+            ] {
+                assert_eq!(other[count], lost[count], "{name}");
+            }
+        }
+    }
+}
+
 /// Every other symbolic allele carries the three counts of the reference 5' UTR
 /// and `-`: a deletion whose record states a confidence interval around its
 /// position and its end, one that runs from one UTR exon into the next, into
-/// the intron or in from before the transcript, each alternate of a record with
-/// two, a duplication, a tandem duplication, a copy-number gain and an
-/// inversion. So does an insertion whose length is a multiple of three, whose
-/// point lies in no reading frame, whose record writes another end, no length,
-/// a confidence interval, the `IMPRECISE` flag or a second alternate, and one
-/// whose text names a mobile element or another kind of insertion.
+/// the intron or in from before the transcript, each alternate of a record of
+/// a loss and a gain that states its span by a list of lengths and no `END`,
+/// a duplication, a tandem duplication and a copy-number gain. So does an
+/// inversion whose record states a confidence interval, the `IMPRECISE` flag
+/// or a second alternate, and one that runs into the next UTR exon. So does
+/// an insertion whose length is a multiple of three, whose point lies in no
+/// reading frame, whose record writes another end, no length, a confidence
+/// interval, the `IMPRECISE` flag or a second alternate, and one whose text
+/// names a mobile element or another kind of insertion.
 #[test]
 fn every_other_symbolic_allele_carries_the_counts_alone() {
     let records = [
@@ -431,11 +655,14 @@ fn every_other_symbolic_allele_carries_the_counts_alone() {
         "21\t10524680\tinto_next_part\tN\t<DEL>\t.\t.\tEND=10527360",
         "21\t10524680\tinto_intron\tN\t<DEL>\t.\t.\tEND=10524700",
         "21\t10521540\tfrom_before_transcript\tN\t<DEL>\t.\t.\tEND=10521560",
-        "21\t10524588\ttwo_alternates\tN\t<CN0>,<CN2>\t.\t.\tEND=10524628",
+        "21\t10524588\ttwo_alternates_by_length\tN\t<CN0>,<CN2>\t.\t.\tSVLEN=-40,40",
         "21\t10524588\tduplication\tN\t<DUP>\t.\t.\tEND=10524628;SVLEN=40",
         "21\t10524588\ttandem_duplication\tN\t<DUP:TANDEM>\t.\t.\tEND=10524628",
         "21\t10524588\tcopy_number_gain\tN\t<CN2>\t.\t.\tEND=10524628",
-        "21\t10524588\tinversion\tN\t<INV>\t.\t.\tEND=10524628",
+        "21\t10524588\tinversion_with_interval\tN\t<INV>\t.\t.\tEND=10524628;CIPOS=-5,5;CIEND=-5,5",
+        "21\t10524588\tinversion_marked_imprecise\tN\t<INV>\t.\t.\tEND=10524628;IMPRECISE",
+        "21\t10524680\tinversion_into_next_part\tN\t<INV>\t.\t.\tEND=10527360",
+        "21\t10524588\tinversion_two_alternates\tN\t<INV>,<DUP>\t.\t.\tEND=10524628",
         "21\t10524588\tinsertion_of_three\tN\t<INS>\t.\t.\tEND=10524588;SVLEN=3",
         "21\t10524582\tinsertion_outside_frames\tN\t<INS>\t.\t.\tEND=10524582;SVLEN=4",
         "21\t10524588\tinsertion_other_end\tN\t<INS>\t.\t.\tEND=10524590;SVLEN=4",
@@ -448,8 +675,12 @@ fn every_other_symbolic_allele_carries_the_counts_alone() {
     ];
     let rows = annotate(&records, FORWARD);
     let names: Vec<&str> = rows.iter().map(|(name, _)| name.as_str()).collect();
-    assert_eq!(names.len(), 21, "{names:?}");
-    for two in ["two_alternates", "insertion_two_alternates"] {
+    assert_eq!(names.len(), 25, "{names:?}");
+    for two in [
+        "two_alternates_by_length",
+        "insertion_two_alternates",
+        "inversion_two_alternates",
+    ] {
         assert_eq!(names.iter().filter(|name| **name == two).count(), 2);
     }
     for (name, keys) in &rows {

@@ -1,0 +1,71 @@
+{
+ "plugin_fixtures": {
+  "generator": "scripts/fixtures/cut_plugin_regions.py",
+  "flank": 5000,
+  "record_flank": 2000,
+  "exon_flank": 50,
+  "gerp_regions": "exons",
+  "tools": {
+   "bgzip": "bgzip (htslib) 1.22.1",
+   "bigtools": "bigtools 0.5.8"
+  },
+  "files": {
+   "plugin_data/gerp_conservation_scores.homo_sapiens.GRCh38.bw": "9c40836fe11c4265b535e41f9c8c2faf223cc2d733c16498eee5e6954bb00c3f",
+   "plugin_data/human_ancestor.fa.fai": "9a25d871c398f70f3d22d9542105e1c9b3dc8fdaa887e3331965b350ec77582d",
+   "plugin_data/human_ancestor.fa.gz": "2d2db5fbbede272e2b7d469c71bba4a5d2ce0ece7f3be9392c7a75f9b6727bc7",
+   "plugin_data/human_ancestor.fa.gz.fai": "9a25d871c398f70f3d22d9542105e1c9b3dc8fdaa887e3331965b350ec77582d",
+   "plugin_data/human_ancestor.fa.gz.gzi": "4991070c7fc0096e0bf07a79806823ecda1e7e974585714447c005136d2fec12",
+   "reference.fa.fai": "9a25d871c398f70f3d22d9542105e1c9b3dc8fdaa887e3331965b350ec77582d",
+   "reference.fa.gz": "f62802f88e3dfbdf66f163030372bd054c421819fb53f83fceeb542d6545dd82",
+   "reference.fa.gz.fai": "9a25d871c398f70f3d22d9542105e1c9b3dc8fdaa887e3331965b350ec77582d",
+   "reference.fa.gz.gzi": "a9f3d5ba4b05b78fde9e5457ec6c153dd10d930ef775a64a9076551b71ee89fa"
+  },
+  "loftee.synthetic.sql": {
+   "generator": "scripts/fixtures/loftee_conservation_database.py",
+   "branch": "grch38",
+   "seed": 1,
+   "rows": {
+    "transcripts": 392,
+    "exons": 6131,
+    "phylocsf_data": 5134,
+    "gerp_exons": 5317,
+    "phylocsf_summary": 5135
+   },
+   "files": {
+    "plugin_data/loftee.synthetic.sql": "b4c933f615bdaeb2315bb4e091a23ee9c41015b94f22efc6174917c9b37a8dc7"
+   },
+   "tools": {
+    "sqlite": "3.53.1"
+   }
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --stats_text --quiet --force_overwrite --mask_header_cache_path --dir_plugins {plugins} --plugin LoF,loftee_path:{plugins},human_ancestor_fa:{corpus}/plugin_data/human_ancestor.fa.gz,gerp_bigwig:{corpus}/plugin_data/gerp_conservation_scores.homo_sapiens.GRCh38.bw,conservation_file:{corpus}/plugin_data/loftee.synthetic.sql [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "reference.fa.gz",
+ "input": "the records of the corpus GRCh38-plugin-loftee, its variants.vcf byte for byte: 24 ClinVar records on chromosome 21 (public ClinVar identifiers; INFO dropped) chosen from a LoFTEE run over the whole chromosome so that every verdict class the plugin writes appears at least once, plus one constructed record (nagnag_acceptor, the A of a JAM2 acceptor AG that a second AG follows three bases on) whose NAGNAG_SITE motif ends the 9-base context the plugin reads, where the ClinVar NAGNAG_SITE record's motif opens it: high-confidence stop-gained, frameshift, splice-donor and splice-acceptor calls; the END_TRUNC, 5UTR_SPLICE, 3UTR_SPLICE and GC_TO_GT_DONOR filters, alone and beside high-confidence rows of the same record; the SINGLE_EXON, NON_CAN_SPLICE, NAGNAG_SITE and NO_EXON_NUMBER flags; two records whose loss-of-function consequence carries no exon number; and a missense and a synonymous record the plugin leaves alone. No record's loss-of-function allele is the ancestral base, and no END_TRUNC decision lies within 40 GERP units of the -58 cutoff.",
+ "sha256": {
+  "default.txt": "ec3604e323f01fe8c551e30c34241b0007e02f3a43fc12645d476137e0c75e23",
+  "tab.txt": "a29f1056bca78d499260cfe3d7131f1b2e4f6ea6f64ca4a7170da37e69b06ffe",
+  "vcf.vcf": "528d8ddf70a561652cc373fd4ecbdab5ecb58708e6c3a7d0a6afa0cbf173f659",
+  "json.jsonl": "8ecf2098b673fd08fdb80346c830e0ba136e758e633ec4cdfe725c34abe1c4f5",
+  "default.summary.log": "f26a8c0a4990157619815e3b333fbf8bce5b70e5d7a733aaacecbc988c3ebe05",
+  "tab.summary.log": "237224c739d42b5d2ed6ca66cc9adf3680cefab63246688bedef0b31fdd55491",
+  "vcf.summary.log": "8c55b4be85bc10027ee7d8728a799157fc593712281c5a39f29ed8cf9ccbc26e",
+  "json.summary.log": "4abf614846a4f1fe48399c041d4f89a7add8260e4e23c3213f6a65bddc081f5b"
+ },
+ "variants_vcf_sha256": "e124bb854272f9cbf217ff25741727100765d80c1ff4fad8ed6fe6bab65961c6",
+ "plugin_files": {
+  "plugin_data/human_ancestor.fa.gz": "2d2db5fbbede272e2b7d469c71bba4a5d2ce0ece7f3be9392c7a75f9b6727bc7",
+  "plugin_data/human_ancestor.fa.gz.fai": "9a25d871c398f70f3d22d9542105e1c9b3dc8fdaa887e3331965b350ec77582d",
+  "plugin_data/human_ancestor.fa.gz.gzi": "4991070c7fc0096e0bf07a79806823ecda1e7e974585714447c005136d2fec12",
+  "plugin_data/gerp_conservation_scores.homo_sapiens.GRCh38.bw": "9c40836fe11c4265b535e41f9c8c2faf223cc2d733c16498eee5e6954bb00c3f",
+  "plugin_data/loftee.synthetic.sql": "b4c933f615bdaeb2315bb4e091a23ee9c41015b94f22efc6174917c9b37a8dc7"
+ },
+ "plugin_source": "LoF.pm and the files it loads, of the LOFTEE repository (https://github.com/konradjk/loftee) at its grch38 branch, commit a46b502a68c812c8ae0c5a5721c0603fe81cae8d (tag v1.0.4_GRCh38), mounted as --dir_plugins and named by loftee_path through {plugins}; its maxEntScan directory holds the stand-in files scripts/data/write_loftee_stand_ins.py writes",
+ "generator": "variants.vcf, json_cache, the reference with its indexes and, under plugin_data, the ancestral-allele FASTA with its indexes and the GERP bigWig are the files of the corpus GRCh38-plugin-loftee, byte for byte, cut as that corpus's record says (the record under plugin_fixtures is that corpus's); scripts/fixtures/loftee_conservation_database.py --branch grch38 --name loftee.synthetic.sql --seed 1 --dir plugin_data (the synthetic SQLite database the grch38 branch opens under conservation_file, LoF.pm line 126: a fabricated row an exon of the cached protein-coding transcripts in the phylocsf_summary table that branch queries, with some exons left without one, and in the phylocsf_data and gerp_exons tables of the master branch, which the grch38 branch does not read, each value a function of the seed, the table, the transcript's stable id and the exon number; seed, row counts and digest under plugin_fixtures); scripts/concordance/generate_reference_output.sh --corpus --dir-plugins <loftee checkout> (the manifest's run, Ensembl VEP's LoF plugin at the grch38 branch of its repository reading loftee_path and --dir_plugins through {plugins}); tools/vep-golden-corpus select --release 116 --assembly GRCh38 --dataset loftee=<reference>=<variants.vcf> --k 100 --seed 1 --keep-records --matrix tests/parity/matrix.tsv --flag=... --fasta-name reference.fa.gz (on a manifest that names LoFTEE under covers and the plugin's files under plugin_files; every record kept) and classify --field LoF --field LoF_filter --field LoF_flags --field LoF_info",
+ "reference": "a conservation_file other than false is opened as a SQLite database (LoF.pm line 126 of the grch38 branch), here the synthetic one under plugin_fixtures, and every stop-gained or frameshift row of a protein-coding transcript that has an exon number is looked up in its phylocsf_summary table by the transcript's stable id and the exon number (LoF.pm lines 262, 274-275 and 553-557). Of the 56 such rows, 10 find no row and gain PHYLOCSF_TOO_SHORT in LoF_info; 46 gain ANN_ORF and MAX_ORF there, 10 of them under a non-negative annotated score, 17 with the flag PHYLOCSF_UNLIKELY_ORF and 19 with PHYLOCSF_WEAK (LoF.pm lines 276-284), among them scores of exactly 0 and two rows that carry SINGLE_EXON beside their flag. Every other field of every row is what the manifest's run of the corpus GRCh38-plugin-loftee writes, which reads no database: the grch38 branch takes every interval of a GERP walk from the bigWig (gerp_dist.pl lines 58-63), so no row reads the gerp_exons table, and none reads the phylocsf_data table, whose rows differ from those of phylocsf_summary on 54 of the 56 lookups. The reference image carries no samtools, so the plugin's ancestral-allele read returns nothing there, as in that corpus's run, and the warnings file of each format holds that read's warning alone (LoF.pm line 540, 128 lines); expected/ holds no warnings log, as that corpus's holds none"
+}

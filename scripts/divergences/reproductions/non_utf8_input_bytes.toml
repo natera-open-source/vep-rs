@@ -1,7 +1,7 @@
 entry = "non_utf8_input_bytes"
 page = "docs/divergences/non-utf8-input.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the GFF3 specification, \"Description of the Format\" (any character set; UTF-8 recommended), and under the VCF 4.2 text format, which names no encoding; not seen in the measured datasets; classed by its most reachable shape, a byte that is not UTF-8 in a GFF attribute value: in a VCF 4.3 file it breaks section 1.2, which sets UTF-8"
 notes = "The ID column carries the Latin-1 byte 0xE9, which is not UTF-8: Ensembl VEP writes the byte as read in Uploaded_variation; vep-rs prints U+FFFD for it."
@@ -32,3 +32,16 @@ where = { location = "21:30289183", feature = "ENST00000416044" }
 [expected]
 ensembl_vep = ["caf\\xe9"]
 vep_rs = ["caf\uFFFD"]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/pipeline.rs::LineParse::parse",
+    "crates/vep-core/src/regulatory_gff.rs::unescape_to_text",
+    "crates/vep-io/src/output/vcf_output.rs::VcfOutputFormatter::record_line",
+]
+tests = [
+    "crates/vep-cli/src/pipeline.rs::tests::a_line_that_is_not_utf8_carries_its_stored_columns_as_bytes",
+    "crates/vep-cli/tests/documented_subsets.rs::byte_transparent_input_exclusion_is_documented",
+    "crates/vep-cli/tests/input_io.rs::latin1_data_line_is_annotated",
+    "crates/vep-cli/tests/input_io.rs::latin1_short_and_structural_records_are_written_from_their_stored_columns",
+]

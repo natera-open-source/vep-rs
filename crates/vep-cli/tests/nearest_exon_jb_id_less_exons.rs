@@ -22,7 +22,7 @@ fn corpus() -> PathBuf {
 const RECORD: &str = "21\t10521550\tidless_exon1\tG\tA";
 
 /// The 18 aligned transcripts the record lies in an exon of, with the item
-/// Ensembl VEP 116.2 writes on each under `--merged --all_refseq`: the exon's
+/// Ensembl VEP 116.3 writes on each under `--merged --all_refseq`: the exon's
 /// id is empty, the distance is to the exon's start and the length is the
 /// exon's.
 const EXPECTED: &[(&str, &str)] = &[
@@ -180,7 +180,7 @@ fn json_items(rows: &[String]) -> BTreeMap<String, String> {
         .collect()
 }
 
-/// Ensembl VEP 116.2 writes the item of an exon that has no stable id with the
+/// Ensembl VEP 116.3 writes the item of an exon that has no stable id with the
 /// empty id (`NearestExonJB.pm:220, :269`): `|23|start|168` on each of the 18
 /// aligned transcripts of `21 10521550 G A` whose exon holds it, `+23+start+168`
 /// under `--vcf`, and the row carries the field in every format; the aligned

@@ -4,7 +4,7 @@
 //! Consequence types and rankings from Ensembl Variation.
 //!
 //! All 41 Sequence Ontology (SO) consequence terms used by VEP, with their
-//! exact ranks, impact classifications, and SO accessions matching the Perl
+//! exact ranks, impact classifications, and SO accessions matching the Ensembl VEP
 //! implementation in `Bio::EnsEMBL::Variation::Utils::Constants`
 //! (ensembl-variation). `OutputFactory.pm` is
 //! `Bio/EnsEMBL/VEP/OutputFactory.pm` in ensembl-vep.
@@ -17,7 +17,7 @@ use smallvec::SmallVec;
 
 use crate::prediction::PredictionTerm;
 pub use crate::transcript::SourceCache;
-use crate::transcript::{BamEditStatus, Transcript};
+use crate::transcript::{file_order_key_suffix, BamEditStatus, Transcript};
 
 /// Per-transcript consequence term list.
 ///
@@ -72,6 +72,7 @@ impl fmt::Display for Impact {
 /// See <https://www.ensembl.org/info/genome/variation/prediction/predicted_data.html>
 /// for the full consequence hierarchy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub enum Consequence {
     TranscriptAblation,
     SpliceAcceptorVariant,
@@ -369,7 +370,7 @@ impl Consequence {
 
     /// Every term in rank order, so `ALL[i].rank() == i + 1` and a term's
     /// position in the list is `term as usize`.
-    pub const ALL: [Consequence; 41] = [
+    pub const ALL: &'static [Consequence] = &[
         Consequence::TranscriptAblation,
         Consequence::SpliceAcceptorVariant,
         Consequence::SpliceDonorVariant,
@@ -460,11 +461,11 @@ impl Ord for Consequence {
 /// summarized [`TranscriptConsequence`] fields do not expose.
 ///
 /// The per-consequence `exon`/`intron` fields are only `"n/total"` summary
-/// strings, and the per-transcript exon/intron coordinate model, genomic CDS
-/// bounds, and `cds_*_NF` flags never reach the plugin phase (plugins run with
-/// `&mut [InputVariant]`, after the source [`crate::transcript::Transcript`] is
-/// out of scope). LoFTEE needs the full structure to compute SMALL_INTRON,
-/// NON_CAN_SPLICE, GC_TO_GT_DONOR, the GERP-weighted END_TRUNC distance, etc.
+/// strings; this context holds what LoFTEE computes SMALL_INTRON,
+/// NON_CAN_SPLICE, GC_TO_GT_DONOR and the GERP-weighted END_TRUNC distance
+/// from: the transcript's exons and introns in rank order (the introns derived
+/// from the exons when the transcript lists none), its strand, coding bounds
+/// and `cds_*_NF` flags.
 ///
 /// The code that builds a [`TranscriptConsequence`] attaches this struct while
 /// it holds the transcript, on the rows
@@ -472,6 +473,7 @@ impl Ord for Consequence {
 /// chooses from the loaded plugins. On every other row the field is `None` and
 /// absent from the serialization.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct LofteeContext {
     /// All exons of the transcript, in rank order.
     pub exons: Vec<crate::transcript::Exon>,
@@ -584,6 +586,7 @@ fn derive_introns_from_exons(
 /// does a field whose doc marks it never serialized, and the keys the list
 /// marks optional appear only when populated.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct TranscriptConsequence {
     /// The source transcript, shared with the index that holds it: every
     /// per-transcript value the row prints is read from it. `None` on a row
@@ -673,7 +676,7 @@ pub struct TranscriptConsequence {
     /// The reference allele the row was analysed against under
     /// `--use_transcript_ref`, relative to the variant's strand: the transcript's
     /// where the variant maps inside its exons, the input's elsewhere (`USED_REF`,
-    /// OutputFactory.pm:1774-1779); `None` without the flag.
+    /// OutputFactory.pm:1783-1788); `None` without the flag.
     pub used_ref: Option<Arc<str>>,
     /// SIFT prediction and score.
     pub sift: Option<String>,
@@ -714,7 +717,7 @@ pub struct TranscriptConsequence {
     /// `refseq_misalignment_offset` as `hgvs_transcript` sets it
     /// (`REFSEQ_OFFSET`); the HGVSc is numbered against the edited model and
     /// moves by nothing. `None` when no offset was computed or it is 0, which
-    /// prints nothing (OutputFactory.pm:1769).
+    /// prints nothing (OutputFactory.pm:1778).
     pub refseq_offset: Option<i64>,
     /// The alternate allele equals the bases of the transcript's first
     /// `_rna_edit` on the codon path (`invalid_alleles`,
@@ -752,19 +755,19 @@ pub struct TranscriptConsequence {
     /// other row. Never serialized.
     pub transcript_sequences: Option<Box<TranscriptSequences>>,
     /// The motif fields of a `MotifFeature` row of a sequence variant
-    /// (`MotifFeatureVariationAllele_to_output_hash`, OutputFactory.pm:1910-1942):
+    /// (`MotifFeatureVariationAllele_to_output_hash`, OutputFactory.pm:1919-1951):
     /// `None` on every other row, a structural variant's motif row included.
     pub motif: Option<Box<MotifFields>>,
     /// The `CELL_TYPE` list of a `RegulatoryFeature` or `MotifFeature` row under
-    /// `--cell_type` (`get_cell_types`, OutputFactory.pm:1959-1969): for each
+    /// `--cell_type` (`get_cell_types`, OutputFactory.pm:1968-1978): for each
     /// requested epigenome, in the order requested, the feature's activity in
     /// it, an epigenome the feature's map lacks skipped. Empty on every motif
     /// row, whose features carry no activity map; `None` on a transcript or
     /// intergenic row and on every row of a run without the flag.
     pub cell_type: Option<Box<[CellTypeActivity]>>,
     /// The source transcript's [`Transcript::id_rank`]: the position of its
-    /// Ensembl VEP sort key (`transcript_id`, then `_` and the dbID when the
-    /// record carries one) in the byte order of its chromosome's keys, so two
+    /// Ensembl VEP sort key ([`Self::ensembl_vep_key`]) in the byte order of
+    /// its chromosome's keys, so two
     /// rows of one chromosome compare by rank as Ensembl VEP orders them; rows
     /// of different chromosomes, an interchromosomal breakend's mate rows among
     /// them, do not. A `MotifFeature` row carries the rank of its motif's
@@ -799,6 +802,7 @@ pub struct TranscriptConsequence {
 /// How a row prints the protein id of its transcript
 /// ([`TranscriptConsequence::protein_id`]).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ProteinIdDisplay {
     /// The id as the cache carries it.
     #[default]
@@ -812,7 +816,7 @@ pub enum ProteinIdDisplay {
 
 /// The keys of a [`TranscriptConsequence`] document in the order they are
 /// written, each with whether it is written only when populated.
-pub const TRANSCRIPT_CONSEQUENCE_KEYS: [(&str, bool); 61] = [
+pub const TRANSCRIPT_CONSEQUENCE_KEYS: &[(&str, bool)] = &[
     ("transcript_id", false),
     ("gene_id", false),
     ("gene_symbol", false),
@@ -1034,6 +1038,7 @@ impl serde::Serialize for FlagsDocument<'_> {
 /// table. The protein is `None` when the cache lacks it; the UTR when neither
 /// the cache nor the reference FASTA yields one ([`Self::from_transcript`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct TranscriptSequences {
     pub cds: Box<str>,
     pub three_prime_utr: Option<Box<str>>,
@@ -1042,6 +1047,21 @@ pub struct TranscriptSequences {
 }
 
 impl TranscriptSequences {
+    /// The sequences a plugin translates from, from each of the four fields.
+    pub fn new(
+        cds: Box<str>,
+        three_prime_utr: Option<Box<str>>,
+        peptide: Option<Box<str>>,
+        codon_table: u8,
+    ) -> Self {
+        Self {
+            cds,
+            three_prime_utr,
+            peptide,
+            codon_table,
+        }
+    }
+
     /// The sequences of `transcript`; `None` for a transcript without a
     /// translateable sequence. `three_prime_utr` is kept as the caller resolved
     /// it, the cache's when it carries one, else the UTR read from the reference
@@ -1062,8 +1082,9 @@ impl TranscriptSequences {
 }
 
 /// The fields a `MotifFeature` row of a sequence variant carries beside its
-/// terms (`MotifFeatureVariationAllele_to_output_hash`, OutputFactory.pm:1910-1942).
+/// terms (`MotifFeatureVariationAllele_to_output_hash`, OutputFactory.pm:1919-1951).
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct MotifFields {
     /// `MOTIF_NAME`: the binding matrix's stable id.
     pub name: Arc<str>,
@@ -1087,12 +1108,32 @@ pub struct MotifFields {
     pub factors: Arc<[Arc<str>]>,
 }
 
+impl MotifFields {
+    /// The fields of a `MotifFeature` row, from each of the five.
+    pub fn new(
+        name: Arc<str>,
+        pos: Option<u32>,
+        high_inf_pos: Option<bool>,
+        score_change: Option<f64>,
+        factors: Arc<[Arc<str>]>,
+    ) -> Self {
+        Self {
+            name,
+            pos,
+            high_inf_pos,
+            score_change,
+            factors,
+        }
+    }
+}
+
 /// The activity of a regulatory feature in one epigenome: the five values of
 /// the funcgen `regulatory_activity` table, printed as Ensembl VEP prints the
 /// value of the feature's activity map (`ACTIVE`, `INACTIVE`, `POISED`,
 /// `REPRESSED`, `NA`), and serialized as that spelling.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[non_exhaustive]
 pub enum Activity {
     Active,
     Inactive,
@@ -1115,7 +1156,7 @@ impl Activity {
 
 /// One entry of a row's `CELL_TYPE` list: an epigenome `--cell_type` named and
 /// the regulatory feature's activity in it, printed `<name>:<activity>`
-/// (OutputFactory.pm:1964-1966).
+/// (OutputFactory.pm:1973-1975).
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct CellTypeActivity {
     pub name: Arc<str>,
@@ -1174,9 +1215,10 @@ impl fmt::Display for FeatureType {
 /// (`Bio::EnsEMBL::Variation::Utils::BaseVepPlugin`), which a shared library
 /// lists in `vep_plugin_feature_types` and a built-in plugin returns from
 /// `feature_types`; a plugin runs on a row only when its list names the row's
-/// kind (`OutputFactory.pm:2223`, `check_feature_type(ref($bvfoa->feature) ||
+/// kind (`OutputFactory.pm:2232`, `check_feature_type(ref($bvfoa->feature) ||
 /// 'Intergenic')`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum RowKind {
     Transcript,
     RegulatoryFeature,
@@ -1186,7 +1228,7 @@ pub enum RowKind {
 
 impl RowKind {
     /// Every kind, in the order Ensembl VEP's overlap list holds the rows.
-    pub const ALL: [RowKind; 4] = [
+    pub const ALL: &'static [RowKind] = &[
         RowKind::Transcript,
         RowKind::RegulatoryFeature,
         RowKind::MotifFeature,
@@ -1304,6 +1346,28 @@ impl Default for TranscriptConsequence {
 }
 
 impl TranscriptConsequence {
+    /// Stores `value` under `key` as a plugin's value on this row, over any
+    /// value an earlier plugin left there, as Ensembl VEP's `run_plugins`
+    /// assigns each key of a plugin's result over the line's hash in load order
+    /// (`OutputFactory.pm:2239-2241`). The key's mark in
+    /// [`Self::plugin_empty_strings`] goes with the earlier value; `empty_string`
+    /// names an empty `value` there as Ensembl VEP's empty string.
+    pub fn set_plugin_value(&mut self, key: String, value: String, empty_string: bool) {
+        self.plugin_empty_strings.retain(|marked| *marked != key);
+        if empty_string && value.is_empty() {
+            self.plugin_empty_strings.push(key.clone());
+        }
+        self.plugin_data.insert(key, value);
+    }
+
+    /// Removes the plugin value under `key` and its mark in
+    /// [`Self::plugin_empty_strings`], keeping the order of the other values.
+    pub fn remove_plugin_value(&mut self, key: &str) {
+        if self.plugin_data.shift_remove(key).is_some() {
+            self.plugin_empty_strings.retain(|marked| marked != key);
+        }
+    }
+
     /// A consequence against `transcript`, holding a shared handle on it, with
     /// every field the transcript determines filled from it (canonical, strand,
     /// span, edit status, rank) and every field the variant determines empty:
@@ -1375,35 +1439,53 @@ impl TranscriptConsequence {
 
     /// The key Ensembl VEP stores the row's feature variation under and sorts
     /// a record's rows of one kind by, as bytes, without the prefix the rejoin
-    /// of a `--minimal` split puts before it (`OutputFactory.pm:2316`): a
+    /// of a `--minimal` split puts before it (`OutputFactory.pm:2325`): a
     /// transcript's stable id, then `_` and its database id when the cache
     /// carries a non-zero one (`BaseVariationFeature.pm:310-320`, sorted at
-    /// `VariationFeature.pm:666`); a regulatory feature's stable id (`:918`,
+    /// `VariationFeature.pm:666`), `_` alone when the cache's record holds no
+    /// database id, as a cache built from a GTF or GFF3 does (Ensembl VEP
+    /// numbers such a file's transcripts as it builds them, `BaseGXF.pm:489`),
+    /// or the place of the gene-model file it was read from
+    /// ([`file_order_key_suffix`]); a regulatory feature's stable id (`:918`,
     /// `:710`); a motif's database id in decimal (`:937`, `:750`), or its stable
     /// id when it has none. The byte order of these keys is the order
     /// [`Self::id_rank`] ranks a sequence variant's rows in; a structural
     /// variant's regulatory and motif rows carry the met rank instead
     /// ([`Self::structural_feature_order`]).
     pub fn ensembl_vep_key(&self) -> impl Iterator<Item = u8> + '_ {
-        let (stable_id, db_id) = match self.feature_type {
-            FeatureType::Transcript => (
-                self.transcript_id(),
-                self.transcript()
-                    .and_then(|transcript| transcript.db_id)
-                    .filter(|&db_id| db_id != 0),
-            ),
-            FeatureType::RegulatoryFeature => (self.transcript_id(), None),
+        // A transcript of a gene-model file has no database id: its key ends
+        // in the file's place instead ([`file_order_key_suffix`]).
+        let file_suffix = match self.feature_type {
+            FeatureType::Transcript => self
+                .source_cache()
+                .and_then(SourceCache::file_order)
+                .map(file_order_key_suffix),
+            _ => None,
+        };
+        let (stable_id, db_id, separator) = match self.feature_type {
+            FeatureType::Transcript => {
+                let db_id = match (&file_suffix, self.transcript()) {
+                    (None, Some(transcript)) => Some(transcript.db_id),
+                    _ => None,
+                };
+                (
+                    self.transcript_id(),
+                    db_id.flatten().filter(|&db_id| db_id != 0),
+                    matches!(db_id, Some(db_id) if db_id != Some(0)),
+                )
+            }
+            FeatureType::RegulatoryFeature => (self.transcript_id(), None, false),
             FeatureType::MotifFeature => match self.motif_db_id {
-                Some(db_id) => ("", Some(db_id)),
-                None => (self.transcript_id(), None),
+                Some(db_id) => ("", Some(db_id), false),
+                None => (self.transcript_id(), None, false),
             },
         };
-        let separator =
-            (self.feature_type == FeatureType::Transcript && db_id.is_some()).then_some(b'_');
+        let separator = separator.then_some(b'_');
         stable_id
             .bytes()
             .chain(separator)
             .chain(db_id.into_iter().flat_map(decimal_digits))
+            .chain(file_suffix.into_iter().flat_map(String::into_bytes))
     }
 
     /// The order of two of one structural variant's `RegulatoryFeature` or
@@ -1568,7 +1650,7 @@ impl TranscriptConsequence {
     /// The gene has at least one phenotype association: the `GENE_PHENO`
     /// column under `--gene_phenotype`. Perl truthiness on the cached count
     /// (`$hash->{GENE_PHENO} = 1 if $self->{gene_phenotype} && $tr->{_gene_phenotype}`,
-    /// OutputFactory.pm:1586 at release/116.2): a count of zero reads as no
+    /// OutputFactory.pm:1595 at release/116.3): a count of zero reads as no
     /// association.
     pub fn gene_phenotype(&self) -> bool {
         self.transcript()
@@ -1578,7 +1660,7 @@ impl TranscriptConsequence {
 
     /// Length of the transcript's translateable sequence as the cache stores it,
     /// `None` for a transcript without a translation. The `length` pick
-    /// criterion reads it (OutputFactory.pm:743-748 at release/116.2).
+    /// criterion reads it (OutputFactory.pm:743-748 at release/116.3).
     pub fn cds_length(&self) -> Option<u32> {
         self.transcript()?.cds_length()
     }
@@ -1621,7 +1703,7 @@ impl TranscriptConsequence {
         }
         let bp = end - start + 1;
         let feature_len = self.feature_end - self.feature_start + 1;
-        // The quotient first, then times 100, as OutputFactory.pm:2091 evaluates
+        // The quotient first, then times 100, as OutputFactory.pm:2100 evaluates
         // `100 * ($overlap_length / $feature_length)`: the two orders round a
         // two-decimal tie differently (23 of 160 is 14.374999999999998 this way and
         // 14.375 the other, printed 14.37 and 14.38).
@@ -1644,7 +1726,7 @@ impl TranscriptConsequence {
 }
 
 /// The decimal digits of `n`, most significant first: the bytes of the string
-/// Perl sorts a database id as ([`TranscriptConsequence::ensembl_vep_key`]).
+/// Ensembl VEP sorts a database id as ([`TranscriptConsequence::ensembl_vep_key`]).
 fn decimal_digits(n: u64) -> impl Iterator<Item = u8> {
     let count = n.checked_ilog10().map_or(1, |magnitude| magnitude + 1);
     (0..count)
@@ -1720,6 +1802,8 @@ mod tests {
             vefc: None,
             source_cache: None,
             bam_edit_status: None,
+            circular_length: None,
+            region_files: None,
             derived: Default::default(),
             id_rank: 0,
         }
@@ -1730,7 +1814,7 @@ mod tests {
     /// miRNA terms wait for the variant, and `GENE_PHENO` follows Perl truthiness
     /// on the cached phenotype count
     /// (`$hash->{GENE_PHENO} = 1 if $self->{gene_phenotype} && $tr->{_gene_phenotype}`,
-    /// OutputFactory.pm:1586 at release/116.2): a count of zero reads as no
+    /// OutputFactory.pm:1595 at release/116.3): a count of zero reads as no
     /// association.
     #[test]
     fn accessors_read_the_borrowed_transcript() {
@@ -1837,8 +1921,6 @@ mod tests {
                 db_id: None,
                 start: 1,
                 end: 300,
-                start_exon_index: 0,
-                end_exon_index: 0,
                 seq: None,
             }),
             flags: Arc::from(["cds_start_NF".to_string()]),
@@ -2240,14 +2322,99 @@ mod tests {
         );
     }
 
-    /// The key Ensembl VEP 116.2 stores a row's feature variation under: a
+    /// A transcript read from a gene-model file keys after the cache's
+    /// transcript of the same stable id, whatever that one's database id, and
+    /// the files' transcripts of one id follow in argument order: the key ends
+    /// in `_:` and the file's place, where Ensembl VEP's ends in a count of the
+    /// transcripts it built before (`BaseGXF.pm:489`), which the input's other
+    /// records and Perl's hash order decide.
+    #[test]
+    fn a_gene_model_file_transcript_keys_after_the_cache_transcript_of_its_id() {
+        let key = |row: &TranscriptConsequence| {
+            String::from_utf8(row.ensembl_vep_key().collect()).unwrap()
+        };
+        let row = |db_id: Option<u64>, source_cache: Option<SourceCache>| {
+            TranscriptConsequence::for_transcript(&Arc::new(Transcript {
+                stable_id: "ENST00000000001".into(),
+                db_id,
+                source_cache,
+                ..annotated_transcript(None)
+            }))
+        };
+        let file = |order: u32| {
+            row(
+                None,
+                Some(SourceCache::GeneModelFile {
+                    short_name: "genes.gtf.gz".into(),
+                    order,
+                }),
+            )
+        };
+        assert_eq!(key(&file(1)), "ENST00000000001_:0000000001");
+        for cache in [
+            row(Some(7), None),
+            row(Some(99_999_999_999), None),
+            row(None, None),
+            row(Some(5), Some(SourceCache::RefSeq)),
+        ] {
+            assert!(cache.ensembl_vep_key().lt(file(1).ensembl_vep_key()));
+        }
+        assert!(file(1).ensembl_vep_key().lt(file(2).ensembl_vep_key()));
+        assert!(file(9).ensembl_vep_key().lt(file(10).ensembl_vep_key()));
+        // Among other stable ids the key stands where a numbered key stands:
+        // before an id that continues `_` with a letter.
+        let longer = TranscriptConsequence::for_transcript(&Arc::new(Transcript {
+            stable_id: "ENST00000000001_PAR_Y".into(),
+            db_id: Some(3),
+            ..annotated_transcript(None)
+        }));
+        assert!(file(1).ensembl_vep_key().lt(longer.ensembl_vep_key()));
+        assert!(row(Some(7), None)
+            .ensembl_vep_key()
+            .lt(longer.ensembl_vep_key()));
+    }
+
+    /// A cache transcript whose record holds no database id keys as its
+    /// stable id and `_`, where Ensembl VEP's key of a GTF or GFF3 transcript
+    /// holds `_` and a counter for every transcript but the first it builds
+    /// (`BaseGXF.pm:489`, `BaseVariationFeature.pm:316-318`): an id that
+    /// continues the stable id with `-` keys first, as it does among numbered
+    /// keys. A database id of zero leaves the key bare.
+    #[test]
+    fn a_transcript_without_a_database_id_keys_as_its_id_and_an_underscore() {
+        let key = |row: &TranscriptConsequence| {
+            String::from_utf8(row.ensembl_vep_key().collect()).unwrap()
+        };
+        let row = |stable_id: &str, db_id: Option<u64>| {
+            TranscriptConsequence::for_transcript(&Arc::new(Transcript {
+                stable_id: stable_id.into(),
+                db_id,
+                ..annotated_transcript(None)
+            }))
+        };
+        assert_eq!(key(&row("MODEL1", None)), "MODEL1_");
+        assert_eq!(key(&row("MODEL1", Some(12))), "MODEL1_12");
+        assert_eq!(key(&row("MODEL1", Some(0))), "MODEL1");
+        assert!(row("MODEL1-A", None)
+            .ensembl_vep_key()
+            .lt(row("MODEL1", None).ensembl_vep_key()));
+        assert!(row("MODEL1-A", Some(4))
+            .ensembl_vep_key()
+            .lt(row("MODEL1", Some(3)).ensembl_vep_key()));
+        assert!(row("MODEL1", Some(0))
+            .ensembl_vep_key()
+            .lt(row("MODEL1-A", Some(4)).ensembl_vep_key()));
+    }
+
+    /// The key Ensembl VEP 116.3 stores a row's feature variation under: a
     /// transcript's stable id with `_` and its database id, which `sort keys`
     /// orders before the stable id alone when that id is a prefix of the other
     /// (`AT4G12020.10_118783` before `AT4G12020.1_118785`, `_` sorting after
     /// every digit; BaseVariationFeature.pm:310-320, VariationFeature.pm:666); a
-    /// transcript with no database id or a zero one keeps its stable id alone,
-    /// as `if(my $dbID = $tr->dbID)` skips both; a regulatory feature's stable
-    /// id (VariationFeature.pm:918); a motif's database id as the digits Perl
+    /// transcript with a database id of zero keeps its stable id alone, as
+    /// `if(my $dbID = $tr->dbID)` skips it, and one whose cache record holds
+    /// none ends in `_` alone; a regulatory feature's stable
+    /// id (VariationFeature.pm:918); a motif's database id as the digits Ensembl VEP
     /// sorts as a string (MotifFeatureVariation.pm:70-76, VariationFeature.pm:937),
     /// and its stable id when it has none.
     #[test]
@@ -2268,7 +2435,10 @@ mod tests {
         assert_eq!(key(&one), "AT4G12020.1_118785");
         assert!(ten.ensembl_vep_key().lt(one.ensembl_vep_key()));
         assert!(one.transcript_id() < ten.transcript_id());
-        assert_eq!(key(&transcript("ENST00000000001", None)), "ENST00000000001");
+        assert_eq!(
+            key(&transcript("ENST00000000001", None)),
+            "ENST00000000001_"
+        );
         assert_eq!(
             key(&transcript("ENST00000000001", Some(0))),
             "ENST00000000001"
@@ -2381,14 +2551,45 @@ mod tests {
         assert_eq!(row(None).peptides(), None);
     }
 
+    /// A plugin's value written on a row replaces the earlier value under its
+    /// key with that value's mark; an empty value is marked only where the
+    /// writer names it Ensembl VEP's empty string, and a removal takes the mark
+    /// and keeps the order of the other values.
+    #[test]
+    fn a_plugin_value_written_on_a_row_replaces_the_earlier_value_and_its_mark() {
+        let mut row = TranscriptConsequence::default();
+        row.set_plugin_value("A".to_string(), String::new(), true);
+        row.set_plugin_value("B".to_string(), "b".to_string(), true);
+        row.set_plugin_value("C".to_string(), String::new(), false);
+        assert_eq!(row.plugin_empty_strings, ["A"]);
+
+        row.set_plugin_value("A".to_string(), String::new(), false);
+        assert_eq!(row.plugin_data["A"], "");
+        assert!(row.plugin_empty_strings.is_empty());
+        row.set_plugin_value("A".to_string(), String::new(), true);
+        row.set_plugin_value("A".to_string(), "a".to_string(), true);
+        assert_eq!(row.plugin_data["A"], "a");
+        assert!(row.plugin_empty_strings.is_empty());
+
+        row.set_plugin_value("C".to_string(), String::new(), true);
+        row.set_plugin_value("D".to_string(), "d".to_string(), false);
+        row.remove_plugin_value("B");
+        row.remove_plugin_value("Absent");
+        assert_eq!(row.plugin_data.keys().collect::<Vec<_>>(), ["A", "C", "D"]);
+        assert_eq!(row.plugin_empty_strings, ["C"]);
+        row.remove_plugin_value("C");
+        assert_eq!(row.plugin_data.keys().collect::<Vec<_>>(), ["A", "D"]);
+        assert!(row.plugin_empty_strings.is_empty());
+    }
+
     /// The plugin empty-string mark is a three-word list on the row and on the
     /// record, so a row measures its fields' 704 bytes plus the list and a
-    /// record its 1280 plus the list on a 64-bit target.
+    /// record its 1288 plus the list on a 64-bit target.
     #[test]
     #[cfg(target_pointer_width = "64")]
     fn plugin_empty_mark_costs_a_row_and_a_record_a_list() {
         assert_eq!(size_of::<Vec<String>>(), 3 * size_of::<usize>());
         assert_eq!(size_of::<TranscriptConsequence>(), 728);
-        assert_eq!(size_of::<crate::variant::InputVariant>(), 1304);
+        assert_eq!(size_of::<crate::variant::InputVariant>(), 1312);
     }
 }

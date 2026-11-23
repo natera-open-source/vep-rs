@@ -1,21 +1,21 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --stats_text --quiet --force_overwrite --grch37 --refseq [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens_refseq/116_GRCh37",
  "fasta": "GRCh37 chromosome 21 at its full length from Homo_sapiens.GRCh37.75.dna.primary_assembly.fa, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
  "input": "variants.vcf: 55 chromosome 21 records of gnomAD v2.1.1 genomes and the 1000 Genomes phase 3 integrated call set, chromosome 21, sites only, each an exemplar of a consequence-set combination or of a stratum of the family key REFSEQ_MATCH=,BAM_EDIT=,REFSEQ_OFFSET,GIVEN_REF/USED_REF in Ensembl VEP's output over the candidate records (the RefSeq models' columns, with --hgvs for REFSEQ_OFFSET); records inside the genomic bases an RNA edit deletes from a model and records whose alternate allele is the base an RNA edit substitutes (Ensembl VEP spells their HGVSc as a change of a base to itself) are left out",
  "sha256": {
-  "default.txt": "018e6fe62cfadc0d54300bb742884db46212c7f581e86d4e822f86cc759f592d",
-  "tab.txt": "ad9c91bc29eb84c3e2e43a9deaa1f19b48dd7b583e6cf1e54fb999730e56694b",
-  "vcf.vcf": "55a8ff97570f384573ad46831dfee231d090323372a7993b829cf6c4e3ac391a",
-  "json.jsonl": "e91c936968b890402df4d83027454a9041d9b0cd78758676090e017dd5383dfe",
-  "default.summary.log": "2c6fcb404d16fcdc11f1dd10072c0962998444e2beaca7c288831b7e01c3dafa",
-  "tab.summary.log": "88587b7d0509f80e0cc159a0e3c65470438ac90fabac66eaa1eefbbbf3b6ac90",
-  "vcf.summary.log": "5c8016662b796099f0b8a9d6a74157f3121109b53ba9bc96df154f836e212d33",
-  "json.summary.log": "4346a88841ad9e1e2c3db9daddc579f682e273f49e020bc69c66607ff3aebba6"
+  "default.txt": "4f8b90e195700ff60f855d6f3ce55d171714e84e926d608a5cc6fb6ebf4f2d78",
+  "tab.txt": "d436643b78be0f4bfa3ba6af8249250965adeb956f1878a9765af7d96c0ae67b",
+  "vcf.vcf": "b89e3ea4776d6e763c1216e50478c97046d2b1a4444e0b16b90444d4be6d54f5",
+  "json.jsonl": "f47c25f8ead0030bf2c8f849b49f6c476b88038d45f36bf2131d58d7e8f2cb36",
+  "default.summary.log": "10f26cbcb33629816bf97b512b6e5bff6e07acbeaacd3eac3bbc8c1443a4a158",
+  "tab.summary.log": "feddf93354b50718ead4292eed267af87e3aa3715e5a730cfa94874a335c05df",
+  "vcf.summary.log": "c200c0f895b63955ab5de281d5ecdf2ad9f43ef44605ad60bd40561b216d5ad5",
+  "json.summary.log": "fe56ff10ab296ae3bcb911d11472bcd52525a6bdaf488aed0d8a7ec69d6dd82b"
  },
  "variants_vcf_sha256": "15e97c8e5903f828fbcd5ead95915e9dd3e2438f9dd71d36b92ee64670f3f3a2",
  "source_cache": {
@@ -24,10 +24,9 @@
   "bam": "GCF_000001405.25_GRCh37.p13_knownrefseq_alns.bam",
   "refseq_annotation": "GCF_000001405.25-RS_2024_09 - GCF_000001405.25_GRCh37.p13_genomic.gff",
   "converter": {
-   "script": "scripts/data/storable_to_json.pl",
+   "tool": "tools/vep-storable-to-json",
    "repository": "github.com/natera-open-source/vep-rs",
-   "image": "ensemblorg/ensembl-vep:release_116.2",
-   "image_digest": "sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+   "build": "the release build of the tree this corpus is committed with"
   },
   "chromosome_21_models": {
    "bam_edit_status": {
@@ -43,5 +42,5 @@
   "shards": 20,
   "method": "scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --flank 5000 over the converted chromosome 21 of the source cache; info.json is the converted cache's own (source_type, bam and the source versions)"
  },
- "generator": "Ensembl VEP 116.2 over the candidate records under --grch37 --refseq --hgvs; scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh37 --suite <id>=<reference>=<candidates> (two datasets) --k 1 --seed 1 --multi-allelic-per-suite 1 --max-span 1000000 --cache <converted cache> --flank 5000 --family-columns REFSEQ_MATCH=,BAM_EDIT=,REFSEQ_OFFSET,GIVEN_REF/USED_REF --covers ... --matrix tests/parity/matrix.tsv --flag=--grch37 --flag=--refseq --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py (see pruned_cache); the FASTA masked as scripts/fixtures/cut_plugin_regions.py masks a reference; scripts/concordance/generate_reference_output.sh --corpus (the manifest's run); scripts/golden/build_golden_corpus.py classify (the manifest's run)"
+ "generator": "Ensembl VEP 116.2 over the candidate records under --grch37 --refseq --hgvs; tools/vep-golden-corpus select --release 116 --assembly GRCh37 --dataset <id>=<reference>=<candidates> (two datasets) --k 1 --seed 1 --multi-allelic-per-dataset 1 --max-span 1000000 --cache <converted cache> --flank 5000 --family-columns REFSEQ_MATCH=,BAM_EDIT=,REFSEQ_OFFSET,GIVEN_REF/USED_REF --covers ... --matrix tests/parity/matrix.tsv --flag=--grch37 --flag=--refseq --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py (see pruned_cache); the FASTA masked as scripts/fixtures/cut_plugin_regions.py masks a reference; scripts/concordance/generate_reference_output.sh --corpus (the manifest's run); tools/vep-golden-corpus classify (the manifest's run)"
 }

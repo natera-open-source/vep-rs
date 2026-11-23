@@ -1,7 +1,7 @@
 entry = "star_alone_svtype_annotated"
 page = "docs/divergences/defect-m.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the VCF 4.4 and 4.5 specifications, the versions that admit the shape: ALT takes the * symbol (section 1.6.1 \"Fixed fields\") and SVTYPE is a deprecated key under no rule beside it (section 3 \"INFO keys used for structural variants\"), where section 5.4 of VCF 4.2 and 4.3 makes an SVTYPE=BND record a breakend; not seen in the measured datasets; classed by its most reachable shape, * beside SVTYPE=BND: beside SVTYPE=DEL the END value is not the final base of REF, which INFO END requires (VCF 4.5, section 1.6.1)"
 notes = "The ALT * marks a base covered by an upstream deletion and names no allele of the record; with SVTYPE=DEL and END in INFO Ensembl VEP annotates a deletion over END from INFO alone, while vep-rs writes no row, as Ensembl VEP's own sequence path does without SVTYPE."
@@ -31,3 +31,14 @@ ensembl_vep = [
   "21:30425651-30425949 | deletion | ENST00000390690 | feature_truncation,coding_sequence_variant,5_prime_UTR_variant",
 ]
 vep_rs = []
+
+[implementation]
+code = [
+    "crates/vep-cli/src/vcf_parser.rs::names_allele",
+    "crates/vep-cli/src/vcf_parser.rs::parse_columns",
+]
+tests = [
+    "crates/vep-cli/src/vcf_parser.rs::tests::a_star_only_record_is_carried_as_the_allele_less_feature",
+    "crates/vep-cli/tests/integration_test.rs::a_star_only_record_is_carried_without_rows",
+]
+rules = ["tools/vep-sv-compare/src/masks/one_sided.rs::filter_star_alone_svtype_annotated"]

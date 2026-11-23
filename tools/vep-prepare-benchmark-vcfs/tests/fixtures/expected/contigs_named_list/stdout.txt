@@ -1,0 +1,3 @@
+prepared ucsc.vcf -> ucsc.vcf (mode=keep, variants=2, headers=4, canonical_dropped=14 chr_stripped=true)
+prepared ensembl.vcf.gz -> ensembl.vcf (mode=keep, variants=4, headers=3, canonical_dropped=11)
+wrote manifest: {{OUTPUT_DIR}}/manifest.json

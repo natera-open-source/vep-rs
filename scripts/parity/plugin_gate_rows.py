@@ -19,6 +19,8 @@ An Assemblies cell is read without its parenthesised parts, and the assemblies a
 its manifest.json alone: it belongs to the plugin its `covers` list names, on the manifest's
 `assembly`. A corpus whose `covers` names several plugins of the table, or none, is no row. A
 second corpus of one plugin and assembly is a row under the fixed label CORPUS_LABELS gives it.
+A row scored on ClinVar takes its label from CLINVAR_LABELS where that names its plugin and
+assembly, and the plugin's name otherwise.
 
 The plugins the table lists as `not ported` are grouped by reason. The group of each plugin is a
 row of scripts/parity/not_ported_groups.tsv (`plugin`, `group`); the groups, their order and their
@@ -73,7 +75,8 @@ KIND_OF_STATUS = {
 # No published file exists for a table of the user's own, so no ClinVar run can score the plugin.
 TABLE_PLUGINS = frozenset({"TranscriptAnnotator"})
 CLINVAR_DATASETS = {"GRCh37": "clinvar_grch37", "GRCh38": "clinvar_grch38"}
-CORPUS_LABELS = {"GRCh38-plugin-cadd-sv": "CADD (structural variants)"}
+CORPUS_LABELS = {"GRCh38-plugin-cadd-sv-fixture": "CADD (structural variants)"}
+CLINVAR_LABELS = {("LoFTEE", "GRCh37"): "LoFTEE (synthetic conservation data)"}
 PARENTHESISED_RE = re.compile(r"\([^()]*\)")
 ASSEMBLY_RE = re.compile(r"\bGRCh[0-9]+\b")
 ROW_COLUMNS = ("plugin", "assembly", "scored_on", "dataset_or_corpus", "label")
@@ -169,7 +172,8 @@ def gate_rows(table: list[dict], corpora: dict[tuple[str, str], list[str]]) -> t
                 if dataset is None:
                     errors.append(f"{where} is scored on ClinVar, and {assembly} has no genome-wide ClinVar dataset")
                     continue
-                own.append(dict(zip(ROW_COLUMNS, (name, assembly, kind, dataset, name))))
+                label = CLINVAR_LABELS.get((name, assembly), name)
+                own.append(dict(zip(ROW_COLUMNS, (name, assembly, kind, dataset, label))))
                 continue
             found = sorted(corpora.get((name, assembly), []))
             if not found:

@@ -1,0 +1,43 @@
+{
+  "generated_at_utc": "{{GENERATED_AT}}",
+  "input_dir": "{{INPUT_DIR}}",
+  "output_dir": "{{OUTPUT_DIR}}",
+  "requested_chrom_mode": "keep",
+  "cache_dir": null,
+  "max_variants": null,
+  "assembly": null,
+  "canonical_contigs_policy": "named_set",
+  "canonical_contigs_filter_active": true,
+  "canonical_contigs_set": [
+    "2",
+    "chr",
+    "chr1",
+    "chrX"
+  ],
+  "files": [
+    {
+      "input_file": "{{INPUT_DIR}}/ucsc.vcf",
+      "output_file": "{{OUTPUT_DIR}}/ucsc.vcf",
+      "detected_input_chrom_style": "chr",
+      "detected_cache_chrom_style": "unknown",
+      "normalization_mode": "keep",
+      "headers_written": 4,
+      "variants_written": 6,
+      "variants_dropped_non_canonical": 10,
+      "output_sha256": "e8a6b4c607ad1d47a862a6fcfd80e93532cb7ddb60461fbd112074310f3ff340",
+      "chr_stripped": true
+    },
+    {
+      "input_file": "{{INPUT_DIR}}/ensembl.vcf.gz",
+      "output_file": "{{OUTPUT_DIR}}/ensembl.vcf",
+      "detected_input_chrom_style": "plain",
+      "detected_cache_chrom_style": "unknown",
+      "normalization_mode": "keep",
+      "headers_written": 3,
+      "variants_written": 1,
+      "variants_dropped_non_canonical": 14,
+      "output_sha256": "d939d185c59a529702e88e5d675fc3079080c7c61c4ade5a412a939d5edc8559",
+      "chr_stripped": false
+    }
+  ]
+}

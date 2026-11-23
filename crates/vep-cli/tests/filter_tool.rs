@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 //! `vep filter`, through the binary: the behaviour of Ensembl VEP's
-//! `filter_vep` (release/116.2, whose line numbers the tests cite) on
+//! `filter_vep` (release/116.3, whose line numbers the tests cite) on
 //! hand-built inputs, and the `tests/golden/116/GRCh38-filter-tool` corpus,
 //! whose `tool_cases` each name the arguments of one `filter_vep` run on an
 //! annotated output and the file its standard output was recorded in.
@@ -647,7 +647,7 @@ fn tab_extra_column_is_exploded_and_dash_reads_as_undefined() {
     let input = write(
         dir.path(),
         "in.txt",
-        "## ENSEMBL VARIANT EFFECT PREDICTOR v116.2\n\
+        "## ENSEMBL VARIANT EFFECT PREDICTOR v116.3\n\
 ## Column descriptions:\n\
 ## Uploaded_variation : Identifier of uploaded variant\n\
 ## Extra column keys:\n\
@@ -694,7 +694,7 @@ r3\t21:300\tT\tENSG2\tENST2\tmissense_variant\tIMPACT=MODERATE;STRAND=-1;SYMBOL=
 #[test]
 fn tab_extra_bare_word_is_undefined_as_filter_vep_reads_it() {
     let dir = tempfile::tempdir().unwrap();
-    let header = "## ENSEMBL VARIANT EFFECT PREDICTOR v116.2\n\
+    let header = "## ENSEMBL VARIANT EFFECT PREDICTOR v116.3\n\
 ## Extra column keys:\n\
 ## IMPACT : Subjective impact classification of consequence type\n\
 ## STRAND : Strand of the feature\n\
@@ -891,6 +891,50 @@ fn missing_csq_field_warns_at_the_end_unless_silenced() {
     );
 }
 
+/// Standard error on a stream that takes no bytes never ends a run of `vep
+/// filter`, a device that refuses every write or a pipe whose reader has gone.
+/// A run whose one line there is the missing-field warning exits 0 with the
+/// output of the same run on a readable stream, and a refused run keeps its
+/// exit status of 1 though its `ERROR:` line is lost.
+#[test]
+fn vep_filter_keeps_its_run_on_an_unwritable_error_stream() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = vcf_fixture(dir.path());
+    let input = input.to_str().unwrap();
+    let run = |args: &[&str], error_stream: Stdio| {
+        common::isolated_vep_anywhere()
+            .arg("filter")
+            .args(args)
+            .stdin(Stdio::null())
+            .stderr(error_stream)
+            .output()
+            .unwrap()
+    };
+    let warns = ["-i", input, "-f", "DP exists"];
+    let refusal = ["-i", "/nonexistent/in.vcf", "-f", "DP > 1"];
+    let readable = run(&warns, Stdio::piped());
+    assert!(readable.status.success(), "{}", stderr(&readable));
+    assert_eq!(
+        stderr(&readable),
+        "WARNING: the VEP annotations INFO field CSQ was not found in 1 line(s) of the input file\n"
+    );
+    assert_eq!(data_lines(&stdout(&readable)).len(), 3);
+    assert_eq!(run(&refusal, Stdio::piped()).status.code(), Some(1));
+    for stream in common::unwritable_streams() {
+        let output = run(&warns, common::unwritable(stream));
+        assert!(output.status.success(), "{stream}: {}", output.status);
+        assert_eq!(output.stdout, readable.stdout, "{stream}");
+        let refused = run(&refusal, common::unwritable(stream));
+        assert_eq!(
+            refused.status.code(),
+            Some(1),
+            "{stream}: {}",
+            refused.status
+        );
+        assert!(refused.stdout.is_empty(), "{stream}");
+    }
+}
+
 /// `--ontology` rewrites `Consequence is <term>` to `Consequence is_child
 /// <term>` (115-118), which passes an entry whose term is the parent or lies
 /// below it in the Sequence Ontology and fails every other; a parent the
@@ -1048,6 +1092,51 @@ fn getopt_spellings_reach_the_tool() {
     assert!(stdout(&help).contains("--soft_filter"));
     let unknown = filter(&["--nope", "-i", input, "-f", "DP"]);
     assert_eq!(unknown.status.code(), Some(2));
+}
+
+/// A name that is a prefix of two options is refused after one dash as after
+/// two, where `filter_vep` ends on `Option li is ambiguous (limit, list)`
+/// (72-103). Its letters are not read as short forms: `-li` lists no field of
+/// the file after it, `-fo` takes no filter and `-on` writes no file named
+/// `n`.
+#[test]
+fn a_one_dash_prefix_of_two_options_is_refused_as_after_two_dashes() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = vcf_fixture(dir.path());
+    let input = input.to_str().unwrap();
+    let refusal = |name: &str, similar: &str, usage: &str| {
+        format!(
+            "error: unexpected argument '--{name}' found\n\n  tip: a similar argument exists: \
+             '--{similar}'\n\nUsage: vep filter {usage}\n\nFor more information, try '--help'.\n"
+        )
+    };
+    for (name, rest, expected) in [
+        ("li", vec![input], refusal("li", "list", "--list")),
+        (
+            "fo",
+            vec!["x", "-i", input],
+            refusal("fo", "format", "--format <vcf|tab>"),
+        ),
+        (
+            "on",
+            vec!["-i", input, "-f", "IMPACT is HIGH"],
+            refusal("on", "ontology", "--ontology"),
+        ),
+    ] {
+        for dashes in ["-", "--"] {
+            let option = format!("{dashes}{name}");
+            let mut args = vec![option.as_str()];
+            args.extend(&rest);
+            let output = filter_in(dir.path(), &args, None);
+            assert_eq!(output.status.code(), Some(2), "{args:?}");
+            assert_eq!(stdout(&output), "", "{args:?}");
+            assert_eq!(stderr(&output), expected, "{args:?}");
+        }
+    }
+    assert!(
+        !dir.path().join("n").exists(),
+        "`-on` wrote its output to a file named `n`"
+    );
 }
 
 /// A repeated option runs with its last value, as `filter_vep`'s
@@ -1377,7 +1466,7 @@ fn match_reads_the_bytes_of_the_value() {
     assert_eq!(passing("ID nre r.$"), [100, 300, 600]);
 }
 
-/// An `in <file>` list is read as bytes, as Perl reads the file with no
+/// An `in <file>` list is read as bytes, as Ensembl VEP reads the file with no
 /// decoding layer (`FilterSet.pm:397-409`): a Latin-1 list matches the
 /// Latin-1 value and a UTF-8 list the UTF-8 value, byte for byte. Each line
 /// loses its carriage returns and every byte Perl's `\v` matches on a byte
@@ -1438,11 +1527,45 @@ fn in_list_file_is_read_as_bytes() {
     );
 }
 
-/// Every command-line word is read as the bytes the shell passed, as Perl
+/// Whether a file system refused the creation of a file over its name, which
+/// is outside UTF-8: the creation failed with `EILSEQ` or `EINVAL`, the two
+/// errors a file system returns over the encoding of a name. A creation that
+/// failed for any other reason panics.
+#[cfg(unix)]
+fn refused_for_its_name(created: std::io::Result<()>) -> bool {
+    match created {
+        Ok(()) => false,
+        Err(error) if matches!(error.raw_os_error(), Some(libc::EILSEQ | libc::EINVAL)) => true,
+        Err(error) => panic!("a file named outside UTF-8 was not made: {error}"),
+    }
+}
+
+/// A creation that succeeded is no refusal, and each of the two errors over a
+/// name's encoding is one.
+#[cfg(unix)]
+#[test]
+fn a_refusal_of_a_file_name_is_told_from_a_creation() {
+    use std::io::Error;
+    assert!(!refused_for_its_name(Ok(())));
+    for refusal in [libc::EILSEQ, libc::EINVAL] {
+        assert!(refused_for_its_name(Err(Error::from_raw_os_error(refusal))));
+    }
+}
+
+/// A creation that fails for any reason but the name fails the test.
+#[cfg(unix)]
+#[test]
+#[should_panic(expected = "a file named outside UTF-8 was not made")]
+fn a_creation_failure_other_than_the_name_fails_the_test() {
+    refused_for_its_name(Err(std::io::Error::from_raw_os_error(libc::EACCES)));
+}
+
+/// Every command-line word is read as the bytes the shell passed, as Ensembl VEP
 /// reads `@ARGV`: a filter value outside UTF-8 compares byte for byte under
 /// `is`, `match` and a character class, with no case fold above ASCII, and an
-/// input or output file whose name is outside UTF-8 is opened. Each expected
-/// output is `filter_vep`'s on the same bytes.
+/// input or output file whose name is outside UTF-8 is opened, where the file
+/// system takes such a name. Each expected output is `filter_vep`'s on the
+/// same bytes.
 #[cfg(unix)]
 #[test]
 fn command_line_words_are_read_as_bytes() {
@@ -1480,9 +1603,22 @@ fn command_line_words_are_read_as_bytes() {
     assert_eq!(passing(b"ID match r[\xE9]$"), [200]);
     assert_eq!(passing(b"ID match r\xC9"), [0u32; 0]);
     assert_eq!(passing(b"ID nre \xE9"), [100, 300, 400, 500, 600]);
+    let output = run(&[b"-f", b"ID in list-\xE9.txt"]);
+    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(
+        output.stderr,
+        b"ERROR: [filter] Could not find/parse list list-\xE9.txt\n"
+    );
 
     let named = dir.path().join(OsStr::from_bytes(b"in-\xE9.vcf"));
-    fs::write(&named, concat(&[header, &records(&[b"r\xE9"])])).unwrap();
+    let created = fs::write(&named, concat(&[header, &records(&[b"r\xE9"])]));
+    if refused_for_its_name(created) {
+        eprintln!(
+            "the scratch directory does not take a file name outside UTF-8: \
+             the runs on such a file are left out"
+        );
+        return;
+    }
     let out = dir.path().join(OsStr::from_bytes(b"out-\xE9.vcf"));
     let mut cmd = common::isolated_vep_anywhere();
     cmd.arg("filter")
@@ -1500,12 +1636,6 @@ fn command_line_words_are_read_as_bytes() {
     assert_eq!(
         fs::read(&out).unwrap(),
         concat(&[header, &records(&[b"r\xE9"])])
-    );
-    let output = run(&[b"-f", b"ID in list-\xE9.txt"]);
-    assert_eq!(output.status.code(), Some(1));
-    assert_eq!(
-        output.stderr,
-        b"ERROR: [filter] Could not find/parse list list-\xE9.txt\n"
     );
 }
 

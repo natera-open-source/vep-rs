@@ -2,12 +2,12 @@
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 //! `vep filter`: filters an annotated output line by line, as Ensembl VEP's
-//! `filter_vep` does (`filter_vep` at release/116.2, whose line numbers the
-//! citations below name), over the filter grammar of [`crate::filter_set`].
+//! `filter_vep` does (`filter_vep` at release/116.3, whose line numbers the
+//! citations below name), over the filter grammar of `crate::filter_set`.
 //!
 //! The input is a VCF or tab output of `vep` or of Ensembl VEP, read from
 //! `--input_file` or standard input; its header lines are written through and
-//! name the fields a filter may read ([`crate::filter_input`]). A VCF line
+//! name the fields a filter may read (`crate::filter_input`). A VCF line
 //! passes when any entry of its consequence field passes the filters, and a
 //! tab line when its row does (282-291); `--only_matched` keeps the passing
 //! entries alone in the field (294-297); `--soft_filter` writes every line and
@@ -21,15 +21,16 @@
 //! option after one dash or two, in any case, abbreviated to any prefix that
 //! names one option; a repeated option keeps its last value, and every
 //! `--filter` given is kept (102). Every word is read as the bytes the shell
-//! passed ([`filter_input::decode_word`]), so a value, a field name or a file
+//! passed (`filter_input::decode_word`), so a value, a field name or a file
 //! name outside UTF-8 compares byte for byte with the input, as Perl's
 //! `@ARGV` byte strings do. A field name resolves against each line's
 //! own keys through the synonym cache
-//! ([`crate::filter_set::FilterSet::deferred`]), limited after the first
+//! (`crate::filter_set::FilterSet::deferred`), limited after the first
 //! failed search except on a tab line with an `Extra` column (244, 273). Every
 //! error is one line `ERROR: [filter] <message>` on standard error and exit 1,
-//! the message Ensembl VEP's where it has one; a command-line syntax error is
-//! clap's, exit 2.
+//! the message Ensembl VEP's where `vep filter` quotes its text and vep-rs's
+//! own elsewhere, as for an `is_child` parent that names no term
+//! (`FilterSet.pm:741`); a command-line syntax error is clap's, exit 2.
 //!
 //! Five readings of `filter_vep` are corrected rather than reproduced: a
 //! field that resolves as the prefix of one key reads its value on the first
@@ -39,7 +40,7 @@
 //! everything after its key's first `=` (`filter_vep:253, 402` keep the text
 //! before the second `=` alone); `--only_matched` rewrites each INFO item
 //! under the consequence field's name to its own passing entries
-//! ([`crate::filter_input::ParsedLine::only_matched`]); and a VCF line's INFO
+//! (`crate::filter_input::ParsedLine::only_matched`); and a VCF line's INFO
 //! column is its eighth word with leading blanks skipped (`filter_vep:252`
 //! keeps a leading blank's empty first field and reads the FILTER column).
 //! `detect_format` at `filter_vep:425-429` classes a first data line starting
@@ -536,10 +537,10 @@ impl Filter {
         }
         if lines_without_field > 0 && !args.no_missing_consequence_warning {
             out.flush()?;
-            eprintln!(
-                "WARNING: the VEP annotations INFO field {} was not found in {} line(s) of the input file",
+            crate::stderr::write(format_args!(
+                "WARNING: the VEP annotations INFO field {} was not found in {} line(s) of the input file\n",
                 args.vcf_info_field, lines_without_field
-            );
+            ));
         }
         Ok(())
     }
@@ -596,7 +597,7 @@ fn soft_filtered(line: &str, pass: bool) -> String {
     } else {
         "filter_vep_fail"
     };
-    // Perl's `split` without a limit drops the trailing empty columns.
+    // Perl's `split` without a limit, as Ensembl VEP calls it, drops the trailing empty columns.
     let mut columns: Vec<&str> = line.split('\t').collect();
     while columns.last() == Some(&"") {
         columns.pop();

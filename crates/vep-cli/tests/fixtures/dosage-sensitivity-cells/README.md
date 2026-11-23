@@ -12,10 +12,10 @@ overlap transcripts of neighbouring genes the table lacks, whose rows carry no
 field in either engine.
 
 `DosageSensitivity.pm` line 138 assigns the split line to three variables, so
-Perl keeps an empty cell, trailing or not, as the empty string and leaves a
+Ensembl VEP keeps an empty cell, trailing or not, as the empty string and leaves a
 missing cell undefined, and lines 141 to 142 store both keys for the gene.
 
-Ensembl VEP 116.2 wrote, on this fixture: for a missing cell, `pTriplo=` in the
+Ensembl VEP 116.3 wrote, on this fixture: for a missing cell, `pTriplo=` in the
 default format, `-` in the tab format, an empty CSQ field in the VCF format and
 no JSON key; for an empty cell, `pHaplo=` in the default format, an empty tab
 cell, an empty CSQ field and `"phaplo": ""` in JSON (`VEP_output.pm` lines 117

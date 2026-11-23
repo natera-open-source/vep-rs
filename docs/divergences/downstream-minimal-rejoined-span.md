@@ -6,23 +6,23 @@
 
 **What vep-rs does instead.** vep-rs reads each split allele's own CDS coordinates in every output format. The two fields equal the ones the allele gets on a record of its own, whatever alleles stand beside it. The plugin's fields are described under [Downstream](../plugins/transcript-model.md#downstream).
 
-**Where it is in Ensembl VEP's source** (`VEP_plugins` at release/116, `ensembl-vep` at release/116.2, `ensembl-variation` at release/116):
+**Where it is in Ensembl VEP's source** (`VEP_plugins` at release/116, `ensembl-vep` at release/116.3, `ensembl-variation` at release/116):
 
 - `Downstream.pm`, line 108: `my ($start, $end) = ($tv->cds_start, $tv->cds_end);` reads the row's CDS coordinates, and line 110 replaces that span of the coding sequence with the allele's bases. Lines 112-113 take the lower of the two coordinates, round it down to a multiple of three and start the translation after that many bases.
-- `OutputFactory.pm`, lines 2284-2316: the rejoin annotates each split feature on its own span (lines 2289 and 2303), then writes the record's span back onto the first feature (lines 2292-2293) and points every merged feature's TranscriptVariations at it (line 2314). The output pass that runs the plugin (line 2226) follows.
+- `OutputFactory.pm`, lines 2293-2325: the rejoin annotates each split feature on its own span (lines 2298 and 2312), then writes the record's span back onto the first feature (lines 2301-2302) and points every merged feature's TranscriptVariations at it (line 2323). The output pass that runs the plugin (line 2235) follows.
 - `OutputFactory.pm`, lines 294-298: the default and tab formats rejoin, then clear every cached CDS position (`clear_shifting_variables`, `TranscriptVariationAllele.pm` lines 509-511), so the output pass maps `$tv->cds_start` and `$tv->cds_end` from the record's span (`BaseTranscriptVariation.pm` lines 511-513). `OutputFactory/VCF.pm` lines 305-308 and `OutputFactory/JSON.pm` lines 217-220 clear first and rejoin after, so those formats keep the coordinates cached on the allele's own span.
 
 **What correcting it would change.** The plugin would read each allele's own CDS coordinates, and a split allele's two fields would equal the ones it gets on a record of its own, in every format.
 
 **The class it produces.** `downstream_minimal_rejoined_span`: a `DownstreamProtein` or `ProteinLengthChange` that differs between the engines in the default or tab format, on a row of a multi-allelic record whose alleles trim to different spans under `--minimal`. No comparison tool sets a row of the shape aside: no committed flag set runs the plugin with `--minimal`, so a disagreement of this shape would be reported as a difference and charged to vep-rs. The concordance figures score consequence sets and never see the fields.
 
-**How often the shape occurs.** Tier 2, see [Intended divergences from Ensembl VEP](../intended-divergences.md): the shape the record alone shows is a multi-allelic record whose sequence alleles trim to different spans, 1,894 of the cuts' 15,646,481 records (121.0 per million), in 24 corpora. The transcript decides whether a split allele is an insertion or a deletion on a frameshift row the plugin writes, and whether its own CDS coordinates and the record's differ. Of the committed flag sets, none runs the plugin with `--minimal`.
+**How often the shape occurs.** Tier 2, see [Intended divergences from Ensembl VEP](../intended-divergences.md): the shape the record alone shows is a multi-allelic record whose sequence alleles trim to different spans, 1,894 of the cuts' 15,646,481 records (121.0 per million), in 27 corpora. The transcript decides whether a split allele is an insertion or a deletion on a frameshift row the plugin writes, and whether its own CDS coordinates and the record's differ. Of the committed flag sets, none runs the plugin with `--minimal`.
 
 Tuple, pair, set aside, charged and the other scoring terms are defined in [How to read the counts](../intended-divergences.md#how-to-read-the-counts).
 
 ## 1. A one-base insertion written beside the deletion of the base before it
 
-**In short.** `21 36896882 ins_beside_del TG TGA,T` on GRCh38 lies in the coding sequence of HLCS on ENST00000336648. Under `--minimal`, `TGA` trims to a one-base insertion after 36896883 and `T` to the deletion of the base at 36896883, coding base 1428. In the default and tab formats Ensembl VEP 116.2 writes a `DownstreamProtein` of 250 residues and `ProteinLengthChange=0` on the insertion's frameshift row, the tail of the unchanged protein. vep-rs writes 100 residues and `-151` in every format, as both engines do for the insertion alone.
+**In short.** `21 36896882 ins_beside_del TG TGA,T` on GRCh38 lies in the coding sequence of HLCS on ENST00000336648. Under `--minimal`, `TGA` trims to a one-base insertion after 36896883 and `T` to the deletion of the base at 36896883, coding base 1428. In the default and tab formats Ensembl VEP 116.3 writes a `DownstreamProtein` of 250 residues and `ProteinLengthChange=0` on the insertion's frameshift row, the tail of the unchanged protein. vep-rs writes 100 residues and `-151` in every format, as both engines do for the insertion alone.
 
 ### 1.1 What a reader needs to know first
 
@@ -44,7 +44,7 @@ Both engines run `--minimal --plugin Downstream` with `--fasta`, and `--tab`, `-
 
 ### 1.3 What each engine writes
 
-The insertion's row on ENST00000336648 in the default format. `<250 residues>` and `<100 residues>` stand for the residues of `DownstreamProtein`, which this page gives by their count. Ensembl VEP 116.2:
+The insertion's row on ENST00000336648 in the default format. `<250 residues>` and `<100 residues>` stand for the residues of `DownstreamProtein`, which this page gives by their count. Ensembl VEP 116.3:
 
 ```
 ins_beside_del	21:36896883	A	ENSG00000159267	ENST00000336648	Transcript	frameshift_variant	1899	1428	476	P/PX	ccc/ccTc	-	ALLELE_NUM=1;IMPACT=HIGH;STRAND=-1;MINIMISED=1;DownstreamProtein=<250 residues>;ProteinLengthChange=0
@@ -58,14 +58,14 @@ ins_beside_del	21:36896883	A	ENSG00000159267	ENST00000336648	Transcript	frameshi
 
 The record writes 34 rows in each engine, 17 per allele, equal in every column but these two fields. The insertion's values on ENST00000336648, by format:
 
-| Format | Ensembl VEP 116.2 | vep-rs |
+| Format | Ensembl VEP 116.3 | vep-rs |
 | --- | --- | --- |
 | default and tab | 250 residues, `0` | 100 residues, `-151` |
 | VCF and JSON | 100 residues, `-151` | 100 residues, `-151` |
 
 The insertion has ten frameshift rows, and in the default and tab formats all ten differ:
 
-| Transcript | Ensembl VEP 116.2 | vep-rs |
+| Transcript | Ensembl VEP 116.3 | vep-rs |
 | --- | --- | --- |
 | ENST00000336648 and five others | 250 residues, `0` | 100 residues, `-151` |
 | ENST00000675057, ENST00001083022 | 128 residues, `0` | 100 residues, `-29` |
@@ -97,8 +97,8 @@ vep -i record.vcf -o out.txt --offline \
   --minimal --plugin Downstream
 ```
 
-`<corpus>` is `tests/golden/116/GRCh38-plugin-computed`. vep-rs writes `ProteinLengthChange=-151` on the insertion's ENST00000336648 row. Ensembl VEP 116.2 takes the same flags with the cache options of [Reproducing these examples](reproducing.md). It writes `ProteinLengthChange=0` on that row, and `-151` under `--vcf` or `--json`. Writing the insertion on a record of its own gives `-151` in both engines.
+`<corpus>` is `tests/golden/116/GRCh38-plugin-computed`. vep-rs writes `ProteinLengthChange=-151` on the insertion's ENST00000336648 row. Ensembl VEP 116.3 takes the same flags with the cache options of [Reproducing these examples](reproducing.md). It writes `ProteinLengthChange=0` on that row, and `-151` under `--vcf` or `--json`. Writing the insertion on a record of its own gives `-151` in both engines.
 
 ### 1.7 How the comparator treats this class
 
-Nothing is set aside. The format comparator (`scripts/concordance/compare_vep_formats.py`) has no class of this shape. The golden harness compares the two fields on every row of the corpora that run the plugin, and none of their flag sets passes `--minimal`. A disagreement of the shape would be reported as a difference and charged to vep-rs.
+Nothing is set aside. The format comparator (`tools/vep-formats-compare`) has no class of this shape. The golden harness compares the two fields on every row of the corpora that run the plugin, and none of their flag sets passes `--minimal`. A disagreement of the shape would be reported as a difference and charged to vep-rs.

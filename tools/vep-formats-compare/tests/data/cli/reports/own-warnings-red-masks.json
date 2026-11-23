@@ -1,0 +1,72 @@
+{
+ "mode": "warnings",
+ "format": "warnings",
+ "verdict": "red",
+ "reasons": [
+  "warnings: 2 entries only in the expected file",
+  "warnings: 2 entries only in the actual file",
+  "warnings: the regulatory notice is missing from the actual file",
+  "skipped: 2 entries only in the expected file",
+  "skipped: 2 entries only in the actual file"
+ ],
+ "warnings": {
+  "expected": "<<T>>/w-expected.txt",
+  "actual": "<<T>>/w-actual.txt",
+  "expected_entries": 3,
+  "actual_entries": 3,
+  "shared": 1,
+  "expected_only": [
+   {
+    "line": 3,
+    "description": "only here"
+   },
+   {
+    "line": null,
+    "description": "relayed text"
+   }
+  ],
+  "actual_only": [
+   {
+    "line": 9,
+    "description": "skipped text <path>"
+   },
+   {
+    "line": null,
+    "description": "only there"
+   }
+  ],
+  "regulatory_notice_missing": true,
+  "masks_applied": {
+   "fork_warning_pid_prefix": 1
+  }
+ },
+ "skipped": {
+  "expected": "<<T>>/w-actual.txt",
+  "actual": "<<T>>/w-expected.txt",
+  "expected_entries": 3,
+  "actual_entries": 3,
+  "shared": 1,
+  "expected_only": [
+   {
+    "line": 9,
+    "description": "skipped text <path>"
+   },
+   {
+    "line": null,
+    "description": "only there"
+   }
+  ],
+  "actual_only": [
+   {
+    "line": 3,
+    "description": "only here"
+   },
+   {
+    "line": null,
+    "description": "4711 : WARNING: relayed text"
+   }
+  ],
+  "regulatory_notice_missing": false,
+  "masks_applied": {}
+ }
+}

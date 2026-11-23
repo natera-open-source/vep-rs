@@ -1,11 +1,11 @@
 [VEP run statistics]
-VEP version (API)	 116.2 (116)
+VEP version (API)	 116.3 (116)
 Annotation sources	Cache: /work/cache/homo_sapiens/116_GRCh38
 Species	homo_sapiens
 Command line options	vep --assembly GRCh38 --cache --cache_version 116 --database 0 --dir_cache [PATH]/cache --dir_plugins /plugins --force_overwrite --fork --format vcf --input_file [PATH]/input.vcf --offline --output_file [PATH]/vcf.vcf --quiet --stats_text --vcf
-Start time	2026-10-28 17:28:59
-End time	2026-10-28 17:29:00
-Run time	1 seconds
+Start time	2026-11-20 13:16:39
+End time	2026-11-20 13:16:41
+Run time	2 seconds
 Input file	/work/input.vcf
 Output file	/work/perl_out/vcf.vcf
 
@@ -106,8 +106,8 @@ synonymous_variant	66
 coding_sequence_variant	3
 
 [Variants by chromosome]
-21	337
 chr21	2
+21	337
 
 [Position in protein]
 00-10%	158

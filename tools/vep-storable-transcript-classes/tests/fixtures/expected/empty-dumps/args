@@ -1,0 +1,12 @@
+--version-a
+a
+--dump-a
+empty.txt
+--version-b
+b
+--dump-b
+no-blocks.txt
+--out-dir
+out
+--json-cache
+json_cache

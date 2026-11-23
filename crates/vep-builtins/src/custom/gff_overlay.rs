@@ -4,14 +4,14 @@
 //! A `--custom` source over a tabix-indexed GFF in `gff_type=gencode_promoter`
 //! mode, read as `AnnotationSource/File/GFF.pm` reads one through ensembl-io's
 //! `Parser/GFF3Tabix.pm`: the one GFF mode that overlays its records on the
-//! input instead of standing in for the transcript cache (`GFF.pm:154-164`).
+//! input instead of standing in for the transcript cache (`GFF.pm:155-165`).
 //!
 //! A record spans its fourth to its fifth column and matches through the base
 //! predicates (`File.pm:534-575`). A matching `promoter_window` record
-//! (`GFF.pm:119-121`) becomes one output record named by its coordinates
+//! (`GFF.pm:120-122`) becomes one output record named by its coordinates
 //! (`File.pm:483-497`: the parser has no name accessor) with three fields:
 //! `type`, `feature_id` (the `ID` attribute) and `associated_gene` (the
-//! `gene_id` attribute, else `.`) (`GFF.pm:181-204`), the two attribute values
+//! `gene_id` attribute, else `.`) (`GFF.pm:182-205`), the two attribute values
 //! with every `%XX` escape decoded over the record's bytes, as the other GFF3
 //! readers decode them, where Ensembl VEP prints them as written (the raw hash
 //! of `GFF3.pm:190-198`). A matching record of any other type yields nothing
@@ -36,7 +36,7 @@ use crate::tabix::TabixRecord;
 use crate::traits::PrefetchData;
 
 /// The feature types a `gencode_promoter` source annotates
-/// (`%INCLUDE_FEATURE_TYPES_GENCODE_PROMOTER`, `GFF.pm:119-121`).
+/// (`%INCLUDE_FEATURE_TYPES_GENCODE_PROMOTER`, `GFF.pm:120-122`).
 const PROMOTER_FEATURE_TYPES: [&str; 1] = ["promoter_window"];
 
 /// The 0-based column of a GFF record's type.
@@ -56,12 +56,16 @@ impl GffOverlaySource {
     /// the escapes decoded over the bytes, then read as text, so an escape
     /// completing a raw first byte of a character forms the character as
     /// Ensembl VEP's bytes do. The attributes cell is the line's bytes as
-    /// [`attributes_text`] spells them, split as `get_attributes` splits them
+    /// `attributes_text` spells them, split as `get_attributes` splits them
     /// (`GFF3.pm:190-198`) and decoded over those bytes where a value is read
     /// ([`FormatRules::match_record`]).
-    pub fn open(spec: CustomSpec, synonyms: Arc<ChromosomeSynonyms>) -> Result<Self, CustomError> {
+    pub fn open(
+        spec: CustomSpec,
+        synonyms: Arc<ChromosomeSynonyms>,
+        assembly: Option<vep_core::assembly::Assembly>,
+    ) -> Result<Self, CustomError> {
         Ok(GffOverlaySource {
-            base: TabixSource::open(spec, synonyms)?.with_reader(|reader| {
+            base: TabixSource::open(spec, synonyms, assembly)?.with_reader(|reader| {
                 reader
                     .decoding_column_from_bytes(TYPE_COLUMN, decode_type)
                     .decoding_column_from_bytes(ATTRIBUTES_COLUMN, attributes_text)
@@ -118,8 +122,8 @@ impl CustomSource for GffOverlaySource {
 impl FormatRules for GffOverlaySource {
     /// The base `_record_overlaps_VF` on the record's fourth to fifth column
     /// (`File.pm:523, 534-575`), the walk ending at a record starting past the
-    /// feature's end plus one (`:333-335`), then `GFF.pm:181-204`: a record of
-    /// a type outside [`PROMOTER_FEATURE_TYPES`] warns and yields nothing; a
+    /// feature's end plus one (`:333-335`), then `GFF.pm:182-205`: a record of
+    /// a type outside `PROMOTER_FEATURE_TYPES` warns and yields nothing; a
     /// promoter window is named `<seqname>:<start>-<end>`, its seqname without
     /// a leading `chr` (`File.pm:489-495`, `GXF.pm:88-94`), its start and end
     /// the whole numbers of the fourth and fifth columns as Perl reads them
@@ -127,8 +131,8 @@ impl FormatRules for GffOverlaySource {
     /// `type`, `feature_id` (`ID`, undefined when the attribute is not there)
     /// and `associated_gene` (`gene_id` when true in Perl's sense on the value
     /// as written, else `.`), the two values then decoded over the record's
-    /// bytes ([`attributes_text`], [`decode_attribute`]), which Ensembl VEP
-    /// leaves as written (`GFF.pm:198-201` over the raw hash of
+    /// bytes (`attributes_text`, [`decode_attribute`]), which Ensembl VEP
+    /// leaves as written (`GFF.pm:199-202` over the raw hash of
     /// `GFF3.pm:190-198`). No score is read, so the statistics count the
     /// records alone.
     fn match_record(
@@ -154,6 +158,7 @@ impl FormatRules for GffOverlaySource {
         let feature_type = column(TYPE_COLUMN);
         if !PROMOTER_FEATURE_TYPES.contains(&feature_type) {
             warn!(
+                input_record = group.lead.input_record,
                 "Ignoring '{feature_type}' feature_type from {} GFF/GTF file. \
                  This feature_type is not supported in VEP.",
                 self.base.spec().file
@@ -178,12 +183,12 @@ impl FormatRules for GffOverlaySource {
         .map(|(field, value)| (field.to_string(), value))
         .collect();
         Verdict::Match(
-            vec![CustomRecord {
-                name: format!("{}:{}-{}", seqname(&record.chr), start.whole(), end.whole()),
-                allele: None,
+            vec![CustomRecord::new(
+                format!("{}:{}-{}", seqname(&record.chr), start.whole(), end.whole()),
+                None,
                 fields,
-                score: None,
-            }],
+                None,
+            )],
             Some(percentage),
         )
     }
@@ -257,7 +262,7 @@ mod tests {
             .collect()
     }
 
-    /// `GFF.pm:181-204` on the record `21 . promoter_window 90 110 . + .
+    /// `GFF.pm:182-205` on the record `21 . promoter_window 90 110 . + .
     /// ID=PW1;gene_id=ENSG00000141510` over a variant at 100: one record under
     /// `GENCODE_PROMOTER`, named `21:90-110` as `File.pm:489-495` names a record
     /// whose parser has no `get_name` (Ensembl VEP's own test expects
@@ -267,7 +272,7 @@ mod tests {
     /// without `ID` an undefined `feature_id` (`:198`). A `chr21` seqname loses
     /// its prefix in the name alone (`GXF.pm:92`). A variant at 89, one base before
     /// the window, matches nothing (`File.pm:569`). Under `summary_stats` the
-    /// records count but add no score (`GFF.pm:186`: no `score` is set).
+    /// records count but add no score (`GFF.pm:187`: no `score` is set).
     #[test]
     fn promoter_windows_annotate_as_overlap_records_with_three_fields() {
         let dir = tempfile::tempdir().unwrap();
@@ -368,7 +373,7 @@ mod tests {
             .collect()
     }
 
-    /// A window whose start a minus sign leads is listed as Ensembl VEP 116.2
+    /// A window whose start a minus sign leads is listed as Ensembl VEP 116.3
     /// lists it, on a file's first sequence and on a later one: for every
     /// record from the first base, where `tabix` indexes the window (htslib
     /// 1.9 `tbx.c:99`), to the window's end and for none past it, under the
@@ -499,7 +504,7 @@ mod tests {
         assert_eq!(names(&batch), [Vec::<&str>::new()]);
     }
 
-    /// `GFF.pm:190-195`: a matching record of a type outside the promoter list
+    /// `GFF.pm:191-196`: a matching record of a type outside the promoter list
     /// yields no record and warns `Ignoring '<type>' feature_type from <file>
     /// GFF/GTF file. This feature_type is not supported in VEP.`, the file as
     /// the string gave it; the input record keeps the promoter windows it
@@ -548,7 +553,7 @@ mod tests {
         );
 
         let source =
-            GffOverlaySource::open(parse_custom(&argument).unwrap(), Arc::default()).unwrap();
+            GffOverlaySource::open(parse_custom(&argument).unwrap(), Arc::default(), None).unwrap();
         let record = |feature_type: &str, start: u64, end: u64| TabixRecord {
             chr: "21".to_string(),
             start,
@@ -736,8 +741,8 @@ mod tests {
         );
     }
 
-    /// Ensembl VEP 116.2 stores the `ID` attribute as the window's `feature_id`
-    /// (`File/GFF.pm:198`), so a record with no `ID` pair carries an undefined
+    /// Ensembl VEP 116.3 stores the `ID` attribute as the window's `feature_id`
+    /// (`File/GFF.pm:199`), so a record with no `ID` pair carries an undefined
     /// value, where `ID=` carries the empty string its two-variable `split`
     /// keeps (`GFF3.pm:190-198`): the text formats print both as the empty
     /// entry, the JSON format `null` and `""`.
@@ -772,9 +777,9 @@ mod tests {
     /// ([`decode_attribute`]), the six GFF3 reserves and any other, in either
     /// letter case, so `ID=PROM%2C1;gene_id=ENSG%3B1` carries `feature_id`
     /// `PROM,1` and `associated_gene` `ENSG;1`, and `ID=PROM%2c1%3E;gene_id=
-    /// ENSG%3b%30` carries `PROM,1>` and `ENSG;0`, where Ensembl VEP 116.2
+    /// ENSG%3b%30` carries `PROM,1>` and `ENSG;0`, where Ensembl VEP 116.3
     /// prints each as written, the raw hash of `GFF3.pm:190-198`
-    /// (`GFF.pm:198-201`). The split comes first, so `%3B` and `%3D` never cut
+    /// (`GFF.pm:199-202`). The split comes first, so `%3B` and `%3D` never cut
     /// a pair; the escapes decode in one pass, so `%2520%30` is `%200`; a
     /// `gene_id` is tested for Perl's truth as written, so `%30` is set where
     /// `0` is `.`.

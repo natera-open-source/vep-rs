@@ -1,19 +1,18 @@
 entry = "refseq_edited_model_appended_edit_pairs"
 page = "docs/divergences/refseq-edited-model-appended-edit-pairs.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
-input_class = "unobserved"
-input_class_basis = "well-formed under the VCF 4.2 specification, section 1.4.1 \"Fixed fields\", and the --refseq option, which reads the RefSeq cache (Ensembl VEP documentation, \"Running Ensembl VEP\", --refseq); not seen in the measured datasets"
-notes = "The record of the page's section 1 and its control. MT:9990 is the last base of the one exon of COX3, MT:9207-9990, 784 bases. The model's `_rna_edit` replaces cDNA 784 by the three bases of its stop codon, so its coding sequence has 786 bases and the cache pairs cDNA 786 with MT:9990 (TranscriptMapper.pm:179, 209-211). Ensembl VEP reads the substitution at CDS 786, the stop codon's third base, as stop_retained_variant. The reference base at MT:9990 is the codon's first base and neither its second nor its third, so vep-rs reads the record at CDS 784, the codon's first base, as stop_lost. whole_stop_first_base is the same substitution at MT:9205, the first stop base of ATP6, whose stop codon is whole on the genome at MT:9205-9207: both engines write stop_lost at CDS 679. Each record's row on the other of the two models lies outside it, upstream or downstream, and is equal in both engines. vep-rs places the stop base from the reference sequence, and without one it keeps the cache's pairs, so the run names the FASTA of the GRCh38-input-hgvs corpus, which holds the mitochondrial genome, in place of --use_given_ref. No committed cache holds the six mitochondrial models with such an edit, so the first step copies info.txt and the mitochondrial region file from the RefSeq GRCh38 cache under the --perl-cache-dir roots and the second converts them with scripts/data/storable_to_json.pl in the image the run names; both engines read that cut."
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "observed"
+input_class_basis = "2 · 13 of 116,165 cache transcripts · 19 flag sets, 4 corpora"
+notes = "The record of the page's section 1 and its control. MT:9990 is the last base of the one exon of COX3, MT:9207-9990, 784 bases. The model's `_rna_edit` replaces cDNA 784 by the three bases of its stop codon, so its coding sequence has 786 bases and the cache pairs cDNA 786 with MT:9990 (TranscriptMapper.pm:179, 209-211). Ensembl VEP reads the substitution at CDS 786, the stop codon's third base, as stop_retained_variant. The reference base at MT:9990 is the codon's first base and neither its second nor its third, so vep-rs reads the record at CDS 784, the codon's first base, as stop_lost. whole_stop_first_base is the same substitution at MT:9205, the first stop base of ATP6, whose stop codon is whole on the genome at MT:9205-9207: both engines write stop_lost at CDS 679. Each record's row on the other of the two models lies outside it, upstream or downstream, and is equal in both engines. vep-rs places the stop base from the reference sequence, and without one it keeps the cache's pairs, so the run names the FASTA of the GRCh38-input-hgvs corpus, which holds the mitochondrial genome, in place of --use_given_ref. No committed cache holds the six mitochondrial models with such an edit, so the first step copies info.txt and the mitochondrial region file from the RefSeq GRCh38 cache under the --perl-cache-dir roots and the second converts them with tools/vep-storable-to-json; both engines read that cut."
 
 prepare = [
-  '''[ -n "$IMAGE" ] || { echo "the cut of the RefSeq cache is converted in the Ensembl VEP image: pass --image" >&2; exit 1; }
-[ -n "$PERL_CACHE" ] || { echo "no homo_sapiens_refseq/116_GRCh38 with chromosome MT under the --perl-cache-dir roots" >&2; exit 1; }
+  '''[ -n "$PERL_CACHE" ] || { echo "no homo_sapiens_refseq/116_GRCh38 with chromosome MT under the --perl-cache-dir roots" >&2; exit 1; }
 cut="$STAGE/perl-cache/homo_sapiens_refseq/116_GRCh38"
 mkdir -p "$cut/MT"
 cp "$PERL_CACHE/info.txt" "$cut/info.txt"
 cp "$PERL_CACHE/MT/1-1000000.gz" "$cut/MT/"''',
-  '''docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$REPO/scripts/data:/scripts:ro" -v "$STAGE:/stage" "$IMAGE" perl /scripts/storable_to_json.pl /stage/perl-cache/homo_sapiens_refseq/116_GRCh38 /stage/json-cache/homo_sapiens_refseq/116_GRCh38 > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
+  '''cargo run --release --locked --quiet --manifest-path "$REPO/tools/vep-storable-to-json/Cargo.toml" -- "$STAGE/perl-cache/homo_sapiens_refseq/116_GRCh38" "$STAGE/json-cache/homo_sapiens_refseq/116_GRCh38" > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
 ]
 
 [input]
@@ -51,4 +50,15 @@ vep_rs = [
   "stop_first_base | COX3 | stop_lost | 784 | 784 | 262 | */K | Taa/Aaa",
   "whole_stop_first_base | ATP6 | stop_lost | 679 | 679 | 227 | */K | Taa/Aaa",
   "whole_stop_first_base | COX3 | upstream_gene_variant | - | - | - | - | -",
+]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/json_cache.rs::completed_stop_codon",
+    "crates/vep-cli/src/json_cache.rs::pair_completed_stop_codon",
+]
+tests = [
+    "crates/vep-cli/src/json_cache.rs::tests::a_completed_stop_codon_after_an_earlier_edit_is_paired_alike",
+    "crates/vep-cli/src/json_cache.rs::tests::a_completed_stop_codon_pairs_with_the_bases_the_genome_holds",
+    "crates/vep-cli/src/json_cache.rs::tests::a_stop_codon_the_reference_does_not_place_keeps_the_cache_pairs",
 ]

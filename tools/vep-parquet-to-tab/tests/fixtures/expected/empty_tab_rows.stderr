@@ -1,0 +1,1 @@
+ERROR: [parquet_to_vep_tab] errors/empty.tab: not a Parquet file

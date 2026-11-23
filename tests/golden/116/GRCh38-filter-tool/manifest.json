@@ -7,9 +7,9 @@
  ],
  "tool": "filter_vep",
  "inputs": {
-  "annotated.vcf": "the --vcf output of Ensembl VEP 116.2 on the GRCh38-writers corpus's variants.vcf with --symbol --biotype --canonical --numbers --af --max_af, the time token of its ##VEP line replaced by [TIME]",
-  "annotated.tab.gz": "the --tab output of Ensembl VEP 116.2 on the same input with the same flags, its time line replaced by [TIME], gzipped",
-  "annotated.txt.gz": "the default-format output of Ensembl VEP 116.2 on the same input with the same flags, its time line replaced by [TIME], gzipped"
+  "annotated.vcf": "the --vcf output of Ensembl VEP 116.3 on the GRCh38-writers corpus's variants.vcf with --symbol --biotype --canonical --numbers --af --max_af, the time token of its ##VEP line replaced by [TIME]",
+  "annotated.tab.gz": "the --tab output of Ensembl VEP 116.3 on the same input with the same flags, its time line replaced by [TIME], gzipped",
+  "annotated.txt.gz": "the default-format output of Ensembl VEP 116.3 on the same input with the same flags, its time line replaced by [TIME], gzipped"
  },
  "tool_cases": [
   {

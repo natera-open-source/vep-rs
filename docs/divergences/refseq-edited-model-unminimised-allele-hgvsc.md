@@ -8,7 +8,7 @@
 
 Three further forms arise where the record's bases stand at a place where the model differs from the genome. In sections 3 and 4 the genome's alleles, which the clip reads, and the model's reference allele, which is written back, differ as well. Section 3 shows a kept base that the model spells differently, section 4 bases that the model holds and the genome lacks, and section 5 an insertion that the 3' placement carries to an exon's last base.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2, `ensembl-variation` at release/116; `TranscriptVariationAllele.pm`, `TranscriptVariation.pm` and `Utils/Sequence.pm` are under `Bio/EnsEMBL/Variation/`):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3, `ensembl-variation` at release/116; `TranscriptVariationAllele.pm`, `TranscriptVariation.pm` and `Utils/Sequence.pm` are under `Bio/EnsEMBL/Variation/`):
 
 - `Bio/EnsEMBL/VEP/Parser/VCF.pm`, lines 306-309: in a record with more than one alternate, one of them of another length than the reference, the first base of the alleles is dropped only when every allele starts with it. `Bio/EnsEMBL/VEP/Parser.pm`, lines 860-881, minimises a record with one alternate whose length differs from its reference's, and `minimise_alleles` (lines 964-1019) leaves a record with a second alternate alone at lines 978-984.
 - `TranscriptVariationAllele.pm`, lines 1474-1483, `hgvs_transcript`: the notation is first built against the sequence of the transcript's genomic slice. Line 1492 then calls `_clip_alleles` unless the type is `dup`.
@@ -26,7 +26,7 @@ Three further forms arise where the record's bases stand at a place where the mo
 
 In a comparison that does not name the class, a row of the shape is reported as a difference in `HGVSc` and charged to vep-rs. So is a row of the further forms of sections 3 to 5, which are outside the class. The concordance figures score consequence sets and never see the field.
 
-**How often the shape occurs.** Tier 2, see [Intended divergences from Ensembl VEP](../intended-divergences.md): the shape is an allele that keeps a base it shares with its reference, on a model with an `_rna_edit` attribute, in a run under `--hgvs`. The committed caches hold 136 such models, in 4 corpora, and one committed flag set writes `HGVSc` on such a cache.
+**How often the shape occurs.** Tier 2, see [Intended divergences from Ensembl VEP](../intended-divergences.md): the shape is an allele that keeps a base it shares with its reference, on a model with an `_rna_edit` attribute, in a run under `--hgvs`. The committed caches hold 160 such models, in 10 corpora, and seven committed flag sets write `HGVSc` on such a cache.
 
 The concordance datasets are annotated on the Ensembl caches, which hold no `_rna_edit` attribute, so no row of them has the shape. No ClinVar record has a second alternate, 0 of 4,398,127 on GRCh38 and 0 of 4,388,172 on GRCh37, so the inserted allele of section 2 comes from no ClinVar record. The rows of sections 2 to 5 are of constructed records on the RefSeq GRCh38 cache of release 116, run under `--refseq --hgvs`. The entry's reproduction runs the two records of section 1 alone.
 
@@ -34,7 +34,7 @@ Tuple, pair, set aside, charged and the other scoring terms are defined in [How 
 
 ## 1. One base changed and the base beside it kept, on `NM_004449.4`
 
-**In short.** `21 38575676 kept_base_before CT CC` and `21 38575677 kept_base_after TG CG` on GRCh38 both change the one base 21:38575677, and each keeps a neighbouring base that its reference and its alternate share. The changed base is coding base 24 of the reverse-strand RefSeq model `NM_004449.4`, which carries `_rna_edit` attributes. Under `--refseq --hgvs`, Ensembl VEP 116.2 writes `c.24AG>GG` for the first record and `c.24CA>CG` for the second, each naming two bases a side. vep-rs writes `c.24A>G` for both. The format comparator sets the difference aside in a comparison that names the entry's class.
+**In short.** `21 38575676 kept_base_before CT CC` and `21 38575677 kept_base_after TG CG` on GRCh38 both change the one base 21:38575677, and each keeps a neighbouring base that its reference and its alternate share. The changed base is coding base 24 of the reverse-strand RefSeq model `NM_004449.4`, which carries `_rna_edit` attributes. Under `--refseq --hgvs`, Ensembl VEP 116.3 writes `c.24AG>GG` for the first record and `c.24CA>CG` for the second, each naming two bases a side. vep-rs writes `c.24A>G` for both. The format comparator sets the difference aside in a comparison that names the entry's class.
 
 ### 1.1 What a reader needs to know first
 
@@ -57,7 +57,7 @@ Both records change the one base 21:38575677. The first is written from 21:38575
 
 ### 1.3 What each engine writes
 
-The two records' rows on the model, in the default format. Ensembl VEP 116.2:
+The two records' rows on the model, in the default format. Ensembl VEP 116.3:
 
 ```
 kept_base_before	21:38575676-38575677	CC	2078	NM_004449.4	Transcript	synonymous_variant	296-297	24-25	8-9	PA	ccAGca/ccGGca	-	IMPACT=LOW;STRAND=-1;GIVEN_REF=CT;USED_REF=CT;BAM_EDIT=OK;HGVSc=NM_004449.4:c.24AG>GG;HGVSp=NP_004440.1:p.ProAla8%3D
@@ -73,7 +73,7 @@ kept_base_after	21:38575677-38575678	CG	2078	NM_004449.4	Transcript	synonymous_v
 
 The rows of each record agree in every column but the `HGVSc`:
 
-| Record | Ensembl VEP 116.2 | vep-rs |
+| Record | Ensembl VEP 116.3 | vep-rs |
 | --- | --- | --- |
 | `kept_base_before` | `c.24AG>GG` | `c.24A>G` |
 | `kept_base_after` | `c.24CA>CG` | `c.24A>G` |
@@ -114,25 +114,25 @@ vep -i record.vcf -o out.txt --offline \
 grep NM_004449.4 out.txt | grep -o 'HGVSc=[^;]*'
 ```
 
-vep-rs prints `HGVSc=NM_004449.4:c.24A>G` twice. Ensembl VEP 116.2 takes the same flags with the cache options of [Reproducing these examples](reproducing.md) and its own RefSeq GRCh38 cache, and prints the two values of its column in 1.3.
+vep-rs prints `HGVSc=NM_004449.4:c.24A>G` twice. Ensembl VEP 116.3 takes the same flags with the cache options of [Reproducing these examples](reproducing.md) and its own RefSeq GRCh38 cache, and prints the two values of its column in 1.3.
 
-The entry's reproduction, `scripts/divergences/reproductions/refseq_edited_model_unminimised_allele_hgvsc.toml`, holds the two records and both engines' values. `scripts/divergences/reevaluate.py` runs it on both engines and holds each value to the recorded one.
+The entry's reproduction, `scripts/divergences/reproductions/refseq_edited_model_unminimised_allele_hgvsc.toml`, holds the two records and both engines' values. `tools/vep-divergence-reevaluate` runs it on both engines and holds each value to the recorded one.
 
 ### 1.7 How the comparator treats these rows
 
-The format comparator (`scripts/concordance/compare_vep_formats.py`) applies `refseq_edited_model_unminimised_allele_hgvsc` when a comparison case names it in `masks`. Its test, the function `edited_model_clipped_alleles`, accepts a differing `HGVSc` on a row that prints `BAM_EDIT=OK` and whose `GIVEN_REF` and `USED_REF` are each the same in both engines. The two values must be two substitutions, two `ins` or two `delins`, under one sequence name and numbering, at the same coordinates. Ensembl VEP's must spell the row's whole alleles on the transcript's strand, and vep-rs's the same alleles without the bases the clip takes. Each accepted row is counted once under the class.
+The format comparator (`tools/vep-formats-compare`) applies `refseq_edited_model_unminimised_allele_hgvsc` when a comparison case names it in `masks`. Its test, the function `edited_model_clipped_alleles`, accepts a differing `HGVSc` on a row that prints `BAM_EDIT=OK` and whose `GIVEN_REF` and `USED_REF` are each the same in both engines. The two values must be two substitutions, two `ins` or two `delins`, under one sequence name and numbering, at the same coordinates. Ensembl VEP's must spell the row's whole alleles on the transcript's strand, and vep-rs's the same alleles without the bases the clip takes. Each accepted row is counted once under the class.
 
-The class accepts both rows of 1.3. The same pair on a row of a model whose edit failed, a notation that vep-rs leaves out and a notation of another allele stay differences. So do two values that differ in kind or in coordinates, which is why the class holds no row of sections 3 to 5.
+The class accepts both rows of 1.3. The same pair on a row of a model whose edit failed, a notation that vep-rs leaves out and a notation of another allele stay differences. So do two values that differ in kind or in coordinates, which is why the class holds no row of sections 3 to 5. Ensembl VEP's substitution on an allele that runs past the model's last base, whose reference names a base outside the transcript that the clip does not take, is a row of [`hgvs_clipped_reference_against_whole_alternate`](hgvs-clipped-reference-against-whole-alternate.md), section 8 of its page.
 
 ## 2. An inserted allele that keeps its reference base
 
-**In short.** A record whose first alternate is its reference base followed by inserted bases, and whose second alternate does not start with that base, keeps the reference base on the inserted allele. On a model with an `_rna_edit` attribute, Ensembl VEP 116.2 writes an `ins` of the inserted bases and the kept base, one base more than the record inserts. Away from bases the model adds, vep-rs writes the `ins` of the inserted bases alone, as both engines do on a model without the attribute. The entry's class asks for two `ins` at the same coordinates; how many of these rows it holds is not counted here.
+**In short.** A record whose first alternate is its reference base followed by inserted bases, and whose second alternate does not start with that base, keeps the reference base on the inserted allele. On a model with an `_rna_edit` attribute, Ensembl VEP 116.3 writes an `ins` of the inserted bases and the kept base, one base more than the record inserts. Away from bases the model adds, vep-rs writes the `ins` of the inserted bases alone, as both engines do on a model without the attribute. The entry's class asks for two `ins` at the same coordinates; how many of these rows it holds is not counted here.
 
 ### 2.1 What each engine writes
 
 A set of 18 constructed records with a second alternate gives 228 rows on which Ensembl VEP writes an `HGVSc` for such an allele. No row of the 228 prints `HGVS_OFFSET`: an allele that keeps a base is not moved by the 3' shift.
 
-| Rows | Ensembl VEP 116.2 |
+| Rows | Ensembl VEP 116.3 |
 | --- | --- |
 | 214 on models with an `_rna_edit` attribute: 147 in an intron, away from any bases the model adds, and 67 on a model that adds bases at the record's point | an `ins` of the record's inserted length plus one, on 214 of 214 |
 | 14 on models without one: 12 that print no `BAM_EDIT` and 2 that print `BAM_EDIT=FAILED` | an `ins` of the record's inserted length, on 14 of 14 |
@@ -147,7 +147,7 @@ The record's first alternate is its reference base followed by the inserted base
 
 ## 3. A kept base that the model spells differently from the genome
 
-**In short.** A record's two alleles share an end base, and the model spells that base differently from the genome. Ensembl VEP's clip takes the base off the genome's alleles, and the model's reference allele, written back whole, does not share it with the alternate. Ensembl VEP 116.2 writes a substitution of the model's whole reference allele by the record's whole alternate, two or three bases a side, at the one position the clip leaves. vep-rs writes a `delins` of two bases, or an inversion where those two bases are the reverse complement of the model's.
+**In short.** A record's two alleles share an end base, and the model spells that base differently from the genome. Ensembl VEP's clip takes the base off the genome's alleles, and the model's reference allele, written back whole, does not share it with the alternate. Ensembl VEP 116.3 writes a substitution of the model's whole reference allele by the record's whole alternate, two or three bases a side, at the one position the clip leaves. vep-rs writes a `delins` of two bases, or an inversion where those two bases are the reverse complement of the model's.
 
 vep-rs clips a shared base only where the model's own base equals it. It writes a `delins` of two bases, from the base the model spells differently to the base the record changes, or an inversion where those two bases are the reverse complement of the model's. Nothing is set aside.
 
@@ -161,7 +161,7 @@ One row of a set of 53 constructed records. The set holds records at five places
 | The model | `NM_001165945.2`, forward strand, `BAM_EDIT=OK`; `3_prime_UTR_variant`, `cDNA_position` 2021-2022 |
 | The model against the genome | another base at cDNA 2021, `c.*257`; the same base at cDNA 2022, `c.*258` |
 | `GIVEN_REF` and `USED_REF` | two bases each, and they differ |
-| Ensembl VEP 116.2 | a substitution at `c.*258` with two bases a side: the model's bases at `c.*257` and `c.*258` against the record's two |
+| Ensembl VEP 116.3 | a substitution at `c.*258` with two bases a side: the model's bases at `c.*257` and `c.*258` against the record's two |
 | vep-rs | the record's two bases in place of the model's two, over `c.*257_*258` |
 
 The set gives 798 rows whose clip takes a base the model spells differently. Ensembl VEP writes the substitution of the whole alleles on 798 of 798, with two bases a side on 266 and three on 532. vep-rs writes a `delins` of two bases on 699 of them and an inversion of two bases on 99. On the 532 rows the clip takes two bases; vep-rs drops a clipped base from the pair only where the model has it, and two bases are left on every row.
@@ -176,13 +176,13 @@ Ensembl VEP's substitution names two reference bases at a position that holds on
 
 ## 4. A kept base beside bases the model holds and the genome lacks
 
-**In short.** A record's reference covers both genomic neighbours of a place where the model holds bases the genome lacks, and its alleles share an end base. The model's reference allele, `USED_REF`, then holds the model's bases as well. Ensembl VEP 116.2 keeps the position or the span that its clip left on the genome's alleles and writes the whole alleles there. vep-rs writes the change from the first base the genome lacks to the last changed base. Nothing is set aside. On 60 `delins` rows and 12 substitution rows the smallest change on the model is shorter than that span, and which of the two the notation should name is not settled.
+**In short.** A record's reference covers both genomic neighbours of a place where the model holds bases the genome lacks, and its alleles share an end base. The model's reference allele, `USED_REF`, then holds the model's bases as well. Ensembl VEP 116.3 keeps the position or the span that its clip left on the genome's alleles and writes the whole alleles there. vep-rs writes the change from the first base the genome lacks to the last changed base. Nothing is set aside. On 60 `delins` rows and 12 substitution rows the smallest change on the model is shorter than that span, and which of the two the notation should name is not settled.
 
 ### 4.1 What each engine writes
 
 Three rows show the three kinds the clip leaves. The first two are on `NM_015120.4`, of records whose reference is the two bases 2:73385942-73385943. The model numbers those bases cDNA 185 and 189 and holds three bases between them, `c.75` to `c.77`. Both rows print `cDNA_position` 185-189 and `CDS_position` 74-78, a `GIVEN_REF` of two bases and a `USED_REF` of five.
 
-| The record's alternate | Ensembl VEP 116.2 | vep-rs |
+| The record's alternate | Ensembl VEP 116.3 | vep-rs |
 | --- | --- | --- |
 | Two bases: the first kept, the second changed | a substitution at `c.75`, five reference bases against two | a `delins` of one base over `c.75_78` |
 | Three bases, the first kept, in a record with a second alternate | a `delins` of three bases, the whole alternate, at the one position `c.75` | a `delins` of two bases, the ones the clip leaves, over `c.75_78` |
@@ -191,7 +191,7 @@ The third row is on `NM_002111.8`, of a record with a second alternate whose ref
 
 The counts are of two sets of constructed records: the 53 records of section 3, and 24 records with two alternates each. By the kind the clip leaves:
 
-| Kind | Rows | Ensembl VEP 116.2 | vep-rs |
+| Kind | Rows | Ensembl VEP 116.3 | vep-rs |
 | --- | --- | --- | --- |
 | Substitution | 16 of the first set and 24 of the second | on the 16, a substitution at one position that names the model's whole reference allele; its values on the 24 are not shown here | on the 40, a `delins` of one base from the first base the genome lacks |
 | `delins` | 75 of the second set | a `delins` of the record's whole alternate, the kept base included, over as many positions as the clip left | a `delins` from the first base the genome lacks to the last changed base, with the alternate bases the clip leaves |
@@ -207,7 +207,7 @@ On 60 of the 75 rows, all at 1:16567177, the alternate's base at one end of vep-
 
 ## 5. An insertion that the 3' placement carries to an exon's last base
 
-**In short.** An allele that keeps a base stands at a place where the model holds bases the genome lacks, and the bases it adds are a copy that the 3' rule can carry to the exon's last base. Ensembl VEP 116.2 does not move such an allele. It writes an `ins` of the whole allele, the kept base included, between two consecutive positions at the record's point. vep-rs places the change 3'-most on the model's sequence, and carries an insertion past the exon's last base: onto the bases the model holds directly after that base where it holds any, or else onto the genome's intron. Nothing is set aside.
+**In short.** An allele that keeps a base stands at a place where the model holds bases the genome lacks, and the bases it adds are a copy that the 3' rule can carry to the exon's last base. Ensembl VEP 116.3 does not move such an allele. It writes an `ins` of the whole allele, the kept base included, between two consecutive positions at the record's point. vep-rs places the change 3'-most on the model's sequence, and carries an insertion past the exon's last base: onto the bases the model holds directly after that base where it holds any, or else onto the genome's intron. Nothing is set aside.
 
 ### 5.1 What each engine writes
 
@@ -218,7 +218,7 @@ One row of a set of 348 constructed records:
 | The record | one reference base at 2:73385942; a first alternate of 255 bases, which are the kept base, the model's three own bases, the 250 exon bases after them and the intron's first base; a second alternate of one base |
 | The model | `NM_015120.4`, forward strand, `BAM_EDIT=OK`; cDNA 1-185 on 2:73385758-73385942 and cDNA 189-438 on 2:73385943-73386192; cDNA 438 is the exon's last base |
 | `cDNA_position` and `CDS_position`, both engines | 185 and 74 |
-| Ensembl VEP 116.2 | an `ins` of 255 bases between `c.74` and `c.75`, and no `HGVS_OFFSET` |
+| Ensembl VEP 116.3 | an `ins` of 255 bases between `c.74` and `c.75`, and no `HGVS_OFFSET` |
 | vep-rs | a `dup` of 251 bases, `c.78` to `c.327+1`: cDNA 189 to 438 and the intron's first base |
 
 On 240 rows of the set, of an allele that keeps a base on a model that holds such bases at the record's point, Ensembl VEP writes an `ins` on 240 of 240. Its two positions are consecutive and stand 5 to 618 positions before the exon's last base. Its bases are the row's whole allele, and no row prints `HGVS_OFFSET`. Every other compared column of the 240 rows is equal in the two engines.

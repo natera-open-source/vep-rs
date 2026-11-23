@@ -1,0 +1,2 @@
+ERROR: [storable_to_json] badactivity/21/45000001-46000000_reg.gz: RegulatoryFeature ENSR_SIXTH has activity 'UNKNOWN' in HepG2; expected one of ACTIVE, INACTIVE, NA, POISED, REPRESSED
+

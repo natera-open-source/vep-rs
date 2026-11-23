@@ -1,0 +1,94 @@
+{
+ "plugin_fixtures": {
+  "generator": "scripts/fixtures/cut_plugin_regions.py",
+  "flank": 5000,
+  "record_flank": 2000,
+  "exon_flank": 50,
+  "gerp_regions": "exons",
+  "tools": {
+   "bgzip": "bgzip (htslib) 1.9"
+  },
+  "files": {
+   "reference.fa.fai": "fb8a4b8169394a818a76f97c937c30a6343ad9d2a1bf63cda54e5a8426c1a0f0",
+   "reference.fa.gz": "57a656748e1b713583c64c05b5a2d0366eac39b3db8ae388bb949ccddc25ed7f",
+   "reference.fa.gz.fai": "fb8a4b8169394a818a76f97c937c30a6343ad9d2a1bf63cda54e5a8426c1a0f0",
+   "reference.fa.gz.gzi": "887758d57fee5ab52e5fa047260d89edd38005c0172177d982391d18c84b36c6"
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species ciona_intestinalis --assembly KH --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "ciona_intestinalis/116_KH",
+ "fasta": "the three sequences the records and the pruned cache's transcripts sit on (MT, 6 and HT001032.1) at their full length from Ciona_intestinalis.KH.dna.chromosome.MT.fa.gz, Ciona_intestinalis.KH.dna.chromosome.6.fa.gz and Ciona_intestinalis.KH.dna.nonchromosomal.fa.gz of Ensembl release 116, each file held to the sum of the directory's CHECKSUMS; every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
+ "input": "variants.vcf: 339 records on the mitochondrion (MT, 95 records), chromosome 6 (235) and the unplaced scaffold HT001032.1 (9); 19 of the records on chromosome 6 name it by a synonym the cache's chr_synonyms.txt lists (HT000011.1 or NC_020171.1). 294 come from tools/vep-seeded-variants (generator version 3, seed 1, --records wide --per-category 40, one --sequence for each of the three sequences, every reference allele read from the genome file), their IDs naming the category and an ordinal: 28 categories, among them a substitution in a codon genetic code 13 reads differently from the standard code, start and stop codons under codes 1 and 13, a missense and a synonymous change on each strand, both splice sites, both untranslated regions, an intron, upstream, downstream and intergenic positions, a frameshift insertion, a frameshift deletion, an in-frame deletion and the first and the last base of a sequence. 45 are designed records in the 13 coding transcripts of the mitochondrion, each a single-base substitution whose reference base was read from the genome file and held to the cached coding sequence, the codons taken from Bio::Tools::CodonTable of the reference image: code13_made_codon (33) makes a codon code 13 reads differently from the standard code, with the residue kept in 12 transcripts, with it changed in 13 and, in the 8 that end on a whole stop codon one substitution away from such a codon, in that stop codon; code13_stop_codon (2) changes a stop codon no such substitution reaches into a sense codon; code13_in_codon (8) sits inside a codon of that kind the coding sequence holds, for each of the four such codons once with the residue kept and once with it changed; code13_start_mark (2) changes the first and the third base of the first codon of ENSCINT00000037381. The cache's variation files hold no record, so the corpus holds no known variant; the cache marks no sequence circular, so no record crosses an origin",
+ "sha256": {
+  "default.txt": "2e7831803dd3a95f2bd3b934111bf0e043834001b01d8c1d622b71746f88a64d",
+  "tab.txt": "e0b559e4e2ea13c96c6795be7949c9764f95334628dbf1f87e2dbb406c42bab3",
+  "vcf.vcf": "f3e7c410cdde46b1cec9e77ab619d3a7acdcec7b592b73e6022cba4ef0df7fc6",
+  "json.jsonl": "680178d2ea55bddc89bc1fce52c63bdde8d635c038ec0665b8f77a1d0c332300"
+ },
+ "variants_vcf_sha256": "ac7b7db83f3c5cdf2620f78d3b1003343b4729ccb29dcbba12a158c0bb54ebbc",
+ "flag_sets": {
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species ciona_intestinalis --assembly KH --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "ciona_intestinalis/116_KH",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "add5f47e4ec848ace4117a05c847686b91fd5a4e68b350c1adaa8f0dd538b34f",
+    "tab.txt": "af22399ea157e1490df50ad2d1d67f5f6beed80d0d7d0d595c958389ebc207bc",
+    "vcf.vcf": "a55142307f1e94c587799756143d13eb55effb1ed3837a90bab8caedda42114e",
+    "json.jsonl": "9a8b65f9913ac2ff3f5a9df5f058ee29a39c88dede625f4cfbb19e65ceedc376"
+   },
+   "flags": [
+    "--everything"
+   ],
+   "expected_dir": "expected_everything"
+  },
+  "hgvs": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species ciona_intestinalis --assembly KH --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs [--tab|--vcf|--json]",
+   "perl_cache": "ciona_intestinalis/116_KH",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "52cd5ddd8eb020ecb1fcc461816562d4f536e2ffb95b1e53ba932926d8136d4f",
+    "tab.txt": "755fab64a017670a9d4477757f916b09cb79a9f1dbe1c394ab75cb048a885c9f",
+    "vcf.vcf": "43556fda01d04853febfcc9beeb2868810458755c9d11e2f233d842f448134a3",
+    "json.jsonl": "85198002543cd82e2c74336db28eef2c20afaf7f13d955909f2b01081a4b7a11"
+   },
+   "flags": [
+    "--hgvs"
+   ],
+   "expected_dir": "expected_hgvs"
+  }
+ },
+ "generator": "tools/vep-seeded-variants --seed 1 --records wide --per-category 40 --fasta <genome sequence> --sequence MT --sequence 6 --sequence HT001032.1 over the whole cache tools/vep-storable-to-json converts from the Ensembl release 116 KH cache, beside the 45 designed records; Ensembl VEP over the two inputs under the default flags; tools/vep-golden-corpus select --release 116 --assembly KH --species ciona_intestinalis --dataset wide=<reference>=<the generator's records> --dataset designed=<reference>=<the designed records> --k 2 --seed 1 --max-span 1000000 --max-records 500 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 6 --include <the named records: every first-base and last-base record, the first ten of every other category and every designed record> --covers species-ciona-kh --covers genetic-code-tables --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --flank 5000 --gzip --drop sorted_exons --perl-info <cache>/info.txt --cache-version 116 over that converted cache (the cache carries no SIFT or PolyPhen predictions and no regulatory data, and its variation files are empty, so the slice holds none); scripts/fixtures/cut_plugin_regions.py --reference <genome sequence> --flank 5000 --record-flank 2000; tools/vep-golden-corpus flag-set (everything, hgvs); scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; tools/vep-golden-corpus classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp --field HGVS_OFFSET for the flag sets)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "6": 198,
+   "HT001032.1": 2,
+   "MT": 39
+  },
+  "shards": 5,
+  "synonym_lines": 4,
+  "variation_slices": "none: every variation file of the Ensembl release 116 KH cache is empty"
+ },
+ "genetic_code_check": {
+  "genetic_code": 13,
+  "sequence": "MT",
+  "table": "Bio/Tools/CodonTable.pm of the reference image (/opt/vep/src/ensembl-vep/Bio/Tools/CodonTable.pm): the residues of table 1 on line 229 and of table 13 on line 240, which differ at four codons, one of them a stop codon of table 1; the start codons of table 1 on line 258 and of table 13 on line 269",
+  "table_sha256": "8b5aba4aafd2058f1a96dc71c646edc23faa5d973243fd8fc9e26da37b0be282",
+  "records": "variants.vcf lines 225 to 233 (code13_in_codon_1 to code13_in_codon_8), two inside each of the four codons, and the generator's code13_changed_codon records; lines 291 and 292 (code13_start_mark_1 and code13_start_mark_2), in the first codon of ENSCINT00000037381, which table 13 on line 240 translates to the start residue and line 269 does not mark as a start: Ensembl VEP writes start_lost for both",
+  "checked": "every row on MT that prints two whole codons, in the default-format output of each of the three runs, 93 rows a run: the Amino_acids column equals the translation of both codons under table 13 as that file gives it in 92; 56 of the rows sit on a codon the two tables read differently and reach all four; the row of every code13_made_codon, code13_stop_codon and code13_in_codon record in its own transcript carries the consequence the table gives (synonymous_variant, missense_variant or stop_lost). The one other row (expected/default.txt.gz line 1204, expected_everything/default.txt.gz line 1267, expected_hgvs/default.txt.gz line 1207) sits in the first codon of ENSCINT00000037364, whose cache record replaces the first residue of the peptide, and prints that residue as the reference amino acid"
+ }
+}

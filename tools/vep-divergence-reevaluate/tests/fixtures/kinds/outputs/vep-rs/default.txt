@@ -1,0 +1,8 @@
+## vep-rs
+## HGVSp : HGVS protein sequence name
+## DISTANCE : Distance to the transcript
+#Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	Extra
+rec1	21:100	A	ENSG1	ENST1	Transcript	splice_region_variant,missense_variant	10	10	4	L/P	ctA/ccA	-	IMPACT=MODERATE;HGVSp=ENSP1:p.Leu4%3D;PICK=1
+rec1	21:100	A	ENSG1	ENST2	Transcript	non_coding_transcript_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+rec2	21:300	C	ENSG3	ENST3	Transcript	downstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER;DISTANCE=4000;FILE=/home/user/data/x.gz
+rec2	21:300	C	ENSG3	ENST4	Transcript	downstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER;FILE=/home/user/data/x.gz

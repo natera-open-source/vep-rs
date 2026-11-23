@@ -1,9 +1,9 @@
 entry = "downstream_minimal_rejoined_span"
 page = "docs/divergences/downstream-minimal-rejoined-span.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 121.0 per million · 0 flag sets, 24 corpora"
+input_class_basis = "2 · 121.0 per million · 0 flag sets, 27 corpora"
 notes = "The first alternate allele trims to a one-base insertion between coding bases 1427 and 1428 of ENST00000336648, the second to the deletion of coding base 1428. In the default format Ensembl VEP's plugin reads the rejoined record's CDS coordinates (Downstream.pm:108) and writes the insertion's base over coding base 1428, an in-frame change of length 0; vep-rs reads the insertion's own coordinates and writes the frameshift's -151, the value both engines write for the second record, the same insertion alone."
 
 [input]
@@ -32,3 +32,12 @@ where = { record = ["ins_beside_del", "ins_alone"], feature = "ENST00000336648",
 [expected]
 ensembl_vep = ["ENST00000336648=-151", "ENST00000336648=0"]
 vep_rs = ["ENST00000336648=-151", "ENST00000336648=-151"]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/downstream.rs::cds_span",
+    "crates/vep-effects/src/display.rs::DisplayFields::record_span_positions",
+]
+tests = [
+    "crates/vep-cli/tests/plugin_documented_rows.rs::a_minimal_split_insertion_changes_the_protein_length_as_the_insertion_alone_does",
+]

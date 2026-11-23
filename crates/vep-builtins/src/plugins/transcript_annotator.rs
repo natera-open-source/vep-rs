@@ -252,6 +252,8 @@ fn basename_without_extensions(file: &str) -> String {
     base
 }
 
+impl crate::traits::sealed::Sealed for TranscriptAnnotatorPlugin {}
+
 impl BuiltinPlugin for TranscriptAnnotatorPlugin {
     fn name(&self) -> &str {
         NAME
@@ -267,6 +269,12 @@ impl BuiltinPlugin for TranscriptAnnotatorPlugin {
 
     fn set_assembly(&mut self, assembly: Option<Assembly>) {
         self.assembly = assembly;
+    }
+
+    fn set_reference_fasta(&mut self, fasta: Option<std::sync::Arc<vep_fasta::IndexedFasta>>) {
+        if let Some(store) = self.store.as_mut() {
+            store.set_reference_fasta(fasta);
+        }
     }
 
     fn init(&mut self, params: &[String]) -> Result<(), PluginError> {
@@ -422,7 +430,7 @@ impl BuiltinPlugin for TranscriptAnnotatorPlugin {
             for (i, row) in matched {
                 let consequence = &mut variant.transcript_consequences[i];
                 // A later plugin's value replaces an earlier one under the same
-                // key (OutputFactory.pm:2230-2231), its empty-string mark included.
+                // key (OutputFactory.pm:2239-2240), its empty-string mark included.
                 consequence
                     .plugin_empty_strings
                     .retain(|key| !row.values.iter().any(|(written, _)| written == key));
@@ -437,7 +445,7 @@ impl BuiltinPlugin for TranscriptAnnotatorPlugin {
     }
 
     /// Ensembl VEP runs the module once per output line and catches each
-    /// line's failure on its own (`run`, `:205-240`; OutputFactory.pm:2225-2245),
+    /// line's failure on its own (`run`, `:205-240`; OutputFactory.pm:2234-2254),
     /// so a transcript row whose matching row precedes the row the match dies
     /// on keeps the fields while the rows whose scan reaches it lose them.
     fn annotate_fails_per_row(&self) -> bool {
@@ -463,7 +471,7 @@ impl BuiltinPlugin for TranscriptAnnotatorPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_fixtures::{write_tabix_fixture, IndexSpec};
+    use crate::test_fixtures::{write_tabix_fixture, IndexSpec, Warnings};
     use std::path::PathBuf;
     use std::sync::Arc;
     use vep_core::consequence::FeatureType;
@@ -565,15 +573,15 @@ mod tests {
     }
 
     fn transcript_row(id: &str, refseq: Option<&str>) -> TranscriptConsequence {
-        TranscriptConsequence {
-            transcript: Some(Arc::new(Transcript {
-                stable_id: id.into(),
-                refseq: refseq.map(str::to_string),
-                ..Transcript::default()
-            })),
-            feature_type: FeatureType::Transcript,
-            ..TranscriptConsequence::default()
-        }
+        let mut consequence = TranscriptConsequence::default();
+        consequence.transcript = Some(Arc::new({
+            let mut transcript = Transcript::default();
+            transcript.stable_id = id.into();
+            transcript.refseq = refseq.map(str::to_string);
+            transcript
+        }));
+        consequence.feature_type = FeatureType::Transcript;
+        consequence
     }
 
     fn snv(pos: u64, alt: &str) -> InputVariant {
@@ -631,6 +639,51 @@ mod tests {
         assert_eq!(
             description,
             &format!("column from {}", dir.path().join("scores.tsv.gz").display())
+        );
+    }
+
+    /// The warnings `init` raises over a table whose last header line is `header`.
+    fn header_warnings(dir: &Path, file_name: &str, header: &str) -> Vec<String> {
+        let rows = [header, "21\t436154\tA\tG\tENST00000421485\t0.03"];
+        let file = write_tabix_fixture(dir, file_name, &rows, IndexSpec::standard());
+        let warnings = Arc::new(Warnings::default());
+        tracing::subscriber::with_default(Arc::clone(&warnings), || {
+            init_table(&file, &[]).unwrap();
+        });
+        let texts = warnings.0.lock().unwrap();
+        texts.clone()
+    }
+
+    /// Each of the five fixed names is a case-insensitive pattern anchored at
+    /// its start, tested against every header name (`:113-115`): a name some
+    /// header name opens with passes, in any letter case and in any column,
+    /// and a name the header's names hold only past their first character
+    /// draws the warning of `:116-117`, which prints the header name that
+    /// stands at the fixed name's own place.
+    #[test]
+    fn a_fixed_name_is_a_case_insensitive_prefix_of_some_header_name() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(
+            header_warnings(
+                dir.path(),
+                "opens.tsv.gz",
+                "#TRANSCRIPT\tAlternate\tREFERENCE\tposition\tChromosome\tScore",
+            ),
+            Vec::<String>::new()
+        );
+        assert_eq!(
+            header_warnings(
+                dir.path(),
+                "holds.tsv.gz",
+                "#xChr\tmypos\taref\tSalt\tstr\tScore",
+            ),
+            [
+                "TranscriptAnnotator: Name of column 0 ('xChr') should start with 'chr'",
+                "TranscriptAnnotator: Name of column 1 ('mypos') should start with 'pos'",
+                "TranscriptAnnotator: Name of column 2 ('aref') should start with 'ref'",
+                "TranscriptAnnotator: Name of column 3 ('Salt') should start with 'alt'",
+                "TranscriptAnnotator: Name of column 4 ('str') should start with 'tr'",
+            ]
         );
     }
 
@@ -788,7 +841,7 @@ mod tests {
         );
     }
 
-    /// Ensembl VEP 116.2 trims the record's alleles as well as the row's inside
+    /// Ensembl VEP 116.3 trims the record's alleles as well as the row's inside
     /// `get_matched_variant_alleles` (ensembl-variation Utils/Sequence.pm:1199-1208
     /// and :1223-1232), so a substitution written with an unchanged leading
     /// base (`GC/GT` at 1887470) or trailing base (`CA/TA` at 1887471) takes
@@ -898,7 +951,7 @@ mod tests {
         );
     }
 
-    /// Ensembl VEP 116.2 splits a row on tabs, dropping its trailing empty
+    /// Ensembl VEP 116.3 splits a row on tabs, dropping its trailing empty
     /// fields, then trims each field under `trim=1` (`:245-246`), and assigns
     /// the fields to the column names (`:250`): a cell the row has and leaves
     /// empty, or trims to nothing, is the defined empty string, written as an
@@ -983,7 +1036,7 @@ mod tests {
     }
 
     /// Two instances under one prefix write the same keys, and the later
-    /// value replaces the earlier one (OutputFactory.pm:2230-2231): a row whose
+    /// value replaces the earlier one (OutputFactory.pm:2239-2240): a row whose
     /// cell is the empty string in the first table and absent from the second
     /// ends undefined, and the reverse order ends as the empty string.
     #[test]
@@ -1032,10 +1085,11 @@ mod tests {
         let mut variants = vec![snv(1887471, "T")];
         variants[0].transcript_consequences.extend([
             transcript_row("ENST00000421485", None),
-            TranscriptConsequence {
-                feature_id: Some(Arc::from("ENST00000421485")),
-                feature_type: FeatureType::RegulatoryFeature,
-                ..TranscriptConsequence::default()
+            {
+                let mut consequence = TranscriptConsequence::default();
+                consequence.feature_id = Some(Arc::from("ENST00000421485"));
+                consequence.feature_type = FeatureType::RegulatoryFeature;
+                consequence
             },
             transcript_row("ENST00000000001", None),
         ]);
@@ -1048,10 +1102,10 @@ mod tests {
         assert_eq!(written, [true, false, false]);
     }
 
-    /// Ensembl VEP 116.2 never hands TranscriptAnnotator a structural variant:
+    /// Ensembl VEP 116.3 never hands TranscriptAnnotator a structural variant:
     /// the module keeps the default `variant_feature_types` of
     /// `['VariationFeature']` (BaseVepPlugin.pm:100), which the dispatch checks
-    /// before running a plugin on a line (OutputFactory.pm:2220). A `<DEL>`
+    /// before running a plugin on a line (OutputFactory.pm:2229). A `<DEL>`
     /// row of a named transcript gets no field, and nor does a matching
     /// substitution carrying the structural mark, which pins the gate rather
     /// than the allele match; the plain substitution is annotated.
@@ -1142,7 +1196,7 @@ mod tests {
     }
 
     /// Ensembl VEP runs the module once per output line and catches each
-    /// line's failure on its own (`run`, `:205-240`; OutputFactory.pm:2225-2245),
+    /// line's failure on its own (`run`, `:205-240`; OutputFactory.pm:2234-2254),
     /// so a transcript whose matching row precedes the short row of its
     /// position keeps its fields while a transcript whose scan reaches the
     /// short row loses them, whether the table never names it or names it in

@@ -1,0 +1,358 @@
+{
+ "transcripts": {
+  "gtf": 1300,
+  "cache": 1300,
+  "shared": 1250,
+  "gtf_only": 50,
+  "cache_only": 50
+ },
+ "per_code": {
+  "gencode_basic": {
+   "agree": 1187,
+   "disagree": 63,
+   "present_in_gtf": 625,
+   "present_in_cache": 562,
+   "examples": [
+    {
+     "transcript": "M0060",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0080",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0100",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0120",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0140",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0160",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0180",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0200",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0220",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0240",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0260",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0280",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0300",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0320",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0340",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0360",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0380",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0400",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0420",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0440",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0460",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0480",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0500",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0520",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0540",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0560",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0580",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0600",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0620",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0640",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0660",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0680",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0700",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0720",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0740",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0760",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0780",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0800",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0820",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0840",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0860",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0880",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0900",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0920",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0940",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0960",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0980",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M1000",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M1020",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M1040",
+     "gtf": true,
+     "cache": false
+    }
+   ]
+  },
+  "gencode_primary": {
+   "agree": 1238,
+   "disagree": 12,
+   "present_in_gtf": 417,
+   "present_in_cache": 421,
+   "examples": [
+    {
+     "transcript": "M0107",
+     "gtf": false,
+     "cache": true
+    },
+    {
+     "transcript": "M0307",
+     "gtf": false,
+     "cache": true
+    },
+    {
+     "transcript": "M0309",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0407",
+     "gtf": false,
+     "cache": true
+    },
+    {
+     "transcript": "M0607",
+     "gtf": false,
+     "cache": true
+    },
+    {
+     "transcript": "M0609",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M0707",
+     "gtf": false,
+     "cache": true
+    },
+    {
+     "transcript": "M0907",
+     "gtf": false,
+     "cache": true
+    },
+    {
+     "transcript": "M0909",
+     "gtf": true,
+     "cache": false
+    },
+    {
+     "transcript": "M1007",
+     "gtf": false,
+     "cache": true
+    },
+    {
+     "transcript": "M1207",
+     "gtf": false,
+     "cache": true
+    },
+    {
+     "transcript": "M1209",
+     "gtf": true,
+     "cache": false
+    }
+   ]
+  },
+  "cds_start_NF": {
+   "agree": 1250,
+   "disagree": 0,
+   "present_in_gtf": 0,
+   "present_in_cache": 0,
+   "examples": []
+  },
+  "cds_end_NF": {
+   "agree": 1249,
+   "disagree": 1,
+   "present_in_gtf": 3,
+   "present_in_cache": 2,
+   "examples": [
+    {
+     "transcript": "M0401",
+     "gtf": true,
+     "cache": false
+    }
+   ]
+  }
+ },
+ "exact_agreement": false
+}

@@ -152,8 +152,9 @@ pub struct AviPlugin {
     include_raw: bool,
     /// Write `AVI_LINK` beside `AVI_PHRED` (`links=1`).
     include_links: bool,
-    /// The run's assembly, from `--assembly`: the table is opened on it, the
-    /// rows are asked for under it, and `init` warns of a GRCh37 run.
+    /// The run's assembly (the cache's own, else the value of `--assembly`): the
+    /// table is opened on it, the rows are asked for under it, and `init` warns
+    /// of a GRCh37 run.
     assembly: Option<Assembly>,
 }
 
@@ -218,9 +219,9 @@ impl AviPlugin {
     /// the row has and leaves empty is Ensembl VEP's empty string, which the
     /// seven-way split of `AVI.pm:161` keeps, so the record names its field.
     fn write_fields(&self, record: &TabixRecord, variant: &mut InputVariant) {
-        Self::write_cell(variant, PHRED_FIELD, &record.columns[PHRED_COL]);
+        self.write_cell(variant, PHRED_FIELD, &record.columns[PHRED_COL]);
         if self.include_raw {
-            Self::write_cell(variant, RAW_FIELD, &record.columns[RAW_COL]);
+            self.write_cell(variant, RAW_FIELD, &record.columns[RAW_COL]);
         }
         if self.include_links {
             let chr = &record.chr;
@@ -232,30 +233,33 @@ impl AviPlugin {
             } else {
                 format!("chr{chr}")
             };
-            variant.plugin_data.insert(
+            variant.set_plugin_value(
                 LINK_FIELD.to_string(),
                 format!(
                     "{ATLAS_URL}?q={link_chr}:{}:{}>{}&m=variant",
                     record.start, record.columns[REF_COL], record.columns[ALT_COL]
                 ),
+                false,
+                self.feature_types(),
             );
         }
     }
 
     /// Write `cell` under `field` on `variant`, naming the field in the record's
     /// `plugin_empty_strings` when the cell is empty. A later plugin's value
-    /// replaces an earlier one under the same key (OutputFactory.pm:2230-2231),
+    /// replaces an earlier one under the same key (OutputFactory.pm:2239-2240),
     /// its mark too.
-    fn write_cell(variant: &mut InputVariant, field: &str, cell: &str) {
-        variant
-            .plugin_data
-            .insert(field.to_string(), cell.to_string());
-        variant.plugin_empty_strings.retain(|key| key != field);
-        if cell.is_empty() {
-            variant.plugin_empty_strings.push(field.to_string());
-        }
+    fn write_cell(&self, variant: &mut InputVariant, field: &str, cell: &str) {
+        variant.set_plugin_value(
+            field.to_string(),
+            cell.to_string(),
+            true,
+            self.feature_types(),
+        );
     }
 }
+
+impl crate::traits::sealed::Sealed for AviPlugin {}
 
 impl BuiltinPlugin for AviPlugin {
     fn name(&self) -> &str {
@@ -265,7 +269,7 @@ impl BuiltinPlugin for AviPlugin {
     /// The Ensembl VEP module declares `['Feature', 'Intergenic']`: every row,
     /// the intergenic row included.
     fn feature_types(&self) -> &[RowKind] {
-        &RowKind::ALL
+        RowKind::ALL
     }
 
     fn header_info(&self) -> Vec<(String, String)> {
@@ -281,6 +285,14 @@ impl BuiltinPlugin for AviPlugin {
 
     fn set_assembly(&mut self, assembly: Option<Assembly>) {
         self.assembly = assembly;
+    }
+
+    fn set_reference_fasta(&mut self, fasta: Option<std::sync::Arc<vep_fasta::IndexedFasta>>) {
+        match self.table.as_mut() {
+            Some(ScoreTable::Tabix(table)) => table.frame_mut().set_reference(fasta),
+            Some(ScoreTable::Binary(store)) => store.frame_mut().set_reference(fasta),
+            None => {}
+        }
     }
 
     fn init(&mut self, params: &[String]) -> Result<(), PluginError> {
@@ -590,7 +602,7 @@ mod tests {
         }
     }
 
-    /// Ensembl VEP 116.2 scores a record whose start equals its end before any
+    /// Ensembl VEP 116.3 scores a record whose start equals its end before any
     /// row is matched (`AVI.pm:134`), so a substitution written with an
     /// unchanged leading base (`CA/CG` at 5030191) takes no score although
     /// `get_matched_variant_alleles` (ensembl-variation Utils/Sequence.pm:1199-1208)
@@ -639,7 +651,7 @@ mod tests {
     }
 
     /// `AVI.pm:161` splits the line into six variables with a limit of seven,
-    /// so Perl keeps a trailing empty cell as the empty string, and `:163`
+    /// so Ensembl VEP keeps a trailing empty cell as the empty string, and `:163`
     /// drops a row lacking its sixth cell before any match. An empty PHRED or
     /// raw cell prints as `AVI_PHRED=` in the default format, an empty tab cell
     /// against `-` and JSON `""` against no key (`Tab.pm:128`, `JSON.pm:327`),
@@ -852,10 +864,10 @@ mod tests {
         );
     }
 
-    /// Ensembl VEP 116.2 never hands AVI a structural variant: the module keeps
+    /// Ensembl VEP 116.3 never hands AVI a structural variant: the module keeps
     /// the default `variant_feature_types` of `['VariationFeature']`
     /// (BaseVepPlugin.pm:100), which the dispatch checks before running a
-    /// plugin on a line (OutputFactory.pm:2220). A `<DEL>` gets no field, and
+    /// plugin on a line (OutputFactory.pm:2229). A `<DEL>` gets no field, and
     /// nor does a scored substitution carrying the structural mark, which pins
     /// the gate rather than the allele test; the plain substitution is scored.
     #[test]

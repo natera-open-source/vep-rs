@@ -1,0 +1,301 @@
+{
+ "records": [
+  {
+   "dataset": "pool",
+   "vcf": "1\t202\trec_two\tA\tG\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "1\t202\trec_two_reverse\tA\tG\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "1\t199\trec_acceptor_alone\tA\tG\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "1\t205\trec_donor_alone\tA\tG\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "1\t150\trec_no_window\tA\tG\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "1\t202\trec_one_intron\tA\tG\t.\tPASS\t.",
+   "combinations": []
+  }
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {},
+ "fields_compared": [
+  "MaxEntScan_ref",
+  "MaxEntScan_alt",
+  "MaxEntScan_diff"
+ ],
+ "field_divergences": [
+  {
+   "location": "1:150",
+   "allele": "G",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    4
+   ],
+   "consequence_set": "splice_region_variant",
+   "field": "MaxEntScan_ref",
+   "vep": "8.100",
+   "vep_rs": "6.400",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:150",
+   "allele": "G",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    4
+   ],
+   "consequence_set": "splice_region_variant",
+   "field": "MaxEntScan_alt",
+   "vep": "2.300",
+   "vep_rs": "1.100",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:150",
+   "allele": "G",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    4
+   ],
+   "consequence_set": "splice_region_variant",
+   "field": "MaxEntScan_diff",
+   "vep": "5.800",
+   "vep_rs": "5.300",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:199",
+   "allele": "G",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    2
+   ],
+   "consequence_set": "splice_region_variant",
+   "field": "MaxEntScan_ref",
+   "vep": "8.100",
+   "vep_rs": "6.400",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:199",
+   "allele": "G",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    2
+   ],
+   "consequence_set": "splice_region_variant",
+   "field": "MaxEntScan_alt",
+   "vep": "2.300",
+   "vep_rs": "1.100",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:199",
+   "allele": "G",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    2
+   ],
+   "consequence_set": "splice_region_variant",
+   "field": "MaxEntScan_diff",
+   "vep": "5.800",
+   "vep_rs": "5.300",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:202",
+   "allele": "G",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "splice_region_variant",
+   "field": "MaxEntScan_ref",
+   "vep": "8.100",
+   "vep_rs": "6.400",
+   "expected_divergence": "maxentscan_overlapping_windows"
+  },
+  {
+   "location": "1:202",
+   "allele": "G",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "splice_region_variant",
+   "field": "MaxEntScan_alt",
+   "vep": "2.300",
+   "vep_rs": "1.100",
+   "expected_divergence": "maxentscan_overlapping_windows"
+  },
+  {
+   "location": "1:202",
+   "allele": "G",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "splice_region_variant",
+   "field": "MaxEntScan_diff",
+   "vep": "5.800",
+   "vep_rs": "5.300",
+   "expected_divergence": "maxentscan_overlapping_windows"
+  },
+  {
+   "location": "1:202",
+   "allele": "G",
+   "feature": "ENST2",
+   "feature_type": "Transcript",
+   "record_indices": [
+    1
+   ],
+   "consequence_set": "splice_region_variant",
+   "field": "MaxEntScan_ref",
+   "vep": "8.100",
+   "vep_rs": "6.400",
+   "expected_divergence": "maxentscan_overlapping_windows"
+  },
+  {
+   "location": "1:202",
+   "allele": "G",
+   "feature": "ENST2",
+   "feature_type": "Transcript",
+   "record_indices": [
+    1
+   ],
+   "consequence_set": "splice_region_variant",
+   "field": "MaxEntScan_alt",
+   "vep": "2.300",
+   "vep_rs": "1.100",
+   "expected_divergence": "maxentscan_overlapping_windows"
+  },
+  {
+   "location": "1:202",
+   "allele": "G",
+   "feature": "ENST2",
+   "feature_type": "Transcript",
+   "record_indices": [
+    1
+   ],
+   "consequence_set": "splice_region_variant",
+   "field": "MaxEntScan_diff",
+   "vep": "5.800",
+   "vep_rs": "5.300",
+   "expected_divergence": "maxentscan_overlapping_windows"
+  },
+  {
+   "location": "1:202",
+   "allele": "G",
+   "feature": "ENST3",
+   "feature_type": "Transcript",
+   "record_indices": [
+    5
+   ],
+   "consequence_set": "splice_region_variant",
+   "field": "MaxEntScan_ref",
+   "vep": "8.100",
+   "vep_rs": "6.400",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:202",
+   "allele": "G",
+   "feature": "ENST3",
+   "feature_type": "Transcript",
+   "record_indices": [
+    5
+   ],
+   "consequence_set": "splice_region_variant",
+   "field": "MaxEntScan_alt",
+   "vep": "2.300",
+   "vep_rs": "1.100",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:202",
+   "allele": "G",
+   "feature": "ENST3",
+   "feature_type": "Transcript",
+   "record_indices": [
+    5
+   ],
+   "consequence_set": "splice_region_variant",
+   "field": "MaxEntScan_diff",
+   "vep": "5.800",
+   "vep_rs": "5.300",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:205",
+   "allele": "G",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    3
+   ],
+   "consequence_set": "splice_region_variant",
+   "field": "MaxEntScan_ref",
+   "vep": "8.100",
+   "vep_rs": "6.400",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:205",
+   "allele": "G",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    3
+   ],
+   "consequence_set": "splice_region_variant",
+   "field": "MaxEntScan_alt",
+   "vep": "2.300",
+   "vep_rs": "1.100",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "1:205",
+   "allele": "G",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    3
+   ],
+   "consequence_set": "splice_region_variant",
+   "field": "MaxEntScan_diff",
+   "vep": "5.800",
+   "vep_rs": "5.300",
+   "expected_divergence": "unexplained_residual"
+  }
+ ],
+ "field_divergence_summary": {
+  "unexplained_residual": 12,
+  "maxentscan_overlapping_windows": 6
+ }
+}

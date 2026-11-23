@@ -267,3 +267,161 @@ def test_cli_writes_scores_and_checks(tmp_path, capsys):
     spec = tmp_path / "kmers.txt"
     spec.write_text("CAGGTAAGT\nCAGGTAAGT,AAGGTAAGT\n\n")
     assert mfm.main(["--dir", str(out), "--check-kmers", str(spec)]) == 0
+
+
+# Four made-up 23-mers; the last reads one line of `me2x3acc6` that the first reads too.
+BOUNDARY_KMERS = [
+    "ACGTACGTACGTACGTACAGGTA",
+    "TTGACCATGGATCCAAGTAGCAT",
+    "GGGGCCCCAAAATTTTGGCCAAT",
+    "TTTTACGTTTTCCCCGGGAGAAA",
+]
+
+
+@pytest.fixture(scope="module")
+def whole_numbers(tmp_path_factory) -> tuple[Path, dict]:
+    out = tmp_path_factory.mktemp("maxentscan_whole") / "fordownload_synthetic"
+    summary = mfm.write_directory(
+        out, seed=1, force=False, whole_numbers=True, boundary_kmers=BOUNDARY_KMERS
+    )
+    return out, summary
+
+
+def test_whole_numbers_are_digits_alone_in_the_eleven_tables_alone(tmp_path):
+    summary = mfm.write_directory(tmp_path, seed=1, force=False, whole_numbers=True)
+    assert summary["other_files"] == {}
+    assert sorted(p.relative_to(tmp_path).as_posix() for p in tmp_path.rglob("*") if p.is_file()) == sorted(
+        EXPECTED_LINES
+    )
+    largest = 0
+    for name, count in EXPECTED_LINES.items():
+        lines = (tmp_path / name).read_text().splitlines()
+        assert len(lines) == count, name
+        if name.endswith("splice5sequences"):
+            # The 7-mers stand in the order the seed gives them under every spelling.
+            assert lines == mfm.file_lines(1)[name]
+            continue
+        assert all(line.isascii() and line.isdigit() and line[0] != "0" for line in lines), name
+        assert all(1 <= int(line) < 2**mfm.WHOLE_NUMBER_BITS for line in lines), name
+        largest = max(largest, *(int(line) for line in lines))
+    # Two entries can multiply past 2**53, the last power of two with every whole number below
+    # it a double.
+    assert largest * largest > 2**53
+
+
+def test_whole_numbers_come_from_a_generator_of_their_own():
+    assert mfm.whole_number_lines(7) == mfm.whole_number_lines(7)
+    assert mfm.whole_number_lines(7)["me2x5"] != mfm.whole_number_lines(8)["me2x5"]
+    # The decimals of a seed do not depend on the whole numbers drawn for it.
+    before = mfm.file_lines(7)
+    mfm.whole_number_lines(7)
+    assert mfm.file_lines(7) == before
+
+
+def test_perl_number_reads_each_spelling_this_tool_writes():
+    assert mfm.perl_number("12") == 12 and isinstance(mfm.perl_number("12"), int)
+    assert mfm.perl_number(" 12 ") == 12 and isinstance(mfm.perl_number(" 12 "), int)
+    assert mfm.perl_number("18446744073709551615") == 2**64 - 1
+    assert isinstance(mfm.perl_number("18446744073709551616"), float)
+    point = mfm.perl_number("12.00000")
+    assert point == 12.0 and isinstance(point, mfm.PointNumber)
+    # An exponent spelling of a whole number is an integer to Perl; any other is a double.
+    assert mfm.perl_number("1.200000e+01") == 12 and isinstance(mfm.perl_number("1.200000e+01"), int)
+    half = mfm.perl_number("1.250000e+01")
+    assert half == 12.5 and not isinstance(half, (int, mfm.PointNumber))
+
+
+def test_perl_multiply_and_divide_are_the_results_perl_prints():
+    # Each value is the one `perl` 5.34 on a 64-bit build prints for the same operands.
+    square = 300000007 * 300000007
+    assert mfm.perl_multiply(300000007, 300000007) == 90000004200000049 == square
+    assert isinstance(mfm.perl_multiply(300000007, 300000007), int)
+    assert mfm.perl_multiply(4294967295, 4294967297) == 2**64 - 1
+    past = mfm.perl_multiply(4294967297, 4294967297)
+    assert isinstance(past, float) and past.hex() == "0x1.0000000200000p+64"
+    assert mfm.perl_multiply(-4294967296, 2147483648) == -(2**63)
+    assert isinstance(mfm.perl_multiply(-4294967296, 2147483649), float)
+    # A number written with a decimal point is multiplied as a double whatever its value:
+    # the product has rounded to the double below the square.
+    rounded = mfm.perl_multiply(mfm.PointNumber(300000007.0), 300000007)
+    assert isinstance(rounded, float) and int(rounded) == square - 1
+    # A product in doubles that is a whole number below 2**53 is an integer again.
+    assert mfm.perl_multiply(mfm.perl_multiply(0.5, 4), square) == 180000008400000098
+    odd = 2**56 + 1
+    assert mfm.perl_divide(odd * 3, 3) == odd and isinstance(mfm.perl_divide(odd * 3, 3), int)
+    assert mfm.perl_divide(odd * 9, 9) == odd
+    uneven = mfm.perl_divide(odd * 3, 7)
+    assert isinstance(uneven, float) and uneven.hex() == "0x1.b6db6db6db6dbp+54"
+    # The dividend must be past 2**53 for an integer quotient.
+    assert mfm.perl_divide(2**53, 2) == 2.0**52 and isinstance(mfm.perl_divide(2**53, 2), float)
+    just_past = 134217728 * 67108865
+    assert mfm.perl_divide(just_past, 134217728) == 67108865
+    assert isinstance(mfm.perl_divide(just_past, 134217728), int)
+    assert isinstance(mfm.perl_divide(6, 3), float)
+    assert mfm.perl_divide(-(odd * 3), 3) == -odd
+    assert mfm.perl_divide(2**64 - 1, -1) == -float(2**64)
+    with pytest.raises(ZeroDivisionError):
+        mfm.perl_divide(5, 0)
+
+
+def test_a_boundary_kmer_prints_another_third_decimal_with_the_product_in_doubles(whole_numbers):
+    out, _ = whole_numbers
+    tables = mfm.Tables(out)
+    for kmer in BOUNDARY_KMERS:
+        entries = tables.entries(kmer)
+        assert all(isinstance(entry, int) for entry in entries), kmer
+        assert 2**52 <= entries[0] < 2**53, kmer
+        as_perl, in_doubles = tables.score3(kmer), tables.score3_in_doubles(kmer)
+        printed = mfm.format_score(as_perl), mfm.format_score(in_doubles)
+        assert round(abs(float(printed[0]) - float(printed[1])), 3) == 0.001, (kmer, printed)
+        # The two scores are neighbours: the product moved by its last binary place or two.
+        assert abs(as_perl - in_doubles) < 1e-14, kmer
+        assert abs(as_perl) < mfm.BOUNDARY_SPAN / 1000.0, kmer
+    # The boundary guard names each of them.
+    assert mfm.check_kmers(tables, BOUNDARY_KMERS) == BOUNDARY_KMERS
+
+
+def test_a_later_boundary_kmer_keeps_the_line_an_earlier_one_wrote(whole_numbers):
+    out, _ = whole_numbers
+    first, last = BOUNDARY_KMERS[0], BOUNDARY_KMERS[3]
+    shared = [
+        place
+        for place, (a, b) in enumerate(zip(mfm.acceptor_lines(first), mfm.acceptor_lines(last)))
+        if a == b
+    ]
+    assert shared == [5]
+    tables = mfm.Tables(out)
+    assert tables.entries(first)[5] == tables.entries(last)[5]
+    # The same k-mers in another order are written again at a boundary, the shared line the
+    # first one's.
+    files = mfm.whole_number_lines(1)
+    mfm.with_boundary_kmers(files, 1, [last, first])
+    name, line = mfm.acceptor_lines(last)[5]
+    assert int(files[name][line]) != tables.entries(first)[5]
+
+
+def test_the_boundary_entries_of_a_seed_do_not_depend_on_the_other_kmers(whole_numbers):
+    out, _ = whole_numbers
+    files = mfm.whole_number_lines(1)
+    mfm.with_boundary_kmers(files, 1, BOUNDARY_KMERS[1:2])
+    for name, line in mfm.acceptor_lines(BOUNDARY_KMERS[1]):
+        assert files[name][line] == (out / name).read_text().splitlines()[line]
+
+
+def test_cli_writes_whole_numbers_and_refuses_what_they_do_not_go_with(tmp_path, capsys):
+    out = tmp_path / "fordownload_synthetic"
+    arguments = ["--seed", "1", "--out", str(out), "--whole-numbers", "--boundary-kmers", *BOUNDARY_KMERS[:2]]
+    assert mfm.main(arguments) == 0
+    assert '"other_files": {}' in capsys.readouterr().out
+    assert (out / "me2x5").read_text().splitlines()[0].isdigit()
+    assert mfm.main(["--dir", str(out), "--score", BOUNDARY_KMERS[0]]) == 0
+    kmer, score = capsys.readouterr().out.strip().split("\t")
+    assert score == mfm.format_score(mfm.Tables(out).score3(kmer))
+    # A boundary k-mer is a 23-mer over ACGT.
+    short = ["--seed", "1", "--out", str(tmp_path / "short"), "--whole-numbers", "--boundary-kmers", "ACGT"]
+    assert mfm.main(short) == 1
+    assert "a boundary k-mer is a 23-mer over ACGT" in capsys.readouterr().err
+    with pytest.raises(SystemExit):
+        mfm.main(["--seed", "1", "--out", str(tmp_path / "decimals"), "--boundary-kmers", BOUNDARY_KMERS[0]])
+    with pytest.raises(SystemExit):
+        mfm.main(["--seed", "1", "--out", str(tmp_path / "both"), "--whole-numbers", "--plain-lines"])

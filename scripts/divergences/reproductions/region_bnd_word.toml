@@ -1,7 +1,7 @@
 entry = "region_bnd_word"
 page = "docs/divergences/region-input.md#a-bnd-word"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "malformed"
 input_class_basis = "Breakends are only supported for VCF input format (Ensembl VEP documentation, \"Data formats\", Structural variant types, BND): a region record names the structural word BND in the place of its allele"
 notes = "A region whose allele is the structural word BND: Ensembl VEP builds it with no allele string, dies reading its breakends (exit 255, `Can't use an undefined value as an ARRAY reference`) and writes no row; vep-rs annotates a chromosome_breakpoint over the span, one row per overlapping transcript, one of them compared."
@@ -31,3 +31,7 @@ where = { record = "21:14221000-14222000/BND", feature = "ENST00000400577" }
 ensembl_vep_exit = 255
 ensembl_vep = []
 vep_rs = ["21:14221000-14222000 | chromosome_breakpoint | ENST00000400577 | coding_sequence_variant,intron_variant"]
+
+[implementation]
+code = ["crates/vep-io/src/input/ensembl.rs::structural_variant"]
+tests = ["crates/vep-cli/tests/reader_and_writer_documented_rows.rs::a_region_whose_allele_is_the_word_bnd_is_a_chromosome_breakpoint_over_its_span"]

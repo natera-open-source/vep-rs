@@ -1,0 +1,15 @@
+shape	first_column	location	allele	taken	insertion
+two bases replaced by three	19_13208046_AC/GTT	19:13208046-13208047	GTT	no	no
+two bases replaced by three, the first base shared	19_13208046_AC/AGT	19:13208046-13208047	AGT	no	no
+a deletion written as a sequence	19_13208046_AC/A/T	19:13208046-13208047	A	no	no
+an insertion kept with its shared first base	19_13208046_A/AC/T	19:13208046	AC	no	no
+an insertion's alleles at one position	19_13208046_-/TGA	19:13208046	TGA	no	yes
+an allele no alternate names beside a reference allele of two	19_13208046_AC/A/T	19:13208046-13208047	GTT	no	no
+a two-base allele under an identifier	1993671	19:13208046-13208047	CG	no	none
+an insertion, the reference allele empty	19_13208046_-/TGA	19:13208046-13208047	TGA	yes	yes
+an insertion spelt with its shared first base	19_13208046_A/ATGA	19:13208046-13208047	TGA	yes	yes
+an insertion of two bases, the alleles spelt	19_13208046_-/CG/T	19:13208046-13208047	CG	yes	yes
+an allele no alternate names beside an empty reference allele	19_13208046_-/CG/T	19:13208046-13208047	TGA	yes	yes
+an insertion under an identifier	1993671	19:13208046-13208047	TGA	yes	none
+under an identifier, two bases replaced by one	1993671	19:13208046-13208047	G	yes	none
+under an identifier, two bases replaced by three	1993671	19:13208046-13208047	CGT	yes	none

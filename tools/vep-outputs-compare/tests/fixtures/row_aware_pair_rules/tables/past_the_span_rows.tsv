@@ -1,0 +1,35 @@
+shape	reference_terms	candidate_terms	allele	location	cdna	cds	candidate_cdna	candidate_cds	feature_type	taken
+the donor term gone and the region term back	splice_donor_variant,frameshift_variant	frameshift_variant,splice_region_variant	GTTCA	7:100998-101000	998-1000	898-900	998-1000	898-900	Transcript	yes
+the donor term gone and nothing back	splice_donor_variant,frameshift_variant	frameshift_variant	GTTCA	7:100998-101000	998-1000	898-900	998-1000	898-900	Transcript	yes
+the donor and the donor region term gone	splice_donor_variant,frameshift_variant,splice_donor_region_variant	frameshift_variant,splice_region_variant	GTTCA	7:100998-101000	998-1000	898-900	998-1000	898-900	Transcript	yes
+the donor and the fifth base term gone	splice_donor_variant,frameshift_variant,splice_donor_5th_base_variant	frameshift_variant	GTTCAGGAT	7:100998-101000	998-1000	898-900	998-1000	898-900	Transcript	yes
+the acceptor term gone at an exon's first positions	splice_acceptor_variant,frameshift_variant	frameshift_variant,splice_region_variant	GTTCA	7:100998-101000	901-903	801-803	901-903	801-803	Transcript	yes
+the acceptor and the tract term gone	splice_acceptor_variant,frameshift_variant,splice_polypyrimidine_tract_variant	frameshift_variant,splice_region_variant	GTTCA	7:100998-101000	901-903	801-803	901-903	801-803	Transcript	yes
+the tract term alone gone and nothing back	frameshift_variant,splice_polypyrimidine_tract_variant	frameshift_variant	GTTCA	7:100998-101000	901-903	801-803	901-903	801-803	Transcript	yes
+the intron term gone with the donor and the donor region term	splice_donor_variant,frameshift_variant,splice_donor_region_variant,intron_variant	frameshift_variant,splice_region_variant	GTTCA	7:100998-101000	998-1000	898-900	998-1000	898-900	Transcript	yes
+the intron term gone with the donor and the fifth base term	splice_donor_variant,frameshift_variant,splice_donor_5th_base_variant,intron_variant	frameshift_variant	GTTCAGGAT	7:100998-101000	998-1000	898-900	998-1000	898-900	Transcript	yes
+the intron term gone with the acceptor term	splice_acceptor_variant,frameshift_variant,intron_variant	frameshift_variant,splice_region_variant	GTTCA	7:100998-101000	901-903	801-803	901-903	801-803	Transcript	yes
+the intron term alone gone and nothing back	frameshift_variant,intron_variant	frameshift_variant	GTTCA	7:100998-101000	998-1000	898-900	998-1000	898-900	Transcript	yes
+four positions under an allele of five	splice_donor_variant,frameshift_variant	frameshift_variant,splice_region_variant	GTTCA	7:100997-101000	997-1000	897-900	997-1000	897-900	Transcript	yes
+positions with the transcript's lengths appended	splice_donor_variant,frameshift_variant	frameshift_variant,splice_region_variant	GTTCA	7:100998-101000	998-1000/2400	898-900/1800	998-1000/2400	898-900/1800	Transcript	yes
+a span across an exon's end	splice_donor_variant,frameshift_variant	frameshift_variant,splice_region_variant	GTTCA	7:100998-101000	999-?	899-?	999-?	899-?	Transcript	no
+an intron span	splice_donor_variant,intron_variant	intron_variant	GTTCA	7:100998-101000	-	-	-	-	Transcript	no
+an allele as long as the span	splice_donor_variant,frameshift_variant	frameshift_variant	GTT	7:100998-101000	998-1000	898-900	998-1000	898-900	Transcript	no
+an allele shorter than the span	splice_donor_variant,frameshift_variant	frameshift_variant	GT	7:100998-101000	998-1000	898-900	998-1000	898-900	Transcript	no
+a Location of one position	splice_donor_variant,frameshift_variant	frameshift_variant	GTT	7:101000	1000	900	1000	900	Transcript	no
+a deletion	splice_donor_variant,frameshift_variant	frameshift_variant	-	7:100998-101000	998-1000	898-900	998-1000	898-900	Transcript	no
+an insertion between two neighbouring positions	splice_donor_variant,frameshift_variant	frameshift_variant	GTT	7:100999-101000	999-1000	899-900	999-1000	899-900	Transcript	no
+two replaced bases	splice_donor_variant,frameshift_variant	frameshift_variant,splice_region_variant	GTTCA	7:100999-101000	999-1000	899-900	999-1000	899-900	Transcript	no
+one of the five splice terms kept	splice_donor_variant,frameshift_variant,splice_donor_5th_base_variant	frameshift_variant,splice_donor_5th_base_variant	GTTCA	7:100998-101000	998-1000	898-900	998-1000	898-900	Transcript	no
+the intron term kept where the donor term is gone	splice_donor_variant,frameshift_variant,intron_variant	frameshift_variant,splice_region_variant,intron_variant	GTTCA	7:100998-101000	998-1000	898-900	998-1000	898-900	Transcript	no
+the intron term kept and nothing back	splice_donor_variant,frameshift_variant,intron_variant	frameshift_variant,intron_variant	GTTCA	7:100998-101000	998-1000	898-900	998-1000	898-900	Transcript	no
+the donor region term come	splice_donor_variant,frameshift_variant,splice_donor_5th_base_variant	frameshift_variant,splice_donor_region_variant	GTTCA	7:100998-101000	998-1000	898-900	998-1000	898-900	Transcript	no
+the region term come where the tract term alone is gone	frameshift_variant,splice_polypyrimidine_tract_variant	frameshift_variant,splice_region_variant	GTTCA	7:100998-101000	901-903	801-803	901-903	801-803	Transcript	no
+the region term come where the intron term alone is gone	frameshift_variant,intron_variant	frameshift_variant,splice_region_variant	GTTCA	7:100998-101000	998-1000	898-900	998-1000	898-900	Transcript	no
+other cDNA positions on vep-rs's row	splice_donor_variant,frameshift_variant	frameshift_variant,splice_region_variant	GTTCA	7:100998-101000	998-1000	898-900	498-500	898-900	Transcript	no
+other CDS positions on vep-rs's row	splice_donor_variant,frameshift_variant	frameshift_variant,splice_region_variant	GTTCA	7:100998-101000	998-1000	898-900	998-1000	398-400	Transcript	no
+cDNA positions further apart than the Location's ends	splice_donor_variant,frameshift_variant	frameshift_variant,splice_region_variant	GTTCA	7:100998-101000	997-1000	897-900	997-1000	897-900	Transcript	no
+the terms the other way round	frameshift_variant,splice_region_variant	splice_donor_variant,frameshift_variant	GTTCA	7:100998-101000	998-1000	898-900	998-1000	898-900	Transcript	no
+a further term gone	splice_donor_variant,frameshift_variant	splice_region_variant	GTTCA	7:100998-101000	998-1000	898-900	998-1000	898-900	Transcript	no
+a further term come	splice_donor_variant,frameshift_variant	stop_gained,frameshift_variant,splice_region_variant	GTTCA	7:100998-101000	998-1000	898-900	998-1000	898-900	Transcript	no
+a row of another feature type	splice_donor_variant,frameshift_variant	frameshift_variant,splice_region_variant	GTTCA	7:100998-101000	998-1000	898-900	998-1000	898-900	RegulatoryFeature	no

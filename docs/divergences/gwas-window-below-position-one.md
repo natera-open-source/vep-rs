@@ -6,11 +6,11 @@
 
 **What vep-rs does instead.** vep-rs clamps the window at position 1 and matches the record against the rows it holds, so a catalog row at position 1 or 2 annotates its record as a row anywhere else does.
 
-**Where it is in Ensembl VEP's source** (`VEP_plugins` at release/116, `ensembl-variation` at release/116, `ensembl-vep` at release/116.2):
+**Where it is in Ensembl VEP's source** (`VEP_plugins` at release/116, `ensembl-variation` at release/116, `ensembl-vep` at release/116.3):
 
 - `GWAS.pm`, line 176, `run`: `get_data($vf->{chr}, $vf->{start} - 2, $vf->{end})`.
 - `Bio/EnsEMBL/Variation/Utils/BaseVepTabixPlugin.pm`, line 354, `get_data`: `die("ERROR: No start specified\n") unless $s`, which a start of 0 fails; lines 596-602, `_get_data_hts`: the region is formatted `chr:start-end`, and `21:-1-1` is refused by the reader with `You must specify a region in the format chr, chr:start or chr:start-end`.
-- `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 2243-2245: the exception from the plugin's `run` becomes the warning `Plugin 'GWAS' went wrong: <reason>` and the row is written without the plugin's fields.
+- `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 2252-2254: the exception from the plugin's `run` becomes the warning `Plugin 'GWAS' went wrong: <reason>` and the row is written without the plugin's fields.
 
 **What correcting it would change.** A record at position 1 or 2 would be matched against the rows from position 1 to its end, as vep-rs matches it, and the warning would go.
 

@@ -1,0 +1,7 @@
+##fileformat=VCFv4.2
+##source=tests/golden/116/GRCh38-refseq/variants.vcf
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+21	9882327	HGSV_241107	C	<INS:ME:ALU>	.	.	.
+21	13600261	.	GCC	G	.	.	.
+21	20929268	rs1984286212	A	G	.	.	.
+21	45505187	rs749541171	A	AC	.	.	.

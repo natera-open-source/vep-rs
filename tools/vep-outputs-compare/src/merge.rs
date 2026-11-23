@@ -13,7 +13,7 @@ use crate::sort::SortedKeys;
 use std::fmt;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// A side of the comparison, named in a message by the option that gives its directory.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -31,27 +31,61 @@ impl Side {
     }
 }
 
-#[derive(Debug)]
-enum Place {
-    /// The key of this number among those the merge read on the side, counted from 1, and
-    /// the partition merged where the merge is of one.
-    Key {
-        number: u64,
-        partition: Option<usize>,
-    },
-    /// The first key of `partition`, held against the last key of the partition `before`.
-    FirstKey { partition: usize, before: usize },
-}
-
 /// The refusal of a key that does not sort after the key before it on its side. The merge
 /// steps forward on the comparison of the two current keys alone, so past such a key it
 /// would count a key both sides hold as missing and as extra at once. The message names the
-/// side and the place and never the key.
+/// side and, once [`written_at`] has placed the two keys, the output file and the line of it
+/// that first writes each. It never names a key, which holds a row's Location, allele,
+/// feature and consequence terms, and it names no partition and no place among the keys a
+/// merge read, so one fault reads the same at any thread count.
 #[derive(Debug)]
 pub struct KeyOrderError {
     side: Side,
-    place: Place,
     collapsed: bool,
+    /// The key that does not sort after `before`, the key before it on its side.
+    key: Vec<u8>,
+    before: Vec<u8>,
+    written_at: Option<WrittenAt>,
+}
+
+/// Where a side's output file writes the two keys of a [`KeyOrderError`]: the file, and the
+/// lines of it that first write `key` and `before`.
+#[derive(Debug)]
+struct WrittenAt {
+    output: PathBuf,
+    key_line: u64,
+    before_line: u64,
+}
+
+impl KeyOrderError {
+    fn of(side: Side, key: &[u8], before: &[u8]) -> KeyOrderError {
+        KeyOrderError {
+            side,
+            collapsed: false,
+            key: key.to_vec(),
+            before: before.to_vec(),
+            written_at: None,
+        }
+    }
+
+    pub fn side(&self) -> Side {
+        self.side
+    }
+
+    /// Whether the keys are context-collapsed ones.
+    pub fn collapsed(&self) -> bool {
+        self.collapsed
+    }
+
+    /// The key that does not sort after the key before it.
+    pub fn key(&self) -> &[u8] {
+        &self.key
+    }
+
+    /// The key before [`KeyOrderError::key`] on its side.
+    pub fn before(&self) -> &[u8] {
+        &self.before
+    }
 }
 
 impl fmt::Display for KeyOrderError {
@@ -61,21 +95,17 @@ impl fmt::Display for KeyOrderError {
             false => "keys",
         };
         let side = self.side.option();
-        write!(f, "the sorted {keys} of the {side} side do not ascend at ")?;
-        match self.place {
-            Place::Key {
-                number,
-                partition: None,
-            } => write!(f, "key {number}")?,
-            Place::Key {
-                number,
-                partition: Some(partition),
-            } => write!(f, "key {number} of partition {partition}")?,
-            Place::FirstKey { partition, before } => write!(
+        write!(f, "the sorted {keys} of the {side} side do not ascend: ")?;
+        match &self.written_at {
+            Some(at) => write!(
                 f,
-                "the first key of partition {partition}, which does not sort after the last \
-                 key of partition {before}"
+                "the key of line {} of {} does not sort after the key of line {}, which stands \
+                 before it",
+                at.key_line,
+                at.output.display(),
+                at.before_line
             )?,
+            None => f.write_str("a key of the side does not sort after the key before it")?,
         }
         f.write_str("; the comparison needs each side's keys in order with every key once")
     }
@@ -93,22 +123,31 @@ fn key_order_of(error: &mut io::Error) -> Option<&mut KeyOrderError> {
     error.get_mut()?.downcast_mut()
 }
 
-/// Whether `error` is the refusal of keys that do not ascend.
-pub fn is_key_order(error: &io::Error) -> bool {
-    error
-        .get_ref()
-        .is_some_and(|inner| inner.is::<KeyOrderError>())
+/// The refusal of keys that do not ascend that `error` carries, None for any other error.
+pub fn key_order(error: &io::Error) -> Option<&KeyOrderError> {
+    error.get_ref()?.downcast_ref()
 }
 
-/// `error` with `partition` named as the place of the merge, where it is the refusal of
+/// Whether `error` is the refusal of keys that do not ascend.
+pub fn is_key_order(error: &io::Error) -> bool {
+    key_order(error).is_some()
+}
+
+/// `error` with the output file of its side and the lines of that file that first write its
+/// key and the key before it named as the places of the two keys, where it is the refusal of
 /// keys that do not ascend.
-pub fn in_partition(mut error: io::Error, partition: usize) -> io::Error {
-    if let Some(KeyOrderError {
-        place: Place::Key { partition: of, .. },
-        ..
-    }) = key_order_of(&mut error)
-    {
-        *of = Some(partition);
+pub fn written_at(
+    mut error: io::Error,
+    output: &Path,
+    key_line: u64,
+    before_line: u64,
+) -> io::Error {
+    if let Some(order) = key_order_of(&mut error) {
+        order.written_at = Some(WrittenAt {
+            output: output.to_path_buf(),
+            key_line,
+            before_line,
+        });
     }
     error
 }
@@ -154,16 +193,11 @@ impl PartitionOrder {
         let Some((first, last)) = ends else {
             return Ok(());
         };
-        if let Some((before, previous)) = &self.last {
+        if let Some((_, previous)) = &self.last {
             if first <= *previous {
-                let before = *before;
+                let refusal = KeyOrderError::of(self.side, &first, previous);
                 self.refused = Some(first);
-                return Err(KeyOrderError {
-                    side: self.side,
-                    place: Place::FirstKey { partition, before },
-                    collapsed: false,
-                }
-                .into());
+                return Err(refusal.into());
             }
         }
         self.last = Some((partition, last));
@@ -284,20 +318,13 @@ impl KeyStream for MemoryKeys<'_> {
     }
 }
 
-/// Steps `stream` to its next key, the one after the `read` keys the merge has read on
-/// `side`, which must sort after the key before it.
-fn advance_ascending(stream: &mut impl KeyStream, side: Side, read: u64) -> io::Result<()> {
+/// Steps `stream` to its next key on `side`, which must sort after the key before it.
+fn advance_ascending(stream: &mut impl KeyStream, side: Side) -> io::Result<()> {
     stream.advance()?;
     match (stream.previous(), stream.current()) {
-        (Some(previous), Some(key)) if key <= previous => Err(KeyOrderError {
-            side,
-            place: Place::Key {
-                number: read + 1,
-                partition: None,
-            },
-            collapsed: false,
+        (Some(previous), Some(key)) if key <= previous => {
+            Err(KeyOrderError::of(side, key, previous).into())
         }
-        .into()),
         _ => Ok(()),
     }
 }
@@ -401,7 +428,7 @@ pub fn merge_keys<W: Write + ?Sized>(
                     out.write_all(p)?;
                     out.write_all(b"\n")?;
                 }
-                advance_ascending(perl, Side::Reference, counts.perl_count)?;
+                advance_ascending(perl, Side::Reference)?;
             }
             (p, Some(r)) if p.is_none_or(|p| r < p) => {
                 counts.rust_count += 1;
@@ -416,15 +443,15 @@ pub fn merge_keys<W: Write + ?Sized>(
                     extra_rows.extend_from_slice(r);
                     extra_rows.push(b'\n');
                 }
-                advance_ascending(rust, Side::Scored, counts.rust_count)?;
+                advance_ascending(rust, Side::Scored)?;
             }
             (Some(p), Some(_)) => {
                 counts.perl_count += 1;
                 counts.rust_count += 1;
                 counts.intersection += 1;
                 observe(&mut collector, file_name, p, true, true);
-                advance_ascending(perl, Side::Reference, counts.perl_count)?;
-                advance_ascending(rust, Side::Scored, counts.rust_count)?;
+                advance_ascending(perl, Side::Reference)?;
+                advance_ascending(rust, Side::Scored)?;
             }
             _ => unreachable!("one side is present"),
         }
@@ -493,26 +520,37 @@ mod tests {
         Ok((counts, rows))
     }
 
-    /// The message both merges stop with, which names no key.
-    fn stop_of(reference: &[&str], scored: &[&str]) -> String {
-        let messages = [
+    /// What both merges stop with, the same over key files and over keys in memory: the
+    /// message, the key the stop is on and the key before it.
+    fn stop_of(reference: &[&str], scored: &[&str]) -> (String, String, String) {
+        let stops = [
             merge_of_files(reference, scored),
             merge_in_memory(reference, scored),
         ]
         .map(|merged| match merged {
-            Err(error) => error.to_string(),
+            Err(error) => {
+                let order = key_order(&error).expect("the refusal of keys that do not ascend");
+                let text = |key: &[u8]| String::from_utf8(key.to_vec()).unwrap();
+                (error.to_string(), text(order.key()), text(order.before()))
+            }
             Ok((counts, _)) => panic!(
                 "the merge went on and counted {} keys on both sides, {} missing and {} extra",
                 counts.intersection, counts.missing, counts.extra
             ),
         });
-        assert_eq!(messages[0], messages[1], "key files against keys in memory");
-        for key in KEYS {
-            for field in key.split('\t').filter(|field| field.len() > 1) {
-                assert!(!messages[0].contains(field), "{}", messages[0]);
-            }
-        }
-        messages[0].clone()
+        assert_eq!(stops[0], stops[1], "key files against keys in memory");
+        stops[0].clone()
+    }
+
+    /// A stop on `key` behind the key `before` on the side `option` names, as [`stop_of`]
+    /// gives it, with the message of a stop whose keys no line of an output file is named
+    /// for: it names the side and neither key.
+    fn stop_on(option: &str, key: &str, before: &str) -> (String, String, String) {
+        let message = format!(
+            "the sorted keys of the {option} side do not ascend: a key of the side does not \
+             sort after the key before it{NEEDS}"
+        );
+        (message, key.to_string(), before.to_string())
     }
 
     #[test]
@@ -543,7 +581,7 @@ mod tests {
     fn a_reference_key_below_the_key_before_it_stops_the_merge() {
         assert_eq!(
             stop_of(&[KEYS[0], KEYS[2], KEYS[1], KEYS[3]], &KEYS),
-            format!("the sorted keys of the --perl-dir side do not ascend at key 3{NEEDS}")
+            stop_on("--perl-dir", KEYS[1], KEYS[2])
         );
     }
 
@@ -551,7 +589,7 @@ mod tests {
     fn a_scored_key_below_the_key_before_it_stops_the_merge() {
         assert_eq!(
             stop_of(&KEYS, &[KEYS[0], KEYS[1], KEYS[3], KEYS[2]]),
-            format!("the sorted keys of the --rust-dir side do not ascend at key 4{NEEDS}")
+            stop_on("--rust-dir", KEYS[2], KEYS[3])
         );
     }
 
@@ -559,34 +597,50 @@ mod tests {
     fn a_key_written_twice_stops_the_merge() {
         assert_eq!(
             stop_of(&[KEYS[0], KEYS[1], KEYS[1], KEYS[2]], &KEYS[..3]),
-            format!("the sorted keys of the --perl-dir side do not ascend at key 3{NEEDS}")
+            stop_on("--perl-dir", KEYS[1], KEYS[1])
         );
         assert_eq!(
             stop_of(&KEYS[..2], &[KEYS[0], KEYS[0], KEYS[1]]),
-            format!("the sorted keys of the --rust-dir side do not ascend at key 2{NEEDS}")
+            stop_on("--rust-dir", KEYS[0], KEYS[0])
         );
     }
 
     #[test]
-    fn the_message_names_the_partition_and_the_collapsed_keys() {
+    fn the_message_names_the_collapsed_keys_and_the_lines_that_write_the_two_keys_and_no_key() {
         let stop = || {
             merge_in_memory(&[KEYS[1], KEYS[0]], &[])
                 .map(drop)
                 .unwrap_err()
         };
-        assert!(is_key_order(&stop()));
+        let refusal = stop();
+        let order = key_order(&refusal).expect("the refusal of keys that do not ascend");
         assert_eq!(
-            in_partition(stop(), 7).to_string(),
-            format!("the sorted keys of the --perl-dir side do not ascend at key 2 of partition 7{NEEDS}")
-        );
-        assert_eq!(
-            in_partition(in_collapsed_keys(stop()), 0).to_string(),
-            format!(
-                "the sorted context-collapsed keys of the --perl-dir side do not ascend at key 2 \
-                 of partition 0{NEEDS}"
+            (order.side(), order.collapsed(), order.key(), order.before()),
+            (
+                Side::Reference,
+                false,
+                KEYS[0].as_bytes(),
+                KEYS[1].as_bytes()
             )
         );
-        let other = in_partition(in_collapsed_keys(io::Error::other("unreadable")), 7);
+        let output = Path::new("reference/pair.txt");
+        let placed = |keys: &str| {
+            format!(
+                "the sorted {keys} of the --perl-dir side do not ascend: the key of line 7 of \
+                 reference/pair.txt does not sort after the key of line 3, which stands before \
+                 it{NEEDS}"
+            )
+        };
+        assert_eq!(written_at(stop(), output, 7, 3).to_string(), placed("keys"));
+        let collapsed = written_at(in_collapsed_keys(stop()), output, 7, 3);
+        assert!(key_order(&collapsed).is_some_and(KeyOrderError::collapsed));
+        assert_eq!(collapsed.to_string(), placed("context-collapsed keys"));
+        let other = written_at(
+            in_collapsed_keys(io::Error::other("unreadable")),
+            output,
+            7,
+            3,
+        );
         assert!(!is_key_order(&other));
         assert_eq!(other.to_string(), "unreadable");
     }
@@ -612,14 +666,24 @@ mod tests {
             order.follow(1, ends(0, 2)).unwrap();
             order.follow(2, None).unwrap();
             let stop = order.follow(4, ends(first, 3)).unwrap_err();
-            assert!(is_key_order(&stop));
+            let between = key_order(&stop).expect("the refusal of keys that do not ascend");
             assert_eq!(
-                in_partition(stop, 9).to_string(),
-                format!(
-                    "the sorted keys of the {option} side do not ascend at the first key of \
-                     partition 4, which does not sort after the last key of partition 1{NEEDS}"
-                )
+                (between.key(), between.before()),
+                (KEYS[first].as_bytes(), KEYS[2].as_bytes())
+            );
+            assert_eq!(
+                stop.to_string(),
+                stop_on(option, KEYS[first], KEYS[2]).0,
+                "a stop between two partitions reads as a stop inside one"
             );
         }
     }
 }
+
+#[cfg(test)]
+#[path = "merge_key_order_tests.rs"]
+mod key_order_tests;
+
+#[cfg(test)]
+#[path = "merge_collectors_tests.rs"]
+mod collectors_tests;

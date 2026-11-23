@@ -1,9 +1,9 @@
 entry = "nearest_exon_jb_stretch_priming"
 page = "docs/plugins/transcript-model.md#3-nearestexonjb-a-value-on-an-upstream-or-downstream-row-that-depends-on-the-records-before-it"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 78 of 77,675 cache transcripts · 2 flag sets, 12 corpora"
+input_class_basis = "2 · 305 of 116,165 cache transcripts · 2 flag sets, 36 corpora"
 
 # ENST00000624847 (forward strand) has 2-base introns at 6358575-6358576 and 6358739-6358740; its first exon spans
 # 6354264-6354522. The first record is nine bases before that exon, the second inside the first short intron:
@@ -31,3 +31,10 @@ columns = ["Location", "Allele", "Feature", "Consequence", "DISTANCE", "NearestE
 [expected]
 ensembl_vep = ["21:6354255 | T | ENST00000624847 | upstream_gene_variant | 9 | -"]
 vep_rs = ["21:6354255 | T | ENST00000624847 | upstream_gene_variant | 9 | ENSE00003757672|9|start|259"]
+
+[implementation]
+code = ["crates/vep-builtins/src/plugins/nearest_exon_jb.rs::overlapped_exons"]
+tests = [
+    "crates/vep-cli/tests/plugin_documented_rows.rs::a_record_just_outside_a_short_intron_transcript_reports_its_nearest_exon_in_any_order",
+]
+rules = ["tools/vep-plugin-pairs/src/rules/nearest_exon.rs::stretch_priming"]

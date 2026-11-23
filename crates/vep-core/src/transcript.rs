@@ -21,6 +21,7 @@ use crate::sv_routing::perl_split;
 /// mapper, protein features). This is the central data structure for consequence
 /// calculation.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct Transcript {
     /// Ensembl stable ID (e.g., "ENST00000366667").
     pub stable_id: Arc<str>,
@@ -50,7 +51,7 @@ pub struct Transcript {
     pub gene_symbol_source: Option<Arc<str>>,
     /// The primary identifier of the EntrezGene entry a RefSeq gene's symbol is
     /// taken from, Ensembl VEP's `_gene_symbol_id` key
-    /// (`AnnotationSource/Database/Transcript.pm:563` at release/116.2); `None`
+    /// (`AnnotationSource/Database/Transcript.pm:563` at release/116.3); `None`
     /// on an Ensembl cache's transcripts and on a RefSeq gene without exactly
     /// one EntrezGene entry. Read by `--transcript_filter` alone.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -107,9 +108,15 @@ pub struct Transcript {
     pub coding_region_start: Option<u64>,
     /// Coding region end (genomic position).
     pub coding_region_end: Option<u64>,
-    /// Translation start (genomic position).
+    /// Translation start (genomic position). A loaded transcript holds the
+    /// lower genomic bound of its coding region here on either strand, the
+    /// value of [`Self::coding_region_start`]: on the reverse strand that is
+    /// the last coding base.
     pub translation_start: Option<u64>,
-    /// Translation end (genomic position).
+    /// Translation end (genomic position). A loaded transcript holds the
+    /// upper genomic bound of its coding region here on either strand, the
+    /// value of [`Self::coding_region_end`]: on the reverse strand that is
+    /// the first coding base.
     pub translation_end: Option<u64>,
     /// Translation object (protein product).
     pub translation: Option<Translation>,
@@ -123,18 +130,43 @@ pub struct Transcript {
     pub gencode_basic: bool,
     /// A `gencode_primary` attribute is present.
     pub gencode_primary: bool,
-    /// Transcript attributes (code/value pairs from the Perl cache).
+    /// Transcript attributes (code/value pairs from the Ensembl VEP cache).
     pub attributes: Vec<Attribute>,
     /// The cache the transcript came from in a merged cache: the `_source_cache`
     /// key stamped on the transcripts of a region file both caches hold
-    /// (`Pipeline/DumpVEP/MergeVEP.pm:103, 110` at release/116.2); `None` on a
+    /// (`Pipeline/DumpVEP/MergeVEP.pm:103, 110` at release/116.3); `None` on a
     /// single-source cache and on a region file one cache alone held.
     pub source_cache: Option<SourceCache>,
     /// Whether the model was corrected against the cache's alignment file: the
     /// `_bam_edit_status` key `apply_edits` sets
-    /// (`AnnotationType/Transcript.pm:601, 621` at release/116.2); `None` on a
+    /// (`AnnotationType/Transcript.pm:601, 621` at release/116.3); `None` on a
     /// transcript the alignment never touched and on every cache without one.
     pub bam_edit_status: Option<BamEditStatus>,
+    /// The length of the circular sequence, on a transcript the cache stores
+    /// across that sequence's origin. The transcript's coordinates then run on
+    /// past the sequence's last base, so a position `p` among the sequence's
+    /// first bases is `p` plus this length on it. `None` on every other
+    /// transcript.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub circular_length: Option<u64>,
+    /// The spans of the cache's region files that hold the transcript, each
+    /// its first and last position, on a transcript whose stable id another
+    /// transcript of its chromosome shares and on one with a `dbID`, not
+    /// stored across the origin of a circular sequence, whose span those
+    /// files do not cover. Ensembl VEP's dump keeps one
+    /// transcript a stable id in each region file of a RefSeq or merged cache
+    /// (`Pipeline/DumpVEP/Dumper/Core.pm:109`,
+    /// `AnnotationType/Transcript.pm:313-343` at release/116.3), and writes
+    /// for a sequence outside the reference assembly the files of the
+    /// megabases its own region lies in
+    /// (`Pipeline/DumpVEP/CreateDumpJobs.pm:169`,
+    /// `Pipeline/DumpVEP/Dumper.pm:135-136`), so such a transcript is one of
+    /// those regions alone and a record reads it through one of them.
+    /// Assigned by the loader and never serialized; `None` on every other
+    /// transcript, and on one read from a region file whose name states no
+    /// span: a record finds each of these by coordinates.
+    #[serde(skip)]
+    pub region_files: Option<Arc<[(u64, u64)]>>,
     /// Cached data for variant effect calculation (_variation_effect_feature_cache).
     pub vefc: Option<TranscriptVEFC>,
     /// Facts derived from the fields above, filled on first use and read by
@@ -143,8 +175,8 @@ pub struct Transcript {
     #[serde(skip)]
     pub derived: TranscriptDerived,
     /// Position of the transcript's Ensembl VEP sort key, the stable id followed
-    /// by `_` and the dbID when the record carries one
-    /// (`BaseVariationFeature.pm:310-321`), in the byte order of the
+    /// by `_` and the dbID when that is not zero, `_` alone when the record
+    /// carries none (`BaseVariationFeature.pm:310-321`), in the byte order of the
     /// chromosome's keys, counted from 1 and assigned by the loader once the
     /// chromosome is complete: two transcripts of one chromosome compare by rank
     /// as their keys compare, and equal keys share a rank. Never serialized; 0
@@ -155,15 +187,26 @@ pub struct Transcript {
 
 /// The cache a transcript of a merged cache came from: Ensembl VEP's
 /// `_source_cache` key, `Ensembl` or `RefSeq` (`Pipeline/DumpVEP/MergeVEP.pm`
-/// at release/116.2), spelled as the cache spells it; or the short name of the
+/// at release/116.3), spelled as the cache spells it; or the short name of the
 /// custom annotation source a transcript was read from, which the `SOURCE`
-/// column prints alike (OutputFactory.pm:1583, Constants.pm:98 and :101).
+/// column prints alike (OutputFactory.pm:1592, Constants.pm:98 and :101).
 /// Serialized as that text: `"Ensembl"`, `"RefSeq"`, or the custom name.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum SourceCache {
     Ensembl,
     RefSeq,
     Custom(Arc<str>),
+    /// A gene-model file the run reads beside its cache (`--gff`, `--gtf`, or
+    /// a `--custom` source of format `gff` or `gtf` in transcript mode): the
+    /// source's short name, which every transcript built from the file
+    /// carries as `_source_cache` (`AnnotationSource/File/BaseGXF.pm:635`),
+    /// and the file's place among the run's gene-model files, counted from 1
+    /// in argument order. Serialized as the short name.
+    GeneModelFile {
+        short_name: Arc<str>,
+        order: u32,
+    },
 }
 
 impl SourceCache {
@@ -173,8 +216,34 @@ impl SourceCache {
             SourceCache::Ensembl => "Ensembl",
             SourceCache::RefSeq => "RefSeq",
             SourceCache::Custom(name) => name,
+            SourceCache::GeneModelFile { short_name, .. } => short_name,
         }
     }
+
+    /// The place of a gene-model file among the run's, for a transcript read
+    /// from one; `None` for a transcript of the cache.
+    pub fn file_order(&self) -> Option<u32> {
+        match self {
+            SourceCache::GeneModelFile { order, .. } => Some(*order),
+            _ => None,
+        }
+    }
+}
+
+/// The bytes that follow the stable id in the sort key of a transcript read
+/// from the gene-model file at place `order`: `_`, a `:`, and the place in ten
+/// digits. Ensembl VEP keys a transcript by its stable id and `_<dbID>`
+/// (`BaseVariationFeature.pm:310-321`) and numbers a file's transcripts as it
+/// builds them (`BaseGXF.pm:489`), an order the input's other records and
+/// Perl's hash order decide, so the order it writes two transcripts of one
+/// stable id in is no property of the input
+/// (`docs/divergences/file-beside-cache-same-id-row-order.md`). Under this
+/// suffix the cache's transcript of a stable id sorts
+/// first, since `:` follows every digit, then each file's in argument order;
+/// and since `:` precedes every letter, the key stands among the keys of other
+/// stable ids where Ensembl VEP's `_<number>` stands.
+pub fn file_order_key_suffix(order: u32) -> String {
+    format!("_:{order:010}")
 }
 
 impl serde::Serialize for SourceCache {
@@ -198,7 +267,7 @@ impl<'de> serde::Deserialize<'de> for SourceCache {
 /// file: Ensembl VEP's `_bam_edit_status`, `ok` when the edited sequence equals
 /// the aligned one and the model carries the edits, `failed` when it did not and
 /// the model was dumped unedited (`AnnotationType/Transcript.pm:599-627` at
-/// release/116.2), spelled as the cache spells it.
+/// release/116.3), spelled as the cache spells it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum BamEditStatus {
@@ -208,7 +277,7 @@ pub enum BamEditStatus {
 
 impl BamEditStatus {
     /// The `BAM_EDIT` column's text, the status upper-cased
-    /// (`uc($tr->{_bam_edit_status})`, OutputFactory.pm:1551-1553 at release/116.2).
+    /// (`uc($tr->{_bam_edit_status})`, OutputFactory.pm:1560-1562 at release/116.3).
     pub fn column_text(self) -> &'static str {
         match self {
             BamEditStatus::Ok => "OK",
@@ -236,10 +305,11 @@ pub struct TranscriptDerived {
 /// `::codon`, ensembl-variation release/116). A transcript carrying neither
 /// kind of attribute has none ([`Transcript::refseq_alignment`] is `None`).
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct RefSeqAlignment {
     /// The codes of the attributes matching `^rseq`, in attribute order
-    /// (`grep {$_->code =~ /^rseq/}` over the attribute list, OutputFactory.pm:1547 at
-    /// release/116.2); `enst_refseq_compare` and `_rna_edit` are not among them.
+    /// (`grep {$_->code =~ /^rseq/}` over the attribute list, OutputFactory.pm:1556 at
+    /// release/116.3); `enst_refseq_compare` and `_rna_edit` are not among them.
     pub match_codes: Arc<[Box<str>]>,
     /// The `_rna_edit` attributes that change the cDNA's length, in order of
     /// their start, as [`get_misalignment_offset`](Self::misalignment_offset)
@@ -258,6 +328,7 @@ pub struct RefSeqAlignment {
 /// spaces with trailing empty fields dropped ([`perl_split`]), so a deletion's
 /// value `50 52 ` has two fields and an insertion's `10 9 AAA` three.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct IndelEdit {
     /// The edit's start in the unedited cDNA, the first field.
     pub start: i64,
@@ -364,9 +435,10 @@ impl Clone for TranscriptDerived {
 /// counterparts of what Ensembl VEP stores on the transcript's
 /// `_variation_effect_feature_cache` once and reads per allele.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct TranscriptFacts {
     /// An intron of the transcript list (or, with no intron list, a gap between
-    /// consecutive exons) spans at most 12 bp: Perl's `_has_frameshift_intron`,
+    /// consecutive exons) spans at most 12 bp: Ensembl VEP's `_has_frameshift_intron`,
     /// which stretches every exon by 12 bases in the exon-overlap test
     /// (`BaseTranscriptVariation::_overlapped_exons`).
     pub has_frameshift_intron: bool,
@@ -401,19 +473,18 @@ pub struct TranscriptFacts {
 impl TranscriptFacts {
     fn compute(tx: &Transcript) -> Self {
         let has_frameshift_intron = if tx.introns.is_empty() {
-            let mut exons: Vec<(i64, i64)> = tx
-                .exons
-                .iter()
-                .map(|e| (e.start as i64, e.end as i64))
-                .collect();
+            let mut exons: Vec<(u64, u64)> = tx.exons.iter().map(|e| (e.start, e.end)).collect();
             exons.sort_unstable();
-            exons
-                .windows(2)
-                .any(|w| ((w[1].0 - 1) - (w[0].1 + 1)).abs() <= 12)
+            exons.windows(2).any(|w| {
+                Intron {
+                    start: w[0].1.saturating_add(1),
+                    end: w[1].0.saturating_sub(1),
+                    rank: 0,
+                }
+                .is_frameshift()
+            })
         } else {
-            tx.introns
-                .iter()
-                .any(|i| (i.end as i64 - i.start as i64).abs() <= 12)
+            tx.introns.iter().any(Intron::is_frameshift)
         };
         let vefc_introns = tx
             .vefc
@@ -421,9 +492,7 @@ impl TranscriptFacts {
             .filter(|v| !v.introns.is_empty())
             .map(|v| v.introns.as_slice())
             .unwrap_or(tx.introns.as_slice());
-        let vefc_has_frameshift_intron = vefc_introns
-            .iter()
-            .any(|i| i.end.saturating_sub(i.start) <= 12);
+        let vefc_has_frameshift_intron = vefc_introns.iter().any(Intron::is_frameshift);
         let has_coding_model = tx.translation.is_some()
             && tx
                 .vefc
@@ -459,6 +528,7 @@ impl TranscriptFacts {
 /// (5' to 3'), the order VEP numbers them in for the `EXON` and `INTRON`
 /// columns.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct FeatureOrdinals {
     pub exons: Box<[(i64, i64)]>,
     /// From the transcript's intron list when present, else the gaps between
@@ -530,7 +600,8 @@ pub struct Exon {
 /// The protein product of a transcript.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Translation {
-    /// Ensembl protein stable ID (e.g., "ENSP00000355627").
+    /// Ensembl protein stable ID (e.g., "ENSP00000355627"); empty for a
+    /// translation whose cache record carries none.
     pub stable_id: String,
     /// Stable ID version.
     pub version: Option<u32>,
@@ -540,16 +611,12 @@ pub struct Translation {
     pub start: u64,
     /// Translation end position within the end exon (1-based).
     pub end: u64,
-    /// Index into the parent transcript's exon array for the start exon.
-    pub start_exon_index: usize,
-    /// Index into the parent transcript's exon array for the end exon.
-    pub end_exon_index: usize,
-    /// Protein sequence from the Perl cache.
+    /// Protein sequence from the Ensembl VEP cache.
     pub seq: Option<String>,
 }
 
 /// The support level a `TSL` attribute's value carries, as Ensembl VEP reads
-/// it for the `TSL` field (`OutputFactory.pm:1610-1611` at release/116.2) and
+/// it for the `TSL` field (`OutputFactory.pm:1619-1620` at release/116.3) and
 /// for the pick orders (`:752-753`; `VariationFeatureAdaptor.pm:2182-2183` at
 /// ensembl-variation release/116): `m/tsl(\d+)/` then `$1 if $1`. The match is
 /// the first `tsl` a digit follows and the run of digits after it, kept as
@@ -568,7 +635,7 @@ pub fn tsl_level(value: &str) -> Option<&str> {
     (digits != "0").then_some(digits)
 }
 
-/// A code/value attribute pair from the Perl cache.
+/// A code/value attribute pair from the Ensembl VEP cache.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Attribute {
     /// The attribute code (`TSL`, `gencode_basic`, `_rna_edit`): one of a few
@@ -582,8 +649,9 @@ pub struct Attribute {
 ///
 /// Contains the CDS (translateable) sequence, UTR sequences, coordinate mapper
 /// pairs, and protein features needed for consequence calculation. Populated
-/// during cache loading from the Perl Storable or JSON cache.
+/// during cache loading from the Ensembl VEP Storable or JSON cache.
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct TranscriptVEFC {
     /// Codon table number (usually 1 for the standard genetic code).
     pub codon_table: u8,
@@ -597,7 +665,7 @@ pub struct TranscriptVEFC {
     pub peptide: Option<String>,
     /// The spliced cDNA with the model's edits applied, which `apply_edits`
     /// stores on an `ok` BAM-edited transcript alone
-    /// (`AnnotationType/Transcript.pm:617` at release/116.2); every other
+    /// (`AnnotationType/Transcript.pm:617` at release/116.3); every other
     /// transcript's cDNA is assembled from the pieces above or read from the
     /// FASTA.
     pub spliced_seq: Option<String>,
@@ -632,7 +700,7 @@ pub struct TranscriptMapper {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ExonCoordMapper {
     /// Number of mapping pairs.
-    pub pair_count: usize,
+    pair_count: usize,
     /// The individual mapping pairs, stored in cDNA (transcript 5'->3') order:
     /// `pairs[i].from_start` ascends with `i`. On the reverse strand the genomic
     /// `to_start` therefore *descends* with `i`, so genomic lookups cannot binary
@@ -643,7 +711,7 @@ pub struct ExonCoordMapper {
     /// Derived at load time, never serialized; an empty/length-mismatched vec
     /// signals callers to fall back to the linear scan.
     #[serde(skip)]
-    pub by_genomic_start: Vec<u32>,
+    by_genomic_start: Vec<u32>,
 }
 
 impl ExonCoordMapper {
@@ -674,6 +742,25 @@ impl ExonCoordMapper {
     /// that constructs/deserializes `pairs` without going through [`Self::new`].
     pub fn rebuild_genomic_index(&mut self) {
         self.by_genomic_start = Self::build_genomic_index(&self.pairs);
+    }
+
+    /// The number of mapping pairs as [`Self::new`] counts them; a mapper read
+    /// from its serde form holds the count that form states. An assignment to
+    /// `pairs` leaves the count as it stands.
+    #[must_use]
+    pub fn pair_count(&self) -> usize {
+        self.pair_count
+    }
+
+    /// The indices of `pairs` in ascending order of genomic start
+    /// (`pairs[i].to_start`), as [`Self::new`] and
+    /// [`Self::rebuild_genomic_index`] derive them; empty on a mapper read from
+    /// its serde form, which carries no index. A slice whose length differs
+    /// from the number of `pairs` is no index of them, and a lookup then scans
+    /// `pairs` itself.
+    #[must_use]
+    pub fn by_genomic_start(&self) -> &[u32] {
+        &self.by_genomic_start
     }
 
     /// The genomic pieces of the cDNA range `start..=end`, as
@@ -759,7 +846,7 @@ impl ExonCoordMapper {
     /// insertion point `start = end + 1` are mapped, a single piece is turned
     /// around, and two pieces are each moved off the point onto their own side,
     /// a gap among them dropped. Any other count of pieces is returned as
-    /// mapped, where the Perl mapper throws.
+    /// mapped, where the Ensembl VEP mapper throws.
     fn map_insert(&self, start: i64, end: i64) -> Vec<MappedPiece> {
         let mut pieces = self.cdna2genomic(end, start);
         match pieces.as_mut_slice() {
@@ -1013,6 +1100,16 @@ pub struct Intron {
     pub rank: u32,
 }
 
+impl Intron {
+    /// Ensembl VEP's `_frameshift` flag: an intron of at most 13 bases
+    /// (`abs($intron_end - $intron_start) <= 12`, `BaseTranscriptVariation.pm:912-915`
+    /// and `:1032-1035`). An intron whose start lies past its end, the gap between two
+    /// exons that overlap or abut, is skipped before the flag is set (`:894`, `:1014`).
+    pub fn is_frameshift(&self) -> bool {
+        self.start <= self.end && self.end - self.start <= 12
+    }
+}
+
 /// The empty transcript: empty identifiers, chromosome, biotype and source,
 /// every optional value absent, the forward strand, a span of 0 to 0, no
 /// exons, introns, flags or attributes, and rank 0.
@@ -1065,6 +1162,8 @@ impl Default for Transcript {
             attributes: Vec::new(),
             source_cache: None,
             bam_edit_status: None,
+            circular_length: None,
+            region_files: None,
             vefc: None,
             derived: TranscriptDerived::default(),
             id_rank: 0,
@@ -1166,7 +1265,7 @@ impl Transcript {
     /// Length of the cached translateable sequence of a transcript with a
     /// translation, padding included
     /// (`length($tr->{_variation_effect_feature_cache}->{translateable_seq})`,
-    /// OutputFactory.pm:743-748 at release/116.2); `None` without a translation.
+    /// OutputFactory.pm:743-748 at release/116.3); `None` without a translation.
     pub fn cds_length(&self) -> Option<u32> {
         self.translation.is_some().then(|| {
             self.vefc
@@ -1281,7 +1380,7 @@ mod tests {
         assert_eq!(mapper.start_phase, 0);
         assert_eq!(mapper.cdna_coding_start, 155);
         assert_eq!(mapper.cdna_coding_end, 622);
-        assert_eq!(mapper.exon_coord_mapper.pair_count, 2);
+        assert_eq!(mapper.exon_coord_mapper.pair_count(), 2);
         assert_eq!(mapper.exon_coord_mapper.pairs.len(), 2);
     }
 
@@ -1317,14 +1416,10 @@ mod tests {
             db_id: Some(12345),
             start: 1,
             end: 155,
-            start_exon_index: 0,
-            end_exon_index: 4,
             seq: Some("MKAVILF...".to_string()),
         };
         assert_eq!(t.stable_id, "ENSP00000355627");
         assert_eq!(t.version, Some(2));
-        assert_eq!(t.start_exon_index, 0);
-        assert_eq!(t.end_exon_index, 4);
     }
 
     /// A SIFT matrix built from its gzip stream inflates on the first lookup
@@ -1448,6 +1543,8 @@ mod tests {
             vefc: None,
             source_cache: None,
             bam_edit_status: None,
+            circular_length: None,
+            region_files: None,
             derived: Default::default(),
             id_rank: 0,
         }
@@ -1498,6 +1595,56 @@ mod tests {
         assert!(tx.facts().vefc_has_frameshift_intron);
     }
 
+    /// Two exons that overlap or abut leave an intron whose start lies past its end.
+    /// Ensembl VEP skips such an intron before it sets `_frameshift` and
+    /// `_has_frameshift_intron` (`BaseTranscriptVariation.pm:894` and `:1014`), in the
+    /// intron list, in the VEFC list and where the gaps between exons stand in for a
+    /// list; an intron of 1 to 13 bases beside it still sets both.
+    #[test]
+    fn an_intron_whose_start_lies_past_its_end_is_no_frameshift_intron() {
+        for (start, end, frameshift) in [
+            (201, 201, true),
+            (201, 213, true),
+            (201, 214, false),
+            (201, 200, false),
+            (201, 195, false),
+        ] {
+            assert_eq!(
+                intron(start, end).is_frameshift(),
+                frameshift,
+                "{start}-{end}"
+            );
+        }
+
+        for second_exon_start in [196, 201] {
+            let exons = vec![exon(100, 200, -1), exon(second_exon_start, 300, -1)];
+            let gap = intron(201, second_exon_start - 1);
+
+            let listed = transcript(Strand::Forward, exons.clone(), vec![gap.clone()]);
+            assert!(!listed.facts().has_frameshift_intron);
+            assert!(!listed.facts().vefc_has_frameshift_intron);
+
+            let unlisted = transcript(Strand::Forward, exons.clone(), vec![]);
+            assert!(!unlisted.facts().has_frameshift_intron);
+            assert!(!unlisted.facts().vefc_has_frameshift_intron);
+
+            let mut vefc_listed = transcript(Strand::Forward, exons, vec![]);
+            vefc_listed.vefc = Some(TranscriptVEFC {
+                introns: vec![gap],
+                ..Default::default()
+            });
+            assert!(!vefc_listed.facts().vefc_has_frameshift_intron);
+        }
+
+        let beside_a_short_intron = transcript(
+            Strand::Forward,
+            vec![exon(100, 200, -1), exon(196, 300, -1), exon(310, 400, -1)],
+            vec![intron(201, 195), intron(301, 309)],
+        );
+        assert!(beside_a_short_intron.facts().has_frameshift_intron);
+        assert!(beside_a_short_intron.facts().vefc_has_frameshift_intron);
+    }
+
     #[test]
     fn facts_read_flags_and_the_coding_model() {
         let mut tx = transcript(Strand::Forward, vec![exon(100, 200, 0)], vec![]);
@@ -1513,8 +1660,6 @@ mod tests {
             db_id: None,
             start: 1,
             end: 10,
-            start_exon_index: 0,
-            end_exon_index: 0,
             seq: None,
         });
         tx.vefc = Some(TranscriptVEFC {
@@ -1576,7 +1721,7 @@ mod tests {
     /// where it is an 8-byte queue pointer (macOS) the 10-byte facts cell pads
     /// to 24, for 80.
     #[test]
-    fn derived_cells_cost_at_most_72_bytes_per_transcript() {
+    fn derived_cells_cost_at_most_72_or_80_bytes_per_transcript_by_the_size_of_once() {
         let bound = if std::mem::size_of::<std::sync::Once>() == 4 {
             72
         } else {
@@ -1604,8 +1749,6 @@ mod tests {
             db_id: None,
             start: 1,
             end: cds.len() as u64,
-            start_exon_index: 0,
-            end_exon_index: 0,
             seq: None,
         });
         let cdna_coding_start = five.len() as u64 + 1;
@@ -1733,6 +1876,15 @@ mod tests {
             serde_json::from_str::<SourceCache>(r#""RefSeq""#).unwrap(),
             SourceCache::RefSeq
         );
+        let file = SourceCache::GeneModelFile {
+            short_name: "genes.gff3.gz".into(),
+            order: 2,
+        };
+        assert_eq!(file.column_text(), "genes.gff3.gz");
+        assert_eq!(serde_json::to_string(&file).unwrap(), r#""genes.gff3.gz""#);
+        assert_eq!(file.file_order(), Some(2));
+        assert_eq!(SourceCache::Ensembl.file_order(), None);
+        assert_eq!(file_order_key_suffix(2), "_:0000000002");
         assert_eq!(
             serde_json::from_str::<BamEditStatus>(r#""failed""#).unwrap(),
             BamEditStatus::Failed
@@ -1743,7 +1895,7 @@ mod tests {
     }
 
     /// The alignment cell reads the `rseq` codes in attribute order, leaving
-    /// `enst_refseq_compare` and `_rna_edit` out (OutputFactory.pm:1547), and
+    /// `enst_refseq_compare` and `_rna_edit` out (OutputFactory.pm:1556), and
     /// the `_rna_edit` values as `get_misalignment_offset` splits them
     /// (TranscriptVariationAllele.pm:1605-1618): `10 9 AAA` inserts three bases,
     /// `50 52 ` deletes three, `70 70 T` replaces one base with one and counts

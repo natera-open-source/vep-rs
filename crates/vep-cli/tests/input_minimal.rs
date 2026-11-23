@@ -4,11 +4,12 @@
 //! How the `vep` binary runs under `--minimal`: the flag switches on
 //! `--allele_number`, every bi-allelic record is trimmed and marked, a
 //! multi-allelic record whose alleles trim is split and rejoined as Ensembl VEP
-//! 116.2 rejoins it (the record's Location, the trimmed Allele, the written
+//! 116.3 rejoins it (the record's Location, the trimmed Allele, the written
 //! position as ALLELE_NUM, the rows in the rejoin's key order) and the three
 //! position columns and the `--coding_only` rows follow the output format.
-//! Every expected value is Ensembl VEP 116.2's output on the record under the
-//! same flags.
+//! Every expected value is Ensembl VEP 116.3's output on the record under the
+//! same flags, except where a test's comment names what Ensembl VEP writes
+//! instead.
 
 use std::path::{Path, PathBuf};
 use std::process::{Output, Stdio};
@@ -164,7 +165,7 @@ fn minimal_implies_allele_number() {
 /// `trim_sequences` compares bases with `eq` (Sequence.pm:1006, :1019), then
 /// `validate_vf` names an ID-less record from the trimmed string (Parser.pm:462) and
 /// upper-cases it (:554). So `21 10542414 10542417 AAAG/AGGg +` loses its shared `A`
-/// and keeps the `G`/`g` pair, and Ensembl VEP 116.2 writes `21_10542415_AAG/GGg` at
+/// and keeps the `G`/`g` pair, and Ensembl VEP 116.3 writes `21_10542415_AAG/GGg` at
 /// `21:10542415-10542417`, Allele `GGG`, positions `438-440`, `86-88` and `29-30`,
 /// `missense_variant`, `UPLOADED_ALLELE=AAAG/AGGg` and `MINIMISED=1` on
 /// ENST00000427445; the same column in upper case is `AA/GG` at 10542415-10542416.
@@ -227,7 +228,7 @@ fn an_ensembl_format_record_is_trimmed_in_its_written_case() {
 /// A VCF record is trimmed in its written case under `--minimal` too, and a record
 /// whose ID Perl reads as false is named from the trimmed string before the
 /// upper-casing (Parser/VCF.pm:343 keeps the string as written, Parser.pm:852, :462,
-/// :554): Ensembl VEP 116.2 writes `21 10542414 0 AAAG AGGg` as `21_10542415_AAG/GGg`
+/// :554): Ensembl VEP 116.3 writes `21 10542414 0 AAAG AGGg` as `21_10542415_AAG/GGg`
 /// at `21:10542415-10542417`, Allele `GGG`, `UPLOADED_ALLELE=AAAG/AGGg`.
 #[test]
 fn a_vcf_record_is_trimmed_in_its_written_case() {
@@ -252,7 +253,7 @@ fn a_vcf_record_is_trimmed_in_its_written_case() {
     }
 }
 
-/// The rejoin of a split record (OutputFactory.pm:2272-2354): every row prints the
+/// The rejoin of a split record (OutputFactory.pm:2281-2363): every row prints the
 /// record's Location `21:10542415-10542417`, the trimmed Allele and the written
 /// position as ALLELE_NUM, the rows sorted by the keys the merged alleles are stored
 /// under (`A/G_<id>` and `AAG/-_<id>` before the first allele's bare `<id>`), each
@@ -501,16 +502,16 @@ fn mirna_rows(lines: &[String], transcript: &str) -> Vec<[String; 5]> {
 /// `miRNA_loop` alone, in the default output (`miRNA=miRNA_loop,miRNA_stem`) and
 /// the VCF output (`miRNA_loop&miRNA_stem`) alike, while the default format's
 /// cDNA_position column prints the rejoined record's span, `6-7`, on both rows.
-/// Ensembl VEP 116.2's default factory rejoins the record
+/// Ensembl VEP 116.3's default factory rejoins the record
 /// (OutputFactory.pm:294 `$self->rejoin_variants_in_InputBuffer($buffer) if
 /// $buffer->rejoin_required;`) and then clears every allele's cached cDNA
 /// coordinates (:297-298 `map {@{$self->reset_shifted_positions($_)}}
 /// @{$buffer->buffer};`, through `clear_shifting_variables` at :318, which
 /// deletes `cdna_start`, `cdna_end` and `_cdna_coords`,
 /// TranscriptVariationAllele.pm:515-517), so its miRNA block
-/// (OutputFactory.pm:1630 `my ($cdna_start, $cdna_end) = ($tv->cdna_start,
+/// (OutputFactory.pm:1639 `my ($cdna_start, $cdna_end) = ($tv->cdna_start,
 /// $tv->cdna_end);`) reads the span afresh over the rejoined record, cDNA 6-7,
-/// and Ensembl VEP 116.2 prints `miRNA=miRNA_loop` for the `TTA` allele. Its VCF
+/// and Ensembl VEP 116.3 prints `miRNA=miRNA_loop` for the `TTA` allele. Its VCF
 /// factory clears the coordinates before the rejoin (OutputFactory/VCF.pm:305-308),
 /// so the `TTA` CSQ entry carries `miRNA_loop&miRNA_stem` at cDNA `7-8` in both
 /// engines.
@@ -605,14 +606,14 @@ fn straddle_rows(lines: &[String], transcript: &str) -> Vec<[String; 5]> {
 /// `--coding_only` judges a split record's rows over the span the format rejoins
 /// on. The default and tab factories clear the cached CDS coordinates after the
 /// rejoin (OutputFactory.pm:297-302), so `affects_cds` maps the record's restored
-/// span, and Ensembl VEP 116.2 keeps every row of the seven coding transcripts for
+/// span, and Ensembl VEP 116.3 keeps every row of the seven coding transcripts for
 /// both alleles of `straddle_a` and `straddle_b` (14 rows each), the intronic SNV's
 /// `splice_acceptor_variant` rows included. The VCF and JSON factories clear them
 /// before the rejoin (OutputFactory/VCF.pm:305-308, OutputFactory/JSON.pm:217-220),
 /// so each allele is judged on its own span: `straddle_a` keeps the deletion's
 /// seven entries alone and `straddle_b` writes no CSQ. `REF_ALLELE` is cached on
 /// the first row the first feature builds before the rejoin (OutputFactory.pm:1357
-/// at :2289): the record's own `GTACG` where that feature's SNV kept no row
+/// at :2298): the record's own `GTACG` where that feature's SNV kept no row
 /// (`straddle_a`, `straddle_b`), the first allele's trimmed `TACG` where the
 /// deletion came first (`straddle_c`).
 #[test]
@@ -700,4 +701,225 @@ fn coding_only_judges_a_split_record_over_the_span_the_format_rejoins_on() {
         "{csq:?}"
     );
     assert_eq!(info(&vcf[1]), ".");
+}
+
+/// The GRCh37 corpus: its chromosome 21 cache slice holds ENST00000399326, whose
+/// exon 24 opens at 21:35201928 on the last base of the stop codon.
+fn grch37_corpus() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden/116/GRCh37")
+}
+
+/// Three records whose alleles add bases between 21:35201927, the last base of
+/// the intron before exon 24 of ENST00000399326, and 21:35201928, the exon's
+/// first base and the stop codon's last (coding base 3048, cDNA 3049).
+/// `stop_lead` writes the intron's last two bases as its reference and is
+/// chopped to `G/GA/GAG` at 35201927; `stop_span` and `stop_sides` write the
+/// intron's last base and the exon's first and are chopped to `A/AA/AGA` and
+/// `A/AA/CA` at 35201928.
+const STOP_LEAD: &str = "21\t35201926\tstop_lead\tAG\tAGA,AGAG\t.\t.\t.\n";
+const STOP_SPAN: &str = "21\t35201927\tstop_span\tGA\tGAA,GAGA\t.\t.\t.\n";
+const STOP_SIDES: &str = "21\t35201927\tstop_sides\tGA\tGAA,GCA\t.\t.\t.\n";
+
+/// A split allele's stop codon term is the term of its own trimmed span, so it
+/// can differ from the term of the record as written. `trim_sequences` trims
+/// the shared bases from the left first and then from the right
+/// (Utils/Sequence.pm:1005-1029). An allele of `stop_lead` loses the intron
+/// base it shares and becomes an insertion before the exon's first base,
+/// between the stop codon's second and third base: `splice_region_variant`
+/// as written, `splice_region_variant,stop_retained_variant` once split. As
+/// written it opens with its one reference base, the intron's last: its
+/// splice term is that of the bases added behind that base
+/// (Utils/VariationEffect.pm:97-100), and every other term and position is
+/// the written base's. Ensembl VEP reads that base as changed
+/// (VariationFeatureOverlapAllele.pm:418, :452-454) and writes
+/// `splice_acceptor_variant` and `IMPACT=HIGH` for it as written. An
+/// allele of `stop_span` or `stop_sides` that opens with the exon's first
+/// base loses that base on the left and becomes an insertion behind it, after
+/// the coding region's end, which `_after_coding` reads as the 3' UTR
+/// (Utils/VariationEffect.pm:722-724): `splice_region_variant,
+/// stop_retained_variant` as written, `splice_region_variant,
+/// 3_prime_UTR_variant` once split. The `C` allele of `stop_sides` shares only
+/// the base on its right and stays before the exon's first base, `stop_lost`
+/// both ways. The default format prints the record span's positions on every
+/// row and the VCF format each allele's own, as the two factories reset the
+/// cached positions after and before the rejoin (OutputFactory.pm:294-298,
+/// OutputFactory/VCF.pm:305-308). Ensembl VEP writes every other row the same.
+#[test]
+fn a_split_alleles_stop_codon_term_follows_its_trimmed_span() {
+    let dir = tempfile::tempdir().unwrap();
+    let corpus = grch37_corpus();
+    let input = format!("{VCF_HEADER}{STOP_LEAD}{STOP_SPAN}{STOP_SIDES}");
+    let rows = |extra: &[&str]| -> Vec<Vec<String>> {
+        vep_in(&corpus, dir.path(), "in.vcf", &input, &[], extra);
+        rows_on(&data_lines(dir.path()), "ENST00000399326")
+    };
+    let retained = "splice_region_variant,stop_retained_variant";
+    let utr = "splice_region_variant,3_prime_UTR_variant";
+    let lost = "stop_lost,splice_region_variant";
+    let low = "IMPACT=LOW;STRAND=1";
+    let high = "IMPACT=HIGH;STRAND=1";
+    let row = |location: &str,
+               allele: &str,
+               positions: [&str; 3],
+               terms: &str,
+               extra: String|
+     -> Vec<String> {
+        [
+            location,
+            allele,
+            positions[0],
+            positions[1],
+            positions[2],
+            terms,
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .chain([extra])
+        .collect()
+    };
+    let none = ["-", "-", "-"];
+    let stop = ["3049", "3048", "1016"];
+
+    // As written: no allele is trimmed past the anchor chop.
+    assert_eq!(
+        rows(&["--grch37", "--allele_number"]),
+        [
+            row(
+                "21:35201927",
+                "GA",
+                none,
+                "splice_region_variant",
+                format!("ALLELE_NUM=1;{low}")
+            ),
+            row(
+                "21:35201927",
+                "GAG",
+                none,
+                "splice_region_variant",
+                format!("ALLELE_NUM=2;{low}")
+            ),
+            row(
+                "21:35201928",
+                "AA",
+                stop,
+                retained,
+                format!("ALLELE_NUM=1;{low}")
+            ),
+            row(
+                "21:35201928",
+                "AGA",
+                stop,
+                retained,
+                format!("ALLELE_NUM=2;{low}")
+            ),
+            row(
+                "21:35201928",
+                "AA",
+                stop,
+                retained,
+                format!("ALLELE_NUM=1;{low}")
+            ),
+            row(
+                "21:35201928",
+                "CA",
+                stop,
+                lost,
+                format!("ALLELE_NUM=2;{high}")
+            ),
+        ]
+    );
+
+    // Split: each allele on its own trimmed span, the later allele's rows first.
+    assert_eq!(
+        rows(&["--grch37", "--minimal"]),
+        [
+            row(
+                "21:35201927",
+                "AG",
+                none,
+                retained,
+                format!("ALLELE_NUM=2;{low};MINIMISED=1")
+            ),
+            row(
+                "21:35201927",
+                "A",
+                none,
+                retained,
+                format!("ALLELE_NUM=1;{low};MINIMISED=1")
+            ),
+            row(
+                "21:35201928",
+                "GA",
+                stop,
+                utr,
+                format!("ALLELE_NUM=2;{low};MINIMISED=1")
+            ),
+            row(
+                "21:35201928",
+                "A",
+                stop,
+                utr,
+                format!("ALLELE_NUM=1;{low};MINIMISED=1")
+            ),
+            row(
+                "21:35201928",
+                "C",
+                stop,
+                lost,
+                format!("ALLELE_NUM=2;{high};MINIMISED=1")
+            ),
+            row(
+                "21:35201928",
+                "A",
+                stop,
+                utr,
+                format!("ALLELE_NUM=1;{low};MINIMISED=1")
+            ),
+        ]
+    );
+
+    // The VCF format prints each split allele's own positions.
+    vep_in(
+        &corpus,
+        dir.path(),
+        "in.vcf",
+        &input,
+        &["--vcf"],
+        &["--grch37", "--minimal"],
+    );
+    let csq: Vec<Vec<String>> = data_lines(dir.path())
+        .iter()
+        .map(|line| {
+            line.split('\t')
+                .nth(7)
+                .unwrap()
+                .trim_start_matches("CSQ=")
+                .split(',')
+                .filter(|entry| entry.contains("ENST00000399326"))
+                .map(|entry| {
+                    let f: Vec<&str> = entry.split('|').collect();
+                    // Allele, Consequence, cDNA_position, CDS_position,
+                    // Protein_position, ALLELE_NUM.
+                    [f[0], f[1], f[12], f[13], f[14], f[18]].join("|")
+                })
+                .collect()
+        })
+        .collect();
+    assert_eq!(
+        csq,
+        [
+            [
+                "AG|splice_region_variant&stop_retained_variant|3048-3049|3047-3048|1016|2",
+                "A|splice_region_variant&stop_retained_variant|3048-3049|3047-3048|1016|1",
+            ],
+            [
+                "GA|splice_region_variant&3_prime_UTR_variant|3049-3050|||2",
+                "A|splice_region_variant&3_prime_UTR_variant|3049-3050|||1",
+            ],
+            [
+                "C|stop_lost&splice_region_variant|3048-3049|3047-3048|1016|2",
+                "A|splice_region_variant&3_prime_UTR_variant|3049-3050|||1",
+            ],
+        ]
+    );
 }

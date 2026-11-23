@@ -23,7 +23,7 @@ Four records of chromosome 21 of GRCh38 over motifs of the release 116 cache. Th
 
 The motif rows of the default format, `Extra` column alone, every other column equal between the engines. The forward-strand rows agree.
 
-| Record | Feature | Ensembl VEP 116.2 | vep-rs |
+| Record | Feature | Ensembl VEP 116.3 | vep-rs |
 | --- | --- | --- | --- |
 | `fwd_mnv_inside` | ENSM00000574814 (+) | `MOTIF_POS=3;HIGH_INF_POS=N;MOTIF_SCORE_CHANGE=-0.108` | the same |
 | `rev_mnv_start` | ENSM00000574814 (+) | `MOTIF_POS=6;HIGH_INF_POS=N;MOTIF_SCORE_CHANGE=-0.111` | the same |
@@ -55,8 +55,8 @@ With a converted GRCh38 release 116 cache holding its regulatory tree ([Regulato
 vep --offline --json_cache <cache> --regulatory -i motifs.vcf -o motifs.txt
 ```
 
-The seven motif rows carry the vep-rs column of the table. Ensembl VEP 116.2 on the same records with `--offline --cache --regulatory`, on the release 116 cache from the Ensembl FTP site, writes its column.
+The seven motif rows carry the vep-rs column of the table. Ensembl VEP 116.3 on the same records with `--offline --cache --regulatory`, on the release 116 cache from the Ensembl FTP site, writes its column.
 
 ## How the comparator treats this difference
 
-The comparators score consequence sets and never read `MOTIF_SCORE_CHANGE`, so nothing is set aside in any figure. The field comparator (`scripts/concordance/compare_vep_fields.py`) compares the field exactly; a run that compares it on records with a multi-base allele over a reverse-strand motif names each such row as a field divergence of this page. The format comparator (`scripts/concordance/compare_vep_formats.py`) takes the class `motif_score_reverse_strand_mnv` under `--masks`. A corpus manifest documents each such row's value. On an input with no manifest the comparator accepts a differing or added `MOTIF_SCORE_CHANGE` on a reverse-strand motif row whose allele spans two or more bases, and nothing else of the row.
+The comparators score consequence sets and never read `MOTIF_SCORE_CHANGE`, so nothing is set aside in any figure. The field comparator (`tools/vep-fields-compare`) compares the field exactly; a run that compares it on records with a multi-base allele over a reverse-strand motif names each such row as a field divergence of this page. The format comparator (`tools/vep-formats-compare`) takes the class `motif_score_reverse_strand_mnv` under `--masks`. A corpus manifest documents each such row's value. On an input with no manifest the comparator accepts a differing or added `MOTIF_SCORE_CHANGE` on a reverse-strand motif row whose allele spans two or more bases, and nothing else of the row.

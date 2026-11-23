@@ -2,7 +2,7 @@
 """Derive the comparators' ``--reference-release`` from a reference set's provenance.
 
 The release is read from the Ensembl VEP image tag the reference was produced with
-(``ensemblorg/ensembl-vep:release_116.2`` gives ``116.2``), under whichever key the
+(``ensemblorg/ensembl-vep:release_116.3`` gives ``116.3``), under whichever key the
 provenance record carries it; a record with no image tag falls back to its cache
 version (115 gives 115.2, 116 gives 116.2, the releases the comparators carry a registry
 for). A record with neither, or a tag of a release without a registry, is an error, so a
@@ -25,11 +25,11 @@ import re
 import sys
 from pathlib import Path
 
-REFERENCE_RELEASES = ("115.2", "116.2")
+REFERENCE_RELEASES = ("115.2", "116.2", "116.3")
 CACHE_VERSION_RELEASE = {"115": "115.2", "116": "116.2"}
 IMAGE_KEYS = ("perl_docker_image", "perl_image", "perl_vep_docker_image", "vep_image_tag", "image")
 _TAG = re.compile(r"release_(\d+\.\d+)$")
-# `ensembl-vep          : 116.2`, the version line VEP prints and a golden corpus records.
+# `ensembl-vep          : 116.3`, the version line VEP prints and a golden corpus records.
 _REPORTED = re.compile(r"ensembl-vep\s*:\s*(\d+\.\d+)")
 _CACHE_VERSION_FLAG = re.compile(r"--cache_version\s+(\d+)")
 # `population_r116.2_c116_<date>`, the archived reference set a record names as its prefix.
@@ -105,7 +105,7 @@ def provenance_file(directory: Path) -> Path:
     """The provenance record that names a ground-truth directory's release: its own
     ``provenance.json``, else the first ``*.provenance.json`` sidecar beside an output, else
     the ``provenance.json`` of the parent directory, which is where a reference set written
-    as one record for every suite keeps it (``<set>/provenance.json`` over ``<set>/<suite>/``)."""
+    as one record for every dataset keeps it (``<set>/provenance.json`` over ``<set>/<dataset>/``)."""
     if not directory.is_dir():
         raise ValueError(f"{directory} is not a directory")
     direct = directory / "provenance.json"
@@ -127,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
     src = ap.add_mutually_exclusive_group(required=True)
     src.add_argument("--provenance", type=Path, help="a provenance.json")
     src.add_argument("--provenance-dir", type=Path, help="a directory holding provenance.json or *.provenance.json")
-    src.add_argument("--image", help="an Ensembl VEP image reference, e.g. ensemblorg/ensembl-vep:release_116.2")
+    src.add_argument("--image", help="an Ensembl VEP image reference, e.g. ensemblorg/ensembl-vep:release_116.3")
     src.add_argument("--vep-constants", type=Path, help="modules/Bio/EnsEMBL/VEP/Constants.pm of a checkout")
     a = ap.parse_args(argv)
     try:

@@ -58,7 +58,7 @@
    "perl_mode": "database"
   }
  ],
- "suites": {
+ "datasets": {
   "hgvs": {
    "reference": "ref_default.txt",
    "input": "variants.vcf",
@@ -248,176 +248,170 @@
    "exemplar_records": 38
   }
  },
- "variant_classes": {
-  "deletion": 55,
-  "insertion": 38,
-  "mnv_or_complex": 39,
-  "snv": 286
- },
  "records": [
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t11000000\t21:g.11000000A>G\tA\tG\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t30282169\tchr21:g.30282169C>A\tC\tA\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t30282169\t21:g.30282169C>a\tC\tA\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t30282169\tNC_000021.9:g.30282169C>A\tC\tA\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t30282169\t21:g.30282168_30282170delinsTAA\tC\tA\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t30282169\t21:g.30282169C>A\tC\tA\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t30282169\t21:g.30282169C>A(p.=)\tC\tA\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t30282169\t21:g.30282169delCinsAT\tC\tAT\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t30282170\t21:g.30282171_30282173del\tAATA\tA\t.\t.\t.",
    "combinations": [
     "inframe_deletion"
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t30282171\t21:g.30282171A>G\tA\tG\t.\t.\t.",
    "combinations": [
     "synonymous_variant"
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t30282171\t21:g.30282172del\tAT\tA\t.\t.\t.",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t30282171\t21:g.30282171_30282173delinsGGG\tATA\tGGG\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t30282171\t21:g.30282171_30282173inv\tATA\tTAT\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t30282172\t21:g.30282172T>C\tT\tC\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t30282172\t21:g.30282172_30282173insG\tT\tTG\t.\t.\t.",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t30282179\t21:g.30282180_30282199del\tTCAGAGGTCTGCTACCACTGC\tT\t.\t.\t.",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t30289183\t21:g.30289184dup\tC\tCA\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t30289183\t21:g.30289184_30289183insA\tC\tCA\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t30319403\t21:g.30319404del\tTC\tT\t.\t.\t.",
    "combinations": [
     "stop_retained_variant"
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t30348409\t21:g.30348410_30348411delTA\tCTA\tC\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t30348409\t21:g.30348410_30348411delGG\tCTA\tC\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t30430756\t21:g.30430757_30430761dup\tT\tTAAATT\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,inframe_insertion"
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t30430756\t21:g.30430756_30430757insCCTAA\tT\tTCCTAA\t.\t.\t.",
    "combinations": [
     "inframe_insertion,stop_lost"
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t42312254\tENST00000518498:c.*2G>A\tC\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -427,7 +421,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t42313634\tENST00000518498:c.83-3C>T\tG\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_polypyrimidine_tract_variant",
@@ -440,7 +434,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t42315290\tENST00000518498:c.82+3G>T\tC\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -450,7 +444,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t42315293\tENSP00000430690:p.Ser28Ala\tA\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -461,7 +455,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t42315323\tENST00000518498:c.50_52inv\tAGG\tCCT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,stop_gained",
@@ -469,7 +463,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t42315333\tENST00000518498:c.40_42delinsATT\tGGC\tAAT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -478,7 +472,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t42315334\tENSP00000381462:p.Ala2Gly\tG\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -486,7 +480,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t42315344\tENST00000518498:c.30_31insAAA\tG\tGTTT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_insertion",
@@ -495,7 +489,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t42315347\tENSP00000430690:p.Met8_Leu9del\tCCAGCAT\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_deletion",
@@ -504,7 +498,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t42315354\tENSP00000430690:p.Cys7=\tG\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,synonymous_variant",
@@ -512,7 +506,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t42315355\tENST00000518498:c.20dup\tC\tCC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -521,7 +515,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t42315362\tENST00000518498:c.10_12del\tCTCT\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_deletion",
@@ -530,7 +524,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t42315365\tENSP00000430690:p.Arg4Ter\tT\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,stop_gained",
@@ -539,7 +533,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t42315370\tENST00000518498:c.5C>T\tG\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -548,7 +542,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t42315370\tENSP00000430690:p.Ala2Gly\tG\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -557,7 +551,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t42315370\tENST00000518498.3:c.5C>A\tG\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -566,7 +560,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t42315377\tENST00000518498:c.-3G>A\tC\tT\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -575,7 +569,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43169090\tENST00000291554:c.-10A>G\tA\tG\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -585,7 +579,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43169102\tENST00000291554:c.3G>A\tG\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -595,7 +589,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43169108\tENST00000291554:c.10_12del\tGACC\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -605,7 +599,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43169109\tENSP00000291554:p.4delinsAla\tA\tG\t.\t.\t.",
    "combinations": [
     "missense_variant",
@@ -614,7 +608,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43169109\tENSP00000291554:p.Thr4Ala\tA\tG\t.\t.\t.",
    "combinations": [
     "missense_variant",
@@ -623,7 +617,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43169112\tENSP00000291554.2:p.Ile5Val\tA\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -633,7 +627,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43169115\tENSP00000291554.9:p.Q6E\tC\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -643,7 +637,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43169115\tENSP00000291554:p.Gln6Ter\tC\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -652,7 +646,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43169118\tENST00000291554:c.20dup\tC\tCA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -661,7 +655,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43169118\tENST00000291554:p.His7Tyr\tC\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -671,7 +665,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43169128\tENSP00000291554:p.Phe10Trp\tTC\tGG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -681,7 +675,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43169129\tENST00000291554:c.30_31insCCC\tC\tCCCC\t.\t.\t.",
    "combinations": [
     "inframe_insertion",
@@ -690,7 +684,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43169129\tENSP00000291554:p.Phe10=\tC\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -700,7 +694,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43169130\tENSP00000291554:p.Lys11*\tA\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -710,7 +704,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43169133\tENSP00000291554:p.Arg12Trp\tCGC\tTGG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -720,7 +714,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43169136\tENSP00000291554:p.Thr13delinsPro\tA\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -730,7 +724,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43169138\tENSP00000291554:p.Leu14del\tCCTG\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -739,7 +733,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43169139\tENST00000291554:c.40_42delinsGAT\tCTG\tGAT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -749,7 +743,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43169141\tENSP00000291554:p.Gly15_Pro16del\tGGGGCCC\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -759,7 +753,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43169149\tENST00000291554:c.50_52inv\tTCT\tAGA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -769,7 +763,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43169199\tENST00000291554.6(CRYAA):c.100T>A\tT\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -779,7 +773,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43169199\tENST00000291554:c.100T>C\tT\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -789,7 +783,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43169199\tENST00000291554.6:c.100T>G\tT\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -799,7 +793,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43169287\tENST00000291554:c.189_190del\tAGGTAAGACGTGGCCCGTGGTGCTGGCCTCTCCTCGCTGCTCAGAGGGTGGTGGCCTCGGTGGGTGGAGAGCGATGGACTCTGGTCTTGCTCCGTCAGGCAGGTGGCCTCGTCCCACTTCATCCCCTTGCAGAGGCTGGGCGAGAGCCTGTGTCCCCACTGCAGCCACGTGGCAGAGCTTCCCCTGGCACTGGGGAGAGGGTGGACAAGGGAGCAGCCTGAATCCACCTTTGCTTTCCTCCATCAGCTCATGACCCATGTGTGCTTTGTAAGGCACCAGCCACATACTGGAAACCCCAAGAGCAGCCCATCCAGGCATGCGTGGTGGCGAATGCCAGCTCCCGGGTTCCTCTGGTCTCCTGAGTCCCGGAGACCTGGGAGCAGGTGGGGGTCATAGTCCTGAAAGCCAGAGAGCAGGGCGTTCCTAGCACCTCCTCCAATGAGCTCGGCCTGCCCACGGCTAGCAAAGCTCTTGGCAAGTTTACTTAGGTGCCCTGCCAAGGCTAAAAGGACAGGCAATGGACGCCCCCCCCCCCACCCAACCACAGGCCTCCTCTCTGAGCCACGGGTGAGCGGTGCAGGTTCTGCTGTTCTGGAGGGCCTGAGTCCCACCCAGCACCTCATAAACAGGGTCCTCCCCAGGGCTGCTGCAGTAGGCATCAACGCCAGGGTGCAAAATGCCTCAGGGAGCCAAGGCTGAGCCAGGGGAGTGAGAAGGAGCATGTGGAAGTGCGTTTTGGAGAGGCAGCTGCGCAGGCTGTCAGCAGGCTCCGGCCGCTTCTATAGACAGCATGACACCAAGGGCAGTGACCTCATTCCACAGGCTGAGTCCAGCCAGCCAGCCAAGCATCACCAGCCAGACGATTGACCCTAACGGACCAACCAACCCGTAACGACCCCTCCTACCATAACCAGTAGCCAGCCAGCCCATAACCAGCCAACTTATCTATAACCAGCCACCTGACCATAGCCAAACAACCAGCCGGCCCACCAGTAGCATTCAGCCCCTCAGCTGGCCCTGAGGGTTTGGAGACAGGTCGAGGGTCATGCCTGTCTGTCCAGGAGACAGTCACAGGCCCCCGAAAGCTCTGCCCCACTTGGTGTGTGGGAGAAGAGGCCGGCAGGTGACCGAAGCATCTCTGTTCTGATAACCGGGACCCGCCCTGTCTCTGCCAACCCCAGCAGGGACGGCACCCTCTGGGCAGCTCCACATGGCACGTTTGGATTTCAGG\tA\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,coding_sequence_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant",
@@ -810,7 +804,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43169293\tENST00000291554:c.189+5G>A\tG\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -820,7 +814,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43170512\tENST00000291554:c.190-5T>C\tT\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -830,7 +824,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43172278\tENSP00000291554:p.Ter174Gln\tT\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -840,7 +834,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43172285\tENST00000291554:c.*5G>A\tG\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -850,7 +844,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43177210\tENST00000806817:n.*3T>C\tT\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -858,7 +852,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43177221\tENST00000806817:n.15T>C\tT\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -867,7 +861,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43177293\tENST00000806817:n.85+2T>A\tT\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -876,7 +870,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43178473\tENST00000807019:n.135+5A>G\tT\tC\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -885,7 +879,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43178590\tENST00000807019:n.20_22del\tGCAG\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -894,7 +888,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "21\t43178603\tENST00000807019:n.10A>G\tT\tC\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -902,7 +896,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "MT\t3243\tMT:m.3243A>G\tA\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -911,7 +905,7 @@
    ]
   },
   {
-   "suite": "hgvs",
+   "dataset": "hgvs",
    "vcf": "MT\t8993\tMT:m.8993T>G\tT\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -920,7 +914,7 @@
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "divergences": [

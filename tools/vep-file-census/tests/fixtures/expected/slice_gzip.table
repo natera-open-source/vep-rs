@@ -1,0 +1,9 @@
+gz	chr1	45	1
+gz	chr2	25	1
+gz		1	1
+gz	  chr2 9000 . C T . PASS leading_blanks	1	1
+gz	chr	1	1
+gz	 	1	1
+gz	3	10	1
+gz	chrX	30	1
+gz	chrUn_KI270742v1	3	1

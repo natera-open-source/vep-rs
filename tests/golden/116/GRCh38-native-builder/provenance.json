@@ -1,24 +1,24 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --symbol --biotype --canonical --mane --tsl --protein --protein_version [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "none on either side",
  "input": "163 chromosome 21 and MT records (150 on 21, 13 on MT): the union of two record sets selected over the native cache (the attribute set: SNVs, deletions, insertions and MNVs from the GRCh38 golden corpus's chromosome 21 records plus records placed on a Mt_tRNA, the MT-ND1 CDS (codon table 2), an intron of a cds_start_NF transcript, an exon of a readthrough transcript, the MIR548X miRNA, the Y_RNA gene named by RFAM, the CYP4F29P gene named by EntrezGene, the TMPRSS15 and CHODL coding sequences and a lncRNA without a symbol; the frame set: coding, splice-region, UTR, start and stop positions of every protein-coding transcript of the 21:34000001-35000000, 42000001-43000000 and 45000001-47000000 windows and of every MT gene, where the exon phases, the N-padded translateable sequence, the UTRs and the codon table decide the consequence, codon and protein columns), and two records placed on the chromosome's ClinVar records that carry a somatic classification, in RUNX1 (nb_runx1_oncogenic at 34859477 and nb_runx1_likely_oncogenic at 34859534; the first takes the T allele, the one allele of its record without an allele-specific ClinVar term, see flag_sets.variation.clin_sig_order); the reference base is the GRCh38 primary assembly's",
  "sha256": {
-  "default.txt": "751f0ae05b25fa0f5e3def883ddb7e29571b1ae94792fd5236d379e55dedeb34",
-  "tab.txt": "69fa879e077b74214f82ee99892fa714b9661688cd38c95a2d3112804326986a",
-  "vcf.vcf": "55c7424cc2dad21ded9cb47edbf579c6549d7dfc40aa33bf9a569d244849f42d",
-  "json.jsonl": "9b0085b6201906f8ed5f6678aa6d43dba13b1365d55eb6be7c4ff5cd6e0d275a"
+  "default.txt": "d065366b7432f5a7c902de2bd9cdcb5edf0f737515218929d204916df3036449",
+  "tab.txt": "eed1ae880325f92b2e1700e00829073e1fb5f6d4cd5bf40a637f36f3cfb83f3d",
+  "vcf.vcf": "a26a17ea07be23081f96ce6f880a0b9327b11531c762bb67b0ad9a9c32d77321",
+  "json.jsonl": "a94dca466033910fb52ba449306018ed63b638963d7a74d1aa395008dbddf383"
  },
  "variants_vcf_sha256": "0e6f59b63776f66d4fc717bafd3706791fa593897f09f51387896c6e05fe726b",
  "json_cache": {
   "source": "built by vep-cache-builder from the release 116 GRCh38 GFF3 (the chromosome 21 and MT lines), the peptide FASTA, the chromosome 21 and MT genome FASTA and the core and variation MySQL table dumps (--core-dumps), then pruned to the records' transcripts with scripts/golden/prune_json_cache.py --gzip (no key dropped); the variation files under variations/ are vep-cache-builder's --include-variations output for chromosomes 21 and MT, built from the release 116 Ensembl variation VCFs (homo_sapiens-chr21.vcf.gz, homo_sapiens-chrMT.vcf.gz, homo_sapiens_somatic.vcf.gz, homo_sapiens_phenotype_associated.vcf.gz, homo_sapiens_clinically_associated.vcf.gz, 1000GENOMES-phase_3.vcf.gz) with the variation database's phenotype_feature and phenotype_feature_attrib dumps (--variation-dumps), then pruned to the records' windows with prune_json_cache.py --variations --variation-info --exclude-variation",
   "info_json": "derived from the Ensembl VEP cache's info.txt as every corpus's is, so the version header the format tests compare matches; variation_cols and var_type are the native build's own (prune_json_cache.py --variation-info), the 21 columns its all_vars.gz files carry; the native build's own info.json carries the assembly, gencode and genebuild versions alone"
  },
- "generator": "vep-cache-builder --release 116 --assembly GRCh38 --gff3 <chr21+MT lines of Homo_sapiens.GRCh38.116.gff3.gz> --fasta Homo_sapiens.GRCh38.pep.all.fa.gz --core-dumps <dir> --genome-fasta <chr21+MT .fa> --output-dir <cache>; scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite <id>=<reference>=<designed and chr21 records> --suite <id>=<reference>=<frame records> --k 1 --seed 1 --cache <cache> --family-columns SYMBOL=,SYMBOL_SOURCE=,HGNC_ID,TSL,MANE_SELECT,CANONICAL,FLAGS=,ENSP,BIOTYPE= --covers ... --matrix tests/parity/matrix.tsv --flag=--symbol ... --out tests/golden/116/GRCh38-native-builder; scripts/golden/prune_json_cache.py --cache <cache> --out <corpus>/json_cache --vcf <corpus>/variants.vcf --gzip; scripts/golden/prune_json_cache.py --info-only --perl-info <perl cache>/info.txt --cache-version 116; scripts/concordance/generate_reference_output.sh --corpus <corpus> --perl-cache-dir <dir>; scripts/golden/build_golden_corpus.py flag-set and classify (the manifest's run and the ccds, gencode_basic, gencode_primary and flag_gencode_primary sets; each set's expected outputs are Ensembl VEP's four formats on its own cache for the same records under the set's flags); vep-cache-builder --release 116 --assembly GRCh38 --include-variations --variation-vcf-dir <release 116 variation VCFs> --variation-dumps <homo_sapiens_variation_116_38 dumps> --output-dir <native>; scripts/golden/prune_json_cache.py --cache <corpus>/json_cache --out <pruned> --vcf <corpus>/variants.vcf --gzip --perl-info <perl cache>/info.txt --cache-version 116 --variations <native>/variations --variation-info <native>/info.json --exclude-variation '^COSV\\d' --exclude-variation '^(C[A-Z]|BM|HM)\\d{6}' (the transcript shards come out byte-identical; variations/ and info.json are taken); scripts/golden/build_golden_corpus.py flag-set and classify --flag-set variation (the variation set's expected outputs are Ensembl VEP's four formats on its own cache for the same records under the set's flags); the two clinical-impact records were added by a re-selection over the native chromosome 21 and MT build: scripts/golden/build_golden_corpus.py select with the same options over the previous selection's records as the two suites' inputs (each suite's reference Ensembl VEP 116.2's default output for them under the manifest's flags, the attribute set's input carrying the two RUNX1 records) with --keep-records --include attributes=nb_runx1_oncogenic --include attributes=nb_runx1_likely_oncogenic; prune_json_cache.py as above over the fresh build; generate_reference_output.sh --corpus for the manifest's run and for each flag set; classify for each; scripts/golden/build_golden_corpus.py flag-set and classify --flag-set domains (no flag-set option writes the set's masks key, which is written by hand and kept by a re-run of flag-set), its expected outputs Ensembl VEP's four formats on its own cache for the same records under the set's flags, through generate_reference_output.sh --corpus on a copy of the corpus whose manifest flags are the set's",
+ "generator": "vep-cache-builder --release 116 --assembly GRCh38 --gff3 <chr21+MT lines of Homo_sapiens.GRCh38.116.gff3.gz> --fasta Homo_sapiens.GRCh38.pep.all.fa.gz --core-dumps <dir> --genome-fasta <chr21+MT .fa> --output-dir <cache>; tools/vep-golden-corpus select --release 116 --assembly GRCh38 --dataset <id>=<reference>=<designed and chr21 records> --dataset <id>=<reference>=<frame records> --k 1 --seed 1 --cache <cache> --family-columns SYMBOL=,SYMBOL_SOURCE=,HGNC_ID,TSL,MANE_SELECT,CANONICAL,FLAGS=,ENSP,BIOTYPE= --covers ... --matrix tests/parity/matrix.tsv --flag=--symbol ... --out tests/golden/116/GRCh38-native-builder; scripts/golden/prune_json_cache.py --cache <cache> --out <corpus>/json_cache --vcf <corpus>/variants.vcf --gzip; scripts/golden/prune_json_cache.py --info-only --perl-info <perl cache>/info.txt --cache-version 116; scripts/concordance/generate_reference_output.sh --corpus <corpus> --perl-cache-dir <dir>; tools/vep-golden-corpus flag-set and classify (the manifest's run and the ccds, gencode_basic, gencode_primary and flag_gencode_primary sets; each set's expected outputs are Ensembl VEP's four formats on its own cache for the same records under the set's flags); vep-cache-builder --release 116 --assembly GRCh38 --include-variations --variation-vcf-dir <release 116 variation VCFs> --variation-dumps <homo_sapiens_variation_116_38 dumps> --output-dir <native>; scripts/golden/prune_json_cache.py --cache <corpus>/json_cache --out <pruned> --vcf <corpus>/variants.vcf --gzip --perl-info <perl cache>/info.txt --cache-version 116 --variations <native>/variations --variation-info <native>/info.json --exclude-variation '^COSV\\d' --exclude-variation '^(C[A-Z]|BM|HM)\\d{6}' (the transcript shards come out byte-identical; variations/ and info.json are taken); tools/vep-golden-corpus flag-set and classify --flag-set variation (the variation set's expected outputs are Ensembl VEP's four formats on its own cache for the same records under the set's flags); the two clinical-impact records were added by a re-selection over the native chromosome 21 and MT build: tools/vep-golden-corpus select with the same options over the previous selection's records as the two datasets' inputs (each dataset's reference Ensembl VEP 116.2's default output for them under the manifest's flags, the attribute set's input carrying the two RUNX1 records) with --keep-records --include attributes=nb_runx1_oncogenic --include attributes=nb_runx1_likely_oncogenic; prune_json_cache.py as above over the fresh build; generate_reference_output.sh --corpus for the manifest's run and for each flag set; classify for each; tools/vep-golden-corpus flag-set and classify --flag-set domains (no flag-set option writes the set's masks key, which is written by hand and kept by a re-run of flag-set), its expected outputs Ensembl VEP's four formats on its own cache for the same records under the set's flags, through generate_reference_output.sh --corpus on a copy of the corpus whose manifest flags are the set's",
  "pruned_cache": {
   "transcripts_per_chromosome": {
    "21": 949,
@@ -32,6 +32,20 @@
  },
  "flag_sets": {
   "ccds": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --symbol --biotype --canonical --mane --tsl --protein --protein_version --ccds [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "tab.txt": "5ba8af14dfc890aa7b79bbde978fb4e3cf531463c6b389743ddb63cf9644c7c9",
+    "vcf.vcf": "2614d413e8e719882b80a1c081094c8947482ef2ca91d7486c1552ec9fbe5be9",
+    "json.jsonl": "936283377b409a1175dcf5918bd8d9e87d2e449c1e3e678e1aa837eee9103adc",
+    "default.txt": "fa56bb6386a3f90ac122f1f0808f2011724d4339f32295be5f050e6023d03598"
+   },
    "flags": [
     "--symbol",
     "--biotype",
@@ -42,15 +56,23 @@
     "--protein_version",
     "--ccds"
    ],
-   "expected_dir": "expected_ccds",
-   "sha256": {
-    "default.txt": "8e7d99ba10ed6ba9fde8297cca060b877e616412323c34ef29a196d90093559e",
-    "tab.txt": "6674f1fcb9a9d5ca9bd7d5baf6b06fbe6184435bd257f72c8c7794ee6a14af85",
-    "vcf.vcf": "04abb8989076e1932655f6ddaae42ff4cfa73e7e4c807cd3ff5c536a0e927348",
-    "json.jsonl": "a3a7ac6079593c1b368d2dcb9e6ac96d08bb53ba8bd113aa335c6d71c7873708"
-   }
+   "expected_dir": "expected_ccds"
   },
   "gencode_basic": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --symbol --biotype --canonical --mane --tsl --protein --protein_version --gencode_basic [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "0896c07c25f68542e724c415b316a645b0f4d55fcc65617362b9b65c80a5609f",
+    "tab.txt": "80a90f798bb357ae2e11e1682d17a0a7942e2b1ce6ef27871f09012690193d97",
+    "vcf.vcf": "f04256f2838b7b1b92a1b5c6298fae75546714780e1292d13753909db3bc2074",
+    "json.jsonl": "70fb0f9f24c66e8a227e7586d679c1cc29a8641eac274eafe30f3ea33beda586"
+   },
    "flags": [
     "--symbol",
     "--biotype",
@@ -61,15 +83,23 @@
     "--protein_version",
     "--gencode_basic"
    ],
-   "expected_dir": "expected_gencode_basic",
-   "sha256": {
-    "default.txt": "33245f4a352cc1bd42bce77a191b31d3f2bad417409f235dee1c372f6d6c5677",
-    "tab.txt": "c868ddc2724ade2c8db07ef66214142444eb883475c493232741eefb244a389c",
-    "vcf.vcf": "3a52ed76ec5e6436ff0c767788f613e4bf021f69121aaabdfed8ad297a78793c",
-    "json.jsonl": "9349d33afcd81d68757b1553d1704ae94a5523df48a02cf59d5fe4c1b3cb85e0"
-   }
+   "expected_dir": "expected_gencode_basic"
   },
   "gencode_primary": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --symbol --biotype --canonical --mane --tsl --protein --protein_version --gencode_primary [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "15ea5f9fedd06f74d3e1f65e495897be316c568943fea0a060edd5dd469bc680",
+    "tab.txt": "404748739c1f4986e3340b894f8f597b5e52937e610fb5192d741e198d120625",
+    "vcf.vcf": "021021915c50467848569cd542a298196086a1e0b2ead1e4bb0ebcadd06d97c6",
+    "json.jsonl": "597ce3a2c6a8c3e96e3e3ac9ca70fe01e562168c37b4d01bfdf25f5b6aae9aba"
+   },
    "flags": [
     "--symbol",
     "--biotype",
@@ -80,15 +110,23 @@
     "--protein_version",
     "--gencode_primary"
    ],
-   "expected_dir": "expected_gencode_primary",
-   "sha256": {
-    "default.txt": "955cc21475e35047b8ce4d7affc74f6a539e993c48b1547d74f59e59a564f044",
-    "tab.txt": "fb08cfb902c1d77381b16d5fac21b07b85f4265df5d0853c659ca2edeb774ecc",
-    "vcf.vcf": "1b6357c7ad6038856c3f38fe73e1afff9a4679136231537bb242ab11a1751993",
-    "json.jsonl": "a61da8df434e07a1b953ba6cb06a6a91c69e01be870c491edace82b57ecea8ea"
-   }
+   "expected_dir": "expected_gencode_primary"
   },
   "flag_gencode_primary": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --symbol --biotype --canonical --mane --tsl --protein --protein_version --flag_gencode_primary [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "9695d877a31abe39660a24c33adf452e0ca912da3e8012630c414f13f2f0743f",
+    "tab.txt": "a3ad10cb79657e74831161e8a6222d96c22fc99825cdcb85a81382d444b35664",
+    "vcf.vcf": "0ff002e99cee6504a4c0a19f14ca1feed314e3a0106b5e99897a566c8ce99fa3",
+    "json.jsonl": "02d9b4b62dca8e1b351e98a07fa5f0eb69cc6fee6acbd4ce8df9a2b90f86f7cd"
+   },
    "flags": [
     "--symbol",
     "--biotype",
@@ -99,15 +137,23 @@
     "--protein_version",
     "--flag_gencode_primary"
    ],
-   "expected_dir": "expected_flag_gencode_primary",
-   "sha256": {
-    "default.txt": "54d1c257b35548ee16af9d5c24900c39479253f1a39ffa2b10c1bd1dedb8d6bd",
-    "tab.txt": "5554994f771195000220148dfe0c5aa0536a70a155dce43dfd410f070594dc7c",
-    "vcf.vcf": "05b8446f3e1de7e8a1d94cd4e5a81b5800b0f01e147d4b91d682d7b7dd0b4703",
-    "json.jsonl": "69a1ff81d552c05e1517041c2d4c8c143efdb50c35c13490556ab816b363db50"
-   }
+   "expected_dir": "expected_flag_gencode_primary"
   },
   "gene_version": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --symbol --biotype --canonical --mane --tsl --protein --protein_version --gene_version [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "4f41c04b2cf352a6207afaeaaa0235974b0ea5ddcb46b3060bfe0a34c02e9c53",
+    "tab.txt": "5394484b786d23d66b41f7d87f450ac88405dd4c1ad3fa9eee6fe7a0abc77125",
+    "vcf.vcf": "25cb7bdc9e3c561b4d4f2f8178d69e761c5995b93909b90d2a11dec7e36e2ae1",
+    "json.jsonl": "7da3f56544ea24924598ab0652793b95a7ce7f8f2af8f4f2e7dae59f732cc0a2"
+   },
    "flags": [
     "--symbol",
     "--biotype",
@@ -118,15 +164,23 @@
     "--protein_version",
     "--gene_version"
    ],
-   "expected_dir": "expected_gene_version",
-   "sha256": {
-    "default.txt": "e656dd28cc6b22610c3ae7e43db1ed8335b36b5a3dc6e86c68f795a25204519f",
-    "tab.txt": "a1c3a88ede91f2e01d4a98a0c3d36d1c2abca9528705ce6bc37d69d22396527b",
-    "vcf.vcf": "e3ed6dfa8a4230c7cdc26352a9420bfd4e31507b92f43509ee874aee0cf05045",
-    "json.jsonl": "0bc0030f93c51e33529e8f93df150cbf182870842e9f4d721d1208589b93b5f5"
-   }
+   "expected_dir": "expected_gene_version"
   },
   "uniprot": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --symbol --biotype --canonical --mane --tsl --protein --protein_version --uniprot [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "f094bb17aa689ba134201bc5ba0dd081e94dae81cf9420b2a6c16acd93d81227",
+    "tab.txt": "0fda4e3ffc9272bd1a4ac418ae9dcd90c46336a477ddff35c8ca4cb3278ddea7",
+    "vcf.vcf": "853c0ed6a9915cf0ac8cc4ced9ea905055972bd1a2b4be68b0d97f062adb597a",
+    "json.jsonl": "7732797309799fc6a8e246f2f2a745fc7ccef7fdf514ac4f6800de61b1da1893"
+   },
    "flags": [
     "--symbol",
     "--biotype",
@@ -137,15 +191,23 @@
     "--protein_version",
     "--uniprot"
    ],
-   "expected_dir": "expected_uniprot",
-   "sha256": {
-    "default.txt": "44ee655de3f54cf1b2bbac707f7eb6ac82821d6013e6f779ef2da0ad3059b20c",
-    "tab.txt": "68f7ec2de99a9910ad7480ea223138755bdb3a5fef268447ec631c040b0068f3",
-    "vcf.vcf": "f088713ceb76fc9e78b4cee1e3e082689bc848311b1403263ae099b8511e54ca",
-    "json.jsonl": "34956d068f28c8afcb12d03c4bea3fd5d48254abde396cdc309563494d3f6452"
-   }
+   "expected_dir": "expected_uniprot"
   },
   "mirna": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --symbol --biotype --canonical --mane --tsl --protein --protein_version --mirna [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "0468d237526a2d3b38d73b6b639411121f7fdfcdbdadbee454dea149725136c9",
+    "tab.txt": "ccb31bda8aaec99d27c74733ead44625601fe049dc03bb2b757397ad5aad98cc",
+    "vcf.vcf": "d5263e671795ca8601c80a332a461d74dae253c91ec56bf44d15f39729687d98",
+    "json.jsonl": "efce1f7a097a40e5292edd53cbdbd173a594269e7f1fe7f21a36ccfa30f88085"
+   },
    "flags": [
     "--symbol",
     "--biotype",
@@ -156,15 +218,23 @@
     "--protein_version",
     "--mirna"
    ],
-   "expected_dir": "expected_mirna",
-   "sha256": {
-    "default.txt": "ef662708dce0f001c57ef97250356029032afcc1b47026c6c3d50c28c02a0b08",
-    "tab.txt": "9a5d2095c7f9c38123e6b650e5bde5ce4effe15521dd32792b3ca5d07e290342",
-    "vcf.vcf": "3f942bd7f356e811c28fa69a39788f3c2d8e41daa1793c49ec687b3b3108152d",
-    "json.jsonl": "7690b82c1b3c33826a4c3d4cd837e8ef15ad0608608ed26394c60825686bff6c"
-   }
+   "expected_dir": "expected_mirna"
   },
   "gene_phenotype": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --symbol --biotype --canonical --mane --tsl --protein --protein_version --gene_phenotype [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "c992329c573f6882a7a6fd46e758626b402ce123eb0cd2756080189ddecbac23",
+    "tab.txt": "d527ad9449498d13735ca674f37c787dac1e9377632057fa5c3f773b590395eb",
+    "vcf.vcf": "2f7c8d88acbcbe04278f004aa978c56b5cca792dd2fa0ee7c29c9755511d560b",
+    "json.jsonl": "03c04c7d18decf0834f9468a9f07a8e62a2542daf1002b91585a2b74b6531952"
+   },
    "flags": [
     "--symbol",
     "--biotype",
@@ -175,15 +245,23 @@
     "--protein_version",
     "--gene_phenotype"
    ],
-   "expected_dir": "expected_gene_phenotype",
-   "sha256": {
-    "default.txt": "ab23eadaab137f64155487fea542d5e13c0c130d36a10f30c467a0e3077f3723",
-    "tab.txt": "3295f6ea0c03f58f17270f936f32402ad925cded59c8f677f36ffed5155ef337",
-    "vcf.vcf": "d701a0911cf14e9b0a1beee4ae91165ed00cdb2fa70b90869775817a8fbad97b",
-    "json.jsonl": "3ac3afc1a016f4548363ec4fdf1d28a6109ea988046c74ffd3e062389561817c"
-   }
+   "expected_dir": "expected_gene_phenotype"
   },
   "xref_refseq": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --symbol --biotype --canonical --mane --tsl --protein --protein_version --xref_refseq [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "0c554deb208364851836cd5586642009d4608ca7b5ec37f893006300bc2bfa2c",
+    "tab.txt": "4c16336c2dbadeeac53cd821676f396947ba8664351a4b59f6e15d8b1d5f74fa",
+    "vcf.vcf": "93991655ee709c19f1a6107abc18ce4083fa22059065cda6f6f57b0c7f4afd17",
+    "json.jsonl": "a660e72b5c5d399c6b8e44ca4a1b47e1847f29cffd45be04926f87c2cc140516"
+   },
    "flags": [
     "--symbol",
     "--biotype",
@@ -194,15 +272,23 @@
     "--protein_version",
     "--xref_refseq"
    ],
-   "expected_dir": "expected_xref_refseq",
-   "sha256": {
-    "default.txt": "ad8485700f8e1fd481c3317fdc82863f20c538b8174d9cace8a875f262c82aa6",
-    "tab.txt": "dc8e821a1079ad2b1d11f47b9a95d9d43a1fd9f271579070857a8009c8c1b832",
-    "vcf.vcf": "26c10018c47993535a4c9ebb4eed7e8bb9375f79823cf1782f276c1ec24e61d7",
-    "json.jsonl": "d4f3cf11e3f1e94cd7e050b5b01ee459ef3e76303ee423da343fe4918bac23d3"
-   }
+   "expected_dir": "expected_xref_refseq"
   },
   "variation": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --symbol --biotype --canonical --mane --tsl --protein --protein_version --check_existing --exclude_null_alleles --af --af_1kg --clinvar_somatic_classification [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "7b8107c0e7ac388d6a960cf4a643eb25310da71dc5f021ee577e64fd97526388",
+    "tab.txt": "c8d83ca6011990a1ac325169dc65271bc05bd00d1e94a69759456363feeeb376",
+    "vcf.vcf": "8041947ece77ccbc18c7a5589c1303af2f080e3cc5aadff7e2b4104c060371cf",
+    "json.jsonl": "e24fdccc6f7ccb9e4077438b8042df6767db46695d77f0041b21af07b3bd2fb2"
+   },
    "flags": [
     "--symbol",
     "--biotype",
@@ -218,12 +304,6 @@
     "--clinvar_somatic_classification"
    ],
    "expected_dir": "expected_variation",
-   "sha256": {
-    "default.txt": "967e76ea4b477043b1814118b7102602ba417a766fc4598b438d8f87a1e80b31",
-    "tab.txt": "1da50b68771fa0b117446675758e6e32e2e358a6464c9ecda956791fd995f6c8",
-    "vcf.vcf": "5868f216f1855522faa72fa2393a29e135223b196c4874e33e2909f30a298cc2",
-    "json.jsonl": "73cf735353516f280440b7f209f6f62108a1490d58f8e94a59aaa44a21d04951"
-   },
    "flags_left_out": {
     "--af_gnomade --af_gnomadg --max_af": "no gnomAD frequency enters a native cache (Ensembl publishes no release 116 gnomAD VCF), where the Ensembl cache's MAX_AF ranges over the gnomAD populations",
     "--pubmed --var_synonyms": "the Ensembl variation VCFs carry no PubMed identifier and no synonym, so a native cache's pubmed and var_synonyms columns are empty",
@@ -247,6 +327,20 @@
    "clin_sig_order": "a co-located record whose allele carries several allele-specific ClinVar terms prints them in its cache's order: the Ensembl dumper writes clin_sig_allele in Perl hash order and vep-cache-builder in the dumps' order, so the A and C alleles of the record at 34859477 (two terms each) and both alleles of the record at 34880580 print the same terms in different orders on the two caches; the corpus record at 34859477 takes the T allele, which carries clinical_impact and no allele-specific term, and the record at 34859534 the A allele, which carries one"
   },
   "domains": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --symbol --biotype --canonical --mane --tsl --protein --protein_version --domains [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "0fadea9692f75cfd3212c4158606b890e0283d23417c85cc7ce1215cc64c97e5",
+    "tab.txt": "20d93cced7e8b702eb6dfc6a787b1729c594b5cf4d7605f4ee8fc8103cb43f61",
+    "vcf.vcf": "171f92b4bda073bd644635b3ebab488a344e1a53222baaae93e34bb2636ed35a",
+    "json.jsonl": "3b9cf61b6f03522724a6bb911ee30742d473599c85f9e7f32582626c23cb76a7"
+   },
    "flags": [
     "--symbol",
     "--biotype",
@@ -258,12 +352,6 @@
     "--domains"
    ],
    "expected_dir": "expected_domains",
-   "sha256": {
-    "default.txt": "6b59a5759aaefb1c0ce570c34a569279ca46cbb14ef78cc21447cbbbc0d4f599",
-    "tab.txt": "4029ebaf3c2e3c7c6d29202e08eb4ab5f59b9d2a47fe4ef157585695b32a5685",
-    "vcf.vcf": "6dff8806ac9e95daf3bbdf7e0638b6e5ff13204a23682b4d60077cd1a13fd23c",
-    "json.jsonl": "8872faff74de07bdcf9e6898b93d7e8dc41da7f5b64901d95b046a2f8a5411fb"
-   },
    "masks": [
     "order_only"
    ],
@@ -272,7 +360,7 @@
     "tab",
     "vcf"
    ],
-   "mask_class": "order_only: the DOMAINS items of a row compare as a multiset, in any order, in the golden runner (crates/vep-cli/tests/common/mod.rs, whose class covers DOMAINS and FREQS) and in scripts/concordance/compare_vep_formats.py --masks order_only (the same two columns); every other column compares exactly. No flag-set option writes a set's masks key: the key is written by hand, build_golden_corpus.py flag-set keeps it when it rewrites the set's entry, and the tool and the golden runner refuse a class other than order_only and regulatory_feature_rows",
+   "mask_class": "order_only: the DOMAINS items of a row compare as a multiset, in any order, in the golden runner (crates/vep-cli/tests/common/mod.rs, whose class covers the columns of its ORDER_ONLY_COLUMNS and its ORDER_ONLY_PAIR_GROUP_COLUMN) and in tools/vep-formats-compare --masks order_only (the same columns); the set's outputs carry no other column of the class, and every other column compares exactly. No flag-set option writes a set's masks key: the key is written by hand, vep-golden-corpus flag-set keeps it when it rewrites the set's entry, and the tool and the golden runner each refuse a class that their own lists do not hold (the tool's mask_classes; the runner's MASK_CLASSES and CORRECTED_BEHAVIOUR_CLASSES)",
    "domains_order": "Ensembl VEP prints a translation's protein features in the order of its cache's protein_features array (ensembl-variation BaseTranscriptVariation.pm:634-643 at release/116), which the core API's Translation::get_all_ProteinFeatures fills by analysis in Perl hash order with the database's rows inside each analysis, and vep-cache-builder writes them by protein_feature_id, so the two caches list the same features in different orders. Measured on this set: 289 rows carry DOMAINS on each side in each text format; 165 print the same list, 124 the same items in another order (121 of them on keys the golden runner compares, 3 on the start_cooccurrence_swap keys it sets aside), none a different set",
    "format_left_out": {
     "json": "the domains array's content follows the order of the list, not only its arrangement: Ensembl VEP builds the array with m/(\\w+)\\:(\\w+)/ followed by push ... if $1 && $2 over the DOMAINS entries (OutputFactory/JSON.pm:363-371), and a failed match leaves $1 and $2 at the previous successful one, so an entry the pattern does not match (Low_complexity_(Seg):seg, Cleavage_site_(Signalp):SignalP-TM and Cleavage_site_(Signalp):SignalP-noTM here) repeats the last matched entry in that cache's order, or nothing when no entry before it matched. Of the 280 arrays populated on both sides, 156 are equal, 114 hold the same objects in another order and 10, every one on a transcript carrying such an entry, hold different objects (8 on keys the golden runner compares), so no order-only class can pass the format; the JSON reference is committed beside the others and the set compares the three formats whose DOMAINS is the entry list itself"

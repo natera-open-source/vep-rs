@@ -1,0 +1,287 @@
+entry = "custom_key_list_shared_across_rows"
+page = "docs/divergences/custom-key-list-shared-across-rows.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "unobserved"
+input_class_basis = "well-formed under the short_name and fields options of --custom, which hold a source's key to no rule against a column or a flag field (AnnotationSourceAdaptor.pm lines 335 to 383 at release 116.3), and under the flags --af_gnomadg, --check_existing, --var_synonyms, --mane_select and --nearest; not seen in the measured datasets"
+notes = "The sites file of the custom corpus as an overlap source named gnomADg that asks for AF and CLASS, so its AF stands under the key gnomADg_AF on every row of a record it overlaps, under --af_gnomadg, over the cache of the everything corpus. The first and the third record are lines 9 and 10 of the custom corpus's input; the second is the first with its alternate alleles in the other order. The known variant of the first site holds a gnomAD genomes frequency for the allele C alone, that of the second site one for each allele. Ensembl VEP lists every allele's frequency on every row of a record; vep-rs lists on each row the frequency of the row's own allele. The further runs give the same source a key of another name. Named Existing_variation under --check_existing, over the same three records: Ensembl VEP lists each co-located identifier once for each row of its record on every row; vep-rs lists it once. Over line 42 of the custom corpus's input, one allele with sixteen rows: named MANE under --mane_select, Ensembl VEP writes MANE_Select on all sixteen rows and vep-rs on the row of the one transcript of that set; named VAR_SYNONYMS under --check_existing --var_synonyms, Ensembl VEP repeats the synonyms once more on each later row and vep-rs lists them once; read as an exact source named NEAREST under --nearest symbol, Ensembl VEP lists the allele's record sixteen times on every row and vep-rs once."
+prepare = [
+  "mkdir -p \"$STAGE/perl-cache/homo_sapiens/116_GRCh38\" && cp -al \"$PERL_CACHE/21\" \"$PERL_CACHE/info.txt\" \"$STAGE/perl-cache/homo_sapiens/116_GRCh38/\"",
+]
+
+[input]
+format = "vcf"
+text = """
+21	5380280	rs1444031311	A	C,G	.	.	.
+21	5380280	alleles_reversed	A	G,C	.	.	.
+21	8987421	rs766964238	G	C,T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-everything/json_cache"
+perl_cache = "{stage}/perl-cache"
+writable = true
+
+[run]
+flags = [
+  "--af_gnomadg",
+  "--custom", "file={repo}/tests/golden/116/GRCh38-custom/custom/sites.vcf.gz,short_name=gnomADg,format=vcf,type=overlap,fields=AF%CLASS",
+]
+format = "default"
+
+[compare]
+kind = "rows"
+where = { location = ["21:5380280", "21:8987421"] }
+columns = ["Uploaded_variation", "Allele", "Feature", "gnomADg_AF"]
+
+[expected]
+ensembl_vep = [
+  "alleles_reversed | C | - | 0.004,7.994e-06",
+  "alleles_reversed | G | - | 0.004,7.994e-06",
+  "rs1444031311 | C | - | 0.004,7.994e-06",
+  "rs1444031311 | G | - | 0.004,7.994e-06",
+  "rs766964238 | C | ENST00000577708 | 0.005,3.593e-05,1.794e-05",
+  "rs766964238 | C | ENST00000581792 | 0.005,3.593e-05,1.794e-05",
+  "rs766964238 | T | ENST00000577708 | 0.005,3.593e-05,1.794e-05",
+  "rs766964238 | T | ENST00000581792 | 0.005,3.593e-05,1.794e-05",
+]
+vep_rs = [
+  "alleles_reversed | C | - | 0.004,7.994e-06",
+  "alleles_reversed | G | - | 0.004",
+  "rs1444031311 | C | - | 0.004,7.994e-06",
+  "rs1444031311 | G | - | 0.004",
+  "rs766964238 | C | ENST00000577708 | 0.005,3.593e-05",
+  "rs766964238 | C | ENST00000581792 | 0.005,3.593e-05",
+  "rs766964238 | T | ENST00000577708 | 0.005,1.794e-05",
+  "rs766964238 | T | ENST00000581792 | 0.005,1.794e-05",
+]
+
+[[also]]
+
+[also.run]
+flags = [
+  "--check_existing",
+  "--custom", "file={repo}/tests/golden/116/GRCh38-custom/custom/sites.vcf.gz,short_name=Existing_variation,format=vcf,type=overlap,fields=AF%CLASS",
+]
+format = "default"
+
+[also.compare]
+kind = "rows"
+where = { location = ["21:5380280", "21:8987421"] }
+columns = ["Uploaded_variation", "Allele", "Feature", "Existing_variation"]
+
+[also.expected]
+ensembl_vep = [
+  "alleles_reversed | C | - | exact_2,rs1444031311,rs1444031311",
+  "alleles_reversed | G | - | exact_2,rs1444031311,rs1444031311",
+  "rs1444031311 | C | - | exact_2,rs1444031311,rs1444031311",
+  "rs1444031311 | G | - | exact_2,rs1444031311,rs1444031311",
+  "rs766964238 | C | ENST00000577708 | overlap_2,rs766964238,rs766964238,rs766964238,rs766964238",
+  "rs766964238 | C | ENST00000581792 | overlap_2,rs766964238,rs766964238,rs766964238,rs766964238",
+  "rs766964238 | T | ENST00000577708 | overlap_2,rs766964238,rs766964238,rs766964238,rs766964238",
+  "rs766964238 | T | ENST00000581792 | overlap_2,rs766964238,rs766964238,rs766964238,rs766964238",
+]
+vep_rs = [
+  "alleles_reversed | C | - | exact_2,rs1444031311",
+  "alleles_reversed | G | - | exact_2,rs1444031311",
+  "rs1444031311 | C | - | exact_2,rs1444031311",
+  "rs1444031311 | G | - | exact_2,rs1444031311",
+  "rs766964238 | C | ENST00000577708 | overlap_2,rs766964238",
+  "rs766964238 | C | ENST00000581792 | overlap_2,rs766964238",
+  "rs766964238 | T | ENST00000577708 | overlap_2,rs766964238",
+  "rs766964238 | T | ENST00000581792 | overlap_2,rs766964238",
+]
+
+[[also]]
+
+[also.input]
+format = "vcf"
+text = """
+21	33549625	rs2145814066	C	T	.	.	.
+"""
+
+[also.run]
+flags = [
+  "--mane_select",
+  "--custom", "file={repo}/tests/golden/116/GRCh38-custom/custom/sites.vcf.gz,short_name=MANE,format=vcf,type=overlap,fields=AF%CLASS",
+]
+format = "default"
+
+[also.compare]
+kind = "rows"
+where = { location = ["21:33549625"] }
+columns = ["Uploaded_variation", "Allele", "Feature", "MANE"]
+
+[also.expected]
+ensembl_vep = [
+  "rs2145814066 | T | ENST00000290239 | multi_7,MANE_Select",
+  "rs2145814066 | T | ENST00000300278 | multi_7,MANE_Select",
+  "rs2145814066 | T | ENST00000356577 | multi_7,MANE_Select",
+  "rs2145814066 | T | ENST00000381679 | multi_7,MANE_Select",
+  "rs2145814066 | T | ENST00000381692 | multi_7,MANE_Select",
+  "rs2145814066 | T | ENST00000436227 | multi_7,MANE_Select",
+  "rs2145814066 | T | ENST00000455528 | multi_7,MANE_Select",
+  "rs2145814066 | T | ENST00000475072 | multi_7,MANE_Select",
+  "rs2145814066 | T | ENST00000492229 | multi_7,MANE_Select",
+  "rs2145814066 | T | ENST00000695559 | multi_7,MANE_Select",
+  "rs2145814066 | T | ENST00000704334 | multi_7,MANE_Select",
+  "rs2145814066 | T | ENST00001036731 | multi_7,MANE_Select",
+  "rs2145814066 | T | ENST00001036732 | multi_7,MANE_Select",
+  "rs2145814066 | T | ENST00001129604 | multi_7,MANE_Select",
+  "rs2145814066 | T | ENST00001129605 | multi_7,MANE_Select",
+  "rs2145814066 | T | ENST00001131645 | multi_7,MANE_Select",
+]
+vep_rs = [
+  "rs2145814066 | T | ENST00000290239 | multi_7",
+  "rs2145814066 | T | ENST00000300278 | multi_7",
+  "rs2145814066 | T | ENST00000356577 | multi_7,MANE_Select",
+  "rs2145814066 | T | ENST00000381679 | multi_7",
+  "rs2145814066 | T | ENST00000381692 | multi_7",
+  "rs2145814066 | T | ENST00000436227 | multi_7",
+  "rs2145814066 | T | ENST00000455528 | multi_7",
+  "rs2145814066 | T | ENST00000475072 | multi_7",
+  "rs2145814066 | T | ENST00000492229 | multi_7",
+  "rs2145814066 | T | ENST00000695559 | multi_7",
+  "rs2145814066 | T | ENST00000704334 | multi_7",
+  "rs2145814066 | T | ENST00001036731 | multi_7",
+  "rs2145814066 | T | ENST00001036732 | multi_7",
+  "rs2145814066 | T | ENST00001129604 | multi_7",
+  "rs2145814066 | T | ENST00001129605 | multi_7",
+  "rs2145814066 | T | ENST00001131645 | multi_7",
+]
+
+[[also]]
+
+[also.input]
+format = "vcf"
+text = """
+21	33549625	rs2145814066	C	T	.	.	.
+"""
+
+[also.run]
+flags = [
+  "--check_existing",
+  "--var_synonyms",
+  "--custom", "file={repo}/tests/golden/116/GRCh38-custom/custom/sites.vcf.gz,short_name=VAR_SYNONYMS,format=vcf,type=overlap,fields=AF%CLASS",
+]
+format = "default"
+
+[also.compare]
+kind = "rows"
+where = { location = ["21:33549625"] }
+columns = ["Uploaded_variation", "Allele", "Feature", "VAR_SYNONYMS"]
+
+[also.expected]
+ensembl_vep = [
+  "rs2145814066 | T | ENST00000290239 | multi_7--ClinVar::RCV002273474,VCV001699617",
+  "rs2145814066 | T | ENST00000300278 | multi_7--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617",
+  "rs2145814066 | T | ENST00000356577 | multi_7--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617",
+  "rs2145814066 | T | ENST00000381679 | multi_7--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617",
+  "rs2145814066 | T | ENST00000381692 | multi_7--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617",
+  "rs2145814066 | T | ENST00000436227 | multi_7--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617",
+  "rs2145814066 | T | ENST00000455528 | multi_7--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617",
+  "rs2145814066 | T | ENST00000475072 | multi_7--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617",
+  "rs2145814066 | T | ENST00000492229 | multi_7--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617",
+  "rs2145814066 | T | ENST00000695559 | multi_7--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617",
+  "rs2145814066 | T | ENST00000704334 | multi_7--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617",
+  "rs2145814066 | T | ENST00001036731 | multi_7--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617",
+  "rs2145814066 | T | ENST00001036732 | multi_7--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617",
+  "rs2145814066 | T | ENST00001129604 | multi_7--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617",
+  "rs2145814066 | T | ENST00001129605 | multi_7--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617",
+  "rs2145814066 | T | ENST00001131645 | multi_7--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617--ClinVar::RCV002273474,VCV001699617",
+]
+vep_rs = [
+  "rs2145814066 | T | ENST00000290239 | multi_7--ClinVar::RCV002273474,VCV001699617",
+  "rs2145814066 | T | ENST00000300278 | multi_7--ClinVar::RCV002273474,VCV001699617",
+  "rs2145814066 | T | ENST00000356577 | multi_7--ClinVar::RCV002273474,VCV001699617",
+  "rs2145814066 | T | ENST00000381679 | multi_7--ClinVar::RCV002273474,VCV001699617",
+  "rs2145814066 | T | ENST00000381692 | multi_7--ClinVar::RCV002273474,VCV001699617",
+  "rs2145814066 | T | ENST00000436227 | multi_7--ClinVar::RCV002273474,VCV001699617",
+  "rs2145814066 | T | ENST00000455528 | multi_7--ClinVar::RCV002273474,VCV001699617",
+  "rs2145814066 | T | ENST00000475072 | multi_7--ClinVar::RCV002273474,VCV001699617",
+  "rs2145814066 | T | ENST00000492229 | multi_7--ClinVar::RCV002273474,VCV001699617",
+  "rs2145814066 | T | ENST00000695559 | multi_7--ClinVar::RCV002273474,VCV001699617",
+  "rs2145814066 | T | ENST00000704334 | multi_7--ClinVar::RCV002273474,VCV001699617",
+  "rs2145814066 | T | ENST00001036731 | multi_7--ClinVar::RCV002273474,VCV001699617",
+  "rs2145814066 | T | ENST00001036732 | multi_7--ClinVar::RCV002273474,VCV001699617",
+  "rs2145814066 | T | ENST00001129604 | multi_7--ClinVar::RCV002273474,VCV001699617",
+  "rs2145814066 | T | ENST00001129605 | multi_7--ClinVar::RCV002273474,VCV001699617",
+  "rs2145814066 | T | ENST00001131645 | multi_7--ClinVar::RCV002273474,VCV001699617",
+]
+
+[[also]]
+
+[also.input]
+format = "vcf"
+text = """
+21	33549625	rs2145814066	C	T	.	.	.
+"""
+
+[also.run]
+flags = [
+  "--nearest",
+  "symbol",
+  "--custom", "file={repo}/tests/golden/116/GRCh38-custom/custom/sites.vcf.gz,short_name=NEAREST,format=vcf,type=exact,fields=AF%CLASS",
+]
+format = "default"
+
+[also.compare]
+kind = "rows"
+where = { location = ["21:33549625"] }
+columns = ["Uploaded_variation", "Allele", "Feature", "NEAREST"]
+
+[also.expected]
+ensembl_vep = [
+  "rs2145814066 | T | ENST00000290239 | SON,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7",
+  "rs2145814066 | T | ENST00000300278 | SON,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7",
+  "rs2145814066 | T | ENST00000356577 | SON,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7",
+  "rs2145814066 | T | ENST00000381679 | SON,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7",
+  "rs2145814066 | T | ENST00000381692 | SON,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7",
+  "rs2145814066 | T | ENST00000436227 | SON,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7",
+  "rs2145814066 | T | ENST00000455528 | SON,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7",
+  "rs2145814066 | T | ENST00000475072 | SON,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7",
+  "rs2145814066 | T | ENST00000492229 | SON,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7",
+  "rs2145814066 | T | ENST00000695559 | SON,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7",
+  "rs2145814066 | T | ENST00000704334 | SON,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7",
+  "rs2145814066 | T | ENST00001036731 | SON,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7",
+  "rs2145814066 | T | ENST00001036732 | SON,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7",
+  "rs2145814066 | T | ENST00001129604 | SON,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7",
+  "rs2145814066 | T | ENST00001129605 | SON,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7",
+  "rs2145814066 | T | ENST00001131645 | SON,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7,multi_7",
+]
+vep_rs = [
+  "rs2145814066 | T | ENST00000290239 | SON,multi_7",
+  "rs2145814066 | T | ENST00000300278 | SON,multi_7",
+  "rs2145814066 | T | ENST00000356577 | SON,multi_7",
+  "rs2145814066 | T | ENST00000381679 | SON,multi_7",
+  "rs2145814066 | T | ENST00000381692 | SON,multi_7",
+  "rs2145814066 | T | ENST00000436227 | SON,multi_7",
+  "rs2145814066 | T | ENST00000455528 | SON,multi_7",
+  "rs2145814066 | T | ENST00000475072 | SON,multi_7",
+  "rs2145814066 | T | ENST00000492229 | SON,multi_7",
+  "rs2145814066 | T | ENST00000695559 | SON,multi_7",
+  "rs2145814066 | T | ENST00000704334 | SON,multi_7",
+  "rs2145814066 | T | ENST00001036731 | SON,multi_7",
+  "rs2145814066 | T | ENST00001036732 | SON,multi_7",
+  "rs2145814066 | T | ENST00001129604 | SON,multi_7",
+  "rs2145814066 | T | ENST00001129605 | SON,multi_7",
+  "rs2145814066 | T | ENST00001131645 | SON,multi_7",
+]
+
+[implementation]
+code = [
+    "crates/vep-io/src/output/fields.rs::list_beside_custom_values",
+    "crates/vep-io/src/output/fields.rs::write_column_beside_a_custom_key",
+    "crates/vep-io/src/output/fields.rs::write_frequency_field_value",
+    "crates/vep-io/src/output/fields.rs::write_list_beside_custom_values",
+]
+tests = [
+    "crates/vep-cli/tests/custom_frequency_key_on_a_record_of_several_alleles.rs::a_whole_record_custom_key_named_as_a_frequency_column_lists_the_frequency_of_the_rows_own_allele",
+    "crates/vep-cli/tests/custom_frequency_key_on_a_record_of_several_alleles.rs::the_parquet_cell_of_such_a_key_holds_the_frequency_of_the_rows_own_allele",
+    "crates/vep-cli/tests/custom_key_list_shared_across_rows.rs::a_whole_record_custom_key_named_existing_variation_lists_each_identifier_once",
+    "crates/vep-cli/tests/custom_key_list_shared_across_rows.rs::a_whole_record_custom_key_named_mane_names_the_set_on_its_own_transcripts_row",
+    "crates/vep-cli/tests/custom_key_list_shared_across_rows.rs::a_whole_record_custom_key_named_var_synonyms_lists_the_synonyms_once_on_every_row",
+    "crates/vep-cli/tests/custom_key_list_shared_across_rows.rs::an_exact_custom_key_named_nearest_lists_the_alleles_record_once_on_every_row",
+]

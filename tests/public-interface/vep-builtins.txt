@@ -1,0 +1,225 @@
+# Written by scripts/check_public_interface.py --update, which reads the tree; the script's opening comment gives the format.
+library	vep_builtins
+module	vep_builtins	mod
+re-export	vep_builtins::AnnotationStore	pub use vep_builtins::annotation_store::AnnotationStore
+re-export	vep_builtins::BinaryAnnotator	pub use vep_builtins::binary_store::BinaryAnnotator
+re-export	vep_builtins::PluginError	pub use vep_builtins::traits::PluginError
+re-export	vep_builtins::TabixAnnotator	pub use vep_builtins::tabix::TabixAnnotator
+module	vep_builtins::annotation_store	mod
+trait	vep_builtins::annotation_store::AnnotationStore	trait: core::marker::Send + core::marker::Sync; dyn
+method	vep_builtins::annotation_store::AnnotationStore::header	fn(&self) -> core::option::Option<&[alloc::string::String]>; required
+method	vep_builtins::annotation_store::AnnotationStore::query	fn(&self, chr: &str, start: u64, end: u64) -> core::result::Result<alloc::vec::Vec<vep_builtins::tabix::TabixRecord>, vep_builtins::traits::PluginError>; required
+method	vep_builtins::annotation_store::AnnotationStore::query_batch	fn(&self, regions: &[(&str, u64, u64)]) -> core::result::Result<vep_builtins::tabix::BatchQueryResult, vep_builtins::traits::PluginError>; required
+function	vep_builtins::annotation_store::open_best_store	fn(tabix_path: &std::path::Path, config: vep_builtins::tabix::TabixConfig) -> core::result::Result<alloc::boxed::Box<dyn vep_builtins::annotation_store::AnnotationStore>, vep_builtins::traits::PluginError>
+module	vep_builtins::binary_store	mod
+auto traits	vep_builtins::binary_store::BinaryAnnotator	RefUnwindSafe, Unpin, UnwindSafe
+implementation	vep_builtins::binary_store::BinaryAnnotator	impl core::marker::Send for vep_builtins::binary_store::BinaryAnnotator
+implementation	vep_builtins::binary_store::BinaryAnnotator	impl core::marker::Sync for vep_builtins::binary_store::BinaryAnnotator
+implementation	vep_builtins::binary_store::BinaryAnnotator	impl vep_builtins::annotation_store::AnnotationStore for vep_builtins::binary_store::BinaryAnnotator
+struct	vep_builtins::binary_store::BinaryAnnotator	struct; named fields, some private
+method	vep_builtins::binary_store::BinaryAnnotator::open	fn(vpd_path: &std::path::Path, config: &vep_builtins::tabix::TabixConfig) -> core::result::Result<Self, vep_builtins::traits::PluginError>
+auto traits	vep_builtins::binary_store::BinaryStoreStream	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_builtins::binary_store::BinaryStoreStream	impl core::ops::drop::Drop for vep_builtins::binary_store::BinaryStoreStream
+struct	vep_builtins::binary_store::BinaryStoreStream	struct; named fields, some private
+method	vep_builtins::binary_store::BinaryStoreStream::chromosomes	fn(&self) -> usize
+method	vep_builtins::binary_store::BinaryStoreStream::finish	fn(self, source: &vep_builtins::binary_store::ContentIdentity) -> core::result::Result<(u64, u64, u64), vep_builtins::traits::PluginError>
+method	vep_builtins::binary_store::BinaryStoreStream::push_row	fn<S: core::convert::AsRef<str>>(&mut self, chr: &str, start: u64, end: u64, cells: &[S]) -> core::result::Result<(), vep_builtins::traits::PluginError>
+method	vep_builtins::binary_store::BinaryStoreStream::span_scratch_path	fn(&mut self, number: usize) -> std::path::PathBuf
+auto traits	vep_builtins::binary_store::BinaryStoreWriter	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+struct	vep_builtins::binary_store::BinaryStoreWriter	struct; named fields, some private
+method	vep_builtins::binary_store::BinaryStoreWriter::check_columns	fn(config: &vep_builtins::tabix::TabixConfig) -> core::result::Result<(), vep_builtins::traits::PluginError>
+method	vep_builtins::binary_store::BinaryStoreWriter::new	fn(vpd_path: std::path::PathBuf) -> Self
+method	vep_builtins::binary_store::BinaryStoreWriter::published_paths	fn(&self) -> core::result::Result<vep_builtins::binary_store::StorePaths, vep_builtins::traits::PluginError>
+method	vep_builtins::binary_store::BinaryStoreWriter::stream	fn(&self, column_names: &[alloc::string::String], config: &vep_builtins::tabix::TabixConfig) -> core::result::Result<vep_builtins::binary_store::BinaryStoreStream, vep_builtins::traits::PluginError>
+method	vep_builtins::binary_store::BinaryStoreWriter::write	fn(&self, column_names: &[alloc::string::String], records: &[(alloc::string::String, alloc::vec::Vec<vep_builtins::tabix::TabixRecord>)], config: &vep_builtins::tabix::TabixConfig, source: &vep_builtins::binary_store::ContentIdentity) -> core::result::Result<(u64, u64, u64), vep_builtins::traits::PluginError>
+auto traits	vep_builtins::binary_store::ContentIdentity	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_builtins::binary_store::ContentIdentity	impl core::clone::Clone for vep_builtins::binary_store::ContentIdentity
+implementation	vep_builtins::binary_store::ContentIdentity	impl core::cmp::Eq for vep_builtins::binary_store::ContentIdentity
+implementation	vep_builtins::binary_store::ContentIdentity	impl core::cmp::PartialEq for vep_builtins::binary_store::ContentIdentity
+implementation	vep_builtins::binary_store::ContentIdentity	impl core::fmt::Debug for vep_builtins::binary_store::ContentIdentity
+implementation	vep_builtins::binary_store::ContentIdentity	impl core::marker::Copy for vep_builtins::binary_store::ContentIdentity
+struct	vep_builtins::binary_store::ContentIdentity	struct; named fields; #[non_exhaustive]
+field	vep_builtins::binary_store::ContentIdentity::length	u64
+method	vep_builtins::binary_store::ContentIdentity::new	fn(sha256: vep_core::cache_manifest::Digest, length: u64) -> Self
+method	vep_builtins::binary_store::ContentIdentity::of_file	fn(path: &std::path::Path) -> std::io::error::Result<Self>
+field	vep_builtins::binary_store::ContentIdentity::sha256	vep_core::cache_manifest::Digest
+auto traits	vep_builtins::binary_store::StorePaths	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_builtins::binary_store::StorePaths	impl core::clone::Clone for vep_builtins::binary_store::StorePaths
+implementation	vep_builtins::binary_store::StorePaths	impl core::cmp::Eq for vep_builtins::binary_store::StorePaths
+implementation	vep_builtins::binary_store::StorePaths	impl core::cmp::PartialEq for vep_builtins::binary_store::StorePaths
+implementation	vep_builtins::binary_store::StorePaths	impl core::fmt::Debug for vep_builtins::binary_store::StorePaths
+struct	vep_builtins::binary_store::StorePaths	struct; named fields; #[non_exhaustive]
+field	vep_builtins::binary_store::StorePaths::data	std::path::PathBuf
+field	vep_builtins::binary_store::StorePaths::index	std::path::PathBuf
+method	vep_builtins::binary_store::StorePaths::new	fn(data: std::path::PathBuf, index: std::path::PathBuf) -> Self
+module	vep_builtins::custom	mod
+re-export	vep_builtins::custom::CustomFormat	pub use vep_builtins::custom::grammar::CustomFormat
+re-export	vep_builtins::custom::CustomSpec	pub use vep_builtins::custom::grammar::CustomSpec
+re-export	vep_builtins::custom::Distance	pub use vep_builtins::custom::grammar::Distance
+re-export	vep_builtins::custom::GffType	pub use vep_builtins::custom::grammar::GffType
+re-export	vep_builtins::custom::GrammarError	pub use vep_builtins::custom::grammar::GrammarError
+re-export	vep_builtins::custom::MatchType	pub use vep_builtins::custom::grammar::MatchType
+re-export	vep_builtins::custom::RecordLimit	pub use vep_builtins::custom::grammar::RecordLimit
+re-export	vep_builtins::custom::SummaryStat	pub use vep_builtins::custom::grammar::SummaryStat
+module	vep_builtins::custom::grammar	mod
+auto traits	vep_builtins::custom::grammar::CustomFormat	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_builtins::custom::grammar::CustomFormat	enum; #[non_exhaustive]
+implementation	vep_builtins::custom::grammar::CustomFormat	impl core::clone::Clone for vep_builtins::custom::grammar::CustomFormat
+implementation	vep_builtins::custom::grammar::CustomFormat	impl core::cmp::Eq for vep_builtins::custom::grammar::CustomFormat
+implementation	vep_builtins::custom::grammar::CustomFormat	impl core::cmp::PartialEq for vep_builtins::custom::grammar::CustomFormat
+implementation	vep_builtins::custom::grammar::CustomFormat	impl core::fmt::Debug for vep_builtins::custom::grammar::CustomFormat
+implementation	vep_builtins::custom::grammar::CustomFormat	impl core::hash::Hash for vep_builtins::custom::grammar::CustomFormat
+implementation	vep_builtins::custom::grammar::CustomFormat	impl core::marker::Copy for vep_builtins::custom::grammar::CustomFormat
+variant	vep_builtins::custom::grammar::CustomFormat::Bed	no fields
+variant	vep_builtins::custom::grammar::CustomFormat::BigWig	no fields
+variant	vep_builtins::custom::grammar::CustomFormat::Gff	no fields
+variant	vep_builtins::custom::grammar::CustomFormat::Gtf	no fields
+variant	vep_builtins::custom::grammar::CustomFormat::Vcf	no fields
+method	vep_builtins::custom::grammar::CustomFormat::as_str	fn(self) -> &'static str
+auto traits	vep_builtins::custom::grammar::CustomSpec	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_builtins::custom::grammar::CustomSpec	impl core::clone::Clone for vep_builtins::custom::grammar::CustomSpec
+implementation	vep_builtins::custom::grammar::CustomSpec	impl core::cmp::PartialEq for vep_builtins::custom::grammar::CustomSpec
+implementation	vep_builtins::custom::grammar::CustomSpec	impl core::fmt::Debug for vep_builtins::custom::grammar::CustomSpec
+struct	vep_builtins::custom::grammar::CustomSpec	struct; named fields; #[non_exhaustive]
+field	vep_builtins::custom::grammar::CustomSpec::distance	core::option::Option<vep_builtins::custom::grammar::Distance>
+field	vep_builtins::custom::grammar::CustomSpec::fields	core::option::Option<alloc::vec::Vec<alloc::string::String>>
+field	vep_builtins::custom::grammar::CustomSpec::file	alloc::string::String
+field	vep_builtins::custom::grammar::CustomSpec::format	vep_builtins::custom::grammar::CustomFormat
+field	vep_builtins::custom::grammar::CustomSpec::gff_type	vep_builtins::custom::grammar::GffType
+method	vep_builtins::custom::grammar::CustomSpec::has_chr_placeholder	fn(&self) -> bool
+method	vep_builtins::custom::grammar::CustomSpec::is_transcript_source	fn(&self) -> bool
+field	vep_builtins::custom::grammar::CustomSpec::match_type	vep_builtins::custom::grammar::MatchType
+field	vep_builtins::custom::grammar::CustomSpec::num_records	vep_builtins::custom::grammar::RecordLimit
+field	vep_builtins::custom::grammar::CustomSpec::num_records_warning	core::option::Option<alloc::string::String>
+field	vep_builtins::custom::grammar::CustomSpec::overlap_cutoff	f64
+field	vep_builtins::custom::grammar::CustomSpec::reciprocal	bool
+field	vep_builtins::custom::grammar::CustomSpec::report_coords	bool
+field	vep_builtins::custom::grammar::CustomSpec::same_type	bool
+field	vep_builtins::custom::grammar::CustomSpec::short_name	alloc::string::String
+field	vep_builtins::custom::grammar::CustomSpec::summary_stats	core::option::Option<alloc::vec::Vec<vep_builtins::custom::grammar::SummaryStat>>
+auto traits	vep_builtins::custom::grammar::Distance	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_builtins::custom::grammar::Distance	enum; #[non_exhaustive]
+implementation	vep_builtins::custom::grammar::Distance	impl core::clone::Clone for vep_builtins::custom::grammar::Distance
+implementation	vep_builtins::custom::grammar::Distance	impl core::cmp::PartialEq for vep_builtins::custom::grammar::Distance
+implementation	vep_builtins::custom::grammar::Distance	impl core::fmt::Debug for vep_builtins::custom::grammar::Distance
+implementation	vep_builtins::custom::grammar::Distance	impl core::marker::Copy for vep_builtins::custom::grammar::Distance
+variant	vep_builtins::custom::grammar::Distance::Float	1 positional field
+field	vep_builtins::custom::grammar::Distance::Float::0	f64
+variant	vep_builtins::custom::grammar::Distance::Whole	1 positional field
+field	vep_builtins::custom::grammar::Distance::Whole::0	u64
+auto traits	vep_builtins::custom::grammar::GffType	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_builtins::custom::grammar::GffType	enum; #[non_exhaustive]
+implementation	vep_builtins::custom::grammar::GffType	impl core::clone::Clone for vep_builtins::custom::grammar::GffType
+implementation	vep_builtins::custom::grammar::GffType	impl core::cmp::Eq for vep_builtins::custom::grammar::GffType
+implementation	vep_builtins::custom::grammar::GffType	impl core::cmp::PartialEq for vep_builtins::custom::grammar::GffType
+implementation	vep_builtins::custom::grammar::GffType	impl core::fmt::Debug for vep_builtins::custom::grammar::GffType
+variant	vep_builtins::custom::grammar::GffType::GencodePromoter	no fields
+variant	vep_builtins::custom::grammar::GffType::Other	1 positional field
+field	vep_builtins::custom::grammar::GffType::Other::0	alloc::string::String
+variant	vep_builtins::custom::grammar::GffType::Transcript	no fields
+auto traits	vep_builtins::custom::grammar::GrammarError	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_builtins::custom::grammar::GrammarError	impl core::clone::Clone for vep_builtins::custom::grammar::GrammarError
+implementation	vep_builtins::custom::grammar::GrammarError	impl core::cmp::Eq for vep_builtins::custom::grammar::GrammarError
+implementation	vep_builtins::custom::grammar::GrammarError	impl core::cmp::PartialEq for vep_builtins::custom::grammar::GrammarError
+implementation	vep_builtins::custom::grammar::GrammarError	impl core::error::Error for vep_builtins::custom::grammar::GrammarError
+implementation	vep_builtins::custom::grammar::GrammarError	impl core::fmt::Debug for vep_builtins::custom::grammar::GrammarError
+implementation	vep_builtins::custom::grammar::GrammarError	impl core::fmt::Display for vep_builtins::custom::grammar::GrammarError
+struct	vep_builtins::custom::grammar::GrammarError	struct; named fields, some private
+auto traits	vep_builtins::custom::grammar::MatchType	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_builtins::custom::grammar::MatchType	enum; #[non_exhaustive]
+implementation	vep_builtins::custom::grammar::MatchType	impl core::clone::Clone for vep_builtins::custom::grammar::MatchType
+implementation	vep_builtins::custom::grammar::MatchType	impl core::cmp::Eq for vep_builtins::custom::grammar::MatchType
+implementation	vep_builtins::custom::grammar::MatchType	impl core::cmp::PartialEq for vep_builtins::custom::grammar::MatchType
+implementation	vep_builtins::custom::grammar::MatchType	impl core::fmt::Debug for vep_builtins::custom::grammar::MatchType
+implementation	vep_builtins::custom::grammar::MatchType	impl core::hash::Hash for vep_builtins::custom::grammar::MatchType
+implementation	vep_builtins::custom::grammar::MatchType	impl core::marker::Copy for vep_builtins::custom::grammar::MatchType
+variant	vep_builtins::custom::grammar::MatchType::Exact	no fields
+variant	vep_builtins::custom::grammar::MatchType::Overlap	no fields
+variant	vep_builtins::custom::grammar::MatchType::Surrounding	no fields
+variant	vep_builtins::custom::grammar::MatchType::Within	no fields
+method	vep_builtins::custom::grammar::MatchType::as_str	fn(self) -> &'static str
+auto traits	vep_builtins::custom::grammar::RecordLimit	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_builtins::custom::grammar::RecordLimit	enum; #[non_exhaustive]
+implementation	vep_builtins::custom::grammar::RecordLimit	impl core::clone::Clone for vep_builtins::custom::grammar::RecordLimit
+implementation	vep_builtins::custom::grammar::RecordLimit	impl core::cmp::Eq for vep_builtins::custom::grammar::RecordLimit
+implementation	vep_builtins::custom::grammar::RecordLimit	impl core::cmp::PartialEq for vep_builtins::custom::grammar::RecordLimit
+implementation	vep_builtins::custom::grammar::RecordLimit	impl core::fmt::Debug for vep_builtins::custom::grammar::RecordLimit
+implementation	vep_builtins::custom::grammar::RecordLimit	impl core::marker::Copy for vep_builtins::custom::grammar::RecordLimit
+variant	vep_builtins::custom::grammar::RecordLimit::All	no fields
+variant	vep_builtins::custom::grammar::RecordLimit::Count	1 positional field
+field	vep_builtins::custom::grammar::RecordLimit::Count::0	u64
+auto traits	vep_builtins::custom::grammar::SummaryStat	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_builtins::custom::grammar::SummaryStat	enum; #[non_exhaustive]
+implementation	vep_builtins::custom::grammar::SummaryStat	impl core::clone::Clone for vep_builtins::custom::grammar::SummaryStat
+implementation	vep_builtins::custom::grammar::SummaryStat	impl core::cmp::Eq for vep_builtins::custom::grammar::SummaryStat
+implementation	vep_builtins::custom::grammar::SummaryStat	impl core::cmp::PartialEq for vep_builtins::custom::grammar::SummaryStat
+implementation	vep_builtins::custom::grammar::SummaryStat	impl core::fmt::Debug for vep_builtins::custom::grammar::SummaryStat
+implementation	vep_builtins::custom::grammar::SummaryStat	impl core::hash::Hash for vep_builtins::custom::grammar::SummaryStat
+implementation	vep_builtins::custom::grammar::SummaryStat	impl core::marker::Copy for vep_builtins::custom::grammar::SummaryStat
+variant	vep_builtins::custom::grammar::SummaryStat::Count	no fields
+variant	vep_builtins::custom::grammar::SummaryStat::Max	no fields
+variant	vep_builtins::custom::grammar::SummaryStat::Mean	no fields
+variant	vep_builtins::custom::grammar::SummaryStat::Min	no fields
+variant	vep_builtins::custom::grammar::SummaryStat::Sum	no fields
+method	vep_builtins::custom::grammar::SummaryStat::as_str	fn(self) -> &'static str
+function	vep_builtins::custom::grammar::parse_custom	fn(argument: &str) -> core::result::Result<vep_builtins::custom::grammar::CustomSpec, vep_builtins::custom::grammar::GrammarError>
+re-export	vep_builtins::custom::parse_custom	pub use vep_builtins::custom::grammar::parse_custom
+module	vep_builtins::perl_format	mod
+function	vep_builtins::perl_format::fixed	fn(value: f64, decimals: usize) -> alloc::string::String
+function	vep_builtins::perl_format::sig3	fn(value: f64) -> alloc::string::String
+function	vep_builtins::perl_format::sprintf_g	fn(value: f64) -> alloc::string::String
+module	vep_builtins::tabix	mod
+auto traits	vep_builtins::tabix::BatchQueryResult	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+struct	vep_builtins::tabix::BatchQueryResult	struct; named fields, some private
+method	vep_builtins::tabix::BatchQueryResult::from_records	fn(records_by_pos: std::collections::hash::map::HashMap<alloc::string::String, alloc::collections::btree::map::BTreeMap<u64, alloc::vec::Vec<vep_builtins::tabix::TabixRecord>>>) -> Self
+method	vep_builtins::tabix::BatchQueryResult::lookup	fn(&self, chr: &str, start: u64, end: u64) -> alloc::vec::Vec<&vep_builtins::tabix::TabixRecord>
+auto traits	vep_builtins::tabix::TabixAnnotator	!RefUnwindSafe, Send, Sync, Unpin, !UnwindSafe
+implementation	vep_builtins::tabix::TabixAnnotator	impl vep_builtins::annotation_store::AnnotationStore for vep_builtins::tabix::TabixAnnotator
+struct	vep_builtins::tabix::TabixAnnotator	struct; named fields, some private
+method	vep_builtins::tabix::TabixAnnotator::header	fn(&self) -> core::option::Option<&[alloc::string::String]>
+method	vep_builtins::tabix::TabixAnnotator::open	fn(config: vep_builtins::tabix::TabixConfig) -> core::result::Result<Self, vep_builtins::traits::PluginError>
+method	vep_builtins::tabix::TabixAnnotator::query	fn(&self, chr: &str, start: u64, end: u64) -> core::result::Result<alloc::vec::Vec<vep_builtins::tabix::TabixRecord>, vep_builtins::traits::PluginError>
+method	vep_builtins::tabix::TabixAnnotator::query_batch	fn(&self, regions: &[(&str, u64, u64)]) -> core::result::Result<vep_builtins::tabix::BatchQueryResult, vep_builtins::traits::PluginError>
+method	vep_builtins::tabix::TabixAnnotator::query_windows	fn(&self, chr: &str, windows: &[(u64, u64)]) -> core::result::Result<alloc::vec::Vec<vep_builtins::tabix::TabixRecord>, vep_builtins::traits::PluginError>
+method	vep_builtins::tabix::TabixAnnotator::query_windows_parallel	fn(&self, chr: &str, windows: &[(u64, u64)]) -> core::result::Result<alloc::vec::Vec<vep_builtins::tabix::TabixRecord>, vep_builtins::traits::PluginError>
+auto traits	vep_builtins::tabix::TabixConfig	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_builtins::tabix::TabixConfig	impl core::clone::Clone for vep_builtins::tabix::TabixConfig
+implementation	vep_builtins::tabix::TabixConfig	impl core::default::Default for vep_builtins::tabix::TabixConfig
+implementation	vep_builtins::tabix::TabixConfig	impl core::fmt::Debug for vep_builtins::tabix::TabixConfig
+struct	vep_builtins::tabix::TabixConfig	struct; named fields; #[non_exhaustive]
+field	vep_builtins::tabix::TabixConfig::alt_col	core::option::Option<usize>
+field	vep_builtins::tabix::TabixConfig::chr_col	usize
+field	vep_builtins::tabix::TabixConfig::end_col	core::option::Option<usize>
+field	vep_builtins::tabix::TabixConfig::file_path	std::path::PathBuf
+method	vep_builtins::tabix::TabixConfig::record_end	fn(&self, start: u64, columns: &[alloc::string::String]) -> u64
+method	vep_builtins::tabix::TabixConfig::record_end_of	fn<S: core::convert::AsRef<str>>(&self, start: u64, cells: &[S]) -> u64
+method	vep_builtins::tabix::TabixConfig::record_start	fn(&self, cell: &str) -> core::option::Option<u64>
+field	vep_builtins::tabix::TabixConfig::ref_col	core::option::Option<usize>
+field	vep_builtins::tabix::TabixConfig::start_col	usize
+field	vep_builtins::tabix::TabixConfig::zero_based	bool
+auto traits	vep_builtins::tabix::TabixRecord	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_builtins::tabix::TabixRecord	impl core::clone::Clone for vep_builtins::tabix::TabixRecord
+implementation	vep_builtins::tabix::TabixRecord	impl core::fmt::Debug for vep_builtins::tabix::TabixRecord
+struct	vep_builtins::tabix::TabixRecord	struct; named fields; #[non_exhaustive]
+field	vep_builtins::tabix::TabixRecord::chr	alloc::string::String
+field	vep_builtins::tabix::TabixRecord::columns	alloc::vec::Vec<alloc::string::String>
+field	vep_builtins::tabix::TabixRecord::end	u64
+method	vep_builtins::tabix::TabixRecord::extract_fields	fn(&self, names: &[&str]) -> indexmap::map::IndexMap<alloc::string::String, alloc::string::String>
+method	vep_builtins::tabix::TabixRecord::get	fn(&self, name: &str) -> core::option::Option<&str>
+field	vep_builtins::tabix::TabixRecord::header	core::option::Option<alloc::sync::Arc<alloc::vec::Vec<alloc::string::String>>>
+method	vep_builtins::tabix::TabixRecord::new	fn(chr: alloc::string::String, start: u64, end: u64, columns: alloc::vec::Vec<alloc::string::String>, header: core::option::Option<alloc::sync::Arc<alloc::vec::Vec<alloc::string::String>>>) -> Self
+field	vep_builtins::tabix::TabixRecord::start	u64
+module	vep_builtins::traits	mod
+auto traits	vep_builtins::traits::PluginError	!RefUnwindSafe, Send, Sync, Unpin, !UnwindSafe
+enum	vep_builtins::traits::PluginError	enum; #[non_exhaustive]
+implementation	vep_builtins::traits::PluginError	impl core::convert::From<std::io::error::Error> for vep_builtins::traits::PluginError
+implementation	vep_builtins::traits::PluginError	impl core::error::Error for vep_builtins::traits::PluginError
+implementation	vep_builtins::traits::PluginError	impl core::fmt::Debug for vep_builtins::traits::PluginError
+implementation	vep_builtins::traits::PluginError	impl core::fmt::Display for vep_builtins::traits::PluginError
+variant	vep_builtins::traits::PluginError::Init	1 positional field
+field	vep_builtins::traits::PluginError::Init::0	alloc::string::String
+variant	vep_builtins::traits::PluginError::Io	1 positional field
+field	vep_builtins::traits::PluginError::Io::0	std::io::error::Error
+variant	vep_builtins::traits::PluginError::Run	1 positional field
+field	vep_builtins::traits::PluginError::Run::0	alloc::string::String
+method	vep_builtins::traits::PluginError::detail	fn(&self) -> alloc::string::String

@@ -1,0 +1,101 @@
+{
+  "baseline_dir": "{{FIXTURES}}/caches/variations/builder",
+  "builder_dir": "{{FIXTURES}}/caches/variations/baseline",
+  "transcripts": {
+    "total_baseline": 1,
+    "total_builder": 1,
+    "shared": 1,
+    "only_baseline": 0,
+    "only_builder": 0,
+    "matched": 1,
+    "differed": 0,
+    "field_mismatches": {},
+    "match_rate": 1.0,
+    "regions_with_diffs": []
+  },
+  "variations": {
+    "total_baseline": 33,
+    "total_builder": 32,
+    "shared": 29,
+    "only_baseline": 4,
+    "only_builder": 3,
+    "matched": 10,
+    "differed": 19,
+    "field_mismatches": {
+      "frequencies": 6,
+      "pubmed": 5,
+      "var_synonyms": 4,
+      "start": 3,
+      "end": 3,
+      "clin_sig": 3,
+      "clin_sig_allele": 3,
+      "failed": 2,
+      "somatic": 2,
+      "phenotype_or_disease": 2,
+      "clin_sig_ref_allele": 2,
+      "clinical_impact": 2,
+      "allele_string": 1,
+      "strand": 1
+    },
+    "frequency_columns_compared": [
+      "AFR",
+      "AF"
+    ],
+    "match_rate": 0.344828
+  },
+  "info_json": {
+    "matches": false,
+    "diffs": [
+      {
+        "field": "control",
+        "baseline": "a\u0007\n\u007f",
+        "builder": "None"
+      },
+      {
+        "field": "long",
+        "baseline": "['xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "builder": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      {
+        "field": "nan",
+        "baseline": "nan",
+        "builder": "None"
+      },
+      {
+        "field": "nested",
+        "baseline": "{'a': None, 'b': [True, False], 'c': {'d': 'say \"it\"'}}",
+        "builder": "{'a': None, 'b': [True, False], 'c': {'d': \"it's\"}}"
+      },
+      {
+        "field": "nested_unicode",
+        "baseline": "[]",
+        "builder": "['\u00e9\\u200b\ud83d\ude00', '\\ud800', 'tab\\t']"
+      },
+      {
+        "field": "numbers",
+        "baseline": "[1, 1.5, 1e+16, 1e-07, 0.0, 12345678901234567890124]",
+        "builder": "[1, 1.5, 1e+16, 1e-07, -0.0, 12345678901234567890123]"
+      },
+      {
+        "field": "only_baseline",
+        "baseline": "None",
+        "builder": "0"
+      },
+      {
+        "field": "only_builder",
+        "baseline": "",
+        "builder": "None"
+      },
+      {
+        "field": "unicode",
+        "baseline": "e",
+        "builder": "\u00e9\u200b \ud83d\ude00 'single' \"double\""
+      },
+      {
+        "field": "variation_cols",
+        "baseline": "['variation_name', 'chr', 'start', 'end', 'allele_string', 'failed', 'somatic', 'strand', 'clin_sig', 'phenotype_or_disease', 'clin_sig_allele', 'clin_sig_ref_allele', 'clinical_impact', 'pubmed', 'va",
+        "builder": "['chr', 'variation_name', 'failed', 'somatic', 'start', 'end', 'allele_string', 'strand', 'clin_sig', 'phenotype_or_disease', 'clin_sig_allele', 'clin_sig_ref_allele', 'clinical_impact', 'pubmed', 'va"
+      }
+    ]
+  }
+}

@@ -1,0 +1,1 @@
+ERROR: [fastvep_plugin_tuples] tests/fixtures/maps/empty_cell.tsv:2: an empty fastvep_column, vep_field, list_separator or reference_set

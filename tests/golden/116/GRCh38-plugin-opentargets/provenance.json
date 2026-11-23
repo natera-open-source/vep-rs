@@ -1,7 +1,7 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "divergences_classified_against": {
   "engine": "vep-rs",
@@ -19,7 +19,7 @@
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "none on either side",
  "input": "16 hand-chosen chromosome 21 records of the Open Targets Platform 26.03 VEP export, by shape: a position with three lead GWAS credible sets and one with four, the latter also written as a multi-allelic record whose second allele the export lacks; one with four lead and two non-lead sets, written twice (its alternate allele with a record, and one the export lacks); a lead GWAS deletion and insertion (VCF-style, anchor base shared); a non-lead-only position; a non-lead insertion and deletion whose QTL records lead; two positions with lead GWAS and lead eQTL records; a lead splice-QTL position whose GWAS records are non-lead with empty GWAS cells; a lead sQTL deletion; a position whose single-cell eQTL biosample carries a comma; and one position with no export record",
- "generator": "json_cache: prune_json_cache.py over the chromosome 21 conversion of the release-116 Ensembl cache, the records' spans with the 5 kb flank; open_targets_vep.slice.tsv.gz: every export line within two bases of a record's span, GWAS and QTL files together, the header line commented and the slice indexed with tabix -s 1 -b 2 -e 2 as the plugin's instructions prepare the export; expected outputs: one Ensembl VEP 116.2 container run per format on the committed records, and one per format for each flag set from the vep command recorded under its flag_sets entry; manifest: classify on the manifest run and each flag set against the committed tree's binary",
+ "generator": "json_cache: prune_json_cache.py over the chromosome 21 conversion of the release-116 Ensembl cache, the records' spans with the 5 kb flank; open_targets_vep.slice.tsv.gz: every export line within two bases of a record's span, GWAS and QTL files together, the header line commented and the slice indexed with tabix -s 1 -b 2 -e 2 as the plugin's instructions prepare the export; expected outputs: one Ensembl VEP 116.3 container run per format on the committed records, and one per format for each flag set from the vep command recorded under its flag_sets entry; manifest: classify on the manifest run and each flag set against the committed tree's binary",
  "pruned_cache_transcripts": {
   "21": 288
  },
@@ -32,76 +32,115 @@
   }
  },
  "sha256": {
-  "default.txt": "156f3a7bee393454531d6a6d2b1c6e8f13d8c44f5a8a6bdeb6ff4b6117aa8971",
-  "tab.txt": "d4ab1a5f722bd3a75ac405d9abbff6033e69afada730ad461c22bc5f1b05a8fb",
-  "vcf.vcf": "52dc74cccbee543c1ee7fee55870b4d432c9464189abf7596d00da7d16b905c2",
-  "json.jsonl": "b91698d2be2e5f54bb7f13ef77827ea29b47953a9df0239a8641bebb7ed08f4b",
-  "default.summary.log": "9b3d071c04ebefc0b4e749805761e11d78c2af3cf8d96ee52a3c8403b17a1978",
-  "tab.summary.log": "662bfd6a3682a1e2b756b4864ed9c906e8cf5a7c2656cf3c0771df98ff4c0365",
-  "vcf.summary.log": "bcd6a817504564c09fb3f0b04b070261c752ffdd05cd7a6be17e096ecaf54e31",
-  "json.summary.log": "20f47f6ce6285212a73b72d305ea2dd3250753242db36cf0dfdc8430018deb45"
+  "default.txt": "1433cbaabcef1d8dad50fab7be68e56f28bf160a4c02ca71b65b178336f04e59",
+  "tab.txt": "5662d8ee5804b2578ed12b0df7326332d4d4d9cead48ac5221f9bfb14ed097f7",
+  "vcf.vcf": "1ff87e319ff0325b116f8faa2278a47b4fd610c230fb3c2438197c389c009887",
+  "json.jsonl": "5ae7b9fa6eedf758c6adf0a6328dee489772eb81f98ed4d8aa34c2a7564590ea",
+  "default.summary.log": "52100bf352437ba55515cf9f085e1357fd9e04b2e9e3f959c0449ab0b94755a1",
+  "tab.summary.log": "29b35e1f055e42ac9f7064c2ffbe74eca47c3d70316ea78c675f338cbcbe6d18",
+  "vcf.summary.log": "be162b8f859522929849705e1f290469cf910c6c197df3db93f33db1e5556c63",
+  "json.summary.log": "dbbaa41796e9c146a1deba455b70d590c22e516db7dfb83b370d8a8309060e09"
  },
  "variants_vcf_sha256": "12e302741f1347df7f00a1188b170b63eb8ffa1d81fda948c19c6a66a85e88f9",
  "flag_sets": {
   "all-columns-every-record": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --dir_plugins {corpus} --plugin OpenTargets,file={corpus}/open_targets_vep.slice.tsv.gz,cols=all,lead_variants_only=0 [--tab|--vcf|--json]",
-   "formats_compared": [
-    "default",
-    "tab",
-    "vcf",
-    "json"
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "01378d54b85d0127dc71626b0f934df90c030df44f6e3bfc56f283c4f1af4dee",
+    "tab.txt": "b176de80a88a3a46f268e8762cd361e1e49bd89cc81e1ac10b93c72dd5c958d1",
+    "vcf.vcf": "a387822723edee421089987e2d1590b9c7b720c342dcc2310e85e0bc3f05b4f3",
+    "json.jsonl": "1a2e0c7e5ecebb749252875b2b27decd96838882f2d5af8cc099f3ec1cfa65f9",
+    "default.summary.log": "918b45b454c2f1e748bc384d6eaed95e9cea15798cfee4d03fd904ed6f480750",
+    "tab.summary.log": "5269974a885b8d51c2c35d488ea98e558807cb740ca0b4078c4c03d4fc02531b",
+    "vcf.summary.log": "3029276e664b586f09faca6e602efe3e6c78df169bc070f12d4dde7d10e92e9a",
+    "json.summary.log": "97c24d1af9361b62d334fb51874bead4ae3e64010b955d62e335b64686272b1f"
+   },
+   "flags": [
+    "--dir_plugins",
+    "{corpus}",
+    "--plugin",
+    "OpenTargets,file={corpus}/open_targets_vep.slice.tsv.gz,cols=all,lead_variants_only=0"
    ],
    "expected_dir": "expected_all-columns-every-record",
-   "sha256": {
-    "default.txt": "adf22fe70edaea64d70bfb9ab2f5a899cef56cd0753fbcd75504489d349ec78a",
-    "tab.txt": "d9874b00c050477bdf26bbcbf963133bb5676496176fb9e298eda27c81dff9e5",
-    "vcf.vcf": "4d087a59f27747c54de8983b80ace82876b8719ee9d670361e9d597973e27ffb",
-    "json.jsonl": "02030c8c171461177a3b1fbc0e7f524ae1a9183367f08e9ad88cb7be53d493fd",
-    "default.summary.log": "c4cc385ead42aa7c0e773511703031d482b2511540904eb8c6d1afda8eb574e5",
-    "tab.summary.log": "5e9f5a1bcbd7848ce7026fa8c4b1a512477611df77cbe3bc7fdea90283c76695",
-    "vcf.summary.log": "3ab56940bb25a518aa6524b215d294140ea1305035a57f263c3507d0ae017dd1",
-    "json.summary.log": "d86d8b1a879e5af5d726e4868a3ce7f5a6fe5b1ebe6cec7bc36d388eb0862967"
-   }
+   "formats_compared": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ]
   },
   "gwas-only": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --dir_plugins {corpus} --plugin OpenTargets,file={corpus}/open_targets_vep.slice.tsv.gz,study_types=gwas [--tab|--vcf|--json]",
-   "formats_compared": [
-    "default",
-    "tab",
-    "vcf",
-    "json"
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "a9ecc53900714432dd5a5441eabbbe1d02b66f16bd6a7c974e318d7218f1a53e",
+    "tab.txt": "f1f46ef54ef3d6816f2aeceba26b21d6bb6ffdc1204b95b5da636e186ddf84a9",
+    "vcf.vcf": "09b2ee8a62c8810aa927291fb1aa89e5ab85ced6bb7479e4ae3f1206abeed05c",
+    "json.jsonl": "ead96273595ec5013325eeeaa15e53ba65e53648e9e3b4760358016d0d87a49b",
+    "default.summary.log": "4b436c05804a28171b1cabef0776305380e519f877a1ca9797ea7482547be059",
+    "tab.summary.log": "755c0aec6786303dc440c63367695ce82429d595bbf3585c1f1eb5792628b82e",
+    "vcf.summary.log": "68fed43171ba8aae110ad1fbd3611f234978553fd03591df498a8eded4d668d6",
+    "json.summary.log": "e0f65273fbb49d239d5124ca23255502107aeed795c55bc793e704112919afb6"
+   },
+   "flags": [
+    "--dir_plugins",
+    "{corpus}",
+    "--plugin",
+    "OpenTargets,file={corpus}/open_targets_vep.slice.tsv.gz,study_types=gwas"
    ],
    "expected_dir": "expected_gwas-only",
-   "sha256": {
-    "default.txt": "1c472f0a5a10bc499c84eb7dadf8db08c9abadd96e7ea9bd51b6f39131e135d0",
-    "tab.txt": "df01724f62a76ab874914f5cc3d46a677b3b7f6ac9d86b865efa80e4060b0396",
-    "vcf.vcf": "ded5489e1fb0b52809b736ef92057665142ec552aa9daa57c20b4e95762d6b0d",
-    "json.jsonl": "a3addf2bdbe10044cbebeb68551995cab913a03981acb4bd8331ce7be4fabb9d",
-    "default.summary.log": "863ddb7cd65b389a806c4e419819cce5d990fe3c0516b6c10de218ba472cbbaa",
-    "tab.summary.log": "6cdb281fa77150ecb4ef3e6cd668f3a075b519e9a78b0c741b86d1f60cac1515",
-    "vcf.summary.log": "2814eafd01cb7ff4073ef66deb360df654af610e8e71f3f9627b49639d09f1b4",
-    "json.summary.log": "041d2d55700c1b47088d3d1234c85f3cc74f9757b9c7d5db3ee54fd1c08ef0e2"
-   }
-  },
-  "qtl-named-columns": {
-   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --dir_plugins {corpus} --plugin OpenTargets,file={corpus}/open_targets_vep.slice.tsv.gz,study_types=QTL,cols=qtlGeneId:qtlBiosampleName:studyId:studyType [--tab|--vcf|--json]",
    "formats_compared": [
     "default",
     "tab",
     "vcf",
     "json"
+   ]
+  },
+  "qtl-named-columns": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --dir_plugins {corpus} --plugin OpenTargets,file={corpus}/open_targets_vep.slice.tsv.gz,study_types=QTL,cols=qtlGeneId:qtlBiosampleName:studyId:studyType [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "852bc7a3dbc56f5a11619beb454151aa5eed78f367a5873a35b7d8431d8d5921",
+    "tab.txt": "806cbc44e56b7c8f402ba1818c45003179caa41897b71887111da8a6dfef87c2",
+    "vcf.vcf": "7e52cb3eb0081f6e6854ba3031092c6eba8d802af936eb7cdf1471fa21e28d51",
+    "json.jsonl": "c48362405dd501dedbf6934f520efdbd39376aefddb33d6cdb4757ed0ab23655",
+    "default.summary.log": "4feecba4dac9cc3ff457dc916d0b73d06f51c85531d1af4a9fd1e55d63749176",
+    "tab.summary.log": "96067648f635aa24a405d0ce3d45a8c2a6074a52aefa648bd128303b9f8c4619",
+    "vcf.summary.log": "30dc30219cada0247643ac1d27d356ebe30a7059db787df148219c327fea5e40",
+    "json.summary.log": "f83599e6c5c501d0b50737291f3ea6a317b788d62d8302e9d8c8920d259451ee"
+   },
+   "flags": [
+    "--dir_plugins",
+    "{corpus}",
+    "--plugin",
+    "OpenTargets,file={corpus}/open_targets_vep.slice.tsv.gz,study_types=QTL,cols=qtlGeneId:qtlBiosampleName:studyId:studyType"
    ],
    "expected_dir": "expected_qtl-named-columns",
-   "sha256": {
-    "default.txt": "17a8ba0ac4f2bb808d01ca2f6369b4ed20dacef0549c7babff568e5a3a414ae3",
-    "tab.txt": "a175b9a1000854755dc7a319d1925c1e2f0c36d978af9b19a4cbac96b34a07ec",
-    "vcf.vcf": "be54eace4cf3bbdb7d486883abe47e0e238f6bd5b2253eb5573c8994d05dbd32",
-    "json.jsonl": "d5e7e8d682a3727e612803f66258d8b2a5ea8c93000bb53cdc844b68c2835175",
-    "default.summary.log": "2c6574943d41a438a465959ec8361b5f447f7d89f70bb06aa86d76de73da8928",
-    "tab.summary.log": "2e6eadc2e6c1712b5ac18ea38ed8fecc440cea0462bbb5ae3513cde18221019e",
-    "vcf.summary.log": "f4d72615e13c6a2b08d80ecc5c3b833a8a30d1dabbb8ea049fe8310afbaa053d",
-    "json.summary.log": "88ce47c3701a052c5ddf57e6497354ad7d4fdb52dcfc3aa4bcb0c5ca670909f3"
-   }
+   "formats_compared": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ]
   }
  }
 }

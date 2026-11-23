@@ -6,31 +6,33 @@
 
 **What vep-rs does instead.** A cache vep-rs builds from a GTF or GFF3 records no source name, and a run on it writes `SOURCE` only from a merged cache's `Ensembl` or `RefSeq` stamp, as Ensembl VEP's own cache run does. The default output's Extra column, the tab columns, the VCF `CSQ` fields, the JSON consequence keys and the header lines are those of a cache run.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2):
+A GTF or GFF3 read beside a cache in the same run gives the run two transcript sets to tell apart. There vep-rs writes the file's short name as `SOURCE` on the rows of the file's transcripts, with the column and both header lines, as Ensembl VEP does ([A file beside a cache in one run](../cache-from-gtf-or-gff3.md#a-file-beside-a-cache-in-one-run)).
+
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3):
 
 - `Bio/EnsEMBL/VEP/Config.pm`, lines 531-543: `--gff <file>` and `--gtf <file>` set `--custom file=<file>,format=gff` or `format=gtf`, so the file is a custom annotation source.
 - `Bio/EnsEMBL/VEP/AnnotationSource/File.pm`, lines 154-158: a custom source's short name is the last component of its path, the file's base name.
 - `Bio/EnsEMBL/VEP/AnnotationSource/File/BaseGXF.pm`, line 635, `_add_identifiers`: every transcript built from the file gets the source's short name as its `_source_cache`.
-- `Bio/EnsEMBL/VEP/OutputFactory.pm`, line 1583: `SOURCE` is written from `_source_cache` whenever it is defined, flag or no flag.
+- `Bio/EnsEMBL/VEP/OutputFactory.pm`, line 1592: `SOURCE` is written from `_source_cache` whenever it is defined, flag or no flag.
 - `Bio/EnsEMBL/VEP/Constants.pm`, line 101: a run with a custom source lists `SOURCE` among its output fields (line 98 lists it for `--merged`), described as `Source of transcript` (line 167).
-- `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 2435-2453, `get_custom_headers`: each custom source adds a header line `## <short name> : [PATH]/<file>` and a column of its own. `OutputFactory/Tab.pm`, lines 187-202, and `OutputFactory/VCF.pm`, lines 276 and 449, append that column to the tab columns, the `CSQ` fields and the VCF `##INFO` lines. A transcript source adds no custom annotation to any record (lines 1004-1012 read `_custom_annotations`, which `BaseGXF.pm` never fills), so the column is empty.
+- `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 2444-2462, `get_custom_headers`: each custom source adds a header line `## <short name> : [PATH]/<file>` and a column of its own. `OutputFactory/Tab.pm`, lines 187-202, and `OutputFactory/VCF.pm`, lines 276 and 449, append that column to the tab columns, the `CSQ` fields and the VCF `##INFO` lines. A transcript source adds no custom annotation to any record (lines 1004-1012 read `_custom_annotations`, which `BaseGXF.pm` never fills), so the column is empty.
 - `Bio/EnsEMBL/VEP/OutputFactory/JSON.pm`, line 345: the JSON output lowers the key, so each transcript consequence carries `"source": "<file>"`.
 
 **What correcting it would change.** With the transcript source stamping no `_source_cache` and registering no output column, a `--gtf` or `--gff` run would write the rows, columns and header lines of a cache run, and the rows below would agree.
 
 **The class it produces.** `file_cache_writes_no_source_field`: the `SOURCE` field Ensembl VEP's `--gtf` or `--gff` source writes on every transcript row, the empty column named after the file, and the header lines describing both, which a run on a cache vep-rs built from the file writes none of. The field is the default format's `SOURCE=<file>` item, the tab column, the `CSQ` field and the JSON `source` key. The class is coded: the golden harness sets the field, the column and the header lines aside before comparing a run on a file-built cache with Ensembl VEP reading the file.
 
-The committed caches hold 1,082 transcripts built from a file (of 77,675): 1,045 in the two caches built whole from a GTF or a GFF3, and 37 in a mitochondrial shard built from the GFF3 that a third corpus splices into a converted cache. The one corpus whose reference read the file, through `--gtf`, reaches the class on every transcript row of its two runs, 862 and 691 rows in each format.
+The committed caches hold 1,082 transcripts built from a file (of 116,165): 1,045 in the two caches built whole from a GTF or a GFF3, and 37 in a mitochondrial shard built from the GFF3 that a third corpus splices into a converted cache. The one corpus whose reference read the file, through `--gtf`, reaches the class on every transcript row of its two runs, 862 and 691 rows in each format.
 
-**How often the shape occurs.** Tier 2: the shape is a transcript of a cache built from a GTF or GFF3, met where Ensembl VEP reads the file as its transcript source. The committed caches hold 77,675 transcripts, 1,082 of them built from a file, in three corpora; 2 committed flag sets compare such a cache with Ensembl VEP reading the file.
+**How often the shape occurs.** Tier 2: the shape is a transcript of a cache built from a GTF or GFF3, met where Ensembl VEP reads the file as its transcript source. The committed caches hold 116,165 transcripts, 1,082 of them built from a file, in three corpora; 2 committed flag sets compare such a cache with Ensembl VEP reading the file.
 
 ## 1. The eight genes of a GTF, read from the file and from a cache built from it
 
-**In short.** The record `1995820`, `21 42395417 T>C`, lies in the first codon of TMPRSS3's transcript `ENST00000398397`. Ensembl VEP 116.2 reading the GTF `chr21_genes.gtf.gz` through `--gtf` writes `start_lost` with `SOURCE=chr21_genes.gtf.gz` as the row's last item; vep-rs annotating the cache built from that GTF writes the same row without the item. The file is the committed corpus `tests/golden/116/GRCh38-gtf-builder`, eight genes of chromosome 21 with 59 transcripts, and the difference is on every one of the 862 transcript rows its 74 records produce.
+**In short.** The record `1995820`, `21 42395417 T>C`, lies in the first codon of TMPRSS3's transcript `ENST00000398397`. Ensembl VEP 116.3 reading the GTF `chr21_genes.gtf.gz` through `--gtf` writes `start_lost` with `SOURCE=chr21_genes.gtf.gz` as the row's last item; vep-rs annotating the cache built from that GTF writes the same row without the item. The file is the committed corpus `tests/golden/116/GRCh38-gtf-builder`, eight genes of chromosome 21 with 59 transcripts, and the difference is on every one of the 862 transcript rows its 74 records produce.
 
 ### 1.1 What a reader needs to know first
 
-`--gtf` and `--gff` make Ensembl VEP read its transcripts from a file in place of a cache; vep-rs builds a cache from the file first ([A GTF or GFF3 as the transcript model](../cache-from-gtf-or-gff3.md)). Ensembl VEP's custom annotation sources (`--custom`) each add a named column to the output and a header line naming the file; `SOURCE` is the field a merged cache fills with `Ensembl` or `RefSeq` to tell the two transcript sets apart. The default output's Extra column is a `;`-joined list of `key=value` items; the tab output gives each field a column; the VCF output lists the fields in the `CSQ` entry's `Format` and the JSON output lowers each field's name to a key.
+`--gtf` and `--gff` without a cache make Ensembl VEP read its transcripts from the file alone; for such a run vep-rs builds a cache from the file first ([A GTF or GFF3 as the transcript model](../cache-from-gtf-or-gff3.md)). Ensembl VEP's custom annotation sources (`--custom`) each add a named column to the output and a header line naming the file; `SOURCE` is the field a merged cache fills with `Ensembl` or `RefSeq` to tell the two transcript sets apart. The default output's Extra column is a `;`-joined list of `key=value` items; the tab output gives each field a column; the VCF output lists the fields in the `CSQ` entry's `Format` and the JSON output lowers each field's name to a key.
 
 ### 1.2 The record
 
@@ -51,7 +53,7 @@ Both engines run `--symbol --biotype --canonical --mane --tsl --protein --protei
 
 ### 1.3 What each engine writes
 
-Ensembl VEP 116.2:
+Ensembl VEP 116.3:
 
 ```
 1995820	21:42395417	C	ENSG00000160183	ENST00000398397.4	Transcript	start_lost	233	1	1	M/V	Atg/Gtg	-	IMPACT=HIGH;STRAND=-1;SYMBOL=TMPRSS3;BIOTYPE=protein_coding;TSL=1;ENSP=ENSP00000381434.1;SOURCE=chr21_genes.gtf.gz
@@ -84,7 +86,7 @@ vep -i record.vcf -o out.txt --offline \
   --protein_version --gene_version --transcript_version
 ```
 
-with `<corpus>` the committed `tests/golden/116/GRCh38-gtf-builder`. vep-rs writes the row without a `SOURCE` item. Ensembl VEP 116.2 with `--gtf <corpus>/chr21_genes.gtf.gz` in place of the cache writes `SOURCE=chr21_genes.gtf.gz` on the row and the two header lines above it; with `--tab`, `--vcf` or `--json` it writes the column, the `CSQ` field and the `source` key. A GFF3 read through `--gff` writes the same field with its own base name.
+with `<corpus>` the committed `tests/golden/116/GRCh38-gtf-builder`. vep-rs writes the row without a `SOURCE` item. Ensembl VEP 116.3 with `--gtf <corpus>/chr21_genes.gtf.gz` in place of the cache writes `SOURCE=chr21_genes.gtf.gz` on the row and the two header lines above it; with `--tab`, `--vcf` or `--json` it writes the column, the `CSQ` field and the `source` key. A GFF3 read through `--gff` writes the same field with its own base name.
 
 ### 1.7 How the comparator treats this class
 

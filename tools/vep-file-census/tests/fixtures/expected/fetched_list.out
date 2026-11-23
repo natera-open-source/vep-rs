@@ -1,0 +1,9 @@
+data/one.txt	bytes-alone
+data/one.txt	bytes-alone
+data/two.txt	DIFFERS
+data/two.txt	DIFFERS
+data/missing.txt	DIFFERS
+data	DIFFERS
+three.txt	DIFFERS
+three.txt	DIFFERS
+held: 3 by md5, 1 by multipart md5, 2 by bytes alone, 1 by sha256, 6 differ of 13

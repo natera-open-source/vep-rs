@@ -1,0 +1,45 @@
+entry = "dbnsfp_mitochondrial_record_named_m"
+page = "docs/divergences/dbnsfp-mitochondrial-record-named-m.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "unobserved"
+input_class_basis = "well-formed under the dbNSFP plugin's header, \"tabix -s 8 -b 9 -e 9 dbNSFP${version}_grch37.gz\", which fixes no sequence for the rows of a contig; not seen in the measured datasets"
+notes = "A made-up table that names its contig M and whose rows state the bases one position on in the made-up reference; the record is spelt MT and its reference base is not the row's."
+
+[input]
+format = "vcf"
+text = """
+MT	3577	other_next_missense	A	C	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh37"
+json_cache = "crates/vep-cli/tests/fixtures/bayesdel-mitochondrial-contig/json_cache"
+fasta = "crates/vep-cli/tests/fixtures/mitochondrial-frame-check/reference_synthetic.fa"
+chromosomes = ["MT"]
+
+[run]
+flags = ["--plugin", "dbNSFP,{repo}/crates/vep-cli/tests/fixtures/mitochondrial-frame-check/dbNSFP4.9a_one_position_on_synthetic.tsv.gz,synthetic_score"]
+
+[compare]
+kind = "field"
+field = "synthetic_score"
+where = { record = "other_next_missense", feature = "ENST00000361390" }
+
+[expected]
+ensembl_vep = ["0.14313"]
+vep_rs = ["-"]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/dbnsfp.rs::DbNsfpPlugin::init",
+    "crates/vep-builtins/src/tabix.rs::MitochondrialFrame::admits",
+    "crates/vep-builtins/src/tabix.rs::grch37_mitochondrial_candidates",
+]
+tests = [
+    "crates/vep-builtins/src/plugins/dbnsfp.rs::tests::on_grch37_a_table_named_m_is_read_for_a_record_on_mt_only_when_its_rows_state_the_reference",
+    "crates/vep-builtins/src/tabix.rs::tests::on_grch37_a_table_one_position_on_is_not_read_across_the_pairs",
+    "crates/vep-cli/tests/plugins_builtin.rs::on_grch37_a_table_of_the_other_mitochondrial_pair_is_read_where_its_rows_state_the_reference",
+]
+rules = ["tools/vep-plugin-pairs/src/rules/mitochondrial.rs::dbnsfp_record_named_m"]

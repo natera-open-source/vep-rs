@@ -1,0 +1,9 @@
+all	chr1	45	45
+all	chr2	25	25
+all		1	1
+all	  chr2 9000 . C T . PASS leading_blanks	1	1
+all	chr	1	1
+all	 	1	1
+all	3	10	10
+all	chrX	30	30
+all	chrUn_KI270742v1	3	3

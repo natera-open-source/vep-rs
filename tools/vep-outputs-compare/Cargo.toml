@@ -4,13 +4,14 @@ version = "0.1.0"
 edition = "2021"
 rust-version = "1.89"
 license = "Apache-2.0"
-description = "Tuple concordance between two VEP default-format output directories, byte-identical to scripts/concordance/compare_vep_outputs.py"
+description = "Tuple concordance between two VEP default-format output directories: raw and adjusted F1, discordant rows and per-consequence-class counts"
 publish = false
 
 [dependencies]
 flate2 = "1"
 memchr = "2"
 regex = "1"
+serde_json = "1"
 
 # Its own Cargo root: the repository workspace's commands do not reach this package, and
 # a cargo command for it names this manifest.

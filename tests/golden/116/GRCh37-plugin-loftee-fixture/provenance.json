@@ -1,0 +1,198 @@
+{
+ "plugin_fixtures": {
+  "generator": "scripts/fixtures/cut_plugin_regions.py",
+  "flank": 5000,
+  "record_flank": 2000,
+  "exon_flank": 50,
+  "gerp_regions": "exons",
+  "tools": {
+   "bgzip": "bgzip (htslib) 1.21"
+  },
+  "files": {
+   "plugin_data/human_ancestor.fa.fai": "edfaeffbe573966428aab6d73c40254b6706b6f3047a9b09391f6e752aca05ad",
+   "plugin_data/human_ancestor.fa.gz": "5fb58c123a1b834b308bb0c565a17ea2e9c46ea490e15e0b624c05db19a74493",
+   "plugin_data/human_ancestor.fa.gz.fai": "edfaeffbe573966428aab6d73c40254b6706b6f3047a9b09391f6e752aca05ad",
+   "plugin_data/human_ancestor.fa.gz.gzi": "a3df78201a6dd365704cae5507e7c0924ec9d3f116d9d578c5cb177cb7054f57",
+   "reference.fa.fai": "edfaeffbe573966428aab6d73c40254b6706b6f3047a9b09391f6e752aca05ad",
+   "reference.fa.gz": "b18c7fd2b63d6cb983dc8e5c0fa8c843e926a21106ae90ed0980290b6022795a",
+   "reference.fa.gz.fai": "edfaeffbe573966428aab6d73c40254b6706b6f3047a9b09391f6e752aca05ad",
+   "reference.fa.gz.gzi": "e57bd38e8b5bb0fcc8743e5bf94c80ef2765ed0f9e80d9d79a54f0fe11332f9f"
+  },
+  "GERP_scores.synthetic.txt.gz": {
+   "generator": "scripts/fixtures/plugin_score_fixtures.py",
+   "shape": "loftee_gerp",
+   "seed": 37,
+   "chr_style": "bare",
+   "misses": [],
+   "variants_vcf_sha256": "da0d1a11c3bb28b5cd49aa5884c69be37c2a9cbab948098e4e5353294f9b67bc",
+   "rows": {
+    "bases": 126433,
+    "regions": 247,
+    "miss": 0
+   },
+   "files": {
+    "plugin_data/GERP_scores.synthetic.txt.gz": "ac9bc733df2d31f2e2b1bf95a1260cc25d164ac914a6fd54742c69f375d6e52d",
+    "plugin_data/GERP_scores.synthetic.txt.gz.tbi": "6dd716b9ff92834696bf4eb15b46b4a9e4730d215bf2ec906bb7f61acdd4dd5a"
+   },
+   "tools": {
+    "bgzip": "bgzip (htslib) 1.21",
+    "tabix": "tabix (htslib) 1.21"
+   },
+   "exon_flank": 50
+  },
+  "phylocsf_gerp.synthetic.sql": {
+   "generator": "scripts/fixtures/loftee_conservation_database.py",
+   "branch": "master",
+   "seed": 1,
+   "rows": {
+    "transcripts": 50,
+    "exons": 593,
+    "phylocsf_data": 494,
+    "gerp_exons": 521
+   },
+   "files": {
+    "plugin_data/phylocsf_gerp.synthetic.sql": "c9e769d8048de3c396ae79d6c98a86086d65c30089ae5491bb70132701811482"
+   },
+   "tools": {
+    "sqlite": "3.53.1"
+   }
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --stats_text --quiet --force_overwrite --mask_header_cache_path --dir_plugins {plugins} --plugin LoF,loftee_path:{plugins},human_ancestor_fa:{corpus}/plugin_data/human_ancestor.fa.gz,gerp_file:{corpus}/plugin_data/GERP_scores.synthetic.txt.gz,run_splice_predictions:0 [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh37",
+ "fasta": "reference.fa.gz",
+ "input": "35 ClinVar records on chromosome 21 (public ClinVar identifiers; INFO dropped) chosen from a run of both engines over the chromosome's ClinVar records so that every verdict the master branch of Ensembl VEP's LoF plugin writes appears at least once, plus one constructed record (single_exon_stop, a stop gain in the middle of the one-exon CLDN17 coding sequence) for the SINGLE_EXON flag, which the chromosome's ClinVar records carry only beside a row whose GERP walk crosses a whole exon: high-confidence stop-gained, frameshift, splice-donor and splice-acceptor calls; the END_TRUNC, 5UTR_SPLICE and 3UTR_SPLICE filters, alone and beside high-confidence rows of the same record, and the GC_TO_GT_DONOR filter; the SINGLE_EXON, NON_CAN_SPLICE, NAGNAG_SITE and NO_EXON_NUMBER flags; rows on each side of the branch's fixed END_TRUNC cutoff of 180 (LoF.pm line 268), the nearest at GERP_DIST 179.95 and 182.06, both among rows the 50-base rule fails, beside rows that rule alone keeps high-confidence under a GERP_DIST below the cutoff; and a missense and a synonymous record the plugin leaves alone. The GERP table is synthetic (plugin_fixtures), so every GERP_DIST totals fabricated scores. The reference image carries no samtools, so the plugin's ancestral-allele read returns nothing there (LoF.pm line 553) and the warnings logs carry the line 554 warning of that read; no record's loss-of-function allele is the ancestral base, so neither engine writes ANC_ALLELE. Six records (64605, 1028048, 1073927, 1323696, 1993997 and 3348455) carry 11 stop-gained and frameshift rows whose GERP walk crosses a whole exon, exons that lie between the variant and the exon holding the stop codon or, for 64605, an untranslated exon after it: 7 that vep-rs calls high-confidence with no filter and no flag, 2 it filters END_TRUNC beside high-confidence rows of the same record, and 2 it flags NO_EXON_NUMBER. In a run without a conservation database the plugin dies on such a row where it asks the database for the exon's total (gerp_dist.pl lines 59-60 and 129): Ensembl VEP writes the row without LoF, LoF_filter, LoF_flags and LoF_info and each warnings log carries the plugin's failure once, vep-rs totals the exon's bases from the GERP table and writes the fields, and the manifest documents those rows under the class loftee_gerp_walk_without_conservation_database. 64605 also carries the one SINGLE_EXON row among the chromosome's ClinVar records, which both engines write alike in every run; the constructed record keeps the flag in a record without a whole-exon row and, in the conservation-database run, beside a PhyloCSF flag. The GERP walk of every other stop-gained and frameshift row crosses no whole exon: it reads the variant's own exon from the variant on and the exon holding the stop codon up to it, and no exon between or after them.",
+ "sha256": {
+  "default.txt": "81f4c7e81d086f189dcc580611a323a621338a5d76e52522b1db8a199f02af89",
+  "tab.txt": "15eefd65c51031cd810422d846b8022d621ed40eb6280cf0ce6d70f203cc21da",
+  "vcf.vcf": "cc817193b28b793c78edca87a9f925e2f74edd2080872181a7d61f4cda3c91a4",
+  "json.jsonl": "e31af4fae4dea084857d9dcc3b71fd68d04835986a17002e9d41863ac4c6fab2",
+  "default.summary.log": "5ce911f5e771e50786b1f607d698659ed36fd3af41472ce6b4102e046c7bc80f",
+  "tab.summary.log": "60720baa3979e595f683a340dc5c89c2f2f07a7af086e3143bc2e865df524dcd",
+  "vcf.summary.log": "25e2ba9eb8f0c2a6e6e67169d2e3a777325fbcbb42c4f134cfb710717a01f90e",
+  "json.summary.log": "c7caf6507d64042b2c821e12fc740b77d186d3690cd609c30d006c305b7c797d"
+ },
+ "variants_vcf_sha256": "da0d1a11c3bb28b5cd49aa5884c69be37c2a9cbab948098e4e5353294f9b67bc",
+ "plugin_files": {
+  "plugin_data/human_ancestor.fa.gz": "5fb58c123a1b834b308bb0c565a17ea2e9c46ea490e15e0b624c05db19a74493",
+  "plugin_data/human_ancestor.fa.gz.fai": "edfaeffbe573966428aab6d73c40254b6706b6f3047a9b09391f6e752aca05ad",
+  "plugin_data/human_ancestor.fa.gz.gzi": "a3df78201a6dd365704cae5507e7c0924ec9d3f116d9d578c5cb177cb7054f57",
+  "plugin_data/GERP_scores.synthetic.txt.gz": "ac9bc733df2d31f2e2b1bf95a1260cc25d164ac914a6fd54742c69f375d6e52d",
+  "plugin_data/GERP_scores.synthetic.txt.gz.tbi": "6dd716b9ff92834696bf4eb15b46b4a9e4730d215bf2ec906bb7f61acdd4dd5a",
+  "plugin_data/phylocsf_gerp.synthetic.sql": "c9e769d8048de3c396ae79d6c98a86086d65c30089ae5491bb70132701811482"
+ },
+ "plugin_source": "LoF.pm and the files it loads, of the LOFTEE repository (https://github.com/konradjk/loftee) at its master branch, commit c7a87dffe3b96a729d299ca3ccb1c25db7b44e30, mounted as --dir_plugins and named by loftee_path through {plugins}; its maxEntScan directory holds the stand-in files scripts/data/write_loftee_stand_ins.py writes",
+ "generator": "scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 (the record spans); scripts/fixtures/cut_plugin_regions.py --reference <GRCh37 primary assembly> --ancestor <ancestral FASTA> (the reference and the ancestral-allele FASTA cut to the regions the run reads; the ancestral source is the chromosome 21 record of Ensembl's GRCh37 ancestral FASTA, the archive scripts/data/setup_plugin_data.sh names for AncestralAllele, written under the contig name 21, the name the plugin's samtools read asks for, LoF.pm lines 552-553); scripts/fixtures/plugin_score_fixtures.py --shape loftee_gerp --name GERP_scores.synthetic.txt.gz --seed 37 --dir plugin_data (the synthetic GERP table in the layout the master branch reads through tabix, gerp_dist.pl lines 92-96: one fabricated score a base over the cached exons and 50 bases either side, each a function of the seed, the chromosome and the position; seed and digests under plugin_fixtures); scripts/fixtures/loftee_conservation_database.py --name phylocsf_gerp.synthetic.sql --seed 1 --dir plugin_data (the synthetic SQLite database the master branch opens under conservation_file, LoF.pm line 126: a fabricated row an exon of the cached protein-coding transcripts in its phylocsf_data and gerp_exons tables, with some exons left without one, each value a function of the seed, the transcript's stable id and the exon number; seed, row counts and digest under plugin_fixtures); scripts/concordance/generate_reference_output.sh --corpus --dir-plugins <loftee checkout> (the manifest's run and the lof-skip-lof-info and conservation-database sets, Ensembl VEP's LoF plugin at the master branch of its repository reading loftee_path and --dir_plugins through {plugins}); tools/vep-golden-corpus select --release 116 --assembly GRCh37 --dataset loftee=<reference>=<candidates> --k 100 --seed 1 --include loftee=single_exon_stop --covers LoFTEE --matrix tests/parity/matrix.tsv --flag=... --fasta-name reference.fa.gz, flag-set (the four sets) and classify --field LoF --field LoF_filter --field LoF_flags --field LoF_info (the manifest's run and every flag set)",
+ "flag_sets": {
+  "loftee-key-value": {
+   "flags": [
+    "--mask_header_cache_path",
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "LoFTEE,loftee_path={plugins},human_ancestor_fa={corpus}/plugin_data/human_ancestor.fa.gz,gerp_tabix={corpus}/plugin_data/GERP_scores.synthetic.txt.gz,run_splice_predictions=0"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected",
+   "perl_mode": "offline",
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --stats_text --quiet --force_overwrite --mask_header_cache_path --dir_plugins {plugins} --plugin LoF,loftee_path:{plugins},human_ancestor_fa:{corpus}/plugin_data/human_ancestor.fa.gz,gerp_file:{corpus}/plugin_data/GERP_scores.synthetic.txt.gz,run_splice_predictions:0 [--tab|--vcf|--json]",
+   "sha256": {
+    "default.txt": "81f4c7e81d086f189dcc580611a323a621338a5d76e52522b1db8a199f02af89",
+    "tab.txt": "15eefd65c51031cd810422d846b8022d621ed40eb6280cf0ce6d70f203cc21da",
+    "vcf.vcf": "cc817193b28b793c78edca87a9f925e2f74edd2080872181a7d61f4cda3c91a4",
+    "json.jsonl": "e31af4fae4dea084857d9dcc3b71fd68d04835986a17002e9d41863ac4c6fab2",
+    "default.summary.log": "5ce911f5e771e50786b1f607d698659ed36fd3af41472ce6b4102e046c7bc80f",
+    "tab.summary.log": "60720baa3979e595f683a340dc5c89c2f2f07a7af086e3143bc2e865df524dcd",
+    "vcf.summary.log": "25e2ba9eb8f0c2a6e6e67169d2e3a777325fbcbb42c4f134cfb710717a01f90e",
+    "json.summary.log": "c7caf6507d64042b2c821e12fc740b77d186d3690cd609c30d006c305b7c797d"
+   },
+   "reference": "the manifest's run: Ensembl VEP's LoF plugin reads its parameters in the colon grammar alone (LoF.pm lines 67-72), has no LoFTEE name and names its GERP table gerp_file (LoF.pm line 132), so the LoFTEE name, the key=value grammar and gerp_tabix are vep-rs spellings of the same run and compare against the same outputs"
+  },
+  "lof-skip-lof-info": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --stats_text --quiet --force_overwrite --mask_header_cache_path --dir_plugins {plugins} --plugin LoF,loftee_path:{plugins},human_ancestor_fa:{corpus}/plugin_data/human_ancestor.fa.gz,gerp_file:{corpus}/plugin_data/GERP_scores.synthetic.txt.gz,run_splice_predictions:0,skip_lof_info:1 [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh37",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "b43999b08f3173ea17d8c9c65c71bae21c3fe73347e253d11b5fc044b810d44e",
+    "tab.txt": "ac1be4ba6a630fbc21204885a61f26a8154c17973a3e5f90753b60acffb59d55",
+    "vcf.vcf": "e92cc3937c24fc1c094c2138f9bdf3b366e6af8e605b9659f18246980d16bef7",
+    "json.jsonl": "8db1f49aded8985559016ecda2f0b93a16fb489523b9a142b9275f12ff2ddc3b",
+    "default.summary.log": "41bd835135f22063e773e090213c56932ce26f5b3f1b3628502fcb1ec1add2f5",
+    "tab.summary.log": "d9bb640fd33e70c6a88f827703ed9f828ff8e87d2db9538d7d0b73ddb84cd87f",
+    "vcf.summary.log": "1e18da964f27b4cb699a5a8b9f90cf4ef5e0343ee865443d5535c9a28f624af4",
+    "json.summary.log": "5b6b57432844474ce98bb255b3ad6fc2ecdd239e4375f3eedff0f7e0f4f0f28c"
+   },
+   "flags": [
+    "--mask_header_cache_path",
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "LoF,loftee_path:{plugins},human_ancestor_fa:{corpus}/plugin_data/human_ancestor.fa.gz,gerp_file:{corpus}/plugin_data/GERP_scores.synthetic.txt.gz,run_splice_predictions:0,skip_lof_info:1"
+   ],
+   "expected_dir": "expected_lof-skip-lof-info",
+   "reference": "its own run: a skip_lof_info true by Perl's string truth drops LoF_info from every row (LoF.pm lines 243 and 339) and leaves LoF, LoF_filter and LoF_flags; on the 11 rows whose GERP walk crosses a whole exon (input) Ensembl VEP writes none of the four fields, as in the manifest's run, and vep-rs writes LoF, with LoF_filter or LoF_flags where the row has one, and no LoF_info"
+  },
+  "lof-conservation-file-false": {
+   "flags": [
+    "--mask_header_cache_path",
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "LoF,loftee_path:{plugins},human_ancestor_fa:{corpus}/plugin_data/human_ancestor.fa.gz,gerp_file:{corpus}/plugin_data/GERP_scores.synthetic.txt.gz,run_splice_predictions:0,conservation_file:false"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected",
+   "perl_mode": "offline",
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --stats_text --quiet --force_overwrite --mask_header_cache_path --dir_plugins {plugins} --plugin LoF,loftee_path:{plugins},human_ancestor_fa:{corpus}/plugin_data/human_ancestor.fa.gz,gerp_file:{corpus}/plugin_data/GERP_scores.synthetic.txt.gz,run_splice_predictions:0 [--tab|--vcf|--json]",
+   "sha256": {
+    "default.txt": "81f4c7e81d086f189dcc580611a323a621338a5d76e52522b1db8a199f02af89",
+    "tab.txt": "15eefd65c51031cd810422d846b8022d621ed40eb6280cf0ce6d70f203cc21da",
+    "vcf.vcf": "cc817193b28b793c78edca87a9f925e2f74edd2080872181a7d61f4cda3c91a4",
+    "json.jsonl": "e31af4fae4dea084857d9dcc3b71fd68d04835986a17002e9d41863ac4c6fab2",
+    "default.summary.log": "5ce911f5e771e50786b1f607d698659ed36fd3af41472ce6b4102e046c7bc80f",
+    "tab.summary.log": "60720baa3979e595f683a340dc5c89c2f2f07a7af086e3143bc2e865df524dcd",
+    "vcf.summary.log": "25e2ba9eb8f0c2a6e6e67169d2e3a777325fbcbb42c4f134cfb710717a01f90e",
+    "json.summary.log": "c7caf6507d64042b2c821e12fc740b77d186d3690cd609c30d006c305b7c797d"
+   },
+   "reference": "the manifest's run: Ensembl VEP's LoF plugin sets conservation_file to false when no word names it (LoF.pm line 119) and opens no database under that value (line 121), so the word names the plugin's default and the run compares against the same outputs; measured on the image, 100 rows identical to default.txt"
+  },
+  "conservation-database": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --stats_text --quiet --force_overwrite --mask_header_cache_path --dir_plugins {plugins} --plugin LoF,loftee_path:{plugins},human_ancestor_fa:{corpus}/plugin_data/human_ancestor.fa.gz,gerp_file:{corpus}/plugin_data/GERP_scores.synthetic.txt.gz,run_splice_predictions:0,conservation_file:{corpus}/plugin_data/phylocsf_gerp.synthetic.sql [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh37",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "ff6f517da7f21bba7697c9dee8ad3ce324472b0684816dd8b14ed78a6ca8970a",
+    "tab.txt": "2ab1b1214d8fa7657d6a0233d8a4aa3560a0edd416ea5b9f10d19a90b4f959bf",
+    "vcf.vcf": "e31d26683afa6a23766422100e37fa6fcb780a4b456f4da3efdde657a636dbae",
+    "json.jsonl": "5e661b025745b045dbaeedfd353ff916c2cfbdfe47c2b41dfa6dce0a8fa503b4",
+    "default.summary.log": "47f7de57dee729ba1e2cd12d71ad1f48e4a7ffbdf9421411f4afc5af2d50acbc",
+    "tab.summary.log": "b72525ba997a6c3892931d9f05a91e7c850ee7765141882295c12c52aabc2635",
+    "vcf.summary.log": "e691f25324a7dd3b4b58399fc61410240367c98b056983598ddd19e4fe3273de",
+    "json.summary.log": "baee75a5084ba5bece451fafe1e44147deb3edca142897adefc48bee04b08806"
+   },
+   "flags": [
+    "--mask_header_cache_path",
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "LoF,loftee_path:{plugins},human_ancestor_fa:{corpus}/plugin_data/human_ancestor.fa.gz,gerp_file:{corpus}/plugin_data/GERP_scores.synthetic.txt.gz,run_splice_predictions:0,conservation_file:{corpus}/plugin_data/phylocsf_gerp.synthetic.sql"
+   ],
+   "expected_dir": "expected_conservation-database",
+   "reference": "its own run: a conservation_file other than false is opened as a SQLite database (LoF.pm line 126), here the synthetic one under plugin_fixtures, and every stop-gained or frameshift row that has an exon number is looked up in its phylocsf_data table by the transcript's stable id and the exon number (LoF.pm lines 276, 288-289 and 570). Of the 35 such rows, 10 find no row and gain PHYLOCSF_TOO_SHORT in LoF_info; 25 gain ANN_ORF and MAX_ORF there, 5 of them under a non-negative annotated score, 9 with the flag PHYLOCSF_UNLIKELY_ORF and 11 with PHYLOCSF_WEAK (LoF.pm lines 290-298), among them scores of exactly 0 and a row that carries SINGLE_EXON beside its flag. The 11 rows whose GERP walk crosses a whole exon (input) read the gerp_exons table (gerp_dist.pl lines 59-60 and 129): the walk takes from it the total of each of the 41 whole exons those rows cross, 39 with a row and 2 without, which add nothing (gerp_dist.pl line 64), so 10 rows read a total for every whole exon and 1 reads 13 totals and finds no row for 2 exons. With the database given the plugin writes those 11 rows, both engines write them alike and the run documents no difference. Every other field of every other row is the manifest run's"
+  }
+ }
+}

@@ -22,7 +22,9 @@
 //! A record matches on position and the alternate allele, on the forward
 //! strand (dbNSFP.pm:299-303, 335-338); only a single-base substitution whose
 //! allele is `A`, `C`, `G` or `T` is annotated (dbNSFP.pm:297, 303), and a
-//! mitochondrial record is looked up under `M` (dbNSFP.pm:313). The first
+//! record on `MT` or `chrMT` is looked up under `M` (dbNSFP.pm:313): on GRCh37,
+//! where `M` names another sequence, only in a table whose rows state the
+//! reference bases, and under `MT` otherwise. The first
 //! matching record of a position is the row's record (dbNSFP.pm:391). A `.`
 //! value is not written (dbNSFP.pm:408).
 //!
@@ -77,8 +79,8 @@ use tracing::{debug, warn};
 use crate::annotation_store::{check_table_or_store, open_best_store_with, AnnotationStore};
 use crate::params::{Grammar, PluginParams};
 use crate::tabix::{
-    allele_match, find_index_path, load_index, parse_header, split_field_count, BatchQueryResult,
-    TabixAnnotator, TabixConfig, TabixRecord,
+    allele_match, indexed_position, parse_header, split_field_count, table_contig,
+    BatchQueryResult, IndexedPosition, TabixAnnotator, TabixConfig, TabixRecord,
 };
 use crate::traits::{print_on_stderr, warn_on_stderr, BuiltinPlugin, PluginError, PrefetchData};
 use vep_core::assembly::Assembly;
@@ -448,29 +450,26 @@ impl DbNsfpPlugin {
         if self.assembly.is_none() {
             warn!("{NAME}: no assembly given; reading the GRCh38 position column '{pos_name}'");
         }
-        let Ok(index_path) = find_index_path(path) else {
-            return Ok((chr_col, pos_col));
-        };
-        let index = load_index(&index_path)?;
-        let Some(index_header) = index.header() else {
-            return Ok((chr_col, pos_col));
-        };
-        let indexed = index_header.start_position_index();
-        if indexed != pos_col {
-            let indexed_name = self.header.get(indexed).map_or_else(
-                || format!("column {}", indexed + 1),
-                |name| format!("'{name}'"),
-            );
-            return Err(PluginError::Init(format!(
-                "{NAME}: a {assembly} run reads '{pos_name}' (column {}), but {} is indexed on {indexed_name} (column {}); \
-                 prepare and index the file for {assembly} as the plugin's documentation describes, or point --plugin {NAME} \
-                 at the copy indexed for it",
-                pos_col + 1,
-                path.display(),
-                indexed + 1,
-            )));
+        match indexed_position(path, pos_col)? {
+            IndexedPosition::Unchecked => Ok((chr_col, pos_col)),
+            IndexedPosition::Agrees { sequence_column } => Ok((sequence_column, pos_col)),
+            IndexedPosition::Disagrees {
+                indexed_column: indexed,
+            } => {
+                let indexed_name = self.header.get(indexed).map_or_else(
+                    || format!("column {}", indexed + 1),
+                    |name| format!("'{name}'"),
+                );
+                Err(PluginError::Init(format!(
+                    "{NAME}: a {assembly} run reads '{pos_name}' (column {}), but {} is indexed on {indexed_name} (column {}); \
+                     prepare and index the file for {assembly} as the plugin's documentation describes, or point --plugin {NAME} \
+                     at the copy indexed for it",
+                    pos_col + 1,
+                    path.display(),
+                    indexed + 1,
+                )))
+            }
         }
-        Ok((index_header.reference_sequence_name_index(), pos_col))
     }
 
     /// The transcript-specific columns: every `;`-bearing column of the first
@@ -909,6 +908,8 @@ impl std::fmt::Debug for DbNsfpPlugin {
     }
 }
 
+impl crate::traits::sealed::Sealed for DbNsfpPlugin {}
+
 impl BuiltinPlugin for DbNsfpPlugin {
     fn name(&self) -> &str {
         NAME
@@ -986,11 +987,19 @@ impl BuiltinPlugin for DbNsfpPlugin {
         // A row's last cell is written as `split /\t/` reads it off the line
         // with its `\r` alone removed (dbNSFP.pm:426-428), its trailing
         // whitespace included; `. ` is not the `.` that is skipped (:408).
-        let store =
-            // Opened on no assembly, so a mitochondrial record reads the table under
-            // every spelling: the module itself names such a record `M` to its table
-            // (dbNSFP.pm:313).
-            open_best_store_with(&path, config, None, TabixAnnotator::keeping_trailing_whitespace)?;
+        let mut store = open_best_store_with(
+            &path,
+            config,
+            self.assembly,
+            TabixAnnotator::keeping_trailing_whitespace,
+        )?;
+        // The module names every record on `MT` or `chrMT` `M` to its table
+        // (dbNSFP.pm:313), so on GRCh37 `M` is the first name tried; a contig of
+        // the other pair of names than the record's is read where the table's
+        // rows state the reference bases (`MitochondrialFrame`).
+        if let Some(frame) = store.mitochondrial_frame_mut() {
+            frame.set_first_name("M");
+        }
         self.chr_col = chr_col;
         self.pos_col = start_col;
         self.alt_col = self.column("alt").unwrap_or(0);
@@ -1044,6 +1053,12 @@ impl BuiltinPlugin for DbNsfpPlugin {
         self.assembly = assembly;
     }
 
+    fn set_reference_fasta(&mut self, fasta: Option<std::sync::Arc<vep_fasta::IndexedFasta>>) {
+        if let Some(store) = self.store.as_mut() {
+            store.set_reference_fasta(fasta);
+        }
+    }
+
     fn set_transcript_set(&mut self, refseq: bool, merged: bool) {
         self.refseq_or_merged = refseq || merged;
     }
@@ -1056,7 +1071,7 @@ impl BuiltinPlugin for DbNsfpPlugin {
         let regions: Vec<(&str, u64, u64)> = variants
             .iter()
             .filter(|v| self.annotates_variant(v) && v.start == v.end)
-            .map(|v| (v.chr.as_str(), v.start, v.end))
+            .map(|v| (table_contig(v, self.assembly), v.start, v.end))
             .collect();
         if regions.is_empty() {
             return Ok(Some(PrefetchData::new(BatchQueryResult::empty())));
@@ -1075,7 +1090,11 @@ impl BuiltinPlugin for DbNsfpPlugin {
             if !self.annotates_variant(variant) || variant.start != variant.end {
                 continue;
             }
-            let records = batch.lookup(&variant.chr, variant.start, variant.end);
+            let records = batch.lookup(
+                table_contig(variant, self.assembly),
+                variant.start,
+                variant.end,
+            );
             if records.is_empty() {
                 continue;
             }
@@ -1091,7 +1110,7 @@ impl BuiltinPlugin for DbNsfpPlugin {
                     // empty tab cell and `""` in JSON (Tab.pm:128,
                     // OutputFactory/JSON.pm:327), which the row's list names.
                     // A later plugin's value replaces an earlier one under
-                    // the same key (OutputFactory.pm:2230-2231), its mark too.
+                    // the same key (OutputFactory.pm:2239-2240), its mark too.
                     let row = &mut variant.transcript_consequences[tc_idx];
                     row.plugin_empty_strings
                         .retain(|key| !fields.contains_key(key));
@@ -1127,7 +1146,11 @@ impl BuiltinPlugin for DbNsfpPlugin {
         if variant.start != variant.end {
             return Ok(IndexMap::new());
         }
-        let records = store.query(&variant.chr, variant.start, variant.end)?;
+        let records = store.query(
+            table_contig(variant, self.assembly),
+            variant.start,
+            variant.end,
+        )?;
         let records: Vec<&TabixRecord> = records.iter().collect();
         Ok(self.annotate_row(consequence, variant, &records))
     }
@@ -1270,15 +1293,15 @@ mod tests {
         term: Consequence,
         amino_acids: Option<&str>,
     ) -> TranscriptConsequence {
-        TranscriptConsequence {
-            transcript: Some(Arc::new(Transcript {
-                stable_id: transcript_id.into(),
-                ..Transcript::default()
-            })),
-            consequences: [term].into_iter().collect(),
-            amino_acids: amino_acids.map(str::to_string),
-            ..TranscriptConsequence::default()
-        }
+        let mut consequence = TranscriptConsequence::default();
+        consequence.transcript = Some(Arc::new({
+            let mut transcript = Transcript::default();
+            transcript.stable_id = transcript_id.into();
+            transcript
+        }));
+        consequence.consequences = [term].into_iter().collect();
+        consequence.amino_acids = amino_acids.map(str::to_string);
+        consequence
     }
 
     fn annotated(
@@ -2663,10 +2686,10 @@ mod tests {
         assert!(c.plugin_data.is_empty());
     }
 
-    /// Ensembl VEP 116.2 never hands dbNSFP a structural variant: the module
+    /// Ensembl VEP 116.3 never hands dbNSFP a structural variant: the module
     /// keeps the default `variant_feature_types` of `['VariationFeature']`
     /// (BaseVepPlugin.pm:100), which the dispatch checks before running a
-    /// plugin on a line (OutputFactory.pm:2220). A one-base `<DEL>` row, whose
+    /// plugin on a line (OutputFactory.pm:2229). A one-base `<DEL>` row, whose
     /// start equals its end as a substitution's does, gets no field, and nor
     /// does a matching substitution carrying the structural mark, which pins
     /// the gate rather than the span test; the plain substitution is annotated.
@@ -2786,7 +2809,7 @@ mod tests {
         );
 
         // An earlier plugin's mark under a key this plugin writes a value for
-        // goes with the value it replaces (OutputFactory.pm:2230-2231); a mark
+        // goes with the value it replaces (OutputFactory.pm:2239-2240); a mark
         // under a key it leaves alone stays.
         let mut marked = consequence("ENST2", Consequence::MissenseVariant, Some("R/G"));
         marked.plugin_empty_strings = strings(&["SIFT_score", "Other"]);
@@ -2856,5 +2879,102 @@ mod tests {
         assert!(!matched("abc"));
         assert!(!matched("0"));
         assert!(!matched("100.5"));
+    }
+
+    /// The module names a record on `MT` or `chrMT` `M` to its table
+    /// (dbNSFP.pm:313). On GRCh37, with the run's reference sequence, a table
+    /// naming its mitochondrial contig `M` is read for such a record when its
+    /// rows state the reference bases at their own positions, and not when
+    /// they state the bases one position on: there the row at the record's
+    /// site carries the record's alternate allele and amino acids, and its
+    /// value is the neighbouring base's. Without a reference sequence neither
+    /// table is read for such a record; a record on `chrM` or `M` reads both,
+    /// and a table naming the contig `MT` is read for a record on `MT`
+    /// whatever its rows state.
+    #[test]
+    fn on_grch37_a_table_named_m_is_read_for_a_record_on_mt_only_when_its_rows_state_the_reference()
+    {
+        use crate::test_fixtures::{
+            made_up_alternate, made_up_reference, made_up_rows, repeated_base,
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let (reference, bases) = made_up_reference(dir.path(), 1600);
+        let site = repeated_base(&bases, 100);
+        let base = bases[site - 1];
+        let sift = |plugin: &DbNsfpPlugin, spelling: &str| -> Option<String> {
+            let mut record = InputVariant::new(
+                spelling.into(),
+                site as u64,
+                site as u64,
+                vec![base],
+                vec![made_up_alternate(base)],
+            );
+            annotated(
+                plugin,
+                &mut record,
+                vec![consequence(
+                    "ENST1",
+                    Consequence::MissenseVariant,
+                    Some("R/G"),
+                )],
+            )[0]
+            .get("SIFT_score")
+            .cloned()
+        };
+        let table = |name: &str, contig: &str, offset: usize| -> String {
+            let mut rows = vec![detection_row()];
+            rows.extend(made_up_rows(
+                contig,
+                &bases,
+                10..1590,
+                offset,
+                |contig, position, reference, alt| {
+                    row(
+                        (contig, position as u64, position as u64),
+                        (&reference.to_string(), &alt.to_string()),
+                        ("R", "G"),
+                        "ENST1",
+                        &format!("0.{position}"),
+                        ".",
+                    )
+                },
+            ));
+            let mut lines: Vec<&str> = vec![HEADER];
+            lines.extend(rows.iter().map(String::as_str));
+            write_tabix_fixture(
+                dir.path(),
+                name,
+                &lines,
+                IndexSpec::standard().with_span_cols(8, 9, 9),
+            )
+            .to_string_lossy()
+            .to_string()
+        };
+        let loaded = |file: &str, fasta: Option<Arc<vep_fasta::IndexedFasta>>| {
+            let mut plugin = load(Some(Assembly::Grch37), &[file, "SIFT_score"]).unwrap();
+            plugin.set_reference_fasta(fasta);
+            plugin
+        };
+        let own = Some(format!("0.{site}"));
+
+        let stating = table("dbNSFP4.9a_stating_the_reference_synthetic.gz", "M", 0);
+        let one_on = table("dbNSFP4.9a_one_position_on_synthetic.gz", "M", 1);
+        for (file, with_reference) in [(&stating, own.clone()), (&one_on, None)] {
+            let plugin = loaded(file, Some(Arc::clone(&reference)));
+            for record in ["MT", "chrMT"] {
+                assert_eq!(sift(&plugin, record), with_reference, "{file}, {record}");
+            }
+            for record in ["chrM", "M"] {
+                assert_eq!(sift(&plugin, record), own, "{file}, {record}");
+            }
+            let plugin = loaded(file, None);
+            assert_eq!(sift(&plugin, "MT"), None, "{file} without a reference");
+            assert_eq!(sift(&plugin, "chrM"), own, "{file} without a reference");
+        }
+
+        let named_mt = table("dbNSFP4.9a_named_mt_one_position_on_synthetic.gz", "MT", 1);
+        let plugin = loaded(&named_mt, None);
+        assert_eq!(sift(&plugin, "MT"), own);
+        assert_eq!(sift(&plugin, "chrM"), None);
     }
 }

@@ -15,7 +15,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
-use common::{corpora, Corpus};
+use common::{corpora, indexed_bed, indexed_gff, Corpus};
 
 const VCF_HEADER: &str = "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n";
 
@@ -235,76 +235,6 @@ fn unknown_chromosome_is_warned_and_skipped_in_every_format() {
     }
 }
 
-/// A bgzip-compressed BED of `records` (tab-separated, zero-based starts) under
-/// `dir` with its tabix index beside it, as `bgzip` and `tabix -p bed` write
-/// them.
-fn indexed_bed(dir: &Path, name: &str, records: &[&str]) -> PathBuf {
-    use noodles::csi::binning_index::index::header;
-    indexed_file(
-        dir,
-        name,
-        header::Builder::bed().build(),
-        (1, 2, 1),
-        records,
-    )
-}
-
-/// A bgzip-compressed GFF3 of `records` under `dir` with its tabix index
-/// beside it, as `bgzip` and `tabix -p gff` write them.
-fn indexed_gff(dir: &Path, name: &str, records: &[&str]) -> PathBuf {
-    use noodles::csi::binning_index::index::header;
-    indexed_file(
-        dir,
-        name,
-        header::Builder::gff().build(),
-        (3, 4, 0),
-        records,
-    )
-}
-
-/// Writes `records` bgzip-compressed with a tabix index describing `header`;
-/// `columns` names the zero-based start and end columns and the offset that
-/// makes the start one-based.
-fn indexed_file(
-    dir: &Path,
-    name: &str,
-    header: noodles::csi::binning_index::index::Header,
-    columns: (usize, usize, usize),
-    records: &[&str],
-) -> PathBuf {
-    use noodles::core::Position;
-    use noodles::csi::binning_index::index::reference_sequence::bin::Chunk;
-    use noodles::{bgzf, tabix};
-    use std::io::Write;
-
-    let (start_column, end_column, start_offset) = columns;
-    let path = dir.join(name);
-    let mut writer = bgzf::io::Writer::new(std::fs::File::create(&path).unwrap());
-    let mut indexer = tabix::index::Indexer::default();
-    indexer.set_header(header);
-    for record in records {
-        let start = writer.virtual_position();
-        writer.write_all(record.as_bytes()).unwrap();
-        writer.write_all(b"\n").unwrap();
-        let end = writer.virtual_position();
-        let fields: Vec<&str> = record.split('\t').collect();
-        let position = |column: &str, offset: usize| {
-            Position::try_from(column.parse::<usize>().unwrap() + offset).unwrap()
-        };
-        indexer
-            .add_record(
-                fields[0],
-                position(fields[start_column], start_offset),
-                position(fields[end_column], 0),
-                Chunk::new(start, end),
-            )
-            .unwrap();
-    }
-    writer.finish().unwrap();
-    tabix::fs::write(format!("{}.tbi", path.display()), &indexer.build()).unwrap();
-    path
-}
-
 /// A record on a chromosome the cache lacks is admitted when a `--custom`
 /// source's index lists it: Ensembl VEP tests the chromosome against the union
 /// over every annotation source's valid chromosomes (BaseRunner.pm:451-453), a
@@ -410,7 +340,7 @@ fn empty_chromosome_directory_annotates_intergenic_and_a_dot_directory_is_absent
 /// `crates/vep-cli/src/pipeline.rs`: a name is known when the cache holds it or
 /// holds one of the name's own synonyms) and writes Parser.pm:542-546's warning
 /// (`crates/vep-cli/src/validate.rs`).
-/// Ensembl VEP 116.2 widens one valid-chromosome hash in place on every miss
+/// Ensembl VEP 116.3 widens one valid-chromosome hash in place on every miss
 /// and keeps it for the parser's life (Parser.pm:328-331; :774 `my $valid =
 /// $self->valid_chromosomes;`, :777 `if($valid->{$vf_chr}) {`, :782
 /// `$valid->{$_} = 1 for map {keys %{$synonyms->{$_} || {}}} keys %$valid;`,
@@ -421,7 +351,7 @@ fn empty_chromosome_directory_annotates_intergenic_and_a_dot_directory_is_absent
 /// and a record on `BETA` is admitted two hops from `21`. The source-name
 /// lookup then tries one hop (BaseVEP.pm:711-716 `foreach my $syn(keys
 /// %{$synonyms->{$chr} || {}}) { if($valid{$syn}) { $mapped_name = $syn; last;
-/// } }`), finds nothing, and Ensembl VEP 116.2 writes the record as
+/// } }`), finds nothing, and Ensembl VEP 116.3 writes the record as
 /// `BETA:43774760 ... intergenic_variant`. vep-rs annotates the `chr21` record
 /// through its `chr` rule at `chr21:43774760` and skips the `BETA` record with
 /// the not-found warning in either order, where Ensembl VEP's admission rests
@@ -941,7 +871,7 @@ fn non_variant_json_object_per_record() {
 /// A record is a non-variant one by its first comma-separated ALT alone
 /// (Parser/VCF.pm:259 `$alts->[0] eq '.'` over the list ensembl-io
 /// BaseVCF4.pm:489 splits, whose limit-less `split` drops a trailing empty
-/// field, so `.,` is the list `.`). Ensembl VEP 116.2 on `21 10538940 dot_first
+/// field, so `.,` is the list `.`). Ensembl VEP 116.3 on `21 10538940 dot_first
 /// TG .,A` and `21 10538950 dot_trailing C .,`: without `--allow_non_variant` no
 /// row, line or object in any format and no warning; with it no default or tab
 /// row, the VCF line carried as written without CSQ, and a JSON object with the
@@ -1023,7 +953,7 @@ fn non_variant_first_alt_fixtures_every_format() {
 /// `--check_frequency` judges a non-variant record kept by `--allow_non_variant`
 /// as the allele-less feature Ensembl VEP builds from it (Parser/VCF.pm:342):
 /// under `--freq_filter include` it is dropped without frequency data and kept
-/// with it (`BaseCacheVariation.pm:322, 444`); under `exclude` it is kept either
+/// with it (`BaseCacheVariation.pm:323, 445`); under `exclude` it is kept either
 /// way. A known variant at its span supplies data only when it co-locates with
 /// a record that names no allele: a null-allele record, or any record under
 /// `--no_check_alleles` (`AnnotationType/Variation.pm:146-207`). The run reads
@@ -1128,7 +1058,7 @@ fn lowercase_alleles_print_uppercase() {
 
     // An ID of `0` or an empty ID column is Perl-false, so Parser.pm:462 names
     // the record `chr_start_alleles` from the chopped string as written, and
-    // Ensembl VEP 116.2 prints that name as `Uploaded_variation` (it differs from
+    // Ensembl VEP 116.3 prints that name as `Uploaded_variation` (it differs from
     // the upper-cased one, OutputFactory.pm:899-901) and as the JSON `id`:
     // `21_30813030_c/t` for `0 c t` and for the empty ID, `21_30319404_ca/-`
     // for `0 tca t` and `21_30319404_ca/-/cg` for `0 tca t,tcg`, the alleles
@@ -1246,7 +1176,7 @@ fn lowercase_alleles_print_uppercase() {
 /// A record the `--chr` list refuses (Parser.pm:470-472) and `--dont_skip` keeps
 /// is annotated with its alleles as written: the refusal returns before the
 /// upper-casing of Parser.pm:554 and nothing later changes the case. Ensembl VEP
-/// 116.2 under `--chr 22 --dont_skip` prints `21 30337048 . c t` with Allele `t`,
+/// 116.3 under `--chr 22 --dont_skip` prints `21 30337048 . c t` with Allele `t`,
 /// JSON `allele_string` `c/t` and CSQ Allele `t`; the same record with the ID `0`
 /// under the JSON `id` `21_30337048_c/t`; and `21 30319403 0 tca t` under the
 /// line's name `21_30319403_tca/t` in the default output (the name built at
@@ -1327,7 +1257,7 @@ fn dont_skip_keeps_the_written_case_of_a_record_the_chr_list_refuses() {
 /// An Ensembl-format record the `--chr` list refuses and `--dont_skip` keeps is
 /// annotated with its alleles as written too: Parser/VEP_input.pm:156 keeps the
 /// column as the feature's allele string and the refusal (Parser.pm:470-472)
-/// returns before the upper-casing of `:554`. Ensembl VEP 116.2 under `--chr 22
+/// returns before the upper-casing of `:554`. Ensembl VEP 116.3 under `--chr 22
 /// --dont_skip` prints Allele `t` for `21 30337048 30337048 c/t + lower_snv`,
 /// `-` for `21 30319404 30319405 ca/- + lower_del`, `t` under the name
 /// `21_30337048_c/t` for the same record with no ID, `t` and `g` for the
@@ -1678,9 +1608,10 @@ fn check_ref_reads_a_y_pseudoautosomal_record_from_x() {
 /// table that links nothing, `--check_ref` reads the record's base through the
 /// alias set vep-fasta builds in (`contig_aliases` in vep-fasta's `lib.rs`: a
 /// record named `MT`, `M`, `chrM` or `chrMT` is reached by any of the four
-/// names, the lookup matched in any letter case) and annotates `MT 3308 T G` as
+/// names outside GRCh37, the lookup matched in any letter case) and annotates
+/// `MT 3308 T G` as
 /// `intergenic_variant`, exit 0. Ensembl
-/// VEP 116.2 reaches a FASTA record by the name, a synonym of it, or the name
+/// VEP 116.3 reaches a FASTA record by the name, a synonym of it, or the name
 /// with `chr` added or removed alone, at the slice (BaseVEP.pm:413 through
 /// `get_source_chr_name`, :689-738) and at the read (FastaSequence.pm:380-389,
 /// `'chr'.$sr_name, 'CHR'.$sr_name` and their synonyms), so `MT` never reaches
@@ -1840,7 +1771,7 @@ fn region_input_reads_its_reference_from_the_fasta() {
 /// so the Ensembl-format records `21 30282169 30282170 C/T +` and
 /// `21 30282168 30282170 C/T +` over the stop codon of ENST00000340345 print
 /// `stop_lost` alone, as the valid `CA/T` over the same span does. The rows are
-/// Ensembl VEP 116.2's under `--format ensembl --dont_skip` on a GRCh38 cache,
+/// Ensembl VEP 116.3's under `--format ensembl --dont_skip` on a GRCh38 cache,
 /// the reference-length warnings included.
 #[test]
 fn dont_skip_reference_length_mismatch_is_annotated_over_its_span() {

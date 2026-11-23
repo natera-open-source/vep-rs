@@ -21,7 +21,7 @@ describes the crate.
 
 Follow `--plugin target/debug/examples/libecho_plugin.so,hello`, the crate's own example
 plugin passed by path with one parameter. `PluginRegistry::load_from_args` splits the argument
-on every comma, as Perl's `split` reads it (a trailing empty field is no parameter), into the
+on every comma, as Perl's `split` in Ensembl VEP reads it (a trailing empty field is no parameter), into the
 name or path and the parameter list `["hello"]`. The private
 `resolve_plugin_path` keeps the first token because it is written as a file (`names_a_file`: a
 path separator or a suffix) and a file exists at it; a file name without a separator is handed
@@ -60,7 +60,7 @@ and plugin columns. When the registry is dropped, each `LoadedPlugin` calls
 
 | Module            | Role                                                                                                                                                                                       |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/lib.rs`      | Crate root: `PluginError`, the `FeatureType` row kind (`vep-core`'s `RowKind`, re-exported) and the `VepPlugin` trait; re-exports `LoadedPlugin` and `PluginRegistry`.                     |
+| `src/lib.rs`      | Crate root: `PluginError` and the `FeatureType` row kind (`vep-core`'s `RowKind`, re-exported); re-exports `LoadedPlugin` and `PluginRegistry`.                                            |
 | `src/abi.rs`      | The contract a plugin library exports: `VEP_PLUGIN_ABI_VERSION`, the ten `vep_plugin_*` symbol names in `symbol_names`, and their function-pointer types in `ffi`.                        |
 | `src/loader.rs`   | `LoadedPlugin`: opens one library, checks the ABI version, resolves the symbols, creates and initialises the instance, reads its header info and feature types, and wraps `run` and destruction in safe methods. |
 | `src/registry.rs` | `PluginRegistry`: parses `--plugin` arguments, resolves a name or path to a file, loads each plugin, lists their header info, answers which row kinds they take, and runs them all on one consequence and variant pair. |
@@ -73,11 +73,13 @@ one that fails on purpose (a non-object result, then a NULL) before it annotates
 per-plugin warnings can be tested. [`tests/echo_roundtrip.rs`](tests/echo_roundtrip.rs)
 loads the two echo plugins through the loader and the registry, by path and by bare name under
 a plugin directory, where only a regular `lib<name>` file answers to a bare name (a directory
-or a plain entry of that name is passed over), compiles the first with the `abi-one` feature
-to check that a version 1 library is refused and with the `missing-free` feature to check that
+or a plain entry of that name is passed over), compiles the first with `--cfg fixture_abi_one`
+to check that a library of interface number 1 is refused and with `--cfg fixture_missing_free` to check that
 a library lacking a required symbol is refused with the dynamic loader's reason, and the second
-with the `no-feature-types` feature to check that a library without the export runs on
-transcript rows alone.
+with `--cfg fixture_no_feature_types` to check that a library without the export runs on
+transcript rows alone. The manifest lists the three `cfg` names under `[lints.rust]`; none is a
+feature of the crate. [`tests/interface_contract.rs`](tests/interface_contract.rs) holds the
+ABI version, the ten symbol names and their C signatures as literals of its own.
 
 ## Public API
 
@@ -125,7 +127,8 @@ host calls each symbol.
   and `runs_on(row)` applies the feature-type list. The type is marked `Send + Sync`, so a
   plugin instance must tolerate calls from any thread.
 - `PluginError` (`src/lib.rs`) has four variants: `Init`, `Run`, `Load` and
-  `AbiMismatch { expected, got }`. `vep-cli` matches the `Load` text
+  `AbiMismatch { expected, got }`. It is `#[non_exhaustive]`, so a `match` on it outside the
+  crate ends in a wildcard arm. `vep-cli` matches the `Load` text
   `plugin '<name>' not found` to tell a name that resolves to no file from a file that failed
   to load. The name is settled by itself: an Ensembl VEP plugin vep-rs does not provide, or a
   `<name>.pm` under the plugins directories, is refused with or without `--safe`, and any other
@@ -140,11 +143,7 @@ host calls each symbol.
   `RegulatoryFeature`, `MotifFeature` or `Intergenic`: `vep-core`'s `RowKind` under the name
   Ensembl VEP gives the list, with `parse` and `as_str` for the names a plugin lists and a
   conversion from the consequence feature type, the one type the built-in plugins' `feature_types`
-  return as well. `VepPlugin`
-  (`src/lib.rs`) describes an in-process plugin interface with the same
-  `run(consequence, variant)` shape over native `vep-core` types. The workspace's built-in
-  plugins implement `BuiltinPlugin` from `vep-builtins` instead, and a loaded library exports
-  the C ABI, so no type in this repository implements `VepPlugin`.
+  return as well.
 
 ## Run it
 
@@ -161,15 +160,14 @@ before `tests/echo_roundtrip.rs` loads the two echo plugins; a
 the test fails with a message saying so. The example build writes `libecho_plugin.so` on Linux
 and `libecho_plugin.dylib` on macOS, the file the worked example in
 docs/developers/writing-a-plugin.md passes to `vep --plugin`. The refusal test also runs
-`rustc` on `examples/echo_plugin.rs` with the `abi-one` feature, so the toolchain's `rustc`
+`rustc` on `examples/echo_plugin.rs` with `--cfg fixture_abi_one`, so the toolchain's `rustc`
 must be on the path. The repository's standard commands (`cargo test --workspace`,
 `cargo clippy`, `cargo fmt`) are in the [contributing guide](../../CONTRIBUTING.md).
 
 ## Related
 
 - [`vep-core`](../vep-core/README.md): the `TranscriptConsequence` and `InputVariant` types
-  named by the `VepPlugin` trait and serialised into the two JSON documents a plugin
-  receives.
+  serialised into the two JSON documents a plugin receives.
 - [`vep-cli`](../vep-cli/README.md): the only crate that depends on `vep-plugin`. Its
   [`dylib_plugins` module](../vep-cli/src/dylib_plugins.rs) loads the `--plugin` names no
   built-in claimed, runs each plugin on the rows it takes and merges each `run` result into

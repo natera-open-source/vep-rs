@@ -1,9 +1,9 @@
 entry = "domains_order_region_file_copy"
 page = "docs/divergences/domains-order-region-file-copy.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 1 of 77,675 cache transcripts · 7 flag sets, 1 corpus"
+input_class_basis = "2 · 8 of 116,165 cache transcripts · 41 flag sets, 8 corpora"
 notes = "ENST00000348990 is stored in the region files 25000001-26000000 and 26000001-27000000 of chromosome 21, its 49 protein features in two orders. The record lies 170,588 bases inside the second region, so Ensembl VEP, annotating it alone, reads that file's copy; vep-rs keeps the lowest region file's copy whatever the input."
 
 [input]
@@ -28,3 +28,11 @@ where = { record = "740728", feature = "ENST00000348990" }
 [expected]
 ensembl_vep = ["Low_complexity_(Seg):seg,Cleavage_site_(Signalp):SignalP-noTM,PANTHER:PTHR23103,Phobius:SIGNAL_PEPTIDE,Phobius:SIGNAL_PEPTIDE_H_REGION,SignalP_GRAM_POSITIVE:SignalP-TM,AFDB-ENSP_mappings:AF-P05067-F1"]
 vep_rs = ["Low_complexity_(Seg):seg,Cleavage_site_(Signalp):SignalP-noTM,PANTHER:PTHR23103,Phobius:SIGNAL_PEPTIDE,Phobius:SIGNAL_PEPTIDE_H_REGION,AFDB-ENSP_mappings:AF-P05067-F1,SignalP_GRAM_POSITIVE:SignalP-TM"]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/json_cache.rs::enumerate_transcript_shards",
+    "crates/vep-cli/src/json_cache.rs::load_transcripts_in_set_with",
+]
+tests = ["crates/vep-cli/src/json_cache.rs::tests::dedup_by_dbid_then_stable_id_version"]
+rules = ["tools/vep-formats-compare/src/lists.rs::arrays_of_one_domains_list"]

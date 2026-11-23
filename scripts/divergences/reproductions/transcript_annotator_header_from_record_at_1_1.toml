@@ -1,7 +1,7 @@
 entry = "transcript_annotator_header_from_record_at_1_1"
 page = "docs/divergences/transcript-annotator-header-from-record.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the TranscriptAnnotator plugin's header, whose data file is a tabix-indexed table with chromosome, position, reference allele, alternative allele and transcript ID as its first 5 columns: a row at position 1 of the contig named 1 meets it; not seen in the measured datasets"
 notes = "The values agree on every row; only the field names differ: Ensembl VEP's ENST00000618007 row reads oneone_0.1=0.61;oneone_Bogus=Tolerated;oneone_RecordAtOneOne=Intronic, vep-rs's oneone_Comment=Intronic;oneone_SIFT_pred=Tolerated;oneone_SIFT_score=0.61."
@@ -39,4 +39,13 @@ vep_rs = [
   "## oneone_Comment : column from <path>",
   "## oneone_SIFT_pred : column from <path>",
   "## oneone_SIFT_score : column from <path>",
+]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/transcript_annotator.rs::TranscriptAnnotatorPlugin::init",
+    "crates/vep-builtins/src/tabix.rs::header_line",
+]
+tests = [
+    "crates/vep-cli/tests/plugin_documented_rows.rs::transcript_annotator_names_its_fields_by_the_header_of_a_table_with_a_record_at_1_1",
 ]

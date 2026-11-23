@@ -1,0 +1,1 @@
+ERROR: [compare_vep_stats] cannot read tests/fixtures/invalid_length_code.summary.log.gz: Error -3 while decompressing data: invalid literal/length code

@@ -28,7 +28,7 @@
   "given-ref-used-ref-columns",
   "bam-refseq-model-correction"
  ],
- "suites": {
+ "datasets": {
   "gnomad_v4.1_chr21": {
    "reference": "gnomad_v4.1_chr21.reference.txt",
    "input": "gnomad_v4.1_chr21.candidates.vcf",
@@ -206,168 +206,168 @@
  },
  "records": [
   {
-   "suite": "gnomad_v4.1_chr21",
+   "dataset": "gnomad_v4.1_chr21",
    "vcf": "21\t7775856\trs1983928809\tTCACAGAGAACAAACC\tT\t.\t.\t.",
    "combinations": [
     "inframe_deletion"
    ]
   },
   {
-   "suite": "gnomad_v4.1_chr21",
+   "dataset": "gnomad_v4.1_chr21",
    "vcf": "21\t9097465\trs1983252399\tACTGCTGGGGTCTGAATGTTTGACCCTCACATAGGATTCCAGAACACTC\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant"
    ]
   },
   {
-   "suite": "1kg_highcov_chr21",
+   "dataset": "1kg_highcov_chr21",
    "vcf": "21\t9792650\t21:9792650:G:T\tG\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "1kg_highcov_chr21",
+   "dataset": "1kg_highcov_chr21",
    "vcf": "21\t9882327\tHGSV_241107\tC\t<INS:ME:ALU>\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "gnomad_v4.1_chr21",
+   "dataset": "gnomad_v4.1_chr21",
    "vcf": "21\t13231777\trs534245489\tG\tA\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "gnomad_v4.1_chr21",
+   "dataset": "gnomad_v4.1_chr21",
    "vcf": "21\t13600261\t.\tGCC\tG\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "gnomad_v4.1_chr21",
+   "dataset": "gnomad_v4.1_chr21",
    "vcf": "21\t13911717\trs2014039309\tC\tA\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "gnomad_v4.1_chr21",
+   "dataset": "gnomad_v4.1_chr21",
    "vcf": "21\t17957402\trs1252631915\tA\tG\t.\t.\t.",
    "combinations": [
     "intron_variant"
    ]
   },
   {
-   "suite": "gnomad_v4.1_chr21",
+   "dataset": "gnomad_v4.1_chr21",
    "vcf": "21\t18737924\trs975049326\tC\tT\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "gnomad_v4.1_chr21",
+   "dataset": "gnomad_v4.1_chr21",
    "vcf": "21\t18759767\trs1978884923\tT\tTGG\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "gnomad_v4.1_chr21",
+   "dataset": "gnomad_v4.1_chr21",
    "vcf": "21\t20929268\trs1984286212\tA\tG\t.\t.\t.",
    "combinations": [
     "upstream_gene_variant"
    ]
   },
   {
-   "suite": "1kg_highcov_chr21",
+   "dataset": "1kg_highcov_chr21",
    "vcf": "21\t22407614\t21:22407614:A:G\tA\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant"
    ]
   },
   {
-   "suite": "1kg_highcov_chr21",
+   "dataset": "1kg_highcov_chr21",
    "vcf": "21\t26468052\t21:26468052:T:C\tT\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant"
    ]
   },
   {
-   "suite": "gnomad_v4.1_chr21",
+   "dataset": "gnomad_v4.1_chr21",
    "vcf": "21\t27653355\t.\tG\tT\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "gnomad_v4.1_chr21",
+   "dataset": "gnomad_v4.1_chr21",
    "vcf": "21\t30396603\trs141793094\tT\tC\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "1kg_highcov_chr21",
+   "dataset": "1kg_highcov_chr21",
    "vcf": "21\t30613699\t21:30613699:T:TAGCCAG\tT\tTAGCCAG\t.\t.\t.",
    "combinations": [
     "inframe_insertion"
    ]
   },
   {
-   "suite": "1kg_highcov_chr21",
+   "dataset": "1kg_highcov_chr21",
    "vcf": "21\t30755326\t21:30755326:C:T\tC\tT\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "gnomad_v4.1_chr21",
+   "dataset": "gnomad_v4.1_chr21",
    "vcf": "21\t38400569\trs771721355\tC\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_donor_5th_base_variant"
    ]
   },
   {
-   "suite": "1kg_highcov_chr21",
+   "dataset": "1kg_highcov_chr21",
    "vcf": "21\t38575677\t21:38575677:T:C\tT\tC\t.\t.\t.",
    "combinations": [
     "synonymous_variant"
    ]
   },
   {
-   "suite": "1kg_highcov_chr21",
+   "dataset": "1kg_highcov_chr21",
    "vcf": "21\t38575746\t21:38575746:G:A\tG\tA\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "gnomad_v4.1_chr21",
+   "dataset": "gnomad_v4.1_chr21",
    "vcf": "21\t38584920\trs187071113\tC\tT\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant"
    ]
   },
   {
-   "suite": "gnomad_v4.1_chr21",
+   "dataset": "gnomad_v4.1_chr21",
    "vcf": "21\t38858065\trs1224647224\tC\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "1kg_highcov_chr21",
+   "dataset": "1kg_highcov_chr21",
    "vcf": "21\t41471807\t21:41471807:G:A\tG\tA\t.\t.\t.",
    "combinations": [
     "splice_region_variant,synonymous_variant"
    ]
   },
   {
-   "suite": "1kg_highcov_chr21",
+   "dataset": "1kg_highcov_chr21",
    "vcf": "21\t41825815\tHGSV_243989\tG\t<DUP>\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -375,49 +375,49 @@
    ]
   },
   {
-   "suite": "gnomad_v4.1_chr21",
+   "dataset": "gnomad_v4.1_chr21",
    "vcf": "21\t41942185\trs2065360223\tG\tA\t.\t.\t.",
    "combinations": [
     "stop_gained"
    ]
   },
   {
-   "suite": "gnomad_v4.1_chr21",
+   "dataset": "gnomad_v4.1_chr21",
    "vcf": "21\t42201729\trs770638104\tG\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_donor_region_variant"
    ]
   },
   {
-   "suite": "1kg_highcov_chr21",
+   "dataset": "1kg_highcov_chr21",
    "vcf": "21\t42362510\t21:42362510:G:T\tG\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "gnomad_v4.1_chr21",
+   "dataset": "gnomad_v4.1_chr21",
    "vcf": "21\t42390035\trs1174754377\tC\tT\t.\t.\t.",
    "combinations": [
     "missense_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "gnomad_v4.1_chr21",
+   "dataset": "gnomad_v4.1_chr21",
    "vcf": "21\t42477289\trs775910136\tA\tACC\t.\t.\t.",
    "combinations": [
     "splice_donor_variant"
    ]
   },
   {
-   "suite": "1kg_highcov_chr21",
+   "dataset": "1kg_highcov_chr21",
    "vcf": "21\t42554054\t21:42554054:T:C\tT\tC\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "gnomad_v4.1_chr21",
+   "dataset": "gnomad_v4.1_chr21",
    "vcf": "21\t42849245\t.\tC\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -426,70 +426,70 @@
    ]
   },
   {
-   "suite": "gnomad_v4.1_chr21",
+   "dataset": "gnomad_v4.1_chr21",
    "vcf": "21\t42854566\trs2057934167\tCGCACAGGA\tC\t.\t.\t.",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "gnomad_v4.1_chr21",
+   "dataset": "gnomad_v4.1_chr21",
    "vcf": "21\t42935124\trs1255801198\tC\tT\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant"
    ]
   },
   {
-   "suite": "gnomad_v4.1_chr21",
+   "dataset": "gnomad_v4.1_chr21",
    "vcf": "21\t45505187\trs749541171\tA\tAC\t.\t.\t.",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "gnomad_v4.1_chr21",
+   "dataset": "gnomad_v4.1_chr21",
    "vcf": "21\t45505272\trs2037126010\tAGGCAGAGTAAGTCAGTGGGGAGTGGGCCCCG\tA\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "gnomad_v4.1_chr21",
+   "dataset": "gnomad_v4.1_chr21",
    "vcf": "21\t45505371\trs922296917\tCGGCCCTCCGGGCCCCCCTG\tC\t.\t.\t.",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "gnomad_v4.1_chr21",
+   "dataset": "gnomad_v4.1_chr21",
    "vcf": "21\t45505388\trs1247639677\tCTGGGCCCCCT\tC\t.\t.\t.",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "gnomad_v4.1_chr21",
+   "dataset": "gnomad_v4.1_chr21",
    "vcf": "21\t45512398\trs1331734889\tG\tA\t.\t.\t.",
    "combinations": [
     "stop_retained_variant"
    ]
   },
   {
-   "suite": "gnomad_v4.1_chr21",
+   "dataset": "gnomad_v4.1_chr21",
    "vcf": "21\t45542197\t.\tCCGGCCCACGCCCCGCACCCTCCCCAGGGCCCCGCGGACCCCAGCGCCAGCCCCCACACTCACCTCACAGGGCCCTGCAAACCT\tC\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "1kg_highcov_chr21",
+   "dataset": "1kg_highcov_chr21",
    "vcf": "21\t45609367\t21:45609367:C:CGA\tC\tCGA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant"
    ]
   }
  ],
- "multi_allelic_per_suite": 1,
+ "multi_allelic_per_dataset": 1,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "cache_layout": "ensembl",

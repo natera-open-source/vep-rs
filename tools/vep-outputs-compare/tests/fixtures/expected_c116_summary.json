@@ -124,6 +124,26 @@
           "count": 1,
           "excluded": 1
         },
+        "structural_deletion_stop_lost_without_stop_codon": {
+          "count": 0,
+          "excluded": 0
+        },
+        "stop_codon_completed_by_polyadenylation": {
+          "count": 0,
+          "excluded": 0
+        },
+        "stop_codon_overlap_without_stop_codon": {
+          "count": 0,
+          "excluded": 0
+        },
+        "stop_codon_behind_last_residue_without_stop_codon": {
+          "count": 0,
+          "excluded": 0
+        },
+        "start_codon_overlap_without_start_codon": {
+          "count": 0,
+          "excluded": 0
+        },
         "stop_codon_overlap_genomic_span": {
           "count": 0,
           "excluded": 0
@@ -144,7 +164,27 @@
           "count": 0,
           "excluded": 0
         },
+        "stop_codon_settled_before_unknown_bases": {
+          "count": 0,
+          "excluded": 0
+        },
+        "frameshift_inside_a_held_stop_codon": {
+          "count": 0,
+          "excluded": 0
+        },
         "splice_term_past_the_record_span": {
+          "count": 0,
+          "excluded": 0
+        },
+        "pachysolen_nuclear_code_read_as_standard": {
+          "count": 0,
+          "excluded": 0
+        },
+        "start_codon_removed_without_five_prime_utr": {
+          "count": 0,
+          "excluded": 0
+        },
+        "start_codon_kept_without_five_prime_utr": {
           "count": 0,
           "excluded": 0
         },
@@ -247,7 +287,7 @@
           "rust": 0
         }
       },
-      "reference_release": "116.2",
+      "reference_release": "116.3",
       "divergence_classes": {
         "intronic_overcall_swap": {
           "definition": "Both sides are pure-intronic sets and vep-rs adds splice_region_variant or splice_polypyrimidine_tract_variant, which the reference's last-written region drops.",
@@ -285,6 +325,36 @@
           "taxonomy_class": "splice_family_swap",
           "perl_citation": "BaseTranscriptVariationAllele.pm:215; VariationEffect.pm:87-110"
         },
+        "structural_deletion_stop_lost_without_stop_codon": {
+          "definition": "A Transcript row of a structural deletion on a transcript at whose coding end no stop codon stands, with cds_end_NF or without, or whose stop codon polyadenylation completes: the reference writes stop_lost for a span over the last three genomic positions of the coding region without testing a flag or reading a base, and vep-rs writes the row's other terms without it. The class reads the transcript's record in the candidate's cache and takes no pair without the cache.",
+          "excludes": true,
+          "taxonomy_class": "structural_deletion_stop_lost_without_stop_codon",
+          "perl_citation": "VariationEffect.pm:1268-1280"
+        },
+        "stop_codon_completed_by_polyadenylation": {
+          "definition": "A Transcript row of a sequence allele on a transcript whose coding sequence ends on its last base one or two bases into its stop codon and whose record shows the model complete, by a mitochondrial codon table or a consensus coding sequence id: the reference reads those bases as an incomplete terminal codon and writes incomplete_terminal_codon_variant and no stop term, and vep-rs writes the terms of the row on the stop codon polyadenylation completes. The class derives vep-rs's coding terms from the transcript's record in the candidate's cache, the allele and the positions both rows print equal, and takes no pair without the cache; a deletion that runs past the transcript's last base is derived only beside the reference sequence.",
+          "excludes": true,
+          "taxonomy_class": "stop_codon_completed_by_polyadenylation",
+          "perl_citation": "VariationEffect.pm:1240, 1296, 1548, 1588-1614"
+        },
+        "stop_codon_overlap_without_stop_codon": {
+          "definition": "A Transcript row of a sequence allele on a transcript without cds_end_NF at whose coding end no stop codon stands: the reference reads the last three coding positions as the stop codon and writes stop_lost or stop_retained_variant from its overlap tests, and vep-rs writes frameshift_variant, an in-frame term or coding_sequence_variant as the row's residues, codons and positions give them. The class derives vep-rs's coding terms from the cells both rows print equal, or the reference's where Amino_acids and Codons differ as alternate_codon_past_the_coding_end reads them, and the transcript's record in the candidate's cache, and takes no pair without the cache or, for a row under an identifier, without the input record.",
+          "excludes": true,
+          "taxonomy_class": "stop_codon_overlap_without_stop_codon",
+          "perl_citation": "VariationEffect.pm:1318, 1373-1381, 1400, 1408-1427, 1466-1480, 1508"
+        },
+        "stop_codon_behind_last_residue_without_stop_codon": {
+          "definition": "A Transcript row of a sequence allele on a transcript at whose coding end no stop codon stands, with cds_end_NF or without: the reference reads a stop codon the allele brings directly behind the last residue as the transcript's own kept and writes stop_retained_variant beside the in-frame term, and vep-rs writes stop_gained beside it. The class derives vep-rs's coding terms from the cells both rows print equal, or the reference's where Amino_acids and Codons differ as alternate_codon_past_the_coding_end reads them, and the transcript's record in the candidate's cache, and takes no pair without the cache or, for a row under an identifier, without the input record.",
+          "excludes": true,
+          "taxonomy_class": "stop_codon_behind_last_residue_without_stop_codon",
+          "perl_citation": "VariationEffect.pm:1344, 1357"
+        },
+        "start_codon_overlap_without_start_codon": {
+          "definition": "A Transcript row on a transcript without cds_start_NF at whose coding start no start codon is shown: the reference reads the first three coding positions as the start codon and writes start_lost or start_retained_variant, and vep-rs writes the terms the row's residues, codons and positions give without a start term. The class derives vep-rs's coding terms from the cells both rows print equal, or the reference's where Amino_acids and Codons differ as alternate_codon_past_the_coding_end reads them, and the transcript's record in the candidate's cache, and takes no pair without the cache or, for a row of a sequence allele under an identifier, without the input record.",
+          "excludes": true,
+          "taxonomy_class": "start_codon_overlap_without_start_codon",
+          "perl_citation": "VariationEffect.pm:975-986"
+        },
         "stop_codon_overlap_genomic_span": {
           "definition": "A Transcript row of an insertion or deletion with both cDNA positions and a CDS start on which the reference writes coding_sequence_variant and vep-rs stop_retained_variant, both beside splice_region_variant: the reference's genomic stop codon overlap reads the last three genomic positions of the coding region and misses a stop base that ends an exon.",
           "excludes": true,
@@ -310,16 +380,46 @@
           "perl_citation": "VariationEffect.pm:1234-1288, 1290-1324, 1508"
         },
         "stop_codon_overlap_insertion_range": {
-          "definition": "A Transcript row of an insertion with both cDNA positions and a CDS start on which vep-rs writes stop_retained_variant, with or without inframe_insertion, for the stop codon the insertion keeps, and the reference coding_sequence_variant, or frameshift_variant with or without stop_gained: the reference's genomic stop codon overlap moves an insertion's start by the inserted length. Under an identifier a row is read as an insertion's by a Location of two neighbouring positions and an Allele of another length than two, so two bases replaced by a sequence of another length are set aside with the insertions.",
+          "definition": "A Transcript row of an insertion with both cDNA positions and a CDS start on which vep-rs writes stop_retained_variant, with or without inframe_insertion, for the stop codon the insertion keeps, and the reference coding_sequence_variant, or frameshift_variant with or without stop_gained: the reference's genomic stop codon overlap moves an insertion's start by the inserted length. A row at a Location of two neighbouring positions is an insertion's where its record's alleles, from the first column or the input records, write the Allele between the two positions and replace no base. Under an identifier a row whose input record replaces the two bases stays a difference; without the input records a row under an identifier is read as an insertion's by an Allele of another length than two, so two bases replaced by a sequence of another length are set aside with the insertions and an insertion of two bases stays a difference. The input records are read by Location and Allele: an insertion no record places stays a difference where a record replaces the same two bases by the same Allele.",
           "excludes": true,
           "taxonomy_class": "stop_codon_overlap_insertion_range",
           "perl_citation": "VariationEffect.pm:1389-1431, 1549"
         },
+        "stop_codon_settled_before_unknown_bases": {
+          "definition": "A Transcript row with one Allele, one CDS position that carries both ends and one Codons cell on both sides, on which vep-rs reads the allele's peptide and the reference does not. vep-rs writes stop_gained where the reference writes none: added to the terms of a row the reference calls frameshift_variant, or in place of the reference's coding_sequence_variant, with at most one of inframe_insertion, inframe_deletion and protein_altering_variant. Where the reference writes stop_retained_variant for a stop codon test it does not make, vep-rs writes stop_gained in that term's place, with frameshift_variant, one of those three terms or no other term. Or vep-rs writes inframe_insertion beside stop_retained_variant where the reference writes no inframe_insertion: added to the terms of a row the reference calls stop_retained_variant, or with stop_retained_variant in the place of the reference's frameshift_variant or coding_sequence_variant on a row of an insertion between two neighbouring positions that carries both cDNA positions and a CDS start on both sides. The pair in the place of frameshift_variant is one of stop_codon_overlap_insertion_range as well, whose rule stands first and counts it. The alternate half of the Codons cell holds a letter other than A, C, G and T, and a stop codon of the standard genetic code stands among its whole codons before the first codon with such a letter. The reference translates no allele that holds such a letter and writes no Amino_acids; vep-rs writes the row every completion of the unknown bases shares, and the alternate half of its Amino_acids holds its first stop at that codon's place. A row that ends before its Codons column stays a difference.",
+          "excludes": true,
+          "taxonomy_class": "stop_codon_settled_before_unknown_bases",
+          "perl_citation": "TranscriptVariationAllele.pm:701; VariationEffect.pm:1100-1127, 1211-1232, 1290-1324, 1616-1649"
+        },
+        "frameshift_inside_a_held_stop_codon": {
+          "definition": "A row of an insertion or a deletion whose length change is no multiple of three and whose first base lies inside the codon of a stop that the transcript's peptide holds as a stop and reads on past (a polymorphic pseudogene's), on which vep-rs writes frameshift_variant and the reference does not. Ensembl VEP's frameshift test returns 0 wherever the reference peptide of the allele's codons begins with a stop, which holds for the stop codon no residue follows, so the reference writes coding_sequence_variant alone, inframe_deletion alone, or inframe_insertion with coding_sequence_variant; vep-rs writes frameshift_variant in the place of that one group, and every other term stands on both rows. The two rows hold the same Amino_acids cell, whose reference half opens with a stop and whose alternate half holds the unknown residue, and the same Codons cell, whose two halves differ in length by a number of bases that is no multiple of three. A pair whose reference row holds stop_retained_variant or stop_lost stays a difference, and so does a pair with a row that ends before its Codons column.",
+          "excludes": true,
+          "taxonomy_class": "frameshift_inside_a_held_stop_codon",
+          "perl_citation": "VariationEffect.pm:1554"
+        },
         "splice_term_past_the_record_span": {
-          "definition": "On a record whose alternate allele is longer than its reference allele, Ensembl VEP writes a splice donor, splice acceptor, donor fifth base, donor region, polypyrimidine tract or intron term from positions past the end of the record's span; where no base of the span lies in a window of that term, vep-rs does not write it. For the intron term the window is the intron. With the record's alleles, from the first column or the input records, a row is set aside where the record is no pure insertion and one intron stands beside the span, at a place the row's cDNA positions allow, at which the record's regions give the reference's terms and the span gives vep-rs's, the donor region and splice_region_variant coming where the terms that withhold them went. Without the record a row is set aside where three or more positions lie in the transcript's sequence and vep-rs's row holds none of the six terms; a Location of two neighbouring positions, which an insertion's row shares, and a span that holds an intron's base then stay differences. A row that differs by the terms of a stop codon class as well is set aside where that class's rule takes the rest of the difference.",
+          "definition": "On a record whose alternate allele is longer than its reference allele, Ensembl VEP writes a splice donor, splice acceptor, donor fifth base, donor region, polypyrimidine tract or intron term from positions past the end of the record's span; where no base of the span lies in a window of that term, vep-rs does not write it, unless it is a term of an insertion written after the span. For the intron term the window is the intron. With the record's alleles, from the first column or the input records, a row is set aside where the record is no pure insertion and one intron stands beside the span, at a place the row's cDNA positions allow, at which the record's regions give the reference's terms and the span gives vep-rs's, the donor region and splice_region_variant coming where the terms that withhold them went. A record whose alternate allele opens with its whole reference allele of two or more bases changes no base of its span. vep-rs reads it as the insertion it writes, between the span's last base and the base after it, and writes that insertion's terms. With the record's alleles such a row is set aside where that insertion gives vep-rs's terms at the intron's place, the polypyrimidine tract and intron terms among those vep-rs alone may hold. A pair whose allele opens with its whole reference allele of two or more bases is put to the row-aware rules also where a set rule classifies it without setting it aside, and is counted under the row-aware rule that takes it. Without the record a row is set aside where three or more positions lie in the transcript's sequence and vep-rs's row holds none of the six terms; a Location of two neighbouring positions, which an insertion's row shares, and a span that holds an intron's base then stay differences, and no row is read as that of an allele that opens with its whole reference allele. A row that differs by the terms of a class of a coding end or of a stop codon class as well is set aside where that class's rule takes the rest of the difference.",
           "excludes": true,
           "taxonomy_class": "splice_term_past_the_record_span",
-          "perl_citation": "VariationFeatureOverlapAllele.pm:405-460; BaseTranscriptVariationAllele.pm:117-118, 143-204"
+          "perl_citation": "VariationFeatureOverlapAllele.pm:405-460; BaseTranscriptVariationAllele.pm:117-118, 143-206"
+        },
+        "pachysolen_nuclear_code_read_as_standard": {
+          "definition": "A Transcript row of a transcript on genetic code 26, the nuclear code of Pachysolen tannophilus, whose Codons cell holds CTG as its reference or its alternate codon and a leucine codon as the other: the reference translates under the last table of its codon module, which holds no table 26, and writes synonymous_variant with leucine alone in Amino_acids; vep-rs reads CTG as alanine, as the code gives it, and writes missense_variant with alanine on that codon's side and leucine on the other. A pair is set aside where the two sets are otherwise equal and the two rows hold the same Codons cell; a row that ends before its Codons column stays a difference.",
+          "excludes": true,
+          "taxonomy_class": "pachysolen_nuclear_code_read_as_standard",
+          "perl_citation": "Bio/Tools/CodonTable.pm:328-338, 412-460; TranscriptVariationAllele.pm:712, 736"
+        },
+        "start_codon_removed_without_five_prime_utr": {
+          "definition": "A Transcript row of a deletion of whole codons from the first coding base of a transcript with no 5' UTR, on which the reference writes inframe_deletion without start_lost and vep-rs start_lost beside it for the start codon the record removes.",
+          "excludes": true,
+          "taxonomy_class": "start_codon_removed_without_five_prime_utr",
+          "perl_citation": "VariationEffect.pm:851-904, 906-945"
+        },
+        "start_codon_kept_without_five_prime_utr": {
+          "definition": "A Transcript row of an insertion or deletion that overlaps the start codon of a transcript with no 5' UTR and leaves a start codon at the start of the coding sequence, on which the reference writes no start_retained_variant, and start_lost where its length or peptide test holds, and vep-rs start_retained_variant alone.",
+          "excludes": true,
+          "taxonomy_class": "start_codon_kept_without_five_prime_utr",
+          "perl_citation": "VariationEffect.pm:851-904, 947-963, 1028-1075"
         },
         "reference_skipped_record": {
           "definition": "A structural record the reference dropped before its input buffer, marked vep_skip for a span over --max_sv_size (its SVLEN, else its END), an ALT type with no Sequence Ontology term, an unsupported multi-allelic list or a deletion with neither END nor SVLEN, so it has no reference row in any format; vep-rs's rows for the record are set aside.",
@@ -337,7 +437,7 @@
           "definition": "A bracket breakend whose mate's chromosome is spelled with a prefix the mate-allele test does not resolve, Chr21 for 21, loses its mate rows in the reference and keeps them in vep-rs; a mate named by an accession on another chromosome loses them in the reference alone too, vep-rs resolving the accession through the synonym table, and one on the record's own chromosome keeps them in both engines.",
           "excludes": false,
           "taxonomy_class": "bnd_synonym_mate_rows_lost",
-          "perl_citation": "StructuralVariationOverlap.pm:86-102, 144-160; Utils/VariationEffect.pm:111-124; InputBuffer.pm:348-357; AnnotationType/Transcript.pm:134"
+          "perl_citation": "StructuralVariationOverlap.pm:86-103, 144-160; Utils/VariationEffect.pm:111-124; InputBuffer.pm:348-357; AnnotationType/Transcript.pm:134"
         },
         "fasta_named_slice_intergenic": {
           "definition": "Under --check_ref or --lookup_ref with a FASTA whose sequence names differ from the cache's, the variant's slice is named after the FASTA and every transcript fails the slice test, so the reference writes intergenic_variant where vep-rs writes transcript rows; a property of the run, counted and never set aside.",
@@ -349,13 +449,13 @@
           "definition": "A breakpoint record that names no mate (a bare <BND>, or one with SVLEN, POS2 or an unreadable END2 and no bracket) is held as N/<BND> and, with no breakend parsed, one allele is built per slash-separated part, the reference base N included, so the reference writes every row twice under chromosome_breakpoint, ALLELE_NUM 1 for the reference allele and 2 for the ALT; a reference allele has no variant effect, so vep-rs writes the ALT row once and the reference-allele rows are set aside: each duplicates the ALT row's tuple, so the unique-tuple key stream drops it before the raw and the adjusted figure, and both comparators count the rows so set aside per record.",
           "excludes": true,
           "taxonomy_class": "bnd_bare_reference_allele_row",
-          "perl_citation": "Parser/VCF.pm:499; StructuralVariationOverlap.pm:64-77; OutputFactory.pm:2029"
+          "perl_citation": "Parser/VCF.pm:499; StructuralVariationOverlap.pm:64-77; OutputFactory.pm BaseStructuralVariationOverlapAllele_to_output_hash"
         },
         "bnd_mate_32bit_buffer_intergenic": {
           "definition": "A coordinate of the reference's input buffer that, plus the --distance flank, reaches 2^31 (a breakend's mate position, a span's end or the record's own position) turns every record of the buffer intergenic, that record and the records loaded with it (the first such position is 2147478648 under the default flank of 5000 and 2147483647 under --distance 1); the coordinates enter the buffer's bounds with the flank added when the cache regions are chosen. vep-rs annotates the buffer's records against their transcripts and a mate at its coordinate. Counted on the reference's rows at the record's Location and never set aside, since the records it reaches beyond that one depend on the buffer boundaries.",
           "excludes": false,
           "taxonomy_class": "bnd_mate_32bit_buffer_intergenic",
-          "perl_citation": "AnnotationSource.pm:190, 251-254, 306-309; InputBuffer.pm:386-390"
+          "perl_citation": "AnnotationSource.pm:190, 251-257, 306-309; InputBuffer.pm:386-390"
         },
         "gvcf_variant_site_dropped": {
           "definition": "A gVCF variant site lists <NON_REF> beside its real allele (`A G,<NON_REF>`); the <NON_REF> token routes the line to the structural path, where `G/<NON_REF>` has no Sequence Ontology term, and the reference drops the site whole, the real allele with it. vep-rs annotates the real allele and reads <NON_REF> as the absence of a variant. vep-rs's rows at the site are set aside: recognised here by the record's own name (`CHROM_POS_REF/ALT/<NON_REF>`) at a Location the reference wrote nothing for, and in the structural-variant comparator from the input record.",
@@ -367,7 +467,7 @@
           "definition": "A dot-notation breakend without INFO/SVTYPE (`N.`, `.N`) takes the sequence rules for its coordinates: the start is POS + 1 when the ALT's length differs from the REF's and POS when it does not, the end is POS + len(REF) - 1, so the reference writes the pair `POS-(POS+1)` with the positions of an insertion for a one-base REF, the span `(POS+1)-(POS+len(REF)-1)` for a longer REF beside an ALT of another length and `POS-(POS+len(REF)-1)` beside an ALT of its own length; with `SVTYPE=BND` it writes the single base at POS + 1, as vep-rs writes it for every REF. The reference's span row and vep-rs's point row at the span's start or the base after it on the same feature are set aside together.",
           "excludes": true,
           "taxonomy_class": "dot_breakend_without_svtype_pair",
-          "perl_citation": "BaseVCF4.pm:255-275, 297-317"
+          "perl_citation": "BaseVCF4.pm:255-276, 297-317"
         },
         "missing_alt_annotated": {
           "definition": "A record whose ALT column is the missing value `.` is routed to the structural path by INFO/SVTYPE and annotated as an allele: a `chromosome_breakpoint` for `SVTYPE=BND`, a deletion over END for `SVTYPE=DEL`; without SVTYPE the reference writes nothing for it, as vep-rs writes nothing in both cases. The reference's rows are set aside by the structural-variant comparator, which reads the input; the SNP/indel comparator cannot tell them from a record with an allele.",
@@ -379,13 +479,13 @@
           "definition": "An INFO/END, SVLEN or POS that is not an integer (`END=30425949.5`, `SVLEN=300.7`, `SVLEN=NaN`, POS `30425949.0` on the sequence path) is taken as written, passes `looks_like_number`, and the record is annotated with the text in its Location (`21:30425651-30425950.7`, `21:30425651-NaN`, `21:30425949.0`) and a fractional DISTANCE; vep-rs refuses an END that is not a coordinate and reads a SVLEN or POS at its numified value (`21:30425651-30425950`, the pair `21:30425650-30425651`, `21:30425949`). The reference's rows, recognised by the Location, are set aside in both comparators, and vep-rs's rows of the same record by the structural-variant comparator, which reads the input.",
           "excludes": true,
           "taxonomy_class": "non_integer_end_annotated",
-          "perl_citation": "BaseVCF4.pm:263, 302-308; Parser.pm:475"
+          "perl_citation": "BaseVCF4.pm:263, 302-309; Parser.pm:475"
         },
         "cnv_tr_empty_expansion_dropped": {
           "definition": "With a FASTA, a <CNV:TR> whose expansion yields no alternate allele, or one equal to the reference run (`RN=.`, a RUC Perl reads as true that gives zero or fewer repeats, a RUC times unit length equal to SVLEN), is expanded to an allele string with no alternate and the reference writes nothing for it, without a warning; vep-rs with a FASTA writes nothing for it either, and without one writes the symbolic rows over the run, as the reference does without one. vep-rs's rows are set aside by the structural-variant comparator when the input record has the shape and the reference wrote nothing at or beside the run; the SNP/indel comparator does not judge it.",
           "excludes": false,
           "taxonomy_class": "cnv_tr_empty_expansion_dropped",
-          "perl_citation": "Parser/VCF.pm:382-431, 516-543; Parser.pm:553-592"
+          "perl_citation": "Parser/VCF.pm:382-431, 516-544; Parser.pm:553-592"
         },
         "star_alone_svtype_annotated": {
           "definition": "A record whose every ALT is `*` under a true INFO/SVTYPE is routed to the structural path and annotated from INFO alone, a deletion over END for `SVTYPE=DEL` or a `chromosome_breakpoint` at POS + 1 for `SVTYPE=BND`, although `*` names no allele of the record; vep-rs writes no row for it. The reference's rows are set aside by the structural-variant comparator, which reads the input; the SNP/indel comparator cannot tell them from a record with an allele.",
@@ -400,7 +500,7 @@
           "perl_citation": "BaseVCF4.pm:255-264; Parser.pm:475-488"
         },
         "cnv_tr_rn_zero_allele_dropped": {
-          "definition": "With a FASTA, a two-ALT <CNV:TR> of which one allele has `RN=0` loses an allele: the empty expansion is an empty part of the allele string, which is not read as multi-allelic, so the first allele alone is kept when the empty part leads and the trailing empty part is dropped by the split; vep-rs writes both alleles when the empty part leads, and the structural-variant comparator sets aside its rows of the dropped allele: the symbolic rows told by their direction term when the real allele is a gain, or unchanged beside a leading empty part (vep-rs reads every symbolic <CNV:TR> allele as a gain), and the literal rows a run with a FASTA writes for the real allele behind a leading empty part.",
+          "definition": "With a FASTA, a two-ALT <CNV:TR> of which one allele has `RN=0` loses an allele: the empty expansion is an empty part of the allele string, which is not read as multi-allelic, so the first allele alone is kept when the empty part leads and the trailing empty part is dropped by the split; vep-rs writes both alleles when the empty part leads, and the structural-variant comparator sets aside its rows of the dropped allele: the symbolic rows told by their direction term when the real allele is a gain, or unchanged beside a leading empty part (vep-rs reads a symbolic <CNV:TR> allele as a gain unless its record states it shorter than its run or, with no direction term, as long as it), and the literal rows a run with a FASTA writes for the real allele behind a leading empty part.",
           "excludes": false,
           "taxonomy_class": "cnv_tr_rn_zero_allele_dropped",
           "perl_citation": "Parser/VCF.pm:411, 428; Parser.pm:881, 978"

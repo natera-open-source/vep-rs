@@ -1,0 +1,7 @@
+#a comment line of one hash
+## meta
+#Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	IMPACT	DISTANCE	STRAND	FLAGS	FV_PRIMATEAI	FV_REVEL
+## FV_REVEL	a meta line, never the header
+v1	21:1000	G	ENSG1	ENST1	Transcript	missense_variant	10	10	4	A/T	gcc/Acc	-	MODERATE	-	1	-	-	G|0.5
+#v9	21:1500	A	ENSG1	ENST9	Transcript	missense_variant	10	10	4	A/T	gcc/Acc	-	MODERATE	-	1	-	A|0.1	A|0.9
+v2	21:2000	T	ENSG1	ENST2	Transcript	missense_variant	10	10	4	A/T	gcc/Acc	-	MODERATE	-	1	-	T|0.7312	-

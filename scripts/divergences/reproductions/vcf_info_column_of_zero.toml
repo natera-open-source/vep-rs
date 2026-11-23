@@ -1,0 +1,39 @@
+entry = "vcf_info_column_of_zero"
+page = "docs/divergences/vcf-info-column-of-zero.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "unobserved"
+input_class_basis = "well-formed under the VCF 4.2 specification, section 1.4.1 \"Fixed fields\", INFO (a semicolon-separated series of keys with optional values, arbitrary keys permitted); not seen in the measured datasets"
+notes = "Two records whose INFO column is the one character `0`. The first has a consequence: Ensembl VEP appends its entry to the column with no `;` before it, so the column reads `0CSQ=...`; vep-rs writes `0;CSQ=...`. The second, whose one ALT is `*`, has none: Ensembl VEP writes `.` in the column's place; vep-rs keeps `0`."
+
+[input]
+format = "vcf"
+text = """
+21	5030602	with_row	A	G	.	.	0
+21	5030610	no_row	T	*	.	.	0
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-writers/json_cache"
+
+[run]
+flags = []
+format = "vcf"
+
+[compare]
+kind = "vcf"
+line = true
+where = { record = ["with_row", "no_row"] }
+mask = ["(?<=CSQ=).*"]
+
+[expected]
+ensembl_vep = ["21\t5030602\twith_row\tA\tG\t.\t.\t0CSQ=<masked>", "21\t5030610\tno_row\tT\t*\t.\t.\t."]
+vep_rs = ["21\t5030602\twith_row\tA\tG\t.\t.\t0;CSQ=<masked>", "21\t5030610\tno_row\tT\t*\t.\t.\t0"]
+
+[implementation]
+code = ["crates/vep-io/src/output/vcf_output.rs::VcfOutputFormatter::format_record_bytes"]
+tests = [
+    "crates/vep-io/src/output/vcf_output.rs::tests::an_info_column_of_zero_keeps_its_separator",
+]

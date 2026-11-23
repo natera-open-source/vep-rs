@@ -1,0 +1,18 @@
+Processing 12 chromosomes
+  chr01: 1 files, 1 transcripts, 0 variation files, 0 regulatory files
+  chr1: 1 files, 1 transcripts, 2 variation files, 0 regulatory files
+  chr10: 1 files, 1 transcripts, 2 variation files, 0 regulatory files
+  chr2: 1 files, 1 transcripts, 2 variation files, 0 regulatory files
+  chr21: 2 files, 3 transcripts, 0 variation files, 0 regulatory files
+  chrGL000008.2: 1 files, 1 transcripts, 0 variation files, 0 regulatory files
+  chrHSCHR1_CTG1: 1 files, 1 transcripts, 0 variation files, 0 regulatory files
+  chrMT: 1 files, 1 transcripts, 0 variation files, 0 regulatory files
+  chrX: 1 files, 1 transcripts, 0 variation files, 0 regulatory files
+  chrY: 1 files, 1 transcripts, 0 variation files, 0 regulatory files
+  chrchr1: 1 files, 1 transcripts, 0 variation files, 0 regulatory files
+  chrempty_dir: 0 files, 0 transcripts, 0 variation files, 0 regulatory files
+Wrote contigs-zero.out/chr_synonyms.txt
+Wrote contigs-zero.out/sequence_regions.tsv (0 sequences)
+Wrote contigs-zero.out/info.json
+
+Done. Converted: 12 / 12 files, 13 total transcripts, 6 variation files copied, 0 regulatory files

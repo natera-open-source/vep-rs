@@ -34,7 +34,7 @@ struct EchoPlugin {
 
 #[no_mangle]
 pub extern "C" fn vep_plugin_abi_version() -> u32 {
-    if cfg!(feature = "abi-one") {
+    if cfg!(fixture_abi_one) {
         1
     } else {
         2
@@ -215,7 +215,7 @@ fn json_quote(s: &str) -> String {
 /// `text` must be a pointer returned by [`vep_plugin_run`],
 /// [`vep_plugin_header_info`] or [`vep_plugin_feature_types`] that has not been
 /// freed.
-#[cfg(not(feature = "missing-free"))]
+#[cfg(not(fixture_missing_free))]
 #[no_mangle]
 pub unsafe extern "C" fn vep_plugin_free(text: *mut c_char) {
     if !text.is_null() {

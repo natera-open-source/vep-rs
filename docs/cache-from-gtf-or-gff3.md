@@ -10,13 +10,66 @@ vep -i input.vcf -o output.txt --offline \
   --json_cache gtf_cache --fasta genome.fa
 ```
 
-In the commands, `genome.fa` is the assembly's genome FASTA with its `samtools faidx` index. `annotation.gtf.gz` and `input.vcf` are the user's own files.
+In the commands, `genome.fa` is the assembly's genome FASTA with its `samtools faidx` index. `annotation.gtf.gz` and `input.vcf` are the user's own files. The builder lists the files of `gtf_cache` in `CHECKSUMS.sha256` as its last write. A build that ends before it leaves a directory `vep` [refuses by name](cache-checksums.md#a-build-that-ends-early).
 
 `--gff3 <file>` takes a GFF3 the same way, plain, gzipped or bgzipped, so the indexed file Ensembl VEP needs serves both engines. Nothing is downloaded: `--release` labels the cache and `--assembly` names the assembly a run is checked against. `--codon-table MT=2` names the mitochondrion's genetic code, which no GTF or GFF3 carries; a file without an organelle region needs no such flag.
 
-`vep --gff <file>` and `vep --gtf <file>`, which Ensembl VEP reads as an annotation source in place of its cache, have no in-process counterpart. vep-rs reads transcripts from its cache alone. Ensembl VEP's file source prints a `SOURCE` field naming the file on every transcript row, which a run on the built cache does not, a documented intended divergence, [`file_cache_writes_no_source_field`](divergences/file-cache-writes-no-source-field.md).
+The two steps are the route when the file is the run's only transcript model. Ensembl VEP's file source prints a `SOURCE` field naming the file on every transcript row, which a run on the built cache does not, a documented intended divergence, [`file_cache_writes_no_source_field`](divergences/file-cache-writes-no-source-field.md). The build's last lines say that the cache names no source and count the transcripts [whose translation names no protein](#the-translation-and-attribute-values), and a run that writes the `SOURCE` column says it is empty there.
+
+A record's rows on the built cache follow Ensembl VEP's key order. Ensembl VEP's key for a file's transcript is its stable identifier, `_` and a number it counts up as it builds transcripts (`BaseGXF.pm` line 489, `BaseVariationFeature.pm` lines 310 to 321). The built cache holds no such number, and vep-rs's key for its transcript is the stable identifier and `_`. Where one identifier continues another, as `YML045W-A` continues `YML045W`, the keys part at `-` against `_`, and `-` sorts first: the longer identifier's rows come first, as in Ensembl VEP for every transcript it has numbered.
+
+Ensembl VEP's count starts at zero, and its key leaves a zero out, so the first transcript it builds in a run is keyed by its identifier alone. Where that transcript is the shorter of such a pair, Ensembl VEP writes its rows first and vep-rs the longer one's. Which transcript is built first follows the input's other records and Perl's hash order, which differs between runs.
+
+`vep --gff <file>` and `vep --gtf <file>` read a file beside a cache in the same run, and the rows of its transcripts carry that `SOURCE` field. [A file beside a cache in one run](#a-file-beside-a-cache-in-one-run) states the command and what the run writes.
 
 An Ensembl GTF built this way carries what Ensembl VEP's own `--gtf` reading carries, not what its cache carries. For the cache's content, build from the Ensembl GFF3 with the GTF beside it, as the [Quick start](getting-started/quick-start.md#2-get-a-transcript-cache) does, and `--core-dumps` for the rest.
+
+## A file beside a cache in one run
+
+`--gff <file>` or `--gtf <file>` names a GFF3 or a GTF whose transcripts `vep` annotates beside the cache's:
+
+```bash
+vep -i input.vcf -o output.txt --offline --cache --dir_cache <dir> \
+  --fasta genome.fa --gtf annotation.gtf.gz
+```
+
+The cache is named by `--cache --dir_cache <dir>` or by `--json_cache <dir>`. `--gff <file>` is `--custom file=<file>,format=gff` and `--gtf <file>` is `--custom file=<file>,format=gtf`, as in Ensembl VEP (`Config.pm` lines 532-541). A run takes one `--gff`, one `--gtf` and any number of `--custom` strings. `short_name=<name>` in the string names the source. Without it the short name is the file's last path segment, `annotation.gtf.gz` in the command (`File.pm` lines 154-157).
+
+### What the run reads
+
+Each file is read once, whole, when the run starts: plain, or gzipped or bgzipped under a name ending `.gz`. No tabix index is read, where Ensembl VEP needs the file bgzipped and indexed. Nothing is written into the cache.
+
+[How the file is read](#how-the-file-is-read) describes the reading for both routes. A file read beside a cache takes the reading of a build from the genome alone: every transcript is kept and the sequences come from the FASTA.
+
+So `--fasta` is required, and a FASTA found in the cache directory counts. Without one the run ends with `ERROR: [custom] a GFF or GTF transcript source needs a FASTA file (--fasta) for its sequences: vep-rs never connects to an Ensembl database (Ensembl VEP: GXF annotation requires either database access (--database or --cache) or a FASTA file (--fasta))`. The text in parentheses is Ensembl VEP's own refusal (`BaseGXF.pm` lines 105-106). Neither database route is a remedy here: `--database` is refused, and the cache is read without a database.
+
+The codon table is 2 for a sequence region named `MT` and 1 for every other, the tables Ensembl VEP's file sources take (`BaseGXF.pm` lines 765 to 767). A run has no flag for it.
+
+A mitochondrion the file writes `chrM` or `M` is read as `MT`. On GRCh37 those two names also name the 16,571-base mitochondrial sequence of the UCSC hg19 naming. There the file's `chrM` or `M` is read as `MT` only where the FASTA holds the assembly's mitochondrial sequence, 16,569 bases long, or gives no record for `MT` and names no organelle genome. Over any other record the run leaves the region's transcripts out and warns once, naming the file, the region and the count. A cache build keeps such a region under its written name and says so.
+
+Neither the name nor the record's length says which of the two sequences a file's models count on, so on GRCh37 vep-rs also tests a mitochondrial region's coding transcripts on the FASTA record they are cut from. A coding sequence cut from the sequence its model counts on opens on a start codon of the region's codon table and holds no stop codon before its last codon.
+
+A transcript whose first codon holds a letter other than the four bases is not tested, as where an `N` pads a coding sequence that opens inside a codon. Nor is one flagged `cds_start_NF`, by the tag of its own line in the file or by the attribute that a cache build's core dumps or the GTF beside its GFF3 give its record.
+
+Where the FASTA gives the coding sequence of at least one of the region's tested transcripts and none of them reads so, the run leaves the region's transcripts out and warns once, naming the file, the region, the record and its length. A cache build ends with an error that names them and writes no cache.
+
+### What the rows carry
+
+Every row of a file's transcript carries `SOURCE=<short name>`, as Ensembl VEP writes it. The field is the default format's `Extra` item, the tab column, the VCF `CSQ` field, the JSON consequence's `source` key and the Parquet column.
+
+The header carries the lines `## SOURCE : Source of transcript` and `## <short name> : [PATH]/<file name>`. The tab, `CSQ` and Parquet outputs also carry a column named for the short name. It is empty on every row, since a transcript source annotates no record. The VCF header describes it in an `##INFO=<ID=<short name>,Number=.,Type=String,Description="[PATH]/<file name>">` line. Ensembl VEP writes each of them.
+
+The cache's rows are what they are without the file: a plain cache's transcript has no `SOURCE` value, a merged cache's `Ensembl` or `RefSeq`.
+
+A transcript the cache and a file both hold, under one stable identifier, is written once per source. A record's rows follow Ensembl VEP's key order, which the transcript's stable identifier decides. The rows of one identifier come cache first, then each file's in argument order: the `--custom` strings as the command line gives them, then `--gff`'s file, then `--gtf`'s. Ensembl VEP orders such rows by a count of the transcripts it has built from the file, which changes with the input's other records and between runs, a documented intended divergence, [`file_beside_cache_same_id_row_order`](divergences/file-beside-cache-same-id-row-order.md).
+
+### Warnings and the run without a cache
+
+`--nearest` reads the nearest feature from the cache's transcripts alone. The run writes Ensembl VEP's warning that `--nearest` is not compatible with GXF annotation sources, once per file source (`BaseGXF.pm` lines 113-115).
+
+Each feature type the reader skips is warned of once per file: `WARNING: Ignoring '<type>' feature_type from <file> GFF/GTF file. This feature_type is not supported in VEP.` The text is Ensembl VEP's, which writes it for every skipped line it meets (`BaseGXF.pm` lines 239-243).
+
+A run that has no cache at the place its flags name ends with an error that opens `ERROR: [custom] a GFF or GTF transcript source is read beside a cache, and this run has none`. The error names the cache flags and the two steps at the top of this page, the route a run with the file alone takes. Every other refusal met while the cache is resolved ends the run on the line it draws without the file, under `cache` or `config`. Among them: a cache that is there and is refused, a `--species` or `--assembly` value the cache's layout refuses, and a `--synonyms` file that cannot be read.
 
 ## How the file is read
 
@@ -31,7 +84,7 @@ The file is read as Ensembl VEP's `BaseGXF`, `GFF.pm` and `GTF.pm` read it:
   | A GTF | `gene`, `transcript`, `exon`, `CDS` and `stop_codon` |
   | A GFF3 | `gene`, `pseudogene`, `ncRNA_gene`, `mRNA`, `transcript`, `ncRNA`, `lnc_RNA`, `miRNA`, `primary_transcript`, `tRNA`, `rRNA`, `snRNA`, `snoRNA`, the gene segments, `exon`, `CDS` and the rest of Ensembl VEP's list |
 
-  A GTF's stop codon is read as one more CDS segment, so the coding sequence runs through it as an Ensembl GFF3's does. Every other line is skipped and the skipped types are logged once with their counts. Ensembl VEP 116.2's `--gff` source skips an `ncRNA_gene` line and drops every transcript whose `Parent` names one, a documented intended divergence, [`file_cache_reads_ncrna_gene_lines`](divergences/file-cache-reads-ncrna-gene-lines.md).
+  A GTF's stop codon is read as one more CDS segment, so the coding sequence runs through it as an Ensembl GFF3's does. Every other line is skipped and the skipped types are logged once with their counts. A line whose columns NUL bytes end, which `tabix` places and Ensembl VEP reads past, is skipped too. The `--gff` source of Ensembl VEP releases before 116.3 skips an `ncRNA_gene` line and drops every transcript whose `Parent` names one; Ensembl VEP 116.3 reads the line as a gene, as vep-rs does.
 - Ensembl lines. An Ensembl GFF3 types each line by its biotype. So a TEC transcript is an `unconfirmed_transcript` line and a scaRNA one a `scRNA` line, neither in the list. From the genome alone those lines are skipped as Ensembl VEP's `--gff` source skips them, and their transcripts are absent from the cache.
 
   A build of the cache's content is one reading the release's protein FASTA or core dumps (the Transcripts bullet below). It reads every `gene:` and `transcript:` line, the prefix in any letter case, whatever its type, since the Ensembl cache carries those transcripts.
@@ -52,6 +105,7 @@ The file is read as Ensembl VEP's `BaseGXF`, `GFF.pm` and `GTF.pm` read it:
 
   A record whose parent list opens with `0` and names nothing set (`Parent=0,0`; a GTF transcript's `gene_id "0"`) is dropped without a warning. Ensembl VEP drops it too (`BaseGXF.pm` lines 389 and 430-435). A `protein_coding` transcript without an exon line, and a transcript whose biotype no rule names, are dropped and named.
 - An empty first parent field. A record whose list opens with an empty field is a record of its own, or the transcript of a gene a later field names. Ensembl VEP's `--gff` source gives such a transcript the gene's identifiers or none by hash order, a documented intended divergence, [`gff_parent_list_with_an_empty_field`](divergences/gff-parent-list-with-an-empty-field.md).
+- Exon order and phase. A GFF3's exons are ordered by `rank` when every exon line carries one, else by position, as a GTF's are. Ranks that run against position refuse the build, naming the exons; Ensembl VEP reads an exon's bases as an intron's there. A CDS line's phase is `0`, `1`, `2`, `-1` or text holding a `.`; other text refuses the build, naming it, where Ensembl VEP ends its run with `Bad value (...) for exon phase`.
 - CDS lines sharing a start. Two CDS lines of one transcript at one start are both read: every base either covers is coding, and the translation is named by the earlier line of the file on the forward strand and by the later on the reverse. Ensembl VEP keeps one of the two lines alone and loses what the other stated, a documented intended divergence, [`gff_cds_lines_sharing_a_start`](divergences/gff-cds-lines-sharing-a-start.md).
 
 ### Biotype and identifiers
@@ -79,7 +133,7 @@ The file is read as Ensembl VEP's `BaseGXF`, `GFF.pm` and `GTF.pm` read it:
   So is the CCDS identifier, an Ensembl GFF3's `ccdsid` or a GTF's `ccds_id` as the line carries it, which Ensembl VEP's `--gff` and `--gtf` sources never print or rank under `--pick`, a documented intended divergence, [`file_cache_reads_ccdsid`](divergences/file-cache-reads-ccdsid.md).
 
   These are not read, so their columns stay empty:
-  - `cds_start_NF` and `cds_end_NF`
+  - `cds_start_NF` and `cds_end_NF`; the `cds_start_NF` tag of a transcript's own line is read for one thing alone, [the test of a GRCh37 mitochondrial region](#what-the-run-reads)
   - a RefSeq GFF3's CCDS
   - APPRIS
   - the symbol's source
@@ -88,7 +142,7 @@ The file is read as Ensembl VEP's `BaseGXF`, `GFF.pm` and `GTF.pm` read it:
   - protein features
   - the gene phenotype count
   - the sequence edits
-- Mature miRNA arms. No GTF or GFF3 carries them, so `mature_miRNA_variant` is never assigned on a cache built without `--core-dumps`. On such a cache a variant inside an arm reads `non_coding_transcript_exon_variant` or the intron term. Ensembl VEP reads the arms from the `miRNA` transcript attribute of its database (`VariationEffect.pm` line 540), which `--core-dumps` supplies ([Cache setup](cache-setup.md#build-a-cache)).
+- Mature miRNA arms. No Ensembl GTF or GFF3 carries them, and a RefSeq GFF3 holds each in a record neither engine reads, a `miRNA` under a `primary_transcript` (`BaseGXF.pm` lines 513 to 514), so `mature_miRNA_variant` is never assigned on a cache built without `--core-dumps`. On such a cache a variant inside an arm reads `non_coding_transcript_exon_variant` or the intron term. Ensembl VEP reads the arms from the `miRNA` transcript attribute of its database (`VariationEffect.pm` line 540), which `--core-dumps` supplies ([Cache setup](cache-setup.md#build-a-cache)). The build's closing lines name the term, as does a run that asks for the `miRNA` column.
 - Transcripts. Every transcript is kept, readthrough and `artifact` ones included, as Ensembl VEP's `--gff` and `--gtf` sources keep them (`BaseGXF.pm` `_create_transcript`). A build that reads the release's protein FASTA or core dumps is the cache's content and leaves both out, as Ensembl VEP's cache does. Such a build passes `--fasta`, `--core-dumps`, or `--include-predictions`, which reads the protein FASTA for its peptide keys ([Cache setup](cache-setup.md#build-a-cache)).
 - Sequence. The coding sequence, UTRs and peptide come from the genome ([`--genome-fasta`](cache-setup.md#build-a-cache)), the peptide under the region's codon table. That table is 1 unless `--codon-table` names another. A region named like an organelle genome stops the build until the flag names its table ([The codon table of each sequence region](cache-setup.md#the-codon-table-of-each-sequence-region)). Such names are `MT`, `Mito`, `mitochondrion_genome` and the rest.
 
@@ -96,16 +150,16 @@ The file is read as Ensembl VEP's `BaseGXF`, `GFF.pm` and `GTF.pm` read it:
 
 ## Transcript filters on the built cache
 
-`--transcript_filter` and `--exclude_predicted` run on the built cache as on any other. Ensembl VEP applies the same filter set to its `--gtf` and `--gff` sources. So a filter on a key both carry keeps the same transcripts on both engines.
+`--transcript_filter` and `--exclude_predicted` run on the built cache as on any other. Ensembl VEP applies the same filter set to its `--gtf` and `--gff` sources. So a filter on a key both carry keeps the same transcripts on both engines. `--transcript_filter` runs on the transcripts of a file read beside a cache as on the cache's (`AnnotationSourceAdaptor.pm` lines 399-403), and `--transcript_filter "_source_cache is <short name>"` keeps that file's transcripts alone.
 
-`--gencode_basic` and `--gencode_primary` filter the built cache as they filter every cache, where Ensembl VEP's `--gtf` and `--gff` sources accept both flags and annotate every transcript, a documented intended divergence, [`file_cache_honours_gencode_basic`](divergences/file-cache-honours-gencode-basic.md). A transcript Ensembl VEP builds from the file holds fewer keys than its cache's, and the built cache holds the cache's keys. [The transcript filter page](divergences/transcript-filter-fields.md#a-gtf-or-gff3-as-the-transcript-source) lists the keys that read differently.
+`--gencode_basic` and `--gencode_primary` filter the built cache as they filter every cache, where Ensembl VEP's `--gtf` and `--gff` sources accept both flags and annotate every transcript, a documented intended divergence, [`file_cache_honours_gencode_basic`](divergences/file-cache-honours-gencode-basic.md). A file read beside a cache is filtered the same way: a transcript of the file without the flag's tag writes no row. The `--refseq`, `--merged` and `--all_refseq` model filter applies to the cache's transcripts alone, as in Ensembl VEP. A transcript Ensembl VEP builds from the file holds fewer keys than its cache's, and the built cache holds the cache's keys. [The transcript filter page](divergences/transcript-filter-fields.md#a-gtf-or-gff3-as-the-transcript-source) lists the keys that read differently.
 
 
 ## The reference peptide of a mitochondrial transcript read from a GTF or GFF3
 
-One behaviour of Ensembl VEP 116.2's `--gtf` and `--gff` sources is not reproduced by a cache built from the same file, a documented class. This section names the rows a comparison sets aside, and no comparator applies the class, since no committed run reaches its shape, as [Intended divergences from Ensembl VEP](intended-divergences.md) lists it; its [How to read the counts](intended-divergences.md#how-to-read-the-counts) defines the terms.
+One behaviour of Ensembl VEP 116.3's `--gtf` and `--gff` sources is not reproduced by a cache built from the same file, a documented class. This section names the rows a comparison sets aside, and no comparator applies the class, since no committed run reaches its shape, as [Intended divergences from Ensembl VEP](intended-divergences.md) lists it; its [How to read the counts](intended-divergences.md#how-to-read-the-counts) defines the terms.
 
-The class carries its tier under that page's rule: tier 1 is a shape the chromosome 21 population cuts carry with no flag, tier 2 one that needs a flag or plugin on ordinary data, tier 3 one ordinary data does not carry. The counts are over the cuts' 15,646,481 records, the 111 golden corpora and their 392 flag sets.
+The class carries its tier under that page's rule: tier 1 is a shape the chromosome 21 cuts carry with no flag, tier 2 one that needs a flag or plugin on ordinary data, tier 3 one ordinary data does not carry. The counts are over the cuts' 15,646,481 records, the 152 golden corpora and their 511 flag sets.
 
 **The defect in one sentence.** Ensembl VEP's `--gtf` and `--gff` sources translate every transcript's reference peptide under the standard genetic code, the `MT` transcripts included, while stamping those transcripts with the mitochondrial table it then uses for the altered codon.
 
@@ -117,7 +171,7 @@ The stored peptide therefore disagrees with the transcript's own stamp, and a co
 
 ### The source lines, the class and how often it occurs
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2, `ensembl` core and `ensembl-variation` at release/116):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3, `ensembl` core and `ensembl-variation` at release/116):
 
 - `Bio/EnsEMBL/VEP/AnnotationSource/File/BaseGXF.pm`, lines 761-768, `_add_translation`: line 763 deletes the transcript's slice, line 764 stores `$translation->seq`, lines 765-768 stamp `codon_table` 1, or 2 for `MT`.
 - `Bio/EnsEMBL/Transcript.pm`, lines 2103-2112, `translate`: the codon table is read from the slice's attributes when the slice is defined, else 1.
@@ -127,11 +181,11 @@ The stored peptide therefore disagrees with the transcript's own stamp, and a co
 
 **The class it produces.** `gxf_organelle_peptide_standard_table`, documented only: the `HGVSp` of a row on an `MT` transcript of a cache built from a GTF or GFF3 whose notation reads a reference residue from the stored peptide, where Ensembl VEP's residue is the standard-table reading of the codon. Those notations are an insertion's flanking residues and a frameshift's or a stop loss's reference residue. `Consequence`, `Amino_acids` and a substitution's HGVSp agree, since they come from the codon under table 2. The `GRCh38-gtf-builder` corpus's GTF holds chromosome 21 alone and no comparison case annotates an `MT` record against a cache built from a GTF or GFF3, so no manifest names the class, no comparator applies it and no row is set aside.
 
-**How often the shape occurs.** Tier 2: the shape is an organelle indel on a GTF- or GFF-built source under `--hgvs`; the flanking residue's codon decides whether the stored peptide reads differently. No chromosome 21 cut carries a mitochondrial record; 247 of the 487 mitochondrial records of the committed corpora (507,187 per million) are indels, in 7 corpora, and no committed flag set runs `--hgvs` on a cache built from a GTF or GFF3.
+**How often the shape occurs.** Tier 2: the shape is an organelle indel on a GTF- or GFF-built source under `--hgvs`; the flanking residue's codon decides whether the stored peptide reads differently. No chromosome 21 cut carries a mitochondrial record; 267 of the 1,198 mitochondrial records of the committed corpora (222,871 per million) are indels, in 18 corpora, and no committed flag set runs `--hgvs` on a cache built from a GTF or GFF3.
 
 ### An in-frame insertion after codon 31 of MT-ND1
 
-**In short.** Codon 31 of MT-ND1 (`ENST00000361390`, `MT:3307-4262`, forward strand) is `ATA`, methionine under the vertebrate mitochondrial code and isoleucine under the standard one. The insertion `MT 3399 . A AGCT`, c.93_94insGCT, adds an alanine after it. On a cache built from the Ensembl GTF with `--codon-table MT=2`, vep-rs writes `inframe_insertion`, `Amino_acids` `-/A` and `HGVSp=ENSP00000354687.1:p.Met31_Gln32insAla`. Ensembl VEP 116.2 reading the same GTF through `--gtf` holds the standard-table peptide, whose residue 31 is `I`, and writes `p.Ile31_Gln32insAla` beside the same terms and `Amino_acids`; from its own cache, whose peptide was translated under table 2, it writes `p.Met31_Gln32insAla`.
+**In short.** Codon 31 of MT-ND1 (`ENST00000361390`, `MT:3307-4262`, forward strand) is `ATA`, methionine under the vertebrate mitochondrial code and isoleucine under the standard one. The insertion `MT 3399 . A AGCT`, c.93_94insGCT, adds an alanine after it. On a cache built from the Ensembl GTF with `--codon-table MT=2`, vep-rs writes `inframe_insertion`, `Amino_acids` `-/A` and `HGVSp=ENSP00000354687.1:p.Met31_Gln32insAla`. Ensembl VEP 116.3 reading the same GTF through `--gtf` holds the standard-table peptide, whose residue 31 is `I`, and writes `p.Ile31_Gln32insAla` beside the same terms and `Amino_acids`; from its own cache, whose peptide was translated under table 2, it writes `p.Met31_Gln32insAla`.
 
 The substitution `MT 3399 . A G`, which makes the codon `ATG`, is `synonymous_variant`, `M`, `p.Met31%3D` on both engines and both routes, since a substitution's residue is translated from the codon under table 2.
 

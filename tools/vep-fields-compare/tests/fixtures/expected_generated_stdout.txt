@@ -1,0 +1,11 @@
+keys: reference 20,001 scored 20,001 intersection 20,001 (reference-only 0, scored-only 0)
+  Uploaded_variation       equal            1 /       20,001  agreement 5e-05
+  Gene                     equal       20,000 /       20,001  agreement 0.99995
+  cDNA_position            equal       13,334 /       20,001  agreement 0.666667
+  CDS_position             equal       20,001 /       20,001  agreement 1.0
+  Protein_position         equal       20,001 /       20,001  agreement 1.0
+  Amino_acids              equal       20,001 /       20,001  agreement 1.0
+  Codons                   equal       20,001 /       20,001  agreement 1.0
+  Existing_variation       equal       20,001 /       20,001  agreement 1.0
+  Extra:IMPACT             equal       20,001 /       20,001  agreement 1.0
+  Extra:STRAND             equal       20,001 /       20,001  agreement 1.0

@@ -1,0 +1,2 @@
+docker run --rm --name reevaluate-stdout_kind-PID-HEX --user UID:GID -e HOME=/tmp -i -v {{ROOT}}/perl/homo_sapiens/116_GRCh38:/work/cache/homo_sapiens/116_GRCh38:ro -v {{ROOT}}/work/stdout_kind/out/ensembl-vep:/work/out -w /work/out ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da vep -i STDIN -o /work/out/default.txt --offline --cache --dir_cache /work/cache --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --force_overwrite --quiet --no_stats
+exit 0

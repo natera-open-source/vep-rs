@@ -1,0 +1,65 @@
+{
+ "mode": "stats",
+ "format": "stats",
+ "verdict": "red",
+ "reasons": [
+  "section [SIFT summary] only in the expected file",
+  "section [PolyPhen summary] only in the expected file"
+ ],
+ "tolerance": 0,
+ "masked_rows": [
+  "Command line options",
+  "End time",
+  "Input data",
+  "Input file",
+  "Output file",
+  "Run time",
+  "Start time"
+ ],
+ "sections": {
+  "expected": [
+   "VEP run statistics",
+   "Data version",
+   "General statistics",
+   "Variant classes",
+   "Consequences (most severe)",
+   "Consequences (all)",
+   "Coding consequences",
+   "SIFT summary",
+   "PolyPhen summary",
+   "Variants by chromosome",
+   "Position in protein"
+  ],
+  "actual": [
+   "VEP run statistics",
+   "Data version",
+   "General statistics",
+   "Variant classes",
+   "Consequences (most severe)",
+   "Consequences (all)",
+   "Coding consequences",
+   "Variants by chromosome",
+   "Position in protein"
+  ],
+  "order_agrees": true
+ },
+ "compared": {
+  "sections": 9,
+  "rows": 105
+ },
+ "documented": [],
+ "differences": {
+  "SIFT summary": [
+   {
+    "kind": "section_missing"
+   }
+  ],
+  "PolyPhen summary": [
+   {
+    "kind": "section_missing"
+   }
+  ]
+ },
+ "expected": "tests/fixtures/predictions.summary.log",
+ "actual": "tests/fixtures/reference.summary.log"
+}

@@ -1,0 +1,86 @@
+{
+ "plugin_fixtures": {
+  "generator": "scripts/fixtures/cut_plugin_regions.py",
+  "flank": 5000,
+  "record_flank": 2000,
+  "exon_flank": 50,
+  "gerp_regions": "exons",
+  "tools": {
+   "bgzip": "bgzip (htslib) 1.9"
+  },
+  "files": {
+   "reference.fa.fai": "4761b23018dace1a77312fef25c4c5bf06dc9c28590c0038cc7b5e26d76e9990",
+   "reference.fa.gz": "11664c89c9766a3e6c21527544f86e402f22a494806c41cb8812ed6e5d890831",
+   "reference.fa.gz.fai": "4761b23018dace1a77312fef25c4c5bf06dc9c28590c0038cc7b5e26d76e9990",
+   "reference.fa.gz.gzi": "71fff20172d6463bbad4cca126228f8e31ab8ce3bf1df1f6810eda2cab1a4b0b"
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 63,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species phytophthora_infestans --assembly ASM14294v1 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "phytophthora_infestans/63_ASM14294v1",
+ "fasta": "the three supercontigs the records and the pruned cache's transcripts sit on (supercont1.1, supercont1.19 and supercont1.99) at their full length from Phytophthora_infestans.ASM14294v1.dna.toplevel.fa of Ensembl Genomes release 63, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
+ "input": "variants.vcf: 256 records on three supercontigs of a scaffold-level assembly: supercont1.1, the first sequence of the cache's order; supercont1.19, the shortest sequence that holds at least 300 coding transcripts with some on each strand; and supercont1.99, the last sequence of the cache's order that holds a transcript. 193 come from tools/vep-seeded-variants (seed 1, wide records, 180 a category, reference alleles read from the genome sequence), their IDs naming the category and its ordinal: start codons, stop codons gained and the one stop codon lost that the three sequences offer (the cached coding sequence of one transcript alone ends on its stop codon), missense and synonymous changes on each strand, splice donors and acceptors, both untranslated regions, introns, upstream, downstream and intergenic positions, frameshift insertions and deletions, in-frame deletions, and the first and the last base of each of the three sequences; 28 of them name their sequence by its INSDC accession, the synonym the cache's chr_synonyms.txt gives. 63 are single-base substitutions sampled from the cache's own variation files with their Ensembl identifiers, one of them multi-allelic. The records are two exemplars per consequence-set combination the two references show, stratified by variant class and strand, six per combination carrying a protein-level term, plus the records the manifest's included_records name: up to six of every category the generator wrote and sixty known variants at an even stride over the sample",
+ "sha256": {
+  "default.txt": "b7540ef739b9b83471fec3b65e15c827173a6428386476402330c42bcf19698b",
+  "tab.txt": "2710615f000b7a2a3da7a69559985fc65cd72de7c363307c99ae5ddd4c54b4a1",
+  "vcf.vcf": "8fd6cdb0e1c77e9ff5c8a3e23ddfc8c1f1be1d68855c44d33076e928da749151",
+  "json.jsonl": "e4167e84e979533f1b916dd05a8c1c9dc03ed16d423d063ebc560149e86c4f7e"
+ },
+ "variants_vcf_sha256": "f2cefb6e6ef923e41485cac62d71b2f957f1744da94eab54c66c4df9d7b69b2e",
+ "flag_sets": {
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species phytophthora_infestans --assembly ASM14294v1 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "phytophthora_infestans/63_ASM14294v1",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "08ccdef079dd037afad929c4d340bf835deaa8ead14e5468757ce836e5476b0c",
+    "tab.txt": "34b2a21deaf00b7d20119faeb7f293b89a50857d5437f6a5a94898721909d95a",
+    "vcf.vcf": "114122069592fbd363932f76d9fe650d483fa35ae9017f8d43dd4b755f8c6799",
+    "json.jsonl": "161c23ae126f4069ad2cfff6ce322416385c425a529fd4ee130730b0582eded1"
+   },
+   "flags": [
+    "--everything"
+   ],
+   "expected_dir": "expected_everything"
+  },
+  "hgvs": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species phytophthora_infestans --assembly ASM14294v1 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs [--tab|--vcf|--json]",
+   "perl_cache": "phytophthora_infestans/63_ASM14294v1",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "834dcc9b30d0fee71aa495bc37947f4102a85dd05a94423ed6045ae9af07582b",
+    "tab.txt": "1242c64823b01fab77e783b5b79c980c4070e31a86d96b06d8c0139d1f1ef0c3",
+    "vcf.vcf": "42ff61321a3c0baf112284d9ab075c2bca04679a245427c4a7f1123f163f0dec",
+    "json.jsonl": "2a7278e5a67b89f1cc12771e526ca29985b9bb4176eccaba73831aba01695016"
+   },
+   "flags": [
+    "--hgvs"
+   ],
+   "expected_dir": "expected_hgvs"
+  }
+ },
+ "generator": "tools/vep-storable-to-json over the whole Ensembl VEP cache phytophthora_infestans_vep_63_ASM14294v1 of Ensembl Genomes release 63; tools/vep-seeded-variants --cache <converted cache> --seed 1 --records wide --per-category 180 --fasta <the three sequences> --sequence supercont1.1 --sequence supercont1.19 --sequence supercont1.99 for the generated records, and 300 single-base substitutions whose first allele is the genome's base, ranked by a seeded hash, from <converted cache>/variations of the same sequences for the known variants; Ensembl VEP over the two inputs under the corpus flags; tools/vep-golden-corpus select --release 63 --assembly ASM14294v1 --species phytophthora_infestans --dataset wide=<reference>=<the generated records> --dataset known=<reference>=<the known variants> --k 2 --seed 1 --max-span 1000000 --max-records 500 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 6 --include <the named records> --covers species-phytophthora-asm14294v1 --covers genetic-code-tables --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --flank 5000 --gzip --drop sorted_exons --perl-info <cache>/info.txt --cache-version 63 --variations <converted cache>/variations; scripts/fixtures/cut_plugin_regions.py --reference <the three sequences> --flank 5000 --record-flank 2000 over the records with each sequence under the cache's own name; tools/vep-golden-corpus flag-set (everything, hgvs); scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; tools/vep-golden-corpus classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp for the hgvs set)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "supercont1.1": 353,
+   "supercont1.19": 116,
+   "supercont1.99": 9
+  },
+  "shards": 11,
+  "synonym_lines": 3,
+  "variation_slices": "all_vars.gz with its index under variations/<sequence>/ for the three sequence directories, cut from the cache's own variants within one base of a record: 47 on supercont1.1, 19 on supercont1.19 and 1 on supercont1.99"
+ }
+}

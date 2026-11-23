@@ -1,0 +1,6 @@
+prepared block_length_past_the_block.vcf.gz -> block_length_past_the_block.vcf (mode=keep, variants=3, headers=3)
+prepared blocks.vcf.gz -> blocks.vcf (mode=keep, variants=260, headers=3)
+prepared blocks_then_member.vcf.gz -> blocks_then_member.vcf (mode=keep, variants=7, headers=3)
+prepared headers_only.vcf.gz -> headers_only.vcf (mode=keep, variants=0, headers=3)
+prepared members.vcf.gz -> members.vcf (mode=keep, variants=9, headers=3)
+wrote manifest: {{OUTPUT_DIR}}/manifest.json

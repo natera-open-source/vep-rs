@@ -1,0 +1,334 @@
+{
+  "overall": {
+    "total_input": 8,
+    "perl_variants": 0,
+    "rust_variants": 0,
+    "perl_tuples": 6,
+    "rust_tuples": 13,
+    "intersection": 5,
+    "only_perl": 1,
+    "only_rust": 8,
+    "precision": 0.384615,
+    "recall": 0.833333,
+    "f1": 0.526316,
+    "perl_tuples_union": 6,
+    "rust_tuples_union": 13,
+    "intersection_union": 5,
+    "cross_file_duplicate_perl": 0,
+    "cross_file_duplicate_rust": 0
+  },
+  "per_file": {
+    "sv": {
+      "total_input": 8,
+      "perl_variants": 0,
+      "rust_variants": 0,
+      "perl_tuples": 6,
+      "rust_tuples": 13,
+      "intersection": 5,
+      "only_perl": 1,
+      "only_rust": 8,
+      "precision": 0.384615,
+      "recall": 0.833333,
+      "f1": 0.526316
+    }
+  },
+  "per_variant_type": {
+    "BND": {
+      "total_input": 2,
+      "perl_variants": 0,
+      "rust_variants": 0,
+      "perl_tuples": 4,
+      "rust_tuples": 5,
+      "intersection": 4,
+      "only_perl": 0,
+      "only_rust": 1,
+      "precision": 0.8,
+      "recall": 1.0,
+      "f1": 0.888889
+    },
+    "Complex_SV": {
+      "total_input": 2,
+      "perl_variants": 0,
+      "rust_variants": 0,
+      "perl_tuples": 0,
+      "rust_tuples": 4,
+      "intersection": 0,
+      "only_perl": 0,
+      "only_rust": 4,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    "NON_REF": {
+      "total_input": 1,
+      "perl_variants": 0,
+      "rust_variants": 0,
+      "perl_tuples": 0,
+      "rust_tuples": 1,
+      "intersection": 0,
+      "only_perl": 0,
+      "only_rust": 1,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    "Symbolic_DEL": {
+      "total_input": 3,
+      "perl_variants": 0,
+      "rust_variants": 0,
+      "perl_tuples": 2,
+      "rust_tuples": 3,
+      "intersection": 1,
+      "only_perl": 1,
+      "only_rust": 2,
+      "precision": 0.333333,
+      "recall": 0.5,
+      "f1": 0.4
+    }
+  },
+  "adjusted": {
+    "total_input": 8,
+    "perl_variants": 0,
+    "rust_variants": 0,
+    "perl_tuples": 6,
+    "rust_tuples": 7,
+    "intersection": 5,
+    "only_perl": 1,
+    "only_rust": 2,
+    "precision": 0.714286,
+    "recall": 0.833333,
+    "f1": 0.769231,
+    "perl_tuples_union": 6,
+    "rust_tuples_union": 7,
+    "intersection_union": 5,
+    "cross_file_duplicate_perl": 0,
+    "cross_file_duplicate_rust": 0,
+    "excluded_divergences": 6,
+    "excluded_rust_extra": 6,
+    "excluded_perl_extra": 0,
+    "excluded_cnvtr_rust": 0,
+    "excluded_cnvtr_perl": 0,
+    "excluded_transcript_selection_rust": 0,
+    "excluded_transcript_selection_perl": 0,
+    "transcript_selection_cnvtr_overlap_rust": 0,
+    "cnvtr_swap_pairs_total_rust": 0,
+    "cnvtr_swap_pairs_total_perl": 0,
+    "excluded_cross_chromosome_perl": 0,
+    "excluded_cross_chromosome_rust": 0,
+    "excluded_transcript_selection_mate_rust": 0,
+    "excluded_registry_swap_rust": 0,
+    "excluded_registry_swap_perl": 0,
+    "excluded_registry_swap_by_bucket": {
+      "start_cooccurrence_swap": 0,
+      "covered_splice_region_swap": 0,
+      "structural_deletion_stop_lost_without_stop_codon": 0,
+      "stop_codon_completed_by_polyadenylation": 0,
+      "stop_codon_overlap_without_stop_codon": 0,
+      "stop_codon_behind_last_residue_without_stop_codon": 0,
+      "start_codon_overlap_without_start_codon": 0,
+      "stop_codon_overlap_genomic_span": 0,
+      "stop_retained_without_stop_codon_test": 0,
+      "stop_retained_three_base_stop_codon_test": 0,
+      "stop_codon_removed_without_stop_codon_test": 0,
+      "stop_codon_overlap_insertion_range": 0,
+      "stop_codon_settled_before_unknown_bases": 0,
+      "frameshift_inside_a_held_stop_codon": 0,
+      "splice_term_past_the_record_span": 0,
+      "pachysolen_nuclear_code_read_as_standard": 0,
+      "start_codon_removed_without_five_prime_utr": 0,
+      "start_codon_kept_without_five_prime_utr": 0
+    },
+    "excluded_non_ref_batch_rust": 0,
+    "excluded_non_ref_batch_perl": 0,
+    "excluded_breakend_mate_local_read_rust": 0,
+    "excluded_breakend_mate_local_read_perl": 0,
+    "excluded_breakend_mate_local_read_by_kind": {
+      "cross_chromosome": 0,
+      "same_chromosome": 0
+    },
+    "transcript_selection_cross_chromosome_overlap_perl": 0,
+    "cross_chromosome_check_ran": true,
+    "scored_engine": "vep-rs",
+    "scored_engine_transcripts_absent_from_cache": 0,
+    "excluded_cross_chromosome_by_file": {},
+    "excluded_cnvtr_by_file": {},
+    "excluded_transcript_selection_by_file": {},
+    "cnvtr_swap_pairs_total_by_file": {},
+    "excluded_cross_chromosome_rust_by_file": {},
+    "excluded_transcript_selection_mate_by_file": {},
+    "excluded_registry_swap_by_file": {},
+    "excluded_non_ref_batch_by_file": {},
+    "excluded_breakend_mate_local_read_by_file": {},
+    "reference_release": "116.2",
+    "masks_applied": [
+      "filter_cnv_tr_expansion_divergences",
+      "filter_registry_swap_pairs",
+      "filter_breakend_mate_local_read_pairs",
+      "filter_reference_skipped_records",
+      "filter_bnd_own_rows_lost",
+      "filter_bnd_synonym_mate_rows",
+      "filter_bnd_bare_reference_allele_rows",
+      "filter_gvcf_variant_sites",
+      "filter_dot_breakend_pairs",
+      "filter_missing_alt_annotated",
+      "filter_non_integer_end_rows",
+      "filter_cnv_tr_empty_expansion",
+      "filter_star_alone_svtype_annotated",
+      "filter_non_numeric_pos_numified",
+      "filter_cnv_tr_rn_zero_allele_dropped"
+    ],
+    "masks_not_applied": {
+      "filter_intended_divergences": "116 drops a vep_skip record before the input buffer; the reference writes no row to compare transcript sets against",
+      "filter_giant_breakend_mate_divergences": "116 drops a breakend pair over --max_sv_size whole; its mate allele has no reference row",
+      "filter_non_ref_batch_divergences": "116 drops a <NON_REF> record before the input buffer",
+      "filter_cross_chromosome_divergences": "116.1's chromosome-aware overlap never pairs a record with a transcript on another chromosome",
+      "filter_cross_chromosome_orphan_intergenic": "with no off-chromosome rows to displace it, the reference writes the intergenic row itself"
+    },
+    "excluded_reference_skipped_rust": 6,
+    "reference_skipped_records": 4,
+    "excluded_reference_skipped_by_file": {
+      "sv": {
+        "rust": 6,
+        "records": 4
+      }
+    },
+    "excluded_bnd_own_rows_lost_rust": 0,
+    "excluded_bnd_own_rows_lost_by_file": {},
+    "excluded_bnd_synonym_mate_rows_rust": 0,
+    "excluded_bnd_synonym_mate_rows_by_file": {},
+    "fasta_named_slice_intergenic_records": 0,
+    "bnd_bare_reference_allele_rows": 0,
+    "bnd_bare_reference_allele_rows_by_file": {},
+    "bnd_mate_32bit_buffer_records": 0,
+    "bnd_mate_32bit_buffer_reference_tuples": 0,
+    "excluded_gvcf_variant_site_rust": 0,
+    "gvcf_variant_site_records": 0,
+    "excluded_dot_breakend_pair_rust": 0,
+    "excluded_dot_breakend_pair_perl": 0,
+    "excluded_missing_alt_annotated_perl": 0,
+    "excluded_non_integer_end_perl": 0,
+    "excluded_non_integer_end_rust": 0,
+    "excluded_cnv_tr_empty_expansion_rust": 0,
+    "excluded_star_alone_svtype_perl": 0,
+    "excluded_non_numeric_pos_perl": 0,
+    "excluded_cnv_tr_rn_zero_rust": 0,
+    "scored_engine_skip_route_residue_rows": 0,
+    "scored_engine_skip_route_residue_by_file": {},
+    "breakend_masks_check_ran": true,
+    "divergence_classes": {
+      "reference_skipped_record": {
+        "definition": "A structural record the reference dropped before its input buffer, marked vep_skip for a span over --max_sv_size (its SVLEN, else its END), an ALT type with no Sequence Ontology term, an unsupported multi-allelic list or a deletion with neither END nor SVLEN, so it has no reference row in any format; vep-rs's rows for the record are set aside.",
+        "excludes": true,
+        "excluded": 6,
+        "taxonomy_class": "reference_skipped_record",
+        "perl_citation": "Parser.pm:491-501, 821-827; Parser/VCF.pm:477-481, 555-558, 575"
+      },
+      "bnd_own_chromosome_rows_lost": {
+        "definition": "A bracket breakend whose mate is on another chromosome loses the rows of its own end when a mate-chromosome transcript, loaded for an earlier record of the same buffer, reaches it first and names its slice: the reference keeps the mate rows and writes nothing under the own-end allele, an order-dependent result.",
+        "excludes": true,
+        "excluded": 0,
+        "taxonomy_class": "bnd_own_chromosome_rows_lost",
+        "perl_citation": "InputBuffer.pm:191-207, 223-234; AnnotationSource.pm:235-258; AnnotationType/Transcript.pm:122-143"
+      },
+      "bnd_synonym_mate_rows_lost": {
+        "definition": "A bracket breakend whose mate's chromosome is spelled with a prefix the mate-allele test does not resolve, Chr21 for 21, loses its mate rows in the reference and keeps them in vep-rs; a mate named by an accession on another chromosome loses them in the reference alone too, vep-rs resolving the accession through the synonym table, and one on the record's own chromosome keeps them in both engines.",
+        "excludes": true,
+        "excluded": 0,
+        "taxonomy_class": "bnd_synonym_mate_rows_lost",
+        "perl_citation": "StructuralVariationOverlap.pm:86-103, 144-160; Utils/VariationEffect.pm:111-124; InputBuffer.pm:348-357; AnnotationType/Transcript.pm:134"
+      },
+      "fasta_named_slice_intergenic": {
+        "definition": "Under --check_ref or --lookup_ref with a FASTA whose sequence names differ from the cache's, the variant's slice is named after the FASTA and every transcript fails the slice test, so the reference writes intergenic_variant where vep-rs writes transcript rows; a property of the run, counted and never set aside.",
+        "excludes": false,
+        "excluded": 0,
+        "taxonomy_class": "fasta_named_slice_intergenic",
+        "perl_citation": "Parser.pm:749; BaseVEP.pm get_slice; AnnotationType/Transcript.pm:141"
+      },
+      "bnd_bare_reference_allele_row": {
+        "definition": "A breakpoint record that names no mate (a bare <BND>, or one with SVLEN, POS2 or an unreadable END2 and no bracket) is held as N/<BND> and, with no breakend parsed, one allele is built per slash-separated part, the reference base N included, so the reference writes every row twice under chromosome_breakpoint, ALLELE_NUM 1 for the reference allele and 2 for the ALT; a reference allele has no variant effect, so vep-rs writes the ALT row once and the reference-allele rows are set aside: each duplicates the ALT row's tuple, so the unique-tuple key stream drops it before the raw and the adjusted figure, and both comparators count the rows so set aside per record.",
+        "excludes": true,
+        "excluded": 0,
+        "taxonomy_class": "bnd_bare_reference_allele_row",
+        "perl_citation": "Parser/VCF.pm:499; StructuralVariationOverlap.pm:64-77; OutputFactory.pm BaseStructuralVariationOverlapAllele_to_output_hash"
+      },
+      "bnd_mate_32bit_buffer_intergenic": {
+        "definition": "A coordinate of the reference's input buffer that, plus the --distance flank, reaches 2^31 (a breakend's mate position, a span's end or the record's own position) turns every record of the buffer intergenic, that record and the records loaded with it (the first such position is 2147478648 under the default flank of 5000 and 2147483647 under --distance 1); the coordinates enter the buffer's bounds with the flank added when the cache regions are chosen. vep-rs annotates the buffer's records against their transcripts and a mate at its coordinate. Counted on the reference's rows at the record's Location and never set aside, since the records it reaches beyond that one depend on the buffer boundaries.",
+        "excludes": false,
+        "excluded": 0,
+        "taxonomy_class": "bnd_mate_32bit_buffer_intergenic",
+        "perl_citation": "AnnotationSource.pm:190, 251-257, 306-309; InputBuffer.pm:386-390"
+      },
+      "gvcf_variant_site_dropped": {
+        "definition": "A gVCF variant site lists <NON_REF> beside its real allele (`A G,<NON_REF>`); the <NON_REF> token routes the line to the structural path, where `G/<NON_REF>` has no Sequence Ontology term, and the reference drops the site whole, the real allele with it. vep-rs annotates the real allele and reads <NON_REF> as the absence of a variant. vep-rs's rows at the site are set aside: recognised here by the record's own name (`CHROM_POS_REF/ALT/<NON_REF>`) at a Location the reference wrote nothing for, and in the structural-variant comparator from the input record.",
+        "excludes": true,
+        "excluded": 0,
+        "taxonomy_class": "gvcf_variant_site_dropped",
+        "perl_citation": "Parser/VCF.pm:237-245, 469-481; Parser.pm:663-728"
+      },
+      "dot_breakend_without_svtype_pair": {
+        "definition": "A dot-notation breakend without INFO/SVTYPE (`N.`, `.N`) takes the sequence rules for its coordinates: the start is POS + 1 when the ALT's length differs from the REF's and POS when it does not, the end is POS + len(REF) - 1, so the reference writes the pair `POS-(POS+1)` with the positions of an insertion for a one-base REF, the span `(POS+1)-(POS+len(REF)-1)` for a longer REF beside an ALT of another length and `POS-(POS+len(REF)-1)` beside an ALT of its own length; with `SVTYPE=BND` it writes the single base at POS + 1, as vep-rs writes it for every REF. The reference's span row and vep-rs's point row at the span's start or the base after it on the same feature are set aside together.",
+        "excludes": true,
+        "excluded": 0,
+        "taxonomy_class": "dot_breakend_without_svtype_pair",
+        "perl_citation": "BaseVCF4.pm:255-276, 297-317"
+      },
+      "missing_alt_annotated": {
+        "definition": "A record whose ALT column is the missing value `.` is routed to the structural path by INFO/SVTYPE and annotated as an allele: a `chromosome_breakpoint` for `SVTYPE=BND`, a deletion over END for `SVTYPE=DEL`; without SVTYPE the reference writes nothing for it, as vep-rs writes nothing in both cases. The reference's rows are set aside by the structural-variant comparator, which reads the input; the SNP/indel comparator cannot tell them from a record with an allele.",
+        "excludes": true,
+        "excluded": 0,
+        "taxonomy_class": "missing_alt_annotated",
+        "perl_citation": "BaseVCF4.pm:486-490; Parser/VCF.pm:237-245; Parser.pm:710-711"
+      },
+      "non_integer_end_annotated": {
+        "definition": "An INFO/END, SVLEN or POS that is not an integer (`END=30425949.5`, `SVLEN=300.7`, `SVLEN=NaN`, POS `30425949.0` on the sequence path) is taken as written, passes `looks_like_number`, and the record is annotated with the text in its Location (`21:30425651-30425950.7`, `21:30425651-NaN`, `21:30425949.0`) and a fractional DISTANCE; vep-rs refuses an END that is not a coordinate and reads a SVLEN or POS at its numified value (`21:30425651-30425950`, the pair `21:30425650-30425651`, `21:30425949`). The reference's rows, recognised by the Location, are set aside in both comparators, and vep-rs's rows of the same record by the structural-variant comparator, which reads the input.",
+        "excludes": true,
+        "excluded": 0,
+        "taxonomy_class": "non_integer_end_annotated",
+        "perl_citation": "BaseVCF4.pm:263, 302-309; Parser.pm:475"
+      },
+      "cnv_tr_empty_expansion_dropped": {
+        "definition": "With a FASTA, a <CNV:TR> whose expansion yields no alternate allele, or one equal to the reference run (`RN=.`, a RUC Perl reads as true that gives zero or fewer repeats, a RUC times unit length equal to SVLEN), is expanded to an allele string with no alternate and the reference writes nothing for it, without a warning; vep-rs with a FASTA writes nothing for it either, and without one writes the symbolic rows over the run, as the reference does without one. vep-rs's rows are set aside by the structural-variant comparator when the input record has the shape and the reference wrote nothing at or beside the run; the SNP/indel comparator does not judge it.",
+        "excludes": true,
+        "excluded": 0,
+        "taxonomy_class": "cnv_tr_empty_expansion_dropped",
+        "perl_citation": "Parser/VCF.pm:382-431, 516-544; Parser.pm:553-592"
+      },
+      "star_alone_svtype_annotated": {
+        "definition": "A record whose every ALT is `*` under a true INFO/SVTYPE is routed to the structural path and annotated from INFO alone, a deletion over END for `SVTYPE=DEL` or a `chromosome_breakpoint` at POS + 1 for `SVTYPE=BND`, although `*` names no allele of the record; vep-rs writes no row for it. The reference's rows are set aside by the structural-variant comparator, which reads the input; the SNP/indel comparator cannot tell them from a record with an allele.",
+        "excludes": true,
+        "excluded": 0,
+        "taxonomy_class": "star_alone_svtype_annotated",
+        "perl_citation": "Parser/VCF.pm:237-245, 469-475; StructuralVariationOverlap.pm:64-77"
+      },
+      "non_numeric_pos_numified": {
+        "definition": "A POS that is not a non-negative number (`.`, empty, `0x1D04A1D`, fullwidth digits, `30_425_949`, `-5`) is numified by the structural path's increment, `.` to 0 and the record annotated from base 1, `30_425_949` from 31, `-5` from -4, where vep-rs refuses the line; the reference's rows at the record's start are set aside by the structural-variant comparator from the input, and by the SNP/indel comparator when the Location's first coordinate is negative, the one spelling no written POS reaches.",
+        "excludes": true,
+        "excluded": 0,
+        "taxonomy_class": "non_numeric_pos_numified",
+        "perl_citation": "BaseVCF4.pm:255-264; Parser.pm:475-488"
+      },
+      "cnv_tr_rn_zero_allele_dropped": {
+        "definition": "With a FASTA, a two-ALT <CNV:TR> of which one allele has `RN=0` loses an allele: the empty expansion is an empty part of the allele string, which is not read as multi-allelic, so the first allele alone is kept when the empty part leads and the trailing empty part is dropped by the split; vep-rs writes both alleles when the empty part leads, and the structural-variant comparator sets aside its rows of the dropped allele: the symbolic rows told by their direction term when the real allele is a gain, or unchanged beside a leading empty part (vep-rs reads a symbolic <CNV:TR> allele as a gain unless its record states it shorter than its run or, with no direction term, as long as it), and the literal rows a run with a FASTA writes for the real allele behind a leading empty part.",
+        "excludes": true,
+        "excluded": 0,
+        "taxonomy_class": "cnv_tr_rn_zero_allele_dropped",
+        "perl_citation": "Parser/VCF.pm:411, 428; Parser.pm:881, 978"
+      }
+    }
+  },
+  "per_file_adjusted": {
+    "sv": {
+      "total_input": 8,
+      "perl_variants": 0,
+      "rust_variants": 0,
+      "perl_tuples": 6,
+      "rust_tuples": 7,
+      "intersection": 5,
+      "only_perl": 1,
+      "only_rust": 2,
+      "precision": 0.714286,
+      "recall": 0.833333,
+      "f1": 0.769231
+    }
+  }
+}

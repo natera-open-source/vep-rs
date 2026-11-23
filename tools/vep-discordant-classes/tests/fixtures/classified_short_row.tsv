@@ -1,0 +1,5 @@
+file_name	source	location	allele	feature	feature_type	consequence_set	mismatch_type
+o.txt	extra_in_rust	1:11	A	T1	Transcript	x	true_extra
+o.txt	extra_in_rust	1:12	A	T2	Transcript	x	true_extra
+o.txt	extra_in_rust	1:13	A	T3	Transcript	x
+o.txt	missing_in_rust	1:14	A	T4	Transcript	x	true_missing

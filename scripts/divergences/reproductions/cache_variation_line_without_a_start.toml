@@ -1,0 +1,62 @@
+entry = "cache_variation_line_without_a_start"
+page = "docs/divergences/cache-variation-line-without-a-start.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "observed"
+input_class_basis = "seen in the variation file of chromosome 2 of the ready-made Anopheles funestus cache (assembly AfunF3, cache version 63): its first line has sixteen cells and no start, and the index bin that begins at it holds 862 known variants"
+notes = "Every identifier is invented. The first step copies the Ensembl VEP cache by hard links and replaces the chromosome 21 variation file with five rows in the column order of the cache's info.txt: a first row of one cell too many, the first characters of a name run into the chromosome's name and a whole record one cell to the right, so its start cell is `.`; then var_first at 84, var_second at 6052 on two rows and var_third at 16419. The host's tabix indexes it and must be of htslib 1.10 or later, which indexes a file past a row it cannot parse and begins the first bin's chunk at that row, as the index of the cache the page names does; the step refuses an index whose first bin begins elsewhere. The second step gives vep-rs the same two files under a cache with no transcript. Ensembl VEP ends the lookups of the records at 84 and 6052 at the first row and names no known variant for them; the record at 16419 lies in the next bin, whose chunk begins past that row, and both engines name var_third."
+
+prepare = [
+  '''mkdir -p "$STAGE/perl-cache/homo_sapiens" && cp -al "$PERL_CACHE" "$STAGE/perl-cache/homo_sapiens/116_GRCh38"
+dir="$STAGE/perl-cache/homo_sapiens/116_GRCh38/21"
+rm -f "$dir/all_vars.gz" "$dir/all_vars.gz.csi" "$dir/all_vars.gz.tbi"
+cols="$(awk -F '\t' '$1 == "variation_cols" { print $2 }' "$PERL_CACHE/info.txt")"
+row() { printf '%s\n' "$cols" | awk -F, -v OFS='\t' -v name="$1" -v start="$2" -v alleles="$3" '{ for (i = 1; i <= NF; i++) { cell = "."; if ($i == "chr") cell = "21"; if ($i == "variation_name") cell = name; if ($i == "start") cell = start; if ($i == "allele_string") cell = alleles; $i = cell } print }'; }
+{ row var_first 84 A/G | awk -F '\t' -v OFS='\t' '{ $2 = "var_fi21" OFS $2; print }'; row var_first 84 A/G; row var_second 6052 G/C; row var_second 6052 G/C; row var_third 16419 T/C; } | bgzip > "$dir/all_vars.gz"
+tabix -C -s 1 -b 5 -e 5 "$dir/all_vars.gz" 2> "$STAGE/tabix.err" || { cat "$STAGE/tabix.err" >&2; exit 1; }
+if tabix "$dir/all_vars.gz" 21:83-85 2> /dev/null | grep . > /dev/null; then echo "the index does not begin its first bin at the row without a start: index with the tabix of htslib 1.10 or later" >&2; exit 1; fi''',
+  '''mkdir -p "$STAGE/json-cache/transcripts/21" "$STAGE/json-cache/variations/21"
+printf '[]' > "$STAGE/json-cache/transcripts/21/1-1000000.json"
+dir="$STAGE/perl-cache/homo_sapiens/116_GRCh38/21"
+cp "$dir/all_vars.gz" "$dir/all_vars.gz.csi" "$STAGE/json-cache/variations/21/"
+awk -F '\t' '$1 == "variation_cols" { print $2 }' "$PERL_CACHE/info.txt" | awk -F, '{ printf "{\"assembly\": \"GRCh38\", \"var_type\": \"tabix\", \"variation_cols\": ["; for (i = 1; i <= NF; i++) printf "%s\"%s\"", (i > 1 ? ", " : ""), $i; print "]}" }' > "$STAGE/json-cache/info.json"''',
+]
+
+[input]
+format = "vcf"
+text = """
+21	84	at_the_line	A	G	.	.	.
+21	6052	past_the_line	G	C	.	.	.
+21	16419	past_the_bin	T	C	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "{stage}/json-cache"
+perl_cache = "{stage}/perl-cache"
+
+[run]
+flags = ["--check_existing"]
+format = "default"
+
+[compare]
+kind = "rows"
+where = { record = ["at_the_line", "past_the_line", "past_the_bin"] }
+columns = ["Location", "Existing_variation"]
+
+[expected]
+ensembl_vep = ["21:16419 | var_third", "21:6052 | -", "21:84 | -"]
+vep_rs = ["21:16419 | var_third", "21:6052 | var_second", "21:84 | var_first"]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/tabix.rs::TabixAnnotator::parse_line",
+    "crates/vep-builtins/src/tabix.rs::TabixConfig::record_start",
+    "crates/vep-cli/src/variation_source.rs::VariationSource::tabix_records_starting_within",
+]
+tests = [
+    "crates/vep-builtins/src/tabix.rs::tests::a_start_cell_is_read_to_its_leading_integer",
+    "crates/vep-cli/tests/known_variants_past_an_unreadable_line.rs::a_line_without_a_start_changes_no_row",
+    "crates/vep-cli/tests/known_variants_past_an_unreadable_line.rs::a_record_past_a_line_without_a_start_keeps_its_known_variant",
+]

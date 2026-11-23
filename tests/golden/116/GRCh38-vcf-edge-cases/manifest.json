@@ -22,10 +22,13 @@
   "chromosome-name-normalisation",
   "chromosome-absent-from-cache"
  ],
+ "masks": [
+  "allele_number_repeated_or_reference_equal_alt"
+ ],
  "reference_warnings": [
   "could not fetch sequence for tandem repeats; consequence calculation for tandem repeats is less precise when using --offline without --fasta"
  ],
- "suites": {
+ "datasets": {
   "GRCh38-vcf-edge-cases": {
    "reference": "default.txt",
    "input": "variants.vcf",
@@ -77,19 +80,19 @@
  },
  "records": [
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30289183\talt_eq_ref\tC\tC\t.\t.\t.",
    "combinations": []
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30289183\tsecond_alt_eq_ref\tC\tG,C\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30289183\tdup_alt\tC\tG,G,T\t.\t.\t.",
    "combinations": [
     "stop_lost",
@@ -97,7 +100,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30289183\tdup_alt_apart\tC\tG,T,G\t.\t.\t.",
    "combinations": [
     "stop_lost",
@@ -105,107 +108,107 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30289183\tdup_only\tC\tG,G\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30289183\tlower_dup\tC\tg,G\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30289183\tlower_eq_ref\tC\tc\t.\t.\t.",
    "combinations": []
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30289183\tins_beside_delstar\tC\tCG,<DEL:*>\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30289183\tlone_delstar\tC\t<DEL:*>\t.\t.\t.",
    "combinations": []
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30289183\tsnv_beside_delstar\tC\tG,<DEL:*>\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30289183\tsnv_beside_star\tC\tG,*\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30289183\tsnv_star_svtype\tC\tG,*\t.\t.\tSVTYPE=DEL;END=30289190",
    "combinations": [
     "feature_truncation,frameshift_variant,stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30289183\tstar_snv_svtype\tC\t*,G\t.\t.\tSVTYPE=DEL;END=30289190",
    "combinations": [
     "feature_truncation,frameshift_variant,stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30289183\tstar_only\tC\t*\t.\t.\t.",
    "combinations": []
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30289183\tins_second_eq_ref\tC\tCG,C\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30396602\tdel_alt_eq_ref\tTTGA\tT,TTGA\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30396602\tmnp_eq_ref\tTTGA\tTTGA\t.\t.\t.",
    "combinations": []
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30396602\tstar_star_multi\tTTGA\t*,*\t.\t.\t.",
    "combinations": []
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30396602\teq_ref_delstar\tTTGA\tTTGA,<DEL:*>\t.\t.\t.",
    "combinations": []
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30289183\trs1;rs2\tC\tG\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30289183\t.\tC\tG,T\t.\t.\t.",
    "combinations": [
     "stop_lost",
@@ -213,7 +216,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30289183\tanchor_multi_ins\tC\tCG,CT\t.\t.\t.",
    "combinations": [
     "stop_lost",
@@ -221,21 +224,21 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30396602\tanchor_star_indel\tTTGA\tTTGC,*\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30396602\ttwo_sided_minimised\tTTGAT\tTTGT\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30396602\tmulti_indel\tTTGA\tT,TTGATC\t.\t.\t.",
    "combinations": [
     "stop_lost",
@@ -243,7 +246,7 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30289183\tmulti_snv\tC\tG,T\t.\t.\t.",
    "combinations": [
     "stop_lost",
@@ -251,98 +254,98 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30289183\tgvcf_block\tC\t<NON_REF>\t.\t.\tEND=30289190",
    "combinations": [],
    "reference_rows": 0,
    "reference_warning": "NON_REF is not a supported structural variant type"
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30165850\tstar_block_svtype\tN\t<*>\t.\t.\tSVTYPE=DEL;END=30165950",
    "combinations": [
     "3_prime_UTR_variant,feature_truncation,frameshift_variant,stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30165850\tmulti_svlen\tN\t<DEL>,<DEL>\t.\t.\tSVTYPE=DEL;SVLEN=-100,-200",
    "combinations": [
     "3_prime_UTR_variant,feature_truncation,frameshift_variant,stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30165850\tcipos_ciend\tN\t<DEL>\t.\t.\tSVTYPE=DEL;END=30165950;CIPOS=-10,10;CIEND=-5,5",
    "combinations": [
     "3_prime_UTR_variant,feature_truncation,frameshift_variant,stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30165850\tsvlen_over_end\tN\t<DEL>\t.\t.\tSVTYPE=DEL;SVLEN=-300;END=30165900",
    "combinations": [
     "3_prime_UTR_variant,coding_sequence_variant,feature_truncation,stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30165850\tbnd_bracket\tN\tN[21:30165950[\t.\t.\tSVTYPE=BND",
    "combinations": [
     "3_prime_UTR_variant,feature_truncation"
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30165850\tbnd_chr2_end2\tN\t<BND>\t.\t.\tSVTYPE=BND;CHR2=21;END2=30165950",
    "combinations": [
     "3_prime_UTR_variant,feature_truncation"
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30165850\tdel_no_end_no_svlen\tN\t<DEL>\t.\t.\tSVTYPE=DEL",
    "combinations": [],
    "reference_rows": 0,
    "reference_warning": "deletion looks incomplete"
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30165850\tdel_end_eq_pos\tN\t<DEL>\t.\t.\tEND=30165850",
    "combinations": [],
    "reference_rows": 0,
    "reference_warning": "deletion looks incomplete"
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30165850\tdel_svlen_only\tN\t<DEL>\t.\t.\tSVLEN=-100",
    "combinations": [
     "3_prime_UTR_variant,feature_truncation,frameshift_variant,stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30165850\tdelstar_svtype\tN\t<DEL:*>\t.\t.\tSVTYPE=DEL;END=30165950",
    "combinations": [
     "3_prime_UTR_variant,feature_truncation,frameshift_variant,stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30165850\ttr_neg_trailing\tN\t<CNV:TR>\t.\t.\tSVTYPE=CNV;SVLEN=-300,",
    "combinations": [],
    "reference_rows": 0,
    "reference_warning": "start > end+1 : (START=30165851, END=30165550)"
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30165850\tdup_short\tN\t<DUP>\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,feature_elongation"
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30289183\ttrailing_tabs\tC\tG,G,T\t.\t.\t.",
    "combinations": [
     "stop_lost",
@@ -350,28 +353,28 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30165850\tsv_qual0\tN\t<DEL>\t0\tPASS\tSVTYPE=DEL;END=30165950",
    "combinations": [
     "3_prime_UTR_variant,feature_truncation,frameshift_variant,stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30289183\tname_21\tC\tCG\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "chr21\t30289183\tname_chr21\tC\tCG\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "chrM\t100\tname_chrm\tG\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -379,56 +382,56 @@
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "GL000999.1\t100\tunknown_contig\tA\tG\t.\t.\t.",
    "combinations": [],
    "reference_rows": 0,
    "reference_warning": "Chromosome GL000999.1 not found in annotation sources or synonyms; chromosome GL000999.1 does not overlap any features"
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t0\tpos0_snv\tA\tG\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t0\tpos0_ins\tA\tAT\t.\t.\t.",
    "combinations": [],
    "reference_rows": 0,
    "reference_warning": "Alleles look like an insertion (-/T) but coordinates are not start = end + 1 (START=1, END=1) for variant (pos0_ins) "
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t0\tpos0_del\tAT\tA\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30289183\t;rs2\tC\tG\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30289183\t0;rs2\tC\tT\t.\t.\t.",
    "combinations": [
     "stop_retained_variant"
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30396602\t\tTTGA\tT\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-vcf-edge-cases",
+   "dataset": "GRCh38-vcf-edge-cases",
    "vcf": "21\t30396602\t0\tTTGA\tT,TTGATC\t.\t.\t.",
    "combinations": [
     "stop_lost",
@@ -478,6 +481,34 @@
    "divergence_summary": {},
    "vep_rs_only_summary": {
     "reference_skipped_record": 1
+   },
+   "fields_compared": [
+    "ALLELE_NUM"
+   ],
+   "field_divergences": [
+    {
+     "location": "21:30289183",
+     "allele": "T",
+     "feature": "ENST00000416044",
+     "feature_type": "Transcript",
+     "record_indices": [
+      2,
+      3,
+      20,
+      25,
+      39,
+      49
+     ],
+     "consequence_set": "stop_retained_variant",
+     "field": "ALLELE_NUM",
+     "vep": "2",
+     "vep_rs": "3",
+     "expected_divergence": "allele_number_repeated_or_reference_equal_alt",
+     "rows_alike": 4
+    }
+   ],
+   "field_divergence_summary": {
+    "allele_number_repeated_or_reference_equal_alt": 1
    }
   },
   {
@@ -520,6 +551,34 @@
    "divergence_summary": {},
    "vep_rs_only_summary": {
     "reference_skipped_record": 1
+   },
+   "fields_compared": [
+    "ALLELE_NUM"
+   ],
+   "field_divergences": [
+    {
+     "location": "21:30289183",
+     "allele": "T",
+     "feature": "ENST00000416044",
+     "feature_type": "Transcript",
+     "record_indices": [
+      2,
+      3,
+      20,
+      25,
+      39,
+      49
+     ],
+     "consequence_set": "stop_retained_variant",
+     "field": "ALLELE_NUM",
+     "vep": "2",
+     "vep_rs": "3",
+     "expected_divergence": "allele_number_repeated_or_reference_equal_alt",
+     "rows_alike": 4
+    }
+   ],
+   "field_divergence_summary": {
+    "allele_number_repeated_or_reference_equal_alt": 1
    }
   },
   {
@@ -560,6 +619,34 @@
    "divergence_summary": {},
    "vep_rs_only_summary": {
     "reference_skipped_record": 1
+   },
+   "fields_compared": [
+    "ALLELE_NUM"
+   ],
+   "field_divergences": [
+    {
+     "location": "21:30289183",
+     "allele": "T",
+     "feature": "ENST00000416044",
+     "feature_type": "Transcript",
+     "record_indices": [
+      2,
+      3,
+      20,
+      25,
+      39,
+      49
+     ],
+     "consequence_set": "stop_retained_variant",
+     "field": "ALLELE_NUM",
+     "vep": "2",
+     "vep_rs": "3",
+     "expected_divergence": "allele_number_repeated_or_reference_equal_alt",
+     "rows_alike": 4
+    }
+   ],
+   "field_divergence_summary": {
+    "allele_number_repeated_or_reference_equal_alt": 1
    }
   },
   {
@@ -604,6 +691,34 @@
    "divergence_summary": {},
    "vep_rs_only_summary": {
     "reference_skipped_record": 1
+   },
+   "fields_compared": [
+    "ALLELE_NUM"
+   ],
+   "field_divergences": [
+    {
+     "location": "21:30289183",
+     "allele": "T",
+     "feature": "ENST00000416044",
+     "feature_type": "Transcript",
+     "record_indices": [
+      2,
+      3,
+      20,
+      25,
+      39,
+      49
+     ],
+     "consequence_set": "stop_retained_variant",
+     "field": "ALLELE_NUM",
+     "vep": "2",
+     "vep_rs": "3",
+     "expected_divergence": "allele_number_repeated_or_reference_equal_alt",
+     "rows_alike": 4
+    }
+   ],
+   "field_divergence_summary": {
+    "allele_number_repeated_or_reference_equal_alt": 1
    }
   }
  ],
@@ -626,5 +741,33 @@
  "divergence_summary": {},
  "vep_rs_only_summary": {
   "reference_skipped_record": 1
+ },
+ "fields_compared": [
+  "ALLELE_NUM"
+ ],
+ "field_divergences": [
+  {
+   "location": "21:30289183",
+   "allele": "T",
+   "feature": "ENST00000416044",
+   "feature_type": "Transcript",
+   "record_indices": [
+    2,
+    3,
+    20,
+    25,
+    39,
+    49
+   ],
+   "consequence_set": "stop_retained_variant",
+   "field": "ALLELE_NUM",
+   "vep": "2",
+   "vep_rs": "3",
+   "expected_divergence": "allele_number_repeated_or_reference_equal_alt",
+   "rows_alike": 4
+  }
+ ],
+ "field_divergence_summary": {
+  "allele_number_repeated_or_reference_equal_alt": 1
  }
 }

@@ -1,0 +1,1 @@
+ERROR: [fastvep_plugin_tuples] tests/fixtures/maps/byte_order_mark.tsv:1: the header is not fastvep_column part vep_field source kind note list_separator reference_set

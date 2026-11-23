@@ -26,12 +26,20 @@
 //! depth. A task's skip warnings travel with its chunk and the writer reports
 //! them as it reaches the chunk; the warnings its records draw while they are
 //! annotated and filtered (`Transcript-assembly mismatch`, `Unable to assign
-//! consequence type`) travel with it too and the writer reports them, in record
-//! order, once the batch is complete, so the warnings file and the
-//! skipped-variants file list them in input order in both modes. A format the
-//! reader thread parses has its skips reported as the reader meets them, ahead
-//! of the records' warnings by as many batches as the pipeline holds, in both
-//! modes.
+//! consequence type` and every `warn!` event the annotation of a record
+//! raises, which the task's thread holds for the record) travel with it too
+//! and the writer reports them, in record order, once the batch is complete,
+//! so the warnings file and the skipped-variants file list them in input
+//! order in both modes. What the
+//! reader thread finds in the input (a run of empty lines and, in a format it
+//! parses, the skipped lines and the parser's warnings) travels in the batch
+//! and is reported in its place among the batch's skips, in both modes, a line
+//! read once a batch is full with the batch after it: the reader writes none
+//! of these itself, however far ahead of the writer it has read. A warning an
+//! annotation source raises when a chromosome is loaded (those of a
+//! `--regulatory_gff` file, for one source) is written when the chromosome is
+//! loaded, by the thread that loads it, the reader and its prewarm helper
+//! among them.
 //! Batched: a prefetch stage between the reader and the coordinator parses each
 //! batch on the pool, warms its chromosomes, filters it under
 //! `--check_frequency` and reads ahead what its sources can read before it is
@@ -44,7 +52,14 @@
 //! depth of batches ahead of the coordinator, and the skips its parse finds
 //! travel with the batch and are reported when the coordinator takes it, the
 //! warnings the batch's records draw once it is annotated, in record order, so
-//! the warnings file lists them in input order. A run with plugins or `--custom`
+//! the warnings file lists them in input order. A `warn!` event a plugin or a
+//! `--custom` source raises over a batch, while the stage reads it ahead or
+//! the coordinator annotates it, is held with the batch and stands among those
+//! warnings with the record it names, or after them when it names none. The
+//! coordinator reports a
+//! batch that carries any once the writer has written the batches sent before
+//! it, so a run the writer ends leaves no warning of a later batch, as a
+//! streaming run leaves none. A run with plugins or `--custom`
 //! sources, one reading known variants from the cache's variation files or the
 //! `--check_svs` file, or one under the `--check_frequency` filter is batched
 //! whatever the mode: plugins, custom sources and the filter see a whole batch
@@ -54,18 +69,27 @@
 //! hung up returns `Ok`, so the stage that failed is the only one reporting.
 //! A streaming task's error travels to the writer in place of its chunk, so
 //! the error reported is the first in input order and every chunk before it
-//! reaches the output, with the warnings the tasks before it drew (the batched
-//! coordinator stops at the failing batch before reporting its records'
-//! warnings, so the two modes' partial output and warnings on a failed run can
-//! differ within that batch);
-//! the prefetch stage's error travels to the coordinator in place of its batch
-//! and is the coordinator's. [`run`] reports the reader's error before the
-//! coordinator's before the writer's.
+//! reaches the output, with the warnings the tasks before it drew. Under the
+//! batched mode a failure of a batch's pool pass (a known-variant lookup whose
+//! file cannot be read is one) is the coordinator's own error, returned once
+//! the batch's skips are reported and before the batch is sent: its records'
+//! warnings are not reported and none of its chunks reaches the writer, so a
+//! write the writer would have failed on is never tried, and the two modes'
+//! error, partial output and warnings on such a run can differ within that
+//! batch.
+//! The prefetch stage's error travels to the coordinator in place of its batch
+//! and is the coordinator's. A write that fails ends the run once the rest of
+//! its batch is reported, in both modes, so the warnings such a run leaves are
+//! those of every batch through the one it ended on, in input order, at any
+//! worker count. [`run`] reports the reader's error before the coordinator's
+//! before the writer's.
 
+use std::any::Any;
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::io::{self, BufRead, BufWriter, Cursor, IoSlice, Read, Write};
 use std::ops::Range;
+use std::panic::{self, AssertUnwindSafe};
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender, SyncSender};
@@ -73,7 +97,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Instant;
 
-use anyhow::{bail, Context};
+use anyhow::{anyhow, bail, Context};
 use bstr::ByteSlice;
 use rayon::prelude::*;
 use rayon::ThreadPool;
@@ -92,8 +116,9 @@ use crate::input_shape::CpuTopology;
 use crate::pick::{self, FilterConfig};
 use crate::render::{fills_rows, render_record, ChunkOutput};
 use crate::runner::{
-    annotate_batch, annotate_one, apply_record_rules, check_variation_reads, fetch_batch,
-    install_prefetch, mark_oversize_sv, prewarm_chromosomes, warn_transcript_assembly_mismatches,
+    annotate_batch, annotate_one, apply_record_rules, check_variation_reads,
+    count_indels_on_edited_models, fetch_batch, install_prefetch, mark_oversize_sv,
+    note_notations_the_reference_lacks, prewarm_chromosomes, warn_transcript_assembly_mismatches,
     AnnotationResources, BatchPrefetch, PipelineStats, RecordWarnings,
 };
 use crate::stats::RunAccumulators;
@@ -105,13 +130,14 @@ use crate::validate::{
 use crate::variation_matcher::{self, ColocationRules};
 use crate::variation_source::{ReadFailure, VariationSource};
 use crate::vcf_parser::{
-    parse_data_line, parse_vcf_line_with_max_sv_size, record_splits, sample_columns,
-    split_minimal_record, stored_line_bytes, vcf_line_is_non_variant, ParsedRecord, SampleColumns,
-    VcfParse,
+    missing_alt_under_svtype, parse_data_line, parse_vcf_line_with_max_sv_size, record_splits,
+    sample_columns, split_minimal_record, stored_line_bytes, vcf_line_is_non_variant, ParsedRecord,
+    SampleColumns, VcfParse,
 };
 use vep_core::coordinate::parse_pos;
 use vep_core::minimal::{
-    apply_minimal_split, feature_on_its_own, minimise_bi_allelic, split_reference_row, MinimalSplit,
+    apply_minimal_split, feature_on_its_own, minimise_bi_allelic, rowless_features,
+    rowless_first_feature, split_reference_row, MinimalSplit,
 };
 use vep_core::sv_record::StructuralRecordError;
 use vep_core::sv_routing::{
@@ -123,6 +149,7 @@ use vep_core::synonyms::ChromosomeSynonyms;
 use vep_core::variant::{classify_variant, so_variation_class, ColocatedVariant, InputVariant};
 use vep_core::vcf_header::fileformat_refusal;
 use vep_core::vcf_info::{info_value, info_value_written};
+use vep_fasta::IndexedFasta;
 use vep_io::input::detect::InputFormat;
 use vep_io::input::{
     empty_lines_warning, read_until_bounded, Delimiter, LineTooLong, MAX_LINE_BYTES,
@@ -188,6 +215,12 @@ pub(crate) struct LineBatch {
     seq: u64,
     text: Vec<u8>,
     items: Vec<Item>,
+    /// What the reader found between the lines (a run of empty lines), in input
+    /// order, each with the index of the item it stands before, the item count
+    /// for one after the last item. The batch's parse reports each in its place
+    /// among the records' skips; the reader reports nothing itself, so a run
+    /// that ends early leaves no warning of a batch it never reached.
+    reports: Vec<(usize, SkipReport)>,
     /// The per-individual split of the batch's records under `--individual` or
     /// `--individual_zyg`, resolved against the input's `#CHROM` header once the
     /// reader met it ([`read_vcf_lines`]); `None` for a run without either flag.
@@ -202,8 +235,35 @@ impl LineBatch {
             seq,
             text: buffers.text,
             items: buffers.items,
+            reports: Vec::new(),
             individuals,
         }
+    }
+
+    /// Holds `report` in its place in input order, before the next line pushed.
+    fn push_report(&mut self, report: SkipReport) {
+        self.reports.push((self.items.len(), report));
+    }
+
+    /// The reader's reports that stand before the items of `items`, and after
+    /// the last item when `items` ends the batch, in input order.
+    fn reports_within(&self, items: &Range<usize>) -> &[(usize, SkipReport)] {
+        let from = self.reports.partition_point(|(at, _)| *at < items.start);
+        let to = if items.end >= self.items.len() {
+            self.reports.len()
+        } else {
+            self.reports.partition_point(|(at, _)| *at < items.end)
+        };
+        &self.reports[from..to]
+    }
+
+    /// The batch without its lines, or `None` when it holds no report: what a
+    /// reader that failed inside a batch sends, so the warnings it found before
+    /// the failure are reported in their turn and none of the unfinished
+    /// batch's records is annotated.
+    fn reports_alone(mut self) -> Option<Self> {
+        self.items.clear();
+        (!self.reports.is_empty()).then_some(self)
     }
 
     fn push_text(&mut self, line: &[u8]) {
@@ -253,6 +313,11 @@ pub(crate) struct ParsedBatch {
     items: Vec<Item>,
     units: Vec<Unit>,
     variants: Vec<InputVariant>,
+    /// What the reader of a parser-fed format found as it read the batch's
+    /// lines, in input order: the skipped lines, the parser's warnings and the
+    /// runs of empty lines. They are reported at the batch's turn, before its
+    /// records' warnings, never by the reader.
+    reports: Vec<SkipReport>,
 }
 
 impl ParsedBatch {
@@ -263,7 +328,16 @@ impl ParsedBatch {
             items: Vec::new(),
             units: Vec::new(),
             variants: Vec::new(),
+            reports: Vec::new(),
         }
+    }
+
+    /// The batch without its records, or `None` when it holds no report
+    /// ([`LineBatch::reports_alone`]).
+    fn reports_alone(mut self) -> Option<Self> {
+        self.units.clear();
+        self.variants.clear();
+        (!self.reports.is_empty()).then_some(self)
     }
 }
 
@@ -287,9 +361,10 @@ pub(crate) struct Rendered {
     first: u32,
     total: u32,
     chunks: anyhow::Result<Vec<Chunk>>,
-    /// The skips and record warnings a streaming task's parse finds, which the
-    /// writer reports when the task's chunk is due; a batch sent whole had its
-    /// skips reported by the coordinator as it took the batch, so it carries none.
+    /// The skips and warnings a streaming task's parse finds, with what the
+    /// reader held between its lines, which the writer reports when the task's
+    /// chunk is due; a batch sent whole had its skips reported by the
+    /// coordinator as it took the batch, so it carries none.
     skips: Vec<SkipReport>,
     /// The warnings a streaming task's records drew while they were annotated
     /// and filtered, in record order, which the writer reports once the batch
@@ -339,11 +414,13 @@ impl Rendered {
     }
 }
 
-/// What a streaming task reports about a record, held until the writer reaches
-/// the task's chunk so the run's warnings keep record order: a skipped record, what
+/// What a reader or a parse reports about a record, held until the batch's
+/// turn (in a streaming run, until the writer reaches the task's chunk) so the
+/// run's warnings keep record order: a skipped record, what
 /// [`Sink::skipped_variant`](crate::warnings::Sink::skipped_variant) takes, or a
 /// warning the record draws (Ensembl VEP's tandem-repeat branch writes its
-/// warnings as it reads the record, Parser/VCF.pm:502-527).
+/// warnings as it reads the record, Parser/VCF.pm:502-527) or the reader finds
+/// between records (a run of empty lines).
 #[derive(Debug)]
 enum SkipReport {
     Skip {
@@ -402,10 +479,11 @@ impl<'a> Reported<'a> {
     }
 }
 
-/// Where a parse reports what a record draws. A parse on the reader thread
-/// reports to the run's sink at once ([`report_to_sink`]); the prefetch stage's
-/// parse collects its reports for the coordinator, and a streaming task's for
-/// the writer.
+/// Where a parse reports what a record draws. No parse reports to the run's
+/// sink itself: a parse on the reader thread collects its reports in the batch
+/// it fills, the prefetch stage's parse for the coordinator and a streaming
+/// task's for the writer, which report them at the batch's turn
+/// ([`report_to_sink`]).
 pub(crate) type SkipSink<'a> = dyn FnMut(Reported<'_>) + 'a;
 
 /// Reports one skip or warning to the run's warning sink at once.
@@ -675,13 +753,16 @@ fn decide_reader_core(policy: ReaderCorePolicy, bytes: u64, records: u64) {
 /// The name the cache knows an input chromosome by: the input's own when the
 /// cache holds it, else a synonym it holds, else the `chr` spelling it holds
 /// (`BaseVEP.pm:689-738`), else the input's name unchanged, which no cache
-/// lookup then matches.
+/// lookup then matches. A name the synonyms give to two or more chromosomes
+/// the cache holds stays unchanged too: the file does not say which of them it
+/// stands for, and Ensembl VEP takes the first in the order `keys` returns
+/// them (`BaseVEP.pm:711-716`), which changes between runs.
 pub(crate) fn cache_chr_name(
     chr: &str,
     synonyms: &ChromosomeSynonyms,
     transcripts: &LazyTranscriptIndexes,
 ) -> String {
-    synonyms.source_chr_name(chr, |name| transcripts.contains_key(name))
+    synonyms.sequence_chr_name(chr, |name| transcripts.contains_key(name))
 }
 
 /// The chromosomes the run's annotation sources beside the cache list: every
@@ -726,19 +807,28 @@ pub(crate) fn source_chromosomes(
 /// the cache alone, as each source's `get_source_chr_name` does. A mate's
 /// rows are written under its resolved name; Ensembl VEP writes them only on
 /// a spelling match (`AnnotationType/Transcript.pm:133-134`), the divergence
-/// `docs/divergences/defect-p.md` records.
+/// `docs/divergences/defect-p.md` records. A record whose written name stands
+/// for a mitochondrial sequence the cache does not hold, as `reference`, the
+/// run's reference FASTA, shows it, keeps that name ([`kept_off_the_cache`]).
 pub(crate) fn name_source_chromosomes(
     variant: &mut InputVariant,
     synonyms: &ChromosomeSynonyms,
     transcripts: &LazyTranscriptIndexes,
     source_chromosomes: &BTreeSet<String>,
+    reference: Option<&IndexedFasta>,
 ) {
     let input_name = if variant.original_chr.is_empty() {
         variant.chr.as_str()
     } else {
         variant.original_chr.as_str()
     };
-    let (renamed, chr) = record_naming(input_name, synonyms, transcripts, source_chromosomes);
+    let (renamed, chr) = record_naming(
+        input_name,
+        synonyms,
+        transcripts,
+        source_chromosomes,
+        reference,
+    );
     if renamed {
         variant.input_chr = Some(input_name.into());
         variant.original_chr = "MT".to_string();
@@ -755,24 +845,81 @@ pub(crate) fn name_source_chromosomes(
 /// How a record's CHROM as written is named: whether `_have_chr` renames a
 /// bare `M` to `MT` ([`renames_m_to_mt`], read over the cache's chromosomes
 /// and `source_chromosomes`), and the cache's name for the record, `MT`'s when
-/// it is renamed (the name every source resolves after the rename), else
-/// [`record_chr_name`]'s. Both the record's own naming and the streaming
-/// coordinator's chromosome scan ([`batch_chromosomes`]) read a CHROM through
-/// this, so the chromosome warmed is the one the record is annotated on.
+/// it is renamed (the name every source resolves after the rename), else the
+/// name as written when it stands for a sequence the cache does not hold
+/// ([`kept_off_the_cache`]), else [`record_chr_name`]'s. Both the record's own
+/// naming and the streaming coordinator's chromosome scan
+/// ([`batch_chromosomes`]) read a CHROM through this, so the chromosome warmed
+/// is the one the record is annotated on.
 fn record_naming(
     input_name: &str,
     synonyms: &ChromosomeSynonyms,
     transcripts: &LazyTranscriptIndexes,
     source_chromosomes: &BTreeSet<String>,
+    reference: Option<&IndexedFasta>,
 ) -> (bool, String) {
     let holds = |name: &str| transcripts.contains_key(name) || source_chromosomes.contains(name);
     let renamed = renames_m_to_mt(input_name, synonyms, holds);
     let chr = if renamed {
         cache_chr_name("MT", synonyms, transcripts)
+    } else if kept_off_the_cache(input_name, synonyms, transcripts, reference).is_some() {
+        input_name.to_string()
     } else {
         record_chr_name(input_name, synonyms, transcripts)
     };
     (renamed, chr)
+}
+
+/// A record whose written name the cache's naming gives to the cache's
+/// mitochondrial chromosome while the run's reference FASTA holds another
+/// sequence under it: the chromosome it is kept off, the FASTA record its
+/// name reaches and that record's length.
+pub(crate) struct KeptOffTheCache<'a> {
+    cache_chr: String,
+    record: &'a str,
+    length: u64,
+}
+
+impl KeptOffTheCache<'_> {
+    /// What the skip line of a record written `written` says of it.
+    pub(crate) fn skip_description(&self, written: &str) -> String {
+        format!(
+            "Chromosome {written} is the FASTA record {} of {} bases, another sequence than the cache's {} of {} bases, and is read as no chromosome of the cache",
+            self.record,
+            self.length,
+            self.cache_chr,
+            vep_fasta::GRCH37_MITOCHONDRIAL_LENGTH
+        )
+    }
+}
+
+/// Whether a record written `input_name` lies on a mitochondrial sequence the
+/// cache does not hold, and what a skip line then says of it. On `GRCh37` the
+/// names `chrM` and `M` are those of the UCSC hg19 naming, whose mitochondrial
+/// sequence is not the assembly's: where `reference`, the run's reference
+/// FASTA, holds under such a name a record of another length than the
+/// assembly's (`IndexedFasta::mitochondrial_record_of_another_sequence`), a
+/// record written under that name is a record of that sequence, and its
+/// position is not a position of the chromosome the cache's synonyms, or the
+/// reading of a kept `M` as `MT` ([`record_chr_name`]), would place it on.
+/// Ensembl VEP places such a record by its name alone
+/// (`AnnotationSource.pm:179`, `BaseVEP.pm:708-716`). `None` for a name the
+/// cache holds itself, for one that reaches no chromosome of the cache either
+/// way, and without such a FASTA record. A bare `M` that `_have_chr` renames
+/// `MT` is renamed before this is asked ([`record_naming`]).
+pub(crate) fn kept_off_the_cache<'a>(
+    input_name: &str,
+    synonyms: &ChromosomeSynonyms,
+    transcripts: &LazyTranscriptIndexes,
+    reference: Option<&'a IndexedFasta>,
+) -> Option<KeptOffTheCache<'a>> {
+    let (record, length) = reference?.mitochondrial_record_of_another_sequence(input_name)?;
+    let cache_chr = record_chr_name(input_name, synonyms, transcripts);
+    (cache_chr != input_name && transcripts.contains_key(&cache_chr)).then_some(KeptOffTheCache {
+        cache_chr,
+        record,
+        length,
+    })
 }
 
 /// The cache's name for a record's CHROM as written in the input: `cache_chr_name`
@@ -831,7 +978,7 @@ pub(crate) fn tabix_contig_order(
     else {
         return Vec::new();
     };
-    let index = match vep_builtins::tabix::load_index(Path::new(&index_path)) {
+    let index = match crate::input_shape::load_index(Path::new(&index_path)) {
         Ok(index) => index,
         Err(e) => {
             debug!("ignoring tabix index {index_path}: {e}");
@@ -961,7 +1108,7 @@ pub(crate) fn prewarm_variant_chromosomes(
 /// A regulatory load's failure as the run prints it, under the `cache`
 /// component; a refusal the loader already made under the error contract (a
 /// checksum mismatch) keeps its own line.
-fn regulatory_load_error(error: anyhow::Error) -> anyhow::Error {
+pub(crate) fn regulatory_load_error(error: anyhow::Error) -> anyhow::Error {
     if error.is::<crate::config::CliError>() {
         return error;
     }
@@ -1077,7 +1224,7 @@ impl Coordinator<'_> {
     /// 10,000 variants prints none.
     fn report_progress(&self, variant_count: u64, reported: &mut u64) {
         if self.progress && progress_due(variant_count, *reported) {
-            crate::stderr::write(format_args!("\rProcessed {} variants...", variant_count));
+            crate::stderr::progress(format_args!("Processed {} variants...", variant_count));
             *reported = variant_count;
         }
     }
@@ -1101,8 +1248,8 @@ impl Coordinator<'_> {
         while *reported < passed {
             *reported += 10000;
             // `eprint!` panics when standard error cannot be written, and a task
-            // that panics never sends its chunk, which the writer waits for.
-            crate::stderr::write_or_drop(format_args!("\rProcessed {} variants...", *reported));
+            // that panics ends the run ([`run_task`]).
+            crate::stderr::progress_or_drop(format_args!("Processed {} variants...", *reported));
         }
     }
 }
@@ -1187,10 +1334,12 @@ pub(crate) fn run(
         }
         let permits_tx = streaming.then_some(permits_tx);
         let pool = coordinator.pool;
-        let spawn_writer = |out_rx: Receiver<Rendered>| {
+        let spawn_writer = |out_rx: Receiver<Rendered>, written: Option<Sender<()>>| {
             thread::Builder::new()
                 .name("vep-writer".into())
-                .spawn_scoped(scope, move || write_stage(out_rx, sink, permits_tx, pool))
+                .spawn_scoped(scope, move || {
+                    write_stage(out_rx, sink, permits_tx, written, pool)
+                })
                 .context("Failed to spawn the output writer thread")
         };
         // The coordinator consumes `in_rx` and the channel to the writer: when
@@ -1203,7 +1352,7 @@ pub(crate) fn run(
             // thread itself once a block already waits there, so a worker held
             // in `send` by a full channel would wait for the writer.
             let (out_tx, out_rx) = mpsc::channel();
-            let writer = spawn_writer(out_rx)?;
+            let writer = spawn_writer(out_rx, None)?;
             let coordinated =
                 coordinate_streaming(ch.in_rx, out_tx, ch.lines_back_tx, permits_rx, coordinator);
             (writer, None, coordinated)
@@ -1212,7 +1361,10 @@ pub(crate) fn run(
             // The batched coordinator sends whole batches and has no permits, so
             // the channel's bound holds it back when the writer lags.
             let (out_tx, out_rx) = mpsc::sync_channel(depth);
-            let writer = spawn_writer(out_rx)?;
+            // One token per batch the writer has put on the output, which the
+            // coordinator waits for before it reports a later batch.
+            let (written_tx, written_rx) = mpsc::channel();
+            let writer = spawn_writer(out_rx, Some(written_tx))?;
             // The stage runs at most `depth` batches ahead of the coordinator;
             // the coordinator's finished vectors come back for the next parse.
             let (staged_tx, staged_rx) = mpsc::sync_channel(depth);
@@ -1224,8 +1376,14 @@ pub(crate) fn run(
                     prefetch_stage(in_rx, staged_tx, spare_rx, coordinator)
                 })
                 .context("Failed to spawn the prefetch stage thread")?;
-            let coordinated =
-                coordinate(staged_rx, out_tx, ch.lines_back_tx, spare_tx, coordinator);
+            let coordinated = coordinate(
+                staged_rx,
+                out_tx,
+                ch.lines_back_tx,
+                spare_tx,
+                written_rx,
+                coordinator,
+            );
             (writer, Some(prefetcher), coordinated)
         };
         let read = join_stage("reader", reader);
@@ -1236,8 +1394,8 @@ pub(crate) fn run(
         let variants = coordinated.map_err(refuse_unreadable_shard)?;
         written?;
         // The coordinators and the writer check per batch; a warning raised on
-        // another thread after their last checks (the reader's trailing
-        // empty-lines warning) fails the run here, with the same error.
+        // another thread after their last checks (a `warn!` event of a pool
+        // task) fails the run here, with the same error.
         if let Some(failure) = crate::warnings::global().failure() {
             return Err(failure.into());
         }
@@ -1367,9 +1525,7 @@ impl<R: BufRead> LineScanner<R> {
 
     /// The refusal of the line being assembled, the one after those handed out.
     fn too_long(&self) -> anyhow::Error {
-        let error = LineTooLong {
-            line: self.lines + 1,
-        };
+        let error = LineTooLong::new(self.lines + 1);
         crate::config::CliError::new("input", error.to_string()).into()
     }
 }
@@ -1487,7 +1643,7 @@ fn push_vcf_header(batch: &mut LineBatch, cfg: &ReaderConfig<'_>, input_headers:
     }
 }
 
-/// Warns about a run of empty lines in the words of `skip_empty_lines`
+/// The warning about a run of empty lines, in the words of `skip_empty_lines`
 /// (Parser.pm:284), which Ensembl VEP's parsers for every input format but VCF
 /// call. Its VCF parser yields no variant for an empty line (Parser/VCF.pm:226),
 /// which ends the buffer fill (InputBuffer.pm:212), and a fill that opens on one
@@ -1497,9 +1653,29 @@ fn push_vcf_header(batch: &mut LineBatch, cfg: &ReaderConfig<'_>, input_headers:
 /// no empty line), so the record after the run takes it; a list-format parser's
 /// reader counts the empty lines too, as `skip_empty_lines` advances
 /// `line_number` per empty line (Parser.pm:273-276), so the first empty line
-/// takes it and the record after the run is `from_line + skipped`.
-fn warn_empty_lines(skipped: u64, from_line: u64) {
-    crate::warnings::global().warn(&empty_lines_warning(skipped, from_line));
+/// takes it and the record after the run is `from_line + skipped`. The reader
+/// holds the warning in the batch it is filling, which reports it in its turn.
+fn empty_lines_report(skipped: u64, from_line: u64) -> SkipReport {
+    SkipReport::Warning(empty_lines_warning(skipped, from_line))
+}
+
+/// A warning about one record the run keeps or reads past without a skip,
+/// named as a skip names its record: `line <number> (<line>): <text>`, the
+/// line quoted as [`crate::warnings::quoted_line`] quotes it.
+fn line_warning(number: u64, line: &[u8], text: &str) -> String {
+    format!(
+        "line {number} ({}): {text}",
+        crate::warnings::quoted_line(&String::from_utf8_lossy(line))
+    )
+}
+
+/// Whether the ALT column of a VCF data line is `.` or opens with `.,`, the
+/// only lines [`missing_alt_under_svtype`] warns about: a scan to the line's
+/// fifth tab, ahead of that function's reading of the columns and INFO.
+fn alt_opens_with_dot(line: &[u8]) -> bool {
+    line.split(|&byte| byte == b'\t')
+        .nth(4)
+        .is_some_and(|alt| alt == b"." || alt.starts_with(b".,"))
 }
 
 /// The VCF's leading `#` lines read ahead of the output's opening and handed
@@ -1577,6 +1753,10 @@ fn read_vcf_lines(
     let mut last_chr: Vec<u8> = Vec::new();
     // The empty lines met since the last record, warned about as one run.
     let mut empty_lines = 0u64;
+    // The run lengths warned about so far: a later run of the same length draws
+    // no second warning (`warning_msg` writes a text once, its trailing `line N`
+    // set aside, BaseVEP.pm:810-813), so the reader holds one report a length.
+    let mut warned_runs: Vec<u64> = Vec::new();
     // The line re-joined with tabs when the delimiter is another pattern.
     let mut rejoined: Vec<u8> = Vec::new();
     // The `#CHROM` header's sample names, read for `--individual` and
@@ -1592,7 +1772,7 @@ fn read_vcf_lines(
 
     loop {
         let mut send_batch = false;
-        let more = scanner.with_next_line(|line| {
+        let read = scanner.with_next_line(|line| {
             if line.first() == Some(&b'#') {
                 if let Some(refusal) = fileformat_refusal(line) {
                     return Err(crate::config::CliError::new("input", refusal).into());
@@ -1619,7 +1799,10 @@ fn read_vcf_lines(
                 return Ok(());
             }
             if empty_lines > 0 {
-                warn_empty_lines(empty_lines, record_count + 1);
+                if !warned_runs.contains(&empty_lines) {
+                    warned_runs.push(empty_lines);
+                    batch.push_report(empty_lines_report(empty_lines, record_count + 1));
+                }
                 empty_lines = 0;
             }
             let line = if *cfg.delimiter == Delimiter::Tab {
@@ -1654,8 +1837,20 @@ fn read_vcf_lines(
             // A non-variant record (ALT `.`) without `--allow_non_variant` is
             // dropped with no warning (Parser/VCF.pm:259-267 moves to the next
             // record); with the flag it is a record of the run ([`non_variant_record`]).
-            if !cfg.allow_non_variant && vcf_line_is_non_variant(&String::from_utf8_lossy(head)) {
-                return Ok(());
+            // One under a true INFO/SVTYPE, which Ensembl VEP annotates as a
+            // structural variant (`:237-245`), is warned about by its line.
+            if !cfg.allow_non_variant {
+                let record = String::from_utf8_lossy(head);
+                if vcf_line_is_non_variant(&record) {
+                    if let Some(text) = missing_alt_under_svtype(&record) {
+                        batch.push_report(SkipReport::Warning(line_warning(
+                            record_count,
+                            crate::warnings::quotable_prefix(line),
+                            text,
+                        )));
+                    }
+                    return Ok(());
+                }
             }
 
             let chr = head.find_byte(b'\t').map_or(head, |tab| &head[..tab]);
@@ -1683,7 +1878,16 @@ fn read_vcf_lines(
                 .map_or(1, |split| split.features_per_line());
             send_batch = records_in_batch >= cfg.batch_size;
             Ok(())
-        })?;
+        });
+        let more = match read {
+            Ok(more) => more,
+            Err(error) => {
+                if let Some(alone) = batch.reports_alone() {
+                    let _ = tx.send(InputBatch::Lines(alone));
+                }
+                return Err(error);
+            }
+        };
         if !more {
             break;
         }
@@ -1704,8 +1908,8 @@ fn read_vcf_lines(
             records_in_batch = 0;
         }
     }
-    if empty_lines > 0 {
-        warn_empty_lines(empty_lines, record_count + 1);
+    if empty_lines > 0 && !warned_runs.contains(&empty_lines) {
+        batch.push_report(empty_lines_report(empty_lines, record_count + 1));
     }
 
     // Ensembl VEP writes the header block before its output loop, whether or
@@ -1716,7 +1920,7 @@ fn read_vcf_lines(
         push_vcf_header(&mut batch, cfg, &input_headers);
     }
 
-    if !batch.items.is_empty() {
+    if !batch.items.is_empty() || !batch.reports.is_empty() {
         let _ = tx.send(InputBatch::Lines(batch));
     }
     Ok(record_count)
@@ -1801,7 +2005,11 @@ fn refused_line_chromosome(line: &str, format: InputFormat, cfg: &ReaderConfig<'
         InputFormat::Spdi => {
             let notation = without_perl_blanks(line);
             let accession = notation.split(':').next().unwrap_or("");
-            cache_chr_name(accession, cfg.synonyms, cfg.transcripts)
+            // The SPDI parser reads a name the synonyms give to several of the
+            // cache's chromosomes as the first of them, where `cache_chr_name`
+            // leaves it as written.
+            let held = |name: &str| cfg.transcripts.contains_key(name);
+            cfg.synonyms.source_chr_name(accession, held)
         }
         _ => line.split(':').next().unwrap_or("").to_string(),
     }
@@ -1824,7 +2032,6 @@ fn read_parsed(
     };
     let mut seq = 0u64;
     let mut batch = ParsedBatch::new(seq);
-    let mut report = report_to_sink;
     // Ensembl VEP's line number for these formats counts the records read and
     // the empty lines read past (Parser/VEP_input.pm:115-119, Parser.pm:273-276),
     // unless the parser counts otherwise and says so (`record_line_number`); a
@@ -1836,9 +2043,9 @@ fn read_parsed(
     // alleles after the first take the first's verdict and the changes the checks
     // made to it; `None` while the record is dropped.
     let mut record_patch: Option<AllelePatch> = None;
-    // A kept record is open from its first allele until the next line's first
-    // allele or the end of the input, and lays out as one unit, as
-    // `parse_lines` lays out a VCF line.
+    // A kept record is open from its first allele until the next line is read
+    // or the input ends, and lays out as one unit, as `parse_lines` lays out a
+    // VCF line.
     let mut open_record: Option<usize> = None;
     // The parser yields one allele at a time, so a record whose every allele
     // writes no row (each equal to the looked-up reference, or to it once the
@@ -1866,19 +2073,64 @@ fn read_parsed(
         }
         batch.units.push(Unit::Record(start..batch.variants.len()));
     };
-    loop {
+    // The reader's own failure, which ends the read with the reports of the
+    // unfinished batch sent on without its records.
+    let failed: Option<anyhow::Error> = loop {
+        // Skipped lines fill no batch, so once the reports held number a batch's
+        // size they go on in a batch of their own, ahead of the records read so
+        // far, whose batch keeps the records it would have held.
+        if batch.reports.len() >= cfg.batch_size.max(1) {
+            let mut alone = ParsedBatch::new(seq);
+            alone.reports = std::mem::take(&mut batch.reports);
+            if tx.send(InputBatch::Parsed(alone)).is_err() {
+                return Ok(record_count);
+            }
+            seq += 1;
+            batch.seq = seq;
+        }
         let next = parser.next_variant();
+        // A line read once the batch is full belongs to the next batch, with
+        // what the reader found on the way to it: Ensembl VEP's parser warns
+        // about an empty line or a line it cannot read as it fills the next
+        // buffer (Parser.pm:266-293 runs before the next record is read). So
+        // the open record closes and a full batch goes on before this line's
+        // reports are held. An allele after its line's first continues the
+        // open record, and a failure of the reader itself leaves the batch as
+        // it stands.
+        let starts_line = match &next {
+            Some(Ok(variant)) => variant.allele_index == 0,
+            Some(Err(
+                vep_io::IoError::Unsupported(_)
+                | vep_io::IoError::CacheUnreadable(_)
+                | vep_io::IoError::Io(_),
+            )) => false,
+            Some(Err(_)) | None => true,
+        };
+        if starts_line {
+            if let Some(start) = open_record.take() {
+                close_record(&mut batch, start, held_none.take());
+            }
+            if batch.variants.len() >= cfg.batch_size {
+                if tx.send(InputBatch::Parsed(batch)).is_err() {
+                    return Ok(record_count);
+                }
+                seq += 1;
+                batch = ParsedBatch::new(seq);
+            }
+        }
         // The empty lines the parser read past before this record, warned as the
         // VCF reader warns a run of them and counted into the line numbers that
         // follow, as `skip_empty_lines` counts them (Parser.pm:273-276).
         let empty_lines = parser.take_empty_lines();
         if empty_lines > 0 {
-            warn_empty_lines(empty_lines, record_count + 1);
+            batch
+                .reports
+                .push(empty_lines_report(empty_lines, record_count + 1));
             record_count += empty_lines;
         }
-        for warning in parser.take_warnings() {
-            crate::warnings::global().warn(&warning);
-        }
+        batch
+            .reports
+            .extend(parser.take_warnings().into_iter().map(SkipReport::Warning));
         match next {
             Some(Ok(mut variant)) => {
                 name_source_chromosomes(
@@ -1886,6 +2138,7 @@ fn read_parsed(
                     cfg.synonyms,
                     cfg.transcripts,
                     cfg.checks.source_chromosomes,
+                    cfg.checks.fasta,
                 );
                 // `post_process_vfs` minimises a bi-allelic record before `validate_vf`
                 // reads it (Parser.pm:852), so the size test measures the trimmed span;
@@ -1899,16 +2152,6 @@ fn read_parsed(
                 }
                 mark_oversize_sv(&mut variant, cfg.max_sv_size);
                 if variant.allele_index == 0 {
-                    if let Some(start) = open_record.take() {
-                        close_record(&mut batch, start, held_none.take());
-                    }
-                    if batch.variants.len() >= cfg.batch_size {
-                        if tx.send(InputBatch::Parsed(batch)).is_err() {
-                            return Ok(record_count);
-                        }
-                        seq += 1;
-                        batch = ParsedBatch::new(seq);
-                    }
                     record_count += 1;
                     let quoted = last_line_read(last_line);
                     let line = RecordLine {
@@ -1916,7 +2159,11 @@ fn read_parsed(
                         info: None,
                         quoted: &quoted,
                     };
-                    let (kept, patch) = rules.validate(&mut variant, &line, &mut report);
+                    let reports = &mut batch.reports;
+                    let (kept, patch) =
+                        rules.validate(&mut variant, &line, &mut |reported: Reported<'_>| {
+                            reports.push(reported.owned())
+                        });
                     if kept {
                         open_record = Some(batch.variants.len());
                         record_patch = Some(patch);
@@ -1926,7 +2173,14 @@ fn read_parsed(
                 } else if let Some(patch) = &record_patch {
                     patch.apply(&mut variant);
                 }
-                variant.input_record = record_count;
+                // The Parquet order check names a refused record by this number, so an
+                // Ensembl-format record, one line of its own, takes the line its skip
+                // warnings name. The mappings of one identifier share the name's line,
+                // so the other formats keep the count, which tells every record apart.
+                variant.input_record = match format {
+                    InputFormat::Ensembl => parser.record_line_number().unwrap_or(record_count),
+                    _ => record_count,
+                };
                 if record_patch.is_none() {
                     continue;
                 }
@@ -1952,11 +2206,15 @@ fn read_parsed(
                     let outcome = apply_minimal_split(&mut variant, own);
                     // Every allele of a split record writes its own feature's
                     // reference row (VariationFeatureOverlap.pm:469-481 per feature,
-                    // carried into the record by OutputFactory.pm:2299-2340), so
+                    // carried into the record by OutputFactory.pm:2308-2349), so
                     // the row goes in per allele here, and `close_record` finds it
                     // in place.
                     if outcome != MinimalSplit::Unchanged && cfg.process_ref_homs {
-                        prewarm_variant_chromosomes(cfg.transcripts, cfg.regulatory, &variant)?;
+                        if let Err(error) =
+                            prewarm_variant_chromosomes(cfg.transcripts, cfg.regulatory, &variant)
+                        {
+                            break Some(error);
+                        }
                         batch.variants.push(split_reference_row(&variant, own));
                     }
                     // The feature of a `*` or `<DEL:*>` allele builds its reference
@@ -1966,23 +2224,27 @@ fn read_parsed(
                         continue;
                     }
                 }
-                prewarm_variant_chromosomes(cfg.transcripts, cfg.regulatory, &variant)?;
+                if let Err(error) =
+                    prewarm_variant_chromosomes(cfg.transcripts, cfg.regulatory, &variant)
+                {
+                    break Some(error);
+                }
                 batch.variants.push(variant);
             }
             Some(Err(vep_io::IoError::Unsupported(message))) => {
-                return Err(crate::config::CliError::new("input", message).into());
+                break Some(crate::config::CliError::new("input", message).into());
             }
             Some(Err(vep_io::IoError::CacheUnreadable(message))) => {
-                return Err(crate::config::CliError::new("cache", message).into());
+                break Some(crate::config::CliError::new("cache", message).into());
             }
             // A failure of the reader itself ends the run, as it ends a VCF read: the
             // parser returns it again for every line it is asked for. A line past
             // the length cap is the input's refusal, not a read failure.
             Some(Err(vep_io::IoError::Io(error))) => {
                 if let Some(too_long) = LineTooLong::from_io_error(&error) {
-                    return Err(crate::config::CliError::new("input", too_long.to_string()).into());
+                    break Some(crate::config::CliError::new("input", too_long.to_string()).into());
                 }
-                return Err(anyhow::Error::from(error).context("Failed to read input line"));
+                break Some(anyhow::Error::from(error).context("Failed to read input line"));
             }
             Some(Err(e)) => {
                 record_count += 1;
@@ -2006,19 +2268,22 @@ fn read_parsed(
                     }
                 }
                 let number = parser.record_line_number().unwrap_or(record_count);
-                report(Reported::Skip {
-                    description: &description,
+                batch.reports.push(SkipReport::Skip {
+                    description,
                     line_number: number,
-                    quoted: Some(&quoted),
+                    quoted: Some(quoted),
                 });
             }
-            None => break,
+            None => break None,
         }
+    };
+    if let Some(error) = failed {
+        if let Some(alone) = batch.reports_alone() {
+            let _ = tx.send(InputBatch::Parsed(alone));
+        }
+        return Err(error);
     }
-    if let Some(start) = open_record {
-        close_record(&mut batch, start, held_none.take());
-    }
-    if !batch.units.is_empty() {
+    if !batch.units.is_empty() || !batch.reports.is_empty() {
         let _ = tx.send(InputBatch::Parsed(batch));
     }
     // A parser that numbers its own lines has read every line once the last
@@ -2027,7 +2292,7 @@ fn read_parsed(
     Ok(parser.record_line_number().unwrap_or(record_count))
 }
 
-/// The skip descriptions of a refused VCF line in Perl's order, both stages of
+/// The skip descriptions of a refused VCF line in Ensembl VEP's order, both stages of
 /// [`refused_record`] together.
 #[cfg(test)]
 fn refused_record_descriptions(error: &anyhow::Error, line: &str) -> Vec<String> {
@@ -2047,13 +2312,13 @@ struct RefusedRecord {
 }
 
 /// The skip descriptions Ensembl VEP writes for a VCF line whose record the
-/// parser refused, in Perl's order: a type `%SO_TERMS` lacks, named as
+/// parser refused, in its order: a type `%SO_TERMS` lacks, named as
 /// `get_SO_term` abbreviates it (Parser.pm:725); `deletion looks incomplete` when
 /// the type string reads `/del/i` and the span is empty or unbounded
 /// (Parser/VCF.pm:555-558); the refused span as `validate_vf` reports it
 /// (Parser.pm:475-477 for an END that is no number, :484-486 for one before the
 /// start), which runs on the refused type's feature too
-/// (Parser/VCF.pm:199). For a refused type the span tested is Perl's own: `POS + 1`
+/// (Parser/VCF.pm:199). For a refused type the span tested is Ensembl VEP's own: `POS + 1`
 /// to the end BaseVCF4.pm:297-317 reads from SVLEN or END, so `SVLEN=0`, an END at
 /// or before POS and an END whose number to Perl lies below the start
 /// ([`end_text_before_start`]: `abc` reads as 0, `30165900abc` as 30165900) each
@@ -2139,6 +2404,8 @@ fn refused_record(error: &anyhow::Error, line: &str) -> RefusedRecord {
                     pos.is_none_or(|pos| end_text_before_start(pos, text))
                 }
                 SpanError::StartPastCeiling(_) => false,
+                // A span refusal with no arm above marks no deletion incomplete.
+                _ => false,
             };
             if deletion && empty {
                 parsed.push(incomplete);
@@ -2152,12 +2419,14 @@ fn refused_record(error: &anyhow::Error, line: &str) -> RefusedRecord {
                 validated: vec![description],
             }
         }
+        // A refusal with no arm above writes its own text and nothing else.
+        _ => validated(vec![message]),
     }
 }
 
 /// The description `validate_vf` writes for a structural record's refused span:
 /// for an END that is no number to Perl, the coordinate test's text
-/// (Parser.pm:475-477) over Perl's start, `POS + 1` (BaseVCF4.pm:260-264), and
+/// (Parser.pm:475-477) over Ensembl VEP's start, `POS + 1` (BaseVCF4.pm:260-264), and
 /// the END text as written (BaseVCF4.pm:307-308 keeps it); every other refusal
 /// as [`SpanError`] renders it, an END Perl numifies and vep-rs cannot hold
 /// (a fraction, a value past its bound) included.
@@ -2202,10 +2471,11 @@ impl Spare {
 
 /// One batch as the prefetch stage hands it to the coordinator: parsed, its
 /// chromosomes warmed, filtered under `--check_frequency`, its sources read
-/// ahead ([`fetch_batch`]), with the skips and warnings its parse found, which
-/// the coordinator reports as it takes the batch, so the warnings file lists
-/// them in input order and a warnings file that cannot be written ends the run
-/// with that batch the last one written.
+/// ahead ([`fetch_batch`]), with the skips and warnings its parse found and
+/// those its reader held for it, in input order, which the coordinator reports
+/// as it takes the batch, so the warnings file lists them in input order and a
+/// warnings file that cannot be written ends the run with that batch the last
+/// one written.
 struct Staged {
     batch: ParsedBatch,
     skips: Vec<SkipReport>,
@@ -2221,6 +2491,7 @@ struct Staged {
 /// stage runs at most that many ahead. The first error ends the stage: it
 /// travels to the coordinator in place of the batch, and the coordinator
 /// reports it after every batch before it is written, as it reports its own.
+/// A panic while a batch is staged is such an error ([`step_or_its_panic`]).
 fn prefetch_stage(
     rx: Receiver<InputBatch>,
     tx: SyncSender<anyhow::Result<Staged>>,
@@ -2232,7 +2503,7 @@ fn prefetch_stage(
         while let Ok(vectors) = spare_back.try_recv() {
             spare.restore(vectors);
         }
-        let staged = stage_batch(input, c, &mut spare);
+        let staged = step_or_its_panic(|| stage_batch(input, c, &mut spare));
         let failed = staged.is_err();
         if tx.send(staged).is_err() || failed {
             // The coordinator stopped (it reports why), or the error is on its
@@ -2256,7 +2527,10 @@ fn stage_batch(
             let mut report = |reported: Reported<'_>| skips.push(reported.owned());
             parse_lines(lines, c, spare, &mut report)?
         }
-        InputBatch::Parsed(parsed) => parsed,
+        InputBatch::Parsed(mut parsed) => {
+            skips = std::mem::take(&mut parsed.reports);
+            parsed
+        }
     };
     debug!(
         batch_size = batch.variants.len(),
@@ -2309,16 +2583,47 @@ fn stage_batch(
     })
 }
 
+/// What the batched coordinator knows of the writer: the batches it has sent
+/// and, through one token a batch, those the writer has put on the output.
+struct WriterProgress {
+    written: Receiver<()>,
+    sent: u64,
+    acknowledged: u64,
+}
+
+impl WriterProgress {
+    /// Waits until the writer has written every batch sent to it; `false` when
+    /// it stopped before that. The coordinator reports a batch's skips and
+    /// warnings behind this wait alone, so a run the writer ends leaves the
+    /// warnings of the batches through the one it ended on and of none after,
+    /// as a streaming run does, however far the coordinator had read.
+    fn caught_up(&mut self) -> bool {
+        while self.acknowledged < self.sent {
+            if self.written.recv().is_err() {
+                return false;
+            }
+            self.acknowledged += 1;
+        }
+        true
+    }
+}
+
 fn coordinate(
     rx: Receiver<anyhow::Result<Staged>>,
     tx: SyncSender<Rendered>,
     lines_back: SyncSender<LineBuffers>,
     spare_back: SyncSender<SpareVectors>,
+    written: Receiver<()>,
     c: &Coordinator<'_>,
 ) -> anyhow::Result<u64> {
     let mut variant_count = 0u64;
     let mut reported = 0u64;
     let mut spare = Spare::default();
+    let mut writer = WriterProgress {
+        written,
+        sent: 0,
+        acknowledged: 0,
+    };
     // Plugins see a whole batch at once (batched tabix queries), so a run with
     // plugins keeps the batch-wide annotate and render phases; a `--custom`
     // source reads its file the same way.
@@ -2329,19 +2634,28 @@ fn coordinate(
             skips,
             mut prefetch,
         } = staged?;
-        for skip in &skips {
-            report_to_sink(skip.as_reported());
+        if !skips.is_empty() {
+            if !writer.caught_up() {
+                // The writer stopped; it reports why.
+                return Ok(variant_count);
+            }
+            for skip in &skips {
+                report_to_sink(skip.as_reported());
+            }
         }
         // The batch's lookups are the next to run: its read-ahead replaces the
         // written batch's.
         install_prefetch(c.resources, &mut prefetch);
         let render_start = Instant::now();
-        let (rendered, record_warnings) = if fused {
-            annotate_render_batch(&mut batch, c, &mut spare)?
-        } else {
+        // A panic inside a task of the batch's passes ends the run as the
+        // batch's error, before any of the batch reaches the writer.
+        let (rendered, record_warnings) = step_or_its_panic(|| {
+            if fused {
+                return annotate_render_batch(&mut batch, c, &mut spare);
+            }
             let mut warnings = RecordWarnings::default();
             if !batch.variants.is_empty() {
-                annotate_batch(
+                warnings = annotate_batch(
                     &mut batch.variants,
                     c.resources,
                     c.pool,
@@ -2360,17 +2674,24 @@ fn coordinate(
                     c.resources,
                     &mut |index, text| warnings.push(index, text),
                 );
+                count_indels_on_edited_models(&batch.variants, c.resources);
+                note_notations_the_reference_lacks(&batch.variants, c.resources);
             }
-            (
+            Ok((
                 render_batch(&mut batch, c, &mut spare)?,
                 warnings.into_texts(),
-            )
-        };
+            ))
+        })?;
         // The warnings the batch's records drew, in record order, after the
-        // batch's skips and before the next batch's: Ensembl VEP writes them as
-        // it renders the buffer (OutputFactory.pm:300-303, :1718).
-        for text in &record_warnings {
-            crate::warnings::global().warn(text);
+        // batch's skips and before the next batch's: Ensembl VEP writes its own
+        // as it renders the buffer (OutputFactory.pm:300-303, :1727).
+        if !record_warnings.is_empty() {
+            if !writer.caught_up() {
+                return Ok(variant_count);
+            }
+            for text in &record_warnings {
+                crate::warnings::global().warn(text);
+            }
         }
         variant_count += batch.variants.len() as u64;
         debug!(
@@ -2389,6 +2710,7 @@ fn coordinate(
             // The writer stopped; it reports why.
             return Ok(variant_count);
         }
+        writer.sent += 1;
         // The render tasks took and freed every variant; only empty
         // placeholders remain, and the vectors go back for the next parse.
         let _ = spare_back.try_send((units, variants));
@@ -2442,7 +2764,7 @@ fn apply_record_step_on_pool(
 /// non-variant record (`--allow_non_variant`) is judged as the allele-less
 /// feature Ensembl VEP builds from it. The features dropped whole, a split
 /// record's rowless ones included, are counted into the statistics
-/// (`BaseCacheVariation.pm:362-373`). Without a `source` (the cache declares
+/// (`BaseCacheVariation.pm:363-374`). Without a `source` (the cache declares
 /// variation columns and holds no variation file) no variant has a known
 /// variant, as Ensembl VEP reads none from an absent file
 /// (`VariationTabix.pm:156` and `:270`), and each record is judged as one without
@@ -2465,21 +2787,32 @@ fn frequency_filter_stage(
             check_variation_reads(&failure)?;
         }
     }
+    // Every feature of a split record is judged on its own (BaseCacheVariation.pm:316),
+    // a feature that writes no row included: it is built here from the record's
+    // working string and takes the known variants of its own span and pair. Each
+    // feature dropped is a VariationFeature the buffer loses and :363 counts,
+    // whether or not a row stands for it; one a reference row leads
+    // (`--process_ref_homs`) is judged and counted with its row by `filter_record`
+    // and `retain_alleles`, so the features judged here are those of a record
+    // without reference rows. One that stays is kept for the record's reset. A
+    // record whose every alternate allele writes no row is one feature with no
+    // allele (`split_minimal_record`), which stays while one of its features does.
+    //
     // The alleles of a split record whose first alternate allele writes no row
     // carry that feature's matches, the ones the rejoined rows print
-    // (`annotate_colocated`); the filter judges every feature on its own
-    // (BaseCacheVariation.pm:315), so each allele takes its own matches while it
-    // is judged, and the first feature, which no allele stands for, is judged
-    // from the matches they carried. A later feature no allele stands for is a
-    // drop of its own under `include`. Each feature dropped is a VariationFeature
-    // the buffer loses and :362 counts, whether or not a row stands for it; one a
-    // reference row leads (`--process_ref_homs`) is counted with its row by
-    // `retain_alleles`, so the features counted here are those of a record
-    // without reference rows.
-    let mut first_feature_matches: Vec<(usize, Vec<ColocatedVariant>)> = Vec::new();
+    // (`annotate_colocated`), so each allele, and each reference row leading no
+    // allele after the first feature, takes its own matches while it is judged.
+    let own_matches = |variant: &InputVariant| {
+        source.map_or_else(Vec::new, |source| {
+            own_colocated_variants(variant, source, rules, &failure)
+        })
+    };
+    let mut first_feature_matches: Vec<(usize, usize, Vec<ColocatedVariant>)> = Vec::new();
     let mut rowless_dropped = vec![false; batch.units.len()];
     let mut rowless_feature_drops = 0u64;
-    for (unit, unit_rowless_dropped) in batch.units.iter().zip(&mut rowless_dropped) {
+    let mut rowless_kept: Vec<(usize, Vec<(usize, InputVariant)>)> = Vec::new();
+    let mut allele_less_stays: Vec<Option<bool>> = vec![None; batch.units.len()];
+    for (u, unit) in batch.units.iter().enumerate() {
         let Unit::Record(range) = unit else {
             continue;
         };
@@ -2487,46 +2820,72 @@ fn frequency_filter_stage(
         if !is_split_record(record) {
             continue;
         }
-        let later_drops = filter.later_rowless_features_dropped(record);
-        // A record whose every alternate allele writes no row is one feature with
-        // no allele (`split_minimal_record`), judged below as such and counted by
-        // `retain_alleles` when it goes; its later features are counted here.
-        let first_judged = if record[0].no_allele {
-            None
-        } else {
-            filter.judge_rowless_first_feature(&record[0])
-        };
-        let first_dropped = first_judged.as_ref().is_some_and(|(stays, _)| !stays);
-        *unit_rowless_dropped = later_drops > 0 || first_dropped;
-        if !record.iter().any(|v| v.reference_allele_row) {
-            rowless_feature_drops += later_drops as u64 + u64::from(first_dropped);
+        let reference_rows = record.iter().any(|v| v.reference_allele_row);
+        let allele_less = record[0].no_allele;
+        if !reference_rows {
+            let mut kept = Vec::new();
+            let mut dropped = 0u64;
+            for (own, mut feature) in rowless_features(&record[0]) {
+                feature.colocated_variants = own_matches(&feature);
+                let (stays, freqs) = filter.judge_feature(&feature);
+                if stays {
+                    feature.existing_variation = variation_matcher::existing_variation_names(
+                        &feature.colocated_variants,
+                        &feature.display_allele(),
+                    );
+                    feature.freqs = freqs;
+                    kept.push((own, feature));
+                } else {
+                    dropped += 1;
+                }
+            }
+            rowless_dropped[u] = dropped > 0;
+            if allele_less {
+                let stays = dropped == 0 || !kept.is_empty();
+                allele_less_stays[u] = Some(stays);
+                rowless_feature_drops += dropped - u64::from(!stays);
+            } else {
+                rowless_feature_drops += dropped;
+                if !kept.is_empty() {
+                    rowless_kept.push((u, kept));
+                }
+            }
         }
-        if first_judged.is_none() {
+        if allele_less || rowless_first_feature(&record[0]).is_none() {
             continue;
         }
+        let lone_rows: Vec<usize> = split_features(record)
+            .into_iter()
+            .skip(1)
+            .filter(|feature| {
+                record[feature.clone()]
+                    .iter()
+                    .all(|v| v.reference_allele_row)
+            })
+            .map(|feature| range.start + feature.start)
+            .collect();
         for index in range.clone() {
             let variant = &mut batch.variants[index];
-            if variant.reference_allele_row {
+            if variant.reference_allele_row && !lone_rows.contains(&index) {
                 continue;
             }
-            let own = source.map_or_else(Vec::new, |source| {
-                own_colocated_variants(variant, source, rules, &failure)
-            });
+            let own = own_matches(variant);
             let first = std::mem::replace(&mut variant.colocated_variants, own);
-            first_feature_matches.push((index, first));
+            first_feature_matches.push((u, index, first));
         }
     }
     check_variation_reads(&failure)?;
     let mut keep = vec![true; batch.variants.len()];
-    for unit in &batch.units {
+    for (unit, allele_less_stays) in batch.units.iter().zip(&allele_less_stays) {
         if let Unit::Record(range) = unit {
             let record = &mut batch.variants[range.clone()];
             // A non-variant record is the reference alone with no allele to judge
             // (Parser/VCF.pm:342); one a Perl-true INFO/SVTYPE routes to the
             // structural path (`:237-245`) gets no co-located variant
             // (`AnnotationType/Variation.pm:85`), so it has no frequency data.
-            let verdict = match record.first() {
-                Some(first) if first.no_allele => {
+            let verdict = match (record.first(), allele_less_stays) {
+                (_, Some(stays)) => vec![*stays; record.len()],
+                (Some(first), None) if first.no_allele => {
                     let dropped = filter.drops_records_without_data()
                         && (first.sv_type.is_some() || filter.drops_record_without_alleles(record));
                     vec![!dropped; record.len()]
@@ -2540,16 +2899,11 @@ fn frequency_filter_stage(
     // writes each split feature left as a record of its own, printing its own
     // matches; with nothing dropped the rejoin builds every row of a split record
     // from the first feature's hash, whose matches and `FREQS` they all print
-    // (:2289, :1046, :1149).
+    // (:2298, :1046, :1149).
     let reset = runs_reset_by_a_drop(&batch.units, &batch.variants, &keep, &rowless_dropped);
-    batch.units = features_as_records(
-        std::mem::take(&mut batch.units),
-        &mut batch.variants,
-        &reset,
-    );
-    for (index, first) in first_feature_matches {
+    for (unit, index, first) in first_feature_matches {
         let variant = &mut batch.variants[index];
-        if variant.standalone_feature.is_some() {
+        if reset[unit] {
             variant.existing_variation = variation_matcher::existing_variation_names(
                 &variant.colocated_variants,
                 &variant.display_allele(),
@@ -2558,6 +2912,13 @@ fn frequency_filter_stage(
             variant.colocated_variants = first;
         }
     }
+    batch.units = features_as_records(
+        std::mem::take(&mut batch.units),
+        &mut batch.variants,
+        &mut keep,
+        &reset,
+        rowless_kept,
+    );
     for unit in &batch.units {
         if let Unit::Record(range) = unit {
             filter.share_first_feature_freqs(&mut batch.variants[range.clone()]);
@@ -2572,12 +2933,12 @@ fn frequency_filter_stage(
 }
 
 /// Which units of a batch Ensembl VEP's buffer reset would reach: a `--check_frequency`
-/// drop, of a feature of the buffer, resets the buffer (BaseCacheVariation.pm:365-369)
+/// drop, of a feature of the buffer, resets the buffer (BaseCacheVariation.pm:366-370)
 /// and with it the rejoin mark of every split record in it (InputBuffer.pm:535-537,
 /// :610). Each feature of a split record is one, dropped where `keep` marks its
 /// rows or where no allele stands for it (`rowless_dropped`, per unit); any other
 /// record is one feature, dropped when `keep` leaves it no row, since `exclude`
-/// keeps a record with its failing alleles when some pass (:350-357). That buffer
+/// keeps a record with its failing alleles when some pass (:351-358). That buffer
 /// ends where the chromosome changes (InputBuffer.pm:195-200, :224-234), so the drop
 /// reaches the records of its own run of one chromosome and no other. One flag per
 /// unit of `units`; a text unit's flag is unread.
@@ -2628,13 +2989,32 @@ fn runs_reset_by_a_drop(
 /// unit per feature in the record's order, the other units as they were. A
 /// feature's position among the record's alternate alleles is its allele's; a
 /// reference row leading no allele takes the position after the feature before it.
+///
+/// `rowless_kept` holds, by unit in the units' order, the features of a split
+/// record that write no row and that the filter kept, each with its position
+/// among the alternate alleles. OutputFactory.pm:301 writes every feature left in
+/// a reset buffer, so each joins `variants` at its place among the record's
+/// features as a record with no allele to annotate, and `keep` grows with it; the
+/// features of a unit `reset` leaves alone are passed over, since the rejoin makes
+/// one feature of the record.
 fn features_as_records(
     units: Vec<Unit>,
-    variants: &mut [InputVariant],
+    variants: &mut Vec<InputVariant>,
+    keep: &mut Vec<bool>,
     reset: &[bool],
+    rowless_kept: Vec<(usize, Vec<(usize, InputVariant)>)>,
 ) -> Vec<Unit> {
     let mut out = Vec::with_capacity(units.len());
-    for (unit, &reset) in units.into_iter().zip(reset) {
+    let mut rowless_kept = rowless_kept.into_iter().peekable();
+    let mut inserted = 0usize;
+    for (u, (unit, &reset)) in units.into_iter().zip(reset).enumerate() {
+        let rowless = rowless_kept
+            .next_if(|(unit, _)| *unit == u)
+            .map_or_else(Vec::new, |(_, features)| features);
+        let unit = match unit {
+            Unit::Record(range) => Unit::Record(range.start + inserted..range.end + inserted),
+            text @ Unit::Text(_) => text,
+        };
         let Unit::Record(range) = &unit else {
             out.push(unit);
             continue;
@@ -2643,14 +3023,33 @@ fn features_as_records(
             out.push(unit);
             continue;
         }
+        let mut rowless = rowless.into_iter().peekable();
+        let mut place_rowless =
+            |variants: &mut Vec<InputVariant>,
+             out: &mut Vec<Unit>,
+             at: usize,
+             (own, mut feature): (usize, InputVariant)| {
+                feature_on_its_own(&mut feature, own as u32);
+                feature.no_allele = true;
+                variants.insert(at, feature);
+                keep.insert(at, true);
+                out.push(Unit::Record(at..at + 1));
+            };
         let mut previous: Option<u32> = None;
+        let mut placed = 0usize;
         for feature in split_features(&variants[range.clone()]) {
-            let feature = range.start + feature.start..range.start + feature.end;
+            let mut feature =
+                range.start + placed + feature.start..range.start + placed + feature.end;
             let allele = feature.clone().find(|&i| !variants[i].reference_allele_row);
             let own = match allele {
                 Some(allele) => variants[allele].allele_index as u32,
                 None => previous.map_or(0, |p| p + 1),
             };
+            while let Some(earlier) = rowless.next_if(|(earlier, _)| (*earlier as u32) < own) {
+                place_rowless(variants, &mut out, feature.start, earlier);
+                placed += 1;
+                feature = feature.start + 1..feature.end + 1;
+            }
             for variant in &mut variants[feature.clone()] {
                 feature_on_its_own(variant, own);
             }
@@ -2679,6 +3078,11 @@ fn features_as_records(
             previous = Some(own);
             out.push(Unit::Record(feature));
         }
+        for later in rowless {
+            place_rowless(variants, &mut out, range.end + placed, later);
+            placed += 1;
+        }
+        inserted += placed;
     }
     out
 }
@@ -2797,9 +3201,10 @@ impl LineParse<'_> {
 }
 
 /// Parses a batch's data lines on the pool and lays the variants out in line
-/// order, reporting each skip and record warning to `report` in line order. A
-/// malformed line is skipped with Ensembl VEP's warning, under `--dont_skip`
-/// too, since it yields no record to keep.
+/// order, reporting each skip and record warning to `report` in line order,
+/// with what the reader held for the batch ([`LineBatch::reports`]) each in its
+/// place among them. A malformed line is skipped with Ensembl VEP's warning,
+/// under `--dont_skip` too, since it yields no record to keep.
 fn parse_lines(
     lines: LineBatch,
     c: &Coordinator<'_>,
@@ -2810,6 +3215,7 @@ fn parse_lines(
         seq,
         text,
         mut items,
+        reports,
         individuals,
     } = lines;
     let line_parse = c.line_parse(individuals.as_deref());
@@ -2817,7 +3223,11 @@ fn parse_lines(
         items
             .par_iter()
             .map(|item| match item {
-                Item::Data { span, .. } => Some(line_parse.parse(&text[span.clone()])),
+                Item::Data { span, .. } => {
+                    #[cfg(test)]
+                    panic_on_a_marked_parse_line(&text[span.clone()]);
+                    Some(line_parse.parse(&text[span.clone()]))
+                }
                 Item::Text(_) => None,
             })
             .collect()
@@ -2828,7 +3238,11 @@ fn parse_lines(
     let mut variants = spare.variants.pop().unwrap_or_default();
     units.clear();
     variants.clear();
-    for (item, result) in items.drain(..).zip(parsed) {
+    let mut held = reports.iter().peekable();
+    for (index, (item, result)) in items.drain(..).zip(parsed).enumerate() {
+        while let Some((_, found)) = held.next_if(|(at, _)| *at <= index) {
+            report(found.as_reported());
+        }
         match (item, result) {
             (Item::Text(span), _) => units.push(Unit::Text(span)),
             (Item::Data { .. }, None) => unreachable!("every data item is parsed"),
@@ -2845,12 +3259,16 @@ fn parse_lines(
             }
         }
     }
+    for (_, found) in held {
+        report(found.as_reported());
+    }
     Ok(ParsedBatch {
         seq,
         text,
         items,
         units,
         variants,
+        reports: Vec::new(),
     })
 }
 
@@ -2890,6 +3308,30 @@ fn place_parsed_line(
     for warning in &warnings {
         report(Reported::Warning(warning));
     }
+    // A record kept as a non-variant one under a true INFO/SVTYPE, which
+    // Ensembl VEP annotates as a structural variant, is warned about by its
+    // line, as the reader warns about the one it drops without the flag. Its
+    // feature has no allele and carries the type; where the reference row
+    // stands in its place (`--process_ref_homs`, the one reference-homozygous
+    // individual of `--individual_zyg`) or no individual's copy is written,
+    // the line's ALT column is read.
+    if let Ok(alleles) = &alleles {
+        let may_lack_its_alt = match alleles.first() {
+            Some(first) if first.no_allele => first.sv_type.is_some(),
+            Some(first) => first.reference_allele_row && alt_opens_with_dot(&text[span.clone()]),
+            None => alt_opens_with_dot(&text[span.clone()]),
+        };
+        if may_lack_its_alt {
+            let record = String::from_utf8_lossy(&text[span.clone()]);
+            if let Some(warning) = missing_alt_under_svtype(&record) {
+                report(Reported::Warning(&line_warning(
+                    *line_number,
+                    &text[quoted.clone()],
+                    warning,
+                )));
+            }
+        }
+    }
     match alleles {
         Ok(mut alleles) => {
             for variant in &mut alleles {
@@ -2900,6 +3342,7 @@ fn place_parsed_line(
                     rules.synonyms,
                     rules.transcripts,
                     rules.checks.source_chromosomes,
+                    rules.checks.fasta,
                 );
             }
             let line = RecordLine {
@@ -3066,13 +3509,13 @@ fn fused_task(
     let resources = c.resources;
     let filter = ctx.filters_active.then_some(ctx.filter_config);
     let mut csqs = 0u64;
-    for variant in slice.iter_mut() {
-        csqs += annotate_one(variant, resources, failure);
+    let mut warnings = RecordWarnings::default();
+    for (index, variant) in slice.iter_mut().enumerate() {
+        csqs += warnings.annotating(index, || annotate_one(variant, resources, failure));
     }
     // A task's slice is whole records (the chunk ends at a unit end), so the
     // record rules and the record step run over it in place.
     apply_record_rules(slice, None);
-    let mut warnings = RecordWarnings::default();
     if let Some(filter_config) = filter {
         pick::apply_to_batch_reporting(slice, filter_config, &mut |index, text| {
             warnings.push(index, text)
@@ -3081,6 +3524,8 @@ fn fused_task(
     warn_transcript_assembly_mismatches(slice, resources, &mut |index, text| {
         warnings.push(index, text)
     });
+    count_indels_on_edited_models(slice, resources);
+    note_notations_the_reference_lacks(slice, resources);
     let mut out = ChunkOutput::new(ctx, reserve);
     let mut stats = c.run_stats.map(RunAccumulators::thread_slot);
     {
@@ -3142,6 +3587,8 @@ fn annotate_render_batch(
         tasks
             .into_par_iter()
             .map(|(chunk, slice, offset)| {
+                #[cfg(test)]
+                panic_on_a_marked_record(slice);
                 fused_task(chunk, slice, offset, text, c, reserve, &failure)
             })
             .collect::<anyhow::Result<Vec<_>>>()
@@ -3220,6 +3667,8 @@ fn render_batch(
         tasks
             .into_par_iter()
             .map(|(chunk, slice, offset)| -> anyhow::Result<Chunk> {
+                #[cfg(test)]
+                panic_on_a_marked_record(slice);
                 let mut out = ChunkOutput::new(ctx, reserve);
                 let mut rows: Vec<Row<'_>> = Vec::new();
                 let mut stats = c.run_stats.map(RunAccumulators::thread_slot);
@@ -3270,12 +3719,14 @@ enum TaskInput {
         items: Range<usize>,
     },
     /// Units a non-VCF parser produced, with their variants, which start at
-    /// index `offset` of the batch's variants.
+    /// index `offset` of the batch's variants, and, on the batch's first task,
+    /// what the reader held for the batch ([`ParsedBatch::reports`]).
     Parsed {
         text: Arc<Vec<u8>>,
         units: Vec<Unit>,
         variants: Vec<InputVariant>,
         offset: usize,
+        reports: Vec<SkipReport>,
     },
 }
 
@@ -3321,31 +3772,53 @@ fn coordinate_streaming(
             if permits.recv().is_err() {
                 break;
             }
-            let (seq, tasks) = match input {
-                InputBatch::Lines(lines) => {
+            // `alone` is what the reader held for a batch that has no task to
+            // carry it.
+            let (seq, tasks, alone) = match input {
+                InputBatch::Lines(mut lines) => {
                     let chromosomes = batch_chromosomes(
                         &lines,
                         c.max_sv_size,
                         c.resources.synonyms(),
                         c.resources.transcripts(),
                         c.checks.source_chromosomes,
+                        c.checks.fasta,
                     );
                     for chr in chromosomes {
                         c.resources.prewarm_chromosome(&chr)?;
                     }
                     let chunk_units = fused_chunk_units(lines.items.len(), c);
-                    (lines.seq, split_lines(lines, chunk_units))
+                    let alone = if lines.items.is_empty() {
+                        let held = std::mem::take(&mut lines.reports);
+                        held.into_iter().map(|(_, report)| report).collect()
+                    } else {
+                        Vec::new()
+                    };
+                    (lines.seq, split_lines(lines, chunk_units), alone)
                 }
-                InputBatch::Parsed(parsed) => {
+                InputBatch::Parsed(mut parsed) => {
                     prewarm_chromosomes(&parsed.variants, c.resources)?;
                     let chunk_units = fused_chunk_units(parsed.units.len(), c);
-                    (parsed.seq, split_parsed(parsed, chunk_units))
+                    let held = std::mem::take(&mut parsed.reports);
+                    let seq = parsed.seq;
+                    let mut tasks = split_parsed(parsed, chunk_units);
+                    let alone = match tasks.first_mut() {
+                        Some(TaskInput::Parsed { reports, .. }) => {
+                            *reports = held;
+                            Vec::new()
+                        }
+                        _ => held,
+                    };
+                    (seq, tasks, alone)
                 }
             };
             let total = tasks.len() as u32;
             if tasks.is_empty() {
                 // An empty batch still takes its place in the output order.
-                let _ = shared.tx.send(Rendered::batch(seq, Vec::new()));
+                let _ = shared.tx.send(Rendered {
+                    skips: alone,
+                    ..Rendered::batch(seq, Vec::new())
+                });
                 continue;
             }
             debug!(seq, tasks = total, "batch handed to the pool");
@@ -3408,6 +3881,7 @@ fn split_parsed(parsed: ParsedBatch, chunk_units: usize) -> Vec<TaskInput> {
             units: chunk,
             variants: chunk_variants,
             offset,
+            reports: Vec::new(),
         });
     }
     tasks.reverse();
@@ -3424,6 +3898,7 @@ fn batch_chromosomes(
     synonyms: &ChromosomeSynonyms,
     transcripts: &LazyTranscriptIndexes,
     source_chromosomes: &BTreeSet<String>,
+    reference: Option<&IndexedFasta>,
 ) -> Vec<String> {
     let mut chrs: Vec<String> = Vec::new();
     let mut push = |chr: String| {
@@ -3438,7 +3913,7 @@ fn batch_chromosomes(
         let line = &lines.text[span.clone()];
         let mut columns = line.split(|&b| b == b'\t');
         let chrom = String::from_utf8_lossy(columns.next().unwrap_or(line));
-        push(record_naming(&chrom, synonyms, transcripts, source_chromosomes).1);
+        push(record_naming(&chrom, synonyms, transcripts, source_chromosomes, reference).1);
         let (reference, alt) = (columns.nth(2), columns.next());
         if !may_name_a_breakend_mate(reference.unwrap_or(b""), alt.unwrap_or(b"")) {
             continue;
@@ -3489,9 +3964,9 @@ fn may_name_a_breakend_mate(reference: &[u8], alt: &[u8]) -> bool {
 }
 
 /// Parses the data lines of `items` as [`parse_lines`] does, into units and
-/// variants of this range alone. The skips are pushed on `skips`, in line
-/// order, rather than reported: the writer reports them when the task's chunk
-/// is due.
+/// variants of this range alone. The skips, and what the reader held between
+/// these lines, are pushed on `skips`, in line order, rather than reported: the
+/// writer reports them when the task's chunk is due.
 fn parse_task_lines(
     lines: &LineBatch,
     items: Range<usize>,
@@ -3503,7 +3978,12 @@ fn parse_task_lines(
     let mut units = Vec::with_capacity(items.len());
     let mut variants = Vec::with_capacity(items.len());
     let mut report = |reported: Reported<'_>| skips.push(reported.owned());
-    for item in &lines.items[items] {
+    let mut held = lines.reports_within(&items).iter().peekable();
+    for index in items {
+        while let Some((_, found)) = held.next_if(|(at, _)| *at <= index) {
+            report(found.as_reported());
+        }
+        let item = &lines.items[index];
         match item {
             Item::Text(span) => units.push(Unit::Text(span.clone())),
             Item::Data { span, .. } => {
@@ -3519,6 +3999,9 @@ fn parse_task_lines(
                 )?;
             }
         }
+    }
+    for (_, found) in held {
+        report(found.as_reported());
     }
     Ok((units, variants))
 }
@@ -3540,11 +4023,123 @@ fn ensure_materialized(
     Ok(())
 }
 
-/// One streaming task: parses its lines when it has them, annotates, renders
-/// and frees its records, sends its chunk (or its error), its skips and the
-/// warnings its records drew to the writer, and returns the line buffers to the
-/// reader when it is the batch's last task.
+/// One streaming task: [`send_task_chunk`], and, when that unwinds, the task's
+/// place in the output order sent with the panic as its error. The writer holds
+/// every later chunk until the due one arrives and the coordinator waits for
+/// the writer's permit, so a task that sent nothing would leave both waiting;
+/// with the message the writer ends the run at this chunk as on any task error.
+/// A task that unwinds sends none of the skips it held, what the reader held
+/// for its lines among them. The release profile aborts on a panic, so the
+/// catch acts in a build that unwinds.
 fn run_task(
+    input: TaskInput,
+    seq: u64,
+    index: u32,
+    total: u32,
+    c: &Coordinator<'_>,
+    shared: &StreamingShared,
+) {
+    let task = AssertUnwindSafe(|| {
+        #[cfg(test)]
+        panic_on_a_marked_line(&input);
+        send_task_chunk(input, seq, index, total, c, shared);
+    });
+    if let Err(payload) = panic::catch_unwind(task) {
+        // A send that fails means the writer has stopped; it reports why.
+        let _ = shared.tx.send(Rendered {
+            seq,
+            first: index,
+            total,
+            chunks: Err(task_panic_error(payload.as_ref())),
+            skips: Vec::new(),
+            record_warnings: Vec::new(),
+        });
+    }
+}
+
+/// One batch's step of a batched stage, with a panic inside it returned as the
+/// step's error. The pool raises a task's panic again on the thread that waits
+/// for the pass, once every task of the pass has ended, so the catch stands on
+/// that thread: the coordinator's, where a panic that passes it leaves [`run`]
+/// by unwinding, or the prefetch stage's, where [`join_stage`] reports one
+/// without its text. The stage ends on the error and reads nothing the step
+/// left behind. The release profile aborts on a panic, so the catch acts in a
+/// build that unwinds.
+fn step_or_its_panic<T>(step: impl FnOnce() -> anyhow::Result<T>) -> anyhow::Result<T> {
+    panic::catch_unwind(AssertUnwindSafe(step))
+        .unwrap_or_else(|payload| Err(task_panic_error(payload.as_ref())))
+}
+
+/// The error a run ends with when a pool task panicked, in either mode.
+fn task_panic_error(payload: &(dyn Any + Send)) -> anyhow::Error {
+    anyhow!("pipeline task panicked: {}", panic_message(payload))
+}
+
+/// The message a panic carries: the text of a `panic!`, or a note that the
+/// payload is of another type.
+fn panic_message(payload: &(dyn Any + Send)) -> &str {
+    payload
+        .downcast_ref::<&str>()
+        .copied()
+        .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+        .unwrap_or("the panic carries no text")
+}
+
+/// What a test writes on an input line to make the streaming task that holds
+/// the line panic.
+#[cfg(test)]
+const TASK_PANIC_MARKER: &[u8] = b"panic_in_this_streaming_task";
+
+/// Panics when a line of the task carries [`TASK_PANIC_MARKER`].
+#[cfg(test)]
+fn panic_on_a_marked_line(input: &TaskInput) {
+    let TaskInput::Lines { lines, items } = input else {
+        return;
+    };
+    let marked = lines.items[items.clone()].iter().any(|item| match item {
+        Item::Data { span, .. } => lines.text[span.clone()].find(TASK_PANIC_MARKER).is_some(),
+        Item::Text(_) => false,
+    });
+    if marked {
+        panic!("a streaming task met a marked line");
+    }
+}
+
+/// What a test writes on an input line to make the batched parse task that
+/// reads the line panic.
+#[cfg(test)]
+const PARSE_PANIC_MARKER: &[u8] = b"panic_in_this_parse_task";
+
+/// Panics when `line` carries [`PARSE_PANIC_MARKER`].
+#[cfg(test)]
+fn panic_on_a_marked_parse_line(line: &[u8]) {
+    if line.find(PARSE_PANIC_MARKER).is_some() {
+        panic!("a batched parse task met a marked line");
+    }
+}
+
+/// What a test writes as a record's ID to make the batched annotate or render
+/// task that holds the record panic.
+#[cfg(test)]
+const RECORD_PANIC_MARKER: &str = "panic_in_this_batched_task";
+
+/// Panics when a record of `records` carries [`RECORD_PANIC_MARKER`] as its ID.
+#[cfg(test)]
+fn panic_on_a_marked_record(records: &[InputVariant]) {
+    let marked = records
+        .iter()
+        .any(|variant| variant.id.as_deref() == Some(RECORD_PANIC_MARKER));
+    if marked {
+        panic!("a batched task met a marked record");
+    }
+}
+
+/// The body of a streaming task: parses its lines when it has them, annotates,
+/// renders and frees its records, sends its chunk (or its error), its skips
+/// with what the reader held for them and the warnings its records drew to the
+/// writer, and returns the line buffers to the reader when it is the batch's
+/// last task.
+fn send_task_chunk(
     input: TaskInput,
     seq: u64,
     index: u32,
@@ -3572,7 +4167,9 @@ fn run_task(
             units,
             mut variants,
             offset,
+            reports,
         } => {
+            skips = reports;
             let count = variants.len() as u64;
             let result = fused_task(&units, &mut variants, offset, &text, c, reserve, &failure)
                 .map(|(out, csqs, warnings)| (out, count, csqs, warnings));
@@ -3767,9 +4364,9 @@ fn write_ready(sink: &mut OutputSink, ready: &mut Vec<Chunk>) -> anyhow::Result<
     written
 }
 
-/// Reports what the rest of a batch holds once a write of its rows has failed:
-/// the skips of each chunk of batch `seq`, from `due_chunk` to the last of its
-/// `total`, in chunk order, each once its message has arrived, then the
+/// Reports what the rest of a batch holds once a write of its chunks has
+/// failed: the skips of each chunk of batch `seq`, from `due_chunk` to the last
+/// of its `total`, in chunk order, each once its message has arrived, then the
 /// warnings the batch's records drew, as the batched coordinator reports a
 /// whole batch before any of it is written. A chunk's own error is passed
 /// over, since the failed write precedes it in output order, and the wait
@@ -3799,11 +4396,14 @@ fn report_rest_of_batch(
     }
 }
 
-/// The error the writer stage ends in: `error`, once the chunks that are ready
-/// are on the output and the output is complete, so everything rendered before
-/// the failure reaches a text output in readable form, or the output's own
-/// error when they cannot be written. A Parquet output gets its footers and
-/// manifest in its temporary directory, which the failed run then removes.
+/// Completes the output and returns the error a task's failure ends the stage
+/// in: `error`, once the chunks that are ready are on the output and the
+/// output is complete, so everything rendered before the failure reaches a
+/// text output in readable form, or the output's own error when they cannot be
+/// written. A failed write and a batch whose warning could not be written end
+/// the stage through [`fail_on_write`], where the warnings file's failure
+/// stands over both. A Parquet output gets its footers and manifest in its
+/// temporary directory, which the failed run then removes.
 fn fail_after_writing(
     mut sink: OutputSink,
     ready: &mut Vec<Chunk>,
@@ -3819,6 +4419,21 @@ fn fail_after_writing(
     }
 }
 
+/// The error a failed write, or a batch whose warning could not be written,
+/// ends the stage in: the warnings-file failure when one stands, as the batched
+/// coordinator ends a run on it whatever the writer then meets, else `error`.
+/// The output is completed first ([`fail_after_writing`]), and a failure of
+/// that completion gives way to the warnings-file failure as the write's does:
+/// a buffered output that takes no bytes fails its last flush too, whether a
+/// write of the batch failed before it or the buffer held the whole batch.
+fn fail_on_write(sink: OutputSink, ready: &mut Vec<Chunk>, error: anyhow::Error) -> anyhow::Error {
+    let ended = fail_after_writing(sink, ready, error);
+    match crate::warnings::global().failure() {
+        Some(failure) => failure.into(),
+        None => ended,
+    }
+}
+
 /// Writes the rendered output in input order. A message is held until every
 /// chunk before it is due; a batch is complete when its last chunk is queued for
 /// the write that follows, and `permits`, the streaming coordinator's, gets one
@@ -3827,22 +4442,30 @@ fn fail_after_writing(
 /// records drew once its batch is complete, after every skip of the batch, as
 /// the batched coordinator reports a batch's skips when it takes it and its
 /// records' warnings once it is annotated; so the warnings file lists them in
-/// input order in both modes. On the streaming coordinator's behalf, a warnings
-/// file that could not be written ends the stage once the batch whose warning
-/// met the failure is complete. The first error in output order ends the stage,
-/// as does a stream that ends with a chunk still due. A sink that checks the
-/// order of its rows ends the stage on a failed write once the rest of that
-/// batch is reported ([`report_rest_of_batch`]). A Parquet sink encodes on a
-/// thread of its own over `pool`, started here.
+/// input order in both modes. A complete batch's chunks are written before the
+/// next batch's first message is read, and `written`, the batched
+/// coordinator's, gets one token per batch once they are. On the streaming
+/// coordinator's behalf, a warnings file that could not be written ends the
+/// stage on that failure once the batch whose warning met it is written,
+/// whatever completing the output then meets. The first
+/// error in output order ends the stage, as does a stream that ends with a
+/// chunk still due. A failed write ends the stage once the rest of its batch
+/// is reported ([`report_rest_of_batch`]), so the warnings a run leaves are
+/// those of every batch through the one it ended on, whatever order the tasks
+/// finished in. A Parquet sink encodes on a thread of its own over `pool`,
+/// started here.
 fn write_stage(
     rx: Receiver<Rendered>,
     mut sink: OutputSink,
     permits: Option<SyncSender<()>>,
+    written: Option<Sender<()>>,
     pool: &Arc<ThreadPool>,
 ) -> anyhow::Result<()> {
     sink.start(pool)?;
     let mut due_seq = 0u64;
     let mut due_chunk = 0u32;
+    // The chunk count of the batch the last message read belongs to.
+    let mut due_total = 0u32;
     let mut pending: BTreeMap<(u64, u32), Rendered> = BTreeMap::new();
     let mut ready: Vec<Chunk> = Vec::new();
     let mut record_warnings: Vec<String> = Vec::new();
@@ -3856,6 +4479,19 @@ fn write_stage(
             let chunks = match message.chunks {
                 Ok(chunks) => chunks,
                 Err(error) => {
+                    // The chunks before the failing task's are written first: a
+                    // write that fails there precedes the task's error in output
+                    // order and ends the stage as any failed write does.
+                    if let Err(write_error) = write_ready(&mut sink, &mut ready) {
+                        report_rest_of_batch(
+                            &rx,
+                            &mut pending,
+                            (due_seq, due_chunk + 1),
+                            message.total,
+                            &mut record_warnings,
+                        );
+                        return Err(fail_on_write(sink, &mut ready, write_error));
+                    }
                     // The warnings the tasks before the failing one drew reach the
                     // file with their chunks.
                     for text in record_warnings.drain(..) {
@@ -3865,8 +4501,9 @@ fn write_stage(
                 }
             };
             due_chunk += chunks.len() as u32;
+            due_total = message.total;
             ready.extend(chunks);
-            let batch_complete = due_chunk >= message.total;
+            let batch_complete = due_chunk >= due_total;
             if batch_complete {
                 for text in record_warnings.drain(..) {
                     crate::warnings::global().warn(&text);
@@ -3875,37 +4512,53 @@ fn write_stage(
                 due_chunk = 0;
                 if let Some(permits) = &permits {
                     let _ = permits.try_send(());
-                    // The skips of a streamed batch are reported here, so a warnings
-                    // file that could not be written ends the run here too, with the
-                    // batch that carried the warning written and nothing after it, as
-                    // the batched coordinator ends it at the end of that batch.
-                    if let Some(failure) = crate::warnings::global().failure() {
-                        return Err(fail_after_writing(sink, &mut ready, failure.into()));
-                    }
                 }
             }
-            // A sink that checks the order of its rows takes each message's
-            // rows before the next message's skips are reported, and a
-            // refused write ends the stage with the rest of its batch
-            // reported: the warnings a refused run leaves are the whole
-            // batch's, whatever order its tasks finished in.
-            if sink.checks_row_order() {
+            // A text sink takes the chunks due together in one write, up to
+            // the end of their batch, and a sink that checks the order of its
+            // rows takes each message's rows before the next message's skips
+            // are reported; either way no skip of a later batch is reported
+            // ahead of a write that may fail.
+            if batch_complete || sink.checks_row_order() {
                 if let Err(error) = write_ready(&mut sink, &mut ready) {
                     if !batch_complete {
                         report_rest_of_batch(
                             &rx,
                             &mut pending,
                             (due_seq, due_chunk),
-                            message.total,
+                            due_total,
                             &mut record_warnings,
                         );
                     }
-                    return Err(fail_after_writing(sink, &mut ready, error));
+                    return Err(fail_on_write(sink, &mut ready, error));
+                }
+            }
+            if batch_complete {
+                if let Some(written) = &written {
+                    let _ = written.send(());
+                }
+                // The skips of a streamed batch are reported here, so a warnings
+                // file that could not be written ends the run here too, with the
+                // batch that carried the warning written and nothing after it, as
+                // the batched coordinator ends it at the end of that batch.
+                if permits.is_some() {
+                    if let Some(failure) = crate::warnings::global().failure() {
+                        return Err(fail_on_write(sink, &mut ready, failure.into()));
+                    }
                 }
             }
         }
+        // What is left is the due chunks of a batch whose next message has not
+        // arrived.
         if let Err(error) = write_ready(&mut sink, &mut ready) {
-            return Err(fail_after_writing(sink, &mut ready, error));
+            report_rest_of_batch(
+                &rx,
+                &mut pending,
+                (due_seq, due_chunk),
+                due_total,
+                &mut record_warnings,
+            );
+            return Err(fail_on_write(sink, &mut ready, error));
         }
     }
     if let Some((seq, first)) = pending.keys().next() {
@@ -3994,6 +4647,53 @@ mod tests {
             );
         }
         assert_eq!(refused_line_chromosome("", InputFormat::Ensembl, &cfg), "");
+    }
+
+    /// The chromosome the `--chr` test reads from a refused SPDI line is the one
+    /// the SPDI parser names the record by: the sequence name itself where the
+    /// cache holds it, else the first of its synonyms the cache holds, in the
+    /// file's order. That holds for a name the file gives to two chromosomes of
+    /// the cache too, which `cache_chr_name` leaves as written.
+    #[test]
+    fn a_refused_spdi_lines_chromosome_is_the_first_synonym_the_cache_holds() {
+        let held = ["21", "X"].map(|name| (name.to_string(), Vec::new()));
+        let transcripts = LazyTranscriptIndexes::from_loaded(held.into(), 0, 0);
+        let synonyms = ChromosomeSynonyms::parse("X\tshared\n21\tshared\n21\tonly_21\n");
+        let cfg = ReaderConfig {
+            batch_size: 8,
+            capture_raw_input: false,
+            delimiter: &Delimiter::Tab,
+            allow_non_variant: false,
+            individuals: None,
+            process_ref_homs: false,
+            dont_skip: false,
+            max_sv_size: Some(10_000_000),
+            minimal: false,
+            output_format: "vep",
+            no_headers: false,
+            vcf_formatter: None,
+            transcripts: &transcripts,
+            regulatory: None,
+            synonyms: &synonyms,
+            prewarm_order: &[],
+            prewarm_ahead: PrewarmAhead::default(),
+            checks: &crate::validate::NO_CHECKS,
+            reader_core: ReaderCorePolicy::NONE,
+        };
+        for (line, chromosome) in [
+            ("21:99:3:", "21"),
+            ("only_21:99:3:", "21"),
+            (" only_21 :99:3:", "21"),
+            ("shared:99:3:", "X"),
+            ("unlisted:99:3:", "unlisted"),
+        ] {
+            assert_eq!(
+                refused_line_chromosome(line, InputFormat::Spdi, &cfg),
+                chromosome,
+                "{line:?}"
+            );
+        }
+        assert_eq!(cache_chr_name("shared", &synonyms, &transcripts), "shared");
     }
 
     fn scan_all(input: &[u8], fill: usize) -> Vec<Vec<u8>> {
@@ -4095,7 +4795,7 @@ mod tests {
         let error = reader.read_line(&mut buf).unwrap_err();
         assert_eq!(
             LineTooLong::from_io_error(&error),
-            Some(&LineTooLong { line: 2 })
+            Some(&LineTooLong::new(2))
         );
         assert_eq!(last_line_read(&last), b"21 100 100 A/G + first".to_vec());
     }
@@ -4168,7 +4868,7 @@ mod tests {
         let error = refuse_unreadable_shard(transcripts.prewarm("21").unwrap_err());
         let line = crate::config::CliError::from_run(&error);
         let prefix = format!(
-            "ERROR: [cache] Cannot read the transcript cache for chr21: Failed to parse {}: ",
+            "ERROR: [cache] Cannot read the transcript cache for chromosome 21: Failed to parse {}: ",
             shard.display()
         );
         assert!(line.starts_with(&prefix), "{line}");
@@ -4197,11 +4897,12 @@ mod tests {
         let cache = crate::cache_resolve::ResolvedCache {
             dir: dir.path().to_string_lossy().into_owned(),
             manifest: Arc::new(vep_core::cache_manifest::CacheManifest::load(dir.path()).unwrap()),
-            info: vep_core::cache_info::CacheInfo {
-                regulatory: true,
-                regulatory_schema: Some(vep_core::cache_info::REGULATORY_SCHEMA),
-                cell_types: crate::regulatory::fixtures::cell_types(),
-                ..Default::default()
+            info: {
+                let mut info = vep_core::cache_info::CacheInfo::default();
+                info.regulatory = true;
+                info.regulatory_schema = Some(vep_core::cache_info::REGULATORY_SCHEMA);
+                info.cell_types = crate::regulatory::fixtures::cell_types();
+                info
             },
             assembly: Some("GRCh38".into()),
             fasta: None,
@@ -4309,7 +5010,7 @@ mod tests {
         let short = b"21\t100\trs1\tA\tG\t50\tPASS";
         assert_eq!(parser_columns(short), (&short[..], &b""[..]));
         // An `N` reference base lets INFO/SVTYPE route the record to the structural
-        // path, so INFO stays; a lowercase allele is outside `ACGT` to Perl as well.
+        // path, so INFO stays; a lowercase allele is outside `ACGT` to Ensembl VEP as well.
         let ambiguous = b"21\t100\t.\tN\tG\t50\tPASS\tSVTYPE=DEL;END=400\tGT";
         assert_eq!(
             parser_columns(ambiguous),
@@ -4382,12 +5083,30 @@ mod tests {
         chunks.into_iter().map(Chunk::Text).collect()
     }
 
+    /// Reports what the reader of a parser-fed format held in `batches` to the
+    /// run's sink, as the stage that takes each batch does, and returns the
+    /// batches.
+    fn report_held(batches: impl Iterator<Item = InputBatch>) -> Vec<ParsedBatch> {
+        batches
+            .map(|batch| match batch {
+                InputBatch::Parsed(mut parsed) => {
+                    for report in std::mem::take(&mut parsed.reports) {
+                        report_to_sink(report.as_reported());
+                    }
+                    parsed
+                }
+                InputBatch::Lines(_) => panic!("a parser-fed format yields parsed batches"),
+            })
+            .collect()
+    }
+
     /// A stream that ends with a chunk still due is an error naming the gap.
     #[test]
     fn writer_rejects_a_stream_with_a_missing_batch() {
         let (tx, rx) = mpsc::sync_channel::<Rendered>(PIPELINE_DEPTH);
-        let handle =
-            thread::spawn(move || write_stage(rx, direct_sink(&Shared::new()), None, &test_pool()));
+        let handle = thread::spawn(move || {
+            write_stage(rx, direct_sink(&Shared::new()), None, None, &test_pool())
+        });
         assert!(tx
             .send(Rendered::batch(1, text_chunks(vec![b"late".to_vec()])))
             .is_ok());
@@ -4407,7 +5126,7 @@ mod tests {
         let shared = Shared::new();
         let (tx, rx) = mpsc::sync_channel::<Rendered>(PIPELINE_DEPTH);
         let sink = direct_sink(&shared);
-        let writer = thread::spawn(move || write_stage(rx, sink, None, &test_pool()));
+        let writer = thread::spawn(move || write_stage(rx, sink, None, None, &test_pool()));
         let mut expected = Vec::new();
         for seq in 0..20u64 {
             // Render tasks finish out of order; the ordered collect restores it.
@@ -4435,15 +5154,17 @@ mod tests {
 
     /// Streaming tasks send single chunks in any order across batches: the
     /// writer puts them out by (batch, chunk index), returns one permit per
-    /// batch once its last chunk is written, and an empty batch takes its place
-    /// in the order.
+    /// batch once its last chunk is queued for writing, and an empty batch takes
+    /// its place in the order.
     #[test]
     fn writer_reorders_streamed_chunks_and_returns_a_permit_per_batch() {
+        let _in_turn = crate::warnings::sink_test_guard();
         let shared = Shared::new();
         let (tx, rx) = mpsc::sync_channel::<Rendered>(16);
         let (permits_tx, permits_rx) = mpsc::sync_channel::<()>(4);
         let sink = direct_sink(&shared);
-        let writer = thread::spawn(move || write_stage(rx, sink, Some(permits_tx), &test_pool()));
+        let writer =
+            thread::spawn(move || write_stage(rx, sink, Some(permits_tx), None, &test_pool()));
         let chunk = |seq: u64, first: u32, total: u32| Rendered {
             seq,
             first,
@@ -4480,7 +5201,7 @@ mod tests {
         let shared = Shared::new();
         let (tx, rx) = mpsc::sync_channel::<Rendered>(16);
         let sink = direct_sink(&shared);
-        let writer = thread::spawn(move || write_stage(rx, sink, None, &test_pool()));
+        let writer = thread::spawn(move || write_stage(rx, sink, None, None, &test_pool()));
         let failed = |seq: u64, first: u32, what: &str| Rendered {
             seq,
             first,
@@ -4537,7 +5258,7 @@ mod tests {
         };
         let sink = OutputSink::new(WriterStrategy::Vectored, 0, Box::new(counted));
         let (tx, rx) = mpsc::sync_channel::<Rendered>(4);
-        let writer = thread::spawn(move || write_stage(rx, sink, None, &test_pool()));
+        let writer = thread::spawn(move || write_stage(rx, sink, None, None, &test_pool()));
         let rendered = |first: u32, text: &[u8]| Rendered {
             seq: 0,
             first,
@@ -4589,10 +5310,8 @@ mod tests {
         drop(tx);
         let mut record_warnings = vec!["w0".to_string()];
         report_rest_of_batch(&rx, &mut pending, (0, 1), 5, &mut record_warnings);
-        crate::warnings::global().configure(Target::Stderr, false, false);
         assert!(record_warnings.is_empty());
         assert_eq!(pending.keys().copied().collect::<Vec<_>>(), [(1, 0)]);
-        // Another test's warning may share the process-wide sink's file.
         let written = std::fs::read_to_string(&warnings).unwrap();
         let ours: Vec<&str> = written
             .lines()
@@ -4609,10 +5328,407 @@ mod tests {
         assert_eq!(ours, ["WARNING: w0", "WARNING: w2", "WARNING: w3"]);
     }
 
+    /// A writer over a shared buffer that fails a write whose bytes open with
+    /// `full_at` and takes every other, as a device that fills does.
+    struct FullAt {
+        inner: Shared,
+        full_at: &'static [u8],
+    }
+
+    impl Write for FullAt {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            if buf.starts_with(self.full_at) {
+                return Err(io::Error::other("the output takes no more bytes"));
+            }
+            self.inner.write(buf)
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    /// Runs the writer stage over `messages` sent in `order`, one chunk each,
+    /// onto a direct text output that fails at the chunk opening with `full`,
+    /// the warnings going to a file of this run: the stage's error, the bytes
+    /// the output took and the warnings the messages named, in file order.
+    fn failed_write(
+        messages: Vec<Rendered>,
+        order: [usize; 4],
+        warnings: &Path,
+    ) -> (String, Vec<u8>, Vec<String>) {
+        use crate::warnings::Target;
+        crate::warnings::global().configure(Target::File(warnings.to_path_buf()), true, false);
+        let shared = Shared::new();
+        let output = FullAt {
+            inner: shared.clone(),
+            full_at: b"full",
+        };
+        let sink = OutputSink::new(WriterStrategy::Direct, 0, Box::new(output));
+        let (tx, rx) = mpsc::channel::<Rendered>();
+        let mut messages: Vec<Option<Rendered>> = messages.into_iter().map(Some).collect();
+        for index in order {
+            tx.send(messages[index].take().unwrap()).unwrap();
+        }
+        drop(tx);
+        let error = write_stage(rx, sink, None, None, &test_pool()).unwrap_err();
+        let named = std::fs::read_to_string(warnings)
+            .unwrap()
+            .lines()
+            .filter(|line| line.ends_with(" skip") || line.ends_with(" record"))
+            .map(str::to_string)
+            .collect();
+        (format!("{error:#}"), shared.bytes(), named)
+    }
+
+    /// One chunk of a batch of `total`, named for its place: its rows, one
+    /// skip and one record warning.
+    fn named_chunk(seq: u64, first: u32, total: u32, name: &str) -> Rendered {
+        Rendered {
+            seq,
+            first,
+            total,
+            chunks: Ok(text_chunks(vec![format!("{name} rows\n").into_bytes()])),
+            skips: vec![SkipReport::Warning(format!("{name} skip"))],
+            record_warnings: vec![format!("{name} record")],
+        }
+    }
+
+    /// A write that fails for a reason of the output's own, here an output
+    /// that takes no more bytes, ends the stage as a write refused for its
+    /// rows' order does: with the write's error, the chunks before it on the
+    /// output and, in the warnings file, the skips of the whole batch in chunk
+    /// order, then its records' warnings, and nothing of the next batch,
+    /// whatever order the messages arrived in.
+    #[test]
+    fn a_failed_write_leaves_the_whole_batchs_warnings_in_any_arrival_order() {
+        let _in_turn = crate::warnings::sink_test_guard();
+        let dir = tempfile::tempdir().unwrap();
+        for (run, order) in [[0, 1, 2, 3], [0, 1, 3, 2], [2, 3, 1, 0], [3, 2, 0, 1]]
+            .into_iter()
+            .enumerate()
+        {
+            let messages = vec![
+                named_chunk(0, 0, 3, "first"),
+                named_chunk(0, 1, 3, "full"),
+                named_chunk(0, 2, 3, "third"),
+                named_chunk(1, 0, 1, "next"),
+            ];
+            let warnings = dir.path().join(format!("warnings{run}.txt"));
+            let (error, output, named) = failed_write(messages, order, &warnings);
+            assert_eq!(
+                error, "Failed to write output: the output takes no more bytes",
+                "{order:?}"
+            );
+            assert_eq!(output, b"first rows\n", "{order:?}");
+            assert_eq!(
+                named,
+                [
+                    "WARNING: first skip",
+                    "WARNING: full skip",
+                    "WARNING: third skip",
+                    "WARNING: first record",
+                    "WARNING: full record",
+                    "WARNING: third record",
+                ],
+                "{order:?}"
+            );
+        }
+    }
+
+    /// A failed write ends the stage on its own error when a later task of the
+    /// batch failed on a record of its own: the task's error follows the write
+    /// in output order and is passed over, its skips and those of the tasks
+    /// after it are reported with the batch's, and the outcome is the same
+    /// whether the task's message arrived before the write was tried or after.
+    #[test]
+    fn a_failed_write_passes_over_a_later_tasks_error_in_any_arrival_order() {
+        let _in_turn = crate::warnings::sink_test_guard();
+        let dir = tempfile::tempdir().unwrap();
+        for (run, order) in [[0, 1, 2, 3], [3, 2, 1, 0], [2, 0, 3, 1], [1, 2, 3, 0]]
+            .into_iter()
+            .enumerate()
+        {
+            let messages = vec![
+                named_chunk(0, 0, 4, "first"),
+                named_chunk(0, 1, 4, "full"),
+                Rendered {
+                    chunks: Err(anyhow::anyhow!("the third task failed")),
+                    record_warnings: Vec::new(),
+                    ..named_chunk(0, 2, 4, "third")
+                },
+                named_chunk(0, 3, 4, "fourth"),
+            ];
+            let warnings = dir.path().join(format!("warnings{run}.txt"));
+            let (error, output, named) = failed_write(messages, order, &warnings);
+            assert_eq!(
+                error, "Failed to write output: the output takes no more bytes",
+                "{order:?}"
+            );
+            assert_eq!(output, b"first rows\n", "{order:?}");
+            assert_eq!(
+                named,
+                [
+                    "WARNING: first skip",
+                    "WARNING: full skip",
+                    "WARNING: third skip",
+                    "WARNING: fourth skip",
+                    "WARNING: first record",
+                    "WARNING: full record",
+                    "WARNING: fourth record",
+                ],
+                "{order:?}"
+            );
+        }
+    }
+
+    /// A failed write ends the stage on the warnings-file failure when a
+    /// warning of its batch could not be written, also where completing the
+    /// output fails in its turn: a buffered output that takes no byte fails
+    /// the write of the batch's second chunk, then the flush of its first.
+    #[test]
+    fn a_failed_write_ends_on_the_warnings_file_failure_when_the_flush_fails_too() {
+        use crate::warnings::Target;
+        let _in_turn = crate::warnings::sink_test_guard();
+        let dir = tempfile::tempdir().unwrap();
+        let warnings = dir.path().join("missing").join("warnings.txt");
+        crate::warnings::global().configure(Target::File(warnings.clone()), true, false);
+        // Every write opens with the empty prefix, so the output takes none;
+        // the buffer holds the first chunk and not the second with it.
+        let output = FullAt {
+            inner: Shared::new(),
+            full_at: b"",
+        };
+        let sink = OutputSink::new(WriterStrategy::Buffered, 16, Box::new(output));
+        let (tx, rx) = mpsc::channel::<Rendered>();
+        tx.send(named_chunk(0, 0, 2, "first")).unwrap();
+        tx.send(named_chunk(0, 1, 2, "second")).unwrap();
+        drop(tx);
+        let error = write_stage(rx, sink, None, None, &test_pool()).unwrap_err();
+        assert_eq!(
+            crate::config::CliError::from_run(&error),
+            format!(
+                "ERROR: [output] Could not write to warnings file {}",
+                warnings.display()
+            )
+        );
+    }
+
+    /// A streamed batch whose warning could not be written ends the stage on
+    /// the warnings-file failure also where the output's buffer held the whole
+    /// batch, so no write of it failed and the flush that completes the output
+    /// is the first to: the output takes no byte, and the batch's one chunk
+    /// fits a buffer of 1,024 bytes.
+    #[test]
+    fn a_batch_that_could_not_write_a_warning_ends_on_that_failure_when_the_last_flush_fails() {
+        use crate::warnings::Target;
+        let _in_turn = crate::warnings::sink_test_guard();
+        let dir = tempfile::tempdir().unwrap();
+        let warnings = dir.path().join("missing").join("warnings.txt");
+        crate::warnings::global().configure(Target::File(warnings.clone()), true, false);
+        let output = FullAt {
+            inner: Shared::new(),
+            full_at: b"",
+        };
+        let sink = OutputSink::new(WriterStrategy::Buffered, 1_024, Box::new(output));
+        let (tx, rx) = mpsc::channel::<Rendered>();
+        tx.send(named_chunk(0, 0, 1, "first")).unwrap();
+        drop(tx);
+        let (permits_tx, _permits) = mpsc::sync_channel::<()>(1);
+        let error = write_stage(rx, sink, Some(permits_tx), None, &test_pool()).unwrap_err();
+        assert_eq!(
+            crate::config::CliError::from_run(&error),
+            format!(
+                "ERROR: [output] Could not write to warnings file {}",
+                warnings.display()
+            )
+        );
+    }
+
+    /// Under the batched mode a failure of a batch's pool pass is the
+    /// coordinator's own error, returned once the batch's skips are reported
+    /// and before the batch is sent: its records' warnings are not reported and
+    /// none of its chunks reaches the writer. So where a streaming run ends on
+    /// a failed write and passes over a later task's error, a batched run ends
+    /// on the task's error and never tries the write. One batch, a record a
+    /// task: a record on a chromosome the cache lacks, which is skipped, a
+    /// record whose row the output takes no bytes of, a non-variant record,
+    /// which draws `Unable to assign consequence type` under `--most_severe`,
+    /// and a record whose known-variant lookup reads a region file that is no
+    /// gzip stream. With that file the run ends on the lookup's error, the
+    /// output untouched and the skip alone in the warnings file; without a
+    /// variation source the same batch reaches the writer, which ends the run
+    /// on the failed write with the record's warning reported.
+    #[test]
+    fn a_batched_pool_pass_that_fails_ends_the_run_before_its_batch_reaches_the_writer() {
+        use crate::warnings::Target;
+        let _in_turn = crate::warnings::sink_test_guard();
+        let dir = tempfile::tempdir().unwrap();
+        let region = dir
+            .path()
+            .join("variations")
+            .join("21")
+            .join("1000001-2000000_var.gz");
+        std::fs::create_dir_all(region.parent().unwrap()).unwrap();
+        std::fs::write(&region, "not a gzip body").unwrap();
+        let mut info = vep_core::cache_info::CacheInfo::default();
+        info.variation_cols = ["variation_name", "failed", "start", "end", "allele_string"]
+            .iter()
+            .map(|name| name.to_string())
+            .collect();
+        let source = VariationSource::open(
+            dir.path(),
+            &info,
+            false,
+            Arc::new(vep_core::cache_manifest::CacheManifest::absent(dir.path())),
+        )
+        .unwrap()
+        .expect("a region file is a variation source");
+        let transcripts = Arc::new(LazyTranscriptIndexes::from_indexes(
+            std::collections::HashMap::from([(
+                "21".to_string(),
+                crate::transcript_index::TranscriptIndex::new(Vec::new(), 5_000, 5_000),
+            )]),
+        ));
+        let readable = crate::runner::resources_over(Arc::clone(&transcripts));
+        let unreadable =
+            crate::runner::resources_over_with_variations(Arc::clone(&transcripts), source);
+        let pool = crate::annotator::build_thread_pool(2).unwrap();
+        let stats = PipelineStats::new();
+        let filter_config = FilterConfig {
+            most_severe: true,
+            ..FilterConfig::default()
+        };
+        let extra_plan = ExtraFieldsPlan::new(vep_io::output::fields::FieldOptions::default());
+        let write_ctx = WriteContext {
+            filter_config: &filter_config,
+            filters_active: true,
+            output_format: "vep",
+            vcf_formatter: None,
+            json_formatter: None,
+            #[cfg(feature = "parquet")]
+            parquet_formatter: None,
+            tab_formatter: None,
+            extra_plan: &extra_plan,
+        };
+        // The coordinator's result, the writer's, the bytes the output took and
+        // the warnings the batch named, in file order.
+        let run_batch = |resources: &AnnotationResources, warnings: &Path| {
+            let c = Coordinator {
+                pool: &pool,
+                use_parallel: true,
+                resources,
+                stats: &stats,
+                stats_enabled: false,
+                run_stats: None,
+                write_ctx: &write_ctx,
+                capture_raw_input: false,
+                delimiter: &Delimiter::Tab,
+                process_ref_homs: false,
+                dont_skip: false,
+                max_sv_size: Some(10_000_000),
+                minimal: false,
+                checks: &crate::validate::NO_CHECKS,
+                progress: false,
+                mode: PipelineMode::Batched,
+                depth: PIPELINE_DEPTH,
+                task_records: Some(1),
+            };
+            let mut lines = LineBatch::new(0, LineBuffers::default(), None);
+            lines.push_data(b"21\t300\tfirst\tA\tG\t.\tPASS\t.", b"", None, 1);
+            lines.push_data(b"Z\t400\tabsent\tA\tG\t.\tPASS\t.", b"", None, 2);
+            lines.push_data(b"21\t200\tfull\tA\tG\t.\tPASS\t.", b"", None, 3);
+            lines.push_data(b"21\t250\tnon_variant\tA\t.\t.\tPASS\t.", b"", None, 4);
+            lines.push_data(b"21\t1000500\tlater\tA\tG\t.\tPASS\t.", b"", None, 5);
+            let mut skips = Vec::new();
+            let mut report = |reported: Reported<'_>| skips.push(reported.owned());
+            let batch = parse_lines(lines, &c, &mut Spare::default(), &mut report).unwrap();
+            crate::warnings::global().configure(Target::File(warnings.to_path_buf()), true, false);
+            let shared = Shared::new();
+            let output = FullAt {
+                inner: shared.clone(),
+                full_at: b"full",
+            };
+            let sink = OutputSink::new(WriterStrategy::Direct, 0, Box::new(output));
+            let (staged_tx, staged_rx) = mpsc::sync_channel(1);
+            let staged = Staged {
+                batch,
+                skips,
+                prefetch: BatchPrefetch::default(),
+            };
+            assert!(staged_tx.send(Ok(staged)).is_ok());
+            drop(staged_tx);
+            let (out_tx, out_rx) = mpsc::sync_channel::<Rendered>(PIPELINE_DEPTH);
+            let (written_tx, written) = mpsc::channel();
+            let writer = thread::spawn(move || {
+                write_stage(out_rx, sink, None, Some(written_tx), &test_pool())
+            });
+            let (lines_back, _lines) = mpsc::sync_channel(1);
+            let (spare_back, _spare) = mpsc::sync_channel(1);
+            let coordinated = coordinate(staged_rx, out_tx, lines_back, spare_back, written, &c);
+            let wrote = writer.join().unwrap();
+            let named: Vec<String> = std::fs::read_to_string(warnings)
+                .unwrap_or_default()
+                .lines()
+                .filter(|line| line.contains("(Z 400 absent ") || line.contains("Unable to assign"))
+                .map(str::to_string)
+                .collect();
+            (coordinated, wrote, shared.bytes(), named)
+        };
+        let skip = "WARNING: line 2 skipped (Z 400 absent A G . PASS .): Chromosome Z not found \
+                    in annotation sources or synonyms; chromosome Z does not overlap any features";
+
+        let (coordinated, wrote, output, named) =
+            run_batch(&unreadable, &dir.path().join("failed_pass.txt"));
+        let line = crate::config::CliError::from_run(&coordinated.unwrap_err());
+        assert!(
+            line.starts_with(&format!("ERROR: [cache] reading {}: ", region.display())),
+            "{line}"
+        );
+        assert!(wrote.is_ok(), "the writer was sent nothing to fail on");
+        assert!(output.is_empty(), "none of the batch reaches the output");
+        assert_eq!(named, [skip]);
+
+        let (coordinated, wrote, output, named) =
+            run_batch(&readable, &dir.path().join("failed_write.txt"));
+        assert!(coordinated.is_ok(), "the pool pass succeeds");
+        assert_eq!(
+            format!("{:#}", wrote.unwrap_err()),
+            "Failed to write output: the output takes no more bytes"
+        );
+        let output = String::from_utf8(output).unwrap();
+        assert_eq!(output.lines().count(), 1, "{output}");
+        assert!(output.starts_with("first\t21:300\t"), "{output}");
+        assert_eq!(named, [skip, "WARNING: Unable to assign consequence type"]);
+    }
+
+    /// The batched coordinator's wait ends once the writer has written every
+    /// batch sent to it, and tells a writer that stopped before that.
+    #[test]
+    fn the_coordinator_waits_for_the_batches_it_sent_to_be_written() {
+        let (written_tx, written) = mpsc::channel();
+        let mut writer = WriterProgress {
+            written,
+            sent: 0,
+            acknowledged: 0,
+        };
+        assert!(writer.caught_up(), "nothing sent, nothing to wait for");
+        writer.sent = 2;
+        written_tx.send(()).unwrap();
+        written_tx.send(()).unwrap();
+        assert!(writer.caught_up());
+        writer.sent = 4;
+        written_tx.send(()).unwrap();
+        drop(written_tx);
+        assert!(
+            !writer.caught_up(),
+            "the writer stopped with one batch unwritten"
+        );
+    }
+
     /// A task's error ends the stage with the record warnings of the chunks
     /// before it in the warnings file, as Ensembl VEP's renderer writes a
     /// record's warning before the buffer's lines are printed
-    /// (OutputFactory.pm:1718); a later chunk's, finished before the error
+    /// (OutputFactory.pm:1727); a later chunk's, finished before the error
     /// arrived, is dropped with the chunk.
     #[test]
     fn writer_keeps_the_record_warnings_before_a_failing_chunk() {
@@ -4624,7 +5740,7 @@ mod tests {
         let shared = Shared::new();
         let (tx, rx) = mpsc::sync_channel::<Rendered>(16);
         let sink = direct_sink(&shared);
-        let writer = thread::spawn(move || write_stage(rx, sink, None, &test_pool()));
+        let writer = thread::spawn(move || write_stage(rx, sink, None, None, &test_pool()));
         let rendered = |first: u32, text: &[u8], warned: &str| Rendered {
             seq: 0,
             first,
@@ -4647,10 +5763,8 @@ mod tests {
             })
             .is_ok());
         let err = writer.join().unwrap().unwrap_err();
-        crate::warnings::global().configure(Target::Stderr, false, false);
         assert_eq!(err.to_string(), "second failed");
         assert_eq!(shared.bytes(), b"first\n");
-        // Another test's warning may share the process-wide sink's file.
         let written = std::fs::read_to_string(&warnings).unwrap();
         assert!(
             written.contains("WARNING: w0\n") && !written.contains("WARNING: w2\n"),
@@ -4733,7 +5847,7 @@ mod tests {
         ));
         let directory = ParquetDirectoryWriter::create(
             out,
-            Arc::clone(formatter.schema()),
+            &formatter,
             vec![("vep_rs_version".to_string(), "0.0.0".to_string())],
             InputOrder::Checked {
                 unlisted_rank: formatter.unlisted_rank(),
@@ -4869,6 +5983,216 @@ mod tests {
         assert_eq!(sort_keys(&out).unwrap().len(), rows);
     }
 
+    /// A panic inside a streaming task ends the run with an error that names
+    /// it. The task sends its place in the output order with the panic as its
+    /// error; without that message the writer would hold the batch's later
+    /// chunks for the one that never comes while the coordinator, its permits
+    /// taken by the first batches, waits for the writer. 600 lines, one task
+    /// per line in batches of 128, are five batches against a pipeline depth
+    /// of two, and the eleventh line carries the marker.
+    #[cfg(feature = "parquet")]
+    #[test]
+    fn a_panic_inside_a_streaming_task_ends_the_run_with_an_error() {
+        use std::time::Duration;
+        let _guard = crate::warnings::sink_test_guard();
+        let dir = tempfile::tempdir().unwrap();
+        let out = dir.path().join("out.parquet");
+        let marker = std::str::from_utf8(TASK_PANIC_MARKER).unwrap();
+        let input: String = (0..600u64)
+            .map(|line| {
+                let id = if line == 10 { marker } else { "." };
+                format!("21\t{}\t{id}\tA\tG\t.\tPASS\t.\n", 1_000 + line * 10)
+            })
+            .collect();
+        let (done_tx, done_rx) = mpsc::channel();
+        thread::spawn(move || {
+            let _ = done_tx.send(streaming_parquet_run(input, &out));
+        });
+        let error = done_rx
+            .recv_timeout(Duration::from_secs(300))
+            .expect("the run ends once a task has panicked")
+            .unwrap_err();
+        let chain = format!("{error:#}");
+        assert!(
+            chain.contains("pipeline task panicked: a streaming task met a marked line"),
+            "{chain}"
+        );
+    }
+
+    /// A panic's message is the text of its payload, the `&str` of a literal
+    /// `panic!` or the `String` of a formatted one; a payload of another type
+    /// has none.
+    #[test]
+    fn a_panic_message_is_the_text_of_its_payload() {
+        let message = |payload: Box<dyn Any + Send>| panic_message(payload.as_ref()).to_string();
+        assert_eq!(message(Box::new("literal")), "literal");
+        assert_eq!(message(Box::new(String::from("formatted"))), "formatted");
+        assert_eq!(message(Box::new(7_u8)), "the panic carries no text");
+    }
+
+    /// A batched run over `input` (VCF text) in the default format into
+    /// `sink`, on a pool of two threads with batches of 128 lines and the
+    /// built-in plugins `plugins` loaded: the variants written, or the run's
+    /// error. A run with a plugin takes the batch-wide annotate and render
+    /// passes; one without takes the fused pass.
+    fn batched_text_run(input: String, plugins: &[&str], sink: &Shared) -> anyhow::Result<u64> {
+        let transcripts = Arc::new(LazyTranscriptIndexes::from_indexes(
+            std::collections::HashMap::from([(
+                "21".to_string(),
+                crate::transcript_index::TranscriptIndex::new(Vec::new(), 5_000, 5_000),
+            )]),
+        ));
+        let pool = crate::annotator::build_thread_pool(2).unwrap();
+        let mut registry = vep_builtins::BuiltinRegistry::new();
+        let plugin_args: Vec<String> = plugins.iter().map(|name| name.to_string()).collect();
+        assert!(registry.load_from_args(&plugin_args).unwrap().is_empty());
+        let resources =
+            crate::runner::resources_over_with_plugins(Arc::clone(&transcripts), registry);
+        let stats = PipelineStats::new();
+        let filter_config = FilterConfig::default();
+        let extra_plan = ExtraFieldsPlan::new(vep_io::output::fields::FieldOptions::default());
+        let write_ctx = WriteContext {
+            filter_config: &filter_config,
+            filters_active: false,
+            output_format: "vep",
+            vcf_formatter: None,
+            json_formatter: None,
+            #[cfg(feature = "parquet")]
+            parquet_formatter: None,
+            tab_formatter: None,
+            extra_plan: &extra_plan,
+        };
+        let synonyms = ChromosomeSynonyms::new();
+        let reader_cfg = ReaderConfig {
+            batch_size: 128,
+            capture_raw_input: false,
+            delimiter: &Delimiter::Tab,
+            allow_non_variant: false,
+            individuals: None,
+            process_ref_homs: false,
+            dont_skip: false,
+            max_sv_size: Some(10_000_000),
+            minimal: false,
+            output_format: "vep",
+            no_headers: false,
+            vcf_formatter: None,
+            transcripts: &transcripts,
+            regulatory: None,
+            synonyms: &synonyms,
+            prewarm_order: &[],
+            prewarm_ahead: PrewarmAhead::default(),
+            checks: &crate::validate::NO_CHECKS,
+            reader_core: ReaderCorePolicy::NONE,
+        };
+        let coordinator = Coordinator {
+            pool: &pool,
+            use_parallel: true,
+            resources: &resources,
+            stats: &stats,
+            stats_enabled: false,
+            run_stats: None,
+            write_ctx: &write_ctx,
+            capture_raw_input: false,
+            delimiter: &Delimiter::Tab,
+            process_ref_homs: false,
+            dont_skip: false,
+            max_sv_size: Some(10_000_000),
+            minimal: false,
+            checks: &crate::validate::NO_CHECKS,
+            progress: false,
+            mode: PipelineMode::Batched,
+            depth: PIPELINE_DEPTH,
+            task_records: None,
+        };
+        let source = InputSource::Vcf(Box::new(Cursor::new(input.into_bytes())));
+        Ok(run(source, &reader_cfg, &coordinator, direct_sink(sink))?.variants)
+    }
+
+    /// The error a batched run over 600 records ends with, and the output it
+    /// leaves, when the 301st record carries `id`: batches of 128 lines put
+    /// that record in the third of five batches.
+    fn a_batched_run_with_a_marked_record(plugins: &'static [&str], id: &str) -> (String, String) {
+        use std::time::Duration;
+        let _guard = crate::warnings::sink_test_guard();
+        let input: String = (0..600u64)
+            .map(|line| {
+                let id = if line == 300 { id } else { "." };
+                format!("21\t{}\t{id}\tA\tG\t.\tPASS\t.\n", 1_000 + line * 10)
+            })
+            .collect();
+        let sink = Shared::new();
+        let run_sink = sink.clone();
+        let (done_tx, done_rx) = mpsc::channel();
+        thread::spawn(move || {
+            let _ = done_tx.send(batched_text_run(input, plugins, &run_sink));
+        });
+        let error = done_rx
+            .recv_timeout(Duration::from_secs(300))
+            .expect("the run returns once a task has panicked")
+            .unwrap_err();
+        (
+            format!("{error:#}"),
+            String::from_utf8(sink.bytes()).unwrap(),
+        )
+    }
+
+    /// The default-format rows of the first two batches of
+    /// [`a_batched_run_with_a_marked_record`]: 256 intergenic records, ten
+    /// apart from 1,000.
+    fn rows_of_the_two_batches_before_the_marked_one() -> String {
+        (0..256u64)
+            .map(|line| {
+                let pos = 1_000 + line * 10;
+                format!(
+                    "21_{pos}_A/G\t21:{pos}\tG\t-\t-\t-\tintergenic_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER\n"
+                )
+            })
+            .collect()
+    }
+
+    /// A panic inside a task of the batched coordinator's fused pass ends the
+    /// run with an error that names it, as a streaming task's does. The pool
+    /// raises the panic again on the coordinator's thread, which reports it as
+    /// the batch's error: the batches before it are written whole and nothing
+    /// after them.
+    #[test]
+    fn a_panic_inside_a_batched_annotate_task_ends_the_run_with_an_error() {
+        let (error, output) = a_batched_run_with_a_marked_record(&[], RECORD_PANIC_MARKER);
+        assert_eq!(
+            error,
+            "pipeline task panicked: a batched task met a marked record"
+        );
+        assert_eq!(output, rows_of_the_two_batches_before_the_marked_one());
+    }
+
+    /// A run a plugin keeps batched annotates a batch and then renders it in
+    /// two passes over the pool; a panic inside a render task ends the run with
+    /// the same error and the same output as one inside a fused task.
+    #[test]
+    fn a_panic_inside_a_batched_render_task_ends_the_run_with_an_error() {
+        let (error, output) = a_batched_run_with_a_marked_record(&["NMD"], RECORD_PANIC_MARKER);
+        assert_eq!(
+            error,
+            "pipeline task panicked: a batched task met a marked record"
+        );
+        assert_eq!(output, rows_of_the_two_batches_before_the_marked_one());
+    }
+
+    /// A panic inside a parse task of the prefetch stage travels to the
+    /// coordinator in place of its batch, as the stage's errors do, so the run
+    /// ends with an error that carries the panic's text once the batches before
+    /// it are written.
+    #[test]
+    fn a_panic_inside_a_batched_parse_task_ends_the_run_with_an_error() {
+        let marker = std::str::from_utf8(PARSE_PANIC_MARKER).unwrap();
+        let (error, output) = a_batched_run_with_a_marked_record(&[], marker);
+        assert_eq!(
+            error,
+            "pipeline task panicked: a batched parse task met a marked line"
+        );
+        assert_eq!(output, rows_of_the_two_batches_before_the_marked_one());
+    }
+
     /// A record out of order after a block has been encoded ends the run with
     /// the refusal, and the output is still completed first: the part holding
     /// the encoded block carries its footer and the manifest names it.
@@ -4968,7 +6292,8 @@ mod tests {
                 Some(10_000_000),
                 &synonyms,
                 &transcripts,
-                &BTreeSet::new()
+                &BTreeSet::new(),
+                None
             ),
             ["21", "22", "2", "MT", "X", "9", "1"]
         );
@@ -5107,14 +6432,21 @@ mod tests {
                 Some(10_000_000),
                 &accession,
                 &by_accession,
-                &BTreeSet::new()
+                &BTreeSet::new(),
+                None
             ),
             ["NC_012920.1"]
         );
         let mut variant = parse_vcf_line("M\t100\t.\tA\tG\t.\tPASS\t.", false)
             .unwrap()
             .remove(0);
-        name_source_chromosomes(&mut variant, &accession, &by_accession, &BTreeSet::new());
+        name_source_chromosomes(
+            &mut variant,
+            &accession,
+            &by_accession,
+            &BTreeSet::new(),
+            None,
+        );
         assert_eq!(variant.chr, "NC_012920.1");
         // A record renamed through a source's `MT` is warmed under `MT`, the
         // name it is annotated on, by a cache that lacks the chromosome.
@@ -5126,13 +6458,13 @@ mod tests {
         let listed: BTreeSet<String> = ["MT".to_string()].into();
         let none = ChromosomeSynonyms::new();
         assert_eq!(
-            batch_chromosomes(&batch, Some(10_000_000), &none, &without_mt, &listed),
+            batch_chromosomes(&batch, Some(10_000_000), &none, &without_mt, &listed, None),
             ["MT"]
         );
         let mut variant = parse_vcf_line("M\t100\t.\tA\tG\t.\tPASS\t.", false)
             .unwrap()
             .remove(0);
-        name_source_chromosomes(&mut variant, &none, &without_mt, &listed);
+        name_source_chromosomes(&mut variant, &none, &without_mt, &listed, None);
         assert_eq!(variant.chr, "MT");
     }
 
@@ -5256,6 +6588,251 @@ mod tests {
         assert_eq!(records, 3);
     }
 
+    /// The VCF reader reports nothing itself: a run of empty lines is held in
+    /// its batch, before the item of the record that follows it, or after the
+    /// last item for a run that ends the input, and a later run of a length
+    /// already held is not held again, since its warning would be dropped as a
+    /// repeat (BaseVEP.pm:810-813).
+    #[test]
+    fn the_vcf_reader_holds_each_empty_run_in_its_batch_at_its_place() {
+        let transcripts = LazyTranscriptIndexes::from_loaded(
+            std::collections::HashMap::from([("21".to_string(), Vec::new())]),
+            0,
+            0,
+        );
+        let synonyms = ChromosomeSynonyms::new();
+        let vcf = "##fileformat=VCFv4.2\n\
+                   #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n\
+                   21\t100\t.\tA\tG\t.\tPASS\t.\n\
+                   \n\
+                   21\t200\t.\tA\tG\t.\tPASS\t.\n\
+                   \n\
+                   21\t300\t.\tA\tG\t.\tPASS\t.\n\
+                   \n\
+                   \n";
+        let cfg = counting_reader_cfg(&transcripts, &synonyms, &Delimiter::Tab);
+        let (tx, rx) = mpsc::sync_channel(4);
+        let (_back_tx, back_rx) = mpsc::sync_channel(4);
+        let reader: Box<dyn BufRead + Send> = Box::new(Cursor::new(vcf.to_string()));
+        assert_eq!(read_vcf(reader, &cfg, tx, back_rx).unwrap(), 3);
+        let batches: Vec<InputBatch> = rx.iter().collect();
+        let [InputBatch::Lines(batch)] = batches.as_slice() else {
+            panic!("the records fill one line batch");
+        };
+        let held: Vec<(usize, &str)> = batch
+            .reports
+            .iter()
+            .map(|(at, report)| match report {
+                SkipReport::Warning(text) => (*at, text.as_str()),
+                SkipReport::Skip { .. } => panic!("the reader skips no record"),
+            })
+            .collect();
+        assert_eq!(
+            held,
+            [
+                (1, "Skipped 1 empty line from line 2"),
+                (3, "Skipped 2 empty lines from line 4"),
+            ]
+        );
+    }
+
+    /// The reader of a parser-fed format reports nothing itself: a skipped line
+    /// is held in the batch being filled, and once the lines held number a
+    /// batch's size they go on in a batch of their own, so a long run of
+    /// skipped lines is neither held whole nor counted among a batch's
+    /// records. Of six lines read two a batch, lines 2, 3, 4 and 6 are skipped:
+    /// lines 2 and 3 go on alone, line 4 with the batch of the records of lines
+    /// 1 and 5, and line 6, read as that batch closed, in the last.
+    #[test]
+    fn a_parser_fed_reader_holds_its_skipped_lines_in_batches() {
+        let transcripts = LazyTranscriptIndexes::from_loaded(
+            std::collections::HashMap::from([("21".to_string(), Vec::new())]),
+            0,
+            0,
+        );
+        let synonyms = ChromosomeSynonyms::new();
+        let ensembl = "21 100 100 A/G 1\n\
+                       Z 1 1 A/G 1\n\
+                       Z 2 2 A/G 1\n\
+                       Z 3 3 A/G 1\n\
+                       21 200 200 A/G 1\n\
+                       Z 4 4 A/G 1\n";
+        let cfg = ReaderConfig {
+            batch_size: 2,
+            ..counting_reader_cfg(&transcripts, &synonyms, &Delimiter::Whitespace)
+        };
+        let context = vep_io::input::ParserContext::with_delimiter(Delimiter::Whitespace);
+        let (reader, last_line) = LineCapture::new(BufReader::new(Cursor::new(ensembl)));
+        let parser: Box<dyn vep_io::InputParser> =
+            Box::new(vep_io::input::ensembl::EnsemblParser::new(reader, &context));
+        let (tx, rx) = mpsc::sync_channel(8);
+        assert_eq!(
+            read_parsed(parser, &last_line, InputFormat::Ensembl, &cfg, tx).unwrap(),
+            6
+        );
+        let batches: Vec<(u64, usize, Vec<u64>)> = rx
+            .iter()
+            .map(|batch| match batch {
+                InputBatch::Parsed(parsed) => {
+                    let skipped = parsed
+                        .reports
+                        .iter()
+                        .map(|report| match report {
+                            SkipReport::Skip { line_number, .. } => *line_number,
+                            SkipReport::Warning(text) => panic!("no warning is drawn: {text}"),
+                        })
+                        .collect();
+                    (parsed.seq, parsed.variants.len(), skipped)
+                }
+                InputBatch::Lines(_) => panic!("a parser-fed format yields parsed batches"),
+            })
+            .collect();
+        assert_eq!(
+            batches,
+            [(0, 0, vec![2, 3]), (1, 2, vec![4]), (2, 0, vec![6])]
+        );
+    }
+
+    /// One line as a [`Scripted`] parser yields it: the empty lines read past
+    /// on the way to it, the warnings raised with it and the line's result.
+    struct ScriptedLine {
+        empty_lines: u64,
+        warnings: Vec<String>,
+        read: Result<InputVariant, vep_io::IoError>,
+    }
+
+    /// A parser that yields the lines a test scripts, then ends the input past
+    /// `trailing_empty_lines` more.
+    struct Scripted {
+        lines: std::collections::VecDeque<ScriptedLine>,
+        trailing_empty_lines: u64,
+        empty_lines: u64,
+        warnings: Vec<String>,
+    }
+
+    impl vep_io::InputParser for Scripted {
+        fn next_variant(&mut self) -> Option<Result<InputVariant, vep_io::IoError>> {
+            let Some(line) = self.lines.pop_front() else {
+                self.empty_lines = std::mem::take(&mut self.trailing_empty_lines);
+                return None;
+            };
+            self.empty_lines = line.empty_lines;
+            self.warnings = line.warnings;
+            Some(line.read)
+        }
+
+        fn take_empty_lines(&mut self) -> u64 {
+            std::mem::take(&mut self.empty_lines)
+        }
+
+        fn take_warnings(&mut self) -> Vec<String> {
+            std::mem::take(&mut self.warnings)
+        }
+    }
+
+    /// What the reader of a parser-fed format finds once a batch is full
+    /// travels with the next batch, at its place, as Ensembl VEP's parser warns
+    /// about it while it fills the next buffer (Parser.pm:266-293): the full
+    /// batch goes on before the line's reports are held, with the records it
+    /// would have held. Read four records a batch: lines 1 to 4 fill the first;
+    /// a run of two empty lines, a line the parser refuses and a warning the
+    /// parser raises with the record of line 8 travel with the records of lines
+    /// 8 to 11, in that order; and the empty line the input ends on, read once
+    /// that batch is full, goes on in a batch of its own.
+    #[test]
+    fn a_line_read_after_a_full_batch_is_reported_with_the_next_batch() {
+        let transcripts = LazyTranscriptIndexes::from_loaded(
+            std::collections::HashMap::from([("21".to_string(), Vec::new())]),
+            0,
+            0,
+        );
+        let synonyms = ChromosomeSynonyms::new();
+        let cfg = ReaderConfig {
+            batch_size: 4,
+            ..counting_reader_cfg(&transcripts, &synonyms, &Delimiter::Tab)
+        };
+        let record = |start: u64| {
+            Ok(InputVariant::new(
+                "21".to_string(),
+                start,
+                start,
+                b"A".to_vec(),
+                b"G".to_vec(),
+            ))
+        };
+        let line = |empty_lines: u64, warnings: &[&str], read| ScriptedLine {
+            empty_lines,
+            warnings: warnings.iter().map(|text| text.to_string()).collect(),
+            read,
+        };
+        let refused = Err(vep_io::IoError::SkippedLine(
+            "the parser cannot read it".into(),
+        ));
+        let parser = Scripted {
+            lines: [
+                line(0, &[], record(100)),
+                line(0, &[], record(200)),
+                line(0, &[], record(300)),
+                line(0, &[], record(400)),
+                line(2, &[], refused),
+                line(0, &["the parser warns"], record(500)),
+                line(0, &[], record(600)),
+                line(0, &[], record(700)),
+                line(0, &[], record(800)),
+            ]
+            .into(),
+            trailing_empty_lines: 1,
+            empty_lines: 0,
+            warnings: Vec::new(),
+        };
+        let last_line = LastLine::default();
+        let (tx, rx) = mpsc::sync_channel(8);
+        assert_eq!(
+            read_parsed(Box::new(parser), &last_line, InputFormat::Region, &cfg, tx).unwrap(),
+            12
+        );
+        let batches: Vec<(u64, Vec<u64>, Vec<String>)> = rx
+            .iter()
+            .map(|batch| match batch {
+                InputBatch::Parsed(parsed) => {
+                    let records = parsed.variants.iter().map(|v| v.start).collect();
+                    let reports = parsed
+                        .reports
+                        .iter()
+                        .map(|report| match report {
+                            SkipReport::Skip {
+                                line_number,
+                                description,
+                                ..
+                            } => format!("line {line_number} skipped: {description}"),
+                            SkipReport::Warning(text) => text.clone(),
+                        })
+                        .collect();
+                    (parsed.seq, records, reports)
+                }
+                InputBatch::Lines(_) => panic!("a parser-fed format yields parsed batches"),
+            })
+            .collect();
+        let reports =
+            |texts: &[&str]| -> Vec<String> { texts.iter().map(|text| text.to_string()).collect() };
+        assert_eq!(
+            batches,
+            [
+                (0, vec![100, 200, 300, 400], reports(&[])),
+                (
+                    1,
+                    vec![500, 600, 700, 800],
+                    reports(&[
+                        "Skipped 2 empty lines from line 5",
+                        "line 7 skipped: the parser cannot read it",
+                        "the parser warns",
+                    ])
+                ),
+                (2, vec![], reports(&["Skipped 1 empty line from line 12"])),
+            ]
+        );
+    }
+
     /// `Variants processed` counts the records the render stage reaches, one per
     /// `Unit::Record` whatever its alleles: a multi-allelic record once, an
     /// oversize structural record the run skips once, and a record the
@@ -5359,7 +6936,9 @@ mod tests {
             batch.push_data(negative_tandem.as_bytes(), b"", None, 7);
             batch
         };
-        let whole = parse_lines(lines(), &c, &mut Spare::default(), &mut report_to_sink).unwrap();
+        let mut whole_reports = Vec::new();
+        let mut report = |reported: Reported<'_>| whole_reports.push(reported.owned());
+        let whole = parse_lines(lines(), &c, &mut Spare::default(), &mut report).unwrap();
         let batch = lines();
         let mut units = Vec::new();
         let mut variants = Vec::new();
@@ -5390,6 +6969,7 @@ mod tests {
                 })
                 .collect()
         };
+        assert_eq!(describe_skips(&skips), describe_skips(&whole_reports));
         let parse_error = "Invalid start 'bad' or end '0' coordinate".to_string();
         assert_eq!(
             describe_skips(&skips),
@@ -5684,7 +7264,7 @@ mod tests {
     }
 
     /// A captured line that is not UTF-8 carries the stored line's bytes for the
-    /// VCF output, not the line as read: Ensembl VEP 116.2 stores the fields its
+    /// VCF output, not the line as read: Ensembl VEP 116.3 stores the fields its
     /// `split` read (ensembl-io ColumnBasedParser.pm:250) and fills a structural
     /// record's QUAL, FILTER and INFO (Parser/VCF.pm:464-466), so a five-column
     /// record with trailing tabs is stored as five fields and a structural QUAL
@@ -6287,14 +7867,12 @@ mod tests {
             Box::new(vep_io::input::ensembl::EnsemblParser::new(reader, &context));
         let (tx, rx) = mpsc::sync_channel(64);
         read_parsed(parser, &last_line, InputFormat::Ensembl, &cfg, tx).unwrap();
+        let batches = report_held(rx.iter());
         let skipped = sink.skipped();
         sink.finish("in.txt").unwrap();
-        let kept: Vec<(u64, usize, String, u64)> = rx
-            .iter()
-            .flat_map(|batch| match batch {
-                InputBatch::Parsed(parsed) => parsed.variants,
-                InputBatch::Lines(_) => panic!("a parser-fed format yields parsed batches"),
-            })
+        let kept: Vec<(u64, usize, String, u64)> = batches
+            .into_iter()
+            .flat_map(|parsed| parsed.variants)
             .map(|v| (v.input_record, v.allele_index, v.original_chr, v.start))
             .collect();
         assert_eq!(
@@ -6444,9 +8022,9 @@ mod tests {
                 reader,
                 &vep_io::input::ParserContext::default(),
             ));
-        let (tx, _rx) = mpsc::sync_channel(8);
+        let (tx, rx) = mpsc::sync_channel(8);
         read_parsed(parser, &last_line, InputFormat::Ensembl, &cfg, tx).unwrap();
-        sink.configure(crate::warnings::Target::Stderr, false, false);
+        report_held(rx.iter());
         let skips: Vec<String> = std::fs::read_to_string(&warnings)
             .unwrap()
             .lines()
@@ -6575,7 +8153,7 @@ mod tests {
             .collect()
     }
 
-    /// Ensembl VEP 116.2 writes the VCF output's header block before its output
+    /// Ensembl VEP 116.3 writes the VCF output's header block before its output
     /// loop, whether or not a record follows (Runner.pm:204-210), so a VCF of
     /// meta lines with neither a `#CHROM` line nor a record gets the block: the
     /// meta lines kept, then the run's own lines and the eight-column line, as
@@ -6600,7 +8178,7 @@ mod tests {
         );
     }
 
-    /// An empty input under `--format vcf` gets the header block Ensembl VEP 116.2
+    /// An empty input under `--format vcf` gets the header block Ensembl VEP 116.3
     /// writes before its output loop (Runner.pm:204-210) in its no-input-headers
     /// shape: `##fileformat=VCFv4.1` first and the eight-column line last
     /// (OutputFactory/VCF.pm:228-231).
@@ -6715,7 +8293,7 @@ mod tests {
             refused.to_string(),
             "ERROR: [input] The VCF file format version 3.3 is not compatible with the parser version (VCF v4.2)"
         );
-        // Ensembl VEP 116.2 accepts `##fileformat=\r\n` (an empty value) and refuses a
+        // Ensembl VEP 116.3 accepts `##fileformat=\r\n` (an empty value) and refuses a
         // final `##fileformat=\r` with no line end, whose value is the `\r`.
         assert!(refuse_vcf_header_early(Box::new(Cursor::new(
             b"##fileformat=\r\n#CHROM\n".to_vec()
@@ -6764,14 +8342,14 @@ mod tests {
     /// type string reading `/del/i` over an empty or unbounded span
     /// (Parser/VCF.pm:555-558), then the span `validate_vf` refuses (Parser.pm:484-486),
     /// or, for an END that is no number to Perl, its coordinate test's text over
-    /// Perl's start, `POS + 1`, and the END as written (Parser.pm:475-477;
-    /// Ensembl VEP 116.2 writes `Invalid start '101' or end 'abc' coordinate` for
+    /// Ensembl VEP's start, `POS + 1`, and the END as written (Parser.pm:475-477;
+    /// Ensembl VEP 116.3 writes `Invalid start '101' or end 'abc' coordinate` for
     /// `21 100 . N <DEL> . . END=abc`, `... end '' coordinate` for `END=`, and
     /// `Invalid start '301' or end 'abc' coordinate` after the type and the
     /// incomplete-deletion lines for `21 300 . N N . . SVTYPE=XDEL;END=abc`). The
     /// incomplete-deletion test compares the END text as Perl's number (`:555`), so
     /// `END=30165900abc` at POS 30165850 (30165900, past the start) gets the
-    /// coordinate line alone, as 116.2 writes it, and `END=50abc` at POS 100 both
+    /// coordinate line alone, as 116.3 writes it, and `END=50abc` at POS 100 both
     /// lines. An END Perl numifies (`5e2`) is refused as vep-rs's own `Invalid END`,
     /// with no incomplete-deletion line when its number is not below the start.
     #[test]
@@ -6954,7 +8532,7 @@ mod tests {
         let input = dir.path().join("09_breakends.vcf.gz");
         std::fs::copy(root.join("09_breakends.vcf.gz"), &input).unwrap();
         let tbi =
-            vep_builtins::tabix::read_tabix_index(&root.join("09_breakends.vcf.gz.tbi")).unwrap();
+            crate::input_shape::read_tabix_index(&root.join("09_breakends.vcf.gz.tbi")).unwrap();
         let header = tbi.header().unwrap().clone();
         let reference_sequence_count = header.reference_sequence_names().len();
         let no_synonyms = ChromosomeSynonyms::new();
@@ -7040,7 +8618,7 @@ mod tests {
             let mut variant =
                 InputVariant::new(input.to_string(), 100, 100, b"A".to_vec(), b"G".to_vec());
             variant.mate_chr = mate.map(str::to_string);
-            name_source_chromosomes(&mut variant, synonyms, &transcripts, &BTreeSet::new());
+            name_source_chromosomes(&mut variant, synonyms, &transcripts, &BTreeSet::new(), None);
             (variant.chr, variant.original_chr, variant.mate_chr)
         };
         let none = ChromosomeSynonyms::new();
@@ -7061,7 +8639,7 @@ mod tests {
         let mut own =
             InputVariant::new("chr21".to_string(), 100, 100, b"N".to_vec(), b"N.".to_vec());
         own.breakend_mates = vec![("chr21".to_string(), 5), ("chrM".to_string(), 7)];
-        name_source_chromosomes(&mut own, &table, &transcripts, &BTreeSet::new());
+        name_source_chromosomes(&mut own, &table, &transcripts, &BTreeSet::new(), None);
         assert_eq!(
             own.breakend_mates,
             [("21".to_string(), 5), ("MT".to_string(), 7)]
@@ -7105,7 +8683,7 @@ mod tests {
         let named = |synonyms: &ChromosomeSynonyms, cache: &LazyTranscriptIndexes| {
             let mut variant =
                 InputVariant::new("M".to_string(), 100, 100, b"A".to_vec(), b"G".to_vec());
-            name_source_chromosomes(&mut variant, synonyms, cache, &BTreeSet::new());
+            name_source_chromosomes(&mut variant, synonyms, cache, &BTreeSet::new(), None);
             (
                 variant.chr,
                 variant.original_chr,
@@ -7155,7 +8733,7 @@ mod tests {
             let listed: BTreeSet<String> = listed.iter().map(|s| s.to_string()).collect();
             let mut variant =
                 InputVariant::new("M".to_string(), 100, 100, b"A".to_vec(), b"G".to_vec());
-            name_source_chromosomes(&mut variant, &none, cache, &listed);
+            name_source_chromosomes(&mut variant, &none, cache, &listed, None);
             (
                 variant.chr,
                 variant.original_chr,
@@ -7206,7 +8784,7 @@ mod tests {
         let named = |input: &str, synonyms: &ChromosomeSynonyms| {
             let mut variant =
                 InputVariant::new(input.to_string(), 100, 100, b"A".to_vec(), b"G".to_vec());
-            name_source_chromosomes(&mut variant, synonyms, &fly, &BTreeSet::new());
+            name_source_chromosomes(&mut variant, synonyms, &fly, &BTreeSet::new(), None);
             (
                 variant.chr,
                 variant.original_chr,
@@ -7237,6 +8815,343 @@ mod tests {
         let holds = |name: &str| fly.contains_key(name);
         assert!(!renames_m_to_mt("M", &none, holds));
         assert!(renames_m_to_mt("M", &mt, holds));
+    }
+
+    /// The name shapes of a bacterial and a fungal cache, each input spelling
+    /// read as the cache's name, the name the output keeps and, where the
+    /// record is renamed, the input's own spelling. A sequence whose own name
+    /// begins with `chr` is held as written (`Parser.pm:777`,
+    /// `BaseVEP.pm:706`); `chr` before a whole name is stripped (`:722-726`);
+    /// the name without its own first three letters, in another case or cut
+    /// short is another name, which no rule reaches; an accession reaches its
+    /// sequence through the cache's table alone (`:711-716`), and behind `chr`
+    /// not at all, since the strip tests the cache's own names. A
+    /// mitochondrion named `Mito` is reached from `MT`, `M` or `chrM` only
+    /// through a line naming that spelling, except that an `M` is renamed and
+    /// read as `MT` once `MT` is a synonym (`Parser.pm:794-796` over the set
+    /// `:782` widens). A breakend mate on a plasmid resolves as a record's own
+    /// name does (`AnnotationSource.pm:251-254`).
+    #[test]
+    fn name_shapes_of_non_human_caches_resolve_through_the_cache_and_its_synonyms() {
+        let cache = |names: &[&str]| {
+            LazyTranscriptIndexes::from_loaded(
+                names
+                    .iter()
+                    .map(|name| (name.to_string(), Vec::new()))
+                    .collect(),
+                0,
+                0,
+            )
+        };
+        let named = |input: &str,
+                     synonyms: &ChromosomeSynonyms,
+                     transcripts: &LazyTranscriptIndexes| {
+            let mut variant =
+                InputVariant::new(input.to_string(), 100, 100, b"A".to_vec(), b"G".to_vec());
+            name_source_chromosomes(&mut variant, synonyms, transcripts, &BTreeSet::new(), None);
+            (
+                variant.chr,
+                variant.original_chr,
+                variant.input_chr.as_deref().map(str::to_string),
+            )
+        };
+        let kept = |chr: &str, input: &str| (chr.to_string(), input.to_string(), None);
+        let none = ChromosomeSynonyms::new();
+
+        let bacterium = cache(&["Chromosome", "pSYN1", "pSYN1.2"]);
+        let accessions = ChromosomeSynonyms::parse(
+            "Chromosome\tNZ_SYN000000.1\npSYN1\tNZ_SYN000001.1\npSYN1.2\tNZ_SYN000002.1\n",
+        );
+        for (input, synonyms, chr) in [
+            ("Chromosome", &none, "Chromosome"),
+            ("chrChromosome", &none, "Chromosome"),
+            ("CHRChromosome", &none, "Chromosome"),
+            ("omosome", &none, "omosome"),
+            ("chromosome", &none, "chromosome"),
+            ("CHROMOSOME", &none, "CHROMOSOME"),
+            ("pSYN1", &none, "pSYN1"),
+            ("pSYN1.2", &none, "pSYN1.2"),
+            ("chrpSYN1.2", &none, "pSYN1.2"),
+            ("pSYN1.1", &none, "pSYN1.1"),
+            ("psyn1", &none, "psyn1"),
+            ("NZ_SYN000000.1", &none, "NZ_SYN000000.1"),
+            ("NZ_SYN000000.1", &accessions, "Chromosome"),
+            ("NZ_SYN000001.1", &accessions, "pSYN1"),
+            ("NZ_SYN000002.1", &accessions, "pSYN1.2"),
+            ("chrNZ_SYN000002.1", &accessions, "chrNZ_SYN000002.1"),
+            ("Chromosome", &accessions, "Chromosome"),
+            ("M", &accessions, "M"),
+            ("MT", &accessions, "MT"),
+            ("chrM", &accessions, "chrM"),
+        ] {
+            assert_eq!(
+                named(input, synonyms, &bacterium),
+                kept(chr, input),
+                "{input}"
+            );
+        }
+        let mated = |mate: &str, synonyms: &ChromosomeSynonyms| {
+            let mut variant = InputVariant::new(
+                "Chromosome".to_string(),
+                100,
+                100,
+                b"N".to_vec(),
+                b"N.".to_vec(),
+            );
+            variant.mate_chr = Some(mate.to_string());
+            variant.breakend_mates = vec![(mate.to_string(), 5)];
+            name_source_chromosomes(&mut variant, synonyms, &bacterium, &BTreeSet::new(), None);
+            (variant.chr, variant.mate_chr, variant.breakend_mates)
+        };
+        for (mate, synonyms, mate_chr) in [
+            ("pSYN1.2", &none, "pSYN1.2"),
+            ("chrpSYN1.2", &none, "pSYN1.2"),
+            ("NZ_SYN000002.1", &accessions, "pSYN1.2"),
+            ("NZ_SYN000002.1", &none, "NZ_SYN000002.1"),
+            ("pSYN1.3", &accessions, "pSYN1.3"),
+        ] {
+            assert_eq!(
+                mated(mate, synonyms),
+                (
+                    "Chromosome".to_string(),
+                    Some(mate_chr.to_string()),
+                    vec![(mate_chr.to_string(), 5)]
+                ),
+                "{mate}"
+            );
+        }
+
+        let fungus = cache(&["I", "II", "IV", "IX", "XVI", "Mito"]);
+        let genbank = ChromosomeSynonyms::parse("I\tBK006935.2\nMito\tAJ011856.1\n");
+        let mt = ChromosomeSynonyms::parse("Mito\tMT\n");
+        let chr_m = ChromosomeSynonyms::parse("Mito\tchrM\n");
+        let m = ChromosomeSynonyms::parse("Mito\tM\n");
+        for (input, synonyms, chr) in [
+            ("I", &none, "I"),
+            ("chrI", &none, "I"),
+            ("chrIV", &none, "IV"),
+            ("ChrXVI", &none, "XVI"),
+            ("1", &none, "1"),
+            ("i", &none, "i"),
+            ("III", &none, "III"),
+            ("BK006935.2", &genbank, "I"),
+            ("BK006935.2", &none, "BK006935.2"),
+            ("Mito", &none, "Mito"),
+            ("chrMito", &none, "Mito"),
+            ("mito", &none, "mito"),
+            ("AJ011856.1", &genbank, "Mito"),
+            ("MT", &genbank, "MT"),
+            ("M", &genbank, "M"),
+            ("chrM", &genbank, "chrM"),
+            ("MT", &mt, "Mito"),
+            ("chrM", &mt, "chrM"),
+            ("chrMT", &mt, "chrMT"),
+            ("chrM", &chr_m, "Mito"),
+            ("M", &chr_m, "M"),
+            ("MT", &chr_m, "MT"),
+            ("M", &m, "Mito"),
+            ("MT", &m, "MT"),
+        ] {
+            assert_eq!(named(input, synonyms, &fungus), kept(chr, input), "{input}");
+        }
+        assert_eq!(
+            named("M", &mt, &fungus),
+            ("Mito".to_string(), "MT".to_string(), Some("M".into()))
+        );
+    }
+
+    /// The rename of a bare `M` (`Parser.pm:794-796`) on made-up caches of
+    /// genomes other than human. A cache that holds `MT` and names neither
+    /// `M` nor `chrM` renames the record, whatever its other chromosomes are
+    /// called; a cache whose mitochondrion goes by a name of its own leaves
+    /// `M` as written, which no chromosome then answers to. On each of those
+    /// caches the record is read under the name the source rule gives the
+    /// written name (`ChromosomeSynonyms::source_chr_name`). The two part
+    /// only where `MT` is a synonym of a held name and not a held name
+    /// itself: the record's rename reads the synonyms (`Parser.pm:782`), and
+    /// the source rule tests the source's own names (`BaseVEP.pm:697-734`),
+    /// so it is asked for `MT` once the record is renamed.
+    #[test]
+    fn a_bare_m_is_renamed_under_any_cache_that_holds_mt_and_under_no_other() {
+        let cache = |names: &[&str]| {
+            LazyTranscriptIndexes::from_loaded(
+                names
+                    .iter()
+                    .map(|name| (name.to_string(), Vec::new()))
+                    .collect(),
+                0,
+                0,
+            )
+        };
+        let named = |input: &str,
+                     synonyms: &ChromosomeSynonyms,
+                     transcripts: &LazyTranscriptIndexes| {
+            let mut variant =
+                InputVariant::new(input.to_string(), 100, 100, b"A".to_vec(), b"G".to_vec());
+            name_source_chromosomes(&mut variant, synonyms, transcripts, &BTreeSet::new(), None);
+            (
+                variant.chr,
+                variant.original_chr,
+                variant.input_chr.as_deref().map(str::to_string),
+            )
+        };
+        let none = ChromosomeSynonyms::new();
+
+        for names in [
+            &["1", "28", "Z", "W", "MT"][..],
+            &["1", "25", "MT"][..],
+            &["I", "II", "MT"][..],
+        ] {
+            let holding_mt = cache(names);
+            assert_eq!(
+                named("M", &none, &holding_mt),
+                ("MT".to_string(), "MT".to_string(), Some("M".to_string())),
+                "{names:?}"
+            );
+            assert_eq!(cache_chr_name("M", &none, &holding_mt), "MT", "{names:?}");
+        }
+
+        for own in [
+            "Mito",
+            "MtDNA",
+            "mitochondrion_genome",
+            "Mt",
+            "mito_A_fumigatus_Af293",
+        ] {
+            let other = cache(&["I", "II", own]);
+            assert_eq!(
+                named("M", &none, &other),
+                ("M".to_string(), "M".to_string(), None),
+                "{own}"
+            );
+            assert_eq!(cache_chr_name("M", &none, &other), "M", "{own}");
+            assert_eq!(
+                named(own, &none, &other),
+                (own.to_string(), own.to_string(), None)
+            );
+        }
+
+        let fly = cache(&["2L", "X", "mitochondrion_genome"]);
+        let mt = ChromosomeSynonyms::parse("mitochondrion_genome\tMT\n");
+        assert_eq!(
+            named("M", &mt, &fly),
+            (
+                "mitochondrion_genome".to_string(),
+                "MT".to_string(),
+                Some("M".to_string())
+            )
+        );
+        assert_eq!(cache_chr_name("M", &mt, &fly), "M");
+        assert_eq!(cache_chr_name("MT", &mt, &fly), "mitochondrion_genome");
+    }
+
+    /// On GRCh37 a record written `chrM` or `M` keeps its name where the
+    /// reference FASTA holds another sequence under it: the cache's table, or
+    /// the reading of a kept `M` as `MT`, would place it on `MT`, and the FASTA
+    /// record's length shows that its position is none of `MT`'s. Ensembl VEP
+    /// places such a record by its name alone (`AnnotationSource.pm:179`,
+    /// `BaseVEP.pm:708-716`). A FASTA record of the assembly's length, and a run
+    /// with no FASTA, leave the record on `MT`; a cache that holds the name
+    /// itself annotates the record there; and under a table that links no
+    /// mitochondrial name `chrM` reaches no chromosome and a bare `M` is renamed
+    /// `MT` (`Parser.pm:794-796`), as without such a FASTA.
+    #[test]
+    fn a_name_the_reference_holds_as_another_mitochondrial_sequence_keeps_the_record_off_mt() {
+        let dir = tempfile::tempdir().unwrap();
+        let reference = |name: &str, length: usize| {
+            let path = dir.path().join(format!("{name}_{length}_synthetic.fa"));
+            let mut text = format!(">{name}\n");
+            for line in vec![b'A'; length].chunks(60) {
+                text.push_str(std::str::from_utf8(line).unwrap());
+                text.push('\n');
+            }
+            std::fs::write(&path, text).unwrap();
+            std::fs::write(
+                format!("{}.fai", path.display()),
+                format!("{name}\t{length}\t{}\t60\t61\n", name.len() + 2),
+            )
+            .unwrap();
+            let mut fasta = IndexedFasta::from_path(&path).unwrap();
+            fasta.set_assembly("GRCh37");
+            fasta
+        };
+        let cache = |names: &[&str]| {
+            LazyTranscriptIndexes::from_loaded(
+                names
+                    .iter()
+                    .map(|name| (name.to_string(), Vec::new()))
+                    .collect(),
+                0,
+                0,
+            )
+        };
+        let named = |input: &str,
+                     synonyms: &ChromosomeSynonyms,
+                     transcripts: &LazyTranscriptIndexes,
+                     reference: Option<&IndexedFasta>| {
+            let mut variant =
+                InputVariant::new(input.to_string(), 100, 100, b"A".to_vec(), b"G".to_vec());
+            name_source_chromosomes(
+                &mut variant,
+                synonyms,
+                transcripts,
+                &BTreeSet::new(),
+                reference,
+            );
+            (
+                variant.chr,
+                variant.original_chr,
+                variant.input_chr.as_deref().map(str::to_string),
+            )
+        };
+        let as_written = |name: &str| (name.to_string(), name.to_string(), None);
+        let linked = ChromosomeSynonyms::parse("MT\tNC_012920.1\nMT\tchrM\n");
+        let unlinked = ChromosomeSynonyms::parse("21\tchr21\n");
+        let on_mt = cache(&["21", "MT"]);
+        let longer = reference("chrM", 16_571);
+        let of_the_assembly = reference("chrM", 16_569);
+
+        for name in ["chrM", "M"] {
+            let kept_off = kept_off_the_cache(name, &linked, &on_mt, Some(&longer))
+                .unwrap_or_else(|| panic!("{name} is kept off the cache"));
+            assert_eq!(
+                kept_off.skip_description(name),
+                format!(
+                    "Chromosome {name} is the FASTA record chrM of 16571 bases, another \
+                     sequence than the cache's MT of 16569 bases, and is read as no chromosome \
+                     of the cache"
+                )
+            );
+            assert_eq!(
+                named(name, &linked, &on_mt, Some(&longer)),
+                as_written(name)
+            );
+            for placed in [Some(&of_the_assembly), None] {
+                assert!(kept_off_the_cache(name, &linked, &on_mt, placed).is_none());
+                assert_eq!(named(name, &linked, &on_mt, placed).0, "MT", "{name}");
+            }
+        }
+        for name in ["MT", "chrMT", "NC_012920.1", "21"] {
+            assert!(kept_off_the_cache(name, &linked, &on_mt, Some(&longer)).is_none());
+        }
+        assert_eq!(named("NC_012920.1", &linked, &on_mt, Some(&longer)).0, "MT");
+
+        let on_chrm = cache(&["chr21", "chrM"]);
+        assert!(kept_off_the_cache("chrM", &linked, &on_chrm, Some(&longer)).is_none());
+        assert_eq!(
+            named("chrM", &linked, &on_chrm, Some(&longer)),
+            as_written("chrM")
+        );
+
+        assert!(kept_off_the_cache("chrM", &unlinked, &on_mt, Some(&longer)).is_none());
+        assert_eq!(
+            named("chrM", &unlinked, &on_mt, Some(&longer)),
+            as_written("chrM")
+        );
+        assert_eq!(
+            named("M", &unlinked, &on_mt, Some(&longer)),
+            ("MT".to_string(), "MT".to_string(), Some("M".to_string()))
+        );
     }
 
     /// `validate_vf`'s size text marks a refusal the `--chr` test gates for an
@@ -7553,7 +9468,7 @@ mod tests {
     /// The overlap-allele rule runs on every Ensembl-format record, whose parser
     /// keeps an allele equal to the reference (VariationFeatureOverlap.pm:481): `A/A`
     /// is the feature with no allele, under `--minimal` trimmed to `-/-` at 101-100
-    /// and marked (Parser.pm:1011), as Ensembl VEP 116.2's JSON object carries it,
+    /// and marked (Parser.pm:1011), as Ensembl VEP 116.3's JSON object carries it,
     /// and `A/G/G` keeps its first `G` alone, the repeat dropped (:461).
     #[test]
     fn read_parsed_applies_the_overlap_rule_to_every_record() {
@@ -7624,11 +9539,10 @@ mod tests {
 
     /// An Ensembl-format record whose every allele `--lookup_ref` makes equal to
     /// the reference is the feature with no allele to annotate, as a VCF record's
-    /// is (`T/A/A` over the reference `A` is `A/A/A`, which Ensembl VEP 116.2
+    /// is (`T/A/A` over the reference `A` is `A/A/A`, which Ensembl VEP 116.3
     /// writes as the JSON object with `most_severe_consequence` `?`), and a record
-    /// left with one allele keeps that allele alone, numbered without the dropped
-    /// one (`T/A/G` is `A/A/G`, the one allele `G` numbered 1,
-    /// VariationFeatureOverlap.pm:483).
+    /// left with one allele keeps that allele alone, under the number of its place
+    /// (`T/A/G` is `A/A/G`, the one allele `G` numbered 2).
     #[test]
     fn read_parsed_keeps_a_record_whose_alleles_all_equal_the_looked_up_reference() {
         let dir = tempfile::tempdir().unwrap();
@@ -7700,9 +9614,10 @@ mod tests {
             shape,
             [
                 (1, true, "A/A/A".to_string(), None),
-                (2, false, "A/G".to_string(), Some(1)),
+                (2, false, "A/G".to_string(), None),
             ]
         );
+        assert_eq!(batch.variants[1].allele_index, 1);
         assert_eq!(batch.units.len(), 2);
     }
 
@@ -7876,13 +9791,117 @@ mod tests {
         );
     }
 
+    /// OutputFactory.pm:301 writes every feature a reset buffer holds, one that
+    /// writes no row included, so `features_as_records` gives each such feature
+    /// the filter kept a unit of its own at its place among the record's
+    /// features: `GG *,G,TG` is `GG/*`, `G/-` and `G/T`, the first before the two
+    /// alleles, and the `*` of `GG G,TG,*` after them. Each is a record with no
+    /// allele to annotate, standing alone by its place, and `keep` grows with
+    /// it. A record the reset leaves alone takes none, the rejoin making one
+    /// feature of it, and the units after an added feature move with it.
+    #[test]
+    fn a_reset_record_takes_its_kept_features_that_write_no_row() {
+        let split = |alts: &str| {
+            crate::vcf_parser::split_minimal_record(
+                crate::vcf_parser::parse_vcf_line(
+                    &format!("21\t31148973\t.\tGG\t{alts}\t.\t.\t."),
+                    true,
+                )
+                .unwrap(),
+            )
+        };
+        let star_first = split("*,G,TG");
+        let star_last = split("G,TG,*");
+        let layout = |reset: [bool; 3]| {
+            let mut variants: Vec<InputVariant> = star_first
+                .iter()
+                .chain(&star_last)
+                .cloned()
+                .chain([InputVariant::new(
+                    "21".into(),
+                    100,
+                    100,
+                    b"A".to_vec(),
+                    b"G".to_vec(),
+                )])
+                .collect();
+            let rowless_kept = vec![
+                (0, rowless_features(&star_first[0])),
+                (2, rowless_features(&star_last[0])),
+            ];
+            let units = vec![
+                Unit::Record(0..2),
+                Unit::Text(0..0),
+                Unit::Record(2..4),
+                Unit::Record(4..5),
+            ];
+            let mut keep = vec![true, false, true, true, true];
+            let reset = [reset[0], false, reset[1], reset[2]];
+            let units = features_as_records(units, &mut variants, &mut keep, &reset, rowless_kept);
+            let ranges: Vec<Option<Range<usize>>> = units
+                .iter()
+                .map(|unit| match unit {
+                    Unit::Record(range) => Some(range.clone()),
+                    Unit::Text(_) => None,
+                })
+                .collect();
+            (variants, keep, ranges)
+        };
+
+        let (variants, keep, ranges) = layout([true, true, false]);
+        assert_eq!(
+            ranges,
+            [
+                Some(0..1),
+                Some(1..2),
+                Some(2..3),
+                None,
+                Some(3..4),
+                Some(4..5),
+                Some(5..6),
+                Some(6..7)
+            ]
+        );
+        assert_eq!(keep, [true, true, false, true, true, true, true]);
+        let shape = |v: &InputVariant| (v.allele_string.clone(), v.no_allele, v.standalone_feature);
+        assert_eq!(
+            variants.iter().map(shape).collect::<Vec<_>>(),
+            [
+                ("GG/*".to_string(), true, Some(0)),
+                ("G/-".to_string(), false, Some(1)),
+                ("G/T".to_string(), false, Some(2)),
+                ("G/-".to_string(), false, Some(0)),
+                ("G/T".to_string(), false, Some(1)),
+                ("GG/*".to_string(), true, Some(2)),
+                ("A/G".to_string(), false, None),
+            ]
+        );
+        assert!(variants[0].minimised && !variants[5].minimised);
+
+        let (variants, keep, ranges) = layout([false, true, false]);
+        assert_eq!(
+            ranges,
+            [
+                Some(0..2),
+                None,
+                Some(2..3),
+                Some(3..4),
+                Some(4..5),
+                Some(5..6)
+            ]
+        );
+        assert_eq!(keep, [true, false, true, true, true, true]);
+        assert_eq!(variants.len(), 6);
+        assert!(variants[4].no_allele && variants[0].standalone_feature.is_none());
+    }
+
     /// Ensembl VEP's buffer ends where the chromosome changes (InputBuffer.pm:195-200,
     /// :224-234), so a `--check_frequency` drop resets the rejoin of the split
     /// records on its own chromosome's run alone: a drop among chromosome 22's
     /// records leaves chromosome 21's written as one, and a run with a drop of a
     /// feature no allele stands for is reset like one with a dropped allele. A
     /// record left with some of its alleles stays in the buffer
-    /// (BaseCacheVariation.pm:350-357), so it resets nothing; a split record left
+    /// (BaseCacheVariation.pm:351-358), so it resets nothing; a split record left
     /// with some of its features lost one, so it does.
     #[test]
     fn a_drop_resets_the_rejoin_of_its_own_chromosomes_run_alone() {

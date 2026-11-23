@@ -30,7 +30,7 @@
  "covers": [
   "Downstream"
  ],
- "suites": {
+ "datasets": {
   "ownspan37": {
    "reference": "output.txt",
    "input": "candidates.vcf",
@@ -78,7 +78,7 @@
  },
  "records": [
   {
-   "suite": "ownspan37",
+   "dataset": "ownspan37",
    "vcf": "19\t13136318\t2948877\tACAAT\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -88,7 +88,7 @@
    ]
   },
   {
-   "suite": "ownspan37",
+   "dataset": "ownspan37",
    "vcf": "21\t46916424\t1444038\tGC\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -98,7 +98,7 @@
    ]
   },
   {
-   "suite": "ownspan37",
+   "dataset": "ownspan37",
    "vcf": "21\t46925057\t2833728\tGGA\tG\t.\t.\t.",
    "combinations": [
     "frameshift_variant",
@@ -107,7 +107,7 @@
    ]
   },
   {
-   "suite": "ownspan37",
+   "dataset": "ownspan37",
    "vcf": "21\t46925109\t988798\tG\tGC\t.\t.\t.",
    "combinations": [
     "frameshift_variant",
@@ -116,7 +116,7 @@
    ]
   },
   {
-   "suite": "ownspan37",
+   "dataset": "ownspan37",
    "vcf": "21\t46925136\t4730422\tC\tCTCCCGGCCCCCCAGGCCCCCCAGGGCCCCCTTCATTTCCTGGCCCTCACAGGCAGAGTAAGTCAGTGGGGAGTGGGCCCCGGGCAGAGGCCGCCTCGTGTGGCTTCGTGTTCCCACCTTGGTTTCTCTCCTGCAGCTATCAGCGT\t.\t.\t.",
    "combinations": [
     "frameshift_variant",
@@ -125,7 +125,7 @@
    ]
   },
   {
-   "suite": "ownspan37",
+   "dataset": "ownspan37",
    "vcf": "X\t152955921\t817103\tCG\tC\t.\t.\t.",
    "combinations": [
     "frameshift_variant",
@@ -134,7 +134,7 @@
    ]
   },
   {
-   "suite": "ownspan37",
+   "dataset": "ownspan37",
    "vcf": "X\t152956806\t1397100\tTAC\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -144,7 +144,7 @@
    ]
   },
   {
-   "suite": "ownspan37",
+   "dataset": "ownspan37",
    "vcf": "X\t152959652\t3066443\tTC\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -154,7 +154,7 @@
    ]
   },
   {
-   "suite": "ownspan37",
+   "dataset": "ownspan37",
    "vcf": "X\t152960006\t1703957\tACGACATTGCCTGTATGATCGGGTAC\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -163,7 +163,7 @@
    ]
   },
   {
-   "suite": "ownspan37",
+   "dataset": "ownspan37",
    "vcf": "X\t152960073\t2583096\tC\tCCCGCTGGTCTGCATGGTAAGGGCTGGGGGAGGTGGGGCAGGGCGGGGGGCGAGGCAGGGCGGGGTAGGGGCCCCATTAACCGCAGCATTCTGGTCCGTAGGGCATCTTCATCTTCAACGTTGTGTACTACGAG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -172,7 +172,7 @@
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "flag_sets": [

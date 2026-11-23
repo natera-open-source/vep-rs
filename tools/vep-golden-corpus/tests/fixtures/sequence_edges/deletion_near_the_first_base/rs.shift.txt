@@ -1,0 +1,2 @@
+near_the_edge	edge:500	-	-	TXR	Transcript	non_coding_transcript_exon_variant	403	-	-	-	-	-	IMPACT=MODIFIER;STRAND=-1;SHIFT_LENGTH=2
+away_from_it	edge:1500	-	-	TXA	Transcript	non_coding_transcript_exon_variant	403	-	-	-	-	-	IMPACT=MODIFIER;STRAND=-1;SHIFT_LENGTH=2

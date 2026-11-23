@@ -1,0 +1,1 @@
+ERROR: [fastvep_plugin_tuples] tests/fixtures/maps/twice.tsv:3: X_ONE is mapped twice

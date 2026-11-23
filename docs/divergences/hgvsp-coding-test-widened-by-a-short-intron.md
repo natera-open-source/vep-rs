@@ -1,12 +1,12 @@
 # The HGVSp of an insertion before an intron's end on a transcript with a very short intron
 
-**The defect in one sentence.** On a transcript that has an intron of 13 bases or fewer, Ensembl VEP 116.2 widens every exon by 12 bases in the test that decides whether an allele is coding. Under `--hgvs`, an insertion written up to 12 bases before the end of another, ordinary intron inside the coding region, and carried to that end by the 3' shift, then gets a definite `HGVSp` beside columns that place it in the intron. vep-rs writes no `HGVSp` for such an insertion.
+**The defect in one sentence.** On a transcript that has an intron of 13 bases or fewer, Ensembl VEP 116.3 widens every exon by 12 bases in the test that decides whether an allele is coding. Under `--hgvs`, an insertion written up to 12 bases before the end of another, ordinary intron inside the coding region, and carried to that end by the 3' shift, then gets a definite `HGVSp` beside columns that place it in the intron. vep-rs writes no `HGVSp` for such an insertion.
 
 **Why this is a defect.** The comment above the widening gives its purpose: a variant that falls in such an intron is to be called exonic. The test is asked of every exon of the transcript, so it also answers yes beside an exon thousands of bases from the short intron. The `HGVSp` that follows states one protein consequence, the inserted bases taken as the exon's first bases. The row's `HGVSc` names intron positions alone, and its CDS and protein positions are empty. The HGVS Nomenclature gives `p.?`, an unknown effect, where a change most probably affects splicing. On a transcript with the same junction and no short intron, Ensembl VEP writes no `HGVSp` for the same record.
 
 **What vep-rs does instead.** For an insertion the record writes inside an intron and the 3' shift carries to the intron's end, vep-rs asks the test of the allele as written, without the widening. Both bases of these insertions are intron bases, so vep-rs writes no `HGVSp`, on a transcript with a short intron as on one without. Its `HGVSc`, its position columns and its consequence terms on these rows equal Ensembl VEP's.
 
-**Where it is in Ensembl VEP's source** (`ensembl-variation` and `ensembl` at release/116, the modules the Ensembl VEP 116.2 image holds):
+**Where it is in Ensembl VEP's source** (`ensembl-variation` and `ensembl` at release/116, the modules the Ensembl VEP 116.3 image holds):
 
 - `Bio/EnsEMBL/Variation/BaseTranscriptVariation.pm`, lines 1032-1035, `_create_intron_trees`: an intron whose end lies at most 12 above its start, 13 bases or fewer, sets `_has_frameshift_intron` on the transcript. Lines 912-915 set it where no interval tree is installed.
 - The same file, lines 858-866, `_overlapped_exons`: the comment of lines 858-860 says such introns "can be up to 12 bases long and if a variant falls in one we actually want to call it exonic". Line 861 sets a stretch of 12 when the flag is set, and line 865 asks the exon tree for the allele's span widened by it on both sides.
@@ -24,7 +24,7 @@
 
 **How often the shape occurs.** Tier 2, see [Intended divergences from Ensembl VEP](../intended-divergences.md): the shape is an insertion written 1 to 12 bases before the end of an intron, which the 3' shift carries to that end. The intron stands before a coding exon, on a transcript that has an intron of 13 bases or fewer elsewhere, in a run with `--hgvs`.
 
-The rows Ensembl VEP 116.2 writes for the genome-wide ClinVar files hold 265 rows on GRCh37 and 1,212 on GRCh38 whose `HGVSc` is a duplication ending on an intron's last base before a coding base, or an insertion between the two. On every one Ensembl VEP's test answers the same with the widening as without it, so the files hold 0 rows of the shape.
+The rows Ensembl VEP 116.3 writes for the genome-wide ClinVar files hold 265 rows on GRCh37 and 1,212 on GRCh38 whose `HGVSc` is a duplication ending on an intron's last base before a coding base, or an insertion between the two. On every one Ensembl VEP's test answers the same with the widening as without it, so the files hold 0 rows of the shape.
 
 Two records written for this page show it, one on each strand. They give 22 transcript rows in each engine, 12 and 10, and the engines differ on 4 of them, in the `HGVSp` alone, in each of the default, tab, VCF and JSON formats. The records stand 1 and 3 bases before the intron's end; the reach of 12 bases is the stretch of line 861.
 
@@ -32,7 +32,7 @@ Tuple, pair, set aside, charged and the other scoring terms are defined in [How 
 
 ## 1. A copy of an intron's last base, written one base before the intron's end, on ENST00000288304
 
-**In short.** `21 38610911 intron_end_dup_21_38610911 C CC` on GRCh37 inserts one base between 21:38610911 and 21:38610912, inside an intron of 1,886 bases of the reverse-strand transcript ENST00000288304. The base copies the intron's last base and is written one base before the intron's end. Both engines write `splice_acceptor_variant` and the `HGVSc` `c.76-1dup`, with no CDS or protein position. Ensembl VEP 116.2 adds `HGVSp=ENSP00000288304.5:p.Pro26AlafsTer27`, and vep-rs writes no `HGVSp`. The transcript has introns of 2 and 4 bases more than 10,000 bases away. On ENST00000309117, which shares the junction and has no such intron, neither engine writes an `HGVSp`.
+**In short.** `21 38610911 intron_end_dup_21_38610911 C CC` on GRCh37 inserts one base between 21:38610911 and 21:38610912, inside an intron of 1,886 bases of the reverse-strand transcript ENST00000288304. The base copies the intron's last base and is written one base before the intron's end. Both engines write `splice_acceptor_variant` and the `HGVSc` `c.76-1dup`, with no CDS or protein position. Ensembl VEP 116.3 adds `HGVSp=ENSP00000288304.5:p.Pro26AlafsTer27`, and vep-rs writes no `HGVSp`. The transcript has introns of 2 and 4 bases more than 10,000 bases away. On ENST00000309117, which shares the junction and has no such intron, neither engine writes an `HGVSp`.
 
 ### 1.1 What a reader needs to know first
 
@@ -71,7 +71,7 @@ Both engines run `--hgvs` with a reference FASTA.
 
 ### 1.3 What each engine writes
 
-The row on ENST00000288304 in the default format. Ensembl VEP 116.2:
+The row on ENST00000288304 in the default format. Ensembl VEP 116.3:
 
 ```
 intron_end_dup_21_38610911	21:38610911-38610912	C	ENSG00000157538	ENST00000288304	Transcript	splice_acceptor_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=-1;HGVSc=ENST00000288304.5:c.76-1dup;HGVSp=ENSP00000288304.5:p.Pro26AlafsTer27;HGVS_OFFSET=-1
@@ -87,7 +87,7 @@ The rows differ in one item of the last column, the `HGVSp`. Ensembl VEP's value
 
 The record writes 12 rows in each engine, and the other 11 are equal in every column. Four of the 12 are rows of coding transcripts with an exon at 21:38610761-38610910:
 
-| Transcript | `HGVSc` | Ensembl VEP 116.2 | vep-rs |
+| Transcript | `HGVSc` | Ensembl VEP 116.3 | vep-rs |
 | --- | --- | --- | --- |
 | ENST00000288304 | `c.76-1dup` | `p.Pro26AlafsTer27` | no `HGVSp` |
 | ENST00000309117 | `c.202-1dup` | no `HGVSp` | no `HGVSp` |
@@ -100,7 +100,7 @@ A second record makes the same change on the forward strand, three bases at once
 
 The second record writes 10 rows in each engine, all on transcripts whose exon opens at 100333343:
 
-| Transcripts | Short intron | Ensembl VEP 116.2 | vep-rs |
+| Transcripts | Short intron | Ensembl VEP 116.3 | vep-rs |
 | --- | --- | --- | --- |
 | ENST00000538115, ENST00000542585, ENST00000546292 | 2 bases | `p.Arg18dup` | no `HGVSp` |
 | ENST00000546213 | 2 bases | no `HGVSp` | no `HGVSp` |
@@ -152,13 +152,13 @@ vep -i record.vcf -o out.txt --offline \
 grep -E 'ENST00000288304|ENST00000309117' out.txt
 ```
 
-The committed GRCh37 cache holds the twelve transcripts of the record, and the committed FASTA holds chromosome 21. vep-rs writes no `HGVSp` on either row. Ensembl VEP 116.2 takes `--hgvs` with the cache options of [Reproducing these examples](reproducing.md), its GRCh37 cache and the GRCh37 FASTA. It writes `p.Pro26AlafsTer27` on the first row and no `HGVSp` on the second.
+The committed GRCh37 cache holds the twelve transcripts of the record, and the committed FASTA holds chromosome 21. vep-rs writes no `HGVSp` on either row. Ensembl VEP 116.3 takes `--hgvs` with the cache options of [Reproducing these examples](reproducing.md), its GRCh37 cache and the GRCh37 FASTA. It writes `p.Pro26AlafsTer27` on the first row and no `HGVSp` on the second.
 
-The entry's reproduction, `scripts/divergences/reproductions/hgvsp_coding_test_widened_by_a_short_intron.toml`, runs both records on both engines. No committed cache holds the chromosome 7 transcripts, so it copies the two region files of Ensembl VEP's GRCh37 cache that hold the records, `21/38000001-39000000` and `7/100000001-101000000`, and converts them in the Ensembl VEP image. It holds seven rows to their recorded values: the four that differ, and the rows of ENST00000309117, ENST00000348028 and ENST00000546213, which do not.
+The entry's reproduction, `scripts/divergences/reproductions/hgvsp_coding_test_widened_by_a_short_intron.toml`, runs both records on both engines. No committed cache holds the chromosome 7 transcripts, so it copies the two region files of Ensembl VEP's GRCh37 cache that hold the records, `21/38000001-39000000` and `7/100000001-101000000`, and converts them with `tools/vep-storable-to-json`. It holds seven rows to their recorded values: the four that differ, and the rows of ENST00000309117, ENST00000348028 and ENST00000546213, which do not.
 
 ### 1.7 How the comparator treats this class
 
-Nothing is set aside. The format comparator (`scripts/concordance/compare_vep_formats.py`) has no class of this shape. A disagreement of the shape is reported as a difference in `HGVSp` and charged to vep-rs.
+Nothing is set aside. The format comparator (`tools/vep-formats-compare`) has no class of this shape. A disagreement of the shape is reported as a difference in `HGVSp` and charged to vep-rs.
 
 The terms of such a row stay equal and are no part of this entry. Both engines apply the stretch when they set `exon` for the consequence terms. The rule of `splice_polypyrimidine_tract_variant` asks for `exon => 0` (`Bio/EnsEMBL/Variation/Utils/Constants.pm`, lines 977-980), so the term is left off the four rows of the second record whose transcripts have the 2-base intron, in both engines, and written on the other six.
 

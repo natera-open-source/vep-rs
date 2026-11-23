@@ -1,0 +1,17 @@
+closed_fixture	closed	Ensembl VEP ['ENSP2:p.Leu4%3D'], vep-rs ['ENSP2:p.Leu4%3D']
+still_present_fixture	still-present
+
+| verdict | entries |
+| --- | --- |
+| still-present | 1 |
+| closed | 1 |
+| changed | 0 |
+| error | 0 |
+| total | 2 |
+
+| entry | verdict | implementation | item |
+| --- | --- | --- | --- |
+| closed_fixture | closed | code | tools/vep-divergence-reevaluate/tests/fixtures/implementation/recorded.rs::PLAIN_EQUALS_SIGN |
+| closed_fixture | closed | tests | tools/vep-divergence-reevaluate/tests/fixtures/implementation/recorded.rs::tests::the_equals_sign_is_written_plain |
+| closed_fixture | closed | rules | tools/vep-divergence-reevaluate/tests/fixtures/implementation/recorded.rs::is_escaped_equals_sign |
+outputs under {{ROOT}}/work

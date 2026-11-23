@@ -1,0 +1,45 @@
+cross-chromosome mask active over 2 chromosomes (9 transcripts)
+Found 4 input VCF files
+  Processing 01_breakends...
+    Input=6 Perl=9 Rust=14 Intersect=8 P=0.5714 R=0.8889 F1=0.6957
+  Processing 02_one_sided...
+    Input=12 Perl=11 Rust=11 Intersect=1 P=0.0909 R=0.0909 F1=0.0909
+  Processing 03_tandem_repeats...
+    Input=6 Perl=5 Rust=10 Intersect=1 P=0.1000 R=0.2000 F1=0.1333
+  Processing 04_small_variants...
+    Input=1 Perl=2 Rust=2 Intersect=1 P=0.5000 R=0.5000 F1=0.5000
+
+Overall (adjusted): P=0.6471 R=0.8462 F1=0.7333  (excluded 20 Rust-extra + 14 Perl-extra transcript divergences)
+Overall (raw):      P=0.2973 R=0.4074 F1=0.3438
+  Perl tuples: 27
+  Rust tuples: 37
+  Intersection: 11
+  Only Perl: 16
+  Only Rust: 26
+  Excluded (Rust-extra transcripts): 20
+  Excluded (Perl-extra transcripts): 14
+  Excluded (<CNV:TR> literal expansion): 3 of 9 Rust / 3 of 4 Perl class tuples
+    03_tandem_repeats: 3 of 9 Rust / 4 Perl
+
+Per-variant-type summary:
+  BND                   n=    7  F1=0.5926 <--
+  Multi_allelic         n=    2  F1=0.0000 <--
+  RefOnly               n=    1  F1=0.0000 <--
+  SNV                   n=    1  F1=0.0000 <--
+  Small_INS             n=    1  F1=0.5000 <--
+  Spanning              n=    1  F1=0.0000 <--
+  Symbolic_CNV          n=    4  F1=0.0000 <--
+  Symbolic_DEL          n=    8  F1=0.1538 <--
+
+Per-file summary:
+  01_breakends                         Raw F1=0.6957  Adj F1=0.9412  (+0.2455)
+  02_one_sided                         Raw F1=0.0909  Adj F1=0.2857  (+0.1948)
+  03_tandem_repeats                    Raw F1=0.1333  Adj F1=0.5000  (+0.3667)
+  04_small_variants                    Raw F1=0.5000  Adj F1=1.0000  (+0.5000)
+
+Reference release 116.2: 1 vep-rs tuple(s) on 1 record(s) the reference skipped; 1 own-end breakend row(s) and 3 synonym-mate row(s) set aside; 1 FASTA-named-slice record(s) counted; 2 bare-breakpoint reference-allele row(s) set aside; 1 record(s) with a mate past the buffer's 32-bit bound counted; 2 gVCF-site row(s), 4 dot-breakend pair row(s), 1 missing-ALT row(s), 3 non-integer-coordinate row(s), 2 empty-expansion row(s), 2 star-alone row(s), 2 numified-POS row(s) and 1 dropped-allele row(s) set aside; 2 scored-engine row(s) at Locations the reference wrote nothing for counted
+Reports written to: {{OUTPUT_DIR}}/
+  concordance_report.json
+  concordance_report.md
+  discordant.tsv (42 discordant records)
+  discordant_adjusted.tsv (8 one-sided records surviving every mask)

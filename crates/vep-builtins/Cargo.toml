@@ -9,6 +9,7 @@ rust-version.workspace = true
 keywords.workspace = true
 categories.workspace = true
 description = "Built-in plugins and custom annotation sources of vep-rs, a Rust reimplementation of Ensembl VEP"
+exclude = ["tests/"]
 
 [dependencies]
 vep-core = { workspace = true }
@@ -16,6 +17,7 @@ vep-fasta = { workspace = true }
 flate2 = { workspace = true }
 noodles = { workspace = true }
 bigtools = { workspace = true }
+rusqlite = { workspace = true }
 bstr = { workspace = true }
 indexmap = { workspace = true }
 serde = { workspace = true }

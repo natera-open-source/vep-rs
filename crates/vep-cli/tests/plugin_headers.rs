@@ -3,7 +3,7 @@
 
 //! Every loaded built-in plugin's header descriptions reach the three headed
 //! formats as Ensembl VEP prints them (`OutputFactory.pm` `get_plugin_headers`,
-//! :2407-2421): the default format's `## <KEY> : <description>` lines after the
+//! :2416-2430): the default format's `## <KEY> : <description>` lines after the
 //! flag fields (`OutputFactory/VEP_output.pm:167`), the tab format's column
 //! descriptions and columns (`OutputFactory/Tab.pm:149-156`) and the VCF
 //! format's `##<KEY>=<description>` metas and CSQ Format entries
@@ -67,7 +67,7 @@ const GNOMADMT_DEFAULT_FIELDS: [&str; 5] = [
 /// beside `DBNSFP_README` under `dir`. The stack needs `--hgvs` (HGVSIntronOffset)
 /// and a reference (UTRAnnotator).
 fn plugin_args(dir: &Path) -> Vec<String> {
-    let dbnsfp = golden("GRCh38-plugin-dbnsfp").join("plugin_data");
+    let dbnsfp = golden("GRCh38-plugin-dbnsfp-fixture").join("plugin_data");
     for name in [
         "dbNSFP4.9a_grch38_synthetic.gz",
         "dbNSFP4.9a_grch38_synthetic.gz.tbi",
@@ -80,11 +80,11 @@ fn plugin_args(dir: &Path) -> Vec<String> {
         format!(
             "CADD,snv={},indels={}",
             file(
-                "GRCh38-plugin-cadd",
+                "GRCh38-plugin-cadd-fixture",
                 "plugin_data/whole_genome_SNVs_synthetic.tsv.gz"
             ),
             file(
-                "GRCh38-plugin-cadd",
+                "GRCh38-plugin-cadd-fixture",
                 "plugin_data/gnomad.genomes.r4.0.indel.synthetic.tsv.gz"
             )
         ),
@@ -152,7 +152,7 @@ fn plugin_args(dir: &Path) -> Vec<String> {
         format!(
             "dbscSNV,{}",
             file(
-                "GRCh38-plugin-dbscsnv",
+                "GRCh38-plugin-dbscsnv-fixture",
                 "plugin_data/dbscSNV1.1_synthetic_GRCh38.txt.gz"
             )
         ),
@@ -170,11 +170,11 @@ fn plugin_args(dir: &Path) -> Vec<String> {
         format!(
             "SpliceAI,snv={},indel={}",
             file(
-                "GRCh38-plugin-spliceai",
+                "GRCh38-plugin-spliceai-fixture",
                 "plugin_data/spliceai_scores.raw.snv.hg38.synthetic.vcf.gz"
             ),
             file(
-                "GRCh38-plugin-spliceai",
+                "GRCh38-plugin-spliceai-fixture",
                 "plugin_data/spliceai_scores.raw.indel.hg38.synthetic.vcf.gz"
             )
         ),
@@ -198,7 +198,7 @@ fn plugin_args(dir: &Path) -> Vec<String> {
         ),
         format!(
             "AVI,file={},raw=1,links=1",
-            file("GRCh38-plugin-avi", "avi_scores.synthetic.tsv.gz")
+            file("GRCh38-plugin-avi-fixture", "avi_scores.synthetic.tsv.gz")
         ),
         format!(
             "OpenTargets,file={}",
@@ -287,18 +287,27 @@ fn data_lines(out: &Path) -> Vec<String> {
 }
 
 /// The stack's header info as the binary builds it: the same arguments loaded
-/// into a registry under the run's output format, assembly and `--hgvs`, every
-/// plugin loaded, plugin by plugin in load order with each plugin's keys sorted.
+/// into a registry under the run's output format, assembly, `--hgvs` and
+/// reference, every plugin loaded, plugin by plugin in load order with each
+/// plugin's keys sorted.
 fn expected_header_info(plugin_args: &[String], format: OutputFormat) -> Vec<(String, String)> {
     let mut registry = BuiltinRegistry::new();
-    let run = RunContext {
-        output_format: format,
-        refseq: false,
-        merged: false,
-        hgvs: true,
-        plugin_dirs: &[],
-    };
-    let outcome = registry.load_from_args_for_run(plugin_args, None, Some(Assembly::Grch38), run);
+    let mut run = RunContext::default();
+    run.output_format = format;
+    run.refseq = false;
+    run.merged = false;
+    run.hgvs = true;
+    run.plugin_dirs = &[];
+    let reference = vep_fasta::IndexedFasta::from_path(
+        golden("GRCh38-plugin-utr-annotator").join("reference.fa.gz"),
+    )
+    .unwrap();
+    let outcome = registry.load_from_args_for_run(
+        plugin_args,
+        Some(std::sync::Arc::new(reference)),
+        Some(Assembly::Grch38),
+        run,
+    );
     assert!(outcome.failed.is_empty(), "{:?}", outcome.failed);
     assert!(outcome.unresolved.is_empty(), "{:?}", outcome.unresolved);
     assert_eq!(registry.plugin_count(), plugin_args.len());

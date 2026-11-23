@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 //! Identifier input (`--format id`), read as `Parser/ID.pm`
-//! `create_VariationFeatures` (release/116.2, lines 138-197) reads it over
+//! `create_VariationFeatures` (release/116.3, lines 138-197) reads it over
 //! ensembl-io's `ListBasedParser`: one variant identifier per line,
 //!
 //! ```text

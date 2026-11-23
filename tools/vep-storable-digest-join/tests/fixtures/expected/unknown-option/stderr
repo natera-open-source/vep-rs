@@ -1,0 +1,2 @@
+usage: vep-storable-digest-join [-h] --version-a VERSION_A --dump-a DUMP_A --version-b VERSION_B --dump-b DUMP_B --out-dir OUT_DIR [--parity-csv PARITY_CSV] [--sweep-id SWEEP_ID] [--assembly ASSEMBLY]
+vep-storable-digest-join: error: unrecognized arguments: --verbose

@@ -37,7 +37,7 @@
  "covers": [
   "REVEL"
  ],
- "suites": {
+ "datasets": {
   "GRCh38-plugin-revel": {
    "reference": "default.txt",
    "input": "variants.vcf",
@@ -138,7 +138,7 @@
  },
  "records": [
   {
-   "suite": "GRCh38-plugin-revel",
+   "dataset": "GRCh38-plugin-revel",
    "vcf": "21\t13610379\ttwo_alts_13610379\tG\tA,T\t.\t.\t.",
    "combinations": [
     "missense_variant"
@@ -148,7 +148,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-revel",
+   "dataset": "GRCh38-plugin-revel",
    "vcf": "21\t26965413\t4637665\tT\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -156,7 +156,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-revel",
+   "dataset": "GRCh38-plugin-revel",
    "vcf": "21\t34799407\t14467\tG\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -164,7 +164,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-revel",
+   "dataset": "GRCh38-plugin-revel",
    "vcf": "21\t34880692\t1042743\tG\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -173,7 +173,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-revel",
+   "dataset": "GRCh38-plugin-revel",
    "vcf": "21\t36369767\t4552610\tG\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -185,7 +185,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-revel",
+   "dataset": "GRCh38-plugin-revel",
    "vcf": "21\t37072532\t666911\tG\tGACAATCTGTGGAAAAGGAAC\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -196,21 +196,21 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-revel",
+   "dataset": "GRCh38-plugin-revel",
    "vcf": "21\t38383536\tshared_base_38383536\tGG\tGA\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "GRCh38-plugin-revel",
+   "dataset": "GRCh38-plugin-revel",
    "vcf": "21\t38383537\t2257665\tG\tA\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "GRCh38-plugin-revel",
+   "dataset": "GRCh38-plugin-revel",
    "vcf": "21\t41489594\t4454534\tC\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant",
@@ -222,7 +222,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-revel",
+   "dataset": "GRCh38-plugin-revel",
    "vcf": "21\t42110916\t4195987\tC\tT\t.\t.\t.",
    "combinations": [
     "missense_variant",
@@ -230,7 +230,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-revel",
+   "dataset": "GRCh38-plugin-revel",
    "vcf": "21\t42123031\t4602042\tG\tC\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -240,7 +240,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-revel",
+   "dataset": "GRCh38-plugin-revel",
    "vcf": "21\t42477295\t2652707\tA\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -250,7 +250,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-revel",
+   "dataset": "GRCh38-plugin-revel",
    "vcf": "21\t43059216\t2773303\tG\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -261,7 +261,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-revel",
+   "dataset": "GRCh38-plugin-revel",
    "vcf": "21\t44550948\t3865777\tC\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -271,7 +271,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-revel",
+   "dataset": "GRCh38-plugin-revel",
    "vcf": "21\t45491273\t1402023\tC\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -283,7 +283,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-revel",
+   "dataset": "GRCh38-plugin-revel",
    "vcf": "21\t46126238\t280693\tG\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,splice_donor_variant",
@@ -294,7 +294,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-revel",
+   "dataset": "GRCh38-plugin-revel",
    "vcf": "21\t46126516\t340377\tG\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -306,7 +306,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-revel",
+   "dataset": "GRCh38-plugin-revel",
    "vcf": "21\t46151609\t2409003\tT\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -319,7 +319,7 @@
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "flag_sets": [

@@ -1,0 +1,5 @@
+location	allele	transcript_id	cds_start	cds_end	translation_start	translation_end	ref_codon	alt_codon	ref_peptide	alt_peptide	consequence_set
+21:1000	A	ENST001	10	10	4	4	gCa	gTa	A	V	missense_variant
+21:0500
+21:0600	A
+21:0500

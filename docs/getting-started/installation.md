@@ -21,7 +21,7 @@ The same build writes `target/release/vep-cache-builder`, which installs a relea
 
 ### From crates.io
 
-The workspace's crates are on crates.io from 0.6.0 on, each under the release's version: the release workflow publishes them when a maintainer publishes the release page, so a version appears there minutes after its page. `vep-cli` is the crate of the `vep` command, and `cargo install` then builds that release's `vep` from source with Rust 1.89+:
+The workspace's crates are on crates.io from 0.6.0 on, each under the release's version. For a release after 0.6.0 the `crates.io` workflow (`.github/workflows/crates-io.yml`) publishes them when a maintainer publishes the release page, so a version is there once a run of that workflow for the release has finished. `vep-cli` is the crate of the `vep` command, and `cargo install` then builds that release's `vep` from source with Rust 1.89+:
 
 ```bash
 cargo install vep-cli --locked
@@ -45,6 +45,7 @@ In a checkout of the repository, `.cargo/config.toml` compiles every build for a
 | `x86_64-apple-darwin` | `x86-64-v3` | AVX2, BMI2 and FMA: every Intel Mac macOS 26 supports |
 
 - On an older CPU, a binary built or downloaded this way aborts with an illegal-instruction fault rather than running slowly. The generic archives are slower than the measured ones; each release page reports the measured difference, or that the release did not time them.
+- Cargo reads `.cargo/config.toml` from the directory a build is started in and its parent directories, not from the manifest's directory. A build started outside the checkout with `--manifest-path` does not apply the checkout's file; start the build inside the checkout.
 - To build for the machine you are on, override the flag for that build. `RUSTFLAGS` replaces the file's setting; it does not add to it. You can also edit the `rustflags` line for your target in `.cargo/config.toml`.
 
 ```bash
@@ -62,7 +63,7 @@ The command below runs from a checkout of the repository, whose `tests/golden/11
 ```bash
 docker run --rm --user "$(id -u):$(id -g)" \
   -v "$PWD/tests/golden/116/GRCh37:/corpus:ro" -v "$PWD:/data" \
-  ghcr.io/natera-open-source/vep-rs:0.6.0 \
+  ghcr.io/natera-open-source/vep-rs:1.0.0 \
   vep --json_cache /corpus/json_cache --assembly GRCh37 \
   -i /corpus/variants.vcf -o /data/output.txt
 ```
@@ -74,7 +75,7 @@ docker run --rm --user "$(id -u):$(id -g)" \
 Each image carries a build-provenance attestation:
 
 ```bash
-gh attestation verify oci://ghcr.io/natera-open-source/vep-rs:0.6.0 \
+gh attestation verify oci://ghcr.io/natera-open-source/vep-rs:1.0.0 \
   --repo natera-open-source/vep-rs
 ```
 
@@ -83,9 +84,9 @@ gh attestation verify oci://ghcr.io/natera-open-source/vep-rs:0.6.0 \
 Apptainer and Singularity run the same image from a single file. `apptainer pull docker://ghcr.io/natera-open-source/vep-rs:X.Y.Z` writes `vep-rs_X.Y.Z.sif` from the image for the host's architecture: the generic binary under the multi-platform tags, the measured one under `X.Y.Z-x86-64-v3` or `X.Y.Z-neoverse-v1` on a host that meets its CPU floor. The container runs as the invoking user with the host's current directory, home directory and `/tmp` mounted, so the image's own user and `/data` working directory do not apply. A cache or output directory anywhere else is mounted with `--bind`:
 
 ```bash
-apptainer pull docker://ghcr.io/natera-open-source/vep-rs:0.6.0
+apptainer pull docker://ghcr.io/natera-open-source/vep-rs:1.0.0
 apptainer exec --bind /shared/vep-cache:/cache:ro --bind "$PWD/results:/out" \
-  vep-rs_0.6.0.sif \
+  vep-rs_1.0.0.sif \
   vep --json_cache /cache/json_cache --assembly GRCh37 \
   -i variants.vcf -o /out/output.txt
 ```
@@ -100,11 +101,11 @@ The Bioconda channel carries vep-rs as the package `vep-rs`, built for Linux and
 conda install -c conda-forge -c bioconda vep-rs
 ```
 
-The channel builds a release from its own copy of the recipe, `recipes/vep-rs` in [bioconda-recipes](https://github.com/bioconda/bioconda-recipes), once that copy names the release, so the version it serves can trail the newest release. `conda search -c bioconda vep-rs` lists the versions the channel holds.
+The channel builds a release from its own copy of the recipe, `recipes/vep-rs` in [bioconda-recipes](https://github.com/bioconda/bioconda-recipes), once that copy names the release, so the version it serves can trail the newest release. `conda search -c bioconda vep-rs` lists the versions the channel holds. `vep --version` prints the installed one.
 
 The repository holds a Bioconda recipe, [`bioconda/vep-rs`](../../bioconda/vep-rs/meta.yaml). It builds `vep`, `vep-cache-builder` and `vep-cache-converter` from the source tarball of the published release its `version` names (`vep-rs-X.Y.Z.tar.gz`, the `git archive` the release workflow cuts) with `cargo build --release --locked`.
 
-Linux x86_64 compiles for `x86-64-v2` and Linux aarch64 for a generic CPU, the floors of the generic release archives. `.cargo/config.toml` would otherwise compile for `x86-64-v3` and Neoverse V1, which abort with an illegal-instruction fault below those floors. On Linux the build links conda-forge OpenSSL, the same library the release binaries link.
+Linux x86_64 compiles for `x86-64-v2` and Linux aarch64 for a generic CPU, the floors of the generic release archives; macOS x86_64 compiles for `x86-64-v2` and macOS arm64 for `apple-m1`. `.cargo/config.toml` would otherwise compile for `x86-64-v3` and Neoverse V1, which abort with an illegal-instruction fault below those floors. On Linux the build links conda-forge OpenSSL, the same library the release binaries link.
 
 [What vep-rs does not do](what-vep-rs-does-not-do.md#bioconda) says what a pipeline that installs Ensembl VEP from Bioconda changes.
 
@@ -122,7 +123,7 @@ vep-rs runs where a release archive or the container image runs. Every archive h
 | Windows | none | the container image under Docker, or the Linux x86_64 archive under WSL2; neither is tested on Windows |
 | FreeBSD, Linux with musl | none | not built |
 
-There is no Homebrew formula: macOS users install from the release archive or build from source. The two macOS archives are not timed by the release measurement, so no page states their speed.
+There is no Homebrew formula: macOS users install from the release archive or the Bioconda package, or build from source. The two macOS archives are not timed by the release measurement, so no page states their speed.
 
 ## Memory
 

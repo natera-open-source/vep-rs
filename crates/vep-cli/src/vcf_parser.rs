@@ -10,7 +10,7 @@
 //! other structural record's alleles are built by
 //! `vep_core::sv_record::structural_variants`.
 //!
-//! Perl citations name modules of ensembl-vep release/116 (`Bio/EnsEMBL/VEP/...`);
+//! Ensembl VEP source citations name modules of ensembl-vep release/116 (`Bio/EnsEMBL/VEP/...`);
 //! `Sequence.pm`, `StructuralVariationFeature.pm` and `StructuralVariationOverlap.pm`
 //! are in ensembl-variation release/116 and `BaseVCF4.pm` is in ensembl-io release/116.
 
@@ -41,6 +41,7 @@ use crate::individuals::{add_reference_allele_row, RecordAlleles, RecordReading}
 
 /// What a run parses every VCF data line with.
 #[derive(Clone, Copy)]
+#[non_exhaustive]
 pub struct VcfParse<'a> {
     /// Whether each produced variant keeps the source line in
     /// `InputVariant::raw_input`, one buffer shared by the record's alleles. The
@@ -69,11 +70,12 @@ pub struct VcfParse<'a> {
     /// keeps its symbolic reading.
     pub fasta: Option<&'a IndexedFasta>,
     /// The run's per-individual reading and `--process_ref_homs`
-    /// ([`RecordReading`]): a sequence record's alleles are copied per individual,
+    /// (`RecordReading`): a sequence record's alleles are copied per individual,
     /// or gain the reference allele's row; a structural record is returned as it
     /// is, since Ensembl VEP builds it before either step (Parser/VCF.pm:237-245
     /// returns ahead of :355), and a `<CNV:TR>` expansion, built there too, is read
     /// once and gains the row alone.
+    #[doc(hidden)]
     pub reading: RecordReading<'a>,
 }
 
@@ -102,7 +104,7 @@ pub fn parse_vcf_line(line: &str, capture_raw_input: bool) -> anyhow::Result<Vec
 }
 
 /// [`parse_vcf_line`] under the run's `--max_sv_size` (`None` for `-1`).
-pub fn parse_vcf_line_with_max_sv_size(
+pub(crate) fn parse_vcf_line_with_max_sv_size(
     line: &str,
     capture_raw_input: bool,
     max_sv_size: Option<u64>,
@@ -222,8 +224,8 @@ fn parse_columns(
 
     let svtype = info.value("SVTYPE").filter(|v| perl_true(v));
 
-    // The ALT column as Perl's list-context `split` reads it, a gVCF variant site read
-    // as its real alleles (`variant_alts`), each ALT keeping its written position. Only
+    // The ALT column as Perl's list-context `split` in Ensembl VEP reads it, a gVCF variant site
+    // read as its real alleles (`variant_alts`), each ALT keeping its written position. Only
     // a list naming a `<NON_REF>` block can lose an allele there; any other list is
     // read as written.
     let written = written_alts(alt_field);
@@ -240,15 +242,15 @@ fn parse_columns(
     // decided; both stay in the record's allele string, which Ensembl VEP builds from
     // every ALT (Parser/VCF.pm:469). On the sequence path Ensembl VEP numbers a `*`
     // and writes no row for it (VariationFeatureOverlap.pm:483-484,
-    // `perl_allele_numbers`) and reads a `.` that is not the first ALT as an allele of
+    // `overlap_alleles_kept`) and reads a `.` that is not the first ALT as an allele of
     // its own (a list opening with `.` is a non-variant record, `:259`); on the
     // structural path it writes a row per `/`-part of the string, `*` and `.` included
     // (StructuralVariationOverlap.pm:64-77, `structural_variants`). `<*>` is not
-    // filtered: Perl treats it as a non-SV allele at POS unless INFO/SVTYPE routes the
+    // filtered: Ensembl VEP treats it as a non-SV allele at POS unless INFO/SVTYPE routes the
     // record. `<CPX>` is not filtered: absent from `%SO_TERMS`, it is parsed with the
     // `vep_skip` mark (`sv_so_term_and_class`). `<DEL:*>` is routed first: under a true
     // INFO/SVTYPE it is a structural allele of the record's class, and on the sequence
-    // path an allele Ensembl VEP numbers and writes no row for (`perl_allele_numbers`).
+    // path an allele Ensembl VEP numbers and writes no row for (`overlap_alleles_kept`).
     let names_an_allele = alts.iter().any(|(_, alt)| names_allele(alt));
 
     let structural = routes_to_structural(ref_allele, alts, svtype);
@@ -349,7 +351,7 @@ fn parse_columns(
 /// object with `most_severe_consequence` `?`, as Ensembl VEP writes them. A
 /// Perl-true INFO/SVTYPE is kept as the record's type, the mark of the line
 /// Ensembl VEP routes to its structural path (`:237-245`), whose stored line is
-/// filled as that path fills it ([`stored_line`]). Under `--individual`
+/// filled as that path fills it (`stored_line`). Under `--individual`
 /// the record is copied per individual like any other (`:355-376`): a `0/0`
 /// genotype is a reference-homozygous copy, and the alleles a genotype indexes
 /// are the reference and every ALT as written, none chopped (`:300-336` never
@@ -357,6 +359,7 @@ fn parse_columns(
 /// an ALT beyond `.` carries that allele (`:627-639` builds the copy's allele
 /// string from the alleles named, and nothing reads the record's non-variant
 /// mark on it), so such a record is read as a sequence record for its copies.
+#[doc(hidden)]
 pub fn non_variant_record(line: &str, parse: &VcfParse<'_>) -> anyhow::Result<Vec<InputVariant>> {
     let columns = vcf_columns(line)?;
     non_variant_columns(&columns, &columns.info(), line, parse)
@@ -499,33 +502,27 @@ fn sequence_variants(
     let (vep_start, vep_end) = (chopped.start, chopped.end);
     let bi_allelic = alts.len() == 1;
     // Under `--minimal` a multi-allelic record splits when any of its chopped alleles
-    // trims (InputBuffer.pm:665-666, :700); every ALT then takes its written position
-    // as its number and a repeated ALT writes its own rows (:684), so the overlap
-    // rules of `perl_allele_numbers` give way to the split's, which
-    // `split_minimal_record` applies once `validate_vf` has read the record.
+    // trims (InputBuffer.pm:665-666, :704); a repeated ALT then writes its own rows
+    // (:658), so the overlap rule of `overlap_alleles_kept` gives way to the split's,
+    // which `split_minimal_record` applies once `validate_vf` has read the record.
     let split_changes = parse.minimal
         && !bi_allelic
         && split_changes_record(&chopped.reference, chopped.alts.iter().map(String::as_str));
-    let numbers = perl_allele_numbers(&chopped.reference, &chopped.alts);
+    let kept = overlap_alleles_kept(&chopped.reference, &chopped.alts);
     let written_case_record = chopped.written_case_string();
     let mut rows: SmallVec<[AlleleRow; 2]> = SmallVec::new();
-    for (k, (((allele_idx, alt), vep_alt), number)) in
-        alts.iter().zip(&chopped.alts).zip(&numbers).enumerate()
+    for (k, (((allele_idx, alt), vep_alt), kept)) in
+        alts.iter().zip(&chopped.alts).zip(&kept).enumerate()
     {
         // The `*` test reads the chopped allele, not the written one: the one ALT
         // `C*` of a `C` record is the allele `*` VariationFeatureOverlap.pm:484 skips.
         if vep_alt == "*" || *alt == "." || vep_alt == "<DEL:*>" {
             continue;
         }
-        // A dropped allele, or one Ensembl VEP numbers and writes no row for; under
-        // the split it writes its rows under its written position. A gVCF block
-        // `variant_alts` left out keeps its written position's number, a record
-        // Ensembl VEP drops whole (`sv_routing::variant_alts`).
-        let number = match *number {
-            Some(number) => Some(number + (*allele_idx - k) as u32),
-            None if split_changes => None,
-            None => continue,
-        };
+        // A dropped allele writes no row; under the split it writes its rows.
+        if !*kept && !split_changes {
+            continue;
+        }
 
         // `trim_sequences` (ensembl-variation Sequence.pm:971) reads an end of 0
         // as no end and resets it to `start + length(ref) - 1`, so the one
@@ -543,7 +540,8 @@ fn sequence_variants(
 
         // Secondary minimisation of a bi-allelic record. Ensembl VEP
         // (Parser.pm `post_process_vfs`) minimises a bi-allelic record whose
-        // alleles differ in length whatever the flags, and under `--minimal`
+        // alleles as written differ in length and carry no `-` (:872-875)
+        // whatever the flags, and under `--minimal`
         // every bi-allelic record (`minimise_alleles`, :852, :995): `trim_sequences`
         // (Sequence.pm) trims from the left while both alleles are non-empty,
         // then from the right, and maps an emptied allele to `-`, so `T/TT`
@@ -559,7 +557,7 @@ fn sequence_variants(
         if bi_allelic
             && chopped.reference != "-"
             && vep_alt != "-"
-            && (parse.minimal || chopped.reference.len() != vep_alt.len())
+            && (parse.minimal || perl_minimises(raw_reference, alt))
         {
             // The end is the record's own, not derived from the trimmed reference
             // (Sequence.pm:1004-1031): a `<CNV:TR>` expansion over the REF column spans
@@ -594,7 +592,6 @@ fn sequence_variants(
         rows.push(AlleleRow {
             chopped_index: k,
             allele_index: *allele_idx,
-            number,
             end,
             minimised,
             written_case,
@@ -617,6 +614,19 @@ fn sequence_variants(
             reference.into_bytes(),
             alt.into_bytes(),
         );
+        // The chop alone writes an emptied reference as `-` (Parser/VCF.pm:331);
+        // an empty REF column beside one ALT is never chopped and is joined as it
+        // stands (:342), so the feature's string opens with `/`. At POS 0, where
+        // the end is held at 0, the record stays the insertion the coordinate
+        // check refuses. The expansion of a `<CNV:TR>` record over an empty run
+        // is joined from its empty reference (:516-518, :535) and has no `-`.
+        if bi_allelic
+            && raw_reference.is_empty()
+            && vep_start == row.end + 1
+            && variant.allele_string.starts_with('-')
+        {
+            variant.allele_string.remove(0);
+        }
         if let Some(minimised) = row.minimised {
             variant.original_allele_string = Some(std::mem::replace(
                 &mut variant.allele_string,
@@ -631,16 +641,16 @@ fn sequence_variants(
         }
         variant.written_case_allele_string = row.written_case;
         // `minimise_alleles` marks every bi-allelic record it handles (Parser.pm:1011),
-        // trimmed or not.
-        if bi_allelic && parse.minimal {
+        // trimmed or not, and passes over a string with no reference before its `/`
+        // (`:974`).
+        if bi_allelic && parse.minimal && !raw_reference.is_empty() {
             variant.minimised = true;
         }
+        // ALLELE_NUM is the allele's written place, `allele_index + 1`, whichever ALT
+        // before it was dropped or left out as a gVCF block (`sv_routing::variant_alts`).
+        // Ensembl VEP counts the alleles it kept (VariationFeatureOverlap.pm:477-490),
+        // which falls behind the written place once an ALT was dropped.
         variant.allele_index = row.allele_index;
-        // ALLELE_NUM is Ensembl VEP's count of the alleles it kept, which falls
-        // behind the written position once an ALT was dropped.
-        variant.allele_num = row
-            .number
-            .filter(|number| *number as usize != row.allele_index + 1);
         variant.uploaded_allele_string = Some(chopped.uploaded.clone());
         variant.record_allele_string_multi = chopped.working.clone();
         variants.push(variant);
@@ -655,8 +665,6 @@ struct AlleleRow {
     chopped_index: usize,
     /// The allele's written position.
     allele_index: usize,
-    /// Ensembl VEP's number for the allele, `None` under a `--minimal` split.
-    number: Option<u32>,
     /// The variant's end before any minimisation.
     end: u64,
     /// The secondary minimisation, when it changed the allele.
@@ -818,8 +826,8 @@ fn tandem_repeat_warnings(
     }
     let mut warnings = Vec::new();
     if let Some(svlen) = info.value_written("SVLEN") {
-        // `uniq(split(/,/, $info->{SVLEN}))` (`:505`): a trailing empty value is no
-        // value, so `SVLEN=9,` is one reference.
+        // `uniq(split(/,/, $info->{SVLEN}))` (`Parser/VCF.pm:505`): a trailing empty
+        // value is no value, so `SVLEN=9,` is one reference.
         let mut values = perl_split(svlen, &[',']);
         let first = values.next().unwrap_or("");
         if values.any(|value| value != first) {
@@ -896,7 +904,7 @@ fn tandem_repeat_record(
         .sequence(chr, start, end)
         .map(|bases| String::from_utf8_lossy(&bases).into_owned())
         .unwrap_or_else(|| ref_allele.to_string());
-    // Without RN the record has one repeat sequence per `CNV:TR` in Perl's type
+    // Without RN the record has one repeat sequence per `CNV:TR` in Ensembl VEP's type
     // string (`() = $type =~ /CNV:TR/g`, Parser/VCF.pm:397), which is INFO/SVTYPE
     // when the ALTs open outside the VCF 4.4 forms (`:473-474`) and is matched
     // case-sensitively where `get_SO_term` matches the type without case.
@@ -1057,6 +1065,7 @@ pub(crate) fn stored_line_bytes(line: &[u8], stored: &str) -> Vec<u8> {
 }
 
 /// The columns of a VCF data line as Ensembl VEP's parser holds them.
+#[doc(hidden)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VcfColumns<'a> {
     /// CHROM through INFO. A line that stops after ALT, QUAL or FILTER reads `.` for
@@ -1090,13 +1099,13 @@ impl<'a> VcfColumns<'a> {
     }
 }
 
-/// Splits a VCF data line into its columns as Perl's `split` does, its trailing
+/// Splits a VCF data line into its columns as Perl's `split` in Ensembl VEP does, its trailing
 /// empty columns dropped. FORMAT and the samples are not split until asked for,
 /// since a multisample line can carry thousands of them. A line with fewer than
 /// five columns names no ALT and is refused here, where Ensembl VEP reads the
 /// missing ALT as an empty string and carries the record as a feature with no
 /// allele to annotate.
-pub fn vcf_columns(line: &str) -> anyhow::Result<VcfColumns<'_>> {
+pub(crate) fn vcf_columns(line: &str) -> anyhow::Result<VcfColumns<'_>> {
     let mut columns = TabColumns::new(line.trim_end_matches('\t'));
     let mut fixed = ["."; 8];
     let mut present = 0;
@@ -1158,6 +1167,7 @@ impl<'a> Iterator for TabColumns<'a> {
 /// tabs whatever the run's `--delimiter`, which Parser/VCF.pm:129 hands to the
 /// data records alone, so the line is read as written, Perl's `split` dropping
 /// the empty fields a trailing tab leaves.
+#[doc(hidden)]
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SampleColumns {
     /// The sample names in column order: the columns after a ninth column
@@ -1170,7 +1180,7 @@ pub struct SampleColumns {
 }
 
 /// The sample columns of a `#CHROM` header line ([`SampleColumns`]).
-pub fn sample_columns(header_line: &str) -> SampleColumns {
+pub(crate) fn sample_columns(header_line: &str) -> SampleColumns {
     let columns: Vec<&str> = perl_split(header_line, &['\t']).collect();
     let genotyped = columns.get(8) == Some(&"FORMAT");
     let first_sample = if genotyped { 9 } else { 8 };
@@ -1196,8 +1206,23 @@ pub(crate) fn vcf_line_is_non_variant(line: &str) -> bool {
         && vcf_columns(line).is_ok_and(|columns| columns_are_non_variant(&columns, &columns.info()))
 }
 
+/// What [`missing_alt_under_svtype`] says of a record.
+const MISSING_ALT_UNDER_SVTYPE: &str = "ALT is '.', which names no allele, so the record is read as a non-variant record and its INFO/SVTYPE is not annotated";
+
+/// What a non-variant line ([`vcf_line_is_non_variant`]) draws when its INFO
+/// carries a true `SVTYPE`: Ensembl VEP tests the structural shape first
+/// (Parser/VCF.pm:237-245) and annotates such a record from INFO alone, while
+/// here it stays a non-variant record, dropped without `--allow_non_variant`
+/// and carried without consequences under it. `None` for every other line.
+pub(crate) fn missing_alt_under_svtype(line: &str) -> Option<&'static str> {
+    let columns = vcf_columns(line).ok()?;
+    let info = columns.info();
+    (columns_are_non_variant(&columns, &info) && info.value("SVTYPE").is_some_and(perl_true))
+        .then_some(MISSING_ALT_UNDER_SVTYPE)
+}
+
 /// Whether the first comma-separated field of an ALT column is `.`: the column is
-/// `.` or opens with `.,`, which is where Perl's list-context `split` puts `.`
+/// `.` or opens with `.,`, which is where Perl's list-context `split` in Ensembl VEP puts `.`
 /// first (a column of commas alone has no field).
 fn first_alt_is_dot(alt_field: &str) -> bool {
     alt_field == "." || alt_field.starts_with(".,")
@@ -1393,7 +1418,7 @@ impl Chopped {
 /// and writes the JSON object with `most_severe_consequence` `?`:
 /// `21 30396602 x TTGA *,*` is the feature `TGA/*/*` at 30396603-30396605 and
 /// `21 30289183 x C C,<DEL:*>` the feature `-/-/<DEL:*>` at 30289184-30289183 in
-/// Ensembl VEP 116.2's JSON.
+/// Ensembl VEP 116.3's JSON.
 fn allele_less_record(chr: String, chopped: Chopped) -> InputVariant {
     let mut variant = InputVariant::new(
         chr,
@@ -1419,25 +1444,22 @@ fn allele_less_record(chr: String, chopped: Chopped) -> InputVariant {
     variant
 }
 
-/// The allele numbers Ensembl VEP gives a sequence record's ALTs when it builds the
-/// overlap alleles (VariationFeatureOverlap.pm:459-491), one entry per chopped ALT
-/// in written order: the reference is seen first and an allele seen before is dropped
-/// without a number (`:461`, an ALT equal to the reference or a repeat of an earlier
-/// ALT), every other ALT takes the next number (`:483`), `*` and `<DEL:*>` theirs
-/// without a row (`:484`). So `C G,C` numbers `G` 1 alone, `C G,G,T` numbers `G` 1
-/// and `T` 2, and `C CG,<DEL:*>` numbers the insertion 1 and the `<DEL:*>` 2, as
-/// Ensembl VEP 116.2 prints under `--allele_number`.
-pub(crate) fn perl_allele_numbers(reference: &str, alts: &[String]) -> SmallVec<[Option<u32>; 4]> {
+/// Which ALTs of a sequence record Ensembl VEP's overlap alleles keep
+/// (VariationFeatureOverlap.pm:459-467), one entry per chopped ALT in written order:
+/// the reference is seen first and an allele seen before is dropped (`:463`), an ALT
+/// equal to the reference or a repeat of an earlier ALT. A kept ALT writes its rows
+/// unless it is a `*` or a `<DEL:*>` (`:484`). So `C G,C` keeps `G` alone, `C G,G,T`
+/// keeps `G` and `T`, and `C CG,<DEL:*>` keeps both ALTs. The number an ALT prints
+/// under `--allele_number` is its written place whichever ALT before it was dropped.
+pub(crate) fn overlap_alleles_kept(reference: &str, alts: &[String]) -> SmallVec<[bool; 4]> {
     let mut seen: SmallVec<[&str; 4]> = smallvec::smallvec![reference];
-    let mut number = 0;
     alts.iter()
         .map(|alt| {
             if seen.contains(&alt.as_str()) {
-                return None;
+                return false;
             }
             seen.push(alt);
-            number += 1;
-            Some(number)
+            true
         })
         .collect()
 }
@@ -1786,7 +1808,7 @@ mod tests {
 
     /// Ensembl VEP accepts a VCF record of five columns (Parser/VCF.pm:464-466 fills
     /// QUAL, FILTER and INFO with `.`; its own test `t/Parser_VCF.t:265-282` reads
-    /// `21 25587759 test G C` as the feature `G/C` at 25587759): 116.2 annotates
+    /// `21 25587759 test G C` as the feature `G/C` at 25587759): 116.3 annotates
     /// `21 30289183 x C G`, `... G 50` and `... G 50 PASS` as it annotates the
     /// eight-column line, writes `21 30289183 x C G . . CSQ=...` and
     /// `... G 50 PASS CSQ=...` in its VCF output, keeps the short line of a sequence
@@ -1847,7 +1869,7 @@ mod tests {
         }
     }
 
-    /// The stored line is the one Ensembl VEP 116.2 echoes. Trailing empty columns are
+    /// The stored line is the one Ensembl VEP 116.3 echoes. Trailing empty columns are
     /// no columns (ensembl-io ColumnBasedParser.pm:250): `21 30289183 x C G,G,T` with
     /// three trailing tabs is a five-column record whose VCF line prints `. . CSQ=...`
     /// and whose JSON `input` ends at the ALT. The structural path fills QUAL, FILTER
@@ -1944,7 +1966,7 @@ mod tests {
     }
 
     /// The stored bytes of a line that is not UTF-8 are the stored line's fields
-    /// with the written bytes kept: Ensembl VEP 116.2 splits the bytes it read
+    /// with the written bytes kept: Ensembl VEP 116.3 splits the bytes it read
     /// (ensembl-io ColumnBasedParser.pm:250), so a five-column record with three
     /// trailing tabs and a Latin-1 `0xE9` in its ID is stored as five fields; the
     /// structural path's fill (Parser/VCF.pm:464-466) turns the record's QUAL `0`
@@ -2063,7 +2085,7 @@ mod tests {
     /// `<DEL:*>` on the sequence path (Parser/VCF.pm:237-245 route a record there when
     /// no bracket token is free of `*` and INFO/SVTYPE is not true) is an allele Ensembl
     /// VEP numbers and writes no row for (VariationFeatureOverlap.pm:483-484, beside
-    /// `*`), left whole by the anchor chop (`:315`). Ensembl VEP 116.2 writes for
+    /// `*`), left whole by the anchor chop (`:315`). Ensembl VEP 116.3 writes for
     /// `21 30289183 x C CG,<DEL:*>` one row, `21:30289183-30289184 G` with ALLELE_NUM 1
     /// and VARIANT_CLASS `sequence_alteration`, and for `C G,<DEL:*>` one row `G`,
     /// ALLELE_NUM 1; under `SVTYPE=DEL` with an END the token is the record's structural
@@ -2111,7 +2133,7 @@ mod tests {
     }
 
     /// A record whose only ALT is `<DEL:*>` has no allele to annotate: Ensembl VEP
-    /// 116.2 writes no row for `21 30289183 x C <DEL:*>` in the default and tab
+    /// 116.3 writes no row for `21 30289183 x C <DEL:*>` in the default and tab
     /// formats, carries its VCF line without CSQ and writes the JSON object
     /// `allele_string` `C/<DEL:*>`, 30289183-30289183, `most_severe_consequence` `?`,
     /// `variant_class` `deletion`; `C C,<DEL:*>` is chopped first (`:306-316`) and is
@@ -2138,7 +2160,7 @@ mod tests {
         assert_eq!(v.uploaded_variation(), "21_30289183_C/C/<DEL:*>");
 
         // The chop compares the first characters as written (Parser/VCF.pm:306, before
-        // the upper-casing at Parser.pm:554): Ensembl VEP 116.2 leaves `C c,<DEL:*>`
+        // the upper-casing at Parser.pm:554): Ensembl VEP 116.3 leaves `C c,<DEL:*>`
         // unchopped, the JSON object `C/C/<DEL:*>` at 30289183-30289183.
         let lower = parse_vcf_line("21\t30289183\t.\tC\tc,<DEL:*>\t.\t.\t.", true).unwrap();
         assert!(lower[0].no_allele);
@@ -2151,8 +2173,8 @@ mod tests {
     /// the vote holds the empty string alone and the start moves (`:306-310`), so
     /// `21 30289183 x <empty> *,*` is `-/*/*` at 30289184-30289182, the span
     /// `validate_vf` refuses as `start > end+1 : (START=30289184, END=30289182)` on both
-    /// engines; `<empty> G` is `-/G` at 30289183-30289182 on both, and at POS 1 the
-    /// insertion `-/G` at 1-0, an end `minimise_alleles` never resets since the
+    /// engines; `<empty> G` is `/G` at 30289183-30289182 on both, and at POS 1 the
+    /// insertion `/G` at 1-0, an end `minimise_alleles` never resets since the
     /// unchopped `/G` fails its `.+/.+` test (Parser.pm:974).
     #[test]
     fn an_empty_ref_keeps_ensembl_veps_end() {
@@ -2163,10 +2185,10 @@ mod tests {
         assert_eq!(stars[0].record_allele_string(), "-/*/*");
         let insertion = parse_vcf_line("21\t30289183\tx\t\tG\t.\t.\t.", true).unwrap();
         assert_eq!((insertion[0].start, insertion[0].end), (30289183, 30289182));
-        assert_eq!(insertion[0].allele_string, "-/G");
+        assert_eq!(insertion[0].allele_string, "/G");
         let at_one = parse_vcf_line("21\t1\tx\t\tG\t.\t.\t.", true).unwrap();
         assert_eq!((at_one[0].start, at_one[0].end), (1, 0));
-        assert_eq!(at_one[0].allele_string, "-/G");
+        assert_eq!(at_one[0].allele_string, "/G");
         assert_eq!(
             trim_multi_alleles("", &["*", "*"]),
             ("-".to_string(), vec!["*".to_string(), "*".to_string()], 1)
@@ -2181,10 +2203,71 @@ mod tests {
         );
     }
 
+    /// The anchor chop alone writes an emptied reference as `-` (Parser/VCF.pm:331).
+    /// An empty REF column beside one ALT is never chopped (`:328` compares its
+    /// empty first character with the ALT's), so the feature's string keeps an
+    /// empty reference before its `/` (`:342`): a string no reference branch of
+    /// `SO_variation_class` takes (Sequence.pm:362, :376, :392) and
+    /// `minimise_alleles` passes over unmarked (Parser.pm:974). Ensembl VEP
+    /// writes `21 30289183 x <empty> <DEL:*>C` as the JSON object `/<DEL:*>C`,
+    /// 30289183-30289182, `variant_class` `sequence_alteration`, and `<empty> G`
+    /// as `/G` with the same class, without `MINIMISED` under `--minimal`. The
+    /// same insertion written with its anchor base, `21 30289182 x T T<DEL:*>C`,
+    /// is the chopped `-/<DEL:*>C`, class `deletion`.
+    #[test]
+    fn an_empty_ref_beside_one_alt_keeps_an_empty_reference_in_its_allele_string() {
+        for (record, allele_string) in [
+            ("21\t30289183\tx\t\t<DEL:*>C\t.\t.\t.", "/<DEL:*>C"),
+            ("21\t30289183\tx\t\tG\t.\t.\t.", "/G"),
+            ("21\t30289183\tx\t\tg\t.\t.\t.", "/G"),
+        ] {
+            let parsed = parse_vcf_line(record, true).unwrap();
+            assert_eq!(parsed.len(), 1, "{record}: {parsed:?}");
+            let v = &parsed[0];
+            assert!(!v.no_allele && !v.minimised, "{record}: {v:?}");
+            assert_eq!(v.allele_string, allele_string, "{record}");
+            assert_eq!(v.record_allele_string(), allele_string, "{record}");
+            assert_eq!((v.start, v.end), (30289183, 30289182), "{record}");
+            assert_eq!(v.ref_allele, b"-", "{record}");
+            assert_eq!(v.class_so_term(), "sequence_alteration", "{record}");
+
+            let minimal = parse_minimal(record);
+            assert_eq!(minimal.len(), 1, "{record}: {minimal:?}");
+            assert!(!minimal[0].minimised, "{record}: {minimal:?}");
+            assert_eq!(minimal[0].allele_string, allele_string, "{record}");
+        }
+        let anchored = parse_vcf_line("21\t30289182\tx\tT\tT<DEL:*>C\t.\t.\t.", true).unwrap();
+        assert_eq!(anchored.len(), 1, "{anchored:?}");
+        assert_eq!(anchored[0].allele_string, "-/<DEL:*>C");
+        assert_eq!((anchored[0].start, anchored[0].end), (30289183, 30289182));
+        assert_eq!(anchored[0].class_so_term(), "deletion");
+    }
+
+    /// A `<CNV:TR>` record whose REF column is empty and whose run holds no base
+    /// (`SVLEN=0`, or `END` at POS) keeps the column as its reference, `sub_Slice`
+    /// yielding nothing (Parser/VCF.pm:516-518), and its feature takes the
+    /// expansion as built (`:535`), a string that opens with `/` and holds no `-`
+    /// to take off. Ensembl VEP writes `21 30289183 x <empty> <CNV:TR>` with
+    /// `RUS=TCA;RUC=4` as the JSON object `/TCATCATCATCA`, 30289184-30289183.
+    #[test]
+    fn a_tandem_repeat_over_an_empty_run_keeps_the_slash_that_opens_its_string() {
+        let (_dir, fasta) = fasta_of(RUN_FASTA);
+        for info in ["SVLEN=0;RN=1;RUS=TCA;RUC=4", "END=10;RN=1;RUS=TCA;RUC=4"] {
+            let parsed = parse_with_fasta(
+                &format!("21\t10\tx\t\t<CNV:TR>\t.\t.\t{info}"),
+                Some(&fasta),
+                Some(DEFAULT_MAX_SV_SIZE),
+            );
+            assert_eq!(parsed.len(), 1, "{info}: {parsed:?}");
+            assert_eq!(parsed[0].allele_string, "/TCATCATCATCA", "{info}");
+            assert_eq!((parsed[0].start, parsed[0].end), (11, 10), "{info}");
+        }
+    }
+
     /// An ALT equal to the reference is dropped when Ensembl VEP builds the overlap
     /// alleles (VariationFeatureOverlap.pm:461 and :481, before the counter at :483), so
     /// it takes no row and no allele number, after the anchor chop and the upper-casing
-    /// of `validate_vf` (Parser.pm:554). Ensembl VEP 116.2 writes for `21 30289183 x C C`
+    /// of `validate_vf` (Parser.pm:554). Ensembl VEP 116.3 writes for `21 30289183 x C C`
     /// no row and the JSON object `C/C`, `?`, `variant_class` `SNV`; for `C G,C` the one
     /// row `G` with ALLELE_NUM 1; for `21 30396602 x TTGA T,TTGA` the one row
     /// `21:30396603-30396605 -` with ALLELE_NUM 1 under the string `TGA/-/TGA`; for
@@ -2235,21 +2318,25 @@ mod tests {
         assert_eq!(lower[0].uploaded_variation(), "21_30289183_C/c");
     }
 
-    /// A repeated ALT is dropped at VariationFeatureOverlap.pm:461 before the counter,
-    /// so the alleles after it take the next numbers: Ensembl VEP 116.2 writes for
-    /// `21 30289183 x C G,G,T` the rows `G` ALLELE_NUM 1 and `T` ALLELE_NUM 2, for
-    /// `C G,T,G` the same two rows, for `C G,G` and `C g,G` the one row `G`, and keeps
-    /// the written string (`C/G/G/T`) as the record's allele string; `*` and `<DEL:*>`
-    /// take a number without a row (`:483-484`), so `C *,G` numbers `G` 2.
+    /// A repeated ALT writes no row of its own and every ALT keeps the number of its
+    /// written place: `21 30289183 x C G,G,T` writes the rows `G` ALLELE_NUM 1 and `T`
+    /// ALLELE_NUM 3, `C G,T,G` the rows `G` 1 and `T` 2, `C G,G` and `C g,G` the one
+    /// row `G`, and the record keeps the written string (`C/G/G/T`) as its allele
+    /// string; an ALT written after one equal to the reference keeps its place too,
+    /// and `*` and `<DEL:*>` hold a place without a row, so `C *,G` numbers `G` 2.
+    /// Ensembl VEP 116.3 drops the repeat before it counts
+    /// (VariationFeatureOverlap.pm:463, `:477-490`) and prints 2 for the `T` of
+    /// `C G,G,T`, the number of the repeated `G`.
     #[test]
-    fn duplicate_alts_deduplicated_allele_num() {
+    fn an_alt_after_a_repeated_alt_keeps_its_written_place() {
+        let number = |v: &InputVariant| v.allele_num.unwrap_or(v.allele_index as u32 + 1);
         let repeated = parse_vcf_line("21\t30289183\tx\tC\tG,G,T\t.\t.\t.", true).unwrap();
         assert_eq!(
             repeated
                 .iter()
-                .map(|v| (v.alt_allele(), v.allele_index, v.allele_num))
+                .map(|v| (v.alt_allele(), v.allele_index, number(v)))
                 .collect::<Vec<_>>(),
-            [(&b"G"[..], 0, None), (&b"T"[..], 2, Some(2))]
+            [(&b"G"[..], 0, 1), (&b"T"[..], 2, 3)]
         );
         assert!(repeated
             .iter()
@@ -2259,9 +2346,17 @@ mod tests {
         assert_eq!(
             apart
                 .iter()
-                .map(|v| (v.alt_allele(), v.allele_index, v.allele_num))
+                .map(|v| (v.alt_allele(), v.allele_index, number(v)))
                 .collect::<Vec<_>>(),
-            [(&b"G"[..], 0, None), (&b"T"[..], 1, None)]
+            [(&b"G"[..], 0, 1), (&b"T"[..], 1, 2)]
+        );
+        let after_reference = parse_vcf_line("21\t30289183\tx\tC\tC,T\t.\t.\t.", true).unwrap();
+        assert_eq!(
+            after_reference
+                .iter()
+                .map(|v| (v.alt_allele(), v.allele_index, number(v)))
+                .collect::<Vec<_>>(),
+            [(&b"T"[..], 1, 2)]
         );
         for line in [
             "21\t30289183\tx\tC\tG,G\t.\t.\t.",
@@ -2274,23 +2369,20 @@ mod tests {
         }
         let star_first = parse_vcf_line("21\t30289183\tx\tC\t*,G\t.\t.\t.", true).unwrap();
         assert_eq!(star_first.len(), 1);
+        assert_eq!((star_first[0].allele_index, number(&star_first[0])), (1, 2));
         assert_eq!(
-            (star_first[0].allele_index, star_first[0].allele_num),
-            (1, None)
+            overlap_alleles_kept("C", &["*".into(), "G".into()]).as_slice(),
+            [true, true]
         );
         assert_eq!(
-            perl_allele_numbers("C", &["*".into(), "G".into()]).as_slice(),
-            [Some(1), Some(2)]
-        );
-        assert_eq!(
-            perl_allele_numbers("-", &["T".into(), "-".into(), "T".into()]).as_slice(),
-            [Some(1), None, None]
+            overlap_alleles_kept("-", &["T".into(), "-".into(), "T".into()]).as_slice(),
+            [true, false, false]
         );
     }
 
     /// Parser/VCF.pm:297 reads an ALT beginning with `D` or `I` as an indel whatever its
     /// length, so the anchor chop runs on same-length alleles behind that letter: Ensembl
-    /// VEP 116.2 annotates `21 30396602 x DA DG` as the SNV `A/G` at 30396603 (`:328-334`)
+    /// VEP 116.3 annotates `21 30396602 x DA DG` as the SNV `A/G` at 30396603 (`:328-334`)
     /// and `21 30289182 x DA DC,DG` as the SNVs `A/C/G` at 30289183 (`:306-308`), the
     /// uploaded alleles kept as written; `DA DG` without the letter, `TA TG`, is not
     /// chopped.
@@ -2334,11 +2426,11 @@ mod tests {
     }
 
     /// Parser/VCF.pm:555-558 marks a deletion with neither END nor SVLEN `vep_skip`
-    /// and warns `deletion looks incomplete`; at 116.2 `validate_svf` (Parser.pm:821-826)
+    /// and warns `deletion looks incomplete`; at 116.3 `validate_svf` (Parser.pm:821-826)
     /// then drops the record unless `--dont_skip` keeps it. The test runs on the term
     /// (`deletion` for `<DEL>` and `<CN0>`, `mobile_element_deletion` for
     /// `<DEL:ME:ALU>`) or on the type string of a type `%SO_TERMS` lacks
-    /// (`<INS>/<DEL>`), so Ensembl VEP 116.2 drops `21 30165850 x N <DEL>` with
+    /// (`<INS>/<DEL>`), so Ensembl VEP 116.3 drops `21 30165850 x N <DEL>` with
     /// `SVTYPE=DEL`, keeps it with `SVLEN=-100` or `END=30165851`, and never marks a
     /// `<DUP>` or `<INV>` for a missing extent.
     #[test]
@@ -2376,7 +2468,7 @@ mod tests {
     }
 
     /// A deletion whose END is POS has an empty span (`$start > $end`, Parser/VCF.pm:555):
-    /// Ensembl VEP 116.2 marks it, warns `deletion looks incomplete` and drops
+    /// Ensembl VEP 116.3 marks it, warns `deletion looks incomplete` and drops
     /// `21 30165850 x N <DEL> . . END=30165850`, which `--dont_skip` keeps as the pair
     /// 30165851-30165850; an END before POS fails `validate_vf`'s own coordinate check
     /// too (`start > end+1 : (START=30165851, END=30165800)`, Parser.pm:484-486) and is
@@ -2399,7 +2491,7 @@ mod tests {
         );
     }
 
-    /// POS 0 is the telomere's position in VCF. Ensembl VEP 116.2 annotates `21 0 x A G`
+    /// POS 0 is the telomere's position in VCF. Ensembl VEP 116.3 annotates `21 0 x A G`
     /// at `21:0` and `21 0 x AT A` at `21:1`, and skips `21 0 x A AT` with `Alleles look
     /// like an insertion (-/T) but coordinates are not start = end + 1 (START=1, END=1)`,
     /// because `trim_sequences` (Sequence.pm:971) reads the chopped record's end of 0 as
@@ -2458,7 +2550,7 @@ mod tests {
     /// the parts as written, the working string `C/G//T` the JSON `allele_string`
     /// prints; the empty part is the allele `-` to every overlap
     /// (VariationFeatureOverlap.pm:462), numbered 2 between `G` and `T`. Ensembl
-    /// VEP 116.2 writes three rows, `G`, `-` and `T`, each `UPLOADED_ALLELE=C/G//T`.
+    /// VEP 116.3 writes three rows, `G`, `-` and `T`, each `UPLOADED_ALLELE=C/G//T`.
     #[test]
     fn an_empty_alt_between_others_stays_empty_in_the_working_string() {
         let variants = parse_vcf_line("21\t30289183\t.\tC\tG,,T\t.\t.\t.", true).unwrap();
@@ -2540,7 +2632,7 @@ mod tests {
     /// here `21_34836522_GAGACGGA/-`, which OutputFactory.pm:900 rejects as the generated
     /// name. On the GRCh37 corpus record `21 34836521 TGAGACGGA T` the IDs `.;rs2`,
     /// `;rs2`, `0` and `0;rs2` therefore all yield the line name
-    /// `21_34836521_TGAGACGGA/T`, the name Ensembl VEP 116.2 writes for the record's
+    /// `21_34836521_TGAGACGGA/T`, the name Ensembl VEP 116.3 writes for the record's
     /// `.` ID, and `rs2;.` yields `rs2`. The JSON `id` (OutputFactory/JSON.pm:236) is the
     /// stored name after the `||=`: `.` for `.;rs2`, `21_34836522_GAGACGGA/-` for `;rs2`,
     /// `0` and `0;rs2`, `rs2` for `rs2;.`.
@@ -2569,7 +2661,7 @@ mod tests {
         assert_eq!(variants[0].variation_name(), "rs2");
     }
 
-    /// Ensembl VEP 116.2 on the GRCh37-hgvs corpus names `21 34971477 . C A`
+    /// Ensembl VEP 116.3 on the GRCh37-hgvs corpus names `21 34971477 . C A`
     /// `21_34971477_C/A`.
     #[test]
     fn dot_id_names_an_snv_by_its_line() {
@@ -2579,7 +2671,7 @@ mod tests {
         );
     }
 
-    /// Ensembl VEP 116.2 names `21 10463009 . T TG` (OutputFactory.pm, the line-name branch)
+    /// Ensembl VEP 116.3 names `21 10463009 . T TG` (OutputFactory.pm, the line-name branch)
     /// `21_10463009_T/TG` and `21 30677516 . TCACA T` (GRCh37-hgvs corpus)
     /// `21_30677516_TCACA/T`: the POS as written, not the anchor-trimmed start.
     #[test]
@@ -2605,7 +2697,7 @@ mod tests {
         assert_eq!(variants[0].uploaded_variation(), "21_100_ATT/AT");
     }
 
-    /// Ensembl VEP 116.2 on the GRCh37 corpus names both alleles of
+    /// Ensembl VEP 116.3 on the GRCh37 corpus names both alleles of
     /// `21 9489854 . T TAA,TAC` `21_9489854_T/TAA/TAC`; the ALT column is taken
     /// as written, a `*` allele included (OutputFactory.pm turns its commas to `/`).
     #[test]
@@ -2620,7 +2712,7 @@ mod tests {
         );
     }
 
-    /// Ensembl VEP 116.2 on the GRCh37 corpus names `21 33867341 . C <CN2>`
+    /// Ensembl VEP 116.3 on the GRCh37 corpus names `21 33867341 . C <CN2>`
     /// `21_33867341_C/<CN2>`: the REF base and the POS, where the structural
     /// variant itself starts at 33867342.
     #[test]
@@ -2758,7 +2850,7 @@ mod tests {
         assert_eq!(variants[0].alt_allele(), b"-");
     }
 
-    /// A sequence ALT beside a symbolic one: VEP 116.2 reads the record's type from
+    /// A sequence ALT beside a symbolic one: VEP 116.3 reads the record's type from
     /// INFO/SVTYPE (the joined ALTs open with a sequence allele) and writes one row
     /// per ALT, each with the class term as its Allele (the `synth_multi_mix` records
     /// of `tests/golden/116/GRCh37`, `deletion` twice per transcript).
@@ -2855,7 +2947,7 @@ mod tests {
     /// INFO/MATEID on a record whose only ALT is a single breakend names no mate:
     /// Ensembl VEP never reads MATEID, `_parse_breakends`
     /// (`StructuralVariationFeature.pm:1279-1283`) finds no bracket in `.N`, and the
-    /// row's Allele falls to `class_SO_term` (`OutputFactory.pm:2029`),
+    /// row's Allele falls to `class_SO_term` (`OutputFactory.pm:2038`),
     /// `chromosome_breakpoint`, as for the record without MATEID.
     #[test]
     fn single_breakend_with_mateid_is_parsed_as_without() {
@@ -2871,7 +2963,7 @@ mod tests {
 
     /// A bracket breakend record names its own breakend `N.` or `.N` whether or not
     /// INFO carries a MATEID (`StructuralVariationFeature.pm` `_parse_breakends`
-    /// builds the string from the bracket alleles alone): Ensembl VEP 116.2 writes
+    /// builds the string from the bracket alleles alone): Ensembl VEP 116.3 writes
     /// `N.` on both rows of `bnd_genic_with_intergenic_mate` (no MATEID) in the
     /// GRCh38-release116 golden corpus.
     #[test]
@@ -2923,7 +3015,7 @@ mod tests {
     /// a bracket mate only under `defined $info->{CHR2}`, so the record stays
     /// `N/<BND>` (`:499`) spanning POS+1 to POS+|SVLEN| (BaseVCF4.pm:302-305) with
     /// no breakend string, one allele whose Allele is `chromosome_breakpoint`
-    /// (OutputFactory.pm:2029); Ensembl VEP 116.2 writes `21:10870052-10922272
+    /// (OutputFactory.pm:2038); Ensembl VEP 116.3 writes `21:10870052-10922272
     /// chromosome_breakpoint` for it. INFO/END is deleted on a breakpoint record
     /// (`:487-489`) and never ends the span.
     #[test]
@@ -2946,7 +3038,7 @@ mod tests {
     /// A breakpoint record's INFO/END never ends its span (Parser/VCF.pm:487-489
     /// deletes it before the end is read again): `<BND>` with `END=30425750` and a
     /// bracket breakend with the same END are the single base at POS+1, as Ensembl
-    /// VEP 116.2 writes `21:30425651` for both; with CHR2 the deleted END is the
+    /// VEP 116.3 writes `21:30425651` for both; with CHR2 the deleted END is the
     /// mate position (`:493`), the span still the point.
     #[test]
     fn a_breakpoint_record_s_end_never_ends_its_span() {
@@ -2981,15 +3073,15 @@ mod tests {
 
     /// A `<BND>` names a mate through CHR2 with END2, else the deleted INFO/END
     /// (Parser/VCF.pm:493, `$info->{END2} || $incorrect_end`); POS2 is never read
-    /// and an END2 that is not a coordinate names nothing, so Ensembl VEP 116.2
+    /// and an END2 that is not a coordinate names nothing, so Ensembl VEP 116.3
     /// writes `chromosome_breakpoint` with no mate row for `CHR2=2;POS2=40000000`
-    /// and for `CHR2=21;END2=-7`. Perl's `||` falls to END only for an END2 that is
+    /// and for `CHR2=21;END2=-7`. Perl's `||` in Ensembl VEP falls to END only for an END2 that is
     /// empty or `0`: `END2=-7` beside `END=30425700` still names no mate, while
     /// `END2=0` reads END. A signed `+30425700` as END2 or END names none, as
     /// `_parse_breakends` reads the position as `[0-9]+`
     /// (`StructuralVariationFeature.pm:1276`). A bare `CHR2` names none (undef to
     /// `defined $info->{CHR2}`, `:491`), and `CHR2=` is defined and empty, so it builds
-    /// `N[:30425800[`, which the bracket regex refuses: Ensembl VEP 116.2 writes
+    /// `N[:30425800[`, which the bracket regex refuses: Ensembl VEP 116.3 writes
     /// `chromosome_breakpoint` for `CHR2=;END2=30425800`.
     #[test]
     fn pos2_or_an_unreadable_end2_names_no_mate() {
@@ -3033,7 +3125,7 @@ mod tests {
     /// The mate INFO/CHR2 names is written `N[CHR2:pos[` whatever the reference base
     /// (Parser/VCF.pm:495-496, `"N"` for a lone `<BND>`), and the own breakend takes the
     /// reference base (`_parse_breakends`, the `A` part of `A/N[21:30425700[`): Ensembl
-    /// VEP 116.2 writes `A.` and `N[21:30425700[` with ALLELE_NUM 0 and 1 for REF `A`,
+    /// VEP 116.3 writes `A.` and `N[21:30425700[` with ALLELE_NUM 0 and 1 for REF `A`,
     /// allele string `A/N[21:30425700[`, over the SVLEN span when there is one. A
     /// `<BND:X>` keeps its part (`N/<BND:X>/N[21:30425700[`) and `<BND>,<BND>` both of
     /// its (`N/<BND>/<BND>/N[21:30425700[`), each with one own breakend and one mate.
@@ -3079,7 +3171,7 @@ mod tests {
     }
 
     /// The bracket text keeps INFO's values as written and the record's string carries
-    /// the text whether or not a mate is parsed from it: Ensembl VEP 116.2 writes the
+    /// the text whether or not a mate is parsed from it: Ensembl VEP 116.3 writes the
     /// Allele `N[21:00030425700[` for `END2=00030425700` (the mate at 30425700), the
     /// allele string `N/N[21:-7[`, `N/N[21:+30425700[` and `N/N[21:abc[` with
     /// `chromosome_breakpoint` rows for an END2 the regex refuses, `N/N[:30425800[` for
@@ -3122,7 +3214,7 @@ mod tests {
 
     /// A dot-bounded ALT beside a bracket ALT lends the own breakend its base and gets no
     /// allele of its own (`_parse_breakends`, StructuralVariationFeature.pm:1280-1283
-    /// against :1322): Ensembl VEP 116.2 writes `N.` and `N[21:30425700[` for
+    /// against :1322): Ensembl VEP 116.3 writes `N.` and `N[21:30425700[` for
     /// `.N,N[21:30425700[` with REF `N` or `A`, and `.N` and `]21:30425700]N` for
     /// `N.,]21:30425700]N` (left-placed mate), whose string is `N/N./]21:30425700]N`.
     #[test]
@@ -3159,7 +3251,7 @@ mod tests {
     }
 
     /// SVLEN is read as Perl's `abs()` numifies it (BaseVCF4.pm:304-305): Ensembl VEP
-    /// 116.2 writes the pair `21:30425650-30425651` for `<DUP>`, `<INV>`, `<CNV>`, `<INS>`,
+    /// 116.3 writes the pair `21:30425650-30425651` for `<DUP>`, `<INV>`, `<CNV>`, `<INS>`,
     /// `<BND>` and `<INS:ME:ALU>` with `SVLEN=0`, `SVLEN=abc` or `SVLEN=` (an END beside
     /// them unread), and `21:30425651-30425950` for `SVLEN=300abc`, `SVLEN= 300` and
     /// `SVLEN=3e2`. A `<DEL>` with the pair is a record Ensembl VEP skips ("deletion looks
@@ -3205,7 +3297,7 @@ mod tests {
     }
 
     /// `validate_vf` (Parser.pm:483-488) skips a record whose end lies more than one base
-    /// before its start, and Ensembl VEP 116.2 does so for `END=0` and `END=30425000` at
+    /// before its start, and Ensembl VEP 116.3 does so for `END=0` and `END=30425000` at
     /// POS 30425650 for every class, a `<BND>` included, whose deleted END is re-read only
     /// when Perl reads it as true (Parser/VCF.pm:489), so `END=0` keeps the 0 and `END=`
     /// the empty string ("Invalid start or end coordinate"). `END=30425650` is the pair
@@ -3251,7 +3343,7 @@ mod tests {
     }
 
     /// A repeated INFO key reads its last value, as the hash Ensembl VEP's parser builds
-    /// does (BaseVCF4.pm:581-583): Ensembl VEP 116.2 writes `21:30425651-30425950` for
+    /// does (BaseVCF4.pm:581-583): Ensembl VEP 116.3 writes `21:30425651-30425950` for
     /// `SVLEN=-100;SVLEN=-300`, `21:30425651-30425900` for `END=30425700;END=30425900`,
     /// the mate `N[21:30425800[` for `END2=30425700;END2=30425800` and for
     /// `CHR2=2;CHR2=21`, and `duplication` for `N.` with `SVTYPE=DEL;SVTYPE=DUP`. A bare
@@ -3296,7 +3388,7 @@ mod tests {
     }
 
     /// A signed coordinate is a number to Perl (`looks_like_number`, Parser.pm:475;
-    /// `$start++` on the raw POS): Ensembl VEP 116.2 annotates `END=+30425899` as the end
+    /// `$start++` on the raw POS): Ensembl VEP 116.3 annotates `END=+30425899` as the end
     /// 30425899 and `SVLEN=+300` as 300, as a POS `+30425650` is 30425650; the sign it
     /// prints inside the Location (`21:30425651-+30425899`) is not reproduced.
     #[test]
@@ -3322,7 +3414,7 @@ mod tests {
     }
 
     /// A record with a parsed breakend is one breakpoint whatever its other ALTs: Ensembl
-    /// VEP 116.2 writes `N.` and `N[21:30425700[` at the point `21:30425651` for
+    /// VEP 116.3 writes `N.` and `N[21:30425700[` at the point `21:30425651` for
     /// `<DEL>,N[21:30425700[` with `SVTYPE=BND;END=30425899`, the `<DEL>` part lending
     /// nothing (`_parse_breakends` reads no base from it) and the END unread.
     #[test]
@@ -3364,12 +3456,12 @@ mod tests {
 
     /// Parser/VCF.pm:237-245 routes a line to the structural path when REF and the ALTs
     /// together are not a run of `ACGT` and INFO/SVTYPE is true or an ALT is written in
-    /// a structural form: Ensembl VEP 116.2 writes `21:30425651-30425949 deletion` for
+    /// a structural form: Ensembl VEP 116.3 writes `21:30425651-30425949 deletion` for
     /// `N G` and for `<*>` with `SVTYPE=DEL;END=30425949`, and for `A g` (a lowercase
     /// base is outside `ACGT`), while `A G` with the same INFO is the SNV
     /// `21:30425650 G missense_variant` and `N G` alone the SNV
     /// `coding_sequence_variant`. `SVTYPE=` and `SVTYPE=0` are false to Perl and route
-    /// nothing; `<*>` alone is a sequence allele at POS.
+    /// nothing in Ensembl VEP; `<*>` alone is a sequence allele at POS.
     #[test]
     fn svtype_routes_a_record_whose_alleles_are_not_plain_acgt() {
         for (reference, alt) in [("N", "G"), ("N", "<*>"), ("A", "g")] {
@@ -3417,7 +3509,7 @@ mod tests {
     /// Parser/VCF.pm:473 tests the VCF 4.4 forms without `/i`, so a lowercase ALT is
     /// outside them and SVTYPE names its type; `get_SO_term`'s fall-through branches
     /// (Parser.pm:712-717) keep the type as written and `%SO_TERMS` has upper-case keys
-    /// only. Ensembl VEP 116.2 writes `insertion` for `<ins:me:alu>` with `SVTYPE=INS`,
+    /// only. Ensembl VEP 116.3 writes `insertion` for `<ins:me:alu>` with `SVTYPE=INS`,
     /// `duplication` for `<del>` with `SVTYPE=DUP`, `copy_number_variation` for `<cnv:tr>`
     /// with `SVTYPE=CNV` and for `<DEL>,<dup>` with `SVTYPE=DEL`, and skips `<del>` alone
     /// and `<BND>` with `SVTYPE=bnd` as unsupported types.
@@ -3488,7 +3580,7 @@ mod tests {
         assert_eq!(sv_type_abbreviation("<CN0>", None), "DEL");
     }
 
-    /// A gVCF variant site lists `<NON_REF>` beside its real alleles; Ensembl VEP 116.2
+    /// A gVCF variant site lists `<NON_REF>` beside its real alleles; Ensembl VEP 116.3
     /// drops the line (`G/NON_REF is not a supported structural variant type`), and
     /// vep-rs reads the real alleles, numbered as they stand: `N G,<NON_REF>` is the SNV
     /// `G` at POS. A record whose only ALT is `<NON_REF>` is a reference block.
@@ -3519,11 +3611,11 @@ mod tests {
 
     /// One StructuralVariationFeature carries the record (Parser/VCF.pm:560-574), so a
     /// record whose class is the breakpoint's gives every ALT the breakpoint's class and
-    /// point: Ensembl VEP 116.2 writes `21:30425651 chromosome_breakpoint` for each part of
+    /// point: Ensembl VEP 116.3 writes `21:30425651 chromosome_breakpoint` for each part of
     /// `<BND>,<DEL>` with `SVTYPE=BND;END=30425949`, the END unread, with the allele string
     /// `N/<BND>/<DEL>`. A `*` allele is a part of the string (`*/<DEL>`) and a variant of
     /// the record's class, numbered at its written place (StructuralVariationOverlap.pm:64-77
-    /// makes one allele per part): 116.2 writes two `deletion` rows per transcript for
+    /// makes one allele per part): 116.3 writes two `deletion` rows per transcript for
     /// `N *,<DEL>` with `SVTYPE=DEL;END=30425949`. A lone `.` ALT names none whatever
     /// SVTYPE says.
     #[test]
@@ -3570,7 +3662,7 @@ mod tests {
 
     /// ALLELE_NUM numbers the parts of Ensembl VEP's allele string from 1
     /// (StructuralVariationOverlap.pm:64-77): a bare `<BND>` is `N/<BND>`, so its row
-    /// prints 2 (116.2 writes `ALLELE_NUM=2` beside the reference allele's 1); `.N` is
+    /// prints 2 (116.3 writes `ALLELE_NUM=2` beside the reference allele's 1); `.N` is
     /// not prefixed and prints 1; a record with parsed breakends prints 0 for its own
     /// breakend and 1 upward for its mates; every other class prints the ALT's position.
     #[test]
@@ -3602,7 +3694,7 @@ mod tests {
     /// `get_SO_term`'s regexes decide the type of a shape at their edges: `/CN=?[0-9]/i`
     /// needs a digit, the list normalisation strips one bracket a side, the mobile-element
     /// pattern takes one colon before the element, and `s/\:.+//g` needs a character after
-    /// the colon. Ensembl VEP 116.2 skips `<CN=X>`, `<<DEL>>,<DEL>` and `<DEL:>` as
+    /// the colon. Ensembl VEP 116.3 skips `<CN=X>`, `<<DEL>>,<DEL>` and `<DEL:>` as
     /// unsupported types (`CN=X`, `DEL/DEL`, `DEL:`), writes `copy_number_variation` for
     /// `<<CN0>>` and `mobile_element_insertion` for `<INS:ME::ALU>` with `SVTYPE=INS`, and
     /// skips `<NON_REF>,<NON_REF>` as `NON_REF`, which vep-rs reads as a reference block
@@ -3665,7 +3757,7 @@ mod tests {
     }
 
     /// Perl's list-context `split` drops a trailing empty ALT field (BaseVCF4.pm:489) and a
-    /// trailing empty type part (Parser.pm:669): Ensembl VEP 116.2 writes the one allele `G`
+    /// trailing empty type part (Parser.pm:669): Ensembl VEP 116.3 writes the one allele `G`
     /// for `A G,`, a `deletion` over END for `<DEL>,` with `SVTYPE=DEL`, and a `deletion`
     /// for `N.` with `SVTYPE=DEL/`.
     #[test]
@@ -3738,7 +3830,7 @@ mod tests {
     }
 
     /// `_parse_breakends`' match tolerates whitespace around the brackets, the name and the
-    /// colon, and BaseVCF4.pm:582 cuts an INFO value at a second `=`: Ensembl VEP 116.2
+    /// colon, and BaseVCF4.pm:582 cuts an INFO value at a second `=`: Ensembl VEP 116.3
     /// writes the own breakend `N.` (ALLELE_NUM 0) and a mate row for `N[ 21 : 30425700 [`,
     /// for `<BND>` with `CHR2= 21;END2=30425700` (Allele `N[ 21:30425700[`) and for `<BND>`
     /// with `CHR2=21;END2=30425700=5` (Allele `N[21:30425700[`).
@@ -3856,7 +3948,7 @@ mod tests {
     /// (BaseVCF4.pm:304, `(split(',',$info->{SVLEN}))[0]`, so `-300,400` ends at
     /// POS+300) and as its largest for a tandem repeat (Parser/VCF.pm:505-511,
     /// `$end = $start + max(@svlen) - 1`, so `300,400` ends at POS+400), as Ensembl
-    /// VEP 116.2 writes `21:30425601-30425900` and `21:30425601-30426000`.
+    /// VEP 116.3 writes `21:30425601-30425900` and `21:30425601-30426000`.
     #[test]
     fn a_comma_separated_svlen_reads_its_first_value_and_a_tandem_repeat_its_largest() {
         let cnv = parse_vcf_line(
@@ -3883,7 +3975,7 @@ mod tests {
     /// A tandem duplication reads SVLEN as a tandem repeat does: Parser/VCF.pm:502
     /// routes every record whose SO term matches `/tandem/` (`tandem_duplication`
     /// included) to `$end = $start + max(@svlen) - 1` (`:505-511`), so Ensembl VEP
-    /// 116.2 writes `21:30425601-30426000 tandem_duplication` for `<DUP:TANDEM>` with
+    /// 116.3 writes `21:30425601-30426000 tandem_duplication` for `<DUP:TANDEM>` with
     /// `SVLEN=300,400` and for `<DUP:TANDEM>,<DUP:TANDEM>` with the same SVLEN, and
     /// skips `SVLEN=-300` (`start > end+1`) with or without END, while a `<DUP>` with
     /// `SVLEN=300,400` or `SVLEN=-300` is `21:30425601-30425900 duplication`.
@@ -3933,7 +4025,7 @@ mod tests {
 
     /// `N.` with `SVTYPE=DEL` is a deletion: the ALT is outside the VCF 4.4 forms, so
     /// INFO/SVTYPE is the type (Parser/VCF.pm:472-475) and `get_SO_term` reads
-    /// `deletion`; Ensembl VEP 116.2 writes `21:30425601-30425899 deletion` with
+    /// `deletion`; Ensembl VEP 116.3 writes `21:30425601-30425899 deletion` with
     /// `frameshift_variant,feature_truncation`. A `<BND>` without SVTYPE is a
     /// breakpoint from its own ALT.
     #[test]
@@ -3976,12 +4068,12 @@ mod tests {
     /// VEP skips the record (Parser.pm `validate_vf`: `start > end+1`, the size test,
     /// "Invalid start or end coordinate"), while a breakpoint record ignores END for
     /// its span and is the single base at POS + 1 and a record with SVLEN never reads
-    /// END (BaseVCF4.pm:302-308); a tandem repeat whose SVLEN is negative ends before
+    /// END (BaseVCF4.pm:302-309); a tandem repeat whose SVLEN is negative ends before
     /// its start and fails the line as Ensembl VEP skips it; and a span from SVLEN
     /// saturates at the ceiling, so a POS just below it with SVLEN `i64::MIN` ends
     /// there whatever the class. A breakpoint's deleted END names its mate with CHR2
     /// (Parser/VCF.pm:493): a run of digits past the ceiling is a mate whose text keeps
-    /// the digits (Ensembl VEP 116.2 writes `N[21:18446744073709551615[`) and whose
+    /// the digits (Ensembl VEP 116.3 writes `N[21:18446744073709551615[`) and whose
     /// position saturates at the ceiling; `-5` or `abc` names none and the record's
     /// string is `N/N[21:-5[`.
     #[test]
@@ -4094,7 +4186,7 @@ mod tests {
     /// leaves the ALT as written without CHR2 (the `:491-498` block that rewrites it
     /// is skipped) and prepends REF (`:499`), `_parse_breakends` finds no bracket in
     /// `N/<BND>` (`StructuralVariationFeature.pm:1279-1283`), and the row's Allele
-    /// falls to `class_SO_term` (`OutputFactory.pm:2029`), `chromosome_breakpoint`,
+    /// falls to `class_SO_term` (`OutputFactory.pm:2038`), `chromosome_breakpoint`,
     /// with or without INFO/MATEID.
     #[test]
     fn bare_symbolic_bnd_prints_the_class_term() {
@@ -4165,8 +4257,7 @@ mod tests {
         let paired = &variants[1];
         assert_eq!(paired.alt_allele(), b"A[21:100[");
         assert_eq!(paired.start, 501); // POS+1
-                                       // Bracket BND: END falls back to POS+abs(SVLEN)=5500, clamped to max(sv_start)
-        assert_eq!(paired.end, 5500);
+        assert_eq!(paired.end, 5500); // POS+abs(SVLEN)
         assert!(!paired.is_single_breakend);
 
         let single = &variants[0];
@@ -4176,8 +4267,8 @@ mod tests {
 
     #[test]
     fn test_parse_vcf_line_symbolic_bnd_with_chr2_end2() {
-        // gnomAD <BND> with CHR2/END2: Perl VCF.pm uses END2 as the mate position
-        // instead of the SVLEN-derived span end. This converts <BND> to a standard
+        // gnomAD <BND> with CHR2/END2: Ensembl VEP's Parser/VCF.pm:493 uses END2 as the mate
+        // position instead of the SVLEN-derived span end. This converts <BND> to a standard
         // paired BND (e.g., N[21:42458165[).
         let line = "21\t15727643\tBND_21_56725\tN\t<BND>\t.\t.\tSVTYPE=BND;END=15727644;SVLEN=26730521;CHR2=21;END2=42458165";
         let variants = parse_vcf_line(line, true).unwrap();
@@ -4207,7 +4298,7 @@ mod tests {
 
     /// With CHR2 but no END2, the mate position is the raw `INFO/END`.
     ///
-    /// Perl's breakpoint branch (VCF.pm:483-498) stashes `INFO/END` as
+    /// Ensembl VEP's breakpoint branch (Parser/VCF.pm:483-498) stashes `INFO/END` as
     /// `$incorrect_end`, deletes it so it cannot be read as a span end, and then
     /// resolves `my $breakend_pos = $info->{END2} || $incorrect_end;`. POS2 is
     /// never consulted, so a record carrying POS2 but not END2 still resolves to
@@ -4222,7 +4313,7 @@ mod tests {
         assert_eq!(
             paired.mate_pos,
             Some(5000001),
-            "Perl resolves END2 || INFO/END and never reads POS2 on this branch"
+            "Ensembl VEP resolves END2 || INFO/END and never reads POS2 on this branch"
         );
         assert_eq!(paired.mate_chr.as_deref(), Some("21"));
     }
@@ -4259,7 +4350,7 @@ mod tests {
         assert_eq!(
             paired.mate_pos,
             Some(5000001),
-            "Perl uses the raw INFO/END as the mate position, not POS + |SVLEN|"
+            "Ensembl VEP uses the raw INFO/END as the mate position, not POS + |SVLEN|"
         );
         assert_eq!(paired.mate_chr.as_deref(), Some("21"));
         let alt_str = std::str::from_utf8(paired.alt_allele()).unwrap();
@@ -4289,9 +4380,11 @@ mod tests {
     }
 
     /// A `<NON_REF>` record is a reference-confidence block: one structural record
-    /// spanning POS+1..END that no consequence path annotates (VEP's own row for it
-    /// is `21:101-200 <NON_REF> - - - intergenic_variant`), and whose VCF and JSON
-    /// output VEP leaves without consequences (`vep_skip`).
+    /// spanning POS+1..END that no consequence path annotates (Ensembl VEP 116.3
+    /// drops it as an unsupported type; vep-rs writes the one row
+    /// `21:101-200 <NON_REF> - - - intergenic_variant`,
+    /// `docs/divergences/defect-c.md`), and whose VCF and JSON output vep-rs leaves
+    /// without consequences (`vep_skip`).
     #[test]
     fn test_parse_vcf_line_non_ref_is_a_reference_block() {
         let line = "21\t100\t.\tA\t<NON_REF>\t.\t.\tEND=200";
@@ -4372,8 +4465,9 @@ mod tests {
 
     #[test]
     fn test_parse_vcf_line_cpx_is_annotated() {
-        // <CPX> variants are annotated by Ensembl VEP (despite vep_skip flag) with
-        // overlap-only consequences. Allele displayed as "CPX".
+        // Ensembl VEP 116.3 drops a `<CPX>` record as an unsupported type; vep-rs
+        // annotates it under the `vep_skip` mark with overlap-only consequences,
+        // its Allele `CPX` (`docs/divergences/defect-c.md`).
         let line = "21\t100\t.\tA\t<CPX>\t.\t.\tSVTYPE=CPX;END=500";
         let variants = parse_vcf_line(line, true).unwrap();
         assert_eq!(variants.len(), 1);
@@ -4386,7 +4480,7 @@ mod tests {
 
     #[test]
     fn test_parse_vcf_line_copy_number_classification() {
-        // CN0 → DEL, CN2 → DUP, CN3 → generic CNV (matching Perl single-allele behavior)
+        // CN0 → DEL, CN2 → DUP, CN3 → generic CNV (matching Ensembl VEP single-allele behavior)
         let mut cn0_variants =
             parse_vcf_line("21\t300\t.\tA\t<CN0>\t.\t.\tSVTYPE=CNV;END=800", true).unwrap();
         let cn0 = cn0_variants.remove(0);
@@ -4444,7 +4538,7 @@ mod tests {
     /// A `<DEL>,<DUP>` record is one `copy_number_variation` (Parser.pm `get_SO_term`:
     /// DEL beside DUP) whose two variants keep the ALT bytes the line wrote, `<DEL>`
     /// and `<DUP>`, under the record's term; its JSON `allele_string` is the ALTs
-    /// joined by `/`. Ensembl VEP 116.2 writes two `copy_number_variation` rows with
+    /// joined by `/`. Ensembl VEP 116.3 writes two `copy_number_variation` rows with
     /// `3_prime_UTR_variant` and `IMPACT=MODIFIER` for `21 30165700 multi_del_dup N
     /// <DEL>,<DUP>` against ENST00000286808 in the GRCh38-release116 golden corpus,
     /// the reading of neither a deletion nor a duplication.
@@ -4478,11 +4572,11 @@ mod tests {
 
     /// Every multi-allelic symbolic shape of ensembl-vep PR 1998 with its type and
     /// row count under 115.2 (the joined string looked up as written: one allele,
-    /// and unsupported unless it was a copy-number list) and under 116.2 (identical
+    /// and unsupported unless it was a copy-number list) and under 116.3 (identical
     /// parts collapse, DEL beside DUP is a copy-number variation, one allele per
-    /// ALT, every row's Allele the record's `class_SO_term`). The 116.2 column is
+    /// ALT, every row's Allele the record's `class_SO_term`). The 116.3 column is
     /// the GRCh38-release116 golden corpus's `multi_*` records; `<INS>,<DEL>` and
-    /// `<INV>,<DUP>` are skipped by 116.2 and stay annotated here with the
+    /// `<INV>,<DUP>` are skipped by 116.3 and stay annotated here with the
     /// `vep_skip` mark, as 115.2 left them. The mobile-element shapes follow
     /// Parser.pm `get_SO_term` (the `(INS|DEL):ME` match runs once over the joined
     /// string and before the DEL-and-DUP test) and `%SO_TERMS` (`Utils/Config.pm`):
@@ -4491,8 +4585,8 @@ mod tests {
     #[test]
     fn multi_allelic_symbolic_shapes_take_the_record_class() {
         use VariantClass::*;
-        // (ALTs, 115.2 type and alleles, 116.2 classes per variant, supported,
-        // 116.2 Allele column per variant)
+        // (ALTs, 115.2 type and alleles, 116.3 classes per variant, supported,
+        // 116.3 Allele column per variant)
         let shapes = [
             (
                 "<INS>,<INS>",
@@ -4656,7 +4750,7 @@ mod tests {
     /// `<INS:ME:L1>` `LINE1_insertion` (Parser.pm `get_SO_term` maps `L1` to
     /// `LINE1`), `<DEL:ME:SVA>` `SVA_deletion`, and an element outside Parser.pm's
     /// list (`<INS:ME:LINE>`) the bare `mobile_element_insertion`. Ensembl VEP
-    /// 116.2 prints `Alu_insertion` for `21 10524521 gnomAD-SV_v3_INS_chr21_1d284ae3
+    /// 116.3 prints `Alu_insertion` for `21 10524521 gnomAD-SV_v3_INS_chr21_1d284ae3
     /// N <INS:ME:ALU>` and `mobile_element_insertion` for `21 31659650
     /// synth_ins_me_0117 A <INS:ME>` in the GRCh38 golden corpus, and
     /// `mobile_element_insertion` for `21 27284085 synth_ins_line_0011 G
@@ -4705,7 +4799,7 @@ mod tests {
         }
     }
 
-    /// `<CN0>,<CN0>` collapses to `<CN0>`, a deletion, under 116.2's normalisation
+    /// `<CN0>,<CN0>` collapses to `<CN0>`, a deletion, under 116.3's normalisation
     /// (Parser.pm `get_SO_term`: identical parts reduce to one).
     #[test]
     fn repeated_cn0_collapses_to_a_deletion() {
@@ -4743,7 +4837,7 @@ mod tests {
 
     #[test]
     fn test_parse_vcf_line_tandem_repeat_uses_svlen_for_end() {
-        // VCF.pm:502-512: $end = $start + max(@svlen) - 1 when $so_term =~ /tandem/
+        // Parser/VCF.pm:502-511: $end = $start + max(@svlen) - 1 when $so_term =~ /tandem/
         let line = "21\t27253937\tsynth_cnv_tr_0001\tC\t<CNV:TR>\t.\tPASS\tSVTYPE=CNV;END=27256025;SVLEN=307";
         let variants = parse_vcf_line(line, true).unwrap();
         assert_eq!(variants.len(), 1);
@@ -4769,7 +4863,7 @@ mod tests {
     }
 
     /// With the reference sequence to hand a `<CNV:TR>` record is the sequence record
-    /// Ensembl VEP 116.2 builds over its run (the run `TCATCATCA` at
+    /// Ensembl VEP 116.3 builds over its run (the run `TCATCATCA` at
     /// 21:13620284-13620292 of GRCh38): `RUC=4` and `RB=12` are
     /// `TCATCATCA/TCATCATCATCA`, minimised to the insertion `-/TCA` after the run
     /// (`21:19-20`); `RUC=2` the deletion `TCA/-` of its last unit (`21:17-19`);
@@ -4911,7 +5005,7 @@ mod tests {
     /// `ACGT` and the type comes from SVTYPE), as is `<CNV:TR>` under `SVTYPE=DEL`
     /// (the ALT names a VCF 4.4 type, so SVTYPE is not read); `G A` under
     /// `SVTYPE=CNV:TR` is a sequence record and `<DEL>` under `SVTYPE=CNV:TR` a
-    /// deletion, and neither warns. Ensembl VEP 116.2 writes the no-FASTA notice
+    /// deletion, and neither warns. Ensembl VEP 116.3 writes the no-FASTA notice
     /// for the first two records and three `tandem_repeat` rows for each.
     #[test]
     fn tandem_warnings_follow_the_structural_routing() {
@@ -4930,8 +5024,8 @@ mod tests {
         ));
     }
 
-    /// The SVLEN values are read as Perl's `split` reads them (`:505`): `SVLEN=9,`
-    /// is the one value `9`, so it warns of no second reference, where `SVLEN=,9`
+    /// The SVLEN values are read as Perl's `split` in Ensembl VEP reads them (Parser/VCF.pm:505):
+    /// `SVLEN=9,` is the one value `9`, so it warns of no second reference, where `SVLEN=,9`
     /// and `SVLEN=9,,9` each hold an empty value beside the `9` and warn.
     #[test]
     fn a_trailing_empty_svlen_value_is_one_reference() {
@@ -4949,11 +5043,11 @@ mod tests {
         assert!(svlen_warning("9,6"));
     }
 
-    /// Without RN the number of repeat sequences is the number of `CNV:TR` in Perl's
+    /// Without RN the number of repeat sequences is the number of `CNV:TR` in Ensembl VEP's
     /// type string (`() = $type =~ /CNV:TR/g`, Parser/VCF.pm:397), INFO/SVTYPE when the
     /// ALT opens outside the VCF 4.4 forms (`:473-474`), matched with case where
     /// `get_SO_term` matches without it: `N N` under `SVTYPE=CNV:TR` builds one
-    /// sequence, the insertion `-/TCA` Ensembl VEP 116.2 writes for it, and `<cnv:tr>`
+    /// sequence, the insertion `-/TCA` Ensembl VEP 116.3 writes for it, and `<cnv:tr>`
     /// is a tandem repeat whose type string holds no `CNV:TR`, so its expansion `REF/`
     /// names no allele.
     #[test]
@@ -4993,7 +5087,7 @@ mod tests {
     /// exceeds (`RUC=4`, twelve bases, at 10; `RUC=2` expands) and without RUS or a
     /// count list, a `<CNV:TR>` record keeps Ensembl VEP's symbolic reading over the run
     /// SVLEN spans (Parser/VCF.pm:385, :403, :417-418, :428, :521-527); one oversized
-    /// allele keeps every allele of its record symbolic; a cap of `0` is Perl's 5000.
+    /// allele keeps every allele of its record symbolic; a cap of `0` is Ensembl VEP's 5000.
     #[test]
     fn cnv_tr_stays_sv_without_fasta() {
         let (_dir, fasta) = fasta_of(RUN_FASTA);
@@ -5083,7 +5177,7 @@ mod tests {
     /// `G/TCATCATCATCA` over 21:31-39, which `validate_vf` then refuses as a reference
     /// allele whose length is not the span's. A negative SVLEN puts the end before the
     /// start (`:511`), so `SVLEN=-9` at 10 is `G/TCATCATCATCA` over 11-1, which
-    /// `validate_vf` refuses as `start > end+1`, as Ensembl VEP 116.2 refuses it with
+    /// `validate_vf` refuses as `start > end+1`, as Ensembl VEP 116.3 refuses it with
     /// a FASTA; an end before the chromosome's first base (`SVLEN=-20` at 10) is the
     /// symbolic path's refusal, `start > end+1 : (START=11, END=-10)`.
     #[test]
@@ -5131,7 +5225,7 @@ mod tests {
     /// bi-allelic indel is (`post_process_vfs`, Parser.pm:862-881), the start moving
     /// past the bases trimmed on the left and the end before those trimmed on the
     /// right, the run's own end kept otherwise (Sequence.pm:1004-1031): Ensembl VEP
-    /// 116.2 with a FASTA refuses `T <CNV:TR>` with `SVLEN=-9` as `start > end+1`
+    /// 116.3 with a FASTA refuses `T <CNV:TR>` with `SVLEN=-9` as `start > end+1`
     /// with the start one past the run's and the end the run's, `A <CNV:TR>` with the
     /// start the run's and the end one before it, and a run past the FASTA from a `T`
     /// as an insertion whose coordinates are not `start = end + 1`; none of the three
@@ -5235,11 +5329,11 @@ mod tests {
     /// A bi-allelic record whose REF is a strict prefix of its ALT must be
     /// re-minimised to a pure insertion.
     ///
-    /// Perl runs two minimisation stages. `VEP/Parser/VCF.pm:328-335` strips one
+    /// Ensembl VEP runs two minimisation stages. `VEP/Parser/VCF.pm:328-335` strips one
     /// shared leading base, then `post_process_vfs` (`VEP/Parser.pm:860-882`) calls
     /// `minimise_alleles` -> `trim_sequences` (`Sequence.pm:1004-1035`), which is
     /// not gated on `--minimal` and trims from the left while both alleles are
-    /// non-empty. With `empty_to_dash` set, `T/TT` therefore becomes `-/T`; Perl
+    /// non-empty. With `empty_to_dash` set, `T/TT` therefore becomes `-/T`; Ensembl VEP
     /// does not keep a base on the shorter allele.
     #[test]
     fn test_parse_vcf_line_biallelic_prefix_ref_minimises_to_insertion() {
@@ -5252,7 +5346,7 @@ mod tests {
         assert_eq!(
             v.ref_allele,
             b"-",
-            "Perl's trim_sequences empties the ref and empty_to_dash maps it to \
+            "Ensembl VEP's trim_sequences empties the ref and empty_to_dash maps it to \
              '-'; got ref={:?} alt={:?}",
             String::from_utf8_lossy(&v.ref_allele),
             String::from_utf8_lossy(&v.alt_alleles[0])
@@ -5267,7 +5361,7 @@ mod tests {
     /// `trim_sequences` compares the bases as written (`eq`, Sequence.pm:1006, :1019)
     /// and `validate_vf` upper-cases the string afterwards (Parser.pm:554), so a
     /// lowercase ALT is minimised only where its letters match the reference's case:
-    /// Ensembl VEP 116.2 annotates `21 30396602 x TTGA t` as `TTGA/T` at
+    /// Ensembl VEP 116.3 annotates `21 30396602 x TTGA t` as `TTGA/T` at
     /// 30396602-30396605 (`stop_lost,inframe_deletion`), `TTGA Ttgatc` as `TGA/TGATC`
     /// at 30396603-30396605 (`stop_retained_variant`), and the upper-cased
     /// `TTGA TTGATC` as `-/TC` at 30396606-30396605.
@@ -5289,7 +5383,7 @@ mod tests {
 
     /// Under `--minimal` every bi-allelic record goes through `minimise_alleles`
     /// (Parser.pm:852, :987-1014): `GAAG/GGGG` at 10542414 is two-side trimmed to
-    /// `AA/GG` at 10542415-10542416 (Ensembl VEP 116.2's `21:10542415-10542416 GG`),
+    /// `AA/GG` at 10542415-10542416 (Ensembl VEP 116.3's `21:10542415-10542416 GG`),
     /// `GAA/GGG` and `AAG/GGG` lose one side, `GAAG/GGGg` keeps its right `G` (the
     /// bases compare as written, `GGG` at 15-17), `gaag/gggg` is `AA/GG` and an SNV
     /// keeps its alleles; each is marked minimised, trimmed or not, and
@@ -5338,7 +5432,7 @@ mod tests {
     /// A bi-allelic record whose one allele equals the reference is minimised under
     /// `--minimal` like any other (Parser.pm:987-1011): `21 10542414 x A A` is the
     /// feature with no allele `-/-` at 10542415-10542414, marked minimised, its class
-    /// `sequence_alteration`, as Ensembl VEP 116.2's JSON object carries it; without
+    /// `sequence_alteration`, as Ensembl VEP 116.3's JSON object carries it; without
     /// the flag it stays `A/A` at 10542414. `A *` trims nothing and is marked too
     /// (`:1011` marks every bi-allelic record).
     #[test]
@@ -5373,7 +5467,7 @@ mod tests {
     /// trims (InputBuffer.pm:638-718): `G T,GA` at 10542414 keeps `G/T` and trims
     /// `G/GA` to `-/A` at 10542415-10542414, every allele numbered by its written
     /// position, Location printing the record's span (`21:10542414` for both, as
-    /// Ensembl VEP 116.2 prints after the rejoin) and the record's class that of the
+    /// Ensembl VEP 116.3 prints after the rejoin) and the record's class that of the
     /// first trimmed pair; `GAA GGA,GGA` keeps its repeated allele as a second row
     /// (ALLELE_NUM 1 and 2); `A A,G` drops the allele equal to the reference and
     /// numbers `G` 2; `G T,C` trims nothing and stays as it is, unmarked;
@@ -5471,7 +5565,7 @@ mod tests {
 
     /// Under `--process_ref_homs` a split record's leading reference row gives way to
     /// one per allele, each its feature's trimmed reference over the feature's span
-    /// and under its rejoin key, before the allele's own row, as Ensembl VEP 116.2
+    /// and under its rejoin key, before the allele's own row, as Ensembl VEP 116.3
     /// prints with `--minimal --process_ref_homs --allele_number` for
     /// `21 10542414 A T,AG` (`A` 0 and `T` 1 of the feature `A/T`; `-` 0 and `G` 2
     /// of the feature `-/G`, on the insertion span), for `21 10542415 A A,G` (`-` 0
@@ -5599,7 +5693,7 @@ mod tests {
     /// chopped string as its `UPLOADED_ALLELE` (InputBuffer.pm:694-697, the string
     /// `split_variants` writes over the raw one): `GAAG GGAG,GAGG,G` at 10542414 is
     /// chopped to `AAG/GAG/AGG/-` at 15-17, its three alleles `A/G` at 15, `A/G` at 16
-    /// and `AAG/-` at 15-17 (Ensembl VEP 116.2's rows `G` 1, `G` 2 and `-` 3, each
+    /// and `AAG/-` at 15-17 (Ensembl VEP 116.3's rows `G` 1, `G` 2 and `-` 3, each
     /// `UPLOADED_ALLELE=AAG/GAG/AGG/-` at `21:10542415-10542417`); a bi-allelic record's
     /// `UPLOADED_ALLELE` stays the raw `GAAG/GGGG`.
     #[test]
@@ -5715,7 +5809,7 @@ mod tests {
     }
 
     /// The anchor chop counts a `*` as an allele of one base (Parser/VCF.pm:296-298) and
-    /// leaves it out of the first-base comparison (:306), so Ensembl VEP 116.2 chops the
+    /// leaves it out of the first-base comparison (:306), so Ensembl VEP 116.3 chops the
     /// shared first base of a record whose other alleles have the REF's length: at 30425650
     /// it writes `AG AC,*` as `21:30425651 C` (allele string `G/C/*`), `AGC ATT,*` as
     /// `21:30425651-30425652 TT` (`GC/TT/*`), `AG *,AC` as `21:30425651 C` (ALLELE_NUM 2,
@@ -5723,10 +5817,11 @@ mod tests {
     /// shared base (`AG TC,*` stays `21:30425650-30425651 TC`), a one-base REF has nothing
     /// to chop (`A G,*`, `A *,G`, `A G,T,*` stay at 30425650) and without the `*` the
     /// same-length record is not an indel (`AG AC,AT` stays `21:30425650-30425651`); an
-    /// indel beside a `*` is chopped as before (`AG A,*` `21:30425651 -`, `A AG,*`
-    /// `21:30425650-30425651 G`, `AG *,A` `21:30425651 -` with ALLELE_NUM 2). A `.` beside the
-    /// alleles is compared and never shares the base, so `A AT,.` keeps its anchor
-    /// (`21:30425650 AT`, as Ensembl VEP 116.2 writes it beside its own rows under `.`).
+    /// indel beside a `*` is chopped with or without the `*` counted (`AG A,*`
+    /// `21:30425651 -`, `A AG,*` `21:30425650-30425651 G`, `AG *,A` `21:30425651 -` with
+    /// ALLELE_NUM 2). A `.` beside the alleles is compared and never shares the base, so
+    /// `A AT,.` keeps its anchor (`21:30425650 AT`, as Ensembl VEP 116.3 writes it beside
+    /// its own rows under `.`).
     #[test]
     fn a_star_counts_as_an_allele_of_one_base_in_the_anchor_chop() {
         for (reference, alts, allele_string, rows) in [
@@ -5803,7 +5898,7 @@ mod tests {
     /// The `*` exemption from the anchor chop belongs to the multi-ALT branch alone
     /// (Parser/VCF.pm:315, inside `if(scalar @$alts > 1)` at :301); the one ALT of a
     /// record is chopped whatever it carries (:332 `substr($alts->[0], 1) || '-'`), so
-    /// Ensembl VEP 116.2 reads `21 30289183 x C C*` as the feature `-/*` at
+    /// Ensembl VEP 116.3 reads `21 30289183 x C C*` as the feature `-/*` at
     /// 30289184-30289183, whose one allele is a `*` it writes no row for
     /// (VariationFeatureOverlap.pm:484): no default or tab row, the VCF line carried
     /// without consequences, the JSON object with `allele_string` `-/*` and
@@ -5878,7 +5973,7 @@ mod tests {
     /// 30289183-30289182, class `deletion`, marked minimised (`:1011`), with no
     /// row. `21 30289182 x CA C<DEL:*>A` is anchor-chopped to `A/<DEL:*>A` first
     /// (Parser/VCF.pm:328-334) and minimised to the same feature; `<del:*>C` is
-    /// upper-cased before the alleles are read (Parser.pm:554). Ensembl VEP 116.2
+    /// upper-cased before the alleles are read (Parser.pm:554). Ensembl VEP 116.3
     /// writes each as the JSON object `-/<DEL:*>`, 30289183-30289182,
     /// `most_severe_consequence` `?`, `variant_class` `deletion`.
     #[test]
@@ -5906,8 +6001,53 @@ mod tests {
         );
     }
 
+    /// `post_process_vfs` ends its length test at the first `-` among the alleles
+    /// as written (Parser.pm:872-875), so a bi-allelic record whose alleles differ
+    /// in length is minimised only where neither written allele holds one. Ensembl
+    /// VEP reads `21 30289183 x C <DEL:*>-C` as the feature `C/<DEL:*>-C` at
+    /// 30289183-30289183 and `21 30289183 x CA T-A` as `CA/T-A` at
+    /// 30289183-30289184, each of class `deletion` and neither marked minimised.
+    /// Under `--minimal` `minimise_alleles` takes every bi-allelic record (`:852`)
+    /// and trims the two to `-/<DEL:*>-` at 30289183-30289182 and `C/T-` at
+    /// 30289183, marked minimised (`:1011`).
+    #[test]
+    fn a_dash_inside_an_allele_keeps_the_record_unminimised() {
+        for (record, allele_string, span, minimal_string, minimal_span) in [
+            (
+                "21\t30289183\tx\tC\t<DEL:*>-C\t.\t.\t.",
+                "C/<DEL:*>-C",
+                (30289183, 30289183),
+                "-/<DEL:*>-",
+                (30289183, 30289182),
+            ),
+            (
+                "21\t30289183\tx\tCA\tT-A\t.\t.\t.",
+                "CA/T-A",
+                (30289183, 30289184),
+                "C/T-",
+                (30289183, 30289183),
+            ),
+        ] {
+            let parsed = parse_vcf_line(record, true).unwrap();
+            assert_eq!(parsed.len(), 1, "{record}: {parsed:?}");
+            let v = &parsed[0];
+            assert!(!v.minimised && !v.no_allele, "{record}: {v:?}");
+            assert_eq!(v.allele_string, allele_string, "{record}");
+            assert_eq!(v.original_allele_string, None, "{record}");
+            assert_eq!((v.start, v.end), span, "{record}");
+            assert_eq!(v.class_so_term(), "deletion", "{record}");
+
+            let minimal = parse_minimal(record);
+            assert_eq!(minimal.len(), 1, "{record}: {minimal:?}");
+            let v = &minimal[0];
+            assert!(v.minimised && !v.no_allele, "{record}: {v:?}");
+            assert_eq!(v.allele_string, minimal_string, "{record}");
+            assert_eq!((v.start, v.end), minimal_span, "{record}");
+        }
+    }
+
     /// A `*` beside an indel keeps the record multi-allelic: `minimise_alleles`
-    /// (Parser.pm:978-984) leaves a three-part string as it is, so Ensembl VEP 116.2 writes
+    /// (Parser.pm:978-984) leaves a three-part string as it is, so Ensembl VEP 116.3 writes
     /// `21 30425650 x ATT AT,*` at `21:30425651-30425652` with the Allele `T` (the
     /// anchor-chopped `TT/T/*`), `AT ATT,*` at `21:30425651` with `TT`, and `ATTG ATC,*` at
     /// `21:30425651-30425653` with `TC`; without the `*` the bi-allelic indel is minimised
@@ -5971,7 +6111,7 @@ mod tests {
         }
     }
 
-    /// A line whose every ALT is `*` names no allele: Ensembl VEP 116.2 writes
+    /// A line whose every ALT is `*` names no allele: Ensembl VEP 116.3 writes
     /// `21 30425650 x N * . . .` and `N *,*` with no row, the VCF line without CSQ and a
     /// JSON object (`"allele_string":"N/*"`, start and end 30425650,
     /// `"most_severe_consequence":"?"`). With `SVTYPE=DEL;END=400` Ensembl VEP routes
@@ -6017,7 +6157,7 @@ mod tests {
     /// A `*` beside a real allele under a true INFO/SVTYPE is routed with it to the
     /// structural path (`CG*` is no run of `ACGT`, Parser/VCF.pm:237-245), where the
     /// record's allele string `G/*` (`:469`) gives one allele per part with no `*`
-    /// filter (StructuralVariationOverlap.pm:64-77): Ensembl VEP 116.2 writes two
+    /// filter (StructuralVariationOverlap.pm:64-77): Ensembl VEP 116.3 writes two
     /// `deletion` rows per transcript for `21 30289183 x C G,* . . SVTYPE=DEL;END=30289190`,
     /// `ALLELE_NUM=1` and `ALLELE_NUM=2`, at 21:30289184-30289190, and the same two for
     /// `C *,G`; the JSON `allele_string` is `G/*` and `*/G`. A `.` beside a real allele
@@ -6112,7 +6252,8 @@ mod tests {
         assert_eq!(variants.len(), 1);
         let v = &variants[0];
         assert_eq!(v.chr, "21");
-        // ME insertions are point-type symbolic alleles; `is_span_type()` is true for every SV class.
+        // ME insertions are point-type symbolic alleles; `is_span_type()` is true for every
+        // SV class.
         assert_eq!(v.variant_class, VariantClass::MobileElementInsertion);
         assert_eq!(v.display_allele(), "Alu_insertion");
     }
@@ -6167,7 +6308,9 @@ mod tests {
         assert_eq!(variants.len(), 1);
         let v = &variants[0];
         assert_eq!(v.variant_class, VariantClass::ComplexStructural);
-        // Ensembl VEP treats CTX as a translocation/BND; vep-rs does not.
+        // Ensembl VEP 116.3 skips `<CTX>` as an unsupported type
+        // (`docs/divergences/defect-c.md`); vep-rs annotates it under the type
+        // string `CTX`.
     }
 
     /// The per-individual reading of `Parser/VCF.pm:595-665` on `21 100 x A G,T,*`

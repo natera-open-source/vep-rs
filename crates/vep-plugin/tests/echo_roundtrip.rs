@@ -142,8 +142,9 @@ fn init_is_called_with_zero_params() {
 
 /// A library's `vep_plugin_feature_types` names the kinds of row it runs on; a
 /// library that exports no such symbol runs on transcript rows alone, Ensembl
-/// VEP's default `feature_types` (`BaseVepPlugin.pm:99`). The `no-feature-types`
-/// fixture is `echo_all_rows_plugin.rs` compiled without the export.
+/// VEP's default `feature_types` (`BaseVepPlugin.pm:99`). The
+/// `fixture_no_feature_types` fixture is `echo_all_rows_plugin.rs` compiled
+/// without the export.
 #[test]
 fn feature_types_export_is_optional_and_read() {
     let echo = LoadedPlugin::load(&echo_plugin_path(), &[]).expect("load echo plugin");
@@ -156,7 +157,7 @@ fn feature_types_export_is_optional_and_read() {
         LoadedPlugin::load(&echo_all_rows_plugin_path(), &[]).expect("load echo_all_rows plugin");
     assert_eq!(all_rows.name(), "echo_all_rows");
     assert_eq!(all_rows.feature_types(), FeatureType::ALL);
-    for row in FeatureType::ALL {
+    for &row in FeatureType::ALL {
         assert!(all_rows.runs_on(row), "{row:?}");
     }
     let on_row = all_rows
@@ -171,7 +172,7 @@ fn feature_types_export_is_optional_and_read() {
     let fixture = compile_fixture(
         "echo_all_rows_plugin.rs",
         "echo_all_rows_no_feature_types",
-        "no-feature-types",
+        "fixture_no_feature_types",
     );
     let unlisted = LoadedPlugin::load(&fixture, &[]).expect("load the fixture without the export");
     assert_eq!(unlisted.feature_types(), [FeatureType::Transcript]);
@@ -186,10 +187,10 @@ fn feature_types_export_is_optional_and_read() {
     std::fs::remove_file(&fixture).unwrap();
 }
 
-/// An example compiled by `rustc` alone with one cfg feature, into
-/// `CARGO_TARGET_TMPDIR` (a cargo feature build would overwrite the example the
-/// other tests load).
-fn compile_fixture(example: &str, crate_name: &str, feature: &str) -> PathBuf {
+/// An example compiled by `rustc` alone with the `cfg` name `fixture_cfg` set,
+/// into `CARGO_TARGET_TMPDIR`: cargo builds each example once, without the name,
+/// and the other tests load that build.
+fn compile_fixture(example: &str, crate_name: &str, fixture_cfg: &str) -> PathBuf {
     let source = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("examples")
         .join(example);
@@ -203,7 +204,7 @@ fn compile_fixture(example: &str, crate_name: &str, feature: &str) -> PathBuf {
     let output = Command::new(rustc)
         .args(["--edition", "2021", "--crate-type", "cdylib"])
         .args(["--crate-name", crate_name])
-        .args(["--cfg", &format!("feature=\"{feature}\"")])
+        .args(["--cfg", fixture_cfg])
         .arg("-o")
         .arg(&fixture)
         .arg(&source)
@@ -211,7 +212,7 @@ fn compile_fixture(example: &str, crate_name: &str, feature: &str) -> PathBuf {
         .expect("rustc runs");
     assert!(
         output.status.success(),
-        "compiling the {feature} fixture failed:\n{}",
+        "compiling the {fixture_cfg} fixture failed:\n{}",
         String::from_utf8_lossy(&output.stderr)
     );
     fixture
@@ -262,11 +263,11 @@ fn a_plugin_listing_regulatory_kinds_switches_regulatory_annotation_on() {
     );
 }
 
-/// The v1 fixture is `echo_plugin.rs` compiled with the `abi-one` feature, under
-/// which `vep_plugin_abi_version` returns 1.
+/// The v1 fixture is `echo_plugin.rs` compiled with `--cfg fixture_abi_one`,
+/// under which `vep_plugin_abi_version` returns 1.
 #[test]
 fn a_v1_library_is_refused() {
-    let fixture = compile_fixture("echo_plugin.rs", "echo_plugin_abi_one", "abi-one");
+    let fixture = compile_fixture("echo_plugin.rs", "echo_plugin_abi_one", "fixture_abi_one");
 
     let err = LoadedPlugin::load(&fixture, &[]).unwrap_err();
     assert!(
@@ -286,13 +287,17 @@ fn a_v1_library_is_refused() {
     std::fs::remove_file(&fixture).unwrap();
 }
 
-/// The fixture is `echo_plugin.rs` compiled with the `missing-free` feature,
+/// The fixture is `echo_plugin.rs` compiled with `--cfg fixture_missing_free`,
 /// which leaves `vep_plugin_free` out. The load error names the symbol, then
 /// the dynamic loader's own words ("undefined symbol" from dlsym on Linux,
 /// "symbol not found" on macOS), never the library's bare "dlsym failed".
 #[test]
 fn a_library_missing_a_required_symbol_names_the_symbol_and_the_loaders_reason() {
-    let fixture = compile_fixture("echo_plugin.rs", "echo_plugin_missing_free", "missing-free");
+    let fixture = compile_fixture(
+        "echo_plugin.rs",
+        "echo_plugin_missing_free",
+        "fixture_missing_free",
+    );
 
     let err = LoadedPlugin::load(&fixture, &[]).unwrap_err();
     let PluginError::Load(msg) = &err else {
@@ -373,7 +378,7 @@ fn registry_lists_header_info_plugin_by_plugin_in_load_order() {
 /// Under the plugins directories a bare name takes a regular `lib<name>` file
 /// alone: a directory of that name, and a plain entry of the bare name itself,
 /// are passed over for the library a later directory holds, or for the
-/// not-found error, as Ensembl VEP 116.2's `use $module` takes only a module
+/// not-found error, as Ensembl VEP 116.3's `use $module` takes only a module
 /// file from `@INC` (Runner.pm:931-933).
 #[test]
 fn registry_resolves_a_bare_name_only_to_a_library_file_under_the_plugin_dirs() {

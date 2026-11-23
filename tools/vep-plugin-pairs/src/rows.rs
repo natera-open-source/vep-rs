@@ -12,7 +12,9 @@
 use crate::extract::{Extracted, Locator, Run};
 use crate::input::{lines, Input, Kind};
 use crate::order::strip;
-use crate::Res;
+use crate::rules::Res;
+use crate::score::interrupt;
+use crate::slots::Slot;
 use memchr::memchr_iter;
 use std::collections::HashSet;
 use std::fs::File;
@@ -21,29 +23,32 @@ use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Writes the rows of a default-format `input` at one of `locations` to `path` and returns
-/// their number.
+/// their number. The caller's slot, `own`, is lent while the pass's threads read.
 pub fn write(
     run: &Run,
     input: &Input,
     extracted: &Extracted,
     locations: &HashSet<Vec<u8>>,
     path: &Path,
+    own: &mut Slot,
 ) -> Res<u64> {
     let mut file = BufWriter::with_capacity(1 << 20, File::create(path)?);
     if locations.is_empty() || input.kind != Kind::Default {
         return Ok(0);
     }
     let next = AtomicUsize::new(0);
+    let lent = own.lent();
     let kept = std::thread::scope(|scope| {
         let workers: Vec<_> = (0..run.threads.min(input.blocks()).max(1))
             .map(|_| {
                 scope.spawn(|| -> Res<(Vec<u8>, Vec<usize>)> {
+                    let _slot = run.slots.take();
                     let mut locator = Locator::new(run);
                     let (mut kept, mut ends) = (Vec::new(), Vec::new());
                     let (mut block, mut key) = (Vec::new(), Vec::new());
                     loop {
                         let index = next.fetch_add(1, Ordering::Relaxed);
-                        if index >= input.blocks() {
+                        if index >= input.blocks() || interrupt::requested() {
                             return Ok((kept, ends));
                         }
                         input.read_block(index, &mut block)?;
@@ -86,7 +91,9 @@ pub fn write(
             .into_iter()
             .map(|worker| worker.join().expect("a row thread panicked"))
             .collect::<Res<Vec<_>>>()
-    })?;
+    });
+    drop(lent);
+    let kept = kept?;
     let mut rows: Vec<&[u8]> = Vec::new();
     for (bytes, ends) in &kept {
         let mut start = 0;

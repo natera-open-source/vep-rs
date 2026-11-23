@@ -1,9 +1,9 @@
 entry = "merged_same_stable_id_collapse"
 page = "docs/cache-conversion.md#a-transcript-model-the-cache-carries-at-two-loci-under---refseq-or---merged"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 38 of 77,675 cache transcripts · 1 flag set, 1 corpus"
+input_class_basis = "2 · 38 of 116,165 cache transcripts · 1 flag set, 1 corpus"
 notes = "The merged cache carries compmerge.264.Heart.chr21 twice, on the reverse strand at 21:32601667-32612845 and on the forward strand at 21:39451905-39515506; the two records load both copies into one buffer, and only --all_refseq admits the model."
 
 [input]
@@ -33,4 +33,15 @@ ensembl_vep = ["21:32612111 | C | compmerge.264.Heart.chr21 | non_coding_transcr
 vep_rs = [
   "21:32612111 | C | compmerge.264.Heart.chr21 | non_coding_transcript_exon_variant | -1",
   "21:39462549 | T | compmerge.264.Heart.chr21 | non_coding_transcript_exon_variant | 1",
+]
+
+[implementation]
+code = ["crates/vep-cli/src/json_cache.rs::load_transcripts_in_set_with"]
+tests = [
+    "crates/vep-cli/src/json_cache.rs::tests::dedup_by_dbid_then_stable_id_version",
+    "crates/vep-cli/src/json_cache.rs::tests::merged_cache_duplicates_are_keyed_by_source_and_db_id",
+]
+rules = [
+    "tools/vep-outputs-compare/src/dbid_replay.rs::kept_of",
+    "tools/vep-outputs-compare/src/rules/shared_stable_id.rs::apply_shared_stable_id_rule",
 ]

@@ -1,9 +1,9 @@
 entry = "nearest_exon_jb_shared_span_cache"
 page = "docs/divergences/nearest-exon-jb-shared-span-cache.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 121.0 per million · 1 flag set, 24 corpora"
+input_class_basis = "2 · 121.0 per million · 1 flag set, 27 corpora"
 
 # The reference is CC at 36897131-36897132: the last base of ENSE00001282176 (ENST00000336648, reverse strand) and
 # the first intron base. Under --minimal, CT trims to a T at 36897132 and GC to a G at 36897131, so the alleles'
@@ -31,3 +31,14 @@ columns = ["Location", "Allele", "Feature", "Consequence", "NearestExonJB"]
 [expected]
 ensembl_vep = ["21:36897131-36897132 | T | ENST00000336648 | splice_acceptor_variant | ENSE00001282176|1|end|272"]
 vep_rs = ["21:36897131-36897132 | T | ENST00000336648 | splice_acceptor_variant | -"]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/nearest_exon_jb.rs::NearestExonJbPlugin::run",
+    "crates/vep-builtins/src/plugins/nearest_exon_jb.rs::flanking_exons",
+    "crates/vep-builtins/src/plugins/nearest_exon_jb.rs::plugin_span",
+]
+tests = [
+    "crates/vep-builtins/src/plugins/nearest_exon_jb.rs::tests::a_split_allele_reads_its_own_span",
+    "crates/vep-builtins/src/plugins/nearest_exon_jb.rs::tests::each_row_answers_for_its_own_terms_under_intronic",
+]

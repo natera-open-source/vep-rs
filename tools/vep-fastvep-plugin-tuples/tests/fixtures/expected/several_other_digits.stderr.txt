@@ -1,0 +1,1 @@
+fastvep_plugin_tuples: wrote 8 tuples from 4 rows (0 too short); by field: X_ONE=4, X_RANGE=4; mapped columns: FV_X; dropped parts with no Ensembl VEP field: 0; values outside --fields: 0; parts not written word(score): 0; cells with several entries: 3; unmapped columns: FV_Y, FV_Z

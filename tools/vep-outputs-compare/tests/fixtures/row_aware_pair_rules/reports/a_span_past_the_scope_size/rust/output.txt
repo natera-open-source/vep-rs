@@ -1,0 +1,3 @@
+#Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	Extra
+v	21:5000-30000000	deletion	g1	T1	Transcript	feature_truncation
+v	21:5000-30000000	deletion	g1	T3	Transcript	feature_truncation

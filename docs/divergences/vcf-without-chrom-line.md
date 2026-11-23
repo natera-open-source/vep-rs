@@ -6,7 +6,7 @@ Ensembl VEP's VCF output copies the input's `#` lines into its header and takes 
 
 ```
 ##fileformat=VCFv4.2
-##VEP="v116.2" API="v116" time="..." cache="..." ...
+##VEP="v116.3" API="v116" time="..." cache="..." ...
 ##INFO=<ID=CSQ,...>
 ##VEP-command-line='...'
 ##source=probe
@@ -18,4 +18,4 @@ vep-rs takes the input's `#CHROM` line as the column line when the header has on
 
 A VCF requires the column line, and a meta line in its place leaves the output outside the format, so the popped line is a defect of the copy and not a reading vep-rs reproduces. A single-`#` line after the `#CHROM` line, which the same reading takes for the column line and the sample list, is [its own page](vcf-hash-line-after-chrom.md).
 
-To reproduce: Ensembl VEP 116.2 with the GRCh38 cache and [the command of the closing section](reproducing.md#reproducing-these-examples), adding `--vcf`, over a VCF of the two meta lines above and one record; vep-rs with the same flags over the same cache.
+To reproduce: Ensembl VEP 116.3 with the GRCh38 cache and [the command of the closing section](reproducing.md#reproducing-these-examples), adding `--vcf`, over a VCF of the two meta lines above and one record; vep-rs with the same flags over the same cache.

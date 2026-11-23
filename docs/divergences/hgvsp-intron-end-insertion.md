@@ -1,6 +1,6 @@
 # The HGVSp of an insertion at either end of an intron
 
-**The defect in one sentence.** Under `--hgvs`, Ensembl VEP 116.2 writes a definite `HGVSp` for an insertion that lies in the gap between an intron and a coding exon, as if the inserted bases were bases of the exon; vep-rs writes no `HGVSp` there.
+**The defect in one sentence.** Under `--hgvs`, Ensembl VEP 116.3 writes a definite `HGVSp` for an insertion that lies in the gap between an intron and a coding exon, as if the inserted bases were bases of the exon; vep-rs writes no `HGVSp` there.
 
 **Why this is a defect.** The gap is a splice junction, and the inserted bases can be placed on either side of it, with the intron or with the exon. Ensembl VEP's `HGVSp` states the outcome of one placement as the consequence: the junction used where it stands, the inserted bases translated as the exon's.
 
@@ -20,7 +20,7 @@ After an exon the rule has two conditions. The 3' rule leaves the insertion betw
 
 A record holds the insertion alone, trimmed to the inserted bases between two positions, or beside another allele, with a base the alleles share. Both engines clip the shared base when they write the `HGVSc`. vep-rs reads the allele as that notation clips it. Where the clipped insertion lies in one of the two gaps, vep-rs asks of the reference sequence whether the 3' rule would leave it there. If it would, the conditions above decide, as they do for the same insertion written alone in that gap. Section 6 shows a record of the second kind, and section 7 the neighbouring shapes that keep their value.
 
-**Where it is in Ensembl VEP's source** (`ensembl-variation` and `ensembl` at release/116, the modules the Ensembl VEP 116.2 image holds; each file lies under `modules/` in its repository). The routines are the same for both gaps:
+**Where it is in Ensembl VEP's source** (`ensembl-variation` and `ensembl` at release/116, the modules the Ensembl VEP 116.3 image holds; each file lies under `modules/` in its repository). The routines are the same for both gaps:
 
 - `Bio/EnsEMBL/Variation/BaseVariationFeatureOverlapAllele.pm`, lines 454-571, `_bvfo_preds`, flags the allele as the record writes it. Lines 340, 363 and 394 of that file compute the flags once and store them, so the 3' shift of the next bullet leaves them as they are. Lines 462-463 take the allele's span, for an insertion the two bases beside its gap. Lines 511-516 set `exon` when an exon of the transcript overlaps the span (`BaseTranscriptVariation.pm`, lines 863-865, `_overlapped_exons`). Without an exon, lines 535-537 flag the allele `non_coding`. With one, line 540 fetches the CDS coordinates of the span, a list of mapped pieces and gaps. Lines 543-545 set `coding` where that list is one mapped piece, as it is for an insertion in either gap.
 - `Bio/EnsEMBL/Variation/TranscriptVariationAllele.pm`, `hgvs_protein`: line 1711 shifts the allele 3'. Lines 1730-1738 then return nothing unless `coding` is set (line 1731) and the shifted position has a first and a last residue (lines 1732-1733).
@@ -34,7 +34,7 @@ These lines were followed on GRCh37 records that write the insertion alone, in r
 
 **What correcting it would change.** The rows would carry an empty `HGVSp`, and no other column would change. Before an exon, that is what Ensembl VEP writes for the same change written inside the intron, on a transcript with no intron of 13 bases or fewer. On a transcript that has one, Ensembl VEP fills the field for the change written inside the intron as well, and vep-rs writes none there. That difference has an entry of its own, [`hgvsp_coding_test_widened_by_a_short_intron`](hgvsp-coding-test-widened-by-a-short-intron.md). Its two records stand 1 and 3 bases before the intron's end; the reach of 12 bases is read from line 861 of `BaseTranscriptVariation.pm`.
 
-**The classes it produces.** Two classes of the format comparator, `scripts/concordance/compare_vep_formats.py`. Each sets aside an `HGVSp` that Ensembl VEP fills and vep-rs leaves empty, on a row where both engines write one `HGVSc`, a notation of the row's transcript.
+**The classes it produces.** Two classes of the format comparator, `tools/vep-formats-compare`. Each sets aside an `HGVSp` that Ensembl VEP fills and vep-rs leaves empty, on a row where both engines write one `HGVSc`, a notation of the row's transcript.
 
 `hgvsp_intron_end_insertion` is the gap before an exon. The `HGVSc` is a duplication of the intron position before an exon's first coding base, a duplication of two or more intron positions ending on that position, or an insertion between that position and the coding base. No `HGVS_OFFSET` stands on either side. The record is written where an intron of more than 13 bases of that transcript ends before a coding exon base.
 
@@ -42,9 +42,9 @@ These lines were followed on GRCh37 records that write the insertion alone, in r
 
 Both classes read the transcript's exons and coding bounds from the JSON cache of the vep-rs run under comparison, named by `--json-cache`, and set nothing aside without it. A record that holds the insertion with a shared base is placed by the gap of its allele once clipped to the bases the `HGVSc` inserts. Its row in the default or tab format gives the record's own Location, so the class works the gap out from that Location and those bases. A VCF or JSON entry is placed from its line of the input file.
 
-These stay differences: an `HGVSp` on both sides, an `HGVSc` that differs between the engines or has another shape, offsets that differ, and a transcript the cache does not hold. The class of the gap before an exon also sets nothing aside on a row that carries an `HGVS_OFFSET`, or at the end of an intron of 13 bases or fewer. An `HGVSp` on one side alone is reported there as a difference. The tests of both classes are in `scripts/concordance/test_compare_vep_formats.py`. The concordance figures compare consequence sets and do not read this field.
+These stay differences: an `HGVSp` on both sides, an `HGVSc` that differs between the engines or has another shape, offsets that differ, and a transcript the cache does not hold. The class of the gap before an exon also sets nothing aside on a row that carries an `HGVS_OFFSET`, or at the end of an intron of 13 bases or fewer. An `HGVSp` on one side alone is reported there as a difference. The tests of both classes are in `tools/vep-formats-compare/tests/intron_ends.rs`. The concordance figures compare consequence sets and do not read this field.
 
-On the rows Ensembl VEP 116.2 writes for the genome-wide ClinVar files under `--hgvs`, vep-rs leaves empty an `HGVSp` that Ensembl VEP fills on these rows:
+On the rows Ensembl VEP 116.3 writes for the genome-wide ClinVar files under `--hgvs`, vep-rs leaves empty an `HGVSp` that Ensembl VEP fills on these rows:
 
 | The insertion | GRCh37 rows | GRCh38 rows |
 | --- | --- | --- |
@@ -116,6 +116,6 @@ After an exon:
 
 ## 8. Running the records
 
-**In short.** The entry's reproduction, `scripts/divergences/reproductions/hgvsp_intron_end_insertion.toml`, runs five records on both engines under `--hgvs` and holds six rows to their values. They are both records of section 1, the first record of section 3, the first record of section 5 and the record of section 6 with its two rows. It spells the notations this page gives in words. It cuts three region files from an Ensembl VEP GRCh37 cache and converts them in the Ensembl VEP image.
+**In short.** The entry's reproduction, `scripts/divergences/reproductions/hgvsp_intron_end_insertion.toml`, runs five records on both engines under `--hgvs` and holds six rows to their values. They are both records of section 1, the first record of section 3, the first record of section 5 and the record of section 6 with its two rows. It spells the notations this page gives in words. It cuts three region files from an Ensembl VEP GRCh37 cache and converts them with `tools/vep-storable-to-json`.
 
 The reproduction does not hold the records of sections 2, 4 and 7, the second records of sections 3 and 5, or the 70 records of section 6. Of the records this page names, those at 21:27070987, 7:94049846, 21:38877585, 15:45657058, 10:105800876, 3:37045965 and 6:24528392, and the three of section 7, are records of ClinVar's GRCh37 file. The records at 21:27070988 and 7:94049852 write the first two of those changes at the gap. Strands, exon numbers, coding bases and reference bases are read from the GRCh37 cache and the FASTA that the reproduction names.

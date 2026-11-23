@@ -1,9 +1,9 @@
 entry = "cell_type_comma_names"
 page = "docs/divergences/cell-type-comma-names.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 457 of 672 epigenome names · 2 flag sets, 6 corpora"
+input_class_basis = "2 · 385 of 560 epigenome names · 2 flag sets, 5 corpora"
 notes = "The enhancer ENSR21_C6M55 is active in A549_(m,_58_y), an epigenome whose name holds a comma."
 
 [input]
@@ -28,3 +28,15 @@ where = { record = "rs868224642", feature = "ENSR21_C6M55" }
 [expected]
 ensembl_vep = [""]
 vep_rs = ["A549_(m,_58_y):ACTIVE"]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/config.rs::split_cell_types",
+    "crates/vep-cli/src/regulatory/rows.rs::CellTypes::project",
+]
+tests = [
+    "crates/vep-cli/src/config.rs::tests::cell_type_splits_by_known_names",
+    "crates/vep-cli/src/regulatory/rows.rs::tests::cell_type_projects_the_requested_epigenomes_onto_the_activity",
+    "crates/vep-cli/tests/regulatory.rs::cell_type_projection_reaches_every_format",
+]
+rules = ["tools/vep-golden-corpus/src/classify/fields.rs::cell_type_comma_names"]

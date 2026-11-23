@@ -1,6 +1,6 @@
 # The HGVSc of a deletion straddling a transcript's first base under the 3' shift
 
-**The defect in one sentence.** Under `--hgvs`, when a deletion straddling a transcript's first base shifts 3' by k bases, Ensembl VEP 116.2 starts its notation at transcript base k+1, not at the first transcript base the shifted deletion removes, and so describes fewer bases than the row deletes. A twenty-one-base deletion shifted thirty-three bases into ENST00000785034 is written `n.34_43del`, ten bases, where the shifted span is `n.23_43del`, the notation vep-rs writes.
+**The defect in one sentence.** Under `--hgvs`, when a deletion straddling a transcript's first base shifts 3' by k bases, Ensembl VEP 116.3 starts its notation at transcript base k+1, not at the first transcript base the shifted deletion removes, and so describes fewer bases than the row deletes. A twenty-one-base deletion shifted thirty-three bases into ENST00000785034 is written `n.34_43del`, ten bases, where the shifted span is `n.23_43del`, the notation vep-rs writes.
 
 **Why this is a defect.** A deletion's notation names the first and the last deleted base of the transcript. The shifted span of that deletion runs from n.23 to n.43, twenty-one bases, and Ensembl VEP writes `n.23_43del` for the same allele given at the shifted position. `n.34_43del` describes the loss of ten bases, a change the record does not carry.
 

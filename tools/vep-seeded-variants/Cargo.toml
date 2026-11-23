@@ -1,0 +1,24 @@
+[package]
+name = "vep-seeded-variants"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.89"
+license = "Apache-2.0"
+description = "Seeded generator of input records for any converted Ensembl VEP cache, one for each situation of the genome check, and the reader of a converted cache it stands on"
+publish = false
+
+[dependencies]
+flate2 = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+vep-core = { path = "../../crates/vep-core" }
+
+# Its own Cargo root: the repository workspace's commands do not reach this package, and
+# a cargo command for it names this manifest.
+[workspace]
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"

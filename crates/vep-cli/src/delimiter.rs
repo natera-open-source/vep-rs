@@ -75,13 +75,13 @@ fn assertion_in(pattern: &str) -> Option<String> {
 }
 
 /// A `--delimiter` pattern compiled over text and over bytes, Unicode off in
-/// both, as Perl reads a line it opened without a decoding layer: `.`, a class
-/// and `\s`, `\w`, `\d` match single bytes, a literal outside ASCII matches
-/// its UTF-8 bytes, and a class or property over characters outside ASCII is
-/// refused. The text form refuses a pattern that could match part of a UTF-8
-/// character (`.`, a negated class, a byte escape above ASCII), so its matches
-/// end on character boundaries; the byte form splits a line that is not UTF-8
-/// as Perl splits the bytes it read.
+/// both, as Ensembl VEP reads a line it opened without a decoding layer: `.`,
+/// a class and `\s`, `\w`, `\d` match single bytes, a literal outside ASCII
+/// matches its UTF-8 bytes, and a class or property over characters outside
+/// ASCII is refused. The text form refuses a pattern that could match part of a
+/// UTF-8 character (`.`, a negated class, a byte escape above ASCII), so its
+/// matches end on character boundaries; the byte form splits a line that is not
+/// UTF-8 as Ensembl VEP splits the bytes it read.
 struct RegexSplit {
     text: regex::Regex,
     bytes: regex::bytes::Regex,
@@ -261,15 +261,15 @@ mod tests {
     /// A value the pattern syntax refuses is an error naming the value and the
     /// fault; so is a pattern that could match part of a UTF-8 character (`.`,
     /// a negated class, a byte escape above ASCII) or a class or property over
-    /// characters outside ASCII, which Perl would read as bytes (a literal
-    /// outside ASCII matches its bytes on both sides and is accepted); so is one
-    /// that can match the empty string: one the empty text matches (`x*`, `,?`,
-    /// the bare `|`, `(|a)`, `\s*`) or one holding an assertion (`\b`, `^`, `$`,
-    /// `\A`, `\z`, `\B`), hidden behind a consuming alternative or not, the
-    /// error naming the assertion. A `^` or `$` inside a character class, an
-    /// escaped one and an escaped backslash before `b` are characters, so those
-    /// patterns are accepted. A value with no regular-expression character is
-    /// literal text.
+    /// characters outside ASCII, which Ensembl VEP would read as bytes (a
+    /// literal outside ASCII matches its bytes on both sides and is accepted);
+    /// so is one that can match the empty string: one the empty text matches
+    /// (`x*`, `,?`, the bare `|`, `(|a)`, `\s*`) or one holding an assertion
+    /// (`\b`, `^`, `$`, `\A`, `\z`, `\B`), hidden behind a consuming alternative
+    /// or not, the error naming the assertion. A `^` or `$` inside a character
+    /// class, an escaped one and an escaped backslash before `b` are characters,
+    /// so those patterns are accepted. A value with no regular-expression
+    /// character is literal text.
     #[test]
     fn invalid_pattern_is_an_error_naming_it() {
         let error = from_flag("[").unwrap_err();

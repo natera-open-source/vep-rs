@@ -1,10 +1,10 @@
 entry = "spliceai_multi_entry_cell"
 page = "docs/plugins/spliceai.md#two-genes-in-one-record"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the VCF 4.2 specification, section 1.4.1 \"Fixed fields\", INFO, whose values for one key are separated by commas, and under the SpliceAI plugin's header, which says a score file can hold scores for several genes that overlap a variant (SpliceAI.pm lines 83-85); not seen in the measured datasets"
-notes = "The record at 21:15482000 lies inside AP001347.6 and LIPI, and the corpus's indel score file, a synthetic fixture, writes the two genes' entries as one record, joined with a comma. Ensembl VEP prints the whole cell as the first gene's value and nothing on the LIPI rows; vep-rs prints each entry on its own gene's rows. The corpus's single-base score file writes the entries of the substitution at 21:15481500, inside the same two genes, as one record for each alternate base, and the engines differ there the same way. The same file holds the joined line of the substitution at 21:15481600 twice for each allele and a line of three entries at 21:15481800 three times; Ensembl VEP prints the whole cell once on the rows of the gene that leads the line and nothing on the other gene's rows, and vep-rs prints each gene's entry once. Two lines of the same two genes with other scores stand at 21:15481900; Ensembl VEP prints the second line's whole cell on the rows of the gene that leads it, and vep-rs prints each gene's entry of the second line."
+notes = "The record at 21:15482000 lies inside AP001347.6 and LIPI, and the corpus's indel score file, a synthetic fixture, writes the two genes' entries as one record, joined with a comma. Ensembl VEP prints the whole cell as the first gene's value and nothing on the LIPI rows; vep-rs prints each entry on its own gene's rows. The corpus's single-base score file writes the entries of the substitution at 21:15481500, inside the same two genes, as one record for each alternate base, and the engines differ there the same way. The same file holds the joined line of the substitution at 21:15481600 twice for each allele and a line of three entries at 21:15481800 three times; Ensembl VEP prints the whole cell once on the rows of the gene that leads the line and nothing on the other gene's rows, and vep-rs prints each gene's entry once. Two lines of the same two genes with other scores stand at 21:15481900; Ensembl VEP prints the second line's whole cell on the rows of the gene that leads it, and vep-rs prints each gene's entry of the second line. Six lines at 21:15482100 to 21:15482600 name AP001347.6 in several entries, alone or beside an entry of LIPI; vep-rs prints every AP001347.6 entry of the line on the AP001347.6 rows, in the line's order, and Ensembl VEP prints the whole cell on the rows of the gene that leads the line."
 
 [input]
 format = "vcf"
@@ -15,8 +15,8 @@ text = """
 [cache]
 species = "homo_sapiens"
 assembly = "GRCh37"
-json_cache = "tests/golden/116/GRCh37-plugin-spliceai/json_cache"
-fasta = "tests/golden/116/GRCh37-plugin-spliceai/reference.fa.gz"
+json_cache = "tests/golden/116/GRCh37-plugin-spliceai-fixture/json_cache"
+fasta = "tests/golden/116/GRCh37-plugin-spliceai-fixture/reference.fa.gz"
 
 [run]
 flags = [
@@ -42,4 +42,20 @@ vep_rs = [
   "ENST00000428809=AP001347.6|0.03|0.12|0.15|0.11|-37|-17|-20|-13",
   "ENST00000432621=AP001347.6|0.03|0.12|0.15|0.11|-37|-17|-20|-13",
   "ENST00000536861=LIPI|0.06|0.10|0.16|0.09|-22|33|12|35",
+]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/spliceai.rs::SpliceAiPlugin::hits",
+    "crates/vep-builtins/src/plugins/spliceai.rs::SpliceAiPlugin::score_values",
+]
+tests = [
+    "crates/vep-builtins/src/plugins/spliceai.rs::tests::score_values_read_every_entry_of_a_well_formed_info",
+    "crates/vep-builtins/src/plugins/spliceai.rs::tests::two_gene_entries_in_one_record_score_each_gene",
+    "crates/vep-cli/tests/plugins_builtin.rs::spliceai_writes_each_gene_its_entry_once_where_a_record_line_stands_again",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/spliceai.rs::spliceai_multi_entry_cell_row",
+    "tools/vep-golden-corpus/src/classify/spliceai.rs::spliceai_multi_entry_cell",
+    "tools/vep-plugin-pairs/src/rules/spliceai.rs::multi_entry_cell",
 ]

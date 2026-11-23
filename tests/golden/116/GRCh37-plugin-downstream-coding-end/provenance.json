@@ -1,34 +1,34 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs --plugin Downstream [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh37",
  "fasta": "reference.fa.gz: GRCh37 chromosomes 16, 17 and 19 at their full lengths from Homo_sapiens.GRCh37.75.dna.primary_assembly.fa, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N, written at 60 bases per line and compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; both engines read it as --fasta, Ensembl VEP's Downstream plugin for the 3' UTR and both for the HGVS shift",
  "input": "6 public ClinVar records on chromosomes 16, 17 and 19 (the ID is ClinVar's), each a deletion at the 3' end of a coding sequence. On 13 frameshift rows the first base Ensembl VEP's Downstream plugin removes in the manifest's run is a codon's third base and the removed span runs to the last base of the translateable sequence, so the changed sequence is one base shorter than the offset Ensembl VEP's plugin translates from (Downstream.pm:113-115) and its substr reads nothing; expected/<format>.warnings.log quotes the plugin's `substr outside of string` warning for each. On the ten of those rows whose transcript has a 3' UTR Ensembl VEP translates the UTR from its first base, vep-rs writes another DownstreamProtein and ProteinLengthChange is equal. On four of the ten both engines read the CDS_position column as printed and vep-rs translates the two bases left of the touched codon with the UTR (class downstream_utr_frame_past_coding_end): 4685676 on ENST00000251595 and ENST00000397806 (HBA2), a 22-base deletion through the stop codon, read at the CDS_position column as printed beside an HGVS_OFFSET of 4; 2024490 on ENST00000561751 (CDH1), a nonsense-mediated-decay transcript, beside four CDH1 rows where the same deletion starts at a codon's first base inside the coding sequence; 530351 on ENST00000259008 (BRIP1), on the reverse strand, where Ensembl VEP's DownstreamProtein is empty. On the other six Ensembl VEP's plugin reads the column moved 3' by the row's HGVS_OFFSET (TranscriptVariationAllele.pm:844-858, 2406-2410; Downstream.pm:108), vep-rs reads the column as printed, a span that ends before the last coding base, and translates from the codon that holds its first base (class plugin_hgvs_shifted_cds_coordinates): 635411 on ENST00000312060 (CTU2), moved by an HGVS_OFFSET of 3, and 932016 on five MYH14 transcripts, moved by an HGVS_OFFSET of 1. The same class documents four more CTU2 rows of 635411, where the span as printed and the span moved by 3 both start at a codon's second base inside the coding sequence, one codon apart, and Ensembl VEP's DownstreamProtein is vep-rs's without its first residue. On the other three of the 13 rows the transcript has no 3' UTR and both engines write an empty DownstreamProtein: 932016 on ENST00000596571 and ENST00000598205, and 4285957 on ENST00000434286 (LILRB4), a one-base deletion of the last coding base. The flag set without-hgvs annotates variants.without-hgvs.vcf, the same six records under a file name of their own, so that a comparison names the run by its input, without --hgvs, where the plugin reads every column as printed: the rows of 932016 start at a codon's second base and are equal on both engines, and 635411 on ENST00000312060 starts at a codon's third base and ends before the last coding base, where Ensembl VEP's translation starts at the codon after the one the deletion touches (Downstream.pm:113)",
  "sha256": {
-  "default.txt": "6b6f70bfde11419aa7e6ff1b2845f2f2cd6e043789a49f0eff777157d9b0fece",
-  "tab.txt": "f015b35c2030295ac0199823e4a034e9ee363097df5b1a3095ee32adda6927a3",
-  "vcf.vcf": "aaa855c665c162e7509dc66394398d6448760eb2bb1cfc72c8181763cf843e79",
-  "json.jsonl": "6bab459ea847abdd1496e1e6d1d8e1927c5b03b0a300043d0d9d65e1591995c1"
+  "default.txt": "0018f380d53441361ebd20c02e80da8dd1fed88bed909a4b84deef34e2440d36",
+  "tab.txt": "cc098708c98af0e51d1f7dbbbfa926a8755d2e3c7af158b16a70a1767fac6a5f",
+  "vcf.vcf": "682dac30a75acfdb0e2218c4ae7003909eb583de956fa0b0cac15d67e0bf8170",
+  "json.jsonl": "0af5b2936a442095739c45c53291282a213f562af0a9033eb34b5a27d7ab922a"
  },
  "variants_vcf_sha256": "441e9671a8b7639fa365683e64a966a22a02ba0afcef8ed9e7b682f8ba3ce656",
  "flag_sets": {
   "without-hgvs": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.without-hgvs.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --plugin Downstream [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh37",
    "fasta": "reference.fa.gz",
    "input": "variants.without-hgvs.vcf",
    "sha256": {
-    "default.txt": "0a78fe5fa2ac81962f579698fd262e7e981f3e6a90b0e2785080748f4584ff04",
-    "tab.txt": "a8e0d586054a8006eb1064a136c51d60e6afdf98dc2122363aef657a5eb30205",
-    "vcf.vcf": "8db5eebfb8e8576e1360ed310a5584c36114c8b5e5efd934f260b16d63f91c34",
-    "json.jsonl": "6d207a7a98e24038143addaa45e3b56c771dc561bf4639dbdda44ef1208aad71"
+    "default.txt": "2d6510c582e4581ce8a5255284a241367c38f1c691c2cf847ff53945dad64cb9",
+    "tab.txt": "94216510ff70154c306a86cb808da39ca8178f859dd1df158f53edc10243be2e",
+    "vcf.vcf": "cea1f08bd9e26bdf431b0ff26112e3388aa09b9db889a14cf3a04de9d7a48980",
+    "json.jsonl": "4b278038a2baaab3e2ffd9aa413e5a0b86fa00104707fb94f7ebfd774da565a5"
    },
    "flags": [
     "--plugin",
@@ -37,7 +37,7 @@
    "expected_dir": "expected_without-hgvs"
   }
  },
- "generator": "candidate records annotated with Ensembl VEP under the corpus flags against the full reference (scripts/concordance/generate_reference_output.sh --data-dir over the six records alone, with --flags \"--hgvs --plugin Downstream\" --fork 1); scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh37 --suite codingend37=<reference>=<candidates> --k 200 --seed 1 --cache <converted cache> --include codingend37=<each record's ID> --covers Downstream --matrix tests/parity/matrix.tsv --fasta-name reference.fa.gz --flag=--hgvs --flag=--plugin --flag=Downstream; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the cache scripts/data/storable_to_json.pl converted from the Ensembl VEP 116 GRCh37 cache; the masked reference as described under fasta, written with the functions of scripts/fixtures/cut_plugin_regions.py; variants.without-hgvs.vcf, a copy of variants.vcf; build_golden_corpus.py flag-set --name without-hgvs --flag=--plugin --flag=Downstream --input variants.without-hgvs.vcf --covers Downstream; scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run, whose rows equal the full-reference run's, and with --flag-set without-hgvs for the flag set; build_golden_corpus.py classify (the manifest's run with --field on the two plugin fields, HGVSc and HGVS_OFFSET; the flag set with --field on the two plugin fields)",
+ "generator": "candidate records annotated with Ensembl VEP under the corpus flags against the full reference (scripts/concordance/generate_reference_output.sh --data-dir over the six records alone, with --flags \"--hgvs --plugin Downstream\" --fork 1); tools/vep-golden-corpus select --release 116 --assembly GRCh37 --dataset codingend37=<reference>=<candidates> --k 200 --seed 1 --cache <converted cache> --include codingend37=<each record's ID> --covers Downstream --matrix tests/parity/matrix.tsv --fasta-name reference.fa.gz --flag=--hgvs --flag=--plugin --flag=Downstream; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the cache tools/vep-storable-to-json converts from the Ensembl VEP 116 GRCh37 cache; the masked reference as described under fasta, written with the functions of scripts/fixtures/cut_plugin_regions.py; variants.without-hgvs.vcf, a copy of variants.vcf; vep-golden-corpus flag-set --name without-hgvs --flag=--plugin --flag=Downstream --input variants.without-hgvs.vcf --covers Downstream; scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run, whose rows equal the full-reference run's, and with --flag-set without-hgvs for the flag set; vep-golden-corpus classify (the manifest's run with --field on the two plugin fields, HGVSc and HGVS_OFFSET; the flag set with --field on the two plugin fields)",
  "pruned_cache": {
   "transcripts_per_chromosome": {
    "16": 44,

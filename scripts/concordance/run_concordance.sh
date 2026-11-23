@@ -14,7 +14,7 @@ WORKSPACE_DIR="$(cd "${VEP_RS_DIR}/.." && pwd)"
 # committed: seed them with scripts/data/download_real_world_vcfs.sh, which
 # fetches from public sources, or point --benchmark-dir at your own directory.
 BENCHMARK_DIR="${VEP_BENCHMARK_DIR:-${VEP_RS_DIR}/.vep/benchmark}"
-# Upstream Perl VEP checkout, needed only for --perl-vep-mode local.
+# Upstream Ensembl VEP checkout, needed only for --perl-vep-mode local.
 ENSEMBL_VEP_DIR="${VEP_ENSEMBL_VEP_DIR:-${WORKSPACE_DIR}/ensembl-vep}"
 WORK_DIR="${VEP_RS_DIR}/tmp/concordance"
 
@@ -23,7 +23,7 @@ SMOKE_VARIANTS=5000
 SPECIES="homo_sapiens"
 ASSEMBLY="GRCh37"
 PERL_VEP_MODE="docker"
-PERL_VEP_DOCKER_IMAGE="ensemblorg/ensembl-vep:release_116.2"
+PERL_VEP_DOCKER_IMAGE="ensemblorg/ensembl-vep:release_116.3"
 FIXTURES_DIR=""
 RUST_RELEASE=0
 # The Ensembl VEP release the comparator scores against (its --reference-release).
@@ -54,8 +54,8 @@ PLUGIN_TIER="quick"
 # annotations is the signature of a broken plugin (contig-name mismatch,
 # unparsed header, wrong position column), not of perfect agreement.
 PLUGIN_MIN_ANNOTATED=1
-# Upstream Perl VEP_plugins checkout, mounted into the Perl container when it
-# exists. Optional: absent means the Perl side runs without Perl-side plugins.
+# Upstream VEP_plugins checkout: mounted into the Ensembl VEP container when it
+# exists (otherwise the image's own plugins are read), --dir_plugins in local mode.
 VEP_PLUGINS_DIR="${VEP_PLUGINS_DIR:-${WORKSPACE_DIR}/VEP_plugins}"
 
 # Final process exit status. A verdict that must fail the run sets this, and the
@@ -81,23 +81,23 @@ Required:
   --fasta <path>            Reference FASTA, or --no-fasta to run every engine without one
 
 Optional:
-  --perl-vep-mode <local|docker|fixtures>  Perl VEP execution mode (default: docker)
+  --perl-vep-mode <local|docker|fixtures>  Ensembl VEP execution mode (default: docker)
                                     fixtures: use pre-existing Perl outputs from --fixtures-dir
                                               (skips Docker/Perl entirely)
-  --perl-vep-docker-image <image>  Docker image for perl VEP (default: ensemblorg/ensembl-vep:release_116.2)
-  --fixtures-dir <path>            Cached Perl VEP outputs (default:
+  --perl-vep-docker-image <image>  Docker image for Ensembl VEP (default: ensemblorg/ensembl-vep:release_116.3)
+  --fixtures-dir <path>            Cached Ensembl VEP outputs (default:
                                    tests/concordance_fixtures/sv_perl, which is
                                    not committed; produce it with
                                    --perl-vep-mode docker first)
   --rust-release            Run vep-rs using a release build (cargo --release)
-  --reference-release <115.2|116.2>  The Ensembl VEP release the comparator's adjusted F1
+  --reference-release <115.2|116.2|116.3>  The Ensembl VEP release the comparator's adjusted F1
                             is scored against (the tuple comparator's --reference-release).
                             Default: derived from the Docker image tag, the fixtures
                             directory's provenance.json, or the local checkout's
                             Constants.pm; the run fails before comparing when none
                             names a release.
-  --perl-output-cache-dir <path>   Cache dir for perl VEP outputs (default: vep-rs/tmp/perl_output_cache)
-  --no-perl-output-cache   Disable perl output caching (always rerun perl VEP)
+  --perl-output-cache-dir <path>   Cache dir for Ensembl VEP outputs (default: vep-rs/tmp/perl_output_cache)
+  --no-perl-output-cache   Disable Ensembl VEP output caching (always rerun Ensembl VEP)
   --refresh-perl-output-cache  Ignore cached perl outputs; rerun and update cache
   --perf-dir <path>         Directory for performance reports (default: <work-dir>/reports/perf)
   --no-perf                 Disable performance monitoring
@@ -106,14 +106,14 @@ Optional:
                             seed it with scripts/data/download_real_world_vcfs.sh.
                             Default: ./.vep/benchmark/ under the repo root, or
                             $VEP_BENCHMARK_DIR.
-  --ensembl-vep-dir <path>  Upstream Perl VEP checkout, for --perl-vep-mode local
+  --ensembl-vep-dir <path>  Upstream Ensembl VEP checkout, for --perl-vep-mode local
                             only. Default: an ensembl-vep/ sibling of the repo, or
                             $VEP_ENSEMBL_VEP_DIR.
   --work-dir <path>         Working output directory (default: vep-rs/tmp/concordance)
   --species <name>          Species (default: homo_sapiens)
   --assembly <name>         Assembly (default: GRCh37)
-  --fasta <path>            Reference FASTA. Enables sequence-derived UTR predicates on Perl +
-                            vep-rs + fastVEP, plus HGVS 3' normalization. Both engines MUST
+  --fasta <path>            Reference FASTA. Enables sequence-derived UTR predicates on Ensembl VEP
+                            and vep-rs, plus HGVS 3' normalization. Both engines MUST
                             receive --fasta or both MUST be invoked without it; an asymmetric
                             run reports sequence-dependent differences as false discordants.
   --no-fasta                Run every engine without a FASTA. Without this flag, an empty
@@ -141,13 +141,12 @@ Optional:
   --help                    Print this help
 
 Environment:
-  VEP_OUTPUTS_COMPARATOR    The SNP/indel tuple comparator. Unset: the Rust tool of this
-                            tree, tools/vep-outputs-compare, built through cargo before
-                            any engine runs. `python`: compare_vep_outputs.py, the
-                            reference implementation, which writes the same reports.
-                            Any other value: a comparator binary, as a path or a
-                            command on PATH; one that is not an executable stops the run
-                            before any engine runs.
+  VEP_PLUGIN_COMPARATOR     The plugin comparator of a run under --plugins, the `compare`
+                            command of vep-plugin-pairs. Unset: the Rust tool of this
+                            tree, tools/vep-plugin-pairs, built through cargo before any
+                            engine runs. Any other value: a built vep-plugin-pairs, as a
+                            path or a command on PATH; one that is not an executable
+                            stops the run before any engine runs.
   CADD_SNV_FILE, CADD_INDEL_FILE, SPLICEAI_SNV_FILE, SPLICEAI_INDEL_FILE, AVI_FILE,
   DBNSFP_FILE, DBSCSNV_FILE
                             Your own data file for CADD, SpliceAI, AVI, dbNSFP or dbscSNV,
@@ -158,7 +157,7 @@ Environment:
 
 Outputs:
   <work-dir>/inputs     prepared VCFs
-  <work-dir>/perl       perl VEP outputs
+  <work-dir>/perl       Ensembl VEP outputs
   <work-dir>/rust       rust VEP outputs
   <work-dir>/reports    concordance reports
 EOF
@@ -306,22 +305,40 @@ if [[ "${PERL_VEP_MODE}" != "local" && "${PERL_VEP_MODE}" != "docker" && "${PERL
     exit 1
 fi
 
-if [[ -n "${REFERENCE_RELEASE}" && "${REFERENCE_RELEASE}" != "115.2" && "${REFERENCE_RELEASE}" != "116.2" ]]; then
-    echo "ERROR: --reference-release must be 115.2 or 116.2 (got ${REFERENCE_RELEASE})" >&2
+if [[ -n "${REFERENCE_RELEASE}" && "${REFERENCE_RELEASE}" != "115.2" && "${REFERENCE_RELEASE}" != "116.2" && "${REFERENCE_RELEASE}" != "116.3" ]]; then
+    echo "ERROR: --reference-release must be 115.2, 116.2 or 116.3 (got ${REFERENCE_RELEASE})" >&2
     exit 1
 fi
 
+# ensembl_fasta_name <species> <assembly>: the reference FASTA an example in a message
+# names, as Ensembl publishes it. Every species has a dna.toplevel file; human also has
+# dna.primary_assembly, the same sequence without the haplotype and patch regions, and
+# that is the one named under homo_sapiens.
+ensembl_fasta_name() {
+    local species="$1" assembly="$2" initial
+    if [[ "${species}" == "homo_sapiens" ]]; then
+        echo "Homo_sapiens.${assembly}.dna.primary_assembly.fa"
+    else
+        initial="$(printf '%s' "${species:0:1}" | tr '[:lower:]' '[:upper:]')"
+        echo "${initial}${species:1}.${assembly}.dna.toplevel.fa"
+    fi
+}
+
 # FASTA-required gate: asymmetric --fasta between engines reports sequence-dependent
-# differences as false discordants. Either ALL three engines (Perl, vep-rs, fastVEP)
-# get --fasta, or none do; the harness enforces "all". --no-fasta is the explicit
-# opt-out that runs every engine without one.
+# differences as false discordants. Either both engines (Ensembl VEP, vep-rs)
+# get --fasta, or neither does; the harness enforces "both". --no-fasta is the explicit
+# opt-out that runs both engines without one.
 if [[ -z "${FASTA}" && "${NO_FASTA}" -ne 1 ]]; then
     echo "ERROR: --fasta is required (or pass --no-fasta to opt out explicitly)" >&2
     echo "  Reason: sequence-derived UTR predicates (_ins_del_start_altered," >&2
     echo "    _ins_del_stop_altered) and HGVS 3' normalization require the reference" >&2
     echo "    FASTA. Asymmetric FASTA between Perl and vep-rs reports sequence-dependent" >&2
     echo "    differences as false discordants." >&2
-    echo "  Fix: pass --fasta /path/to/Homo_sapiens.GRCh3{7,8}.dna.primary_assembly.fa" >&2
+    if [[ "${SPECIES}" == "homo_sapiens" ]]; then
+        echo "  Fix: pass --fasta /path/to/Homo_sapiens.GRCh3{7,8}.dna.primary_assembly.fa" >&2
+    else
+        echo "  Fix: pass --fasta /path/to/$(ensembl_fasta_name "${SPECIES}" "${ASSEMBLY}")" >&2
+    fi
     echo "    (with .fai index alongside)." >&2
     echo "  Opt-out: pass --no-fasta to run every engine without a FASTA. The output" >&2
     echo "    is tagged with the no-fasta caveat in provenance.json." >&2
@@ -338,7 +355,7 @@ fi
 # Canonical-contigs gate: real-world clinical/research
 # VCFs annotate against 1-22,X,Y,MT only. Unplaced contigs (NT_*, NW_*, decoys) are
 # sequencing artifacts that don't belong in F1. Each engine handles alt contigs differently
-# (Perl includes some, vep-rs includes everything in cache, fastVEP drops them entirely),
+# (Ensembl VEP includes some, vep-rs includes everything in cache, fastVEP drops them entirely),
 # producing F1 divergence on multi-chromosome cells purely from contig-handling
 # asymmetry, NOT from real consequence-logic differences.
 #
@@ -351,9 +368,9 @@ fi
 # The human canonical contig set, Ensembl-style for both GRCh37 and GRCh38. The
 # assembly difference is in the genome-sequence content, NOT contig naming.
 # UCSC-style chr-prefix inputs are auto-stripped at filter time so the output is
-# always Ensembl-style. Must match scripts/concordance/prepare_benchmark_vcfs.py
-# CANONICAL_CONTIGS frozenset and scripts/concordance/compare_vep_outputs.py
-# CANONICAL_CONTIGS frozenset. Under any other assembly the set is the JSON
+# always Ensembl-style. Must match tools/vep-prepare-benchmark-vcfs/src/contigs.rs
+# HUMAN constant and tools/vep-outputs-compare/src/input.rs
+# CANONICAL_CONTIGS constant. Under any other assembly the set is the JSON
 # cache's contig_order, read once the cache directory is resolved below.
 #
 # The variable is CANONICAL_CONTIGS_LIST, not CANONICAL_CONTIGS: the latter is the
@@ -365,11 +382,11 @@ if [[ "${PERL_VEP_MODE}" == "fixtures" ]]; then
         FIXTURES_DIR="${VEP_FIXTURES_DIR:-${VEP_RS_DIR}/tests/concordance_fixtures/sv_perl}"
     fi
     if [[ ! -d "${FIXTURES_DIR}" ]]; then
-        echo "ERROR: [run_concordance] no Perl VEP fixtures at ${FIXTURES_DIR}" >&2
-        echo "  Fixtures are cached Perl VEP outputs. They are NOT committed: they are" >&2
+        echo "ERROR: [run_concordance] no Ensembl VEP fixtures at ${FIXTURES_DIR}" >&2
+        echo "  Fixtures are cached Ensembl VEP outputs. They are NOT committed: they are" >&2
         echo "  large and specific to one cache release. Produce them with" >&2
         echo "    --perl-vep-mode docker" >&2
-        echo "  which runs Perl VEP itself, then point --fixtures-dir at the saved" >&2
+        echo "  which runs Ensembl VEP itself, then point --fixtures-dir at the saved" >&2
         echo "  outputs on later runs. See scripts/README.md." >&2
         exit 1
     fi
@@ -382,30 +399,62 @@ for cmd in cargo python3; do
     fi
 done
 
-# The SNP/indel tuple comparator. Unset, VEP_OUTPUTS_COMPARATOR selects the Rust tool of this
-# tree, tools/vep-outputs-compare, built here through cargo as the engine is, so that a build
-# that fails stops the run before any engine runs; `python` selects compare_vep_outputs.py,
-# the reference implementation, which writes the same reports; any other value names a
-# comparator binary, a path or a command on PATH (`type -P` resolves it as the exec does).
+# The SNP/indel tuple comparator is the Rust tool of this tree, tools/vep-outputs-compare,
+# built here through cargo as the engine is, so that a build that fails stops the run before
+# any engine runs. No other program runs in its place.
 OUTPUTS_COMPARE_MANIFEST="${VEP_RS_DIR}/tools/vep-outputs-compare/Cargo.toml"
-case "${VEP_OUTPUTS_COMPARATOR:-}" in
-"")
-    if ! cargo build -q --release --locked --manifest-path "${OUTPUTS_COMPARE_MANIFEST}"; then
-        echo "ERROR: [run_concordance] the tuple comparator tools/vep-outputs-compare did not build: repair 'cargo build --release --locked --manifest-path ${OUTPUTS_COMPARE_MANIFEST}' or name a built one in VEP_OUTPUTS_COMPARATOR, or set VEP_OUTPUTS_COMPARATOR=python to score with the Python reference implementation" >&2
-        exit 1
-    fi
-    OUTPUTS_COMPARE=(cargo run -q --release --locked --manifest-path "${OUTPUTS_COMPARE_MANIFEST}" --)
-    ;;
-python) OUTPUTS_COMPARE=(python3 "${VEP_RS_DIR}/scripts/concordance/compare_vep_outputs.py") ;;
-*)
-    if outputs_bin=$(type -P -- "${VEP_OUTPUTS_COMPARATOR}") && [[ -f "${outputs_bin}" && -x "${outputs_bin}" ]]; then
-        OUTPUTS_COMPARE=("${outputs_bin}")
-    else
-        echo "ERROR: [run_concordance] the tuple comparator ${VEP_OUTPUTS_COMPARATOR} is not an executable: name a built one in VEP_OUTPUTS_COMPARATOR or unset it to build tools/vep-outputs-compare, or set VEP_OUTPUTS_COMPARATOR=python to score with the Python reference implementation" >&2
-        exit 1
-    fi
-    ;;
-esac
+if ! cargo build -q --release --locked --manifest-path "${OUTPUTS_COMPARE_MANIFEST}"; then
+    echo "ERROR: [run_concordance] the tuple comparator tools/vep-outputs-compare did not build: repair 'cargo build --release --locked --manifest-path ${OUTPUTS_COMPARE_MANIFEST}'" >&2
+    exit 1
+fi
+OUTPUTS_COMPARE=(cargo run -q --release --locked --manifest-path "${OUTPUTS_COMPARE_MANIFEST}" --)
+
+# The input preparation is the Rust tool of this tree, tools/vep-prepare-benchmark-vcfs,
+# built here through cargo as the tuple comparator is, so that a build that fails stops the
+# run before any engine runs.
+PREPARE_VCFS_MANIFEST="${VEP_RS_DIR}/tools/vep-prepare-benchmark-vcfs/Cargo.toml"
+if ! cargo build -q --release --locked --manifest-path "${PREPARE_VCFS_MANIFEST}"; then
+    echo "ERROR: [run_concordance] the input preparation tool tools/vep-prepare-benchmark-vcfs did not build: repair 'cargo build --release --locked --manifest-path ${PREPARE_VCFS_MANIFEST}'" >&2
+    exit 1
+fi
+PREPARE_VCFS=(cargo run -q --release --locked --manifest-path "${PREPARE_VCFS_MANIFEST}" --)
+
+# The digests of the caches, the FASTA and the prepared inputs read every byte of them:
+# they are made by the Rust tool of this tree, tools/vep-file-census, across the host's
+# cores. It is built here through cargo as the input preparation tool is, so that a build
+# that fails stops the run before any engine runs.
+FILE_CENSUS_MANIFEST="${VEP_RS_DIR}/tools/vep-file-census/Cargo.toml"
+if ! cargo build -q --release --locked --manifest-path "${FILE_CENSUS_MANIFEST}"; then
+    echo "ERROR: [run_concordance] the file census tools/vep-file-census did not build: repair 'cargo build --release --locked --manifest-path ${FILE_CENSUS_MANIFEST}'" >&2
+    exit 1
+fi
+FILE_CENSUS=(cargo run -q --release --locked --manifest-path "${FILE_CENSUS_MANIFEST}" --)
+
+# The plugin comparator of a run under --plugins: the `compare` command of vep-plugin-pairs.
+# Unset, VEP_PLUGIN_COMPARATOR selects the Rust tool of this tree, tools/vep-plugin-pairs,
+# built here through cargo as the tuple comparator is, so that a build that fails stops the
+# run before any engine runs; any other value names a built vep-plugin-pairs, a path or a
+# command on PATH.
+PLUGIN_COMPARE_MANIFEST="${VEP_RS_DIR}/tools/vep-plugin-pairs/Cargo.toml"
+if [[ -n "${PLUGINS}" ]]; then
+    case "${VEP_PLUGIN_COMPARATOR:-}" in
+    "")
+        if ! cargo build -q --release --locked --manifest-path "${PLUGIN_COMPARE_MANIFEST}"; then
+            echo "ERROR: [run_concordance] the plugin comparator tools/vep-plugin-pairs did not build: repair 'cargo build --release --locked --manifest-path ${PLUGIN_COMPARE_MANIFEST}' or name a built one in VEP_PLUGIN_COMPARATOR" >&2
+            exit 1
+        fi
+        PLUGIN_COMPARE=(cargo run -q --release --locked --manifest-path "${PLUGIN_COMPARE_MANIFEST}" -- compare)
+        ;;
+    *)
+        if plugin_bin=$(type -P -- "${VEP_PLUGIN_COMPARATOR}") && [[ -f "${plugin_bin}" && -x "${plugin_bin}" ]]; then
+            PLUGIN_COMPARE=("${plugin_bin}" compare)
+        else
+            echo "ERROR: [run_concordance] the plugin comparator ${VEP_PLUGIN_COMPARATOR} is not an executable: name a built vep-plugin-pairs in VEP_PLUGIN_COMPARATOR or unset it to build tools/vep-plugin-pairs" >&2
+            exit 1
+        fi
+        ;;
+    esac
+fi
 
 if [[ "${PERL_VEP_MODE}" == "local" ]]; then
     if ! command -v perl >/dev/null 2>&1; then
@@ -445,7 +494,7 @@ fi
 if [[ "${PERL_VEP_MODE}" == "local" ]]; then
     if [[ ! -f "${ENSEMBL_VEP_DIR}/vep" ]]; then
         echo "ERROR: [run_concordance] no ensembl-vep executable at ${ENSEMBL_VEP_DIR}/vep" >&2
-        echo "  --perl-vep-mode local needs an upstream Perl VEP checkout. Clone it from" >&2
+        echo "  --perl-vep-mode local needs an upstream Ensembl VEP checkout. Clone it from" >&2
         echo "    https://github.com/Ensembl/ensembl-vep" >&2
         echo "  and pass --ensembl-vep-dir, or use --perl-vep-mode docker instead." >&2
         exit 1
@@ -481,15 +530,7 @@ if [[ "${PERF_ENABLED}" -eq 1 ]]; then
 fi
 
 sha256_file() {
-    python3 - "$1" <<'PY'
-import hashlib, sys
-path = sys.argv[1]
-h = hashlib.sha256()
-with open(path, "rb") as f:
-    for chunk in iter(lambda: f.read(1024 * 1024), b""):
-        h.update(chunk)
-print(h.hexdigest())
-PY
+    "${FILE_CENSUS[@]}" digest --algorithm sha256 - <"$1" | awk '{print $1}'
 }
 
 sha256_string() {
@@ -845,9 +886,9 @@ echo "  rust vep version constant: ${RUST_VERSION}"
 echo "  perl cache version (from info.txt): ${PERL_CACHE_VERSION}"
 echo "  reference release (comparator registry): ${REFERENCE_RELEASE}"
 echo "  rust release build: ${RUST_RELEASE}"
-echo "  perl vep mode: ${PERL_VEP_MODE}"
+echo "  Ensembl VEP mode: ${PERL_VEP_MODE}"
 if [[ "${PERL_VEP_MODE}" == "docker" ]]; then
-    echo "  perl vep docker image: ${PERL_VEP_DOCKER_IMAGE}"
+    echo "  Ensembl VEP docker image: ${PERL_VEP_DOCKER_IMAGE}"
 fi
 if [[ "${PERL_VEP_MODE}" == "fixtures" ]]; then
     echo "  fixtures dir: ${FIXTURES_DIR}"
@@ -890,12 +931,12 @@ if [[ -n "${PLUGINS}" && -n "${PLUGIN_DATA_DIR}" ]]; then
     esac
 fi
 
-# Build plugin argument strings for Perl and Rust VEP
+# Build plugin argument strings for Ensembl VEP and vep-rs
 PERL_PLUGIN_ARGS=()
 RUST_PLUGIN_ARGS=()
 PLUGIN_NAMES=()
 
-# Emit the `-v` flags the Perl container needs for the requested plugins. Defined
+# Emit the `-v` flags the Ensembl VEP container needs for the requested plugins. Defined
 # once for both call sites: build_plugin_args emits the container paths
 # /work/loftee_perl and /work/loftee_data for LoFTEE, and a mount list that
 # drifts from it leaves a docker-mode LoFTEE comparison unable to run.
@@ -909,12 +950,28 @@ plugin_docker_mounts() {
         vols+=(-v "${PLUGIN_DATA_DIR}:/work/plugin_data:ro")
     fi
     # A user's own file is read through its directory, mounted under the variable's name,
-    # the path build_plugin_args gives the Perl engine.
-    local var
+    # the path build_plugin_args gives Ensembl VEP. A variable whose plugin the run leaves
+    # out names a file no engine reads, so its directory is neither mounted nor required
+    # to exist.
+    local var reader name asked dir host
     for var in "${USER_PLUGIN_FILE_VARS[@]}"; do
-        if [[ -n "${!var:-}" ]]; then
-            vols+=(-v "$(cd "$(dirname "${!var}")" && pwd):/work/user_plugin_data/${var}:ro")
+        [[ -n "${!var:-}" ]] || continue
+        reader="$(user_plugin_file_reader "${var}")"
+        asked=0
+        for name in "${PLUGIN_NAMES[@]+"${PLUGIN_NAMES[@]}"}"; do
+            [[ "${name}" != "${reader}" ]] || asked=1
+        done
+        [[ "${asked}" -eq 1 ]] || continue
+        dir="$(dirname "${!var}")"
+        if [[ ! -d "${dir}" ]]; then
+            echo "ERROR: [run_concordance] ${var} names a file whose directory does not exist: ${dir}" >&2
+            return 1
         fi
+        if ! host="$(cd "${dir}" 2>/dev/null && pwd)"; then
+            echo "ERROR: [run_concordance] ${var} names a file whose directory cannot be entered: ${dir}" >&2
+            return 1
+        fi
+        vols+=(-v "${host}:/work/user_plugin_data/${var}:ro")
     done
     # Only mount VEP_plugins when it exists: the ensembl-vep image already installs
     # every .pm into /plugins (ENV VEP_DIR_PLUGINS=/plugins), so the mount is a
@@ -960,11 +1017,21 @@ user_plugin_file_vars() {
     dbscSNV) echo "DBSCSNV_FILE" ;;
     esac
 }
+# The plugin whose argument string names the file of a variable (build_plugin_args).
+user_plugin_file_reader() {
+    case "$1" in
+    CADD_SNV_FILE | CADD_INDEL_FILE) echo "CADD" ;;
+    SPLICEAI_SNV_FILE | SPLICEAI_INDEL_FILE) echo "SpliceAI" ;;
+    AVI_FILE) echo "AVI" ;;
+    DBNSFP_FILE) echo "dbNSFP" ;;
+    DBSCSNV_FILE) echo "dbscSNV" ;;
+    esac
+}
 
 build_plugin_args() {
     # Map plugin name to --plugin argument for a given data directory.
     # $1 = plugin name, $2 = data directory (host path), $3 = "perl" or "rust"
-    # For Docker Perl VEP, paths are remapped to /work/plugin_data/
+    # For Ensembl VEP in Docker, paths are remapped to /work/plugin_data/
     # File names come from scripts/data/plugin_data_layout.sh, the table
     # setup_plugin_data.sh stages from, so the harness reads what staging wrote.
     # CADD, SpliceAI, AVI, dbNSFP and dbscSNV are not in that table: each reads the
@@ -981,7 +1048,7 @@ build_plugin_args() {
     local f
 
     # The path an engine reads a user's file at: the host path, or the mount of its
-    # directory in the Perl container (plugin_docker_mounts).
+    # directory in the Ensembl VEP container (plugin_docker_mounts).
     user_file() {
         if [[ "${target}" == "perl" && "${PERL_VEP_MODE}" == "docker" ]]; then
             echo "/work/user_plugin_data/$1/$(basename "${!1}")"
@@ -1036,8 +1103,10 @@ build_plugin_args() {
         ;;
     LOEUF)
         # LOEUF.pm:146-153 dies without match_by; gene is the mode the runs of
-        # plugin_gate_runs.toml pass.
-        echo "LOEUF,file=${d}/$(plugin_data_file LOEUF file "${ASSEMBLY_LC}"),match_by=gene"
+        # plugin_gate_runs.toml pass. The layout names a table on GRCh37 and GRCh38
+        # alone, and its refusal of another assembly ends the run.
+        f="$(plugin_data_file LOEUF file "${ASSEMBLY_LC}")" || return 1
+        echo "LOEUF,file=${d}/${f},match_by=gene"
         ;;
     DosageSensitivity)
         echo "DosageSensitivity,file=${d}/$(plugin_data_file DosageSensitivity file "${ASSEMBLY_LC}")"
@@ -1086,16 +1155,21 @@ build_plugin_args() {
         # "LoF" (key:value args + loftee_path); vep-rs is "LoFTEE" (key=value).
         # Both are fed the SAME data so HC/LC uses identical inputs.
         #
-        # The two upstream bundles differ STRUCTURALLY: GRCh38 ships GERP as a
-        # bigWig, GRCh37 as a tabix per-base TSV. A hardcoded bigWig key cannot
-        # build a GRCh37 invocation.
+        # The plugin's two branches read GERP from two kinds of file: grch38 a
+        # bigWig, master a file it reads with tabix (LoF.pm lines 138 to 141). A
+        # hardcoded bigWig key cannot build a GRCh37 invocation.
         local ld="${LOFTEE_DATA_DIR:-${d}/loftee/${ASSEMBLY_LC}}"
         local gerp_file gerp_key ancestor_plain ancestor_bgzf splice_off=""
-        gerp_file="$(basename "$(plugin_data_file LoFTEE gerp "${ASSEMBLY_LC}")")"
+        # The layout names a bundle on GRCh37 and GRCh38 alone; its refusal of another
+        # assembly ends the run before the branches below read one as GRCh38.
+        f="$(plugin_data_file LoFTEE gerp "${ASSEMBLY_LC}")" || return 1
+        gerp_file="$(basename "${f}")"
         # The Perl plugin reads the bgzipped ancestral FASTA (with .fai and .gzi); vep-rs
         # reads the plain one. Both are staged, so both names come from the layout table.
-        ancestor_plain="$(basename "$(plugin_data_file LoFTEE ancestor "${ASSEMBLY_LC}")")"
-        ancestor_bgzf="$(basename "$(plugin_data_file LoFTEE ancestor_bgzf "${ASSEMBLY_LC}")")"
+        f="$(plugin_data_file LoFTEE ancestor "${ASSEMBLY_LC}")" || return 1
+        ancestor_plain="$(basename "${f}")"
+        f="$(plugin_data_file LoFTEE ancestor_bgzf "${ASSEMBLY_LC}")" || return 1
+        ancestor_bgzf="$(basename "${f}")"
         if [[ "${ASSEMBLY_LC}" == "grch37" ]]; then
             gerp_key="gerp_tabix"
             # vep-rs refuses a GRCh37 run that leaves master's splice layer on.
@@ -1110,7 +1184,7 @@ build_plugin_args() {
                 lp="/work/loftee_perl"
                 pld="/work/loftee_data"
             fi
-            # Perl reads gerp_bigwig on the grch38 branch, gerp_file on master.
+            # The Perl plugin reads gerp_bigwig on its grch38 branch, gerp_file on master.
             # master defaults run_splice_predictions to 1 (LoF.pm:98) and vep-rs has no
             # splice layer, so both branches pass :0.
             if [[ "${ASSEMBLY_LC}" == "grch37" ]]; then
@@ -1178,15 +1252,24 @@ fi
 
 if [[ -z "${JSON_CACHE_DIR}" ]]; then
     JSON_CACHE_DIR="${WORK_DIR}/cache_json"
+    # vep-cache-builder's --species defaults to homo_sapiens, so the example names any other.
+    builder_species=""
+    if [[ "${SPECIES}" != "homo_sapiens" ]]; then
+        builder_species=" --species ${SPECIES}"
+    fi
     echo "ERROR: --json-cache-dir is required; no JSON cache was given (for example ${JSON_CACHE_DIR})." >&2
     echo "  Build one with vep-cache-builder (no Perl required):" >&2
-    echo "    vep-cache-builder --release 116 --assembly ${ASSEMBLY} \\" >&2
-    echo "      --genome-fasta Homo_sapiens.${ASSEMBLY}.dna.primary_assembly.fa \\" >&2
+    echo "    vep-cache-builder --release 116${builder_species} --assembly ${ASSEMBLY} \\" >&2
+    echo "      --genome-fasta $(ensembl_fasta_name "${SPECIES}" "${ASSEMBLY}") \\" >&2
     echo "      --core-dumps core_dumps_${ASSEMBLY_LC} \\" >&2
     echo "      --include-predictions --output-dir ${JSON_CACHE_DIR}" >&2
     echo "  --core-dumps names a directory of the release's table dumps (a missing table is" >&2
     echo "  downloaded into it): they supply what the GFF3 lacks and each region's codon table." >&2
-    echo "  A build without them needs --codon-table MT=2 where the annotation holds MT." >&2
+    # Table 2 is the vertebrate mitochondrial code and MT the human mitochondrial contig:
+    # another species' mitochondrion can take another table under another contig name.
+    if [[ "${SPECIES}" == "homo_sapiens" ]]; then
+        echo "  A build without them needs --codon-table MT=2 where the annotation holds MT." >&2
+    fi
     echo "  Or provide an existing cache with --json-cache-dir." >&2
     exit 1
 else
@@ -1237,7 +1320,7 @@ if [[ "${MODE}" == "smoke" ]]; then
 fi
 
 echo "preparing benchmark vcfs (${MODE})"
-run_timed "prepare_benchmark_vcfs" python3 "${VEP_RS_DIR}/scripts/concordance/prepare_benchmark_vcfs.py" "${PREP_ARGS[@]}"
+run_timed "prepare_benchmark_vcfs" "${PREPARE_VCFS[@]}" "${PREP_ARGS[@]}"
 
 echo "running annotations"
 shopt -s nullglob
@@ -1261,7 +1344,8 @@ dir_sha256() {
     # sha256 over the contents of a directory; deterministic across reruns.
     local dir="$1"
     if [[ -d "${dir}" ]]; then
-        (cd "${dir}" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum 2>/dev/null | sha256sum | awk '{print $1}')
+        (cd "${dir}" && find . -type f -print0 | LC_ALL=C sort -z) |
+            "${FILE_CENSUS[@]}" digest --algorithm sha256 --names nul --directory "${dir}" 2>/dev/null | sha256sum | awk '{print $1}'
     fi
 }
 
@@ -1270,7 +1354,7 @@ PERL_CACHE_SHA=""
 JSON_CACHE_SHA=""
 [[ -n "${JSON_CACHE_DIR}" && -d "${JSON_CACHE_DIR}" ]] && JSON_CACHE_SHA="$(dir_sha256 "${JSON_CACHE_DIR}")"
 FASTA_SHA=""
-[[ -n "${FASTA}" && -f "${FASTA}" ]] && FASTA_SHA="$(sha256sum "${FASTA}" 2>/dev/null | awk '{print $1}')"
+[[ -n "${FASTA}" && -f "${FASTA}" ]] && FASTA_SHA="$("${FILE_CENSUS[@]}" digest --algorithm sha256 "${FASTA}" 2>/dev/null | awk '{print $1}')"
 
 # Per-VCF SHAs as a TSV side-channel; the provenance.json writer below reads it.
 # The side-channel keeps escaping/quoting in Python, not bash, and a plain loop
@@ -1278,11 +1362,11 @@ FASTA_SHA=""
 input_shas_tsv="${WORK_DIR}/reports/_input_shas.tsv"
 : >"${input_shas_tsv}"
 for vcf in "${prepared_inputs[@]}"; do
-    printf '%s\t%s\n' "$(basename "${vcf}")" "$(sha256sum "${vcf}" 2>/dev/null | awk '{print $1}')" >>"${input_shas_tsv}"
+    printf '%s\t%s\n' "$(basename "${vcf}")" "$("${FILE_CENSUS[@]}" digest --algorithm sha256 "${vcf}" 2>/dev/null | awk '{print $1}')" >>"${input_shas_tsv}"
 done
 export PERL_DOCKER_DIGEST PERL_CACHE_SHA JSON_CACHE_SHA FASTA_SHA
 
-# Cache key for reusable Perl output.
+# Cache key for reusable Ensembl VEP output.
 #
 # `plugins=` alone is not enough: it records WHICH plugins ran, not which DATA
 # they read. Two runs naming the same plugins but pointing at different files
@@ -1319,7 +1403,7 @@ if [[ -n "${PLUGINS}" ]]; then
     )"
 fi
 # The plugin argument strings are in the key as well: the same plugin names over the same
-# data with one parameter changed are another Perl run.
+# data with one parameter changed are another Ensembl VEP run.
 PERL_VEP_SIGNATURE="mode=${PERL_VEP_MODE};docker_image=${PERL_VEP_DOCKER_IMAGE};perl_cache_dir=${PERL_CACHE_DIR};species=${SPECIES};assembly=${ASSEMBLY};format=vcf;buffer_size=5000;fork=1;no_headers=1;no_stats=1;offline=1;cache=1;plugins=${PLUGINS};plugin_data_dir=${PLUGIN_DATA_DIR};plugin_data=${PLUGIN_DATA_FINGERPRINT};fasta=${FASTA:-}${PERL_PLUGIN_ARGS[*]+";perl_plugin_args=${PERL_PLUGIN_ARGS[*]}"}"
 PERL_VEP_SIGNATURE_SHA="$(sha256_string "${PERL_VEP_SIGNATURE}")"
 
@@ -1328,7 +1412,7 @@ for input_vcf in "${prepared_inputs[@]}"; do
     perl_out="${WORK_DIR}/perl/${base_name}.txt"
     rust_out="${WORK_DIR}/rust/${base_name}.txt"
 
-    echo "  perl vep: ${base_name}"
+    echo "  Ensembl VEP: ${base_name}"
 
     if [[ "${PERL_VEP_MODE}" == "fixtures" ]]; then
         fixture_file="${FIXTURES_DIR}/${base_name}.txt"
@@ -1478,7 +1562,7 @@ out.write_text(json.dumps({
 PY
                 # Ensure docker wait succeeded.
                 if [[ "${rc}" -ne 0 || "${perl_rc}" -ne 0 ]]; then
-                    echo "ERROR: perl vep docker run failed for ${base_name}" >&2
+                    echo "ERROR: Ensembl VEP docker run failed for ${base_name}" >&2
                     exit 1
                 fi
             else
@@ -1715,7 +1799,7 @@ if [[ ${#PLUGIN_NAMES[@]} -gt 0 ]]; then
     # swallowed, a plugin FAIL, including one that annotated nothing at all,
     # cannot fail the run.
     PLUGIN_COMPARE_STATUS=0
-    run_timed "compare_plugin_outputs" python3 "${VEP_RS_DIR}/scripts/concordance/compare_plugin_outputs.py" \
+    run_timed "compare_plugin_outputs" "${PLUGIN_COMPARE[@]}" \
         --perl-dir "${WORK_DIR}/perl" \
         --rust-dir "${WORK_DIR}/rust" \
         --plugins "${PLUGIN_LIST_CSV}" \
@@ -1788,7 +1872,7 @@ if plugins_file.exists():
     with_plugins = json.loads(plugins_file.read_text())
     report["with_plugins_rust_seconds"] = with_plugins.get("wall_seconds", 0)
 
-# Parse Perl timing
+# Parse Ensembl VEP timing
 perl_file = perf_dir / "perl_vep_${benchmark_base}.time.json"
 if perl_file.exists():
     perl_data = json.loads(perl_file.read_text())

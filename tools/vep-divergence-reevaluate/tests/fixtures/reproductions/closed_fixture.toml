@@ -1,0 +1,35 @@
+entry = "closed_fixture"
+page = "docs/intended-divergences.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "unobserved"
+input_class_basis = "well-formed under VCF 4.2; not seen in the measured datasets"
+notes = "A test fixture whose recorded divergence the engines do not show: both print the escaped HGVSp."
+
+[input]
+format = "vcf"
+text = """
+21	200	fx2	A	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "{stage}/json_cache"
+
+[run]
+flags = ["--hgvs"]
+
+[compare]
+kind = "field"
+field = "HGVSp"
+where = { record = "fx2", feature = "ENST2" }
+
+[expected]
+ensembl_vep = ["ENSP2:p.Leu4%3D"]
+vep_rs = ["ENSP2:p.Leu4="]
+
+[implementation]
+code = ["tools/vep-divergence-reevaluate/tests/fixtures/implementation/recorded.rs::PLAIN_EQUALS_SIGN"]
+tests = ["tools/vep-divergence-reevaluate/tests/fixtures/implementation/recorded.rs::tests::the_equals_sign_is_written_plain"]
+rules = ["tools/vep-divergence-reevaluate/tests/fixtures/implementation/recorded.rs::is_escaped_equals_sign"]

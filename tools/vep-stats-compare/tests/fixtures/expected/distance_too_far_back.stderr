@@ -1,0 +1,1 @@
+ERROR: [compare_vep_stats] cannot read tests/fixtures/distance_too_far_back.summary.log.gz: Error -3 while decompressing data: invalid distance too far back

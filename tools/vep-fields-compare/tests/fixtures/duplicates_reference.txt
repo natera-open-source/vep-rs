@@ -1,0 +1,9 @@
+#Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	Extra
+b	1:100	T	ENSG1	ENST1	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1
+a	1:100	T	ENSG1	ENST1	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1
+c	1:100	T	ENSG1	ENST1	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1
+rs200	1:200	T	ENSG1	ENST1	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1
+rs200	1:200	T	ENSG1	ENST1	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1
+rs400	1:400	T	ENSG1	ENST1	Transcript	b_variant,a_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1
+rs400	1:400	T	ENSG1	ENST1	Transcript	a_variant,b_variant,a_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1
+rs400	1:400	T	ENSG1	ENST1	Transcript	 a_variant,,b_variant, 	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1

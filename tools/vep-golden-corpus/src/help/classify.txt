@@ -1,0 +1,58 @@
+usage: vep-golden-corpus classify [-h] --corpus CORPUS
+                                  --vep-default VEP_DEFAULT
+                                  --vep-rs-output VEP_RS_OUTPUT
+                                  [--vep-tab FILE] [--vep-vcf FILE]
+                                  [--vep-json FILE] [--vep-rs-tab FILE]
+                                  [--vep-rs-vcf FILE] [--vep-rs-json FILE]
+                                  [--field FIELD] [--flag-set FLAG_SET]
+                                  [--spliceai-table FILE]
+                                  [--reference-fasta FILE]
+                                  [--formats-comparator PROGRAM] [--flag FLAG]
+                                  [--fasta-name FASTA_NAME]
+
+options:
+  -h, --help            show this help message and exit
+  --corpus CORPUS
+  --vep-default VEP_DEFAULT
+                        VEP default-format output for variants.vcf
+  --vep-rs-output VEP_RS_OUTPUT
+                        vep-rs default-format output for variants.vcf
+  --vep-tab FILE        VEP tab-format output for the same input; with --vep-
+                        rs-tab, every further field of a row --field documents
+                        that differs in this format is written too, under the
+                        name the format gives it
+  --vep-vcf FILE        VEP VCF-format output, read with --vep-rs-vcf as the
+                        tab format is
+  --vep-json FILE       VEP JSON-format output, read with --vep-rs-json as the
+                        tab format is
+  --vep-rs-tab FILE     vep-rs tab-format output for the same input
+  --vep-rs-vcf FILE     vep-rs VCF-format output
+  --vep-rs-json FILE    vep-rs JSON-format output
+  --field FIELD         an Extra field (HGVSc, HGVSp) compared on every key
+                        whose consequence sets agree
+  --flag-set FLAG_SET   write the divergence keys into this flag set's entry
+                        instead of the manifest's top level
+  --spliceai-table FILE
+                        a score file the run's SpliceAI plugin read, its tabix
+                        index beside it (repeatable: the snv= file and the
+                        indel= file), whose records the class
+                        spliceai_multi_entry_cell reads; the gene of a row
+                        that writes no SYMBOL is read from the corpus's cache
+  --reference-fasta FILE
+                        the run's reference sequence as an uncompressed FASTA,
+                        its .fai index beside it, which the class
+                        hgvs_shift_sequence_edge_window reads with the
+                        transcripts of the corpus's cache
+  --formats-comparator PROGRAM
+                        the build of tools/vep-formats-compare that answers
+                        under --spliceai-table for the class
+                        spliceai_multi_entry_cell and under --reference-fasta
+                        for hgvs_shift_sequence_edge_window, a path or a
+                        command on PATH; without the option, the one
+                        VEP_FORMATS_COMPARATOR names, else the release build
+                        of the tree this executable stands in
+  --flag FLAG           a command-line flag both engines ran with, written
+                        --flag=--hgvs (repeatable), recorded as `flags`
+  --fasta-name FASTA_NAME
+                        file name of the gzipped reference beside the
+                        manifest, recorded as `fasta`

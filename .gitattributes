@@ -6,3 +6,6 @@ tests/golden/** -text
 
 # The score files bundled with Ensembl VEP's plugins, kept byte for byte (LoFtool's ends its lines in CRLF).
 tests/fixtures/plugins/** -text
+
+# Inputs that end lines in CRLF and in a lone CR, and the reports expected of them, byte for byte.
+tools/vep-intermediates-compare/tests/fixtures/** -text

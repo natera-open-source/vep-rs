@@ -1,17 +1,17 @@
 # The HGVSp of a GFF3 translation whose first CDS line names no protein
 
-**The defect in one sentence.** Ensembl VEP 116.2's `--gff` source takes a translation's protein identifier from the transcript's first CDS line in transcript order, and when that line carries no `protein_id` it builds the translation with none. Its HGVSp writer then names the reference sequence as the empty identifier followed by the version, so the protein notation is written `.1:p.Pro6Leu`, a change on a sequence the notation does not name.
+**The defect in one sentence.** Ensembl VEP 116.3's `--gff` source takes a translation's protein identifier from the transcript's first CDS line in transcript order, and when that line carries no `protein_id` it builds the translation with none. Its HGVSp writer then names the reference sequence as the empty identifier followed by the version, so the protein notation is written `.1:p.Pro6Leu`, a change on a sequence the notation does not name.
 
 **Why this is a defect.** An HGVS protein description is a reference sequence name, a colon, `p.` and the change, and the name is what makes it resolvable. `.1:p.Pro6Leu` has no name: nothing can be looked up, and the `.1` is the version of nothing. The `ENSP` field of the same row is empty, so one row says both that the transcript's protein has no identifier and that version 1 of it carries a change at residue 6. The writer appends the version to whatever the translation's display identifier is, and for a translation with neither a stable nor a database identifier that is the empty string.
 
 **What vep-rs does instead.** A cache vep-rs builds from the file and the genome writes no `HGVSp` and no `ENSP` for a translation whose first CDS line names no protein, as both engines write none for a transcript without a translation. A build of the cache's content that reads the core table dumps takes their identifier and writes both. The rest of the row, the consequence term, the positions, the codons and the amino acids, is written as Ensembl VEP writes it. Later CDS lines of the transcript that do name the protein change nothing in either engine: both read the identifier from the first line in transcript order alone.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2, `ensembl-variation` and `ensembl` at release/116):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3, `ensembl-variation` and `ensembl` at release/116):
 
 - `Bio/EnsEMBL/VEP/AnnotationSource/File/BaseGXF.pm`, lines 719-734, `_add_translation`: line 723 reads `protein_id` from the first ordered CDS record, undefined when the attribute is absent, and line 726 copies it to the transcript's `_protein` only when it is set. Lines 730-734 build the translation with that identifier and the version of line 727, the line's `version` or 1.
 - `Bio/EnsEMBL/Variation/TranscriptVariationAllele.pm`, lines 1747-1760, `hgvs_protein`: line 1748 takes the reference name from the translation's `display_id`, and lines 1759-1760 append `.` and the translation's version unless the version is undefined or the name already ends in one. Line 1905, in `_get_hgvs_protein_format`, writes the name, `:p.` and the change.
 - `Bio/EnsEMBL/Translation.pm`, lines 907-910, `display_id`: the stable identifier, else the database identifier, else the empty string.
-- `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 1556-1565: `ENSP` is written from the transcript's `_protein` when that is set, with the version appended under `--protein_version`; for this translation nothing is written.
+- `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 1565-1574: `ENSP` is written from the transcript's `_protein` when that is set, with the version appended under `--protein_version`; for this translation nothing is written.
 
 **What correcting it would change.** With `hgvs_protein` returning nothing for a translation without a name, as it returns nothing for a transcript without a translation, the row would carry its HGVSc and no HGVSp, as vep-rs's row does; the `ENSP` field is already empty in both engines.
 
@@ -21,7 +21,7 @@
 
 ## 1. A TMPRSS3 transcript whose first CDS line names no protein
 
-**In short.** The GRCh38 release-116 GFF3 lines of the gene TMPRSS3 and its transcript `ENST00001113783`, with `protein_id=ENSP00000783588` removed from the transcript's first CDS line in transcript order, beside the lines of PWP2 and its transcript `ENST00000456705` as released. That line, at `42395324-42395417`, holds the 5' end of the coding sequence on the reverse strand. On the record `tmprss3_codon6`, `21 42395401 G>A`, a `missense_variant` at codon 6, Ensembl VEP 116.2 reading the file through `--gff` writes `HGVSp=.1:p.Pro6Leu` and no `ENSP`; vep-rs writes neither. On the PWP2 record `pwp2_codon3`, `21 44107424 T>C`, both engines write `ENSP00000411749.1:p.Phe3Ser`.
+**In short.** The GRCh38 release-116 GFF3 lines of the gene TMPRSS3 and its transcript `ENST00001113783`, with `protein_id=ENSP00000783588` removed from the transcript's first CDS line in transcript order, beside the lines of PWP2 and its transcript `ENST00000456705` as released. That line, at `42395324-42395417`, holds the 5' end of the coding sequence on the reverse strand. On the record `tmprss3_codon6`, `21 42395401 G>A`, a `missense_variant` at codon 6, Ensembl VEP 116.3 reading the file through `--gff` writes `HGVSp=.1:p.Pro6Leu` and no `ENSP`; vep-rs writes neither. On the PWP2 record `pwp2_codon3`, `21 44107424 T>C`, both engines write `ENSP00000411749.1:p.Phe3Ser`.
 
 ### 1.1 What a reader needs to know first
 
@@ -47,7 +47,7 @@ Both engines run `--hgvs --protein --protein_version --symbol`. Ensembl VEP read
 
 ### 1.3 What each engine writes
 
-Ensembl VEP 116.2:
+Ensembl VEP 116.3:
 
 ```
 tmprss3_codon6	21:42395401	A	ENSG00000160183	ENST00001113783	Transcript	missense_variant	249	17	6	P/L	cCg/cTg	-	IMPACT=MODERATE;STRAND=-1;SYMBOL=TMPRSS3;SOURCE=tmprss3_cds_no_protein_id.gff3.gz;HGVSc=ENST00001113783.1:c.17C>T;HGVSp=.1:p.Pro6Leu
@@ -82,7 +82,7 @@ vep -i records.vcf -o out.txt --offline --json_cache cache \
   --hgvs --protein --protein_version --symbol
 ```
 
-vep-rs writes no `HGVSp` for `tmprss3_codon6`. Ensembl VEP 116.2 with `--gff tmprss3_cds_no_protein_id.gff3.gz`, the file bgzipped and indexed, writes `HGVSp=.1:p.Pro6Leu`. Restoring `protein_id=ENSP00000783588` on the line makes both engines write `ENSP=ENSP00000783588.1` and `HGVSp=ENSP00000783588.1:p.Pro6Leu`.
+vep-rs writes no `HGVSp` for `tmprss3_codon6`. Ensembl VEP 116.3 with `--gff tmprss3_cds_no_protein_id.gff3.gz`, the file bgzipped and indexed, writes `HGVSp=.1:p.Pro6Leu`. Restoring `protein_id=ENSP00000783588` on the line makes both engines write `ENSP=ENSP00000783588.1` and `HGVSp=ENSP00000783588.1:p.Pro6Leu`.
 
 ### 1.7 How the comparator treats this class
 

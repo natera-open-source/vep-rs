@@ -4,11 +4,14 @@
 //! Parse Ensembl protein FASTA files to extract transcript -> protein record mapping.
 //!
 //! A record is held under its header's `transcript:` token, whole, and found
-//! for a model's transcript by [`record_of`]: a dot precedes the identifier's
+//! for a model's transcript by `record_of`: a dot precedes the identifier's
 //! version in a release that writes one (`ENST00000456.3`) and sits inside
 //! the identifier in one that writes none (`AT1G01010.1`,
 //! `HORVU.MOREX.r3.7HG0737000.1`), and only the model tells the two apart.
+//! `ModelNames` holds what the model states, the identifier and version of
+//! each transcript, and orders the names a transcript is looked up under.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
@@ -43,7 +46,7 @@ impl Peptide {
     /// its last component then the identifier's own (`AT1G01010.1`, a
     /// translation Ensembl VEP's cache holds without a version); else the
     /// header's.
-    pub fn version_beside(&self, protein_id: Option<&str>) -> Option<u32> {
+    pub(crate) fn version_beside(&self, protein_id: Option<&str>) -> Option<u32> {
         if protein_id == Some(self.identifier.as_str()) {
             None
         } else {
@@ -52,30 +55,146 @@ impl Peptide {
     }
 }
 
-/// The record of the model's transcript `id`, with the key it is held under:
-/// the one whose `transcript:` token is `id.version` when the model states a
-/// version and the file holds that token, else the one whose token is `id`,
-/// each compared whole. A token that names another version of `id`, or
-/// shares only its first components, is another transcript's record.
-pub fn record_of<'a>(
+/// The names the transcripts of a model state, each the pair of an identifier
+/// as written and a version (`ENST00000456` at 3, `AT1G01010.1` at none), and
+/// the order a transcript is looked up in among the names a file states
+/// ([`ModelNames::name_of`]).
+#[derive(Debug, Default)]
+pub(crate) struct ModelNames<'a> {
+    versions: HashMap<&'a str, Vec<Option<u32>>>,
+}
+
+impl<'a> ModelNames<'a> {
+    /// The names of a model whose transcripts state `pairs`, each an
+    /// identifier as written with its version.
+    pub(crate) fn of(pairs: impl IntoIterator<Item = (&'a str, Option<u32>)>) -> Self {
+        let mut versions: HashMap<&'a str, Vec<Option<u32>>> = HashMap::new();
+        for (identifier, version) in pairs {
+            let stated = versions.entry(identifier).or_default();
+            if !stated.contains(&version) {
+                stated.push(version);
+            }
+        }
+        Self { versions }
+    }
+
+    /// The versions the transcripts written `identifier` state.
+    fn versions_of(&self, identifier: &str) -> &[Option<u32>] {
+        self.versions.get(identifier).map_or(&[], Vec::as_slice)
+    }
+
+    /// The name a file states for the transcript `id` at `version`, the pair
+    /// its line or record is held under; `held` says whether the file states
+    /// a pair. The pairs are tried in this order, each compared whole:
+    ///
+    /// 1. the transcript's own, `id` at `version`;
+    /// 2. for a transcript with a version: the dotted form `id.version`
+    ///    stating no version (`ENST00000456.3`); the dotted form stating that
+    ///    version again, a version written twice; `id` stating no version;
+    /// 3. for a transcript without one whose identifier ends in a dot and a
+    ///    whole number (`T1.3`): the identifier before that dot stating that
+    ///    number; `id` stating that number, a version written twice.
+    ///
+    /// A pair past the first may be another transcript's: the transcript
+    /// that states it as its own takes it, then one whose identifier as
+    /// written is the pair's, and one that reaches it by the dotted form
+    /// last. A pair another transcript takes ahead of this one is passed
+    /// over, so `T1` at version 1 and a sibling written `T1.1` each find
+    /// their own line or record. A pair of another version of `id`, or one
+    /// sharing only its first components, is never tried.
+    pub(crate) fn name_of<'n>(
+        &self,
+        id: &'n str,
+        version: Option<u32>,
+        held: &dyn Fn(&str, Option<u32>) -> bool,
+    ) -> Option<(Cow<'n, str>, Option<u32>)> {
+        if held(id, version) {
+            return Some((Cow::Borrowed(id), version));
+        }
+        match version {
+            Some(number) => {
+                let dotted = format!("{id}.{number}");
+                for stated in [None, version] {
+                    if held(&dotted, stated) && !self.found_by_its_own(&dotted, stated, held) {
+                        return Some((Cow::Owned(dotted), stated));
+                    }
+                }
+                (held(id, None) && !self.states(id, None)).then_some((Cow::Borrowed(id), None))
+            }
+            None => {
+                let (stem, number) = ending_version(id)?;
+                let stated = Some(number);
+                if held(stem, stated) && !self.found_by_its_own(stem, stated, held) {
+                    return Some((Cow::Borrowed(stem), stated));
+                }
+                (held(id, stated) && !self.states(id, stated))
+                    .then_some((Cow::Borrowed(id), stated))
+            }
+        }
+    }
+
+    /// Whether a transcript of the model states `identifier` at `version` as
+    /// its own pair.
+    fn states(&self, identifier: &str, version: Option<u32>) -> bool {
+        self.versions_of(identifier).contains(&version)
+    }
+
+    /// Whether a transcript written `identifier` finds the pair `identifier`
+    /// at `stated` for itself ([`ModelNames::name_of`]). The search ends: a
+    /// transcript without a version asks only about a held pair, which the
+    /// transcript stating it answers at once, and a transcript with one asks
+    /// only about a longer identifier.
+    fn found_by_its_own(
+        &self,
+        identifier: &str,
+        stated: Option<u32>,
+        held: &dyn Fn(&str, Option<u32>) -> bool,
+    ) -> bool {
+        self.versions_of(identifier).iter().any(|&version| {
+            self.name_of(identifier, version, held)
+                .is_some_and(|(name, found)| name == identifier && found == stated)
+        })
+    }
+}
+
+/// `identifier` split at its last dot when a version follows it, written as
+/// the number prints: `T1.3` is `T1` and 3, and `T1.03`, `T1.` and `T1` are
+/// not split.
+fn ending_version(identifier: &str) -> Option<(&str, u32)> {
+    let (stem, digits) = identifier.rsplit_once('.')?;
+    let number: u32 = digits.parse().ok()?;
+    (number.to_string() == digits).then_some((stem, number))
+}
+
+/// The record of the transcript `id` at `version`, with the key it is held
+/// under. A record states its `transcript:` token as an identifier and no
+/// version, so the token is looked up in the order of
+/// [`ModelNames::name_of`]: `id` itself for a transcript without a version;
+/// for one with a version `id.version`, unless that token is the record of
+/// another transcript of `names`, then `id`. A token that names another
+/// version of `id`, or shares only its first components, is another
+/// transcript's record.
+pub(crate) fn record_of<'a>(
     records: &'a HashMap<String, Peptide>,
+    names: &ModelNames,
     id: &str,
     version: Option<u32>,
 ) -> Option<(&'a str, &'a Peptide)> {
-    version
-        .and_then(|version| records.get_key_value(format!("{id}.{version}").as_str()))
-        .or_else(|| records.get_key_value(id))
+    let held = |token: &str, stated: Option<u32>| stated.is_none() && records.contains_key(token);
+    let (token, _) = names.name_of(id, version, &held)?;
+    records
+        .get_key_value(token.as_ref())
         .map(|(key, record)| (key.as_str(), record))
 }
 
 /// Parse a protein FASTA file (plain, gzipped or bgzipped) into a map of each
-/// header's `transcript:` token, whole, to its record ([`record_of`] finds a
+/// header's `transcript:` token, whole, to its record (`record_of` finds a
 /// model's), with the length of a line capped: a line longer than
 /// `MAX_LINE_BYTES` fails the parse, naming the file and the line, as does a
 /// line that is not UTF-8 and a header whose protein version is above the
-/// largest the cache holds ([`version_number`]). A byte-order mark at the
+/// largest the cache holds (`version_number`). A byte-order mark at the
 /// start of a line is taken off before the line is read
-/// ([`without_byte_order_marks`]): a header behind one is a header, where
+/// (`without_byte_order_marks`): a header behind one is a header, where
 /// the mark kept would file it with the sequence before it.
 ///
 /// Ensembl protein FASTA headers look like:
@@ -286,8 +405,10 @@ mod tests {
         )
         .unwrap();
         let records = parse_protein_fasta(&path).unwrap();
+        let alone = ModelNames::default();
         let found = |id: &str, version| {
-            record_of(&records, id, version).map(|(key, record)| (key, record.sequence.as_str()))
+            record_of(&records, &alone, id, version)
+                .map(|(key, record)| (key, record.sequence.as_str()))
         };
         assert_eq!(found("AT1G01020.2", None), Some(("AT1G01020.2", "MKVL")));
         assert_eq!(found("AT1G01020", None), None);
@@ -311,6 +432,64 @@ mod tests {
             found("ENST00000999", Some(3)),
             Some(("ENST00000999", "MKVLWA"))
         );
+    }
+
+    /// A token goes to the transcript written as it before one that reaches
+    /// it by the dotted form. Beside a sibling written `T1.1`, the transcript
+    /// `T1` at version 1 takes the record of `T1`, and none where the file
+    /// holds the sibling's alone; a sibling with a version of its own takes
+    /// `T1.1` only where the file holds no `T1.1.1`, and leaves it to `T1`
+    /// where it does. Without the sibling the dotted token is tried first.
+    #[test]
+    fn a_token_written_as_a_sibling_is_the_siblings_record() {
+        let file = |tokens: &[&str]| -> HashMap<String, Peptide> {
+            let record = Peptide {
+                sequence: "MK".to_string(),
+                identifier: "ENSP1".to_string(),
+                version: None,
+            };
+            tokens
+                .iter()
+                .map(|token| (token.to_string(), record.clone()))
+                .collect()
+        };
+        let keys = |model: &[(&str, Option<u32>)], tokens: &[&str]| -> Vec<Option<String>> {
+            let names = ModelNames::of(model.iter().copied());
+            let records = file(tokens);
+            model
+                .iter()
+                .map(|(id, version)| {
+                    record_of(&records, &names, id, *version).map(|(key, _)| key.to_string())
+                })
+                .collect()
+        };
+        let key = |token: &str| Some(token.to_string());
+
+        let plain_sibling = [("T1", Some(1)), ("T1.1", None)];
+        assert_eq!(
+            keys(&plain_sibling, &["T1", "T1.1"]),
+            [key("T1"), key("T1.1")]
+        );
+        assert_eq!(keys(&plain_sibling, &["T1.1"]), [None, key("T1.1")]);
+
+        let versioned_sibling = [("T1", Some(1)), ("T1.1", Some(1))];
+        assert_eq!(
+            keys(&versioned_sibling, &["T1", "T1.1"]),
+            [key("T1"), key("T1.1")]
+        );
+        assert_eq!(
+            keys(&versioned_sibling, &["T1.1", "T1.1.1"]),
+            [key("T1.1"), key("T1.1.1")]
+        );
+        assert_eq!(keys(&versioned_sibling, &["T1.1"]), [None, key("T1.1")]);
+
+        let three = [("T1", Some(1)), ("T1.1", Some(1)), ("T1.1.1", None)];
+        assert_eq!(
+            keys(&three, &["T1", "T1.1", "T1.1.1"]),
+            [key("T1"), key("T1.1"), key("T1.1.1")]
+        );
+
+        assert_eq!(keys(&[("T1", Some(1))], &["T1", "T1.1"]), [key("T1.1")]);
     }
 
     /// A header whose protein identifier is the model's own, whole, states no

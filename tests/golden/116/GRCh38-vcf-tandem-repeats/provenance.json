@@ -1,7 +1,7 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "divergences_classified_against": {
   "engine": "vep-rs",
@@ -19,15 +19,15 @@
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "none for the manifest's run; the fasta and fasta-max10 sets pass the GRCh38-identifiers corpus's reference.fa.gz (chromosome 21, the corpus's transcript spans with N elsewhere) to both engines, decompressed for Ensembl VEP",
  "input": "15 hand-built `<CNV:TR>` records (VCF 4.4) at 21:13620283, the padding base before the run TCATCATCA of a coding exon on the forward strand: a gain and a loss of one unit, an allele equal to the run, RB in place of RUC, no RN, two alleles, two SVLEN values, CIRUC, no RUS, a fractional RUC, a lower-case RUS, END without SVLEN, two repeat sequences in one allele, a `.` unit and a record with INFO/SVTYPE",
- "generator": "json_cache: the GRCh38-identifiers corpus's pruned cache; expected outputs: one Ensembl VEP 116.2 container run per format and per run (without a FASTA, with one, with one under --max_sv_size 10) on the committed records",
+ "generator": "json_cache: the GRCh38-identifiers corpus's pruned cache; expected outputs: one Ensembl VEP 116.3 container run per format and per run (without a FASTA, with one, with one under --max_sv_size 10) on the committed records",
  "pruned_cache_transcripts": {
   "21": 726
  },
  "sha256": {
-  "default.txt": "9bd197c1d19b1fc9b04b124d61d4efd65423130f542ef59d210009d81d0502fa",
-  "tab.txt": "d9b5aa265ba00466dc89620ce24e68cf5908fbd74739a65e43dcab342522db4b",
-  "vcf.vcf": "008f10186445f70efff64ff91a0e79e47cab40987703abf76dbad640a36e1a06",
-  "json.jsonl": "3fd8fb4fd79d5368bdf7f93fdbe7c952d7efe722093b8a921603c6e575ad02e9"
+  "default.txt": "5bd8b1aec52de0ad119d5bb4441aa6b8ffb4c88ea9bf7bdc46a1d2d9223cf2ed",
+  "tab.txt": "1b580f6781fd249ca3fba32b8d4893229450522ac241c31743ad14947c9dcc71",
+  "vcf.vcf": "187e578b1f7335ce24ebb9780c33c3a37c1543cdfaec811e78248c345f95ef69",
+  "json.jsonl": "0cbb4cb64005569cb9db03a85f9699088d1ed505e86b108b6172fd308e608c3c"
  },
  "variants_vcf_sha256": "94f6cdc8895108c32061ba1547ac6817c91eb55042e4d47fe14ae0f576dc5559",
  "flag_sets": {
@@ -45,11 +45,14 @@
    "perl_mode": "offline",
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --uploaded_allele --allele_number --variant_class --mask_header_cache_path --fasta reference.fa [--tab|--vcf|--json]",
    "sha256": {
-    "default.txt": "4c037726e0df976beb3b2dc45035ebacd357fd231944c5e50779e52a8200da77",
-    "tab.txt": "ae67dc6bd57486b04affbce496b84a126d11920ccc50f8e70c2ce077ec6ed85d",
-    "vcf.vcf": "fb224d6064023ccf3012c9c16a073fc271e5c7ddfbf50cf98f7ff7c5a7eab84a",
-    "json.jsonl": "a636bd186c047a9eaeb34ad05f97886c08d0834ffeb7a001fd8ffac9fc2ebf69"
-   }
+    "default.txt": "24b2d0d407f8f653fa289671b09e6aea6dd07fdf5896386d1684b5106beff202",
+    "tab.txt": "4e84558dd7a8e4949a71ee47e5ab652d069330fd3ad559c0075ec5aad25c79d8",
+    "vcf.vcf": "f97f607850380accc4bb50e307f4930f6280524149b84f9e9970c6dec82a805a",
+    "json.jsonl": "27b8768998779cc51d697fe1a4158b94b4b4e5607510ecb4b1311996a9189f8e"
+   },
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3"
   },
   "fasta-max10": {
    "flags": [
@@ -67,11 +70,14 @@
    "perl_mode": "offline",
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --uploaded_allele --allele_number --variant_class --mask_header_cache_path --fasta reference.fa --max_sv_size 10 [--tab|--vcf|--json]",
    "sha256": {
-    "default.txt": "d680c61c436f2eb60d82052b01953dd8af46be8d258589992600425c9730b867",
-    "tab.txt": "7ccba0da5a9207c91c5b21a3dfb0f069e031576fa3412f220713a2d78557cbf2",
-    "vcf.vcf": "81decc0bc46abbf88bdda2c0a5783df229ae929efe8168e76508ed33368459f9",
-    "json.jsonl": "9aeccadb2ccb1fe6fd670e6ba04e98a3e2b43d58250c4fae6c18b59db7c4a8ce"
-   }
+    "default.txt": "b3e664ba4451afca8e2e99f94d18ad6b9bd32d598ee78084926cdfd797fa2dca",
+    "tab.txt": "00522e1b175eca46f735b7a2beb484e7a8fe2fde0c52f029cb16462386e23486",
+    "vcf.vcf": "cb3e6595591814da51613b7aa1ca2ed3306708a6d5f2a80b3ebb832dc13f7896",
+    "json.jsonl": "7d21b67d75dd22218d1bae286dd9a38918788a736630cc7d3d813f284327dfc5"
+   },
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3"
   }
  }
 }

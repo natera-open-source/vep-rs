@@ -1,0 +1,25 @@
+shape	reference_terms	candidate_terms	feature_type	reference_amino_acids	candidate_amino_acids	reference_codons	candidate_codons	taken
+the third base of the codon changed	synonymous_variant	missense_variant	Transcript	L	A/L	ctG/ctA	ctG/ctA	yes
+a third base changed into the codon	synonymous_variant	missense_variant	Transcript	L	L/A	ctA/ctG	ctA/ctG	yes
+the first base of the codon changed	synonymous_variant	missense_variant	Transcript	L	A/L	Ctg/Ttg	Ctg/Ttg	yes
+a first base changed into the codon	synonymous_variant	missense_variant	Transcript	L	L/A	Ttg/Ctg	Ttg/Ctg	yes
+two bases of the codon changed	synonymous_variant	missense_variant	Transcript	L	A/L	CtG/TtA	CtG/TtA	yes
+the codons in one letter case	synonymous_variant	missense_variant	Transcript	L	A/L	CTG/CTA	CTG/CTA	yes
+a term both rows hold beside the two	splice_region_variant,synonymous_variant	missense_variant,splice_region_variant	Transcript	L	A/L	ctG/ctA	ctG/ctA	yes
+a further term on the candidate row	synonymous_variant	missense_variant,splice_region_variant	Transcript	L	A/L	ctG/ctA	ctG/ctA	no
+the two terms the other way round	missense_variant	synonymous_variant	Transcript	L	A/L	ctG/ctA	ctG/ctA	no
+neither codon is the codon	synonymous_variant	missense_variant	Transcript	L	A/L	ctA/ctT	ctA/ctT	no
+both codons are the codon	synonymous_variant	missense_variant	Transcript	L	A/L	ctG/ctG	ctG/ctG	no
+two residues in the reference cell	synonymous_variant	missense_variant	Transcript	L/L	A/L	ctG/ctA	ctG/ctA	no
+a reference residue other than leucine	synonymous_variant	missense_variant	Transcript	P	A/L	ctG/ctA	ctG/ctA	no
+alanine on the side of the other codon	synonymous_variant	missense_variant	Transcript	L	L/A	ctG/ctA	ctG/ctA	no
+serine where alanine would stand	synonymous_variant	missense_variant	Transcript	L	S/L	ctG/ctA	ctG/ctA	no
+one residue in the candidate cell	synonymous_variant	missense_variant	Transcript	L	A	ctG/ctA	ctG/ctA	no
+another residue than leucine beside alanine	synonymous_variant	missense_variant	Transcript	L	A/P	ctG/ctA	ctG/ctA	no
+two Codons cells that differ	synonymous_variant	missense_variant	Transcript	L	A/L	ctG/ctA	ctG/ctT	no
+a codon of two letters	synonymous_variant	missense_variant	Transcript	L	A/L	ctG/ct	ctG/ct	no
+three codons in the cell	synonymous_variant	missense_variant	Transcript	L	A/L	ctG/ctA/ctT	ctG/ctA/ctT	no
+a codon with a character that is no letter	synonymous_variant	missense_variant	Transcript	L	A/L	ctG/c-A	ctG/c-A	no
+no Codons cell	synonymous_variant	missense_variant	Transcript	L	A/L	-	-	no
+no Amino_acids cell	synonymous_variant	missense_variant	Transcript	-	-	ctG/ctA	ctG/ctA	no
+a row of another feature type	synonymous_variant	missense_variant	RegulatoryFeature	L	A/L	ctG/ctA	ctG/ctA	no

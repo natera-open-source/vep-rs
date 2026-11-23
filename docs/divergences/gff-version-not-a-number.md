@@ -1,6 +1,6 @@
 # A GFF3 line whose `version` is not a number
 
-**The defect in one sentence.** Ensembl VEP 116.2's `--gff` source takes the text of a `version` attribute as the version of the gene, the transcript or the translation without reading it as a number. A value such as `v2` is printed after the identifier wherever a version is printed: `ENSG00000160183.v2` in `Gene`, `ENST00001113783.v2` in `Feature` and in the HGVSc reference name, `ENSP00000783588.v2` in `ENSP` and in the HGVSp reference name. A value written `01` is printed as `01`. vep-rs refuses to build a cache from a file whose `version` is not a whole number, naming the line and the text, and prints `01` as `1`.
+**The defect in one sentence.** Ensembl VEP 116.3's `--gff` source takes the text of a `version` attribute as the version of the gene, the transcript or the translation without reading it as a number. A value such as `v2` is printed after the identifier wherever a version is printed: `ENSG00000160183.v2` in `Gene`, `ENST00001113783.v2` in `Feature` and in the HGVSc reference name, `ENSP00000783588.v2` in `ENSP` and in the HGVSp reference name. A value written `01` is printed as `01`. vep-rs refuses to build a cache from a file whose `version` is not a whole number, naming the line and the text, and prints `01` as `1`.
 
 **Why this is a defect.** A version is a whole number: every Ensembl file that carries `version` writes one, a versioned identifier such as `ENST00001113783.1` is read everywhere as an accession and a release number, and an HGVS reference name needs the same form to resolve. `ENST00001113783.v2` names no release of the transcript, and `ENST00001113783.01` and `ENST00001113783.1` are two spellings of one. Ensembl VEP applies no test to the text: the only test on the way to the output is whether the identifier already ends in a dot and digits, which `v2` and `01` both pass through.
 
@@ -10,10 +10,10 @@ The HGVSc reference name takes any defined text, so a transcript line's `transcr
 
 A whole number written with leading zeros is that number, so `01` prints as `1`. Every other field is read as Ensembl VEP reads it.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2, `ensembl-variation` at release/116):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3, `ensembl-variation` at release/116):
 
 - `Bio/EnsEMBL/VEP/AnnotationSource/File/BaseGXF.pm`, line 481, `_create_transcript`: the transcript's version is the transcript line's `version`, else its `transcript_version`, as written. Line 639, `_add_identifiers`: the gene's version is the gene line's `version` as written. Line 727, `_add_translation`: the translation's version is the first ordered CDS record's `version`, `|| 1`, so any text but an empty or `0` value is kept as written.
-- `Bio/EnsEMBL/VEP/OutputFactory.pm`, line 1465: under `--transcript_version`, `Feature` gains `.` and the transcript's version unless the identifier already ends in `.` and digits. Line 1469: under `--gene_version`, `Gene` gains the gene's version the same way. Lines 1560-1565: under `--protein_version`, `ENSP` gains the translation's version the same way.
+- `Bio/EnsEMBL/VEP/OutputFactory.pm`, line 1474: under `--transcript_version`, `Feature` gains `.` and the transcript's version unless the identifier already ends in `.` and digits. Line 1478: under `--gene_version`, `Gene` gains the gene's version the same way. Lines 1569-1574: under `--protein_version`, `ENSP` gains the translation's version the same way.
 - `Bio/EnsEMBL/Variation/TranscriptVariationAllele.pm`, lines 1499-1500, `hgvs_transcript`: the HGVSc reference name gains `.` and the transcript's version under the same test, whatever the flags. Lines 1759-1760, `hgvs_protein`: the HGVSp reference name gains the translation's version the same way.
 
 **What correcting it would change.** With each attribute read as a whole number, as `_add_translation` already reads an absent one as 1, the version printed would be a number on every row, as vep-rs's is. The rows on files whose `version` values are whole numbers written plainly, every Ensembl release file among them, would not change.
@@ -28,7 +28,7 @@ The class is documented only: every `version` on chromosomes 21 and MT of the re
 
 ## 1. A TMPRSS3 transcript whose first CDS line carries `version=v2`
 
-**In short.** The GRCh38 release-116 GFF3 lines of the gene TMPRSS3 and its transcript `ENST00001113783`, with `version=1` rewritten `version=v2` on the transcript's first CDS line in transcript order, the line at `42395324-42395417`, beside the lines of PWP2 and its transcript `ENST00000456705` as released. On the record `tmprss3_codon6`, `21 42395401 G>A`, Ensembl VEP 116.2 reading the file through `--gff` writes `ENSP=ENSP00000783588.v2` and `HGVSp=ENSP00000783588.v2:p.Pro6Leu`; vep-rs refuses to build a cache from the file at that CDS line. On the PWP2 record `pwp2_codon3` Ensembl VEP writes `ENSP00000411749.1:p.Phe3Ser`; vep-rs, with no cache built, writes no row.
+**In short.** The GRCh38 release-116 GFF3 lines of the gene TMPRSS3 and its transcript `ENST00001113783`, with `version=1` rewritten `version=v2` on the transcript's first CDS line in transcript order, the line at `42395324-42395417`, beside the lines of PWP2 and its transcript `ENST00000456705` as released. On the record `tmprss3_codon6`, `21 42395401 G>A`, Ensembl VEP 116.3 reading the file through `--gff` writes `ENSP=ENSP00000783588.v2` and `HGVSp=ENSP00000783588.v2:p.Pro6Leu`; vep-rs refuses to build a cache from the file at that CDS line. On the PWP2 record `pwp2_codon3` Ensembl VEP writes `ENSP00000411749.1:p.Phe3Ser`; vep-rs, with no cache built, writes no row.
 
 ### 1.1 What a reader needs to know first
 
@@ -54,7 +54,7 @@ Both engines run `--hgvs --protein --protein_version --symbol`. Ensembl VEP read
 
 ### 1.3 What each engine writes
 
-Ensembl VEP 116.2:
+Ensembl VEP 116.3:
 
 ```
 tmprss3_codon6	21:42395401	A	ENSG00000160183	ENST00001113783	Transcript	missense_variant	249	17	6	P/L	cCg/cTg	-	IMPACT=MODERATE;STRAND=-1;SYMBOL=TMPRSS3;ENSP=ENSP00000783588.v2;SOURCE=tmprss3_cds_version_v2.gff3.gz;HGVSc=ENST00001113783.1:c.17C>T;HGVSp=ENSP00000783588.v2:p.Pro6Leu
@@ -88,7 +88,7 @@ vep -i records.vcf -o out.txt --offline --json_cache cache \
   --hgvs --protein --protein_version --symbol
 ```
 
-vep-rs's cache builder refuses the file at its sixth line with the error above and writes no cache. Ensembl VEP 116.2 with `--gff tmprss3_cds_version_v2.gff3.gz`, the file bgzipped and indexed, writes `ENSP00000783588.v2`. Restoring `version=1` on the line makes vep-rs build the cache and both engines write `ENSP00000783588.1`.
+vep-rs's cache builder refuses the file at its sixth line with the error above and writes no cache. Ensembl VEP 116.3 with `--gff tmprss3_cds_version_v2.gff3.gz`, the file bgzipped and indexed, writes `ENSP00000783588.v2`. Restoring `version=1` on the line makes vep-rs build the cache and both engines write `ENSP00000783588.1`.
 
 ### 1.7 How the comparator treats this class
 
@@ -96,7 +96,7 @@ The reproduction `scripts/divergences/reproductions/gff_version_not_a_number.tom
 
 ## 2. The same transcript with `version=v2` on its transcript line
 
-**In short.** The same lines, with `version=1` rewritten `version=v2` on the transcript line of `ENST00001113783` instead, and every CDS line as released. On `tmprss3_codon6`, Ensembl VEP 116.2 writes `ENST00001113783.v2` in `Feature` and `HGVSc=ENST00001113783.v2:c.17C>T`; vep-rs refuses to build a cache from the file at the transcript line. On `pwp2_codon3` Ensembl VEP writes `ENST00000456705.1` in both places; vep-rs, with no cache built, writes no row.
+**In short.** The same lines, with `version=1` rewritten `version=v2` on the transcript line of `ENST00001113783` instead, and every CDS line as released. On `tmprss3_codon6`, Ensembl VEP 116.3 writes `ENST00001113783.v2` in `Feature` and `HGVSc=ENST00001113783.v2:c.17C>T`; vep-rs refuses to build a cache from the file at the transcript line. On `pwp2_codon3` Ensembl VEP writes `ENST00000456705.1` in both places; vep-rs, with no cache built, writes no row.
 
 ### 2.1 What a reader needs to know first
 
@@ -114,7 +114,7 @@ The input is the two records of 1.2. Both engines run `--hgvs --protein --protei
 
 ### 2.3 What each engine writes
 
-Ensembl VEP 116.2:
+Ensembl VEP 116.3:
 
 ```
 tmprss3_codon6	21:42395401	A	ENSG00000160183.19	ENST00001113783.v2	Transcript	missense_variant	249	17	6	P/L	cCg/cTg	-	IMPACT=MODERATE;STRAND=-1;SYMBOL=TMPRSS3;ENSP=ENSP00000783588.1;SOURCE=tmprss3_transcript_version_v2.gff3.gz;HGVSc=ENST00001113783.v2:c.17C>T;HGVSp=ENSP00000783588.1:p.Pro6Leu
@@ -152,11 +152,11 @@ vep -i records.vcf -o out.txt --offline --json_cache cache \
   --hgvs --protein --protein_version --symbol --transcript_version --gene_version
 ```
 
-vep-rs's cache builder refuses the file at its third line with the error above and writes no cache. Ensembl VEP 116.2 with `--gff tmprss3_transcript_version_v2.gff3.gz`, the file bgzipped and indexed, writes `ENST00001113783.v2` in both. Restoring `version=1` on the line makes vep-rs build the cache and both engines write `ENST00001113783.1`.
+vep-rs's cache builder refuses the file at its third line with the error above and writes no cache. Ensembl VEP 116.3 with `--gff tmprss3_transcript_version_v2.gff3.gz`, the file bgzipped and indexed, writes `ENST00001113783.v2` in both. Restoring `version=1` on the line makes vep-rs build the cache and both engines write `ENST00001113783.1`.
 
 ## 3. The same transcript with `version=v2` on its gene line
 
-**In short.** The same lines, with `version=19` rewritten `version=v2` on the gene line of `ENSG00000160183` instead, and the transcript and CDS lines as released. On `tmprss3_codon6`, Ensembl VEP 116.2 writes `ENSG00000160183.v2` in `Gene`; vep-rs refuses to build a cache from the file at the gene line. On `pwp2_codon3` Ensembl VEP writes `ENSG00000241945.10`; vep-rs, with no cache built, writes no row.
+**In short.** The same lines, with `version=19` rewritten `version=v2` on the gene line of `ENSG00000160183` instead, and the transcript and CDS lines as released. On `tmprss3_codon6`, Ensembl VEP 116.3 writes `ENSG00000160183.v2` in `Gene`; vep-rs refuses to build a cache from the file at the gene line. On `pwp2_codon3` Ensembl VEP writes `ENSG00000241945.10`; vep-rs, with no cache built, writes no row.
 
 ### 3.1 What a reader needs to know first
 
@@ -174,7 +174,7 @@ The input and the flags are those of 2.2. Ensembl VEP reads the file, bgzipped a
 
 ### 3.3 What each engine writes
 
-Ensembl VEP 116.2:
+Ensembl VEP 116.3:
 
 ```
 tmprss3_codon6	21:42395401	A	ENSG00000160183.v2	ENST00001113783.1	Transcript	missense_variant	249	17	6	P/L	cCg/cTg	-	IMPACT=MODERATE;STRAND=-1;SYMBOL=TMPRSS3;ENSP=ENSP00000783588.1;SOURCE=tmprss3_gene_version_v2.gff3.gz;HGVSc=ENST00001113783.1:c.17C>T;HGVSp=ENSP00000783588.1:p.Pro6Leu
@@ -208,11 +208,11 @@ vep -i records.vcf -o out.txt --offline --json_cache cache \
   --hgvs --protein --protein_version --symbol --transcript_version --gene_version
 ```
 
-vep-rs's cache builder refuses the file at its second line with the error above and writes no cache. Ensembl VEP 116.2 with `--gff tmprss3_gene_version_v2.gff3.gz`, the file bgzipped and indexed, writes `ENSG00000160183.v2`. Restoring `version=19` on the line makes vep-rs build the cache and both engines write `ENSG00000160183.19`.
+vep-rs's cache builder refuses the file at its second line with the error above and writes no cache. Ensembl VEP 116.3 with `--gff tmprss3_gene_version_v2.gff3.gz`, the file bgzipped and indexed, writes `ENSG00000160183.v2`. Restoring `version=19` on the line makes vep-rs build the cache and both engines write `ENSG00000160183.19`.
 
 ## 4. The same transcript with `version=4294967296` on its three lines
 
-**In short.** The same lines, with `version=4294967296`, one above the largest 32-bit number, on the gene line, the transcript line and the transcript's first CDS line in transcript order, and the PWP2 lines as released. Ensembl VEP 116.2 writes the digits after every identifier, `ENSG00000160183.4294967296`, `ENST00001113783.4294967296` and `ENSP00000783588.4294967296`, in `Gene`, `Feature`, `ENSP` and both HGVS reference names. vep-rs refuses to build the cache: the build ends at the first such line with an error naming the file, the line and the limit, and writes no row. With `version=4294967295` on the same lines both engines write `.4294967295` everywhere.
+**In short.** The same lines, with `version=4294967296`, one above the largest 32-bit number, on the gene line, the transcript line and the transcript's first CDS line in transcript order, and the PWP2 lines as released. Ensembl VEP 116.3 writes the digits after every identifier, `ENSG00000160183.4294967296`, `ENST00001113783.4294967296` and `ENSP00000783588.4294967296`, in `Gene`, `Feature`, `ENSP` and both HGVS reference names. vep-rs refuses to build the cache: the build ends at the first such line with an error naming the file, the line and the limit, and writes no row. With `version=4294967295` on the same lines both engines write `.4294967295` everywhere.
 
 ### 4.1 What a reader needs to know first
 
@@ -232,7 +232,7 @@ The input and the flags are those of 2.2. Ensembl VEP reads the file, bgzipped a
 
 ### 4.3 What each engine writes
 
-Ensembl VEP 116.2:
+Ensembl VEP 116.3:
 
 ```
 tmprss3_codon6	21:42395401	A	ENSG00000160183.4294967296	ENST00001113783.4294967296	Transcript	missense_variant	249	17	6	P/L	cCg/cTg	-	IMPACT=MODERATE;STRAND=-1;SYMBOL=TMPRSS3;ENSP=ENSP00000783588.4294967296;SOURCE=tmprss3_version_above_limit.gff3.gz;HGVSc=ENST00001113783.4294967296:c.17C>T;HGVSp=ENSP00000783588.4294967296:p.Pro6Leu
@@ -263,4 +263,4 @@ vep-cache-builder --species homo_sapiens --assembly GRCh38 --release 116 \
   --genome-fasta <corpus>/reference.fa.gz --output-dir cache
 ```
 
-The build ends with the error above and exit status 1. Ensembl VEP 116.2 with `--gff tmprss3_version_above_limit.gff3.gz`, the file bgzipped and indexed, writes `ENST00001113783.4294967296` for `tmprss3_codon6`. Rewriting the three values `4294967295` builds the cache and makes both engines write `.4294967295` in every version-bearing field.
+The build ends with the error above and exit status 1. Ensembl VEP 116.3 with `--gff tmprss3_version_above_limit.gff3.gz`, the file bgzipped and indexed, writes `ENST00001113783.4294967296` for `tmprss3_codon6`. Rewriting the three values `4294967295` builds the cache and makes both engines write `.4294967295` in every version-bearing field.

@@ -1,10 +1,10 @@
 entry = "gff_attribute_escapes_read_raw"
 page = "docs/divergences/gff-attribute-escapes-read-raw.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
 input_class_basis = "seen in the Arabidopsis thaliana TAIR10 GFF3 and the Saccharomyces cerevisiae R64-1-1 GFF3: 115 gene names with an escaped semicolon and three with an escaped comma; classed by that shape: the escape of a character the GFF3 specification does not list breaks its \"no other characters may be encoded\" (\"Description of the Format\")"
-notes = "The GRCh38 release-116 GFF3 lines of TMPRSS3 and ENST00001113783 with the gene's Name rewritten `A%2CB`, the GFF3 spelling of the symbol `A,B`, beside the lines of PWP2 and ENST00000456705 as a control whose rows agree. Ensembl VEP's --gff source reads the ninth column through GFF3.pm's get_attributes (lines 190-198), which splits the raw column and decodes nothing, so the symbol prints as `A%2CB`; the same parser's get_attribute_by_name would decode it. A --custom GFF source of promoter windows reads the same hash (GFF.pm lines 198-201), so a window `ID=PROM%2c1%3E;gene_id=ENSG%3B1` over the first record prints feature_id `PROM%2c1%3E` and associated_gene `ENSG%3B1`, the lower-case escape and the escape of a character GFF3 does not reserve as written too. vep-rs decodes every `%XX` escape, in either letter case, in both routes. A GTF value is decoded by both engines, so the GTF form agrees."
+notes = "The GRCh38 release-116 GFF3 lines of TMPRSS3 and ENST00001113783 with the gene's Name rewritten `A%2CB`, the GFF3 spelling of the symbol `A,B`, beside the lines of PWP2 and ENST00000456705 as a control whose rows agree. Ensembl VEP's --gff source reads the ninth column through GFF3.pm's get_attributes (lines 190-198), which splits the raw column and decodes nothing, so the symbol prints as `A%2CB`; the same parser's get_attribute_by_name would decode it. A --custom GFF source of promoter windows reads the same hash (GFF.pm lines 199-202), so a window `ID=PROM%2c1%3E;gene_id=ENSG%3B1` over the first record prints feature_id `PROM%2c1%3E` and associated_gene `ENSG%3B1`, the lower-case escape and the escape of a character GFF3 does not reserve as written too. vep-rs decodes every `%XX` escape, in either letter case, in both routes. A GTF value is decoded by both engines, so the GTF form agrees."
 prepare = [
   '''cat > "$STAGE/tmprss3_escaped_name.gff3" <<'GFF'
 ##gff-version 3
@@ -71,4 +71,17 @@ ensembl_vep = [
 vep_rs = [
   "21:42395401 | A | ENSG00000160183 | A,B | PROM,1> | ENSG;1 | missense_variant",
   "21:44107424 | C | ENSG00000241945 | PWP2 | - | - | missense_variant",
+]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/custom/gff_overlay.rs::GffOverlaySource::match_record",
+    "crates/vep-cache-builder/src/gff3.rs::text",
+    "crates/vep-core/src/regulatory_gff.rs::decode_attribute",
+]
+tests = [
+    "crates/vep-builtins/src/custom/gff_overlay.rs::tests::reserved_escapes_in_the_identifiers_are_decoded",
+    "crates/vep-cache-builder/src/gff3.rs::tests::every_escape_of_a_read_value_is_decoded_after_the_tests_on_the_written_value",
+    "crates/vep-cli/tests/custom_gff_overlay.rs::promoter_identifiers_carry_the_characters_their_escapes_encode",
+    "crates/vep-cli/tests/documented_subsets.rs::gff_attribute_escapes_read_raw_divergence_is_documented",
 ]

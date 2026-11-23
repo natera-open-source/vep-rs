@@ -258,7 +258,7 @@ fn substitution(
     if from.is_none() && description.contains("delins") {
         from = Some(translated.clone());
     }
-    // Perl's truth test on the captures: a residue is a word, the position
+    // Perl's truth test on Ensembl VEP's captures: a residue is a word, the position
     // fails as the string `0` alone.
     let truthy = |text: &str| !text.is_empty() && text != "0";
     let (from, to) = match (&from, &to) {
@@ -1316,8 +1316,9 @@ mod tests {
     }
 
     /// `validate_vf`'s size test applies to a protein record as to any other:
-    /// a deletion of thirteen codons within the first exon spans 38 bases and
-    /// is skipped under `--max_sv_size 30` with Perl's text, kept under 38.
+    /// a deletion of thirteen codons within the first exon covers 39 bases, its
+    /// end 38 past its start, and is skipped under `--max_sv_size 30` with
+    /// Ensembl VEP's text, kept under 38.
     #[test]
     fn protein_record_over_max_sv_size_is_skipped() {
         let read_bounded = |max_sv_size: Option<u64>| {

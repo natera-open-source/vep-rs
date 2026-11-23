@@ -10,11 +10,13 @@ The RefSeq and merged caches that `--refseq` and `--merged` annotate are Ensembl
 
 ## Custom annotation sources
 
-`--custom` reads local VCF, BED, GFF promoter and bigWig sources ([Custom annotation](../custom-annotation.md)). Two things Ensembl VEP reads through it are not read. A remote file (`http://`, `ftp://` or any URL) is refused with an error naming a local copy, where Ensembl VEP reads it over the network. A GFF or GTF transcript model is refused with the two-step cache recipe, where Ensembl VEP reads it in place of its cache.
+`--custom` reads local VCF, BED, GFF promoter and bigWig sources ([Custom annotation](../custom-annotation.md)). Two things Ensembl VEP reads through it are not read. A remote file (`http://`, `ftp://` or any URL) is refused with an error naming a local copy, where Ensembl VEP reads it over the network. A GFF or GTF transcript model is read beside a cache in the same run (`--gff`, `--gtf`); a run with the file alone is refused with the two-step cache recipe, where Ensembl VEP reads it in place of its cache.
 
 A BAM is not read. Ensembl VEP corrects such a model against one named by `--bam`. `--bam` is refused, and `format=bam` is refused as an unsupported format (exit 1), as Ensembl VEP refuses it.
 
-A `--custom` run still reads a cache, where Ensembl VEP accepts the source as the run's only annotation source. `--gff` and `--gtf`, Ensembl VEP's shortcuts to a `--custom` transcript source, are refused with an error that prints the cache recipe (exit 1): build a cache from the file with `vep-cache-builder` and annotate against it ([A GTF or GFF3 as the transcript model](../cache-from-gtf-or-gff3.md)). `--phyloP` and `--phastCons` read their bigWigs from a local mirror alone: the remote root Ensembl VEP reads by default is refused ([Conservation shortcuts](../output/custom-bigwig.md#conservation-shortcuts)).
+A `--custom` run still reads a cache, where Ensembl VEP accepts the source as the run's only annotation source. `--gff` and `--gtf`, Ensembl VEP's shortcuts to a `--custom` transcript source, read the file beside the cache. Without a cache they are refused with an error that prints the cache recipe (exit 1): build a cache from the file with `vep-cache-builder` and annotate against it ([A GTF or GFF3 as the transcript model](../cache-from-gtf-or-gff3.md)). `--phyloP` and `--phastCons` read their bigWigs from a local mirror alone: the remote root Ensembl VEP reads by default is refused ([Conservation shortcuts](../output/custom-bigwig.md#conservation-shortcuts)).
+
+`--regulatory_gff` reads local files alone as well. A file whose name opens `http://`, `https://` or `ftp://` is refused with an error that says so, where Ensembl VEP reads an `http://` or `ftp://` file over the network ([Regulatory and motif features](../regulatory.md#files-and-records-that-are-refused)).
 
 ## Plugins
 
@@ -53,11 +55,11 @@ The release archives and the container image carry no `haplo`.
 
 `variant_recoder` is `vep recode` ([its page](../cli/recode.md)): the same options over the cache alone. The synonyms and the co-located variants come from the cache's variation data, where `variant_recoder` reads the Ensembl database. So the merged dbSNP identifiers the database lists as synonyms (`Archive dbSNP`) are not written. `--lrg` and `--ambiguous_hgvs` are refused with the database connection flags.
 
-A RefSeq notation appears only with a merged cache, a ClinGen allele identifier is not an input, and `ga4gh_vrs` is written only for a chromosome whose synonyms name an `NC_` accession. For any other chromosome the `ga4gh_vrs` key is still present under `--ga4gh_vrs`, as it is in `variant_recoder`, and holds an empty list.
+A RefSeq notation is written from a merged cache, and a run on a cache read as the Ensembl set says so. A ClinGen allele identifier is not an input, and `ga4gh_vrs` is written only for a chromosome whose synonyms name an `NC_` accession. For any other chromosome the `ga4gh_vrs` key is still present under `--ga4gh_vrs`, as it is in `variant_recoder`, and holds an empty list.
 
 ## Debug output
 
-`--debug` is accepted without effect. Ensembl VEP reads it only to print the plugin directories and modules it loads, and that detail is not printed. The flag changes no annotation.
+`--debug` is accepted without effect. Ensembl VEP reads it only to print the plugin directories and modules it loads; that detail is not printed, and one `INFO:` line on standard error says so unless `--quiet` is given. The flag changes no annotation.
 
 ## Ensembl database mode
 
@@ -81,6 +83,6 @@ The limits, by what reads the line:
 
 ## Bioconda
 
-The Bioconda channel carries vep-rs as the package `vep-rs`, and the version it serves can trail the newest release: the channel builds a release once its own copy of the recipe names it ([Installation](installation.md#bioconda)). Every release is published as pre-built binaries on the [Releases](https://github.com/natera-open-source/vep-rs/releases) page, as source and as the container image ([Installation](installation.md)). A pipeline that installs Ensembl VEP from Bioconda does not get vep-rs by that package: its environment names `vep-rs` in place of `ensembl-vep`, or it runs vep-rs from the container image or the release archive ([Workflow managers](workflow-managers.md)). The repository holds a Bioconda recipe, which builds the binaries from a published release's source tarball ([Installation](installation.md#bioconda)).
+The Bioconda channel carries vep-rs as the package `vep-rs`, and the version it serves can trail the newest release: the channel builds a release once its own copy of the recipe names it ([Installation](installation.md#bioconda)). `vep --version` prints the release the installed package holds. Every release is published as pre-built binaries on the [Releases](https://github.com/natera-open-source/vep-rs/releases) page, as source and as the container image ([Installation](installation.md)). A pipeline that installs Ensembl VEP from Bioconda does not get vep-rs by that package: its environment names `vep-rs` in place of `ensembl-vep`, or it runs vep-rs from the container image or the release archive ([Workflow managers](workflow-managers.md)). The repository holds a Bioconda recipe, which builds the binaries from a published release's source tarball ([Installation](installation.md#bioconda)).
 
 To ask for a feature, or to report one this page leaves out, open an issue on the [issue tracker](https://github.com/natera-open-source/vep-rs/issues).

@@ -51,7 +51,7 @@ vep -i input.vcf -o output.txt \
 use it to reject a data file built from the other genome; REVEL uses it to select
 which of its two coordinate columns to read and rejects a copy whose tabix index
 was built on the other column. Without the flag the cache's own assembly serves
-those guards. Ensembl VEP 116.2 builds its plugins before it reads the cache, so
+those guards. Ensembl VEP 116.3 builds its plugins before it reads the cache, so
 there REVEL, and dbscSNV without its own assembly parameter, fail to load without
 `--assembly` and the run goes on without them.
 

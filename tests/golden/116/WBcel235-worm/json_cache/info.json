@@ -1,0 +1,16 @@
+{
+  "assembly": "WBcel235",
+  "cache_version": 116,
+  "contig_order": [
+    "III",
+    "MtDNA"
+  ],
+  "polyphen": "",
+  "regulatory": false,
+  "sift": "",
+  "source_versions": {
+    "assembly": "WBcel235",
+    "genebuild": "WS282"
+  },
+  "species": "caenorhabditis_elegans"
+}

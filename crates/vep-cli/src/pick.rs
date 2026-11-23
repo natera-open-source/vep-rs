@@ -15,7 +15,8 @@
 //! vep-rs annotates one allele at a time, so this module reassembles a record's
 //! rows from its alleles in Ensembl VEP's order and applies the same steps.
 //!
-//! Perl citations name modules of ensembl-vep release/116.2 (`Bio/EnsEMBL/VEP/...`).
+//! Ensembl VEP source citations name modules of ensembl-vep release/116.3
+//! (`Bio/EnsEMBL/VEP/...`).
 
 use smallvec::SmallVec;
 use vep_core::consequence::{
@@ -28,6 +29,7 @@ use crate::row_filter::{self, RowFilters};
 
 /// One `--pick_order` criterion, in Ensembl VEP's spelling (`Config.pm:601`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum PickCriterion {
     ManeSelect,
     ManePlusClinical,
@@ -44,7 +46,7 @@ pub enum PickCriterion {
 
 impl PickCriterion {
     /// The default `--pick_order` (`Config.pm:311`).
-    pub const DEFAULT_ORDER: [PickCriterion; 11] = [
+    pub(crate) const DEFAULT_ORDER: &'static [PickCriterion] = &[
         PickCriterion::ManeSelect,
         PickCriterion::ManePlusClinical,
         PickCriterion::Canonical,
@@ -60,7 +62,7 @@ impl PickCriterion {
 
     /// The criterion a `--pick_order` token names, `None` for a token outside
     /// `%VALID{pick_order}` (`Config.pm:601`).
-    pub fn parse(token: &str) -> Option<Self> {
+    pub(crate) fn parse(token: &str) -> Option<Self> {
         Some(match token {
             "mane_select" => PickCriterion::ManeSelect,
             "mane_plus_clinical" => PickCriterion::ManePlusClinical,
@@ -78,7 +80,7 @@ impl PickCriterion {
     }
 
     /// The token Ensembl VEP names the criterion by.
-    pub fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             PickCriterion::ManeSelect => "mane_select",
             PickCriterion::ManePlusClinical => "mane_plus_clinical",
@@ -98,8 +100,8 @@ impl PickCriterion {
 /// The `--pick_order` list as criteria: the default order when the flag is
 /// absent, else its tokens in the given order. A token outside Ensembl VEP's
 /// list is the error `check_config` raises for it (`Config.pm:945-957`), with
-/// Perl's own `ERROR: ` prefix stripped.
-pub fn pick_order(tokens: Option<&[String]>) -> Result<Vec<PickCriterion>, String> {
+/// the engine's own `ERROR: ` prefix stripped.
+pub(crate) fn pick_order(tokens: Option<&[String]>) -> Result<Vec<PickCriterion>, String> {
     let Some(tokens) = tokens else {
         return Ok(PickCriterion::DEFAULT_ORDER.to_vec());
     };
@@ -123,6 +125,7 @@ pub fn pick_order(tokens: Option<&[String]>) -> Result<Vec<PickCriterion>, Strin
 /// The row filters, the pick family and the summary flags of a run, each a
 /// command-line flag, and the criteria `pick_worst` compares in order.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct FilterConfig {
     /// `--coding_only` and `--no_intergenic`, applied before the pick family.
     pub row_filters: RowFilters,
@@ -259,7 +262,7 @@ impl Row {
 /// id, a regulatory feature's stable id or a motif's database id
 /// ([`TranscriptConsequence::ensembl_vep_key`]); the rejoin of a `--minimal`
 /// split stores every allele after the first under `<its allele string>_<key>`
-/// (`OutputFactory.pm:2316`), so such an allele's feature sorts by its allele
+/// (`OutputFactory.pm:2325`), so such an allele's feature sorts by its allele
 /// string against the first allele's bare key, before it when the string starts
 /// with a byte below the key's first. A structural variant's regulatory and
 /// motif rows stand in the order the features were met instead
@@ -695,19 +698,19 @@ mod tests {
             .first()
             .map(|c| c.impact())
             .unwrap_or(Impact::MODIFIER);
-        TranscriptConsequence {
-            transcript: Some(Arc::new(Transcript {
-                stable_id: transcript_id.into(),
-                gene_stable_id: gene_id.into(),
-                biotype: "protein_coding".into(),
-                ..Transcript::default()
-            })),
-            consequences,
-            impact,
-            feature_type: FeatureType::Transcript,
-            strand: 1,
-            ..Default::default()
-        }
+        let mut consequence = TranscriptConsequence::default();
+        consequence.transcript = Some(Arc::new({
+            let mut transcript = Transcript::default();
+            transcript.stable_id = transcript_id.into();
+            transcript.gene_stable_id = gene_id.into();
+            transcript.biotype = "protein_coding".into();
+            transcript
+        }));
+        consequence.consequences = consequences;
+        consequence.impact = impact;
+        consequence.feature_type = FeatureType::Transcript;
+        consequence.strand = 1;
+        consequence
     }
 
     /// A regulatory or motif row of `feature_type` carrying the one term
@@ -717,12 +720,11 @@ mod tests {
         feature_type: FeatureType,
         consequence: Consequence,
     ) -> TranscriptConsequence {
-        TranscriptConsequence {
-            feature_id: Some(id.into()),
-            feature_type,
-            consequences: smallvec![consequence],
-            ..Default::default()
-        }
+        let mut row = TranscriptConsequence::default();
+        row.feature_id = Some(id.into());
+        row.feature_type = feature_type;
+        row.consequences = smallvec![consequence];
+        row
     }
 
     fn allele(alt: &[u8], index: usize, tcs: Vec<TranscriptConsequence>) -> InputVariant {
@@ -893,8 +895,9 @@ mod tests {
 
     /// `--per_gene` keeps the worst row of each gene over the whole record
     /// (`pick_VariationFeatureOverlapAllele_per_gene`, `:830-859`, keyed on the
-    /// gene stable id at `:851`): ENST1 of the first allele for G1 and ENST2 of
-    /// the first allele for G2, each a full tie resolved to the first row.
+    /// gene stable id at `:851`): ENST1 of the first allele for G1, whose
+    /// missense term outranks the second allele's synonymous one, and ENST2 of
+    /// the first allele for G2, a full tie resolved to the first row.
     #[test]
     fn per_gene_keeps_one_row_per_gene_per_record() {
         let mut record = two_gene_record();
@@ -1337,10 +1340,10 @@ mod tests {
     /// with `_` and the database id (`BaseVariationFeature.pm:310-320`). `_`
     /// sorts after every digit, so on the TAIR10 record `4 7204233 CA CT,CAAGG`
     /// under `--pick --pick_order rank`, where the eleven `AAGG` rows of
-    /// AT4G12020 tie on `inframe_insertion`, Ensembl VEP 116.2 keeps
+    /// AT4G12020 tie on `inframe_insertion`, Ensembl VEP 116.3 keeps
     /// `AT4G12020.10` (key `AT4G12020.10_118783`), not the bare-id-first
     /// `AT4G12020.1` (`AT4G12020.1_118785`); `--flag_pick` marks that same row.
-    /// A transcript without a database id keys by its stable id alone.
+    /// A transcript without a database id keys by its stable id and `_`.
     #[test]
     fn full_tie_falls_to_the_first_transcript_key_with_its_database_id() {
         let later = tc(
@@ -1443,7 +1446,7 @@ mod tests {
     /// a gene falls to the first transcript key (`:808`): on the TAIR10 record
     /// `ENSVATH10224189` (`4 9557579 T TAAATT`), whose nineteen AT4G16990
     /// isoforms are all `upstream_gene_variant` and `protein_coding`, Ensembl
-    /// VEP 116.2 keeps `AT4G16990.10` (key `AT4G16990.10_108373`) under
+    /// VEP 116.3 keeps `AT4G16990.10` (key `AT4G16990.10_108373`) under
     /// `--per_gene --pick_order biotype` and under `--per_gene --pick_order
     /// rank`, where the bare ids would put `AT4G16990.1` (`AT4G16990.1_108382`)
     /// first; the default order decides on `canonical`, `AT4G16990.7`.
@@ -1499,30 +1502,31 @@ mod tests {
             );
         }
         let mut record = gene_record();
-        apply_to_record(&mut record, &per_gene(&PickCriterion::DEFAULT_ORDER));
+        apply_to_record(&mut record, &per_gene(PickCriterion::DEFAULT_ORDER));
         assert_eq!(kept(&record), vec![(0, "AT4G16990.7".to_string())]);
     }
 
     /// Ensembl VEP keys a motif row by the motif's database id
     /// (`MotifFeatureVariation.pm:70-76`, `VariationFeature.pm:937`) and the
     /// rejoin of a `--minimal` split stores a later allele's rows under its
-    /// allele string, `_` and that key (`OutputFactory.pm:2316`), so `sort keys`
+    /// allele string, `_` and that key (`OutputFactory.pm:2325`), so `sort keys`
     /// (`VariationFeature.pm:750`) lists the first allele's digit-led keys
     /// before any letter-led prefix and after a `-/` one. On
     /// `21 6562008 CGA TGA,CGC` under `--regulatory --minimal --pick`, the first
     /// allele's `C/T` row and the second's `A/C_` row of ENSM00000575394 tie on
-    /// every criterion, and Ensembl VEP 116.2 keeps the first allele's (`575394`
+    /// every criterion, and Ensembl VEP 116.3 keeps the first allele's (`575394`
     /// before `A/C_575394`); with the second allele an insertion keyed `-/G_`
     /// the second allele's row leads and is kept.
     #[test]
     fn prefixed_motif_rows_tie_falls_to_the_first_key_by_database_id() {
-        let motif = || TranscriptConsequence {
-            motif_db_id: Some(575394),
-            ..feature(
+        let motif = || {
+            let mut consequence = feature(
                 "ENSM00000575394",
                 FeatureType::MotifFeature,
                 Consequence::TfBindingSiteVariant,
-            )
+            );
+            consequence.motif_db_id = Some(575394);
+            consequence
         };
         let split_record = |prefix: &str| {
             let mut first = allele(b"T", 0, vec![motif()]);
@@ -1555,15 +1559,16 @@ mod tests {
     /// rows keep the stable-id order.
     #[test]
     fn structural_tie_falls_to_the_first_feature_met() {
-        let regulatory = |id: &str, id_rank: u32, start: u64| TranscriptConsequence {
-            id_rank,
-            feature_start: start,
-            feature_end: start + 230,
-            ..feature(
+        let regulatory = |id: &str, id_rank: u32, start: u64| {
+            let mut consequence = feature(
                 id,
                 FeatureType::RegulatoryFeature,
                 Consequence::RegulatoryRegionAblation,
-            )
+            );
+            consequence.id_rank = id_rank;
+            consequence.feature_start = start;
+            consequence.feature_end = start + 230;
+            consequence
         };
         let structural = |rows: Vec<TranscriptConsequence>| {
             let mut v = allele(b"<DEL>", 0, rows);
@@ -1694,12 +1699,12 @@ mod tests {
     }
 
     /// The alleles of a `--minimal` split sort by the keys the rejoin stores
-    /// their transcript variations under (`OutputFactory.pm:2316`: the allele
+    /// their transcript variations under (`OutputFactory.pm:2325`: the allele
     /// string before the stable id for every allele after the first;
     /// `VariationFeature.pm:666` sorts the keys as strings): on `AAA AGA,AGA`,
     /// two `A/G` features tied on every criterion, `A/G_ENST...` sorts before
     /// the bare `ENST...`, so `--pick` keeps the second allele, the ALLELE_NUM 2
-    /// row Ensembl VEP 116.2 writes for the minimal corpus's
+    /// row Ensembl VEP 116.3 writes for the minimal corpus's
     /// `multi_dup_trimmable`; on `A T,T,AG` the second `A/T` outranks the
     /// `-/G` insertion's frameshift row on rank and precedes the first allele's
     /// equal row (`multi_dup_plus_ins`, ALLELE_NUM 2). A prefix sorting after the
@@ -1707,7 +1712,7 @@ mod tests {
     /// reference row of `--process_ref_homs` stays ahead of its alternate. The
     /// intergenic rows follow in allele order whatever the prefixes: the rejoin
     /// appends a later allele's intergenic alleles to the record's one intergenic
-    /// variation (`:2323-2338`) instead of rekeying them.
+    /// variation (`:2332-2347`) instead of rekeying them.
     #[test]
     fn minimal_split_alleles_sort_by_the_rejoin_key() {
         let same = || {
@@ -1940,10 +1945,14 @@ mod tests {
         let mut v = allele(b"G", 0, vec![]);
         v.most_severe_consequence = None;
         let mut record = vec![v];
-        apply_to_record(&mut record, &config(|c| c.summary = true));
+        let mut warned = Vec::new();
+        apply_to_record_reporting(&mut record, &config(|c| c.summary = true), &mut |text| {
+            warned.push(text)
+        });
         assert_eq!(record[0].summary_terms, Some(SmallVec::new()));
         assert_eq!(record[0].most_severe_consequence, None);
         assert_eq!(kept(&record), Vec::<(usize, String)>::new());
+        assert_eq!(warned, ["Unable to assign consequence type"]);
     }
 
     /// The default `--pick_order` is Ensembl VEP's (`Config.pm:311`); a token

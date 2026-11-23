@@ -8,8 +8,8 @@ use std::num::NonZero;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 /// The environment variable that bounds the worker threads; unset or empty, the host's
-/// available cores are the bound. An environment variable and not an option, so that the
-/// command line stays the Python's.
+/// available cores are the bound. An environment variable and not an option: the command
+/// line names the comparison, and the thread count changes no byte of its reports.
 pub const THREADS_ENV: &str = "VEP_OUTPUTS_COMPARE_THREADS";
 
 /// The worker-thread bound of this run.

@@ -1,7 +1,7 @@
 entry = "individual_two_alt_allele_order"
 page = "docs/divergences/individual-allele-order.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
 input_class_basis = "2 · 8 of 373 records with sample columns · 4 flag sets, 2 corpora"
 notes = "The record lists its ALTs as T,A; Ensembl VEP's copy of the 1/2 sample joins the keys of a hash, which the fixed seed orders A then T."
@@ -30,3 +30,12 @@ where = { id = "ind_two_alts" }
 [expected]
 ensembl_vep = ["G/A/T"]
 vep_rs = ["G/T/A"]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/individuals.rs::CalledGenotype::read",
+    "crates/vep-cli/src/individuals.rs::individual_copy",
+]
+tests = [
+    "crates/vep-cli/tests/individuals.rs::an_individuals_copy_with_a_perl_false_id_is_named_from_its_alleles_as_written",
+]

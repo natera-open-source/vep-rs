@@ -4,22 +4,26 @@
 //! Indexed FASTA access wrapper for VEP.
 //!
 //! This crate provides fast, thread-safe random access into a reference
-//! FASTA using a `.fai` index (samtools faidx format). The FASTA is either a
-//! plain file or a BGZF-compressed one (the output of `bgzip`), which needs the
-//! `.gzi` index `samtools faidx` writes beside the `.fai`; a gzip file that is
-//! not BGZF is refused, since its `.fai` offsets cannot be reached without
-//! inflating the whole file. A directory stands for every indexed FASTA in
-//! it, their sequences read together.
+//! FASTA using a `.fai` index (samtools faidx format). The FASTA is a plain
+//! file, a BGZF-compressed one (the output of `bgzip`), which needs the `.gzi`
+//! index `samtools faidx` writes beside the `.fai`, or a RAZF-compressed one
+//! (the output of samtools 0.1's `razip`), which carries its block index at
+//! its own end; a gzip file that is neither BGZF nor RAZF is refused, since
+//! its `.fai` offsets cannot be reached without inflating the whole file. A
+//! directory stands for every indexed FASTA in it, their sequences read
+//! together.
 //!
 //! Design notes:
 //! - By default the FASTA file is mmapped once and offsets come from the `.fai`
-//!   metadata. A BGZF file is mapped compressed and its blocks are inflated on
-//!   demand, one at a time, each thread keeping the blocks it inflated last.
-//!   The `.gzi` is checked against the file's block layout when it is opened.
+//!   metadata. A BGZF or RAZF file is mapped compressed and its blocks are
+//!   inflated on demand, one at a time, each thread keeping the blocks it
+//!   inflated last. The `.gzi` is checked against the file's block layout when
+//!   it is opened, and a RAZF file's header, index and closing lengths against
+//!   its length.
 //! - Set `VEP_FASTA_STORAGE=memory` or call [`IndexedFasta::from_path_in_memory`]
-//!   to read the FASTA (inflated, for a BGZF file) into owned RAM. This avoids
-//!   runtime major page faults in service environments where random mmap reads
-//!   hit remote or block-backed storage.
+//!   to read the FASTA (inflated, for a BGZF or RAZF file) into owned RAM. This
+//!   avoids runtime major page faults in service environments where random mmap
+//!   reads hit remote or block-backed storage.
 //! - All queries are 1-based genomic coordinates, matching VEP conventions.
 //! - A small contig-alias map tolerates `chr`-prefixed references, and
 //!   [`IndexedFasta::add_synonyms`] extends it with a chromosome synonym table.
@@ -42,6 +46,7 @@ use std::{
 
 pub mod index;
 
+use flate2::{Crc, Decompress, FlushDecompress, Status};
 use memmap2::Mmap;
 use noodles::bgzf;
 use thiserror::Error;
@@ -60,7 +65,7 @@ use vep_core::synonyms::ChromosomeSynonyms;
 ///         NotBgzf(_) | GziMismatch { .. } | MalformedBgzfBlock { .. } => false,
 ///         DuplicateSequence { .. } | Io { .. } | InvalidFaiLine { .. } => false,
 ///         IndexBeyondFile { .. } | InvalidStorageMode(_) => false,
-///         LockFile { .. } | Unindexable { .. } => false,
+///         LockFile { .. } | Unindexable { .. } | MalformedRazf { .. } => false,
 ///     }
 /// }
 /// ```
@@ -94,6 +99,12 @@ pub enum FastaError {
     #[error("malformed BGZF block at offset {offset} in {path}")]
     MalformedBgzfBlock { path: String, offset: u64 },
 
+    /// The header, the index or the closing lengths of a RAZF file do not
+    /// describe its bytes, or a block does not inflate as they say; `reason`
+    /// is the first fault found.
+    #[error("{path} is not a readable RAZF file ({reason}): recompress the FASTA with bgzip and index it with samtools faidx")]
+    MalformedRazf { path: String, reason: String },
+
     #[error("no indexed FASTA file in {0}: a .fa with its .fai, or a bgzipped .fa.gz with its .fai and .gzi")]
     NoIndexedFasta(String),
 
@@ -106,7 +117,8 @@ pub enum FastaError {
         second: String,
     },
 
-    /// A read of the FASTA or of one of its indexes failed; `action` says which.
+    /// An open, a memory map or a read of the FASTA, or a read or a write of
+    /// one of its indexes, failed; `action` says which.
     #[error("{action} {path}: {source}")]
     Io {
         action: &'static str,
@@ -135,8 +147,8 @@ pub enum FastaError {
         source: std::io::Error,
     },
 
-    /// A FASTA whose `.fai` cannot be written: its sequence lines differ in
-    /// length, or a BGZF block of it cannot be read.
+    /// A FASTA that cannot be indexed: a read of it fails, no `.fai` describes
+    /// its layout, or a BGZF block of it cannot be read.
     #[error("failed to index {path}: {reason}")]
     Unindexable { path: String, reason: String },
 }
@@ -200,6 +212,7 @@ impl FaiRecord {
 /// A pseudoautosomal region of chromosome `Y`, read from `X`: one entry of
 /// Ensembl VEP's `%PARS` (`Variation/Utils/FastaSequence.pm:78-103`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Par {
     /// The region's first base on `Y`.
     pub start: u64,
@@ -250,6 +263,7 @@ pub fn pars_for_assembly(assembly: &str) -> &'static [Par] {
 
 /// How [`IndexedFasta`] should store reference bytes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum FastaStorageMode {
     /// File-backed mmap. Lower resident memory, but random access can fault at
     /// runtime if the file-backed pages are not resident.
@@ -289,12 +303,15 @@ enum Encoding {
     Plain,
     /// A gzip member whose header is a BGZF block header ([`bgzf_header_len`]).
     Bgzf,
-    /// A gzip stream whose first member is not a BGZF block.
+    /// A gzip member whose extra field carries the `RAZF` tag
+    /// (`is_razf_header`).
+    Razf,
+    /// A gzip stream whose first member is neither a BGZF block nor RAZF.
     Gzip,
 }
 
-/// Reads the first bytes of `path`: a BGZF block header, another gzip header,
-/// or neither.
+/// Reads the first bytes of `path`: a BGZF block header, a RAZF header,
+/// another gzip header, or neither.
 fn encoding_of(path: &Path) -> Result<Encoding, FastaError> {
     let mut header = Vec::with_capacity(BGZF_HEADER_LEN);
     File::open(path)
@@ -306,6 +323,8 @@ fn encoding_of(path: &Path) -> Result<Encoding, FastaError> {
         Encoding::Plain
     } else if bgzf_header_len(&header).is_some() {
         Encoding::Bgzf
+    } else if is_razf_header(&header) {
+        Encoding::Razf
     } else {
         Encoding::Gzip
     })
@@ -318,9 +337,9 @@ fn map_file(path: &Path) -> Result<Mmap, FastaError> {
     unsafe { Mmap::map(&file) }.map_err(io_error("failed to memory-map FASTA", path))
 }
 
-/// Each BGZF handle gets its own number so the per-thread block cache never
-/// serves one handle's block for another's.
-static NEXT_BGZF_ID: AtomicU64 = AtomicU64::new(0);
+/// Each BGZF or RAZF handle gets its own number so the per-thread block cache
+/// never serves one handle's block for another's.
+static NEXT_STORAGE_ID: AtomicU64 = AtomicU64::new(0);
 
 /// The length of a BGZF block header: the gzip header, XLEN and the `BC`
 /// subfield whose last two bytes are BSIZE, the block length minus one.
@@ -567,7 +586,7 @@ impl BgzfStorage {
             data,
             index,
             uncompressed_len,
-            id: NEXT_BGZF_ID.fetch_add(1, Ordering::Relaxed),
+            id: NEXT_STORAGE_ID.fetch_add(1, Ordering::Relaxed),
             fasta_path: fasta_path.to_path_buf(),
             gzi_path: gzi_path.to_path_buf(),
             corrupt: AtomicBool::new(false),
@@ -615,39 +634,9 @@ impl BgzfStorage {
             let (block_start, uncompressed_start) = if i == 0 { (0, 0) } else { self.index[i - 1] };
             let expected_len = self.index.get(i).map(|next| next.1 - uncompressed_start);
             let within = usize::try_from(offset - uncompressed_start).ok()?;
-            let fetched = BLOCKS.with(|cache| {
-                let mut cache = cache.borrow_mut();
-                let hit = cache
-                    .iter()
-                    .position(|b| b.storage == self.id && b.compressed_offset == block_start);
-                let at = match hit {
-                    Some(at) => at,
-                    None => {
-                        let Some(data) = self.inflate(block_start) else {
-                            return Fetch::Corrupt;
-                        };
-                        if expected_len.is_some_and(|n| n != data.len() as u64) {
-                            return Fetch::Corrupt;
-                        }
-                        if cache.len() == BLOCKS_PER_THREAD {
-                            cache.pop_front();
-                        }
-                        cache.push_back(CachedBlock {
-                            storage: self.id,
-                            compressed_offset: block_start,
-                            data,
-                        });
-                        cache.len() - 1
-                    }
-                };
-                match cache[at].data.get(within..) {
-                    Some(available) if !available.is_empty() => {
-                        let n = available.len().min(buf.len() - filled);
-                        buf[filled..filled + n].copy_from_slice(&available[..n]);
-                        Fetch::Copied(n)
-                    }
-                    _ => Fetch::PastEnd,
-                }
+            let fetched = copy_from_block(self.id, block_start, within, &mut buf[filled..], || {
+                self.inflate(block_start)
+                    .filter(|data| expected_len.is_none_or(|n| n == data.len() as u64))
             });
             match fetched {
                 Fetch::Copied(n) => {
@@ -665,7 +654,7 @@ impl BgzfStorage {
     }
 }
 
-/// What one block lookup of [`BgzfStorage::read_at`] yielded.
+/// What one block lookup of a compressed handle's `read_at` yielded.
 enum Fetch {
     /// This many bytes copied from the block.
     Copied(usize),
@@ -675,10 +664,425 @@ enum Fetch {
     Corrupt,
 }
 
+/// Copies into `buf` the bytes from `within` of one block, as many as the
+/// block holds from there and `buf` takes: the block of the handle numbered
+/// `storage` that starts at `compressed_offset`. It comes from the thread's
+/// kept blocks or, when it is not among them, from `inflate`, which answers
+/// `None` for a block that does not read as its index says.
+fn copy_from_block(
+    storage: u64,
+    compressed_offset: u64,
+    within: usize,
+    buf: &mut [u8],
+    inflate: impl FnOnce() -> Option<Vec<u8>>,
+) -> Fetch {
+    BLOCKS.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        let hit = cache
+            .iter()
+            .position(|b| b.storage == storage && b.compressed_offset == compressed_offset);
+        let at = match hit {
+            Some(at) => at,
+            None => {
+                let Some(data) = inflate() else {
+                    return Fetch::Corrupt;
+                };
+                if cache.len() == BLOCKS_PER_THREAD {
+                    cache.pop_front();
+                }
+                cache.push_back(CachedBlock {
+                    storage,
+                    compressed_offset,
+                    data,
+                });
+                cache.len() - 1
+            }
+        };
+        match cache[at].data.get(within..) {
+            Some(available) if !available.is_empty() => {
+                let n = available.len().min(buf.len());
+                buf[..n].copy_from_slice(&available[..n]);
+                Fetch::Copied(n)
+            }
+            _ => Fetch::PastEnd,
+        }
+    })
+}
+
+/// The uncompressed bytes of a RAZF block, `RZ_BLOCK_SIZE` (razf.h:54):
+/// `razip` ends a deflate block with a full flush each time its input reaches
+/// a multiple of it (razf.c:293-301), so an inflater started at a block needs
+/// no byte before it.
+const RAZF_BLOCK_SIZE: u64 = 32768;
+
+/// How many index entries share one bin offset, `RZ_BIN_SIZE` (razf.h:65):
+/// the blocks of 2^32 uncompressed bytes.
+const RAZF_BIN_SIZE: u64 = (1 << 32) / RAZF_BLOCK_SIZE;
+
+/// The two big-endian 64-bit lengths that close a RAZF file, the uncompressed
+/// length and the offset the index starts at (razf.c:803-811).
+const RAZF_TAIL_LEN: u64 = 16;
+
+/// The checksum and the ISIZE that end a gzip member.
+const GZIP_TRAILER_LEN: u64 = 8;
+
+/// How many leading bytes hold the whole gzip header of a RAZF file,
+/// `RZ_BUFFER_SIZE` (razf.h:58): samtools parses the header out of its first
+/// read of the file (razf.c:375-377).
+const RAZF_HEADER_WINDOW: usize = 4096;
+
+/// Where the `RAZF` tag ends in a gzip header: the extra field starts at byte
+/// 12, after the ten fixed bytes and XLEN, and the tag is its first four bytes.
+const RAZF_TAG_END: usize = 16;
+
+/// Whether `header`, the first bytes of a gzip file, starts a RAZF header: the
+/// deflate method, FLG.FEXTRA and an extra field of seven bytes or more whose
+/// first four are `RAZF`, the test of `razf_open_r` (razf.c:400).
+fn is_razf_header(header: &[u8]) -> bool {
+    header.get(..RAZF_TAG_END).is_some_and(|header| {
+        header[..3] == [0x1f, 0x8b, 8]
+            && header[3] & 0x04 != 0
+            && u16::from_le_bytes([header[10], header[11]]) >= 7
+            && header[12..] == *b"RAZF"
+    })
+}
+
+/// The `N` bytes of `data` from `at`.
+fn bytes_at<const N: usize>(data: &[u8], at: usize) -> [u8; N] {
+    let mut bytes = [0; N];
+    bytes.copy_from_slice(&data[at..at + N]);
+    bytes
+}
+
+/// The length of the gzip header of the RAZF file `data`, where its deflate
+/// data starts, or what is wrong with the header. The block size is the
+/// big-endian 16 bits at bytes 5 and 6 of the extra field (razf.c:401), and
+/// the fields after the extra field are skipped as `_read_gz_header` skips
+/// them (razf.c:316-347): a zero-terminated FNAME and FCOMMENT and a two-byte
+/// FHCRC, each present when its flag bit is set.
+fn razf_header_len(data: &[u8]) -> Result<usize, String> {
+    let header = &data[..data.len().min(RAZF_HEADER_WINDOW)];
+    if !is_razf_header(header) {
+        return Err("the file does not start with a RAZF header".to_string());
+    }
+    let unfinished =
+        || format!("the gzip header does not end in the first {RAZF_HEADER_WINDOW} bytes");
+    let flags = header[3];
+    if flags & 0xe0 != 0 {
+        return Err("the gzip header sets a reserved flag bit".to_string());
+    }
+    let mut at = 12 + usize::from(u16::from_le_bytes([header[10], header[11]]));
+    if at > header.len() {
+        return Err(unfinished());
+    }
+    let block_size = u16::from_be_bytes([header[17], header[18]]);
+    if u64::from(block_size) != RAZF_BLOCK_SIZE {
+        return Err(format!(
+            "the header declares a block size of {block_size}, not {RAZF_BLOCK_SIZE}"
+        ));
+    }
+    // FNAME, then FCOMMENT.
+    for flag in [0x08, 0x10] {
+        if flags & flag != 0 {
+            let text = &header[at..];
+            at += text
+                .iter()
+                .position(|&byte| byte == 0)
+                .ok_or_else(unfinished)?
+                + 1;
+        }
+    }
+    if flags & 0x02 != 0 {
+        at += 2;
+    }
+    if at > header.len() {
+        return Err(unfinished());
+    }
+    Ok(at)
+}
+
+/// What the header, the index and the closing lengths of a RAZF file say of
+/// its blocks.
+struct RazfLayout {
+    /// The compressed offset each block of `RAZF_BLOCK_SIZE` uncompressed
+    /// bytes starts at: the header's length, then the index's entries.
+    block_starts: Vec<u64>,
+    /// Where the gzip member ends and the index starts.
+    compressed_end: u64,
+    /// The length of the sequence the blocks inflate to.
+    uncompressed_len: u64,
+}
+
+/// The layout of the RAZF file `data`, or the first thing wrong with it: the
+/// index after the gzip member is the entry count, a bin offset for every
+/// `RAZF_BIN_SIZE` entries and a cell for every entry, all big-endian
+/// (razf.c:92-108), and entry `i`, its bin plus its cell, is the compressed
+/// offset at which uncompressed offset `(i + 1) * RAZF_BLOCK_SIZE` starts
+/// (razf.c:81-90 and 766). The index and the closing lengths must end where
+/// the file ends, the entry count must be the one `razip` writes for the
+/// uncompressed length (razf.c:293-301), and the blocks must start in
+/// increasing order between the header and the index.
+fn razf_layout(data: &[u8]) -> Result<RazfLayout, String> {
+    let header_len = razf_header_len(data)? as u64;
+    let len = data.len() as u64;
+    if len < header_len + RAZF_TAIL_LEN {
+        return Err(format!(
+            "the {len} byte file ends before the {RAZF_TAIL_LEN} bytes that close it"
+        ));
+    }
+    let tail_at = data.len() - RAZF_TAIL_LEN as usize;
+    let uncompressed_len = i64::from_be_bytes(bytes_at(data, tail_at));
+    let compressed_end = i64::from_be_bytes(bytes_at(data, tail_at + 8));
+    let (Ok(uncompressed_len), Ok(compressed_end)) = (
+        u64::try_from(uncompressed_len),
+        u64::try_from(compressed_end),
+    ) else {
+        return Err(format!(
+            "the last {RAZF_TAIL_LEN} bytes hold a negative length"
+        ));
+    };
+    // The index starts after a whole gzip member and holds its entry count
+    // at the least.
+    if compressed_end < header_len + GZIP_TRAILER_LEN || compressed_end + 4 > len - RAZF_TAIL_LEN {
+        return Err(format!(
+            "the last 8 bytes put the index at byte {compressed_end} of a {len} byte file"
+        ));
+    }
+    let index_at = compressed_end as usize;
+    let size = i32::from_be_bytes(bytes_at(data, index_at));
+    let Ok(size) = u64::try_from(size) else {
+        return Err(format!("the index declares {size} entries"));
+    };
+    let bins = size / RAZF_BIN_SIZE + 1;
+    let index_end = compressed_end + 4 + 8 * bins + 4 * size + RAZF_TAIL_LEN;
+    if index_end != len {
+        return Err(format!(
+            "an index of {size} entries at byte {compressed_end} ends the file at byte {index_end}, not at byte {len}"
+        ));
+    }
+    let blocks = uncompressed_len / RAZF_BLOCK_SIZE;
+    if size != blocks {
+        return Err(format!(
+            "the index holds {size} entries for the {blocks} whole blocks of {uncompressed_len} uncompressed bytes"
+        ));
+    }
+    let bins_at = index_at + 4;
+    let cells_at = bins_at + 8 * bins as usize;
+    let mut block_starts = Vec::with_capacity(size as usize + 1);
+    block_starts.push(header_len);
+    for entry in 0..size as usize {
+        let bin = i64::from_be_bytes(bytes_at(
+            data,
+            bins_at + 8 * (entry / RAZF_BIN_SIZE as usize),
+        ));
+        let cell = u32::from_be_bytes(bytes_at(data, cells_at + 4 * entry));
+        let previous = block_starts[entry];
+        let start = u64::try_from(bin)
+            .ok()
+            .and_then(|bin| bin.checked_add(u64::from(cell)));
+        match start {
+            Some(start) if previous < start && start < compressed_end => block_starts.push(start),
+            _ => {
+                return Err(format!(
+                    "index entry {} does not start a block between byte {previous}, where the block before it starts, and byte {compressed_end}, where the compressed data ends",
+                    entry + 1
+                ));
+            }
+        }
+    }
+    Ok(RazfLayout {
+        block_starts,
+        compressed_end,
+        uncompressed_len,
+    })
+}
+
+/// The [`FastaError::MalformedRazf`] of the file at `path` for `reason`.
+fn malformed_razf(path: &Path, reason: String) -> FastaError {
+    FastaError::MalformedRazf {
+        path: path.display().to_string(),
+        reason,
+    }
+}
+
+/// A RAZF-compressed FASTA: the compressed bytes mapped once and the block
+/// starts read from the index at the file's end.
+struct RazfStorage {
+    data: Mmap,
+    layout: RazfLayout,
+    id: u64,
+    path: PathBuf,
+    /// Set once a block fails to inflate to its length, so the failure is
+    /// reported once per handle and the run that read the file can refuse its
+    /// output.
+    corrupt: AtomicBool,
+}
+
+impl RazfStorage {
+    /// Maps the RAZF file at `path`, which is accepted when `razf_layout`
+    /// accepts its bytes and its first block inflates to its length; the
+    /// blocks after it are inflated when a read reaches them.
+    fn open(path: &Path) -> Result<Self, FastaError> {
+        let data = map_file(path)?;
+        let layout = razf_layout(&data).map_err(|reason| malformed_razf(path, reason))?;
+        let storage = Self {
+            data,
+            layout,
+            id: NEXT_STORAGE_ID.fetch_add(1, Ordering::Relaxed),
+            path: path.to_path_buf(),
+            corrupt: AtomicBool::new(false),
+        };
+        if storage.inflate(0).is_none() {
+            return Err(malformed_razf(
+                path,
+                format!(
+                    "the first block does not inflate to {} bytes",
+                    storage.block_len(0)
+                ),
+            ));
+        }
+        Ok(storage)
+    }
+
+    /// How many blocks hold the sequence: its whole blocks and a shorter last
+    /// one.
+    fn block_count(&self) -> u64 {
+        self.layout.uncompressed_len.div_ceil(RAZF_BLOCK_SIZE)
+    }
+
+    /// The uncompressed length of block `block`: `RAZF_BLOCK_SIZE`, or what is
+    /// left of the sequence for its last block, and zero past that.
+    fn block_len(&self, block: u64) -> usize {
+        let before = block.saturating_mul(RAZF_BLOCK_SIZE);
+        let left = self.layout.uncompressed_len.saturating_sub(before);
+        left.min(RAZF_BLOCK_SIZE) as usize
+    }
+
+    /// The uncompressed bytes of block `block`, or `None` when the compressed
+    /// bytes from its start to the next block's do not inflate to exactly its
+    /// length. The bytes are raw deflate that refers to nothing before the
+    /// block, the full flush having reset the stream there (razf.c:230).
+    fn inflate(&self, block: u64) -> Option<Vec<u8>> {
+        let index = usize::try_from(block).ok()?;
+        let starts = &self.layout.block_starts;
+        let start = usize::try_from(*starts.get(index)?).ok()?;
+        let end = match starts.get(index + 1) {
+            Some(&next) => next,
+            None => self.layout.compressed_end,
+        };
+        let compressed = self.data.get(start..usize::try_from(end).ok()?)?;
+        let expected = self.block_len(block);
+        // One byte more than the block holds, so a longer one is seen.
+        let mut data = vec![0; expected + 1];
+        let mut inflater = Decompress::new(false);
+        let (mut consumed, mut produced) = (0, 0);
+        loop {
+            let status = inflater
+                .decompress(
+                    &compressed[consumed..],
+                    &mut data[produced..],
+                    FlushDecompress::None,
+                )
+                .ok()?;
+            let read = inflater.total_in() as usize;
+            let written = inflater.total_out() as usize;
+            let stalled = read == consumed && written == produced;
+            (consumed, produced) = (read, written);
+            if status == Status::StreamEnd || stalled {
+                break;
+            }
+        }
+        data.truncate(expected);
+        (produced == expected).then_some(data)
+    }
+
+    /// Records that a block did not inflate to its length, once per handle:
+    /// every later read of that block answers `None`.
+    fn report_corrupt(&self, compressed_offset: u64) {
+        if !self.corrupt.swap(true, Ordering::Relaxed) {
+            tracing::error!(
+                "{} is not a readable RAZF file: the block at byte {compressed_offset} does not inflate to its length; recompress the FASTA with bgzip and index it with samtools faidx",
+                self.path.display()
+            );
+        }
+    }
+
+    /// The refusal a run owes once a block has failed to inflate to its length.
+    fn corruption(&self) -> Option<FastaError> {
+        self.corrupt.load(Ordering::Relaxed).then(|| {
+            malformed_razf(
+                &self.path,
+                "a block did not inflate to its length".to_string(),
+            )
+        })
+    }
+
+    /// Fills `buf` with the uncompressed bytes starting at `offset`, or returns
+    /// `None` when they reach past the end of the data or a block is unreadable.
+    fn read_at(&self, mut offset: u64, buf: &mut [u8]) -> Option<()> {
+        let mut filled = 0;
+        while filled < buf.len() {
+            if offset >= self.layout.uncompressed_len {
+                return None;
+            }
+            let block = offset / RAZF_BLOCK_SIZE;
+            let block_start = *self.layout.block_starts.get(usize::try_from(block).ok()?)?;
+            let within = (offset % RAZF_BLOCK_SIZE) as usize;
+            let fetched = copy_from_block(self.id, block_start, within, &mut buf[filled..], || {
+                self.inflate(block)
+            });
+            match fetched {
+                Fetch::Copied(n) => {
+                    filled += n;
+                    offset += n as u64;
+                }
+                Fetch::PastEnd => return None,
+                Fetch::Corrupt => {
+                    self.report_corrupt(block_start);
+                    return None;
+                }
+            }
+        }
+        Some(())
+    }
+
+    /// The whole sequence, inflated block by block as `Self::read_at` inflates
+    /// it, so a file whose blocks the mapped storage cannot read is not
+    /// accepted either. A block that does not inflate to its length is the
+    /// error, and so is data whose checksum is not the one the gzip trailer
+    /// records, which only a read of every block can check.
+    fn inflate_all(&self) -> Result<Vec<u8>, FastaError> {
+        let mut data = Vec::new();
+        let mut crc = Crc::new();
+        for block in 0..self.block_count() {
+            let Some(bytes) = self.inflate(block) else {
+                return Err(malformed_razf(
+                    &self.path,
+                    format!(
+                        "the block at byte {} does not inflate to its length",
+                        self.layout.block_starts[block as usize]
+                    ),
+                ));
+            };
+            crc.update(&bytes);
+            data.extend_from_slice(&bytes);
+        }
+        let trailer_at = (self.layout.compressed_end - GZIP_TRAILER_LEN) as usize;
+        if crc.sum() != u32::from_le_bytes(bytes_at(&self.data, trailer_at)) {
+            return Err(malformed_razf(
+                &self.path,
+                "the inflated data does not have the CRC-32 the gzip trailer records".to_string(),
+            ));
+        }
+        Ok(data)
+    }
+}
+
 enum FastaStorage {
     Mmap(Mmap),
     Memory(Arc<[u8]>),
     Bgzf(BgzfStorage),
+    Razf(RazfStorage),
 }
 
 impl std::fmt::Debug for FastaStorage {
@@ -690,6 +1094,11 @@ impl std::fmt::Debug for FastaStorage {
                 .debug_struct("Bgzf")
                 .field("compressed_len", &storage.data.len())
                 .field("blocks", &(storage.index.len() + 1))
+                .finish(),
+            Self::Razf(storage) => f
+                .debug_struct("Razf")
+                .field("compressed_len", &storage.data.len())
+                .field("blocks", &storage.block_count())
                 .finish(),
         }
     }
@@ -707,6 +1116,7 @@ impl FastaStorage {
             (FastaStorageMode::Mmap, Encoding::Bgzf) => {
                 Self::Bgzf(BgzfStorage::open(fasta_path, &sibling(fasta_path, "gzi"))?)
             }
+            (FastaStorageMode::Mmap, Encoding::Razf) => Self::Razf(RazfStorage::open(fasta_path)?),
             (FastaStorageMode::Mmap, _) => Self::Mmap(map_file(fasta_path)?),
             (FastaStorageMode::Memory, Encoding::Bgzf) => {
                 // The whole stream inflates from the blocks' own headers and
@@ -717,6 +1127,10 @@ impl FastaStorage {
                 bgzf::io::Reader::new(&compressed[..])
                     .read_to_end(&mut data)
                     .map_err(io_error("failed to read FASTA", fasta_path))?;
+                Self::Memory(Arc::from(data.into_boxed_slice()))
+            }
+            (FastaStorageMode::Memory, Encoding::Razf) => {
+                let data = RazfStorage::open(fasta_path)?.inflate_all()?;
                 Self::Memory(Arc::from(data.into_boxed_slice()))
             }
             (FastaStorageMode::Memory, _) => {
@@ -733,6 +1147,7 @@ impl FastaStorage {
             Self::Mmap(data) => data.len() as u64,
             Self::Memory(data) => data.len() as u64,
             Self::Bgzf(storage) => storage.uncompressed_len,
+            Self::Razf(storage) => storage.layout.uncompressed_len,
         }
     }
 
@@ -748,12 +1163,17 @@ impl FastaStorage {
                 storage.read_at(offset, &mut buf)?;
                 Some(Cow::Owned(buf))
             }
+            Self::Razf(storage) => {
+                let mut buf = vec![0; len];
+                storage.read_at(offset, &mut buf)?;
+                Some(Cow::Owned(buf))
+            }
         }
     }
 
     fn mode(&self) -> FastaStorageMode {
         match self {
-            Self::Mmap(_) | Self::Bgzf(_) => FastaStorageMode::Mmap,
+            Self::Mmap(_) | Self::Bgzf(_) | Self::Razf(_) => FastaStorageMode::Mmap,
             Self::Memory(_) => FastaStorageMode::Memory,
         }
     }
@@ -785,17 +1205,23 @@ pub struct IndexedFasta {
     /// The record names in `.fai` order, the files in the order they were
     /// opened.
     names: Vec<String>,
-    // Lowercased alias -> canonical contig name in `records`.
+    /// Lowercased spelling -> the record it reaches ([`built_in_spellings`]).
     aliases: HashMap<String, String>,
+    /// Lowercased synonym -> the records a chromosome synonym table names it
+    /// for ([`Self::add_synonyms`]), sorted by name and read after `aliases`.
+    synonym_aliases: HashMap<String, Vec<String>>,
+    /// Whether the handle keeps the mitochondrial names of `GRCh37` apart
+    /// ([`Self::keep_grch37_mitochondrial_pairs_apart`]).
+    grch37_mitochondrial_pairs_apart: bool,
     /// The pseudoautosomal regions a read on the record `Y` is redirected
     /// through; empty until [`Self::set_assembly`] names an assembly with a table.
     pars: &'static [Par],
 }
 
 impl IndexedFasta {
-    /// Open an indexed FASTA at `path` (expects a sibling `.fai`, and a sibling
-    /// `.gzi` for a BGZF file); a directory opens every indexed FASTA in it and
-    /// serves their sequences together.
+    /// Open an indexed FASTA at `path`, a plain, BGZF or RAZF file (expects a
+    /// sibling `.fai`, and a sibling `.gzi` for a BGZF file); a directory opens
+    /// every indexed FASTA in it and serves their sequences together.
     pub fn from_path(path: impl AsRef<Path>) -> Result<Self, FastaError> {
         Self::from_path_with_storage(path, FastaStorageMode::from_env()?)
     }
@@ -832,7 +1258,6 @@ impl IndexedFasta {
         let mut sources: Vec<FastaSource> = Vec::with_capacity(files.len());
         let mut records: HashMap<String, FaiRecord> = HashMap::new();
         let mut names: Vec<String> = Vec::new();
-        let mut aliases: HashMap<String, String> = HashMap::new();
         for fasta_path in files {
             let encoding = encoding_of(&fasta_path)?;
             if encoding == Encoding::Gzip {
@@ -876,19 +1301,18 @@ impl IndexedFasta {
                         second: sources[source].path.display().to_string(),
                     });
                 }
-                for alias in contig_aliases(&name) {
-                    aliases.insert(alias.to_ascii_lowercase(), name.clone());
-                }
-                aliases.insert(name.to_ascii_lowercase(), name.clone());
                 names.push(name);
             }
         }
+        let aliases = built_in_spellings(&records, false);
         Ok(Self {
             fasta_path: given.to_path_buf(),
             sources,
             records,
             names,
             aliases,
+            synonym_aliases: HashMap::new(),
+            grch37_mitochondrial_pairs_apart: false,
             pars: &[],
         })
     }
@@ -901,8 +1325,34 @@ impl IndexedFasta {
     /// `X` the FASTA lacks reads as `N` (`:597-601`), those bases before and
     /// after it still from `Y`. The record's name is the FASTA's own, so a file
     /// naming the chromosome `chrY` is read as written.
+    ///
+    /// On `GRCh37` the names `MT` and `chrMT` are the assembly's mitochondrial
+    /// sequence, of [`GRCH37_MITOCHONDRIAL_LENGTH`] bases, and `chrM` and `M`
+    /// the one of the UCSC hg19 naming, of another length. There a record
+    /// under one pair of names is reached under the other pair through the
+    /// handle's own spellings (`contig_aliases`) only when it has the
+    /// assembly's length. A record of another length is reached through a
+    /// synonym of the run's table ([`Self::add_synonyms`]) from a name of its
+    /// own pair alone, so a table that links `MT` or its accession to `chrM`
+    /// hands a query for the assembly's sequence no record of the other one.
+    /// Where the FASTA holds a record under each pair, `MT` reads the one of
+    /// the assembly's length, `chrMT` before `chrM` where both have it, in
+    /// whichever order the file lists them (`built_in_spellings`).
+    /// Ensembl VEP's reader tries a query's synonyms and tests only that a
+    /// record exists (`FastaSequence.pm:380-397`).
     pub fn set_assembly(&mut self, assembly: &str) {
         self.pars = pars_for_assembly(assembly);
+        if assembly == "GRCh37" {
+            self.keep_grch37_mitochondrial_pairs_apart();
+        }
+    }
+
+    /// The mitochondrial rule [`Self::set_assembly`] applies on `GRCh37`,
+    /// with no pseudoautosomal redirect armed: for a FASTA of a GRCh37 run
+    /// that is not its reference, such as a plugin's own.
+    pub fn keep_grch37_mitochondrial_pairs_apart(&mut self) {
+        self.grch37_mitochondrial_pairs_apart = true;
+        self.aliases = built_in_spellings(&self.records, true);
     }
 
     /// The bytes of `rec`'s file from `offset`, as [`FastaStorage::bytes`] reads them.
@@ -1041,6 +1491,23 @@ impl IndexedFasta {
         self.record(chr).map(|(_, record)| record.len)
     }
 
+    /// On `GRCh37`, once the two pairs of mitochondrial names are kept apart
+    /// ([`Self::set_assembly`]), the record `name` reaches where `name` is
+    /// `chrM` or `M`, in any letter case, and that record has another length
+    /// than [`GRCH37_MITOCHONDRIAL_LENGTH`]: its name in the FASTA and its
+    /// length. Such a record is the mitochondrial sequence of the UCSC hg19
+    /// naming and not the one the assembly names `MT`, so a name that reaches
+    /// it stands for no sequence of an annotation source built on the
+    /// assembly. `None` for any other name, for a record of the assembly's
+    /// length, and on a handle whose pairs are not kept apart.
+    pub fn mitochondrial_record_of_another_sequence(&self, name: &str) -> Option<(&str, u64)> {
+        if !self.grch37_mitochondrial_pairs_apart || mitochondrial_pair(name) != Some(false) {
+            return None;
+        }
+        let (record, held) = self.record(name)?;
+        (held.len != GRCH37_MITOCHONDRIAL_LENGTH).then_some((record, held.len))
+    }
+
     /// The records' names in `.fai` order, the order the reference lists its
     /// sequences in; a directory's files contribute theirs in the order they
     /// were opened ([`Self::files`]).
@@ -1075,27 +1542,52 @@ impl IndexedFasta {
         let (name, record) = match self.records.get_key_value(chr) {
             Some(found) => found,
             None => {
-                let canonical = self.aliases.get(&chr.to_ascii_lowercase())?;
+                let asked = chr.to_ascii_lowercase();
+                let canonical = self
+                    .aliases
+                    .get(&asked)
+                    .or_else(|| self.synonym_record(&asked))?;
                 self.records.get_key_value(canonical)?
             }
         };
         Some((name.as_str(), record))
     }
 
+    /// The record a chromosome synonym table names for the lowercased query
+    /// `asked`: the first by name of the records the table gives it to. A
+    /// handle that keeps the mitochondrial names of `GRCh37` apart passes
+    /// over a record `asked` does not name there
+    /// ([`synonym_names_the_record`]), whichever of the table and the
+    /// assembly it was given first.
+    fn synonym_record(&self, asked: &str) -> Option<&String> {
+        self.synonym_aliases.get(asked)?.iter().find(|name| {
+            !self.grch37_mitochondrial_pairs_apart
+                || synonym_names_the_record(&self.records, asked, name)
+        })
+    }
+
     /// Registers, for each record, the names a chromosome synonym table gives
     /// it ([`ChromosomeSynonyms::aliases_of`]), as Ensembl VEP's reference
     /// reader tries a query's synonyms when the query itself names no record
-    /// (`Variation/Utils/FastaSequence.pm:380-389`). A record's own name and an
-    /// alias already present win over a synonym; records are visited by name,
-    /// so two records claiming one alias resolve the same way on every run.
+    /// (`Variation/Utils/FastaSequence.pm:380-389`). A record's own name and a
+    /// spelling the handle builds in win over a synonym; of two records a
+    /// table gives one synonym, the first by name is read, so they resolve
+    /// the same way on every run. On a handle that keeps the mitochondrial
+    /// names of `GRCh37` apart ([`Self::set_assembly`]), a mitochondrial
+    /// record of another length than the assembly's is read under a synonym
+    /// of its own pair of names alone, and the synonym goes to the next
+    /// record the table gives it, whether the table is added before the
+    /// assembly is set or after.
     pub fn add_synonyms(&mut self, synonyms: &ChromosomeSynonyms) {
-        let mut names: Vec<&String> = self.records.keys().collect();
-        names.sort();
-        for name in names {
+        for name in self.records.keys() {
             for alias in synonyms.aliases_of(name) {
-                self.aliases
+                let named = self
+                    .synonym_aliases
                     .entry(alias.to_ascii_lowercase())
-                    .or_insert_with(|| name.clone());
+                    .or_default();
+                if let Err(place) = named.binary_search(name) {
+                    named.insert(place, name.clone());
+                }
             }
         }
     }
@@ -1115,15 +1607,17 @@ impl IndexedFasta {
         self.sources.iter().map(|source| source.path.as_path())
     }
 
-    /// The error a compressed file's reads have earned, if any: a block that did
-    /// not inflate as its `.gzi` says, which every read of it answered as `None`.
-    /// A run checks it when its reads are done, so the output it wrote from those
+    /// The error a compressed file's reads have earned, if any: a BGZF block
+    /// that did not inflate as its `.gzi` says or a RAZF block that did not
+    /// inflate to its length, which every read of it answered as `None`. A run
+    /// checks it when its reads are done, so the output it wrote from those
     /// reads is refused rather than trusted.
     pub fn corruption(&self) -> Option<FastaError> {
         self.sources
             .iter()
             .find_map(|source| match &source.storage {
                 FastaStorage::Bgzf(storage) => storage.corruption(),
+                FastaStorage::Razf(storage) => storage.corruption(),
                 _ => None,
             })
     }
@@ -1147,14 +1641,15 @@ fn is_fasta_name(name: &str) -> bool {
 
 /// Whether the FASTA at `path` has the index files it needs: a `.fai`, and a
 /// `.gzi` when its bytes are BGZF, the same test [`IndexedFasta::from_path`]
-/// applies. A plain gzip file, which no index serves, and a file that cannot
-/// be read are not indexed.
+/// applies; a RAZF file holds its block index itself. A gzip file that is
+/// neither, which no index serves, and a file that cannot be read are not
+/// indexed.
 fn is_indexed(path: &Path) -> bool {
     if !sibling(path, "fai").is_file() {
         return false;
     }
     match encoding_of(path) {
-        Ok(Encoding::Plain) => true,
+        Ok(Encoding::Plain | Encoding::Razf) => true,
         Ok(Encoding::Bgzf) => sibling(path, "gzi").is_file(),
         Ok(Encoding::Gzip) | Err(_) => false,
     }
@@ -1186,6 +1681,51 @@ pub fn indexed_fasta_files(dir: &Path) -> Vec<PathBuf> {
 /// `.fa.gz` the directory lists).
 pub fn first_indexed_fasta(dir: &Path) -> Option<PathBuf> {
     indexed_fasta_files(dir).into_iter().next()
+}
+
+/// The FASTA files of `dir` by name (`.fa` and `.fa.gz`) that
+/// [`indexed_fasta_files`] passes over, each with the refusal
+/// [`IndexedFasta::from_path`] gives the file named by itself: the index it
+/// lacks, that its bytes are gzip and not BGZF, or that it cannot be read.
+pub fn unindexed_fasta_files(dir: &Path) -> Vec<(PathBuf, FastaError)> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut files: Vec<(PathBuf, FastaError)> = entries
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(is_fasta_name)
+                && path.is_file()
+        })
+        .filter_map(|path| index_refusal(&path).map(|refusal| (path, refusal)))
+        .collect();
+    files.sort_by(|(a, _), (b, _)| a.cmp(b));
+    files
+}
+
+/// Why the FASTA at `path` is not indexed (`is_indexed`), as
+/// [`IndexedFasta::from_path`] refuses it: by its bytes, then its `.fai`, then
+/// the `.gzi` of a BGZF file. `None` for a file with the indexes it needs.
+fn index_refusal(path: &Path) -> Option<FastaError> {
+    let encoding = match encoding_of(path) {
+        Ok(encoding) => encoding,
+        Err(unreadable) => return Some(unreadable),
+    };
+    if encoding == Encoding::Gzip {
+        return Some(FastaError::NotBgzf(path.display().to_string()));
+    }
+    let fai = sibling(path, "fai");
+    if !fai.is_file() {
+        return Some(FastaError::MissingFai(fai.display().to_string()));
+    }
+    let gzi = sibling(path, "gzi");
+    if encoding == Encoding::Bgzf && !gzi.is_file() {
+        return Some(FastaError::MissingGzi(gzi.display().to_string()));
+    }
+    None
 }
 
 /// The FASTA `--fasta_dir` selects (`BaseVEP.pm:495-519`): among the `.fa` and
@@ -1305,6 +1845,120 @@ fn load_fai(path: &Path, source: usize) -> Result<Vec<(String, FaiRecord)>, Fast
     }
 
     Ok(records)
+}
+
+/// The number of bases of GRCh37's mitochondrial sequence, the one that
+/// assembly names `MT`.
+pub const GRCH37_MITOCHONDRIAL_LENGTH: u64 = 16_569;
+
+/// Which pair of mitochondrial names `name` is of, in any letter case: `true`
+/// for `MT` and `chrMT`, `false` for `M` and `chrM`, `None` for any other
+/// name.
+fn mitochondrial_pair(name: &str) -> Option<bool> {
+    let bare = match name.get(..3) {
+        Some(prefix) if prefix.eq_ignore_ascii_case("chr") => &name[3..],
+        _ => name,
+    };
+    if bare.eq_ignore_ascii_case("mt") {
+        Some(true)
+    } else if bare.eq_ignore_ascii_case("m") {
+        Some(false)
+    } else {
+        None
+    }
+}
+
+/// Whether, on `GRCh37`, the synonym `alias` of a chromosome synonym table
+/// names the record `name`: always for a record that is no mitochondrial
+/// sequence or has [`GRCH37_MITOCHONDRIAL_LENGTH`] bases, and for a
+/// mitochondrial record of another length only when `alias` is of the
+/// record's own pair of names ([`mitochondrial_pair`]). Such a record is not
+/// the sequence the other pair and the assembly's accession name.
+fn synonym_names_the_record(records: &HashMap<String, FaiRecord>, alias: &str, name: &str) -> bool {
+    let Some(held) = mitochondrial_pair(name) else {
+        return true;
+    };
+    mitochondrial_pair(alias) == Some(held)
+        || records
+            .get(name)
+            .is_some_and(|record| record.len == GRCH37_MITOCHONDRIAL_LENGTH)
+}
+
+/// How strongly a record claims a spelling that reaches it, weakest first. A
+/// spelling several records claim goes to the strongest claim and, of equal
+/// claims, to the first record by name ([`built_in_spellings`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Claim {
+    /// On `GRCh37`, a name of the assembly's pair for a record of that pair
+    /// whose length is not the assembly's.
+    AssemblyNameOfAnotherLength,
+    /// A mitochondrial name of the other pair than the record's own.
+    OtherPair,
+    /// The record's name with `chr` put before it or taken off.
+    ChrSpelling,
+    /// The record's own name, in any letter case.
+    OwnName,
+}
+
+/// The claim the record `name`, of `length` bases, has on `alias`, one of its
+/// [`contig_aliases`]; `None` where the record is not read under it.
+///
+/// A mitochondrial record claims the other name of its own pair
+/// ([`mitochondrial_pair`]) as its `chr` spelling and the names of the other
+/// pair more weakly. On a handle that keeps the pairs of `GRCh37` apart, a
+/// record of [`GRCH37_MITOCHONDRIAL_LENGTH`] bases keeps both claims, and a
+/// record of another length has none on the other pair and, on a name of the
+/// assembly's pair, the weakest: `MT` then reads a record of the assembly's
+/// length where the FASTA holds one under either pair.
+fn claim_on(alias: &str, name: &str, length: u64, grch37_pairs_apart: bool) -> Option<Claim> {
+    let (Some(asked), Some(held)) = (mitochondrial_pair(alias), mitochondrial_pair(name)) else {
+        return Some(Claim::ChrSpelling);
+    };
+    let own_pair = asked == held;
+    let assembly_length = length == GRCH37_MITOCHONDRIAL_LENGTH;
+    match (own_pair, !grch37_pairs_apart || assembly_length) {
+        (true, true) => Some(Claim::ChrSpelling),
+        (false, true) => Some(Claim::OtherPair),
+        // `asked` is true for `MT` and `chrMT`, the assembly's own names.
+        (true, false) if asked => Some(Claim::AssemblyNameOfAnotherLength),
+        (true, false) => Some(Claim::ChrSpelling),
+        (false, false) => None,
+    }
+}
+
+/// The spellings under which a read reaches a record, keyed in lower case:
+/// each record's own name and its [`contig_aliases`], on a handle that keeps
+/// the mitochondrial names of `GRCh37` apart those the record still claims
+/// there ([`claim_on`]). A spelling goes to its strongest claim ([`Claim`])
+/// and, of equal claims, to the first record by name, so the order in which
+/// a FASTA lists its records decides nothing.
+fn built_in_spellings(
+    records: &HashMap<String, FaiRecord>,
+    grch37_pairs_apart: bool,
+) -> HashMap<String, String> {
+    let mut names: Vec<&String> = records.keys().collect();
+    names.sort();
+    let mut claimed: HashMap<String, (Claim, &String)> = HashMap::new();
+    for name in names {
+        let length = records[name].len;
+        let own = std::iter::once((name.to_ascii_lowercase(), Claim::OwnName));
+        let spelled = contig_aliases(name).into_iter().filter_map(|alias| {
+            let claim = claim_on(&alias, name, length, grch37_pairs_apart)?;
+            Some((alias.to_ascii_lowercase(), claim))
+        });
+        for (alias, claim) in own.chain(spelled) {
+            let stronger = claimed
+                .get(&alias)
+                .is_none_or(|(standing, _)| claim > *standing);
+            if stronger {
+                claimed.insert(alias, (claim, name));
+            }
+        }
+    }
+    claimed
+        .into_iter()
+        .map(|(alias, (_, name))| (alias, name.clone()))
+        .collect()
 }
 
 fn contig_aliases(name: &str) -> Vec<String> {
@@ -1506,6 +2160,60 @@ mod tests {
     /// dummy subfield of four bytes: an extra field of ten bytes.
     const BC_AND_DUMMY_SUBFIELDS: [u8; 10] = [b'B', b'C', 2, 0, 0, 0, b'X', b'Y', 0, 0];
 
+    /// `fasta` as `razip` writes it: the 19-byte header, raw deflate with a
+    /// full flush after every 32768 uncompressed bytes, the gzip trailer, the
+    /// index (the entry count, one bin holding the first entry, each entry's
+    /// distance from it) and the two closing lengths. An entry is the
+    /// compressed offset reached at a flush.
+    pub(crate) fn razf(fasta: &[u8]) -> Vec<u8> {
+        razf_with_header_fields(fasta, 0, &[])
+    }
+
+    /// `razf` with `flags` added to the header's FLG and `fields`, the bytes
+    /// those flags announce, after its extra field.
+    fn razf_with_header_fields(fasta: &[u8], flags: u8, fields: &[u8]) -> Vec<u8> {
+        use flate2::{Compress, Compression, FlushCompress};
+        let block = RAZF_BLOCK_SIZE as usize;
+        let mut out = vec![0x1f, 0x8b, 8, 4 | flags, 0, 0, 0, 0, 0, 3, 7, 0];
+        out.extend_from_slice(b"RAZF\x01\x80\x00");
+        out.extend_from_slice(fields);
+        let mut deflater = Compress::new(Compression::default(), false);
+        let mut entries = Vec::new();
+        for chunk in fasta.chunks(block) {
+            let flush = if chunk.len() == block {
+                FlushCompress::Full
+            } else {
+                FlushCompress::None
+            };
+            let fed = deflater.total_in();
+            out.reserve(2 * block);
+            deflater.compress_vec(chunk, &mut out, flush).unwrap();
+            assert_eq!(deflater.total_in() - fed, chunk.len() as u64);
+            assert!(out.len() < out.capacity(), "the flush is written whole");
+            if chunk.len() == block {
+                entries.push(out.len() as u64);
+            }
+        }
+        out.reserve(2 * block);
+        let end = deflater.compress_vec(&[], &mut out, FlushCompress::Finish);
+        assert_eq!(end.unwrap(), Status::StreamEnd);
+        let mut crc = Crc::new();
+        crc.update(fasta);
+        out.extend_from_slice(&crc.sum().to_le_bytes());
+        out.extend_from_slice(&(fasta.len() as u32).to_le_bytes());
+        let compressed_end = out.len() as i64;
+        assert!(entries.len() < RAZF_BIN_SIZE as usize, "one bin");
+        let bin = entries.first().copied().unwrap_or(0);
+        out.extend_from_slice(&(entries.len() as i32).to_be_bytes());
+        out.extend_from_slice(&(bin as i64).to_be_bytes());
+        for entry in &entries {
+            out.extend_from_slice(&((entry - bin) as u32).to_be_bytes());
+        }
+        out.extend_from_slice(&(fasta.len() as i64).to_be_bytes());
+        out.extend_from_slice(&compressed_end.to_be_bytes());
+        out
+    }
+
     /// Every base and a set of ranges read the same from the BGZF file, in both
     /// storage modes, as from the plain file whose bytes it compresses: the
     /// `.fai` offsets are uncompressed offsets, reached through the `.gzi`, and
@@ -1587,11 +2295,291 @@ mod tests {
         }
     }
 
+    /// Every base, and ranges that between them hold every block boundary,
+    /// read the same from the RAZF file, in both storage modes and under a
+    /// header that carries a file name, a comment and a header CRC, as from
+    /// the plain file whose bytes it compresses: the `.fai` offsets are
+    /// uncompressed offsets, reached through the index at the file's end. A
+    /// file of exactly two blocks, whose last index entry is the start of the
+    /// stream's final empty block, reads to its last base, and a directory
+    /// lists a RAZF file that has its `.fai`.
+    #[test]
+    fn reads_a_razf_fasta_through_its_fai() {
+        let dir = tempdir().unwrap();
+        let contigs = [
+            ("1", bases(21, 70_000)),
+            ("2", bases(22, 45_000)),
+            ("chrM", bases(23, 5_000)),
+        ];
+        let listed: Vec<(&str, &[u8])> = contigs
+            .iter()
+            .map(|(name, seq)| (*name, seq.as_slice()))
+            .collect();
+        let (fasta, fai) = fasta_and_fai(&listed);
+        let plain = dir.path().join("ref.fa");
+        std::fs::write(&plain, &fasta).unwrap();
+        std::fs::write(dir.path().join("ref.fa.fai"), &fai).unwrap();
+        let rz = dir.path().join("ref.fa.rz");
+        std::fs::write(&rz, razf(&fasta)).unwrap();
+        std::fs::write(dir.path().join("ref.fa.rz.fai"), &fai).unwrap();
+        let named = dir.path().join("named.fa.rz");
+        let fields = b"ref.fa\0made up\0\x12\x34";
+        std::fs::write(&named, razf_with_header_fields(&fasta, 0x1a, fields)).unwrap();
+        std::fs::write(dir.path().join("named.fa.rz.fai"), &fai).unwrap();
+        let layout = RazfStorage::open(&rz).unwrap().layout;
+        assert_eq!(layout.uncompressed_len, fasta.len() as u64);
+        assert_eq!(
+            layout.block_starts.len(),
+            4,
+            "the block after the header and one for each of three index entries"
+        );
+        let named_layout = RazfStorage::open(&named).unwrap().layout;
+        assert_eq!(named_layout.block_starts[0], 19 + fields.len() as u64);
+
+        let expected = IndexedFasta::from_path_mmap(&plain).unwrap();
+        for (mode, opened) in [
+            (
+                FastaStorageMode::Mmap,
+                IndexedFasta::from_path_mmap(&rz).unwrap(),
+            ),
+            (
+                FastaStorageMode::Memory,
+                IndexedFasta::from_path_in_memory(&rz).unwrap(),
+            ),
+            (
+                FastaStorageMode::Mmap,
+                IndexedFasta::from_path_mmap(&named).unwrap(),
+            ),
+        ] {
+            assert_eq!(opened.storage_mode(), mode);
+            for (name, seq) in &contigs {
+                let len = seq.len() as u64;
+                for pos in 1..=len {
+                    assert_eq!(
+                        opened.base(name, pos),
+                        expected.base(name, pos),
+                        "{mode:?} {name}:{pos}"
+                    );
+                }
+                assert_eq!(opened.base(name, len + 1), None);
+                // Ranges of 1,500 bases starting every 997 overlap, so every
+                // block boundary inside the contig lies within one of them.
+                for start in (1..=len).step_by(997) {
+                    let end = (start + 1_499).min(len);
+                    assert_eq!(
+                        opened.sequence(name, start, end),
+                        expected.sequence(name, start, end),
+                        "{mode:?} {name}:{start}-{end}"
+                    );
+                }
+                assert_eq!(
+                    opened.sequence(name, 1, len),
+                    Some(seq.to_ascii_uppercase()),
+                    "{mode:?} {name}"
+                );
+                assert_eq!(opened.sequence(name, len, len + 1), None);
+            }
+            assert!(opened.corruption().is_none());
+        }
+
+        // 64,458 bases at 60 a line under a three-byte header line are 65,536
+        // bytes, two whole blocks.
+        let exact_dir = tempdir().unwrap();
+        let seq = bases(24, 64_458);
+        let (fasta, fai) = fasta_and_fai(&[("1", &seq)]);
+        assert_eq!(fasta.len() as u64, 2 * RAZF_BLOCK_SIZE);
+        let exact = exact_dir.path().join("exact.fa.gz");
+        std::fs::write(&exact, razf(&fasta)).unwrap();
+        std::fs::write(exact_dir.path().join("exact.fa.gz.fai"), &fai).unwrap();
+        let layout = RazfStorage::open(&exact).unwrap().layout;
+        assert_eq!(
+            layout.block_starts.len(),
+            3,
+            "two blocks and the final empty block's entry"
+        );
+        assert_eq!(
+            indexed_fasta_files(exact_dir.path()),
+            [exact_dir.path().join("exact.fa.gz")]
+        );
+        for opened in [
+            IndexedFasta::from_path_mmap(exact_dir.path()).unwrap(),
+            IndexedFasta::from_path_in_memory(&exact).unwrap(),
+        ] {
+            for pos in 1..=64_458 {
+                assert_eq!(
+                    opened.base("1", pos),
+                    Some(seq[pos as usize - 1].to_ascii_uppercase()),
+                    "1:{pos}"
+                );
+            }
+            assert_eq!(opened.base("1", 64_459), None);
+            assert_eq!(
+                opened.sequence("1", 1, 64_458),
+                Some(seq.to_ascii_uppercase())
+            );
+        }
+    }
+
+    /// The text of the refusal `error` gives for the RAZF file at `path`
+    /// between the file's name and the advice that ends it: the first fault.
+    fn razf_refusal_reason(path: &Path, error: &FastaError) -> String {
+        assert!(
+            matches!(error, FastaError::MalformedRazf { .. }),
+            "{error:?}"
+        );
+        let text = error.to_string();
+        text.strip_prefix(&format!("{} is not a readable RAZF file (", path.display()))
+            .and_then(|rest| {
+                rest.strip_suffix(
+                    "): recompress the FASTA with bgzip and index it with samtools faidx",
+                )
+            })
+            .unwrap_or_else(|| panic!("{text}"))
+            .to_string()
+    }
+
+    /// A RAZF file cut short is refused when it is opened, in both storage
+    /// modes alike, wherever the cut falls: inside the deflate data, inside
+    /// the index, or one byte before the end, each of which leaves closing
+    /// lengths that do not describe the file. So is a header declaring a block
+    /// size other than 32768, closing lengths that are negative or name more
+    /// blocks than the index has entries, an index entry that is not after
+    /// the one before it, and a first block that is not deflate data, while
+    /// the file as written opens.
+    #[test]
+    fn refuses_a_truncated_razf() {
+        let dir = tempdir().unwrap();
+        let (fasta, fai) = fasta_and_fai(&[("1", &bases(31, 100_000))]);
+        let whole = razf(&fasta);
+        let rz = dir.path().join("ref.fa.rz");
+        std::fs::write(dir.path().join("ref.fa.rz.fai"), &fai).unwrap();
+        let refusal = |bytes: &[u8]| {
+            std::fs::write(&rz, bytes).unwrap();
+            let error = IndexedFasta::from_path_mmap(&rz).unwrap_err();
+            let in_memory = IndexedFasta::from_path_in_memory(&rz).unwrap_err();
+            assert_eq!(in_memory.to_string(), error.to_string());
+            razf_refusal_reason(&rz, &error)
+        };
+        let len = whole.len();
+        let compressed_end = i64::from_be_bytes(bytes_at(&whole, len - 8)) as usize;
+        for cut in [compressed_end / 2, compressed_end + 6, len - 1] {
+            refusal(&whole[..cut]);
+        }
+
+        let mut other_block_size = whole.clone();
+        other_block_size[17..19].copy_from_slice(&16_384u16.to_be_bytes());
+        assert_eq!(
+            refusal(&other_block_size),
+            "the header declares a block size of 16384, not 32768"
+        );
+        let mut negative = whole.clone();
+        negative[len - 16] = 0x80;
+        assert_eq!(
+            refusal(&negative),
+            "the last 16 bytes hold a negative length"
+        );
+        let uncompressed = fasta.len() as i64 + 32_768;
+        let mut longer = whole.clone();
+        longer[len - 16..len - 8].copy_from_slice(&uncompressed.to_be_bytes());
+        assert_eq!(
+            refusal(&longer),
+            format!(
+                "the index holds 3 entries for the 4 whole blocks of {uncompressed} uncompressed bytes"
+            )
+        );
+        // The index is its entry count, one bin offset and a cell for each
+        // entry: the second cell takes the value of the first.
+        let cells_at = compressed_end + 12;
+        let first_entry = i64::from_be_bytes(bytes_at(&whole, compressed_end + 4));
+        let mut repeated = whole.clone();
+        repeated.copy_within(cells_at..cells_at + 4, cells_at + 4);
+        assert_eq!(
+            refusal(&repeated),
+            format!(
+                "index entry 2 does not start a block between byte {first_entry}, where the block before it starts, and byte {compressed_end}, where the compressed data ends"
+            )
+        );
+        // The first three bits of a deflate block are its last-block flag and
+        // its type, and type 3 is reserved.
+        let mut reserved_type = whole.clone();
+        reserved_type[19] = 0x06;
+        assert_eq!(
+            refusal(&reserved_type),
+            "the first block does not inflate to 32768 bytes"
+        );
+
+        std::fs::write(&rz, &whole).unwrap();
+        IndexedFasta::from_path_mmap(&rz).unwrap();
+        IndexedFasta::from_path_in_memory(&rz).unwrap();
+    }
+
+    /// A block after the first that is not deflate data leaves a file that
+    /// opens mapped, since only the first block is inflated then: reads of
+    /// the blocks before it are served, a read of it is `None` and leaves the
+    /// handle owing a refusal, and the in-memory inflate refuses the file at
+    /// open, naming the block. A gzip trailer whose checksum is not the data's
+    /// is seen by the in-memory inflate alone, which reads every block.
+    #[test]
+    fn razf_block_that_does_not_inflate_fails_its_reads() {
+        let dir = tempdir().unwrap();
+        let seq = bases(32, 100_000);
+        let (fasta, fai) = fasta_and_fai(&[("1", &seq)]);
+        let whole = razf(&fasta);
+        let rz = dir.path().join("ref.fa.rz");
+        std::fs::write(&rz, &whole).unwrap();
+        std::fs::write(dir.path().join("ref.fa.rz.fai"), &fai).unwrap();
+        let third_block = RazfStorage::open(&rz).unwrap().layout.block_starts[2] as usize;
+
+        // Deflate block type 3 is reserved, so the third block does not inflate.
+        let mut damaged = whole.clone();
+        damaged[third_block] = 0x06;
+        std::fs::write(&rz, &damaged).unwrap();
+        let opened = IndexedFasta::from_path_mmap(&rz).unwrap();
+        assert_eq!(
+            opened.sequence("1", 1, 60_000),
+            Some(seq[..60_000].to_ascii_uppercase()),
+            "the first two blocks hold 65,536 bytes"
+        );
+        assert!(
+            opened.corruption().is_none(),
+            "no read has reached the third block"
+        );
+        assert_eq!(opened.base("1", 70_000), None);
+        assert_eq!(opened.sequence("1", 60_000, 70_000), None);
+        let owed = opened.corruption().expect("the block is remembered");
+        assert_eq!(
+            razf_refusal_reason(&rz, &owed),
+            "a block did not inflate to its length"
+        );
+        let error = IndexedFasta::from_path_in_memory(&rz).unwrap_err();
+        assert_eq!(
+            razf_refusal_reason(&rz, &error),
+            format!("the block at byte {third_block} does not inflate to its length")
+        );
+
+        let compressed_end = i64::from_be_bytes(bytes_at(&whole, whole.len() - 8)) as usize;
+        let mut other_crc = whole.clone();
+        other_crc[compressed_end - 8] ^= 0xff;
+        std::fs::write(&rz, &other_crc).unwrap();
+        let opened = IndexedFasta::from_path_mmap(&rz).unwrap();
+        assert_eq!(
+            opened.sequence("1", 1, 100_000),
+            Some(seq.to_ascii_uppercase())
+        );
+        assert!(opened.corruption().is_none());
+        let error = IndexedFasta::from_path_in_memory(&rz).unwrap_err();
+        assert_eq!(
+            razf_refusal_reason(&rz, &error),
+            "the inflated data does not have the CRC-32 the gzip trailer records"
+        );
+    }
+
     /// A gzip FASTA without the BGZF `BC` subfield is refused by name with the
     /// recompression advice, whatever indexes sit beside it, and so is one whose
     /// extra field holds the `BC` subfield beside another (XLEN 10, which
-    /// htslib's `check_header` refuses); a BGZF file without its `.gzi` names
-    /// the missing index.
+    /// htslib's `check_header` refuses) or the `RAZF` tag in fewer than the
+    /// seven bytes a RAZF header's extra field has; a BGZF file without its
+    /// `.gzi` names the missing index.
     #[test]
     fn plain_gzip_fasta_is_refused() {
         let dir = tempdir().unwrap();
@@ -1614,6 +2602,9 @@ mod tests {
             )
         );
         std::fs::write(&gz, gzip_with_extra(&fasta, &BC_AND_DUMMY_SUBFIELDS)).unwrap();
+        let error = IndexedFasta::from_path(&gz).unwrap_err();
+        assert!(matches!(error, FastaError::NotBgzf(_)), "{error:?}");
+        std::fs::write(&gz, gzip_with_extra(&fasta, b"RAZF\x01\x80")).unwrap();
         let error = IndexedFasta::from_path(&gz).unwrap_err();
         assert!(matches!(error, FastaError::NotBgzf(_)), "{error:?}");
 
@@ -2002,6 +2993,90 @@ mod tests {
         let fasta = IndexedFasta::from_path(dir.path().join("ref.fa")).unwrap();
         assert_eq!(fasta.record_names().collect::<Vec<_>>(), ["2", "10", "1"]);
         assert_eq!(fasta.record_name("chr10"), Some("10"));
+    }
+
+    /// Every `.fa` and `.fa.gz` of a directory is either listed as indexed or
+    /// listed as passed over with the refusal the reader gives it by name: a
+    /// plain file without its `.fai`, a BGZF file without its `.gzi`, BGZF
+    /// bytes under a `.fa` name without a `.gzi`, and a gzip file that is not
+    /// BGZF, which no index serves. A `.fasta` is in neither list.
+    #[test]
+    fn unindexed_files_are_listed_with_what_each_lacks() {
+        let dir = tempdir().unwrap();
+        let (fasta, fai) = fasta_and_fai(&[("2", b"GGGGGG")]);
+        let (compressed, gzi) = bgzf_and_gzi(&fasta, 1_000);
+        let at = |name: &str| dir.path().join(name);
+        std::fs::write(at("a.fa"), &fasta).unwrap();
+        std::fs::write(at("b.fa"), &fasta).unwrap();
+        std::fs::write(at("b.fa.fai"), &fai).unwrap();
+        std::fs::write(at("c.fa.gz"), &compressed).unwrap();
+        std::fs::write(at("c.fa.gz.fai"), &fai).unwrap();
+        bgzf::gzi::fs::write(at("c.fa.gz.gzi"), &gzi).unwrap();
+        std::fs::write(at("d.fasta"), &fasta).unwrap();
+        std::fs::write(at("e.fa.gz"), &compressed).unwrap();
+        std::fs::write(at("e.fa.gz.fai"), &fai).unwrap();
+        std::fs::write(at("f.fa.gz"), &compressed).unwrap();
+        // A gzip header that is not a BGZF block's: no extra field.
+        std::fs::write(at("g.fa.gz"), [0x1f, 0x8b, 8, 0, 0, 0, 0, 0, 0, 0xff]).unwrap();
+        std::fs::write(at("g.fa.gz.fai"), &fai).unwrap();
+        std::fs::write(at("y.fa"), &compressed).unwrap();
+        std::fs::write(at("y.fa.fai"), &fai).unwrap();
+
+        assert_eq!(indexed_fasta_files(dir.path()), [at("b.fa"), at("c.fa.gz")]);
+        let passed_over: Vec<(PathBuf, String)> = unindexed_fasta_files(dir.path())
+            .into_iter()
+            .map(|(path, refusal)| (path, refusal.to_string()))
+            .collect();
+        let shown = |name: &str| at(name).display().to_string();
+        assert_eq!(
+            passed_over,
+            [
+                (
+                    at("a.fa"),
+                    format!(
+                        "FASTA index {} not found: index the FASTA with samtools faidx",
+                        shown("a.fa.fai")
+                    )
+                ),
+                (
+                    at("e.fa.gz"),
+                    format!(
+                        "BGZF index {} not found: index the compressed FASTA with samtools faidx, which writes the .fai and the .gzi",
+                        shown("e.fa.gz.gzi")
+                    )
+                ),
+                (
+                    at("f.fa.gz"),
+                    format!(
+                        "FASTA index {} not found: index the FASTA with samtools faidx",
+                        shown("f.fa.gz.fai")
+                    )
+                ),
+                (
+                    at("g.fa.gz"),
+                    format!(
+                        "{} is gzip but not BGZF: recompress with bgzip and index with samtools faidx",
+                        shown("g.fa.gz")
+                    )
+                ),
+                (
+                    at("y.fa"),
+                    format!(
+                        "BGZF index {} not found: index the compressed FASTA with samtools faidx, which writes the .fai and the .gzi",
+                        shown("y.fa.gzi")
+                    )
+                ),
+            ]
+        );
+        for (path, refusal) in &passed_over {
+            assert_eq!(
+                &IndexedFasta::from_path(path).unwrap_err().to_string(),
+                refusal,
+                "{}",
+                path.display()
+            );
+        }
+        assert!(unindexed_fasta_files(&at("missing")).is_empty());
     }
 
     /// A directory given as the FASTA opens every indexed `.fa` and `.fa.gz` in
@@ -2455,7 +3530,9 @@ mod tests {
 
     /// The encoding is read from the bytes, not the name, and a gzip member is
     /// BGZF on htslib's `check_header` test alone: an extra field of exactly the
-    /// `BC` subfield, whatever BSIZE it carries, and nothing beside it.
+    /// `BC` subfield, whatever BSIZE it carries, and nothing beside it. It is
+    /// RAZF on the test of `razf_open_r` (razf.c:400): an extra field of seven
+    /// bytes or more that starts with the `RAZF` tag.
     #[test]
     fn encoding_is_read_from_the_header() {
         let dir = tempdir().unwrap();
@@ -2495,6 +3572,15 @@ mod tests {
         swapped.extend_from_slice(&BC_AND_DUMMY_SUBFIELDS[..6]);
         std::fs::write(&dummy_first, gzip_with_extra(&fasta, &swapped)).unwrap();
         assert_eq!(encoding_of(&dummy_first).unwrap(), Encoding::Gzip);
+        let razf_path = dir.path().join("razf.fa");
+        std::fs::write(&razf_path, razf(&fasta)).unwrap();
+        assert_eq!(encoding_of(&razf_path).unwrap(), Encoding::Razf);
+        let tag_and_size = dir.path().join("tag_and_size.fa.gz");
+        std::fs::write(&tag_and_size, gzip_with_extra(&fasta, b"RAZF\x01\x80\x00")).unwrap();
+        assert_eq!(encoding_of(&tag_and_size).unwrap(), Encoding::Razf);
+        let short_extra = dir.path().join("short_extra.fa.gz");
+        std::fs::write(&short_extra, gzip_with_extra(&fasta, b"RAZF\x01\x80")).unwrap();
+        assert_eq!(encoding_of(&short_extra).unwrap(), Encoding::Gzip);
     }
 
     /// A `.fai` that lists one sequence twice is refused as an invalid index
@@ -2571,6 +3657,446 @@ mod tests {
         assert_eq!(idx.record_name("NC_000021.9"), Some("NC_000021.9"));
         assert_eq!(idx.record_name("chrX"), Some("X"));
         assert_eq!(idx.record_name("CM000683.2"), None);
+    }
+
+    /// On GRCh37 `MT` and `chrMT` name the assembly's mitochondrial sequence,
+    /// of 16,569 bases, and `chrM` and `M` another one. A record under one
+    /// pair is reached under the other through the handle's own spellings
+    /// only when it has the assembly's length. Any other assembly, and a
+    /// handle armed with none, reaches every spelling.
+    #[test]
+    fn on_grch37_a_mitochondrial_record_of_another_length_is_reached_within_its_pair_alone() {
+        let dir = tempdir().unwrap();
+        let opened = |name: &str, length: usize, assembly: Option<&str>| {
+            let sequence = bases(41, length);
+            let (fasta, fai) = fasta_and_fai(&[(name, &sequence)]);
+            let fa = dir.path().join(format!("{name}_{length}_synthetic.fa"));
+            std::fs::write(&fa, fasta).unwrap();
+            std::fs::write(
+                dir.path().join(format!("{name}_{length}_synthetic.fa.fai")),
+                fai,
+            )
+            .unwrap();
+            let mut idx = IndexedFasta::from_path(&fa).unwrap();
+            if let Some(assembly) = assembly {
+                idx.set_assembly(assembly);
+            }
+            idx
+        };
+        let reached = |idx: &IndexedFasta| -> Vec<&'static str> {
+            ["MT", "chrMT", "M", "chrM"]
+                .into_iter()
+                .filter(|name| idx.record_name(name).is_some())
+                .collect()
+        };
+        let assembly_length = GRCH37_MITOCHONDRIAL_LENGTH as usize;
+        let every = ["MT", "chrMT", "M", "chrM"];
+
+        // A record of another length under the other naming.
+        for name in ["chrM", "M"] {
+            let idx = opened(name, assembly_length + 2, Some("GRCh37"));
+            assert_eq!(reached(&idx), ["M", "chrM"], "{name}");
+            assert_eq!(idx.sequence_length("MT"), None);
+            assert_eq!(
+                idx.sequence_length("chrM"),
+                Some(GRCH37_MITOCHONDRIAL_LENGTH + 2)
+            );
+            for assembly in [Some("GRCh38"), None] {
+                assert_eq!(
+                    reached(&opened(name, assembly_length + 2, assembly)),
+                    every,
+                    "{name} under {assembly:?}"
+                );
+            }
+        }
+        // A record of the assembly's length is one sequence under any name.
+        for name in ["chrM", "M", "MT", "chrMT"] {
+            assert_eq!(
+                reached(&opened(name, assembly_length, Some("GRCh37"))),
+                every,
+                "{name}"
+            );
+        }
+        // A record named as the assembly names its sequence is not reached
+        // from the other pair when its length is another one.
+        assert_eq!(
+            reached(&opened("MT", assembly_length - 1, Some("GRCh37"))),
+            ["MT", "chrMT"]
+        );
+    }
+
+    /// On GRCh37 a synonym of the run's table reaches a mitochondrial record
+    /// of another length than the assembly's only from that record's own pair
+    /// of names. The lines of a GRCh37 cache's table that link `MT` and its
+    /// accession to `chrM` hand no query for the assembly's sequence a record
+    /// named `chrM` that is another sequence, whichever of the table and the
+    /// assembly the handle is given first. A record of the assembly's length
+    /// is reached through the table, as is any record on another assembly or
+    /// on a handle armed with none (`FastaSequence.pm:380-389`).
+    #[test]
+    fn on_grch37_no_synonym_reaches_a_mitochondrial_record_of_another_length() {
+        let dir = tempdir().unwrap();
+        let table = ChromosomeSynonyms::parse("NC_012920.1\tchrM\nMT\tNC_012920.1\nMT\tchrM\n");
+        let opened = |name: &str, length: usize| {
+            let sequence = bases(43, length);
+            let (fasta, fai) = fasta_and_fai(&[(name, &sequence)]);
+            let fa = dir.path().join(format!("{name}_{length}_synthetic.fa"));
+            std::fs::write(&fa, fasta).unwrap();
+            std::fs::write(
+                dir.path().join(format!("{name}_{length}_synthetic.fa.fai")),
+                fai,
+            )
+            .unwrap();
+            IndexedFasta::from_path(&fa).unwrap()
+        };
+        let reached = |idx: &IndexedFasta| -> Vec<&'static str> {
+            ["MT", "chrMT", "NC_012920.1", "M", "chrM"]
+                .into_iter()
+                .filter(|name| idx.record_name(name).is_some())
+                .collect()
+        };
+        let assembly_length = GRCH37_MITOCHONDRIAL_LENGTH as usize;
+        let every = ["MT", "chrMT", "NC_012920.1", "M", "chrM"];
+
+        // A record of another length under the other naming, the table given
+        // before the assembly, as a run arms its reader, and after it.
+        for table_first in [true, false] {
+            let mut idx = opened("chrM", assembly_length + 2);
+            if table_first {
+                idx.add_synonyms(&table);
+                idx.set_assembly("GRCh37");
+            } else {
+                idx.set_assembly("GRCh37");
+                idx.add_synonyms(&table);
+            }
+            assert_eq!(reached(&idx), ["M", "chrM"], "table first: {table_first}");
+            assert_eq!(idx.sequence_length("MT"), None);
+            assert_eq!(idx.base("MT", 1), None);
+            assert_eq!(idx.sequence("NC_012920.1", 1, 3), None);
+            assert_eq!(
+                idx.sequence_length("chrM"),
+                Some(GRCH37_MITOCHONDRIAL_LENGTH + 2)
+            );
+        }
+        // The same handle kept apart with no redirect armed.
+        let mut idx = opened("chrM", assembly_length + 2);
+        idx.add_synonyms(&table);
+        idx.keep_grch37_mitochondrial_pairs_apart();
+        assert_eq!(reached(&idx), ["M", "chrM"]);
+
+        // A record of the assembly's length is reached through the table.
+        let mut idx = opened("chrM", assembly_length);
+        idx.add_synonyms(&table);
+        idx.set_assembly("GRCh37");
+        assert_eq!(reached(&idx), every);
+        assert_eq!(idx.record_name("NC_012920.1"), Some("chrM"));
+
+        // Another assembly, and a handle armed with none, reach every name.
+        for assembly in [Some("GRCh38"), None] {
+            let mut idx = opened("chrM", assembly_length + 2);
+            idx.add_synonyms(&table);
+            if let Some(assembly) = assembly {
+                idx.set_assembly(assembly);
+            }
+            assert_eq!(reached(&idx), every, "{assembly:?}");
+        }
+
+        // A record named as the assembly names its sequence, of another
+        // length, is reached from neither the other pair nor the accession.
+        let mut idx = opened("MT", assembly_length - 1);
+        idx.add_synonyms(&table);
+        idx.set_assembly("GRCh37");
+        assert_eq!(reached(&idx), ["MT", "chrMT"]);
+    }
+
+    /// How a test arms a handle: the calls a run makes, in either order, the
+    /// assembly with no table, the mitochondrial rule with no redirect,
+    /// another assembly, or the table alone.
+    #[derive(Debug, Clone, Copy, PartialEq)]
+    enum Armed {
+        TableThenGrch37,
+        Grch37ThenTable,
+        Grch37WithNoTable,
+        KeptApartWithNoRedirect,
+        TableThenGrch38,
+        TableAlone,
+    }
+
+    impl Armed {
+        const EVERY: [Armed; 6] = [
+            Armed::TableThenGrch37,
+            Armed::Grch37ThenTable,
+            Armed::Grch37WithNoTable,
+            Armed::KeptApartWithNoRedirect,
+            Armed::TableThenGrch38,
+            Armed::TableAlone,
+        ];
+
+        /// Whether the handle keeps the mitochondrial names of GRCh37 apart.
+        fn keeps_the_pairs_apart(self) -> bool {
+            !matches!(self, Armed::TableThenGrch38 | Armed::TableAlone)
+        }
+
+        /// Whether the handle was given the synonym table.
+        fn has_the_table(self) -> bool {
+            !matches!(self, Armed::Grch37WithNoTable)
+        }
+
+        fn arm(self, idx: &mut IndexedFasta, table: &ChromosomeSynonyms) {
+            match self {
+                Armed::TableThenGrch37 => {
+                    idx.add_synonyms(table);
+                    idx.set_assembly("GRCh37");
+                }
+                Armed::Grch37ThenTable => {
+                    idx.set_assembly("GRCh37");
+                    idx.add_synonyms(table);
+                }
+                Armed::Grch37WithNoTable => idx.set_assembly("GRCh37"),
+                Armed::KeptApartWithNoRedirect => {
+                    idx.add_synonyms(table);
+                    idx.keep_grch37_mitochondrial_pairs_apart();
+                }
+                Armed::TableThenGrch38 => {
+                    idx.add_synonyms(table);
+                    idx.set_assembly("GRCh38");
+                }
+                Armed::TableAlone => idx.add_synonyms(table),
+            }
+        }
+    }
+
+    /// A FASTA that holds two mitochondrial records, `chrM` and `chrMT`,
+    /// gives each name no record bears to the same record whichever of the
+    /// two the file lists first, and whichever of the synonym table and the
+    /// assembly the handle is given first. A name goes to the record of its
+    /// own pair before one of the other pair, so `MT` reads `chrMT` and `M`
+    /// reads `chrM`. On GRCh37 a name of the assembly's pair goes first to a
+    /// record of the assembly's length, so `MT` reads the record named `chrM`
+    /// where that one alone has 16,569 bases. A record's own name in another
+    /// letter case reaches that record, never one listed after it.
+    #[test]
+    fn two_mitochondrial_records_are_reached_alike_whichever_the_fasta_lists_first() {
+        let dir = tempdir().unwrap();
+        let table = ChromosomeSynonyms::parse("NC_012920.1\tchrM\nMT\tNC_012920.1\nMT\tchrM\n");
+        let assembly_length = GRCH37_MITOCHONDRIAL_LENGTH as usize;
+        let opened = |chrm: usize, chrmt: usize, chrm_first: bool| {
+            let (chrm_bases, chrmt_bases) = (bases(47, chrm), bases(53, chrmt));
+            let contigs: [(&str, &[u8]); 2] = if chrm_first {
+                [("chrM", &chrm_bases), ("chrMT", &chrmt_bases)]
+            } else {
+                [("chrMT", &chrmt_bases), ("chrM", &chrm_bases)]
+            };
+            let (fasta, fai) = fasta_and_fai(&contigs);
+            let stem = format!("chrM_{chrm}_chrMT_{chrmt}_{chrm_first}_synthetic.fa");
+            std::fs::write(dir.path().join(&stem), fasta).unwrap();
+            std::fs::write(dir.path().join(format!("{stem}.fai")), fai).unwrap();
+            IndexedFasta::from_path(dir.path().join(&stem)).unwrap()
+        };
+        // The lengths of `chrM` and of `chrMT`, then the record `MT` reaches on
+        // a handle that keeps the pairs apart and the one the accession
+        // reaches there through the table, which links it to `chrM`.
+        let pairings = [
+            (assembly_length, assembly_length, "chrMT", Some("chrM")),
+            (assembly_length + 2, assembly_length, "chrMT", None),
+            (assembly_length, assembly_length + 2, "chrM", Some("chrM")),
+            (assembly_length + 2, assembly_length + 1, "chrMT", None),
+        ];
+        for (chrm, chrmt, mt_kept_apart, accession_kept_apart) in pairings {
+            for chrm_first in [true, false] {
+                for armed in Armed::EVERY {
+                    let mut idx = opened(chrm, chrmt, chrm_first);
+                    armed.arm(&mut idx, &table);
+                    let case =
+                        format!("chrM {chrm}, chrMT {chrmt}, chrM first {chrm_first}, {armed:?}");
+                    let (mt, accession) = if armed.keeps_the_pairs_apart() {
+                        (mt_kept_apart, accession_kept_apart)
+                    } else {
+                        ("chrMT", Some("chrM"))
+                    };
+                    assert_eq!(idx.record_name("MT"), Some(mt), "{case}");
+                    assert_eq!(idx.record_name("mt"), Some(mt), "{case}");
+                    assert_eq!(idx.record_name("M"), Some("chrM"), "{case}");
+                    assert_eq!(
+                        idx.record_name("NC_012920.1"),
+                        accession.filter(|_| armed.has_the_table()),
+                        "{case}"
+                    );
+                    for (own, other_case) in [("chrM", "CHRM"), ("chrMT", "chrmt")] {
+                        assert_eq!(idx.record_name(own), Some(own), "{case}");
+                        assert_eq!(idx.record_name(other_case), Some(own), "{case}");
+                    }
+                    let length = if mt == "chrM" { chrm } else { chrmt };
+                    assert_eq!(idx.sequence_length("MT"), Some(length as u64), "{case}");
+                }
+            }
+        }
+    }
+
+    /// The UCSC hg19 file set that adds the assembly's mitochondrial sequence
+    /// lists 298 sequences, `chrM` of 16,571 bases the 91st and `chrMT` of
+    /// 16,569 bases the last. Over a made-up file of that layout, armed as a
+    /// run arms its reader, `MT` and the `chr` spelling of it read `chrMT`,
+    /// and they read it over the same records listed the other way round.
+    #[test]
+    fn mt_reads_chrmt_over_the_layout_that_lists_chrm_before_it() {
+        let dir = tempdir().unwrap();
+        let table = ChromosomeSynonyms::parse("NC_012920.1\tchrM\nMT\tNC_012920.1\nMT\tchrM\n");
+        let assembly_length = GRCH37_MITOCHONDRIAL_LENGTH as usize;
+        let (chrm_bases, chrmt_bases) =
+            (bases(59, assembly_length + 2), bases(61, assembly_length));
+        let short = bases(67, 8);
+        let names: Vec<String> = (1..=296).map(|n| format!("synthetic_{n}")).collect();
+        let mut contigs: Vec<(&str, &[u8])> = names
+            .iter()
+            .map(|name| (name.as_str(), &short[..]))
+            .collect();
+        contigs.insert(90, ("chrM", &chrm_bases));
+        contigs.push(("chrMT", &chrmt_bases));
+        assert_eq!(contigs.len(), 298);
+        assert_eq!(contigs[90].0, "chrM");
+        for reversed in [false, true] {
+            if reversed {
+                contigs.reverse();
+            }
+            let (fasta, fai) = fasta_and_fai(&contigs);
+            let stem = format!("two_mitochondrial_records_{reversed}_synthetic.fa");
+            std::fs::write(dir.path().join(&stem), fasta).unwrap();
+            std::fs::write(dir.path().join(format!("{stem}.fai")), fai).unwrap();
+            let mut idx = IndexedFasta::from_path(dir.path().join(&stem)).unwrap();
+            idx.add_synonyms(&table);
+            idx.set_assembly("GRCh37");
+            for name in ["MT", "chrMT"] {
+                assert_eq!(
+                    idx.record_name(name),
+                    Some("chrMT"),
+                    "{name}, reversed {reversed}"
+                );
+                assert_eq!(
+                    idx.sequence_length(name),
+                    Some(GRCH37_MITOCHONDRIAL_LENGTH),
+                    "{name}, reversed {reversed}"
+                );
+            }
+            assert_eq!(
+                idx.sequence("MT", 3301, 3320),
+                Some(chrmt_bases[3300..3320].to_ascii_uppercase()),
+                "reversed {reversed}"
+            );
+            assert_eq!(idx.record_name("chrM"), Some("chrM"));
+            assert_eq!(idx.record_name("M"), Some("chrM"));
+            assert_eq!(idx.record_name("NC_012920.1"), None);
+        }
+    }
+
+    /// A table that gives one synonym to two records hands it to the first of
+    /// them by name, `chrM` before `chrMT`. A handle that keeps the
+    /// mitochondrial names of GRCh37 apart passes over a `chrM` of another
+    /// length and reads `chrMT` under the synonym, whichever the file lists
+    /// first and whichever of the table and the assembly the handle is given
+    /// first. A table added a second time leaves each reading as it is.
+    #[test]
+    fn a_synonym_of_two_records_reads_the_first_by_name_it_names() {
+        let dir = tempdir().unwrap();
+        let table = ChromosomeSynonyms::parse("NC_012920.1\tchrM\nNC_012920.1\tchrMT\n");
+        let assembly_length = GRCH37_MITOCHONDRIAL_LENGTH as usize;
+        // The lengths of `chrM` and of `chrMT`, then the record the accession
+        // reaches on a handle that keeps the pairs apart.
+        let pairings = [
+            (assembly_length, assembly_length, Some("chrM")),
+            (assembly_length + 2, assembly_length, Some("chrMT")),
+            (assembly_length, assembly_length + 2, Some("chrM")),
+            (assembly_length + 2, assembly_length + 1, None),
+        ];
+        for (chrm, chrmt, kept_apart) in pairings {
+            let (chrm_bases, chrmt_bases) = (bases(71, chrm), bases(73, chrmt));
+            for chrm_first in [true, false] {
+                let mut contigs: [(&str, &[u8]); 2] =
+                    [("chrM", &chrm_bases), ("chrMT", &chrmt_bases)];
+                if !chrm_first {
+                    contigs.reverse();
+                }
+                let (fasta, fai) = fasta_and_fai(&contigs);
+                let stem = format!("one_synonym_{chrm}_{chrmt}_{chrm_first}_synthetic.fa");
+                std::fs::write(dir.path().join(&stem), fasta).unwrap();
+                std::fs::write(dir.path().join(format!("{stem}.fai")), fai).unwrap();
+                for armed in Armed::EVERY {
+                    let mut idx = IndexedFasta::from_path(dir.path().join(&stem)).unwrap();
+                    armed.arm(&mut idx, &table);
+                    let case =
+                        format!("chrM {chrm}, chrMT {chrmt}, chrM first {chrm_first}, {armed:?}");
+                    let with_the_table = if armed.keeps_the_pairs_apart() {
+                        kept_apart
+                    } else {
+                        Some("chrM")
+                    };
+                    assert_eq!(
+                        idx.record_name("NC_012920.1"),
+                        with_the_table.filter(|_| armed.has_the_table()),
+                        "{case}"
+                    );
+                    idx.add_synonyms(&table);
+                    assert_eq!(
+                        idx.record_name("NC_012920.1"),
+                        with_the_table,
+                        "the table added once more: {case}"
+                    );
+                }
+            }
+        }
+    }
+
+    /// Two records of one pair of names claim a name of the other pair alike,
+    /// and the first of them by name is read, `M` before `chrM` for `MT` and
+    /// `MT` before `chrMT` for `M`, whichever of a directory's two files holds
+    /// which. On GRCh37 a record of another length has no claim on the other
+    /// pair, whose names read the record of the assembly's length, or none.
+    #[test]
+    fn two_records_of_one_pair_give_the_other_pair_the_first_by_name() {
+        let dir = tempdir().unwrap();
+        let assembly_length = GRCH37_MITOCHONDRIAL_LENGTH as usize;
+        // The lengths of the first record by name and of the second, then
+        // which of the two the other pair reads on GRCh37.
+        let pairings = [
+            (assembly_length, assembly_length, Some(0)),
+            (assembly_length + 2, assembly_length, Some(1)),
+            (assembly_length, assembly_length + 2, Some(0)),
+            (assembly_length + 2, assembly_length + 1, None),
+        ];
+        let pairs = [
+            (["M", "chrM"], ["MT", "chrMT"]),
+            (["MT", "chrMT"], ["M", "chrM"]),
+        ];
+        for (records, other_pair) in pairs {
+            for (first, second, on_grch37) in pairings {
+                let sequences = [bases(79, first), bases(83, second)];
+                for first_file in [0, 1] {
+                    let stem = format!("{}_{first}_{second}_{first_file}", records[0]);
+                    let files = dir.path().join(stem);
+                    std::fs::create_dir(&files).unwrap();
+                    for (file, record) in [(first_file, 0), (1 - first_file, 1)] {
+                        let (fasta, fai) = fasta_and_fai(&[(records[record], &sequences[record])]);
+                        let name = format!("file_{file}_synthetic.fa");
+                        std::fs::write(files.join(&name), fasta).unwrap();
+                        std::fs::write(files.join(format!("{name}.fai")), fai).unwrap();
+                    }
+                    let mut idx = IndexedFasta::from_path(&files).unwrap();
+                    let case =
+                        format!("{records:?} of {first} and {second}, first in file {first_file}");
+                    for name in other_pair {
+                        assert_eq!(idx.record_name(name), Some(records[0]), "{name}: {case}");
+                    }
+                    idx.set_assembly("GRCh37");
+                    for name in other_pair {
+                        assert_eq!(
+                            idx.record_name(name),
+                            on_grch37.map(|record| records[record]),
+                            "{name} on GRCh37: {case}"
+                        );
+                    }
+                }
+            }
+        }
     }
 
     /// The tables are Ensembl VEP's `%PARS` (`FastaSequence.pm:78-103`), keyed
@@ -2737,5 +4263,76 @@ mod tests {
         straddling.extend(upper(&x[60_000..60_005]));
         assert_eq!(idx.sequence("Y", 9_996, 10_005), Some(straddling));
         assert_eq!(idx.sequence("Y", 10_001, 10_021), None);
+    }
+
+    /// On GRCh37 a record of another length than the assembly's is named, with
+    /// its length, for each name of its own pair, `chrM` and `M`, in any
+    /// letter case, and for no other name: the table's link from `MT` and from
+    /// the accession does not reach it. A record of the assembly's length is
+    /// the assembly's sequence under any name, a record named `MT` of another
+    /// length is reached from neither name of the other pair, and a handle of
+    /// another assembly, or armed with none, names no such record.
+    #[test]
+    fn on_grch37_a_chrm_of_another_length_is_named_as_another_sequence() {
+        let dir = tempdir().unwrap();
+        let table = ChromosomeSynonyms::parse("NC_012920.1\tchrM\nMT\tNC_012920.1\nMT\tchrM\n");
+        let opened = |name: &str, length: usize, assembly: Option<&str>| {
+            let sequence = bases(47, length);
+            let (fasta, fai) = fasta_and_fai(&[(name, &sequence)]);
+            let fa = dir.path().join(format!("{name}_{length}_synthetic.fa"));
+            std::fs::write(&fa, fasta).unwrap();
+            std::fs::write(
+                dir.path().join(format!("{name}_{length}_synthetic.fa.fai")),
+                fai,
+            )
+            .unwrap();
+            let mut idx = IndexedFasta::from_path(&fa).unwrap();
+            idx.add_synonyms(&table);
+            if let Some(assembly) = assembly {
+                idx.set_assembly(assembly);
+            }
+            idx
+        };
+        let assembly_length = GRCH37_MITOCHONDRIAL_LENGTH as usize;
+        let longer = GRCH37_MITOCHONDRIAL_LENGTH + 2;
+
+        for record in ["chrM", "M"] {
+            let idx = opened(record, assembly_length + 2, Some("GRCh37"));
+            for name in ["chrM", "M", "CHRM", "m"] {
+                assert_eq!(
+                    idx.mitochondrial_record_of_another_sequence(name),
+                    Some((record, longer)),
+                    "{name} over a record named {record}"
+                );
+            }
+            for name in ["MT", "chrMT", "NC_012920.1", "21"] {
+                assert_eq!(
+                    idx.mitochondrial_record_of_another_sequence(name),
+                    None,
+                    "{name} over a record named {record}"
+                );
+            }
+            for assembly in [Some("GRCh38"), None] {
+                let idx = opened(record, assembly_length + 2, assembly);
+                assert_eq!(
+                    idx.mitochondrial_record_of_another_sequence("chrM"),
+                    None,
+                    "{record} under {assembly:?}"
+                );
+            }
+        }
+        for record in ["chrM", "M", "MT"] {
+            let idx = opened(record, assembly_length, Some("GRCh37"));
+            for name in ["chrM", "M"] {
+                assert_eq!(
+                    idx.mitochondrial_record_of_another_sequence(name),
+                    None,
+                    "{name} over a record named {record} of the assembly's length"
+                );
+            }
+        }
+        let idx = opened("MT", assembly_length - 1, Some("GRCh37"));
+        assert_eq!(idx.mitochondrial_record_of_another_sequence("chrM"), None);
+        assert_eq!(idx.mitochondrial_record_of_another_sequence("M"), None);
     }
 }

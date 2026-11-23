@@ -97,7 +97,7 @@ jobs:
       - name: Build the pull request's pages
         if: github.event_name == 'pull_request'
         run: |
-          mdbook build
+          python3 scripts/docs/site_build.py
           python3 scripts/docs/check_site_links.py --site target/book --tree HEAD
           python3 scripts/docs/site_metrics.py --gate
       - name: Build the release's site

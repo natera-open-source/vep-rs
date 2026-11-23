@@ -1,0 +1,30 @@
+[VEP run statistics]
+VEP version (API)	 116.3 (116)
+
+[Counts]
+plain	7
+plus	+7
+padded	  7　 
+zeros	007
+underscore	7_000
+arabic	٧
+fullwidth	７
+negative	-2
+big	340282366920938463463374607431768211457
+float	7.00
+text	seven
+empty	
+none
+close	101
+far	104
+mixed	seven
+separator	7
+only_actual_small	1
+only_actual_big	9
+only_actual_zero	0
+only_actual_text	1e3
+only_actual_none
+
+[Masked chart]
+Run time	9
+kept	3

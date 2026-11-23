@@ -1,19 +1,18 @@
 entry = "refseq_edited_model_inserted_span_hgvsp"
 page = "docs/divergences/refseq-edited-model-inserted-span-hgvsp.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "seen in the genome-wide ClinVar GRCh37 file annotated on the RefSeq GRCh37 cache under --hgvs: variation 768677, one insertion that the 3' shift moves onto the 9 bases five models hold and the genome lacks, 5 rows differing in HGVSp, the file's other insertions not counted"
-notes = "ClinVar variation 768677 on GRCh37 inserts 18 bases between 14:94582130 and 14:94582131. Five RefSeq models of gene 3429 (NM_001130080.3, NM_001288952.2, NM_001288956.2, NM_001366993.1 and NM_001366994.1) hold 9 bases the genome lacks after 14:94582133, their coding bases 129 to 137, and under --hgvs the 3' shift moves the insertion three bases on, onto them: both engines print HGVS_OFFSET=3, CDS_position 125-126 and Protein_position 42. Ensembl VEP reads the reference peptide of the protein notation from the coding sequence with those 9 bases cut out (TranscriptVariationAllele.pm:873, at the shifted span), so its `delins` at 44 to 46 names there the model's residues 47 and 49 and ends in six residues; vep-rs reads the model's own residues and writes the `dup` of 44 to 46. The six residues after `delins` are masked in the compared value. The HGVSc of the same rows differs through the mechanism of refseq_edited_model_seam_insertion_hgvsc and is not compared. No committed cache holds a model with such bases inside its coding sequence, so the first step copies info.txt and one region file from the RefSeq GRCh37 cache under the --perl-cache-dir roots and the second converts them with scripts/data/storable_to_json.pl in the image the run names; both engines read that cut. The third step writes the record from the cached model NM_001130080.3: after the base at 14:94582130 it inserts the model's 9 added bases turned back by three, twice, which is the record as the ClinVar GRCh37 file spells it. --hgvs needs a FASTA offline and the tree commits none of chromosome 14, so the run is given the directory of the GRCh37 primary assembly as --extra-dir grch37_fasta=<directory>."
+input_class_basis = "2 · 16 of 116,165 cache transcripts · 7 flag sets, 4 corpora"
+notes = "ClinVar variation 768677 on GRCh37 inserts 18 bases between 14:94582130 and 14:94582131. Five RefSeq models of gene 3429 (NM_001130080.3, NM_001288952.2, NM_001288956.2, NM_001366993.1 and NM_001366994.1) hold 9 bases the genome lacks after 14:94582133, their coding bases 129 to 137, and under --hgvs the 3' shift moves the insertion three bases on, onto them: both engines print HGVS_OFFSET=3, CDS_position 125-126 and Protein_position 42. Ensembl VEP reads the reference peptide of the protein notation from the coding sequence with those 9 bases cut out (TranscriptVariationAllele.pm:873, at the shifted span), so its `delins` at 44 to 46 names there the model's residues 47 and 49 and ends in six residues; vep-rs reads the model's own residues and writes the `dup` of 44 to 46. The six residues after `delins` are masked in the compared value. The HGVSc of the same rows differs through the mechanism of refseq_edited_model_seam_insertion_hgvsc and is not compared. No committed cache holds a model with such bases inside its coding sequence, so the first step copies info.txt and one region file from the RefSeq GRCh37 cache under the --perl-cache-dir roots and the second converts them with tools/vep-storable-to-json; both engines read that cut. The third step writes the record from the cached model NM_001130080.3: after the base at 14:94582130 it inserts the model's 9 added bases turned back by three, twice, which is the record as the ClinVar GRCh37 file spells it. --hgvs needs a FASTA offline and the tree commits none of chromosome 14, so the run is given the directory of the GRCh37 primary assembly as --extra-dir grch37_fasta=<directory>."
 
 prepare = [
-  '''[ -n "$IMAGE" ] || { echo "the cut of the RefSeq cache is converted in the Ensembl VEP image: pass --image" >&2; exit 1; }
-[ -n "$PERL_CACHE" ] || { echo "no homo_sapiens_refseq/116_GRCh37 with chromosome 14 under the --perl-cache-dir roots" >&2; exit 1; }
+  '''[ -n "$PERL_CACHE" ] || { echo "no homo_sapiens_refseq/116_GRCh37 with chromosome 14 under the --perl-cache-dir roots" >&2; exit 1; }
 cut="$STAGE/perl-cache/homo_sapiens_refseq/116_GRCh37"
 mkdir -p "$cut/14"
 cp "$PERL_CACHE/info.txt" "$cut/info.txt"
 cp "$PERL_CACHE/14/94000001-95000000.gz" "$cut/14/"''',
-  '''docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$REPO/scripts/data:/scripts:ro" -v "$STAGE:/stage" "$IMAGE" perl /scripts/storable_to_json.pl /stage/perl-cache/homo_sapiens_refseq/116_GRCh37 /stage/json-cache/homo_sapiens_refseq/116_GRCh37 > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
+  '''cargo run --release --locked --quiet --manifest-path "$REPO/tools/vep-storable-to-json/Cargo.toml" -- "$STAGE/perl-cache/homo_sapiens_refseq/116_GRCh37" "$STAGE/json-cache/homo_sapiens_refseq/116_GRCh37" > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
   '''python3 - "$STAGE/json-cache/homo_sapiens_refseq/116_GRCh37/transcripts/14/94000001-95000000.json" "$STAGE/record.vcf" <<'PY'
 import json
 import sys
@@ -76,3 +75,10 @@ vep_rs = [
   "NM_001366993.1 | inframe_insertion | 125-126 | 42 | 3 | NP_001353922.1:p.Met44_Ala46dup",
   "NM_001366994.1 | inframe_insertion | 125-126 | 42 | 3 | NP_001353923.1:p.Met44_Ala46dup",
 ]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/coding.rs::PerlCodingEval::codon",
+    "crates/vep-effects/src/coding.rs::overlay_seq_edits",
+]
+tests = ["crates/vep-cli/tests/edited_model_inserted_span_protein_notation.rs::an_insertion_shifted_onto_bases_an_edited_model_adds_names_the_models_own_residues"]

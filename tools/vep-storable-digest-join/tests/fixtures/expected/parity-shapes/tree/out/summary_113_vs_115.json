@@ -1,0 +1,21 @@
+{
+  "version_a": "113",
+  "version_b": "115",
+  "storable_113_transcripts": 5,
+  "storable_115_transcripts": 6,
+  "in_both": 4,
+  "only_in_113": 1,
+  "only_in_115": 2,
+  "identical_full_dump": 2,
+  "identical_content_only": 1,
+  "differing_content": 2,
+  "content_digest_normalises": [
+    "dbID",
+    "adaptor",
+    "created_date",
+    "modified_date",
+    "_gene_version",
+    "integer scalars stored as strings"
+  ],
+  "content_identical": false
+}

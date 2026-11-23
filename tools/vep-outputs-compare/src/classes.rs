@@ -38,8 +38,8 @@ impl PerClassCounts {
         if vep_only > vep_tuples {
             return Err(format!(
                 "term {term:?}: {vep_only} VEP-only tuples against {vep_tuples} VEP tuples. The \
-                 discordance report does not correspond to this Perl output -- check the run id, \
-                 the assembly and the canonical-contigs setting on both."
+                 discordance report does not correspond to this Ensembl VEP output: check the run \
+                 id, the assembly and the canonical-contigs setting on both."
             ));
         }
         Ok(PerClassCounts {
@@ -465,7 +465,7 @@ pub const PER_CLASS_POOLED_COLUMNS: [&str; 15] = [
     "adj_f1",
 ];
 
-/// The per-term cells of a row, `_per_class_row` without the extras.
+/// The cells `term` to `recall` of a per-term row, the same in both CSV schemas.
 fn per_class_cells(counts: &PerClassCounts) -> [String; 8] {
     [
         counts.term.clone(),
@@ -703,3 +703,7 @@ pub fn read_per_term_exclusions(path: &Path) -> io::Result<Exclusions> {
     }
     Ok(out)
 }
+
+#[cfg(test)]
+#[path = "classes_per_class_counts_tests.rs"]
+mod per_class_counts_tests;

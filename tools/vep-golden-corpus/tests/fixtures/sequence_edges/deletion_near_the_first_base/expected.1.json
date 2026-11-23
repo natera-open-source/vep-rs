@@ -1,0 +1,81 @@
+{
+ "records": [
+  {
+   "vcf": "edge\t499\tnear_the_edge\tAA\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "vcf": "edge\t1499\taway_from_it\tAA\tA\t.\tPASS\t.",
+   "combinations": []
+  }
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {},
+ "fields_compared": [
+  "HGVSc",
+  "HGVS_OFFSET"
+ ],
+ "field_divergences": [
+  {
+   "location": "edge:1500",
+   "allele": "-",
+   "feature": "TXA",
+   "feature_type": "Transcript",
+   "record_indices": [
+    1
+   ],
+   "consequence_set": "non_coding_transcript_exon_variant",
+   "field": "HGVSc",
+   "vep": "TXA.2:n.401del",
+   "vep_rs": "TXA.2:n.403del",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "edge:1500",
+   "allele": "-",
+   "feature": "TXA",
+   "feature_type": "Transcript",
+   "record_indices": [
+    1
+   ],
+   "consequence_set": "non_coding_transcript_exon_variant",
+   "field": "HGVS_OFFSET",
+   "vep": "-",
+   "vep_rs": "-2",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "edge:500",
+   "allele": "-",
+   "feature": "TXR",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "non_coding_transcript_exon_variant",
+   "field": "HGVSc",
+   "vep": "TXR.2:n.401del",
+   "vep_rs": "TXR.2:n.403del",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "edge:500",
+   "allele": "-",
+   "feature": "TXR",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "non_coding_transcript_exon_variant",
+   "field": "HGVS_OFFSET",
+   "vep": "-",
+   "vep_rs": "-2",
+   "expected_divergence": "unexplained_residual"
+  }
+ ],
+ "field_divergence_summary": {
+  "unexplained_residual": 4
+ }
+}

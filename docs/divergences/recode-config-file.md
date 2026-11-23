@@ -89,4 +89,4 @@ vep recode --id rs781261918 --config recode.ini --fields hgvsg,gene_symbol \
 
 ### 1.7 How the comparator treats this class
 
-The class is documented only. No committed recoder run names `--config`, so the tool comparison (`scripts/concordance/compare_vep_formats.py` over the recoder cases) meets no output shaped by a file, and a comparison case that names one records the class from its documentation.
+The class is documented only. No committed recoder run names `--config`, so the tool comparison (`tools/vep-formats-compare` over the recoder cases) meets no output shaped by a file, and a comparison case that names one records the class from its documentation.

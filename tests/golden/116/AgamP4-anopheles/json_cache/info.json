@@ -1,0 +1,36 @@
+{
+  "assembly": "AgamP4",
+  "cache_version": 63,
+  "contig_order": [
+    "X",
+    "Mt",
+    "Y_unplaced"
+  ],
+  "polyphen": "",
+  "regulatory": false,
+  "sift": "b",
+  "source_versions": {
+    "assembly": "AgamP4",
+    "genebuild": "VEuPathDB-AgamP4.14",
+    "sift": "sift5.2.2"
+  },
+  "species": "anopheles_gambiae",
+  "var_type": "tabix",
+  "variation_cols": [
+    "chr",
+    "variation_name",
+    "failed",
+    "somatic",
+    "start",
+    "end",
+    "allele_string",
+    "strand",
+    "clin_sig",
+    "phenotype_or_disease",
+    "clin_sig_allele",
+    "clin_sig_ref_allele",
+    "clinical_impact",
+    "pubmed",
+    "var_synonyms"
+  ]
+}

@@ -1,0 +1,94 @@
+{
+ "plugin_fixtures": {
+  "generator": "scripts/fixtures/cut_plugin_regions.py",
+  "flank": 5000,
+  "record_flank": 2000,
+  "exon_flank": 50,
+  "gerp_regions": "exons",
+  "tools": {
+   "bgzip": "bgzip (htslib) 1.9"
+  },
+  "files": {
+   "reference.fa.fai": "4221486e4d211b685963965fdaef6faed1c901919988e31c1e5ed517b083f178",
+   "reference.fa.gz": "0b96f3bb1dbb72f094ba2980669ff8b1ab1c28659ea11eb32fda4253e91b6b78",
+   "reference.fa.gz.fai": "4221486e4d211b685963965fdaef6faed1c901919988e31c1e5ed517b083f178",
+   "reference.fa.gz.gzi": "4d36ece0e49dca62d7e1f027582a32bc2768523734aff37ad5a79d204fc2debd"
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 63,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species acanthaster_planci_gca001949145v1 --assembly OKI_Apl_1.0 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "acanthaster_planci_gca001949145v1/63_OKI_Apl_1.0",
+ "fasta": "the three sequences the records and the pruned cache's transcripts sit on (the scaffolds DF978536.1 and DF980041.1 and the mitochondrion NC_007788.1) at their full length from Acanthaster_planci_gca001949145v1.OKI_Apl_1.0.dna.toplevel.fa.gz of Ensembl Genomes release 63 (Ensembl Metazoa), the file held to the sum of the directory's CHECKSUMS; every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
+ "input": "variants.vcf: 441 records on the scaffold DF978536.1 (256 records), the scaffold DF980041.1 (2) and the mitochondrion NC_007788.1 (183); 22 of them name their sequence by a synonym the cache's chr_synonyms.txt lists (DF978536, NW_019091402, NW_019091402.1 and oki_scaffold48 for the first scaffold, MT and NC_007788 for the mitochondrion). 373 come from tools/vep-seeded-variants (generator version 3, seed 1, --records wide --per-category 40, one --sequence for each of the three sequences, every reference allele read from the genome file), their IDs naming the category and an ordinal: 29 categories, among them a substitution in a codon genetic code table 9 reads unlike the standard code, start and stop codons under tables 1 and 9, a missense and a synonymous change on each strand, both splice sites, both untranslated regions, an intron, upstream, downstream and intergenic positions, a frameshift insertion, a frameshift deletion, an in-frame deletion, the first and the last base of each sequence and a deletion across the origin of the mitochondrion, which the cache states circular. 68 are designed records on the mitochondrion's thirteen coding transcripts, each reference base read from the genome file and held to the cached coding sequence: in every transcript a substitution that makes a codon table 9 translates unlike table 1 (code9_makes_codon, the four such codons taken in turn from transcript to transcript), one that makes such a codon and keeps the residue (code9_keeps_residue), one that makes one and alters the residue (code9_alters_residue) and one on a codon of the coding sequence that is such a codon (code9_on_codon); in the seven transcripts whose closing stop codon is one substitution from such a codon, that substitution (code9_at_stop); in the transcript whose first codon the published table 9 marks as a start and the reference image's table does not, a substitution at the codon's first base and one at its third (code9_start_mark); the same two in each of the two other transcripts whose first residue the cache sets by a sequence edit (code9_edited_start); and in the three transcripts whose coding sequence ends inside a codon, a substitution at its last base (code9_incomplete_end). Two exemplars per consequence-set combination the two references show, stratified by variant class and strand, six per combination carrying a protein-level term, plus the records the manifest's included_records name: every generator record at a sequence's first and last base, across the origin, on the organelle, on the first and the last sequence and of the table 9 categories, the first nine of every other generator category, and the 68 designed records. The cache names no known variant, so no record carries a variation identifier; no record is multi-allelic",
+ "sha256": {
+  "default.txt": "c05d5e3b063077842230e4a1d5f33d1a5f6dc45ae6e73e2857f0d1d740c840ac",
+  "tab.txt": "c5baa0bf9d2ad97d2dfc6de9637f83cd776f28e5f55e80f7c9177f20f90b6bb5",
+  "vcf.vcf": "a2921765f1aecacbba59480f272de4e4b30f7102b8e1ee07eb6478180a7a1acb",
+  "json.jsonl": "c989484b44dee13543fe29d623e08efe5d1c1c098ffe0ecc282a985e2e34166c"
+ },
+ "variants_vcf_sha256": "1a13b6cc6b579e384c356e350d3f4e7abc1f59eff99c5c8dde309e40fa8efbc5",
+ "flag_sets": {
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species acanthaster_planci_gca001949145v1 --assembly OKI_Apl_1.0 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "acanthaster_planci_gca001949145v1/63_OKI_Apl_1.0",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "ba7313d884bd1d5abde422f33327d2d6e888c87a19492d2ba919df2ccac85fda",
+    "tab.txt": "15a6e2f4669649aca1661cc0b616e776a33016d1a106c4153db31e17a3e2c81e",
+    "vcf.vcf": "7ca02c614560ba5a2ed859f92a08df2046cb756a68e895ad1f2f0387b2cd2a21",
+    "json.jsonl": "27770ad5dda33110f7ffac9f2b1a7394d88520e79fb87e1736ad766408545d64"
+   },
+   "flags": [
+    "--everything"
+   ],
+   "expected_dir": "expected_everything"
+  },
+  "hgvs": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species acanthaster_planci_gca001949145v1 --assembly OKI_Apl_1.0 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs [--tab|--vcf|--json]",
+   "perl_cache": "acanthaster_planci_gca001949145v1/63_OKI_Apl_1.0",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "27c18aa21082230a9b8a3d13acf341f79fa178de7edbfe61050f3bf6b7eb5d56",
+    "tab.txt": "b6bcc19600e01fe58bbd02dc18677fc091df22b8f95a6c1a99117365034a6684",
+    "vcf.vcf": "38ce858949d784ed9936e715d7894ad31be3f1ad81a7b0a613e8f94dbe6e26e9",
+    "json.jsonl": "e325255d616256971d853cce1dba800792eb15a55e0d1826b1b15edd684c3538"
+   },
+   "flags": [
+    "--hgvs"
+   ],
+   "expected_dir": "expected_hgvs"
+  }
+ },
+ "generator": "tools/vep-seeded-variants --cache <converted cache> --seed 1 --records wide --per-category 40 --fasta <genome> --sequence DF978536.1 --sequence DF980041.1 --sequence NC_007788.1, beside the 68 designed records; Ensembl VEP over the two inputs under the corpus flags; tools/vep-golden-corpus select --release 63 --assembly OKI_Apl_1.0 --species acanthaster_planci_gca001949145v1 --dataset wide=<reference>=<the generated records> --dataset designed=<reference>=<the designed records> --k 2 --seed 1 --max-span 1000000 --max-records 500 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 6 --include <the named records> --covers species-acanthaster-oki-apl1 --covers genetic-code-tables --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --flank 5000 --gzip --drop sorted_exons --perl-info <cache>/info.txt --cache-version 63 over the whole cache tools/vep-storable-to-json converts from the Ensembl Metazoa release 63 OKI_Apl_1.0 cache (protein features kept for the DOMAINS column of the everything set; the cache names no known variant and carries no SIFT or PolyPhen predictions and no regulatory data); scripts/fixtures/cut_plugin_regions.py --reference <the three sequences> --flank 5000 --record-flank 2000; tools/vep-golden-corpus flag-set (everything, hgvs); scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; tools/vep-golden-corpus classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp --field HGVS_OFFSET for the two flag sets)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "DF978536.1": 262,
+   "DF980041.1": 1,
+   "NC_007788.1": 37
+  },
+  "shards": 5,
+  "synonym_lines": 10,
+  "variation_slices": "none: the cache names no known variant"
+ },
+ "genetic_code_check": {
+  "genetic_code": 9,
+  "sequence": "NC_007788.1",
+  "table": "Bio/Tools/CodonTable.pm of the reference image (/opt/vep/src/ensembl-vep/Bio/Tools/CodonTable.pm): the residues of table 1 on line 229 and of table 9 on line 236, which differ at four codons, the fifteenth, the forty-third, the forty-seventh and the forty-eighth in the table's own order, the fifteenth a stop under table 1; the start codons of table 1 on line 258 and of table 9 on line 265",
+  "table_sha256": "8b5aba4aafd2058f1a96dc71c646edc23faa5d973243fd8fc9e26da37b0be282",
+  "records": "the 68 designed records, each kept by name: code9_on_codon (variants.vcf lines 14, 26, 59, 75, 82, 92, 105, 113, 127, 136, 152, 160, 174), code9_makes_codon (17, 27, 60, 73, 78, 93, 103, 116, 128, 133, 150, 167, 172), code9_keeps_residue (21, 25, 66, 74, 83, 97, 106, 115, 130, 135, 154, 165, 175), code9_alters_residue (20, 28, 58, 72, 79, 91, 102, 114, 129, 134, 149, 168, 173), code9_at_stop (76, 101, 111, 121, 131, 143, 158), code9_start_mark (29, 30), code9_edited_start (70, 71, 125, 126) and code9_incomplete_end (67, 87, 180); and the generator's code9_changed_codon records (15, 64, 80, 98, 104, 120, 141, 151, 163, 179)",
+  "checked": "every row of expected/default.txt.gz on the mitochondrion past the first residue that prints two whole codons, 111 rows: the Amino_acids column equals the translation of both codons under table 9 as that file gives it, and on 76 of them table 1 would translate a codon otherwise; each of the four codons stands as the reference codon of a row (4, 13, 4 and 6 records in the table's order) and as the codon a record makes (18, 11, 15 and 8 records). On its own transcript every code9_keeps_residue row is a synonymous_variant, every code9_alters_residue and code9_on_codon row a missense_variant, every code9_at_stop row a stop_lost and every code9_incomplete_end row an incomplete_terminal_codon_variant; the rows at a first residue print the residue the transcript's peptide opens with, which a sequence edit of the cache sets on three transcripts, and are a start_lost but the code9_start_mark record at the codon's first base, a start_retained_variant"
+ }
+}

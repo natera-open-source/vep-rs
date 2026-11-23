@@ -1,0 +1,59 @@
+case	exit	check	arguments
+sources	0	bytes	tests/fixtures/inputs/sources.tab {tuples}
+sources_fields	0	bytes	tests/fixtures/inputs/sources.tab {tuples} --fields REVEL,ClinVar_CLNSIG,gnomAD_AF_mid,SIFT_score,pLI_gene_value,SpliceAI_pred
+sources_fields_map_given	0	bytes	tests/fixtures/inputs/sources.tab {tuples} --field-map=data/fastvep_field_map.tsv --fields=REVEL
+fields_unknown	1	bytes	tests/fixtures/inputs/sources.tab {tuples} --field-map data/fastvep_field_map.tsv --fields zeta,REVEL,alpha,zeta,LOEUf
+fields_empty	1	bytes	tests/fixtures/inputs/sources.tab {tuples} --fields=
+fields_beside_a_comma	1	bytes	tests/fixtures/inputs/sources.tab {tuples} --fields REVEL,,LOEUF
+fields_column_absent	1	bytes	tests/fixtures/inputs/late_header.tab {tuples} --fields am_class,REVEL,LOEUF,PrimateAI,am_pathogenicity
+odd_bytes	0	bytes	tests/fixtures/inputs/odd_bytes.tab {tuples} --field-map tests/fixtures/maps/custom.tsv
+crlf	0	bytes	tests/fixtures/inputs/crlf.tab {tuples}
+several	0	bytes	tests/fixtures/inputs/several.tab {tuples} --field-map tests/fixtures/maps/custom.tsv
+several_fields	0	bytes	tests/fixtures/inputs/several.tab {tuples} --field-map tests/fixtures/maps/custom.tsv --fields Y_SCORE,X_LIST,Z_REST
+several_map_crlf	0	bytes	tests/fixtures/inputs/several.tab {tuples} --field-map tests/fixtures/maps/custom_crlf.tsv
+several_other_digits	0	bytes	tests/fixtures/inputs/several.tab {tuples} --field-map tests/fixtures/maps/other_digits.tsv
+late_header	0	bytes	tests/fixtures/inputs/late_header.tab {tuples}
+first_column	0	bytes	tests/fixtures/inputs/first_column.tab {tuples}
+header_only	0	bytes	tests/fixtures/inputs/header_only.tab {tuples}
+no_header	1	bytes	tests/fixtures/inputs/no_header.tab {tuples}
+empty_input	1	bytes	tests/fixtures/inputs/empty.tab {tuples}
+byte_order_mark	1	bytes	tests/fixtures/inputs/byte_order_mark.tab {tuples}
+no_mapped	1	bytes	tests/fixtures/inputs/no_mapped.tab {tuples}
+undecodable_header	1	bytes	tests/fixtures/inputs/undecodable_header.tab {tuples}
+repeated	1	bytes	tests/fixtures/inputs/repeated.tab {tuples}
+repeated_fields	1	bytes	tests/fixtures/inputs/repeated.tab {tuples} --fields LOEUF
+map_header_alone	1	bytes	tests/fixtures/inputs/sources.tab {tuples} --field-map tests/fixtures/maps/header_alone.tsv
+map_header_alone_fields	1	bytes	tests/fixtures/inputs/sources.tab {tuples} --field-map tests/fixtures/maps/header_alone.tsv --fields REVEL
+map_bad_header	1	bytes	tests/fixtures/inputs/several.tab {tuples} --field-map tests/fixtures/maps/bad_header.tsv
+map_byte_order_mark	1	bytes	tests/fixtures/inputs/several.tab {tuples} --field-map tests/fixtures/maps/byte_order_mark.tsv
+map_bad_count	1	bytes	tests/fixtures/inputs/several.tab {tuples} --field-map tests/fixtures/maps/bad_count.tsv
+map_blank_line	1	bytes	tests/fixtures/inputs/several.tab {tuples} --field-map tests/fixtures/maps/blank_line.tsv
+map_bad_part	1	bytes	tests/fixtures/inputs/several.tab {tuples} --field-map tests/fixtures/maps/bad_part.tsv
+map_bad_part_escapes	1	bytes	tests/fixtures/inputs/several.tab {tuples} --field-map tests/fixtures/maps/bad_part_escapes.tsv
+map_part_zero	1	bytes	tests/fixtures/inputs/several.tab {tuples} --field-map tests/fixtures/maps/part_zero.tsv
+map_falling_range	1	bytes	tests/fixtures/inputs/several.tab {tuples} --field-map tests/fixtures/maps/falling_range.tsv
+map_bad_kind	1	bytes	tests/fixtures/inputs/several.tab {tuples} --field-map tests/fixtures/maps/bad_kind.tsv
+map_empty_cell	1	bytes	tests/fixtures/inputs/several.tab {tuples} --field-map tests/fixtures/maps/empty_cell.tsv
+map_twice	1	bytes	tests/fixtures/inputs/several.tab {tuples} --field-map tests/fixtures/maps/twice.tsv
+map_separator_range	1	bytes	tests/fixtures/inputs/several.tab {tuples} --field-map tests/fixtures/maps/separator_range.tsv
+map_separator_half	1	bytes	tests/fixtures/inputs/several.tab {tuples} --field-map tests/fixtures/maps/separator_half.tsv
+map_line_separator	1	bytes	tests/fixtures/inputs/several.tab {tuples} --field-map tests/fixtures/maps/line_separator.tsv
+map_not_utf8	1	bytes	tests/fixtures/inputs/several.tab {tuples} --field-map tests/fixtures/maps/not_utf8.tsv
+map_empty	1	bytes	tests/fixtures/inputs/several.tab {tuples} --field-map tests/fixtures/maps/empty.tsv
+map_missing	1	bytes	tests/fixtures/inputs/several.tab {tuples} --field-map tests/fixtures/maps/absent.tsv
+map_is_a_directory	1	bytes	tests/fixtures/inputs/several.tab {tuples} --field-map tests/fixtures/maps
+map_name_empty	1	bytes	tests/fixtures/inputs/several.tab {tuples} --field-map=
+map_name_as_pathlib_reads_it	1	bytes	tests/fixtures/inputs/several.tab {tuples} --field-map ./tests//fixtures/./maps/twice.tsv/
+input_missing	1	bytes	tests/fixtures/inputs/absent.tab {tuples}
+input_is_a_directory	1	bytes	tests/fixtures/inputs {tuples}
+input_under_a_file	1	bytes	tests/fixtures/inputs/empty.tab/ {tuples}
+tuples_under_a_file	1	bytes	tests/fixtures/inputs/sources.tab tests/fixtures/inputs/empty.tab/tuples.tsv
+tuples_is_a_directory	1	bytes	tests/fixtures/inputs/sources.tab tests/fixtures/inputs
+usage_no_arguments	2	exit	
+usage_one_path	2	exit	tests/fixtures/inputs/sources.tab
+usage_third_path	2	exit	tests/fixtures/inputs/sources.tab {tuples} third
+usage_unknown_option	2	exit	tests/fixtures/inputs/sources.tab {tuples} --verbose
+usage_ambiguous_option	2	exit	tests/fixtures/inputs/sources.tab {tuples} --field x
+usage_fields_without_a_value	2	exit	tests/fixtures/inputs/sources.tab {tuples} --fields
+help	0	exit	--help
+help_short	0	exit	tests/fixtures/inputs/sources.tab -h

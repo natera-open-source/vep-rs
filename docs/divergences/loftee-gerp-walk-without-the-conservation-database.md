@@ -4,26 +4,30 @@
 
 **Why this is a defect.** The module is written to run without the database. It defaults `conservation_file` to `false`, it skips its PhyloCSF lookup under that value, the basic usage line of its documentation names no such file, and that documentation says what the plugin does when none is given. The GERP walk alone calls the database without that test. So one run writes a call for a stop gain whose walk meets no whole exon, as in a single-exon transcript or where the stop codon's exon alone follows the variant's, and nothing for a stop gain with a whole exon after it. The plugin's own `grch38` branch sums such an exon from its GERP file.
 
-**What vep-rs does instead.** On GRCh37 vep-rs sums the per-base GERP file across each whole exon, as it does across the variant's own exon and the exon holding the stop codon, and writes `LoF` and `LoF_info` on the row. It reads no conservation database, and it refuses a `conservation_file` that names one ([LoFTEE's parameters](../plugins/loftee.md#loftee)).
+**What vep-rs does instead.** On GRCh37 vep-rs sums the per-base GERP file across each whole exon, as it does across the variant's own exon and the exon holding the stop codon, and writes `LoF` and `LoF_info` on the row. Under a `conservation_file` naming the database, it reads each whole exon's total from the database, as the plugin does ([LoFTEE's parameters](../plugins/loftee.md#loftee)).
 
-**Where it is in Ensembl VEP's source** (`LoF.pm` and `gerp_dist.pl` of the LOFTEE repository's `master` branch, the plugin for GRCh37; `ensembl-vep` at release/116.2):
+**Where it is in Ensembl VEP's source** (`LoF.pm` and `gerp_dist.pl` of the LOFTEE repository's `master` branch, the plugin for GRCh37; `ensembl-vep` at release/116.3):
 
 - `LoF.pm`, lines 67-72: a parameter is stored when it splits on `:` into exactly two fields. Line 119 defaults `conservation_file` to `'false'`, line 120 sets `conservation_database` to the string `'false'`, and lines 121-128 replace it with a database handle only when the key holds another string.
 - `LoF.pm`, line 258: a stop-gained or frameshift row with a coding position calls `get_gerp_weighted_dist` with the GERP source and `conservation_database`.
 - `gerp_dist.pl`, lines 26-66: the walk over the transcript's exons. Lines 46-57 sum the stop codon's exon and the variant's exon from the GERP source, and lines 58-60 pass every other exon to `get_exon_gerp` with the database.
 - `gerp_dist.pl`, line 129, in `get_exon_gerp`: `$gerp_db->prepare(...)`, a method call on the string `false`.
 - `LoF.pm`, line 288: the PhyloCSF lookup runs only when `conservation_file` is not `false`, the test the walk lacks.
-- `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 2225-2245, `run_plugins`: a plugin's `run` is called inside an `eval`, and an exception leaves the row without the plugin's fields and writes the warning. `Bio/EnsEMBL/VEP/BaseVEP.pm`, lines 809-813: a warning already written is not written again.
+- `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 2234-2254, `run_plugins`: a plugin's `run` is called inside an `eval`, and an exception leaves the row without the plugin's fields and writes the warning. `Bio/EnsEMBL/VEP/BaseVEP.pm`, lines 809-813: a warning already written is not written again.
 
 **What correcting it would change.** Summing a whole exon from the GERP source the run already reads, as the walk does for the exons at its two ends, would write the row. With a per-base file the row would be the one vep-rs writes.
 
-**The class it produces.** `loftee_gerp_walk_without_conservation_database`: on a GRCh37 run of the plugin with no conservation database, the stop-gained and frameshift rows whose walk meets a whole exon. The reference row carries no `LoF`, `LoF_filter`, `LoF_flags` or `LoF_info`. The candidate row carries `LoF` and `LoF_info`, with `LoF_filter` and `LoF_flags` where a filter or a flag applies. The class is documented only: no committed flag set runs LoFTEE on GRCh37, so no comparator codes it.
+**The class it produces.** `loftee_gerp_walk_without_conservation_database`: on a GRCh37 run of the plugin with no conservation database, the stop-gained and frameshift rows whose walk meets a whole exon. The reference row carries no `LoF`, `LoF_filter`, `LoF_flags` or `LoF_info`. The candidate row carries `LoF` and a `LoF_info` holding a `GERP_DIST` item, with `LoF_filter` and `LoF_flags` where a filter or a flag applies. Under `skip_lof_info`, which leaves `LoF_info` off every row, the candidate row carries `LoF` and no `LoF_info`.
 
-**How often the shape occurs.** Tier 3: the shape is a GRCh37 run of the LoF plugin whose `conservation_file` is unset or the word `false`. Of the 392 committed flag sets, 4 load the plugin, the four the index counts as reaching the entry. All four run GRCh38, where the plugin's `grch38` branch sums every exon from its GERP file, so none carries the shape. On a run of the shape, the rows it reaches are those of a stop-gained or frameshift variant with a whole exon after its own.
+Each of the four fields the candidate fills is set aside. The `GRCh37-plugin-loftee-fixture` golden corpus holds rows of the class, and [section 1.7](#17-how-the-comparator-treats-this-class) says how each comparison treats them.
+
+**How often the shape occurs.** Tier 2: the shape is a GRCh37 run of the LoF plugin whose `conservation_file` is unset or the word `false`, an ordinary use of the plugin. Four committed flag sets carry it, the four the index counts: the own run of the `GRCh37-plugin-loftee-fixture` golden corpus and its flag sets `loftee-key-value`, `lof-skip-lof-info` and `lof-conservation-file-false`. In each, 11 of the 100 rows are rows of the class, on 6 ClinVar records.
+
+A GRCh38 run does not carry the shape: the `grch38` branch sums every exon from its GERP file. On a run of the shape, the rows it reaches are those of a stop-gained or frameshift variant with a whole exon after its own.
 
 ## 1. A stop gain in the first of three exons
 
-**In short.** `21 37442543 C>T` on GRCh37 is a stop gain in the first exon of CBR1, on four transcripts. On the three that have three exons the walk crosses the whole second exon. Ensembl VEP 116.2, running the plugin's `master` branch, writes no LoF field on those three rows, and vep-rs writes `LoF=HC` with a five-item `LoF_info`. On the fourth transcript, of two exons, both engines write the same `LoF=HC` row.
+**In short.** `21 37442543 C>T` on GRCh37 is a stop gain in the first exon of CBR1, on four transcripts. On the three that have three exons the walk crosses the whole second exon. Ensembl VEP 116.3, running the plugin's `master` branch, writes no LoF field on those three rows, and vep-rs writes `LoF=HC` with a five-item `LoF_info`. On the fourth transcript, of two exons, both engines write the same `LoF=HC` row.
 
 ### 1.1 What a reader needs to know first
 
@@ -52,12 +56,12 @@ The GERP table has the layout of the plugin's own GRCh37 file, a chromosome, a p
 Both engines take the GRCh37 assembly and one plugin flag, with no `conservation_file`. `human_ancestor_fa:false` switches the ancestral-allele filter off, and `run_splice_predictions:0` the splice-prediction layer, which vep-rs does not run:
 
 ```
---plugin LoF,loftee_path:<loftee>,gerp_file:GERP_scores.txt.gz,human_ancestor_fa:false,run_splice_predictions:0
+--plugin LoF,loftee_path:<loftee>,gerp_file:GERP_scores.synthetic.txt.gz,human_ancestor_fa:false,run_splice_predictions:0
 ```
 
 ### 1.3 What each engine writes
 
-The record has nine rows, four of them `stop_gained`. Those four in the default format, from Ensembl VEP 116.2:
+The record has nine rows, four of them `stop_gained`. Those four in the default format, from Ensembl VEP 116.3:
 
 ```
 first_exon_stop	21:37442543	T	ENSG00000159228	ENST00000290349	Transcript	stop_gained	305	130	44	Q/*	Cag/Tag	-	IMPACT=HIGH;STRAND=1
@@ -87,7 +91,7 @@ Three more CBR1 records against the same cache and table show where the differen
 
 The spelling of the default does not matter. `conservation_file:false`, a bare `conservation_file:` and `conservation_file:a:b`, the last two dropped by the plugin's two-field rule, give the rows above on both engines. So does `conservation_file:False`, by a neighbouring line: the plugin opens an empty database of that name, and the lookup ends at line 130 on the table the file lacks.
 
-Given a database, the plugin completes the walk. An SQLite file with an empty `phylocsf_data` table and a `gerp_exons` table holding `108` for the second exon of each three-exon coding transcript, the total of that exon's 108 bases, was passed as `conservation_file`. Ensembl VEP then writes `LoF=HC` on all four rows, with the five items vep-rs writes on each, followed by `PHYLOCSF_TOO_SHORT`, an item of the PhyloCSF lookup that naming a database switches on.
+Given a database, the plugin completes the walk. An SQLite file with an empty `phylocsf_data` table and a `gerp_exons` table holding `108` for the second exon of each three-exon coding transcript, the total of that exon's 108 bases, was passed as `conservation_file`. Ensembl VEP then writes `LoF=HC` on all four rows, with the five items vep-rs writes on each, followed by `PHYLOCSF_TOO_SHORT`, an item of the PhyloCSF lookup that naming a database switches on. vep-rs, given the same file, writes the same four rows.
 
 ### 1.4 Why Ensembl VEP writes that
 
@@ -97,11 +101,11 @@ For each stop-gained or frameshift row the plugin walks the transcript's exons f
 
 Ensembl VEP calls each plugin on each row inside an `eval`. The exception discards what the plugin had computed for the row, the row is written without the plugin's fields, and the message goes to the warnings file once, since a warning already written is not repeated. A row whose walk never reaches the lookup is untouched, which is why the two-exon transcript of the same record carries its call.
 
-Source (LOFTEE `master` branch; `ensembl-vep` at release/116.2, `Bio/EnsEMBL/VEP/`):
+Source (LOFTEE `master` branch; `ensembl-vep` at release/116.3, `Bio/EnsEMBL/VEP/`):
 
 - `LoF.pm`, lines 119-128: the default, the string and the database handle; line 258: the walk's call.
 - `gerp_dist.pl`, lines 58-60: a whole exon goes to `get_exon_gerp`; line 129: the method call on the string.
-- `OutputFactory.pm`, lines 2225-2245: the `eval` and the warning; `BaseVEP.pm`, lines 809-813: a warning is written once.
+- `OutputFactory.pm`, lines 2234-2254: the `eval` and the warning; `BaseVEP.pm`, lines 809-813: a warning is written once.
 
 ### 1.5 Why vep-rs's row is the correct one
 
@@ -115,16 +119,33 @@ Ensembl VEP's own plugin agrees wherever it can finish. It writes that call and 
 
 ```
 { seq 31586001 31589000; seq 37442001 37446000; } \
-  | awk -v OFS='\t' '{ print 21, $1, 1 }' | bgzip > GERP_scores.txt.gz
-tabix -s 1 -b 2 -e 2 GERP_scores.txt.gz
+  | awk -v OFS='\t' '{ print 21, $1, 1 }' | bgzip > GERP_scores.synthetic.txt.gz
+tabix -s 1 -b 2 -e 2 GERP_scores.synthetic.txt.gz
 
 vep -i record.vcf -o out.txt --offline --json_cache <corpus>/json_cache \
   --species homo_sapiens --assembly GRCh37 \
-  --plugin LoF,gerp_file:GERP_scores.txt.gz,human_ancestor_fa:false,run_splice_predictions:0
+  --plugin LoF,gerp_file:GERP_scores.synthetic.txt.gz,human_ancestor_fa:false,run_splice_predictions:0
 ```
 
-`<corpus>` is `tests/golden/116/GRCh37`, and `record.vcf` holds the record of 1.2. vep-rs writes the four rows of 1.3. Ensembl VEP 116.2 takes the same `--plugin` flag with `loftee_path:` added, `--dir_plugins` naming a checkout of the LOFTEE `master` branch and the cache options of [Reproducing these examples](reproducing.md). It leaves the three rows without a LoF field.
+`<corpus>` is `tests/golden/116/GRCh37`, and `record.vcf` holds the record of 1.2. vep-rs writes the four rows of 1.3. Ensembl VEP 116.3 takes the same `--plugin` flag with `loftee_path:` added, `--dir_plugins` naming a checkout of the LOFTEE `master` branch and the cache options of [Reproducing these examples](reproducing.md). It leaves the three rows without a LoF field.
 
 ### 1.7 How the comparator treats this class
 
-The reproduction `scripts/divergences/reproductions/loftee_gerp_walk_without_conservation_database.toml` builds the table of 1.2, runs the record and the two CLDN8 records of 1.3 on both engines and records their eight stop-gained and frameshift rows. The class covers the stop-gained and frameshift rows of a GRCh37 LoFTEE run without a conservation database whose walk meets a whole exon. No committed flag set runs LoFTEE on GRCh37, so no comparator codes the class.
+The reproduction `scripts/divergences/reproductions/loftee_gerp_walk_without_conservation_database.toml` builds the table of 1.2, runs the record and the two CLDN8 records of 1.3 on both engines and records their eight stop-gained and frameshift rows. The class covers the stop-gained and frameshift rows of a GRCh37 LoFTEE run without a conservation database whose walk meets a whole exon.
+
+The `GRCh37-plugin-loftee-fixture` golden corpus (`tests/golden/116/GRCh37-plugin-loftee-fixture/`) holds such rows. Its records are 35 ClinVar records of chromosome 21 and one constructed record, and its GERP table, `plugin_data/GERP_scores.synthetic.txt.gz`, is made up. The corpus's own run and its flag sets `loftee-key-value`, `lof-skip-lof-info` and `lof-conservation-file-false` pass no conservation database. In each of the four runs, 11 of the 100 rows are rows of the class, on 6 of the ClinVar records: Ensembl VEP's committed output carries no `LoF`, `LoF_filter`, `LoF_flags` or `LoF_info` on them.
+
+The corpus manifest documents each of those rows. Under `field_divergences`, a run lists every field vep-rs fills on a row of the class, with the value vep-rs prints and the class's name. Three of the runs list 26 entries: `LoF` and `LoF_info` on the 11 rows, `LoF_filter` on 2 and `LoF_flags` on 2. Under `skip_lof_info` the plugin writes no `LoF_info` (`LoF.pm`, lines 243 and 339), nor does vep-rs, so `lof-skip-lof-info` lists the 15 other entries. Each of the four runs names the class in its `masks`.
+
+One rule recognises a row of the class wherever a tool holds it. The row's Consequence holds `stop_gained` or `frameshift_variant`. Ensembl VEP's row carries none of `LoF`, `LoF_filter`, `LoF_flags` and `LoF_info`. vep-rs's row carries `LoF` beside a `LoF_info` holding a `GERP_DIST` item or, as under `skip_lof_info`, beside no `LoF_info`. The fields set aside are those of the four that vep-rs fills.
+
+A row on which Ensembl VEP writes one of the four, a row that holds neither term and a row on which vep-rs writes no `LoF` are no rows of the class. Neither is a row whose vep-rs `LoF_info` holds items and no `GERP_DIST` among them. Those rows are compared like any other.
+
+Four tools hold the class. [How to read the counts](../intended-divergences.md#how-to-read-the-counts) defines the first three and the manifest's lists, and [Reproducing the plugin concordance](../plugins/reproducing-concordance.md) describes the scoring the fourth does:
+
+- The format comparator (`tools/vep-formats-compare`) holds the rule as a built-in field class of the entry's name. Where a comparison case or a corpus manifest names the class in `masks`, it sets the fields aside in the default, tab, VCF and JSON formats and counts each row once. The oracle (`scripts/concordance/feature_oracle.sh`) lists the class among its built-in ones, so a comparison case may name it without a manifest.
+- `classify`, the golden corpus builder's subcommand (`tools/vep-golden-corpus`), applies the rule to the two engines' rows and writes the `field_divergences` entries.
+- The golden harness (`crates/vep-cli/tests/common/mod.rs`) checks vep-rs's row against the value each entry documents, in place of Ensembl VEP's, in every format the run compares. It reads the class's name in `masks` as the statement of what the run sets aside.
+- The plugin tuple scorer (`tools/vep-plugin-pairs`) holds the rule as a class of its class table, `scripts/concordance/plugin_class_table.tsv`. The class's row reads `not met`, so a run applies the class only where `--classes` names it.
+
+The corpus's fifth run, the flag set `conservation-database`, passes the made-up database `plugin_data/phylocsf_gerp.synthetic.sql` as `conservation_file`. With the database given both engines write `LoF` and `LoF_info` on those 11 rows, every field equal. The flag set's `masks` list is empty, it documents no row, and nothing is set aside.

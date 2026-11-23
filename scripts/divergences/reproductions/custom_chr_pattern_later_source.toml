@@ -1,7 +1,7 @@
 entry = "custom_chr_pattern_later_source"
 page = "docs/custom-annotation.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the ###CHR### placeholder of the --custom file option (Ensembl VEP documentation, \"Custom annotations\", \"Multiple files split by chromosome\"); not seen in the measured datasets; classed by its most reachable shape, files named for chromosomes the run does not try: a pattern with no file breaks the file option's valid path"
 notes = "The pattern is the second --custom source and matches no file. Ensembl VEP writes the row with the first source's records and no `missing` key, header line or warning; vep-rs exits 1 with `No files with pattern <file> were found`. The same pattern as the first source makes Ensembl VEP die with the same text."
@@ -30,3 +30,13 @@ kind = "exit"
 [expected]
 ensembl_vep = ["0"]
 vep_rs = ["1"]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/custom/grammar.rs::expand_chr_placeholder",
+    "crates/vep-builtins/src/custom/mod.rs::expand_all",
+]
+tests = [
+    "crates/vep-builtins/src/custom/grammar.rs::tests::chr_placeholder_expands_over_existing_files_and_dies_on_none",
+    "crates/vep-cli/tests/custom_grammar.rs::a_source_file_that_cannot_be_opened_exits_1_before_the_output_is_written",
+]

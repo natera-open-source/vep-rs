@@ -1,0 +1,524 @@
+{
+ "records": [
+  {
+   "dataset": "pool",
+   "vcf": "21\t100\trs_inside\tT\tTA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t200\trs_forward_end\tT\tTA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t300\trs_genomic_start\tT\tTA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t400\trs_del\tT\tTA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t500\trs_fewer\tT\tTA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t600\trs_past_the_end\tT\tTA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t700\trs_offset\tT\tTA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t800\trs_both\tT\tTA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t900\trs_both_turned\tT\tTA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t1000\trs_both_dup\tT\tTA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t1100\trs_both_del\tT\tTA\t.\tPASS\t.",
+   "combinations": []
+  }
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {},
+ "fields_compared": [
+  "HGVSc",
+  "HGVS_OFFSET",
+  "HGVS_IntronStartOffset",
+  "HGVS_IntronEndOffset"
+ ],
+ "field_divergences": [
+  {
+   "location": "21:100-109",
+   "allele": "ACGTACGTAGACGTACGTAG",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "5_prime_UTR_variant",
+   "field": "HGVSc",
+   "vep": "-",
+   "vep_rs": "ENST1.1:n.7_8insACGTACGTAG",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:100-109",
+   "allele": "ACGTACGTAGACGTACGTAG",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "5_prime_UTR_variant",
+   "field": "HGVS_IntronStartOffset",
+   "vep": "-",
+   "vep_rs": "0",
+   "expected_divergence": "hgvs_clipped_reference_against_whole_alternate"
+  },
+  {
+   "location": "21:100-109",
+   "allele": "ACGTACGTAGACGTACGTAG",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "5_prime_UTR_variant",
+   "field": "HGVS_IntronEndOffset",
+   "vep": "-",
+   "vep_rs": "0",
+   "expected_divergence": "hgvs_clipped_reference_against_whole_alternate"
+  },
+  {
+   "location": "21:1000-1006",
+   "allele": "ACGTACGACGTACG",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    9
+   ],
+   "consequence_set": "5_prime_UTR_variant",
+   "field": "HGVSc",
+   "vep": "ENST1.1:c.-529-1dup",
+   "vep_rs": "ENST1.1:c.-528_-527insACGTACG",
+   "expected_divergence": "hgvs_clipped_reference_against_whole_alternate"
+  },
+  {
+   "location": "21:1000-1006",
+   "allele": "ACGTACGACGTACG",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    9
+   ],
+   "consequence_set": "5_prime_UTR_variant",
+   "field": "HGVS_IntronStartOffset",
+   "vep": "-1",
+   "vep_rs": "0",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:1000-1006",
+   "allele": "ACGTACGACGTACG",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    9
+   ],
+   "consequence_set": "5_prime_UTR_variant",
+   "field": "HGVS_IntronEndOffset",
+   "vep": "-1",
+   "vep_rs": "0",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:1100-1106",
+   "allele": "ACGTACGACGTACG",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    10
+   ],
+   "consequence_set": "5_prime_UTR_variant",
+   "field": "HGVSc",
+   "vep": "ENST1.1:c.-529-1_-529insACGTACGTACGT",
+   "vep_rs": "ENST1.1:c.-528del",
+   "expected_divergence": "hgvs_clipped_reference_against_whole_alternate"
+  },
+  {
+   "location": "21:1100-1106",
+   "allele": "ACGTACGACGTACG",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    10
+   ],
+   "consequence_set": "5_prime_UTR_variant",
+   "field": "HGVS_IntronEndOffset",
+   "vep": "-1",
+   "vep_rs": "0",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:200-209",
+   "allele": "ACGTACGTAGACGTACGTAG",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    1
+   ],
+   "consequence_set": "5_prime_UTR_variant",
+   "field": "HGVSc",
+   "vep": "-",
+   "vep_rs": "ENST1.1:n.7_8insACGTACGTAG",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:200-209",
+   "allele": "ACGTACGTAGACGTACGTAG",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    1
+   ],
+   "consequence_set": "5_prime_UTR_variant",
+   "field": "HGVS_IntronStartOffset",
+   "vep": "-",
+   "vep_rs": "0",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:200-209",
+   "allele": "ACGTACGTAGACGTACGTAG",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    1
+   ],
+   "consequence_set": "5_prime_UTR_variant",
+   "field": "HGVS_IntronEndOffset",
+   "vep": "-",
+   "vep_rs": "0",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:300-309",
+   "allele": "ACGTACGTAGACGTACGTAG",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    2
+   ],
+   "consequence_set": "5_prime_UTR_variant",
+   "field": "HGVSc",
+   "vep": "-",
+   "vep_rs": "ENST1.1:n.7_8insACGTACGTAG",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:300-309",
+   "allele": "ACGTACGTAGACGTACGTAG",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    2
+   ],
+   "consequence_set": "5_prime_UTR_variant",
+   "field": "HGVS_IntronStartOffset",
+   "vep": "-",
+   "vep_rs": "0",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:300-309",
+   "allele": "ACGTACGTAGACGTACGTAG",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    2
+   ],
+   "consequence_set": "5_prime_UTR_variant",
+   "field": "HGVS_IntronEndOffset",
+   "vep": "-",
+   "vep_rs": "0",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:400-409",
+   "allele": "ACGTACGTAGACGTACGTAG",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    3
+   ],
+   "consequence_set": "5_prime_UTR_variant",
+   "field": "HGVSc",
+   "vep": "-",
+   "vep_rs": "ENST1.1:n.1del",
+   "expected_divergence": "hgvs_clipped_reference_against_whole_alternate"
+  },
+  {
+   "location": "21:400-409",
+   "allele": "ACGTACGTAGACGTACGTAG",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    3
+   ],
+   "consequence_set": "5_prime_UTR_variant",
+   "field": "HGVS_IntronStartOffset",
+   "vep": "-",
+   "vep_rs": "0",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:400-409",
+   "allele": "ACGTACGTAGACGTACGTAG",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    3
+   ],
+   "consequence_set": "5_prime_UTR_variant",
+   "field": "HGVS_IntronEndOffset",
+   "vep": "-",
+   "vep_rs": "0",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:500-509",
+   "allele": "ACGTACGTAGACGTACGTAG",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    4
+   ],
+   "consequence_set": "5_prime_UTR_variant",
+   "field": "HGVSc",
+   "vep": "-",
+   "vep_rs": "ENST1.1:n.7_8insACGTACGTA",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:500-509",
+   "allele": "ACGTACGTAGACGTACGTAG",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    4
+   ],
+   "consequence_set": "5_prime_UTR_variant",
+   "field": "HGVS_IntronStartOffset",
+   "vep": "-",
+   "vep_rs": "0",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:500-509",
+   "allele": "ACGTACGTAGACGTACGTAG",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    4
+   ],
+   "consequence_set": "5_prime_UTR_variant",
+   "field": "HGVS_IntronEndOffset",
+   "vep": "-",
+   "vep_rs": "0",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:600-609",
+   "allele": "ACGTACGTAGACGTACGTAG",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    5
+   ],
+   "consequence_set": "5_prime_UTR_variant",
+   "field": "HGVSc",
+   "vep": "-",
+   "vep_rs": "ENST1.1:n.8_9insACGTACGTAG",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:600-609",
+   "allele": "ACGTACGTAGACGTACGTAG",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    5
+   ],
+   "consequence_set": "5_prime_UTR_variant",
+   "field": "HGVS_IntronStartOffset",
+   "vep": "-",
+   "vep_rs": "0",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:600-609",
+   "allele": "ACGTACGTAGACGTACGTAG",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    5
+   ],
+   "consequence_set": "5_prime_UTR_variant",
+   "field": "HGVS_IntronEndOffset",
+   "vep": "-",
+   "vep_rs": "0",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:700-709",
+   "allele": "ACGTACGTAGACGTACGTAG",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    6
+   ],
+   "consequence_set": "5_prime_UTR_variant",
+   "field": "HGVSc",
+   "vep": "-",
+   "vep_rs": "ENST1.1:n.7_8insACGTACGTAG",
+   "expected_divergence": "hgvs_shifted_indel_written_span_gate"
+  },
+  {
+   "location": "21:700-709",
+   "allele": "ACGTACGTAGACGTACGTAG",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    6
+   ],
+   "consequence_set": "5_prime_UTR_variant",
+   "field": "HGVS_OFFSET",
+   "vep": "-",
+   "vep_rs": "2",
+   "expected_divergence": "hgvs_shifted_indel_written_span_gate"
+  },
+  {
+   "location": "21:700-709",
+   "allele": "ACGTACGTAGACGTACGTAG",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    6
+   ],
+   "consequence_set": "5_prime_UTR_variant",
+   "field": "HGVS_IntronStartOffset",
+   "vep": "-",
+   "vep_rs": "0",
+   "expected_divergence": "hgvs_shifted_indel_written_span_gate"
+  },
+  {
+   "location": "21:700-709",
+   "allele": "ACGTACGTAGACGTACGTAG",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    6
+   ],
+   "consequence_set": "5_prime_UTR_variant",
+   "field": "HGVS_IntronEndOffset",
+   "vep": "-",
+   "vep_rs": "0",
+   "expected_divergence": "hgvs_shifted_indel_written_span_gate"
+  },
+  {
+   "location": "21:800-806",
+   "allele": "ACGTACGACGTACG",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    7
+   ],
+   "consequence_set": "5_prime_UTR_variant",
+   "field": "HGVSc",
+   "vep": "ENST1.1:c.-529-1_-529insACGTACGTACGT",
+   "vep_rs": "ENST1.1:c.-528_-527insACGTACG",
+   "expected_divergence": "hgvs_clipped_reference_against_whole_alternate"
+  },
+  {
+   "location": "21:800-806",
+   "allele": "ACGTACGACGTACG",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    7
+   ],
+   "consequence_set": "5_prime_UTR_variant",
+   "field": "HGVS_IntronEndOffset",
+   "vep": "-1",
+   "vep_rs": "0",
+   "expected_divergence": "hgvs_clipped_reference_against_whole_alternate"
+  },
+  {
+   "location": "21:900-906",
+   "allele": "ACGTACGACGTACG",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    8
+   ],
+   "consequence_set": "5_prime_UTR_variant",
+   "field": "HGVSc",
+   "vep": "ENST1.1:c.-529-1_-529insACGTACGTACGT",
+   "vep_rs": "ENST1.1:c.-528_-527insACGTACG",
+   "expected_divergence": "hgvs_clipped_reference_against_whole_alternate"
+  },
+  {
+   "location": "21:900-906",
+   "allele": "ACGTACGACGTACG",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    8
+   ],
+   "consequence_set": "5_prime_UTR_variant",
+   "field": "HGVS_IntronStartOffset",
+   "vep": "-1",
+   "vep_rs": "0",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:900-906",
+   "allele": "ACGTACGACGTACG",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    8
+   ],
+   "consequence_set": "5_prime_UTR_variant",
+   "field": "HGVS_IntronEndOffset",
+   "vep": "1",
+   "vep_rs": "0",
+   "expected_divergence": "unexplained_residual"
+  }
+ ],
+ "field_divergence_summary": {
+  "unexplained_residual": 20,
+  "hgvs_clipped_reference_against_whole_alternate": 8,
+  "hgvs_shifted_indel_written_span_gate": 4
+ }
+}

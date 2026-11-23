@@ -200,7 +200,7 @@ mod tests {
 
     /// A deletion takes its reference allele from the genome over its span,
     /// whether the notation lists no bases, the right ones or the wrong ones
-    /// (`:2065`): Ensembl VEP 116.2 annotates `21:g.30348410_30348411delTA`
+    /// (`:2065`): Ensembl VEP 116.3 annotates `21:g.30348410_30348411delTA`
     /// and `21:g.30348410_30348411delGG` alike, at `21:30348410-30348411`
     /// with the allele `-`. The alternate is `-` and the class a deletion.
     #[test]
@@ -226,7 +226,7 @@ mod tests {
 
     /// A duplication is an insertion of the genome's bases over the span,
     /// placed before the span's first base, `end = start - 1` (`:2071-2078`):
-    /// Ensembl VEP 116.2 places `21:g.30289184dup` at `21:30289183-30289184`
+    /// Ensembl VEP 116.3 places `21:g.30289184dup` at `21:30289183-30289184`
     /// with the allele `A` and `21:g.30430757_30430761dup` at
     /// `21:30430756-30430757` with the allele `AAATT`; the bases the notation
     /// lists after `dup` are not read.
@@ -247,7 +247,7 @@ mod tests {
 
     /// A deletion-insertion reads its deleted bases from the genome and trims
     /// the bases the two alleles share, from the left and then the right, the
-    /// span moving in with them (`:2079-2082`): Ensembl VEP 116.2 annotates
+    /// span moving in with them (`:2079-2082`): Ensembl VEP 116.3 annotates
     /// `21:g.30282168_30282170delinsTAA` at `21:30282169` with the allele `A`
     /// and `21:g.30282169delCinsAT` at `21:30282169` with the allele `AT`. A
     /// replacement by the genome's own bases trims to nothing on both sides
@@ -280,14 +280,14 @@ mod tests {
     }
 
     /// An insertion's start follows its end, the two positions swapped when
-    /// written in ascending order (`:2083-2086`): Ensembl VEP 116.2 places
+    /// written in ascending order (`:2083-2086`): Ensembl VEP 116.3 places
     /// `21:g.30289183_30289184insA` and `21:g.30289184_30289183insA` alike at
     /// `21:30289183-30289184`. An insertion that names no bases is the
     /// feature `-/` (`ins([A-Z]*)$` captures the empty alternate,
     /// Utils/Sequence.pm:745), which `validate_vf` admits as an insertion whose
     /// start follows its end (Parser.pm:564) and whose split drops the empty
     /// field (`:575`): a record with no allele to annotate, which Ensembl VEP
-    /// 116.2 writes no row for.
+    /// 116.3 writes no row for.
     #[test]
     fn ins_start_is_end_plus_one() {
         for notation in ["21:g.30282172_30282173insG", "21:g.30282173_30282172insG"] {
@@ -312,7 +312,7 @@ mod tests {
     }
 
     /// An inversion is the genome's bases against their reverse complement
-    /// (`:2087-2091`): Ensembl VEP 116.2 annotates `21:g.30282168_30282170inv`
+    /// (`:2087-2091`): Ensembl VEP 116.3 annotates `21:g.30282168_30282170inv`
     /// at `21:30282168-30282170` with the allele `TGA`. A palindrome inverts
     /// to itself and is refused as a reference allele matching its alternate;
     /// a span written end first is refused as Ensembl VEP's feature refuses it
@@ -337,7 +337,7 @@ mod tests {
     }
 
     /// An `m.` notation is read as a `g.` one on the sequence it names
-    /// (`:1882`): Ensembl VEP 116.2 annotates `MT:m.8993T>G` at `MT:8993`.
+    /// (`:1882`): Ensembl VEP 116.3 annotates `MT:m.8993T>G` at `MT:8993`.
     #[test]
     fn m_prefix() {
         let v = read("MT:m.8993T>G").remove(0).unwrap();
@@ -357,7 +357,7 @@ mod tests {
 
     /// A `=` notation names one allele as reference and alternate, so it is
     /// refused as a reference allele matching its alternate when the base is
-    /// the genome's (Ensembl VEP 116.2 on `21:g.30282169C=`) and as a mismatch
+    /// the genome's (Ensembl VEP 116.3 on `21:g.30282169C=`) and as a mismatch
     /// when it is not; one with no base is returned with the allele string
     /// `/`, which the reader's `validate_vf` stage skips (Parser.pm:556). A
     /// repeat (`[3]`) is skipped before the notation is split
@@ -392,11 +392,11 @@ mod tests {
 
     /// A substitution's reference allele is checked against the genome as
     /// written, so a wrong base and a lower-case right one are both refused
-    /// with Ensembl VEP's message (116.2 skips `21:g.30282169G>A` and
+    /// with Ensembl VEP's message (116.3 skips `21:g.30282169G>A` and
     /// `21:g.30282169c>a` so, and annotates `21:g.30282169C>a` as `C/A`);
     /// under `--lookup_ref` the genome's base replaces the written one
     /// (`:2096-2102`). A reference allele equal to its alternate is refused
-    /// (`:2104-2106`; 116.2 skips `21:g.30282169C>C`).
+    /// (`:2104-2106`; 116.3 skips `21:g.30282169C>C`).
     #[test]
     fn ref_mismatch_skipped_unless_lookup_ref() {
         for (written, shown) in [("G", "G"), ("c", "c")] {
@@ -428,7 +428,7 @@ mod tests {
     }
 
     /// The record prints under the FASTA's name for the sequence the notation
-    /// reaches, as Ensembl VEP prints its slice's `seq_region_name`: 116.2
+    /// reaches, as Ensembl VEP prints its slice's `seq_region_name`: 116.3
     /// annotates `NC_000021.9:g.30282169C>A` and `chr21:g.30282169C>A` at
     /// `21:30282169`, each named by its own notation. A `(p.=)` suffix is
     /// read past and kept in the name.
@@ -464,7 +464,7 @@ mod tests {
     /// written (Parser.pm:852 before the upper-casing at :554): the
     /// substitution `TCA>TCG` over 30282168-30282170 is `A/G` at 30282170, and
     /// `delinsGGa` over the same `TCA` keeps its `A`/`a` pair, `TCA/GGA` over
-    /// three bases once upper-cased, as Ensembl VEP 116.2 annotates both; the
+    /// three bases once upper-cased, as Ensembl VEP 116.3 annotates both; the
     /// record is marked minimised either way, trimmed or not, and its uploaded
     /// allele string is the pair as built, `TCA/TCG` and `TCA/GGa`, the
     /// `original_allele_string` the trim records (:1008). Without the flag the
@@ -557,7 +557,7 @@ mod tests {
     /// `--lookup_ref` the genome's `T` replaces that `-` (`:2096-2097`) beside
     /// the empty alternate `dup([A-Z]*)$` captured, the feature `T/` whose
     /// empty field `validate_vf` drops (Parser.pm:575): a record with no allele
-    /// to annotate, for which Ensembl VEP 116.2 writes no row (`Dup` alike). The
+    /// to annotate, for which Ensembl VEP 116.3 writes no row (`Dup` alike). The
     /// type letter is read the same way (`g`, `c`, `n` or `m`), so `G.` with
     /// `del` is checked as a substitution is. A `del` followed by `>` is a
     /// substitution whose reference allele the genome supplies, and `delinv`

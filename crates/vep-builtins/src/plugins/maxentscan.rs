@@ -47,7 +47,9 @@ use vep_core::consequence::{LofteeContext, TranscriptConsequence};
 use vep_core::transcript::{Exon, Intron};
 use vep_core::variant::InputVariant;
 
+use super::parse_rank_of_total;
 use crate::params::{warn_unread_parameters, PluginParams};
+use crate::perl_format::{sprintf_g, PerlNumber};
 use crate::tabix::{lossy_text, BoundedLines};
 use crate::traits::{BuiltinPlugin, PluginError};
 
@@ -88,7 +90,35 @@ const ACCEPTOR_TABLES: [(&str, usize, usize, usize); 9] = [
 const WINDOW_FLANK: u64 = 43;
 
 /// A scoring function of the tables: `score5` over a 9-mer or `score3` over a 23-mer.
-type Score = fn(&Tables, &[u8]) -> f64;
+type Score = fn(&Tables, &[u8]) -> Result<f64, Died>;
+
+/// Where the plugin dies while it scores a k-mer, which costs the row every
+/// field of the plugin (`run_plugins`, OutputFactory.pm:2234-2253): the
+/// division of MaxEntScan.pm:860 by a product that is zero, or the logarithm
+/// of `:796` over a product that is zero or negative.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Died {
+    DivisionByZero,
+    LogOf(f64),
+}
+
+impl std::fmt::Display for Died {
+    /// Perl's own message, then the matrix entries behind it.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DivisionByZero => f.write_str(
+                "Illegal division by zero: the entries a 23-mer reads in me2x3acc6 to \
+                 me2x3acc9 multiply to zero",
+            ),
+            Self::LogOf(value) => write!(
+                f,
+                "Can't take log of {}: the matrix entries a k-mer reads multiply to a \
+                 number that is not positive",
+                sprintf_g(*value)
+            ),
+        }
+    }
+}
 
 /// Whether every byte is one of the four bases (`/^[ACGT]+$/`).
 fn is_acgt(seq: &[u8]) -> bool {
@@ -112,8 +142,13 @@ fn hash(seq: &[u8]) -> usize {
 
 /// `log($val) / log(2)` (MaxEntScan.pm:794-797): the natural logarithms' quotient,
 /// not a base-2 logarithm, so the last binary place agrees with the plugin's.
-fn log2(value: f64) -> f64 {
-    value.ln() / 2f64.ln()
+/// Perl's `log` dies on zero and on a negative number, either zero and the
+/// negative infinity among them, and reads a not-a-number through.
+fn log2(value: f64) -> Result<f64, Died> {
+    if value <= 0.0 {
+        return Err(Died::LogOf(value));
+    }
+    Ok(value.ln() / 2f64.ln())
 }
 
 /// Ensembl's `overlap`: two closed spans sharing a base.
@@ -165,15 +200,18 @@ fn acceptor_of_exon(exon: &Exon, strand: i8) -> (i64, i64) {
 }
 
 /// The matrices as the plugin holds them after loading, each indexed by the
-/// base-4 hash of the k-mer it scores.
+/// base-4 hash of the k-mer it scores. The plugin keeps every line as text
+/// (MaxEntScan.pm:757, 835), so an entry is the operand Perl's arithmetic
+/// makes of that text: a whole number is an integer, and a product of
+/// integers is exact while it fits 64 bits.
 struct Tables {
     /// `me2x5` entries by the hash of the 7-mer whose line of
     /// `splice5sequences` names them (`score5_makesequencematrix` and
     /// `score5_makescorematrix`, MaxEntScan.pm:732-762).
-    donor: Vec<f64>,
+    donor: Vec<PerlNumber>,
     /// `me2x3acc1` to `me2x3acc9`, each by the hash of its k-mer
     /// (`score3_makemaxentscores`, :822-843).
-    acceptor: Vec<Vec<f64>>,
+    acceptor: Vec<Vec<PerlNumber>>,
 }
 
 impl Tables {
@@ -183,7 +221,7 @@ impl Tables {
         let sequences = read_lines(&sequences_path, DONOR_TABLE_LEN)?;
         // The plugin keys the scores by the sequence file's text and a repeated
         // 7-mer keeps its last line (`$matrix{$_} = $n`, MaxEntScan.pm:732-762).
-        let mut donor = vec![0.0; DONOR_TABLE_LEN];
+        let mut donor = vec![PerlNumber::Double(0.0); DONOR_TABLE_LEN];
         let mut listed = vec![false; DONOR_TABLE_LEN];
         for (n, seq) in sequences.iter().enumerate() {
             if seq.len() != 7 || !is_acgt(seq.as_bytes()) {
@@ -210,49 +248,62 @@ impl Tables {
     }
 
     /// `score5` (MaxEntScan.pm:665-696) of a 9-mer over ACGT: the consensus factor
-    /// of bases 3 and 4 times the `me2x5` entry of the other seven bases, as log2.
-    fn score5(&self, seq: &[u8]) -> f64 {
+    /// of bases 3 and 4 times the `me2x5` entry of the other seven bases
+    /// (`$a * $d`, `:689`), as log2.
+    fn score5(&self, seq: &[u8]) -> Result<f64, Died> {
         let (b3, b4) = (base_index(seq[3]), base_index(seq[4]));
         let consensus =
             DONOR_CONSENSUS_1[b3] * DONOR_CONSENSUS_2[b4] / (BACKGROUND[b3] * BACKGROUND[b4]);
         let rest = [seq[0], seq[1], seq[2], seq[5], seq[6], seq[7], seq[8]];
-        log2(consensus * self.donor[hash(&rest)])
+        let entry = self.donor[hash(&rest)];
+        log2(PerlNumber::Double(consensus).multiply(entry).double())
     }
 
     /// `score3` (MaxEntScan.pm:698-726) of a 23-mer over ACGT: the consensus factor
     /// of bases 18 and 19 times the maximum-entropy ratio of the other 21 bases,
-    /// five tables over four in the plugin's order (`:860`), as log2.
-    fn score3(&self, seq: &[u8]) -> f64 {
+    /// five tables over four in the plugin's order (`:860`), as log2. The
+    /// two products and their quotient are Perl's: exact over whole numbers
+    /// where an integer holds them, and a zero divisor is where the plugin
+    /// dies.
+    fn score3(&self, seq: &[u8]) -> Result<f64, Died> {
         let (b18, b19) = (base_index(seq[18]), base_index(seq[19]));
         let consensus = ACCEPTOR_CONSENSUS_1[b18] * ACCEPTOR_CONSENSUS_2[b19]
             / (BACKGROUND[b18] * BACKGROUND[b19]);
         let mut rest = [0u8; 21];
         rest[..18].copy_from_slice(&seq[..18]);
         rest[18..].copy_from_slice(&seq[20..23]);
-        let mut sc = [0.0; 9];
+        let mut sc = [PerlNumber::Double(0.0); 9];
         for (slot, ((_, _, from, to), table)) in sc
             .iter_mut()
             .zip(ACCEPTOR_TABLES.iter().zip(&self.acceptor))
         {
             *slot = table[hash(&rest[*from..*to])];
         }
-        let ratio = sc[0] * sc[1] * sc[2] * sc[3] * sc[4] / (sc[5] * sc[6] * sc[7] * sc[8]);
-        log2(consensus * ratio)
+        let product = |entries: &[PerlNumber]| {
+            entries[1..]
+                .iter()
+                .fold(entries[0], |product, entry| product.multiply(*entry))
+        };
+        let ratio = product(&sc[..5])
+            .divide(product(&sc[5..]))
+            .ok_or(Died::DivisionByZero)?;
+        log2(PerlNumber::Double(consensus).multiply(ratio).double())
     }
 
     /// The highest-scoring k-mer of `sequence` under `score`: its 1-based
     /// position (`frame`) and score (`get_max_donor` and `get_max_acceptor`,
-    /// MaxEntScan.pm:517-551); the first of equal maxima wins.
-    fn best_kmer(&self, sequence: &[u8], k: usize, score: Score) -> (usize, f64) {
+    /// MaxEntScan.pm:517-551); the first of equal maxima wins, and the first
+    /// k-mer the plugin dies on ends the search.
+    fn best_kmer(&self, sequence: &[u8], k: usize, score: Score) -> Result<(usize, f64), Died> {
         let mut best: Option<(usize, f64)> = None;
         for (i, kmer) in sequence.windows(k).enumerate() {
-            let s = score(self, kmer);
+            let s = score(self, kmer)?;
             if best.is_none_or(|(_, max)| s > max) {
                 best = Some((i, s));
             }
         }
         let (i, max) = best.expect("a context holds at least one k-mer");
-        (i + 1, max)
+        Ok((i + 1, max))
     }
 }
 
@@ -289,22 +340,19 @@ fn read_lines(path: &Path, expected: usize) -> Result<Vec<String>, PluginError> 
     Ok(lines)
 }
 
-/// The number of a kept line that holds a decimal number written with a
-/// point or an exponent: the whitespace before and after it is skipped, and
-/// the number is the one Perl's arithmetic gives that text where the plugin
-/// multiplies the line (`$a * $d`, MaxEntScan.pm:689; the product at :860).
-fn perl_number(text: &str) -> Option<f64> {
-    text.trim_matches(is_perl_space).parse().ok()
-}
-
-/// A matrix file as numbers, one per line, each read as [`perl_number`] reads
-/// it; a line that is no such number is refused by its file and line.
-fn read_numbers(path: &Path, expected: usize) -> Result<Vec<f64>, PluginError> {
+/// A matrix file as numbers, one per kept line, each the operand Perl's
+/// arithmetic makes of that text where the plugin multiplies the line (`$a *
+/// $d`, MaxEntScan.pm:689; the products at :860), as [`PerlNumber::from_text`]
+/// reads it: the whitespace before and after a number is skipped, and an
+/// infinity or a not-a-number stands in any spelling Perl takes. A line Perl
+/// converts only under its `isn't numeric` warning is refused by its file
+/// and line.
+fn read_numbers(path: &Path, expected: usize) -> Result<Vec<PerlNumber>, PluginError> {
     read_lines(path, expected)?
         .iter()
         .enumerate()
         .map(|(n, line)| {
-            perl_number(line).ok_or_else(|| {
+            PerlNumber::from_text(line).ok_or_else(|| {
                 PluginError::Init(format!(
                     "{NAME}: {} line {} is not a number: '{line}'",
                     path.display(),
@@ -338,7 +386,7 @@ impl Window {
 
 /// A score as the plugin prints it (`sprintf('%.3f', ...)`, MaxEntScan.pm:245):
 /// three decimals, and Perl's `Inf` and `-Inf` for an infinity, which a table
-/// entry that is one gives.
+/// entry that is one, or a product past the largest double, gives.
 fn format_score(score: f64) -> String {
     if score.is_infinite() {
         return if score > 0.0 { "Inf" } else { "-Inf" }.to_string();
@@ -349,6 +397,10 @@ fn format_score(score: f64) -> String {
 /// The rendered fields of one group: every score as `%.3f` (`:245`) and, under
 /// `verbose`, the sequences, k-mer positions and contexts behind them.
 type Fields = Vec<(&'static str, String)>;
+
+/// The nearest-site fields of a batch by [`ncss_key`], or the failure the
+/// plugin dies of on that key's sites.
+type NcssCache = HashMap<(Arc<str>, bool, usize), Result<Fields, Died>>;
 
 /// The fields of one side of the sliding window.
 struct SwaKeys {
@@ -454,13 +506,6 @@ fn nth_in_transcript_order<T>(
         .find(|f| features.iter().filter(|g| start(g) < start(f)).count() == from_low)
 }
 
-/// The first ordinal of an `EXON` or `INTRON` value (`3/5`, `2-3/5`) and the total.
-fn first_ordinal(value: &str) -> Option<(usize, usize)> {
-    let (ordinals, total) = value.split_once('/')?;
-    let first = ordinals.split('-').next()?.trim().parse().ok()?;
-    Some((first, total.trim().parse().ok()?))
-}
-
 /// The key of a row's nearest canonical sites: the transcript, whether the row
 /// lies in an intron (`INTRON` set) or an exon, and the first ordinal; `None` for
 /// a row in neither.
@@ -468,11 +513,11 @@ fn ncss_key(tc: &TranscriptConsequence) -> Option<(Arc<str>, bool, usize)> {
     let id = tc
         .transcript_id_handle()
         .map_or_else(|| Arc::from(""), Arc::clone);
-    if let Some((number, _)) = tc.intron.as_deref().and_then(first_ordinal) {
-        return Some((id, true, number));
+    if let Some((number, _)) = parse_rank_of_total(tc.intron.as_deref()) {
+        return Some((id, true, number as usize));
     }
-    let (number, _) = tc.exon.as_deref().and_then(first_ordinal)?;
-    Some((id, false, number))
+    let (number, _) = parse_rank_of_total(tc.exon.as_deref())?;
+    Some((id, false, number as usize))
 }
 
 /// A canonical window a substitution lies in: its place in transcript order (the
@@ -593,10 +638,11 @@ impl Row<'_> {
     /// alternate sequence; a window the reference cannot be read for, or one
     /// holding a base outside ACGT, yields nothing. The introns walked are
     /// the ones on Ensembl VEP's overlapped-intron list
-    /// ([`Self::on_overlapped_intron_list`]).
-    fn mes(&self, ctx: &LofteeContext, fields: &mut Fields) {
+    /// ([`Self::on_overlapped_intron_list`]). A score the plugin dies on is
+    /// the row's failure.
+    fn mes(&self, ctx: &LofteeContext, fields: &mut Fields) -> Result<(), Died> {
         if !self.is_snv() {
-            return;
+            return Ok(());
         }
         let (vf_start, vf_end) = (self.variant.start as i64, self.variant.end as i64);
         let strand = self.strand;
@@ -634,23 +680,24 @@ impl Row<'_> {
             }
         }
         let Some(MesWindow { span, score, .. }) = hit else {
-            return;
+            return Ok(());
         };
         let Some((reference, alternate)) = self.seqs(span.0, span.1) else {
-            return;
+            return Ok(());
         };
         if !is_acgt(&reference) || !is_acgt(&alternate) {
-            return;
+            return Ok(());
         }
         let (ref_score, alt_score) = (
-            score(self.tables, &reference),
-            score(self.tables, &alternate),
+            score(self.tables, &reference)?,
+            score(self.tables, &alternate)?,
         );
         self.score(fields, "MaxEntScan_ref", ref_score);
         self.text(fields, "MaxEntScan_ref_seq", &reference);
         self.score(fields, "MaxEntScan_alt", alt_score);
         self.text(fields, "MaxEntScan_alt_seq", &alternate);
         self.score(fields, "MaxEntScan_diff", ref_score - alt_score);
+        Ok(())
     }
 
     /// `run_SWA` (MaxEntScan.pm:334-418) for one site type: the highest-scoring
@@ -658,19 +705,20 @@ impl Row<'_> {
     /// comparison (the reference context in the alternate k-mer's frame for a
     /// substitution, else the reference's own best k-mer) and the difference.
     /// The results depend on the variant and the strand alone, so one
-    /// computation serves every row of the variant on that strand.
-    fn swa(&self, site: &SwaSite, fields: &mut Fields) {
+    /// computation serves every row of the variant on that strand, a k-mer
+    /// the plugin dies on failing each of them.
+    fn swa(&self, site: &SwaSite, fields: &mut Fields) -> Result<(), Died> {
         let (vf_start, vf_end) = (self.variant.start as i64, self.variant.end as i64);
         let Some((ref_context, alt_context)) =
             self.seqs(vf_start - site.flank, vf_end + site.flank)
         else {
-            return;
+            return Ok(());
         };
         let keys = &site.keys;
         self.text(fields, keys.ref_context, &ref_context);
         let mut ref_best = None;
         if is_acgt(&ref_context) {
-            let (frame, score) = self.tables.best_kmer(&ref_context, site.k, site.score);
+            let (frame, score) = self.tables.best_kmer(&ref_context, site.k, site.score)?;
             self.text(
                 fields,
                 keys.ref_seq,
@@ -682,9 +730,9 @@ impl Row<'_> {
         }
         self.text(fields, keys.alt_context, &alt_context);
         if !is_acgt(&alt_context) {
-            return;
+            return Ok(());
         }
-        let (frame, score) = self.tables.best_kmer(&alt_context, site.k, site.score);
+        let (frame, score) = self.tables.best_kmer(&alt_context, site.k, site.score)?;
         self.text(
             fields,
             keys.alt_seq,
@@ -693,14 +741,15 @@ impl Row<'_> {
         self.frame(fields, keys.alt_frame, frame);
         self.score(fields, keys.alt, score);
         let Some(ref_frame) = ref_best else {
-            return;
+            return Ok(());
         };
         let comparison_frame = if self.is_snv() { frame } else { ref_frame };
         let comparison = &ref_context[comparison_frame - 1..comparison_frame - 1 + site.k];
-        let comparison_score = (site.score)(self.tables, comparison);
+        let comparison_score = (site.score)(self.tables, comparison)?;
         self.text(fields, keys.ref_comp_seq, comparison);
         self.score(fields, keys.ref_comp, comparison_score);
         self.score(fields, keys.diff, comparison_score - score);
+        Ok(())
     }
 
     /// One nearest canonical site: its score when the sequence is all ACGT, and
@@ -711,42 +760,50 @@ impl Row<'_> {
         keys: (&'static str, &'static str),
         span: (i64, i64),
         score: Score,
-    ) {
+    ) -> Result<(), Died> {
         let Some(seq) = self.read(span.0, span.1) else {
-            return;
+            return Ok(());
         };
         if is_acgt(&seq) {
-            self.score(fields, keys.0, score(self.tables, &seq));
+            self.score(fields, keys.0, score(self.tables, &seq)?);
         }
         self.text(fields, keys.1, &seq);
+        Ok(())
     }
 
     /// `run_NCSS` (MaxEntScan.pm:420-511): the canonical donor and acceptor
     /// sequences nearest the row's intron or exon, in transcript order, read from
     /// the reference on the transcript's strand. The results depend on the
     /// transcript and the ordinal alone ([`ncss_key`]), so one computation serves
-    /// every row of a batch with that key.
-    fn ncss(&self, tc: &TranscriptConsequence, ctx: &LofteeContext, fields: &mut Fields) {
+    /// every row of a batch with that key, a site the plugin dies on failing
+    /// each of them.
+    fn ncss(
+        &self,
+        tc: &TranscriptConsequence,
+        ctx: &LofteeContext,
+        fields: &mut Fields,
+    ) -> Result<(), Died> {
         let strand = self.strand;
-        if let Some((number, total)) = tc.intron.as_deref().and_then(first_ordinal) {
+        if let Some((number, total)) = parse_rank_of_total(tc.intron.as_deref()) {
+            let (number, total) = (number as usize, total as usize);
             let intron = |ordinal: usize| {
                 nth_in_transcript_order(&ctx.introns, strand, ordinal, |i: &Intron| i.start)
             };
             let Some(this) = intron(number) else {
-                return;
+                return Ok(());
             };
             self.site(
                 fields,
                 NCSS_UPSTREAM_DONOR,
                 donor_of_intron(this, strand),
                 Tables::score5,
-            );
+            )?;
             self.site(
                 fields,
                 NCSS_DOWNSTREAM_ACCEPTOR,
                 acceptor_of_intron(this, strand),
                 Tables::score3,
-            );
+            )?;
             if number != 1 {
                 if let Some(upstream) = intron(number - 1) {
                     self.site(
@@ -754,7 +811,7 @@ impl Row<'_> {
                         NCSS_UPSTREAM_ACCEPTOR,
                         acceptor_of_intron(upstream, strand),
                         Tables::score3,
-                    );
+                    )?;
                 }
             }
             if number != total {
@@ -764,15 +821,16 @@ impl Row<'_> {
                         NCSS_DOWNSTREAM_DONOR,
                         donor_of_intron(downstream, strand),
                         Tables::score5,
-                    );
+                    )?;
                 }
             }
-        } else if let Some((number, total)) = tc.exon.as_deref().and_then(first_ordinal) {
+        } else if let Some((number, total)) = parse_rank_of_total(tc.exon.as_deref()) {
+            let (number, total) = (number as usize, total as usize);
             let exon = |ordinal: usize| {
                 nth_in_transcript_order(&ctx.exons, strand, ordinal, |e: &Exon| e.start)
             };
             let Some(this) = exon(number) else {
-                return;
+                return Ok(());
             };
             if number != 1 {
                 if let Some(upstream) = exon(number - 1) {
@@ -781,14 +839,14 @@ impl Row<'_> {
                         NCSS_UPSTREAM_DONOR,
                         donor_of_exon(upstream, strand),
                         Tables::score5,
-                    );
+                    )?;
                 }
                 self.site(
                     fields,
                     NCSS_UPSTREAM_ACCEPTOR,
                     acceptor_of_exon(this, strand),
                     Tables::score3,
-                );
+                )?;
             }
             if number != total {
                 self.site(
@@ -796,17 +854,18 @@ impl Row<'_> {
                     NCSS_DOWNSTREAM_DONOR,
                     donor_of_exon(this, strand),
                     Tables::score5,
-                );
+                )?;
                 if let Some(downstream) = exon(number + 1) {
                     self.site(
                         fields,
                         NCSS_DOWNSTREAM_ACCEPTOR,
                         acceptor_of_exon(downstream, strand),
                         Tables::score3,
-                    );
+                    )?;
                 }
             }
         }
+        Ok(())
     }
 }
 
@@ -844,6 +903,43 @@ impl MaxEntScanPlugin {
         } else {
             alt.into_owned()
         }
+    }
+
+    /// The fields of one row, in the plugin's order of groups (`run`,
+    /// MaxEntScan.pm:221-239): the canonical window, the sliding window when
+    /// switched on, then the nearest sites. The first score the plugin dies on
+    /// is the row's failure, whichever group it belongs to, and a cached group
+    /// keeps its failure for every row that reads it.
+    fn row_fields(
+        &self,
+        row: &Row<'_>,
+        tc: &TranscriptConsequence,
+        ctx: &LofteeContext,
+        swa_cache: &mut Option<Result<Fields, Died>>,
+        ncss_cache: &mut NcssCache,
+    ) -> Result<Fields, Died> {
+        let mut fields = Fields::new();
+        row.mes(ctx, &mut fields)?;
+        if self.swa {
+            let swa = swa_cache.get_or_insert_with(|| {
+                let mut swa = Fields::new();
+                row.swa(&SWA_DONOR, &mut swa)?;
+                row.swa(&SWA_ACCEPTOR, &mut swa)?;
+                Ok(swa)
+            });
+            fields.extend(swa.as_ref().map_err(|died| *died)?.iter().cloned());
+        }
+        if self.ncss {
+            if let Some(key) = ncss_key(tc) {
+                let ncss = ncss_cache.entry(key).or_insert_with(|| {
+                    let mut ncss = Fields::new();
+                    row.ncss(tc, ctx, &mut ncss)?;
+                    Ok(ncss)
+                });
+                fields.extend(ncss.as_ref().map_err(|died| *died)?.iter().cloned());
+            }
+        }
+        Ok(fields)
     }
 
     fn header_fields(&self) -> Vec<(&'static str, &'static str)> {
@@ -986,6 +1082,8 @@ impl Default for MaxEntScanPlugin {
     }
 }
 
+impl crate::traits::sealed::Sealed for MaxEntScanPlugin {}
+
 impl BuiltinPlugin for MaxEntScanPlugin {
     fn name(&self) -> &str {
         NAME
@@ -1044,13 +1142,17 @@ impl BuiltinPlugin for MaxEntScanPlugin {
     /// `run` (MaxEntScan.pm:221-254) over the batch: one reference window per
     /// variant, the sliding-window fields once per variant and strand, the
     /// nearest-site fields once per transcript and ordinal, the canonical-window
-    /// fields per row.
+    /// fields per row. A row the plugin dies on, scoring any of its groups,
+    /// carries none of the plugin's fields, as Ensembl VEP's `run_plugins`
+    /// drops the result of a call that died (OutputFactory.pm:2234-2253); every
+    /// other row is written, and the first failure is the batch's.
     fn run_batch(&self, variants: &mut [InputVariant]) -> Result<(), PluginError> {
         let (Some(tables), Some(fasta)) = (self.tables.as_ref(), self.reference_fasta.as_ref())
         else {
             return Ok(());
         };
-        let mut ncss_cache: HashMap<(Arc<str>, bool, usize), Fields> = HashMap::new();
+        let mut ncss_cache: NcssCache = HashMap::new();
+        let mut first_death: Option<Died> = None;
         for variant in variants.iter_mut() {
             // The plugin declares `VariationFeature` rows alone (`variant_feature_types`,
             // BaseVepPlugin.pm:100), so Ensembl VEP never runs it on a structural variant.
@@ -1085,7 +1187,7 @@ impl BuiltinPlugin for MaxEntScanPlugin {
                 Self::feature_seq(variant, 1),
                 Self::feature_seq(variant, -1),
             ];
-            let mut swa_cache: [Option<Fields>; 2] = [None, None];
+            let mut swa_cache: [Option<Result<Fields, Died>>; 2] = [None, None];
             for tc_idx in 0..variant.transcript_consequences.len() {
                 let tc = &variant.transcript_consequences[tc_idx];
                 if !self.annotates_row(tc) {
@@ -1104,35 +1206,25 @@ impl BuiltinPlugin for MaxEntScanPlugin {
                     feature_seq: &feature_seqs[side],
                     verbose: self.verbose,
                 };
-                let mut fields = Fields::new();
-                row.mes(ctx, &mut fields);
-                if self.swa {
-                    let swa = swa_cache[side].get_or_insert_with(|| {
-                        let mut swa = Fields::new();
-                        row.swa(&SWA_DONOR, &mut swa);
-                        row.swa(&SWA_ACCEPTOR, &mut swa);
-                        swa
-                    });
-                    fields.extend(swa.iter().cloned());
-                }
-                if self.ncss {
-                    if let Some(key) = ncss_key(tc) {
-                        let ncss = ncss_cache.entry(key).or_insert_with(|| {
-                            let mut ncss = Fields::new();
-                            row.ncss(tc, ctx, &mut ncss);
-                            ncss
-                        });
-                        fields.extend(ncss.iter().cloned());
-                    }
-                }
-                let plugin_data = &mut variant.transcript_consequences[tc_idx].plugin_data;
-                plugin_data.reserve(fields.len());
+                let fields =
+                    match self.row_fields(&row, tc, ctx, &mut swa_cache[side], &mut ncss_cache) {
+                        Ok(fields) => fields,
+                        Err(died) => {
+                            first_death.get_or_insert(died);
+                            continue;
+                        }
+                    };
+                let row = &mut variant.transcript_consequences[tc_idx];
+                row.plugin_data.reserve(fields.len());
                 for (key, value) in fields {
-                    plugin_data.insert(key.to_string(), value);
+                    row.set_plugin_value(key.to_string(), value, false);
                 }
             }
         }
-        Ok(())
+        match first_death {
+            Some(died) => Err(PluginError::Run(format!("{NAME}: {died}"))),
+            None => Ok(()),
+        }
     }
 }
 
@@ -1275,31 +1367,31 @@ mod tests {
                 end_phase: -1,
             })
             .collect();
-        LofteeContext {
-            introns,
-            exons,
-            strand,
-            coding_region_start: None,
-            coding_region_end: None,
-            translation_start: None,
-            translation_end: None,
-            cdna_coding_start: None,
-            cdna_coding_end: None,
-            cds_start_nf: false,
-            cds_end_nf: false,
-        }
+        let mut context =
+            LofteeContext::from_transcript(&vep_core::transcript::Transcript::default());
+        context.introns = introns;
+        context.exons = exons;
+        context.strand = strand;
+        context.coding_region_start = None;
+        context.coding_region_end = None;
+        context.translation_start = None;
+        context.translation_end = None;
+        context.cdna_coding_start = None;
+        context.cdna_coding_end = None;
+        context.cds_start_nf = false;
+        context.cds_end_nf = false;
+        context
     }
 
     /// A transcript row of `ctx` with the `EXON` and `INTRON` values given.
     fn row(ctx: &LofteeContext, exon: Option<&str>, intron: Option<&str>) -> TranscriptConsequence {
-        TranscriptConsequence {
-            feature_type: FeatureType::Transcript,
-            strand: ctx.strand,
-            exon: exon.map(str::to_string),
-            intron: intron.map(str::to_string),
-            loftee_ctx: Some(Box::new(ctx.clone())),
-            ..TranscriptConsequence::default()
-        }
+        let mut consequence = TranscriptConsequence::default();
+        consequence.feature_type = FeatureType::Transcript;
+        consequence.strand = ctx.strand;
+        consequence.exon = exon.map(str::to_string);
+        consequence.intron = intron.map(str::to_string);
+        consequence.loftee_ctx = Some(Box::new(ctx.clone()));
+        consequence
     }
 
     fn variant(
@@ -1541,11 +1633,15 @@ mod tests {
     }
 
     /// A one-table file of `lines`, read as the plugin's number tables are.
-    fn numbers_of(lines: &[&str]) -> Result<Vec<f64>, PluginError> {
+    fn numbers_of(lines: &[&str]) -> Result<Vec<PerlNumber>, PluginError> {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("table");
+        let path = dir.path().join("synthetic_table");
         std::fs::write(&path, lines.join("\n") + "\n").unwrap();
         read_numbers(&path, lines.len())
+    }
+
+    fn doubles(numbers: &[PerlNumber]) -> Vec<f64> {
+        numbers.iter().map(|number| number.double()).collect()
     }
 
     /// Perl's numeric conversion skips the whitespace before and after a
@@ -1566,11 +1662,14 @@ mod tests {
             "\x0B\x0B0.5",
             "\x0C0.5\x0C",
         ];
-        assert_eq!(numbers_of(&lines).unwrap(), vec![0.5; lines.len()]);
+        assert_eq!(
+            numbers_of(&lines).unwrap(),
+            vec![PerlNumber::Point(0.5); lines.len()]
+        );
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("table");
+        let path = dir.path().join("synthetic_table");
         std::fs::write(&path, "0.5\r\n  0.5\r\n0.5 \r\n").unwrap();
-        assert_eq!(read_numbers(&path, 3).unwrap(), [0.5; 3]);
+        assert_eq!(read_numbers(&path, 3).unwrap(), [PerlNumber::Point(0.5); 3]);
     }
 
     /// A number with an exponent is the number of its decimal spelling, under
@@ -1586,7 +1685,10 @@ mod tests {
             "+1.25e-3",
             ".125e-2",
         ];
-        assert_eq!(numbers_of(&lines).unwrap(), vec![0.00125; lines.len()]);
+        assert_eq!(
+            doubles(&numbers_of(&lines).unwrap()),
+            vec![0.00125; lines.len()]
+        );
     }
 
     /// A line Perl reads only under a warning (an empty line, a numeric prefix
@@ -1609,36 +1711,108 @@ mod tests {
             let message = init_message(numbers_of(&["0.5", text]).map(|_| ()));
             let kept = text.replacen(|c: char| c.is_ascii_whitespace() || c == '\x0B', "", 1);
             assert!(
-                message.ends_with(&format!("table line 2 is not a number: '{kept}'")),
+                message.ends_with(&format!("synthetic_table line 2 is not a number: '{kept}'")),
                 "{text:?}: {message}"
             );
         }
     }
 
-    /// Perl converts further spellings of an infinity or a NaN without a
-    /// warning, and its own `0 but true`; `f64::from_str` reads none of them,
-    /// and a line holding one is refused by its table and line like any text
-    /// that is no number here.
+    /// Perl converts further spellings of an infinity or a not-a-number
+    /// without a warning (`grok_infnan`, numeric.c): a `q` or `s` on either
+    /// side of `nan`, a payload in parentheses, and Visual C's `1.#INF`,
+    /// `1.#IND` and `1.#QNAN`, the point optional. Each is read as the value
+    /// Perl 5.34 multiplies it as, and so are the ten bytes `0 but true`, an
+    /// integer zero. Over three such entries on lines the layouts' acceptor
+    /// 23-mers read, the scores are the ones the Ensembl VEP plugin printed
+    /// for the GRCh38 records the layouts are copied from: `1.#QNAN` in
+    /// `me2x3acc6` stands on the left of a decimal entry of `me2x3acc7`
+    /// (`$sc[5] * $sc[6]`, MaxEntScan.pm:860), where Perl reads it as `1`.
     #[test]
-    fn a_further_spelling_of_an_infinity_or_a_nan_is_refused_by_its_line() {
-        for text in [
+    fn a_further_spelling_of_an_infinity_or_a_nan_is_read_as_perl_reads_it() {
+        let not_a_number = [
             "nanq",
             "NaNS",
             "qnan",
             "sNaN",
             "nan(1)",
             "nan(0x7ff)",
-            "1.#INF",
-            "-1.#INF",
-            "1#INF",
+            "nanq(1)",
+            "nan(1)x",
+            "-nan(123)",
             "1.#IND",
+            "1.#IND0",
             "1.#QNAN",
+            "1.#SNAN",
+            "1#NAN",
+        ];
+        let read = numbers_of(&not_a_number).unwrap();
+        for (text, number) in not_a_number.iter().zip(&read) {
+            assert!(number.double().is_nan(), "{text}: {number:?}");
+        }
+        let read = numbers_of(&["1.#INF", "-1.#INF", "1#INF", "+1.#INFINITY", "Infinity\t"]);
+        assert_eq!(
+            doubles(&read.unwrap()),
+            [
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+                f64::INFINITY,
+                f64::INFINITY,
+                f64::INFINITY
+            ]
+        );
+        // `s/\s//` (MaxEntScan.pm:756) takes the tab, and the ten bytes are left.
+        assert_eq!(
+            numbers_of(&["\t0 but true"]).unwrap(),
+            [PerlNumber::Integer {
+                negative: false,
+                magnitude: 0
+            }]
+        );
+
+        let dir = tempfile::tempdir().unwrap();
+        let [intron_1, exon_3, reverse_exon_2] = [0, 1, 2].map(|n| BOUNDARY_KMERS[n].0);
+        let matrices = edited_fixture(
+            dir.path(),
+            &[
+                (intron_1, 0, "1.#INF"),
+                (reverse_exon_2, 0, "nanq(1)"),
+                (exon_3, 5, "1.#QNAN"),
+            ],
+        );
+        let t = Tables::load(&matrices).unwrap();
+        let scored = [intron_1, reverse_exon_2, exon_3]
+            .map(|kmer| format_score(t.score3(kmer.as_bytes()).unwrap()));
+        assert_eq!(scored, ["Inf", "NaN", "10.752"]);
+    }
+
+    /// A spelling of an infinity or a not-a-number that Perl converts only
+    /// under its `isn't numeric` warning is refused by its table and line
+    /// like any text that is no number here: text after the word, an
+    /// unfinished `infinity`, a payload that is empty, unclosed or no whole
+    /// number, and `0 but true` once `s/\s//` has taken its first blank.
+    #[test]
+    fn a_further_spelling_of_an_infinity_or_a_nan_is_refused_by_its_line() {
+        for text in [
+            "nanx",
+            "infx",
+            "infinit",
+            "infinityx",
+            "NaN(",
+            "nan()",
+            "nan(1",
+            "nan(a)",
+            "nan(1.5)",
+            "1.#INFx",
+            "1.#INDx",
+            "1.#IN",
             "0 but true",
+            "\t0 but true ",
+            "\t0 BUT TRUE",
         ] {
             let message = init_message(numbers_of(&["0.5", text]).map(|_| ()));
             let kept = text.replacen(|c: char| c.is_ascii_whitespace() || c == '\x0B', "", 1);
             assert!(
-                message.ends_with(&format!("table line 2 is not a number: '{kept}'")),
+                message.ends_with(&format!("synthetic_table line 2 is not a number: '{kept}'")),
                 "{text:?}: {message}"
             );
         }
@@ -1652,6 +1826,7 @@ mod tests {
     #[test]
     fn an_infinity_and_a_nan_are_read_and_printed_as_perl_prints_them() {
         let read = numbers_of(&["inf", "-Infinity", "1e400", "+INF", "nan", "-NaN"]).unwrap();
+        let read = doubles(&read);
         assert_eq!(
             read[..4],
             [f64::INFINITY, -f64::INFINITY, f64::INFINITY, f64::INFINITY]
@@ -1716,8 +1891,262 @@ mod tests {
         }
 
         let (spelled, plain) = (tables(), Tables::load(&plain_fixture_dir()).unwrap());
-        assert_eq!(spelled.donor, plain.donor);
-        assert_eq!(spelled.acceptor, plain.acceptor);
+        assert_eq!(doubles(&spelled.donor), doubles(&plain.donor));
+        for (spelled, plain) in spelled.acceptor.iter().zip(&plain.acceptor) {
+            assert_eq!(doubles(spelled), doubles(plain));
+        }
+    }
+
+    /// The reference acceptor 23-mers of the two layouts, each with the score
+    /// the Ensembl VEP plugin printed for it over the matrices of
+    /// [`whole_number_fixture_dir`], on the GRCh38 records the layouts are
+    /// copied from.
+    const BOUNDARY_KMERS: [(&str, &str); 4] = [
+        ("AATTTTTAAGTTTCTTATAGGCG", "-0.019"),
+        ("TTACTCTGTTTCTTTCAAAGGGA", "-0.020"),
+        ("TTAATTTTCCTTTATTTCAGGAT", "-0.002"),
+        ("TTTGCAAATCCTATTCACAGGTT", "-0.006"),
+    ];
+
+    /// The seed-1 matrices under `--whole-numbers`, the 23-mers of
+    /// [`BOUNDARY_KMERS`] given to `--boundary-kmers`: every number is a whole
+    /// number, and each of the four 23-mers reads nine entries whose score
+    /// prints one third decimal with the product of MaxEntScan.pm:860 computed
+    /// as Perl computes it and the next one with it computed in doubles.
+    fn whole_number_fixture_dir() -> PathBuf {
+        static DIR: OnceLock<tempfile::TempDir> = OnceLock::new();
+        DIR.get_or_init(|| {
+            let mut options = vec!["--whole-numbers", "--boundary-kmers"];
+            options.extend(BOUNDARY_KMERS.iter().map(|(kmer, _)| *kmer));
+            write_fixture(&options)
+        })
+        .path()
+        .join("synthetic_dir")
+    }
+
+    /// Perl keeps a line that is a whole number as an integer and multiplies
+    /// two integers exactly while the product fits 64 bits (the product of
+    /// MaxEntScan.pm:860 over the text `:835` keeps), where a product in
+    /// doubles has rounded once per factor past 2**53. Every expected value
+    /// is the one the Ensembl VEP plugin printed over the same matrices for
+    /// the GRCh38 records the layouts are copied from; with the product in
+    /// doubles each of the four 23-mers prints the next third decimal.
+    #[test]
+    fn a_whole_number_entry_multiplies_exactly_as_perl_does() {
+        let whole = whole_number_fixture_dir();
+        for table in ["me2x5", "splicemodels/me2x3acc1", "splicemodels/me2x3acc9"] {
+            let text = std::fs::read_to_string(whole.join(table)).unwrap();
+            assert!(
+                text.lines()
+                    .all(|line| line.bytes().all(|b| b.is_ascii_digit())),
+                "{table}"
+            );
+        }
+        let t = Tables::load(&whole).unwrap();
+        for (kmer, expected) in BOUNDARY_KMERS {
+            let score = t.score3(kmer.as_bytes()).unwrap();
+            assert_eq!(score_text(score), expected, "{kmer}");
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let fields = |out: &IndexMap<String, String>| {
+            [
+                "MaxEntScan_ref",
+                "MaxEntScan_alt",
+                "MaxEntScan_diff",
+                "MES-NCSS_upstream_donor",
+                "MES-NCSS_upstream_acceptor",
+                "MES-NCSS_downstream_donor",
+                "MES-NCSS_downstream_acceptor",
+            ]
+            .map(|key| out.get(key).cloned().unwrap_or_default())
+        };
+        let ncss = || {
+            let mut p = MaxEntScanPlugin::new();
+            p.init(&[whole.display().to_string(), "NCSS".to_string()])
+                .unwrap();
+            p
+        };
+        // The first exonic base of exon 2 on each strand, in the acceptor
+        // window of intron 1: the rows of 21:14219563 and of 21:14381543.
+        let mut p = ncss();
+        let (fa, ctx) = forward_layout(dir.path());
+        p.set_reference_fasta(Some(fa));
+        let out = annotate(
+            &p,
+            variant("21", 221, 221, b"G", b"A", row(&ctx, Some("2/3"), None)),
+        );
+        assert_eq!(
+            fields(&out),
+            ["-0.019", "23.944", "-23.963", "29.063", "-0.019", "4.977", "-0.020"]
+        );
+        let mut p = ncss();
+        let (fa, ctx) = reverse_layout(dir.path());
+        p.set_reference_fasta(Some(fa));
+        let out = annotate(
+            &p,
+            variant("22", 139, 139, b"C", b"A", row(&ctx, Some("2/3"), None)),
+        );
+        assert_eq!(
+            fields(&out),
+            ["-0.002", "-0.586", "0.585", "27.952", "-0.002", "23.632", "-0.006"]
+        );
+    }
+
+    /// A copy of the plain seed-1 directory under `dir` with `text` written
+    /// over single lines: the line a 23-mer reads in the acceptor table at
+    /// `place` (0 to 8, the plugin's order), or, at `place` 9, the `me2x5`
+    /// line of a 9-mer's seven bases.
+    fn edited_fixture(dir: &Path, edits: &[(&str, usize, &str)]) -> PathBuf {
+        let copy = dir.join("synthetic_dir");
+        std::fs::create_dir_all(copy.join("splicemodels")).unwrap();
+        let read = |name: &str| std::fs::read_to_string(plain_fixture_dir().join(name)).unwrap();
+        let sequences = read("splicemodels/splice5sequences");
+        let mut files: IndexMap<String, Vec<String>> = IndexMap::new();
+        files.insert(
+            "me2x5".to_string(),
+            read("me2x5").lines().map(str::to_string).collect(),
+        );
+        for (file, _, _, _) in ACCEPTOR_TABLES {
+            let name = format!("splicemodels/{file}");
+            let lines = read(&name).lines().map(str::to_string).collect();
+            files.insert(name, lines);
+        }
+        for (kmer, place, text) in edits {
+            let kmer = kmer.as_bytes();
+            let (name, line) = if *place == 9 {
+                let seven = [kmer[..3].to_vec(), kmer[5..].to_vec()].concat();
+                let line = sequences
+                    .lines()
+                    .position(|line| line.as_bytes() == seven)
+                    .unwrap();
+                ("me2x5".to_string(), line)
+            } else {
+                let rest = [kmer[..18].to_vec(), kmer[20..].to_vec()].concat();
+                let (file, _, from, to) = ACCEPTOR_TABLES[*place];
+                (format!("splicemodels/{file}"), hash(&rest[from..to]))
+            };
+            files[&name][line] = text.to_string();
+        }
+        std::fs::write(copy.join("splicemodels/splice5sequences"), sequences).unwrap();
+        for (name, lines) in files {
+            std::fs::write(copy.join(name), lines.join("\n") + "\n").unwrap();
+        }
+        copy
+    }
+
+    /// The plugin dies where the logarithm of MaxEntScan.pm:796 is taken of a
+    /// product that is zero or negative (`Can't take log of 0`) and where the
+    /// division of `:860` is by a product that is zero (`Illegal division by
+    /// zero`), and `run_plugins` drops the result of a call that died
+    /// (OutputFactory.pm:2234-2253): the row carries none of the plugin's
+    /// fields, whichever group met the entry, every other row is written, and
+    /// the batch's failure opens with Perl's own message. The made-up entries
+    /// are a zero in a numerator table, in a denominator table and in
+    /// `me2x5`, and a negative entry; over the same matrices the Ensembl VEP
+    /// plugin wrote no field on the rows of the GRCh38 records the layout is
+    /// copied from, the scores below on the others, and those messages in its
+    /// warnings file.
+    #[test]
+    fn a_row_the_plugin_dies_on_carries_none_of_its_fields() {
+        let dir = tempfile::tempdir().unwrap();
+        let (fa, ctx) = forward_layout(dir.path());
+        let acceptor = BOUNDARY_KMERS[0].0;
+        let donor = "CAGGTACCG";
+        // The first exonic base of exon 2, in the acceptor window of intron 1,
+        // and the last exonic base of exon 1, in its donor window.
+        let batch = || {
+            vec![
+                variant("21", 221, 221, b"G", b"A", row(&ctx, Some("2/3"), None)),
+                variant("21", 123, 123, b"G", b"A", row(&ctx, Some("1/3"), None)),
+            ]
+        };
+        let mes = |v: &InputVariant| {
+            ["MaxEntScan_ref", "MaxEntScan_alt", "MaxEntScan_diff"].map(|key| {
+                v.transcript_consequences[0]
+                    .plugin_data
+                    .get(key)
+                    .cloned()
+                    .unwrap_or_default()
+            })
+        };
+        let on_the_acceptor = ["-1.563", "-3.332", "1.769"];
+        let on_the_donor = ["0.312", "6.055", "-5.743"];
+        let (default_groups, nearest_sites): (&[&str], &[&str]) = (&[], &["NCSS"]);
+        for (name, edit, tokens, message, expected) in [
+            (
+                "a zero in a numerator table",
+                (acceptor, 0, "0"),
+                default_groups,
+                "MaxEntScan: Can't take log of 0: ",
+                [None, Some(on_the_donor)],
+            ),
+            (
+                "a zero in a denominator table",
+                (acceptor, 5, "0"),
+                default_groups,
+                "MaxEntScan: Illegal division by zero: ",
+                [None, Some(on_the_donor)],
+            ),
+            (
+                "a zero in me2x5",
+                (donor, 9, "0"),
+                default_groups,
+                "MaxEntScan: Can't take log of 0: ",
+                [Some(on_the_acceptor), None],
+            ),
+            (
+                "a negative entry",
+                (acceptor, 1, "-2.5"),
+                default_groups,
+                "MaxEntScan: Can't take log of -6.79108: ",
+                [None, Some(on_the_donor)],
+            ),
+            // The acceptor of exon 2 is the nearest site downstream of exon 1,
+            // so the row in the donor window dies on it under `NCSS`.
+            (
+                "a zero in a numerator table, read by another group",
+                (acceptor, 0, "0"),
+                nearest_sites,
+                "MaxEntScan: Can't take log of 0: ",
+                [None, None],
+            ),
+        ] {
+            let matrices = edited_fixture(&dir.path().join(name), &[edit]);
+            let mut params = vec![matrices.display().to_string()];
+            params.extend(tokens.iter().map(|token| token.to_string()));
+            let mut p = MaxEntScanPlugin::new();
+            p.init(&params).unwrap();
+            p.set_reference_fasta(Some(fa.clone()));
+            let mut variants = batch();
+            match p.run_batch(&mut variants) {
+                Err(PluginError::Run(text)) => assert!(text.starts_with(message), "{name}: {text}"),
+                other => panic!("{name}: expected PluginError::Run, got {other:?}"),
+            }
+            for (v, expected) in variants.iter().zip(expected) {
+                match expected {
+                    Some(scores) => assert_eq!(mes(v), scores, "{name}"),
+                    None => {
+                        let written = &v.transcript_consequences[0].plugin_data;
+                        assert!(written.is_empty(), "{name}: {written:?}");
+                    }
+                }
+            }
+        }
+
+        // Two negative entries of one product: the product is positive, and
+        // the row is scored.
+        let matrices = edited_fixture(
+            &dir.path().join("two negative entries"),
+            &[(acceptor, 1, "-2.5"), (acceptor, 3, "-4")],
+        );
+        let mut p = MaxEntScanPlugin::new();
+        p.init(&[matrices.display().to_string()]).unwrap();
+        p.set_reference_fasta(Some(fa));
+        let mut variants = batch();
+        p.run_batch(&mut variants).unwrap();
+        assert_eq!(mes(&variants[0]), ["7.494", "5.725", "1.769"]);
+        assert_eq!(mes(&variants[1]), on_the_donor);
     }
 
     #[test]
@@ -1733,7 +2162,8 @@ mod tests {
             ("TAAGTGGGT", "4.541"),
             ("AAGGTAAGT", "8.192"),
         ] {
-            assert_eq!(score_text(t.score5(kmer.as_bytes())), expected, "{kmer}");
+            let score = t.score5(kmer.as_bytes()).unwrap();
+            assert_eq!(score_text(score), expected, "{kmer}");
         }
     }
 
@@ -1752,7 +2182,8 @@ mod tests {
             ("GAGATGACGATCTTAGGTGGGTT", "17.338"),
             ("TTTGCAAATCCTATTCACAGGTT", "-7.316"),
         ] {
-            assert_eq!(score_text(t.score3(kmer.as_bytes())), expected, "{kmer}");
+            let score = t.score3(kmer.as_bytes()).unwrap();
+            assert_eq!(score_text(score), expected, "{kmer}");
         }
     }
 
@@ -1889,7 +2320,7 @@ mod tests {
         );
     }
 
-    /// Ensembl VEP 116.2 walks the overlapped-intron list memoised by the
+    /// Ensembl VEP 116.3 walks the overlapped-intron list memoised by the
     /// consequence predicates with the variant's own span over introns widened
     /// three bases on each side (`BaseTranscriptVariation.pm:802-822`, `:1027`;
     /// `BaseVariationFeatureOverlapAllele.pm:500`; `MaxEntScan.pm:270`), so a
@@ -2012,7 +2443,7 @@ mod tests {
         );
         assert_eq!(field("MES-SWA_donor_ref_comp"), field("MES-SWA_donor_ref"));
         let t = tables();
-        let (frame, score) = t.best_kmer(b"TCCTTCAGACCGTCTC", 9, Tables::score5);
+        let (frame, score) = t.best_kmer(b"TCCTTCAGACCGTCTC", 9, Tables::score5).unwrap();
         let best = &b"TCCTTCAGACCGTCTC"[frame - 1..frame - 1 + 9];
         assert_eq!(
             field("MES-SWA_donor_alt_seq"),
@@ -2022,7 +2453,7 @@ mod tests {
         assert_eq!(field("MES-SWA_donor_alt"), score_text(score));
         assert_eq!(
             field("MES-SWA_donor_diff"),
-            score_text(t.score5(field("MES-SWA_donor_ref_seq").as_bytes()) - score)
+            score_text(t.score5(field("MES-SWA_donor_ref_seq").as_bytes()).unwrap() - score)
         );
 
         // The reverse strand reads both contexts on the transcript's strand.

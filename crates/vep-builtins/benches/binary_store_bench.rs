@@ -1,7 +1,7 @@
 // Copyright (c) 2026-present Natera, Inc.
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-//! Benchmark: binary annotation store vs tabix lookup performance.
+//! Benchmark: binary annotation store lookup performance.
 //!
 //! Generates synthetic annotation data, writes it to a binary store,
 //! and benchmarks batch and single-position queries.
@@ -17,8 +17,8 @@ use vep_builtins::annotation_store::AnnotationStore;
 use vep_builtins::binary_store::{BinaryAnnotator, BinaryStoreWriter, ContentIdentity};
 use vep_builtins::tabix::{TabixConfig, TabixRecord};
 
-/// Generate synthetic records: `record_count` records across `chr_count` chromosomes,
-/// evenly spaced starting at position 1000.
+/// Generate synthetic records: `records_per_chr` records on each of `chr_count`
+/// chromosomes, evenly spaced starting at position 1000.
 fn generate_records(
     chr_count: usize,
     records_per_chr: usize,
@@ -34,13 +34,13 @@ fn generate_records(
         for i in 0..records_per_chr {
             let pos = 1000 + (i as u64) * 3; // positions: 1000, 1003, 1006, ...
             let columns: Vec<String> = (0..col_count).map(|j| format!("{}.{}", pos, j)).collect();
-            records.push(TabixRecord {
-                chr: chr.clone(),
-                start: pos,
-                end: pos,
+            records.push(TabixRecord::new(
+                chr.clone(),
+                pos,
+                pos,
                 columns,
-                header: Some(Arc::clone(&header)),
-            });
+                Some(Arc::clone(&header)),
+            ));
         }
         grouped.push((chr, records));
     }
@@ -64,10 +64,8 @@ fn bench_binary_store_queries(c: &mut Criterion) {
         let table = dir.path().join("bench.tsv.gz");
         std::fs::write(&table, b"bench").unwrap();
         let source = ContentIdentity::of_file(&table).unwrap();
-        let config = TabixConfig {
-            file_path: table,
-            ..TabixConfig::default()
-        };
+        let mut config = TabixConfig::default();
+        config.file_path = table;
         writer
             .write(&column_names, &grouped, &config, &source)
             .unwrap();

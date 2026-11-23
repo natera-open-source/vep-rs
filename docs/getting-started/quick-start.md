@@ -15,7 +15,7 @@ target/release/vep \
 
 ## 2. Get a transcript cache
 
-For real data you need a JSON transcript cache. One command installs a release's cache and its indexed genome FASTA under `$HOME/.vep` in the layout `vep` resolves. The command shows GRCh38, and `GRCh37` in its place works the same. [Cache setup](../cache-setup.md) explains each input:
+For real data you need a JSON transcript cache. One command installs a release's cache and its indexed genome FASTA under `$HOME/.vep` in the layout `vep` resolves. The command shows GRCh38. `GRCh37` in its place installs that assembly without the 1000 Genomes frequencies, PubMed identifiers and variant synonyms, whose files the GRCh37 tree lacks, and takes the SIFT and PolyPhen matrices with `--include-predictions --mysql-port 3337`. [Cache setup](../cache-setup.md) explains each input:
 
 ```bash
 # Ensembl release 116, GRCh38
@@ -24,9 +24,9 @@ target/release/vep-cache-builder --auto homo_sapiens GRCh38 --release 116 \
   --dir_cache $HOME/.vep
 ```
 
-The cache lands at `$HOME/.vep/homo_sapiens/116_GRCh38`. It is about 1.6 GB of downloads checked against Ensembl's `CHECKSUMS` files, with no `wget`, `gunzip` or `samtools` step.
+The cache lands at `$HOME/.vep/homo_sapiens/116_GRCh38` with the release's known variants, their 1000 Genomes frequencies, PubMed identifiers, synonyms and failed flag, SIFT and PolyPhen matrices, and regulatory and motif features with their cell-type activity and binding matrices. It is about 32 GB of downloads checked against Ensembl's `CHECKSUMS` files, with no `wget`, `gunzip` or `samtools` step; `--chromosomes` narrows the variation VCFs and not the table dumps. A species with one variation VCF also fetches the `variation_feature` table for a sequence of its cache that file holds no record on. The installation's last lines name each part it left out and the gnomAD frequencies, which no release file carries ([Cache setup](../cache-setup.md#build-a-cache)).
 
-The inputs can also be named one flag at a time. A GTF alone, with the genome, builds the cache Ensembl VEP's `--gtf` would annotate from instead ([A GTF or GFF3 as the transcript model](../cache-from-gtf-or-gff3.md)). Or convert an existing Ensembl VEP cache with `scripts/data/storable_to_json.pl` ([scripts/README.md](../../scripts/README.md)).
+The inputs can also be named one flag at a time. A GTF alone, with the genome, builds the cache Ensembl VEP's `--gtf` would annotate from instead ([A GTF or GFF3 as the transcript model](../cache-from-gtf-or-gff3.md)). Or convert an existing Ensembl VEP cache with `tools/vep-storable-to-json` ([scripts/README.md](../../scripts/README.md)).
 
 ## 3. Annotate
 

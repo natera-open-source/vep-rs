@@ -150,7 +150,7 @@ impl GnomadcPlugin {
     /// divisor, as Perl's undefined value does. The sums live on the stack and
     /// the map is sized once, so a variant costs the key and value strings
     /// alone beyond the lookup.
-    fn write_means(&self, records: &[&TabixRecord], fields: &mut IndexMap<String, String>) {
+    fn write_means(&self, records: &[&TabixRecord], variant: &mut InputVariant) {
         let mut sums = [0.0f64; MAX_VALUE_COLUMNS];
         let sums = &mut sums[..self.keys.len()];
         for record in records {
@@ -159,12 +159,19 @@ impl GnomadcPlugin {
             }
         }
         let count = records.len() as f64;
-        fields.reserve(self.keys.len());
+        variant.plugin_data.reserve(self.keys.len());
         for (key, sum) in self.keys.iter().zip(sums.iter()) {
-            fields.insert(key.clone(), perl_format::fixed(sum / count, 4));
+            variant.set_plugin_value(
+                key.clone(),
+                perl_format::fixed(sum / count, 4),
+                false,
+                self.feature_types(),
+            );
         }
     }
 }
+
+impl crate::traits::sealed::Sealed for GnomadcPlugin {}
 
 impl BuiltinPlugin for GnomadcPlugin {
     fn name(&self) -> &str {
@@ -174,7 +181,7 @@ impl BuiltinPlugin for GnomadcPlugin {
     /// The Ensembl VEP module declares `['Feature', 'Intergenic']`: every row,
     /// the intergenic row included.
     fn feature_types(&self) -> &[RowKind] {
-        &RowKind::ALL
+        RowKind::ALL
     }
 
     fn header_info(&self) -> Vec<(String, String)> {
@@ -189,6 +196,12 @@ impl BuiltinPlugin for GnomadcPlugin {
 
     fn set_assembly(&mut self, assembly: Option<Assembly>) {
         self.assembly = assembly;
+    }
+
+    fn set_reference_fasta(&mut self, fasta: Option<std::sync::Arc<vep_fasta::IndexedFasta>>) {
+        if let Some(store) = self.store.as_mut() {
+            store.set_reference_fasta(fasta);
+        }
     }
 
     fn init(&mut self, params: &[String]) -> Result<(), PluginError> {
@@ -289,7 +302,7 @@ impl BuiltinPlugin for GnomadcPlugin {
             if records.is_empty() {
                 continue;
             }
-            self.write_means(&records, &mut variant.plugin_data);
+            self.write_means(&records, variant);
         }
 
         Ok(())
@@ -340,13 +353,12 @@ mod tests {
     }
 
     fn variant(start: u64, end: u64) -> InputVariant {
-        InputVariant {
-            chr: "21".to_string(),
-            original_chr: "21".to_string(),
-            start,
-            end,
-            ..InputVariant::default()
-        }
+        let mut variant = InputVariant::default();
+        variant.chr = "21".to_string();
+        variant.original_chr = "21".to_string();
+        variant.start = start;
+        variant.end = end;
+        variant
     }
 
     fn plugin(columns: usize) -> GnomadcPlugin {
@@ -559,10 +571,10 @@ mod tests {
         assert!(plugin.run_batch(&mut variants).is_ok());
     }
 
-    /// Ensembl VEP 116.2 never hands gnomADc a structural variant: the module
+    /// Ensembl VEP 116.3 never hands gnomADc a structural variant: the module
     /// keeps the default `variant_feature_types` of `['VariationFeature']`
     /// (BaseVepPlugin.pm:100), which the dispatch checks before running a
-    /// plugin on a line (OutputFactory.pm:2220). A `<DEL>` over the covered
+    /// plugin on a line (OutputFactory.pm:2229). A `<DEL>` over the covered
     /// positions gets no coverage field, while the sequence variant beside it
     /// is averaged.
     #[test]
@@ -723,7 +735,7 @@ mod tests {
         }
     }
 
-    /// The gate of OutputFactory.pm:2220 is applied before the coverage file is
+    /// The gate of OutputFactory.pm:2229 is applied before the coverage file is
     /// read: a structural variant's span, one record per base in the file, is
     /// left out of the prefetch query, so a `<DEL>` over eleven covered
     /// positions beside a substitution at one of them fetches that one record

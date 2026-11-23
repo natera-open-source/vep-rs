@@ -1,0 +1,12 @@
+### ENST00000000001
+{
+  'matrix' => 'ÿş€ raw â˜',
+  'k' => 'w'
+}
+
+### ENST00000000002
+{ 'biotype' => 'b ### inside' }
+### ENST00000000003
+{ 'peptide' => 'AC' }
+### inside' }
+x

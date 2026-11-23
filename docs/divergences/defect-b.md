@@ -1,12 +1,12 @@
 # Defect B: `start_lost` and `start_retained_variant` are both written for one allele
 
-**The defect in one sentence.** Ensembl VEP decides "the start codon is lost" and "the start codon is retained" with two separate tests that never consult each other, so one allele can be given both terms, and on the records of this class it is. Those records are of two kinds, a sequence deletion at a start codon and a structural allele over one, and on each vep-rs writes one of the two terms, the one the record supports.
+**The defect in one sentence.** Ensembl VEP decides "the start codon is lost" and "the start codon is retained" with two separate tests that never consult each other, so one allele can be given both terms, and on the records of this class it is. Those records are of two kinds, a sequence deletion at a start codon and a structural allele over one, both on a transcript that shows a start codon, and on each vep-rs writes one of the two terms, the one the record supports.
 
 **Why this is a defect.** The two terms contradict each other: a start codon cannot be both lost and kept by the same change. Which of the two is wrong depends on the allele. On a sequence deletion, an allele given as bases, Ensembl VEP rebuilds the leading untranslated region (UTR) and the coding sequence with the edit applied. The loss test behind `start_lost` reads that rebuilt sequence at the old UTR length, finds `TGA` where `ATG` stood, and reports the start altered; `start_lost` is the wrong member.
 
 On a structural allele, a symbolic one such as `<DEL>`, the retention test behind `start_retained_variant` returns "not altered" for every structural allele before reading anything, and the term is its negation; `start_retained_variant` is the wrong member. In both cases one term was computed from the record and the other was not.
 
-**What vep-rs does instead.** vep-rs writes one of the two terms, the one the record supports: `start_retained_variant` on a sequence deletion whose rebuilt sequence still begins with `ATG`, `start_lost` on a structural deletion whose interval contains the codon. The two are never written together.
+**What vep-rs does instead.** vep-rs writes one of the two terms, the one the record supports: `start_retained_variant` on a sequence deletion whose rebuilt sequence still begins with `ATG`, `start_lost` on a structural deletion whose interval contains the codon. The two are never written together. On a transcript that shows no start codon it writes neither, which is the entry [`start_codon_overlap_without_start_codon`](start-codon-overlap-without-start-codon.md).
 
 **Where it is in Ensembl VEP's source** (`ensembl-variation`, `Bio/EnsEMBL/Variation/Utils/VariationEffect.pm`):
 - `start_lost`, lines 851-903. The sequence branch (lines 869-883) calls `_inv_start_altered` (lines 906-944), whose `substr($utr_and_translateable, $atg_start, 3)` at line 939 reads at the old UTR length and whose `ne 'ATG'` test is line 941. The structural branch (lines 886-896, at 891 and 894) is an overlap of the span with the codon's three coordinates.
@@ -141,7 +141,7 @@ Both rows also carry `frameshift_variant`, which both engines derive from the de
 
 ### 3.6 Try it yourself
 
-The sequence deletion has two VCF spellings of one edit, because the deleted A is part of a two-base run. Annotate both with Ensembl VEP 116.2 (GRCh37 cache and FASTA, the command of [the closing section](reproducing.md)):
+The sequence deletion has two VCF spellings of one edit, because the deleted A is part of a two-base run. Annotate both with Ensembl VEP 116.3 (GRCh37 cache and FASTA, the command of [the closing section](reproducing.md)):
 
 - The left-aligned `21 36265245 . AT A` above gives ENST00000486278 `frameshift_variant,start_lost,start_retained_variant`.
 - The right-aligned `21 36265246 . TT T` (ClinVar's own `g.36265247del`) gives `5_prime_UTR_variant` with no start term at all; vep-rs writes the same `5_prime_UTR_variant` for that spelling.
@@ -155,7 +155,9 @@ The structural deletion has an explicit spelling too: write the same 673 deleted
 
 ### 3.7 How the comparator treats this class
 
-A pair matches when Ensembl VEP's set contains both `start_lost` and `start_retained_variant` and vep-rs's set is the same set minus exactly the erroneous member for the allele kind: `start_lost` on a sequence allele, `start_retained_variant` on a structural one. The test is `_is_start_cooccurrence_swap` in `scripts/concordance/compare_vep_outputs.py`. An allele written as bases or `-` is a sequence allele; a Sequence Ontology class name such as `deletion` is structural. A vep-rs set that adds any other term, or drops the other member, is not matched and stays charged. Both members of a matching pair are set aside.
+A pair matches when Ensembl VEP's set contains both `start_lost` and `start_retained_variant` and vep-rs's set is the same set minus exactly the erroneous member for the allele kind: `start_lost` on a sequence allele, `start_retained_variant` on a structural one. The test is `is_start_cooccurrence_swap` in `tools/vep-outputs-compare/src/rules/pair.rs`. An allele written as bases or `-` is a sequence allele; a Sequence Ontology class name such as `deletion` is structural. A vep-rs set that adds any other term, or drops the other member, is not matched, and stays charged unless another class takes the pair. Both members of a matching pair are set aside.
+
+A comparison that is given the cache vep-rs annotated with, the candidate's cache, matches a pair only where the transcript's record shows a start codon, and none where the cache gives no record for the row. On a transcript that shows none vep-rs writes neither term, and the pair is that of [`start_codon_overlap_without_start_codon`](start-codon-overlap-without-start-codon.md). A comparison that is given no cache reads the two sets alone.
 
 The class is fully masked. Counts, from the SNP/indel summary's `start_cooccurrence_swap` line:
 
@@ -166,6 +168,28 @@ The class is fully masked. Counts, from the SNP/indel summary's `start_cooccurre
 - 1000 Genomes high-coverage chr21: 1 pair.
 
 Its reach into the structural-variant sets is class 4.
+
+### 3.8 The protein notation under `--hgvs`
+
+The rows of 3.3 were written without `--hgvs`. Under it the two rows of the sequence deletion carry one more cell that differs, the `HGVSp` item of `Extra`:
+
+| Engine | `HGVSp` on ENST00000486278 |
+| --- | --- |
+| Ensembl VEP | `ENSP00000438019.1:p.Met1?` |
+| vep-rs | `ENSP00000438019.1:p.Met1%3D` |
+
+Ensembl VEP's notation is that of a lost start. Its `hgvs_protein` asks `start_lost` alone (`TranscriptVariationAllele.pm` lines 2161-2164), which the loss test of 3.4 answers for this allele, and writes `?` for the new protein. vep-rs writes the first residue, unchanged, `p.Met1=`. The default output of either engine writes the `=` of an `HGVSp` as `%3D`.
+
+The alternate coding sequence that both engines translate is the coding sequence with the allele written into it (`TranscriptVariationAllele.pm` lines 2394-2439). It holds no base of the 5' UTR, so on this record it opens `TGA`, and translated alone it reads as a frameshift from residue 1. The edited molecule does not read that frame: its start codon stands one base upstream, and every codon after it is the reference's. Translation from that codon gives the reference protein, which is what `p.Met1=` says and what the row's own term, `start_retained_variant`, says.
+
+The edit shortens the 5' UTR by one base and changes nothing else, as its right-aligned spelling in [3.6](#36-try-it-yourself) shows. The row's `frameshift_variant`, with the `Amino_acids` and `Codons` cells that go with it, is the term of 3.5's last paragraph, which both engines write alike.
+
+On a matching pair of 3.7, vep-rs writes `p.Met1=` for an insertion or deletion of any length wherever the retention test passes by its last comparison alone: the rebuilt string ends in the whole coding sequence (`VariationEffect.pm` line 1071). Two cases are read otherwise:
+
+- The transcript's first codon stands at the old UTR length behind an unchanged 5' UTR, which is the retention test's first comparison (lines 1061-1065). Translation is read from that codon, and vep-rs writes the notation of the change it shows there, such as a frameshift from a later residue or a duplication.
+- The deletion also removes bases of the 5' UTR. Its span opens before the coding sequence and has no protein position to start at, so neither engine writes an `HGVSp`.
+
+The comparators set a matching pair aside whole, so this cell is not compared.
 
 ## 4. Class 3 on the structural-variant sets
 

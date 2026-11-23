@@ -1,7 +1,7 @@
 entry = "dont_skip_cannot_keep"
 page = "docs/divergences/dont-skip-cannot-keep.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the region input format (Ensembl VEP documentation, \"Data formats\", REST-style regions); not seen in the measured datasets; classed by its most reachable shape, a span over --max_sv_size: a POS that is not a number breaks its Integer type (VCF 4.2 specification, section 1.4.1 \"Fixed fields\")"
 notes = "The first of the four shapes: a POS that is not a number. Under --dont_skip Ensembl VEP writes the text as the position and annotates the record as intergenic; vep-rs skips it with the parser's refusal."
@@ -27,3 +27,16 @@ where = { record = "pos_not_a_number" }
 [expected]
 ensembl_vep = ["21:abc | G | - | intergenic_variant"]
 vep_rs = []
+
+[implementation]
+code = [
+    "crates/vep-cli/src/pipeline.rs::place_parsed_line",
+    "crates/vep-cli/src/pipeline.rs::read_parsed",
+    "crates/vep-cli/src/validate.rs::SkipRules::validate",
+]
+tests = [
+    "crates/vep-cli/tests/documented_subsets.rs::dont_skip_exclusion_is_documented",
+    "crates/vep-cli/tests/input_validation.rs::dont_skip_keeps_a_chr_mismatch_silently_and_drops_two_shapes_warned",
+    "crates/vep-cli/tests/integration_test.rs::test_dont_skip_skips_an_invalid_vcf_line",
+    "crates/vep-cli/tests/pipeline_parity.rs::dont_skip_reports_the_malformed_line_in_a_later_batch_and_exits",
+]

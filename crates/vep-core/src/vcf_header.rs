@@ -57,8 +57,8 @@ fn is_ascii_space(b: u8) -> bool {
     matches!(b, b'\t' | b'\n' | 0x0B | 0x0C | b'\r' | b' ')
 }
 
-/// The first `<digits>.<digits>` of `value`, Perl's `/(\d+)\.(\d+)/`: the leftmost
-/// run of digits a `.` and a digit follow, with the digits after the `.`.
+/// The first `<digits>.<digits>` of `value`, Ensembl VEP's `/(\d+)\.(\d+)/`: the
+/// leftmost run of digits a `.` and a digit follow, with the digits after the `.`.
 fn first_version(value: &[u8]) -> Option<(&[u8], &[u8])> {
     let digits_end = |from: usize| {
         value[from..]
@@ -93,7 +93,7 @@ mod tests {
         "The VCF file format version 3.3 is not compatible with the parser version (VCF v4.2)";
     const UNREADABLE: &str = "The script can't read the VCF file format version of 'fileformat'";
 
-    /// Ensembl VEP 116.2, measured on each line as the first header line of a
+    /// Ensembl VEP 116.3, measured on each line as the first header line of a
     /// `--custom` VCF source: `VCFv3.3`, `VCFv5.0` and `##  fileformat=VCFv3.3`
     /// end the run with the version's text, `VCFv4` with the unreadable-version
     /// text; `VCFv4.2`, `VCFv4.5`, `VCFv04.2`, an empty value and `FILEFORMAT`

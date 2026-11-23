@@ -1,0 +1,18 @@
+##fileformat=VCFv4.2
+##contig=<ID=chr1,length=248956422,assembly=ID=chr1>
+##contig=<ID=chr2,length=242193529>
+##contig=<ID=chrX,length=156040895>
+##contig=<ID=3,length=198295559>
+##INFO=<ID=NOTE,Number=1,Type=String,Description="A note with ID=chr inside">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+chr1	1814	.	A	G	.	PASS	AF=0.5;NOTE=row 22 of the file
+chr2	2924	.	A	G	.	PASS	AF=0.8;NOTE=row 52 of the file
+
+  chr2 9000 . C T . PASS leading_blanks
+chr	9100	.	C	T	.	PASS	bare_prefix
+ 	 
+chr2	3368	.	A	G	.	PASS	AF=0.2;NOTE=row 64 of the file
+3	3738	.	A	G	.	PASS	AF=0.3;NOTE=row 74 of the file
+chrX	4848	.	A	G	.	PASS	AF=0.6;NOTE=row 104 of the file
+chr1	5033	.	A	G	.	PASS	AF=0.2;NOTE=row 109 of the file
+chrUn_KI270742v1	5144	.	A	G	.	PASS	NOTE=two  blanks	and a tab;DP=112 

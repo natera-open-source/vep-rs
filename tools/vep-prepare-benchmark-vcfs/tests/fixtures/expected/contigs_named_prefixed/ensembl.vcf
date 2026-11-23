@@ -1,0 +1,4 @@
+##fileformat=VCFv4.2
+##source=made-up records
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+2	1010	.	G	T	.	PASS	.

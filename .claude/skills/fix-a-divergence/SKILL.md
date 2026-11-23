@@ -19,7 +19,7 @@ follow [AGENTS.md](../../../AGENTS.md); the Ensembl VEP source paths are in step
 Take one record from a public dataset, or write one and print it in full. Run both engines on it
 with the same cache, assembly, flags and FASTA, as
 [docs/divergences/reproducing.md](../../../docs/divergences/reproducing.md) runs every example.
-Ensembl VEP runs from the pinned image `ensemblorg/ensembl-vep:release_116.2`. Without Docker and an
+Ensembl VEP runs from the pinned image `ensemblorg/ensembl-vep:release_116.3`. Without Docker and an
 Ensembl VEP 116 cache, start from a committed corpus instead: `cargo test -p vep-cli --test golden
 --test format_parity` lists every mismatching column of every format over `tests/golden/`, and the
 corpus's `expected/` directory is Ensembl VEP's output.
@@ -28,7 +28,7 @@ Check the index before classing the difference. Read
 [docs/intended-divergences.md](../../../docs/intended-divergences.md) and search its sections and the
 pages they link for the flag, the field or the shape of the row. A difference that is an entry there
 is intended, and a change that makes vep-rs match Ensembl VEP on it is refused. A row that differs
-from its entry's recorded shape is a `changed` verdict of `scripts/divergences/reevaluate.py`, which
+from its entry's recorded shape is a `changed` verdict of `tools/vep-divergence-reevaluate`, which
 re-traces the entry rather than opening a new one. Cite an entry as the index's first column names
 it (the text of its row's first cell, inner backticks dropped) or by the path of its page. Removing
 an entry needs the newer Ensembl VEP behaviour stated in plain words, with the record that shows it.
@@ -39,7 +39,7 @@ cache version, and either the index has no entry for the difference or you can c
 ## 2. Trace the mechanism
 
 Read the Ensembl VEP code that writes its row and cite every claim as `Module.pm:line` at
-`release/116.2`. Then derive the correct row from the record's own coordinates and the reference
+`release/116.3`. Then derive the correct row from the record's own coordinates and the reference
 sequence, not from either engine's output: which bases change, which transcript positions they
 touch, which Sequence Ontology terms follow.
 
@@ -63,11 +63,11 @@ vep-rs writes the correct row and the difference becomes an entry of the index. 
 one mechanism, and the entry's name is the class the comparators count its rows under. The pull
 request carries every part:
 
-- **The class name**, in `CORRECTED_BEHAVIOUR_CLASSES` of `scripts/golden/build_golden_corpus.py`
+- **The class name**, in `CORRECTED_BEHAVIOUR_CLASSES` of `tools/vep-golden-corpus/src/constants.rs`
   and of `crates/vep-cli/tests/common/mod.rs`, and as a built-in class of
-  `scripts/concordance/compare_vep_formats.py`, each recognising the shape of the disagreement from
+  `tools/vep-formats-compare`, each recognising the shape of the disagreement from
   the rows alone. The corpus that carries the record names the class in its `masks` list, and
-  `build_golden_corpus.py classify` records it on the explained rows as `expected_divergence`.
+  `vep-golden-corpus classify` records it on the explained rows as `expected_divergence`.
 - **The page**: `docs/divergences/<entry-with-hyphens>.md` (the entry's name is written with
   underscores, its page's with hyphens, and the reproduction's `page` key names the page), or a
   section of its subject's page where one exists (a plugin's divergences live on the plugin's page).
@@ -78,23 +78,26 @@ request carries every part:
 - **The index row**, in the section of `docs/intended-divergences.md` for the part of a run the
   entry touches, or under the same category of its last section of entries, `Differences only
   malformed input reaches`, when the entry's input class is `malformed`: the entry linked to its
-  page, the difference in one sentence, its `Tier and count`, `Verified against` 116.2, and the
+  page, the difference in one sentence, its `Tier and count`, `Verified against` 116.3, and the
   page. The section's rules place the row: the tier from the input the divergence needs, then the
   counts. Count what the tree lets you count (the committed flag sets whose command line reaches
   the divergence, the corpora whose records carry the shape) and name the counts under
   Verification. The maintainers measure the rate over the datasets the page names and hold the
   order with `scripts/divergences/check_divergence_order.py`.
 - **The reproduction**: `scripts/divergences/reproductions/<entry>.toml` in the shape the
-  directory's README defines, `verified_against = "116.2"`, the image by digest, the input class
+  directory's README defines, `verified_against = "116.3"`, the image by digest, the input class
   with its basis (`observed`, `unobserved` or `malformed`, as that README defines them), the record,
-  the committed cache, the compared field or rows and both engines' recorded values. `python3
-  scripts/divergences/reevaluate.py --check` passes, and `python3 -m pytest -q
-  scripts/divergences/test_reevaluate.py scripts/divergences/test_check_divergence_order.py` stays
-  green.
+  the committed cache, the compared field or rows, both engines' recorded values and the
+  `implementation` table: the functions that hold the entry's behaviour, the tests that pin
+  vep-rs's row and the comparison rules that recognise the difference, each as `<path>::<item>`.
+  `cargo run
+  --release --locked --manifest-path tools/vep-divergence-reevaluate/Cargo.toml -- --check` passes,
+  and `cargo test --locked --manifest-path tools/vep-divergence-reevaluate/Cargo.toml` and `python3
+  -m pytest -q scripts/divergences/test_check_divergence_order.py` stay green.
 - **The changelog line** under Unreleased, naming the entry and the page.
 
 Done when the harness passes with the class named, the index row and the reproduction agree, and
-`--check` reports every entry verified against 116.2.
+`--check` reports every entry verified against 116.3.
 
 ## 5. Gate
 
@@ -113,4 +116,5 @@ it, what the change does to it, and why the index's reasoning is wrong for this 
 step 4 checks the third, with its input, both engines' rows and why vep-rs's row is the one to keep.
 The first statement excludes the other two, and a change that edits the index, a page it links or
 the reproduction registry under `scripts/divergences/reproductions/` (its README excepted) cannot
-claim it.
+claim it; nor can a change to a line of an item a record's `implementation` table lists, which
+names that record's entry under the second statement.

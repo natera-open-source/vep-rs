@@ -1,7 +1,7 @@
 entry = "spliceai_reverse_strand_indel"
 page = "docs/plugins/spliceai.md#reverse-strand-indels"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under Ensembl VEP's default input format (Ensembl VEP documentation, \"Data formats\", \"Default Ensembl VEP input\": strand is + or -, and the section's own deletion example is on the reverse strand); not seen in the measured datasets"
 notes = "The strand -1 insertion of G between 21338600 and 21338601 is the forward-strand insertion of C, the indel fixture's `21 21338600 A AC` row; its forward-strand twin `-/C` on strand 1 scores that row in both engines."
@@ -15,8 +15,8 @@ text = """
 [cache]
 species = "homo_sapiens"
 assembly = "GRCh38"
-json_cache = "tests/golden/116/GRCh38-plugin-spliceai/json_cache"
-fasta = "tests/golden/116/GRCh38-plugin-spliceai/reference.fa.gz"
+json_cache = "tests/golden/116/GRCh38-plugin-spliceai-fixture/json_cache"
+fasta = "tests/golden/116/GRCh38-plugin-spliceai-fixture/reference.fa.gz"
 
 [run]
 flags = [
@@ -37,4 +37,13 @@ vep_rs = [
   "ENST00000400546=NCAM2|0.91|0.48|0.98|0.40|48|-1|11|17",
   "ENST00000461281=NCAM2|0.91|0.48|0.98|0.40|48|-1|11|17",
   "ENST00001131746=NCAM2|0.91|0.48|0.98|0.40|48|-1|11|17",
+]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/spliceai.rs::SpliceAiPlugin::written_alleles_match",
+    "crates/vep-builtins/src/tabix.rs::allele_match::matched_allele_offset",
+]
+tests = [
+    "crates/vep-cli/tests/plugin_documented_rows.rs::a_reverse_strand_spliceai_insertion_scores_the_row_of_its_forward_strand_twin",
 ]

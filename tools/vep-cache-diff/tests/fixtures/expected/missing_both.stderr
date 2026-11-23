@@ -1,0 +1,1 @@
+ERROR: [diff_caches] baseline directory not found: {{FIXTURES}}/caches/nowhere

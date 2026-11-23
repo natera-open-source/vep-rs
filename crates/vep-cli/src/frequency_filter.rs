@@ -2,13 +2,13 @@
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 //! The `--check_frequency` filter: Ensembl VEP's
-//! `AnnotationSource/Cache/BaseCacheVariation.pm` at release/116.2, which
+//! `AnnotationSource/Cache/BaseCacheVariation.pm` at release/116.3, which
 //! drops input alleles by the frequency of the known variants co-located with
 //! their record before any transcript is annotated (`check_frequency_filter`
-//! :271-289 validates the population, `get_frequency_data` :179-256 reads the
-//! frequencies, `_add_check_freq_data_to_vf` :394-446 judges each alternate
-//! allele, `check_pass` :460-471 is the threshold test and
-//! `frequency_check_buffer` :308-375 rewrites the buffer).
+//! :272-290 validates the population, `get_frequency_data` :179-257 reads the
+//! frequencies, `_add_check_freq_data_to_vf` :395-447 judges each alternate
+//! allele, `check_pass` :461-472 is the threshold test and
+//! `frequency_check_buffer` :309-376 rewrites the buffer).
 //!
 //! The filter is a stage of the binary's pipeline, between co-location and
 //! annotation as Ensembl VEP's variation source runs before its transcript
@@ -26,7 +26,7 @@
 //! never filters.
 //!
 //! `--freq_pop 1KG_ALL`, the default and what `--filter_common` reads, is
-//! resolved to the cache's `AF` column: Ensembl VEP 116.2 reads the
+//! resolved to the cache's `AF` column: Ensembl VEP 116.3 reads the
 //! `1KG_ALL` population from a record's `minor_allele` (:216-218) or its
 //! `1KG_ALL` or `ALL` keys (:232), none of which a release-116 cache carries,
 //! so it filters nothing under that population; `docs/intended-divergences.md`
@@ -34,15 +34,15 @@
 //!
 //! Two rules of the allele judgement are Ensembl VEP's own corrections of
 //! 116.2, its commits `b172d852`, `6f45fdb7` and `5f67fd83`, released in
-//! 116.3 (`_add_check_freq_data_to_vf` :423-433 there), so the filter diverges
-//! from the 116.2 reference by design and `docs/intended-divergences.md`
-//! documents both classes. A frequency of exactly `0` is a frequency: the
+//! 116.3 (`_add_check_freq_data_to_vf` :423-433 there): the filter judges
+//! both as Ensembl VEP 116.3 does, where Ensembl VEP 116.2 differs on
+//! each. A frequency of exactly `0` is a frequency: the
 //! value is read with Perl's `//`, so only a key without a value is `NA`, and
-//! `0` is judged against the threshold (116.2's `|| 'NA'` read a zero as no
-//! frequency). The frequency judged for an input allele is the one of the
+//! `0` is judged against the threshold (from 94.0 to 116.2, `|| 'NA'` read a zero
+//! as no frequency). The frequency judged for an input allele is the one of the
 //! known variant's allele it was matched to; the allele's own key is read only
 //! when no match was recorded (`--no_check_alleles`, a known variant with
-//! unknown alleles). 116.2 read the own key first, so a minimised insertion
+//! unknown alleles). Releases before 116.3 read the own key first, so an insertion
 //! `-/G` against a known `G/GG` read the reference `G`'s filled-in frequency
 //! of about 1 and `exclude` dropped a variant seen once as common. The matched
 //! allele is turned to the input's strand before the lookup, as the frequency
@@ -57,7 +57,7 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use vep_core::cache_info::CacheInfo;
-use vep_core::minimal::{rowless_alternate_allele, rowless_first_feature};
+use vep_core::minimal::{rowless_features, rowless_first_feature};
 use vep_core::sv_routing::{perl_split, perl_true};
 use vep_core::variant::{ColocatedVariant, InputVariant};
 use vep_core::variation::{perl_number_string, perl_numeric, reverse_comp};
@@ -133,11 +133,11 @@ fn lookup_names(freq_pop: &str) -> (String, Option<String>) {
 }
 
 /// Ensembl VEP's check of `--freq_pop` against the cache's declared variation
-/// columns (`BaseCacheVariation.pm:271-289`), run when `--check_frequency` is
+/// columns (`BaseCacheVariation.pm:272-290`), run when `--check_frequency` is
 /// on and the cache declares columns, as its variation source is built
 /// (`CacheDir.pm:179-207`): the population must be `1KG_ALL`, a column name, or
 /// `1KG_` followed by a column name, once upper-cased with `ExAC`, `Adj` and
-/// `gnomADe` respelled. The `gnomADg` respelling of :280 looks for `GNOMADg`,
+/// `gnomADe` respelled. The `gnomADg` respelling of :281 looks for `GNOMADg`,
 /// which no upper-cased name contains, so every gnomAD genome population is
 /// refused in every spelling, as Ensembl VEP refuses it.
 pub fn check_frequency_filter(config: &Config, info: &CacheInfo) -> Result<(), CliError> {
@@ -180,7 +180,7 @@ pub fn check_frequency_filter(config: &Config, info: &CacheInfo) -> Result<(), C
 #[derive(Debug, Clone, PartialEq)]
 pub struct FrequencyFilter {
     /// `--freq_pop` upper-cased: the population `FREQS` names
-    /// (`BaseCacheVariation.pm:402`, `OutputFactory.pm:1156`).
+    /// (`BaseCacheVariation.pm:403`, `OutputFactory.pm:1156`).
     freqs_key: String,
     /// The cache column read first on every co-located variant (:232), the
     /// respelled `--freq_pop`, or `AF` for `1KG_ALL`.
@@ -192,10 +192,10 @@ pub struct FrequencyFilter {
     /// `--freq_freq`.
     threshold: f64,
     /// `--freq_gt_lt gt`: an allele passes at or above the threshold; `lt`, at
-    /// or below (:467-468).
+    /// or below (:468-469).
     at_or_above: bool,
     /// `--freq_filter include`: a record is kept only when every alternate
-    /// allele passes; `exclude` drops the alleles that pass (:319-359).
+    /// allele passes; `exclude` drops the alleles that pass (:320-360).
     include: bool,
 }
 
@@ -223,7 +223,7 @@ impl FrequencyFilter {
     }
 
     /// Whether a record with no frequency data is dropped (`--freq_filter
-    /// include`, `BaseCacheVariation.pm:322`); under `exclude` it is kept.
+    /// include`, `BaseCacheVariation.pm:323`); under `exclude` it is kept.
     pub fn drops_records_without_data(&self) -> bool {
         self.include
     }
@@ -231,9 +231,9 @@ impl FrequencyFilter {
     /// Whether a record with no alternate allele is dropped: the feature of a
     /// non-variant line kept by `--allow_non_variant`, the reference alone
     /// (`Parser/VCF.pm:342`). Under `include` it is dropped without frequency
-    /// data (`BaseCacheVariation.pm:322`) and kept with it, since
+    /// data (`BaseCacheVariation.pm:323`) and kept with it, since
     /// `_add_check_freq_data_to_vf` marks a record passed when its pass count
-    /// equals its allele count (:444) and no allele can fail; under `exclude`
+    /// equals its allele count (:445) and no allele can fail; under `exclude`
     /// it is kept either way. The data is its co-located variants' as
     /// `get_frequency_data` reads them: a null-allele record at its span
     /// contributes the remainder `1` for its one allele (:249-252).
@@ -241,7 +241,7 @@ impl FrequencyFilter {
         self.include && !record.is_empty() && self.frequency_data(record).0.is_empty()
     }
 
-    /// `check_pass` (`BaseCacheVariation.pm:460-471`): inclusive on both sides.
+    /// `check_pass` (`BaseCacheVariation.pm:461-472`): inclusive on both sides.
     fn passes(&self, frequency: &Frequency) -> bool {
         let value = frequency.numeric();
         if self.at_or_above {
@@ -251,7 +251,7 @@ impl FrequencyFilter {
         }
     }
 
-    /// `get_frequency_data` (`BaseCacheVariation.pm:179-256`) over the
+    /// `get_frequency_data` (`BaseCacheVariation.pm:179-257`) over the
     /// record's co-located variants in window order (the order of Ensembl VEP's
     /// `existing` list, which the per-allele lists of a record whose alleles
     /// span different positions interleave by start): the frequency of every
@@ -294,8 +294,8 @@ impl FrequencyFilter {
                 }
             }
             // `%matched_alleles` (:206-210): the record allele turned to the input's
-            // strand so that it keys the frequencies; Perl keeps the known variant's
-            // own spelling (`b_allele`, Sequence.pm:1236).
+            // strand so that it keys the frequencies; Ensembl VEP keeps the known
+            // variant's own spelling (`b_allele`, Sequence.pm:1236).
             for pair in &cv.matched_alleles {
                 matched.insert(pair.input_allele.clone(), oriented(&pair.record_allele));
             }
@@ -324,20 +324,20 @@ impl FrequencyFilter {
 
     /// Judges one input record, the alleles split from one line, and returns
     /// which of them stay (`frequency_check_buffer`,
-    /// `BaseCacheVariation.pm:308-359`, with `_add_check_freq_data_to_vf`,
-    /// :394-446). Every allele of a record with frequency data gets the
+    /// `BaseCacheVariation.pm:309-360`, with `_add_check_freq_data_to_vf`,
+    /// :395-447). Every allele of a record with frequency data gets the
     /// record's `FREQS` entries; the survivors of a record that lost alleles
     /// get the rewritten allele string and their new allele numbers. An empty
     /// record has an empty verdict.
     ///
     /// Under `include` a record without frequency data is dropped, and so is
     /// one with a failing allele: Ensembl VEP rewrites its allele string to the
-    /// passing alleles and then leaves it out of the buffer (:325-334). Under
+    /// passing alleles and then leaves it out of the buffer (:326-335). Under
     /// `exclude` a record without data, or whose every allele fails, is kept
     /// whole; one whose every allele passes is dropped; one with both keeps
-    /// its failing alleles (:341-358).
+    /// its failing alleles (:342-359).
     ///
-    /// The alleles judged are those of the record's allele string (:404,
+    /// The alleles judged are those of the record's allele string (:405,
     /// `$vf->alt_alleles`), so a `*` or `.` ALT, which the parser reads as no
     /// variant, has no frequency and fails. When it alone stays, the record
     /// stays as Ensembl VEP keeps its feature: with no allele to annotate, the
@@ -358,7 +358,7 @@ impl FrequencyFilter {
         let mut freqs = Vec::with_capacity(alleles.len());
         for (allele, _) in &alleles {
             let (passed, entry) = self.judge_allele(allele, &frequencies, &matched);
-            // `%used_freqs` is keyed by allele (:433), so a repeated ALT lists once.
+            // `%used_freqs` is keyed by allele (:435), so a repeated ALT lists once.
             if !freqs.contains(&entry) {
                 freqs.push(entry);
             }
@@ -417,26 +417,41 @@ impl FrequencyFilter {
 
     /// `frequency_check_buffer` over a `--minimal` split record, whose alleles
     /// Ensembl VEP's input buffer made features of their own before the
-    /// variation source ran (InputBuffer.pm:265, :638-718), so :315 judges each
+    /// variation source ran (InputBuffer.pm:265, :638-718), so :316 judges each
     /// on its own co-located variants, the ones each allele carries here, and its
-    /// one alternate allele (:404). Each feature, with the reference row leading
+    /// one alternate allele (:405). Each feature, with the reference row leading
     /// it (`--process_ref_homs`), stays or goes whole and carries its own `FREQS`.
     /// A reference row leading no allele is the row of a feature that writes none
-    /// ([`vep_core::minimal::rowless_alternate_allele`]): the first feature's is
-    /// judged on the matches it carries ([`Self::judge_rowless_first_feature`]),
-    /// and a later one's feature matches no known allele, so it has no frequency
-    /// data, goes under `include` (:322) and stays under `exclude` (:341). Whether
-    /// the features that stay are written as one record or each as its own is the
-    /// batch's to decide once every record is judged, by the drops of the batch.
+    /// ([`vep_core::minimal::rowless_features`]), judged on the matches the row
+    /// carries with the feature's own alternate allele: the allele is its own key
+    /// when no match names it (:431 at release/116.3), so a `-` left by an allele
+    /// equal to the reference reads the frequency a known insertion at its point
+    /// gives its reference under `--no_check_alleles`, the remainder included
+    /// (:249-252). The features stand in the working string's order, one per
+    /// alternate allele; where they do not, a row past the first is judged as a
+    /// feature without frequency data. Whether the features that stay are written
+    /// as one record or each as its own is the batch's to decide once every record
+    /// is judged, by the drops of the batch.
     fn filter_split_record(&self, record: &mut [InputVariant]) -> Vec<bool> {
         let mut keep = vec![true; record.len()];
-        for feature in split_features(record) {
+        let features = split_features(record);
+        let rowless = rowless_features(&record[0]);
+        let alternates = record[0].record_allele_string().split('/').count() - 1;
+        let one_feature_per_allele = features.len() == alternates;
+        for (place, feature) in features.into_iter().enumerate() {
             let allele = feature.clone().find(|&i| !record[i].reference_allele_row);
             let (stays, freqs) = match allele {
                 Some(allele) => self.judge_feature(&record[allele]),
-                None => (feature.start == 0)
-                    .then(|| self.judge_rowless_first_feature(&record[0]))
-                    .flatten()
+                None => rowless
+                    .iter()
+                    .find(|(own, _)| *own == place && (place == 0 || one_feature_per_allele))
+                    .map(|(_, rowless)| {
+                        let mut judged = rowless.clone();
+                        judged
+                            .colocated_variants
+                            .clone_from(&record[feature.start].colocated_variants);
+                        self.judge_feature(&judged)
+                    })
                     .unwrap_or_else(|| (!self.include, Vec::new())),
             };
             for i in feature {
@@ -449,10 +464,10 @@ impl FrequencyFilter {
 
     /// The verdict and `FREQS` of the first feature of a split record whose first
     /// alternate allele writes no row (`*`, `<DEL:*>`, or the reference once
-    /// trimmed), which no allele of the batch stands for: :315 judges it like any
+    /// trimmed), which no allele of the batch stands for: :316 judges it like any
     /// other feature, on its own matches, which are the ones `allele`, any allele
     /// or reference row of the record, carries as `annotate_colocated` left them.
-    /// Under `include` a feature matching no known allele goes (:322). `None` for
+    /// Under `include` a feature matching no known allele goes (:323). `None` for
     /// an allele of any other record.
     pub fn judge_rowless_first_feature(
         &self,
@@ -465,31 +480,9 @@ impl FrequencyFilter {
         Some(self.judge_feature(&first))
     }
 
-    /// How many features of `record`, a split record, the filter drops that no
-    /// allele of the batch stands for and whose verdict no reference row carries:
-    /// each alternate allele after the first that writes no row
-    /// ([`vep_core::minimal::rowless_alternate_allele`]) matches no known allele
-    /// (`get_matched_variant_alleles` keys on the trimmed pair), so its feature has
-    /// no frequency data and `include` leaves it out of the buffer (:322), which
-    /// resets the buffer (:365-369) like any other drop and counts the feature
-    /// among the filtered variants (:362). Under `exclude` each stays (:341). The
-    /// first feature is [`Self::judge_rowless_first_feature`]'s.
-    pub fn later_rowless_features_dropped(&self, record: &[InputVariant]) -> usize {
-        if !self.include {
-            return 0;
-        }
-        let working = record[0].record_allele_string();
-        let mut parts = working.split('/');
-        let reference = parts.next().unwrap_or("");
-        parts
-            .skip(1)
-            .filter(|alt| rowless_alternate_allele(reference, alt))
-            .count()
-    }
-
     /// Gives every allele of a rejoined `--minimal` split record the `FREQS` of its
     /// first feature: the rejoin builds every row of the record from the hash of the
-    /// feature the others merge into (OutputFactory.pm:2289, read by :1149), so the
+    /// feature the others merge into (OutputFactory.pm:2298, read by :1149), so the
     /// later features' own values never print. A first feature no allele stands for
     /// is judged here ([`Self::judge_rowless_first_feature`]). A record the split
     /// left alone is left as it is.
@@ -507,11 +500,13 @@ impl FrequencyFilter {
     }
 
     /// One split feature's verdict and `FREQS`: `_add_check_freq_data_to_vf` on its
-    /// one alternate allele, then :319-358 with one allele, so under `include` it
+    /// one alternate allele, then :320-359 with one allele, so under `include` it
     /// stays when the allele passes and under `exclude` when it does not. A
-    /// feature with no frequency data stays under `exclude` alone (:322, :341) and
-    /// lists no `FREQS` (:255 sets none).
-    fn judge_feature(&self, feature: &InputVariant) -> (bool, Vec<String>) {
+    /// feature with no frequency data stays under `exclude` alone (:323, :342) and
+    /// lists no `FREQS` (:256 sets none). The known variants read are the ones
+    /// `feature` carries, so a feature that writes no row
+    /// ([`vep_core::minimal::rowless_features`]) is handed its own first.
+    pub fn judge_feature(&self, feature: &InputVariant) -> (bool, Vec<String>) {
         let (frequencies, matched) = self.frequency_data(std::slice::from_ref(feature));
         if frequencies.is_empty() {
             return (!self.include, Vec::new());
@@ -578,7 +573,7 @@ fn record_alleles(record: &[InputVariant]) -> Vec<(String, Option<usize>)> {
 }
 
 /// The record's allele string after `frequency_check_buffer` dropped alleles
-/// (`BaseCacheVariation.pm:355`, `join('/', ref_allele_string, @alts)`): the
+/// (`BaseCacheVariation.pm:356`, `join('/', ref_allele_string, @alts)`): the
 /// reference and the alleles that stay, set on every kept variant, each allele
 /// with its new `ALLELE_NUM`, which Ensembl VEP numbers from the rewritten string
 /// (`VariationFeatureOverlapAllele::allele_number` of ensembl-variation), and a
@@ -669,10 +664,9 @@ mod tests {
     ];
 
     fn info() -> CacheInfo {
-        CacheInfo {
-            variation_cols: COLUMNS.iter().map(|c| c.to_string()).collect(),
-            ..CacheInfo::default()
-        }
+        let mut info = CacheInfo::default();
+        info.variation_cols = COLUMNS.iter().map(|c| c.to_string()).collect();
+        info
     }
 
     fn config(args: &[&str]) -> Config {
@@ -693,28 +687,27 @@ mod tests {
         frequencies: &[(&str, &str)],
         matched: &[(&str, &str)],
     ) -> ColocatedVariant {
-        ColocatedVariant {
-            id: name.to_string(),
-            start: 100,
-            end: 100,
-            allele_string: Some(allele_string.to_string()),
-            strand: 1,
-            frequency_strings: frequencies
-                .iter()
-                .map(|(column, text)| (column.to_string(), text.to_string()))
-                .collect(),
-            matched_alleles: matched
-                .iter()
-                .enumerate()
-                .map(|(i, (input, record))| MatchedAllele {
-                    input_allele: input.to_string(),
-                    input_index: i,
-                    record_allele: record.to_string(),
-                    record_index: i,
-                })
-                .collect(),
-            ..ColocatedVariant::default()
-        }
+        let mut colocated = ColocatedVariant::default();
+        colocated.id = name.to_string();
+        colocated.start = 100;
+        colocated.end = 100;
+        colocated.allele_string = Some(allele_string.to_string());
+        colocated.strand = 1;
+        colocated.frequency_strings = frequencies
+            .iter()
+            .map(|(column, text)| (column.to_string(), text.to_string()))
+            .collect();
+        colocated.matched_alleles = matched
+            .iter()
+            .enumerate()
+            .map(|(i, (input, record))| MatchedAllele {
+                input_allele: input.to_string(),
+                input_index: i,
+                record_allele: record.to_string(),
+                record_index: i,
+            })
+            .collect();
+        colocated
     }
 
     /// The alleles of one record, `reference` against each of `alts`, each
@@ -750,7 +743,7 @@ mod tests {
         alleles_of(reference, &[alt], colocated)
     }
 
-    /// Ensembl VEP 116.2 on the release-116 GRCh38 cache, `21 5131441 T C` with
+    /// Ensembl VEP 116.3 on the release-116 GRCh38 cache, `21 5131441 T C` with
     /// `rs1555830109` (`AF` `C:0.006789`), `21 7759128 T A,G` with `rs1555870136`
     /// (`AF` `G:1`) and `21 5030192 A G` with `rs1172282560` (gnomAD genome
     /// columns alone) under `--check_frequency --freq_pop AF --freq_freq 0.01
@@ -843,7 +836,7 @@ mod tests {
     }
 
     /// A repeated ALT is one key of Ensembl VEP's `%used_freqs`
-    /// (`BaseCacheVariation.pm:433`), so `FREQS` lists it once: `21 7759128 T A,G,G`
+    /// (`BaseCacheVariation.pm:435`), so `FREQS` lists it once: `21 7759128 T A,G,G`
     /// against `rs1555870136` lists `AF:A:NA,AF:G:1`.
     #[test]
     fn a_repeated_alt_is_listed_once_in_freqs() {
@@ -871,7 +864,7 @@ mod tests {
     }
 
     /// A `*` ALT is an allele of the record's string with no variant behind it.
-    /// Ensembl VEP 116.2 judges it with the others (`$vf->alt_alleles`, :404): on
+    /// Ensembl VEP 116.3 judges it with the others (`$vf->alt_alleles`, :405): on
     /// `21 8529128 T C,*` against `rs66525445` (`AF` `C:0.1939,G:0.5665`) it
     /// prints `FREQS=AF:C:0.1939,AF:*:NA`; under `--freq_filter include` the
     /// failing `*` drops the record; under `exclude` at `--freq_freq 0.01` the
@@ -962,9 +955,9 @@ mod tests {
         assert!(!mixed[1].no_allele);
     }
 
-    /// Under `--freq_filter include` Ensembl VEP 116.2 drops a record with no
-    /// frequency data (`BaseCacheVariation.pm:322`) and a record with a failing
-    /// allele beside a passing one (:325-334 rewrites it and leaves it out of
+    /// Under `--freq_filter include` Ensembl VEP 116.3 drops a record with no
+    /// frequency data (`BaseCacheVariation.pm:323`) and a record with a failing
+    /// allele beside a passing one (:326-335 rewrites it and leaves it out of
     /// the buffer): under `--freq_pop AF --freq_freq 0.01 --freq_gt_lt gt
     /// --freq_filter include` it writes no row for `21 44195140 G A,C` (`A`
     /// 0.5625 passes, `C` has no value). A record whose every allele passes is
@@ -1012,7 +1005,7 @@ mod tests {
     /// (`Parser/VCF.pm:342`), is dropped under `include` only without frequency
     /// data: a null-allele known variant at its span supplies the remainder `1`
     /// (:249-252), and `_add_check_freq_data_to_vf` marks a record with no
-    /// allele to fail passed (:444). Ensembl VEP 116.2 under
+    /// allele to fail passed (:445). Ensembl VEP 116.3 under
     /// `--allow_non_variant --vcf --check_frequency --freq_pop AF --freq_filter
     /// include` writes `21 10521608 . C .` and `21 10521659 . A .`, each at a
     /// `COSMIC_MUTATION` record, and drops `21 5131442 . C .`, where no known
@@ -1028,7 +1021,7 @@ mod tests {
             "include",
         ]);
         let exclude = filter(&["--check_frequency", "--freq_pop", "AF"]);
-        let cosmic = known("COSV9900001", "COSMIC_MUTATION", &[], &[]);
+        let cosmic = known("COSV0000000", "COSMIC_MUTATION", &[], &[]);
         let feature = |colocated: Vec<ColocatedVariant>| {
             let mut v =
                 InputVariant::without_allele("21".into(), 10521608, "C", std::iter::empty());
@@ -1042,7 +1035,7 @@ mod tests {
         assert!(!include.drops_record_without_alleles(&[]));
     }
 
-    /// `check_pass` (`BaseCacheVariation.pm:467-468`) passes at the threshold
+    /// `check_pass` (`BaseCacheVariation.pm:468-469`) passes at the threshold
     /// on either side: `$f >= $freq_freq` under `gt`, `$f <= $freq_freq` under
     /// `lt`.
     #[test]
@@ -1087,7 +1080,7 @@ mod tests {
     }
 
     /// Under `lt` an allele passes at or below the threshold and fails above
-    /// it (`check_pass`, :468).
+    /// it (`check_pass`, :469).
     #[test]
     fn lt_passes_at_or_below_threshold() {
         let f = lt_include_filter();
@@ -1121,9 +1114,9 @@ mod tests {
     /// release/116.3): `21 5131441 T C` against `rs1555830109` (`gnomADe_AFR`
     /// `C:0`) under `--freq_pop gnomADe_AFR --freq_freq 0.05 --freq_gt_lt lt
     /// --freq_filter include` prints `FREQS=GNOMADE_AFR:C:0`, passes and is kept.
-    /// Ensembl VEP 116.2 read the zero as no frequency (`|| 'NA'`, :419), printed
-    /// `FREQS=GNOMADE_AFR:C:NA` and dropped the record; `docs/intended-divergences.md`
-    /// documents the class. A key written with no value is still `NA`.
+    /// Ensembl VEP releases 94.0 to 116.2 read the zero as no frequency (`|| 'NA'`,
+    /// :419 at release/116.2), printed `FREQS=GNOMADE_AFR:C:NA` and dropped the
+    /// record. A key written with no value is still `NA`.
     #[test]
     fn zero_frequency_is_a_frequency() {
         let f = lt_include_filter();
@@ -1181,10 +1174,10 @@ mod tests {
     /// :423-431 at release/116.3): an insertion minimised to `-/G` against a
     /// known `G/GG` with `gnomADe` `GG:6.365e-06` reads 6.365e-06 and stays
     /// under `--freq_freq 0.01 --freq_gt_lt gt --freq_filter exclude`. Ensembl
-    /// VEP 116.2 read the input allele's own key `G` first, the known reference
-    /// allele's filled-in `1 - total` (:249-252), and dropped the record as
-    /// common; `docs/intended-divergences.md` documents the class. A matched
-    /// allele without a value is `NA` even where the own key has one.
+    /// VEP releases before 116.3 read the input allele's own key `G` first, the
+    /// known reference allele's filled-in `1 - total` (:249-252), and dropped
+    /// the record as common. A matched allele without a value is `NA` even
+    /// where the own key has one.
     #[test]
     fn matched_allele_frequency_wins_over_the_input_key() {
         let f = filter(&[
@@ -1240,10 +1233,10 @@ mod tests {
         assert_eq!(unspelled[0].freqs, ["GNOMADE:A:NA"]);
     }
 
-    /// `check_frequency_filter` (`BaseCacheVariation.pm:271-289`) accepts
+    /// `check_frequency_filter` (`BaseCacheVariation.pm:272-290`) accepts
     /// `1KG_ALL`, any declared column in any case (`af`, `AFR`, `gnomade_nfe`
     /// respelled `gnomADe_NFE`) and `1KG_` before a column (`1KG_AFR`,
-    /// `1kg_all`), each of which Ensembl VEP 116.2 accepts on the release-116
+    /// `1kg_all`), each of which Ensembl VEP 116.3 accepts on the release-116
     /// GRCh38 cache.
     #[test]
     fn freq_pop_accepts_cache_columns_and_1kg_prefix() {
@@ -1273,12 +1266,12 @@ mod tests {
         );
     }
 
-    /// `ERROR: Invalid population <pop> specified` (:285) for a name that is no
+    /// `ERROR: Invalid population <pop> specified` (:286) for a name that is no
     /// column once upper-cased (`chr`, `AFR_AF`, `nowhere`) and for every
     /// gnomAD genome population (`gnomADg_AFR`, `gnomadg_afr`, `gnomadg`), since
-    /// the respelling at :280 matches nothing after `uc`, each of which Ensembl
-    /// VEP 116.2 refuses on the release-116 GRCh38 cache. An empty or `0`
-    /// population is `ERROR: No population specified` (:274).
+    /// the respelling at :281 matches nothing after `uc`, each of which Ensembl
+    /// VEP 116.3 refuses on the release-116 GRCh38 cache. An empty or `0`
+    /// population is `ERROR: No population specified` (:275).
     #[test]
     fn freq_pop_rejects_unknown_population_with_ensembl_message() {
         for pop in [
@@ -1306,7 +1299,7 @@ mod tests {
     /// `--filter_common` is `--check_frequency` under the defaults of
     /// `Config.pm:319-322` (`freq_pop 1KG_ALL`, `freq_freq 0.01`, `freq_gt_lt gt`,
     /// `freq_filter exclude`), and `1KG_ALL` reads the cache's `AF` column with
-    /// `FREQS` naming `1KG_ALL`; Ensembl VEP 116.2 reads no column for it.
+    /// `FREQS` naming `1KG_ALL`; Ensembl VEP 116.3 reads no column for it.
     #[test]
     fn filter_common_equals_check_frequency_defaults_with_af_column() {
         let common = filter(&["--filter_common"]);
@@ -1354,7 +1347,7 @@ mod tests {
 
     /// The lookup reads `$ex->{$freq_pop_full} || $ex->{$freq_pop}` (:232): a
     /// record with no `gnomADe_AFR` value is judged on its 1000 Genomes `AFR`
-    /// column. Ensembl VEP 116.2 under `--freq_pop gnomADe_AFR --freq_freq 0.05
+    /// column. Ensembl VEP 116.3 under `--freq_pop gnomADe_AFR --freq_freq 0.05
     /// --freq_gt_lt lt --freq_filter exclude` prints
     /// `FREQS=GNOMADE_AFR:A:0.7148,GNOMADE_AFR:C:NA` for `21 44195140 G A,C`
     /// against `rs2838519` (`AFR` `A:0.7148`, no gnomAD exome columns) and keeps
@@ -1493,13 +1486,13 @@ mod tests {
         split_alleles("GG/G/TG", &[(0, "G"), (1, "TG")])
     }
 
-    /// Ensembl VEP 116.2 on the release-116 GRCh38 cache, `21 31148973 . GG G,TG`
+    /// Ensembl VEP 116.3 on the release-116 GRCh38 cache, `21 31148973 . GG G,TG`
     /// under `--minimal --check_frequency --freq_pop AF --freq_freq 0.0001
     /// --freq_gt_lt gt --freq_filter include`: the input buffer split the record
     /// into `G/-` and `G/T` before the variation source ran (InputBuffer.pm:265),
-    /// `frequency_check_buffer` judged each feature alone (BaseCacheVariation.pm:315,
-    /// :404) and both passed, so the rejoined record writes 32 rows, every one
-    /// `FREQS=AF:-:0.6705`, the first feature's (OutputFactory.pm:2289, :1149).
+    /// `frequency_check_buffer` judged each feature alone (BaseCacheVariation.pm:316,
+    /// :405) and both passed, so the rejoined record writes 32 rows, every one
+    /// `FREQS=AF:-:0.6705`, the first feature's (OutputFactory.pm:2298, :1149).
     /// Under `--freq_freq 0.5 --freq_filter exclude` the deletion passes and goes
     /// and the substitution stays, written on its own with `FREQS=AF:T:0.1396`.
     /// Judged as one record over `GG/G/TG`, the `TG` allele would have no frequency
@@ -1539,10 +1532,10 @@ mod tests {
         assert_eq!(record[1].freqs, ["AF:T:0.1396"]);
     }
 
-    /// Ensembl VEP 116.2 on the release-116 GRCh38 cache, `21 31148973 . GG *,G,TG`
+    /// Ensembl VEP 116.3 on the release-116 GRCh38 cache, `21 31148973 . GG *,G,TG`
     /// under `--minimal --check_frequency --freq_pop AF --freq_gt_lt gt`: the first
     /// feature, `GG/*`, matches no known allele, so under `--freq_freq 0.0001
-    /// --freq_filter include` it goes (BaseCacheVariation.pm:322) while `G/-` and
+    /// --freq_filter include` it goes (BaseCacheVariation.pm:323) while `G/-` and
     /// `G/T`, judged on their own matches, stay and are written on their own, 16
     /// rows each with `FREQS=AF:-:0.6705` and `FREQS=AF:T:0.1396`; under
     /// `--freq_freq 0.9 --freq_filter exclude` nothing goes and the rejoined
@@ -1600,17 +1593,28 @@ mod tests {
         exclude.share_first_feature_freqs(&mut rejoined);
         assert!(rejoined.iter().all(|v| v.freqs.is_empty()));
 
+        // The features no allele stands for are built from any allele of the
+        // record, each at its place among the alternate alleles. `GG G,*,GG`
+        // holds two, the `*` and the allele the trim leaves equal to the
+        // reference; with no known variant of its own each is a feature `include`
+        // leaves out (:323) and `exclude` keeps (:342).
+        let places = |record: &[InputVariant]| -> Vec<usize> {
+            rowless_features(&record[0])
+                .into_iter()
+                .map(|(own, _)| own)
+                .collect()
+        };
         let star_last = split_alleles("GG/G/TG/*", &[(0, "G"), (1, "TG")]);
-        assert_eq!(include.later_rowless_features_dropped(&star_last), 1);
-        assert_eq!(exclude.later_rowless_features_dropped(&star_last), 0);
-        assert_eq!(include.later_rowless_features_dropped(&record), 0);
-        assert_eq!(include.later_rowless_features_dropped(&split_record()), 0);
-        // `GG G,*,GG` holds two later features no allele stands for, the `*` and
-        // the allele the trim leaves equal to the reference, each a feature of the
-        // buffer `include` leaves out and :362 counts.
+        assert_eq!(places(&star_last), [2]);
+        assert_eq!(places(&record), [0]);
+        assert!(places(&split_record()).is_empty());
         let two_rowless = split_alleles("GG/G/*/GG", &[(0, "G")]);
-        assert_eq!(include.later_rowless_features_dropped(&two_rowless), 2);
-        assert_eq!(exclude.later_rowless_features_dropped(&two_rowless), 0);
+        assert_eq!(places(&two_rowless), [1, 2]);
+        for (_, feature) in rowless_features(&two_rowless[0]) {
+            assert!(feature.colocated_variants.is_empty());
+            assert_eq!(include.judge_feature(&feature), (false, vec![]));
+            assert_eq!(exclude.judge_feature(&feature), (true, vec![]));
+        }
 
         let with_rows = vec![
             vep_core::minimal::split_reference_row(&record[0], 0),
@@ -1630,11 +1634,90 @@ mod tests {
         );
     }
 
+    /// `21 31148973 . GG G,*,GG` under `--minimal`: the last allele equals the
+    /// reference, so its feature is `-/-` at the point after the record's last
+    /// base (InputBuffer.pm:665), 31148975-31148974. A known insertion there is
+    /// listed under `--no_check_alleles` on its span alone
+    /// (AnnotationType/Variation.pm:159-161) with no match recorded, its `-`
+    /// takes the remainder of the one frequency it names
+    /// (BaseCacheVariation.pm:249-252), and the feature's `-` reads its own key
+    /// (:431 at release/116.3): 0.75 passes `--freq_freq 0.5`, so `exclude` drops
+    /// the feature and `include` keeps it, and the `*` feature beside it, which
+    /// no frequency keys, stays under `exclude` alone. Under `--process_ref_homs`
+    /// the reference row that stands for each feature takes that verdict and the
+    /// `FREQS` entry, read from the known variants the row carries.
+    #[test]
+    fn a_feature_that_writes_no_row_reads_the_frequency_its_own_allele_keys() {
+        let at_a_half = |mode: &str| {
+            filter(&[
+                "--minimal",
+                "--check_frequency",
+                "--freq_pop",
+                "AF",
+                "--freq_freq",
+                "0.5",
+                "--freq_filter",
+                mode,
+            ])
+        };
+        let (include, exclude) = (at_a_half("include"), at_a_half("exclude"));
+        let insertion = known("rs1", "-/A", &[("AF", "A:0.25")], &[]);
+        let record = split_alleles("GG/G/*/GG", &[(0, "G")]);
+
+        let mut features = rowless_features(&record[0]);
+        let (own, mut same_as_reference) = features.pop().unwrap();
+        assert_eq!(own, 2);
+        assert_eq!(
+            (
+                same_as_reference.allele_string.as_str(),
+                same_as_reference.start,
+                same_as_reference.end
+            ),
+            ("-/-", 31_148_975, 31_148_974)
+        );
+        same_as_reference.colocated_variants = vec![insertion.clone()];
+        let entry = vec!["AF:-:0.75".to_string()];
+        assert_eq!(
+            exclude.judge_feature(&same_as_reference),
+            (false, entry.clone())
+        );
+        assert_eq!(
+            include.judge_feature(&same_as_reference),
+            (true, entry.clone())
+        );
+        let (_, mut star) = features.pop().unwrap();
+        star.colocated_variants = vec![insertion.clone()];
+        let unkeyed = vec!["AF:*:NA".to_string()];
+        assert_eq!(exclude.judge_feature(&star), (true, unkeyed.clone()));
+        assert_eq!(include.judge_feature(&star), (false, unkeyed));
+
+        let mut with_rows = vec![
+            vep_core::minimal::split_reference_row(&record[0], 0),
+            record[0].clone(),
+            vep_core::minimal::split_reference_row(&record[0], 1),
+            vep_core::minimal::split_reference_row(&record[0], 2),
+        ];
+        with_rows[3].colocated_variants = vec![insertion];
+        assert_eq!(split_features(&with_rows), [0..2, 2..3, 3..4]);
+        let mut judged = with_rows.clone();
+        assert_eq!(
+            exclude.filter_record(&mut judged),
+            [false, false, true, false]
+        );
+        assert_eq!(judged[3].freqs, entry);
+        assert!(judged[2].freqs.is_empty());
+        assert_eq!(
+            include.filter_record(&mut with_rows),
+            [true, true, false, true]
+        );
+        assert_eq!(with_rows[3].freqs, entry);
+    }
+
     /// `C G,,T`, whose working string keeps the empty ALT (`C/G//T`) while its
     /// allele reads `-`: Ensembl VEP judges the string's alleles `G`, the empty
-    /// one and `T` (`$vf->alt_alleles`, :404), lists the empty one in `FREQS`
+    /// one and `T` (`$vf->alt_alleles`, :405), lists the empty one in `FREQS`
     /// under its empty name and joins it as the empty part of a rewritten string
-    /// (:355). It reads `NA`: no frequency is keyed by an empty allele, and
+    /// (:356). It reads `NA`: no frequency is keyed by an empty allele, and
     /// `get_matched_variant_alleles` records no match for an alternate allele Perl
     /// reads as false. The `-` variant carries that allele, not one of its own.
     #[test]

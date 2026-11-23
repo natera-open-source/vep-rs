@@ -1,0 +1,35 @@
+{
+  "assembly": "ASM14294v1",
+  "cache_version": 63,
+  "contig_order": [
+    "supercont1.1",
+    "supercont1.19",
+    "supercont1.99"
+  ],
+  "polyphen": "",
+  "regulatory": false,
+  "sift": "",
+  "source_versions": {
+    "assembly": "ASM14294v1",
+    "genebuild": "2010-12-BROAD"
+  },
+  "species": "phytophthora_infestans",
+  "var_type": "tabix",
+  "variation_cols": [
+    "chr",
+    "variation_name",
+    "failed",
+    "somatic",
+    "start",
+    "end",
+    "allele_string",
+    "strand",
+    "clin_sig",
+    "phenotype_or_disease",
+    "clin_sig_allele",
+    "clin_sig_ref_allele",
+    "clinical_impact",
+    "pubmed",
+    "var_synonyms"
+  ]
+}

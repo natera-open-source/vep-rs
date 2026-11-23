@@ -1,0 +1,94 @@
+{
+ "plugin_fixtures": {
+  "generator": "scripts/fixtures/cut_plugin_regions.py",
+  "flank": 5000,
+  "record_flank": 2000,
+  "exon_flank": 50,
+  "gerp_regions": "exons",
+  "tools": {
+   "bgzip": "bgzip (htslib) 1.9"
+  },
+  "files": {
+   "reference.fa.fai": "dc4a15b4e3d94d97ca8bb87a25781071e0f6e4d86009bc37cdac14c23d84264c",
+   "reference.fa.gz": "cb867b01c8a35586bcb7d7ac0c1e14ba93f914d1cd7866bbb88546f933cb13ef",
+   "reference.fa.gz.fai": "dc4a15b4e3d94d97ca8bb87a25781071e0f6e4d86009bc37cdac14c23d84264c",
+   "reference.fa.gz.gzi": "bc8bf645c88ce09d1d3b41906dce64d08d288f88b43bbc7aaa31e86e2d068416"
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 63,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species oryza_sativa --assembly IRGSP-1.0 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "oryza_sativa/63_IRGSP-1.0",
+ "fasta": "the three sequences the records and the pruned cache's transcripts sit on (9, Mt and Pt) at their full length from Oryza_sativa.IRGSP-1.0.dna.chromosome.9.fa, Oryza_sativa.IRGSP-1.0.dna.chromosome.Mt.fa and Oryza_sativa.IRGSP-1.0.dna.chromosome.Pt.fa of Ensembl Plants release 63, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
+ "input": "variants.vcf: 299 records on chromosome 9, the mitochondrion (Mt) and the plastid (Pt). 242 are records of tools/vep-seeded-variants in its wide mode under seed 1, generated from the converted cache with every reference allele read from the genome sequence, their IDs naming the situation and an ordinal: 29 situations, among them the start codons, the stop codons and the differently read codons of genetic code 11 on the plastid, the start and stop codons of the standard code, both strands, both splice sites, both untranslated regions, the three indel kinds, the first and the last base of a sequence and one deletion across the plastid's origin. Eleven of them name their sequence by a synonym the cache's chr_synonyms.txt lists (AP014965.1 for 9, NC_011033.1 for Mt, X15901.1 for Pt). 57 are known variants of chromosome 9 from the variation files of the Ensembl Plants release 63 cache, every one a single-nucleotide substitution under its Ensembl identifier, eight of them multi-allelic; the cache names no variant on Mt or Pt. The selection keeps two exemplars per consequence-set combination the two references show, stratified by variant class and strand, six per combination carrying a protein-level term, plus the records the manifest's included_records name: 225 generated records, the lowest eight ordinals of every situation and ten of the situations of genetic code 11, the organelles and the synonyms, and 48 known variants at an even stride",
+ "sha256": {
+  "default.txt": "73001b03e28cfbfb549c1046071c0c0efe9116c96e3cee6be0a5ff7a608f7d95",
+  "tab.txt": "ced93d0610c10b6924af9280aeeb8cb4fbcb2b6b6a0dc1d0b5648b86c6a4f3ae",
+  "vcf.vcf": "16d52da940e71ae51dc4c6bd56bee41e16ebb4c1edcb19382dba2f1957a5728e",
+  "json.jsonl": "9a9f04a76d24354b55237f131d7a5cc2bccdf5bb971d622919c113a91cc709d8"
+ },
+ "variants_vcf_sha256": "c74ad8d2f9bfffd3ce069035b6217c05707ee01174286bdaf1de138adb454444",
+ "flag_sets": {
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species oryza_sativa --assembly IRGSP-1.0 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "oryza_sativa/63_IRGSP-1.0",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "008b2f6dd1c3c59a02df98339cf9fa7a469d16c60c87bdefca3cac3f3e2140f9",
+    "tab.txt": "a2ac4bec608a88a716fce321baae1fd7789f0e907cd12c21719769ee1b43b4d1",
+    "vcf.vcf": "9c1b85899d5b0dcf5d12c3cf42ab793814b389c0746e2046464cabca5a761d08",
+    "json.jsonl": "f36163cb757bbb6122c25017e4d5cc906088066f97b3d5bd31e12e8199281d6d"
+   },
+   "flags": [
+    "--everything"
+   ],
+   "expected_dir": "expected_everything"
+  },
+  "hgvs-sift": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species oryza_sativa --assembly IRGSP-1.0 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs --sift b [--tab|--vcf|--json]",
+   "perl_cache": "oryza_sativa/63_IRGSP-1.0",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "a8e3ff359e2949de00bf7b24f2e3460548bd09e4830527324795dba2796a5fd2",
+    "tab.txt": "e77524853ee43e44cda32cc551d796c57de5499641cbdd2a99ae230125698cf5",
+    "vcf.vcf": "3f6bbc60fc089df581d3da71897924c868dbbeb4f0db8dcfb9114b361d9578a0",
+    "json.jsonl": "c91788926c6c4f92ed3b99028607d50008bd04952b0cafd963e088ea45ceda2f"
+   },
+   "flags": [
+    "--hgvs",
+    "--sift",
+    "b"
+   ],
+   "expected_dir": "expected_hgvs-sift"
+  }
+ },
+ "generator": "tools/vep-seeded-variants --cache <converted cache> --seed 1 --records wide --fasta <the genome sequence> --sequence 9 --sequence Mt --sequence Pt for the generated records, and 300 single-nucleotide substitutions drawn with seed 1 from the cache's variation files of the same sequences; Ensembl VEP over the two inputs under default flags; tools/vep-golden-corpus select --release 63 --assembly IRGSP-1.0 --species oryza_sativa --dataset wide=<reference>=<the generated records> --dataset known=<reference>=<the known variants> --k 2 --seed 1 --max-span 1000000 --max-records 500 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 6 --include <the named records> --covers species-rice-irgsp1 --covers genetic-code-tables --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_function_predictions --drop-except <the transcripts on which a record changes one residue, the rows SIFT scores> --perl-info <cache>/info.txt --cache-version 63 --variations <cache>/variations over the whole cache tools/vep-storable-to-json converts from the Ensembl Plants release 63 IRGSP-1.0 cache (protein features kept for the DOMAINS column of the everything set; the variation slices hold the known variants within one base of a record); scripts/fixtures/cut_plugin_regions.py --reference <the genome sequence> --flank 5000 --record-flank 2000, given the records with every sequence under the cache's own name; tools/vep-golden-corpus flag-set (everything, hgvs-sift); scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; tools/vep-golden-corpus classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp --field HGVS_OFFSET for the everything set and the same with --field SIFT for the hgvs-sift set)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "9": 429,
+   "Mt": 48,
+   "Pt": 124
+  },
+  "shards": 24,
+  "synonym_lines": 6,
+  "matrices_kept_on": 70,
+  "variation_records_per_chromosome": {
+   "9": 90,
+   "Mt": 0,
+   "Pt": 0
+  },
+  "variation_slices": "chromosome 9's known variants within one base of a record under variations/9/all_vars.gz, bgzip-compressed with a .csi; under variations/Mt/ and variations/Pt/ an empty indexed file, since the cache names no variant on the two organelles"
+ }
+}

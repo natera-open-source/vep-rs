@@ -1,17 +1,17 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {corpus}/plugin_data --plugin AlphaMissense,file={corpus}/plugin_data/alphamissense.tsv.gz [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh37",
  "fasta": "none on either side",
  "input": "18 ClinVar records on chromosome 21 (public ClinVar identifiers; INFO dropped) chosen from an AlphaMissense run over the whole chromosome, plus one two-allele record at 21:14982700, a position none of the 18 occupies, and one substitution written with an unchanged leading base (the alleles both engines trim before the match): missense substitutions every transcript row of which the prediction's amino-acid change names, records of several transcripts whose prediction names one of them (the other rows unscored under transcript_match), records whose transcripts give different amino-acid changes, a missense substitution the file has no row for, a synonymous, a stop-gained, a frameshift and an intronic record the plugin leaves alone, and a reverse-strand gene; every predicted transcript carries a one-digit version, so both engines match it under transcript_match",
  "sha256": {
-  "default.txt": "b0a65069271cb516ea10df32adbe42ff8a0e497352e271bd7f01d8c22f033324",
-  "tab.txt": "d89549b3efbd90824999a0d637c4a234844d6548c52b8574364185881feae29d",
-  "vcf.vcf": "632e730be184afaad87955ff1b9c404852b3b27054973f68a088430db367c189",
-  "json.jsonl": "1b37b0afcc049f902a067c42fe1e4fe5de7bac75e2b137294601e3c2e63cecfc"
+  "default.txt": "f9617f8893a8fb07bf6e37c81b7748c961585a0a15fa40c6b497b400d54e44d2",
+  "tab.txt": "a7a9f24ce867743baceb239a31940ca06969f122615c148f4ec03a86f2cddce4",
+  "vcf.vcf": "b5dc853ce69cd5eaa3bb73f06aced8ad81abf74ca7be9bf0fd3bbf16b74c4dd4",
+  "json.jsonl": "7c04c4ff0a604427ba1992d003b301601597270c941b60dfd0eb9bef553fd48e"
  },
  "variants_vcf_sha256": "2aa5e458c9e6b824c8ca8205a88626e1494c0612a5d8c02c6590fa2a165d57ae",
  "plugin_files": {
@@ -20,36 +20,62 @@
  },
  "flag_sets": {
   "cols-all": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {corpus}/plugin_data --plugin AlphaMissense,file={corpus}/plugin_data/alphamissense.tsv.gz,cols=all [--tab|--vcf|--json]",
-   "formats_compared": [
-    "default",
-    "tab",
-    "vcf",
-    "json"
+   "perl_cache": "homo_sapiens/116_GRCh37",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "290d9bdea15f3d938ecb7e62b67bc9fe33632a43878c72654755219a682a254f",
+    "tab.txt": "61bb2830ef13fee904b6458aeafc999cf87ef7ac5002d9f758027591087a6ba2",
+    "vcf.vcf": "33760213821d218403aa9d80cda0f3dac25d99b16a72eb6b605db596e52f2749",
+    "json.jsonl": "20145a2d77492328f8cf85fd8fdc48dee0516a5be455b45a6cf1eb28dd6ef476"
+   },
+   "flags": [
+    "--dir_plugins",
+    "{corpus}/plugin_data",
+    "--plugin",
+    "AlphaMissense,file={corpus}/plugin_data/alphamissense.tsv.gz,cols=all"
    ],
    "expected_dir": "expected_cols-all",
-   "sha256": {
-    "default.txt": "9fa58e150492b218d350b2f53c5f8711e7f582df573a2295cd41b125e7ecc4cc",
-    "tab.txt": "9aa95ee0dfc3b84c42dbbd746e2269dd8b9565600ba23e09e21ef450bcf13111",
-    "vcf.vcf": "a23df991b627cd9579b3273ed667d742852a76bdcac20fd7451a5ef8c4dabe63",
-    "json.jsonl": "cb0fd9e744b060d92a1172ab2a3574b4e0f39779aaed46b8a6603213bace64a7"
-   }
-  },
-  "transcript-match": {
-   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {corpus}/plugin_data --plugin AlphaMissense,file={corpus}/plugin_data/alphamissense.tsv.gz,transcript_match=1 [--tab|--vcf|--json]",
    "formats_compared": [
     "default",
     "tab",
     "vcf",
     "json"
+   ]
+  },
+  "transcript-match": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {corpus}/plugin_data --plugin AlphaMissense,file={corpus}/plugin_data/alphamissense.tsv.gz,transcript_match=1 [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh37",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "8048efd75fb3141f0171566478c4b51e0924f3b0f024ed59090e5d519099da9f",
+    "tab.txt": "ccdd036cf564675b7829511000f1803da43802fafb44fd63909564d476ee1a5a",
+    "vcf.vcf": "137cd49a7c366c952399534f589af2dca9b8846824417178df70fc7714ff3948",
+    "json.jsonl": "d87377cf10f2904f8ff6ed81756f83a22681f2e7863b7116a185b49b57bb6123"
+   },
+   "flags": [
+    "--dir_plugins",
+    "{corpus}/plugin_data",
+    "--plugin",
+    "AlphaMissense,file={corpus}/plugin_data/alphamissense.tsv.gz,transcript_match=1"
    ],
    "expected_dir": "expected_transcript-match",
-   "sha256": {
-    "default.txt": "15f3b38c3a1dc19de7a4b72e627d7c3ebcdf68515f579a2e6415e75307e243fc",
-    "tab.txt": "c7b3738277e82827e9567922162b4366fdcdd697e1078f81e00be233a0a3ac67",
-    "vcf.vcf": "6ea218f2f9ff6e489c433ca5c6e5f5eb4b66c39c1743def2fddacbd2ac80792c",
-    "json.jsonl": "bca015bc0ee828a231eff3d3c40b9b823844d25d61187a2186762fd56f94e710"
-   }
+   "formats_compared": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ]
   }
  },
  "plugin_fixtures": {
@@ -67,5 +93,5 @@
    }
   }
  },
- "generator": "plugin_data/alphamissense.tsv.gz: a tabix cut of the published AlphaMissense file to the records' spans (plugin_fixtures); json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice scripts/data/storable_to_json.pl converted from the Ensembl VEP 116 GRCh37 cache; expected outputs: scripts/concordance/generate_reference_output.sh --corpus --dir-plugins <VEP_plugins checkout> for the manifest's run, and one Ensembl VEP 116.2 container run per format for each flag set from the vep command recorded under its flag_sets entry, the corpus mounted read-only at /work/corpus as the working directory and the AlphaMissense plugin read from the container's plugin directory, whose module text equals the VEP_plugins release/116 checkout's; manifest: scripts/golden/build_golden_corpus.py select --include for every record, flag-set, then classify for the manifest's run and each flag set against the committed tree's binary"
+ "generator": "plugin_data/alphamissense.tsv.gz: a tabix cut of the published AlphaMissense file to the records' spans (plugin_fixtures); json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice tools/vep-storable-to-json converts from the Ensembl VEP 116 GRCh37 cache; expected outputs: scripts/concordance/generate_reference_output.sh --corpus --dir-plugins <VEP_plugins checkout> for the manifest's run, and one Ensembl VEP 116.3 container run per format for each flag set from the vep command recorded under its flag_sets entry, the corpus mounted read-only at /work/corpus as the working directory and the AlphaMissense plugin read from the container's plugin directory, whose module text equals the VEP_plugins release/116 checkout's; manifest: tools/vep-golden-corpus select --include for every record, flag-set, then classify for the manifest's run and each flag set against the committed tree's binary"
 }

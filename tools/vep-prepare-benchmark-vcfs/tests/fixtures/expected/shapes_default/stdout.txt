@@ -1,0 +1,13 @@
+prepared .vcf -> .vcf (mode=keep, variants=1, headers=3, canonical_dropped=0)
+prepared B.vcf -> B.vcf (mode=keep, variants=1, headers=3, canonical_dropped=0)
+prepared byte_order_mark.vcf -> byte_order_mark.vcf (mode=keep, variants=2, headers=2, canonical_dropped=1 chr_stripped=true)
+prepared empty.vcf -> empty.vcf (mode=keep, variants=0, headers=0, canonical_dropped=0)
+prepared ends_in_cr_lf.vcf -> ends_in_cr_lf.vcf (mode=keep, variants=2, headers=3, canonical_dropped=0 chr_stripped=true)
+prepared header_without_line_end.vcf -> header_without_line_end.vcf (mode=keep, variants=0, headers=2, canonical_dropped=0)
+prepared lone_cr.vcf -> lone_cr.vcf (mode=keep, variants=2, headers=3, canonical_dropped=1 chr_stripped=true)
+prepared odd_lines.vcf -> odd_lines.vcf (mode=keep, variants=7, headers=6, canonical_dropped=6 chr_stripped=true)
+prepared only_dropped.vcf -> only_dropped.vcf (mode=keep, variants=0, headers=3, canonical_dropped=2)
+prepared same.vcf -> same.vcf (mode=keep, variants=1, headers=3, canonical_dropped=0 chr_stripped=true)
+prepared empty.vcf.gz -> empty.vcf (mode=keep, variants=0, headers=0, canonical_dropped=0)
+prepared same.vcf.gz -> same.vcf (mode=keep, variants=2, headers=3, canonical_dropped=0)
+wrote manifest: {{OUTPUT_DIR}}/manifest.json

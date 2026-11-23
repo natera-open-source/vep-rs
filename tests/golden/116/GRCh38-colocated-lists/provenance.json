@@ -1,24 +1,24 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --check_existing --af --af_1kg --af_gnomade --af_gnomadg --max_af --pubmed --var_synonyms --clinvar_somatic_classification --failed 1 [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "none on either side",
  "input": "variants.vcf: 23 chromosome 21 records, 22 single-base substitutions and one with two alternate alleles, each at the position and with the alleles of a record of the GRCh38-minor-allele-columns corpus, so the pruned transcript cache holds every transcript Ensembl VEP reaches from them; each identifier is . and no identifier of any Ensembl VEP cache is carried",
  "sha256": {
-  "default.txt": "3017eb5e6cb2a7df1a8d5c4a00c0289763ae4510c979c3c2be8079a424f7a33a",
-  "tab.txt": "f91d011df9b1d4e511ec4706672ac2c599a8687332e1a0774c536d8aa3af09d6",
-  "vcf.vcf": "46581975c4df7f1fd946718be2cf7bcedc354fc07bdaf2dabfdc53832e521c4f",
-  "json.jsonl": "cfb376353e4aaddde2ca7cc0fc1e1b262d6df10ed48986f64504fe5e7990d92e",
-  "default.summary.log": "e7f85a7dc7938f92a8df169e4d2c0f50d72d96c654dd2d3ed5649b829208d9ac",
-  "tab.summary.log": "534cbe8e18920f8ba8c7ec1d615b7acfe04bfff8c9c947e7a250e486b35329be",
-  "vcf.summary.log": "feb0884e26713a4090385d7ab287c3d0af75cf4ef3448ba6ead266db3fb3f373",
-  "json.summary.log": "dfed78f2be813981610569ec6eae7b033356cd9314a2d50b76751352a9e4c1b7"
+  "default.txt": "d585c849320457fba4796a856d7666788d6d278dcaf91d6eac4710a4781d692c",
+  "tab.txt": "43404b928ce8be021bdf5490d20b46823585c5c83b860372bfeb12667eb0ec17",
+  "vcf.vcf": "ecc165d1d27753f87c418e14e90eee3cbda2fc569c3c7150d639972ef42d4f2c",
+  "json.jsonl": "ec2621041d276c73fbe877ca3b38729871574aa87c53502873e83c952b6474bf",
+  "default.summary.log": "ebe510f4bebc715598a0a524b2591c2ecbec557fa6e52c94987faa0cbb70d053",
+  "tab.summary.log": "61d052c74f225207c283488d99c530fb5c120ee10f7f5ef17d6534ea5d51ba02",
+  "vcf.summary.log": "07ab3331fdec8ab12b739657734814304e8d3bf940ccc8969f496a27702591b8",
+  "json.summary.log": "bbd1fa4ee1565b81c5838218f182d0892df0fcd38bb9922d3e63f133733711a5"
  },
  "variants_vcf_sha256": "ab5059346fa8c9571a88de4ce53b11a8bcc92ead0a452cc1f60565f6587d68a7",
- "generator": "scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite lists=<reference>=<candidates> --k 1 --seed 1 --multi-allelic-per-suite 2 --cache tests/golden/116/GRCh38-release116/json_cache --covers <each name of the manifest's covers> --matrix tests/parity/matrix.tsv --flag=<each flag of the manifest> --include lists=<each record's name>; scripts/golden/prune_json_cache.py --cache tests/golden/116/GRCh38-release116/json_cache --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <the GRCh38 cache's info.txt> --cache-version 116 --variations <a directory holding the slice committed as json_cache/variations/21/all_vars.gz>; scripts/concordance/generate_reference_output.sh --corpus; scripts/golden/build_golden_corpus.py flag-set --name no-check-alleles; scripts/concordance/generate_reference_output.sh --corpus --flag-set no-check-alleles; scripts/golden/build_golden_corpus.py classify, once for the manifest's run and once with --flag-set no-check-alleles",
+ "generator": "tools/vep-golden-corpus select --release 116 --assembly GRCh38 --dataset lists=<reference>=<candidates> --k 1 --seed 1 --multi-allelic-per-dataset 2 --cache tests/golden/116/GRCh38-release116/json_cache --covers <each name of the manifest's covers> --matrix tests/parity/matrix.tsv --flag=<each flag of the manifest> --include lists=<each record's name>; scripts/golden/prune_json_cache.py --cache tests/golden/116/GRCh38-release116/json_cache --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <the GRCh38 cache's info.txt> --cache-version 116 --variations <a directory holding the slice committed as json_cache/variations/21/all_vars.gz>; scripts/concordance/generate_reference_output.sh --corpus; tools/vep-golden-corpus flag-set --name no-check-alleles; scripts/concordance/generate_reference_output.sh --corpus --flag-set no-check-alleles; tools/vep-golden-corpus classify, once for the manifest's run and once with --flag-set no-check-alleles",
  "pruned_cache": {
   "source": "tests/golden/116/GRCh38-release116/json_cache, cut to the transcripts within 5,000 bases of a record",
   "transcripts_per_chromosome": {
@@ -132,23 +132,23 @@
  },
  "flag_sets": {
   "no-check-alleles": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --check_existing --no_check_alleles --af --af_1kg --af_gnomade --af_gnomadg --max_af --pubmed --var_synonyms --clinvar_somatic_classification --failed 1 [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
    "fasta": "none on either side",
    "input": "variants.vcf",
    "sha256": {
-    "default.txt": "477d6501601f1de193d2cc97f6a59de151934fb95b63f8a5a4852edb20e2933e",
-    "tab.txt": "57a437d204d87afbcb00ba143c737d3b0e6b74d622fe6b80035d0e8af3d4f52f",
-    "vcf.vcf": "e94987c99273442d71757437a569290dc1d3348295abd836b2a79391dac29d3c",
-    "json.jsonl": "4e95d5c37c7169f2be0171e2aa82cc8de004370cdde1898db9a09fe8ce81bdb5",
-    "default.summary.log": "b2c00f9dc10bc5370dc1e8ec2c779a681eacb5f6093efb75f20cce152ee2eb22",
-    "tab.summary.log": "f458746ff40efe166ecea7d60f44a5ab4f038bc696647d0438cbdfde9d6d7a5c",
-    "vcf.summary.log": "68dd649af97f7091924e9d6f91823a39f6367f540fa3e62d43e0f36388ab8c10",
-    "json.summary.log": "0610f8cbe010dcd22e1ca716e1ec2527d94fa9c32d48d2f18d32fc7bb9d709df"
+    "default.txt": "e800ff478728a70cf4621cc222b4fa0132d07c19fd7180505b5ad1bb8efc93f5",
+    "tab.txt": "d99924fa0189be726c0d384a9758902ac21893845397caf37747830c08506ccc",
+    "vcf.vcf": "0fdbfdc9d8683bf56caf5f67291379a0ef67b81e355094de948a391c52cff485",
+    "json.jsonl": "67e04200ad2ec01a6d97f65098da40e8cf2c727a07259af86a384f27ab9d8f5c",
+    "default.summary.log": "9e25115372a42f5e76e8c4f6f5257aac026030d9dcfc67314f055f45a4203a5e",
+    "tab.summary.log": "4fc3d1231f2a748aaf0f32ee3657077c5331cf1ce8cd3d2d0d72f281f6ef4904",
+    "vcf.summary.log": "f5bb282bb3b1b08281e9bf8d9405f6e8b32348db0363c28667b972787e1e9b4d",
+    "json.summary.log": "9a9f78e1770d46413427ad81cf627a98fde54182da230f4488fe5f66447e499f"
    },
    "flags": [
     "--check_existing",

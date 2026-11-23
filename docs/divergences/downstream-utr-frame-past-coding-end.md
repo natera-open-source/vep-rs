@@ -25,7 +25,7 @@ Tier 2 is the second of the three tiers of [Intended divergences from Ensembl VE
 
 ## 1. A four-base deletion over the stop codon of BRIP1
 
-**In short.** `17 59760656 530351 ATTAC A`, a ClinVar record, deletes the last base of codon 1249 and the stop codon of ENST00000259008 (BRIP1, reverse strand). Both engines write `frameshift_variant,stop_lost`, `p.Lys1249AsnfsTer4` and `ProteinLengthChange=2`: three new residues and a stop. vep-rs writes those three residues, `DownstreamProtein=NNT`. Ensembl VEP 116.2 writes `DownstreamProtein=`, an empty value, because it reads the 3' UTR from its first codon, `TAA`.
+**In short.** `17 59760656 530351 ATTAC A`, a ClinVar record, deletes the last base of codon 1249 and the stop codon of ENST00000259008 (BRIP1, reverse strand). Both engines write `frameshift_variant,stop_lost`, `p.Lys1249AsnfsTer4` and `ProteinLengthChange=2`: three new residues and a stop. vep-rs writes those three residues, `DownstreamProtein=NNT`. Ensembl VEP 116.3 writes `DownstreamProtein=`, an empty value, because it reads the 3' UTR from its first codon, `TAA`.
 
 ### 1.1 What a reader needs to know first
 
@@ -43,7 +43,7 @@ On the forward strand the record deletes `TTAC`, 17:59760657-59760660. On the tr
 
 ### 1.3 What each engine writes
 
-Ensembl VEP 116.2, default format:
+Ensembl VEP 116.3, default format:
 
 ```
 530351	17:59760657-59760660	-	ENSG00000136492	ENST00000259008	Transcript	frameshift_variant,stop_lost	4015-4018	3747-3750	1249-1250	K*/X	aaGTAA/aa	-	IMPACT=HIGH;STRAND=-1;HGVSc=ENST00000259008.2:c.3747_3750del;HGVSp=ENSP00000259008.2:p.Lys1249AsnfsTer4;DownstreamProtein=;ProteinLengthChange=2
@@ -74,7 +74,7 @@ vep -i variants.vcf -o out.txt --offline --json_cache json_cache \
   --assembly GRCh37 --fasta reference.fa.gz --hgvs --plugin Downstream
 ```
 
-vep-rs writes `DownstreamProtein=NNT` on the row. Ensembl VEP 116.2, run on the same record against its own GRCh37 cache and the reference FASTA, writes `DownstreamProtein=`; the corpus's `expected/` directory holds its four outputs. Dropping `--hgvs` changes neither value, the record having no 3' shift.
+vep-rs writes `DownstreamProtein=NNT` on the row. Ensembl VEP 116.3, run on the same record against its own GRCh37 cache and the reference FASTA, writes `DownstreamProtein=`; the corpus's `expected/` directory holds its four outputs. Dropping `--hgvs` changes neither value, the record having no 3' shift.
 
 ### 1.7 How the comparator treats this class
 

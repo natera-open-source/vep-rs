@@ -1,0 +1,207 @@
+[
+ {
+  "entry": "count_kind",
+  "verdict": "changed",
+  "ensembl_vep": [
+   "1"
+  ],
+  "vep_rs": [
+   "2"
+  ],
+  "detail": "Ensembl VEP ['1'], vep-rs ['2']"
+ },
+ {
+  "entry": "exit_kind",
+  "verdict": "still-present",
+  "ensembl_vep": [
+   "2"
+  ],
+  "vep_rs": [
+   "0"
+  ],
+  "detail": ""
+ },
+ {
+  "entry": "field_kind",
+  "verdict": "still-present",
+  "ensembl_vep": [
+   "ENST1=ENSP1:p.Leu4Pro"
+  ],
+  "vep_rs": [
+   "ENST1=ENSP1:p.Leu4%3D"
+  ],
+  "detail": ""
+ },
+ {
+  "entry": "header_kind",
+  "verdict": "still-present",
+  "ensembl_vep": [
+   "## DISTANCE : Shortest distance from variant to <masked>",
+   "## HGVSp : HGVS protein sequence name"
+  ],
+  "vep_rs": [
+   "## DISTANCE : Distance to the <masked>",
+   "## HGVSp : HGVS protein sequence name"
+  ],
+  "detail": ""
+ },
+ {
+  "entry": "json_kind",
+  "verdict": "still-present",
+  "ensembl_vep": [
+   "ENSP1:p.Leu4Pro"
+  ],
+  "vep_rs": [
+   "ENSP1:p.Leu4%3D"
+  ],
+  "detail": ""
+ },
+ {
+  "entry": "json_values_kind",
+  "verdict": "changed",
+  "ensembl_vep": [
+   "{\"canonical\":true,\"consequence_terms\":[\"missense_variant\"],\"flags\":null,\"hgvsp\":\"ENSP1:p.Leu4Pro\",\"sift_score\":0.05,\"transcript_id\":\"ENST1\"}",
+   "{\"consequence_terms\":[\"intron_variant\"],\"distance\":12,\"transcript_id\":\"ENST2\"}"
+  ],
+  "vep_rs": [
+   "{\"canonical\":true,\"consequence_terms\":[\"missense_variant\"],\"flags\":null,\"hgvsp\":\"ENSP1:p.Leu4%3D\",\"sift_score\":0.05,\"transcript_id\":\"ENST1\"}",
+   "{\"consequence_terms\":[\"intron_variant\"],\"distance\":12.0,\"transcript_id\":\"ENST2\"}"
+  ],
+  "detail": "Ensembl VEP ['{\"canonical\":true,\"consequence_terms\":[\"missense_variant\"],\"flags\":null,\"hgvsp\":\"ENSP1:p.Leu4Pro\",\"sift_score\":0.05,\"transcript_id\":\"ENST1\"}', '{\"consequence_terms\":[\"intron_variant\"],\"distance\":12,\"transcript_id\":\"ENST2\"}'], vep-rs ['{\"canonical\":true,\"consequence_terms\":[\"missense_variant\"],\"flags\":null,\"hgvsp\":\"ENSP1:p.Leu4%3D\",\"sift_score\":0.05,\"transcript_id\":\"ENST1\"}', '{\"consequence_terms\":[\"intron_variant\"],\"distance\":12.0,\"transcript_id\":\"ENST2\"}']"
+ },
+ {
+  "entry": "lines_kind",
+  "verdict": "closed",
+  "ensembl_vep": [
+   "rec2\t21:300\tC\tENSG3\tENST3\tTranscript\tdownstream_gene_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER;DISTANCE=4000;FILE=<path>"
+  ],
+  "vep_rs": [
+   "rec2\t21:300\tC\tENSG3\tENST3\tTranscript\tdownstream_gene_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER;DISTANCE=4000;FILE=<path>"
+  ],
+  "detail": "Ensembl VEP ['rec2\\t21:300\\tC\\tENSG3\\tENST3\\tTranscript\\tdownstream_gene_variant\\t-\\t-\\t-\\t-\\t-\\t-\\tIMPACT=MODIFIER;DISTANCE=4000;FILE=<path>'], vep-rs ['rec2\\t21:300\\tC\\tENSG3\\tENST3\\tTranscript\\tdownstream_gene_variant\\t-\\t-\\t-\\t-\\t-\\t-\\tIMPACT=MODIFIER;DISTANCE=4000;FILE=<path>']"
+ },
+ {
+  "entry": "lines_unmasked_kind",
+  "verdict": "still-present",
+  "ensembl_vep": [
+   "rec2\t21:300\tC\tENSG3\tENST3\tTranscript\tdownstream_gene_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER;DISTANCE=4000;FILE=/opt/vep/data/x.gz  "
+  ],
+  "vep_rs": [
+   "rec2\t21:300\tC\tENSG3\tENST3\tTranscript\tdownstream_gene_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER;DISTANCE=4000;FILE=/home/user/data/x.gz",
+   "rec2\t21:300\tC\tENSG3\tENST4\tTranscript\tdownstream_gene_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER;FILE=/home/user/data/x.gz"
+  ],
+  "detail": ""
+ },
+ {
+  "entry": "prepare_error_kind",
+  "verdict": "error",
+  "ensembl_vep": null,
+  "vep_rs": null,
+  "detail": "cannot prepare"
+ },
+ {
+  "entry": "recorded_exit_kind",
+  "verdict": "changed",
+  "ensembl_vep": [
+   "21:100 | A | ENST1 | missense_variant,splice_region_variant",
+   "21:100 | A | ENST2 | intron_variant"
+  ],
+  "vep_rs": [
+   "21:100 | A | ENST1 | splice_region_variant,missense_variant",
+   "21:100 | A | ENST2 | non_coding_transcript_variant"
+  ],
+  "detail": "Ensembl VEP ['21:100 | A | ENST1 | missense_variant,splice_region_variant', '21:100 | A | ENST2 | intron_variant'], vep-rs ['21:100 | A | ENST1 | splice_region_variant,missense_variant', '21:100 | A | ENST2 | non_coding_transcript_variant']; vep-rs exit 3: "
+ },
+ {
+  "entry": "rows_kind",
+  "verdict": "still-present",
+  "ensembl_vep": [
+   "21:100 | A | ENST1 | missense_variant,splice_region_variant",
+   "21:100 | A | ENST2 | intron_variant"
+  ],
+  "vep_rs": [
+   "21:100 | A | ENST1 | splice_region_variant,missense_variant",
+   "21:100 | A | ENST2 | non_coding_transcript_variant"
+  ],
+  "detail": ""
+ },
+ {
+  "entry": "stats_kind",
+  "verdict": "still-present",
+  "ensembl_vep": [
+   "00-10%\t1",
+   "10-20%\t2"
+  ],
+  "vep_rs": [
+   "00-10%\t1",
+   "10-20%\t3"
+  ],
+  "detail": ""
+ },
+ {
+  "entry": "stderr_kind",
+  "verdict": "still-present",
+  "ensembl_vep": [
+   "ERROR: [input] bad record at <path> line 3"
+  ],
+  "vep_rs": [],
+  "detail": ""
+ },
+ {
+  "entry": "stdout_kind",
+  "verdict": "still-present",
+  "ensembl_vep": [
+   "done",
+   "\u00e9 and a tab\there"
+  ],
+  "vep_rs": [
+   "done"
+  ],
+  "detail": ""
+ },
+ {
+  "entry": "tool_kind",
+  "verdict": "changed",
+  "ensembl_vep": [
+   "rec1 | IMPACT=MODERATE;HGVSp=ENSP1:p.Leu4Pro;PICK=1",
+   "rec1 | IMPACT=MODIFIER",
+   "rec2 | IMPACT=MODIFIER;DISTANCE=4000;FILE=<path>"
+  ],
+  "vep_rs": [],
+  "detail": "Ensembl VEP ['rec1 | IMPACT=MODERATE;HGVSp=ENSP1:p.Leu4Pro;PICK=1', 'rec1 | IMPACT=MODIFIER', 'rec2 | IMPACT=MODIFIER;DISTANCE=4000;FILE=<path>'], vep-rs []"
+ },
+ {
+  "entry": "vcf_kind",
+  "verdict": "still-present",
+  "ensembl_vep": [
+   "ENSP1:p.Leu4Pro"
+  ],
+  "vep_rs": [
+   "ENSP1:p.Leu4%3D"
+  ],
+  "detail": ""
+ },
+ {
+  "entry": "vcf_line_kind",
+  "verdict": "still-present",
+  "ensembl_vep": [
+   "21\t300\trec2\tG\tC\t.\t.\t."
+  ],
+  "vep_rs": [
+   "21\t300\trec2\tG\tC\t.\t.\tCSQ=C|downstream_gene_variant|ENST3|"
+  ],
+  "detail": ""
+ },
+ {
+  "entry": "warnings_kind",
+  "verdict": "still-present",
+  "ensembl_vep": [
+   "WARNING: <masked> : <masked> <path>",
+   "WARNING: <masked> : <masked>"
+  ],
+  "vep_rs": [
+   "WARNING: <masked> : <masked> <path>"
+  ],
+  "detail": ""
+ }
+]

@@ -1,7 +1,7 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --dir_plugins {plugins} --plugin NMD --plugin Faulty --plugin pLI,{corpus}/plugin_data/pLI_values.txt [--tab|--vcf|--json]",
  "generator": "variants.vcf and json_cache: the GRCh38-plugin-nmd corpus's records and its pruned cache (scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice of the vep-rs JSON conversion of the Ensembl VEP 116 GRCh38 cache), copied as they are; manifest: that corpus's manifest with this corpus's flags, covers, plugin_files, masks and reference_warnings; plugins/Faulty.pm: the Ensembl VEP module the reference run loads from --dir_plugins {plugins}, mounted by the generator's --dir-plugins; plugin_data/pLI_values.txt: the rows of the pLI plugin's bundled pLI_values.txt for the genes the records' transcript rows name, the directory vep-rs reads as {plugins}; expected outputs and this record: scripts/concordance/generate_reference_output.sh --corpus tests/golden/116/GRCh38-plugin-faulty --dir-plugins tests/golden/116/GRCh38-plugin-faulty/plugins --perl-cache-dir <full Ensembl VEP 116 GRCh38 cache> (NMD and pLI read from the image's /plugins through PERL5LIB), the warnings file kept beside each format as expected/<format>.warnings.log",
@@ -9,14 +9,14 @@
  "fasta": "none on either side",
  "input": "variants.vcf",
  "sha256": {
-  "default.txt": "057b2ff186ce53e2b6f472d8bcc163479115270a41d8033e602a389f22e79906",
-  "tab.txt": "26f70fdae3cd9f7b2b299e84b7021738f7b21b260695b91ae4179792b4f857c4",
-  "vcf.vcf": "c5101de5009fbd521a5b8d63b41ea8a5329c8a42a8219ae6c82e1a0ffe4cde91",
-  "json.jsonl": "36444343b9cb4dd0764d088e8ac5a06300212b0bc8b04c016e41204b86585f5a",
-  "default.summary.log": "fccd38400eaaabf419eae8db225648cae6a2048813cb07373f07a3130ab27b34",
-  "tab.summary.log": "ca2e0c0a1bd77cdf482e18fca11d180a441d1852be206c65af6b65f753fac301",
-  "vcf.summary.log": "7edb011602baa4adbaa232ff296e6143801c4de96f263f427be5880ed5dbc6db",
-  "json.summary.log": "c03c614b8565e8b24851ff7dfb044c32d15b3281ead141fd8d64a6ecd7ea0503"
+  "default.txt": "74c8cf48dd0b00ff3a152f790d62b2b9604daafb24123eb6acb817fc1540d195",
+  "tab.txt": "1f0b93240c855741d1fe75bddda83760bfb0d7162bce23519878c39ae5e971d0",
+  "vcf.vcf": "8a9c9ce56fc49271f9de3766ae846dd161bd0dbcb45d4f995fd50d816e2c008e",
+  "json.jsonl": "b518dcf339c044d32619ce0e67b1ecaa3e635c03b58d07effccd9a3e6f358309",
+  "default.summary.log": "b9bc58d3a1a7318ef4f3acfedc4addc63f57c9b0a015817d1a9c92646d42e3ac",
+  "tab.summary.log": "340157f8d0e27c0522a4bf331e32593a715a7646b8472baee216451ee445242a",
+  "vcf.summary.log": "4aa7a2175cece3436e0ff305b936aabede564e7a0ee7c5187a7c601b14689ae0",
+  "json.summary.log": "23e2fec542106cc4fde001b887a32b1b6808fd64bfb676722d153a95e58a6c97"
  },
  "variants_vcf_sha256": "4cfb05d3fc9562013946a49419c6f6a2d140d580307035ea30c5c54b92598f1e",
  "plugin_files": {

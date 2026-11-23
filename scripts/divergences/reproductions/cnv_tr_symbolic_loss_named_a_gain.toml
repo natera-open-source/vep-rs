@@ -1,0 +1,101 @@
+entry = "cnv_tr_symbolic_loss_named_a_gain"
+page = "docs/divergences/cnv-tr-symbolic-loss-named-a-gain.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "unobserved"
+input_class_basis = "well-formed under the VCF 4.4 specification, section 5.7 \"Representing tandem repeats\" (a <CNV:TR> allele whose RUS and RUC state fewer bases than SVLEN gives the reference allele, or exactly as many); not seen in the measured datasets"
+notes = "Line 4 of the corpus's input: SVLEN gives a run of nine bases at 21:13620284-13620292, three copies of the unit, and RUC=2 states an allele of two units, six bases. Neither engine reads a FASTA, so both keep the allele symbolic over the run. Ensembl VEP reads every tandem_repeat as a copy-number gain and names feature_elongation on the two coding transcripts; vep-rs names feature_truncation there. The upstream row and every other cell are equal. Line 5 of the input, in the same run, states three units, nine bases on the run of nine: Ensembl VEP writes it the rows of line 4, and vep-rs names no direction term on the two coding transcripts, where its IMPACT is the MODIFIER of coding_sequence_variant. The further run is line 8, two alleles of four units and of two, with the FASTA under --max_sv_size 10: the first allele's twelve bases keep the whole record symbolic, and the second allele's rows differ in the same term."
+
+[input]
+format = "vcf"
+text = """
+21	13620283	tr_loss	G	<CNV:TR>	.	.	SVLEN=9;RN=1;RUS=TCA;RUC=2
+21	13620283	tr_same	G	<CNV:TR>	.	.	SVLEN=9;RN=1;RUS=TCA;RUC=3
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-vcf-tandem-repeats/json_cache"
+
+[run]
+flags = ["--uploaded_allele", "--allele_number", "--variant_class"]
+
+[compare]
+kind = "rows"
+where = { record = ["tr_loss", "tr_same"] }
+columns = ["Location", "Allele", "Feature", "Consequence", "IMPACT"]
+
+[expected]
+ensembl_vep = [
+  "21:13620284-13620292 | tandem_repeat | ENST00000299443 | feature_elongation,coding_sequence_variant | HIGH",
+  "21:13620284-13620292 | tandem_repeat | ENST00000299443 | feature_elongation,coding_sequence_variant | HIGH",
+  "21:13620284-13620292 | tandem_repeat | ENST00000384745 | upstream_gene_variant | MODIFIER",
+  "21:13620284-13620292 | tandem_repeat | ENST00000384745 | upstream_gene_variant | MODIFIER",
+  "21:13620284-13620292 | tandem_repeat | ENST00000620442 | feature_elongation,coding_sequence_variant | HIGH",
+  "21:13620284-13620292 | tandem_repeat | ENST00000620442 | feature_elongation,coding_sequence_variant | HIGH",
+]
+vep_rs = [
+  "21:13620284-13620292 | tandem_repeat | ENST00000299443 | coding_sequence_variant | MODIFIER",
+  "21:13620284-13620292 | tandem_repeat | ENST00000299443 | feature_truncation,coding_sequence_variant | HIGH",
+  "21:13620284-13620292 | tandem_repeat | ENST00000384745 | upstream_gene_variant | MODIFIER",
+  "21:13620284-13620292 | tandem_repeat | ENST00000384745 | upstream_gene_variant | MODIFIER",
+  "21:13620284-13620292 | tandem_repeat | ENST00000620442 | coding_sequence_variant | MODIFIER",
+  "21:13620284-13620292 | tandem_repeat | ENST00000620442 | feature_truncation,coding_sequence_variant | HIGH",
+]
+
+[[also]]
+notes = "The FASTA under --max_sv_size 10: a record whose first allele is over ten bases stays symbolic, and its second allele states a loss."
+
+[also.input]
+format = "vcf"
+text = """
+21	13620283	tr_multi	G	<CNV:TR>,<CNV:TR>	.	.	SVLEN=9,9;RN=1,1;RUS=TCA,TCA;RUC=4,2
+"""
+
+[also.run]
+flags = [
+  "--uploaded_allele",
+  "--allele_number",
+  "--variant_class",
+  "--fasta",
+  "{repo}/tests/golden/116/GRCh38-identifiers/reference.fa.gz",
+  "--max_sv_size",
+  "10",
+]
+
+[also.compare]
+kind = "rows"
+where = { record = "tr_multi", feature = "ENST00000299443" }
+columns = ["Location", "Allele", "Feature", "Consequence", "ALLELE_NUM"]
+
+[also.expected]
+ensembl_vep = [
+  "21:13620284-13620292 | tandem_repeat | ENST00000299443 | feature_elongation,coding_sequence_variant | 1",
+  "21:13620284-13620292 | tandem_repeat | ENST00000299443 | feature_elongation,coding_sequence_variant | 2",
+]
+vep_rs = [
+  "21:13620284-13620292 | tandem_repeat | ENST00000299443 | feature_elongation,coding_sequence_variant | 1",
+  "21:13620284-13620292 | tandem_repeat | ENST00000299443 | feature_truncation,coding_sequence_variant | 2",
+]
+
+[implementation]
+code = [
+    "crates/vep-core/src/sv_record.rs::stated_alleles",
+    "crates/vep-core/src/sv_record.rs::tandem_repeat_alleles_as_long_as_the_run",
+    "crates/vep-core/src/sv_record.rs::tandem_repeat_stated_bases",
+    "crates/vep-effects/src/sv/mod.rs::name_no_length_term",
+    "crates/vep-effects/src/sv/mod.rs::name_the_stated_loss",
+]
+tests = [
+    "crates/vep-cli/tests/tandem_repeat_as_long_as_its_run_read_symbolically.rs::an_allele_as_long_as_its_run_names_the_coding_sequence_and_no_length_term",
+    "crates/vep-cli/tests/tandem_repeat_as_long_as_its_run_read_symbolically.rs::the_json_object_of_an_allele_as_long_as_its_run_has_the_coding_sequence_as_most_severe",
+    "crates/vep-cli/tests/tandem_repeat_loss_read_symbolically.rs::an_allele_kept_symbolic_for_its_records_size_is_named_by_its_own_stated_length",
+    "crates/vep-cli/tests/tandem_repeat_loss_read_symbolically.rs::an_allele_that_states_fewer_bases_than_its_run_is_named_a_truncation_without_a_reference",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/term_pairs.rs::names_no_length_term",
+    "tools/vep-formats-compare/src/rules/term_pairs.rs::symbolic_loss_named_a_gain_pair",
+    "tools/vep-golden-corpus/src/classify/tandem_repeat_loss.rs::classify_symbolic_loss_pair",
+    "tools/vep-golden-corpus/src/classify/tandem_repeat_loss.rs::records_of_both",
+]

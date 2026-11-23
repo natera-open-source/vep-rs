@@ -11,8 +11,8 @@
 //! `upstream_gene_variant` or `downstream_gene_variant` row carries the
 //! notation of the most 3' placement on the transcript's strand, with
 //! `HGVS_OFFSET` and the two fields of the HGVSIntronOffset plugin.
-//! Ensembl VEP 116.2 asks for a notation only on a row inside the transcript
-//! (OutputFactory.pm:1721, BaseVariationFeatureOverlapAllele.pm:460-481), so
+//! Ensembl VEP 116.3 asks for a notation only on a row inside the transcript
+//! (OutputFactory.pm:1730, BaseVariationFeatureOverlapAllele.pm:460-481), so
 //! it writes no HGVSc on such a row.
 //! The records are made up on the chromosome 21 reference the corpora carry,
 //! and every expected value follows from the record's bases and the bases at

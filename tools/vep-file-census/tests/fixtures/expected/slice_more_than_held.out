@@ -1,0 +1,124 @@
+##fileformat=VCFv4.2
+##contig=<ID=chr1,length=248956422,assembly=ID=chr1>
+##contig=<ID=chr2,length=242193529>
+##contig=<ID=chrX,length=156040895>
+##contig=<ID=3,length=198295559>
+##INFO=<ID=NOTE,Number=1,Type=String,Description="A note with ID=chr inside">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+chr1	1000	.	A	G	.	PASS	NOTE=two  blanks	and a tab;DP=0 
+chr1	1037	.	A	G	.	PASS	AF=0.2;NOTE=row 1 of the file
+chr1	1074	.	A	G	.	PASS	AF=0.3;NOTE=row 2 of the file
+chr1	1111	.	A	G	.	PASS	AF=0.4;NOTE=row 3 of the file
+chr1	1148	.	A	G	.	PASS	AF=0.5;NOTE=row 4 of the file
+chr1	1185	.	A	G	.	PASS	AF=0.6;NOTE=row 5 of the file
+chr1	1222	.	A	G	.	PASS	AF=0.7;NOTE=row 6 of the file
+chr1	1259	.	A	G	.	PASS	NOTE=two  blanks	and a tab;DP=7 
+chr1	1296	.	A	G	.	PASS	AF=0.9;NOTE=row 8 of the file
+chr1	1333	.	A	G	.	PASS	AF=0.1;NOTE=row 9 of the file
+chr1	1370	.	A	G	.	PASS	AF=0.2;NOTE=row 10 of the file
+chr1	1407	.	A	G	.	PASS	AF=0.3;NOTE=row 11 of the file
+chr1	1444	.	A	G	.	PASS	AF=0.4;NOTE=row 12 of the file
+chr1	1481	.	A	G	.	PASS	AF=0.5;NOTE=row 13 of the file
+chr1	1518	.	A	G	.	PASS	NOTE=two  blanks	and a tab;DP=14 
+chr1	1555	.	A	G	.	PASS	AF=0.7;NOTE=row 15 of the file
+chr1	1592	.	A	G	.	PASS	AF=0.8;NOTE=row 16 of the file
+chr1	1629	.	A	G	.	PASS	AF=0.9;NOTE=row 17 of the file
+chr1	1666	.	A	G	.	PASS	AF=0.1;NOTE=row 18 of the file
+chr1	1703	.	A	G	.	PASS	AF=0.2;NOTE=row 19 of the file
+chr1	1740	.	A	G	.	PASS	AF=0.3;NOTE=row 20 of the file
+chr1	1777	.	A	G	.	PASS	NOTE=two  blanks	and a tab;DP=21 
+chr1	1814	.	A	G	.	PASS	AF=0.5;NOTE=row 22 of the file
+chr1	1851	.	A	G	.	PASS	AF=0.6;NOTE=row 23 of the file
+chr1	1888	.	A	G	.	PASS	AF=0.7;NOTE=row 24 of the file
+chr1	1925	.	A	G	.	PASS	AF=0.8;NOTE=row 25 of the file
+chr1	1962	.	A	G	.	PASS	AF=0.9;NOTE=row 26 of the file
+chr1	1999	.	A	G	.	PASS	AF=0.1;NOTE=row 27 of the file
+chr1	2036	.	A	G	.	PASS	NOTE=two  blanks	and a tab;DP=28 
+chr1	2073	.	A	G	.	PASS	AF=0.3;NOTE=row 29 of the file
+chr1	2110	.	A	G	.	PASS	AF=0.4;NOTE=row 30 of the file
+chr1	2147	.	A	G	.	PASS	AF=0.5;NOTE=row 31 of the file
+chr1	2184	.	A	G	.	PASS	AF=0.6;NOTE=row 32 of the file
+chr1	2221	.	A	G	.	PASS	AF=0.7;NOTE=row 33 of the file
+chr1	2258	.	A	G	.	PASS	AF=0.8;NOTE=row 34 of the file
+chr1	2295	.	A	G	.	PASS	NOTE=two  blanks	and a tab;DP=35 
+chr1	2332	.	A	G	.	PASS	AF=0.1;NOTE=row 36 of the file
+chr1	2369	.	A	G	.	PASS	AF=0.2;NOTE=row 37 of the file
+chr1	2406	.	A	G	.	PASS	AF=0.3;NOTE=row 38 of the file
+chr1	2443	.	A	G	.	PASS	AF=0.4;NOTE=row 39 of the file
+chr2	2480	.	A	G	.	PASS	AF=0.5;NOTE=row 40 of the file
+chr2	2517	.	A	G	.	PASS	AF=0.6;NOTE=row 41 of the file
+chr2	2554	.	A	G	.	PASS	NOTE=two  blanks	and a tab;DP=42 
+chr2	2591	.	A	G	.	PASS	AF=0.8;NOTE=row 43 of the file
+chr2	2628	.	A	G	.	PASS	AF=0.9;NOTE=row 44 of the file
+chr2	2665	.	A	G	.	PASS	AF=0.1;NOTE=row 45 of the file
+chr2	2702	.	A	G	.	PASS	AF=0.2;NOTE=row 46 of the file
+chr2	2739	.	A	G	.	PASS	AF=0.3;NOTE=row 47 of the file
+chr2	2776	.	A	G	.	PASS	AF=0.4;NOTE=row 48 of the file
+chr2	2813	.	A	G	.	PASS	NOTE=two  blanks	and a tab;DP=49 
+chr2	2850	.	A	G	.	PASS	AF=0.6;NOTE=row 50 of the file
+chr2	2887	.	A	G	.	PASS	AF=0.7;NOTE=row 51 of the file
+chr2	2924	.	A	G	.	PASS	AF=0.8;NOTE=row 52 of the file
+
+  chr2 9000 . C T . PASS leading_blanks
+chr	9100	.	C	T	.	PASS	bare_prefix
+ 	 
+chr2	2961	.	A	G	.	PASS	AF=0.9;NOTE=row 53 of the file
+chr2	2998	.	A	G	.	PASS	AF=0.1;NOTE=row 54 of the file
+chr2	3035	.	A	G	.	PASS	AF=0.2;NOTE=row 55 of the file
+chr2	3072	.	A	G	.	PASS	NOTE=two  blanks	and a tab;DP=56 
+chr2	3109	.	A	G	.	PASS	AF=0.4;NOTE=row 57 of the file
+chr2	3146	.	A	G	.	PASS	AF=0.5;NOTE=row 58 of the file
+chr2	3183	.	A	G	.	PASS	AF=0.6;NOTE=row 59 of the file
+chr2	3220	.	A	G	.	PASS	AF=0.7;NOTE=row 60 of the file
+chr2	3257	.	A	G	.	PASS	AF=0.8;NOTE=row 61 of the file
+chr2	3294	.	A	G	.	PASS	AF=0.9;NOTE=row 62 of the file
+chr2	3331	.	A	G	.	PASS	NOTE=two  blanks	and a tab;DP=63 
+chr2	3368	.	A	G	.	PASS	AF=0.2;NOTE=row 64 of the file
+3	3405	.	A	G	.	PASS	AF=0.3;NOTE=row 65 of the file
+3	3442	.	A	G	.	PASS	AF=0.4;NOTE=row 66 of the file
+3	3479	.	A	G	.	PASS	AF=0.5;NOTE=row 67 of the file
+3	3516	.	A	G	.	PASS	AF=0.6;NOTE=row 68 of the file
+3	3553	.	A	G	.	PASS	AF=0.7;NOTE=row 69 of the file
+3	3590	.	A	G	.	PASS	NOTE=two  blanks	and a tab;DP=70 
+3	3627	.	A	G	.	PASS	AF=0.9;NOTE=row 71 of the file
+3	3664	.	A	G	.	PASS	AF=0.1;NOTE=row 72 of the file
+3	3701	.	A	G	.	PASS	AF=0.2;NOTE=row 73 of the file
+3	3738	.	A	G	.	PASS	AF=0.3;NOTE=row 74 of the file
+chrX	3775	.	A	G	.	PASS	AF=0.4;NOTE=row 75 of the file
+chrX	3812	.	A	G	.	PASS	AF=0.5;NOTE=row 76 of the file
+chrX	3849	.	A	G	.	PASS	NOTE=two  blanks	and a tab;DP=77 
+chrX	3886	.	A	G	.	PASS	AF=0.7;NOTE=row 78 of the file
+chrX	3923	.	A	G	.	PASS	AF=0.8;NOTE=row 79 of the file
+chrX	3960	.	A	G	.	PASS	AF=0.9;NOTE=row 80 of the file
+chrX	3997	.	A	G	.	PASS	AF=0.1;NOTE=row 81 of the file
+chrX	4034	.	A	G	.	PASS	AF=0.2;NOTE=row 82 of the file
+chrX	4071	.	A	G	.	PASS	AF=0.3;NOTE=row 83 of the file
+chrX	4108	.	A	G	.	PASS	NOTE=two  blanks	and a tab;DP=84 
+chrX	4145	.	A	G	.	PASS	AF=0.5;NOTE=row 85 of the file
+chrX	4182	.	A	G	.	PASS	AF=0.6;NOTE=row 86 of the file
+chrX	4219	.	A	G	.	PASS	AF=0.7;NOTE=row 87 of the file
+chrX	4256	.	A	G	.	PASS	AF=0.8;NOTE=row 88 of the file
+chrX	4293	.	A	G	.	PASS	AF=0.9;NOTE=row 89 of the file
+chrX	4330	.	A	G	.	PASS	AF=0.1;NOTE=row 90 of the file
+chrX	4367	.	A	G	.	PASS	NOTE=two  blanks	and a tab;DP=91 
+chrX	4404	.	A	G	.	PASS	AF=0.3;NOTE=row 92 of the file
+chrX	4441	.	A	G	.	PASS	AF=0.4;NOTE=row 93 of the file
+chrX	4478	.	A	G	.	PASS	AF=0.5;NOTE=row 94 of the file
+chrX	4515	.	A	G	.	PASS	AF=0.6;NOTE=row 95 of the file
+chrX	4552	.	A	G	.	PASS	AF=0.7;NOTE=row 96 of the file
+chrX	4589	.	A	G	.	PASS	AF=0.8;NOTE=row 97 of the file
+chrX	4626	.	A	G	.	PASS	NOTE=two  blanks	and a tab;DP=98 
+chrX	4663	.	A	G	.	PASS	AF=0.1;NOTE=row 99 of the file
+chrX	4700	.	A	G	.	PASS	AF=0.2;NOTE=row 100 of the file
+chrX	4737	.	A	G	.	PASS	AF=0.3;NOTE=row 101 of the file
+chrX	4774	.	A	G	.	PASS	AF=0.4;NOTE=row 102 of the file
+chrX	4811	.	A	G	.	PASS	AF=0.5;NOTE=row 103 of the file
+chrX	4848	.	A	G	.	PASS	AF=0.6;NOTE=row 104 of the file
+chr1	4885	.	A	G	.	PASS	NOTE=two  blanks	and a tab;DP=105 
+chr1	4922	.	A	G	.	PASS	AF=0.8;NOTE=row 106 of the file
+chr1	4959	.	A	G	.	PASS	AF=0.9;NOTE=row 107 of the file
+chr1	4996	.	A	G	.	PASS	AF=0.1;NOTE=row 108 of the file
+chr1	5033	.	A	G	.	PASS	AF=0.2;NOTE=row 109 of the file
+chrUn_KI270742v1	5070	.	A	G	.	PASS	AF=0.3;NOTE=row 110 of the file
+chrUn_KI270742v1	5107	.	A	G	.	PASS	AF=0.4;NOTE=row 111 of the file
+chrUn_KI270742v1	5144	.	A	G	.	PASS	NOTE=two  blanks	and a tab;DP=112 

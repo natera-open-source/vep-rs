@@ -1,6 +1,6 @@
 # The description of a custom source's `PC` field
 
-Two header-line differences of a `--custom` source: the `PC` description below, and the line that receives a repeated short name's file ([section 2](#2-the-header-line-that-receives-a-repeated-custom-short-names-file)). In the first, Ensembl VEP's header describes the field, under either setting of `reciprocal`, with a sentence that does not name the share the value is, and vep-rs's names that share. In the second, Ensembl VEP appends the file to the first custom header line unless the key holds a lowercase `o`, and vep-rs appends it to the key's own line.
+Two header-line differences of a `--custom` source: the `PC` description below, and the line that receives a repeated short name's file ([section 2](#2-the-header-line-that-receives-a-repeated-custom-short-names-file)). In the first, Ensembl VEP's header describes the field, under either setting of `reciprocal`, with a sentence that does not name the share the value is, and vep-rs's names that share. In the second, Ensembl VEP appends the file to the first custom header line unless the key holds a lowercase `o`, and vep-rs appends it to the key's own line, on the text of the declaration the second source repeats.
 
 **The defect in one sentence.** Under either setting of `reciprocal`, Ensembl VEP's header describes the `PC` field of a `--custom` source with a sentence that does not name the share the value is. Without `reciprocal` it announces the share of the input variant covered while the value is the share of the annotation record covered; with `reciprocal=1` it announces a minimum reciprocal overlap while the value is the share of the input variant covered.
 
@@ -12,7 +12,7 @@ Two header-line differences of a `--custom` source: the `PC` description below, 
 
 - `Bio/EnsEMBL/VEP/AnnotationSourceAdaptor.pm`, lines 395-397: `overlap_def` is set to `Percentage of minimum reciprocal overlap between input variant and reference variant` when `reciprocal` is true and to `Percentage of input variant covered by reference variant` otherwise.
 - `Bio/EnsEMBL/VEP/AnnotationSource/File.pm`, lines 536-564: the share computed. `$length` at line 538 is the input variant's length, and line 554 divides the overlap by it. Lines 556-563 replace that share, when `reciprocal` is false, by the overlap divided by the annotation record's length, under the comment `when reciprocal = 0, check percentage of reference (annotation) variant covered`.
-- `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 2476-2480: the `<key>_PC` header line prints `overlap_def` followed by ` from <file>`.
+- `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 2485-2489: the `<key>_PC` header line prints `overlap_def` followed by ` from <file>`.
 
 **What correcting it would change.** The class vanishes: each setting's header would name the share its value is, as vep-rs's does, and no value would move.
 
@@ -89,7 +89,7 @@ Source (`ensembl-vep`):
 
 - `Bio/EnsEMBL/VEP/AnnotationSource/File.pm`, lines 536-564: `$length` (the variant's) at line 538, the shared bases over it at line 554, and the `unless ($reciprocal)` branch at lines 556-563 that divides by the record's length instead.
 - `Bio/EnsEMBL/VEP/AnnotationSourceAdaptor.pm`, lines 395-397: the two sentences, chosen by `reciprocal`.
-- `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 2476-2480: the `<key>_PC` header line.
+- `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 2485-2489: the `<key>_PC` header line.
 
 ### 1.5 Why vep-rs's row is the correct one
 
@@ -116,32 +116,82 @@ Checking the default row against the spans of 1.2: two of `exact_1`'s three base
 
 ### 1.7 How the comparator treats this class
 
-The golden harness (`crates/vep-cli/tests/common/mod.rs`, `masked_reference_text`) and the format comparator (`scripts/concordance/compare_vep_formats.py`, `reference_text_masked`) apply the class `pc_description_text` when a corpus flag set or a comparison case names it in `masks`. Under the class a reference header line that describes a `<key>_PC` field with either of Ensembl VEP's two sentences is read with vep-rs's sentence for the same setting. The rewrite covers the `## <key>_PC : ` shape and the VCF `##INFO` shape and runs before the header lines are compared. The comparator counts each rewritten line under the class in its report. A row's values compare as any other value, and a header line describing any other key is untouched.
+The golden harness (`crates/vep-cli/tests/common/mod.rs`, `masked_reference_text`) and the format comparator (`tools/vep-formats-compare`, `reference_text_masked`) apply the class `pc_description_text` when a corpus flag set or a comparison case names it in `masks`. Under the class a reference header line that describes a `<key>_PC` field with either of Ensembl VEP's two sentences is read with vep-rs's sentence for the same setting. The rewrite covers the `## <key>_PC : ` shape and the VCF `##INFO` shape and runs before the header lines are compared. The comparator counts each rewritten line under the class in its report. A row's values compare as any other value, and a header line describing any other key is untouched.
 
 The `bed-overlap-stats` flag set of the `GRCh38-custom` corpus names the class, and so does the comparison case that asks a BED source for `PC`. The class rewrites nothing in the JSON format, which carries no header, and a run that does not name it compares the header line as written.
 
 ## 2. The header line that receives a repeated custom short name's file
 
-A second header-line difference of a custom source, a documented class, as [Intended divergences from Ensembl VEP](../intended-divergences.md) lists it. The class is documented only: no committed dataset reaches its shape. The class carries its tier under that page's rule: tier 1 is a shape the chromosome 21 population cuts carry with no flag, tier 2 one that needs a flag or plugin on ordinary data, tier 3 one ordinary data does not carry. The counts are over the cuts' 15,646,481 records, the 111 golden corpora and their 392 flag sets.
+A second header-line difference of a custom source, a documented class, as [Intended divergences from Ensembl VEP](../intended-divergences.md) lists it. The class is documented only: no committed dataset reaches its shape. The class carries its tier under that page's rule: tier 1 is a shape the chromosome 21 cuts carry with no flag, tier 2 one that needs a flag or plugin on ordinary data, tier 3 one ordinary data does not carry. The counts are over the cuts' 15,646,481 records, the 152 golden corpora and their 511 flag sets.
 
-**The defect in one sentence.** When two `--custom` sources share a short name, Ensembl VEP 116.2 appends the second source's file to the first custom header line of the output instead of the shared key's own line, unless the key happens to contain a lowercase `o`.
+**The defect in one sentence.** When two `--custom` sources share a short name, Ensembl VEP 116.3 appends the second source's file to the first custom header line of the output instead of the shared key's own line, unless the key happens to contain a lowercase `o`.
 
 **Why this is a defect.** The header is the one place an output names the file a key's values came from. `get_custom_headers` indexes the header keys by position but keeps only the entries that match the regular expression `/o/`, a test on a letter, not on a key. A key without a lowercase `o` has no index, and `|| 0` and `undef / 2` both read as line 0, so the file lands on whichever key was listed first. Every field or statistic key of the repeated name adds a `Use of uninitialized value` warning. The same run with a key holding an `o` lists both files on the key's own line, the shape the code intends.
 
-**What vep-rs does instead.** vep-rs finds the key's own header line, whatever its letters, and appends `,<file>` there, for the short name and for each of its field and statistic keys; the VCF `##INFO` descriptions follow the same lines.
+On the key's own line Ensembl VEP appends the file to the text that line has, whatever the second source declares the key as. The test that finds a listed key reads the key alone. A record field and a statistic of one name share a key, so a statistic that the second source asks for joins the first source's field text as one more file, and the statistic is described in no header ([section 2.2](#22-a-key-the-two-sources-declare-apart-as-a-record-field-and-as-a-statistic)).
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2):
+**What vep-rs does instead.** vep-rs finds the key's own header line, whatever its letters, and appends `,<file>` there, for the short name and for each of its field and statistic keys; the VCF `##INFO` descriptions follow the same lines. A field's file joins the field's text and a statistic's the statistic's. A declaration the key's texts lack is described by a text of its own.
 
-- `Bio/EnsEMBL/VEP/OutputFactory.pm`, line 2443, `get_custom_headers`: `%pos` is built from the flattened `[key, description]` pairs, keeping only the entries that match `/o/`.
-- The same file, line 2449: the short name's line is `($pos{$short_name} || 0) / 2`; lines 2474 and 2491: a field's or statistic's line is `$pos{$sub_id} / 2`, where an undefined position reads as 0.
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3):
+
+- `Bio/EnsEMBL/VEP/OutputFactory.pm`, line 2452, `get_custom_headers`: `%pos` is built from the flattened `[key, description]` pairs, keeping only the entries that match `/o/`.
+- The same file, line 2458: the short name's line is `($pos{$short_name} || 0) / 2`; lines 2483 and 2500: a field's or statistic's line is `$pos{$sub_id} / 2`, where an undefined position reads as 0.
+- The same file, line 2451: the keys and texts listed so far are read once a source, before the source's own are pushed. Lines 2482 and 2499 test a field's and a statistic's key against that reading. Where the key is found, lines 2484 and 2501 append the file to the later of the key's listed texts, whatever it declares, and the text of the second source's declaration (lines 2493 and 2503-2506) is not pushed.
 - `Bio/EnsEMBL/VEP/OutputFactory/VCF.pm`, line 276: the same pairs become the `##INFO` lines, so the VCF header carries the misplaced file too.
 
-**What correcting it would change.** The second file would join the shared key's own line in every run, as it does for a key holding an `o`, and no row would change.
+**What correcting it would change.** The second file would join the shared key's own line in every run, as it does for a key holding an `o`, a declaration of another kind would bring its own text, and no row would change.
 
-**The class it produces.** `custom_repeated_short_name_header_lines`: on a run naming one short name on two or more sources, a `,<file>` that the reference's `## <key> : <text>` and `##INFO` header lines carry on another key's line; the rows agree. The class is documented only: no committed golden corpus and no comparison case names a short name twice.
+**The class it produces.** `custom_repeated_short_name_header_lines`: on a run naming one short name on two or more sources, a `,<file>` that the reference's `## <key> : <text>` and `##INFO` header lines carry on another key's line; the rows agree. Where the sources declare a key apart, the reference lacks the second declaration's text and, for a key holding an `o`, carries the file on the text of the other declaration. The class is documented only: no committed golden corpus and no comparison case names a short name twice.
 
-**How often the shape occurs.** Tier 3: the shape is two sources sharing a short name that holds no lowercase `o`, which none of the 392 flag sets does; 14 of them run a `--custom` source.
+**How often the shape occurs.** Tier 3: the shape is two sources sharing a short name that holds no lowercase `o`, which none of the 511 flag sets does; 19 of them run a `--custom` source. The shape of section 2.2 needs two sources of one short name as well, and a record field whose name is a statistic's (`count`, `min`, `max`, `mean` or `sum`).
 
 ### 2.1 A short name `SITES` on two VCF sources beside a BED source named `cons`
 
-**In short.** A run names a BED source `cons`, then two VCF sources `sites.vcf.gz` and `clinvar_source.vcf.gz` under one short name `SITES` with `type=exact,fields=AF`. Ensembl VEP 116.2 prints `## cons : [PATH]/regions.bed.gz,[PATH]/clinvar_source.vcf.gz,[PATH]/clinvar_source.vcf.gz`, once for the `SITES` key and once for `SITES_AF`, while `## SITES : [PATH]/sites.vcf.gz` and `## SITES_AF` name one file, and warns `Use of uninitialized value $pos{"SITES_AF"} in division (/)`. vep-rs prints `## SITES : [PATH]/sites.vcf.gz,[PATH]/clinvar_source.vcf.gz`, the same two files on `## SITES_AF`, and `cons` with its BED alone. The rows agree in the default, tab and VCF formats, and with the shared name spelt `solo`, which holds an `o`, both engines print the same header lines.
+**In short.** A run names a BED source `cons`, then two VCF sources `sites.vcf.gz` and `clinvar_source.vcf.gz` under one short name `SITES` with `type=exact,fields=AF`. Ensembl VEP 116.3 prints `## cons : [PATH]/regions.bed.gz,[PATH]/clinvar_source.vcf.gz,[PATH]/clinvar_source.vcf.gz`, once for the `SITES` key and once for `SITES_AF`, while `## SITES : [PATH]/sites.vcf.gz` and `## SITES_AF` name one file, and warns `Use of uninitialized value $pos{"SITES_AF"} in division (/)`. vep-rs prints `## SITES : [PATH]/sites.vcf.gz,[PATH]/clinvar_source.vcf.gz`, the same two files on `## SITES_AF`, and `cons` with its BED alone. The rows agree in the default, tab and VCF formats, and with the shared name spelt `solo`, which holds an `o`, both engines print the same header lines.
+
+### 2.2 A key the two sources declare apart, as a record field and as a statistic
+
+**In short.** Two VCF sources named `S` each match one record at `21:5380280`. The first names the record field `count`. The second asks for the statistic `count`, the number of records it matched. Both declare the key `S_count`. Ensembl VEP 116.3 describes it with the first source's field text and appends the second file, over a cell that holds the second source's statistic, `1`. In its tab and VCF headers vep-rs describes the statistic and then the field, each with its own file: `count data from [PATH]/b.vcf.gz; The first file's made-up field. count field from [PATH]/a.vcf.gz`. The rows agree.
+
+**The files and the command.** The input record is `21 5380280 rs1444031311 A C,G` of the `GRCh38-custom` corpus. Two made-up site files hold one record each at that position: `exact_2` with `count=7` in `a.vcf.gz`, and `second_1` with `count=9` in `b.vcf.gz`. Each record names the allele `C`, and neither has a `QUAL`. The first file's header describes `count` as `The first file's made-up field`, and the second file's as `The second file's made-up field`.
+
+```
+--custom file=a.vcf.gz,short_name=S,format=vcf,type=overlap,fields=count
+--custom file=b.vcf.gz,short_name=S,format=vcf,type=overlap,\
+summary_stats=count
+```
+
+**What each engine writes.** `A` and `B` stand for `[PATH]/a.vcf.gz` and `[PATH]/b.vcf.gz`, and `F` for the field's text, `The first file's made-up field. count field from A`.
+
+| Header | Ensembl VEP | vep-rs |
+| --- | --- | --- |
+| Tab | `## S_count : F,B` | `## S_count : count data from B; F` |
+| VCF | one `##INFO` line of `S_count`, with `F,B` | one line, with `count data from B; F` |
+| Default | `## S_count : F,B` | `## S_count : F`, then `## S_count : count data from B` |
+
+vep-rs lists a key once in its tab and VCF headers, so its two texts share a line there. Its default header prints the texts on separate lines, in the order the sources declare them. The entry's reproduction record writes the two files and runs the command in the tab and default formats.
+
+Both engines write `## S : A,B`: the short name's line is the first custom line and `S_count` holds an `o`, so the lowercase-`o` rule of this section moves no file in this run. On the rows of both alleles, `C` and `G`, both write `exact_2,second_1` under `S` and `1` under `S_count`. The JSON record holds both the statistic and the `count` of the first file's record, `7`, in both engines.
+
+**Why Ensembl VEP writes that.** It lists the first source's key with the field's text. Before it reads the second source it takes the keys listed so far, the first source's. It tests the second source's statistic key against them, finds it, and appends the file to the listed text. The branch that pushes the statistic's own text is not taken. A source's own keys are not among those it is tested against, so a source that declares a key twice lists it twice, and a later source's file joins the later listing.
+
+**Why vep-rs's lines are the correct ones.** The second source matched one record, so its count is `1`, and under `type=overlap` the statistic replaces the list of the field's values under the key ([A key that spells a source's statistic](custom-key-named-as-a-plain-value-field.md#3-a-key-that-spells-a-sources-statistic)). The cell therefore holds a count of records. Ensembl VEP's line calls it the values of a record field and names `b.vcf.gz` as a file of that field, which the second source does not name.
+
+A text for each declaration, each with the files of the sources that make it, is true of the cell whichever value it holds. On the one line of the tab and VCF headers the statistic's text stands first, the order of the two values on a row that holds both. Under `type=overlap` a record belongs to the whole input record, and the statistic replaces its value. Under `type=exact` a record belongs to the allele it names, `C`, and its value is listed after the statistic: vep-rs's row of `C` reads `1,7`. Ensembl VEP ends that run before its first row, the documented difference of [that page](custom-key-named-as-a-plain-value-field.md#3-a-key-that-spells-a-sources-statistic).
+
+**The other orders.** The same two files under other declarations; `F2` stands for the second file's field text, `The second file's made-up field. count field from B`, and a `/` parts two lines of the VCF and default headers:
+
+| First source, second source | Ensembl VEP, VCF and default | vep-rs, tab and VCF |
+| --- | --- | --- |
+| field; field and statistic | `F,B,B` | `count data from B; F,B` |
+| statistic; field | `count data from A,B` | `count data from A; F2` |
+| statistic; field and statistic | `count data from A,B,B` | `count data from A,B; F2` |
+| field and statistic; field | `F` / `count data from A,B` | `count data from A; F,B` |
+| field and statistic; both | `F` / `count data from A,B,B` | `count data from A,B; F,B` |
+| field and statistic; statistic | `F` / `count data from A,B` | `count data from A,B; F` |
+
+vep-rs's default header prints its texts on separate lines, in the order the sources declare them. In the last row the engines print the same two texts with the same files: the second source repeats the statistic, whose text takes its file. The default headers agree there, and the VCF header holds the two texts on two lines in Ensembl VEP and on one in vep-rs. Where the first source declares the key twice, Ensembl VEP's tab header prints the later text on both of the key's lines ([the description of a key one source declares twice](custom-key-named-as-a-plain-value-field.md#36-the-description-of-a-key-one-source-declares-twice)).
+
+A statistic that needs a score shows why one text cannot stand alone. Give each record the field `min` in place of `count`, and ask for `summary_stats=min`. A VCF record's score is its `QUAL`. With a `QUAL` on the records the cell holds the asking source's statistic. With none it holds the field's values: `7` under the command above, and `7,9` where the second source names the field as well.
+
+vep-rs's line carries both texts in either run. The key `S_min` holds no `o`, so Ensembl VEP appends the second file to the `## S` line a second time, for the statistic the second source asks for: `## S : A,B,B`. Its `## S_min` line keeps the first source's text alone.

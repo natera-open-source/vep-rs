@@ -1,0 +1,41 @@
+entry = "json_mismatch_warning_names_no_record"
+page = "docs/divergences/json-mismatch-warning-names-no-record.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "observed"
+input_class_basis = "2 · 6 of 511 flag sets · 19 flag sets, 2 corpora"
+notes = "Both records draw the transcript-assembly mismatch on an edited RefSeq model. In a JSON run Ensembl VEP builds each row from an empty hash (OutputFactory/JSON.pm:320), so the warning joins a record name the hash does not hold (OutputFactory.pm:1727): its text ends after `in`, and a process writes equal texts once (BaseVEP.pm:809-813), here the one child that annotates both records. vep-rs names each record, as both engines do in the other three formats."
+
+[input]
+format = "vcf"
+text = """
+21	45505371	rs922296917	CGGCCCTCCGGGCCCCCCTG	C	.	.	.
+21	45505388	rs1247639677	CTGGGCCCCCT	C	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+source = "refseq"
+json_cache = "tests/golden/116/GRCh38-refseq/cache_root/homo_sapiens_refseq/116_GRCh38"
+fasta = "tests/golden/116/GRCh38-refseq/reference.fa.gz"
+
+[run]
+flags = ["--refseq"]
+format = "json"
+
+[compare]
+kind = "warnings"
+pattern = "Transcript-assembly mismatch"
+
+[expected]
+ensembl_vep = ["WARNING: Transcript-assembly mismatch in"]
+vep_rs = [
+    "WARNING: Transcript-assembly mismatch in rs1247639677",
+    "WARNING: Transcript-assembly mismatch in rs922296917",
+]
+
+[implementation]
+code = ["crates/vep-cli/src/runner.rs::transcript_assembly_mismatch_warning"]
+tests = ["crates/vep-cli/tests/assembly_mismatch_warning.rs::a_json_run_names_each_record_that_warns"]
+rules = ["tools/vep-formats-compare/src/warnings.rs::without_unnamed_mismatch_warning"]

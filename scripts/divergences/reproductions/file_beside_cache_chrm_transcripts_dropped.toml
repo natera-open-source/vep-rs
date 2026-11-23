@@ -1,0 +1,44 @@
+entry = "file_beside_cache_chrm_transcripts_dropped"
+page = "docs/divergences/file-beside-cache-chrm-transcripts-dropped.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "unobserved"
+input_class_basis = "well-formed under the --gtf contract, \"Use GTF transcript annotations in [filename] as an annotation source\", which sets no rule on the names of a file's sequences (Ensembl VEP documentation, \"Running Ensembl VEP\", --gtf); not seen in the measured datasets"
+notes = "A record on MT inside the one exon of a made-up gene whose GTF lines write the sequence chrM, read beside a GRCh37 cache whose synonyms link MT and chrM, over a made-up reference of the assembly's 16,569 bases. Ensembl VEP reads the lines, hands each transcript on under the name M (the file's name less chr) and filters it out against the buffer's table, which the cache source keyed MT, so it writes the cache's rows alone. vep-rs names the file's chrM as the cache's MT and writes the transcript's row. The same three lines written MT give that row in both engines."
+
+[input]
+format = "vcf"
+text = """
+MT	150	chrm_gene_exon_snv	G	A	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh37"
+json_cache = "crates/vep-cli/tests/fixtures/bayesdel-mitochondrial-contig/json_cache"
+fasta = "crates/vep-cli/tests/fixtures/mitochondrial-frame-check/reference_synthetic.fa"
+# The record is on the cache's MT.
+chromosomes = ["MT"]
+
+[run]
+flags = ["--gtf", "{repo}/crates/vep-cli/tests/fixtures/gene-model-chrm-beside-cache/chrm_gene_synthetic.gtf.gz"]
+
+[compare]
+kind = "rows"
+where = { record = "chrm_gene_exon_snv", feature = "MITOT1" }
+columns = ["Location", "Allele", "Gene", "Feature", "Consequence", "cDNA_position", "SOURCE"]
+
+[expected]
+ensembl_vep = []
+vep_rs = ["MT:150 | A | MITOG1 | MITOT1 | non_coding_transcript_exon_variant | 50 | chrm_gene_synthetic.gtf.gz"]
+
+[implementation]
+code = [
+    "crates/vep-cache-builder/src/gff3.rs::SequenceNames::name",
+    "crates/vep-cli/src/gene_model.rs::load",
+    "crates/vep-core/src/synonyms.rs::ChromosomeSynonyms::source_chr_name",
+]
+tests = [
+    "crates/vep-cli/tests/gene_model_chrm_beside_a_cache.rs::a_chrm_gene_beside_a_cache_keeps_its_row_on_mt",
+    "crates/vep-cli/tests/gene_model_mitochondrial_name_on_grch37.rs::a_chrm_model_over_a_record_of_the_assemblys_length_annotates_mt",
+]

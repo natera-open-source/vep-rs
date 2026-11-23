@@ -1,0 +1,1 @@
+ERROR: [fastvep_plugin_tuples] tests/fixtures/maps/bad_kind.tsv:2: kind 'float' is not text or number

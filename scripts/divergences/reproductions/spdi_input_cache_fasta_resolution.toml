@@ -1,7 +1,7 @@
 entry = "spdi_input_cache_fasta_resolution"
 page = "docs/divergences/spdi-input.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the genomic SPDI input format, four colon-delimited fields S:P:D:I (Ensembl VEP documentation, \"Data formats\", Genomic SPDI notation); not seen in the measured datasets"
 notes = "The first of the page's three readings, a version-less accession in SPDI form: Ensembl VEP reads SPDI through its database, whose slice adaptor resolves `NC_000021` through the synonym `NC_000021.9` as a prefix and annotates the record at 21:10538885; vep-rs matches the name against the cache's chromosomes and synonyms exactly, finds none and skips the record (`Sequence name NC_000021 not valid`). The span past the chromosome end and the deletion of length 0 are not reproduced."
@@ -30,3 +30,15 @@ where = { record = "NC_000021:10538884:A:C", feature = "ENST00000427445" }
 [expected]
 ensembl_vep = ["21:10538885 | C | ENST00000427445 | intron_variant"]
 vep_rs = []
+
+[implementation]
+code = [
+    "crates/vep-io/src/input/spdi.rs::SpdiParser::chromosome_name",
+    "crates/vep-io/src/input/spdi.rs::SpdiParser::variant",
+]
+tests = [
+    "crates/vep-cli/tests/documented_subsets.rs::spdi_input_format_exclusion_is_documented",
+    "crates/vep-io/src/input/spdi.rs::tests::a_zero_length_deletion_is_refused_naming_the_empty_span",
+    "crates/vep-io/src/input/spdi.rs::tests::nc_accession_via_synonyms",
+    "crates/vep-io/src/input/spdi.rs::tests::span_past_the_end_is_refused_naming_the_length",
+]

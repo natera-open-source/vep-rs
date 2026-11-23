@@ -1,7 +1,7 @@
 # SpliceAI score file of two joined streams
 
 Seven records of the GRCh38 SpliceAI golden corpus
-(`tests/golden/116/GRCh38-plugin-spliceai`), each a single-base change at one
+(`tests/golden/116/GRCh38-plugin-spliceai-fixture`), each a single-base change at one
 of the corpus's own sites under a name of its own, in `variants.vcf`. The test
 annotates them against the corpus's `json_cache` and reference, with the
 corpus's made-up indel score file beside the made-up score file of this
@@ -30,8 +30,8 @@ The generator writes under `<corpus>/data/`, so it wrote the file over a
 directory holding a copy of `variants.vcf` and `symbols.tsv`, and the file and
 its index are copies of what it wrote there.
 
-`ensembl_vep.txt` is the output of Ensembl VEP 116.2 in the default format,
-from the image `ensemblorg/ensembl-vep:release_116.2` with this directory
+`ensembl_vep.txt` is the output of Ensembl VEP 116.3 in the default format,
+from the image `ensemblorg/ensembl-vep:release_116.3` with this directory
 mounted read-only at `/work/corpus` as the working directory:
 
 ```bash
@@ -46,7 +46,7 @@ vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> \
 made-up file with fabricated scores, and `<plugins>` a `VEP_plugins` checkout
 at release/116.
 
-Ensembl VEP 116.2 wrote 33 rows. `SpliceAI_pred` stands on 18: the row of
+Ensembl VEP 116.3 wrote 33 rows. `SpliceAI_pred` stands on 18: the row of
 `first_stream_one_gene` whose transcript has a gene symbol, the four rows of
 `first_stream_two_genes`, the row of `opens_second_stream` and the twelve rows
 of `second_stream_two_alternates`. No row of `no_information`,

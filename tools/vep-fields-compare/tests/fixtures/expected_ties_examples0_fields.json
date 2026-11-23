@@ -1,0 +1,107 @@
+{
+  "totals": {
+    "reference_keys": 30,
+    "scored_keys": 30,
+    "intersection": 30,
+    "reference_only": 0,
+    "scored_only": 0,
+    "reference_duplicate_keys": 0,
+    "scored_duplicate_keys": 0
+  },
+  "fields": {
+    "Uploaded_variation": {
+      "compared": 30,
+      "equal": 0,
+      "differ": 30,
+      "agreement": 0.0,
+      "distinct_mismatch_shapes": 12,
+      "top_mismatches": []
+    },
+    "Gene": {
+      "compared": 30,
+      "equal": 0,
+      "differ": 30,
+      "agreement": 0.0,
+      "distinct_mismatch_shapes": 30,
+      "top_mismatches": []
+    },
+    "cDNA_position": {
+      "compared": 30,
+      "equal": 30,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "CDS_position": {
+      "compared": 30,
+      "equal": 30,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "Protein_position": {
+      "compared": 30,
+      "equal": 30,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "Amino_acids": {
+      "compared": 30,
+      "equal": 30,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "Codons": {
+      "compared": 30,
+      "equal": 30,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "Existing_variation": {
+      "compared": 30,
+      "equal": 30,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    }
+  },
+  "extra": {
+    "IMPACT": {
+      "compared": 30,
+      "equal": 30,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "STRAND": {
+      "compared": 30,
+      "equal": 30,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    }
+  },
+  "inputs": {
+    "reference": "tests/fixtures/ties_reference.txt",
+    "scored": "tests/fixtures/ties_scored.txt"
+  },
+  "key": [
+    "Location",
+    "Allele",
+    "Feature",
+    "Feature_type",
+    "consequence_set"
+  ],
+  "comparison": "verbatim per field on tuples both sides emit under the same key"
+}

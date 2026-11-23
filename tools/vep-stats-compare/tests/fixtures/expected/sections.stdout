@@ -1,0 +1,10 @@
+stats: red
+  section [Variant classes] appears twice in the actual file
+  section [SIFT summary] appears twice in the actual file
+  section [Coding consequences] only in the expected file
+  section [SIFT summary] only in the actual file
+  section [SIFT summary] only in the actual file
+  the shared sections come in another order in the actual file
+  [General statistics]: 1 difference
+  [Variants by chromosome]: 12 differences
+  [Position in protein]: 12 differences

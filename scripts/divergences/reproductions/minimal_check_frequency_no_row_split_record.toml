@@ -1,10 +1,10 @@
 entry = "minimal_check_frequency_no_row_split_record"
 page = "docs/output/known-variants.md#filtering-by-frequency"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "malformed"
 input_class_basis = "ALT is a \"Comma separated list of alternate non-reference alleles\" (VCF 4.2 specification, section 1.4.1 \"Fixed fields\", ALT): the record's ALT list carries an allele identical to its REF allele"
-notes = "GG *,GG splits into a GG/* feature and a -/- feature, neither of which writes a row. The common rs8131855 on the next line is dropped inside the same unit of both engines (Ensembl VEP's one chunk of int(4 / 2) records under --fork 1, vep-rs's batch of four lines), so the rejoin is reset: Ensembl VEP writes one VCF line per feature, vep-rs one for the record."
+notes = "GG *,GG splits into a GG/* feature and a -/- feature, neither of which writes a row. The common rs8131855 on the next line is dropped inside the same unit of both engines (Ensembl VEP's one chunk of int(4 / 2) records under --fork 1, vep-rs's batch of four lines), so the rejoin is reset: Ensembl VEP writes one VCF line per feature, vep-rs one for the record. The statistics report follows the lines: with --stats_text in place of --no_stats Ensembl VEP prints Variants processed 2 and vep-rs 1, each beside Variants filtered out 1."
 
 [input]
 format = "vcf"
@@ -34,3 +34,14 @@ ensembl_vep = [
   "21\t34716326\tnullsplit\tGG\t*,GG\t.\t.\t.",
 ]
 vep_rs = ["21\t34716326\tnullsplit\tGG\t*,GG\t.\t.\t."]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/pipeline.rs::features_as_records",
+    "crates/vep-cli/src/pipeline.rs::frequency_filter_stage",
+    "crates/vep-cli/src/vcf_parser.rs::split_minimal_record",
+]
+tests = [
+    "crates/vep-cli/tests/minimal_frequency_reset.rs::a_kept_feature_no_row_stands_for_is_a_record_of_its_own_after_a_drop",
+    "crates/vep-cli/tests/minimal_frequency_reset.rs::a_record_no_allele_of_which_writes_a_row_is_one_processed_variant_after_a_drop",
+]

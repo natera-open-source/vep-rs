@@ -46,9 +46,11 @@ POOLED = "The four whole-genome datasets, pooled"
 # The plugin panel's group of rows scored on real data, named for what the fixture's rows of the released tool sum:
 # the ClinVar dataset and the population dataset of the row's assembly, whose labels open with one word.
 REAL_GROUP = "Genome-wide ClinVar and Population"
-# The runs a wall-time cell of the synthetic records holds: the reference's, and the two other tools'.
+# The runs a wall-time cell of the synthetic records holds: the reference's, and the two other tools'. The texts
+# name a cell as what it is: a dataset, or a separately timed part of one.
 REFERENCE_RUNS, TOOL_RUNS = 1, 3
-RUNS_CLAUSE = f"each wall-time cell of Ensembl VEP holds {REFERENCE_RUNS} run, against {TOOL_RUNS} for vep-rs and fastVEP"
+RUNS_SUBJECT = "each dataset, or each separately timed part of one,"
+RUNS_CLAUSE = f"{RUNS_SUBJECT} is timed in {REFERENCE_RUNS} run for Ensembl VEP, against {TOOL_RUNS} for vep-rs and fastVEP"
 IMAGE_LINE = re.compile(r"^!\[[^\]]*\]\(docs/assets/comparison\.png\)\s*$", re.MULTILINE)
 
 
@@ -166,6 +168,52 @@ def record_set(**replaced) -> dict:
         else:
             records[name] = record
     return records
+
+
+GENOME_REASON = "reads no made-up transcript cache"
+GENOME_SENTENCE = (
+    f"fastVEP {COMPARATOR_VERSION}'s documentation says that its gene models come from a made-up file and that it reads no made-up transcript "
+    "cache, so it has no counterpart in this panel, where a cross stands in its row."
+)
+
+
+def genome_block() -> dict:
+    """A made-up block of the caches checked: 1,234 exact of 1,240 checked in two sets, two more excluded, and
+    the comparator's entry at the version the other records state, with two statements."""
+    return {
+        "reference": {"image": IMAGE_TAG, "digest": f"sha256:{'2' * 64}", "prefix": "made-up/reference/prefix"},
+        "tables": {"commit": "3" * 40, "files": [{"file": "tests/genomes/genomes.tsv", "sha256": "4" * 64}]},
+        "groups": [
+            {"group": "vertebrates", "checked": 40, "exact": 34, "differs": {"unclassified": 6}, "excluded": {"no-transcripts": 2},
+             "cache_versions": [116]},
+            {"group": "bacteria_collections", "checked": 1200, "exact": 1200, "differs": {}, "excluded": {}, "cache_versions": [63]},
+        ],
+        "totals": {"checked": 1240, "exact": 1234, "differs": {"unclassified": 6}, "excluded": {"no-transcripts": 2}},
+        "sets": [
+            {"label": "made-up species caches", "groups": ["vertebrates"], "checked": 40, "exact": 34},
+            {"label": "made-up collection genomes", "groups": ["bacteria_collections"], "checked": 1200, "exact": 1200},
+        ],
+        "absent": [{
+            "engine": "fastvep", "reason": GENOME_REASON,
+            "stated_by": {
+                "version": COMPARATOR_VERSION, "commit": "5" * 40,
+                "statements": [
+                    {"file": "docs/MADE_UP.md", "line": 18, "words": "made-up words", "says": "its gene models come from a made-up file"},
+                    {"file": "src/made_up.rs", "line": 24, "words": "more made-up words", "says": "it reads no made-up transcript cache"},
+                ],
+            },
+        }],
+    }
+
+
+def release_with_genomes(block: dict | None = None) -> dict:
+    """The release record with the block of the caches checked: `block`, or the made-up one."""
+    return release_record() | {figure.GENOMES_BLOCK: genome_block() if block is None else block}
+
+
+def with_genomes(block: dict | None = None) -> dict:
+    """The records of one release whose release record holds the block of the caches checked."""
+    return record_set(release=release_with_genomes(block))
 
 
 def write_records(directory: Path, records: dict) -> Path:
@@ -430,7 +478,7 @@ COVERAGE = (
     "and whole-genome population datasets of that build (GRCh37: Population B; GRCh38: {grch38}), except on gnomADMt GRCh38 (ClinVar alone); "
     "fastVEP's counts are of the genome-wide ClinVar dataset of the row's genome build alone."
 )
-UNEVEN_OPENING = "A row's figure is summed over the sets"
+UNEVEN_OPENING = "A row's figure sums the per-feature entries"
 
 
 def real_entries(plugins: dict, plugin: str, assembly: str, engine: str = "vep-rs", projection: str = "feature") -> list[dict]:
@@ -537,6 +585,27 @@ def test_a_comparators_row_reads_the_datasets_the_record_holds_for_it_and_no_oth
             "that build (GRCh38: Population A), except on ") in more["caption"]
 
 
+def test_a_real_data_row_under_a_label_of_its_own_is_drawn_and_named_with_the_labels_words(tmp_path):
+    """LoFTEE on GRCh37 is scored on real variants with synthetic conservation data, and its gate row says so
+    in its label: the row stands in the real-data group under that label, and both texts name it."""
+    label = "LoFTEE (synthetic conservation data)"
+    plugins = copy.deepcopy(PLUGINS)
+    at = next(i for i, row in enumerate(plugins["rows"]) if (row["plugin"], row["assembly"]) == ("LoFTEE", "GRCh38"))
+    plugins["rows"].insert(at, {"plugin": label, "assembly": "GRCh37", "scored_on": "clinvar", "dataset_or_corpus": "clinvar_grch37"})
+    plugins["real_data"].append({**population_entry(label, "GRCh37", "clinvar_grch37", (900, 1000, 950)), "scored_on": "clinvar"})
+    plugins["population_data"].append(population_entry(label, "GRCh37", "pop_b", (90, 100, 95)))
+    document = values_of(tmp_path, record_set(plugins=plugins))
+    rows = rows_of(document, "c")
+    assert [key for key in rows if "synthetic conservation data" in key[1]] == [(REAL_GROUP, f"{label} GRCh37")]
+    found = marks(rows[(REAL_GROUP, f"{label} GRCh37")])
+    # The bar and the marker sum the row's ClinVar entry and its entry on the population dataset of GRCh37.
+    assert found[("vep-rs", "bar")] == nine_places(990, 1100, 1045) and found[("vep-rs", "marker")] == "1.000000000"
+    assert found[("fastvep", "text")] == "no such source"
+    assert ("vep-rs", "bar") in marks(rows[(REAL_GROUP, "LoFTEE GRCh38")])
+    named = f"LoFTEE is scored under {label} and LoFTEE"
+    assert document["caption"].count(named) == 1 and document["alt_text"].count(named) == 1
+
+
 def test_one_sentence_of_each_text_says_which_datasets_the_rows_of_each_tool_cover(tmp_path):
     document = values_of(tmp_path)
     sentence = COVERAGE.format(grch38="Population A")
@@ -619,6 +688,18 @@ def test_the_group_of_rows_scored_on_real_data_names_in_plain_words_the_datasets
     assert "(GRCh37: Cohort B; GRCh38: Population A)" in apart["caption"]
 
 
+@pytest.mark.parametrize("flags", [(), ("--draft",)], ids=["final", "draft"])
+@pytest.mark.parametrize("label", [" ", ", whole genome"], ids=["blank", "suffix-alone"])
+def test_a_population_dataset_whose_label_holds_no_word_is_refused_by_name(tmp_path, label, flags):
+    # The plugin panel names a population dataset by the words of its label, read without the whole-genome suffix:
+    # a label of blanks, or of that suffix alone, leaves it no word.
+    records = record_set()
+    assert records[POPULATION_NAME]["datasets"][1]["dataset"] == "pop_b"
+    records[POPULATION_NAME]["datasets"][1]["label"] = label
+    assert refusal(tmp_path, records, *flags) == (
+        f"{POPULATION_NAME} datasets[1].label holds no word: {label!r}; the plugin panel names a population dataset by the words of its label")
+
+
 def test_a_record_without_an_entry_on_a_population_dataset_is_refused_and_a_draft_draws_it_from_clinvar_alone_with_its_notes(tmp_path):
     plugins = copy.deepcopy(PLUGINS)
     del plugins["population_data"], plugins["population_absent"]
@@ -699,12 +780,26 @@ def test_the_plugin_panel_shows_each_tool_of_the_record_on_every_gate_row(tmp_pa
     plugins["absent"] = [item for item in plugins["absent"] if item["plugin"] != "AncestralAllele"]
     name = f"2001-01-01-plugins-{RELEASE}.json"
     missing = f"{name} neither scores fastVEP per feature on AncestralAllele GRCh37 nor lists the plugin as absent for it"
-    assert refusal(tmp_path / "neither", record_set(plugins=plugins)) == f"{missing}; every gate row shows each tool the record scores"
+    assert refusal(tmp_path / "neither", record_set(plugins=plugins)) == f"{missing}; every row the record lists under rows shows each tool the record scores"
     done, values = run(tmp_path / "draft", record_set(plugins=plugins), "--draft")
     assert done.returncode == 0, done.stderr
     assert f"note: {missing}; the figure draws no mark of fastVEP on that row\n" in done.stdout
     row = rows_of(json.loads(values.read_text(encoding="utf-8")), "c")[(REAL_GROUP, "AncestralAllele GRCh37")]
     assert {value["tool"] for value in row["values"]} == {"vep-rs"}
+
+    # A row the record lists under rows without a per-feature entry of the released tool is refused by name; a
+    # draft notes it and draws the comparator alone on that row.
+    plugins = copy.deepcopy(PLUGINS)
+    plugins["real_data"] = [e for e in plugins["real_data"]
+                            if (e["plugin"], e["assembly"], e["engine"], e["projection"]) != ("LOEUF", "GRCh37", "vep-rs", "feature")]
+    missing = f"{name} holds no per-feature tuple of vep-rs on LOEUF GRCh37"
+    assert refusal(tmp_path / "unscored", record_set(plugins=plugins)) == (
+        f"{missing}; every row the record lists under rows states the released tool's figure")
+    done, values = run(tmp_path / "unscored-draft", record_set(plugins=plugins), "--draft")
+    assert done.returncode == 0, done.stderr
+    assert f"note: {missing}; the figure omits that bar\n" in done.stdout
+    row = rows_of(json.loads(values.read_text(encoding="utf-8")), "c")[(REAL_GROUP, "LOEUF GRCh37")]
+    assert {value["tool"] for value in row["values"]} == {"fastvep"}
 
     # One plain mark has one meaning: two reasons for one comparator's absent plugins are refused by name.
     plugins = copy.deepcopy(PLUGINS)
@@ -1437,8 +1532,8 @@ def test_the_texts_say_from_the_records_own_counts_what_the_image_leaves_unsaid(
             tag = " synthetic" if row["scored_on"] == "synthetic_fixture" else ""
             uneven.append(f"{row['plugin']} {row['assembly']}{tag} (vep-rs {ours}, fastVEP {theirs})")
     assert uneven
-    sets = (f"A row's figure is summed over the sets of the row that the record holds for the tool, and the tools differ in them on "
-            f"{len(uneven)} rows: {figure.and_list(uneven)}.")
+    sets = ("A row's figure sums the per-feature entries that the record holds for the tool on the row's own dataset or corpus, each scored by "
+            f"itself, and the tools differ in the number of those entries on {len(uneven)} rows: {figure.and_list(uneven)}.")
     # The row names of the plugin panel against its plugins: a plugin scored under two names counts as one.
     names = list(dict.fromkeys(row["plugin"] for row in PLUGINS["rows"]))
     held = {}
@@ -1463,14 +1558,15 @@ def test_the_texts_say_from_the_records_own_counts_what_the_image_leaves_unsaid(
     # A sentence whose record holds nothing to say is left out: without a plugin record the texts speak of no row
     # names and no sets, and with the comparator kept out of the concordance panels no row differs in its sets.
     two = values_of(tmp_path / "two", record_set(plugins=None))
-    assert not any(word in text for text in (two["caption"], two["alt_text"]) for word in ("row names", "differ in them"))
+    assert not any(word in text for text in (two["caption"], two["alt_text"]) for word in ("row names", "differ in the number"))
     assert two["caption"].count("it is drawn where the axis reads 1, past a break in the axis line") == 1
     alone = values_of(tmp_path / "alone", registry=registry_with(tmp_path, lambda rows: rows["fastvep"].update(concordance_panel="no")))
-    assert "differ in them" not in alone["caption"] and alone["caption"].count(named) == 1
+    assert "differ in the number" not in alone["caption"] and alone["caption"].count(named) == 1
 
 
 def test_the_sentence_on_differing_sets_reads_one_row_where_exactly_one_row_differs(tmp_path):
-    lead = "A row's figure is summed over the sets of the row that the record holds for the tool, and the tools differ in them on "
+    lead = ("A row's figure sums the per-feature entries that the record holds for the tool on the row's own dataset or corpus, each scored by "
+            "itself, and the tools differ in the number of those entries on ")
 
     def feature_sets(plugins: dict, plugin: str, assembly: str, engine: str) -> list[dict]:
         return [e for e in plugins["synthetic_fixtures"] if (e["plugin"], e["assembly"], e["engine"], e["projection"]) == (plugin, assembly, engine, "feature")]
@@ -1490,7 +1586,7 @@ def test_the_sentence_on_differing_sets_reads_one_row_where_exactly_one_row_diff
     one = values_of(tmp_path / "one", record_set(plugins=plugins))
     sentence = f"{lead}1 row: {listed[0]}."
     for text in (one["caption"], one["alt_text"]):
-        assert text.count(sentence) == 1 and "1 rows" not in text and text.count("differ in them") == 1
+        assert text.count(sentence) == 1 and "1 rows" not in text and text.count("differ in the number") == 1
     assert [source["key"] for source in one["sources"] if source["text"] == sentence] == [figure.UNEVEN_KEY]
 
 
@@ -1666,7 +1762,7 @@ def test_every_number_of_sets_the_texts_print_stands_in_the_values_file_with_the
     assert document["sources"].count(listed) == 1 and f"of Ensembl VEP's {listed['text']}." in panel(document, "d")["note"]
     # Where no row's tools differ in their sets no number of sets is printed, and none is kept.
     alone = values_of(tmp_path / "alone", registry=registry_with(tmp_path, lambda rows: rows["fastvep"].update(concordance_panel="no")))
-    assert "differ in them" not in alone["caption"] and not any(source["key"].endswith(": the number of entries") for source in alone["sources"])
+    assert "differ in the number" not in alone["caption"] and not any(source["key"].endswith(": the number of entries") for source in alone["sources"])
 
 
 def test_the_wall_time_panel_names_no_tool_and_ties_no_name_to_a_circle(tmp_path):
@@ -2016,8 +2112,8 @@ def test_the_alternative_text_names_the_order_of_the_tools_circles_on_a_row_of_t
     # One tool on every row has no order to name.
     registry = registry_with(tmp_path, lambda rows: [rows[name].update(speed_panel="no") for name in ("fastvep", "ensembl-vep")])
     alone = values_of(tmp_path / "alone", registry=registry)["alt_text"]
-    assert (f"(b) Wall time per dataset and architecture of vep-rs, a circle each, filled for ARM and open for x86; each wall-time cell holds {TOOL_RUNS} "
-            "runs. (c) ") in alone and "from left to right" not in alone
+    assert (f"(b) Wall time per dataset and architecture of vep-rs, a circle each, filled for ARM and open for x86; {RUNS_SUBJECT} is timed in "
+            f"{TOOL_RUNS} runs. (c) ") in alone and "from left to right" not in alone
 
 
 def test_the_alternative_text_reads_of_the_one_row_where_the_plugin_panel_holds_one_row(tmp_path):
@@ -2056,32 +2152,36 @@ def test_the_wall_time_panel_says_which_lines_are_medians_and_which_are_sums(tmp
     lines = figure.axis_lines(document, figure.read_registry(REGISTRY), wall)
     assert lines[1] == "ClinVar: medians; other datasets: sums of medians" and len(lines) == 2
     assert lines[1] in figure.drawn_texts(document, figure.read_registry(REGISTRY))
-    assert ("(b) Wall time per dataset and architecture: a ClinVar line is the median of its runs, any other the sum of its dataset's "
-            f"cell medians; {RUNS_CLAUSE}.") in document["caption"]
+    assert ("(b) Wall time per dataset and architecture: a ClinVar line is the median of its runs, any other the sum of the medians of its "
+            f"dataset's separately timed parts; {RUNS_CLAUSE}.") in document["caption"]
 
 
-def test_the_caption_says_a_sum_of_cell_medians_and_what_a_cell_is_in_the_records_own_words(tmp_path):
+def test_the_caption_says_a_sum_of_the_medians_of_separately_timed_parts_and_names_the_parts_in_the_records_words_alone(tmp_path):
+    """The values' key is the record's, a sum of cell medians. Neither text uses the record's word: the caption
+    says what a cell is, a separately timed part of the dataset, and which parts they are only by quoting the
+    record's methodology note."""
     name = f"2001-01-01-population-{RELEASE}.json"
-    # The values' key is the record's: a sum of cell medians. The caption uses that word, and no other of its own.
     document = values_of(tmp_path)
     sums = [value["key"] for group in panel(document, "b")["groups"] for row in group["rows"] for value in row["values"] if "sum_of" in value["key"]]
     assert sums and all(key.endswith(".sum_of_cell_medians_sec") for key in sums)
-    assert f"any other the sum of its dataset's cell medians; {RUNS_CLAUSE}." in document["caption"] and "per-chromosome" not in document["caption"]
+    assert f"any other the sum of the medians of its dataset's separately timed parts; {RUNS_CLAUSE}." in document["caption"]
+    assert "per-chromosome" not in document["caption"] and not re.search(r"\bcells?\b", document["caption"] + document["alt_text"])
     # A record without a methodology note gives no gloss, and the script says so on its output.
     done, _ = run(tmp_path / "noted", record_set())
     assert f"note: {name} carries no methodology note that says what a dataset's sum is of; the caption omits it\n" in done.stdout
     assert not any(source["key"] == "methodology_note" for source in document["sources"])
-    # What a cell is stands in the record's methodology note: the caption quotes the clause that says what a
-    # dataset's sum is of, and the values file names the key it is drawn from.
+    # Which parts a dataset is timed in stands in the record's methodology note: the caption quotes the clause
+    # that says what a dataset's sum is of, and the values file names the key it is drawn from.
     population = population_record()
     population["methodology_note"] = ("Five machines per chromosome per architecture, each running one timed run; cell quantiles by one "
                                       "estimator; a dataset's figure is the sum of its per-chromosome medians. The inputs are the ones scored.")
     document = values_of(tmp_path / "glossed", record_set(population=population))
     clause = "a dataset's figure is the sum of its per-chromosome medians"
-    assert ("(b) Wall time per dataset and architecture: a ClinVar line is the median of its runs, any other the sum of its dataset's "
-            f'cell medians (the record\'s methodology note: "{clause}"); {RUNS_CLAUSE}. (c) ') in document["caption"]
+    assert ("(b) Wall time per dataset and architecture: a ClinVar line is the median of its runs, any other the sum of the medians of its "
+            f'dataset\'s separately timed parts (the record\'s methodology note: "{clause}"); {RUNS_CLAUSE}. (c) ') in document["caption"]
     assert document["sources"][0] == {"text": clause, "record": name, "key": "methodology_note"}
     assert clause in population["methodology_note"] and document["caption"].count(clause) == 1
+    assert document["caption"].count("per-chromosome") == 1 and not re.search(r"\bcells?\b", document["caption"] + document["alt_text"])
     # A note that speaks of no sum of medians, or one that is no text, is quoted nowhere.
     for index, note in enumerate(("Five machines per chromosome; quantiles by one estimator.", ["a dataset's figure is the sum of its medians"])):
         population["methodology_note"] = note
@@ -2108,7 +2208,7 @@ def test_the_texts_say_how_many_runs_a_wall_time_cell_holds_from_the_numbers_the
     done, values = run(tmp_path, record_set())
     document = json.loads(values.read_text(encoding="utf-8"))
     caption, alt = wall_texts(document)
-    assert caption.endswith(f"cell medians; {RUNS_CLAUSE}.") and alt.endswith(f"those of vep-rs, fastVEP and Ensembl VEP; {RUNS_CLAUSE}.")
+    assert caption.endswith(f"separately timed parts; {RUNS_CLAUSE}.") and alt.endswith(f"those of vep-rs, fastVEP and Ensembl VEP; {RUNS_CLAUSE}.")
     assert document["caption"].count(RUNS_CLAUSE) == document["alt_text"].count(RUNS_CLAUSE) == 1 and "number of runs" not in done.stdout
     # Each number is read beside a value: `n_clones` of a ClinVar entry, `n_clones_per_cell` of a sum's entry and,
     # where the entry states none, as the reference's do, of its engine's block. The values file keeps each number
@@ -2130,7 +2230,7 @@ def test_the_texts_say_how_many_runs_a_wall_time_cell_holds_from_the_numbers_the
         entry["n_clones"] = TOOL_RUNS
     level_population["wall_time"]["ensembl_vep"]["n_clones_per_cell"] = TOOL_RUNS
     document = values_of(tmp_path / "level", record_set(walltime=level_wall, population=level_population))
-    assert all(text.endswith(f"; each wall-time cell holds {TOOL_RUNS} runs.") for text in wall_texts(document))
+    assert all(text.endswith(f"; {RUNS_SUBJECT} is timed in {TOOL_RUNS} runs.") for text in wall_texts(document))
     assert [text for text, _, _ in run_sources(document)] == [str(TOOL_RUNS)] * 6
 
     # Another number in a record is the number the clause gives: each number with its tools, the fewest first, and
@@ -2145,7 +2245,7 @@ def test_the_texts_say_how_many_runs_a_wall_time_cell_holds_from_the_numbers_the
     for entry in other_population["wall_time"]["vep_rs"]["per_dataset"]:
         entry["n_clones_per_cell"] = TOOL_RUNS + 4
     document = values_of(tmp_path / "other", record_set(walltime=other_wall, population=other_population))
-    clause = (f"each wall-time cell of Ensembl VEP holds {REFERENCE_RUNS} run, against {TOOL_RUNS - 1} for fastVEP and "
+    clause = (f"{RUNS_SUBJECT} is timed in {REFERENCE_RUNS} run for Ensembl VEP, against {TOOL_RUNS - 1} for fastVEP and "
               f"{TOOL_RUNS} to {TOOL_RUNS + 4} for vep-rs")
     assert all(text.endswith(f"; {clause}.") for text in wall_texts(document))
     assert [(text, record) for text, record, _ in run_sources(document)] == [
@@ -2153,7 +2253,7 @@ def test_the_texts_say_how_many_runs_a_wall_time_cell_holds_from_the_numbers_the
         (f"{TOOL_RUNS} to {TOOL_RUNS + 4}", release), (f"{TOOL_RUNS} to {TOOL_RUNS + 4}", population)]
 
     # A record that states no number for a cell, or none that is a whole number of one run or more, gives no
-    # clause: both texts leave the runs of a cell out, the values file keeps no number of runs, and a note is printed.
+    # clause: both texts leave the number of runs out, the values file keeps no number of runs, and a note is printed.
     for index, runs in enumerate((None, 0, True, "5", 2.5)):
         bare = walltime_record()
         if runs is None:
@@ -2162,15 +2262,15 @@ def test_the_texts_say_how_many_runs_a_wall_time_cell_holds_from_the_numbers_the
             bare["per_cell_aggregates"][-1]["n_clones"] = runs
         done, values = run(tmp_path / f"bare{index}", record_set(walltime=bare))
         assert done.returncode == 0, done.stderr
-        assert f"note: {walltime} states no number of runs for a wall-time cell of Ensembl VEP; the texts leave the runs of a cell out\n" in done.stdout
+        assert f"note: {walltime} states no number of runs beside a wall time of Ensembl VEP; the texts leave the number of runs out\n" in done.stdout
         document = json.loads(values.read_text(encoding="utf-8"))
         caption, alt = wall_texts(document)
-        assert caption.endswith("cell medians.") and alt.endswith("those of vep-rs, fastVEP and Ensembl VEP.") and run_sources(document) == []
-        assert "wall-time cell" not in document["caption"] + document["alt_text"]
+        assert caption.endswith("separately timed parts.") and alt.endswith("those of vep-rs, fastVEP and Ensembl VEP.") and run_sources(document) == []
+        assert "is timed in" not in document["caption"] + document["alt_text"]
     blockless = population_record()
     del blockless["wall_time"]["ensembl_vep"]["n_clones_per_cell"]
     done, values = run(tmp_path / "blockless", record_set(population=blockless))
-    assert f"note: {population} states no number of runs for a wall-time cell of Ensembl VEP; the texts leave the runs of a cell out\n" in done.stdout
+    assert f"note: {population} states no number of runs beside a wall time of Ensembl VEP; the texts leave the number of runs out\n" in done.stdout
     assert run_sources(json.loads(values.read_text(encoding="utf-8"))) == []
 
 
@@ -2200,6 +2300,32 @@ def test_the_f1_axis_is_labelled_f1_against_the_reference_and_the_legend_says_th
     bare = copy.deepcopy(document)
     bare["panels"] = [p for p in bare["panels"] if p["id"] in ("b", "d")]
     assert "raw" not in {entry["mark"] for entry in figure.legend_entries(bare)}
+
+
+def test_an_f1_axis_is_refused_by_name_where_the_figure_holds_no_mark_of_the_reference(tmp_path):
+    registry = figure.read_registry(REGISTRY)
+    refused_with = (
+        "ERROR: [render_release_figure] the values file's tools hold no Ensembl VEP, the registry's reference, which an F1 axis names "
+        "and whose version the legend states: a tool stands among them with a mark of its own, and the reference's marks are its wall "
+        "times, read from the population record's wall_time.<key>.per_dataset and a wall-time record's per_cell_aggregates[engine=<key>] "
+        "under its record keys (ensembl_vep, perl) where the registry admits it to the speed panel")
+    # No record holds a wall time of the reference: the values file is written with a note for each mark left out,
+    # and its tools, each there with a mark of its own, hold no reference for an F1 axis to name.
+    records = record_set()
+    del records[POPULATION_NAME]["wall_time"]["ensembl_vep"]
+    timed = next(record for name, record in records.items() if "-comparator-walltime-" in name)
+    timed["per_cell_aggregates"] = [entry for entry in timed["per_cell_aggregates"] if entry["engine"] != "perl"]
+    untimed = values_of(tmp_path, records)
+    # A registry row that keeps the reference out of the speed panel leaves the same tools.
+    kept_out = values_of(tmp_path / "kept-out", registry=registry_with(tmp_path, lambda rows: rows["ensembl-vep"].update(speed_panel="no")))
+    for document in (untimed, kept_out):
+        assert [tool["id"] for tool in document["tools"]] == ["vep-rs", "fastvep"]
+        for panel_id in ("a", "c"):
+            with pytest.raises(SystemExit) as refused:
+                figure.axis_lines(document, registry, panel(document, panel_id))
+            assert str(refused.value) == refused_with
+        # The wall-time axis names no tool.
+        assert figure.axis_lines(document, registry, panel(document, "b"))[0] == "Wall time (s), log scale; further left is better"
 
 
 def test_no_dagger_stands_in_the_image_and_the_caption_says_nothing_of_a_tools_gene_models(tmp_path):
@@ -2538,6 +2664,15 @@ def test_draft_without_named_outputs_is_refused_since_the_defaults_lie_under_doc
     done = subprocess.run([sys.executable, str(SCRIPT), "--repo", str(tmp_path), "--records", str(directory), "--draft", "--values-only"],
                           capture_output=True, text=True, check=False)
     assert done.returncode == 1 and "--draft writes no file under docs/assets/" in done.stderr
+
+
+def test_the_help_of_draft_names_the_two_sets_of_records_a_draft_is_drawn_from():
+    done = subprocess.run([sys.executable, str(SCRIPT), "--help"], capture_output=True, text=True, check=False)
+    assert done.returncode == 0, done.stderr
+    # The help is wrapped to the terminal: its words are compared, whatever the line breaks.
+    assert " ".join(done.stdout.split()).count(
+        "--draft draw a marked draft from a plugin record whose gate block does not read passed for the released tool, or from records "
+        "of several releases") == 1
 
 
 # The drawing's checks
@@ -3784,8 +3919,8 @@ def test_a_cross_is_drawn_only_where_the_record_lists_the_plugin_as_absent_for_t
     unlisted = copy.deepcopy(PLUGINS)
     unlisted["absent"] = [item for item in unlisted["absent"] if item["plugin"] not in ("GWAS", "LoFTEE")]
     assert refusal(tmp_path / "unlisted", record_set(plugins=unlisted)) == (
-        f"{name} neither scores fastVEP per feature on GWAS GRCh38 nor lists the plugin as absent for it; every gate row shows each tool "
-        "the record scores")
+        f"{name} neither scores fastVEP per feature on GWAS GRCh38 nor lists the plugin as absent for it; every row the record lists under "
+        "rows shows each tool the record scores")
     done, values = run(tmp_path / "draft", record_set(plugins=unlisted), "--draft")
     assert done.returncode == 0, done.stderr
     rows = rows_of(json.loads(values.read_text(encoding="utf-8")), "c")
@@ -3891,6 +4026,404 @@ def test_wall_time_axis_draws_no_minor_ticks():
     assert axes.calls[2][1] == (ticks,) and axes.calls[3][1] == (["1", "10", "100", "1K", "10K", "100K"],)
 
 
+class Canvas(Page):
+    """A sheet that records where each text is set and hands out axes that record what is asked of them."""
+
+    def axes(self, left: float, top: float, width: float, height: float):
+        return Recorder()
+
+
+def test_a_wall_time_panel_that_holds_no_value_is_refused_by_name(tmp_path):
+    # A registry whose every row keeps its tool out of the speed panel: the values file's wall-time panel holds
+    # its datasets and architectures and no value, and a wall-time axis has no smallest value to start under.
+    def no_speed_panel(rows: dict) -> None:
+        for row in rows.values():
+            row["speed_panel"] = "no"
+
+    registry = registry_with(tmp_path, no_speed_panel)
+    document = values_of(tmp_path, registry=registry)
+    wall = panel(document, "b")
+    assert len(wall["groups"]) == 4 and not [value for group in wall["groups"] for row in group["rows"] for value in row["values"]]
+    refused_with = (
+        "ERROR: [render_release_figure] the values file's panels[id=b] holds no value; a wall-time axis starts at the decade under its "
+        "smallest value")
+    with pytest.raises(SystemExit) as refused:
+        figure.draw_seconds(Canvas(), document, figure.read_registry(registry), wall, 16.0, 0.0, 500.0, 200.0)
+    assert str(refused.value) == refused_with
+    # The axis's own functions refuse the numbers of no value under the name they are given.
+    for limits in (lambda: figure.seconds_limits([], "the values file's panels[id=b]"),
+                   lambda: figure.set_time_axis(Recorder(), [], "the values file's panels[id=b]")):
+        with pytest.raises(SystemExit) as refused:
+            limits()
+        assert str(refused.value) == refused_with
+
+
+def test_a_wall_time_panel_that_holds_no_group_is_refused_by_name(tmp_path):
+    # A values document whose wall-time panel lists no dataset has no line to draw and no height to share among lines.
+    document = values_of(tmp_path)
+    bare = {**panel(document, "b"), "groups": []}
+    with pytest.raises(SystemExit) as refused:
+        figure.draw_seconds(Canvas(), document, figure.read_registry(REGISTRY), bare, 16.0, 0.0, 500.0, 200.0)
+    assert str(refused.value) == (
+        "ERROR: [render_release_figure] the values file's panels[id=b] holds no group; the wall-time panel draws one line per dataset")
+
+
+# Panel (e): the caches that are exact, of those checked
+
+
+def test_panel_e_is_one_bar_of_the_released_tool_and_a_row_without_a_bar_for_the_comparator(tmp_path):
+    name = f"2001-01-01-release-{RELEASE}.json"
+    document = values_of(tmp_path, with_genomes())
+    assert [p["id"] for p in document["panels"]] == ["a", "b", "c", "d", "e"]
+    drawn = panel(document, "e")
+    assert drawn["title"] == "Ready-made Ensembl VEP caches, exact of checked" and "note" not in drawn
+    assert figure.axis_lines(document, figure.read_registry(REGISTRY), drawn) == ["Caches exact"]
+    # One total bar, labelled exact of checked with thousands separators: no bar a group or a set.
+    (group,) = drawn["groups"]
+    ours, theirs = group["rows"]
+    assert (group["label"], ours["label"], theirs["label"]) == ("", "vep-rs", "fastVEP")
+    assert ours["values"] == [
+        {"tool": "vep-rs", "kind": "bar", "value": "1234", "record": name, "key": "genome_checks.totals.exact"},
+        {"tool": "vep-rs", "kind": "text", "value": "1,234 of 1,240", "record": name, "key": "genome_checks.totals.exact, checked"},
+    ]
+    # The comparator's row holds the entry's reason and no bar: the drawing sets a cross there.
+    assert theirs["values"] == [
+        {"tool": "fastvep", "kind": "text", "value": GENOME_REASON, "record": name, "key": "genome_checks.absent[engine=fastvep].reason"},
+    ]
+    assert figure.crossed_rows(drawn) == [(theirs, theirs["values"][0])] and figure.crossed_rows(panel(document, "d")) == []
+    # The legend keeps the plugin record's one reason for the tool's crosses, and the panel's reason is a drawn text.
+    crosses = [entry["label"] for entry in figure.legend_entries(document) if entry["mark"] == "absent"]
+    assert crosses == ["fastVEP: no such source"]
+    texts = figure.drawn_texts(document, figure.read_registry(REGISTRY))
+    assert {GENOME_REASON, "1,234 of 1,240", "(e)", drawn["title"], "Caches exact"} <= set(texts)
+    # The texts count five panels.
+    assert document["alt_text"].startswith(f"Five panels comparing vep-rs {RELEASE} and fastVEP {COMPARATOR_VERSION} against ")
+
+
+def test_a_release_record_without_the_block_gives_the_four_panels_and_the_texts_it_gave_before(tmp_path):
+    document = values_of(tmp_path)
+    assert [p["id"] for p in document["panels"]] == ["a", "b", "c", "d"]
+    assert document["alt_text"].startswith("Four panels comparing ") and " (e) " not in document["caption"]
+    assert not [source for source in document["sources"] if "genome_checks" in source["key"]]
+    # The four panels of a record that holds the block are the same four: the fifth changes none of them.
+    with_block = values_of(tmp_path / "block", with_genomes())
+    assert with_block["panels"][:4] == document["panels"]
+    assert [tool["version"] for tool in with_block["tools"]] == [tool["version"] for tool in document["tools"]]
+
+
+def test_the_committed_records_give_the_committed_values_file_and_a_fifth_panel_only_with_the_block(tmp_path):
+    records = figure.discover(ROOT, None)
+    held = any(figure.GENOMES_BLOCK in record["data"] for record in records)
+    values = tmp_path / "values.json"
+    done = subprocess.run([sys.executable, str(SCRIPT), "--repo", str(ROOT), "--values-only", "--values", str(values)],
+                          capture_output=True, text=True, check=False)
+    assert done.returncode == 0, done.stderr
+    # The values file the tree commits is the one its records give, byte for byte.
+    committed = ROOT / figure.VALUES
+    if committed.exists():
+        assert values.read_bytes() == committed.read_bytes()
+    # Records without the block give the four panels and the words that count four; the block alone adds the fifth.
+    document = json.loads(values.read_text(encoding="utf-8"))
+    letters, words = ("abcde", "Five panels comparing ") if held else ("abcd", "Four panels comparing ")
+    assert [p["id"] for p in document["panels"]] == list(letters) and document["alt_text"].startswith(words)
+
+
+def test_the_texts_of_panel_e_state_the_blocks_counts_and_what_the_comparators_documentation_says(tmp_path):
+    name = f"2001-01-01-release-{RELEASE}.json"
+    document = values_of(tmp_path, with_genomes())
+    sets = "made-up species caches 34 of 40 and made-up collection genomes 1,200 of 1,200"
+    counted = ("The bar counts the caches on which vep-rs's output reads exact on the genome check's generated input, of those checked "
+               f"against the stored output of Ensembl VEP {REFERENCE_VERSION}.")
+    named = "The caches that are not exact are named on the supported-genomes page."
+    # The caption's part opens with the home page's clause, then the bar's label, what the bar counts, the sets'
+    # counts, where the caches that are not exact are named, and the comparator's sentence, word for word.
+    assert (f" (e) The ready-made Ensembl VEP caches that are exact, of those checked: 1,234 of 1,240. {counted} By set, exact of checked: {sets}. "
+            f"{named} {GENOME_SENTENCE} ") in document["caption"]
+    # The alternative text says what the panel holds as it is drawn, the sets' counts and the same sentence.
+    assert (" (e) The ready-made Ensembl VEP caches that are exact, of those checked: a bar for vep-rs, labelled 1,234 of 1,240; for fastVEP a "
+            f"cross ({GENOME_REASON}) and no bar. By set, exact of checked: {sets}. {GENOME_SENTENCE} ") in document["alt_text"]
+    # Each of the block's figures, labels and sentences that no value holds has its key among the sources, once.
+    assert [source for source in document["sources"] if "genome_checks" in source["key"]] == [
+        {"text": f"Ensembl VEP {REFERENCE_VERSION}", "record": name, "key": "genome_checks.reference.image"},
+        {"text": "made-up species caches 34 of 40", "record": name, "key": "genome_checks.sets[label=made-up species caches].label, exact, checked"},
+        {"text": "made-up collection genomes 1,200 of 1,200", "record": name,
+         "key": "genome_checks.sets[label=made-up collection genomes].label, exact, checked"},
+        {"text": GENOME_SENTENCE, "record": name, "key": "genome_checks.absent[engine=fastvep].stated_by.version, statements[].says"},
+    ]
+    # The sentence on concordance stands once, as without the panel, and the panel's part speaks of no run of a tool.
+    assert document["caption"].count(figure.CONCORDANCE_SENTENCE) == 1
+    part = document["caption"].split(" (e) ", 1)[1].split(GENOME_SENTENCE)[0] + GENOME_SENTENCE
+    assert not re.search(r"\b(ran|run|runs|running|scored|measured|would)\b", part)
+    assert document["alt_text"].isprintable() and not set(document["alt_text"]) & set("[]")
+    # Every cache exact: no sentence sends the reader to the page that names the others.
+    whole = genome_block()
+    whole["totals"]["exact"] = whole["totals"]["checked"]
+    document = values_of(tmp_path / "whole", with_genomes(whole))
+    assert named not in document["caption"] and " of those checked: 1,240 of 1,240. " in document["caption"]
+    # Three statements are three clauses of the one sentence.
+    three = genome_block()
+    three["absent"][0]["stated_by"]["statements"].append({"file": "docs/OTHER.md", "line": 3, "words": "words", "says": "it reads a made-up table"})
+    assert ("documentation says that its gene models come from a made-up file, that it reads no made-up transcript cache and that it reads a "
+            "made-up table, so it has no counterpart") in values_of(tmp_path / "three", with_genomes(three))["caption"]
+
+
+def test_a_block_without_absent_draws_the_released_tools_row_alone(tmp_path):
+    block = genome_block()
+    del block["absent"]
+    done, values = run(tmp_path, with_genomes(block))
+    assert done.returncode == 0 and "genome_checks" not in done.stdout, done.stderr
+    document = json.loads(values.read_text(encoding="utf-8"))
+    assert [row["label"] for row in panel(document, "e")["groups"][0]["rows"]] == ["vep-rs"]
+    assert " (e) The ready-made Ensembl VEP caches that are exact, of those checked: a bar for vep-rs, labelled 1,234 of 1,240. By set, " in document["alt_text"]
+    assert "documentation says" not in document["caption"] and "no counterpart in this panel" not in document["alt_text"]
+
+
+def unlisted(block: dict) -> None:
+    block["absent"] = []
+
+
+def at_another_version(block: dict) -> None:
+    block["absent"][0]["stated_by"]["version"] = "v9.9.9"
+
+
+def without_a_statement(block: dict) -> None:
+    block["absent"][0]["stated_by"]["statements"] = []
+
+
+@pytest.mark.parametrize(
+    ("edit", "refused", "note", "rows", "comparator"),
+    [
+        (
+            unlisted,
+            ("genome_checks.absent holds no entry for fastVEP, which has a mark in another panel; each comparator the figure draws has a row in "
+             "the panel of the caches, and --draft draws a marked draft without it"),
+            "genome_checks.absent holds no entry for fastVEP, which has a mark in another panel; the draft leaves its row out",
+            ["vep-rs"], COMPARATOR_VERSION,
+        ),
+        (
+            at_another_version,
+            f"the records name fastVEP at {COMPARATOR_VERSION} and v9.9.9; a tool is drawn at one version, and --draft draws a marked draft",
+            (f"genome_checks.absent[0] is stated at v9.9.9 and the other records name fastVEP at {COMPARATOR_VERSION}; the draft draws its row "
+             "and names each version"),
+            ["vep-rs", "fastVEP"], f"{COMPARATOR_VERSION} and v9.9.9",
+        ),
+        (
+            without_a_statement,
+            ("genome_checks.absent[0].stated_by holds no statement that gives what fastVEP's documentation says; the caption's sentence on the "
+             "tool is built from its statements, and --draft draws a marked draft without its row"),
+            "genome_checks.absent[0].stated_by holds no statement that gives what fastVEP's documentation says; the draft leaves its row out",
+            ["vep-rs"], COMPARATOR_VERSION,
+        ),
+    ],
+    ids=["a-drawn-comparator-the-block-does-not-list", "an-entry-at-another-version-than-the-records", "an-entry-without-a-statement"],
+)
+def test_what_panel_e_refuses_of_a_comparators_entry_is_named_and_a_draft_notes_it(tmp_path, edit, refused, note, rows, comparator):
+    name = f"2001-01-01-release-{RELEASE}.json"
+    block = genome_block()
+    edit(block)
+    message = refusal(tmp_path / "final", with_genomes(block))
+    assert message == (refused if refused.startswith("the records") else f"{name} {refused}")
+    done, values = run(tmp_path / "draft", with_genomes(block), "--draft")
+    assert done.returncode == 0, done.stderr
+    assert f"note: {name} {note}" in done.stdout.splitlines()
+    document = json.loads(values.read_text(encoding="utf-8"))
+    assert [row["label"] for row in panel(document, "e")["groups"][0]["rows"]] == rows
+    assert next(tool["version"] for tool in document["tools"] if tool["id"] == "fastvep") == comparator
+    assert document["caption"].startswith(figure.DRAFT_LINE)
+
+
+def test_a_comparator_without_a_mark_in_another_panel_that_the_block_does_not_list_has_no_row_and_is_not_refused(tmp_path):
+    # A registry that keeps the comparator out of the concordance and the speed panels, and no plugin record: the
+    # comparator has no mark in a panel, so a block whose `absent` does not list it draws the released tool's row
+    # alone, outside a draft too, and prints no note.
+    registry = registry_with(tmp_path, lambda rows: rows["fastvep"].update(concordance_panel="no", speed_panel="no"))
+    block = genome_block()
+    unlisted(block)
+    done, values = run(tmp_path, record_set(release=release_with_genomes(block), plugins=None), registry=registry)
+    assert done.returncode == 0 and "genome_checks" not in done.stdout, done.stderr
+    document = json.loads(values.read_text(encoding="utf-8"))
+    assert [p["id"] for p in document["panels"]] == ["a", "b", "e"]
+    assert [row["label"] for row in panel(document, "e")["groups"][0]["rows"]] == ["vep-rs"]
+    assert [tool["id"] for tool in document["tools"]] == ["vep-rs", "ensembl-vep"]
+
+
+def test_an_entry_of_the_block_for_an_engine_that_is_no_comparator_of_the_registry_is_noted_and_left_out(tmp_path):
+    name = f"2001-01-01-release-{RELEASE}.json"
+    block = genome_block()
+    block["absent"].append({**copy.deepcopy(block["absent"][0]), "engine": "othervep"})
+    block["absent"].append({**copy.deepcopy(block["absent"][0]), "engine": "vep_rs"})
+    done, values = run(tmp_path, with_genomes(block))
+    assert done.returncode == 0, done.stderr
+    for position, engine in ((1, "othervep"), (2, "vep_rs")):
+        assert f"note: {name} genome_checks.absent[{position}] names {engine}, which the registry lists as no comparator; the figure omits it" in done.stdout
+    document = json.loads(values.read_text(encoding="utf-8"))
+    assert [row["label"] for row in panel(document, "e")["groups"][0]["rows"]] == ["vep-rs", "fastVEP"]
+    assert "othervep" not in document["caption"] + document["alt_text"]
+
+
+@pytest.mark.parametrize(
+    ("edit", "message"),
+    [
+        (lambda block: block["absent"].append(copy.deepcopy(block["absent"][0])), "genome_checks.absent names fastVEP twice; a comparator has one entry"),
+        (lambda block: block["absent"][0].pop("reason"), "genome_checks.absent[0] states no reason"),
+        (lambda block: block["absent"][0].pop("engine"), "genome_checks.absent[0] names no engine"),
+        (lambda block: block["absent"][0].pop("stated_by"), "genome_checks.absent[0] carries no stated_by"),
+        (lambda block: block["absent"][0]["stated_by"].pop("version"), "genome_checks.absent[0].stated_by states no version of fastVEP"),
+        (lambda block: block.pop("totals"), "genome_checks carries no totals"),
+        (lambda block: block["totals"].update(exact=1241), "genome_checks.totals counts 1241 exact of 1240 checked; the bar is the exact caches among one or more checked"),
+        (lambda block: block["totals"].update(exact=0, checked=0), "genome_checks.totals counts 0 exact of 0 checked; the bar is the exact caches among one or more checked"),
+        (lambda block: block.pop("sets"), "genome_checks carries no sets"),
+        (lambda block: block["sets"][0].pop("label"), "genome_checks.sets[0] carries no label"),
+        (lambda block: block["sets"][1].update(exact="1200"), "genome_checks.sets[1] carries no count under exact: '1200'"),
+        (lambda block: block.pop("reference"), "genome_checks carries no reference"),
+        (lambda block: block["reference"].update(image="made-up"), "genome_checks.reference names no image tag"),
+    ],
+    ids=["an-engine-twice", "no-reason", "no-engine", "no-stated-by", "no-version", "no-totals", "more-exact-than-checked", "none-checked",
+         "no-sets", "a-set-without-a-label", "a-count-that-is-no-integer", "no-reference", "no-image-tag"],
+)
+def test_a_block_that_lacks_what_panel_e_reads_is_refused_by_name(tmp_path, edit, message):
+    block = genome_block()
+    edit(block)
+    assert refusal(tmp_path, with_genomes(block)) == f"2001-01-01-release-{RELEASE}.json {message}"
+
+
+def test_a_block_whose_reference_is_another_release_than_the_records_is_refused_as_one_tool_at_two_versions(tmp_path):
+    block = genome_block()
+    block["reference"]["image"] = "ensemblorg/ensembl-vep:release_999.9"
+    assert refusal(tmp_path, with_genomes(block)) == (
+        f"the records name Ensembl VEP at {REFERENCE_VERSION} and 999.9; a tool is drawn at one version, and --draft draws a marked draft")
+    document = values_of(tmp_path / "draft", with_genomes(block), "--draft")
+    assert "against the stored output of Ensembl VEP 999.9." in document["caption"]
+
+
+def test_the_cross_of_panel_e_is_the_plugin_panels_cross_at_the_left_of_the_plot_with_its_reason_beside_it():
+    row = {"label": "fastVEP", "values": [{"tool": "fastvep", "kind": "text", "value": GENOME_REASON}]}
+    place, reach = figure.absent_place(), figure.absent_reach()
+    for width in (float(figure.MIN_PLOT), 261.0, 330.0):
+        axes, across = Recorder(), object()
+        figure.draw_count_cross(axes, across, 1, row, FILLS, width)
+        ((at, cross),) = axes.drawn("plot")
+        # The plugin panel's own cross, in the tool's colour, on the row's line, placed by its share of the plot's width.
+        assert (cross["marker"], cross["markersize"], cross["markeredgewidth"]) == (figure.ABSENT_MARK, figure.ABSENT_SIZE, figure.ABSENT_STROKE)
+        assert cross["color"] == FILLS["fastvep"] and cross["transform"] is across and cross["linestyle"] == "none"
+        centre = at[0][0] * width
+        assert at[1] == [1] and centre == pytest.approx(place)
+        # Its arms end a pixel and a half or more right of the axis line, where a bar would start, and it reads as a
+        # cross at the README's width, 830 pixels of 1080.
+        assert centre - reach >= 1.5 and 2 * reach * 830 / 1080 >= 6.0 and cross["markeredgewidth"] * figure.DPI / 72 * 830 / 1080 >= 1.5
+        # The reason starts right of the cross, a label's gap past its arms, in the type and the ink of a bar's label.
+        ((words, label),) = axes.drawn("annotate")
+        assert words == (GENOME_REASON,) and label["xy"] == (at[0][0], 1) and label["xycoords"] is across
+        assert label["textcoords"] == "offset points" and label["xytext"][1] == 0
+        assert label["xytext"][0] * figure.DPI / 72 == pytest.approx(reach + figure.LABEL_GAP)
+        assert (label["fontsize"], label["color"], label["ha"], label["va"]) == (figure.MIN_POINTS, figure.INK, "left", "center")
+    assert not hasattr(figure, "ABSENT_INSET")
+
+
+def test_a_panel_of_counts_draws_a_bar_with_its_label_and_a_cross_with_its_text_and_keeps_the_tips_room_for_the_bars_label_alone(tmp_path):
+    document = values_of(tmp_path, with_genomes())
+    tools = figure.read_registry(REGISTRY)
+    sheet = Canvas()
+    axes = Recorder()
+    sheet.axes = lambda left, top, width, height: (sheet.placed.append(("axes", (left, top, width, height))), axes)[1]
+    height = figure.draw_count(sheet, document, tools, panel(document, "e"), 500.0, 900.0, 520.0)
+    assert height == figure.TITLE_HEIGHT + 2 * figure.COUNT_PITCH + figure.AXIS_HEIGHT - 17
+    # The plot leaves room right of it for the bar's label, never for the reason, which starts at the plot's left.
+    (_, (plot_left, _, plot_width, plot_height)) = next(item for item in sheet.placed if item[0] == "axes")
+    label_width = 6.0 * len("fastVEP") + figure.LABEL_GAP + 4
+    tip_width = 6.0 * len("1,234 of 1,240") + 10
+    assert plot_left == 500.0 + label_width and plot_width == 520.0 - tip_width - label_width - figure.PLOT_PAD
+    assert plot_height == 2 * figure.COUNT_PITCH
+    # One bar, the released tool's, to its count, on an axis that runs to the caches checked, with separators.
+    ((bar_at, bar),) = axes.drawn("barh")
+    assert bar_at == (0, 1234) and bar["color"] == FILLS["vep-rs"]
+    assert axes.drawn("set_xlim")[0][0] == (0, 1240)
+    assert axes.drawn("set_xticks")[0][0] == ([0, 200, 400, 600, 800, 1000, 1200], ["0", "200", "400", "600", "800", "1,000", "1,200"])
+    # The bar's label at its tip, and on the comparator's row a cross and the reason beside it.
+    labels = {args[0]: style for args, style in axes.drawn("annotate")}
+    assert set(labels) == {"1,234 of 1,240", GENOME_REASON} and labels["1,234 of 1,240"]["xy"] == (1234, 0)
+    ((cross_at, cross),) = axes.drawn("plot")
+    assert cross_at[1] == [1] and cross["color"] == FILLS["fastvep"] and labels[GENOME_REASON]["xy"][1] == 1
+    # A reason too long for the room beside its cross is refused by name.
+    long = genome_block()
+    long["absent"][0]["reason"] = "reads " + "no made-up transcript cache " * 4
+    wide = values_of(tmp_path / "long", with_genomes(long))
+    with pytest.raises(SystemExit) as refused:
+        figure.draw_count(Canvas(), wide, tools, panel(wide, "e"), 500.0, 900.0, 520.0)
+    assert str(refused.value).startswith("ERROR: [render_release_figure] the drawn figure leaves 'reads no made-up") and str(refused.value).endswith(
+        "no room beside its cross in the plot of 'Ready-made Ensembl VEP caches, exact of checked'")
+    # The panel of the plugins read draws as before: a bar and its label a row, no cross, the axis's own ticks.
+    axes = Recorder()
+    sheet = Canvas()
+    sheet.axes = lambda left, top, width, height: axes
+    figure.draw_count(sheet, document, tools, panel(document, "d"), 500.0, 700.0, 520.0)
+    assert len(axes.drawn("barh")) == len(axes.drawn("annotate")) == 2 and not axes.drawn("plot") and not axes.drawn("set_xticks")
+
+
+def test_the_ticks_of_a_count_axis_of_a_thousand_or_more_are_seven_or_fewer_round_multiples():
+    assert figure.count_ticks(34289) == [0, 5000, 10000, 15000, 20000, 25000, 30000]
+    assert figure.count_ticks(1000) == [0, 200, 400, 600, 800, 1000] and figure.count_ticks(1240) == [0, 200, 400, 600, 800, 1000, 1200]
+    for limit in (1000, 1399, 1400, 6999, 7000, 34289, 99999, 100000, 1234567):
+        ticks = figure.count_ticks(limit)
+        step = ticks[1]
+        assert ticks[0] == 0 and 2 <= len(ticks) <= 7 and ticks[-1] <= limit < ticks[-1] + step
+        assert str(step).rstrip("0") in ("1", "2", "5") and ticks == list(range(0, limit + 1, step))
+
+
+def test_panel_e_stands_under_panel_d_and_the_split_of_the_plugin_panel_counts_its_height(tmp_path):
+    document = values_of(tmp_path, with_genomes())
+    by_id = {p["id"]: p for p in document["panels"]}
+    without = {key: by_id[key] for key in "abcd"}
+    # A panel of counts takes its title, its rows, its axis and a row's foot: two rows, about 132 pixels, and a gap over it.
+    height = figure.count_panel_height(by_id["e"])
+    assert height == figure.TITLE_HEIGHT + figure.AXIS_HEIGHT + figure.ROW_FOOT * figure.MAX_PITCH - 17 + 2 * figure.COUNT_PITCH
+    # The split counts that height, and the gap over it, under the second part beside panel (d)'s and its note: on
+    # these records the first column is given one group more than without the panel.
+    under = figure.count_panel_height(by_id["d"]) + figure.NOTE_LINES * figure.NOTE_PITCH + figure.NOTE_GAP + figure.PANEL_GAP + height
+    counted = figure.split_columns(by_id["c"]["groups"], figure.lines_of(by_id["a"]["groups"]), round(under / figure.MIN_PITCH))
+    assert figure.plugin_split(by_id) == counted == figure.plugin_split(without) + 1
+    first = figure.plugin_split(by_id)
+    loads, plain = figure.column_loads(by_id, first, figure.NOTE_LINES), figure.column_loads(without, first, figure.NOTE_LINES)
+    assert loads[0] == plain[0] and loads[1][1] == plain[1][1]
+    assert loads[1][0] - plain[1][0] == pytest.approx(figure.PANEL_GAP + height)
+    # Without a plugin record the panel stands under the wall-time panel, and nothing is split.
+    bare = {p["id"]: p for p in values_of(tmp_path / "bare", record_set(release=release_with_genomes(), plugins=None))["panels"]}
+    assert list(bare) == ["a", "b", "e"] and figure.plugin_split(bare) == 0
+    fixed = figure.TITLE_HEIGHT + figure.AXIS_HEIGHT + figure.ROW_FOOT * figure.MAX_PITCH
+    lines = figure.lines_of(bare["a"]["groups"])
+    assert figure.column_loads(bare, 0, 0) == [(fixed, lines), (fixed + figure.PANEL_GAP + height, lines)]
+    # The drawing sets it after panel (d) and its note, in the second column, from the same loads.
+    source = SCRIPT.read_text(encoding="utf-8")
+    count_at = source.index('draw_count(sheet, document, tools, panels["d"], lefts[1], tops[1], columns[1])')
+    genomes_at = source.index('draw_count(sheet, document, tools, panels["e"], lefts[1], tops[1], columns[1])')
+    assert count_at < source.index("tops[1] += len(panel_note_lines) * NOTE_PITCH + NOTE_GAP if panel_note_lines else 0", count_at) < genomes_at
+    assert "column_loads(panels, first, len(panel_note_lines))" in source
+
+
+def test_the_last_releases_records_with_the_block_added_are_drawn_at_the_least_pitch_or_wider():
+    tools = figure.read_registry(REGISTRY)
+    records = figure.discover(ROOT, None)
+    release = next(record for record in records if record["kind"] == "release")
+    block = genome_block()
+    block["reference"]["image"] = release["data"]["perl_reference"]["snv_indel"]["image"]
+    held = {**release, "data": {**release["data"], figure.GENOMES_BLOCK: block}}
+    chosen = figure.select([held if record is release else record for record in records], tools, False)
+    block["absent"][0]["stated_by"]["version"] = chosen["datasets"]["fastvep"]["data"]["engine_version"]
+    document, _ = figure.build_values(tools, chosen, False)
+    by_id = {p["id"]: p for p in document["panels"]}
+    assert list(by_id) == ["a", "b", "c", "d", "e"]
+    first = figure.plugin_split(by_id)
+    loads = figure.column_loads(by_id, first, figure.NOTE_LINES)
+    # The canvas less its margins, a legend of three rows with the gap under it, and no note under the columns.
+    room = figure.CANVAS[1] - 2 * figure.MARGIN - 90 - 12
+    pitch = figure.row_pitch([(room - used, lines) for used, lines in loads])
+    assert figure.MIN_PITCH <= pitch <= figure.MAX_PITCH
+    # Without the panel the same records stand at a wider pitch or the same: the panel is paid for in pitch alone, never in canvas.
+    plain = {key: by_id[key] for key in "abcd"}
+    wider = figure.row_pitch([(room - used, lines) for used, lines in figure.column_loads(plain, figure.plugin_split(plain), figure.NOTE_LINES)])
+    assert pitch <= wider and document["canvas"] == {"width_px": 1080, "height_px": 1350}
+
+
 # The committed figure and the README
 
 
@@ -3913,13 +4446,18 @@ def test_png_helpers_read_the_size_and_the_stamp():
         figure.png_size(b"GIF89a")
 
 
-def tables(readme: str) -> dict[str, list[dict[str, str]]]:
-    """The tables of the README's current-release section by the heading above them, each row by its header cell."""
+def release_section(readme: str) -> str:
+    """The README's current-release section, from under its heading to the next heading of its level."""
     start = re.search(r"^## Current release: .*$", readme, re.MULTILINE)
     assert start, "README.md has no current-release section"
     section = readme[start.end():]
     following = re.search(r"^## ", section, re.MULTILINE)
-    section = section[: following.start()] if following else section
+    return section[: following.start()] if following else section
+
+
+def tables(readme: str) -> dict[str, list[dict[str, str]]]:
+    """The tables of the README's current-release section by the heading above them, each row by its header cell."""
+    section = release_section(readme)
     out: dict[str, list[dict[str, str]]] = {}
     heading, header = "", None
     for line in section.splitlines():
@@ -3944,7 +4482,10 @@ def one(rows: list[dict[str, str]], **cells: str) -> dict[str, str]:
 
 def readme_mismatches(readme: str, document: dict) -> list[str]:
     """Every value of the values file that differs from the README table cell it corresponds to. The pooled row
-    of panel (a) is the README's row of the same name, which states both assemblies."""
+    of panel (a) is the README's row of the same name, which states both assemblies. The README has no table
+    for panel (e): each value of that panel is held to the words of the current-release section, which carries
+    the figure's caption and, in its image line, the alternative text. A text stands there word for word, and a
+    bar's count with its thousands separators."""
     found = tables(readme)
     labels = {tool["id"]: f"{tool['name']} {tool['version']}" for tool in document["tools"]}
     comparators = {tool["id"] for tool in figure.read_registry(REGISTRY) if tool["role"] == "comparator"}
@@ -4012,6 +4553,13 @@ def readme_mismatches(readme: str, document: dict) -> list[str]:
             read = shown[column]
             for value in row["values"]:
                 compare(f"(d) {row['label']} {value['kind']}", value["value"], read if value["kind"] == "bar" else f"{read} of {column.rsplit(' ', 1)[1]}")
+    if any(p["id"] == "e" for p in document["panels"]):
+        section = release_section(readme)
+        for row in (r for g in panel(document, "e")["groups"] for r in g["rows"]):
+            for value in row["values"]:
+                stated = f"{int(value['value']):,}" if value["kind"] == "bar" else value["value"]
+                if stated not in section:
+                    out.append(f"(e) {row['label']} {value['kind']}: the figure states {stated}, and the README's release section does not")
     return out
 
 
@@ -4185,11 +4733,11 @@ SYNTHETIC_README = f"""# Project
 """
 
 
-def synthetic_tree(tmp_path: Path) -> Path:
+def synthetic_tree(tmp_path: Path, records: dict | None = None) -> Path:
     """A tree whose README states the synthetic records' figures in hand-written cells and the fixture record's
-    in tables computed here, with the pair written from those records."""
+    in tables computed here, with the pair written from those records, or from `records`."""
     repo = tmp_path / "repo"
-    write_records(repo / PROVENANCE, record_set())
+    write_records(repo / PROVENANCE, record_set() if records is None else records)
     (repo / "README.md").write_text("placeholder\n\n## Current release: " + RELEASE + "\n", encoding="utf-8")
     done = subprocess.run([sys.executable, str(SCRIPT), "--repo", str(repo), "--values-only"], capture_output=True, text=True, check=False)
     assert done.returncode == 0, done.stderr
@@ -4231,3 +4779,65 @@ def test_every_value_of_all_four_panels_equals_its_readme_cell(tmp_path):
     readme.write_text(text.replace(next(line for line in text.splitlines(keepends=True) if line.startswith(old)), ""), encoding="utf-8")
     with pytest.raises(AssertionError, match="0 README rows state vep-rs"):
         pair_problems(repo)
+
+
+def test_a_panel_the_readme_has_no_table_for_is_held_to_the_words_of_its_release_section(tmp_path):
+    repo = synthetic_tree(tmp_path, with_genomes())
+    document = json.loads((repo / figure.VALUES).read_text(encoding="utf-8"))
+    assert [p["id"] for p in document["panels"]] == ["a", "b", "c", "d", "e"]
+    readme = repo / "README.md"
+    text = readme.read_text(encoding="utf-8")
+    lacking = "and the README's release section does not"
+    # A README that states the first four panels in its tables and says nothing of the fifth lacks each of its values.
+    assert pair_problems(repo) == [
+        f"(e) vep-rs bar: the figure states 1,234, {lacking}",
+        f"(e) vep-rs text: the figure states 1,234 of 1,240, {lacking}",
+        f"(e) fastVEP text: the figure states {GENOME_REASON}, {lacking}",
+    ]
+    # The caption under the image carries them: the bar's label, and the reason inside the comparator's sentence.
+    shown = text.replace("## Next\n", f"{document['caption']}\n\n## Next\n")
+    assert shown != text
+    readme.write_text(shown, encoding="utf-8")
+    assert pair_problems(repo) == []
+    # A caption left from other counts, or one without the comparator's sentence, is named value by value.
+    readme.write_text(shown.replace("1,234 of 1,240", "1,233 of 1,240"), encoding="utf-8")
+    assert pair_problems(repo) == [f"(e) vep-rs bar: the figure states 1,234, {lacking}", f"(e) vep-rs text: the figure states 1,234 of 1,240, {lacking}"]
+    readme.write_text(shown.replace(GENOME_SENTENCE, ""), encoding="utf-8")
+    assert pair_problems(repo) == [f"(e) fastVEP text: the figure states {GENOME_REASON}, {lacking}"]
+    # The section's words are the ones read: the same words under a later heading hold nothing.
+    readme.write_text(text.replace("## Next\n", f"## Next\n\n{document['caption']}\n"), encoding="utf-8")
+    assert len(pair_problems(repo)) == 3
+
+
+def test_a_readme_row_that_states_the_population_sum_is_held_to_the_figures_sum(tmp_path):
+    repo = synthetic_tree(tmp_path)
+    readme = repo / "README.md"
+    text = readme.read_text(encoding="utf-8")
+    plugin, assembly = "AlphaMissense", "GRCh37"
+
+    def cells(population: bool) -> list[str]:
+        """The released tool's raw and adjusted F1 on the row, from its ClinVar entries alone or summed with its
+        entries on the population dataset of the assembly, as the figure sums them."""
+        return [nine_places(*plugin_sums("real_data", plugin, assembly, "vep-rs", "feature", keys, population=population))
+                for keys in (figure.RAW_COUNTS, ADJUSTED)]
+
+    def stated(raw: str, adjusted: str) -> str:
+        """The row as a README states a sum: its Data cell names ClinVar and the population dataset."""
+        return f"| vep-rs {RELEASE} | {plugin} | ClinVar and Population B | {assembly} | {raw} | {adjusted} |"
+
+    def off(cell: str) -> str:
+        """`cell` with another last digit."""
+        return cell[:-1] + str((int(cell[-1]) + 1) % 10)
+
+    # The made-up README states the released tool's row from its ClinVar entries alone. Restated as a sum, the row
+    # holds the figure's own values, and every cell of it is compared.
+    alone, (raw, adjusted) = cells(False), cells(True)
+    written = f"| vep-rs {RELEASE} | {plugin} | ClinVar | {assembly} | {alone[0]} | {alone[1]} |"
+    assert text.count(written) == 1 and raw != alone[0]
+    text = text.replace(written, stated(raw, adjusted))
+    readme.write_text(text, encoding="utf-8")
+    assert pair_problems(repo) == []
+    # One digit off in the raw cell, then in the adjusted cell, is named with its row and its mark.
+    for wrong, kind, value in ((stated(off(raw), adjusted), "bar", raw), (stated(raw, off(adjusted)), "marker", adjusted)):
+        readme.write_text(text.replace(stated(raw, adjusted), wrong), encoding="utf-8")
+        assert pair_problems(repo) == [f"(c) {plugin} {assembly} vep-rs {kind}: the figure states {value}, the README {off(value)}"]

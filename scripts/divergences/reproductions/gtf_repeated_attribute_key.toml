@@ -1,7 +1,7 @@
 entry = "gtf_repeated_attribute_key"
 page = "docs/divergences/gtf-repeated-attribute-key.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the GTF 2.2 specification, [attributes], which makes gene_id and transcript_id mandatory and states no rule against a key written twice on one line; not seen in the measured datasets"
 notes = "The GRCh38 release-116 GTF lines of TMPRSS3 and ENST00001113783 with the transcript line's `gene_name \"TMPRSS3\"` followed by a second `gene_name \"OTHER\"`, beside the lines of PWP2 and ENST00000456705 as a control whose rows agree. Ensembl VEP's --gtf source reads the ninth column through GTF.pm's get_attributes (lines 116-136), which lists a key's values when the key is written twice after a defined value (lines 128-131); BaseGXF.pm:662 takes the symbol from that hash, so the list prints joined by commas at the output (Utils.pm:185-193 convert_arrayref): SYMBOL `TMPRSS3,OTHER`, a JSON list, `TMPRSS3&OTHER` in the VCF. A repeated transcript_biotype prints joined the same way; a repeated transcript_version or, under --protein_version, protein_id prints the list's address (`ENST00001113783.ARRAY(0x...)`); a repeated transcript_support_level prints no TSL; a repeated gene_id or transcript_id on the gene or transcript line loses the transcript, its records written as intergenic_variant, and a repeated transcript_id on an exon line drops that exon from the transcript; a repeated exon_id, protein_version or ccds_id leaves the rows unchanged. vep-rs refuses to build a cache from the file at the line, `ERROR: [cache-builder] Failed to parse GTF: <file> line 4: GTF attribute gene_name is repeated; Ensembl VEP reads a repeated key as a list` (the prepare step asserts that line and that no cache directory exists), so its run has no cache to read, exits 1 and writes no rows."
@@ -71,3 +71,13 @@ ensembl_vep = [
 ]
 vep_rs = []
 vep_rs_exit = 1
+
+[implementation]
+code = [
+    "crates/vep-cache-builder/src/gtf.rs::SINGLE_VALUE_KEYS",
+    "crates/vep-cache-builder/src/gtf.rs::parse_gtf_attributes",
+]
+tests = [
+    "crates/vep-cache-builder/src/gtf.rs::tests::a_repeated_read_key_and_a_non_utf8_escape_are_refused",
+    "crates/vep-cli/tests/documented_subsets.rs::gtf_repeated_attribute_key_divergence_is_documented",
+]

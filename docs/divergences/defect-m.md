@@ -36,11 +36,11 @@ With a true `SVTYPE` in INFO Ensembl VEP routes the line to the structural path,
 21	30425650	star_svtype_bnd	N	*	.	.	SVTYPE=BND
 ```
 
-Executed with Ensembl VEP 116.2 (`ensemblorg/ensembl-vep:release_116.2`, the 116 GRCh38 cache, `--offline --cache --allele_number`).
+Executed with Ensembl VEP 116.3 (`ensemblorg/ensembl-vep:release_116.3`, the 116 GRCh38 cache, `--offline --cache --allele_number`).
 
 ### 20.3 What each engine writes
 
-Ensembl VEP 116.2, for the first record (the second, with REF `A`, writes the same two rows under its own name), two rows, one per feature, and for the third, four rows, every row twice under `ALLELE_NUM` 1 and 2. vep-rs writes no row for any of the three; one table per row.
+Ensembl VEP 116.3, for the first record (the second, with REF `A`, writes the same two rows under its own name), two rows, one per feature, and for the third, four rows, every row twice under `ALLELE_NUM` 1 and 2. vep-rs writes no row for any of the three; one table per row.
 
 `star_svtype_del` on ENST00000334068:
 
@@ -136,7 +136,7 @@ vep-rs: no row for any of the three in the default and tab formats, no warning. 
 
 ```bash
 printf '##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n21\t30425650\tstar_svtype_del\tN\t*\t.\t.\tSVTYPE=DEL;END=30425949\n' > star.vcf
-docker run --rm -v "$PWD":/work -v /path/to/vep-cache:/cache ensemblorg/ensembl-vep:release_116.2 \
+docker run --rm -v "$PWD":/work -v /path/to/vep-cache:/cache ensemblorg/ensembl-vep:release_116.3 \
   vep -i /work/star.vcf -o /work/star.perl.txt --offline --cache --dir_cache /cache --cache_version 116 \
   --assembly GRCh38 --species homo_sapiens --allele_number --no_stats
 vep -i star.vcf -o star.vep-rs.txt --offline --json_cache tests/golden/116/GRCh38-release116/json_cache --assembly GRCh38 --no_stats
@@ -146,4 +146,4 @@ Replacing `SVTYPE=DEL;END=30425949` with `.` gives no row from either engine.
 
 ### 20.7 How the comparator treats this class
 
-The class is `star_alone_svtype_annotated` in the 116.2 registry. The structural-variant comparator reads the input and sets aside the reference's rows at the Location of a record whose ALTs are all `*` and whose `SVTYPE` Perl reads as true. The SNP/indel comparator, which opens the input only to recognise gVCF variant sites under `--input-dir` or `--input-vcf`, judges this class from the output alone. There it cannot tell such a row from a record with an allele, so the class counts nothing and the rows stay charged.
+The class is `star_alone_svtype_annotated` in the 116.3 registry. The structural-variant comparator reads the input and sets aside the reference's rows at the Location of a record whose ALTs are all `*` and whose `SVTYPE` Perl reads as true. The SNP/indel comparator, which opens the input only to recognise gVCF variant sites under `--input-dir` or `--input-vcf`, judges this class from the output alone. There it cannot tell such a row from a record with an allele, so the class counts nothing and the rows stay charged.

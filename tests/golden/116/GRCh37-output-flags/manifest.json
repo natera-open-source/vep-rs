@@ -13,7 +13,7 @@
   "allele_number",
   "rest-option-set"
  ],
- "suites": {
+ "datasets": {
   "flags": {
    "reference": "expected.default.out",
    "input": "design-variants.vcf",
@@ -207,7 +207,7 @@
  },
  "records": [
   {
-   "suite": "flags",
+   "dataset": "flags",
    "vcf": "21\t9937918\trs867932594\tG\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -216,7 +216,7 @@
    ]
   },
   {
-   "suite": "flags",
+   "dataset": "flags",
    "vcf": "21\t9937921\ttwo_alts\tG\tA,C\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -228,7 +228,7 @@
    ]
   },
   {
-   "suite": "flags",
+   "dataset": "flags",
    "vcf": "21\t10906906\trs748371308\tT\tC\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant",
@@ -236,7 +236,7 @@
    ]
   },
   {
-   "suite": "flags",
+   "dataset": "flags",
    "vcf": "21\t10906909\tthree_alts\tT\tA,C,G\t.\t.\t.",
    "combinations": [
     "missense_variant",
@@ -247,7 +247,7 @@
    ]
   },
   {
-   "suite": "flags",
+   "dataset": "flags",
    "vcf": "21\t10910400\trs149363218\tCTA\tC\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant",
@@ -255,7 +255,7 @@
    ]
   },
   {
-   "suite": "flags",
+   "dataset": "flags",
    "vcf": "21\t10910406\ttwo_deletions\tATG\tAT,A\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant,splice_region_variant",
@@ -266,7 +266,7 @@
    ]
   },
   {
-   "suite": "flags",
+   "dataset": "flags",
    "vcf": "21\t10970008\trs11184139\tC\tT\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_region_variant",
@@ -278,7 +278,7 @@
    ]
   },
   {
-   "suite": "flags",
+   "dataset": "flags",
    "vcf": "21\t10970008\trs11184139\tCCTTT\tC\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_region_variant",
@@ -290,7 +290,7 @@
    ]
   },
   {
-   "suite": "flags",
+   "dataset": "flags",
    "vcf": "21\t10970011\tmixed_lengths\tT\tA,TT\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_region_variant",
@@ -304,7 +304,7 @@
    ]
   },
   {
-   "suite": "flags",
+   "dataset": "flags",
    "vcf": "21\t15966333\trs1369241870\tCCAGTT\tC\t.\t.\t.",
    "combinations": [
     "frameshift_variant",
@@ -313,7 +313,7 @@
    ]
   },
   {
-   "suite": "flags",
+   "dataset": "flags",
    "vcf": "21\t15974344\trs1385910518\tCTGATAGGAAGTTCCT\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -321,7 +321,7 @@
    ]
   },
   {
-   "suite": "flags",
+   "dataset": "flags",
    "vcf": "21\t17202918\trs1262376465\tCAAGT\tC\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,splice_donor_variant",
@@ -329,7 +329,7 @@
    ]
   },
   {
-   "suite": "flags",
+   "dataset": "flags",
    "vcf": "21\t19638355\trs770292805\tA\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -338,7 +338,7 @@
    ]
   },
   {
-   "suite": "flags",
+   "dataset": "flags",
    "vcf": "21\t19638358\tstar_allele\tA\tC,*\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -347,7 +347,7 @@
    ]
   },
   {
-   "suite": "flags",
+   "dataset": "flags",
    "vcf": "21\t19744457\t3722895\tCTACAGTGAGGGAGGATAAAACAGAAGGGGAGAGAGTAGGGGGGAGAACTTACCACACATTTTATTGT\tC\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,coding_sequence_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
@@ -355,28 +355,28 @@
    ]
   },
   {
-   "suite": "flags",
+   "dataset": "flags",
    "vcf": "21\t23006810\trs117720560\tA\tT\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant,splice_donor_region_variant"
    ]
   },
   {
-   "suite": "flags",
+   "dataset": "flags",
    "vcf": "21\t24245453\trs1037870053\tC\tT\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "flags",
+   "dataset": "flags",
    "vcf": "21\t26979786\t3904802\tA\tG\t.\t.\t.",
    "combinations": [
     "start_lost"
    ]
   },
   {
-   "suite": "flags",
+   "dataset": "flags",
    "vcf": "21\t27062183\t829531\tAT\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -386,7 +386,7 @@
    ]
   },
   {
-   "suite": "flags",
+   "dataset": "flags",
    "vcf": "21\t27369678\t662051\tTAACAGGATC\tG\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -395,7 +395,7 @@
    ]
   },
   {
-   "suite": "flags",
+   "dataset": "flags",
    "vcf": "21\t27394181\t1346978\tT\tTGTGGTG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -404,7 +404,7 @@
    ]
   },
   {
-   "suite": "flags",
+   "dataset": "flags",
    "vcf": "21\t27850391\trs1039049841\tT\tTAC\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -413,7 +413,7 @@
    ]
   },
   {
-   "suite": "flags",
+   "dataset": "flags",
    "vcf": "21\t33867405\trs779730010\tATCG\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -426,7 +426,7 @@
    ]
   },
   {
-   "suite": "flags",
+   "dataset": "flags",
    "vcf": "21\t34655545\trs148468217\tC\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant",
@@ -436,7 +436,7 @@
    ]
   },
   {
-   "suite": "flags",
+   "dataset": "flags",
    "vcf": "21\t34924574\t996796\tT\tTA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant,stop_gained",
@@ -446,7 +446,7 @@
    ]
   },
   {
-   "suite": "flags",
+   "dataset": "flags",
    "vcf": "21\t34950628\trs1374797816\tA\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -459,7 +459,7 @@
    ]
   },
   {
-   "suite": "flags",
+   "dataset": "flags",
    "vcf": "21\t46326846\t3632111\tC\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -470,7 +470,7 @@
    ]
   },
   {
-   "suite": "flags",
+   "dataset": "flags",
    "vcf": "21\t46957692\trs773493715\tC\tT\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,incomplete_terminal_codon_variant",
@@ -480,7 +480,7 @@
    ]
   },
   {
-   "suite": "flags",
+   "dataset": "flags",
    "vcf": "21\t47531391\t2439448\tA\tATGCTCCAGGGCACC\t.\t.\t.",
    "combinations": [
     "frameshift_variant,start_retained_variant",
@@ -488,7 +488,7 @@
    ]
   },
   {
-   "suite": "flags",
+   "dataset": "flags",
    "vcf": "21\t47532318\t842566\tCGCGAGGAGGGCATCCGGCTCTTCGCCGTGGCCCCCAACCAGAACCTGAAGGAGCAGGGCCTGCGGGACATCGCCAGCACGCCGCACGAGCTCTACCGCAACGACTACGCCACCATGCTGCCCGACTCCACCGAGATCGACCAGGACACCATCAACCGCATCATCAAGGTCATGGTGAGCCGCGGGCGGGAGCACCGTCCACGCGCCAGGGGTGGCCACGGTGGGCCGTCCACCCACTCCGGGCCTCACTTTACCCCTCTGTGAGTGCGGAGGCCGAAGGAGGAAGCTCCGGGCAGGGCCTGGGCCACTCAGGTGTCCCTCCATCCCCACCCAGACTCGAGGTGCAGCCGCCCCAGGTCTCGAGGCACACGGCTAACCAGCATGTCTGTCTTTTCTGCAGAAACACGAAGCCTACGGAGAGGTGAGTGGCGCTTCCCTTCCTGCCAGTGCTGGCCGGCAGCTGACCCAGCAGAGATGACCGCGCCAGGCTGCCGACTCCTGGCGCCTCCAGGCTGGAACAGATGAGAGGAGAGGGAGTCACCTGCTCCATGTTGGACCTGAGGCCTTGGAGTCTGGAGAAAGGGCTCCCAGCCAAAGCTAGGCTGTTTAGATCCCGTGAGGGTCAGCGTTAGGGTCACCCACAGAGCACGTGTTACAAGGAGAGGTCGAGGGTCTGGCCTCCGGGCAGGTGGGATCCATCCACCCTGGACTCGAGGCCCGAGCCCAGCCCAGCAGGTCAGGGGAGAAGGAACTGACATCATCGGGGTCCATGACATCCCCACCTCCCTGTGTGTCCCAGCTCCAGCTCTCAGGAAG\tC\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant",
@@ -498,7 +498,7 @@
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "flag_sets": [
@@ -520,9 +520,68 @@
     "terms",
     "terms-vocabularies"
    ],
-   "divergences": [],
+   "divergences": [
+    {
+     "location": "21:10970011",
+     "allele": "TT",
+     "feature": "ENST00000298232",
+     "feature_type": "Transcript",
+     "record_indices": [
+      8
+     ],
+     "vep_consequence_set": "FRAMESHIFT_CODING,SPLICE_SITE",
+     "vep_rs_consequence_sets": [
+      "FRAMESHIFT_CODING"
+     ],
+     "expected_divergence": "splice_term_past_the_record_span"
+    },
+    {
+     "location": "21:10970011",
+     "allele": "TT",
+     "feature": "ENST00000342420",
+     "feature_type": "Transcript",
+     "record_indices": [
+      8
+     ],
+     "vep_consequence_set": "FRAMESHIFT_CODING,SPLICE_SITE",
+     "vep_rs_consequence_sets": [
+      "FRAMESHIFT_CODING"
+     ],
+     "expected_divergence": "splice_term_past_the_record_span"
+    },
+    {
+     "location": "21:10970011",
+     "allele": "TT",
+     "feature": "ENST00000361285",
+     "feature_type": "Transcript",
+     "record_indices": [
+      8
+     ],
+     "vep_consequence_set": "FRAMESHIFT_CODING,SPLICE_SITE",
+     "vep_rs_consequence_sets": [
+      "FRAMESHIFT_CODING"
+     ],
+     "expected_divergence": "splice_term_past_the_record_span"
+    },
+    {
+     "location": "21:10970011",
+     "allele": "TT",
+     "feature": "ENST00000415664",
+     "feature_type": "Transcript",
+     "record_indices": [
+      8
+     ],
+     "vep_consequence_set": "SPLICE_SITE,WITHIN_NON_CODING_GENE",
+     "vep_rs_consequence_sets": [
+      "WITHIN_NON_CODING_GENE"
+     ],
+     "expected_divergence": "splice_term_past_the_record_span"
+    }
+   ],
    "vep_rs_only_tuples": [],
-   "divergence_summary": {},
+   "divergence_summary": {
+    "splice_term_past_the_record_span": 4
+   },
    "vep_rs_only_summary": {}
   },
   {
@@ -543,9 +602,68 @@
     "terms",
     "terms-vocabularies"
    ],
-   "divergences": [],
+   "divergences": [
+    {
+     "location": "21:10970011",
+     "allele": "TT",
+     "feature": "ENST00000298232",
+     "feature_type": "Transcript",
+     "record_indices": [
+      8
+     ],
+     "vep_consequence_set": "frameshift,splice_region_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift"
+     ],
+     "expected_divergence": "splice_term_past_the_record_span"
+    },
+    {
+     "location": "21:10970011",
+     "allele": "TT",
+     "feature": "ENST00000342420",
+     "feature_type": "Transcript",
+     "record_indices": [
+      8
+     ],
+     "vep_consequence_set": "frameshift,splice_region_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift"
+     ],
+     "expected_divergence": "splice_term_past_the_record_span"
+    },
+    {
+     "location": "21:10970011",
+     "allele": "TT",
+     "feature": "ENST00000361285",
+     "feature_type": "Transcript",
+     "record_indices": [
+      8
+     ],
+     "vep_consequence_set": "frameshift,splice_region_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift"
+     ],
+     "expected_divergence": "splice_term_past_the_record_span"
+    },
+    {
+     "location": "21:10970011",
+     "allele": "TT",
+     "feature": "ENST00000415664",
+     "feature_type": "Transcript",
+     "record_indices": [
+      8
+     ],
+     "vep_consequence_set": "non_coding_transcript_exon_variant,splice_region_variant",
+     "vep_rs_consequence_sets": [
+      "non_coding_transcript_exon_variant"
+     ],
+     "expected_divergence": "splice_term_past_the_record_span"
+    }
+   ],
    "vep_rs_only_tuples": [],
-   "divergence_summary": {},
+   "divergence_summary": {
+    "splice_term_past_the_record_span": 4
+   },
    "vep_rs_only_summary": {}
   },
   {
@@ -565,10 +683,1543 @@
    "covers": [
     "total_length"
    ],
-   "divergences": [],
+   "masks": [
+    "total_length_json_range_end"
+   ],
+   "divergences": [
+    {
+     "location": "21:10970011",
+     "allele": "TT",
+     "feature": "ENST00000298232",
+     "feature_type": "Transcript",
+     "record_indices": [
+      8
+     ],
+     "vep_consequence_set": "frameshift_variant,splice_region_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant"
+     ],
+     "expected_divergence": "splice_term_past_the_record_span"
+    },
+    {
+     "location": "21:10970011",
+     "allele": "TT",
+     "feature": "ENST00000342420",
+     "feature_type": "Transcript",
+     "record_indices": [
+      8
+     ],
+     "vep_consequence_set": "frameshift_variant,splice_region_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant"
+     ],
+     "expected_divergence": "splice_term_past_the_record_span"
+    },
+    {
+     "location": "21:10970011",
+     "allele": "TT",
+     "feature": "ENST00000361285",
+     "feature_type": "Transcript",
+     "record_indices": [
+      8
+     ],
+     "vep_consequence_set": "frameshift_variant,splice_region_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant"
+     ],
+     "expected_divergence": "splice_term_past_the_record_span"
+    },
+    {
+     "location": "21:10970011",
+     "allele": "TT",
+     "feature": "ENST00000415664",
+     "feature_type": "Transcript",
+     "record_indices": [
+      8
+     ],
+     "vep_consequence_set": "non_coding_transcript_exon_variant,splice_region_variant",
+     "vep_rs_consequence_sets": [
+      "non_coding_transcript_exon_variant"
+     ],
+     "expected_divergence": "splice_term_past_the_record_span"
+    }
+   ],
    "vep_rs_only_tuples": [],
-   "divergence_summary": {},
-   "vep_rs_only_summary": {}
+   "divergence_summary": {
+    "splice_term_past_the_record_span": 4
+   },
+   "vep_rs_only_summary": {},
+   "field_divergences": [
+    {
+     "location": "21:10970009-10970012",
+     "allele": "-",
+     "feature": "ENST00000298232",
+     "feature_type": "Transcript",
+     "record_indices": [
+      6,
+      7
+     ],
+     "consequence_set": "frameshift_variant,splice_region_variant",
+     "field": "cdna_end",
+     "vep": "484",
+     "vep_rs": "487/2674",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:10970009-10970012",
+     "allele": "-",
+     "feature": "ENST00000298232",
+     "feature_type": "Transcript",
+     "record_indices": [
+      6,
+      7
+     ],
+     "consequence_set": "frameshift_variant,splice_region_variant",
+     "field": "cds_end",
+     "vep": "116",
+     "vep_rs": "119/1602",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:10970009-10970012",
+     "allele": "-",
+     "feature": "ENST00000298232",
+     "feature_type": "Transcript",
+     "record_indices": [
+      6,
+      7
+     ],
+     "consequence_set": "frameshift_variant,splice_region_variant",
+     "field": "protein_end",
+     "vep": "39",
+     "vep_rs": "40/533",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:10970009-10970012",
+     "allele": "-",
+     "feature": "ENST00000342420",
+     "feature_type": "Transcript",
+     "record_indices": [
+      6,
+      7
+     ],
+     "consequence_set": "frameshift_variant,splice_region_variant",
+     "field": "cdna_end",
+     "vep": "446",
+     "vep_rs": "449/2036",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:10970009-10970012",
+     "allele": "-",
+     "feature": "ENST00000342420",
+     "feature_type": "Transcript",
+     "record_indices": [
+      6,
+      7
+     ],
+     "consequence_set": "frameshift_variant,splice_region_variant",
+     "field": "cds_end",
+     "vep": "116",
+     "vep_rs": "119/1542",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:10970009-10970012",
+     "allele": "-",
+     "feature": "ENST00000342420",
+     "feature_type": "Transcript",
+     "record_indices": [
+      6,
+      7
+     ],
+     "consequence_set": "frameshift_variant,splice_region_variant",
+     "field": "protein_end",
+     "vep": "39",
+     "vep_rs": "40/513",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:10970009-10970012",
+     "allele": "-",
+     "feature": "ENST00000361285",
+     "feature_type": "Transcript",
+     "record_indices": [
+      6,
+      7
+     ],
+     "consequence_set": "frameshift_variant,splice_region_variant",
+     "field": "cdna_end",
+     "vep": "446",
+     "vep_rs": "449/2150",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:10970009-10970012",
+     "allele": "-",
+     "feature": "ENST00000361285",
+     "feature_type": "Transcript",
+     "record_indices": [
+      6,
+      7
+     ],
+     "consequence_set": "frameshift_variant,splice_region_variant",
+     "field": "cds_end",
+     "vep": "116",
+     "vep_rs": "119/1656",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:10970009-10970012",
+     "allele": "-",
+     "feature": "ENST00000361285",
+     "feature_type": "Transcript",
+     "record_indices": [
+      6,
+      7
+     ],
+     "consequence_set": "frameshift_variant,splice_region_variant",
+     "field": "protein_end",
+     "vep": "39",
+     "vep_rs": "40/551",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:10970009-10970012",
+     "allele": "-",
+     "feature": "ENST00000415664",
+     "feature_type": "Transcript",
+     "record_indices": [
+      6,
+      7
+     ],
+     "consequence_set": "non_coding_transcript_exon_variant,splice_region_variant",
+     "field": "cdna_end",
+     "vep": "1792",
+     "vep_rs": "1795/3336",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:15966334-15966338",
+     "allele": "-",
+     "feature": "ENST00000400562",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "frameshift_variant",
+     "field": "cdna_end",
+     "vep": "511",
+     "vep_rs": "515/808",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:15966334-15966338",
+     "allele": "-",
+     "feature": "ENST00000400562",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "frameshift_variant",
+     "field": "cds_end",
+     "vep": "461",
+     "vep_rs": "465/498",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:15966334-15966338",
+     "allele": "-",
+     "feature": "ENST00000400562",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "frameshift_variant",
+     "field": "protein_end",
+     "vep": "154",
+     "vep_rs": "155/165",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:15966334-15966338",
+     "allele": "-",
+     "feature": "ENST00000435732",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "frameshift_variant,splice_region_variant",
+     "field": "cdna_end",
+     "vep": "437",
+     "vep_rs": "441/1151",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:15966334-15966338",
+     "allele": "-",
+     "feature": "ENST00000435732",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "frameshift_variant,splice_region_variant",
+     "field": "cds_end",
+     "vep": "437",
+     "vep_rs": "441/459",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:15966334-15966338",
+     "allele": "-",
+     "feature": "ENST00000435732",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "frameshift_variant,splice_region_variant",
+     "field": "protein_end",
+     "vep": "146",
+     "vep_rs": "147/152",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:15974345-15974359",
+     "allele": "-",
+     "feature": "ENST00000400562",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "inframe_deletion,splice_region_variant",
+     "field": "cdna_end",
+     "vep": "434",
+     "vep_rs": "448/808",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:15974345-15974359",
+     "allele": "-",
+     "feature": "ENST00000400562",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "inframe_deletion,splice_region_variant",
+     "field": "cds_end",
+     "vep": "384",
+     "vep_rs": "398/498",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:15974345-15974359",
+     "allele": "-",
+     "feature": "ENST00000400562",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "inframe_deletion,splice_region_variant",
+     "field": "protein_end",
+     "vep": "128",
+     "vep_rs": "133/165",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:15974345-15974359",
+     "allele": "-",
+     "feature": "ENST00000435732",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "inframe_deletion,splice_region_variant",
+     "field": "cdna_end",
+     "vep": "360",
+     "vep_rs": "374/1151",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:15974345-15974359",
+     "allele": "-",
+     "feature": "ENST00000435732",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "inframe_deletion,splice_region_variant",
+     "field": "cds_end",
+     "vep": "360",
+     "vep_rs": "374/459",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:15974345-15974359",
+     "allele": "-",
+     "feature": "ENST00000435732",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "inframe_deletion,splice_region_variant",
+     "field": "protein_end",
+     "vep": "120",
+     "vep_rs": "125/152",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27369678-27369687",
+     "allele": "G",
+     "feature": "ENST00000346798",
+     "feature_type": "Transcript",
+     "record_indices": [
+      19
+     ],
+     "consequence_set": "protein_altering_variant",
+     "field": "cdna_end",
+     "vep": "1112",
+     "vep_rs": "1121/3467",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27369678-27369687",
+     "allele": "G",
+     "feature": "ENST00000346798",
+     "feature_type": "Transcript",
+     "record_indices": [
+      19
+     ],
+     "consequence_set": "protein_altering_variant",
+     "field": "cds_end",
+     "vep": "1078",
+     "vep_rs": "1087/2313",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27369678-27369687",
+     "allele": "G",
+     "feature": "ENST00000346798",
+     "feature_type": "Transcript",
+     "record_indices": [
+      19
+     ],
+     "consequence_set": "protein_altering_variant",
+     "field": "protein_end",
+     "vep": "360",
+     "vep_rs": "363/770",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27369678-27369687",
+     "allele": "G",
+     "feature": "ENST00000358918",
+     "feature_type": "Transcript",
+     "record_indices": [
+      19
+     ],
+     "consequence_set": "protein_altering_variant",
+     "field": "cdna_end",
+     "vep": "1278",
+     "vep_rs": "1287/3578",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27369678-27369687",
+     "allele": "G",
+     "feature": "ENST00000358918",
+     "feature_type": "Transcript",
+     "record_indices": [
+      19
+     ],
+     "consequence_set": "protein_altering_variant",
+     "field": "cds_end",
+     "vep": "1078",
+     "vep_rs": "1087/2259",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27369678-27369687",
+     "allele": "G",
+     "feature": "ENST00000358918",
+     "feature_type": "Transcript",
+     "record_indices": [
+      19
+     ],
+     "consequence_set": "protein_altering_variant",
+     "field": "protein_end",
+     "vep": "360",
+     "vep_rs": "363/752",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27369678-27369687",
+     "allele": "G",
+     "feature": "ENST00000359726",
+     "feature_type": "Transcript",
+     "record_indices": [
+      19
+     ],
+     "consequence_set": "protein_altering_variant",
+     "field": "cdna_end",
+     "vep": "1110",
+     "vep_rs": "1119/3464",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27369678-27369687",
+     "allele": "G",
+     "feature": "ENST00000359726",
+     "feature_type": "Transcript",
+     "record_indices": [
+      19
+     ],
+     "consequence_set": "protein_altering_variant",
+     "field": "cds_end",
+     "vep": "910",
+     "vep_rs": "919/2145",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27369678-27369687",
+     "allele": "G",
+     "feature": "ENST00000359726",
+     "feature_type": "Transcript",
+     "record_indices": [
+      19
+     ],
+     "consequence_set": "protein_altering_variant",
+     "field": "protein_end",
+     "vep": "304",
+     "vep_rs": "307/714",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27369678-27369687",
+     "allele": "G",
+     "feature": "ENST00000415997",
+     "feature_type": "Transcript",
+     "record_indices": [
+      19
+     ],
+     "consequence_set": "protein_altering_variant",
+     "field": "cdna_end",
+     "vep": "281",
+     "vep_rs": "290/541",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27369678-27369687",
+     "allele": "G",
+     "feature": "ENST00000415997",
+     "feature_type": "Transcript",
+     "record_indices": [
+      19
+     ],
+     "consequence_set": "protein_altering_variant",
+     "field": "cds_end",
+     "vep": "283",
+     "vep_rs": "292/543",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27369678-27369687",
+     "allele": "G",
+     "feature": "ENST00000415997",
+     "feature_type": "Transcript",
+     "record_indices": [
+      19
+     ],
+     "consequence_set": "protein_altering_variant",
+     "field": "protein_end",
+     "vep": "95",
+     "vep_rs": "98/181",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27369678-27369687",
+     "allele": "G",
+     "feature": "ENST00000439274",
+     "feature_type": "Transcript",
+     "record_indices": [
+      19
+     ],
+     "consequence_set": "protein_altering_variant",
+     "field": "cdna_end",
+     "vep": "944",
+     "vep_rs": "953/2517",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27369678-27369687",
+     "allele": "G",
+     "feature": "ENST00000439274",
+     "feature_type": "Transcript",
+     "record_indices": [
+      19
+     ],
+     "consequence_set": "protein_altering_variant",
+     "field": "cds_end",
+     "vep": "910",
+     "vep_rs": "919/2145",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27369678-27369687",
+     "allele": "G",
+     "feature": "ENST00000439274",
+     "feature_type": "Transcript",
+     "record_indices": [
+      19
+     ],
+     "consequence_set": "protein_altering_variant",
+     "field": "protein_end",
+     "vep": "304",
+     "vep_rs": "307/714",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27369678-27369687",
+     "allele": "G",
+     "feature": "ENST00000491395",
+     "feature_type": "Transcript",
+     "record_indices": [
+      19
+     ],
+     "consequence_set": "non_coding_transcript_exon_variant",
+     "field": "cdna_end",
+     "vep": "435",
+     "vep_rs": "444/619",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27394181-27394182",
+     "allele": "GTGGTG",
+     "feature": "ENST00000346798",
+     "feature_type": "Transcript",
+     "record_indices": [
+      20
+     ],
+     "consequence_set": "inframe_insertion",
+     "field": "cdna_end",
+     "vep": "873",
+     "vep_rs": "874/3467",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27394181-27394182",
+     "allele": "GTGGTG",
+     "feature": "ENST00000346798",
+     "feature_type": "Transcript",
+     "record_indices": [
+      20
+     ],
+     "consequence_set": "inframe_insertion",
+     "field": "cds_end",
+     "vep": "839",
+     "vep_rs": "840/2313",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27394181-27394182",
+     "allele": "GTGGTG",
+     "feature": "ENST00000348990",
+     "feature_type": "Transcript",
+     "record_indices": [
+      20
+     ],
+     "consequence_set": "inframe_insertion",
+     "field": "cdna_end",
+     "vep": "986",
+     "vep_rs": "987/3355",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27394181-27394182",
+     "allele": "GTGGTG",
+     "feature": "ENST00000348990",
+     "feature_type": "Transcript",
+     "record_indices": [
+      20
+     ],
+     "consequence_set": "inframe_insertion",
+     "field": "cds_end",
+     "vep": "839",
+     "vep_rs": "840/2088",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27394181-27394182",
+     "allele": "GTGGTG",
+     "feature": "ENST00000354192",
+     "feature_type": "Transcript",
+     "record_indices": [
+      20
+     ],
+     "consequence_set": "inframe_insertion",
+     "field": "cdna_end",
+     "vep": "798",
+     "vep_rs": "799/3167",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27394181-27394182",
+     "allele": "GTGGTG",
+     "feature": "ENST00000354192",
+     "feature_type": "Transcript",
+     "record_indices": [
+      20
+     ],
+     "consequence_set": "inframe_insertion",
+     "field": "cds_end",
+     "vep": "671",
+     "vep_rs": "672/1920",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27394181-27394182",
+     "allele": "GTGGTG",
+     "feature": "ENST00000357903",
+     "feature_type": "Transcript",
+     "record_indices": [
+      20
+     ],
+     "consequence_set": "inframe_insertion",
+     "field": "cdna_end",
+     "vep": "1006",
+     "vep_rs": "1007/3543",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27394181-27394182",
+     "allele": "GTGGTG",
+     "feature": "ENST00000357903",
+     "feature_type": "Transcript",
+     "record_indices": [
+      20
+     ],
+     "consequence_set": "inframe_insertion",
+     "field": "cds_end",
+     "vep": "839",
+     "vep_rs": "840/2256",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27394181-27394182",
+     "allele": "GTGGTG",
+     "feature": "ENST00000358918",
+     "feature_type": "Transcript",
+     "record_indices": [
+      20
+     ],
+     "consequence_set": "inframe_insertion",
+     "field": "cdna_end",
+     "vep": "1039",
+     "vep_rs": "1040/3578",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27394181-27394182",
+     "allele": "GTGGTG",
+     "feature": "ENST00000358918",
+     "feature_type": "Transcript",
+     "record_indices": [
+      20
+     ],
+     "consequence_set": "inframe_insertion",
+     "field": "cds_end",
+     "vep": "839",
+     "vep_rs": "840/2259",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27394181-27394182",
+     "allele": "GTGGTG",
+     "feature": "ENST00000359726",
+     "feature_type": "Transcript",
+     "record_indices": [
+      20
+     ],
+     "consequence_set": "inframe_insertion",
+     "field": "cdna_end",
+     "vep": "1039",
+     "vep_rs": "1040/3464",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27394181-27394182",
+     "allele": "GTGGTG",
+     "feature": "ENST00000359726",
+     "feature_type": "Transcript",
+     "record_indices": [
+      20
+     ],
+     "consequence_set": "inframe_insertion",
+     "field": "cds_end",
+     "vep": "839",
+     "vep_rs": "840/2145",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27394181-27394182",
+     "allele": "GTGGTG",
+     "feature": "ENST00000415997",
+     "feature_type": "Transcript",
+     "record_indices": [
+      20
+     ],
+     "consequence_set": "inframe_insertion",
+     "field": "cdna_end",
+     "vep": "210",
+     "vep_rs": "211/541",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27394181-27394182",
+     "allele": "GTGGTG",
+     "feature": "ENST00000415997",
+     "feature_type": "Transcript",
+     "record_indices": [
+      20
+     ],
+     "consequence_set": "inframe_insertion",
+     "field": "cds_end",
+     "vep": "212",
+     "vep_rs": "213/543",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27394181-27394182",
+     "allele": "GTGGTG",
+     "feature": "ENST00000439274",
+     "feature_type": "Transcript",
+     "record_indices": [
+      20
+     ],
+     "consequence_set": "inframe_insertion",
+     "field": "cdna_end",
+     "vep": "705",
+     "vep_rs": "706/2517",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27394181-27394182",
+     "allele": "GTGGTG",
+     "feature": "ENST00000439274",
+     "feature_type": "Transcript",
+     "record_indices": [
+      20
+     ],
+     "consequence_set": "inframe_insertion",
+     "field": "cds_end",
+     "vep": "671",
+     "vep_rs": "672/2145",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27394181-27394182",
+     "allele": "GTGGTG",
+     "feature": "ENST00000440126",
+     "feature_type": "Transcript",
+     "record_indices": [
+      20
+     ],
+     "consequence_set": "inframe_insertion",
+     "field": "cdna_end",
+     "vep": "1090",
+     "vep_rs": "1091/2846",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27394181-27394182",
+     "allele": "GTGGTG",
+     "feature": "ENST00000440126",
+     "feature_type": "Transcript",
+     "record_indices": [
+      20
+     ],
+     "consequence_set": "inframe_insertion",
+     "field": "cds_end",
+     "vep": "824",
+     "vep_rs": "825/2241",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27394181-27394182",
+     "allele": "GTGGTG",
+     "feature": "ENST00000448388",
+     "feature_type": "Transcript",
+     "record_indices": [
+      20
+     ],
+     "consequence_set": "inframe_insertion",
+     "field": "cdna_end",
+     "vep": "926",
+     "vep_rs": "927/2518",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27394181-27394182",
+     "allele": "GTGGTG",
+     "feature": "ENST00000448388",
+     "feature_type": "Transcript",
+     "record_indices": [
+      20
+     ],
+     "consequence_set": "inframe_insertion",
+     "field": "cds_end",
+     "vep": "734",
+     "vep_rs": "735/1983",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27394181-27394182",
+     "allele": "GTGGTG",
+     "feature": "ENST00000448850",
+     "feature_type": "Transcript",
+     "record_indices": [
+      20
+     ],
+     "consequence_set": "inframe_insertion",
+     "field": "cdna_end",
+     "vep": "603",
+     "vep_rs": "604/1846",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27394181-27394182",
+     "allele": "GTGGTG",
+     "feature": "ENST00000448850",
+     "feature_type": "Transcript",
+     "record_indices": [
+      20
+     ],
+     "consequence_set": "inframe_insertion",
+     "field": "cds_end",
+     "vep": "605",
+     "vep_rs": "606/1458",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27394181-27394182",
+     "allele": "GTGGTG",
+     "feature": "ENST00000474136",
+     "feature_type": "Transcript",
+     "record_indices": [
+      20
+     ],
+     "consequence_set": "non_coding_transcript_exon_variant",
+     "field": "cdna_end",
+     "vep": "965",
+     "vep_rs": "966/1309",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27394181-27394182",
+     "allele": "GTGGTG",
+     "feature": "ENST00000491395",
+     "feature_type": "Transcript",
+     "record_indices": [
+      20
+     ],
+     "consequence_set": "non_coding_transcript_exon_variant",
+     "field": "cdna_end",
+     "vep": "196",
+     "vep_rs": "197/619",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27850391-27850392",
+     "allele": "AC",
+     "feature": "ENST00000400043",
+     "feature_type": "Transcript",
+     "record_indices": [
+      21
+     ],
+     "consequence_set": "stop_lost",
+     "field": "cdna_end",
+     "vep": "633",
+     "vep_rs": "634/735",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:27850391-27850392",
+     "allele": "AC",
+     "feature": "ENST00000400043",
+     "feature_type": "Transcript",
+     "record_indices": [
+      21
+     ],
+     "consequence_set": "stop_lost",
+     "field": "cds_end",
+     "vep": "397",
+     "vep_rs": "398/399",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:33867406-33867408",
+     "allele": "-",
+     "feature": "ENST00000300255",
+     "feature_type": "Transcript",
+     "record_indices": [
+      22
+     ],
+     "consequence_set": "inframe_deletion",
+     "field": "cdna_end",
+     "vep": "1177",
+     "vep_rs": "1179/1998",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:33867406-33867408",
+     "allele": "-",
+     "feature": "ENST00000300255",
+     "feature_type": "Transcript",
+     "record_indices": [
+      22
+     ],
+     "consequence_set": "inframe_deletion",
+     "field": "cds_end",
+     "vep": "704",
+     "vep_rs": "706/1326",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:33867406-33867408",
+     "allele": "-",
+     "feature": "ENST00000300255",
+     "feature_type": "Transcript",
+     "record_indices": [
+      22
+     ],
+     "consequence_set": "inframe_deletion",
+     "field": "protein_end",
+     "vep": "235",
+     "vep_rs": "236/441",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:33867406-33867408",
+     "allele": "-",
+     "feature": "ENST00000382699",
+     "feature_type": "Transcript",
+     "record_indices": [
+      22
+     ],
+     "consequence_set": "inframe_deletion",
+     "field": "cdna_end",
+     "vep": "856",
+     "vep_rs": "858/1668",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:33867406-33867408",
+     "allele": "-",
+     "feature": "ENST00000382699",
+     "feature_type": "Transcript",
+     "record_indices": [
+      22
+     ],
+     "consequence_set": "inframe_deletion",
+     "field": "cds_end",
+     "vep": "704",
+     "vep_rs": "706/1317",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:33867406-33867408",
+     "allele": "-",
+     "feature": "ENST00000382699",
+     "feature_type": "Transcript",
+     "record_indices": [
+      22
+     ],
+     "consequence_set": "inframe_deletion",
+     "field": "protein_end",
+     "vep": "235",
+     "vep_rs": "236/438",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:33867406-33867408",
+     "allele": "-",
+     "feature": "ENST00000412833",
+     "feature_type": "Transcript",
+     "record_indices": [
+      22
+     ],
+     "consequence_set": "inframe_deletion",
+     "field": "cdna_end",
+     "vep": "895",
+     "vep_rs": "897/936",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:33867406-33867408",
+     "allele": "-",
+     "feature": "ENST00000412833",
+     "feature_type": "Transcript",
+     "record_indices": [
+      22
+     ],
+     "consequence_set": "inframe_deletion",
+     "field": "cds_end",
+     "vep": "419",
+     "vep_rs": "421/460",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:33867406-33867408",
+     "allele": "-",
+     "feature": "ENST00000412833",
+     "feature_type": "Transcript",
+     "record_indices": [
+      22
+     ],
+     "consequence_set": "inframe_deletion",
+     "field": "protein_end",
+     "vep": "140",
+     "vep_rs": "141/153",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:33867406-33867408",
+     "allele": "-",
+     "feature": "ENST00000437338",
+     "feature_type": "Transcript",
+     "record_indices": [
+      22
+     ],
+     "consequence_set": "3_prime_UTR_variant,NMD_transcript_variant",
+     "field": "cdna_end",
+     "vep": "924",
+     "vep_rs": "926/1745",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:33867406-33867408",
+     "allele": "-",
+     "feature": "ENST00000457807",
+     "feature_type": "Transcript",
+     "record_indices": [
+      22
+     ],
+     "consequence_set": "NMD_transcript_variant,inframe_deletion",
+     "field": "cdna_end",
+     "vep": "684",
+     "vep_rs": "686/1548",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:33867406-33867408",
+     "allele": "-",
+     "feature": "ENST00000457807",
+     "feature_type": "Transcript",
+     "record_indices": [
+      22
+     ],
+     "consequence_set": "NMD_transcript_variant,inframe_deletion",
+     "field": "cds_end",
+     "vep": "383",
+     "vep_rs": "385/579",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:33867406-33867408",
+     "allele": "-",
+     "feature": "ENST00000457807",
+     "feature_type": "Transcript",
+     "record_indices": [
+      22
+     ],
+     "consequence_set": "NMD_transcript_variant,inframe_deletion",
+     "field": "protein_end",
+     "vep": "128",
+     "vep_rs": "129/192",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:33867406-33867408",
+     "allele": "-",
+     "feature": "ENST00000459833",
+     "feature_type": "Transcript",
+     "record_indices": [
+      22
+     ],
+     "consequence_set": "non_coding_transcript_exon_variant",
+     "field": "cdna_end",
+     "vep": "572",
+     "vep_rs": "574/687",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:33867406-33867408",
+     "allele": "-",
+     "feature": "ENST00000464037",
+     "feature_type": "Transcript",
+     "record_indices": [
+      22
+     ],
+     "consequence_set": "non_coding_transcript_exon_variant",
+     "field": "cdna_end",
+     "vep": "1671",
+     "vep_rs": "1673/2492",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:33867406-33867408",
+     "allele": "-",
+     "feature": "ENST00000496615",
+     "feature_type": "Transcript",
+     "record_indices": [
+      22
+     ],
+     "consequence_set": "non_coding_transcript_exon_variant",
+     "field": "cdna_end",
+     "vep": "180",
+     "vep_rs": "182/492",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:34924574-34924575",
+     "allele": "A",
+     "feature": "ENST00000290239",
+     "feature_type": "Transcript",
+     "record_indices": [
+      24
+     ],
+     "consequence_set": "frameshift_variant,stop_gained",
+     "field": "cdna_end",
+     "vep": "3086",
+     "vep_rs": "3087/8492",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:34924574-34924575",
+     "allele": "A",
+     "feature": "ENST00000290239",
+     "feature_type": "Transcript",
+     "record_indices": [
+      24
+     ],
+     "consequence_set": "frameshift_variant,stop_gained",
+     "field": "cds_end",
+     "vep": "3037",
+     "vep_rs": "3038/6978",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:34924574-34924575",
+     "allele": "A",
+     "feature": "ENST00000300278",
+     "feature_type": "Transcript",
+     "record_indices": [
+      24
+     ],
+     "consequence_set": "frameshift_variant,stop_gained",
+     "field": "cdna_end",
+     "vep": "3066",
+     "vep_rs": "3067/7477",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:34924574-34924575",
+     "allele": "A",
+     "feature": "ENST00000300278",
+     "feature_type": "Transcript",
+     "record_indices": [
+      24
+     ],
+     "consequence_set": "frameshift_variant,stop_gained",
+     "field": "cds_end",
+     "vep": "3037",
+     "vep_rs": "3038/6912",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:34924574-34924575",
+     "allele": "A",
+     "feature": "ENST00000356577",
+     "feature_type": "Transcript",
+     "record_indices": [
+      24
+     ],
+     "consequence_set": "frameshift_variant,stop_gained",
+     "field": "cdna_end",
+     "vep": "3512",
+     "vep_rs": "3513/8813",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:34924574-34924575",
+     "allele": "A",
+     "feature": "ENST00000356577",
+     "feature_type": "Transcript",
+     "record_indices": [
+      24
+     ],
+     "consequence_set": "frameshift_variant,stop_gained",
+     "field": "cds_end",
+     "vep": "3037",
+     "vep_rs": "3038/7281",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:34924574-34924575",
+     "allele": "A",
+     "feature": "ENST00000381679",
+     "feature_type": "Transcript",
+     "record_indices": [
+      24
+     ],
+     "consequence_set": "frameshift_variant,stop_gained",
+     "field": "cdna_end",
+     "vep": "3065",
+     "vep_rs": "3066/7860",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:34924574-34924575",
+     "allele": "A",
+     "feature": "ENST00000381679",
+     "feature_type": "Transcript",
+     "record_indices": [
+      24
+     ],
+     "consequence_set": "frameshift_variant,stop_gained",
+     "field": "cds_end",
+     "vep": "3037",
+     "vep_rs": "3038/6327",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:34924574-34924575",
+     "allele": "A",
+     "feature": "ENST00000436227",
+     "feature_type": "Transcript",
+     "record_indices": [
+      24
+     ],
+     "consequence_set": "frameshift_variant,stop_gained",
+     "field": "cdna_end",
+     "vep": "21",
+     "vep_rs": "22/5269",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:34924574-34924575",
+     "allele": "A",
+     "feature": "ENST00000436227",
+     "feature_type": "Transcript",
+     "record_indices": [
+      24
+     ],
+     "consequence_set": "frameshift_variant,stop_gained",
+     "field": "cds_end",
+     "vep": "22",
+     "vep_rs": "23/4365",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:34924574-34924575",
+     "allele": "A",
+     "feature": "ENST00000455528",
+     "feature_type": "Transcript",
+     "record_indices": [
+      24
+     ],
+     "consequence_set": "NMD_transcript_variant,frameshift_variant,stop_gained",
+     "field": "cdna_end",
+     "vep": "3066",
+     "vep_rs": "3067/8394",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:34924574-34924575",
+     "allele": "A",
+     "feature": "ENST00000455528",
+     "feature_type": "Transcript",
+     "record_indices": [
+      24
+     ],
+     "consequence_set": "NMD_transcript_variant,frameshift_variant,stop_gained",
+     "field": "cds_end",
+     "vep": "3037",
+     "vep_rs": "3038/6978",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:47531391-47531392",
+     "allele": "TGCTCCAGGGCACC",
+     "feature": "ENST00000300527",
+     "feature_type": "Transcript",
+     "record_indices": [
+      28
+     ],
+     "consequence_set": "frameshift_variant,start_retained_variant",
+     "field": "cdna_end",
+     "vep": "105",
+     "vep_rs": "106/3461",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:47531391-47531392",
+     "allele": "TGCTCCAGGGCACC",
+     "feature": "ENST00000300527",
+     "feature_type": "Transcript",
+     "record_indices": [
+      28
+     ],
+     "consequence_set": "frameshift_variant,start_retained_variant",
+     "field": "cds_end",
+     "vep": "1",
+     "vep_rs": "2/3060",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:47531391-47531392",
+     "allele": "TGCTCCAGGGCACC",
+     "feature": "ENST00000310645",
+     "feature_type": "Transcript",
+     "record_indices": [
+      28
+     ],
+     "consequence_set": "frameshift_variant,start_retained_variant",
+     "field": "cdna_end",
+     "vep": "83",
+     "vep_rs": "84/3446",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:47531391-47531392",
+     "allele": "TGCTCCAGGGCACC",
+     "feature": "ENST00000310645",
+     "feature_type": "Transcript",
+     "record_indices": [
+      28
+     ],
+     "consequence_set": "frameshift_variant,start_retained_variant",
+     "field": "cds_end",
+     "vep": "1",
+     "vep_rs": "2/2487",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:47531391-47531392",
+     "allele": "TGCTCCAGGGCACC",
+     "feature": "ENST00000357838",
+     "feature_type": "Transcript",
+     "record_indices": [
+      28
+     ],
+     "consequence_set": "frameshift_variant,start_retained_variant",
+     "field": "cdna_end",
+     "vep": "83",
+     "vep_rs": "84/3153",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:47531391-47531392",
+     "allele": "TGCTCCAGGGCACC",
+     "feature": "ENST00000357838",
+     "feature_type": "Transcript",
+     "record_indices": [
+      28
+     ],
+     "consequence_set": "frameshift_variant,start_retained_variant",
+     "field": "cds_end",
+     "vep": "1",
+     "vep_rs": "2/2757",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:47531391-47531392",
+     "allele": "TGCTCCAGGGCACC",
+     "feature": "ENST00000397763",
+     "feature_type": "Transcript",
+     "record_indices": [
+      28
+     ],
+     "consequence_set": "frameshift_variant,start_retained_variant",
+     "field": "cdna_end",
+     "vep": "28",
+     "vep_rs": "29/3101",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:47531391-47531392",
+     "allele": "TGCTCCAGGGCACC",
+     "feature": "ENST00000397763",
+     "feature_type": "Transcript",
+     "record_indices": [
+      28
+     ],
+     "consequence_set": "frameshift_variant,start_retained_variant",
+     "field": "cds_end",
+     "vep": "1",
+     "vep_rs": "2/2757",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:47531391-47531392",
+     "allele": "TGCTCCAGGGCACC",
+     "feature": "ENST00000409416",
+     "feature_type": "Transcript",
+     "record_indices": [
+      28
+     ],
+     "consequence_set": "frameshift_variant,start_retained_variant",
+     "field": "cdna_end",
+     "vep": "64",
+     "vep_rs": "65/3430",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:47531391-47531392",
+     "allele": "TGCTCCAGGGCACC",
+     "feature": "ENST00000409416",
+     "feature_type": "Transcript",
+     "record_indices": [
+      28
+     ],
+     "consequence_set": "frameshift_variant,start_retained_variant",
+     "field": "cds_end",
+     "vep": "1",
+     "vep_rs": "2/2487",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:47531391-47531392",
+     "allele": "TGCTCCAGGGCACC",
+     "feature": "ENST00000436769",
+     "feature_type": "Transcript",
+     "record_indices": [
+      28
+     ],
+     "consequence_set": "frameshift_variant,start_retained_variant",
+     "field": "cdna_end",
+     "vep": "379",
+     "vep_rs": "380/919",
+     "expected_divergence": "total_length_json_range_end"
+    },
+    {
+     "location": "21:47531391-47531392",
+     "allele": "TGCTCCAGGGCACC",
+     "feature": "ENST00000436769",
+     "feature_type": "Transcript",
+     "record_indices": [
+      28
+     ],
+     "consequence_set": "frameshift_variant,start_retained_variant",
+     "field": "cds_end",
+     "vep": "1",
+     "vep_rs": "2/541",
+     "expected_divergence": "total_length_json_range_end"
+    }
+   ],
+   "field_divergence_summary": {
+    "total_length_json_range_end": 104
+   }
   },
   {
    "name": "no-escape",
@@ -589,9 +2240,68 @@
     "no_escape",
     "extra-key-order-and-percent-encoding"
    ],
-   "divergences": [],
+   "divergences": [
+    {
+     "location": "21:10970011",
+     "allele": "TT",
+     "feature": "ENST00000298232",
+     "feature_type": "Transcript",
+     "record_indices": [
+      8
+     ],
+     "vep_consequence_set": "frameshift_variant,splice_region_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant"
+     ],
+     "expected_divergence": "splice_term_past_the_record_span"
+    },
+    {
+     "location": "21:10970011",
+     "allele": "TT",
+     "feature": "ENST00000342420",
+     "feature_type": "Transcript",
+     "record_indices": [
+      8
+     ],
+     "vep_consequence_set": "frameshift_variant,splice_region_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant"
+     ],
+     "expected_divergence": "splice_term_past_the_record_span"
+    },
+    {
+     "location": "21:10970011",
+     "allele": "TT",
+     "feature": "ENST00000361285",
+     "feature_type": "Transcript",
+     "record_indices": [
+      8
+     ],
+     "vep_consequence_set": "frameshift_variant,splice_region_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant"
+     ],
+     "expected_divergence": "splice_term_past_the_record_span"
+    },
+    {
+     "location": "21:10970011",
+     "allele": "TT",
+     "feature": "ENST00000415664",
+     "feature_type": "Transcript",
+     "record_indices": [
+      8
+     ],
+     "vep_consequence_set": "non_coding_transcript_exon_variant,splice_region_variant",
+     "vep_rs_consequence_sets": [
+      "non_coding_transcript_exon_variant"
+     ],
+     "expected_divergence": "splice_term_past_the_record_span"
+    }
+   ],
    "vep_rs_only_tuples": [],
-   "divergence_summary": {},
+   "divergence_summary": {
+    "splice_term_past_the_record_span": 4
+   },
    "vep_rs_only_summary": {},
    "fields_compared": [
     "HGVSc",
@@ -689,14 +2399,132 @@
     "variant_class",
     "numbers"
    ],
-   "divergences": [],
+   "divergences": [
+    {
+     "location": "21:10970011",
+     "allele": "TT",
+     "feature": "ENST00000298232",
+     "feature_type": "Transcript",
+     "record_indices": [
+      8
+     ],
+     "vep_consequence_set": "frameshift_variant,splice_region_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant"
+     ],
+     "expected_divergence": "splice_term_past_the_record_span"
+    },
+    {
+     "location": "21:10970011",
+     "allele": "TT",
+     "feature": "ENST00000342420",
+     "feature_type": "Transcript",
+     "record_indices": [
+      8
+     ],
+     "vep_consequence_set": "frameshift_variant,splice_region_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant"
+     ],
+     "expected_divergence": "splice_term_past_the_record_span"
+    },
+    {
+     "location": "21:10970011",
+     "allele": "TT",
+     "feature": "ENST00000361285",
+     "feature_type": "Transcript",
+     "record_indices": [
+      8
+     ],
+     "vep_consequence_set": "frameshift_variant,splice_region_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant"
+     ],
+     "expected_divergence": "splice_term_past_the_record_span"
+    },
+    {
+     "location": "21:10970011",
+     "allele": "TT",
+     "feature": "ENST00000415664",
+     "feature_type": "Transcript",
+     "record_indices": [
+      8
+     ],
+     "vep_consequence_set": "non_coding_transcript_exon_variant,splice_region_variant",
+     "vep_rs_consequence_sets": [
+      "non_coding_transcript_exon_variant"
+     ],
+     "expected_divergence": "splice_term_past_the_record_span"
+    }
+   ],
    "vep_rs_only_tuples": [],
-   "divergence_summary": {},
+   "divergence_summary": {
+    "splice_term_past_the_record_span": 4
+   },
    "vep_rs_only_summary": {}
   }
  ],
- "divergences": [],
+ "divergences": [
+  {
+   "location": "21:10970011",
+   "allele": "TT",
+   "feature": "ENST00000298232",
+   "feature_type": "Transcript",
+   "record_indices": [
+    8
+   ],
+   "vep_consequence_set": "frameshift_variant,splice_region_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "21:10970011",
+   "allele": "TT",
+   "feature": "ENST00000342420",
+   "feature_type": "Transcript",
+   "record_indices": [
+    8
+   ],
+   "vep_consequence_set": "frameshift_variant,splice_region_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "21:10970011",
+   "allele": "TT",
+   "feature": "ENST00000361285",
+   "feature_type": "Transcript",
+   "record_indices": [
+    8
+   ],
+   "vep_consequence_set": "frameshift_variant,splice_region_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "21:10970011",
+   "allele": "TT",
+   "feature": "ENST00000415664",
+   "feature_type": "Transcript",
+   "record_indices": [
+    8
+   ],
+   "vep_consequence_set": "non_coding_transcript_exon_variant,splice_region_variant",
+   "vep_rs_consequence_sets": [
+    "non_coding_transcript_exon_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  }
+ ],
  "vep_rs_only_tuples": [],
- "divergence_summary": {},
+ "divergence_summary": {
+  "splice_term_past_the_record_span": 4
+ },
  "vep_rs_only_summary": {}
 }

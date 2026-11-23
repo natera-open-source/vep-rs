@@ -1,7 +1,7 @@
 entry = "transcript_filter_abbreviated_fields"
 page = "docs/divergences/transcript-filter-fields.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the filter notation, where a field may be its first few characters (Ensembl VEP documentation, \"Filtering results\", Writing filters); not seen in the measured datasets; classed by its most reachable shape, an abbreviated field: a match unit with no value breaks that section's three-component filter string"
 notes = "The first mechanism of the entry: stable is a prefix of stable_id, and Ensembl VEP's prefix branch records the synonym and reads no value on the first transcript it evaluates for the record, ENST00000626994, so the match fails there; vep-rs resolves the prefix once and reads every transcript's value."
@@ -28,3 +28,15 @@ where = { record = "tf_17608184", feature = "ENST00000626994" }
 [expected]
 ensembl_vep = []
 vep_rs = ["21:17608184 | G | ENST00000626994 | upstream_gene_variant"]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/filter_set.rs::TRANSCRIPT_KEYS",
+    "crates/vep-cli/src/filter_set.rs::prefixed",
+    "crates/vep-cli/src/filter_set.rs::resolve",
+]
+tests = [
+    "crates/vep-cli/src/filter_set.rs::tests::ambiguous_prefix_is_an_error",
+    "crates/vep-cli/src/filter_set.rs::tests::transcript_keys_read_the_transcript",
+    "crates/vep-cli/tests/transcript_filter_refseq_keys.rs::gene_symbol_id_is_read_on_a_refseq_cache",
+]

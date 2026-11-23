@@ -1,0 +1,70 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species pan_troglodytes --assembly Pan_tro_3.0 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "pan_troglodytes/116_Pan_tro_3.0",
+ "fasta": "the three sequences the records and the pruned cache's transcripts sit on (21, MT and the unplaced scaffold AACZ04007423.1) at their full length from Pan_troglodytes.Pan_tro_3.0.dna.chromosome.21.fa.gz, Pan_troglodytes.Pan_tro_3.0.dna.chromosome.MT.fa.gz and Pan_troglodytes.Pan_tro_3.0.dna.nonchromosomal.fa.gz of Ensembl release 116, each file held to the sum its directory's CHECKSUMS lists, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
+ "input": "variants.vcf: 338 records, every one generated from the converted cache and the genome sequence by tools/vep-seeded-variants with seed 1, its ID naming its category and ordinal (28 categories: code1_start_codon, code1_stop_gained, code1_stop_lost, code2_changed_codon, code2_start_codon, code2_stop_gained, code2_stop_lost, downstream, first_base, first_sequence, five_prime_utr, frameshift_deletion, frameshift_insertion, inframe_deletion, intergenic, intron, last_base, last_sequence, missense_forward, missense_reverse, organelle, splice_acceptor, splice_donor, synonym, synonymous_forward, synonymous_reverse, three_prime_utr, upstream). 256 are written under the name 21, 4 are written under the name AACZ04007423.1, 15 are written under the name CM004190.1, 49 are written under the name MT, 14 are written under the name NC_006488.4; NC_006488.4 and CM004190.1 are synonyms of chromosome 21 in the cache's chr_synonyms.txt. The cache marks no sequence circular, so the generator writes no record across an origin, and the cache's variation files hold no record, so the corpus carries no known variant",
+ "sha256": {
+  "default.txt": "9cc6099cd304c88846bb2477c0de6c8dfd88c8f4ac05ec211e63ae519db0a4c7",
+  "tab.txt": "1b6e82efff5bd73b21497f0f91ce57be5f205c97ccdb07785970d2ff04a9f303",
+  "vcf.vcf": "e99d7a5dacd395698b19009fa49ecc1a10e40c00b077ab356cd8a1719f09734f",
+  "json.jsonl": "f5566dcfbcdaec9e962300042e05b91838fa0b9b5d72cf3056a73705eafc5944"
+ },
+ "variants_vcf_sha256": "3a246fa94dc3f30149948d886342c45f4d8cb3f5e489f5679e57ac66efa0b8dc",
+ "flag_sets": {
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species pan_troglodytes --assembly Pan_tro_3.0 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "pan_troglodytes/116_Pan_tro_3.0",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "4ae5184900ffcd5ae93ca9b50dbc53ca97fed9dba5dda6bd7f7a58f051e5c590",
+    "tab.txt": "d20ab76fa80eaf006605ecff465c4bff944aa47df86b2da41b196e5d613cf14c",
+    "vcf.vcf": "6309fae9cedb019115cdcaecae1e1aabda592c8060b477623e51be18a69efd69",
+    "json.jsonl": "d79fa62dd009845543d70309b392f3716a4fde97245446c82bac5dce5e11e6bc"
+   },
+   "flags": [
+    "--everything"
+   ],
+   "expected_dir": "expected_everything"
+  },
+  "hgvs": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species pan_troglodytes --assembly Pan_tro_3.0 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs [--tab|--vcf|--json]",
+   "perl_cache": "pan_troglodytes/116_Pan_tro_3.0",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "c422f219ccfff50557ded71c958647e23cc95f87d692c1c4485db5e4c6dc0571",
+    "tab.txt": "11e735605cbd32977b05de0a747cf5c3bf38633f348e9e2bda9a1db6f8ee3c5c",
+    "vcf.vcf": "98372e51a8a8a4315f9ecab5604d112153f96bfca8323a527c0ee3de6d0f0abd",
+    "json.jsonl": "6ffdc32eea0914f43aaefb1df3243a97b43ebad44766c1800ccc9a420ebcc0ef"
+   },
+   "flags": [
+    "--hgvs"
+   ],
+   "expected_dir": "expected_hgvs"
+  }
+ },
+ "generator": "tools/vep-seeded-variants --cache <converted cache> --seed 1 --records wide --per-category 150 --fasta <genome FASTA> --sequence MT --sequence 21 --sequence AACZ04007423.1 (generator version 2); Ensembl VEP over the generated records under the corpus flags; tools/vep-golden-corpus select --release 116 --assembly Pan_tro_3.0 --species pan_troglodytes --dataset wide=<reference>=<the generated records> --k 2 --seed 1 --max-span 1000000 --max-records 500 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, incomplete_terminal_codon_variant, inframe_deletion, inframe_insertion, missense_variant, protein_altering_variant, start_lost, start_retained_variant, stop_gained, stop_lost, stop_retained_variant, synonymous_variant> --focus-k 6 --include <the named records> --covers species-chimpanzee-pantro3 --covers genetic-code-tables --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --flank 5000 --gzip --drop sorted_exons --perl-info <cache>/info.txt --cache-version 116 --species pan_troglodytes --assembly Pan_tro_3.0 --variations <converted cache>/variations over the whole cache tools/vep-storable-to-json converts from the Ensembl VEP 116 Pan_tro_3.0 cache; scripts/fixtures/cut_plugin_regions.py --reference <genome FASTA> --flank 5000 --record-flank 2000 over the records with every sequence under the cache's own name; tools/vep-golden-corpus flag-set (everything, hgvs); scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; tools/vep-golden-corpus classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp for the hgvs set)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "21": 240,
+   "AACZ04007423.1": 1,
+   "MT": 37
+  },
+  "shards": 32,
+  "synonym_lines": 5,
+  "variation_slices": "all_vars.gz with its index under variations/<chr>/ for the three sequence directories, each an empty block-compressed file: every variation file of the Ensembl VEP 116 Pan_tro_3.0 cache holds no record"
+ }
+}

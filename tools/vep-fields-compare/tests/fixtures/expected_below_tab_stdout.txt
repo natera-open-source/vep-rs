@@ -1,0 +1,9 @@
+keys: reference 2 scored 1 intersection 0 (reference-only 2, scored-only 1)
+  Uploaded_variation       equal            0 /            0  agreement None
+  Gene                     equal            0 /            0  agreement None
+  cDNA_position            equal            0 /            0  agreement None
+  CDS_position             equal            0 /            0  agreement None
+  Protein_position         equal            0 /            0  agreement None
+  Amino_acids              equal            0 /            0  agreement None
+  Codons                   equal            0 /            0  agreement None
+  Existing_variation       equal            0 /            0  agreement None

@@ -1,0 +1,7 @@
+{
+  "glob": "*.txt",
+  "missing_rust_pairs": [],
+  "aggregate": {
+    "f1": true
+  }
+}

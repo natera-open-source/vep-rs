@@ -1,7 +1,7 @@
 entry = "hgvsg_repeated_or_reference_equal_alt"
 page = "docs/divergences/hgvsg-allele-lookup.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the VCF 4.2 specification, section 1.4.1 \"Fixed fields\" (ALT carries no rule against a repeated allele); not seen in the measured datasets; classed by its most reachable shape, a repeated ALT allele: an ALT equal to REF breaks \"alternate non-reference alleles\" (ALT, the same section)"
 notes = "Two records at the first base of IFNGR2's start codon: one whose ALT list names the reference base, one that repeats an allele; the rows on ENST00000290219."
@@ -34,7 +34,11 @@ ensembl_vep = [
   "dupalt | G | 2 | 21:g.34775850A>C",
 ]
 vep_rs = [
-  "refeq | C | 1 | 21:g.34775850A>C",
+  "refeq | C | 2 | 21:g.34775850A>C",
   "dupalt | C | 1 | 21:g.34775850A>C",
-  "dupalt | G | 2 | 21:g.34775850A>G",
+  "dupalt | G | 3 | 21:g.34775850A>G",
 ]
+
+[implementation]
+code = ["crates/vep-effects/src/hgvsg.rs::for_variant"]
+tests = ["crates/vep-cli/tests/consequence_documented_rows.rs::a_repeated_or_reference_equal_alternate_allele_gets_its_own_hgvsg"]

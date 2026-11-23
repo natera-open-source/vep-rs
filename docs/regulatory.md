@@ -4,7 +4,7 @@
 
 ## The rows
 
-The rows, terms and fields follow Ensembl VEP's `OutputFactory.pm` lines 1867 to 1942.
+The rows, terms and fields follow Ensembl VEP's `OutputFactory.pm` lines 1876 to 1951.
 
 A record inside a regulatory feature gets a `RegulatoryFeature` row; a record inside a motif gets a `MotifFeature` row. A record that covers the whole feature adds a term to its row.
 
@@ -108,7 +108,7 @@ A value that names no epigenome, `''` or `','`, is the flag absent. Ensembl VEP 
 
 ## The cache
 
-The features come from an Ensembl VEP cache converted with `scripts/data/storable_to_json.pl` ([Cache setup](cache-setup.md#convert-an-existing-ensembl-vep-cache)). Beside `transcripts/<chr>/` the script writes:
+The features come from the cache's `regulatory/` tree. An Ensembl VEP cache converted with `tools/vep-storable-to-json` ([Cache setup](cache-setup.md#convert-an-existing-ensembl-vep-cache)) carries it with every value this section tables. A cache `vep-cache-builder --auto` installs carries the tree baked from the release's regulatory files, with the activity and the matrix counts where the release publishes them ([below](#baking-the-files-into-a-cache)). Beside `transcripts/<chr>/` the converter writes:
 
 - `regulatory/<chr>/<start>-<end>.json`, one shard per region holding the region's regulatory features and motif features
 - `regulatory/binding_matrices.json`, every binding matrix the motifs name stored once under its stable id
@@ -134,7 +134,7 @@ The activity is one code per epigenome of `cell_types`, in order.
 | `N` | not assessed |
 | `-` | no record for that epigenome |
 
-A run refuses a regulatory tree without `regulatory_schema` with `ERROR: [cache] regulatory shards of <dir> predate the current converter: reconvert the cache`.
+A run refuses a regulatory tree without `regulatory_schema` with `ERROR: [cache] regulatory shards of <dir> declare no schema; this build reads schema 1: reconvert the cache`.
 
 A cache converted without the regulatory tree holds no regulatory features. Convert the Ensembl VEP cache again, or build the tree from the regulatory GFF files ([below](#regulatory-features-from-gff-files)).
 
@@ -164,9 +164,13 @@ The flag switches `--regulatory` on. The files are annotation sources of the run
 
 ### Files and records that are refused
 
-Each file is bgzip-compressed and tabix-indexed; the files Ensembl distributes are bgzipped, so `tabix -p gff <file>` writes the index a file lacks. A file that does not exist, or has no index, stops the run with an error naming the key and the file. A value the grammar refuses stops it too. These errors carry Ensembl VEP's texts. Each refusal comes before the output file and the statistics report exist, as in Ensembl VEP, so a refused run leaves neither behind.
+Each file is bgzip-compressed and tabix-indexed; the files Ensembl distributes are bgzipped, so `tabix -p gff <file>` writes the index a file lacks. A file that does not exist, or has no index, stops the run with an error in vep-rs's own words, which names the file as `<key>=<file>`, a bare file name under the key `file`. A value the grammar refuses stops it too, and that error carries Ensembl VEP's text. Each refusal comes before the output file and the statistics report exist, as in Ensembl VEP, so a refused run leaves neither behind.
 
-A record whose start or end is not a whole number, whose start is 0 or whose end is below its start stops the run when its chromosome is first read, after the output file is opened, naming the record and the file. So does any other line whose start or end no number leads or whose end is below zero. A start or end no number leads at the file's first line leaves an index vep-rs refuses as malformed; such a start on a later sequence leaves none. Ensembl VEP reads on past a line its `tabix` could not place and, when the end was the fault, loses the later records of its block, a documented intended divergence, [`gxf_malformed_coordinate_line_refused`](divergences/gxf-malformed-coordinate-line-refused.md).
+A file is read from a local path alone. A name that opens `http://`, `https://` or `ftp://` stops the run as a missing file does, with an error that says vep-rs reads a local file alone. Ensembl VEP passes a name that opens `http://` or `ftp://` to its tabix reader, which reads the file over the network. Copy such a file and its index to a local path.
+
+A record whose start or end is not a whole number, whose start is 0 or whose end is below its start stops the run before the output file and the statistics report exist, naming the record and the file. So does any other line whose start or end no number leads or whose end is below zero. Every record of the files is checked, on every chromosome they list, so a record on a chromosome the input never names stops the run too.
+
+A start or end no number leads at the file's first line leaves an index vep-rs refuses as malformed; such a start on a later sequence leaves none. Ensembl VEP reads on past a line its `tabix` could not place and, when the end was the fault, loses the later records of its block, a documented intended divergence, [`gxf_malformed_coordinate_line_refused`](divergences/gxf-malformed-coordinate-line-refused.md).
 
 ### What a record becomes
 
@@ -187,7 +191,7 @@ A feature's identifier is its `ID`, else its `Name`. Each has every `%XX` escape
 
 Two distinct records of one file sharing an identifier are one feature. The run writes Ensembl VEP's warning once per identifier and file, and an input record inside both gets the later record's row.
 
-A byte that is not UTF-8 in a record is read as U+FFFD by `--regulatory_gff` and printed so ([input bytes that are not UTF-8](divergences/non-utf8-input.md)), a type so read skipping its record with a warning, where `vep-cache-builder` refuses the file, naming the line.
+A byte that is not UTF-8 in a record is read as U+FFFD by `--regulatory_gff` and printed so ([input bytes that are not UTF-8](divergences/non-utf8-input.md)), a type so read skipping its record with a warning. `vep-cache-builder` skips a record of such a type too, whatever bytes its line holds, and refuses a record of a type it keeps whose line holds the byte, naming the line.
 
 A record of the regulatory file and one of the EMAR file sharing an identifier are two features with two rows. Ensembl VEP keeps the EMAR row alone ([the shared identifier class](divergences/regulatory-rows.md#3-one-identifier-in-both-the-regulatory-file-and-the-emar-file-of---regulatory_gff)). An EMAR is a container region that overlaps many regulatory features. An input record inside a promoter or an enhancer therefore usually gains an EMAR row beside it.
 
@@ -221,9 +225,29 @@ When the cache holds regulatory data too, the run reads the files alone; the cac
 
 ### Baking the files into a cache
 
-`vep-cache-builder --regulatory-gff <file> --emars-gff <file> --motif-gff <file> [--extended-promoters]` bakes the same files into a cache's regulatory tree ([Cache setup](cache-setup.md#regulatory-data)). The tree holds one shard per 1 Mb region of each feature's start. In `binding_matrices.json` it holds a stub of each motif's matrix (its span and factors, no counts). `info.json` carries `regulatory: true` and `regulatory_schema` and no `cell_types`.
+`vep-cache-builder --regulatory-gff <file> --emars-gff <file> --motif-gff <file> [--extended-promoters]` bakes the same files into a cache's regulatory tree ([Cache setup](cache-setup.md#regulatory-data)). The tree holds one shard per 1 Mb region of each feature's start. In `binding_matrices.json` it holds a stub of each motif's matrix (its span and factors, no counts). `info.json` carries `regulatory: true` and `regulatory_schema` and no `cell_types`. With `--genome-fasta` each motif also carries its sequence on its own strand.
 
 Each baked feature records the file it came from and its place in that file. A run with `--regulatory` over that cache therefore writes the rows a run with `--regulatory_gff` over the files writes, the shared-identifier rules included. The bake itself writes the warnings the run-time reader writes.
+
+`vep-cache-builder --auto` bakes the release's regulatory-feature and motif-feature GFF3 the same way with no flag, each promoter at its core span. It reads no EMAR file, since Ensembl VEP's own cache holds no EMAR. Beside the two files it reads what the release publishes of these:
+
+| An installation reads | So the tree gains |
+| --- | --- |
+| `<Species>.<assembly>.regulatory_activity.v<N>.tsv.gz`, the activity file beside the GFF3 files | Each regulatory feature's activity by cell type and `cell_types` in `info.json`: `--cell_type` takes a name and `CELL_TYPE` prints |
+| The `binding_matrix` and `binding_matrix_frequencies` tables of the release's funcgen database dump | The counts, name, source and threshold of each matrix a motif names: a motif row prints `HIGH_INF_POS` and `MOTIF_SCORE_CHANGE` |
+| Its `binding_matrix_transcription_factor_complex` and `transcription_factor_complex` tables | Each matrix's factor names, which come from the motif GFF3 where the dump lacks either table |
+| Its `regulatory_build` table | `regbuild` among the cache's source versions: a run prints the header line `## regbuild version <v>` |
+| The genome FASTA | Each motif's sequence on its own strand, which the motif score reads |
+
+Each of the ten species with a regulation directory lists the activity file; human, on both assemblies, and mouse publish a motif file. For GRCh37 the funcgen dump is the GRCh37 tree's, and the GFF3 and activity files are the release tree's. A CTCF binding site has no row in the activity file and no activity in Ensembl VEP's own cache either. The installation's last lines name the cell-type activity or the two motif fields where the tree lacks their file or tables, with the listing.
+
+An installed tree differs from the tree of Ensembl VEP's own cache in three ways the published files cause:
+
+- The published GRCh37 activity file names 14 of its 112 cell types as the GRCh38 build names them (`B_cell_(f,_27-43_y)` where Ensembl VEP's GRCh37 cache says `B_cell_(f)`); the installed cache carries the file's names, and `--cell_type` takes those.
+- The motif GFF3 carries no database id, so an installed motif has none and a variant's motif rows stand in stable-id order, on GRCh38 the order of Ensembl VEP's cache except between ids of unequal digit counts.
+- Ensembl VEP's own cache holds no motif of a megabase in which it holds no regulatory feature: on chromosome 21 of GRCh38 an installed cache holds 7 motif features (21:12,967,793-12,996,793) that cache lacks, and the other 13,570 are the same features.
+
+On that chromosome the 13,570 shared motif features have equal sequences, the 51 matrices they name are equal in counts, length, name, source, threshold and factor names, and none of the 582,512 activity cells of its 5,201 regulatory features differs.
 
 ## Where next
 

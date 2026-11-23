@@ -1,7 +1,7 @@
 entry = "control_bytes_percent_encoded"
 page = "docs/divergences/control-bytes-in-output.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the VCF 4.2 specification, section 1.4.1 \"Fixed fields\", ID (no whitespace or semicolons permitted); not seen in the measured datasets; classed by its most reachable shape, an escape byte in an identifier: a form feed there is whitespace, which that clause excludes, and the VCF 4.3 specification, section 1.2, disallows both bytes"
 notes = "The record's ID carries a form feed (0x0C) between `ctrl` and `byte`. Ensembl VEP writes the byte as read in the Uploaded_variation column; vep-rs writes it as %0C."
@@ -25,3 +25,15 @@ where = { location = "21:30881493", feature = "ENST00000332378" }
 [expected]
 ensembl_vep = ["ctrl\fbyte"]
 vep_rs = ["ctrl%0Cbyte"]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/render.rs::write_encoded",
+    "crates/vep-io/src/output/fields.rs::percent_encode_control_bytes",
+]
+tests = [
+    "crates/vep-cli/src/render.rs::tests::control_bytes_in_a_value_are_percent_encoded",
+    "crates/vep-io/src/output/fields.rs::tests::percent_encode_control_bytes_rewrites_the_value_alone",
+    "crates/vep-io/src/output/tab.rs::tests::control_bytes_in_a_value_are_percent_encoded",
+    "crates/vep-io/src/output/vcf_output.rs::tests::control_bytes_in_a_csq_value_are_percent_encoded",
+]

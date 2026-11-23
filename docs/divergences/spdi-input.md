@@ -4,7 +4,7 @@ A difference in which SPDI inputs resolve, on an input format no measured datase
 
 Ensembl VEP reads SPDI notation (`--format spdi`) only with a database connection (`Parser/SPDI.pm` line 96, `Cannot use SPDI format in offline mode`). Each line goes to its variation database adaptor (`VariationFeatureAdaptor.pm` lines 2477-2611). The adaptor resolves the sequence name through the core database's slice adaptor (line 2533) and places the variant at the 0-based position plus one (line 2524). It then checks the deleted bases against the genome or reads them from it (lines 2545-2596).
 
-vep-rs resolves the same notations from the cache and the reference FASTA: the sequence name through the cache's chromosomes and their synonyms, the reference bases from `--fasta`, which the format therefore needs. The shapes, positions, refusals and warning texts are the adaptor's, and the `tests/golden/116/GRCh38-input-spdi` corpus compares its rows with Ensembl VEP 116.2's database-mode output. Three readings differ.
+vep-rs resolves the same notations from the cache and the reference FASTA: the sequence name through the cache's chromosomes and their synonyms, the reference bases from `--fasta`, which the format therefore needs. The shapes, positions, refusals and warning texts are the adaptor's, and the `tests/golden/116/GRCh38-input-spdi` corpus compares its rows with Ensembl VEP 116.3's database-mode output. Three readings differ.
 
 ## A version-less accession
 
@@ -33,7 +33,7 @@ NC_000021
 
 ## A span past the end of the chromosome
 
-Ensembl VEP fetches the whole-sequence slice before it reads the shape (line 2533) and tests no coordinate against the sequence's length. An insertion reads no sequence at all (lines 2545-2549). A deletion by length reads a slice the slice adaptor builds past the end with no bounds test (`SliceAdaptor.pm` lines 430-438), which under `--fasta` is filled with `N` (`Utils/FastaSequence.pm` lines 619-639, one `N` for a start past the end). The record checks (`Parser.pm` lines 457-649) test no sequence length either, so the record is annotated at a coordinate the chromosome lacks. Chromosome 21 of GRCh38 ends at 46709983; run on the equivalent VCF records, Ensembl VEP 116.2 writes one intergenic row for each:
+Ensembl VEP fetches the whole-sequence slice before it reads the shape (line 2533) and tests no coordinate against the sequence's length. An insertion reads no sequence at all (lines 2545-2549). A deletion by length reads a slice the slice adaptor builds past the end with no bounds test (`SliceAdaptor.pm` lines 430-438), which under `--fasta` is filled with `N` (`Utils/FastaSequence.pm` lines 619-639, one `N` for a start past the end). The record checks (`Parser.pm` lines 457-649) test no sequence length either, so the record is annotated at a coordinate the chromosome lacks. Chromosome 21 of GRCh38 ends at 46709983; run on the equivalent VCF records, Ensembl VEP 116.3 writes one intergenic row for each:
 
 ```
 21	46709984	past_end_ins	N	NA
@@ -55,7 +55,7 @@ vep-rs reads the genome before it reads the shape and skips each with `Unable to
 
 ## A deletion of length 0
 
-The adaptor reads `<sequence>:<position>:0:` as a deletion (line 2552) and ends the span at the position (line 2563). The reference allele is the empty slice's sequence (line 2564): the core API's `Slice.pm` line 693 returns an empty string for a slice whose start is its end plus one. The adaptor keeps the feature `/-` from the position plus one to the position (line 2566), a feature with no allele to annotate. So Ensembl VEP 116.2 writes no row for it in the default and tab formats, carries its VCF line with an empty REF column and no consequences, and writes a JSON object with `allele_string` `/-` and `most_severe_consequence` `?`.
+The adaptor reads `<sequence>:<position>:0:` as a deletion (line 2552) and ends the span at the position (line 2563). The reference allele is the empty slice's sequence (line 2564): the core API's `Slice.pm` line 693 returns an empty string for a slice whose start is its end plus one. The adaptor keeps the feature `/-` from the position plus one to the position (line 2566), a feature with no allele to annotate. So Ensembl VEP 116.3 writes no row for it in the default and tab formats, carries its VCF line with an empty REF column and no consequences, and writes a JSON object with `allele_string` `/-` and `most_severe_consequence` `?`.
 
 vep-rs refuses the notation and skips the record, naming the empty span:
 
@@ -71,4 +71,4 @@ WARNING: line 1 skipped (21:10538884:0:): Unable to parse SPDI notation
 
 A length written `00` is read the same way by both engines. The notation with `0` for both parts, `21:10538884:0:0`, is refused by both with `SPDI notation not supported.` (lines 2540-2542).
 
-To reproduce: vep-rs with `--format spdi --fasta` over the GRCh38 cache and the records above, and with `--format hgvs --fasta` for the notations. Ensembl VEP 116.2 reads both formats with a database connection alone; it reads the two VCF records with the GRCh38 cache and [the command of the closing section](reproducing.md#reproducing-these-examples), adding `--fasta`.
+To reproduce: vep-rs with `--format spdi --fasta` over the GRCh38 cache and the records above, and with `--format hgvs --fasta` for the notations. Ensembl VEP 116.3 reads both formats with a database connection alone; it reads the two VCF records with the GRCh38 cache and [the command of the closing section](reproducing.md#reproducing-these-examples), adding `--fasta`.

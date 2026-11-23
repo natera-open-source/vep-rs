@@ -1,9 +1,9 @@
 entry = "transcript_annotator_sibling_allele_rows"
 page = "docs/plugins/annotation-store-divergences.md#5-transcriptannotator-the-table-row-of-a-sibling-allele"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 405.6 per million · 5 flag sets, 64 corpora"
+input_class_basis = "2 · 405.6 per million · 5 flag sets, 80 corpora"
 notes = "The table holds a row for the `T` allele alone; the `T` allele's row agrees between the engines."
 
 [input]
@@ -28,3 +28,11 @@ where = { record = "rs463608", allele = "A", feature = "ENST00000618007" }
 [expected]
 ensembl_vep = ["0.61"]
 vep_rs = ["-"]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/transcript_annotator.rs::TranscriptAnnotatorPlugin::matching_values",
+]
+tests = [
+    "crates/vep-cli/tests/plugin_documented_rows.rs::a_transcript_annotator_row_is_written_on_the_allele_it_names",
+]

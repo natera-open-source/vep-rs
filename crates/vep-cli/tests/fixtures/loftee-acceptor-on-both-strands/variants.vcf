@@ -1,0 +1,4 @@
+##fileformat=VCFv4.2
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+toy	400	acceptor_forward_motif	G	C	.	.	.
+toy	699	acceptor_reverse_motif	C	G	.	.	.

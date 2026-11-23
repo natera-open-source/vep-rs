@@ -325,7 +325,7 @@
    }
   }
  ],
- "suites": {
+ "datasets": {
   "mes": {
    "reference": "default.txt",
    "input": "candidates.vcf",
@@ -438,14 +438,14 @@
  },
  "records": [
   {
-   "suite": "mes",
+   "dataset": "mes",
    "vcf": "21\t15588421\t.\tC\tA\t.\t.\t.",
    "combinations": [
     "upstream_gene_variant"
    ]
   },
   {
-   "suite": "mes",
+   "dataset": "mes",
    "vcf": "21\t15588603\t.\tG\tA\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant,splice_region_variant",
@@ -453,7 +453,7 @@
    ]
   },
   {
-   "suite": "mes",
+   "dataset": "mes",
    "vcf": "21\t15588603\t.\tGGT\tG\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_donor_variant",
@@ -461,7 +461,7 @@
    ]
   },
   {
-   "suite": "mes",
+   "dataset": "mes",
    "vcf": "21\t15588605\t.\tT\tC\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_donor_variant",
@@ -469,7 +469,7 @@
    ]
   },
   {
-   "suite": "mes",
+   "dataset": "mes",
    "vcf": "21\t15591882\t.\tA\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -480,7 +480,7 @@
    ]
   },
   {
-   "suite": "mes",
+   "dataset": "mes",
    "vcf": "21\t15591884\t.\tG\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -491,7 +491,7 @@
    ]
   },
   {
-   "suite": "mes",
+   "dataset": "mes",
    "vcf": "21\t15592046\t.\tG\tGCA\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_region_variant",
@@ -501,7 +501,7 @@
    ]
   },
   {
-   "suite": "mes",
+   "dataset": "mes",
    "vcf": "21\t15593410\t.\tTTTCAAAGGGAGTTCTCGCTCTTCTGAACCAGCTAACCAAAGTTTTGAGAGCTGTGTTAAGATAAATTCACACAACTACAGGTAATT\tT\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant",
@@ -511,7 +511,7 @@
    ]
   },
   {
-   "suite": "mes",
+   "dataset": "mes",
    "vcf": "21\t15593418\t.\tG\tA,T\t.\t.\t.",
    "combinations": [
     "missense_variant,splice_region_variant",
@@ -523,7 +523,7 @@
    ]
   },
   {
-   "suite": "mes",
+   "dataset": "mes",
    "vcf": "21\t15593461\t.\tC\tT\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant",
@@ -532,7 +532,7 @@
    ]
   },
   {
-   "suite": "mes",
+   "dataset": "mes",
    "vcf": "21\t15596866\t.\tT\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -541,7 +541,7 @@
    ]
   },
   {
-   "suite": "mes",
+   "dataset": "mes",
    "vcf": "21\t15599199\t.\tA\tC\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant",
@@ -550,7 +550,7 @@
    ]
   },
   {
-   "suite": "mes",
+   "dataset": "mes",
    "vcf": "21\t15746611\t.\tT\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -558,7 +558,7 @@
    ]
   },
   {
-   "suite": "mes",
+   "dataset": "mes",
    "vcf": "21\t15750621\t.\tT\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -567,7 +567,7 @@
    ]
   },
   {
-   "suite": "mes",
+   "dataset": "mes",
    "vcf": "21\t15753864\t.\tC\tA\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,splice_region_variant",
@@ -576,7 +576,7 @@
    ]
   },
   {
-   "suite": "mes",
+   "dataset": "mes",
    "vcf": "21\t15753864\t.\tC\tCTG\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,splice_region_variant",
@@ -585,7 +585,7 @@
    ]
   },
   {
-   "suite": "mes",
+   "dataset": "mes",
    "vcf": "21\t15753866\t.\tT\tC\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_acceptor_variant",
@@ -593,7 +593,7 @@
    ]
   },
   {
-   "suite": "mes",
+   "dataset": "mes",
    "vcf": "21\t15755412\t.\tCCA\tC\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -601,7 +601,7 @@
    ]
   },
   {
-   "suite": "mes",
+   "dataset": "mes",
    "vcf": "21\t15755414\t.\tA\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -609,7 +609,7 @@
    ]
   },
   {
-   "suite": "mes",
+   "dataset": "mes",
    "vcf": "21\t15755416\t.\tC\tT\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,splice_region_variant",
@@ -618,7 +618,7 @@
    ]
   },
   {
-   "suite": "mes",
+   "dataset": "mes",
    "vcf": "21\t30973548\t.\tA\tG\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -627,7 +627,7 @@
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "generated": {

@@ -1,0 +1,135 @@
+[VEP run statistics]
+VEP version (API)	 116.3 (116)
+Annotation sources	Cache: /work/cache/homo_sapiens/116_GRCh37
+Species	homo_sapiens
+Command line options	vep --assembly GRCh37 --cache --cache_version 116 --database 0 --dir_cache [PATH]/cache --dir_plugins [PATH]/plugins --fasta [PATH]/ref.fa --force_overwrite --fork --format vcf --input_file [PATH]/input.vcf --offline --output_file [PATH]/vcf.vcf --plugin SpliceAI,snv=[PATH]/spliceai_scores.raw.snv.hg19.synthetic.vcf.gz,indel=[PATH]/spliceai_scores.raw.indel.hg19.synthetic.vcf.gz --quiet --stats_text --vcf
+Start time	2026-11-21 04:03:14
+End time	2026-11-21 04:03:15
+Run time	1 seconds
+Input file	/work/input.vcf
+Output file	/work/perl_out/vcf.vcf
+
+[Data version]
+1000genomes	phase3
+COSMIC	98
+ClinVar	202306
+HGMD-PUBLIC	20204
+assembly	GRCh37.p13
+dbSNP	156
+gencode	GENCODE 19
+genebuild	2011-04
+gnomADe	v4.1
+gnomADg	v4.1
+polyphen	2.2.2
+regbuild	1.0
+sift	sift5.2.2
+
+[General statistics]
+Lines of input read	31
+Variants processed	31
+Variants filtered out	0
+Novel / existing variants	-
+Overlapped genes	10
+Overlapped transcripts	33
+Overlapped regulatory features	-
+
+[Variant classes]
+substitution	1
+indel	2
+insertion	2
+deletion	3
+SNV	23
+
+[Consequences (most severe)]
+splice_acceptor_variant	1
+splice_donor_variant	2
+frameshift_variant	2
+missense_variant	6
+splice_donor_5th_base_variant	1
+synonymous_variant	1
+intron_variant	17
+intergenic_variant	1
+
+[Consequences (all)]
+splice_acceptor_variant	2
+splice_donor_variant	6
+frameshift_variant	4
+missense_variant	17
+splice_donor_5th_base_variant	4
+synonymous_variant	4
+intron_variant	92
+non_coding_transcript_variant	29
+upstream_gene_variant	3
+downstream_gene_variant	4
+intergenic_variant	1
+
+[Coding consequences]
+frameshift_variant	4
+missense_variant	17
+synonymous_variant	4
+
+[Variants by chromosome]
+21	31
+
+[Distribution of variants on chromosome 21]
+0	0
+1	0
+2	0
+3	0
+4	0
+5	0
+6	0
+7	0
+8	0
+9	0
+10	0
+11	0
+12	0
+13	0
+14	0
+15	20
+16	0
+17	3
+18	5
+19	0
+20	0
+21	0
+22	0
+23	0
+24	0
+25	0
+26	0
+27	0
+28	0
+29	0
+30	1
+31	0
+32	0
+33	0
+34	1
+35	0
+36	0
+37	0
+38	0
+39	0
+40	0
+41	0
+42	0
+43	0
+44	0
+45	0
+46	0
+47	1
+48	0
+
+[Position in protein]
+00-10%	1
+10-20%	3
+20-30%	5
+30-40%	1
+40-50%	2
+50-60%	3
+60-70%	2
+70-80%	4
+80-90%	0
+90-100%	4

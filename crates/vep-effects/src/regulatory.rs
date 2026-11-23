@@ -12,7 +12,9 @@
 //! the motif's binding score, read from the binding matrix the motif names
 //! (`vep_core::binding_matrix`).
 //!
-//! Perl citations name modules of ensembl-variation (`Bio/EnsEMBL/Variation/...`).
+//! Ensembl VEP source citations name modules of ensembl-variation
+//! (`Bio/EnsEMBL/Variation/...`); `OutputFactory.pm` and `Parser.pm` are in ensembl-vep
+//! (`Bio/EnsEMBL/VEP/...`), and `Bio::EnsEMBL::Feature` is in ensembl core.
 
 use std::sync::Arc;
 
@@ -71,6 +73,7 @@ pub fn regulatory_terms(
 
 /// A motif feature as the arithmetic reads it.
 #[derive(Debug, Clone, Copy)]
+#[non_exhaustive]
 pub struct Motif<'a> {
     /// The feature's genomic span, 1-based and inclusive.
     pub start: u64,
@@ -87,11 +90,43 @@ pub struct Motif<'a> {
 /// A sequence variant's allele as the arithmetic reads it: the span and the
 /// two alleles on the forward strand of the genome, `-` for an empty allele.
 #[derive(Debug, Clone, Copy)]
+#[non_exhaustive]
 pub struct Allele<'a> {
     pub start: u64,
     pub end: u64,
     pub reference: &'a [u8],
     pub alternate: &'a [u8],
+}
+
+impl<'a> Motif<'a> {
+    /// A motif feature, from each of the five fields.
+    pub fn new(
+        start: u64,
+        end: u64,
+        strand: i8,
+        seq: Option<&'a [u8]>,
+        matrix: &'a BindingMatrix,
+    ) -> Self {
+        Self {
+            start,
+            end,
+            strand,
+            seq,
+            matrix,
+        }
+    }
+}
+
+impl<'a> Allele<'a> {
+    /// A sequence variant's allele, from each of the four fields.
+    pub fn new(start: u64, end: u64, reference: &'a [u8], alternate: &'a [u8]) -> Self {
+        Self {
+            start,
+            end,
+            reference,
+            alternate,
+        }
+    }
 }
 
 impl Motif<'_> {
@@ -131,7 +166,7 @@ impl Motif<'_> {
 /// `motif_start` (`MotifFeatureVariationAllele.pm:90-112`): the variant's
 /// genomic start as a position in the motif, `None` outside 1 to the feature's
 /// length.
-pub fn motif_start(motif: &Motif<'_>, allele: &Allele<'_>) -> Option<u32> {
+pub(crate) fn motif_start(motif: &Motif<'_>, allele: &Allele<'_>) -> Option<u32> {
     let position = motif.motif_position(allele.start);
     (position >= 1 && position <= motif.feature_length()).then_some(position as u32)
 }
@@ -139,7 +174,7 @@ pub fn motif_start(motif: &Motif<'_>, allele: &Allele<'_>) -> Option<u32> {
 /// `motif_end` (`MotifFeatureVariationAllele.pm:122-143`): the variant's
 /// genomic end as a position in the motif, `None` below 1; a position past the
 /// motif's end is kept, for `motif_score_delta` to clip against.
-pub fn motif_end(motif: &Motif<'_>, allele: &Allele<'_>) -> Option<i64> {
+pub(crate) fn motif_end(motif: &Motif<'_>, allele: &Allele<'_>) -> Option<i64> {
     let position = motif.motif_position(allele.end);
     (position >= 1).then_some(position)
 }
@@ -148,7 +183,7 @@ pub fn motif_end(motif: &Motif<'_>, allele: &Allele<'_>) -> Option<i64> {
 /// a one-base variant whose allele is not `-` falls on an informative position
 /// of the matrix; `false` for any other variant, for a start outside the
 /// feature, and for a matrix without counts.
-pub fn in_informative_position(motif: &Motif<'_>, allele: &Allele<'_>) -> bool {
+pub(crate) fn in_informative_position(motif: &Motif<'_>, allele: &Allele<'_>) -> bool {
     if allele.start != allele.end || allele.alternate == b"-" {
         return false;
     }
@@ -162,7 +197,8 @@ pub fn in_informative_position(motif: &Motif<'_>, allele: &Allele<'_>) -> bool {
 /// outside the feature or its end before the motif's first position, when the
 /// source carries no motif sequence or the matrix no counts, or when the
 /// spliced sequence is not the motif's length. An allele running past the
-/// motif's end is clipped to the positions inside it (`:222-225`).
+/// motif's end is clipped to the positions inside it (`:222-225`), and one with
+/// no base inside the motif's sequence has no score.
 ///
 /// The allele is spliced in at its first position in the motif, the smaller of
 /// `motif_start` and `motif_end`. On a reverse-strand motif `motif_start` is
@@ -171,7 +207,7 @@ pub fn in_informative_position(motif: &Motif<'_>, allele: &Allele<'_>) -> bool {
 /// allele one or more positions too far along the motif and, at the motif's
 /// end, lengthening the sequence so that no score is written; a one-base
 /// allele is unaffected. vep-rs scores the allele where it lies.
-pub fn motif_score_delta(motif: &Motif<'_>, allele: &Allele<'_>) -> Option<f64> {
+pub(crate) fn motif_score_delta(motif: &Motif<'_>, allele: &Allele<'_>) -> Option<f64> {
     let alternate = motif.feature_seq(allele.alternate);
     let reference = motif.feature_seq(allele.reference);
     if alternate.as_ref() == b"-"
@@ -189,7 +225,7 @@ pub fn motif_score_delta(motif: &Motif<'_>, allele: &Allele<'_>) -> Option<f64> 
         let kept = (motif_len - start + 1).max(0) as usize;
         alternate = &alternate[..kept.min(alternate.len())];
     }
-    if alternate.len() as i64 > motif.feature_length() {
+    if alternate.is_empty() || alternate.len() as i64 > motif.feature_length() {
         return None;
     }
     let reference_affinity = motif.matrix.relative_similarity(motif_seq)?;
@@ -204,10 +240,10 @@ pub fn motif_score_delta(motif: &Motif<'_>, allele: &Allele<'_>) -> Option<f64> 
 }
 
 /// The motif fields of a `MotifFeature` row
-/// (`MotifFeatureVariationAllele_to_output_hash`, `OutputFactory.pm:1910-1942`):
+/// (`MotifFeatureVariationAllele_to_output_hash`, `OutputFactory.pm:1919-1951`):
 /// the matrix's id and factors, `MOTIF_POS`, and, for a matrix with counts,
 /// `HIGH_INF_POS` and `MOTIF_SCORE_CHANGE`, the score only for an alternate
-/// allele of A, C, G and T bases (`:1935-1939`).
+/// allele of A, C, G and T bases (`:1944-1948`).
 pub fn motif_fields(motif: &Motif<'_>, allele: &Allele<'_>) -> MotifFields {
     let scored = motif.matrix.has_frequencies();
     let score_change = if scored && is_plain_dna(allele.alternate) {
@@ -215,16 +251,16 @@ pub fn motif_fields(motif: &Motif<'_>, allele: &Allele<'_>) -> MotifFields {
     } else {
         None
     };
-    MotifFields {
-        name: Arc::clone(&motif.matrix.stable_id),
-        pos: motif_start(motif, allele),
-        high_inf_pos: scored.then(|| in_informative_position(motif, allele)),
+    MotifFields::new(
+        Arc::clone(&motif.matrix.stable_id),
+        motif_start(motif, allele),
+        scored.then(|| in_informative_position(motif, allele)),
         score_change,
-        factors: Arc::clone(&motif.matrix.transcription_factors),
-    }
+        Arc::clone(&motif.matrix.transcription_factors),
+    )
 }
 
-/// `/^[ACGT]+$/` on the allele as written (`OutputFactory.pm:1938`).
+/// `/^[ACGT]+$/` on the allele as written (`OutputFactory.pm:1947`).
 fn is_plain_dna(allele: &[u8]) -> bool {
     !allele.is_empty() && allele.iter().all(|base| b"ACGT".contains(base))
 }
@@ -490,6 +526,14 @@ mod tests {
     /// reverse-strand motif the allele is reverse-complemented and a one-base
     /// change scores at the genomic base's motif position; a multi-base allele is
     /// spliced at its first motif position, where Ensembl VEP splices at its last.
+    ///
+    /// An allele whose start lies outside the motif while its end lies inside
+    /// has no score on either strand, however far it overhangs: its genomic
+    /// start lies before the motif (`:107-108`), or, along a reverse-strand
+    /// motif, its genomic end lies past it (`:139`). A motif whose sequence is
+    /// shorter than its span, or holds no base, is read without an index
+    /// outside the sequence: an allele with no base inside the sequence, and
+    /// one that would run past its end, have no score.
     #[test]
     fn motif_score_delta_cases() {
         let ctcf = ctcf();
@@ -571,10 +615,76 @@ mod tests {
             fields(&reverse, &allele(START - 1, START, b"CA", b"TT")),
             (None, Some(false), None)
         );
+
+        // A genomic start three bases before the motif and an end on its second
+        // base: no position and no score on either strand. Along the reverse
+        // motif the end is position 16 and the start would be 20.
+        let before = allele(START - 3, START + 1, b"CCTAG", b"GGACT");
+        assert_eq!(motif_start(&forward, &before), None);
+        assert_eq!(motif_end(&forward, &before), Some(2));
+        assert_eq!(motif_score_delta(&forward, &before), None);
+        assert_eq!(fields(&forward, &before), (None, Some(false), None));
+        assert_eq!(motif_start(&reverse, &before), None);
+        assert_eq!(motif_end(&reverse, &before), Some(16));
+        assert_eq!(motif_score_delta(&reverse, &before), None);
+        assert_eq!(fields(&reverse, &before), (None, Some(false), None));
+        // A genomic start on the motif's last base and an end two bases past
+        // it. On the forward motif the allele is clipped to its first base, at
+        // position 17. Along the reverse motif the allele's first base lies two
+        // positions before the motif's first: the end position is -1, nothing
+        // is clipped there and no score is written.
+        let past = allele(END, END + 2, b"TCA", b"GAC");
+        assert_eq!(motif_end(&forward, &past), Some(19));
+        assert_eq!(
+            fields(&forward, &past),
+            (Some(17), Some(false), delta_of(&ctcf, MOTIF_SEQ, 17, b"G"))
+        );
+        assert_eq!(motif_start(&reverse, &past), Some(1));
+        assert_eq!(motif_end(&reverse, &past), None);
+        assert_eq!(motif_score_delta(&reverse, &past), None);
+        assert_eq!(fields(&reverse, &past), (Some(1), Some(false), None));
+        // An allele over the whole motif and one base either side of it.
+        let around = allele(START - 1, END + 1, &[b'A'; 19], &[b'C'; 19]);
+        for stranded in [&forward, &reverse] {
+            assert_eq!(motif_score_delta(stranded, &around), None);
+            assert_eq!(fields(stranded, &around), (None, Some(false), None));
+        }
+
+        // A sequence of no base is scored by no matrix, and no position of it
+        // is read.
+        let inside = allele(START + 1, START + 2, b"GT", b"AC");
+        for strand in [1, -1] {
+            let empty = motif(&ctcf, strand, b"");
+            assert_eq!(motif_score_delta(&empty, &inside), None, "strand {strand}");
+        }
+        // A span two positions longer than the matrix and the sequence, which
+        // breaks the rule of `Motif::seq`. A start one or two positions past
+        // the sequence's end leaves no base of the allele inside it: no score.
+        let long_forward = Motif {
+            end: END + 2,
+            ..forward
+        };
+        let one_past = allele(END + 1, END + 2, b"AC", b"GT");
+        assert_eq!(motif_start(&long_forward, &one_past), Some(18));
+        assert_eq!(motif_score_delta(&long_forward, &one_past), None);
+        let two_past = allele(END + 2, END + 2, b"A", b"C");
+        assert_eq!(motif_start(&long_forward, &two_past), Some(19));
+        assert_eq!(motif_score_delta(&long_forward, &two_past), None);
+        // Along the reverse strand of that span a genomic start two bases
+        // before the motif is position 19, past the sequence, and the end is
+        // position 16, inside it: the allele would run past the sequence's end.
+        let long_reverse = Motif {
+            end: END + 2,
+            ..reverse
+        };
+        let before_long = allele(START - 2, START + 1, b"CTAG", b"GACT");
+        assert_eq!(motif_start(&long_reverse, &before_long), Some(19));
+        assert_eq!(motif_end(&long_reverse, &before_long), Some(16));
+        assert_eq!(motif_score_delta(&long_reverse, &before_long), None);
     }
 
     /// Two motifs of the GRCh38 cache over one site, 21:5090724 A>T, with the
-    /// values Ensembl VEP 116.2 writes for them: the forward motif
+    /// values Ensembl VEP 116.3 writes for them: the forward motif
     /// ENSM00000574814 (ENSPFM0290, 5090718-5090731) is at an informative
     /// position with the score change `-0.089`, the reverse motif
     /// ENSM00000574815 (ENSPFM0484, 5090723-5090738) is not, with `0.039`.
@@ -654,9 +764,9 @@ mod tests {
     }
 
     /// The fields Ensembl VEP writes only for a matrix with counts
-    /// (`OutputFactory.pm:1935-1939`): a matrix known by its length alone
+    /// (`OutputFactory.pm:1944-1948`): a matrix known by its length alone
     /// omits HIGH_INF_POS and MOTIF_SCORE_CHANGE and keeps MOTIF_POS; an allele
-    /// with a base outside A, C, G and T has no score (`:1938`) but a
+    /// with a base outside A, C, G and T has no score (`:1947`) but a
     /// HIGH_INF_POS; a motif without a sequence has no score; `motif_end` keeps
     /// a position past the motif and drops one before it.
     #[test]

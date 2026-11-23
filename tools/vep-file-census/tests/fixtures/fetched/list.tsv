@@ -1,0 +1,15 @@
+# key, bytes, etag
+
+data/one.txt	4	5bbf5a52328e7439ae6e719dfe712200
+data/two.txt	8	84499fb9423e708d4e9e967a36e286d1-1
+three.txt	6	f6936912184481f5edd4c304ce27c5a1a827804fc7f329f43d273b8621870776
+data/empty.bin	0	d41d8cd98f00b204e9800998ecf8427e
+data/two words.txt	10	d022cbf534b2330c70b5185e19f89d3b
+data/one.txt	4	5bbf5a52328e7439ae6e719dfe712200-1
+data/one.txt	4	5bbf5a52328e7439ae6e719dfe712200-2
+data/two.txt	8	5bbf5a52328e7439ae6e719dfe712200
+data/two.txt	007	0e7e0fde2b79174e03e6cb79ed759ef7
+data/missing.txt	4	5bbf5a52328e7439ae6e719dfe712200
+data	4	5bbf5a52328e7439ae6e719dfe712200
+three.txt	6	not-an-etag
+three.txt	6	2c8b08da5ce60398e1f19af0e5dccc744df274b826abe585eaba68c525434806

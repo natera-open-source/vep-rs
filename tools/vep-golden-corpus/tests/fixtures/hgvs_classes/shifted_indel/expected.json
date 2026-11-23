@@ -1,0 +1,418 @@
+{
+ "records": [
+  {
+   "dataset": "pool",
+   "vcf": "21\t100\trs_ins\tT\tTA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t200\trs_del\tT\tTA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t300\trs_last\tT\tTA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t400\trs_sub\tT\tTA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t500\trs_nooff\tT\tTA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t600\trs_clamp\tT\tTA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t700\trs_utr\tT\tTA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t800\trs_intron\tT\tTA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t900\trs_one\tT\tTA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t1000\trs_end\tT\tTA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t1100\trs_later\tT\tTA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t1200\trs_cold\tT\tTA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t1300\trs_other\tT\tTA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t1400\trs_outside\tT\tTA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t1500\trs_insdel\tT\tTA\t.\tPASS\t.",
+   "combinations": []
+  }
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {},
+ "fields_compared": [
+  "HGVSc",
+  "HGVS_OFFSET",
+  "HGVS_IntronStartOffset",
+  "HGVS_IntronEndOffset"
+ ],
+ "field_divergences": [
+  {
+   "location": "21:100-101",
+   "allele": "A",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "non_coding_transcript_exon_variant",
+   "field": "HGVSc",
+   "vep": "-",
+   "vep_rs": "ENST1.1:n.15dup",
+   "expected_divergence": "hgvs_shifted_indel_written_span_gate"
+  },
+  {
+   "location": "21:100-101",
+   "allele": "A",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "non_coding_transcript_exon_variant",
+   "field": "HGVS_OFFSET",
+   "vep": "-",
+   "vep_rs": "17",
+   "expected_divergence": "hgvs_shifted_indel_written_span_gate"
+  },
+  {
+   "location": "21:1000-1001",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    9
+   ],
+   "consequence_set": "non_coding_transcript_exon_variant",
+   "field": "HGVSc",
+   "vep": "ENST1.1:n.34_43del",
+   "vep_rs": "ENST1.1:n.23_42del",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:1100-1101",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    10
+   ],
+   "consequence_set": "non_coding_transcript_exon_variant",
+   "field": "HGVSc",
+   "vep": "ENST1.1:n.34_43del",
+   "vep_rs": "ENST1.1:n.35_43del",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:1200-1201",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    11
+   ],
+   "consequence_set": "non_coding_transcript_exon_variant",
+   "field": "HGVSc",
+   "vep": "ENST1.1:n.34_43del",
+   "vep_rs": "ENST1.1:n.23_43del",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:1300-1301",
+   "allele": "A",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    12
+   ],
+   "consequence_set": "non_coding_transcript_exon_variant",
+   "field": "HGVSc",
+   "vep": "-",
+   "vep_rs": "ENST2.1:n.15dup",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:1300-1301",
+   "allele": "A",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    12
+   ],
+   "consequence_set": "non_coding_transcript_exon_variant",
+   "field": "HGVS_OFFSET",
+   "vep": "-",
+   "vep_rs": "17",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:1400-1401",
+   "allele": "A",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    13
+   ],
+   "consequence_set": "upstream_gene_variant",
+   "field": "HGVSc",
+   "vep": "-",
+   "vep_rs": "ENST1.1:n.15dup",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:1400-1401",
+   "allele": "A",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    13
+   ],
+   "consequence_set": "upstream_gene_variant",
+   "field": "HGVS_OFFSET",
+   "vep": "-",
+   "vep_rs": "17",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:1500-1501",
+   "allele": "A",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    14
+   ],
+   "consequence_set": "non_coding_transcript_exon_variant",
+   "field": "HGVSc",
+   "vep": "ENST1.1:n.34_43del",
+   "vep_rs": "ENST1.1:n.23_43del",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:200-201",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    1
+   ],
+   "consequence_set": "non_coding_transcript_exon_variant",
+   "field": "HGVSc",
+   "vep": "-",
+   "vep_rs": "ENST1.1:n.5_25del",
+   "expected_divergence": "hgvs_shifted_indel_written_span_gate"
+  },
+  {
+   "location": "21:200-201",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    1
+   ],
+   "consequence_set": "non_coding_transcript_exon_variant",
+   "field": "HGVS_OFFSET",
+   "vep": "-",
+   "vep_rs": "33",
+   "expected_divergence": "hgvs_shifted_indel_written_span_gate"
+  },
+  {
+   "location": "21:300-301",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    2
+   ],
+   "consequence_set": "non_coding_transcript_exon_variant",
+   "field": "HGVSc",
+   "vep": "-",
+   "vep_rs": "ENST1.1:c.*2333_*2540del",
+   "expected_divergence": "hgvs_shifted_indel_written_span_gate"
+  },
+  {
+   "location": "21:300-301",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    2
+   ],
+   "consequence_set": "non_coding_transcript_exon_variant",
+   "field": "HGVS_OFFSET",
+   "vep": "-",
+   "vep_rs": "74",
+   "expected_divergence": "hgvs_shifted_indel_written_span_gate"
+  },
+  {
+   "location": "21:300-301",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    2
+   ],
+   "consequence_set": "non_coding_transcript_exon_variant",
+   "field": "HGVS_IntronStartOffset",
+   "vep": "-",
+   "vep_rs": "0",
+   "expected_divergence": "hgvs_shifted_indel_written_span_gate"
+  },
+  {
+   "location": "21:300-301",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    2
+   ],
+   "consequence_set": "non_coding_transcript_exon_variant",
+   "field": "HGVS_IntronEndOffset",
+   "vep": "-",
+   "vep_rs": "0",
+   "expected_divergence": "hgvs_shifted_indel_written_span_gate"
+  },
+  {
+   "location": "21:400-401",
+   "allele": "A",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    3
+   ],
+   "consequence_set": "non_coding_transcript_exon_variant",
+   "field": "HGVSc",
+   "vep": "-",
+   "vep_rs": "ENST1.1:n.16A>T",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:400-401",
+   "allele": "A",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    3
+   ],
+   "consequence_set": "non_coding_transcript_exon_variant",
+   "field": "HGVS_OFFSET",
+   "vep": "-",
+   "vep_rs": "17",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:500-501",
+   "allele": "A",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    4
+   ],
+   "consequence_set": "non_coding_transcript_exon_variant",
+   "field": "HGVSc",
+   "vep": "-",
+   "vep_rs": "ENST1.1:n.15dup",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:600-601",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    5
+   ],
+   "consequence_set": "non_coding_transcript_exon_variant",
+   "field": "HGVSc",
+   "vep": "ENST1.1:n.34_43del",
+   "vep_rs": "ENST1.1:n.23_43del",
+   "expected_divergence": "hgvs_shifted_deletion_clamped_span"
+  },
+  {
+   "location": "21:700-701",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    6
+   ],
+   "consequence_set": "non_coding_transcript_exon_variant",
+   "field": "HGVSc",
+   "vep": "ENST1.1:c.-355_-327del",
+   "vep_rs": "ENST1.1:c.-361_-327del",
+   "expected_divergence": "hgvs_shifted_deletion_clamped_span"
+  },
+  {
+   "location": "21:800-801",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    7
+   ],
+   "consequence_set": "non_coding_transcript_exon_variant",
+   "field": "HGVSc",
+   "vep": "ENST1.1:c.-301_-228+19del",
+   "vep_rs": "ENST1.1:c.-307_-228+19del",
+   "expected_divergence": "hgvs_shifted_deletion_clamped_span"
+  },
+  {
+   "location": "21:900-901",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    8
+   ],
+   "consequence_set": "non_coding_transcript_exon_variant",
+   "field": "HGVSc",
+   "vep": "ENST1.1:n.14del",
+   "vep_rs": "ENST1.1:n.13_14del",
+   "expected_divergence": "hgvs_shifted_deletion_clamped_span"
+  }
+ ],
+ "field_divergence_summary": {
+  "hgvs_shifted_indel_written_span_gate": 8,
+  "unexplained_residual": 11,
+  "hgvs_shifted_deletion_clamped_span": 4
+ }
+}

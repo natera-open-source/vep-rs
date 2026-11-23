@@ -1,0 +1,1 @@
+ERROR: [compare_vep_stats] cannot read tests/fixtures: [Errno 21] Is a directory: 'tests/fixtures'

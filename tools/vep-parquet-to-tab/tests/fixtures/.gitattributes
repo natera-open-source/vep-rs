@@ -1,0 +1,2 @@
+# The bytes of a fixture are what a test holds: some end their lines in CRLF or in a lone CR.
+* -text

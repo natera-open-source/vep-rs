@@ -1,10 +1,10 @@
 entry = "duplicate_output_column_collapsed"
 page = "docs/divergences/duplicate-output-column.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the --custom short_name contract, \"any string without commas\" (Ensembl VEP documentation, \"Custom annotations\", short_name), the dbNSFP plugin's header (dbNSFP.pm:76-79 and 86-87) and the --plugin option; not seen in the measured datasets"
-notes = "A --custom source named SOURCE, the name of the column every --custom run adds. Ensembl VEP's tab writer lists the plugin and custom keys after the flag columns with no test against them (Tab.pm:195), so its column line names SOURCE twice and the row prints the source's record names in both cells; its VCF's CSQ format ends SOURCE|SOURCE the same way (VCF.pm:449). vep-rs lists the column once. The same file named `regions` makes the engines agree."
+notes = "A --custom source named SOURCE, the name of the column every --custom run adds. Ensembl VEP's tab writer lists the plugin and custom keys after the flag columns with no test against them (Tab.pm:195), so its column line names SOURCE twice and the row prints the source's record names in both cells; its VCF's CSQ format ends SOURCE|SOURCE the same way (VCF.pm:449). vep-rs lists the column once. The same file named `regions` makes the engines agree. The two further runs hold the second half of the entry, a key whose declarations give different descriptions: under the REVEL plugin beside a source named REVEL, and under TranscriptAnnotator with prefix=CADD beside the CADD plugin, Ensembl VEP's tab header gives both lines of the key the description declared last (Tab.pm:149), and vep-rs's one line carries each declaration's, the plugin loaded last first and the source last, the order their values stand on a row (OutputFactory.pm:2239-2241)."
 
 [input]
 format = "vcf"
@@ -29,3 +29,55 @@ pattern = "^#Uploaded_variation"
 [expected]
 ensembl_vep = ["#Uploaded_variation\tLocation\tAllele\tGene\tFeature\tFeature_type\tConsequence\tcDNA_position\tCDS_position\tProtein_position\tAmino_acids\tCodons\tExisting_variation\tIMPACT\tDISTANCE\tSTRAND\tFLAGS\tSOURCE\tSOURCE"]
 vep_rs = ["#Uploaded_variation\tLocation\tAllele\tGene\tFeature\tFeature_type\tConsequence\tcDNA_position\tCDS_position\tProtein_position\tAmino_acids\tCodons\tExisting_variation\tIMPACT\tDISTANCE\tSTRAND\tFLAGS\tSOURCE"]
+
+[[also]]
+notes = "A source named as the REVEL plugin's key: two lines of the source's file in Ensembl VEP's tab header, one line of both descriptions in vep-rs's."
+
+[also.run]
+flags = ["--plugin", "REVEL,file={repo}/tests/golden/116/GRCh38-plugin-revel/plugin_data/revel.tsv.gz", "--custom", "file={corpus}/custom/sites.vcf.gz,short_name=REVEL,format=vcf,type=overlap"]
+format = "tab"
+
+[also.compare]
+kind = "header"
+pattern = "^## REVEL : "
+
+[also.expected]
+ensembl_vep = ["## REVEL : [PATH]/sites.vcf.gz", "## REVEL : [PATH]/sites.vcf.gz"]
+vep_rs = ["## REVEL : Rare Exome Variant Ensemble Learner; [PATH]/sites.vcf.gz"]
+
+[[also]]
+notes = "Two plugins that write CADD_PHRED, the CADD plugin loaded last: two lines of its description in Ensembl VEP's tab header, one line of its description and then the table's in vep-rs's."
+
+[also.run]
+flags = ["--plugin", "TranscriptAnnotator,file={repo}/crates/vep-cli/tests/fixtures/plugin-shared-key/transcript_annotator_PHRED.tsv.gz,prefix=CADD", "--plugin", "CADD,{repo}/crates/vep-cli/tests/fixtures/plugin-shared-key/CADD_shared_key_GRCh38_synthetic.tsv.gz"]
+format = "tab"
+
+[also.compare]
+kind = "header"
+pattern = "^## CADD_PHRED : "
+
+[also.expected]
+ensembl_vep = [
+    "## CADD_PHRED : PHRED-like scaled CADD score. CADD is only available here for non-commercial use. See CADD website for more information.",
+    "## CADD_PHRED : PHRED-like scaled CADD score. CADD is only available here for non-commercial use. See CADD website for more information.",
+]
+vep_rs = ["## CADD_PHRED : PHRED-like scaled CADD score. CADD is only available here for non-commercial use. See CADD website for more information.; column from <path>"]
+
+[implementation]
+code = [
+    "crates/vep-io/src/output/fields.rs::column_description",
+    "crates/vep-io/src/output/fields.rs::tab_columns",
+    "crates/vep-io/src/output/vcf_output.rs::build_csq_field_list",
+]
+tests = [
+    "crates/vep-cli/tests/custom_key_named_as_a_frequency_column.rs::a_custom_key_named_as_a_frequency_column_prints_the_sources_value_then_the_frequency",
+    "crates/vep-cli/tests/documented_subsets.rs::duplicate_column_and_recode_config_file_classes_are_documented",
+    "crates/vep-cli/tests/tab_description_of_a_key_declared_more_than_once.rs::a_key_two_plugins_write_is_described_by_the_later_plugin_first",
+    "crates/vep-cli/tests/tab_description_of_a_key_declared_more_than_once.rs::a_plugin_that_writes_no_row_of_the_record_is_still_named_on_the_line",
+    "crates/vep-cli/tests/tab_description_of_a_key_declared_more_than_once.rs::a_plugins_key_that_a_custom_short_name_repeats_is_described_by_both_texts",
+    "crates/vep-cli/tests/tab_description_of_a_key_declared_more_than_once.rs::a_record_the_plugin_writes_no_row_of_keeps_the_line_of_both_texts",
+    "crates/vep-io/src/output/fields.rs::tests::a_custom_key_named_as_a_frequency_column_carries_the_sources_values_then_the_frequencies",
+    "crates/vep-io/src/output/fields.rs::tests::a_custom_source_named_source_writes_its_names_under_the_flag_field",
+    "crates/vep-io/src/output/fields.rs::tests::a_key_declared_more_than_once_is_described_by_each_declaration",
+    "crates/vep-io/src/output/fields.rs::tests::a_repeated_plugin_key_is_one_tab_column",
+]

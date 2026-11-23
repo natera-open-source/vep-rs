@@ -5,7 +5,7 @@
 //! header's `transcript:` token is, whole: an identifier with dots of its own
 //! takes its record, transcripts that share a first component each take
 //! their own, and a token that ends in a version goes to the model of that
-//! version.
+//! version where no sibling written as that token takes the record itself.
 //!
 //! `tests/fixtures/tair10_slice/` holds the GFF3 lines (`slice.gff3`) and the
 //! protein FASTA records (`peptides.fa`) of two Arabidopsis thaliana genes,
@@ -99,22 +99,26 @@ fn a_build_from_dotted_identifiers_uses_its_peptides() {
         log.contains("Loaded 7 protein sequences from FASTA"),
         "{log}"
     );
-    assert!(
-        !log.contains("have no record in the protein FASTA"),
-        "{log}"
-    );
+    assert!(!log.contains("no record in the protein FASTA"), "{log}");
 }
 
 /// A GFF3 gene `G1` whose transcript `T1.1` (and `T1.2` when `second`) the
 /// transcript line gives `version` when one is named; each codes on one exon
 /// for the protein of its own identifier.
 fn model(version: Option<u32>, second: bool) -> String {
+    let ids: &[&str] = if second { &["T1.1", "T1.2"] } else { &["T1.1"] };
+    model_of(ids, version)
+}
+
+/// A GFF3 gene `G1` with one transcript per identifier of `ids`, each
+/// transcript line carrying `version` when one is named; each codes on one
+/// exon for the protein of its own identifier.
+fn model_of(ids: &[&str], version: Option<u32>) -> String {
     let version_attribute = version.map_or(String::new(), |v| format!(";version={v}"));
     let mut text = String::from(
         "##gff-version 3\n\
          21\tx\tgene\t1000\t2000\t.\t+\t.\tID=gene:G1;biotype=protein_coding\n",
     );
-    let ids: &[&str] = if second { &["T1.1", "T1.2"] } else { &["T1.1"] };
     for id in ids {
         text += &format!(
             "21\tx\tmRNA\t1000\t2000\t.\t+\t.\tID=transcript:{id};Parent=gene:G1;\
@@ -182,6 +186,47 @@ fn transcripts_sharing_a_first_component_take_their_own_records() {
     );
 }
 
+/// The transcript `T1` at version 1 and its sibling written `T1.1` each take
+/// their own record. In a file that writes no version the record of `T1` is
+/// the first's and the record of `T1.1` the sibling's, in either order of the
+/// records; in one that writes each version inside the token, the record of
+/// `T1.1` is the first's and the record of `T1.1.1` the sibling's. Where the
+/// file holds the record of `T1.1` alone it is the sibling's, whose
+/// identifier the token is as written, and the build counts `T1` without a
+/// record.
+#[test]
+fn a_versioned_model_and_a_dotted_sibling_keep_their_own_records() {
+    let siblings = model_of(&["T1", "T1.1"], Some(1));
+    let first = |token: &str| format!(">P-T1 pep transcript:{token}\nMK\n");
+    let second = |token: &str| format!(">P-T1.1 pep transcript:{token}\nMKV\n");
+    let own = [
+        ("T1".to_string(), Some("MK".to_string()), None),
+        ("T1.1".to_string(), Some("MKV".to_string()), None),
+    ];
+    for fasta in [
+        [first("T1"), second("T1.1")],
+        [second("T1.1"), first("T1")],
+        [first("T1.1"), second("T1.1.1")],
+    ] {
+        let (rows, log) = built(&siblings, &fasta.concat());
+        assert_eq!(rows, own, "{log}");
+        assert!(!log.contains("no record in the protein FASTA"), "{log}");
+    }
+
+    let (rows, log) = built(&siblings, &second("T1.1"));
+    assert_eq!(
+        rows,
+        [
+            ("T1".to_string(), None, None),
+            ("T1.1".to_string(), Some("MKV".to_string()), None)
+        ]
+    );
+    assert!(
+        log.contains("1 of 2 translated transcripts has no record in the protein FASTA"),
+        "{log}"
+    );
+}
+
 /// A token that ends in a version goes to the model of that version: the
 /// transcript `T1.1` at version 3 takes the record of `T1.1.3`, with the
 /// version its header's protein identifier ends in, and the record of
@@ -201,16 +246,13 @@ fn a_versioned_token_goes_to_the_model_of_that_version() {
             [("T1.1".to_string(), Some("MK".to_string()), Some(2))],
             "{log}"
         );
-        assert!(
-            !log.contains("have no record in the protein FASTA"),
-            "{log}"
-        );
+        assert!(!log.contains("no record in the protein FASTA"), "{log}");
     }
 
     let (rows, log) = built(&versioned, ">P-T1.1.2 pep transcript:T1.1.4\nMK\n");
     assert_eq!(rows, [("T1.1".to_string(), None, None)]);
     assert!(
-        log.contains("1 of 1 translated transcripts have no record in the protein FASTA"),
+        log.contains("1 of 1 translated transcript has no record in the protein FASTA"),
         "{log}"
     );
 }

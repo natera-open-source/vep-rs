@@ -1,7 +1,7 @@
 entry = "gxf_malformed_coordinate_line_refused"
 page = "docs/divergences/gxf-malformed-coordinate-line-refused.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the GFF3 and GTF 2.2 specifications in the shapes their text does not exclude: a zero-padded coordinate, each text saying integer and no more (GFF3, columns 4 and 5, \"positive 1-based integer coordinates\"; GTF 2.2, <start> <end>, \"Integer start and end coordinates\"); a blank before the digits of a GFF3 start or end, GFF3 saying \"unescaped spaces are allowed within fields\"; a GTF start of 0 or below, GTF 2.2 numbering a sequence from 1 but calling values outside the reference sequence \"technically acceptable, but they are discouraged\"; a CDS line that sets the translation's start or end in no exon, an exon nested in another and a GFF3 exon rank set against position, neither text holding a CDS or exon line to the span or the order of another exon line and GFF3 saying it \"does not enforce a rule in which features must be wholly contained within the location of their parents\"; a blank line (GFF3, \"Blank lines should be ignored by parsers\"; GTF 2.2 names none); a GFF3 sequence section, a last line that begins with > with no sequence behind it among them (GFF3, \"##FASTA\" and \"a GFF line that begins with the character > creates an implied ##FASTA directive\", a file Ensembl VEP's documentation \"does not support\"); a byte-order mark before a file's first line, of which the texts say nothing; in a GTF a seqname that begins with > and a line led by spaces, GTF 2.2 naming no character a seqname may not hold and speaking of white space only between fields; not seen in the measured datasets; classed by those shapes: a start or end that is not a plain whole number (text, 0x, an exponent or a fraction in it) breaks the integer clauses, a GFF3 start or end of 0 or below \"positive 1-based integer coordinates\", an end below its start \"Start is always less than or equal to end\" (GFF3) and \"<start> must be less than or equal to <end>\" (GTF 2.2), and a line short of its columns, a line led by a tab, a GFF3 line led by spaces, a GFF3 seqid that begins with > and annotation after a sequence section the nine columns, the seqid rule and \"no other content beyond valid FASTA sequence is allowed\" (GFF3) and, with a blank before the digits of a GTF start or end, the field list and \"a single TAB and no white space\" (GTF 2.2)"
 notes = "The GRCh38 release-116 GFF3 lines of TMPRSS3 and ENST00001113783 with the start of the transcript's first CDS line in transcript order rewritten `abc`, beside the PWP2 transcript ENST00000456705 as released, the control. Ensembl VEP's --gff source reads the records tabix returns (BaseGXF.pm:211, 222-237), and the tabix the release ships (htslib 1.9) indexes the file past the line it cannot parse, printing `Failed to parse TBX_GENERIC` and exiting 0, since the line is the file's first once sorted: the source never meets the CDS line and _add_translation (BaseGXF.pm:719) starts the translation at the next one, so tmprss3_codon6 is a 5_prime_UTR_variant, c.-78C>T. vep-rs reads the file itself and refuses the build at the line, `line 6: GFF3 start \"abc\" is not a number`, so its run has no cache, exits 1 and writes no rows. The prepare steps index every file with the tabix of the image the run names (`$IMAGE`), the route of record, and hold each index build to its outcome: exit 0 with the message, exit 0 in silence, and, for a start no number leads on the later sequence of a two-sequence file, exit 1 with `Unsorted positions` and no index, where the same line as the first of a two-sequence file exits 0 and leaves an index of 67,668,768 sequences. They assert the builder's refusals of the kept-line shapes and of a start or end no number leads and an end below zero on a five_prime_UTR line, on one sequence and on either of two, and of a start no number leads on a line of eight columns, its builds past a zero start, an end below its start and an empty start before a numeric end on that line (matched), its refusal of a --custom GFF source whose index tabix 1.9 built past a start it could not parse, and the promoter window whose start a minus sign leads, which vep-rs lists as `21:-5-42395410`. The regulatory step asserts the --regulatory_gff reader's refusal of the four shapes on a four-record file (the record named, or the oversized index), the bake's refusals of the same files and of an `exon` line whose end no number leads, and the run-time reader's refusal of that line. A further step moves a CDS line off its exon three ways, each putting the translation's start in no exon: the PWP2 transcript's first CDS line starting 13 bases before its exon, the TMPRSS3 transcript's first CDS line in transcript order ending 32 bases past its exon, and that line placed in the intron, in no exon. It holds each index build to exit 0 in silence and asserts Ensembl VEP's rows: the source attaches a CDS record to the exon holding its start (BaseGXF.pm:544) and takes the translation's ends from the first and last attached records (BaseGXF.pm:740-756), so pwp2_codon3 is a 5_prime_UTR_variant, c.-11T>C, on the first file, tmprss3_codon6 is c.100C>T on the second, where the released lines give c.17C>T, and a 5_prime_UTR_variant, c.-78C>T, on the third. It asserts the builder's refusal of each file at the line, naming the transcript, the CDS line's span and the base at which the translation starts, in no exon. The last step runs Ensembl VEP of the image three times more: over the released lines with the first CDS line's end zero-padded, which the index reader takes as octal and no query returns, so tmprss3_codon6 is a 5_prime_UTR_variant where vep-rs, reading decimal, writes missense_variant, c.17C>T; over the regulatory file with the `exon` line, where it keeps the regulatory row of in_first alone; and over the promoter file whose first window starts at `-5`, which it lists as `21:-5-42395410` too."
@@ -55,19 +55,28 @@ GFF''',
   sed 's/\t5013566\t5014200\t/\t0\t5014200\t/' reg_released.gff3 > reg_start_zero.gff3
   sed 's/\t5013566\t5014200\t/\t5014200\t5013566\t/' reg_released.gff3 > reg_end_below_start.gff3
   awk -F'\t' -v OFS='\t' '{print} NR==1 {print "21","Ensembl","exon","5012000","xyz",".",".",".","ID=SKIPPED"}' reg_released.gff3 > reg_exon_end_not_a_number.gff3
+  first_base() { printf '21\tEnsembl\tenhancer\t1\t100\t.\t.\t.\tID=ENSR21_FIRST_BASE;color=#faca00\n'; }
+  { first_base; sed '1s/^/\t/' reg_released.gff3; } > reg_tab_led.gff3
+  { first_base; sed '1s/\tEnsembl\t/\tEnsembl\x00\t/' reg_released.gff3; } > reg_source_nul_ended.gff3
+  { first_base; sed '1s/^21\tEnsembl\t/21\x00\x00\x00\t5011400\t/' reg_released.gff3; } > reg_name_nul_ended.gff3
+  sed 's/\t5013566\t5014200\t/\t5013566\x00\t5014200\t/' reg_released.gff3 > reg_start_nul_ended.gff3
+  [ "$(head -c 1 reg_tab_led.gff3 | od -A n -t x1 | tr -d ' ')" = 32 ] && [ "$(sed -n 2p reg_tab_led.gff3 | head -c 1 | od -A n -t x1 | tr -d ' ')" = 09 ] || exit 1
+  for f in reg_source_nul_ended reg_start_nul_ended; do [ "$(tr -cd '\000' < "$f.gff3" | wc -c)" = 1 ] || exit 1; done
+  [ "$(tr -cd '\000' < reg_name_nul_ended.gff3 | wc -c)" = 3 ] || exit 1
   for f in reg_end_not_a_number reg_start_not_a_number reg_start_zero reg_end_below_start; do grep -q 'ENSR21_BZTD' "$f.gff3" && [ "$(grep -c '' "$f.gff3")" = 4 ] && ! cmp -s reg_released.gff3 "$f.gff3" || exit 1; done
   [ "$(grep -c '' utr_start_first_of_two.gff3)" = 37 ] && [ "$(grep -c '' utr_start_later_of_two.gff3)" = 37 ] && [ "$(grep -c '' cds_start_later_of_two.gff3)" = 36 ]''',
   '''for f in released cds_start_not_a_number cds_end_below_start cds_start_zero cds_end_zero_padded exon_end_not_a_number utr_end_not_a_number utr_start_not_a_number utr_end_below_zero utr_start_zero utr_end_below_start utr_start_empty short_start_not_a_number utr_start_first_of_two utr_start_later_of_two cds_start_later_of_two reg_end_not_a_number reg_start_not_a_number reg_start_zero reg_end_below_start reg_exon_end_not_a_number; do grep -v '^#' "$f.gff3" | LC_ALL=C sort -k1,1 -k4,4n -k5,5n | bgzip > "$f.gff3.gz"; done
-  for f in promoters promoters_minus; do grep -v '^#' "$f.gff" | LC_ALL=C sort -k1,1 -k4,4n -k5,5n | bgzip > "$f.gff.gz"; done''',
+  for f in promoters promoters_minus; do grep -v '^#' "$f.gff" | LC_ALL=C sort -k1,1 -k4,4n -k5,5n | bgzip > "$f.gff.gz"; done
+  for f in reg_tab_led reg_source_nul_ended reg_start_nul_ended reg_name_nul_ended; do bgzip -c "$f.gff3" > "$f.gff3.gz"; done''',
   '''test -n "$IMAGE" || { echo 'this reproduction indexes its files with the tabix of the Ensembl VEP image, so it needs --image' >&2; exit 1; }
   docker run --rm --user "$(id -u):$(id -g)" -v "$STAGE:/stage" -w /stage "$IMAGE" sh -c 'for f in *.gff3.gz promoters.gff.gz promoters_minus.gff.gz; do tabix -p gff "$f" 2> "$f.tabix.err"; echo $? > "$f.tabix.exit"; done'
   wrong() { echo "$1: the index build of the image did not $2" >&2; cat "$1.tabix.err" >&2; exit 1; }
-  for f in cds_start_not_a_number exon_end_not_a_number utr_end_not_a_number utr_end_below_zero utr_start_not_a_number short_start_not_a_number utr_start_first_of_two reg_end_not_a_number reg_start_not_a_number reg_exon_end_not_a_number; do
+  for f in cds_start_not_a_number exon_end_not_a_number utr_end_not_a_number utr_end_below_zero utr_start_not_a_number short_start_not_a_number utr_start_first_of_two reg_end_not_a_number reg_start_not_a_number reg_exon_end_not_a_number reg_tab_led reg_source_nul_ended; do
     [ "$(cat "$f.gff3.gz.tabix.exit")" = 0 ] && grep -q 'Failed to parse TBX_GENERIC' "$f.gff3.gz.tabix.err" || wrong "$f.gff3.gz" 'exit 0 with its parse message'
   done
   [ "$(cat promoters.gff.gz.tabix.exit)" = 0 ] && grep -q 'Failed to parse TBX_GENERIC' promoters.gff.gz.tabix.err || wrong promoters.gff.gz 'exit 0 with its parse message'
   [ "$(cat promoters_minus.gff.gz.tabix.exit)" = 0 ] && test ! -s promoters_minus.gff.gz.tabix.err || wrong promoters_minus.gff.gz 'exit 0 in silence'
-  for f in released cds_end_below_start cds_start_zero cds_end_zero_padded utr_start_zero utr_end_below_start utr_start_empty reg_start_zero reg_end_below_start; do
+  for f in released cds_end_below_start cds_start_zero cds_end_zero_padded utr_start_zero utr_end_below_start utr_start_empty reg_start_zero reg_end_below_start reg_start_nul_ended reg_name_nul_ended; do
     [ "$(cat "$f.gff3.gz.tabix.exit")" = 0 ] && test ! -s "$f.gff3.gz.tabix.err" || wrong "$f.gff3.gz" 'exit 0 in silence'
   done
   for f in utr_start_later_of_two cds_start_later_of_two; do
@@ -114,6 +123,11 @@ GFF''',
   refused_run reg_start_zero 'reg_start_zero.gff3.gz: the coordinates 0-5014200 of enhancer record ENSR21_BZTD of chromosome 21 are not 1-based and ordered'
   refused_run reg_end_below_start 'reg_end_below_start.gff3.gz: the coordinates 5014200-5013566 of enhancer record ENSR21_BZTD of chromosome 21 are not 1-based and ordered'
   refused_run reg_exon_end_not_a_number 'reg_exon_end_not_a_number.gff3.gz: the end of exon record SKIPPED of chromosome 21 is not a whole number: xyz'
+  refused_run reg_tab_led 'reg_tab_led.gff3.gz: the start of a record of type Ensembl of chromosome 21 is not a whole number: enhancer'
+  refused_run reg_start_nul_ended 'reg_start_nul_ended.gff3.gz: the start of enhancer record ENSR21_BZTD of chromosome 21 is not a whole number: 5013566'
+  refused_run reg_source_nul_ended 'reg_source_nul_ended.gff3.gz: the start of enhancer record ENSR21_85ZF5 of chromosome 21 is not a whole number: enhancer'
+  run reg_name_nul_ended || { cat reg_name_nul_ended.run.err >&2; exit 1; }
+  [ "$(awk -F'\t' '$6=="RegulatoryFeature" {print $1 ":" $5}' reg_probe_reg_name_nul_ended.txt | tr '\n' ' ')" = 'in_lost:ENSR21_BZTD in_last:ENSR21_93ZQB ' ] || { echo 'vep read the record whose sequence name ends in NUL bytes' >&2; exit 1; }
   refused_bake() {
     if "$VEP_CACHE_BUILDER" --release 116 --assembly GRCh38 --species homo_sapiens --gff3 "$REPO/crates/vep-cache-builder/tests/fixtures/grch38_chr21/slice.gff3" --fasta "$REPO/crates/vep-cache-builder/tests/fixtures/grch38_chr21/peptides.fa" --regulatory-gff "$1.gff3.gz" --output-dir "$STAGE/bake_$1" 2> "$1.bake.err"; then echo "the cache builder baked $1.gff3.gz" >&2; exit 1; fi
     grep -F "$2" "$1.bake.err" > /dev/null || { cat "$1.bake.err" >&2; exit 1; }
@@ -123,6 +137,11 @@ GFF''',
   refused_bake reg_start_zero 'GFF coordinates 0-5014200 at line 1 are not 1-based and ordered'
   refused_bake reg_end_below_start 'GFF coordinates 5014200-5013566 at line 2 are not 1-based and ordered'
   refused_bake reg_exon_end_not_a_number 'the end of line 2 of reg_exon_end_not_a_number.gff3.gz is not a whole number: xyz'
+  refused_bake reg_tab_led 'the start of line 2 of reg_tab_led.gff3.gz is not a whole number: enhancer'
+  refused_bake reg_start_nul_ended 'the start of line 2 of reg_start_nul_ended.gff3.gz is not a whole number: 5013566'
+  refused_bake reg_source_nul_ended 'the start of line 2 of reg_source_nul_ended.gff3.gz is not a whole number: enhancer'
+  "$VEP_CACHE_BUILDER" --release 116 --assembly GRCh38 --species homo_sapiens --gff3 "$REPO/crates/vep-cache-builder/tests/fixtures/grch38_chr21/slice.gff3" --fasta "$REPO/crates/vep-cache-builder/tests/fixtures/grch38_chr21/peptides.fa" --regulatory-gff reg_name_nul_ended.gff3.gz --output-dir "$STAGE/bake_reg_name_nul_ended" 2> reg_name_nul_ended.bake.err || { cat reg_name_nul_ended.bake.err >&2; exit 1; }
+  ! grep -rqF ENSR21_85ZF5 "$STAGE/bake_reg_name_nul_ended/regulatory" && grep -rqF ENSR21_BZTD "$STAGE/bake_reg_name_nul_ended/regulatory" || { echo 'the bake did not skip the record whose sequence name ends in NUL bytes' >&2; exit 1; }
   true''',
   '''test -n "$IMAGE" || { echo 'this reproduction runs Ensembl VEP of the image over three files whose CDS line leaves its exon, so it needs --image' >&2; exit 1; }
   printf '##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n21\t42395401\ttmprss3_codon6\tG\tA\t.\t.\t.\n21\t44107424\tpwp2_codon3\tT\tC\t.\t.\t.\n' > records.vcf
@@ -166,6 +185,15 @@ GFF''',
   row octal_vep_rs.txt pwp2_codon3 missense_variant 'HGVSc=ENST00000456705.1:c.8T>C'
   ensembl reg_probe.vcf reg_skipped_ensembl.txt --gff released.gff3.gz --regulatory_gff file=reg_exon_end_not_a_number.gff3.gz
   [ "$(awk -F'\t' '$6=="RegulatoryFeature" {print $1}' reg_skipped_ensembl.txt | tr '\n' ' ')" = 'in_first ' ] || { echo 'Ensembl VEP kept a regulatory row past the exon line' >&2; exit 1; }
+  regulatory_rows() { awk -F'\t' '$6=="RegulatoryFeature" {print $1}' "$1" | tr '\n' ' '; }
+  ensembl reg_probe.vcf reg_tab_led_ensembl.txt --gff released.gff3.gz --regulatory_gff file=reg_tab_led.gff3.gz
+  [ "$(regulatory_rows reg_tab_led_ensembl.txt)" = 'in_lost in_last ' ] || { echo 'Ensembl VEP did not pass over the line that opens with a tab' >&2; exit 1; }
+  ensembl reg_probe.vcf reg_source_nul_ended_ensembl.txt --gff released.gff3.gz --regulatory_gff file=reg_source_nul_ended.gff3.gz
+  [ "$(regulatory_rows reg_source_nul_ended_ensembl.txt)" = 'in_lost in_last ' ] || { echo 'Ensembl VEP read the record whose source column ends in a NUL byte' >&2; exit 1; }
+  ensembl reg_probe.vcf reg_name_nul_ended_ensembl.txt --gff released.gff3.gz --regulatory_gff file=reg_name_nul_ended.gff3.gz
+  [ "$(regulatory_rows reg_name_nul_ended_ensembl.txt)" = 'in_first in_lost in_last ' ] || { echo 'Ensembl VEP did not build the record whose sequence name ends in NUL bytes' >&2; exit 1; }
+  ensembl reg_probe.vcf reg_start_nul_ended_ensembl.txt --gff released.gff3.gz --regulatory_gff file=reg_start_nul_ended.gff3.gz
+  [ "$(regulatory_rows reg_start_nul_ended_ensembl.txt)" = 'in_first in_lost in_last ' ] || { echo 'Ensembl VEP did not build the record whose start a NUL byte ends' >&2; exit 1; }
   ensembl records.vcf custom_minus_ensembl.txt --gff released.gff3.gz --custom file=promoters_minus.gff.gz,format=gff,gff_type=gencode_promoter
   grep -q 'GENCODE_PROMOTER=21:-5-42395410;' custom_minus_ensembl.txt || { echo 'Ensembl VEP did not list the window whose start a minus sign leads' >&2; exit 1; }''',
 ]
@@ -201,3 +229,16 @@ ensembl_vep = [
 ]
 vep_rs = []
 vep_rs_exit = 1
+
+[implementation]
+code = [
+    "crates/vep-cache-builder/src/builder.rs::translation_end_outside_exons",
+    "crates/vep-cache-builder/src/gff3.rs::parse_coordinate",
+    "crates/vep-cache-builder/src/line.rs::check_indexed_coordinates",
+]
+tests = [
+    "crates/vep-cache-builder/src/gff3.rs::tests::a_coordinate_the_index_build_fails_is_refused_on_a_skipped_line_of_any_sequence",
+    "crates/vep-cache-builder/src/gff3.rs::tests::non_numeric_coordinate_fails_the_parse",
+    "crates/vep-cache-builder/tests/refused_models.rs::a_translation_that_starts_or_ends_in_no_exon_is_refused_and_writes_nothing",
+    "crates/vep-cli/tests/documented_subsets.rs::gxf_malformed_coordinate_line_refused_divergence_is_documented",
+]

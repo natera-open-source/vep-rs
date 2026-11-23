@@ -1,0 +1,1 @@
+[{"stable_id": "ENST1", "strand": 1, "exons": [{"start": 1, "end": 100}, {"start": 201, "end": 203}, {"start": 301, "end": 400}]}, {"stable_id": "ENST2", "strand": -1, "exons": [{"start": 1, "end": 100}, {"start": 201, "end": 203}, {"start": 301, "end": 400}]}, {"stable_id": "ENST3", "strand": 1, "exons": [{"start": 1, "end": 100}, {"start": 301, "end": 400}]}]

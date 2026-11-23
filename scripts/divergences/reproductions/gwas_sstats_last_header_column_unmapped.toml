@@ -1,7 +1,7 @@
 entry = "gwas_sstats_last_header_column_unmapped"
 page = "docs/plugins/flat-file.md#4-gwas-the-last-column-of-a-summary-statistics-header-is-never-read"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the GWAS plugin's header, which says the plugin can process the harmonised version of the summary statistics file and fixes no order for its columns; not seen in the measured datasets"
 # A nine-column harmonised file ending in `p_value`, with the committed file's row for rs4817614, under the committed file's name.
@@ -33,3 +33,9 @@ columns = ["Location", "Allele", "Feature", "GWAS_p_value", "GWAS_risk_allele", 
 [expected]
 ensembl_vep = ["21:34036428 | G | ENST00000813277 |  | G | GCST000028"]
 vep_rs = ["21:34036428 | G | ENST00000813277 | 0.1965 | G | GCST000028"]
+
+[implementation]
+code = ["crates/vep-builtins/src/plugins/gwas.rs::GwasPlugin::load_summary_statistics"]
+tests = [
+    "crates/vep-builtins/src/plugins/gwas.rs::tests::sstate_file_parses_harmonised_columns_and_filename",
+]

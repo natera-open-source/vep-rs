@@ -1,0 +1,92 @@
+{
+ "plugin_fixtures": {
+  "generator": "scripts/fixtures/cut_plugin_regions.py",
+  "flank": 5000,
+  "record_flank": 2000,
+  "exon_flank": 50,
+  "gerp_regions": "exons",
+  "tools": {
+   "bgzip": "bgzip (htslib) 1.9"
+  },
+  "files": {
+   "reference.fa.fai": "c283ae756e33c8b5c02ec792001e911aa0aa99128c8635e84cf949f04667a339",
+   "reference.fa.gz": "d866afdfc7612dd702fcff0e41b662f466b1dbdc81719037ef22e733e77c813a",
+   "reference.fa.gz.fai": "c283ae756e33c8b5c02ec792001e911aa0aa99128c8635e84cf949f04667a339",
+   "reference.fa.gz.gzi": "a30ccbcf7befbae3408bc1e8896840e82662f2ed0d0f58e271b2b390918ceecb"
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species felis_catus --assembly F.catus_Fca126_mat1.0 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "felis_catus/116_F.catus_Fca126_mat1.0",
+ "fasta": "the two sequences the records sit on (chromosome F1 and the unplaced scaffold JAFEKA010000047.1) at their full length from Felis_catus.F.catus_Fca126_mat1.0.dna.primary_assembly.F1.fa and Felis_catus.F.catus_Fca126_mat1.0.dna.nonchromosomal.fa of Ensembl release 116, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
+ "input": "variants.vcf: 220 records on chromosome F1 and the unplaced scaffold JAFEKA010000047.1. 166 are designed records that tools/vep-seeded-variants wrote from the converted cache and the genome sequence (--records wide, seed 1), their IDs the category and an ordinal: start and stop codons, missense and synonymous changes on each strand, splice donors and acceptors, both untranslated regions, introns, upstream, downstream and intergenic positions, frameshift insertions and deletions, in-frame deletions, the first and the last base of each sequence, and records that name their sequence by a synonym (CM031428.1 for F1, chrA2_random_Un_scaffold_37 for the scaffold). 54 are single-base substitutions drawn with seed 1 from the cache's known variants of the two sequences, their IDs the cache's identifiers. Sixteen exemplars per consequence-set combination the two references show, stratified by variant class and strand, forty-eight per combination carrying a protein-level term, plus the records the manifest's included_records name. The cache holds no organelle sequence and every transcript names genetic code table 1",
+ "sha256": {
+  "default.txt": "cb4c84810fa1668e803c690bbbbedb336098f27b8aeb045a49fe5cc2a6ee5a03",
+  "tab.txt": "3d9f46ac70510313b9b26d90767b2c19d512eb206f31a2e95da1b9d36e0bfc53",
+  "vcf.vcf": "a1d1ba08b76cd578b21866df6855d673946db38a9c873019eec612a234fce230",
+  "json.jsonl": "5605c893f58c562bd3355c83922ff3a5e0d14227d4bd6a85b79649de2e4fb4ba"
+ },
+ "variants_vcf_sha256": "51681acb26fb2cec2f84938d11fe76abeebca386a8240f0ac5f670f2e09a5dfe",
+ "flag_sets": {
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species felis_catus --assembly F.catus_Fca126_mat1.0 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "felis_catus/116_F.catus_Fca126_mat1.0",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "dbdb661688dc90ec3835226784d00a21f9193f80c48123869d4887651749ae0a",
+    "tab.txt": "c0a1532196fcb5d40bb6db85fa541bec3721f028a288191cdaa144216c42f50b",
+    "vcf.vcf": "b15604acc75345b3df996f085fa5634a1b5800d64f0823a4d94fcb013b399d3f",
+    "json.jsonl": "ac9106cff0fa3bb88f89014db7a6ba580e3a4d009c5d66d10764a07a450c0587"
+   },
+   "flags": [
+    "--everything"
+   ],
+   "expected_dir": "expected_everything"
+  },
+  "hgvs-sift": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species felis_catus --assembly F.catus_Fca126_mat1.0 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs --sift b [--tab|--vcf|--json]",
+   "perl_cache": "felis_catus/116_F.catus_Fca126_mat1.0",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "f5de496072a5b53da804f7af807ab309ebd5b96b0425e47bfbfe441254fd1d9d",
+    "tab.txt": "91c7953ad6ff5c483aebab7bbe32756ade318b83efd7b341cae5dab39ad830d1",
+    "vcf.vcf": "67764440424d3df5e6c1d67f5b5a43a69cd0e30483b000ad2555c1fd15ccbc24",
+    "json.jsonl": "b1638f83063e6931e01b1372cc13afe48adfe7f15e836c71ed24f60c45c0384a"
+   },
+   "flags": [
+    "--hgvs",
+    "--sift",
+    "b"
+   ],
+   "expected_dir": "expected_hgvs-sift"
+  }
+ },
+ "generator": "tools/vep-seeded-variants --records wide --seed 1 --fasta <genome> --sequence F1 --sequence JAFEKA010000047.1 over the converted cache, and 300 single-base substitutions drawn with seed 1 from the known variants of the same two sequences; Ensembl VEP over the two inputs under the corpus flags; tools/vep-golden-corpus select --release 116 --assembly F.catus_Fca126_mat1.0 --species felis_catus --dataset wide=<reference>=<the designed records> --dataset known=<reference>=<the known variants> --k 16 --seed 1 --max-span 1000000 --max-records 500 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 48 --include <the named records> --covers species-cat-fca126 --covers genetic-code-tables --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --flank 5000 --gzip --drop sorted_exons --drop protein_function_predictions --drop-except <the transcripts on which a record changes one residue, the rows SIFT scores> --perl-info <cache>/info.txt --cache-version 116 --variations <converted cache>/variations over the whole cache tools/vep-storable-to-json converts from the Ensembl VEP 116 F.catus_Fca126_mat1.0 cache (protein features kept for the DOMAINS column of the everything set; the variation slices hold the known variants within one base of a record); scripts/fixtures/cut_plugin_regions.py --reference <genome> --flank 5000 --record-flank 2000 over the pruned cache and a copy of the records that names each sequence as the cache does; scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; tools/vep-golden-corpus flag-set (everything, hgvs-sift) and classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp --field SIFT for the hgvs-sift set)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "F1": 682,
+   "JAFEKA010000047.1": 18
+  },
+  "distinct_transcripts_per_chromosome": {
+   "F1": 630,
+   "JAFEKA010000047.1": 18
+  },
+  "shards": 61,
+  "synonym_lines": 2,
+  "matrices_kept_on": 268,
+  "variation_slices": "the known variants within one base of a record under variations/<chr>/all_vars.gz with its .csi, as the Ensembl VEP cache lays them out: 57 on F1 and 0 on the scaffold"
+ }
+}

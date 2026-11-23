@@ -1,7 +1,7 @@
 entry = "buffer_size_zero_writes_the_header_alone"
 page = "docs/divergences/buffer-size-zero.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the --buffer_size option, an integer with no stated lower bound (Bio::EnsEMBL::VEP::Config, `buffer_size=i`; Ensembl VEP documentation, \"Running Ensembl VEP\", --buffer_size); not seen in the measured datasets"
 notes = "Ensembl VEP fills its buffer while it holds fewer records than `--buffer_size` (InputBuffer.pm:191, 212), so at 0 the first fill is empty, the run reads that as the end of the input (Runner.pm:423-424, 476-477) and exits 0 with the header alone. vep-rs closes a batch once it holds a record and writes the record's five rows, the rows both engines write at `--buffer_size 1` and at the default."
@@ -34,3 +34,10 @@ vep_rs = [
   "21:45573402 | T | ENST00000763269 | upstream_gene_variant",
   "21:45573402 | T | ENST00000859469 | 5_prime_UTR_variant",
 ]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/pipeline.rs::read_parsed",
+    "crates/vep-cli/src/pipeline.rs::read_vcf_lines",
+]
+tests = ["crates/vep-cli/tests/filter_report_and_run_documented_rows.rs::a_buffer_size_of_zero_writes_every_row"]

@@ -1,10 +1,10 @@
 [VEP run statistics]
-VEP version (API)	 116.2 (116)
+VEP version (API)	 116.3 (116)
 Annotation sources	Cache: /work/cache/homo_sapiens_refseq/116_GRCh38
 Species	homo_sapiens
 Command line options	vep --assembly GRCh38 --cache --cache_version 116 --database 0 --dir_cache [PATH]/cache --dir_plugins /plugins --fasta [PATH]/ref.fa --force_overwrite --fork --format vcf --input_file [PATH]/input.vcf --json --offline --output_file [PATH]/json.jsonl --quiet --refseq --stats_text --transcript_filter _gene_symbol_id
-Start time	2026-11-07 16:07:40
-End time	2026-11-07 16:07:40
+Start time	2026-11-20 13:25:18
+End time	2026-11-20 13:25:18
 Run time	0 seconds
 Input file	/work/input.vcf
 Output file	/work/perl_out/json.jsonl
@@ -35,8 +35,8 @@ Overlapped transcripts	153
 Overlapped regulatory features	-
 
 [Variant classes]
-duplication	1
 Alu_insertion	1
+duplication	1
 insertion	5
 deletion	8
 SNV	25

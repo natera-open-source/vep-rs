@@ -1,0 +1,9 @@
+## ENSEMBL VARIANT EFFECT PREDICTOR
+## Output produced by the second run
+## Using cache in /work/second/cache
+## Column descriptions:
+## Extra column keys:
+#Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	Extra
+v1	I:1000	T	GENE0001	TRANSCRIPT0001	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1
+v2	I:2000	-	GENE0002	TRANSCRIPT0002	Transcript	downstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER;DISTANCE=120;STRAND=-1
+v3	Mito:15	C	-	-	-	intergenic_variant	-	-	-	-	-	-	IMPACT=MODIFIER

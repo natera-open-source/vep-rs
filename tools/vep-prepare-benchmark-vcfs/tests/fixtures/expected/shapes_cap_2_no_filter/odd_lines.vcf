@@ -1,0 +1,6 @@
+##fileformat=VCFv4.2
+##a header that ends in CR LF
+##a header that ends in a lone CR
+#CHROM	POS	ID
+
+	100	a line whose first column is empty

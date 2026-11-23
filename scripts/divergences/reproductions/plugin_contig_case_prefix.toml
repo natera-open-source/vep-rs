@@ -1,7 +1,7 @@
 entry = "plugin_contig_case_prefix"
 page = "docs/plugins.md#4-a-chromosome-written-with-a-capitalised-chr-prefix-in-a-plugins-file-lookup"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the VCF 4.2 specification, section 1.4.1 \"Fixed fields\", CHROM, a string with no whitespace for which no letter case of a chr prefix is set; not seen in the measured datasets"
 notes = "gnomADc against the corpus coverage file, whose contig is named chr21; the record is spelt Chr21."
@@ -29,3 +29,14 @@ where = { record = "cap_chr", feature = "ENST00000357345" }
 [expected]
 ensembl_vep = ["-"]
 vep_rs = ["31.1000"]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/tabix.rs::chromosome_query_candidates",
+    "crates/vep-builtins/src/tabix.rs::table_contig",
+    "crates/vep-cli/src/pipeline.rs::name_source_chromosomes",
+    "crates/vep-core/src/synonyms.rs::ChromosomeSynonyms::source_chr_name",
+]
+tests = [
+    "crates/vep-cli/tests/plugin_documented_rows.rs::a_gnomadc_record_spelt_with_a_capitalised_chr_prefix_takes_its_coverage",
+]

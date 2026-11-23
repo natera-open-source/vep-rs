@@ -1,0 +1,28 @@
+[package]
+name = "vep-loftee-synthetic-conservation"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.89"
+license = "Apache-2.0"
+description = "Writer of made-up conservation files for the LoFTEE plugin from a converted Ensembl VEP cache, on which vep-rs and Ensembl VEP are compared: a tabix-indexed table of base scores and a SQLite database of exon scores, every value a function of a seed"
+publish = false
+
+[dependencies]
+noodles = { version = "0.115", features = ["bgzf", "core", "csi", "tabix"] }
+noodles-bgzf = { version = "0.51", features = ["libdeflate"] }
+rusqlite = { version = "0.43", default-features = false, features = ["bundled"] }
+sha2 = "0.11"
+vep-seeded-variants = { path = "../vep-seeded-variants" }
+
+[dev-dependencies]
+serde_json = "1"
+
+# Its own Cargo root: the repository workspace's commands do not reach this package, and
+# a cargo command for it names this manifest.
+[workspace]
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"

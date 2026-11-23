@@ -34,7 +34,7 @@
  "covers": [
   "gnomADc"
  ],
- "suites": {
+ "datasets": {
   "gnomadc": {
    "reference": "cand.vep.txt",
    "input": "cand.vcf",
@@ -95,21 +95,21 @@
  },
  "records": [
   {
-   "suite": "gnomadc",
+   "dataset": "gnomadc",
    "vcf": "21\t13826644\trs1258005577\tAAAG\tA\t.\t.\t.",
    "combinations": [
     "upstream_gene_variant"
    ]
   },
   {
-   "suite": "gnomadc",
+   "dataset": "gnomadc",
    "vcf": "21\t14011314\trs564579936\tC\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant"
    ]
   },
   {
-   "suite": "gnomadc",
+   "dataset": "gnomadc",
    "vcf": "21\t18486439\trs1344590079\tGTAT\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -117,14 +117,14 @@
    ]
   },
   {
-   "suite": "gnomadc",
+   "dataset": "gnomadc",
    "vcf": "21\t24811606\trs980597155\tG\tA\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant"
    ]
   },
   {
-   "suite": "gnomadc",
+   "dataset": "gnomadc",
    "vcf": "21\t25769399\trs1391930189\tC\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -133,7 +133,7 @@
    ]
   },
   {
-   "suite": "gnomadc",
+   "dataset": "gnomadc",
    "vcf": "21\t26924283\trs1311362461\tACTT\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -142,7 +142,7 @@
    ]
   },
   {
-   "suite": "gnomadc",
+   "dataset": "gnomadc",
    "vcf": "21\t30806881\trs35442370\tG\tGAAA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -150,14 +150,14 @@
    ]
   },
   {
-   "suite": "gnomadc",
+   "dataset": "gnomadc",
    "vcf": "21\t32699959\trs2042341561\tG\tA\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "gnomadc",
+   "dataset": "gnomadc",
    "vcf": "21\t33324525\trs967312417\tCGGA\tC\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -166,7 +166,7 @@
    ]
   },
   {
-   "suite": "gnomadc",
+   "dataset": "gnomadc",
    "vcf": "21\t36170554\trs1280472312\tC\tCCA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -177,7 +177,7 @@
    ]
   },
   {
-   "suite": "gnomadc",
+   "dataset": "gnomadc",
    "vcf": "21\t39212646\trs1460677935\tAACC\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -188,7 +188,7 @@
    ]
   },
   {
-   "suite": "gnomadc",
+   "dataset": "gnomadc",
    "vcf": "21\t39217042\trs2032950535\tT\tTAA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -198,7 +198,7 @@
    ]
   },
   {
-   "suite": "gnomadc",
+   "dataset": "gnomadc",
    "vcf": "21\t43332022\trs1392062079\tT\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -207,7 +207,7 @@
    ]
   },
   {
-   "suite": "gnomadc",
+   "dataset": "gnomadc",
    "vcf": "21\t45073962\trs988209446\tG\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -218,7 +218,7 @@
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "plugin_files": {

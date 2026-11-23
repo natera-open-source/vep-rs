@@ -1,0 +1,1 @@
+[classify_storable_transcript_differences] 8 transcripts: identical_after_normalisation 2, other 2, peptide 2, predictions 1, protein_features 3; combinations {"identical_after_normalisation": 2, "peptide+predictions": 1, "protein_features": 1, "other+protein_features": 2, "peptide": 1, "": 1}; JSON cache peptide matches {"both": 2, "113": 1, "absent": 2, "neither": 3}

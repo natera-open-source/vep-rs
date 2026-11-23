@@ -31,7 +31,7 @@ body:
     id: evidence
     attributes:
       label: Evidence
-      description: The Ensembl VEP source that contradicts the target, cited as `Module.pm:line` at `release/116.2`, with what it does; or the contradicting row and the behaviour the two rows cannot both have; or the code path that shows it.
+      description: The Ensembl VEP source that contradicts the target, cited as `Module.pm:line` at `release/116.3`, with what it does; or the contradicting row and the behaviour the two rows cannot both have; or the code path that shows it.
     validations:
       required: true
   - type: dropdown

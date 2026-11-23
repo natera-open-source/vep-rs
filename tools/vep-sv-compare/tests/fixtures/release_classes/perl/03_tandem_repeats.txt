@@ -1,0 +1,6 @@
+#Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	Extra
+del_kept	21:38000001-38000500	deletion	G	ENST21_A	Transcript	feature_truncation	-	-	-	-	-	-	IMPACT=MODIFIER
+tr_rn_zero	21:31425588-31425596	-	G	ENST21_A	Transcript	upstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+tr_rn_zero	21:31425588-31425596	-	G	ENST21_B	Transcript	inframe_deletion	-	-	-	-	-	-	IMPACT=MODIFIER
+tr_gain	21:2000-2001	ATAT	G	ENST21_A	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+tr_loss	21:2997-3000	-	G	ENST21_B	Transcript	intron_variant,start_lost	-	-	-	-	-	-	IMPACT=MODIFIER

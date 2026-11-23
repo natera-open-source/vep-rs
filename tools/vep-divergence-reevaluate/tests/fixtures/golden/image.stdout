@@ -1,0 +1,13 @@
+field_kind	still-present
+stdout_kind	still-present
+tool_kind	changed	Ensembl VEP ['rec1 | IMPACT=MODERATE;HGVSp=ENSP1:p.Leu4Pro;PICK=1', 'rec1 | IMPACT=MODIFIER', 'rec2 | IMPACT=MODIFIER;DISTANCE=4000;FILE=<path>'], vep-rs []
+exit_kind	still-present
+
+| verdict | entries |
+| --- | --- |
+| still-present | 3 |
+| closed | 0 |
+| changed | 1 |
+| error | 0 |
+| total | 4 |
+outputs under {{ROOT}}/work

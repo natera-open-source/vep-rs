@@ -1,0 +1,8 @@
+reference release: 116.2
+wrote summary: {{REPORT_DIR}}/summary.json
+wrote markdown: {{REPORT_DIR}}/summary.md
+wrote discordance: {{REPORT_DIR}}/discordant.tsv
+wrote open discordance: {{REPORT_DIR}}/discordant_open.tsv
+aggregate: precision=0.500000 recall=0.500000 f1=0.500000
+adjusted: precision=1.000000 recall=1.000000 f1=1.000000 (excluded 1P + 1R = 2 intended-divergence tuples)
+aggregate (context-collapsed): precision=0.500000 recall=0.500000 f1=0.500000

@@ -1,7 +1,7 @@
 entry = "individual_trimmable_indel"
 page = "docs/divergences/individual-trimmable-indel.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
 input_class_basis = "2 · 2 of 373 records with sample columns · 8 flag sets, 1 corpus"
 notes = "Two records read through the one-sample --individual_zyg rule, where Ensembl VEP compares the chopped genotype alleles with the minimised reference and vep-rs with the chopped reference. A same-length record --minimal trims a base on, with a 0/0 sample: Ensembl VEP keeps the alternate allele's row as HOM; vep-rs reads the sample as HOMREF and annotates the reference allele. A deletion of one copy of a doubled unit, whose chopped alternate equals the minimised reference, with a 1/1 sample: Ensembl VEP reads the sample as HOMREF and annotates the reference allele; vep-rs keeps the deletion's row as HOM."
@@ -35,4 +35,15 @@ ensembl_vep = [
 vep_rs = [
   "21:34716422 | - | ENST00000349499 | frameshift_variant | S1:HOM | 1 | 1",
   "21:34716540 | A | ENST00000349499 | 3_prime_UTR_variant | S1:HOMREF | 0 | 1",
+]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/individuals.rs::CalledGenotype::read",
+    "crates/vep-cli/src/individuals.rs::individual_copy",
+    "crates/vep-cli/src/individuals.rs::zygosity_record",
+]
+tests = [
+    "crates/vep-cli/tests/individuals.rs::individual_zyg_reads_a_homozygous_alternate_sample_of_a_retrimmed_deletion_as_a_carrier",
+    "crates/vep-cli/tests/individuals.rs::individual_zyg_reads_a_minimal_trimmed_same_length_record_as_reference_homozygous",
 ]

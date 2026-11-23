@@ -1,10 +1,10 @@
 entry = "output_format_flag_read_in_its_given_case"
 page = "docs/divergences/output-format-flag-case.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the --output_format option, declared as a string with no documented restriction on its letter case (Bio::EnsEMBL::VEP::Config, output_format); not seen in the measured datasets"
-notes = "Of the two readers the entry names this reproduces the SYMBOL one, offline: the TAIR10 gene AT4G22890 is named `PGR5-LIKE A`, and under `--output_format VCF` Ensembl VEP's `%20` encoding is skipped (OutputFactory.pm:1527 tests the spelling as typed against `vcf`), so the VCF writer turns the space into `_`; vep-rs writes `%20` under every spelling. The GA4GH_VRS reader (:1409) is reached in Ensembl VEP's database mode alone, where `--output_format JSON` writes the object as one JSON string. The BIOTYPE and EXON fields differ as well, the stated `--output_format vcf` coupling, so the compared field is SYMBOL."
+notes = "Of the two readers the entry names this reproduces the SYMBOL one, offline: the TAIR10 gene AT4G22890 is named `PGR5-LIKE A`, and under `--output_format VCF` Ensembl VEP's `%20` encoding is skipped (OutputFactory.pm:1536 tests the spelling as typed against `vcf`), so the VCF writer turns the space into `_`; vep-rs writes `%20` under every spelling. The GA4GH_VRS reader (:1409) is reached in Ensembl VEP's database mode alone, where `--output_format JSON` writes the object as one JSON string. The BIOTYPE and EXON fields differ as well, the stated `--output_format vcf` coupling, so the compared field is SYMBOL."
 
 [input]
 format = "vcf"
@@ -32,3 +32,14 @@ where = { record = "chr4_mnv2_12007993_TC_AG", feature = "AT4G22890.1" }
 [expected]
 ensembl_vep = ["PGR5-LIKE_A"]
 vep_rs = ["PGR5-LIKE%20A"]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/config.rs::Config::from_parsed",
+    "crates/vep-cli/src/config.rs::canonical_output_format",
+]
+tests = [
+    "crates/vep-cli/src/config.rs::tests::output_format_is_lower_cased_validated_and_ensembl_is_vep",
+    "crates/vep-cli/tests/documented_subsets.rs::output_format_given_case_divergence_is_documented",
+    "crates/vep-io/src/output/vcf_output.rs::tests::symbol_whitespace_escapes_percent20",
+]

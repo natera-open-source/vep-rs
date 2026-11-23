@@ -1,0 +1,89 @@
+{
+ "plugin_fixtures": {
+  "generator": "scripts/fixtures/cut_plugin_regions.py",
+  "flank": 5000,
+  "record_flank": 2000,
+  "exon_flank": 50,
+  "gerp_regions": "exons",
+  "tools": {
+   "bgzip": "bgzip (htslib) 1.9"
+  },
+  "files": {
+   "reference.fa.fai": "3cc6750c2f74e2ff036603ea62922f5f60302c49a5a92fb2c4607a81efb298f5",
+   "reference.fa.gz": "7cb2a742fbe7d5e25347523a31ee005ed067496afae614bcba4b451f064d4d60",
+   "reference.fa.gz.fai": "3cc6750c2f74e2ff036603ea62922f5f60302c49a5a92fb2c4607a81efb298f5",
+   "reference.fa.gz.gzi": "e269b9ac5f13150251214a3074d97418f95f4a89670288c6037bf3ac94a15131"
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species salmo_salar --assembly Ssal_v3.1 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "salmo_salar/116_Ssal_v3.1",
+ "fasta": "the two sequences the records and the pruned cache's transcripts sit on (8 and CAJNNT020003670.1) at their full length from Salmo_salar.Ssal_v3.1.dna.primary_assembly.8.fa.gz and Salmo_salar.Ssal_v3.1.dna.nonchromosomal.fa.gz of Ensembl release 116, each file held to the sum of the directory's CHECKSUMS; every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
+ "input": "variants.vcf: 301 records on chromosome 8 (260) and the unplaced scaffold CAJNNT020003670.1 (41); 19 of them name their sequence by a synonym the cache's chr_synonyms.txt lists (ssa08 on 9 and HG993267.1 on 3 for the chromosome, contig3670 on 7 for the scaffold). Every record comes from tools/vep-seeded-variants (generator version 2, seed 1, --records wide --per-category 24, one --sequence for each of the two sequences, every reference allele read from the genome file), its ID naming the category and an ordinal: 24 categories, a start codon, a stop gained and a stop lost under genetic code 1, a missense and a synonymous change on each strand, both splice sites, both untranslated regions, an intron, upstream, downstream and intergenic positions, a frameshift insertion, a frameshift deletion, an in-frame deletion, records on the first and on the last sequence, records named by a synonym, and the first and the last base of each sequence; the category the generator names organelle draws, where two sequences are chosen, on every sequence but the longest, which is the scaffold. 256 records are single-base substitutions, 32 deletions and 13 insertions; none is multi-allelic. The cache names no organelle sequence, no circular sequence and no genetic code other than 1, and its variation files hold no record, so the corpus carries no codon another genetic code reads differently, no record across an origin and no known variant. Two exemplars per consequence-set combination the reference shows, stratified by variant class and strand, six per combination carrying a protein-level term (33 records chosen that way alone), plus the 268 records the manifest's included_records name: the first twelve of every category and each first-base and last-base record",
+ "sha256": {
+  "default.txt": "92320e36a86f40d8d7f40f447799183908622baeb2bd8ef95baaa570cd921351",
+  "tab.txt": "7c35cf00eb4b7beea8072f7b84dc8fc57f6d198ff5d8ec9ba563deceaf5ae89c",
+  "vcf.vcf": "377ff9fcc7fba32e061ec408a57c074548a0976ba47559c0ee14308812e22b9a",
+  "json.jsonl": "108f63ab01a663692c5dadec2729260cf734ad474ce0c2c22e520ee84e9b306a"
+ },
+ "variants_vcf_sha256": "261b8097d8a50ccc5ac5546a46dbe73dd0ac629365e0b72f5f26761f99507420",
+ "flag_sets": {
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species salmo_salar --assembly Ssal_v3.1 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "salmo_salar/116_Ssal_v3.1",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "39859c722b66fcdb2e83797120e3c9eb989afd2593455cf9eab1d291aa16a543",
+    "tab.txt": "ce3eefdd5eb440b19a81209d475c39c4bbb1784a6310a43b13f15fe19d7b4220",
+    "vcf.vcf": "fc62413d8b0fdc8701ea1b76765e8926a90aaddda6d395575b3ffb4bad45dee8",
+    "json.jsonl": "38b4dc69606e2a13f23f582eeafa63187bf86061202f4e51269f1bbd9f444e63"
+   },
+   "flags": [
+    "--everything"
+   ],
+   "expected_dir": "expected_everything"
+  },
+  "hgvs": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species salmo_salar --assembly Ssal_v3.1 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs [--tab|--vcf|--json]",
+   "perl_cache": "salmo_salar/116_Ssal_v3.1",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "b166355b0d3602f56a1b6f3c20488e31682886e1269eb85b12200224a80e4aa7",
+    "tab.txt": "523721bffc0cd098e7154812deed1d2545d32d36a67c6916159ef61bdaca6f21",
+    "vcf.vcf": "c6046bc051968715c16b60d97a94a8a43d38f1ebbace0d53427fc518f90c2b41",
+    "json.jsonl": "15177aadfc52a6f49966d719ab1a0060c217be39ae74290630471a676680b176"
+   },
+   "flags": [
+    "--hgvs"
+   ],
+   "expected_dir": "expected_hgvs"
+  }
+ },
+ "generator": "Ensembl VEP over the record pool under the corpus flags; tools/vep-golden-corpus select --release 116 --assembly Ssal_v3.1 --species salmo_salar --dataset wide=<reference>=<the generated records> --k 2 --seed 1 --max-span 1000000 --max-records 500 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, incomplete_terminal_codon_variant, inframe_deletion, inframe_insertion, missense_variant, protein_altering_variant, start_lost, start_retained_variant, stop_gained, stop_lost, stop_retained_variant, synonymous_variant> --focus-k 6 --include <the named records> --covers species-salmon-ssal-v3 --covers genetic-code-tables --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --flank 5000 --gzip --drop sorted_exons --perl-info <cache>/info.txt --cache-version 116 --variations <converted cache>/variations over the whole cache tools/vep-storable-to-json converts from the Ensembl VEP 116 Ssal_v3.1 cache (the cache carries no SIFT or PolyPhen predictions; its regulatory data stays out of the slice, and the regulatory rows of the everything set's reference are set aside); scripts/fixtures/cut_plugin_regions.py --reference <the two sequences> --flank 5000 --record-flank 2000, run over the records with each sequence synonym written as the cache's name; scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; tools/vep-golden-corpus flag-set (everything, hgvs) and classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp for the hgvs set)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "8": 778,
+   "CAJNNT020003670.1": 73
+  },
+  "distinct_transcripts_per_chromosome": {
+   "8": 737,
+   "CAJNNT020003670.1": 73
+  },
+  "shards": 29,
+  "synonym_lines": 3,
+  "variation_slices": "all_vars.gz with its index under variations/<sequence>/ for the two sequences; the cache's variation files hold no record, so each slice is the empty indexed file"
+ }
+}

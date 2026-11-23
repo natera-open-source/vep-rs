@@ -1,0 +1,11 @@
+{
+   "assembly" : "GRCh38",
+   "bam" : "interim_GRCh38.p10_knownrefseq_alignments.bam",
+   "cache_version" : 84,
+   "contig_order" : [
+      "21"
+   ],
+   "source_type" : "refseq",
+   "source_versions" : {},
+   "species" : "homo_sapiens"
+}

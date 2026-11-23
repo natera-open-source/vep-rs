@@ -1,0 +1,56 @@
+entry = "nearest_start_site_one_base_above"
+page = "docs/divergences/nearest-start-site-one-base-above.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "observed"
+input_class_basis = "2 · 30.7 per million · 3 flag sets, 34 corpora"
+notes = "Two made-up substitutions in the 5' UTR of ENST00000286808 (CLDN17, reverse strand), whose start site is 30166805: one base below the site and two. Ensembl VEP's search above the start passes over the site for the first and names the next site above, that of ENST00000399899 (CLDN8) at 30216097. Then three made-up records at two start sites of SAMSN1 (reverse strand), ENST00000959353's at 14546313 and ENST00000400566's at 14546315: a deletion from the first site to the second, a deletion one base longer and a substitution on the first site. Ensembl VEP's search above the start begins two bases above it, so it names the higher site alone for both deletions. Its first run writes the start-site table into the cache directory, so the run reads a linked copy of the cache's chromosome 21."
+prepare = [
+  "mkdir -p \"$STAGE/perl-cache/homo_sapiens/116_GRCh38\" && cp -al \"$PERL_CACHE/21\" \"$PERL_CACHE/info.txt\" \"$STAGE/perl-cache/homo_sapiens/116_GRCh38/\"",
+]
+
+[input]
+format = "vcf"
+text = """
+21	30166804	one_below_site	A	G	.	.	.
+21	30166803	two_below_site	C	T	.	.	.
+21	14546312	first_base_and_last_base	AACT	A	.	.	.
+21	14546312	first_base_and_inside	AACTG	A	.	.	.
+21	14546313	on_the_site	A	C	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-identifiers/json_cache"
+perl_cache = "{stage}/perl-cache"
+writable = true
+
+[run]
+flags = ["--nearest", "transcript"]
+
+[compare]
+kind = "field"
+field = "NEAREST"
+sorted = false
+where = { record = ["one_below_site", "two_below_site", "first_base_and_last_base", "first_base_and_inside", "on_the_site"], feature = ["ENST00000286808", "ENST00000959353"] }
+
+[expected]
+ensembl_vep = ["ENST00000399899", "ENST00000286808", "ENST00000400566", "ENST00000400566", "ENST00000959353"]
+vep_rs = ["ENST00000286808", "ENST00000286808", "ENST00000400566,ENST00000959353", "ENST00000959353", "ENST00000959353"]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/nearest.rs::nearest_points",
+]
+tests = [
+    "crates/vep-cli/src/nearest.rs::tests::a_site_on_the_first_base_is_the_up_candidate",
+    "crates/vep-cli/src/nearest.rs::tests::a_site_one_base_above_the_start_is_the_up_candidate",
+    "crates/vep-cli/src/nearest.rs::tests::ensembl_veps_candidate_above_the_start_is_kept",
+    "crates/vep-cli/tests/nearest_site_above_start.rs::a_record_one_base_below_a_start_site_names_that_site",
+    "crates/vep-cli/tests/nearest_site_above_start.rs::a_record_whose_first_base_is_a_start_site_names_that_site",
+]
+rules = [
+    "tools/vep-formats-compare/src/nearest.rs::NearestSites::site_above_start_span",
+    "tools/vep-formats-compare/src/nearest.rs::reached",
+]

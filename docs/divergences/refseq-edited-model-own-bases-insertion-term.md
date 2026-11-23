@@ -6,7 +6,7 @@
 
 **What vep-rs does instead.** vep-rs maps the insertion onto the same span and builds the same alternate coding sequence. It reads the reference codons from the model's coding sequence as the cache holds it, over the residues the row prints. The two windows are equal, and vep-rs writes `synonymous_variant` with `IMPACT=LOW` beside the positions Ensembl VEP prints.
 
-**Where it is in Ensembl VEP's source** (`ensembl-variation` and `ensembl` at release/116, `ensembl-vep` at release/116.2, the modules the Ensembl VEP 116.2 image holds):
+**Where it is in Ensembl VEP's source** (`ensembl-variation` and `ensembl` at release/116, `ensembl-vep` at release/116.3, the modules the Ensembl VEP 116.3 image holds):
 
 - `Bio/EnsEMBL/Mapper.pm`, lines 485-580, `map_insert`: an insertion is mapped through the two bases beside its point (lines 489-491). Where they lie in two mapper pairs (line 504), the first mapped coordinate is moved to start one past the first base (lines 524-528) and the last to end one before the second (lines 538-542).
 - `Bio/EnsEMBL/Variation/BaseTranscriptVariation.pm`, line 513, `cds_coords`, and lines 263-264, `cds_start`: the row's CDS span runs from the first coordinate's start to the last coordinate's end. Where the two bases are a model's added bases apart, the span is those bases.
@@ -17,14 +17,14 @@
 - `Bio/EnsEMBL/Variation/Utils/Constants.pm`, lines 886-890: the `include` rule of `missense_variant` asks for `increase_length => 0`, so the predicate is never run on an insertion. Lines 1051-1053: the rule of `synonymous_variant` asks for `coding => 1` alone, so that predicate is run. Line 1046 holds its description: "A sequence variant where there is no resulting change to the encoded amino acid".
 - `Bio/EnsEMBL/Variation/Utils/VariationEffect.pm`, three more predicates that are run: `frameshift` (lines 1556-1564) takes the allele's length less the CDS span's, modulo three. `inframe_insertion` (line 1111) needs alternate codons longer than the reference codons. `protein_altering_variant` (line 384) refuses two peptides of one length.
 - `Bio/EnsEMBL/Variation/BaseVariationFeatureOverlapAllele.pm`, lines 321-325, `_skip_oc`: the `include` rules decide which predicates are run. Line 285: with no predicate true, `$DEFAULT_OVERLAP_CONSEQUENCE` is assigned. `Bio/EnsEMBL/Variation/Utils/Constants.pm`, lines 636-649: the default is `intergenic_variant`, with `IMPACT` `MODIFIER`.
-- `Bio/EnsEMBL/Variation/TranscriptVariationAllele.pm`, lines 831-836: an alternate allele equal to the bases of the model's first `_rna_edit` attribute sets `invalid_alleles`. `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 1713 and 1717-1718: the comment reads "the ref and alt alleles are the same", and the flag's one effect is a warning, written unless `--use_given_ref` is passed.
+- `Bio/EnsEMBL/Variation/TranscriptVariationAllele.pm`, lines 831-836: an alternate allele equal to the bases of the model's first `_rna_edit` attribute sets `invalid_alleles`. `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 1722 and 1726-1727: the comment reads "the ref and alt alleles are the same", and the flag's one effect is a warning, written unless `--use_given_ref` is passed.
 - The write of lines 872-874 is also behind [`refseq_edited_model_deleted_span_codons`](refseq-edited-model-deleted-span-codons.md), where a deletion's reference allele is longer than its CDS span.
 
 **What correcting it would change.** A write made only when the reference allele has the span's length would leave the model's sequence whole on these rows. The reference window would be the model's own, equal to the alternate's, and `synonymous_variant` would accept. Each such row would carry that term and `IMPACT=LOW`, as vep-rs writes them, and its `Amino_acids` would print the unchanged residues once. No position column changes: both engines print the same three.
 
 **The class it produces.** `refseq_edited_model_own_bases_insertion_term`: a `Transcript` row of an insertion whose `Consequence` is `intergenic_variant` in Ensembl VEP and `synonymous_variant` in vep-rs, with `IMPACT` `MODIFIER` against `LOW` and the same cDNA, CDS and protein positions in both. No comparison tool sets a row of the shape aside: a disagreement of this shape is reported as a difference and charged to vep-rs. The concordance figures are measured on the Ensembl caches, whose models hold no such bases, so they hold no row of the shape.
 
-**How often the shape occurs.** Tier 3, see [Intended divergences from Ensembl VEP](../intended-divergences.md): the shape is an insertion written exactly where a RefSeq model holds bases the genome lacks, inside its coding sequence, whose inserted bases are the model's own bases there. The two Ensembl caches the concordance datasets run on hold 0 `_rna_edit` attributes and 0 such places, in 727,139 transcript entries on GRCh38 and 253,803 on GRCh37, an entry being a transcript counted once for each region file of the cache that stores it. The concordance figures are measured without `--refseq` or `--merged`, so they hold 0 rows of the shape.
+**How often the shape occurs.** Tier 2, see [Intended divergences from Ensembl VEP](../intended-divergences.md): the shape is an insertion written exactly where a RefSeq model holds bases the genome lacks, inside its coding sequence, whose inserted bases are the model's own bases there. The two Ensembl caches the concordance datasets run on hold 0 `_rna_edit` attributes and 0 such places, in 727,139 transcript entries on GRCh38 and 253,803 on GRCh37, an entry being a transcript counted once for each region file of the cache that stores it. The concordance figures are measured without `--refseq` or `--merged`, so they hold 0 rows of the shape.
 
 A set of 78 hand-written records, run with `--refseq --hgvs` on the RefSeq GRCh38 cache of release 116, holds a record of the shape at five places inside coding sequences. They give 21 rows of the shape: 15 at `1:16567177`, 3 at `7:94664512` and 1 each at `2:73385942`, `4:3074935` and `19:14090084`. Of the 21, 16 are on reverse-strand models and 5 on forward-strand ones. On all 21 both engines print the span of the model's own bases as `CDS_position`, the inserted bases equal the cached coding sequence over it, and no residue changes. The 15 models at `1:16567177` hold their own bases at `1:16567174` too, three bases apart, and this set's records stand at `1:16567177`.
 
@@ -36,7 +36,7 @@ Tuple, pair, set aside, charged and the other scoring terms are defined in [How 
 
 ## 1. The six bases `NM_002111.8` holds and the genome lacks, inserted where the model holds them
 
-**In short.** `4 3074935 own_bases_4_3074935 A AGCAGCA` on GRCh38 inserts six bases between 4:3074935 and 4:3074936. The forward-strand RefSeq model `NM_002111.8` holds six bases at that point that the genome lacks, its coding positions 111 to 116, and the record's six bases are those six. Both engines print `CDS_position` 111-116 and `Protein_position` 37-39 on the model's row, with the same alternate codons. Ensembl VEP 116.2 writes `intergenic_variant` and `IMPACT=MODIFIER` there; vep-rs writes `synonymous_variant` and `IMPACT=LOW`.
+**In short.** `4 3074935 own_bases_4_3074935 A AGCAGCA` on GRCh38 inserts six bases between 4:3074935 and 4:3074936. The forward-strand RefSeq model `NM_002111.8` holds six bases at that point that the genome lacks, its coding positions 111 to 116, and the record's six bases are those six. Both engines print `CDS_position` 111-116 and `Protein_position` 37-39 on the model's row, with the same alternate codons. Ensembl VEP 116.3 writes `intergenic_variant` and `IMPACT=MODIFIER` there; vep-rs writes `synonymous_variant` and `IMPACT=LOW`.
 
 ### 1.1 What a reader needs to know first
 
@@ -69,7 +69,7 @@ Both engines run `--refseq --use_given_ref`. The second flag lets a run read an 
 
 ### 1.3 What each engine writes
 
-The model's row in the default format. Ensembl VEP 116.2:
+The model's row in the default format. Ensembl VEP 116.3:
 
 ```
 own_bases_4_3074935	4:3074935-3074936	GCAGCA	3064	NM_002111.8	Transcript	intergenic_variant	256-261	111-116	37-39	QQP/QQQ	caacagccg/caGCAGCAa	-	IMPACT=MODIFIER;STRAND=1;BAM_EDIT=OK
@@ -83,7 +83,7 @@ own_bases_4_3074935	4:3074935-3074936	GCAGCA	3064	NM_002111.8	Transcript	synonym
 
 The rows agree on the three position columns and on the alternate half of `Codons`. They differ in four places:
 
-| Part of the row | Ensembl VEP 116.2 | vep-rs |
+| Part of the row | Ensembl VEP 116.3 | vep-rs |
 | --- | --- | --- |
 | `Consequence` | `intergenic_variant` | `synonymous_variant` |
 | `IMPACT` | `MODIFIER` | `LOW` |
@@ -138,13 +138,13 @@ vep -i record.vcf -o out.txt --offline \
 grep NM_002111.8 out.txt
 ```
 
-`<cache>` is the conversion of Ensembl VEP's RefSeq GRCh38 cache of release 116 ([Cache conversion](../cache-conversion.md)). vep-rs writes `synonymous_variant` on the model's row. Ensembl VEP 116.2 takes the same flags with the cache options of [Reproducing these examples](reproducing.md) and its RefSeq cache, and writes `intergenic_variant`. With the second record of 1.3 and `grep NM_015120.4`, both write `synonymous_variant`.
+`<cache>` is the conversion of Ensembl VEP's RefSeq GRCh38 cache of release 116 ([Cache conversion](../cache-conversion.md)). vep-rs writes `synonymous_variant` on the model's row. Ensembl VEP 116.3 takes the same flags with the cache options of [Reproducing these examples](reproducing.md) and its RefSeq cache, and writes `intergenic_variant`. With the second record of 1.3 and `grep NM_015120.4`, both write `synonymous_variant`.
 
-No committed corpus holds a model with such bases inside its coding sequence. The entry's reproduction, `scripts/divergences/reproductions/refseq_edited_model_own_bases_insertion_term.toml`, therefore copies the two region files of Ensembl VEP's cache that hold the two models, `4/3000001-4000000` and `2/73000001-74000000`. It converts them in the Ensembl VEP image and runs both records on both engines. It holds four rows to their recorded values: the two models' rows and the rows of the two models of the same genes without the bases.
+The committed caches of `AaegL5-aedes`, `AgamP4-anopheles`, `GRCm39-mouse-merged` and `GRCm39-mouse-refseq` hold 6, 4, 3 and 3 models with such bases inside their coding sequence, the 16 the tier counts. No committed GRCh38 corpus holds one. The entry's reproduction, `scripts/divergences/reproductions/refseq_edited_model_own_bases_insertion_term.toml`, therefore copies the two region files of Ensembl VEP's cache that hold the two models, `4/3000001-4000000` and `2/73000001-74000000`. It converts them with `tools/vep-storable-to-json` and runs both records on both engines. It holds four rows to their recorded values: the two models' rows and the rows of the two models of the same genes without the bases.
 
 ### 1.7 How the comparator treats this class
 
-Nothing is set aside. The format comparator (`scripts/concordance/compare_vep_formats.py`) has no class of this shape, and no committed corpus holds a row of it. A disagreement of the shape is reported as a difference in `Consequence` and `IMPACT` and charged to vep-rs.
+Nothing is set aside. The format comparator (`tools/vep-formats-compare`) has no class of this shape, and no committed corpus holds a row of it. A disagreement of the shape is reported as a difference in `Consequence` and `IMPACT` and charged to vep-rs.
 
 Other columns of such a row differ as well and stay differences: `Amino_acids` and the reference half of `Codons`, which come from the same write and are another entry's subject, as 1.3 says, and, under `--hgvs`, the `HGVSp`. On the row of 1.3 Ensembl VEP's `HGVSp` names a change of residue 39, and vep-rs's says that the three residues from 37 are unchanged.
 

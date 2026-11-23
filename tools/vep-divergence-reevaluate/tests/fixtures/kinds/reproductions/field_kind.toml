@@ -1,0 +1,34 @@
+entry = "field_kind"
+page = "docs/intended-divergences.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under VCF 4.2; not seen in the measured datasets"
+notes = "A test fixture of one compare kind."
+prepare = [
+  'printf "%s|%s|%s|%s|%s|%s\n" "$IMAGE" "$(basename "$VEP")" "$(basename "$VEP_CACHE_BUILDER")" "$CORPUS" "$JSON_CACHE" "$PERL_CACHE" > "$STAGE/env.txt"',
+  'test "$PWD" = "$STAGE" && test -d "$REPO/scripts/divergences" && echo made > made.txt',
+]
+
+[input]
+text = """
+21	100	rec1	G	A	.	.	.
+21	300	rec2	G	C	.	.	.
+"""
+
+[cache]
+assembly = "GRCh38"
+json_cache = "{stage}/json_cache"
+
+[run]
+flags = ["--hgvs"]
+
+[compare]
+kind = "field"
+field = "HGVSp"
+with_key = true
+where = { record = "rec1", feature = ["ENST1", "ENST9"], consequence = "splice_region_variant,missense_variant", pattern = 'PICK=1$' }
+
+[expected]
+ensembl_vep = "ENST1=ENSP1:p.Leu4Pro"
+vep_rs = "ENST1=ENSP1:p.Leu4%3D"

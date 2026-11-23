@@ -166,7 +166,7 @@ fn regulatory_rows_and_extras_reach_every_text_format() {
 /// its four `NRF1` motifs on both strands, and `21:5090724 A>T` inside two
 /// motifs of different matrices and no regulatory feature. Every row is held
 /// whole, in the default, tab, VCF and JSON formats, to the row Ensembl VEP
-/// 116.2 writes for the same record on the same cache, `HIGH_INF_POS` and
+/// 116.3 writes for the same record on the same cache, `HIGH_INF_POS` and
 /// `MOTIF_SCORE_CHANGE` included (`Y`, `-0.094`, `Y`, `-0.094`, `N`, `-0.070`,
 /// `N`, `-0.082` on the NRF1 rows; `Y`, `-0.089` and `N`, `0.039` on the two
 /// others).
@@ -322,7 +322,7 @@ fn regulatory_rows_are_byte_exact_in_every_format() {
 }
 
 /// Multi-base alleles over the motifs of `fixtures/regulatory/chr21-slice.json`,
-/// beside the rows Ensembl VEP 116.2 writes for the same records on the same
+/// beside the rows Ensembl VEP 116.3 writes for the same records on the same
 /// cache. On a forward-strand motif the two engines agree: `21:5090720 GG>AA`
 /// scores `-0.108` on ENSM00000574814, `21:5090723 CA>TT` `-0.111` on it, and
 /// `21:46699250 CG>TA` `-0.149` on ENSM00000588224. On a reverse-strand motif
@@ -528,7 +528,7 @@ fn reverse_strand_transcript_hgvs_scores_the_genomic_change() {
 #[cfg(feature = "parquet")]
 #[test]
 fn regulatory_rows_round_trip_through_parquet() {
-    use vep_io::output::parquet::{canonical_tab_text, column_type, tab_rows};
+    use vep_io::output::parquet::{canonical_tab_text, tab_column_types, tab_rows};
     let dir = tempfile::tempdir().unwrap();
     let cache = cache(dir.path());
     fs::write(
@@ -546,28 +546,6 @@ fn regulatory_rows_round_trip_through_parquet() {
         .trim_start_matches('#')
         .split('\t')
         .collect();
-    let mut expected: Vec<String> = tab
-        .lines()
-        .filter(|line| !line.starts_with('#'))
-        .map(|line| {
-            line.split('\t')
-                .zip(&columns)
-                .map(|(cell, column)| canonical_tab_text(column_type(column), cell))
-                .collect::<Vec<_>>()
-                .join("\t")
-        })
-        .collect();
-    expected.sort_unstable();
-    assert!(
-        expected.iter().any(|row| row.contains("\tTF_A,TF_B")),
-        "the forward motif row carries its factors:\n{tab}"
-    );
-    assert!(
-        expected
-            .iter()
-            .any(|row| row.contains("ENSM_REVERSE") && row.ends_with('\t')),
-        "the factorless motif row ends in the empty factor cell:\n{tab}"
-    );
     let parquet = dir.path().join("out.parquet");
     let result = common::isolated_vep(dir.path())
         .args([
@@ -595,6 +573,37 @@ fn regulatory_rows_round_trip_through_parquet() {
         "parquet: {}",
         String::from_utf8_lossy(&result.stderr)
     );
+    // Each tab cell in the form of the type the part stores its column under.
+    let stored = tab_column_types(&parquet).unwrap();
+    assert_eq!(
+        stored
+            .iter()
+            .map(|(name, _)| name.as_str())
+            .collect::<Vec<_>>(),
+        columns
+    );
+    let mut expected: Vec<String> = tab
+        .lines()
+        .filter(|line| !line.starts_with('#'))
+        .map(|line| {
+            line.split('\t')
+                .zip(&stored)
+                .map(|(cell, (_, column_type))| canonical_tab_text(*column_type, cell))
+                .collect::<Vec<_>>()
+                .join("\t")
+        })
+        .collect();
+    expected.sort_unstable();
+    assert!(
+        expected.iter().any(|row| row.contains("\tTF_A,TF_B")),
+        "the forward motif row carries its factors:\n{tab}"
+    );
+    assert!(
+        expected
+            .iter()
+            .any(|row| row.contains("ENSM_REVERSE") && row.ends_with('\t')),
+        "the factorless motif row ends in the empty factor cell:\n{tab}"
+    );
     let mut actual = tab_rows(&parquet).unwrap();
     actual.sort_unstable();
     assert_eq!(actual, expected, "parquet round trip");
@@ -602,13 +611,13 @@ fn regulatory_rows_round_trip_through_parquet() {
 
 /// Every structural class and the sequence-variant edges over the hand-built
 /// fixture (enhancer 100-120, motifs 105-108 and 115-118), as Ensembl VEP
-/// 116.2 writes them: `<DEL>` and `<CN0>` covering a feature are its ablation
+/// 116.3 writes them: `<DEL>` and `<CN0>` covering a feature are its ablation
 /// (`deletion`, `copy_number_loss`: Utils/VariationEffect.pm:192-216), `<DUP>`,
 /// `<CN2>`, `<DUP:TANDEM>` and `<CNV:TR>` its amplification (`copy_number_gain`,
 /// :246-256), `<CNV>` and `<INV>` the overlap term alone (a VCF `<CNV>` has no
 /// supporting variants), each with `OverlapBP` and `OverlapPC`
-/// (OutputFactory.pm:2087-2095) and none of `BIOTYPE`, `STRAND` and the motif
-/// fields (:2069-2102 writes no such key); `--overlaps` adds the two as columns
+/// (OutputFactory.pm:2096-2104) and none of `BIOTYPE`, `STRAND` and the motif
+/// fields (:2078-2111 writes no such key); `--overlaps` adds the two as columns
 /// to the tab and VCF outputs, `-` and empty on the intergenic row. A sequence
 /// deletion covering the features is their ablation with the motif fields and
 /// no `MOTIF_POS` (its start lies before the matrix); a multi-allelic SNV writes
@@ -1048,7 +1057,7 @@ fn pick_family_flags_through_the_cli_keep_regulatory_rows() {
 /// keeps its regulatory and motif rows at the input position, while under
 /// `--shift_genomic 1` the intergenic row prints the shifted location, as
 /// `IntergenicVariationAllele_to_output_hash` shifts it
-/// (OutputFactory.pm:1992-1998) and the regulatory factories do not.
+/// (OutputFactory.pm:2001-2007) and the regulatory factories do not.
 #[test]
 fn unshifted_span_is_tested_under_shift_3prime() {
     let dir = tempfile::tempdir().unwrap();
@@ -1645,13 +1654,9 @@ fn embedding_batches_load_regulatory_features_and_apply_summary_filters() {
         .iter()
         .any(|r| r.motif.as_deref().is_some_and(|m| m.pos == Some(4))));
     let mut summary = variants.clone();
-    vep_cli::apply_to_batch(
-        &mut summary,
-        &vep_cli::FilterConfig {
-            summary: true,
-            ..Default::default()
-        },
-    );
+    let mut summary_alone = vep_cli::FilterConfig::default();
+    summary_alone.summary = true;
+    vep_cli::apply_to_batch(&mut summary, &summary_alone);
     assert_eq!(
         summary[0].summary_terms.as_deref(),
         Some(
@@ -1663,29 +1668,15 @@ fn embedding_batches_load_regulatory_features_and_apply_summary_filters() {
         )
     );
     let mut coding = variants.clone();
-    vep_cli::apply_to_batch(
-        &mut coding,
-        &vep_cli::FilterConfig {
-            row_filters: vep_cli::RowFilters {
-                coding_only: true,
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-    );
+    let mut coding_only = vep_cli::FilterConfig::default();
+    coding_only.row_filters.coding_only = true;
+    vep_cli::apply_to_batch(&mut coding, &coding_only);
     assert!(coding
         .iter()
         .all(|v| v.transcript_consequences.is_empty() && v.most_severe_consequence.is_none()));
-    vep_cli::apply_to_batch(
-        &mut variants,
-        &vep_cli::FilterConfig {
-            row_filters: vep_cli::RowFilters {
-                no_intergenic: true,
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-    );
+    let mut no_intergenic = vep_cli::FilterConfig::default();
+    no_intergenic.row_filters.no_intergenic = true;
+    vep_cli::apply_to_batch(&mut variants, &no_intergenic);
     assert!(variants
         .iter()
         .all(|v| v.transcript_consequences.is_empty() && v.most_severe_consequence.is_none()));
@@ -1848,7 +1839,7 @@ fn regulatory_gff_replaces_the_cache_through_the_cli() {
         [("ENSR00001793149", "EMAR"), ("ENSR21_85ZF5", "enhancer")]
     );
     // The structural deletion's rows in the default format: feature, type, terms
-    // and the Extra column, Ensembl VEP 116.2's own rows and order over these
+    // and the Extra column, Ensembl VEP 116.3's own rows and order over these
     // files (the `file=` record before the `emars=` record of the same span,
     // then the motifs in file order).
     let default = annotate_with_args(
@@ -1957,8 +1948,8 @@ fn regulatory_gff_replaces_the_cache_through_the_cli() {
     // `--cell_type` with the GFF files: no name is checked against the cache
     // (HUVEC is in no list), the source's warning is written once, and every
     // regulatory and motif row carries CELL_TYPE as the empty list, which
-    // Ensembl VEP sets on each such row under the flag (OutputFactory.pm:1879,
-    // 1927): an empty tab cell where every other row prints `-` (Tab.pm:128),
+    // Ensembl VEP sets on each such row under the flag (OutputFactory.pm:1888,
+    // 1936): an empty tab cell where every other row prints `-` (Tab.pm:128),
     // `CELL_TYPE=` in the default format's Extra column and `[]` in JSON.
     let is_feature_row = |line: &str| {
         matches!(
@@ -2105,11 +2096,11 @@ fn regulatory_gff_refusals_exit_with_their_message() {
         ),
         (
             format!("emars={}", missing.display()),
-            format!("ERROR: [cli] --regulatory_gff emars file {} not found", missing.display()),
+            format!("ERROR: [cli] --regulatory_gff emars={} not found", missing.display()),
         ),
         (
             unindexed.display().to_string(),
-            format!("ERROR: [cli] --regulatory_gff file file {} has no tabix index", unindexed.display()),
+            format!("ERROR: [cli] --regulatory_gff file={} has no tabix index", unindexed.display()),
         ),
     ] {
         let output = dir.path().join("out.txt");
@@ -2128,7 +2119,7 @@ fn regulatory_gff_refusals_exit_with_their_message() {
     }
 }
 
-/// A refused regulatory source leaves no file behind. Ensembl VEP 116.2 builds
+/// A refused regulatory source leaves no file behind. Ensembl VEP 116.3 builds
 /// every annotation source in `init` (Runner.pm:128): a `--regulatory_gff` file
 /// that is not there throws at AnnotationSourceAdaptor.pm:266, a `--cell_type`
 /// the cache lacks at AnnotationType/RegFeat.pm:87-93 (from Cache/RegFeat.pm:117),
@@ -2188,14 +2179,14 @@ fn refused_regulatory_source_leaves_no_output_file_or_report() {
         (
             ["--regulatory_gff", missing_value.as_str()],
             format!(
-                "ERROR: [cli] --regulatory_gff file file {} not found",
+                "ERROR: [cli] --regulatory_gff file={} not found",
                 missing.display()
             ),
         ),
         (
             ["--regulatory_gff", unindexed.to_str().unwrap()],
             format!(
-                "ERROR: [cli] --regulatory_gff file file {} has no tabix index",
+                "ERROR: [cli] --regulatory_gff file={} has no tabix index",
                 unindexed.display()
             ),
         ),
@@ -2235,4 +2226,121 @@ fn refused_regulatory_source_leaves_no_output_file_or_report() {
     );
     assert!(lines[first_row].contains("\tRegulatoryFeature\t"), "{text}");
     assert!(fs::metadata(&report).unwrap().len() > 0);
+}
+
+/// A `--regulatory_gff` record the reader refuses leaves no output or report,
+/// whichever chromosome holds it: every record of the files meets the reader's
+/// refusals before the statistics report and the output are created. The file
+/// holds a sound enhancer on chromosome 21, which the input names, and on
+/// chromosome 22, which it does not, a record without its attributes column,
+/// which the index admits. The run exits 1 with the reader's refusal on
+/// standard error, no output file and no report; the same run without that
+/// record writes the enhancer's row and the report.
+#[test]
+fn a_refused_regulatory_gff_record_leaves_no_output_file_or_report() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("in.vcf"),
+        "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n21\t106\tr\tC\tG\t.\t.\t.\n",
+    )
+    .unwrap();
+    let cache = cache(dir.path());
+    let output = dir.path().join("out.txt");
+    let report = dir.path().join("out.txt_summary.html");
+    let run = |gff: &Path| {
+        common::isolated_vep(dir.path())
+            .args([
+                "--json_cache",
+                cache.to_str().unwrap(),
+                "--assembly",
+                "GRCh38",
+                "--no_fasta",
+                "--force_overwrite",
+                "--quiet",
+            ])
+            .arg("--regulatory_gff")
+            .arg(format!("file={}", gff.display()))
+            .arg("--input_file")
+            .arg(dir.path().join("in.vcf"))
+            .arg("--output_file")
+            .arg(&output)
+            .output()
+            .unwrap()
+    };
+    let sound = "21\tEnsembl\tenhancer\t100\t120\t.\t.\t.\tID=ENSR_SOUND";
+    let refused = "22\tEnsembl\tenhancer\t100\t120\t.\t.\t.";
+
+    let with_refused = common::indexed_gff(dir.path(), "refused.gff3.gz", &[sound, refused]);
+    let result = run(&with_refused);
+    assert_eq!(result.status.code(), Some(1));
+    assert_eq!(
+        String::from_utf8_lossy(&result.stderr).trim_end(),
+        format!(
+            "ERROR: [cache] {}: a record of chromosome 22 has no attributes column: {refused}",
+            with_refused.display()
+        )
+    );
+    assert!(!output.exists(), "the refusal left {}", output.display());
+    assert!(!report.exists(), "the refusal left {}", report.display());
+
+    let sound_alone = common::indexed_gff(dir.path(), "sound.gff3.gz", &[sound]);
+    let result = run(&sound_alone);
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let text = fs::read_to_string(&output).unwrap();
+    let rows: Vec<&str> = text.lines().filter(|line| !line.starts_with('#')).collect();
+    assert!(
+        rows.iter()
+            .any(|row| row.contains("\tENSR_SOUND\tRegulatoryFeature\t")),
+        "{text}"
+    );
+    assert!(fs::metadata(&report).unwrap().len() > 0);
+}
+
+/// A type no regulatory file yields draws its warning when its chromosome is
+/// first read, and the check every record meets before the output is created
+/// draws none: a run whose file holds such a line on chromosome 22, which the
+/// input does not name, leaves the warnings file of the run without the line.
+/// The same file under an input record on chromosome 22 draws the warning.
+#[test]
+fn a_regulatory_gff_type_on_an_unread_chromosome_draws_no_warning() {
+    let dir = tempfile::tempdir().unwrap();
+    let cache = cache(dir.path());
+    let enhancer = "21\tEnsembl\tenhancer\t100\t120\t.\t.\t.\tID=ENSR_SOUND";
+    let exon = "22\tEnsembl\texon\t100\t120\t.\t.\t.\tID=EXON";
+    let gff = dir.path().join("features.gff3.gz");
+    let warnings_of = |records: &[&str], chromosome: &str| -> String {
+        fs::write(
+            dir.path().join("in.vcf"),
+            format!(
+                "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n\
+                 {chromosome}\t106\tr\tC\tG\t.\t.\t.\n"
+            ),
+        )
+        .unwrap();
+        common::indexed_gff(dir.path(), "features.gff3.gz", records);
+        let _ = fs::remove_file(dir.path().join("out.tab_warnings.txt"));
+        let value = format!("file={}", gff.display());
+        let (_, warnings, _) = tab_rows(dir.path(), &cache, &["--regulatory_gff", &value]);
+        warnings
+    };
+    let type_warning = format!(
+        "WARNING: Ignoring 'exon' feature type from {}; not a supported regulatory feature type",
+        gff.display()
+    );
+
+    let with_line = warnings_of(&[enhancer, exon], "21");
+    let without_line = warnings_of(&[enhancer], "21");
+    assert_eq!(with_line, without_line);
+    assert!(!with_line.contains(&type_warning), "{with_line}");
+
+    let read = warnings_of(&[enhancer, exon], "22");
+    assert_eq!(
+        read.lines().filter(|line| *line == type_warning).count(),
+        1,
+        "{read}"
+    );
 }

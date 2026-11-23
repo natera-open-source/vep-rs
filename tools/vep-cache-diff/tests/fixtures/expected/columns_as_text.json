@@ -1,0 +1,41 @@
+{
+  "baseline_dir": "{{FIXTURES}}/caches/columns_as_text/baseline",
+  "builder_dir": "{{FIXTURES}}/caches/columns_as_text/builder",
+  "transcripts": {
+    "total_baseline": 0,
+    "total_builder": 0,
+    "shared": 0,
+    "only_baseline": 0,
+    "only_builder": 0,
+    "matched": 0,
+    "differed": 0,
+    "field_mismatches": {},
+    "match_rate": 0.0,
+    "regions_with_diffs": []
+  },
+  "variations": {
+    "total_baseline": 0,
+    "total_builder": 0,
+    "shared": 0,
+    "only_baseline": 0,
+    "only_builder": 0,
+    "matched": 0,
+    "differed": 0,
+    "field_mismatches": {},
+    "frequency_columns_compared": [
+      "b",
+      "c"
+    ],
+    "match_rate": 0.0
+  },
+  "info_json": {
+    "matches": false,
+    "diffs": [
+      {
+        "field": "variation_cols",
+        "baseline": "abc",
+        "builder": "{'b': 4, 'c': 2, 'd': 3}"
+      }
+    ]
+  }
+}

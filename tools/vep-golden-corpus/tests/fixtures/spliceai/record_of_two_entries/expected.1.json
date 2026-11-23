@@ -1,0 +1,64 @@
+{
+ "records": [
+  {
+   "dataset": "pool",
+   "vcf": "21\t5000\tdel_two_genes\tGCA\tG\t.\t.\t.",
+   "combinations": []
+  }
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {},
+ "fields_compared": [
+  "SpliceAI_pred",
+  "SpliceAI_cutoff"
+ ],
+ "field_divergences": [
+  {
+   "location": "21:5001-5002",
+   "allele": "-",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "intron_variant",
+   "field": "SpliceAI_pred",
+   "vep": "GENEA|0.15|0.08|0.06|0.17|-6|-41|-17|-9,G|GENEB|0.00|1.00|0.10|0.05|-25|-23|37|17",
+   "vep_rs": "GENEA|0.15|0.08|0.06|0.17|-6|-41|-17|-9",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:5001-5002",
+   "allele": "-",
+   "feature": "ENST2",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "intron_variant",
+   "field": "SpliceAI_pred",
+   "vep": "-",
+   "vep_rs": "GENEB|0.00|1.00|0.10|0.05|-25|-23|37|17",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:5001-5002",
+   "allele": "-",
+   "feature": "ENST2",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "intron_variant",
+   "field": "SpliceAI_cutoff",
+   "vep": "-",
+   "vep_rs": "PASS",
+   "expected_divergence": "unexplained_residual"
+  }
+ ],
+ "field_divergence_summary": {
+  "unexplained_residual": 3
+ }
+}

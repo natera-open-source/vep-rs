@@ -1,0 +1,5 @@
+species	homo_sapiens
+assembly	GRCh38
+sift	b
+polyphen	b
+bam	interim_GRCh38.p10_knownrefseq_alignments.bam

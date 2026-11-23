@@ -1,0 +1,68 @@
+entry = "start_codon_kept_without_five_prime_utr"
+page = "docs/divergences/start-codon-kept-without-five-prime-utr.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "observed"
+input_class_basis = "1 · 137,713 per million · no flag needed"
+notes = "Four records written for the entry at the start codon two forward-strand transcripts of MRAP share, 21:32298972-32298974 on GRCh38. ENST00000303645 holds 117 bases of 5' UTR before the codon, which is its cDNA 118-120; ENST00000339944 begins on the codon, which is its cDNA 1-3. Two records write bases between the codon's first and second bases, four bases and three, and the inserted bases open with the codon's last two bases, so the codon stands whole before them. Two remove bases from the codon's third base on, one base and nine, and the base after the removed ones repeats that third base. With each record applied the coding sequence of both transcripts opens ATG. On ENST00000303645 Ensembl VEP reads the start as kept (VariationEffect.pm:1065) and writes start_retained_variant for all four, and for the nine-base deletion start_lost beside it by its peptide test (:878-882), the pair of start terms of the entry start_cooccurrence_swap, under which vep-rs writes start_retained_variant alone. On ENST00000339944 Ensembl VEP makes no kept-start test, which stands inside a condition that asks for a 5' UTR (:1061): a deletion reads as an altered start (:1069) and an insertion by the comparison of :1071. Its row carries no start_retained_variant, and start_lost on the two frameshifts (:870) and on the nine-base deletion (:878-882), with the HGVSp of a lost start, which holds a ?, on those three. vep-rs makes the test at the transcript's first base and writes start_retained_variant and no start_lost on all four rows, the row it writes on ENST00000303645, with the IMPACT of its terms, MODERATE where Ensembl VEP's start_lost gives HIGH on the nine-base deletion, and the HGVSp of the change itself. The four lines run under --hgvs on the committed cache and reference of the corpus GRCh38-plugin-loftee-fixture."
+
+[input]
+format = "vcf"
+text = """
+21	32298972	frameshift_insertion_inside_the_codon	A	ATGCC	.	.	.
+21	32298972	whole_codon_insertion_inside_the_codon	A	ATGC	.	.	.
+21	32298973	third_base_removed_before_its_repeat	TG	T	.	.	.
+21	32298973	three_codons_removed_from_the_third_base	TGGCCAACGG	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-loftee-fixture/json_cache"
+fasta = "tests/golden/116/GRCh38-plugin-loftee-fixture/reference.fa.gz"
+
+[run]
+flags = ["--hgvs"]
+
+[compare]
+kind = "rows"
+where = { record = ["frameshift_insertion_inside_the_codon", "whole_codon_insertion_inside_the_codon", "third_base_removed_before_its_repeat", "three_codons_removed_from_the_third_base"], feature = ["ENST00000303645", "ENST00000339944"] }
+columns = ["Uploaded_variation", "Feature", "Consequence", "cDNA_position", "CDS_position", "IMPACT", "HGVSp"]
+
+[expected]
+ensembl_vep = [
+    "frameshift_insertion_inside_the_codon | ENST00000303645 | frameshift_variant,start_retained_variant | 118-119 | 1-2 | HIGH | ENSP00000306697.5:p.Ala2ProfsTer15",
+    "frameshift_insertion_inside_the_codon | ENST00000339944 | frameshift_variant,start_lost | 1-2 | 1-2 | HIGH | ENSP00000343661.4:p.Ala2_?1",
+    "whole_codon_insertion_inside_the_codon | ENST00000303645 | inframe_insertion,start_retained_variant | 118-119 | 1-2 | MODERATE | ENSP00000306697.5:p.Met1_Ala2insLeu",
+    "whole_codon_insertion_inside_the_codon | ENST00000339944 | inframe_insertion | 1-2 | 1-2 | MODERATE | ENSP00000343661.4:p.Met1_Ala2insLeu",
+    "third_base_removed_before_its_repeat | ENST00000303645 | frameshift_variant,start_retained_variant | 120 | 3 | HIGH | ENSP00000306697.5:p.Ala2ProfsTer30",
+    "third_base_removed_before_its_repeat | ENST00000339944 | frameshift_variant,start_lost | 3 | 3 | HIGH | ENSP00000343661.4:p.Ala2?",
+    "three_codons_removed_from_the_third_base | ENST00000303645 | start_lost,inframe_deletion,start_retained_variant | 120-128 | 3-11 | HIGH | ENSP00000306697.5:p.AlaAsnGly2_?4",
+    "three_codons_removed_from_the_third_base | ENST00000339944 | start_lost,inframe_deletion | 3-11 | 3-11 | HIGH | ENSP00000343661.4:p.AlaAsnGly2_?4",
+]
+vep_rs = [
+    "frameshift_insertion_inside_the_codon | ENST00000303645 | frameshift_variant,start_retained_variant | 118-119 | 1-2 | HIGH | ENSP00000306697.5:p.Ala2ProfsTer15",
+    "frameshift_insertion_inside_the_codon | ENST00000339944 | frameshift_variant,start_retained_variant | 1-2 | 1-2 | HIGH | ENSP00000343661.4:p.Ala2ProfsTer15",
+    "whole_codon_insertion_inside_the_codon | ENST00000303645 | inframe_insertion,start_retained_variant | 118-119 | 1-2 | MODERATE | ENSP00000306697.5:p.Met1_Ala2insLeu",
+    "whole_codon_insertion_inside_the_codon | ENST00000339944 | inframe_insertion,start_retained_variant | 1-2 | 1-2 | MODERATE | ENSP00000343661.4:p.Met1_Ala2insLeu",
+    "third_base_removed_before_its_repeat | ENST00000303645 | frameshift_variant,start_retained_variant | 120 | 3 | HIGH | ENSP00000306697.5:p.Ala2ProfsTer30",
+    "third_base_removed_before_its_repeat | ENST00000339944 | frameshift_variant,start_retained_variant | 3 | 3 | HIGH | ENSP00000343661.4:p.Ala2ProfsTer30",
+    "three_codons_removed_from_the_third_base | ENST00000303645 | inframe_deletion,start_retained_variant | 120-128 | 3-11 | MODERATE | ENSP00000306697.5:p.Ala2_Gly4del",
+    "three_codons_removed_from_the_third_base | ENST00000339944 | inframe_deletion,start_retained_variant | 3-11 | 3-11 | MODERATE | ENSP00000343661.4:p.Ala2_Gly4del",
+]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/coding.rs::PerlCodingEval::ins_del_start_altered",
+]
+tests = [
+    "crates/vep-cli/tests/start_codon_kept_without_a_five_prime_utr.rs::a_frameshift_insertion_inside_the_start_codon_keeps_the_start_without_a_five_prime_utr",
+    "crates/vep-cli/tests/start_codon_kept_without_a_five_prime_utr.rs::a_whole_codon_insertion_inside_the_start_codon_keeps_the_start_without_a_five_prime_utr",
+    "crates/vep-cli/tests/start_codon_kept_without_a_five_prime_utr.rs::the_third_base_removed_before_its_repeat_keeps_the_start_without_a_five_prime_utr",
+    "crates/vep-cli/tests/start_codon_kept_without_a_five_prime_utr.rs::three_codons_removed_from_the_third_base_keep_the_start_without_a_five_prime_utr",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/kept_start.rs::start_codon_kept_without_five_prime_utr_pair",
+    "tools/vep-outputs-compare/src/rules/row.rs::start_codon_kept_without_five_prime_utr_pair",
+    "tools/vep-plugin-pairs/src/rules/term_pair.rs::start_codon_kept_without_five_prime_utr_pair",
+]

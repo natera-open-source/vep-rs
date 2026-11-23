@@ -1,9 +1,9 @@
 entry = "chromosome_name_resolution"
 page = "docs/cache-setup.md#chromosome-names"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 487 of 487 MT records · 24 flag sets, 11 corpora"
+input_class_basis = "2 · 1,198 of 1,198 MT records · 96 flag sets, 30 corpora"
 notes = "chrNC_000021.9 reaches the cache's 21 only through a synonym of its chr-stripped spelling: Ensembl VEP's validation widens the valid names with their synonyms and accepts the stripped name, then resolves the unwidened name one hop to nothing and writes the record as intergenic under its own name; vep-rs resolves the name once and skips the record as not found. A bare M is the entry bare_m_chromosome."
 
 [input]
@@ -29,3 +29,16 @@ columns = ["Location", "Allele", "Feature", "Consequence"]
 [expected]
 ensembl_vep = ["chrNC_000021.9:42372764 | G | - | intergenic_variant"]
 vep_rs = []
+
+[implementation]
+code = [
+    "crates/vep-cli/src/pipeline.rs::cache_chr_name",
+    "crates/vep-core/src/synonyms.rs::ChromosomeSynonyms::source_chr_name",
+    "crates/vep-fasta/src/lib.rs::built_in_spellings",
+    "crates/vep-fasta/src/lib.rs::contig_aliases",
+]
+tests = [
+    "crates/vep-cli/tests/input_validation.rs::a_two_hop_synonym_is_skipped_after_an_earlier_miss",
+    "crates/vep-cli/tests/input_validation.rs::check_ref_reaches_a_chrm_record_through_the_built_in_mt_alias",
+    "crates/vep-core/src/synonyms.rs::tests::an_organelle_is_reached_by_its_own_name_or_a_synonym_and_by_nothing_else",
+]

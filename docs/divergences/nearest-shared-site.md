@@ -26,4 +26,4 @@ The deletion lies above the site, which the search below its end returns; the su
 
 Under `--nearest gene` and `--nearest symbol` every row of these records agrees, `ENSG00000171189` and `GRIK1`. Over the 47 records of `tests/golden/116/GRCh38-identifiers` under `--nearest transcript`, 326 of 808 rows differ, each one id against a list containing it; under `gene` and `symbol` every row agrees. Chromosome 21 of the release-116 GRCh38 cache holds one site shared by three genes, 34073509, where Ensembl VEP prints `ENSG00000243927` and `MRPS6` for a record on the site.
 
-To reproduce: Ensembl VEP 116.2 with the GRCh38 cache and [the command of the closing section](reproducing.md#reproducing-these-examples), adding `--nearest transcript`, the cache directory writable for the table its first run writes; vep-rs with the same flag over the same cache.
+To reproduce: Ensembl VEP 116.3 with the GRCh38 cache and [the command of the closing section](reproducing.md#reproducing-these-examples), adding `--nearest transcript`, the cache directory writable for the table its first run writes; vep-rs with the same flag over the same cache.

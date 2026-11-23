@@ -1,0 +1,17 @@
+{
+ "mode": "warnings",
+ "format": "warnings",
+ "verdict": "green",
+ "reasons": [],
+ "warnings": {
+  "expected": "<<T>>/w\u00e4rn.txt",
+  "actual": "<<T>>/w\udcff.txt",
+  "expected_entries": 3,
+  "actual_entries": 3,
+  "shared": 3,
+  "expected_only": [],
+  "actual_only": [],
+  "regulatory_notice_missing": false,
+  "masks_applied": {}
+ }
+}

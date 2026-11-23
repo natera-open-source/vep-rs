@@ -1,6 +1,6 @@
 # `--hgvsg_use_accession` in an offline run
 
-**The defect in one sentence.** Under `--hgvsg --hgvsg_use_accession`, an offline run of Ensembl VEP 116.2 looks for a record's RefSeq accession among the synonyms of the chromosome name exactly as the input writes it. On a name the run resolves that has no `NC_` synonym of its own, the run dies inside the Ensembl API with `Can't call method "db" on an undefined value`, and writes no row for the record or for any record after it. vep-rs writes the chromosome's accession for every spelling it resolves, and every record's rows.
+**The defect in one sentence.** Under `--hgvsg --hgvsg_use_accession`, an offline run of Ensembl VEP 116.3 looks for a record's RefSeq accession among the synonyms of the chromosome name exactly as the input writes it. On a name the run resolves that has no `NC_` synonym of its own, the run dies inside the Ensembl API with `Can't call method "db" on an undefined value`, and writes no row for the record or for any record after it. vep-rs writes the chromosome's accession for every spelling it resolves, and every record's rows.
 
 **Why this is a defect.** The flag asks for the accession of the record's chromosome, which does not depend on how the input spells the chromosome. Ensembl VEP reads `Chr21`, `CHR21` and `NC_000021.9` as chromosome 21 and annotates each against it. Its synonyms table pairs `21` with `NC_000021.9`, and with a database connection it prints that accession for all three names. Offline, the lookup takes one step in the table from the name as written. It finds the accession for `21`, `chr21` and `CM000683.2` and for no other name of the chromosome, and the accession itself is among the names it misses.
 
@@ -12,7 +12,7 @@ A scaffold or a patch that the FASTA holds takes the RefSeq name the table holds
 
 The table carries no label for the source of a name, and the connected run takes a RefSeq name only from the source its database labels `RefSeq_genomic`. Where the database files a sequence's RefSeq names under another label, as the fly database does, the connected run writes the sequence's own name and vep-rs a RefSeq accession from the table, the versioned form where the table lists both. Under `--ga4gh_vrs` vep-rs writes its object there on a sequence's `NC_` accession, where Ensembl VEP writes none, offline or with a database.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2, `Bio/EnsEMBL/VEP/` unless a path says otherwise):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3, `Bio/EnsEMBL/VEP/` unless a path says otherwise):
 
 - `Config.pm`, line 199: the flag, under the comment `force HGVSg to return on chromosome accession instead of input chr name`.
 - `BaseVEP.pm`, lines 637-665: the cache's `chr_synonyms.txt` is read into a table keyed by name. Lines 653-654 store the pair of each line under both of its names, and nothing joins two pairs.
@@ -24,11 +24,11 @@ The table carries no label for the source of a name, and the connected run takes
 
 **The class it produces.** `hgvsg_use_accession_ends_the_run_offline`: every row of an offline run under `--hgvsg --hgvsg_use_accession` from the first record the run resolves whose chromosome name has no `NC_` synonym of its own. The reference, Ensembl VEP's side of a comparison, ends at that record, with exit status 255 under `--fork` and 25 without it, where the candidate, vep-rs's side, writes the record's rows and every later record's. No comparator codes the class. The one committed flag set that passes both flags, `accession` of the `GRCh38-identifiers` golden corpus, names each of its 47 records `21`, and the engines agree on every row of it.
 
-**How often the shape occurs.** Tier 3, see [Intended divergences from Ensembl VEP](../intended-divergences.md): the shape is a chromosome name outside the three names of each chromosome that Ensembl's human synonyms table pairs with its accession, in a run under both flags. No record of the cuts carries one, since each cut names the chromosome `21` or `chr21`. Of the 392 committed flag sets, 1 passes both flags, and 10 golden corpora hold a record under such a name.
+**How often the shape occurs.** Tier 3, see [Intended divergences from Ensembl VEP](../intended-divergences.md): the shape is a chromosome name outside the three names of each chromosome that Ensembl's human synonyms table pairs with its accession, in a run under both flags. No record of the cuts carries one, since each cut names the chromosome `21` or `chr21`. Of the 511 committed flag sets, 1 passes both flags, and 45 golden corpora hold a record under such a name.
 
 ## 1. One substitution on a chromosome written `Chr21`
 
-**In short.** The record `Chr21 10538885 A C` is a substitution in an intron on chromosome 21, under a spelling both engines resolve and Ensembl's synonyms table does not hold. Under `--hgvsg --hgvsg_use_accession`, an offline run of Ensembl VEP 116.2 dies with `Can't call method "db" on an undefined value`, its header written and no row; its exit status is 255 under `--fork` and 25 without it. vep-rs writes the record's nine rows with `HGVSg=NC_000021.9:g.10538885A>C`, the rows Ensembl VEP writes with a database connection.
+**In short.** The record `Chr21 10538885 A C` is a substitution in an intron on chromosome 21, under a spelling both engines resolve and Ensembl's synonyms table does not hold. Under `--hgvsg --hgvsg_use_accession`, an offline run of Ensembl VEP 116.3 dies with `Can't call method "db" on an undefined value`, its header written and no row; its exit status is 255 under `--fork` and 25 without it. vep-rs writes the record's nine rows with `HGVSg=NC_000021.9:g.10538885A>C`, the rows Ensembl VEP writes with a database connection.
 
 ### 1.1 What a reader needs to know first
 
@@ -54,7 +54,7 @@ Both engines run offline under the same two flags:
 
 ### 1.3 What each engine writes
 
-Ensembl VEP 116.2 writes its header and no row and writes this line to standard error:
+Ensembl VEP 116.3 writes its header and no row and writes this line to standard error:
 
 ```
 Can't call method "db" on an undefined value at /opt/vep/src/ensembl-vep/Bio/EnsEMBL/Slice.pm line 2985, <__ANONIO__> line 3.
@@ -79,7 +79,7 @@ Ensembl VEP maps the record's name to the cache's chromosome when it reads the c
 
 The lookup calls the HGVS code with what it found, a name or nothing. Given nothing, that code asks the record's slice for its `RefSeq_genomic` synonyms, the route a connected run takes for every record under the flag. The slice of an offline run has no database adaptor, and the call on it is the error of 1.3.
 
-Source (`ensembl-vep` at release/116.2, `Bio/EnsEMBL/VEP/` unless a path says otherwise):
+Source (`ensembl-vep` at release/116.3, `Bio/EnsEMBL/VEP/` unless a path says otherwise):
 
 - `BaseVEP.pm`, lines 689-738: a name is mapped to the cache's chromosome through a synonym or, at lines 722-726, with its `chr` prefix removed in any letter case.
 - `BaseVEP.pm`, lines 653-654: the table stores each pair under both names.
@@ -98,7 +98,7 @@ vep -i record.vcf -o out.txt --offline --json_cache <corpus>/json_cache \
   --fasta <corpus>/reference.fa.gz --hgvsg --hgvsg_use_accession
 ```
 
-vep-rs writes its rows of 1.3. Ensembl VEP 116.2 takes the same two flags with a FASTA file and the cache options of [Reproducing these examples](reproducing.md), and ends with the line of 1.3. With `--cache` and a connection to Ensembl's public database in place of `--offline`, it writes vep-rs's rows.
+vep-rs writes its rows of 1.3. Ensembl VEP 116.3 takes the same two flags with a FASTA file and the cache options of [Reproducing these examples](reproducing.md), and ends with the line of 1.3. With `--cache` and a connection to Ensembl's public database in place of `--offline`, it writes vep-rs's rows.
 
 ### 1.7 How the comparator treats this class
 

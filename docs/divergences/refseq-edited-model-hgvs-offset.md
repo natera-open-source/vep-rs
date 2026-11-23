@@ -8,11 +8,11 @@ A duplication's notation survives, because Ensembl VEP's dup test looks 3' from 
 
 **What vep-rs does instead.** vep-rs computes the shift of every row on its own transcript's strand and prints the distance in `HGVS_OFFSET` whenever the notation was moved, on RefSeq and merged caches alike.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2, `ensembl-variation` at release/116):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3, `ensembl-variation` at release/116):
 
 - `Bio/EnsEMBL/Variation/TranscriptVariationAllele.pm`, lines 150-157 and 164-199, `_return_3prime`: on an `NM_` or `XM_` model carrying an `_rna_edit` attribute, the method walks every shift hash already attached to the variant, those of other transcripts and other alleles included, and copies the first whose flanking sequences it cannot read.
 - The same file, lines 175-176, 179 and 182-183: for an insertion the method sets `start` to the base before it and `end` to the base after it, so the sequence it cuts is two bases longer than the length the test at line 182 expects. For a deletion the test adds the length of the `REF/ALT` string, not of the deleted bases. The test fails for every insertion and deletion, the first hash is copied at line 186, and the method returns at line 187 before the transcript-level shift at lines 211-256 runs.
-- The same file, lines 1446-1447, `hgvs_transcript`: the copied hash's `_hgvs_offset` becomes the row's offset; `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 1752-1755: an offset of zero prints nothing.
+- The same file, lines 1446-1447, `hgvs_transcript`: the copied hash's `_hgvs_offset` becomes the row's offset; `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 1761-1764: an offset of zero prints nothing.
 - `Bio/EnsEMBL/Variation/Utils/Sequence.pm`, lines 570-589, `hgvs_variant_notation`: an insertion is tested against the bases 3' of the unshifted position first, so the duplication is named even though no shift was applied.
 
 **What correcting it would change.** Every insertion and deletion on an edited model would carry its own transcript's shift, as vep-rs's rows do and as Ensembl VEP's rows do when the record overlaps no transcript on the other strand.
@@ -65,10 +65,10 @@ Here the first hash is the one the two TSPEAR models made. On the reverse strand
 
 The notation survives because `hgvs_variant_notation` tests an insertion against the bases 3' of the unshifted position first. The 21 bases after c.985 equal the insertion, so the duplication `c.986_1006dup` is named from the unshifted position, the same text a 21-base shift would give.
 
-Source (`ensembl-vep` at release/116.2, `ensembl-variation` at release/116):
+Source (`ensembl-vep` at release/116.3, `ensembl-variation` at release/116):
 
 - `Bio/EnsEMBL/Variation/TranscriptVariationAllele.pm`, lines 140-145: the genomic shift; lines 150-157: the edited-model branch entered; line 164: every shift hash of the variant; lines 175-176 and 179: the two extra bases; lines 182-188: the failing test and the copy; lines 211-256: the transcript-level shift that is never reached.
-- The same file, lines 1446-1447 and 1835-1838: the copied hash's offset becomes the row's; `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 1752-1755: a zero offset prints nothing.
+- The same file, lines 1446-1447 and 1835-1838: the copied hash's offset becomes the row's; `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 1761-1764: a zero offset prints nothing.
 - `Bio/EnsEMBL/Variation/Utils/Sequence.pm`, lines 570-589: the 3'-first duplication test.
 
 ### 1.5 Why vep-rs's row is the correct one
@@ -92,11 +92,11 @@ grep rs782070127 out.txt | grep NM_198689 | grep -o 'HGVS[^=]*=[^;]*'
 | record as given | `c.986_1006dup`, no `HGVS_OFFSET` | `c.986_1006dup;HGVS_OFFSET=21` |
 | `--transcript_filter "stable_id match NM_198689"` | `c.986_1006dup;HGVS_OFFSET=21` | `c.986_1006dup;HGVS_OFFSET=21` |
 
-With Ensembl VEP 116.2 the first run needs its RefSeq GRCh37 cache and the GRCh37 reference; the second run adds the filter and prints the offset.
+With Ensembl VEP 116.3 the first run needs its RefSeq GRCh37 cache and the GRCh37 reference; the second run adds the filter and prints the offset.
 
 ### 1.7 How the comparator treats this class
 
-The format comparator (`scripts/concordance/compare_vep_formats.py`) applies `refseq_edited_model_hgvs_offset` when a comparison case names it in `masks`. The shape is a differing `HGVS_OFFSET` (the JSON `hgvs_offset`) on a row carrying `BAM_EDIT=OK`, a CDS position and an `HGVSc` that names a duplication. The difference is accepted when Ensembl VEP's value is blank and vep-rs's is a non-zero integer, negative on a reverse-strand transcript. Every other field of the row, the `HGVSc` included, must agree or be accepted by its own class.
+The format comparator (`tools/vep-formats-compare`) applies `refseq_edited_model_hgvs_offset` when a comparison case names it in `masks`. The shape is a differing `HGVS_OFFSET` (the JSON `hgvs_offset`) on a row carrying `BAM_EDIT=OK`, a CDS position and an `HGVSc` that names a duplication. The difference is accepted when Ensembl VEP's value is blank and vep-rs's is a non-zero integer, negative on a reverse-strand transcript. Every other field of the row, the `HGVSc` included, must agree or be accepted by its own class.
 
 The shape is that narrow for two reasons. The edited-model branch is entered only for an allele with CDS coordinates, and only a duplication keeps its notation whatever the shift. A substitution is never shifted, and a deletion or plain insertion that inherits the foreign shift changes its `HGVSc` too, a difference of another shape. Each accepted row is counted once. The GRCh37 RefSeq comparison case under `--hgvs` expects 1 row in each of the four formats and the GRCh38 case 0.
 

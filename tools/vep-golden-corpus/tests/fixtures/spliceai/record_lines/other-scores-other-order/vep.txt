@@ -1,0 +1,2 @@
+snv_two_genes	21:7000	C	-	ENST1	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;SYMBOL=GENEA;SpliceAI_pred=GENEA|0.15|0.08|0.06|0.17|-6|-41|-17|-9,C|GENEB|0.00|1.00|0.10|0.05|-25|-23|37|17
+snv_two_genes	21:7000	C	-	ENST2	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;SYMBOL=GENEB;SpliceAI_pred=GENEB|0.15|0.08|0.06|0.17|-6|-41|-17|-9,C|GENEA|0.31|0.00|0.44|0.09|3|-2|11|-30

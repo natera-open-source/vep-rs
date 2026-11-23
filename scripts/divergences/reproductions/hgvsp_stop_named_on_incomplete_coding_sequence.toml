@@ -1,19 +1,19 @@
 entry = "hgvsp_stop_named_on_incomplete_coding_sequence"
 page = "docs/divergences/hgvsp-stop-named-on-incomplete-coding-sequence.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 4,232 of 77,675 cache transcripts · 23 flag sets, 101 corpora"
-notes = "Two records written for the entry, on GRCh37, each a substitution of one base on chromosome 1: the first changes 1:3548777, the last base of the coding sequence of the reverse-strand ENST00000424367, which is flagged cds_end_NF and whose coding sequence of 913 bases ends on the first base of codon 305, and the second changes 1:865692, the first coding base of the forward-strand ENST00000341065, which is flagged cds_start_NF and whose coding sequence opens on the second base of its first codon and is closed by a stop codon. Ensembl VEP writes the stop unchanged at residue 305 on the first and at residue 1 on the second, the equals sign percent-encoded as the default output writes it; vep-rs writes no HGVSp on either, and every other column is the same in both engines' rows."
+input_class_basis = "2 · 4,626 of 116,165 cache transcripts · 95 flag sets, 127 corpora"
+notes = "Five records, on GRCh37, each a substitution of one base. Two are written for the entry, on chromosome 1: the first changes 1:3548777, the last base of the coding sequence of the reverse-strand ENST00000424367, which is flagged cds_end_NF and whose coding sequence of 913 bases ends on the first base of codon 305, and the second changes 1:865692, the first coding base of the forward-strand ENST00000341065, which is flagged cds_start_NF and whose coding sequence opens on the second base of its first codon and is closed by a stop codon. Ensembl VEP writes the stop unchanged at residue 305 on the first and at residue 1 on the second, the equals sign percent-encoded as the default output writes it; vep-rs writes no HGVSp on either, and every other column is the same in both engines' rows. The other three are the three substitutions of 22:23235998, which ClinVar holds: the last base of the coding sequence of the forward-strand ENST00000390320, which is flagged cds_start_NF and whose coding sequence of 127 bases is 42 codons and the first base of codon 43, its last three bases spelling a stop codon in a frame the protein is not read in. The record named kept leaves a stop codon in those three bases and the two named changed turn them into a residue's codon; Ensembl VEP writes the stop unchanged at residue 43 on all three and vep-rs no HGVSp."
 
 prepare = [
-  '''[ -n "$IMAGE" ] || { echo "the cut of the cache is converted in the Ensembl VEP image: give --image" >&2; exit 1; }
-[ -n "$PERL_CACHE" ] || { echo "no homo_sapiens/116_GRCh37 with chromosome 1 under the --perl-cache-dir roots" >&2; exit 1; }
+  '''[ -n "$PERL_CACHE" ] || { echo "no homo_sapiens/116_GRCh37 with chromosomes 1 and 22 under the --perl-cache-dir roots" >&2; exit 1; }
 cut="$STAGE/perl-cache/homo_sapiens/116_GRCh37"
-mkdir -p "$cut/1"
+mkdir -p "$cut/1" "$cut/22"
 cp "$PERL_CACHE/info.txt" "$PERL_CACHE/chr_synonyms.txt" "$cut/"
-cp "$PERL_CACHE/1/1-1000000.gz" "$PERL_CACHE/1/3000001-4000000.gz" "$cut/1/"''',
-  '''docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$REPO/scripts/data:/scripts:ro" -v "$STAGE:/stage" "$IMAGE" perl /scripts/storable_to_json.pl /stage/perl-cache/homo_sapiens/116_GRCh37 /stage/json-cache 1 > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
+cp "$PERL_CACHE/1/1-1000000.gz" "$PERL_CACHE/1/3000001-4000000.gz" "$cut/1/"
+cp "$PERL_CACHE/22/23000001-24000000.gz" "$cut/22/"''',
+  '''cargo run --release --locked --quiet --manifest-path "$REPO/tools/vep-storable-to-json/Cargo.toml" -- "$STAGE/perl-cache/homo_sapiens/116_GRCh37" "$STAGE/json-cache" 1,22 > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
 ]
 
 [input]
@@ -21,6 +21,9 @@ format = "vcf"
 text = """
 1	3548777	partial_last_codon_substitution_1_3548777	C	A	.	.	.
 1	865692	incomplete_first_codon_substitution_1_865692	C	A	.	.	.
+22	23235998	out_of_frame_stop_codon_kept_22_23235998	G	A	.	.	.
+22	23235998	out_of_frame_stop_codon_changed_22_23235998_first	G	C	.	.	.
+22	23235998	out_of_frame_stop_codon_changed_22_23235998_second	G	T	.	.	.
 """
 
 [cache]
@@ -37,15 +40,42 @@ flags = [
 
 [compare]
 kind = "rows"
-where = { record = ["partial_last_codon_substitution_1_3548777", "incomplete_first_codon_substitution_1_865692"], feature = ["ENST00000424367", "ENST00000341065"] }
+where = { record = ["partial_last_codon_substitution_1_3548777", "incomplete_first_codon_substitution_1_865692", "out_of_frame_stop_codon_kept_22_23235998", "out_of_frame_stop_codon_changed_22_23235998_first", "out_of_frame_stop_codon_changed_22_23235998_second"], feature = ["ENST00000424367", "ENST00000341065", "ENST00000390320"] }
 columns = ["Uploaded_variation", "Feature", "Consequence", "CDS_position", "Protein_position", "HGVSc", "HGVSp", "FLAGS"]
 
 [expected]
 ensembl_vep = [
   "incomplete_first_codon_substitution_1_865692 | ENST00000341065 | coding_sequence_variant | 2 | 1 | ENST00000341065.4:c.2C>A | ENSP00000349216.4:p.Ter1%3D | cds_start_NF",
+  "out_of_frame_stop_codon_changed_22_23235998_first | ENST00000390320 | incomplete_terminal_codon_variant,coding_sequence_variant | 127 | 43 | ENST00000390320.2:c.127G>C | ENSP00000417505.1:p.Ter43%3D | cds_start_NF",
+  "out_of_frame_stop_codon_changed_22_23235998_second | ENST00000390320 | incomplete_terminal_codon_variant,coding_sequence_variant | 127 | 43 | ENST00000390320.2:c.127G>T | ENSP00000417505.1:p.Ter43%3D | cds_start_NF",
+  "out_of_frame_stop_codon_kept_22_23235998 | ENST00000390320 | incomplete_terminal_codon_variant,coding_sequence_variant | 127 | 43 | ENST00000390320.2:c.127G>A | ENSP00000417505.1:p.Ter43%3D | cds_start_NF",
   "partial_last_codon_substitution_1_3548777 | ENST00000424367 | incomplete_terminal_codon_variant,coding_sequence_variant | 913 | 305 | ENST00000424367.1:c.913G>T | ENSP00000416192.1:p.Ter305%3D | cds_end_NF",
 ]
 vep_rs = [
   "incomplete_first_codon_substitution_1_865692 | ENST00000341065 | coding_sequence_variant | 2 | 1 | ENST00000341065.4:c.2C>A | - | cds_start_NF",
+  "out_of_frame_stop_codon_changed_22_23235998_first | ENST00000390320 | incomplete_terminal_codon_variant,coding_sequence_variant | 127 | 43 | ENST00000390320.2:c.127G>C | - | cds_start_NF",
+  "out_of_frame_stop_codon_changed_22_23235998_second | ENST00000390320 | incomplete_terminal_codon_variant,coding_sequence_variant | 127 | 43 | ENST00000390320.2:c.127G>T | - | cds_start_NF",
+  "out_of_frame_stop_codon_kept_22_23235998 | ENST00000390320 | incomplete_terminal_codon_variant,coding_sequence_variant | 127 | 43 | ENST00000390320.2:c.127G>A | - | cds_start_NF",
   "partial_last_codon_substitution_1_3548777 | ENST00000424367 | incomplete_terminal_codon_variant,coding_sequence_variant | 913 | 305 | ENST00000424367.1:c.913G>T | - | cds_end_NF",
+]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/coding.rs::PerlCodingEval::stop_codon_closes_the_coding_sequence",
+    "crates/vep-effects/src/coding.rs::names_a_stop_the_reference_lacks",
+    "crates/vep-effects/src/coding.rs::stop_named_alone",
+]
+tests = [
+    "crates/vep-effects/src/stop_codon_tests.rs::extension_on_a_coding_sequence_no_stop_codon_closes_has_no_protein_notation",
+    "crates/vep-effects/src/stop_codon_tests.rs::frameshift_past_the_last_whole_codon_of_an_unflagged_coding_sequence_has_no_protein_notation",
+    "crates/vep-effects/src/stop_codon_tests.rs::stop_deleted_on_a_coding_sequence_no_stop_codon_closes_has_no_protein_notation",
+    "crates/vep-effects/src/stop_codon_tests.rs::stop_unchanged_at_residue_1_of_an_incomplete_first_codon_has_no_protein_notation",
+    "crates/vep-effects/src/stop_codon_tests.rs::stop_unchanged_on_a_coding_sequence_no_stop_codon_closes_has_no_protein_notation",
+]
+rules = [
+    "tools/vep-formats-compare/src/coding_end_terms.rs::landed_rule_may_take",
+    "tools/vep-formats-compare/src/rules/coding_end_pairs.rs::stands_on_the_record",
+    "tools/vep-formats-compare/src/rules/hgvsp_stop.rs::stop_named_on_a_transcript_of_a_partial_last_codon",
+    "tools/vep-formats-compare/src/rules/hgvsp_stop.rs::stop_named_on_incomplete_coding_sequence",
+    "tools/vep-golden-corpus/src/classify/protein.rs::stop_named_on_incomplete_coding_sequence_pair",
 ]

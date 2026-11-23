@@ -1,0 +1,13 @@
+rs_dup	21:100-101	T	ENSG1	ENST1	Transcript	upstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER;DISTANCE=5;STRAND=1
+rs_same_pair	21:200-201	T	ENSG1	ENST1	Transcript	upstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER;DISTANCE=5;STRAND=1;HGVS_IntronStartOffset=0;HGVS_IntronEndOffset=0
+rs_other_pair	21:300-301	T	ENSG1	ENST1	Transcript	upstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER;DISTANCE=5;STRAND=1;HGVS_IntronStartOffset=1;HGVS_IntronEndOffset=0
+rs_reverse	21:400-401	T	ENSG1	ENST1	Transcript	upstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER;DISTANCE=5;STRAND=-1;HGVS_IntronStartOffset=0;HGVS_IntronEndOffset=-1
+rs_intron_dup	21:500-501	T	ENSG1	ENST1	Transcript	upstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER;DISTANCE=5;STRAND=1
+rs_intron_ins	21:600-601	T	ENSG1	ENST1	Transcript	upstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER;DISTANCE=5;STRAND=1
+rs_before_exon	21:700-701	T	ENSG1	ENST1	Transcript	upstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER;DISTANCE=5;STRAND=1;HGVS_IntronStartOffset=0;HGVS_IntronEndOffset=0
+rs_downstream	21:800-801	T	ENSG1	ENST1	Transcript	downstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER;DISTANCE=5;STRAND=1;HGVS_IntronStartOffset=1;HGVS_IntronEndOffset=0
+rs_neither_writes	21:900-901	T	ENSG1	ENST1	Transcript	upstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER;DISTANCE=5;STRAND=1
+rs_not_its_coordinates	21:1000-1001	T	ENSG1	ENST1	Transcript	upstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER;DISTANCE=5;STRAND=1
+rs_fields_not_written	21:1100-1101	T	ENSG1	ENST1	Transcript	upstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER;DISTANCE=5;STRAND=1;HGVS_IntronStartOffset=0;HGVS_IntronEndOffset=0
+rs_one_field_written	21:1200-1201	T	ENSG1	ENST1	Transcript	upstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER;DISTANCE=5;STRAND=1
+rs_one_reference_field	21:1300-1301	T	ENSG1	ENST1	Transcript	upstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER;DISTANCE=5;STRAND=1;HGVS_IntronStartOffset=1

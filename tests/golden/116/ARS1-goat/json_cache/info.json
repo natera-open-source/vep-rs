@@ -1,0 +1,37 @@
+{
+  "assembly": "ARS1",
+  "cache_version": 116,
+  "contig_order": [
+    "25",
+    "MT",
+    "LWLT01020929.1"
+  ],
+  "polyphen": "",
+  "regulatory": false,
+  "sift": "b",
+  "source_versions": {
+    "assembly": "ARS1",
+    "dbSNP": "143",
+    "genebuild": "2018-03",
+    "sift": "sift6.2.1"
+  },
+  "species": "capra_hircus",
+  "var_type": "tabix",
+  "variation_cols": [
+    "chr",
+    "variation_name",
+    "failed",
+    "somatic",
+    "start",
+    "end",
+    "allele_string",
+    "strand",
+    "clin_sig",
+    "phenotype_or_disease",
+    "clin_sig_allele",
+    "clin_sig_ref_allele",
+    "clinical_impact",
+    "pubmed",
+    "var_synonyms"
+  ]
+}

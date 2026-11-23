@@ -1,9 +1,9 @@
 entry = "minimal_split_hgvsp"
 page = "docs/divergences/minimal-split-hgvsp.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 156.8 per million · 0 flag sets, 28 corpora"
+input_class_basis = "2 · 156.8 per million · 0 flag sets, 31 corpora"
 notes = "The first mechanism of the entry: the split deletion allele shifts one base into exon 6 of CLIC6 for its HGVS notations; Ensembl VEP's default output keeps the shifted peptides and recomputes the HGVSp over the record's span, which reaches the intron, so it prints amino acids and no HGVSp."
 
 [input]
@@ -30,3 +30,10 @@ columns = ["Location", "Allele", "Feature", "Amino_acids", "HGVSp"]
 [expected]
 ensembl_vep = ["21:34716320-34716323 | - | ENST00000349499 | IV/X | -"]
 vep_rs = ["21:34716320-34716323 | - | ENST00000349499 | - | ENSP00000290332.4:p.Ile634TrpfsTer14"]
+
+[implementation]
+code = ["crates/vep-core/src/minimal.rs::apply_minimal_split"]
+tests = [
+    "crates/vep-cli/tests/input_minimal.rs::a_split_alleles_mirna_terms_come_from_its_own_span_in_the_default_output",
+    "crates/vep-cli/tests/shift_3prime.rs::a_minimal_split_allele_shifts_its_hgvs_as_a_bi_allelic_record_does",
+]

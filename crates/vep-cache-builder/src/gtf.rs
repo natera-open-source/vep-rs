@@ -19,7 +19,7 @@
 //! release repeats `tag "..."` per transcript line and includes `cds_start_NF`
 //! and `cds_end_NF`. Ensembl VEP's own cache keeps those two plus
 //! `gencode_basic` and `gencode_primary` as transcript attributes
-//! ([`KEPT_TAGS`]), and its output prints the `cds_` ones in FLAGS. The
+//! (`KEPT_TAGS`), and its output prints the `cds_` ones in FLAGS. The
 //! GENCODE basic tag is spelled `basic` in the GRCh37 (release 87 annotation)
 //! and GENCODE GTFs and `gencode_basic` in the GRCh38 Ensembl one; both
 //! readings take a tag through the one table, so `basic` is `gencode_basic`
@@ -36,24 +36,22 @@ use vep_core::coordinate::is_cache_path_component;
 use vep_core::regulatory_gff::{undecodable_attribute_error, uri_unescape};
 use vep_core::sv_routing::perl_split;
 
-use crate::core_dumps::BoundedLines;
+use crate::fasta::ModelNames;
 use crate::gff3::{
-    attribute, check_skipped_coordinates, feature_version_keys, is_set, located, names_a_parent,
-    normalize_chr, opens_with_a_blank_column, parent_ids, parse_version, without_byte_order_marks,
-    CdsRecord, ExonRecord, Feature, GeneRecord, Model, Reading, Records,
+    attribute, feature_version_keys, is_set, located, names_a_parent, parent_ids, parse_phase,
+    parse_version, CdsRecord, ExonRecord, Feature, GeneRecord, Model, Reading, Records,
+    SequenceNames,
 };
-
-/// The longest GTF line read, 16 MiB. A transcript line's widest column is its
-/// attributes, a few kilobytes even with every tag listed, so the cap refuses
-/// a file with no line end in it long before the line buffer grows to its
-/// size.
-const MAX_LINE_BYTES: usize = 16 << 20;
+use crate::line::{
+    check_indexed_coordinates, index_columns_may_differ, is_blank_or_a_comment, lines,
+    record_columns, tab_columns,
+};
 
 /// GTF tags Ensembl VEP's cache dumper stores as transcript attributes, with
 /// the attribute code each becomes. The one table of both GTF readings: a tag
-/// list is spelled by [`attribute_code`] as it is read, so `basic` is
+/// list is spelled by `attribute_code` as it is read, so `basic` is
 /// `gencode_basic` to the model and to the tags beside a GFF3 alike.
-pub const KEPT_TAGS: [(&str, &str); 5] = [
+const KEPT_TAGS: [(&str, &str); 5] = [
     ("basic", "gencode_basic"),
     ("gencode_basic", "gencode_basic"),
     ("gencode_primary", "gencode_primary"),
@@ -73,18 +71,19 @@ fn attribute_code(tag: &str) -> &str {
 /// The GTF feature types Ensembl VEP reads from a file given as an annotation
 /// source (`GTF.pm` `%INCLUDE_FEATURE_TYPES`); a line of any other type is
 /// skipped.
-pub const GTF_FEATURE_TYPES: [&str; 6] = ["cds", "CDS", "stop_codon", "exon", "gene", "transcript"];
+const GTF_FEATURE_TYPES: [&str; 6] = ["cds", "CDS", "stop_codon", "exon", "gene", "transcript"];
 
 /// Header fields (`#!key value`) and per-transcript tags of a GTF.
 #[derive(Debug, Default)]
 pub struct GtfTags {
     /// `#!genome-build`, `#!genebuild-last-updated` and the other header keys.
     pub header: HashMap<String, String>,
-    /// A `transcript` line's name ([`tagged_name`]: its `transcript_id` whole,
-    /// with its version behind a dot when it carries one) to every `tag`
-    /// value on the line, each spelled as its attribute code
-    /// ([`attribute_code`]).
-    pub tags: HashMap<String, Vec<String>>,
+    /// Every `tag` value of a `transcript` line, each spelled as its
+    /// attribute code (`attribute_code`), under the pair the line states:
+    /// its `transcript_id` as written, every dot kept, then its version
+    /// (`stated_version`). The identifier is never joined to the version,
+    /// so `T1` at version 1 and `T1.1` at none are two entries.
+    pub tags: HashMap<String, HashMap<Option<u32>, Vec<String>>>,
 }
 
 /// A GTF read as a transcript model.
@@ -93,6 +92,10 @@ pub struct GtfModel {
     /// `#!genome-build`, `#!genebuild-last-updated` and the other header keys.
     pub header: HashMap<String, String>,
     pub genes: HashMap<String, GeneRecord>,
+    /// The feature types of the lines skipped, in name order: the types
+    /// Ensembl VEP's `--gtf` source warns of as it passes over each such line
+    /// (`BaseGXF.pm:239-243`).
+    pub skipped_types: Vec<String>,
 }
 
 /// Opens a plain, gzipped or bgzipped GTF for line reading.
@@ -212,23 +215,26 @@ fn parse_gtf_attributes(
 }
 
 /// Reads a GTF (plain, gzipped or bgzipped) as a transcript model, with the
-/// length of a line capped: a line longer than `MAX_LINE_BYTES` fails the parse, naming
-/// the file and the line, as does a line that is not UTF-8. Fails as
+/// length of a line capped: a line longer than `crate::line::MAX_LINE_BYTES`
+/// fails the parse, naming the file and the line, as does a line that is not
+/// UTF-8. Fails as
 /// [`crate::gff3::parse_gff3`] fails on a coordinate that is not a number or
 /// not ordered, on the start or end no number leads, or the end below zero,
 /// of a line it skips, for its type or for having fewer than nine columns
-/// ([`check_skipped_coordinates`]), on a line that is no comment and ends
+/// (`check_indexed_coordinates`), on a line that is no comment and ends
 /// before its start column, on a line that opens with a tab, read at the
-/// columns the file writes, or with white space and a tab
-/// ([`opens_with_a_blank_column`]), on a seqid that cannot name a
+/// columns the file writes, or with white space and a tab or holding a NUL
+/// byte (`index_columns_may_differ`), on a seqid that cannot name a
 /// chromosome's cache directory,
 /// and on a version that is not a whole number or is above the largest the
 /// cache holds, read from a gene or transcript line or, under the keys of
 /// `reading`, a CDS line, and on an attribute column
-/// [`parse_gtf_attributes`] refuses; each error opens with the file and the
+/// `parse_gtf_attributes` refuses; each error opens with the file and the
 /// line. A byte-order mark at the start of a line is taken off before the
-/// line is read ([`without_byte_order_marks`]), so a `#!` key behind one is
-/// read.
+/// line is read (`crate::line::without_byte_order_marks`), so a `#!` key
+/// behind one is read. A line's columns are read as the GFF3 reader reads
+/// them (`crate::line`): a line whose columns NUL bytes end is one the
+/// index build places and no record, and is skipped.
 ///
 /// A record is named by its `<type>_id` attribute (`gene_id`,
 /// `transcript_id`, `exon_id`), else by the MD5 of its line (`GTF.pm`
@@ -245,19 +251,18 @@ fn parse_gtf_attributes(
 /// of the cache's content reads `version`, else `protein_version`, the
 /// attribute the Ensembl GTF writes the translation's version as, else
 /// leaves it to the core dumps or the protein FASTA header. A GTF's lines
-/// are read by [`GTF_FEATURE_TYPES`] under either reading.
-pub fn parse_gtf_model(path: &Path, reading: Reading) -> Result<GtfModel> {
+/// are read by `GTF_FEATURE_TYPES` under either reading. A record's
+/// sequence is named as `names` names its seqid ([`SequenceNames`]).
+pub fn parse_gtf_model(path: &Path, reading: Reading, names: &SequenceNames) -> Result<GtfModel> {
     let mut header = HashMap::new();
     let mut records = Records::new(reading);
     let version_keys: &[&str] = match reading {
         Reading::GffSource => &["version"],
         Reading::EnsemblCache => &["version", "protein_version"],
     };
-    for (line_index, line) in
-        BoundedLines::new(open(path)?, MAX_LINE_BYTES, path.display().to_string()).enumerate()
-    {
+    for (line_index, line) in lines(open(path)?, path).enumerate() {
         let line_number = line_index + 1;
-        let written = String::from_utf8(without_byte_order_marks(line?))
+        let written = String::from_utf8(line?)
             .map_err(|_| anyhow!("GTF line is not UTF-8"))
             .with_context(|| located(path, line_number))?;
         if let Some(rest) = written.strip_prefix("#!") {
@@ -266,27 +271,16 @@ pub fn parse_gtf_model(path: &Path, reading: Reading) -> Result<GtfModel> {
             }
             continue;
         }
-        let line = written.trim();
-        if line.is_empty() || line.starts_with('#') {
+        if is_blank_or_a_comment(written.as_bytes()) {
             continue;
         }
         // A record without its start, as the GFF3 reader refuses one: a GTF
-        // has no sequence section, so every such line is a record's.
-        let columns = written.split('\t').count();
-        if columns < 4 {
-            return Err(anyhow!(
-                "GTF line ends at column {columns}, before its start"
-            ))
-            .with_context(|| located(path, line_number));
-        }
-        // A line that opens with a tab is read at the columns the file
-        // writes, as the GFF3 reader reads one.
-        let line = if written.starts_with('\t') {
-            written.trim_end()
-        } else {
-            line
-        };
-        let fields: Vec<&str> = line.split('\t').collect();
+        // has no sequence section, so every such line is a record's. A line
+        // that opens with a tab is read at the columns the file writes, as
+        // the GFF3 reader reads one.
+        let (line, fields) = record_columns(&written)
+            .map_err(|columns| anyhow!("GTF line ends at column {columns}, before its start"))
+            .with_context(|| located(path, line_number))?;
         let coordinate = |column: &str, value: &str| -> Result<u64> {
             value
                 .parse()
@@ -294,7 +288,7 @@ pub fn parse_gtf_model(path: &Path, reading: Reading) -> Result<GtfModel> {
                 .with_context(|| located(path, line_number))
         };
         if fields.len() < 9 {
-            check_skipped_coordinates(&written, coordinate)?;
+            check_indexed_coordinates(&written, coordinate)?;
             continue;
         }
         // The include test comes before any other column is read, as it does
@@ -304,17 +298,17 @@ pub fn parse_gtf_model(path: &Path, reading: Reading) -> Result<GtfModel> {
         // the one rule the GFF3 reader holds them to.
         let feature_type = fields[2];
         if !GTF_FEATURE_TYPES.contains(&feature_type) {
-            check_skipped_coordinates(&written, coordinate)?;
+            check_indexed_coordinates(&written, coordinate)?;
             records.skip(feature_type, "");
             continue;
         }
         // White space and a tab before a record put its type where the index
         // build reads a start, as in the GFF3 reader: the line is held to
         // that reading, as its twin of a skipped type is.
-        if opens_with_a_blank_column(&written) {
-            check_skipped_coordinates(&written, coordinate)?;
+        if index_columns_may_differ(&written) {
+            check_indexed_coordinates(&written, coordinate)?;
         }
-        let chr = normalize_chr(fields[0]);
+        let chr = names.name(fields[0]);
         if !is_cache_path_component(chr) {
             return Err(anyhow!("invalid chromosome name '{}'", fields[0]))
                 .with_context(|| located(path, line_number));
@@ -331,7 +325,6 @@ pub fn parse_gtf_model(path: &Path, reading: Reading) -> Result<GtfModel> {
             "-" => -1,
             _ => 1,
         };
-        let phase: i8 = fields[7].parse().unwrap_or(-1);
         // The tag list is built in the arm whose record keeps it
         // ([`Feature::tags`]): an exon, CDS or stop codon line repeats its
         // transcript's tags, and its record has no field for them.
@@ -363,7 +356,8 @@ pub fn parse_gtf_model(path: &Path, reading: Reading) -> Result<GtfModel> {
                         start,
                         end,
                         strand,
-                        phase,
+                        phase: parse_phase(Model::Gtf, fields[7])
+                            .with_context(|| located(path, line_number))?,
                         protein_id: attribute(&attrs, &["protein_id"]),
                         protein_version: parse_version(Model::Gtf, &attrs, version_keys)
                             .with_context(|| located(path, line_number))?,
@@ -405,22 +399,26 @@ pub fn parse_gtf_model(path: &Path, reading: Reading) -> Result<GtfModel> {
             }
         }
     }
+    let skipped_types = records.skipped_types();
     let genes = records.assemble(Model::Gtf, path)?;
-    Ok(GtfModel { header, genes })
+    Ok(GtfModel {
+        header,
+        genes,
+        skipped_types,
+    })
 }
 
 /// Reads the `transcript` lines of an Ensembl GTF (plain, gzipped or
 /// bgzipped), with the length of a line capped: a line longer than
-/// `MAX_LINE_BYTES` fails the parse, naming the file and the line, as does a
-/// line that is not UTF-8 and a line [`parse_gtf_attributes`] refuses. A
+/// `crate::line::MAX_LINE_BYTES` fails the parse, naming the file and the
+/// line, as does a
+/// line that is not UTF-8 and a line `parse_gtf_attributes` refuses. A
 /// byte-order mark at the start of a line is taken off first, as
 /// [`parse_gtf_model`] takes it.
 pub fn parse_gtf_tags(path: &Path) -> Result<GtfTags> {
     let mut out = GtfTags::default();
-    for (line_index, line) in
-        BoundedLines::new(open(path)?, MAX_LINE_BYTES, path.display().to_string()).enumerate()
-    {
-        let line = String::from_utf8(without_byte_order_marks(line?))
+    for (line_index, line) in lines(open(path)?, path).enumerate() {
+        let line = String::from_utf8(line?)
             .map_err(|_| anyhow!("GTF line is not UTF-8"))
             .with_context(|| located(path, line_index + 1))?;
         if let Some(rest) = line.strip_prefix("#!") {
@@ -435,7 +433,7 @@ pub fn parse_gtf_tags(path: &Path) -> Result<GtfTags> {
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
-        let mut fields = line.split('\t');
+        let mut fields = tab_columns(line);
         let feature = fields.nth(2);
         if feature != Some("transcript") {
             continue;
@@ -447,7 +445,9 @@ pub fn parse_gtf_tags(path: &Path) -> Result<GtfTags> {
             parse_gtf_attributes(attrs, true).with_context(|| located(path, line_index + 1))?;
         if let Some(id) = attrs.get("transcript_id") {
             out.tags
-                .entry(tagged_name(id, &attrs))
+                .entry(id.clone())
+                .or_default()
+                .entry(stated_version(&attrs))
                 .or_default()
                 .extend(tags);
         }
@@ -455,32 +455,53 @@ pub fn parse_gtf_tags(path: &Path) -> Result<GtfTags> {
     Ok(out)
 }
 
-/// The name a `transcript` line's tags are held under: its `transcript_id`
-/// whole, every dot kept, and behind one more dot its version when the line
-/// carries one (`version`, else `transcript_version`, as
-/// [`feature_version_keys`] orders them), read as the number (`01` is 1). It
-/// is the form a protein FASTA header writes (`ENST00000456328.2`); a
-/// version that is not a whole number the cache holds names nothing.
-fn tagged_name(id: &str, attrs: &HashMap<String, String>) -> String {
-    match parse_version(Model::Gtf, attrs, &["version", "transcript_version"]) {
-        Ok(Some(version)) => format!("{id}.{version}"),
-        Ok(None) | Err(_) => id.to_string(),
-    }
+/// The version a `transcript` line states beside its `transcript_id`:
+/// `version`, else `transcript_version`, as [`feature_version_keys`] orders
+/// them, read as the number (`01` is 1). A version the identifier ends in
+/// (`ENST00000456328.2`) is the identifier's text and is not read here, and
+/// a version that is not a whole number the cache holds is none.
+fn stated_version(attrs: &HashMap<String, String>) -> Option<u32> {
+    parse_version(Model::Gtf, attrs, &["version", "transcript_version"])
+        .ok()
+        .flatten()
 }
 
 impl GtfTags {
-    /// The attribute codes Ensembl VEP keeps, for the model's transcript `id`
-    /// at `version`, in [`KEPT_TAGS`] order, each code once; the tag list
-    /// holds codes ([`attribute_code`]), so a code is matched, never a file
-    /// spelling. The tags are those of the line named `id.version` when the
-    /// model states a version and the file holds that name, else of the line
-    /// named `id`, each compared whole, as [`crate::fasta::record_of`] finds
-    /// a protein FASTA record: the line of another version of `id`, or of a
-    /// transcript that shares only its first components, is not its own.
-    pub fn kept_attribute_codes(&self, id: &str, version: Option<u32>) -> Vec<&'static str> {
-        let tags = version
-            .and_then(|version| self.tags.get(format!("{id}.{version}").as_str()))
-            .or_else(|| self.tags.get(id));
+    /// The number of pairs the `transcript` lines state.
+    pub fn names(&self) -> usize {
+        self.tags.values().map(HashMap::len).sum()
+    }
+
+    /// The tag codes of the line that states `identifier` at `version`.
+    fn codes_under(&self, identifier: &str, version: Option<u32>) -> Option<&Vec<String>> {
+        self.tags.get(identifier)?.get(&version)
+    }
+
+    /// The attribute codes Ensembl VEP keeps, for the transcript `id` at
+    /// `version` of the model `names`, in [`KEPT_TAGS`] order, each code
+    /// once; the tag list holds codes (`attribute_code`), so a code is
+    /// matched, never a file spelling. The tags are those of the first line
+    /// found in the order of [`ModelNames::name_of`], as
+    /// [`crate::fasta::record_of`] finds a protein FASTA record: the line
+    /// that states `id` at `version`; for a transcript with a version, the
+    /// line written `id.version` without one or with it again, then the line
+    /// written `id` without one; for a transcript without a version whose
+    /// identifier ends in one (`T1.3`), the line that states the two apart,
+    /// then the line written `id` with that version. A line another
+    /// transcript of `names` takes ahead of this one, the line of another
+    /// version of `id`, and that of a transcript sharing only its first
+    /// components are not its own.
+    pub(crate) fn kept_attribute_codes(
+        &self,
+        names: &ModelNames,
+        id: &str,
+        version: Option<u32>,
+    ) -> Vec<&'static str> {
+        let held =
+            |identifier: &str, stated: Option<u32>| self.codes_under(identifier, stated).is_some();
+        let tags = names
+            .name_of(id, version, &held)
+            .and_then(|(identifier, stated)| self.codes_under(&identifier, stated));
         let Some(tags) = tags else {
             return Vec::new();
         };
@@ -498,6 +519,7 @@ impl GtfTags {
 mod tests {
     use super::*;
     use crate::gff3::TranscriptRecord;
+    use crate::line::MAX_LINE_BYTES;
 
     /// Parses `text` (a GTF, header lines included) from a temporary file
     /// under `reading`.
@@ -505,7 +527,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("t.gtf");
         std::fs::write(&path, text).unwrap();
-        parse_gtf_model(&path, reading)
+        parse_gtf_model(&path, reading, &SequenceNames::default())
     }
 
     fn parse_model_as(text: &str, reading: Reading) -> GtfModel {
@@ -753,6 +775,23 @@ mod tests {
         let neither = SEVEN_LINES.replace(" transcript_version \"5\";", "");
         let model = parse_model(&neither);
         assert_eq!(transcript(&model.genes, "ENST00000000001").version, None);
+    }
+
+    /// A `tag "cds_start_NF"` on a model's transcript line is carried on
+    /// the record, as the GFF3 reader carries it.
+    #[test]
+    fn the_start_incomplete_tag_is_carried_from_a_gtf_transcript_line() {
+        let model = parse_model(SEVEN_LINES);
+        assert!(!transcript(&model.genes, "ENST00000000001").cds_start_nf);
+
+        let flagged = SEVEN_LINES.replace(
+            "tag \"MANE_Select\";",
+            "tag \"MANE_Select\"; tag \"cds_start_NF\";",
+        );
+        assert_ne!(flagged, SEVEN_LINES);
+        let model = parse_model(&flagged);
+        let tr = transcript(&model.genes, "ENST00000000001");
+        assert!(tr.cds_start_nf && tr.mane_select);
     }
 
     /// A `tag "readthrough_transcript"` marks the transcript `readthrough`
@@ -1243,35 +1282,33 @@ NC_000001.11\tBestRefSeq\texon\t11874\t12227\t.\t+\t.\tgene_id \"DDX11L1\"; tran
         // A value that ends the line with a blank and no `;` loses the blank
         // to the line trim, as it does in the model reader.
         assert_eq!(
-            gtf.kept_attribute_codes("ENST00000000004", None),
+            kept_alone(&gtf, "ENST00000000004", None),
             vec!["gencode_basic"]
         );
         // A line is named by its identifier and its version: a model that
         // writes the version inside its identifier and one that states it
         // apart both find the line, and a model of another version does not.
         assert_eq!(
-            gtf.kept_attribute_codes("ENST00000456328.2", None),
+            kept_alone(&gtf, "ENST00000456328.2", None),
             vec!["gencode_basic"]
         );
         assert_eq!(
-            gtf.kept_attribute_codes("ENST00000456328", Some(2)),
+            kept_alone(&gtf, "ENST00000456328", Some(2)),
             vec!["gencode_basic"]
         );
-        assert!(gtf
-            .kept_attribute_codes("ENST00000456328", Some(3))
-            .is_empty());
+        assert!(kept_alone(&gtf, "ENST00000456328", Some(3)).is_empty());
         // mRNA_start_NF is not an attribute Ensembl VEP keeps; exon lines do
         // not count.
         assert_eq!(
-            gtf.kept_attribute_codes("ENST00000641515", None),
+            kept_alone(&gtf, "ENST00000641515", None),
             vec!["cds_start_NF", "cds_end_NF"]
         );
         // The GRCh38 GTF spells the basic tag `gencode_basic`.
         assert_eq!(
-            gtf.kept_attribute_codes("ENST00000000003", Some(7)),
+            kept_alone(&gtf, "ENST00000000003", Some(7)),
             vec!["gencode_basic", "gencode_primary"]
         );
-        assert!(gtf.kept_attribute_codes("ENST00000000000", None).is_empty());
+        assert!(kept_alone(&gtf, "ENST00000000000", None).is_empty());
     }
 
     /// Reads the tags of a GTF with one `transcript` line of gene `G1` per
@@ -1290,13 +1327,22 @@ NC_000001.11\tBestRefSeq\texon\t11874\t12227\t.\t+\t.\tgene_id \"DDX11L1\"; tran
         parse_gtf_tags(&path).unwrap()
     }
 
-    /// A `transcript` line's tags are held under its `transcript_id` whole,
-    /// every dot kept, with its version behind one more dot when the line
-    /// carries one (`02` is 2): transcripts that share a first component
-    /// (`T1.1`, `T1.2`) each hold their own tags. A version that is not a
-    /// whole number, or is `0`, names nothing.
+    /// The kept codes of the transcript `id` at `version` in a model that
+    /// holds no other transcript.
+    fn kept_alone(gtf: &GtfTags, id: &str, version: Option<u32>) -> Vec<&'static str> {
+        gtf.kept_attribute_codes(&ModelNames::default(), id, version)
+    }
+
+    /// A `transcript` line's tags are held under the pair the line states,
+    /// its `transcript_id` as written, every dot kept, and its version (`02`
+    /// is 2, `version` ahead of `transcript_version`), the two never joined:
+    /// transcripts that share a first component (`T1.1`, `T1.2`) each hold
+    /// their own tags, a line that writes its version twice holds it once
+    /// beside the identifier as written, and the line of `T5` at version 1
+    /// is held apart from the line written `T5.1`. A version that is not a
+    /// whole number, or is `0`, is none.
     #[test]
-    fn tags_are_held_under_each_lines_whole_name() {
+    fn tags_are_held_under_each_lines_identifier_and_version() {
         let gtf = tags_of_transcript_lines(&[
             "transcript_id \"T1.1\"; tag \"cds_start_NF\";",
             "transcript_id \"T1.2\"; tag \"cds_end_NF\";",
@@ -1304,21 +1350,102 @@ NC_000001.11\tBestRefSeq\texon\t11874\t12227\t.\t+\t.\tgene_id \"DDX11L1\"; tran
             "transcript_id \"ENST2\"; transcript_version \"v3\"; tag \"basic\";",
             "transcript_id \"ENST3\"; transcript_version \"0\"; tag \"basic\";",
             "transcript_id \"ENST4\"; version \"5\"; transcript_version \"6\"; tag \"basic\";",
+            "transcript_id \"ENST5.3\"; transcript_version \"3\"; tag \"basic\";",
+            "transcript_id \"T5\"; transcript_version \"1\"; tag \"cds_start_NF\";",
+            "transcript_id \"T5.1\"; tag \"cds_end_NF\";",
         ]);
-        let mut held: Vec<(String, Vec<String>)> = gtf.tags.into_iter().collect();
+        assert_eq!(gtf.names(), 9);
+        let mut held: Vec<(String, Option<u32>, Vec<String>)> = gtf
+            .tags
+            .into_iter()
+            .flat_map(|(identifier, versions)| {
+                versions
+                    .into_iter()
+                    .map(move |(version, codes)| (identifier.clone(), version, codes))
+            })
+            .collect();
         held.sort();
-        let codes = |name: &str, code: &str| (name.to_string(), vec![code.to_string()]);
+        let codes = |identifier: &str, version: Option<u32>, code: &str| {
+            (identifier.to_string(), version, vec![code.to_string()])
+        };
         assert_eq!(
             held,
             [
-                codes("ENST1.2", "gencode_basic"),
-                codes("ENST2", "gencode_basic"),
-                codes("ENST3", "gencode_basic"),
-                codes("ENST4.5", "gencode_basic"),
-                codes("T1.1", "cds_start_NF"),
-                codes("T1.2", "cds_end_NF"),
+                codes("ENST1", Some(2), "gencode_basic"),
+                codes("ENST2", None, "gencode_basic"),
+                codes("ENST3", None, "gencode_basic"),
+                codes("ENST4", Some(5), "gencode_basic"),
+                codes("ENST5.3", Some(3), "gencode_basic"),
+                codes("T1.1", None, "cds_start_NF"),
+                codes("T1.2", None, "cds_end_NF"),
+                codes("T5", Some(1), "cds_start_NF"),
+                codes("T5.1", None, "cds_end_NF"),
             ]
         );
+    }
+
+    /// A line that writes its version twice, inside its `transcript_id` and
+    /// as `transcript_version` (`T1.3` at version 3), tags the transcript
+    /// `T1` at version 3 and the transcript written `T1.3`, with that version
+    /// or without one, and no transcript of another version.
+    #[test]
+    fn a_line_that_writes_its_version_twice_is_found_under_it_once() {
+        let gtf = tags_of_transcript_lines(&[
+            "transcript_id \"T1.3\"; transcript_version \"3\"; tag \"basic\";",
+        ]);
+        for (id, version) in [("T1", Some(3)), ("T1.3", Some(3)), ("T1.3", None)] {
+            assert_eq!(
+                kept_alone(&gtf, id, version),
+                ["gencode_basic"],
+                "{id} at {version:?}"
+            );
+        }
+        for (id, version) in [("T1", Some(4)), ("T1", None), ("T1.3", Some(4))] {
+            assert!(
+                kept_alone(&gtf, id, version).is_empty(),
+                "{id} at {version:?}"
+            );
+        }
+    }
+
+    /// The transcript `T1` at version 1 and a sibling written `T1.1` each
+    /// take their own line. The line that states `T1` at version 1 is the
+    /// first's and the line written `T1.1` the sibling's; where the file
+    /// writes no version, the line written `T1` is the first's; and where it
+    /// holds the line written `T1.1` alone, the first has none, as the
+    /// sibling takes a line written as it ahead of the dotted reading. A
+    /// sibling with a line of its own version (`T1.1.1`) leaves the line
+    /// written `T1.1` to the first.
+    #[test]
+    fn a_versioned_transcript_and_a_dotted_sibling_take_their_own_lines() {
+        let kept = |model: &[(&str, Option<u32>)], lines: &[&str]| -> Vec<Vec<&'static str>> {
+            let names = ModelNames::of(model.iter().copied());
+            let gtf = tags_of_transcript_lines(lines);
+            model
+                .iter()
+                .map(|(id, version)| gtf.kept_attribute_codes(&names, id, *version))
+                .collect()
+        };
+        let own = [vec!["cds_start_NF"], vec!["cds_end_NF"]];
+        let siblings_alone = [vec![], vec!["cds_end_NF"]];
+        let first_stated = "transcript_id \"T1\"; transcript_version \"1\"; tag \"cds_start_NF\";";
+        let first_plain = "transcript_id \"T1\"; tag \"cds_start_NF\";";
+        let dotted = "transcript_id \"T1.1\"; tag \"cds_end_NF\";";
+
+        for sibling_version in [None, Some(1)] {
+            let model = [("T1", Some(1)), ("T1.1", sibling_version)];
+            assert_eq!(kept(&model, &[first_stated, dotted]), own);
+            assert_eq!(kept(&model, &[dotted, first_stated]), own);
+            assert_eq!(kept(&model, &[first_plain, dotted]), own);
+            assert_eq!(kept(&model, &[dotted]), siblings_alone);
+        }
+
+        let versioned = [("T1", Some(1)), ("T1.1", Some(1))];
+        let inside = [
+            "transcript_id \"T1.1\"; tag \"cds_start_NF\";",
+            "transcript_id \"T1.1.1\"; tag \"cds_end_NF\";",
+        ];
+        assert_eq!(kept(&versioned, &inside), own);
     }
 
     /// A model's transcript takes the tags of the line that names it whole:
@@ -1326,7 +1453,9 @@ NC_000001.11\tBestRefSeq\texon\t11874\t12227\t.\t+\t.\tgene_id \"DDX11L1\"; tran
     /// line's and never a sibling's; one that states a version takes the line
     /// of that version, written apart or inside the identifier, else the
     /// line that carries no version, and never the line of another version;
-    /// one that states none does not take a line that carries one.
+    /// one that states none does not take a line that carries one. The line
+    /// written `T1.1` is the dotted form of `T1` at version 1 in a model
+    /// that holds no transcript written `T1.1`.
     #[test]
     fn a_transcript_takes_the_tags_of_the_line_that_names_it_whole() {
         let gtf = tags_of_transcript_lines(&[
@@ -1340,36 +1469,29 @@ NC_000001.11\tBestRefSeq\texon\t11874\t12227\t.\t+\t.\tgene_id \"DDX11L1\"; tran
         ]);
         let none: Vec<&str> = Vec::new();
 
-        assert_eq!(gtf.kept_attribute_codes("T1.1", None), ["cds_start_NF"]);
-        assert_eq!(gtf.kept_attribute_codes("T1.2", None), ["cds_end_NF"]);
-        assert_eq!(gtf.kept_attribute_codes("T1", None), none);
-        assert_eq!(gtf.kept_attribute_codes("T1", Some(1)), ["cds_start_NF"]);
-
+        assert_eq!(kept_alone(&gtf, "T1.1", None), ["cds_start_NF"]);
+        assert_eq!(kept_alone(&gtf, "T1.2", None), ["cds_end_NF"]);
+        assert_eq!(kept_alone(&gtf, "T1", None), none);
+        assert_eq!(kept_alone(&gtf, "T1", Some(1)), ["cds_start_NF"]);
+        let beside_a_sibling = ModelNames::of([("T1", Some(1)), ("T1.1", None)]);
         assert_eq!(
-            gtf.kept_attribute_codes("ENST1", Some(3)),
-            ["gencode_basic"]
-        );
-        assert_eq!(gtf.kept_attribute_codes("ENST1", Some(4)), none);
-        assert_eq!(gtf.kept_attribute_codes("ENST1", None), none);
-
-        assert_eq!(
-            gtf.kept_attribute_codes("ENST2", Some(3)),
-            ["gencode_primary"]
-        );
-        assert_eq!(gtf.kept_attribute_codes("ENST2", Some(4)), none);
-        assert_eq!(
-            gtf.kept_attribute_codes("ENST2.3", None),
-            ["gencode_primary"]
+            gtf.kept_attribute_codes(&beside_a_sibling, "T1", Some(1)),
+            none
         );
 
-        assert_eq!(gtf.kept_attribute_codes("ENST3", Some(9)), ["cds_start_NF"]);
-        assert_eq!(gtf.kept_attribute_codes("ENST3", None), ["cds_start_NF"]);
+        assert_eq!(kept_alone(&gtf, "ENST1", Some(3)), ["gencode_basic"]);
+        assert_eq!(kept_alone(&gtf, "ENST1", Some(4)), none);
+        assert_eq!(kept_alone(&gtf, "ENST1", None), none);
 
-        assert_eq!(
-            gtf.kept_attribute_codes("ENST4", Some(3)),
-            ["gencode_basic"]
-        );
-        assert_eq!(gtf.kept_attribute_codes("ENST4", Some(4)), ["cds_end_NF"]);
+        assert_eq!(kept_alone(&gtf, "ENST2", Some(3)), ["gencode_primary"]);
+        assert_eq!(kept_alone(&gtf, "ENST2", Some(4)), none);
+        assert_eq!(kept_alone(&gtf, "ENST2.3", None), ["gencode_primary"]);
+
+        assert_eq!(kept_alone(&gtf, "ENST3", Some(9)), ["cds_start_NF"]);
+        assert_eq!(kept_alone(&gtf, "ENST3", None), ["cds_start_NF"]);
+
+        assert_eq!(kept_alone(&gtf, "ENST4", Some(3)), ["gencode_basic"]);
+        assert_eq!(kept_alone(&gtf, "ENST4", Some(4)), ["cds_end_NF"]);
     }
 
     /// A bgzipped GTF is a run of gzip members, the shape Ensembl VEP's
@@ -1389,12 +1511,12 @@ NC_000001.11\tBestRefSeq\texon\t11874\t12227\t.\t+\t.\tgene_id \"DDX11L1\"; tran
             bytes.extend(encoder.finish().unwrap());
         }
         std::fs::write(&path, bytes).unwrap();
-        let model = parse_gtf_model(&path, Reading::GffSource).unwrap();
+        let model = parse_gtf_model(&path, Reading::GffSource, &SequenceNames::default()).unwrap();
         assert_eq!(model.header["genome-build"], "GRCh38.p14");
         assert_eq!(model.genes["ENSG00000000001"].transcripts.len(), 1);
         let tags = parse_gtf_tags(&path).unwrap();
         assert_eq!(
-            tags.kept_attribute_codes("ENST00000000001", Some(5)),
+            kept_alone(&tags, "ENST00000000001", Some(5)),
             vec!["gencode_basic"]
         );
     }
@@ -1420,7 +1542,8 @@ NC_000001.11\tBestRefSeq\texon\t11874\t12227\t.\t+\t.\tgene_id \"DDX11L1\"; tran
             )),
             "{err:#}"
         );
-        let err = parse_gtf_model(&path, Reading::GffSource).unwrap_err();
+        let err =
+            parse_gtf_model(&path, Reading::GffSource, &SequenceNames::default()).unwrap_err();
         assert!(
             format!("{err:#}").ends_with(&format!(
                 "t.gtf line 2 is longer than the {MAX_LINE_BYTES}-byte limit for one line"
@@ -1860,7 +1983,7 @@ NC_000001.11\tBestRefSeq\texon\t11874\t12227\t.\t+\t.\tgene_id \"DDX11L1\"; tran
         assert_eq!(marked.header, plain.header);
         assert_eq!(marked.header["genome-build"], "GRCh38.p14");
         assert_eq!(marked.tags, plain.tags);
-        assert!(!plain.tags["ENST00000000001.5"].is_empty());
+        assert!(!plain.tags["ENST00000000001"][&Some(5)].is_empty());
     }
 
     /// A line that opens with a tab is read at the columns the file writes,
@@ -1978,11 +2101,12 @@ NC_000001.11\tBestRefSeq\texon\t11874\t12227\t.\t+\t.\tgene_id \"DDX11L1\"; tran
         .unwrap();
         let gff3_text = format!(
             "{:#}",
-            crate::gff3::parse_gff3(&gff3, Reading::GffSource).unwrap_err()
+            crate::gff3::parse_gff3(&gff3, Reading::GffSource, &SequenceNames::default())
+                .unwrap_err()
         );
         let gtf_text = format!(
             "{:#}",
-            parse_gtf_model(&gtf, Reading::GffSource).unwrap_err()
+            parse_gtf_model(&gtf, Reading::GffSource, &SequenceNames::default()).unwrap_err()
         );
         let gff3_refusal = undecodable_attribute_error("GFF3", "Name", "caf%FF");
         let gtf_refusal = undecodable_attribute_error("GTF", "Name", "caf%FF");
@@ -2014,7 +2138,7 @@ NC_000001.11\tBestRefSeq\texon\t11874\t12227\t.\t+\t.\tgene_id \"DDX11L1\"; tran
         bytes.extend_from_slice(after_name.as_bytes());
         std::fs::write(&path, bytes).unwrap();
         for err in [
-            parse_gtf_model(&path, Reading::GffSource).unwrap_err(),
+            parse_gtf_model(&path, Reading::GffSource, &SequenceNames::default()).unwrap_err(),
             parse_gtf_tags(&path).unwrap_err(),
         ] {
             assert!(

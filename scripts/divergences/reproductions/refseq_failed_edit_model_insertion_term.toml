@@ -1,17 +1,16 @@
 entry = "refseq_failed_edit_model_insertion_term"
 page = "docs/divergences/refseq-failed-edit-model-insertion-term.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the VCF 4.2 specification, section 1.4.1 \"Fixed fields\", and the --refseq option, which reads the RefSeq cache (Ensembl VEP documentation, \"Running Ensembl VEP\", --refseq); not seen in the measured datasets"
-notes = "Three one-base insertions on GRCh38 chromosome 7 at the position the forward-strand models NM_015068.3, NM_001184961.1 and NM_001172437.2 of PEG10 read twice, each a model with BAM_EDIT=FAILED: a base of the run inserted between 7:94664512 and 7:94664513, the same base inserted one position on, between 7:94664513 and 7:94664514, and a base that is not the run's own inserted between 7:94664512 and 7:94664513. The cache writes the twice-read position as two bases, cDNA 1436 and 1437 of NM_015068.3, and gives cDNA 1436 no genomic base. On the two records written at that position Ensembl VEP's span is the one position itself, the allele is written over it one base for one base, and the row is synonymous_variant beside a frameshift HGVSp or an unchanged residue; vep-rs reads the insertion on the genome, after the base 5' of it, and writes frameshift_variant with an insertion's positions, codons and residues. On the record written one position on both engines write frameshift_variant. No committed corpus's cache holds a model with BAM_EDIT=FAILED, so the prepare step copies the one region file of the Ensembl VEP RefSeq cache that holds the three models and converts it with the Perl of the image, which the run therefore needs; --hgvs reads the GRCh38 primary assembly, whose directory the reproduction tool takes as --extra-dir grch38_fasta=<directory>."
+notes = "Three one-base insertions on GRCh38 chromosome 7 at the position the forward-strand models NM_015068.3, NM_001184961.1 and NM_001172437.2 of PEG10 read twice, each a model with BAM_EDIT=FAILED: a base of the run inserted between 7:94664512 and 7:94664513, the same base inserted one position on, between 7:94664513 and 7:94664514, and a base that is not the run's own inserted between 7:94664512 and 7:94664513. The cache writes the twice-read position as two bases, cDNA 1436 and 1437 of NM_015068.3, and gives cDNA 1436 no genomic base. On the two records written at that position Ensembl VEP's span is the one position itself, the allele is written over it one base for one base, and the row is synonymous_variant beside a frameshift HGVSp or an unchanged residue; vep-rs reads the insertion on the genome, after the base 5' of it, and writes frameshift_variant with an insertion's positions, codons and residues. On the record written one position on both engines write frameshift_variant. No committed corpus's cache holds a model with BAM_EDIT=FAILED, so the prepare step copies the one region file of the Ensembl VEP RefSeq cache that holds the three models and converts it with tools/vep-storable-to-json; --hgvs reads the GRCh38 primary assembly, whose directory the reproduction tool takes as --extra-dir grch38_fasta=<directory>."
 # The region file 7/94000001-95000000 of the Ensembl VEP RefSeq cache, converted into the cache vep-rs reads.
 prepare = [
-  '''[ -n "$IMAGE" ] || { echo "the region file is converted with the Perl of the image: pass --image" >&2; exit 1; }
-mkdir -p "$STAGE/perl-cut/7" "$STAGE/json-cache"
+  '''mkdir -p "$STAGE/perl-cut/7" "$STAGE/json-cache"
 cp "$PERL_CACHE/info.txt" "$PERL_CACHE/chr_synonyms.txt" "$STAGE/perl-cut/"
 cp "$PERL_CACHE/7/94000001-95000000.gz" "$STAGE/perl-cut/7/"
-docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$STAGE/perl-cut:/input:ro" -v "$REPO/scripts/data:/scripts:ro" -v "$STAGE/json-cache:/output" "$IMAGE" perl /scripts/storable_to_json.pl /input /output 7 > "$STAGE/convert.log" 2>&1''',
+cargo run --release --locked --quiet --manifest-path "$REPO/tools/vep-storable-to-json/Cargo.toml" -- "$STAGE/perl-cut" "$STAGE/json-cache" 7 > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
 ]
 
 [input]
@@ -47,7 +46,14 @@ ensembl_vep = [
   "twice_read_own_base | synonymous_variant | 1436 | 957 | G | gga/ggA | FAILED | NM_015068.3:c.961dup | NP_055883.2:p.Leu321ThrfsTer23",
 ]
 vep_rs = [
-  "own_base_one_position_on | frameshift_variant | 1437-1438 | 958-959 | K/KX | aaa/aAaa | FAILED | NM_015068.3:c.960dup | NP_055883.2:p.Leu321ThrfsTer23",
+  "own_base_one_position_on | frameshift_variant | 1437-1438 | 958-959 | K/KX | aaa/aAaa | FAILED | NM_015068.3:c.959dup | NP_055883.2:p.Leu321ThrfsTer23",
   "twice_read_other_base | frameshift_variant | 1435-1436 | 956-957 | G/GX | gga/ggCa | FAILED | NM_015068.3:c.956_957insC | NP_055883.2:p.Leu321ThrfsTer23",
-  "twice_read_own_base | frameshift_variant | 1435-1436 | 956-957 | G/GX | gga/ggAa | FAILED | NM_015068.3:c.960dup | NP_055883.2:p.Leu321ThrfsTer23",
+  "twice_read_own_base | frameshift_variant | 1435-1436 | 956-957 | G/GX | gga/ggAa | FAILED | NM_015068.3:c.959dup | NP_055883.2:p.Leu321ThrfsTer23",
+]
+
+[implementation]
+code = ["crates/vep-effects/src/coding.rs::genome_is_reference"]
+tests = [
+    "crates/vep-effects/src/consequences.rs::tests::an_insertion_on_a_base_a_failed_edit_model_holds_is_read_on_the_genome",
+    "crates/vep-effects/src/consequences.rs::tests::bases_added_between_kept_bases_on_a_failed_edit_model_are_an_insertion",
 ]

@@ -1,0 +1,4 @@
+transcript_id	note	consequence_set	location	allele	cds_start	ref_peptide	alt_peptide	location
+ENST001	n	missense_variant	ignored	A	10	A	V	21:1000
+ENST002	n	missense_variant	21:1000	A	21	S	I	21:1000
+ENST003	n	stop_gained	x	T	31	R	*	21:2000

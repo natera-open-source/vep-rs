@@ -1,0 +1,3 @@
+file_name	source	location	allele	feature	feature_type	consequence_set
+output.txt	missing_in_rust	21:5000- 30000000	deletion	T2	Transcript	feature_truncation
+output.txt	extra_in_rust	21:5000- 30000000	deletion	T3	Transcript	feature_truncation

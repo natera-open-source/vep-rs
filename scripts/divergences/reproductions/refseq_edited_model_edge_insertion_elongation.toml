@@ -1,9 +1,9 @@
 entry = "refseq_edited_model_edge_insertion_elongation"
 page = "docs/divergences/refseq-edited-model-edge-insertion-elongation.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 8 of 77,675 cache transcripts · 10 flag sets, 4 corpora"
+input_class_basis = "2 · 14 of 116,165 cache transcripts · 19 flag sets, 5 corpora"
 notes = "The forward-strand models NM_130444.3 and NM_030582.4 end at 21:45513720, as the unedited model NM_001379500.1 does, and each carries one edit that removes nine bases (`4092 4100` and `3387 3395`), so the cached mapper numbers that base 6587 and 5882 where their exons sum to 6596 and 5891. The record is the point between 21:45513720 and 21:45513721: a symbolic insertion with END at its POS and no SVLEN has start POS + 1 and end POS (BaseVCF4.pm:262-264, 302-309). Its one mapped neighbour becomes the coordinate (6588, 6587) or (5883, 5882) (Mapper.pm:485-580), whose start is at most the unedited exon total, so within_cdna accepts it (VariationEffect.pm:680), and complete_within_feature holds for a point that straddles the feature's end (VariationEffect.pm:163-166). Ensembl VEP therefore writes feature_elongation beside downstream_gene_variant on the two edited models' rows. On NM_001379500.1 the base is numbered 5408, the exon total, the coordinate (5409, 5408) is refused, and both engines write downstream_gene_variant alone, as vep-rs does on all three rows."
 
 [input]
@@ -38,4 +38,14 @@ vep_rs = [
   "21:45513720-45513721 | NM_001379500.1 | downstream_gene_variant | - | MODIFIER | 0",
   "21:45513720-45513721 | NM_030582.4 | downstream_gene_variant | - | MODIFIER | 0",
   "21:45513720-45513721 | NM_130444.3 | downstream_gene_variant | - | MODIFIER | 0",
+]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/sv/insertion.rs::calculate_insertion_pair",
+    "crates/vep-effects/src/sv/insertion.rs::classify_upstream_downstream",
+]
+tests = [
+    "crates/vep-effects/src/sv/insertion.rs::tests::test_pair_after_transcript_end_is_downstream_at_the_nearer_flank",
+    "crates/vep-effects/src/sv/insertion.rs::tests::test_pair_before_transcript_start_is_upstream_at_the_nearer_flank",
 ]

@@ -50,7 +50,7 @@
   "species-yeast-r64",
   "genetic-code-tables"
  ],
- "suites": {
+ "datasets": {
   "sgrp_all": {
    "reference": "default.txt.gz",
    "input": "variants.vcf",
@@ -370,35 +370,35 @@
  },
  "records": [
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "X\t4582\tintron_mnv2_X_4582_CT_GA\tCT\tGA\t.\t.\t.",
    "combinations": [
     "splice_acceptor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "X\t4582\tintron_del2_X_4582_CTG_C\tCTG\tC\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "sgrp_all",
+   "dataset": "sgrp_all",
    "vcf": "X\t4595\ts10-4595\tT\tG\t.\t.\tSGRP;TSA=SNV",
    "combinations": [
     "intron_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "sgrp_all",
+   "dataset": "sgrp_all",
    "vcf": "X\t26412\ts10-26412\tC\tA\t.\t.\tSGRP;TSA=SNV",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "sgrp_all",
+   "dataset": "sgrp_all",
    "vcf": "X\t332595\ts10-332590\tA\tC,T\t.\t.\tSGRP;TSA=SNV",
    "combinations": [],
    "strata": [
@@ -406,14 +406,14 @@
    ]
   },
   {
-   "suite": "sgrp_all",
+   "dataset": "sgrp_all",
    "vcf": "X\t354287\ts10-354282\tC\tT\t.\t.\tSGRP;TSA=SNV",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_donor_5th_base_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "sgrp_all",
+   "dataset": "sgrp_all",
    "vcf": "I\t476\ts01-476\tG\tC,T\t.\t.\tSGRP;TSA=SNV",
    "combinations": [
     "downstream_gene_variant",
@@ -422,14 +422,14 @@
    ]
   },
   {
-   "suite": "sgrp_all",
+   "dataset": "sgrp_all",
    "vcf": "XV\t594\ts15-594\tG\tA\t.\t.\tSGRP;TSA=SNV",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "sgrp_all",
+   "dataset": "sgrp_all",
    "vcf": "I\t634\ts01-634\tC\tA,T\t.\t.\tSGRP;TSA=SNV",
    "combinations": [],
    "strata": [
@@ -437,14 +437,14 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t3459\tmito_snv_3459_T_G\tT\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t3952\tmito_snv_3952_A_C\tA\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -453,14 +453,14 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t3952\tmito_snv_3952_A_G\tA\tG\t.\t.\t.",
    "combinations": [
     "start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t3954\tmito_snv_3954_A_G\tA\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -469,7 +469,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t3954\tmito_snv_3954_A_T\tA\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -478,7 +478,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t3957\tmito_snv_3957_T_A\tT\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -487,7 +487,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t3971\tmito_snv_3971_T_G\tT\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -496,14 +496,14 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t3974\tmito_ins2_3974_A_AAC\tA\tAAC\t.\t.\t.",
    "combinations": [
     "frameshift_variant,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t3974\tmito_del1_3974_AT_A\tAT\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -512,7 +512,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t4032\tmito_ins3_4032_T_TACG\tT\tTACG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -521,42 +521,42 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t4090\tmito_ins1_4090_T_TA\tT\tTA\t.\t.\t.",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t4090\tmito_del3_4090_TTTA_T\tTTTA\tT\t.\t.\t.",
    "combinations": [
     "inframe_deletion"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t4112\tmito_snv_4112_T_A\tT\tA\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t4143\tmito_snv_4143_T_G\tT\tG\t.\t.\t.",
    "combinations": [
     "stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t4152\tmito_snv_4152_T_A\tT\tA\t.\t.\t.",
    "combinations": [
     "stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t4183\tmito_snv_4183_C_A\tC\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -565,7 +565,7 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t4185\tmito_snv_4185_T_C\tT\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -574,35 +574,35 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t4254\tmito_snv_4254_A_T\tA\tT\t.\t.\t.",
    "combinations": [
     "start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t4255\tmito_snv_4255_T_G\tT\tG\t.\t.\t.",
    "combinations": [
     "start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t4264\tmito_ins1_4264_T_TA\tT\tTA\t.\t.\t.",
    "combinations": [
     "frameshift_variant,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t4337\tmito_snv_4337_A_C\tA\tC\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t4337\tmito_snv_4337_A_G\tA\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -612,77 +612,77 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t4338\tmito_snv_4338_A_G\tA\tG\t.\t.\t.",
    "combinations": [
     "stop_retained_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t4409\tmito_del4_4409_TTTAT_T\tTTTAT\tT\t.\t.\t.",
    "combinations": [
     "frameshift_variant,stop_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "IX\t4986\tintron_snv_IX_4986_C_A\tC\tA\t.\t.\t.",
    "combinations": [
     "splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t7469\tchrI_del3_I_7469_TATC_T\tTATC\tT\t.\t.\t.",
    "combinations": [
     "inframe_deletion,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t8439\tchrI_ins3_I_8439_G_GACG\tG\tGACG\t.\t.\t.",
    "combinations": [
     "inframe_insertion"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t8827\tchrI_ins3_I_8827_G_GACG\tG\tGACG\t.\t.\t.",
    "combinations": [
     "inframe_insertion"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t10088\tchrI_del4_I_10088_ATCAT_A\tATCAT\tA\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,coding_sequence_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t11669\tmito_snv_11669_A_G\tA\tG\t.\t.\t.",
    "combinations": [
     "start_retained_variant"
    ]
   },
   {
-   "suite": "sgrp_all",
+   "dataset": "sgrp_all",
    "vcf": "I\t12195\ts01-12196\tT\tC\t.\t.\tSGRP;TSA=SNV",
    "combinations": [
     "synonymous_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t13580\tchrI_ins3_I_13580_T_TACG\tT\tTACG\t.\t.\t.",
    "combinations": [
     "protein_altering_variant,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t13987\tintron_del1_Mito_13987_GT_G\tGT\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -691,1029 +691,1029 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t16471\tintron_mnv2_Mito_16471_GT_TA\tGT\tTA\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t20504\tmito_del2_20504_GAA_G\tGAA\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t20504\tmito_del4_20504_GAACT_G\tGAACT\tG\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,intron_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t21722\tmito_mnv2_21722_TT_AA\tTT\tAA\t.\t.\t.",
    "combinations": [
     "intron_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t22244\tmito_ins3_22244_T_TACG\tT\tTACG\t.\t.\t.",
    "combinations": [
     "protein_altering_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t22244\tmito_del3_22244_TTAA_T\tTTAA\tT\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t22244\tmito_del4_22244_TTAAT_T\tTTAAT\tT\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t22245\tmito_snv_22245_T_A\tT\tA\t.\t.\t.",
    "combinations": [
     "splice_region_variant,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t24056\tchrI_del4_I_24056_GTAAG_G\tGTAAG\tG\t.\t.\t.",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t24158\tmito_snv_24158_A_G\tA\tG\t.\t.\t.",
    "combinations": [
     "start_retained_variant"
    ]
   },
   {
-   "suite": "sgrp_all",
+   "dataset": "sgrp_all",
    "vcf": "IX\t24457\ts09-24457\tG\tA\t.\t.\tSGRP;TSA=SNV",
    "combinations": [
     "synonymous_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t24868\tmito_snv_24868_T_A\tT\tA\t.\t.\t.",
    "combinations": [
     "splice_region_variant,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t25318\tmito_ins3_25318_A_AACG\tA\tAACG\t.\t.\t.",
    "combinations": [
     "protein_altering_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t25318\tmito_del3_25318_ACTT_A\tACTT\tA\t.\t.\t.",
    "combinations": [
     "inframe_deletion,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t25347\tmito_ins2_25347_G_GAC\tG\tGAC\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_donor_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t26217\tmito_del4_26217_ACCTA_A\tACCTA\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t27667\tmito_ins1_27667_T_TA\tT\tTA\t.\t.\t.",
    "combinations": [
     "frameshift_variant,start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t27667\tmito_ins2_27667_T_TAC\tT\tTAC\t.\t.\t.",
    "combinations": [
     "frameshift_variant,start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t27667\tmito_del1_27667_TG_T\tTG\tT\t.\t.\t.",
    "combinations": [
     "frameshift_variant,start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t27667\tmito_del2_27667_TGC_T\tTGC\tT\t.\t.\t.",
    "combinations": [
     "frameshift_variant,start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t27667\tmito_del3_27667_TGCC_T\tTGCC\tT\t.\t.\t.",
    "combinations": [
     "inframe_deletion,start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t27667\tmito_del4_27667_TGCCA_T\tTGCCA\tT\t.\t.\t.",
    "combinations": [
     "frameshift_variant,start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t27742\tchrI_ins3_I_27742_T_TACG\tT\tTACG\t.\t.\t.",
    "combinations": [
     "protein_altering_variant,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t27812\tmito_mnv2_27812_AT_CA\tAT\tCA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,coding_sequence_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t29119\tmito_snv_29119_T_C\tT\tC\t.\t.\t.",
    "combinations": [
     "synonymous_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t29262\tmito_del2_29262_ATT_A\tATT\tA\t.\t.\t.",
    "combinations": [
     "frameshift_variant,stop_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t29262\tmito_del3_29262_ATTA_A\tATTA\tA\t.\t.\t.",
    "combinations": [
     "inframe_deletion,stop_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t29262\tmito_del4_29262_ATTAA_A\tATTAA\tA\t.\t.\t.",
    "combinations": [
     "frameshift_variant,stop_lost"
    ]
   },
   {
-   "suite": "sgrp_all",
+   "dataset": "sgrp_all",
    "vcf": "XV\t30709\ts15-30708\tA\tG\t.\t.\tSGRP;TSA=SNV",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t30876\tmito_snv_30876_A_G\tA\tG\t.\t.\t.",
    "combinations": [
     "start_retained_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "II\t36435\tintron_ins2_II_36435_A_AAC\tA\tAAC\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_donor_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "II\t36435\tintron_del1_II_36435_AA_A\tAA\tA\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_donor_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "II\t36435\tintron_del2_II_36435_AAA_A\tAAA\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_donor_region_variant,splice_donor_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "II\t36435\tintron_del3_II_36435_AAAA_A\tAAAA\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_donor_region_variant,splice_donor_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "II\t36435\tintron_del4_II_36435_AAAAA_A\tAAAAA\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_donor_5th_base_variant,splice_donor_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t36541\tmito_del3_36541_TGGC_T\tTGGC\tT\t.\t.\t.",
    "combinations": [
     "inframe_deletion,start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t36802\tmito_mnv2_36802_TC_AG\tTC\tAG\t.\t.\t.",
    "combinations": [
     "stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t36955\tintron_del2_Mito_36955_GTG_G\tGTG\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_donor_region_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t36955\tintron_del3_Mito_36955_GTGA_G\tGTGA\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_donor_region_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t37725\tmito_snv_37725_T_A\tT\tA\t.\t.\t.",
    "combinations": [
     "missense_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t37730\tmito_del4_37730_TTGAG_T\tTTGAG\tT\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t37734\tmito_snv_37734_G_A\tG\tA\t.\t.\t.",
    "combinations": [
     "missense_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t40676\tmito_snv_40676_T_A\tT\tA\t.\t.\t.",
    "combinations": [
     "intron_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t40841\tmito_snv_40841_C_T\tC\tT\t.\t.\t.",
    "combinations": [
     "splice_region_variant,synonymous_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t40843\tmito_snv_40843_C_A\tC\tA\t.\t.\t.",
    "combinations": [
     "splice_region_variant,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t41090\tmito_snv_41090_T_G\tT\tG\t.\t.\t.",
    "combinations": [
     "splice_region_variant,synonymous_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t41091\tintron_del4_Mito_41091_CAAAA_C\tCAAAA\tC\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_donor_5th_base_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t41094\tmito_mnv2_41094_AA_CC\tAA\tCC\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_donor_5th_base_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t43298\tmito_ins3_43298_T_TACG\tT\tTACG\t.\t.\t.",
    "combinations": [
     "inframe_insertion,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t43298\tmito_del3_43298_TACC_T\tTACC\tT\t.\t.\t.",
    "combinations": [
     "inframe_deletion,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t43646\tmito_ins3_43646_A_AACG\tA\tAACG\t.\t.\t.",
    "combinations": [
     "inframe_insertion,stop_retained_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t43646\tmito_del4_43646_AATAT_A\tAATAT\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,stop_retained_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t43647\tmito_snv_43647_A_G\tA\tG\t.\t.\t.",
    "combinations": [
     "stop_retained_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t46952\tmito_ins1_46952_A_AA\tA\tAA\t.\t.\t.",
    "combinations": [
     "stop_retained_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t46952\tmito_ins3_46952_A_AACG\tA\tAACG\t.\t.\t.",
    "combinations": [
     "inframe_insertion,stop_retained_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t46952\tmito_del2_46952_AAT_A\tAAT\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,stop_retained_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t46952\tmito_del3_46952_AATA_A\tAATA\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,stop_retained_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t46952\tmito_del4_46952_AATAT_A\tAATAT\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,stop_retained_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t48982\tmito_ins3_48982_T_TACG\tT\tTACG\t.\t.\t.",
    "combinations": [
     "protein_altering_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t49388\tmito_ins3_49388_A_AACG\tA\tAACG\t.\t.\t.",
    "combinations": [
     "protein_altering_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t49417\tmito_ins3_49417_A_AACG\tA\tAACG\t.\t.\t.",
    "combinations": [
     "protein_altering_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t49475\tmito_ins2_49475_G_GAC\tG\tGAC\t.\t.\t.",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t49881\tmito_del1_49881_AT_A\tAT\tA\t.\t.\t.",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t49932\tmito_snv_49932_A_T\tA\tT\t.\t.\t.",
    "combinations": [
     "synonymous_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t49997\tmito_del2_49997_ATA_A\tATA\tA\t.\t.\t.",
    "combinations": [
     "frameshift_variant,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t49997\tmito_del3_49997_ATAA_A\tATAA\tA\t.\t.\t.",
    "combinations": [
     "inframe_deletion,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t51157\tmito_ins3_51157_C_CACG\tC\tCACG\t.\t.\t.",
    "combinations": [
     "inframe_insertion"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t51273\tmito_del4_51273_TCATA_T\tTCATA\tT\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,coding_sequence_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t54111\tmito_snv_54111_A_G\tA\tG\t.\t.\t.",
    "combinations": [
     "start_retained_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t54310\tmito_snv_54310_T_C\tT\tC\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t54434\tmito_del2_54434_TAT_T\tTAT\tT\t.\t.\t.",
    "combinations": [
     "frameshift_variant,stop_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t54434\tmito_del3_54434_TATA_T\tTATA\tT\t.\t.\t.",
    "combinations": [
     "inframe_deletion,stop_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t54434\tmito_del4_54434_TATAA_T\tTATAA\tT\t.\t.\t.",
    "combinations": [
     "frameshift_variant,stop_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "XVI\t56205\tintron_ins3_XVI_56205_T_TACG\tT\tTACG\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "XVI\t56205\tintron_del3_XVI_56205_TGCA_T\tTGCA\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "XVI\t56205\tintron_del4_XVI_56205_TGCAA_T\tTGCAA\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "XVI\t56206\tintron_snv_XVI_56206_G_A\tG\tA\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "XVI\t56238\tintron_snv_XVI_56238_A_G\tA\tG\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t57450\tmito_del1_57450_TA_T\tTA\tT\t.\t.\t.",
    "combinations": [
     "upstream_gene_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t60723\tmito_snv_60723_T_A\tT\tA\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t60724\tmito_snv_60724_A_G\tA\tG\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t60725\tintron_del2_Mito_60725_ATT_A\tATT\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_donor_region_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t60725\tintron_del3_Mito_60725_ATTT_A\tATTT\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_donor_region_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t60725\tintron_del4_Mito_60725_ATTTA_A\tATTTA\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_donor_5th_base_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t60727\tmito_snv_60727_T_A\tT\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_donor_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t60727\tmito_ins2_60727_T_TAC\tT\tTAC\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_donor_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t60727\tmito_del4_60727_TTACC_T\tTTACC\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_donor_5th_base_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t60729\tmito_snv_60729_A_T\tA\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_donor_5th_base_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t60732\tmito_snv_60732_C_A\tC\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t60747\tmito_snv_60747_A_C\tA\tC\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t60959\tmito_ins2_60959_A_AAC\tA\tAAC\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t61124\tmito_snv_61124_G_T\tG\tT\t.\t.\t.",
    "combinations": [
     "stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t61162\tmito_ins1_61162_T_TA\tT\tTA\t.\t.\t.",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t61568\tmito_del3_61568_TTTC_T\tTTTC\tT\t.\t.\t.",
    "combinations": [
     "inframe_deletion,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t61655\tmito_ins3_61655_A_AACG\tA\tAACG\t.\t.\t.",
    "combinations": [
     "protein_altering_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t61722\tmito_snv_61722_T_A\tT\tA\t.\t.\t.",
    "combinations": [
     "stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t61851\tmito_snv_61851_G_T\tG\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t61858\tmito_ins2_61858_A_AAC\tA\tAAC\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t61858\tmito_del3_61858_AAAA_A\tAAAA\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t61864\tmito_snv_61864_T_G\tT\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t65772\tmito_snv_65772_A_G\tA\tG\t.\t.\t.",
    "combinations": [
     "start_retained_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t65944\tmito_snv_65944_C_A\tC\tA\t.\t.\t.",
    "combinations": [
     "synonymous_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t65947\tmito_ins3_65947_T_TACG\tT\tTACG\t.\t.\t.",
    "combinations": [
     "protein_altering_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t66005\tmito_del3_66005_ATTT_A\tATTT\tA\t.\t.\t.",
    "combinations": [
     "inframe_deletion,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t66057\tchrI_ins2_I_66057_T_TAC\tT\tTAC\t.\t.\t.",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t66174\tmito_snv_66174_G_A\tG\tA\t.\t.\t.",
    "combinations": [
     "stop_retained_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t66736\tchrI_ins3_I_66736_T_TACG\tT\tTACG\t.\t.\t.",
    "combinations": [
     "protein_altering_variant,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t67471\tmito_snv_67471_G_C\tG\tC\t.\t.\t.",
    "combinations": [
     "upstream_gene_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t67484\tmito_del4_67484_TGGTA_T\tTGGTA\tT\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t68006\tmito_del4_68006_ATTTT_A\tATTTT\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t73777\tmito_ins3_73777_T_TACG\tT\tTACG\t.\t.\t.",
    "combinations": [
     "inframe_insertion"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t73951\tmito_del3_73951_ATTC_A\tATTC\tA\t.\t.\t.",
    "combinations": [
     "inframe_deletion,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t75169\tmito_del3_75169_TTTA_T\tTTTA\tT\t.\t.\t.",
    "combinations": [
     "inframe_deletion"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t75285\tmito_del3_75285_ATGT_A\tATGT\tA\t.\t.\t.",
    "combinations": [
     "inframe_deletion,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t75620\tmito_snv_75620_T_C\tT\tC\t.\t.\t.",
    "combinations": [
     "missense_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t75626\tmito_snv_75626_T_G\tT\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_donor_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t75630\tmito_snv_75630_G_C\tG\tC\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t75658\tmito_snv_75658_G_C\tG\tC\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t75661\tintron_snv_Mito_75661_C_T\tC\tT\t.\t.\t.",
    "combinations": [
     "splice_acceptor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t75662\tmito_ins1_75662_T_TA\tT\tTA\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t75662\tmito_ins2_75662_T_TAC\tT\tTAC\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t75662\tmito_ins3_75662_T_TACG\tT\tTACG\t.\t.\t.",
    "combinations": [
     "inframe_insertion,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t75662\tmito_mnv2_75662_TA_AC\tTA\tAC\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t75662\tmito_del1_75662_TA_T\tTA\tT\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t75662\tmito_del2_75662_TAA_T\tTAA\tT\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t75662\tmito_del3_75662_TAAA_T\tTAAA\tT\t.\t.\t.",
    "combinations": [
     "inframe_deletion,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t75662\tmito_del4_75662_TAAAA_T\tTAAAA\tT\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t75663\tmito_snv_75663_A_T\tA\tT\t.\t.\t.",
    "combinations": [
     "splice_region_variant,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t75720\tmito_del3_75720_TATC_T\tTATC\tT\t.\t.\t.",
    "combinations": [
     "inframe_deletion"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t75836\tmito_del3_75836_TGGT_T\tTGGT\tT\t.\t.\t.",
    "combinations": [
     "inframe_deletion"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t75872\tmito_snv_75872_T_C\tT\tC\t.\t.\t.",
    "combinations": [
     "splice_region_variant,synonymous_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t75877\tmito_snv_75877_T_G\tT\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_donor_5th_base_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t75894\tmito_ins2_75894_G_GAC\tG\tGAC\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t75904\tmito_snv_75904_A_T\tA\tT\t.\t.\t.",
    "combinations": [
     "splice_region_variant,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t75906\tmito_snv_75906_A_C\tA\tC\t.\t.\t.",
    "combinations": [
     "missense_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t75906\tmito_snv_75906_A_G\tA\tG\t.\t.\t.",
    "combinations": [
     "splice_region_variant,synonymous_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t75906\tmito_snv_75906_A_T\tA\tT\t.\t.\t.",
    "combinations": [
     "missense_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t75981\tmito_del3_75981_TTAA_T\tTTAA\tT\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t75981\tmito_del4_75981_TTAAT_T\tTTAAT\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,stop_retained_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t79968\tmito_snv_79968_T_C\tT\tC\t.\t.\t.",
    "combinations": [
     "synonymous_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t83226\tchrI_ins3_I_83226_A_AACG\tA\tAACG\t.\t.\t.",
    "combinations": [
     "inframe_insertion,stop_retained_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t84972\tchrI_del3_I_84972_GGAT_G\tGGAT\tG\t.\t.\t.",
    "combinations": [
     "inframe_deletion,stop_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t85417\tmito_snv_85417_T_C\tT\tC\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t85554\tmito_snv_85554_A_G\tA\tG\t.\t.\t.",
    "combinations": [
     "start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "Mito\t85709\tmito_snv_85709_A_C\tA\tC\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t98552\tchrI_ins2_I_98552_A_AAC\tA\tAAC\t.\t.\t.",
    "combinations": [
     "frameshift_variant,stop_gained"
    ]
   },
   {
-   "suite": "sgrp_all",
+   "dataset": "sgrp_all",
    "vcf": "I\t99348\ts01-99349\tT\tC\t.\t.\tSGRP;TSA=SNV",
    "combinations": [
     "downstream_gene_variant",
@@ -1723,56 +1723,56 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t139195\tchrI_mnv2_I_139195_CT_GA\tCT\tGA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t141426\tchrI_del3_I_141426_TGAC_T\tTGAC\tT\t.\t.\t.",
    "combinations": [
     "inframe_deletion,start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t141426\tchrI_del4_I_141426_TGACA_T\tTGACA\tT\t.\t.\t.",
    "combinations": [
     "frameshift_variant,start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t151099\tchrI_snv_I_151099_C_G\tC\tG\t.\t.\t.",
    "combinations": [
     "missense_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t155006\tchrI_mnv2_I_155006_TG_AT\tTG\tAT\t.\t.\t.",
    "combinations": [
     "start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t156752\tchrI_del4_I_156752_CATTA_C\tCATTA\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,stop_retained_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t157334\tchrI_ins3_I_157334_T_TACG\tT\tTACG\t.\t.\t.",
    "combinations": [
     "protein_altering_variant,stop_gained"
    ]
   },
   {
-   "suite": "sgrp_all",
+   "dataset": "sgrp_all",
    "vcf": "I\t165205\ts01-165206\tT\tC\t.\t.\tSGRP;TSA=SNV",
    "combinations": [
     "downstream_gene_variant",
@@ -1781,63 +1781,63 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t166743\tchrI_del3_I_166743_CATT_C\tCATT\tC\t.\t.\t.",
    "combinations": [
     "inframe_deletion,stop_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t166743\tchrI_del4_I_166743_CATTT_C\tCATTT\tC\t.\t.\t.",
    "combinations": [
     "frameshift_variant,stop_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t174309\tchrI_ins3_I_174309_T_TACG\tT\tTACG\t.\t.\t.",
    "combinations": [
     "protein_altering_variant,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t174988\tchrI_mnv2_I_174988_CT_GA\tCT\tGA\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t181179\tintron_ins1_I_181179_A_AA\tA\tAA\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t181179\tintron_del4_I_181179_AAATA_A\tAAATA\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_donor_5th_base_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t186822\tchrI_ins3_I_186822_T_TACG\tT\tTACG\t.\t.\t.",
    "combinations": [
     "protein_altering_variant,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t192254\tchrI_ins2_I_192254_T_TAC\tT\tTAC\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "sgrp_all",
+   "dataset": "sgrp_all",
    "vcf": "II\t197654\ts02-197657\tG\tA\t.\t.\tSGRP;TSA=SNV",
    "combinations": [
     "downstream_gene_variant",
@@ -1846,21 +1846,21 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t201663\tchrI_del2_I_201663_CAA_C\tCAA\tC\t.\t.\t.",
    "combinations": [
     "frameshift_variant,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t217280\tchrI_del3_I_217280_CAAA_C\tCAAA\tC\t.\t.\t.",
    "combinations": [
     "inframe_deletion"
    ]
   },
   {
-   "suite": "sgrp_all",
+   "dataset": "sgrp_all",
    "vcf": "I\t218221\ts01-218212\tC\tT\t.\t.\tSGRP;TSA=SNV",
    "combinations": [
     "non_coding_transcript_exon_variant",
@@ -1868,301 +1868,301 @@
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t220287\tchrI_ins3_I_220287_C_CACG\tC\tCACG\t.\t.\t.",
    "combinations": [
     "inframe_insertion"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t220384\tchrI_ins1_I_220384_T_TA\tT\tTA\t.\t.\t.",
    "combinations": [
     "frameshift_variant,stop_gained"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t221063\tchrI_del3_I_221063_TAAC_T\tTAAC\tT\t.\t.\t.",
    "combinations": [
     "inframe_deletion"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t224264\tchrI_ins3_I_224264_C_CACG\tC\tCACG\t.\t.\t.",
    "combinations": [
     "protein_altering_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "I\t229114\tchrI_ins3_I_229114_G_GACG\tG\tGACG\t.\t.\t.",
    "combinations": [
     "inframe_insertion"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "III\t293940\tintron_snv_III_293940_G_C\tG\tC\t.\t.\t.",
    "combinations": [
     "splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "III\t294240\tintron_del4_III_294240_GTATG_G\tGTATG\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_donor_5th_base_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "IX\t335935\tintron_snv_IX_335935_C_A\tC\tA\t.\t.\t.",
    "combinations": [
     "missense_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "IX\t335935\tintron_snv_IX_335935_C_G\tC\tG\t.\t.\t.",
    "combinations": [
     "missense_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "IX\t335935\tintron_snv_IX_335935_C_T\tC\tT\t.\t.\t.",
    "combinations": [
     "missense_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "IX\t335936\tintron_ins1_IX_335936_T_TA\tT\tTA\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "IX\t335936\tintron_ins2_IX_335936_T_TAC\tT\tTAC\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "IX\t335936\tintron_ins3_IX_335936_T_TACG\tT\tTACG\t.\t.\t.",
    "combinations": [
     "inframe_insertion,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "IX\t335936\tintron_del1_IX_335936_TA_T\tTA\tT\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "IX\t335936\tintron_del2_IX_335936_TAA_T\tTAA\tT\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "IX\t335936\tintron_del3_IX_335936_TAAG_T\tTAAG\tT\t.\t.\t.",
    "combinations": [
     "inframe_deletion,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "IX\t335936\tintron_del4_IX_335936_TAAGT_T\tTAAGT\tT\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "IX\t335937\tintron_snv_IX_335937_A_C\tA\tC\t.\t.\t.",
    "combinations": [
     "splice_acceptor_variant,synonymous_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "IX\t335937\tintron_snv_IX_335937_A_G\tA\tG\t.\t.\t.",
    "combinations": [
     "splice_acceptor_variant,synonymous_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "IX\t335937\tintron_snv_IX_335937_A_T\tA\tT\t.\t.\t.",
    "combinations": [
     "splice_acceptor_variant,synonymous_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "XIII\t352317\tintron_del4_XIII_352317_AAATA_A\tAAATA\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_donor_5th_base_variant,splice_donor_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "sgrp_all",
+   "dataset": "sgrp_all",
    "vcf": "II\t407115\ts02-407109\tA\tT\t.\t.\tSGRP;TSA=SNV",
    "combinations": [
     "intron_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "sgrp_all",
+   "dataset": "sgrp_all",
    "vcf": "V\t441880\ts05-441876\tG\tA\t.\t.\tSGRP;TSA=SNV",
    "combinations": [
     "stop_retained_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "XVI\t459005\tintron_snv_XVI_459005_G_A\tG\tA\t.\t.\t.",
    "combinations": [
     "splice_acceptor_variant,synonymous_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "XVI\t459005\tintron_snv_XVI_459005_G_C\tG\tC\t.\t.\t.",
    "combinations": [
     "splice_acceptor_variant,synonymous_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "XVI\t459005\tintron_snv_XVI_459005_G_T\tG\tT\t.\t.\t.",
    "combinations": [
     "splice_acceptor_variant,synonymous_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "XVI\t459006\tintron_snv_XVI_459006_T_C\tT\tC\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "XVI\t459006\tintron_ins1_XVI_459006_T_TA\tT\tTA\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "XVI\t459006\tintron_ins2_XVI_459006_T_TAC\tT\tTAC\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "XVI\t459006\tintron_ins3_XVI_459006_T_TACG\tT\tTACG\t.\t.\t.",
    "combinations": [
     "inframe_insertion,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "XVI\t459006\tintron_mnv2_XVI_459006_TG_AT\tTG\tAT\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "XVI\t459006\tintron_del1_XVI_459006_TG_T\tTG\tT\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "XVI\t459006\tintron_del2_XVI_459006_TGA_T\tTGA\tT\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_donor_region_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "XVI\t459006\tintron_del3_XVI_459006_TGAC_T\tTGAC\tT\t.\t.\t.",
    "combinations": [
     "inframe_deletion,splice_donor_region_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "XVI\t459006\tintron_del4_XVI_459006_TGACA_T\tTGACA\tT\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_donor_5th_base_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "XVI\t459007\tintron_snv_XVI_459007_G_A\tG\tA\t.\t.\t.",
    "combinations": [
     "missense_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "XVI\t459007\tintron_snv_XVI_459007_G_C\tG\tC\t.\t.\t.",
    "combinations": [
     "missense_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "XVI\t459007\tintron_snv_XVI_459007_G_T\tG\tT\t.\t.\t.",
    "combinations": [
     "missense_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "sgrp_all",
+   "dataset": "sgrp_all",
    "vcf": "V\t499347\ts05-499342\tT\tC\t.\t.\tSGRP;TSA=SNV",
    "combinations": [
     "stop_retained_variant"
    ]
   },
   {
-   "suite": "sgrp_all",
+   "dataset": "sgrp_all",
    "vcf": "XII\t592578\ts12-592580\tC\tT\t.\t.\tSGRP;TSA=SNV",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_donor_region_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "sgrp_all",
+   "dataset": "sgrp_all",
    "vcf": "XVI\t622590\ts16-622587\tT\tC\t.\t.\tSGRP;TSA=SNV",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_donor_5th_base_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "sgrp_all",
+   "dataset": "sgrp_all",
    "vcf": "XVI\t678193\ts16-678190\tC\tA\t.\t.\tSGRP;TSA=SNV",
    "combinations": [
     "splice_region_variant,synonymous_variant"
    ]
   },
   {
-   "suite": "sgrp_all",
+   "dataset": "sgrp_all",
    "vcf": "II\t680703\ts02-680698\tG\tA\t.\t.\tSGRP;TSA=SNV",
    "combinations": [
     "downstream_gene_variant",
@@ -2171,70 +2171,70 @@
    ]
   },
   {
-   "suite": "sgrp_all",
+   "dataset": "sgrp_all",
    "vcf": "XIV\t781603\ts14-781603\tT\tC\t.\t.\tSGRP;TSA=SNV",
    "combinations": [
     "start_lost"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "XV\t785688\tintron_ins1_XV_785688_A_AA\tA\tAA\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "XV\t785688\tintron_ins2_XV_785688_A_AAC\tA\tAAC\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "XV\t785688\tintron_ins3_XV_785688_A_AACG\tA\tAACG\t.\t.\t.",
    "combinations": [
     "inframe_insertion,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "XV\t785688\tintron_del1_XV_785688_AG_A\tAG\tA\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "XV\t785688\tintron_del2_XV_785688_AGG_A\tAGG\tA\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_donor_region_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "XV\t785688\tintron_del3_XV_785688_AGGC_A\tAGGC\tA\t.\t.\t.",
    "combinations": [
     "inframe_deletion,splice_donor_region_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "probe",
+   "dataset": "probe",
    "vcf": "XV\t785688\tintron_del4_XV_785688_AGGCA_A\tAGGCA\tA\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_donor_5th_base_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "sgrp_all",
+   "dataset": "sgrp_all",
    "vcf": "XIII\t923640\ts13-923638\tG\tA\t.\t.\tSGRP;TSA=SNV",
    "combinations": [
     "stop_gained"
    ]
   },
   {
-   "suite": "sgrp_all",
+   "dataset": "sgrp_all",
    "vcf": "IV\t1307709\ts04-1307701\tA\tG,T\t.\t.\tSGRP;TSA=SNV",
    "combinations": [],
    "strata": [
@@ -2242,7 +2242,7 @@
    ]
   },
   {
-   "suite": "sgrp_all",
+   "dataset": "sgrp_all",
    "vcf": "IV\t1503911\ts04-1503902\tG\tA,T\t.\t.\tSGRP;TSA=SNV",
    "combinations": [],
    "strata": [
@@ -2250,7 +2250,7 @@
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "divergences": [

@@ -1,7 +1,7 @@
 entry = "cnv_tr_rn_zero_allele_dropped"
 page = "docs/divergences/defect-o.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the VCF 4.4 specification, section 3 \"INFO keys used for structural variants\" (RN is an Integer count of repeat sequences per ALT allele and the section states no minimum for it, here 0 for one of two <CNV:TR> alleles, with RUS and RUC lists that match the sum of RN); not seen in the measured datasets"
 notes = "With the FASTA both engines expand the alleles into one string, AGCAGCAGC//AGCAGCAGCAGC; Ensembl VEP reads the empty middle part as a single-allele indel and keeps the RN=0 allele alone, vep-rs keeps the four-unit allele beside it."
@@ -31,4 +31,16 @@ ensembl_vep = ["21:30425588-30425596 | - | ENST00000390690 | inframe_deletion | 
 vep_rs = [
   "21:30425588-30425596 | - | ENST00000390690 | inframe_deletion | 1",
   "21:30425588-30425596 | AGCAGCAGCAGC | ENST00000390690 | protein_altering_variant | 2",
+]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/vcf_parser.rs::tandem_repeat_record",
+    "crates/vep-core/src/sv_record.rs::tandem_repeat_allele_string",
+]
+tests = ["crates/vep-core/src/sv_record.rs::tests::repeat_counts_are_read_as_perl_numifies_them"]
+rules = [
+    "tools/vep-sv-compare/src/masks/cnv_tr.rs::dropped_symbolic_rows",
+    "tools/vep-sv-compare/src/masks/cnv_tr.rs::filter_cnv_tr_rn_zero_allele_dropped",
+    "tools/vep-sv-compare/src/masks/cnv_tr.rs::rows_without_the_gain_term",
 ]

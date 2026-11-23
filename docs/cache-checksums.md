@@ -21,6 +21,16 @@ ERROR: [cache] checksum mismatch for transcripts/21/1-1000000.json.gz in cache
 
 A listed file that is missing ends the run before anything is read, as `ERROR: [cache] <path> is listed in CHECKSUMS.sha256 but missing from <dir>`. A missing `info.json` or `transcripts/` is refused earlier, with the cache resolution's own lines.
 
+## A build that ends early
+
+`vep-cache-builder` and `vep-cache-converter` write the manifest twice: before the first file of a build or conversion, as one line that lists no file, and last, as the list. A run of either that fails or is killed between the two leaves the first. `sha256sum --check` fails on it, and a run ends with exit 1 and one line:
+
+```
+ERROR: [cache] cache holds a cache whose build did not finish: build it again
+```
+
+The line names the directory, here `cache`, whichever files the run had written. Building or converting into the same directory completes the cache.
+
 ## What it does not protect
 
 `all_vars.gz` and a FASTA are read by byte range through their index, so a run does not hash them. Their index is hashed, the file must be listed, and a copy that ends before the last block or base its index names is refused. A change inside such a file that keeps its index and length is not detected. Under `--format id` the variation files are read start to end and hashed whole. The manifest is not a signature: whoever can change a file can rewrite it.
@@ -33,7 +43,7 @@ A cache without the file loads and annotates unchanged. The run warns once, in t
 WARNING: cache /path/to/cache carries no checksum manifest
 ```
 
-Caches built or converted by releases before 0.5.0 carry none, and deleting the manifest returns a cache to that state. Build or convert the cache again, or write the manifest in the cache directory:
+A cache converted from an Ensembl VEP cache by `tools/vep-storable-to-json` carries none: that tool writes no manifest, so converting again leaves the cache without one. Caches built or converted by releases before 0.5.0 carry none either, and deleting the manifest returns a cache to that state. `vep-cache-builder` and `vep-cache-converter` write one when a cache is built or converted with them again. For any cache, write the manifest in the cache directory:
 
 ```
 find -L . -type f ! -name CHECKSUMS.sha256 | sort | xargs sha256sum \

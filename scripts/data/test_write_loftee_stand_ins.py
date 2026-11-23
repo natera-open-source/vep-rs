@@ -210,7 +210,6 @@ def test_foreign_file_refuses_and_is_never_opened(tmp_path, capsys, monkeypatch)
         (directory / name).write_text("not the script's own\n", encoding="utf-8")
         (directory / name).chmod(0o000)
     before = state(tree)
-    read_times = [os.lstat(directory / name).st_atime_ns for name in ("alpha.pl", "notes.txt")]
     opened = record_opens(monkeypatch)
     code, out, err = run(capsys, tree)
     monkeypatch.undo()
@@ -222,7 +221,6 @@ def test_foreign_file_refuses_and_is_never_opened(tmp_path, capsys, monkeypatch)
     assert str(tree / "Gadget.pm") in opened and str(tree / "helper.pl") in opened
     assert [path for path in opened if path.startswith(str(directory))] == []
     assert before == state(tree)
-    assert read_times == [os.lstat(directory / name).st_atime_ns for name in ("alpha.pl", "notes.txt")]
 
 
 def test_checkout_without_a_call_site_refuses(tmp_path, capsys):

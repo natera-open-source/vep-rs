@@ -7,14 +7,15 @@
 //!
 //! The feature projection keeps a value as often as its rows write it; the allele
 //! projection drops the Feature and keeps a value once. A key under which a side writes
-//! one field more than once is counted once for the field's source, as the scorer's merge
-//! counts it.
+//! one field more than once is counted once for the field's source.
 
 use crate::extract::Run;
 use crate::input::{scratch_file, Kind};
 use crate::order::take_varint;
 use crate::resolve::Table;
-use crate::Res;
+use crate::rules::Res;
+use crate::score::interrupt;
+use crate::slots::Slot;
 use memchr::memchr;
 use std::collections::{BTreeMap, HashSet};
 use std::fs::File;
@@ -316,7 +317,9 @@ impl Pairer<'_> {
 
 /// Pairs the engine that is the run's input `number` with the reference, input 0, and
 /// writes the remainder's files, `input<number>.<projection>.<side>`, and with `rows` the
-/// rows of a tuple-file engine, `input<number>.rows.engine`, into `out`.
+/// rows of a tuple-file engine, `input<number>.rows.engine`, into `out`. The caller's slot,
+/// `own`, is lent while the pass's threads pair, and the caller takes one for each turn in
+/// which it writes the shards that ended.
 pub fn pair(
     run: &Run,
     table: &Table,
@@ -324,6 +327,7 @@ pub fn pair(
     kind: Kind,
     rows: bool,
     out: &Path,
+    own: &mut Slot,
 ) -> Res<Paired> {
     let tuple_rows = rows && kind == Kind::Tuples;
     let mut files = Vec::new();
@@ -348,7 +352,10 @@ pub fn pair(
     let next = AtomicUsize::new(0);
     let (send, receive) = mpsc::channel::<(usize, io::Result<ShardOut>)>();
     let shards = run.shards();
-    std::thread::scope(|scope| -> Res<()> {
+    let lent = own.lent();
+    let paired_all = std::thread::scope(|scope| -> Res<()> {
+        // Dropped on every way out, after which a thread's send fails and the thread ends.
+        let receive = receive;
         let workers: Vec<_> = (0..run.threads.min(shards).max(1))
             .map(|_| {
                 let send = send.clone();
@@ -362,9 +369,10 @@ pub fn pair(
                     };
                     loop {
                         let shard = next.fetch_add(1, Ordering::Relaxed);
-                        if shard >= shards {
+                        if shard >= shards || interrupt::requested() {
                             break;
                         }
+                        let slot = run.slots.take();
                         let read = |input: usize| {
                             Shard::read(&scratch_file(run.scratch, input, &format!("shard{shard}")))
                         };
@@ -373,6 +381,7 @@ pub fn pair(
                             pairer.shard(&reference, &engine, tuple_rows);
                             Ok(std::mem::take(&mut pairer.out))
                         });
+                        drop(slot);
                         if send.send((shard, done)).is_err() {
                             break;
                         }
@@ -385,18 +394,22 @@ pub fn pair(
         // Shards end in any order and are written in their own, which is the lines' order.
         let mut waiting: BTreeMap<usize, ShardOut> = BTreeMap::new();
         let mut due = 0;
-        for (shard, done) in receive {
-            waiting.insert(shard, done?);
-            while let Some(found) = waiting.remove(&due) {
-                for (file, lines) in files.iter_mut().zip(found.remainder.iter().flatten()) {
-                    file.write_all(lines)?;
+        while let Ok(ended) = receive.recv() {
+            // One turn writes every shard that ended before it.
+            let _slot = run.slots.take();
+            for (shard, done) in std::iter::once(ended).chain(receive.try_iter()) {
+                waiting.insert(shard, done?);
+                while let Some(found) = waiting.remove(&due) {
+                    for (file, lines) in files.iter_mut().zip(found.remainder.iter().flatten()) {
+                        file.write_all(lines)?;
+                    }
+                    if let Some(file) = tuple_file.as_mut() {
+                        file.write_all(&found.tuple_rows)?;
+                    }
+                    paired.tuple_rows += found.tuple_row_count;
+                    paired.locations.extend(found.locations);
+                    due += 1;
                 }
-                if let Some(file) = tuple_file.as_mut() {
-                    file.write_all(&found.tuple_rows)?;
-                }
-                paired.tuple_rows += found.tuple_row_count;
-                paired.locations.extend(found.locations);
-                due += 1;
             }
         }
         for worker in workers {
@@ -406,7 +419,9 @@ pub fn pair(
             }
         }
         Ok(())
-    })?;
+    });
+    drop(lent);
+    paired_all?;
     for file in files.iter_mut().chain(tuple_file.as_mut()) {
         file.flush()?;
     }

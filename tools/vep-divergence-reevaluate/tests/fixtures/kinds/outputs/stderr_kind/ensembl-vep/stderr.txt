@@ -1,0 +1,2 @@
+WARNING: 1 record skipped
+ERROR: [input] bad record at /work/in/record.vcf line 3

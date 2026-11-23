@@ -1,7 +1,7 @@
 entry = "gff_cds_without_protein_id_hgvsp"
 page = "docs/divergences/gff-cds-without-protein-id-hgvsp.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the GFF3 specification, \"Description of the Format\", column 9 (protein_id is an application attribute the format does not require), and the Ensembl VEP documentation, \"Annotation sources\", GFF format expectations, whose example CDS line carries no protein_id; not seen in the measured datasets"
 notes = "The GRCh38 release-116 GFF3 lines of TMPRSS3 and ENST00001113783 with `protein_id` removed from the transcript's first CDS line in transcript order, beside the PWP2 transcript ENST00000456705 as written, the control. Ensembl VEP reads the protein identifier from that line alone (BaseGXF.pm:723), builds the translation with none (:730-734), and the HGVSp writer names the reference as the empty identifier plus the version (TranscriptVariationAllele.pm:1748 and :1759): `.1:p.Pro6Leu`, with no ENSP. vep-rs writes no HGVSp and no ENSP for a translation without an identifier; the control transcript's rows agree."
@@ -67,3 +67,10 @@ vep_rs = [
   "21:42395401 | A | ENST00001113783 | missense_variant | - | -",
   "21:44107424 | C | ENST00000456705 | missense_variant | ENSP00000411749.1 | ENSP00000411749.1:p.Phe3Ser",
 ]
+
+[implementation]
+code = [
+    "crates/vep-cache-builder/src/builder.rs::build_transcript",
+    "crates/vep-effects/src/hgvs.rs::hgvsp_at",
+]
+tests = ["crates/vep-cli/tests/consequence_documented_rows.rs::a_coding_transcript_without_a_protein_identifier_gets_no_hgvsp"]

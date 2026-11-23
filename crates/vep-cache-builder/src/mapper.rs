@@ -5,13 +5,13 @@
 //!
 //! The mapper pairs define the cDNA <-> genomic coordinate mapping for each
 //! transcript. The pairs
-//! must exactly match Perl's TranscriptMapper output.
+//! must exactly match Ensembl VEP's TranscriptMapper output.
 
 use crate::gff3::{CdsRecord, ExonRecord};
 
 /// A computed mapper pair for the JSON cache.
 #[derive(Debug, Clone)]
-pub struct MapperPair {
+pub(crate) struct MapperPair {
     pub from_start: u64,
     pub from_end: u64,
     pub to_start: u64,
@@ -21,7 +21,7 @@ pub struct MapperPair {
 
 /// Result of building the mapper for a transcript.
 #[derive(Debug)]
-pub struct MapperResult {
+pub(crate) struct MapperResult {
     pub pairs: Vec<MapperPair>,
     pub cdna_coding_start: Option<u64>,
     pub cdna_coding_end: Option<u64>,
@@ -39,7 +39,7 @@ pub struct MapperResult {
 ///
 /// `first_exon_phase` is the Ensembl phase of exon 1, recorded as the mapper's
 /// `start_phase` (`TranscriptMapper.pm:110`); a transcript without exons records -1.
-pub fn build_mapper(
+pub(crate) fn build_mapper(
     exons: &[ExonRecord],
     cds_regions: &[CdsRecord],
     strand: i8,

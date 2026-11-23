@@ -17,7 +17,7 @@ twelfth ends with one (`26 `); and a row at `chr21:18315257` for `C>A` whose
 first event ends in its separator (`Top1:CA;-480;7%;`), an empty fifth part.
 `variants.vcf` holds the eight records.
 
-`SpliceVault.pm` line 201 splits a row into twelve variables, so Perl keeps a
+`SpliceVault.pm` line 201 splits a row into twelve variables, so Ensembl VEP keeps a
 trailing empty cell as the empty string and leaves a missing cell undefined,
 and lines 206 to 220 write both into the plugin's result. The events cell is
 split into a list on `|` (line 216), empty when the cell is, and the text
@@ -29,7 +29,7 @@ part is the empty string and a `,` inside a part is text. In the JSON format
 `numberify` (`Utils.pm` line 231) converts every value `looks_like_number`
 admits, blanks at either end included, and writes the number without them.
 
-Ensembl VEP 116.2 wrote, on this fixture: for the two rows whose twelfth cell
+Ensembl VEP 116.3 wrote, on this fixture: for the two rows whose twelfth cell
 is empty, `SpliceVault_site_max_depth=` in the default format, an empty cell in
 the tab format, an empty CSQ field in the VCF format and
 `"SpliceVault_site_max_depth": ""` inside the `splicevault` object in JSON; for

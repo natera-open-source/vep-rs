@@ -9,7 +9,8 @@ record: the release record (`record: release-addendum`), the population record
 record (`comparator-walltime`), and the plugin record (`record_type: plugins`). A record states its
 release under `release`, a comparator's dataset record under `scored_with_release.version`. One
 release record and one population record are required; the plugin record is optional and without
-it panels (c) and (d) are not drawn.
+it panels (c) and (d) are not drawn. Panel (e) is drawn when the release record holds the block
+`genome_checks`.
 
 Tools. `comparators.tsv` beside this script lists the tools, one row each: `id`, `name`, `role`
 (`released`, `comparator` or `reference`), `record_keys` (the names the records file the tool
@@ -32,13 +33,14 @@ a logarithmic axis that starts at the decade under its smallest value: the popul
 the comparators' wall-time record. Of the release record's entries of a cell and architecture the
 one that names no `target_cpu` is read, and the value's key says so, since the record may hold
 others that name one; the axis label and the caption say which lines are medians and
-which are sums, the caption in the record's own words: a sum of cell medians, with the clause of
-the population record's `methodology_note` that says what a dataset's sum is of, where it has one.
-The caption and the alternative text say how many runs a wall-time cell holds, tool by tool where
-the tools differ, from the number each record states beside a value: `n_clones` of a ClinVar entry,
+which are sums. The caption calls a cell of the record's `sum_of_cell_medians_sec` a separately
+timed part of its dataset, and adds the clause of the population record's `methodology_note` that
+says what a dataset's sum is of, where it has one. The caption and the alternative text say in how
+many runs a dataset, or a separately timed part of one, is timed, tool by tool where the tools
+differ, from the number each record states beside a value: `n_clones` of a ClinVar entry,
 `n_clones_per_cell` of a population sum's entry or, where the entry states none, of its engine's
-block. Each number has its keys among the values file's `sources`; where a record states none for
-a cell, the clause is left out, with a printed note.
+block. Each number has its keys among the values file's `sources`; where a record states none
+beside a value, the clause is left out, with a printed note.
 No tool is named in the panel: a circle wears its tool's colour, and in the legend a circle in that
 colour stands beside the swatch of each tool that has bars too. (c) Raw F1 per gate row of the
 plugin record's `rows`, grouped by the kind of data a row is scored on, the counts summed over a
@@ -69,7 +71,18 @@ the released tool and every comparator of the registry, and otherwise left out w
 caption; the reference has no row. The panel's title names the tools it draws, and the note of what
 the counts are of, with the number of plugins the reference lists, stands under the panel. A panel
 carries its letter once: where the plugin panel's rows take both columns, its second part is titled
-as the first's continued and carries no letter.
+as the first's continued and carries no letter. (e) The ready-made Ensembl VEP caches that read
+exact in the genome check, of those checked, from the release record's `genome_checks`. The released
+tool's row is one bar, the block's total of caches that are exact, labelled `<exact> of <checked>`
+with thousands separators. Each comparator of the registry that the block's `absent` lists has a
+row with no bar: a cross in the tool's colour at the left of the plot, where a bar would start, and
+the entry's reason beside it, so the legend's one reason for a tool's crosses stays the plugin
+record's. Every value names its key of the block. A comparator with a mark in another panel that
+`absent` does not list is refused by name, as is an entry without a statement; an entry stated at
+another version than the records state for its tool is refused with the other versions, as one tool
+at two versions; an entry whose engine the registry lists as no comparator is noted and left out;
+and a block without `absent` draws the released tool's row alone. The panel stands in the second
+column under (d) and its note.
 
 Marks. On an F1 axis a value is a place, not a length. The plot's left edge stands a fixed room
 left of the tick that reads 0, a marker's half width and four pixels more, and every bar starts at
@@ -140,7 +153,14 @@ the panel of counts. The reason a comparator's crosses stand for, which both tex
 entry among the `sources` too, and so has each number of rows the alternative text gives of the
 plugin panel and, where the order of the tools' circles differs between rows, of the wall-time
 panel, with what it counts of the panel's values. A sentence whose record holds nothing to say is
-left out.
+left out. For panel (e) the caption says what the bar counts and against which reference, the
+counts of the block's sets under the block's labels, that the caches that are not exact are named
+on the supported-genomes page where the block counts one, and for each comparator with a row one
+sentence built from the tool's name, the version its entry states and the clauses of the entry's
+statements: what the comparator's own documentation says, and that the tool therefore has no
+counterpart in the panel. The alternative text says what the panel holds as it is drawn, the bar
+with its label and each cross with its reason, then the sets' counts and the same sentence. The
+reference, each set's counts and each comparator's sentence have their keys among the `sources`.
 
 Two layers. The values layer uses the standard library alone and writes the values file: `image`,
 `canvas`, `alt_text`, `caption`, `notes` (the lines drawn inside the image that are no panel's),
@@ -163,18 +183,23 @@ counts of the released tool that are unequal and round to 1 at nine places (the 
 adjusted F1 is exactly 1 or the record is not a shipped state), a plugin record whose `gate` block
 does not say it passed for the released tool, and records that do not all state one release.
 --draft draws the last two as a marked draft: a line inside the image, which also opens the caption
-and the alternative text, and never under `docs/assets/`. Of the plugin record's entries and
+and the alternative text, and never under `docs/assets/`. A draft also draws what panel (e) refuses,
+each with a printed note: it leaves out the row of a comparator the block does not list or lists
+without a statement, and draws an entry stated at another version, naming each version. Of the plugin record's entries and
 statements on the population datasets, one on a dataset the population record does not list or of
 another assembly than its dataset's is refused, as is a statement beside an entry; a row scored on
 real data on which the released tool lacks a population dataset of its assembly without the
 record's statement is also refused, and in a draft it is drawn from the datasets the record holds,
-with a printed note. A comparator's or the reference's missing
+with a printed note. With a plugin record, a population dataset whose label holds no word is refused.
+A comparator's or the reference's missing
 figure loses its mark with a printed note, and so does a tool or a dataset the figure has no place
 for: an engine the registry does not list, a dataset on which the comparator alone is scored. The
 drawing layer refuses the same way a drawing whose text is small, faint or set over other text,
 whose plots have no room on the canvas, whose rows would be set tighter than 18 pixels to fit it
 (a figure with more rows takes a taller canvas), whose wall-time circles cannot be set apart on
-their line, and one that does not set each panel's letter once.
+their line, and one that does not set each panel's letter once. It also refuses a values file whose
+tools hold no reference for an F1 axis to name, as where no record holds a wall time of the
+reference, and one whose wall-time panel holds no group or no value.
 
 usage: render_release_figure.py [--repo DIR] [--records PATH ...] [--registry FILE]
                                 [--values FILE] [--png FILE] [--values-only] [--draft]
@@ -271,8 +296,9 @@ PANEL_TITLES = {
     "b": "Wall time per dataset and architecture",
     "c": "Concordance per plugin",
     "d": "Plugins read by {tools}",
+    "e": "Ready-made Ensembl VEP caches, exact of checked",
 }
-PANEL_AXES = {"a": "f1", "b": "seconds", "c": "f1", "d": "count"}
+PANEL_AXES = {"a": "f1", "b": "seconds", "c": "f1", "d": "count", "e": "count"}
 # What a row of each F1 panel is, in the alternative text.
 F1_ROWS = {"a": "dataset", "c": "plugin"}
 # The groups of panel (a); `{count}` is the number of whole-genome datasets the pooled row pools, in words.
@@ -283,7 +309,7 @@ DATASET_GROUPS = (
 # architectures.
 LEGEND_KINDS = (("fill", "fill_dot", "dot"), ("raw", "exact", "adjusted", "absent"), ("filled", "open"))
 NUMBER_WORDS = {2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7: "seven", 8: "eight", 9: "nine"}
-COUNT_WORDS = {1: "One panel", 2: "Two panels", 3: "Three panels", 4: "Four panels"}
+COUNT_WORDS = {1: "One panel", 2: "Two panels", 3: "Three panels", 4: "Four panels", 5: "Five panels"}
 
 # What follows a panel's title over its second part, which carries no letter.
 CONTINUED = ", continued"
@@ -310,6 +336,10 @@ PLACE_SENTENCE = (
     "On an F1 axis a value is a place, not a length: every bar starts at the left edge of its plot, left of where an F1 of 0 stands, "
     "and ends at the place of its F1."
 )
+# The wall-time texts' words for a cell of the records, which is what one median is taken over: a ClinVar cell is
+# its whole dataset on one architecture, and a population dataset's cells are the parts its sum adds up.
+SUMMED_PARTS = "its dataset's separately timed parts"
+RUNS_SUBJECT = "each dataset, or each separately timed part of one,"
 # The one sentence of the caption and of the alternative text on a marker without a line from its bar:
 # the line's length is the distance between the places of the two figures.
 AGREE_SENTENCE = "A marker standing at the end of its bar means that the tool's raw and adjusted F1 are equal as drawn."
@@ -318,7 +348,10 @@ AGREE_SENTENCE = "A marker standing at the end of its bar means that the tool's 
 # over different numbers of sets, and the place of an F1 of exactly 1. The last two strings are the keys the
 # values file names for the sentences before them.
 NAMES_SENTENCE = "The plugin panel's {rows} rows carry {names} row names for {plugins} plugin{plural}: {doubled}."
-UNEVEN_SENTENCE = "A row's figure is summed over the sets of the row that the record holds for the tool, and the tools differ in them on {count} row{plural}: {rows}."
+UNEVEN_SENTENCE = (
+    "A row's figure sums the per-feature entries that the record holds for the tool on the row's own dataset or corpus, each scored by "
+    "itself, and the tools differ in the number of those entries on {count} row{plural}: {rows}."
+)
 # The sentence of the caption and of the alternative text on the datasets a tool's counts cover on the plugin
 # panel's rows scored on real data, which names the bar by no second word: its clause for a tool whose rows sum
 # population datasets, with the builds' datasets and the rows that cover fewer, its clause for a tool whose
@@ -363,6 +396,25 @@ F1_AXIS_SCALE = "log(1 − F1) scale; further right is better"
 SECONDS_AXIS = "Wall time (s), log scale; further left is better"
 SECONDS_STATISTICS = "{medians}: medians; other datasets: sums of medians"
 COUNT_AXIS = "Plugins read"
+# Panel (e), the genomes checked from their ready-made caches: the release record's block, the axis label, the
+# clause that opens the panel's part of the caption and of the alternative text, and their sentences. Every
+# number, label and name of them is read from the block. A comparator's sentence gives what its own
+# documentation says, in the clauses of the block's entry for it, and nothing of a run.
+GENOMES_BLOCK = "genome_checks"
+GENOMES_AXIS = "Caches exact"
+GENOMES_CLAUSE = "the ready-made Ensembl VEP caches that are exact, of those checked"
+GENOMES_COUNTED = (
+    "The bar counts the caches on which {released}'s output reads exact on the genome check's generated input, of those checked "
+    "against the stored output of {reference}."
+)
+GENOMES_SETS = "By set, exact of checked: {sets}."
+GENOMES_NOT_EXACT = "The caches that are not exact are named on the supported-genomes page."
+GENOMES_ABSENT = "{tool}'s documentation says {says}, so it has no counterpart in this panel, where a cross stands in its row."
+GENOMES_DRAWN = "a bar for {released}, labelled {label}"
+GENOMES_CROSSED = "for {tool} a cross ({reason}) and no bar"
+GENOMES_SET_KEY = GENOMES_BLOCK + ".sets[label={label}].label, exact, checked"
+GENOMES_ABSENT_KEY = GENOMES_BLOCK + ".absent[engine={engine}].stated_by.version, statements[].says"
+DRAFT_HELP = "draw a marked draft from a plugin record whose gate block does not read passed for the released tool, or from records of several releases"
 
 
 def fail(message: str) -> None:
@@ -672,6 +724,8 @@ class Reader:
         self.row_names: list[str] = []
         self.sources: list[dict] = []
         self.runs: dict[str, list[tuple[int | None, str, str]]] = {}
+        self.genomes: tuple[dict, dict[str, dict] | None] | None = None
+        self.genome_sentences: dict | None = None
 
     def note(self, text: str) -> None:
         if text not in self.printed:
@@ -682,7 +736,7 @@ class Reader:
         `tool`, with its record and key; where the record states none there, keep that and print a note."""
         stated = runs if isinstance(runs, int) and not isinstance(runs, bool) and runs > 0 else None
         if stated is None:
-            self.note(f"note: {record['file']} states no number of runs for a wall-time cell of {tool['name']}; the texts leave the runs of a cell out")
+            self.note(f"note: {record['file']} states no number of runs beside a wall time of {tool['name']}; the texts leave the number of runs out")
         if (stated, record["file"], key) not in self.runs.setdefault(tool["id"], []):
             self.runs[tool["id"]].append((stated, record["file"], key))
 
@@ -791,11 +845,50 @@ def read_versions(reader: Reader) -> None:
                 reader.version(tool, block.get("engine_version"), f"{plugins['file']} engines[{index}]")
         for index, block in enumerate(block_of(plugins["data"], "perl_reference", plugins["file"], list)):
             reader.version(reader.reference, block.get("ensembl_vep") if isinstance(block, dict) else None, f"{plugins['file']} perl_reference[{index}]")
+    read_genomes(reader)
     if not reader.draft:
         for tool in reader.tools:
             versions = reader.versions.get(tool["id"], [])
             if len(versions) > 1:
                 fail(f"the records name {tool['name']} at {and_list(versions)}; a tool is drawn at one version, and --draft draws a marked draft")
+
+
+def read_genomes(reader: Reader) -> None:
+    """The release record's block of the genomes checked, where it holds one, and the versions it states: the
+    reference's, from its image tag, and each comparator's, from the entry that says why the comparator has no
+    counterpart. The block's `absent` entries are kept by tool id, or None where the block holds no such list.
+    An entry names its engine once; one whose engine the registry lists as no comparator is noted and left
+    out. A version stated here is a version the records state: one tool at two versions is refused with the
+    others."""
+    release = reader.chosen["release"]
+    block = release["data"].get(GENOMES_BLOCK)
+    if block is None:
+        return
+    where = f"{release['file']} {GENOMES_BLOCK}"
+    if not isinstance(block, dict):
+        fail(f"{where} is no object")
+    reader.version(reader.reference, image_release(block_of(block, "reference", where), f"{where}.reference"), f"{where}.reference")
+    entries: dict[str, dict] | None = None
+    if "absent" in block:
+        entries = {}
+        for position, item in enumerate(block_of(block, "absent", where, list)):
+            at = f"{where}.absent[{position}]"
+            engine = item.get("engine") if isinstance(item, dict) else None
+            if not isinstance(engine, str) or not engine:
+                fail(f"{at} names no engine")
+            tool = tool_of(reader.tools, engine)
+            if tool is None or tool["role"] != "comparator":
+                reader.note(f"note: {at} names {engine}, which the registry lists as no comparator; the figure omits it")
+                continue
+            if tool["id"] in entries:
+                fail(f"{where}.absent names {tool['name']} twice; a comparator has one entry")
+            reason = item.get("reason")
+            if not isinstance(reason, str) or not reason:
+                fail(f"{at} states no reason")
+            stated = block_of(item, "stated_by", at)
+            reader.version(tool, stated.get("version"), f"{at}.stated_by")
+            entries[tool["id"]] = {"engine": engine, "reason": reason, "stated_by": stated, "where": at}
+    reader.genomes = (block, entries)
 
 
 def check_one_configuration(reader: Reader) -> None:
@@ -1138,7 +1231,8 @@ def entry_key(parts: list[tuple[tuple, list]], engine: str, projection: str, cou
 
 def dataset_families(labels: list[str]) -> list[str]:
     """The plain names of the datasets `labels` name, in their order: labels that open with one word name one
-    dataset in several releases, which goes by the leading words they share."""
+    dataset in several releases, which goes by the leading words they share. Each label holds a word, which
+    `population_datasets` holds the record to."""
     families: dict[str, list[str]] = {}
     for label in labels:
         words = label.split()
@@ -1149,13 +1243,20 @@ def dataset_families(labels: list[str]) -> list[str]:
 
 def population_datasets(reader: Reader) -> dict[str, tuple[str, str]]:
     """The whole-genome population datasets as {dataset: (label, assembly)}, in the population record's order,
-    each label as panels (a) and (b) spell it."""
+    each label as panels (a) and (b) spell it. A label that holds no word so spelled is refused by name: the
+    plugin panel's group and texts name a dataset by its label's words."""
     population = reader.chosen["population"]
     held = {}
-    for dataset in block_of(population["data"], "datasets", population["file"], list):
+    for position, dataset in enumerate(block_of(population["data"], "datasets", population["file"], list)):
         if not isinstance(dataset, dict) or not all(isinstance(dataset.get(k), str) and dataset[k] for k in ("dataset", "label", "assembly")):
             fail(f"{population['file']} datasets holds an entry without dataset, label and assembly")
-        held[dataset["dataset"]] = (short_label(dataset["label"]), dataset["assembly"])
+        label = short_label(dataset["label"])
+        if not label.split():
+            fail(
+                f"{population['file']} datasets[{position}].label holds no word: {dataset['label']!r}; the plugin panel names a population "
+                "dataset by the words of its label"
+            )
+        held[dataset["dataset"]] = (label, dataset["assembly"])
     return held
 
 
@@ -1231,7 +1332,7 @@ def plugin_row(reader: Reader, index: dict, absent: dict, engines: dict, row_key
             raw = summed_counts(summed, RAW_COUNTS) if feature else None
             if raw is None:
                 if gate and not reader.draft:
-                    fail(f"{plugins['file']} holds no per-feature tuple of {tool['name']} on {label}; every gate row states the released tool's figure")
+                    fail(f"{plugins['file']} holds no per-feature tuple of {tool['name']} on {label}; every row the record lists under rows states the released tool's figure")
                 if gate:
                     reader.note(f"note: {plugins['file']} holds no per-feature tuple of {tool['name']} on {label}; the figure omits that bar")
                 continue
@@ -1284,7 +1385,7 @@ def plugin_row(reader: Reader, index: dict, absent: dict, engines: dict, row_key
         elif gate and engine and not feature:
             missing = f"{plugins['file']} neither scores {tool['name']} per feature on {label} nor lists the plugin as absent for it"
             if not reader.draft:
-                fail(f"{missing}; every gate row shows each tool the record scores")
+                fail(f"{missing}; every row the record lists under rows shows each tool the record scores")
             reader.note(f"note: {missing}; the figure draws no mark of {tool['name']} on that row")
     if len(set(sets.values())) > 1:
         # The tools' figures on this row are summed over different numbers of the sets of its own key: the texts
@@ -1382,6 +1483,118 @@ def panel_support(reader: Reader) -> list[dict]:
     return [{"label": "", "rows": rows}]
 
 
+def genome_statements(entry: dict) -> list[str]:
+    """The clauses of an `absent` entry of the genomes block, one for each of its statements: what the
+    comparator's own documentation says, as a caption prints it. Empty where the entry holds no statement, or
+    one that states no such clause."""
+    statements = entry["stated_by"].get("statements")
+    if not isinstance(statements, list) or not statements:
+        return []
+    says = [item.get("says") if isinstance(item, dict) else None for item in statements]
+    return says if all(isinstance(clause, str) and clause for clause in says) else []
+
+
+def panel_genomes(reader: Reader) -> list[dict]:
+    """Panel (e): the released tool's row, one bar for the block's total of caches that read exact with
+    `<exact> of <checked>` as its label, and one row for each comparator of the registry that the block's
+    `absent` lists, which holds the entry's reason and no bar: the drawing sets a cross there. A comparator
+    with a mark in an earlier panel that the block's `absent` does not list is refused by name, and so is an
+    entry without a statement its sentence is built from; a draft notes either and leaves the row out, and
+    notes an entry stated at another version than the other records state. A block without `absent` gives the
+    released tool's row alone."""
+    release = reader.chosen["release"]
+    block, entries = reader.genomes
+    where = f"{release['file']} {GENOMES_BLOCK}"
+    totals = block_of(block, "totals", where)
+    exact, checked = count(totals, "exact", f"{where}.totals"), count(totals, "checked", f"{where}.totals")
+    if not 0 < checked >= exact:
+        fail(f"{where}.totals counts {exact} exact of {checked} checked; the bar is the exact caches among one or more checked")
+    rows = [{"label": reader.released["name"], "values": [
+        reader.value(reader.released, "bar", str(exact), release, f"{GENOMES_BLOCK}.totals.exact"),
+        reader.value(reader.released, "text", f"{exact:,} of {checked:,}", release, f"{GENOMES_BLOCK}.totals.exact, checked"),
+    ]}]
+    for tool in reader.tools if entries is not None else []:
+        if tool["role"] != "comparator":
+            continue
+        entry = entries.get(tool["id"])
+        if entry is None:
+            if tool["id"] in reader.drawn:
+                lacking = f"{where}.absent holds no entry for {tool['name']}, which has a mark in another panel"
+                if not reader.draft:
+                    fail(f"{lacking}; each comparator the figure draws has a row in the panel of the caches, and --draft draws a marked draft without it")
+                reader.note(f"note: {lacking}; the draft leaves its row out")
+            continue
+        if not genome_statements(entry):
+            unstated = f"{entry['where']}.stated_by holds no statement that gives what {tool['name']}'s documentation says"
+            if not reader.draft:
+                fail(f"{unstated}; the caption's sentence on the tool is built from its statements, and --draft draws a marked draft without its row")
+            reader.note(f"note: {unstated}; the draft leaves its row out")
+            continue
+        version = version_text(tool, entry["stated_by"]["version"])
+        others = [named for named in reader.versions[tool["id"]] if named != version]
+        if others:
+            # Reached in a draft alone: outside one, a tool at two versions is refused when the versions are read.
+            reader.note(
+                f"note: {entry['where']} is stated at {version} and the other records name {tool['name']} at {and_list(others)}; the draft "
+                "draws its row and names each version"
+            )
+        rows.append({"label": tool["name"], "values": [
+            reader.value(tool, "text", entry["reason"], release, f"{GENOMES_BLOCK}.absent[engine={entry['engine']}].reason"),
+        ]})
+    return [{"label": "", "rows": rows}]
+
+
+def crossed_rows(panel: dict) -> list[tuple[dict, dict]]:
+    """The rows of a panel of counts that hold a text and no bar, each with that text's value: the rows the
+    drawing sets a cross on."""
+    rows = [row for group in panel["groups"] for row in group["rows"]]
+    return [
+        (row, value) for row in rows if not any(held["kind"] == "bar" for held in row["values"])
+        for value in row["values"] if value["kind"] == "text"
+    ]
+
+
+def genomes_sentences(reader: Reader, panel: dict) -> dict:
+    """The sentences the caption and the alternative text take for panel (e), built once, every number, label
+    and name from the block and each kept among the values file's sources: `counted`, what the bar counts,
+    against the reference the block names; `sets`, the counts of the block's sets under the block's labels;
+    `not_exact`, that the caches that are not exact are named on the supported-genomes page, or None where the
+    block counts none; and `absent`, one sentence for each comparator with a row, from its name, the version
+    its entry states and the entry's clauses."""
+    if reader.genome_sentences is not None:
+        return reader.genome_sentences
+    release = reader.chosen["release"]
+    block, entries = reader.genomes
+    where = f"{release['file']} {GENOMES_BLOCK}"
+    reference = reader.source(
+        f"{reader.reference['name']} {image_release(block['reference'], f'{where}.reference')}", release, f"{GENOMES_BLOCK}.reference.image",
+    )
+    sets = []
+    for position, item in enumerate(block_of(block, "sets", where, list)):
+        at = f"{where}.sets[{position}]"
+        label = item.get("label") if isinstance(item, dict) else None
+        if not isinstance(label, str) or not label:
+            fail(f"{at} carries no label")
+        counts = f"{label} {count(item, 'exact', at):,} of {count(item, 'checked', at):,}"
+        sets.append(reader.source(counts, release, GENOMES_SET_KEY.format(label=label)))
+    if not sets:
+        fail(f"{where}.sets holds no set; the texts give the counts of each")
+    absent = []
+    for _, value in crossed_rows(panel):
+        tool = next(tool for tool in reader.tools if tool["id"] == value["tool"])
+        entry = entries[tool["id"]]
+        named = f"{tool['name']} {version_text(tool, entry['stated_by']['version'])}"
+        says = and_list([f"that {clause}" for clause in genome_statements(entry)])
+        absent.append(reader.source(GENOMES_ABSENT.format(tool=named, says=says), release, GENOMES_ABSENT_KEY.format(engine=entry["engine"])))
+    reader.genome_sentences = {
+        "counted": GENOMES_COUNTED.format(released=reader.released["name"], reference=reference),
+        "sets": GENOMES_SETS.format(sets=and_list(sets)),
+        "not_exact": GENOMES_NOT_EXACT if block["totals"]["exact"] < block["totals"]["checked"] else None,
+        "absent": absent,
+    }
+    return reader.genome_sentences
+
+
 def median_lines(panel: dict) -> tuple[list[str], bool]:
     """Of a wall-time panel, from the keys of its values: the datasets whose lines are medians, each named
     without its assembly, and whether the panel also holds lines that are sums of medians."""
@@ -1409,18 +1622,19 @@ def run_groups(reader: Reader) -> list[tuple[str, list[dict]]]:
 
 
 def runs_clause(reader: Reader) -> str:
-    """The clause of the caption and the alternative text on the runs a wall-time cell holds: one number where
-    every tool's cells hold as many, otherwise the fewest with its tools, against each other number with its
-    tools. Empty without the groups of `run_groups`."""
+    """The clause of the caption and the alternative text on the runs a wall-time cell holds, which names a cell
+    as what it is, a dataset or a separately timed part of one: one number where every tool's cells hold as
+    many, otherwise the fewest with its tools, against each other number with its tools. Empty without the
+    groups of `run_groups`."""
     groups = run_groups(reader)
     if not groups:
         return ""
     (fewest, tools), others = groups[0], groups[1:]
-    held = f"holds {fewest} run{'' if fewest == '1' else 's'}"
+    timed = f"{RUNS_SUBJECT} is timed in {fewest} run{'' if fewest == '1' else 's'}"
     if not others:
-        return f"each wall-time cell {held}"
+        return timed
     against = and_list([f"{runs} for {and_list([tool['name'] for tool in named])}" for runs, named in others])
-    return f"each wall-time cell of {and_list([tool['name'] for tool in tools])} {held}, against {against}"
+    return f"{timed} for {and_list([tool['name'] for tool in tools])}, against {against}"
 
 
 def methodology_clause(reader: Reader) -> str | None:
@@ -1583,6 +1797,12 @@ def alt_sentence(reader: Reader, panel: dict) -> str:
         runs = runs_clause(reader)
         return (f"Wall time per dataset and architecture of {and_list(holders('marker'))}, a circle each{circles}{circle_order(reader, panel['id'], rows)}"
                 f"{'; ' if runs else ''}{runs}.")
+    if panel["id"] == "e":
+        label = next(value["value"] for row in rows for value in row["values"] if value["tool"] == reader.released["id"] and value["kind"] == "text")
+        drawn = [GENOMES_DRAWN.format(released=reader.released["name"], label=label)]
+        drawn += [GENOMES_CROSSED.format(tool=row["label"], reason=value["value"]) for row, value in crossed_rows(panel)]
+        sentences = genomes_sentences(reader, panel)
+        return " ".join([f"{GENOMES_CLAUSE[0].upper()}{GENOMES_CLAUSE[1:]}: {'; '.join(drawn)}.", sentences["sets"], *sentences["absent"]])
     if axis == "count":
         reads = [value["value"] for row in rows for value in row["values"] if value["kind"] == "text"]
         return f"The plugins read by {and_list(holders('bar'))}, a bar each: {and_list(reads)}."
@@ -1661,10 +1881,11 @@ def texts(reader: Reader, panels: list[dict]) -> tuple[str, str, list[str]]:
     medians, sums = median_lines(by_id["b"])
     statistics = []
     if medians and sums:
-        # The record's key names a sum of cell medians; what a cell is, its methodology note says.
+        # The record's key names a sum of cell medians: a cell is a separately timed part of the dataset, and
+        # which parts they are, the record's methodology note says.
         clause = methodology_clause(reader)
         gloss = f' (the record\'s methodology note: "{clause}")' if clause else ""
-        statistics.append(f"a {and_list(medians)} line is the median of its runs, any other the sum of its dataset's cell medians{gloss}")
+        statistics.append(f"a {and_list(medians)} line is the median of its runs, any other the sum of the medians of {SUMMED_PARTS}{gloss}")
     runs = runs_clause(reader)
     if runs:
         statistics.append(runs)
@@ -1712,6 +1933,14 @@ def texts(reader: Reader, panels: list[dict]) -> tuple[str, str, list[str]]:
         )
     elif reader.chosen["plugins"] is not None:
         caption.append(SUPPORT_LEFT_OUT.format(tools=and_list([tool["name"] for tool in support_blocks(reader)[1]])))
+    if "e" in by_id:
+        label = next(
+            value["value"] for group in by_id["e"]["groups"] for row in group["rows"] for value in row["values"]
+            if value["tool"] == reader.released["id"] and value["kind"] == "text"
+        )
+        sentences = genomes_sentences(reader, by_id["e"])
+        following = [sentences["counted"], sentences["sets"], *([sentences["not_exact"]] if sentences["not_exact"] else []), *sentences["absent"]]
+        caption.append(f"(e) {GENOMES_CLAUSE[0].upper()}{GENOMES_CLAUSE[1:]}: {label}. {' '.join(following)}")
     statements = []
     if "c" in by_id:
         plugins = reader.chosen["plugins"]
@@ -1784,13 +2013,14 @@ def build_values(tools: list[dict], chosen: dict, draft: bool) -> tuple[dict, li
     reader = Reader(tools, chosen, draft)
     read_versions(reader)
     check_one_configuration(reader)
-    panel_records = {"a": chosen["release"], "b": chosen["population"], "c": chosen["plugins"], "d": chosen["plugins"]}
-    builders = {"a": panel_datasets, "b": panel_wall_time, "c": panel_plugins, "d": panel_support}
+    panel_records = {"a": chosen["release"], "b": chosen["population"], "c": chosen["plugins"], "d": chosen["plugins"], "e": chosen["release"]}
+    builders = {"a": panel_datasets, "b": panel_wall_time, "c": panel_plugins, "d": panel_support, "e": panel_genomes}
     panels = []
     for panel_id, builder in builders.items():
         record = panel_records[panel_id]
-        # Panel (d) compares counts: it is built when every tool it would compare has one.
-        if record is None or (panel_id == "d" and support_blocks(reader)[1]):
+        # Panel (d) compares counts: it is built when every tool it would compare has one. Panel (e) is built
+        # when the release record holds the block of the genomes checked.
+        if record is None or (panel_id == "d" and support_blocks(reader)[1]) or (panel_id == "e" and reader.genomes is None):
             continue
         groups = builder(reader)
         # The panel of counts names the tools it draws, each a row of it.
@@ -1836,15 +2066,25 @@ def lane_tools(document: dict, panel: dict) -> list[str]:
 def axis_lines(document: dict, tools: list[dict], panel: dict) -> list[str]:
     """The lines of a panel's value-axis label. An F1 axis names the reference tool, whose version the legend
     states, and no kind of F1: its bars are raw figures and its markers adjusted ones, as the legend says; a
-    wall-time axis says which lines are medians and which are sums of medians."""
+    wall-time axis says which lines are medians and which are sums of medians. An F1 axis of a document whose
+    tools hold no reference is refused by name: the legend states a version only of a tool with a mark."""
     axis = PANEL_AXES[panel["id"]]
     if axis == "f1":
-        reference = next(t for t in document["tools"] if any(r["id"] == t["id"] and r["role"] == "reference" for r in tools))
+        listed = [row for row in tools if row["role"] == "reference"]
+        reference = next((tool for tool in document["tools"] if any(row["id"] == tool["id"] for row in listed)), None)
+        if reference is None:
+            fail(
+                f"the values file's tools hold no {and_list([row['name'] for row in listed])}, the registry's reference, which an F1 "
+                "axis names and whose version the legend states: a tool stands among them with a mark of its own, and the reference's "
+                "marks are its wall times, read from the population record's wall_time.<key>.per_dataset and a wall-time record's "
+                f"per_cell_aggregates[engine=<key>] under its record keys ({', '.join(key for row in listed for key in row['keys'])}) "
+                "where the registry admits it to the speed panel"
+            )
         return [f"F1 against {reference['name']}", F1_AXIS_SCALE]
     if axis == "seconds":
         medians, sums = median_lines(panel)
         return [SECONDS_AXIS, SECONDS_STATISTICS.format(medians=and_list(medians))] if medians and sums else [SECONDS_AXIS]
-    return [COUNT_AXIS]
+    return [GENOMES_AXIS if panel["id"] == "e" else COUNT_AXIS]
 
 
 def discordance(value: dict) -> Fraction:
@@ -2304,9 +2544,12 @@ def f1_axis_labels(sheet, plot_widths: list[float], floor: float) -> list[str]:
     return [label if keep else "" for label, keep in zip(labels, shown)]
 
 
-def seconds_limits(numbers: list[float]) -> tuple[float, float]:
+def seconds_limits(numbers: list[float], where: str = "the wall-time panel") -> tuple[float, float]:
     """The limits of a wall-time axis: from the decade at or under the smallest value, so that no value
-    lies before the axis's lowest tick, to a fifth of a decade past the largest."""
+    lies before the axis's lowest tick, to a fifth of a decade past the largest. `where` names the panel whose
+    values the numbers are; a panel that holds no value is refused by that name."""
+    if not numbers:
+        fail(f"{where} holds no value; a wall-time axis starts at the decade under its smallest value")
     return float(f"1e{Decimal(str(min(numbers))).adjusted()}"), max(numbers) * 10.0**0.2
 
 
@@ -2331,10 +2574,11 @@ def seconds_ticks(low: float, high: float) -> tuple[list[float], list[str]]:
     return ticks, [time_label(tick) for tick in ticks]
 
 
-def set_time_axis(axes, numbers: list[float]) -> list[float]:
-    """Give `axes` the logarithmic wall-time axis of `numbers`: its limits, its ticks with their labels, and no
-    minor ticks, which a logarithmic scale draws unasked. Returns the ticks."""
-    low, high = seconds_limits(numbers)
+def set_time_axis(axes, numbers: list[float], where: str = "the wall-time panel") -> list[float]:
+    """Give `axes` the logarithmic wall-time axis of `numbers`, the values of the panel `where` names: its
+    limits, its ticks with their labels, and no minor ticks, which a logarithmic scale draws unasked. Returns
+    the ticks."""
+    low, high = seconds_limits(numbers, where)
     ticks, labels = seconds_ticks(low, high)
     axes.set_xscale("log")
     axes.set_xlim(low, high)
@@ -2387,19 +2631,46 @@ def split_columns(groups: list[dict], above: int, below: int) -> int:
     return best
 
 
+def count_panel_height(panel: dict) -> float:
+    """The pixels a panel of counts is allowed in its column: its title, its rows, its axis and the foot of a
+    row."""
+    return TITLE_HEIGHT + AXIS_HEIGHT + ROW_FOOT * MAX_PITCH - 17 + sum(len(group["rows"]) for group in panel["groups"]) * COUNT_PITCH
+
+
 def plugin_split(panels: dict[str, dict]) -> int:
     """How many leading groups of the plugin panel stand in the first column, under the dataset panel; the
-    others continue the panel in the second column, over the panel of counts. A function of the panels by id
-    alone, so the texts can say where the panel continues: the note under the panel of counts is allowed
-    NOTE_LINES lines. 0 without a plugin panel."""
+    others continue the panel in the second column, over the panels of counts: (d) with its note and, under
+    it, (e). A function of the panels by id alone, so the texts can say where the panel continues: the note
+    under panel (d) is allowed NOTE_LINES lines. 0 without a plugin panel."""
     groups = panels["c"]["groups"] if "c" in panels else []
     if not groups:
         return 0
     under = 0.0
     if "d" in panels:
-        under = TITLE_HEIGHT + AXIS_HEIGHT + ROW_FOOT * MAX_PITCH - 17 + sum(len(group["rows"]) for group in panels["d"]["groups"]) * COUNT_PITCH
+        under = count_panel_height(panels["d"])
         under += NOTE_LINES * NOTE_PITCH + NOTE_GAP if panels["d"].get("note") else 0
+    if "e" in panels:
+        under += (PANEL_GAP if under else 0) + count_panel_height(panels["e"])
     return split_columns(groups, lines_of(panels["a"]["groups"]), round(under / MIN_PITCH))
+
+
+def column_loads(panels: dict[str, dict], first: int, note_lines: int) -> list[tuple[float, int]]:
+    """Per column, the pixels its titles, its axes and its panels of counts take and the lines of its rows,
+    with the plugin panel's `first` leading groups in the first column and `note_lines` lines of note under
+    panel (d): the first column holds (a) and the plugin panel's first part, the second (b), the plugin
+    panel's other part, (d) with its note and (e)."""
+    groups = panels["c"]["groups"] if "c" in panels else []
+    dataset_lines = lines_of(panels["a"]["groups"])
+    fixed = TITLE_HEIGHT + AXIS_HEIGHT + ROW_FOOT * MAX_PITCH
+    under = 0.0
+    if "d" in panels:
+        under += PANEL_GAP + count_panel_height(panels["d"]) + (note_lines * NOTE_PITCH + NOTE_GAP if note_lines else 0)
+    if "e" in panels:
+        under += PANEL_GAP + count_panel_height(panels["e"])
+    return [
+        (fixed + (PANEL_GAP + fixed if part else 0) + (under if index == 1 else 0), dataset_lines + lines_of(part))
+        for index, part in enumerate((groups[:first], groups[first:]))
+    ]
 
 
 class Sheet:
@@ -2632,10 +2903,14 @@ def draw_seconds(sheet: Sheet, document: dict, tools: list[dict], panel: dict, l
                  plot_height: float) -> float:
     """A panel of wall times: one line per dataset, its rows as lanes (the first filled, the second open), one
     marker per tool in the tool's colour, which the legend names, and circles that would meet set apart along
-    the line's height. No tool is named in the panel. Returns the height taken."""
+    the line's height. No tool is named in the panel. A panel that holds no group, or no value, is refused by
+    name. Returns the height taken."""
     fills = {tool["id"]: tool["colour"] for tool in document["tools"]}
     names = {tool["id"]: tool["name"] for tool in document["tools"]}
     groups = panel["groups"]
+    where = f"the values file's panels[id={panel['id']}]"
+    if not groups:
+        fail(f"{where} holds no group; the wall-time panel draws one line per dataset")
     draw_title(sheet, left, top, panel["id"], panel["title"])
     label_width = max(sheet.measure(group["label"]) for group in groups) + LABEL_GAP + 4
     (plot_left, plot_width), plot_top = plot_box(left, width, label_width, panel["title"]), top + TITLE_HEIGHT
@@ -2645,7 +2920,7 @@ def draw_seconds(sheet: Sheet, document: dict, tools: list[dict], panel: dict, l
     axes.set_yticks([])
     axes.grid(axis="y", visible=False)
     axes.tick_params(axis="x", length=2.5, width=0.5, pad=2)
-    set_time_axis(axes, [float(v["value"]) for group in groups for row in group["rows"] for v in row["values"]])
+    set_time_axis(axes, [float(v["value"]) for group in groups for row in group["rows"] for v in row["values"]], where)
     for g, group in enumerate(groups):
         sheet.text(plot_left - LABEL_GAP, plot_top + (g + 0.5) * pitch, group["label"], ha="right")
     marks = [(g, r, value) for g, group in enumerate(groups) for r, row in enumerate(group["rows"]) for value in row["values"]]
@@ -2667,13 +2942,37 @@ def draw_seconds(sheet: Sheet, document: dict, tools: list[dict], panel: dict, l
     return TITLE_HEIGHT + plot_height + AXIS_HEIGHT
 
 
+def count_ticks(limit: int) -> list[int]:
+    """The ticks of a count axis that runs from 0 to `limit`: the multiples, from 0, of the least step of 1, 2
+    or 5 times a power of ten that gives seven ticks or fewer."""
+    steps = sorted(factor * 10**power for power in range(len(str(limit)) + 1) for factor in (1, 2, 5))
+    step = next(step for step in steps if limit // step < 7)
+    return list(range(0, limit + 1, step))
+
+
+def draw_count_cross(axes, across, line: float, row: dict, fills: dict[str, str], width: float) -> None:
+    """The cross of a row of a panel of counts that holds a text and no bar, and that text beside it. The
+    cross is the plugin panel's, as many pixels right of the plot's left edge, where a bar would start: it
+    stands clear of the axis line, in its tool's colour, and the text starts a cross's reach and LABEL_GAP
+    pixels right of its centre. `across` places a point by its share of the plot's width, which is `width`
+    pixels, and its line."""
+    draw_absent(axes, across, [(line, row)], {value["tool"]: 0.0 for value in row["values"]}, fills, width)
+    for value in row["values"]:
+        if value["kind"] == "text":
+            axes.annotate(value["value"], xy=(absent_place() / width, line), xycoords=across, xytext=((absent_reach() + LABEL_GAP) * 72 / DPI, 0),
+                          textcoords="offset points", fontsize=MIN_POINTS, color=INK, ha="left", va="center", annotation_clip=False)
+
+
 def draw_count(sheet: Sheet, document: dict, tools: list[dict], panel: dict, left: float, top: float, width: float) -> float:
-    """A panel of counts: one solid bar per row, labelled at its tip. Returns the height taken."""
+    """A panel of counts: one solid bar per row, labelled at its tip, and a cross with its text on a row
+    that holds a text and no bar. A count of a thousand or more is written with thousands separators, on the
+    axis as in a label. Returns the height taken."""
     fills = {tool["id"]: tool["colour"] for tool in document["tools"]}
     rows = [row for group in panel["groups"] for row in group["rows"]]
+    crossed = {id(row): value["value"] for row, value in crossed_rows(panel)}
     draw_title(sheet, left, top, panel["id"], panel["title"])
     label_width = max(sheet.measure(row["label"]) for row in rows) + LABEL_GAP + 4
-    tip_labels = [value["value"] for row in rows for value in row["values"] if value["kind"] == "text"]
+    tip_labels = [value["value"] for row in rows if id(row) not in crossed for value in row["values"] if value["kind"] == "text"]
     tip_width = max((sheet.measure(label) for label in tip_labels), default=0) + 10
     (plot_left, plot_width), plot_top = plot_box(left, width - tip_width, label_width, panel["title"]), top + TITLE_HEIGHT
     plot_height = len(rows) * COUNT_PITCH
@@ -2683,10 +2982,19 @@ def draw_count(sheet: Sheet, document: dict, tools: list[dict], panel: dict, lef
     axes.grid(axis="y", visible=False)
     axes.tick_params(axis="x", length=2.5, width=0.5, pad=2)
     counts = [int(value["value"]) for row in rows for value in row["values"] if value["kind"] == "bar"]
-    totals = [int(found.group(1)) for label in tip_labels if (found := re.fullmatch(r"\d+ of (\d+)", label))]
+    totals = [int(found.group(1).replace(",", "")) for label in tip_labels if (found := re.fullmatch(r"[\d,]+ of ([\d,]+)", label))]
     axes.set_xlim(0, max(counts + totals))
+    if max(counts + totals) >= 1000:
+        ticks = count_ticks(max(counts + totals))
+        axes.set_xticks(ticks, [f"{tick:,}" for tick in ticks])
+    for text in crossed.values():
+        if sheet.measure(text) > plot_width + tip_width - (absent_place() + absent_reach() + LABEL_GAP):
+            fail(f"the drawn figure leaves {text!r} no room beside its cross in the plot of {panel['title']!r}")
     for index, row in enumerate(rows):
         sheet.text(plot_left - LABEL_GAP, plot_top + (index + 0.5) * COUNT_PITCH, row["label"], ha="right")
+        if id(row) in crossed:
+            draw_count_cross(axes, axes.get_yaxis_transform(), index, row, fills, plot_width)
+            continue
         for value in row["values"]:
             if value["kind"] == "bar":
                 axes.barh(index, int(value["value"]), height=0.56, color=fills[value["tool"]], linewidth=0, zorder=2)
@@ -2859,8 +3167,8 @@ def check_drawing(sheet: Sheet, right_spine: float, note_artists: list, expected
 
 def draw(document: dict, tools: list[dict], png: Path, digest: str) -> None:
     """Draw the values document on the canvas and write the PNG with `digest` in a text chunk. The layout is
-    two columns: (a) over the plugin panel's first groups, (b) over its other groups and (d) with its note
-    under it, any other note under both columns and the legend above. The columns are sized so that the plugin panel's two plots share one scale; the
+    two columns: (a) over the plugin panel's first groups, (b) over its other groups, (d) with its note
+    under it and (e) under that, any other note under both columns and the legend above. The columns are sized so that the plugin panel's two plots share one scale; the
     tight crop is padded to the canvas."""
     try:
         import matplotlib
@@ -2883,8 +3191,6 @@ def draw(document: dict, tools: list[dict], png: Path, digest: str) -> None:
         sheet = Sheet(figure)
         plugin_groups = panels["c"]["groups"] if "c" in panels else []
         dataset_lines = lines_of(panels["a"]["groups"])
-        fixed = TITLE_HEIGHT + AXIS_HEIGHT + ROW_FOOT * MAX_PITCH
-        count_height = fixed - 17 + sum(len(g["rows"]) for g in panels["d"]["groups"]) * COUNT_PITCH if "d" in panels else 0
         panel_note = panels["d"].get("note") if "d" in panels else None
 
         # The plugin panel is split by the panels alone, as the alternative text says where it continues.
@@ -2892,7 +3198,6 @@ def draw(document: dict, tools: list[dict], png: Path, digest: str) -> None:
         parts = (plugin_groups[:first], plugin_groups[first:])
         columns = column_widths(sheet, width - 2 * MARGIN, parts)
         panel_note_lines = sheet.wrap(panel_note, columns[1] - PLOT_PAD, color=INK_SECONDARY) if panel_note else []
-        count_height += len(panel_note_lines) * NOTE_PITCH + NOTE_GAP if panel_note_lines else 0
         lefts = (MARGIN, MARGIN + columns[0] + GUTTER)
         right_spine = lefts[1] + columns[1] - PLOT_PAD
 
@@ -2905,12 +3210,8 @@ def draw(document: dict, tools: list[dict], png: Path, digest: str) -> None:
         note_lines = [line for note in notes for line in sheet.wrap(note, right_spine - MARGIN, color=INK_SECONDARY)]
         bottom = height - MARGIN - (len(note_lines) * NOTE_PITCH + NOTE_GAP if note_lines else 0)
 
-        # Per column, the pixels left for its rows under the titles, the axes and the panel of counts.
-        taken = [
-            fixed + (PANEL_GAP + fixed if part else 0) + (PANEL_GAP + count_height if index == 1 and count_height else 0)
-            for index, part in enumerate(parts)
-        ]
-        pitch = row_pitch([(bottom - top - used, dataset_lines + lines_of(part)) for used, part in zip(taken, parts)])
+        # Per column, the pixels left for its rows under the titles, the axes and the panels of counts.
+        pitch = row_pitch([(bottom - top - used, lines) for used, lines in column_loads(panels, first, len(panel_note_lines))])
 
         floor = discord_floor([
             value for panel in document["panels"] if PANEL_AXES[panel["id"]] == "f1"
@@ -2944,6 +3245,9 @@ def draw(document: dict, tools: list[dict], png: Path, digest: str) -> None:
                 for index, line in enumerate(panel_note_lines)
             ]
             tops[1] += len(panel_note_lines) * NOTE_PITCH + NOTE_GAP if panel_note_lines else 0
+        if "e" in panels:
+            tops[1] += PANEL_GAP
+            tops[1] += draw_count(sheet, document, tools, panels["e"], lefts[1], tops[1], columns[1])
         note_top = max(tops) + NOTE_GAP
         note_artists += [
             sheet.text(MARGIN, note_top + index * NOTE_PITCH + NOTE_GAP, line, color=INK_SECONDARY, ha="left") for index, line in enumerate(note_lines)
@@ -2984,7 +3288,7 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--values", type=Path, help=f"values file; default {VALUES} under --repo")
     ap.add_argument("--png", type=Path, help=f"image; default {IMAGE} under --repo")
     ap.add_argument("--values-only", action="store_true", help="write the values file and draw nothing")
-    ap.add_argument("--draft", action="store_true", help="draw a marked draft from an ungated plugin record or records of several releases")
+    ap.add_argument("--draft", action="store_true", help=DRAFT_HELP)
     args = ap.parse_args(argv)
     values_path = args.values or args.repo / VALUES
     png_path = args.png or args.repo / IMAGE

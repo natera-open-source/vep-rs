@@ -1,0 +1,101 @@
+{
+ "plugin_fixtures": {
+  "generator": "scripts/fixtures/cut_plugin_regions.py",
+  "flank": 5000,
+  "record_flank": 2000,
+  "exon_flank": 50,
+  "gerp_regions": "exons",
+  "tools": {
+   "bgzip": "bgzip (htslib) 1.9"
+  },
+  "files": {
+   "reference.fa.fai": "0f384ea4994f9e74fa35386ab05f204013b54872d56c77775941fe2c6faeedb7",
+   "reference.fa.gz": "7f8dac320649395b3ba1a86175c2738e4000c00c0a29d836babf8eaf5d00dacc",
+   "reference.fa.gz.fai": "0f384ea4994f9e74fa35386ab05f204013b54872d56c77775941fe2c6faeedb7",
+   "reference.fa.gz.gzi": "ec59ef250318de7daef1d07a5664df717572dc3280d14c15a9ba68b16db9e919"
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 63,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species candida_albicans --assembly GCA000182965v3 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "candida_albicans/63_GCA000182965v3",
+ "fasta": "the two sequences the records sit on (Ca22chr7A_C_albicans_SC5314 and Ca22chrM_C_albicans_SC5314) at their full length from the per-sequence files Candida_albicans.GCA000182965v3.dna.primary_assembly.<sequence>.fa.gz of Ensembl Fungi (release 63 of Ensembl Genomes), each file held to the sum of the directory's CHECKSUMS; every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
+ "input": "variants.vcf: 341 records, 267 on chromosome 7 (Ca22chr7A_C_albicans_SC5314; 22 of them name it by the cache's synonym CalbSC5314_Chr7) and 74 on the mitochondrion (Ca22chrM_C_albicans_SC5314). 317 come from the seeded generator tools/vep-seeded-variants (generator version 3, seed 1, 36 records a category, on those two sequences, every reference allele read from the genome sequence), their IDs the generator's category and ordinal. 24 are designed records in six coding transcripts of chromosome 7, three a strand, on the one codon genetic code table 12 translates unlike the standard code: code12_makes_codon_1 to code12_makes_codon_6 (one base makes the codon and alters the residue), code12_keeps_residue_1 to code12_keeps_residue_6 (two adjacent bases inside one codon lead into the codon or out of it and keep the residue), code12_alters_residue_1 to code12_alters_residue_6 (one base alters the residue of a standing codon) and code12_stop_codon_1 to code12_stop_codon_6 (two or three bases make the closing stop codon into the codon), each reference base read from the genome sequence and held to the cached coding sequence. Two exemplars per consequence-set combination the two references show, stratified by variant class and strand, six per combination carrying a protein-level term, plus the records the manifest's included_records name: both generator records at a sequence's first base, the first twelve of every other generator category and the 24 designed records. The cache names no known variant, so no record carries a variation identifier. The generator wrote no record at a sequence's last base (both sequences end in N in the genome sequence), none across an origin (the cache flags no sequence circular) and none in a 5' untranslated region (no transcript of the converted cache carries one). Chromosome 7 translates under genetic code table 12 and the mitochondrion under table 4, each transcript's codon_table in the cache",
+ "sha256": {
+  "default.txt": "baad959087d901427b45db47dcf8095b6dac2066a144bf795a312b3e00eb1e80",
+  "tab.txt": "87e0e6c9b14ecc3313de832fde87ae8e7dd43f60488a2c3acdf198dd4fff473d",
+  "vcf.vcf": "e5a1902a65cae77ff552f8a6e0ba475e1fea5762de5b94b7585d2c270fa81025",
+  "json.jsonl": "c1951cbbd8e4bbe4a3c4aeac16ce59065c05d01d76d082784edee8396db1ac27"
+ },
+ "variants_vcf_sha256": "c7cb219377c354221a28ed7ba6baeee97a3f032db7448cc92e2bd652f8573af2",
+ "flag_sets": {
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species candida_albicans --assembly GCA000182965v3 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "candida_albicans/63_GCA000182965v3",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "0f33564776240238a75b7d1063ed748ba68210e8ac8ca7a9dde7b7380f4cf459",
+    "tab.txt": "42799e7e3f3fbc1ae99d5e58f22311267f75543133492a6b8f357208909e07a3",
+    "vcf.vcf": "fb407beafc310debd9846c2f39c9afb7211ea9b16921a37d20ba7f69aaede19c",
+    "json.jsonl": "5dfce823bd5efcea79994b881cf2731d4ed04023789e043a12e469f6dbf542e7"
+   },
+   "flags": [
+    "--everything"
+   ],
+   "expected_dir": "expected_everything"
+  },
+  "hgvs": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species candida_albicans --assembly GCA000182965v3 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs [--tab|--vcf|--json]",
+   "perl_cache": "candida_albicans/63_GCA000182965v3",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "7b565a31cb1824326423672122897c5f91d103751cc5c0765a235e67efe9f860",
+    "tab.txt": "4252f68f24f83914330be5ea2f5e87a773742e52695fd8e3d20bb8cac2c9120e",
+    "vcf.vcf": "df0ee24187790aa9ad39409fb5f53b5f15cfcd51b66d71d12d7590545e1366bd",
+    "json.jsonl": "caf92982c208706b1a2bccc06f2442331fd33aa72a31b895fae9aa0630464f9e"
+   },
+   "flags": [
+    "--hgvs"
+   ],
+   "expected_dir": "expected_hgvs"
+  }
+ },
+ "generator": "tools/vep-seeded-variants --seed 1 --records wide --per-category 36 --fasta <genome sequence> --sequence Ca22chrM_C_albicans_SC5314 --sequence Ca22chr7A_C_albicans_SC5314 over the whole cache tools/vep-storable-to-json converts from the Ensembl Fungi release 63 GCA000182965v3 cache, beside the 24 designed records; Ensembl VEP over the two inputs under the default flags; tools/vep-golden-corpus select --release 63 --assembly GCA000182965v3 --species candida_albicans --dataset wide=<reference>=<the generator's records> --dataset designed=<reference>=<the designed records> --k 2 --seed 1 --max-span 1000000 --max-records 500 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 6 --include <the named records> --covers species-candida-gca000182965v3 --covers genetic-code-tables --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --flank 5000 --gzip --drop sorted_exons --perl-info <cache>/info.txt --cache-version 63 over that converted cache (protein features kept for the DOMAINS column of the everything set; the cache holds no variation file, so the slice holds none); scripts/fixtures/cut_plugin_regions.py --reference <genome sequence> --flank 5000 --record-flank 2000 over the records under the cache's own sequence names; tools/vep-golden-corpus flag-set (everything, hgvs); scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; tools/vep-golden-corpus classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp --field HGVS_OFFSET for each flag set)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "Ca22chr7A_C_albicans_SC5314": 271,
+   "Ca22chrM_C_albicans_SC5314": 52
+  },
+  "shards": 2,
+  "synonym_lines": 1,
+  "variation_slices": "none: the Ensembl VEP cache holds no variation file"
+ },
+ "genetic_code_check": {
+  "table": "Bio/Tools/CodonTable.pm of the reference image (/opt/vep/src/ensembl-vep/Bio/Tools/CodonTable.pm), its codons in the order line 280 gives: the residues of table 1 on line 229, of table 4 on line 232 and of table 12 on line 239; the start codons of table 4 on line 261 and of table 12 on line 268",
+  "table_sha256": "8b5aba4aafd2058f1a96dc71c646edc23faa5d973243fd8fc9e26da37b0be282",
+  "genetic_code_12": {
+   "sequence": "Ca22chr7A_C_albicans_SC5314",
+   "differs_from_table_1": "at one codon, the twentieth in the table's own order: a residue changes and no stop",
+   "records": "the 24 designed records (variants.vcf lines 8 to 13, 16, 19, 254, 256, 257, 259, 285 to 288, 322 to 325 and 327 to 330) and code12_changed_codon_1 to code12_changed_codon_12 (lines 38, 70, 115, 124, 132, 141, 185, 191, 201, 206, 230 and 247), all kept by name, on both strands",
+   "checked": "every row of expected/default.txt.gz on chromosome 7 that prints two whole codons, 160 rows: the Amino_acids column equals the translation of both codons under table 12 as that file gives it. 37 of the rows sit on the codon the two tables read differently, and each prints residues table 1 would not. On its own transcript every designed record has the consequence its design names: the six that make the codon and the six that alter a standing one are missense_variant where table 1 keeps the residue, the six that keep the residue are synonymous_variant where table 1 alters it, and the six at the closing stop codon are stop_lost with table 12's residue"
+  },
+  "genetic_code_4": {
+   "sequence": "Ca22chrM_C_albicans_SC5314",
+   "differs_from_table_1": "at one codon, the fifteenth in the table's own order",
+   "records": "code4_changed_codon_1 to code4_changed_codon_12 (variants.vcf lines 23, 32, 41, 63, 66, 74, 75, 82, 85, 90, 101 and 104), all kept by name",
+   "checked": "every row of expected/default.txt.gz on the mitochondrion that prints two whole codons, 87 rows: the Amino_acids column equals the translation of both codons under table 4; 23 of the rows, of those twelve records, sit on the codon the two tables read differently"
+  }
+ }
+}

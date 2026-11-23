@@ -1,0 +1,3 @@
+species	assembly	cache_version	fasta	json_cache
+homo_sapiens	GRCh37	116	reference/grch37/genome.fa	caches/vep-rs/grch37
+homo_sapiens	GRCh38	116	reference/grch38/genome.fa	caches/vep-rs/grch38

@@ -5,7 +5,7 @@
 //! variation files, the source `--format id` reads.
 //!
 //! Ensembl VEP's identifier parser asks its variation database for each name
-//! (`Parser/ID.pm:162` at release/116.2, `VariationAdaptor::fetch_by_name`,
+//! (`Parser/ID.pm:162` at release/116.3, `VariationAdaptor::fetch_by_name`,
 //! whose `v.name = ?` compares case-insensitively under the database's
 //! collation) and takes every variation feature of the variant it finds. The
 //! variation files hold those features by name, indexed by position alone, so
@@ -152,11 +152,9 @@ mod tests {
     /// The variation files under `cache`, opened for an `info.json` whose
     /// `variation_cols` are `cols` and whose `var_type` is `var_type`.
     fn open_source(cache: &Path, cols: &str, var_type: Option<&str>) -> VariationSource {
-        let info = CacheInfo {
-            variation_cols: cols.split(',').map(str::to_string).collect(),
-            var_type: var_type.map(str::to_string),
-            ..Default::default()
-        };
+        let mut info = CacheInfo::default();
+        info.variation_cols = cols.split(',').map(str::to_string).collect();
+        info.var_type = var_type.map(str::to_string);
         VariationSource::open(cache, &info, false, Arc::new(CacheManifest::absent(cache)))
             .unwrap()
             .expect("variation files")

@@ -106,7 +106,7 @@
  "covers": [
   "AncestralAllele"
  ],
- "suites": {
+ "datasets": {
   "ancestral": {
    "reference": "pre.txt",
    "input": "variants.vcf",
@@ -527,14 +527,14 @@
  },
  "records": [
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t6211371\tgnomAD-SV_v3_DUP_chr21_87376b16\tN\t<DUP>\t.\t.\tEND=6373800;SVTYPE=DUP",
    "combinations": [
     "transcript_amplification"
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t8987026\trs1988325939\tAGCCGCGGGGATC\tA\t.\t.\t.",
    "combinations": [
     "mature_miRNA_variant",
@@ -542,7 +542,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t8987044\t.\tG\tT\t.\t.\t.",
    "combinations": [
     "mature_miRNA_variant",
@@ -550,7 +550,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t9376344\trs1244414369\tC\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -559,7 +559,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t9376344\trs1244414369\tC\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -568,7 +568,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t9530271\trs1472626418\tT\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -577,7 +577,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t9530271\trs1472626418\tT\tC\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -586,7 +586,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t9548815\trs1989872784\tT\tC\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant,splice_region_variant",
@@ -594,7 +594,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t9548815\trs1989872784\tT\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant,splice_region_variant",
@@ -602,14 +602,14 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t10414912\trs1600775702\tG\tGTGCTTCATCTTC\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t10603633\trs1281258100\tGTATGAATATAATAGA\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
@@ -617,14 +617,14 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t13610235\tgnomAD-SV_v3_DEL_chr21_9b2929e7\tN\t<DEL>\t.\t.\tEND=13610507;SVTYPE=DEL",
    "combinations": [
     "feature_truncation,frameshift_variant"
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t14165216\trs551950541\tC\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_region_variant",
@@ -634,7 +634,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t14216335\trs1391685509\tCAT\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant,stop_lost",
@@ -644,14 +644,14 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t14439400\tanc_intergenic_snv\tC\tT\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t14622621\trs2123345541\tG\tC\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -659,7 +659,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t14740399\t21:14740399:CTAG:C\tCTAG\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -668,14 +668,14 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t15105118\trs752575819\tC\tT\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t15283784\t21:15283784:T:TA\tT\tTA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -684,7 +684,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t15477784\trs1601121900\tTCA\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -693,21 +693,21 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t15575269\trs1361934799\tC\tCAG\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t15575422\t21:15575422:A:AT\tA\tAT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t17657320\trs981856265\tC\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -715,7 +715,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t17657320\trs981856265\tC\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -723,7 +723,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t17756666\t.\tTGGAG\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant",
@@ -731,14 +731,14 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t18171655\trs1568921854\tC\tA\t.\t.\t.",
    "combinations": [
     "intron_variant"
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t18256505\t.\tTCAGGCCA\tT\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -747,28 +747,28 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t19268555\trs937007124\tC\tT\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t20204701\t21:20204701:T:C\tT\tC\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant"
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t23254313\t21:23254313:G:GA\tG\tGA\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t23432233\trs1983579045\tTA\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -777,7 +777,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t23473610\trs1431460128\tG\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -785,7 +785,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t23473610\trs1431460128\tG\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -793,7 +793,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t24526341\t.\tAGAC\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -802,7 +802,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t25729793\trs1237301162\tATGCTGATTC\tA\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant,splice_acceptor_variant",
@@ -814,7 +814,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t25954687\tsynth_cpx_sub_0157\tAAC\tACATAT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant",
@@ -825,7 +825,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t26100495\tsynth_inv_0363\tT\t<INV>\t.\t.\tEND=26147578;SVTYPE=INV",
    "combinations": [
     "5_prime_UTR_variant,coding_sequence_variant,intron_variant",
@@ -836,7 +836,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t26483402\t.\tTCTCTCCTATC\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,coding_sequence_variant,intron_variant,splice_acceptor_variant",
@@ -847,7 +847,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t26841549\trs761640407\tCATTT\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_deletion,stop_retained_variant",
@@ -859,7 +859,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t28885369\trs575418327\tC\tT\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -870,7 +870,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t29006645\t21:29006645:TCTGAGTC:T\tTCTGAGTC\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -882,14 +882,14 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t30547882\trs1173582563\tT\tC\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant"
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t31659979\tsynth_mnp_0574\tGGTCG\tAGTTG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -904,7 +904,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t32567827\trs776557022\tT\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -914,7 +914,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t32743007\trs1256639203\tTAGTC\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,stop_retained_variant",
@@ -926,7 +926,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t32893769\trs2045243839\tG\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -935,7 +935,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t33065835\t21:33065835:GGTTTCAGAG:G\tGGTTTCAGAGTGAGATTCT\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -946,7 +946,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t33072052\trs1327468266\tG\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -956,7 +956,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t33485728\t.\tA\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -966,7 +966,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t33488226\trs1568995364\tATCAAAATGATCGTATTTTAATAAATTTCCACAGATTCATCCAGTTTAAAAAACCTTTCTTGATTTCAGG\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -975,7 +975,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t33836987\trs1200767520\tG\tGAATC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant",
@@ -987,7 +987,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t33903747\trs1987132913\tT\tTTACCTC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -999,7 +999,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t34142409\trs1184816984\tT\tTG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant",
@@ -1011,7 +1011,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t34213171\trs1982347220\tG\tGTTTTTTT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -1021,7 +1021,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t34213171\trs1982347220\tG\tGTTTTTTTTT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -1031,7 +1031,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t34213171\trs1982347220\tG\tGTTTTTTTTTT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -1041,7 +1041,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t34213171\trs1982347220\tG\tGTTTTTTTTTTT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -1051,7 +1051,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t34213171\trs1982347220\tG\tGTTTTTTTTTTTT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -1061,7 +1061,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t34213171\trs1982347220\tG\tGTTTTTTTTTTTTTTTCT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -1071,7 +1071,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t34213171\trs1982347220\tG\tGTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -1081,7 +1081,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t34748182\trs193193818\tC\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -1089,7 +1089,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t36320266\trs2085174483\tTGGC\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_deletion,start_lost,start_retained_variant",
@@ -1098,7 +1098,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t36374328\trs1433696562\tCG\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -1108,7 +1108,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t39345138\trs10529119\tC\tCACACA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_region_variant",
@@ -1121,7 +1121,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t39345138\trs10529119\tC\tCACACACACA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_region_variant",
@@ -1134,7 +1134,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t39345138\trs10529119\tC\tCACACACACACACA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_region_variant",
@@ -1147,7 +1147,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t39345138\trs10529119\tC\tCACACACACACACACA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_region_variant",
@@ -1160,7 +1160,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t39345138\trs10529119\tC\tCACACACACACACACACA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_region_variant",
@@ -1173,7 +1173,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t39345138\trs10529119\tC\tCACACACACACACACACACA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_region_variant",
@@ -1186,7 +1186,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t39345138\trs10529119\tC\tCACACACACAT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_region_variant",
@@ -1199,7 +1199,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t39508997\trs764368542\tGGAA\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant",
@@ -1208,7 +1208,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t39916525\trs1470200400\tA\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -1217,7 +1217,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t39929109\trs2087638767\tT\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -1228,7 +1228,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t41345735\t.\tT\tTAGACCTTAATTC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_insertion,stop_gained",
@@ -1239,7 +1239,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t41584973\trs1249262350\tC\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -1247,14 +1247,14 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t42400000\tanc_lowercase_snv\tC\tT\t.\t.\t.",
    "combinations": [
     "upstream_gene_variant"
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t42426705\trs771158307\tC\tCCTT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_insertion",
@@ -1262,7 +1262,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t42476047\t.\tC\tCTCTCAGCTCCTGGAGCGTCTTGGCCAGGTCCATCCGTAGAGGTCGGCTTTTTGGGGAGAGTTGGTGTCCA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant,splice_region_variant",
@@ -1271,7 +1271,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t42476047\t.\tC\tCTCTCAGCTCCTGGAGCGTCTTGGCCAGGTCCATCCGTAGAGGTCGGCTTTTTGGGGAGAGTTGGTGTCCACAGGGCCAATT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_insertion,splice_region_variant",
@@ -1281,7 +1281,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t42482619\t408130\tACATGCTCCGCAACTTAC\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -1291,7 +1291,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t42503478\tanc_gap_snv\tG\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -1299,7 +1299,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t42550059\tanc_case_boundary_del\tCAG\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -1308,21 +1308,21 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t42583112\tanc_no_call_snv\tC\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant"
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t42600001\tanc_mnv\tTC\tCT\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant"
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t42700000\tanc_multi_snv\tC\tA,G\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -1335,7 +1335,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t42750000\tanc_multi_indel\tTG\tT,TGT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -1347,7 +1347,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t42863432\t3336333\tCCACCTA\tACACCTG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -1358,7 +1358,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t43161261\trs1985621170\tG\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -1366,7 +1366,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t43172724\tanc_no_coverage_snv\tA\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -1376,7 +1376,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t43683285\trs755653178\tG\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -1386,7 +1386,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t43774760\t4725737\tC\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -1399,7 +1399,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t43776268\t423466\tA\tAAT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -1409,7 +1409,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t43801711\trs2085093698\tCGCGTCAGTGAGGT\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -1424,7 +1424,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t44499780\t.\tGCCTCAGCGTGT\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -1433,7 +1433,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t44529793\trs781794878\tCTAACCATAGG\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_donor_region_variant,splice_donor_variant",
@@ -1444,7 +1444,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t44612102\t.\tTGGCTGACGCCTG\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -1453,7 +1453,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t44809112\trs1448853522\tA\tACAAGCCCTGGAAAGGAAAAGCAGTGGCCATTAGTCTCACTGG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -1471,7 +1471,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t44809112\trs1448853522\tACAAGCCCTGGAAAGGAAAAGCAGTGGCCATTAGTCTCACTGG\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -1489,7 +1489,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t44817965\t.\tACAT\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_deletion,start_lost",
@@ -1500,7 +1500,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t45379117\trs1374160967\tC\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -1509,7 +1509,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t45537772\t.\tT\tTATTCCAGAA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,protein_altering_variant,splice_region_variant,stop_gained",
@@ -1523,7 +1523,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t45595661\trs1282250887\tTGTAA\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -1533,7 +1533,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t46136981\trs766861300\tGCACCGT\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -1549,7 +1549,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "21\t46658922\t.\tT\tTTAAGGAGTTTTTTTCAAAGCCCAAGTATAACCACATTTTGAAACCAG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -1566,7 +1566,7 @@
    ]
   },
   {
-   "suite": "ancestral",
+   "dataset": "ancestral",
    "vcf": "chr21\t42650000\tanc_chr_prefixed_snv\tC\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -1575,7 +1575,7 @@
    ]
   }
  ],
- "multi_allelic_per_suite": 50,
+ "multi_allelic_per_dataset": 50,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "flag_sets": [
@@ -2540,6 +2540,20 @@
      "expected_divergence": "stop_codon_removed_without_stop_codon_test"
     },
     {
+     "location": "21:44817966-44817968",
+     "allele": "-",
+     "feature": "ENST00000397893",
+     "feature_type": "Transcript",
+     "record_indices": [
+      98
+     ],
+     "vep_consequence_set": "inframe_deletion",
+     "vep_rs_consequence_sets": [
+      "inframe_deletion,start_lost"
+     ],
+     "expected_divergence": "start_codon_removed_without_five_prime_utr"
+    },
+    {
      "location": "21:46136982-46136987",
      "allele": "-",
      "feature": "ENST00000291670",
@@ -2729,6 +2743,7 @@
     "stop_codon_overlap_genomic_span": 12,
     "start_cooccurrence_swap": 9,
     "stop_codon_removed_without_stop_codon_test": 2,
+    "start_codon_removed_without_five_prime_utr": 1,
     "stop_retained_without_stop_codon_test": 13
    },
    "vep_rs_only_summary": {},
@@ -3679,6 +3694,20 @@
    "expected_divergence": "stop_codon_removed_without_stop_codon_test"
   },
   {
+   "location": "21:44817966-44817968",
+   "allele": "-",
+   "feature": "ENST00000397893",
+   "feature_type": "Transcript",
+   "record_indices": [
+    98
+   ],
+   "vep_consequence_set": "inframe_deletion",
+   "vep_rs_consequence_sets": [
+    "inframe_deletion,start_lost"
+   ],
+   "expected_divergence": "start_codon_removed_without_five_prime_utr"
+  },
+  {
    "location": "21:46136982-46136987",
    "allele": "-",
    "feature": "ENST00000291670",
@@ -3868,6 +3897,7 @@
   "stop_codon_overlap_genomic_span": 12,
   "start_cooccurrence_swap": 9,
   "stop_codon_removed_without_stop_codon_test": 2,
+  "start_codon_removed_without_five_prime_utr": 1,
   "stop_retained_without_stop_codon_test": 13
  },
  "vep_rs_only_summary": {},

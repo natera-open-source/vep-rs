@@ -1,7 +1,7 @@
 entry = "bnd_bare_reference_allele_row"
 page = "docs/divergences/defect-f.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the VCF 4.3 specification, section 1.4.5 \"Alternative allele field format\" (BND is a first-level type of a symbolic alternate allele) and section 3 \"INFO keys used for structural variants\" (SVTYPE takes the value BND; no clause there requires a key that names a mate); not seen in the measured datasets"
 notes = "A <BND> that names no mate is held by Ensembl VEP as the allele string N/<BND> and split on the slash, so the reference base N is written as allele 1 beside the ALT; vep-rs writes the single breakend once."
@@ -31,3 +31,11 @@ ensembl_vep = [
   "21:30425651 | chromosome_breakpoint | ENST00000334068 | upstream_gene_variant | 2",
 ]
 vep_rs = ["21:30425651 | chromosome_breakpoint | ENST00000334068 | upstream_gene_variant | 2"]
+
+[implementation]
+code = ["crates/vep-core/src/sv_record.rs::structural_variants"]
+tests = [
+    "crates/vep-cli/src/vcf_parser.rs::tests::allele_num_follows_ensembl_veps_allele_string",
+    "crates/vep-cli/src/vcf_parser.rs::tests::symbolic_bnd_with_svlen_and_no_chr2_is_one_single_breakend_over_the_span",
+]
+rules = ["tools/vep-sv-compare/src/masks/breakend116.rs::filter_bnd_bare_reference_allele_rows"]

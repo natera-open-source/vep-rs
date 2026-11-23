@@ -1,0 +1,79 @@
+usage: vep-sv-compare [-h] [--assembly {grch37,grch38}]
+                      [--input-dir INPUT_DIR] [--perl-dir PERL_DIR]
+                      [--rust-dir RUST_DIR] [--output-dir OUTPUT_DIR]
+                      [--vep-rs-cache VEP_RS_CACHE]
+                      [--scored-engine SCORED_ENGINE]
+                      [--reference-release {115.2,116.2,116.3}]
+                      [--reference-max-sv-size REFERENCE_MAX_SV_SIZE]
+
+Compare Ensembl VEP and vep-rs outputs across a directory of SV VCFs.
+
+options:
+  -h, --help            show this help message and exit
+  --assembly {grch37,grch38}
+                        Assembly to compare (default: grch37). Sets default
+                        paths for input/perl/rust/output dirs.
+  --input-dir INPUT_DIR
+                        Directory with input VCF files (default:
+                        tests/sv_validation/{assembly})
+  --perl-dir PERL_DIR   Directory with Ensembl VEP output .txt files (default:
+                        tmp/sv_perl/{assembly})
+  --rust-dir RUST_DIR   Directory with vep-rs output .txt files (default:
+                        tmp/sv_rust/{assembly})
+  --output-dir OUTPUT_DIR
+                        Directory for concordance reports (default:
+                        tmp/sv_concordance/{assembly})
+  --vep-rs-cache VEP_RS_CACHE
+                        vep-rs JSON cache directory, the authority for which
+                        chromosome a transcript is on. Enables the cross-
+                        chromosome mask, which removes Ensembl VEP tuples
+                        naming a transcript the variant's chromosome does not
+                        contain. Omit it and that mask is INACTIVE; the report
+                        records which, so an unadjudicated run cannot read as
+                        a clean one.
+  --scored-engine SCORED_ENGINE
+                        Which engine produced --rust-dir. Three things read
+                        it. (1) The cross-chromosome filter's scored-engine
+                        sanity assertion: vep-rs naming a transcript the cache
+                        does not hold for the variant's chromosome is a vep-rs
+                        defect and raises, while a third-party engine building
+                        its own transcript set from a different annotation
+                        release does it legitimately and is counted instead
+                        (reported as
+                        scored_engine_transcripts_absent_from_cache). (2)
+                        Allele normalisation: for 'fastvep' a raw symbolic ALT
+                        token in the scored side's Allele column (<DEL>,
+                        <DUP:TANDEM>, <INS:ME:ALU>, <CN0>, ...) is mapped to
+                        the SO class string Ensembl VEP and vep-rs write there
+                        (deletion, tandem_duplication, Alu_insertion,
+                        deletion, ...). fastVEP through v0.5.0 writes the raw
+                        token, and without the mapping every symbolic-allele
+                        tuple of such an output is a guaranteed miss; from
+                        v0.6.0 it writes the class string itself, which the
+                        mapping leaves as written. The reference side is never
+                        mapped. (3) The 116.2 skipped-record cross-check: a
+                        vep-rs structural row at a Location the reference
+                        wrote nothing for that no skip-route record explains
+                        stops the comparison, while another engine's is its
+                        own disagreement, counted (reported as
+                        scored_engine_skip_route_residue_rows) and scored.
+                        Pass the engine's name, e.g. fastvep, to score a non-
+                        vep-rs output.
+  --reference-release {115.2,116.2,116.3}
+                        The Ensembl VEP release that produced --perl-dir,
+                        which selects the masks (MASKS_BY_RELEASE). Under
+                        115.2 they are the published comparator's; under 116.2
+                        and 116.3 (default) the class-C arms and the two
+                        cross-chromosome masks are not applied, a record the
+                        reference dropped as vep_skip is set aside whole, and
+                        the two breakend shapes of 116.1's chromosome-aware
+                        overlap are set aside under --vep-rs-cache. The report
+                        names the release and the masks it applied.
+                        run_clone_measurement.sh derives the value from the
+                        reference set's provenance.
+  --reference-max-sv-size REFERENCE_MAX_SV_SIZE
+                        The --max_sv_size the reference ran with (default
+                        10000000, Ensembl VEP's own; -1 when it disabled the
+                        cap). Read by the 116.2 skipped-record cross-check,
+                        which refuses a reference that kept a record on a skip
+                        route or dropped one that is not.

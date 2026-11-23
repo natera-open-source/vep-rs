@@ -1,0 +1,32 @@
+{
+ "mode": "stats",
+ "format": "stats",
+ "verdict": "red",
+ "reasons": [
+  "the expected file carries no [section] header",
+  "the actual file carries no [section] header"
+ ],
+ "tolerance": 0,
+ "masked_rows": [
+  "Command line options",
+  "End time",
+  "Input data",
+  "Input file",
+  "Output file",
+  "Run time",
+  "Start time"
+ ],
+ "sections": {
+  "expected": [],
+  "actual": [],
+  "order_agrees": true
+ },
+ "compared": {
+  "sections": 0,
+  "rows": 0
+ },
+ "documented": [],
+ "differences": {},
+ "expected": "tests/fixtures/empty.summary.log",
+ "actual": "tests/fixtures/empty.summary.log"
+}

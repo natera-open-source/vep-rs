@@ -1,9 +1,10 @@
 // Copyright (c) 2026-present Natera, Inc.
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-//! Text the report must reproduce character for character from CPython: `str.strip()`,
+//! The CPython rules the tool's bytes follow, character for character: `str.strip()`,
 //! `float.__repr__`, `round(x, 6)`, `json.dumps(ensure_ascii=True)` string escapes,
-//! `f"{n:,}"` digit grouping and `str(pathlib.Path(arg))`.
+//! `f"{n:,}"` digit grouping, `str(pathlib.Path(arg))` and the `surrogateescape` reading of a
+//! command-line argument that is not UTF-8; and `int()` for the one option that takes a count.
 
 use std::fmt::Write;
 
@@ -29,6 +30,38 @@ pub fn is_py_space(c: char) -> bool {
 /// `str.strip()` with no argument.
 pub fn py_strip(s: &str) -> &str {
     s.trim_matches(is_py_space)
+}
+
+/// `int(text)` for a count, clamped to `i64`: the blanks `int()` drops around the number
+/// (those of `str.isspace()` but U+001C to U+001F), an optional sign, then decimal digits
+/// with single underscores between them, at any length. None where `int()` raises
+/// `ValueError`, and for a digit outside ASCII, which `int()` reads.
+pub fn py_int_clamped(text: &str) -> Option<i64> {
+    let body = text.trim_matches(|c| is_py_space(c) && !('\u{1c}'..='\u{1f}').contains(&c));
+    let (negative, digits) = match body.strip_prefix('-') {
+        Some(rest) => (true, rest),
+        None => (false, body.strip_prefix('+').unwrap_or(body)),
+    };
+    if digits.is_empty()
+        || digits.starts_with('_')
+        || digits.ends_with('_')
+        || digits.contains("__")
+    {
+        return None;
+    }
+    let mut value = 0i64;
+    for byte in digits.bytes() {
+        match byte {
+            b'_' => {}
+            b'0'..=b'9' => {
+                value = value
+                    .saturating_mul(10)
+                    .saturating_add(i64::from(byte - b'0'));
+            }
+            _ => return None,
+        }
+    }
+    Some(if negative { -value } else { value })
 }
 
 /// `repr(x)` for a finite f64: the shortest round-trip digits, `.0` on an integral value,
@@ -72,6 +105,38 @@ pub fn py_round6(x: f64) -> f64 {
 /// above U+FFFF.
 pub fn push_json_str(out: &mut String, s: &str) {
     out.push('"');
+    push_json_chars(out, s);
+    out.push('"');
+}
+
+/// Appends `json.dumps(s)` for the `str` a command-line argument of these bytes is: Python
+/// decodes it with `surrogateescape`, so the UTF-8 in it reads as `push_json_str` writes it
+/// and each byte outside UTF-8 is the lone surrogate `\udcXX`.
+pub fn push_json_os_str(out: &mut String, bytes: &[u8]) {
+    out.push('"');
+    for chunk in bytes.utf8_chunks() {
+        push_json_chars(out, chunk.valid());
+        for byte in chunk.invalid() {
+            write!(out, "\\udc{byte:02x}").unwrap();
+        }
+    }
+    out.push('"');
+}
+
+/// The text Python's stderr writes for that `str` under its `backslashreplace` handler: the
+/// UTF-8 as it is and each byte outside UTF-8 as the six characters `\udcXX`.
+pub fn py_stderr_os_str(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity(bytes.len());
+    for chunk in bytes.utf8_chunks() {
+        out.push_str(chunk.valid());
+        for byte in chunk.invalid() {
+            write!(out, "\\udc{byte:02x}").unwrap();
+        }
+    }
+    out
+}
+
+fn push_json_chars(out: &mut String, s: &str) {
     for c in s.chars() {
         match c {
             '"' => out.push_str("\\\""),
@@ -90,7 +155,6 @@ pub fn push_json_str(out: &mut String, s: &str) {
             }
         }
     }
-    out.push('"');
 }
 
 /// `f"{n:,}"`.
@@ -152,6 +216,35 @@ mod tests {
     }
 
     #[test]
+    fn a_count_is_read_as_int_reads_it_and_clamped() {
+        let read = [
+            ("20", 20),
+            ("0", 0),
+            ("-0", 0),
+            ("+2", 2),
+            ("-1", -1),
+            ("007", 7),
+            ("1_000", 1000),
+            (" 3 ", 3),
+            ("\t3\n", 3),
+            ("\u{a0}3\u{3000}", 3),
+            ("\u{85}3\u{2003}", 3),
+            ("99999999999999999999999999", i64::MAX),
+            ("-99999999999999999999999999", -i64::MAX),
+        ];
+        for (text, expected) in read {
+            assert_eq!(py_int_clamped(text), Some(expected), "int({text:?})");
+        }
+        let refused = [
+            "", " ", "x", "1.5", "1e2", "0x10", "_1", "1_", "1__0", "+_1", "- 3", "+-3", "--3",
+            "-", "+", "1 0", "\u{1c}3", "3\u{1f}", "\u{ff13}",
+        ];
+        for text in refused {
+            assert_eq!(py_int_clamped(text), None, "int({text:?})");
+        }
+    }
+
+    #[test]
     fn float_repr_matches_python() {
         let cases = [
             (0.0, "0.0"),
@@ -198,6 +291,39 @@ mod tests {
             out,
             r#""\u001f\u007f\u00e9\ud83d\ude00\ufffd/\\\"\n\t\b\f\r\u0000""#
         );
+    }
+
+    #[test]
+    fn bytes_outside_utf8_read_as_surrogateescape_reads_them() {
+        let cases: [(&[u8], &str, &str); 5] = [
+            (
+                b"ref\xff\xe2\x82.txt",
+                r#""ref\udcff\udce2\udc82.txt""#,
+                r"ref\udcff\udce2\udc82.txt",
+            ),
+            (
+                b"d\xc0\x80r/sco\xed\xa0\x80red.txt",
+                r#""d\udcc0\udc80r/sco\udced\udca0\udc80red.txt""#,
+                r"d\udcc0\udc80r/sco\udced\udca0\udc80red.txt",
+            ),
+            (
+                b"no\xffpe\xe2\x82/x\xc3\xa9.txt",
+                r#""no\udcffpe\udce2\udc82/x\u00e9.txt""#,
+                "no\\udcffpe\\udce2\\udc82/x\u{e9}.txt",
+            ),
+            (b"plain/name.txt", r#""plain/name.txt""#, "plain/name.txt"),
+            (
+                b"\xf0\x9f\x98\x80\x80",
+                r#""\ud83d\ude00\udc80""#,
+                "\u{1F600}\\udc80",
+            ),
+        ];
+        for (bytes, json, stderr) in cases {
+            let mut out = String::new();
+            push_json_os_str(&mut out, bytes);
+            assert_eq!(out, json, "{bytes:?}");
+            assert_eq!(py_stderr_os_str(bytes), stderr, "{bytes:?}");
+        }
     }
 
     #[test]

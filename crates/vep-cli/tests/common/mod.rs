@@ -36,7 +36,11 @@
 //! consequence terms are documented to differ between VEP and vep-rs (with the
 //! corpus record ordinals they belong to), and `vep_rs_only_tuples` the keys
 //! only vep-rs emits, each classified; both are compared against their
-//! documented shape rather than for equality. A `divergences` item's
+//! documented shape rather than for equality. An item whose
+//! `vep_rs_consequence_sets` hold VEP's own set beside another documents a key
+//! several records share: a row on which vep-rs writes VEP's set is compared
+//! for equality like any other, and the rows that differ are held to the
+//! item's sets ([`compare_entries`]). A `divergences` item's
 //! `vep_rs_consequence_sets` are vep-rs's sets in a run without a reference
 //! sequence; an item may state its sets in a run that has one under
 //! `vep_rs_consequence_sets_with_reference_sequence`, and such a run is held to
@@ -46,21 +50,24 @@
 //! annotation (its `reference_rows` is 0 and `reference_warning` quotes the
 //! reason): the reference writes nothing for it, so the record-level VCF line
 //! and JSON object vep-rs writes for it are counted, not compared, while every
-//! consequence entry on it must still be a documented vep-rs-only key; the two
-//! `--check_frequency` classes of [`RECORD_DROPPING_CLASSES`] mark their records
-//! the same way.
+//! consequence entry on it must still be a documented vep-rs-only key.
 //! `field_divergences` names keys whose terms agree but whose named field (an
 //! HGVS string) is documented to differ, with the value vep-rs prints; the key
 //! carries the row's consequence set, so a record sharing a Location and Allele
 //! with the documented one keeps its own rows compared exactly, and every other
-//! field of a documented key compares exactly. A run under `--nearest transcript`
+//! field of a documented key compares exactly. An item that states `rows_alike`
+//! documents a key and consequence set several records share: a row of it on
+//! which both engines print one value of the field is compared for equality like
+//! any other, and the rows that differ are held to the item's value
+//! ([`Documented::field_shares_its_key`]); the rows found alike are held to the
+//! count the item states. A run under `--nearest transcript`
 //! compares its `NEAREST` values as the coordinates of the named transcripts'
 //! start sites ([`nearest_as_coordinates`]). `masks` lists the mask classes
 //! applied to every run of the corpus before the comparison: under
 //! [`REGULATORY_FEATURE_ROWS`] the reference loses its regulatory rows
 //! ([`apply_masks`]), under [`ORDER_ONLY`] the `DOMAINS`, `FREQS`, `ZYG` and
-//! `NearestExonJB` items and the `5UTR_annotation` pair groups of both sides
-//! compare as a multiset ([`list_columns_as_multisets`]), under
+//! `NearestExonJB` items, the `CLIN_SIG` lists and the `5UTR_annotation` pair
+//! groups of both sides compare as a multiset ([`list_columns_as_multisets`]), under
 //! [`UNLOADED_MODULE_PLUGIN`] the reference's run-time warnings about a plugin
 //! module vep-rs cannot load stand against vep-rs's load warning for it
 //! ([`compare_warnings`]), and under [`CONSERVATION_SHORT_NAME_SPELLING`] and
@@ -78,7 +85,8 @@
 //! input with `-i STDIN`), `formats` (the formats compared, all four by default),
 //! `expected_dir` (`expected_<name>` by default), `unordered` (the entries
 //! compared without their order, for a set whose rows the reference emits in
-//! hash order) and `perl_mode` (the manifest's own, `offline` when it names
+//! hash order; entries sharing a key then pair by what they hold,
+//! [`number_shared_keys_by_content`]) and `perl_mode` (the manifest's own, `offline` when it names
 //! none; `database` for a reference Ensembl VEP wrote connected to its
 //! database, whose default and tab headers compare by their column
 //! descriptions alone and whose VCF `##VEP=` line by the tokens it names; `gtf`
@@ -103,7 +111,9 @@
 //! strings, each at its record's ordinal, and the unnumbered texts of a
 //! `reference_warnings` list (the flag set's own, else the manifest's;
 //! [`run_reference_warnings`]), with paths masked and the quoted input line
-//! left out.
+//! left out. The line vep-rs writes when a run asks for known variants from a
+//! cache without variation data has no counterpart in the reference and is set
+//! aside on a corpus whose cache holds none.
 //!
 //! The VCF and JSON formats carry no `Location`, so their entries are keyed by
 //! the corpus record ordinal, found by matching each output record to its
@@ -304,18 +314,21 @@ pub const REGULATORY_FEATURE_ROWS: &str = "regulatory_feature_rows";
 /// vep-rs prints in the order the run names the samples; the UTRAnnotator
 /// plugin's `5UTR_annotation` writes its `key=value` pairs and its groups in
 /// hash order (UTRAnnotator.pm:282-288), which vep-rs fixes, as the
-/// NearestExonJB plugin lists its exon items (NearestExonJB.pm:267-271). Under
-/// the class the items of the four columns and the pair groups of the fifth in
-/// the default, tab and VCF formats and the JSON `domains` and `zyg` arrays and
-/// `NearestExonJB` string compare as a multiset ([`list_columns_as_multisets`]);
-/// every other field compares exactly.
+/// NearestExonJB plugin lists its exon items (NearestExonJB.pm:267-271); and
+/// `CLIN_SIG` under `--clin_sig_allele 1` joins the different term lists of a
+/// row's known variants in hash order (`OutputFactory.pm:1120`, `1143-1144`),
+/// which vep-rs writes in the order of the known variants. Under the class the
+/// items of the four item columns, the lists of `CLIN_SIG` and the pair groups
+/// of `5UTR_annotation` in the default, tab and VCF formats and the JSON
+/// `domains` and `zyg` arrays and `NearestExonJB` string compare as a multiset
+/// ([`list_columns_as_multisets`]); every other field compares exactly.
 pub const ORDER_ONLY: &str = "order_only";
 
 /// The mask class of a corpus whose flags name a plugin module of its own that
 /// Ensembl VEP loads from the plugins directory and vep-rs, which runs no such
 /// module, cannot. The reference's run-time warnings about that plugin,
 /// `Plugin '<Name>' did not return a hashref, output ignored!` and `Plugin
-/// '<Name>' went wrong: <reason>` (OutputFactory.pm:2235 and :2244), are set
+/// '<Name>' went wrong: <reason>` (OutputFactory.pm:2244 and :2253), are set
 /// aside, and the one line vep-rs writes about it, `Failed to load plugin
 /// <Name>: ...`, is required in their place and set aside too; every other
 /// warning compares as usual ([`compare_warnings`]).
@@ -340,7 +353,7 @@ pub const CONSERVATION_SHORT_NAME_SPELLING: &str = "conservation_short_name_spel
 /// are read with that text ([`masked_reference_text`]).
 pub const PC_DESCRIPTION_TEXT: &str = "pc_description_text";
 
-/// The classes of the behaviours vep-rs corrects where Ensembl VEP 116.2 is
+/// The classes of the behaviours vep-rs corrects where Ensembl VEP 116.3 is
 /// wrong, each a page or section of `docs/intended-divergences.md`. A corpus
 /// documents the rows of such a class in its `divergences`, `vep_rs_only_tuples`
 /// or `field_divergences` under `expected_divergence`, which the harness applies
@@ -350,6 +363,8 @@ pub const PC_DESCRIPTION_TEXT: &str = "pc_description_text";
 const CORRECTED_BEHAVIOUR_CLASSES: &[&str] = &[
     "start_cooccurrence_swap",
     "splice_family_swap",
+    "start_codon_removed_without_five_prime_utr",
+    "start_codon_kept_without_five_prime_utr",
     "gxf_reverse_strand_utr_sequence",
     "conservation_max_text_order",
     "gwas_haplotype_cross_product",
@@ -361,19 +376,24 @@ const CORRECTED_BEHAVIOUR_CLASSES: &[&str] = &[
     "utrannotator_gained_start_window",
     "loeuf_zero_minimum",
     "maxentscan_overlapping_windows",
+    "loftee_gerp_walk_without_conservation_database",
     "dosage_sensitivity_regulatory_row_warnings",
     "hgvs_shift_shared_across_alleles",
     "hgvs_shift_sequence_edge_window",
     "refseq_edited_model_hgvsc_offset",
-    "frequency_filter_zero_value",
-    "frequency_filter_allele_key_order",
+    "refseq_edited_model_intron_span_coding_reference",
+    "cnv_tr_symbolic_loss_named_a_gain",
     "organelle_peptide_paths_translation_table",
     "hgvs_shifted_indel_written_span_gate",
     "hgvs_shifted_deletion_clamped_span",
+    "hgvsp_shifted_indel_written_span_start_test",
+    "hgvsp_start_codon_test_past_the_shifted_allele",
     "hgvs_clipped_reference_against_whole_alternate",
     "hgvs_added_bases_left_at_the_span_end",
     "hgvs_insertion_left_where_the_shift_stops",
     "hgvs_added_bases_written_outside_the_transcript",
+    "total_length_json_range_end",
+    "allele_number_repeated_or_reference_equal_alt",
 ];
 
 /// The mask classes that change how the harness compares; a manifest may also
@@ -495,6 +515,12 @@ const REGULATORY_FEATURE_TYPES: [&str; 2] = ["RegulatoryFeature", "MotifFeature"
 /// The warnings-file phrase vep-rs writes when the cache holds no regulatory
 /// data; [`REGULATORY_FEATURE_ROWS`] requires the line.
 const REGULATORY_NOTICE: &str = "this cache holds no regulatory data";
+/// The warnings-file phrase vep-rs writes when a run asks for known variants
+/// from a cache that holds no variation data. Ensembl VEP attaches no variation
+/// source to such a cache and writes nothing about it (`CacheDir.pm:179`), so
+/// [`compare_warnings`] sets the line aside on a corpus whose cache holds no
+/// `variations` directory.
+const VARIATION_NOTICE: &str = "[cache] no variation data under";
 
 /// Applies a run's mask classes to the reference entries of one format.
 /// Under [`REGULATORY_FEATURE_ROWS`] the default and tab rows and the VCF CSQ
@@ -561,8 +587,22 @@ pub fn apply_masks(masks: &[String], format: &str, expected: &mut Vec<Entry>) {
 /// The columns [`ORDER_ONLY`] compares as multisets in the text formats; the
 /// JSON format carries `DOMAINS` as a consequence's `domains` array, `ZYG` as
 /// the record's `zyg` array and `NearestExonJB` as the consequence's
-/// `,`-joined `nearestexonjb` string.
-const ORDER_ONLY_COLUMNS: [&str; 4] = ["DOMAINS", "FREQS", "ZYG", "NearestExonJB"];
+/// `,`-joined `nearestexonjb` string, and has no joined `CLIN_SIG`: each known
+/// variant carries its own terms there.
+const ORDER_ONLY_COLUMNS: [&str; 5] = ["DOMAINS", "FREQS", "ZYG", "NearestExonJB", "CLIN_SIG"];
+
+/// The separator of the term lists of `CLIN_SIG` in the text format `format`:
+/// the `;` Ensembl VEP joins them with (`OutputFactory.pm:1144`), which the
+/// default and VCF formats write as `%3B` (`OutputFactory/VEP_output.pm:118`,
+/// `OutputFactory/VCF.pm:402`). The lists are compared whole, so `CLIN_SIG`
+/// is split at this separator alone.
+fn clin_sig_list_separator(format: &str) -> &'static str {
+    if format == "tab" {
+        ";"
+    } else {
+        "%3B"
+    }
+}
 
 /// The column [`ORDER_ONLY`] compares as a multiset of `key=value` groups: the
 /// UTRAnnotator plugin writes one `:`-joined group of pairs per affected
@@ -574,6 +614,7 @@ const ORDER_ONLY_PAIR_GROUP_COLUMN: &str = "5UTR_annotation";
 /// Rewrites every [`ORDER_ONLY_COLUMNS`] value of one side into its items in
 /// sorted order: the default and tab formats' `,`-joined items
 /// (`Utils.pm:185-198`), the VCF's `&`-joined items (`OutputFactory/VCF.pm:391`),
+/// the lists of `CLIN_SIG` (`clin_sig_list_separator`),
 /// the JSON `domains` array's objects by their compact text, the JSON `zyg`
 /// array's strings and the JSON `nearestexonjb` string's `,`-joined items; the
 /// [`ORDER_ONLY_PAIR_GROUP_COLUMN`]'s groups each into
@@ -625,6 +666,9 @@ pub fn list_columns_as_multisets(entries: &mut [Entry], format: &str) {
                         .map(|group| sorted_items(group.split(':'), ":")),
                     separator,
                 )
+            } else if column == "CLIN_SIG" {
+                let lists = clin_sig_list_separator(format);
+                sorted_items(value.split(lists), lists)
             } else {
                 sorted_items(value.split(separator), separator)
             };
@@ -956,8 +1000,8 @@ impl Run<'_> {
         masks_name(&self.masks, UNLOADED_MODULE_PLUGIN)
     }
 
-    /// Whether the run compares `DOMAINS`, `FREQS`, `ZYG` and `NearestExonJB` as
-    /// multisets ([`ORDER_ONLY`]).
+    /// Whether the run compares the columns of [`ORDER_ONLY_COLUMNS`] and of
+    /// [`ORDER_ONLY_PAIR_GROUP_COLUMN`] as multisets ([`ORDER_ONLY`]).
     pub fn order_only(&self) -> bool {
         masks_name(&self.masks, ORDER_ONLY)
     }
@@ -1013,7 +1057,7 @@ const SOURCE_COLUMN: &str = "SOURCE";
 /// headers, the two names in the CSQ format list and the VCF's
 /// `##INFO=<ID=<file>,...>` line). The source's line is recognised by its text
 /// ending in the key it describes, as Ensembl VEP writes a custom source's
-/// header (`OutputFactory.pm:2435-2470`, `## <short name> : <path>`), which no
+/// header (`OutputFactory.pm:2444-2479`, `## <short name> : <path>`), which no
 /// other header line does. In the VCF the fields dropped are those the last
 /// `##INFO=<ID=<info_field>,...>` line carrying a `Format: ` clause names, and
 /// the entry rewritten is a line's last one under the field, as
@@ -1231,7 +1275,7 @@ pub fn protein_coding_start_sites(corpus: &Corpus) -> HashMap<String, u64> {
             let plain = path.to_str().unwrap().trim_end_matches(".gz");
             let text = read_maybe_gz(Path::new(plain));
             let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
-            // A converted cache wraps its transcripts in a range-keyed map.
+            // A shard is a bare array of transcripts or a map of such arrays.
             let records: Vec<&serde_json::Value> = match &parsed {
                 serde_json::Value::Array(items) => items.iter().collect(),
                 serde_json::Value::Object(map) => map
@@ -1708,6 +1752,31 @@ pub fn isolated_vep_anywhere() -> Command {
     isolated_vep(Path::new(env!("CARGO_TARGET_TMPDIR")))
 }
 
+/// The device that refuses every write, where the platform has one.
+const FULL_DEVICE: &str = "/dev/full";
+
+/// The streams that take no bytes, by name, for a test that puts standard
+/// error on each: the device that refuses every write, where the platform has
+/// one, and a pipe whose reader has gone.
+pub fn unwritable_streams() -> &'static [&'static str] {
+    if Path::new(FULL_DEVICE).exists() {
+        &[FULL_DEVICE, "a pipe whose reader has gone"]
+    } else {
+        &["a pipe whose reader has gone"]
+    }
+}
+
+/// The stream [`unwritable_streams`] names as `stream`, opened for a child
+/// process to write.
+pub fn unwritable(stream: &str) -> Stdio {
+    if stream == FULL_DEVICE {
+        return fs::File::options().write(true).open(stream).unwrap().into();
+    }
+    let (reader, writer) = std::io::pipe().unwrap();
+    drop(reader);
+    writer.into()
+}
+
 /// The `vep` invocation a run starts from: the run's input (`-i STDIN` when it
 /// is piped) and the corpus cache, the fixed arguments, then the run's `flags`
 /// and the corpus `fasta`; `out_dir` holds the staged cache of a
@@ -1846,6 +1915,49 @@ fn dedup_keys(entries: &mut [Entry]) {
         *n += 1;
         if *n > 1 {
             e.key = format!("{}#{}", e.key, n);
+        }
+    }
+}
+
+/// Numbers the entries that share a key by what they hold, where
+/// [`dedup_keys`] numbered them by where they stand: of the entries under one
+/// key, the one whose consequence and fields sort first keeps the key and the
+/// rest take `#2`, `#3` in that order. An unordered run pairs its entries
+/// this way, so two rows of one feature that the engines write in different
+/// orders (a transcript the cache and a gene-model file both hold, which
+/// Ensembl VEP lists in an order that differs from run to run) meet their own
+/// counterparts.
+pub fn number_shared_keys_by_content(entries: &mut [Entry]) {
+    fn base(key: &str) -> &str {
+        match key.rsplit_once('#') {
+            Some((base, count))
+                if !count.is_empty() && count.bytes().all(|b| b.is_ascii_digit()) =>
+            {
+                base
+            }
+            _ => key,
+        }
+    }
+    let mut sharing: BTreeMap<String, Vec<usize>> = BTreeMap::new();
+    for (at, entry) in entries.iter().enumerate() {
+        sharing
+            .entry(base(&entry.key).to_string())
+            .or_default()
+            .push(at);
+    }
+    for (key, mut places) in sharing {
+        if places.len() < 2 {
+            continue;
+        }
+        places.sort_by(|&a, &b| {
+            (&entries[a].consequence, &entries[a].fields)
+                .cmp(&(&entries[b].consequence, &entries[b].fields))
+        });
+        for (rank, at) in places.into_iter().enumerate() {
+            entries[at].key = match rank {
+                0 => key.clone(),
+                _ => format!("{key}#{}", rank + 1),
+            };
         }
     }
 }
@@ -2326,8 +2438,16 @@ pub struct Documented {
     /// the feature carries the field and the other not.
     fields_by_location: HashMap<(String, String, String, String), BTreeMap<String, String>>,
     fields_by_record: HashMap<(usize, String, String, String), BTreeMap<String, String>>,
+    /// The documented fields, under the same two keys, of an item that states
+    /// `rows_alike`: several records write a row on its key, and on some of
+    /// those rows both engines print one value. Each field names its item's
+    /// place in `shared_items`.
+    shared_fields_by_location: HashMap<(String, String, String, String), BTreeMap<String, usize>>,
+    shared_fields_by_record: HashMap<(usize, String, String, String), BTreeMap<String, usize>>,
+    /// The items that state `rows_alike`, in the manifest's order.
+    shared_items: Vec<SharedField>,
     /// Records the reference wrote nothing for: those a `vep_rs_only_tuples`
-    /// entry of a class in [`RECORD_DROPPING_CLASSES`] names.
+    /// entry of the class [`REFERENCE_SKIPPED_RECORD`] names.
     skipped_records: BTreeSet<usize>,
 }
 
@@ -2335,18 +2455,18 @@ pub struct Documented {
 /// is one the reference dropped before annotation.
 pub const REFERENCE_SKIPPED_RECORD: &str = "reference_skipped_record";
 
-/// The classes under which a `vep_rs_only_tuples` entry documents a record
-/// the reference wrote nothing for: one it dropped before annotation, and one
-/// its `--check_frequency` filter left out where vep-rs keeps it (a frequency
-/// of exactly 0 read as none, or the input allele's own key read before the
-/// matched allele's). The record's VCF line and JSON object are counted, not
-/// compared, while every consequence entry on it must still be a documented
-/// vep-rs-only key.
-pub const RECORD_DROPPING_CLASSES: &[&str] = &[
-    REFERENCE_SKIPPED_RECORD,
-    "frequency_filter_zero_value",
-    "frequency_filter_allele_key_order",
-];
+/// The key of a `field_divergences` item that counts the rows of its key on
+/// which both engines print one value of the field: the rows of other records
+/// that share the key with the documented one.
+pub const ROWS_ALIKE: &str = "rows_alike";
+
+/// A `field_divergences` item that states [`ROWS_ALIKE`]: its key as a report
+/// names it, its field and the count it states.
+struct SharedField {
+    key: String,
+    field: String,
+    rows_alike: u64,
+}
 
 impl Documented {
     /// The documented keys of a run without a reference sequence.
@@ -2368,6 +2488,9 @@ impl Documented {
             extra_by_record: BTreeSet::new(),
             fields_by_location: HashMap::new(),
             fields_by_record: HashMap::new(),
+            shared_fields_by_location: HashMap::new(),
+            shared_fields_by_record: HashMap::new(),
+            shared_items: Vec::new(),
             skipped_records: BTreeSet::new(),
         };
         let s = |v: &serde_json::Value, k: &str| {
@@ -2413,9 +2536,8 @@ impl Documented {
                 s(item, "allele"),
                 s(item, "feature"),
             ));
-            let reference_skipped = item["expected_divergence"]
-                .as_str()
-                .is_some_and(|class| RECORD_DROPPING_CLASSES.contains(&class));
+            let reference_skipped =
+                item["expected_divergence"].as_str() == Some(REFERENCE_SKIPPED_RECORD);
             for r in item["record_indices"].as_array().into_iter().flatten() {
                 if let Some(r) = r.as_u64() {
                     d.extra_by_record
@@ -2433,24 +2555,46 @@ impl Documented {
         {
             let (field, value) = (s(item, "field"), s(item, "vep_rs"));
             let terms = consequence_set(&s(item, "consequence_set"));
+            let location_key = (
+                s(item, "location"),
+                s(item, "allele"),
+                s(item, "feature"),
+                terms.clone(),
+            );
+            let shared = item.get(ROWS_ALIKE).map(|count| {
+                d.shared_items.push(SharedField {
+                    key: format!("{}|{}|{}", location_key.0, location_key.1, location_key.2),
+                    field: field.clone(),
+                    rows_alike: count.as_u64().unwrap_or(0),
+                });
+                d.shared_items.len() - 1
+            });
+            if let Some(place) = shared {
+                d.shared_fields_by_location
+                    .entry(location_key.clone())
+                    .or_default()
+                    .insert(field.clone(), place);
+            }
             d.fields_by_location
-                .entry((
-                    s(item, "location"),
-                    s(item, "allele"),
-                    s(item, "feature"),
-                    terms.clone(),
-                ))
+                .entry(location_key)
                 .or_default()
                 .insert(field.clone(), value.clone());
             for r in item["record_indices"].as_array().into_iter().flatten() {
                 if let Some(r) = r.as_u64() {
+                    let record_key = (
+                        r as usize,
+                        s(item, "allele"),
+                        s(item, "feature"),
+                        terms.clone(),
+                    );
+                    if let Some(place) = shared {
+                        d.shared_fields_by_record
+                            .entry(record_key.clone())
+                            .or_default()
+                            .insert(field.clone(), place);
+                    }
                     d.fields_by_record
-                        .entry((
-                            r as usize,
-                            s(item, "allele"),
-                            s(item, "feature"),
-                            terms.clone(),
-                        ))
+                        .entry(record_key)
                         .or_default()
                         .insert(field.clone(), value.clone());
                 }
@@ -2491,6 +2635,54 @@ impl Documented {
             })
         }
         self.divergent_fields(e).and_then(|m| lookup(m, field))
+    }
+
+    /// The place among the items that state [`ROWS_ALIKE`] of the one that
+    /// documents `field` on the entry's key, the key looked up as
+    /// [`Documented::divergent_field`] looks it up and the field in any letter
+    /// case; `None` where no such item documents it. On such a key a row whose
+    /// two values agree is the row of another record than the documented one.
+    pub fn field_shares_its_key(&self, e: &Entry, field: &str) -> Option<usize> {
+        let (allele, feature) = (dash(&e.allele), dash(&e.feature));
+        let terms = consequence_set(&e.consequence);
+        let named = |fields: &BTreeMap<String, usize>| {
+            fields
+                .iter()
+                .find(|(name, _)| name.eq_ignore_ascii_case(field))
+                .map(|(_, place)| *place)
+        };
+        if let Some(loc) = &e.location {
+            let key = (loc.clone(), allele.clone(), feature.clone(), terms.clone());
+            if self.fields_by_location.contains_key(&key) {
+                return self.shared_fields_by_location.get(&key).and_then(named);
+            }
+        }
+        self.shared_fields_by_record
+            .get(&(e.record?, allele, feature, terms))
+            .and_then(named)
+    }
+
+    /// One line for each item that states [`ROWS_ALIKE`], some row of whose key
+    /// a comparison read, and whose count is not the rows it found alike:
+    /// `rows` holds, by the item's place, the rows read and those alike.
+    fn stale_row_counts(&self, rows: &HashMap<usize, (u64, u64)>) -> Vec<String> {
+        let mut lines: Vec<(usize, String)> = rows
+            .iter()
+            .filter_map(|(place, (_, alike))| {
+                let item = &self.shared_items[*place];
+                (*alike != item.rows_alike).then(|| {
+                    (
+                        *place,
+                        format!(
+                            "{}: field {} documents {} rows alike, {} are",
+                            item.key, item.field, item.rows_alike, alike
+                        ),
+                    )
+                })
+            })
+            .collect();
+        lines.sort();
+        lines.into_iter().map(|(_, line)| line).collect()
     }
 
     /// Whether any field of the entry is documented to differ.
@@ -2625,6 +2817,18 @@ pub fn consequence_set(s: &str) -> String {
 
 const EXAMPLES_PER_GROUP: usize = 4;
 
+/// Whether vep-rs writes VEP's own consequence set on a row of a documented key
+/// whose documented `sets` hold that set beside another. Several records share
+/// such a key (every `<CNV:TR>` record of one position writes one Location and
+/// Allele), the documented divergence is the row of another of them, and this
+/// row is compared like any other. A key documented with VEP's own set alone
+/// is set aside whole: its rows agree in their terms and differ in a field.
+fn agrees_on_a_shared_key(e: &Entry, a: Option<&Entry>, sets: &[String]) -> bool {
+    let own = consequence_set(&e.consequence);
+    let stated = |held: bool| sets.iter().any(|set| (consequence_set(set) == own) == held);
+    a.is_some_and(|a| consequence_set(&a.consequence) == own) && stated(true) && stated(false)
+}
+
 /// Compares expected against actual entries and returns a report of every
 /// difference, or an empty string when the two agree. Under `ordered` the keys
 /// both sides share must also come in the same order.
@@ -2644,13 +2848,19 @@ pub fn compare_entries(
     let mut mismatches: BTreeMap<String, BTreeMap<String, Vec<String>>> = BTreeMap::new();
     let mut mismatch_totals: BTreeMap<String, usize> = BTreeMap::new();
     let mut stale_divergences: Vec<String> = Vec::new();
+    // By the place of an item that states `rows_alike`: the rows of its key read
+    // and those on which both engines print one value.
+    let mut shared_rows: HashMap<usize, (u64, u64)> = HashMap::new();
     let mut compared = 0usize;
     let mut skipped_documented = 0usize;
     let mut annotated_without_reference = 0usize;
 
     for e in expected {
         let a = actual_by_key.get(e.key.as_str()).copied();
-        if let Some(sets) = documented.divergent(e) {
+        let documented_sets = documented
+            .divergent(e)
+            .filter(|sets| !agrees_on_a_shared_key(e, a, sets));
+        if let Some(sets) = documented_sets {
             skipped_documented += 1;
             match a {
                 None if sets.is_empty() => {}
@@ -2699,7 +2909,18 @@ pub fn compare_entries(
             if let Some(documented_value) = documented.divergent_field(e, name) {
                 // The field is documented to differ: vep-rs must print the documented
                 // value (compared after the Extra/CSQ percent-encoding of `=` and `;`
-                // is undone), or the documentation is stale.
+                // is undone), or the documentation is stale. On a key whose item
+                // states `rows_alike`, a row on which both engines print one value
+                // is another record's and agrees like any other row; the rows found
+                // so are counted against the item's number.
+                if let Some(place) = documented.field_shares_its_key(e, name) {
+                    let (read, alike) = shared_rows.entry(place).or_insert((0, 0));
+                    *read += 1;
+                    if ev == av {
+                        *alike += 1;
+                        continue;
+                    }
+                }
                 if !is_documented_value(av, documented_value) {
                     stale_divergences.push(format!(
                         "{}: field {name} documented as {:?}, vep-rs now prints {:?} (VEP: {:?})",
@@ -2721,6 +2942,7 @@ pub fn compare_entries(
             }
         }
     }
+    stale_divergences.extend(documented.stale_row_counts(&shared_rows));
     for a in actual {
         if expected_by_key.contains_key(a.key.as_str()) || documented.extra(a) {
             continue;
@@ -2828,7 +3050,7 @@ pub fn compare_entries(
     }
     if !stale_divergences.is_empty() {
         report.push_str(&format!(
-            "DOCUMENTED DIVERGENCES NOT OBSERVED IN THIS RUN: {} (regenerate the manifest with build_golden_corpus.py classify)\n",
+            "DOCUMENTED DIVERGENCES NOT OBSERVED IN THIS RUN: {} (regenerate the manifest with vep-golden-corpus classify)\n",
             stale_divergences.len()
         ));
         for s in stale_divergences.iter().take(20) {
@@ -3017,9 +3239,9 @@ pub fn compare_column_descriptions(expected: &str, actual: &str) -> String {
 }
 
 /// Compares VCF meta lines: `##fileformat` and `##INFO` exact, the `##VEP=`
-/// line with its `time`, `cache`, `db` and API-component tokens removed, the
-/// command line by prefix, the `##vep-rs=` identity line set aside; the
-/// `#CHROM` line exact.
+/// line with its `time`, `cache` and `db` tokens removed, so its API module
+/// tokens compare exactly and in their order, the command line by prefix, the
+/// `##vep-rs=` identity line set aside; the `#CHROM` line exact.
 pub fn compare_vcf_headers(expected: &str, actual: &str) -> String {
     compare_vcf_headers_of(expected, actual, false)
 }
@@ -3034,7 +3256,7 @@ pub fn compare_database_vcf_headers(expected: &str, actual: &str) -> String {
 
 fn compare_vcf_headers_of(expected: &str, actual: &str, database: bool) -> String {
     /// The `key=value` tokens of a `##VEP=` line, a quoted value kept whole,
-    /// without the tokens an offline vep-rs run never writes.
+    /// without the three whose value is the run's own: `time`, `cache` and `db`.
     fn vep_line_tokens(line: &str) -> Vec<String> {
         // Tokens are `key=value` or `key="quoted value"`; quoted values may hold spaces.
         let mut tokens: Vec<String> = Vec::new();
@@ -3062,10 +3284,7 @@ fn compare_vcf_headers_of(expected: &str, actual: &str, database: bool) -> Strin
             // value that is a path (`regulatory_gff`, the first file of
             // `--regulatory_gff`) names each engine's own copy of the file, the
             // reference's inside its container, so it compares masked.
-            let drop = matches!(key, "time" | "cache" | "db")
-                || key == "ensembl"
-                || key.starts_with("ensembl-");
-            if !drop {
+            if !matches!(key, "time" | "cache" | "db") {
                 tokens.push(format!("{key}={}", mask_paths(value)));
             }
             rest = remainder;
@@ -3190,6 +3409,10 @@ pub fn compare_run(run: &Run, format: &str, out_dir: &Path) -> (String, String) 
         &mut expected_entries,
         &mut actual_entries,
     );
+    if run.unordered {
+        number_shared_keys_by_content(&mut expected_entries);
+        number_shared_keys_by_content(&mut actual_entries);
+    }
     if run.nearest_by_coordinate() {
         let sites = protein_coding_start_sites(run.corpus);
         nearest_as_coordinates(&mut expected_entries, &sites);
@@ -3246,8 +3469,8 @@ fn mask_paths(description: &str) -> String {
 }
 
 /// The plugin a run-time plugin warning of `run_plugins` names: `Plugin '<Name>'
-/// did not return a hashref, output ignored!` (OutputFactory.pm:2235) or
-/// `Plugin '<Name>' went wrong: <reason>` (`:2244`); `None` for any other text.
+/// did not return a hashref, output ignored!` (OutputFactory.pm:2244) or
+/// `Plugin '<Name>' went wrong: <reason>` (`:2253`); `None` for any other text.
 fn plugin_run_warning_name(description: &str) -> Option<String> {
     let rest = description.strip_prefix("Plugin '")?;
     let (name, tail) = rest.split_once('\'')?;
@@ -3341,8 +3564,7 @@ const SUMMARY_TABULAR_SECTIONS: [&str; 3] =
 
 /// The `[VEP run statistics]` rows whose values no second run reproduces
 /// (Stats.pm:645-663): the engine's own command line, times and paths. They
-/// compare by key alone, as `scripts/concordance/compare_vep_stats.py` compares
-/// them.
+/// compare by key alone, as `tools/vep-stats-compare` compares them.
 const VOLATILE_SUMMARY_ROWS: [&str; 7] = [
     "Command line options",
     "Start time",
@@ -3416,13 +3638,20 @@ fn masked_summary_value(key: &str, value: &str) -> String {
         .join(" ")
 }
 
-/// Compares two `--stats_text` reports as `scripts/concordance/compare_vep_stats.py`
-/// does and returns a report of every difference, or an empty string: the same
+/// Compares two `--stats_text` reports as `tools/vep-stats-compare` does, its
+/// rules for the two documented differences excepted, and
+/// returns a report of every difference, or an empty string: the same
 /// sections in the same order; a tabular section row by row, the same keys in
 /// the same order and every value equal once [`masked_summary_value`] has set the
 /// volatile values aside; a chart section as a set of `(key, count)` pairs, since
 /// `sort_keys` (Stats.pm:760-790) breaks ties in hash order; a key printed twice
-/// in a section is a difference on its side.
+/// in a section is a difference on its side. The tool holds the
+/// `Novel / existing variants` row of a run under a frequency check to
+/// `stats_existing_variants_check_frequency`, and a key of
+/// `[Consequences (all)]` that names no consequence type, in a run under a
+/// `--custom` source keyed `Consequence`, to
+/// `stats_consequences_custom_key_named_consequence`; here the row's two values
+/// and the key compare as written, like any other.
 pub fn compare_summary_sections(expected: &str, actual: &str) -> String {
     let expected = summary_sections(expected);
     let actual = summary_sections(actual);
@@ -3473,7 +3702,7 @@ pub fn compare_summary_sections(expected: &str, actual: &str) -> String {
         let Some((_, actual_rows)) = actual.iter().find(|(t, _)| t == title) else {
             continue;
         };
-        // A key printed twice keeps its first value, as the Python comparator keeps it.
+        // A key printed twice keeps its first value, as `tools/vep-stats-compare` keeps it.
         let mut keyed = |rows: &[(String, String)], side: &str| -> IndexMap<String, String> {
             let mut map = IndexMap::new();
             for (key, value) in rows {
@@ -3702,10 +3931,15 @@ fn warnings_file_beside(output: &Path) -> PathBuf {
 /// warnings, which are the manifest's `reference_warning` entries, the run's
 /// `reference_warnings` list and, when the run's expected directory holds
 /// `default.txt_warnings.txt`, that file, whose entries must agree with the
-/// manifest's. Returns a report, or an empty string.
+/// manifest's. On a corpus whose cache holds no `variations` directory the line
+/// vep-rs writes about that ([`VARIATION_NOTICE`]) is no part of the comparison.
+/// Returns a report, or an empty string.
 pub fn compare_warnings(run: &Run, out_dir: &Path) -> String {
     let path = warnings_file_beside(&output_path(run, "default", out_dir));
     let mut actual = warning_entries(&fs::read_to_string(&path).unwrap_or_default());
+    if !run.corpus.cache_dir().join("variations").is_dir() {
+        actual.retain(|(_, description)| !description.contains(VARIATION_NOTICE));
+    }
     let mut expected = reference_warnings(&run.corpus.manifest);
     expected.extend(run_reference_warnings(run));
     let mut report = String::new();
@@ -4256,6 +4490,119 @@ pub fn execute_manifest_run(corpus: &Corpus, run: &ManifestRun, out_dir: &Path) 
         }
     }
     report
+}
+
+/// Writes `head` and then `records`, one line each, bgzip-compressed at
+/// `<dir>/<name>` with no flush between lines, and a tabix index describing
+/// `header` at `<dir>/<name>.tbi`. The index holds each record under the name
+/// in its first column, at the one-based span `span` reads from its columns;
+/// the `head` lines belong to no chunk.
+pub fn indexed_lines(
+    dir: &Path,
+    name: &str,
+    header: noodles::csi::binning_index::index::Header,
+    head: &[&str],
+    records: &[&str],
+    span: impl Fn(&[&str]) -> (usize, usize),
+) -> PathBuf {
+    use noodles::core::Position;
+    use noodles::csi::binning_index::index::reference_sequence::bin::Chunk;
+    use noodles::{bgzf, tabix};
+
+    let path = dir.join(name);
+    let mut writer = bgzf::io::Writer::new(fs::File::create(&path).unwrap());
+    let mut indexer = tabix::index::Indexer::default();
+    indexer.set_header(header);
+    for line in head {
+        writeln!(writer, "{line}").unwrap();
+    }
+    for record in records {
+        let start = writer.virtual_position();
+        writeln!(writer, "{record}").unwrap();
+        let end = writer.virtual_position();
+        let fields: Vec<&str> = record.split('\t').collect();
+        let (first, last) = span(&fields);
+        indexer
+            .add_record(
+                fields[0],
+                Position::try_from(first).unwrap(),
+                Position::try_from(last).unwrap(),
+                Chunk::new(start, end),
+            )
+            .unwrap();
+    }
+    writer.finish().unwrap();
+    let mut index_path = path.as_os_str().to_owned();
+    index_path.push(".tbi");
+    tabix::fs::write(index_path, &indexer.build()).unwrap();
+    path
+}
+
+/// [`indexed_lines`] with no line ahead of the records; `columns` names the
+/// zero-based start and end columns and the offset that makes the start
+/// one-based.
+pub fn indexed_file(
+    dir: &Path,
+    name: &str,
+    header: noodles::csi::binning_index::index::Header,
+    columns: (usize, usize, usize),
+    records: &[&str],
+) -> PathBuf {
+    let (start_column, end_column, start_offset) = columns;
+    let position = |column: &str| column.parse::<usize>().unwrap();
+    indexed_lines(dir, name, header, &[], records, |fields| {
+        (
+            position(fields[start_column]) + start_offset,
+            position(fields[end_column]),
+        )
+    })
+}
+
+/// A bgzip-compressed BED of `records` (tab-separated, zero-based starts) under
+/// `dir` with its tabix index beside it, as `bgzip` and `tabix -p bed` write
+/// them.
+pub fn indexed_bed(dir: &Path, name: &str, records: &[&str]) -> PathBuf {
+    use noodles::csi::binning_index::index::header;
+    indexed_file(
+        dir,
+        name,
+        header::Builder::bed().build(),
+        (1, 2, 1),
+        records,
+    )
+}
+
+/// A bgzip-compressed GFF3 of `records` under `dir` with its tabix index
+/// beside it, as `bgzip` and `tabix -p gff` write them.
+pub fn indexed_gff(dir: &Path, name: &str, records: &[&str]) -> PathBuf {
+    use noodles::csi::binning_index::index::header;
+    indexed_file(
+        dir,
+        name,
+        header::Builder::gff().build(),
+        (3, 4, 0),
+        records,
+    )
+}
+
+/// A bgzipped VCF at `<dir>/<name>` with its tabix index beside it: the
+/// `header` lines, the `#CHROM` line, then the one `record`, indexed over the
+/// bases of its `REF`.
+pub fn indexed_vcf(dir: &Path, name: &str, header: &[&str], record: &str) -> PathBuf {
+    use noodles::csi::binning_index::index::header::Builder;
+    let mut head = header.to_vec();
+    head.push("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO");
+    indexed_lines(
+        dir,
+        name,
+        Builder::vcf().build(),
+        &head,
+        &[record],
+        |fields| {
+            let pos: usize = fields[1].parse().unwrap();
+            (pos, pos + fields[3].len() - 1)
+        },
+    )
 }
 
 /// Sum of file sizes under a directory.

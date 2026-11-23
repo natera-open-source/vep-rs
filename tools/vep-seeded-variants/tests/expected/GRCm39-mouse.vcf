@@ -1,0 +1,36 @@
+##fileformat=VCFv4.2
+##source=vep-seeded-variants generator_version=5
+##seed=1
+##records=light
+##reference_alleles=cache
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+19	4247739	first_sequence_1	T	C	.	.	.
+19	4252124	splice_acceptor_1	G	C	.	.	.
+19	4986205	frameshift_deletion_1	ACA	A	.	.	.
+19	6098074	synonymous_forward_1	C	A	.	.	.
+19	6975334	missense_forward_1	T	C	.	.	.
+19	8769543	downstream_1	A	C	.	.	.
+19	8849624	code1_stop_lost_1	A	T	.	.	.
+19	8944580	code1_start_codon_1	G	C	.	.	.
+19	10922521	intron_1	G	A	.	.	.
+19	11140802	missense_reverse_1	T	C	.	.	.
+19	11493065	upstream_1	C	T	.	.	.
+19	18563955	frameshift_insertion_1	G	GT	.	.	.
+19	20720138	intergenic_1	A	G	.	.	.
+19	29326379	synonymous_reverse_1	C	T	.	.	.
+19	36062491	inframe_deletion_1	TCAC	T	.	.	.
+19	38112525	code1_stop_gained_1	T	A	.	.	.
+19	38113244	five_prime_utr_1	G	A	.	.	.
+19	53921881	splice_donor_1	C	G	.	.	.
+19	60185617	three_prime_utr_1	A	T	.	.	.
+MT	24	organelle_1	C	G	.	.	.
+NC_005089.1	1683	synonym_1	G	A	.	.	.
+MT	4355	code2_made_codon_missense_1	C	A	.	.	.
+MT	5840	code2_made_codon_synonymous_1	G	A	.	.	.
+MT	8606	code2_made_codon_stop_1	A	G	.	.	.
+MT	9878	code2_start_codon_1	T	A	.	.	.
+MT	13552	code2_stop_lost_1	T	A	.	.	.
+MT	13641	code2_changed_codon_1	T	C	.	.	.
+MT	15241	code2_stop_gained_1	T	G	.	.	.
+JH584303.1	1	first_base_1	T	A	.	.	.
+JH584304.1	57064	last_sequence_1	C	G	.	.	.

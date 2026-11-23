@@ -77,7 +77,8 @@ pub struct PrimateAiPlugin {
     score_col: usize,
     /// The data file, for error messages.
     file: String,
-    /// Target assembly from `--assembly`, injected before `init()`.
+    /// The run's assembly (the cache's own, else the value of `--assembly`),
+    /// injected before `init()`.
     assembly: Option<Assembly>,
 }
 
@@ -197,6 +198,8 @@ impl PrimateAiPlugin {
     }
 }
 
+impl crate::traits::sealed::Sealed for PrimateAiPlugin {}
+
 impl BuiltinPlugin for PrimateAiPlugin {
     fn name(&self) -> &str {
         NAME
@@ -205,7 +208,7 @@ impl BuiltinPlugin for PrimateAiPlugin {
     /// The Ensembl VEP module declares `['Feature', 'Intergenic']`
     /// (`PrimateAI.pm:143-144`): every row, the intergenic row included.
     fn feature_types(&self) -> &[RowKind] {
-        &RowKind::ALL
+        RowKind::ALL
     }
 
     fn header_info(&self) -> Vec<(String, String)> {
@@ -217,6 +220,12 @@ impl BuiltinPlugin for PrimateAiPlugin {
 
     fn set_assembly(&mut self, assembly: Option<Assembly>) {
         self.assembly = assembly;
+    }
+
+    fn set_reference_fasta(&mut self, fasta: Option<std::sync::Arc<vep_fasta::IndexedFasta>>) {
+        if let Some(store) = self.store.as_mut() {
+            store.set_reference_fasta(fasta);
+        }
     }
 
     fn init(&mut self, params: &[String]) -> Result<(), PluginError> {
@@ -278,12 +287,16 @@ impl BuiltinPlugin for PrimateAiPlugin {
         // A row keeps the whitespace before its line end, which Ensembl VEP's
         // `split /\t/` leaves on the score cell (`parse_data`, `:188`, `:196`),
         // so a whitespace-only score is a defined score, not a missing one.
-        self.store = Some(open_best_store_with(
+        let mut store = open_best_store_with(
             path,
             config,
             self.assembly,
             TabixAnnotator::keeping_trailing_whitespace,
-        )?);
+        )?;
+        if let Some(frame) = store.mitochondrial_frame_mut() {
+            frame.set_allele_column(header.iter().position(|name| *name == "ref"));
+        }
+        self.store = Some(store);
         self.pos_col = pos_col;
         self.alt_col = alt_col;
         self.score_col = score_col;
@@ -333,8 +346,16 @@ impl BuiltinPlugin for PrimateAiPlugin {
                 (start, end),
                 alt,
             ) {
+                // An empty score `first_score` returns is a cell with a filled
+                // cell after it, Ensembl VEP's empty string (`PrimateAI.pm:196`,
+                // `:204-207`), which the record names.
                 Ok(Some(score)) => {
-                    variant.plugin_data.insert(FIELD.to_string(), score.clone());
+                    variant.set_plugin_value(
+                        FIELD.to_string(),
+                        score.clone(),
+                        true,
+                        self.feature_types(),
+                    );
                 }
                 Ok(None) => {}
                 Err(error) => {
@@ -913,6 +934,32 @@ mod tests {
         );
     }
 
+    /// A score cell left empty before a filled cell is Ensembl VEP's empty
+    /// string: `split /\t/` keeps it (`PrimateAI.pm:188`), `:198` passes it as
+    /// defined and `:204-207` return it, so the record names the field in its
+    /// `plugin_empty_strings`. A scored row leaves no mark.
+    #[test]
+    fn an_empty_score_cell_before_a_filled_cell_is_the_empty_string() {
+        let dir = tempfile::tempdir().unwrap();
+        let header = format!("{HEADER}\tnote");
+        let rows = [
+            format!("{}\tmade_up", row("chr21", 5030000, "A", "G", "")),
+            format!("{}\tmade_up", row("chr21", 5030010, "A", "G", "0.25")),
+        ];
+        let plugin = loaded(&fixture(
+            dir.path(),
+            "empty_before_filled_synthetic.tsv.bgz",
+            &header,
+            &rows,
+        ));
+        let mut variants = vec![snv(5030000, b"A", b"G"), snv(5030010, b"A", b"G")];
+        plugin.run_batch(&mut variants).unwrap();
+        assert_eq!(variants[0].plugin_data[FIELD], "");
+        assert_eq!(variants[0].plugin_empty_strings, [FIELD]);
+        assert_eq!(variants[1].plugin_data[FIELD], "0.25");
+        assert!(variants[1].plugin_empty_strings.is_empty());
+    }
+
     /// An empty cell before a filled one is a defined empty string to
     /// `split /\t/`, so a row whose `alt` cell is empty dies nowhere (`:198`)
     /// and matches no allele: the other rows of the position score as usual.
@@ -983,13 +1030,15 @@ mod tests {
         assert!(intergenic.transcript_consequences.is_empty());
         let mut genic = snv(19268555, b"C", b"T");
         genic.transcript_consequences.extend([
-            TranscriptConsequence {
-                feature_type: FeatureType::Transcript,
-                ..TranscriptConsequence::default()
+            {
+                let mut consequence = TranscriptConsequence::default();
+                consequence.feature_type = FeatureType::Transcript;
+                consequence
             },
-            TranscriptConsequence {
-                feature_type: FeatureType::RegulatoryFeature,
-                ..TranscriptConsequence::default()
+            {
+                let mut consequence = TranscriptConsequence::default();
+                consequence.feature_type = FeatureType::RegulatoryFeature;
+                consequence
             },
         ]);
         let mut variants = vec![intergenic, genic];
@@ -1006,10 +1055,10 @@ mod tests {
         }
     }
 
-    /// Ensembl VEP 116.2 never hands PrimateAI a structural variant: the
+    /// Ensembl VEP 116.3 never hands PrimateAI a structural variant: the
     /// module keeps the default `variant_feature_types` of
     /// `['VariationFeature']` (BaseVepPlugin.pm:100), which the dispatch checks
-    /// before running a plugin on a line (OutputFactory.pm:2220). A `<DEL>`
+    /// before running a plugin on a line (OutputFactory.pm:2229). A `<DEL>`
     /// gets no score, and nor does a scored substitution carrying the
     /// structural mark, which pins the gate rather than the allele test; the
     /// plain substitution is scored.

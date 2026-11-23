@@ -1,0 +1,609 @@
+{
+  "baseline_dir": "{{FIXTURES}}/caches/transcripts/baseline",
+  "builder_dir": "{{FIXTURES}}/caches/transcripts/builder",
+  "transcripts": {
+    "total_baseline": 114,
+    "total_builder": 90,
+    "shared": 83,
+    "only_baseline": 31,
+    "only_builder": 7,
+    "matched": 15,
+    "differed": 68,
+    "field_mismatches": {
+      "start": 10,
+      "hgnc_id": 8,
+      "strand": 8,
+      "biotype": 8,
+      "source": 8,
+      "gene_symbol": 8,
+      "canonical": 8,
+      "end": 7,
+      "gene_stable_id": 7,
+      "vefc_five_prime_utr": 3,
+      "vefc_three_prime_utr": 3,
+      "vefc_introns": 2,
+      "vefc_sorted_exons": 2,
+      "vefc_codon_table": 2,
+      "vefc_protein_features": 2,
+      "vefc_seq_edits": 2,
+      "exon_count": 1,
+      "intron_count": 1,
+      "mapper_pair_count": 1,
+      "vefc_introns_count": 1,
+      "vefc_sorted_exons_count": 1,
+      "vefc_protein_features_count": 1,
+      "vefc_seq_edits_count": 1,
+      "vefc_five_prime_utr_count": 1,
+      "vefc_three_prime_utr_count": 1,
+      "vefc_codon_table_count": 1
+    },
+    "match_rate": 0.180723,
+    "regions_with_diffs": [
+      {
+        "region": ".hidden.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "21/1-1000000.json",
+        "baseline_count": 26,
+        "builder_count": 17,
+        "shared": 14,
+        "only_baseline": [
+          "ONLY_B00",
+          "ONLY_B01",
+          "ONLY_B02",
+          "ONLY_B03",
+          "ONLY_B04",
+          "ONLY_B05",
+          "ONLY_B06",
+          "ONLY_B07",
+          "ONLY_B08",
+          "ONLY_B09"
+        ],
+        "only_builder": [
+          "ONLY_C1",
+          "ONLY_C2",
+          "ONLY_C3"
+        ],
+        "matched": 7,
+        "differed": 7
+      },
+      {
+        "region": "21/1000001-2000000.json",
+        "baseline_count": 3,
+        "builder_count": 3,
+        "shared": 3,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 2,
+        "differed": 1
+      },
+      {
+        "region": "22/1-1000000.json",
+        "baseline_count": 2,
+        "builder_count": 3,
+        "shared": 2,
+        "only_baseline": [],
+        "only_builder": [
+          "W3"
+        ],
+        "matched": 1,
+        "differed": 1
+      },
+      {
+        "region": "MT/1-1000000.json",
+        "baseline_count": 0,
+        "builder_count": 1,
+        "shared": 0,
+        "only_baseline": [],
+        "only_builder": [
+          "M1"
+        ],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "X/1-1000000.json",
+        "baseline_count": 2,
+        "builder_count": 2,
+        "shared": 2,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 1,
+        "differed": 1
+      },
+      {
+        "region": "Y/1-1000000.json",
+        "baseline_count": 2,
+        "builder_count": 0,
+        "shared": 0,
+        "only_baseline": [
+          "Y1",
+          "Y2"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 0
+      },
+      {
+        "region": "deep/er/still/1.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "escapes/1.json",
+        "baseline_count": 8,
+        "builder_count": 3,
+        "shared": 2,
+        "only_baseline": [
+          "A/",
+          "del\u007f",
+          "quote\"back\\slash",
+          "tab\there",
+          "\u00e9t\u00e9",
+          "\udc00low"
+        ],
+        "only_builder": [
+          "A/x"
+        ],
+        "matched": 1,
+        "differed": 1
+      },
+      {
+        "region": "many/000.json",
+        "baseline_count": 2,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [
+          "N000_B"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/001.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/002.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/003.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/004.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/005.json",
+        "baseline_count": 2,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [
+          "N005_B"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/006.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/007.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/008.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/009.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/010.json",
+        "baseline_count": 2,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [
+          "N010_B"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/011.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/012.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/013.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/014.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/015.json",
+        "baseline_count": 2,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [
+          "N015_B"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/016.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/017.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/018.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/019.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/020.json",
+        "baseline_count": 2,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [
+          "N020_B"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/021.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/022.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/023.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/024.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/025.json",
+        "baseline_count": 2,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [
+          "N025_B"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/026.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/027.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/028.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/029.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/030.json",
+        "baseline_count": 2,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [
+          "N030_B"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/031.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/032.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/033.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/034.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/035.json",
+        "baseline_count": 2,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [
+          "N035_B"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/036.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/037.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/038.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/039.json",
+        "baseline_count": 1,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      },
+      {
+        "region": "many/040.json",
+        "baseline_count": 2,
+        "builder_count": 1,
+        "shared": 1,
+        "only_baseline": [
+          "N040_B"
+        ],
+        "only_builder": [],
+        "matched": 0,
+        "differed": 1
+      }
+    ]
+  },
+  "variations": {
+    "total_baseline": 0,
+    "total_builder": 0,
+    "shared": 0,
+    "only_baseline": 0,
+    "only_builder": 0,
+    "matched": 0,
+    "differed": 0,
+    "field_mismatches": {},
+    "frequency_columns_compared": [],
+    "match_rate": 0.0
+  },
+  "info_json": {
+    "matches": true,
+    "diffs": []
+  }
+}

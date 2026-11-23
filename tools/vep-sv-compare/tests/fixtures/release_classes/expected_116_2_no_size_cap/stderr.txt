@@ -1,0 +1,1 @@
+ERROR: [compare_sv_concordance] skipped-record cross-check: 21:1001-12000000 deletion: the reference wrote nothing at this Location and no input record on a skip route starts there

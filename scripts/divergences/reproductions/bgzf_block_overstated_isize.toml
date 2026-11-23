@@ -1,10 +1,10 @@
 entry = "bgzf_block_overstated_isize"
 page = "docs/divergences/malformed-bgzf-block.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "malformed"
 input_class_basis = "a BGZF file is \"a series of concatenated BGZF blocks\" and a block's ISIZE is the \"length of uncompressed data\", \"limited to the range [0,65536]\" (SAM specification, section 4.1 \"The BGZF compression format\"): a block's trailer declares more bytes than its data inflates to, or the file ends inside a block"
-notes = "The corpus's BGZF file holds one data block and the end-of-file block; the data block's ISIZE is rewritten to 131072, above the 65536 bytes a block can inflate to. gzip inflates the block's records and then reports the length error, once per parser object that opens the file, and Ensembl VEP writes a row for every record of the block; vep-rs refuses the block and writes none."
+notes = "The corpus's BGZF file holds one data block and the end-of-file block; the data block's ISIZE is rewritten to 131072, above the 65536 bytes a block can inflate to. gzip inflates the block's records and then reports the length error, and Ensembl VEP annotates the block's records, 977 rows in all, and exits 0; vep-rs refuses the block, writes no row and exits 1. The rows are counted and gzip's line is not compared: Ensembl VEP starts one gzip for each of its two parser objects (Parser.pm:133, 159) and reads the second alone, and the first reports the error, which follows its output, only where that output is written before its pipe closes, so standard error holds the line once or twice."
 prepare = [
   'src="$CORPUS/variants.vcf.bgz"; n=$(wc -c < "$src"); { head -c $((n - 32)) "$src"; printf "\x00\x00\x02\x00"; tail -c 28 "$src"; } > "$STAGE/overstated.vcf.bgz"',
 ]
@@ -23,12 +23,19 @@ chromosomes = ["21", "22"]
 flags = ["--max_sv_size", "-1"]
 
 [compare]
-kind = "stderr"
-pattern = "malformed BGZF block|length error"
+kind = "count"
 
 [expected]
-ensembl_vep = [
-  "gzip: <path> invalid compressed data--length error",
-  "gzip: <path> invalid compressed data--length error",
+ensembl_vep = "977"
+vep_rs = "0"
+vep_rs_exit = 1
+
+[implementation]
+code = [
+    "crates/vep-cli/src/runner.rs::BGZF_MAX_ISIZE",
+    "crates/vep-cli/src/runner.rs::BgzfBlockGuard::next_block",
 ]
-vep_rs = ["ERROR: [input] malformed BGZF block at offset 0 in <path>"]
+tests = [
+    "crates/vep-cli/src/runner.rs::tests::a_bgzf_block_declaring_more_than_it_can_hold_is_refused",
+    "crates/vep-cli/tests/malformed_inputs.rs::a_bgzf_block_declaring_an_isize_over_the_limit_is_refused",
+]

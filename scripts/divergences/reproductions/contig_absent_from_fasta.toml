@@ -1,13 +1,14 @@
 entry = "contig_absent_from_fasta"
 page = "docs/cache-setup.md#reference-fasta"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 390 of 487 MT records · 24 flag sets, 11 corpora"
-notes = "The corpus FASTA holds 21 and MT; the prepared copy ends before the MT record, so MT is a contig the FASTA lacks while both caches hold it. A one-base record at MT:1 under --lookup_ref: Ensembl VEP reads the placeholder slice's N as the reference and annotates, vep-rs skips the record with the could-not-fetch warning."
-# The FASTA cut after its first record, chromosome 21, with the index line of that record.
+input_class_basis = "2 · 1,096 of 1,198 MT records · 97 flag sets, 30 corpora"
+notes = "The corpus FASTA holds 21 and MT; the prepared copy ends before the MT record, so MT is a contig the FASTA lacks while both caches hold it. A one-base record at MT:1 under --lookup_ref: Ensembl VEP reads the placeholder slice's N as the reference and annotates, vep-rs skips the record with the could-not-fetch warning. The further run gives five records there under --hgvsg, which --lookup_ref would skip in vep-rs: Ensembl VEP writes each notation from the record's own span and N bases, vep-rs none."
+# The FASTA cut after its first record, chromosome 21, with the index line of that record. awk reads the stream to
+# its end, where an awk that left at the MT header would close the pipe early and fail the step under pipefail.
 prepare = [
-  "gunzip -c \"$CORPUS/reference.fa.gz\" | awk '/^>MT/ { exit } { print }' > \"$STAGE/chr21_only.fa\"",
+  "gunzip -c \"$CORPUS/reference.fa.gz\" | awk '/^>MT/ { past = 1 } !past { print }' > \"$STAGE/chr21_only.fa\"",
   "grep -v '^MT' \"$CORPUS/reference.fa.fai\" > \"$STAGE/chr21_only.fa.fai\"",
 ]
 
@@ -34,3 +35,60 @@ columns = ["Location", "Allele", "Feature", "Consequence", "REF_ALLELE"]
 [expected]
 ensembl_vep = ["MT:1 | A | ENST00000387314 | upstream_gene_variant | N"]
 vep_rs = []
+
+# The notation rows: the same contig under --hgvsg, one record of each shape the page's table
+# states.
+[[also]]
+
+[also.input]
+format = "vcf"
+text = """
+MT	700	mt_substitution	A	C	.	.	.
+MT	713	mt_deletion	CA	C	.	.	.
+MT	735	mt_deletion_in_a_run	AC	A	.	.	.
+MT	745	mt_insertion	A	AC	.	.	.
+MT	755	mt_insertion_of_the_base_before_it	G	GG	.	.	.
+"""
+
+[also.run]
+flags = ["--hgvsg"]
+
+[also.compare]
+kind = "rows"
+where = { feature = "ENST00000387314" }
+columns = ["Location", "Allele", "Feature", "Consequence", "HGVSg"]
+
+[also.expected]
+ensembl_vep = [
+    "MT:700 | C | ENST00000387314 | downstream_gene_variant | MT:m.700N>C",
+    "MT:714 | - | ENST00000387314 | downstream_gene_variant | MT:m.714del",
+    "MT:736 | - | ENST00000387314 | downstream_gene_variant | MT:m.736del",
+    "MT:745-746 | C | ENST00000387314 | downstream_gene_variant | MT:m.745_746insC",
+    "MT:755-756 | G | ENST00000387314 | downstream_gene_variant | MT:m.755_756insG",
+]
+vep_rs = [
+    "MT:700 | C | ENST00000387314 | downstream_gene_variant | -",
+    "MT:714 | - | ENST00000387314 | downstream_gene_variant | -",
+    "MT:736 | - | ENST00000387314 | downstream_gene_variant | -",
+    "MT:745-746 | C | ENST00000387314 | downstream_gene_variant | -",
+    "MT:755-756 | G | ENST00000387314 | downstream_gene_variant | -",
+]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/validate.rs::SkipRules::validate",
+    "crates/vep-cli/src/validate.rs::reference_sequence",
+    "crates/vep-effects/src/hgvs.rs::TranscriptSlice::substr",
+    "crates/vep-effects/src/hgvs.rs::hgvs_variant_notation",
+    "crates/vep-effects/src/hgvsg.rs::flank_sequence",
+    "crates/vep-effects/src/hgvsg.rs::hgvs_genomic",
+    "crates/vep-fasta/src/lib.rs::IndexedFasta::base",
+    "crates/vep-fasta/src/lib.rs::IndexedFasta::sequence_in_case",
+]
+tests = [
+    "crates/vep-cli/tests/contig_absent_from_fasta_genomic_notation.rs::no_kind_of_record_on_a_contig_the_fasta_lacks_gets_an_hgvsg",
+    "crates/vep-cli/tests/documented_subsets.rs::hgvs_exclusion_is_documented",
+    "crates/vep-cli/tests/input_hgvs.rs::a_contig_the_fasta_lacks_gives_no_hgvsc_for_a_substitution_or_deletion",
+    "crates/vep-cli/tests/input_left_out_notices.rs::a_contig_the_fasta_lacks_gives_no_hgvsg",
+    "crates/vep-cli/tests/input_validation.rs::an_insertion_on_a_contig_the_fasta_lacks_passes_the_reference_checks",
+]

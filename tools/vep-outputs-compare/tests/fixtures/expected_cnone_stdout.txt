@@ -1,4 +1,4 @@
-reference release: 116.2
+reference release: 116.3
 wrote summary: {{REPORT_DIR}}/summary.json
 wrote markdown: {{REPORT_DIR}}/summary.md
 wrote discordance: {{REPORT_DIR}}/discordant.tsv

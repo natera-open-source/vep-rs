@@ -2,6 +2,7 @@
 set -euo pipefail
 #
 # Stage plugin data files for vep-rs plugin testing, per assembly.
+# The plugin data it stages is for the two human assemblies, GRCh37 and GRCh38.
 #
 # TWO SOURCES. Neither downloads from the upstream databases unattended.
 #
@@ -18,7 +19,7 @@ set -euo pipefail
 #   <bucket>/plugin_data/<scope>/<relative path>
 #   <bucket>/plugin_data/MANIFEST.json
 # where <scope> is grch37, grch38, or assembly_agnostic (LoFtool, pLI, GWAS,
-# DosageSensitivity),
+# DosageSensitivity, gnomADMt),
 # and <relative path> is the path plugin_data_layout.sh assigns to the file, the
 # same path it takes under --data-dir. MANIFEST.json is optional. When present, a
 # staged file whose byte size differs from its entry is re-fetched as a truncated
@@ -62,23 +63,35 @@ DRY_RUN=0
 # gnomADc        GRCh37 + GRCh38   v2.1 genomes (37) / v4.0 exomes (38)
 # LoFtool        both              gene-symbol keyed, assembly-independent
 # pLI            both              gene keyed, assembly-independent
-# LoFTEE         GRCh37 + GRCh38   STRUCTURALLY different bundles (tabix TSV vs bigWig)
+# LoFTEE         GRCh37 + GRCh38   the plugin reads GERP with tabix on master, from a bigWig on grch38;
+#                                  on GRCh37 the layout also names the files of the plugin gate's run
+#                                  (loftee_synthetic_conservation/): a made-up GERP table and a made-up
+#                                  conservation database, which no source publishes, and the
+#                                  ancestral FASTA; the script neither stops nor reports MISSING
+#                                  for want of one
 # AncestralAllele GRCh37 + GRCh38  Ensembl's EPO ancestral FASTA, one archive per assembly
 # GWAS           GRCh38 only       the catalog publishes GRCh38 coordinates
 # OpenTargets    GRCh38 only       the Platform publishes GRCh38 coordinates
 # LOEUF          GRCh37 + GRCh38   gnomAD v2.1.1 (37) / Ensembl's cut of v4.1.1 (38)
 # DosageSensitivity both           gene-symbol keyed, assembly-independent
+# UTRAnnotator   GRCh37 + GRCh38   one uORF table per assembly (UTRAnnotator.pm:42-43)
+# gnomADMt       GRCh38 only       the mitochondrial sites VCF is GRCh38 based (gnomADMt.pm:50)
 # Conservation   GRCh38 only       Ensembl Compara publishes the GERP bigWig for GRCh38 alone;
-#                                  LoFTEE's GRCh38 bundle ships a copy (an earlier Compara release)
+#                                  LoFTEE's GRCh38 bundle ships a copy (another Compara release)
 
-ALL_PLUGINS=(REVEL gnomADc AlphaMissense GWAS LoFtool LoFTEE pLI AncestralAllele OpenTargets Conservation LOEUF DosageSensitivity)
+ALL_PLUGINS=(REVEL gnomADc AlphaMissense GWAS LoFtool LoFTEE pLI AncestralAllele OpenTargets Conservation LOEUF DosageSensitivity UTRAnnotator gnomADMt)
 
 # Plugins that only support one assembly.
-GRCH38_ONLY_PLUGINS=(GWAS OpenTargets Conservation)
+GRCH38_ONLY_PLUGINS=(GWAS OpenTargets Conservation gnomADMt)
+
+# Plugins whose files the runs of scripts/concordance/plugin_gate_runs.toml read and
+# run_concordance.sh builds no argument string for.
+GATE_RUN_PLUGINS=(UTRAnnotator gnomADMt)
 
 usage() {
 	cat <<'EOF'
 Stage plugin data files for vep-rs plugin testing, per assembly.
+The plugin data it stages is for the two human assemblies, GRCh37 and GRCh38.
 
 Usage:
   scripts/data/setup_plugin_data.sh --assembly <GRCh37|GRCh38> [options]
@@ -102,7 +115,7 @@ Options:
   --plugins <list>      Comma-separated (default: all supported for the assembly)
                           REVEL,gnomADc,AlphaMissense,GWAS,LoFtool,LoFTEE,pLI,
                           AncestralAllele,OpenTargets,Conservation,LOEUF,
-                          DosageSensitivity
+                          DosageSensitivity,UTRAnnotator,gnomADMt
   --bucket <name>       Your S3 bucket holding an already-prepared copy. Required
                         for --source s3; defaults to $VEP_BENCHMARK_BUCKET.
   --profile <name>      AWS profile for S3 access
@@ -117,8 +130,10 @@ Not supported:
   Conservation  GRCh38 only: Ensembl Compara publishes its GERP bigWig for
             GRCh38 alone (the GRCh37 scores live in its database, which the
             plugin's database mode reads and vep-rs does not). The staged file is
-            the copy LoFTEE's GRCh38 bundle ships (an earlier Compara release),
-            under loftee/.
+            the copy LoFTEE's GRCh38 bundle ships (a Compara release other than
+            the 116 one whose URL --source upstream prints), under loftee/.
+  gnomADMt  GRCh38 only: the plugin's documentation calls the gnomAD v3.1
+            mitochondrial sites VCF GRCh38 based.
 
 A plugin whose data cannot be redistributed reads the file you pass to it; this
 script stages no file for it.
@@ -258,6 +273,9 @@ for plugin in "${SELECTED_PLUGINS[@]}"; do
 		Conservation)
 			echo "SKIP  Conservation: GRCh38 only (Ensembl Compara publishes the GERP bigWig for GRCh38 alone)" >&2
 			;;
+		gnomADMt)
+			echo "SKIP  gnomADMt: GRCh38 only (the gnomAD v3.1 mitochondrial sites file is GRCh38 based)" >&2
+			;;
 		esac
 		continue
 	fi
@@ -295,10 +313,31 @@ staged_files_for() {
 	plugin_staged_files "$1" "${ASSEMBLY_LC}"
 }
 
+# The files of a plugin's run on made-up data, which the layout lists apart: no source
+# publishes one, so staging goes on without it and the summary reads the run in a line of
+# its own.
+synthetic_run_files_for() {
+	plugin_synthetic_run_files "$1" "${ASSEMBLY_LC}"
+}
+
+is_synthetic_run_file() {
+	local plugin="$1" rel="$2" files
+	files="$(synthetic_run_files_for "${plugin}")"
+	grep -qxF -- "${rel}" <<<"${files}"
+}
+
+# Where a file of such a run comes from, for the line that names an absent one.
+synthetic_run_file_origin() {
+	case "$1" in
+	*.fa.gz | *.fa.gz.fai | *.fa.gz.gzi) echo "made from the ancestral FASTA" ;;
+	*) echo "written by tools/vep-loftee-synthetic-conservation" ;;
+	esac
+}
+
 # Which S3 prefix holds a plugin's data: per-assembly, or shared.
 s3_scope_for() {
 	case "$1" in
-	LoFtool | pLI | GWAS | DosageSensitivity) echo "assembly_agnostic" ;;
+	LoFtool | pLI | GWAS | DosageSensitivity | gnomADMt) echo "assembly_agnostic" ;;
 	*) echo "${ASSEMBLY_LC}" ;;
 	esac
 }
@@ -361,11 +400,12 @@ verify_tabix_index() {
 		return 1
 	fi
 	# Only tabix-indexed formats need a .tbi: flat gene-keyed files, FASTA files and
-	# their .fai and .gzi indexes, bigWig files and the .tbi files themselves do not.
+	# their .fai and .gzi indexes, bigWig files, a .sql database and the .tbi files
+	# themselves do not.
 	# Nor does the DosageSensitivity table, a gzipped file both engines read whole.
 	[[ "${file}" == "${DATA_DIR}/$(plugin_data_file DosageSensitivity file "${ASSEMBLY_LC}")" ]] && return 0
 	case "${file}" in
-	*.txt | *.tsv | *.fa | *.fa.gz | *.fai | *.gzi | *.bw | *.tbi) return 0 ;;
+	*.txt | *.tsv | *.fa | *.fa.gz | *.fai | *.gzi | *.bw | *.sql | *.tbi) return 0 ;;
 	esac
 	if [[ -f "${file}.tbi" ]]; then
 		return 0
@@ -405,6 +445,10 @@ stage_from_s3() {
 			echo "    [sync] ${rel}"
 			if ! aws s3 cp "${AWS_PROFILE_ARG[@]+"${AWS_PROFILE_ARG[@]}"}" \
 				"${src}" "${dest}" --only-show-errors; then
+				if is_synthetic_run_file "${plugin}" "${rel}"; then
+					echo "    [absent] ${rel}: $(synthetic_run_file_origin "${rel}"), see docs/plugins/reproducing-concordance.md"
+					continue
+				fi
 				echo "    [ERROR] not in the bucket: ${src}" >&2
 				echo "            Re-seed it with --source upstream, then upload." >&2
 				return 1
@@ -484,12 +528,15 @@ stage_from_upstream() {
 			echo "    https://personal.broadinstitute.org/konradk/loftee_data/${ASSEMBLY}/"
 			if [[ "${ASSEMBLY_LC}" == "grch37" ]]; then
 				echo "      GERP_scores.final.sorted.txt.gz (+ .tbi), human_ancestor.fa.gz (+ .fai/.gzi)"
-				upstream_note "GRCh37 (master branch) ships GERP as a tabix per-base TSV, NOT a bigWig. Pass it as gerp_tabix= with run_splice_predictions=0, without which vep-rs refuses a GRCh37 run. The END_TRUNC cutoff is +180 here, vs -58 on grch38."
+				upstream_note "On GRCh37 the plugin's master branch reads its GERP file through tabix (LoF.pm lines 138 to 141), not from a bigWig. Pass it as gerp_tabix= with run_splice_predictions=0, without which vep-rs refuses a GRCh37 run. The END_TRUNC cutoff is +180 here, vs -58 on grch38."
 			else
 				echo "      gerp_conservation_scores.homo_sapiens.GRCh38.bw, human_ancestor.fa.gz (+ .fai/.gzi)"
 				upstream_note "GRCh38 (grch38 branch) ships GERP as a bigWig. Pass it as gerp_bigwig=."
 			fi
 			upstream_note "Both engines read human_ancestor.fa.gz with its .fai and .gzi as shipped, and vep-rs reads a plain human_ancestor.fa with its .fai as well; this layout stages both, so keep the upstream .gz trio and decompress a copy, re-indexed with samtools faidx, which the concordance harness hands to vep-rs."
+			if [[ "${ASSEMBLY_LC}" == "grch37" ]]; then
+				upstream_note "The plugin gate's GRCh37 run of LoFTEE reads a made-up GERP table and a made-up conservation database, which tools/vep-loftee-synthetic-conservation writes, with the ancestral FASTA beside them, in $(dirname "$(plugin_data_file LoFTEE synthetic_gerp "${ASSEMBLY_LC}")")/. docs/plugins/reproducing-concordance.md gives the commands."
+			fi
 			;;
 		LOEUF)
 			if [[ "${ASSEMBLY_LC}" == "grch37" ]]; then
@@ -505,9 +552,17 @@ stage_from_upstream() {
 			echo "    https://zenodo.org/records/6347673/files/Collins_rCNV_2022.dosage_sensitivity_scores.tsv.gz"
 			upstream_note "Gene-symbol keyed and read whole (no index), so one copy serves both assemblies. Licence as the Zenodo record states it: 'Creative Commons Attribution 4.0 International'."
 			;;
+		UTRAnnotator)
+			echo "    https://raw.githubusercontent.com/Ensembl/UTRannotator/40e30db003d72435eb3744ee747029294abbcf3a/uORF_5UTR_${ASSEMBLY}_PUBLIC.txt"
+			upstream_note "The table UTRAnnotator.pm's documentation names for the assembly (UTRAnnotator.pm:42-43), at one commit of the Ensembl UTRannotator repository. Plain tab-separated text read whole (no index); stage as published. Licence as the repository's LICENSE states it: 'The MIT License (MIT)'."
+			;;
+		gnomADMt)
+			echo "    https://storage.googleapis.com/gcp-public-data--gnomad/release/3.1/vcf/genomes/gnomad.genomes.v3.1.sites.chrM.vcf.bgz (+ .tbi)"
+			upstream_note "The download gnomADMt.pm's documentation gives (gnomADMt.pm:51-52); stage the VCF and its index as published. Licence: gnomAD terms, 'The primary data from the gnomAD exomes and genomes are available free of restrictions under the Creative Commons Zero Public Domain Dedication' (https://gnomad.broadinstitute.org/terms)."
+			;;
 		Conservation)
 			echo "    https://ftp.ensembl.org/pub/release-116/compara/conservation_scores/92_mammals.gerp_conservation_score/gerp_conservation_scores.homo_sapiens.GRCh38.bw"
-			upstream_note "The layout stages one GERP bigWig for GRCh38, under loftee/grch38/, where LoFTEE's GRCh38 bundle ships its copy of this file (an earlier Compara release); the copy prepared for LoFTEE serves Conservation as it is. Ensembl places no restriction on the use of its data."
+			upstream_note "The layout stages one GERP bigWig for GRCh38, under loftee/grch38/, where LoFTEE's GRCh38 bundle ships its copy of this file (a Compara release other than the 116 one above); the copy prepared for LoFTEE serves Conservation as it is. Ensembl places no restriction on the use of its data."
 			;;
 		AncestralAllele)
 			if [[ "${ASSEMBLY_LC}" == "grch37" ]]; then
@@ -540,8 +595,10 @@ MISSING_ANY=0
 for plugin in "${APPLICABLE_PLUGINS[@]}"; do
 	all_present=1
 	summary_scope="$(s3_scope_for "${plugin}")"
+	synthetic_run="$(synthetic_run_files_for "${plugin}")"
 	while IFS= read -r rel; do
 		[[ -z "${rel}" ]] && continue
+		grep -qxF -- "${rel}" <<<"${synthetic_run}" && continue
 		if [[ ! -f "${DATA_DIR}/${rel}" ]]; then
 			all_present=0
 			break
@@ -556,18 +613,41 @@ for plugin in "${APPLICABLE_PLUGINS[@]}"; do
 		echo "  ${plugin}: MISSING"
 		MISSING_ANY=1
 	fi
+	# A run on made-up data is READY when every file of it stands; ABSENT is no failure.
+	if [[ -n "${synthetic_run}" ]]; then
+		synthetic_state="READY"
+		while IFS= read -r rel; do
+			if [[ ! -f "${DATA_DIR}/${rel}" ]] || ! verify_staged_size "${summary_scope}" "${rel}" "${DATA_DIR}/${rel}"; then
+				synthetic_state="ABSENT"
+			fi
+		done <<<"${synthetic_run}"
+		echo "  ${plugin} synthetic conservation run: ${synthetic_state}"
+	fi
 done
 echo ""
 echo "Data directory: ${DATA_DIR}"
 echo ""
-echo "Run plugin concordance with (the harness requires the Perl cache root, a vep-rs JSON cache and a FASTA):"
-echo "  scripts/concordance/run_concordance.sh --assembly ${ASSEMBLY} \\"
-echo "    --perl-cache-dir <dir above homo_sapiens/> --json-cache-dir <json cache dir> --fasta <genome.fa> \\"
-echo "    --plugins $(
-	IFS=','
-	echo "${APPLICABLE_PLUGINS[*]}"
-) \\"
-echo "    --plugin-data-dir ${DATA_DIR}"
+# The harness command names the plugins run_concordance.sh builds an argument string for;
+# the others are named in a line of their own.
+HARNESS_PLUGIN_LIST=""
+GATE_RUN_PLUGIN_LIST=""
+for plugin in "${APPLICABLE_PLUGINS[@]}"; do
+	if in_list "${plugin}" "${GATE_RUN_PLUGINS[@]}"; then
+		GATE_RUN_PLUGIN_LIST="${GATE_RUN_PLUGIN_LIST:+${GATE_RUN_PLUGIN_LIST},}${plugin}"
+	else
+		HARNESS_PLUGIN_LIST="${HARNESS_PLUGIN_LIST:+${HARNESS_PLUGIN_LIST},}${plugin}"
+	fi
+done
+if [[ -n "${HARNESS_PLUGIN_LIST}" ]]; then
+	echo "Run plugin concordance with (the harness requires the Perl cache root, a vep-rs JSON cache and a FASTA):"
+	echo "  scripts/concordance/run_concordance.sh --assembly ${ASSEMBLY} \\"
+	echo "    --perl-cache-dir <dir above homo_sapiens/> --json-cache-dir <json cache dir> --fasta <genome.fa> \\"
+	echo "    --plugins ${HARNESS_PLUGIN_LIST} \\"
+	echo "    --plugin-data-dir ${DATA_DIR}"
+fi
+if [[ -n "${GATE_RUN_PLUGIN_LIST}" ]]; then
+	echo "run_concordance.sh builds no argument string for ${GATE_RUN_PLUGIN_LIST}: the runs of scripts/concordance/plugin_gate_runs.toml read their files (docs/plugins/reproducing-concordance.md)."
+fi
 
 # A partially-staged directory must not look like success: every later gate
 # assumes these files exist.

@@ -1,10 +1,10 @@
 entry = "file_cache_reads_ccdsid"
 page = "docs/divergences/file-cache-reads-ccdsid.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 235 of 77,675 cache transcripts · 1 flag set, 2 corpora"
-notes = "The GRCh38 release-116 GFF3 lines of TMPRSS3 and ENST00000398397, whose transcript line carries ccdsid=CCDS42939.1. Ensembl VEP's --gff source reads no ccdsid (BaseGXF.pm:632-703, _add_identifiers), so the transcript has no _ccds and OutputFactory.pm:1534-1537 prints no CCDS; vep-rs reads the attribute into the cache and prints it. Removing the ccdsid attribute makes the engines agree. The transcript's GTF lines part the engines the same way through --gtf: the transcript line carries ccds_id \"CCDS42939\" (GTFSerializer.pm:459-464, the xref's primary identifier without the version), and vep-rs prints CCDS42939 as the GTF carries it."
+input_class_basis = "2 · 235 of 116,165 cache transcripts · 1 flag set, 2 corpora"
+notes = "The GRCh38 release-116 GFF3 lines of TMPRSS3 and ENST00000398397, whose transcript line carries ccdsid=CCDS42939.1. Ensembl VEP's --gff source reads no ccdsid (BaseGXF.pm:632-703, _add_identifiers), so the transcript has no _ccds and OutputFactory.pm:1543-1546 prints no CCDS; vep-rs reads the attribute into the cache and prints it. Removing the ccdsid attribute makes the engines agree. The transcript's GTF lines part the engines the same way through --gtf: the transcript line carries ccds_id \"CCDS42939\" (GTFSerializer.pm:459-464, the xref's primary identifier without the version), and vep-rs prints CCDS42939 as the GTF carries it."
 prepare = [
   '''cat > "$STAGE/tmprss3_ccds.gff3" <<'GFF'
 ##gff-version 3
@@ -58,3 +58,12 @@ where = { record = "1995820", feature = "ENST00000398397" }
 [expected]
 ensembl_vep = ["-"]
 vep_rs = ["CCDS42939.1"]
+
+[implementation]
+code = ["crates/vep-cache-builder/src/gff3.rs::transcript_record"]
+tests = [
+    "crates/vep-cache-builder/src/gff3.rs::tests::ccdsid_becomes_ccds",
+    "crates/vep-cache-builder/src/gtf.rs::tests::ccds_id_becomes_ccds",
+    "crates/vep-cache-builder/tests/custom_transcript_source.rs::a_gtf_ccds_id_is_the_cache_ccds",
+    "crates/vep-cli/tests/documented_subsets.rs::file_cache_ccdsid_divergence_is_documented",
+]

@@ -1,9 +1,9 @@
 entry = "minimal_split_pick_marks"
 page = "docs/divergences/minimal-split-hgvsp.md#pick-marks-under-the-flagging-variants"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 156.8 per million · 0 flag sets, 28 corpora"
+input_class_basis = "2 · 156.8 per million · 0 flag sets, 31 corpora"
 notes = "The first mechanism of the entry, --flag_pick: the two insertions trim to the distinct strings T and A, so --minimal splits the record into two features, and Ensembl VEP's first pass marks one row of each before the output pass marks the rejoined record once more; vep-rs marks one row of the record."
 
 [input]
@@ -28,3 +28,10 @@ columns = ["Allele", "Feature", "ALLELE_NUM", "PICK"]
 [expected]
 ensembl_vep = ["A | ENST00000291552 | 2 | 1", "T | ENST00000291552 | 1 | 1"]
 vep_rs = ["A | ENST00000291552 | 2 | 1"]
+
+[implementation]
+code = ["crates/vep-cli/src/pick.rs::pick_family"]
+tests = [
+    "crates/vep-cli/src/pick.rs::tests::flag_pick_marks_one_row_per_record",
+    "crates/vep-cli/src/pick.rs::tests::minimal_split_alleles_sort_by_the_rejoin_key",
+]

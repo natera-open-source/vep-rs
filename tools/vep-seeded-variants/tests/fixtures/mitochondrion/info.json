@@ -1,0 +1,14 @@
+{
+  "assembly": "MADE2",
+  "cache_version": 63,
+  "contig_order": [
+    "MT_MADE"
+  ],
+  "polyphen": "",
+  "sift": "",
+  "source_versions": {
+    "assembly": "MADE2",
+    "genebuild": "made-up"
+  },
+  "species": "made_up_protist"
+}

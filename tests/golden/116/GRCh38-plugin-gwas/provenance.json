@@ -1,21 +1,21 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --dir plugin_data/vepdir --dir_plugins {plugins} --plugin GWAS,file=plugin_data/gwas_catalog_slice.tsv [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "none on either side",
  "input": "variants.vcf: 36 records at chromosome 21 sites, one record per allele except one multi-allelic record. Ten SNVs at eight sites the catalog reports from one study each, carrying a beta coefficient with its unit, an odds ratio, a ratio without a confidence interval, no ratio, no reported gene and a gene list; four SNVs at sites several studies report, where the order of the plugin's processed file decides the record; two SNVs at sites whose first record in that order names another allele, so a later record is reported; the paired sites of a 25-SNP haplotype row, of a 9-SNP haplotype row and the second SNP of a SNP x SNP interaction row; an SNV whose allele is the complement of the site's risk allele, reported on no row; a multi-allelic record whose second allele is the site's risk allele, reported on the rows of both alleles; an insertion and a deletion at a catalog site, reported on no row; and thirteen records at ten sites of the summary statistics of GCST000028: six sites with one allele, the effect allele, three with two alleles of which one is the effect allele, and one with a deletion in place of an SNV.",
  "sha256": {
-  "default.txt": "c09f52f84103d88a31cb672128016f39584b365762417d8ae9676630f8ff9dde",
-  "tab.txt": "84cdce3adfd93503e0799dd9759bbf4ff2f4c64b90983776d755f6c203813cc0",
-  "vcf.vcf": "c7906e9228c6b158f98eb7e34516291435c9bcdd334e14f84d535bbb12728c52",
-  "json.jsonl": "4226a0f808d1d9ba49d1f074c3ff0928b253509509a93be71bc34e3d1586947c",
-  "default.summary.log": "325ab758083947bcf59bb00028be8b9da4dc34739fd5fbfd60d7ae94bf90afdd",
-  "tab.summary.log": "49a3bb55d3ddb445c32c13ec29182a75f16993ae16018b8ab90d1ddf0ba55e89",
-  "vcf.summary.log": "2e047ec11917e25345bc86f44a03cabd6d2bf4efacf503cb2d4edea9f6a568f1",
-  "json.summary.log": "ffdd3a79a837601b7de386158cc331960a181480af40adbd2070223fa640a65b"
+  "default.txt": "41edbbea127b08b778049dbc437d5f28225bc0c044a8afee3e47e3b791c98ed3",
+  "tab.txt": "f57cbaeace9c18f54dbf6a8c936946b74c226ffdc44f324504b1a9becba3b9b4",
+  "vcf.vcf": "59460fc70ea6a9e622c8b561799cbcb6929e27f09e5b401a50889786813e9c56",
+  "json.jsonl": "dbe1f915487c55335c03d17c9a318668271d55244a99cb8b9758a75c320a8942",
+  "default.summary.log": "26faa6c6ec55accf462f6831e86863633e7a140a4543dae25fe1a3cbfff60b1b",
+  "tab.summary.log": "ad0b2ad63216dc851737407a4b350b381bb66406f6092f02a3ed87eb6f56ac3c",
+  "vcf.summary.log": "bea46e78d585b73517fd7f5b7d2881bf47e54ce5a1e291392f6ce8fa1852035f",
+  "json.summary.log": "6796b2e9b473567c6d199175ca85d2ed130ebfa1dc081b8b14f01e4fd6cdc8ff"
  },
  "variants_vcf_sha256": "bed11c07a9b92196858adf1dd03c958ecaa90185d20f810de43ed01e7459fc03",
  "plugin_files": {
@@ -28,6 +28,24 @@
  },
  "flag_sets": {
   "sstate": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --dir plugin_data/vepdir --dir_plugins {plugins} --plugin GWAS,type=sstate,file=plugin_data/17463246-GCST000028-EFO_0001360.h.tsv [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "48495e381aa7e2e5f3d92f9e241c05bd136a54a6bdb26b4fdf71ceec3ecdc534",
+    "tab.txt": "7b5746d8fd747391c8501b682259e43644ce4d1ee7711d2fe501f86f3bc238a6",
+    "vcf.vcf": "5da4c32f7c03f9ceb4d2ae0553aeb26c54ffd9760280fab5e3f3a20c80612069",
+    "json.jsonl": "f2b009a2ad2f2658451db27046e88e5a287994ec3c203ef7eb502d116cdaf7d9",
+    "default.summary.log": "d220d129b1ea82669d581306d79de2841d43ff0176590b0ad0369fb5f696a9f5",
+    "tab.summary.log": "1bbd7a24baf38af7eb7f3d525e1b90b1407bca85e2910ac03a048a50b2913f81",
+    "vcf.summary.log": "9080ac0fb8463a2292d92cb6fb9007a3efaec4af8e8e97eb3eea5e230df6e0ff",
+    "json.summary.log": "373a7fd57c0b845d1caff2c7147115d4909160bf339f679924e58bbbd245cf72"
+   },
    "flags": [
     "--dir",
     "plugin_data/vepdir",
@@ -36,19 +54,9 @@
     "--plugin",
     "GWAS,type=sstate,file=plugin_data/17463246-GCST000028-EFO_0001360.h.tsv"
    ],
-   "expected_dir": "expected_sstate",
-   "sha256": {
-    "default.txt": "14ff533b16f4579fe5f8bc195ecfc79cd2b360e31c4e5329e4174300411f32aa",
-    "tab.txt": "23dcfe7020e1b9ff6297f38a1a17329a2a2d48e9c0c07e002e4aed08404fcb67",
-    "vcf.vcf": "7421e543435869cf830267e4c45efa1e45131aef4d936b986abf5a0dbc044be3",
-    "json.jsonl": "5fa237a5e09adaea8af4b2385ae37456928eb9d107f8cc821072fc8a4eb3917b",
-    "default.summary.log": "76c62b336c8ac06d485b7a7002912c4297b39ee3b9fc98d484c8799d2674c5d3",
-    "tab.summary.log": "0999a7e4b100692735310be072a8dff7a71d1c9a3b766ee2426796ed77b8f5c3",
-    "vcf.summary.log": "f95d5db2865aebc6fa4db5435737f5d3cff1cb7e9b507b2af624a4b6f94c0a6b",
-    "json.summary.log": "8bd9b170ea402bb4faf04a62c07c04d6a3f765d9e48b0329f83f5fc4289feab3"
-   }
+   "expected_dir": "expected_sstate"
   }
  },
  "data": "plugin_data/gwas_catalog_slice.tsv: the header and the 43 rows of the NHGRI-EBI GWAS Catalog associations download (ontology-annotated, full) that name a chromosome 21 site of the records, every column kept; among them rows whose risk allele carries a ?, whose reported gene is NR or a list, and haplotype and interaction rows naming several sites. plugin_data/17463246-GCST000028-EFO_0001360.h.tsv: the header and 15 rows of the harmonised summary statistics of GCST000028, named as the catalog publishes the file: its first three rows, whose harmonised coordinates are NA, the rows at the records' sites and two more chromosome 21 rows; the file is uncompressed because Ensembl VEP's plugin reads the compressed bytes of a .gz file as its header. plugin_data/vepdir/: the processed, sorted and indexed copies of both files that Ensembl VEP's plugin writes under its --dir on a first run and reads on every run, written by that run and named through --dir so the reference run finds them on its read-only corpus; vep-rs reads the two source files and the flag is inert for it.",
- "generator": "scripts/golden/build_golden_corpus.py select (--include for every record); scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; scripts/concordance/generate_reference_output.sh --corpus --dir-plugins <VEP_plugins checkout> (the manifest's run and, with the manifest's flags set to the flag set's words, the sstate run); scripts/golden/build_golden_corpus.py flag-set, classify (both runs) and check"
+ "generator": "tools/vep-golden-corpus select (--include for every record); scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; scripts/concordance/generate_reference_output.sh --corpus --dir-plugins <VEP_plugins checkout> (the manifest's run and, with the manifest's flags set to the flag set's words, the sstate run); tools/vep-golden-corpus flag-set, classify (both runs) and check"
 }

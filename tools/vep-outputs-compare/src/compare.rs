@@ -5,22 +5,33 @@
 //! classified, and the summary, markdown and discordance files written.
 
 use crate::classes::Counter;
+use crate::dbid_replay::{replay, Replay, Source};
 use crate::input::{
-    for_each_record, for_each_record_in, for_each_record_name, KeyPrep, CANONICAL_CONTIGS,
+    for_each_record, for_each_record_in, for_each_record_name, CacheContigNames, KeyPrep,
+    CANONICAL_CONTIGS, HUMAN_ASSEMBLIES,
 };
 use crate::merge::{
-    compare_sorted_key_files, in_collapsed_keys, in_partition, is_key_order, merge_keys, Collector,
-    MemoryKeys, MergeCounts, PartitionOrder, Side,
+    compare_sorted_key_files, in_collapsed_keys, is_key_order, key_order, merge_keys, written_at,
+    Collector, MemoryKeys, MergeCounts, PartitionOrder, Side,
 };
 use crate::partition::{self, PartitionFiles, ScanSpec, Tuning};
 use crate::pyfmt::py_strip;
 use crate::report::{fixed6, utc_now_isoformat, Adjusted, Aggregate, FileMetrics, Json, Scores};
 use crate::rules::breakend::BARE_BREAKPOINT_ALLELE;
-use crate::rules::filter::{filter_intended_divergences, Collector as FilterCollector};
+use crate::rules::cache_transcripts::CacheTranscripts;
+use crate::rules::coding_end::CodingEndSources;
+#[cfg(test)]
+use crate::rules::filter::filter_intended_divergences;
+use crate::rules::filter::{filter_intended_divergences_beside, Collector as FilterCollector};
 use crate::rules::gvcf::{gvcf_site_locations, gvcf_site_locations_from_vcf};
+use crate::rules::reference_bases::ReferenceBases;
 use crate::rules::row_pair_rules;
 use crate::rules::scope::{ReferenceRecordScope, ScopeFeatures};
-use crate::rules::table::DIVERGENCE_CLASSES_116_2;
+use crate::rules::shared_synonym::shared_synonym_names;
+use crate::rules::table::{
+    DIVERGENCE_CLASSES_116_2, MERGED_SAME_DBID_COLLAPSE, MERGED_SAME_STABLE_ID_COLLAPSE,
+    SYNONYM_OF_SEVERAL_SEQUENCES_BY_HASH_ORDER,
+};
 use crate::sort::{KeySorter, SortedKeys, DEFAULT_MEMORY_BOUND};
 use crate::threads::joined;
 use crate::{file_name_of, glob_sorted, path_of, py_resolve, py_stem, Args, ContigsFlag, TempDir};
@@ -28,6 +39,11 @@ use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
+
+/// The refusal of a `--canonical-contigs` value that names no contig.
+fn names_no_contig(value: &str) -> String {
+    format!("error: --canonical-contigs '{value}' names no contig")
+}
 
 /// The contig set a `--canonical-contigs` value names: the names in the file at `value` when
 /// one exists (comma- or white-space-separated, `#` lines ignored), else the comma-separated
@@ -49,37 +65,109 @@ fn parse_canonical_contigs(value: &str) -> Result<HashSet<String>, String> {
         .map(str::to_string)
         .collect();
     if names.is_empty() {
-        return Err(format!(
-            "error: --canonical-contigs '{value}' names no contig"
-        ));
+        return Err(names_no_contig(value));
     }
     Ok(names)
 }
 
-/// The defensive contig filter: off, the set a value names, or the human set under a human
-/// `--assembly`, with a warning on stdout when the bare flag names no set.
-pub fn resolve_canonical_contigs(args: &Args) -> Result<Option<HashSet<String>>, String> {
-    match &args.canonical_contigs {
-        ContigsFlag::Off => Ok(None),
-        ContigsFlag::Named(value) => parse_canonical_contigs(value).map(Some),
-        ContigsFlag::Bare => match args.assembly.as_deref() {
-            Some("GRCh37") | Some("GRCh38") => Ok(Some(
-                CANONICAL_CONTIGS.iter().map(|c| c.to_string()).collect(),
-            )),
-            assembly => {
+/// The sequence names of the converted cache at `directory`: the `contig_order` of its
+/// `info.json`, a list of at least one name.
+fn cache_contig_order(directory: &Path) -> Result<HashSet<String>, String> {
+    let path = directory.join("info.json");
+    let refused = |reason: &str| format!("--json-cache: {}: {reason}", path.display());
+    let text = std::fs::read_to_string(&path).map_err(|e| refused(&e.to_string()))?;
+    let info: serde_json::Value =
+        serde_json::from_str(&text).map_err(|e| refused(&e.to_string()))?;
+    let listed = match info.get("contig_order") {
+        None | Some(serde_json::Value::Null) => &[][..],
+        Some(serde_json::Value::Array(listed)) => listed.as_slice(),
+        Some(_) => return Err(refused("contig_order is not a list of names")),
+    };
+    let names: HashSet<String> = listed
+        .iter()
+        .map(|name| name.as_str().map(str::to_string))
+        .collect::<Option<_>>()
+        .ok_or_else(|| refused("contig_order is not a list of names"))?;
+    if names.is_empty() {
+        return Err(refused("contig_order lists no name"));
+    }
+    Ok(names)
+}
+
+/// The sequence names one run compares under.
+pub struct RunContigs {
+    /// The defensive contig filter's set; `None` where the filter is off.
+    pub canonical: Option<HashSet<String>>,
+    /// The names the cache files its sequences under.
+    pub cache_names: CacheContigNames,
+}
+
+/// The sequence names of the run. Under a human `--assembly` both are the human sets,
+/// whatever cache the run names. Under any other, or none, the bare flag's filter is the
+/// `contig_order` of the `--json-cache` directory, off with a warning on stdout where the run
+/// names no cache, and the cache's names are that `contig_order`, else the set a
+/// `--canonical-contigs` value names, else unknown. A value of `--canonical-contigs` names
+/// the filter's set under every assembly and `--no-canonical-contigs` turns the filter off.
+pub fn resolve_contigs(args: &Args) -> Result<RunContigs, String> {
+    let assembly = args.assembly.as_deref();
+    let human = assembly.is_some_and(|assembly| HUMAN_ASSEMBLIES.contains(&assembly));
+    let cache = match &args.json_cache {
+        Some(directory) if !human => Some(cache_contig_order(&py_resolve(directory))?),
+        _ => None,
+    };
+    let canonical = match &args.canonical_contigs {
+        ContigsFlag::Off => None,
+        ContigsFlag::Named(value) => Some(parse_canonical_contigs(value)?),
+        ContigsFlag::Bare if human => {
+            Some(CANONICAL_CONTIGS.iter().map(|c| c.to_string()).collect())
+        }
+        ContigsFlag::Bare => {
+            if cache.is_none() {
                 println!(
                     "WARNING: --canonical-contigs (default ON) requested but --assembly is {}, \
                      which names no canonical set. Defensive output-side filter is OFF for this \
                      run. The upstream input-prep canonical-contigs filter \
-                     (prepare_benchmark_vcfs.py) still applies. Pass --assembly GRCh37 or \
-                     --assembly GRCh38, or name the set with --canonical-contigs <file or list> \
-                     (a cache's info.json contig_order), to enable the defensive layer, or \
+                     (vep-prepare-benchmark-vcfs) still applies. Pass --assembly GRCh37 or \
+                     --assembly GRCh38, name the set with --canonical-contigs <file or list>, \
+                     or name a converted cache with --json-cache <directory> (the set is its \
+                     info.json contig_order), to enable the defensive layer, or \
                      --no-canonical-contigs to silence this warning.",
                     assembly.filter(|a| !a.is_empty()).unwrap_or("not provided")
                 );
-                Ok(None)
             }
-        },
+            cache.clone()
+        }
+    };
+    let cache_names = match (human, cache, &args.canonical_contigs) {
+        (true, _, _) => CacheContigNames::Human,
+        (false, Some(names), _) => CacheContigNames::Named(names),
+        (false, None, ContigsFlag::Named(_)) => {
+            CacheContigNames::Named(canonical.clone().unwrap_or_default())
+        }
+        (false, None, _) => CacheContigNames::Unknown,
+    };
+    Ok(RunContigs {
+        canonical,
+        cache_names,
+    })
+}
+
+/// The defensive contig filter of the run (`resolve_contigs`).
+pub fn resolve_canonical_contigs(args: &Args) -> Result<Option<HashSet<String>>, String> {
+    resolve_contigs(args).map(|contigs| contigs.canonical)
+}
+
+/// What a mode returns where [`resolve_canonical_contigs`] fails with `message`. A
+/// `--canonical-contigs` value that names no contig is a usage error: its message goes to
+/// stderr as it stands and the run ends with exit code 1, as on a missing mode argument. Any
+/// other failure is the mode's.
+pub fn ended_without_contig_filter(args: &Args, message: String) -> Result<u8, String> {
+    match &args.canonical_contigs {
+        ContigsFlag::Named(value) if message == names_no_contig(value) => {
+            eprintln!("{message}");
+            Ok(1)
+        }
+        _ => Err(message),
     }
 }
 
@@ -92,6 +180,8 @@ pub fn sort_keys(
     out_path: &Path,
 ) -> io::Result<()> {
     let mut sorter = KeySorter::new(scratch, &file_name_of(out_path), DEFAULT_MEMORY_BOUND);
+    #[cfg(debug_assertions)]
+    sorter.holds_collapsed_keys(collapse);
     let mut prep = KeyPrep::default();
     let mut key = Vec::new();
     for_each_record(File::open(input)?, |record| {
@@ -248,13 +338,44 @@ enum ReleaseScope {
 }
 
 /// What every paired file's comparison shares: where the sort scratch goes, the contig
-/// filter, where the input VCFs are looked for and the worker threads.
+/// filter, where the input VCFs are looked for, the converted cache where one is named and
+/// the worker threads.
 struct CompareSettings<'a> {
     report_dir: &'a Path,
     canonical: Option<&'a HashSet<String>>,
     input_dir: Option<&'a Path>,
     input_vcf: Option<&'a Path>,
+    json_cache: Option<&'a Path>,
     threads: usize,
+}
+
+/// For each of `keys`, the line of the output file `output`, counted from 1 over every line
+/// of the file, that first writes it as a tuple key, or under `collapsed` as a
+/// context-collapsed key; None for a key no row of the file writes.
+fn first_lines_writing(
+    output: &Path,
+    keys: [&[u8]; 2],
+    collapsed: bool,
+    canonical_contigs: Option<&HashSet<String>>,
+) -> io::Result<[Option<u64>; 2]> {
+    let mut prep = KeyPrep::default();
+    let mut written = Vec::new();
+    let (mut line, mut found) = (0u64, [None; 2]);
+    for_each_record(File::open(output)?, |record| {
+        line += 1;
+        if found.contains(&None) {
+            written.clear();
+            if prep.prepare(record, collapsed, canonical_contigs, &mut written) {
+                for (found, key) in found.iter_mut().zip(keys) {
+                    if found.is_none() && written == key {
+                        *found = Some(line);
+                    }
+                }
+            }
+        }
+        Ok(())
+    })?;
+    Ok(found)
 }
 
 /// Why the comparison of one paired file stopped.
@@ -277,52 +398,67 @@ impl From<String> for Stopped {
 impl Stopped {
     /// A failure of the comparison of the paired file `name`, whose key files lie in
     /// `tmp`. Where a side's keys do not ascend the directory is kept, since the files the
-    /// merge stops on are the evidence of the fault. Any other failure leaves the directory
-    /// to its removal on drop.
-    fn on(name: &str, error: io::Error, tmp: &TempDir) -> Stopped {
-        let key_files = is_key_order(&error).then(|| {
-            tmp.keep();
-            tmp.path.clone()
-        });
+    /// merge stops on are the evidence of the fault, and the side's file of `outputs`, the
+    /// reference's output and the scored one, is read once more under `canonical_contigs`
+    /// for the lines that first write the key the merge stopped on and the key before it:
+    /// the message names that file and the two lines, which no thread count changes, or
+    /// the side alone where the file does not yield both. It names neither key. Any other
+    /// failure leaves the directory to its removal on drop.
+    fn on(
+        name: &str,
+        error: io::Error,
+        tmp: &TempDir,
+        outputs: [&Path; 2],
+        canonical_contigs: Option<&HashSet<String>>,
+    ) -> Stopped {
+        let Some(order) = key_order(&error) else {
+            return Stopped::from(format!("{name}: {error}"));
+        };
+        tmp.keep();
+        let output = match order.side() {
+            Side::Reference => outputs[0],
+            Side::Scored => outputs[1],
+        };
+        let keys = [order.key(), order.before()];
+        let lines = first_lines_writing(output, keys, order.collapsed(), canonical_contigs);
+        let error = match lines {
+            Ok([Some(key_line), Some(before_line)]) => {
+                written_at(error, output, key_line, before_line)
+            }
+            _ => error,
+        };
         Stopped {
             message: format!("{name}: {error}"),
-            key_files,
+            key_files: Some(tmp.path.clone()),
         }
     }
 
-    /// The message the run ends with. Where a side's keys do not ascend the discordance
-    /// report is incomplete: this closes it and renames it with a `.partial` suffix, so
-    /// that no file of the report directory carries a name read as a result, and the
-    /// message names the file and the directory of the key files.
+    /// The message the run ends with. A stop leaves the discordance report incomplete: this
+    /// closes it and renames it with a `.partial` suffix, so that no file of the report
+    /// directory carries a name read as a result, and the message names the file, after the
+    /// directory of the key files where a side's keys do not ascend.
     fn reported(self, discordant_out: BufWriter<File>, discordant_path: &Path) -> String {
-        let Some(key_files) = self.key_files else {
-            return self.message;
-        };
         let mut partial_name = discordant_path
             .file_name()
             .unwrap_or_default()
             .to_os_string();
         partial_name.push(".partial");
         let partial = discordant_path.with_file_name(partial_name);
-        let renamed = discordant_out
-            .into_inner()
-            .map_err(io::IntoInnerError::into_error)
-            .and_then(|file| {
-                drop(file);
-                std::fs::rename(discordant_path, &partial)
-            });
-        match renamed {
-            Ok(()) => format!(
-                "{}; the key files are kept in {} and the rows written before the stop in {}",
-                self.message,
-                key_files.display(),
-                partial.display()
+        // The writer writes out the rows it holds as it is dropped, and a row it cannot
+        // write is in the file under neither name.
+        drop(discordant_out);
+        let kept = match &self.key_files {
+            Some(key_files) => format!(
+                "the key files are kept in {} and the rows written before the stop in",
+                key_files.display()
             ),
+            None => "the rows written before the stop are kept in".to_string(),
+        };
+        match std::fs::rename(discordant_path, &partial) {
+            Ok(()) => format!("{}; {kept} {}", self.message, partial.display()),
             Err(error) => format!(
-                "{}; the key files are kept in {} and the rows written before the stop in {}, \
-                 which was not renamed: {error}",
+                "{}; {kept} {}, which was not renamed: {error}",
                 self.message,
-                key_files.display(),
                 discordant_path.display()
             ),
         }
@@ -406,7 +542,7 @@ fn compare_pair(
     let canonical = settings.canonical;
     let tmp = TempDir::create(settings.report_dir, "compare_vep_tmp_")
         .map_err(|e| format!("temporary directory: {e}"))?;
-    let on_io = |e: io::Error| Stopped::on(&name, e, &tmp);
+    let on_io = |e: io::Error| Stopped::on(&name, e, &tmp, [perl_file, rust_file], canonical);
     let perl_sorted = tmp.path.join(format!("{name}.perl.keys.sorted.txt"));
     let rust_sorted = tmp.path.join(format!("{name}.rust.keys.sorted.txt"));
     sort_keys(perl_file, false, canonical, &tmp.path, &perl_sorted).map_err(on_io)?;
@@ -482,7 +618,7 @@ fn compare_pair_partitioned(
     let canonical = settings.canonical;
     let tmp = TempDir::create(settings.report_dir, "compare_vep_tmp_")
         .map_err(|e| format!("temporary directory: {e}"))?;
-    let on_io = |e: io::Error| Stopped::on(&name, e, &tmp);
+    let on_io = |e: io::Error| Stopped::on(&name, e, &tmp, [perl_file, rust_file], canonical);
     let release_116 = matches!(scope, ReleaseScope::Release116(_));
     let splitters =
         partition::splitters_for(&[perl_file, rust_file], canonical, tuning).map_err(on_io)?;
@@ -614,10 +750,8 @@ fn compare_pair_partitioned(
             rust_ends,
         })
     };
-    let mut merged = crate::threads::run_indexed(tuning.threads, partitions, |partition| {
-        merge_partition(partition).map_err(|e| in_partition(e, partition))
-    })
-    .map_err(on_io)?;
+    let mut merged =
+        crate::threads::run_indexed(tuning.threads, partitions, merge_partition).map_err(on_io)?;
     // The discordant rows follow partition order, so each side's keys must ascend from
     // each partition to the next as well as inside it.
     let mut perl_order = PartitionOrder::new(Side::Reference);
@@ -700,10 +834,18 @@ pub fn run(args: &Args) -> Result<u8, String> {
     let perl_dir = py_resolve(args.perl_dir.as_deref().expect("required"));
     let rust_dir = py_resolve(args.rust_dir.as_deref().expect("required"));
     let report_dir = py_resolve(args.report_dir.as_deref().expect("required"));
+    let release_115 = args.reference_release == "115.2";
     std::fs::create_dir_all(&report_dir).map_err(|e| format!("{}: {e}", report_dir.display()))?;
-    let canonical = resolve_canonical_contigs(args)?;
+    let RunContigs {
+        canonical,
+        cache_names,
+    } = match resolve_contigs(args) {
+        Ok(contigs) => contigs,
+        Err(message) => return ended_without_contig_filter(args, message),
+    };
     let input_dir = args.input_dir.as_deref().map(py_resolve);
     let input_vcf = args.input_vcf.as_deref().map(py_resolve);
+    let json_cache = args.json_cache.as_deref().map(py_resolve);
     let perl_files = glob_sorted(&perl_dir, &args.glob)?;
     if perl_files.is_empty() {
         return Err(format!(
@@ -712,6 +854,17 @@ pub fn run(args: &Args) -> Result<u8, String> {
             args.glob
         ));
     }
+    // Read before the discordance file is created: a cache that cannot be read leaves no
+    // file under that name.
+    let shared_synonyms = match &args.ensembl_cache {
+        Some(directory) if !release_115 => {
+            let names = shared_synonym_names(&py_resolve(directory))
+                .map_err(|error| format!("--ensembl-cache: {error}"))?;
+            (!names.is_empty()).then_some(names)
+        }
+        _ => None,
+    };
+    let reads_shared_synonyms = shared_synonyms.is_some();
     let discordant_path = report_dir.join(path_of(args.discordant_tsv.as_ref()));
     if let Some(parent) = discordant_path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
@@ -723,17 +876,25 @@ pub fn run(args: &Args) -> Result<u8, String> {
     discordant_out
         .write_all(b"file_name\tsource\tlocation\tallele\tfeature\tfeature_type\tconsequence_set\n")
         .map_err(|e| e.to_string())?;
-    let release_115 = args.reference_release == "115.2";
     let mut scope = if release_115 {
         ReleaseScope::Release115(ScopeFeatures::default())
     } else {
-        ReleaseScope::Release116(Box::default())
+        let mut record_scope = Box::<ReferenceRecordScope>::default();
+        if json_cache.is_some() {
+            record_scope.shared_dbid_drops = Some(HashMap::new());
+            record_scope.shared_stable_id_drops = Some(HashMap::new());
+        }
+        if let Some(names) = shared_synonyms {
+            record_scope.record_shared_synonyms(names);
+        }
+        ReleaseScope::Release116(record_scope)
     };
     let settings = CompareSettings {
         report_dir: &report_dir,
         canonical: canonical.as_ref(),
         input_dir: input_dir.as_deref(),
         input_vcf: input_vcf.as_deref(),
+        json_cache: json_cache.as_deref(),
         threads: args.threads,
     };
     let tuning = Tuning::new(settings.threads);
@@ -777,9 +938,45 @@ pub fn run(args: &Args) -> Result<u8, String> {
                 &rust_file,
                 &record_scope.absent_locations(&name),
                 settings.canonical,
-            )
-            .map_err(|e| format!("{name}: {e}"))?;
+            );
+            let named = match named {
+                Ok(named) => named,
+                Err(error) => {
+                    let stopped = Stopped::from(format!("{name}: {error}"));
+                    return Err(stopped.reported(discordant_out, &discordant_path));
+                }
+            };
             record_scope.record_reference_named(&name, &named);
+            if let Some(cache) = settings.json_cache {
+                let vcf = input_vcf_for(&name, settings.input_dir, settings.input_vcf);
+                let replayed = match replay(perl_file, vcf.as_deref(), cache, settings.threads) {
+                    Ok(replayed) => replayed,
+                    Err(message) => {
+                        let stopped = Stopped::from(message);
+                        return Err(stopped.reported(discordant_out, &discordant_path));
+                    }
+                };
+                match replayed {
+                    Replay::Dropped(dropped) => {
+                        record_scope.record_shared_dbid_drops(&name, dropped.shared_dbid);
+                        record_scope.record_shared_stable_id_drops(&name, dropped.shared_stable_id);
+                    }
+                    Replay::OtherSource => {}
+                    // The `dbID` class concerns a merged run alone, the stable id class a
+                    // RefSeq run as well: one line for each class the run concerns.
+                    Replay::StoodDown(source, reason) => {
+                        let merged =
+                            (source == Source::Merged).then_some(MERGED_SAME_DBID_COLLAPSE);
+                        for class in merged.into_iter().chain([MERGED_SAME_STABLE_ID_COLLAPSE]) {
+                            eprintln!(
+                                "WARNING: [{}] {name}: {} is not applied: {reason}",
+                                crate::PROG,
+                                class.bucket
+                            );
+                        }
+                    }
+                }
+            }
         }
         totals.perl_count += pair.raw.perl_count;
         totals.rust_count += pair.raw.rust_count;
@@ -791,7 +988,10 @@ pub fn run(args: &Args) -> Result<u8, String> {
         totals.extra_counter.update(&pair.raw.extra_counter);
         files.push(metrics_of(&name, &pair));
     }
-    discordant_out.flush().map_err(|e| e.to_string())?;
+    if let Err(error) = discordant_out.flush() {
+        let stopped = Stopped::from(format!("{}: {error}", discordant_path.display()));
+        return Err(stopped.reported(discordant_out, &discordant_path));
+    }
     drop(discordant_out);
 
     let extra_rust_pairs: Vec<String> = glob_sorted(&rust_dir, &args.glob)?
@@ -812,7 +1012,9 @@ pub fn run(args: &Args) -> Result<u8, String> {
         discordant_path.with_file_name(format!("{stem}_open{}", &discordant_name[stem.len()..]));
     let collector = match &scope {
         ReleaseScope::Release115(features) => FilterCollector::Release115(features),
-        ReleaseScope::Release116(record_scope) => FilterCollector::Release116(record_scope),
+        ReleaseScope::Release116(record_scope) => {
+            FilterCollector::Release116(record_scope, &cache_names)
+        }
     };
     let row_rules = if release_115 {
         Vec::new()
@@ -820,15 +1022,37 @@ pub fn run(args: &Args) -> Result<u8, String> {
         row_pair_rules()
     };
     let input_records = |name: &str| input_vcf_for(name, settings.input_dir, settings.input_vcf);
-    let exclusions = filter_intended_divergences(
+    // The candidate's cache is asked under every assembly, a sequence's transcripts when a
+    // pair on it first reaches a rule that reads the coding ends of its transcript.
+    let transcripts = args
+        .json_cache
+        .as_deref()
+        .map(|cache| CacheTranscripts::new(&py_resolve(cache), settings.threads));
+    let reference = match args.reference_fasta.as_deref() {
+        Some(fasta) => Some(ReferenceBases::open(&py_resolve(fasta)).map_err(|e| e.to_string())?),
+        None => None,
+    };
+    let exclusions = filter_intended_divergences_beside(
         &discordant_path,
         &open_path,
         collector,
         &row_rules,
         Some((&perl_dir, &rust_dir)),
         Some(&input_records),
+        CodingEndSources {
+            transcripts: transcripts.as_ref(),
+            reference: reference.as_ref(),
+        },
     )
-    .map_err(|e| format!("{}: {e}", discordant_path.display()))?;
+    .map_err(|e| e.to_string())?;
+    let mut classes = DIVERGENCE_CLASSES_116_2.to_vec();
+    if settings.json_cache.is_some() {
+        classes.push(MERGED_SAME_DBID_COLLAPSE);
+        classes.push(MERGED_SAME_STABLE_ID_COLLAPSE);
+    }
+    if reads_shared_synonyms {
+        classes.push(SYNONYM_OF_SEVERAL_SEQUENCES_BY_HASH_ORDER);
+    }
     let adj_perl = totals.perl_count - exclusions.excluded_perl;
     let adj_rust = totals.rust_count - exclusions.excluded_rust;
     let adjusted_scores = Scores::new(totals.intersection, adj_rust, adj_perl);
@@ -844,7 +1068,7 @@ pub fn run(args: &Args) -> Result<u8, String> {
             excluded_rust_tuples: exclusions.excluded_rust,
             excluded_categories: &exclusions.buckets,
             reference: (!release_115)
-                .then_some((args.reference_release.as_str(), DIVERGENCE_CLASSES_116_2)),
+                .then_some((args.reference_release.as_str(), classes.as_slice())),
         },
     };
     let sorted_contigs: Option<Vec<String>> = canonical.as_ref().map(|set| {
@@ -959,3 +1183,15 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "compare_stop_tests.rs"]
+mod stop_tests;
+
+#[cfg(test)]
+#[path = "compare_canonical_contigs_tests.rs"]
+mod canonical_contigs_tests;
+
+#[cfg(test)]
+#[path = "compare_one_sided_readers_tests.rs"]
+mod one_sided_readers_tests;

@@ -1,0 +1,89 @@
+{
+ "plugin_fixtures": {
+  "generator": "scripts/fixtures/cut_plugin_regions.py",
+  "flank": 5000,
+  "record_flank": 2000,
+  "exon_flank": 50,
+  "gerp_regions": "exons",
+  "tools": {
+   "bgzip": "bgzip (htslib) 1.9"
+  },
+  "files": {
+   "reference.fa.fai": "8854e547e9294cdd2eba0907abb4f25ae45ec231ef9dc8d11f0aacc931c17dfc",
+   "reference.fa.gz": "d479134dd699dcd15a92488b406a57b001198d610f6f886076c51ff4938a7b42",
+   "reference.fa.gz.fai": "8854e547e9294cdd2eba0907abb4f25ae45ec231ef9dc8d11f0aacc931c17dfc",
+   "reference.fa.gz.gzi": "9e07bbed1a93505a4e36d2d446e2509fda180a68c2a88a0a7f0ea5bf6efad5fa"
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species ovis_aries --assembly ARS-UI_Ramb_v3.0 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "ovis_aries/116_ARS-UI_Ramb_v3.0",
+ "fasta": "the three sequences the records and the pruned cache's transcripts sit on (24, MT and the unplaced scaffold JAEVFA010000099.1) at their full length from Ovis_aries.ARS-UI_Ramb_v3.0.dna.primary_assembly.24.fa, Ovis_aries.ARS-UI_Ramb_v3.0.dna.primary_assembly.MT.fa and Ovis_aries.ARS-UI_Ramb_v3.0.dna.nonchromosomal.fa of Ensembl release 116, each compressed file held to its line of that directory's CHECKSUMS, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
+ "input": "variants.vcf: 299 records, 233 on chromosome 24, 45 on the mitochondrion and 21 on the unplaced scaffold JAEVFA010000099.1; 29 of them write their sequence by a synonym the cache lists (CM028727.1 and NC_056077.1 for 24, AF010406 and NC_001941.1 for MT, scaffold_231 and NW_024599817.1 for the scaffold). 261 are seeded records of tools/vep-seeded-variants (generator version 2, seed 1, --records wide --per-category 36 over the three sequences, every reference allele read from the genome), their IDs the situation's name and an ordinal: a codon the vertebrate mitochondrial code reads differently, start and stop codons under both genetic codes, missense and synonymous changes on each strand, splice donors and acceptors, both untranslated regions, introns, upstream, downstream and intergenic positions, frameshift insertions and deletions, in-frame deletions, and the first and last base of each sequence. 38 are known variants of the cache (dbSNP 150, as the cache names its source), single-base substitutions sampled with seed 1 whose first allele is the genome's base, their IDs the rs identifiers. The cache marks no sequence circular, so no record crosses an origin",
+ "sha256": {
+  "default.txt": "6ffb6ce975b202903605b9fd94efdb211c50d8a7d163fcf56bfa4707fbabc811",
+  "tab.txt": "6e3956392e74cbcd551d57e453926a08da2bba8d929971519babca6333878281",
+  "vcf.vcf": "2e528866a3cad267f10b3f832efc7ab106dc8722194c208663fc3dd3f65520a1",
+  "json.jsonl": "f3d16072520d3243152dbde4a4e5e15b42310d01d5d648351458b9693c2a7f51"
+ },
+ "variants_vcf_sha256": "532d6f71cd382630b1e9766bd72ae48854b9a0d284ce0856e2b6852fd1c204fe",
+ "flag_sets": {
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species ovis_aries --assembly ARS-UI_Ramb_v3.0 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "ovis_aries/116_ARS-UI_Ramb_v3.0",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "4cd3fbdc7d281cc16e82d5441085b03762e66ec54372ab94c73d3644b6bce15a",
+    "tab.txt": "c524296054491906540fb7a7082be6a5deb0f0ceca3d6d240b273c7150d9e83b",
+    "vcf.vcf": "b4bf443affca52fff01c5ba171ed7bc9f681a052f7b8f3fe13efa9be76d91581",
+    "json.jsonl": "3e903c6e9d7f10ca745ef4b1e220809be5a9739e9100a9ff64ebb90740aa6312"
+   },
+   "flags": [
+    "--everything"
+   ],
+   "expected_dir": "expected_everything"
+  },
+  "hgvs-sift": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species ovis_aries --assembly ARS-UI_Ramb_v3.0 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs --sift b [--tab|--vcf|--json]",
+   "perl_cache": "ovis_aries/116_ARS-UI_Ramb_v3.0",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "e7d5f3e220658538b1daf29d83a9c7df5b61207636d4eb547cd06d088e22d5d2",
+    "tab.txt": "bddca2b6b190dece630232f97b0a0b7353a0a7dfcdaaf6ccd6705eb998a79ba2",
+    "vcf.vcf": "00699a9539e5352d4c55f3f3fe5679a8d74b05db4e4bdc78a573c3d0fb1d45e6",
+    "json.jsonl": "a38f40df12389751631d7d0ed44df508f7a2a4349fb5670618141d4feb30468b"
+   },
+   "flags": [
+    "--hgvs",
+    "--sift",
+    "b"
+   ],
+   "expected_dir": "expected_hgvs-sift"
+  }
+ },
+ "generator": "tools/vep-seeded-variants --seed 1 --records wide --per-category 36 --sequence 24 --sequence MT --sequence JAEVFA010000099.1 --fasta <the genome> (the wide input) and a seeded sample of 300 known single-base substitutions of the cache on the same sequences (the known input); Ensembl VEP over the two inputs under default flags; tools/vep-golden-corpus select --release 116 --assembly ARS-UI_Ramb_v3.0 --species ovis_aries --dataset wide=<reference>=<the seeded records> --dataset known=<reference>=<the known variants> --k 16 --seed 1 --max-span 1000000 --max-records 500 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 24 --include <the named records> --covers species-sheep-ramb-v3 --covers genetic-code-tables --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --flank 5000 --gzip --drop sorted_exons --drop protein_function_predictions --drop-except <the transcripts on which a record changes one residue, the rows SIFT scores> --perl-info <cache>/info.txt --cache-version 116 --variations <converted cache>/variations over the whole cache tools/vep-storable-to-json converts from the Ensembl VEP 116 ARS-UI_Ramb_v3.0 cache (protein features kept for the DOMAINS column of the everything set; the variation slices hold the known variants within one base of a record); scripts/fixtures/cut_plugin_regions.py --reference <the genome> --flank 5000 --record-flank 2000, each record named by a synonym read under the cache's own name for its sequence; tools/vep-golden-corpus flag-set (everything, hgvs-sift); scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; tools/vep-golden-corpus classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp --field SIFT for the hgvs-sift set)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "24": 643,
+   "JAEVFA010000099.1": 4,
+   "MT": 37
+  },
+  "shards": 44,
+  "synonym_lines": 6,
+  "matrices_kept_on": 108,
+  "variation_slices": "the known variants within one base of a record under variations/<chr>/all_vars.gz with its .csi, as the Ensembl VEP cache lays them out, on all three sequences"
+ }
+}

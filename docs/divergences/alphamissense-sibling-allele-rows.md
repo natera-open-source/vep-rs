@@ -16,7 +16,7 @@
 
 **The class it produces.** `alphamissense_sibling_allele_rows`: an `am_` field (the JSON `alphamissense` object) that differs between the engines on a row of a multi-allelic record whose alleles give one amino-acid change. The format comparator sets the field aside where a comparison case names the class, under the test of section 1.7. Each AlphaMissense golden corpus holds one two-allele record, whose alleles give different amino acids, and its table carries no two rows of one site and one amino-acid change with different predictions, so no committed row has the shape. Where no case names the class, a disagreement of this shape is reported as a difference and charged to vep-rs. The concordance figures score consequence sets and never see the field.
 
-**How often the shape occurs.** Tier 2, see [Intended divergences from Ensembl VEP](../intended-divergences.md): 6,347 of the cuts' 15,646,481 records (405.6 per million) carry two or more sequence alleles; the codon decides whether two give one amino acid, and the table whether their rows differ. 64 corpora carry the shape and 6 flag sets run the plugin.
+**How often the shape occurs.** Tier 2, see [Intended divergences from Ensembl VEP](../intended-divergences.md): 6,347 of the cuts' 15,646,481 records (405.6 per million) carry two or more sequence alleles; the codon decides whether two give one amino acid, and the table whether their rows differ. 80 corpora carry the shape and 6 flag sets run the plugin.
 
 The published tables predict the protein variant, so a transcript's rows for one amino-acid change carry one value, and the rows that differ belong to two genes' transcripts overlapping at one site. The GRCh38 table's rows form 5,842,071 groups of one site and one amino-acid change with two or more alternate alleles, and one group carries two values; the GRCh37 table's form 5,688,744, and one carries two values. Neither site is on chromosome 21.
 
@@ -24,7 +24,7 @@ Tuple, pair, set aside, charged and the other scoring terms are defined in [How 
 
 ## 1. Two alleles of one codon that both give leucine, against a table whose rows for them differ
 
-**In short.** The record `21 13610388 A C,T` on the forward-strand transcript `ENST00000299443`, against the GRCh38 AlphaMissense golden corpus's table with one row changed: the `A T` row's prediction set to `0.9000`, `likely_pathogenic`, where the `A C` row keeps `0.1079`, `likely_benign`. Both alleles give the amino-acid change `M/L`. Both engines write the `A C` row on the `C` rows. On the `T` rows Ensembl VEP 116.2 writes the `A C` row's values, `am_class=likely_benign;am_pathogenicity=0.1079`, in either ALT order; vep-rs writes the `A T` row's, `am_class=likely_pathogenic;am_pathogenicity=0.9000`. Run as two one-allele records, Ensembl VEP writes vep-rs's rows.
+**In short.** The record `21 13610388 A C,T` on the forward-strand transcript `ENST00000299443`, against the GRCh38 AlphaMissense golden corpus's table with one row changed: the `A T` row's prediction set to `0.9000`, `likely_pathogenic`, where the `A C` row keeps `0.1079`, `likely_benign`. Both alleles give the amino-acid change `M/L`. Both engines write the `A C` row on the `C` rows. On the `T` rows Ensembl VEP 116.3 writes the `A C` row's values, `am_class=likely_benign;am_pathogenicity=0.1079`, in either ALT order; vep-rs writes the `A T` row's, `am_class=likely_pathogenic;am_pathogenicity=0.9000`. Run as two one-allele records, Ensembl VEP writes vep-rs's rows.
 
 ### 1.1 What a reader needs to know first
 
@@ -51,14 +51,14 @@ Both engines run `--plugin AlphaMissense,file=<table>`.
 
 ### 1.3 What each engine writes
 
-The rows on `ENST00000299443` in the default format. Ensembl VEP 116.2 on `C,T`:
+The rows on `ENST00000299443` in the default format. Ensembl VEP 116.3 on `C,T`:
 
 ```
 sibling_ct	21:13610388	C	ENSG00000166351	ENST00000299443	Transcript	missense_variant	612	160	54	M/L	Atg/Ctg	-	IMPACT=MODERATE;STRAND=1;am_class=likely_benign;am_pathogenicity=0.1079
 sibling_ct	21:13610388	T	ENSG00000166351	ENST00000299443	Transcript	missense_variant	612	160	54	M/L	Atg/Ttg	-	IMPACT=MODERATE;STRAND=1;am_class=likely_benign;am_pathogenicity=0.1079
 ```
 
-Ensembl VEP 116.2 on `T,C`:
+Ensembl VEP 116.3 on `T,C`:
 
 ```
 sibling_tc	21:13610388	T	ENSG00000166351	ENST00000299443	Transcript	missense_variant	612	160	54	M/L	Atg/Ttg	-	IMPACT=MODERATE;STRAND=1;am_class=likely_benign;am_pathogenicity=0.1079
@@ -81,7 +81,7 @@ sibling_tc	21:13610388	C	ENSG00000166351	ENST00000299443	Transcript	missense_var
 
 Each record writes four rows in each engine, two per allele; the rows on `ENST00000620442` follow the same pattern. The `am_` fields by ALT order:
 
-| ALT order | Allele | Ensembl VEP 116.2 | vep-rs |
+| ALT order | Allele | Ensembl VEP 116.3 | vep-rs |
 | --- | --- | --- | --- |
 | `C,T` | `C` | `likely_benign`, `0.1079` | `likely_benign`, `0.1079` |
 | `C,T` | `T` | `likely_benign`, `0.1079` | `likely_pathogenic`, `0.9000` |
@@ -117,6 +117,6 @@ Ensembl VEP's `T` rows carry `am_class=likely_benign;am_pathogenicity=0.1079` an
 
 ### 1.7 How the comparator treats this class
 
-The format comparator (`scripts/concordance/compare_vep_formats.py`) applies `alphamissense_sibling_allele_rows` when a comparison case names it. An `am_` field, or the JSON `alphamissense` object, is set aside, counted once per row, where Ensembl VEP's value is the one its row of another allele of the record carries on the same feature beside the same `Amino_acids`. vep-rs leaves the field empty there or fills it differently. Every other difference stays one: a field vep-rs alone fills, an Ensembl VEP value that none of its rows of another allele carries on that feature beside those amino acids, and any value on a record of one allele.
+The format comparator (`tools/vep-formats-compare`) applies `alphamissense_sibling_allele_rows` when a comparison case names it. An `am_` field, or the JSON `alphamissense` object, is set aside, counted once per row, where Ensembl VEP's value is the one its row of another allele of the record carries on the same feature beside the same `Amino_acids`. vep-rs leaves the field empty there or fills it differently. Every other difference stays one: a field vep-rs alone fills, an Ensembl VEP value that none of its rows of another allele carries on that feature beside those amino acids, and any value on a record of one allele.
 
 The golden harness compares the two AlphaMissense corpora's `am_` fields verbatim, which their one two-allele record each, giving different amino acids per allele, never puts to the test, so the class applies to none of their rows.

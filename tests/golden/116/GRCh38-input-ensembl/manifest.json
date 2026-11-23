@@ -144,7 +144,7 @@
    "vep_rs_only_summary": {}
   }
  ],
- "suites": {
+ "datasets": {
   "GRCh38-input-ensembl": {
    "reference": "ref_default.txt",
    "input": "input.vcf",
@@ -231,21 +231,21 @@
  },
  "records": [
   {
-   "suite": "GRCh38-input-ensembl",
+   "dataset": "GRCh38-input-ensembl",
    "vcf": "21\t11000000\tintergenic_snv\tA\tG\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-input-ensembl",
+   "dataset": "GRCh38-input-ensembl",
    "vcf": "21\t11000000\tintergenic_rev\tA\tG\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-input-ensembl",
+   "dataset": "GRCh38-input-ensembl",
    "vcf": "21\t30213500\tdel_from_before_transcript\tN\t<DEL>\t.\t.\tEND=30214300",
    "combinations": [
     "3_prime_UTR_variant,feature_truncation",
@@ -253,7 +253,7 @@
    ]
   },
   {
-   "suite": "GRCh38-input-ensembl",
+   "dataset": "GRCh38-input-ensembl",
    "vcf": "21\t30214000\tutr_snv\tA\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -261,7 +261,7 @@
    ]
   },
   {
-   "suite": "GRCh38-input-ensembl",
+   "dataset": "GRCh38-input-ensembl",
    "vcf": "21\t30214000\tutr_rev_dash\tA\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -269,7 +269,7 @@
    ]
   },
   {
-   "suite": "GRCh38-input-ensembl",
+   "dataset": "GRCh38-input-ensembl",
    "vcf": "21\t30215900\tdup_past_transcript_end\tN\t<DUP>\t.\t.\tEND=30216600",
    "combinations": [
     "5_prime_UTR_variant,coding_sequence_variant",
@@ -277,49 +277,49 @@
    ]
   },
   {
-   "suite": "GRCh38-input-ensembl",
+   "dataset": "GRCh38-input-ensembl",
    "vcf": "21\t30282169\tsnv_fwd\tC\tA\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-input-ensembl",
+   "dataset": "GRCh38-input-ensembl",
    "vcf": "21\t30282169\tdot_id\tC\tA\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-input-ensembl",
+   "dataset": "GRCh38-input-ensembl",
    "vcf": "21\t30282169\tminus_snv_stop_lost_rev\tC\tA\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-input-ensembl",
+   "dataset": "GRCh38-input-ensembl",
    "vcf": "21\t30282169\tfour_columns\tC\tA\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-input-ensembl",
+   "dataset": "GRCh38-input-ensembl",
    "vcf": "21\t30282169\tseven_columns\tC\tA\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-input-ensembl",
+   "dataset": "GRCh38-input-ensembl",
    "vcf": "21\t30282169\tlower_snv\tC\tA\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-input-ensembl",
+   "dataset": "GRCh38-input-ensembl",
    "vcf": "21\t30282169\tmulti\tC\tA,T\t.\t.\t.",
    "combinations": [
     "stop_lost",
@@ -330,84 +330,84 @@
    ]
   },
   {
-   "suite": "GRCh38-input-ensembl",
+   "dataset": "GRCh38-input-ensembl",
    "vcf": "21\t30282911\tminus_del3_inframe_rev\tTAGA\tT\t.\t.\t.",
    "combinations": [
     "inframe_deletion"
    ]
   },
   {
-   "suite": "GRCh38-input-ensembl",
+   "dataset": "GRCh38-input-ensembl",
    "vcf": "21\t30282923\tminus_anchored_del_frameshift_rev\tCT\tC\t.\t.\t.",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "GRCh38-input-ensembl",
+   "dataset": "GRCh38-input-ensembl",
    "vcf": "21\t30282928\tminus_snv_missense_rev\tG\tT\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "GRCh38-input-ensembl",
+   "dataset": "GRCh38-input-ensembl",
    "vcf": "21\t30289183\tzero_id\tC\tCG\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-input-ensembl",
+   "dataset": "GRCh38-input-ensembl",
    "vcf": "21\t30289183\tstop_ins1_lost_rev\tC\tCG\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-input-ensembl",
+   "dataset": "GRCh38-input-ensembl",
    "vcf": "21\t30319403\tstop_del1_kept_rev\tTC\tT\t.\t.\t.",
    "combinations": [
     "stop_retained_variant"
    ]
   },
   {
-   "suite": "GRCh38-input-ensembl",
+   "dataset": "GRCh38-input-ensembl",
    "vcf": "21\t30319403\tlower_del\tTC\tT\t.\t.\t.",
    "combinations": [
     "stop_retained_variant"
    ]
   },
   {
-   "suite": "GRCh38-input-ensembl",
+   "dataset": "GRCh38-input-ensembl",
    "vcf": "21\t30348409\tstop_del2_lost_rev\tCTA\tC\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-input-ensembl",
+   "dataset": "GRCh38-input-ensembl",
    "vcf": "21\t30348409\tlower_unminimised\tCTA\tC\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-input-ensembl",
+   "dataset": "GRCh38-input-ensembl",
    "vcf": "21\t30396087\tminus_snv_start_lost_fwd\tA\tG\t.\t.\t.",
    "combinations": [
     "start_lost"
    ]
   },
   {
-   "suite": "GRCh38-input-ensembl",
+   "dataset": "GRCh38-input-ensembl",
    "vcf": "21\t30396091\tminus_snv_missense_fwd\tC\tT\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "GRCh38-input-ensembl",
+   "dataset": "GRCh38-input-ensembl",
    "vcf": "21\t30396091\tminus_multi_missense_fwd\tC\tT,G\t.\t.\t.",
    "combinations": [
     "missense_variant"
@@ -417,42 +417,42 @@
    ]
   },
   {
-   "suite": "GRCh38-input-ensembl",
+   "dataset": "GRCh38-input-ensembl",
    "vcf": "21\t30396095\tdash_snv_synonymous_fwd\tC\tT\t.\t.\t.",
    "combinations": [
     "synonymous_variant"
    ]
   },
   {
-   "suite": "GRCh38-input-ensembl",
+   "dataset": "GRCh38-input-ensembl",
    "vcf": "21\t30396096\tminus_snv_ref_mismatch_fwd\tT\tA\t.\t.\t.",
    "combinations": [
     "synonymous_variant"
    ]
   },
   {
-   "suite": "GRCh38-input-ensembl",
+   "dataset": "GRCh38-input-ensembl",
    "vcf": "21\t30396100\tminus_anchored_del_frameshift_fwd\tGC\tG\t.\t.\t.",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "GRCh38-input-ensembl",
+   "dataset": "GRCh38-input-ensembl",
    "vcf": "21\t30396101\tminus_snv_stop_gained_fwd\tC\tA\t.\t.\t.",
    "combinations": [
     "stop_gained"
    ]
   },
   {
-   "suite": "GRCh38-input-ensembl",
+   "dataset": "GRCh38-input-ensembl",
    "vcf": "21\t30396107\tminus_ins3_inframe_fwd\tT\tTGCT\t.\t.\t.",
    "combinations": [
     "inframe_insertion"
    ]
   },
   {
-   "suite": "GRCh38-input-ensembl",
+   "dataset": "GRCh38-input-ensembl",
    "vcf": "21\t30430756\tstop_ins5_newstop_fwd\tT\tTCCTAA\t.\t.\t.",
    "combinations": [
     "inframe_insertion,stop_lost",
@@ -460,7 +460,7 @@
    ]
   },
   {
-   "suite": "GRCh38-input-ensembl",
+   "dataset": "GRCh38-input-ensembl",
    "vcf": "21\t30601265\tstop_del1_kept_fwd\tTG\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -469,14 +469,14 @@
    ]
   },
   {
-   "suite": "GRCh38-input-ensembl",
+   "dataset": "GRCh38-input-ensembl",
    "vcf": "21\t34716478\tpenult_ins3_stop_fwd\tA\tAATA\t.\t.\t.",
    "combinations": [
     "inframe_insertion,stop_retained_variant"
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "divergences": [],

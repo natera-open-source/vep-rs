@@ -1,0 +1,11 @@
+{
+   "assembly" : "GRCh38",
+   "contig_order" : [
+      "21"
+   ],
+   "polyphen" : "b",
+   "source_versions" : {
+      "polyphen" : "2.2.3"
+   },
+   "species" : "homo_sapiens"
+}

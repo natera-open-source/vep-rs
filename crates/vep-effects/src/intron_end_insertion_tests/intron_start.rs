@@ -175,13 +175,24 @@ fn insertion_left_before_an_intron_of_two_bases_has_no_protein_notation() {
 }
 
 /// A copy of the bases before the gap is a duplication of coding positions
-/// and keeps its protein notation: one base equal to the last base of exon
-/// 4 of ENST00000231790, three equal to its last three, and the shape of
+/// and keeps the notation its bases give: one base equal to the last base of
+/// exon 4 of ENST00000231790, three equal to its last three, and the shape of
 /// the row at GRCh37 22:29120964 on ENST00000417588, 391 bases equal to the
 /// 391 before them, written after the last base of an exon of 148 bases.
 /// That copy holds the whole exon, the intron before it and the whole exon
 /// before that; the reference shows it a copy all the same, and the frame
 /// it opens ends on the stop codon the copied intron holds.
+///
+/// Exons 4 and 5 of the first model hold the filler base alone, so codons
+/// 103 to 151, the model's last, read one residue: the frame one copied
+/// base opens reads the reference's residues to the last of them and has
+/// no protein notation, where Ensembl VEP's walk of the two translations
+/// leaves by its bound one position on, at 152
+/// (`TranscriptVariationAllele.pm:2348-2364`), and the residue three copied
+/// bases add is named at the last of that run, 151, both past the row's
+/// protein position, 127. On the third row the copy's first two bases close
+/// codon 198 with the exon's last base, so the first changed residue is the
+/// row's own, and the copied intron's stop codon is the 51st codon from it.
 #[test]
 fn copy_of_the_bases_before_an_introns_first_base_keeps_its_notation() {
     let row = ENST00000231790_EXONS_4_5.row(37045966, 37045965, "-", "T");
@@ -190,10 +201,7 @@ fn copy_of_the_bases_before_an_introns_first_base_keeps_its_notation() {
     assert_eq!(row.hgvs_offset, None);
     assert_eq!(row.cds_position.as_deref(), Some("380-381"));
     assert_eq!(row.protein_position.as_deref(), Some("127"));
-    assert_eq!(
-        row.hgvsp.as_deref(),
-        Some("ENSP00000000001.1:p.Phe152PhefsTer?")
-    );
+    assert_eq!(row.hgvsp.as_deref(), None);
 
     let row = ENST00000231790_EXONS_4_5.row(37045966, 37045965, "-", "TTT");
     assert_eq!(terms(&row), ["inframe_insertion", "splice_region_variant"]);

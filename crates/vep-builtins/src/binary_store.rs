@@ -24,6 +24,7 @@
 //!   by its start can lie and still reach into the query
 //! - Per-chromosome position index: sorted array of `(position: u64, data_offset: u64, record_count: u32)`,
 //!   one entry per distinct position, `data_offset` into the `.vpd` file
+//! - Digest: the SHA256 of every byte before it, the file's last 32 bytes
 //!
 //! **Data file (`.vpd`)**: large, memory-mapped:
 //! - Header: magic `VPDA`, version `u32`, column count `u16`
@@ -47,23 +48,34 @@
 //! under its name, or an index beside another store's data, therefore leaves
 //! the plugin reading the table.
 //!
-//! A store of an earlier index version is refused with the reconversion
-//! named: version 1 carries neither layout nor span, version 2 may hold a
-//! position's records sorted by their ends, and version 3 records neither
-//! identity. A refused store leaves the plugin reading the table.
+//! The index answers for its own bytes as well: it ends with the SHA256 of
+//! every byte before that digest, and an index whose bytes differ from it is
+//! refused before any of its counts is read. An index naming one chromosome
+//! twice, or holding a chromosome's positions out of ascending order, is
+//! refused naming the chromosome.
+//!
+//! A store of any index version but the current one is refused with the
+//! reconversion named, a later version as an earlier one: version 1 carries
+//! neither layout nor span, version 2 may hold a position's records sorted
+//! by their ends, version 3 records neither identity, and version 4 carries
+//! no digest of its own bytes. A refused store leaves the plugin reading the
+//! table through tabix, which needs the table's `.tbi` beside it
+//! (`crate::annotation_store::open_backend`).
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::ffi::{OsStr, OsString};
 use std::fmt::Write as FmtWrite;
-use std::io::{self, BufWriter, Read as IoRead, Seek, Write as IoWrite};
+use std::fs::File;
+use std::io::{self, BufReader, BufWriter, Read as IoRead, Seek, Write as IoWrite};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use memmap2::Mmap;
 use vep_core::assembly::Assembly;
-use vep_core::cache_manifest::{Digest, HashingReader};
+use vep_core::cache_manifest::{Digest, HashingReader, HashingWriter};
 
 use crate::annotation_store::AnnotationStore;
-use crate::tabix::{BatchQueryResult, TabixConfig, TabixRecord};
+use crate::tabix::{BatchQueryResult, MitochondrialFrame, TabixConfig, TabixRecord};
 use crate::PluginError;
 
 const VPD_MAGIC: &[u8; 4] = b"VPDA";
@@ -72,14 +84,27 @@ const VPDI_MAGIC: &[u8; 4] = b"VPDI";
 const DATA_FORMAT_VERSION: u32 = 1;
 /// The index file's version: 2 adds the layout and each chromosome's longest
 /// span; 3, the same bytes, marks a store holding a position's records in the
-/// table's order; 4 adds the identity of the table and of the data file.
-const INDEX_FORMAT_VERSION: u32 = 4;
-/// What a refusal over a store's content ends with.
+/// table's order; 4 adds the identity of the table and of the data file; 5
+/// ends the index with the SHA256 of every byte before it, which 4 lacks.
+const INDEX_FORMAT_VERSION: u32 = 5;
+/// The bytes of the SHA256 digest an index ends with.
+const INDEX_DIGEST_BYTES: usize = 32;
+/// The conversion that rebuilds a store, as a store's refusals name it.
 const RECONVERT: &str = "convert the table again with vep-cache-converter convert-plugin-data";
+
+/// Whether `refusal`, a store's, names the conversion that rebuilds the
+/// store. The refusals over its index version, its columns, its content, its
+/// index's own digest and the chromosomes and order of its index do, each
+/// through [`RECONVERT`]; no other refusal does, that of a store file that is
+/// missing or cannot be read among them.
+pub(crate) fn names_the_conversion(refusal: &PluginError) -> bool {
+    refusal.detail().contains(RECONVERT)
+}
 
 /// The content of a file as a store's index records it: the SHA256 digest of
 /// all its bytes and their count.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ContentIdentity {
     /// The SHA256 digest of the whole file.
     pub sha256: Digest,
@@ -88,10 +113,21 @@ pub struct ContentIdentity {
 }
 
 impl ContentIdentity {
+    /// The identity of a file whose bytes have the digest `sha256` and count
+    /// `length`.
+    pub fn new(sha256: Digest, length: u64) -> Self {
+        Self { sha256, length }
+    }
+
     /// The identity of the file at `path`, read once to its end.
     pub fn of_file(path: &Path) -> io::Result<Self> {
-        let mut file = std::fs::File::open(path)?;
-        let sha256 = HashingReader::new(&file).digest_to_end()?;
+        Self::of_handle(&File::open(path)?)
+    }
+
+    /// The identity of the open `file`, read once from its start to its end.
+    fn of_handle(mut file: &File) -> io::Result<Self> {
+        file.seek(io::SeekFrom::Start(0))?;
+        let sha256 = HashingReader::new(file).digest_to_end()?;
         Ok(Self {
             sha256,
             length: file.stream_position()?,
@@ -99,7 +135,7 @@ impl ContentIdentity {
     }
 
     /// The digest in the lower-case hexadecimal spelling `sha256sum` prints.
-    pub fn sha256_hex(&self) -> String {
+    pub(crate) fn sha256_hex(&self) -> String {
         hex(&self.sha256)
     }
 
@@ -185,6 +221,10 @@ struct Layout {
 impl Layout {
     /// The index's value for an absent column.
     const NO_COLUMN: u16 = u16::MAX;
+
+    /// The bytes of a layout in an index: four columns and the zero-based
+    /// flag.
+    const BYTES: usize = 4 * 2 + 1;
 
     fn of(config: &TabixConfig) -> Result<Self, PluginError> {
         let column = |col: usize| {
@@ -342,7 +382,7 @@ impl StoreFiles {
 ///
 /// Provides the same query interface as [`TabixAnnotator`](crate::TabixAnnotator)
 /// but backed by a preprocessed binary format. Records are accessed via
-/// binary search on an in-memory position index and zero-copy reads from
+/// binary search on an in-memory position index and reads from
 /// the memory-mapped data file.
 pub struct BinaryAnnotator {
     /// Memory-mapped `.vpd` data file.
@@ -358,6 +398,12 @@ pub struct BinaryAnnotator {
     /// The run's assembly, which decides the spellings a mitochondrial name
     /// is tried under; none by default.
     assembly: Option<Assembly>,
+    /// The table the store was built from, which a logged line names.
+    table: PathBuf,
+    /// What decides, on GRCh37, whether the rows of a mitochondrial contig
+    /// are read for a record of the other pair of names: the check the
+    /// table's own reader makes, on the same rows.
+    frame: MitochondrialFrame,
 }
 
 // SAFETY: The Mmap is immutable and lives as long as the BinaryAnnotator.
@@ -373,6 +419,10 @@ impl BinaryAnnotator {
     /// with `.vpdi` extension). A store built for other columns is refused,
     /// naming the `convert-plugin-data` flags that rebuild it for this table.
     ///
+    /// The index is held to the SHA256 of its own bytes that it ends with
+    /// before any of its counts is read, and an index naming one chromosome
+    /// twice, or a chromosome's positions out of ascending order, is refused.
+    ///
     /// The store is bound to its table by content: the data file and the
     /// table at `config.file_path` are each read whole, and a store whose
     /// data, or whose table, differs in length or SHA256 from what the index
@@ -382,6 +432,103 @@ impl BinaryAnnotator {
         Self::checked(vpd_path, StoreFiles::read(vpd_path)?, config)
     }
 
+    /// Whether the store at `vpd_path` has both its files and an index of
+    /// the current version, which [`Self::open`] requires before it reads
+    /// either file whole. Reads the index's first eight bytes and nothing of
+    /// the data file or the table.
+    #[cfg(test)]
+    pub(crate) fn has_current_index(vpd_path: &Path) -> bool {
+        Self::current_index(vpd_path).is_ok()
+    }
+
+    /// Why the store at `vpd_path` is refused before either of its files is
+    /// read whole, in the words [`Self::open`] refuses the same store in: a
+    /// file of the two is missing, or the index cannot be read or does not
+    /// open with the magic and the current version. A data path that is no
+    /// file is refused here by name. The data file is not opened here, so
+    /// one that cannot be opened is refused by [`Self::open`] alone, which
+    /// opens it before it reads the index's magic. `Ok` where
+    /// `Self::has_current_index` holds.
+    pub(crate) fn current_index(vpd_path: &Path) -> Result<(), PluginError> {
+        let vpdi_path = vpd_path.with_extension("vpdi");
+        if !vpd_path.exists() {
+            return Err(PluginError::Init(format!(
+                "binary data file not found: {}",
+                vpd_path.display()
+            )));
+        }
+        if !vpd_path.is_file() {
+            return Err(PluginError::Init(format!(
+                "binary data file {} is not a file",
+                vpd_path.display()
+            )));
+        }
+        if !vpdi_path.exists() {
+            return Err(PluginError::Init(format!(
+                "binary index file not found: {}",
+                vpdi_path.display()
+            )));
+        }
+        let unread = |e: io::Error| {
+            PluginError::Init(format!(
+                "failed to read index file {}: {e}",
+                vpdi_path.display()
+            ))
+        };
+        // `open` reads the index whole before its magic, so only an index
+        // that ends early fails there at the magic or the version.
+        let cut_short_or_unread = |e: io::Error| match e.kind() {
+            io::ErrorKind::UnexpectedEof => read_err(e),
+            _ => unread(e),
+        };
+        let mut index = File::open(&vpdi_path).map_err(unread)?;
+        let mut word = [0u8; 4];
+        index.read_exact(&mut word).map_err(cut_short_or_unread)?;
+        index_magic(&word)?;
+        index.read_exact(&mut word).map_err(cut_short_or_unread)?;
+        index_version(u32::from_le_bytes(word))
+    }
+
+    /// The query configuration the store at `vpd_path` records for `table`,
+    /// in what a tabix index names of one: the sequence, start and end
+    /// columns and a zero-based start. A reference allele column, which no
+    /// tabix index names, is left out, so [`Self::open`] refuses with this
+    /// configuration a store built on one. A store that
+    /// `Self::has_current_index` does not hold for is refused as
+    /// [`Self::open`] refuses it. Reads the index's opening bytes and nothing
+    /// of the data file or the table; [`Self::open`] holds the same bytes to
+    /// the index's digest.
+    pub(crate) fn index_named_columns(
+        vpd_path: &Path,
+        table: &Path,
+    ) -> Result<TabixConfig, PluginError> {
+        Self::current_index(vpd_path)?;
+        let vpdi_path = vpd_path.with_extension("vpdi");
+        // The layout follows the magic and the version.
+        let mut opening = [0u8; 4 + 4 + Layout::BYTES];
+        File::open(&vpdi_path)
+            .and_then(|mut index| index.read_exact(&mut opening))
+            .map_err(|e| match e.kind() {
+                io::ErrorKind::UnexpectedEof => read_err(e),
+                _ => PluginError::Init(format!(
+                    "failed to read index file {}: {e}",
+                    vpdi_path.display()
+                )),
+            })?;
+        let mut cursor = io::Cursor::new(&opening[..]);
+        cursor.set_position(4 + 4);
+        let layout = Layout::read_from(&mut cursor)?;
+        Ok(TabixConfig {
+            file_path: table.to_path_buf(),
+            chr_col: usize::from(layout.chr_col),
+            start_col: usize::from(layout.start_col),
+            end_col: layout.end_col.map(usize::from),
+            ref_col: None,
+            alt_col: None,
+            zero_based: layout.zero_based,
+        })
+    }
+
     /// The store of `files`, checked against `config`'s columns and table;
     /// `vpd_path` names the data file in a refusal and is not read.
     fn checked(
@@ -389,12 +536,12 @@ impl BinaryAnnotator {
         files: StoreFiles,
         config: &TabixConfig,
     ) -> Result<Self, PluginError> {
-        let index = Self::load_index(&files.index)?;
+        let index = Self::load_index(&files.index, &vpd_path.with_extension("vpdi"))?;
         let layout = Layout::of(config)?;
         if index.layout != layout {
             return Err(PluginError::Init(format!(
-                "store columns `{}` differ from the table's `{}`; convert the table again with \
-                 vep-cache-converter convert-plugin-data and the table's flags",
+                "store columns `{}` differ from the table's `{}`; {RECONVERT} and the table's \
+                 flags",
                 index.layout.flags(),
                 layout.flags()
             )));
@@ -442,56 +589,59 @@ impl BinaryAnnotator {
             index,
             column_names,
             assembly: None,
+            table: table.clone(),
+            frame: MitochondrialFrame::comparing_column(config.ref_col),
         })
     }
 
     /// `self` naming a query's chromosome to the store as a plugin's table is
     /// named it under `assembly` ([`crate::tabix::plugin_table_candidates`]).
-    pub fn on_assembly(mut self, assembly: Option<Assembly>) -> Self {
+    pub(crate) fn on_assembly(mut self, assembly: Option<Assembly>) -> Self {
         self.assembly = assembly;
         self
     }
 
+    /// The frame check's inputs, for the caller that holds the run's reference
+    /// sequence or names the table's reference-allele column
+    /// ([`MitochondrialFrame`]).
+    pub(crate) fn frame_mut(&mut self) -> &mut MitochondrialFrame {
+        &mut self.frame
+    }
+
     /// The identity of the table the store was built from, which
     /// [`Self::open`] found the table to have.
-    pub fn source(&self) -> &ContentIdentity {
+    pub(crate) fn source(&self) -> &ContentIdentity {
         &self.index.source
     }
 
     /// The identity of the store's `.vpd` file, which [`Self::open`] found the
     /// mapped file to have.
-    pub fn data(&self) -> &ContentIdentity {
+    pub(crate) fn data(&self) -> &ContentIdentity {
         &self.index.data
     }
 
-    /// Parse the bytes of a `.vpdi` index file.
-    fn load_index(bytes: &[u8]) -> Result<VpdIndex, PluginError> {
+    /// Parse the bytes of a `.vpdi` index file, which `index_path` names in
+    /// a refusal: the magic, then the version, then the digest the index ends
+    /// with, held to the bytes before it, and only then the counts and the
+    /// entries, which lie before that digest.
+    fn load_index(bytes: &[u8], index_path: &Path) -> Result<VpdIndex, PluginError> {
         let mut cursor = io::Cursor::new(bytes);
 
         let mut magic = [0u8; 4];
         cursor.read_exact(&mut magic).map_err(read_err)?;
-        if &magic != VPDI_MAGIC {
-            return Err(PluginError::Init(format!(
-                "invalid index magic: expected VPDI, got {:?}",
-                magic
-            )));
-        }
+        index_magic(&magic)?;
+        index_version(read_u32(&mut cursor)?)?;
 
-        let version = read_u32(&mut cursor)?;
-        if version != INDEX_FORMAT_VERSION {
-            return Err(PluginError::Init(format!(
-                "unsupported index version: {version} (expected {INDEX_FORMAT_VERSION}); \
-                 convert the table again with vep-cache-converter convert-plugin-data"
-            )));
-        }
-
+        let mut cursor = io::Cursor::new(index_body(bytes, index_path)?);
+        cursor.set_position(4 + 4);
         let layout = Layout::read_from(&mut cursor)?;
         let source = ContentIdentity::read_from(&mut cursor)?;
         let data = ContentIdentity::read_from(&mut cursor)?;
 
-        // Each count is checked against the bytes left before anything is
-        // allocated for it: a chromosome entry is at least its name length, its
-        // longest span and its position count, a position entry exactly 20 bytes.
+        // Each count is checked against the bytes left before the digest,
+        // before anything is allocated for it: a chromosome entry is at least
+        // its name length, its longest span and its position count, a position
+        // entry exactly 20 bytes.
         let chr_count = read_u32(&mut cursor)?;
         let chr_count = entries_fit(&cursor, u64::from(chr_count), 2 + 8 + 8).map_err(|left| {
             PluginError::Init(format!(
@@ -506,6 +656,12 @@ impl BinaryAnnotator {
             cursor.read_exact(&mut name_bytes).map_err(read_err)?;
             let name = String::from_utf8(name_bytes)
                 .map_err(|e| PluginError::Init(format!("invalid chromosome name in index: {e}")))?;
+            // A query reads one entry by the chromosome's name.
+            if chromosomes.contains_key(&name) {
+                return Err(PluginError::Init(format!(
+                    "index names chromosome {name:.32} twice; {RECONVERT}"
+                )));
+            }
 
             let longest_span = read_u64(&mut cursor)?;
             let pos_count = read_u64(&mut cursor)?;
@@ -516,11 +672,20 @@ impl BinaryAnnotator {
                 ))
             })?;
 
-            let mut positions = Vec::with_capacity(pos_count);
+            let mut positions: Vec<PosIndexEntry> = Vec::with_capacity(pos_count);
             for _ in 0..pos_count {
                 let position = read_u64(&mut cursor)?;
                 let data_offset = read_u64(&mut cursor)?;
                 let record_count = read_u32(&mut cursor)?;
+                // A query finds a chromosome's entries by binary search.
+                if let Some(previous) = positions.last().map(|entry| entry.position) {
+                    if position <= previous {
+                        return Err(PluginError::Init(format!(
+                            "index positions of chromosome {name:.32} do not ascend: {position} \
+                             follows {previous}; {RECONVERT}"
+                        )));
+                    }
+                }
                 positions.push(PosIndexEntry {
                     position,
                     data_offset,
@@ -657,13 +822,38 @@ impl BinaryAnnotator {
     /// `chr21`-keyed store and vice versa. `open_best_store` reads a `.vpd`
     /// sibling in place of its table, so an exact-name lookup against a
     /// converted `chr`-prefixed file would annotate nothing.
-    fn resolve_chromosome(&self, chr: &str) -> Option<(&str, &ChrIndex)> {
-        for candidate in crate::tabix::plugin_table_candidates(chr, self.assembly) {
-            if let Some((key, idx)) = self.index.chromosomes.get_key_value(&candidate) {
-                return Some((key.as_str(), idx));
+    ///
+    /// A mitochondrial name on GRCh37 is tried as the tabix backend tries it
+    /// ([`crate::tabix::grch37_mitochondrial_candidates`]): a contig of the
+    /// other pair of names is read only when the store's rows state the run's
+    /// reference bases ([`MitochondrialFrame::admits`]), the verdict the table
+    /// itself would get, since the store holds the table's rows.
+    fn resolve_chromosome(&self, chr: &str) -> Result<Option<(&str, &ChrIndex)>, PluginError> {
+        if self.assembly != Some(Assembly::Grch37)
+            || !crate::tabix::is_mitochondrial_name(chr.trim())
+        {
+            for candidate in crate::tabix::plugin_table_candidates(chr, self.assembly) {
+                if let Some((key, idx)) = self.index.chromosomes.get_key_value(&candidate) {
+                    return Ok(Some((key.as_str(), idx)));
+                }
+            }
+            return Ok(None);
+        }
+        for (candidate, crosses) in
+            crate::tabix::grch37_mitochondrial_candidates(chr, self.frame.first_name())
+        {
+            let Some((key, idx)) = self.index.chromosomes.get_key_value(&candidate) else {
+                continue;
+            };
+            let read = !crosses
+                || self.frame.admits(&self.table, key, &|start, end, limit| {
+                    self.chr_range_rows(idx, key, start, end, limit)
+                })?;
+            if read {
+                return Ok(Some((key.as_str(), idx)));
             }
         }
-        None
+        Ok(None)
     }
 
     /// Query the records whose span overlaps a chromosome + position range
@@ -678,6 +868,19 @@ impl BinaryAnnotator {
         chr_name: &str,
         start: u64,
         end: u64,
+    ) -> Result<Vec<TabixRecord>, PluginError> {
+        self.chr_range_rows(chr_index, chr_name, start, end, usize::MAX)
+    }
+
+    /// [`Self::query_chr_range`], the read ending once `limit` records are
+    /// held.
+    fn chr_range_rows(
+        &self,
+        chr_index: &ChrIndex,
+        chr_name: &str,
+        start: u64,
+        end: u64,
+        limit: usize,
     ) -> Result<Vec<TabixRecord>, PluginError> {
         let positions = &chr_index.positions;
         if positions.is_empty() {
@@ -697,6 +900,9 @@ impl BinaryAnnotator {
                 if let Some(mut record) = record {
                     record.chr = chr_name.to_string();
                     records.push(record);
+                    if records.len() >= limit {
+                        return Ok(records);
+                    }
                 }
             }
         }
@@ -724,7 +930,7 @@ impl AnnotationStore for BinaryAnnotator {
         let mut all_records: HashMap<String, BTreeMap<u64, Vec<TabixRecord>>> = HashMap::new();
 
         for (chr, mut intervals) in by_chr {
-            let Some((file_chr, chr_index)) = self.resolve_chromosome(chr) else {
+            let Some((file_chr, chr_index)) = self.resolve_chromosome(chr)? else {
                 continue;
             };
 
@@ -761,7 +967,7 @@ impl AnnotationStore for BinaryAnnotator {
         } else {
             (end, start)
         };
-        let Some((file_chr, chr_index)) = self.resolve_chromosome(chr) else {
+        let Some((file_chr, chr_index)) = self.resolve_chromosome(chr)? else {
             return Ok(Vec::new());
         };
         self.query_chr_range(chr_index, file_chr, start, end)
@@ -774,14 +980,50 @@ impl AnnotationStore for BinaryAnnotator {
             Some(&self.column_names)
         }
     }
+
+    fn mitochondrial_frame_mut(&mut self) -> Option<&mut MitochondrialFrame> {
+        Some(self.frame_mut())
+    }
 }
 
-/// Writes a `.vpd` + `.vpdi` binary store from an iterator of records.
+/// The two paths of a store's files.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct StorePaths {
+    /// The `.vpd` data file.
+    pub data: PathBuf,
+    /// The `.vpdi` index file.
+    pub index: PathBuf,
+}
+
+impl StorePaths {
+    /// The paths of a store whose data file is `data` and whose index file is
+    /// `index`.
+    pub fn new(data: PathBuf, index: PathBuf) -> Self {
+        Self { data, index }
+    }
+
+    /// The renames that put `self`'s two files at `published`'s paths, in the
+    /// order they are made: the data, then the index, so no index is in place
+    /// before the data it was written for.
+    fn renames_onto<'a>(&'a self, published: &'a Self) -> [(&'a Path, &'a Path); 2] {
+        [
+            (&self.data, &published.data),
+            (&self.index, &published.index),
+        ]
+    }
+}
+
+/// Writes a `.vpd` + `.vpdi` binary store, from records grouped by chromosome
+/// and held in memory ([`Self::write`]) or from rows given one at a time
+/// ([`Self::stream`]).
 ///
-/// Records must be sorted by (chr, position), the records at one position in
-/// the order the table holds them, which the store keeps: a query returns
-/// them in that order, as `tabix` prints a position's rows in file order. The
-/// writer creates both the data file and the index file.
+/// Records given to [`Self::write`] must be sorted by (chr, position), the
+/// records at one position in the order the table holds them, which the store
+/// keeps: a query returns them in that order, as `tabix` prints a position's
+/// rows in file order. The writer checks that order and creates both the data
+/// file and the index file. Rows given to a stream may come in any order, and
+/// the stream stores them in that same order of chromosome, start and arrival.
 pub struct BinaryStoreWriter {
     vpd_path: PathBuf,
     vpdi_path: PathBuf,
@@ -797,31 +1039,103 @@ impl BinaryStoreWriter {
         }
     }
 
+    /// Refuses a column of `config` that a store's index cannot record, as
+    /// [`Self::write`] does before it creates anything, so a conversion can
+    /// refuse the column before it reads its table.
+    pub fn check_columns(config: &TabixConfig) -> Result<(), PluginError> {
+        Layout::of(config).map(|_| ())
+    }
+
+    /// The paths [`Self::write`] publishes the store's two files at: each
+    /// path as it was given or, where a symbolic link lies there, the name at
+    /// the end of the link's chain, whether or not a file lies there, so the
+    /// links stay and the files they name are replaced.
+    ///
+    /// Refused, as [`Self::write`] refuses them before it creates anything: a
+    /// data path with the index's own extension, and a pair that names one
+    /// file through a link, since the index would replace the data; a chain
+    /// of more symbolic links than a path is resolved through; a link whose
+    /// target ends in a separator or a `.` component, which names a
+    /// directory; and a file name longer than a file system holds, which a
+    /// data file named at that limit gives its index.
+    pub fn published_paths(&self) -> Result<StorePaths, PluginError> {
+        if self.vpd_path == self.vpdi_path {
+            return Err(PluginError::Init(format!(
+                "data file {} carries the index's extension .vpdi; name it .vpd",
+                self.vpd_path.display()
+            )));
+        }
+        let published = StorePaths {
+            data: link_target(&self.vpd_path)?,
+            index: link_target(&self.vpdi_path)?,
+        };
+        if names_one_file(&published.data, &published.index) {
+            return Err(PluginError::Init(format!(
+                "data file {} and index file {} name one file; a store's two files lie apart",
+                self.vpd_path.display(),
+                self.vpdi_path.display()
+            )));
+        }
+        for (file, path) in [("data", &published.data), ("index", &published.index)] {
+            let Some(name) = path.file_name() else {
+                return Err(PluginError::Init(format!(
+                    "{file} file {} names no file",
+                    path.display()
+                )));
+            };
+            if name.len() > NAME_MAX {
+                return Err(PluginError::Init(format!(
+                    "{file} file {} has a name of {} bytes, more than the {NAME_MAX} a file \
+                     name holds; name the data file shorter",
+                    path.display(),
+                    name.len()
+                )));
+            }
+        }
+        Ok(published)
+    }
+
     /// Write the binary store from sorted records.
     ///
     /// `column_names` is the header row from the source file.
     /// `records` must be sorted by (chr, position), placed and spanned by
-    /// `config`'s columns, which the index records. `source` is the identity
-    /// of the complete table the records were read from, which the index
-    /// records beside the identity of the data file written here, so
-    /// [`BinaryAnnotator::open`] accepts the store for that table's content
-    /// alone.
+    /// `config`'s columns, which the index records. The order is checked: a
+    /// chromosome given twice, or a row whose start lies below the start
+    /// before it in its chromosome, is refused naming the chromosome and the
+    /// start. `source` is the identity of the complete table the records were
+    /// read from, which the index records beside the identity of the data
+    /// file written here, so [`BinaryAnnotator::open`] accepts the store for
+    /// that table's content alone. The index ends with the SHA256 of its own
+    /// bytes.
     ///
     /// A cell or name longer than a length field records, a header or record
     /// of more cells, or a position of more rows than its index entry counts,
     /// is refused naming the row and the count: a truncated length would
     /// corrupt every record after it, and a wrapped count would hide the rows
-    /// past it. A data path with the index's own extension is refused before
-    /// anything is created, since the two files would be one.
+    /// past it.
     ///
-    /// Both files are written whole under other names beside their own
-    /// (`partial_path`) and renamed into place, the data first and the
-    /// index last, after the previous store's index is removed; a path that
-    /// is a symbolic link is written at the file it names. A reader
-    /// finds no index, the previous data without an index, the new data
+    /// Both files are written whole under scratch names beside their own
+    /// (`scratch_path`) and renamed into place, the data first and the index
+    /// last, at the paths of [`Self::published_paths`]. A reader finds the
+    /// previous pair, the previous data without an index, the new data
     /// without an index, or the whole new pair, never a file part written,
     /// and a store a reader has mapped is replaced, not rewritten under it.
-    /// A refused or failed write leaves neither file behind.
+    ///
+    /// The previous store's index is removed once both scratch files are
+    /// written whole, before the data is renamed. A write refused or failed
+    /// before that removal (a column the index cannot record, a path
+    /// [`Self::published_paths`] refuses, a scratch file its directory does
+    /// not take, a row the store cannot record) leaves a previous store
+    /// whole; a write that fails from that removal on, at a rename, leaves
+    /// neither file behind.
+    ///
+    /// Each scratch file lies under this process's exclusive lock from its
+    /// creation to the end of the write. Before either is created, the
+    /// scratch files of the same output that no conversion holds locked,
+    /// which a killed conversion left, are removed (`remove_dead_scratch`).
+    ///
+    /// The rows go through [`Self::stream`], the one encoder of a store, in
+    /// the order `records` gives the chromosomes.
     ///
     /// Returns `(record_count, data_file_size, index_file_size)`.
     pub fn write(
@@ -831,243 +1145,73 @@ impl BinaryStoreWriter {
         config: &TabixConfig,
         source: &ContentIdentity,
     ) -> Result<(u64, u64, u64), PluginError> {
-        let layout = Layout::of(config)?;
-        if self.vpd_path == self.vpdi_path {
-            return Err(PluginError::Init(format!(
-                "data file {} carries the index's extension .vpdi; name it .vpd",
-                self.vpd_path.display()
-            )));
-        }
-        // A path that is a symbolic link is written at the file it names, as
-        // a file created in place is, so the rename leaves the link.
-        let published = Self {
-            vpd_path: link_target(&self.vpd_path),
-            vpdi_path: link_target(&self.vpdi_path),
-        };
-        match std::fs::remove_file(&published.vpdi_path) {
-            Ok(()) => {}
-            Err(e) if e.kind() == io::ErrorKind::NotFound => {}
-            Err(e) => {
-                return Err(PluginError::Init(format!(
-                    "failed to remove index file {}: {e}",
-                    published.vpdi_path.display()
-                )))
-            }
-        }
-        let partial = Self {
-            vpd_path: partial_path(&published.vpd_path),
-            vpdi_path: partial_path(&published.vpdi_path),
-        };
-        let written = partial
-            .write_files(&layout, source, column_names, records)
-            .and_then(|written| {
-                for (from, to) in partial.renames_onto(&published) {
-                    std::fs::rename(from, to).map_err(|e| {
-                        PluginError::Init(format!(
-                            "failed to move {} to {}: {e}",
-                            from.display(),
-                            to.display()
-                        ))
-                    })?;
-                }
-                Ok(written)
-            });
-        if written.is_err() {
-            // The previous data goes with its index, removed above.
-            for path in [
-                &partial.vpd_path,
-                &partial.vpdi_path,
-                &published.vpd_path,
-                &published.vpdi_path,
-            ] {
-                let _ = std::fs::remove_file(path);
-            }
-        }
-        written
-    }
-
-    /// The renames that put `self`'s two files at `published`'s paths, in the
-    /// order they are made: the data, then the index, so no index is in place
-    /// before the data it was written for.
-    fn renames_onto<'a>(&'a self, published: &'a Self) -> [(&'a Path, &'a Path); 2] {
-        [
-            (&self.vpd_path, &published.vpd_path),
-            (&self.vpdi_path, &published.vpdi_path),
-        ]
-    }
-
-    /// Writes the data file, then the index recording `source` and the
-    /// identity of the data file as it lies on disk.
-    fn write_files(
-        &self,
-        layout: &Layout,
-        source: &ContentIdentity,
-        column_names: &[String],
-        records: &[(String, Vec<TabixRecord>)],
-    ) -> Result<(u64, u64, u64), PluginError> {
-        let data_file = std::fs::File::create(&self.vpd_path).map_err(|e| {
-            PluginError::Init(format!(
-                "failed to create data file {}: {e}",
-                self.vpd_path.display()
-            ))
-        })?;
-        let mut data_writer = BufWriter::new(data_file);
-
-        data_writer.write_all(VPD_MAGIC).map_err(write_err)?;
-        data_writer
-            .write_all(&DATA_FORMAT_VERSION.to_le_bytes())
-            .map_err(write_err)?;
-        let column_count = recorded(column_names.len(), "cells", || "the header".to_string())?;
-        data_writer
-            .write_all(&column_count.to_le_bytes())
-            .map_err(write_err)?;
-
-        for (i, name) in column_names.iter().enumerate() {
-            let name_len = recorded(name.len(), "bytes", || format!("column name {i}"))?;
-            data_writer
-                .write_all(&name_len.to_le_bytes())
-                .map_err(write_err)?;
-            data_writer.write_all(name.as_bytes()).map_err(write_err)?;
-        }
-
-        let mut chr_entries: Vec<(String, u64, Vec<PosIndexEntry>)> = Vec::new();
-        let mut total_records: u64 = 0;
-
-        let mut data_offset: u64 = Self::header_size(column_names);
-
+        let mut stream = self.stream(column_names, config)?;
+        stream.chromosomes_as_given = true;
+        let mut given: HashSet<&str> = HashSet::with_capacity(records.len());
         for (chr_name, chr_records) in records {
-            let mut pos_entries: Vec<PosIndexEntry> = Vec::new();
-            let longest_span = chr_records
-                .iter()
-                .map(|record| record.end.saturating_sub(record.start))
-                .max()
-                .unwrap_or(0);
-
-            let mut i = 0;
-            while i < chr_records.len() {
-                let cur_pos = chr_records[i].start;
-                let group_offset = data_offset;
-                let mut count = 0usize;
-
-                while i < chr_records.len() && chr_records[i].start == cur_pos {
-                    let record = &chr_records[i];
-                    let row = || format!("row {chr_name:.32}:{cur_pos}");
-                    data_writer
-                        .write_all(&record.start.to_le_bytes())
-                        .map_err(write_err)?;
-                    data_writer
-                        .write_all(&record.end.to_le_bytes())
-                        .map_err(write_err)?;
-                    let field_count = recorded(record.columns.len(), "cells", row)?;
-                    data_writer
-                        .write_all(&field_count.to_le_bytes())
-                        .map_err(write_err)?;
-
-                    let mut record_size: u64 = 8 + 8 + 2; // position + end + field_count
-                    for (col_index, col) in record.columns.iter().enumerate() {
-                        let col_bytes = col.as_bytes();
-                        let value_len = recorded(col_bytes.len(), "bytes", || {
-                            let name = column_names
-                                .get(col_index)
-                                .map_or(String::new(), |name| format!(" ({name})"));
-                            format!("{} cell {col_index}{name}", row())
-                        })?;
-                        data_writer
-                            .write_all(&value_len.to_le_bytes())
-                            .map_err(write_err)?;
-                        data_writer.write_all(col_bytes).map_err(write_err)?;
-                        record_size += 2 + col_bytes.len() as u64;
-                    }
-
-                    data_offset += record_size;
-                    count += 1;
-                    total_records += 1;
-                    i += 1;
+            if !given.insert(chr_name.as_str()) {
+                return Err(PluginError::Init(format!(
+                    "chromosome {chr_name:.32} is given twice; a store takes each chromosome's \
+                     rows once"
+                )));
+            }
+            // A chromosome without a row keeps its entry in the index.
+            stream.chromosome(chr_name)?;
+            let mut previous: Option<u64> = None;
+            for record in chr_records {
+                let cur_pos = record.start;
+                if let Some(previous) = previous.filter(|&previous| cur_pos < previous) {
+                    return Err(PluginError::Init(format!(
+                        "row {chr_name:.32}:{cur_pos} lies below the start before it, \
+                         {previous}; a store takes a chromosome's rows sorted by start"
+                    )));
                 }
-
-                pos_entries.push(PosIndexEntry {
-                    position: cur_pos,
-                    data_offset: group_offset,
-                    record_count: recorded_rows(count, chr_name, cur_pos)?,
-                });
-            }
-
-            chr_entries.push((chr_name.clone(), longest_span, pos_entries));
-        }
-
-        data_writer.flush().map_err(write_err)?;
-        drop(data_writer);
-        let data_size = data_offset;
-        let data = ContentIdentity::of_file(&self.vpd_path).map_err(|e| {
-            PluginError::Init(format!(
-                "failed to read data file {}: {e}",
-                self.vpd_path.display()
-            ))
-        })?;
-
-        let index_file = std::fs::File::create(&self.vpdi_path).map_err(|e| {
-            PluginError::Init(format!(
-                "failed to create index file {}: {e}",
-                self.vpdi_path.display()
-            ))
-        })?;
-        let mut idx_writer = BufWriter::new(index_file);
-
-        idx_writer.write_all(VPDI_MAGIC).map_err(write_err)?;
-        idx_writer
-            .write_all(&INDEX_FORMAT_VERSION.to_le_bytes())
-            .map_err(write_err)?;
-        layout.write_to(&mut idx_writer).map_err(write_err)?;
-        for identity in [source, &data] {
-            identity.write_to(&mut idx_writer).map_err(write_err)?;
-        }
-        let chr_count = u32::try_from(chr_entries.len()).map_err(|_| {
-            PluginError::Init(format!(
-                "the table has {} chromosomes, more than the {} a store records",
-                chr_entries.len(),
-                u32::MAX
-            ))
-        })?;
-        idx_writer
-            .write_all(&chr_count.to_le_bytes())
-            .map_err(write_err)?;
-
-        for (chr_name, longest_span, pos_entries) in &chr_entries {
-            let name_bytes = chr_name.as_bytes();
-            let name_len = recorded(name_bytes.len(), "bytes", || {
-                format!("the name of chromosome {chr_name:.32}")
-            })?;
-            idx_writer
-                .write_all(&name_len.to_le_bytes())
-                .map_err(write_err)?;
-            idx_writer.write_all(name_bytes).map_err(write_err)?;
-            idx_writer
-                .write_all(&longest_span.to_le_bytes())
-                .map_err(write_err)?;
-            idx_writer
-                .write_all(&(pos_entries.len() as u64).to_le_bytes())
-                .map_err(write_err)?;
-
-            for entry in pos_entries {
-                idx_writer
-                    .write_all(&entry.position.to_le_bytes())
-                    .map_err(write_err)?;
-                idx_writer
-                    .write_all(&entry.data_offset.to_le_bytes())
-                    .map_err(write_err)?;
-                idx_writer
-                    .write_all(&entry.record_count.to_le_bytes())
-                    .map_err(write_err)?;
+                previous = Some(cur_pos);
+                stream.push_row(chr_name, record.start, record.end, &record.columns)?;
             }
         }
+        stream.finish(source)
+    }
 
-        idx_writer.flush().map_err(write_err)?;
-
-        let index_size = std::fs::metadata(&self.vpdi_path)
-            .map(|m| m.len())
-            .unwrap_or(0);
-
-        Ok((total_records, data_size, index_size))
+    /// Begins a store whose rows are given one at a time
+    /// ([`BinaryStoreStream::push_row`]) and whose two files are published
+    /// when the rows end ([`BinaryStoreStream::finish`]), for a table read by
+    /// `config`'s columns under the header row `column_names`.
+    ///
+    /// Refused before anything is created, as [`Self::write`] refuses them: a
+    /// column `config` names that the index cannot record and a pair of paths
+    /// [`Self::published_paths`] refuses. Both scratch files are then created
+    /// and the header is written: a header of more cells, or a column name of
+    /// more bytes, than a length field records is refused before any row is
+    /// taken. Nothing at the published paths changes before
+    /// [`BinaryStoreStream::finish`] publishes the store: a stream refused,
+    /// failed or dropped before then leaves a previous store whole and no
+    /// scratch file.
+    pub fn stream(
+        &self,
+        column_names: &[String],
+        config: &TabixConfig,
+    ) -> Result<BinaryStoreStream, PluginError> {
+        let layout = Layout::of(config)?;
+        let published = self.published_paths()?;
+        let scratch = Scratch::create(&published)?;
+        let stream = BinaryStoreStream {
+            published,
+            scratch,
+            layout,
+            column_names: column_names.to_vec(),
+            chromosomes: Vec::new(),
+            numbers: HashMap::new(),
+            open: None,
+            rows: 0,
+            span_files: 0,
+            chromosomes_as_given: false,
+            failed: false,
+            previous_index_removed: false,
+            published_whole: false,
+        };
+        stream.write_header()?;
+        Ok(stream)
     }
 
     fn header_size(column_names: &[String]) -> u64 {
@@ -1079,24 +1223,1034 @@ impl BinaryStoreWriter {
     }
 }
 
-/// The name a store file is written under before it is renamed to `path`:
-/// `path` with the writing process's id and `.partial` appended, so it lies
-/// in `path`'s directory and two conversions write apart.
-fn partial_path(path: &Path) -> PathBuf {
-    let mut name = path.as_os_str().to_owned();
-    name.push(format!(".{}.partial", std::process::id()));
-    PathBuf::from(name)
+/// A store's two scratch files, created empty beside the files they are
+/// renamed to, each under this process's exclusive lock until `self` is
+/// dropped.
+struct Scratch {
+    paths: StorePaths,
+    data: File,
+    index: File,
 }
 
-/// The file `path` names: the target of a symbolic link at `path`, a target
-/// that does not exist yet included, and `path` itself otherwise.
-fn link_target(path: &Path) -> PathBuf {
-    if !path.is_symlink() {
-        return path.to_path_buf();
+impl Scratch {
+    /// Creates the scratch files of the store published at `published`,
+    /// after removing those a killed conversion of the same output left
+    /// (`remove_dead_scratch`). A file that cannot be created leaves neither.
+    fn create(published: &StorePaths) -> Result<Self, PluginError> {
+        let paths = StorePaths {
+            data: scratch_path(&published.data, DATA_ROLE),
+            index: scratch_path(&published.index, INDEX_ROLE),
+        };
+        remove_dead_numbered(&published.data);
+        remove_dead_scratch(&published.data, DATA_ROLE);
+        remove_dead_scratch(&published.index, INDEX_ROLE);
+        let create = |path: &Path, file: &str| {
+            create_locked(path).map_err(|e| {
+                PluginError::Init(format!(
+                    "failed to create {file} file {}: {e}",
+                    path.display()
+                ))
+            })
+        };
+        let data = create(&paths.data, "data")?;
+        let index = match create(&paths.index, "index") {
+            Ok(index) => index,
+            Err(error) => {
+                let _ = std::fs::remove_file(&paths.data);
+                return Err(error);
+            }
+        };
+        Ok(Self { paths, data, index })
     }
-    std::fs::canonicalize(path).unwrap_or_else(|_| match std::fs::read_link(path) {
-        Ok(target) => path.parent().unwrap_or(Path::new("")).join(target),
+
+    /// Removes both scratch files, whichever of them lie under their scratch
+    /// names.
+    fn remove(&self) {
+        for path in [&self.paths.data, &self.paths.index] {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+}
+
+/// The bytes a chromosome's rows are buffered in on their way to its scratch
+/// file.
+const ROWS_BUFFER: usize = 1 << 16;
+
+/// The bytes of one position entry of an index: a start, the offset of its
+/// first row and the count of its rows.
+const ENTRY_BYTES: usize = 8 + 8 + 4;
+
+/// The bytes of a row before its cells: its start, its end and the count of
+/// its cells.
+const ROW_HEAD_BYTES: usize = 8 + 8 + 2;
+
+/// A store being written one row at a time ([`BinaryStoreWriter::stream`]).
+///
+/// The rows may come in any order. Each is encoded as the store's record and
+/// appended to a scratch file of its chromosome as it is given, and
+/// [`Self::finish`] writes the data file as its header followed by the
+/// chromosomes' rows in the byte order of the chromosomes' names, a
+/// chromosome's rows sorted by start and the rows of one start in the order
+/// they were given, then the index, and renames both into place. A chromosome
+/// given in two separate runs of rows is one chromosome of the store.
+///
+/// What the stream holds in memory does not grow with the rows of a table
+/// whose chromosomes each come sorted by start, as every table `tabix` indexes
+/// has them. Of a row nothing is kept once its call returns. Of a chromosome
+/// the stream keeps its name and a fixed record of counts. The chromosome
+/// being given has one buffer of `ROWS_BUFFER` bytes. A chromosome's
+/// position entries, 20 bytes a distinct start, lie in a scratch file of their
+/// own until the index is written. A chromosome whose rows came out of start
+/// order is put in order at [`Self::finish`] by a stable sort of its rows'
+/// starts and offsets alone, 16 bytes a row of that chromosome, held while
+/// that chromosome is written.
+///
+/// The scratch files lie beside the data file under the names `numbered_path`
+/// gives them, one of rows and one of position entries a chromosome, and only
+/// those of the chromosome being given are open. A chromosome's rows file is
+/// removed once the data file holds its rows, so the scratch files and the
+/// data file together take the store's size and one chromosome's rows more.
+/// Every scratch file is removed when the stream ends, whether it is
+/// finished, fails or is dropped. A previous store at the published paths is
+/// left as it lies until [`Self::finish`] has written both scratch files
+/// whole.
+pub struct BinaryStoreStream {
+    /// The paths the store's two files are published at.
+    published: StorePaths,
+    /// The store's two scratch files, each under the stream's lock.
+    scratch: Scratch,
+    layout: Layout,
+    column_names: Vec<String>,
+    /// The chromosomes, in the order each was first given.
+    chromosomes: Vec<StreamedChromosome>,
+    /// A chromosome's place in `chromosomes`, by its name.
+    numbers: HashMap<String, usize>,
+    /// The scratch files of the chromosome being given.
+    open: Option<OpenChromosome>,
+    /// The rows taken.
+    rows: u64,
+    /// The span scratch paths handed out ([`Self::span_scratch_path`]).
+    span_files: usize,
+    /// Whether the chromosomes are stored in the order they were given, as
+    /// [`BinaryStoreWriter::write`] stores them, and not by name.
+    chromosomes_as_given: bool,
+    /// Whether a call failed, after which no row is taken and nothing is
+    /// published.
+    failed: bool,
+    /// Whether the previous store's index was removed, which begins the
+    /// publication.
+    previous_index_removed: bool,
+    /// Whether both files were renamed into place.
+    published_whole: bool,
+}
+
+/// What a stream keeps of one chromosome.
+struct StreamedChromosome {
+    name: String,
+    /// The rows given.
+    rows: u64,
+    /// The bytes of its rows, the length of its rows scratch file.
+    bytes: u64,
+    /// The largest `end - start` of its rows.
+    longest_span: u64,
+    /// Whether no row came below the start of the row before it.
+    in_order: bool,
+    /// The start of the last row given.
+    last_start: u64,
+    /// The position entries in its entries scratch file.
+    entries: u64,
+    /// Where the rows at `last_start` begin among the chromosome's rows.
+    group_offset: u64,
+    /// The rows at `last_start`.
+    group_rows: u64,
+    /// Where the chromosome's rows begin in the data file.
+    data_offset: u64,
+}
+
+/// The scratch files of the chromosome a stream is being given.
+struct OpenChromosome {
+    /// The chromosome's place in the stream's list.
+    number: usize,
+    rows: BufWriter<File>,
+    /// The position entries, while the chromosome's rows come in order.
+    starts: Option<BufWriter<File>>,
+}
+
+impl BinaryStoreStream {
+    /// Writes the data file's header: the magic, the version and the column
+    /// names.
+    fn write_header(&self) -> Result<(), PluginError> {
+        let mut header = Vec::new();
+        header.extend_from_slice(VPD_MAGIC);
+        header.extend_from_slice(&DATA_FORMAT_VERSION.to_le_bytes());
+        let column_count = recorded(self.column_names.len(), "cells", || {
+            "the header".to_string()
+        })?;
+        header.extend_from_slice(&column_count.to_le_bytes());
+        for (i, name) in self.column_names.iter().enumerate() {
+            let name_len = recorded(name.len(), "bytes", || format!("column name {i}"))?;
+            header.extend_from_slice(&name_len.to_le_bytes());
+            header.extend_from_slice(name.as_bytes());
+        }
+        (&self.scratch.data).write_all(&header).map_err(write_err)
+    }
+
+    /// The chromosomes given so far.
+    pub fn chromosomes(&self) -> usize {
+        self.chromosomes.len()
+    }
+
+    /// The path of a scratch file the caller keeps for itself while the
+    /// stream is open, the `number`th of them: beside the store's data file,
+    /// under the store's scratch names in the role `spans`. The caller
+    /// creates, writes and reads the file. The stream removes every such file
+    /// when it ends, at [`Self::finish`] before the store is published or
+    /// when it is dropped, and a later conversion of the same output removes
+    /// those a killed conversion left.
+    pub fn span_scratch_path(&mut self, number: usize) -> PathBuf {
+        self.span_files = self.span_files.max(number.saturating_add(1));
+        numbered_path(&self.published.data, SPANS_ROLE, number)
+    }
+
+    /// Takes one row: its chromosome, its span `start..=end` and its cells.
+    ///
+    /// A row of more cells, or a cell of more bytes, than a length field
+    /// records is refused naming the row, as is a start with more rows than
+    /// its index entry counts. After a refusal or a failure the stream takes
+    /// no further row and [`Self::finish`] publishes nothing.
+    pub fn push_row<S: AsRef<str>>(
+        &mut self,
+        chr: &str,
+        start: u64,
+        end: u64,
+        cells: &[S],
+    ) -> Result<(), PluginError> {
+        self.live()?;
+        let taken = self.take_row(chr, start, end, cells);
+        self.failed = taken.is_err();
+        taken
+    }
+
+    /// Refuses a call on a stream an earlier call failed.
+    fn live(&self) -> Result<(), PluginError> {
+        if self.failed {
+            return Err(PluginError::Init(
+                "the store's stream failed at an earlier call and takes no more".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    fn take_row<S: AsRef<str>>(
+        &mut self,
+        chr: &str,
+        start: u64,
+        end: u64,
+        cells: &[S],
+    ) -> Result<(), PluginError> {
+        self.chromosome(chr)?;
+        let Some(open) = self.open.as_mut() else {
+            return Err(write_err(io::Error::other("no chromosome is open")));
+        };
+        let chromosome = &mut self.chromosomes[open.number];
+
+        if chromosome.in_order && chromosome.rows > 0 && start < chromosome.last_start {
+            // The entries written so far follow the order the rows came in,
+            // which is not the store's from this row on.
+            chromosome.in_order = false;
+            open.starts = None;
+            let _ = std::fs::remove_file(numbered_path(
+                &self.published.data,
+                STARTS_ROLE,
+                open.number,
+            ));
+        }
+        if chromosome.in_order {
+            if chromosome.rows > 0 && start != chromosome.last_start {
+                let Some(starts) = open.starts.as_mut() else {
+                    return Err(write_err(io::Error::other("no entries file is open")));
+                };
+                write_entry(
+                    starts,
+                    chromosome.last_start,
+                    chromosome.group_offset,
+                    chromosome.last_group_rows()?,
+                )?;
+                chromosome.entries += 1;
+                chromosome.group_offset = chromosome.bytes;
+                chromosome.group_rows = 0;
+            }
+            chromosome.group_rows += 1;
+        }
+
+        let row = || format!("row {chr:.32}:{start}");
+        let field_count = recorded(cells.len(), "cells", row)?;
+        let rows = &mut open.rows;
+        rows.write_all(&start.to_le_bytes()).map_err(write_err)?;
+        rows.write_all(&end.to_le_bytes()).map_err(write_err)?;
+        rows.write_all(&field_count.to_le_bytes())
+            .map_err(write_err)?;
+        let mut row_bytes = ROW_HEAD_BYTES as u64;
+        for (col_index, cell) in cells.iter().enumerate() {
+            let cell = cell.as_ref().as_bytes();
+            let value_len = recorded(cell.len(), "bytes", || {
+                let name = self
+                    .column_names
+                    .get(col_index)
+                    .map_or(String::new(), |name| format!(" ({name})"));
+                format!("{} cell {col_index}{name}", row())
+            })?;
+            rows.write_all(&value_len.to_le_bytes())
+                .map_err(write_err)?;
+            rows.write_all(cell).map_err(write_err)?;
+            row_bytes += 2 + cell.len() as u64;
+        }
+
+        chromosome.rows += 1;
+        chromosome.bytes += row_bytes;
+        chromosome.last_start = start;
+        chromosome.longest_span = chromosome.longest_span.max(end.saturating_sub(start));
+        self.rows += 1;
+        Ok(())
+    }
+
+    /// Makes `name` the chromosome being given: closes the scratch files of
+    /// the one before it and opens those of `name`, created for a chromosome
+    /// not given before and appended to otherwise.
+    fn chromosome(&mut self, name: &str) -> Result<(), PluginError> {
+        if let Some(open) = &self.open {
+            if self.chromosomes[open.number].name == name {
+                return Ok(());
+            }
+        }
+        self.close_open()?;
+        let known = self.numbers.get(name).copied();
+        let number = known.unwrap_or(self.chromosomes.len());
+        let fresh = known.is_none();
+        if fresh {
+            self.chromosomes.push(StreamedChromosome {
+                name: name.to_string(),
+                rows: 0,
+                bytes: 0,
+                longest_span: 0,
+                in_order: true,
+                last_start: 0,
+                entries: 0,
+                group_offset: 0,
+                group_rows: 0,
+                data_offset: 0,
+            });
+            self.numbers.insert(name.to_string(), number);
+        }
+        let data = &self.published.data;
+        let rows = open_numbered(&numbered_path(data, ROWS_ROLE, number), fresh)?;
+        let starts = if self.chromosomes[number].in_order {
+            let starts = open_numbered(&numbered_path(data, STARTS_ROLE, number), fresh)?;
+            Some(BufWriter::new(starts))
+        } else {
+            None
+        };
+        self.open = Some(OpenChromosome {
+            number,
+            rows: BufWriter::with_capacity(ROWS_BUFFER, rows),
+            starts,
+        });
+        Ok(())
+    }
+
+    /// Writes out and closes the scratch files of the chromosome being given.
+    fn close_open(&mut self) -> Result<(), PluginError> {
+        let Some(mut open) = self.open.take() else {
+            return Ok(());
+        };
+        open.rows.flush().map_err(write_err)?;
+        if let Some(starts) = &mut open.starts {
+            starts.flush().map_err(write_err)?;
+        }
+        Ok(())
+    }
+
+    /// Ends the store: writes the data file from the chromosomes' rows, then
+    /// the index recording `source`, the identity of the complete table the
+    /// rows were read from, beside the identity of the data file as it lies
+    /// on disk, removes the previous store's index and renames both into
+    /// place, the data first. A failure before that removal leaves a
+    /// previous store whole; one after it leaves neither file.
+    ///
+    /// Returns `(record_count, data_file_size, index_file_size)`, as
+    /// [`BinaryStoreWriter::write`] does.
+    pub fn finish(mut self, source: &ContentIdentity) -> Result<(u64, u64, u64), PluginError> {
+        self.live()?;
+        let written = self.publish(source)?;
+        self.published_whole = true;
+        Ok(written)
+    }
+
+    fn publish(&mut self, source: &ContentIdentity) -> Result<(u64, u64, u64), PluginError> {
+        self.close_open()?;
+        let mut order: Vec<usize> = (0..self.chromosomes.len()).collect();
+        if !self.chromosomes_as_given {
+            order.sort_by(|&a, &b| self.chromosomes[a].name.cmp(&self.chromosomes[b].name));
+        }
+        for chromosome in &self.chromosomes {
+            if chromosome.ends_in_an_open_group() {
+                chromosome.last_group_rows()?;
+            }
+        }
+
+        let mut data_offset = BinaryStoreWriter::header_size(&self.column_names);
+        for &number in &order {
+            self.chromosomes[number].data_offset = data_offset;
+            let rows_path = numbered_path(&self.published.data, ROWS_ROLE, number);
+            if self.chromosomes[number].in_order {
+                self.copy_rows(&rows_path, number)?;
+            } else {
+                self.copy_rows_by_start(&rows_path, number)?;
+            }
+            let _ = std::fs::remove_file(&rows_path);
+            data_offset += self.chromosomes[number].bytes;
+        }
+        let data_size = data_offset;
+        // Read back through the handle that holds the file's lock.
+        let data = ContentIdentity::of_handle(&self.scratch.data).map_err(|e| {
+            PluginError::Init(format!(
+                "failed to read data file {}: {e}",
+                self.scratch.paths.data.display()
+            ))
+        })?;
+
+        let mut idx_writer = BufWriter::new(HashingWriter::new(&self.scratch.index));
+        idx_writer.write_all(VPDI_MAGIC).map_err(write_err)?;
+        idx_writer
+            .write_all(&INDEX_FORMAT_VERSION.to_le_bytes())
+            .map_err(write_err)?;
+        self.layout.write_to(&mut idx_writer).map_err(write_err)?;
+        for identity in [source, &data] {
+            identity.write_to(&mut idx_writer).map_err(write_err)?;
+        }
+        let chr_count = u32::try_from(order.len()).map_err(|_| {
+            PluginError::Init(format!(
+                "the table has {} chromosomes, more than the {} a store records",
+                order.len(),
+                u32::MAX
+            ))
+        })?;
+        idx_writer
+            .write_all(&chr_count.to_le_bytes())
+            .map_err(write_err)?;
+
+        for &number in &order {
+            let chromosome = &self.chromosomes[number];
+            let chr_name = &chromosome.name;
+            let name_bytes = chr_name.as_bytes();
+            let name_len = recorded(name_bytes.len(), "bytes", || {
+                format!("the name of chromosome {chr_name:.32}")
+            })?;
+            idx_writer
+                .write_all(&name_len.to_le_bytes())
+                .map_err(write_err)?;
+            idx_writer.write_all(name_bytes).map_err(write_err)?;
+            idx_writer
+                .write_all(&chromosome.longest_span.to_le_bytes())
+                .map_err(write_err)?;
+            let open_group = chromosome.ends_in_an_open_group();
+            let position_count = chromosome.entries + u64::from(open_group);
+            idx_writer
+                .write_all(&position_count.to_le_bytes())
+                .map_err(write_err)?;
+
+            let starts_path = numbered_path(&self.published.data, STARTS_ROLE, number);
+            if chromosome.entries > 0 {
+                let starts = File::open(&starts_path).map_err(|e| scratch_err(&starts_path, e))?;
+                let mut starts = BufReader::new(starts);
+                let mut entry = [0u8; ENTRY_BYTES];
+                for _ in 0..chromosome.entries {
+                    starts.read_exact(&mut entry).map_err(read_err)?;
+                    let (position, rest) = entry.split_at(8);
+                    let (offset, count) = rest.split_at(8);
+                    let offset = u64::from_le_bytes(offset.try_into().unwrap_or_default());
+                    idx_writer.write_all(position).map_err(write_err)?;
+                    idx_writer
+                        .write_all(&(chromosome.data_offset + offset).to_le_bytes())
+                        .map_err(write_err)?;
+                    idx_writer.write_all(count).map_err(write_err)?;
+                }
+            }
+            if open_group {
+                write_entry(
+                    &mut idx_writer,
+                    chromosome.last_start,
+                    chromosome.data_offset + chromosome.group_offset,
+                    chromosome.last_group_rows()?,
+                )?;
+            }
+            let _ = std::fs::remove_file(&starts_path);
+        }
+
+        let hashed = idx_writer
+            .into_inner()
+            .map_err(|e| write_err(e.into_error()))?;
+        let (mut index_file, digest) = hashed.finish();
+        index_file.write_all(&digest).map_err(write_err)?;
+        let index_size = self.scratch.index.metadata().map(|m| m.len()).unwrap_or(0);
+
+        // A numbered scratch file is another conversion's to remove once the
+        // data scratch file is renamed, so none outlives that name.
+        self.remove_span_files();
+        // The previous index goes before the data is renamed, so it never
+        // stands over data it was not written for.
+        match std::fs::remove_file(&self.published.index) {
+            Ok(()) => {}
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+            Err(e) => {
+                return Err(PluginError::Init(format!(
+                    "failed to remove index file {}: {e}",
+                    self.published.index.display()
+                )));
+            }
+        }
+        self.previous_index_removed = true;
+        for (from, to) in self.scratch.paths.renames_onto(&self.published) {
+            std::fs::rename(from, to).map_err(|e| {
+                PluginError::Init(format!(
+                    "failed to move {} to {}: {e}",
+                    from.display(),
+                    to.display()
+                ))
+            })?;
+        }
+        Ok((self.rows, data_size, index_size))
+    }
+
+    /// Appends to the data file the rows of chromosome `number`, which came
+    /// in the store's order, from its rows scratch file.
+    fn copy_rows(&self, rows_path: &Path, number: usize) -> Result<(), PluginError> {
+        let written = self.chromosomes[number].bytes;
+        let mut rows = File::open(rows_path).map_err(|e| scratch_err(rows_path, e))?;
+        let copied = io::copy(&mut rows, &mut &self.scratch.data).map_err(write_err)?;
+        if copied != written {
+            return Err(cut_short(rows_path));
+        }
+        Ok(())
+    }
+
+    /// Appends to the data file the rows of chromosome `number`, which came
+    /// out of start order, sorted by start with the rows of one start in the
+    /// order they came, and writes the chromosome's position entries to its
+    /// entries scratch file. The rows' starts and offsets are sorted, the
+    /// offsets ascending in the order the rows came, and each row is copied
+    /// from the mapping of the rows scratch file.
+    fn copy_rows_by_start(&mut self, rows_path: &Path, number: usize) -> Result<(), PluginError> {
+        let file = File::open(rows_path).map_err(|e| scratch_err(rows_path, e))?;
+        // SAFETY: the scratch file is this stream's own and is written no
+        // more once its chromosome is closed.
+        let rows = unsafe { Mmap::map(&file) }.map_err(|e| scratch_err(rows_path, e))?;
+
+        let chromosome = &self.chromosomes[number];
+        let mut keys: Vec<(u64, usize)> =
+            Vec::with_capacity(usize::try_from(chromosome.rows).unwrap_or(0));
+        let mut at = 0;
+        while at < rows.len() {
+            let (start, length) = row_at(&rows, at).ok_or_else(|| cut_short(rows_path))?;
+            keys.push((start, at));
+            at += length;
+        }
+        if keys.len() as u64 != chromosome.rows || rows.len() as u64 != chromosome.bytes {
+            return Err(cut_short(rows_path));
+        }
+        keys.sort_by_key(|&(start, _)| start);
+
+        let starts_path = numbered_path(&self.published.data, STARTS_ROLE, number);
+        let mut starts = BufWriter::new(open_numbered(&starts_path, true)?);
+        let mut data = BufWriter::with_capacity(ROWS_BUFFER, &self.scratch.data);
+        let mut entries = 0;
+        let mut offset = 0;
+        // The rows at the start being written: the start, where they begin
+        // among the chromosome's rows, and their count.
+        let mut group: Option<(u64, u64, u64)> = None;
+        for &(start, at) in &keys {
+            let (_, length) = row_at(&rows, at).ok_or_else(|| cut_short(rows_path))?;
+            match &mut group {
+                Some((position, _, count)) if *position == start => *count += 1,
+                _ => {
+                    if let Some((position, begins, count)) = group.replace((start, offset, 1)) {
+                        let count = entry_rows(count, &chromosome.name, position)?;
+                        write_entry(&mut starts, position, begins, count)?;
+                        entries += 1;
+                    }
+                }
+            }
+            data.write_all(&rows[at..at + length]).map_err(write_err)?;
+            offset += length as u64;
+        }
+        if let Some((position, begins, count)) = group {
+            let count = entry_rows(count, &chromosome.name, position)?;
+            write_entry(&mut starts, position, begins, count)?;
+            entries += 1;
+        }
+        data.flush().map_err(write_err)?;
+        starts.flush().map_err(write_err)?;
+        drop(data);
+        self.chromosomes[number].entries = entries;
+        Ok(())
+    }
+
+    /// Removes the scratch files the caller was handed paths for.
+    fn remove_span_files(&self) {
+        for number in 0..self.span_files {
+            let _ = std::fs::remove_file(numbered_path(&self.published.data, SPANS_ROLE, number));
+        }
+    }
+}
+
+impl Drop for BinaryStoreStream {
+    /// Removes what a stream that did not publish its store left: every
+    /// scratch file and, where the previous store's index was already
+    /// removed for the publication, whichever store file lies at the
+    /// published paths. A stream that ends before that removal leaves the
+    /// previous store whole.
+    fn drop(&mut self) {
+        if self.published_whole {
+            return;
+        }
+        self.open = None;
+        for number in 0..self.chromosomes.len() {
+            for role in [ROWS_ROLE, STARTS_ROLE] {
+                let _ = std::fs::remove_file(numbered_path(&self.published.data, role, number));
+            }
+        }
+        self.remove_span_files();
+        self.scratch.remove();
+        if self.previous_index_removed {
+            for path in [&self.published.data, &self.published.index] {
+                let _ = std::fs::remove_file(path);
+            }
+        }
+    }
+}
+
+impl StreamedChromosome {
+    /// Whether the rows at the last start given are in no position entry of
+    /// the entries scratch file: a chromosome in order writes a start's entry
+    /// when a row of a later start comes.
+    fn ends_in_an_open_group(&self) -> bool {
+        self.in_order && self.rows > 0
+    }
+
+    /// The count of the rows at the last start given, as an index entry
+    /// records it.
+    fn last_group_rows(&self) -> Result<u32, PluginError> {
+        entry_rows(self.group_rows, &self.name, self.last_start)
+    }
+}
+
+/// `count`, the rows at `chr:pos`, as an index entry records it
+/// (`recorded_rows`).
+fn entry_rows(count: u64, chr: &str, pos: u64) -> Result<u32, PluginError> {
+    recorded_rows(usize::try_from(count).unwrap_or(usize::MAX), chr, pos)
+}
+
+/// Writes one position entry: the start, the offset of its first row and the
+/// count of its rows.
+fn write_entry(
+    writer: &mut impl IoWrite,
+    position: u64,
+    offset: u64,
+    count: u32,
+) -> Result<(), PluginError> {
+    let mut entry = [0u8; ENTRY_BYTES];
+    entry[..8].copy_from_slice(&position.to_le_bytes());
+    entry[8..16].copy_from_slice(&offset.to_le_bytes());
+    entry[16..].copy_from_slice(&count.to_le_bytes());
+    writer.write_all(&entry).map_err(write_err)
+}
+
+/// The start and the length in bytes of the row encoded at `at` in `rows`,
+/// the bytes of a rows scratch file; `None` where the bytes end inside it.
+fn row_at(rows: &[u8], at: usize) -> Option<(u64, usize)> {
+    let head = rows.get(at..at.checked_add(ROW_HEAD_BYTES)?)?;
+    let start = u64::from_le_bytes(head[..8].try_into().ok()?);
+    let cells = u16::from_le_bytes(head[16..].try_into().ok()?);
+    let mut end = at + ROW_HEAD_BYTES;
+    for _ in 0..cells {
+        let length = rows.get(end..end.checked_add(2)?)?;
+        let length = usize::from(u16::from_le_bytes(length.try_into().ok()?));
+        end = end.checked_add(2 + length)?;
+    }
+    (end <= rows.len()).then_some((start, end - at))
+}
+
+/// Opens a numbered scratch file for writing at its end: created empty when
+/// `fresh`, replacing whatever a killed conversion of this process id left
+/// under the name.
+fn open_numbered(path: &Path, fresh: bool) -> Result<File, PluginError> {
+    let opened = if fresh {
+        File::create(path)
+    } else {
+        File::options().append(true).open(path)
+    };
+    opened.map_err(|e| scratch_err(path, e))
+}
+
+fn scratch_err(path: &Path, e: io::Error) -> PluginError {
+    PluginError::Init(format!(
+        "failed to open scratch file {}: {e}",
+        path.display()
+    ))
+}
+
+/// The failure of a scratch file that does not hold the rows written to it.
+fn cut_short(path: &Path) -> PluginError {
+    PluginError::Init(format!(
+        "scratch file {} does not hold the rows written to it",
+        path.display()
+    ))
+}
+
+/// The longest file name the common file systems take, in bytes.
+const NAME_MAX: usize = 255;
+/// The most symbolic links followed from one path, the bound Linux puts on a
+/// path's resolution.
+const LINK_HOPS: usize = 40;
+/// How often a scratch file is created again after a conversion clearing
+/// leftovers removed it before it was locked.
+const SCRATCH_ATTEMPTS: usize = 16;
+/// The role the scratch file of a store's data file is named for.
+const DATA_ROLE: &str = "data";
+/// The role the scratch file of a store's index is named for.
+const INDEX_ROLE: &str = "index";
+/// The role the scratch files of the chromosomes' rows are named for.
+const ROWS_ROLE: &str = "rows";
+/// The role the scratch files of the chromosomes' position entries are named
+/// for.
+const STARTS_ROLE: &str = "starts";
+/// The role the scratch files a stream's caller keeps are named for
+/// ([`BinaryStoreStream::span_scratch_path`]).
+const SPANS_ROLE: &str = "spans";
+/// The roles of the numbered scratch files, of which a conversion keeps one
+/// a chromosome.
+const NUMBERED_ROLES: [&str; 3] = [ROWS_ROLE, STARTS_ROLE, SPANS_ROLE];
+
+/// What the name of a scratch file ends with: the writing process's id, so
+/// two conversions write apart, and the file's role, so the data's scratch
+/// name and the index's differ where both are cut to one stem.
+fn scratch_suffix(pid: u32, role: &str) -> String {
+    format!(".{pid}.{role}.partial")
+}
+
+/// What the name of every scratch file of the store file named `name`
+/// begins with: `name`, cut at a character boundary where the longest suffix,
+/// a ten-digit process id's, would not fit after it in a file name. The stem
+/// holds no process id, so a conversion finds the files another one left.
+fn scratch_stem(name: &OsStr, role: &str) -> OsString {
+    let room = NAME_MAX.saturating_sub(scratch_suffix(u32::MAX, role).len());
+    if name.len() <= room {
+        return name.to_owned();
+    }
+    let lossy = name.to_string_lossy();
+    let mut end = room.min(lossy.len());
+    while !lossy.is_char_boundary(end) {
+        end -= 1;
+    }
+    OsString::from(&lossy[..end])
+}
+
+/// The name a store file is written under before it is renamed to
+/// `published`: in the same directory, the file's `scratch_stem` followed by
+/// this process's `scratch_suffix`.
+fn scratch_path(published: &Path, role: &str) -> PathBuf {
+    scratch_path_of(published, role, std::process::id())
+}
+
+/// [`scratch_path`] as the process `pid` names the file.
+fn scratch_path_of(published: &Path, role: &str, pid: u32) -> PathBuf {
+    let mut name = scratch_stem(published.file_name().unwrap_or_default(), role);
+    name.push(scratch_suffix(pid, role));
+    published.with_file_name(name)
+}
+
+/// The role part of a numbered scratch file's name: its role and its number
+/// within that role.
+fn numbered_role(role: &str, number: impl std::fmt::Display) -> String {
+    format!("{role}.{number}")
+}
+
+/// What the name of every numbered scratch file of the data file named `name`
+/// begins with: its `scratch_stem` under the longest role and number such a
+/// file can carry, so the files of every role and number share one stem. A
+/// name that stem cuts is cut shorter and followed by sixteen hexadecimal
+/// digits of the SHA256 of the whole name: two data files whose names share
+/// the cut part have their numbered files under two stems, where one stem
+/// would have a conversion of either take the other's files for its own.
+fn numbered_stem(name: &OsStr) -> OsString {
+    let longest = NUMBERED_ROLES
+        .iter()
+        .max_by_key(|role| role.len())
+        .map_or(String::new(), |role| numbered_role(role, u64::MAX));
+    let stem = scratch_stem(name, &longest);
+    if stem == name {
+        return stem;
+    }
+    let digest = HashingReader::new(name.as_encoded_bytes())
+        .digest_to_end()
+        .unwrap_or_default();
+    let tag = format!(".{:.16}", hex(&digest));
+    // The tag is counted with the role part, so the stem leaves room for it.
+    let mut stem = scratch_stem(name, &format!("{longest}{tag}"));
+    stem.push(tag);
+    stem
+}
+
+/// The name of the `number`th scratch file of `role`, one of
+/// [`NUMBERED_ROLES`], that a conversion keeps beside the data file published
+/// at `published_data`: the `numbered_stem` of the data file's name followed
+/// by this process's `scratch_suffix` under the role and the number.
+fn numbered_path(published_data: &Path, role: &str, number: usize) -> PathBuf {
+    let mut name = numbered_stem(published_data.file_name().unwrap_or_default());
+    name.push(scratch_suffix(
+        std::process::id(),
+        &numbered_role(role, number),
+    ));
+    published_data.with_file_name(name)
+}
+
+/// The process id in `name` when it is a numbered scratch name over `stem`:
+/// the stem, a process id of one to ten digits, one of [`NUMBERED_ROLES`], a
+/// number of one to twenty digits and `.partial`.
+fn numbered_scratch_pid(name: &OsStr, stem: &OsStr) -> Option<u32> {
+    let digits = |text: &[u8], most: usize| {
+        (1..=most).contains(&text.len()) && text.iter().all(u8::is_ascii_digit)
+    };
+    let rest = name
+        .as_encoded_bytes()
+        .strip_prefix(stem.as_encoded_bytes())?
+        .strip_prefix(b".")?
+        .strip_suffix(b".partial")?;
+    let mut parts = rest.split(|byte| *byte == b'.');
+    let (pid, role, number) = (parts.next()?, parts.next()?, parts.next()?);
+    let known = NUMBERED_ROLES.iter().any(|known| known.as_bytes() == role);
+    if parts.next().is_some() || !known || !digits(pid, 10) || !digits(number, 20) {
+        return None;
+    }
+    std::str::from_utf8(pid).ok()?.parse().ok()
+}
+
+/// Removes the numbered scratch files a killed conversion left beside the
+/// data file published at `published_data`. A numbered file is closed while
+/// another chromosome is given and so lies under no lock of its own: it is
+/// its conversion's while that conversion holds its data scratch file locked
+/// (`conversion_holds`), and is removed otherwise.
+fn remove_dead_numbered(published_data: &Path) {
+    let Some(name) = published_data.file_name() else {
+        return;
+    };
+    let Ok(listing) = std::fs::read_dir(directory_of(published_data)) else {
+        return;
+    };
+    let stem = numbered_stem(name);
+    let mut held: HashMap<u32, bool> = HashMap::new();
+    for entry in listing.flatten() {
+        let Some(pid) = numbered_scratch_pid(&entry.file_name(), &stem) else {
+            continue;
+        };
+        let path = entry.path();
+        if !std::fs::symlink_metadata(&path).is_ok_and(|found| found.is_file()) {
+            continue;
+        }
+        let held = held
+            .entry(pid)
+            .or_insert_with(|| conversion_holds(published_data, pid));
+        if !*held {
+            let _ = std::fs::remove_file(&path);
+        }
+    }
+}
+
+/// Whether a conversion of process `pid` holds the data scratch file of the
+/// store published at `published_data`: the file is there and this process
+/// cannot lock it. A file this process locks is a killed conversion's, and
+/// one that cannot be opened for another reason than its absence, or lies on
+/// a file system that grants no lock, counts as held.
+fn conversion_holds(published_data: &Path, pid: u32) -> bool {
+    match File::open(scratch_path_of(published_data, DATA_ROLE, pid)) {
+        Ok(file) => file.try_lock().is_err(),
+        Err(error) => error.kind() != io::ErrorKind::NotFound,
+    }
+}
+
+/// Whether `name` is a scratch name of the store file whose scratch stem is
+/// `stem`, in the role `role`: the stem, a process id of one to ten digits
+/// and the role's ending.
+fn is_scratch_name(name: &OsStr, stem: &OsStr, role: &str) -> bool {
+    let ending = format!(".{role}.partial");
+    name.as_encoded_bytes()
+        .strip_prefix(stem.as_encoded_bytes())
+        .and_then(|rest| rest.strip_prefix(b"."))
+        .and_then(|rest| rest.strip_suffix(ending.as_bytes()))
+        .is_some_and(|pid| (1..=10).contains(&pid.len()) && pid.iter().all(u8::is_ascii_digit))
+}
+
+/// Removes the scratch files a killed conversion left of the store file
+/// published at `published`: every regular file of its directory named as a
+/// scratch file of it that this process can lock (`remove_if_dead`). A
+/// scratch file under the lock of the conversion writing it stays, and so
+/// does one on a file system that grants no lock, where a live file cannot
+/// be told from a dead one.
+fn remove_dead_scratch(published: &Path, role: &str) {
+    let Some(name) = published.file_name() else {
+        return;
+    };
+    let Ok(listing) = std::fs::read_dir(directory_of(published)) else {
+        return;
+    };
+    let stem = scratch_stem(name, role);
+    for entry in listing.flatten() {
+        if !is_scratch_name(&entry.file_name(), &stem, role) {
+            continue;
+        }
+        let path = entry.path();
+        if !std::fs::symlink_metadata(&path).is_ok_and(|found| found.is_file()) {
+            continue;
+        }
+        let Ok(file) = File::open(&path) else {
+            continue;
+        };
+        remove_if_dead(&path, &file);
+    }
+}
+
+/// Removes the scratch file at `path` when `file`, opened from it, takes this
+/// process's lock while `path` names it. Between the open and the lock
+/// another sweep can remove the file and a conversion create its own under
+/// the same name: that file lies under its writer's lock, which a lock on
+/// the removed file does not meet, so a name that names another file stays.
+fn remove_if_dead(path: &Path, file: &File) {
+    if file.try_lock().is_ok() && names_open_file(path, file) {
+        // Removed under the lock, so a conversion creating this name
+        // waits for the lock and then finds the name gone.
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+/// Creates the scratch file at `path`, empty and under this process's
+/// exclusive lock, which the returned handle holds until it closes. The lock
+/// is waited for, and the file is created again when `path` names another
+/// file, or none, once the lock is held: a conversion clearing leftovers can
+/// lock and remove the file between its creation and its lock here, and a
+/// conversion writing under the same name, one of the same process id, is
+/// waited for. On a file system that grants no lock the file is written
+/// unlocked.
+fn create_locked(path: &Path) -> io::Result<File> {
+    for _ in 0..SCRATCH_ATTEMPTS {
+        let file = File::options()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(path)?;
+        if file.lock().is_err() || names_open_file(path, &file) {
+            file.set_len(0)?;
+            return Ok(file);
+        }
+    }
+    Err(io::Error::other(
+        "the file was removed each time it was created",
+    ))
+}
+
+/// Whether `path` names the open `file`: by device and inode on Unix, by the
+/// path's presence elsewhere.
+fn names_open_file(path: &Path, file: &File) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        match (std::fs::symlink_metadata(path), file.metadata()) {
+            (Ok(named), Ok(open)) => (named.dev(), named.ino()) == (open.dev(), open.ino()),
+            _ => false,
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = file;
+        path.exists()
+    }
+}
+
+/// The directory `path` lies in: its parent, or the current directory for a
+/// bare file name.
+fn directory_of(path: &Path) -> &Path {
+    match path.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => parent,
+        _ => Path::new("."),
+    }
+}
+
+/// `path` with its directory resolved to its canonical form, where that
+/// directory exists; `path` as it is otherwise.
+fn in_resolved_directory(path: &Path) -> PathBuf {
+    let Some(name) = path.file_name() else {
+        return path.to_path_buf();
+    };
+    match std::fs::canonicalize(directory_of(path)) {
+        Ok(directory) => directory.join(name),
         Err(_) => path.to_path_buf(),
+    }
+}
+
+/// Whether `a` and `b` are one name: equal as given, or equal once the
+/// directory of each is resolved, as two spellings of one directory entry are.
+fn names_one_file(a: &Path, b: &Path) -> bool {
+    a == b || in_resolved_directory(a) == in_resolved_directory(b)
+}
+
+/// Whether `target`, the text of a symbolic link, ends in a separator or a
+/// `.` component. Such a text names a directory, and `Path::file_name` reads
+/// past both to the name before them, which can itself be a link.
+fn ends_as_a_directory(target: &Path) -> bool {
+    let is_separator = |byte: &u8| std::path::is_separator(char::from(*byte));
+    let text = target.as_os_str().as_encoded_bytes();
+    let last = text.rsplit(is_separator).next().unwrap_or_default();
+    last.is_empty() || last == b"."
+}
+
+/// The file `path` names: `path` itself or, where a symbolic link lies
+/// there, the name at the end of the chain of links, each target read
+/// against its link's directory, whether or not a file lies at that last
+/// name. A chain of more than [`LINK_HOPS`] links, a loop included, is
+/// refused, and so is a link whose target ends in a separator or a `.`
+/// component (`ends_as_a_directory`): a file renamed to the name read from
+/// such a target would replace a link lying there.
+fn link_target(path: &Path) -> Result<PathBuf, PluginError> {
+    let mut named = path.to_path_buf();
+    let mut hops = 0;
+    while named.is_symlink() {
+        if hops == LINK_HOPS {
+            return Err(PluginError::Init(format!(
+                "{} is a chain of more than {LINK_HOPS} symbolic links",
+                path.display()
+            )));
+        }
+        hops += 1;
+        let target = std::fs::read_link(&named).map_err(|e| {
+            PluginError::Init(format!(
+                "failed to read the symbolic link {}: {e}",
+                named.display()
+            ))
+        })?;
+        if ends_as_a_directory(&target) {
+            return Err(PluginError::Init(format!(
+                "the symbolic link {} names {}, which ends in a separator or `.` and so names \
+                 a directory; a store's file is no directory",
+                named.display(),
+                target.display()
+            )));
+        }
+        named = directory_of(&named).join(target);
+    }
+    Ok(if hops == 0 {
+        named
+    } else {
+        in_resolved_directory(&named)
     })
 }
 
@@ -1120,6 +2274,32 @@ fn merge_intervals(intervals: &[(u64, u64)]) -> Vec<(u64, u64)> {
     merged
 }
 
+/// The bytes of an index before the digest it ends with, once they hash to
+/// that digest; the refusal names `index_path` otherwise.
+fn index_body<'a>(bytes: &'a [u8], index_path: &Path) -> Result<&'a [u8], PluginError> {
+    let refusal = |difference: std::fmt::Arguments| {
+        PluginError::Init(format!(
+            "store index differs from its own digest: the index file {} {difference}; {RECONVERT}",
+            index_path.display()
+        ))
+    };
+    let Some((body, recorded)) = bytes.split_last_chunk::<INDEX_DIGEST_BYTES>() else {
+        return Err(refusal(format_args!(
+            "holds {} bytes, fewer than the {INDEX_DIGEST_BYTES} of the digest it ends with",
+            bytes.len()
+        )));
+    };
+    let found = HashingReader::new(body).digest_to_end().map_err(read_err)?;
+    if found != *recorded {
+        return Err(refusal(format_args!(
+            "has SHA256 {} before its last {INDEX_DIGEST_BYTES} bytes, which record {}",
+            hex(&found),
+            hex(recorded)
+        )));
+    }
+    Ok(body)
+}
+
 /// `count` of `unit`s as the `u16` a store's length or count field records, or
 /// the refusal naming `what` with the count.
 fn recorded(count: usize, unit: &str, what: impl FnOnce() -> String) -> Result<u16, PluginError> {
@@ -1133,8 +2313,8 @@ fn recorded(count: usize, unit: &str, what: impl FnOnce() -> String) -> Result<u
 }
 
 /// `count`, the rows at `chr:pos`, as the `u32` the position's index entry
-/// records, or the refusal naming the position: the rows are held in memory
-/// before they are written, and a vector holds more than a `u32` counts.
+/// records, or the refusal naming the position: a table can hold more rows at
+/// one start than a `u32` counts.
 fn recorded_rows(count: usize, chr: &str, pos: u64) -> Result<u32, PluginError> {
     u32::try_from(count).map_err(|_| {
         PluginError::Init(format!(
@@ -1161,6 +2341,29 @@ fn read_u16(cursor: &mut io::Cursor<&[u8]>) -> Result<u16, PluginError> {
     let mut buf = [0u8; 2];
     cursor.read_exact(&mut buf).map_err(read_err)?;
     Ok(u16::from_le_bytes(buf))
+}
+
+/// Refuses the first four bytes of an index file that are not its magic.
+fn index_magic(magic: &[u8]) -> Result<(), PluginError> {
+    if magic == VPDI_MAGIC {
+        Ok(())
+    } else {
+        Err(PluginError::Init(format!(
+            "invalid index magic: expected VPDI, got {magic:?}"
+        )))
+    }
+}
+
+/// Refuses an index of any version but the current one, an earlier version
+/// as a later one, naming the conversion that writes the current one.
+fn index_version(version: u32) -> Result<(), PluginError> {
+    if version == INDEX_FORMAT_VERSION {
+        Ok(())
+    } else {
+        Err(PluginError::Init(format!(
+            "unsupported index version: {version} (expected {INDEX_FORMAT_VERSION}); {RECONVERT}"
+        )))
+    }
 }
 
 fn read_u32(cursor: &mut io::Cursor<&[u8]>) -> Result<u32, PluginError> {
@@ -1192,6 +2395,22 @@ mod tests {
     const IDENTITY_AT: usize = 4 + 4 + 4 * 2 + 1;
     /// The bytes of one identity: a SHA256 digest and a length.
     const IDENTITY_BYTES: usize = 32 + 8;
+    /// The bytes of the SHA256 digest an index ends with.
+    const DIGEST_BYTES: usize = INDEX_DIGEST_BYTES;
+
+    /// `body` followed by the SHA256 of its bytes, as the writer ends an
+    /// index.
+    fn sealed(body: &[u8]) -> Vec<u8> {
+        let digest = HashingReader::new(body).digest_to_end().unwrap();
+        [body, &digest[..]].concat()
+    }
+
+    /// `index` with the digest it ends with replaced by the SHA256 of the
+    /// bytes before it: a test that alters a field seals the index again to
+    /// reach the check that lies behind the digest.
+    fn resealed(index: &[u8]) -> Vec<u8> {
+        sealed(&index[..index.len() - DIGEST_BYTES])
+    }
 
     /// The names of every entry directly under `dir`, sorted.
     fn entries(dir: &Path) -> Vec<String> {
@@ -1323,8 +2542,8 @@ mod tests {
     /// batch query agree. The index carries the chromosome's longest span, so a
     /// version 1 index, which carries none, is refused naming the reconversion,
     /// as is a version 2 index, whose records at a position may lie sorted by
-    /// their ends, and a version 3 index, which records neither its table nor
-    /// its data.
+    /// their ends, a version 3 index, which records neither its table nor its
+    /// data, and a version 4 index, which carries no digest of its own bytes.
     #[test]
     fn a_query_inside_a_records_span_returns_it() {
         let dir = tempfile::tempdir().unwrap();
@@ -1419,7 +2638,7 @@ mod tests {
 
         let vpdi_path = dir.path().join("spans.vpdi");
         let index = std::fs::read(&vpdi_path).unwrap();
-        for earlier in [1u32, 2, 3] {
+        for earlier in [1u32, 2, 3, 4] {
             let mut patched = index.clone();
             patched[4..8].copy_from_slice(&earlier.to_le_bytes());
             std::fs::write(&vpdi_path, patched).unwrap();
@@ -1429,18 +2648,106 @@ mod tests {
             };
             assert!(
                 error.contains(&format!(
-                    "unsupported index version: {earlier} (expected 4); convert the table again"
+                    "unsupported index version: {earlier} (expected 5); convert the table again"
                 )),
                 "{error}"
             );
         }
     }
 
+    /// `current_index` refuses a store in the words `open` refuses it in: an
+    /// index of another version, earlier or later, another magic, an index
+    /// cut short, an index path that is a directory and a missing index or
+    /// data file. A data path that is a directory is refused by name, and a
+    /// whole store passes.
+    #[test]
+    fn current_index_refuses_a_store_in_the_words_open_refuses_it_in() {
+        let dir = tempfile::tempdir().unwrap();
+        let vpd_path = dir.path().join("scores.vpd");
+        let (config, source) = with_source(&vpd_path, TabixConfig::default());
+        let (column_names, records) = one_row(200, "0.5");
+        BinaryStoreWriter::new(vpd_path.clone())
+            .write(&column_names, &records, &config, &source)
+            .unwrap();
+        let before_content = || BinaryAnnotator::current_index(&vpd_path).map_err(|e| e.detail());
+        let opened = || {
+            BinaryAnnotator::open(&vpd_path, &config)
+                .map(|_| ())
+                .map_err(|e| e.detail())
+        };
+        assert_eq!(before_content(), Ok(()));
+        assert_eq!(opened(), Ok(()));
+        assert!(BinaryAnnotator::has_current_index(&vpd_path));
+
+        let vpdi_path = dir.path().join("scores.vpdi");
+        let index = std::fs::read(&vpdi_path).unwrap();
+        let of_version = |version: u32| {
+            let mut patched = index.clone();
+            patched[4..8].copy_from_slice(&version.to_le_bytes());
+            patched
+        };
+        let mut another_magic = index.clone();
+        another_magic[..4].copy_from_slice(b"VPDX");
+        const RECONVERT_ALL: &str =
+            "convert the table again with vep-cache-converter convert-plugin-data";
+        let short = "failed to read binary store: failed to fill whole buffer".to_string();
+        for (bytes, refusal) in [
+            (
+                of_version(4),
+                format!("unsupported index version: 4 (expected 5); {RECONVERT_ALL}"),
+            ),
+            (
+                of_version(6),
+                format!("unsupported index version: 6 (expected 5); {RECONVERT_ALL}"),
+            ),
+            (
+                another_magic,
+                "invalid index magic: expected VPDI, got [86, 80, 68, 88]".to_string(),
+            ),
+            (index[..6].to_vec(), short.clone()),
+            (index[..2].to_vec(), short),
+        ] {
+            std::fs::write(&vpdi_path, bytes).unwrap();
+            assert_eq!(before_content(), Err(refusal.clone()));
+            assert_eq!(opened(), Err(refusal));
+            assert!(!BinaryAnnotator::has_current_index(&vpd_path));
+        }
+
+        std::fs::remove_file(&vpdi_path).unwrap();
+        let refusal = format!("binary index file not found: {}", vpdi_path.display());
+        assert_eq!(before_content(), Err(refusal.clone()));
+        assert_eq!(opened(), Err(refusal));
+
+        std::fs::create_dir(&vpdi_path).unwrap();
+        let refusal = opened().unwrap_err();
+        let unread = format!("failed to read index file {}: ", vpdi_path.display());
+        assert!(refusal.starts_with(&unread), "{refusal}");
+        assert_eq!(before_content(), Err(refusal));
+        assert!(!BinaryAnnotator::has_current_index(&vpd_path));
+        std::fs::remove_dir(&vpdi_path).unwrap();
+
+        std::fs::write(&vpdi_path, &index).unwrap();
+        std::fs::remove_file(&vpd_path).unwrap();
+        let refusal = format!("binary data file not found: {}", vpd_path.display());
+        assert_eq!(before_content(), Err(refusal.clone()));
+        assert_eq!(opened(), Err(refusal));
+        std::fs::create_dir(&vpd_path).unwrap();
+        assert_eq!(
+            before_content(),
+            Err(format!(
+                "binary data file {} is not a file",
+                vpd_path.display()
+            ))
+        );
+        assert!(!BinaryAnnotator::has_current_index(&vpd_path));
+    }
+
     /// An index whose position count or chromosome count claims more entries
-    /// than the bytes after it hold is refused when the store is opened,
-    /// before anything is allocated for it, and `open_best_store` then
-    /// answers from the tabix file beside it; a record offset past the data
-    /// file is refused by the query.
+    /// than the bytes after it hold, up to the digest the index ends with, is
+    /// refused when the store is opened, before anything is allocated for it,
+    /// and `open_best_store` then answers from the tabix file beside it; a
+    /// record offset past the data file is refused by the query. Each altered
+    /// index is sealed again, so the count is what refuses it.
     #[test]
     fn index_counts_past_the_file_are_refused() {
         let dir = tempfile::tempdir().unwrap();
@@ -1478,7 +2785,7 @@ mod tests {
         let chr_count_at = IDENTITY_AT + 2 * IDENTITY_BYTES;
         let pos_count_at = chr_count_at + 4 + 2 + 2 + 8;
         let open_error = |patched: &[u8]| {
-            std::fs::write(&vpdi_path, patched).unwrap();
+            std::fs::write(&vpdi_path, resealed(patched)).unwrap();
             BinaryAnnotator::open(&vpd_path, &bound)
                 .err()
                 .expect("a count past the file is refused")
@@ -1492,7 +2799,7 @@ mod tests {
                 "plugin initialization failed: index position count {} for 21 exceeds what the \
                  {} bytes left can hold",
                 u64::MAX,
-                index.len() - pos_count_at - 8
+                index.len() - DIGEST_BYTES - pos_count_at - 8
             )
         );
         let mut many_chromosomes = index.clone();
@@ -1503,7 +2810,7 @@ mod tests {
                 "plugin initialization failed: index chromosome count {} exceeds what the {} \
                  bytes left can hold",
                 u32::MAX,
-                index.len() - chr_count_at - 4
+                index.len() - DIGEST_BYTES - chr_count_at - 4
             )
         );
 
@@ -1533,7 +2840,7 @@ mod tests {
         let mut far_offset = index.clone();
         far_offset[pos_count_at + 8 + 8..pos_count_at + 8 + 16]
             .copy_from_slice(&u64::MAX.to_le_bytes());
-        std::fs::write(&vpdi_path, far_offset).unwrap();
+        std::fs::write(&vpdi_path, resealed(&far_offset)).unwrap();
         let store = BinaryAnnotator::open(&vpd_path, &bound).unwrap();
         assert_eq!(
             store.query("21", 100, 100).unwrap_err().to_string(),
@@ -1616,17 +2923,98 @@ mod tests {
         assert_eq!(store.query("21", 100, 100).unwrap().len(), 1);
     }
 
+    /// The columns a tabix index names of a table are read back from a
+    /// store's index as the store was built on them, and the store opens
+    /// with them. A reference allele column is not among them, so a store
+    /// built on one is refused with the configuration read back, naming both
+    /// sets of flags. An index cut short inside its columns gives none.
+    #[test]
+    fn the_columns_an_index_names_are_read_back_from_a_store() {
+        let dir = tempfile::tempdir().unwrap();
+        let (column_names, records) = one_row(100, "0.5");
+        let spans = TabixConfig {
+            end_col: Some(2),
+            zero_based: true,
+            ..TabixConfig::default()
+        };
+
+        let vpd_path = dir.path().join("spans.vpd");
+        let (built_on, source) = with_source(&vpd_path, spans.clone());
+        BinaryStoreWriter::new(vpd_path.clone())
+            .write(&column_names, &records, &built_on, &source)
+            .unwrap();
+        let read_back =
+            BinaryAnnotator::index_named_columns(&vpd_path, &built_on.file_path).unwrap();
+        assert_eq!(
+            (
+                read_back.file_path.as_path(),
+                read_back.chr_col,
+                read_back.start_col,
+                read_back.end_col,
+                read_back.ref_col,
+                read_back.alt_col,
+                read_back.zero_based
+            ),
+            (
+                built_on.file_path.as_path(),
+                0,
+                1,
+                Some(2),
+                None,
+                None,
+                true
+            )
+        );
+        assert!(BinaryAnnotator::open(&vpd_path, &read_back).is_ok());
+
+        let vpd_path = dir.path().join("alleles.vpd");
+        let (built_on, source) = with_source(
+            &vpd_path,
+            TabixConfig {
+                ref_col: Some(2),
+                ..spans
+            },
+        );
+        BinaryStoreWriter::new(vpd_path.clone())
+            .write(&column_names, &records, &built_on, &source)
+            .unwrap();
+        let read_back =
+            BinaryAnnotator::index_named_columns(&vpd_path, &built_on.file_path).unwrap();
+        assert_eq!(read_back.ref_col, None);
+        let refusal = BinaryAnnotator::open(&vpd_path, &read_back)
+            .err()
+            .map_or_else(|| "the store opened".to_string(), |e| e.to_string());
+        assert_eq!(
+            refusal,
+            "plugin initialization failed: store columns `--chr-col 0 --start-col 1 --end-col 2 \
+             --ref-col 2 --zero-based` differ from the table's `--chr-col 0 --start-col 1 \
+             --end-col 2 --zero-based`; convert the table again with vep-cache-converter \
+             convert-plugin-data and the table's flags"
+        );
+
+        let index_path = vpd_path.with_extension("vpdi");
+        let index = std::fs::read(&index_path).unwrap();
+        std::fs::write(&index_path, &index[..4 + 4 + 2]).unwrap();
+        let refusal = BinaryAnnotator::index_named_columns(&vpd_path, &built_on.file_path)
+            .err()
+            .map_or_else(|| "the columns were read".to_string(), |e| e.to_string());
+        assert_eq!(
+            refusal,
+            "plugin initialization failed: failed to read binary store: failed to fill whole \
+             buffer"
+        );
+    }
+
     /// A store's length and count fields are 16 bits wide, so a cell one byte
     /// past `u16::MAX` is refused naming the row, the cell and its length, and
-    /// neither file is left behind, where a cell of exactly `u16::MAX` bytes
-    /// round-trips whole; a column name, a header, a record and a chromosome
-    /// name past the field are refused the same way. A truncated length would
-    /// put every record after the cell out of frame.
+    /// the store written before it stays whole, where a cell of exactly
+    /// `u16::MAX` bytes round-trips whole; a column name, a header, a record
+    /// and a chromosome name past the field are refused the same way. A
+    /// truncated length would put every record after the cell out of frame.
     #[test]
     fn a_cell_or_name_past_the_length_field_is_refused() {
         let dir = tempfile::tempdir().unwrap();
         let vpd_path = dir.path().join("wide.vpd");
-        let vpdi_path = dir.path().join("wide.vpdi");
         let names =
             |names: &[&str]| -> Vec<String> { names.iter().map(|s| s.to_string()).collect() };
         let column_names = names(&["chr", "pos", "ref", "alt", "score"]);
@@ -1658,6 +3046,7 @@ mod tests {
         assert_eq!(write(&column_names, &records).unwrap().0, 1);
         let store = BinaryAnnotator::open(&vpd_path, &config).unwrap();
         assert_eq!(store.query("21", 100, 100).unwrap()[0].columns[4], widest);
+        let earlier = store_bytes(&vpd_path);
 
         let too_wide = "x".repeat(limit + 1);
         let records = vec![(
@@ -1674,8 +3063,16 @@ mod tests {
              the 65535 a store records"
         );
         assert!(
-            !vpd_path.exists() && !vpdi_path.exists(),
-            "a refused write leaves no file"
+            store_bytes(&vpd_path) == earlier,
+            "a refused write leaves the earlier store whole"
+        );
+        let fresh = dir.path().join("fresh.vpd");
+        assert!(BinaryStoreWriter::new(fresh.clone())
+            .write(&column_names, &records, &config, &source)
+            .is_err());
+        assert!(
+            !fresh.exists() && !fresh.with_extension("vpdi").exists(),
+            "a refused write where no store lay leaves no file"
         );
 
         let long_name = names(&["chr", "pos", "ref", "alt", &too_wide]);
@@ -1713,7 +3110,8 @@ mod tests {
             )),
             "{error}"
         );
-        assert!(!vpd_path.exists() && !vpdi_path.exists());
+        assert_eq!(entries(dir.path()), ["wide.table", "wide.vpd", "wide.vpdi"]);
+        assert!(store_bytes(&vpd_path) == earlier);
     }
 
     /// A position's index entry counts its rows in 32 bits: exactly `u32::MAX`
@@ -1733,12 +3131,12 @@ mod tests {
         );
     }
 
-    /// The previous store's index is removed before anything is written, and
-    /// both files are written under other names and renamed into place, the
-    /// data first: here the data cannot be renamed (a directory stands at its
-    /// path), the index is already gone and neither part-named file stays, so
-    /// no pair opens. A data path carrying the index's own extension is
-    /// refused with nothing created, since the index would overwrite the data.
+    /// Both files are written under other names, the previous store's index
+    /// is removed and both are renamed into place, the data first: here the
+    /// data cannot be renamed (a directory stands at its path), the index is
+    /// already gone and neither part-named file stays, so no pair opens. A
+    /// data path carrying the index's own extension is refused with nothing
+    /// created, since the index would overwrite the data.
     #[test]
     fn a_write_cut_short_leaves_no_index_and_the_index_name_is_refused() {
         let dir = tempfile::tempdir().unwrap();
@@ -1776,7 +3174,7 @@ mod tests {
         assert_eq!(
             entries(dir.path()),
             ["cut.table", "cut.vpd"],
-            "the index goes before anything is written, and no part-named file stays"
+            "the index goes before the data is renamed, and no part-named file stays"
         );
 
         let index_named = dir.path().join("store.vpdi");
@@ -1799,8 +3197,12 @@ mod tests {
     /// in place before the data it was written for.
     #[test]
     fn the_data_is_renamed_into_place_before_the_index() {
-        let partial = BinaryStoreWriter::new(PathBuf::from("dir/part.vpd"));
-        let published = BinaryStoreWriter::new(PathBuf::from("dir/store.vpd"));
+        let paths = |data: &str, index: &str| StorePaths {
+            data: PathBuf::from(data),
+            index: PathBuf::from(index),
+        };
+        let partial = paths("dir/part.vpd", "dir/part.vpdi");
+        let published = paths("dir/store.vpd", "dir/store.vpdi");
         assert_eq!(
             partial.renames_onto(&published),
             [
@@ -1981,7 +3383,8 @@ mod tests {
     /// any of its four fields refuses the store by the field's binding: the
     /// table's digest and length as a source that differs, the data file's as
     /// data that differs from its index. An index cut short inside the
-    /// identity is refused as unreadable.
+    /// identity is refused as unreadable. Each altered index is sealed again,
+    /// so the identity is what refuses it.
     #[test]
     fn altered_identity_bytes_in_the_index_refuse_the_store() {
         let dir = tempfile::tempdir().unwrap();
@@ -2005,6 +3408,7 @@ mod tests {
                 Ok(_) => "the store opened".to_string(),
             }
         };
+        let refusal_past_the_digest = |patched: &[u8]| refusal(&resealed(patched));
         for (field, at, broken) in [
             (
                 "the table's digest",
@@ -2029,7 +3433,7 @@ mod tests {
         ] {
             let mut patched = index.clone();
             patched[at] ^= 1;
-            let refused = refusal(&patched);
+            let refused = refusal_past_the_digest(&patched);
             assert!(
                 refused.starts_with(&format!("plugin initialization failed: {broken}"))
                     && refused.ends_with(RECONVERT),
@@ -2037,7 +3441,7 @@ mod tests {
             );
         }
         assert_eq!(
-            refusal(&index[..IDENTITY_AT + IDENTITY_BYTES + 3]),
+            refusal(&sealed(&index[..IDENTITY_AT + IDENTITY_BYTES + 3])),
             "plugin initialization failed: failed to read binary store: failed to fill whole buffer"
         );
         assert_eq!(refusal(&index), "the store opened");
@@ -2239,5 +3643,1360 @@ mod tests {
 
         assert!(store.query("2", 100, 100).unwrap().is_empty());
         assert!(store.query("chr2", 100, 100).unwrap().is_empty());
+    }
+
+    /// An index ends with the SHA256 of every byte before it, so a byte
+    /// altered past the header (in a chromosome's name, its longest span, a
+    /// position, a data offset or a row count) and a byte added or removed at
+    /// the end each refuse the store by that digest, naming the index file,
+    /// and `open_best_store` then answers from the table. The store's row
+    /// differs from the table's, so the score tells which of the two answered.
+    #[test]
+    fn an_index_altered_past_its_header_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let tabix_path = crate::test_fixtures::write_tabix_fixture(
+            dir.path(),
+            "21.tsv.gz",
+            &["#chr\tpos\tref\talt\tscore", "21\t100\tA\tG\t0.25"],
+            crate::test_fixtures::IndexSpec::standard(),
+        );
+        let config = TabixConfig {
+            file_path: tabix_path.clone(),
+            chr_col: 0,
+            start_col: 1,
+            end_col: None,
+            ref_col: Some(2),
+            alt_col: Some(3),
+            zero_based: false,
+        };
+        let vpd_path = dir.path().join("21.tsv.vpd");
+        let vpdi_path = dir.path().join("21.tsv.vpdi");
+        let column_names: Vec<String> = ["chr", "pos", "ref", "alt", "score"]
+            .map(String::from)
+            .to_vec();
+        let records = vec![(
+            "21".to_string(),
+            vec![TabixRecord {
+                chr: "21".to_string(),
+                start: 100,
+                end: 100,
+                columns: ["21", "100", "A", "G", "0.95"].map(String::from).to_vec(),
+                header: Some(Arc::new(column_names.clone())),
+            }],
+        )];
+        let source = ContentIdentity::of_file(&tabix_path).unwrap();
+        BinaryStoreWriter::new(vpd_path.clone())
+            .write(&column_names, &records, &config, &source)
+            .unwrap();
+        let answered = || {
+            crate::annotation_store::open_best_store(&tabix_path, config.clone())
+                .unwrap()
+                .query("21", 100, 100)
+                .unwrap()[0]
+                .columns[4]
+                .clone()
+        };
+        assert_eq!(answered(), "0.95", "the store answers while it is whole");
+
+        let index = std::fs::read(&vpdi_path).unwrap();
+        // After the identities come the chromosome count, the name's length,
+        // the name `21`, the longest span and the position count, then the
+        // one position entry: its position, its data offset and its row count.
+        let name_at = IDENTITY_AT + 2 * IDENTITY_BYTES + 4 + 2;
+        let span_at = name_at + 2;
+        let entry_at = span_at + 8 + 8;
+        let mut altered: Vec<(&str, Vec<u8>)> = [
+            ("a chromosome's name", name_at),
+            ("a longest span", span_at),
+            ("a position", entry_at),
+            ("a data offset", entry_at + 8),
+            ("a row count", entry_at + 16),
+        ]
+        .into_iter()
+        .map(|(field, at)| {
+            let mut patched = index.clone();
+            patched[at] ^= 1;
+            (field, patched)
+        })
+        .collect();
+        altered.push(("a byte added at the end", [&index[..], &[0]].concat()));
+        altered.push((
+            "a byte removed at the end",
+            index[..index.len() - 1].to_vec(),
+        ));
+        let refusal = |altered: &[u8]| {
+            std::fs::write(&vpdi_path, altered).unwrap();
+            match BinaryAnnotator::open(&vpd_path, &config) {
+                Err(error) => error.to_string(),
+                Ok(_) => "the store opened".to_string(),
+            }
+        };
+        let by_the_digest = format!(
+            "plugin initialization failed: store index differs from its own digest: the index \
+             file {} ",
+            vpdi_path.display()
+        );
+        for (field, bytes) in &altered {
+            let refused = refusal(bytes);
+            assert!(
+                refused.starts_with(&by_the_digest) && refused.ends_with(RECONVERT),
+                "{field}: {refused}"
+            );
+            assert_eq!(answered(), "0.25", "{field}: the table answers");
+        }
+        assert_eq!(refusal(&index), "the store opened");
+        assert_eq!(answered(), "0.95");
+    }
+
+    /// The writer checks the order it documents: a row whose start lies below
+    /// the start before it in its chromosome, and a chromosome given a second
+    /// time, are each refused naming the chromosome and the start, and neither
+    /// file is left. Rows sharing a start are in order.
+    #[test]
+    fn rows_out_of_start_order_or_a_chromosome_given_twice_are_refused_by_the_writer() {
+        let dir = tempfile::tempdir().unwrap();
+        let vpd_path = dir.path().join("order.vpd");
+        let (config, source) = with_source(&vpd_path, TabixConfig::default());
+        let column_names: Vec<String> = ["chr", "pos", "score"].map(String::from).to_vec();
+        let row = |chr: &str, start: u64| TabixRecord {
+            chr: chr.to_string(),
+            start,
+            end: start,
+            columns: vec![chr.into(), start.to_string(), "0.5".into()],
+            header: Some(Arc::new(column_names.clone())),
+        };
+        let write = |records: &[(String, Vec<TabixRecord>)]| {
+            BinaryStoreWriter::new(vpd_path.clone()).write(&column_names, records, &config, &source)
+        };
+
+        let descending = [(
+            "21".to_string(),
+            vec![
+                row("21", 100),
+                row("21", 300),
+                row("21", 300),
+                row("21", 200),
+            ],
+        )];
+        assert_eq!(
+            write(&descending).unwrap_err().to_string(),
+            "plugin initialization failed: row 21:200 lies below the start before it, 300; a \
+             store takes a chromosome's rows sorted by start"
+        );
+        assert_eq!(entries(dir.path()), ["order.table"]);
+
+        let twice = [
+            ("21".to_string(), vec![row("21", 100)]),
+            ("22".to_string(), vec![row("22", 100)]),
+            ("21".to_string(), vec![row("21", 200)]),
+        ];
+        assert_eq!(
+            write(&twice).unwrap_err().to_string(),
+            "plugin initialization failed: chromosome 21 is given twice; a store takes each \
+             chromosome's rows once"
+        );
+        assert_eq!(entries(dir.path()), ["order.table"]);
+
+        let sorted = [
+            (
+                "21".to_string(),
+                vec![row("21", 100), row("21", 300), row("21", 300)],
+            ),
+            ("22".to_string(), vec![row("22", 50)]),
+        ];
+        assert_eq!(write(&sorted).unwrap().0, 4);
+    }
+
+    /// An index whose chromosome table names one chromosome twice, or whose
+    /// positions do not ascend within a chromosome, is refused naming the
+    /// chromosome: a lookup by name would read one of the two entries alone,
+    /// and a binary search over positions out of order misses rows. The index
+    /// bytes are built by hand and sealed, and the same bytes holding one
+    /// entry in order open.
+    #[test]
+    fn an_index_naming_a_chromosome_twice_or_out_of_order_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let vpd_path = dir.path().join("table.vpd");
+        let vpdi_path = dir.path().join("table.vpdi");
+        let (config, source) = with_source(&vpd_path, TabixConfig::default());
+        let (column_names, records) = one_row(200, "SRC_A");
+        BinaryStoreWriter::new(vpd_path.clone())
+            .write(&column_names, &records, &config, &source)
+            .unwrap();
+        let index = std::fs::read(&vpdi_path).unwrap();
+        let table_at = IDENTITY_AT + 2 * IDENTITY_BYTES;
+        // The one entry's data offset lies after the chromosome count, the
+        // name's length, the name `21`, the longest span, the position count
+        // and the position.
+        let offset_at = table_at + 4 + 2 + 2 + 8 + 8 + 8;
+        let data_offset = &index[offset_at..offset_at + 8];
+        let chromosome = |name: &str, positions: &[u64]| -> Vec<u8> {
+            let mut entry = (name.len() as u16).to_le_bytes().to_vec();
+            entry.extend(name.as_bytes());
+            entry.extend(0u64.to_le_bytes());
+            entry.extend((positions.len() as u64).to_le_bytes());
+            for position in positions {
+                entry.extend(position.to_le_bytes());
+                entry.extend(data_offset);
+                entry.extend(1u32.to_le_bytes());
+            }
+            entry
+        };
+        let opened = |chromosomes: &[Vec<u8>]| {
+            let body = [
+                &index[..table_at],
+                &(chromosomes.len() as u32).to_le_bytes()[..],
+                &chromosomes.concat(),
+            ]
+            .concat();
+            std::fs::write(&vpdi_path, sealed(&body)).unwrap();
+            match BinaryAnnotator::open(&vpd_path, &config) {
+                Ok(store) => format!(
+                    "opened, {} row at 200",
+                    store.query("21", 200, 200).unwrap().len()
+                ),
+                Err(error) => error.to_string(),
+            }
+        };
+        assert_eq!(opened(&[chromosome("21", &[200])]), "opened, 1 row at 200");
+        assert_eq!(
+            opened(&[
+                chromosome("21", &[200]),
+                chromosome("22", &[200]),
+                chromosome("21", &[200]),
+            ]),
+            format!("plugin initialization failed: index names chromosome 21 twice; {RECONVERT}")
+        );
+        for (positions, follows) in [
+            (&[200u64, 100][..], "100 follows 200"),
+            (&[100, 200, 200], "200 follows 200"),
+        ] {
+            assert_eq!(
+                opened(&[chromosome("21", positions)]),
+                format!(
+                    "plugin initialization failed: index positions of chromosome 21 do not \
+                     ascend: {follows}; {RECONVERT}"
+                )
+            );
+        }
+    }
+
+    /// Both scratch files are created before the earlier store's index is
+    /// removed, so a write refused or failed before that point leaves the
+    /// earlier store whole and opening: a column index the layout cannot
+    /// record, a data path carrying the index's extension, and a scratch name
+    /// the directory refuses, here a directory standing at the name of the
+    /// data's scratch file and then at the index's.
+    #[test]
+    fn a_refusal_before_the_write_leaves_an_earlier_store_whole() {
+        let dir = tempfile::tempdir().unwrap();
+        let vpd_path = dir.path().join("kept.vpd");
+        let vpdi_path = dir.path().join("kept.vpdi");
+        let (config, source) = with_source(&vpd_path, TabixConfig::default());
+        let write = |path: &Path, config: &TabixConfig, score: &str| {
+            let (column_names, records) = one_row(200, score);
+            BinaryStoreWriter::new(path.to_path_buf()).write(
+                &column_names,
+                &records,
+                config,
+                &source,
+            )
+        };
+        write(&vpd_path, &config, "EARLIER").unwrap();
+        let whole = entries(dir.path());
+        assert_eq!(whole, ["kept.table", "kept.vpd", "kept.vpdi"]);
+        let answers = || {
+            BinaryAnnotator::open(&vpd_path, &config)
+                .unwrap()
+                .query("21", 200, 200)
+                .unwrap()[0]
+                .columns[2]
+                .clone()
+        };
+
+        let unrecordable = TabixConfig {
+            start_col: usize::from(u16::MAX),
+            ..config.clone()
+        };
+        assert_eq!(
+            write(&vpd_path, &unrecordable, "LATER")
+                .unwrap_err()
+                .to_string(),
+            "plugin initialization failed: column index 65535 exceeds what the store index can \
+             record"
+        );
+        assert_eq!(entries(dir.path()), whole);
+        assert_eq!(answers(), "EARLIER");
+
+        let refused = write(&vpdi_path, &config, "LATER").unwrap_err().to_string();
+        assert!(
+            refused.ends_with("carries the index's extension .vpdi; name it .vpd"),
+            "{refused}"
+        );
+        assert_eq!(entries(dir.path()), whole);
+        assert_eq!(answers(), "EARLIER");
+
+        for (blocked, file) in [
+            (scratch_path(&vpd_path, DATA_ROLE), "data"),
+            (scratch_path(&vpdi_path, INDEX_ROLE), "index"),
+        ] {
+            std::fs::create_dir(&blocked).unwrap();
+            let refused = write(&vpd_path, &config, "LATER").unwrap_err().to_string();
+            assert!(
+                refused.starts_with(&format!(
+                    "plugin initialization failed: failed to create {file} file {}: ",
+                    blocked.display()
+                )),
+                "{refused}"
+            );
+            std::fs::remove_dir(&blocked).unwrap();
+            assert_eq!(entries(dir.path()), whole, "{file}: {refused}");
+            assert_eq!(answers(), "EARLIER", "{file}");
+        }
+
+        write(&vpd_path, &config, "LATER").unwrap();
+        assert_eq!(entries(dir.path()), whole);
+        assert_eq!(answers(), "LATER");
+    }
+
+    /// A scratch name is cut to fit the 255 bytes a file name holds, at a
+    /// character boundary, so a data file named in 251 bytes, whose scratch
+    /// name would not fit whole, is written and opens, as is one named in
+    /// two-byte characters. A data file named in 255 bytes has an index name
+    /// one byte past that limit and is refused before anything is created.
+    #[test]
+    fn an_output_name_at_the_file_name_limit_is_written_or_refused_whole() {
+        let dir = tempfile::tempdir().unwrap();
+        let table = dir.path().join("limit.table");
+        std::fs::write(&table, b"the table").unwrap();
+        let source = ContentIdentity::of_file(&table).unwrap();
+        let config = TabixConfig {
+            file_path: table,
+            ..TabixConfig::default()
+        };
+        let (column_names, records) = one_row(200, "LONG");
+        let named = |bytes: usize| dir.path().join(format!("{}.vpd", "n".repeat(bytes - 4)));
+
+        let fits = named(251);
+        BinaryStoreWriter::new(fits.clone())
+            .write(&column_names, &records, &config, &source)
+            .unwrap();
+        let store = BinaryAnnotator::open(&fits, &config).unwrap();
+        assert_eq!(store.query("21", 200, 200).unwrap()[0].columns[2], "LONG");
+        let accented = dir.path().join(format!("{}.vpd", "\u{e9}".repeat(120)));
+        for role in [DATA_ROLE, INDEX_ROLE] {
+            let scratch = scratch_path(&accented, role);
+            let name = scratch.file_name().unwrap().to_str().unwrap();
+            assert!(
+                name.len() <= NAME_MAX && name.starts_with('\u{e9}'),
+                "{role}: {name}"
+            );
+        }
+        BinaryStoreWriter::new(accented.clone())
+            .write(&column_names, &records, &config, &source)
+            .unwrap();
+        assert!(BinaryAnnotator::open(&accented, &config).is_ok());
+        let written = entries(dir.path());
+        assert_eq!(written.len(), 5, "{written:?}");
+
+        let too_long = named(255);
+        let refused = BinaryStoreWriter::new(too_long.clone())
+            .write(&column_names, &records, &config, &source)
+            .unwrap_err()
+            .to_string();
+        assert_eq!(
+            refused,
+            format!(
+                "plugin initialization failed: index file {} has a name of 256 bytes, more than \
+                 the 255 a file name holds; name the data file shorter",
+                too_long.with_extension("vpdi").display()
+            )
+        );
+        assert_eq!(entries(dir.path()), written);
+    }
+
+    /// A conversion removes, before it writes, the scratch files of its own
+    /// output that it can lock, which a killed conversion left. One it cannot
+    /// lock is under the lock of the conversion writing it and stays, as do
+    /// the scratch files of another output and names that are no scratch name
+    /// of this one. Once the lock is gone the next conversion removes them.
+    #[test]
+    fn scratch_files_of_a_dead_conversion_are_removed_and_a_live_ones_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let vpd_path = dir.path().join("swept.vpd");
+        let (config, source) = with_source(&vpd_path, TabixConfig::default());
+        let own = std::process::id();
+        let (dead, live) = (own.wrapping_add(1), own.wrapping_add(2));
+        let scratch = |name: &str, pid: u32, role: &str| format!("{name}.{pid}.{role}.partial");
+        for name in [
+            scratch("swept.vpd", dead, "data"),
+            scratch("swept.vpdi", dead, "index"),
+        ] {
+            std::fs::write(dir.path().join(name), b"left by a killed conversion").unwrap();
+        }
+        let live_names = [
+            scratch("swept.vpd", live, "data"),
+            scratch("swept.vpdi", live, "index"),
+        ];
+        let held: Vec<std::fs::File> = live_names
+            .iter()
+            .map(|name| {
+                let file = std::fs::File::create(dir.path().join(name)).unwrap();
+                file.lock().unwrap();
+                file
+            })
+            .collect();
+        let other_names = [
+            scratch("other.vpd", dead, "data"),
+            format!("swept.vpd.x{dead}.data.partial"),
+            format!("swept.vpd.{dead}.data.partial.kept"),
+            format!("swept.vpd.{dead}.index.partial"),
+        ];
+        for name in &other_names {
+            std::fs::write(dir.path().join(name), b"not a scratch file of this output").unwrap();
+        }
+        let write = |score: &str| {
+            let (column_names, records) = one_row(200, score);
+            BinaryStoreWriter::new(vpd_path.clone())
+                .write(&column_names, &records, &config, &source)
+                .unwrap();
+            BinaryAnnotator::open(&vpd_path, &config)
+                .unwrap()
+                .query("21", 200, 200)
+                .unwrap()[0]
+                .columns[2]
+                .clone()
+        };
+        let listed = |kept: &[&[String]]| {
+            let mut names: Vec<String> = ["swept.table", "swept.vpd", "swept.vpdi"]
+                .map(String::from)
+                .to_vec();
+            names.extend(kept.iter().flat_map(|names| names.iter().cloned()));
+            names.sort();
+            names
+        };
+
+        assert_eq!(write("FIRST"), "FIRST");
+        assert_eq!(entries(dir.path()), listed(&[&live_names, &other_names]));
+
+        drop(held);
+        assert_eq!(write("OTHER"), "OTHER");
+        assert_eq!(entries(dir.path()), listed(&[&other_names]));
+
+        // A scratch file is under its writer's lock from its creation: no
+        // second handle locks it, and a conversion clearing leftovers leaves
+        // it until the writer's handle closes.
+        let own = scratch_path(&vpd_path, DATA_ROLE);
+        let writing = create_locked(&own).unwrap();
+        assert!(matches!(
+            File::open(&own).unwrap().try_lock(),
+            Err(std::fs::TryLockError::WouldBlock)
+        ));
+        remove_dead_scratch(&vpd_path, DATA_ROLE);
+        assert!(own.exists(), "a scratch file being written stays");
+        drop(writing);
+        remove_dead_scratch(&vpd_path, DATA_ROLE);
+        assert!(!own.exists(), "a scratch file no conversion holds goes");
+    }
+
+    /// A sweep removes a scratch file only while its name names the file the
+    /// sweep locked. Here a leftover is opened as a sweep opens it, and
+    /// before the sweep locks it the leftover is removed and a conversion
+    /// creates its own scratch file under the same name. The lock on the
+    /// removed leftover is granted, and the conversion's file, under its
+    /// writer's lock, stays at its name. A leftover still at its name goes.
+    #[cfg(unix)]
+    #[test]
+    fn a_sweep_leaves_a_scratch_file_created_under_a_name_it_opened() {
+        let dir = tempfile::tempdir().unwrap();
+        let scratch = scratch_path(&dir.path().join("raced.vpd"), DATA_ROLE);
+        std::fs::write(&scratch, b"left by a killed conversion").unwrap();
+        let opened = File::open(&scratch).unwrap();
+        std::fs::remove_file(&scratch).unwrap();
+        let writing = create_locked(&scratch).unwrap();
+
+        remove_if_dead(&scratch, &opened);
+        assert!(
+            names_open_file(&scratch, &writing),
+            "a scratch file under its writer's lock stays at its name"
+        );
+        drop((opened, writing));
+
+        let leftover = File::open(&scratch).unwrap();
+        remove_if_dead(&scratch, &leftover);
+        assert!(!scratch.exists(), "a leftover still at its name goes");
+    }
+
+    /// A data path that is a chain of symbolic links ending at a name where
+    /// no file lies is written at that last name, and every link of the chain
+    /// stays a link, through a second write too.
+    #[cfg(unix)]
+    #[test]
+    fn a_chain_of_links_is_written_at_its_last_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let first = dir.path().join("chain.vpd");
+        let second = dir.path().join("second.vpd");
+        let last = dir.path().join("last.vpd");
+        std::os::unix::fs::symlink("second.vpd", &first).unwrap();
+        std::os::unix::fs::symlink(&last, &second).unwrap();
+        let (config, source) = with_source(&first, TabixConfig::default());
+        for written in ["FIRST", "OTHER"] {
+            let (column_names, records) = one_row(200, written);
+            BinaryStoreWriter::new(first.clone())
+                .write(&column_names, &records, &config, &source)
+                .unwrap();
+            assert!(
+                first.is_symlink() && second.is_symlink(),
+                "{written}: each link of the chain stays a link"
+            );
+            assert!(std::fs::symlink_metadata(&last).unwrap().is_file());
+            let store = BinaryAnnotator::open(&first, &config).unwrap();
+            assert_eq!(store.query("21", 200, 200).unwrap()[0].columns[2], written);
+        }
+        assert_eq!(
+            entries(dir.path()),
+            [
+                "chain.table",
+                "chain.vpd",
+                "chain.vpdi",
+                "last.vpd",
+                "second.vpd"
+            ]
+        );
+    }
+
+    /// A data path that is a link to its own index path, or an index path
+    /// that is a link to the data path, would put both files at one name, the
+    /// index replacing the data: the pair is refused before anything is
+    /// created, as a data path spelled with the index's extension is.
+    #[cfg(unix)]
+    #[test]
+    fn a_data_link_naming_the_index_path_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        for (name, link, target) in [
+            ("data", "own.vpd", "own.vpdi"),
+            ("index", "rev.vpdi", "./rev.vpd"),
+        ] {
+            let link = dir.path().join(link);
+            std::os::unix::fs::symlink(target, &link).unwrap();
+            let vpd_path = link.with_extension("vpd");
+            let (config, source) = with_source(&vpd_path, TabixConfig::default());
+            let before = entries(dir.path());
+            let (column_names, records) = one_row(200, "ONE");
+            let refused = BinaryStoreWriter::new(vpd_path.clone())
+                .write(&column_names, &records, &config, &source)
+                .unwrap_err()
+                .to_string();
+            assert_eq!(
+                refused,
+                format!(
+                    "plugin initialization failed: data file {} and index file {} name one \
+                     file; a store's two files lie apart",
+                    vpd_path.display(),
+                    vpd_path.with_extension("vpdi").display()
+                ),
+                "{name}"
+            );
+            assert!(link.is_symlink(), "{name}");
+            assert_eq!(entries(dir.path()), before, "{name}");
+        }
+    }
+
+    /// A link whose target ends in a separator or a `.` component names a
+    /// directory, and the file name read from such a target is the name
+    /// before that ending: a store renamed there would replace a link lying
+    /// at that name. The output is refused before anything is created, and
+    /// the link the target names stays a link, to a file and to a directory
+    /// alike.
+    #[cfg(unix)]
+    #[test]
+    fn a_link_whose_target_ends_as_a_directory_is_refused_and_the_link_it_names_kept() {
+        for (case, target, held_is_a_directory) in [
+            ("a separator", "named/", false),
+            ("a dot component", "named/.", false),
+            ("a separator, to a directory", "named/", true),
+        ] {
+            let dir = tempfile::tempdir().unwrap();
+            let held = dir.path().join("held");
+            if held_is_a_directory {
+                std::fs::create_dir(&held).unwrap();
+            } else {
+                std::fs::write(&held, b"held").unwrap();
+            }
+            let named = dir.path().join("named");
+            std::os::unix::fs::symlink("held", &named).unwrap();
+            let link = dir.path().join("out.vpd");
+            std::os::unix::fs::symlink(target, &link).unwrap();
+            let (config, source) = with_source(&link, TabixConfig::default());
+            let before = entries(dir.path());
+            let (column_names, records) = one_row(200, "ONE");
+            let refused = BinaryStoreWriter::new(link.clone())
+                .write(&column_names, &records, &config, &source)
+                .unwrap_err()
+                .to_string();
+            assert_eq!(
+                refused,
+                format!(
+                    "plugin initialization failed: the symbolic link {} names {target}, which \
+                     ends in a separator or `.` and so names a directory; a store's file is no \
+                     directory",
+                    link.display()
+                ),
+                "{case}"
+            );
+            assert!(named.is_symlink() && link.is_symlink(), "{case}");
+            assert_eq!(entries(dir.path()), before, "{case}");
+        }
+        for (target, ends) in [
+            ("named", false),
+            ("dir/named", false),
+            ("..", false),
+            ("named/", true),
+            ("named//", true),
+            ("named/.", true),
+            ("named/./", true),
+            (".", true),
+            ("/", true),
+        ] {
+            assert_eq!(ends_as_a_directory(Path::new(target)), ends, "{target}");
+        }
+    }
+
+    /// An index path that is a symbolic link is written at the file the link
+    /// names, as the data path is: the link stays a link, its target holds
+    /// the index, and a second write replaces the target.
+    #[cfg(unix)]
+    #[test]
+    fn an_index_path_that_is_a_link_is_written_at_its_target() {
+        let dir = tempfile::tempdir().unwrap();
+        let elsewhere = dir.path().join("elsewhere");
+        std::fs::create_dir(&elsewhere).unwrap();
+        let target = elsewhere.join("positions.bin");
+        let vpd_path = dir.path().join("linked.vpd");
+        let index_link = dir.path().join("linked.vpdi");
+        std::os::unix::fs::symlink(&target, &index_link).unwrap();
+        let (config, source) = with_source(&vpd_path, TabixConfig::default());
+        for written in ["FIRST", "OTHER"] {
+            let (column_names, records) = one_row(200, written);
+            BinaryStoreWriter::new(vpd_path.clone())
+                .write(&column_names, &records, &config, &source)
+                .unwrap();
+            assert!(index_link.is_symlink(), "{written}: the link stays a link");
+            assert!(std::fs::symlink_metadata(&target).unwrap().is_file());
+            let store = BinaryAnnotator::open(&vpd_path, &config).unwrap();
+            assert_eq!(store.query("21", 200, 200).unwrap()[0].columns[2], written);
+        }
+        assert_eq!(entries(&elsewhere), ["positions.bin"]);
+        assert_eq!(
+            entries(dir.path()),
+            ["elsewhere", "linked.table", "linked.vpd", "linked.vpdi"]
+        );
+    }
+
+    /// A link whose relative target is missing names a file beside the link,
+    /// whatever the process's own directory: the store is created there, and
+    /// the link stays a link.
+    #[cfg(unix)]
+    #[test]
+    fn a_relative_link_to_a_missing_target_has_it_created_beside_the_link() {
+        let dir = tempfile::tempdir().unwrap();
+        let beside = dir.path().join("beside");
+        std::fs::create_dir(&beside).unwrap();
+        let link = beside.join("rel.vpd");
+        std::os::unix::fs::symlink("fresh.vpd", &link).unwrap();
+        let (config, source) = with_source(&link, TabixConfig::default());
+        let (column_names, records) = one_row(200, "FRESH");
+        BinaryStoreWriter::new(link.clone())
+            .write(&column_names, &records, &config, &source)
+            .unwrap();
+        assert!(link.is_symlink());
+        assert!(std::fs::symlink_metadata(beside.join("fresh.vpd"))
+            .unwrap()
+            .is_file());
+        assert!(!Path::new("fresh.vpd").exists());
+        let store = BinaryAnnotator::open(&link, &config).unwrap();
+        assert_eq!(store.query("21", 200, 200).unwrap()[0].columns[2], "FRESH");
+        assert_eq!(
+            entries(&beside),
+            ["fresh.vpd", "rel.table", "rel.vpd", "rel.vpdi"]
+        );
+    }
+
+    /// A batch query reads its regions merged across gaps of up to 1000
+    /// bases, and the result answers each asked position as a single query
+    /// of that position does: two positions 500 bases apart are read as one
+    /// region, the row between them is read with it and returned for neither,
+    /// and a row spanning both is returned for each, once.
+    #[test]
+    fn a_batch_answers_each_asked_position_as_its_single_query_does() {
+        let dir = tempfile::tempdir().unwrap();
+        let vpd_path = dir.path().join("bridged.vpd");
+        let column_names: Vec<String> = ["chr", "start", "end", "name"].map(String::from).to_vec();
+        let row = |start: u64, end: u64, name: &str| TabixRecord {
+            chr: "21".to_string(),
+            start,
+            end,
+            columns: vec!["21".into(), start.to_string(), end.to_string(), name.into()],
+            header: Some(Arc::new(column_names.clone())),
+        };
+        let records = vec![(
+            "21".to_string(),
+            vec![
+                row(900, 1600, "spanning"),
+                row(1000, 1000, "first"),
+                row(1200, 1200, "between"),
+                row(1500, 1500, "second"),
+            ],
+        )];
+        let (spans, source) = with_source(
+            &vpd_path,
+            TabixConfig {
+                end_col: Some(2),
+                ..TabixConfig::default()
+            },
+        );
+        BinaryStoreWriter::new(vpd_path.clone())
+            .write(&column_names, &records, &spans, &source)
+            .unwrap();
+        let store = BinaryAnnotator::open(&vpd_path, &spans).unwrap();
+        assert_eq!(merge_intervals(&[(1000, 1000), (1500, 1500)]).len(), 1);
+
+        let names = |records: Vec<TabixRecord>| -> Vec<String> {
+            records.into_iter().map(|r| r.columns[3].clone()).collect()
+        };
+        let asked = [("21", 1000, 1000), ("21", 1500, 1500)];
+        let reversed = [asked[1], asked[0]];
+        for regions in [asked, reversed] {
+            let batch = store.query_batch(&regions).unwrap();
+            for (position, expected) in [
+                (1000, ["spanning", "first"]),
+                (1500, ["spanning", "second"]),
+            ] {
+                let single = names(store.query("21", position, position).unwrap());
+                assert_eq!(single, expected);
+                assert_eq!(
+                    names(
+                        batch
+                            .lookup("21", position, position)
+                            .into_iter()
+                            .cloned()
+                            .collect()
+                    ),
+                    single,
+                    "position {position}"
+                );
+            }
+        }
+    }
+
+    /// The two files of the store at `vpd_path`, the data's bytes and the
+    /// index's.
+    fn store_bytes(vpd_path: &Path) -> (Vec<u8>, Vec<u8>) {
+        (
+            std::fs::read(vpd_path).unwrap(),
+            std::fs::read(vpd_path.with_extension("vpdi")).unwrap(),
+        )
+    }
+
+    /// A row of `chr` spanning `start..=end`, named in its last cell.
+    fn named_row(chr: &str, start: u64, end: u64, name: &str) -> TabixRecord {
+        TabixRecord {
+            chr: chr.to_string(),
+            start,
+            end,
+            columns: vec![chr.into(), start.to_string(), end.to_string(), name.into()],
+            header: None,
+        }
+    }
+
+    /// `rows` as [`BinaryStoreWriter::write`] takes them: grouped by
+    /// chromosome in the byte order of the names, each chromosome's rows in a
+    /// stable sort by start.
+    fn grouped_by_start(rows: &[TabixRecord]) -> Vec<(String, Vec<TabixRecord>)> {
+        let mut grouped: BTreeMap<String, Vec<TabixRecord>> = BTreeMap::new();
+        for row in rows {
+            grouped
+                .entry(row.chr.clone())
+                .or_default()
+                .push(row.clone());
+        }
+        for rows in grouped.values_mut() {
+            rows.sort_by_key(|row| row.start);
+        }
+        grouped.into_iter().collect()
+    }
+
+    /// The store `rows` make when streamed to `vpd_path` in the order given:
+    /// what the stream returns.
+    fn streamed(
+        vpd_path: &Path,
+        column_names: &[String],
+        rows: &[TabixRecord],
+        config: &TabixConfig,
+        source: &ContentIdentity,
+    ) -> (u64, u64, u64) {
+        let mut stream = BinaryStoreWriter::new(vpd_path.to_path_buf())
+            .stream(column_names, config)
+            .unwrap();
+        for row in rows {
+            stream
+                .push_row(&row.chr, row.start, row.end, &row.columns)
+                .unwrap();
+        }
+        stream.finish(source).unwrap()
+    }
+
+    /// Rows streamed out of start order are stored as a stable sort by start
+    /// stores them: the streamed store equals, byte for byte, the store
+    /// `write` makes of the same rows grouped and sorted, and the rows of one
+    /// start come back in the order they were given. The chromosomes come in
+    /// another order than the byte order of their names; one comes in start
+    /// order, one shuffled with many rows a start, and each holds more rows
+    /// than the rows buffer and more starts than the entries buffer take.
+    #[test]
+    fn rows_streamed_out_of_start_order_are_stored_in_stable_start_order() {
+        let dir = tempfile::tempdir().unwrap();
+        let vpd_path = dir.path().join("streamed.vpd");
+        let reference = dir.path().join("reference.vpd");
+        let column_names: Vec<String> = ["chr", "start", "end", "name"].map(String::from).to_vec();
+        let (config, source) = with_source(
+            &vpd_path,
+            TabixConfig {
+                end_col: Some(2),
+                ..TabixConfig::default()
+            },
+        );
+
+        let mut rows = Vec::new();
+        for i in 0..3000u64 {
+            let start = (i * 7919) % 1000 + 1;
+            rows.push(named_row("3", start, start + i % 5, &format!("three-{i}")));
+        }
+        for i in 0..3000u64 {
+            rows.push(named_row("21", 10 + i, 10 + i, &format!("twenty-one-{i}")));
+        }
+        for (start, end, name) in [
+            (300, 300, "a"),
+            (100, 400, "b"),
+            (300, 310, "c"),
+            (100, 100, "d"),
+            (200, 200, "e"),
+        ] {
+            rows.push(named_row("10", start, end, name));
+        }
+        let written = streamed(&vpd_path, &column_names, &rows, &config, &source);
+        let expected = BinaryStoreWriter::new(reference.clone())
+            .write(&column_names, &grouped_by_start(&rows), &config, &source)
+            .unwrap();
+        assert_eq!(written, expected);
+        assert_eq!(written.0, 6005);
+        assert!(written.1 > 2 * ROWS_BUFFER as u64 && written.2 > 2 * 8192);
+        assert!(
+            store_bytes(&vpd_path) == store_bytes(&reference),
+            "the streamed store differs from the one written from sorted rows"
+        );
+        assert_eq!(
+            entries(dir.path()),
+            [
+                "reference.vpd",
+                "reference.vpdi",
+                "streamed.table",
+                "streamed.vpd",
+                "streamed.vpdi"
+            ]
+        );
+
+        let store = BinaryAnnotator::open(&vpd_path, &config).unwrap();
+        let names = |start: u64| -> Vec<String> {
+            let found = store.query("10", start, start).unwrap();
+            found.into_iter().map(|r| r.columns[3].clone()).collect()
+        };
+        assert_eq!(names(100), ["b", "d"]);
+        assert_eq!(names(300), ["b", "a", "c"]);
+        let ties: Vec<String> = store
+            .query("3", 1, 1)
+            .unwrap()
+            .into_iter()
+            .filter(|r| r.start == 1)
+            .map(|r| r.columns[3].clone())
+            .collect();
+        assert_eq!(ties, ["three-0", "three-1000", "three-2000"]);
+    }
+
+    /// A chromosome given in two separate runs of rows is one chromosome of
+    /// the store: the rows of a start that both runs carry form one position,
+    /// in the order given, and a second run lying below the first is sorted
+    /// into place. The store equals the one `write` makes of the same rows.
+    #[test]
+    fn a_chromosome_streamed_in_two_blocks_is_one_chromosome_of_the_store() {
+        let dir = tempfile::tempdir().unwrap();
+        let vpd_path = dir.path().join("blocks.vpd");
+        let reference = dir.path().join("reference.vpd");
+        let column_names: Vec<String> = ["chr", "start", "end", "name"].map(String::from).to_vec();
+        let (config, source) = with_source(&vpd_path, TabixConfig::default());
+        let rows = [
+            named_row("21", 100, 100, "a"),
+            named_row("21", 200, 200, "b"),
+            named_row("22", 50, 50, "c"),
+            named_row("21", 200, 200, "d"),
+            named_row("21", 300, 300, "e"),
+            named_row("22", 10, 10, "f"),
+        ];
+
+        let written = streamed(&vpd_path, &column_names, &rows, &config, &source);
+        assert_eq!(written.0, 6);
+        BinaryStoreWriter::new(reference.clone())
+            .write(&column_names, &grouped_by_start(&rows), &config, &source)
+            .unwrap();
+        assert!(store_bytes(&vpd_path) == store_bytes(&reference));
+
+        let store = BinaryAnnotator::open(&vpd_path, &config).unwrap();
+        let names = |chr: &str, from: u64, to: u64| -> Vec<String> {
+            let found = store.query(chr, from, to).unwrap();
+            found.into_iter().map(|r| r.columns[3].clone()).collect()
+        };
+        assert_eq!(names("21", 200, 200), ["b", "d"]);
+        assert_eq!(names("21", 1, 1000), ["a", "b", "d", "e"]);
+        assert_eq!(names("22", 1, 1000), ["f", "c"]);
+    }
+
+    /// A stream ended without a row writes a store of its header alone, the
+    /// store `write` makes of no record: it opens, carries the column names
+    /// and answers every query with nothing.
+    #[test]
+    fn a_store_with_no_row_is_written_and_opens() {
+        let dir = tempfile::tempdir().unwrap();
+        let vpd_path = dir.path().join("empty.vpd");
+        let reference = dir.path().join("reference.vpd");
+        let column_names: Vec<String> = ["chr", "pos", "score"].map(String::from).to_vec();
+        let (config, source) = with_source(&vpd_path, TabixConfig::default());
+
+        let written = streamed(&vpd_path, &column_names, &[], &config, &source);
+        let expected = BinaryStoreWriter::new(reference.clone())
+            .write(&column_names, &[], &config, &source)
+            .unwrap();
+        assert_eq!(written, expected);
+        assert_eq!(
+            (written.0, written.1),
+            (0, BinaryStoreWriter::header_size(&column_names))
+        );
+        assert!(store_bytes(&vpd_path) == store_bytes(&reference));
+
+        let store = BinaryAnnotator::open(&vpd_path, &config).unwrap();
+        assert_eq!(store.header().unwrap(), column_names);
+        assert!(store.query("21", 1, u64::MAX).unwrap().is_empty());
+        assert!(store
+            .query_batch(&[("21", 100, 100)])
+            .unwrap()
+            .lookup("21", 100, 100)
+            .is_empty());
+    }
+
+    /// A stream leaves no scratch file on any path it ends by: a header
+    /// refused before a row is taken, a row refused after rows of two
+    /// chromosomes, a stream dropped unfinished, a store whose data cannot be
+    /// renamed into place, and a store published. The files the caller keeps
+    /// under the stream's span paths go with the stream's own. A failed
+    /// stream takes no further row and publishes nothing, and one dropped
+    /// over an earlier store leaves that store's two files.
+    #[test]
+    fn a_refused_or_failed_stream_leaves_no_scratch_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let vpd_path = dir.path().join("left.vpd");
+        let (config, source) = with_source(&vpd_path, TabixConfig::default());
+        let column_names: Vec<String> = ["chr", "pos", "score"].map(String::from).to_vec();
+        let writer = BinaryStoreWriter::new(vpd_path.clone());
+        let cells = |chr: &str, start: u64, score: &str| {
+            [chr.to_string(), start.to_string(), score.to_string()]
+        };
+        let before = entries(dir.path());
+        assert_eq!(before, ["left.table"]);
+
+        let wide_header: Vec<String> = (0..=usize::from(u16::MAX))
+            .map(|i| format!("c{i}"))
+            .collect();
+        let refused = writer.stream(&wide_header, &config).err().unwrap();
+        assert!(
+            refused
+                .to_string()
+                .ends_with("the header has 65536 cells, more than the 65535 a store records"),
+            "{refused}"
+        );
+        assert_eq!(entries(dir.path()), before);
+
+        let mut stream = writer.stream(&column_names, &config).unwrap();
+        for (chr, start) in [("21", 200), ("22", 100), ("21", 100)] {
+            stream
+                .push_row(chr, start, start, &cells(chr, start, "0.5"))
+                .unwrap();
+        }
+        for number in 0..2 {
+            std::fs::write(stream.span_scratch_path(number), b"a caller's spans").unwrap();
+        }
+        let open = entries(dir.path());
+        for role in ["data", "rows.0", "rows.1", "starts.1", "spans.0", "spans.1"] {
+            let name = format!("left.vpd.{}.{role}.partial", std::process::id());
+            assert!(open.contains(&name), "{name} is not among {open:?}");
+        }
+        let too_wide = "x".repeat(usize::from(u16::MAX) + 1);
+        let refused = stream
+            .push_row("22", 300, 300, &cells("22", 300, &too_wide))
+            .unwrap_err()
+            .to_string();
+        assert_eq!(
+            refused,
+            "plugin initialization failed: row 22:300 cell 2 (score) has 65536 bytes, more than \
+             the 65535 a store records"
+        );
+        let after = stream
+            .push_row("22", 400, 400, &cells("22", 400, "0.5"))
+            .unwrap_err()
+            .to_string();
+        assert!(
+            after.ends_with("the store's stream failed at an earlier call and takes no more"),
+            "{after}"
+        );
+        assert_eq!(stream.finish(&source).unwrap_err().to_string(), after);
+        assert_eq!(entries(dir.path()), before);
+
+        writer.write(&column_names, &[], &config, &source).unwrap();
+        assert_eq!(entries(dir.path()), ["left.table", "left.vpd", "left.vpdi"]);
+        let mut stream = writer.stream(&column_names, &config).unwrap();
+        stream
+            .push_row("21", 100, 100, &cells("21", 100, "0.5"))
+            .unwrap();
+        drop(stream);
+        assert_eq!(entries(dir.path()), ["left.table", "left.vpd", "left.vpdi"]);
+        for path in [&vpd_path, &vpd_path.with_extension("vpdi")] {
+            std::fs::remove_file(path).unwrap();
+        }
+
+        std::fs::create_dir(&vpd_path).unwrap();
+        let mut stream = writer.stream(&column_names, &config).unwrap();
+        for (chr, start) in [("21", 200), ("22", 100), ("21", 100)] {
+            stream
+                .push_row(chr, start, start, &cells(chr, start, "0.5"))
+                .unwrap();
+        }
+        std::fs::write(stream.span_scratch_path(0), b"a caller's spans").unwrap();
+        let failed = stream.finish(&source).unwrap_err().to_string();
+        assert!(failed.contains("failed to move"), "{failed}");
+        assert_eq!(entries(dir.path()), ["left.table", "left.vpd"]);
+        std::fs::remove_dir(&vpd_path).unwrap();
+
+        let mut stream = writer.stream(&column_names, &config).unwrap();
+        for (chr, start) in [("21", 200), ("22", 100), ("21", 100)] {
+            stream
+                .push_row(chr, start, start, &cells(chr, start, "0.5"))
+                .unwrap();
+        }
+        std::fs::write(stream.span_scratch_path(0), b"a caller's spans").unwrap();
+        assert_eq!(stream.chromosomes(), 2);
+        assert_eq!(stream.finish(&source).unwrap().0, 3);
+        assert_eq!(entries(dir.path()), ["left.table", "left.vpd", "left.vpdi"]);
+        assert!(BinaryAnnotator::open(&vpd_path, &config).is_ok());
+    }
+
+    /// A stream changes nothing at the store's two paths before it publishes,
+    /// so an earlier store stays whole, byte for byte, and answers: while a
+    /// stream over it takes rows, after a row is refused, after a stream is
+    /// dropped unfinished, and after `write` is refused at its second row. A
+    /// stream that finishes replaces it. A stream that never ends, as a
+    /// conversion killed while it reads leaves one, has its scratch files
+    /// beside the earlier store, which still answers.
+    #[test]
+    fn a_stream_that_does_not_publish_leaves_an_earlier_store_whole() {
+        let dir = tempfile::tempdir().unwrap();
+        let vpd_path = dir.path().join("kept.vpd");
+        let (config, source) = with_source(&vpd_path, TabixConfig::default());
+        let writer = BinaryStoreWriter::new(vpd_path.clone());
+        let (column_names, earlier) = one_row(200, "EARLIER");
+        writer
+            .write(&column_names, &earlier, &config, &source)
+            .unwrap();
+        let whole = entries(dir.path());
+        assert_eq!(whole, ["kept.table", "kept.vpd", "kept.vpdi"]);
+        let bytes = store_bytes(&vpd_path);
+        let answers = || {
+            BinaryAnnotator::open(&vpd_path, &config)
+                .unwrap()
+                .query("21", 200, 200)
+                .unwrap()[0]
+                .columns[2]
+                .clone()
+        };
+        let cells =
+            |start: u64, score: &str| ["21".to_string(), start.to_string(), score.to_string()];
+        let too_wide = "x".repeat(usize::from(u16::MAX) + 1);
+        let refusal = "plugin initialization failed: row 21:300 cell 2 (score) has 65536 bytes, \
+                       more than the 65535 a store records";
+
+        let mut stream = writer.stream(&column_names, &config).unwrap();
+        stream
+            .push_row("21", 200, 200, &cells(200, "LATER"))
+            .unwrap();
+        assert!(
+            store_bytes(&vpd_path) == bytes,
+            "a stream taking rows changed the earlier store"
+        );
+        assert_eq!(answers(), "EARLIER");
+        let refused = stream
+            .push_row("21", 300, 300, &cells(300, &too_wide))
+            .unwrap_err();
+        assert_eq!(refused.to_string(), refusal);
+        assert!(stream.finish(&source).is_err());
+        assert_eq!(entries(dir.path()), whole, "after a refused row");
+        assert!(store_bytes(&vpd_path) == bytes, "after a refused row");
+        assert_eq!(answers(), "EARLIER");
+
+        let mut stream = writer.stream(&column_names, &config).unwrap();
+        stream
+            .push_row("21", 200, 200, &cells(200, "LATER"))
+            .unwrap();
+        drop(stream);
+        assert_eq!(entries(dir.path()), whole, "after a dropped stream");
+        assert!(store_bytes(&vpd_path) == bytes, "after a dropped stream");
+        assert_eq!(answers(), "EARLIER");
+
+        let (_, mut later) = one_row(200, "LATER");
+        later[0].1.push(TabixRecord {
+            chr: "21".to_string(),
+            start: 300,
+            end: 300,
+            columns: cells(300, &too_wide).to_vec(),
+            header: None,
+        });
+        let refused = writer
+            .write(&column_names, &later, &config, &source)
+            .unwrap_err();
+        assert_eq!(refused.to_string(), refusal);
+        assert_eq!(entries(dir.path()), whole, "after a refused write");
+        assert!(store_bytes(&vpd_path) == bytes, "after a refused write");
+        assert_eq!(answers(), "EARLIER");
+
+        let mut stream = writer.stream(&column_names, &config).unwrap();
+        stream
+            .push_row("21", 200, 200, &cells(200, "LATER"))
+            .unwrap();
+        assert_eq!(stream.finish(&source).unwrap().0, 1);
+        assert_eq!(entries(dir.path()), whole);
+        assert_eq!(answers(), "LATER");
+        let bytes = store_bytes(&vpd_path);
+
+        // No destructor runs in a killed process: the stream is leaked with
+        // its scratch files open, and no later stream of this output is
+        // begun here, since one would wait for their locks.
+        let mut stream = writer.stream(&column_names, &config).unwrap();
+        stream
+            .push_row("21", 200, 200, &cells(200, "NEVER"))
+            .unwrap();
+        std::mem::forget(stream);
+        let left = entries(dir.path());
+        for role in ["data", "rows.0", "starts.0"] {
+            let name = format!("kept.vpd.{}.{role}.partial", std::process::id());
+            assert!(left.contains(&name), "{name} is not among {left:?}");
+        }
+        assert!(
+            store_bytes(&vpd_path) == bytes,
+            "after a stream that never ended"
+        );
+        assert_eq!(answers(), "LATER");
+    }
+
+    /// An earlier index that cannot be removed ends the write before the
+    /// publication begins: here a directory stands at the index's path, and
+    /// the refused write leaves the earlier data file byte for byte, the
+    /// directory and no scratch file.
+    #[test]
+    fn an_earlier_index_that_cannot_be_removed_keeps_the_earlier_data() {
+        let dir = tempfile::tempdir().unwrap();
+        let vpd_path = dir.path().join("held.vpd");
+        let vpdi_path = dir.path().join("held.vpdi");
+        let (config, source) = with_source(&vpd_path, TabixConfig::default());
+        let writer = BinaryStoreWriter::new(vpd_path.clone());
+        let (column_names, earlier) = one_row(200, "EARLIER");
+        writer
+            .write(&column_names, &earlier, &config, &source)
+            .unwrap();
+        let data = std::fs::read(&vpd_path).unwrap();
+        std::fs::remove_file(&vpdi_path).unwrap();
+        std::fs::create_dir(&vpdi_path).unwrap();
+        let held = entries(dir.path());
+        assert_eq!(held, ["held.table", "held.vpd", "held.vpdi"]);
+
+        let (_, later) = one_row(200, "LATER");
+        let refused = writer
+            .write(&column_names, &later, &config, &source)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            refused.starts_with(&format!(
+                "plugin initialization failed: failed to remove index file {}: ",
+                vpdi_path.display()
+            )),
+            "{refused}"
+        );
+        assert_eq!(entries(dir.path()), held);
+        assert!(vpdi_path.is_dir());
+        assert!(
+            std::fs::read(&vpd_path).unwrap() == data,
+            "a failed removal changed the earlier data file"
+        );
+    }
+
+    /// A conversion removes, before it writes, the numbered scratch files of
+    /// its own output that a killed conversion left: those of a process id
+    /// whose data scratch file is gone, and those of one whose data scratch
+    /// file it can lock. The numbered files of a conversion that holds its
+    /// data scratch file locked stay, closed as they are, as do the files of
+    /// another output and names that are no numbered scratch name of this
+    /// one. Once the lock is gone the next conversion removes them.
+    #[test]
+    fn numbered_scratch_files_of_a_dead_conversion_are_removed_and_a_live_ones_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let vpd_path = dir.path().join("swept.vpd");
+        let (config, source) = with_source(&vpd_path, TabixConfig::default());
+        let own = std::process::id();
+        let (gone, dead, live) = (
+            own.wrapping_add(1),
+            own.wrapping_add(2),
+            own.wrapping_add(3),
+        );
+        let numbered =
+            |pid: u32, role: &str, number: u64| format!("swept.vpd.{pid}.{role}.{number}.partial");
+        let data = |pid: u32| format!("swept.vpd.{pid}.data.partial");
+        for name in [
+            numbered(gone, "rows", 0),
+            numbered(gone, "starts", 0),
+            numbered(gone, "spans", 3),
+            numbered(dead, "rows", u64::MAX),
+            data(dead),
+        ] {
+            std::fs::write(dir.path().join(name), b"left by a killed conversion").unwrap();
+        }
+        let live_names = [
+            numbered(live, "rows", 0),
+            numbered(live, "starts", 1),
+            numbered(live, "spans", 0),
+            data(live),
+        ];
+        for name in &live_names {
+            std::fs::write(dir.path().join(name), b"of a running conversion").unwrap();
+        }
+        let held = File::open(dir.path().join(data(live))).unwrap();
+        held.lock().unwrap();
+        let other_names = [
+            format!("other.vpd.{gone}.rows.0.partial"),
+            format!("swept.vpd.{gone}.cells.0.partial"),
+            format!("swept.vpd.{gone}.rows.x.partial"),
+            format!("swept.vpd.{gone}.rows.0.1.partial"),
+            format!("swept.vpd.{gone}.rows.0.partial.kept"),
+            format!("swept.vpd.x{gone}.rows.0.partial"),
+        ];
+        for name in &other_names {
+            std::fs::write(dir.path().join(name), b"not a scratch file of this output").unwrap();
+        }
+        let write = || {
+            let (column_names, records) = one_row(200, "SCORE");
+            BinaryStoreWriter::new(vpd_path.clone())
+                .write(&column_names, &records, &config, &source)
+                .unwrap();
+        };
+        let listed = |kept: &[&[String]]| {
+            let mut names: Vec<String> = ["swept.table", "swept.vpd", "swept.vpdi"]
+                .map(String::from)
+                .to_vec();
+            names.extend(kept.iter().flat_map(|names| names.iter().cloned()));
+            names.sort();
+            names
+        };
+
+        write();
+        assert_eq!(entries(dir.path()), listed(&[&live_names, &other_names]));
+
+        drop(held);
+        write();
+        assert_eq!(entries(dir.path()), listed(&[&other_names]));
+
+        assert_eq!(
+            numbered_scratch_pid(
+                OsStr::new(&numbered(live, "starts", 7)),
+                OsStr::new("swept.vpd")
+            ),
+            Some(live)
+        );
+        let long = format!("{}.vpd", "n".repeat(247));
+        let path = numbered_path(&dir.path().join(&long), ROWS_ROLE, usize::MAX);
+        let name = path.file_name().unwrap();
+        assert!(name.len() <= NAME_MAX, "{} bytes", name.len());
+        assert_eq!(
+            numbered_scratch_pid(name, &numbered_stem(OsStr::new(&long))),
+            Some(own)
+        );
+    }
+
+    /// Two data files whose names share every byte a numbered scratch name
+    /// keeps of a long name have their numbered scratch files under two
+    /// stems: a store written at one while a stream of the other is open
+    /// removes none of that stream's files, and each store holds its own
+    /// rows. A numbered file a killed conversion left of such an output goes
+    /// when that output is written again.
+    #[test]
+    fn numbered_scratch_files_of_two_long_named_outputs_lie_apart() {
+        let dir = tempfile::tempdir().unwrap();
+        let shared = "n".repeat(209);
+        let first = dir.path().join(format!("{shared}aaaa.vpd"));
+        let other = dir.path().join(format!("{shared}bbbb.vpd"));
+        let table = dir.path().join("long.table");
+        std::fs::write(&table, b"the table").unwrap();
+        let source = ContentIdentity::of_file(&table).unwrap();
+        let config = TabixConfig {
+            file_path: table,
+            ..TabixConfig::default()
+        };
+        let column_names: Vec<String> = ["chr", "pos", "score"].map(String::from).to_vec();
+        let cells = |chr: &str, start: u64| [chr.to_string(), start.to_string(), "FIRST".into()];
+        let write = |vpd_path: &Path, score: &str| {
+            let (column_names, records) = one_row(200, score);
+            BinaryStoreWriter::new(vpd_path.to_path_buf())
+                .write(&column_names, &records, &config, &source)
+                .unwrap();
+        };
+        let score = |vpd_path: &Path| {
+            BinaryAnnotator::open(vpd_path, &config)
+                .unwrap()
+                .query("21", 200, 200)
+                .unwrap()[0]
+                .columns[2]
+                .clone()
+        };
+
+        let mut stream = BinaryStoreWriter::new(first.clone())
+            .stream(&column_names, &config)
+            .unwrap();
+        for (chr, start) in [("21", 200), ("22", 100), ("21", 300)] {
+            stream
+                .push_row(chr, start, start, &cells(chr, start))
+                .unwrap();
+        }
+        write(&other, "OTHER");
+        assert_eq!(stream.finish(&source).unwrap().0, 3);
+        assert_eq!(score(&first), "FIRST");
+        assert_eq!(score(&other), "OTHER");
+
+        let stem = numbered_stem(first.file_name().unwrap());
+        assert_ne!(stem, numbered_stem(other.file_name().unwrap()));
+        let mut left = stem;
+        left.push(format!(
+            ".{}.rows.0.partial",
+            std::process::id().wrapping_add(1)
+        ));
+        assert!(left.len() <= NAME_MAX, "{} bytes", left.len());
+        let left = dir.path().join(left);
+        std::fs::write(&left, b"left by a killed conversion").unwrap();
+        write(&first, "AGAIN");
+        assert!(!left.exists(), "a killed conversion's numbered file goes");
+        assert_eq!(score(&first), "AGAIN");
+        assert_eq!(entries(dir.path()).len(), 5);
     }
 }

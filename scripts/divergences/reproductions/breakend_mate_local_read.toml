@@ -1,7 +1,7 @@
 entry = "breakend_mate_local_read"
 page = "docs/divergences/defect-e.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
 input_class_basis = "seen in gnomad_sv_v4.1_chr21.vcf.gz, the gnomAD-SV file of the GRCh38 structural-variant set: 4,158 pairs of class 11"
 notes = "The mate-allele rows are selected by the mate's coordinate, 21:30425600, and Ensembl VEP evaluates them at the record's own coordinate, 21:11200001, so the transcript the mate lies in gets bare feature_truncation and the one it lies near intergenic_variant; vep-rs evaluates the mate where it is."
@@ -33,4 +33,20 @@ ensembl_vep = [
 vep_rs = [
   "21:11200001 | N[21:30425600[ | ENST00000334068 | upstream_gene_variant | 4620",
   "21:11200001 | N[21:30425600[ | ENST00000390690 | feature_truncation,coding_sequence_variant | -",
+]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/sv/breakend.rs::calculate_paired_mate",
+    "crates/vep-effects/src/sv/breakend.rs::mate_breakpoint",
+]
+tests = [
+    "crates/vep-effects/src/concordance_tests.rs::concordance_mate_side_row_inside_intron_is_truncation_and_intron_variant",
+    "crates/vep-effects/src/concordance_tests.rs::concordance_mate_side_row_upstream_within_5kb_is_upstream_gene_variant",
+    "crates/vep-effects/src/sv/breakend.rs::tests::test_paired_mate_row_does_not_read_the_local_coordinate",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/structural.rs::filter_breakend_mate_local_read_pairs",
+    "tools/vep-golden-corpus/src/classify/keys.rs::classify_mate_side_pair",
+    "tools/vep-sv-compare/src/masks/mate_read.rs::filter_breakend_mate_local_read_pairs",
 ]

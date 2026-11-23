@@ -1,0 +1,2 @@
+file_name	source	location	feature_type	consequence
+o.txt	missing_in_rust	1:11	Transcript	x

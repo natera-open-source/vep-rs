@@ -1,7 +1,7 @@
 entry = "utrannotator_missing_file"
 page = "docs/plugins/transcript-model.md#utrannotator"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "malformed"
 input_class_basis = "file is the required path to the plugin's data file (the UTRAnnotator plugin's header, \"file : (Required) Path to UTRAnnotator data file\"): the run passes a path that names no file"
 notes = "The `file=` path names no file. Ensembl VEP prints `Warning: small ORF file not found` on standard output and annotates with `Evidence=NA`; vep-rs refuses the plugin with a warning and writes no UTRAnnotator field."
@@ -29,3 +29,7 @@ where = { record = "uaug_lost_snv", feature = "ENST00000427445" }
 [expected]
 ensembl_vep = ["KozakContext=AGAATGT:type=uORF:KozakStrength=Moderate:DistanceToStop=48:DistanceToCDS=207:CapDistanceToStart=145:Evidence=NA"]
 vep_rs = ["-"]
+
+[implementation]
+code = ["crates/vep-builtins/src/plugins/utr_annotator.rs::UtrAnnotatorPlugin::init"]
+tests = ["crates/vep-builtins/src/plugins/utr_annotator.rs::tests::missing_file_is_an_init_error"]

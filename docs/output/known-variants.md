@@ -22,7 +22,7 @@ Under `--minimal`, a record whose alleles trim to different spans is matched as 
 
 `CLINVAR_SOMATIC_CLASSIFICATION` (under `--clinvar_somatic_classification`) is the cache's classification string as written. Ensembl VEP builds that string from ClinVar's somatic records when it dumps a cache or reads its database. vep-rs reads a cache only, so a classification the cache lacks is never recovered.
 
-`CLIN_SIG` reports, by default (`--clin_sig_allele 1`), the ClinVar entries recorded for the row's own allele when any listed variant carries one. The entries are `;`-joined across variants, each variant's terms `,`-joined. A variant's ClinVar reference allele can differ from the reference `REF_ALLELE` prints: the input's, or under `--minimal` a split record's first allele's trimmed reference. Its entry alleles are then read reverse-complemented first.
+`CLIN_SIG` reports, by default (`--clin_sig_allele 1`), the ClinVar entries recorded for the row's own allele when any listed variant carries one. The entries are `;`-joined across variants, each variant's terms `,`-joined. A list two variants share is written once, and the lists stand in the order of the listed variants, where [Ensembl VEP's order is a hash's](../divergences/clin-sig-allele-list-order.md). A variant's ClinVar reference allele can differ from the reference `REF_ALLELE` prints: the input's, or under `--minimal` a split record's first allele's trimmed reference. Its entry alleles are then read reverse-complemented first.
 
 When no listed variant carries an entry for the row's allele, it lists the terms of the variants read before the first one with allele-specific entries, duplicates kept. Under `--clin_sig_allele 0` it lists every listed variant's terms, duplicates kept.
 
@@ -55,7 +55,7 @@ A variant on the other strand is read through its reverse complement. The one al
 
 Each alternate allele takes the value of the record allele it was matched to. When no match was recorded (`--no_check_alleles`, a known variant with unknown alleles) it takes its own value, else `NA`. A value of `0` is a value. It passes when the value is at or above `--freq_freq` under `gt` or at or below it under `lt`.
 
-Ensembl VEP 116.2 read the allele's own value first and a `0` as no value. Both readings are Ensembl VEP's own corrections in 116.3, and against the 116.2 reference they are documented [intended divergences](../intended-divergences.md).
+Ensembl VEP releases before 116.3 read the allele's own value first, and releases 94.0 to 116.2 read a `0` as no value. Ensembl VEP 116.3 corrects both readings.
 
 Under `exclude`:
 
@@ -84,7 +84,7 @@ A record that loses alleles is renumbered (`ALLELE_NUM`) and its allele string r
 
 ### Population names and the cache
 
-`--freq_pop` accepts `1KG_ALL`, a declared variation column in any case (`af`, `AFR`, `gnomade_nfe`) and `1KG_` before one. On a cache that declares variation columns it refuses every other name, the gnomAD genome populations included, before the input opens. The error is `ERROR: [cache] Invalid population <name> specified`, Ensembl VEP's message (`BaseCacheVariation.pm` line 285). `1KG_ALL` reads the cache's `AF` column where Ensembl VEP 116.2 finds no data and filters nothing ([intended divergences](../divergences/filter-common-1kg-all.md)).
+`--freq_pop` accepts `1KG_ALL`, a declared variation column in any case (`af`, `AFR`, `gnomade_nfe`) and `1KG_` before one. On a cache that declares variation columns it refuses every other name, the gnomAD genome populations included, before the input opens. The error is `ERROR: [cache] Invalid population <name> specified`, Ensembl VEP's message (`BaseCacheVariation.pm` line 286). `1KG_ALL` reads the cache's `AF` column where Ensembl VEP 116.3 finds no data and filters nothing ([intended divergences](../divergences/filter-common-1kg-all.md)).
 
 On a cache that declares no variation columns every `--freq_pop` name is accepted and the filter is inactive. Ensembl VEP builds no variation source there.
 
@@ -103,7 +103,18 @@ A batch in which a record or a split feature was dropped writes each surviving a
 
 A split feature that writes no row (a `*`, a `<DEL:*>`, an allele equal to the reference once trimmed) counts as a drop when the filter drops it. A record `exclude` keeps with its failing alleles does not.
 
-The first feature's `UPLOADED_ALLELE` is the record's anchor-chopped allele string, as every row's is when the record is written as one (`TG/-/AG` for `GTG/G/GAG`), and a later feature's is the uploaded spelling. Ensembl VEP's drop resets its buffer and with it the rejoin, so a reset record takes the same shape in both engines. A split record none of whose alleles writes a row (`GG *,GG`) stays one VCF line and one JSON object under a reset, where Ensembl VEP writes each of its features as its own.
+Such a feature is judged like any other, on the known variants of its own span, and has no frequency data unless one lies exactly there. An allele equal to the reference trims to `-/-` at the point after the record's last base. Under `--no_check_alleles` a known insertion at that point is listed for it, and the feature reads the frequency of the insertion's reference `-`, the remainder included.
+
+A feature that writes no row and survives a reset is a record of its own too, as in Ensembl VEP. For `GG *,TG`, whose common `TG` allele `exclude` drops, the `*` feature stays:
+
+- its VCF line is the input line without `CSQ`
+- its JSON object has its own pair (`GG/*`) and span, and `?` as `most_severe_consequence`
+- the default and tab formats write no row for it
+- the statistics report counts it among `Variants processed`, under its own class and `intergenic_variant`
+
+The first feature's `UPLOADED_ALLELE` is the record's anchor-chopped allele string, as every row's is when the record is written as one (`TG/-/AG` for `GTG/G/GAG`), and a later feature's is the uploaded spelling. Ensembl VEP's drop resets its buffer and with it the rejoin, so a reset record takes the same shape in both engines.
+
+A split record none of whose alleles writes a row (`GG *,GG`) stays one VCF line and one JSON object under a reset, where Ensembl VEP writes each of its features as its own. The statistics report counts it once among `Variants processed`, and once in each count taken with it, where Ensembl VEP's report counts each feature that stays.
 
 The reach of the reset differs. Here it is the dropped record's run of one chromosome within a batch of `--buffer_size` input lines counted from the file's first data line, skipped lines included. In Ensembl VEP it is the buffer, one chromosome's records up to `--buffer_size` (`InputBuffer.pm` lines 191-199), or under `--fork` a chunk of the buffer holding at most `--buffer_size` over twice the fork count (`Runner.pm` line 486). Where the units differ, one engine rejoins a split record the other resets.
 
@@ -119,7 +130,7 @@ A record's span is read as the dump writes it, `POS + 1` to `END`. That is the d
 
 ### What the dump lacks
 
-The dump lacks three kinds of mapping the database holds.
+The dump lacks three kinds of mapping the database holds, and a run under `--check_svs` names them in one `INFO:` line on standard error unless `--quiet` is given.
 
 1. The dump covers the 25 chromosomes (1 to 22, X, Y, MT) and no scaffold or patch. A variant on an unplaced or unlocalised scaffold therefore gets no name where the database holds a mapping. Release 116 holds 27,305 top-level features on 360 other regions, 4,903 of them on 75 `GL` and `KI` scaffolds. The release-116 cache carries several of those scaffolds.
 2. A structural variant mapped to several locations is in the dump at one location per dump piece. A further mapping the database holds may therefore be missing. On chromosome 21 of release 116 that is 713 of the 97,616 database mappings. They lie under the same name's dump mapping except at 590 of the chromosome's 46,709,983 positions. There the database names a structural variant the dump lacks.
@@ -137,5 +148,5 @@ A record's alleles share the names, as Ensembl VEP keeps them on the record: a b
 
 - [VEP default and tab](vep-and-tab.md#extra-field): where these keys stand among the Extra keys.
 - [Allele frequencies and co-located variants](../cli/allele-frequencies.md): the flags each key appears under.
-- [Intended divergences from Ensembl VEP](../intended-divergences.md): the documented differences, the two frequency readings of Ensembl VEP 116.2 among them.
+- [Intended divergences from Ensembl VEP](../intended-divergences.md): the documented differences, the two frequency readings of Ensembl VEP 116.3 among them.
 - [Cache checksums](../cache-checksums.md): the manifest check that refuses a cache listing an absent file.

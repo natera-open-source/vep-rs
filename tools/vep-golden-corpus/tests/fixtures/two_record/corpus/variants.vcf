@@ -1,0 +1,4 @@
+##fileformat=VCFv4.2
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+21	100	rs1	A	G	.	PASS	.
+21	200	rs2	C	T	.	PASS	.

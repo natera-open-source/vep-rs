@@ -1,15 +1,17 @@
 entry = "refseq_edited_model_deleted_span_codons"
 page = "docs/divergences/refseq-edited-model-deleted-span-codons.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 8 of 77,675 cache transcripts · 10 flag sets, 4 corpora"
-notes = "NM_030582.4 and NM_130444.3 lack the nine genomic bases 21:45504526-45504534; the seventeen-base deletion holds eight coding positions of each, so Ensembl VEP's reference codons end in the genome's C and vep-rs's in the models' A."
+input_class_basis = "2 · 14 of 116,165 cache transcripts · 19 flag sets, 5 corpora"
+notes = "NM_030582.4 and NM_130444.3 lack the nine genomic bases 21:45504526-45504534. The seventeen-base deletion rs1179352929 holds eight coding positions of each, so Ensembl VEP's reference codons end in the genome's C and vep-rs's in the models' A. ClinVar's eighteen-base deletion 1338712 holds nine, three whole codons, and Ensembl VEP's third residue is read from bases the models lack. The twelve-base deletion 21:45504525-45504536, written for this file, holds three inside two codons: Ensembl VEP's spliced codons fail its in-frame test and it writes protein_altering_variant."
 
 [input]
 format = "vcf"
 text = """
 21	45504518	rs1179352929	CCAGGCCCCCCAGGCCCA	C	.	.	.
+21	45504520	1338712	AGGCCCCCCAGGCCCACGT	A	.	.	.
+21	45504524	twelve_bases	CCCCCAGGCCCAC	C	.	.	.
 """
 
 [cache]
@@ -24,11 +26,43 @@ fasta = "tests/golden/116/GRCh38-refseq/reference.fa.gz"
 flags = ["--refseq"]
 
 [compare]
-kind = "field"
-field = "Codons"
-with_key = true
-where = { record = "rs1179352929", feature = ["NM_030582.4", "NM_130444.3"] }
+kind = "rows"
+where = { feature = ["NM_030582.4", "NM_130444.3"] }
+columns = ["Location", "Feature", "Consequence", "Amino_acids", "Codons"]
 
 [expected]
-ensembl_vep = ["NM_030582.4=cCAGGCCCC/c", "NM_130444.3=cCAGGCCCC/c"]
-vep_rs = ["NM_030582.4=cCAGGCCCA/c", "NM_130444.3=cCAGGCCCA/c"]
+ensembl_vep = [
+  "21:45504519-45504535 | NM_030582.4 | frameshift_variant | PGP/X | cCAGGCCCC/c",
+  "21:45504519-45504535 | NM_130444.3 | frameshift_variant | PGP/X | cCAGGCCCC/c",
+  "21:45504521-45504538 | NM_030582.4 | inframe_deletion | GPP/- | GGCCCCCCA/-",
+  "21:45504521-45504538 | NM_130444.3 | inframe_deletion | GPP/- | GGCCCCCCA/-",
+  "21:45504525-45504536 | NM_030582.4 | protein_altering_variant | PP/R | cCCCCA/cgt",
+  "21:45504525-45504536 | NM_130444.3 | protein_altering_variant | PP/R | cCCCCA/cgt",
+]
+vep_rs = [
+  "21:45504519-45504535 | NM_030582.4 | frameshift_variant | PGP/X | cCAGGCCCA/c",
+  "21:45504519-45504535 | NM_130444.3 | frameshift_variant | PGP/X | cCAGGCCCA/c",
+  "21:45504521-45504538 | NM_030582.4 | inframe_deletion | GPR/- | GGCCCACGT/-",
+  "21:45504521-45504538 | NM_130444.3 | inframe_deletion | GPR/- | GGCCCACGT/-",
+  "21:45504525-45504536 | NM_030582.4 | inframe_deletion | PR/R | cCACGT/cgt",
+  "21:45504525-45504536 | NM_130444.3 | inframe_deletion | PR/R | cCACGT/cgt",
+]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/coding.rs::PerlCodingEval::codon",
+    "crates/vep-effects/src/display.rs::codon",
+    "crates/vep-effects/src/display.rs::peptide",
+]
+tests = [
+    "crates/vep-cli/tests/consequence_documented_rows.rs::a_deletion_across_bases_an_edited_model_lacks_reads_the_models_codons",
+    "crates/vep-cli/tests/deleted_edit_bases.rs::a_deletion_across_the_deleted_bases_reads_the_models_codons_and_residues",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/term_pairs.rs::deleted_span_coding_reference_cell",
+    "tools/vep-formats-compare/src/rules/term_pairs.rs::deleted_span_codons_pair",
+    "tools/vep-formats-compare/src/rules/term_pairs.rs::deleted_span_inframe_term_pair",
+    "tools/vep-formats-compare/src/rules/term_pairs.rs::deleted_span_residues_pair",
+    "tools/vep-formats-compare/src/rules/term_pairs.rs::inframe_deletion_reads_codons",
+    "tools/vep-formats-compare/src/rules/term_pairs.rs::standard_translation",
+]

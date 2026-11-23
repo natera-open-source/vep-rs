@@ -6,51 +6,57 @@
    "plugin_data/LoFtool_scores.txt": "352f7b4a3673edd07b6430a5ac2ef4bda8c16b68c8a7d54968fd30f434a12115"
   }
  },
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --dir_plugins {plugins} --plugin LoFtool [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "none on either side",
  "input": "29 ClinVar GRCh38 records on chromosome 21 (public ClinVar identifiers; INFO dropped), the records of tests/golden/116/GRCh38-plugin-pli, one or two in the canonical transcript of each chosen gene (an exonic substitution and, where the records offer one, an exonic indel): TPTE, LIPI, APP, SOD1, TTC3, DYRK1A, DSCAM, RUNX1, KCNJ6, SETD4, CXADR and HUNK, which the LoFtool file lists; GABPA, LTN1, TMPRSS15 and two further genes, which it does not list; and one intergenic record more than 5,000 bases from any transcript. The scores reach the output in every shape the plugin prints: LoFtool's `%g` from `0.00427` to `0.992`.",
  "sha256": {
-  "default.txt": "01c66735f4953ebcc474dcc6fa8dedba6c899c59f17a300b3bed30fd4a0f6706",
-  "tab.txt": "bf9b995986de14204a458fe3c3c794ae27719ba97619f2765f5c1722916e0995",
-  "vcf.vcf": "6417436cc65baa43875a963f9e12aecf41826b7f87f6666dc281d87076f2d9e5",
-  "json.jsonl": "c5ab84cf8771f780ae1462d884b909bab33a8afab0f64a6fa9f64d0dab5f6945",
-  "default.summary.log": "0dcb12ebe52e57ef2fafad324c0b032ea07e5fba41c7057f3877d7759bd4f222",
-  "tab.summary.log": "0049d76843db65d7f78006583b1a15c643ce66af3fbef683124010dbf9c98b7c",
-  "vcf.summary.log": "b38656e626643579ed30995bc51da8e2126ca8e14a891ea0d621bf8082b1e4ea",
-  "json.summary.log": "87c058d9c10ce65bc4a2b42b175947d95067ba2963ddf94bdf1c898195a6d867"
+  "default.txt": "3b45bd5f44f33af265b6dfde5a5b41e32e596ef93e0e441b252cf3563ea6edd6",
+  "tab.txt": "d8c065d78f7dbb60592d51c7ef80cb72aec946cdea210c56794fd2d46095ed72",
+  "vcf.vcf": "c6dc38be452995d9ce03f1935b4b59ef67910488f71cc99de8eafaef8c55bd05",
+  "json.jsonl": "760c2bd2d636a856aa71afbd7047d7a20ca8ca7a497c74c9e328a74d86d8eb07",
+  "default.summary.log": "92dfa79b0f71a525d5eaae9f9a286cad55b764501daf5091f43f191a323f2f83",
+  "tab.summary.log": "df3192792698a56f5c3c51643272d92128f30d947cd963634fdf5a308664f012",
+  "vcf.summary.log": "294f6778640adb5febf95a27247285071b47857342e366a9c806a68166a62af5",
+  "json.summary.log": "4391867867353c0ae2df6b03b848a060c7c2f2652ca43d4e4b2c89c573be68c5"
  },
  "variants_vcf_sha256": "26e9e856f3117e0cefc00bf216ce614eebf998c94fe176df0ac699fc5adb0745",
  "plugin_files": {
   "plugin_data/LoFtool_scores.txt": "352f7b4a3673edd07b6430a5ac2ef4bda8c16b68c8a7d54968fd30f434a12115"
  },
- "generator": "manifest: scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite plugin-loftool=<reference over the candidate records>=candidates.vcf --k 3 --seed 1 --include <each record's name> --covers LoFtool --matrix tests/parity/matrix.tsv --flag=--dir_plugins --flag={plugins} --flag=--plugin --flag=LoFtool, then flag-set for each flag_sets entry and classify for the manifest's run and each flag set; json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice of the vep-rs JSON conversion of the Ensembl VEP 116 GRCh38 cache; plugin_data: the cut described under plugin_fixtures; expected outputs: scripts/concordance/generate_reference_output.sh --corpus --dir-plugins <VEP_plugins checkout> for the manifest's run and, per flag set, for a copy of the corpus carrying the set's flags as its own, whose outputs and record are the set's",
+ "generator": "manifest: tools/vep-golden-corpus select --release 116 --assembly GRCh38 --dataset plugin-loftool=<reference over the candidate records>=candidates.vcf --k 3 --seed 1 --include <each record's name> --covers LoFtool --matrix tests/parity/matrix.tsv --flag=--dir_plugins --flag={plugins} --flag=--plugin --flag=LoFtool, then flag-set for each flag_sets entry and classify for the manifest's run and each flag set; json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice of the vep-rs JSON conversion of the Ensembl VEP 116 GRCh38 cache; plugin_data: the cut described under plugin_fixtures; expected outputs: scripts/concordance/generate_reference_output.sh --corpus --dir-plugins <VEP_plugins checkout> for the manifest's run and, per flag set, for a copy of the corpus carrying the set's flags as its own, whose outputs and record are the set's",
  "flag_sets": {
   "scores-file": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --dir_plugins {plugins} --plugin LoFtool,{corpus}/plugin_data/LoFtool_scores.txt [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "48cb16a024bcb84907e5472c2da92ffe6341ba55bbc1d1d0e0108badf0e3b7ef",
+    "tab.txt": "7df1864af3f28e8e6f345a1f2b13d2c7e2687ef69186e681f4d2607983e7d1ea",
+    "vcf.vcf": "8b89ee7d515ed5473dd26dcff24273b45b41ee96edfdb31b981238fbf809ac25",
+    "json.jsonl": "411f691453ed83f37750b3a0b35527b5eab3b446e114ae936281fa276152ab82",
+    "default.summary.log": "7f0d4b36c01391f821616e10c920116cbd71d69fb9298480ead871aa810eb494",
+    "tab.summary.log": "f346288b9a5578389e883f2b00d34f0d59cfe2b0fe20a99e1afc44afb71f852f",
+    "vcf.summary.log": "576d6b94bd2ae69a5a7e707f4f61e8db37a451d61eeab64dfc73106a5663afe0",
+    "json.summary.log": "8a66b80ed0eef48ca4d720755c47deccd5b3c94fa29d727652841d4d0d7fc0d5"
+   },
    "flags": [
     "--dir_plugins",
     "{plugins}",
     "--plugin",
     "LoFtool,{corpus}/plugin_data/LoFtool_scores.txt"
    ],
-   "input": "variants.vcf",
    "expected_dir": "expected_scores-file",
-   "perl_mode": "offline",
-   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --dir_plugins {plugins} --plugin LoFtool,{corpus}/plugin_data/LoFtool_scores.txt [--tab|--vcf|--json]",
-   "sha256": {
-    "default.txt": "323d1969ce3cf5d20c93a28adf2ffde986f9d44f6ccd85937a28581caff82d11",
-    "tab.txt": "4dfda7fa6c7d863582ac23fa5c181b2c7798f83dbc77bd6e67aa8a722d8fa40d",
-    "vcf.vcf": "b6e6a1465ddcb142db1c41a38b23cca92f0af079485abcead1aeda2dda0d76f0",
-    "json.jsonl": "36aeab8800199de2889902757126ec7d688266ef1bb9217524d5d465f22ad488",
-    "default.summary.log": "7fed7786ddc2ae3fadc08a796b29cc3ce806b25b9d1fcb23fa9a6d6f79bf923d",
-    "tab.summary.log": "6a0b3c177783b77e89b3c5861b0cca4fb943c90d5e3203d0b1b2085b08b400fd",
-    "vcf.summary.log": "fe2483c98875307915d0a347d3072f53456e0f5148a28393f75b78e1204cd317",
-    "json.summary.log": "db24b8453040fedbf40b3417bf8b29aaaafb81fdf3bc63e4a0f3976a1cd0e747"
-   }
+   "perl_mode": "offline"
   }
  }
 }

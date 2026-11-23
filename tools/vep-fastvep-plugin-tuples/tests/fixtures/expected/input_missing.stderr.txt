@@ -1,0 +1,1 @@
+ERROR: [fastvep_plugin_tuples] cannot read the input tests/fixtures/inputs/absent.tab: No such file or directory

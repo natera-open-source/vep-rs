@@ -2,25 +2,25 @@
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 //! Ensembl VEP's filter grammar, the one `--transcript_filter` reads
-//! (`Bio::EnsEMBL::VEP::FilterSet`, ensembl-vep release/116.2).
+//! (`Bio::EnsEMBL::VEP::FilterSet`, ensembl-vep release/116.3).
 //!
 //! A filter string is units of `field operator value` joined by `and` and `or`,
-//! grouped by parentheses and inverted by `not`. Perl citations below name
-//! `FilterSet.pm` at release/116.2.
+//! grouped by parentheses and inverted by `not`. Ensembl VEP source citations below name
+//! `FilterSet.pm` at release/116.3.
 //!
 //! * The operators are `eq` (`is`, `=`), `ne` (`!=`), `gt` (`>`), `lt` (`<`),
 //!   `gte` (`>=`), `lte` (`<=`), `ex` (`exists`, `defined`), `nex`, `re`
 //!   (`match`, `matches`, `regex`), `nre`, `in` and `is_child` (the synonym
 //!   table at lines 100-117, the predicates at 704-748). A unit without an
 //!   operator tests that the field is defined; `ne` without a value is `nex`
-//!   (`finish_filter_node`, 370-432).
+//!   (`finish_filter_node`, 370-424).
 //! * `and` multiplies and `or` adds the running result, left to right with no
-//!   precedence (`evaluate`, 441-515): `a or b and c` is `(a or b) and c`.
+//!   precedence (`evaluate`, 441-512): `a or b and c` is `(a or b) and c`.
 //! * A value starting with `#` names another field, whose value is compared.
 //! * `in` takes a comma-separated list, or the name of a file with one value
 //!   per line, read as bytes (385-419).
 //! * `re` and `nre` are case-insensitive, unanchored regular expressions
-//!   (`/$pattern/i`, 714-715), read as Perl reads them ([`filter_regex`]) and
+//!   (`/$pattern/i`, 714-715), read as Perl reads them (`filter_regex`) and
 //!   compiled with the `regex` crate: a construct the crate lacks
 //!   (back-references, look-around) is an error naming the pattern. The
 //!   pattern runs over the bytes of the value as Perl's runs over a byte
@@ -100,7 +100,7 @@ pub trait FilterData {
 
 /// The keys of a transcript as Ensembl VEP's cache stores them, the fields a
 /// `--transcript_filter` can name and the set its prefixes resolve over. The
-/// first twenty are the scalar fields of `AnnotationSource/Database/Transcript.pm`
+/// first twenty-one are the scalar fields of `AnnotationSource/Database/Transcript.pm`
 /// and of the transcript itself; `dbID`, `cdna_coding_start`, `cdna_coding_end`,
 /// `translation` and `_gene_version` are read from the transcript too. `slice`,
 /// `attributes`, `_gene`, `_trans_exon_array` and `_variation_effect_feature_cache`
@@ -200,7 +200,7 @@ impl FilterData for Transcript {
                 .as_ref()
                 .map(|source| Cow::Borrowed(source.column_text())),
             // The cache's spelling, `ok` or `failed`; the `BAM_EDIT` column
-            // upper-cases it (OutputFactory.pm:1551-1553), the filter does not.
+            // upper-cases it (OutputFactory.pm:1560-1562), the filter does not.
             "_bam_edit_status" => self.bam_edit_status.map(|status| {
                 Cow::Borrowed(match status {
                     BamEditStatus::Ok => "ok",
@@ -212,7 +212,7 @@ impl FilterData for Transcript {
             "cdna_coding_end" => self.cdna_coding_end.map(|n| Cow::Owned(n.to_string())),
             // Perl stringifies a reference as its class and address and numifies
             // it as the address, so a value of that shape keeps `is`, `ne`, a
-            // regex and a numeric comparison reading as they do there
+            // regex and a numeric comparison reading as they do in Ensembl VEP
             // (`perl_number` reads the address back); the class name alone
             // would equal the written class and compare as 0.
             "translation" => self
@@ -424,6 +424,19 @@ impl FilterSet {
         out
     }
 
+    /// Whether a unit reads `key`, as its field or as a `#field` value, in a
+    /// filter whose names were resolved at parse time.
+    pub(crate) fn names_key(&self, key: &str) -> bool {
+        fn walk(node: &Node, key: &str) -> bool {
+            let as_value =
+                matches!(&node.bound, Some(Value::Field { key: Some(k), .. }) if k == key);
+            node.key.as_deref() == Some(key)
+                || as_value
+                || node.children.iter().any(|child| walk(child, key))
+        }
+        walk(&self.root, key)
+    }
+
     /// Whether `data` passes the filter; a deferred filter's resolution error
     /// reads as a failure.
     pub fn evaluate(&self, data: &dyn FilterData) -> bool {
@@ -433,7 +446,7 @@ impl FilterSet {
     /// Whether `data` passes the filter, or the error an evaluation meets: a
     /// deferred field name that is a prefix of several of the data's keys
     /// (`get_input`, 574-580), or a `#field` pattern Perl or the dialect
-    /// refuses, which Perl compiles, and dies on, at the match (714).
+    /// refuses, which Ensembl VEP compiles, and dies on, at the match (714).
     pub fn try_evaluate(&self, data: &dyn FilterData) -> Result<bool, FilterError> {
         if self.root.children.is_empty() {
             return Ok(true);
@@ -666,7 +679,7 @@ fn read_list(value: Option<&str>) -> Result<(Option<String>, HashSet<String>), F
         .enumerate()
         .any(|(i, b)| *b == b',' && i >= 1 && i + 1 < bytes.len());
     let entries: Vec<String> = if inline {
-        // Perl's `split` drops the empty fields a trailing comma leaves.
+        // Perl's `split` in Ensembl VEP drops the empty fields a trailing comma leaves.
         let mut parts: Vec<&str> = list.split(',').collect();
         while parts.last() == Some(&"") {
             parts.pop();
@@ -679,10 +692,10 @@ fn read_list(value: Option<&str>) -> Result<(Option<String>, HashSet<String>), F
         }
         let contents = std::fs::read(&path)
             .map_err(|_| FilterError(format!("Could not read from file {list}")))?;
-        // Perl reads the file line by line, so a final newline ends the last
+        // Ensembl VEP reads the file line by line, so a final newline ends the last
         // entry and opens no empty one; `split_inclusive` keeps that count.
         // Each line then loses its carriage returns and every byte `\v`
-        // matches on a byte string (405): 0x0A to 0x0D and 0x85.
+        // matches on a byte string (406): 0x0A to 0x0D and 0x85.
         contents
             .split_inclusive(|b| *b == b'\n')
             .map(|line| {
@@ -787,7 +800,7 @@ fn resolve(field: &str, keys: &[&str]) -> Result<Option<String>, FilterError> {
 }
 
 /// The one key of `keys` that `field` is a case-insensitive prefix of
-/// (567-572); several are the error of 574-580, none is `None`. Perl tests
+/// (567-572); several are the error of 574-580, none is `None`. Ensembl VEP tests
 /// each key against `/^$field/i`, so the name is a pattern over the key's
 /// bytes with ASCII case folded: a name without a regex metacharacter is
 /// compared as the bytes it was read from, any other is compiled.
@@ -938,7 +951,7 @@ fn unit(node: &Node, lookup: &mut Lookup<'_>) -> Result<Option<bool>, FilterErro
 }
 
 /// Whether `piece` matches the unit's regular expression: the compiled one, or
-/// a `#field` value compiled here, whose refusal is the unit's error, as Perl
+/// a `#field` value compiled here, whose refusal is the unit's error, as Ensembl VEP
 /// dies compiling it at the match (714).
 fn matches(
     regex: Option<&Matcher>,
@@ -956,7 +969,7 @@ fn matches(
 /// `get_input`'s numeric extraction (589-610): a value shaped `text(number)` or
 /// `text:number` compared against a numeric filter value is its number (its
 /// text when that is itself a number); any other pairing keeps the value whole.
-/// `CELL_TYPE` and the HGVS fields are exempt, as Perl's condition names them.
+/// `CELL_TYPE` and the HGVS fields are exempt, as Ensembl VEP's condition names them.
 fn extract<'a>(input: Cow<'a, str>, value: Option<&str>, field: &str) -> Cow<'a, str> {
     if field == "CELL_TYPE" || field.contains("HGVS") {
         return input;
@@ -1474,7 +1487,7 @@ mod tests {
 
     /// `is_child` passes on a regex match of the term (`filter_is_child`, 726),
     /// else when the field's term descends from it in the Sequence Ontology
-    /// (728-746), which `vep` reaches with no ontology adaptor and dies on
+    /// (728-747), which `vep` reaches with no ontology adaptor and dies on
     /// (`No ontology adaptor set`, 736): the walk over the built-in table is
     /// the documented extension. A list of terms splits only after a digit
     /// (487), so two terms compare whole.
@@ -1522,7 +1535,7 @@ mod tests {
         ));
     }
 
-    /// A pattern outside the `regex` crate's dialect is an error naming the
+    /// A pattern the `regex` crate cannot express is an error naming the
     /// pattern and the construct, and a pattern Perl refuses is an error with
     /// Perl's message: a reference to a group the pattern lacks, an unclosed
     /// class and a trailing backslash. Perl's `\Z` and `\K` escapes compile.
@@ -1538,6 +1551,10 @@ mod tests {
         assert_eq!(
             error(r"stable_id match ENST\X"),
             r#"pattern "ENST\X" is not supported: unrecognized escape sequence"#
+        );
+        assert_eq!(
+            error("stable_id match s++s$"),
+            r#"pattern "s++s$" is not supported: the possessive quantifier ++ is not supported"#
         );
         assert_eq!(
             error(r"stable_id match \1"),
@@ -1569,6 +1586,13 @@ mod tests {
                 .unwrap_err()
                 .to_string(),
             "pattern \"r(?=x)\" is not supported: look-around, including look-ahead and look-behind, is not supported"
+        );
+        assert_eq!(
+            via_field
+                .try_evaluate(&hash(&[("id", "r"), ("pat", "r{1,2}+")]))
+                .unwrap_err()
+                .to_string(),
+            "pattern \"r{1,2}+\" is not supported: the possessive quantifier {1,2}+ is not supported"
         );
         assert_eq!(
             via_field.try_evaluate(&hash(&[("id", "r"), ("pat", "r{1}")])),
@@ -1610,66 +1634,66 @@ mod tests {
     /// fields as the cache stores them: `-` for TrEMBL, UniParc and the
     /// isoform undefined.
     fn canonical_transcript() -> Transcript {
-        Transcript {
-            stable_id: "ENST00000380152".into(),
-            version: Some(8),
-            db_id: Some(4_201_747),
-            gene_stable_id: "ENSG00000139618".into(),
-            chr: "13".to_string(),
-            start: 32315086,
-            end: 32400268,
-            strand: Strand::Forward,
-            biotype: "protein_coding".into(),
-            source: "ensembl_havana".to_string(),
-            gene_symbol: Some("BRCA2".into()),
-            gene_symbol_source: Some("HGNC".into()),
-            gene_symbol_id: None,
-            hgnc_id: Some("HGNC:1101".into()),
-            gene_phenotype: Some(3),
-            canonical: true,
-            mane_select: None,
-            mane_plus_clinical: None,
-            tsl: None,
-            appris: None,
-            ccds: Some("CCDS9344.1".to_string()),
-            protein_id: Some("ENSP00000369497".into()),
-            refseq: Some("NM_000059.4".to_string()),
-            swissprot: Some("P51587.242".to_string()),
-            trembl: Some("-".to_string()),
-            uniparc: None,
-            exons: Vec::new(),
-            exon_ids: None,
-            introns: Vec::new(),
-            cdna_coding_start: Some(228),
-            cdna_coding_end: Some(10_484),
-            coding_region_start: Some(32_316_461),
-            coding_region_end: Some(32_398_770),
-            translation_start: None,
-            translation_end: None,
-            translation: Some(vep_core::transcript::Translation {
-                stable_id: "ENSP00000369497".to_string(),
-                version: None,
-                db_id: None,
-                start: 1,
-                end: 1,
-                start_exon_index: 0,
-                end_exon_index: 0,
-                seq: None,
-            }),
-            cdna_sequence: None,
-            protein_sequence: None,
-            flags: Vec::new().into(),
-            gencode_primary: false,
-            gencode_basic: false,
-            gene_version: Some(17),
-            uniprot_isoform: None,
-            attributes: Vec::new(),
-            vefc: Some(vep_core::transcript::TranscriptVEFC::default()),
-            source_cache: None,
-            bam_edit_status: None,
-            derived: Default::default(),
-            id_rank: 0,
-        }
+        let mut model = Transcript::default();
+        model.stable_id = "ENST00000380152".into();
+        model.version = Some(8);
+        model.db_id = Some(4_201_747);
+        model.gene_stable_id = "ENSG00000139618".into();
+        model.chr = "13".to_string();
+        model.start = 32315086;
+        model.end = 32400268;
+        model.strand = Strand::Forward;
+        model.biotype = "protein_coding".into();
+        model.source = "ensembl_havana".to_string();
+        model.gene_symbol = Some("BRCA2".into());
+        model.gene_symbol_source = Some("HGNC".into());
+        model.gene_symbol_id = None;
+        model.hgnc_id = Some("HGNC:1101".into());
+        model.gene_phenotype = Some(3);
+        model.canonical = true;
+        model.mane_select = None;
+        model.mane_plus_clinical = None;
+        model.tsl = None;
+        model.appris = None;
+        model.ccds = Some("CCDS9344.1".to_string());
+        model.protein_id = Some("ENSP00000369497".into());
+        model.refseq = Some("NM_000059.4".to_string());
+        model.swissprot = Some("P51587.242".to_string());
+        model.trembl = Some("-".to_string());
+        model.uniparc = None;
+        model.exons = Vec::new();
+        model.exon_ids = None;
+        model.introns = Vec::new();
+        model.cdna_coding_start = Some(228);
+        model.cdna_coding_end = Some(10_484);
+        model.coding_region_start = Some(32_316_461);
+        model.coding_region_end = Some(32_398_770);
+        model.translation_start = None;
+        model.translation_end = None;
+        model.translation = Some(vep_core::transcript::Translation {
+            stable_id: "ENSP00000369497".to_string(),
+            version: None,
+            db_id: None,
+            start: 1,
+            end: 1,
+            seq: None,
+        });
+        model.cdna_sequence = None;
+        model.protein_sequence = None;
+        model.flags = Vec::new().into();
+        model.gencode_primary = false;
+        model.gencode_basic = false;
+        model.gene_version = Some(17);
+        model.uniprot_isoform = None;
+        model.attributes = Vec::new();
+        model.vefc = Some(vep_core::transcript::TranscriptVEFC::default());
+        model.source_cache = None;
+        model.bam_edit_status = None;
+        model.circular_length = None;
+        model.region_files = None;
+        model.derived = Default::default();
+        model.id_rank = 0;
+        model
     }
 
     /// The transcript keys resolve to the cache's values: `is_canonical` is
@@ -2854,6 +2878,9 @@ mod tests {
         "a \\N{U+} escape of several characters and the literal beside it fold as two runs in Perl alone";
     /// The dialect sentence behind the `\N{U+}` sequence shapes vep-rs refuses.
     const SEQUENCE_SHAPE: &str = "a \\N{U+} escape of several characters in a negated class, before a `-` or as the end of a range is refused";
+    /// The dialect sentence behind a possessive quantifier, refused in every
+    /// place, the end of a pattern included.
+    const POSSESSIVE: &str = "a possessive quantifier is refused";
 
     /// The measured shapes vep-rs reads otherwise, each with vep-rs's verdict
     /// and the dialect sentence of `docs/divergences/transcript-filter-fields.md`
@@ -2876,6 +2903,7 @@ mod tests {
         ),
         ("brace 2", Verdict::Refused, "a back-reference is refused"),
         ("brace 39", Verdict::Refused, "a back-reference is refused"),
+        ("brace 47", Verdict::Refused, POSSESSIVE),
         ("charset 42", Verdict::Rows(&[800, 2200]), MERGED_RUN),
         ("charset 244", Verdict::Rows(&[800, 2200]), MERGED_RUN),
         ("charset 43", Verdict::Rows(&[800, 2200]), MERGED_RUN),
@@ -2951,6 +2979,7 @@ mod tests {
         ("named 55", Verdict::Refused, SEQUENCE_SHAPE),
         ("named 73", Verdict::Refused, SEQUENCE_SHAPE),
         ("named 80", Verdict::Refused, SEQUENCE_SHAPE),
+        ("named 93", Verdict::Refused, POSSESSIVE),
         ("named 96", Verdict::Refused, SEQUENCE_SHAPE),
         ("named 100", Verdict::Refused, SEQUENCE_SHAPE),
         ("named 101", Verdict::Refused, SEQUENCE_SHAPE),

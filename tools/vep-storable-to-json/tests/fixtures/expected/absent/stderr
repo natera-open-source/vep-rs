@@ -1,0 +1,2 @@
+WARN: no absent/info.txt; info.json carries no source versions
+ERROR: [storable_to_json] cannot open absent: No such file or directory

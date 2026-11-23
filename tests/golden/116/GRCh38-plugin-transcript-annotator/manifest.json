@@ -28,7 +28,7 @@
   "TranscriptAnnotator",
   "api-plugin-licence-headers"
  ],
- "suites": {
+ "datasets": {
   "ta": {
    "reference": "reference.txt",
    "input": "candidates.vcf",
@@ -112,7 +112,7 @@
  },
  "records": [
   {
-   "suite": "ta",
+   "dataset": "ta",
    "vcf": "21\t10521702\trs463608\tC\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_region_variant",
@@ -120,7 +120,7 @@
    ]
   },
   {
-   "suite": "ta",
+   "dataset": "ta",
    "vcf": "21\t10524568\trs1184063233\tT\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_polypyrimidine_tract_variant",
@@ -128,7 +128,7 @@
    ]
   },
   {
-   "suite": "ta",
+   "dataset": "ta",
    "vcf": "21\t10538730\trs1255945263\tG\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -137,7 +137,7 @@
    ]
   },
   {
-   "suite": "ta",
+   "dataset": "ta",
    "vcf": "21\t10538731\trs2074312880\tA\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -146,7 +146,7 @@
    ]
   },
   {
-   "suite": "ta",
+   "dataset": "ta",
    "vcf": "21\t10541117\trs2074361249\tA\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -155,7 +155,7 @@
    ]
   },
   {
-   "suite": "ta",
+   "dataset": "ta",
    "vcf": "21\t10541121\trs374325784\tG\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,synonymous_variant",
@@ -164,7 +164,7 @@
    ]
   },
   {
-   "suite": "ta",
+   "dataset": "ta",
    "vcf": "21\t10541121\trs374325784\tG\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,synonymous_variant",
@@ -173,7 +173,7 @@
    ]
   },
   {
-   "suite": "ta",
+   "dataset": "ta",
    "vcf": "21\t10541121\trs374325784\tG\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,synonymous_variant",
@@ -182,7 +182,7 @@
    ]
   },
   {
-   "suite": "ta",
+   "dataset": "ta",
    "vcf": "21\t10541124\trs1361703761\tTG\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -191,7 +191,7 @@
    ]
   },
   {
-   "suite": "ta",
+   "dataset": "ta",
    "vcf": "21\t10542444\trs1398151563\tG\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,stop_gained",
@@ -200,7 +200,7 @@
    ]
   },
   {
-   "suite": "ta",
+   "dataset": "ta",
    "vcf": "21\t10561166\trs576571770\tGTTC\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_deletion",
@@ -208,7 +208,7 @@
    ]
   },
   {
-   "suite": "ta",
+   "dataset": "ta",
    "vcf": "21\t14485915\trs1291258748\tG\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -217,7 +217,7 @@
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "flag_sets": [

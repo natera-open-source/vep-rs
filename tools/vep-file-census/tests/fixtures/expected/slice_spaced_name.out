@@ -1,0 +1,9 @@
+##fileformat=VCFv4.2
+##contig=<ID=1,length=1000>
+##contig=<ID=2,length=1000>
+##INFO=<ID=CSQ,Number=.,Type=String,Description="Consequence annotations">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+2	400	.	T	C	.	PASS	XCSQ=1
+
+#a comment line among the records
+1	700	.	A	C	.	PASS	AF=0.2

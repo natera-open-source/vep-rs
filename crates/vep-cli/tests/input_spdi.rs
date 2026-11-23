@@ -251,7 +251,7 @@ fn format_guess_detects_spdi() {
 
 /// Position 0 names the first base (VariationFeatureAdaptor.pm:2524), so
 /// `NC_000021.9:0::G` is an insertion before it: start 1, end 0, printed
-/// `21:0-1` with no transcript to overlap, as Ensembl VEP 116.2 prints it; a
+/// `21:0-1` with no transcript to overlap, as Ensembl VEP 116.3 prints it; a
 /// deletion there is checked against base 1.
 #[test]
 fn insertion_before_the_first_base_prints_0_1() {
@@ -279,7 +279,7 @@ fn insertion_before_the_first_base_prints_0_1() {
 /// span and the sequence's length, where Ensembl VEP's adaptor builds a slice
 /// past the end with no bounds test (VariationFeatureAdaptor.pm:2533,
 /// 2545-2549, 2563-2564), reads `N` for every base past it
-/// (Utils/FastaSequence.pm:619-629) and annotates the record: Ensembl VEP 116.2
+/// (Utils/FastaSequence.pm:619-629) and annotates the record: Ensembl VEP 116.3
 /// prints `21:46709984-46709985 A intergenic_variant` and `21:46709984 -
 /// intergenic_variant` for the VCF twins of `NC_000021.9:46709984::A` and
 /// `NC_000021.9:46709983:1:` on the 46,709,983-base chromosome 21. The
@@ -323,7 +323,7 @@ fn span_past_the_sequence_end_is_warned_and_skipped() {
 /// where Ensembl VEP's adaptor reads it as a deletion ending at the position
 /// (VariationFeatureAdaptor.pm:2552, :2563), takes the empty slice's sequence as
 /// its reference allele (:2564) and keeps the feature `/-` (:2566), which
-/// writes no consequence row: Ensembl VEP 116.2 writes no default or tab row
+/// writes no consequence row: Ensembl VEP 116.3 writes no default or tab row
 /// for `21:10538884:0:`, the VCF line `21 10538885 21:10538884:0: <empty> . . .`
 /// without consequences and a JSON object with `allele_string` `/-` and
 /// `most_severe_consequence` `?`. The notation with `0` for both parts is

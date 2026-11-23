@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 //! Ensembl VEP's record validation, `validate_vf` (Parser.pm:457-649 at
-//! release/116.2), over the alleles vep-rs parsed from one input record.
+//! release/116.3), over the alleles vep-rs parsed from one input record.
 //!
 //! Ensembl VEP builds one feature per input line and runs the checks on it in a
 //! fixed order, stopping at the first that fails: the `--chr` list, the
@@ -276,10 +276,11 @@ pub(crate) fn rowless_allele(variant: &InputVariant) -> bool {
 /// a `*` or `<DEL:*>`: every record of the parser-fed formats, whose parsers keep
 /// such an allele, and a VCF record once `--lookup_ref` replaced its reference.
 /// Ensembl VEP builds the overlap alleles at annotation time
-/// (VariationFeatureOverlap.pm:459-491), so an ALT equal to the reference writes no
-/// row and takes no number (`:481`), and the alleles after it are numbered without
-/// it (`:483`); a `*` or `<DEL:*>` takes its number and writes no row (`:484`), so
-/// the alleles after it keep theirs. The one ALT of a bi-allelic record, or the
+/// (VariationFeatureOverlap.pm:459-491), so an ALT equal to the reference, or a
+/// repeat of an earlier ALT, writes no row (`:463`), and a `*` or `<DEL:*>` writes
+/// no row either (`:484`). Every allele that writes a row keeps the number of its
+/// place in the record's allele string, where Ensembl VEP numbers the alleles after
+/// a dropped one without it (`:477-490`). The one ALT of a bi-allelic record, or the
 /// last allele left of a record, then makes it the feature with no allele to
 /// annotate, written as a non-variant line is. The reference row of
 /// `--process_ref_homs` stands whatever the alternates equal: Ensembl VEP builds the
@@ -297,15 +298,8 @@ pub(crate) fn keep_overlap_allele(variant: &mut InputVariant, last: bool) -> boo
         Some(multi) => {
             let reference = String::from_utf8_lossy(&variant.ref_allele);
             let alts: Vec<String> = multi.split('/').skip(1).map(str::to_string).collect();
-            let numbers = crate::vcf_parser::perl_allele_numbers(&reference, &alts);
-            match numbers.get(variant.allele_index).copied().flatten() {
-                Some(number) => {
-                    variant.allele_num =
-                        (number as usize != variant.allele_index + 1).then_some(number);
-                    false
-                }
-                None => true,
-            }
+            let kept = crate::vcf_parser::overlap_alleles_kept(&reference, &alts);
+            !kept.get(variant.allele_index).copied().unwrap_or(false)
         }
     };
     if !equal_to_reference && !rowless {
@@ -329,13 +323,16 @@ impl SkipRules<'_> {
     /// (Parser.pm:821-826). Then `validate_vf` (Parser.pm:457-649) in its order,
     /// each failing check dropping the record unless `--dont_skip` keeps it as it
     /// stands (Parser/VCF.pm:199-201): the `--chr` list, read against the input's
-    /// own name and silent (`:470-472`); a start past the end plus one (`:483-488`);
-    /// a span over `--max_sv_size` (`:493-500`, warned and in vep-rs still
+    /// own name and silent (`:470-472`); a start past the end plus one
+    /// (`:483-488`), dropped under `--dont_skip` too; a span over
+    /// `--max_sv_size` (`:493-500`, warned and in vep-rs still
     /// annotated, unless the span reached the coordinate ceiling, where its SVLEN
     /// or END overflowed and the span is not the record's: that record is
     /// dropped unless `--dont_skip` keeps it); a chromosome no annotation source
     /// carries, the cache's contigs and every other source's chromosomes making
-    /// the set (`:542-546`, `BaseRunner.pm:444-460`); then, for a sequence
+    /// the set (`:542-546`, `BaseRunner.pm:444-460`), among them a name that
+    /// stands for a mitochondrial sequence the cache does not hold
+    /// (`pipeline::kept_off_the_cache`); then, for a sequence
     /// variant, the allele string upper-cased (`:554`), an allele string with no
     /// `ACGTN-` run (`:556-560`), an insertion whose start is not the end plus
     /// one (`:564-572`), a reference allele whose length is not the span's
@@ -420,9 +417,33 @@ impl SkipRules<'_> {
             && !self.checks.source_lists(input_name, self.synonyms)
         {
             let chr = &first.original_chr;
-            skip(&format!(
-                "Chromosome {chr} not found in annotation sources or synonyms; chromosome {chr} does not overlap any features"
-            ));
+            let held = |name: &str| self.transcripts.contains_key(name);
+            // The cache's naming gives the name to its mitochondrial chromosome and
+            // the reference FASTA holds another sequence under it.
+            if let Some(kept_off) = crate::pipeline::kept_off_the_cache(
+                input_name,
+                self.synonyms,
+                self.transcripts,
+                self.checks.fasta,
+            ) {
+                skip(&kept_off.skip_description(chr));
+                return self.keep_as_written(first, patch);
+            }
+            // `chr`, not `input_name`: a renamed `M` is looked up as `MT`, the name it prints.
+            match self.synonyms.held_synonyms(chr, held).as_slice() {
+                // The synonyms give the name to several of the cache's chromosomes
+                // and do not say which one it stands for.
+                [first_listed, second_listed, more @ ..] => {
+                    let count = more.len() + 2;
+                    let others = if more.is_empty() { "" } else { ", ..." };
+                    skip(&format!(
+                        "Chromosome {chr} is a synonym of {count} chromosomes of the cache ({first_listed}, {second_listed}{others}) and is read as none of them"
+                    ));
+                }
+                _ => skip(&format!(
+                    "Chromosome {chr} not found in annotation sources or synonyms; chromosome {chr} does not overlap any features"
+                )),
+            }
             return self.keep_as_written(first, patch);
         }
         if first.is_structural {
@@ -511,9 +532,19 @@ impl SkipRules<'_> {
             ));
             return (self.dont_skip, patch);
         }
+        // The record's reference is read under the cache's name for its chromosome
+        // and, where the FASTA holds no record under that name, under the record's
+        // own name, which is `MT` for a renamed bare `M`: Ensembl VEP names the
+        // record's slice over the FASTA's records from the record's name after
+        // that rename (Parser.pm:749 and :794-796, BaseVEP.pm:413).
         let fetch = || {
             self.checks.fasta.and_then(|fasta| {
-                reference_sequence(fasta, &first.chr, first.start, first.end, first.strand)
+                let chr = if fasta.record_name(&first.chr).is_some() {
+                    first.chr.as_str()
+                } else {
+                    first.original_chr.as_str()
+                };
+                reference_sequence(fasta, chr, first.start, first.end, first.strand)
             })
         };
         let span_text = || {
@@ -526,7 +557,7 @@ impl SkipRules<'_> {
             )
         };
         if self.checks.check_ref {
-            // An insertion has no reference allele to check (Parser.pm:601-603).
+            // An insertion has no reference allele to check (Parser.pm:600-602).
             let matched = if reference.is_empty() {
                 true
             } else {
@@ -926,7 +957,7 @@ mod tests {
 
     /// Parser.pm:564-572: an insertion whose coordinates are not start = end + 1
     /// is refused with Ensembl VEP's text, the record's name quoted and the
-    /// trailing blank of the Perl concatenation kept; `--dont_skip` keeps it.
+    /// trailing blank of the engine's concatenation kept; `--dont_skip` keeps it.
     #[test]
     fn insertion_needs_start_eq_end_plus_one() {
         let dir = tempfile::tempdir().unwrap();
@@ -1029,7 +1060,7 @@ mod tests {
         // A parser's working copy of the multi-allelic string arrives upper-cased
         // with the chopped string in its written case beside it: the lower-case
         // base reaches the sibling it belongs to, and the name reads the alleles
-        // as written (Ensembl VEP 116.2 names `21 30319403 0 tca t,tcg`
+        // as written (Ensembl VEP 116.3 names `21 30319403 0 tca t,tcg`
         // `21_30319404_ca/-/cg`).
         let mut first = variant("21", 5, 5, "A", "G");
         first.record_allele_string_multi = Some("A/G/T".into());
@@ -1051,7 +1082,7 @@ mod tests {
         assert_eq!(sibling.variation_name(), "21_5_A/G/t");
         // The bi-allelic record of the VCF parser arrives the same way, its one
         // pair chopped and upper-cased with the written case beside it: Ensembl
-        // VEP 116.2 names `21 30319403 0 tca t` `21_30319404_ca/-` and prints
+        // VEP 116.3 names `21 30319403 0 tca t` `21_30319404_ca/-` and prints
         // that name in every format, its alleles `CA/-`.
         let mut deletion = variant("21", 30319404, 30319405, "CA", "-");
         deletion.written_case_allele_string = Some("ca/-".into());
@@ -1070,7 +1101,7 @@ mod tests {
     /// return before the upper-casing of `:554`, so a record `--dont_skip` keeps
     /// after either refused it is annotated with its alleles as written, on the
     /// first allele and through the patch on its siblings, the shared string
-    /// included: Ensembl VEP 116.2 prints Allele `g` and JSON `allele_string`
+    /// included: Ensembl VEP 116.3 prints Allele `g` and JSON `allele_string`
     /// `a/g` for `Z 1000 . a g` under `--dont_skip`, and Allele `t` with
     /// `allele_string` `c/t` for `21 30337048 . c t` under `--chr 22 --dont_skip`.
     /// A record written in upper case has nothing to restore, and a check after
@@ -1199,7 +1230,7 @@ mod tests {
         );
     }
 
-    /// An insertion has no reference allele to check (Parser.pm:601-603), so it
+    /// An insertion has no reference allele to check (Parser.pm:600-602), so it
     /// passes `check_ref` whatever the flanking bases.
     #[test]
     fn check_ref_insertion_passes() {
@@ -1244,11 +1275,13 @@ mod tests {
         );
     }
 
-    /// An ALT the looked-up reference now equals writes no row and takes no number
-    /// (VariationFeatureOverlap.pm:481): Ensembl VEP 116.2 writes `21 10542415 x T A,G`
-    /// over the reference `A` as the one row `G` with ALLELE_NUM 1, `T G,A` the same,
-    /// `T A,G,C` as `G` 1 and `C` 2, and `T A` as the feature with no allele (`A/A`,
-    /// `?`); an allele the reference does not equal keeps its row.
+    /// An ALT the looked-up reference now equals writes no row, and the ALTs after it
+    /// keep the numbers of their written places: `21 10542415 x T A,G` over the
+    /// reference `A` is the one row `G` with ALLELE_NUM 2, `T G,A` the row `G` with 1,
+    /// `T A,G,C` the rows `G` 2 and `C` 3, and `T A` the feature with no allele
+    /// (`A/A`, `?`); an allele the reference does not equal keeps its row. Ensembl VEP
+    /// 116.3 counts the alleles left (VariationFeatureOverlap.pm:463, `:477-490`) and
+    /// prints 1 for the `G` of `T A,G`, and 1 and 2 for `T A,G,C`.
     #[test]
     fn lookup_ref_drops_an_alt_the_reference_now_equals() {
         let dir = tempfile::tempdir().unwrap();
@@ -1268,14 +1301,14 @@ mod tests {
         patch.apply(&mut second);
         assert!(keep_overlap_allele(&mut second, true));
         assert_eq!(second.allele_string, "A/G");
-        assert_eq!(second.allele_num, Some(1));
+        assert_eq!((second.allele_index, second.allele_num), (1, None));
         assert_eq!(second.uploaded_allele(false).as_deref(), Some("A/A/G"));
         let mut third = variant("21", 1, 1, "T", "C");
         third.allele_index = 2;
         third.record_allele_string_multi = Some("T/A/G/C".into());
         patch.apply(&mut third);
         assert!(keep_overlap_allele(&mut third, true));
-        assert_eq!(third.allele_num, Some(2));
+        assert_eq!((third.allele_index, third.allele_num), (2, None));
         let mut alone = variant("21", 1, 1, "T", "A");
         assert!(judge(&rules, &mut alone, dir.path()).0);
         assert!(keep_overlap_allele(&mut alone, true));
@@ -1288,7 +1321,7 @@ mod tests {
     }
 
     /// A `*` or `<DEL:*>` allele of a parser-fed record takes its number and writes
-    /// no row (VariationFeatureOverlap.pm:483-484): Ensembl VEP 116.2 writes the
+    /// no row (VariationFeatureOverlap.pm:483-484): Ensembl VEP 116.3 writes the
     /// Ensembl-format line `21 30282169 30282169 C/*/A` as the one row `A` with
     /// ALLELE_NUM 2, `C/A/*` as `A` with ALLELE_NUM 1, and `C/*`, `C/<DEL:*>` as
     /// the feature with no allele (no default row, JSON `?`).
@@ -1355,7 +1388,7 @@ mod tests {
         // A reference-homozygous copy without `--process_ref_homs` is a feature
         // with no allele carrying the written reference alone; the join of
         // Parser.pm:645 over that one part is the looked-up reference alone
-        // (Ensembl VEP 116.2 prints the JSON `allele_string` `T` for a `0|0` copy
+        // (Ensembl VEP 116.3 prints the JSON `allele_string` `T` for a `0|0` copy
         // of `C A` over a `T`), and a trailing empty part, a copy whose genotype
         // names no allele, is no part to Perl's `split` (`:575`).
         for working in ["T", "T/"] {
@@ -1508,7 +1541,7 @@ mod tests {
         );
     }
 
-    /// Ensembl VEP 116.2 tests a record's chromosome against the union over
+    /// Ensembl VEP 116.3 tests a record's chromosome against the union over
     /// every annotation source's valid chromosomes (BaseRunner.pm:451-453),
     /// a `--custom` file's being its index's sequence names (File.pm:369-372),
     /// so a record on a chromosome the cache lacks but a custom source lists
@@ -1574,7 +1607,7 @@ mod tests {
     /// and the column copied out of a line read through a replacement copy
     /// answers as the parse's view does. A deletion of another format (`info`
     /// None), an Ensembl-format `21 30165851 30165850 DEL + x` whose start is its
-    /// end plus one, is never incomplete, since Ensembl VEP 116.2 annotates it
+    /// end plus one, is never incomplete, since Ensembl VEP 116.3 annotates it
     /// (`feature_truncation` on ENST00000286808) and Parser/VEP_input.pm:136-148
     /// makes no such test.
     #[test]

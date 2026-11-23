@@ -1,7 +1,7 @@
 entry = "empty_csq_entry_removal"
 page = "docs/divergences/empty-csq-entry.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the VCF 4.3 specification, section 1.6.1 \"Fixed fields\", INFO (format key[=value[,...,value]], a dot allowed in a key); not seen in the measured datasets; classed by its most reachable shape, an entry whose value is empty: an INFO column that begins with a semicolon breaks that format"
 notes = "The first mechanism of the entry: the input INFO `CSQ=;DP=4`. Ensembl VEP's substitution removes the empty CSQ entry together with `DP=4`, so the output INFO has no DP entry; vep-rs removes the empty entry alone and keeps DP=4 before the new CSQ entry."
@@ -26,3 +26,11 @@ where = { record = "empty_csq" }
 [expected]
 ensembl_vep = ["-"]
 vep_rs = ["4"]
+
+[implementation]
+code = ["crates/vep-io/src/output/vcf_output.rs::VcfOutputFormatter::format_record_bytes"]
+tests = [
+    "crates/vep-io/src/output/vcf_output.rs::tests::a_carried_record_drops_a_stale_csq_entry",
+    "crates/vep-io/src/output/vcf_output.rs::tests::a_semicolon_closing_the_removed_entry_goes_with_it",
+    "crates/vep-io/src/output/vcf_output.rs::tests::vcf_info_field_ann_names_header_strip_and_key",
+]

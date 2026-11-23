@@ -410,7 +410,7 @@ fn id_alias_with_an_identifier_string_detects_the_id_format() {
 /// (Config.pm:730-749): a flag of the `--config` file and one of a `VEP_*`
 /// variable print beside the command line's own, each under its long name,
 /// sorted, and a value of exactly `1` prints as the flag alone (:745). Ensembl
-/// VEP 116.2 prints `--chr 21,22 --config [PATH]/flags.ini ... --fork ...
+/// VEP 116.3 prints `--chr 21,22 --config [PATH]/flags.ini ... --fork ...
 /// --symbol` for this config file with `VEP_FORK=1` in the environment.
 #[test]
 fn config_file_and_environment_flags_print_in_the_command_line_header() {
@@ -782,7 +782,7 @@ fn input_data_false_value_drops_the_line_number_from_skip_warnings() {
 /// command-line header, `## VEP command-line:` and the VCF `##VEP-command-line=`
 /// alike, whether it came from the command line, a `--config` file or
 /// `VEP_FULL_CACHE_DIR`: `full_command` walks the stored keys (Config.pm:734-745)
-/// and Ensembl VEP 116.2 prints `--full_cache_dir [PATH]/json_cache` from all
+/// and Ensembl VEP 116.3 prints `--full_cache_dir [PATH]/json_cache` from all
 /// three sources.
 #[test]
 fn full_cache_dir_keeps_its_own_key_in_the_command_line_header() {
@@ -866,7 +866,7 @@ fn full_cache_dir_keeps_its_own_key_in_the_command_line_header() {
 }
 
 /// Under `--full_cache_dir` with no `--assembly`, the JSON `assembly_name` is the
-/// cache's own, read from `info.json`. Ensembl VEP 116.2 prints `null` there:
+/// cache's own, read from `info.json`. Ensembl VEP 116.3 prints `null` there:
 /// JSON.pm:242 reads the `assembly` parameter, set by `--assembly` or by the
 /// cache directory's name (CacheDir.pm:356), which the `--full_cache_dir` branch
 /// (:303) never reaches, or by `cache_assembly`, declared at JSON.pm:168 and set

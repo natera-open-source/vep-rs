@@ -1,0 +1,4 @@
+source_file	variant_type	direction	location	allele	feature	feature_type	consequence
+sv	Symbolic_DEL	only_perl	21:16155574-16155648	deletion	ENST22_X	Transcript	intron_variant
+sv	Symbolic_DEL	only_rust	21:16155574-16155648	deletion	-	-	intergenic_variant
+sv	BND	only_rust	21:18457513-32484691	N.	ENST21_G3	Transcript	transcript_ablation

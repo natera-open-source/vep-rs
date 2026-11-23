@@ -1,7 +1,7 @@
 entry = "cache_without_transcript_shards"
 page = "docs/divergences/damaged-cache-shard.md#a-cache-holding-no-transcript-shard"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "malformed"
 input_class_basis = "a cache directory is one \"containing transcript data and potentially also regulatory and variation data\" (Bio::EnsEMBL::VEP::CacheDir module documentation, DESCRIPTION) and a cache holds \"all transcript models\" for a species (Ensembl VEP documentation, \"Annotation sources\", opening list): no chromosome directory of the cache holds a transcript file"
 notes = "Each cache holds its metadata file and an empty chromosome 21 directory and nothing else."
@@ -35,3 +35,11 @@ pattern = "no transcript shards"
 [expected]
 ensembl_vep = []
 vep_rs = ["ERROR: [cache] no transcript shards under <path> (serialiser_type storable)"]
+
+[implementation]
+code = ["crates/vep-cli/src/json_cache.rs::enumerate_transcript_shards"]
+tests = [
+    "crates/vep-cli/src/json_cache.rs::tests::cache_with_shards_only_in_a_dot_directory_is_refused",
+    "crates/vep-cli/src/json_cache.rs::tests::sereal_cache_without_shards_is_refused",
+    "crates/vep-cli/tests/documented_subsets.rs::cache_without_a_transcript_shard_refusal_is_documented",
+]

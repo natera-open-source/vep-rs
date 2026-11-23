@@ -32,11 +32,11 @@ A GATK gVCF writes every variant site with `<NON_REF>` beside its real alleles (
 21	30425650	gvcf_a_g	A	G,<NON_REF>	.	.	.
 ```
 
-Executed with Ensembl VEP 116.2 (`ensemblorg/ensembl-vep:release_116.2`, the 116 GRCh38 cache, `--offline --cache --allele_number`).
+Executed with Ensembl VEP 116.3 (`ensemblorg/ensembl-vep:release_116.3`, the 116 GRCh38 cache, `--offline --cache --allele_number`).
 
 ### 15.3 What each engine writes
 
-Ensembl VEP 116.2, no row, and in its warnings file:
+Ensembl VEP 116.3, no row, and in its warnings file:
 
 ```
 WARNING: line 1 skipped (21 30425650 gvcf_a_g A G,<NON_REF> . . .): G/NON_REF is not a supported structural variant type
@@ -80,7 +80,7 @@ The same happens with a reference base of `N` (`N G,<NON_REF>`, where vep-rs wri
 
 ```bash
 printf '##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n21\t30425650\tgvcf_a_g\tA\tG,<NON_REF>\t.\t.\t.\n' > gvcf.vcf
-docker run --rm -v "$PWD":/work -v /path/to/vep-cache:/cache ensemblorg/ensembl-vep:release_116.2 \
+docker run --rm -v "$PWD":/work -v /path/to/vep-cache:/cache ensemblorg/ensembl-vep:release_116.3 \
   vep -i /work/gvcf.vcf -o /work/gvcf.perl.txt --offline --cache --dir_cache /cache --cache_version 116 \
   --assembly GRCh38 --species homo_sapiens --allele_number --no_stats
 vep -i gvcf.vcf -o gvcf.vep-rs.txt --offline --json_cache tests/golden/116/GRCh38-release116/json_cache --assembly GRCh38 --no_stats
@@ -88,7 +88,7 @@ vep -i gvcf.vcf -o gvcf.vep-rs.txt --offline --json_cache tests/golden/116/GRCh3
 
 ### 15.7 How the comparator treats this class
 
-The class is `gvcf_variant_site_dropped` in the 116.2 registry of both comparators, and both set aside vep-rs's rows at the site. They recognise the site by the record's shape: `<NON_REF>` beside a sequence allele and no true `SVTYPE`. (A list of `<NON_REF>` alone, or a block beside a symbolic allele, is the registry class `reference_skipped_record`; under a true `SVTYPE` both engines read the block as an allele of the structural record and agree.)
+The class is `gvcf_variant_site_dropped` in the 116.3 registry of both comparators, and both set aside vep-rs's rows at the site. They recognise the site by the record's shape: `<NON_REF>` beside a sequence allele and no true `SVTYPE`. (A list of `<NON_REF>` alone, or a block beside a symbolic allele, is the registry class `reference_skipped_record`; under a true `SVTYPE` both engines read the block as an allele of the structural record and agree.)
 
 The SNP/indel comparator reads the shape from the input VCFs when `--input-dir` (paired with each output by stem) or `--input-vcf` names them, as the runners do. For an ID-less record it reads the shape from the record's own name in vep-rs's output, `CHROM_POS_REF/ALT/<NON_REF>`, the name Ensembl VEP and vep-rs give such a record, at a Location the reference wrote nothing for.
 

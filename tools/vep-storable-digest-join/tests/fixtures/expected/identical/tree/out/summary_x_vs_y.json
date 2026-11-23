@@ -1,0 +1,21 @@
+{
+  "version_a": "x",
+  "version_b": "y",
+  "storable_x_transcripts": 1,
+  "storable_y_transcripts": 1,
+  "in_both": 1,
+  "only_in_x": 0,
+  "only_in_y": 0,
+  "identical_full_dump": 1,
+  "identical_content_only": 0,
+  "differing_content": 0,
+  "content_digest_normalises": [
+    "dbID",
+    "adaptor",
+    "created_date",
+    "modified_date",
+    "_gene_version",
+    "integer scalars stored as strings"
+  ],
+  "content_identical": true
+}

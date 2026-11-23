@@ -1,10 +1,16 @@
 entry = "custom_repeated_short_name_header_lines"
 page = "docs/divergences/pc-description-text.md#2-the-header-line-that-receives-a-repeated-custom-short-names-file"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the short_name option of --custom, any string without commas, with no rule that two sources take different names (Ensembl VEP documentation, \"Custom annotations\", Options, short_name); not seen in the measured datasets"
-notes = "The shared short name SITES holds no lowercase o, so Ensembl VEP appends the second source's file to the first custom header line, the BED source cons, once for SITES and once for SITES_AF; the rows agree. With the shared name spelt solo both engines print the same header lines."
+notes = "The shared short name SITES holds no lowercase o, so Ensembl VEP appends the second source's file to the first custom header line, the BED source cons, once for SITES and once for SITES_AF; the rows agree. With the shared name spelt solo both engines print the same header lines. The further runs give two made-up site files, one record each at the input record's position, to two sources named S: the first names the record field count and the second asks for the statistic count. Ensembl VEP appends the second file to the field's text (OutputFactory.pm:2499-2501) over a cell that holds the statistic; vep-rs describes the statistic and the field, each with its own file, on one line in the tab header and on a line each in the default header."
+
+# Two site files of one record each at 21:5380280, whose INFO field count is named as a statistic.
+prepare = [
+  '''printf "##fileformat=VCFv4.2\n##INFO=<ID=count,Number=1,Type=Integer,Description=\"The first file's made-up field\">\n##contig=<ID=21>\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n21\t5380280\texact_2\tA\tC\t.\tPASS\tcount=7\n" | bgzip -c > "$STAGE/a.vcf.gz" && tabix -p vcf "$STAGE/a.vcf.gz"''',
+  '''printf "##fileformat=VCFv4.2\n##INFO=<ID=count,Number=1,Type=Integer,Description=\"The second file's made-up field\">\n##contig=<ID=21>\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n21\t5380280\tsecond_1\tA\tC\t.\tPASS\tcount=9\n" | bgzip -c > "$STAGE/b.vcf.gz" && tabix -p vcf "$STAGE/b.vcf.gz"''',
+]
 
 [input]
 format = "vcf"
@@ -40,4 +46,80 @@ vep_rs = [
   "## cons : [PATH]/regions.bed.gz",
   "## SITES : [PATH]/sites.vcf.gz,[PATH]/clinvar_source.vcf.gz",
   "## SITES_AF : Allele frequency, one value per alternate allele. AF field from [PATH]/sites.vcf.gz,[PATH]/clinvar_source.vcf.gz",
+]
+
+[[also]]
+
+[also.input]
+format = "vcf"
+text = """
+21	5380280	rs1444031311	A	C,G	.	.	.
+"""
+
+[also.run]
+flags = [
+  "--custom", "file={stage}/a.vcf.gz,short_name=S,format=vcf,type=overlap,fields=count",
+  "--custom", "file={stage}/b.vcf.gz,short_name=S,format=vcf,type=overlap,summary_stats=count",
+]
+format = "tab"
+
+[also.compare]
+kind = "header"
+pattern = "^## (S|S_count) : "
+mask_paths = false
+
+[also.expected]
+ensembl_vep = [
+  "## S : [PATH]/a.vcf.gz,[PATH]/b.vcf.gz",
+  "## S_count : The first file's made-up field. count field from [PATH]/a.vcf.gz,[PATH]/b.vcf.gz",
+]
+vep_rs = [
+  "## S : [PATH]/a.vcf.gz,[PATH]/b.vcf.gz",
+  "## S_count : count data from [PATH]/b.vcf.gz; The first file's made-up field. count field from [PATH]/a.vcf.gz",
+]
+
+[[also]]
+
+[also.input]
+format = "vcf"
+text = """
+21	5380280	rs1444031311	A	C,G	.	.	.
+"""
+
+[also.run]
+flags = [
+  "--custom", "file={stage}/a.vcf.gz,short_name=S,format=vcf,type=overlap,fields=count",
+  "--custom", "file={stage}/b.vcf.gz,short_name=S,format=vcf,type=overlap,summary_stats=count",
+]
+format = "default"
+
+[also.compare]
+kind = "header"
+pattern = "^## (S|S_count) : "
+mask_paths = false
+
+[also.expected]
+ensembl_vep = [
+  "## S : [PATH]/a.vcf.gz,[PATH]/b.vcf.gz",
+  "## S_count : The first file's made-up field. count field from [PATH]/a.vcf.gz,[PATH]/b.vcf.gz",
+]
+vep_rs = [
+  "## S : [PATH]/a.vcf.gz,[PATH]/b.vcf.gz",
+  "## S_count : The first file's made-up field. count field from [PATH]/a.vcf.gz",
+  "## S_count : count data from [PATH]/b.vcf.gz",
+]
+
+[implementation]
+code = [
+    "crates/vep-io/src/output/fields.rs::CustomDeclaration::joins",
+    "crates/vep-io/src/output/fields.rs::custom_header_pairs",
+    "crates/vep-io/src/output/fields.rs::custom_headers",
+]
+tests = [
+    "crates/vep-cli/tests/custom_key_sources_of_one_short_name_declare.rs::a_field_a_later_source_names_is_described_beside_the_earlier_sources_statistic",
+    "crates/vep-cli/tests/custom_key_sources_of_one_short_name_declare.rs::a_later_sources_file_joins_the_declaration_it_repeats",
+    "crates/vep-cli/tests/custom_key_sources_of_one_short_name_declare.rs::a_statistic_a_later_source_asks_for_is_described_beside_the_earlier_sources_field",
+    "crates/vep-cli/tests/custom_key_sources_of_one_short_name_declare.rs::the_line_names_what_the_cell_holds_with_a_score_and_without_one",
+    "crates/vep-io/src/output/fields.rs::tests::a_key_two_custom_sources_declare_apart_carries_each_declarations_text",
+    "crates/vep-io/src/output/fields.rs::tests::custom_headers_mask_the_path_and_take_info_descriptions",
 ]

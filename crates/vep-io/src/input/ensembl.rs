@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 //! Ensembl VEP's default input format, read as `Parser/VEP_input.pm`
-//! `create_VariationFeatures` (release/116.2, lines 109-168) reads it over
+//! `create_VariationFeatures` (release/116.3, lines 109-168) reads it over
 //! ensembl-io's `VEP_input` parser:
 //!
 //! ```text
@@ -31,8 +31,9 @@
 //! VEP_input.pm:61), so a `#` header of four columns is skipped with a
 //! coordinate warning and a shorter one dies; either way the line counts
 //! toward the line numbers that follow (Parser/VEP_input.pm:119). Here a `#`
-//! line is a comment, counted the same way and otherwise passed over without
-//! a word (`LineCount`); an empty or whitespace-only line is counted and
+//! line is a comment, counted the same way and otherwise passed over, with
+//! one warning at the end of the input that counts such lines (`LineCount`);
+//! an empty or whitespace-only line is counted and
 //! warned about in `skip_empty_lines`'s words, as the list formats' lines are
 //! (Parser.pm:273-290), where Ensembl VEP's own parser dies; and a short line
 //! is a parse error the caller warns about and skips.
@@ -308,6 +309,7 @@ impl<R: BufRead + Send> InputParser for EnsemblParser<R> {
             }
             self.lines.record_line();
             if line.starts_with('#') {
+                self.lines.comment_line();
                 continue;
             }
             let mut variants = match self.parse_record(line) {
@@ -379,7 +381,7 @@ mod tests {
     /// Parser/VEP_input.pm:131 over ensembl-io's conversion of `+`, `.` and `-`:
     /// the record is reverse when the strand token contains a `-`, so `-` and
     /// `-1` are reverse and `+`, `1`, `+1`, `.`, `0` and a word such as `minus`
-    /// are forward. Ensembl VEP 116.2 reads `-` and `-1` as reverse and `minus`
+    /// are forward. Ensembl VEP 116.3 reads `-` and `-1` as reverse and `minus`
     /// as forward.
     #[test]
     fn strand_tokens_plus_minus_one() {
@@ -402,7 +404,7 @@ mod tests {
 
     /// ensembl-io `VEP_input.pm:133` reads an absent strand column as `1`, so a
     /// four-column line is a forward-strand record with no identifier (Ensembl
-    /// VEP 116.2 annotates `21 25585733 25585733 A/G` as forward); three columns
+    /// VEP 116.3 annotates `21 25585733 25585733 A/G` as forward); three columns
     /// leave no allele string to read and fail the line.
     #[test]
     fn four_column_line_defaults_forward() {
@@ -514,7 +516,7 @@ mod tests {
     /// so `a/t` is the SNV `A/T` with Allele `T` and the uploaded allele column
     /// keeps the written case. An ID-less record is named at Parser.pm:462 from
     /// the written alleles as they stand after the minimisation, and the name
-    /// differs from the upper-cased one, so Ensembl VEP 116.2 prints
+    /// differs from the upper-cased one, so Ensembl VEP 116.3 prints
     /// `21_30348410_ta/-` for `21 30348409 30348411 cta/c` and `21_30282169_c/a`
     /// for `21 30282169 30282169 c/a` in `Uploaded_variation`; a lower-case
     /// record with an ID is named by it.
@@ -786,8 +788,9 @@ mod tests {
     /// Every line counts toward Ensembl VEP's line number (Parser/VEP_input.pm:119
     /// per record read, a `#` line and an empty line included, as ensembl-io's
     /// VEP_input parser has no metadata lines, VEP_input.pm:61): a `#` line is a
-    /// comment here, counted and passed over without a warning (Ensembl VEP
-    /// 116.2 numbers `#chr start end allele strand id`, a record, an oversize
+    /// comment here, counted, passed over and warned about once at the end of
+    /// the input (Ensembl VEP
+    /// 116.3 numbers `#chr start end allele strand id`, a record, an oversize
     /// record as `line 1 skipped` twice and `line 3 skipped`); an empty or
     /// whitespace-only line, which Ensembl VEP's own parser dies on
     /// (Parser/VEP_input.pm:136), is counted and warned about here in
@@ -811,7 +814,15 @@ mod tests {
         assert_eq!(parser.record_line_number(), Some(4));
         assert!(parser.take_warnings().is_empty());
         assert!(parser.next_variant().is_none());
-        assert_eq!(parser.take_warnings(), ["Skipped 1 empty line from line 6"]);
+        assert_eq!(
+            parser.take_warnings(),
+            [
+                "Skipped 1 empty line from line 6",
+                "Read 2 lines that begin with '#' as comments, the first at line 1"
+            ]
+        );
+        assert!(parser.next_variant().is_none());
+        assert!(parser.take_warnings().is_empty());
         assert_eq!(parser.take_empty_lines(), 0);
     }
 

@@ -48,13 +48,29 @@ All tabix plugins require bgzipped, tabix-indexed data files (`.tsv.gz` +
 binary store built from the data file by `vep-cache-converter
 convert-plugin-data`, with its `.vpdi` index beside it.
 
-The plugin reads its rows from the store instead of through tabix on two
+Fifteen plugins read a store: AlphaMissense, AVI, BayesDel, CADD, ClinPred,
+dbNSFP, dbscSNV, gnomADc, gnomADMt, OpenTargets, PrimateAI, REVEL, SpliceAI,
+SpliceVault and TranscriptAnnotator. LOEUF reads its data file through tabix
+alone, since it takes its coordinate columns from the file's tabix index.
+
+Such a plugin reads its rows from the store instead of through tabix on two
 conditions:
 
 - the store is named after the data file with `.vpd` in place of `.gz` or
   `.bgz` and sits beside it (`whole_genome_SNVs.tsv.vpd` beside
   `whole_genome_SNVs.tsv.gz`)
 - the store was built from that file's content
+
+CADD takes the columns it reads from the data file's tabix index. A data file
+with no index is read from its store alone, and CADD then takes the columns
+from the names in the file's header. It reads a `Pos` column as one-based
+positions and a `Start` column as zero-based starts, as the plugin's own
+comparison reads them (`CADD.pm` lines 209 and 220). An `End` column, where the
+header names one, ends each row.
+
+A store built on other columns is refused there, and the refusal names the
+flags that rebuild it. The converter checks a store through the data file's
+index, so a data file with no index is converted with `--no-verify`.
 
 ### The layout flags of a store
 
@@ -77,6 +93,21 @@ gnomADMt's VCF is read with `--end-col 7 --ref-col 3`, its INFO `END` and
 reference allele. A CADD structural-variant data file whose index declares
 zero-based starts and an end column is read with `--end-col 2 --zero-based`.
 
+The converter holds its layout flags to the data file's tabix index before the
+data file is read. It refuses `--chr-col` and `--start-col` naming other columns
+than the index was built on. Beyond those two, the flags name either the end
+column and the starts the index declares or single one-based positions: any
+other `--end-col` given without `--ref-col` is refused. So is any other
+`--zero-based`, unless it is given with `--end-col` and `--ref-col` under an
+index that declares zero-based starts. An
+index of tabix's `vcf` or `sam` preset declares one-based starts and no end
+column. The refusal names the flags that match the index.
+
+Where the flags name single one-based positions and the index declares an end
+column or zero-based starts, the converter prints a warning naming the flags
+that match the index and converts: CADD refuses that store. A data file without
+an index is not compared.
+
 ### What the converter checks
 
 The converter checks its store against the data file through the plugin's tabix
@@ -93,19 +124,54 @@ A cell, column name or chromosome name over 65,535 bytes, or a header or row of
 more than 65,535 cells, is refused naming the row, since a store's length
 fields are 16 bits wide. The data file is then read through tabix.
 
-The converter refuses an `--output` that is its input data file or the data
-file's `.tbi`, or whose `.vpdi` path is, before it writes anything. It writes
-each file whole under another name and renames it into place, the data first
-and the index last. A run that starts while the files are written therefore
-finds no part-written store.
+The converter refuses an `--output` that is its input data file or a path the
+data file's index is read from, or whose `.vpdi` path is, before it reads the
+data file. The index paths are `<file>.tbi`, `<file>.csi` and the same two
+names on the file's stem. A column index of 65,535 or more is refused at the
+same point. An `--output` that is a symbolic link is written at the file the
+link's chain names, and the link stays. A link that names a directory, and a
+data path and `.vpdi` path that name one file through a link, are refused.
+
+The converter reads the data file once and writes each row as it reads it, so
+it keeps no row in memory while it reads: for each chromosome it holds the
+name and a few counts. While it runs it needs room beside the output for the
+store and the rows of one chromosome more, in scratch files it removes.
+
+The converter writes each file whole under a scratch name beside its own and
+renames it into place, the data first and the index last. A run that starts
+while the files are written therefore finds no part-written store. A scratch
+name ends in the converter's process id, a role and `.partial`. The two files
+have the roles `data` and `index`. What the converter keeps of each chromosome
+while it reads has the roles `rows`, `starts` and `spans`, each followed by
+the chromosome's number.
+
+An earlier store's index is removed once both scratch files are written
+whole, before they are renamed. A conversion that is refused or fails before
+that point, while it reads the data file included, leaves an earlier store
+whole. One that fails at a rename, or whose store fails the check, leaves no
+store.
+
+The converter holds a lock on the `data` and `index` scratch files while it
+writes, and the numbered scratch files are held with them. A conversion that
+is killed can leave its scratch files beside the output. The next conversion
+of the same `--output` removes those that no running conversion holds. On a
+file system that grants no file lock they stay.
 
 ### When a plugin refuses a store
 
 The store records its flags. A plugin refuses a store whose columns differ from
-its data file's, naming the flags that rebuild it. It also refuses a store of
-an earlier index version, which carries neither spans nor flags. Every store
-built by the converter of release 0.5.0 or earlier is one. A refused store
-leaves the data file read through tabix.
+its data file's, naming the flags that rebuild it. It also refuses a store
+whose index is of any version but the one it reads, an earlier version as a
+later one, naming the conversion that rebuilds it. Every store built by the
+converter of release 0.6.0 or earlier is one.
+
+A refused store leaves the data file read through tabix, which needs the data
+file's `.tbi` index beside it. Without that index the plugin is not loaded.
+For a store refused for its index version, the plugin's refusal names the
+missing `.tbi`, the store, the version its index carries and the conversion
+that rebuilds it. Beside a data file with no index, a refusal that names the
+conversion ends with `--no-verify`, the flag the conversion needs on such a
+file.
 
 The store's index also records the SHA256 and the length of the data file it
 was built from and of its own `.vpd` file. A plugin refuses a store whose data
@@ -113,7 +179,12 @@ file differs from that record, as a data file replaced under the same name
 does. It refuses a store whose `.vpd` differs from it, as an index beside
 another store's data does.
 
-The warning names the store, the data file and which of the two differs. The
+The index ends with the SHA256 of its own bytes. A plugin refuses a store whose
+index differs from that digest, as an index altered or cut short does. It also
+refuses an index that names one chromosome twice, or that holds a chromosome's
+positions out of ascending order.
+
+The warning names the store, the data file and what differs. The
 data file is read through tabix, so the answer is the data file's either way.
 An `INFO` line names what each plugin reads: the store, with the data file's
 path and both SHA256 values, or the data file.
@@ -142,6 +213,10 @@ PrimateAI reports such a score row as missing its values (`PrimateAI.pm` line
 value, `rf_score=` in the default format. It skips `.` alone (`dbscSNV.pm`
 lines 179 to 184).
 
+PrimateAI writes an empty score cell that has a filled cell after it as the
+empty string, an empty tab cell and `""` in JSON, since the module's split
+keeps that cell (`PrimateAI.pm` lines 188, 196 and 204 to 207).
+
 ClinPred's and BayesDel's modules split a row into five variables (`ClinPred.pm`
 line 127, `BayesDel.pm` line 151), which keeps a trailing empty cell. A row
 lacking its score cell is written as the empty value: `ClinPred=` in the
@@ -159,21 +234,22 @@ is empty or missing, so `SpliceVault_top_events` is then an empty tab cell and
 
 ## The mitochondrial contig of a table on GRCh37 {#mitochondrial-contig-grch37}
 
-On GRCh37 a plugin's table is read for a mitochondrial record under the
-record's own spelling of the contig and its `chr` variant alone. A record on
-`MT` reads the rows a table names `MT` or `chrMT`; a record written `chrM`
-reads the rows named `chrM` or `M`. The two pairs name different sequences
-there: the assembly's NC_012920.1, and NC_001807.4 of the UCSC hg19 naming. The
-coding positions of the second stand one base after the assembly's. A table
-prepared from files of the UCSC naming therefore annotates no record on `MT`,
-in vep-rs as in Ensembl VEP.
+On GRCh37 the two pairs of mitochondrial names are two sequences: `MT` and
+`chrMT` name the assembly's NC_012920.1, `chrM` and `M` the NC_001807.4 of the
+UCSC hg19 naming, whose coding positions stand one base after the assembly's.
+A plugin's table is read for a mitochondrial record under the record's own
+spelling of the contig and its `chr` variant: a record on `MT` reads the rows a
+table names `MT` or `chrMT`, a record written `chrM` those named `chrM` or `M`.
 
-AlphaMissense's published table states its `chrM` rows at the assembly's
-positions and is read under every spelling. So are the dbNSFP and gnomADMt
-tables, whose modules name the contig `M` themselves (`dbNSFP.pm` line 313,
-`gnomADMt.pm` lines 259-260). On GRCh38 the four names are one sequence and
-every spelling is read
-([the documented difference](../divergences/plugin-contig-mitochondrial-spelling.md)).
+A contig of the other pair is read only where the table's rows state the bases
+the run's reference sequence, `--fasta`, holds at their own positions. vep-rs
+compares a bounded sample of the rows once a table and logs the verdict
+([the check](../divergences/plugin-contig-mitochondrial-spelling.md)). A table
+prepared from files of the UCSC naming therefore annotates no record on `MT`.
+Without `--fasta`, or for a table with no reference-allele column, the
+comparison cannot be made: the record's own pair alone is read and one warning
+names the table. On GRCh38 the four names are one sequence and every spelling
+is read.
 
 ## The cells of a TranscriptAnnotator table {#transcriptannotator-cells}
 

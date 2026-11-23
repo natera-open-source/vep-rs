@@ -6,7 +6,7 @@
 //!
 //! Ensembl VEP builds one variation feature per record, then copies it once per
 //! named individual with that individual's genotype (`Parser/VCF.pm:355-376` and
-//! `create_individual_VariationFeatures`, `:595-665`, at release/116.2): the
+//! `create_individual_VariationFeatures`, `:595-665`, at release/116.3): the
 //! genotype is read by ensembl-io (`BaseVCF4.pm:928-955` at release/116), each
 //! called allele mapped from the record's written alleles to the chopped ones,
 //! the non-reference alleles the individual carries become the copy's allele
@@ -490,7 +490,7 @@ fn individual_copy(
         .enumerate()
         .filter_map(|(number, &index)| {
             // The record's row for the allele: a repeated ALT has one row, the
-            // first ALT of that string (`perl_allele_numbers`).
+            // first ALT of that string (`overlap_alleles_kept`).
             let allele = &alleles.chopped[index];
             let mut variant = record
                 .iter()
@@ -722,7 +722,7 @@ mod tests {
     /// name is one sample reading its last column, `all` lists the names by that
     /// column, a list may repeat a name (`Parser/VCF.pm:622`), and the refusal of
     /// an unknown name lists the header's samples the same way (`:616` joins
-    /// `get_samples`): Ensembl VEP 116.2 names a header `S1 S3 S1` as `(S3,S1)`.
+    /// `get_samples`): Ensembl VEP 116.3 names a header `S1 S3 S1` as `(S3,S1)`.
     #[test]
     fn a_repeated_sample_name_reads_its_last_column() {
         let columns = SampleColumns {

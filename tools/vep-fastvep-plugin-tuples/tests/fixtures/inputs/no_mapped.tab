@@ -1,0 +1,2 @@
+#Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	IMPACT	DISTANCE	STRAND	FLAGS	FV_PHYLOP	FV_Ø
+v1	21:1000	G	ENSG1	ENST1	Transcript	missense_variant	10	10	4	A/T	gcc/Acc	-	MODERATE	-	1	-	0.1	x

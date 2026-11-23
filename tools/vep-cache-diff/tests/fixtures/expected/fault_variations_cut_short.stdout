@@ -1,0 +1,6 @@
+Comparing caches:
+  Baseline: {{FIXTURES}}/caches/faults/variations_cut_short/baseline
+  Builder:  {{FIXTURES}}/caches/faults/variations_cut_short/builder
+  Comparing transcripts...
+    0 shared, 0 matched, 0 differed, rate=0.0000
+  Comparing variations...

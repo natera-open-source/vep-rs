@@ -26,4 +26,4 @@ Under the default `--distance 5000` both engines write `far_mate_5500` as two `i
 
 The flag's purpose is to widen the window, and a record that disappears from the output when it widens is a defect of the admission test, not a reading vep-rs reproduces.
 
-To reproduce: Ensembl VEP 116.2 with the GRCh38 cache and [the command of the closing section](reproducing.md#reproducing-these-examples), adding `--distance 6000 --allele_number`; vep-rs with the same flags over the same cache.
+To reproduce: Ensembl VEP 116.3 with the GRCh38 cache and [the command of the closing section](reproducing.md#reproducing-these-examples), adding `--distance 6000 --allele_number`; vep-rs with the same flags over the same cache.

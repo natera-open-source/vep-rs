@@ -1,0 +1,1 @@
+ERROR: [fastvep_plugin_tuples] tests/fixtures/maps/bad_count.tsv:3: 7 columns, not 8

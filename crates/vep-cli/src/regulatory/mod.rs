@@ -1,7 +1,7 @@
 // Copyright (c) 2026-present Natera, Inc.
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-//! Regulatory overlaps (Ensembl VEP 116.2): the regulatory tree of a converted
+//! Regulatory overlaps (Ensembl VEP 116.3): the regulatory tree of a converted
 //! cache and its loader (`source`), the GFF files `--regulatory_gff` reads in
 //! its place (`gff`), the per-chromosome overlap index (`index`) and the rows
 //! a variant gains (`rows`).
@@ -45,11 +45,12 @@ pub(crate) mod fixtures {
     pub fn resolved_cache(dir: &Path) -> ResolvedCache {
         ResolvedCache {
             dir: dir.to_string_lossy().into_owned(),
-            info: vep_core::cache_info::CacheInfo {
-                regulatory: true,
-                regulatory_schema: Some(REGULATORY_SCHEMA),
-                cell_types: cell_types(),
-                ..Default::default()
+            info: {
+                let mut info = vep_core::cache_info::CacheInfo::default();
+                info.regulatory = true;
+                info.regulatory_schema = Some(REGULATORY_SCHEMA);
+                info.cell_types = cell_types();
+                info
             },
             manifest: Arc::new(CacheManifest::load(dir).unwrap()),
             assembly: Some("GRCh38".into()),

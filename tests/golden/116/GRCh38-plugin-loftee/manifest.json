@@ -114,7 +114,7 @@
    "vep_rs_only_summary": {}
   }
  ],
- "suites": {
+ "datasets": {
   "loftee": {
    "reference": "default.txt",
    "input": "variants.vcf",
@@ -239,14 +239,14 @@
  },
  "records": [
   {
-   "suite": "loftee",
+   "dataset": "loftee",
    "vcf": "21\t18281038\t3687853\tA\tG\t.\t.\t.",
    "combinations": [
     "splice_donor_variant"
    ]
   },
   {
-   "suite": "loftee",
+   "dataset": "loftee",
    "vcf": "21\t25709432\tnagnag_acceptor\tA\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -258,7 +258,7 @@
    ]
   },
   {
-   "suite": "loftee",
+   "dataset": "loftee",
    "vcf": "21\t25714639\t4453406\tG\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -271,7 +271,7 @@
    ]
   },
   {
-   "suite": "loftee",
+   "dataset": "loftee",
    "vcf": "21\t30215764\t64605\tG\tT\t.\t.\t.",
    "combinations": [
     "stop_gained",
@@ -279,7 +279,7 @@
    ]
   },
   {
-   "suite": "loftee",
+   "dataset": "loftee",
    "vcf": "21\t31659843\t4453607\tC\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -294,7 +294,7 @@
    ]
   },
   {
-   "suite": "loftee",
+   "dataset": "loftee",
    "vcf": "21\t32314564\t4540287\tG\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -303,7 +303,7 @@
    ]
   },
   {
-   "suite": "loftee",
+   "dataset": "loftee",
    "vcf": "21\t32631163\t1346321\tC\tCA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -312,7 +312,7 @@
    ]
   },
   {
-   "suite": "loftee",
+   "dataset": "loftee",
    "vcf": "21\t34799300\t3766477\tC\tCTTGAT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant",
@@ -320,7 +320,7 @@
    ]
   },
   {
-   "suite": "loftee",
+   "dataset": "loftee",
    "vcf": "21\t35048845\t2815871\tT\tTC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -328,7 +328,7 @@
    ]
   },
   {
-   "suite": "loftee",
+   "dataset": "loftee",
    "vcf": "21\t36394546\t4454129\tG\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,splice_acceptor_variant",
@@ -340,7 +340,7 @@
    ]
   },
   {
-   "suite": "loftee",
+   "dataset": "loftee",
    "vcf": "21\t36938995\t2676008\tC\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -351,7 +351,7 @@
    ]
   },
   {
-   "suite": "loftee",
+   "dataset": "loftee",
    "vcf": "21\t37065678\t1388806\tG\tGT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -364,7 +364,7 @@
    ]
   },
   {
-   "suite": "loftee",
+   "dataset": "loftee",
    "vcf": "21\t37478207\t977916\tG\tGA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -375,14 +375,14 @@
    ]
   },
   {
-   "suite": "loftee",
+   "dataset": "loftee",
    "vcf": "21\t40052109\t3349942\tT\tC\t.\t.\t.",
    "combinations": [
     "splice_acceptor_variant"
    ]
   },
   {
-   "suite": "loftee",
+   "dataset": "loftee",
    "vcf": "21\t41427205\t4454478\tG\tA\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -397,7 +397,7 @@
    ]
   },
   {
-   "suite": "loftee",
+   "dataset": "loftee",
    "vcf": "21\t41871622\t4454587\tC\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -408,7 +408,7 @@
    ]
   },
   {
-   "suite": "loftee",
+   "dataset": "loftee",
    "vcf": "21\t42076131\t2213778\tG\tA\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -416,21 +416,21 @@
    ]
   },
   {
-   "suite": "loftee",
+   "dataset": "loftee",
    "vcf": "21\t42076175\t4454616\tG\tT\t.\t.\t.",
    "combinations": [
     "stop_gained"
    ]
   },
   {
-   "suite": "loftee",
+   "dataset": "loftee",
    "vcf": "21\t42076183\t2652695\tC\tT\t.\t.\t.",
    "combinations": [
     "synonymous_variant"
    ]
   },
   {
-   "suite": "loftee",
+   "dataset": "loftee",
    "vcf": "21\t43053860\t4454804\tA\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -442,7 +442,7 @@
    ]
   },
   {
-   "suite": "loftee",
+   "dataset": "loftee",
    "vcf": "21\t44291097\t1162026\tG\tA\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant",
@@ -452,7 +452,7 @@
    ]
   },
   {
-   "suite": "loftee",
+   "dataset": "loftee",
    "vcf": "21\t44711463\t984376\tG\tGGCCGGGGGCC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -460,7 +460,7 @@
    ]
   },
   {
-   "suite": "loftee",
+   "dataset": "loftee",
    "vcf": "21\t46126243\t497375\tC\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_donor_region_variant",
@@ -472,7 +472,7 @@
    ]
   },
   {
-   "suite": "loftee",
+   "dataset": "loftee",
    "vcf": "21\t46326358\t2767584\tT\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -484,7 +484,7 @@
    ]
   },
   {
-   "suite": "loftee",
+   "dataset": "loftee",
    "vcf": "21\t46326392\t3702047\tCAG\tC\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -495,7 +495,7 @@
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "divergences": [],

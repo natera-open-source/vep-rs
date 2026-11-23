@@ -38,13 +38,13 @@ The numified start passes `looks_like_number`, the start-against-end test passes
 21	12abc	num_prefix	GA	G	.	.	.
 ```
 
-Executed with Ensembl VEP 116.2 (`ensemblorg/ensembl-vep:release_116.2`, the 116 GRCh38 cache, `--offline --cache --allele_number`; `--max_sv_size -1` for the first two records). Both engines take `--format vcf` as well: neither detects the format from a first data line whose POS is not a number.
+Executed with Ensembl VEP 116.3 (`ensemblorg/ensembl-vep:release_116.3`, the 116 GRCh38 cache, `--offline --cache --allele_number`; `--max_sv_size -1` for the first two records). Both engines take `--format vcf` as well: neither detects the format from a first data line whose POS is not a number.
 
 Once numified, the first two span more than 10,000,000 bases, so at the default `--max_sv_size` Ensembl VEP drops them as oversize (`variant size (30425948) is bigger than --max_sv_size (10000000)`) and annotates them under `--max_sv_size -1`.
 
 ### 21.3 What each engine writes
 
-Ensembl VEP 116.2 under `--max_sv_size -1`, 3,254 rows for the first record, one per transcript the span from base 1 to 30425949 reaches, 3,253 of them `transcript_ablation`; two of them:
+Ensembl VEP 116.3 under `--max_sv_size -1`, 3,254 rows for the first record, one per transcript the span from base 1 to 30425949 reaches, 3,253 of them `transcript_ablation`; two of them:
 
 The first record, `pos_dot_del`, on ENST00000262354: one of Ensembl VEP's 3,254 rows, no vep-rs row.
 
@@ -131,7 +131,7 @@ A position that is not a number names no base, and a negative one names none eit
 
 ```bash
 printf '##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n21\t-5\tpos_neg_del\tN\t<DEL>\t.\t.\tSVTYPE=DEL;SVLEN=-300\n' > pos.vcf
-docker run --rm -v "$PWD":/work -v /path/to/vep-cache:/cache ensemblorg/ensembl-vep:release_116.2 \
+docker run --rm -v "$PWD":/work -v /path/to/vep-cache:/cache ensemblorg/ensembl-vep:release_116.3 \
   vep -i /work/pos.vcf -o /work/pos.perl.txt --offline --cache --dir_cache /cache --cache_version 116 \
   --assembly GRCh38 --species homo_sapiens --format vcf --allele_number --no_stats
 vep -i pos.vcf -o pos.vep-rs.txt --offline --json_cache tests/golden/116/GRCh38-release116/json_cache --assembly GRCh38 --format vcf --no_stats
@@ -141,7 +141,7 @@ vep -i pos.vcf -o pos.vep-rs.txt --offline --json_cache tests/golden/116/GRCh38-
 
 ### 21.7 How the comparator treats this class
 
-The class is `non_numeric_pos_numified` in the 116.2 registry of both comparators. A non-negative number here is digits with an optional fraction, exponent, leading `+` or surrounding blanks. The class sets aside the reference's rows of a record whose POS is anything else (`.`, an empty column, `0x1D04A1D`, fullwidth digits, `30_425_949`, `-5`), at Locations vep-rs wrote nothing for. A fractional POS is [class 18](defect-k.md#18-a-non-integer-end-svlen-or-pos-text-annotated-and-printed), and a POS above 2^62 - 1, or at it for a structural record whose first base is POS + 1, is a number and not this class. vep-rs refuses the line as past its coordinate bound and the reference's rows stay charged.
+The class is `non_numeric_pos_numified` in the 116.3 registry of both comparators. A non-negative number here is digits with an optional fraction, exponent, leading `+` or surrounding blanks. The class sets aside the reference's rows of a record whose POS is anything else (`.`, an empty column, `0x1D04A1D`, fullwidth digits, `30_425_949`, `-5`), at Locations vep-rs wrote nothing for. A fractional POS is [class 18](defect-k.md#18-a-non-integer-end-svlen-or-pos-text-annotated-and-printed), and a POS above 2^62 - 1, or at it for a structural record whose first base is POS + 1, is a number and not this class. vep-rs refuses the line as past its coordinate bound and the reference's rows stay charged.
 
 The structural-variant comparator reads the input and matches the reference's rows by the start the reference prints for the record, POS + 1 on the structural path and POS on the sequence path (`21:-5 G - intergenic_variant`, the form a substitution reaches). An anchor-chopped indel prints the incremented start instead, which that match does not reach, so its rows stay charged there.
 
@@ -149,7 +149,7 @@ The SNP/indel comparator, which opens the input only to recognise gVCF variant s
 
 ## Two more numified texts: a `--custom` record limit and a promoter bound
 
-Defect N's mechanism, Perl reading a text that is not a number as one, reaches two more places outside the coordinate columns. Each is a documented class: the section names the rows a comparison sets aside, and no committed dataset has its shape, so the comparison tools carry no rule for it, as [Intended divergences from Ensembl VEP](../intended-divergences.md) lists it. Each carries its tier under that page's rule: tier 1 is a shape the chromosome 21 population cuts carry with no flag, tier 2 one that needs a flag or plugin on ordinary data, tier 3 one ordinary data does not carry. The counts are over the cuts' 15,646,481 records, the 111 golden corpora and their 392 flag sets.
+Defect N's mechanism, Perl reading a text that is not a number as one, reaches two more places outside the coordinate columns. Each is a documented class: the section names the rows a comparison sets aside, and no committed dataset has its shape, so the comparison tools carry no rule for it, as [Intended divergences from Ensembl VEP](../intended-divergences.md) lists it. Each carries its tier under that page's rule: tier 1 is a shape the chromosome 21 cuts carry with no flag, tier 2 one that needs a flag or plugin on ordinary data, tier 3 one ordinary data does not carry. The counts are over the cuts' 15,646,481 records, the 152 golden corpora and their 511 flag sets.
 
 ## 26. A `--custom` record limit that is not a whole number
 
@@ -159,7 +159,7 @@ Defect N's mechanism, Perl reading a text that is not a number as one, reaches t
 
 **What vep-rs does instead.** vep-rs reads the value as the count it denotes, its integer part and never below 0, lists at most that many records and writes the `...` marker when more matched. So `1.5` lists one record and the marker, `-1` and `0` the marker alone, and the warnings file names the value and its reading once per source ([Custom annotation](../custom-annotation.md#records-and-statistics-per-input-record)).
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3):
 
 - `Bio/EnsEMBL/VEP/AnnotationSource/File.pm`, line 127, the POD: `maximum number of records to show (50 by default)`; line 167 stores the text as given.
 - The same file, line 337 ends the loop once the count exceeds the value; lines 436-439 keep a record while the count is below it and write the `...` entry when the count equals it.
@@ -168,7 +168,7 @@ Defect N's mechanism, Perl reading a text that is not a number as one, reaches t
 
 **The class it produces.** `custom_non_integer_num_records`: the `<short_name>` fields of a `--custom` source given a `num_records` that is not a non-negative integer, where the reference lists one record more than the candidate and no `...` entry, or lists nothing where the candidate writes `...`. No row on the committed corpora or their comparison cases: the only `num_records` any of them names is `num_records=1`, in one flag set of the GRCh38 custom corpus.
 
-**How often the shape occurs.** Tier 3: the shape is a `num_records` value that is neither a non-negative integer nor `all`, which none of the 392 flag sets passes; 14 of them run a `--custom` source.
+**How often the shape occurs.** Tier 3: the shape is a `num_records` value that is neither a non-negative integer nor `all`, which none of the 511 flag sets passes; 19 of them run a `--custom` source.
 
 ### 26.1 An insertion overlapping two sites under `num_records=1.5`
 
@@ -182,7 +182,7 @@ Defect N's mechanism, Perl reading a text that is not a number as one, reaches t
 
 **What vep-rs does instead.** vep-rs reads each bound as a whole number and leaves the promoter's own coordinate in place when a bound is not one, so the promoter keeps its core start while a valid other bound still widens it. The warnings file names the record and the attribute once ([Regulatory features from GFF files](../regulatory.md#regulatory-features-from-gff-files)).
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3):
 
 - `Bio/EnsEMBL/VEP/AnnotationSource/File/RegFeat.pm`, lines 360-364, `_record_to_regfeat`: `$start = $xs if defined($xs) && $xs < $start` on the attribute's raw text; lines 372 and 583 build the fallback identifier from the widened pair with `%d`, printing 0.
 - The same file, lines 401-403, stores the widened span, and `Bio/EnsEMBL/VEP/AnnotationType/RegFeat.pm`, line 125, overlaps variants against it.

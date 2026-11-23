@@ -1,0 +1,30 @@
+## fastVEP output
+## COLUMN=<ID=FV_SCORE,Description="A made-up supplementary column. Format: ALT|SCORE">
+#Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	IMPACT	DISTANCE	STRAND	FLAGS	FV_SCORE
+var1	21:1000	G	ENSG00000000001	ENST00000000011	Transcript	missense_variant	167	107	36	E/G	gAa/gGa	-	MODERATE	-	1	-	G|0.5
+var1	21:1000	G	ENSG00000000002	ENST00000000021	Transcript	upstream_gene_variant	-	-	-	-	-	-	MODIFIER	3401	-1	-	-
+var2	21:2000	T	-	-	-	intergenic_variant	-	-	-	-	-	-	MODIFIER	-	-	-	-
+var3	21:3000-3002	-	-	-	-	intergenic_variant	-	-	-	-	-	-	MODIFIER	-	-	-	-
+var4	21:4000	A	-	-	-	intergenic_variant	-	-	-	-	-	-	MODIFIER	-	-	-	-
+var5	21:5000	C	-	ENSR00000000051	RegulatoryFeature	regulatory_region_variant	-	-	-	-	-	-	MODIFIER	-	-	-	-
+var6	21:6000	C	ENSG00000000003	-	Transcript	intron_variant	-	-	-	-	-	-	MODIFIER	-	-	-	-
+var7	21:7000	C	-	ENST00000000071	Transcript	intron_variant	-	-	-	-	-	-	MODIFIER	-	-	-	-
+var8	21:8000	C	-	-	Transcripts	intergenic_variant	-	-	-	-	-	-	MODIFIER	-	-	-	-
+var9	21:9000	C	-	-	transcript	intergenic_variant	-	-	-	-	-	-	MODIFIER	-	-	-	-
+var10	21:10000	G	-	-	-
+var11	21:11000	G	-	-
+var12	21:12000	G	-	-	-	intergenic_variant
+var13	21:13000	-	-	Transcript	intergenic_variant	-
+var14	21:14000	G	x	-	-	Transcript	intergenic_variant
+var15	21:15000	G	ENSG00000000004	ENST00000000041	Transcript	intron_variant	-	-	Transcript	-	-	Transcript
+
+			-	-	-	
+ var16	21:16000	G	-	-	Transcript 	intergenic_variant
+#var17	21:17000	G	-	-	Transcript	intergenic_variant
+ #var18	21:18000	G	-	-	-	intergenic_variant
+## a comment line between rows
+var2	21:2000	T	-	-	-	intergenic_variant	-	-	-	-	-	-	MODIFIER	-	-	-	-
+var1	21:1000	G	ENSG00000000001	ENST00000000011	Transcript	missense_variant	167	107	36	E/G	gAa/gGa	-	MODERATE	-	1	-	G|0.5
+
+
+var3	21:3000-3002	-	-	-	-	intergenic_variant	-	-	-	-	-	-	MODIFIER	-	-	-	-

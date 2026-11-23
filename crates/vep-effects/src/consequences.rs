@@ -3,17 +3,20 @@
 
 //! Consequence calculator: assigns SO consequence terms to variant-transcript overlaps.
 //!
-//! Perl citations name modules of ensembl-variation release/116
-//! (`Bio/EnsEMBL/Variation/...`); the `VEP::...` modules are in ensembl-vep release/116.2.
+//! Ensembl VEP source citations name modules of ensembl-variation release/116
+//! (`Bio/EnsEMBL/Variation/...`); the `VEP::...` modules are in ensembl-vep release/116.3.
+//! `AnnotationType/Transcript.pm`, `InputBuffer.pm`, `OutputFactory.pm` and `Parser.pm` are
+//! among them, and `TranscriptMapper`, `Transcript`, `SeqEdit` and the `Mapper` modules are
+//! in ensembl core release/116.
 //!
 //! Under `--use_transcript_ref` every row reads the reference allele
-//! [`transcript_reference_allele`] gives; a BAM-edited cache switches the flag
+//! `transcript_reference_allele` gives; a BAM-edited cache switches the flag
 //! on by itself (`VEP::CacheDir`, the `bam` entry of the cache's info file), and
 //! an edited transcript's reference allele is cut from the edited cDNA the cache
 //! stores (`VEP::AnnotationType::Transcript`, `apply_edits`), coding or not. A
 //! row whose alternate allele equals the bases of the transcript's first
 //! `_rna_edit` on the codon path is marked for the `Transcript-assembly
-//! mismatch` warning ([`transcript_assembly_mismatch`]), which the caller
+//! mismatch` warning (`transcript_assembly_mismatch`), which the caller
 //! writes. Not ported: the `--bam` flag that edits the models at run time,
 //! which is refused.
 
@@ -36,6 +39,7 @@ use crate::coding::{frameshift_stop_gained_full_cds, frameshift_stop_gained_in_c
 use crate::mapper::{map_genomic_to_transcript, partial_codon, CdsSpanBounds, TranscriptPosition};
 
 /// Configuration for consequence calculation.
+#[non_exhaustive]
 pub struct EffectsConfig {
     /// Maximum upstream distance in base pairs (default 5000).
     pub upstream_distance: u64,
@@ -44,7 +48,7 @@ pub struct EffectsConfig {
     /// Optional reference FASTA for sequence-aware behaviors (e.g. 3' shifting indels).
     pub reference_fasta: Option<Arc<vep_fasta::IndexedFasta>>,
     /// `--shift_3prime 1`: move each insertion or deletion to its most 3' position
-    /// on the transcript, within [`perform_shift_bound`], before its terms,
+    /// on the transcript, within `perform_shift_bound`, before its terms,
     /// positions, codons and amino acids are computed; needs `reference_fasta`.
     ///
     /// Off by default because it changes consequence semantics.
@@ -82,7 +86,7 @@ pub struct EffectsConfig {
     /// Compute HGVSc / HGVSp notations for each transcript consequence.
     ///
     /// Off by default. On the default `-o vep` path HGVS is emitted only under
-    /// `--hgvs` (Ensembl VEP parity: Perl emits HGVS solely under that flag), so
+    /// `--hgvs` (Ensembl VEP parity: the engine emits HGVS solely under that flag), so
     /// computing it unconditionally spends significant CPU building `String`s
     /// that are then discarded. When off, `TranscriptConsequence.hgvsc`,
     /// `.hgvsp` and `.hgvs_offset` stay `None`.
@@ -117,7 +121,7 @@ pub struct EffectsConfig {
     /// stays empty.
     pub domains: bool,
     /// `--use_transcript_ref`: each row is analysed against the reference allele
-    /// [`transcript_reference_allele`] reads from the transcript, and carries it
+    /// `transcript_reference_allele` reads from the transcript, and carries it
     /// as `TranscriptConsequence.used_ref`; an unedited non-coding transcript's
     /// cDNA is read from `reference_fasta`.
     pub use_transcript_ref: bool,
@@ -130,6 +134,7 @@ pub struct EffectsConfig {
 /// Which transcript consequences carry a
 /// [`LofteeContext`](vep_core::consequence::LofteeContext) ([`EffectsConfig::loftee_context`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum LofteeContextRows {
     /// No row.
     #[default]
@@ -215,7 +220,7 @@ fn insertion_analysis_cds_pos(cds_pos: u64, coding_bounds: Option<&CdsSpanBounds
 /// start_lost / stop_lost peptide path silently undercalls on reverse-strand
 /// deletions.
 ///
-/// Perl's `start_lost` / `stop_lost` predicates work in cDNA/CDS space, which is
+/// Ensembl VEP's `start_lost` / `stop_lost` predicates work in cDNA/CDS space, which is
 /// strand-normalized, so they always anchor at the 5'-most CDS index of the
 /// span. Here, for deletions/substitutions (`cds_start <= cds_end`)
 /// the 5'-most index is `cds_start.min(cds_end)`; for insertions
@@ -254,18 +259,57 @@ fn remove_consequence(consequences: &mut ConsequenceList, consequence: Consequen
 /// attributes through it.
 ///
 /// On a model the genome is the reference of
-/// ([`crate::coding::genome_is_reference`]) an allele that keeps the bases on
+/// (`crate::coding::genome_is_reference`) an allele that keeps the bases on
 /// both sides of bases the model holds and the genome lacks adds its other
 /// bases between two neighbours of the transcript and replaces nothing: the
 /// row takes the term, the codons, the residues, the protein position and the
 /// HGVS notations, with the offset of their 3' shift, of the same bases
 /// written as an insertion at that point
-/// ([`insertion_between_kept_bases`]), and its cDNA and CDS position cells
+/// (`insertion_between_kept_bases`), and its cDNA and CDS position cells
 /// keep the record's span, the model's bases inside it. Ensembl VEP reads the
 /// allele in place of the whole span, the model's bases with it
 /// (BaseTranscriptVariation.pm:263-264; TranscriptVariationAllele.pm:2409-2410,
-/// 2421).
+/// 2421). The `REFSEQ_OFFSET` column stays the record's too: Ensembl VEP sums
+/// the indel edits that start at or before the row's cDNA start
+/// (`get_misalignment_offset`, TranscriptVariationAllele.pm:1608-1610), the
+/// start of the span the cDNA position cell keeps, which lies before the
+/// model's bases, where the insertion's start lies on them.
+///
+/// On a transcript whose record shows that polyadenylation completes its
+/// stop codon every term and cell of a sequence variant's row is read on the
+/// transcript with the completed codon in its coding sequence and the
+/// adenines of the poly(A) tail after it
+/// (`crate::coding::completed_by_polyadenylation`). The row stays the
+/// record's: it holds `transcript`, and the coding length beside its CDS
+/// position is the cached coding sequence's. A structural variant is read on
+/// the record as the cache holds it, where its own arm reads the stop codon
+/// at the bases the genome has of it (`crate::sv::structural_stop_lost`).
 pub fn calculate_consequences(
+    variant: &InputVariant,
+    transcript: &Arc<Transcript>,
+    config: &EffectsConfig,
+) -> Option<TranscriptConsequence> {
+    let structural = variant.is_structural || variant.variant_class.is_structural();
+    let completed = (!structural)
+        .then(|| crate::coding::completed_by_polyadenylation(transcript))
+        .flatten();
+    let Some(completed) = completed else {
+        return consequences_on_the_model(variant, transcript, config);
+    };
+    let mut row = consequences_on_the_model(variant, &Arc::new(completed), config)?;
+    row.transcript = Some(Arc::clone(transcript));
+    let cached_coding_length = transcript
+        .vefc
+        .as_ref()
+        .and_then(|vefc| vefc.translateable_seq.as_deref())
+        .map(|coding| coding.len() as u32);
+    row.cds_total = row.cds_total.and(cached_coding_length);
+    Some(row)
+}
+
+/// The row of `variant` against `transcript` as its record stands;
+/// [`calculate_consequences`] states what it is given.
+fn consequences_on_the_model(
     variant: &InputVariant,
     transcript: &Arc<Transcript>,
     config: &EffectsConfig,
@@ -399,7 +443,7 @@ fn consequences_of_the_record(
     // shift moves the deleted bases it names (`_genomic_shift` reads the
     // reference allele's object, TranscriptVariationAllele.pm:439-449). `USED_REF`
     // prints it relative to the variant (`variation_feature_seq`,
-    // OutputFactory.pm:1776), so an allele read on the reverse strand is given
+    // OutputFactory.pm:1785), so an allele read on the reverse strand is given
     // back on it.
     let used_ref = if config.use_transcript_ref
         && !placed.is_structural
@@ -457,7 +501,7 @@ fn consequences_of_the_record(
         (tc.exon, tc.intron) = crate::display::exon_intron_numbers(analysed, placed, transcript);
     }
     // A reference row prints `SHIFT_LENGTH` 0 whatever span it was read at: the
-    // reference allele's object carries no shift of its own (OutputFactory.pm:1690).
+    // reference allele's object carries no shift of its own (OutputFactory.pm:1699).
     tc.shift_length = match shifted {
         Some((start, _)) if !placed.reference_allele_row => start.abs_diff(placed.start),
         _ => 0,
@@ -479,9 +523,15 @@ fn consequences_of_the_record(
     // `shift_feature_seqs` rotates the allele as the input wrote it (:1334-1343),
     // here as read on the transcript's strand.
     tc.used_ref = used_ref.map(|mut reference| {
-        let reference_rewritten =
-            !crate::coding::annotated_in_coding_intron(transcript, analysed.start, analysed.end)
-                || intronic_allele_reads_as_coding(transcript, analysed);
+        let reference_rewritten = !crate::coding::annotated_before_the_coding_start(
+            transcript,
+            analysed.start,
+            analysed.end,
+        ) && (!crate::coding::annotated_in_coding_intron(
+            transcript,
+            analysed.start,
+            analysed.end,
+        ) || intronic_allele_reads_as_coding(transcript, analysed));
         let as_given = match used_ref_rotation(
             &tc,
             translation_span,
@@ -522,10 +572,10 @@ fn consequences_of_the_record(
 /// `-` as the empty sequence (`feature_seq`, `:821-822`), with the bases of the
 /// transcript's first `_rna_edit` (`:832-833`); equal, the row is one Ensembl
 /// VEP warns about as `Transcript-assembly mismatch in <Uploaded_variation>`
-/// (OutputFactory.pm:1717-1718), unless `--use_given_ref`. `variant` is the
+/// (OutputFactory.pm:1726-1727), unless `--use_given_ref`. `variant` is the
 /// allele as analysed, on the forward strand. A deletion's empty allele equals
 /// the empty bases of a first edit that deletes, as the rule reads it.
-pub fn transcript_assembly_mismatch(
+pub(crate) fn transcript_assembly_mismatch(
     variant: &InputVariant,
     transcript: &Transcript,
     translation_span: Option<(i64, i64)>,
@@ -675,7 +725,7 @@ fn shifted_display_allele(
 /// `fasta` over the exons the span covers, as Ensembl's `Transcript::spliced_seq`
 /// reads every exon, and is `None` without one. `variant` is the allele on the
 /// forward strand.
-pub fn transcript_reference_allele(
+pub(crate) fn transcript_reference_allele(
     variant: &InputVariant,
     transcript: &Transcript,
     fasta: Option<&vep_fasta::IndexedFasta>,
@@ -704,7 +754,7 @@ pub fn transcript_reference_allele(
     };
     let (cdna_start, cdna_end) = (u64::try_from(*start).ok()?, u64::try_from(*end).ok()?);
     let mut reference = match transcript.spliced_seq() {
-        // Perl's `substr` reads to the end of a shorter sequence.
+        // Perl's `substr` in Ensembl VEP reads to the end of a shorter sequence.
         Some(cdna) => {
             let from = (cdna_start.saturating_sub(1) as usize).min(cdna.len());
             let to = (cdna_end as usize).clamp(from, cdna.len());
@@ -760,7 +810,7 @@ fn cdna_bases_from_fasta(
     Some(bases)
 }
 
-/// The `miRNA` column's terms (OutputFactory.pm:1624-1664 at release/116.2).
+/// The `miRNA` column's terms (OutputFactory.pm:1633-1673 at release/116.3).
 ///
 /// On a transcript of biotype `miRNA` whose first `ncRNA` attribute reads
 /// `<start>:<end> <structure>` (three fields split on whitespace or `:`), the
@@ -824,7 +874,7 @@ fn mirna_structure_terms(variant: &InputVariant, transcript: &Transcript) -> Vec
         elements.extend(std::iter::repeat_n(c, count));
     }
 
-    // `sort map {$map{$_}} keys %chars` (OutputFactory.pm:1662): the set is of
+    // `sort map {$map{$_}} keys %chars` (OutputFactory.pm:1671): the set is of
     // structure characters, not of terms, so `(` and `)` each yield a `miRNA_stem`.
     let mut overlapped: BTreeSet<Option<char>> = BTreeSet::new();
     for position in cdna_start..=cdna_end {
@@ -847,7 +897,7 @@ fn mirna_structure_terms(variant: &InputVariant, transcript: &Transcript) -> Vec
 }
 
 /// The first three fields of an `ncRNA` attribute value, split as Perl's
-/// `split /\s+|\:/` splits it: a colon or a run of whitespace ends a field, so
+/// `split /\s+|\:/` in Ensembl VEP splits it: a colon or a run of whitespace ends a field, so
 /// a colon beside whitespace leaves an empty field between them.
 fn ncrna_fields(value: &str) -> Vec<&str> {
     let mut fields = Vec::with_capacity(3);
@@ -991,8 +1041,8 @@ fn append_translation_version(tc: &mut TranscriptConsequence, transcript: &Trans
     }
 }
 
-/// The `DOMAINS` pairs of a coding consequence (`OutputFactory.pm:1494-1512`
-/// at release/116.2; `BaseTranscriptVariation.pm` `get_overlapping_ProteinFeatures`,
+/// The `DOMAINS` pairs of a coding consequence (`OutputFactory.pm:1503-1521`
+/// at release/116.3; `BaseTranscriptVariation.pm` `get_overlapping_ProteinFeatures`,
 /// release/116): every protein feature of the transcript whose residue span
 /// overlaps `translation_span`, in the cache's order, each as its analysis
 /// label and its identifier with every whitespace character, `;` and `=`
@@ -1012,7 +1062,8 @@ fn domains_overlapping_protein_position(
         return Vec::new();
     };
     let printable = |text: &str| -> String {
-        // Perl's `\s` matches the vertical tab, which `is_ascii_whitespace` does not.
+        // Perl's `\s` in Ensembl VEP matches the vertical tab, which `is_ascii_whitespace` does
+        // not.
         text.chars()
             .map(|c| match c {
                 ' ' | '\t' | '\n' | '\r' | '\u{0b}' | '\u{0c}' | ';' | '=' => '_',
@@ -1068,7 +1119,7 @@ fn calculate_terms(
         vep_core::variant::VariantClass::Insertion
     ) && variant.start == variant.end + 1;
 
-    // Perl keeps a transcript for a variant only when its non-normalising
+    // Ensembl VEP keeps a transcript for a variant only when its non-normalising
     // `overlap(vf.start, vf.end, tr.start - dist, tr.end + dist)` holds
     // (`VEP::AnnotationType::Transcript::annotate_InputBuffer`,
     // `VEP::InputBuffer::get_overlapping_vfs`). The left-hand test reads
@@ -1086,7 +1137,7 @@ fn calculate_terms(
         }
     }
 
-    // Perl's `complete_overlap` pre-predicate
+    // Ensembl VEP's `complete_overlap` pre-predicate
     // (`BaseVariationFeatureOverlapAllele::_bvf_preds`): `vf.start <= tr.start
     // && vf.end >= tr.end` on the raw coordinates, which an insertion
     // (start = end + 1) cannot satisfy.
@@ -1102,7 +1153,7 @@ fn calculate_terms(
     if complete_overlap && perl_deletion_pre_predicate(variant) {
         // A span covering the transcript is `within_feature`, so Ensembl VEP
         // asks `hgvs_transcript` for this row like any other
-        // (OutputFactory.pm:1721, 1750-1754): `_var2transcript_slice_coords`
+        // (OutputFactory.pm:1730, 1759-1763): `_var2transcript_slice_coords`
         // refuses only a span with both ends outside on one side and clamps
         // each end onto the transcript (TranscriptVariationAllele.pm:2729-2733),
         // so a deletion covering it at a zero 3' shift is written end to end.
@@ -1117,16 +1168,17 @@ fn calculate_terms(
         } else {
             crate::hgvs::HgvsNotation::default()
         };
-        return Some(TranscriptConsequence {
-            consequences: smallvec![Consequence::TranscriptAblation],
-            impact: Impact::HIGH,
-            hgvsc: hgvs.hgvsc,
-            hgvsp: hgvs.hgvsp,
-            hgvs_offset: hgvs.offset,
-            hgvs_offset_of_hgvsc_alone: hgvs.offset_of_hgvsc_alone,
-            hgvs_intron_offsets: hgvs_intron_offsets(hgvs.intron_offsets),
-            refseq_offset: hgvs.refseq_offset,
-            ..TranscriptConsequence::for_transcript(transcript)
+        return Some({
+            let mut consequence = TranscriptConsequence::for_transcript(transcript);
+            consequence.consequences = smallvec![Consequence::TranscriptAblation];
+            consequence.impact = Impact::HIGH;
+            consequence.hgvsc = hgvs.hgvsc;
+            consequence.hgvsp = hgvs.hgvsp;
+            consequence.hgvs_offset = hgvs.offset;
+            consequence.hgvs_offset_of_hgvsc_alone = hgvs.offset_of_hgvsc_alone;
+            consequence.hgvs_intron_offsets = hgvs_intron_offsets(hgvs.intron_offsets);
+            consequence.refseq_offset = hgvs.refseq_offset;
+            consequence
         });
     }
 
@@ -1228,12 +1280,12 @@ fn calculate_terms(
                         apply_position(end_p, &mut ctx, Some(start_p), true);
                     }
                 } else if insertion && start_is_intron && end_is_intron {
-                    // For purely intronic insertions, Perl behavior is effectively
+                    // For purely intronic insertions, Ensembl VEP behavior is effectively
                     // single-anchor; using both sides overcalls mixed splice labels
                     // (e.g. donor_5th_base + donor_region).
                     apply_position(start_p, &mut ctx, Some(end_p), true);
                 } else if start_is_flank ^ end_is_flank {
-                    // Perl parity around transcript edges:
+                    // Ensembl VEP parity around transcript edges:
                     // - insertions straddling body/flank are treated as flank-only
                     // - non-insertions straddling body/flank are treated as body-only
                     let keep_start = if insertion {
@@ -1254,10 +1306,10 @@ fn calculate_terms(
         }
     }
 
-    // Perl's coding predicates, ported whole for every non-SNV allele and for
+    // Ensembl VEP's coding predicates, ported whole for every non-SNV allele and for
     // an SNV inside the start codon (`coding::perl_coding_terms`): the
     // per-endpoint passes above keep their display fields, and the coding terms
-    // they emitted are replaced by the set Perl assigns.
+    // they emitted are replaced by the set Ensembl VEP assigns.
     if let Some(terms) = crate::coding::perl_coding_terms(
         variant,
         transcript,
@@ -1271,7 +1323,7 @@ fn calculate_terms(
         }
     }
 
-    // Perl reports DISTANCE as the smallest of the four gaps between either end
+    // Ensembl VEP reports DISTANCE as the smallest of the four gaps between either end
     // of the variant and either end of the transcript (BaseTranscriptVariation
     // distance_to_transcript), not the gap from one anchor position.
     if consequences.iter().any(|c| {
@@ -1283,7 +1335,7 @@ fn calculate_terms(
         fields.distance = Some(distance_to_transcript(input, transcript));
     }
 
-    // Perl checks splice sites against all overlapping introns
+    // Ensembl VEP checks splice sites against all overlapping introns
     // (_overlapped_introns / _overlapped_introns_boundary), while the per-endpoint
     // apply_position calls above cover only the introns containing the endpoints;
     // the evaluations made so far skip the introns those calls read.
@@ -1294,11 +1346,11 @@ fn calculate_terms(
             transcript,
             &mut splice_evaluations,
         );
-        // Perl uses full-span overlap for UTR terms (_before_coding /
+        // Ensembl VEP uses full-span overlap for UTR terms (_before_coding /
         // _after_coding), so a deletion from coding into UTR gets the UTR term.
         add_utr_for_overlapping_span(&mut consequences, variant, transcript);
 
-        // Perl uses full-span exon overlap for non_coding_transcript_exon_variant
+        // Ensembl VEP uses full-span exon overlap for non_coding_transcript_exon_variant
         // (_overlapped_exons); with both endpoints intronic the endpoint mapping
         // never enters the NonCodingExon branch, and the term added here makes
         // add_transcript_context_consequences skip the generic one.
@@ -1315,7 +1367,7 @@ fn calculate_terms(
             }
         }
     } else {
-        // Perl's _intron_effects iterates all overlapping introns for insertions
+        // Ensembl VEP's _intron_effects iterates all overlapping introns for insertions
         // too; the per-endpoint apply_position calls cover only the endpoint introns.
         add_splice_for_overlapping_introns_insertion(
             &mut consequences,
@@ -1325,7 +1377,7 @@ fn calculate_terms(
         );
     }
 
-    // Perl's `VariationEffect::splice_donor_region_variant` and `splice_region`
+    // Ensembl VEP's `VariationEffect::splice_donor_region_variant` and `splice_region`
     // predicates read the transcript-wide `_intron_effects` flags: a 5th-base
     // hit in any intron suppresses the donor region, and a donor, acceptor,
     // 5th-base or donor-region hit in any intron suppresses splice_region,
@@ -1375,7 +1427,7 @@ fn calculate_terms(
         }
     }
 
-    // Perl `within_feature`: `overlap(vf.start, vf.end, tr.start, tr.end)` on the
+    // Ensembl VEP `within_feature`: `overlap(vf.start, vf.end, tr.start, tr.end)` on the
     // raw coordinates, so an insertion butting against a transcript edge
     // (end = tr.start - 1 or start = tr.end + 1) is outside.
     let within_feature = variant.end >= transcript.start && variant.start <= transcript.end;
@@ -1401,8 +1453,17 @@ fn calculate_terms(
         }
     }
 
+    // Ensembl VEP gives an allele that no predicate claims the default
+    // consequence and writes its row (BaseVariationFeatureOverlapAllele.pm:285).
+    // One such allele lies between two parts of a model spliced from both
+    // strands where the intron between them starts above its end: Ensembl VEP
+    // passes over an intron of that shape (BaseTranscriptVariation.pm:894 and
+    // :1014).
     if consequences.is_empty() {
-        return None;
+        if !within_feature {
+            return None;
+        }
+        consequences.push(Consequence::IntergenicVariant);
     }
 
     // Ensembl VEP outputs consequence terms in severity order (most severe first).
@@ -1416,7 +1477,7 @@ fn calculate_terms(
 
     // HGVS strings are consumed solely by the output layer, so they are built
     // only when `compute_hgvs` is set.
-    // The HGVS notations are built only `within_feature` (OutputFactory.pm:1721),
+    // The HGVS notations are built only `within_feature` (OutputFactory.pm:1730),
     // the predicate read at the shifted span, so an allele that shifts off the
     // transcript has none even where its input span overlapped it. A row
     // outside the transcript whose allele adds bases is asked all the same:
@@ -1432,17 +1493,18 @@ fn calculate_terms(
         crate::hgvs::HgvsNotation::default()
     };
 
-    Some(TranscriptConsequence {
-        consequences,
-        impact,
-        distance: fields.distance,
-        hgvsc: hgvs.hgvsc,
-        hgvsp: hgvs.hgvsp,
-        hgvs_offset: hgvs.offset,
-        hgvs_offset_of_hgvsc_alone: hgvs.offset_of_hgvsc_alone,
-        hgvs_intron_offsets: hgvs_intron_offsets(hgvs.intron_offsets),
-        refseq_offset: hgvs.refseq_offset,
-        ..TranscriptConsequence::for_transcript(transcript)
+    Some({
+        let mut consequence = TranscriptConsequence::for_transcript(transcript);
+        consequence.consequences = consequences;
+        consequence.impact = impact;
+        consequence.distance = fields.distance;
+        consequence.hgvsc = hgvs.hgvsc;
+        consequence.hgvsp = hgvs.hgvsp;
+        consequence.hgvs_offset = hgvs.offset;
+        consequence.hgvs_offset_of_hgvsc_alone = hgvs.offset_of_hgvsc_alone;
+        consequence.hgvs_intron_offsets = hgvs_intron_offsets(hgvs.intron_offsets);
+        consequence.refseq_offset = hgvs.refseq_offset;
+        consequence
     })
 }
 
@@ -1484,7 +1546,7 @@ struct ApplyPositionContext<'a> {
     splice_evaluations: &'a mut SpliceEvaluations,
 }
 
-/// Perl's `deletion` pre-predicate for a sequence variant
+/// Ensembl VEP's `deletion` pre-predicate for a sequence variant
 /// (`BaseVariationFeatureOverlapAllele::_pre_consequence_predicates`): the
 /// reference span `vf.end - vf.start + 1` (`_bvf_preds` `ref_length`) is longer
 /// than the ALT sequence, `-` counting as empty. `snp` is the equal-length case
@@ -1580,7 +1642,7 @@ fn apply_position(
                 ) {
                     push_unique(consequences, Consequence::SpliceRegionVariant);
                 }
-                // Perl adds exonic splice_region only through _intron_effects() for an
+                // Ensembl VEP adds exonic splice_region only through _intron_effects() for an
                 // insertion at an exon/intron boundary; with an intronic paired
                 // position the Intron branch already evaluates the splice windows.
                 let paired_is_intron =
@@ -1611,7 +1673,7 @@ fn apply_position(
                 ) {
                     push_unique(consequences, Consequence::SpliceRegionVariant);
                 }
-                // Perl: exonic splice_region for insertions comes from _intron_effects()
+                // Ensembl VEP: exonic splice_region for insertions comes from _intron_effects()
                 // only. Skip when paired with an intron (intron branch handles it).
                 let paired_is_intron =
                     matches!(paired_position, Some(TranscriptPosition::Intron { .. }));
@@ -1627,7 +1689,7 @@ fn apply_position(
         TranscriptPosition::Coding { cds_pos, .. } => {
             if insertion {
                 // An insertion between the coding region's edge base and the base
-                // outside it is a UTR variant in Perl: `_before_coding` and
+                // outside it is a UTR variant in Ensembl VEP: `_before_coding` and
                 // `_after_coding` special-case an insertion whose start is the coding
                 // region start or whose end is the coding region end, `within_cdna`
                 // holds through the coding flank, and `_bvfo_preds` sets `exon` and
@@ -1654,13 +1716,15 @@ fn apply_position(
                 ) || variant_span_overlaps_intron(variant, transcript));
 
             if spans_non_coding {
-                // Perl's stop_lost/start_lost for these alleles go through
+                // Ensembl VEP's stop_lost/start_lost for these alleles go through
                 // `_ins_del_stop_altered` / `_ins_del_start_altered`, which require
                 // `VariationFeatureOverlapAllele::seq_is_unambiguous_dna` (true for
                 // "-"; regex /^[ACGT-]+$/i), a length change (increase_length OR
                 // decrease_length), and `_overlaps_stop_codon` /
                 // `_overlaps_start_codon`, which return 0 for `cds_end_NF` /
-                // `cds_start_NF`.
+                // `cds_start_NF` alone (VariationEffect.pm:1373, 975). Here
+                // neither term is written where its codon does not stand at
+                // that end of the coding sequence.
                 let also_spans_intron =
                     matches!(paired_position, Some(TranscriptPosition::Intron { .. }))
                         || variant_span_overlaps_intron(variant, transcript);
@@ -1672,7 +1736,7 @@ fn apply_position(
                     .map(|s| s.len() as u64)
                     .unwrap_or(0);
 
-                // For an MNV (same ref/alt lengths) the only Perl stop_lost path is
+                // For an MNV (same ref/alt lengths) the only Ensembl VEP stop_lost path is
                 // via defined peptide alleles, and `_get_peptide_alleles` is empty
                 // past the CDS boundary because `codon()` requires `tv_tr_start &&
                 // tv_tr_end` and `tv_tr_end` is undef.
@@ -1689,35 +1753,36 @@ fn apply_position(
                 };
                 let is_length_changing = ref_len != alt_len;
 
-                let cds_start_nf = transcript.facts().cds_start_nf;
-                let cds_end_nf = transcript.facts().cds_end_nf;
+                let stop_codon_stands = crate::coding::stop_codon_at_the_coding_end(transcript)
+                    != crate::coding::StopCodonAtTheCodingEnd::None;
 
-                // A deletion from CDS into the 3' UTR covers the stop codon by
-                // construction; Perl still requires a length change and excludes
-                // `cds_end_NF` via `_overlaps_stop_codon`.
+                // A deletion from CDS into the 3' UTR covers the last three
+                // coding positions by construction; Ensembl VEP still requires a
+                // length change and excludes `cds_end_NF` via
+                // `_overlaps_stop_codon`.
                 //
                 // `Downstream` is not a stop_lost shape. A reference span past the
-                // transcript's 3' boundary leaves Perl's `cdna_end` undef (trailing
+                // transcript's 3' boundary leaves Ensembl VEP's `cdna_end` undef (trailing
                 // `Gap`), so `VariationEffect::_overlaps_stop_codon` returns 0, which
                 // gates `_ins_del_stop_altered`, the only `stop_lost` path for these
                 // alleles (`_get_peptide_alleles` is undef, so `stop_lost` delegates
-                // to it); Perl emits `3_prime_UTR_variant,coding_sequence_variant`
+                // to it); Ensembl VEP emits `3_prime_UTR_variant,coding_sequence_variant`
                 // via `coding_unknown`. The mapper here snaps the out-of-transcript
                 // endpoint to the nearest exon boundary, so `cdna_hi` alone would
                 // open the gate. Symmetric with the `extends_upstream_of_transcript`
                 // exclusion on `is_start_lost`.
                 //
-                // The structural-variant arm of Perl's `stop_lost` (its
+                // The structural-variant arm of Ensembl VEP's `stop_lost` (its
                 // `TranscriptStructuralVariationAllele` branch) does emit stop_lost
                 // for a Downstream-extending deletion with no cdna_end requirement,
                 // but only symbolic/structural classes reach it: the dispatch in
                 // `calculate_consequences` tests `variant.is_structural` (symbolic
                 // ALTs) and `VariantClass::is_structural()`, and
                 // `VariantClass::Deletion` is in neither, so an explicit-sequence
-                // long deletion arrives here on Perl's `coding_unknown` path.
+                // long deletion arrives here on Ensembl VEP's `coding_unknown` path.
                 let is_stop_lost = !also_spans_intron
                     && is_length_changing
-                    && !cds_end_nf
+                    && stop_codon_stands
                     && cds_len > 0
                     && *cds_pos <= cds_len
                     && matches!(
@@ -1725,12 +1790,12 @@ fn apply_position(
                         Some(TranscriptPosition::ThreePrimeUtr { .. })
                     );
 
-                // start_lost, symmetric on the start codon side; excluded when
-                // `cds_start_NF`.
+                // start_lost, symmetric on the start codon side; excluded where
+                // no start codon stands.
                 //
                 // A reference span extending upstream of the transcript (forward:
                 // `span_start < transcript.start`; reverse: `span_end >
-                // transcript.end`) never gets `start_lost` from Perl: its mapper
+                // transcript.end`) never gets `start_lost` from Ensembl VEP: its mapper
                 // yields a leading `Gap`, so `cds_start` and `cdna_start` are undef
                 // and `_ins_del_start_altered` is bypassed, leaving
                 // `5_prime_UTR_variant,coding_sequence_variant`. The mapper here
@@ -1742,7 +1807,7 @@ fn apply_position(
                         vep_core::coordinate::Strand::Reverse => variant.end > transcript.end,
                     };
 
-                // For the upstream-extension shape Perl emits
+                // For the upstream-extension shape Ensembl VEP emits
                 // `5_prime_UTR_variant,coding_sequence_variant`. The 5'UTR term
                 // normally comes from `add_utr_for_overlapping_span`, which
                 // short-circuits when `genomic_coding_bounds` or
@@ -1765,7 +1830,6 @@ fn apply_position(
                 let near_start_codon = cds_len > 0 && *cds_pos <= cds_len;
                 let is_start_lost = !also_spans_intron
                     && is_length_changing
-                    && !cds_start_nf
                     && near_start_codon
                     && !extends_upstream_of_transcript
                     && matches!(
@@ -1774,12 +1838,13 @@ fn apply_position(
                             TranscriptPosition::FivePrimeUtr { .. }
                                 | TranscriptPosition::Upstream { .. }
                         )
-                    );
+                    )
+                    && crate::coding::start_codon_stands_at_the_coding_start(transcript);
 
                 if is_stop_lost {
-                    // Perl's stop_lost fires only when alt_pep lacks '*' while ref_pep
+                    // Ensembl VEP's stop_lost fires only when alt_pep lacks '*' while ref_pep
                     // has '*'. `_get_peptide_alleles` returns undef for a deletion
-                    // extending past the CDS end, which routes Perl into
+                    // extending past the CDS end, which routes Ensembl VEP into
                     // `_ins_del_stop_altered`: it concatenates CDS + 3'UTR, applies
                     // the edit and re-translates the codon at the original stop, so
                     // shifted UTR bases spelling another stop yield
@@ -1817,7 +1882,7 @@ fn apply_position(
                         if cds_lo == 0 || cds_lo > cds_len {
                             return None;
                         }
-                        // Perl's `_ins_del_stop_altered` anchors the splice at
+                        // Ensembl VEP's `_ins_del_stop_altered` anchors the splice at
                         // `$cds_start - 1` but uses the full cDNA length
                         // `($cdna_end - $cdna_start) + 1`, not clamped to the CDS end:
                         // a 4bp deletion with 3bp in the stop codon and 1bp in the
@@ -1879,10 +1944,10 @@ fn apply_position(
                     };
                     push_unique(consequences, consequence);
                 } else if is_start_lost {
-                    // Perl's `VariationEffect::_ins_del_start_altered`
+                    // Ensembl VEP's `VariationEffect::_ins_del_start_altered`
                     // checks DNA-level ATG integrity: when the triplet at
                     // `length($utr->seq)` is still 'ATG' after the edit and the
-                    // 5'UTR bases are unchanged, Perl returns 0 and suppresses
+                    // 5'UTR bases are unchanged, Ensembl VEP returns 0 and suppresses
                     // `start_lost`; the widened gate alone would fire it for every
                     // UTR-spanning length-changing deletion. The helper prefers the
                     // cached `vefc.five_prime_utr` and uses FASTA only as fallback.
@@ -1913,7 +1978,7 @@ fn apply_position(
                             push_unique(consequences, Consequence::StartLost);
                         }
                         Some(false) => {
-                            // Start preserved: Perl emits no start_lost; the 5'UTR term
+                            // Start preserved: Ensembl VEP emits no start_lost; the 5'UTR term
                             // comes from the paired_position UTR emission.
                         }
                         None => {
@@ -1924,7 +1989,7 @@ fn apply_position(
                 } else {
                     // `frameshift_variant` / `inframe_insertion` / `inframe_deletion`
                     // for the `[Coordinate, Gap, Coordinate]` shape (a deletion
-                    // spanning introns with both endpoints in exonic CDS): Perl's
+                    // spanning introns with both endpoints in exonic CDS): Ensembl VEP's
                     // `VariationEffect::frameshift` fires when `defined cds_start &&
                     // defined cds_end`, which `BaseTranscriptVariation::cds_start` /
                     // `cds_end` take from the first and last `cds_coords` entries; a
@@ -1941,26 +2006,27 @@ fn apply_position(
                         variant.end,
                         transcript,
                     ) {
-                        // Perl gate 1: `defined cds_start && defined cds_end`, both
+                        // Ensembl VEP gate 1: `defined cds_start && defined cds_end`, both
                         // endpoints `EndpointClass::InCds`.
                         let perl_gate_1 = proj.both_endpoints_in_cds();
 
-                        // Perl gate 2: `return 0 if partial_codon`.
+                        // Ensembl VEP gate 2: `return 0 if partial_codon`.
                         let perl_gate_2 = !proj.has_partial_terminal_codon;
 
-                        // Perl gate 3: `_overlaps_stop_codon` / `_overlaps_start_codon`
+                        // Ensembl VEP gate 3: `_overlaps_stop_codon` / `_overlaps_start_codon`
                         // return 0 for cds_end_NF / cds_start_NF, and the frameshift
                         // chain reaches one of them via `stop_retained`.
                         let perl_gate_3 = !proj.cds_start_nf && !proj.cds_end_nf;
 
-                        // Perl gate 4: the is_stop_lost / is_start_lost branches above
+                        // Ensembl VEP gate 4: the is_stop_lost / is_start_lost branches above
                         // already handled the exon-to-UTR and exon-to-flank cases.
                         let perl_gate_4 = !is_stop_lost && !is_start_lost;
 
                         if perl_gate_1 && perl_gate_2 && perl_gate_3 && perl_gate_4 {
                             if let Some((cs, ce)) = proj.coordinate_bounds() {
                                 let var_len = ce.saturating_sub(cs) + 1;
-                                // Perl: allele_len = bvfoa->seq_length, 0 for a pure deletion.
+                                // Ensembl VEP: allele_len = bvfoa->seq_length, 0 for a pure
+                                // deletion.
                                 let alt_bytes = variant.alt_allele();
                                 let allele_len: u64 = if alt_bytes == b"-" {
                                     0
@@ -1969,7 +2035,7 @@ fn apply_position(
                                 };
                                 let diff = var_len.abs_diff(allele_len);
                                 if diff % 3 != 0 {
-                                    // Perl `frameshift`: abs(allele_len - var_len) % 3
+                                    // Ensembl VEP `frameshift`: abs(allele_len - var_len) % 3
                                     push_unique(consequences, Consequence::FrameshiftVariant);
                                     emitted_specific_term = true;
                                 } else if allele_len != var_len {
@@ -1980,13 +2046,13 @@ fn apply_position(
                                     }
                                     emitted_specific_term = true;
                                 }
-                                // allele_len == var_len: Perl emits only
+                                // allele_len == var_len: Ensembl VEP emits only
                                 // coding_sequence_variant for a same-length change in the
                                 // spans_non_coding branch.
                             }
                         }
 
-                        // Perl's `VariationEffect::partial_codon` is both a suppressor
+                        // Ensembl VEP's `VariationEffect::partial_codon` is both a suppressor
                         // (`perl_gate_2` above) and a positive emitter of
                         // `incomplete_terminal_codon_variant`, including for spans that
                         // leave the CDS (`CDS_position = N-?`); its early return
@@ -2018,13 +2084,13 @@ fn apply_position(
                     *cds_pos
                 };
 
-                // Perl emits `incomplete_terminal_codon_variant` + `coding_sequence_variant`
-                // for a variant in the last partial codon of a CDS whose length is not
-                // divisible by 3.
+                // Ensembl VEP emits `incomplete_terminal_codon_variant` +
+                // `coding_sequence_variant` for a variant in the last partial codon of a CDS
+                // whose length is not divisible by 3.
                 let translation_start = (analysis_cds_pos - 1) / 3 + 1;
                 let in_incomplete_terminal = partial_codon(transcript, Some(translation_start));
 
-                // Perl evaluates the coding predicates once per variant-transcript
+                // Ensembl VEP evaluates the coding predicates once per variant-transcript
                 // pair over the full span, so the secondary endpoint of a multi-base
                 // edit (which would apply the same edit at another cds_pos) is skipped.
                 {
@@ -2042,7 +2108,7 @@ fn apply_position(
                 }
 
                 if let Some(cc) = get_codon_change(variant, transcript, analysis_cds_pos) {
-                    // Perl's frameshift predicate uses the CDS-mapped length
+                    // Ensembl VEP's frameshift predicate uses the CDS-mapped length
                     // (cds_end - cds_start + 1), which differs from the raw ref length
                     // at exon/intron boundaries and UTR spans and changes the mod-3
                     // result; raw lengths apply only when no bounds exist.
@@ -2057,7 +2123,7 @@ fn apply_position(
                     } else if is_frameshift {
                         let frameshift_bounds = coding_bounds;
 
-                        // Perl's `frameshift` returns 0 if `stop_retained` is true, so a
+                        // Ensembl VEP's `frameshift` returns 0 if `stop_retained` is true, so a
                         // stop-preserving variant at the stop codon is inframe_insertion +
                         // stop_retained_variant. The codon window extends by the alt
                         // allele length, so a large insertion near the stop includes it;
@@ -2073,7 +2139,7 @@ fn apply_position(
                             push_unique(consequences, Consequence::StopRetainedVariant);
                         } else {
                             push_unique(consequences, Consequence::FrameshiftVariant);
-                            // Perl's frameshift stop_gained reads the local codon-window
+                            // Ensembl VEP's frameshift stop_gained reads the local codon-window
                             // peptides, where the stop can sit in a later codon of the
                             // window (`AGC` -> `ACTTAGC` => `T*X`), so a single-codon AA
                             // check is insufficient.
@@ -2096,7 +2162,7 @@ fn apply_position(
                             }
                         }
                     } else {
-                        // Perl's codon windows use translation_start/end from the full
+                        // Ensembl VEP's codon windows use translation_start/end from the full
                         // variant span, not a single cds_pos.
                         assign_coding_consequence(
                             consequences,
@@ -2108,7 +2174,7 @@ fn apply_position(
                             coding_bounds.as_ref(),
                         );
 
-                        // Perl's stop predicates are peptide-based and fire for inframe
+                        // Ensembl VEP's stop predicates are peptide-based and fire for inframe
                         // indels too. `stop_retained` -> `ref_eq_alt_sequence` reads
                         // codon-window peptides (`_get_peptide_alleles`), not the full CDS,
                         // whose terminal `*` would make every distant insertion
@@ -2118,14 +2184,14 @@ fn apply_position(
                             && !consequences.contains(&Consequence::StopRetainedVariant)
                         {
                             // Codon-window check first; near the stop codon the full-CDS
-                            // check follows (Perl's condition 2 in ref_eq_alt_sequence, full
-                            // peptide substitution).
+                            // check follows (Ensembl VEP's condition 2 in ref_eq_alt_sequence,
+                            // full peptide substitution).
                             let stop_retained_inframe = if let Some(b) = coding_bounds.as_ref() {
                                 if is_stop_retained_insertion(variant, transcript, b, false) {
                                     true
                                 } else {
-                                    // Perl's _overlaps_stop_codon: the variant cDNA overlaps
-                                    // the last 3 CDS positions.
+                                    // Ensembl VEP's _overlaps_stop_codon: the variant cDNA
+                                    // overlaps the last 3 CDS positions.
                                     let near_stop = transcript
                                         .vefc
                                         .as_ref()
@@ -2194,12 +2260,12 @@ fn apply_position(
                             }
                         }
 
-                        // No StartLost here: the start-codon block above covers
+                        // No StartLost here: the start-codon block below covers
                         // InframeDeletion and runs the alt-CDS ATG scanner before
                         // deciding, so a push here would short-circuit its
                         // StartRetainedVariant emission.
                         //
-                        // Perl's stop predicates fire for any coding variant, so a
+                        // Ensembl VEP's stop predicates fire for any coding variant, so a
                         // ProteinAltering alt peptide with a premature stop still gets
                         // stop_gained, scoped by the codon window.
                         if populate_fields
@@ -2261,9 +2327,9 @@ fn apply_position(
                             }
                         }
 
-                        // Perl suppresses missense/synonymous when stop_gained or stop_lost
-                        // is true; both anchors of a multi-base allele are evaluated here,
-                        // so the invariant is enforced after stop detection.
+                        // Ensembl VEP suppresses missense/synonymous when stop_gained or
+                        // stop_lost is true; both anchors of a multi-base allele are evaluated
+                        // here, so the invariant is enforced after stop detection.
                         if consequences.contains(&Consequence::StopGained)
                             || consequences.contains(&Consequence::StopLost)
                         {
@@ -2279,7 +2345,7 @@ fn apply_position(
                 }
             }
 
-            // Perl co-emits frameshift_variant + stop_lost for a terminal frameshift
+            // Ensembl VEP co-emits frameshift_variant + stop_lost for a terminal frameshift
             // but drops the generic inframe labels once stop_lost fires.
             if !consequences.contains(&Consequence::StopLost)
                 && !consequences.contains(&Consequence::StopGained)
@@ -2335,7 +2401,7 @@ fn apply_position(
                 }
             }
 
-            // Perl fires start_lost when the first codon does not translate to M,
+            // Ensembl VEP fires start_lost when the first codon does not translate to M,
             // and start_retained when the original ATG triplet is still present in
             // the altered codon window. The gate uses the 5'-most CDS index of the
             // span: on a reverse-strand deletion `*cds_pos` is the 3'-most index (4
@@ -2367,7 +2433,7 @@ fn apply_position(
                     .unwrap_or(false);
 
                 if ref_is_met {
-                    // The alt-CDS ATG scan runs first: Perl's start_retained fires when
+                    // The alt-CDS ATG scan runs first: Ensembl VEP's start_retained fires when
                     // an in-frame ATG remains at the canonical start regardless of
                     // whether the first-codon peptide translates to M (a 1bp deletion
                     // of the G in ATG when codon 2 begins with G leaves ATG at position
@@ -2454,7 +2520,7 @@ fn apply_position(
                 ) {
                     push_unique(consequences, Consequence::SpliceRegionVariant);
                 }
-                // Perl: exonic splice_region for insertions comes from _intron_effects()
+                // Ensembl VEP: exonic splice_region for insertions comes from _intron_effects()
                 // only. Skip when paired with an intron (intron branch handles it).
                 let paired_is_intron =
                     matches!(paired_position, Some(TranscriptPosition::Intron { .. }));
@@ -2492,7 +2558,7 @@ fn apply_position(
 
             if let Some((intron_start, intron_end)) = intron_bounds {
                 if is_frameshift_intron(intron_start, intron_end) {
-                    // Perl's _intron_effects sets within_frameshift_intron for a
+                    // Ensembl VEP's _intron_effects sets within_frameshift_intron for a
                     // frameshift intron (<= 12 bp) and skips every intron and splice
                     // term. On a coding transcript `within_cds` then accepts the span
                     // only where it overlaps the coding region
@@ -2549,16 +2615,17 @@ fn apply_position(
             );
             if !insertion && (spans_exon_boundary || paired_intron_same) {
                 if let Some((intron_start, intron_end)) = intron_bounds {
-                    // Perl computes intronic splice labels by overlap across the full
+                    // Ensembl VEP computes intronic splice labels by overlap across the full
                     // allele span; evaluating both endpoints independently over-calls
                     // mixed labels (donor_5th_base + donor_region).
                     if paired_intron_same && !populate_fields {
                         return;
                     }
-                    // Perl's `include` gate: splice_polypyrimidine_tract_variant requires
+                    // Ensembl VEP's `include` gate: splice_polypyrimidine_tract_variant requires
                     // `exon => 0`, so suppress polypyr when the variant also overlaps an exon.
-                    // Perl also extends the exon overlap window by 12bp when the transcript
-                    // has any frameshift intron (`BaseTranscriptVariation::_overlapped_exons`).
+                    // Ensembl VEP also extends the exon overlap window by 12bp when the
+                    // transcript has any frameshift intron
+                    // (`BaseTranscriptVariation::_overlapped_exons`).
                     let lo = variant.start.min(variant.end);
                     let hi = variant.start.max(variant.end);
                     let frameshift_stretch = !spans_exon_boundary
@@ -2579,7 +2646,7 @@ fn apply_position(
                 }
             }
 
-            // For intronic non-insertions Perl uses overlap-based intron effects;
+            // For intronic non-insertions Ensembl VEP uses overlap-based intron effects;
             // that path applies whenever intron bounds exist.
             if !insertion {
                 if let Some((intron_start, intron_end)) = intron_bounds {
@@ -2613,7 +2680,7 @@ fn apply_position(
                     add_intronic_insertion_splice_consequences(
                         consequences,
                         transcript,
-                        variant,
+                        (variant.start, variant.end),
                         (intron_start, intron_end),
                         splice_evaluations,
                     );
@@ -2678,7 +2745,7 @@ fn apply_position(
                 ) {
                     push_unique(consequences, Consequence::SpliceRegionVariant);
                 }
-                // Perl: exonic splice_region for insertions comes from _intron_effects()
+                // Ensembl VEP: exonic splice_region for insertions comes from _intron_effects()
                 // only. Skip when paired with an intron (intron branch handles it).
                 let paired_is_intron =
                     matches!(paired_position, Some(TranscriptPosition::Intron { .. }));
@@ -2749,7 +2816,7 @@ fn allele_overlaps_any_exon(transcript: &Transcript, lo: u64, hi: u64) -> bool {
     exons.iter().any(|e| hi >= e.start && lo <= e.end)
 }
 
-/// Check if the variant overlaps any exon with a 12bp stretch (Perl's frameshift-intron
+/// Check if the variant overlaps any exon with a 12bp stretch (Ensembl VEP's frameshift-intron
 /// exon extension). Suppresses polypyrimidine for transcripts with frameshift introns.
 fn allele_overlaps_any_exon_stretched(transcript: &Transcript, lo: u64, hi: u64) -> bool {
     let exons = transcript
@@ -2786,14 +2853,14 @@ fn allele_overlaps_coding_region(transcript: &Transcript, lo: u64, hi: u64) -> b
     hi >= start && lo <= end
 }
 
-/// Perl's `overlap` (`Utils/VariationEffect.pm`) on the allele's own coordinates,
+/// Ensembl VEP's `overlap` (`Utils/VariationEffect.pm`) on the allele's own coordinates,
 /// which for an insertion run `start == end + 1`: an insertion overlaps a region
 /// only when both flanks lie inside it, so one sitting on the region's edge does not.
 fn perl_overlap(f1_start: u64, f1_end: u64, f2_start: u64, f2_end: u64) -> bool {
     f1_end >= f2_start && f1_start <= f2_end
 }
 
-/// Perl's `within_cds` frameshift-intron arm and the `coding` pre-predicate of
+/// Ensembl VEP's `within_cds` frameshift-intron arm and the `coding` pre-predicate of
 /// `_bvfo_preds`: the allele overlaps the genomic coding region.
 fn allele_overlaps_coding_bounds(variant: &InputVariant, transcript: &Transcript) -> bool {
     match genomic_coding_bounds(transcript) {
@@ -2802,7 +2869,7 @@ fn allele_overlaps_coding_bounds(variant: &InputVariant, transcript: &Transcript
     }
 }
 
-/// The positional half of Perl's `within_5_prime_utr` and `within_3_prime_utr`
+/// The positional half of Ensembl VEP's `within_5_prime_utr` and `within_3_prime_utr`
 /// (`Utils/VariationEffect.pm`). `_before_coding` is an overlap with
 /// `[transcript start, coding_region_start - 1]`, or an insertion whose start is
 /// the coding region start; `_after_coding` is an overlap with
@@ -2838,7 +2905,7 @@ fn push_perl_utr_terms(
 /// The term of the transcript region whose genomic span holds an allele with no
 /// transcript coordinate, every base of it one the model's alignment deleted:
 /// on a coding model, `coding_sequence_variant` where the span overlaps the
-/// coding region (Perl's `coding` pre-predicate) and the UTR terms of
+/// coding region (Ensembl VEP's `coding` pre-predicate) and the UTR terms of
 /// [`push_perl_utr_terms`], so a span across the coding boundary takes both, as
 /// a mapped span does; on any other model the exon term (a mature miRNA product
 /// lies on mapped bases, so none holds the span). The bases have no cDNA, CDS or
@@ -2909,12 +2976,12 @@ fn assign_coding_consequence(
     let ref_allele = &variant.ref_allele;
     let alt_allele = variant.alt_allele();
 
-    // Perl's `TranscriptVariationAllele::peptide` returns undef when
+    // Ensembl VEP's `TranscriptVariationAllele::peptide` returns undef when
     // `VariationFeatureOverlapAllele::seq_is_unambiguous_dna` is false (allele
     // contains non-ACGT characters like N, R, Y), and `_get_peptide_alleles` needs
     // the reference allele's peptide as well as the alternate's
     // (Utils/VariationEffect.pm:772-790), so a reference base of `N` leaves every
-    // peptide predicate false: Ensembl VEP 116.2 writes `coding_sequence_variant`
+    // peptide predicate false: Ensembl VEP 116.3 writes `coding_sequence_variant`
     // for `N G` where `A G` at the same base is `missense_variant`.
     let ambiguous = |allele: &[u8]| {
         !allele.is_empty() && allele != b"-" && !crate::coding::is_unambiguous_dna(allele)
@@ -2929,7 +2996,7 @@ fn assign_coding_consequence(
 
     // Pure insertions and complex indels with a net length change take
     // classify_inframe_indel_by_peptide's peptide-level containment checks,
-    // matching the containment gate in Perl's
+    // matching the containment gate in Ensembl VEP's
     // `VariationEffect::protein_altering_variant`.
     if ref_is_dash && !alt_is_dash {
         let kind = classify_inframe_indel_by_peptide(variant, transcript, cds_pos, cds_bounds);
@@ -2947,7 +3014,7 @@ fn assign_coding_consequence(
                 push_unique(consequences, Consequence::InframeInsertion);
             }
             None => {
-                // Perl falls back to coding_sequence_variant when the peptide
+                // Ensembl VEP falls back to coding_sequence_variant when the peptide
                 // comparison fails (no translateable_seq, invalid CDS bounds).
                 push_unique(consequences, Consequence::CodingSequenceVariant);
             }
@@ -2955,7 +3022,7 @@ fn assign_coding_consequence(
         return;
     }
     if !ref_is_dash && alt_is_dash {
-        // Perl classifies a pure deletion as protein_altering_variant when the alt
+        // Ensembl VEP classifies a pure deletion as protein_altering_variant when the alt
         // peptide does not contain the ref as a sub/super-string.
         let kind = classify_inframe_indel_by_peptide(variant, transcript, cds_pos, cds_bounds);
         match kind {
@@ -2992,7 +3059,7 @@ fn assign_coding_consequence(
                 push_unique(consequences, Consequence::ProteinAlteringVariant);
             }
             None => {
-                // Perl falls back to coding_sequence_variant when translateable_seq
+                // Ensembl VEP falls back to coding_sequence_variant when translateable_seq
                 // is unavailable or CDS bounds fail.
                 push_unique(consequences, Consequence::CodingSequenceVariant);
             }
@@ -3000,7 +3067,20 @@ fn assign_coding_consequence(
         return;
     }
 
-    // Perl's coding_unknown fires when either peptide contains 'X' (an
+    // A SeqEdit that takes the reference residue out of the protein leaves the
+    // reference peptide undefined (TranscriptVariationAllele.pm:763-765), so
+    // `_get_peptide_alleles` is empty and no peptide predicate holds. The stop
+    // tests of an allele that keeps its length fail with them
+    // (VariationEffect.pm:1259-1264, 1313-1319, 1447): coding_unknown alone.
+    let codon = (cds_pos.saturating_sub(1) / 3 + 1) as i64;
+    if transcript.vefc.as_ref().is_some_and(|v| {
+        crate::coding::seq_edits_leave_reference_peptide_undefined(&v.seq_edits, codon, codon)
+    }) {
+        push_unique(consequences, Consequence::CodingSequenceVariant);
+        return;
+    }
+
+    // Ensembl VEP's coding_unknown fires when either peptide contains 'X' (an
     // ambiguous codon, or an `X` SeqEdit on the reference residue). Its
     // exclusion list names neither stop_gained nor missense_variant, and
     // `missense_variant` is plain `ref_pep ne alt_pep`, so an edited `X`
@@ -3048,7 +3128,7 @@ fn is_start_codon_affected(ref_aa: u8, cds_pos: u64) -> bool {
 
 /// Check if a variant is an insertion/indel at/near the stop codon that preserves the stop.
 ///
-/// Perl's `stop_retained` predicate suppresses `frameshift` when an insertion
+/// Ensembl VEP's `stop_retained` predicate suppresses `frameshift` when an insertion
 /// at or just before the stop codon does not destroy the downstream stop
 /// (e.g., `taa/taAGTGa` → `*/*VX`).
 ///
@@ -3077,7 +3157,7 @@ pub(crate) fn is_stop_retained_insertion(
         return false;
     }
 
-    // Perl's `TranscriptVariationAllele::peptide` reads the local codon window;
+    // Ensembl VEP's `TranscriptVariationAllele::peptide` reads the local codon window;
     // the stop must appear there to count as retained.
     let Some((ref_pep, alt_pep)) =
         compute_codon_window_peptide_alleles(variant, transcript, bounds)
@@ -3085,17 +3165,18 @@ pub(crate) fn is_stop_retained_insertion(
         return false;
     };
 
-    // Perl guard in `VariationEffect::ref_eq_alt_sequence`:
+    // Ensembl VEP guard in `VariationEffect::ref_eq_alt_sequence`:
     //   return 0 if $ref_pep eq "X" && $alt_pep eq "X";  # incomplete coding terminal
     // Both peptides a single 'X' means an incomplete coding terminal that cannot
-    // be translated either way, and Perl emits no stop_retained. The wider codon
+    // be translated either way, and Ensembl VEP emits no stop_retained. The wider codon
     // window here produces 'X' at boundary codons more readily, so the guard fires
     // only when both resolve to exactly one 'X'.
     if ref_pep == b"X" && alt_pep == b"X" {
         return false;
     }
 
-    // Perl's `stop_retained` → `ref_eq_alt_sequence` has three conditions (any true → retained):
+    // Ensembl VEP's `stop_retained` → `ref_eq_alt_sequence` has three conditions (any true →
+    // retained):
     //
     // 1. ref_pep == first char of alt_pep AND alt_pep contains '*'
     //    (large insertion preserves the ref AA and introduces a stop in the inserted sequence)
@@ -3106,12 +3187,12 @@ pub(crate) fn is_stop_retained_insertion(
     // 3. Both ref and alt contain '*' at the same peptide position
     //    (stop codon is at the same offset in both peptides)
     //
-    // Condition 1: Perl's `$ref_pep eq substr($alt_pep, 0, 1)` requires the entire
+    // Condition 1: Ensembl VEP's `$ref_pep eq substr($alt_pep, 0, 1)` requires the entire
     // ref_pep to be one character equal to the first character of alt_pep, so it
     // fires only when ref_pep is exactly 1 AA. CdsSpanBounds can produce a wider
-    // window than Perl's, whose alt peptide may include shifted-frame stops Perl
+    // window than Ensembl VEP's, whose alt peptide may include shifted-frame stops Ensembl VEP
     // never sees, so the scan is capped to ref AAs + inserted AAs, with no +1 for
-    // the boundary codon: Perl's window does not extend into it.
+    // the boundary codon: Ensembl VEP's window does not extend into it.
     if ref_pep.len() == 1 && !alt_pep.is_empty() && ref_pep[0] == alt_pep[0] {
         let ref_len_nt = if ref_allele == b"-" || ref_allele.is_empty() {
             0usize
@@ -3120,7 +3201,7 @@ pub(crate) fn is_stop_retained_insertion(
         };
         let net_insertion_nt = alt_allele.len().saturating_sub(ref_len_nt);
         // For a frameshift (net insertion not divisible by 3) the partial boundary
-        // codon translates to 'X' in Perl's `TranscriptVariationAllele::peptide`,
+        // codon translates to 'X' in Ensembl VEP's `TranscriptVariationAllele::peptide`,
         // hiding shifted-frame stops, so floor division excludes it; an inframe
         // indel scans the full window.
         let insertion_aa_count = if for_frameshift {
@@ -3138,7 +3219,7 @@ pub(crate) fn is_stop_retained_insertion(
     // Condition 3: both peptides contain '*' (a small insertion near the stop
     // codon, where both windows include the stop).
     if ref_pep.contains(&b'*') && alt_pep.contains(&b'*') {
-        // Perl checks same position: index(ref, '*') == index(alt, '*')
+        // Ensembl VEP checks same position: index(ref, '*') == index(alt, '*')
         let ref_stop_pos = ref_pep.iter().position(|&b| b == b'*');
         let alt_stop_pos = alt_pep.iter().position(|&b| b == b'*');
         if ref_stop_pos == alt_stop_pos {
@@ -3148,7 +3229,7 @@ pub(crate) fn is_stop_retained_insertion(
 
     // Condition 2: full-peptide substitution check.
     //
-    // Perl's ref_eq_alt_sequence condition 2:
+    // Ensembl VEP's ref_eq_alt_sequence condition 2:
     //   $ref_seq = $bvfo->_peptide;  # full protein (from cache, without terminal *)
     //   $mut_seq = $ref_seq;
     //   substr($mut_seq, $tl_start-1, $tl_end - $tl_start + 1) = $alt_pep;
@@ -3156,7 +3237,7 @@ pub(crate) fn is_stop_retained_insertion(
     //   $final_stop = substr($mut_seq, length($ref_seq));
     //   return 1 if ($ref_seq eq $mut_substring && length($final_stop) < 3);
     //
-    // Perl's cached peptide (_peptide) does not include the terminal `*`, so the
+    // Ensembl VEP's cached peptide (_peptide) does not include the terminal `*`, so the
     // substitution check compares against a protein ending at the last AA: for an
     // insertion in the penultimate codon the first ref_len chars of mut_seq still
     // match because the stop was never there. Hence the CDS is translated, the
@@ -3164,7 +3245,7 @@ pub(crate) fn is_stop_retained_insertion(
     // translation_start. Only the last ~15 CDS positions are checked: an insertion
     // further upstream displaces AAs and cannot satisfy the equality.
     //
-    // Perl's stop_retained checks `return 0 if stop_lost(@_)` first, and stop_lost
+    // Ensembl VEP's stop_retained checks `return 0 if stop_lost(@_)` first, and stop_lost
     // reads the codon-window peptides (`ref_pep =~ /\*/ && alt_pep !~ /\*/`), so an
     // insertion in the stop codon destroys it and skips condition 2.
     let ref_has_stop = ref_pep.contains(&b'*');
@@ -3187,7 +3268,8 @@ pub(crate) fn is_stop_retained_insertion(
                         }
                         let ref_len = ref_full_pep.len();
 
-                        // Perl: substr($mut_seq, $tl_start-1, $tl_end - $tl_start + 1) = $alt_pep
+                        // Ensembl VEP: substr($mut_seq, $tl_start-1, $tl_end - $tl_start + 1) =
+                        // $alt_pep
                         let sub_start = tl_start - 1; // 0-based index
                         let sub_len = if tl_end >= tl_start {
                             tl_end - tl_start + 1
@@ -3222,7 +3304,7 @@ pub(crate) fn is_stop_retained_insertion(
 
 /// Full-CDS variant of `is_stop_retained_insertion`, for the **inframe** supplement path.
 ///
-/// For inframe insertions (length divisible by 3), Perl's stop_retained predicate fires
+/// For inframe insertions (length divisible by 3), Ensembl VEP's stop_retained predicate fires
 /// whenever both the ref and alt full-CDS peptides contain a stop codon. This is correct
 /// because an inframe insertion shifts the stop downstream but preserves it.
 ///
@@ -3237,10 +3319,13 @@ fn is_stop_retained_insertion_full_cds(
     use crate::coding::compute_full_peptide_alleles;
     use vep_core::variant::VariantClass;
 
-    // Perl skips stop_retained analysis for an incomplete CDS, whose truncated
-    // sequence gives an unreliable stop position.
-    let facts = transcript.facts();
-    if facts.cds_start_nf || facts.cds_end_nf {
+    // Ensembl VEP skips stop_retained analysis for an incomplete CDS, whose truncated
+    // sequence gives an unreliable stop position. No stop codon is kept where
+    // none stands at the coding end.
+    if transcript.facts().cds_start_nf
+        || crate::coding::stop_codon_at_the_coding_end(transcript)
+            == crate::coding::StopCodonAtTheCodingEnd::None
+    {
         return false;
     }
 
@@ -3366,7 +3451,7 @@ fn intron_overlap_for_insertion(
         || v_end == intron_end.saturating_sub(2)
 }
 
-/// Splice terms for one intron of a pure insertion, following Perl's
+/// Splice terms for one intron of a pure insertion, following Ensembl VEP's
 /// `_intron_effects`: the single differing region is the inverted anchor pair
 /// (`start = end + 1`), so the non-normalising `overlap` holds only when both
 /// anchors sit inside a window, and the `$insertion` equality clauses admit the
@@ -3375,10 +3460,14 @@ fn intron_overlap_for_insertion(
 /// frameshift intron (span <= 12) the anchors overlap is skipped (the `next` in
 /// `BaseTranscriptVariationAllele::_intron_effects`). Evaluated once per
 /// intron per allele through `evaluated`.
+///
+/// `(v_start, v_end)` is that anchor pair: the variant's own coordinates for
+/// a pure insertion, and `insertion_after_the_span`'s pair for an allele that
+/// writes an insertion after its span.
 fn add_intronic_insertion_splice_consequences(
     consequences: &mut ConsequenceList,
     transcript: &Transcript,
-    variant: &InputVariant,
+    (v_start, v_end): (u64, u64),
     (intron_start, intron_end): (u64, u64),
     evaluated: &mut SpliceEvaluations,
 ) {
@@ -3387,7 +3476,6 @@ fn add_intronic_insertion_splice_consequences(
         return;
     }
     evaluated.push(key);
-    let (v_start, v_end) = (variant.start, variant.end);
     let (in_intron_list, in_boundary_list) = perl_intron_list_membership(
         v_start.min(v_end),
         v_start.max(v_end),
@@ -3466,14 +3554,14 @@ fn add_intronic_insertion_splice_consequences(
     if donor_region {
         push_unique(consequences, Consequence::SpliceDonorRegionVariant);
     }
-    // Perl's `include` gate for polypyrimidine is `exon => 0`: PPT is filtered
+    // Ensembl VEP's `include` gate for polypyrimidine is `exon => 0`: PPT is filtered
     // when the pre-predicate `exon=1`, and `_overlapped_exons` stretches exon
     // bounds by 12bp on a transcript with any frameshift intron (span <= 12bp),
     // so a variant near but outside an exon can still register `exon=1`
     // (`BaseTranscriptVariation::_overlapped_exons`,
     // `BaseVariationFeatureOverlapAllele::_skip_oc`).
-    let lo = variant.start.min(variant.end);
-    let hi = variant.start.max(variant.end);
+    let lo = v_start.min(v_end);
+    let hi = v_start.max(v_end);
     let overlaps_exon = if transcript.facts().vefc_has_frameshift_intron {
         allele_overlaps_any_exon_stretched(transcript, lo, hi)
     } else {
@@ -3483,7 +3571,7 @@ fn add_intronic_insertion_splice_consequences(
         push_unique(consequences, Consequence::SplicePolypyrimidineTractVariant);
     }
 
-    // Perl `within_intron` tests the core intron (intron_start+2..intron_end-2)
+    // Ensembl VEP `within_intron` tests the core intron (intron_start+2..intron_end-2)
     // plus the two anchor equalities; for an intron shorter than 4bp the
     // equalities still hold.
     let core_start = intron_start.saturating_add(2);
@@ -3507,9 +3595,9 @@ fn add_intronic_insertion_splice_consequences(
     }
 }
 
-/// For non-insertion variants, add splice consequences for every intron Perl's
+/// For non-insertion variants, add splice consequences for every intron Ensembl VEP's
 /// memoised intron list holds (`perl_intron_list_membership`), not only the
-/// introns containing the variant endpoints. Perl reaches `_intron_effects`
+/// introns containing the variant endpoints. Ensembl VEP reaches `_intron_effects`
 /// only when `within_feature` holds for the raw variant span
 /// (`BaseVariationFeatureOverlapAllele::_bvfo_preds`), and the inserted bases
 /// of a delins play no part in which introns are fetched.
@@ -3539,14 +3627,18 @@ fn add_splice_for_overlapping_introns(
     }
 
     let overlaps_exon = allele_overlaps_any_exon(transcript, vf_lo, vf_hi);
-    // Perl extends exon overlap by 12bp when the transcript has any frameshift intron.
+    // Ensembl VEP extends exon overlap by 12bp when the transcript has any frameshift intron.
     let suppress_polypyr = overlaps_exon
         || (transcript.facts().vefc_has_frameshift_intron
             && allele_overlaps_any_exon_stretched(transcript, vf_lo, vf_hi));
 
+    // An insertion written after the span is read on the introns its own
+    // anchors fetch, which reach one base past the span.
+    let list_hi = insertion_after_the_span(variant).map_or(vf_hi, |(after, _)| after);
+
     for intron in introns {
         let (in_intron_list, in_boundary_list) =
-            perl_intron_list_membership(vf_lo, vf_hi, intron.start, intron.end);
+            perl_intron_list_membership(vf_lo, list_hi, intron.start, intron.end);
         if !in_intron_list && !in_boundary_list {
             continue;
         }
@@ -3561,7 +3653,7 @@ fn add_splice_for_overlapping_introns(
     }
 }
 
-/// Supplemental splice check for insertions, over every intron Perl's memoised
+/// Supplemental splice check for insertions, over every intron Ensembl VEP's memoised
 /// intron list holds for the anchor pair (`perl_intron_list_membership`), after
 /// `within_feature` on the raw anchors (both inside the transcript). The
 /// per-endpoint `apply_position` calls cover only the anchor introns, which
@@ -3597,7 +3689,7 @@ fn add_splice_for_overlapping_introns_insertion(
         add_intronic_insertion_splice_consequences(
             consequences,
             transcript,
-            variant,
+            (v_start, v_end),
             (intron.start, intron.end),
             evaluated,
         );
@@ -3605,10 +3697,10 @@ fn add_splice_for_overlapping_introns_insertion(
 }
 
 /// For non-insertion variants, add `5_prime_UTR_variant` / `3_prime_UTR_variant`
-/// exactly as Perl's `VariationEffect::within_5_prime_utr` /
+/// exactly as Ensembl VEP's `VariationEffect::within_5_prime_utr` /
 /// `within_3_prime_utr` do.
 ///
-/// Perl tests `overlap(bvf_start, bvf_end, region_start, region_end)` as
+/// Ensembl VEP tests `overlap(bvf_start, bvf_end, region_start, region_end)` as
 /// `bvf_end >= region_start && bvf_start <= region_end` with no check that the
 /// region is non-empty. `_before_coding` uses the region
 /// `transcript.start .. coding_region_start - 1` and `_after_coding` uses
@@ -3669,7 +3761,7 @@ fn add_utr_for_overlapping_span(
 /// Genomic coding bounds, preferring the transcript's own fields and falling back to the
 /// cDNA-coding offsets in the cache's coordinate mapper.
 ///
-/// `pub(crate)` so the SV predicates in `sv/mod.rs` share it: Perl derives the
+/// `pub(crate)` so the SV predicates in `sv/mod.rs` share it: Ensembl VEP derives the
 /// bounds through its mapper when a cache entry carries the CDS only as cDNA
 /// offsets, and reading `coding_region_start` / `_end` alone would withhold
 /// `coding_sequence_variant` and both UTR terms on such a transcript.
@@ -3705,30 +3797,42 @@ fn cdna_to_genomic_pos(cdna_pos: u64, pairs: &[vep_core::transcript::MapperPair]
     None
 }
 
-/// Perl's `_frameshift` flag on an intron: `abs(end - start) <= 12`
+/// Ensembl VEP's `_frameshift` flag on an intron: `abs(end - start) <= 12`
 /// (`BaseTranscriptVariation::_create_intron_trees`). `_intron_effects` skips
 /// such an intron, in both its loops, for every differing region that overlaps
-/// it, so the region gets none of that intron's splice or intron terms.
+/// it, so the region gets none of that intron's splice or intron terms. The
+/// test is `Intron::is_frameshift`, which an intron whose start lies past its
+/// end never passes.
 fn is_frameshift_intron(intron_start: u64, intron_end: u64) -> bool {
-    intron_end.saturating_sub(intron_start) <= 12
+    vep_core::transcript::Intron {
+        start: intron_start,
+        end: intron_end,
+        rank: 0,
+    }
+    .is_frameshift()
 }
 
-/// Perl's `BaseTranscriptVariation::_overlapped_introns` /
+/// Ensembl VEP's `BaseTranscriptVariation::_overlapped_introns` /
 /// `_overlapped_introns_boundary` are memoised on the first call, which
 /// `_bvfo_preds` makes with the raw variant span, so every later per-region check
 /// in `_intron_effects` runs over the introns that span fetched. The interval
 /// trees hold `[intron_start-3, intron_end+3]` and the two boundary windows
 /// `[intron_start-3, intron_start+7]`, `[intron_end-7, intron_end+3]` (1-based
 /// closed, after the half-open insert/fetch adjustment of Set::IntervalTree
-/// 0.12, the version Ensembl VEP release 115.2 runs). Returns (in intron list,
+/// 0.12, the version Ensembl VEP release 116.3 runs). Returns (in intron list,
 /// in boundary list); for an intron shorter than 5bp the boundary windows reach
-/// past the intron window, so neither list contains the other.
+/// past the intron window, so neither list contains the other. An intron whose
+/// start lies past its end is in neither list: `_create_intron_trees` skips it
+/// before the inserts (`BaseTranscriptVariation.pm:1014`).
 fn perl_intron_list_membership(
     vf_lo: u64,
     vf_hi: u64,
     intron_start: u64,
     intron_end: u64,
 ) -> (bool, bool) {
+    if intron_start > intron_end {
+        return (false, false);
+    }
     let overlap_perl = |rs: u64, re: u64, fs: u64, fe: u64| -> bool { re >= fs && rs <= fe };
     let in_intron_list = overlap_perl(
         vf_lo,
@@ -3753,7 +3857,7 @@ fn perl_intron_list_membership(
 /// The windows of the donor, acceptor, donor 5th base, donor region,
 /// polypyrimidine tract and intron terms on one intron, in that order, for a
 /// transcript on `strand`: the five splice windows as `_intron_effects` places
-/// them (BaseTranscriptVariationAllele.pm:155-204) and the predicates pick them
+/// them (BaseTranscriptVariationAllele.pm:155-206) and the predicates pick them
 /// by strand (VariationEffect.pm:560-614), and for the intron term the whole
 /// intron, its two end bases included.
 fn strand_splice_windows(
@@ -3817,7 +3921,25 @@ fn span_holds_splice_window_base(
     held
 }
 
-/// Splice terms for one intron of a non-insertion variant, following Perl's
+/// The anchor pair `(end + 1, end)` of the insertion an allele writes after
+/// its span. The alternate allele opens with the whole reference allele: no
+/// base of the span changes, and the further bases stand between the span's
+/// last base and the base after it. Ensembl VEP compares two alleles of two
+/// or more bases index by index and finds every differing index past the
+/// span (VariationFeatureOverlapAllele.pm:418); a reference allele of one
+/// base it does not compare, and reads that base as changed (:452-454).
+fn insertion_after_the_span(variant: &InputVariant) -> Option<(u64, u64)> {
+    let ref_allele = variant.ref_allele.as_slice();
+    let alt_allele = variant.alt_allele();
+    let written = !ref_allele.is_empty()
+        && ref_allele != b"-"
+        && alt_allele.len() > ref_allele.len()
+        && alt_allele.starts_with(ref_allele);
+    let span_end = variant.start.max(variant.end);
+    written.then(|| (span_end.saturating_add(1), span_end))
+}
+
+/// Splice terms for one intron of a non-insertion variant, following Ensembl VEP's
 /// `BaseTranscriptVariationAllele::_intron_effects`: every window is
 /// tested per differing region (`_get_differing_regions`, which for a variant
 /// with either allele of 1 base or less is the raw reference span and otherwise
@@ -3833,6 +3955,11 @@ fn span_holds_splice_window_base(
 /// variant's span reach is written only when the span holds a base of a window
 /// of that term in the transcript (`span_holds_splice_window_base`); the
 /// intron term's window is the whole intron.
+///
+/// A second: an allele that writes an insertion after its span
+/// (`insertion_after_the_span`) is read as that insertion, by
+/// `add_intronic_insertion_splice_consequences`, where `_intron_effects` reads
+/// as changed the bases after the span or, for a span of one base, that base.
 fn add_intronic_non_insertion_splice_consequences(
     consequences: &mut ConsequenceList,
     transcript: &Transcript,
@@ -3841,6 +3968,16 @@ fn add_intronic_non_insertion_splice_consequences(
     suppress_polypyr: bool,
     evaluated: &mut SpliceEvaluations,
 ) {
+    if let Some(anchors) = insertion_after_the_span(variant) {
+        add_intronic_insertion_splice_consequences(
+            consequences,
+            transcript,
+            anchors,
+            (intron_start, intron_end),
+            evaluated,
+        );
+        return;
+    }
     let key = (intron_start, intron_end, suppress_polypyr);
     if evaluated.contains(&key) {
         return;
@@ -3967,7 +4104,7 @@ fn add_intronic_non_insertion_splice_consequences(
     if donor_region {
         push_unique(consequences, Consequence::SpliceDonorRegionVariant);
     }
-    // Perl's `include` gate: splice_polypyrimidine_tract_variant requires
+    // Ensembl VEP's `include` gate: splice_polypyrimidine_tract_variant requires
     // `exon => 0` and `intron => 1`, so exon overlap suppresses it.
     if polypyrimidine && !suppress_polypyr {
         push_unique(consequences, Consequence::SplicePolypyrimidineTractVariant);
@@ -3979,7 +4116,8 @@ fn add_intronic_non_insertion_splice_consequences(
         if !donor_splice_site && !acceptor_splice_site && !donor_region && !donor_5th_base {
             push_unique(consequences, Consequence::SpliceRegionVariant);
         } else {
-            // Perl's suppression rules also apply to a splice_region the exonic side added.
+            // Ensembl VEP's suppression rules also apply to a splice_region the exonic side
+            // added.
             remove_consequence(consequences, Consequence::SpliceRegionVariant);
         }
     }
@@ -3996,7 +4134,7 @@ const SHIFT_SEARCH_AREA: usize = 1000;
 /// the flank moves at most `1001 - len` positions; a longer one gets a bound of
 /// `length(post_seq)` (:304), 1,000 moves, except that going 5' `len == 1001`
 /// leaves the loop bound at zero and nothing moves.
-pub fn perform_shift_bound(len: usize, reverse: bool) -> u64 {
+pub(crate) fn perform_shift_bound(len: usize, reverse: bool) -> u64 {
     match len {
         0..=SHIFT_SEARCH_AREA => (SHIFT_SEARCH_AREA + 1 - len) as u64,
         _ if reverse && len == SHIFT_SEARCH_AREA + 1 => 0,
@@ -4024,8 +4162,8 @@ pub fn shift_indel_3prime_coords(
 /// mixes classes (`TT/-/T`) shifts none of its alleles. A record with one
 /// allele takes that allele's class, as does an allele of a `--minimal` split,
 /// which is a feature of its own, with its own allele string, until the rejoin
-/// (InputBuffer.pm:638-718) and is annotated before it (OutputFactory.pm:2289,
-/// 2303).
+/// (InputBuffer.pm:638-718) and is annotated before it (OutputFactory.pm:2298,
+/// 2312).
 fn record_class_shifts(variant: &InputVariant) -> bool {
     if variant.original_start.is_some() {
         return true;
@@ -4076,55 +4214,95 @@ pub fn shift_motif(variant: &InputVariant) -> Option<Vec<u8>> {
 
 /// [`shift_indel_3prime_coords`] towards the 3' end of `strand`: the span an
 /// insertion or deletion reaches when every base it passes matches the pattern
-/// cyclically, within [`perform_shift_bound`].
+/// cyclically, within `perform_shift_bound`.
 pub fn shift_indel_3prime(
     variant: &InputVariant,
     strand: vep_core::coordinate::Strand,
     fasta: &vep_fasta::IndexedFasta,
 ) -> Option<(u64, u64)> {
-    shift_indel_3prime_within(variant, strand, fasta, true)
+    let motif = shift_motif(variant)?;
+    let towards_lower = strand != vep_core::coordinate::Strand::Forward;
+    let max_shift = perform_shift_bound(motif.len(), towards_lower);
+    shift_indel_3prime_within(variant, motif, strand, max_shift, |pos| {
+        fasta.base(&variant.chr, pos)
+    })
 }
 
 /// The span an insertion reaches when every base it passes matches its bases
-/// cyclically, however far that is: its most 3' placement on `transcript`'s
-/// strand, which the HGVS 3' rule describes it at. `perform_shift` reads 1,000
-/// bases of flank (TranscriptVariationAllele.pm:427-437) and stops where they
-/// end (:303-306), short of that placement in a longer run. `None` for any
-/// other class and for an insertion nothing moves.
-pub fn shift_insertion_to_its_last_placement(
+/// cyclically: its most 3' placement on `transcript`'s strand, which the HGVS
+/// 3' rule describes it at, or the first placement wholly past the
+/// transcript's last base where the run goes on beyond it. `perform_shift`
+/// reads 1,000 bases of flank (TranscriptVariationAllele.pm:427-437) and stops
+/// where they end (:303-306), short of that placement in a longer run. Every
+/// placement wholly past the last base has one description, none
+/// (`hgvsc_notation` of the `hgvs` module), so the walk ends at the first of
+/// them and reads no base beyond the one directly past the last base, however
+/// long the run is. `None` for any other class and for an insertion nothing
+/// moves.
+pub(crate) fn shift_insertion_to_its_last_placement(
     variant: &InputVariant,
     transcript: &Transcript,
     fasta: &vep_fasta::IndexedFasta,
 ) -> Option<(u64, u64)> {
+    insertion_at_its_last_placement(variant, transcript, |pos| fasta.base(&variant.chr, pos))
+}
+
+/// `shift_insertion_to_its_last_placement` on the bases `base_at` reads from
+/// the variant's chromosome.
+fn insertion_at_its_last_placement(
+    variant: &InputVariant,
+    transcript: &Transcript,
+    base_at: impl Fn(u64) -> Option<u8>,
+) -> Option<(u64, u64)> {
+    use vep_core::coordinate::Strand;
+
     if variant.variant_class != vep_core::variant::VariantClass::Insertion {
         return None;
     }
-    shift_indel_3prime_within(variant, transcript.strand, fasta, false)
+    let motif = shift_motif(variant)?;
+    // The moves that carry both ends of the span past the transcript's last
+    // base, its highest position on the forward strand and its lowest on the
+    // reverse.
+    let to_the_first_placement_past_the_last_base = match transcript.strand {
+        Strand::Forward => transcript
+            .end
+            .saturating_add(1)
+            .saturating_sub(variant.start.min(variant.end)),
+        Strand::Reverse => variant
+            .start
+            .max(variant.end)
+            .saturating_add(1)
+            .saturating_sub(transcript.start),
+    };
+    shift_indel_3prime_within(
+        variant,
+        motif,
+        transcript.strand,
+        to_the_first_placement_past_the_last_base,
+        base_at,
+    )
 }
 
-/// [`shift_indel_3prime`], within [`perform_shift_bound`] when `bounded` and
-/// to the end of the run otherwise.
+/// The span `variant` reaches when it moves towards the 3' end of `strand`
+/// while every base it passes, read through `base_at`, matches `motif`
+/// cyclically, in `max_shift` moves at most; `None` when nothing moves.
+/// `motif` is [`shift_motif`] of the variant.
 fn shift_indel_3prime_within(
     variant: &InputVariant,
+    mut motif: Vec<u8>,
     strand: vep_core::coordinate::Strand,
-    fasta: &vep_fasta::IndexedFasta,
-    bounded: bool,
+    max_shift: u64,
+    base_at: impl Fn(u64) -> Option<u8>,
 ) -> Option<(u64, u64)> {
     use vep_core::coordinate::Strand;
     use vep_core::variant::VariantClass;
 
     let (mut start, mut end) = (variant.start, variant.end);
-    let mut motif = shift_motif(variant)?;
     let is_insertion = variant.variant_class == VariantClass::Insertion;
 
     // VEP shifts indels in the transcript 3' direction (genomic right for + strand,
     // genomic left for - strand transcripts).
     let shift_right = strand == Strand::Forward;
-    let max_shift = if bounded {
-        perform_shift_bound(motif.len(), !shift_right)
-    } else {
-        u64::MAX
-    };
     let mut shifted = 0u64;
 
     while shifted < max_shift {
@@ -4138,7 +4316,7 @@ fn shift_indel_3prime_within(
                 end.saturating_add(1)
             };
 
-            let Some(ref_base) = fasta.base(&variant.chr, check_pos) else {
+            let Some(ref_base) = base_at(check_pos) else {
                 break;
             };
             if ref_base != motif[0] {
@@ -4162,7 +4340,7 @@ fn shift_indel_3prime_within(
                 break;
             }
 
-            let Some(ref_base) = fasta.base(&variant.chr, check_pos) else {
+            let Some(ref_base) = base_at(check_pos) else {
                 break;
             };
             if ref_base != *motif.last().unwrap() {
@@ -4185,7 +4363,7 @@ fn shift_indel_3prime_within(
 
 /// Add splice_region_variant for exonic positions near splice junctions.
 ///
-/// Mirrors Perl's `VariationEffect::_intron_overlap`, which checks the
+/// Mirrors Ensembl VEP's `VariationEffect::_intron_overlap`, which checks the
 /// narrowed variant span (via `_get_differing_regions`) against four windows. Two
 /// are the 3bp exonic windows adjacent to each intron:
 ///   - donor-side:    [intron_start - 3, intron_start - 1]
@@ -4195,7 +4373,7 @@ fn shift_indel_3prime_within(
 ///   - [intron_start + 2, intron_start + 7]
 ///   - [intron_end - 7,   intron_end - 2]
 ///
-/// Perl does not clamp those two to the intron, so for an intron shorter than 8bp
+/// Ensembl VEP does not clamp those two to the intron, so for an intron shorter than 8bp
 /// they spill past the far boundary into the flanking exon and a purely exonic
 /// variant 4-7bp away satisfies the predicate. `spill_windows` below reproduces
 /// that, which is why this function owns them rather than the intronic path: the
@@ -4225,24 +4403,26 @@ fn add_exonic_splice_region(
         return;
     }
 
-    // Every differing region is visited, as Perl's _get_differing_regions XORs
+    // Every differing region is visited, as Ensembl VEP's _get_differing_regions XORs
     // ref/alt character by character and groups consecutive differences; a complex indel
     // with matching bases inside the pair (ACCCCA to CTTCC shares CC at positions
     // 3-4) yields multiple non-contiguous regions.
     let regions = get_differing_regions(variant);
-    // The same regions as Perl maps them, `$vf_start + $region->{e}` with no
+    // The same regions as Ensembl VEP maps them, `$vf_start + $region->{e}` with no
     // clamp to the reference span: the frameshift skip reads these, because a
     // net-insertion delins whose region runs past the reference span overlaps
-    // an intron the clamped region stops short of, and Perl skips that intron.
+    // an intron the clamped region stops short of, and Ensembl VEP skips that intron.
     // The window tests keep the clamped regions.
     let perl_regions = get_differing_regions_perl_unclamped(variant);
 
-    // Perl's overlap does not normalise, so start > end is no overlap.
+    // Ensembl VEP's overlap does not normalise, so start > end is no overlap.
     let overlap_perl = |vs: u64, ve: u64, fs: u64, fe: u64| -> bool { ve >= fs && vs <= fe };
 
+    // An intron whose start lies past its end is in neither intron tree
+    // (`BaseTranscriptVariation.pm:1014`), so no region is tested against it.
     let skipped_for = |intron: &vep_core::transcript::Intron, (rs, re): (u64, u64)| -> bool {
-        is_frameshift_intron(intron.start, intron.end)
-            && overlap_perl(rs, re, intron.start, intron.end)
+        intron.start > intron.end
+            || (intron.is_frameshift() && overlap_perl(rs, re, intron.start, intron.end))
     };
 
     let is_insertion = matches!(
@@ -4250,7 +4430,7 @@ fn add_exonic_splice_region(
         vep_core::variant::VariantClass::Insertion
     );
 
-    // Perl's two nominally-intronic windows, restricted to the part that spills
+    // Ensembl VEP's two nominally-intronic windows, restricted to the part that spills
     // out of a short intron into the flanking exon.
     //
     // For an intron of length L, `[start+2, start+7]` extends `7 - L + 1` bases
@@ -4259,7 +4439,7 @@ fn add_exonic_splice_region(
     // unaffected: the intronic path already owns those.
     //
     // Insertions are excluded: their anchor pair straddles the boundary by
-    // construction (`ref = "-"`, `end = start - 1`), and Perl reaches them
+    // construction (`ref = "-"`, `end = start - 1`), and Ensembl VEP reaches them
     // through `_intron_overlap`'s dedicated `$insertion` clause with its four
     // exact-equality tests rather than through these windows.
     let spill_windows = |intron: &vep_core::transcript::Intron| -> [Option<(u64, u64)>; 2] {
@@ -4442,15 +4622,17 @@ fn add_short_intron_far_boundary_donor_terms(
 /// bases and a longer delins spills to the heap.
 type DifferingRegions = SmallVec<[(u64, u64); 4]>;
 
-/// Compute all differing regions between ref and alt alleles, matching Perl's
-/// `VariationFeatureOverlapAllele::_get_differing_regions`.
+/// Compute all differing regions between ref and alt alleles, grouped as Ensembl VEP's
+/// `VariationFeatureOverlapAllele::_get_differing_regions` groups them, with each
+/// region's end clamped to the reference allele's last base, a clamp Ensembl VEP does
+/// not have (`get_differing_regions_perl_unclamped` is the reading without it).
 ///
-/// Perl XORs ref and alt character-by-character, finds positions where they differ,
+/// Ensembl VEP XORs ref and alt character-by-character, finds positions where they differ,
 /// and groups consecutive differing positions into contiguous regions. This produces
 /// multiple regions for complex indels where interior characters match.
 ///
 /// For SNPs or when one allele is 1 base or less, returns a single region covering
-/// the full ref span (matching Perl's `else` branch).
+/// the full ref span (matching Ensembl VEP's `else` branch).
 ///
 /// Each region is returned as absolute genomic coordinates (start, end). For pure
 /// insertions, returns a single inverted-coordinate region.
@@ -4473,13 +4655,13 @@ fn get_differing_regions(variant: &InputVariant) -> DifferingRegions {
     let ref_len = ref_allele.len();
     let alt_len = alt_allele.len();
 
-    // Perl's _get_differing_regions only does multi-region splitting when both
+    // Ensembl VEP's _get_differing_regions only does multi-region splitting when both
     // alleles are > 1 base. Otherwise, returns a single region.
     if ref_len <= 1 || alt_len <= 1 {
         return smallvec![(lo, hi)];
     }
 
-    // Perl: `$m = $al1 ^ $al2;` then finds non-zero positions. XOR pads the
+    // Ensembl VEP: `$m = $al1 ^ $al2;` then finds non-zero positions. XOR pads the
     // shorter string with null bytes, so positions beyond it always differ.
     let max_len = ref_len.max(alt_len);
     let mut diff_positions = Vec::new();
@@ -4504,8 +4686,8 @@ fn get_differing_regions(variant: &InputVariant) -> DifferingRegions {
         if pos == prev + 1 {
             prev = pos;
         } else {
-            // Perl: r_end = vf_start + region.e, offsets relative to the ref allele
-            // and clamped to ref_len - 1.
+            // The end offset is clamped to `ref_len - 1`, the reference allele's last base.
+            // Ensembl VEP: $r_end = $vf_start + $region->{e}; no clamp.
             regions.push((
                 lo.saturating_add(region_start as u64),
                 lo.saturating_add(prev.min(ref_len - 1) as u64),
@@ -4524,14 +4706,14 @@ fn get_differing_regions(variant: &InputVariant) -> DifferingRegions {
 
 /// Compute differing regions without clamping the end offset to `ref_len - 1`.
 ///
-/// This matches Perl's `_get_differing_regions` exactly: the XOR byte string is
+/// This matches Ensembl VEP's `_get_differing_regions` exactly: the XOR byte string is
 /// `max(ref_len, alt_len)` bytes long (shorter string padded with null bytes),
 /// so positions beyond the ref span correspond to genomic positions past
-/// `ref_end`. Perl's `_intron_effects` maps these positions directly to
+/// `ref_end`. Ensembl VEP's `_intron_effects` maps these positions directly to
 /// `vf_start + region->{e}` without clamping, which extends the region onto
 /// the bases after the span, bases the variant does not replace.
 ///
-/// Use this variant when the caller needs Perl-identical per-region
+/// Use this variant when the caller needs Ensembl VEP-identical per-region
 /// coordinates. `add_intronic_non_insertion_splice_consequences` reads the
 /// intronic windows with it and then holds the donor, acceptor, 5th-base,
 /// donor-region, polypyrimidine and intron terms to the span;
@@ -4549,7 +4731,7 @@ fn get_differing_regions_perl_unclamped(variant: &InputVariant) -> DifferingRegi
     let alt_is_dash = alt_allele == b"-" || alt_allele.is_empty();
 
     if ref_is_dash {
-        // Pure insertion: inverted coordinates (Perl emits {s: 0, e: -1}).
+        // Pure insertion: inverted coordinates (Ensembl VEP emits {s: 0, e: -1}).
         return smallvec![(hi, lo)];
     }
     if alt_is_dash {
@@ -4559,7 +4741,7 @@ fn get_differing_regions_perl_unclamped(variant: &InputVariant) -> DifferingRegi
     let ref_len = ref_allele.len();
     let alt_len = alt_allele.len();
 
-    // Perl's multi-region splitting only runs when both alleles are > 1 base.
+    // Ensembl VEP's multi-region splitting only runs when both alleles are > 1 base.
     if ref_len <= 1 || alt_len <= 1 {
         return smallvec![(lo, hi)];
     }
@@ -4586,7 +4768,7 @@ fn get_differing_regions_perl_unclamped(variant: &InputVariant) -> DifferingRegi
         if pos == prev + 1 {
             prev = pos;
         } else {
-            // Perl: $r_end = $vf_start + $region->{e}; no clamp.
+            // Ensembl VEP: $r_end = $vf_start + $region->{e}; no clamp.
             regions.push((
                 lo.saturating_add(region_start as u64),
                 lo.saturating_add(prev as u64),
@@ -4604,11 +4786,11 @@ fn get_differing_regions_perl_unclamped(variant: &InputVariant) -> DifferingRegi
 }
 
 /// Compute differing-region coordinates for exonic splice region checks,
-/// preserving Perl's inversion semantics for insertions.
+/// preserving Ensembl VEP's inversion semantics for insertions.
 ///
 /// This function returns inverted coordinates (start > end) for pure insertions
 /// and for complex indels whose entire ref allele is consumed by shared
-/// prefix/suffix. This matches Perl's `_get_differing_regions` output.
+/// prefix/suffix. This matches Ensembl VEP's `_get_differing_regions` output.
 ///
 /// note: This returns a single span (prefix/suffix trimmed). For complex indels,
 /// `get_differing_regions` should be used instead to get all non-contiguous segments.
@@ -4622,7 +4804,7 @@ fn exonic_splice_differing_region(variant: &InputVariant) -> (u64, u64) {
     let alt_is_dash = alt_allele == b"-" || alt_allele.is_empty();
 
     if ref_is_dash {
-        // Pure insertion: Perl's _get_differing_regions returns {s: 0, e: -1},
+        // Pure insertion: Ensembl VEP's _get_differing_regions returns {s: 0, e: -1},
         // which gives r_start = vf_start, r_end = vf_start - 1 (inverted).
         // Use (hi, lo), which is (max, min): inverted so overlap_perl returns false
         // for exonic boundary positions.
@@ -4648,14 +4830,14 @@ fn exonic_splice_differing_region(variant: &InputVariant) -> (u64, u64) {
     }
 
     // Not normalised: when prefix + suffix >= ref_allele.len() the result is
-    // inverted (start > end), as in Perl.
+    // inverted (start > end), as in Ensembl VEP.
     (
         lo.saturating_add(prefix as u64),
         hi.saturating_sub(suffix as u64),
     )
 }
 
-/// Perl `within_mature_miRNA`: the transcript is biotype `miRNA` and the raw
+/// Ensembl VEP `within_mature_miRNA`: the transcript is biotype `miRNA` and the raw
 /// variant span overlaps, by the non-normalising `overlap()`, the genomic
 /// projection (`cdna2genomic`) of a `miRNA` attribute's `a-b` cDNA range.
 /// Raw coordinates matter: an insertion just past the last mature base has
@@ -4702,7 +4884,7 @@ fn variant_overlaps_mature_mirna(variant: &InputVariant, transcript: &Transcript
         })
 }
 
-/// The first `(\d+)-(\d+)` in a `miRNA` attribute value, which is all Perl's
+/// The first `(\d+)-(\d+)` in a `miRNA` attribute value, which is all Ensembl VEP's
 /// regex captures of it.
 fn mirna_attribute_cdna_range(value: &str) -> Option<(u64, u64)> {
     let bytes = value.as_bytes();
@@ -4815,14 +4997,14 @@ mod tests {
     }
 
     /// `miRNA` reads the structure element under each cDNA position of the
-    /// variant (OutputFactory.pm:1624-1664 at release/116.2): a base in a run
+    /// variant (OutputFactory.pm:1633-1673 at release/116.3): a base in a run
     /// of dots is `miRNA_loop`, a base in a bracket run `miRNA_stem`, a
-    /// deletion across the boundary both, sorted (Ensembl VEP 116.2 writes
+    /// deletion across the boundary both, sorted (Ensembl VEP 116.3 writes
     /// `miRNA=miRNA_loop,miRNA_stem` for the deletion `21 8249508 TGCG T` on
     /// MIR6724-2 and `miRNA=miRNA_stem` for the insertion `21 8249510 C CTTA`,
     /// whose two flanking bases are both stem). A deletion from one arm across
     /// the terminal loop into the other arm (cDNA 35-52, `(4.10)4`) lists
-    /// `miRNA_stem` once per bracket kind, as the Perl `sort map` over the
+    /// `miRNA_stem` once per bracket kind, as the Ensembl VEP `sort map` over the
     /// distinct characters does. The same cDNA positions decide on the reverse
     /// strand; a variant outside the transcript, a transcript of another
     /// biotype, and an attribute without a structure give nothing.
@@ -4889,8 +5071,8 @@ mod tests {
 
     /// Under `--domains` a coding row lists the protein features whose residue
     /// span overlaps the variant's, in the cache's order, as `label:identifier`
-    /// with whitespace, `;` and `=` written `_` (OutputFactory.pm:1494-1512 at
-    /// release/116.2 over `get_overlapping_ProteinFeatures`, whose test is
+    /// with whitespace, `;` and `=` written `_` (OutputFactory.pm:1503-1521 at
+    /// release/116.3 over `get_overlapping_ProteinFeatures`, whose test is
     /// Ensembl's `overlap` on the raw residue span). On the test transcript
     /// residue n is genomic 25_000_050 + 3(n - 1) to + 2: the residue-3 SNV
     /// overlaps the Pfam and the AFDB features and not the residue-5 Gene3D one;
@@ -5226,7 +5408,7 @@ mod tests {
 
     #[test]
     fn test_ambiguous_alt_allele_n_gets_coding_sequence_variant() {
-        // Perl's `TranscriptVariationAllele::peptide` returns undef for a non-ACGT
+        // Ensembl VEP's `TranscriptVariationAllele::peptide` returns undef for a non-ACGT
         // allele (`seq_is_unambiguous_dna` fails), so only coding_unknown fires:
         // coding_sequence_variant, not missense.
         let tx = make_test_transcript();
@@ -5317,7 +5499,7 @@ mod tests {
         // Transcript-matching complex inframe indel where neither allele is '-'.
         // Codon 3 in the test CDS is GGA. Replacing it with 9bp `TTTGGAGCT`
         // yields a net +6bp inframe event whose altered peptide does not start
-        // or end with the ref peptide, so Perl falls through to
+        // or end with the ref peptide, so Ensembl VEP falls through to
         // protein_altering_variant.
         let variant = InputVariant::new(
             "21".into(),
@@ -5543,7 +5725,7 @@ mod tests {
         let tx = make_test_transcript();
         let config = EffectsConfig::default();
         // Exon 2 starts at 25_002_000. Insert between bases 3 and 4 of the exon
-        // (between 25_002_002 and 25_002_003). Perl represents pure insertions
+        // (between 25_002_002 and 25_002_003). Ensembl VEP represents pure insertions
         // with an inverted differing region, so the raw overlap check does not
         // count this as overlapping the acceptor-side exonic 3bp window.
         let variant = InputVariant::new(
@@ -5608,7 +5790,7 @@ mod tests {
     #[test]
     fn test_get_differing_regions_complex_indel_multi_segment() {
         // ACCCCA → CTTCC: positions 0-2 differ, 3-4 match, 5 differs (net deletion)
-        // Perl's XOR produces two regions: (0,2) and (5,5).
+        // Ensembl VEP's XOR produces two regions: (0,2) and (5,5).
         let variant = InputVariant::new(
             "10".into(),
             13112454,
@@ -5641,7 +5823,7 @@ mod tests {
 
     /// ACG to ATGTT: the XOR differs at offsets 1, 3 and 4, so the second region
     /// starts past the 3-base reference span. The clamped form ends it at
-    /// `ref_len - 1` (an inverted span, no overlap), the Perl form at offset 4.
+    /// `ref_len - 1` (an inverted span, no overlap), the Ensembl VEP form at offset 4.
     #[test]
     fn test_get_differing_regions_clamps_only_the_exonic_form() {
         let variant = InputVariant::new("10".into(), 500, 502, b"ACG".to_vec(), b"ATGTT".to_vec());
@@ -5765,7 +5947,7 @@ mod tests {
 
     #[test]
     fn test_frameshift_insertion_can_create_immediate_stop_gained() {
-        // Perl output `tat/tAat` produces `Y/*` and adds `stop_gained` alongside
+        // Ensembl VEP output `tat/tAat` produces `Y/*` and adds `stop_gained` alongside
         // `frameshift_variant`.
         let mut tx = make_test_transcript();
         if let Some(vefc) = tx.vefc.as_mut() {
@@ -5793,8 +5975,8 @@ mod tests {
 
     #[test]
     fn test_frameshift_insertion_stop_in_second_codon_is_stop_gained() {
-        // An insertion can create a stop in the *second* codon of Perl's local
-        // window (AGC -> A CTTA GC => ACT TAG C => T*X), and Perl reports stop_gained.
+        // An insertion can create a stop in the *second* codon of Ensembl VEP's local
+        // window (AGC -> A CTTA GC => ACT TAG C => T*X), and Ensembl VEP reports stop_gained.
         let mut tx = make_test_transcript();
         if let Some(vefc) = tx.vefc.as_mut() {
             if let Some(seq) = vefc.translateable_seq.as_mut() {
@@ -5826,7 +6008,7 @@ mod tests {
     #[test]
     fn test_frameshift_deletion_partial_codon_does_not_overcall_stop_gained() {
         // A 1-base deletion shortens the codon window to a partial codon (a VX
-        // peptide); Perl does not call stop_gained because the partial codon
+        // peptide); Ensembl VEP does not call stop_gained because the partial codon
         // translates to X, not *.
         let mut tx = make_test_transcript();
         if let Some(vefc) = tx.vefc.as_mut() {
@@ -5855,7 +6037,7 @@ mod tests {
 
     #[test]
     fn test_reverse_strand_deletion_does_not_overcall_stop_gained() {
-        // A reverse-strand 1-base deletion: Perl reports frameshift_variant only
+        // A reverse-strand 1-base deletion: Ensembl VEP reports frameshift_variant only
         // (gag/gTag -> E/VX), the shortened alt CDS giving a partial-codon X.
         let mut tx = make_test_transcript();
         tx.strand = vep_core::coordinate::Strand::Reverse;
@@ -5868,7 +6050,6 @@ mod tests {
 
         let config = EffectsConfig::default();
         // Delete 1 base at CDS position 2 on a reverse-strand transcript.
-        // Genomic coordinates: the variant spans 2 genomic positions.
         // On reverse strand, genomic start maps to higher CDS pos.
         let variant = InputVariant::new(
             "21".into(),
@@ -5896,7 +6077,7 @@ mod tests {
                 // CDS begins with ATG (M) then GAC (D).
                 // Variant changes AC->GT at CDS pos 5 (bases 5-6), turning GAC->GGT (G),
                 // but should not introduce any stop codon. Codon 2 keeps the edit off
-                // the start codon, where Perl's `_inv_start_altered` would call any
+                // the start codon, where Ensembl VEP's `_inv_start_altered` would call any
                 // non-ATG result start_lost.
                 seq.replace_range(0..6, "ATGGAC");
             }
@@ -5919,7 +6100,7 @@ mod tests {
 
     #[test]
     fn test_cross_codon_mnv_stop_gained_suppresses_missense() {
-        // Cross-codon MNV: ATG CAG (MQ) -> ATT TAG (I*), so Perl reports stop_gained
+        // Cross-codon MNV: ATG CAG (MQ) -> ATT TAG (I*), so Ensembl VEP reports stop_gained
         // (and does not co-emit missense_variant).
         let mut tx = make_test_transcript();
         if let Some(vefc) = tx.vefc.as_mut() {
@@ -6001,7 +6182,7 @@ mod tests {
     #[test]
     fn test_spanning_deletion_suppresses_polypyr_and_adds_coding_sequence_variant() {
         // Deletion whose endpoints map to different introns, but the allele span overlaps
-        // exon 2. Perl suppresses splice_polypyrimidine_tract_variant when exon overlap
+        // exon 2. Ensembl VEP suppresses splice_polypyrimidine_tract_variant when exon overlap
         // exists, and emits coding_sequence_variant when the span overlaps the coding region.
         let tx = make_test_transcript();
         let config = EffectsConfig::default();
@@ -6082,7 +6263,7 @@ mod tests {
         let tx = make_test_transcript();
         let config = EffectsConfig::default();
         // Insertion fully within intron 1: one side maps to donor+5, the other to donor+4.
-        // Perl-style single-anchor behavior should not combine both donor labels.
+        // Ensembl VEP-style single-anchor behavior should not combine both donor labels.
         let variant = InputVariant::new(
             "21".into(),
             25_000_305,
@@ -6159,7 +6340,7 @@ mod tests {
         let config = EffectsConfig::default();
 
         // Delete intron positions +2..+3: within donor_region and splice_region windows.
-        // Perl precedence keeps splice_region suppressed when donor_region is present.
+        // Ensembl VEP precedence keeps splice_region suppressed when donor_region is present.
         let variant = InputVariant::new(
             "21".into(),
             25_000_302,
@@ -6201,7 +6382,7 @@ mod tests {
     #[test]
     fn test_short_noncoding_intron_produces_non_coding_transcript_variant() {
         // A deletion inside a frameshift intron (<= 12 bp) of a non-coding
-        // transcript overlaps no exon, so Perl's `non_coding_exon_variant` is
+        // transcript overlaps no exon, so Ensembl VEP's `non_coding_exon_variant` is
         // false and `within_non_coding_gene` yields non_coding_transcript_variant
         // (both in `VariationEffect`); the intron flags are skipped for a region
         // overlapping the frameshift intron, so no intron_variant either.
@@ -6235,6 +6416,77 @@ mod tests {
         crate::test_helpers::assert_consequence_set_eq(&tc, &["non_coding_transcript_variant"]);
     }
 
+    /// An intron whose start lies past its end is in neither of Ensembl VEP's intron
+    /// trees and never sets `_has_frameshift_intron`
+    /// (`BaseTranscriptVariation.pm:1014`, ahead of `:1027-1035`). A base of the
+    /// polypyrimidine tract ten bases before exon 2 keeps its term, which the
+    /// 12-base exon stretch of a frameshift intron would drop, and a base or a
+    /// deletion on the exon ends takes no intron or splice term from the windows
+    /// such an intron would have. Ensembl VEP 116.3 on a GFF3 model whose second
+    /// and third exons abut writes
+    /// `splice_polypyrimidine_tract_variant,intron_variant,non_coding_transcript_variant`
+    /// ten bases before the second exon and `non_coding_transcript_exon_variant`
+    /// alone on each of the six bases either side of the shared exon end and for
+    /// a deletion across it; its GFF reader refuses exons that overlap.
+    #[test]
+    fn an_intron_whose_start_lies_past_its_end_draws_no_term_and_stretches_no_exon() {
+        for second_start in crate::test_helpers::EXON_3_SECOND_HALF_STARTS {
+            let tx = crate::test_helpers::make_test_transcript_with_exon_3_in_two(second_start);
+            exon_ends_without_an_intron_between_draw_no_term(&tx);
+        }
+    }
+
+    fn exon_ends_without_an_intron_between_draw_no_term(tx: &Transcript) {
+        assert!(!tx.facts().vefc_has_frameshift_intron);
+        let config = EffectsConfig::default();
+
+        let tract = InputVariant::new(
+            "21".into(),
+            25_001_990,
+            25_001_990,
+            b"A".to_vec(),
+            b"G".to_vec(),
+        );
+        let tc = calculate_consequences(&tract, tx, &config).unwrap();
+        crate::test_helpers::assert_consequence_set_eq(
+            &tc,
+            &["intron_variant", "splice_polypyrimidine_tract_variant"],
+        );
+
+        let plain = make_test_transcript();
+        let shared_base = InputVariant::new(
+            "21".into(),
+            25_004_101,
+            25_004_101,
+            b"G".to_vec(),
+            b"A".to_vec(),
+        );
+        let across = InputVariant::new(
+            "21".into(),
+            25_004_094,
+            25_004_102,
+            vec![b'N'; 9],
+            b"-".to_vec(),
+        );
+        for variant in [&shared_base, &across] {
+            let on_plain = calculate_consequences(variant, &plain, &config).unwrap();
+            let tc = calculate_consequences(variant, tx, &config).unwrap();
+            assert_eq!(
+                tc.consequences, on_plain.consequences,
+                "{}-{}",
+                variant.start, variant.end
+            );
+            for term in [
+                Consequence::IntronVariant,
+                Consequence::SpliceDonorVariant,
+                Consequence::SpliceAcceptorVariant,
+                Consequence::SpliceRegionVariant,
+            ] {
+                assert!(!tc.consequences.contains(&term), "{term}");
+            }
+        }
+    }
+
     #[test]
     fn test_transcript_metadata_populated() {
         let tx = make_test_transcript();
@@ -6257,7 +6509,7 @@ mod tests {
         assert_eq!(tc.feature_type, FeatureType::Transcript);
     }
 
-    /// Ensembl VEP 116.2 on the GRCh38-release116 corpus prints
+    /// Ensembl VEP 116.3 on the GRCh38-release116 corpus prints
     /// `ENSP00000286808.3` for ENST00000286808 (translation version 3) under
     /// `--protein --protein_version`, and `ENSP00000286808` without the flag.
     #[test]
@@ -6371,7 +6623,7 @@ mod tests {
     /// 420; Utils/Sequence.pm:335-398): every allele of `-/A/AA` or `TT/-/-`
     /// walks, no allele of `TT/-/T` or `GT/G/AT` does, a lone allele walks by its
     /// own class, and an allele given on the reverse strand walks as its
-    /// forward-strand bases (:459).
+    /// forward-strand bases (TranscriptVariationAllele.pm:459).
     #[test]
     fn shift_motif_follows_the_record_class_and_the_forward_strand() {
         let allele = |record: Option<&str>, reference: &str, alt: &str| {
@@ -6568,8 +6820,91 @@ mod tests {
         );
     }
 
+    /// The walk to an insertion's last placement ends at the first placement
+    /// wholly past the transcript's last base, which has no HGVSc as every
+    /// later one has none. The made-up reference is one run of `CAG`. Three
+    /// bases that continue the run, inserted in the last exon of the compact
+    /// forward fixture, which ends at genomic 6100, and of the compact
+    /// reverse fixture, which ends at genomic 100, have no notation and no
+    /// offset where the run goes on past the last base. A `T` directly past
+    /// the last base, at 6101 or at 99, leaves the last placement directly
+    /// past it: the duplication of the transcript's last three bases, with
+    /// the moves in the offset. On a run of a million bases the walk reads
+    /// one base a move, from the insertion's point to the base directly past
+    /// the last base, and returns the first placement past that base.
+    #[test]
+    fn an_insertions_last_placement_walk_ends_at_the_first_placement_past_the_last_base() {
+        use crate::concordance_tests::{
+            bases_from, compact_on_chr1, hgvsc_fasta_fixture, make_compact_test_transcript,
+            make_descending_reverse_strand_transcript, without_coding_model,
+        };
+        use crate::hgvs::{generate_hgvs, HgvsNotation, HgvsOptions};
+
+        let run_base = |pos: u64| b"CAG"[(pos % 3) as usize];
+        let run_bases = |first: u64, last: u64| (first..=last).map(run_base).collect::<Vec<u8>>();
+        let forward = without_coding_model(make_compact_test_transcript());
+        let reverse = compact_on_chr1(without_coding_model(
+            make_descending_reverse_strand_transcript(),
+        ));
+        assert_eq!((forward.start, forward.end), (100, 6100));
+        assert_eq!((reverse.start, reverse.end), (100, 6100));
+        // The run goes on after 4500 with the bases of 4501-4503, and back
+        // from 1499 with the bases of 1497-1499.
+        let insertion = |start: u64, bases: Vec<u8>| {
+            InputVariant::new("1".into(), start, start - 1, b"-".to_vec(), bases)
+        };
+        let on_forward = insertion(4501, run_bases(4501, 4503));
+        let on_reverse = insertion(1500, run_bases(1497, 1499));
+
+        let whole_run = String::from_utf8(run_bases(1, 7000)).expect("ASCII run");
+        let (_dir, endless) = hgvsc_fasta_fixture(&bases_from(1, &whole_run));
+        let mut stopped = bases_from(1, &whole_run);
+        stopped.extend([(99, b'T'), (6101, b'T')]);
+        let (_dir, stopped_past_the_last_base) = hgvsc_fasta_fixture(&stopped);
+        let options = HgvsOptions::default();
+        for (variant, tx, offset) in [
+            (&on_forward, &forward, 1600),
+            (&on_reverse, &reverse, -1400),
+        ] {
+            assert_eq!(
+                generate_hgvs(variant, tx, Some(&endless), options),
+                HgvsNotation::default()
+            );
+            let duplication =
+                generate_hgvs(variant, tx, Some(&stopped_past_the_last_base), options);
+            assert_eq!(
+                duplication.hgvsc.as_deref(),
+                Some("ENST00000000001.1:n.2599_2601dup")
+            );
+            assert_eq!(duplication.offset, Some(offset));
+        }
+
+        let read = std::cell::RefCell::new(Vec::new());
+        let a_million_bases = |pos: u64| {
+            read.borrow_mut().push(pos);
+            (1..=1_000_000).contains(&pos).then(|| run_base(pos))
+        };
+        // The count of the bases the last walk read, with the lowest and the
+        // highest position among them.
+        let reads = || {
+            let read = std::mem::take(&mut *read.borrow_mut());
+            (
+                read.len(),
+                read.iter().min().copied(),
+                read.iter().max().copied(),
+            )
+        };
+        let placement = insertion_at_its_last_placement(&on_forward, &forward, a_million_bases);
+        assert_eq!(reads(), (1601, Some(4501), Some(6101)));
+        assert_eq!(placement, Some((6102, 6101)));
+
+        let placement = insertion_at_its_last_placement(&on_reverse, &reverse, a_million_bases);
+        assert_eq!(reads(), (1401, Some(99), Some(1499)));
+        assert_eq!(placement, Some((99, 98)));
+    }
+
     /// Under `--shift_3prime 1` the display columns describe the shifted allele
-    /// and `shift_length` counts the move (OutputFactory.pm:1690-1695, 1725-1741);
+    /// and `shift_length` counts the move (OutputFactory.pm:1699-1704, 1734-1750);
     /// a substitution moves nothing and reports 0, and without the flag an indel
     /// keeps the input span and reports 0 too.
     #[test]
@@ -6606,7 +6941,7 @@ mod tests {
 
     /// The reference row of `--process_ref_homs` is read at the span the record's
     /// alternate shifts to and counts no shift of its own (OutputFactory.pm:306-323,
-    /// 1690): the `T` deletion at 160 moves two bases to CDS 13 and its reference
+    /// 1699): the `T` deletion at 160 moves two bases to CDS 13 and its reference
     /// row reads CDS 13 as a `synonymous_variant`; an inserted `T` before `TTA`
     /// moves two bases to CDS 13-14, as does the reference row of the same
     /// insertion written on the reverse strand as `-/A`, whose alternate is
@@ -6942,14 +7277,14 @@ mod tests {
         assert!(tc.protein_position.is_none());
     }
 
-    /// Ensembl VEP 116.2 writes HGVSc on the `transcript_ablation` row of a
+    /// Ensembl VEP 116.3 writes HGVSc on the `transcript_ablation` row of a
     /// deletion covering the whole transcript: the row is `within_feature`
-    /// (OutputFactory.pm:1721), `_var2transcript_slice_coords` clamps both ends
+    /// (OutputFactory.pm:1730), `_var2transcript_slice_coords` clamps both ends
     /// onto the transcript (TranscriptVariationAllele.pm:2729-2733) and, at a
     /// zero 3' shift, `hgvs_transcript` describes the deletion from the first
     /// base to the last (:1472-1478, :1524-1525); `hgvs_protein` finds no
     /// peptide position for it (:1730-1738), so the row has no HGVSp and no
-    /// `HGVS_OFFSET` (OutputFactory.pm:1755). Without `compute_hgvs` the row
+    /// `HGVS_OFFSET` (OutputFactory.pm:1764). Without `compute_hgvs` the row
     /// carries nothing.
     #[test]
     fn transcript_ablation_row_carries_the_hgvsc_clamped_to_the_whole_transcript() {
@@ -7067,9 +7402,10 @@ mod tests {
 
     #[test]
     fn test_large_spanning_deletion_from_cds_into_utr_is_stop_lost() {
-        let tx = make_test_transcript();
+        let tx = crate::concordance_tests::make_transcript_with_terminal_stop();
         let config = EffectsConfig::default();
-        // A deletion from coding exon 1 into the 3' UTR of exon 3: Perl's
+        // A deletion from coding exon 1, over the stop codon that closes the
+        // coding sequence, into the 3' UTR of exon 3: Ensembl VEP's
         // `cds_end` is undef (the span leaves the CDS), so the peptide alleles are
         // empty and `stop_lost` delegates to `_ins_del_stop_altered`, which
         // splices the cDNA span out of CDS + 3'UTR and re-reads the codon at the
@@ -7091,9 +7427,118 @@ mod tests {
         assert!(
             !tc.consequences
                 .contains(&Consequence::CodingSequenceVariant),
-            "Perl's coding_unknown is 0 when stop_lost fires. got: {:?}",
+            "Ensembl VEP's coding_unknown is 0 when stop_lost fires. got: {:?}",
             tc.consequences
         );
+
+        // The coding sequence of `make_test_transcript` ends one base into a
+        // codon before the 3' UTR, so no stop codon stands at its coding end:
+        // the same deletion loses none and is a `coding_sequence_variant`.
+        let tc = calculate_consequences(&variant, &make_test_transcript(), &config).unwrap();
+        assert!(
+            !tc.consequences.contains(&Consequence::StopLost),
+            "No stop codon stands at the coding end, so none is lost. got: {:?}",
+            tc.consequences
+        );
+        assert!(
+            tc.consequences
+                .contains(&Consequence::CodingSequenceVariant),
+            "A span that leaves the coding sequence takes coding_sequence_variant. got: {:?}",
+            tc.consequences
+        );
+    }
+
+    /// The full-CDS reading of a stop codon kept behind an insertion holds
+    /// only where a stop codon stands at the coding end. A coding sequence
+    /// whose last whole codon is a stop codon and that goes on two bases into
+    /// a further codon before a 3' UTR has none there.
+    #[test]
+    fn stop_retained_insertion_full_cds_needs_a_stop_codon_at_the_coding_end() {
+        use crate::test_helpers::{
+            cds_ending_in, insertion_after_cds, make_single_exon_transcript,
+        };
+        use vep_core::coordinate::Strand;
+        let closed_cds = cds_ending_in("GCT", "TAA");
+        let closed = make_single_exon_transcript(Strand::Forward, &closed_cds, "GGC");
+        let inserted = insertion_after_cds(&closed, 6, "GCT");
+        assert!(is_stop_retained_insertion_full_cds(&inserted, &closed, 7));
+
+        let open_cds = format!("{closed_cds}AA");
+        let open = make_single_exon_transcript(Strand::Forward, &open_cds, "GGC");
+        let inserted = insertion_after_cds(&open, 6, "GCT");
+        assert!(!is_stop_retained_insertion_full_cds(&inserted, &open, 7));
+    }
+
+    /// `make_single_exon_transcript` with a six-base 3' UTR and no genomic
+    /// coding bounds on its record: `coding::perl_coding_terms` returns `None`
+    /// for such a record, so a row keeps the coding terms the per-endpoint
+    /// pass names.
+    fn without_genomic_coding_bounds(strand: Strand, cds: &str) -> Transcript {
+        let mut tx = crate::test_helpers::make_single_exon_transcript(strand, cds, "GGCGGC");
+        tx.coding_region_start = None;
+        tx.coding_region_end = None;
+        tx
+    }
+
+    /// The per-endpoint pass names `stop_lost` for a deletion from the coding
+    /// sequence into the 3' UTR only where a stop codon stands at the coding
+    /// end. A coding sequence whose last whole codon is a stop codon and that
+    /// goes on two bases into a further codon before a 3' UTR has none there,
+    /// and a deletion from those two bases into the 3' UTR takes the terms of
+    /// the incomplete terminal codon.
+    #[test]
+    fn per_endpoint_stop_lost_into_the_3_prime_utr_needs_a_stop_codon_at_the_coding_end() {
+        use crate::test_helpers::{assert_consequence_set_eq, cds_ending_in, deletion_of_cds};
+        let config = EffectsConfig::default();
+        let closed_cds = cds_ending_in("GCT", "TAA");
+        let open_cds = format!("{closed_cds}AA");
+        for strand in [Strand::Forward, Strand::Reverse] {
+            // The last two bases of the stop codon and the first 3' UTR base.
+            let closed = without_genomic_coding_bounds(strand, &closed_cds);
+            let deletion = deletion_of_cds(&closed, 68, 70, "AAG");
+            let tc = calculate_consequences(&deletion, &closed, &config).unwrap();
+            assert_consequence_set_eq(&tc, &["stop_lost", "3_prime_UTR_variant"]);
+
+            // The two bases after the last whole codon and the first 3' UTR
+            // base.
+            let open = without_genomic_coding_bounds(strand, &open_cds);
+            let deletion = deletion_of_cds(&open, 70, 72, "AAG");
+            let tc = calculate_consequences(&deletion, &open, &config).unwrap();
+            assert_consequence_set_eq(
+                &tc,
+                &[
+                    "incomplete_terminal_codon_variant",
+                    "coding_sequence_variant",
+                    "3_prime_UTR_variant",
+                ],
+            );
+        }
+    }
+
+    /// The per-endpoint pass names `start_lost` for a deletion from the 5' UTR
+    /// into the coding sequence only where a start codon stands at the coding
+    /// start. A first codon that is no start codon of the table, on a record
+    /// with no cached translation, shows none.
+    #[test]
+    fn per_endpoint_start_lost_from_the_5_prime_utr_needs_a_start_codon_at_the_coding_start() {
+        use crate::test_helpers::{assert_consequence_set_eq, cds_ending_in, deletion_of_cds};
+        let config = EffectsConfig::default();
+        let opened_cds = cds_ending_in("GCT", "TAA");
+        let mut unopened_cds = opened_cds.clone();
+        unopened_cds.replace_range(..3, "GCT");
+        for strand in [Strand::Forward, Strand::Reverse] {
+            // CDS position 0 is the last 5' UTR base: each deletion takes it
+            // and the first two coding bases.
+            let opened = without_genomic_coding_bounds(strand, &opened_cds);
+            let deletion = deletion_of_cds(&opened, 0, 2, "CAT");
+            let tc = calculate_consequences(&deletion, &opened, &config).unwrap();
+            assert_consequence_set_eq(&tc, &["start_lost", "5_prime_UTR_variant"]);
+
+            let unopened = without_genomic_coding_bounds(strand, &unopened_cds);
+            let deletion = deletion_of_cds(&unopened, 0, 2, "CGC");
+            let tc = calculate_consequences(&deletion, &unopened, &config).unwrap();
+            assert_consequence_set_eq(&tc, &["coding_sequence_variant", "5_prime_UTR_variant"]);
+        }
     }
 
     #[test]
@@ -7330,7 +7775,7 @@ mod tests {
     /// allele, since the cDNA branch returns it without the `N` test of the
     /// genomic branch (VariationFeatureOverlap.pm:392, skipped under
     /// `-no_ref_check`). A reverse-strand transcript's cDNA is read back onto
-    /// the forward strand (`:465`).
+    /// the forward strand (TranscriptVariation.pm:465).
     #[test]
     fn used_ref_is_dash_for_an_insertion_and_keeps_an_all_n_exon_reference() {
         use crate::concordance_tests::{hgvsc_fasta_fixture, make_compact_test_transcript};
@@ -7561,7 +8006,7 @@ mod tests {
     /// 813-820, 1330-1346) and the protein-notation path under `--hgvs`
     /// (:1730-1737, 1771-1786), so only on a row whose shifted span has both
     /// protein coordinates: a coding deletion of `TA` moved one base prints
-    /// `AT`, measured on Ensembl VEP 116.2 (`CA` deleted at chromosome 21
+    /// `AT`, measured on Ensembl VEP 116.3 (`CA` deleted at chromosome 21
     /// 34716447 and moved one base on ENST00000349499 prints `USED_REF=AC` under
     /// either flag, `CA` under neither), while a deletion in the 3' UTR and a
     /// run without either flag print the bases as the input wrote them. Under
@@ -7626,12 +8071,12 @@ mod tests {
     /// The `Allele` a coding row prints for a shifted insertion is the written
     /// allele rotated as `shift_feature_seqs` rotates it, read on the
     /// transcript's strand: one place per base of the shift, so `AAG` moved one
-    /// base on the reverse-strand APP prints `GAA` as Ensembl VEP 116.2 does,
+    /// base on the reverse-strand APP prints `GAA` as Ensembl VEP 116.3 does,
     /// the same insertion given on the reverse strand as `CTT` prints `TTC`
-    /// (Ensembl VEP 116.2 turns it by the transcript's strand alone to `TCT`,
+    /// (Ensembl VEP 116.3 turns it by the transcript's strand alone to `TCT`,
     /// TranscriptVariationAllele.pm:1337-1338, a defect), a shift of the
     /// allele's length or of a multiple leaves it, and a longer shift rotates by
-    /// the remainder (Ensembl VEP 116.2 leaves a reverse-strand allele as
+    /// the remainder (Ensembl VEP 116.3 leaves a reverse-strand allele as
     /// written there, `:1338-1339`, a defect). A row with no translation
     /// coordinate, an unmoved row, a reference row and a deletion keep the
     /// allele as given.
@@ -7688,7 +8133,7 @@ mod tests {
     /// so `GA` deleted at chromosome 21 30348449 and moved three bases on
     /// ENST00000334160 (reverse strand) prints `USED_REF=AG` under
     /// `--shift_3prime 1` alone as under `--hgvs`, the bases the shifted span
-    /// holds; Ensembl VEP 116.2 prints `GA` under `--shift_3prime 1` alone,
+    /// holds; Ensembl VEP 116.3 prints `GA` under `--shift_3prime 1` alone,
     /// where `shift_feature_seqs` counts `seq_length - shift_length` places
     /// (TranscriptVariationAllele.pm:1338-1339), a defect.
     #[test]
@@ -7698,10 +8143,8 @@ mod tests {
         crate::coding::rotate_shifted_allele(&mut deleted, 3, Strand::Forward, Strand::Reverse);
         assert_eq!(deleted, b"AG");
 
-        let mut tc = TranscriptConsequence {
-            shift_length: 3,
-            ..Default::default()
-        };
+        let mut tc = TranscriptConsequence::default();
+        tc.shift_length = 3;
         assert_eq!(
             used_ref_rotation(&tc, Some((2, 3)), false, true),
             Some(UsedRefRotation::Codon(3))
@@ -7796,7 +8239,7 @@ mod tests {
     /// prints `AAG`. A shift longer than the deletion rotates by the remainder
     /// through either path: `GA` moved three bases prints `AG`, the bases of the
     /// shifted span, under `--shift_3prime 1` alone as under `--hgvs` (Ensembl
-    /// VEP 116.2 prints `GA` under `--shift_3prime 1` alone, where
+    /// VEP 116.3 prints `GA` under `--shift_3prime 1` alone, where
     /// `shift_feature_seqs` counts `seq_length - shift_length` places,
     /// TranscriptVariationAllele.pm:1338-1339, a defect).
     #[test]
@@ -7865,7 +8308,7 @@ mod tests {
     /// The HGVS shift of a deletion moves the bases the reference allele's
     /// object names (`_genomic_shift`, TranscriptVariationAllele.pm:439-449), so
     /// under `--use_transcript_ref` a deletion whose input spells the deleted
-    /// bases wrongly shifts along the transcript's bases: Ensembl VEP 116.2
+    /// bases wrongly shifts along the transcript's bases: Ensembl VEP 116.3
     /// writes `c.2027_2028del` with `HGVS_OFFSET=2` for `21 34716445 TGC T` on
     /// ENST00000349499, whose sequence there is `ACAC`, where the input's `GC`
     /// shifts nowhere without the flag.
@@ -8084,13 +8527,13 @@ mod tests {
     /// allele's cDNA start (`:1608-1610`), the insertion `10 9 AAA` counting +3,
     /// the deletion `50 52 ` -3 and the substitution `70 70 T` nothing (`:1606`):
     /// an allele at cDNA 30 carries +3 as `REFSEQ_OFFSET`, one at cDNA 60 sums
-    /// to 0 and carries no column (OutputFactory.pm:1769), one at cDNA 5 sums
+    /// to 0 and carries no column (OutputFactory.pm:1778), one at cDNA 5 sums
     /// nothing. The offset is computed for an `NM_` or `XM_` model alone
-    /// (`:1517`) and only where `hgvs_transcript` runs, under `--hgvs`. A
-    /// genomic base the deletion edit removed from the model maps to no cDNA
-    /// position, so its notation is described from the nearest modelled base
-    /// as an intronic base is, `c.-49+2`; Ensembl VEP numbers it `c.-50`, as if
-    /// the model held it.
+    /// (TranscriptVariationAllele.pm:1517) and only where `hgvs_transcript`
+    /// runs, under `--hgvs`. A genomic base the deletion edit removed from the
+    /// model maps to no cDNA position, so its notation is described from the
+    /// nearest modelled base as an intronic base is, `c.-49+2`; Ensembl VEP
+    /// numbers it `c.-50`, as if the model held it.
     #[test]
     fn refseq_offset_sums_the_indel_edits_upstream_of_the_variant() {
         use crate::concordance_tests::hgvsc_fasta_fixture;
@@ -9502,8 +9945,10 @@ mod tests {
     /// Mapper.pm:522-542), reads the allele in place of that base and so no
     /// length change (VariationEffect.pm:1556-1564): `synonymous_variant`
     /// beside the frameshift its own HGVSp states. A model the alignment
-    /// corrected holds the base, and its rows are read on it; no other row
-    /// of the failed model differs from that model's.
+    /// corrected holds the base, and its rows are read on it. Off the point
+    /// the failed model's rows differ from that model's in the HGVSc alone,
+    /// which counts the transcript's bases along the genome: a position past
+    /// the point is one below the cached number.
     #[test]
     fn an_insertion_on_a_base_a_failed_edit_model_holds_is_read_on_the_genome() {
         use crate::concordance_tests::{bases_from, hgvsc_fasta_fixture};
@@ -9539,7 +9984,7 @@ mod tests {
         assert_eq!(on_the_point.amino_acids.as_deref(), Some("G/GX"));
         assert_eq!(on_the_point.codons.as_deref(), Some("gga/ggAa"));
         assert_eq!(on_the_point.hgvs_offset, Some(4));
-        assert_eq!(on_the_point.hgvsc.as_deref(), Some("NM_000006.1:c.13dup"));
+        assert_eq!(on_the_point.hgvsc.as_deref(), Some("NM_000006.1:c.12dup"));
         assert!(on_the_point
             .hgvsp
             .as_deref()
@@ -9550,7 +9995,7 @@ mod tests {
         assert_eq!(one_base_on.hgvsp, on_the_point.hgvsp);
         assert_eq!(
             insertion(&failed, 158, b"A", &unshifted).hgvsc.as_deref(),
-            Some("NM_000006.1:c.10dup")
+            Some("NM_000006.1:c.9dup")
         );
 
         // Another base, and the base before the point, which the genome
@@ -9588,7 +10033,8 @@ mod tests {
         assert_eq!(other.hgvsc.as_deref(), Some("NM_000006.1:c.9A>C"));
         assert!(other.hgvsp.as_deref().is_some_and(|p| p.ends_with('=')));
 
-        // Off the point the two models write the same rows.
+        // Off the point the two models write the same rows but for the
+        // HGVSc past it, which the failed model counts along the genome.
         let off_the_point: [(u64, u64, &[u8], &[u8]); 5] = [
             (159, 158, b"-", b"A"),
             (157, 156, b"-", b"C"),
@@ -9596,7 +10042,17 @@ mod tests {
             (158, 158, b"A", b"-"),
             (160, 160, b"A", b"C"),
         ];
-        for (start, end, reference, alt) in off_the_point {
+        // Each record's notation on the failed model and on the corrected one.
+        let notations = [
+            ("c.12dup", "c.13dup"),
+            ("c.7_8insC", "c.7_8insC"),
+            ("c.8G>C", "c.8G>C"),
+            ("c.12del", "c.13del"),
+            ("c.11A>C", "c.12A>C"),
+        ];
+        for ((start, end, reference, alt), (on_the_genome, on_the_model)) in
+            off_the_point.into_iter().zip(notations)
+        {
             let variant =
                 InputVariant::new("1".into(), start, end, reference.to_vec(), alt.to_vec());
             let rows = [&failed, &corrected]
@@ -9609,11 +10065,17 @@ mod tests {
                     row.protein_position.clone(),
                     row.amino_acids.clone(),
                     row.codons.clone(),
-                    row.hgvsc.clone(),
                     row.hgvsp.clone(),
                 )
             };
             assert_eq!(cells(&rows[0]), cells(&rows[1]), "{start}-{end}");
+            for (row, notation) in rows.iter().zip([on_the_genome, on_the_model]) {
+                assert_eq!(
+                    row.hgvsc,
+                    Some(format!("NM_000006.1:{notation}")),
+                    "{start}-{end}"
+                );
+            }
         }
     }
 
@@ -9623,8 +10085,9 @@ mod tests {
     /// one the same bases take written as a minimised insertion there: the
     /// 3' rule and the duplication test read the genome's `G AAAA TT` around
     /// the point, not the model's `G AAAAA TT`. Inserted `AC` moves over one
-    /// genomic `A`, CDS 10, where the model's own base would stop it at CDS
-    /// 9; `AG` then copies CDS 8 and CDS 10; a kept base after the point
+    /// genomic `A`, base 9 of the count along the genome, where the model's
+    /// own base would stop it; `AG` then copies bases 8 and 9; a kept base
+    /// after the point
     /// leaves `C` at the point, not after the model's base. A model the
     /// alignment corrected holds the base, and its notations are read on it.
     #[test]
@@ -9656,11 +10119,11 @@ mod tests {
         // The inserted bases, with their notation under the 3' shift and
         // without it.
         let inserted: [(&[u8], &str, &str); 5] = [
-            (b"A", "c.13dup", "c.10dup"),
+            (b"A", "c.12dup", "c.9dup"),
             (b"C", "c.8_9insC", "c.8_9insC"),
             (b"G", "c.8dup", "c.8dup"),
-            (b"AC", "c.10_11insCA", "c.8_9insAC"),
-            (b"AG", "c.8_10dup", "c.8_9insAG"),
+            (b"AC", "c.9_10insCA", "c.8_9insAC"),
+            (b"AG", "c.8_9dup", "c.8_9insAG"),
         ];
         for (bases, with_the_shift, without) in inserted {
             let kept_before = [b"G".as_slice(), bases].concat();
@@ -9806,7 +10269,7 @@ mod tests {
         beside_another_allele.record_allele_string_multi = Some(Arc::from("GA/GAA/CC"));
         let moved = calculate_consequences(&beside_another_allele, &failed, &shifted)
             .expect("an allele inside a coding exon has a row");
-        assert_eq!(moved.hgvsc.as_deref(), Some("NM_000006.1:c.13dup"));
+        assert_eq!(moved.hgvsc.as_deref(), Some("NM_000006.1:c.12dup"));
         assert_eq!(moved.hgvs_offset, Some(4));
         assert_eq!(
             row(&failed, 157, 158, b"GA", b"GCCCA", &shifted)
@@ -9824,6 +10287,97 @@ mod tests {
             [Consequence::SynonymousVariant]
         );
         assert_eq!(on_the_corrected_model.cds_position.as_deref(), Some("8-10"));
+    }
+
+    /// The `REFSEQ_OFFSET` of a row whose notations are read as an insertion
+    /// (`insertion_between_kept_bases`) is the record's own. Ensembl VEP sums
+    /// the indel edits that start at or before the row's cDNA start
+    /// (`get_misalignment_offset`, TranscriptVariationAllele.pm:1608-1610),
+    /// the start of the span its cDNA position cell prints
+    /// (BaseTranscriptVariation.pm:136-150, 478-488). `GA` to `GCA` over
+    /// genomic 157-158, beside a second alternate that keeps the record as
+    /// written (Parser.pm:860-881 minimises such a record of one alternate),
+    /// starts at cDNA 58, before the edit at 59: it carries no offset, on the
+    /// failed-edit model as on the one the alignment corrected, and so does a
+    /// record that keeps two bases before the point or adds the run's own
+    /// base, whose notation the 3' rule moves. The insertion of `C` written at
+    /// the point takes the same HGVSc, starts on the model's own base, cDNA
+    /// 59, and carries 2, the length of the edit's bases (`:1617`). On the
+    /// model that holds three bases between genomic 108 and 109 (`10 9 AAA`)
+    /// the record starts at cDNA 9 and carries none, and the insertion starts
+    /// at cDNA 10 and carries 3.
+    #[test]
+    fn the_refseq_offset_follows_the_reading_its_cdna_position_is_written_from() {
+        use crate::concordance_tests::{bases_from, hgvsc_fasta_fixture};
+        use vep_core::transcript::BamEditStatus;
+        let row = |tx: &Transcript,
+                   start: u64,
+                   end: u64,
+                   reference: &[u8],
+                   alt: &[u8],
+                   config: &EffectsConfig| {
+            let mut variant =
+                InputVariant::new("1".into(), start, end, reference.to_vec(), alt.to_vec());
+            if start <= end {
+                let other: Vec<u8> = reference.iter().map(|_| b'C').collect();
+                variant.record_allele_string_multi = Some(Arc::from(format!(
+                    "{}/{}/{}",
+                    String::from_utf8_lossy(reference),
+                    String::from_utf8_lossy(alt),
+                    String::from_utf8_lossy(&other)
+                )));
+            }
+            calculate_consequences(&variant, tx, config)
+                .expect("an allele inside an exon has a row")
+        };
+
+        let failed = twice_read_base_model(BamEditStatus::Failed);
+        let corrected = twice_read_base_model(BamEditStatus::Ok);
+        let genome = [bases_from(150, "ATGGCTGG"), bases_from(158, "AAAATTCGAT")].concat();
+        let (_dir, fasta) = hgvsc_fasta_fixture(&genome);
+        let fasta = Arc::new(fasta);
+        let unshifted = hgvs_config(&fasta, true);
+        let shifted = EffectsConfig {
+            hgvs: crate::hgvs::HgvsOptions::default(),
+            ..hgvs_config(&fasta, true)
+        };
+        for config in [&shifted, &unshifted] {
+            let kept = row(&failed, 157, 158, b"GA", b"GCA", config);
+            let insertion = row(&failed, 158, 157, b"-", b"C", config);
+            assert_eq!(kept.hgvsc.as_deref(), Some("NM_000006.1:c.8_9insC"));
+            assert_eq!(kept.hgvsc, insertion.hgvsc);
+            assert_eq!(kept.cdna_position.as_deref(), Some("58-60"));
+            assert_eq!(kept.refseq_offset, None);
+            assert_eq!(insertion.cdna_position.as_deref(), Some("58-59"));
+            assert_eq!(insertion.refseq_offset, Some(2));
+            let on_the_corrected_model = row(&corrected, 157, 158, b"GA", b"GCA", config);
+            assert_eq!(on_the_corrected_model.cdna_position, kept.cdna_position);
+            assert_eq!(on_the_corrected_model.refseq_offset, None);
+            let two_kept_before = row(&failed, 156, 158, b"GGA", b"GGCA", config);
+            assert_eq!(two_kept_before.hgvsc, insertion.hgvsc);
+            assert_eq!(two_kept_before.cdna_position.as_deref(), Some("57-60"));
+            assert_eq!(two_kept_before.refseq_offset, None);
+        }
+        let moved = row(&failed, 157, 158, b"GA", b"GAA", &shifted);
+        assert_eq!(moved.hgvsc.as_deref(), Some("NM_000006.1:c.12dup"));
+        assert_eq!(moved.hgvs_offset, Some(4));
+        assert_eq!(moved.refseq_offset, None);
+        let moved_insertion = row(&failed, 158, 157, b"-", b"A", &shifted);
+        assert_eq!(moved_insertion.hgvsc, moved.hgvsc);
+        assert_eq!(moved_insertion.refseq_offset, Some(2));
+
+        let mut holding_three = insertion_edited_model("NM_000001.1");
+        holding_three.bam_edit_status = Some(BamEditStatus::Failed);
+        let (_dir, fasta) = hgvsc_fasta_fixture(&[]);
+        let fasta = Arc::new(fasta);
+        let config = hgvs_config(&fasta, true);
+        let kept = row(&holding_three, 108, 109, b"TT", b"TAT", &config);
+        let insertion = row(&holding_three, 109, 108, b"-", b"A", &config);
+        assert!(kept.hgvsc.is_some());
+        assert_eq!(kept.hgvsc, insertion.hgvsc);
+        assert_eq!(kept.cdna_position.as_deref(), Some("9-13"));
+        assert_eq!(kept.refseq_offset, None);
+        assert_eq!(insertion.refseq_offset, Some(3));
     }
 
     /// The reference that carries the compact transcript's first 138 coding
@@ -9861,8 +10415,9 @@ mod tests {
     /// bases, are an `ins` between neighbours, and an insertion the shift
     /// moves there keeps its shifted notation and its offset. Under
     /// `--shift_3prime 1` the row itself is annotated at the shifted point and
-    /// keeps the notation of that point; so does the row of a model whose edit
-    /// failed, which is read against the genome.
+    /// keeps the notation of that point. The row of a model whose edit failed
+    /// is read against the genome: it takes the shifted point, counted along
+    /// the genome's exons, which hold none of the model's own bases.
     #[test]
     fn insertion_the_shift_moves_off_edited_model_bases_is_described_where_it_is_written() {
         use vep_core::transcript::BamEditStatus;
@@ -9930,7 +10485,7 @@ mod tests {
         let mut failed = coding_seam_model();
         failed.bam_edit_status = Some(BamEditStatus::Failed);
         let tc = row(&failed, 158, b"ATT", &shifted);
-        assert_eq!(tc.hgvsc.as_deref(), Some("NM_000004.1:c.12_13insTTA"));
+        assert_eq!(tc.hgvsc.as_deref(), Some("NM_000004.1:c.9_10insTTA"));
         assert_eq!(tc.hgvs_offset, Some(1));
     }
 
@@ -9995,6 +10550,106 @@ mod tests {
         assert_eq!(left_in_place.hgvs_offset, None);
     }
 
+    /// The same record on a model whose own bases open on another codon than
+    /// the start codon: `ATCCCACGT` before the genome's `ATGG`. The allele,
+    /// those nine bases twice, shifts two bases on the genome and is read on
+    /// the model's bases, where it adds nine: the duplication of CDS 1-9 that
+    /// the 3' rule places as `c.3_11dup`, and of the residues `Ile1` to
+    /// `Arg3`. No start codon stands at the model's coding start, so the row
+    /// takes no start term: its span, from the 5' UTR into the coding
+    /// sequence, is a `coding_sequence_variant` beside `5_prime_UTR_variant`.
+    #[test]
+    fn insertion_on_opening_bases_that_open_on_another_codon_keeps_its_duplication() {
+        let (_dir, fasta) = coding_seam_genome();
+        let fasta = Arc::new(fasta);
+        let shifted = EffectsConfig {
+            hgvs: crate::hgvs::HgvsOptions::default(),
+            ..hgvs_config(&fasta, false)
+        };
+        let tx = coding_model_holding(0, "ATCCCACGT");
+        let variant = InputVariant::new(
+            "1".into(),
+            150,
+            149,
+            b"-".to_vec(),
+            b"ATCCCACGTATCCCACGT".to_vec(),
+        );
+        let tc = calculate_consequences(&variant, &tx, &shifted)
+            .expect("an insertion on the first coding bases has a row");
+        assert_eq!(
+            tc.consequences.as_slice(),
+            [
+                Consequence::CodingSequenceVariant,
+                Consequence::FivePrimeUtrVariant
+            ]
+        );
+        assert_eq!(tc.cds_position.as_deref(), Some("?-9"));
+        assert_eq!(tc.hgvsc.as_deref(), Some("NM_000004.1:c.3_11dup"));
+        assert_eq!(
+            tc.hgvsp.as_deref(),
+            Some("ENSP00000000001.1:p.Ile1_Arg3dup")
+        );
+        assert_eq!(tc.hgvs_offset, None);
+    }
+
+    /// The first base of a model's nine opening bases and then the nine. Read
+    /// in place of the nine, the allele leaves them standing one base later
+    /// behind a 5' UTR one base longer: the duplication of coding base 1.
+    ///
+    /// Where the model opens on the start codon, `A ATG CCA CGT ATG G`, the
+    /// three bases at the coding start, `AAT`, are not the model's first
+    /// codon, and the whole coding sequence stands behind its start codon
+    /// (`start_retained_variant`): the first residue, unchanged.
+    ///
+    /// Where the model opens on another codon, `A ATC CCA CGT ATG G`, no
+    /// start codon stands at the coding start. The row takes no start term,
+    /// and its notation is the frameshift's, read on the alternate coding
+    /// sequence from coding base 1: `AAT` where the model reads `ATC`. That
+    /// frame meets no stop codon in the coding sequence or the 3' UTR, so the
+    /// count is unknown.
+    #[test]
+    fn insertion_that_moves_a_models_opening_bases_one_base_on_is_read_by_the_codon_they_open_on() {
+        let (_dir, fasta) = coding_seam_genome();
+        let fasta = Arc::new(fasta);
+        let shifted = EffectsConfig {
+            hgvs: crate::hgvs::HgvsOptions::default(),
+            ..hgvs_config(&fasta, false)
+        };
+        let row = |opening: &str| {
+            let tx = coding_model_holding(0, opening);
+            let allele = format!("{}{opening}", &opening[..1]);
+            let variant =
+                InputVariant::new("1".into(), 150, 149, b"-".to_vec(), allele.into_bytes());
+            calculate_consequences(&variant, &tx, &shifted)
+                .expect("an insertion on the first coding bases has a row")
+        };
+
+        let tc = row("ATGCCACGT");
+        assert_eq!(
+            tc.consequences.as_slice(),
+            [
+                Consequence::StartRetainedVariant,
+                Consequence::FivePrimeUtrVariant
+            ]
+        );
+        assert_eq!(tc.hgvsc.as_deref(), Some("NM_000004.1:c.1dup"));
+        assert_eq!(tc.hgvsp.as_deref(), Some("ENSP00000000001.1:p.Met1="));
+
+        let tc = row("ATCCCACGT");
+        assert_eq!(
+            tc.consequences.as_slice(),
+            [
+                Consequence::CodingSequenceVariant,
+                Consequence::FivePrimeUtrVariant
+            ]
+        );
+        assert_eq!(tc.hgvsc.as_deref(), Some("NM_000004.1:c.1dup"));
+        assert_eq!(
+            tc.hgvsp.as_deref(),
+            Some("ENSP00000000001.1:p.Ile1AsnfsTer?")
+        );
+    }
+
     /// An insertion beside the bases an edited model holds and the genome
     /// lacks, which the genome shows as a duplication of bases on both sides
     /// of them, is numbered on the model. `hgvs_variant_notation` types the
@@ -10010,7 +10665,7 @@ mod tests {
     /// past them copies, on the genome, the `C` before them and the `T`
     /// after; on the model it copies their last base and that `T`:
     /// `c.77_78dup` and `c.116_117dup`, two positions for two bases, the
-    /// ranges Ensembl VEP 116.2 writes on those models
+    /// ranges Ensembl VEP 116.3 writes on those models
     /// (TranscriptVariationAllele.pm:1524-1525 moves both ends by one
     /// offset). Written two bases earlier, the same allele is carried there
     /// by the shift and keeps its offset. Where the model's bases end in `A`
@@ -10102,7 +10757,7 @@ mod tests {
         failed.bam_edit_status = Some(BamEditStatus::Failed);
         assert_eq!(
             hgvsc(&failed, 225, b"CT").as_deref(),
-            Some("NM_000004.1:c.74_78dup")
+            Some("NM_000004.1:c.74_75dup")
         );
 
         let on_the_bases = coding_seam_model();
@@ -10224,7 +10879,7 @@ mod tests {
         failed.bam_edit_status = Some(BamEditStatus::Failed);
         assert_eq!(
             row(&failed, 223, b"CT", &shifted).hgvsc.as_deref(),
-            Some("NM_000004.1:c.74_78dup")
+            Some("NM_000004.1:c.74_75dup")
         );
 
         let (_dir, reverse_fasta) = hgvsc_fasta_fixture(&bases_from(1201, &"G".repeat(80)));
@@ -10492,7 +11147,7 @@ mod tests {
     /// coordinates. Without the 3' shift nothing moves, and a model the
     /// alignment corrected, whose bases are placed along its own, prints no
     /// offset. Ensembl VEP leaves the bases at the point, an `ins` with no
-    /// offset (TranscriptVariationAllele.pm:1492; OutputFactory.pm:1750-1758).
+    /// offset (TranscriptVariationAllele.pm:1492; OutputFactory.pm:1759-1767).
     #[test]
     fn a_notation_moved_beside_a_kept_base_on_a_failed_edit_model_carries_its_offset() {
         use crate::concordance_tests::{bases_from, hgvsc_fasta_fixture};
@@ -10520,9 +11175,9 @@ mod tests {
         };
         // The inserted bases, their notation and the offset of its move.
         let moved: [(&[u8], &str, Option<i64>); 5] = [
-            (b"A", "c.13dup", Some(4)),
-            (b"AC", "c.10_11insCA", Some(1)),
-            (b"AG", "c.8_10dup", Some(1)),
+            (b"A", "c.12dup", Some(4)),
+            (b"AC", "c.9_10insCA", Some(1)),
+            (b"AG", "c.8_9dup", Some(1)),
             (b"C", "c.8_9insC", None),
             (b"G", "c.8dup", None),
         ];
@@ -10547,15 +11202,12 @@ mod tests {
         let typed_on_the_kept_base = row(&failed, 158, 158, b"A", b"AA", &shifted);
         assert_eq!(
             typed_on_the_kept_base.hgvsc.as_deref(),
-            Some("NM_000006.1:c.10dup")
+            Some("NM_000006.1:c.9dup")
         );
         assert_eq!(typed_on_the_kept_base.hgvs_offset, None);
 
         let three_kept = row(&failed, 155, 157, b"TGG", b"TGGAC", &shifted);
-        assert_eq!(
-            three_kept.hgvsc.as_deref(),
-            Some("NM_000006.1:c.10_11insCA")
-        );
+        assert_eq!(three_kept.hgvsc.as_deref(), Some("NM_000006.1:c.9_10insCA"));
         assert_eq!(three_kept.hgvs_offset, Some(1));
         assert!(three_kept.hgvsp.is_some());
         assert_eq!(three_kept.used_ref.as_deref(), Some("TGG"));
@@ -10567,7 +11219,7 @@ mod tests {
         let on_the_reverse_strand = row(&reverse, 1281, 1281, b"T", b"GT", &shifted);
         assert_eq!(
             on_the_reverse_strand.hgvsc.as_deref(),
-            Some("NR_000001.1:n.103dup")
+            Some("NR_000001.1:n.100dup")
         );
         assert_eq!(on_the_reverse_strand.hgvs_offset, Some(-80));
 
@@ -11078,17 +11730,18 @@ mod tests {
         tx.translation_end = None;
         tx.translation = None;
         tx.protein_id = None;
-        tx.vefc = Some(TranscriptVEFC {
-            codon_table: 1,
-            introns,
-            sorted_exons: exons,
-            mapper: Some(TranscriptMapper {
+        tx.vefc = Some({
+            let mut vefc = TranscriptVEFC::default();
+            vefc.codon_table = 1;
+            vefc.introns = introns;
+            vefc.sorted_exons = exons;
+            vefc.mapper = Some(TranscriptMapper {
                 start_phase: 0,
                 cdna_coding_start: 0,
                 cdna_coding_end: 0,
                 exon_coord_mapper: ExonCoordMapper::new(pairs),
-            }),
-            ..Default::default()
+            });
+            vefc
         });
         tx.derived = Default::default();
         tx
@@ -11127,7 +11780,7 @@ mod tests {
     }
 
     /// Every splice window of every junction on both strands, for an SNV, a
-    /// deletion and an insertion, against the term sets the Perl predicates
+    /// deletion and an insertion, against the term sets the Ensembl VEP predicates
     /// assign: the windows of `_intron_effects`
     /// (BaseTranscriptVariationAllele.pm:99-224: donor and acceptor at the two
     /// terminal intronic bases, the 5th base, the donor region at intronic bases
@@ -11141,7 +11794,7 @@ mod tests {
     /// (the polypyrimidine tract needs no exon overlap). The context term is
     /// `non_coding_transcript_exon_variant` on an exon overlap, else
     /// `non_coding_transcript_variant` (VariationEffect.pm:495-520). The
-    /// insertion rows read Perl's inverted differing region, so a window holds an
+    /// insertion rows read Ensembl VEP's inverted differing region, so a window holds an
     /// insertion only when both flanks lie inside it, and the polypyrimidine
     /// window either flank. Each shape's endpoint intron is evaluated by the
     /// endpoint pass and met again by the whole-span pass, which the evaluation
@@ -11331,7 +11984,7 @@ mod tests {
         add_intronic_insertion_splice_consequences(
             &mut csq,
             &tx,
-            &insertion,
+            (insertion.start, insertion.end),
             intron,
             &mut evaluated,
         );
@@ -11339,7 +11992,7 @@ mod tests {
         add_intronic_insertion_splice_consequences(
             &mut csq,
             &tx,
-            &insertion,
+            (insertion.start, insertion.end),
             intron,
             &mut evaluated,
         );
@@ -11546,7 +12199,7 @@ mod tests {
     /// A term stands beside positions past the span when the span itself holds
     /// a base of a window of that term, even at an index where the two alleles
     /// hold the same base, as Ensembl VEP writes it
-    /// (BaseTranscriptVariationAllele.pm:176-204).
+    /// (BaseTranscriptVariationAllele.pm:176-206).
     #[test]
     fn a_term_whose_window_the_span_holds_stands_beside_bases_past_the_span() {
         use vep_core::coordinate::Strand::{Forward, Reverse};
@@ -11579,6 +12232,313 @@ mod tests {
         assert!(terms.iter().any(|term| term == DONOR_TERM), "{terms:?}");
     }
 
+    /// Inside the span the two alleles are compared index by index
+    /// (VariationFeatureOverlapAllele.pm:428-429): a base of a window at an
+    /// index where both alleles hold the same base is not changed and draws
+    /// no term where no differing index lies in that window, as Ensembl VEP
+    /// writes it.
+    #[test]
+    fn a_splice_window_base_both_alleles_hold_draws_no_term() {
+        use vep_core::coordinate::Strand::{Forward, Reverse};
+        assert_splice_terms(&[
+            // Intronic base 8, the last of the `splice_region` window, is
+            // shared; bases 9 and 10 differ.
+            (Forward, 10_308, 3, 3, &[0], &[]),
+            // The donor's second base and intronic bases 3 to 8 are shared;
+            // base 9 differs.
+            (Forward, 10_302, 8, 8, &[0, 1, 2, 3, 4, 5, 6], &[]),
+            // Both donor bases are shared; the exon's last base and intronic
+            // base 3 differ.
+            (Forward, 10_300, 4, 4, &[1, 2], &[DONOR_REGION_TERM]),
+            // The tract's outermost base is shared; the two bases before it
+            // differ.
+            (Forward, 10_382, 3, 3, &[2], &[]),
+            // Intronic base 8 on the reverse strand is shared; bases 10 and 9
+            // differ.
+            (Reverse, 10_391, 3, 3, &[2], &[]),
+            // Both acceptor bases are shared; the tract's innermost base
+            // differs.
+            (Reverse, 10_301, 3, 3, &[0, 1], &[TRACT_TERM, REGION_TERM]),
+            // The tract's outermost base is shared; the two bases past it
+            // differ.
+            (Reverse, 10_317, 3, 3, &[0], &[]),
+        ]);
+        assert_whole_rows(&[
+            (Forward, 10_308, 3, 3, &[0], &[INTRON_TERM, TRANSCRIPT_TERM]),
+            (
+                Forward,
+                10_302,
+                8,
+                8,
+                &[0, 1, 2, 3, 4, 5, 6],
+                &[INTRON_TERM, TRANSCRIPT_TERM],
+            ),
+        ]);
+    }
+
+    /// Two differing indices with one shared base between them are two
+    /// regions (VariationFeatureOverlapAllele.pm:434-450), and each is read
+    /// alone: with the donor's 5th base shared and its two neighbours
+    /// changed, the row holds the donor region term and no 5th-base term, as
+    /// Ensembl VEP writes it. The same span with every index changed holds
+    /// the 5th-base term.
+    #[test]
+    fn two_changes_a_base_apart_are_read_apart() {
+        use vep_core::coordinate::Strand::{Forward, Reverse};
+        assert_whole_rows(&[
+            // Intronic bases 4 and 6 differ; the 5th base, 10_305, is shared.
+            (
+                Forward,
+                10_304,
+                3,
+                3,
+                &[1],
+                &[INTRON_TERM, TRANSCRIPT_TERM, DONOR_REGION_TERM],
+            ),
+            // The 5th base on the reverse strand is 10_396.
+            (
+                Reverse,
+                10_395,
+                3,
+                3,
+                &[1],
+                &[INTRON_TERM, TRANSCRIPT_TERM, DONOR_REGION_TERM],
+            ),
+            (
+                Forward,
+                10_304,
+                3,
+                3,
+                &[],
+                &[INTRON_TERM, TRANSCRIPT_TERM, FIFTH_BASE_TERM],
+            ),
+            (
+                Reverse,
+                10_395,
+                3,
+                3,
+                &[],
+                &[INTRON_TERM, TRANSCRIPT_TERM, FIFTH_BASE_TERM],
+            ),
+        ]);
+    }
+
+    /// A record whose alternate allele opens with its whole reference allele
+    /// changes no base of its span: its further bases
+    /// stand between the span's last base and the base after it. Its splice
+    /// and intron terms are those of that insertion written minimally, read
+    /// by its two neighbours (VariationEffect.pm:97-100,
+    /// BaseTranscriptVariationAllele.pm:143-161), whatever positions past
+    /// the span the index comparison reaches.
+    #[test]
+    fn an_insertion_written_with_shared_leading_bases_keeps_its_minimal_form_terms() {
+        use vep_core::coordinate::Strand::{Forward, Reverse};
+        // The base the inserted bases follow, and the `splice_*` terms of
+        // the insertion.
+        let cases: [(vep_core::coordinate::Strand, u64, &[&str]); 12] = [
+            // Before the tract's outermost base.
+            (Forward, 10_383, &[TRACT_TERM]),
+            // Between the tract's innermost base and the acceptor bases.
+            (Forward, 10_398, &[TRACT_TERM, REGION_TERM]),
+            // Between the intron's last base and the exon after it.
+            (Forward, 10_400, &[REGION_TERM]),
+            // Between the exon's last base and the donor bases.
+            (Forward, 10_300, &[REGION_TERM]),
+            // Between the two donor bases.
+            (Forward, 10_301, &[DONOR_TERM]),
+            // Between the donor bases and intronic base 3.
+            (Forward, 10_302, &[REGION_TERM]),
+            // Between intronic bases 4 and 5.
+            (Forward, 10_304, &[DONOR_REGION_TERM]),
+            // After the tract's outermost base on the reverse strand.
+            (Reverse, 10_317, &[TRACT_TERM]),
+            // Between the acceptor bases and the tract's innermost base.
+            (Reverse, 10_302, &[TRACT_TERM, REGION_TERM]),
+            // Between intronic base 3 and the donor bases.
+            (Reverse, 10_398, &[REGION_TERM]),
+            // Between the two donor bases.
+            (Reverse, 10_399, &[DONOR_TERM]),
+            // Between intronic bases 5 and 4.
+            (Reverse, 10_396, &[DONOR_REGION_TERM]),
+        ];
+        let mut wrong = Vec::new();
+        for (strand, before, expected) in cases {
+            let tx = four_exon_non_coding_transcript(strand);
+            let minimal = splice_terms(&tx, &insertion_after(before));
+            if minimal != expected {
+                wrong.push(format!(
+                    "{strand:?} strand, after {before}, written minimally: wrote {minimal:?}, \
+                     expected {expected:?}"
+                ));
+            }
+            for shared in [1_usize, 2, 3, 7] {
+                let same: Vec<usize> = (0..shared).collect();
+                let record = replacement(before + 1 - shared as u64, shared, shared + 3, &same);
+                let got = splice_terms(&tx, &record);
+                if got != expected {
+                    wrong.push(format!(
+                        "{strand:?} strand, after {before}, with {shared} shared leading bases: \
+                         wrote {got:?}, expected {expected:?}"
+                    ));
+                }
+            }
+        }
+        assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+
+        // A span wholly inside the intron: the whole row, with the intron
+        // term the insertion's own place gives.
+        let same: &[usize] = &[0, 1];
+        assert_whole_rows(&[
+            (
+                Forward,
+                10_382,
+                2,
+                5,
+                same,
+                &[INTRON_TERM, TRANSCRIPT_TERM, TRACT_TERM],
+            ),
+            (
+                Forward,
+                10_397,
+                2,
+                5,
+                same,
+                &[INTRON_TERM, TRANSCRIPT_TERM, TRACT_TERM, REGION_TERM],
+            ),
+            (
+                Reverse,
+                10_316,
+                2,
+                5,
+                same,
+                &[INTRON_TERM, TRANSCRIPT_TERM, TRACT_TERM],
+            ),
+        ]);
+
+        // A reference allele of one base opens its alternate allele the
+        // same way. Ensembl VEP does not compare the two
+        // (VariationFeatureOverlapAllele.pm:418, :452-454) and writes the
+        // donor term from the donor's second base, which both alleles hold.
+        assert_whole_rows(&[(
+            Forward,
+            10_302,
+            1,
+            4,
+            &[0],
+            &[INTRON_TERM, TRANSCRIPT_TERM, REGION_TERM],
+        )]);
+    }
+
+    /// A span is never read as one region. Where one differing region lies in
+    /// the `splice_region` window and the span holds the donor or acceptor
+    /// bases at indices of equal bases, the row holds `splice_region_variant`
+    /// and no donor, acceptor, 5th-base or donor-region term
+    /// (VariationFeatureOverlapAllele.pm:428-450). The first four records end
+    /// in a region outside the window, whose verdict replaces the first
+    /// region's in Ensembl VEP (BaseTranscriptVariationAllele.pm:215). The
+    /// same spans with every index changed hold the narrower term and lose
+    /// `splice_region_variant` (VariationEffect.pm:620-624).
+    #[test]
+    fn a_differing_region_in_the_splice_region_window_beside_an_unchanged_donor_base() {
+        use vep_core::coordinate::Strand::{Forward, Reverse};
+        assert_whole_rows(&[
+            // Intron 2's third-last base and exon 3's fourth base differ; the
+            // acceptor bases 10_399-10_400 are shared.
+            (
+                Forward,
+                10_398,
+                7,
+                7,
+                &[1, 2, 3, 4, 5],
+                &[INTRON_TERM, EXON_TERM, REGION_TERM],
+            ),
+            // Exon 2's last base and intronic base 9 differ; the donor bases,
+            // the donor region and the 5th base are shared.
+            (
+                Forward,
+                10_300,
+                10,
+                10,
+                &[1, 2, 3, 4, 5, 6, 7, 8],
+                &[INTRON_TERM, EXON_TERM, REGION_TERM],
+            ),
+            // Intronic base 7 and the fourth base before the exon's end
+            // differ; the donor region, the 5th base, the donor bases
+            // 10_399-10_400 and the exon's last three bases are shared.
+            (
+                Reverse,
+                10_394,
+                11,
+                11,
+                &[1, 2, 3, 4, 5, 6, 7, 8, 9],
+                &[INTRON_TERM, EXON_TERM, REGION_TERM],
+            ),
+            // The next exon's first base and intronic base 9 from the 3' end
+            // differ; the acceptor bases 10_301-10_302 are shared.
+            (
+                Reverse,
+                10_300,
+                10,
+                10,
+                &[1, 2, 3, 4, 5, 6, 7, 8],
+                &[INTRON_TERM, EXON_TERM, REGION_TERM],
+            ),
+            // The first record's shape on this strand: the last region lies
+            // in the window.
+            (
+                Reverse,
+                10_297,
+                7,
+                7,
+                &[1, 2, 3, 4, 5],
+                &[INTRON_TERM, EXON_TERM, REGION_TERM],
+            ),
+            // The second record's shape on this strand.
+            (
+                Reverse,
+                10_392,
+                10,
+                10,
+                &[1, 2, 3, 4, 5, 6, 7, 8],
+                &[INTRON_TERM, EXON_TERM, REGION_TERM],
+            ),
+        ]);
+        assert_whole_rows(&[
+            (
+                Forward,
+                10_398,
+                7,
+                7,
+                &[],
+                &[INTRON_TERM, EXON_TERM, ACCEPTOR_TERM],
+            ),
+            (
+                Forward,
+                10_300,
+                10,
+                10,
+                &[],
+                &[INTRON_TERM, EXON_TERM, FIFTH_BASE_TERM, DONOR_TERM],
+            ),
+            (
+                Reverse,
+                10_394,
+                11,
+                11,
+                &[],
+                &[INTRON_TERM, EXON_TERM, FIFTH_BASE_TERM, DONOR_TERM],
+            ),
+            (
+                Reverse,
+                10_300,
+                10,
+                10,
+                &[],
+                &[INTRON_TERM, EXON_TERM, ACCEPTOR_TERM],
+            ),
+        ]);
+    }
+
     /// A record of 204 bases from intron 2 into intron 3 holds the acceptor
     /// bases of intron 2 (10_399-10_400) at indices of equal bases, and its
     /// alternate allele's bases past the span stand on the acceptor bases of
@@ -11596,7 +12556,7 @@ mod tests {
     }
 
     /// An insertion replaces no base and is read by its two neighbours
-    /// (VariationEffect.pm:97-100, BaseTranscriptVariationAllele.pm:152-159):
+    /// (VariationEffect.pm:97-100, BaseTranscriptVariationAllele.pm:152-161):
     /// with one neighbour inside a window it keeps the `splice_region` and
     /// polypyrimidine tract terms Ensembl VEP writes.
     #[test]
@@ -11658,7 +12618,7 @@ mod tests {
     }
 
     /// The intron term is read from the same regions as the splice terms
-    /// (BaseTranscriptVariationAllele.pm:143-149, on intronic bases 3 to the
+    /// (BaseTranscriptVariationAllele.pm:143-150, on intronic bases 3 to the
     /// third-last), so an alternate allele's bases past the span set it too. A
     /// span that lies wholly in the exon beside intron 2 (10_301-10_400), one
     /// to three bases short of it, takes out no intronic base, and the term is
@@ -11981,7 +12941,7 @@ mod tests {
     /// and a deletion wholly inside the deleted bases take the term of the
     /// transcript region whose genomic span holds them, with no cDNA, CDS or
     /// protein position, on both strands: the bases carry no transcript
-    /// coordinate, so the model gives no closer reading. Ensembl VEP 116.2
+    /// coordinate, so the model gives no closer reading. Ensembl VEP 116.3
     /// writes `intergenic_variant` on such a row, the default it assigns when
     /// no predicate fires on a mapper gap.
     #[test]

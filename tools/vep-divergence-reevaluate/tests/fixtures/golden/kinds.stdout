@@ -1,0 +1,27 @@
+count_kind	changed	Ensembl VEP ['1'], vep-rs ['2']
+exit_kind	still-present
+field_kind	still-present
+header_kind	still-present
+json_kind	still-present
+json_values_kind	changed	Ensembl VEP ['{"canonical":true,"consequence_terms":["missense_variant"],"flags":null,"hgvsp":"ENSP1:p.Leu4Pro","sift_score":0.05,"transcript_id":"ENST1"}', '{"consequence_terms":["intron_variant"],"distance":12,"transcript_id":"ENST2"}'], vep-rs ['{"canonical":true,"consequence_terms":["missense_variant"],"flags":null,"hgvsp":"ENSP1:p.Leu4%3D","sift_score":0.05,"transcript_id":"ENST1"}', '{"consequence_terms":["intron_variant"],"distance":12.0,"transcript_id":"ENST2"}']
+lines_kind	closed	Ensembl VEP ['rec2\t21:300\tC\tENSG3\tENST3\tTranscript\tdownstream_gene_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER;DISTANCE=4000;FILE=<path>'], vep-rs ['rec2\t21:300\tC\tENSG3\tENST3\tTranscript\tdownstream_gene_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER;DISTANCE=4000;FILE=<path>']
+lines_unmasked_kind	still-present
+prepare_error_kind	error	cannot prepare
+recorded_exit_kind	changed	Ensembl VEP ['21:100 | A | ENST1 | missense_variant,splice_region_variant', '21:100 | A | ENST2 | intron_variant'], vep-rs ['21:100 | A | ENST1 | splice_region_variant,missense_variant', '21:100 | A | ENST2 | non_coding_transcript_variant']; vep-rs exit 3: 
+rows_kind	still-present
+stats_kind	still-present
+stderr_kind	still-present
+stdout_kind	still-present
+tool_kind	changed	Ensembl VEP ['rec1 | IMPACT=MODERATE;HGVSp=ENSP1:p.Leu4Pro;PICK=1', 'rec1 | IMPACT=MODIFIER', 'rec2 | IMPACT=MODIFIER;DISTANCE=4000;FILE=<path>'], vep-rs []
+vcf_kind	still-present
+vcf_line_kind	still-present
+warnings_kind	still-present
+
+| verdict | entries |
+| --- | --- |
+| still-present | 12 |
+| closed | 1 |
+| changed | 4 |
+| error | 1 |
+| total | 18 |
+outputs under {{ROOT}}/work

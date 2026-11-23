@@ -1,18 +1,17 @@
 entry = "refseq_edited_model_seam_shift_and_duplication_hgvs"
 page = "docs/divergences/refseq-edited-model-seam-shift-and-duplication-hgvs.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 33 of 77,675 cache transcripts · 1 flag set, 3 corpora"
-notes = "Five records at the point where the forward-strand model NM_015120.4 carries the insertion edit `186 185` of three bases, between 2:73385942 and 2:73385943. Two bases inserted there, the first equal to the genome's base at 2:73385943: the genome's 3' shift moves the insertion one place, so Ensembl VEP prints HGVS_OFFSET=1, an `ins` between c.78 and c.79 and a frameshift named at residue 27 beside CDS 75-77; vep-rs reads the row where the record is written, the replacement of c.75 to c.77, a frameshift named at residue 26, and prints no offset. A copy of the genome's two bases beside the point written at the point is carried one place the same way: Ensembl VEP's `dup` of c.77 and c.78 with the offset, vep-rs's replacement of c.75 and c.76 without. The same copy written one base on is the control: CDS 78-79 and `c.77_78dup` in both engines. The last two records spell a copy of two and of three genome bases as a reference doubled across the point, kept whole by a second alternate: Ensembl VEP names as many positions as the genome copies, from the row's first coding position into the model's added bases; vep-rs names the change the alternate makes to the row's span. The prepare steps are those of the entry refseq_edited_model_seam_insertion_hgvsc: the one region file of the Ensembl VEP RefSeq cache that holds the model, converted with the Perl of the image, which the run therefore needs, and a chromosome 2 FASTA of the model's first exon."
+input_class_basis = "2 · 49 of 116,165 cache transcripts · 7 flag sets, 7 corpora"
+notes = "Five records at the point where the forward-strand model NM_015120.4 carries the insertion edit `186 185` of three bases, between 2:73385942 and 2:73385943. Two bases inserted there, the first equal to the genome's base at 2:73385943: the genome's 3' shift moves the insertion one place, so Ensembl VEP prints HGVS_OFFSET=1, an `ins` between c.78 and c.79 and a frameshift named at residue 27 beside CDS 75-77; vep-rs reads the row where the record is written, the replacement of c.75 to c.77, a frameshift named at residue 26, and prints no offset. A copy of the genome's two bases beside the point written at the point is carried one place the same way: Ensembl VEP's `dup` of c.77 and c.78 with the offset, vep-rs's replacement of c.75 and c.76 without. The same copy written one base on is the control: CDS 78-79 and `c.77_78dup` in both engines. The last two records spell a copy of two and of three genome bases as a reference doubled across the point, kept whole by a second alternate: Ensembl VEP names as many positions as the genome copies, from the row's first coding position into the model's added bases; vep-rs names the change the alternate makes to the row's span. The prepare steps are those of the entry refseq_edited_model_seam_insertion_hgvsc: the one region file of the Ensembl VEP RefSeq cache that holds the model, converted with tools/vep-storable-to-json, and a chromosome 2 FASTA of the model's first exon."
 # The region file 2/73000001-74000000 of the Ensembl VEP RefSeq cache, converted into the cache vep-rs reads, and a
 # chromosome 2 FASTA of 74,000,000 bases that holds the 435 genomic bases of the model's first exon and N elsewhere.
 prepare = [
-  '''[ -n "$IMAGE" ] || { echo "the region file is converted with the Perl of the image: pass --image" >&2; exit 1; }
-mkdir -p "$STAGE/perl-cut/2" "$STAGE/json-cache"
+  '''mkdir -p "$STAGE/perl-cut/2" "$STAGE/json-cache"
 cp "$PERL_CACHE/info.txt" "$PERL_CACHE/chr_synonyms.txt" "$STAGE/perl-cut/"
 cp "$PERL_CACHE/2/73000001-74000000.gz" "$STAGE/perl-cut/2/"
-docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$STAGE/perl-cut:/input:ro" -v "$REPO/scripts/data:/scripts:ro" -v "$STAGE/json-cache:/output" "$IMAGE" perl /scripts/storable_to_json.pl /input /output 2 > "$STAGE/convert.log" 2>&1''',
+cargo run --release --locked --quiet --manifest-path "$REPO/tools/vep-storable-to-json/Cargo.toml" -- "$STAGE/perl-cut" "$STAGE/json-cache" 2 > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
   '''python3 - "$STAGE/json-cache/transcripts/2/73000001-74000000.json" "$STAGE/chr2_exon_window.fa" <<'PY'
 import json
 import sys
@@ -74,4 +73,16 @@ vep_rs = [
   "doubled_three_bases | 74-79 | - | NM_015120.4:c.75G>A | NP_055935.4:<masked>%3D",
   "doubled_two_bases | 74-78 | - | NM_015120.4:c.75_76delinsA | NP_055935.4:p.Glu26LysfsTer16",
   "shifted_two_bases | 75-77 | - | NM_015120.4:c.75_77delinsAC | NP_055935.4:p.Glu26GlnfsTer16",
+]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/hgvs.rs::duplication_across_model_bases",
+    "crates/vep-effects/src/hgvs.rs::generate_hgvs",
+    "crates/vep-effects/src/hgvs.rs::model_span_across_model_bases",
+]
+tests = [
+    "crates/vep-effects/src/consequences.rs::tests::duplication_across_edited_model_bases_is_numbered_on_the_model",
+    "crates/vep-effects/src/consequences.rs::tests::duplication_spelt_across_edited_model_bases_replaces_the_model_span",
+    "crates/vep-effects/src/consequences.rs::tests::insertion_the_shift_moves_off_edited_model_bases_is_described_where_it_is_written",
 ]

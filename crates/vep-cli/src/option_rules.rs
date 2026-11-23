@@ -3,12 +3,12 @@
 
 //! Ensembl VEP's option rules as data: the lists, option sets, valid values,
 //! requirements, incompatibilities and deprecations of `Config.pm:327-645` at
-//! release/116.2, and the flag state they act on.
+//! release/116.3, and the flag state they act on.
 //!
 //! The tables name every flag Ensembl VEP declares, declared by vep-rs or not, so
-//! they read as the Perl source does. [`FlagState`] is the Perl configuration
-//! hash: one value per flag given on the command line, option sets applied in
-//! order (`Config.pm:816-884`), then the checks of `check_config` (`:944-985`)
+//! they read as the Ensembl VEP source does. [`FlagState`] is the Ensembl VEP
+//! configuration hash: one value per flag given on the command line, option sets applied
+//! in order (`Config.pm:816-884`), then the checks of `check_config` (`:944-985`)
 //! with Ensembl VEP's messages.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -246,7 +246,7 @@ pub const VALID: &[(&str, &[&str])] = &[
 ];
 
 /// The values [`VALID`] lists for `flag`; empty for a flag outside the table.
-pub fn valid_values(flag: &str) -> &'static [&'static str] {
+pub(crate) fn valid_values(flag: &str) -> &'static [&'static str] {
     VALID
         .iter()
         .find(|(name, _)| *name == flag)
@@ -419,10 +419,10 @@ pub const OWN_RULES: &[OwnRule] = &[
     },
 ];
 
-/// A flag's value as the Perl configuration hash holds it: a scalar, or the
+/// A flag's value as the Ensembl VEP configuration hash holds it: a scalar, or the
 /// list a repeatable or comma-separated flag becomes.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum FlagValue {
+pub(crate) enum FlagValue {
     Scalar(String),
     List(Vec<String>),
 }
@@ -443,7 +443,7 @@ fn truthy(value: &str) -> bool {
 /// of every `LIST_FLAGS` value (`Config.pm:760`) and of a scalar the value check
 /// of `check_config` meets (`:946`): a trailing empty field is no field and a
 /// middle one is kept, so `21,` is one name and `21,,22` three.
-pub fn split_list_flag(value: &str) -> Vec<String> {
+pub(crate) fn split_list_flag(value: &str) -> Vec<String> {
     perl_split(value, &[',']).map(str::to_string).collect()
 }
 
@@ -697,7 +697,7 @@ mod tests {
     use crate::args::Args;
     use clap::{CommandFactory, Parser};
 
-    /// `@LIST_FLAGS` and `@ALLOW_MULTIPLE`, Config.pm:327-346 at release/116.2.
+    /// `@LIST_FLAGS` and `@ALLOW_MULTIPLE`, Config.pm:327-346 at release/116.3.
     const CONFIG_PM_LISTS: &str = r#"our @LIST_FLAGS = qw(
   individual
   individual_zyg
@@ -1057,10 +1057,11 @@ our %DEPRECATED = (
         words(&body[body.find("qw(").unwrap()..=end])
     }
 
-    /// One option set as the Perl list declares it: its flags and its (key, value) pairs.
+    /// One option set as the Ensembl VEP list declares it: its flags and its (key, value)
+    /// pairs.
     type PerlOptionSet = (Vec<String>, Vec<(String, String)>);
 
-    /// The option sets parsed from the Perl list.
+    /// The option sets parsed from the Ensembl VEP list.
     fn perl_option_sets() -> Vec<PerlOptionSet> {
         let mut sets = Vec::new();
         for block in CONFIG_PM_OPTION_SETS.split("flags =>").skip(1) {
@@ -1102,7 +1103,7 @@ our %DEPRECATED = (
         FlagState::from_matches(&command, &matches)
     }
 
-    /// `LIST_FLAGS` and `ALLOW_MULTIPLE` are the Perl lists, word for word.
+    /// `LIST_FLAGS` and `ALLOW_MULTIPLE` are the Ensembl VEP lists, word for word.
     #[test]
     fn list_flags_split_on_comma() {
         assert_eq!(array(CONFIG_PM_LISTS, "LIST_FLAGS"), LIST_FLAGS);
@@ -1151,7 +1152,7 @@ our %DEPRECATED = (
         );
     }
 
-    /// `%INCOMPATIBLE` is the Perl table, pair for pair and in its order.
+    /// `%INCOMPATIBLE` is the Ensembl VEP table, pair for pair and in its order.
     #[test]
     fn incompatible_pairs_match_config_pm() {
         assert_eq!(
@@ -1180,7 +1181,7 @@ our %DEPRECATED = (
         );
     }
 
-    /// The lifted pairs are pairs of the Perl table, and the one lifted pair
+    /// The lifted pairs are pairs of the Ensembl VEP table, and the one lifted pair
     /// passes the check while its neighbour in the table, `lrg` beside
     /// `offline`, is still refused.
     #[test]
@@ -1206,7 +1207,7 @@ our %DEPRECATED = (
         );
     }
 
-    /// `%REQUIRES`, `%VALID` and `%DEPRECATED` are the Perl tables.
+    /// `%REQUIRES`, `%VALID` and `%DEPRECATED` are the Ensembl VEP tables.
     #[test]
     fn requires_match_config_pm() {
         assert_eq!(hash_of_lists(CONFIG_PM_CHECKS, "REQUIRES"), owned(REQUIRES));
@@ -1238,7 +1239,7 @@ our %DEPRECATED = (
         );
     }
 
-    /// `OPTION_SETS` is the Perl list, set for set and in its order, and applies
+    /// `OPTION_SETS` is the Ensembl VEP list, set for set and in its order, and applies
     /// as `apply_option_sets` does: `--grch37` sets the assembly over an explicit
     /// `--assembly`, `--hgvs` reaches `hgvsc`, a `%name%` takes the flag's value
     /// per instance and stays when the flag is unset.
@@ -1313,7 +1314,7 @@ our %DEPRECATED = (
         assert!(parse(&["vep"]).values.get("plugin") == Some(&FlagValue::List(Vec::new())));
     }
 
-    /// Every `%VALID` flag vep-rs declares carries the Perl list as its clap
+    /// Every `%VALID` flag vep-rs declares carries the Ensembl VEP list as its clap
     /// value enumeration, so a value outside it is refused at parse time, and
     /// `--output_format`, vep-rs's own, is an enumeration as well: Ensembl VEP's
     /// `%FORMAT_MAP` names (`ensembl` and `vep` the same format) plus `parquet`.

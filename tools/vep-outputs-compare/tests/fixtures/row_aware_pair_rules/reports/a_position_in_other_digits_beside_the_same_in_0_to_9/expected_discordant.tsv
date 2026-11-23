@@ -1,0 +1,3 @@
+file_name	source	location	allele	feature	feature_type	consequence_set
+output.txt	missing_in_rust	21:١٠٠	-	T1	Transcript	intron_variant
+output.txt	extra_in_rust	21:100	-	T1	Transcript	intron_variant

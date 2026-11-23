@@ -1,0 +1,14 @@
+usage: vep-golden-corpus covers [-h] [--add ADD] [--list]
+                                [--flag-set FLAG_SET] [--matrix MATRIX]
+                                corpus
+
+positional arguments:
+  corpus
+
+options:
+  -h, --help           show this help message and exit
+  --add ADD            a parity-matrix row to add (repeatable)
+  --list               print the list, one name per line
+  --flag-set FLAG_SET  the flag set whose list is read or extended
+  --matrix MATRIX      the parity matrix whose `item` column every `covers`
+                       name must be in (default: tests/parity/matrix.tsv)

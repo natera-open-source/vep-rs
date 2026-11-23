@@ -7,7 +7,7 @@
     "X"
   ],
   "polyphen": "b",
-  "regulatory": true,
+  "regulatory": false,
   "sift": "b",
   "source_versions": {
     "1000genomes": "phase3",

@@ -38,7 +38,7 @@ contradicts the run, rather than silently annotating nothing. Those guards are
 inert when neither names an assembly.
 
 Without the flag, the cache's own assembly serves every plugin that reads one.
-Ensembl VEP 116.2 builds its plugins before it reads the cache (`Runner.pm`
+Ensembl VEP 116.3 builds its plugins before it reads the cache (`Runner.pm`
 lines 125-128). There a plugin that reads the assembly as it loads, REVEL,
 dbscSNV and PrimateAI among them, refuses a run without `--assembly` and is
 dropped with a warning. CADD's header check (`CADD.pm` line 141) then has no assembly to test.
@@ -46,7 +46,7 @@ A GRCh37 file loads on a GRCh38 cache and its scores are written, where vep-rs
 refuses the file from the cache's assembly.
 
 Each plugin's parameters are on its page. A parameter list is all positional or
-all `key=value`. A value is the second `=`-field alone, as Ensembl VEP 116.2
+all `key=value`. A value is the second `=`-field alone, as Ensembl VEP 116.3
 splits it (`BaseVepPlugin.pm` line 126): `file=a=b` is `a`, `file==b` and
 `file=` the empty value. LoFTEE's own rules are on [its page](plugins/loftee.md).
 
@@ -83,8 +83,8 @@ The status is one of three phrases.
   that reason.
 
 The Terms column states the data provider's licence and whether it permits
-commercial use, as far as the plugin or the provider states it; "terms not
-stated by the plugin" means neither names any. The staged AlphaMissense cuts
+commercial use, as the plugin or the provider states it; "terms not stated by
+the plugin" means the plugin's module names none. The staged AlphaMissense cuts
 keep the file's own header, with its CC BY-NC-SA 4.0 notice, verbatim, and the
 corpus provenance record states both licences. A linked plugin name leads to the
 page that documents it; the pages group the built-in plugins by mechanism, as
@@ -98,7 +98,7 @@ VEP's plugin gives it.
 | [AncestralAllele](plugins/ancestral-allele.md) | `homo_sapiens_ancestor_GRCh38.tar.gz` (Ensembl, release 116 FTP) and `homo_sapiens_ancestor_GRCh37_e71.tar.bz2` (release 75) | Ensembl data, no restriction on access or use | GRCh37, GRCh38 | supported, verified on real data | the record's span read from the ancestral FASTA as written; `-` for an insertion, `?` for a chromosome the FASTA lacks |
 | AVADA | `avada_v1.00_2016.vcf.gz`; Bejerano laboratory, Stanford | an academic resource; terms not stated by the plugin | GRCh37 | not ported | literature-evidence PubMed identifiers from one GRCh37-only file; absent from the release 116 web manifest |
 | [AVI](plugins/annotation-store.md#avi) | `avi_scores.tsv.gz` in the plugin's synopsis, a tabix-indexed, bgzip-compressed TSV file of AlphaGenome Variant Impact scores for single nucleotide variants (`AVI.pm` lines 31 and 37-38), available from the address its documentation gives (lines 40-41); Google DeepMind | a permissive-use artifact under the AlphaGenome terms: commercial and non-commercial use | GRCh38 | supported on the user's licensed file, verified on synthetic fixtures | the table is not redistributed here, so the comparison with Ensembl VEP runs on a synthetic table of the six columns the plugin reads (`AVI.pm` line 161), in all four output formats; `AVI_PHRED`, with `AVI_RAW` under `raw=1` and `AVI_LINK` under `links=1` |
-| BayesDel | the `BayesDel_170824_addAF` per-chromosome files concatenated, sorted, bgzip-compressed and tabix-indexed as the Ensembl VEP plugin documents (`BayesDel.pm` lines 53-62); the authors' download | no licence text published; commercial use not stated | GRCh37; GRCh38 on a file remapped as the plugin's documentation describes (`BayesDel.pm` lines 64-65) | supported on the user's licensed file, verified on synthetic fixtures | with no licence text published the file is not redistributed here, so the comparison with Ensembl VEP runs on a synthetic file of the five columns the plugin reads (`BayesDel.pm` line 151); `file=`; position, reference and alternate allele on every row of the record, intergenic rows included; a reverse-strand Ensembl-format record: [section 2 below](#2-bayesdel-a-record-given-on-the-reverse-strand) |
+| BayesDel | the `BayesDel_170824_addAF` per-chromosome files concatenated, sorted, bgzip-compressed and tabix-indexed as the Ensembl VEP plugin documents (`BayesDel.pm` lines 53-62); the authors' download | terms not stated by the plugin, whose licence header covers the module alone (`BayesDel.pm` lines 1-16) | GRCh37; GRCh38 on a file remapped as the plugin's documentation describes (`BayesDel.pm` lines 64-65) | supported on the user's licensed file, verified on synthetic fixtures | with no terms stated by the plugin the file is not redistributed here, so the comparison with Ensembl VEP runs on a synthetic file of the five columns the plugin reads (`BayesDel.pm` line 151); `file=`; position, reference and alternate allele on every row of the record, intergenic rows included; a reverse-strand Ensembl-format record: [section 2 below](#2-bayesdel-a-record-given-on-the-reverse-strand) |
 | [Blosum62](plugins/transcript-model.md#blosum62) | none; the BLOSUM62 matrix is embedded in the plugin | Apache 2.0 plugin code; no data | GRCh37, GRCh38 | supported, verified on real data | the score of the row's amino-acid change, compared with Ensembl VEP on public ClinVar records |
 | [CADD](plugins/annotation-store.md#cadd) | `whole_genome_SNVs.tsv.gz` and the release's indel file, CADD, University of Washington; the CADD-SV v1.1 structural-variant files, Berlin Institute of Health | free for academic and non-commercial use; commercial use needs a licence from UW CoMotion | GRCh37, GRCh38 (CADD-SV on GRCh38) | supported on the user's licensed file, verified on synthetic fixtures | the files are not redistributed here, so the comparison with Ensembl VEP runs on synthetic files whose headers name the columns the plugin reads (`CADD.pm` lines 81-98 and 265-268), the structural-variant file included; Ensembl VEP gives a structural allele outside insertion, deletion and duplication a `Plugin 'CADD' went wrong` warning where both engines write its row without a score, and matches no reverse-strand record of Ensembl's input format, where vep-rs matches the class word as written and scores it ([the class](plugins/annotation-store-divergences.md#2-cadd-structural-alleles-outside-insertion-deletion-and-duplication)) |
 | CAPICE | `capice_v1.0_build37_snvs.tsv.gz` and `capice_v1.0_build37_indels.tsv.gz`, Zenodo record 3928295 | terms not stated by the plugin | GRCh37 | not ported | a GRCh37-only pathogenicity score from a single data release |
@@ -109,14 +109,14 @@ VEP's plugin gives it.
 | [Conservation](plugins/conservation.md) | `gerp_conservation_scores.homo_sapiens.GRCh38.bw`; Ensembl Compara, the GERP scores of the 92-mammal alignment, release 116 | Ensembl data, no restriction on access or use | GRCh38 | supported, verified on real data | open data; Ensembl publishes the bigWig for GRCh38 alone, so on GRCh37 the plugin reads a bigWig of your own; the database and FTP-lookup forms of the Ensembl VEP plugin are refused by name; under `MAX` Ensembl VEP reports the score of an all-negative span that sorts last as text, which can lie below the numeric maximum vep-rs reports ([the class](plugins/conservation.md#where-max-differs-from-ensembl-vep)) |
 | CSN | none; computes HGVS itself and needs `--fasta` offline | no data | GRCh37, GRCh38 | not ported | Clinical Sequencing Nomenclature strings computed from the transcript model; rarely used, and absent from the release 116 web manifest |
 | DAS | a DAS server queried per variant | a web service; terms not stated by the plugin | any | not ported | an obsolete remote protocol queried per variant; absent from the release 116 web manifest |
-| [dbNSFP](#dbnsfp) | the `_variant` download prepared per assembly as the Ensembl VEP plugin documents (`dbNSFP<version>_grch38.gz`, `_grch37.gz`), or a dbNSFP 5.x file; Liu et al. | free for academic use; commercial use needs a paid agreement | GRCh37, GRCh38 | supported on the user's licensed file, verified on synthetic fixtures | the file is not redistributed here, so the comparison with Ensembl VEP runs on a synthetic file named for dbNSFP 4.9a, in both preparations the plugin's documentation gives (`dbNSFP.pm` lines 68-74) |
-| [dbscSNV](plugins/annotation-store.md#dbscsnv) | `dbscSNV1.1_GRCh37.txt.gz` and `dbscSNV1.1_GRCh38.txt.gz`, the download prepared per assembly as the Ensembl VEP plugin documents; dbscSNV 1.1, Jian, Boerwinkle and Liu | no licence text published; commercial use not stated | GRCh37, GRCh38 | supported on the user's licensed file, verified on synthetic fixtures | with no licence text published the file is not redistributed here, so the comparison with Ensembl VEP runs on a synthetic file in both preparations the plugin's documentation gives (`dbscSNV.pm` lines 53-59) |
+| [dbNSFP](#dbnsfp) | the `_variant` download prepared per assembly as the Ensembl VEP plugin documents (`dbNSFP<version>_grch38.gz`, `_grch37.gz`), or a dbNSFP 5.x file; Liu et al. | two branches of the files, one for academic and one for commercial use, as the Ensembl VEP plugin documents (`dbNSFP.pm` lines 54-55) | GRCh37, GRCh38 | supported on the user's licensed file, verified on synthetic fixtures | the file is not redistributed here, so the comparison with Ensembl VEP runs on a synthetic file named for dbNSFP 4.9a, in both preparations the plugin's documentation gives (`dbNSFP.pm` lines 68-74) |
+| [dbscSNV](plugins/annotation-store.md#dbscsnv) | `dbscSNV1.1_GRCh37.txt.gz` and `dbscSNV1.1_GRCh38.txt.gz`, the download prepared per assembly as the Ensembl VEP plugin documents; dbscSNV 1.1, Jian, Boerwinkle and Liu | terms not stated by the plugin, whose licence header covers the module alone (`dbscSNV.pm` lines 1-16) | GRCh37, GRCh38 | supported on the user's licensed file, verified on synthetic fixtures | with no terms stated by the plugin the file is not redistributed here, so the comparison with Ensembl VEP runs on a synthetic file in both preparations the plugin's documentation gives (`dbscSNV.pm` lines 53-59) |
 | DeNovo | a PED pedigree file and the record's genotypes | the user's own data | GRCh37, GRCh38 | not ported | a filter plugin that writes per-run report files from a pedigree and the record's genotypes; a vep-rs plugin drops no output line and writes no file |
 | [DosageSensitivity](plugins/flat-file.md#dosagesensitivity) | `Collins_rCNV_2022.dosage_sensitivity_scores.tsv.gz`, Zenodo record 6347673; Collins et al., 2022 | CC BY 4.0; commercial use permitted | GRCh37, GRCh38 | supported, verified on real data | open data keyed on gene symbol, so one file serves both assemblies; `file=` and `cover=0\|1`; `pHaplo` and `pTriplo` on every transcript row, or under `cover=1` only where the variant spans the transcript, structural variants included; Ensembl VEP's module dies on a regulatory or motif row under `--regulatory` and writes a warning per row kind; vep-rs writes none ([the class](plugins/flat-file.md#2-dosagesensitivity-a-warning-per-row-kind-on-regulatory-and-motif-rows)) |
 | [Downstream](plugins/transcript-model.md#downstream) | none; the cache's coding sequence, 3' UTR and protein | Apache 2.0 plugin code; no data | GRCh37, GRCh38 | supported, verified on real data | the changed coding sequence translated from the frameshift on the record's own span, with and without `--hgvs`, where Ensembl VEP's plugin reads the HGVS-shifted span ([the class](divergences/plugin-hgvs-shifted-cds-coordinates.md)) |
 | Draw | none; the GD graphics library | no data | any | not ported | writes a PNG image per output row through the GD library |
 | Enformer | `Enformer_grch37.vcf.gz` and `Enformer_grch38.vcf.gz`, the Enformer variant scores lifted over; Ensembl FTP | redistributed by Ensembl; the score provider's terms not stated by the plugin | GRCh37, GRCh38 | not ported | over five thousand regulatory expression-impact features per variant from a lifted-over score file; rarely used |
-| EVE | `eve_merged.vcf.gz`, built by the user from the evemodel.org bulk VCFs, and the popEVE file `grch38_popEVE_ukbb_20250715.vcf.gz` | MIT code; no data terms stated | GRCh38 | not ported | missense-only evolutionary scores, popEVE included since release 116, distributed without stated data terms; AlphaMissense covers missense pathogenicity |
+| EVE | `eve_merged.vcf.gz`, built by the user from the evemodel.org bulk VCFs, and the popEVE file `grch38_popEVE_ukbb_20250715.vcf.gz` | terms not stated by the plugin, whose licence header covers the module alone (`EVE.pm` lines 1-16) | GRCh38 | not ported | missense-only evolutionary scores, popEVE included since release 116; AlphaMissense covers missense pathogenicity |
 | FATHMM | the `fathmm.py` script against a MySQL load of `fathmm.v2.3.SQL` | terms not stated by the plugin | any | not ported | runs an external Python script against a MySQL database |
 | FATHMM_MKL | `fathmm-MKL_Current.tab.gz` | terms not stated by the plugin | GRCh37 | not ported | GRCh37-only coding and non-coding scores |
 | FlagLRG | `list_LRGs_transcripts_xrefs.txt`; EMBL-EBI, the Locus Reference Genomic resource | EMBL-EBI terms | any; keyed on transcript id | not ported | flags Locus Reference Genomic transcripts; the LRG resource is retired and the `--lrg` flag is refused |
@@ -137,16 +137,16 @@ VEP's plugin gives it.
 | LD | the Ensembl variation database plus 1000 Genomes genotype VCFs | Ensembl data | GRCh37, GRCh38 | not ported | linkage disequilibrium computed through the Ensembl variation database and genotype VCFs; vep-rs connects to no database |
 | LocalID | a SQLite database built from the Ensembl variation database or the cache | Ensembl data | any | not ported | serves identifier input from a SQLite database built from the variation database; vep-rs reads identifier input from the variation cache with `--format id` |
 | [LOEUF](plugins/annotation-store.md#loeuf) | the gnomAD constraint tables tabix-indexed on their gene coordinate columns as the Ensembl VEP plugin documents: v2.1.1 by transcript on GRCh37, v4.1.1 on GRCh38 as Ensembl publishes it with gene coordinates appended; Broad Institute | CC0, the gnomAD terms; commercial use permitted | GRCh37, GRCh38 | supported, verified on real data | open data; `file=` and `match_by=gene\|transcript`, both required; `LOEUF` on transcript rows, the minimum over the gene's transcripts under `match_by=gene`, none on upstream or downstream rows; Ensembl VEP's module drops a gene's minimum written `0`; vep-rs prints it ([the class](plugins/annotation-store-divergences.md#7-loeuf-a-genes-minimum-of-0)) |
-| [LoFTEE](plugins/loftee.md) | `human_ancestor.fa.gz` and `gerp_conservation_scores.homo_sapiens.GRCh38.bw` of the LoFTEE `grch38` data bundle; Ensembl ancestral alleles and Compara GERP scores | MIT code on Ensembl data; commercial use permitted | GRCh38 | supported, verified on real data | loads as `--plugin LoF` or `--plugin LoFTEE`; the GRCh37 bundle is read, but its GERP table carries no licence text, so GRCh37 verdicts are unverified; a `conservation_file` naming a database is refused, since vep-rs does not compute the PhyloCSF items |
+| [LoFTEE](plugins/loftee.md) | `human_ancestor.fa.gz` and `gerp_conservation_scores.homo_sapiens.GRCh38.bw` of the LoFTEE `grch38` data bundle; Ensembl ancestral alleles and Compara GERP scores | MIT code on Ensembl data; commercial use permitted | GRCh37 (synthetic conservation data), GRCh38 | supported, verified on real data | loads as `--plugin LoF` or `--plugin LoFTEE`; on GRCh37 the bundle's GERP table, for which the plugin states no terms (the `master` branch's `README.md` lines 111-113 name its download alone), is not redistributed here, so the comparison with Ensembl VEP runs on genome-wide ClinVar, gnomAD v2.1.1 and 1000 Genomes Phase 3 with a synthetic GERP table and a synthetic conservation database; `conservation_file` names the SQLite database of the PhyloCSF items and, on GRCh37, of the whole-exon GERP totals, compared with Ensembl VEP on a synthetic database |
 | [LoFtool](plugins/flat-file.md#loftool) | `LoFtool_scores.txt` beside the Ensembl VEP plugin; Fadista et al. | Apache 2.0; commercial use permitted | GRCh37, GRCh38 | supported, verified on real data | open data keyed on gene symbol, so one file serves both assemblies; given no file, read from the `--dir_plugins` directory as Ensembl VEP's plugin reads its bundled copy |
 | LOVD | the `lovd.nl` web service, queried per variant | a web service; terms not stated by the plugin | GRCh37, GRCh38 | not ported | queries the LOVD web service per variant, which the plugin itself asks users not to do intensively |
 | Mastermind | `mastermind_cited_variants_reference-*.vcf.gz`; Genomenon | Genomenon's terms, behind a free registration | GRCh37, GRCh38 | not ported | literature citation counts and identifiers from a vendor file behind registration, under commercial terms |
 | MaveDB | `MaveDB_variants.tsv.gz`; Ensembl FTP | redistributed by Ensembl; each MaveDB dataset carries its own licence | GRCh38 | not ported | deep mutational scanning scores whose licence differs per dataset; rarely used |
-| [MaxEntScan](plugins/transcript-model.md#maxentscan) | the directory of matrix files the Ensembl VEP plugin opens (`MaxEntScan.pm` lines 104-105 and 824-831), read as a positional parameter | no licence text published; commercial use not stated | GRCh37, GRCh38 | supported on the user's licensed file, verified on synthetic fixtures | with no licence text published the matrices are not redistributed here, so the comparison with Ensembl VEP runs on a synthetic matrix set under the file names the plugin opens (`MaxEntScan.pm` lines 104-105 and 824-831); splice-site windows read from `--fasta`; `SWA`, `NCSS` and `verbose` as Ensembl VEP's plugin reads them; a substitution in an exon of at most five bases lies in two canonical windows, which Ensembl VEP resolves in the order its interval tree returns the introns and vep-rs in transcript order, the upstream intron's acceptor window first ([the class](plugins/transcript-model.md#2-maxentscan-two-splice-site-windows-over-one-substitution)) |
+| [MaxEntScan](plugins/transcript-model.md#maxentscan) | the directory of matrix files the Ensembl VEP plugin opens (`MaxEntScan.pm` lines 104-105 and 824-831), read as a positional parameter | terms not stated by the plugin, whose licence header covers the module alone (`MaxEntScan.pm` lines 1-16) | GRCh37, GRCh38 | supported on the user's licensed file, verified on synthetic fixtures | with no terms stated by the plugin the matrices are not redistributed here, so the comparison with Ensembl VEP runs on a synthetic matrix set under the file names the plugin opens (`MaxEntScan.pm` lines 104-105 and 824-831); splice-site windows read from `--fasta`; `SWA`, `NCSS` and `verbose` as Ensembl VEP's plugin reads them; a substitution in an exon of at most five bases lies in two canonical windows, which Ensembl VEP resolves in the order its interval tree returns the introns and vep-rs in transcript order, the upstream intron's acceptor window first ([the class](plugins/transcript-model.md#2-maxentscan-two-splice-site-windows-over-one-substitution)) |
 | MechPredict | `MechPredict_input.tsv`, assembled from three OSF datasets; Badonyi, 2024 | terms not stated by the plugin | any; keyed on gene | not ported | gene-level probabilities of dominant-negative, gain-of-function and loss-of-function mechanisms, assembled from three OSF datasets; rarely used |
-| MPC | `fordist_constraint_official_mpc_values.txt.gz`; Broad Institute, the ExAC release | terms not stated by the plugin | GRCh37 | not ported | GRCh37-only regional missense constraint scores |
+| MPC | `fordist_constraint_official_mpc_values.txt.gz`; Broad Institute, the ExAC release | terms not stated by the plugin | GRCh37 | not ported | a GRCh37-only missense deleteriousness metric |
 | MTR | `mtrflatfile_2.0`; University of Melbourne | terms not stated by the plugin | GRCh37 | not ported | a GRCh37-only missense tolerance ratio |
-| mutfunc | `mutfunc_data.db`, a SQLite database, plus `--fasta`; Ensembl FTP | Ensembl data | any; keyed on protein position | not ported | protein destabilisation and motif effects from a SQLite database; vep-rs embeds no SQLite |
+| mutfunc | `mutfunc_data.db`, a SQLite database, plus `--fasta`; Ensembl FTP | Ensembl data | any; keyed on protein position | not ported | protein destabilisation and motif effects from a SQLite database whose tables vep-rs does not read |
 | [NearestExonJB](plugins/transcript-model.md#nearestexonjb) | none; the cache's exon model | Apache 2.0 plugin code; no data | GRCh37, GRCh38 | supported, verified on real data | the nearest junction of each overlapped exon, `max_range=` and `intronic=1`; items in transcript order where Ensembl VEP's follow hash order; `gff3=<file>` is refused |
 | NearestGene | the Ensembl core database by default; `gff3=` names a tabix-indexed GFF3 of gene locations | Ensembl data | GRCh37, GRCh38 | not ported | reads the Ensembl core database by default; the `--nearest` flag covers the nearest-gene lookup from the cache |
 | neXtProt | the neXtProt SPARQL endpoint, queried per variant, plus a database connection | a web service; terms not stated by the plugin | any | not ported | queries the neXtProt SPARQL endpoint per variant and needs a database connection; absent from the release 116 web manifest |
@@ -163,7 +163,7 @@ VEP's plugin gives it.
 | PrimateAI | `PrimateAI_scores_v0.2.tsv.gz` (GRCh37) and `PrimateAI_scores_v0.2_hg38.tsv.gz` (GRCh38), sorted, bgzip-compressed and tabix-indexed as the Ensembl VEP plugin documents (`PrimateAI.pm` lines 65-69); Illumina | non-commercial use under Illumina's terms | GRCh37, GRCh38 | supported on the user's licensed file, verified on synthetic fixtures | the file is not redistributed here, so the comparison with Ensembl VEP runs on a synthetic file with the header columns the plugin requires (`PrimateAI.pm` lines 136-138); the file is the first positional parameter, and a file name carrying an assembly must match the run; single-base substitutions on every row of the record, intergenic rows included |
 | PromoterAI | `promoterAI.tsv.bgz`; Illumina | Illumina licence agreement, restricted | GRCh38 | not ported | promoter expression-impact scores under a commercial licence agreement |
 | ProteinSeqs | none; writes two FASTA files | no data | GRCh37, GRCh38 | not ported | writes two FASTA files of reference and mutated protein sequences as a side effect |
-| ProtVar | `ProtVar_data.db`, a SQLite database, plus `--fasta`; EMBL-EBI | EMBL-EBI terms | any; keyed on protein position | not ported | structure stability, pocket and interface context from a SQLite database; vep-rs embeds no SQLite |
+| ProtVar | `ProtVar_data.db`, a SQLite database, plus `--fasta`; EMBL-EBI | EMBL-EBI terms | any; keyed on protein position | not ported | structure stability, pocket and interface context from a SQLite database whose tables vep-rs does not read |
 | RankFilter | none | no data | any | not ported | an example filter plugin absent from the release 116 web manifest; `--most_severe`, `--pick` and the `vep filter` tool cover the use |
 | ReferenceQuality | GRC issue and clone-problem GFF3 files merged by the user; NCBI | NCBI, public domain | GRCh37, GRCh38 | not ported | reference-assembly issue annotations from GRC GFF3 files merged by the user; rarely used |
 | RefSeqHGVS | the Ensembl otherfeatures database | Ensembl data | any | not ported | reads the Ensembl otherfeatures database; `--refseq` with `--hgvs` yields RefSeq HGVS notation directly, and the plugin is absent from the release 116 web manifest |
@@ -172,9 +172,9 @@ VEP's plugin gives it.
 | SameCodon | the Ensembl variation database | Ensembl data | any | not ported | reads the Ensembl variation database for other variants in the same codon |
 | satMutMPRA | `satMutMPRA_GRCh37_ALL` and `satMutMPRA_GRCh38_ALL`; University of Washington | terms not stated by the plugin | GRCh37, GRCh38 | not ported | saturation mutagenesis MPRA effects for twenty-one regulatory elements; rarely used |
 | SingleLetterAA | none | no data | GRCh37, GRCh38 | not ported | rewrites `HGVSp` with one-letter amino-acid codes, a form of the protein notation vep-rs does not compute |
-| [SpliceAI](plugins/spliceai.md) | `spliceai_scores.raw.snv.hg38.vcf.gz`, `spliceai_scores.raw.indel.hg38.vcf.gz` and their hg19 twins; Illumina, `genome_scores_v1.3` (`SpliceAI.pm` line 109); the Ensembl MANE SNV file `spliceai_scores.masked.snv.ensembl_mane_v1.4.grch38.vcf.gz` | academic use only under Illumina's terms; no licence text published for the Ensembl-derived SNV file | GRCh37, GRCh38 | supported on the user's licensed file, verified on synthetic fixtures | the files are not redistributed here, so the comparison with Ensembl VEP runs on synthetic SNV and indel files in the VCF layout the plugin reads (`SpliceAI.pm` lines 257 and 326-332), in every output format and under `cutoff` and `split_output` |
+| [SpliceAI](plugins/spliceai.md) | `spliceai_scores.raw.snv.hg38.vcf.gz`, `spliceai_scores.raw.indel.hg38.vcf.gz` and their hg19 twins; Illumina, `genome_scores_v1.3` (`SpliceAI.pm` line 109); the Ensembl MANE SNV file `spliceai_scores.masked.snv.ensembl_mane_v1.4.grch38.vcf.gz` | academic use only under Illumina's terms; the Ensembl-derived SNV file's terms not stated by the plugin | GRCh37, GRCh38 | supported on the user's licensed file, verified on synthetic fixtures | the files are not redistributed here, so the comparison with Ensembl VEP runs on synthetic SNV and indel files in the VCF layout the plugin reads (`SpliceAI.pm` lines 257 and 326-332), in every output format and under `cutoff` and `split_output` |
 | SpliceRegion | none | no data | GRCh37, GRCh38 | not ported | its `splice_donor_5th_base_variant`, `splice_donor_region_variant` and `splice_polypyrimidine_tract_variant` terms are core consequence terms of both engines; only its `Extended` mode adds a key of its own |
-| [SpliceVault](plugins/annotation-store.md#splicevault) | `SpliceVault_data_GRCh38.tsv.gz` and `SpliceVault_data_hg19.tsv.gz`; Dawes et al., 2023 | no licence text published; commercial use not stated | GRCh37, GRCh38 | supported on the user's licensed file, verified on synthetic fixtures | with no licence text published the tables are not redistributed here, so the comparison with Ensembl VEP runs on a synthetic file of the twelve columns the plugin reads (`SpliceVault.pm` line 201); `file=`; seven `SpliceVault_` fields on the rows naming the transcript under `transcript_match=1`, and on every transcript row from the first allele match under `transcript_match=0`; on a multi-allelic record Ensembl VEP's module gives every allele the first allele's table row; vep-rs matches each allele's own ([the class](plugins/annotation-store-divergences.md#3-splicevault-the-table-row-of-a-sibling-allele)); in the JSON format under `transcript_match=0` Ensembl VEP's module writes the `splicevault` object on a record's first transcript row alone; vep-rs writes it on every row ([the class](plugins/annotation-store-divergences.md#4-splicevault-the-json-object-of-a-records-later-transcript-rows)) |
+| [SpliceVault](plugins/annotation-store.md#splicevault) | `SpliceVault_data_GRCh38.tsv.gz` and `SpliceVault_data_hg19.tsv.gz`; Dawes et al., 2023 | terms not stated by the plugin, whose licence header covers the module alone (`SpliceVault.pm` lines 1-16) | GRCh37, GRCh38 | supported on the user's licensed file, verified on synthetic fixtures | with no terms stated by the plugin the tables are not redistributed here, so the comparison with Ensembl VEP runs on a synthetic file of the twelve columns the plugin reads (`SpliceVault.pm` line 201); `file=`; seven `SpliceVault_` fields on the rows naming the transcript under `transcript_match=1`, and on every transcript row from the first allele match under `transcript_match=0`; on a multi-allelic record Ensembl VEP's module gives every allele the first allele's table row; vep-rs matches each allele's own ([the class](plugins/annotation-store-divergences.md#3-splicevault-the-table-row-of-a-sibling-allele)); in the JSON format under `transcript_match=0` Ensembl VEP's module writes the `splicevault` object on a record's first transcript row alone; vep-rs writes it on every row ([the class](plugins/annotation-store-divergences.md#4-splicevault-the-json-object-of-a-records-later-transcript-rows)) |
 | StructuralVariantOverlap | none; the module was removed from the Ensembl VEP plugin collection in release 116 | none | none | not ported | removed from the Ensembl VEP plugin collection in release 116; a `--custom` structural-variant VCF source covers the use |
 | SubsetVCF | any tabix-indexed VCF named by the user | the user's own file | GRCh37, GRCh38 | not ported | all alternate alleles and INFO fields of the overlapping records of a VCF; a `--custom` VCF source covers the common case, and the plugin is absent from the release 116 web manifest |
 | [TranscriptAnnotator](plugins/annotation-store.md#transcriptannotator) | a tabix-indexed table of your own: chromosome, position, reference and alternate allele, transcript id, then the columns to append, named by its last header line | the user's own file; no third-party terms | GRCh37, GRCh38 | supported, verified on real data | the table is the user's, so the comparison with Ensembl VEP runs on a table of the documented layout; `file=`, `cols=`, `prefix=` and `trim=`; one `<prefix>_<column>` field per selected column on the rows whose transcript id or RefSeq cross-reference the table names; on a multi-allelic record Ensembl VEP's module gives an allele without a row a sibling allele's; vep-rs matches each allele's own ([the class](plugins/annotation-store-divergences.md#5-transcriptannotator-the-table-row-of-a-sibling-allele)) |
@@ -185,7 +185,7 @@ VEP's plugin gives it.
 ## Rows a plugin writes on
 
 A plugin runs on the rows whose kind its Ensembl VEP module's `feature_types`
-names, as `OutputFactory.pm` `run_plugins` checks it (line 2223): a transcript
+names, as `OutputFactory.pm` `run_plugins` checks it (line 2232): a transcript
 row, a regulatory-feature row, a motif-feature row or the intergenic row of a
 record that overlaps no transcript. CADD, gnomADc, GWAS, BayesDel, PrimateAI,
 gnomADMt, AncestralAllele, AVI, OpenTargets and Conservation declare every kind.
@@ -202,7 +202,7 @@ intergenic row. A shared-library plugin names its kinds in
 ([Writing a plugin](developers/writing-a-plugin.md)).
 
 A plugin also runs only on the variant kinds its module's `variant_feature_types`
-names, checked before the row kind (`OutputFactory.pm` line 2220). The default is
+names, checked before the row kind (`OutputFactory.pm` line 2229). The default is
 sequence variants alone (`BaseVepPlugin.pm` line 100). Of the built-in plugins,
 CADD, DosageSensitivity and UTRAnnotator declare `StructuralVariationFeature` as
 well and TSSDistance declares `BaseVariationFeature`. These four annotate the
@@ -241,8 +241,8 @@ transcript_match=1,output_prefix=1,SIFT_score,GERP++_RS
 
 A record matches a single-base substitution (`A`, `C`, `G` or `T`) on its
 position and alternate allele. The first matching table row of a position is the
-row's, and a mitochondrial record is read under the name `M` (`dbNSFP.pm` line
-313). A `.` value is
+row's, and a mitochondrial record is read under `M` (`dbNSFP.pm` line 313),
+[checked on GRCh37](plugins/data-files.md#mitochondrial-contig-grch37). A `.` value is
 not written, nor the transcript's own `.` list entry under `transcript_match=1`.
 An empty cell the row has is written as the empty value.
 
@@ -251,14 +251,14 @@ replacement-logic file says otherwise for that column. A logic line without
 three blank-separated values, one opening with a blank included, fails the
 plugin's load as in Ensembl VEP.
 A `dbNSFP_replacement_logic` file in the working directory is not read;
-Ensembl VEP 116.2 reads one when no second positional names a file
+Ensembl VEP 116.3 reads one when no second positional names a file
 (`dbNSFP.pm` lines 548-549).
 
 ### Core fields and warnings
 
 A selected column named as a core field, `TSL` or `APPRIS`, prints
 the file's value on the plugin's rows over the cache's, with or without `--tsl`
-and `--appris`, as Ensembl VEP does (`OutputFactory.pm` line 2231). Other rows
+and `--appris`, as Ensembl VEP does (`OutputFactory.pm` line 2240). Other rows
 print the cache's value under the flag alone. Under `--output_format
 parquet` the INT32 `TSL` column stores a list of support levels as NULL
 ([Parquet output](output/parquet.md)).
@@ -302,7 +302,7 @@ version decides acceptance alone; the layout comes from the header.
 A description is `(from <data file>)`, the name without `.gz`, a blank and the
 README's text. ASCII whitespace is collapsed to single spaces, none at either end.
 Non-UTF-8 README or logic-file bytes print as the replacement character where
-Ensembl VEP prints them. Ensembl VEP 116.2 keeps one trailing space when the
+Ensembl VEP prints them. Ensembl VEP 116.3 keeps one trailing space when the
 text's last line ends in whitespace. It prints `<column> from dbNSFP file`, its
 text for an undescribed column, when no space follows the colon (`dbNSFP.pm`
 lines 520, 537 and 278).
@@ -321,7 +321,7 @@ column; its continuation lines are dropped.
 ## Where the tabix-backed plugins differ from Ensembl VEP
 
 Beside those documented with each plugin, seven behaviours of Ensembl VEP
-116.2's tabix-backed plugins are not reproduced. Four are set out here: two of
+116.3's tabix-backed plugins are not reproduced. Four are set out here: two of
 ClinPred and BayesDel, which have no page of their own, and two several
 plugins share.
 
@@ -344,9 +344,9 @@ The seventh is
 [a VCF table row with `END` below its position](divergences/tabix-row-with-an-end-below-its-start.md).
 
 Each class carries its tier under the index's rule. Tier 1 is a shape the
-chromosome 21 population cuts carry with no flag, tier 2 one that needs a flag
+chromosome 21 cuts carry with no flag, tier 2 one that needs a flag
 or plugin on ordinary data, tier 3 one ordinary data does not carry. The counts
-are over the cuts' 15,646,481 records, the 111 golden corpora and their 392 flag
+are over the cuts' 15,646,481 records, the 152 golden corpora and their 511 flag
 sets.
 
 ### 1. ClinPred: a record given on the reverse strand
@@ -396,7 +396,7 @@ or region format. A VCF record is always on the forward strand, so the shape has
 no row on the committed corpora or the comparison cases.
 
 **How often the shape occurs.** Tier 3: the shape is an Ensembl-format line on
-the reverse strand, which no population cut uses (VCF is forward-strand). 107 of
+the reverse strand, which no cut uses (VCF is forward-strand). 107 of
 the 217 Ensembl-format lines of the committed corpora are reverse-strand, in two
 corpora, and 4 flag sets run the plugin; the table's rows at the position decide
 which row is wrongly taken.
@@ -438,13 +438,13 @@ record and matches the table on the forward strand, the rule the lines state.
 The record therefore scores the row its forward-strand twin scores.
 
 **Where it is in Ensembl VEP's source** (`VEP_plugins` at release/116,
-`ensembl-vep` at release/116.2):
+`ensembl-vep` at release/116.3):
 
 - `BayesDel.pm`, lines 135-138, `run`: `reverse_comp(\$ref_allele)` and
   `reverse_comp(\$alt_allele)` under `if ($vf->{strand} == -1)`. Lines 74-79,
   the module's `use` lines, load `strict`, `warnings` and the tabix base class
   alone, and the file defines no `sub reverse_comp`.
-- `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 2225-2245, `run_plugins`: the
+- `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 2234-2254, `run_plugins`: the
   plugin runs inside `eval`, and its death becomes the warning
   `Plugin 'BayesDel' went wrong: Undefined subroutine &BayesDel::reverse_comp
   called at ... line 136`.
@@ -460,7 +460,7 @@ mode the reference's `Plugin 'BayesDel' went wrong` lines. No committed
 corpus or comparison case runs the plugin on Ensembl-format or region input.
 
 **How often the shape occurs.** Tier 3: the shape is an Ensembl-format line on
-the reverse strand, which no population cut uses. 107 of the 217 Ensembl-format
+the reverse strand, which no cut uses. 107 of the 217 Ensembl-format
 lines of the committed corpora are reverse-strand, in two corpora, and 2 flag
 sets run the plugin; the plugin dies before any lookup.
 
@@ -495,11 +495,11 @@ equals `C_T_5030633`. The plugins hand it the table's cells unchanged. The
 same substitution, written in two cases, is read as two.
 
 **What vep-rs does instead.** vep-rs compares a table row's alleles with the
-record's without regard to letter case, in the matcher its AVI, gnomADMt,
-SpliceAI, SpliceVault and TranscriptAnnotator plugins share. A lower-case row therefore
-scores the record it describes. The row's own text is printed as written.
+record's without regard to letter case, in every plugin of the table below. A
+lower-case row therefore scores the record it describes. The row's own text is
+printed as written.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2,
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3,
 `ensembl-variation` at release/116, `VEP_plugins` at release/116):
 
 - `Bio/EnsEMBL/VEP/Parser.pm`, line 554, `validate_vf`: the record's allele
@@ -510,32 +510,42 @@ scores the record it describes. The row's own text is printed as written.
 - `AVI.pm`, lines 135-136 and 139-151, `run`: the record's alleles pass an
   upper-case `/^[ACGT]$/` gate and are matched through that function. Lines 161
   and 176-181, `parse_data`: the row's `ref` and `alt` are split from the line
-  and stored as written. `gnomADMt.pm`, line 278, `SpliceVault.pm`, line 165,
-  and `TranscriptAnnotator.pm`, line 224, call the same function on their rows.
-  `SpliceAI.pm`, line 272, compares its row's alleles with `eq`.
+  and stored as written. The table below gives the line of every other plugin.
 
 **What correcting it would change.** A table row in lower case would score the
 record it describes, as its upper-case twin does, in every plugin that matches a
 row by allele.
 
 **The class it produces.** `tabix_allele_case_insensitive_match`: a field of
-the AVI, gnomADMt, SpliceAI or SpliceVault plugin (the JSON `avi_`, `gnomad_`,
-`spliceai` and `splicevault` keys), or a TranscriptAnnotator field a manifest
-names, that the candidate alone fills on a row whose table row carries a
-lower-case allele. Every committed table carries upper-case alleles alone, the
-AVI, SpliceAI and SpliceVault tables being synthetic fixtures: 0 of
-225 AVI rows, 0 of 373 gnomADMt rows, 0 of 141 SpliceAI rows, 0 of 92 SpliceVault
-rows and 0 of 18 TranscriptAnnotator rows. No committed corpus and no comparison
-case reaches the shape.
+one of the table's plugins that the candidate alone fills on a row whose table
+row carries a lower-case allele, with a `GWAS_` field it writes empty beside
+them. A comparison reads the fields the plugins name themselves; a
+TranscriptAnnotator table's fields carry the user's names. The
+table counts the rows of the committed tables of eight plugins, the AVI, CADD,
+SpliceAI and SpliceVault tables being synthetic fixtures. No committed corpus
+reaches the shape.
+
+| Plugin | Where it matches a row | Rows counted | With a lower-case allele |
+| --- | --- | --- | --- |
+| AlphaMissense | `AlphaMissense.pm`, line 263 | not counted | |
+| AVI | `AVI.pm`, line 139 | 225 | 0 |
+| CADD | `CADD.pm`, line 239; a structural variant's class word is compared as written | 185 | 0 |
+| gnomADMt | `gnomADMt.pm`, line 278 | 373 | 0 |
+| GWAS | `GWAS.pm`, line 182, the risk allele | 58 | 0 |
+| OpenTargets | `OpenTargets.pm`, line 376 | 69 | 0 |
+| REVEL | `REVEL.pm`, line 176 | not counted | |
+| SpliceAI | `SpliceAI.pm`, line 272, with `eq` | 177 | 0 |
+| SpliceVault | `SpliceVault.pm`, line 165 | 92 | 0 |
+| TranscriptAnnotator | `TranscriptAnnotator.pm`, line 224 | 18 | 0 |
 
 **How often the shape occurs.** Tier 3: the shape is a table row whose allele
-cell holds a lower-case base. None of the 849 rows of the ten corpus tables
-has one, and 23 flag sets run one of the five plugins.
+cell holds a lower-case base. None of the 1,197 rows of the twenty tables
+counted has one, and 52 flag sets run one of the ten plugins.
 
 #### 3.1 The AVI row for 21:5030633 with its alleles lower-cased
 
 **In short.** The GRCh38 AVI corpus's synthetic table
-(`tests/golden/116/GRCh38-plugin-avi/`)
+(`tests/golden/116/GRCh38-plugin-avi-fixture/`)
 holds the row `chr21 5030633 C T 1.6133 3.465`, and for the record
 `21 5030633 . C T` under `raw=1,links=1` both engines write
 `AVI_PHRED=3.465;AVI_RAW=1.6133` and the Atlas link ending
@@ -569,7 +579,7 @@ names it before any lookup, `21` here. It queries a plugin's file under that
 name and its `chr`-prefixed form, so the lookup reaches `chr21`. The output
 keeps the input's spelling.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2,
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3,
 `ensembl-variation` at release/116, `VEP_plugins` at release/116):
 
 - `Bio/EnsEMBL/VEP/Parser.pm`, lines 788-793, `_have_chr`: a record is kept
@@ -596,7 +606,7 @@ them.
 
 **How often the shape occurs.** Tier 3: the shape is a chromosome name whose
 `chr` prefix is not all lower-case. None of the 15,646,481 records of the
-population cuts and no corpus record carries one; 85 flag sets run a
+cuts and no corpus record carries one; 85 flag sets run a
 tabix-backed plugin.
 
 #### 4.1 A gnomADc record spelt `Chr21`

@@ -35,10 +35,15 @@
 //! - the JSON format nests the nine parts and the flag under `spliceai`, built
 //!   by the JSON writer from the nine fields written here.
 //!
-//! A record's scores reach the transcript rows whose gene symbol equals the
-//! record's `SYMBOL` exactly (`:313-317`); a row without a symbol takes nothing.
-//! When several records of one gene match the variant the last one wins
-//! (`:305`). Both files are read for every variant (`BaseVepTabixPlugin.pm:591`).
+//! A record's entries reach the transcript rows whose gene symbol equals an
+//! entry's `SYMBOL` exactly (`:313-317`); a row without a symbol takes nothing.
+//! A row carries every entry of the record that names its gene, in the
+//! record's order: the one field holds them as the record spells them from the
+//! first of them on, each later one with its allele part, joined by a comma;
+//! each of the nine fields holds its values over them, joined by a comma; and
+//! the flag is `PASS` where any of them reaches the cutoff. When several
+//! records naming one gene match the variant the last one wins (`:305`). Both
+//! files are read for every variant (`BaseVepTabixPlugin.pm:591`).
 //! The header descriptions carry the tool version read from the first file's
 //! `##INFO` line (`:193-206`).
 //!
@@ -96,13 +101,22 @@ const VCF_ALT_COL: usize = 4;
 /// VCF INFO column index.
 const VCF_INFO_COL: usize = 7;
 
-/// One matching record's scores from its INFO column: the gene symbol the
-/// scores reach, the value after the allele, `SYMBOL|DS_AG|...|DP_DL` as
-/// [`SpliceAiPlugin::score_values`] keeps it, and the cutoff flag when a cutoff
-/// is set.
-struct Hit<'a> {
+/// One entry of a record's INFO column as `SpliceAiPlugin::score_values` reads
+/// it: the entry as the record spells it, its allele part included, the gene
+/// symbol it names, and the value after the allele, `SYMBOL|DS_AG|...|DP_DL`.
+struct ScoreEntry<'a> {
+    spelled: &'a str,
     symbol: &'a str,
     scores: Cow<'a, str>,
+}
+
+/// The entries of one matching record that name one gene symbol, in the
+/// record's order, and the cutoff flag when a cutoff is set: `PASS` where any
+/// of the entries reaches the cutoff by its own largest delta score, `FAIL`
+/// where none does.
+struct Hit<'a> {
+    symbol: &'a str,
+    entries: Vec<ScoreEntry<'a>>,
     flag: Option<&'static str>,
 }
 
@@ -194,8 +208,8 @@ impl SpliceAiPlugin {
     /// the allele part is never read, the match being on the REF and ALT
     /// columns (`:272`). An entry of one part has no symbol, which no row's
     /// gene symbol equals (`:314`), so it is left out. One INFO may carry
-    /// several entries joined by `,`. Each entry is its symbol and its value.
-    fn score_values(record: &TabixRecord) -> impl Iterator<Item = (&str, Cow<'_, str>)> {
+    /// several entries joined by `,`, and each is read on its own.
+    fn score_values(record: &TabixRecord) -> impl Iterator<Item = ScoreEntry<'_>> {
         let info = record
             .get("INFO")
             .or_else(|| record.columns.get(VCF_INFO_COL).map(String::as_str))
@@ -209,7 +223,11 @@ impl SpliceAiPlugin {
                     Some((symbol, _)) => (symbol, Cow::Borrowed(rest)),
                     None => (rest, Cow::Owned(format!("{rest}|"))),
                 };
-                Some((symbol, scores))
+                Some(ScoreEntry {
+                    spelled: entry,
+                    symbol,
+                    scores,
+                })
             })
     }
 
@@ -261,29 +279,40 @@ impl SpliceAiPlugin {
             && file_alt.as_bytes().eq_ignore_ascii_case(&var_alt)
     }
 
-    /// The matching records of `records`, one per gene symbol, the last record
-    /// of a gene winning (`SpliceAI.pm:248-307`): a record matches when it is
-    /// the variant's ([`Self::is_variant_record`]).
+    /// The entries of the matching records of `records`, one hit per gene
+    /// symbol: every entry of a record that names the symbol, in the record's
+    /// order, the last record that names a gene taking the place of an earlier
+    /// one's entries (`SpliceAI.pm:248-307`, the hash of `:305` keeping one
+    /// record a gene). A record matches when it is the variant's
+    /// ([`Self::is_variant_record`]).
     fn hits<'a>(&self, variant: &InputVariant, records: &[&'a TabixRecord]) -> Vec<Hit<'a>> {
         let mut hits: Vec<Hit> = Vec::new();
         for record in records {
             if !Self::is_variant_record(record, variant) {
                 continue;
             }
-            for (symbol, scores) in Self::score_values(record) {
-                let flag = self.cutoff.map(|cutoff| {
-                    if Self::max_delta_score(&scores) >= cutoff {
+            let mut of_record: Vec<Hit> = Vec::new();
+            for entry in Self::score_values(record) {
+                match of_record.iter_mut().find(|hit| hit.symbol == entry.symbol) {
+                    Some(hit) => hit.entries.push(entry),
+                    None => of_record.push(Hit {
+                        symbol: entry.symbol,
+                        entries: vec![entry],
+                        flag: None,
+                    }),
+                }
+            }
+            for mut hit in of_record {
+                hit.flag = self.cutoff.map(|cutoff| {
+                    let reaches =
+                        |entry: &ScoreEntry| Self::max_delta_score(&entry.scores) >= cutoff;
+                    if hit.entries.iter().any(reaches) {
                         "PASS"
                     } else {
                         "FAIL"
                     }
                 });
-                let hit = Hit {
-                    symbol,
-                    scores,
-                    flag,
-                };
-                match hits.iter_mut().find(|earlier| earlier.symbol == symbol) {
+                match hits.iter_mut().find(|earlier| earlier.symbol == hit.symbol) {
                     Some(earlier) => *earlier = hit,
                     None => hits.push(hit),
                 }
@@ -294,28 +323,57 @@ impl SpliceAiPlugin {
 
     /// A hit's fields in the run's shape, with the names of the fields whose
     /// empty value is the empty string. The nine fields of the split shape are
-    /// the value's `split /\|/` (`SpliceAI.pm:276-287`), which drops the
-    /// trailing empty parts, read into nine variables: a part the value lacks is
+    /// an entry's `split /\|/` (`SpliceAI.pm:276-287`), which drops the
+    /// trailing empty parts, read into nine variables: a part the entry lacks is
     /// the undefined value, written as the empty value, and an empty part before
-    /// a filled one the empty string.
+    /// a filled one the empty string. Over several entries each of the nine
+    /// fields is its values joined by a comma, in the entries' order. The one
+    /// field of the other shape is a lone entry's value, and over several
+    /// entries the first without its allele part and each later one as the
+    /// record spells it, joined by a comma, the text `:328-332` keep of a
+    /// record that names the gene alone.
     fn fields_of(&self, hit: &Hit<'_>) -> (IndexMap<String, String>, Vec<String>) {
         let mut fields = IndexMap::new();
         let mut empty_strings = Vec::new();
         if self.splits() {
             fields.reserve(SPLIT_FIELDS.len() + usize::from(hit.flag.is_some()));
-            let mut parts: Vec<&str> = hit.scores.split('|').collect();
-            while parts.last() == Some(&"") {
-                parts.pop();
-            }
+            let parts_of: Vec<Vec<&str>> = hit
+                .entries
+                .iter()
+                .map(|entry| {
+                    let mut parts: Vec<&str> = entry.scores.split('|').collect();
+                    while parts.last() == Some(&"") {
+                        parts.pop();
+                    }
+                    parts
+                })
+                .collect();
             for (index, name) in SPLIT_FIELDS.iter().enumerate() {
-                let part = parts.get(index).copied();
-                fields.insert((*name).to_string(), part.unwrap_or("").to_string());
-                if part == Some("") {
-                    empty_strings.push((*name).to_string());
+                let values: Vec<&str> = parts_of
+                    .iter()
+                    .map(|parts| parts.get(index).copied().unwrap_or(""))
+                    .collect();
+                fields.insert((*name).to_string(), values.join(","));
+                if let [parts] = parts_of.as_slice() {
+                    if parts.get(index) == Some(&"") {
+                        empty_strings.push((*name).to_string());
+                    }
                 }
             }
         } else {
-            fields.insert(JOINED_FIELD.to_string(), hit.scores.to_string());
+            let value = match hit.entries.as_slice() {
+                [entry] => entry.scores.to_string(),
+                entries => entries
+                    .iter()
+                    .enumerate()
+                    .map(|(place, entry)| match place {
+                        0 => entry.spelled.split_once('|').map_or("", |(_, rest)| rest),
+                        _ => entry.spelled,
+                    })
+                    .collect::<Vec<_>>()
+                    .join(","),
+            };
+            fields.insert(JOINED_FIELD.to_string(), value);
         }
         if let Some(flag) = hit.flag {
             fields.insert(CUTOFF_FIELD.to_string(), flag.to_string());
@@ -323,8 +381,8 @@ impl SpliceAiPlugin {
         (fields, empty_strings)
     }
 
-    /// Writes the hit of each transcript row's gene symbol on that row
-    /// (`SpliceAI.pm:313-317`).
+    /// Writes the hit of each transcript row's gene symbol, every entry of the
+    /// row's record that names it, on that row (`SpliceAI.pm:313-317`).
     fn annotate_variant(&self, variant: &mut InputVariant, records: &[&TabixRecord]) {
         let hits = self.hits(variant, records);
         if hits.is_empty() {
@@ -391,6 +449,8 @@ impl SpliceAiPlugin {
     }
 }
 
+impl crate::traits::sealed::Sealed for SpliceAiPlugin {}
+
 impl BuiltinPlugin for SpliceAiPlugin {
     fn name(&self) -> &str {
         NAME
@@ -441,6 +501,12 @@ impl BuiltinPlugin for SpliceAiPlugin {
 
     fn set_assembly(&mut self, assembly: Option<Assembly>) {
         self.assembly = assembly;
+    }
+
+    fn set_reference_fasta(&mut self, fasta: Option<std::sync::Arc<vep_fasta::IndexedFasta>>) {
+        for store in &mut self.stores {
+            store.set_reference_fasta(fasta.clone());
+        }
     }
 
     fn init(&mut self, params: &[String]) -> Result<(), PluginError> {
@@ -614,14 +680,14 @@ mod tests {
     /// A transcript row whose gene symbol is `symbol`; `None` leaves the row
     /// without one.
     fn gene_row(symbol: Option<&str>) -> TranscriptConsequence {
-        TranscriptConsequence {
-            transcript: Some(Arc::new(Transcript {
-                gene_symbol: symbol.map(Into::into),
-                ..Transcript::default()
-            })),
-            feature_type: FeatureType::Transcript,
-            ..TranscriptConsequence::default()
-        }
+        let mut consequence = TranscriptConsequence::default();
+        consequence.transcript = Some(Arc::new({
+            let mut transcript = Transcript::default();
+            transcript.gene_symbol = symbol.map(Into::into);
+            transcript
+        }));
+        consequence.feature_type = FeatureType::Transcript;
+        consequence
     }
 
     fn snv(pos: u64, reference: &[u8], alt: &[u8], symbols: &[Option<&str>]) -> InputVariant {
@@ -1089,12 +1155,11 @@ mod tests {
         let plugin = loaded(OutputFormat::Vep, &[format!("snv={}", path.display())]);
         let mut variants = vec![snv(100, b"A", b"G", &[Some("SOD1")])];
         for feature_type in [FeatureType::RegulatoryFeature, FeatureType::MotifFeature] {
-            variants[0]
-                .transcript_consequences
-                .push(TranscriptConsequence {
-                    feature_type,
-                    ..gene_row(Some("SOD1"))
-                });
+            variants[0].transcript_consequences.push({
+                let mut consequence = gene_row(Some("SOD1"));
+                consequence.feature_type = feature_type;
+                consequence
+            });
         }
         let through_run = plugin
             .run(&variants[0].transcript_consequences[0], &variants[0])
@@ -1116,10 +1181,10 @@ mod tests {
             .is_empty());
     }
 
-    /// Ensembl VEP 116.2 never hands SpliceAI a structural variant: the module
+    /// Ensembl VEP 116.3 never hands SpliceAI a structural variant: the module
     /// keeps the default `variant_feature_types` of `['VariationFeature']`
     /// (BaseVepPlugin.pm:100), which the dispatch checks before running a
-    /// plugin on a line (OutputFactory.pm:2220). A `<DEL>` row gets no field,
+    /// plugin on a line (OutputFactory.pm:2229). A `<DEL>` row gets no field,
     /// and nor does a scored substitution carrying the structural mark, which
     /// pins the gate rather than the allele match; the plain one is scored.
     #[test]
@@ -1182,7 +1247,7 @@ mod tests {
 
     /// A `Number=.` INFO cell joining two genes' entries with a comma scores
     /// each gene from its own entry, where `SpliceAI.pm:328-332` reads the
-    /// whole cell as one entry and Ensembl VEP 116.2 prints
+    /// whole cell as one entry and Ensembl VEP 116.3 prints
     /// `GENE1|0.10|0.20|0.30|0.40|1|2|3|4,G|GENE2|0.50|0.60|0.70|0.80|5|6|7|8`
     /// on the GENE1 rows, `DP_DL` as `4,G`, and nothing on the GENE2 rows.
     #[test]
@@ -1223,6 +1288,243 @@ mod tests {
         assert_eq!(fields_of(&variants[0], 0)[1], ("SpliceAI_cutoff", "FAIL"));
         assert_eq!(fields_of(&variants[0], 1)[1], ("SpliceAI_cutoff", "PASS"));
         assert!(fields_of(&variants[0], 2).is_empty());
+    }
+
+    /// Three entries of one made-up record, two naming one gene and one
+    /// another, in each of their three orders: a row carries every entry that
+    /// names its gene, in the record's order, and no entry of the other gene,
+    /// where `SpliceAI.pm:328-332` files the whole cell under the first
+    /// entry's gene.
+    #[test]
+    fn every_entry_of_a_gene_stands_on_its_rows_in_the_record_s_order() {
+        let first = "G|GENE1|0.10|0.20|0.30|0.40|1|2|3|4";
+        let second = "G|GENE1|0.11|0.21|0.31|0.41|-1|-2|-3|-4";
+        let other = "G|GENE2|0.50|0.60|0.70|0.80|5|6|7|8";
+        let rows = &[Some("GENE1"), Some("GENE2"), Some("GENE3")];
+        for order in [
+            [first, second, other],
+            [first, other, second],
+            [other, first, second],
+        ] {
+            let dir = tempfile::tempdir().unwrap();
+            let line = format!("21\t100\t.\tA\tG\t.\t.\tSpliceAI={}", order.join(","));
+            let path = score_file(
+                dir.path(),
+                "three_entries.synthetic.vcf.gz",
+                &["##fileformat=VCFv4.2", INFO_HEADER, COLUMNS],
+                &[&line],
+            );
+            let plugin = loaded(OutputFormat::Vep, &[format!("snv={}", path.display())]);
+            let mut variants = vec![snv(100, b"A", b"G", rows)];
+            plugin.run_batch(&mut variants).unwrap();
+            assert_eq!(
+                fields_of(&variants[0], 0),
+                [(
+                    "SpliceAI_pred",
+                    "GENE1|0.10|0.20|0.30|0.40|1|2|3|4,G|GENE1|0.11|0.21|0.31|0.41|-1|-2|-3|-4"
+                )],
+                "{order:?}"
+            );
+            assert_eq!(
+                fields_of(&variants[0], 1),
+                [("SpliceAI_pred", "GENE2|0.50|0.60|0.70|0.80|5|6|7|8")],
+                "{order:?}"
+            );
+            assert!(fields_of(&variants[0], 2).is_empty(), "{order:?}");
+        }
+    }
+
+    /// A made-up record that names one gene alone in two and in four entries:
+    /// the one field of the default and tab formats is the record's value
+    /// behind its first allele, each later entry with its allele part, the
+    /// value `SpliceAI.pm:328-332` keeps and `:291` prints.
+    #[test]
+    fn a_later_entry_of_a_gene_keeps_its_allele_part_in_the_one_field_form() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = score_file(
+            dir.path(),
+            "one_gene.synthetic.vcf.gz",
+            &["##fileformat=VCFv4.2", INFO_HEADER, COLUMNS],
+            &[
+                "21\t100\t.\tA\tG\t.\t.\tSpliceAI=G|SOD1|0.10|0.20|0.30|0.40|1|2|3|4,G|SOD1|0.11|0.21|0.31|0.41|-1|-2|-3|-4",
+                "21\t200\t.\tC\tT\t.\t.\tSpliceAI=T|SOD1|0.01|0.02|0.03|0.04|1|2|3|4,T|SOD1|0.01|0.02|0.03|0.04|1|2|3|4,T|SOD1|0.05|0.06|0.07|0.08|5|6|7|8,T|SOD1|0.09|0.10|0.11|0.12|9|10|11|12",
+            ],
+        );
+        for format in [OutputFormat::Vep, OutputFormat::Tab] {
+            let plugin = loaded(format, &[format!("snv={}", path.display())]);
+            let mut variants = vec![
+                snv(100, b"A", b"G", &[Some("SOD1")]),
+                snv(200, b"C", b"T", &[Some("SOD1")]),
+            ];
+            plugin.run_batch(&mut variants).unwrap();
+            assert_eq!(
+                fields_of(&variants[0], 0),
+                [(
+                    "SpliceAI_pred",
+                    "SOD1|0.10|0.20|0.30|0.40|1|2|3|4,G|SOD1|0.11|0.21|0.31|0.41|-1|-2|-3|-4"
+                )],
+                "{format:?}"
+            );
+            assert_eq!(
+                fields_of(&variants[1], 0),
+                [(
+                    "SpliceAI_pred",
+                    "SOD1|0.01|0.02|0.03|0.04|1|2|3|4,T|SOD1|0.01|0.02|0.03|0.04|1|2|3|4,T|SOD1|0.05|0.06|0.07|0.08|5|6|7|8,T|SOD1|0.09|0.10|0.11|0.12|9|10|11|12"
+                )],
+                "{format:?}"
+            );
+        }
+    }
+
+    /// In the nine-field shape each member carries its values over the
+    /// entries of a made-up record that name the row's gene, in the record's
+    /// order, joined by a comma, where the ninth variable of `SpliceAI.pm:287`
+    /// holds `4,G` and the later entries are dropped; a gene named by one
+    /// entry keeps its nine values.
+    #[test]
+    fn the_nine_members_join_their_values_over_a_gene_s_entries() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = score_file(
+            dir.path(),
+            "members.synthetic.vcf.gz",
+            &["##fileformat=VCFv4.2", INFO_HEADER, COLUMNS],
+            &["21\t100\t.\tA\tG\t.\t.\tSpliceAI=G|GENE1|0.10|0.20|0.30|0.40|1|2|3|4,G|GENE2|0.50|0.60|0.70|0.80|5|6|7|8,G|GENE1|0.11|0.21|0.31|0.41|-1|-2|-3|-4"],
+        );
+        let snv_param = format!("snv={}", path.display());
+        let rows = &[Some("GENE1"), Some("GENE2")];
+        let joined = [
+            ("SpliceAI_pred_SYMBOL", "GENE1,GENE1"),
+            ("SpliceAI_pred_DS_AG", "0.10,0.11"),
+            ("SpliceAI_pred_DS_AL", "0.20,0.21"),
+            ("SpliceAI_pred_DS_DG", "0.30,0.31"),
+            ("SpliceAI_pred_DS_DL", "0.40,0.41"),
+            ("SpliceAI_pred_DP_AG", "1,-1"),
+            ("SpliceAI_pred_DP_AL", "2,-2"),
+            ("SpliceAI_pred_DP_DG", "3,-3"),
+            ("SpliceAI_pred_DP_DL", "4,-4"),
+        ];
+        let single = [
+            ("SpliceAI_pred_SYMBOL", "GENE2"),
+            ("SpliceAI_pred_DS_AG", "0.50"),
+            ("SpliceAI_pred_DS_AL", "0.60"),
+            ("SpliceAI_pred_DS_DG", "0.70"),
+            ("SpliceAI_pred_DS_DL", "0.80"),
+            ("SpliceAI_pred_DP_AG", "5"),
+            ("SpliceAI_pred_DP_AL", "6"),
+            ("SpliceAI_pred_DP_DG", "7"),
+            ("SpliceAI_pred_DP_DL", "8"),
+        ];
+        for (format, split_output) in [
+            (OutputFormat::Vcf, false),
+            (OutputFormat::Json, false),
+            (OutputFormat::Vep, true),
+            (OutputFormat::Tab, true),
+        ] {
+            let mut params = vec![snv_param.clone()];
+            if split_output {
+                params.push("split_output=1".to_string());
+            }
+            let plugin = loaded(format, &params);
+            let mut variants = vec![snv(100, b"A", b"G", rows)];
+            plugin.run_batch(&mut variants).unwrap();
+            assert_eq!(fields_of(&variants[0], 0), joined, "{format:?}");
+            assert_eq!(fields_of(&variants[0], 1), single, "{format:?}");
+            assert!(variants[0].transcript_consequences[0]
+                .plugin_empty_strings
+                .is_empty());
+        }
+    }
+
+    /// Under a cutoff a row carries one verdict, in the one-field and the
+    /// nine-field shape: `PASS` where any entry of a made-up record that names
+    /// the row's gene reaches the cutoff by its own largest delta score, also
+    /// a later entry alone, and `FAIL` where none does, an entry of another
+    /// gene counting for nothing. `SpliceAI.pm:336-338` reads the first four
+    /// score parts of the whole cell, the first entry's.
+    #[test]
+    fn the_cutoff_flag_is_one_verdict_over_a_gene_s_entries() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = score_file(
+            dir.path(),
+            "verdicts.synthetic.vcf.gz",
+            &["##fileformat=VCFv4.2", INFO_HEADER, COLUMNS],
+            &[
+                "21\t100\t.\tA\tG\t.\t.\tSpliceAI=G|SOD1|0.10|0.20|0.30|0.40|1|2|3|4,G|SOD1|0.10|0.90|0.30|0.40|1|2|3|4",
+                "21\t200\t.\tC\tT\t.\t.\tSpliceAI=T|SOD1|0.10|0.20|0.30|0.40|1|2|3|4,T|SOD1|0.11|0.21|0.31|0.41|1|2|3|4",
+                "21\t300\t.\tG\tA\t.\t.\tSpliceAI=A|SOD1|0.70|0.20|0.30|0.40|1|2|3|4,A|SOD1|0.11|0.21|0.31|0.41|1|2|3|4",
+                "21\t400\t.\tT\tC\t.\t.\tSpliceAI=C|SOD1|0.10|0.20|0.30|0.40|1|2|3|4,C|GENE2|0.95|0.21|0.31|0.41|1|2|3|4,C|SOD1|0.11|0.21|0.31|0.41|1|2|3|4",
+            ],
+        );
+        let snv_param = format!("snv={}", path.display());
+        let verdicts = ["PASS", "FAIL", "PASS", "FAIL"];
+        for format in [OutputFormat::Vep, OutputFormat::Vcf, OutputFormat::Json] {
+            let plugin = loaded(format, &[snv_param.clone(), "cutoff=0.5".to_string()]);
+            let mut variants = vec![
+                snv(100, b"A", b"G", &[Some("SOD1")]),
+                snv(200, b"C", b"T", &[Some("SOD1")]),
+                snv(300, b"G", b"A", &[Some("SOD1")]),
+                snv(400, b"T", b"C", &[Some("SOD1"), Some("GENE2")]),
+            ];
+            plugin.run_batch(&mut variants).unwrap();
+            for (variant, verdict) in variants.iter().zip(verdicts) {
+                let fields = fields_of(variant, 0);
+                assert_eq!(
+                    fields.last(),
+                    Some(&("SpliceAI_cutoff", verdict)),
+                    "{format:?}"
+                );
+                let flags = fields
+                    .iter()
+                    .filter(|(name, _)| *name == "SpliceAI_cutoff")
+                    .count();
+                assert_eq!(flags, 1, "{format:?}");
+            }
+            assert_eq!(
+                fields_of(&variants[3], 1).last(),
+                Some(&("SpliceAI_cutoff", "PASS")),
+                "{format:?}"
+            );
+        }
+    }
+
+    /// Where several made-up record lines stand at one allele, the last line
+    /// that names a gene is its rows' record (`SpliceAI.pm:305`): its entries
+    /// of the gene take the place of an earlier line's, and a gene the last
+    /// line leaves out keeps the entries of the last line that names it.
+    #[test]
+    fn a_later_record_line_of_a_gene_replaces_the_earlier_line_s_entries() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = score_file(
+            dir.path(),
+            "lines.synthetic.vcf.gz",
+            &["##fileformat=VCFv4.2", INFO_HEADER, COLUMNS],
+            &[
+                "21\t100\t.\tA\tG\t.\t.\tSpliceAI=G|GENE1|0.10|0.20|0.30|0.40|1|2|3|4,G|GENE1|0.11|0.21|0.31|0.41|-1|-2|-3|-4",
+                "21\t100\t.\tA\tG\t.\t.\tSpliceAI=G|GENE1|0.12|0.22|0.32|0.42|9|9|9|9",
+                "21\t200\t.\tC\tT\t.\t.\tSpliceAI=T|GENE1|0.10|0.20|0.30|0.40|1|2|3|4,T|GENE2|0.50|0.60|0.70|0.80|5|6|7|8",
+                "21\t200\t.\tC\tT\t.\t.\tSpliceAI=T|GENE1|0.13|0.23|0.33|0.43|6|6|6|6,T|GENE1|0.14|0.24|0.34|0.44|7|7|7|7",
+            ],
+        );
+        let plugin = loaded(OutputFormat::Vep, &[format!("snv={}", path.display())]);
+        let rows = &[Some("GENE1"), Some("GENE2")];
+        let mut variants = vec![snv(100, b"A", b"G", rows), snv(200, b"C", b"T", rows)];
+        plugin.run_batch(&mut variants).unwrap();
+        assert_eq!(
+            fields_of(&variants[0], 0),
+            [("SpliceAI_pred", "GENE1|0.12|0.22|0.32|0.42|9|9|9|9")]
+        );
+        assert!(fields_of(&variants[0], 1).is_empty());
+        assert_eq!(
+            fields_of(&variants[1], 0),
+            [(
+                "SpliceAI_pred",
+                "GENE1|0.13|0.23|0.33|0.43|6|6|6|6,T|GENE1|0.14|0.24|0.34|0.44|7|7|7|7"
+            )]
+        );
+        assert_eq!(
+            fields_of(&variants[1], 1),
+            [("SpliceAI_pred", "GENE2|0.50|0.60|0.70|0.80|5|6|7|8")]
+        );
     }
 
     /// A truncated entry is kept as `parse_data` keeps it (SpliceAI.pm:326-349)
@@ -1322,7 +1624,7 @@ mod tests {
         };
         let values = |info: &str| -> Vec<String> {
             SpliceAiPlugin::score_values(&record(info))
-                .map(|(_, scores)| scores.into_owned())
+                .map(|entry| entry.scores.into_owned())
                 .collect()
         };
         assert_eq!(
@@ -1351,7 +1653,7 @@ mod tests {
         assert!(values("SpliceAI=T").is_empty());
         let symbols = |info: &str| -> Vec<String> {
             SpliceAiPlugin::score_values(&record(info))
-                .map(|(symbol, _)| symbol.to_string())
+                .map(|entry| entry.symbol.to_string())
                 .collect()
         };
         assert_eq!(symbols("SpliceAI=T|GENE,T|GENE2|0.5"), ["GENE", "GENE2"]);

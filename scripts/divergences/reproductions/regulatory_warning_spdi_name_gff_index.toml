@@ -1,9 +1,9 @@
 entry = "regulatory_warning_spdi_name_gff_index"
 page = "docs/divergences/regulatory-rows.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 4 of 392 flag sets · 25 flag sets, 4 corpora"
+input_class_basis = "2 · 37 of 511 flag sets · 60 flag sets, 37 corpora"
 notes = "The first of the entry's three differences: a --regulatory run on a cache without regulatory data. The Drosophila melanogaster cache carries no regulatory build, so the flag switches nothing on; Ensembl VEP writes no message and vep-rs one warnings-file line."
 
 [input]
@@ -27,3 +27,16 @@ pattern = "regulatory"
 [expected]
 ensembl_vep = []
 vep_rs = ["WARNING: --regulatory: this cache holds no regulatory data; no RegulatoryFeature or MotifFeature row is written"]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/regulatory/gff.rs::GffRegulatorySource::open",
+    "crates/vep-cli/src/regulatory/source.rs::RegulatorySource::open",
+    "crates/vep-effects/src/spdi.rs::reference_name",
+]
+tests = [
+    "crates/vep-cli/tests/documented_subsets.rs::regulatory_spdi_chromosome_name_exclusion_is_documented",
+    "crates/vep-cli/tests/regulatory.rs::regulatory_gff_refusals_exit_with_their_message",
+    "crates/vep-cli/tests/species_flags.rs::regulatory_on_a_cache_without_regulatory_data_warns_once_and_writes_no_row",
+    "crates/vep-effects/src/spdi.rs::tests::chromosome_is_named_by_the_cache_on_transcript_rows_and_by_the_fasta_elsewhere",
+]

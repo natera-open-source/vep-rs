@@ -1,9 +1,9 @@
 entry = "check_frequency_reset_reach_under_minimal"
 page = "docs/output/known-variants.md#filtering-by-frequency"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 121.0 per million · 2 flag sets, 24 corpora"
+input_class_basis = "2 · 121.0 per million · 2 flag sets, 27 corpora"
 notes = "Four lines under --buffer_size 4: the split record on line 1 and the dropped common record (rs8131855, AF 0.0986) on line 4. Ensembl VEP under --fork 1 annotates the buffer in chunks of int(4 / 2) records, so the drop in the second chunk leaves the first chunk's rejoin standing and the split allele's row takes the record's span; vep-rs's batch of four lines holds the drop, so the split record is reset and the row takes the allele's own span."
 
 [input]
@@ -32,3 +32,10 @@ where = { record = "split", allele = "C", feature = "ENST00000349499" }
 [expected]
 ensembl_vep = ["21:34716320-34716323 | C | ENST00000349499 | splice_region_variant,synonymous_variant"]
 vep_rs = ["21:34716323 | C | ENST00000349499 | splice_region_variant,synonymous_variant"]
+
+[implementation]
+code = ["crates/vep-cli/src/pipeline.rs::runs_reset_by_a_drop"]
+tests = [
+    "crates/vep-cli/src/pipeline.rs::tests::a_drop_resets_the_rejoin_of_its_own_chromosomes_run_alone",
+    "crates/vep-cli/tests/minimal_frequency_reset.rs::a_drops_reset_reaches_the_batch_counted_from_the_first_line",
+]

@@ -358,7 +358,7 @@ pub fn sorted_context_terms() -> Vec<&'static str> {
     terms
 }
 
-/// `write_summary_markdown`'s text, a trailing newline included.
+/// The text of `summary.md`, a trailing newline included.
 pub fn summary_markdown(aggregate: &Aggregate, files: &[FileMetrics]) -> String {
     let mut lines: Vec<String> = vec![
         "# Concordance Summary".to_string(),
@@ -398,6 +398,19 @@ pub fn summary_markdown(aggregate: &Aggregate, files: &[FileMetrics]) -> String 
         .collect();
     if !cats.is_empty() {
         lines.push(format!("- Divergence buckets: {}", cats.join(", ")));
+    }
+    let not_evaluated: Vec<String> = adjusted
+        .excluded_categories
+        .iter()
+        .map(|(bucket, stats)| (bucket, count_of(stats, crate::rules::filter::NOT_EVALUATED)))
+        .filter(|(_, rows)| *rows > 0)
+        .map(|(bucket, rows)| format!("{bucket}: {rows} row{}", if rows == 1 { "" } else { "s" }))
+        .collect();
+    if !not_evaluated.is_empty() {
+        lines.push(format!(
+            "- Not evaluated (the run gives no sequence names of its cache): {}",
+            not_evaluated.join(", ")
+        ));
     }
     if adjusted.excluded_perl_tuples > 0 {
         lines.push(format!(
@@ -470,3 +483,7 @@ pub fn summary_markdown(aggregate: &Aggregate, files: &[FileMetrics]) -> String 
     lines.push(String::new());
     lines.join("\n")
 }
+
+#[cfg(test)]
+#[path = "report_ratio_tests.rs"]
+mod ratio_tests;

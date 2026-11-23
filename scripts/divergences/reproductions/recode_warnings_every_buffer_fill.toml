@@ -1,7 +1,7 @@
 entry = "recode_warnings_every_buffer_fill"
 page = "docs/divergences/recode-warnings-and-fields.md#the-warnings-of-a-repeated-input"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the variant identifier input format, which sets no rule against a line given twice or a dbSNP identifier the sources lack (Ensembl VEP documentation, \"Data formats\", \"Variant identifiers\"; \"Variant Recoder\", --input_file); not seen in the measured datasets"
 notes = "One identifier twice, each after an identifier no source holds: with the default buffer size of 1, each fill holds the known variant and the warning of the line before it, and the two fills write one object, keyed by the repeated text. --pretty puts each warning of the object on its own line. variant_recoder reads the Ensembl database and passes the cache and FASTA arguments vep recode reads through unread, and reads the synonyms file."
@@ -36,3 +36,7 @@ vep_rs = [
   "         \"No variant found with ID 'rs_nope1'\",",
   "         \"No variant found with ID 'rs_nope2'\"",
 ]
+
+[implementation]
+code = ["crates/vep-cli/src/recode.rs::attach_warnings"]
+tests = ["crates/vep-cli/tests/filter_report_and_run_documented_rows.rs::recode_keeps_the_warnings_of_every_fill_of_an_input_given_twice"]

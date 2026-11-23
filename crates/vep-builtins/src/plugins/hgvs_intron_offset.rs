@@ -44,6 +44,8 @@ impl HgvsIntronOffsetPlugin {
     }
 }
 
+impl crate::traits::sealed::Sealed for HgvsIntronOffsetPlugin {}
+
 impl BuiltinPlugin for HgvsIntronOffsetPlugin {
     fn name(&self) -> &str {
         "HGVSIntronOffset"
@@ -93,12 +95,11 @@ mod tests {
     use vep_core::consequence::FeatureType;
 
     fn row(hgvsc: Option<&str>, offsets: Option<(i32, i32)>) -> TranscriptConsequence {
-        TranscriptConsequence {
-            hgvsc: hgvsc.map(str::to_string),
-            hgvs_intron_offsets: offsets,
-            feature_type: FeatureType::Transcript,
-            ..TranscriptConsequence::default()
-        }
+        let mut consequence = TranscriptConsequence::default();
+        consequence.hgvsc = hgvsc.map(str::to_string);
+        consequence.hgvs_intron_offsets = offsets;
+        consequence.feature_type = FeatureType::Transcript;
+        consequence
     }
 
     fn snv() -> InputVariant {

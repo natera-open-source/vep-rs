@@ -407,6 +407,134 @@ mod tests {
         assert_ne!(reference, compress(OutputCompression::Bgzip, 1, &text));
     }
 
+    /// The encoders the write-pattern tests open: gzip, and BGZF on the writing
+    /// thread and on a worker pool.
+    const ENCODERS: [(OutputCompression, usize); 3] = [
+        (OutputCompression::Gzip, 1),
+        (OutputCompression::Bgzip, 1),
+        (OutputCompression::Bgzip, 4),
+    ];
+
+    /// `text` through the encoder as the output sink writes a run: in pieces of
+    /// the sizes `sizes` cycles through, beneath a buffer of `buffer` bytes when
+    /// one is given, flushed once every byte is written, then finished.
+    fn compress_as_the_sink_writes(
+        kind: OutputCompression,
+        workers: usize,
+        text: &[u8],
+        sizes: &[usize],
+        buffer: Option<usize>,
+    ) -> Vec<u8> {
+        let sink = Sink::default();
+        let (writer, output) = kind.open(Box::new(sink.clone()), workers);
+        let mut writer: Box<dyn Write> = match buffer {
+            Some(bytes) => Box::new(io::BufWriter::with_capacity(bytes, writer)),
+            None => writer,
+        };
+        let mut rest = text;
+        for &size in sizes.iter().cycle() {
+            if rest.is_empty() {
+                break;
+            }
+            let (piece, tail) = rest.split_at(size.min(rest.len()));
+            writer.write_all(piece).unwrap();
+            rest = tail;
+        }
+        writer.flush().unwrap();
+        drop(writer);
+        output.finish().unwrap();
+        let bytes = sink.0.lock().unwrap().clone();
+        bytes
+    }
+
+    /// The compressed bytes follow the text alone. The output sink hands the
+    /// encoder each rendered chunk whole, or flushes a buffer into it wherever a
+    /// chunk overflows the buffer, so the sizes of the writes follow the task
+    /// split and the buffer size; its one `flush` call comes when every byte is
+    /// written. Each encoder writes the same stream under every such pattern:
+    /// the gzip encoder's deflate stream takes no flush before its end, and the
+    /// BGZF encoders cut the text at the block fill.
+    #[test]
+    fn a_compressed_stream_is_the_same_bytes_under_any_write_sizes_and_flushes() {
+        let text = rows(5_000);
+        let sizes: [&[usize]; 6] = [
+            &[text.len()],
+            &[65_536],
+            &[4_096],
+            &[100],
+            &[7],
+            &[1, 13, 70, 911, 4_097, 70_000],
+        ];
+        let buffers = [None, Some(1), Some(4_096), Some(4 << 20)];
+        for (kind, workers) in ENCODERS {
+            let reference = compress(kind, workers, &text);
+            for pieces in sizes {
+                for buffer in buffers {
+                    let stream = compress_as_the_sink_writes(kind, workers, &text, pieces, buffer);
+                    assert!(
+                        stream == reference,
+                        "{kind:?} with {workers} workers, writes of {pieces:?} bytes beneath a buffer of {buffer:?}: the compressed bytes differ from one write's"
+                    );
+                }
+            }
+        }
+    }
+
+    /// A `flush` call inside the stream closes a deflate block (gzip) or a BGZF
+    /// block where it lands, so the compressed bytes follow such calls and the
+    /// decompressed bytes do not. With a flush after every 4,096-byte write, and
+    /// with one flush halfway, each encoder's stream differs from the unflushed
+    /// one and still decompresses to the text: the gzip stream as one member, the
+    /// BGZF stream as blocks closed by one end-of-file member.
+    #[test]
+    fn a_flush_inside_a_compressed_stream_leaves_the_decompressed_bytes_as_they_are() {
+        let text = rows(5_000);
+        for (kind, workers) in ENCODERS {
+            let reference = compress(kind, workers, &text);
+            for chunk in [4_096, text.len() / 2 + 1] {
+                let sink = Sink::default();
+                let (mut writer, output) = kind.open(Box::new(sink.clone()), workers);
+                for piece in text.chunks(chunk) {
+                    writer.write_all(piece).unwrap();
+                    writer.flush().unwrap();
+                }
+                drop(writer);
+                output.finish().unwrap();
+                let stream = sink.0.lock().unwrap().clone();
+                let pattern =
+                    format!("{kind:?} with {workers} workers, a flush every {chunk} bytes");
+                assert!(
+                    stream != reference,
+                    "{pattern}: a flush inside the stream closes a block there"
+                );
+                let mut back = Vec::new();
+                flate2::read::MultiGzDecoder::new(&stream[..])
+                    .read_to_end(&mut back)
+                    .unwrap();
+                assert!(back == text, "{pattern}: the decompressed bytes");
+                match kind {
+                    OutputCompression::Gzip => {
+                        let mut member = Vec::new();
+                        flate2::read::GzDecoder::new(&stream[..])
+                            .read_to_end(&mut member)
+                            .unwrap();
+                        assert!(member == text, "{pattern}: one member");
+                    }
+                    OutputCompression::Bgzip => {
+                        let sizes = bgzf_block_sizes(&stream);
+                        assert_eq!(sizes.iter().sum::<usize>(), text.len(), "{pattern}");
+                        assert_eq!(
+                            sizes.iter().filter(|&&size| size == 0).count(),
+                            1,
+                            "{pattern}: one end-of-file member"
+                        );
+                        assert_eq!(&stream[stream.len() - 28..], &BGZF_EOF, "{pattern}");
+                    }
+                }
+            }
+        }
+    }
+
     /// A finished output refuses further bytes, so a late write is an error and
     /// not a silent loss, at every worker count.
     #[test]

@@ -1,0 +1,86 @@
+{
+ "plugin_fixtures": {
+  "generator": "scripts/fixtures/cut_plugin_regions.py",
+  "flank": 5000,
+  "record_flank": 2000,
+  "exon_flank": 50,
+  "gerp_regions": "exons",
+  "tools": {
+   "bgzip": "bgzip (htslib) 1.9"
+  },
+  "files": {
+   "reference.fa.fai": "d80517e317db046a34402f5e5ada869b50874972fb74b9ceeaeef9dd1af4350b",
+   "reference.fa.gz": "aa8b1f5efea7e78d252b93e0335d65f6021b03f419afcfc53632f9befcec37e8",
+   "reference.fa.gz.fai": "d80517e317db046a34402f5e5ada869b50874972fb74b9ceeaeef9dd1af4350b",
+   "reference.fa.gz.gzi": "16de4d99991e9a936f6921feb2d2a55b60c0f69af50c4ea038bb101db19b9046"
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 63,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species plasmodium_falciparum --assembly GCA000002765v3 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "plasmodium_falciparum/63_GCA000002765v3",
+ "fasta": "the three sequences the records sit on (Pf3D7_05_v3, Pf3D7_API_v3 and Pf3D7_MIT_v3) at their full length from the per-sequence files Plasmodium_falciparum.GCA000002765v3.dna.primary_assembly.<sequence>.fa.gz of Ensembl Protists (release 63 of Ensembl Genomes), every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
+ "input": "variants.vcf: 261 records, 188 on chromosome 5 (Pf3D7_05_v3; 14 of them name it by the cache's synonyms MAL5 and Pf3D7_05), 45 on the apicoplast Pf3D7_API_v3 and 28 on the mitochondrion Pf3D7_MIT_v3. 252 come from the seeded generator tools/vep-seeded-variants (seed 1, 24 records a category, on those three sequences, every reference allele read from the genome sequence), their IDs the generator's category and ordinal. 9 are designed records (code4_made_codon_1 to code4_made_codon_9): in each of the mitochondrion's three coding transcripts, the first codon one substitution from the codon genetic code table 4 translates unlike the standard code, changed once so that the residue stays, once so that it alters and once at the stop codon, each reference base read from the genome sequence and held to the cached coding sequence. Two exemplars per consequence-set combination the two references show, stratified by variant class and strand, six per combination carrying a protein-level term, plus the records the manifest's included_records name: every generator record at a sequence's first and last base, the first eight of every other generator category and the nine designed records. The cache names no known variant, so no record carries a variation identifier. The generator wrote no record across an origin (the cache flags neither organelle circular), none in a codon table 4 reads unlike the standard code (the mitochondrion's coding sequences hold none) and one between genes. The apicoplast translates under genetic code table 11 and the mitochondrion under table 4, each transcript's codon_table in the cache",
+ "sha256": {
+  "default.txt": "71270676ee9a8e4702e9fb451774c5ab621ac04a377fd8cff5a98a34f5a8d297",
+  "tab.txt": "b84ddef20e75f847ad1045b8ca99015b3658b1bfabc97d3c4f44f99c3eab5fd7",
+  "vcf.vcf": "64ee93e89fe5713a8a7643b95f0a522a19b0ab391be1e89f2a91811c9e3b6ae4",
+  "json.jsonl": "2164a88849d3ca5e2d0c30d3ded69ef2646e6d1bdf41afa4f1672dd740082961"
+ },
+ "variants_vcf_sha256": "5ac500e17dba425afd5ec590a50eed75c4df15aa6eab78053029750bf9216bb9",
+ "flag_sets": {
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species plasmodium_falciparum --assembly GCA000002765v3 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "plasmodium_falciparum/63_GCA000002765v3",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "218b6078ee0f20010c0bbfa6f26df6cc289996cc49c948b60195f166c08032e8",
+    "tab.txt": "7e1d0d8ae047467593b67dbbc97aee68b84981642ca5e23787276dff42599e45",
+    "vcf.vcf": "01bd0d6584ad96437884530c4240132c48dc48818f5e5d1acf3b6e235e14b6c6",
+    "json.jsonl": "fd21774e52b9d419b6693da41eb22c74a1c56f13a5f16bbc1d55a4df5944aa0f"
+   },
+   "flags": [
+    "--everything"
+   ],
+   "expected_dir": "expected_everything"
+  },
+  "hgvs": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species plasmodium_falciparum --assembly GCA000002765v3 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs [--tab|--vcf|--json]",
+   "perl_cache": "plasmodium_falciparum/63_GCA000002765v3",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "d87cf465612bd0a36e23e61c8ec9542e19388ae53c6fcb54c512d64c8589388c",
+    "tab.txt": "f3c025aeac1e5771ba5174025f0d238830ac1094e9359a04c2a0289f2a8b2a6d",
+    "vcf.vcf": "249ff7dc4ba25caa5c019bdda2deb1684f096ad275da74b6f9971c92d5a5c3e1",
+    "json.jsonl": "ea55eec8460b736a4604d1ed019ed68c7561841dcec835a93bf53f891dbfaf76"
+   },
+   "flags": [
+    "--hgvs"
+   ],
+   "expected_dir": "expected_hgvs"
+  }
+ },
+ "generator": "tools/vep-seeded-variants --seed 1 --records wide --per-category 24 --fasta <genome sequence> --sequence Pf3D7_API_v3 --sequence Pf3D7_MIT_v3 --sequence Pf3D7_05_v3 over the whole cache tools/vep-storable-to-json converts from the Ensembl Protists release 63 GCA000002765v3 cache, beside the nine designed records; Ensembl VEP over the two inputs under the default flags; tools/vep-golden-corpus select --release 63 --assembly GCA000002765v3 --species plasmodium_falciparum --dataset wide=<reference>=<the generator's records> --dataset designed=<reference>=<the designed records> --k 2 --seed 1 --max-span 1000000 --max-records 500 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 6 --include <the named records> --covers species-plasmodium-gca000002765v3 --covers genetic-code-tables --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --flank 5000 --gzip --drop sorted_exons --perl-info <cache>/info.txt --cache-version 63 over that converted cache (protein features kept for the DOMAINS column of the everything set; the cache holds no variation file, so the slice holds none); scripts/fixtures/cut_plugin_regions.py --reference <genome sequence> --flank 5000 --record-flank 2000 over the records under the cache's own sequence names; tools/vep-golden-corpus flag-set (everything, hgvs); scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; tools/vep-golden-corpus classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp for the hgvs set)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "Pf3D7_05_v3": 209,
+   "Pf3D7_API_v3": 62,
+   "Pf3D7_MIT_v3": 42
+  },
+  "shards": 4,
+  "synonym_lines": 2,
+  "variation_slices": "none: the Ensembl VEP cache holds no variation file"
+ }
+}

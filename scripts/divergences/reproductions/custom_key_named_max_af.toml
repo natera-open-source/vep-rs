@@ -1,0 +1,43 @@
+entry = "custom_key_named_max_af"
+page = "docs/divergences/custom-key-named-max-af.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "unobserved"
+input_class_basis = "well-formed under the short_name and fields options of --custom, any string without commas and a percentage-separated list of INFO fields, with no rule that a source's key differ from a flag's field, and under the flag --max_af (Ensembl VEP documentation, \"Custom annotations\", Options, and \"Options\", Co-located variants); not seen in the measured datasets"
+notes = "The sites file of the custom corpus as an exact source named MAX that asks for AF and CLASS, so its AF stands under the key MAX_AF, under --max_af, over the cache of the everything corpus, whose known variant at the site holds gnomAD genomes frequencies for the record's first alternate allele. Ensembl VEP writes the source's value alone and no MAX_AF_POPS; vep-rs writes the source's value, then the maximum, and the maximum's population. The second alternate allele's row carries neither key in either engine."
+
+[input]
+format = "vcf"
+text = """
+21	5380280	rs1444031311	A	C,G	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-everything/json_cache"
+
+[run]
+flags = [
+  "--max_af",
+  "--custom", "file={repo}/tests/golden/116/GRCh38-custom/custom/sites.vcf.gz,short_name=MAX,format=vcf,type=exact,fields=AF%CLASS",
+]
+format = "default"
+
+[compare]
+kind = "rows"
+where = { record = "rs1444031311", allele = "C" }
+columns = ["MAX_AF", "MAX_AF_POPS"]
+
+[expected]
+ensembl_vep = ["0.004 | -"]
+vep_rs = ["0.004,1.993e-05 | gnomADg_NFE"]
+
+[implementation]
+code = [
+    "crates/vep-io/src/output/fields.rs::write_max_af_after_custom_values",
+]
+tests = [
+    "crates/vep-cli/tests/custom_key_named_as_the_maximum_frequency.rs::a_custom_key_named_max_af_lists_the_sources_values_then_the_maximum",
+    "crates/vep-io/src/output/fields.rs::tests::a_custom_key_named_max_af_carries_the_sources_values_then_the_maximum",
+]

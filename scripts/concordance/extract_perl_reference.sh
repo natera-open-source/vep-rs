@@ -1,22 +1,23 @@
 #!/usr/bin/env bash
-# Extract five Perl VEP modules from the Docker image into a local directory, for
-# reading and tracing beside the Rust port. Re-run when the image version changes.
+# Extract five of Ensembl VEP's Perl modules from the Docker image into a local
+# directory, for reading and tracing beside the Rust port. Re-run when the image
+# version changes.
 #
 # Usage: scripts/concordance/extract_perl_reference.sh [--output-dir DIR] [--image REF]
 set -euo pipefail
 
 # Defaults
 OUTPUT_DIR="${VEP_PERL_REF_DIR:-./.vep/perl_reference}"
-DOCKER_IMAGE="ensemblorg/ensembl-vep:release_116.2"
+DOCKER_IMAGE="ensemblorg/ensembl-vep:release_116.3"
 PERL_BASE="/opt/vep/src/ensembl-vep"
 
 usage() {
     cat <<'EOF'
-Extract five Perl VEP modules from the Docker image for reference and debugging.
+Extract five of Ensembl VEP's Perl modules from the Docker image for reference and debugging.
 
 Optional:
   --output-dir <path>   Where to write extracted files (default: ${VEP_PERL_REF_DIR:-./.vep/perl_reference})
-  --image <ref>         Docker image (default: ensemblorg/ensembl-vep:release_116.2)
+  --image <ref>         Docker image (default: ensemblorg/ensembl-vep:release_116.3)
   -h, --help            Show this help
 EOF
     exit 1
@@ -59,7 +60,7 @@ LOCAL_NAMES=(
     "VCF.pm"
 )
 
-echo "=== Extract Perl VEP Reference Modules ==="
+echo "=== Extract Ensembl VEP Reference Modules ==="
 echo "Docker image: $DOCKER_IMAGE"
 echo "Output dir:   $OUTPUT_DIR"
 echo "Started:      $(date -u +%Y-%m-%dT%H:%M:%SZ)"

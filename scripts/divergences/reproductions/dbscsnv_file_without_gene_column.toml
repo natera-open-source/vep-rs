@@ -1,0 +1,41 @@
+entry = "dbscsnv_file_without_gene_column"
+page = "docs/divergences/dbscsnv-file-without-gene-column.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "malformed"
+input_class_basis = "the file is the rows of the dbscSNV1.1 download under that download's own header line, bgzip-compressed and tabix-indexed (the dbscSNV plugin's header, dbscSNV.pm:51-59, \"head -n1 dbscSNV1.1.chr1 > h\" and \"cat h - | bgzip -c\"), and the module names Ensembl_gene a required column of that header (dbscSNV.pm:111-113): the run passes a file cut down to six columns whose header lacks Ensembl_gene"
+notes = "The GRCh37 dbscSNV corpus's made-up file cut to its columns 1 to 4, 17 and 18 (`chr pos ref alt ada_score rf_score`) and indexed as the plugin documents. Ensembl VEP writes `Failed to instantiate plugin dbscSNV: ERROR: Could not find required column Ensembl_gene in <file>` to its warnings file and no row carries a score; vep-rs writes the scores Ensembl VEP writes from the whole file."
+prepare = [
+  "bgzip -dc \"$CORPUS/plugin_data/dbscSNV1.1_synthetic_GRCh37.txt.gz\" | cut -f1-4,17,18 | bgzip -c > \"$STAGE/dbscSNV1.1_synthetic_six_columns_GRCh37.txt.gz\"",
+  "tabix -s 1 -b 2 -e 2 -c c \"$STAGE/dbscSNV1.1_synthetic_six_columns_GRCh37.txt.gz\"",
+]
+
+[input]
+format = "vcf"
+text = """
+21	10942709	splice_donor_a	A	C	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh37"
+json_cache = "tests/golden/116/GRCh37-plugin-dbscsnv-fixture/json_cache"
+
+[run]
+flags = ["--plugin", "dbscSNV,{stage}/dbscSNV1.1_synthetic_six_columns_GRCh37.txt.gz"]
+
+[compare]
+kind = "rows"
+where = { record = "splice_donor_a", feature = "ENST00000298232" }
+columns = ["Location", "Allele", "Feature", "Consequence", "ada_score", "rf_score"]
+
+[expected]
+ensembl_vep = ["21:10942709 | C | ENST00000298232 | splice_donor_variant | - | -"]
+vep_rs = ["21:10942709 | C | ENST00000298232 | splice_donor_variant | 0.644219 | 0.058437"]
+
+[implementation]
+code = ["crates/vep-builtins/src/plugins/dbscsnv.rs::DbscSnvPlugin::init"]
+tests = [
+    "crates/vep-builtins/src/plugins/dbscsnv.rs::tests::a_header_without_the_gene_column_is_read",
+    "crates/vep-cli/tests/plugins_builtin.rs::dbscsnv_reads_a_file_whose_header_lacks_the_gene_column",
+]

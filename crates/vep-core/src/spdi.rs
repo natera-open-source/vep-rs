@@ -5,7 +5,7 @@
 //! `spdi_genomic`, and the GA4GH Variation Representation Specification allele
 //! (`GA4GH_VRS`) Ensembl VEP derives from it.
 //!
-//! Perl citations name modules of ensembl-variation release/116
+//! Ensembl VEP source citations name modules of ensembl-variation release/116
 //! (`Bio/EnsEMBL/Variation/...`).
 
 use std::borrow::Cow;
@@ -76,7 +76,7 @@ fn repeat_unit(unit: &[u8], digits: &[u8], written: usize) -> Option<Vec<u8>> {
 /// inserted bases joined by `:`. `start..=end` is the record's span and
 /// `reference` and `alt` its alleles as the record writes them (`-` for no
 /// bases), which `reverse` reads on the reverse strand. Each allele has its
-/// tandem notation expanded first (2156, 2170, [`expand_tandem`]), so
+/// tandem notation expanded first (2156, 2170, `expand_tandem`), so
 /// `(AC)3` is the six bases `ACACAC`. A single-base span is a substitution or a
 /// one-base deletion (2185-2191); a reference of `-` is an insertion positioned
 /// after `end` (2193-2197); a deletion of more than 20 bases writes their count
@@ -193,7 +193,7 @@ pub fn ga4gh_vrs_from_spdi(spdi: &str) -> Option<VrsAllele> {
     {
         return None;
     }
-    // An empty position fails the parse, as Perl's `\d+` fails to match it.
+    // An empty position fails the parse, as Ensembl VEP's `\d+` fails to match it.
     let start: u64 = position.parse().ok()?;
     let deleted_is_count = !deleted.is_empty() && deleted.bytes().all(|b| b.is_ascii_digit());
     let deleted_length: u64 = if deleted_is_count {
@@ -211,7 +211,7 @@ pub fn ga4gh_vrs_from_spdi(spdi: &str) -> Option<VrsAllele> {
 
 impl VrsAllele {
     /// The object as the text output formats carry it, JSON-encoded on one line
-    /// in the order the Perl literal names its keys (1455-1470). Ensembl VEP
+    /// in the order the Ensembl VEP literal names its keys (1455-1470). Ensembl VEP
     /// encodes the hash with its keys in hash order, so a reader compares the
     /// parsed object, not the text. `start` is a JSON string and `end` a number:
     /// Perl's JSON encoder writes a scalar last used as text as a string, and
@@ -251,7 +251,7 @@ fn json_text(s: &str) -> String {
 mod tests {
     use super::*;
 
-    /// Ensembl VEP 116.2 under `--spdi` on these records (the chromosome named
+    /// Ensembl VEP 116.3 under `--spdi` on these records (the chromosome named
     /// `21` offline): a substitution at a 0-based position (`21 10538885 A C`),
     /// an insertion positioned after the anchor base (`21 10578406 T TA`, the
     /// record's `-/A` at 10578407-10578406), a one-base deletion
@@ -348,7 +348,7 @@ mod tests {
         );
     }
 
-    /// Ensembl VEP 116.2 under `--spdi` on the Ensembl-format record
+    /// Ensembl VEP 116.3 under `--spdi` on the Ensembl-format record
     /// `21 10538885 10538890 (AC)3/- +` prints `21:10538884:ACACAC:` on every
     /// row: `spdi_genomic` expands a tandem notation (`expand`, Utils/Sequence.pm
     /// 116-119) before it tests the characters (VariationFeature.pm 2156, 2170).
@@ -410,7 +410,7 @@ mod tests {
         assert_eq!(&*expand_tandem(b"ACGT"), b"ACGT");
     }
 
-    /// Ensembl VEP 116.2 in database mode under `--spdi --ga4gh_vrs` for
+    /// Ensembl VEP 116.3 in database mode under `--spdi --ga4gh_vrs` for
     /// `21 10538885 A C` (SPDI `NC_000021.9:10538884:A:C`) writes the object
     /// `{"location":{"type":"SequenceLocation","interval":{"type":"SimpleInterval",
     /// "start":"10538884","end":10538885},"sequence_id":"refseq:NC_000021.9"},

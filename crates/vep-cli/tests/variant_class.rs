@@ -62,13 +62,14 @@ fn rows(
         .collect()
 }
 
-/// A symbolic ALT with no Sequence Ontology term keeps Perl's type string as
-/// its `class_SO_term` (Parser/VCF.pm:469-481: the ALTs joined by `/`, replaced
-/// by INFO/SVTYPE when that names the type, kept whole when `get_SO_term` has no
-/// term for it), printed in `Allele` and `VARIANT_CLASS` (OutputFactory.pm:967):
-/// Ensembl VEP 116.2 under `--dont_skip --variant_class` prints `<CPX>` for
-/// `21 19744457 cpx_bare N <CPX> . . END=19744524`, `CPX` for the same record
-/// with `SVTYPE=CPX`, and `FOO` with `SVTYPE=FOO`; `<CTX>` reads like `<CPX>`.
+/// A symbolic ALT with no Sequence Ontology term keeps Ensembl VEP's type string
+/// as its `class_SO_term` (Parser/VCF.pm:469-481: the ALTs joined by `/`,
+/// replaced by INFO/SVTYPE when that names the type, kept whole when
+/// `get_SO_term` has no term for it), printed in `Allele` and `VARIANT_CLASS`
+/// (OutputFactory.pm:967): Ensembl VEP 116.3 under `--dont_skip --variant_class`
+/// prints `<CPX>` for `21 19744457 cpx_bare N <CPX> . . END=19744524`, `CPX` for
+/// the same record with `SVTYPE=CPX`, and `FOO` with `SVTYPE=FOO`; `<CTX>` reads
+/// like `<CPX>`.
 #[test]
 fn typeless_symbolic_alt_prints_perls_type_string() {
     let dir = tempfile::tempdir().unwrap();
@@ -121,9 +122,9 @@ fn classes(rows: &[(String, String, String)]) -> Vec<(&str, &str, &str)> {
 /// A record `--check_frequency` rewrote prints the class of its kept alleles:
 /// the filtering source annotates before the transcript source
 /// (AnnotationSourceAdaptor.pm:98 sorts `can_filter_vfs` first), rewrites the
-/// feature's allele string to the kept alleles (BaseCacheVariation.pm:355 under
+/// feature's allele string to the kept alleles (BaseCacheVariation.pm:356 under
 /// `exclude`) and `class_SO_term` reads that string (VariationFeature.pm:1118).
-/// Ensembl VEP 116.2 prints `VARIANT_CLASS=SNV` on all 16 rows of
+/// Ensembl VEP 116.3 prints `VARIANT_CLASS=SNV` on all 16 rows of
 /// `21 31148973 del_plus_snv GG G,GC` under the GRCh38-freqfilter corpus's
 /// exclude set, whose common `-` allele (AF 0.6705) the filter drops, and
 /// `sequence_alteration` for the same record without the filter.
@@ -176,9 +177,9 @@ fn frequency_filtered_record_prints_the_class_of_its_kept_alleles() {
 /// A split feature whose only row is its reference row prints the class of
 /// its own allele string: `--minimal` splits the record per ALT
 /// (InputBuffer.pm:638-718), the frequency check judges each feature
-/// (BaseCacheVariation.pm:308-375), `--process_ref_homs` adds the reference
+/// (BaseCacheVariation.pm:309-376), `--process_ref_homs` adds the reference
 /// allele's rows (OutputFactory.pm:511) and `class_SO_term` reads the
-/// feature's string (VariationFeature.pm:1118). Ensembl VEP 116.2 prints 48
+/// feature's string (VariationFeature.pm:1118). Ensembl VEP 116.3 prints 48
 /// rows for `21 31148973 . GG *,G,TG` under the exclude set below: the `GG/G`
 /// feature's common `-` allele (AF 0.6705) is dropped whole, the `GG/*`
 /// feature, whose `*` writes no row and has no frequency data, keeps 16 `GG`

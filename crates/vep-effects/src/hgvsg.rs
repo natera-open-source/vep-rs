@@ -4,7 +4,7 @@
 //! HGVS genomic notation (`HGVSg`) for a sequence variant, Ensembl VEP's
 //! `hgvs_genomic` on the chromosome slice of the reference FASTA.
 //!
-//! Perl citations name modules of ensembl-variation release/116
+//! Ensembl VEP source citations name modules of ensembl-variation release/116
 //! (`Bio/EnsEMBL/Variation/...`) unless another repository is named.
 
 use std::collections::HashMap;
@@ -17,6 +17,7 @@ use crate::consequences::EffectsConfig;
 
 /// How `--hgvsg` describes a variant.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct HgvsgOptions {
     /// Describe an insertion or deletion at its most 3' position
     /// (`shift_hgvs_variants_3prime`, VariationFeature.pm 1981-1988).
@@ -44,7 +45,7 @@ pub fn nc_accession<'a>(synonyms: impl IntoIterator<Item = &'a str>) -> Option<&
 /// That is the name Ensembl VEP prints for a scaffold or a patch with a
 /// database, the slice's `RefSeq_genomic` synonym (ensembl-variation
 /// VariationFeature.pm 1912-1916). Where the synonyms list the accession taken
-/// in more than one form, the latest is returned ([`later_form`]): a cache's
+/// in more than one form, the latest is returned (`later_form`): a cache's
 /// table links the previous assembly's version of a sequence to it, and the
 /// slice's own synonym is the higher version.
 pub fn refseq_name<'a>(synonyms: impl IntoIterator<Item = &'a str>) -> Option<&'a str> {
@@ -57,7 +58,8 @@ pub fn refseq_name<'a>(synonyms: impl IntoIterator<Item = &'a str>) -> Option<&'
     Some(latest_form(taken, names))
 }
 
-/// The latest form of `accession` among `names` and itself ([`later_form`]).
+/// The latest form of `accession` among `names` and itself (`later_form`).
+#[doc(hidden)]
 pub fn latest_form<'a>(accession: &'a str, names: impl IntoIterator<Item = &'a str>) -> &'a str {
     names.into_iter().fold(accession, |latest, name| {
         later_form(latest, name).unwrap_or(latest)
@@ -67,6 +69,7 @@ pub fn latest_form<'a>(accession: &'a str, names: impl IntoIterator<Item = &'a s
 /// The later of two forms of one accession: the higher version, a versioned
 /// form over one without a version, `a` where they are equal. `None` when the
 /// names are not forms of one accession.
+#[doc(hidden)]
 pub fn later_form<'a>(a: &'a str, b: &'a str) -> Option<&'a str> {
     let (accession_a, version_a) = accession_and_version(a);
     let (accession_b, version_b) = accession_and_version(b);
@@ -112,9 +115,9 @@ pub fn annotate(variant: &mut InputVariant, config: &EffectsConfig) {
         return;
     }
     // Ensembl VEP looks the accession up under the name as written alone and
-    // has no output when that misses (OutputFactory.pm 1368-1372); with a
-    // database it names the slice's RefSeq synonym, the resolved sequence's
-    // (ensembl-variation VariationFeature.pm 1912-1916).
+    // has no output when that misses (ensembl-vep OutputFactory.pm 1368-1372);
+    // with a database it names the slice's RefSeq synonym, the resolved
+    // sequence's (ensembl-variation VariationFeature.pm 1912-1916).
     let reference_name = match &options.accessions {
         None => variant.original_chr.as_str(),
         Some(names) => {
@@ -141,12 +144,13 @@ pub fn annotate(variant: &mut InputVariant, config: &EffectsConfig) {
 /// chromosome's, `reference_name` is printed before the numbering, and the
 /// numbering is `m.` on the mitochondrial chromosome (`MT` as the cache names it).
 /// An allele of a `--minimal` split is described from the record's string and
-/// span, which the rejoin restores before the row is built (:2291-2293), under
+/// span, which the rejoin restores before the row is built (:2300-2302), under
 /// the allele as the record writes it (:1386-1390), so it prints the notation
 /// it prints without the flag. `None` where Ensembl VEP writes no value: an
 /// allele outside `ACGT-`, an allele equal to the reference bases, or a variant
-/// outside the chromosome.
-pub fn for_variant(
+/// outside the chromosome. `None` also for a variant on a chromosome the FASTA
+/// lacks, where no reference base can be read.
+pub(crate) fn for_variant(
     variant: &InputVariant,
     fasta: &vep_fasta::IndexedFasta,
     reference_name: &str,
@@ -170,9 +174,9 @@ pub fn for_variant(
 /// and span ([`InputVariant::original_start`], `original_end`) and the written
 /// alternate allele whose trim over that span gives the feature's alleles, the
 /// allele `allele_number` indexes once the string is restored
-/// (InputBuffer.pm:665-685, OutputFactory.pm:1386-1390); for any other variant,
-/// its own string, allele and span. `None` for a split feature no written allele
-/// trims to (a reference allele's row).
+/// (ensembl-vep InputBuffer.pm:665-685, ensembl-vep OutputFactory.pm:1386-1390);
+/// for any other variant, its own string, allele and span. `None` for a split
+/// feature no written allele trims to (a reference allele's row).
 fn rejoined_record(variant: &InputVariant) -> Option<(&str, &str, u64, u64)> {
     let record_string = variant.record_allele_string_multi.as_deref();
     let (Some(start), Some(end), Some(working)) =
@@ -206,7 +210,7 @@ struct Record<'a> {
     reverse: bool,
 }
 
-/// Perl's variant class as `hgvs_genomic` reads it (`var_allele_class`,
+/// Ensembl VEP's variant class as `hgvs_genomic` reads it (`var_allele_class`,
 /// VariationFeature.pm 1136, over `SO_variation_class`, Utils/Sequence.pm 335):
 /// only a deletion or an insertion is shifted 3'.
 #[derive(Debug)]
@@ -244,8 +248,13 @@ fn hgvs_genomic(
         end,
         reverse,
     } = *record;
-    // A variant that does not fall within the slice gets no notation (1904-1908);
-    // the slice is the chromosome, so both ends must be bases of it.
+    // A variant that does not fall within the slice gets no notation
+    // (VariationFeature.pm 1904-1907); the slice is the chromosome as the FASTA
+    // holds it, so both ends must be bases of it. A chromosome the FASTA lacks
+    // has no base to read and gets no notation either, which is this function's
+    // own bound: Ensembl VEP writes a notation there for a record that takes a
+    // transcript's slice (ensembl-vep AnnotationType/Transcript.pm 122), from
+    // `N` bases (Utils/FastaSequence.pm 597-601).
     fasta.base(chr, start)?;
     fasta.base(chr, end)?;
 
@@ -458,7 +467,7 @@ fn trim_sequences(reference: &[u8], alt: &[u8], mut start: i64, mut end: i64) ->
     }
 }
 
-/// Perl's HGVS variant type (`hgvs_variant_notation`, Utils/Sequence.pm 493).
+/// Ensembl VEP's HGVS variant type (`hgvs_variant_notation`, Utils/Sequence.pm 493).
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Kind {
     Del,
@@ -471,7 +480,7 @@ enum Kind {
     Multiple(usize),
 }
 
-/// Perl's `$hgvs_notation` hash: the displayed span and the alleles.
+/// Ensembl VEP's `$hgvs_notation` hash: the displayed span and the alleles.
 struct Notation {
     start: i64,
     end: i64,
@@ -484,7 +493,7 @@ struct Notation {
 /// of `alt` replacing flank positions `ref_start..=ref_end`, displayed at
 /// `display_start..=display_end`; `lookup_order` 1 tests an insertion for a
 /// duplication against the bases after the site first, -1 against the bases
-/// before it first. `None` where Perl returns `undef`: the alternate allele
+/// before it first. `None` where Ensembl VEP returns `undef`: the alternate allele
 /// equals the reference bases.
 fn hgvs_variant_notation(
     alt: &[u8],
@@ -566,8 +575,8 @@ fn hgvs_variant_notation(
 /// moving `end`, and the type is re-read from what remains: a substitution, a
 /// deletion, or an insertion that is a duplication when it repeats the bases
 /// removed from the front. One reference base left with no alternate base is a
-/// substitution to `-` (`G>-`): Perl reads the emptied allele as the one-character
-/// `-` (2069-2080).
+/// substitution to `-` (`G>-`): Ensembl VEP reads the emptied allele as the
+/// one-character `-` (2069-2080).
 fn clip_alleles(n: &mut Notation) {
     let Trimmed {
         reference,
@@ -662,11 +671,17 @@ mod tests {
 
     /// The test reference as an indexed FASTA, 60 bases per line.
     fn test_fasta() -> (tempfile::TempDir, Arc<vep_fasta::IndexedFasta>) {
+        fasta_of(&[("21", CHR21), ("MT", MT)])
+    }
+
+    /// An indexed FASTA of `records` (a name and its sequence), 60 bases per
+    /// line.
+    fn fasta_of(records: &[(&str, &[&str])]) -> (tempfile::TempDir, Arc<vep_fasta::IndexedFasta>) {
         let dir = tempfile::tempdir().unwrap();
         let fa = dir.path().join("ref.fa");
         let mut text = String::new();
         let mut fai = String::new();
-        for (name, chunks) in [("21", CHR21), ("MT", MT)] {
+        for (name, chunks) in records {
             let seq: String = chunks.concat();
             text.push_str(&format!(">{name}\n"));
             fai.push_str(&format!("{name}\t{}\t{}\t60\t61\n", seq.len(), text.len()));
@@ -738,7 +753,7 @@ mod tests {
         &'static [(&'static str, &'static str)],
     );
 
-    /// The strings Ensembl VEP 116.2 writes under `--hgvsg --fasta` for these
+    /// The strings Ensembl VEP 116.3 writes under `--hgvsg --fasta` for these
     /// records on the test reference, one per case, the record given as its VCF
     /// columns: a substitution reads its reference base from the FASTA, not the
     /// record (`21 150 G A` prints `C>A`); a deletion or insertion in a repeat
@@ -796,7 +811,7 @@ mod tests {
         }
     }
 
-    /// Ensembl VEP 116.2 writes `MT:m.500T>C` for `MT 500 T C` on the test
+    /// Ensembl VEP 116.3 writes `MT:m.500T>C` for `MT 500 T C` on the test
     /// reference: the mitochondrial chromosome takes the `m.` numbering
     /// (VariationFeature.pm 2034).
     #[test]
@@ -814,7 +829,39 @@ mod tests {
         );
     }
 
-    /// Ensembl VEP 116.2 on multi-allelic records of the test reference: each
+    /// The `m.` numbering belongs to a sequence region named exactly `MT`,
+    /// whatever the species (VariationFeature.pm 2034 tests the region's name
+    /// and nothing else): a mitochondrion or a plastid that another genome
+    /// names otherwise is numbered `g.`, as every other region is.
+    #[test]
+    fn hgvsg_m_numbering_is_for_a_region_named_mt_alone() {
+        const OWN_NAMES: [&str; 6] = [
+            "Mito",
+            "MtDNA",
+            "mitochondrion_genome",
+            "Mt",
+            "Pt",
+            "mito_A_fumigatus_Af293",
+        ];
+        let mut records: Vec<(&str, &[&str])> = vec![("MT", MT)];
+        records.extend(OWN_NAMES.map(|name| (name, MT)));
+        let (_dir, fasta) = fasta_of(&records);
+        let mut v = variant("MT", 500, 500, "T", "C");
+        assert_eq!(
+            hgvsg_of(&mut v, &shifting(&fasta)).as_deref(),
+            Some("MT:m.500T>C")
+        );
+        for name in OWN_NAMES {
+            let mut v = variant(name, 500, 500, "T", "C");
+            assert_eq!(
+                hgvsg_of(&mut v, &shifting(&fasta)),
+                Some(format!("{name}:g.500T>C")),
+                "{name}"
+            );
+        }
+    }
+
+    /// Ensembl VEP 116.3 on multi-allelic records of the test reference: each
     /// allele is trimmed against the reference on its own (VariationFeature.pm
     /// 1967-1976) to place and class it, an insertion or deletion is then written
     /// from the trimmed bases, and any other allele with the bases the record
@@ -875,7 +922,7 @@ mod tests {
     }
 
     /// Fifty-one `AC` units sit at 700-801, so the 100-base flank downstream of
-    /// the first unit is all repeat. Ensembl VEP 116.2 writes `21:g.800_801del`
+    /// the first unit is all repeat. Ensembl VEP 116.3 writes `21:g.800_801del`
     /// for `21 699 GAC G` and `21:g.798_799dup` for `21 699 G GAC`: the 3' walk
     /// runs over every base of the flank (`get_3prime_seq_offset`,
     /// Utils/Sequence.pm 802, `n <= length(post_seq)`), moving a two-base allele
@@ -903,7 +950,7 @@ mod tests {
         );
     }
 
-    /// Ensembl VEP 116.2 on Ensembl-format records with strand -1 (the alleles
+    /// Ensembl VEP 116.3 on Ensembl-format records with strand -1 (the alleles
     /// written on the reverse strand) writes the same strings as for their
     /// forward-strand twins: `21 150 150 G/T -1` prints `21:g.150C>A`, `21 300
     /// 301 GT/- -1` `21:g.306_307del`, `21 300 299 -/GT -1` `21:g.306_307dup`,
@@ -934,7 +981,7 @@ mod tests {
         }
     }
 
-    /// Under `--shift_hgvs 0` Ensembl VEP 116.2 leaves an insertion or deletion
+    /// Under `--shift_hgvs 0` Ensembl VEP 116.3 leaves an insertion or deletion
     /// where the record puts it and tests the duplication on the forward strand
     /// against the bases after the site first, on the reverse strand against the
     /// bases before it first (`lookup_order`, VariationFeature.pm 2011 and
@@ -982,7 +1029,7 @@ mod tests {
         );
     }
 
-    /// Ensembl VEP 116.2 with `--hgvsg_use_accession` writes
+    /// Ensembl VEP 116.3 with `--hgvsg_use_accession` writes
     /// `NC_000021.9:g.150C>A` for `21 150 C A` and `NC_012920.1:m.500T>C` for
     /// `MT 500 T C` on a cache whose `chr_synonyms.txt` pairs `21` with
     /// `NC_000021.9` and `MT` with `NC_012920.1`: the accession is the first
@@ -1023,11 +1070,11 @@ mod tests {
 
     /// A name the synonyms table pairs with no `NC_` entry takes the accession
     /// of the chromosome the cache reads it as: `Chr21`, read as `21`, prints
-    /// `NC_000021.9`, the name Ensembl VEP 116.2 prints for the record with a
+    /// `NC_000021.9`, the name Ensembl VEP 116.3 prints for the record with a
     /// database connection (the slice's `RefSeq_genomic` synonym,
     /// ensembl-variation VariationFeature.pm 1912-1916). Offline it has no
-    /// output for the record: OutputFactory.pm 1368-1372 reads the synonyms of
-    /// the name as written alone and passes the missing name on to
+    /// output for the record: ensembl-vep OutputFactory.pm 1368-1372 reads the
+    /// synonyms of the name as written alone and passes the missing name on to
     /// `hgvs_genomic`, which asks the adaptor-less slice for its synonyms and
     /// dies. A name with an accession of its own keeps it, and the resolved
     /// chromosome's `NC_` accession comes before a RefSeq name of another
@@ -1068,7 +1115,7 @@ mod tests {
 
     /// A chromosome whose synonyms carry no RefSeq name, under the name as
     /// written or under the cache's, is printed by the cache's name for it:
-    /// the slice's own name, which Ensembl VEP 116.2 prints with a database
+    /// the slice's own name, which Ensembl VEP 116.3 prints with a database
     /// connection where the slice has no `RefSeq_genomic` synonym
     /// (ensembl-variation VariationFeature.pm 1916).
     #[test]
@@ -1122,8 +1169,9 @@ mod tests {
     }
 
     /// A variant outside the chromosome, an insertion before its first base
-    /// included, and a chromosome the FASTA lacks get no value
-    /// (VariationFeature.pm 1904-1908).
+    /// included, gets no value (VariationFeature.pm 1904-1907), and neither
+    /// does a variant on a chromosome the FASTA lacks, where no reference base
+    /// can be read.
     #[test]
     fn hgvsg_is_absent_outside_the_chromosome() {
         let (_dir, fasta) = test_fasta();

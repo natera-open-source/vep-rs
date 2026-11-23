@@ -1,0 +1,3 @@
+stats: red
+  section [SIFT summary] only in the expected file
+  section [PolyPhen summary] only in the expected file

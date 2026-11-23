@@ -1,0 +1,44 @@
+{
+ "mode": "stats",
+ "format": "stats",
+ "verdict": "green",
+ "reasons": [],
+ "tolerance": 9,
+ "masked_rows": [
+  "Command line options",
+  "End time",
+  "Input data",
+  "Input file",
+  "Output file",
+  "Run time",
+  "Start time",
+  "float",
+  "mixed",
+  "only_actual_none",
+  "only_actual_text",
+  "only_expected_none",
+  "only_expected_text",
+  "separator"
+ ],
+ "sections": {
+  "expected": [
+   "VEP run statistics",
+   "Counts",
+   "Masked chart"
+  ],
+  "actual": [
+   "VEP run statistics",
+   "Counts",
+   "Masked chart"
+  ],
+  "order_agrees": true
+ },
+ "compared": {
+  "sections": 3,
+  "rows": 25
+ },
+ "documented": [],
+ "differences": {},
+ "expected": "tests/fixtures/counts_expected.summary.log",
+ "actual": "tests/fixtures/counts_actual.summary.log"
+}

@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 //! The lines `vep filter` reads, as Ensembl VEP's `filter_vep` reads them
-//! (`filter_vep` at release/116.2): the header block of an annotated output,
+//! (`filter_vep` at release/116.3): the header block of an annotated output,
 //! the format of its data lines, and each line parsed into the hash a filter
 //! is evaluated on.
 //!
@@ -33,7 +33,7 @@
 //! a private-use character and [`encode_line`] maps it back. A command-line
 //! word is read the same way ([`decode_word`]), so a filter value, a field
 //! name or a file name ([`path_of`]) compares byte for byte with the line, as
-//! Perl compares its `@ARGV` byte strings. The text rules that read a line
+//! Ensembl VEP compares its `@ARGV` byte strings. The text rules that read a line
 //! are Perl's over a byte string: a blank, a word character and a letter's
 //! case are ASCII, and no byte above ASCII is any of them.
 
@@ -150,7 +150,7 @@ pub fn encode_line(text: &str) -> Cow<'_, [u8]> {
 }
 
 /// The text of a command-line word read as the bytes the shell passed, as
-/// Perl reads `@ARGV`, each byte outside UTF-8 one escape character as in a
+/// Ensembl VEP reads `@ARGV`, each byte outside UTF-8 one escape character as in a
 /// line ([`decode_line`]).
 pub fn decode_word(word: &OsStr) -> String {
     #[cfg(unix)]
@@ -212,7 +212,8 @@ impl Headers {
                     }
                 }
             } else {
-                // Perl's `split` without a limit drops the trailing empty fields.
+                // Perl's `split` without a limit, as Ensembl VEP calls it, drops the
+                // trailing empty fields.
                 let mut columns: Vec<&str> = stripped.split('\t').collect();
                 while columns.last() == Some(&"") {
                     columns.pop();
@@ -801,7 +802,7 @@ mod tests {
     #[test]
     fn tab_headers_name_the_described_fields_and_columns() {
         let h = headers(&[
-            "## ENSEMBL VARIANT EFFECT PREDICTOR v116.2",
+            "## ENSEMBL VARIANT EFFECT PREDICTOR v116.3",
             "## Output produced at 2026-01-01 09:20:15",
             "## Column descriptions:",
             "## Uploaded_variation : Identifier of uploaded variant",

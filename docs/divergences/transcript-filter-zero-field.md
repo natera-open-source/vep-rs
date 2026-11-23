@@ -1,6 +1,6 @@
 # A filter unit whose first word is `0`
 
-**The defect in one sentence.** Ensembl VEP 116.2 tests whether a filter unit has its field yet with Perl's truth test, and the string `0` is false to Perl. So a unit whose first word is `0` loses that word: the operator word becomes the field, and the next word, when there is one, is read as the operator, refused unless it names one. vep-rs reads the first word as the unit's field whatever it is, so `0` names a field undefined everywhere and a unit with a value keeps nothing.
+**The defect in one sentence.** Ensembl VEP 116.3 tests whether a filter unit has its field yet with Perl's truth test, and the string `0` is false to Perl. So a unit whose first word is `0` loses that word: the operator word becomes the field, and the next word, when there is one, is read as the operator, refused unless it names one. vep-rs reads the first word as the unit's field whatever it is, so `0` names a field undefined everywhere and a unit with a value keeps nothing.
 
 **Why this is a defect.** The parser fills a unit's three slots in order, deciding which slot a word fills by testing whether the earlier slots are set. The field slot is tested as `!$current->{field}`, true for an empty slot and true again for one holding `0`, so the word after `0` overwrites it. In `0 is 1` the field becomes `is`, and `1` is read as the operator and refused as `No such operator "1"`, an error naming the value. In `0 ne` the field becomes `ne`, and the unit tests whether a field named `ne` is defined. In `0 biotype is protein_coding` every word lands one slot late, and the unit runs as `biotype is protein_coding`.
 
@@ -10,7 +10,7 @@ The value slot is tested with `defined`, so only the field slot loses a `0`.
 
 `0 is`, with no value, compares the undefined field with no value and keeps everything, as `filter_eq` compares two undefined values. The same rule governs `vep filter`, whose `filter_vep` counterpart shares the grammar.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2, `Bio/EnsEMBL/VEP/FilterSet.pm`):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3, `Bio/EnsEMBL/VEP/FilterSet.pm`):
 
 - Line 223, `parse_filters`: the words of a filter string, split at blanks and parentheses.
 - Lines 238-255: an empty word is skipped, `and` and `or` close the unit, `not` inverts it.
@@ -24,11 +24,11 @@ The value slot is tested with `defined`, so only the field slot loses a `0`.
 
 **The class it produces.** `transcript_filter_zero_field_read_as_unset`: the outcome of a `--transcript_filter` or `vep filter` run whose filter holds a unit whose first word is `0`. Ensembl VEP reads the unit's words one slot late, refusing `0 is 1`, running `0 biotype is protein_coding` as `biotype is protein_coding` and testing `0 ne` as a field named `ne`; vep-rs reads `0` as the field. The class is documented only: no committed flag set and no committed tool run passes such a unit.
 
-**How often the shape occurs.** Tier 3: the shape is a value of `--transcript_filter`, or of `vep filter`'s `--filter`, that no ordinary command line carries. No ordinary field is named `0` either. A `--custom` source given `short_name=0` is named after its file on both engines, since `AnnotationSource/File.pm:154-157` falls back to the file's last path segment for a short name false to Perl, and a VCF INFO key may not begin with a digit. So the shape arises only in a filter string as typed. Of the 392 committed flag sets, 9 pass `--transcript_filter` and none passes a unit whose first word is `0`; none of the 28 committed `vep filter` runs does.
+**How often the shape occurs.** Tier 3: the shape is a value of `--transcript_filter`, or of `vep filter`'s `--filter`, that no ordinary command line carries. No ordinary field is named `0` either. A `--custom` source given `short_name=0` is named after its file on both engines, since `AnnotationSource/File.pm:154-157` falls back to the file's last path segment for a short name false to Perl, and a VCF INFO key may not begin with a digit. So the shape arises only in a filter string as typed. Of the 511 committed flag sets, 10 pass `--transcript_filter` and none passes a unit whose first word is `0`; none of the 28 committed `vep filter` runs does.
 
 ## 1. A unit `0 is 1` and a unit `0 ne` over 41 transcripts
 
-**In short.** The record `tf_17608184`, `21 17608184 A>G`, lies within reach of 41 transcripts. Under `--transcript_filter '0 is 1'`, Ensembl VEP 116.2 refuses the run with `ERROR: No such operator "1"` and writes nothing; vep-rs runs and writes the record's one `intergenic_variant` row, every transcript dropped. Under `--transcript_filter '0 ne'`, Ensembl VEP writes that intergenic row and vep-rs the 41 transcript rows.
+**In short.** The record `tf_17608184`, `21 17608184 A>G`, lies within reach of 41 transcripts. Under `--transcript_filter '0 is 1'`, Ensembl VEP 116.3 refuses the run with `ERROR: No such operator "1"` and writes nothing; vep-rs runs and writes the record's one `intergenic_variant` row, every transcript dropped. Under `--transcript_filter '0 ne'`, Ensembl VEP writes that intergenic row and vep-rs the 41 transcript rows.
 
 ### 1.1 What a reader needs to know first
 
@@ -46,7 +46,7 @@ Both engines run over the GRCh38 release 116 cache, with the filter quoted below
 
 ### 1.3 What each engine writes
 
-Ensembl VEP 116.2 with `--transcript_filter '0 is 1'` writes no output and ends with exit status 2 and this line in its exception block:
+Ensembl VEP 116.3 with `--transcript_filter '0 is 1'` writes no output and ends with exit status 2 and this line in its exception block:
 
 ```
 MSG: ERROR: No such operator "1"
@@ -90,7 +90,7 @@ vep -i record.vcf -o out.txt --offline --json_cache <corpus>/json_cache \
   --assembly GRCh38 --transcript_filter '0 is 1'
 ```
 
-vep-rs writes the record's intergenic row. Ensembl VEP 116.2 with the same filter over the GRCh38 release 116 cache ends with `ERROR: No such operator "1"`. With `--transcript_filter '0 ne'`, vep-rs writes the 41 transcript rows and Ensembl VEP the intergenic row.
+vep-rs writes the record's intergenic row. Ensembl VEP 116.3 with the same filter over the GRCh38 release 116 cache ends with `ERROR: No such operator "1"`. With `--transcript_filter '0 ne'`, vep-rs writes the 41 transcript rows and Ensembl VEP the intergenic row.
 
 ### 1.7 How the comparator treats this class
 

@@ -63,6 +63,9 @@ jobs:
                 README.md | CHANGELOG.md | CONTRIBUTING.md | AGENTS.md | CLAUDE.md \
                   | CODE_OF_CONDUCT.md | SECURITY.md | CITATION.cff | .zenodo.json | book.toml \
                   | theme/* | manuscript/* | bioconda/* | docker/* | .claude/* | .github/*) ;;
+                # Every other path is code. tools/ is never split by tool: the tools compile
+                # each other's source by `#[path]` and `include_str!` and read each other's
+                # test fixtures, so a change under one tool is built and tested by others.
                 *) code=true ;;
               esac
             done < "$RUNNER_TEMP/changed"
@@ -82,19 +85,48 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # tools/vep-fields-compare, tools/vep-outputs-compare, tools/vep-plugin-pairs and
-        # tools/vep-formats-remainder are their own Cargo roots, so a `--workspace` command
-        # never reaches them; `comparator`, `outputs_comparator`, `plugin_pairs` and
-        # `formats_remainder` are the same check over those packages. `gate` names the
-        # `changes` output that decides whether the entry's steps run.
+        # Every directory under tools/ is its own Cargo root, so a `--workspace` command
+        # never reaches it; each key after `command` is the same check over one of those
+        # packages, run by the step that names the key. `gate` names the `changes` output
+        # that decides whether the entry's steps run.
         include:
           - name: Test
             gate: test
             command: cargo test --workspace --locked
             comparator: cargo test --locked --manifest-path tools/vep-fields-compare/Cargo.toml
             outputs_comparator: cargo test --locked --manifest-path tools/vep-outputs-compare/Cargo.toml
+            formats_comparator: cargo test --locked --manifest-path tools/vep-formats-compare/Cargo.toml
             plugin_pairs: cargo test --locked --manifest-path tools/vep-plugin-pairs/Cargo.toml
-            formats_remainder: cargo test --locked --manifest-path tools/vep-formats-remainder/Cargo.toml
+            cache_diff: cargo test --locked --manifest-path tools/vep-cache-diff/Cargo.toml
+            cache_output_gates: cargo test --locked --manifest-path tools/vep-cache-output-gates/Cargo.toml
+            cache_parity_audit: cargo test --locked --manifest-path tools/vep-cache-parity-audit/Cargo.toml
+            discordant_classes: cargo test --locked --manifest-path tools/vep-discordant-classes/Cargo.toml
+            divergence_reevaluate: cargo test --locked --manifest-path tools/vep-divergence-reevaluate/Cargo.toml
+            fastvep_normalize: cargo test --locked --manifest-path tools/vep-fastvep-normalize/Cargo.toml
+            fastvep_plugin_tuples: cargo test --locked --manifest-path tools/vep-fastvep-plugin-tuples/Cargo.toml
+            file_census: cargo test --locked --manifest-path tools/vep-file-census/Cargo.toml
+            # The tests of this package that classify with SpliceAI score files ask a build of
+            # tools/vep-formats-compare, which the `formats_comparator` step leaves under that
+            # tool's target/debug before this one runs; they fail where none stands.
+            golden_corpus: cargo test --locked --manifest-path tools/vep-golden-corpus/Cargo.toml
+            gtf_tags_compare: cargo test --locked --manifest-path tools/vep-gtf-tags-compare/Cargo.toml
+            intermediates_compare: cargo test --locked --manifest-path tools/vep-intermediates-compare/Cargo.toml
+            # The corpus round trips of this package read the `vep` binary the workspace's
+            # cargo test leaves under target/debug and pass without running where none
+            # stands; under the variable they fail instead, so they run here.
+            parquet_to_tab: VEP_ROUND_TRIPS_MUST_RUN=1 cargo test --locked --manifest-path tools/vep-parquet-to-tab/Cargo.toml
+            prepare_benchmark_vcfs: cargo test --locked --manifest-path tools/vep-prepare-benchmark-vcfs/Cargo.toml
+            stats_compare: cargo test --locked --manifest-path tools/vep-stats-compare/Cargo.toml
+            storable_digest: cargo test --locked --manifest-path tools/vep-storable-digest/Cargo.toml
+            storable_digest_join: cargo test --locked --manifest-path tools/vep-storable-digest-join/Cargo.toml
+            storable_dump: cargo test --locked --manifest-path tools/vep-storable-dump/Cargo.toml
+            storable_to_json: cargo test --locked --manifest-path tools/vep-storable-to-json/Cargo.toml
+            storable_transcript_classes: cargo test --locked --manifest-path tools/vep-storable-transcript-classes/Cargo.toml
+            sv_comparator: cargo test --locked --manifest-path tools/vep-sv-compare/Cargo.toml
+            genome_table: cargo test --locked --manifest-path tools/vep-genome-table/Cargo.toml
+            seeded_variants: cargo test --locked --manifest-path tools/vep-seeded-variants/Cargo.toml
+            genome_features: cargo test --locked --manifest-path tools/vep-genome-features/Cargo.toml
+            loftee_synthetic_conservation: cargo test --locked --manifest-path tools/vep-loftee-synthetic-conservation/Cargo.toml
           - name: Clippy
             gate: rust
             # `vep-cli/bench` puts the `bench_plugins` binary, which builds only
@@ -102,23 +134,76 @@ jobs:
             command: cargo clippy --workspace --features vep-cli/bench -- -D warnings
             comparator: cargo clippy --all-targets --locked --manifest-path tools/vep-fields-compare/Cargo.toml -- -D warnings
             outputs_comparator: cargo clippy --all-targets --locked --manifest-path tools/vep-outputs-compare/Cargo.toml -- -D warnings
+            formats_comparator: cargo clippy --all-targets --locked --manifest-path tools/vep-formats-compare/Cargo.toml -- -D warnings
             plugin_pairs: cargo clippy --all-targets --locked --manifest-path tools/vep-plugin-pairs/Cargo.toml -- -D warnings
-            formats_remainder: cargo clippy --all-targets --locked --manifest-path tools/vep-formats-remainder/Cargo.toml -- -D warnings
+            cache_diff: cargo clippy --all-targets --locked --manifest-path tools/vep-cache-diff/Cargo.toml -- -D warnings
+            cache_output_gates: cargo clippy --all-targets --locked --manifest-path tools/vep-cache-output-gates/Cargo.toml -- -D warnings
+            cache_parity_audit: cargo clippy --all-targets --locked --manifest-path tools/vep-cache-parity-audit/Cargo.toml -- -D warnings
+            discordant_classes: cargo clippy --all-targets --locked --manifest-path tools/vep-discordant-classes/Cargo.toml -- -D warnings
+            divergence_reevaluate: cargo clippy --all-targets --locked --manifest-path tools/vep-divergence-reevaluate/Cargo.toml -- -D warnings
+            fastvep_normalize: cargo clippy --all-targets --locked --manifest-path tools/vep-fastvep-normalize/Cargo.toml -- -D warnings
+            fastvep_plugin_tuples: cargo clippy --all-targets --locked --manifest-path tools/vep-fastvep-plugin-tuples/Cargo.toml -- -D warnings
+            file_census: cargo clippy --all-targets --locked --manifest-path tools/vep-file-census/Cargo.toml -- -D warnings
+            golden_corpus: cargo clippy --all-targets --locked --manifest-path tools/vep-golden-corpus/Cargo.toml -- -D warnings
+            gtf_tags_compare: cargo clippy --all-targets --locked --manifest-path tools/vep-gtf-tags-compare/Cargo.toml -- -D warnings
+            intermediates_compare: cargo clippy --all-targets --locked --manifest-path tools/vep-intermediates-compare/Cargo.toml -- -D warnings
+            parquet_to_tab: cargo clippy --all-targets --locked --manifest-path tools/vep-parquet-to-tab/Cargo.toml -- -D warnings
+            prepare_benchmark_vcfs: cargo clippy --all-targets --locked --manifest-path tools/vep-prepare-benchmark-vcfs/Cargo.toml -- -D warnings
+            stats_compare: cargo clippy --all-targets --locked --manifest-path tools/vep-stats-compare/Cargo.toml -- -D warnings
+            storable_digest: cargo clippy --all-targets --locked --manifest-path tools/vep-storable-digest/Cargo.toml -- -D warnings
+            storable_digest_join: cargo clippy --all-targets --locked --manifest-path tools/vep-storable-digest-join/Cargo.toml -- -D warnings
+            storable_dump: cargo clippy --all-targets --locked --manifest-path tools/vep-storable-dump/Cargo.toml -- -D warnings
+            storable_to_json: cargo clippy --all-targets --locked --manifest-path tools/vep-storable-to-json/Cargo.toml -- -D warnings
+            storable_transcript_classes: cargo clippy --all-targets --locked --manifest-path tools/vep-storable-transcript-classes/Cargo.toml -- -D warnings
+            sv_comparator: cargo clippy --all-targets --locked --manifest-path tools/vep-sv-compare/Cargo.toml -- -D warnings
+            genome_table: cargo clippy --all-targets --locked --manifest-path tools/vep-genome-table/Cargo.toml -- -D warnings
+            seeded_variants: cargo clippy --all-targets --locked --manifest-path tools/vep-seeded-variants/Cargo.toml -- -D warnings
+            genome_features: cargo clippy --all-targets --locked --manifest-path tools/vep-genome-features/Cargo.toml -- -D warnings
+            loftee_synthetic_conservation: cargo clippy --all-targets --locked --manifest-path tools/vep-loftee-synthetic-conservation/Cargo.toml -- -D warnings
           - name: Format
             gate: rust
             command: cargo fmt --all -- --check
             comparator: cargo fmt --all --manifest-path tools/vep-fields-compare/Cargo.toml -- --check
             outputs_comparator: cargo fmt --all --manifest-path tools/vep-outputs-compare/Cargo.toml -- --check
+            formats_comparator: cargo fmt --all --manifest-path tools/vep-formats-compare/Cargo.toml -- --check
             plugin_pairs: cargo fmt --all --manifest-path tools/vep-plugin-pairs/Cargo.toml -- --check
-            formats_remainder: cargo fmt --all --manifest-path tools/vep-formats-remainder/Cargo.toml -- --check
+            cache_diff: cargo fmt --all --manifest-path tools/vep-cache-diff/Cargo.toml -- --check
+            cache_output_gates: cargo fmt --all --manifest-path tools/vep-cache-output-gates/Cargo.toml -- --check
+            cache_parity_audit: cargo fmt --all --manifest-path tools/vep-cache-parity-audit/Cargo.toml -- --check
+            discordant_classes: cargo fmt --all --manifest-path tools/vep-discordant-classes/Cargo.toml -- --check
+            divergence_reevaluate: cargo fmt --all --manifest-path tools/vep-divergence-reevaluate/Cargo.toml -- --check
+            fastvep_normalize: cargo fmt --all --manifest-path tools/vep-fastvep-normalize/Cargo.toml -- --check
+            fastvep_plugin_tuples: cargo fmt --all --manifest-path tools/vep-fastvep-plugin-tuples/Cargo.toml -- --check
+            file_census: cargo fmt --all --manifest-path tools/vep-file-census/Cargo.toml -- --check
+            golden_corpus: cargo fmt --all --manifest-path tools/vep-golden-corpus/Cargo.toml -- --check
+            gtf_tags_compare: cargo fmt --all --manifest-path tools/vep-gtf-tags-compare/Cargo.toml -- --check
+            intermediates_compare: cargo fmt --all --manifest-path tools/vep-intermediates-compare/Cargo.toml -- --check
+            parquet_to_tab: cargo fmt --all --manifest-path tools/vep-parquet-to-tab/Cargo.toml -- --check
+            prepare_benchmark_vcfs: cargo fmt --all --manifest-path tools/vep-prepare-benchmark-vcfs/Cargo.toml -- --check
+            stats_compare: cargo fmt --all --manifest-path tools/vep-stats-compare/Cargo.toml -- --check
+            storable_digest: cargo fmt --all --manifest-path tools/vep-storable-digest/Cargo.toml -- --check
+            storable_digest_join: cargo fmt --all --manifest-path tools/vep-storable-digest-join/Cargo.toml -- --check
+            storable_dump: cargo fmt --all --manifest-path tools/vep-storable-dump/Cargo.toml -- --check
+            storable_to_json: cargo fmt --all --manifest-path tools/vep-storable-to-json/Cargo.toml -- --check
+            storable_transcript_classes: cargo fmt --all --manifest-path tools/vep-storable-transcript-classes/Cargo.toml -- --check
+            sv_comparator: cargo fmt --all --manifest-path tools/vep-sv-compare/Cargo.toml -- --check
+            genome_table: cargo fmt --all --manifest-path tools/vep-genome-table/Cargo.toml -- --check
+            seeded_variants: cargo fmt --all --manifest-path tools/vep-seeded-variants/Cargo.toml -- --check
+            genome_features: cargo fmt --all --manifest-path tools/vep-genome-features/Cargo.toml -- --check
+            loftee_synthetic_conservation: cargo fmt --all --manifest-path tools/vep-loftee-synthetic-conservation/Cargo.toml -- --check
           # Catches a license header run into a module's `//!` doc line with no
           # blank line between them. Test/Clippy/Format are all blind to it: the
           # joined line is a valid comment, so everything compiles and passes while
           # the first rustdoc line is silently lost.
+          #
+          # scripts/check_api_docs.sh builds the API documentation with rustdoc's warnings
+          # denied. A doc comment rustdoc cannot render as written (a link to an item the
+          # page cannot reach, a bare URL, an angle-bracketed word read as an HTML tag) is
+          # a warning, which `cargo doc`, the tests and clippy all pass.
           - name: Module Docs
             gate: rust
-            command: scripts/check_module_docs.sh
-            comparator: scripts/check_module_docs.sh tools
+            command: scripts/check_module_docs.sh && scripts/check_api_docs.sh workspace
+            comparator: scripts/check_module_docs.sh tools && scripts/check_api_docs.sh tools
 
     steps:
       - if: needs.changes.outputs[matrix.gate] == 'false'
@@ -138,60 +223,94 @@ jobs:
         run: ${{ matrix.comparator }}
       - if: matrix.outputs_comparator && needs.changes.outputs[matrix.gate] != 'false'
         run: ${{ matrix.outputs_comparator }}
+      - if: matrix.formats_comparator && needs.changes.outputs[matrix.gate] != 'false'
+        run: ${{ matrix.formats_comparator }}
       - if: matrix.plugin_pairs && needs.changes.outputs[matrix.gate] != 'false'
         run: ${{ matrix.plugin_pairs }}
-      - if: matrix.formats_remainder && needs.changes.outputs[matrix.gate] != 'false'
-        run: ${{ matrix.formats_remainder }}
-      # The Parquet adapter's corpus round trips run only where a vep binary
-      # exists, and the Test job's cargo test leaves target/debug/vep, so the
-      # Python inverse of the writer's cell contract is held to the writer here;
-      # the three round trips must run, not skip.
+      - if: matrix.cache_diff && needs.changes.outputs[matrix.gate] != 'false'
+        run: ${{ matrix.cache_diff }}
+      - if: matrix.cache_output_gates && needs.changes.outputs[matrix.gate] != 'false'
+        run: ${{ matrix.cache_output_gates }}
+      - if: matrix.cache_parity_audit && needs.changes.outputs[matrix.gate] != 'false'
+        run: ${{ matrix.cache_parity_audit }}
+      - if: matrix.discordant_classes && needs.changes.outputs[matrix.gate] != 'false'
+        run: ${{ matrix.discordant_classes }}
+      - if: matrix.divergence_reevaluate && needs.changes.outputs[matrix.gate] != 'false'
+        run: ${{ matrix.divergence_reevaluate }}
+      - if: matrix.fastvep_normalize && needs.changes.outputs[matrix.gate] != 'false'
+        run: ${{ matrix.fastvep_normalize }}
+      - if: matrix.fastvep_plugin_tuples && needs.changes.outputs[matrix.gate] != 'false'
+        run: ${{ matrix.fastvep_plugin_tuples }}
+      - if: matrix.file_census && needs.changes.outputs[matrix.gate] != 'false'
+        run: ${{ matrix.file_census }}
+      - if: matrix.golden_corpus && needs.changes.outputs[matrix.gate] != 'false'
+        run: ${{ matrix.golden_corpus }}
+      - if: matrix.gtf_tags_compare && needs.changes.outputs[matrix.gate] != 'false'
+        run: ${{ matrix.gtf_tags_compare }}
+      - if: matrix.intermediates_compare && needs.changes.outputs[matrix.gate] != 'false'
+        run: ${{ matrix.intermediates_compare }}
+      - if: matrix.parquet_to_tab && needs.changes.outputs[matrix.gate] != 'false'
+        run: ${{ matrix.parquet_to_tab }}
+      - if: matrix.prepare_benchmark_vcfs && needs.changes.outputs[matrix.gate] != 'false'
+        run: ${{ matrix.prepare_benchmark_vcfs }}
+      - if: matrix.stats_compare && needs.changes.outputs[matrix.gate] != 'false'
+        run: ${{ matrix.stats_compare }}
+      - if: matrix.storable_digest && needs.changes.outputs[matrix.gate] != 'false'
+        run: ${{ matrix.storable_digest }}
+      - if: matrix.storable_digest_join && needs.changes.outputs[matrix.gate] != 'false'
+        run: ${{ matrix.storable_digest_join }}
+      - if: matrix.storable_dump && needs.changes.outputs[matrix.gate] != 'false'
+        run: ${{ matrix.storable_dump }}
+      - if: matrix.storable_to_json && needs.changes.outputs[matrix.gate] != 'false'
+        run: ${{ matrix.storable_to_json }}
+      - if: matrix.storable_transcript_classes && needs.changes.outputs[matrix.gate] != 'false'
+        run: ${{ matrix.storable_transcript_classes }}
+      - if: matrix.sv_comparator && needs.changes.outputs[matrix.gate] != 'false'
+        run: ${{ matrix.sv_comparator }}
+      - if: matrix.genome_table && needs.changes.outputs[matrix.gate] != 'false'
+        run: ${{ matrix.genome_table }}
+      - if: matrix.seeded_variants && needs.changes.outputs[matrix.gate] != 'false'
+        run: ${{ matrix.seeded_variants }}
+      - if: matrix.genome_features && needs.changes.outputs[matrix.gate] != 'false'
+        run: ${{ matrix.genome_features }}
+      - if: matrix.loftee_synthetic_conservation && needs.changes.outputs[matrix.gate] != 'false'
+        run: ${{ matrix.loftee_synthetic_conservation }}
+      # pytest for the step below, by the install line of the Comparator Tests job.
       - if: matrix.name == 'Test' && needs.changes.outputs[matrix.gate] != 'false'
-        run: |
-          set -eo pipefail
-          python3 -m pip install --quiet pytest pyarrow==26.0.0 pyyaml
-          python3 -m pytest -q scripts/adapters/test_parquet_to_vep_tab.py
-          python3 -m pytest -q scripts/adapters/test_parquet_to_vep_tab.py -k golden_corpus | tee /tmp/round_trips.txt
-          grep -q '^3 passed' /tmp/round_trips.txt
-      # The tuple comparator's test of its Rust build runs only where the tool's binary exists,
-      # and the Test job's cargo test leaves
-      # tools/vep-outputs-compare/target/debug/vep-outputs-compare: the test must run, not
-      # skip, so both programs are held to one set of reports over its output pairs.
-      - if: matrix.name == 'Test' && needs.changes.outputs[matrix.gate] != 'false'
-        run: |
-          set -eo pipefail
-          export VEP_OUTPUTS_COMPARE="$PWD/tools/vep-outputs-compare/target/debug/vep-outputs-compare"
-          python3 -m pytest -q scripts/concordance/test_compare_vep_outputs.py -k OutputsToolWritesTheSameReports | tee /tmp/outputs_tool.txt
-          grep -q '^1 passed' /tmp/outputs_tool.txt
-      # The plugin scorer's tests of the pairing tool run only where its binary exists, and
-      # the Test job's cargo test leaves tools/vep-plugin-pairs/target/debug/vep-plugin-pairs:
-      # the tests named for the tool must run, not skip, and then every test of the module
-      # that scores runs through the binary, so both paths are held to one set of outputs.
-      - if: matrix.name == 'Test' && needs.changes.outputs[matrix.gate] != 'false'
-        run: |
-          set -eo pipefail
-          export VEP_PLUGIN_PAIRS="$PWD/tools/vep-plugin-pairs/target/debug/vep-plugin-pairs"
-          python3 -m pytest -q scripts/concordance/test_score_plugin_tuples.py -k pairing_tool | tee /tmp/pairing_tool.txt
-          grep -q '^9 passed' /tmp/pairing_tool.txt
-          SCORE_PLUGIN_TUPLES_PATH=pairing-tool python3 -m pytest -q scripts/concordance/test_score_plugin_tuples.py | tee /tmp/through_the_tool.txt
-          grep -q '^248 passed, 1 skipped' /tmp/through_the_tool.txt
-      # The plugin concordance driver's scoring path needs a vep binary and the pairing tool, and
-      # the Test job's cargo test leaves both: one committed corpus is annotated and scored through
-      # the tool against the corpus's committed Ensembl VEP output, with no container, and the rows
+        run: python3 -m pip install --quiet pytest pyyaml
+      # The plugin concordance driver scores through tools/vep-plugin-pairs, and its tests that
+      # score skip themselves without the tool's binary. The Test job's cargo test leaves
+      # tools/vep-plugin-pairs/target/debug/vep-plugin-pairs and a vep binary: the three tests
+      # must run, not skip, and then one committed corpus is annotated and scored through the
+      # tool against the corpus's committed Ensembl VEP output, with no container, and the rows
       # printed are held to the committed ones.
       - if: matrix.name == 'Test' && needs.changes.outputs[matrix.gate] != 'false'
         run: |
           set -eo pipefail
+          python3 -m pytest -q scripts/concordance/test_reproduce_plugin_concordance.py -k built_tool | tee "$RUNNER_TEMP/built_tool.txt"
+          grep -q '^3 passed' "$RUNNER_TEMP/built_tool.txt"
           python3 scripts/concordance/reproduce_plugin_concordance.py \
             --run GRCh38-plugin-transcript-annotator --set base \
             --vep "$PWD/target/debug/vep" \
             --pairing-tool "$PWD/tools/vep-plugin-pairs/target/debug/vep-plugin-pairs" \
             --work-dir "$RUNNER_TEMP/plugin-concordance" | tee "$RUNNER_TEMP/plugin_rows.jsonl"
           cmp scripts/concordance/testdata/reproduce_plugin_concordance/GRCh38-plugin-transcript-annotator.base.jsonl "$RUNNER_TEMP/plugin_rows.jsonl"
+      # The `bench_plugins` binary builds only under the feature `bench`, which the workspace's
+      # cargo test does not pass, so the tests inside it run in a step of their own.
+      - if: matrix.name == 'Test' && needs.changes.outputs[matrix.gate] != 'false'
+        run: cargo test --locked -p vep-cli --features bench --bin bench_plugins
+      # The documented public interface of the workspace's crates is held to the record under
+      # tests/public-interface: every documented item of each library with its signature, each
+      # package's features and library target, and the crates outside the workspace a signature
+      # may name. The step reads rustdoc's JSON output on the pinned toolchain and shares the
+      # dependency builds of this cell's documentation build, so it runs after it, with no
+      # network. A deliberate change writes the record again and commits its diff:
+      # python3 scripts/check_public_interface.py --update
+      - if: matrix.name == 'Module Docs' && needs.changes.outputs[matrix.gate] != 'false'
+        run: python3 scripts/check_public_interface.py --offline
 
-  # The Python comparators and the golden-corpus generator ship with their own
-  # test files; a file that fails to import reports zero failures, so the
-  # collected count is asserted per file.
+  # The Python scripts ship with their own test files; a file that fails to
+  # import reports zero failures, so the collected count is asserted per file.
   comparator-tests:
     name: Comparator Tests
     runs-on: ubuntu-latest
@@ -200,17 +319,13 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
-      # pyarrow: the Parquet adapter reads the writer's files through it, and its
-      # test module skips itself without it, so the collected count below holds
-      # the install; pinned, so every run reads the files with one reader version.
-      - run: pip install --quiet pytest pyarrow==26.0.0 pyyaml
-      # The hand-over tests of test_compare_vep_formats.py compare through the front end,
-      # tools/vep-formats-remainder, and skip themselves without its release build; this job
-      # builds it, and the step after the run holds those tests to have run.
+      - run: pip install --quiet pytest pyyaml
+      # The pinned toolchain's cargo: scripts/release/crate_publish_order.py reads the workspace
+      # through `cargo metadata`, in the test run below and in the step after it, which also
+      # packages the crates.
       - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
         with:
           toolchain: 1.97.1
-      - run: cargo build --release --locked --manifest-path tools/vep-formats-remainder/Cargo.toml
       # The custom-source fixture test skips itself without bgzip, tabix and bigtools;
       # this job installs them so the skip cannot hide a regression.
       - run: |
@@ -230,39 +345,32 @@ jobs:
       - run: |
           set -e
           tests=(
-            "scripts/concordance/test_compare_vep_outputs.py 314"
-            "scripts/validation/test_compare_sv_concordance.py 290"
-            "scripts/concordance/test_reference_release.py 17"
-            "scripts/validation/test_breakend_mate_context.py 24"
-            "scripts/concordance/test_compare_vep_formats.py 578"
-            "scripts/concordance/test_compare_vep_stats.py 6"
-            "scripts/adapters/test_parquet_to_vep_tab.py 14"
-            "scripts/concordance/test_compare_vep_fields.py 9"
-            "scripts/concordance/test_compare_plugin_outputs.py 24"
-            "scripts/concordance/test_score_plugin_tuples.py 249"
-            "scripts/concordance/test_plugin_gate_runs.py 15"
-            "scripts/concordance/test_reproduce_plugin_concordance.py 42"
-            "scripts/concordance/test_fastvep_plugin_tuples.py 94"
-            "scripts/concordance/test_species_harness.py 3"
-            "scripts/golden/test_golden_scripts.py 374"
-            "scripts/fixtures/test_cut_plugin_regions.py 10"
-            "scripts/fixtures/test_plugin_score_fixtures.py 27"
-            "scripts/fixtures/test_make_plugin_fixture.py 9"
-            "scripts/release/test_render_release_notes.py 197"
+            "scripts/concordance/test_reference_release.py 19"
+            "scripts/concordance/test_plugin_gate_runs.py 16"
+            "scripts/concordance/test_reproduce_plugin_concordance.py 49"
+            "scripts/concordance/test_species_harness.py 7"
+            "scripts/golden/test_fixture_scripts.py 21"
+            "scripts/golden/test_prune_json_cache.py 4"
+            "scripts/fixtures/test_cut_plugin_regions.py 20"
+            "scripts/fixtures/test_plugin_score_fixtures.py 30"
+            "scripts/fixtures/test_make_plugin_fixture.py 10"
+            "scripts/fixtures/test_loftee_conservation_database.py 6"
+            "scripts/release/test_render_release_notes.py 223"
             "scripts/release/test_check_glibc_floor.py 8"
-            "scripts/parity/test_check_parity_matrix.py 72"
-            "scripts/parity/test_plugin_gate_rows.py 41"
-            "scripts/validation/test_diff_caches.py 4"
-            "scripts/docs/test_site_tools.py 173"
-            "scripts/docs/test_render_release_figure.py 175"
+            "scripts/release/test_crate_publish_order.py 20"
+            "scripts/parity/test_check_parity_matrix.py 184"
+            "scripts/parity/test_plugin_gate_rows.py 42"
+            "scripts/docs/test_site_tools.py 225"
+            "scripts/docs/test_render_release_figure.py 215"
             "scripts/docs/test_render_plugin_wall_time.py 30"
-            "scripts/fixtures/test_maxentscan_fixture_matrices.py 19"
+            "scripts/docs/test_supported_genomes.py 52"
+            "scripts/fixtures/test_maxentscan_fixture_matrices.py 27"
             "scripts/data/test_write_loftee_stand_ins.py 14"
             "scripts/divergences/test_check_divergence_order.py 34"
-            "scripts/divergences/test_reevaluate.py 25"
-            "scripts/ci/test_admission.py 475"
-            "scripts/docs/test_contributor_guide.py 16"
+            "scripts/ci/test_admission.py 546"
+            "scripts/docs/test_contributor_guide.py 20"
             "scripts/bioconda/test_recipe.py 24"
+            "scripts/test_check_public_interface.py 34"
           )
           fail=0
           files=()
@@ -278,62 +386,13 @@ jobs:
           done
           [ "$fail" -eq 0 ]
           python3 -m pytest -q "${files[@]}"
-      # The twenty-two hand-over tests must run, not skip: each compares planted outputs on the
-      # whole outputs and through the front end built above.
+      # The list CRATES of crates-io.yml must name the workspace's crates, each after the
+      # siblings it depends on, and every sibling pin must read the workspace version. Then
+      # every crate is packaged from its manifest. `--no-verify` compiles nothing: the build
+      # of the packaged crates is the publishing workflow's.
       - run: |
-          set -eo pipefail
-          python3 -m pytest -q scripts/concordance/test_compare_vep_formats.py -k front_end | tee /tmp/front_end.txt
-          grep -q '^22 passed' /tmp/front_end.txt
-      # The Rust field comparator's goldens are what compare_vep_fields.py writes over its
-      # fixture pairs; the Test job holds the binary to them, this step holds the Python,
-      # so a change to either side that moves the contract fails here or there. From the
-      # package root with relative fixture paths, which the goldens' `inputs` block carries.
-      - run: |
-          set -e
-          cd tools/vep-fields-compare
-          actual=$(mktemp -d)
-          py=../../scripts/concordance/compare_vep_fields.py
-          python3 "$py" --perl tests/fixtures/reference.txt --rust tests/fixtures/scored.txt --out "$actual/fields.json" --tmp-dir "$actual" > "$actual/stdout.txt"
-          cmp "$actual/fields.json" tests/fixtures/expected_fields.json
-          cmp "$actual/stdout.txt" tests/fixtures/expected_stdout.txt
-          python3 "$py" --perl tests/fixtures/reference.txt --rust tests/fixtures/scored.txt --out "$actual/fields_examples1.json" --tmp-dir "$actual" --examples 1 > /dev/null
-          cmp "$actual/fields_examples1.json" tests/fixtures/expected_fields_examples1.json
-          python3 "$py" --perl tests/fixtures/disjoint_reference.txt --rust tests/fixtures/disjoint_scored.txt --out "$actual/disjoint_fields.json" --tmp-dir "$actual" > "$actual/disjoint_stdout.txt"
-          cmp "$actual/disjoint_fields.json" tests/fixtures/expected_disjoint_fields.json
-          cmp "$actual/disjoint_stdout.txt" tests/fixtures/expected_disjoint_stdout.txt
-      # The same hold for the Rust outputs comparator: compare_vep_outputs.py over its fixture
-      # directories in the three modes, every report file against the committed golden, the
-      # checkout-dependent values (the resolved directories, the timestamp) masked to the
-      # tokens the goldens carry.
-      - run: |
-          set -e
-          cd tools/vep-outputs-compare
-          py=../../scripts/concordance/compare_vep_outputs.py
-          fx=$(cd tests/fixtures && pwd -P)
-          actual=$(mktemp -d)
-          mask() { sed -E "s/\"generated_at_utc\": \"[^\"]*\"/\"generated_at_utc\": \"{{GENERATED_AT}}\"/; s#$actual/report_[a-z0-9]*#{{REPORT_DIR}}#g; s#$fx/perl#{{PERL_DIR}}#g; s#$fx/rust#{{RUST_DIR}}#g; s#$fx/input#{{INPUT_DIR}}#g; s#$actual#{{SCRATCH}}#g"; }
-          check() { mask < "$1" | cmp - "tests/fixtures/$2"; }
-          python3 "$py" --perl-dir tests/fixtures/perl --rust-dir tests/fixtures/rust --assembly GRCh38 --input-dir tests/fixtures/input --report-dir "$actual/report_c116" > "$actual/c116.stdout" 2> "$actual/c116.stderr"
-          for f in summary.json summary.md discordant.tsv discordant_open.tsv; do check "$actual/report_c116/$f" "expected_c116_$f"; done
-          check "$actual/c116.stdout" expected_c116_stdout.txt
-          check "$actual/c116.stderr" expected_c116_stderr.txt
-          python3 "$py" --perl-dir tests/fixtures/perl --rust-dir tests/fixtures/rust --assembly GRCh38 --reference-release 115.2 --report-dir "$actual/report_c115" > "$actual/c115.stdout"
-          for f in summary.json summary.md discordant.tsv discordant_open.tsv; do check "$actual/report_c115/$f" "expected_c115_$f"; done
-          check "$actual/c115.stdout" expected_c115_stdout.txt
-          python3 "$py" --perl-dir tests/fixtures/perl --rust-dir tests/fixtures/rust --no-canonical-contigs --input-vcf tests/fixtures/input/sample_a.vcf --fail-below-f1 0.99 --report-dir "$actual/report_cnone" > "$actual/cnone.stdout" || [ $? -eq 2 ]
-          for f in discordant.tsv discordant_open.tsv; do check "$actual/report_cnone/$f" "expected_cnone_$f"; done
-          check "$actual/cnone.stdout" expected_cnone_stdout.txt
-          d116=tests/fixtures/expected_c116_discordant.tsv; d115=tests/fixtures/expected_c115_discordant.tsv
-          python3 "$py" --by-consequence-class --perl-dir tests/fixtures/perl --discordant-in $d116 --dataset ds_a --class-csv "$actual/per_class.csv" --sweep-id sweep0001 --binary-md5 0123abcd --assembly GRCh38 > "$actual/k1.stdout"
-          python3 "$py" --by-consequence-class --perl-dir tests/fixtures/perl --discordant-in $d115 --dataset ds_b --class-csv "$actual/per_class.csv" --sweep-id sweep0002 --binary-md5 4567ef01 --assembly GRCh38 --engine fastvep --append --assembly-label hg38 --min-tuples 3 --vep-totals-cache "$actual/totals_cache.csv" > "$actual/k2.stdout"
-          python3 "$py" --by-consequence-class --perl-dir tests/fixtures/perl --discordant-in $d116 --dataset ds_c --class-csv "$actual/per_class.csv" --sweep-id sweep0001 --binary-md5 0123abcd --assembly GRCh38 --append --vep-totals-cache "$actual/totals_cache.csv" > "$actual/k3.stdout"
-          python3 "$py" --pool-consequence-class --class-csv "$actual/per_class.csv" --pooled-csv "$actual/pooled.csv" --per-term tests/fixtures/per_term.tsv --min-tuples 2 > "$actual/p1.stdout"
-          python3 "$py" --pool-consequence-class --class-csv "$actual/per_class.csv" --pooled-csv "$actual/pooled_plain.csv" > "$actual/p2.stdout"
-          for n in k1 k2 k3 p1 p2; do check "$actual/$n.stdout" "expected_${n}_stdout.txt"; done
-          cmp "$actual/per_class.csv" tests/fixtures/expected_per_class.csv
-          cmp "$actual/pooled.csv" tests/fixtures/expected_pooled.csv
-          cmp "$actual/pooled_plain.csv" tests/fixtures/expected_pooled_plain.csv
-          tail -n +2 "$actual/totals_cache.csv" | cmp - tests/fixtures/expected_totals_cache_body.csv
+          python3 scripts/release/crate_publish_order.py
+          cargo package --workspace --locked --no-verify
       # The parity matrix (tests/parity/matrix.tsv) must name every flag args.rs declares,
       # and every landed row's tests must resolve in this tree.
       - run: python3 scripts/parity/check_parity_matrix.py
@@ -342,17 +401,17 @@ jobs:
       # dbscSNV are passed the user's own file; the test file below proves it.
       - run: |
           bash -n scripts/concordance/run_concordance.sh
-          floor=103
+          floor=191
           out=$(bash scripts/data/test_plugin_data_layout.sh 2>&1) || { printf '%s\n' "$out"; exit 1; }
           n=$(printf '%s\n' "$out" | grep -c '^  ok ') || n=0
-          echo "plugin data layout suite reported $n ok lines (floor $floor)"
+          echo "plugin data layout tests reported $n ok lines (floor $floor)"
           [ "$n" -ge "$floor" ]
 
   # The measurement harness and the reference-output generator each ship with a
-  # Bash and python3 test suite (stub engines, a stub bcftools, a stub docker) whose
-  # checks inject a fault and prove the matching fail-closed gate fires. A suite
+  # Bash and python3 test file (stub engines, a stub bcftools, a stub docker) whose
+  # checks inject a fault and prove the matching fail-closed gate fires. A test file
   # exits 1 on any failure and prints one `ok` line per passing check; the count
-  # is asserted so a suite that silently ran nothing cannot pass.
+  # is asserted so a test file that silently ran nothing cannot pass.
   harness-tests:
     name: Harness Tests
     needs: changes
@@ -363,15 +422,35 @@ jobs:
         run: echo "No path this check reads changed; its steps are skipped."
       - if: needs.changes.outputs.harness != 'false'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # test_feature_oracle.sh runs one case through the runner on both sides of the format
-      # comparator's switch and skips those checks without the front end's release build; the
-      # floor below counts them, so the build must be here.
+      # test_feature_oracle.sh compares through the release build of the format comparator,
+      # tools/vep-formats-compare, which the runner starts and never builds.
+      # test_check_api_docs.sh documents scratch crates with the same toolchain.
       - if: needs.changes.outputs.harness != 'false'
         uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
         with:
           toolchain: 1.97.1
       - if: needs.changes.outputs.harness != 'false'
-        run: cargo build --release --locked --manifest-path tools/vep-formats-remainder/Cargo.toml
+        run: cargo build --release --locked --manifest-path tools/vep-formats-compare/Cargo.toml
+      # The test files below run their scripts on the tree's release builds of the tools the
+      # scripts call: test_run_clone_measurement.sh on the tuple and field comparators, the
+      # fastVEP normaliser and the file census, test_tree_tuple_comparator.sh on the tuple
+      # comparator and the file census, test_generate_reference_output.sh and
+      # test_capture_baseline.sh on the file census, test_cache_comparison_callers.sh on
+      # tools/vep-cache-diff and test_cache_output_gates.sh on tools/vep-cache-output-gates.
+      # A check that needs a build skips without it and the floors below count it, so the
+      # builds must be here.
+      - if: needs.changes.outputs.harness != 'false'
+        run: cargo build --release --locked --manifest-path tools/vep-outputs-compare/Cargo.toml
+      - if: needs.changes.outputs.harness != 'false'
+        run: cargo build --release --locked --manifest-path tools/vep-fields-compare/Cargo.toml
+      - if: needs.changes.outputs.harness != 'false'
+        run: cargo build --release --locked --manifest-path tools/vep-fastvep-normalize/Cargo.toml
+      - if: needs.changes.outputs.harness != 'false'
+        run: cargo build --release --locked --manifest-path tools/vep-file-census/Cargo.toml
+      - if: needs.changes.outputs.harness != 'false'
+        run: cargo build --release --locked --manifest-path tools/vep-cache-diff/Cargo.toml
+      - if: needs.changes.outputs.harness != 'false'
+        run: cargo build --release --locked --manifest-path tools/vep-cache-output-gates/Cargo.toml
       - if: needs.changes.outputs.harness != 'false'
         run: |
           set -e
@@ -381,18 +460,27 @@ jobs:
             echo "$1 reported $n ok lines (floor $2)"
             [ "$n" -ge "$2" ]
           }
-          check scripts/concordance/test_run_clone_measurement.sh 203
-          check scripts/concordance/test_tuple_comparator_switch.sh 25
-          check scripts/concordance/test_generate_reference_output.sh 296
-          check scripts/concordance/test_feature_oracle.sh 340
+          check scripts/concordance/test_run_clone_measurement.sh 308
+          check scripts/concordance/test_run_concordance.sh 25
+          check scripts/concordance/test_tree_tuple_comparator.sh 50
+          check scripts/concordance/test_plugin_comparator_switch.sh 15
+          check scripts/concordance/test_generate_reference_output.sh 343
+          check scripts/concordance/test_feature_oracle.sh 639
+          check scripts/concordance/test_harness_genomes.sh 32
+          check scripts/genomes/test_check_genome.sh 254
+          check scripts/genomes/test_genome_checks.sh 128
+          check scripts/validation/test_cache_comparison_callers.sh 16
+          check scripts/validation/test_cache_output_gates.sh 20
+          check scripts/validation/test_capture_baseline.sh 14
           check scripts/docker/test_image_source.sh 26
           check scripts/docker/test_image_tags.sh 8
           check scripts/docker/test_release_recipe.sh 11
           check scripts/docker/test_require_images.sh 16
           check scripts/docker/test_stage_release.sh 17
-          check scripts/docker/test_stage_tree.sh 32
+          check scripts/docker/test_stage_tree.sh 38
           check scripts/docker/test_smoke_test.sh 28
           check scripts/docker/test_workflow_jobs.sh 14
+          check scripts/test_check_api_docs.sh 20
 
   # A `cargo audit` advisory is a failure only when the advisory's crate is
   # reachable from the `vep` binary; scripts/check_advisory_reachability.sh makes
@@ -424,18 +512,69 @@ jobs:
           cargo audit --version
       - if: needs.changes.outputs.rust != 'false'
         run: scripts/check_advisory_reachability.sh
-      # tools/vep-fields-compare has its own lockfile, outside the script's audit of the
-      # root one. The whole lockfile is audited, with no reachability distinction: an
-      # advisory of any class on any crate in it, including a backend the build leaves
-      # out, fails here and is cleared by a bump.
+      # Each tool root has its own lockfile, outside the script's audit of the root one.
+      # The whole lockfile is audited, with no reachability distinction: an advisory of
+      # any class on any crate in it, including a backend the build leaves out, fails
+      # here and is cleared by a bump. The one advisory a row passes over with `--ignore`
+      # is on the dated allowlist the script reads for the workspace, which links the
+      # same crate for the same reason; scripts/docs/test_contributor_guide.py holds the
+      # row to an entry there that has not expired.
       - if: needs.changes.outputs.rust != 'false'
         run: cargo audit --deny warnings --file tools/vep-fields-compare/Cargo.lock
       - if: needs.changes.outputs.rust != 'false'
         run: cargo audit --deny warnings --file tools/vep-outputs-compare/Cargo.lock
       - if: needs.changes.outputs.rust != 'false'
+        run: cargo audit --deny warnings --ignore RUSTSEC-2026-0543 --file tools/vep-formats-compare/Cargo.lock
+      - if: needs.changes.outputs.rust != 'false'
         run: cargo audit --deny warnings --file tools/vep-plugin-pairs/Cargo.lock
       - if: needs.changes.outputs.rust != 'false'
-        run: cargo audit --deny warnings --file tools/vep-formats-remainder/Cargo.lock
+        run: cargo audit --deny warnings --file tools/vep-cache-diff/Cargo.lock
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo audit --deny warnings --file tools/vep-cache-output-gates/Cargo.lock
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo audit --deny warnings --file tools/vep-cache-parity-audit/Cargo.lock
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo audit --deny warnings --file tools/vep-discordant-classes/Cargo.lock
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo audit --deny warnings --file tools/vep-divergence-reevaluate/Cargo.lock
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo audit --deny warnings --file tools/vep-fastvep-normalize/Cargo.lock
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo audit --deny warnings --file tools/vep-fastvep-plugin-tuples/Cargo.lock
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo audit --deny warnings --file tools/vep-file-census/Cargo.lock
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo audit --deny warnings --file tools/vep-golden-corpus/Cargo.lock
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo audit --deny warnings --file tools/vep-gtf-tags-compare/Cargo.lock
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo audit --deny warnings --file tools/vep-intermediates-compare/Cargo.lock
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo audit --deny warnings --ignore RUSTSEC-2026-0543 --file tools/vep-parquet-to-tab/Cargo.lock
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo audit --deny warnings --file tools/vep-prepare-benchmark-vcfs/Cargo.lock
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo audit --deny warnings --file tools/vep-stats-compare/Cargo.lock
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo audit --deny warnings --file tools/vep-storable-digest/Cargo.lock
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo audit --deny warnings --file tools/vep-storable-digest-join/Cargo.lock
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo audit --deny warnings --file tools/vep-storable-dump/Cargo.lock
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo audit --deny warnings --file tools/vep-storable-to-json/Cargo.lock
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo audit --deny warnings --file tools/vep-storable-transcript-classes/Cargo.lock
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo audit --deny warnings --file tools/vep-sv-compare/Cargo.lock
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo audit --deny warnings --file tools/vep-genome-table/Cargo.lock
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo audit --deny warnings --file tools/vep-seeded-variants/Cargo.lock
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo audit --deny warnings --file tools/vep-genome-features/Cargo.lock
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo audit --deny warnings --file tools/vep-loftee-synthetic-conservation/Cargo.lock
 
   # Builds on the DECLARED minimum supported Rust version rather than the
   # pinned toolchain. Every job above runs the pinned 1.97.1, the toolchain the
@@ -468,7 +607,7 @@ jobs:
         if: needs.changes.outputs.rust != 'false'
         run: |
           actual=$(rustc --version | awk '{print $2}')
-          for manifest in Cargo.toml tools/vep-fields-compare/Cargo.toml tools/vep-outputs-compare/Cargo.toml tools/vep-plugin-pairs/Cargo.toml tools/vep-formats-remainder/Cargo.toml; do
+          for manifest in Cargo.toml tools/*/Cargo.toml; do
             declared=$(sed -n 's/^rust-version *= *"\([^"]*\)".*/\1/p' "$manifest" | head -1)
             echo "$manifest: declared rust-version=$declared, toolchain=$actual"
             case "$actual" in
@@ -485,9 +624,57 @@ jobs:
       - if: needs.changes.outputs.rust != 'false'
         run: cargo build --locked --manifest-path tools/vep-outputs-compare/Cargo.toml
       - if: needs.changes.outputs.rust != 'false'
+        run: cargo build --locked --manifest-path tools/vep-formats-compare/Cargo.toml
+      - if: needs.changes.outputs.rust != 'false'
         run: cargo build --locked --manifest-path tools/vep-plugin-pairs/Cargo.toml
       - if: needs.changes.outputs.rust != 'false'
-        run: cargo build --locked --manifest-path tools/vep-formats-remainder/Cargo.toml
+        run: cargo build --locked --manifest-path tools/vep-cache-diff/Cargo.toml
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo build --locked --manifest-path tools/vep-cache-output-gates/Cargo.toml
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo build --locked --manifest-path tools/vep-cache-parity-audit/Cargo.toml
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo build --locked --manifest-path tools/vep-discordant-classes/Cargo.toml
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo build --locked --manifest-path tools/vep-divergence-reevaluate/Cargo.toml
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo build --locked --manifest-path tools/vep-fastvep-normalize/Cargo.toml
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo build --locked --manifest-path tools/vep-fastvep-plugin-tuples/Cargo.toml
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo build --locked --manifest-path tools/vep-file-census/Cargo.toml
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo build --locked --manifest-path tools/vep-golden-corpus/Cargo.toml
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo build --locked --manifest-path tools/vep-gtf-tags-compare/Cargo.toml
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo build --locked --manifest-path tools/vep-intermediates-compare/Cargo.toml
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo build --locked --manifest-path tools/vep-parquet-to-tab/Cargo.toml
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo build --locked --manifest-path tools/vep-prepare-benchmark-vcfs/Cargo.toml
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo build --locked --manifest-path tools/vep-stats-compare/Cargo.toml
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo build --locked --manifest-path tools/vep-storable-digest/Cargo.toml
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo build --locked --manifest-path tools/vep-storable-digest-join/Cargo.toml
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo build --locked --manifest-path tools/vep-storable-dump/Cargo.toml
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo build --locked --manifest-path tools/vep-storable-to-json/Cargo.toml
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo build --locked --manifest-path tools/vep-storable-transcript-classes/Cargo.toml
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo build --locked --manifest-path tools/vep-sv-compare/Cargo.toml
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo build --locked --manifest-path tools/vep-genome-table/Cargo.toml
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo build --locked --manifest-path tools/vep-seeded-variants/Cargo.toml
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo build --locked --manifest-path tools/vep-genome-features/Cargo.toml
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo build --locked --manifest-path tools/vep-loftee-synthetic-conservation/Cargo.toml
 
   build-release:
     name: Build Release

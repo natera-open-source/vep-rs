@@ -1,0 +1,92 @@
+entry = "refseq_failed_edit_model_hgvsc_offset"
+page = "docs/divergences/refseq-failed-edit-model-hgvsc-offset.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "observed"
+input_class_basis = "seen in genome-wide ClinVar on GRCh38: 9 records past the own edit of a failed-edit model, 24 rows"
+notes = "Thirteen records on GRCh38 on two forward-strand models with BAM_EDIT=FAILED. Six lie on chromosome 7 on NM_015068.3 of PEG10, whose one edit writes one cDNA position as two bases (cDNA 1436), and seven, named base_out, on chromosome 19 on NM_004152.3 of OAZ1, whose one edit takes one cDNA position out (cDNA 318). coding_substitution, utr_substitution and base_out_clinvar_coding_substitution are ClinVar's variations 4134666, 4340897 and 2648969. The other ten are made up, each indel written where the reference bases beside it differ from it and from each other, so that no 3' shift moves it. cDNA_position and CDS_position, the cached numbers, are equal between the engines on every row, and before either edit the notations are equal. Past the edit vep-rs counts each position along the genome's exons: on NM_015068.3 a coding position is one below the row's CDS_position, on NM_004152.3 one above, and a 3' UTR position is the count of bases from the last base of the stop codon. On NM_015068.3 Ensembl VEP writes the coding substitution at the row's CDS_position, one above vep-rs's, the coding deletion and insertion two above, and the 3' UTR notations one above. On NM_004152.3 it writes every coding notation one below vep-rs's, and the intron and 3' UTR notations as vep-rs does. A substitution's base differs as well where the neighbouring base differs, by the cause of the entry use_transcript_ref_cache_cdna. No committed corpus's cache holds a model with BAM_EDIT=FAILED, so the prepare step converts the two region files that hold the models from the Ensembl VEP RefSeq GRCh38 cache the run is given; the run reads the GRCh38 reference FASTA as the directory grch38_fasta."
+prepare = [
+  '''mkdir -p "$STAGE/perl-cut/7" "$STAGE/perl-cut/19" "$STAGE/json-cache"
+cp "$PERL_CACHE/info.txt" "$PERL_CACHE/chr_synonyms.txt" "$STAGE/perl-cut/"
+cp "$PERL_CACHE/7/94000001-95000000.gz" "$STAGE/perl-cut/7/"
+cp "$PERL_CACHE/19/2000001-3000000.gz" "$STAGE/perl-cut/19/"
+cargo run --release --locked --quiet --manifest-path "$REPO/tools/vep-storable-to-json/Cargo.toml" -- "$STAGE/perl-cut" "$STAGE/json-cache" 7,19 > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
+]
+
+[input]
+format = "vcf"
+text = """
+7	94664299	coding_deletion_before_the_edit	GC	G	.	.	.
+7	94664733	coding_substitution	A	C	.	.	.
+7	94664801	coding_deletion_past_the_edit	AC	A	.	.	.
+7	94664900	coding_insertion_past_the_edit	C	CA	.	.	.
+7	94667457	utr_substitution	T	A	.	.	.
+7	94667601	utr_insertion	A	AC	.	.	.
+19	2271402	base_out_coding_deletion_before_the_edit	AC	A	.	.	.
+19	2271801	base_out_coding_deletion_past_the_edit	CA	C	.	.	.
+19	2271850	base_out_coding_insertion_past_the_edit	C	CG	.	.	.
+19	2271900	base_out_coding_substitution_past_the_edit	G	A	.	.	.
+19	2271966	base_out_intron_substitution_past_the_edit	G	A	.	.	.
+19	2273083	base_out_clinvar_coding_substitution	A	T	.	.	.
+19	2273200	base_out_utr_insertion	T	TA	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+source = "refseq"
+json_cache = "{stage}/json-cache"
+
+[run]
+flags = [
+  "--refseq",
+  "--hgvs",
+  "--fasta", "{grch38_fasta}/Homo_sapiens.GRCh38.dna.primary_assembly.fa",
+]
+
+[compare]
+kind = "rows"
+where = { record = ["base_out_clinvar_coding_substitution", "base_out_coding_deletion_before_the_edit", "base_out_coding_deletion_past_the_edit", "base_out_coding_insertion_past_the_edit", "base_out_coding_substitution_past_the_edit", "base_out_intron_substitution_past_the_edit", "base_out_utr_insertion", "coding_deletion_before_the_edit", "coding_deletion_past_the_edit", "coding_insertion_past_the_edit", "coding_substitution", "utr_insertion", "utr_substitution"], feature = ["NM_004152.3", "NM_015068.3"] }
+columns = ["Uploaded_variation", "Consequence", "cDNA_position", "CDS_position", "BAM_EDIT", "REFSEQ_OFFSET", "HGVSc"]
+
+[expected]
+ensembl_vep = [
+  "base_out_clinvar_coding_substitution | missense_variant | 775 | 662 | FAILED | -1 | NM_004152.3:c.662G>T",
+  "base_out_coding_deletion_before_the_edit | frameshift_variant | 278 | 165 | FAILED | - | NM_004152.3:c.165del",
+  "base_out_coding_deletion_past_the_edit | frameshift_variant | 425 | 312 | FAILED | -1 | NM_004152.3:c.312del",
+  "base_out_coding_insertion_past_the_edit | frameshift_variant | 473-474 | 360-361 | FAILED | -1 | NM_004152.3:c.360_361insG",
+  "base_out_coding_substitution_past_the_edit | missense_variant | 523 | 410 | FAILED | -1 | NM_004152.3:c.410G>A",
+  "base_out_intron_substitution_past_the_edit | intron_variant | - | - | FAILED | - | NM_004152.3:c.465+12G>A",
+  "base_out_utr_insertion | 3_prime_UTR_variant | 892-893 | - | FAILED | -1 | NM_004152.3:c.*92_*93insA",
+  "coding_deletion_before_the_edit | frameshift_variant | 1223 | 744 | FAILED | - | NM_015068.3:c.744del",
+  "coding_deletion_past_the_edit | frameshift_variant | 1726 | 1247 | FAILED | 2 | NM_015068.3:c.1248del",
+  "coding_insertion_past_the_edit | frameshift_variant | 1824-1825 | 1345-1346 | FAILED | 2 | NM_015068.3:c.1346_1347insA",
+  "coding_substitution | missense_variant | 1657 | 1178 | FAILED | 2 | NM_015068.3:c.1178G>C",
+  "utr_insertion | 3_prime_UTR_variant | 4525-4526 | - | FAILED | 2 | NM_015068.3:c.*1920_*1921insC",
+  "utr_substitution | 3_prime_UTR_variant | 4381 | - | FAILED | 2 | NM_015068.3:c.*1776G>A",
+]
+vep_rs = [
+  "base_out_clinvar_coding_substitution | missense_variant | 775 | 662 | FAILED | -1 | NM_004152.3:c.663A>T",
+  "base_out_coding_deletion_before_the_edit | frameshift_variant | 278 | 165 | FAILED | - | NM_004152.3:c.165del",
+  "base_out_coding_deletion_past_the_edit | frameshift_variant | 425 | 312 | FAILED | -1 | NM_004152.3:c.313del",
+  "base_out_coding_insertion_past_the_edit | frameshift_variant | 473-474 | 360-361 | FAILED | -1 | NM_004152.3:c.361_362insG",
+  "base_out_coding_substitution_past_the_edit | missense_variant | 523 | 410 | FAILED | -1 | NM_004152.3:c.411G>A",
+  "base_out_intron_substitution_past_the_edit | intron_variant | - | - | FAILED | - | NM_004152.3:c.465+12G>A",
+  "base_out_utr_insertion | 3_prime_UTR_variant | 892-893 | - | FAILED | -1 | NM_004152.3:c.*92_*93insA",
+  "coding_deletion_before_the_edit | frameshift_variant | 1223 | 744 | FAILED | - | NM_015068.3:c.744del",
+  "coding_deletion_past_the_edit | frameshift_variant | 1726 | 1247 | FAILED | 2 | NM_015068.3:c.1246del",
+  "coding_insertion_past_the_edit | frameshift_variant | 1824-1825 | 1345-1346 | FAILED | 2 | NM_015068.3:c.1344_1345insA",
+  "coding_substitution | missense_variant | 1657 | 1178 | FAILED | 2 | NM_015068.3:c.1177A>C",
+  "utr_insertion | 3_prime_UTR_variant | 4525-4526 | - | FAILED | 2 | NM_015068.3:c.*1919_*1920insC",
+  "utr_substitution | 3_prime_UTR_variant | 4381 | - | FAILED | 2 | NM_015068.3:c.*1775T>A",
+]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/hgvs.rs::GenomeCount::of",
+    "crates/vep-effects/src/hgvs.rs::GenomeCount::number",
+]
+tests = [
+    "crates/vep-cli/tests/failed_edit_model_hgvsc_position_past_the_edit.rs::a_notation_past_the_edit_of_a_failed_edit_model_is_counted_along_the_exon",
+]
+rules = ["tools/vep-formats-compare/src/rules/length_edits.rs::failed_edit_offset_cell"]

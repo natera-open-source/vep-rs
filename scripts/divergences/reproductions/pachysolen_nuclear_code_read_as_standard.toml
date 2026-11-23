@@ -1,0 +1,64 @@
+entry = "pachysolen_nuclear_code_read_as_standard"
+page = "docs/divergences/pachysolen-nuclear-code-read-as-standard.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "observed"
+input_class_basis = "seen in the Ensembl Genomes release 63 cache of Pachysolen tannophilus NRRL Y-2460: 5,986 of 5,991 transcripts name genetic code 26, and their coding sequences hold 15,128 CTG codons past the first codon"
+notes = "A synthetic cache of one sequence, contig, 3,000 bases long, with one forward protein-coding gene of six codons from base 1,001 whose record names genetic code 26: ATG, GCT, CTG, CTA, GAA and the stop codon TAA. The stored peptide is written as an Ensembl cache dump writes it, through the BioPerl table object for id 26, which holds no such table and gives the standard residues. Three substitutions of one base: at base 1,008, CTG to CCG; at base 1,009, CTG to CTA; and at base 1,012, CTA to CTG. Ensembl VEP reads CTG as leucine and writes leucine to proline for the first and synonymous_variant for the other two; vep-rs reads CTG as alanine, as genetic code 26 gives it, and writes three missense changes. inputs/pachysolen_nuclear_code_read_as_standard/make_cache.pl builds the cache in the Ensembl VEP image; vep-rs reads the committed json_cache beside it, which a prepare step holds to the conversion of that cache by tools/vep-storable-to-json."
+
+prepare = [
+  '''[ -n "$IMAGE" ] || { echo "the synthetic cache is built in the Ensembl VEP image: give --image" >&2; exit 1; }''',
+  '''docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$REPO/scripts/divergences/reproductions/inputs/pachysolen_nuclear_code_read_as_standard:/inputs:ro" -v "$STAGE:/stage" "$IMAGE" perl /inputs/make_cache.pl /stage/perl-cache > "$STAGE/build.log" 2>&1 || { tail -n 1 "$STAGE/build.log" >&2; exit 1; }''',
+  '''cargo run --release --locked --quiet --manifest-path "$REPO/tools/vep-storable-to-json/Cargo.toml" -- "$STAGE/perl-cache/nuclear_code_example/116_EXAMPLE1" "$STAGE/json-converted" > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
+  '''for f in info.json transcripts/contig/1-1000000.json; do cmp -s "$STAGE/json-converted/$f" "$JSON_CACHE/$f" || { echo "the committed json_cache is not the conversion of the cache make_cache.pl builds: copy $STAGE/json-converted/$f over its $f (the stage is kept under --keep or --work-dir)" >&2; exit 1; }; done''',
+]
+
+[input]
+format = "vcf"
+text = """
+contig	1008	alanine_codon_to_proline	T	C	.	.	.
+contig	1009	alanine_codon_to_leucine	G	A	.	.	.
+contig	1012	leucine_codon_to_alanine	A	G	.	.	.
+"""
+
+[cache]
+species = "nuclear_code_example"
+assembly = "EXAMPLE1"
+json_cache = "scripts/divergences/reproductions/inputs/pachysolen_nuclear_code_read_as_standard/json_cache"
+perl_cache = "{stage}/perl-cache"
+
+[run]
+flags = []
+
+[compare]
+kind = "rows"
+where = { record = ["alanine_codon_to_proline", "alanine_codon_to_leucine", "leucine_codon_to_alanine"] }
+columns = ["Uploaded_variation", "Location", "Feature", "Consequence", "cDNA_position", "CDS_position", "Protein_position", "Amino_acids", "Codons", "IMPACT"]
+
+[expected]
+ensembl_vep = [
+  "alanine_codon_to_leucine | contig:1009 | CODET1 | synonymous_variant | 9 | 9 | 3 | L | ctG/ctA | LOW",
+  "alanine_codon_to_proline | contig:1008 | CODET1 | missense_variant | 8 | 8 | 3 | L/P | cTg/cCg | MODERATE",
+  "leucine_codon_to_alanine | contig:1012 | CODET1 | synonymous_variant | 12 | 12 | 4 | L | ctA/ctG | LOW",
+]
+vep_rs = [
+  "alanine_codon_to_leucine | contig:1009 | CODET1 | missense_variant | 9 | 9 | 3 | A/L | ctG/ctA | MODERATE",
+  "alanine_codon_to_proline | contig:1008 | CODET1 | missense_variant | 8 | 8 | 3 | A/P | cTg/cCg | MODERATE",
+  "leucine_codon_to_alanine | contig:1012 | CODET1 | missense_variant | 12 | 12 | 4 | L/A | ctA/ctG | MODERATE",
+]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/json_cache.rs::peptide_under_own_code",
+    "crates/vep-core/src/codon.rs::PACHYSOLEN_NUCLEAR_CODE",
+    "crates/vep-core/src/codon.rs::genetic_code",
+]
+tests = [
+    "crates/vep-cli/tests/pachysolen_nuclear_code.rs::a_transcript_on_the_pachysolen_nuclear_code_reads_ctg_as_alanine",
+    "crates/vep-cli/tests/pachysolen_nuclear_code.rs::the_reproduction_records_the_rows_vep_rs_writes",
+    "crates/vep-core/tests/genetic_codes.rs::genetic_code_26_is_ncbis_pachysolen_nuclear_code",
+    "crates/vep-effects/src/genetic_code_path_tests.rs::a_transcript_is_translated_under_its_own_table_for_every_code",
+]
+rules = [
+    "tools/vep-outputs-compare/src/rules/row.rs::pachysolen_nuclear_code_read_as_standard_pair",
+]

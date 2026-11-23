@@ -1,0 +1,7 @@
+ERROR: [reevaluate] bare_entry: the record has no implementation table
+ERROR: [reevaluate] lost_entry: implementation.code names 'tools/vep-divergence-reevaluate/tests/fixtures/implementation/absent.rs::downstream_row': the repository holds no file tools/vep-divergence-reevaluate/tests/fixtures/implementation/absent.rs
+ERROR: [reevaluate] lost_entry: implementation.code names 'tools/vep-divergence-reevaluate/tests/fixtures/implementation/recorded.rs::upstream_row': tools/vep-divergence-reevaluate/tests/fixtures/implementation/recorded.rs defines no item upstream_row
+ERROR: [reevaluate] lost_entry: implementation.tests names 'tools/vep-divergence-reevaluate/tests/fixtures/implementation/recorded.rs::the_downstream_row_is_written': tools/vep-divergence-reevaluate/tests/fixtures/implementation/recorded.rs defines no item the_downstream_row_is_written
+ERROR: [reevaluate] shapeless_entry: implementation.code names 'tools/vep-divergence-reevaluate/tests/fixtures/implementation/recorded.rs', which is not <path>::<item>
+ERROR: [reevaluate] shapeless_entry: implementation holds code and none: none is for an entry with no code of its own
+ERROR: [reevaluate] shapeless_entry: implementation needs tests

@@ -1,26 +1,26 @@
 #!/usr/bin/env python3
-"""Aggregate classified discordants across several concordance suites into a pattern map.
+"""Aggregate classified discordants across several concordance datasets into a pattern map.
 
-Finds every discordant.tsv produced by compare_vep_outputs.py (or
-compare_sv_concordance.py), runs classify_discordants.py on each, then builds
-a cross-suite pattern map showing which discordance categories appear in which
-suites and at what volume.
+Finds every discordant.tsv produced by tools/vep-outputs-compare (or
+tools/vep-sv-compare), classes each with tools/vep-discordant-classes,
+then builds a cross-dataset pattern map showing which discordance categories
+appear in which datasets and at what volume.
 
 Input layout, under --output-dir:
-  suites/<suite-id>/report/discordant.tsv
-      One per suite. run_concordance.sh writes its report as
+  suites/<dataset-id>/report/discordant.tsv
+      One per dataset. run_concordance.sh writes its report as
       <work-dir>/reports/discordant.tsv, so a run whose --work-dir is
-      suites/<suite-id> lands in the right place; both the `report/` and
+      suites/<dataset-id> lands in the right place; both the `report/` and
       `reports/` spellings are read.
   dashboard.json (optional)
-      {"suites": [{"id": <suite-id>, "name": <display name>,
+      {"suites": [{"id": <dataset-id>, "name": <display name>,
                    "severity": "blocking" | "major" | "minor"}, ...]}
-      Supplies display names and the per-suite severity that sets the
-      sample limit. Absent, names are the suite ids and every suite is
+      Supplies display names and the per-dataset severity that sets the
+      sample limit. Absent, names are the dataset ids and every dataset is
       minor.
 
 Outputs, under --output-dir/analysis/ unless --output names another path:
-  - pattern_map.json: machine-readable category x suite matrix with samples
+  - pattern_map.json: machine-readable category x dataset matrix with samples
   - pattern_map.md: human-readable markdown table
 
 Usage:
@@ -35,26 +35,27 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
 
-# Per-severity sample limits for representative discordant rows. A suite's
-# severity comes from dashboard.json; a suite without one is minor.
+# Per-severity sample limits for representative discordant rows. A dataset's
+# severity comes from dashboard.json; a dataset without one is minor.
 SAMPLE_LIMITS = {"blocking": 10, "major": 5, "minor": 5}
 DEFAULT_SAMPLE_LIMIT = 5
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Aggregate classified discordants across all concordance suites"
+        description="Aggregate classified discordants across all concordance datasets"
     )
     parser.add_argument(
         "--output-dir",
         required=True,
-        help="Base output directory containing per-suite report directories",
+        help="Base output directory containing per-dataset report directories",
     )
     parser.add_argument(
         "--repo-dir",
@@ -72,22 +73,22 @@ def parse_args() -> argparse.Namespace:
 def find_discordant_files(output_dir: Path) -> list[tuple[str, Path]]:
     """Find every discordant.tsv under suites/*/report/ or suites/*/reports/."""
     results = []
-    suites_dir = output_dir / "suites"
-    if not suites_dir.is_dir():
+    datasets_dir = output_dir / "suites"
+    if not datasets_dir.is_dir():
         return results
-    for suite_dir in sorted(suites_dir.iterdir()):
-        if not suite_dir.is_dir():
+    for dataset_dir in sorted(datasets_dir.iterdir()):
+        if not dataset_dir.is_dir():
             continue
         for report_dir in ("report", "reports"):
-            tsv = suite_dir / report_dir / "discordant.tsv"
+            tsv = dataset_dir / report_dir / "discordant.tsv"
             if tsv.exists():
-                results.append((suite_dir.name, tsv))
+                results.append((dataset_dir.name, tsv))
                 break
     return results
 
 
 def load_dashboard(output_dir: Path) -> dict[str, dict]:
-    """Load dashboard.json and return a mapping of suite_id -> suite info."""
+    """Load dashboard.json and return a mapping of dataset_id -> dataset info."""
     dashboard_path = output_dir / "dashboard.json"
     if not dashboard_path.exists():
         return {}
@@ -96,13 +97,12 @@ def load_dashboard(output_dir: Path) -> dict[str, dict]:
     return {s["id"]: s for s in data.get("suites", [])}
 
 
-def run_classify(classify_script: Path, discordant_tsv: Path, output_tsv: Path) -> bool:
-    """Run classify_discordants.py on a single discordant.tsv."""
+def run_classify(classifier: Path, discordant_tsv: Path, output_tsv: Path) -> bool:
+    """Run vep-discordant-classes on a single discordant.tsv."""
     import subprocess
 
     cmd = [
-        sys.executable,
-        str(classify_script),
+        str(classifier),
         str(discordant_tsv),
         "-o",
         str(output_tsv),
@@ -110,7 +110,7 @@ def run_classify(classify_script: Path, discordant_tsv: Path, output_tsv: Path) 
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         print(
-            f"  WARN: classify_discordants.py failed for {discordant_tsv}: "
+            f"  WARN: vep-discordant-classes failed for {discordant_tsv}: "
             f"{result.stderr.strip()[:200]}",
             file=sys.stderr,
         )
@@ -128,21 +128,21 @@ def read_classified_rows(path: Path) -> list[dict[str, str]]:
 
 
 def build_pattern_map(
-    suite_rows: dict[str, list[dict[str, str]]],
-    suite_info: dict[str, dict],
+    dataset_rows: dict[str, list[dict[str, str]]],
+    dataset_info: dict[str, dict],
 ) -> dict:
-    """Build the cross-suite pattern map structure."""
-    # Collect all categories and per-suite counts
-    category_suite_counts: dict[str, dict[str, int]] = defaultdict(
+    """Build the cross-dataset pattern map structure."""
+    # Collect all categories and per-dataset counts
+    category_dataset_counts: dict[str, dict[str, int]] = defaultdict(
         lambda: defaultdict(int)
     )
     category_samples: dict[str, list[dict[str, str]]] = defaultdict(list)
 
-    all_suite_ids = sorted(suite_rows.keys())
+    all_dataset_ids = sorted(dataset_rows.keys())
 
-    for suite_id in all_suite_ids:
-        rows = suite_rows[suite_id]
-        severity = suite_info.get(suite_id, {}).get("severity", "minor")
+    for dataset_id in all_dataset_ids:
+        rows = dataset_rows[dataset_id]
+        severity = dataset_info.get(dataset_id, {}).get("severity", "minor")
         sample_limit = SAMPLE_LIMITS.get(severity, DEFAULT_SAMPLE_LIMIT)
 
         per_category_count: dict[str, int] = defaultdict(int)
@@ -151,11 +151,11 @@ def build_pattern_map(
         for row in rows:
             category = row.get("mismatch_type", "unclassified")
             per_category_count[category] += 1
-            category_suite_counts[category][suite_id] += 1
+            category_dataset_counts[category][dataset_id] += 1
 
             if per_category_sampled[category] < sample_limit:
                 sample = {
-                    "suite": suite_id,
+                    "dataset": dataset_id,
                     "location": row.get("location", ""),
                     "allele": row.get("allele", ""),
                     "feature": row.get("feature", ""),
@@ -170,16 +170,16 @@ def build_pattern_map(
     # Build sorted category list
     categories = []
     for cat_name in sorted(
-        category_suite_counts.keys(),
-        key=lambda c: sum(category_suite_counts[c].values()),
+        category_dataset_counts.keys(),
+        key=lambda c: sum(category_dataset_counts[c].values()),
         reverse=True,
     ):
-        suites_map = dict(category_suite_counts[cat_name])
-        total = sum(suites_map.values())
+        datasets_map = dict(category_dataset_counts[cat_name])
+        total = sum(datasets_map.values())
         categories.append(
             {
                 "name": cat_name,
-                "suites": suites_map,
+                "datasets": datasets_map,
                 "total": total,
                 "samples": category_samples[cat_name],
             }
@@ -187,9 +187,9 @@ def build_pattern_map(
 
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "suite_ids": all_suite_ids,
-        "suite_names": {
-            sid: suite_info.get(sid, {}).get("name", sid) for sid in all_suite_ids
+        "dataset_ids": all_dataset_ids,
+        "dataset_names": {
+            sid: dataset_info.get(sid, {}).get("name", sid) for sid in all_dataset_ids
         },
         "categories": categories,
     }
@@ -200,14 +200,14 @@ def write_pattern_map_markdown(
     pattern_map: dict,
 ) -> None:
     """Write a markdown table summarizing the pattern map."""
-    suite_ids = pattern_map["suite_ids"]
-    suite_names = pattern_map["suite_names"]
+    dataset_ids = pattern_map["dataset_ids"]
+    dataset_names = pattern_map["dataset_names"]
     categories = pattern_map["categories"]
 
-    # Column headers abbreviate the assembly in each suite's display name.
+    # Column headers abbreviate the assembly in each dataset's display name.
     short_names = {}
-    for sid in suite_ids:
-        name = suite_names.get(sid, sid)
+    for sid in dataset_ids:
+        name = dataset_names.get(sid, sid)
         short = name.replace("GRCh37", "37").replace("GRCh38", "38")
         short_names[sid] = short.strip()
 
@@ -221,7 +221,7 @@ def write_pattern_map_markdown(
     # Header row
     header = "| Category |"
     sep = "| --- |"
-    for sid in suite_ids:
+    for sid in dataset_ids:
         header += f" {short_names[sid]} |"
         sep += " ---: |"
     header += " Total |"
@@ -232,8 +232,8 @@ def write_pattern_map_markdown(
     # Data rows
     for cat in categories:
         row = f"| {cat['name']} |"
-        for sid in suite_ids:
-            count = cat["suites"].get(sid, 0)
+        for sid in dataset_ids:
+            count = cat["datasets"].get(sid, 0)
             row += f" {count:,} |" if count else " |"
         row += f" {cat['total']:,} |"
         lines.append(row)
@@ -241,8 +241,8 @@ def write_pattern_map_markdown(
     # Totals row
     totals_row = "| **Total** |"
     grand_total = 0
-    for sid in suite_ids:
-        col_total = sum(cat["suites"].get(sid, 0) for cat in categories)
+    for sid in dataset_ids:
+        col_total = sum(cat["datasets"].get(sid, 0) for cat in categories)
         totals_row += f" **{col_total:,}** |" if col_total else " |"
         grand_total += col_total
     totals_row += f" **{grand_total:,}** |"
@@ -261,10 +261,16 @@ def main() -> int:
     else:
         repo_dir = Path(__file__).resolve().parent.parent.parent
 
-    classify_script = repo_dir / "scripts" / "validation" / "classify_discordants.py"
-    if not classify_script.exists():
+    # The classifier is this tree's release build of tools/vep-discordant-classes. Nothing
+    # is built here: a build that is not an executable file stops the run before any table
+    # is classed.
+    tool_dir = repo_dir / "tools" / "vep-discordant-classes"
+    classifier = tool_dir / "target" / "release" / "vep-discordant-classes"
+    if not (classifier.is_file() and os.access(classifier, os.X_OK)):
         print(
-            f"ERROR: classify_discordants.py not found at {classify_script}",
+            f"ERROR: [analyze_all_discordants] the discordant-row classifier {classifier} "
+            "is not an executable: build the tool with 'cargo build --release --locked "
+            f"--manifest-path {tool_dir / 'Cargo.toml'}'",
             file=sys.stderr,
         )
         return 1
@@ -278,29 +284,29 @@ def main() -> int:
         )
         return 0
 
-    # Load dashboard for suite metadata
-    suite_info = load_dashboard(output_dir)
+    # Load dashboard for dataset metadata
+    dataset_info = load_dashboard(output_dir)
 
     print(f"Found {len(disc_files)} discordant files")
 
-    # Classify each suite's discordants
-    suite_rows: dict[str, list[dict[str, str]]] = {}
-    for suite_id, disc_tsv in disc_files:
+    # Classify each dataset's discordants
+    dataset_rows: dict[str, list[dict[str, str]]] = {}
+    for dataset_id, disc_tsv in disc_files:
         classified_tsv = disc_tsv.parent / "discordant_classified.tsv"
-        print(f"  Classifying {suite_id}...")
-        if run_classify(classify_script, disc_tsv, classified_tsv):
+        print(f"  Classifying {dataset_id}...")
+        if run_classify(classifier, disc_tsv, classified_tsv):
             rows = read_classified_rows(classified_tsv)
-            suite_rows[suite_id] = rows
+            dataset_rows[dataset_id] = rows
             print(f"    {len(rows)} discordants classified")
         else:
-            print(f"    WARN: skipping {suite_id} (classification failed)")
+            print(f"    WARN: skipping {dataset_id} (classification failed)")
 
-    if not suite_rows:
-        print("WARN: No suites were successfully classified", file=sys.stderr)
+    if not dataset_rows:
+        print("WARN: No datasets were successfully classified", file=sys.stderr)
         return 0
 
     # Build pattern map
-    pattern_map = build_pattern_map(suite_rows, suite_info)
+    pattern_map = build_pattern_map(dataset_rows, dataset_info)
 
     # Write outputs
     analysis_dir = output_dir / "analysis"
@@ -321,7 +327,7 @@ def main() -> int:
     total_discordants = sum(cat["total"] for cat in pattern_map["categories"])
     print(
         f"\nPattern map: {len(pattern_map['categories'])} categories, "
-        f"{total_discordants:,} total discordants across {len(suite_rows)} suites"
+        f"{total_discordants:,} total discordants across {len(dataset_rows)} datasets"
     )
     print(f"JSON: {json_path}")
     print(f"Markdown: {md_path}")

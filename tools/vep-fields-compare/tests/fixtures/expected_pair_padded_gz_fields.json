@@ -1,0 +1,141 @@
+{
+  "totals": {
+    "reference_keys": 5,
+    "scored_keys": 5,
+    "intersection": 4,
+    "reference_only": 1,
+    "scored_only": 1,
+    "reference_duplicate_keys": 1,
+    "scored_duplicate_keys": 0
+  },
+  "fields": {
+    "Uploaded_variation": {
+      "compared": 4,
+      "equal": 3,
+      "differ": 1,
+      "agreement": 0.75,
+      "distinct_mismatch_shapes": 1,
+      "top_mismatches": [
+        {
+          "reference": "rs1",
+          "scored": "1_100_C/T",
+          "count": 1
+        }
+      ]
+    },
+    "Gene": {
+      "compared": 4,
+      "equal": 4,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "cDNA_position": {
+      "compared": 4,
+      "equal": 4,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "CDS_position": {
+      "compared": 4,
+      "equal": 4,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "Protein_position": {
+      "compared": 4,
+      "equal": 4,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "Amino_acids": {
+      "compared": 4,
+      "equal": 4,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "Codons": {
+      "compared": 4,
+      "equal": 4,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "Existing_variation": {
+      "compared": 4,
+      "equal": 4,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    }
+  },
+  "extra": {
+    "DISTANCE": {
+      "compared": 1,
+      "equal": 0,
+      "differ": 1,
+      "agreement": 0.0,
+      "distinct_mismatch_shapes": 1,
+      "top_mismatches": [
+        {
+          "reference": "1500",
+          "scored": "1499",
+          "count": 1
+        }
+      ]
+    },
+    "FLAGS": {
+      "compared": 1,
+      "equal": 0,
+      "differ": 1,
+      "agreement": 0.0,
+      "distinct_mismatch_shapes": 1,
+      "top_mismatches": [
+        {
+          "reference": "<absent>",
+          "scored": "cds_end_NF",
+          "count": 1
+        }
+      ]
+    },
+    "IMPACT": {
+      "compared": 4,
+      "equal": 4,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "STRAND": {
+      "compared": 4,
+      "equal": 4,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    }
+  },
+  "inputs": {
+    "reference": "tests/fixtures/pair_reference_padded.txt.gz",
+    "scored": "tests/fixtures/pair_scored.txt"
+  },
+  "key": [
+    "Location",
+    "Allele",
+    "Feature",
+    "Feature_type",
+    "consequence_set"
+  ],
+  "comparison": "verbatim per field on tuples both sides emit under the same key"
+}

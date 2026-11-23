@@ -1,0 +1,3 @@
+WARNING: line 12 skipped (some text): unsupported record at /data/in.vcf
+WARNING: something else on line 7
+plain line

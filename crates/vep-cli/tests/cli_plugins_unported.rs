@@ -105,11 +105,30 @@ fn every_unported_ensembl_plugin_name_refuses_with_its_reason() {
     }
 }
 
+/// The refusal of EVE, whole: what the plugin's module reads (`EVE.pm:179`
+/// leaves every row that is not `missense_variant` unannotated, and
+/// `EVE.pm:116` takes a `popeve_file` from release 116 on) and the built-in
+/// that covers the use.
+#[test]
+fn the_eve_refusal_names_what_the_module_reads() {
+    let tmp = tempfile::tempdir().unwrap();
+    let out = tmp.path().join("default.txt");
+    let refused = vep_on_corpus(&out, &["--plugin", "EVE"]);
+    assert_refused(
+        &refused,
+        &out,
+        "EVE is an Ensembl VEP plugin vep-rs does not provide: Missense-only evolutionary \
+         scores, popEVE included since release 116; AlphaMissense covers missense \
+         pathogenicity. The plugin support table in docs/plugins.md lists every Ensembl VEP \
+         plugin and its status.",
+    );
+}
+
 /// The working directory is never read for a bare name: a directory, an empty
 /// file and a Perl-shaped file, each named like an unported plugin as the
 /// plugin's own archive unpacks beside the input, leave the refusal in place
 /// with its documented line, bare or with parameters, with or without `--safe`.
-/// Ensembl VEP 116.2 finds a plugin module through `@INC`, onto which only the
+/// Ensembl VEP 116.3 finds a plugin module through `@INC`, onto which only the
 /// plugins directories are pushed (Runner.pm:921, :931-933).
 #[test]
 fn a_working_directory_entry_named_like_an_unported_plugin_keeps_the_refusal() {
@@ -343,7 +362,7 @@ fn a_remote_data_file_is_refused_by_name() {
 /// A library reporting ABI version 1 against the version 2 host is dropped as a
 /// module that fails to compile (Runner.pm:929-939), the run going on without
 /// it; under `--safe` it is the plugin component's error. The fixture is the
-/// `echo_plugin` example compiled with its `abi-one` feature, under which
+/// `echo_plugin` example compiled with `--cfg fixture_abi_one`, under which
 /// `vep_plugin_abi_version` returns 1.
 #[test]
 fn safe_makes_an_abi_mismatch_fatal() {
@@ -359,7 +378,7 @@ fn safe_makes_an_abi_mismatch_fatal() {
     let compiled = Command::new(rustc)
         .args(["--edition", "2021", "--crate-type", "cdylib"])
         .args(["--crate-name", "echo_plugin_abi_one_cli"])
-        .args(["--cfg", "feature=\"abi-one\""])
+        .args(["--cfg", "fixture_abi_one"])
         .arg("-o")
         .arg(&fixture)
         .arg(&source)
@@ -367,7 +386,7 @@ fn safe_makes_an_abi_mismatch_fatal() {
         .expect("rustc runs");
     assert!(
         compiled.status.success(),
-        "compiling the abi-one fixture failed:\n{}",
+        "compiling the fixture_abi_one fixture failed:\n{}",
         String::from_utf8_lossy(&compiled.stderr)
     );
     let tmp = tempfile::tempdir().unwrap();

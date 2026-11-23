@@ -1,0 +1,1 @@
+ERROR: [vep-cache-diff] {{FIXTURES}}/caches/faults/feature_cache/baseline/transcripts/1/1.json: transcript F2: the feature cache of a record is no object

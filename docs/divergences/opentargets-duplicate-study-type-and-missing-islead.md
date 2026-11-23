@@ -1,17 +1,17 @@
 # A repeated `QTL` study type and an OpenTargets export without `isLead`
 
-**The defect in one sentence.** Ensembl VEP 116.2's OpenTargets plugin stores the `QTL` token's selection in the variable it then tests as a list, so a `study_types` list naming `QTL` twice, with only `gwas` or `QTL` before the second, dies with a Perl type error and the plugin is dropped. The same plugin filters on the `isLead` and `studyType` cells without checking that the export has those columns, so an export lacking the column under the filter loads, prints the plugin's header lines and annotates nothing. vep-rs reads the repeated `QTL` as one selection and annotates, and refuses such an export as the plugin loads, writing no OpenTargets header line.
+**The defect in one sentence.** Ensembl VEP 116.3's OpenTargets plugin stores the `QTL` token's selection in the variable it then tests as a list, so a `study_types` list naming `QTL` twice, with only `gwas` or `QTL` before the second, dies with a Perl type error and the plugin is dropped. The same plugin filters on the `isLead` and `studyType` cells without checking that the export has those columns, so an export lacking the column under the filter loads, prints the plugin's header lines and annotates nothing. vep-rs reads the repeated `QTL` as one selection and annotates, and refuses such an export as the plugin loads, writing no OpenTargets header line.
 
 **Why this is a defect.** A study type named twice names one set of studies, as `gwas:gwas` does in the same plugin, and the error the plugin dies with is not a refusal written for the user but the interpreter's. A filter on a column the export does not carry can keep no record, so the header lines announce fields no row will carry, and the only trace is a stream of interpreter warnings about an undefined value. In both shapes the engine's answer, the plugin silently absent or silently empty, is not an answer to the request.
 
 **What vep-rs does instead.** vep-rs reads a repeated `QTL` as the one selection it names, every study type ending in `qtl`, and annotates with the QTL columns. It refuses, as the plugin loads, an export whose header lacks `isLead` under `lead_variants_only=1` or lacks `studyType` under a `study_types` filter, with a warning naming the column and the parameter that lifts the filter, and writes no OpenTargets header line.
 
-**Where it is in Ensembl VEP's source** (`VEP_plugins` at release/116, `ensembl-vep` at release/116.2):
+**Where it is in Ensembl VEP's source** (`VEP_plugins` at release/116, `ensembl-vep` at release/116.3):
 
 - `OpenTargets.pm`, lines 147-200, `_get_studytypes`: the tokens of `study_types` are read in order. Line 170 stores the `QTL` token's selection as a compiled pattern in `$qtl_studytypes`, the variable lines 161 and 183 test as a list. A second `QTL` reaches line 161, `scalar(@$qtl_studytypes)`, with the pattern in the variable, and the dereference dies: `Not an ARRAY reference`. A named type after `QTL` reaches line 183, which tests the variable's kind first and dies with the plugin's own conflict message, the refusal both engines share.
 - `Bio/EnsEMBL/VEP/Runner.pm`, lines 946-951: a plugin whose constructor dies is dropped with the warning `Failed to instantiate plugin OpenTargets: <error>` and the run goes on without it.
 - `OpenTargets.pm`, lines 105-124, `_get_colnames`: the columns are the export header's from the fifth on; nothing checks that `isLead` or `studyType` is among them. Line 354 filters the records at a site by `$_->{result}->{'OpenTargets_isLead'} eq 'true'`, and lines 362-366 by the `OpenTargets_studyType` cell. A column the header lacks reads as an undefined value, which never equals `true` and matches no pattern, so every record is filtered out, with a `Use of uninitialized value` warning per record.
-- `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 2407-2421, `get_plugin_headers`: the header lines come from the plugin's `get_header_info`, which names the selected columns whether or not a record can reach them.
+- `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 2416-2430, `get_plugin_headers`: the header lines come from the plugin's `get_header_info`, which names the selected columns whether or not a record can reach them.
 
 **What correcting it would change.** A repeated `QTL` would select the QTL study types once and the plugin would load and annotate. An export without the filtered column would be refused as it loads, or the filter lifted, so that no run prints OpenTargets header lines over rows that carry no field.
 
@@ -19,7 +19,7 @@
 
 ## 1. `study_types=QTL:QTL` on the committed export
 
-**In short.** Against the OpenTargets dataset's export (`tests/golden/116/GRCh38-plugin-opentargets/`), `--plugin OpenTargets,file=<export>,study_types=QTL:QTL` drops the plugin in Ensembl VEP 116.2 with `Failed to instantiate plugin OpenTargets: Not an ARRAY reference at OpenTargets.pm line 161`, so no row carries an `OpenTargets_` field and no header line names one. vep-rs loads the plugin as under `study_types=QTL`: two header lines, and `OpenTargets_qtlBiosampleName` and `OpenTargets_qtlGeneId` on every row of a record with a lead QTL association.
+**In short.** Against the OpenTargets dataset's export (`tests/golden/116/GRCh38-plugin-opentargets/`), `--plugin OpenTargets,file=<export>,study_types=QTL:QTL` drops the plugin in Ensembl VEP 116.3 with `Failed to instantiate plugin OpenTargets: Not an ARRAY reference at OpenTargets.pm line 161`, so no row carries an `OpenTargets_` field and no header line names one. vep-rs loads the plugin as under `study_types=QTL`: two header lines, and `OpenTargets_qtlBiosampleName` and `OpenTargets_qtlGeneId` on every row of a record with a lead QTL association.
 
 ### 1.1 What a reader needs to know first
 
@@ -41,7 +41,7 @@ Both engines run `--plugin OpenTargets,file=<export>,study_types=QTL:QTL` agains
 
 ### 1.3 What each engine writes
 
-Ensembl VEP 116.2 writes the record's twenty transcript rows without an `OpenTargets_` field and no `## OpenTargets_` header line; its warnings file reads:
+Ensembl VEP 116.3 writes the record's twenty transcript rows without an `OpenTargets_` field and no `## OpenTargets_` header line; its warnings file reads:
 
 ```
 WARNING: Failed to instantiate plugin OpenTargets: Not an ARRAY reference at /plugins/OpenTargets.pm line 161.
@@ -74,7 +74,7 @@ vep -i record.vcf -o out.txt --offline --json_cache <corpus>/json_cache \
   --plugin OpenTargets,file=<corpus>/open_targets_vep.slice.tsv.gz,study_types=QTL:QTL
 ```
 
-vep-rs writes the two QTL columns on the record's rows. Ensembl VEP 116.2 writes none and the warning above. Replacing `QTL:QTL` by `QTL` makes the engines agree.
+vep-rs writes the two QTL columns on the record's rows. Ensembl VEP 116.3 writes none and the warning above. Replacing `QTL:QTL` by `QTL` makes the engines agree.
 
 ### 1.7 How the comparator treats this class
 
@@ -82,7 +82,7 @@ The reproduction `scripts/divergences/reproductions/opentargets_duplicate_study_
 
 ## 2. An export without `isLead` under the default filter
 
-**In short.** The committed export with its `isLead` column removed, run under the default `lead_variants_only=1`, loads in Ensembl VEP 116.2. It prints the five `## OpenTargets_` header lines, writes no field on any row and warns `Use of uninitialized value in string eq at OpenTargets.pm line 354` once per association read. vep-rs drops the plugin as it loads, with a warning naming the missing column, and prints no header line. The data rows are the same in both engines. An export without `studyType` under a `study_types` filter behaves the same way, from line 364.
+**In short.** The committed export with its `isLead` column removed, run under the default `lead_variants_only=1`, loads in Ensembl VEP 116.3. It prints the five `## OpenTargets_` header lines, writes no field on any row and warns `Use of uninitialized value in string eq at OpenTargets.pm line 354` once per association read. vep-rs drops the plugin as it loads, with a warning naming the missing column, and prints no header line. The data rows are the same in both engines. An export without `studyType` under a `study_types` filter behaves the same way, from line 364.
 
 ### 2.1 What a reader needs to know first
 
@@ -107,7 +107,7 @@ Both engines run `--plugin OpenTargets,file=<export without isLead>` with no oth
 
 ### 2.3 What each engine writes
 
-Ensembl VEP 116.2's header block carries the five default columns' lines:
+Ensembl VEP 116.3's header block carries the five default columns' lines:
 
 ```
 ## OpenTargets_gwasDiseases : column from no_islead.tsv.gz
@@ -126,7 +126,7 @@ Use of uninitialized value in string eq at /plugins/OpenTargets.pm line 354, <__
 vep-rs writes no `## OpenTargets_` line, the same thirty-five rows, and in its warnings file:
 
 ```
-WARNING: Failed to instantiate plugin OpenTargets: OpenTargets: lead_variants_only=1 needs an isLead column, which the header of no_islead.tsv.gz lacks; pass lead_variants_only=0
+WARNING: Failed to instantiate plugin OpenTargets: lead_variants_only=1 needs an isLead column, which the header of no_islead.tsv.gz lacks; pass lead_variants_only=0
 ```
 
 In the tab output Ensembl VEP has the five columns, every cell `-`, and vep-rs has no such column. In the VCF output Ensembl VEP has five `##OpenTargets_` lines and five `CSQ` fields, every one empty, and vep-rs none. The JSON outputs are the same, no record carrying an `opentargets` object. Under `lead_variants_only=0` both engines load the export, print the five header lines and write every association of each site, lead or not, on its record's rows.
@@ -148,7 +148,7 @@ vep -i record.vcf -o out.txt --offline --json_cache <corpus>/json_cache \
   --assembly GRCh38 --dir_plugins <corpus> --plugin OpenTargets,file=no_islead.tsv.gz
 ```
 
-Ensembl VEP 116.2 prints the five `## OpenTargets_` header lines and no field. vep-rs prints the warning and no header line. Adding `lead_variants_only=0` to the plugin's parameters makes the engines agree on every line.
+Ensembl VEP 116.3 prints the five `## OpenTargets_` header lines and no field. vep-rs prints the warning and no header line. Adding `lead_variants_only=0` to the plugin's parameters makes the engines agree on every line.
 
 ### 2.7 How the comparator treats this class
 

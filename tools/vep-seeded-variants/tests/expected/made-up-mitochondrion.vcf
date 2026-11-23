@@ -1,0 +1,20 @@
+##fileformat=VCFv4.2
+##source=vep-seeded-variants generator_version=5
+##seed=1
+##records=light
+##reference_alleles=cache
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+MT_MADE	1	first_base_1	A	G	.	.	.
+MT_MADE	101	code4_start_codon_1	A	T	.	.	.
+MT_MADE	112	synonymous_forward_1	C	A	.	.	.
+MT_MADE	116	first_sequence_1	T	C	.	.	.
+MT_MADE	118	code4_made_codon_synonymous_1	G	A	.	.	.
+MT_MADE	119	missense_forward_1	C	A	.	.	.
+MT_MADE	122	frameshift_deletion_1	CA	C	.	.	.
+MT_MADE	124	frameshift_insertion_1	A	AT	.	.	.
+MT_MADE	130	inframe_deletion_1	CACT	C	.	.	.
+MT_MADE	135	code4_stop_gained_1	T	A	.	.	.
+MT_MADE	135	code4_made_codon_missense_1	T	G	.	.	.
+MT_MADE	159	code4_stop_lost_1	A	T	.	.	.
+MT_MADE	159	code4_made_codon_stop_1	A	G	.	.	.
+MT_MADE	600	last_base_1	T	A	.	.	.

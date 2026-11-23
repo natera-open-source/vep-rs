@@ -1,19 +1,18 @@
 entry = "hgvsp_shifted_indel_written_span_gate"
 page = "docs/divergences/hgvsp-shifted-indel-written-span-gate.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 137,702 per million · 23 flag sets, 104 corpora"
-notes = "Two records written for the entry, on GRCh37, each the deletion of the last base of an intron that the 3' shift carries into the next exon: the first deletes 7:934970, the last base of intron 8 of the forward-strand ENST00000265857, and shifts two bases to coding base 897, and the second deletes 7:21934501, the last base of an intron of the forward-strand ENST00000328843 and ENST00000409508, and shifts four bases to coding base 12958 of the one and 12937 of the other. Both engines write the HGVSc of the shifted deletion with its HGVS_OFFSET and no CDS or protein position; Ensembl VEP writes no HGVSp on ENST00000265857 and ENST00000409508, where vep-rs writes the frameshift of the shifted deletion, and both write it on ENST00000328843, which has an intron one base long."
+input_class_basis = "2 · 137,702 per million · 95 flag sets, 144 corpora"
+notes = "Twenty records written for the entry, on GRCh37. Seven are each the deletion of the last base of an intron that the 3' shift carries into the next exon: the first deletes 7:934970, the last base of intron 8 of the forward-strand ENST00000265857, and shifts two bases to coding base 897, and the second deletes 7:21934501, the last base of an intron of the forward-strand ENST00000328843 and ENST00000409508, and shifts four bases to coding base 12958 of the one and 12937 of the other. Both engines write the HGVSc of the shifted deletion with its HGVS_OFFSET and no CDS or protein position; Ensembl VEP writes no HGVSp on ENST00000265857 and ENST00000409508, where vep-rs writes the frameshift of the shifted deletion, and both write it on ENST00000328843, which has an intron one base long. The third deletes 7:780455, the last base of an intron of three forward-strand transcripts of one gene, and shifts one base into the next exon: ENST00000297440 carries no flag, ENST00000440747 carries cds_start_NF, a start phase of 2 and a coding sequence that ends on its stop codon, and ENST00000437419 carries cds_start_NF and cds_end_NF. Ensembl VEP writes no HGVSp on any of the three; vep-rs writes the frameshift of the shifted deletion on all three, numbered on each transcript's own codons, the new stop of the third inside the coding sequence that transcript holds. The fourth deletes 7:888054, the last intron base before an exon of the forward-strand ENST00000429178 (cds_start_NF, start phase 0), and the fifth 7:635942, the last intron base before an exon of the reverse-strand ENST00000400758 (cds_start_NF, start phase 1) and ENST00000414568 (cds_end_NF); on each vep-rs writes the frameshift of the shifted deletion and Ensembl VEP no HGVSp. The sixth deletes 7:716958, the last intron base before another exon of ENST00000414568, where the shifted deletion replaces a valine by a stop, and the seventh 7:882842, the last intron base before an exon of the forward-strand ENST00000435699 (cds_end_NF), where the new frame meets no stop codon before the transcript's last base and the count to it is the unknown one. One record inserts three bases between 7:889153 and 7:889154, which the shift carries four bases on, into an exon of ENST00000419312 (cds_start_NF and cds_end_NF) and of ENST00000429178: one residue inserted on the first, one duplicated on the second. Another inserts three bases between 7:878431 and 7:878432, which the shift carries four bases on, into an exon of ENST00000421580 and ENST00000435699 (both cds_end_NF): one residue duplicated on each. On each of those rows vep-rs writes the notation and Ensembl VEP no HGVSp. The other seven of those sixteen records give the third to the seventh deletions and the two insertions at their shifted positions, where both engines write that notation on every transcript named. The seventeenth record inserts seven bases between 7:21582861 and 7:21582862, in the 5' UTR of ENST00000328843 and ENST00000409508: they repeat the last two bases of the 5' UTR and coding bases 1 to 5, and the shift carries them seven bases on, to stand after coding base 5. Both engines write 5_prime_UTR_variant, the HGVSc of the duplication and its HGVS_OFFSET; Ensembl VEP writes no HGVSp on either transcript, where vep-rs writes the frameshift at residue 3. The eighteenth gives that duplication at its shifted position, where both engines write that notation on both transcripts. The nineteenth is the same kind of record on the reverse-strand ENST00000514988: seven bases written between 7:228862 and 7:228863, in its 5' UTR, repeat the seven before them on the genome (the last two bases of the 5' UTR and coding bases 1 to 5), and the shift carries them eight bases towards lower coordinates, to stand after coding base 6, with a negative HGVS_OFFSET. Ensembl VEP writes no HGVSp, where vep-rs writes the frameshift at residue 3. The twentieth gives that duplication at its shifted position, where both engines write that notation."
 
 prepare = [
-  '''[ -n "$IMAGE" ] || { echo "the cut of the cache is converted in the Ensembl VEP image: give --image" >&2; exit 1; }
-[ -n "$PERL_CACHE" ] || { echo "no homo_sapiens/116_GRCh37 with chromosome 7 under the --perl-cache-dir roots" >&2; exit 1; }
+  '''[ -n "$PERL_CACHE" ] || { echo "no homo_sapiens/116_GRCh37 with chromosome 7 under the --perl-cache-dir roots" >&2; exit 1; }
 cut="$STAGE/perl-cache/homo_sapiens/116_GRCh37"
 mkdir -p "$cut/7"
 cp "$PERL_CACHE/info.txt" "$PERL_CACHE/chr_synonyms.txt" "$cut/"
 cp "$PERL_CACHE/7/1-1000000.gz" "$PERL_CACHE/7/21000001-22000000.gz" "$cut/7/"''',
-  '''docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$REPO/scripts/data:/scripts:ro" -v "$STAGE:/stage" "$IMAGE" perl /scripts/storable_to_json.pl /stage/perl-cache/homo_sapiens/116_GRCh37 /stage/json-cache 7 > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
+  '''cargo run --release --locked --quiet --manifest-path "$REPO/tools/vep-storable-to-json/Cargo.toml" -- "$STAGE/perl-cache/homo_sapiens/116_GRCh37" "$STAGE/json-cache" 7 > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
 ]
 
 [input]
@@ -21,6 +20,24 @@ format = "vcf"
 text = """
 7	934969	intron_last_base_del_7_934969	AG	A	.	.	.
 7	21934500	intron_last_base_del_7_21934500	AG	A	.	.	.
+7	780454	intron_last_base_del_7_780454	AG	A	.	.	.
+7	780455	exon_first_base_del_7_780455	GG	G	.	.	.
+7	888053	intron_last_base_del_7_888053	AG	A	.	.	.
+7	888054	exon_first_base_del_7_888054	GG	G	.	.	.
+7	635941	intron_last_base_del_7_635941	CC	C	.	.	.
+7	635940	exon_first_base_del_7_635940	AC	A	.	.	.
+7	716957	intron_last_base_del_7_716957	CC	C	.	.	.
+7	716956	exon_first_base_del_7_716956	AC	A	.	.	.
+7	882841	intron_last_base_del_7_882841	AG	A	.	.	.
+7	882842	exon_first_base_del_7_882842	GG	G	.	.	.
+7	889153	intron_end_dup_7_889153	G	GCAG	.	.	.
+7	889157	exon_dup_7_889157	C	CAGC	.	.	.
+7	878431	intron_end_dup_7_878431	C	CTAG	.	.	.
+7	878435	exon_dup_7_878435	T	TAGT	.	.	.
+7	21582861	utr_dup_7_21582861	C	CCAATGGC	.	.	.
+7	21582868	coding_dup_7_21582868	C	CCAATGGC	.	.	.
+7	228862	utr_dup_7_228862	C	CTGCATGC	.	.	.
+7	228854	coding_dup_7_228854	A	ACTGCATG	.	.	.
 """
 
 [cache]
@@ -37,17 +54,148 @@ flags = [
 
 [compare]
 kind = "rows"
-where = { record = ["intron_last_base_del_7_934969", "intron_last_base_del_7_21934500"], feature = ["ENST00000265857", "ENST00000328843", "ENST00000409508"] }
+where = { record = ["intron_last_base_del_7_934969", "intron_last_base_del_7_21934500", "intron_last_base_del_7_780454", "exon_first_base_del_7_780455", "intron_last_base_del_7_888053", "exon_first_base_del_7_888054", "intron_last_base_del_7_635941", "exon_first_base_del_7_635940", "intron_last_base_del_7_716957", "exon_first_base_del_7_716956", "intron_last_base_del_7_882841", "exon_first_base_del_7_882842", "intron_end_dup_7_889153", "exon_dup_7_889157", "intron_end_dup_7_878431", "exon_dup_7_878435", "utr_dup_7_21582861", "coding_dup_7_21582868", "utr_dup_7_228862", "coding_dup_7_228854"], feature = ["ENST00000265857", "ENST00000328843", "ENST00000409508", "ENST00000297440", "ENST00000440747", "ENST00000437419", "ENST00000429178", "ENST00000400758", "ENST00000414568", "ENST00000435699", "ENST00000419312", "ENST00000421580", "ENST00000514988"] }
 columns = ["Uploaded_variation", "Feature", "Consequence", "CDS_position", "Protein_position", "HGVSc", "HGVS_OFFSET", "HGVSp"]
 
 [expected]
 ensembl_vep = [
+  "coding_dup_7_21582868 | ENST00000328843 | frameshift_variant | 5-6 | 2 | ENST00000328843.6:c.-2_5dup | - | ENSP00000330671.6:p.Ala3AsnfsTer105",
+  "coding_dup_7_21582868 | ENST00000409508 | frameshift_variant | 5-6 | 2 | ENST00000409508.3:c.-2_5dup | - | ENSP00000475939.1:p.Ala3AsnfsTer105",
+  "coding_dup_7_228854 | ENST00000514988 | frameshift_variant | 6-7 | 2-3 | ENST00000514988.1:c.-1_6dup | - | ENSP00000425352.1:p.Leu3HisfsTer57",
+  "exon_dup_7_878435 | ENST00000419312 | upstream_gene_variant | - | - | - | - | -",
+  "exon_dup_7_878435 | ENST00000421580 | inframe_insertion,splice_region_variant | 78-79 | 26-27 | ENST00000421580.1:c.78-2_78dup | - | ENSP00000394381.1:p.Ser28dup",
+  "exon_dup_7_878435 | ENST00000429178 | upstream_gene_variant | - | - | - | - | -",
+  "exon_dup_7_878435 | ENST00000435699 | inframe_insertion,splice_region_variant | 78-79 | 26-27 | ENST00000435699.1:c.78-2_78dup | - | ENSP00000388430.1:p.Ser28dup",
+  "exon_dup_7_889157 | ENST00000419312 | inframe_insertion,splice_region_variant | 182-183 | 61 | ENST00000419312.1:c.181-2_181dup | - | ENSP00000414279.1:p.Ser61_His62insAla",
+  "exon_dup_7_889157 | ENST00000429178 | inframe_insertion,splice_region_variant | 350-351 | 117 | ENST00000429178.1:c.350-2_350dup | - | ENSP00000409909.1:p.Ala117dup",
+  "exon_first_base_del_7_635940 | ENST00000400758 | frameshift_variant,splice_region_variant | 133 | 45 | ENST00000400758.2:c.132del | - | ENSP00000383569.2:p.Val45CysfsTer3",
+  "exon_first_base_del_7_635940 | ENST00000414568 | frameshift_variant,splice_region_variant | 385 | 129 | ENST00000414568.1:c.385del | - | ENSP00000394633.1:p.Val129CysfsTer3",
+  "exon_first_base_del_7_716956 | ENST00000414568 | frameshift_variant,splice_region_variant | 184 | 62 | ENST00000414568.1:c.184del | - | ENSP00000394633.1:p.Val62Ter",
+  "exon_first_base_del_7_780455 | ENST00000297440 | frameshift_variant,splice_region_variant | 781 | 261 | ENST00000297440.6:c.781del | - | ENSP00000297440.6:p.Val261SerfsTer64",
+  "exon_first_base_del_7_780455 | ENST00000437419 | frameshift_variant,splice_region_variant | 100 | 34 | ENST00000437419.1:c.98del | - | ENSP00000410788.1:p.Val34SerfsTer64",
+  "exon_first_base_del_7_780455 | ENST00000440747 | frameshift_variant,splice_region_variant | 187 | 63 | ENST00000440747.1:c.185del | - | ENSP00000403165.1:p.Val63SerfsTer64",
+  "exon_first_base_del_7_882842 | ENST00000419312 | upstream_gene_variant | - | - | - | - | -",
+  "exon_first_base_del_7_882842 | ENST00000421580 | downstream_gene_variant | - | - | - | - | -",
+  "exon_first_base_del_7_882842 | ENST00000429178 | upstream_gene_variant | - | - | - | - | -",
+  "exon_first_base_del_7_882842 | ENST00000435699 | frameshift_variant,splice_region_variant | 452 | 151 | ENST00000435699.1:c.452del | - | ENSP00000388430.1:p.Gly151ValfsTer?",
+  "exon_first_base_del_7_888054 | ENST00000419312 | intron_variant | - | - | ENST00000419312.1:c.181-1102del | - | -",
+  "exon_first_base_del_7_888054 | ENST00000429178 | frameshift_variant,splice_region_variant | 152 | 51 | ENST00000429178.1:c.152del | - | ENSP00000409909.1:p.Cys51SerfsTer7",
+  "intron_end_dup_7_878431 | ENST00000419312 | upstream_gene_variant | - | - | - | - | -",
+  "intron_end_dup_7_878431 | ENST00000421580 | splice_region_variant,splice_polypyrimidine_tract_variant,intron_variant | - | - | ENST00000421580.1:c.78-2_78dup | 4 | -",
+  "intron_end_dup_7_878431 | ENST00000429178 | upstream_gene_variant | - | - | - | - | -",
+  "intron_end_dup_7_878431 | ENST00000435699 | splice_region_variant,splice_polypyrimidine_tract_variant,intron_variant | - | - | ENST00000435699.1:c.78-2_78dup | 4 | -",
+  "intron_end_dup_7_889153 | ENST00000419312 | splice_region_variant,splice_polypyrimidine_tract_variant,intron_variant | - | - | ENST00000419312.1:c.181-2_181dup | 4 | -",
+  "intron_end_dup_7_889153 | ENST00000429178 | splice_region_variant,splice_polypyrimidine_tract_variant,intron_variant | - | - | ENST00000429178.1:c.350-2_350dup | 4 | -",
   "intron_last_base_del_7_21934500 | ENST00000328843 | splice_acceptor_variant | - | - | ENST00000328843.6:c.12958del | 4 | ENSP00000330671.6:p.Glu4320AsnfsTer15",
   "intron_last_base_del_7_21934500 | ENST00000409508 | splice_acceptor_variant | - | - | ENST00000409508.3:c.12937del | 4 | -",
+  "intron_last_base_del_7_635941 | ENST00000400758 | splice_acceptor_variant | - | - | ENST00000400758.2:c.132del | -1 | -",
+  "intron_last_base_del_7_635941 | ENST00000414568 | splice_acceptor_variant | - | - | ENST00000414568.1:c.385del | -1 | -",
+  "intron_last_base_del_7_716957 | ENST00000414568 | splice_acceptor_variant | - | - | ENST00000414568.1:c.184del | -1 | -",
+  "intron_last_base_del_7_780454 | ENST00000297440 | splice_acceptor_variant | - | - | ENST00000297440.6:c.781del | 1 | -",
+  "intron_last_base_del_7_780454 | ENST00000437419 | splice_acceptor_variant | - | - | ENST00000437419.1:c.98del | 1 | -",
+  "intron_last_base_del_7_780454 | ENST00000440747 | splice_acceptor_variant | - | - | ENST00000440747.1:c.185del | 1 | -",
+  "intron_last_base_del_7_882841 | ENST00000419312 | upstream_gene_variant | - | - | - | - | -",
+  "intron_last_base_del_7_882841 | ENST00000421580 | downstream_gene_variant | - | - | - | - | -",
+  "intron_last_base_del_7_882841 | ENST00000429178 | upstream_gene_variant | - | - | - | - | -",
+  "intron_last_base_del_7_882841 | ENST00000435699 | splice_acceptor_variant | - | - | ENST00000435699.1:c.452del | 1 | -",
+  "intron_last_base_del_7_888053 | ENST00000419312 | intron_variant | - | - | ENST00000419312.1:c.181-1102del | 1 | -",
+  "intron_last_base_del_7_888053 | ENST00000429178 | splice_acceptor_variant | - | - | ENST00000429178.1:c.152del | 1 | -",
   "intron_last_base_del_7_934969 | ENST00000265857 | splice_acceptor_variant | - | - | ENST00000265857.3:c.897del | 2 | -",
+  "utr_dup_7_21582861 | ENST00000328843 | 5_prime_UTR_variant | - | - | ENST00000328843.6:c.-2_5dup | 7 | -",
+  "utr_dup_7_21582861 | ENST00000409508 | 5_prime_UTR_variant | - | - | ENST00000409508.3:c.-2_5dup | 7 | -",
+  "utr_dup_7_228862 | ENST00000514988 | 5_prime_UTR_variant | - | - | ENST00000514988.1:c.-1_6dup | -8 | -",
 ]
 vep_rs = [
+  "coding_dup_7_21582868 | ENST00000328843 | frameshift_variant | 5-6 | 2 | ENST00000328843.6:c.-2_5dup | - | ENSP00000330671.6:p.Ala3AsnfsTer105",
+  "coding_dup_7_21582868 | ENST00000409508 | frameshift_variant | 5-6 | 2 | ENST00000409508.3:c.-2_5dup | - | ENSP00000475939.1:p.Ala3AsnfsTer105",
+  "coding_dup_7_228854 | ENST00000514988 | frameshift_variant | 6-7 | 2-3 | ENST00000514988.1:c.-1_6dup | - | ENSP00000425352.1:p.Leu3HisfsTer57",
+  "exon_dup_7_878435 | ENST00000419312 | upstream_gene_variant | - | - | - | - | -",
+  "exon_dup_7_878435 | ENST00000421580 | inframe_insertion,splice_region_variant | 78-79 | 26-27 | ENST00000421580.1:c.78-2_78dup | - | ENSP00000394381.1:p.Ser28dup",
+  "exon_dup_7_878435 | ENST00000429178 | upstream_gene_variant | - | - | - | - | -",
+  "exon_dup_7_878435 | ENST00000435699 | inframe_insertion,splice_region_variant | 78-79 | 26-27 | ENST00000435699.1:c.78-2_78dup | - | ENSP00000388430.1:p.Ser28dup",
+  "exon_dup_7_889157 | ENST00000419312 | inframe_insertion,splice_region_variant | 182-183 | 61 | ENST00000419312.1:c.181-2_181dup | - | ENSP00000414279.1:p.Ser61_His62insAla",
+  "exon_dup_7_889157 | ENST00000429178 | inframe_insertion,splice_region_variant | 350-351 | 117 | ENST00000429178.1:c.350-2_350dup | - | ENSP00000409909.1:p.Ala117dup",
+  "exon_first_base_del_7_635940 | ENST00000400758 | frameshift_variant,splice_region_variant | 133 | 45 | ENST00000400758.2:c.132del | - | ENSP00000383569.2:p.Val45CysfsTer3",
+  "exon_first_base_del_7_635940 | ENST00000414568 | frameshift_variant,splice_region_variant | 385 | 129 | ENST00000414568.1:c.385del | - | ENSP00000394633.1:p.Val129CysfsTer3",
+  "exon_first_base_del_7_716956 | ENST00000414568 | frameshift_variant,splice_region_variant | 184 | 62 | ENST00000414568.1:c.184del | - | ENSP00000394633.1:p.Val62Ter",
+  "exon_first_base_del_7_780455 | ENST00000297440 | frameshift_variant,splice_region_variant | 781 | 261 | ENST00000297440.6:c.781del | - | ENSP00000297440.6:p.Val261SerfsTer64",
+  "exon_first_base_del_7_780455 | ENST00000437419 | frameshift_variant,splice_region_variant | 100 | 34 | ENST00000437419.1:c.98del | - | ENSP00000410788.1:p.Val34SerfsTer64",
+  "exon_first_base_del_7_780455 | ENST00000440747 | frameshift_variant,splice_region_variant | 187 | 63 | ENST00000440747.1:c.185del | - | ENSP00000403165.1:p.Val63SerfsTer64",
+  "exon_first_base_del_7_882842 | ENST00000419312 | upstream_gene_variant | - | - | - | - | -",
+  "exon_first_base_del_7_882842 | ENST00000421580 | downstream_gene_variant | - | - | - | - | -",
+  "exon_first_base_del_7_882842 | ENST00000429178 | upstream_gene_variant | - | - | - | - | -",
+  "exon_first_base_del_7_882842 | ENST00000435699 | frameshift_variant,splice_region_variant | 452 | 151 | ENST00000435699.1:c.452del | - | ENSP00000388430.1:p.Gly151ValfsTer?",
+  "exon_first_base_del_7_888054 | ENST00000419312 | intron_variant | - | - | ENST00000419312.1:c.181-1102del | - | -",
+  "exon_first_base_del_7_888054 | ENST00000429178 | frameshift_variant,splice_region_variant | 152 | 51 | ENST00000429178.1:c.152del | - | ENSP00000409909.1:p.Cys51SerfsTer7",
+  "intron_end_dup_7_878431 | ENST00000419312 | upstream_gene_variant | - | - | - | - | -",
+  "intron_end_dup_7_878431 | ENST00000421580 | splice_region_variant,splice_polypyrimidine_tract_variant,intron_variant | - | - | ENST00000421580.1:c.78-2_78dup | 4 | ENSP00000394381.1:p.Ser28dup",
+  "intron_end_dup_7_878431 | ENST00000429178 | upstream_gene_variant | - | - | - | - | -",
+  "intron_end_dup_7_878431 | ENST00000435699 | splice_region_variant,splice_polypyrimidine_tract_variant,intron_variant | - | - | ENST00000435699.1:c.78-2_78dup | 4 | ENSP00000388430.1:p.Ser28dup",
+  "intron_end_dup_7_889153 | ENST00000419312 | splice_region_variant,splice_polypyrimidine_tract_variant,intron_variant | - | - | ENST00000419312.1:c.181-2_181dup | 4 | ENSP00000414279.1:p.Ser61_His62insAla",
+  "intron_end_dup_7_889153 | ENST00000429178 | splice_region_variant,splice_polypyrimidine_tract_variant,intron_variant | - | - | ENST00000429178.1:c.350-2_350dup | 4 | ENSP00000409909.1:p.Ala117dup",
   "intron_last_base_del_7_21934500 | ENST00000328843 | splice_acceptor_variant | - | - | ENST00000328843.6:c.12958del | 4 | ENSP00000330671.6:p.Glu4320AsnfsTer15",
   "intron_last_base_del_7_21934500 | ENST00000409508 | splice_acceptor_variant | - | - | ENST00000409508.3:c.12937del | 4 | ENSP00000475939.1:p.Glu4313AsnfsTer15",
+  "intron_last_base_del_7_635941 | ENST00000400758 | splice_acceptor_variant | - | - | ENST00000400758.2:c.132del | -1 | ENSP00000383569.2:p.Val45CysfsTer3",
+  "intron_last_base_del_7_635941 | ENST00000414568 | splice_acceptor_variant | - | - | ENST00000414568.1:c.385del | -1 | ENSP00000394633.1:p.Val129CysfsTer3",
+  "intron_last_base_del_7_716957 | ENST00000414568 | splice_acceptor_variant | - | - | ENST00000414568.1:c.184del | -1 | ENSP00000394633.1:p.Val62Ter",
+  "intron_last_base_del_7_780454 | ENST00000297440 | splice_acceptor_variant | - | - | ENST00000297440.6:c.781del | 1 | ENSP00000297440.6:p.Val261SerfsTer64",
+  "intron_last_base_del_7_780454 | ENST00000437419 | splice_acceptor_variant | - | - | ENST00000437419.1:c.98del | 1 | ENSP00000410788.1:p.Val34SerfsTer64",
+  "intron_last_base_del_7_780454 | ENST00000440747 | splice_acceptor_variant | - | - | ENST00000440747.1:c.185del | 1 | ENSP00000403165.1:p.Val63SerfsTer64",
+  "intron_last_base_del_7_882841 | ENST00000419312 | upstream_gene_variant | - | - | - | - | -",
+  "intron_last_base_del_7_882841 | ENST00000421580 | downstream_gene_variant | - | - | - | - | -",
+  "intron_last_base_del_7_882841 | ENST00000429178 | upstream_gene_variant | - | - | - | - | -",
+  "intron_last_base_del_7_882841 | ENST00000435699 | splice_acceptor_variant | - | - | ENST00000435699.1:c.452del | 1 | ENSP00000388430.1:p.Gly151ValfsTer?",
+  "intron_last_base_del_7_888053 | ENST00000419312 | intron_variant | - | - | ENST00000419312.1:c.181-1102del | 1 | -",
+  "intron_last_base_del_7_888053 | ENST00000429178 | splice_acceptor_variant | - | - | ENST00000429178.1:c.152del | 1 | ENSP00000409909.1:p.Cys51SerfsTer7",
   "intron_last_base_del_7_934969 | ENST00000265857 | splice_acceptor_variant | - | - | ENST00000265857.3:c.897del | 2 | ENSP00000265857.3:p.Asn300ThrfsTer3",
+  "utr_dup_7_21582861 | ENST00000328843 | 5_prime_UTR_variant | - | - | ENST00000328843.6:c.-2_5dup | 7 | ENSP00000330671.6:p.Ala3AsnfsTer105",
+  "utr_dup_7_21582861 | ENST00000409508 | 5_prime_UTR_variant | - | - | ENST00000409508.3:c.-2_5dup | 7 | ENSP00000475939.1:p.Ala3AsnfsTer105",
+  "utr_dup_7_228862 | ENST00000514988 | 5_prime_UTR_variant | - | - | ENST00000514988.1:c.-1_6dup | -8 | ENSP00000425352.1:p.Leu3HisfsTer57",
+]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/coding.rs::annotated_before_the_coding_start",
+    "crates/vep-effects/src/coding.rs::annotated_in_coding_intron",
+    "crates/vep-effects/src/coding.rs::coding_sequence_ends_on_its_stop_codon",
+    "crates/vep-effects/src/coding.rs::held_codons_give_the_protein_notation",
+    "crates/vep-effects/src/coding.rs::hgvs_protein",
+]
+tests = [
+    "crates/vep-cli/tests/hgvsp_allele_moved_from_the_5_prime_utr_into_the_coding_sequence.rs::a_duplication_written_in_the_5_prime_utr_carries_the_frameshift_of_its_3_prime_place",
+    "crates/vep-cli/tests/hgvsp_allele_moved_from_the_5_prime_utr_into_the_coding_sequence.rs::bases_moved_from_the_5_prime_utr_into_the_start_codon_carry_the_notation_of_their_3_prime_place",
+    "crates/vep-effects/src/concordance_tests.rs::concordance_hgvsp_h19a_intronic_deletion_shifted_into_the_cds_forward_strand",
+    "crates/vep-effects/src/concordance_tests.rs::concordance_hgvsp_h19c_intronic_indels_shifted_into_the_cds_reverse_strand",
+    "crates/vep-effects/src/concordance_tests.rs::concordance_hgvsp_h19d_intronic_deletion_on_a_transcript_with_a_frameshift_intron",
+    "crates/vep-effects/src/concordance_tests.rs::concordance_hgvsp_h19p_a_complete_transcript_carries_the_notation_of_the_shifted_intronic_indel",
+    "crates/vep-effects/src/shifted_intron_notation_tests.rs::a_deleted_residue_shifted_out_of_an_intron_keeps_its_notation_where_the_coding_end_is_not_found",
+    "crates/vep-effects/src/shifted_intron_notation_tests.rs::a_deletion_shifted_from_an_intron_onto_the_stop_codon_is_an_extension_named_at_the_stop",
+    "crates/vep-effects/src/shifted_intron_notation_tests.rs::a_deletion_shifted_into_a_stop_codon_that_stays_a_stop_names_the_stop_unchanged",
+    "crates/vep-effects/src/shifted_intron_notation_tests.rs::a_deletion_shifted_onto_the_stop_codon_on_the_reverse_strand_is_the_same_extension",
+    "crates/vep-effects/src/shifted_intron_notation_tests.rs::a_deletion_shifted_out_of_an_intron_is_numbered_on_the_codons_the_start_phase_pads",
+    "crates/vep-effects/src/shifted_intron_notation_tests.rs::a_deletion_shifted_out_of_an_intron_keeps_its_frameshift_on_the_reverse_strand_too",
+    "crates/vep-effects/src/shifted_intron_notation_tests.rs::a_deletion_shifted_out_of_an_intron_keeps_its_frameshift_where_the_coding_start_is_not_found",
+    "crates/vep-effects/src/shifted_intron_notation_tests.rs::a_deletion_shifted_out_of_an_intron_keeps_its_frameshift_where_the_transcript_carries_both_flags",
+    "crates/vep-effects/src/shifted_intron_notation_tests.rs::a_frameshift_shifted_out_of_an_intron_keeps_its_notation_where_the_coding_end_is_not_found",
+    "crates/vep-effects/src/shifted_intron_notation_tests.rs::a_frameshift_that_meets_no_stop_codon_is_counted_as_unknown_where_the_coding_end_is_not_found",
+    "crates/vep-effects/src/shifted_intron_notation_tests.rs::a_stop_shifted_out_of_an_intron_keeps_its_notation_where_the_coding_end_is_not_found",
+    "crates/vep-effects/src/shifted_intron_notation_tests.rs::an_in_frame_insertion_shifted_out_of_an_intron_keeps_its_notation_where_the_coding_start_is_not_found",
+    "crates/vep-effects/src/shifted_intron_notation_tests.rs::an_insertion_shifted_further_than_its_coding_coordinate_keeps_the_frameshift_notation",
+    "crates/vep-effects/src/shifted_intron_notation_tests.rs::an_insertion_shifted_further_than_its_coding_coordinate_on_the_reverse_strand",
+    "crates/vep-effects/src/shifted_intron_notation_tests.rs::an_insertion_whose_run_ends_in_the_coding_sequence_keeps_its_notation_where_the_coding_start_is_not_found",
+    "crates/vep-effects/src/shifted_intron_notation_tests.rs::residues_replaced_in_the_last_whole_codon_keep_their_notation_where_the_coding_end_is_not_found",
+    "crates/vep-effects/src/shifted_leading_utr_notation_tests.rs::a_deletion_in_a_run_that_ends_on_coding_base_1_takes_the_notation_of_the_deleted_start_base",
+    "crates/vep-effects/src/shifted_leading_utr_notation_tests.rs::a_duplication_written_in_an_intron_of_the_5_prime_utr_is_named_at_its_3_prime_place",
+    "crates/vep-effects/src/shifted_leading_utr_notation_tests.rs::a_duplication_written_in_the_5_prime_utr_is_named_as_the_frameshift_at_its_3_prime_place",
+    "crates/vep-effects/src/shifted_leading_utr_notation_tests.rs::a_duplication_written_in_the_5_prime_utr_of_a_reverse_strand_transcript_is_the_same_frameshift",
+    "crates/vep-effects/src/shifted_leading_utr_notation_tests.rs::a_start_codon_copy_deleted_in_the_5_prime_utr_takes_the_notation_of_the_deleted_start_codon",
+    "crates/vep-effects/src/shifted_leading_utr_notation_tests.rs::an_insertion_the_shift_leaves_at_the_end_of_an_intron_keeps_an_empty_hgvsp",
+    "crates/vep-effects/src/shifted_leading_utr_notation_tests.rs::the_held_codons_give_the_notation_where_the_coding_end_is_not_found",
+    "crates/vep-effects/src/shifted_leading_utr_notation_tests.rs::used_ref_of_an_allele_written_in_the_5_prime_utr_is_not_rotated_by_the_notation",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/shifted_indel.rs::placed_exon_start",
+    "tools/vep-formats-compare/src/rules/shifted_indel.rs::reaches_the_coding_sequence",
+    "tools/vep-formats-compare/src/rules/shifted_indel.rs::shifted_indel_written_span_protein_gate",
+    "tools/vep-formats-compare/src/rules/shifted_indel.rs::shifted_out_of_an_intron",
 ]

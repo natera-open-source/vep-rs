@@ -3,7 +3,7 @@ set -euo pipefail
 
 # capture_baseline.sh
 #
-# Captures baseline metrics from a Perl-derived JSON cache by running vep-rs
+# Captures baseline metrics from an Ensembl VEP-derived JSON cache by running vep-rs
 # and computing annotation statistics from the output.
 #
 # Usage:
@@ -128,6 +128,19 @@ if [[ ! -x "$VEP_BINARY" ]]; then
 	exit 1
 fi
 
+# The metrics of Step 2 and the checksums of Step 3 read the whole output and every cache
+# file: they are made by this tree's release build of tools/vep-file-census, across the
+# host's cores. Nothing is built here and no other program runs in its place: a tree
+# without the build stops here, before vep-rs runs.
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+census_bin="$REPO_DIR/tools/vep-file-census/target/release/vep-file-census"
+if [[ -f "$census_bin" && -x "$census_bin" ]]; then
+	FILE_CENSUS=("$census_bin")
+else
+	echo "ERROR: [capture_baseline] the file census $census_bin is not an executable: build the tool with 'cargo build --release --locked --manifest-path $REPO_DIR/tools/vep-file-census/Cargo.toml'" >&2
+	exit 1
+fi
+
 # Setup
 mkdir -p "$OUTPUT_DIR"
 OUTPUT_FILE="${OUTPUT_DIR}/baseline_output.txt"
@@ -175,143 +188,15 @@ echo "  vep-rs completed in ${ELAPSED}s"
 # Step 2: Compute metrics from VEP output
 echo "Step 2: Computing metrics..."
 
-python3 - "$OUTPUT_FILE" "$METRICS_FILE" "$ELAPSED" <<'PYEOF'
-import json
-import sys
-from collections import Counter
-from pathlib import Path
-
-output_file = Path(sys.argv[1])
-metrics_file = Path(sys.argv[2])
-elapsed_seconds = int(sys.argv[3])
-
-total_lines = 0
-consequence_counts = Counter()
-existing_variation_count = 0
-clin_sig_count = 0
-hgvsc_count = 0
-hgvsp_count = 0
-frequency_fields = {
-    "AF": 0,
-    "gnomADe_AF": 0,
-    "gnomADg_AF": 0,
-    "MAX_AF": 0,
-    "EUR_AF": 0,
-    "AFR_AF": 0,
-    "AMR_AF": 0,
-    "EAS_AF": 0,
-    "SAS_AF": 0,
-}
-
-# Parse header to find Extra field index
-header_cols = []
-
-with open(output_file) as fh:
-    for line in fh:
-        line = line.rstrip("\n")
-        if line.startswith("##"):
-            continue
-        if line.startswith("#"):
-            header_cols = line.lstrip("#").split("\t")
-            continue
-        if not line:
-            continue
-
-        total_lines += 1
-        cols = line.split("\t")
-        if len(cols) < 7:
-            continue
-
-        # Column 6 is Consequence
-        consequences = cols[6].strip()
-        for csq in consequences.split(","):
-            csq = csq.strip()
-            if csq:
-                consequence_counts[csq] += 1
-
-        # Extra field is the last column (col 13 in standard VEP output)
-        extra_idx = -1
-        if header_cols:
-            for i, h in enumerate(header_cols):
-                if h.strip() == "Extra":
-                    extra_idx = i
-                    break
-
-        extra = ""
-        if extra_idx >= 0 and extra_idx < len(cols):
-            extra = cols[extra_idx]
-        elif len(cols) > 13:
-            extra = cols[13]
-
-        extra_fields = {}
-        if extra and extra != "-":
-            for pair in extra.split(";"):
-                if "=" in pair:
-                    k, v = pair.split("=", 1)
-                    extra_fields[k] = v
-
-        # Existing_variation is col 12 in standard output
-        existing_var = ""
-        if len(cols) > 12:
-            existing_var = cols[12].strip()
-        if existing_var and existing_var != "-":
-            existing_variation_count += 1
-
-        if extra_fields.get("CLIN_SIG"):
-            clin_sig_count += 1
-        if extra_fields.get("HGVSc"):
-            hgvsc_count += 1
-        if extra_fields.get("HGVSp"):
-            hgvsp_count += 1
-
-        for freq_field in frequency_fields:
-            if extra_fields.get(freq_field):
-                frequency_fields[freq_field] += 1
-
-metrics = {
-    "total_annotation_lines": total_lines,
-    "consequence_counts": dict(consequence_counts.most_common()),
-    "existing_variation_count": existing_variation_count,
-    "clin_sig_count": clin_sig_count,
-    "hgvsc_count": hgvsc_count,
-    "hgvsp_count": hgvsp_count,
-    "frequency_field_counts": frequency_fields,
-    "elapsed_seconds": elapsed_seconds,
-}
-
-with open(metrics_file, "w") as fh:
-    json.dump(metrics, fh, indent=2)
-    fh.write("\n")
-
-print(f"  Total annotation lines: {total_lines}")
-print(f"  Unique consequence types: {len(consequence_counts)}")
-print(f"  Existing_variation non-empty: {existing_variation_count}")
-print(f"  CLIN_SIG non-empty: {clin_sig_count}")
-print(f"  HGVSc non-empty: {hgvsc_count}")
-print(f"  HGVSp non-empty: {hgvsp_count}")
-top_freq = max(frequency_fields.values()) if frequency_fields else 0
-print(f"  Max frequency field count: {top_freq}")
-PYEOF
+"${FILE_CENSUS[@]}" metrics "$OUTPUT_FILE" "$METRICS_FILE" "$ELAPSED"
 
 # Step 3: Compute cache file checksums
 echo "Step 3: Computing cache checksums..."
 
-if command -v md5sum &>/dev/null; then
-	MD5CMD="md5sum"
-elif command -v md5 &>/dev/null; then
-	MD5CMD="md5 -r"
-else
-	echo "  WARNING: No md5sum/md5 found, skipping checksums"
-	MD5CMD=""
-fi
-
-if [[ -n "$MD5CMD" ]]; then
-	find "$CACHE_DIR" -type f -name "*.json" | sort | while read -r f; do
-		$MD5CMD "$f"
-	done >"$CHECKSUMS_FILE"
-	CHECKSUM_COUNT=$(wc -l <"$CHECKSUMS_FILE" | tr -d ' ')
-	echo "  Wrote $CHECKSUM_COUNT checksums to $CHECKSUMS_FILE"
-fi
+find "$CACHE_DIR" -type f -name "*.json" | sort |
+	"${FILE_CENSUS[@]}" digest --algorithm md5 --names read >"$CHECKSUMS_FILE"
+CHECKSUM_COUNT=$(wc -l <"$CHECKSUMS_FILE" | tr -d ' ')
+echo "  Wrote $CHECKSUM_COUNT checksums to $CHECKSUMS_FILE"
 
 echo ""
 echo "=== Baseline capture complete ==="

@@ -1,7 +1,7 @@
 entry = "regulatory_identifier_numberified"
 page = "docs/divergences/regulatory-identifier-numberified.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the GFF3 specification, \"Description of the Format\", column 9: an \"ID\" is text unique within the scope of its file and a lowercase attribute is free to the application, with no rule against a name made of digits; not seen in the measured datasets"
 notes = "Four --regulatory_gff features over one deletion, three identified by text Perl's number test admits (12345, 007, 1e3) and the corpus's own ENSR21_536SRH as the control: Ensembl VEP's JSON writer numifies every value under a key its exempt list does not name (JSON.pm:288, :114-121), so the three identifiers are written as the numbers 12345, 7 and 1000; vep-rs writes every feature identifier as a string. The text formats agree."
@@ -45,4 +45,10 @@ vep_rs = [
   '{"biotype":"enhancer","consequence_terms":["regulatory_region_variant"],"impact":"MODIFIER","regulatory_feature_id":"12345","variant_allele":"-"}',
   '{"biotype":"open_chromatin_region","consequence_terms":["regulatory_region_variant"],"impact":"MODIFIER","regulatory_feature_id":"1e3","variant_allele":"-"}',
   '{"biotype":"promoter_flanking_region","consequence_terms":["regulatory_region_variant"],"impact":"MODIFIER","regulatory_feature_id":"007","variant_allele":"-"}',
+]
+
+[implementation]
+code = ["crates/vep-io/src/output/json.rs::JsonOutputFormatter::consequence_object"]
+tests = [
+    "crates/vep-io/src/output/json.rs::tests::feature_identifiers_and_factor_names_stay_strings",
 ]

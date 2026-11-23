@@ -11,7 +11,7 @@ A regulatory-feature or motif-feature row the mate selects goes the same way. `w
 **Where it is in Ensembl VEP's source** (`ensembl-variation`):
 - `Bio/EnsEMBL/Variation/BaseVariationFeatureOverlapAllele.pm`, lines 257 and 273: the record's own feature is passed to every predicate.
 - `Utils/VariationEffect.pm`, lines 350-358: `feature_truncation` alone tests `within_feature` on the breakend; lines 444-458: `upstream` and `downstream` read the record; lines 629-634: `within_intron` reads the record's differing region, which `BaseTranscriptVariationAllele.pm` line 118 derives from the record's start.
-- `StructuralVariationOverlap.pm`, lines 86-102 and 144-160: the mate allele is created from the mate's coordinate and chromosome.
+- `StructuralVariationOverlap.pm`, lines 86-103 and 144-160: the mate allele is created from the mate's coordinate and chromosome.
 
 **What correcting it would change.** If every predicate were evaluated at the breakpoint the row is for, [class 11](#11-breakend-mate-rows-read-from-the-other-chromosomes-coordinate) would vanish.
 
@@ -33,7 +33,7 @@ Ensembl VEP represents a breakend in one of two ways:
 - A `<BND>` whose mate is on the same chromosome and given in `INFO/CHR2` and `END2` becomes a span from POS+1 to the mate ([class 5](defect-c.md#5-a-record-ensembl-vep-drops-before-annotation) shows one). Every allele of a span record is evaluated over the span.
 - A breakend written in bracket notation, or a `<BND>` whose mate is on another chromosome, becomes a point record whose Location is the single base after POS.
 
-This class is about the mate-allele rows of point records. For a transcript within 5,000 bases of the mate, Ensembl VEP writes a mate-allele row (`StructuralVariationOverlap.pm` lines 86-102 and 144-160). What that row should say is what the mate breakpoint does to that transcript:
+This class is about the mate-allele rows of point records. For a transcript within 5,000 bases of the mate, Ensembl VEP writes a mate-allele row (`StructuralVariationOverlap.pm` lines 86-103 and 144-160). What that row should say is what the mate breakpoint does to that transcript:
 
 - when the breakpoint falls inside it: `feature_truncation` (SO:0001906), plus the region the breakpoint lands in (`intron_variant`, SO:0001627, or an exon term);
 - when it falls near it: `upstream_gene_variant` (SO:0001631, "a sequence variant located 5' of a gene") and `downstream_gene_variant` (SO:0001632, "a sequence variant located 3' of a gene") with a DISTANCE.
@@ -163,7 +163,7 @@ Source (`ensembl-variation`):
 
 - `Bio/EnsEMBL/Variation/BaseVariationFeatureOverlapAllele.pm`, lines 257 and 273: `$bvf` is the record's own feature and is passed to every predicate.
 - `Utils/VariationEffect.pm`, lines 350-358: `feature_truncation` alone tests `within_feature` on `$bvfoa->breakend`; lines 444-458: `upstream` and `downstream` read `$bvf`; lines 629-634: `within_intron` reads the record's differing region, which `BaseTranscriptVariationAllele.pm` line 118 derives from `$vf->{start}`.
-- `StructuralVariationOverlap.pm`, lines 86-102 and 144-160: the mate allele is created from the mate's coordinate and chromosome.
+- `StructuralVariationOverlap.pm`, lines 86-103 and 144-160: the mate allele is created from the mate's coordinate and chromosome.
 
 ### 11.5 Why vep-rs's row is the correct one
 
@@ -175,7 +175,7 @@ Ensembl VEP itself annotates the same breakpoint correctly when it is the record
 
 ### 11.6 Try it yourself
 
-Annotate with Ensembl VEP 116.2, GRCh37 cache and FASTA, using [the command of the closing section](reproducing.md#reproducing-these-examples). Keep the mate at `21:33034355` and move the record's own position:
+Annotate with Ensembl VEP 116.3, GRCh37 cache and FASTA, using [the command of the closing section](reproducing.md#reproducing-these-examples). Keep the mate at `21:33034355` and move the record's own position:
 
 | Record | Ensembl VEP, mate-allele rows on ENST00000270142 and ENST00000449339 |
 | --- | --- |
@@ -186,7 +186,7 @@ The second input places the chromosome 1 number inside SOD1's chromosome 21 span
 
 ### 11.7 How the comparator treats this class
 
-`filter_breakend_mate_local_read_pairs` in `scripts/validation/compare_sv_concordance.py`, with the derivation in `scripts/validation/breakend_mate_context.py`, is computed, not pattern-matched. For a pair whose row is a mate-allele row of a point breakend ([11.1](#111-what-a-reader-needs-to-know-first)) it derives both of these sets from the transcript cache:
+`filter_breakend_mate_local_read_pairs` in `tools/vep-sv-compare`, with the derivation in its `src/mate_context.rs`, is computed, not pattern-matched. For a pair whose row is a mate-allele row of a point breakend ([11.1](#111-what-a-reader-needs-to-know-first)) it derives both of these sets from the transcript cache:
 
 - the set the mate coordinate supports for the transcript: inside it, `feature_truncation` plus the exon, intron, UTR or coding region the breakpoint lands in, with the non-coding and NMD context terms; within 5,000 bases of it, `upstream_gene_variant` or `downstream_gene_variant`;
 - the set the record's own coordinate yields by Ensembl VEP's reading: `feature_truncation` alone when the mate is inside, `intergenic_variant` when it is not.

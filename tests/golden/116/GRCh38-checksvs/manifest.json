@@ -80,7 +80,7 @@
    "field_divergence_summary": {}
   }
  ],
- "suites": {
+ "datasets": {
   "GRCh38-checksvs": {
    "reference": "reference.txt",
    "input": "candidates.vcf",
@@ -119,63 +119,63 @@
  },
  "records": [
   {
-   "suite": "GRCh38-checksvs",
+   "dataset": "GRCh38-checksvs",
    "vcf": "21\t5028997\t.\tTCA\tT\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-checksvs",
+   "dataset": "GRCh38-checksvs",
    "vcf": "21\t5028998\t.\tCAT\tC\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-checksvs",
+   "dataset": "GRCh38-checksvs",
    "vcf": "21\t5028999\t.\tA\tAT\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-checksvs",
+   "dataset": "GRCh38-checksvs",
    "vcf": "21\t5028999\t.\tA\tG\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-checksvs",
+   "dataset": "GRCh38-checksvs",
    "vcf": "21\t5029000\t.\tT\t<DEL>\t.\t.\tSVTYPE=DEL;END=5047000",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-checksvs",
+   "dataset": "GRCh38-checksvs",
    "vcf": "21\t5029000\t.\tT\tC\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-checksvs",
+   "dataset": "GRCh38-checksvs",
    "vcf": "21\t5029000\t.\tT\tTG\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-checksvs",
+   "dataset": "GRCh38-checksvs",
    "vcf": "21\t5030192\t.\tA\tG\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-checksvs",
+   "dataset": "GRCh38-checksvs",
    "vcf": "21\t5030602\t.\tA\tC,T\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
@@ -185,14 +185,14 @@
    ]
   },
   {
-   "suite": "GRCh38-checksvs",
+   "dataset": "GRCh38-checksvs",
    "vcf": "21\t5047000\t.\tT\tA\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-checksvs",
+   "dataset": "GRCh38-checksvs",
    "vcf": "21\t5047000\t.\tT\tA,TG\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
@@ -202,7 +202,7 @@
    ]
   },
   {
-   "suite": "GRCh38-checksvs",
+   "dataset": "GRCh38-checksvs",
    "vcf": "21\t5047000\t.\tT\tTG,A\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
@@ -212,14 +212,14 @@
    ]
   },
   {
-   "suite": "GRCh38-checksvs",
+   "dataset": "GRCh38-checksvs",
    "vcf": "21\t5047001\t.\tT\tA\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-checksvs",
+   "dataset": "GRCh38-checksvs",
    "vcf": "21\t44195140\t.\tG\tA,C\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -232,7 +232,7 @@
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "divergences": [],

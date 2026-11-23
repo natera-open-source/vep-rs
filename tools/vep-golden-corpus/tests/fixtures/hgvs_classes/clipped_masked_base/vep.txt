@@ -1,0 +1,3 @@
+rs_masked	21:100-110	TGCTGGGCGCC	ENSG1	ENST1	Transcript	5_prime_UTR_variant	?-6	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;HGVSc=ENST1.6:c.-49_-47delinsTGCTGGGC
+rs_masked_ref	21:200-203	GGG	ENSG1	ENST1	Transcript	5_prime_UTR_variant	?-3	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;HGVSc=ENST1.6:c.-47N>G
+rs_masked_alt	21:300-310	TGCTGGGCGCC	ENSG1	ENST1	Transcript	5_prime_UTR_variant	?-6	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;HGVSc=ENST1.6:c.-49_-47delinsTGCTGGGC

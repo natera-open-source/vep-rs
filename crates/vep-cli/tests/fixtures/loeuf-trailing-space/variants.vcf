@@ -1,0 +1,3 @@
+##fileformat=VCFv4.2
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+21	26112000	trailing_space	G	A	.	.	.

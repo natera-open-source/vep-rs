@@ -469,9 +469,10 @@ fn as_c_char(byte: u8) -> i32 {
 mod tests {
     use super::*;
 
-    /// A temporary tree holding the directories `p1`, `p2`, `a`, `B`, `A1`, `a1`,
-    /// `Ab`, `aB`, `.hidden` and `star*dir`, and the file `f.txt`; `expand` on it
-    /// returns the matches with the tree's path replaced by `T`.
+    /// A temporary tree holding the directories `p1`, `p2`, `a`, `B`, `a1`, `aB`,
+    /// `.hidden` and `star*dir`, and the file `f.txt`, no two of them alike once
+    /// case is folded, so a directory that folds case holds them all; `expand`
+    /// on it returns the matches with the tree's path replaced by `T`.
     struct Tree {
         dir: tempfile::TempDir,
     }
@@ -479,13 +480,43 @@ mod tests {
     impl Tree {
         fn new() -> Self {
             let dir = tempfile::tempdir().unwrap();
-            for name in [
-                "p1", "p2", "a", "B", ".hidden", "star*dir", "A1", "a1", "Ab", "aB",
-            ] {
+            for name in ["p1", "p2", "a", "B", ".hidden", "star*dir", "a1", "aB"] {
                 fs::create_dir(dir.path().join(name)).unwrap();
             }
             fs::write(dir.path().join("f.txt"), "").unwrap();
             Self { dir }
+        }
+
+        /// Whether the tree's directory keeps names that differ by case alone
+        /// apart: it holds `a1`, so it does where `A1` names nothing.
+        fn tells_case_apart(&self) -> bool {
+            fs::symlink_metadata(self.dir.path().join("A1")).is_err()
+        }
+
+        /// Runs `assertions` on the tree once it also holds `A1` and `Ab`, the
+        /// twins of `a1` and `aB` under a case fold, where the directory keeps
+        /// such names apart. A directory that folds case cannot hold a twin, so
+        /// there one line says that the assertions on the twins are left out.
+        fn with_case_twins(&self, assertions: impl FnOnce(&Self)) {
+            let tells_case_apart = self.tells_case_apart();
+            if !tells_case_apart {
+                eprintln!(
+                    "the scratch directory folds case: \
+                     the assertions on names that differ by case alone are left out"
+                );
+            }
+            self.with_case_twins_where(tells_case_apart, assertions);
+        }
+
+        /// `with_case_twins` on the answer given for the directory, silently.
+        fn with_case_twins_where(&self, tells_case_apart: bool, assertions: impl FnOnce(&Self)) {
+            if !tells_case_apart {
+                return;
+            }
+            for name in ["A1", "Ab"] {
+                fs::create_dir(self.dir.path().join(name)).unwrap();
+            }
+            assertions(self);
         }
 
         fn root(&self) -> &str {
@@ -506,8 +537,9 @@ mod tests {
     }
 
     /// `*` matches every entry but the dot-prefixed ones, sorted with ASCII case
-    /// folded and byte order breaking the ties (`a` before `A1`, `A1` before `a1`,
-    /// `Ab` before `aB`); `?` is one byte; `**` is `*`; `*.txt` reaches the file.
+    /// folded (`aB` before `B`) and byte order breaking the ties between the case
+    /// twins (`A1` before `a1`, `Ab` before `aB`); `?` is one byte; `**` is `*`;
+    /// `*.txt` reaches the file.
     #[test]
     fn star_and_question_match_as_bsd_glob_does() {
         let tree = Tree::new();
@@ -515,9 +547,7 @@ mod tests {
             tree.expand("*"),
             strings(&[
                 "T/a",
-                "T/A1",
                 "T/a1",
-                "T/Ab",
                 "T/aB",
                 "T/B",
                 "T/f.txt",
@@ -528,8 +558,27 @@ mod tests {
         );
         assert_eq!(tree.expand("**"), tree.expand("*"));
         assert_eq!(tree.expand("p?"), strings(&["T/p1", "T/p2"]));
-        assert_eq!(tree.expand("?1"), strings(&["T/A1", "T/a1", "T/p1"]));
+        assert_eq!(tree.expand("?1"), strings(&["T/a1", "T/p1"]));
         assert_eq!(tree.expand("*.txt"), strings(&["T/f.txt"]));
+        tree.with_case_twins(|tree| {
+            assert_eq!(
+                tree.expand("*"),
+                strings(&[
+                    "T/a",
+                    "T/A1",
+                    "T/a1",
+                    "T/Ab",
+                    "T/aB",
+                    "T/B",
+                    "T/f.txt",
+                    "T/p1",
+                    "T/p2",
+                    "T/star*dir"
+                ])
+            );
+            assert_eq!(tree.expand("**"), tree.expand("*"));
+            assert_eq!(tree.expand("?1"), strings(&["T/A1", "T/a1", "T/p1"]));
+        });
     }
 
     /// A name whose first byte is outside ASCII sorts as the target's C `char`
@@ -539,13 +588,22 @@ mod tests {
     fn a_byte_outside_ascii_sorts_as_the_platform_char() {
         let tree = Tree::new();
         fs::create_dir(tree.dir.path().join("é1")).unwrap();
-        let expected = if i32::from(std::ffi::c_char::MIN) < 0 {
-            ["T/é1", "T/A1", "T/a1", "T/p1"]
+        let signed = i32::from(std::ffi::c_char::MIN) < 0;
+        let expected = if signed {
+            ["T/é1", "T/a1", "T/p1"]
         } else {
-            ["T/A1", "T/a1", "T/p1", "T/é1"]
+            ["T/a1", "T/p1", "T/é1"]
         };
         assert_eq!(tree.expand("*1"), strings(&expected));
         assert_eq!(tree.expand("{p,é}1"), strings(&["T/p1", "T/é1"]));
+        tree.with_case_twins(|tree| {
+            let expected = if signed {
+                ["T/é1", "T/A1", "T/a1", "T/p1"]
+            } else {
+                ["T/A1", "T/a1", "T/p1", "T/é1"]
+            };
+            assert_eq!(tree.expand("*1"), strings(&expected));
+        });
     }
 
     /// A pattern with no metacharacter is itself whether or not it exists; one
@@ -594,15 +652,23 @@ mod tests {
     }
 
     /// A class matches one byte of its members and ranges, `!` negates it, the
-    /// first member may be `]`, and a `-` before the `]` is a member.
+    /// first member may be `]`, and a `-` before the `]` is a member. A member
+    /// is its own byte alone: `[ab]` takes neither `B` nor the twin `A1`.
     #[test]
     fn classes_match_one_byte() {
         let tree = Tree::new();
         assert_eq!(tree.expand("[ab]*"), strings(&["T/a", "T/a1", "T/aB"]));
         assert_eq!(tree.expand("[a-b]1"), strings(&["T/a1"]));
         assert_eq!(tree.expand("[!pfaAB]*"), strings(&["T/star*dir"]));
-        assert_eq!(tree.expand("[!]]1"), strings(&["T/A1", "T/a1", "T/p1"]));
+        assert_eq!(tree.expand("[!]]1"), strings(&["T/a1", "T/p1"]));
         assert_eq!(tree.expand("[a-]*"), strings(&["T/a", "T/a1", "T/aB"]));
+        tree.with_case_twins(|tree| {
+            assert_eq!(tree.expand("[ab]*"), strings(&["T/a", "T/a1", "T/aB"]));
+            assert_eq!(tree.expand("[a-b]1"), strings(&["T/a1"]));
+            assert_eq!(tree.expand("[!pfaAB]*"), strings(&["T/star*dir"]));
+            assert_eq!(tree.expand("[!]]1"), strings(&["T/A1", "T/a1", "T/p1"]));
+            assert_eq!(tree.expand("[a-]*"), strings(&["T/a", "T/a1", "T/aB"]));
+        });
         fs::create_dir(tree.dir.path().join("]b")).unwrap();
         assert_eq!(tree.expand("[]]b"), strings(&["T/]b"]));
     }
@@ -662,6 +728,24 @@ mod tests {
         );
         fs::create_dir(tree.dir.path().join("p1").join("sub")).unwrap();
         assert_eq!(tree.expand("*/sub"), strings(&["T/link/sub", "T/p1/sub"]));
+    }
+
+    /// The assertions on the case twins run, on a tree holding the twins, where
+    /// the directory keeps them apart; on the answer that it folds case they are
+    /// left out and no twin is made.
+    #[test]
+    fn case_twins_are_left_out_where_the_directory_folds_case() {
+        let tree = Tree::new();
+        let mut ran = false;
+        tree.with_case_twins_where(false, |_| ran = true);
+        assert!(!ran);
+        assert_eq!(tree.expand("?1"), strings(&["T/a1", "T/p1"]));
+        let tells_case_apart = tree.tells_case_apart();
+        tree.with_case_twins(|tree| {
+            ran = true;
+            assert_eq!(tree.expand("?1"), strings(&["T/A1", "T/a1", "T/p1"]));
+        });
+        assert_eq!(ran, tells_case_apart);
     }
 
     /// `~` is `home`, `~/x` is under it, an empty `home` makes `~` the root and

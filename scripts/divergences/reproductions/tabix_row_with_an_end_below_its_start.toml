@@ -1,7 +1,7 @@
 entry = "tabix_row_with_an_end_below_its_start"
 page = "docs/divergences/tabix-row-with-an-end-below-its-start.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the VCF missing value, a dot in all cases (VCF 4.2 specification, section 1.4.1 \"Fixed fields\"); not seen in the measured datasets; classed by its most reachable shape, an END set to the missing value: an END below POS breaks section 3, \"For precise variants, END is POS + length of REF allele - 1\""
 notes = "Ensembl VEP's tabix reader (htslib 1.9) spans a VCF row to its INFO END and returns a row whose END lies below its position, or is not a number, for no query over its bases; the reader parses each row as it answers, so the index's builder does not decide. Neither engine writes a warning."
@@ -53,4 +53,16 @@ vep_rs = [
   "21:5029162 | C | - | intergenic_variant | end_x",
   "21:5029202 | C | - | intergenic_variant | end_dot",
   "21:5029222 | T | - | intergenic_variant | end_empty",
+]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/spliceai.rs::SpliceAiPlugin::vcf_config",
+    "crates/vep-builtins/src/tabix.rs::TabixConfig::end_or",
+    "crates/vep-builtins/src/tabix.rs::info_end",
+]
+tests = [
+    "crates/vep-builtins/src/custom/vcf.rs::tests::a_row_whose_end_lies_below_its_position_spans_its_reference_allele",
+    "crates/vep-builtins/src/tabix.rs::tests::record_end_reads_the_end_cell_as_tabix_does",
+    "crates/vep-builtins/src/tabix.rs::tests::vcf_info_end_key_is_the_record_end",
 ]

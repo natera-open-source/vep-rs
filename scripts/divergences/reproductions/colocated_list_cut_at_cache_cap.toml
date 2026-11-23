@@ -1,7 +1,7 @@
 entry = "colocated_list_cut_at_cache_cap"
 page = "docs/divergences/colocated-list-cut-at-cache-cap.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
 input_class_basis = "seen in the variation files of the human caches of release 116: 1,079 pubmed and 22 var_synonyms lists of exactly 1,024 characters end inside an item on GRCh38, 726 and 6 on GRCh37"
 notes = "Every identifier is invented. The known variant rs9920000001 at 21:500 stores a pubmed list of 113 eight-digit ids and the first seven digits of a 114th, 1,024 characters in all. The first step copies the Ensembl VEP cache by hard links and replaces the chromosome 21 variation file with that one row, in the column order of the cache's info.txt; the second builds vep-rs's cache with the same row. Ensembl VEP prints the stored list, the seven digits as a 114th id; vep-rs writes the 113 whole ids. The mask stands for the first 112 ids, equal on both sides."
@@ -45,3 +45,21 @@ mask = ["^99000001,(?:99[0-9]{6},){111}"]
 [expected]
 ensembl_vep = ["<masked>99000113,9900011"]
 vep_rs = ["<masked>99000113"]
+
+[implementation]
+code = [
+    "crates/vep-core/src/variant.rs::STORED_LIST_CAP",
+    "crates/vep-core/src/variant.rs::whole_items",
+    "crates/vep-core/src/variant.rs::written_pubmed",
+]
+tests = [
+    "crates/vep-cli/tests/colocated_list_fields.rs::pubmed_at_the_cap_loses_a_last_id_of_whole_length",
+    "crates/vep-cli/tests/colocated_list_fields.rs::pubmed_cut_inside_an_id_ends_before_it",
+    "crates/vep-core/src/variant.rs::tests::pubmed_at_the_cap_ends_before_its_cut_id",
+    "crates/vep-core/src/variant.rs::tests::synonyms_at_the_cap_end_before_their_cut_item",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/cut_lists.rs::cut_list_reading",
+    "tools/vep-formats-compare/src/rules/cut_lists.rs::json_cut_lists_pair",
+    "tools/vep-formats-compare/src/rules/cut_lists.rs::row_cut_lists_pair",
+]

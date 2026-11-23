@@ -24,7 +24,7 @@
   ],
   "reason": "COSMIC and HGMD-PUBLIC identifiers are not redistributed; the input records are chosen so that Ensembl VEP matches none of them"
  },
- "suites": {
+ "datasets": {
   "GRCh37-colocated": {
    "reference": "grch37-default.txt",
    "input": "grch37.vcf",
@@ -77,112 +77,112 @@
  },
  "records": [
   {
-   "suite": "GRCh37-colocated",
+   "dataset": "GRCh37-colocated",
    "vcf": "21\t9411284\t.\tC\tA\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh37-colocated",
+   "dataset": "GRCh37-colocated",
    "vcf": "21\t9411349\t.\tT\tA\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh37-colocated",
+   "dataset": "GRCh37-colocated",
    "vcf": "21\t9411379\t.\tCT\tC\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh37-colocated",
+   "dataset": "GRCh37-colocated",
    "vcf": "21\t9411405\t.\tTCTATC\tTC\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh37-colocated",
+   "dataset": "GRCh37-colocated",
    "vcf": "21\t9411410\t.\tC\tA\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh37-colocated",
+   "dataset": "GRCh37-colocated",
    "vcf": "21\t9411555\t.\tC\tT\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh37-colocated",
+   "dataset": "GRCh37-colocated",
    "vcf": "21\t9412358\t.\tT\tTG\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh37-colocated",
+   "dataset": "GRCh37-colocated",
    "vcf": "21\t9412370\t.\tA\tAAC,AT\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh37-colocated",
+   "dataset": "GRCh37-colocated",
    "vcf": "21\t9412503\t.\tC\tA,G,T\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh37-colocated",
+   "dataset": "GRCh37-colocated",
    "vcf": "21\t9413584\t.\tG\tA\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh37-colocated",
+   "dataset": "GRCh37-colocated",
    "vcf": "21\t9492382\t.\tC\tA,T\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh37-colocated",
+   "dataset": "GRCh37-colocated",
    "vcf": "21\t9569350\t.\tC\tT\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh37-colocated",
+   "dataset": "GRCh37-colocated",
    "vcf": "21\t9569836\t.\tT\tC\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh37-colocated",
+   "dataset": "GRCh37-colocated",
    "vcf": "21\t9879171\t.\tT\tA,C\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh37-colocated",
+   "dataset": "GRCh37-colocated",
    "vcf": "21\t10090673\t.\tT\tA\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh37-colocated",
+   "dataset": "GRCh37-colocated",
    "vcf": "21\t10910401\t.\tTAT\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant,splice_region_variant",
@@ -190,7 +190,7 @@
    ]
   },
   {
-   "suite": "GRCh37-colocated",
+   "dataset": "GRCh37-colocated",
    "vcf": "21\t15588513\t.\tC\tA,G,T\t.\t.\t.",
    "combinations": [
     "missense_variant",
@@ -199,7 +199,7 @@
    ]
   },
   {
-   "suite": "GRCh37-colocated",
+   "dataset": "GRCh37-colocated",
    "vcf": "21\t16340235\t.\tCC\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -208,21 +208,21 @@
    ]
   },
   {
-   "suite": "GRCh37-colocated",
+   "dataset": "GRCh37-colocated",
    "vcf": "21\t16438793\t.\tA\tG,T\t.\t.\t.",
    "combinations": [
     "upstream_gene_variant"
    ]
   },
   {
-   "suite": "GRCh37-colocated",
+   "dataset": "GRCh37-colocated",
    "vcf": "21\t43005598\t.\tG\tA\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   }
  ],
- "multi_allelic_per_suite": 0,
+ "multi_allelic_per_dataset": 0,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "divergences": [],

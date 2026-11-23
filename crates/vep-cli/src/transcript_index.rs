@@ -3,7 +3,7 @@
 
 //! Per-chromosome transcript interval index.
 //!
-//! [`TranscriptIndex`] answers overlap queries through UCSC hierarchical binning
+//! `TranscriptIndex` answers overlap queries through UCSC hierarchical binning
 //! (Kent et al. 2002): each transcript's extended region is assigned to a single
 //! bin and an overlap query enumerates the candidate bins, O(1) typical and
 //! O(N_bin) worst case. Reference:
@@ -14,10 +14,11 @@
 use std::collections::HashMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use rayon::prelude::*;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use vep_core::cache_manifest::CacheManifest;
 use vep_core::coordinate::Strand;
@@ -30,6 +31,7 @@ use crate::json_cache::{GencodeTally, LoadedTranscripts};
 
 /// One chromosome's transcripts: the overlap index and the transcription start
 /// sites Ensembl VEP's `--nearest` searches.
+#[doc(hidden)]
 pub struct TranscriptIndex {
     overlap: TranscriptBinIndex,
     tss: Vec<TssPoint>,
@@ -38,6 +40,7 @@ pub struct TranscriptIndex {
 /// A protein-coding transcript's transcription start site with the identifiers
 /// Ensembl VEP's `--nearest` reports: one line of the `transcript_gene_tss.txt`
 /// Ensembl VEP derives from its cache (`AnnotationType/Transcript.pm:747-751`).
+#[doc(hidden)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TssPoint {
     /// The transcript's start on the forward strand, its end on the reverse.
@@ -63,8 +66,10 @@ impl TranscriptIndex {
     /// Call `f` for every transcript whose extended region overlaps
     /// `[query_start, query_end]` (1-based, inclusive, VEP convention), with
     /// the index's shared handle on it, so a caller may keep the transcript
-    /// beyond the call at the cost of a reference count. Callback is invoked
-    /// at most once per transcript.
+    /// beyond the call at the cost of a reference count. A transcript held to
+    /// region files ([`Transcript::region_files`]) is passed only when the
+    /// query, widened both ways by the larger of the two distances, overlaps
+    /// one of them. Callback is invoked at most once per transcript.
     pub fn for_each_overlapping(
         &self,
         query_start: u64,
@@ -72,6 +77,52 @@ impl TranscriptIndex {
         f: impl FnMut(&Arc<Transcript>),
     ) {
         self.overlap.for_each_overlapping(query_start, query_end, f);
+    }
+
+    /// The sequence length by which `[query_start, query_end]` is read one
+    /// turn on against `tx`: `Some` for a transcript stored across the origin
+    /// of a circular sequence ([`Transcript::circular_length`]) when the span,
+    /// moved that length on, reaches the transcript's extended region and lies
+    /// nearer the transcript than where it is written. `None` for every other
+    /// transcript and span.
+    pub fn origin_shift(&self, tx: &Transcript, query_start: u64, query_end: u64) -> Option<u64> {
+        let length = tx.circular_length?;
+        let (start, end) = extended_region(
+            tx,
+            self.overlap.upstream_distance,
+            self.overlap.downstream_distance,
+        );
+        let (low, high) = (query_start.min(query_end), query_start.max(query_end));
+        let (moved_low, moved_high) = (low.checked_add(length)?, high.checked_add(length)?);
+        if moved_low > end || moved_high < start {
+            return None;
+        }
+        let gap = |low: u64, high: u64| {
+            if high < tx.start {
+                tx.start - high
+            } else {
+                low.saturating_sub(tx.end)
+            }
+        };
+        let reached_as_written = low <= end && high >= start;
+        (!reached_as_written || gap(moved_low, moved_high) < gap(low, high)).then_some(length)
+    }
+
+    /// Call `f`, with the sequence's length, for every transcript stored
+    /// across the origin of a circular sequence that `[query_start,
+    /// query_end]` is read one turn on against ([`Self::origin_shift`]).
+    pub fn for_each_across_origin(
+        &self,
+        query_start: u64,
+        query_end: u64,
+        mut f: impl FnMut(&Arc<Transcript>, u64),
+    ) {
+        for &at in &self.overlap.across_origin {
+            let tx = &self.overlap.transcripts[at];
+            if let Some(length) = self.origin_shift(tx, query_start, query_end) {
+                f(tx, length);
+            }
+        }
     }
 
     /// Number of transcripts in the index.
@@ -122,6 +173,7 @@ impl TranscriptIndex {
             overlap: TranscriptBinIndex {
                 transcripts,
                 bins: self.overlap.bins.clone(),
+                across_origin: self.overlap.across_origin.clone(),
                 upstream_distance: self.overlap.upstream_distance,
                 downstream_distance: self.overlap.downstream_distance,
             },
@@ -141,11 +193,18 @@ impl TranscriptIndex {
 fn protein_coding_tss_points(transcripts: &[Transcript]) -> Vec<TssPoint> {
     let mut points: Vec<TssPoint> = transcripts
         .iter()
-        .filter(|tx| tx.is_protein_coding())
+        // The cache's transcripts alone: Ensembl VEP's file sources take no
+        // `nearest` shortcut (`BaseGXF.pm:111`), so no nearest feature is read
+        // from a gene-model file.
+        .filter(|tx| tx.is_protein_coding() && !crate::gene_model::is_from_file(tx))
         .map(|tx| TssPoint {
-            tss: match tx.strand {
-                Strand::Forward => tx.start,
-                Strand::Reverse => tx.end,
+            tss: match (tx.strand, tx.circular_length) {
+                (Strand::Forward, _) => tx.start,
+                // A transcript stored across the origin ends among the
+                // sequence's first bases, one length below the end it loads
+                // with.
+                (Strand::Reverse, Some(length)) if tx.end > length => tx.end - length,
+                (Strand::Reverse, _) => tx.end,
             },
             transcript: tx.stable_id.clone(),
             gene: tx.gene_stable_id.clone(),
@@ -186,9 +245,13 @@ fn to_0based_half_open(start_1based_inclusive: u64, end_1based_inclusive: u64) -
 /// Per-chromosome transcript index using UCSC hierarchical binning. The index
 /// owns its transcripts as shared handles and yields them to the overlap
 /// callback.
+#[doc(hidden)]
 pub struct TranscriptBinIndex {
     transcripts: Vec<Arc<Transcript>>,
     bins: FxHashMap<u32, Vec<usize>>,
+    /// The places in `transcripts` of those stored across the origin of a
+    /// circular sequence.
+    across_origin: Vec<usize>,
     upstream_distance: u64,
     downstream_distance: u64,
 }
@@ -208,17 +271,25 @@ impl TranscriptBinIndex {
             bins.entry(bin).or_default().push(idx);
         }
 
+        let across_origin = transcripts
+            .iter()
+            .enumerate()
+            .filter(|(_, tx)| tx.circular_length.is_some())
+            .map(|(at, _)| at)
+            .collect();
         Self {
             transcripts,
             bins,
+            across_origin,
             upstream_distance,
             downstream_distance,
         }
     }
 
-    /// Call `f` for every transcript whose extended region overlaps `query`,
-    /// with the index's shared handle on it. Callback is invoked at most once
-    /// per transcript.
+    /// Call `f` for every transcript whose extended region overlaps `query`
+    /// and that `query` reaches through a region file
+    /// (`reaches_a_region_file_of`), with the index's shared handle on it.
+    /// Callback is invoked at most once per transcript.
     pub fn for_each_overlapping(
         &self,
         query_start: u64,
@@ -234,11 +305,34 @@ impl TranscriptBinIndex {
                 let tx = &self.transcripts[idx];
                 let (start, end) =
                     extended_region(tx, self.upstream_distance, self.downstream_distance);
-                if query_start <= end && query_end >= start {
+                if query_start <= end
+                    && query_end >= start
+                    && self.reaches_a_region_file_of(tx, query_start, query_end)
+                {
                     f(tx);
                 }
             }
         });
+    }
+
+    /// Whether `query` reaches a region file that holds `tx`: true for a
+    /// transcript held to none ([`Transcript::region_files`]), else whether
+    /// the query, widened both ways by the larger of the two distances,
+    /// overlaps one of the files' spans. Ensembl VEP reads for a record the
+    /// files of the regions between its start less that flank and its end
+    /// plus it (`AnnotationSource.pm:182-190`), the flank the larger of the
+    /// upstream and the downstream distance
+    /// (`AnnotationType/Transcript.pm:190-196`).
+    fn reaches_a_region_file_of(&self, tx: &Transcript, query_start: u64, query_end: u64) -> bool {
+        let Some(region_files) = tx.region_files.as_deref() else {
+            return true;
+        };
+        let flank = self.upstream_distance.max(self.downstream_distance);
+        let low = query_start.min(query_end).saturating_sub(flank);
+        let high = query_start.max(query_end).saturating_add(flank);
+        region_files
+            .iter()
+            .any(|&(first, last)| first <= high && low <= last)
     }
 
     pub fn len(&self) -> usize {
@@ -323,6 +417,7 @@ fn for_each_reg2bin(beg: u64, end: u64, mut f: impl FnMut(u32)) {
 /// deserialised, `AnnotationSource/Cache/Transcript.pm:241`), so no
 /// consequence, distance or pick ever sees it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct TranscriptSet {
     /// Keep the transcripts carrying a `gencode_basic` attribute alone.
     pub gencode_basic: bool,
@@ -351,7 +446,7 @@ impl Default for TranscriptSet {
 impl TranscriptSet {
     /// The set a configuration's `--gencode_basic`, `--gencode_primary`,
     /// `--refseq`, `--merged` and `--all_refseq` name.
-    pub fn from_config(config: &crate::config::Config) -> Self {
+    pub(crate) fn from_config(config: &crate::config::Config) -> Self {
         Self {
             gencode_basic: config.gencode_basic,
             gencode_primary: config.gencode_primary,
@@ -363,7 +458,7 @@ impl TranscriptSet {
     /// The attribute code the set's GENCODE clause tests, `gencode_basic` or
     /// `gencode_primary`; `None` when neither flag is on. The option rules
     /// refuse the pair, so at most one applies.
-    pub fn gencode_attribute(&self) -> Option<&'static str> {
+    pub(crate) fn gencode_attribute(&self) -> Option<&'static str> {
         if self.gencode_basic {
             Some("gencode_basic")
         } else if self.gencode_primary {
@@ -374,7 +469,7 @@ impl TranscriptSet {
     }
 
     /// Whether `transcript` belongs to the set.
-    pub fn accepts(&self, transcript: &Transcript) -> bool {
+    pub(crate) fn accepts(&self, transcript: &Transcript) -> bool {
         self.accepts_model(
             &transcript.stable_id,
             &transcript.chr,
@@ -394,7 +489,7 @@ impl TranscriptSet {
     /// RefSeq cache and on the RefSeq-sourced models of a merged cache, whose
     /// `source_cache` reads `RefSeq` (`:240`; a model without the key is not
     /// one), and keeps the RefSeq accession shapes alone.
-    pub fn accepts_model(
+    pub(crate) fn accepts_model(
         &self,
         stable_id: &str,
         chr: &str,
@@ -412,6 +507,19 @@ impl TranscriptSet {
             return false;
         }
         !self.filters_refseq_models(source_cache) || is_refseq_accession(stable_id, chr)
+    }
+
+    /// Whether a transcript read from a gene-model file is in the set: the
+    /// GENCODE flags read it as they read the cache's transcripts, so
+    /// `--gencode_basic` keeps a file's tagged transcripts alone. Ensembl VEP
+    /// calls `filter_transcript` from its cache and database sources only
+    /// (`Cache/Transcript.pm:241`, `Database/Transcript.pm:251`) and annotates
+    /// every transcript of a file under either flag, the documented divergence
+    /// `file_cache_honours_gencode_basic`. The RefSeq model rule is the RefSeq
+    /// cache's own and reads no file's transcript.
+    pub(crate) fn accepts_file_transcript(&self, transcript: &Transcript) -> bool {
+        (!self.gencode_basic || transcript.gencode_basic)
+            && (!self.gencode_primary || transcript.gencode_primary)
     }
 
     /// Whether the RefSeq clause applies to a model with `source_cache`.
@@ -468,7 +576,7 @@ fn is_mitochondrial_gene_id(stable_id: &str) -> bool {
 /// shard is sound, and the cache resolved, so neither `input` nor `run`
 /// describes it.
 #[derive(Debug)]
-pub struct ShardUnreadable {
+pub(crate) struct ShardUnreadable {
     chromosome: String,
     cause: anyhow::Error,
 }
@@ -493,7 +601,7 @@ impl fmt::Display for ShardUnreadable {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "Cannot read the transcript cache for chr{}: {:#}",
+            "Cannot read the transcript cache for chromosome {}: {:#}",
             self.chromosome, self.cause
         )
     }
@@ -504,18 +612,18 @@ impl fmt::Display for ShardUnreadable {
 impl std::error::Error for ShardUnreadable {}
 
 /// Per-chromosome transcript indexes, each materialized by its first
-/// [`prewarm`](Self::prewarm).
+/// `prewarm`.
 ///
 /// The cache directory is enumerated eagerly (a `read_dir` walk, no parsing), so
 /// the chromosome key set is known and complete from construction. Each
-/// chromosome's JSON is parsed and indexed only when [`prewarm`](Self::prewarm)
-/// first names it, then memoized; [`get`](Self::get) never parses.
+/// chromosome's JSON is parsed and indexed only when `prewarm`
+/// first names it, then memoized; `get` never parses.
 ///
 /// **Why the split matters.** Loading every chromosome up front costs the same
 /// whether the input touches 1 chromosome or 25; a chr21-only input would parse
 /// the whole cache to answer chr21 queries.
 ///
-/// **Why the eager key set matters.** [`contains_key`](Self::contains_key) asks
+/// **Why the eager key set matters.** `contains_key` asks
 /// whether a chromosome is *present* in the cache rather than what it contains,
 /// and three readers act on the answer: the chromosome-synonym resolution of
 /// `pipeline::name_source_chromosomes`, for which it is the set of valid names
@@ -531,13 +639,13 @@ impl std::error::Error for ShardUnreadable {}
 /// Thread-safe under rayon `par_iter_mut`: the outer map is immutable after
 /// construction and each chromosome's slot is a [`OnceLock`], so concurrent
 /// first-touch on the same chromosome initializes at most once and every thread
-/// observes the same index. A [`prewarm`](Self::prewarm) racing another on the
+/// observes the same index. A `prewarm` racing another on the
 /// same cold chromosome waits on that chromosome's `load_locks` entry rather
 /// than parsing the shards a second time.
 ///
 /// The maps hash with `FxHasher`: the keys are the cache's own chromosome
-/// names, not attacker-controlled input, and [`Self::prewarm`] plus
-/// [`Self::get`] look one up for every variant.
+/// names, not attacker-controlled input, and `Self::prewarm` plus
+/// `Self::get` look one up for every variant.
 pub struct LazyTranscriptIndexes {
     shards: FxHashMap<String, Vec<PathBuf>>,
     slots: FxHashMap<String, OnceLock<TranscriptIndex>>,
@@ -559,11 +667,94 @@ pub struct LazyTranscriptIndexes {
     /// ([`crate::json_cache::pair_completed_stop_codons`]); `None` for a run
     /// without one, whose transcripts keep the cache's mapper pairs.
     reference: Option<Arc<vep_fasta::IndexedFasta>>,
+    /// The transcripts of the run's gene-model files, by chromosome key, which
+    /// join the cache's when the chromosome's index is built
+    /// ([`Self::with_file_transcripts`]).
+    file_transcripts: Arc<FxHashMap<String, Vec<Transcript>>>,
+    /// The insertion and deletion alleles the output keeps an HGVS notation of
+    /// on a model whose sequence is edited away from the genome
+    /// ([`Self::note_indel_on_edited_model`]).
+    edited_model_indels: EditedModelIndels,
+    /// The chromosomes on which a row the output keeps is without an HGVS
+    /// notation because the reference FASTA holds no sequence of them
+    /// ([`Self::note_unread_notations`]).
+    unread_notations: UnreadChromosomes,
+}
+
+/// The HGVS notations the rows an output keeps on one chromosome are without
+/// because the reference FASTA holds no sequence of that chromosome.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct UnreadNotations {
+    /// A kept row is without the HGVSg the output writes of it.
+    pub(crate) hgvsg: bool,
+    /// A kept row is without the HGVSc the output writes of it.
+    pub(crate) hgvsc: bool,
+}
+
+impl UnreadNotations {
+    /// Whether no notation is named.
+    pub(crate) fn is_empty(self) -> bool {
+        !(self.hgvsg || self.hgvsc)
+    }
+
+    /// The notations of either.
+    fn with(self, other: Self) -> Self {
+        Self {
+            hgvsg: self.hgvsg || other.hgvsg,
+            hgvsc: self.hgvsc || other.hgvsc,
+        }
+    }
+}
+
+/// The chromosomes a run's kept rows are without a notation on, by name, each
+/// with the notations left out there.
+#[derive(Default)]
+struct UnreadChromosomes(Mutex<std::collections::BTreeMap<String, UnreadNotations>>);
+
+impl UnreadChromosomes {
+    /// A record that starts from this one's.
+    fn carried_on(&self) -> Self {
+        Self(Mutex::new(
+            self.0
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .clone(),
+        ))
+    }
+}
+
+/// The count of insertion and deletion alleles the output keeps an HGVS
+/// notation of on a model edited away from the genome, each allele of the
+/// input once.
+#[derive(Default)]
+struct EditedModelIndels {
+    /// The alleles counted.
+    alleles: AtomicU64,
+    /// The alleles counted from an individual's copy under `--individual`,
+    /// each by its record's ordinal in the input and its index among the
+    /// record's alleles: a later copy of one of them adds nothing.
+    copied: Mutex<FxHashSet<(u64, usize)>>,
+}
+
+impl EditedModelIndels {
+    /// A count that starts from this one's.
+    fn carried_on(&self) -> Self {
+        let copied = self
+            .copied
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
+        Self {
+            alleles: AtomicU64::new(self.alleles.load(Ordering::Relaxed)),
+            copied: Mutex::new(copied),
+        }
+    }
 }
 
 impl LazyTranscriptIndexes {
     /// Enumerate `json_cache_dir` and prepare one lazy slot per chromosome,
     /// reading the directory's checksum manifest for the shard reads.
+    #[doc(hidden)]
     pub fn new(
         json_cache_dir: &str,
         upstream_distance: u64,
@@ -580,7 +771,7 @@ impl LazyTranscriptIndexes {
     }
 
     /// [`Self::new`] with the manifest the cache resolution already read.
-    pub fn new_with_manifest(
+    pub(crate) fn new_with_manifest(
         json_cache_dir: &str,
         upstream_distance: u64,
         downstream_distance: u64,
@@ -606,11 +797,34 @@ impl LazyTranscriptIndexes {
             gencode: Mutex::new(GencodeTally::default()),
             manifest,
             reference: None,
+            file_transcripts: Arc::default(),
+            edited_model_indels: EditedModelIndels::default(),
+            unread_notations: UnreadChromosomes::default(),
         })
     }
 
+    /// Adds the transcripts of the run's gene-model files, keyed by the
+    /// chromosome name the cache uses, or the file's own for a chromosome the
+    /// cache lacks, which joins the key set. Each chromosome's index then holds
+    /// the cache's transcripts and the files', ranked together
+    /// ([`crate::json_cache::assign_id_ranks`]). Called before any chromosome
+    /// is loaded.
+    pub(crate) fn with_file_transcripts(
+        mut self,
+        by_chr: HashMap<String, Vec<Transcript>>,
+    ) -> Self {
+        for chr in by_chr.keys() {
+            if !self.slots.contains_key(chr) {
+                self.slots.insert(chr.clone(), OnceLock::new());
+                self.load_locks.insert(chr.clone(), Mutex::new(()));
+            }
+        }
+        self.file_transcripts = Arc::new(by_chr.into_iter().collect());
+        self
+    }
+
     /// Restricts every index this set materializes to `transcript_set`.
-    pub fn with_transcript_set(mut self, transcript_set: TranscriptSet) -> Self {
+    pub(crate) fn with_transcript_set(mut self, transcript_set: TranscriptSet) -> Self {
         self.transcript_set = transcript_set;
         self
     }
@@ -618,7 +832,7 @@ impl LazyTranscriptIndexes {
     /// Keeps each exon's stable id on the transcripts every later load reads
     /// ([`Transcript::exon_ids`]); off by default, since no output or
     /// consequence reads an exon's id and parsing them is a cost of every load.
-    pub fn with_exon_ids(mut self, keep_exon_ids: bool) -> Self {
+    pub(crate) fn with_exon_ids(mut self, keep_exon_ids: bool) -> Self {
         self.keep_exon_ids = keep_exon_ids;
         self
     }
@@ -626,7 +840,7 @@ impl LazyTranscriptIndexes {
     /// Hands the set the reference sequence, so that a stop codon an
     /// `_rna_edit` completes is paired with the bases the genome holds of it,
     /// as the `vep` binary pairs it under `--fasta`
-    /// ([`crate::json_cache::pair_completed_stop_codons`]): on every
+    /// (`crate::json_cache::pair_completed_stop_codons`): on every
     /// chromosome the set already holds, loaded by it or built from loaded
     /// transcripts ([`Self::from_loaded`]), and on every later load.
     ///
@@ -709,11 +923,15 @@ impl LazyTranscriptIndexes {
             gencode: Mutex::new(gencode),
             manifest: Arc::clone(&self.manifest),
             reference: Some(Arc::clone(reference)),
+            file_transcripts: Arc::clone(&self.file_transcripts),
+            edited_model_indels: self.edited_model_indels.carried_on(),
+            unread_notations: self.unread_notations.carried_on(),
         })
     }
 
     /// An empty set (no cache configured). Every `get` returns `None` and every
     /// `contains_key` is false, matching an absent transcript cache.
+    #[doc(hidden)]
     pub fn empty() -> Self {
         Self {
             shards: FxHashMap::default(),
@@ -726,6 +944,9 @@ impl LazyTranscriptIndexes {
             gencode: Mutex::new(GencodeTally::default()),
             manifest: Arc::new(CacheManifest::absent("")),
             reference: None,
+            file_transcripts: Arc::default(),
+            edited_model_indels: EditedModelIndels::default(),
+            unread_notations: UnreadChromosomes::default(),
         }
     }
 
@@ -766,6 +987,9 @@ impl LazyTranscriptIndexes {
             gencode: Mutex::new(GencodeTally::default()),
             manifest: Arc::new(CacheManifest::absent("")),
             reference: None,
+            file_transcripts: Arc::default(),
+            edited_model_indels: EditedModelIndels::default(),
+            unread_notations: UnreadChromosomes::default(),
         }
     }
 
@@ -798,16 +1022,20 @@ impl LazyTranscriptIndexes {
             gencode: Mutex::new(GencodeTally::default()),
             manifest: Arc::new(CacheManifest::absent("")),
             reference: None,
+            file_transcripts: Arc::default(),
+            edited_model_indels: EditedModelIndels::default(),
+            unread_notations: UnreadChromosomes::default(),
         }
     }
 
     /// Whether the cache covers `chr`, answered without parsing it.
-    pub fn contains_key(&self, chr: &str) -> bool {
+    pub(crate) fn contains_key(&self, chr: &str) -> bool {
         self.slots.contains_key(chr)
     }
 
     /// The chromosomes the cache covers, in no particular order, answered
     /// without parsing any.
+    #[doc(hidden)]
     pub fn chromosomes(&self) -> impl Iterator<Item = &str> {
         self.slots.keys().map(String::as_str)
     }
@@ -816,14 +1044,19 @@ impl LazyTranscriptIndexes {
     /// [`Self::load_shard`] and keeps nothing; `None` for a chromosome the cache
     /// does not cover or one built from loaded transcripts, whose index
     /// [`Self::get`] already holds.
-    pub fn shards_of(&self, chr: &str) -> Option<&[PathBuf]> {
-        self.shards.get(chr).map(Vec::as_slice)
+    pub(crate) fn shards_of(&self, chr: &str) -> Option<&[PathBuf]> {
+        match self.shards.get(chr) {
+            Some(shards) => Some(shards),
+            // A chromosome only a gene-model file covers: no shard of the cache.
+            None if self.file_transcripts.contains_key(chr) => Some(&[]),
+            None => None,
+        }
     }
 
     /// The transcripts of one shard of `chr`, checked against the cache's
     /// manifest and paired from the set's reference sequence as the index's
     /// own loads are.
-    pub fn load_shard(&self, chr: &str, shard: &Path) -> anyhow::Result<Vec<Transcript>> {
+    pub(crate) fn load_shard(&self, chr: &str, shard: &Path) -> anyhow::Result<Vec<Transcript>> {
         let mut transcripts = crate::json_cache::load_transcripts_for_chr(
             chr,
             std::slice::from_ref(&shard.to_path_buf()),
@@ -837,7 +1070,7 @@ impl LazyTranscriptIndexes {
 
     /// Whether the run's transcript set admits `transcript`, the test every
     /// index this set materializes applies.
-    pub fn accepts(&self, transcript: &Transcript) -> bool {
+    pub(crate) fn accepts(&self, transcript: &Transcript) -> bool {
         self.transcript_set.accepts(transcript)
     }
 
@@ -863,7 +1096,7 @@ impl LazyTranscriptIndexes {
     /// [`Self::from_loaded`] and [`Self::empty`] satisfy this by construction;
     /// [`Self::new`] does not until each chromosome is pre-warmed. This is the
     /// predicate [`MaterializedTranscriptIndexes::try_from_lazy`] checks.
-    pub fn is_fully_materialized(&self) -> bool {
+    pub(crate) fn is_fully_materialized(&self) -> bool {
         self.slots.values().all(|slot| slot.get().is_some())
     }
 
@@ -893,6 +1126,7 @@ impl LazyTranscriptIndexes {
     /// chromosome as it first sees it while `annotate_batch` warms the batch it
     /// is about to annotate, and the later caller blocks on the per-chromosome
     /// load lock until the first has filled the slot.
+    #[doc(hidden)]
     pub fn prewarm(&self, chr: &str) -> anyhow::Result<()> {
         // Not in the cache at all. `contains_key` also reports false, so the parity
         // predicates already treat the chromosome as absent.
@@ -911,7 +1145,7 @@ impl LazyTranscriptIndexes {
         // stays `None`, and that combination is the silent
         // every-variant-is-`intergenic_variant`-with-exit-0 defect this type exists to
         // prevent.
-        let Some(shards) = self.shards.get(chr) else {
+        let Some(shards) = self.shards_of(chr) else {
             anyhow::bail!(
                 "chr{chr} is present in the chromosome key set but has neither a shard \
                  list nor a materialized index: `slots` and `shards` are out of sync"
@@ -938,7 +1172,11 @@ impl LazyTranscriptIndexes {
         if let Some(reference) = &self.reference {
             crate::json_cache::pair_completed_stop_codons(&mut txs, reference);
         }
-        tracing::info!("  chr{}: {} transcripts", chr, txs.len());
+        if let Some(from_files) = self.file_transcripts.get(chr) {
+            txs.extend(from_files.iter().cloned());
+            crate::json_cache::assign_id_ranks(&mut txs);
+        }
+        tracing::info!("{}", crate::json_cache::chromosome_line(chr, txs.len()));
         let built = TranscriptIndex::new(txs, self.upstream_distance, self.downstream_distance);
         // Losing this race is harmless: the winner's index is equivalent, and
         // the loser's tally is not added, so each chromosome counts once.
@@ -959,12 +1197,76 @@ impl LazyTranscriptIndexes {
     /// record carried the attribute or when nothing was loaded; read at the end
     /// of the run, since one chromosome without a carrier says nothing about the
     /// cache.
-    pub fn gencode_set_warning(&self) -> Option<String> {
+    pub(crate) fn gencode_set_warning(&self) -> Option<String> {
         let attribute = self.transcript_set.gencode_attribute()?;
         self.gencode
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .warning(attribute)
+    }
+
+    /// Counts one insertion or deletion allele of which a row left by the
+    /// record step holds an HGVS notation on a model edited away from the
+    /// genome (the runner's `count_indels_on_edited_models`):
+    /// `vep_effects::hgvs` shifts it 3' along the genome, and along the
+    /// model's own sequence only on bases the genome lacks. `copy_of` names
+    /// the allele, by its record's ordinal in the input and its index among
+    /// the record's alleles, when the variant annotated is one individual's
+    /// copy of it: `--individual` annotates a copy for each individual that
+    /// carries the allele (`Parser/VCF.pm:627-662`), and the copies of one
+    /// allele are counted once.
+    pub(crate) fn note_indel_on_edited_model(&self, copy_of: Option<(u64, usize)>) {
+        if let Some(allele) = copy_of {
+            let first_copy = self
+                .edited_model_indels
+                .copied
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .insert(allele);
+            if !first_copy {
+                return;
+            }
+        }
+        self.edited_model_indels
+            .alleles
+            .fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// The alleles [`Self::note_indel_on_edited_model`] has counted.
+    pub(crate) fn indels_on_edited_models(&self) -> u64 {
+        self.edited_model_indels.alleles.load(Ordering::Relaxed)
+    }
+
+    /// Notes that a row the record step left on `chr` is without the
+    /// notations of `unread` because the reference FASTA holds no sequence of
+    /// that chromosome (the runner's `note_notations_the_reference_lacks`).
+    pub(crate) fn note_unread_notations(&self, chr: &str, unread: UnreadNotations) {
+        if unread.is_empty() {
+            return;
+        }
+        let mut chromosomes = self
+            .unread_notations
+            .0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        match chromosomes.get_mut(chr) {
+            Some(noted) => *noted = noted.with(unread),
+            None => {
+                chromosomes.insert(chr.to_string(), unread);
+            }
+        }
+    }
+
+    /// The chromosomes [`Self::note_unread_notations`] has noted, in the order
+    /// of their names, each with the notations its kept rows are without.
+    pub(crate) fn unread_notations(&self) -> Vec<(String, UnreadNotations)> {
+        self.unread_notations
+            .0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .iter()
+            .map(|(chr, unread)| (chr.clone(), *unread))
+            .collect()
     }
 
     /// The index for `chr`. An infallible lookup after [`Self::prewarm`].
@@ -974,6 +1276,7 @@ impl LazyTranscriptIndexes {
     /// from inside the rayon annotation closure without risking the deadlock
     /// described on [`Self::prewarm`]. It is deliberately not `get_or_init`, whose
     /// blocking is exactly what deadlocks there.
+    #[doc(hidden)]
     pub fn get(&self, chr: &str) -> Option<&TranscriptIndex> {
         self.slots.get(chr)?.get()
     }
@@ -983,7 +1286,7 @@ impl LazyTranscriptIndexes {
 ///
 /// Exists so that a caller which fans out to rayon without a pre-warm pass cannot
 /// be handed a lazily-built index. `get` never parses (deliberately: parsing
-/// from a rayon worker deadlocks, see [`LazyTranscriptIndexes::prewarm`]), so on
+/// from a rayon worker deadlocks, see `LazyTranscriptIndexes::prewarm`), so on
 /// such a path an unmaterialized chromosome yields `None` while `contains_key`
 /// still answers `true` from the directory listing: every variant on it would be
 /// annotated `intergenic_variant` and the process would exit 0.
@@ -999,7 +1302,7 @@ impl MaterializedTranscriptIndexes {
     /// Errors when any slot is still empty, and the message names the remedy.
     /// Cheap: one pass over the per-chromosome slots (~25 entries), done once per
     /// annotator.
-    pub fn try_from_lazy(indexes: Arc<LazyTranscriptIndexes>) -> anyhow::Result<Self> {
+    pub(crate) fn try_from_lazy(indexes: Arc<LazyTranscriptIndexes>) -> anyhow::Result<Self> {
         if !indexes.is_fully_materialized() {
             anyhow::bail!(
                 "transcript index is not fully materialized: this consumer fans out to \
@@ -1014,6 +1317,7 @@ impl MaterializedTranscriptIndexes {
     }
 
     /// The wrapped indexes. Every `get` on them is guaranteed to hit.
+    #[doc(hidden)]
     pub fn as_lazy(&self) -> &Arc<LazyTranscriptIndexes> {
         &self.0
     }
@@ -1024,58 +1328,131 @@ mod tests {
     use super::*;
     use vep_core::transcript::Transcript;
 
-    fn mk_tx(stable_id: &str, start: u64, end: u64, strand: Strand) -> Transcript {
-        Transcript {
-            stable_id: Arc::from(stable_id),
-            version: None,
-            db_id: None,
-            gene_stable_id: Arc::from(""),
-            gene_version: None,
-            chr: "1".to_string(),
-            start,
-            end,
-            strand,
-            biotype: Arc::from("protein_coding"),
-            source: String::new(),
-            gene_symbol: None,
-            gene_symbol_source: None,
-            gene_symbol_id: None,
-            hgnc_id: None,
-            gene_phenotype: None,
-            canonical: false,
-            mane_select: None,
-            mane_plus_clinical: None,
-            tsl: None,
-            appris: None,
-            ccds: None,
-            protein_id: None,
-            refseq: None,
-            swissprot: None,
-            trembl: None,
-            uniparc: None,
-            uniprot_isoform: None,
-            exons: Vec::new(),
-            exon_ids: None,
-            introns: Vec::new(),
-            cdna_coding_start: None,
-            cdna_coding_end: None,
-            coding_region_start: None,
-            coding_region_end: None,
-            translation_start: None,
-            translation_end: None,
-            translation: None,
-            cdna_sequence: None,
-            protein_sequence: None,
-            flags: Arc::from(Vec::<String>::new()),
-            gencode_basic: false,
-            gencode_primary: false,
-            attributes: Vec::new(),
-            vefc: None,
-            source_cache: None,
-            bam_edit_status: None,
-            derived: Default::default(),
-            id_rank: 0,
+    /// An insertion or deletion allele on an edited model is counted once
+    /// whatever the number of individuals `--individual` copied it for, by
+    /// its record's ordinal and its index among the record's alleles; a
+    /// variant that is no copy is counted each time, and a count carried on
+    /// to another set keeps the alleles it has counted.
+    #[test]
+    fn copies_of_one_allele_are_one_indel_on_an_edited_model() {
+        let set = LazyTranscriptIndexes::empty();
+        set.note_indel_on_edited_model(None);
+        set.note_indel_on_edited_model(None);
+        assert_eq!(set.indels_on_edited_models(), 2);
+        for _individual in 0..3 {
+            set.note_indel_on_edited_model(Some((7, 0)));
         }
+        assert_eq!(set.indels_on_edited_models(), 3);
+        set.note_indel_on_edited_model(Some((7, 1)));
+        set.note_indel_on_edited_model(Some((8, 0)));
+        assert_eq!(set.indels_on_edited_models(), 5);
+
+        let carried = LazyTranscriptIndexes {
+            edited_model_indels: set.edited_model_indels.carried_on(),
+            ..LazyTranscriptIndexes::empty()
+        };
+        carried.note_indel_on_edited_model(Some((8, 0)));
+        assert_eq!(carried.indels_on_edited_models(), 5);
+        carried.note_indel_on_edited_model(Some((9, 0)));
+        assert_eq!(carried.indels_on_edited_models(), 6);
+        assert_eq!(set.indels_on_edited_models(), 5);
+    }
+
+    /// A chromosome is noted once, with every notation a kept row of it is
+    /// noted without; a note that names no notation adds no chromosome; the
+    /// chromosomes come in the order of their names; and a record carried on
+    /// to another set keeps what it has noted.
+    #[test]
+    fn a_chromosome_is_noted_with_the_notations_its_kept_rows_are_without() {
+        let genomic = UnreadNotations {
+            hgvsg: true,
+            hgvsc: false,
+        };
+        let coding = UnreadNotations {
+            hgvsg: false,
+            hgvsc: true,
+        };
+        let both = UnreadNotations {
+            hgvsg: true,
+            hgvsc: true,
+        };
+        let set = LazyTranscriptIndexes::empty();
+        assert!(set.unread_notations().is_empty());
+        set.note_unread_notations("21", UnreadNotations::default());
+        assert!(set.unread_notations().is_empty());
+        set.note_unread_notations("MT", genomic);
+        set.note_unread_notations("21", coding);
+        set.note_unread_notations("21", genomic);
+        set.note_unread_notations("21", genomic);
+        let noted = [("21".to_string(), both), ("MT".to_string(), genomic)];
+        assert_eq!(set.unread_notations(), noted);
+
+        let carried = LazyTranscriptIndexes {
+            unread_notations: set.unread_notations.carried_on(),
+            ..LazyTranscriptIndexes::empty()
+        };
+        carried.note_unread_notations("MT", coding);
+        assert_eq!(
+            carried.unread_notations(),
+            [("21".to_string(), both), ("MT".to_string(), both)]
+        );
+        assert_eq!(set.unread_notations(), noted);
+    }
+
+    fn mk_tx(stable_id: &str, start: u64, end: u64, strand: Strand) -> Transcript {
+        let mut transcript = Transcript::default();
+        transcript.stable_id = Arc::from(stable_id);
+        transcript.version = None;
+        transcript.db_id = None;
+        transcript.gene_stable_id = Arc::from("");
+        transcript.gene_version = None;
+        transcript.chr = "1".to_string();
+        transcript.start = start;
+        transcript.end = end;
+        transcript.strand = strand;
+        transcript.biotype = Arc::from("protein_coding");
+        transcript.source = String::new();
+        transcript.gene_symbol = None;
+        transcript.gene_symbol_source = None;
+        transcript.gene_symbol_id = None;
+        transcript.hgnc_id = None;
+        transcript.gene_phenotype = None;
+        transcript.canonical = false;
+        transcript.mane_select = None;
+        transcript.mane_plus_clinical = None;
+        transcript.tsl = None;
+        transcript.appris = None;
+        transcript.ccds = None;
+        transcript.protein_id = None;
+        transcript.refseq = None;
+        transcript.swissprot = None;
+        transcript.trembl = None;
+        transcript.uniparc = None;
+        transcript.uniprot_isoform = None;
+        transcript.exons = Vec::new();
+        transcript.exon_ids = None;
+        transcript.introns = Vec::new();
+        transcript.cdna_coding_start = None;
+        transcript.cdna_coding_end = None;
+        transcript.coding_region_start = None;
+        transcript.coding_region_end = None;
+        transcript.translation_start = None;
+        transcript.translation_end = None;
+        transcript.translation = None;
+        transcript.cdna_sequence = None;
+        transcript.protein_sequence = None;
+        transcript.flags = Arc::from(Vec::<String>::new());
+        transcript.gencode_basic = false;
+        transcript.gencode_primary = false;
+        transcript.attributes = Vec::new();
+        transcript.vefc = None;
+        transcript.source_cache = None;
+        transcript.bam_edit_status = None;
+        transcript.circular_length = None;
+        transcript.region_files = None;
+        transcript.derived = Default::default();
+        transcript.id_rank = 0;
+        transcript
     }
 
     fn sorted_ids(mut v: Vec<String>) -> Vec<String> {
@@ -1155,7 +1532,9 @@ mod tests {
     /// models; on `MT` it also keeps the mitochondrial gene ids, four digits or
     /// three or more capitals and digits with an optional `rna-` prefix (`:243`),
     /// a two-letter id and a lower-case one failing both shapes, and off `MT`
-    /// those ids are dropped. An id false to Perl is dropped on every cache
+    /// those ids are dropped: the test is on the region's name, `MT` and no
+    /// other (`:243`), so a mitochondrion another genome names otherwise
+    /// keeps none of them. An id false to Perl is dropped on every cache
     /// (`:220`), and an Ensembl cache's set never runs the clause.
     #[test]
     fn refseq_set_keeps_nm_nr_xm_xr_and_mt_models() {
@@ -1169,6 +1548,9 @@ mod tests {
         for id in ["ND4L", "4540", "rna-TRNP", "COX1", "RNR1"] {
             assert!(set.accepts(&model(id, "MT", None)), "{id} on MT");
             assert!(!set.accepts(&model(id, "21", None)), "{id} off MT");
+            for region in ["Mito", "MtDNA", "mitochondrion_genome", "Mt", "chrM", "M"] {
+                assert!(!set.accepts(&model(id, region, None)), "{id} on {region}");
+            }
         }
         for id in ["AB", "nd4l", "rna-AB", "RNA-ND4L", "ND4L.1"] {
             assert!(!set.accepts(&model(id, "MT", None)), "{id} on MT");
@@ -1281,6 +1663,28 @@ mod tests {
         }
     }
 
+    /// A transcript held to region files is found by a query that reaches one
+    /// of them with the larger of the two distances as its flank, and by no
+    /// other query its span overlaps; a transcript held to none is found
+    /// wherever its span is.
+    #[test]
+    fn a_transcript_held_to_region_files_is_found_through_them_alone() {
+        let mut held = mk_tx("held", 900_001, 1_103_000, Strand::Forward);
+        held.region_files = Some(Arc::from([(1_000_001, 2_000_000)]));
+        let free = mk_tx("free", 900_001, 1_103_000, Strand::Forward);
+        let idx = TranscriptIndex::new(vec![held, free], 2_000, 5_000);
+
+        assert_eq!(collect_ids(&idx, 901_000, 901_000), ["free"]);
+        assert_eq!(collect_ids(&idx, 995_000, 995_000), ["free"]);
+        assert_eq!(collect_ids(&idx, 995_001, 995_001), ["free", "held"]);
+        assert_eq!(collect_ids(&idx, 1_102_500, 1_102_500), ["free", "held"]);
+        // An insertion's start is one past its end.
+        assert_eq!(collect_ids(&idx, 995_001, 995_000), ["free", "held"]);
+        assert_eq!(collect_ids(&idx, 995_000, 994_999), ["free"]);
+        // A span that begins in the first region and ends in the second.
+        assert_eq!(collect_ids(&idx, 901_000, 1_000_001), ["free", "held"]);
+    }
+
     /// A query whose END is the largest `u64` finds every transcript from its start
     /// onward: both bin primitives clamp their coordinates to `MAX_BIN_COORD`, so the
     /// `u32` bin offsets never wrap (unclamped, `1 + (end >> 26)` overflows `u32`) and
@@ -1380,6 +1784,77 @@ mod tests {
         dir
     }
 
+    /// The transcripts of the run's gene-model files join the cache's when a
+    /// chromosome is indexed, ranked together: the cache's transcript of a
+    /// stable id first, then each file's in argument order. A chromosome only
+    /// a file covers joins the key set with no shard of the cache, and the
+    /// `--nearest` table holds the cache's transcripts alone
+    /// (`BaseGXF.pm:111` takes no `nearest` shortcut).
+    #[test]
+    fn file_transcripts_join_the_caches_ranked_after_their_cache_twin() {
+        let dir = tmp_cache("files", &[("21", 2)]);
+        let file = |stable_id: &str, chr: &str, short_name: &str, order: u32| {
+            let mut tx = mk_tx(stable_id, 100, 200, Strand::Forward);
+            tx.chr = chr.to_string();
+            tx.biotype = Arc::from("protein_coding");
+            tx.source_cache = Some(SourceCache::GeneModelFile {
+                short_name: Arc::from(short_name),
+                order,
+            });
+            tx
+        };
+        let by_chr = HashMap::from([
+            (
+                "21".to_string(),
+                vec![
+                    file("ENST211", "21", "second", 2),
+                    file("NOVT1", "21", "first", 1),
+                    file("ENST211", "21", "first", 1),
+                ],
+            ),
+            (
+                "contig_of_the_file".to_string(),
+                vec![file("NOVT2", "contig_of_the_file", "first", 1)],
+            ),
+        ]);
+        let lazy = LazyTranscriptIndexes::new(dir.path().to_str().unwrap(), 5_000, 5_000)
+            .unwrap()
+            .with_file_transcripts(by_chr);
+
+        assert!(lazy.contains_key("contig_of_the_file"));
+        assert_eq!(lazy.shards_of("contig_of_the_file"), Some(&[][..]));
+        assert_eq!(lazy.shards_of("99"), None);
+        lazy.prewarm("21").unwrap();
+        lazy.prewarm("contig_of_the_file").unwrap();
+
+        let index = lazy.get("21").unwrap();
+        let mut ranked: Vec<(u32, &str, Option<&str>)> = index
+            .transcripts()
+            .iter()
+            .map(|t| {
+                (
+                    t.id_rank,
+                    &*t.stable_id,
+                    t.source_cache.as_ref().map(SourceCache::column_text),
+                )
+            })
+            .collect();
+        ranked.sort_unstable();
+        assert_eq!(
+            ranked,
+            [
+                (1, "ENST210", None),
+                (2, "ENST211", None),
+                (3, "ENST211", Some("first")),
+                (4, "ENST211", Some("second")),
+                (5, "NOVT1", Some("first")),
+            ]
+        );
+        let nearest: Vec<&str> = index.tss_points().iter().map(|p| &*p.transcript).collect();
+        assert_eq!(nearest, ["ENST210", "ENST211"]);
+        assert_eq!(lazy.get("contig_of_the_file").unwrap().len(), 1);
+    }
+
     /// The chromosome key set must be complete before any chromosome is parsed.
     ///
     /// Three readers ask only "is this chromosome in the cache?": the
@@ -1466,6 +1941,9 @@ mod tests {
             gencode: Mutex::new(GencodeTally::default()),
             manifest: Arc::new(CacheManifest::absent("")),
             reference: None,
+            file_transcripts: Arc::default(),
+            edited_model_indels: EditedModelIndels::default(),
+            unread_notations: UnreadChromosomes::default(),
         };
 
         assert!(desynced.contains_key("21"), "advertised as present");
@@ -1557,7 +2035,7 @@ mod tests {
         assert!(!lazy.contains_key("21"));
         assert!(lazy.get("21").is_none());
         // Pre-warming an unknown chromosome is a no-op, not an error: absence is a
-        // legitimate state the Perl-parity predicates depend on.
+        // legitimate state the Ensembl VEP-parity predicates depend on.
         assert!(lazy.prewarm("21").is_ok());
     }
 
@@ -1621,7 +2099,7 @@ mod tests {
         );
         let msg = format!("{err:#}");
         let prefix = format!(
-            "Cannot read the transcript cache for chr21: Failed to parse {}: ",
+            "Cannot read the transcript cache for chromosome 21: Failed to parse {}: ",
             shard.display()
         );
         assert!(msg.starts_with(&prefix), "got: {msg}");
@@ -1735,8 +2213,9 @@ mod tests {
                 r#"{{"stable_id":"{id}","gene_stable_id":"{gene}","chr":"21","start":{start},"end":{end},"strand":{strand},"biotype":"{biotype}","source":"ensembl"{symbol}}}"#
             )
         };
-        // The second shard's records come first in the table when their TSS is
-        // lower; two forward transcripts share a TSS and keep their file order.
+        // The first shard's last record, on the reverse strand, comes first in the
+        // table, its TSS being the lowest; two forward transcripts share a TSS and
+        // keep their file order.
         std::fs::write(
             chr_dir.join("1000001-2000000.json"),
             format!(
@@ -1855,5 +2334,104 @@ mod tests {
         unflagged.prewarm("21").unwrap();
         assert_eq!(unflagged.gencode_set_warning(), None);
         assert_eq!(unflagged.get("21").unwrap().len(), 1);
+    }
+
+    /// A transcript stored across the origin of a circular sequence of
+    /// `length` bases, in coordinates that run on past the last base.
+    fn across_origin(start: u64, end: u64, strand: Strand, length: u64) -> Transcript {
+        let mut tx = mk_tx("across", start, end, strand);
+        tx.circular_length = Some(length);
+        tx
+    }
+
+    /// The sequence lengths [`TranscriptIndex::for_each_across_origin`] reports
+    /// for a span, one a transcript.
+    fn turns(idx: &TranscriptIndex, q_start: u64, q_end: u64) -> Vec<u64> {
+        let mut lengths = Vec::new();
+        idx.for_each_across_origin(q_start, q_end, |_, length| lengths.push(length));
+        lengths
+    }
+
+    /// A gene from 11911 across the origin of a sequence of 12,000 bases to
+    /// base 60 stands at 11911-12060. A span among the first bases reaches it
+    /// one sequence length on, up to 5,000 bases past its end; a span among
+    /// the last bases reaches it as written.
+    #[test]
+    fn a_span_among_the_first_bases_reaches_a_transcript_across_the_origin_one_turn_on() {
+        let idx = TranscriptIndex::new(
+            vec![
+                across_origin(11_911, 12_060, Strand::Forward, 12_000),
+                mk_tx("plain", 3_000, 3_100, Strand::Forward),
+            ],
+            5_000,
+            5_000,
+        );
+        assert_eq!(turns(&idx, 30, 30), [12_000]);
+        assert_eq!(collect_ids(&idx, 30, 30), ["plain"]);
+        assert_eq!(turns(&idx, 5_060, 5_060), [12_000]);
+        assert!(turns(&idx, 5_061, 5_061).is_empty());
+        assert!(turns(&idx, 11_950, 11_950).is_empty());
+        assert_eq!(collect_ids(&idx, 11_950, 11_950), ["across"]);
+        // An insertion before base 1, start 1 and end 0, is the insertion
+        // after the last base.
+        assert_eq!(turns(&idx, 0, 1), [12_000]);
+        let plain = &idx.transcripts()[1];
+        assert_eq!(idx.origin_shift(plain, 30, 30), None);
+    }
+
+    /// On a sequence of 3,000 bases every base is within 5,000 bases of a gene
+    /// from 2951 to base 100 both as written and one turn on; a span is read
+    /// where it lies nearer the gene, as written when the two are equal.
+    #[test]
+    fn a_span_within_reach_both_ways_is_read_where_it_lies_nearer() {
+        let idx = TranscriptIndex::new(
+            vec![across_origin(2_951, 3_100, Strand::Forward, 3_000)],
+            5_000,
+            5_000,
+        );
+        let across = &idx.transcripts()[0];
+        // Base 50 lies inside the gene one turn on and 2,901 bases before it
+        // as written.
+        assert_eq!(idx.origin_shift(across, 50, 50), Some(3_000));
+        // Base 1,000 is 900 bases past the gene one turn on, 1,951 before it
+        // as written.
+        assert_eq!(idx.origin_shift(across, 1_000, 1_000), Some(3_000));
+        // Base 2,000 is 951 bases before the gene as written, 1,900 past it
+        // one turn on.
+        assert_eq!(idx.origin_shift(across, 2_000, 2_000), None);
+        // Base 1,526 is 1,425 bases before the gene as written and 1,426
+        // past it one turn on; base 1,525 is 1,426 before it and 1,425 past.
+        assert_eq!(idx.origin_shift(across, 1_526, 1_526), None);
+        assert_eq!(idx.origin_shift(across, 1_525, 1_525), Some(3_000));
+        // A gene one base longer, from 2951 to base 101: base 1,526 is 1,425
+        // bases from it both ways.
+        let longer = TranscriptIndex::new(
+            vec![across_origin(2_951, 3_101, Strand::Forward, 3_000)],
+            5_000,
+            5_000,
+        );
+        assert_eq!(
+            longer.origin_shift(&longer.transcripts()[0], 1_526, 1_526),
+            None
+        );
+    }
+
+    /// The start site of a reverse-strand transcript across the origin is its
+    /// end, among the sequence's first bases; a forward one starts among the
+    /// last bases.
+    #[test]
+    fn the_start_site_of_a_transcript_across_the_origin_is_on_the_sequence() {
+        let reverse = TranscriptIndex::new(
+            vec![across_origin(11_911, 12_060, Strand::Reverse, 12_000)],
+            5_000,
+            5_000,
+        );
+        assert_eq!(reverse.tss_points()[0].tss, 60);
+        let forward = TranscriptIndex::new(
+            vec![across_origin(11_911, 12_060, Strand::Forward, 12_000)],
+            5_000,
+            5_000,
+        );
+        assert_eq!(forward.tss_points()[0].tss, 11_911);
     }
 }

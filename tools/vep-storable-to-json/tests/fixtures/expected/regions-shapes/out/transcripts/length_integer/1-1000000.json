@@ -1,0 +1,1 @@
+[{"biotype":"protein_coding","dbID":"1","end":150,"stable_id":"T1","start":100,"strand":1,"variation_effect_feature_cache":{"codon_table":1,"seq_edits":[]},"version":1},{"biotype":"protein_coding","dbID":"2","end":250,"stable_id":"T2","start":200,"strand":1,"variation_effect_feature_cache":{"codon_table":1,"seq_edits":[]},"version":1}]

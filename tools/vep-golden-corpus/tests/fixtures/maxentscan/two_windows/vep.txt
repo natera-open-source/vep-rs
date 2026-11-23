@@ -1,0 +1,6 @@
+rec_two	1:202	G	ENSG1	ENST1	Transcript	splice_region_variant	-	-	-	-	-	-	IMPACT=LOW;STRAND=1;MaxEntScan_ref=8.100;MaxEntScan_alt=2.300;MaxEntScan_diff=5.800;MaxEntScan_ref_seq=ACACACACG;MaxEntScan_alt_seq=ACACACACT
+rec_two_reverse	1:202	G	ENSG1	ENST2	Transcript	splice_region_variant	-	-	-	-	-	-	IMPACT=LOW;STRAND=1;MaxEntScan_ref=8.100;MaxEntScan_alt=2.300;MaxEntScan_diff=5.800;MaxEntScan_ref_seq=ACACACACG;MaxEntScan_alt_seq=ACACACACT
+rec_acceptor_alone	1:199	G	ENSG1	ENST1	Transcript	splice_region_variant	-	-	-	-	-	-	IMPACT=LOW;STRAND=1;MaxEntScan_ref=8.100;MaxEntScan_alt=2.300;MaxEntScan_diff=5.800;MaxEntScan_ref_seq=ACACACACG;MaxEntScan_alt_seq=ACACACACT
+rec_donor_alone	1:205	G	ENSG1	ENST1	Transcript	splice_region_variant	-	-	-	-	-	-	IMPACT=LOW;STRAND=1;MaxEntScan_ref=8.100;MaxEntScan_alt=2.300;MaxEntScan_diff=5.800;MaxEntScan_ref_seq=ACACACACG;MaxEntScan_alt_seq=ACACACACT
+rec_no_window	1:150	G	ENSG1	ENST1	Transcript	splice_region_variant	-	-	-	-	-	-	IMPACT=LOW;STRAND=1;MaxEntScan_ref=8.100;MaxEntScan_alt=2.300;MaxEntScan_diff=5.800;MaxEntScan_ref_seq=ACACACACG;MaxEntScan_alt_seq=ACACACACT
+rec_one_intron	1:202	G	ENSG1	ENST3	Transcript	splice_region_variant	-	-	-	-	-	-	IMPACT=LOW;STRAND=1;MaxEntScan_ref=8.100;MaxEntScan_alt=2.300;MaxEntScan_diff=5.800;MaxEntScan_ref_seq=ACACACACG;MaxEntScan_alt_seq=ACACACACT

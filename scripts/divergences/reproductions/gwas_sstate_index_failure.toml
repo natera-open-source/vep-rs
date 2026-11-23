@@ -1,7 +1,7 @@
 entry = "gwas_sstate_index_failure"
 page = "docs/divergences/gwas-sstate-index-failure.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the GWAS plugin's header, which says the plugin can process the harmonised version of the summary statistics file and states no rule for an empty cell; not seen in the measured datasets"
 notes = "Ensembl VEP's plugin filters and sorts the file counting blank-separated fields, so the empty first cell shifts its sort onto the position as text (14482906 before 9053097); tabix then refuses the copy and the plugin is dropped with `Failed to instantiate plugin GWAS: Failed to create index` in the warnings file. With the first cell filled both engines write vep-rs's rows."
@@ -41,4 +41,10 @@ ensembl_vep = [
 vep_rs = [
   "21:9053097 | C | ENST00000623201 | 0.5 | C | GCST000028",
   "21:14482906 | T | ENST00000285670 | 0.641 | T | GCST000028",
+]
+
+[implementation]
+code = ["crates/vep-builtins/src/plugins/gwas.rs::GwasPlugin::load_summary_statistics"]
+tests = [
+    "crates/vep-builtins/src/plugins/gwas.rs::tests::sstate_rows_with_an_empty_leading_cell_are_read_by_their_tab_columns",
 ]

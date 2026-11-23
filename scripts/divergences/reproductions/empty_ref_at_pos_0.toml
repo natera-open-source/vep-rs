@@ -1,7 +1,7 @@
 entry = "empty_ref_at_pos_0"
 page = "docs/divergences/empty-ref-pos-0.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the VCF 4.2 specification, section 1.4.1 \"Fixed fields\", whose POS clause indicates a telomere by position 0; not seen in the measured datasets; classed by its most reachable shape, a one-base REF at POS 0 with a two-base ALT that ends in that base: an empty REF column breaks \"missing values are specified with a dot\" (same section)"
 notes = "The record's REF column is empty (two tabs where the base would be) at POS 0. Ensembl VEP reads it over 0 to -1 and writes an intergenic row at 21:-1-0; vep-rs skips it with the insertion warning `Alleles look like an insertion (-/A) but coordinates are not start = end + 1 (START=0, END=0)`."
@@ -24,3 +24,12 @@ where = { record = "empty_ref_pos_0" }
 [expected]
 ensembl_vep = ["21:-1-0 | A | - | intergenic_variant"]
 vep_rs = []
+
+[implementation]
+code = [
+    "crates/vep-cli/src/validate.rs::SkipRules::validate",
+    "crates/vep-cli/src/vcf_parser.rs::chop_record",
+]
+tests = [
+    "crates/vep-cli/src/vcf_parser.rs::tests::pos_zero_records_follow_ensembl_vep_without_underflow",
+]

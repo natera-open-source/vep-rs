@@ -1,8 +1,12 @@
 {
   "assembly": "GRCh38",
   "cache_version": 116,
+  "contig_order": [
+    "21",
+    "22"
+  ],
   "polyphen": "b",
-  "regulatory": true,
+  "regulatory": false,
   "sift": "b",
   "source_versions": {
     "1000genomes": "phase3",

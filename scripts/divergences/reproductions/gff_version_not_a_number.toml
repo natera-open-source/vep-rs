@@ -1,10 +1,10 @@
 entry = "gff_version_not_a_number"
 page = "docs/divergences/gff-version-not-a-number.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the GFF3 specification, \"Description of the Format\", column 9 (version is a lower-case attribute, which applications use freely; no clause fixes its form), and the GTF 2.2 specification, [attributes] (gene_id and transcript_id alone are mandatory; other attributes \"will be ignored\"); not seen in the measured datasets"
-notes = "The GRCh38 release-116 GFF3 lines of TMPRSS3 and ENST00001113783 with `version=v2` on the gene line, the transcript line and the transcript's first CDS line in transcript order, beside the PWP2 transcript ENST00000456705 as written, the control. Ensembl VEP takes each attribute's text as the version (BaseGXF.pm:639 gene, BaseGXF.pm:481 transcript, BaseGXF.pm:727 translation) and prints it after the identifier: `ENSG00000160183.v2` in Gene under --gene_version (OutputFactory.pm:1469); `ENST00001113783.v2` in Feature under --transcript_version (OutputFactory.pm:1465) and in the HGVSc reference name (TranscriptVariationAllele.pm:1499); `ENSP00000783588.v2` in ENSP under --protein_version (OutputFactory.pm:1560) and in the HGVSp reference name (TranscriptVariationAllele.pm:1759). vep-rs holds a version as a number and refuses to build a cache from the file at its first `version=v2`, the gene line, with `ERROR: [cache-builder] Failed to parse GFF3: <file> line 2: version \"v2\" is not a whole number` (the prepare step asserts that line and that no cache directory exists), so its run has no cache to read, exits 1 and writes no rows. The same lines with `version=4294967296`, one above the cache's 32-bit limit, are the fourth file the prepare steps write: Ensembl VEP prints the digits in every version-bearing field, and the cache build ends at its gene line with `line 2: version 4294967296 is above 4294967295, the largest version the cache holds`, which the last prepare step asserts; the version 4294967295 itself builds and both engines print it."
+notes = "The GRCh38 release-116 GFF3 lines of TMPRSS3 and ENST00001113783 with `version=v2` on the gene line, the transcript line and the transcript's first CDS line in transcript order, beside the PWP2 transcript ENST00000456705 as written, the control. Ensembl VEP takes each attribute's text as the version (BaseGXF.pm:639 gene, BaseGXF.pm:481 transcript, BaseGXF.pm:727 translation) and prints it after the identifier: `ENSG00000160183.v2` in Gene under --gene_version (OutputFactory.pm:1478); `ENST00001113783.v2` in Feature under --transcript_version (OutputFactory.pm:1474) and in the HGVSc reference name (TranscriptVariationAllele.pm:1499); `ENSP00000783588.v2` in ENSP under --protein_version (OutputFactory.pm:1569) and in the HGVSp reference name (TranscriptVariationAllele.pm:1759). vep-rs holds a version as a number and refuses to build a cache from the file at its first `version=v2`, the gene line, with `ERROR: [cache-builder] Failed to parse GFF3: <file> line 2: version \"v2\" is not a whole number` (the prepare step asserts that line and that no cache directory exists), so its run has no cache to read, exits 1 and writes no rows. The same lines with `version=4294967296`, one above the cache's 32-bit limit, are the fourth file the prepare steps write: Ensembl VEP prints the digits in every version-bearing field, and the cache build ends at its gene line with `line 2: version 4294967296 is above 4294967295, the largest version the cache holds`, which the last prepare step asserts; the version 4294967295 itself builds and both engines print it."
 prepare = [
   '''cat > "$STAGE/tmprss3_version_v2.gff3" <<'GFF'
 ##gff-version 3
@@ -67,3 +67,15 @@ ensembl_vep = [
 ]
 vep_rs = []
 vep_rs_exit = 1
+
+[implementation]
+code = [
+    "crates/vep-cache-builder/src/gff3.rs::parse_version",
+    "crates/vep-cache-builder/src/gff3.rs::version_number",
+]
+tests = [
+    "crates/vep-cache-builder/src/gff3.rs::tests::a_version_above_the_cache_limit_fails_the_parse",
+    "crates/vep-cache-builder/src/gff3.rs::tests::a_version_that_is_not_a_whole_number_fails_the_parse",
+    "crates/vep-cache-builder/src/gtf.rs::tests::a_version_that_is_not_a_whole_number_fails_the_parse",
+    "crates/vep-cache-builder/tests/custom_transcript_source.rs::a_version_that_is_not_a_whole_number_is_refused_and_writes_nothing",
+]

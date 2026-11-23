@@ -81,7 +81,7 @@ vep-rs writes the record's one output line in Ensembl VEP's own convention for a
 
 ### 5.3 What each engine writes
 
-Ensembl VEP 116.2 writes no row for any of the three records, in any output format; its warnings file names each line as skipped, with the reason. vep-rs writes 4,652 rows for the breakend: 4,628 under the local allele `N.`, for the transcripts its span 14604132-41770788 overlaps or comes within 5,000 bases of. The other 24 are under the mate allele `N[chr21:41770788[`, for the transcripts within 5,000 bases of the mate breakpoint 41770788. It writes 534 rows for the complex event, every transcript inside 14923959-16588080 under the allele `CPX`, and one `intergenic_variant` row for the block.
+Ensembl VEP 116.3 writes no row for any of the three records, in any output format; its warnings file names each line as skipped, with the reason. vep-rs writes 4,652 rows for the breakend: 4,628 under the local allele `N.`, for the transcripts its span 14604132-41770788 overlaps or comes within 5,000 bases of. The other 24 are under the mate allele `N[chr21:41770788[`, for the transcripts within 5,000 bases of the mate breakpoint 41770788. It writes 534 rows for the complex event, every transcript inside 14923959-16588080 under the allele `CPX`, and one `intergenic_variant` row for the block.
 
 Ensembl VEP, warnings file, each record run alone:
 
@@ -214,9 +214,9 @@ Ensembl VEP's cap is a memory guard, not a statement about the record, and its m
 
 ### 5.6 Try it yourself
 
-Run Ensembl VEP 116.2 and vep-rs (GRCh38 cache and FASTA for the gnomAD-SV records, GRCh37 for the block, the commands of [the closing section](reproducing.md)) on inputs built from the records:
+Run Ensembl VEP 116.3 and vep-rs (GRCh38 cache and FASTA for the gnomAD-SV records, GRCh37 for the block, the commands of [the closing section](reproducing.md)) on inputs built from the records:
 
-| Input | Ensembl VEP 116.2 rows for the record | vep-rs rows for the record |
+| Input | Ensembl VEP 116.3 rows for the record | vep-rs rows for the record |
 | --- | --- | --- |
 | the breakend alone | 0, the size warning | 4,652 (4,628 local, 24 mate) |
 | the breakend plus the SNV `21 14604131 . A C` | 0 (the SNV gets its 4 rows) | 4,652 |
@@ -227,7 +227,7 @@ Run Ensembl VEP 116.2 and vep-rs (GRCh38 cache and FASTA for the gnomAD-SV recor
 | the block alone | 0, the type warning | 1 |
 | `synth_nonref_0188` (`21 38589780 synth_nonref_0188 A <NON_REF>` with `END=38590008`, a 228-base block in a DSCR9 intron) plus the SNV `21 38589780 . A C` | 0 (the SNV gets its 8 rows) | 1 |
 
-No neighbouring record changes the outcome: under release 115.2 the breakend beside the SNV at its mate breakpoint got 20 mate-allele rows and the block beside its SNV eight transcript rows, and under 116.2 both get none.
+No neighbouring record changes the outcome: under release 115.2 the breakend beside the SNV at its mate breakpoint got 20 mate-allele rows and the block beside its SNV eight transcript rows, and under 116.3 both get none.
 
 Other records of the measured sets on the same routes: the GRCh37 breakend `gnomAD-SV_v2.1_BND_21_56677` (`SVLEN=14688819`; the warning reads `variant size (14688818)`) gets 0 rows against vep-rs's 381, and the GRCh37 complex event `gnomAD-SV_v2.1_CPX_21_5151` 0 against 4. The GRCh38 `gnomAD-SV_v3_CTX_chr21_d895c6b5` gets 0 (`CTX is not a supported structural variant type`) against vep-rs's one `intergenic_variant` row under the allele `CTX`. The GRCh38 breakend `gnomAD-SV_v3_BND_chr21_f6d2016e` (`SVLEN=39158730`; the warning reads `variant size (39158729)`) gets 0 against 6,967. `gnomAD-SV_v3_CPX_chr21_896ebdf0`, a `<CPX>` spanning 39,354,624 bases, is on two routes at once and gets both warnings, the type's and the size's, against vep-rs's 7,123 rows.
 
@@ -235,7 +235,7 @@ Other records of the measured sets on the same routes: the GRCh37 breakend `gnom
 
 The two comparators recognise a dropped record from what each reads, and both set vep-rs's rows for it aside.
 
-The structural-variant comparator, `filter_reference_skipped_records` in `scripts/validation/compare_sv_concordance.py`, reads the input VCF and names the records from it with a port of Ensembl VEP's own routes. The routes are `get_SO_term` over the ALT list and `SVTYPE`, the incomplete-deletion test, the size test over the span `get_end` derives (`SVLEN` first, else `END`, a breakend's `END` discarded), and the coordinate checks of `validate_vf`.
+The structural-variant comparator, `filter_reference_skipped_records` in `tools/vep-sv-compare`, reads the input VCF and names the records from it with a port of Ensembl VEP's own routes. The routes are `get_SO_term` over the ALT list and `SVTYPE`, the incomplete-deletion test, the size test over the span `get_end` derives (`SVLEN` first, else `END`, a breakend's `END` discarded), and the coordinate checks of `validate_vf`.
 
 Each such record is confirmed dropped when Ensembl VEP wrote no row under the record's own Location start and an allele string the record produces. Those strings are the Sequence Ontology class of its ALT and of its ALT list, and the class term vep-rs prints for an ALT whose letters name a class but whose spelling has no term. They include the type string of an ALT whose letters name none, the ALT as written (`<CPX>`) or `INFO/SVTYPE` when that names it (`CPX`), a breakend's bracket, own-end and `CHR2`/`END2` mate strings, and a sequence ALT as written.
 
@@ -249,13 +249,15 @@ The records and the outputs are the authority, not the warnings file, which is a
 - vep-rs structural rows at a Location Ensembl VEP wrote nothing for that no record on a route explains;
 - or a dropped and a kept record at one start whose alleles and ends coincide.
 
-The SNP/indel comparator, `scripts/concordance/compare_vep_outputs.py`, opens the input only to recognise gVCF variant sites under `--input-dir` or `--input-vcf`, so for this class it applies an output-only rule. Ensembl VEP 116.2 writes at least one row for every record it keeps, an `intergenic_variant` row when no transcript is in range. So a Location at which vep-rs wrote rows and Ensembl VEP wrote nothing, under any allele, is a record Ensembl VEP dropped when every vep-rs row there names a record, in the first column, and no Ensembl VEP row carries any of those names.
+The SNP/indel comparator, `tools/vep-outputs-compare`, opens the input only to recognise gVCF variant sites under `--input-dir` or `--input-vcf`, so for this class it applies an output-only rule. Ensembl VEP 116.3 writes at least one row for every record it keeps, an `intergenic_variant` row when no transcript is in range. So a Location at which vep-rs wrote rows and Ensembl VEP wrote nothing, under any allele, is a record Ensembl VEP dropped when every vep-rs row there names a record, in the first column, and no Ensembl VEP row carries any of those names.
 
-At least one vep-rs row at the Location must carry a structural allele (every route to the mark is structural), and `tandem_repeat` does not admit a Location, because Ensembl VEP keeps a `<CNV:TR>` record and writes it at another Location (class 12). Once admitted, every vep-rs row at the Location is set aside, a sequence allele beside the symbolic one of a mixed ALT list included, because Ensembl VEP skips the line whole. Among the SNP/indel datasets, the 1000 Genomes high-coverage dataset carries such records: structural records whose span exceeds the default `--max_sv_size`.
+At least one vep-rs row at the Location must carry a structural allele (every route to the mark is structural), and `tandem_repeat` does not admit a Location, because a `<CNV:TR>` record without Ensembl VEP rows at its run need not carry the mark. With a FASTA, Ensembl VEP writes an expansion it trims at another Location (class 12) and writes no row for an empty or unchanged one (class 19). Without a FASTA, and with one where it writes the expanded allele whole, its rows stand at the run.
 
-Ensembl VEP writes no row for a dropped record, so none of its plugins runs there. Where vep-rs annotates such a record, its plugins write on its rows as on any structural row, so every plugin value there stands on vep-rs's side alone. The plugin tuple scorer, `scripts/concordance/score_plugin_tuples.py`, scores a value and not a row, and sets such a value aside under the class `plugin_value_on_reference_skipped_record`. It decides by the output-only rule above, putting both engines' rows at the value's Location and the first column of Ensembl VEP's output to the SNP/indel comparator's own routines. Its table row declares five fields: DosageSensitivity's two scores, `pHaplo` and `pTriplo`, and UTRAnnotator's three counts of existing upstream open reading frames, `Existing_InFrame_oORFs`, `Existing_OutOfFrame_oORFs` and `Existing_uORFs`.
+Once admitted, every vep-rs row at the Location is set aside, a sequence allele beside the symbolic one of a mixed ALT list included, because Ensembl VEP skips the line whole. Among the SNP/indel datasets, the 1000 Genomes high-coverage dataset carries such records: structural records whose span exceeds the default `--max_sv_size`.
 
-A value stays a difference at a Location Ensembl VEP wrote a row for, on Ensembl VEP's side, and at a Location where no vep-rs row carries a structural allele other than `tandem_repeat`. Every value of an engine given as a tuple file, which states no rows, stays a difference too, and so does a value of any other field. The class does not take a value at a gVCF variant site, which belongs to another class of the SNP/indel comparator. The format comparator, `scripts/concordance/compare_vep_formats.py`, decides no value under the class: there the whole row is set aside under `reference_skipped_record`.
+Ensembl VEP writes no row for a dropped record, so none of its plugins runs there. Where vep-rs annotates such a record, its plugins write on its rows as on any structural row, so every plugin value there stands on vep-rs's side alone. The plugin tuple scorer, `vep-plugin-pairs score`, scores a value and not a row, and sets such a value aside under the class `plugin_value_on_reference_skipped_record`. It decides by the output-only rule above, putting both engines' rows at the value's Location and the first column of Ensembl VEP's output to the SNP/indel comparator's rule. Its table row declares five fields: DosageSensitivity's two scores, `pHaplo` and `pTriplo`, and UTRAnnotator's three counts of existing upstream open reading frames, `Existing_InFrame_oORFs`, `Existing_OutOfFrame_oORFs` and `Existing_uORFs`.
+
+A value stays a difference at a Location Ensembl VEP wrote a row for, on Ensembl VEP's side, and at a Location where no vep-rs row carries a structural allele other than `tandem_repeat`. Every value of an engine given as a tuple file, which states no rows, stays a difference too, and so does a value of any other field. The class does not take a value at a gVCF variant site, which belongs to another class of the SNP/indel comparator. The format comparator, `tools/vep-formats-compare`, decides no value under the class: there the whole row is set aside under `reference_skipped_record`.
 
 Counts (`excluded_reference_skipped_rust`, per file in `excluded_reference_skipped_by_file`, the records in `reference_skipped_records`):
 

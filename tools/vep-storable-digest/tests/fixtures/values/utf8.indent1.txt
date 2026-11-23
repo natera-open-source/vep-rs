@@ -1,0 +1,10 @@
+{
+  'ascii_flagged' => 'plain',
+  'astral' => "\x{1f600}",
+  'café' => 'latin key',
+  "cl\x{e9}" => 'flagged latin key',
+  "k\x{263a}" => 'wide key',
+  'latin_flagged' => "caf\x{e9}",
+  'plainkey' => 'flagged ascii key',
+  'wide' => "smile \x{263a} \$x \@y \"q\" \\ 'single'"
+}

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Aggregate per-suite warning counts from engine stderr logs.
+"""Aggregate per-dataset warning counts from engine stderr logs.
 
 Reads ``<work_dir>/{perl,rust}/<base>.stderr.log`` (one file per benchmark
-suite per engine), classifies each non-blank line as ERROR / WARN / INFO /
+dataset per engine), classifies each non-blank line as ERROR / WARN / INFO /
 OTHER via simple regex, and emits a single JSON summary at
 ``<work_dir>/reports/warning_counts.json`` plus a Markdown section written to
 ``--out-md``.
@@ -59,7 +59,7 @@ def discover_logs(work_dir: Path) -> dict[str, dict[str, Path]]:
     Supports two layouts:
 
     1. ``run_concordance.sh`` ad-hoc layout: ``<work_dir>/{perl,rust}/<base>.stderr.log``.
-    2. Per-suite layout, as ``run_concordance.sh --work-dir <work_dir>/suites/<sid>``
+    2. Per-dataset layout, as ``run_concordance.sh --work-dir <work_dir>/suites/<sid>``
        writes it: ``<work_dir>/suites/<sid>/{perl,rust}/<base>.stderr*`` (covers both
        the single-file SNP case and the multi-VCF SV case).
     """
@@ -75,15 +75,15 @@ def discover_logs(work_dir: Path) -> dict[str, dict[str, Path]]:
             found.setdefault(base, {})[engine] = path
 
     # Layout 2: <work_dir>/suites/<sid>/{perl,rust}/*.stderr{,.log}
-    suites_dir = work_dir / "suites"
-    if suites_dir.is_dir():
-        for sid_dir in sorted(p for p in suites_dir.iterdir() if p.is_dir()):
+    datasets_dir = work_dir / "suites"
+    if datasets_dir.is_dir():
+        for sid_dir in sorted(p for p in datasets_dir.iterdir() if p.is_dir()):
             sid = sid_dir.name
             for engine in ("perl", "rust"):
                 engine_dir = sid_dir / engine
                 if not engine_dir.is_dir():
                     continue
-                # Both .stderr.log (SNP and indel suites) and .stderr (SV-loop) variants.
+                # Both .stderr.log (SNP and indel datasets) and .stderr (SV-loop) variants.
                 for pattern in ("*.stderr.log", "*.stderr"):
                     for path in sorted(engine_dir.glob(pattern)):
                         base_local = path.name
@@ -91,7 +91,7 @@ def discover_logs(work_dir: Path) -> dict[str, dict[str, Path]]:
                             if base_local.endswith(suffix):
                                 base_local = base_local[: -len(suffix)]
                                 break
-                        # Disambiguate per suite when multiple SV files share a base.
+                        # Disambiguate per dataset when multiple SV files share a base.
                         full_key = f"{sid}/{base_local}"
                         found.setdefault(full_key, {})[engine] = path
     return found
@@ -99,15 +99,15 @@ def discover_logs(work_dir: Path) -> dict[str, dict[str, Path]]:
 
 def render_markdown(report: dict) -> str:
     lines = ["## Warning counts (from engine stderr)\n"]
-    suites = report.get("suites", {})
-    if not suites:
+    datasets = report.get("datasets", {})
+    if not datasets:
         lines.append("No engine stderr logs found.\n")
         return "\n".join(lines)
-    lines.append("| Suite | Engine | ERROR | WARN | INFO | Other | Lines |")
+    lines.append("| Dataset | Engine | ERROR | WARN | INFO | Other | Lines |")
     lines.append("| ----- | ------ | -----:| ----:| ----:| -----:| -----:|")
-    for base in sorted(suites):
+    for base in sorted(datasets):
         for engine in ("perl", "rust"):
-            c = suites[base].get(engine)
+            c = datasets[base].get(engine)
             if not c:
                 continue
             lines.append(
@@ -151,22 +151,22 @@ def main(argv: Iterable[str] | None = None) -> int:
     out_json.parent.mkdir(parents=True, exist_ok=True)
 
     pairs = discover_logs(work_dir)
-    suites: dict[str, dict[str, dict[str, int]]] = {}
+    datasets: dict[str, dict[str, dict[str, int]]] = {}
     totals = {"ERROR": 0, "WARN": 0, "INFO": 0, "OTHER": 0, "lines": 0}
 
     for base, engines in pairs.items():
-        suites[base] = {}
+        datasets[base] = {}
         for engine, path in engines.items():
             counts = count_file(path)
-            suites[base][engine] = counts
+            datasets[base][engine] = counts
             for key, val in counts.items():
                 totals[key] = totals.get(key, 0) + val
 
     report = {
         "work_dir": str(work_dir),
-        "suite_count": len(suites),
+        "dataset_count": len(datasets),
         "totals": totals,
-        "suites": suites,
+        "datasets": datasets,
     }
     out_json.write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
 
@@ -175,7 +175,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         args.out_md.write_text(render_markdown(report), encoding="utf-8")
 
     print(
-        f"warning_counts: {len(suites)} suites, "
+        f"warning_counts: {len(datasets)} datasets, "
         f"ERROR={totals['ERROR']} WARN={totals['WARN']} "
         f"INFO={totals['INFO']} OTHER={totals['OTHER']} "
         f"-> {out_json}"

@@ -1,17 +1,17 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "vep_command": "vep -i variants.vcf -o <out> --gtf {corpus}/chr21_genes.gtf.gz --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta <reference> --no_stats --quiet --force_overwrite --symbol --biotype --canonical --mane --tsl --protein --protein_version --gene_version --transcript_version [--tab|--vcf|--json]",
  "perl_cache": "none: Ensembl VEP read its transcripts from chr21_genes.gtf.gz through --gtf (no --cache, no --offline, which would switch the cache on as well); vep-rs reads json_cache, built from the same file",
  "fasta": "GRCh38 chromosome 21 at its full length from Homo_sapiens.GRCh38.dna.primary_assembly.fa, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run and vep-rs the compressed one",
- "input": "74 records on chromosome 21 inside eight genes of the Ensembl 116 GTF (PWP2 and TMPRSS3, protein coding on either strand; LINC00308 and PLAC4, lncRNA; ANKRD30BP1, an unprocessed pseudogene; TMEM97P1, a processed pseudogene; RNU6-1149P, an snRNA; MIR6070, a miRNA): the ClinVar GRCh38 records inside their spans, chosen by build_golden_corpus.py select for every consequence set Ensembl VEP's --gtf route produces over them, and 21 synthetic single-base, two-base, deletion and insertion records written from the reference sequence inside, upstream and downstream of the non-coding genes",
+ "input": "74 records on chromosome 21 inside eight genes of the Ensembl 116 GTF (PWP2 and TMPRSS3, protein coding on either strand; LINC00308 and PLAC4, lncRNA; ANKRD30BP1, an unprocessed pseudogene; TMEM97P1, a processed pseudogene; RNU6-1149P, an snRNA; MIR6070, a miRNA): the ClinVar GRCh38 records inside their spans, chosen by vep-golden-corpus select for every consequence set Ensembl VEP's --gtf route produces over them, and 21 synthetic single-base, two-base, deletion and insertion records written from the reference sequence inside, upstream and downstream of the non-coding genes",
  "sha256": {
-  "default.txt": "6f0cf56286b80333fae8b2fa2238c669ed4a2bf2b0a514237d50a7594357d5a3",
-  "tab.txt": "c5fec8fd0a4045a68452d41de8f1e7fcf99c8f4d8a87fcc892ee015cca86560c",
-  "vcf.vcf": "c4aad8eeb9bbcc2cdfb70fc2b12442740c0a4b7b95d66737d05d2a9bf933c3e6",
-  "json.jsonl": "f07d1c713aa7387ce3db61b05caafe4f7420be94a9ab49f0dcdd05f347b0327c"
+  "default.txt": "25c99fd6ed1c8b21de8813afb8c4feccc827d964138d06b20d3b21a233b6685b",
+  "tab.txt": "3b2c06614cacc300bb542e366c30d91a8416fe78fca77c5e65c4123a1317f004",
+  "vcf.vcf": "0850732fb0d2221be61e77875b7ae117ea523cef1dd8d686c57c16dc8fcf8f22",
+  "json.jsonl": "020bdb8d11e421620b257e271efe049eca585bd472343a4a7be3bcfb6f0065dd"
  },
  "variants_vcf_sha256": "82e2b0a2d78ae79bb420fb4a1cd00759b20610e052c604ad9390d32878bd5951",
  "transcript_source": {
@@ -50,12 +50,15 @@
    ],
    "expected_dir": "expected_filter-biotype",
    "sha256": {
-    "default.txt": "3d9a1df995a131cdf9d0398c7d10e95a5068966aa3555ea324468172a8be9862",
-    "tab.txt": "31d6987047ac4bf23e9c03ed7ab5c1c6190d7e72a03e23744bf4e306cd22e9f7",
-    "vcf.vcf": "215f79ef153005dbb2dbb86781182d420f6ab0633274cd04bc43c49c60428396",
-    "json.jsonl": "250bc32c9ec362b7f9abad5df08e421307ca9da46d277f55324d988892699bf4"
-   }
+    "default.txt": "a0e780041c18867bb44fd3ed5359fde456a037677cf85179fed8313638f0292f",
+    "tab.txt": "f2b6bcb10f5cbfc239a6b762da783956dd0fed69851e8b3d437f5696f812efa8",
+    "vcf.vcf": "29f103dcdf4bff84ee60b62cb5bfec23da51d6557d3e7f95c64c69f6b509e191",
+    "json.jsonl": "2eedf030c51fc81da9eae98f1787d764a960f9becafdfe4571d746896c9626be"
+   },
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3"
   }
  },
- "generator": "chr21_genes.gtf.gz: the eight genes' lines of the Ensembl 116 GTF, bgzip and tabix; json_cache: vep-cache-builder --gtf chr21_genes.gtf.gz --genome-fasta reference.fa.gz (the build the manifest's runs read); the masked reference as described under fasta, cut by scripts/fixtures/cut_plugin_regions.py --reference over the cache's transcripts and the records; expected outputs: one Ensembl VEP 116.2 container run per format for the manifest's run and each flag set from the vep command recorded here, the corpus mounted read-only at /work/corpus as its working directory and the decompressed reference at /work/ref.fa, the transcripts read from the GTF through --gtf and no cache mounted (the manifest's perl_mode gtf: the harness sets the source's SOURCE column and header lines aside); manifest: scripts/golden/build_golden_corpus.py select over the --gtf route's reference for the ClinVar records inside the eight genes and the synthetic records, --include for every synthetic record and one PLAC4 record, --k 2 --seed 1 --max-records 80 --cache json_cache, then flag-set --perl-mode gtf, then classify for the manifest's run and the flag set against the committed tree's binary"
+ "generator": "chr21_genes.gtf.gz: the eight genes' lines of the Ensembl 116 GTF, bgzip and tabix; json_cache: vep-cache-builder --gtf chr21_genes.gtf.gz --genome-fasta reference.fa.gz (the build the manifest's runs read); the masked reference as described under fasta, cut by scripts/fixtures/cut_plugin_regions.py --reference over the cache's transcripts and the records; expected outputs: one Ensembl VEP 116.3 container run per format for the manifest's run and each flag set from the vep command recorded here, the corpus mounted read-only at /work/corpus as its working directory and the decompressed reference at /work/ref.fa, the transcripts read from the GTF through --gtf and no cache mounted (the manifest's perl_mode gtf: the harness sets the source's SOURCE column and header lines aside); manifest: tools/vep-golden-corpus select over the --gtf route's reference for the ClinVar records inside the eight genes and the synthetic records, --include for every synthetic record and one PLAC4 record, --k 2 --seed 1 --max-records 80 --cache json_cache, then flag-set --perl-mode gtf, then classify for the manifest's run and the flag set against the committed tree's binary"
 }

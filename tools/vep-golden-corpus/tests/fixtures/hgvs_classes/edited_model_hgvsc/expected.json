@@ -1,0 +1,169 @@
+{
+ "records": [
+  {
+   "dataset": "pool",
+   "vcf": "21\t100\trs_del\tAT\tA\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t200\trs_sub\tA\tG\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t300\trs_plain\tA\tG\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t400\trs_name\tA\tG\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t500\trs_allele\tA\tG\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t600\trs_two\tA\tG\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t700\trs_off\tA\tG\t.\tPASS\t.",
+   "combinations": []
+  },
+  {
+   "dataset": "pool",
+   "vcf": "21\t800\trs_slide\tAT\tA\t.\tPASS\t.",
+   "combinations": []
+  }
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {},
+ "fields_compared": [
+  "HGVSc"
+ ],
+ "field_divergences": [
+  {
+   "location": "21:101",
+   "allele": "-",
+   "feature": "NM_1.1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "intron_variant",
+   "field": "HGVSc",
+   "vep": "NM_1.1:c.247+601del",
+   "vep_rs": "NM_1.1:c.250+601del",
+   "expected_divergence": "refseq_edited_model_hgvsc_offset"
+  },
+  {
+   "location": "21:200",
+   "allele": "G",
+   "feature": "NM_2.1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    1
+   ],
+   "consequence_set": "intron_variant",
+   "field": "HGVSc",
+   "vep": "NM_2.1:c.247+601T>A",
+   "vep_rs": "NM_2.1:c.250+601T>A",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:300",
+   "allele": "G",
+   "feature": "NM_3.1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    2
+   ],
+   "consequence_set": "intron_variant",
+   "field": "HGVSc",
+   "vep": "NM_3.1:c.247+601T>A",
+   "vep_rs": "NM_3.1:c.250+601T>A",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:400",
+   "allele": "G",
+   "feature": "NM_4.1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    3
+   ],
+   "consequence_set": "intron_variant",
+   "field": "HGVSc",
+   "vep": "NM_4.1:c.247+601T>A",
+   "vep_rs": "NM_4.2:c.250+601T>A",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:500",
+   "allele": "G",
+   "feature": "NM_5.1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    4
+   ],
+   "consequence_set": "intron_variant",
+   "field": "HGVSc",
+   "vep": "NM_5.1:c.247+601T>A",
+   "vep_rs": "NM_5.1:c.250+601T>C",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:600",
+   "allele": "G",
+   "feature": "NM_6.1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    5
+   ],
+   "consequence_set": "intron_variant",
+   "field": "HGVSc",
+   "vep": "NM_6.1:c.56+4A>G",
+   "vep_rs": "NM_6.1:c.57+4A>G",
+   "expected_divergence": "refseq_edited_model_hgvsc_offset"
+  },
+  {
+   "location": "21:700",
+   "allele": "G",
+   "feature": "NM_7.1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    6
+   ],
+   "consequence_set": "intron_variant",
+   "field": "HGVSc",
+   "vep": "NM_7.1:c.5A>G",
+   "vep_rs": "NM_7.1:c.6A>G",
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:801",
+   "allele": "-",
+   "feature": "NM_8.1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    7
+   ],
+   "consequence_set": "intron_variant",
+   "field": "HGVSc",
+   "vep": "NM_8.1:c.3546_3553+23del",
+   "vep_rs": "NM_8.1:c.3544+2_3544+32del",
+   "expected_divergence": "refseq_edited_model_hgvsc_offset"
+  }
+ ],
+ "field_divergence_summary": {
+  "refseq_edited_model_hgvsc_offset": 3,
+  "unexplained_residual": 5
+ }
+}

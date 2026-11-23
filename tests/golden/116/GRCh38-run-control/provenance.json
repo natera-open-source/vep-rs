@@ -1,7 +1,7 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "divergences_classified_against": {
   "engine": "vep-rs",
@@ -20,14 +20,14 @@
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "none on either side",
  "input": "the 39 hand-built records of GRCh38-release116 followed by two records Ensembl VEP skips before annotation: one on a chromosome absent from the cache (Parser.pm validate_vf, the offline branch) and one whose alleles X/Y carry no ACGTN run (the allele-string check); both get no row in any format",
- "generator": "copied from tests/golden/116/GRCh38-release116 with the two records appended; scripts/golden/build_golden_corpus.py classify over the default output of the tree this corpus is committed with, which writes no row for either appended record",
+ "generator": "copied from tests/golden/116/GRCh38-release116 with the two records appended; tools/vep-golden-corpus classify over the default output of the tree this corpus is committed with, which writes no row for either appended record",
  "sha256": {
-  "default.txt": "5344b8e22dd3dc6fb5e8169409508e864af0149cfb50c72c9acc172fc627bf03",
-  "tab.txt": "014ffa601182c582e5e7d44db51a52bf37874ccd29cf287f887b368067237fe0",
-  "vcf.vcf": "9f17d1eee9025fc9d7fd7fb90f667a3f635b626de92854193fefc0327386cd11",
-  "json.jsonl": "781aa112996fed3c395c44ef7472273e7039b7f287b814243c86dcfe4b58bcd2",
-  "ensembl_input.txt": "a796a4ec5aa9ec87fb33716518cbea849bf0136c20795879d1d17fa6a23d2e7a",
-  "input_data.txt": "6b971006af0658377ee0469a344710a4a4fa04139f50f0e4e08d031856417688"
+  "default.txt": "974b49b8da85090daefc04387845db3e86e9c9771cdf00e3355786e4a8176fd0",
+  "tab.txt": "4312ee086217d82b4a8a0663be16d47ff4f6ba4d25d1e7dee76591d507c8997f",
+  "vcf.vcf": "2f75bb90091b57c115548384defaf3f2dd249cba59798c8bcf6696da500f52a9",
+  "json.jsonl": "d12e44f722248cdd54ea4a4959840d20bb101c233f602c9038b3cabba59256fa",
+  "ensembl_input.txt": "338bdeff8e74638c9707e2b120aadc21e66291dad801ef5cb7e87e909a6e82df",
+  "input_data.txt": "994d9c2da5dca5284d50767bc5ab165c574c22aec1b2ece92cf0961ed7b5902a"
  },
  "variants_vcf_sha256": "e890fad35fd3e8922a840754ccc1cc93dea33d57a430fc4010c83bb3e9683b9f",
  "pruned_cache": {
@@ -41,6 +41,7 @@
    "22": 2
   }
  },
+ "cache_metadata": "info.json states regulatory as the whole GRCh38 cache does, over a slice that holds no regulatory shard, and lists no contig_order, and the cache holds no chr_synonyms.txt: crates/vep-cli/tests/cli_run_control.rs reads the warning a --regulatory_gff run writes over a cache that states regulatory data; every transcript shard is GRCh38-release116's",
  "expected_outputs": "the GRCh38-release116 reference outputs: the same 39 annotated records against the same cache under the same flags, and the two appended records are skipped before annotation, so the four files are identical; default.txt_warnings.txt and skipped.txt carry the five records Ensembl VEP skips (the reference_warning of each record, recorded from its run) rendered as BaseVEP.pm:840-863 renders a warning (the input line collapsed to single spaces and cut to 50 characters) and BaseRunner.pm:364-380 the skipped-variants file (Line %-5s, the line to 40 characters, the reason), the header naming variants.vcf; the plugin_*_warnings.txt files are the same five lines plus the plugin-loading lines their run expects, paths masked as <path>; ensembl_input.txt is default.txt's header and the 124 rows of its 19 records named in variants.ensembl.txt, which Ensembl VEP writes alike for the two shapes of one variant (Parser/VCF.pm derives the start, end and allele string the Ensembl line states, and the identifier column names the variant as the VCF ID does), and ensembl_input_warnings.txt the two skips it reports for that input at their record numbers; input_data.txt is default.txt's header and the 3 rows of the two records the input-data runs pass as a string",
  "plugin_data": "LoFtool_scores.slice.txt: the first 20 lines (the header and 19 genes) of LoFtool_scores.txt from the Ensembl VEP_plugins repository at release/116 (Apache License 2.0), line endings normalised; the plugin-loftool-column run expects the LoFtool_percentile column, not its values",
  "input_twins": {
@@ -55,9 +56,9 @@
  },
  "flag_sets": {
   "bgzf-input": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.vcf.gz -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --protein --protein_version --mask_header_cache_path --max_sv_size -1 [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
@@ -65,16 +66,16 @@
    "input": "variants.vcf.gz",
    "expected_outputs": "the default run's four files (expected/): the twin carries the 41 records of variants.vcf byte for byte, so Ensembl VEP's output for it is the output for variants.vcf",
    "sha256": {
-    "default.txt": "5344b8e22dd3dc6fb5e8169409508e864af0149cfb50c72c9acc172fc627bf03",
-    "tab.txt": "014ffa601182c582e5e7d44db51a52bf37874ccd29cf287f887b368067237fe0",
-    "vcf.vcf": "9f17d1eee9025fc9d7fd7fb90f667a3f635b626de92854193fefc0327386cd11",
-    "json.jsonl": "781aa112996fed3c395c44ef7472273e7039b7f287b814243c86dcfe4b58bcd2"
+    "default.txt": "974b49b8da85090daefc04387845db3e86e9c9771cdf00e3355786e4a8176fd0",
+    "tab.txt": "4312ee086217d82b4a8a0663be16d47ff4f6ba4d25d1e7dee76591d507c8997f",
+    "vcf.vcf": "2f75bb90091b57c115548384defaf3f2dd249cba59798c8bcf6696da500f52a9",
+    "json.jsonl": "d12e44f722248cdd54ea4a4959840d20bb101c233f602c9038b3cabba59256fa"
    }
   },
   "bgzf-input-one-thread": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.vcf.gz -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --protein --protein_version --mask_header_cache_path --max_sv_size -1 --decompression_threads 1 [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
@@ -82,16 +83,16 @@
    "input": "variants.vcf.gz",
    "expected_outputs": "the default run's four files (expected/): the twin carries the 41 records of variants.vcf byte for byte, so Ensembl VEP's output for it is the output for variants.vcf",
    "sha256": {
-    "default.txt": "5344b8e22dd3dc6fb5e8169409508e864af0149cfb50c72c9acc172fc627bf03",
-    "tab.txt": "014ffa601182c582e5e7d44db51a52bf37874ccd29cf287f887b368067237fe0",
-    "vcf.vcf": "9f17d1eee9025fc9d7fd7fb90f667a3f635b626de92854193fefc0327386cd11",
-    "json.jsonl": "781aa112996fed3c395c44ef7472273e7039b7f287b814243c86dcfe4b58bcd2"
+    "default.txt": "974b49b8da85090daefc04387845db3e86e9c9771cdf00e3355786e4a8176fd0",
+    "tab.txt": "4312ee086217d82b4a8a0663be16d47ff4f6ba4d25d1e7dee76591d507c8997f",
+    "vcf.vcf": "2f75bb90091b57c115548384defaf3f2dd249cba59798c8bcf6696da500f52a9",
+    "json.jsonl": "d12e44f722248cdd54ea4a4959840d20bb101c233f602c9038b3cabba59256fa"
    }
   },
   "gzip-input": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.plain-gzip.vcf.gz -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --protein --protein_version --mask_header_cache_path --max_sv_size -1 [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
@@ -99,16 +100,16 @@
    "input": "variants.plain-gzip.vcf.gz",
    "expected_outputs": "the default run's four files (expected/): the twin carries the 41 records of variants.vcf byte for byte, so Ensembl VEP's output for it is the output for variants.vcf",
    "sha256": {
-    "default.txt": "5344b8e22dd3dc6fb5e8169409508e864af0149cfb50c72c9acc172fc627bf03",
-    "tab.txt": "014ffa601182c582e5e7d44db51a52bf37874ccd29cf287f887b368067237fe0",
-    "vcf.vcf": "9f17d1eee9025fc9d7fd7fb90f667a3f635b626de92854193fefc0327386cd11",
-    "json.jsonl": "781aa112996fed3c395c44ef7472273e7039b7f287b814243c86dcfe4b58bcd2"
+    "default.txt": "974b49b8da85090daefc04387845db3e86e9c9771cdf00e3355786e4a8176fd0",
+    "tab.txt": "4312ee086217d82b4a8a0663be16d47ff4f6ba4d25d1e7dee76591d507c8997f",
+    "vcf.vcf": "2f75bb90091b57c115548384defaf3f2dd249cba59798c8bcf6696da500f52a9",
+    "json.jsonl": "d12e44f722248cdd54ea4a4959840d20bb101c233f602c9038b3cabba59256fa"
    }
   },
   "stdin-vcf": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i STDIN -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --protein --protein_version --mask_header_cache_path --max_sv_size -1 --format vcf [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
@@ -116,16 +117,16 @@
    "input": "variants.vcf on standard input",
    "expected_outputs": "the default run's four files (expected/): the twin carries the 41 records of variants.vcf byte for byte, so Ensembl VEP's output for it is the output for variants.vcf",
    "sha256": {
-    "default.txt": "5344b8e22dd3dc6fb5e8169409508e864af0149cfb50c72c9acc172fc627bf03",
-    "tab.txt": "014ffa601182c582e5e7d44db51a52bf37874ccd29cf287f887b368067237fe0",
-    "vcf.vcf": "9f17d1eee9025fc9d7fd7fb90f667a3f635b626de92854193fefc0327386cd11",
-    "json.jsonl": "781aa112996fed3c395c44ef7472273e7039b7f287b814243c86dcfe4b58bcd2"
+    "default.txt": "974b49b8da85090daefc04387845db3e86e9c9771cdf00e3355786e4a8176fd0",
+    "tab.txt": "4312ee086217d82b4a8a0663be16d47ff4f6ba4d25d1e7dee76591d507c8997f",
+    "vcf.vcf": "2f75bb90091b57c115548384defaf3f2dd249cba59798c8bcf6696da500f52a9",
+    "json.jsonl": "d12e44f722248cdd54ea4a4959840d20bb101c233f602c9038b3cabba59256fa"
    }
   },
   "pipeline-batched": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --protein --protein_version --mask_header_cache_path --max_sv_size -1 [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
@@ -133,16 +134,16 @@
    "input": "variants.vcf",
    "expected_outputs": "the default run's four files (expected/): the set's extra flags choose the batched coordinator, which schedules the run and changes no row, so Ensembl VEP's output for the default run is the output for this set",
    "sha256": {
-    "default.txt": "5344b8e22dd3dc6fb5e8169409508e864af0149cfb50c72c9acc172fc627bf03",
-    "tab.txt": "014ffa601182c582e5e7d44db51a52bf37874ccd29cf287f887b368067237fe0",
-    "vcf.vcf": "9f17d1eee9025fc9d7fd7fb90f667a3f635b626de92854193fefc0327386cd11",
-    "json.jsonl": "781aa112996fed3c395c44ef7472273e7039b7f287b814243c86dcfe4b58bcd2"
+    "default.txt": "974b49b8da85090daefc04387845db3e86e9c9771cdf00e3355786e4a8176fd0",
+    "tab.txt": "4312ee086217d82b4a8a0663be16d47ff4f6ba4d25d1e7dee76591d507c8997f",
+    "vcf.vcf": "2f75bb90091b57c115548384defaf3f2dd249cba59798c8bcf6696da500f52a9",
+    "json.jsonl": "d12e44f722248cdd54ea4a4959840d20bb101c233f602c9038b3cabba59256fa"
    }
   },
   "pipeline-knobs": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --protein --protein_version --mask_header_cache_path --max_sv_size -1 [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
@@ -150,16 +151,16 @@
    "input": "variants.vcf",
    "expected_outputs": "the default run's four files (expected/): the set's extra flags choose the streaming coordinator at a pipeline depth of 2 and 3 records per task, which schedules the run and changes no row, so Ensembl VEP's output for the default run is the output for this set",
    "sha256": {
-    "default.txt": "5344b8e22dd3dc6fb5e8169409508e864af0149cfb50c72c9acc172fc627bf03",
-    "tab.txt": "014ffa601182c582e5e7d44db51a52bf37874ccd29cf287f887b368067237fe0",
-    "vcf.vcf": "9f17d1eee9025fc9d7fd7fb90f667a3f635b626de92854193fefc0327386cd11",
-    "json.jsonl": "781aa112996fed3c395c44ef7472273e7039b7f287b814243c86dcfe4b58bcd2"
+    "default.txt": "974b49b8da85090daefc04387845db3e86e9c9771cdf00e3355786e4a8176fd0",
+    "tab.txt": "4312ee086217d82b4a8a0663be16d47ff4f6ba4d25d1e7dee76591d507c8997f",
+    "vcf.vcf": "2f75bb90091b57c115548384defaf3f2dd249cba59798c8bcf6696da500f52a9",
+    "json.jsonl": "d12e44f722248cdd54ea4a4959840d20bb101c233f602c9038b3cabba59256fa"
    }
   },
   "pipeline-knobs-batched": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --protein --protein_version --mask_header_cache_path --max_sv_size -1 [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
@@ -167,16 +168,16 @@
    "input": "variants.vcf",
    "expected_outputs": "the default run's four files (expected/): the set's extra flags choose the batched coordinator at a pipeline depth of 2 and 3 records per task, which schedules the run and changes no row, so Ensembl VEP's output for the default run is the output for this set",
    "sha256": {
-    "default.txt": "5344b8e22dd3dc6fb5e8169409508e864af0149cfb50c72c9acc172fc627bf03",
-    "tab.txt": "014ffa601182c582e5e7d44db51a52bf37874ccd29cf287f887b368067237fe0",
-    "vcf.vcf": "9f17d1eee9025fc9d7fd7fb90f667a3f635b626de92854193fefc0327386cd11",
-    "json.jsonl": "781aa112996fed3c395c44ef7472273e7039b7f287b814243c86dcfe4b58bcd2"
+    "default.txt": "974b49b8da85090daefc04387845db3e86e9c9771cdf00e3355786e4a8176fd0",
+    "tab.txt": "4312ee086217d82b4a8a0663be16d47ff4f6ba4d25d1e7dee76591d507c8997f",
+    "vcf.vcf": "2f75bb90091b57c115548384defaf3f2dd249cba59798c8bcf6696da500f52a9",
+    "json.jsonl": "d12e44f722248cdd54ea4a4959840d20bb101c233f602c9038b3cabba59256fa"
    }
   },
   "writer-direct": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --protein --protein_version --mask_header_cache_path --max_sv_size -1 [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
@@ -184,16 +185,16 @@
    "input": "variants.vcf",
    "expected_outputs": "the default run's four files (expected/): the set's extra flags choose the direct writer strategy, which changes how the rendered bytes reach the file and changes no row, so Ensembl VEP's output for the default run is the output for this set",
    "sha256": {
-    "default.txt": "5344b8e22dd3dc6fb5e8169409508e864af0149cfb50c72c9acc172fc627bf03",
-    "tab.txt": "014ffa601182c582e5e7d44db51a52bf37874ccd29cf287f887b368067237fe0",
-    "vcf.vcf": "9f17d1eee9025fc9d7fd7fb90f667a3f635b626de92854193fefc0327386cd11",
-    "json.jsonl": "781aa112996fed3c395c44ef7472273e7039b7f287b814243c86dcfe4b58bcd2"
+    "default.txt": "974b49b8da85090daefc04387845db3e86e9c9771cdf00e3355786e4a8176fd0",
+    "tab.txt": "4312ee086217d82b4a8a0663be16d47ff4f6ba4d25d1e7dee76591d507c8997f",
+    "vcf.vcf": "2f75bb90091b57c115548384defaf3f2dd249cba59798c8bcf6696da500f52a9",
+    "json.jsonl": "d12e44f722248cdd54ea4a4959840d20bb101c233f602c9038b3cabba59256fa"
    }
   },
   "writer-vectored": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --protein --protein_version --mask_header_cache_path --max_sv_size -1 [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
@@ -201,16 +202,16 @@
    "input": "variants.vcf",
    "expected_outputs": "the default run's four files (expected/): the set's extra flags choose the vectored writer strategy, which changes how the rendered bytes reach the file and changes no row, so Ensembl VEP's output for the default run is the output for this set",
    "sha256": {
-    "default.txt": "5344b8e22dd3dc6fb5e8169409508e864af0149cfb50c72c9acc172fc627bf03",
-    "tab.txt": "014ffa601182c582e5e7d44db51a52bf37874ccd29cf287f887b368067237fe0",
-    "vcf.vcf": "9f17d1eee9025fc9d7fd7fb90f667a3f635b626de92854193fefc0327386cd11",
-    "json.jsonl": "781aa112996fed3c395c44ef7472273e7039b7f287b814243c86dcfe4b58bcd2"
+    "default.txt": "974b49b8da85090daefc04387845db3e86e9c9771cdf00e3355786e4a8176fd0",
+    "tab.txt": "4312ee086217d82b4a8a0663be16d47ff4f6ba4d25d1e7dee76591d507c8997f",
+    "vcf.vcf": "2f75bb90091b57c115548384defaf3f2dd249cba59798c8bcf6696da500f52a9",
+    "json.jsonl": "d12e44f722248cdd54ea4a4959840d20bb101c233f602c9038b3cabba59256fa"
    }
   },
   "writer-buffered-one-byte": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --protein --protein_version --mask_header_cache_path --max_sv_size -1 [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
@@ -218,16 +219,16 @@
    "input": "variants.vcf",
    "expected_outputs": "the default run's four files (expected/): the set's extra flags choose the buffered writer strategy with a one-byte buffer, which changes how the rendered bytes reach the file and changes no row, so Ensembl VEP's output for the default run is the output for this set",
    "sha256": {
-    "default.txt": "5344b8e22dd3dc6fb5e8169409508e864af0149cfb50c72c9acc172fc627bf03",
-    "tab.txt": "014ffa601182c582e5e7d44db51a52bf37874ccd29cf287f887b368067237fe0",
-    "vcf.vcf": "9f17d1eee9025fc9d7fd7fb90f667a3f635b626de92854193fefc0327386cd11",
-    "json.jsonl": "781aa112996fed3c395c44ef7472273e7039b7f287b814243c86dcfe4b58bcd2"
+    "default.txt": "974b49b8da85090daefc04387845db3e86e9c9771cdf00e3355786e4a8176fd0",
+    "tab.txt": "4312ee086217d82b4a8a0663be16d47ff4f6ba4d25d1e7dee76591d507c8997f",
+    "vcf.vcf": "2f75bb90091b57c115548384defaf3f2dd249cba59798c8bcf6696da500f52a9",
+    "json.jsonl": "d12e44f722248cdd54ea4a4959840d20bb101c233f602c9038b3cabba59256fa"
    }
   },
   "no-progress": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --protein --protein_version --mask_header_cache_path --max_sv_size -1 [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
@@ -235,16 +236,16 @@
    "input": "variants.vcf",
    "expected_outputs": "the default run's four files (expected/): the set's extra flag switches off the progress line on standard error and changes no row, so Ensembl VEP's output for the default run is the output for this set",
    "sha256": {
-    "default.txt": "5344b8e22dd3dc6fb5e8169409508e864af0149cfb50c72c9acc172fc627bf03",
-    "tab.txt": "014ffa601182c582e5e7d44db51a52bf37874ccd29cf287f887b368067237fe0",
-    "vcf.vcf": "9f17d1eee9025fc9d7fd7fb90f667a3f635b626de92854193fefc0327386cd11",
-    "json.jsonl": "781aa112996fed3c395c44ef7472273e7039b7f287b814243c86dcfe4b58bcd2"
+    "default.txt": "974b49b8da85090daefc04387845db3e86e9c9771cdf00e3355786e4a8176fd0",
+    "tab.txt": "4312ee086217d82b4a8a0663be16d47ff4f6ba4d25d1e7dee76591d507c8997f",
+    "vcf.vcf": "2f75bb90091b57c115548384defaf3f2dd249cba59798c8bcf6696da500f52a9",
+    "json.jsonl": "d12e44f722248cdd54ea4a4959840d20bb101c233f602c9038b3cabba59256fa"
    }
   },
   "safe": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --protein --protein_version --mask_header_cache_path --max_sv_size -1 [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
@@ -252,16 +253,16 @@
    "input": "variants.vcf",
    "expected_outputs": "the default run's four files (expected/): the set's extra flag makes a plugin that does not load, or a missing plugins directory, an error instead of a warning and skips the check of incompatible flag pairs; the run names no plugin and no incompatible pair, so it changes no row, and Ensembl VEP's output for the default run is the output for this set",
    "sha256": {
-    "default.txt": "5344b8e22dd3dc6fb5e8169409508e864af0149cfb50c72c9acc172fc627bf03",
-    "tab.txt": "014ffa601182c582e5e7d44db51a52bf37874ccd29cf287f887b368067237fe0",
-    "vcf.vcf": "9f17d1eee9025fc9d7fd7fb90f667a3f635b626de92854193fefc0327386cd11",
-    "json.jsonl": "781aa112996fed3c395c44ef7472273e7039b7f287b814243c86dcfe4b58bcd2"
+    "default.txt": "974b49b8da85090daefc04387845db3e86e9c9771cdf00e3355786e4a8176fd0",
+    "tab.txt": "4312ee086217d82b4a8a0663be16d47ff4f6ba4d25d1e7dee76591d507c8997f",
+    "vcf.vcf": "2f75bb90091b57c115548384defaf3f2dd249cba59798c8bcf6696da500f52a9",
+    "json.jsonl": "d12e44f722248cdd54ea4a4959840d20bb101c233f602c9038b3cabba59256fa"
    }
   },
   "reader-core-none": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --protein --protein_version --mask_header_cache_path --max_sv_size -1 [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
@@ -269,16 +270,16 @@
    "input": "variants.vcf",
    "expected_outputs": "the default run's four files (expected/): the set's extra flags leave the reader thread on whatever CPU the kernel gives it, the value a host without hardware threads runs under in any case, and change no row, so Ensembl VEP's output for the default run is the output for this set",
    "sha256": {
-    "default.txt": "5344b8e22dd3dc6fb5e8169409508e864af0149cfb50c72c9acc172fc627bf03",
-    "tab.txt": "014ffa601182c582e5e7d44db51a52bf37874ccd29cf287f887b368067237fe0",
-    "vcf.vcf": "9f17d1eee9025fc9d7fd7fb90f667a3f635b626de92854193fefc0327386cd11",
-    "json.jsonl": "781aa112996fed3c395c44ef7472273e7039b7f287b814243c86dcfe4b58bcd2"
+    "default.txt": "974b49b8da85090daefc04387845db3e86e9c9771cdf00e3355786e4a8176fd0",
+    "tab.txt": "4312ee086217d82b4a8a0663be16d47ff4f6ba4d25d1e7dee76591d507c8997f",
+    "vcf.vcf": "2f75bb90091b57c115548384defaf3f2dd249cba59798c8bcf6696da500f52a9",
+    "json.jsonl": "d12e44f722248cdd54ea4a4959840d20bb101c233f602c9038b3cabba59256fa"
    }
   },
   "reader-core-cpu-0": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --protein --protein_version --mask_header_cache_path --max_sv_size -1 [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
@@ -286,10 +287,10 @@
    "input": "variants.vcf",
    "expected_outputs": "the default run's four files (expected/): the set's extra flags pin the reader thread to CPU 0 and move the run's other threads off that CPU's core where the host allows it, which changes which CPU a thread runs on and no row, so Ensembl VEP's output for the default run is the output for this set",
    "sha256": {
-    "default.txt": "5344b8e22dd3dc6fb5e8169409508e864af0149cfb50c72c9acc172fc627bf03",
-    "tab.txt": "014ffa601182c582e5e7d44db51a52bf37874ccd29cf287f887b368067237fe0",
-    "vcf.vcf": "9f17d1eee9025fc9d7fd7fb90f667a3f635b626de92854193fefc0327386cd11",
-    "json.jsonl": "781aa112996fed3c395c44ef7472273e7039b7f287b814243c86dcfe4b58bcd2"
+    "default.txt": "974b49b8da85090daefc04387845db3e86e9c9771cdf00e3355786e4a8176fd0",
+    "tab.txt": "4312ee086217d82b4a8a0663be16d47ff4f6ba4d25d1e7dee76591d507c8997f",
+    "vcf.vcf": "2f75bb90091b57c115548384defaf3f2dd249cba59798c8bcf6696da500f52a9",
+    "json.jsonl": "d12e44f722248cdd54ea4a4959840d20bb101c233f602c9038b3cabba59256fa"
    }
   }
  }

@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        [docs/cache-setup.md](https://github.com/natera-open-source/vep-rs/blob/main/docs/cache-setup.md) describes what `vep-cache-builder` reads and writes, the one `ERROR: [cache-builder] <message>` line a failed build ends with, and the conversion of an Ensembl VEP cache with `scripts/data/storable_to_json.pl`; `vep-cache-converter` copies a flat JSON cache into the per-chromosome runtime layout. If the cache builds but `vep` annotates differently from Ensembl VEP on it, use the **Output differs from Ensembl VEP** form instead.
+        [docs/cache-setup.md](https://github.com/natera-open-source/vep-rs/blob/main/docs/cache-setup.md) describes what `vep-cache-builder` reads and writes, the one `ERROR: [cache-builder] <message>` line a failed build ends with, and the conversion of an Ensembl VEP cache with `tools/vep-storable-to-json`; `vep-cache-converter` copies a flat JSON cache into the per-chromosome runtime layout. If the cache builds but `vep` annotates differently from Ensembl VEP on it, use the **Output differs from Ensembl VEP** form instead.
   - type: input
     id: version
     attributes:
@@ -19,7 +19,7 @@ body:
       label: Tool
       options:
         - vep-cache-builder
-        - scripts/data/storable_to_json.pl (Ensembl VEP cache conversion)
+        - tools/vep-storable-to-json (Ensembl VEP cache conversion)
         - vep-cache-converter
     validations:
       required: true

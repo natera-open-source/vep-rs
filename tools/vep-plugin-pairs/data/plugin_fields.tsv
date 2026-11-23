@@ -1,0 +1,731 @@
+# The plugin field registry: the Extra keys each supported plugin writes.
+#
+# One fact per row, tab-separated; the order of the rows is the order every list and report
+# of the comparison keeps.
+#
+#   field         <set>     <entry>            An entry of a field set, a plugin's unless a
+#                                              not_a_plugin row names the set. An entry is a
+#                                              field name as Ensembl VEP writes it, or a
+#                                              pattern: `<N>` stands for a run of digits, any
+#                                              other `<word>` for a name the run chooses.
+#   not_a_plugin  <set>                        A field set that is not a plugin.
+#   alias         <alias>   <plugin>           The name Ensembl VEP's command line loads a
+#                                              plugin under, where it is not the registry's.
+#   core_named    <plugin>  <column>  <flag>   A column of the plugin's data file that carries
+#                                              the name of one of Ensembl VEP's own Extra keys,
+#                                              with one flag that turns that key on. No field
+#                                              row names it: the name is the column's in a run
+#                                              that loads the plugin and sets none of the
+#                                              flags, and both the column's and the key's in a
+#                                              run that sets one.
+
+# The comparison doubles as the HGVS comparator, so HGVS is a field set, but it is not a
+# plugin: `--plugins all` leaves it out, because a set that no plugin run writes can only
+# report zero there.
+field	HGVS	HGVSc
+field	HGVS	HGVSp
+
+field	CADD	CADD_PHRED
+field	CADD	CADD_RAW
+
+field	REVEL	REVEL
+
+# One joined field in the default and tab formats, nine fields in the VCF format and
+# under split_output, the flag under cutoff; a field absent from both outputs is not
+# compared.
+field	SpliceAI	SpliceAI_pred
+field	SpliceAI	SpliceAI_pred_DS_AG
+field	SpliceAI	SpliceAI_pred_DS_AL
+field	SpliceAI	SpliceAI_pred_DS_DG
+field	SpliceAI	SpliceAI_pred_DS_DL
+field	SpliceAI	SpliceAI_pred_DP_AG
+field	SpliceAI	SpliceAI_pred_DP_AL
+field	SpliceAI	SpliceAI_pred_DP_DG
+field	SpliceAI	SpliceAI_pred_DP_DL
+field	SpliceAI	SpliceAI_pred_SYMBOL
+field	SpliceAI	SpliceAI_cutoff
+
+# The coverage file's columns choose the keys: a median or an approximate median, a
+# total depth where the file has one, and one field per depth threshold.
+field	gnomADc	gnomAD_mean_cov
+field	gnomADc	gnomAD_median_cov
+field	gnomADc	gnomAD_median_approx_cov
+field	gnomADc	gnomAD_total_DP_cov
+field	gnomADc	gnomAD_<N>x_cov
+
+field	AlphaMissense	am_class
+field	AlphaMissense	am_pathogenicity
+field	AlphaMissense	am_genome
+field	AlphaMissense	am_uniprot_id
+field	AlphaMissense	am_transcript_id
+field	AlphaMissense	am_protein_variant
+
+field	AVI	AVI_PHRED
+field	AVI	AVI_RAW
+field	AVI	AVI_LINK
+
+field	GWAS	GWAS_accessions
+field	GWAS	GWAS_associated_gene
+field	GWAS	GWAS_beta_coef
+field	GWAS	GWAS_odds_ratio
+field	GWAS	GWAS_p_value
+field	GWAS	GWAS_pmid
+field	GWAS	GWAS_risk_allele
+field	GWAS	GWAS_study
+
+field	Blosum62	BLOSUM62
+
+field	Downstream	DownstreamProtein
+field	Downstream	ProteinLengthChange
+
+field	HGVSIntronOffset	HGVS_IntronStartOffset
+field	HGVSIntronOffset	HGVS_IntronEndOffset
+
+field	NearestExonJB	NearestExonJB
+
+field	TSSDistance	TSSDistance
+
+# The first five are the default columns; `cols=` selects among all of them.
+field	OpenTargets	OpenTargets_gwasLocusToGeneScore
+field	OpenTargets	OpenTargets_gwasGeneId
+field	OpenTargets	OpenTargets_gwasDiseases
+field	OpenTargets	OpenTargets_qtlGeneId
+field	OpenTargets	OpenTargets_qtlBiosampleName
+field	OpenTargets	OpenTargets_beta
+field	OpenTargets	OpenTargets_finemappingMethod
+field	OpenTargets	OpenTargets_is95CredibleSet
+field	OpenTargets	OpenTargets_is99CredibleSet
+field	OpenTargets	OpenTargets_isLead
+field	OpenTargets	OpenTargets_pValueExponent
+field	OpenTargets	OpenTargets_pValueMantissa
+field	OpenTargets	OpenTargets_posteriorProbability
+field	OpenTargets	OpenTargets_studyId
+field	OpenTargets	OpenTargets_studyLocusId
+field	OpenTargets	OpenTargets_studyType
+field	OpenTargets	OpenTargets_variantId
+
+# dbNSFP writes the selected columns under their own names; a run with output_prefix=1
+# prefixes them dbNSFP_. The columns are those of the golden corpora's dbNSFP fixtures as
+# the corpora's references declare them, without the core_named ones. NoSuchColumn is a
+# name the fixtures lack, which Ensembl VEP writes as the run gives it.
+field	dbNSFP	dbNSFP_<column>
+field	dbNSFP	1000Gp3_AC
+field	dbNSFP	1000Gp3_AF
+field	dbNSFP	1000Gp3_AFR_AC
+field	dbNSFP	1000Gp3_AFR_AF
+field	dbNSFP	1000Gp3_AMR_AC
+field	dbNSFP	1000Gp3_AMR_AF
+field	dbNSFP	1000Gp3_EAS_AC
+field	dbNSFP	1000Gp3_EAS_AF
+field	dbNSFP	1000Gp3_EUR_AC
+field	dbNSFP	1000Gp3_EUR_AF
+field	dbNSFP	1000Gp3_SAS_AC
+field	dbNSFP	1000Gp3_SAS_AF
+field	dbNSFP	ALFA_African_AC
+field	dbNSFP	ALFA_African_AF
+field	dbNSFP	ALFA_African_AN
+field	dbNSFP	ALFA_African_American_AC
+field	dbNSFP	ALFA_African_American_AF
+field	dbNSFP	ALFA_African_American_AN
+field	dbNSFP	ALFA_African_Others_AC
+field	dbNSFP	ALFA_African_Others_AF
+field	dbNSFP	ALFA_African_Others_AN
+field	dbNSFP	ALFA_Asian_AC
+field	dbNSFP	ALFA_Asian_AF
+field	dbNSFP	ALFA_Asian_AN
+field	dbNSFP	ALFA_East_Asian_AC
+field	dbNSFP	ALFA_East_Asian_AF
+field	dbNSFP	ALFA_East_Asian_AN
+field	dbNSFP	ALFA_European_AC
+field	dbNSFP	ALFA_European_AF
+field	dbNSFP	ALFA_European_AN
+field	dbNSFP	ALFA_Latin_American_1_AC
+field	dbNSFP	ALFA_Latin_American_1_AF
+field	dbNSFP	ALFA_Latin_American_1_AN
+field	dbNSFP	ALFA_Latin_American_2_AC
+field	dbNSFP	ALFA_Latin_American_2_AF
+field	dbNSFP	ALFA_Latin_American_2_AN
+field	dbNSFP	ALFA_Other_AC
+field	dbNSFP	ALFA_Other_AF
+field	dbNSFP	ALFA_Other_AN
+field	dbNSFP	ALFA_Other_Asian_AC
+field	dbNSFP	ALFA_Other_Asian_AF
+field	dbNSFP	ALFA_Other_Asian_AN
+field	dbNSFP	ALFA_South_Asian_AC
+field	dbNSFP	ALFA_South_Asian_AF
+field	dbNSFP	ALFA_South_Asian_AN
+field	dbNSFP	ALFA_Total_AC
+field	dbNSFP	ALFA_Total_AF
+field	dbNSFP	ALFA_Total_AN
+field	dbNSFP	ALSPAC_AC
+field	dbNSFP	ALSPAC_AF
+field	dbNSFP	Aloft_Confidence
+field	dbNSFP	Aloft_Fraction_transcripts_affected
+field	dbNSFP	Aloft_pred
+field	dbNSFP	Aloft_prob_Dominant
+field	dbNSFP	Aloft_prob_Recessive
+field	dbNSFP	Aloft_prob_Tolerant
+field	dbNSFP	AlphaMissense_pred
+field	dbNSFP	AlphaMissense_rankscore
+field	dbNSFP	AlphaMissense_score
+field	dbNSFP	AltaiNeandertal
+field	dbNSFP	Ancestral_allele
+field	dbNSFP	BayesDel_addAF_pred
+field	dbNSFP	BayesDel_addAF_rankscore
+field	dbNSFP	BayesDel_addAF_score
+field	dbNSFP	BayesDel_noAF_pred
+field	dbNSFP	BayesDel_noAF_rankscore
+field	dbNSFP	BayesDel_noAF_score
+field	dbNSFP	CADD_phred
+field	dbNSFP	CADD_phred_hg19
+field	dbNSFP	CADD_raw
+field	dbNSFP	CADD_raw_hg19
+field	dbNSFP	CADD_raw_rankscore
+field	dbNSFP	CADD_raw_rankscore_hg19
+field	dbNSFP	ChagyrskayaNeandertal
+field	dbNSFP	ClinPred_pred
+field	dbNSFP	ClinPred_rankscore
+field	dbNSFP	ClinPred_score
+field	dbNSFP	DANN_rankscore
+field	dbNSFP	DANN_score
+field	dbNSFP	DEOGEN2_pred
+field	dbNSFP	DEOGEN2_rankscore
+field	dbNSFP	DEOGEN2_score
+field	dbNSFP	Denisova
+field	dbNSFP	ESM1b_pred
+field	dbNSFP	ESM1b_rankscore
+field	dbNSFP	ESM1b_score
+field	dbNSFP	ESP6500_AA_AC
+field	dbNSFP	ESP6500_AA_AF
+field	dbNSFP	ESP6500_EA_AC
+field	dbNSFP	ESP6500_EA_AF
+field	dbNSFP	EVE_Class10_pred
+field	dbNSFP	EVE_Class20_pred
+field	dbNSFP	EVE_Class25_pred
+field	dbNSFP	EVE_Class30_pred
+field	dbNSFP	EVE_Class40_pred
+field	dbNSFP	EVE_Class50_pred
+field	dbNSFP	EVE_Class60_pred
+field	dbNSFP	EVE_Class70_pred
+field	dbNSFP	EVE_Class75_pred
+field	dbNSFP	EVE_Class80_pred
+field	dbNSFP	EVE_Class90_pred
+field	dbNSFP	EVE_rankscore
+field	dbNSFP	EVE_score
+field	dbNSFP	Eigen-PC-phred_coding
+field	dbNSFP	Eigen-PC-raw_coding
+field	dbNSFP	Eigen-PC-raw_coding_rankscore
+field	dbNSFP	Eigen-phred_coding
+field	dbNSFP	Eigen-raw_coding
+field	dbNSFP	Eigen-raw_coding_rankscore
+field	dbNSFP	Ensembl_geneid
+field	dbNSFP	Ensembl_proteinid
+field	dbNSFP	Ensembl_transcriptid
+field	dbNSFP	ExAC_AC
+field	dbNSFP	ExAC_AF
+field	dbNSFP	ExAC_AFR_AC
+field	dbNSFP	ExAC_AFR_AF
+field	dbNSFP	ExAC_AMR_AC
+field	dbNSFP	ExAC_AMR_AF
+field	dbNSFP	ExAC_Adj_AC
+field	dbNSFP	ExAC_Adj_AF
+field	dbNSFP	ExAC_EAS_AC
+field	dbNSFP	ExAC_EAS_AF
+field	dbNSFP	ExAC_FIN_AC
+field	dbNSFP	ExAC_FIN_AF
+field	dbNSFP	ExAC_NFE_AC
+field	dbNSFP	ExAC_NFE_AF
+field	dbNSFP	ExAC_SAS_AC
+field	dbNSFP	ExAC_SAS_AF
+field	dbNSFP	ExAC_nonTCGA_AC
+field	dbNSFP	ExAC_nonTCGA_AF
+field	dbNSFP	ExAC_nonTCGA_AFR_AC
+field	dbNSFP	ExAC_nonTCGA_AFR_AF
+field	dbNSFP	ExAC_nonTCGA_AMR_AC
+field	dbNSFP	ExAC_nonTCGA_AMR_AF
+field	dbNSFP	ExAC_nonTCGA_Adj_AC
+field	dbNSFP	ExAC_nonTCGA_Adj_AF
+field	dbNSFP	ExAC_nonTCGA_EAS_AC
+field	dbNSFP	ExAC_nonTCGA_EAS_AF
+field	dbNSFP	ExAC_nonTCGA_FIN_AC
+field	dbNSFP	ExAC_nonTCGA_FIN_AF
+field	dbNSFP	ExAC_nonTCGA_NFE_AC
+field	dbNSFP	ExAC_nonTCGA_NFE_AF
+field	dbNSFP	ExAC_nonTCGA_SAS_AC
+field	dbNSFP	ExAC_nonTCGA_SAS_AF
+field	dbNSFP	ExAC_nonpsych_AC
+field	dbNSFP	ExAC_nonpsych_AF
+field	dbNSFP	ExAC_nonpsych_AFR_AC
+field	dbNSFP	ExAC_nonpsych_AFR_AF
+field	dbNSFP	ExAC_nonpsych_AMR_AC
+field	dbNSFP	ExAC_nonpsych_AMR_AF
+field	dbNSFP	ExAC_nonpsych_Adj_AC
+field	dbNSFP	ExAC_nonpsych_Adj_AF
+field	dbNSFP	ExAC_nonpsych_EAS_AC
+field	dbNSFP	ExAC_nonpsych_EAS_AF
+field	dbNSFP	ExAC_nonpsych_FIN_AC
+field	dbNSFP	ExAC_nonpsych_FIN_AF
+field	dbNSFP	ExAC_nonpsych_NFE_AC
+field	dbNSFP	ExAC_nonpsych_NFE_AF
+field	dbNSFP	ExAC_nonpsych_SAS_AC
+field	dbNSFP	ExAC_nonpsych_SAS_AF
+field	dbNSFP	FATHMM_converted_rankscore
+field	dbNSFP	FATHMM_pred
+field	dbNSFP	FATHMM_score
+field	dbNSFP	GENCODE_basic
+field	dbNSFP	GERP++_NR
+field	dbNSFP	GERP++_RS
+field	dbNSFP	GERP++_RS_rankscore
+field	dbNSFP	GERP_91_mammals
+field	dbNSFP	GERP_91_mammals_rankscore
+field	dbNSFP	GM12878_confidence_value
+field	dbNSFP	GM12878_fitCons_rankscore
+field	dbNSFP	GM12878_fitCons_score
+field	dbNSFP	GTEx_V8_eQTL_gene
+field	dbNSFP	GTEx_V8_eQTL_tissue
+field	dbNSFP	GTEx_V8_sQTL_gene
+field	dbNSFP	GTEx_V8_sQTL_tissue
+field	dbNSFP	GenoCanyon_rankscore
+field	dbNSFP	GenoCanyon_score
+field	dbNSFP	Geuvadis_eQTL_target_gene
+field	dbNSFP	H1-hESC_confidence_value
+field	dbNSFP	H1-hESC_fitCons_rankscore
+field	dbNSFP	H1-hESC_fitCons_score
+field	dbNSFP	HGVSc_ANNOVAR
+field	dbNSFP	HGVSc_VEP
+field	dbNSFP	HGVSc_snpEff
+field	dbNSFP	HGVSp_ANNOVAR
+field	dbNSFP	HGVSp_VEP
+field	dbNSFP	HGVSp_snpEff
+field	dbNSFP	HUVEC_confidence_value
+field	dbNSFP	HUVEC_fitCons_rankscore
+field	dbNSFP	HUVEC_fitCons_score
+field	dbNSFP	Interpro_domain
+field	dbNSFP	LINSIGHT
+field	dbNSFP	LINSIGHT_rankscore
+field	dbNSFP	LIST-S2_pred
+field	dbNSFP	LIST-S2_rankscore
+field	dbNSFP	LIST-S2_score
+field	dbNSFP	LRT_Omega
+field	dbNSFP	LRT_converted_rankscore
+field	dbNSFP	LRT_pred
+field	dbNSFP	LRT_score
+field	dbNSFP	M-CAP_pred
+field	dbNSFP	M-CAP_rankscore
+field	dbNSFP	M-CAP_score
+field	dbNSFP	MPC_rankscore
+field	dbNSFP	MPC_score
+field	dbNSFP	MVP_rankscore
+field	dbNSFP	MVP_score
+field	dbNSFP	MetaLR_pred
+field	dbNSFP	MetaLR_rankscore
+field	dbNSFP	MetaLR_score
+field	dbNSFP	MetaRNN_pred
+field	dbNSFP	MetaRNN_rankscore
+field	dbNSFP	MetaRNN_score
+field	dbNSFP	MetaSVM_pred
+field	dbNSFP	MetaSVM_rankscore
+field	dbNSFP	MetaSVM_score
+field	dbNSFP	MutFormer_rankscore
+field	dbNSFP	MutFormer_score
+field	dbNSFP	MutPred_AAchange
+field	dbNSFP	MutPred_Top5features
+field	dbNSFP	MutPred_protID
+field	dbNSFP	MutPred_rankscore
+field	dbNSFP	MutPred_score
+field	dbNSFP	MutScore_rankscore
+field	dbNSFP	MutScore_score
+field	dbNSFP	MutationAssessor_pred
+field	dbNSFP	MutationAssessor_rankscore
+field	dbNSFP	MutationAssessor_score
+field	dbNSFP	MutationTaster_AAE
+field	dbNSFP	MutationTaster_converted_rankscore
+field	dbNSFP	MutationTaster_model
+field	dbNSFP	MutationTaster_pred
+field	dbNSFP	MutationTaster_score
+field	dbNSFP	PHACTboost_rankscore
+field	dbNSFP	PHACTboost_score
+field	dbNSFP	PROVEAN_converted_rankscore
+field	dbNSFP	PROVEAN_pred
+field	dbNSFP	PROVEAN_score
+field	dbNSFP	Polyphen2_HDIV_pred
+field	dbNSFP	Polyphen2_HDIV_rankscore
+field	dbNSFP	Polyphen2_HDIV_score
+field	dbNSFP	Polyphen2_HVAR_pred
+field	dbNSFP	Polyphen2_HVAR_rankscore
+field	dbNSFP	Polyphen2_HVAR_score
+field	dbNSFP	PrimateAI_pred
+field	dbNSFP	PrimateAI_rankscore
+field	dbNSFP	PrimateAI_score
+field	dbNSFP	REVEL_rankscore
+field	dbNSFP	REVEL_score
+field	dbNSFP	Reliability_index
+field	dbNSFP	SIFT4G_converted_rankscore
+field	dbNSFP	SIFT4G_pred
+field	dbNSFP	SIFT4G_score
+field	dbNSFP	SIFT_converted_rankscore
+field	dbNSFP	SIFT_pred
+field	dbNSFP	SIFT_score
+field	dbNSFP	SiPhy_29way_logOdds
+field	dbNSFP	SiPhy_29way_logOdds_rankscore
+field	dbNSFP	SiPhy_29way_pi
+field	dbNSFP	TWINSUK_AC
+field	dbNSFP	TWINSUK_AF
+field	dbNSFP	UK10K_AC
+field	dbNSFP	UK10K_AF
+field	dbNSFP	Uniprot_acc
+field	dbNSFP	Uniprot_entry
+field	dbNSFP	VARITY_ER_LOO_rankscore
+field	dbNSFP	VARITY_ER_LOO_score
+field	dbNSFP	VARITY_ER_rankscore
+field	dbNSFP	VARITY_ER_score
+field	dbNSFP	VARITY_R_LOO_rankscore
+field	dbNSFP	VARITY_R_LOO_score
+field	dbNSFP	VARITY_R_rankscore
+field	dbNSFP	VARITY_R_score
+field	dbNSFP	VEP_canonical
+field	dbNSFP	VEST4_rankscore
+field	dbNSFP	VEST4_score
+field	dbNSFP	VindijiaNeandertal
+field	dbNSFP	aaalt
+field	dbNSFP	aapos
+field	dbNSFP	aaref
+field	dbNSFP	alt
+field	dbNSFP	bStatistic
+field	dbNSFP	bStatistic_converted_rankscore
+field	dbNSFP	cds_strand
+field	dbNSFP	chr
+field	dbNSFP	clinvar_MedGen_id
+field	dbNSFP	clinvar_OMIM_id
+field	dbNSFP	clinvar_Orphanet_id
+field	dbNSFP	clinvar_clnsig
+field	dbNSFP	clinvar_hgvs
+field	dbNSFP	clinvar_id
+field	dbNSFP	clinvar_review
+field	dbNSFP	clinvar_trait
+field	dbNSFP	clinvar_var_source
+field	dbNSFP	codon_degeneracy
+field	dbNSFP	codonpos
+field	dbNSFP	eQTLGen_cis_or_trans
+field	dbNSFP	eQTLGen_gene_id
+field	dbNSFP	eQTLGen_gene_symbol
+field	dbNSFP	eQTLGen_snp_id
+field	dbNSFP	fathmm-MKL_coding_group
+field	dbNSFP	fathmm-MKL_coding_pred
+field	dbNSFP	fathmm-MKL_coding_rankscore
+field	dbNSFP	fathmm-MKL_coding_score
+field	dbNSFP	fathmm-XF_coding_pred
+field	dbNSFP	fathmm-XF_coding_rankscore
+field	dbNSFP	fathmm-XF_coding_score
+field	dbNSFP	gMVP_rankscore
+field	dbNSFP	gMVP_score
+field	dbNSFP	genename
+field	dbNSFP	gnomAD_exomes_AC
+field	dbNSFP	gnomAD_exomes_AF
+field	dbNSFP	gnomAD_exomes_AFR_AC
+field	dbNSFP	gnomAD_exomes_AFR_AF
+field	dbNSFP	gnomAD_exomes_AFR_AN
+field	dbNSFP	gnomAD_exomes_AFR_nhomalt
+field	dbNSFP	gnomAD_exomes_AMR_AC
+field	dbNSFP	gnomAD_exomes_AMR_AF
+field	dbNSFP	gnomAD_exomes_AMR_AN
+field	dbNSFP	gnomAD_exomes_AMR_nhomalt
+field	dbNSFP	gnomAD_exomes_AN
+field	dbNSFP	gnomAD_exomes_ASJ_AC
+field	dbNSFP	gnomAD_exomes_ASJ_AF
+field	dbNSFP	gnomAD_exomes_ASJ_AN
+field	dbNSFP	gnomAD_exomes_ASJ_nhomalt
+field	dbNSFP	gnomAD_exomes_EAS_AC
+field	dbNSFP	gnomAD_exomes_EAS_AF
+field	dbNSFP	gnomAD_exomes_EAS_AN
+field	dbNSFP	gnomAD_exomes_EAS_nhomalt
+field	dbNSFP	gnomAD_exomes_FIN_AC
+field	dbNSFP	gnomAD_exomes_FIN_AF
+field	dbNSFP	gnomAD_exomes_FIN_AN
+field	dbNSFP	gnomAD_exomes_FIN_nhomalt
+field	dbNSFP	gnomAD_exomes_MID_AC
+field	dbNSFP	gnomAD_exomes_MID_AF
+field	dbNSFP	gnomAD_exomes_MID_AN
+field	dbNSFP	gnomAD_exomes_MID_nhomalt
+field	dbNSFP	gnomAD_exomes_NFE_AC
+field	dbNSFP	gnomAD_exomes_NFE_AF
+field	dbNSFP	gnomAD_exomes_NFE_AN
+field	dbNSFP	gnomAD_exomes_NFE_nhomalt
+field	dbNSFP	gnomAD_exomes_POPMAX_AC
+field	dbNSFP	gnomAD_exomes_POPMAX_AF
+field	dbNSFP	gnomAD_exomes_POPMAX_AN
+field	dbNSFP	gnomAD_exomes_POPMAX_nhomalt
+field	dbNSFP	gnomAD_exomes_SAS_AC
+field	dbNSFP	gnomAD_exomes_SAS_AF
+field	dbNSFP	gnomAD_exomes_SAS_AN
+field	dbNSFP	gnomAD_exomes_SAS_nhomalt
+field	dbNSFP	gnomAD_exomes_flag
+field	dbNSFP	gnomAD_exomes_nhomalt
+field	dbNSFP	gnomAD_exomes_non_ukb_AC
+field	dbNSFP	gnomAD_exomes_non_ukb_AF
+field	dbNSFP	gnomAD_exomes_non_ukb_AFR_AC
+field	dbNSFP	gnomAD_exomes_non_ukb_AFR_AF
+field	dbNSFP	gnomAD_exomes_non_ukb_AFR_AN
+field	dbNSFP	gnomAD_exomes_non_ukb_AFR_nhomalt
+field	dbNSFP	gnomAD_exomes_non_ukb_AMR_AC
+field	dbNSFP	gnomAD_exomes_non_ukb_AMR_AF
+field	dbNSFP	gnomAD_exomes_non_ukb_AMR_AN
+field	dbNSFP	gnomAD_exomes_non_ukb_AMR_nhomalt
+field	dbNSFP	gnomAD_exomes_non_ukb_AN
+field	dbNSFP	gnomAD_exomes_non_ukb_ASJ_AC
+field	dbNSFP	gnomAD_exomes_non_ukb_ASJ_AF
+field	dbNSFP	gnomAD_exomes_non_ukb_ASJ_AN
+field	dbNSFP	gnomAD_exomes_non_ukb_ASJ_nhomalt
+field	dbNSFP	gnomAD_exomes_non_ukb_EAS_AC
+field	dbNSFP	gnomAD_exomes_non_ukb_EAS_AF
+field	dbNSFP	gnomAD_exomes_non_ukb_EAS_AN
+field	dbNSFP	gnomAD_exomes_non_ukb_EAS_nhomalt
+field	dbNSFP	gnomAD_exomes_non_ukb_FIN_AC
+field	dbNSFP	gnomAD_exomes_non_ukb_FIN_AF
+field	dbNSFP	gnomAD_exomes_non_ukb_FIN_AN
+field	dbNSFP	gnomAD_exomes_non_ukb_FIN_nhomalt
+field	dbNSFP	gnomAD_exomes_non_ukb_MID_AC
+field	dbNSFP	gnomAD_exomes_non_ukb_MID_AF
+field	dbNSFP	gnomAD_exomes_non_ukb_MID_AN
+field	dbNSFP	gnomAD_exomes_non_ukb_MID_nhomalt
+field	dbNSFP	gnomAD_exomes_non_ukb_NFE_AC
+field	dbNSFP	gnomAD_exomes_non_ukb_NFE_AF
+field	dbNSFP	gnomAD_exomes_non_ukb_NFE_AN
+field	dbNSFP	gnomAD_exomes_non_ukb_NFE_nhomalt
+field	dbNSFP	gnomAD_exomes_non_ukb_SAS_AC
+field	dbNSFP	gnomAD_exomes_non_ukb_SAS_AF
+field	dbNSFP	gnomAD_exomes_non_ukb_SAS_AN
+field	dbNSFP	gnomAD_exomes_non_ukb_SAS_nhomalt
+field	dbNSFP	gnomAD_exomes_non_ukb_nhomalt
+field	dbNSFP	gnomAD_genomes_AC
+field	dbNSFP	gnomAD_genomes_AF
+field	dbNSFP	gnomAD_genomes_AFR_AC
+field	dbNSFP	gnomAD_genomes_AFR_AF
+field	dbNSFP	gnomAD_genomes_AFR_AN
+field	dbNSFP	gnomAD_genomes_AFR_nhomalt
+field	dbNSFP	gnomAD_genomes_AMI_AC
+field	dbNSFP	gnomAD_genomes_AMI_AF
+field	dbNSFP	gnomAD_genomes_AMI_AN
+field	dbNSFP	gnomAD_genomes_AMI_nhomalt
+field	dbNSFP	gnomAD_genomes_AMR_AC
+field	dbNSFP	gnomAD_genomes_AMR_AF
+field	dbNSFP	gnomAD_genomes_AMR_AN
+field	dbNSFP	gnomAD_genomes_AMR_nhomalt
+field	dbNSFP	gnomAD_genomes_AN
+field	dbNSFP	gnomAD_genomes_ASJ_AC
+field	dbNSFP	gnomAD_genomes_ASJ_AF
+field	dbNSFP	gnomAD_genomes_ASJ_AN
+field	dbNSFP	gnomAD_genomes_ASJ_nhomalt
+field	dbNSFP	gnomAD_genomes_EAS_AC
+field	dbNSFP	gnomAD_genomes_EAS_AF
+field	dbNSFP	gnomAD_genomes_EAS_AN
+field	dbNSFP	gnomAD_genomes_EAS_nhomalt
+field	dbNSFP	gnomAD_genomes_FIN_AC
+field	dbNSFP	gnomAD_genomes_FIN_AF
+field	dbNSFP	gnomAD_genomes_FIN_AN
+field	dbNSFP	gnomAD_genomes_FIN_nhomalt
+field	dbNSFP	gnomAD_genomes_MID_AC
+field	dbNSFP	gnomAD_genomes_MID_AF
+field	dbNSFP	gnomAD_genomes_MID_AN
+field	dbNSFP	gnomAD_genomes_MID_nhomalt
+field	dbNSFP	gnomAD_genomes_NFE_AC
+field	dbNSFP	gnomAD_genomes_NFE_AF
+field	dbNSFP	gnomAD_genomes_NFE_AN
+field	dbNSFP	gnomAD_genomes_NFE_nhomalt
+field	dbNSFP	gnomAD_genomes_POPMAX_AC
+field	dbNSFP	gnomAD_genomes_POPMAX_AF
+field	dbNSFP	gnomAD_genomes_POPMAX_AN
+field	dbNSFP	gnomAD_genomes_POPMAX_nhomalt
+field	dbNSFP	gnomAD_genomes_SAS_AC
+field	dbNSFP	gnomAD_genomes_SAS_AF
+field	dbNSFP	gnomAD_genomes_SAS_AN
+field	dbNSFP	gnomAD_genomes_SAS_nhomalt
+field	dbNSFP	gnomAD_genomes_flag
+field	dbNSFP	gnomAD_genomes_nhomalt
+field	dbNSFP	hg18_chr
+field	dbNSFP	hg18_pos(1-based)
+field	dbNSFP	hg19_chr
+field	dbNSFP	hg19_pos(1-based)
+field	dbNSFP	integrated_confidence_value
+field	dbNSFP	integrated_fitCons_rankscore
+field	dbNSFP	integrated_fitCons_score
+field	dbNSFP	phastCons100way_vertebrate
+field	dbNSFP	phastCons100way_vertebrate_rankscore
+field	dbNSFP	phastCons17way_primate
+field	dbNSFP	phastCons17way_primate_rankscore
+field	dbNSFP	phastCons470way_mammalian
+field	dbNSFP	phastCons470way_mammalian_rankscore
+field	dbNSFP	phyloP100way_vertebrate
+field	dbNSFP	phyloP100way_vertebrate_rankscore
+field	dbNSFP	phyloP17way_primate
+field	dbNSFP	phyloP17way_primate_rankscore
+field	dbNSFP	phyloP470way_mammalian
+field	dbNSFP	phyloP470way_mammalian_rankscore
+field	dbNSFP	pos(1-based)
+field	dbNSFP	ref
+field	dbNSFP	refcodon
+field	dbNSFP	rs_dbSNP
+field	dbNSFP	NoSuchColumn
+
+field	dbscSNV	ada_score
+field	dbscSNV	rf_score
+
+field	LoFtool	LoFtool
+
+# pLI writes one of the two: the gene field by default, the transcript field in its
+# transcript mode.
+field	pLI	pLI_gene_value
+field	pLI	pLI_transcript_value
+
+# LoFTEE writes the field names of Ensembl VEP's LoF plugin, so a vep-rs run
+# (--plugin LoFTEE) and an Ensembl VEP run (--plugin LoF) compare directly. LoF (HC or
+# LC) and LoF_filter are the verdict; LoF_flags and LoF_info are informational, and
+# GERP_DIST in LoF_info differs under a GERP bigWig with zoom levels (`--fields LoF`
+# isolates the verdict).
+field	LoFTEE	LoF
+field	LoFTEE	LoF_filter
+field	LoFTEE	LoF_flags
+field	LoFTEE	LoF_info
+
+# The three groups of MaxEntScan.pm: the canonical-window scores, the sliding-window
+# scores (SWA) and the nearest canonical sites (NCSS), with the sequences, positions and
+# contexts `verbose` adds.
+field	MaxEntScan	MaxEntScan_ref
+field	MaxEntScan	MaxEntScan_alt
+field	MaxEntScan	MaxEntScan_diff
+field	MaxEntScan	MaxEntScan_ref_seq
+field	MaxEntScan	MaxEntScan_alt_seq
+field	MaxEntScan	MES-SWA_donor_ref
+field	MaxEntScan	MES-SWA_donor_alt
+field	MaxEntScan	MES-SWA_donor_ref_comp
+field	MaxEntScan	MES-SWA_donor_diff
+field	MaxEntScan	MES-SWA_donor_ref_seq
+field	MaxEntScan	MES-SWA_donor_ref_frame
+field	MaxEntScan	MES-SWA_donor_ref_context
+field	MaxEntScan	MES-SWA_donor_alt_seq
+field	MaxEntScan	MES-SWA_donor_alt_frame
+field	MaxEntScan	MES-SWA_donor_alt_context
+field	MaxEntScan	MES-SWA_donor_ref_comp_seq
+field	MaxEntScan	MES-SWA_acceptor_ref
+field	MaxEntScan	MES-SWA_acceptor_alt
+field	MaxEntScan	MES-SWA_acceptor_ref_comp
+field	MaxEntScan	MES-SWA_acceptor_diff
+field	MaxEntScan	MES-SWA_acceptor_ref_seq
+field	MaxEntScan	MES-SWA_acceptor_ref_frame
+field	MaxEntScan	MES-SWA_acceptor_ref_context
+field	MaxEntScan	MES-SWA_acceptor_alt_seq
+field	MaxEntScan	MES-SWA_acceptor_alt_frame
+field	MaxEntScan	MES-SWA_acceptor_alt_context
+field	MaxEntScan	MES-SWA_acceptor_ref_comp_seq
+field	MaxEntScan	MES-NCSS_upstream_acceptor
+field	MaxEntScan	MES-NCSS_upstream_donor
+field	MaxEntScan	MES-NCSS_downstream_acceptor
+field	MaxEntScan	MES-NCSS_downstream_donor
+field	MaxEntScan	MES-NCSS_upstream_acceptor_seq
+field	MaxEntScan	MES-NCSS_upstream_donor_seq
+field	MaxEntScan	MES-NCSS_downstream_acceptor_seq
+field	MaxEntScan	MES-NCSS_downstream_donor_seq
+
+field	AncestralAllele	AA
+
+field	Conservation	Conservation
+
+field	BayesDel	BayesDel
+
+field	ClinPred	ClinPred
+
+field	DosageSensitivity	pHaplo
+field	DosageSensitivity	pTriplo
+
+# The file's INFO fields: five haplogroup fields by default, any of the others under
+# `fields=`. Each is named, because gnomADc's fields and dbNSFP's gnomAD columns share
+# the prefix.
+field	gnomADMt	gnomAD_hap_AC_het
+field	gnomADMt	gnomAD_hap_AC_hom
+field	gnomADMt	gnomAD_hap_AF_het
+field	gnomADMt	gnomAD_hap_AF_hom
+field	gnomADMt	gnomAD_hap_AN
+field	gnomADMt	gnomAD_AC_het
+field	gnomADMt	gnomAD_AC_hom
+field	gnomADMt	gnomAD_AF_het
+field	gnomADMt	gnomAD_AF_hom
+field	gnomADMt	gnomAD_AN
+field	gnomADMt	gnomAD_age_hist_het_bin_freq
+field	gnomADMt	gnomAD_age_hist_het_n_larger
+field	gnomADMt	gnomAD_age_hist_het_n_smaller
+field	gnomADMt	gnomAD_age_hist_hom_bin_freq
+field	gnomADMt	gnomAD_age_hist_hom_n_larger
+field	gnomADMt	gnomAD_age_hist_hom_n_smaller
+field	gnomADMt	gnomAD_base_qual_hist
+field	gnomADMt	gnomAD_common_low_heteroplasmy
+field	gnomADMt	gnomAD_contamination_hist
+field	gnomADMt	gnomAD_dp_hist_all_bin_freq
+field	gnomADMt	gnomAD_dp_hist_all_n_larger
+field	gnomADMt	gnomAD_dp_hist_alt_bin_freq
+field	gnomADMt	gnomAD_dp_hist_alt_n_larger
+field	gnomADMt	gnomAD_dp_mean
+field	gnomADMt	gnomAD_excluded_AC
+field	gnomADMt	gnomAD_faf_hapmax_hom
+field	gnomADMt	gnomAD_filters
+field	gnomADMt	gnomAD_hap_defining_variant
+field	gnomADMt	gnomAD_hap_faf_hom
+field	gnomADMt	gnomAD_hap_hl_hist
+field	gnomADMt	gnomAD_hapmax_AF_het
+field	gnomADMt	gnomAD_hapmax_AF_hom
+field	gnomADMt	gnomAD_heteroplasmy_below_min_het_threshold_hist
+field	gnomADMt	gnomAD_hl_hist
+field	gnomADMt	gnomAD_max_hl
+field	gnomADMt	gnomAD_mitotip_score
+field	gnomADMt	gnomAD_mitotip_trna_prediction
+field	gnomADMt	gnomAD_mq_mean
+field	gnomADMt	gnomAD_pon_ml_probability_of_pathogenicity
+field	gnomADMt	gnomAD_pon_mt_trna_prediction
+field	gnomADMt	gnomAD_pop_AC_het
+field	gnomADMt	gnomAD_pop_AC_hom
+field	gnomADMt	gnomAD_pop_AF_het
+field	gnomADMt	gnomAD_pop_AF_hom
+field	gnomADMt	gnomAD_pop_AN
+field	gnomADMt	gnomAD_pop_hl_hist
+field	gnomADMt	gnomAD_position_hist
+field	gnomADMt	gnomAD_strand_bias_hist
+field	gnomADMt	gnomAD_tlod_mean
+field	gnomADMt	gnomAD_variant_collapsed
+field	gnomADMt	gnomAD_vep
+field	gnomADMt	gnomAD_weak_evidence_hist
+
+field	LOEUF	LOEUF
+
+field	NMD	NMD
+
+field	PrimateAI	PrimateAI
+
+field	SpliceVault	SpliceVault_SpliceAI_delta
+field	SpliceVault	SpliceVault_out_of_frame_events
+field	SpliceVault	SpliceVault_site_max_depth
+field	SpliceVault	SpliceVault_site_pos
+field	SpliceVault	SpliceVault_site_sample_count
+field	SpliceVault	SpliceVault_site_type
+field	SpliceVault	SpliceVault_top_events
+
+# One field per selected column of the run's own table, under the transcript_annotator_
+# prefix by default; `prefix=0` writes the bare column names, here those of the golden
+# corpus's table, two of which dbNSFP writes too.
+field	TranscriptAnnotator	transcript_annotator_<column>
+field	TranscriptAnnotator	Comment
+field	TranscriptAnnotator	SIFT_pred
+field	TranscriptAnnotator	SIFT_score
+
+field	UTRAnnotator	5UTR_annotation
+field	UTRAnnotator	5UTR_consequence
+field	UTRAnnotator	Existing_InFrame_oORFs
+field	UTRAnnotator	Existing_OutOfFrame_oORFs
+field	UTRAnnotator	Existing_uORFs
+
+not_a_plugin	HGVS
+
+alias	LoF	LoFTEE
+
+core_named	dbNSFP	APPRIS	--appris
+core_named	dbNSFP	APPRIS	--everything
+core_named	dbNSFP	TSL	--tsl
+core_named	dbNSFP	TSL	--everything

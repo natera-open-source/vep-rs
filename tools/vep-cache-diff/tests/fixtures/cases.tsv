@@ -1,0 +1,32 @@
+# One case a line: name, exit code, stderr, report, baseline directory, builder directory
+# (tab-separated). The binary runs in this directory with the two directories as
+# `--baseline-dir` and `--builder-dir` and a report path in a scratch directory. stdout is
+# the bytes of expected/<name>.stdout; stderr is `empty` or `golden` (expected/<name>.stderr);
+# the report is `golden` (expected/<name>.json) or `none` (no report is written). In the
+# goldens `{{FIXTURES}}` stands for this directory's resolved path and `{{REPORT}}` for the
+# report path.
+identical	0	empty	golden	caches/identical/cache	caches/identical/cache
+transcripts	0	empty	golden	caches/transcripts/baseline	caches/transcripts/builder
+transcripts_swapped	0	empty	golden	caches/transcripts/builder	caches/transcripts/baseline
+variations	0	empty	golden	caches/variations/baseline	caches/variations/builder
+variations_swapped	0	empty	golden	caches/variations/builder	caches/variations/baseline
+across	0	empty	golden	caches/transcripts/baseline	caches/variations/builder
+empty	0	empty	golden	caches/empty/baseline	caches/empty/builder
+info_baseline_only	0	empty	golden	caches/info_baseline_only/baseline	caches/info_baseline_only/builder
+info_builder_only	0	empty	golden	caches/info_builder_only/baseline	caches/info_builder_only/builder
+columns_as_text	0	empty	golden	caches/columns_as_text/baseline	caches/columns_as_text/builder
+missing_baseline	1	golden	none	caches/nowhere	caches/identical/cache
+missing_builder	1	golden	none	caches/identical/cache	caches/identical/cache/info.json
+missing_both	1	golden	none	caches/nowhere	caches/elsewhere
+fault_shard_json	1	golden	none	caches/faults/shard_json/baseline	caches/faults/shard_json/builder
+fault_shard_utf8	1	golden	none	caches/faults/shard_utf8/baseline	caches/faults/shard_utf8/builder
+fault_shard_gzip	1	golden	none	caches/faults/shard_gzip/baseline	caches/faults/shard_gzip/builder
+fault_shard_bom	1	golden	none	caches/faults/shard_bom/baseline	caches/faults/shard_bom/builder
+fault_feature_cache	1	golden	none	caches/faults/feature_cache/baseline	caches/faults/feature_cache/builder
+fault_id_list	1	golden	none	caches/faults/id_list/baseline	caches/faults/id_list/builder
+fault_info_json	1	golden	none	caches/faults/info_json/baseline	caches/faults/info_json/builder
+fault_info_array	1	golden	none	caches/faults/info_array/baseline	caches/faults/info_array/builder
+fault_columns_number	1	golden	none	caches/faults/columns_number/baseline	caches/faults/columns_number/builder
+fault_variations_gzip	1	golden	none	caches/faults/variations_gzip/baseline	caches/faults/variations_gzip/builder
+fault_variations_utf8	1	golden	none	caches/faults/variations_utf8/baseline	caches/faults/variations_utf8/builder
+fault_variations_cut_short	1	golden	none	caches/faults/variations_cut_short/baseline	caches/faults/variations_cut_short/builder

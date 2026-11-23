@@ -1,9 +1,9 @@
 entry = "alphamissense_sibling_allele_rows"
 page = "docs/divergences/alphamissense-sibling-allele-rows.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 405.6 per million · 6 flag sets, 64 corpora"
+input_class_basis = "2 · 405.6 per million · 6 flag sets, 80 corpora"
 
 # The corpus table with the `A T` row at 13610388 given its own prediction, 0.9000 likely_pathogenic, where the
 # `A C` row before it keeps 0.1079 likely_benign; both rows predict M54L on ENST00000299443.5.
@@ -41,4 +41,17 @@ ensembl_vep = [
 vep_rs = [
   "21:13610388 | C | ENST00000299443 | M/L | likely_benign | 0.1079",
   "21:13610388 | T | ENST00000299443 | M/L | likely_pathogenic | 0.9000",
+]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/alpha_missense.rs::AlphaMissensePlugin::matching_record",
+    "crates/vep-builtins/src/plugins/alpha_missense.rs::AlphaMissensePlugin::matching_records",
+]
+tests = [
+    "crates/vep-builtins/src/plugins/alpha_missense.rs::tests::each_allele_of_a_multi_allelic_record_takes_its_own_row",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/revel.rs::sibling_allele_value",
+    "tools/vep-plugin-pairs/src/rules/sibling.rs::sibling_allele_value",
 ]

@@ -1,0 +1,8 @@
+#Feature
+.hidden.parquet
+a/z.parquet
+a-c/x.parquet
+a.d/x.parquet
+b.parquet
+deep/er/p.parquet
+dir.parquet/inner.parquet

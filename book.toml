@@ -236,9 +236,14 @@ heading-split-level = 3
 "/index.html#authors" = "https://github.com/natera-open-source/vep-rs#authors"
 "/index.html#disclaimer" = "https://github.com/natera-open-source/vep-rs#disclaimer"
 
-# Cache setup: the page itself, and the SIFT and PolyPhen page.
+# Cache setup: the page itself, the SIFT and PolyPhen page and the variation
+# data page.
 "/cache-setup.html#cache-setup-building-or-converting-the-json-transcript-cache" = "cache-setup.html"
 "/cache-setup.html#sift-and-polyphen-predictions" = "cache-predictions.html"
+"/cache-setup.html#the-form-of-a-record" = "cache-variation-data.html#the-form-of-a-record"
+"/cache-setup.html#an-indel-that-can-shift-along-a-run" = "cache-variation-data.html#an-indel-that-can-shift-along-a-run"
+"/cache-setup.html#what-a-native-cache-lacks" = "cache-variation-data.html#what-a-native-cache-lacks"
+"/cache-setup.html#the-1000-genomes-frequencies" = "cache-variation-data.html#the-1000-genomes-frequencies"
 
 # README sections shown on the Benchmarks, Getting started and Project pages.
 "/index.html#current-release-v040" = "benchmarks/current-release.html#current-release-v060"
@@ -281,8 +286,12 @@ heading-split-level = 3
 "/cli-reference.html#transcript-sets" = "cli/filtering-picking.html#transcript-sets"
 "/cli-reference.html#statistics" = "cli/statistics-verbosity-misc.html#statistics"
 "/cli-reference.html#verbosity" = "cli/statistics-verbosity-misc.html#verbosity"
-"/cli-reference.html#miscellaneous" = "cli/statistics-verbosity-misc.html#miscellaneous"
+"/cli-reference.html#miscellaneous" = "cli/statistics-verbosity-misc.html#record-handling"
 "/cli-reference.html#compatibility-with-perl-vep" = "cli/compatibility.html"
+# CLI group pages: one section per kind of flag.
+"/cli/output-control.html#flags" = "output-control.html#annotation-fields"
+"/cli/plugins.html#flags" = "plugins.html#loading-plugins"
+"/cli/statistics-verbosity-misc.html#miscellaneous" = "statistics-verbosity-misc.html#record-handling"
 # Output formats: one page per format.
 "/output-formats.html#vep-default-format" = "output/vep-and-tab.html#vep-default-format"
 "/output-formats.html#header" = "output/vep-and-tab.html#header"

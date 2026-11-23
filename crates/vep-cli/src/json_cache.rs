@@ -8,9 +8,12 @@
 //! `is_canonical` vs `canonical`). This module provides deserialization types
 //! that map the JSON format and converts them to the canonical Rust types.
 //!
-//! Perl citations name modules of ensembl-vep (`Bio/EnsEMBL/VEP/...`);
-//! `VariationEffect.pm` is `Bio/EnsEMBL/Variation/Utils/VariationEffect.pm` in
-//! ensembl-variation.
+//! Ensembl VEP source citations name modules of ensembl-vep (`Bio/EnsEMBL/VEP/...`);
+//! `VariationEffect.pm` is `Bio/EnsEMBL/Variation/Utils/VariationEffect.pm`, and
+//! `BaseTranscriptVariation.pm`, `BaseVariationFeature.pm` and
+//! `ProteinFunctionPredictionMatrix.pm` are
+//! `Bio/EnsEMBL/Variation/...`, in ensembl-variation; `TranscriptMapper.pm` is
+//! `Bio/EnsEMBL/TranscriptMapper.pm` in ensembl core.
 
 use std::cell::Cell;
 use std::collections::{BTreeMap, HashMap};
@@ -45,7 +48,8 @@ use crate::transcript_index::TranscriptSet;
 /// error on the load path. Each visitor below accepts the same inputs with the
 /// same results: an integer as itself, a negative integer as 0, a float
 /// truncated, a string parsed (an empty string is "absent" where the field is
-/// optional), and for `u8` a bool as 0/1.
+/// optional, and a negative integer in a string is 0, as the number is), and
+/// for `u8` a bool as 0/1.
 macro_rules! num_or_str_visitor {
     ($name:ident, $t:ty) => {
         num_or_str_visitor!(@impl $name, $t,);
@@ -87,9 +91,14 @@ macro_rules! num_or_str_visitor {
 
             fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
                 if v.is_empty() {
-                    Ok(None)
-                } else {
-                    v.parse::<$t>().map(Some).map_err(E::custom)
+                    return Ok(None);
+                }
+                match v.parse::<$t>() {
+                    Ok(n) => Ok(Some(n)),
+                    Err(error) => match v.parse::<i64>() {
+                        Ok(n) if n < 0 => Ok(Some(0)),
+                        _ => Err(E::custom(error)),
+                    },
                 }
             }
         }
@@ -136,6 +145,53 @@ where
     deserializer
         .deserialize_any(U64OrStr)?
         .ok_or_else(|| serde::de::Error::custom("cannot parse integer from empty string"))
+}
+
+/// Visitor for a genomic coordinate that can lie below 1, as the start of a
+/// transcript stored across the origin of a circular sequence does
+/// ([`place_across_origin`]): the inputs of [`U64OrStr`], a negative integer
+/// kept as it is.
+struct SignedOrStr;
+impl serde::de::Visitor<'_> for SignedOrStr {
+    type Value = Option<i64>;
+
+    fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.write_str("an integer, a string holding one, or an empty string")
+    }
+
+    fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<Self::Value, E> {
+        Ok(Some(i64::try_from(v).unwrap_or(i64::MAX)))
+    }
+
+    fn visit_i64<E: serde::de::Error>(self, v: i64) -> Result<Self::Value, E> {
+        Ok(Some(v))
+    }
+
+    fn visit_f64<E: serde::de::Error>(self, v: f64) -> Result<Self::Value, E> {
+        Ok(Some(v as i64))
+    }
+
+    fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
+        if v.is_empty() {
+            Ok(None)
+        } else {
+            v.parse::<i64>().map(Some).map_err(E::custom)
+        }
+    }
+}
+
+fn deserialize_signed_string_or_number<'de, D>(deserializer: D) -> Result<i64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    deserializer
+        .deserialize_any(SignedOrStr)?
+        .ok_or_else(|| serde::de::Error::custom("cannot parse integer from empty string"))
+}
+
+/// A stored coordinate as a position on its sequence: one below 1 reads as 0.
+fn position(stored: i64) -> u64 {
+    u64::try_from(stored).unwrap_or(0)
 }
 
 fn deserialize_optional_string_or_number<'de, D>(deserializer: D) -> Result<Option<u64>, D::Error>
@@ -338,14 +394,17 @@ struct JsonTranscript {
         deserialize_with = "deserialize_optional_string_or_number"
     )]
     db_id: Option<u64>,
-    #[serde(deserialize_with = "deserialize_arc_str")]
-    gene_stable_id: Arc<str>,
+    /// Absent on a transcript whose gene has no stable id, which Ensembl VEP
+    /// keeps and annotates (`AnnotationType/Transcript.pm:220` and `:280`
+    /// test the transcript's own id alone).
+    #[serde(default, deserialize_with = "deserialize_optional_arc_str")]
+    gene_stable_id: Option<Arc<str>>,
     #[serde(default, deserialize_with = "deserialize_optional_u32")]
     gene_version: Option<u32>,
     #[serde(default)]
     chr: Option<String>,
-    #[serde(deserialize_with = "deserialize_string_or_number")]
-    start: u64,
+    #[serde(deserialize_with = "deserialize_signed_string_or_number")]
+    start: i64,
     #[serde(deserialize_with = "deserialize_string_or_number")]
     end: u64,
     #[serde(deserialize_with = "deserialize_strand")]
@@ -458,10 +517,10 @@ where
 struct JsonExon {
     #[serde(default, deserialize_with = "deserialize_exon_id")]
     stable_id: Option<Arc<str>>,
-    #[serde(deserialize_with = "deserialize_string_or_number")]
-    start: u64,
-    #[serde(deserialize_with = "deserialize_string_or_number")]
-    end: u64,
+    #[serde(deserialize_with = "deserialize_signed_string_or_number")]
+    start: i64,
+    #[serde(deserialize_with = "deserialize_signed_string_or_number")]
+    end: i64,
     #[serde(default, deserialize_with = "deserialize_optional_u32")]
     rank: Option<u32>,
     #[serde(default, deserialize_with = "deserialize_i8_from_number")]
@@ -472,16 +531,22 @@ struct JsonExon {
 
 #[derive(Deserialize)]
 struct JsonIntron {
-    #[serde(deserialize_with = "deserialize_string_or_number")]
-    start: u64,
-    #[serde(deserialize_with = "deserialize_string_or_number")]
-    end: u64,
+    #[serde(deserialize_with = "deserialize_signed_string_or_number")]
+    start: i64,
+    #[serde(deserialize_with = "deserialize_signed_string_or_number")]
+    end: i64,
     #[serde(default, deserialize_with = "deserialize_optional_u32")]
     rank: Option<u32>,
 }
 
+/// A transcript's translation. The converter writes defined values alone, so
+/// a translation the cache holds without a stable id has no `stable_id` key and
+/// loads with an empty id. Ensembl VEP reads that id in one place, the
+/// reference name of an HGVSp string (`TranscriptVariationAllele.pm:1748` at
+/// ensembl-variation release/116).
 #[derive(Deserialize)]
 struct JsonTranslation {
+    #[serde(default)]
     stable_id: String,
     #[serde(default, deserialize_with = "deserialize_optional_u32")]
     version: Option<u32>,
@@ -748,8 +813,8 @@ fn exon_ids_in_rank_order(exons: &[JsonExon]) -> Option<Arc<[Arc<str>]>> {
 
 fn convert_exon(je: JsonExon, rank_fallback: u32) -> Exon {
     Exon {
-        start: je.start,
-        end: je.end,
+        start: position(je.start),
+        end: position(je.end),
         rank: je.rank.unwrap_or(rank_fallback),
         phase: je.phase,
         end_phase: je.end_phase,
@@ -758,8 +823,8 @@ fn convert_exon(je: JsonExon, rank_fallback: u32) -> Exon {
 
 fn convert_intron(ji: JsonIntron, rank_fallback: u32) -> Intron {
     Intron {
-        start: ji.start,
-        end: ji.end,
+        start: position(ji.start),
+        end: position(ji.end),
         rank: ji.rank.unwrap_or(rank_fallback),
     }
 }
@@ -865,14 +930,99 @@ fn set_admits(
     ))
 }
 
+/// Reads a transcript the cache stores across the origin of a circular
+/// sequence into coordinates that run on past the sequence's last base, and
+/// returns the sequence's length; `None`, and the record untouched, for every
+/// other transcript.
+///
+/// Ensembl's dump stores such a transcript with a start below 1, its
+/// database start less the sequence's length (ensembl core
+/// `DBSQL/TranscriptAdaptor.pm:1941-1947`), and its exons the same way,
+/// while the mapper pairs keep the database coordinates, the pair across the
+/// origin with its start above its end (`TranscriptMapper.pm:160-161`). The
+/// first base of the transcript among the pairs, less the stored start, is
+/// therefore the sequence's length. Every coordinate at or below the stored
+/// end lies among the sequence's first bases and is moved one length on, and
+/// the pair across the origin has its end moved.
+fn place_across_origin(jt: &mut JsonTranscript) -> Result<Option<u64>, String> {
+    if jt.start >= 1 {
+        return Ok(None);
+    }
+    let stored_end = jt.end;
+    let first_base = jt
+        .vefc
+        .as_ref()
+        .and_then(|vefc| vefc.mapper.as_ref())
+        .and_then(|mapper| {
+            mapper
+                .pairs
+                .iter()
+                .map(|pair| pair.to_start)
+                .filter(|&start| start > stored_end)
+                .min()
+        })
+        .ok_or_else(|| {
+            format!(
+                "transcript {}: its start {} lies below base 1 and no mapper pair places \
+                 it across the origin of a circular sequence",
+                jt.stable_id, jt.start
+            )
+        })?;
+    // The stored start is the first base less the length, and is not above 0.
+    let length = first_base.saturating_add(jt.start.unsigned_abs());
+    let low_side = i64::try_from(stored_end).unwrap_or(i64::MAX);
+    let turn = i64::try_from(length).unwrap_or(i64::MAX);
+    let moved = |stored: i64| {
+        if stored > low_side {
+            stored
+        } else {
+            stored.saturating_add(turn)
+        }
+    };
+    jt.start = moved(jt.start);
+    jt.end = stored_end.saturating_add(length);
+    for exon in &mut jt.exons {
+        exon.start = moved(exon.start);
+        exon.end = moved(exon.end);
+    }
+    if let Some(vefc) = jt.vefc.as_mut() {
+        for exon in &mut vefc.sorted_exons {
+            exon.start = moved(exon.start);
+            exon.end = moved(exon.end);
+        }
+        for intron in &mut vefc.introns {
+            intron.start = moved(intron.start);
+            intron.end = moved(intron.end);
+        }
+        for pair in vefc.mapper.iter_mut().flat_map(|mapper| &mut mapper.pairs) {
+            if pair.to_start <= stored_end {
+                pair.to_start = pair.to_start.saturating_add(length);
+                pair.to_end = pair.to_end.saturating_add(length);
+            } else if pair.to_end <= stored_end
+                && pair.from_start <= pair.from_end
+                && length
+                    .checked_sub(pair.to_start)
+                    .and_then(|high| high.checked_add(pair.to_end))
+                    == Some(pair.from_end - pair.from_start)
+            {
+                // The pair across the origin: its cDNA bases are those from its
+                // start to the last base and from base 1 to its end.
+                pair.to_end = pair.to_end.saturating_add(length);
+            }
+        }
+    }
+    Ok(Some(length))
+}
+
 /// The loaded transcript, or the reason a record's value cannot be represented.
 /// `codes` shares one allocation among the attributes of a shard carrying the
 /// same code.
 fn convert_transcript(
-    jt: JsonTranscript,
+    mut jt: JsonTranscript,
     chr_override: &str,
     codes: &mut AttributeCodes,
 ) -> Result<Transcript, String> {
+    let circular_length = place_across_origin(&mut jt)?;
     let source_cache = source_cache_of(&jt)?;
     let bam_edit_status = bam_edit_status_of(&jt)?;
     let chr = jt.chr.unwrap_or_else(|| chr_override.to_string());
@@ -901,8 +1051,6 @@ fn convert_transcript(
         db_id: t.db_id,
         start: t.start,
         end: t.end,
-        start_exon_index: 0,
-        end_exon_index: exons.len().saturating_sub(1),
         seq: t.seq,
     });
 
@@ -927,7 +1075,7 @@ fn convert_transcript(
     // A Storable-derived cache carries MANE, TSL and APPRIS only as transcript
     // attributes; a top-level key, when a cache writes one, is read in the
     // attribute's place, and its one digit `0` is none, as the attribute's is
-    // (`$1 if $1`, `OutputFactory.pm:1611` at release/116.2).
+    // (`$1 if $1`, `OutputFactory.pm:1620` at release/116.3).
     let tsl = match jt.tsl {
         Some(level) => (level != "0").then_some(level),
         None => attribute_value(&attributes, "TSL")
@@ -1020,76 +1168,86 @@ fn convert_transcript(
             })
             .collect();
 
-        let vefc = TranscriptVEFC {
-            codon_table: v.codon_table.unwrap_or(1),
-            five_prime_utr: v.five_prime_utr,
-            three_prime_utr: v.three_prime_utr,
-            translateable_seq: v.translateable_seq,
-            peptide: v.peptide,
-            spliced_seq: v.spliced_seq,
-            introns: vefc_introns,
-            sorted_exons,
-            mapper,
-            protein_features,
-            protein_function_predictions,
-            seq_edits,
+        let codon_table = v.codon_table.unwrap_or(1);
+        let peptide = match (v.peptide, v.translateable_seq.as_deref()) {
+            (Some(peptide), Some(coding)) => {
+                Some(peptide_under_own_code(peptide, coding, codon_table))
+            }
+            (peptide, _) => peptide,
         };
+        let mut vefc = TranscriptVEFC::default();
+        vefc.codon_table = codon_table;
+        vefc.five_prime_utr = v.five_prime_utr;
+        vefc.three_prime_utr = v.three_prime_utr;
+        vefc.translateable_seq = v.translateable_seq;
+        vefc.peptide = peptide;
+        vefc.spliced_seq = v.spliced_seq;
+        vefc.introns = vefc_introns;
+        vefc.sorted_exons = sorted_exons;
+        vefc.mapper = mapper;
+        vefc.protein_features = protein_features;
+        vefc.protein_function_predictions = protein_function_predictions;
+        vefc.seq_edits = seq_edits;
 
         (Some(vefc), tx_introns)
     } else {
         (None, derive_introns(&exons))
     };
 
-    Ok(Transcript {
-        stable_id: jt.stable_id,
-        version: jt.version,
-        db_id: jt.db_id,
-        gene_stable_id: jt.gene_stable_id,
-        gene_version: jt.gene_version,
-        chr,
-        start: jt.start,
-        end: jt.end,
-        strand: jt.strand,
-        biotype: jt.biotype,
-        source: jt.source,
-        gene_symbol: jt.gene_symbol,
-        gene_symbol_source: jt.gene_symbol_source,
-        gene_symbol_id: jt.gene_symbol_id,
-        hgnc_id: jt.hgnc_id,
-        gene_phenotype: jt.gene_phenotype,
-        canonical: jt.canonical,
-        mane_select,
-        mane_plus_clinical,
-        tsl,
-        appris,
-        ccds: jt.ccds,
-        protein_id: jt.protein_id,
-        refseq: jt.refseq,
-        swissprot: jt.swissprot,
-        trembl: jt.trembl,
-        uniparc: jt.uniparc,
-        uniprot_isoform: jt.uniprot_isoform,
-        exons,
-        exon_ids,
-        introns,
-        cdna_coding_start: jt.cdna_coding_start,
-        cdna_coding_end: jt.cdna_coding_end,
-        coding_region_start,
-        coding_region_end,
-        translation_start: coding_region_start,
-        translation_end: coding_region_end,
-        translation,
-        cdna_sequence: None,
-        protein_sequence: None,
-        flags: flags.into(),
-        gencode_basic,
-        gencode_primary,
-        attributes,
-        source_cache,
-        bam_edit_status,
-        vefc,
-        derived: Default::default(),
-        id_rank: 0,
+    Ok({
+        let mut transcript = Transcript::default();
+        transcript.stable_id = jt.stable_id;
+        transcript.version = jt.version;
+        transcript.db_id = jt.db_id;
+        transcript.gene_stable_id = jt.gene_stable_id.unwrap_or_default();
+        transcript.gene_version = jt.gene_version;
+        transcript.chr = chr;
+        transcript.start = position(jt.start);
+        transcript.end = jt.end;
+        transcript.strand = jt.strand;
+        transcript.biotype = jt.biotype;
+        transcript.source = jt.source;
+        transcript.gene_symbol = jt.gene_symbol;
+        transcript.gene_symbol_source = jt.gene_symbol_source;
+        transcript.gene_symbol_id = jt.gene_symbol_id;
+        transcript.hgnc_id = jt.hgnc_id;
+        transcript.gene_phenotype = jt.gene_phenotype;
+        transcript.canonical = jt.canonical;
+        transcript.mane_select = mane_select;
+        transcript.mane_plus_clinical = mane_plus_clinical;
+        transcript.tsl = tsl;
+        transcript.appris = appris;
+        transcript.ccds = jt.ccds;
+        transcript.protein_id = jt.protein_id;
+        transcript.refseq = jt.refseq;
+        transcript.swissprot = jt.swissprot;
+        transcript.trembl = jt.trembl;
+        transcript.uniparc = jt.uniparc;
+        transcript.uniprot_isoform = jt.uniprot_isoform;
+        transcript.exons = exons;
+        transcript.exon_ids = exon_ids;
+        transcript.introns = introns;
+        transcript.cdna_coding_start = jt.cdna_coding_start;
+        transcript.cdna_coding_end = jt.cdna_coding_end;
+        transcript.coding_region_start = coding_region_start;
+        transcript.coding_region_end = coding_region_end;
+        transcript.translation_start = coding_region_start;
+        transcript.translation_end = coding_region_end;
+        transcript.translation = translation;
+        transcript.cdna_sequence = None;
+        transcript.protein_sequence = None;
+        transcript.flags = flags.into();
+        transcript.gencode_basic = gencode_basic;
+        transcript.gencode_primary = gencode_primary;
+        transcript.attributes = attributes;
+        transcript.source_cache = source_cache;
+        transcript.bam_edit_status = bam_edit_status;
+        transcript.circular_length = circular_length;
+        transcript.region_files = None;
+        transcript.vefc = vefc;
+        transcript.derived = Default::default();
+        transcript.id_rank = 0;
+        transcript
     })
 }
 
@@ -1132,9 +1290,8 @@ fn compute_coding_region(mapper: &JsonMapper) -> (Option<u64>, Option<u64>) {
         Some(v) if v > 0 => v,
         _ => return (None, None),
     };
-    // A coding end before the coding start loads on a transcript without a
-    // coding sequence (`check_mapper_bounds` refuses it on a coding one); its
-    // bounds are those of the span between the two.
+    // A coding end before the coding start, both on the cDNA, has the bounds
+    // of the span between the two.
     let (cds_start, cds_end) = (cds_start.min(cds_end), cds_start.max(cds_end));
 
     let genomic = |pair: &JsonMapperPair, cdna: u64| {
@@ -1176,7 +1333,7 @@ fn compute_coding_region(mapper: &JsonMapper) -> (Option<u64>, Option<u64>) {
 /// run will only ever query one chromosome.
 ///
 /// The returned map's key set is the complete set of chromosomes the cache
-/// covers. That matters beyond convenience: several Perl-parity predicates in
+/// covers. That matters beyond convenience: several Ensembl VEP-parity predicates in
 /// `runner.rs` / `annotator.rs` branch on whether a chromosome is *present* in
 /// the cache (the `intergenic_variant` fallback, and the inter-chromosomal BND
 /// mate-annotation gate), mirroring Ensembl VEP's own cache-loading behavior. A
@@ -1285,6 +1442,19 @@ pub(crate) fn shard_start(path: &Path) -> (u64, String) {
     (start, name)
 }
 
+/// The first and last position of the region a shard's file name states
+/// (`<start>-<end>.json`, or the same under `.json.gz`); `None` for a name of
+/// another shape.
+fn shard_span(path: &Path) -> Option<(u64, u64)> {
+    let name = path.file_name()?.to_str()?;
+    let range = name
+        .strip_suffix(".json.gz")
+        .or_else(|| name.strip_suffix(".json"))?;
+    let (start, end) = range.split_once('-')?;
+    let (start, end) = (start.parse().ok()?, end.parse().ok()?);
+    (start <= end).then_some((start, end))
+}
+
 /// Read a shard's bytes, checking them against the cache's manifest before a
 /// `.json.gz` shard is inflated.
 pub(crate) fn read_shard(path: &Path, manifest: &CacheManifest) -> anyhow::Result<Vec<u8>> {
@@ -1301,12 +1471,13 @@ pub(crate) fn read_shard(path: &Path, manifest: &CacheManifest) -> anyhow::Resul
 
 /// Parse a shard's transcripts from either shard shape.
 ///
-/// vep-cache-builder writes a bare array; a Storable-derived cache wraps the
-/// transcripts in a range-keyed map (`{"<chr>": [transcript, null, ...]}`) whose
-/// nulls are dropped. The first non-whitespace byte selects the shape, so a
-/// shard is parsed once and a malformed shard reports the error from the parse
-/// that matched its shape. Map keys are visited in sorted order so two loads of
-/// the same shard yield the same transcript order.
+/// vep-cache-builder and `tools/vep-storable-to-json` each write a bare array;
+/// a shard that wraps the transcripts in a map of arrays
+/// (`{"<key>": [transcript, null, ...]}`) is read too, its nulls dropped. The
+/// first non-whitespace byte selects the shape, so a shard is parsed once and a
+/// malformed shard reports the error from the parse that matched its shape. Map
+/// keys are visited in sorted order so two loads of the same shard yield the
+/// same transcript order.
 ///
 /// Under `keep_exon_ids` each exon's `stable_id` is read
 /// ([`Transcript::exon_ids`]), else consumed and dropped; the option holds for
@@ -1345,7 +1516,7 @@ type TranscriptKey = (Option<SourceCache>, Option<u64>, Arc<str>, Option<u32>);
 /// the run's GENCODE set tests ([`TranscriptSet::gencode_attribute`]); both
 /// stay zero when the set names no GENCODE flag.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct GencodeTally {
+pub(crate) struct GencodeTally {
     pub records: usize,
     pub carriers: usize,
 }
@@ -1372,10 +1543,37 @@ impl GencodeTally {
     }
 }
 
+/// The transcripts of one shard's bytes held in memory, each stamped with
+/// `chr`: the records of a gene-model file read beside the cache
+/// ([`crate::gene_model`]), which take the conversion and the checks a cache
+/// shard's records take. No transcript set reads them, as Ensembl VEP's file
+/// sources never call `filter_transcript` (`AnnotationType/Transcript.pm:215`
+/// is the cache's and the database's alone), and none is ranked: the caller
+/// ranks the chromosome once every source's transcripts are in
+/// ([`assign_id_ranks`]).
+pub(crate) fn transcripts_of_shard_bytes(
+    chr: &str,
+    data: &[u8],
+    keep_exon_ids: bool,
+) -> Result<Vec<Transcript>, String> {
+    let json_transcripts =
+        parse_shard_transcripts(data, keep_exon_ids).map_err(|error| error.to_string())?;
+    let mut codes = AttributeCodes::default();
+    json_transcripts
+        .into_iter()
+        .map(|jt| {
+            let transcript = convert_transcript(jt, chr, &mut codes)?;
+            check_mapper_bounds(&transcript)?;
+            check_codon_table(&transcript)?;
+            Ok(transcript)
+        })
+        .collect()
+}
+
 /// One chromosome's transcripts as a load returns them, with the load's
 /// GENCODE tally.
 #[derive(Debug)]
-pub struct LoadedTranscripts {
+pub(crate) struct LoadedTranscripts {
     pub transcripts: Vec<Transcript>,
     pub gencode: GencodeTally,
 }
@@ -1411,7 +1609,7 @@ pub fn load_transcripts_for_chr(
 /// attribute are counted ([`GencodeTally`]); the caller reads the count once
 /// every load of the run is in, since a chromosome without a carrier says
 /// nothing about the cache.
-pub fn load_transcripts_in_set(
+pub(crate) fn load_transcripts_in_set(
     chr: &str,
     shards: &[PathBuf],
     manifest: &CacheManifest,
@@ -1423,7 +1621,7 @@ pub fn load_transcripts_in_set(
 /// [`load_transcripts_in_set`] keeping each exon's stable id on its transcript
 /// under `keep_exon_ids` ([`Transcript::exon_ids`]), for a run whose plugins
 /// print the ids.
-pub fn load_transcripts_in_set_with(
+pub(crate) fn load_transcripts_in_set_with(
     chr: &str,
     shards: &[PathBuf],
     manifest: &CacheManifest,
@@ -1477,25 +1675,106 @@ pub fn load_transcripts_in_set_with(
     // transcript, not a copy.
     let mut out: Vec<Transcript> = Vec::new();
     let mut gencode = GencodeTally::default();
-    let mut seen: std::collections::HashSet<TranscriptKey> = std::collections::HashSet::new();
-    for item in parsed {
+    // Each kept transcript's place in `out`, and beside `out` the span of
+    // every shard the transcript was read from.
+    let mut seen: HashMap<TranscriptKey, usize> = HashMap::new();
+    let mut read_from: Vec<Vec<Option<(u64, u64)>>> = Vec::new();
+    for (item, shard) in parsed.into_iter().zip(shards) {
         let (transcripts, tally) = item?;
         gencode.add(tally);
+        let span = shard_span(shard);
         for t in transcripts {
             let key = match t.db_id {
                 Some(id) => (t.source_cache.clone(), Some(id), Arc::from(""), None),
                 None => (t.source_cache.clone(), None, t.stable_id.clone(), t.version),
             };
-            if seen.insert(key) {
-                out.push(t);
+            match seen.entry(key) {
+                std::collections::hash_map::Entry::Occupied(place) => {
+                    read_from[*place.get()].push(span);
+                }
+                std::collections::hash_map::Entry::Vacant(place) => {
+                    place.insert(out.len());
+                    read_from.push(vec![span]);
+                    out.push(t);
+                }
             }
         }
     }
+    hold_transcripts_to_their_region_files(&mut out, read_from);
     assign_id_ranks(&mut out);
     Ok(LoadedTranscripts {
         transcripts: out,
         gencode,
     })
+}
+
+/// Holds to the region files it was read from ([`Transcript::region_files`])
+/// every transcript whose stable id another transcript of the chromosome
+/// shares, and every transcript those files hold short of its span
+/// (`filed_short_of_its_span`). A run of Ensembl VEP reads the files of the
+/// regions a record reaches (`AnnotationSource.pm:190`), so a transcript is a
+/// transcript of the regions whose files hold it.
+///
+/// Ensembl VEP's dump keeps one transcript a stable id in each region file of
+/// a RefSeq or merged cache, the `ensembl`-sourced one, else the lowest `dbID`
+/// (`Pipeline/DumpVEP/Dumper/Core.pm:109`,
+/// `AnnotationType/Transcript.pm:313-343`). A transcript that lost its id to
+/// another in one region's file and stands in a neighbour's is therefore no
+/// transcript of the first region, though its span lies there.
+///
+/// `read_from` gives, beside each transcript, the span of every shard that
+/// held it; a transcript read from a shard whose name states no span is left
+/// to be found by its coordinates.
+fn hold_transcripts_to_their_region_files(
+    transcripts: &mut [Transcript],
+    read_from: Vec<Vec<Option<(u64, u64)>>>,
+) {
+    let mut holders: HashMap<Arc<str>, u32> = HashMap::new();
+    for transcript in transcripts.iter() {
+        *holders.entry(transcript.stable_id.clone()).or_default() += 1;
+    }
+    for (transcript, spans) in transcripts.iter_mut().zip(read_from) {
+        let Some(spans) = spans.into_iter().collect::<Option<Vec<_>>>() else {
+            continue;
+        };
+        if holders[&transcript.stable_id] > 1 || filed_short_of_its_span(transcript, &spans) {
+            transcript.region_files = Some(Arc::from(spans));
+        }
+    }
+}
+
+/// Whether the region files of `spans`, the ones `transcript` was read from,
+/// leave a base of its span uncovered, on a transcript that carries a `dbID`
+/// and is not stored across the origin of a circular sequence.
+///
+/// Ensembl VEP's dump writes into a megabase's file every transcript of each
+/// gene that overlaps the megabase
+/// (`AnnotationSource/Database/Transcript.pm:237, 250`), and for a sequence
+/// outside the reference assembly (a patch, an alternate locus) it writes the
+/// files of the megabases that sequence's own region lies in and no other
+/// (`Pipeline/DumpVEP/CreateDumpJobs.pm:169`,
+/// `Pipeline/DumpVEP/Dumper.pm:135-136`). A transcript of a gene that leaves
+/// that region therefore reaches megabases the cache holds no file for, where
+/// Ensembl VEP reads nothing (`AnnotationSource/Cache/BaseSerialized.pm:255-263`).
+///
+/// A transcript without a `dbID` is none of that dump's: a cache built from a
+/// gene-model file holds a transcript once, in the file of the megabase it
+/// starts in, and it is found by its coordinates.
+fn filed_short_of_its_span(transcript: &Transcript, spans: &[(u64, u64)]) -> bool {
+    if transcript.db_id.is_none() || transcript.circular_length.is_some() {
+        return false;
+    }
+    let mut spans = spans.to_vec();
+    spans.sort_unstable();
+    // The lowest base of the transcript no file so far covers.
+    let mut uncovered = transcript.start;
+    for (first, last) in spans {
+        if first > uncovered {
+            break;
+        }
+        uncovered = uncovered.max(last.saturating_add(1));
+    }
+    uncovered <= transcript.end
 }
 
 /// Gives each RefSeq model of a merged cache's shard that has a gene symbol and
@@ -1538,15 +1817,19 @@ fn copy_hgnc_ids_to_refseq_models(transcripts: &mut [Transcript]) {
 }
 
 /// Refuses a coding transcript whose mapper places the coding sequence where
-/// the transcript's own span cannot hold it, or whose coding end precedes its
-/// coding start. A cache without UTR strings has each one padded with `N` to
-/// the mapper's `cdna_coding_start - 1` and to the cDNA length less
-/// `cdna_coding_end`, so each padding is bounded here by the transcript's
-/// genomic span plus the bases its RNA edits insert, the most bases its cDNA
-/// can hold, before any record is annotated against it; the coding span's
-/// length, `cdna_coding_end - cdna_coding_start + 1`, is sized from the pair
-/// wherever the spliced sequence is assembled, so an inverted pair is refused
-/// here rather than read as a transcript with no coding model.
+/// the transcript's own span cannot hold it. A cache without UTR strings has
+/// each one padded with `N` to the mapper's `cdna_coding_start - 1` and to the
+/// cDNA length less `cdna_coding_end`, so each padding is bounded here by the
+/// transcript's genomic span plus the bases its RNA edits insert, the most
+/// bases its cDNA can hold, before any record is annotated against it.
+///
+/// A coding end before the coding start is not refused. Ensembl core takes the
+/// coding end of a model with sequence edits from its `_transl_end` attribute
+/// as it stands (`Transcript.pm:1042-1044`), so a cache can hold a coding end
+/// below 1, and Ensembl VEP reads the model: every cDNA position lies past
+/// that end, so none maps to a coding position (`TranscriptMapper.pm:441`).
+/// The transcript loads without a coding model (`has_coding_model` of its
+/// facts).
 fn check_mapper_bounds(transcript: &Transcript) -> Result<(), String> {
     let Some(vefc) = transcript.vefc.as_ref() else {
         return Ok(());
@@ -1593,22 +1876,16 @@ fn check_mapper_bounds(transcript: &Transcript) -> Result<(), String> {
             transcript.stable_id, mapper.cdna_coding_start, mapper.cdna_coding_end
         ));
     }
-    if mapper.cdna_coding_end < mapper.cdna_coding_start {
-        return Err(format!(
-            "transcript {}: the mapper's coding end {} precedes its coding start {}",
-            transcript.stable_id, mapper.cdna_coding_end, mapper.cdna_coding_start
-        ));
-    }
     Ok(())
 }
 
-/// Refuses a transcript whose record names a codon table Ensembl VEP does not
-/// translate with (`vep_core::codon::known_table`): every codon under such a
-/// table would read `X`, so the consequence of every coding variant on the
-/// transcript would be wrong. Ensembl VEP's own translation under one reads
-/// each codon as an apostrophe or as nothing (ids 7, 8 and 17 to 20) or, after
-/// a warning, under its last table (25 and above). A record without the field
-/// is table 1.
+/// Refuses a transcript whose record names a codon table that is not known
+/// (`vep_core::codon::known_table`): every codon under such a table would read
+/// `X`, so the consequence of every coding variant on the transcript would be
+/// wrong. Ensembl VEP's own translation under one reads each codon as an
+/// apostrophe or as nothing (ids 7, 8 and 17 to 20) or, after a warning, under
+/// its last table (25 and above, the known table 26 among them). A record
+/// without the field is table 1.
 fn check_codon_table(transcript: &Transcript) -> Result<(), String> {
     let Some(vefc) = transcript.vefc.as_ref() else {
         return Ok(());
@@ -1617,9 +1894,52 @@ fn check_codon_table(transcript: &Transcript) -> Result<(), String> {
         return Ok(());
     }
     Err(format!(
-        "codon table {} of transcript {} is not a table Ensembl VEP translates",
+        "codon table {} of transcript {} is not a genetic code vep-rs translates with",
         vefc.codon_table, transcript.stable_id
     ))
+}
+
+/// The cached peptide of a transcript on genetic code `table`, read under that
+/// code. Ensembl's dumper writes it with `Transcript::translate`, whose
+/// `Bio::Tools::CodonTable` reads a code it lacks under another table
+/// (`vep_core::codon::module_table`). For such a code each residue that other
+/// table gives its codon of `coding` is translated again under the
+/// transcript's own code, `M` first where the first codon is a start codon of
+/// the code; any other residue, a sequence edit or one a dumper already read
+/// under the code, is kept. Under every other table the peptide is returned
+/// as it is.
+fn peptide_under_own_code(peptide: String, coding: &str, table: u8) -> String {
+    use vep_core::codon::{is_start_codon, known_table, module_table, translate_sequence};
+
+    let dumped_under = module_table(table);
+    if dumped_under == table || !known_table(table) {
+        return peptide;
+    }
+    let coding = coding.as_bytes();
+    let residue = |codon: &[u8], first: bool, table: u8| {
+        if first && is_start_codon(codon, table) {
+            b'M'
+        } else {
+            // `translate_sequence` reads an ambiguous codon as
+            // `Bio::Tools::CodonTable::translate` does, where
+            // `translate_codon_with_table` reads `X`.
+            translate_sequence(codon, table)
+                .first()
+                .copied()
+                .unwrap_or(b'X')
+        }
+    };
+    let reread: Vec<u8> = peptide
+        .bytes()
+        .enumerate()
+        .map(|(at, cached)| match coding.get(3 * at..3 * at + 3) {
+            Some(codon) if cached == residue(codon, at == 0, dumped_under) => {
+                residue(codon, at == 0, table)
+            }
+            _ => cached,
+        })
+        .collect();
+    String::from_utf8(reread).unwrap_or(peptide)
 }
 
 /// The `_rna_edit` attributes of `transcript` as `(start, end, bases)`: the
@@ -1822,10 +2142,11 @@ pub(crate) fn with_completed_stop_codon_paired(
 /// in the byte order of the slice's keys, counted from 1; transcripts sharing a
 /// key share the rank. The key's `_<dbID>` suffix decides the order where one
 /// stable id prefixes another: `YIL171W-A_mRNA_34173` precedes
-/// `YIL171W_29222` although `YIL171W` alone would precede `YIL171W-A_mRNA`.
-/// Rank 0 stays the mark of a transcript no loader ranked, which the writers
-/// order by its id instead.
-fn assign_id_ranks(transcripts: &mut [Transcript]) {
+/// `YIL171W_29222` although `YIL171W` alone would precede `YIL171W-A_mRNA`,
+/// and the two rank the same way in a cache whose records hold no database
+/// id. Rank 0 stays the mark of a transcript no loader ranked, which the
+/// writers order by its key instead.
+pub(crate) fn assign_id_ranks(transcripts: &mut [Transcript]) {
     let keys: Vec<String> = transcripts.iter().map(perl_transcript_key).collect();
     let mut by_key: Vec<usize> = (0..transcripts.len()).collect();
     by_key.sort_by(|&a, &b| keys[a].cmp(&keys[b]));
@@ -1842,11 +2163,29 @@ fn assign_id_ranks(transcripts: &mut [Transcript]) {
 
 /// The key Ensembl VEP sorts a variant's transcript variations by
 /// (`_get_transcript_key`, BaseVariationFeature.pm:310-321): the stable id,
-/// and `_<dbID>` appended when the transcript has a non-zero database id.
+/// and `_<dbID>` appended when the transcript has a non-zero database id. A
+/// transcript of a gene-model file ends in the file's place instead
+/// ([`vep_core::transcript::file_order_key_suffix`]). A record without a
+/// database id, which a cache built from a GTF or GFF3 holds, ends in `_`
+/// alone: Ensembl VEP numbers the transcripts of such a file as it builds
+/// them (BaseGXF.pm:489), so every key but the first-built transcript's
+/// carries `_` and a number there.
 fn perl_transcript_key(transcript: &Transcript) -> String {
+    if let Some(order) = transcript
+        .source_cache
+        .as_ref()
+        .and_then(SourceCache::file_order)
+    {
+        return format!(
+            "{}{}",
+            transcript.stable_id,
+            vep_core::transcript::file_order_key_suffix(order)
+        );
+    }
     match transcript.db_id {
-        Some(db_id) if db_id != 0 => format!("{}_{db_id}", transcript.stable_id),
-        _ => transcript.stable_id.to_string(),
+        Some(0) => transcript.stable_id.to_string(),
+        Some(db_id) => format!("{}_{db_id}", transcript.stable_id),
+        None => format!("{}_", transcript.stable_id),
     }
 }
 
@@ -1874,7 +2213,7 @@ pub fn load_all_transcripts(
 /// parsed record before its transcript is built ([`load_transcripts_in_set`]).
 /// This load covers the whole cache, so a GENCODE set no record of it carries
 /// is warned about here ([`GencodeTally::warning`]).
-pub fn load_all_transcripts_in_set(
+pub(crate) fn load_all_transcripts_in_set(
     json_cache_dir: &str,
     set: Option<&TranscriptSet>,
 ) -> anyhow::Result<HashMap<String, Vec<Transcript>>> {
@@ -1883,7 +2222,20 @@ pub fn load_all_transcripts_in_set(
 
 /// [`load_all_transcripts_in_set`] keeping each exon's stable id under
 /// `keep_exon_ids` ([`load_transcripts_in_set_with`]).
-pub fn load_all_transcripts_in_set_with(
+pub(crate) fn load_all_transcripts_in_set_with(
+    json_cache_dir: &str,
+    set: Option<&TranscriptSet>,
+    keep_exon_ids: bool,
+) -> anyhow::Result<HashMap<String, Vec<Transcript>>> {
+    let by_chr = load_all_transcripts_without_status_lines(json_cache_dir, set, keep_exon_ids)?;
+    write_loaded_lines(&by_chr);
+    Ok(by_chr)
+}
+
+/// [`load_all_transcripts_in_set_with`] without its status lines, for a caller
+/// that adds transcripts to the load before it writes them
+/// (`write_loaded_lines`).
+pub(crate) fn load_all_transcripts_without_status_lines(
     json_cache_dir: &str,
     set: Option<&TranscriptSet>,
     keep_exon_ids: bool,
@@ -1919,13 +2271,41 @@ pub fn load_all_transcripts_in_set_with(
     {
         tracing::warn!("{warning}");
     }
-    info!("Loaded transcripts for {} chromosomes", by_chr.len());
+    Ok(by_chr)
+}
+
+/// Writes the status lines of a whole-cache load (`loaded_lines`), which count
+/// the transcripts `by_chr` holds when it is called.
+pub(crate) fn write_loaded_lines(by_chr: &HashMap<String, Vec<Transcript>>) {
+    for line in loaded_lines(by_chr) {
+        info!("{line}");
+    }
+}
+
+/// One chromosome's status line: its name as the cache spells it, with nothing
+/// put before it, and the number of transcripts loaded for it.
+pub(crate) fn chromosome_line(chromosome: &str, transcripts: usize) -> String {
+    format!(
+        "  chromosome {chromosome}: {transcripts} transcript{}",
+        if transcripts == 1 { "" } else { "s" }
+    )
+}
+
+/// The status lines of a whole-cache load: the number of chromosomes read, then
+/// `chromosome_line` for each in name order.
+fn loaded_lines(by_chr: &HashMap<String, Vec<Transcript>>) -> Vec<String> {
     let mut chrs: Vec<&String> = by_chr.keys().collect();
     chrs.sort();
-    for chr in chrs {
-        info!("  chr{}: {} transcripts", chr, by_chr[chr].len());
-    }
-    Ok(by_chr)
+    let mut lines = vec![format!(
+        "Loaded transcripts for {} chromosome{}",
+        by_chr.len(),
+        if by_chr.len() == 1 { "" } else { "s" }
+    )];
+    lines.extend(
+        chrs.into_iter()
+            .map(|chr| chromosome_line(chr, by_chr[chr].len())),
+    );
+    lines
 }
 
 #[cfg(test)]
@@ -2061,6 +2441,52 @@ mod tests {
             ids.dedup();
             assert_eq!(unique, ids.len(), "chr{chr} must have no duplicate ids");
         }
+    }
+
+    /// The status lines of a whole-cache load name each chromosome as the cache
+    /// spells it, in name order, and count one chromosome and one transcript in
+    /// the singular.
+    #[test]
+    fn load_lines_name_a_chromosome_as_the_cache_spells_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let add = |chr: &str, transcripts: usize| {
+            let chr_dir = dir.path().join("transcripts").join(chr);
+            std::fs::create_dir_all(&chr_dir).unwrap();
+            let entries: Vec<String> = (0..transcripts)
+                .map(|i| {
+                    format!(
+                        r#"{{"stable_id":"T{chr}_{i}","gene_stable_id":"G{chr}","chr":"{chr}","start":{start},"end":{end},"strand":1,"biotype":"protein_coding","source":"ensembl"}}"#,
+                        start = 100 + i * 10,
+                        end = 200 + i * 10
+                    )
+                })
+                .collect();
+            std::fs::write(
+                chr_dir.join("1-1000000.json"),
+                format!("[{}]", entries.join(",")),
+            )
+            .unwrap();
+        };
+        let lines = || loaded_lines(&load_all_transcripts(dir.path().to_str().unwrap()).unwrap());
+        add("rDNA", 2);
+        assert_eq!(
+            lines(),
+            [
+                "Loaded transcripts for 1 chromosome",
+                "  chromosome rDNA: 2 transcripts",
+            ]
+        );
+        add("211000022278760", 1);
+        add("mitochondrion_genome", 38);
+        assert_eq!(
+            lines(),
+            [
+                "Loaded transcripts for 3 chromosomes",
+                "  chromosome 211000022278760: 1 transcript",
+                "  chromosome mitochondrion_genome: 38 transcripts",
+                "  chromosome rDNA: 2 transcripts",
+            ]
+        );
     }
 
     /// A cache converted from VEP's region files carries a gene's transcripts in
@@ -2225,6 +2651,158 @@ mod tests {
                 ("ENST_SEVEN", Some(SourceCache::Ensembl)),
                 ("NM_SEVEN", Some(SourceCache::RefSeq)),
             ]
+        );
+    }
+
+    /// A transcript whose stable id another transcript of the chromosome
+    /// shares is held to the spans of the shards it was read from, one span a
+    /// shard; a transcript whose id is its own is held to none, also when two
+    /// shards hold it, and so is one read from a shard whose name states no
+    /// span.
+    #[test]
+    fn a_shared_stable_id_holds_a_transcript_to_the_shards_it_was_read_from() {
+        let tx = |id: &str, db_id: u32, source: &str| {
+            format!(
+                r#"{{"stable_id":"{id}","dbID":{db_id},"gene_stable_id":"G{db_id}","chr":"21","start":999000,"end":1001000,"strand":1,"biotype":"lncRNA","source":"{source}"}}"#
+            )
+        };
+        let load = |files: &[(&str, String)]| {
+            let dir = tempfile::Builder::new()
+                .prefix("vep_jc_shared_id_")
+                .tempdir()
+                .unwrap();
+            let chr_dir = dir.path().join("transcripts").join("21");
+            std::fs::create_dir_all(&chr_dir).unwrap();
+            for (name, records) in files {
+                std::fs::write(chr_dir.join(name), format!("[{records}]")).unwrap();
+            }
+            let shards = enumerate_transcript_shards(dir.path().to_str().unwrap()).unwrap();
+            let mut held: Vec<_> = load_transcripts_for_chr("21", &shards["21"], &unchecked())
+                .unwrap()
+                .iter()
+                .map(|t| {
+                    (
+                        t.db_id.unwrap(),
+                        t.region_files.as_deref().map(<[_]>::to_vec),
+                    )
+                })
+                .collect();
+            held.sort();
+            held
+        };
+
+        let alignment = tx("XR_SHARED", 11, "ensembl");
+        let of_the_gene = tx("XR_SHARED", 22, "Gnomon");
+        let alone = tx("XR_ALONE", 33, "Gnomon");
+        assert_eq!(
+            load(&[
+                ("1-1000000.json", format!("{alignment},{alone}")),
+                (
+                    "1000001-2000000.json",
+                    format!("{alignment},{of_the_gene},{alone}")
+                ),
+            ]),
+            [
+                (11, Some(vec![(1, 1_000_000), (1_000_001, 2_000_000)])),
+                (22, Some(vec![(1_000_001, 2_000_000)])),
+                (33, None),
+            ]
+        );
+        assert_eq!(
+            load(&[
+                ("1-1000000.json", alignment.clone()),
+                ("upper.json", of_the_gene.clone()),
+            ]),
+            [(11, Some(vec![(1, 1_000_000)])), (22, None)]
+        );
+    }
+
+    /// A transcript with a `dbID` whose shards leave a base of its span
+    /// uncovered is held to the spans of those shards, whether it lies partly
+    /// or wholly past them; one whose shards cover its span is held to none,
+    /// and so are a transcript without a `dbID`, one stored across the origin
+    /// of a circular sequence and one read from a shard whose name states no
+    /// span.
+    #[test]
+    fn a_transcript_its_shards_hold_short_of_its_span_is_held_to_them() {
+        let tx = |id: &str, db_id: Option<u32>, start: u64, end: u64| {
+            let db_id = db_id.map_or(String::new(), |db_id| format!(r#""dbID":{db_id},"#));
+            format!(
+                r#"{{"stable_id":"{id}",{db_id}"gene_stable_id":"G_{id}","chr":"21","start":{start},"end":{end},"strand":1,"biotype":"lncRNA","source":"ensembl"}}"#
+            )
+        };
+        let load = |files: &[(&str, String)]| {
+            let dir = tempfile::Builder::new()
+                .prefix("vep_jc_short_of_span_")
+                .tempdir()
+                .unwrap();
+            let chr_dir = dir.path().join("transcripts").join("21");
+            std::fs::create_dir_all(&chr_dir).unwrap();
+            for (name, records) in files {
+                std::fs::write(chr_dir.join(name), format!("[{records}]")).unwrap();
+            }
+            let shards = enumerate_transcript_shards(dir.path().to_str().unwrap()).unwrap();
+            let mut held: Vec<_> = load_transcripts_for_chr("21", &shards["21"], &unchecked())
+                .unwrap()
+                .iter()
+                .map(|t| {
+                    (
+                        t.stable_id.to_string(),
+                        t.region_files.as_deref().map(<[_]>::to_vec),
+                    )
+                })
+                .collect();
+            held.sort();
+            held
+        };
+
+        let across_the_end = tx("ACROSS_THE_END", Some(1), 1_999_000, 2_001_000);
+        let past_the_end = tx("PAST_THE_END", Some(2), 2_007_000, 2_009_000);
+        let across_two_files = tx("ACROSS_TWO_FILES", Some(3), 999_000, 1_001_000);
+        let before_the_start = tx("BEFORE_THE_START", Some(4), 999_000, 1_001_000);
+        let without_a_database_id = tx("WITHOUT_A_DATABASE_ID", None, 1_999_000, 2_001_000);
+        assert_eq!(
+            load(&[
+                ("1-1000000.json", across_two_files.clone()),
+                (
+                    "1000001-2000000.json",
+                    format!(
+                        "{across_the_end},{past_the_end},{across_two_files},\
+                         {without_a_database_id}"
+                    )
+                ),
+            ]),
+            [
+                (
+                    "ACROSS_THE_END".to_string(),
+                    Some(vec![(1_000_001, 2_000_000)])
+                ),
+                ("ACROSS_TWO_FILES".to_string(), None),
+                (
+                    "PAST_THE_END".to_string(),
+                    Some(vec![(1_000_001, 2_000_000)])
+                ),
+                ("WITHOUT_A_DATABASE_ID".to_string(), None),
+            ]
+        );
+        assert_eq!(
+            load(&[("1000001-2000000.json", before_the_start.clone())]),
+            [(
+                "BEFORE_THE_START".to_string(),
+                Some(vec![(1_000_001, 2_000_000)])
+            )]
+        );
+        assert_eq!(
+            load(&[("upper.json", across_the_end.clone())]),
+            [("ACROSS_THE_END".to_string(), None)]
+        );
+        // The pair across the origin starts at 1999911 and the stored start is
+        // -89, so the sequence holds 2,000,000 bases and the transcript loads
+        // at 1999911 to 2000060, past the one shard that holds it.
+        let across_the_origin = r#"{"stable_id":"ACROSS_THE_ORIGIN","dbID":5,"gene_stable_id":"G_ACROSS_THE_ORIGIN","chr":"21","start":-89,"end":60,"strand":1,"biotype":"lncRNA","source":"ensembl","variation_effect_feature_cache":{"mapper":{"pairs":[{"from_start":1,"from_end":150,"to_start":1999911,"to_end":60,"ori":1}]}}}"#;
+        assert_eq!(
+            load(&[("1-1000000.json", across_the_origin.to_string())]),
+            [("ACROSS_THE_ORIGIN".to_string(), None)]
         );
     }
 
@@ -2649,7 +3227,10 @@ mod tests {
     /// Where one stable id is a prefix of another, the `_<dbID>` suffix decides
     /// the order as it does in Ensembl VEP: `YIL171W-A_mRNA_34173` precedes
     /// `YIL171W_29222` because `-` sorts before `_`, and `YML045W-A_35661`
-    /// precedes `YML045W_35617`; a record without a dbID ranks by its id alone.
+    /// precedes `YML045W_35617`. A record without a dbID, as a cache built
+    /// from a GTF or GFF3 holds it, keys as its id and `_`, so such a pair
+    /// ranks the same way; a dbID of zero leaves the key bare
+    /// (BaseVariationFeature.pm:316).
     #[test]
     fn a_stable_id_that_prefixes_another_ranks_by_the_dbid_suffix() {
         let dir = tempfile::Builder::new()
@@ -2671,12 +3252,16 @@ mod tests {
         std::fs::write(
             chr_dir.join("1-1000000.json"),
             format!(
-                "[{},{},{},{},{}]",
+                "[{},{},{},{},{},{},{},{},{}]",
                 tx("YIL171W", Some(29222), 19515),
                 tx("YIL171W-A_mRNA", Some(34173), 18260),
                 tx("YML045W", Some(35617), 184461),
                 tx("YML045W-A", Some(35661), 184461),
-                tx("YML044C", None, 180000)
+                tx("YML044C", None, 180000),
+                tx("MODEL1", None, 200000),
+                tx("MODEL1-A", None, 200500),
+                tx("MODEL2", Some(0), 210000),
+                tx("MODEL2-A", Some(8), 210500)
             ),
         )
         .unwrap();
@@ -2688,7 +3273,42 @@ mod tests {
         assert!(rank("YIL171W-A_mRNA") < rank("YIL171W"));
         assert!(rank("YML045W-A") < rank("YML045W"));
         assert!(rank("YML044C") < rank("YML045W-A"));
-        assert_eq!(perl_transcript_key(transcript("YML044C")), "YML044C");
+        assert_eq!(perl_transcript_key(transcript("YML044C")), "YML044C_");
+        assert!(rank("MODEL1-A") < rank("MODEL1"));
+        assert_eq!(perl_transcript_key(transcript("MODEL2")), "MODEL2");
+        assert!(rank("MODEL2") < rank("MODEL2-A"));
+    }
+
+    /// The key the loader ranks a transcript by and the key a row without a
+    /// rank is ordered by (`TranscriptConsequence::ensembl_vep_key`) are the
+    /// same bytes: with a database id, without one, with a zero one, and for a
+    /// transcript of a gene-model file, whatever database id that one carries.
+    #[test]
+    fn the_rank_key_and_the_row_key_of_a_transcript_are_the_same_bytes() {
+        use vep_core::consequence::TranscriptConsequence;
+        let file = |order: u32| SourceCache::GeneModelFile {
+            short_name: "genes.gtf.gz".into(),
+            order,
+        };
+        let cases: [(Option<u64>, Option<SourceCache>, &str); 7] = [
+            (Some(34173), None, "MODEL1_34173"),
+            (None, None, "MODEL1_"),
+            (Some(0), None, "MODEL1"),
+            (Some(7), Some(SourceCache::RefSeq), "MODEL1_7"),
+            (None, Some(file(1)), "MODEL1_:0000000001"),
+            (Some(7), Some(file(12)), "MODEL1_:0000000012"),
+            (Some(0), Some(file(2)), "MODEL1_:0000000002"),
+        ];
+        for (db_id, source_cache, key) in cases {
+            let mut transcript = Transcript::default();
+            transcript.stable_id = "MODEL1".into();
+            transcript.db_id = db_id;
+            transcript.source_cache = source_cache;
+            assert_eq!(perl_transcript_key(&transcript), key);
+            let row = TranscriptConsequence::for_transcript(&Arc::new(transcript));
+            let row_key = String::from_utf8(row.ensembl_vep_key().collect()).unwrap();
+            assert_eq!(row_key, key);
+        }
     }
 
     /// A shard may be stored gzip-compressed as `.json.gz`; it loads like a plain shard.
@@ -2713,9 +3333,9 @@ mod tests {
         assert_eq!(&*txs[0].stable_id, "ENST_GZ");
     }
 
-    /// A Storable-derived shard wraps its transcripts in a range-keyed map with
-    /// null placeholders; it loads beside an array shard, nulls dropped, keys in
-    /// sorted order.
+    /// A shard that wraps its transcripts in a map of arrays with null
+    /// placeholders loads beside an array shard, nulls dropped, keys in sorted
+    /// order.
     #[test]
     fn map_shaped_shards_load_beside_array_shards() {
         let dir = tempfile::Builder::new()
@@ -2773,6 +3393,54 @@ mod tests {
         assert!(msg.contains("1-1000000.json"), "{msg}");
         assert!(msg.contains("EOF"), "{msg}");
         assert!(!msg.contains("expected a sequence"), "{msg}");
+    }
+
+    /// A coding end the cache holds as a negative number, as a JSON number or
+    /// as a string holding one, reads as 0 on the transcript and in its
+    /// mapper, and the coding transcript that carries it loads without a
+    /// coding model and without coding bounds on the genome. Ensembl VEP reads
+    /// such a model, and no coding position maps to it (ensembl core
+    /// `TranscriptMapper.pm:441`: every cDNA position lies past the coding
+    /// end).
+    #[test]
+    fn a_negative_coding_end_loads_without_a_coding_model() {
+        for stored in [r#""-20""#, "-20"] {
+            let json = coding_transcript_json("")
+                .replace(
+                    r#""cdna_coding_end":30,"#,
+                    &format!(r#""cdna_coding_end":{stored},"#),
+                )
+                .replace(
+                    r#""stable_id":"ENST1","#,
+                    &format!(
+                        r#""stable_id":"ENST1","cdna_coding_start":1,"cdna_coding_end":{stored},"#
+                    ),
+                );
+            let dir = cache_with_shards("vep_jc_negative_end_", &[("21", &format!("[{json}]"))]);
+            let shards = enumerate_transcript_shards(dir.path().to_str().unwrap()).unwrap();
+            let loaded = load_transcripts_for_chr("21", &shards["21"], &unchecked())
+                .unwrap_or_else(|error| panic!("{stored}: {error}"));
+            assert_eq!(loaded.len(), 1, "{stored}");
+            let transcript = &loaded[0];
+            assert_eq!(
+                (transcript.cdna_coding_start, transcript.cdna_coding_end),
+                (Some(1), Some(0)),
+                "{stored}"
+            );
+            let mapper = transcript.vefc.as_ref().unwrap().mapper.as_ref().unwrap();
+            assert_eq!(
+                (mapper.cdna_coding_start, mapper.cdna_coding_end),
+                (1, 0),
+                "{stored}"
+            );
+            assert!(transcript.translation.is_some(), "{stored}");
+            assert!(!transcript.facts().has_coding_model, "{stored}");
+            assert_eq!(
+                (transcript.coding_region_start, transcript.coding_region_end),
+                (None, None),
+                "{stored}"
+            );
+        }
     }
 
     /// A shard whose mapper places the coding start, or the coding end, a UTR
@@ -2850,27 +3518,21 @@ mod tests {
         );
         assert_eq!(load(&[cdna_far_past_span, non_coding]).unwrap(), 1);
 
-        // A coding end before the coding start is refused on a coding
-        // transcript, where the coding span's length is sized from the pair,
-        // and loads on a transcript without a coding sequence.
+        // A coding end before the coding start loads, on a coding transcript
+        // as on one without a coding sequence.
         let inverted = (r#""cdna_coding_end":30,"#, r#""cdna_coding_end":0,"#);
-        let inverted_pair = load(&[inverted]).unwrap_err();
-        assert_eq!(
-            CliError::from_run(&inverted_pair),
-            "ERROR: [cache] transcript ENST1: the mapper's coding end 0 precedes its coding \
-             start 1"
-        );
+        assert_eq!(load(&[inverted]).unwrap(), 1);
         assert_eq!(load(&[inverted, non_coding]).unwrap(), 1);
     }
 
-    /// A shard whose record names a codon table Ensembl VEP does not translate
-    /// with (BioPerl 1.006924 holds no table at 7, 8 and 17 to 20 and none
-    /// from 25 on) is refused under the `cache` component when its chromosome
-    /// loads, naming the table and the transcript; a record naming a table it
-    /// ships, as a number or a string, loads, as does one without the field,
-    /// which is table 1.
+    /// A shard whose record names a codon table that is not known is refused
+    /// under the `cache` component when its chromosome loads, naming the table
+    /// and the transcript. BioPerl 1.006924 holds no table at 7, 8 and 17 to
+    /// 20 and none from 25 on, and of those 26 alone is known. A record naming
+    /// a known table, as a number or a string, loads, as does one without the
+    /// field, which is table 1.
     #[test]
-    fn a_codon_table_ensembl_vep_lacks_is_refused_on_load() {
+    fn a_codon_table_that_is_not_known_is_refused_on_load() {
         let load = |codon_table: Option<&str>| {
             let field = r#""codon_table":1,"#;
             let json = coding_transcript_json("");
@@ -2883,18 +3545,23 @@ mod tests {
             let shards = enumerate_transcript_shards(dir.path().to_str().unwrap()).unwrap();
             load_transcripts_for_chr("21", &shards["21"], &unchecked())
         };
-        for refused in ["7", "8", "17", "18", "19", "20", "25", "255", r#""7""#] {
+        for refused in [
+            "7", "8", "17", "18", "19", "20", "25", "27", "255", r#""7""#,
+        ] {
             let err = load(Some(refused)).unwrap_err();
             assert_eq!(
                 CliError::from_run(&err),
                 format!(
-                    "ERROR: [cache] codon table {} of transcript ENST1 is not a table Ensembl \
-                     VEP translates",
+                    "ERROR: [cache] codon table {} of transcript ENST1 is not a genetic code \
+                     vep-rs translates with",
                     refused.trim_matches('"')
                 )
             );
         }
-        for shipped in ["0", "1", "2", "3", "5", "11", "24", r#""2""#, r#""11""#] {
+        let known = [
+            "0", "1", "2", "3", "5", "11", "24", "26", r#""2""#, r#""11""#, r#""26""#,
+        ];
+        for shipped in known {
             let txs = load(Some(shipped)).unwrap();
             assert_eq!(txs.len(), 1, "{shipped}");
             let want: u8 = shipped.trim_matches('"').parse().unwrap();
@@ -2902,6 +3569,135 @@ mod tests {
         }
         let without_field = load(None).unwrap();
         assert_eq!(without_field[0].vefc.as_ref().unwrap().codon_table, 1);
+    }
+
+    /// The cached peptide of a transcript on genetic code 26 is read under
+    /// that code. `Bio::Tools::CodonTable` holds no table 26 and reads the id
+    /// under its last table, the standard translation with `ATG` its one start
+    /// codon (`CodonTable.pm:328-338` and `:412-460`), so a dumper on that
+    /// module writes leucine for `CTG` and no `M` over a first `CTG`. Each
+    /// residue that table gives its codon is read again under code 26, which
+    /// reads `CTG` as alanine and as a start codon; a residue it does not
+    /// give, a sequence edit or one already read under code 26, is kept, as is
+    /// every residue past the whole codons. A peptide on a table the module
+    /// holds, or on an unknown one, is returned as it is.
+    #[test]
+    fn the_cached_peptide_on_genetic_code_26_is_read_under_that_code() {
+        let reread = |peptide: &str, coding: &str, table: u8| {
+            peptide_under_own_code(peptide.to_string(), coding, table)
+        };
+        // ATG GCT CTG CTA GAA TAA
+        let coding = "ATGGCTCTGCTAGAATAA";
+        assert_eq!(reread("MALLE", coding, 26), "MAALE");
+        assert_eq!(reread("MALLE", &coding.to_lowercase(), 26), "MAALE");
+        assert_eq!(reread("MAALE", coding, 26), "MAALE");
+        assert_eq!(reread("MAULE", coding, 26), "MAULE");
+        assert_eq!(reread("MALLEKK", coding, 26), "MAALEKK");
+        assert_eq!(reread("", coding, 26), "");
+        // CTG GCT TAA
+        assert_eq!(reread("LA", "CTGGCTTAA", 26), "MA");
+        assert_eq!(reread("MA", "CTGGCTTAA", 26), "MA");
+        // ATG CTN YTG TAA: every reading of `CTN` and of `YTG` is leucine under
+        // the module's last table, and `CTG` is alanine under code 26.
+        assert_eq!(reread("MLL", "ATGCTNYTGTAA", 26), "MXX");
+        for table in [1, 4, 11, 12, 24, 25, 27] {
+            assert_eq!(reread("MALLE", coding, table), "MALLE", "table {table}");
+        }
+    }
+
+    /// A cache whose sequence regions name different genetic codes keeps each
+    /// transcript on its own code. Ensembl VEP stores the table on every
+    /// transcript's record, from its sequence region's `codon_table`
+    /// attribute (`AnnotationSource/Database/Transcript.pm:359-363`), and
+    /// translates under the record's value
+    /// (`BaseTranscriptVariation.pm:1146-1164`), so a region's shard loads
+    /// with the table its records name whatever another region's shard names,
+    /// before and after that one loads, and a record without the field beside
+    /// them is table 1. The pairs are the standard code beside each other
+    /// genetic code the ready-made Ensembl VEP caches name, and two
+    /// non-standard codes side by side. Each non-standard code but table 11
+    /// translates some codon unlike table 1, so a record read under the
+    /// default table is a wrong reading; table 11 translates all 64 codons as
+    /// table 1 does and marks other start codons.
+    #[test]
+    fn two_sequences_of_one_cache_keep_their_own_codes() {
+        use vep_core::codon::{is_start_codon, translate_codon_with_table};
+
+        // The 64 codons in the order of `Bio::Tools::CodonTable`'s strings.
+        let bases = *b"TCAG";
+        let mut codons = Vec::with_capacity(64);
+        for first in bases {
+            for second in bases {
+                for third in bases {
+                    codons.push([first, second, third]);
+                }
+            }
+        }
+        let translates_as_standard = |table: u8| {
+            codons.iter().all(|codon| {
+                translate_codon_with_table(codon, table) == translate_codon_with_table(codon, 1)
+            })
+        };
+        let starts_as_standard = |table: u8| {
+            codons
+                .iter()
+                .all(|codon| is_start_codon(codon, table) == is_start_codon(codon, 1))
+        };
+
+        let record = |region: &str, id: &str, codon_table: Option<u8>| {
+            let (stable_id, chr) = (r#""stable_id":"ENST1""#, r#""chr":"21""#);
+            let field = r#""codon_table":1,"#;
+            let json = coding_transcript_json("");
+            assert!(json.contains(stable_id) && json.contains(chr) && json.contains(field));
+            let json = json
+                .replace(stable_id, &format!(r#""stable_id":"{id}""#))
+                .replace(chr, &format!(r#""chr":"{region}""#));
+            match codon_table {
+                Some(table) => json.replace(field, &format!(r#""codon_table":{table},"#)),
+                None => json.replace(field, ""),
+            }
+        };
+        let shard = |region: &str, table: u8| {
+            let named = record(region, "named", Some(table));
+            let unnamed = record(region, "unnamed", None);
+            format!("[{named},{unnamed}]")
+        };
+        let loaded_as = |region: &str, table: u8| {
+            vec![
+                (region.to_string(), "named".to_string(), table),
+                (region.to_string(), "unnamed".to_string(), 1),
+            ]
+        };
+
+        assert!(!starts_as_standard(11));
+        let beside_standard = [2u8, 3, 4, 5, 6, 9, 11, 12, 13].map(|other| (1u8, other));
+        let both_non_standard = [(11, 4), (12, 4)];
+        for (first, second) in beside_standard.into_iter().chain(both_non_standard) {
+            assert_ne!(first, second);
+            for table in [first, second].into_iter().filter(|table| *table != 1) {
+                assert_eq!(translates_as_standard(table), table == 11, "table {table}");
+            }
+
+            let dir = cache_with_shards(
+                "vep_jc_two_codes_",
+                &[("1", &shard("1", first)), ("2", &shard("2", second))],
+            );
+            let shards = enumerate_transcript_shards(dir.path().to_str().unwrap()).unwrap();
+            let tables = |region: &str| -> Vec<(String, String, u8)> {
+                load_transcripts_for_chr(region, &shards[region], &unchecked())
+                    .unwrap()
+                    .iter()
+                    .map(|t| {
+                        let table = t.vefc.as_ref().unwrap().codon_table;
+                        (t.chr.clone(), t.stable_id.to_string(), table)
+                    })
+                    .collect()
+            };
+            let pair = format!("tables {first} and {second}");
+            assert_eq!(tables("1"), loaded_as("1", first), "{pair}");
+            assert_eq!(tables("2"), loaded_as("2", second), "{pair}");
+            assert_eq!(tables("1"), loaded_as("1", first), "{pair}");
+        }
     }
 
     /// The numeric helpers accept a JSON number, a float, a string holding a
@@ -3086,10 +3882,8 @@ mod tests {
 
     /// The default-format rows for a missense SNV at 21:1004 against one transcript.
     fn missense_rows(transcript_json: &str, variations: Option<Arc<VariationSource>>) -> String {
-        let options = FieldOptions {
-            check_existing: variations.is_some(),
-            ..Default::default()
-        };
+        let mut options = FieldOptions::default();
+        options.check_existing = variations.is_some();
         missense_rows_under(transcript_json, variations, options)
     }
 
@@ -3100,14 +3894,13 @@ mod tests {
     /// The metadata of a region-layout cache whose records carry the fixed
     /// columns then `extra_columns`.
     fn region_cache_info(extra_columns: &[&str]) -> CacheInfo {
-        CacheInfo {
-            variation_cols: REGION_COLUMNS
-                .split(',')
-                .chain(extra_columns.iter().copied())
-                .map(str::to_string)
-                .collect(),
-            ..Default::default()
-        }
+        let mut info = CacheInfo::default();
+        info.variation_cols = REGION_COLUMNS
+            .split(',')
+            .chain(extra_columns.iter().copied())
+            .map(str::to_string)
+            .collect();
+        info
     }
 
     /// Writes `line` as the one record of the gzip region file at `path`.
@@ -3186,7 +3979,7 @@ mod tests {
     }
 
     /// A region line whose `clin_sig_allele` and `clinical_impact` cells are empty
-    /// inside the line prints as Ensembl VEP 116.2 prints a region-layout cache
+    /// inside the line prints as Ensembl VEP 116.3 prints a region-layout cache
     /// (`21 10602054 ATA A` against rs149363218):
     /// `CLIN_SIG` is left out under the default `--clin_sig_allele 1`
     /// (OutputFactory.pm:1097, 1121, 1125 on the defined `''`), `CLIN_SIG=benign`
@@ -3202,18 +3995,15 @@ mod tests {
         };
         let defined_empty = "rs1 0 0 1004  C/A 1 benign 1      A:0.01";
         let trailing = "rs1 0 0 1004  C/A 1 benign 1";
-        let default = FieldOptions {
-            check_existing: true,
-            ..Default::default()
+        let default = {
+            let mut options = FieldOptions::default();
+            options.check_existing = true;
+            options
         };
-        let whole = FieldOptions {
-            clin_sig_allele: ClinSigAllele::WholeVariant,
-            ..default.clone()
-        };
-        let somatic = FieldOptions {
-            clinvar_somatic_classification: true,
-            ..default.clone()
-        };
+        let mut whole = default.clone();
+        whole.clin_sig_allele = ClinSigAllele::WholeVariant;
+        let mut somatic = default.clone();
+        somatic.clinvar_somatic_classification = true;
         let rows = rows_for(defined_empty, default.clone());
         assert!(
             rows.contains("\trs1\t") && !rows.contains("CLIN_SIG"),
@@ -3238,7 +4028,7 @@ mod tests {
     /// them for `--freq_pop 1KG_ALL` alone, BaseCacheVariation.pm:216-228) and
     /// are echoed in every JSON `colocated_variants` object under their own
     /// names, as `add_colocated_variant_info_JSON` copies the record's hash
-    /// (OutputFactory/JSON.pm:415, :473): Ensembl VEP 116.2 writes both keys in
+    /// (OutputFactory/JSON.pm:415, :473): Ensembl VEP 116.3 writes both keys in
     /// every object on such a cache. The reader keeps the columns as it keeps
     /// every column outside the fixed set.
     #[test]
@@ -3266,10 +4056,8 @@ mod tests {
                 &crate::variation_matcher::ColocationRules::default(),
                 &crate::variation_source::ReadFailure::default(),
             );
-            let options = FieldOptions {
-                check_existing: true,
-                ..Default::default()
-            };
+            let mut options = FieldOptions::default();
+            options.check_existing = true;
             vep_io::output::json::JsonOutputFormatter::new(options, Vec::new(), None)
                 .format_variant_value(&variant)["colocated_variants"][0]
                 .clone()
@@ -3287,8 +4075,8 @@ mod tests {
     /// A transcript's `source` names the set it came from; Ensembl VEP reads it
     /// only to resolve two transcripts sharing a stable ID under `--refseq` or
     /// `--merged` to the `ensembl` one (`AnnotationType/Transcript.pm:313-339` at
-    /// release/116.2), and the SOURCE column prints the separate `_source_cache`
-    /// key (`OutputFactory.pm:1583` at release/116.2), so at the default flags two
+    /// release/116.3), and the SOURCE column prints the separate `_source_cache`
+    /// key (`OutputFactory.pm:1592` at release/116.3), so at the default flags two
     /// caches differing only there annotate alike.
     #[test]
     fn transcript_source_changes_no_output() {
@@ -3302,7 +4090,7 @@ mod tests {
 
     /// The translation object's `start_exon` and `end_exon` objects and its
     /// exon-relative offsets (the `Bio::EnsEMBL::Translation` fields the Storable
-    /// cache keeps, `Pipeline/DumpVEP/Dumper/Core.pm:226-235` at release/116.2
+    /// cache keeps, `Pipeline/DumpVEP/Dumper/Core.pm:226-235` at release/116.3
     /// stripping only the translation's attributes, protein features, dates,
     /// cross-references and adaptor) are not read: the coding region comes from
     /// the exon coordinate mapper, so a cache with or without them annotates alike.
@@ -3322,7 +4110,7 @@ mod tests {
 
     /// `_gene_symbol_id`, the primary identifier of the EntrezGene entry a
     /// RefSeq core's gene symbol is taken from, is set by
-    /// `Database/Transcript.pm:549-567` at release/116.2 and read by no output
+    /// `Database/Transcript.pm:549-567` at release/116.3 and read by no output
     /// column: SYMBOL_SOURCE and HGNC_ID print `_gene_symbol_source` and
     /// `_gene_hgnc_id`. So the converter's `gene_symbol_id` key loads as the
     /// transcript's identifier, read by `--transcript_filter` alone, and two
@@ -3349,10 +4137,8 @@ mod tests {
         let mut stripped = identified.clone();
         stripped.gene_symbol_id = None;
         assert_eq!(format!("{plain:?}"), format!("{stripped:?}"));
-        let options = FieldOptions {
-            symbol: true,
-            ..Default::default()
-        };
+        let mut options = FieldOptions::default();
+        options.symbol = true;
         let rows = missense_rows_under(&without, None, options.clone());
         assert!(
             rows.contains("SYMBOL=TP53") && rows.contains("SYMBOL_SOURCE=EntrezGene"),
@@ -3424,12 +4210,12 @@ mod tests {
     }
 
     /// `TSL` follows VEP's `m/tsl(\d+)/` with `$hash->{TSL} = $1 if $1`
-    /// (`OutputFactory.pm:1610-1611` at release/116.2, the same rule the pick
+    /// (`OutputFactory.pm:1619-1620` at release/116.3, the same rule the pick
     /// order reads at `:752-753`): `tsl1 (assigned to previous version 8)` is
     /// `1`, `tslNA` with or without a suffix is none, and a zero is none. The
     /// level is the digit run as text, since `$1` is a string: `tsl007` is
-    /// `007` (116.2 prints `TSL=007`), `tsl00` is `00` (the string is true, so
-    /// 116.2 prints `TSL=00`), and `tsl256` and `tsl999` keep their digits.
+    /// `007` (116.3 prints `TSL=007`), `tsl00` is `00` (the string is true, so
+    /// 116.3 prints `TSL=00`), and `tsl256` and `tsl999` keep their digits.
     #[test]
     fn tsl_leading_digits_with_assigned_suffix() {
         let tsl = |value: &str| transcript_from(&minimal(&attributes(&[("TSL", value)]))).tsl;
@@ -3660,20 +4446,21 @@ mod tests {
         assert!(unnamed.hgnc_id.is_none());
     }
 
-    /// `gene_stable_id` (VEP's `_gene_stable_id`) is required: a shard whose
-    /// transcript lacks it fails to parse, and the loaded transcript carries
-    /// it; the gene's `_gene` object is not in the cache and nothing reads it.
+    /// `gene_stable_id` (VEP's `_gene_stable_id`) is carried onto the loaded
+    /// transcript. A transcript whose gene has no stable id, written without
+    /// the key or with a null, loads with an empty one, the value the writers
+    /// print as no gene; the gene's `_gene` object is not in the cache and
+    /// nothing reads it.
     #[test]
-    fn gene_stable_id_required() {
+    fn gene_stable_id_loaded_and_empty_when_absent() {
         assert_eq!(
             &*transcript_from(&minimal("")).gene_stable_id,
             "ENSG00000215455"
         );
-        let without = r#"{"stable_id":"ENST1","start":1,"end":9,"strand":1,"biotype":"lncRNA","source":"ensembl"}"#;
-        let err = serde_json::from_str::<JsonTranscript>(without)
-            .err()
-            .unwrap();
-        assert!(err.to_string().contains("gene_stable_id"), "{err}");
+        let without = r#"{"stable_id":"NM_1","start":1,"end":9,"strand":1,"biotype":"cDNA","source":"ensembl"}"#;
+        assert_eq!(&*transcript_from(without).gene_stable_id, "");
+        let null = r#"{"stable_id":"NM_1","gene_stable_id":null,"start":1,"end":9,"strand":1,"biotype":"cDNA","source":"ensembl"}"#;
+        assert_eq!(&*transcript_from(null).gene_stable_id, "");
     }
 
     /// `biotype` is required and read verbatim.
@@ -3771,6 +4558,29 @@ mod tests {
         let derived = transcript_from(&minimal(exons));
         let introns: Vec<(u64, u64)> = derived.introns.iter().map(|i| (i.start, i.end)).collect();
         assert_eq!(introns, vec![(201, 300)]);
+    }
+
+    /// A translation the cache holds without a stable id reaches the shard
+    /// without the `stable_id` key, the converter writing defined values alone.
+    /// It loads with an empty id and its database id, and the transcript is
+    /// otherwise the one a translation with an id gives.
+    #[test]
+    fn a_translation_without_a_stable_id_loads_with_an_empty_id() {
+        let with_id = coding_transcript_json(r#","dbID":7001"#);
+        let without_id = with_id.replacen(r#""stable_id":"ENSP1","#, "", 1);
+        assert_ne!(without_id, with_id);
+
+        let loaded = transcript_from(&without_id);
+        let translation = loaded.translation.as_ref().unwrap();
+        assert_eq!(translation.stable_id, "");
+        assert_eq!(translation.db_id, Some(7001));
+
+        let mut expected = transcript_from(&with_id);
+        expected.translation.as_mut().unwrap().stable_id.clear();
+        assert_eq!(
+            serde_json::to_value(&loaded).unwrap(),
+            serde_json::to_value(&expected).unwrap()
+        );
     }
 
     /// Ensembl VEP's cache stores `coding_region_start` and `coding_region_end`
@@ -3935,8 +4745,8 @@ mod tests {
     fn exon_ids_are_kept_in_rank_order_with_the_empty_id_for_an_exon_without_one() {
         let exon = |rank: u32, id: Option<&str>| JsonExon {
             stable_id: id.map(Arc::from),
-            start: 100 * u64::from(rank),
-            end: 100 * u64::from(rank) + 50,
+            start: 100 * i64::from(rank),
+            end: 100 * i64::from(rank) + 50,
             rank: Some(rank),
             phase: -1,
             end_phase: -1,
@@ -4306,7 +5116,7 @@ mod tests {
             );
             let mapper = transcript.vefc.as_ref().unwrap().mapper.as_ref().unwrap();
             assert_eq!(mapper.cdna_coding_end, 15);
-            assert_eq!(mapper.exon_coord_mapper.by_genomic_start, [0]);
+            assert_eq!(mapper.exon_coord_mapper.by_genomic_start(), [0]);
             assert_eq!(
                 (transcript.coding_region_start, transcript.coding_region_end),
                 bounds
@@ -4478,6 +5288,230 @@ mod tests {
         not_read(
             &mut at_range_ends,
             "a coding end and a phase at their range ends",
+        );
+    }
+
+    /// A coding transcript as the converter writes a dumped one: the stored
+    /// span, the stored exons with the introns between them, and the mapper
+    /// pairs as `(cDNA start, cDNA end, genomic start, genomic end)`.
+    fn stored_transcript(
+        start: i64,
+        end: u64,
+        ori: i8,
+        exons: &[(i64, i64)],
+        pairs: &[(u64, u64, u64, u64)],
+    ) -> Result<Transcript, String> {
+        let exon_list: Vec<serde_json::Value> = exons
+            .iter()
+            .map(|(start, end)| serde_json::json!({"start": start, "end": end}))
+            .collect();
+        let introns: Vec<serde_json::Value> = exons
+            .windows(2)
+            .map(|pair| serde_json::json!({"start": pair[0].1 + 1, "end": pair[1].0 - 1}))
+            .collect();
+        let cdna_end = pairs.iter().map(|pair| pair.1).max().unwrap();
+        let pair_list: Vec<serde_json::Value> = pairs
+            .iter()
+            .map(|(from_start, from_end, to_start, to_end)| {
+                serde_json::json!({
+                    "from_start": from_start,
+                    "from_end": from_end,
+                    "to_start": to_start,
+                    "to_end": to_end,
+                    "ori": ori,
+                })
+            })
+            .collect();
+        let record = serde_json::json!({
+            "stable_id": "T1",
+            "gene_stable_id": "G1",
+            "start": start,
+            "end": end,
+            "strand": ori,
+            "biotype": "protein_coding",
+            "source": "ensembl",
+            "exons": exon_list.clone(),
+            "variation_effect_feature_cache": {
+                "translateable_seq": "ATG".repeat((cdna_end / 3) as usize),
+                "introns": introns,
+                "sorted_exons": exon_list,
+                "mapper": {
+                    "start_phase": 0,
+                    "cdna_coding_start": 1,
+                    "cdna_coding_end": cdna_end,
+                    "pairs": pair_list,
+                },
+            },
+        });
+        let jt: JsonTranscript = serde_json::from_value(record).unwrap();
+        convert_transcript(jt, "ring", &mut AttributeCodes::default())
+    }
+
+    /// The transcript's span, exons, introns and mapper pairs' genomic spans,
+    /// its coding region and the length of its circular sequence.
+    #[allow(clippy::type_complexity)]
+    fn placement(
+        transcript: &Transcript,
+    ) -> (
+        (u64, u64),
+        Vec<(u64, u64)>,
+        Vec<(u64, u64)>,
+        Vec<(u64, u64)>,
+        (Option<u64>, Option<u64>),
+        Option<u64>,
+    ) {
+        let vefc = transcript.vefc.as_ref().unwrap();
+        (
+            (transcript.start, transcript.end),
+            transcript.exons.iter().map(|e| (e.start, e.end)).collect(),
+            transcript
+                .introns
+                .iter()
+                .map(|i| (i.start, i.end))
+                .collect(),
+            vefc.mapper
+                .as_ref()
+                .unwrap()
+                .exon_coord_mapper
+                .pairs
+                .iter()
+                .map(|p| (p.to_start, p.to_end))
+                .collect(),
+            (transcript.coding_region_start, transcript.coding_region_end),
+            transcript.circular_length,
+        )
+    }
+
+    /// A gene of 150 bases from 11911 across the origin of a sequence of
+    /// 12,000 bases to base 60 is dumped with the start -89 on a pair that
+    /// keeps 11911 and 60 (ensembl core `DBSQL/TranscriptAdaptor.pm:1941-1947`,
+    /// `TranscriptMapper.pm:160-161`). It loads at 11911-12060 on either
+    /// strand, with the sequence's length.
+    #[test]
+    fn a_transcript_stored_across_the_origin_runs_on_past_the_last_base() {
+        for ori in [1, -1] {
+            let transcript =
+                stored_transcript(-89, 60, ori, &[(-89, 60)], &[(1, 150, 11_911, 60)]).unwrap();
+            assert_eq!(
+                placement(&transcript),
+                (
+                    (11_911, 12_060),
+                    vec![(11_911, 12_060)],
+                    vec![],
+                    vec![(11_911, 12_060)],
+                    (Some(11_911), Some(12_060)),
+                    Some(12_000),
+                ),
+                "strand {ori}"
+            );
+        }
+    }
+
+    /// A dump can hold the exon of such a transcript past the last base
+    /// already, under a transcript stored below base 1; the exon stays where
+    /// it is.
+    #[test]
+    fn an_exon_stored_past_the_last_base_stays_where_it_is() {
+        let transcript =
+            stored_transcript(-89, 60, -1, &[(11_911, 12_060)], &[(1, 150, 11_911, 60)]).unwrap();
+        assert_eq!(
+            placement(&transcript),
+            (
+                (11_911, 12_060),
+                vec![(11_911, 12_060)],
+                vec![],
+                vec![(11_911, 12_060)],
+                (Some(11_911), Some(12_060)),
+                Some(12_000),
+            )
+        );
+    }
+
+    /// Two exons either side of the origin, the intron across it: the exon
+    /// among the last bases is stored below base 1 and its pair keeps its
+    /// database span, the exon among the first bases is stored where it lies.
+    /// Both load in one run past the last base.
+    #[test]
+    fn exons_on_both_sides_of_the_origin_load_in_one_run() {
+        let transcript = stored_transcript(
+            -89,
+            60,
+            1,
+            &[(-89, -40), (11, 60)],
+            &[(1, 50, 11_911, 11_960), (51, 100, 11, 60)],
+        )
+        .unwrap();
+        assert_eq!(
+            placement(&transcript),
+            (
+                (11_911, 12_060),
+                vec![(11_911, 11_960), (12_011, 12_060)],
+                vec![(11_961, 12_010)],
+                vec![(11_911, 11_960), (12_011, 12_060)],
+                (Some(11_911), Some(12_060)),
+                Some(12_000),
+            )
+        );
+    }
+
+    /// A start below base 1 on a transcript none of whose pairs begins past
+    /// its stored end names no sequence length, and the record is refused.
+    #[test]
+    fn a_start_below_one_without_a_pair_across_the_origin_is_refused() {
+        let refused = stored_transcript(-89, 60, 1, &[(-89, 60)], &[(1, 150, 1, 60)]).unwrap_err();
+        assert_eq!(
+            refused,
+            "transcript T1: its start -89 lies below base 1 and no mapper pair places it \
+             across the origin of a circular sequence"
+        );
+    }
+
+    /// A pair across the origin that starts at the largest coordinate a record
+    /// can hold names a sequence of that length, and its end, moved one length
+    /// on, stays at that coordinate.
+    #[test]
+    fn a_pair_across_the_origin_at_the_largest_coordinate_is_placed_without_overflow() {
+        let record = serde_json::json!({
+            "stable_id": "T1",
+            "gene_stable_id": "G1",
+            "start": 0,
+            "end": 10,
+            "strand": 1,
+            "biotype": "protein_coding",
+            "source": "ensembl",
+            "variation_effect_feature_cache": {
+                "mapper": {
+                    "pairs": [{
+                        "from_start": 1,
+                        "from_end": 6,
+                        "to_start": u64::MAX,
+                        "to_end": 5,
+                        "ori": 1,
+                    }],
+                },
+            },
+        });
+        let mut jt: JsonTranscript = serde_json::from_value(record).unwrap();
+        assert_eq!(place_across_origin(&mut jt), Ok(Some(u64::MAX)));
+        let mapper = jt.vefc.unwrap().mapper.unwrap();
+        let pair = &mapper.pairs[0];
+        assert_eq!((pair.to_start, pair.to_end), (u64::MAX, u64::MAX));
+    }
+
+    /// A transcript that starts at base 1 is on no origin and loads as stored.
+    #[test]
+    fn a_transcript_that_starts_at_base_one_loads_as_stored() {
+        let transcript = stored_transcript(1, 150, 1, &[(1, 150)], &[(1, 150, 1, 150)]).unwrap();
+        assert_eq!(
+            placement(&transcript),
+            (
+                (1, 150),
+                vec![(1, 150)],
+                vec![],
+                vec![(1, 150)],
+                (Some(1), Some(150)),
+                None,
+            )
         );
     }
 }

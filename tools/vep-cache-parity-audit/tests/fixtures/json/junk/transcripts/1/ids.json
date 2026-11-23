@@ -1,0 +1,1 @@
+{"a": [{"stable_id": 0},{"stable_id": ""},{"stable_id": "0"},{"stable_id": null},{"stable_id": false},{"stable_id": true},{"stable_id": 12345},{"stable_id": 1.5},{"stable_id": 1000.0},{"stable_id": -0.0},{"stable_id": [1]},{"stable_id": {"a": 1}},{"stable_id": "TEXT"},{"stable_id": "TEXT"},{"stable_id": 7},{"stable_id": "7"}], "b": {"stable_id": "NOT_IN_A_LIST"}, "c": 5}

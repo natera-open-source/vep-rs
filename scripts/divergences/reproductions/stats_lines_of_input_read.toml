@@ -1,7 +1,7 @@
 entry = "stats_lines_of_input_read"
 page = "docs/divergences/statistics-report-counts.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the VCF 4.2 specification, section 1.4.1 \"Fixed fields\" (a record on a sequence the cache lacks, which Ensembl VEP skips); not seen in the measured datasets; classed by its most reachable shape, that skipped record: a <DEL> with neither END nor SVLEN breaks \"SVLEN must be specified\" under the VCF 4.4 specification, section 3"
 notes = "The kept record fills the one-record buffer exactly and the deletion without END or SVLEN that follows is skipped by the parser, so Ensembl VEP's last stored count is the first buffer's while its warnings file names line 2."
@@ -35,4 +35,13 @@ ensembl_vep = [
 vep_rs = [
   "Lines of input read\t2", "Variants processed\t1", "Variants filtered out\t0", "Novel / existing variants\t-",
   "Overlapped genes\t1", "Overlapped transcripts\t4", "Overlapped regulatory features\t-",
+]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/pipeline.rs::read_stage",
+    "crates/vep-cli/src/stats.rs::RunStats::set_lines_read",
+]
+tests = [
+    "crates/vep-cli/src/pipeline.rs::tests::lines_of_input_read_is_the_readers_final_record_count",
 ]

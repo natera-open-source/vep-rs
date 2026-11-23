@@ -1,9 +1,9 @@
 entry = "stats_protein_position_chart"
 page = "docs/divergences/stats-protein-position.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 23 of 392 flag sets · 23 flag sets, 13 corpora"
+input_class_basis = "2 · 95 of 511 flag sets · 95 flag sets, 51 corpora"
 
 [input]
 format = "vcf"
@@ -32,4 +32,10 @@ ensembl_vep = [
 vep_rs = [
   "00-10%\t171", "10-20%\t75", "20-30%\t79", "30-40%\t95", "40-50%\t90",
   "50-60%\t129", "60-70%\t65", "70-80%\t78", "80-90%\t113", "90-100%\t158",
+]
+
+[implementation]
+code = ["crates/vep-cli/src/stats.rs::ThreadStats::log_record"]
+tests = [
+    "crates/vep-cli/tests/stats_protein_position.rs::position_in_protein_chart_is_the_same_with_and_without_hgvs",
 ]

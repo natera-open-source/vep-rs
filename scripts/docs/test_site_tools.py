@@ -1,7 +1,8 @@
-"""Tests for the site tooling in this directory, on fixtures the tests write: the mdBook preprocessor driven
-through its stdin protocol, the page metrics and their gate, the post-build finish with its three checks, the
-benchmark chart renderer, the home page's writer, and the screenshot script's pure helpers. No test runs mdbook or a
-browser."""
+"""Tests for the site tooling in this directory, on fixtures the tests write: the link check, the mdBook preprocessor driven
+through its stdin protocol, the page metrics and their gate, the post-build finish with its two checks, the
+home page's writer, the screenshot script's pure helpers, the site build's refusal of a builder warning on a
+stand-in for the builder, and the theme script's version selector run under node on a stand-in for its DOM calls.
+No test runs mdbook or a browser."""
 
 from __future__ import annotations
 
@@ -9,8 +10,10 @@ import io
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -18,10 +21,11 @@ import pytest
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 sys.path.insert(0, str(HERE))
+import check_site_links as link_check
 import mdbook_repo_links as links
-import render_benchmark_chart as chart
 import render_home_page as home
 import render_release_figure as figure
+import site_build
 import site_metrics as metrics
 import site_postbuild as postbuild
 import site_screenshots as shots
@@ -30,7 +34,6 @@ import test_render_release_figure as figure_records
 REPO_URL = "https://github.com/natera-open-source/vep-rs"
 EDIT_URL = f"{REPO_URL}/edit/main/"
 RELEASE = "v1.2.3"
-VERSION = "1.2.3"
 BASE = "https://docs.example/vep-rs/"
 STUB = "# vep-rs documentation\n\nThe home page is the README.\n"
 OVERVIEW = "# Overview\n\nWelcome.\n"
@@ -377,6 +380,14 @@ def test_missing_repository_file_behind_a_chapter_is_refused(monkeypatch, tmp_pa
     assert preprocess_error(monkeypatch, root, site_book("Text.\n")) == f"mdbook_repo_links: CHANGELOG.md is missing from {root}"
 
 
+def test_a_repository_file_that_is_not_utf8_is_refused_in_one_line(monkeypatch, tmp_path):
+    root = repository(tmp_path)
+    readable = b"# Project\n\n## Install\n\n"
+    (root / "README.md").write_bytes(readable + b"\xff\n")
+    code = preprocess_error(monkeypatch, root, site_book("<!-- readme-section: Install -->\n"))
+    assert code == f"mdbook_repo_links: README.md in {root} is not UTF-8: byte {len(readable)} does not decode"
+
+
 LONG_PARAGRAPH = " ".join(["One two three four five."] * 25)
 LONG_SENTENCE = " ".join(["word"] * 45) + " end."
 PAGE = f"""# Title
@@ -519,13 +530,11 @@ SETUP_PROSE = "The setup page of the fixture site opens with a paragraph of its 
 OTHER_PROSE = "A third page of the fixture site opens with a paragraph that no other page of the site begins with."
 
 
-def built_site(tmp_path, chart_release=RELEASE, redirect="guide/setup.html#step-2", book=f"vep-rs {RELEASE}"):
+def built_site(tmp_path, redirect="guide/setup.html#step-2", book=f"vep-rs {RELEASE}"):
     """A built site of two reader pages, each with a title and an opening paragraph of its own, two redirect
-    stubs, the two pages mdBook generates for printing and not-found, and the benchmark chart; beside it the
-    source tree whose README names the release."""
+    stubs, and the two pages mdBook generates for printing and not-found."""
     site = tmp_path / "book"
     (site / "guide").mkdir(parents=True)
-    (site / "assets").mkdir()
     edit = f'<a href="{EDIT_URL}docs/index.md">Edit</a>\n<h1 id="overview">Overview</h1>\n<p>{HOME_PROSE}</p>'
     (site / "index.html").write_text(page_html("vep-rs", edit, book), encoding="utf-8")
     (site / "guide" / "setup.html").write_text(
@@ -541,15 +550,7 @@ def built_site(tmp_path, chart_release=RELEASE, redirect="guide/setup.html#step-
     (site / "moved.html").write_text(moved, encoding="utf-8")
     (site / "print.html").write_text(page_html("Print", "<p>Every page.</p>"), encoding="utf-8")
     (site / "404.html").write_text(page_html("Not found", "<p>No such page.</p>"), encoding="utf-8")
-    (site / "assets" / "benchmark.svg").write_text(
-        f'<svg xmlns="http://www.w3.org/2000/svg" class="benchmark-chart" data-release="{chart_release}">\n'
-        f"<desc>Release {chart_release}</desc>\n</svg>\n",
-        encoding="utf-8",
-    )
-    source = tmp_path / "source"
-    source.mkdir()
-    (source / "README.md").write_text(f"# Project\n\n## Current release: {RELEASE}\n\nText.\n", encoding="utf-8")
-    return site, source
+    return site
 
 
 def finish(monkeypatch, capsys, site, *extra, base=BASE, readme_home=None):
@@ -562,8 +563,8 @@ def finish(monkeypatch, capsys, site, *extra, base=BASE, readme_home=None):
 
 
 def test_canonical_and_og_url_are_inserted_once_and_a_second_run_adds_nothing(monkeypatch, capsys, tmp_path):
-    site, source = built_site(tmp_path)
-    code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+    site = built_site(tmp_path)
+    code, out = finish(monkeypatch, capsys, site)
     assert code == 0, out
     index = (site / "index.html").read_text(encoding="utf-8")
     assert index.count(f'<link rel="canonical" href="{BASE}">') == 1
@@ -574,16 +575,15 @@ def test_canonical_and_og_url_are_inserted_once_and_a_second_run_adds_nothing(mo
         assert 'rel="canonical"' not in (site / page).read_text(encoding="utf-8")
     assert "6 pages finished: menu title demoted, head tags (canonical, og:url) inserted on 2, 0 already carried a canonical link\n" in out
     assert "redirect destinations: 3 checked, 1 external not fetched, 0 broken\n" in out
-    assert "benchmark chart: v1.2.3 matches the README\n" in out
-    code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+    code, out = finish(monkeypatch, capsys, site)
     assert code == 0, out
     assert (site / "index.html").read_text(encoding="utf-8") == index
     assert "inserted on 0, 2 already carried a canonical link\n" in out
 
 
 def test_menu_title_is_demoted_and_a_title_repeating_the_book_name_collapses(monkeypatch, capsys, tmp_path):
-    site, source = built_site(tmp_path)
-    finish(monkeypatch, capsys, site, "--source", str(source))
+    site = built_site(tmp_path)
+    finish(monkeypatch, capsys, site)
     index = (site / "index.html").read_text(encoding="utf-8")
     assert postbuild.HOME_TAGLINE == "fast Ensembl VEP (Variant Effect Predictor) in Rust"
     assert f'<p class="menu-title">vep-rs {RELEASE}</p>' in index
@@ -594,8 +594,8 @@ def test_menu_title_is_demoted_and_a_title_repeating_the_book_name_collapses(mon
 
 
 def test_preview_channel_marks_its_pages_and_writes_no_sitemap(monkeypatch, capsys, tmp_path):
-    site, source = built_site(tmp_path)
-    code, out = finish(monkeypatch, capsys, site, "--source", str(source), "--channel", "main", base=BASE + "main/")
+    site = built_site(tmp_path)
+    code, out = finish(monkeypatch, capsys, site, "--channel", "main", base=BASE + "main/")
     assert code == 0, out
     index = (site / "index.html").read_text(encoding="utf-8")
     assert f'<link rel="canonical" href="{BASE}main/">' in index
@@ -606,8 +606,8 @@ def test_preview_channel_marks_its_pages_and_writes_no_sitemap(monkeypatch, caps
 
 
 def test_release_form_adds_no_channel_metas_and_writes_versions_and_the_sitemap(monkeypatch, capsys, tmp_path):
-    site, source = built_site(tmp_path)
-    code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+    site = built_site(tmp_path)
+    code, out = finish(monkeypatch, capsys, site)
     assert code == 0, out
     index = (site / "index.html").read_text(encoding="utf-8")
     assert "vep-rs-channel" not in index
@@ -637,14 +637,14 @@ def described_page(title, body, book=f"vep-rs {RELEASE}"):
 
 
 def test_each_page_gets_its_first_paragraph_of_prose_as_its_description(monkeypatch, capsys, tmp_path):
-    site, source = built_site(tmp_path)
+    site = built_site(tmp_path)
     (site / "index.html").write_text(
         described_page("vep-rs", f"<main>\n<p>Documentation: short.</p>\n<p>{PROSE}</p>\n</main>"), encoding="utf-8"
     )
     (site / "guide" / "setup.html").write_text(
         described_page("Setup", "<main>\n<h2 id=\"step-2\">Step 2</h2>\n<p>Too short to describe anything.</p>\n</main>"), encoding="utf-8"
     )
-    code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+    code, out = finish(monkeypatch, capsys, site)
     assert code == 0, out
     index = (site / "index.html").read_text(encoding="utf-8")
     expected = postbuild.page_description(index)
@@ -662,17 +662,17 @@ def test_each_page_gets_its_first_paragraph_of_prose_as_its_description(monkeypa
     setup = (site / "guide" / "setup.html").read_text(encoding="utf-8")
     assert setup.count(BOOK_DESCRIPTION) == 3
     assert '<meta property="og:site_name" content="vep-rs">' in setup
-    code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+    code, out = finish(monkeypatch, capsys, site)
     assert code == 0, out
     assert (site / "index.html").read_text(encoding="utf-8") == index
 
 
 def test_preview_home_gets_the_tagline_but_no_json_ld(monkeypatch, capsys, tmp_path):
-    site, source = built_site(tmp_path)
+    site = built_site(tmp_path)
     (site / "index.html").write_text(
         described_page("vep-rs", f"<main><p>{PROSE}</p></main>", "vep-rs main"), encoding="utf-8"
     )
-    code, out = finish(monkeypatch, capsys, site, "--source", str(source), "--channel", "main", base=BASE + "main/")
+    code, out = finish(monkeypatch, capsys, site, "--channel", "main", base=BASE + "main/")
     assert code == 0, out
     index = (site / "index.html").read_text(encoding="utf-8")
     assert f"<title>vep-rs main: {postbuild.HOME_TAGLINE}</title>" in index
@@ -681,8 +681,8 @@ def test_preview_home_gets_the_tagline_but_no_json_ld(monkeypatch, capsys, tmp_p
 
 
 def test_page_heads_line_counts_the_pages_a_reader_lands_on(monkeypatch, capsys, tmp_path):
-    site, source = built_site(tmp_path)
-    code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+    site = built_site(tmp_path)
+    code, out = finish(monkeypatch, capsys, site)
     assert code == 0, out
     assert "page heads: 2 pages, 0 titles shared, 0 descriptions shared, 0 on the book's description\n" in out
     assert "WARNING" not in out
@@ -694,11 +694,11 @@ def third_page_finding(monkeypatch, capsys, tmp_path, title, prose, counts, find
     title ends with on the channel."""
     for channel, name in ((None, "vep-rs documentation"), ("main", "vep-rs main")):
         book = name if channel else f"vep-rs {RELEASE}"
-        site, source = built_site(tmp_path / (channel or "release"), book=book)
+        site = built_site(tmp_path / (channel or "release"), book=book)
         (site / "guide" / "other.html").write_text(page_html(title, f"<p>{prose}</p>", book), encoding="utf-8")
         extra = ("--channel", channel) if channel else ()
         base = BASE + (f"{channel}/" if channel else "")
-        code, out = finish(monkeypatch, capsys, site, "--source", str(source), *extra, base=base)
+        code, out = finish(monkeypatch, capsys, site, *extra, base=base)
         assert f"page heads: 3 pages, {counts}\n" in out
         assert f"{'ERROR' if channel else 'WARNING'}: [site_postbuild] {finding.format(name=name)}\n" in out
         assert code == (1 if channel else 0)
@@ -731,8 +731,8 @@ def test_a_page_left_on_the_book_description_fails_the_preview_and_is_a_warning_
 
 
 def test_a_sitemap_that_does_not_list_as_many_pages_as_a_reader_lands_on_fails(monkeypatch, capsys, tmp_path):
-    site, source = built_site(tmp_path)
-    code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+    site = built_site(tmp_path)
+    code, out = finish(monkeypatch, capsys, site)
     assert code == 0, out
     reader_pages = {"index.html", "guide/setup.html"}
     assert postbuild.check_page_heads(str(site), reader_pages, None) == []
@@ -823,9 +823,9 @@ def title_of(site, page):
 
 
 def test_the_release_fits_each_title_and_a_second_run_changes_no_byte(monkeypatch, capsys, tmp_path):
-    site, source = built_site(tmp_path)
+    site = built_site(tmp_path)
     kept, bare, cut = add_chapters(site, ["Setting up a cache", "x" * 52, CUT_A])
-    code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+    code, out = finish(monkeypatch, capsys, site)
     assert code == 0, out
     assert {page: title_of(site, page) for page in ("index.html", "guide/setup.html", kept, bare, cut)} == {
         "index.html": HOME_PAGE_TITLE,
@@ -837,17 +837,17 @@ def test_the_release_fits_each_title_and_a_second_run_changes_no_byte(monkeypatc
     assert f'<meta property="og:title" content="{CUT_A}">' in (site / cut).read_text(encoding="utf-8")
     assert TITLES_LINE.format(5, 1, 1, 2, 1, 0) in out
     finished = {path: path.read_bytes() for path in site.rglob("*") if path.is_file()}
-    code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+    code, out = finish(monkeypatch, capsys, site)
     assert code == 0, out
     assert {path: path.read_bytes() for path in site.rglob("*") if path.is_file()} == finished
     assert TITLES_LINE.format(5, 1, 1, 2, 1, 0) in out
 
 
 def test_the_preview_keeps_every_title_whole_and_prints_no_titles_line(monkeypatch, capsys, tmp_path):
-    site, source = built_site(tmp_path, book="vep-rs main")
+    site = built_site(tmp_path, book="vep-rs main")
     names = ["A", "Setting up a cache", "x" * 52, CUT_A]
     pages = add_chapters(site, names, "vep-rs main")
-    code, out = finish(monkeypatch, capsys, site, "--source", str(source), "--channel", "main", base=BASE + "main/")
+    code, out = finish(monkeypatch, capsys, site, "--channel", "main", base=BASE + "main/")
     assert code == 0, out
     assert "page titles:" not in out
     assert [title_of(site, page) for page in pages] == [f"{name} - vep-rs main" for name in names]
@@ -855,9 +855,9 @@ def test_the_preview_keeps_every_title_whole_and_prints_no_titles_line(monkeypat
 
 
 def test_a_title_is_measured_unescaped_and_written_back_escaped(monkeypatch, capsys, tmp_path):
-    site, source = built_site(tmp_path)
+    site = built_site(tmp_path)
     kept, lengthened = add_chapters(site, ["R&D " + "x" * 47, "A <B> & C's"])
-    code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+    code, out = finish(monkeypatch, capsys, site)
     assert code == 0, out
     assert title_of(site, kept) == "R&amp;D " + "x" * 47 + ENDING
     assert title_of(site, lengthened) == "A &lt;B&gt; &amp; C's" + ENDING_LONG
@@ -865,65 +865,65 @@ def test_a_title_is_measured_unescaped_and_written_back_escaped(monkeypatch, cap
 
 
 def test_a_title_under_25_characters_fails_the_release_and_passes_the_preview(monkeypatch, capsys, tmp_path):
-    site, source = built_site(tmp_path / "release")
+    site = built_site(tmp_path / "release")
     (page,) = add_chapters(site, ["A"])
-    code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+    code, out = finish(monkeypatch, capsys, site)
     assert code == 1
     assert f"ERROR: [site_postbuild] {page}: title 'A - vep-rs documentation' is 24 characters, under 25\n" in out
     assert TITLES_LINE.format(3, 0, 2, 1, 0, 1) in out
-    site, source = built_site(tmp_path / "main", book="vep-rs main")
+    site = built_site(tmp_path / "main", book="vep-rs main")
     add_chapters(site, ["A"], "vep-rs main")
-    code, out = finish(monkeypatch, capsys, site, "--source", str(source), "--channel", "main", base=BASE + "main/")
+    code, out = finish(monkeypatch, capsys, site, "--channel", "main", base=BASE + "main/")
     assert code == 0, out
 
 
 def test_a_title_over_60_characters_fails_the_release(monkeypatch, capsys, tmp_path):
     monkeypatch.setattr(postbuild, "HOME_TAGLINE", postbuild.HOME_TAGLINE + ", every flag")
-    site, source = built_site(tmp_path)
-    code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+    site = built_site(tmp_path)
+    code, out = finish(monkeypatch, capsys, site)
     assert code == 1
     assert f"ERROR: [site_postbuild] index.html: title '{HOME_PAGE_TITLE}, every flag' is 71 characters, over 60\n" in out
     assert TITLES_LINE.format(2, 0, 1, 1, 0, 1) in out
 
 
 def test_two_headings_cut_to_one_title_fail_the_release_and_pass_the_preview(monkeypatch, capsys, tmp_path):
-    site, source = built_site(tmp_path / "release")
+    site = built_site(tmp_path / "release")
     first, second = add_chapters(site, [CUT_A, CUT_B])
-    code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+    code, out = finish(monkeypatch, capsys, site)
     assert code == 1
     assert "page heads: 4 pages, 1 titles shared, 0 descriptions shared, 0 on the book's description\n" in out
     assert f"ERROR: [site_postbuild] title {CUT_TITLE!r} is the fit of 2 headings: {first}, {second}\n" in out
     assert "WARNING" not in out
-    site, source = built_site(tmp_path / "main", book="vep-rs main")
+    site = built_site(tmp_path / "main", book="vep-rs main")
     add_chapters(site, [CUT_A, CUT_B], "vep-rs main")
-    code, out = finish(monkeypatch, capsys, site, "--source", str(source), "--channel", "main", base=BASE + "main/")
+    code, out = finish(monkeypatch, capsys, site, "--channel", "main", base=BASE + "main/")
     assert code == 0, out
     assert "page heads: 4 pages, 0 titles shared, 0 descriptions shared, 0 on the book's description\n" in out
 
 
 def test_one_heading_cut_on_two_pages_is_a_warning_on_the_release(monkeypatch, capsys, tmp_path):
-    site, source = built_site(tmp_path)
+    site = built_site(tmp_path)
     first, second = add_chapters(site, [CUT_A, CUT_A])
-    code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+    code, out = finish(monkeypatch, capsys, site)
     assert code == 0, out
     assert f"WARNING: [site_postbuild] title {CUT_TITLE!r} is on 2 pages: {first}, {second}\n" in out
     assert "is the fit of" not in out
 
 
 def test_a_chapter_name_that_ends_in_the_release_tag_keeps_it_on_a_second_run(monkeypatch, capsys, tmp_path):
-    site, source = built_site(tmp_path)
+    site = built_site(tmp_path)
     kept, bare = add_chapters(site, [f"Upgrading to {RELEASE}", f"{'x' * 45} {RELEASE}"])
     for _run in range(2):
-        code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+        code, out = finish(monkeypatch, capsys, site)
         assert code == 0, out
         assert title_of(site, kept) == f"Upgrading to {RELEASE}" + ENDING
         assert title_of(site, bare) == f"{'x' * 45} {RELEASE}"
 
 
 def test_a_home_chapter_of_another_name_is_titled_with_the_book_name_alone(monkeypatch, capsys, tmp_path):
-    site, source = built_site(tmp_path)
+    site = built_site(tmp_path)
     (site / "index.html").write_text(described_page("Overview", f"<p>{HOME_PROSE}</p>"), encoding="utf-8")
-    code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+    code, out = finish(monkeypatch, capsys, site)
     assert code == 0, out
     index = (site / "index.html").read_text(encoding="utf-8")
     assert f"<title>{HOME_PAGE_TITLE}</title>" in index
@@ -938,7 +938,7 @@ CHAPTERS = (
 
 
 def test_home_page_lists_every_chapter_where_its_noscript_block_framed_the_list(monkeypatch, capsys, tmp_path):
-    site, source = built_site(tmp_path)
+    site = built_site(tmp_path)
     for page in (site / "index.html", site / "guide" / "setup.html"):
         framed = page.read_text(encoding="utf-8").replace("<body>\n", f"<body>\n<nav>{FRAME}</nav>\n")
         page.write_text(framed, encoding="utf-8")
@@ -946,14 +946,14 @@ def test_home_page_lists_every_chapter_where_its_noscript_block_framed_the_list(
         f'<!DOCTYPE HTML>\n<html>\n<head></head>\n<body class="sidebar-iframe-inner">\n{CHAPTERS}\n</body>\n</html>\n',
         encoding="utf-8",
     )
-    code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+    code, out = finish(monkeypatch, capsys, site)
     assert code == 0, out
     index = (site / "index.html").read_text(encoding="utf-8")
     assert f'<nav><noscript>\n<div class="sidebar-scrollbox">{CHAPTERS}</div>\n</noscript></nav>' in index
     assert "<iframe" not in index
     assert f"<nav>{FRAME}</nav>" in (site / "guide" / "setup.html").read_text(encoding="utf-8")
     assert "home page: 2 chapter links listed in its <noscript> block\n" in out
-    code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+    code, out = finish(monkeypatch, capsys, site)
     assert code == 0, out
     assert (site / "index.html").read_text(encoding="utf-8") == index
 
@@ -996,6 +996,14 @@ def test_the_readme_opening_the_book_description_and_the_home_title_name_the_sam
             assert name in text, f"{where} does not name {name}: {text}"
 
 
+def test_the_header_example_of_the_default_format_names_the_workspace_version():
+    """The engine line `## vep-rs <version>` of the header example on `docs/output/vep-and-tab.md` names the version
+    `[workspace.package]` of the root `Cargo.toml` declares, the version the binary writes on that line."""
+    page = (ROOT / "docs" / "output" / "vep-and-tab.md").read_text(encoding="utf-8")
+    workspace = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))["workspace"]
+    assert re.findall(r"^## vep-rs (\S+)$", page, re.MULTILINE) == [workspace["package"]["version"]]
+
+
 @pytest.mark.parametrize(
     ("destination", "message"),
     [
@@ -1008,8 +1016,8 @@ def test_the_readme_opening_the_book_description_and_the_home_title_name_the_sam
     ids=["missing-page", "missing-id", "outside-the-site", "longer-name-than-the-site-root", "directory-without-an-index-page"],
 )
 def test_a_redirect_without_its_destination_fails_by_name(monkeypatch, capsys, tmp_path, destination, message):
-    site, source = built_site(tmp_path, redirect=destination)
-    code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+    site = built_site(tmp_path, redirect=destination)
+    code, out = finish(monkeypatch, capsys, site)
     assert code == 1
     assert f"ERROR: [site_postbuild] {message}\n" in out
 
@@ -1018,183 +1026,522 @@ def test_a_redirect_without_its_destination_fails_by_name(monkeypatch, capsys, t
     "destination", ["/vep-rs", "/vep-rs/", "guide/"], ids=["site-root-without-the-slash", "site-root", "directory"]
 )
 def test_a_redirect_to_a_directory_is_checked_against_its_index_page(monkeypatch, capsys, tmp_path, destination):
-    site, source = built_site(tmp_path, redirect=destination)
+    site = built_site(tmp_path, redirect=destination)
     (site / "guide" / "index.html").write_text(page_html("Guide", '<h1 id="guide">Guide</h1>'), encoding="utf-8")
-    code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+    code, out = finish(monkeypatch, capsys, site)
     assert code == 0, out
     assert "redirect destinations: 3 checked, 1 external not fetched, 0 broken\n" in out
 
 
-def test_chart_release_differing_from_the_readme_heading_fails(monkeypatch, capsys, tmp_path):
-    site, source = built_site(tmp_path, chart_release="v1.2.2")
-    code, out = finish(monkeypatch, capsys, site, "--source", str(source))
-    assert code == 1
-    assert "ERROR: [site_postbuild] benchmark chart says v1.2.2, the README's Current release heading says v1.2.3\n" in out
+LINK_CHECK_BOOK = """[book]
+title = "vep-rs"
+src = "docs"
+
+[output.html]
+site-url = "/vep-rs/"
+{table}
+[output.html.search]
+limit-results = 20
+"""
 
 
-def test_chart_without_a_source_tree_cannot_be_checked(monkeypatch, capsys, tmp_path):
-    site, _source = built_site(tmp_path)
-    code, out = finish(monkeypatch, capsys, site)
-    assert code == 1
-    assert "ERROR: [site_postbuild] assets/benchmark.svg says v1.2.3; --source is needed to compare it with the README\n" in out
+def linked_site(tmp_path, entries, home_link="guide/setup.html#step-2"):
+    """A checkout holding a built site of three reader pages, their sources beside the chapter list under `docs`, and
+    the site's book configuration, whose redirect table holds `entries`; `None` writes a configuration without the
+    table."""
+    root = tmp_path / "checkout"
+    site = root / "target" / "book"
+    (site / "guide").mkdir(parents=True)
+    (root / "docs" / "guide").mkdir(parents=True)
+    for source in ("SUMMARY.md", "index.md", "guide/setup.md", "guide/page.md"):
+        (root / "docs" / source).write_text("# A page\n", encoding="utf-8")
+    home = f'<h1 id="overview">Overview</h1>\n<a href="{home_link}">Setup</a>\n<a href="https://example.org/">Elsewhere</a>'
+    setup = '<h1 id="setup">Setup</h1>\n<h2 id="step-2">Step 2</h2>\n<a href="../index.html#overview">Home</a>'
+    (site / "index.html").write_text(page_html("vep-rs", home), encoding="utf-8")
+    (site / "guide" / "setup.html").write_text(page_html("Setup", setup), encoding="utf-8")
+    (site / "guide" / "page.html").write_text(page_html("Page", '<h1 id="page">Page</h1>'), encoding="utf-8")
+    (site / "print.html").write_text(page_html("Print", '<a href="gone.html">Gone</a>'), encoding="utf-8")
+    table = "" if entries is None else "\n[output.html.redirect]\n# Pages and headings that moved.\n\n" + "".join(
+        f"{entry}\n" for entry in entries
+    )
+    (root / "book.toml").write_text(LINK_CHECK_BOOK.format(table=table), encoding="utf-8")
+    return root
 
 
-def test_readme_home_skips_the_chart_check_and_points_the_edit_link_at_the_readme(monkeypatch, capsys, tmp_path):
-    site, source = built_site(tmp_path, chart_release="v1.2.2")
-    code, out = finish(monkeypatch, capsys, site, "--source", str(source), readme_home="1")
+def check_links(cwd, *flags):
+    """The finished run of the link check started in `cwd`."""
+    return subprocess.run(
+        [sys.executable, str(HERE / "check_site_links.py"), *flags], cwd=cwd, capture_output=True, text=True, check=False
+    )
+
+
+LANDING_REDIRECTS = (
+    '"/old.html" = "guide/setup.html#step-2"',
+    '"/guide/page.html#was-here" = "setup.html#step-2"',
+    '"/guide/page.html#up" = "../index.html#overview"',
+    '"/index.html#top" = "#overview"',
+    f'"/index.html#source" = "{REPO_URL}/blob/main/book.toml"',
+    '"/index.html#readme" = "https://example.org/readme" # another host',
+    '"/index.html#root" = "/vep-rs/guide/setup.html"',
+)
+NOT_FOLLOWED = "not followed (a URL or a path from the server root)"
+ALL_BUILT = "pages under docs: 3 checked, 0 not in the site\n"
+NOT_BUILT = "in the site: mdBook builds the chapters {}/SUMMARY.md lists\n"
+
+
+def test_the_link_check_passes_a_site_whose_links_and_redirects_all_land(tmp_path):
+    out = check_links(linked_site(tmp_path, LANDING_REDIRECTS))
+    assert (out.returncode, out.stderr) == (0, "")
+    assert out.stdout == (
+        "checked 2 links on 3 pages, 0 broken\n"
+        f"redirects of book.toml: 5 checked, 2 {NOT_FOLLOWED}, 0 broken\n"
+        + ALL_BUILT
+    )
+
+
+def test_the_link_check_lists_each_redirect_whose_destination_the_site_or_the_repository_lacks(tmp_path):
+    lost = (
+        '"/old.html" = "guide/gone.html"',
+        '"/guide/page.html#was-here" = "setup.html#step-9"',
+        '"/guide/page.html#up" = "../index.html#overview"',
+        '"/index.html#top" = "#summary"',
+        f'"/index.html#source" = "{REPO_URL}/blob/main/docs/gone.md"',
+    )
+    out = check_links(linked_site(tmp_path, lost))
+    assert (out.returncode, out.stderr) == (1, "")
+    assert out.stdout == (
+        "book.toml: /old.html -> guide/gone.html: no such file in the site\n"
+        "book.toml: /guide/page.html#was-here -> setup.html#step-9: no id 'step-9' on guide/setup.html\n"
+        "book.toml: /index.html#top -> #summary: no id 'summary' on index.html\n"
+        f"book.toml: /index.html#source -> {REPO_URL}/blob/main/docs/gone.md: no such path in the repository\n"
+        "checked 2 links on 3 pages, 0 broken\n"
+        f"redirects of book.toml: 5 checked, 0 {NOT_FOLLOWED}, 4 broken\n"
+        + ALL_BUILT
+    )
+
+
+def test_the_link_check_holds_a_redirect_to_a_directory_to_its_index_page(tmp_path):
+    entries = ('"/old.html" = "guide/"', '"/guide/page.html#up" = "../#overview"', '"/index.html#top" = "guide/#step-2"')
+    root = linked_site(tmp_path, entries)
+    out = check_links(root)
+    assert (out.returncode, out.stderr) == (1, "")
+    assert out.stdout == (
+        "book.toml: /old.html -> guide/: no such file in the site\n"
+        "book.toml: /index.html#top -> guide/#step-2: no such file in the site\n"
+        "checked 2 links on 3 pages, 0 broken\n"
+        f"redirects of book.toml: 3 checked, 0 {NOT_FOLLOWED}, 2 broken\n"
+        + ALL_BUILT
+    )
+    (root / "target" / "book" / "guide" / "index.html").write_text(page_html("Guide", '<h1 id="guide">Guide</h1>'), encoding="utf-8")
+    out = check_links(root)
+    assert (out.returncode, out.stderr) == (1, "")
+    assert out.stdout == (
+        "book.toml: /index.html#top -> guide/#step-2: no id 'step-2' on guide/index.html\n"
+        "checked 2 links on 4 pages, 0 broken\n"
+        f"redirects of book.toml: 3 checked, 0 {NOT_FOLLOWED}, 1 broken\n"
+        "pages under docs: 3 checked, 0 not in the site\n"
+    )
+
+
+def test_the_link_check_lists_a_broken_link_before_a_lost_redirect_and_counts_each_apart(tmp_path):
+    root = linked_site(tmp_path, ['"/old.html" = "guide/setup.html#step-9"'], home_link="guide/setup.html#step-9")
+    out = check_links(root)
+    assert (out.returncode, out.stderr) == (1, "")
+    assert out.stdout == (
+        "index.html: guide/setup.html#step-9: no id 'step-9' on guide/setup.html\n"
+        "book.toml: /old.html -> guide/setup.html#step-9: no id 'step-9' on guide/setup.html\n"
+        "checked 2 links on 3 pages, 1 broken\n"
+        f"redirects of book.toml: 1 checked, 0 {NOT_FOLLOWED}, 1 broken\n"
+        + ALL_BUILT
+    )
+
+
+def test_the_link_check_reads_the_book_its_option_names(tmp_path):
+    root = linked_site(tmp_path, ['"/old.html" = "guide/setup.html"', '"/guide/page.html#was-here" = "setup.html#step-9"'])
+    book = root / "book.toml"
+    out = check_links(tmp_path, "--site", str(root / "target" / "book"), "--book", str(book))
+    assert (out.returncode, out.stderr) == (1, "")
+    assert out.stdout == (
+        f"{book}: /guide/page.html#was-here -> setup.html#step-9: no id 'step-9' on guide/setup.html\n"
+        "checked 2 links on 3 pages, 0 broken\n"
+        f"redirects of {book}: 2 checked, 0 {NOT_FOLLOWED}, 1 broken\n"
+        f"pages under {root / 'docs'}: 3 checked, 0 not in the site\n"
+    )
+
+
+def test_the_link_check_passes_a_book_without_a_redirect_table(tmp_path):
+    out = check_links(linked_site(tmp_path, None))
+    assert (out.returncode, out.stderr) == (0, "")
+    assert out.stdout == (
+        f"checked 2 links on 3 pages, 0 broken\nredirects of book.toml: 0 checked, 0 {NOT_FOLLOWED}, 0 broken\n"
+        + ALL_BUILT
+    )
+
+
+def test_the_link_check_refuses_a_site_whose_book_it_cannot_find(tmp_path):
+    root = linked_site(tmp_path, LANDING_REDIRECTS)
+    (root / "book.toml").unlink()
+    out = check_links(root)
+    assert (out.returncode, out.stdout) == (1, "")
+    assert out.stderr == (
+        "ERROR: [check_site_links] no book configuration at book.toml: name the one the site was built from with --book\n"
+    )
+
+
+@pytest.mark.parametrize(
+    "entry",
+    ["'/old.html' = 'guide/setup.html'", '"/old.html" = { to = "guide/setup.html" }', '"/old.html" ='],
+    ids=["literal-strings", "inline-table", "no-destination"],
+)
+def test_the_link_check_refuses_a_redirect_entry_it_cannot_read(tmp_path, entry):
+    out = check_links(linked_site(tmp_path, ['"/guide/page.html#up" = "../index.html"', entry]))
+    assert (out.returncode, out.stdout) == (1, "")
+    assert out.stderr == f"ERROR: [check_site_links] unrecognised redirect entry in book.toml: {entry}\n"
+
+
+def test_the_link_check_reads_every_entry_of_the_committed_redirect_table():
+    book = ROOT / "book.toml"
+    sources = [line.split('"')[1] for line in book.read_text(encoding="utf-8").splitlines() if line.startswith('"/')]
+    assert sources
+    assert [source for source, _ in link_check.read_redirects(str(book))] == sources
+
+
+def unlisted(root, *sources, docs="docs"):
+    """Writes each of `sources` under the fixture's source directory as a page no chapter lists and the site lacks."""
+    for source in sources:
+        (root / docs / source).write_text("# A page no chapter lists\n", encoding="utf-8")
+
+
+def test_the_link_check_lists_each_source_page_the_site_lacks_after_the_lost_redirects(tmp_path):
+    root = linked_site(tmp_path, ['"/old.html" = "guide/setup.html#step-9"'])
+    unlisted(root, "notes.md", "guide/extra.md")
+    out = check_links(root)
+    assert (out.returncode, out.stderr) == (1, "")
+    assert out.stdout == (
+        "book.toml: /old.html -> guide/setup.html#step-9: no id 'step-9' on guide/setup.html\n"
+        "docs/guide/extra.md: no page guide/extra.html " + NOT_BUILT.format("docs")
+        + "docs/notes.md: no page notes.html " + NOT_BUILT.format("docs")
+        + "checked 2 links on 3 pages, 0 broken\n"
+        f"redirects of book.toml: 1 checked, 0 {NOT_FOLLOWED}, 1 broken\n"
+        "pages under docs: 5 checked, 2 not in the site\n"
+    )
+
+
+def test_a_missing_page_alone_fails_the_link_check(tmp_path):
+    root = linked_site(tmp_path, LANDING_REDIRECTS)
+    unlisted(root, "guide/extra.md")
+    out = check_links(root)
+    assert (out.returncode, out.stderr) == (1, "")
+    assert out.stdout == (
+        "docs/guide/extra.md: no page guide/extra.html " + NOT_BUILT.format("docs")
+        + "checked 2 links on 3 pages, 0 broken\n"
+        f"redirects of book.toml: 5 checked, 2 {NOT_FOLLOWED}, 0 broken\n"
+        "pages under docs: 4 checked, 1 not in the site\n"
+    )
+
+
+def test_the_link_check_holds_a_readme_to_the_index_of_its_directory_and_the_not_found_source_to_its_page(tmp_path):
+    root = linked_site(tmp_path, None)
+    unlisted(root, "404.md", "guide/README.md")
+    out = check_links(root)
+    assert (out.returncode, out.stderr) == (1, "")
+    assert out.stdout == (
+        "docs/404.md: no page 404.html " + NOT_BUILT.format("docs")
+        + "docs/guide/README.md: no page guide/index.html " + NOT_BUILT.format("docs")
+        + f"checked 2 links on 3 pages, 0 broken\nredirects of book.toml: 0 checked, 0 {NOT_FOLLOWED}, 0 broken\n"
+        "pages under docs: 5 checked, 2 not in the site\n"
+    )
+    site = root / "target" / "book"
+    (site / "404.html").write_text(page_html("Not found", "<p>No such page.</p>"), encoding="utf-8")
+    (site / "guide" / "index.html").write_text(page_html("Guide", '<h1 id="guide">Guide</h1>'), encoding="utf-8")
+    out = check_links(root)
+    assert (out.returncode, out.stderr) == (0, "")
+    assert out.stdout == (
+        f"checked 2 links on 4 pages, 0 broken\nredirects of book.toml: 0 checked, 0 {NOT_FOLLOWED}, 0 broken\n"
+        "pages under docs: 5 checked, 0 not in the site\n"
+    )
+
+
+def test_the_link_check_reads_the_source_pages_of_the_tree_its_option_names(tmp_path):
+    root = linked_site(tmp_path, None)
+    unlisted(root, "guide/extra.md")
+    git(root, "init", "-q")
+    git(root, "add", "book.toml", "docs")
+    git(root, "commit", "-q", "-m", "The pages")
+    (root / "docs" / "guide" / "extra.md").unlink()
+    unlisted(root, "notes.md")
+    links_and_redirects = (
+        f"checked 2 links on 3 pages, 0 broken\nredirects of book.toml: 0 checked, 0 {NOT_FOLLOWED}, 0 broken\n"
+    )
+    out = check_links(root, "--tree", "HEAD")
+    assert (out.returncode, out.stderr) == (1, "")
+    assert out.stdout == (
+        "docs/guide/extra.md: no page guide/extra.html " + NOT_BUILT.format("docs")
+        + links_and_redirects
+        + "pages under docs in HEAD: 4 checked, 1 not in the site\n"
+    )
+    out = check_links(root)
+    assert (out.returncode, out.stderr) == (1, "")
+    assert out.stdout == (
+        "docs/notes.md: no page notes.html " + NOT_BUILT.format("docs")
+        + links_and_redirects
+        + "pages under docs: 4 checked, 1 not in the site\n"
+    )
+
+
+def test_the_link_check_takes_no_directory_of_the_tree_for_a_page(tmp_path):
+    root = linked_site(tmp_path, None)
+    (root / "docs" / "figures.md").mkdir()
+    (root / "docs" / "figures.md" / "plot.txt").write_text("A plot.\n", encoding="utf-8")
+    git(root, "init", "-q")
+    git(root, "add", "book.toml", "docs")
+    git(root, "commit", "-q", "-m", "The pages")
+    out = check_links(root, "--tree", "HEAD")
+    assert (out.returncode, out.stderr) == (0, "")
+    assert out.stdout.endswith("pages under docs in HEAD: 3 checked, 0 not in the site\n")
+    out = check_links(root)
+    assert (out.returncode, out.stderr) == (0, "")
+    assert out.stdout.endswith(ALL_BUILT)
+
+
+def test_under_a_tree_the_link_check_reads_the_source_directory_from_the_root_of_that_tree(tmp_path):
+    root = linked_site(tmp_path, None)
+    unlisted(root, "guide/extra.md")
+    git(root, "init", "-q")
+    git(root, "add", "book.toml", "docs")
+    git(root, "commit", "-q", "-m", "The pages")
+    book = tmp_path / "elsewhere" / "book.toml"
+    book.parent.mkdir()
+    shutil.copyfile(root / "book.toml", book)
+    out = check_links(root, "--book", str(book), "--tree", "HEAD")
+    assert (out.returncode, out.stderr) == (1, "")
+    assert out.stdout == (
+        "docs/guide/extra.md: no page guide/extra.html " + NOT_BUILT.format("docs")
+        + f"checked 2 links on 3 pages, 0 broken\nredirects of {book}: 0 checked, 0 {NOT_FOLLOWED}, 0 broken\n"
+        "pages under docs in HEAD: 4 checked, 1 not in the site\n"
+    )
+
+
+def test_the_link_check_reads_a_readme_in_another_letter_case_as_an_index_page(tmp_path):
+    root = linked_site(tmp_path, None)
+    unlisted(root, "guide/ReadMe.md")
+    out = check_links(root)
+    assert (out.returncode, out.stderr) == (1, "")
+    assert out.stdout.startswith("docs/guide/ReadMe.md: no page guide/index.html " + NOT_BUILT.format("docs"))
+
+
+def test_a_directory_at_the_address_of_a_page_is_not_that_page(tmp_path):
+    root = linked_site(tmp_path, None)
+    unlisted(root, "guide/extra.md")
+    (root / "target" / "book" / "guide" / "extra.html").mkdir()
+    out = check_links(root)
+    assert (out.returncode, out.stderr) == (1, "")
+    assert out.stdout.startswith("docs/guide/extra.md: no page guide/extra.html " + NOT_BUILT.format("docs"))
+
+
+def test_the_link_check_reads_the_source_directory_from_the_book_table_alone(tmp_path):
+    root = linked_site(tmp_path, None)
+    book = root / "book.toml"
+    named = book.read_text(encoding="utf-8")
+    site_url = 'site-url = "/vep-rs/"\n'
+    assert 'src = "docs"\n' in named and site_url in named
+    book.write_text(named.replace('src = "docs"\n', "").replace(site_url, site_url + 'src = "elsewhere"\n'), encoding="utf-8")
+    (root / "docs").rename(root / "src")
+    out = check_links(root)
+    assert (out.returncode, out.stderr) == (0, "")
+    assert out.stdout.endswith("pages under src: 3 checked, 0 not in the site\n")
+
+
+@pytest.mark.parametrize(("key", "directory"), [('src = "pages"\n', "pages"), ("", "src")], ids=["named", "left-out"])
+def test_the_link_check_reads_the_source_directory_from_the_book(tmp_path, key, directory):
+    root = linked_site(tmp_path, None)
+    book = root / "book.toml"
+    named = book.read_text(encoding="utf-8")
+    assert 'src = "docs"\n' in named
+    book.write_text(named.replace('src = "docs"\n', key), encoding="utf-8")
+    (root / "docs").rename(root / directory)
+    unlisted(root, "notes.md", docs=directory)
+    out = check_links(root)
+    assert (out.returncode, out.stderr) == (1, "")
+    assert out.stdout == (
+        f"{directory}/notes.md: no page notes.html " + NOT_BUILT.format(directory)
+        + f"checked 2 links on 3 pages, 0 broken\nredirects of book.toml: 0 checked, 0 {NOT_FOLLOWED}, 0 broken\n"
+        f"pages under {directory}: 4 checked, 1 not in the site\n"
+    )
+
+
+def test_the_link_check_refuses_a_source_directory_without_a_page(tmp_path):
+    root = linked_site(tmp_path, LANDING_REDIRECTS)
+    git(root, "init", "-q")
+    git(root, "add", "book.toml")
+    git(root, "commit", "-q", "-m", "The book alone")
+    refusal = "ERROR: [check_site_links] no Markdown page under {}, the source directory of the book book.toml\n"
+    out = check_links(root, "--tree", "HEAD")
+    assert (out.returncode, out.stdout, out.stderr) == (1, "", refusal.format("docs in HEAD"))
+    for source in ("index.md", "guide/setup.md", "guide/page.md"):
+        (root / "docs" / source).unlink()
+    out = check_links(root)
+    assert (out.returncode, out.stdout, out.stderr) == (1, "", refusal.format("docs"))
+    shutil.rmtree(root / "docs")
+    out = check_links(root)
+    assert (out.returncode, out.stdout, out.stderr) == (1, "", refusal.format("docs"))
+
+
+def test_the_link_check_reads_the_source_directory_of_the_committed_book():
+    book = ROOT / "book.toml"
+    assert link_check.read_source(str(book)) == tomllib.loads(book.read_text(encoding="utf-8"))["book"]["src"]
+
+
+def test_the_release_site_script_has_the_link_check_read_the_table_it_built_from():
+    script = (HERE / "build_release_site.sh").read_text(encoding="utf-8")
+    runs = [line for line in script.splitlines() if "check_site_links.py" in line and not line.startswith("#")]
+    arguments = '--site "$out/target/book" --book "$out/book.toml" --ref "$docs_ref" --tree "$ref"'
+    assert runs == [f'python3 "$checkout/scripts/docs/check_site_links.py" {arguments}']
+
+
+QUIET_BUILD = " INFO Book building has started\n INFO Running the html backend\n"
+INDEX_WARNING = " WARN search index is very large (16413305 bytes)\n"
+# What mdBook 0.5.4 writes for a code span that wraps so that `<dir>` opens a line: in a paragraph the
+# first line alone, in a list item both.
+UNCLOSED_IN_PARAGRAPH = " WARN unclosed HTML tag `<dir>` found in `developers/writing-a-plugin.md`\n"
+UNCLOSED_IN_ITEM = (
+    " WARN unclosed HTML tag `<dir>` found in `plugins.md` while exiting Item\n"
+    "HTML tags must be closed before exiting a markdown element.\n"
+)
+
+
+def stand_in_builder(tmp_path, output, status=0):
+    """A directory whose `mdbook` writes its arguments, one a line, to `arguments.txt` beside it and
+    the value of `MDBOOK_LOG`, or `unset`, to `log_variable.txt`, then `output` to standard error,
+    and ends with `status`. It calls shell built-ins alone, since the directory is the whole PATH of
+    the run."""
+    directory = tmp_path / "bin"
+    directory.mkdir()
+    (directory / "output.txt").write_text(output, encoding="utf-8")
+    builder = directory / "mdbook"
+    builder.write_text(
+        "#!/bin/sh\n"
+        "here=${0%/*}\n"
+        'printf \'%s\\n\' "$@" > "$here/arguments.txt"\n'
+        'printf \'%s\\n\' "${MDBOOK_LOG-unset}" > "$here/log_variable.txt"\n'
+        'while IFS= read -r line; do printf \'%s\\n\' "$line" >&2; done < "$here/output.txt"\n'
+        f"exit {status}\n",
+        encoding="utf-8",
+    )
+    builder.chmod(0o755)
+    return directory
+
+
+def build_site(path, *arguments):
+    """The finished run of the site build with `path` as its whole PATH."""
+    return subprocess.run(
+        [sys.executable, str(HERE / "site_build.py"), *arguments],
+        env={**os.environ, "PATH": str(path)},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+@pytest.mark.parametrize(
+    ("warning", "message"),
+    [
+        (UNCLOSED_IN_PARAGRAPH, "unclosed HTML tag `<dir>` found in `developers/writing-a-plugin.md`"),
+        (UNCLOSED_IN_ITEM, "unclosed HTML tag `<dir>` found in `plugins.md` while exiting Item"),
+    ],
+    ids=["in a paragraph", "in a list item"],
+)
+def test_the_site_build_refuses_a_page_that_leaves_a_tag_unclosed(tmp_path, warning, message):
+    """The builder ends with status 0 under the warning; the site build names it and ends with 1."""
+    run = build_site(stand_in_builder(tmp_path, QUIET_BUILD + warning + INDEX_WARNING))
+    assert run.returncode == 1
+    assert run.stderr == f"ERROR: [site_build] the builder warned: {message}\n"
+    assert run.stdout == QUIET_BUILD + warning + INDEX_WARNING
+
+
+@pytest.mark.parametrize("output", [QUIET_BUILD, QUIET_BUILD + INDEX_WARNING], ids=["none", "the admitted one"])
+def test_the_site_build_passes_a_build_with_no_warning_but_an_admitted_one(tmp_path, output):
+    run = build_site(stand_in_builder(tmp_path, output))
+    assert (run.returncode, run.stderr, run.stdout) == (0, "", output)
+
+
+def test_only_a_line_at_the_warning_level_is_a_warning_and_each_is_named_once():
+    lines = [
+        " INFO a page says WARN in its text\n",
+        "WARN first word of a line, no padding\n",
+        " WARN search index is very large (1 bytes)\n",
+        "HTML tags must be closed before exiting a markdown element.\n",
+        "  WARN  padded twice  \n",
+    ]
+    assert site_build.refused(lines) == ["first word of a line, no padding", "padded twice"]
+    assert all(reason for reason in site_build.ADMITTED.values())
+
+
+def test_the_site_build_ends_with_the_builders_status_when_the_build_fails(tmp_path):
+    failed = "ERROR Rendering failed\n"
+    run = build_site(stand_in_builder(tmp_path, QUIET_BUILD + UNCLOSED_IN_PARAGRAPH + failed, status=101))
+    assert run.returncode == 101
+    assert run.stderr == "ERROR: [site_build] mdbook build ended with status 101\n"
+    assert run.stdout.endswith(failed)
+
+
+def test_the_site_build_hands_its_arguments_to_the_builder(tmp_path):
+    directory = stand_in_builder(tmp_path, QUIET_BUILD)
+    assert build_site(directory, "--dest-dir", "target/other book").returncode == 0
+    assert (directory / "arguments.txt").read_text(encoding="utf-8") == "build\n--dest-dir\ntarget/other book\n"
+
+
+def test_the_site_build_runs_the_builder_without_its_log_variable(monkeypatch, tmp_path):
+    """mdBook reads `MDBOOK_LOG`: `error` silences its warnings, and any level puts each line's
+    source before its message, which then opens with no entry of `ADMITTED`. The builder runs
+    without the variable."""
+    monkeypatch.setenv("MDBOOK_LOG", "error")
+    directory = stand_in_builder(tmp_path, QUIET_BUILD + UNCLOSED_IN_PARAGRAPH)
+    assert build_site(directory).returncode == 1
+    assert (directory / "log_variable.txt").read_text(encoding="utf-8") == "unset\n"
+
+
+def test_the_site_build_writes_a_character_its_standard_output_cannot_encode_as_its_escape(monkeypatch, tmp_path):
+    """A line of the builder that the encoding of standard output cannot hold is passed through with
+    the character escaped, and the warning on it is still refused."""
+    monkeypatch.setenv("PYTHONIOENCODING", "ascii")
+    message = "unclosed HTML tag `<dir>` found in `{}`"
+    named, escaped = message.format("caf" + chr(0xE9) + ".md"), message.format("caf\\xe9.md")
+    run = build_site(stand_in_builder(tmp_path, QUIET_BUILD + f" WARN {named}\n"))
+    assert run.returncode == 1
+    assert run.stdout == QUIET_BUILD + f" WARN {escaped}\n"
+    assert run.stderr == f"ERROR: [site_build] the builder warned: {escaped}\n"
+
+
+def test_the_site_build_refuses_to_run_without_the_builder(tmp_path):
+    run = build_site(tmp_path)
+    assert (run.returncode, run.stdout) == (2, "")
+    assert run.stderr == "ERROR: [site_build] mdbook is not on PATH\n"
+
+
+def test_the_pull_request_step_of_the_pages_job_builds_through_the_site_build():
+    """The step builds the pages with the script that refuses a warning, never with the builder alone,
+    and builds before the checks that read the built site. The builder the job installs is of the
+    series whose warning lines the script reads."""
+    workflow = (ROOT / ".github" / "workflows" / "pages.yml").read_text(encoding="utf-8")
+    installed = re.findall(r"^\s*MDBOOK_VERSION=(\S+)$", workflow, re.MULTILINE)
+    assert len(installed) == 1, installed
+    assert installed[0].startswith(site_build.MDBOOK_SERIES + "."), installed[0]
+    step = workflow[workflow.index("      - name: Build the pull request's pages\n") :]
+    commands = [line.strip() for line in step[: step.index("\n      - name: ", 1)].splitlines()]
+    assert "python3 scripts/docs/site_build.py" in commands
+    assert not [command for command in commands if command.split()[:1] == ["mdbook"]]
+    built = commands.index("python3 scripts/docs/site_build.py")
+    assert built < min(i for i, command in enumerate(commands) if "check_site_links.py" in command)
+
+
+def test_readme_home_points_the_edit_link_at_the_readme(monkeypatch, capsys, tmp_path):
+    site = built_site(tmp_path)
+    code, out = finish(monkeypatch, capsys, site, readme_home="1")
     assert code == 0, out
-    assert "benchmark chart: the README is the home page; release check skipped\n" in out
     index = (site / "index.html").read_text(encoding="utf-8")
     assert f'<a href="{EDIT_URL}README.md">Edit</a>' in index
     assert "docs/index.md" not in index
-
-
-DATASETS = [
-    ("alpha", "Alpha, whole genome", "GRCh38"),
-    ("beta", "Beta, whole genome", "GRCh37"),
-    ("gamma", "Gamma, whole genome", "GRCh37"),
-    ("delta", "Delta, whole genome", "GRCh38"),
-]
-# Seconds per chromosome on ARM; every dataset has chromosomes 1 and 2, so a dataset's time is twice its entry.
-MEDIANS = {
-    "vep_rs": {"alpha": 10, "beta": 20, "gamma": 30, "delta": 40},
-    "fastvep": {"alpha": 100, "beta": 200, "gamma": 300, "delta": 600},
-    "ensembl_vep": {"alpha": 2000, "beta": 4000, "gamma": 6000, "delta": 8000},
-}
-ENGINE_VERSIONS = {"vep_rs": "v1.2.3", "fastvep": "v2.0.0", "ensembl_vep": "release_115.2"}
-
-
-def chart_record(engines=("vep_rs", "fastvep", "ensembl_vep"), release=RELEASE):
-    """A population record of four two-chromosome datasets; the x86 cells carry other times, so a sum that
-    reads them is wrong."""
-    wall_time = {}
-    for engine in engines:
-        cells = []
-        for key, _label, _assembly in DATASETS:
-            for chromosome in ("1", "2"):
-                for arch, extra in (("arm64", 0), ("x86_64", 1)):
-                    cells.append({"dataset": key, "arch": arch, "chromosome": chromosome,
-                                  "median_sec": MEDIANS[engine][key] + extra})
-        wall_time[engine] = {"engine_version": ENGINE_VERSIONS[engine], "n_clones_per_cell": 5, "per_cell": cells}
-    return {
-        "release": release,
-        "fork": 16,
-        "datasets": [
-            {"dataset": key, "label": label, "assembly": assembly, "chromosomes": ["1", "2"]}
-            for key, label, assembly in DATASETS
-        ],
-        "wall_time": wall_time,
-    }
-
-
-def chart_repo(tmp_path, records):
-    repo = tmp_path / "repo"
-    provenance = repo / "docs" / "concordance-provenance"
-    provenance.mkdir(parents=True)
-    (repo / "README.md").write_text(f"# Project\n\n## Current release: {RELEASE}\n", encoding="utf-8")
-    for name, record in records.items():
-        (provenance / name).write_text(json.dumps(record), encoding="utf-8")
-    return repo
-
-
-def render_chart(monkeypatch, repo, out):
-    monkeypatch.setattr(sys, "argv", ["render_benchmark_chart.py", "--repo", str(repo), "--out", str(out)])
-    chart.main()
-
-
-def test_population_record_is_the_one_file_of_the_version(tmp_path):
-    repo = chart_repo(tmp_path, {
-        "first-population-v1.2.3.json": chart_record(),
-        "other-population-v1.2.2.json": chart_record(release="v1.2.2"),
-    })
-    assert chart.population_record(repo, VERSION) == repo / "docs" / "concordance-provenance" / "first-population-v1.2.3.json"
-
-
-def test_no_population_record_fails_by_pattern(tmp_path):
-    with pytest.raises(SystemExit) as excinfo:
-        chart.population_record(chart_repo(tmp_path, {}), VERSION)
-    assert excinfo.value.code == "ERROR: [render_benchmark_chart] no docs/concordance-provenance/*-population-v1.2.3.json"
-
-
-def test_two_population_records_fail_naming_both(tmp_path):
-    repo = chart_repo(tmp_path, {
-        "first-population-v1.2.3.json": chart_record(),
-        "second-population-v1.2.3.json": chart_record(),
-    })
-    with pytest.raises(SystemExit) as excinfo:
-        chart.population_record(repo, VERSION)
-    assert excinfo.value.code == (
-        "ERROR: [render_benchmark_chart] 2 records match docs/concordance-provenance/*-population-v1.2.3.json: "
-        "first-population-v1.2.3.json, second-population-v1.2.3.json"
-    )
-
-
-def test_load_record_refuses_a_release_other_than_the_readme_version(tmp_path):
-    path = tmp_path / "first-population-v1.2.3.json"
-    path.write_text(json.dumps(chart_record(release="v1.2.2")), encoding="utf-8")
-    with pytest.raises(SystemExit) as excinfo:
-        chart.load_record(path, VERSION)
-    assert excinfo.value.code == (
-        "ERROR: [render_benchmark_chart] first-population-v1.2.3.json records release 'v1.2.2'; the README names v1.2.3"
-    )
-
-
-def test_the_committed_chart_is_the_render_of_the_current_record(monkeypatch, capsys, tmp_path):
-    out = tmp_path / "benchmark.svg"
-    render_chart(monkeypatch, ROOT, out)
-    assert out.read_bytes() == (ROOT / "docs" / "assets" / "benchmark.svg").read_bytes()
-    version = chart.current_release(ROOT / "README.md")
-    record = chart.population_record(ROOT, version)
-    assert capsys.readouterr().out.endswith(f" bytes) for v{version} from {record.name}\n")
-
-
-def test_a_record_without_a_required_engine_fails_by_name():
-    with pytest.raises(SystemExit) as excinfo:
-        chart.read_chart(chart_record(engines=("vep_rs", "fastvep")), "record.json", VERSION)
-    assert excinfo.value.code == "ERROR: [render_benchmark_chart] record.json carries no wall_time.ensembl_vep"
-
-
-def test_a_record_without_fastvep_omits_its_series_with_a_note(monkeypatch, capsys, tmp_path):
-    repo = chart_repo(tmp_path, {"first-population-v1.2.3.json": chart_record(engines=("vep_rs", "ensembl_vep"))})
-    out = tmp_path / "chart.svg"
-    render_chart(monkeypatch, repo, out)
-    printed = capsys.readouterr().out
-    assert printed.startswith("note: first-population-v1.2.3.json has no wall_time.fastvep; the chart omits fastVEP\n")
-    svg = out.read_text(encoding="utf-8")
-    assert "bar-fastvep" not in svg
-    assert "bar-ensembl-vep" in svg
-    assert "bar-vep-rs" in svg
-
-
-def test_svg_carries_the_release_stamp_and_no_blank_line():
-    svg = chart.render(chart.read_chart(chart_record(), "record.json", VERSION))
-    first = svg.split("\n", 1)[0]
-    assert first.startswith("<svg ")
-    assert first.endswith(f'data-release="{RELEASE}">')
-    assert (
-        f"<desc>Release {RELEASE}: whole-genome wall time per dataset on ARM for vep-rs v1.2.3, fastVEP v2.0.0, "
-        "Ensembl VEP 115.2, from the release's population record.</desc>"
-    ) in svg
-    assert "\n\n" not in svg
-    assert svg.endswith("</svg>\n")
-
-
-def test_headline_states_the_speed_up_range_against_each_other_series():
-    assert chart.headline(chart.read_chart(chart_record(), "record.json", VERSION)) == (
-        "vep-rs annotates the four whole-genome datasets 10.0 to 15.0 times faster than fastVEP v2.0.0 and "
-        "200 times faster than Ensembl VEP 115.2 on ARM."
-    )
-
-
-def test_title_names_the_base_machine_count_and_every_series_measured_on_another():
-    assert chart.title_text(chart.read_chart(chart_record(), "record.json", VERSION)) == (
-        "Wall time, sum of per-chromosome medians over 5 machines at 16 threads, ARM"
-    )
-    record = chart_record()
-    record["wall_time"]["ensembl_vep"]["n_clones_per_cell"] = 1
-    assert chart.title_text(chart.read_chart(record, "record.json", VERSION)) == (
-        "Wall time, sum of per-chromosome medians over 5 machines (Ensembl VEP over 1) at 16 threads, ARM"
-    )
 
 
 def probe_record(**overrides):
@@ -1311,7 +1658,9 @@ PANEL_A = "raw F1 per dataset"
 PANEL_B = "wall time per dataset and architecture"
 PANEL_C = "raw F1 per plugin"
 PANEL_D = "the plugins each tool reads"
+PANEL_E = "the ready-made Ensembl VEP caches that are exact, of those checked"
 FOUR_PANELS = f"{PANEL_A}, {PANEL_B}, {PANEL_C} and {PANEL_D}"
+FIVE_PANELS = f"{PANEL_A}, {PANEL_B}, {PANEL_C}, {PANEL_D} and {PANEL_E}"
 CHECK_REFUSAL = (
     "ERROR: [render_home_page] docs/index.md line {} is not the line the records of v1.2.3 give; "
     "scripts/docs/render_home_page.py writes the page"
@@ -1389,11 +1738,13 @@ def home_values(tools=(RELEASED_TOOL, COMPARATOR_TOOL, REFERENCE_TOOL), notes=(H
     }
 
 
-def figure_tree(tmp_path):
+def figure_tree(tmp_path, genomes=False):
     """A made-up tree of one release whose records the figure script and the page's script both read, with the
     figure's pair: the values file as the figure script's values layer writes it from those records, and made-up
-    image bytes beside it. Returns the tree and the values file's document."""
-    records = json.loads(json.dumps(figure_records.record_set()).replace('"pop_a"', '"gnomad_v4.1_genomes"'))
+    image bytes beside it. With `genomes` the release record holds the block of the caches checked, which gives
+    the figure its fifth panel. Returns the tree and the values file's document."""
+    made_up = figure_records.with_genomes() if genomes else figure_records.record_set()
+    records = json.loads(json.dumps(made_up).replace('"pop_a"', '"gnomad_v4.1_genomes"'))
     for record in records.values():
         if record.get("record") == "population-measurements":
             for entry in record["datasets"]:
@@ -1623,6 +1974,11 @@ def test_the_reference_release_is_the_image_tag_without_its_prefix(tmp_path):
             f"{HOME_NOTE} vep-rs v1.2.3 against Ensembl VEP 100.1, with fastVEP v9.8.7 as comparator.",
         ),
         (
+            {"panels": "abcde"},
+            f"{HOME_NOTE} Five panels comparing vep-rs v1.2.3 and fastVEP v9.8.7 against Ensembl VEP 100.1: {FIVE_PANELS}.",
+            f"{HOME_NOTE} vep-rs v1.2.3 against Ensembl VEP 100.1, with fastVEP v9.8.7 as comparator.",
+        ),
+        (
             {"notes": ("On *one* machine [made up].",), "tools": (RELEASED_TOOL, ("fastvep", "fast_VEP*", "v9.8.7"), REFERENCE_TOOL)},
             (
                 "On \\*one\\* machine \\[made up\\]. Four panels comparing vep-rs v1.2.3 and fast\\_VEP\\* v9.8.7 against "
@@ -1633,7 +1989,7 @@ def test_the_reference_release_is_the_image_tag_without_its_prefix(tmp_path):
     ],
     ids=[
         "one-comparator", "no-comparator", "no-notes", "two-notes", "panel-notes-after-the-notes", "one-panel",
-        "panels-in-the-file-order", "markup-escaped",
+        "panels-in-the-file-order", "five-panels", "markup-escaped",
     ],
 )
 def test_the_figure_block_is_composed_from_the_values_file(tmp_path, values, alt, caption):
@@ -1658,6 +2014,22 @@ def test_the_page_is_built_from_the_values_file_the_figure_script_writes(tmp_pat
     assert document["alt_text"].startswith(f"Four panels comparing {released} and {comparator} against {reference}. ")
     for panel_id, clause in zip("abcd", (PANEL_A, PANEL_B, PANEL_C, PANEL_D)):
         assert f" ({panel_id}) {clause[0].upper()}{clause[1:]}" in document["caption"]
+
+
+def test_the_page_counts_five_panels_from_a_values_file_whose_release_record_holds_the_caches_checked(tmp_path):
+    repo, document = figure_tree(tmp_path, genomes=True)
+    assert [panel["id"] for panel in document["panels"]] == list("abcde")
+    released, comparator, reference = (f"{tool['name']} {tool['version']}" for tool in document["tools"])
+    note = next(panel["note"] for panel in document["panels"] if panel["id"] == "d")
+    lead = f"{released} against {reference}, with {comparator} as comparator."
+    alt = f"{note} Five panels comparing {released} and {comparator} against {reference}: {FIVE_PANELS}."
+    assert home_page(repo).split("\n\n")[3:9] == [*figure_paragraphs(alt, f"{note} {lead}"), "## Why vep-rs"]
+    # Each clause of the page opens its panel's part of the caption the figure script writes, the fifth too,
+    # and the page's clause for the fifth panel names no tool.
+    assert document["alt_text"].startswith(f"Five panels comparing {released} and {comparator} against {reference}. ")
+    for panel_id, clause in zip("abcde", (PANEL_A, PANEL_B, PANEL_C, PANEL_D, PANEL_E)):
+        assert f" ({panel_id}) {clause[0].upper()}{clause[1:]}" in document["caption"]
+    assert PANEL_E == figure.GENOMES_CLAUSE and not any(tool["name"] in PANEL_E for tool in document["tools"] if tool["id"] != "ensembl-vep")
 
 
 def test_two_comparators_are_named_together_in_the_figure_block(tmp_path):
@@ -1722,8 +2094,8 @@ def test_the_paragraph_under_the_opening_says_what_the_tool_is_and_links_the_ins
             f"{HOME_VALUES} names the image 'docs/assets/other.png'; the page shows {HOME_IMAGE}",
         ),
         (
-            {"values": home_values(panels="ae")},
-            f"{HOME_VALUES} holds the panel e, and home_page.template.md has no '<<panel e>>' clause",
+            {"values": home_values(panels="az")},
+            f"{HOME_VALUES} holds the panel z, and home_page.template.md has no '<<panel z>>' clause",
         ),
         (
             {"values": home_values(tools=(RELEASED_TOOL, ("othervep", "otherVEP", "v4.5.6"), REFERENCE_TOOL))},
@@ -1927,28 +2299,334 @@ def redirect_filter():
     return body[:body.index("\nEOF\n") + 1]
 
 
-def test_a_redirect_to_an_anchor_the_built_page_lacks_is_sent_to_the_page(tmp_path):
+def filter_redirects(tmp_path, built, table):
+    """Run the redirect filter over `table` on a site whose pages, each with its Markdown source, carry the
+    ids `built` gives them; returns the finished run and the table as the filter left it."""
     docs, site = tmp_path / "docs", tmp_path / "site"
-    (docs / SUB).mkdir(parents=True)
-    (site / SUB).mkdir(parents=True)
-    for page in ("index", f"{SUB}/setup"):
-        (docs / f"{page}.md").write_text("# Page\n", encoding="utf-8")
-    (site / "index.html").write_text('<h1 id="page">Page</h1>', encoding="utf-8")
-    (site / SUB / "setup.html").write_text('<h2 id="step-1">Step 1</h2>', encoding="utf-8")
+    for page, ids in built.items():
+        headings = "".join(f'<h2 id="{anchor}">Heading</h2>' for anchor in ids)
+        for root, suffix, text in ((docs, ".md", "# Page\n"), (site, ".html", headings)):
+            path = root / f"{page}{suffix}"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
     toml = tmp_path / "book.toml"
-    table = (
-        "[output.html.redirect]\n"
-        f'"/index.html#first" = "{SUB}/setup.html#step-1"\n'
-        f'"/index.html#second" = "{SUB}/setup.html#step-2"\n'
-    )
     toml.write_text(table, encoding="utf-8")
     done = subprocess.run(
         [sys.executable, "-", str(toml), str(docs), str(site), RELEASE, "/vep-rs/"],
         input=redirect_filter(), capture_output=True, text=True, check=False,
     )
+    return done, toml.read_text(encoding="utf-8")
+
+
+def test_a_redirect_to_an_anchor_the_built_page_lacks_is_sent_to_the_page(tmp_path):
+    table = (
+        "[output.html.redirect]\n"
+        f'"/index.html#first" = "{SUB}/setup.html#step-1"\n'
+        f'"/index.html#second" = "{SUB}/setup.html#step-2"\n'
+    )
+    done, left = filter_redirects(tmp_path, {"index": ["page"], f"{SUB}/setup": ["step-1"]}, table)
     assert done.returncode == 0, done.stderr
     assert done.stdout == (
         f"redirect sent to the page, anchor not on the {RELEASE} page: /index.html#second -> {SUB}/setup.html#step-2\n"
-        "redirects kept: 2, dropped: 0, sent to the page: 1\n"
+        "redirects kept: 2, dropped: 0, sent to the page: 1, sent to the source's anchor: 0\n"
     )
-    assert toml.read_text(encoding="utf-8") == table.replace("setup.html#step-2", "setup.html")
+    assert left == table.replace("setup.html#step-2", "setup.html")
+
+
+def test_a_redirect_whose_destination_page_carries_the_sources_anchor_name_is_sent_to_that_anchor(tmp_path):
+    """The setup page carries `step-1` and `step-2`. Only a redirect whose destination anchor the page lacks
+    moves: to the source's anchor name where the page carries it, else to the page."""
+    built = {"index": ["page"], f"{SUB}/page": ["page"], f"{SUB}/setup": ["step-1", "step-2"]}
+    table = (
+        "[output.html.redirect]\n"
+        f'"/index.html#step-1" = "{SUB}/setup.html#first-step"\n'
+        f'"/index.html#step-2" = "{SUB}/setup.html#step-1"\n'
+        f'"/index.html#step-3" = "{SUB}/setup.html#third-step"\n'
+        f'"/moved.html" = "{SUB}/setup.html#first-step"\n'
+        f'"/{SUB}/page.html#step-2" = "setup.html#second-step"\n'
+    )
+    done, left = filter_redirects(tmp_path, built, table)
+    sent = f"redirect sent to the source's anchor, the destination's anchor not on the {RELEASE} page"
+    to_page = f"redirect sent to the page, anchor not on the {RELEASE} page"
+    assert done.returncode == 0, done.stderr
+    assert done.stdout == (
+        f"{sent}: /index.html#step-1 -> {SUB}/setup.html#first-step\n"
+        f"{to_page}: /index.html#step-3 -> {SUB}/setup.html#third-step\n"
+        f"{to_page}: /moved.html -> {SUB}/setup.html#first-step\n"
+        f"{sent}: /{SUB}/page.html#step-2 -> setup.html#second-step\n"
+        "redirects kept: 5, dropped: 0, sent to the page: 2, sent to the source's anchor: 2\n"
+    )
+    assert left == (
+        "[output.html.redirect]\n"
+        f'"/index.html#step-1" = "{SUB}/setup.html#step-1"\n'
+        f'"/index.html#step-2" = "{SUB}/setup.html#step-1"\n'
+        f'"/index.html#step-3" = "{SUB}/setup.html"\n'
+        f'"/moved.html" = "{SUB}/setup.html"\n'
+        f'"/{SUB}/page.html#step-2" = "setup.html#step-2"\n'
+    )
+
+
+THEME_SCRIPT = ROOT / "theme" / "vep-rs.js"
+SITE = "https://docs.example"
+ATTACKER = "attacker.example"
+
+# The theme script runs whole under node against this stand-in for the DOM calls it makes on a page with nothing to
+# fit: one content element with its main, the menu bar and its buttons, and elements that keep their children and
+# listeners. The select's value answers as a browser's does, the chosen option's own value or else its text, unless the
+# scenario plants one, so a script that navigated to text read back from the page would be seen doing it. Each choice
+# reports the addresses the script navigated to and the requests it made; the report also carries the address the
+# preview banner links, when the scenario names the page's channel and the script shows the banner.
+SELECTOR_HARNESS = r"""
+const fs = require('fs');
+const vm = require('vm');
+const [script, scenarioText] = process.argv.slice(2);
+const scenario = JSON.parse(scenarioText);
+
+function element(tag) {
+    const listeners = {};
+    return {
+        tagName: String(tag).toUpperCase(),
+        children: [],
+        className: '',
+        textContent: '',
+        style: { setProperty() {}, removeProperty() {} },
+        classList: { add() {}, remove() {}, toggle() {} },
+        setAttribute() {},
+        removeAttribute() {},
+        getAttribute() { return null; },
+        hasAttribute() { return false; },
+        querySelector() { return null; },
+        querySelectorAll() { return []; },
+        appendChild(child) { this.children.push(child); return child; },
+        append(...nodes) { this.children.push(...nodes); },
+        insertBefore(node) { this.children.unshift(node); return node; },
+        get firstChild() { return this.children[0] || null; },
+        addEventListener(type, listener) { (listeners[type] = listeners[type] || []).push(listener); },
+        fire(type) { (listeners[type] || []).forEach(listener => listener({ type, target: this })); },
+        focus() {},
+        blur() {},
+    };
+}
+
+function select() {
+    const node = element('select');
+    let planted;
+    node.selectedIndex = -1;
+    Object.defineProperty(node, 'value', {
+        get() {
+            if (planted !== undefined) {
+                return planted;
+            }
+            const option = node.children[node.selectedIndex];
+            if (!option) {
+                return '';
+            }
+            return option.value === undefined ? option.textContent : option.value;
+        },
+        set(text) { planted = text; },
+    });
+    return node;
+}
+
+const main = element('main');
+const content = element('div');
+content.querySelector = selector => (selector === 'main' ? main : null);
+const menuBar = element('div');
+const buttons = element('div');
+const document = {
+    documentElement: element('html'),
+    body: element('body'),
+    activeElement: null,
+    getElementById: id => ({ 'mdbook-content': content, 'mdbook-menu-bar': menuBar })[id] || null,
+    querySelector(selector) {
+        if (selector === 'meta[name="vep-rs-channel"]' && scenario.channel) {
+            return { getAttribute: () => scenario.channel };
+        }
+        return selector === '#mdbook-menu-bar .right-buttons' ? buttons : null;
+    },
+    querySelectorAll: () => [],
+    createElement: tag => (tag === 'select' ? select() : element(tag)),
+    addEventListener() {},
+};
+
+const navigations = [];
+const requests = [];
+const location = {
+    origin: scenario.origin,
+    pathname: scenario.pathname,
+    search: '',
+    hash: scenario.hash || '',
+    get href() { return this.origin + this.pathname + this.hash; },
+    set href(address) { navigations.push(String(address)); },
+    assign(address) { navigations.push(String(address)); },
+    replace(address) { navigations.push(String(address)); },
+};
+const window = {
+    location,
+    matchMedia: () => ({ matches: false, addEventListener() {} }),
+    addEventListener() {},
+    open(address) { navigations.push(String(address)); },
+};
+
+function fetch(address, options) {
+    const text = String(address);
+    if (text.endsWith('versions.json')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(scenario.versions) });
+    }
+    requests.push(((options && options.method) || 'GET') + ' ' + text);
+    if (scenario.offline) {
+        return Promise.reject(new Error('offline'));
+    }
+    return Promise.resolve({ ok: scenario.pages.includes(text) });
+}
+
+const settle = () => new Promise(resolve => setImmediate(resolve));
+
+(async () => {
+    vm.runInNewContext(fs.readFileSync(script, 'utf8'), {
+        window,
+        document,
+        fetch,
+        URL,
+        localStorage: { getItem: () => null },
+        getComputedStyle: () => ({}),
+        requestAnimationFrame: callback => callback(),
+    });
+    await settle();
+    const label = buttons.children[0];
+    const chooser = label ? label.children.find(child => child.tagName === 'SELECT') : null;
+    const note = content.children.find(child => child.className === 'vep-banner');
+    const link = note ? note.children.find(child => child.tagName === 'A') : null;
+    const report = {
+        options: chooser ? chooser.children.map(option => option.textContent) : null,
+        banner: link ? link.href : null,
+        choices: [],
+    };
+    for (const choice of scenario.choices) {
+        navigations.length = 0;
+        requests.length = 0;
+        chooser.selectedIndex = choice.index;
+        if (choice.planted !== undefined) {
+            chooser.value = choice.planted;
+        }
+        chooser.fire('change');
+        await settle();
+        await settle();
+        report.choices.push({ navigations: [...navigations], requests: [...requests] });
+    }
+    process.stdout.write(JSON.stringify(report));
+})().catch(error => {
+    process.stderr.write(String(error && error.stack ? error.stack : error) + '\n');
+    process.exit(1);
+});
+"""
+
+# A list as the site writes it, the release at the site's path and the preview under it, then entries no site tool
+# writes: a script address, another site by its full address, by a scheme-relative one and by a backslash a browser
+# reads as a slash, and a path that resolves outside every listed one.
+LISTED = [{"name": RELEASE, "path": "/vep-rs/"}, {"name": "main", "path": "/vep-rs/main/"}]
+UNLISTED = [
+    {"name": "script", "path": "javascript:alert(document.domain)"},
+    {"name": "elsewhere", "path": f"https://{ATTACKER}/vep-rs/"},
+    {"name": "scheme-relative", "path": f"//{ATTACKER}/vep-rs/"},
+    {"name": "backslash", "path": f"/\\{ATTACKER}/vep-rs/"},
+    {"name": "another scheme", "path": "ftp://docs.example/vep-rs/"},
+    {"name": "outside", "path": "/vep-rs/main/../../private/"},
+]
+PREVIEW_PAGE = f"/vep-rs/main/{GUIDE_PAGE[:-3]}.html"
+RELEASE_PAGE = f"{SITE}/vep-rs/{GUIDE_PAGE[:-3]}.html"
+
+
+def choose(
+    tmp_path, choices, *, script=THEME_SCRIPT, channels=None, pathname=PREVIEW_PAGE, pages=(), offline=False, channel=None,
+):
+    """What the theme script at `script` does for each choice in the version selector of the page at `pathname`: the
+    option names it listed, the address its preview banner links on a page of `channel`, and per choice the addresses
+    it navigated to and the requests it made."""
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("no node on PATH: the version selector's behaviour is tested by running theme/vep-rs.js under node")
+    harness = tmp_path / "selector_harness.js"
+    harness.write_text(SELECTOR_HARNESS, encoding="utf-8")
+    scenario = {
+        "origin": SITE,
+        "pathname": pathname,
+        "hash": "#section",
+        "channel": channel,
+        "versions": {"release": RELEASE, "channels": LISTED + UNLISTED if channels is None else channels},
+        "pages": list(pages),
+        "offline": offline,
+        "choices": choices,
+    }
+    done = subprocess.run(
+        [node, str(harness), str(script), json.dumps(scenario)], capture_output=True, text=True, check=False,
+    )
+    assert done.returncode == 0, done.stderr
+    return json.loads(done.stdout)
+
+
+def test_the_version_selector_lists_every_entry_in_the_lists_order(tmp_path):
+    report = choose(tmp_path, [])
+    assert report["options"] == [entry["name"] for entry in LISTED + UNLISTED]
+
+
+def test_choosing_a_version_opens_the_same_page_there_with_the_fragment(tmp_path):
+    report = choose(tmp_path, [{"index": 0}], pages=[RELEASE_PAGE])
+    assert report["choices"] == [{"navigations": [f"{RELEASE_PAGE}#section"], "requests": [f"HEAD {RELEASE_PAGE}"]}]
+
+
+@pytest.mark.parametrize("offline", [False, True], ids=["the page is not there", "the request fails"])
+def test_choosing_a_version_without_the_page_opens_the_versions_home(tmp_path, offline):
+    report = choose(tmp_path, [{"index": 0}], offline=offline)
+    assert report["choices"] == [{"navigations": [f"{SITE}/vep-rs/"], "requests": [f"HEAD {RELEASE_PAGE}"]}]
+
+
+def test_a_site_served_at_an_unlisted_path_opens_the_chosen_versions_home(tmp_path):
+    report = choose(tmp_path, [{"index": 1}, {"index": 2}], pathname="/local-copy/index.html", pages=[RELEASE_PAGE])
+    assert report["choices"] == [
+        {"navigations": [f"{SITE}/vep-rs/main/"], "requests": []},
+        {"navigations": [], "requests": []},
+    ]
+
+
+@pytest.mark.parametrize("entry", UNLISTED, ids=[entry["name"] for entry in UNLISTED])
+def test_an_entry_off_the_site_or_off_the_list_is_never_navigated_to(tmp_path, entry):
+    index = (LISTED + UNLISTED).index(entry)
+    report = choose(tmp_path, [{"index": index}, {"index": 0}], pages=[RELEASE_PAGE])
+    assert report["choices"] == [
+        {"navigations": [], "requests": []},
+        {"navigations": [f"{RELEASE_PAGE}#section"], "requests": [f"HEAD {RELEASE_PAGE}"]},
+    ]
+
+
+@pytest.mark.parametrize(
+    "choice, navigations",
+    [
+        ({"index": 0, "planted": "javascript:alert(document.domain)"}, [f"{RELEASE_PAGE}#section"]),
+        ({"index": 0, "planted": f"https://{ATTACKER}/"}, [f"{RELEASE_PAGE}#section"]),
+        ({"index": -1, "planted": f"https://{ATTACKER}/"}, []),
+        ({"index": len(LISTED + UNLISTED), "planted": "/vep-rs/"}, []),
+    ],
+    ids=["a script address", "another site", "no option chosen", "an option past the list"],
+)
+def test_the_destination_is_the_lists_entry_whatever_the_pages_select_holds(tmp_path, choice, navigations):
+    report = choose(tmp_path, [choice], pages=[RELEASE_PAGE])
+    assert report["choices"][0]["navigations"] == navigations
+
+
+def test_the_preview_banner_links_the_listed_release(tmp_path):
+    assert choose(tmp_path, [], channel="main")["banner"] == f"{SITE}/vep-rs/"
+    assert choose(tmp_path, [])["banner"] is None
+
+
+@pytest.mark.parametrize("entry", UNLISTED, ids=[entry["name"] for entry in UNLISTED])
+def test_the_preview_banner_links_the_parent_site_when_the_release_path_is_off_the_site_or_the_list(tmp_path, entry):
+    channels = [{"name": RELEASE, "path": entry["path"]}, LISTED[1]]
+    assert choose(tmp_path, [], channel="main", channels=channels)["banner"] == "../"
+
+
+def test_the_theme_script_navigates_in_one_place_and_never_to_a_value_read_from_the_page():
+    text = THEME_SCRIPT.read_text(encoding="utf-8")
+    assert len(re.findall(r"location\.href\s*=(?!=)", text)) == 1
+    assert not re.search(r"location\.(href\s*=(?!=)|assign\(|replace\().*\.value\b", text)
+    assert not re.search(r"\bselect\.value\b", text)

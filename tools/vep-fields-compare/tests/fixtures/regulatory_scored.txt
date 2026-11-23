@@ -1,0 +1,9 @@
+#Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	Extra
+1_100_C/T	1:100	T	ENSG1	ENST1	Transcript	missense_variant	10	5	2	A/V	gCc/gTc	-	IMPACT=MODERATE;STRAND=1
+rs2	1:200	G	ENSG1	ENST1	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1
+rs3	1:300	A	ENSG2	ENST2	Transcript	upstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER;DISTANCE=1499;STRAND=-1
+rs4	1:400	C	ENSG2	ENST2	Transcript	synonymous_variant	40	35	12	L	ctG/ctA	-	IMPACT=LOW;STRAND=-1;FLAGS=cds_end_NF
+rs6	1:600	G	ENSG4	ENST4	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1
+reg	1:700	T	-	ENSR1	RegulatoryFeature	regulatory_region_variant	-	-	-	-	-	-	BIOTYPE=promoter
+motif	1:700	T	-	ENSM1	MotifFeature	TF_binding_site_variant	-	-	-	-	-	-	MOTIF_POS=4
+extra	1:900	G	-	ENSM2	MotifFeature	TF_binding_site_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1

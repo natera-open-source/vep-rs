@@ -1,0 +1,34 @@
+entry = "lines_unmasked_kind"
+page = "docs/intended-divergences.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under VCF 4.2; not seen in the measured datasets"
+notes = "A test fixture of one compare kind."
+
+[input]
+text = """
+21	100	rec1	G	A	.	.	.
+21	300	rec2	G	C	.	.	.
+"""
+
+[cache]
+assembly = "GRCh38"
+json_cache = "{stage}/json_cache"
+
+[run]
+format = "tab"
+buffer_size = 1
+stats = true
+
+[compare]
+kind = "lines"
+pattern = "FILE="
+mask_paths = false
+strip = false
+sorted = false
+columns = ["unused"]
+
+[expected]
+ensembl_vep = ["rec2\t21:300\tC\tENSG3\tENST3\tTranscript\tdownstream_gene_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER;DISTANCE=4000;FILE=/opt/vep/data/x.gz  "]
+vep_rs = ["rec2\t21:300\tC\tENSG3\tENST3\tTranscript\tdownstream_gene_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER;DISTANCE=4000;FILE=/home/user/data/x.gz", "rec2\t21:300\tC\tENSG3\tENST4\tTranscript\tdownstream_gene_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER;FILE=/home/user/data/x.gz"]

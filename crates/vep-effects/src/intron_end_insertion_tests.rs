@@ -205,8 +205,6 @@ impl JunctionModel {
         let translation = tx.translation.as_mut().expect("a translation");
         translation.start = 1;
         translation.end = coding_end - pairs[end_exon].from_start + 1;
-        translation.start_exon_index = 0;
-        translation.end_exon_index = end_exon;
         let vefc = tx.vefc.as_mut().expect("a coding model");
         vefc.sorted_exons = tx.exons.clone();
         vefc.introns = tx.introns.clone();

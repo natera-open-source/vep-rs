@@ -4,12 +4,14 @@
 //! Format-parity tests: the `--tab`, `--vcf` and `--json` outputs on each
 //! golden corpus, and on each `flag_sets` run of its manifest that names the
 //! format, are compared with the Ensembl VEP files committed beside it. Header
-//! lines VEP fills with run-specific values (time, paths, command line, Perl
-//! API component versions) compare by shape; every other header line and every
-//! data value compares exactly, except the consequence keys the corpus manifest
-//! documents as divergent. The Parquet output is read back through its cell
-//! contract and compared with the `--tab` rows of the manifest's own run, and
-//! its file layout with the writer's declared properties.
+//! lines Ensembl VEP fills with run-specific values (time, paths, command line)
+//! compare by shape, and the tab header's Ensembl API component version lines
+//! may be absent; every other header line, the API module versions of the VCF
+//! `##VEP=` line among them, and every data value compares exactly, except the
+//! consequence keys the corpus manifest documents as divergent. The Parquet
+//! output is read back through its cell contract and compared with the `--tab`
+//! rows of the manifest's own run, and its file layout with the writer's
+//! declared properties.
 
 mod common;
 
@@ -18,7 +20,7 @@ use std::path::{Path, PathBuf};
 
 use common::{compare_run, corpora, default_run, parse_tab, parse_vcf, run_vep, runs, Run};
 #[cfg(feature = "parquet")]
-use common::{run_output, vep_command};
+use common::{parse_vcf_info, run_output, vep_command};
 
 fn check(run: &Run, label: &str, header: String, body: String, failures: &mut Vec<String>) {
     if !header.is_empty() || !body.is_empty() {
@@ -74,10 +76,10 @@ fn json_output_matches_vep_on_every_corpus() {
 /// `--vcf` switches on), and fills them on every structural variant row except a
 /// breakpoint's, when the overlap is positive, with the overlap length and
 /// `sprintf("%.2f")` of the percentage of the feature it covers (`OutputFactory.pm`
-/// 2087-2094). On the GRCh38 corpus the 272-base deletion
+/// 2096-2103). On the GRCh38 corpus the 272-base deletion
 /// `gnomAD-SV_v3_DEL_chr21_9b2929e7` (21:13610236-13610507) against ENST00000299443
 /// carries 272 and 0.75 and against ENST00000620442 272 and 1.73, the values Ensembl
-/// VEP 116.2 writes for those rows; the breakend `synth_bnd_inter_0055_A` carries
+/// VEP 116.3 writes for those rows; the breakend `synth_bnd_inter_0055_A` carries
 /// neither (`-` in tab, empty in VCF). Without the flag neither format names the
 /// two fields.
 #[test]
@@ -231,60 +233,138 @@ fn parquet_columns(out: &Path) -> Vec<String> {
         .collect()
 }
 
-/// The data rows of a `--tab` output as the Parquet round trip prints them:
-/// each cell canonicalised by its column's type (a DOUBLE as its shortest
-/// decimal), every other cell as written.
+/// The data rows of a `--tab` output as the Parquet output `out` of the same
+/// run holds them: each cell in the form of the type its column is stored
+/// under (a DOUBLE as its shortest decimal, the cell of a string column as
+/// written whatever the column's name), every other cell as written.
 #[cfg(feature = "parquet")]
-fn canonical_tab_rows(tab: &str) -> Vec<String> {
-    use vep_io::output::parquet::{canonical_tab_text, column_type};
-    let columns: Vec<&str> = tab
-        .lines()
-        .find(|l| l.starts_with('#') && !l.starts_with("##"))
-        .expect("the tab column line")
-        .trim_start_matches('#')
-        .split('\t')
-        .collect();
+fn canonical_tab_rows(tab: &str, out: &Path) -> Vec<String> {
+    use vep_io::output::parquet::{canonical_tab_text, tab_column_types};
+    let columns = tab_column_line(tab);
+    let stored = tab_column_types(out).unwrap();
+    assert_eq!(
+        stored
+            .iter()
+            .map(|(name, _)| name.as_str())
+            .collect::<Vec<_>>(),
+        columns,
+        "{} holds the tab columns in the tab order",
+        out.display()
+    );
     tab.lines()
         .filter(|l| !l.starts_with('#'))
         .map(|line| {
             line.split('\t')
-                .zip(&columns)
-                .map(|(cell, column)| canonical_tab_text(column_type(column), cell))
+                .zip(&stored)
+                .map(|(cell, (_, column_type))| canonical_tab_text(*column_type, cell))
                 .collect::<Vec<_>>()
                 .join("\t")
         })
         .collect()
 }
 
-/// The corpora whose records are not in chromosome and position order, which
-/// a Parquet run refuses without `--no_check_variants_order`.
+/// The columns of a `--tab` output's column line.
 #[cfg(feature = "parquet")]
-const UNSORTED_CORPORA: [&str; 11] = [
-    "BDGP6.54-fly",
-    "GRCm39-mouse",
-    "GRCh38-alt-contigs",
-    "GRCh38-plugin-ancestral",
-    "GRCh38-plugin-conservation",
-    "GRCh38-statistics",
-    "GRCh38-vcf-check-ref",
-    "GRCh38-vcf-edge-cases",
-    "GRCh38-vcf-minimal",
-    "R64-1-1-yeast",
-    "TAIR10-arabidopsis",
-];
+fn tab_column_line(tab: &str) -> Vec<&str> {
+    tab.lines()
+        .find(|l| l.starts_with('#') && !l.starts_with("##"))
+        .expect("the tab column line")
+        .trim_start_matches('#')
+        .split('\t')
+        .collect()
+}
+
+/// Whether the records a run writes are out of chromosome and position order
+/// by the rule the Parquet writer refuses on
+/// (`vep_io::output::parquet::OrderMonitor`): a chromosome returns after
+/// another, or a record's written position is below the greatest seen on its
+/// chromosome. The records are the lines of `vcf` that carry consequences,
+/// each at its `POS`; `vcf` is the run's VCF output under `--max_sv_size -1`,
+/// since that format alone keeps a record over the limit without consequences
+/// where the tab and Parquet outputs annotate it. A record with a symbolic
+/// allele the VCF format writes no consequences for (`<CPX>`, `<NON_REF>`),
+/// which the other formats write rows for, is not among them, so a corpus
+/// whose order turns on such a record alone reads as in order here. A
+/// chromosome is the `contig_index` its spelling has in `unchecked`, the run's
+/// Parquet output under `--no_check_variants_order`; the chromosomes outside
+/// the footer's `contig_order` share the rank after the last listed one and
+/// are told apart by their spelling, as is a spelling no row of `unchecked`
+/// carries.
+#[cfg(feature = "parquet")]
+fn written_out_of_order(run: &Run, vcf: &str, unchecked: &Path) -> bool {
+    use parquet::file::reader::FileReader;
+    use parquet::file::serialized_reader::SerializedFileReader;
+    use parquet::record::RowAccessor;
+    use std::collections::{HashMap, HashSet};
+
+    let mut ranks: HashMap<String, i32> = HashMap::new();
+    let mut unlisted = 0;
+    for part in vep_io::output::parquet::part_files(unchecked).unwrap() {
+        let reader = SerializedFileReader::new(std::fs::File::open(&part).unwrap()).unwrap();
+        let contig_order = reader
+            .metadata()
+            .file_metadata()
+            .key_value_metadata()
+            .and_then(|kvs| kvs.iter().find(|kv| kv.key == "contig_order"))
+            .and_then(|kv| kv.value.clone())
+            .expect("the footer names the contig order");
+        unlisted = match contig_order.as_str() {
+            "" => 0,
+            listed => listed.split(',').count() as i32,
+        };
+        for row in reader.get_row_iter(None).unwrap() {
+            let row = row.unwrap();
+            ranks.insert(row.get_string(1).unwrap().clone(), row.get_int(0).unwrap());
+        }
+    }
+    let chromosome_of = |spelling: &str| match ranks.get(spelling) {
+        Some(&rank) if rank != unlisted => (rank, String::new()),
+        _ => (unlisted, spelling.to_string()),
+    };
+
+    let mut current: Option<((i32, String), u64)> = None;
+    let mut finished = HashSet::new();
+    for line in parse_vcf_info(vcf, &run.input_records(), run.vcf_info_field()) {
+        if line.fields.get("CSQ_present").map(String::as_str) != Some("yes") {
+            continue;
+        }
+        let chromosome = chromosome_of(&line.fields["CHROM"]);
+        let position: u64 = line.fields["POS"].parse().unwrap();
+        match &mut current {
+            Some((on, greatest)) if *on == chromosome => {
+                if position < *greatest {
+                    return true;
+                }
+                *greatest = position;
+            }
+            _ => {
+                if finished.contains(&chromosome) {
+                    return true;
+                }
+                if let Some((ended, _)) = current.replace((chromosome, position)) {
+                    finished.insert(ended);
+                }
+            }
+        }
+    }
+    false
+}
 
 /// The Parquet output of every corpus, read back row by row through the cell
 /// contract, holds exactly the `--tab` rows of the same run, as a multiset
 /// with equal counts (the file's row order is the sort order, not the tab
 /// order), with `--no_check_variants_order`, with `--parquet_partition chrom`
-/// beside it, and, for every corpus in order, without either; the corpora out
-/// of order are refused without the flag.
+/// beside it, and, for every corpus in order, without either; a corpus whose
+/// written records are out of order ([`written_out_of_order`]) is refused
+/// without the flag, and the corpora hold both kinds.
 #[cfg(feature = "parquet")]
 #[test]
 fn parquet_round_trips_to_the_tab_output() {
     let tmp = tempfile::tempdir().unwrap();
     let mut failures = Vec::new();
-    let mut compare = |label: &str, expected: &[String], out: &Path| {
+    let mut compare = |label: &str, tab: &str, out: &Path| {
+        let mut expected = canonical_tab_rows(tab, out);
+        expected.sort_unstable();
         let mut actual = vep_io::output::parquet::tab_rows(out).unwrap();
         actual.sort_unstable();
         if expected != actual {
@@ -302,12 +382,11 @@ fn parquet_round_trips_to_the_tab_output() {
             ));
         }
     };
+    let (mut refused, mut accepted) = (0usize, 0usize);
     for corpus in &corpora() {
         let run = default_run(corpus);
         let label = run.label();
         let tab = run_vep(&run, "tab", tmp.path(), &[]);
-        let mut expected = canonical_tab_rows(&tab);
-        expected.sort_unstable();
         let unchecked = write_parquet(
             &run,
             tmp.path(),
@@ -316,7 +395,7 @@ fn parquet_round_trips_to_the_tab_output() {
         );
         compare(
             &format!("{label} [--no_check_variants_order]"),
-            &expected,
+            &tab,
             &unchecked,
         );
         let partitioned = write_parquet(
@@ -327,7 +406,7 @@ fn parquet_round_trips_to_the_tab_output() {
         );
         compare(
             &format!("{label} [--parquet_partition chrom]"),
-            &expected,
+            &tab,
             &partitioned,
         );
         let checked = try_write_parquet(
@@ -336,19 +415,23 @@ fn parquet_round_trips_to_the_tab_output() {
             &format!("{}_{}.parquet", corpus.release, corpus.name),
             &[],
         );
+        let vcf = run_vep(&run, "vcf", tmp.path(), &["--max_sv_size", "-1"]);
+        let out_of_order = written_out_of_order(&run, &vcf, &unchecked);
         match checked {
             Ok(file) => {
                 assert!(
-                    !UNSORTED_CORPORA.contains(&corpus.name.as_str()),
+                    !out_of_order,
                     "{label} is out of order and is accepted without the flag"
                 );
-                compare(&label, &expected, &file);
+                accepted += 1;
+                compare(&label, &tab, &file);
             }
             Err(stderr) => {
                 assert!(
-                    UNSORTED_CORPORA.contains(&corpus.name.as_str()),
-                    "{label} is refused without the flag:\n{stderr}"
+                    out_of_order,
+                    "{label} is in order and is refused without the flag:\n{stderr}"
                 );
+                refused += 1;
                 assert!(
                     stderr.contains(
                         "ERROR: [parquet] input is not sorted by chromosome and position at line "
@@ -359,6 +442,10 @@ fn parquet_round_trips_to_the_tab_output() {
         }
     }
     assert!(failures.is_empty(), "\n{}", failures.join("\n"));
+    assert!(
+        refused > 0 && accepted > 0,
+        "the corpora hold both orders: {refused} refused, {accepted} accepted"
+    );
 }
 
 /// The layout the writer declares, read from the output: a directory of one
@@ -640,11 +727,85 @@ fn parquet_partition_chrom_writes_hive_directories_with_the_column_stored() {
             part.display()
         );
     }
-    let mut expected = canonical_tab_rows(&tab);
+    let mut expected = canonical_tab_rows(&tab, &out);
     expected.sort_unstable();
     let mut actual = tab_rows(&out).unwrap();
     actual.sort_unstable();
     assert_eq!(actual, expected);
+}
+
+/// dbNSFP's `ALL` declares every column of its file's header
+/// (`dbNSFP.pm:233-236`), and the header of the synthetic dbNSFP fixture names
+/// `ref` and `alt`, the names of two key columns. Over the `dbnsfp-all` run of
+/// that corpus no two columns of the Parquet output share a name: the plugin's
+/// two are stored as `tab_ref` and `tab_alt`, the output reads back under the
+/// names of the `--tab` column line, and its rows are the `--tab` rows, the
+/// plugin's `ref` and `alt` cells among them.
+#[cfg(feature = "parquet")]
+#[test]
+fn parquet_stores_a_plugin_column_named_as_a_key_column_under_its_own_name() {
+    use std::collections::HashSet;
+    use vep_io::output::parquet::{
+        part_files, tab_column_types, tab_rows, ColumnType, KEY_COLUMNS,
+    };
+
+    let tmp = tempfile::tempdir().unwrap();
+    let corpora = corpora();
+    let corpus = corpora
+        .iter()
+        .find(|c| c.release == "116" && c.name == "GRCh38-plugin-dbnsfp-fixture")
+        .expect("the 116/GRCh38-plugin-dbnsfp-fixture corpus");
+    let run = runs(corpus)
+        .into_iter()
+        .find(|run| run.name == "dbnsfp-all")
+        .expect("the dbnsfp-all flag set");
+    let tab = run_vep(&run, "tab", tmp.path(), &[]);
+    let tab_columns = tab_column_line(&tab);
+    let out = write_parquet(&run, tmp.path(), "dbnsfp_all.parquet", &[]);
+
+    let part = &part_files(&out).unwrap()[0];
+    let names = parquet_schema_names(part);
+    let distinct: HashSet<&String> = names.iter().collect();
+    assert_eq!(distinct.len(), names.len(), "{names:?}");
+    assert_eq!(&names[..KEY_COLUMNS.len()], KEY_COLUMNS);
+    for key in ["ref", "alt"] {
+        assert!(tab_columns.contains(&key), "the tab output has {key}");
+        assert!(
+            names[KEY_COLUMNS.len()..].contains(&format!("tab_{key}")),
+            "{key} is stored as tab_{key}"
+        );
+    }
+    let stored = tab_column_types(&out).unwrap();
+    for key in ["ref", "alt"] {
+        let column = tab_columns.iter().position(|c| *c == key).unwrap();
+        assert_eq!(stored[column], (key.to_string(), ColumnType::Text), "{key}");
+    }
+
+    let mut expected = canonical_tab_rows(&tab, &out);
+    expected.sort_unstable();
+    let mut actual = tab_rows(&out).unwrap();
+    actual.sort_unstable();
+    assert_eq!(actual.len(), expected.len());
+    let first = expected.iter().zip(&actual).position(|(a, b)| a != b);
+    assert!(
+        first.is_none(),
+        "first difference at sorted line {first:?}:\n  tab:     {:?}\n  parquet: {:?}",
+        first.map(|i| &expected[i]),
+        first.map(|i| &actual[i])
+    );
+    for key in ["ref", "alt"] {
+        let column = tab_columns.iter().position(|c| *c == key).unwrap();
+        let cells = |rows: &[String]| -> Vec<String> {
+            rows.iter()
+                .map(|row| row.split('\t').nth(column).unwrap().to_string())
+                .collect()
+        };
+        assert_eq!(cells(&actual), cells(&expected), "{key}");
+        assert!(
+            cells(&expected).iter().any(|cell| cell != "-"),
+            "the plugin writes a {key} value on a row"
+        );
+    }
 }
 
 /// Every column of a Parquet file's schema, the key columns included.

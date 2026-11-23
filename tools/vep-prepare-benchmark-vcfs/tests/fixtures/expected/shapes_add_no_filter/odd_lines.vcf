@@ -1,0 +1,19 @@
+##fileformat=VCFv4.2
+##a header that ends in CR LF
+##a header that ends in a lone CR
+#CHROM	POS	ID
+chr
+chr	100	a line whose first column is empty
+chra_line_without_a_tab
+chr1	100	a variant that ends in CR LF
+chr1	200	a variant that ends in a lone CR
+chr2	300	the line after it
+##a header after variant lines
+chr1	400	�� bytes outside UTF-8 in a later column
+chr�1	500	a byte outside UTF-8 in the first column
+chr�	600	a cut-off sequence as the first column
+chr1	700	café 😀 in UTF-8
+chr���	750	a surrogate's bytes
+#� a header with a byte outside UTF-8
+chrX	800	spaces  and	tabs		kept
+chr3	900	the last line has no line end

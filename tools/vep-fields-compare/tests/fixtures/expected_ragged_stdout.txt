@@ -1,0 +1,11 @@
+keys: reference 4 scored 4 intersection 4 (reference-only 0, scored-only 0)
+  Uploaded_variation       equal            2 /            4  agreement 0.5
+  Gene                     equal            4 /            4  agreement 1.0
+  cDNA_position            equal            2 /            4  agreement 0.5
+  CDS_position             equal            2 /            4  agreement 0.5
+  Protein_position         equal            2 /            4  agreement 0.5
+  Amino_acids              equal            2 /            4  agreement 0.5
+  Codons                   equal            2 /            4  agreement 0.5
+  Existing_variation       equal            2 /            4  agreement 0.5
+  Extra:IMPACT             equal            1 /            3  agreement 0.333333
+  Extra:STRAND             equal            1 /            3  agreement 0.333333

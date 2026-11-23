@@ -1,12 +1,12 @@
 # An `in` list file whose name carries a mode character
 
-**The defect in one sentence.** Ensembl VEP 116.2 opens the file an `in` list names with Perl's two-argument `open`, which reads a mode out of the name. A leading `<` is stripped and the rest of the name is opened; a leading `>` or `>>` opens the rest of the name for writing, truncating or extending that file. A trailing `|` runs the rest of the name as a command and reads its output as the list; the bare name `-` reads the standard input. vep-rs opens the file of the written name and reads its lines, and nothing else is read, written or run.
+**The defect in one sentence.** Ensembl VEP 116.3 opens the file an `in` list names with Perl's two-argument `open`, which reads a mode out of the name. A leading `<` is stripped and the rest of the name is opened; a leading `>` or `>>` opens the rest of the name for writing, truncating or extending that file. A trailing `|` runs the rest of the name as a command and reads its output as the list; the bare name `-` reads the standard input. vep-rs opens the file of the written name and reads its lines, and nothing else is read, written or run.
 
 **Why this is a defect.** The `in` operator takes a comma-separated list or a file with one value per line, and the run first tests that a file of the written name exists. Perl's two-argument `open` then reads the same string again, as a mode followed by a file name or a command. So a file named `<ids.txt` passes the existence test and the list is read from `ids.txt`, and a file named `true|` passes the test and the list is the empty output of the command `true`. A list name can therefore truncate a file or run a command, and the name the user wrote is tested and then not opened.
 
 **What vep-rs does instead.** vep-rs opens the file of the written name and reads its lines, whatever characters the name holds. The mode reading is never replicated: a name beginning with `<` or `>`, or ending with `|`, is a file name and nothing else, so no other file is read, truncated or written and no program runs. A name that is no path is refused as `Could not find/parse list <name>`, and a file that cannot be read as `Could not read from file <name>`, the two messages Ensembl VEP prints for those cases. The same rule governs `vep filter`, whose `filter_vep` counterpart shares the grammar.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2, `Bio/EnsEMBL/VEP/FilterSet.pm`):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3, `Bio/EnsEMBL/VEP/FilterSet.pm`):
 
 - Lines 385-393, `finish_filter_node`: an `in` value with text on both sides of a comma is a comma-separated list.
 - Line 396: any other value is tested as a path with `-e`, which reads the name as written.
@@ -18,11 +18,11 @@
 
 **The class it produces.** `transcript_filter_list_file_two_argument_open`: the rows a `--transcript_filter` keeps, and the lines a `vep filter` run keeps, under an `in` list naming a file whose name begins with `<`, `>`, `>>`, `+<`, `+>` or `|`, ends with `|` or is `-`. Ensembl VEP reads another file or the standard input, writes a file or runs a program; vep-rs reads the named file. The class is documented only: no committed flag set and no committed tool run names such a file.
 
-**How often the shape occurs.** Tier 3: the shape is a value of `--transcript_filter`, or of `vep filter`'s `--filter`, that no ordinary command line carries. Of the 392 committed flag sets, 9 pass `--transcript_filter`, one of them names a list file, `transcript_ids.txt`, and none names a file whose name carries a mode character; of the 28 committed `vep filter` runs, the one that passes an `in` list writes it inline.
+**How often the shape occurs.** Tier 3: the shape is a value of `--transcript_filter`, or of `vep filter`'s `--filter`, that no ordinary command line carries. Of the 511 committed flag sets, 10 pass `--transcript_filter`, one of them names a list file, `transcript_ids.txt`, and none names a file whose name carries a mode character; of the 28 committed `vep filter` runs, the one that passes an `in` list writes it inline.
 
 ## 1. A list file named `<ids.txt` beside `ids.txt`, and one named `true|`
 
-**In short.** The working directory holds `ids.txt`, one line `ENST00001020056`, and a file named `<ids.txt`, one line `ENST00000624153`. Under `--transcript_filter 'stable_id in <ids.txt'`, vep-rs keeps the one row of `ENST00000624153` on the record `tf_7130369`; Ensembl VEP 116.2 reads `ids.txt` instead and keeps the two rows of `ENST00001020056` on the record `tf_32493707`. With a file named `true|` holding `ENST00000624153`, `stable_id in true|` keeps that row on vep-rs, where Ensembl VEP runs the command `true`, reads an empty list and drops every transcript.
+**In short.** The working directory holds `ids.txt`, one line `ENST00001020056`, and a file named `<ids.txt`, one line `ENST00000624153`. Under `--transcript_filter 'stable_id in <ids.txt'`, vep-rs keeps the one row of `ENST00000624153` on the record `tf_7130369`; Ensembl VEP 116.3 reads `ids.txt` instead and keeps the two rows of `ENST00001020056` on the record `tf_32493707`. With a file named `true|` holding `ENST00000624153`, `stable_id in true|` keeps that row on vep-rs, where Ensembl VEP runs the command `true`, reads an empty list and drops every transcript.
 
 ### 1.1 What a reader needs to know first
 
@@ -41,7 +41,7 @@ The first lies within reach of 3 transcripts, `ENST00000624153` among them; the 
 
 ### 1.3 What each engine writes
 
-Ensembl VEP 116.2 with `--transcript_filter 'stable_id in <ids.txt'` reads `ids.txt` and writes:
+Ensembl VEP 116.3 with `--transcript_filter 'stable_id in <ids.txt'` reads `ids.txt` and writes:
 
 ```
 tf_7130369	21:7130369	G	-	-	-	intergenic_variant	-	-	-	-	-	-	IMPACT=MODIFIER
@@ -80,7 +80,7 @@ vep -i records.vcf -o out.txt --offline --json_cache <corpus>/json_cache \
   --assembly GRCh38 --transcript_filter 'stable_id in <ids.txt'
 ```
 
-vep-rs keeps `ENST00000624153`. Ensembl VEP 116.2, run in the same directory over the GRCh38 release 116 cache, keeps the two `ENST00001020056` rows. A name ending in `|` runs the rest of the name as a command on Ensembl VEP, so it is shown here in words alone.
+vep-rs keeps `ENST00000624153`. Ensembl VEP 116.3, run in the same directory over the GRCh38 release 116 cache, keeps the two `ENST00001020056` rows. A name ending in `|` runs the rest of the name as a command on Ensembl VEP, so it is shown here in words alone.
 
 ### 1.7 How the comparator treats this class
 

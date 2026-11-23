@@ -7,96 +7,114 @@
    "plugin_data/pLI_values.txt": "680b775ba2828ad91f14656f521065aa4f4e5382083bbfb1ba4111032719e2d6"
   }
  },
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --dir_plugins {plugins} --plugin pLI [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh37",
  "fasta": "none on either side",
  "input": "33 gnomAD v2.1.1 genome records on chromosome 21 (dbSNP identifiers where the release carries one; INFO dropped), one or two in the canonical transcript of each chosen gene (an exonic substitution and, where the records offer one, an exonic indel): TPTE, LIPI, APP, SOD1, TTC3, DYRK1A, DSCAM, RUNX1, KCNJ6, SETD4, CXADR and HUNK, which the pLI file and the LoFtool file of tests/golden/116/GRCh37-plugin-loftool, a corpus over the same records, both list; GABPA, LTN1 and TMPRSS15, which the pLI file lists and that LoFtool file does not; one gene neither file lists (AL050302.1); and one intergenic record more than 5,000 bases from any transcript. The scores reach the output in every shape the plugin prints: two decimals from `0.00` (TPTE, 5.11e-31) to `1.00` (DSCAM) and, under `sigfig`, three significant figures from `5.11e-31` to `1`.",
  "sha256": {
-  "default.txt": "bd96cc727c0769dff164474da843451b11f3bbec7b5abc4fd99301391a97565b",
-  "tab.txt": "40fa5c44b63423a5461d86bdb61b1e3656def39c390cbf72be49c061765eefa2",
-  "vcf.vcf": "232b11d9850d9e850de58a01b2a0281a620f1f5ef2cbfd3da35c5786a55bc310",
-  "json.jsonl": "e3b09f0b2e018639bf36280dc9a87c7918667b50de1e6e5dacabdaef837c6c81",
-  "default.summary.log": "e3a8ab09269d005603736eef507ea772b24566c2045bb85de379a771748d5f01",
-  "tab.summary.log": "5f173a149c29cad89eb7b3e4e6a284eca6ae28cb4cb0ca89352d437e4965137a",
-  "vcf.summary.log": "8106e2358a2bc8e06f21e77b8bc29ccd9cc6af68f186ff96c56888b6dcc45c39",
-  "json.summary.log": "64f4576a2c79bfe2040e3814e74cc514b2341c3d9b0d6ef14f47db856721021d"
+  "default.txt": "1bd98ece23eb0a2ebcd2eb5e96f18c336d290fff24bab87ad7872eeaceceb3c7",
+  "tab.txt": "6aaf2c23ac1a82ef800e0e1ba45922bda86d448e897b3625c440e083f747f021",
+  "vcf.vcf": "f91627ce5f816778c1ff07cc38664661e5f62af7c38735a6f908c09631e4c2af",
+  "json.jsonl": "7aa890ba77d4933910826edb74ba179f6de28be1ce51d92fb4d0707c7a3f1832",
+  "default.summary.log": "8b8cdaa22ea30a3d8af7a0ab4fac680e78f1e610ccd44e066d54019caf81f05d",
+  "tab.summary.log": "ba7e87531058dc3d3b2ad13c20cdbd63440cff3b7469771e7dda1b19cb32afef",
+  "vcf.summary.log": "22701036254707db3a079a2d1f775e93b225504560bdcff2efc382b3f3b27514",
+  "json.summary.log": "4a77a52077e59ddb9c64d03c65cab5136a555ba1b626d972b767dba7a651b277"
  },
  "variants_vcf_sha256": "6061f4e0bcb09da8319a65d8a09b2f052c0a28e579dcd6e7e646c53a301ac961",
  "plugin_files": {
   "plugin_data/pLI_values.txt": "680b775ba2828ad91f14656f521065aa4f4e5382083bbfb1ba4111032719e2d6",
   "plugin_data/pLI_transcript_values.txt": "31aeef54a8ddbd4ea2e87277a0062241e601db32ef1fa4b3c4a8f243a589fdc6"
  },
- "generator": "manifest: scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh37 --suite plugin-pli=<reference over the candidate records>=candidates.vcf --k 3 --seed 1 --include <each record's name> --covers pLI --matrix tests/parity/matrix.tsv --flag=--dir_plugins --flag={plugins} --flag=--plugin --flag=pLI, then flag-set for each flag_sets entry and classify for the manifest's run and each flag set; json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice of the vep-rs JSON conversion of the Ensembl VEP 116 GRCh37 cache; plugin_data: the cut described under plugin_fixtures; expected outputs: scripts/concordance/generate_reference_output.sh --corpus --dir-plugins <VEP_plugins checkout> for the manifest's run and, per flag set, for a copy of the corpus carrying the set's flags as its own, whose outputs and record are the set's",
+ "generator": "manifest: tools/vep-golden-corpus select --release 116 --assembly GRCh37 --dataset plugin-pli=<reference over the candidate records>=candidates.vcf --k 3 --seed 1 --include <each record's name> --covers pLI --matrix tests/parity/matrix.tsv --flag=--dir_plugins --flag={plugins} --flag=--plugin --flag=pLI, then flag-set for each flag_sets entry and classify for the manifest's run and each flag set; json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice of the vep-rs JSON conversion of the Ensembl VEP 116 GRCh37 cache; plugin_data: the cut described under plugin_fixtures; expected outputs: scripts/concordance/generate_reference_output.sh --corpus --dir-plugins <VEP_plugins checkout> for the manifest's run and, per flag set, for a copy of the corpus carrying the set's flags as its own, whose outputs and record are the set's",
  "flag_sets": {
   "values-file": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --dir_plugins {plugins} --plugin pLI,{corpus}/plugin_data/pLI_values.txt [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh37",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "5339c0ff5c430275194b4e66d8b240680a8fcd78181e192c0acd7ccda1e04a01",
+    "tab.txt": "9be6ae1787368c4c9c909c6804a318ecbf69c58177baabd35338bfd127ef93d1",
+    "vcf.vcf": "fd0172f96f03906a016aec3cd1cbd6e88d531e5e5cd74a8c8952e68caad11093",
+    "json.jsonl": "4048db20232d933993247ac734727ec217411d5096b9f262d81657fbbbef1dc4",
+    "default.summary.log": "ece77c3b83b018cfb77d50db592c1200bea8e4207e686fe8a5b7b7dab08391eb",
+    "tab.summary.log": "5c2bb7ede0f8d666b70ef48c548f7c3a1b875f2035f24b6d01fd1755548d22c8",
+    "vcf.summary.log": "a66a70e70751c95b65dcfeb6b348163e2453dc1535adbc9506c23aebe552eebd",
+    "json.summary.log": "b77528c5fbc3e7c4bc2b38b5efcf65d8696c8bbda400677653d45b2a3bb98fd1"
+   },
    "flags": [
     "--dir_plugins",
     "{plugins}",
     "--plugin",
     "pLI,{corpus}/plugin_data/pLI_values.txt"
    ],
-   "input": "variants.vcf",
    "expected_dir": "expected_values-file",
-   "perl_mode": "offline",
-   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --dir_plugins {plugins} --plugin pLI,{corpus}/plugin_data/pLI_values.txt [--tab|--vcf|--json]",
-   "sha256": {
-    "default.txt": "5a6c6e0d5d78eb377362d926504621894067b4d7ec757fcae89910056ad8c7e9",
-    "tab.txt": "79fe82cf9a0ef0a06f78eb9a24c26821c951f578896bd61469f2ebd17f79f99d",
-    "vcf.vcf": "e55591911b632846d38297ecf0a824c2892ec82ec989d9054edc6d728f43dd46",
-    "json.jsonl": "3afa3e623be5e9fc662eb85b9d0401ff9c5e97c27b69801e9270ffb8a433a40c",
-    "default.summary.log": "87ee2e6e16901c9c59e0a19349fc58edce4d5e5c6b2694a3ae0cef2f3e44a76c",
-    "tab.summary.log": "88e5b7f9b0fb9f42894e735859967fefe47885a067a9f0be1f7af2c9244e7da7",
-    "vcf.summary.log": "22428378bb35fb1bc0ac1d20ce91e094792523d00c326c6275e48476cba863c5",
-    "json.summary.log": "dee48f4fb46cd1d368514cceea02cb90d12576ee7835d0e27dd1f3404a7f9cfd"
-   }
+   "perl_mode": "offline"
   },
   "transcript": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --dir_plugins {plugins} --plugin pLI,{corpus}/plugin_data/pLI_transcript_values.txt,transcript [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh37",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "676e0a702da66862ef9609a68861adb31fda67c34fbe9db2d3ee0a07d426439b",
+    "tab.txt": "d85ec2b8bd517baeca48262a2a995423c37049d0561622ba757b23c4d459d7e8",
+    "vcf.vcf": "7b966967f124c8e8f7c0b463767d64d7bdc46f4e67ba0890c5e944b11c2ef21e",
+    "json.jsonl": "4328675ed7183737af4817e264516cadaed291a9ce5af44932822ccbd4713f35",
+    "default.summary.log": "0b02794e51ce9a61c9317afe8ec4c9bbcd262b0e3bad2aa1a14d50f03fe082eb",
+    "tab.summary.log": "bb3ac3ae6ae81ee895867bd8528e474082839f3322c10046e494566069734e1c",
+    "vcf.summary.log": "6376339e82050e9af27dfab6ab32252efabf17913e1227fa32a337b423a16140",
+    "json.summary.log": "bab18fa97c2a5fd0d4bda4d8eb8c7b2c42af5e609cc75a095e99b527eebc535e"
+   },
    "flags": [
     "--dir_plugins",
     "{plugins}",
     "--plugin",
     "pLI,{corpus}/plugin_data/pLI_transcript_values.txt,transcript"
    ],
-   "input": "variants.vcf",
    "expected_dir": "expected_transcript",
-   "perl_mode": "offline",
-   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --dir_plugins {plugins} --plugin pLI,{corpus}/plugin_data/pLI_transcript_values.txt,transcript [--tab|--vcf|--json]",
-   "sha256": {
-    "default.txt": "243b4fe6f6189b7bef7ce6757cb7a65daf9f2e5870734edf8675267420643244",
-    "tab.txt": "eac6b88d9c30e3768332feb799e0866fc2a7d4bf06aa28c8cd13104119045b47",
-    "vcf.vcf": "0bdf7144182f7f544eb39e0fe415f325288c0eb9c5a799a398d5a0b71b080fa9",
-    "json.jsonl": "6f2dada7ea806bccc9d3807ea11ad9612239fb38edbbc951447cc316ed9850b8",
-    "default.summary.log": "3400c7c93672e7816832b290ac05bf14b12a05e6597f4249261f3d4aa711d1f2",
-    "tab.summary.log": "5f79903edc2e2122b234b01e8888a33abb1936587cee52e0732d80910bffcc44",
-    "vcf.summary.log": "83abae26eb66e95a36f6e0a6330aca2b05515a861139496aed39bbe1396c9673",
-    "json.summary.log": "2dbc3ef41cdcc05522384e8013bfc2e9d364361c7a58a5417eb1171fd8d61c01"
-   }
+   "perl_mode": "offline"
   },
   "sigfig": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --dir_plugins {plugins} --plugin pLI,sigfig [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh37",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "5dc45b9ffad583b0deb386b76d9b6be43f2ce135fa1ce76e7981607700668830",
+    "tab.txt": "9b803724189bcb7c633e1926d62991431369f04dd3e3553f1957c79f1fc028f8",
+    "vcf.vcf": "5172193f67450d2e578db08b90ff65c1e0797a6cd705571ff0c51fe786f93e5e",
+    "json.jsonl": "f28cf33563e6310b3307d6084c2273f22990fb6e376ee6683eca879d0030d4a5",
+    "default.summary.log": "57d1ad3555cbb1720277635479ca31899b3135d7c147b04979a359424eb3bf6f",
+    "tab.summary.log": "a848ab9721a796219f30b341a5224600e7122a04fe0701bc54eac2d80f18138f",
+    "vcf.summary.log": "7cd78b60884fdb56271eacba096c48429c26dd7baaebd65b13e96234131d37a8",
+    "json.summary.log": "04b5488e8ca5fe6ffb0bbc87f87870ed08c169eafc97a3f20f89218c11c2b351"
+   },
    "flags": [
     "--dir_plugins",
     "{plugins}",
     "--plugin",
     "pLI,sigfig"
    ],
-   "input": "variants.vcf",
    "expected_dir": "expected_sigfig",
-   "perl_mode": "offline",
-   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --dir_plugins {plugins} --plugin pLI,sigfig [--tab|--vcf|--json]",
-   "sha256": {
-    "default.txt": "1573b5e67221957b2e4503c76a40e8bf5632fa085d60320549bcd883c09b8ca4",
-    "tab.txt": "be0242183ac41bd4ed4a8a1b48bfb8af5b45b19b3b0f2d593d2d3d5fd770d46d",
-    "vcf.vcf": "32abde7a9513bfa26997e711f7ff3a7cb12b22693552353e8a0619da5688e966",
-    "json.jsonl": "197a00baaf88464f5114383ac2e4d78ecf860c111553849dbb4120a380693634",
-    "default.summary.log": "c827e66701f8594ba31f837bfebcaf0adc8e34f16e5a41a704cff42f1d3aeb7b",
-    "tab.summary.log": "590beb89d463e338c67056b8b55275adb8a7eefca11f72cd13989ab8dce632e7",
-    "vcf.summary.log": "c217f64f8157602733b3df7c89b50543ecc58c509a027e3295adf5c9b4b7edac",
-    "json.summary.log": "ba0eb34c1c9056533bcbf909f8a70d9f03bffe38bade5bad1a0393117af84df7"
-   }
+   "perl_mode": "offline"
   }
  }
 }

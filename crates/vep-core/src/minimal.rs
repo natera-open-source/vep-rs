@@ -3,7 +3,7 @@
 
 //! Ensembl VEP's `--minimal` over the alleles vep-rs parsed from one record.
 //!
-//! Ensembl VEP minimises in two places (ensembl-vep release/116.2). A record with
+//! Ensembl VEP minimises in two places (ensembl-vep release/116.3). A record with
 //! one alternate allele goes through `minimise_alleles` (Parser.pm:964-1019) as
 //! it is parsed: `trim_sequences` (ensembl-variation Utils/Sequence.pm:965-1038)
 //! trims the bases the two alleles share from the left while both are non-empty,
@@ -17,7 +17,7 @@
 //! after the first numbered by its written position (`_base_allele_number`,
 //! :684, read by VariationFeatureOverlap.pm:477), the first carrying the record's
 //! chopped allele string and span as its originals (:694-697) and the `minimised`
-//! mark. At output the features are merged back (OutputFactory.pm:2272-2354): the
+//! mark. At output the features are merged back (OutputFactory.pm:2281-2363): the
 //! record prints its own span and allele string, the alleles print trimmed, and
 //! an allele that once trimmed equals the reference, or is a `*` or `<DEL:*>`,
 //! writes no row (VariationFeatureOverlap.pm:481, :484). A record none of whose
@@ -29,6 +29,7 @@ use crate::variant::{classify_variant, so_variation_class, InputVariant};
 
 /// What the `--minimal` split made of one allele of a multi-allelic record.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum MinimalSplit {
     /// No allele of the record changed: the record is annotated as it stands.
     Unchanged,
@@ -127,7 +128,7 @@ pub fn minimise_bi_allelic(variant: &mut InputVariant) {
 /// its trimmed alleles and span, the record's span as `original_start` and
 /// `original_end` for the columns the rejoin restores, the chopped string as its
 /// `UPLOADED_ALLELE` (:694), the class `VARIANT_CLASS` prints under the split
-/// (the first allele's trimmed pair: OutputFactory.pm:2289 builds the first
+/// (the first allele's trimmed pair: OutputFactory.pm:2298 builds the first
 /// feature's hash, which caches `class_SO_term`, before the rejoin; a record
 /// carrying a class already, a resolved identifier's stored one, keeps it, as
 /// `class_SO_term` keeps a set value, VariationFeature.pm:1117), its written
@@ -197,7 +198,7 @@ fn rowless_trimmed_pair(trimmed_ref: &[u8], trimmed_alt: &[u8]) -> bool {
 /// it was split at. Ensembl VEP builds the reference allele of every feature
 /// before it tests the feature's alternate (VariationFeatureOverlap.pm:469-481)
 /// and the rejoin carries every split feature's overlaps into the record
-/// (OutputFactory.pm:2299-2340), so the record writes one reference row per
+/// (OutputFactory.pm:2308-2349), so the record writes one reference row per
 /// allele, each the allele's own trimmed reference over its trimmed span, an
 /// allele equal to the reference once trimmed included: its feature `-/-` writes
 /// the row and nothing else.
@@ -235,7 +236,7 @@ fn split_feature(allele: &InputVariant, own: usize) -> Option<InputVariant> {
 /// allele writes no row, for the lookups the record's rows print. Ensembl VEP
 /// annotates every split feature on its own span and its rows print the first
 /// feature's co-located variants and overlapping structural variants: the
-/// rejoin (OutputFactory.pm:2272-2353) moves the later features' consequences
+/// rejoin (OutputFactory.pm:2281-2362) moves the later features' consequences
 /// into the first and leaves `existing` and `overlapping_svs` where they are,
 /// and the rows are built from the first feature (:342-349). An allele equal
 /// to the reference once trimmed, a `*` and a `<DEL:*>` write no row
@@ -254,6 +255,34 @@ pub fn rowless_first_feature(allele: &InputVariant) -> Option<InputVariant> {
     split_feature(allele, 0)
 }
 
+/// The split features of a `--minimal` split record that write no row
+/// ([`rowless_alternate_allele`]), each with its position among the working
+/// string's alternate alleles, built from `allele`, any allele or reference row
+/// of the record. A feature takes its own trimmed pair and span
+/// (InputBuffer.pm:665-676) and none of the known variants or frequencies
+/// `allele` carries. Empty for an allele the split left alone.
+pub fn rowless_features(allele: &InputVariant) -> Vec<(usize, InputVariant)> {
+    let Some(working) = allele.record_allele_string_multi.as_deref() else {
+        return Vec::new();
+    };
+    let mut parts = working.split('/');
+    let reference = parts.next().unwrap_or("");
+    parts
+        .enumerate()
+        .filter(|(_, alt)| rowless_alternate_allele(reference, alt))
+        .filter_map(|(own, _)| {
+            let mut feature = split_feature(allele, own)?;
+            feature.reference_allele_row = false;
+            feature.allele_index = own;
+            feature.allele_num = None;
+            feature.colocated_variants.clear();
+            feature.existing_variation.clear();
+            feature.freqs.clear();
+            Some((own, feature))
+        })
+        .collect()
+}
+
 /// Whether the split feature of `alt`, an alternate allele of a record's working
 /// string, writes no row: once the pair is trimmed (InputBuffer.pm:665), an allele
 /// equal to `reference` (VariationFeatureOverlap.pm:481) or a `*` or `<DEL:*>`,
@@ -266,7 +295,7 @@ pub fn rowless_alternate_allele(reference: &str, alt: &str) -> bool {
 
 /// `variant`, an allele of a `--minimal` split record or the reference row leading
 /// it, as the feature of its own that Ensembl VEP writes once a `--check_frequency`
-/// drop has reset the buffer and its rejoin mark (BaseCacheVariation.pm:365-369,
+/// drop has reset the buffer and its rejoin mark (BaseCacheVariation.pm:366-370,
 /// InputBuffer.pm:535-537 and :610), so that OutputFactory.pm:294 skips the
 /// rejoin: the feature prints its own span, string and class, is named by the
 /// record's `variation_name` (Parser.pm:462, given before the split and inherited
@@ -303,7 +332,7 @@ pub fn feature_on_its_own(variant: &mut InputVariant, own: u32) {
 
 /// The class `VARIANT_CLASS` prints for a `--minimal` split record: that of the
 /// first alternate allele of `working`, the record's chopped allele string, trimmed
-/// against the reference (OutputFactory.pm:2289 builds the first feature's hash,
+/// against the reference (OutputFactory.pm:2298 builds the first feature's hash,
 /// which caches `class_SO_term`, before the rejoin).
 fn first_feature_class(working: &str) -> String {
     let mut parts = working.split('/');
@@ -318,7 +347,7 @@ fn first_feature_class(working: &str) -> String {
 /// chopped allele string: the rows print the record's feature, whose
 /// `ref_allele_string` was cached while the first allele's rows were built
 /// before the rejoin restored the record's string (OutputFactory.pm:1357 at
-/// :2289, VariationFeature.pm:1533-1539), so it is the first allele's trimmed
+/// :2298, VariationFeature.pm:1533-1539), so it is the first allele's trimmed
 /// reference, or the record's own when the first allele writes no row
 /// ([`rowless_alternate_allele`]: equal to the reference once trimmed, or a `*`
 /// or `<DEL:*>`) and so built none to cache it; with `reference_rows`
@@ -338,7 +367,7 @@ pub fn rejoined_reference(working: &str, reference_rows: bool) -> String {
 
 /// `variant` as the split feature of one allele: its trimmed pair over the
 /// trimmed span and, after the first allele, the key prefix the rejoin sorts its
-/// rows by (OutputFactory.pm:2316, the feature's allele string before the key).
+/// rows by (OutputFactory.pm:2325, the feature's allele string before the key).
 fn set_split_feature(
     variant: &mut InputVariant,
     own: usize,
@@ -466,7 +495,7 @@ mod tests {
         assert_eq!(multi.allele_string, "G/GA");
     }
 
-    /// The split of `G/T/GA` at 14 (Ensembl VEP 116.2 on `21 10542414 x G T,GA`
+    /// The split of `G/T/GA` at 14 (Ensembl VEP 116.3 on `21 10542414 x G T,GA`
     /// under `--minimal`): the `T` allele keeps its alleles under the record's
     /// span with no key prefix, the `GA` allele becomes `-/A` at 15-14 with
     /// `original_start` and `original_end` at 14, the prefix `-/A_`, the chopped
@@ -516,7 +545,7 @@ mod tests {
     /// `REF_ALLELE` on a split record is the first allele's trimmed reference (`A`
     /// for `AAG/GAG/AGG/-` and for `AG/GG/-`, `-` for `G/GA/T`), or the record's
     /// own reference when the first allele equals it once trimmed (`A` for
-    /// `A/A/G`), as Ensembl VEP 116.2 prints under `--minimal --show_ref_allele`
+    /// `A/A/G`), as Ensembl VEP 116.3 prints under `--minimal --show_ref_allele`
     /// for `21 10542414 AAAG AGAG,AAGG,A`, `21 10542414 AAG AGG,A`,
     /// `21 10542414 G GA,T` and `21 10542415 A A,G`; under `--process_ref_homs`
     /// the same run prints `-` for `A/A/G`, the trimmed reference of the first
@@ -533,7 +562,7 @@ mod tests {
     }
 
     /// Under `--process_ref_homs` every allele of a split record contributes the
-    /// reference row of its own feature, as Ensembl VEP 116.2 prints for
+    /// reference row of its own feature, as Ensembl VEP 116.3 prints for
     /// `21 10542414 A T,AG`: `A` numbered 0 over 10542414 for the SNV's feature
     /// `A/T`, and `-` numbered 0 over the insertion span 10542415-10542414 for the
     /// feature `-/G`, sorted under that feature's key `-/G_`; and for
@@ -597,7 +626,7 @@ mod tests {
     /// The first feature of a split record is built for an allele of the record
     /// when the first alternate allele writes no row: `A/A/G` at 10542415 gives
     /// `-/-` at 10542416-10542415 and `A/*/G/AT` at 100 gives `A/*` at 100, each
-    /// without a key prefix, as Ensembl VEP 116.2 splits `21 10542415 A A,G`
+    /// without a key prefix, as Ensembl VEP 116.3 splits `21 10542415 A A,G`
     /// (`-/-` over 10542416-10542415, VARIANT_CLASS `sequence_alteration`) and
     /// trims nothing off `*`. `A/AA/G`, whose first allele writes its rows, and a
     /// record the split left alone give none.
@@ -648,6 +677,65 @@ mod tests {
             MinimalSplit::Unchanged
         );
         assert!(rowless_first_feature(&unsplit).is_none());
+    }
+
+    /// Every feature that writes no row is built from one allele of the record,
+    /// at its place among the alternate alleles: `A/*/G/A` at 100 gives `A/*` at
+    /// 100 in place 0 and, for the allele equal to the reference, `-/-` at
+    /// 101-100 in place 2 under its key prefix. A feature is no reference row and
+    /// carries none of the known variants or `FREQS` of the allele it was built
+    /// from. A record whose alleles all write rows, and one the split left alone,
+    /// give none.
+    #[test]
+    fn the_features_that_write_no_row_are_built_from_any_allele() {
+        let mut g = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        g.allele_index = 1;
+        g.record_allele_string_multi = Some("A/*/G/A".into());
+        assert_eq!(apply_minimal_split(&mut g, 1), MinimalSplit::Trimmed);
+        g.freqs = vec!["AF:G:0.5".to_string()];
+        g.existing_variation = vec!["rs1".to_string()];
+        for template in [g.clone(), split_reference_row(&g, 1)] {
+            let features = rowless_features(&template);
+            let shapes: Vec<(usize, &str, u64, u64, Option<&str>)> = features
+                .iter()
+                .map(|(own, feature)| {
+                    (
+                        *own,
+                        feature.allele_string.as_str(),
+                        feature.start,
+                        feature.end,
+                        feature.rejoin_key_prefix.as_deref(),
+                    )
+                })
+                .collect();
+            assert_eq!(
+                shapes,
+                [
+                    (0, "A/*", 100, 100, None),
+                    (2, "-/-", 101, 100, Some("-/-_"))
+                ]
+            );
+            for (own, feature) in &features {
+                assert_eq!(feature.allele_index, *own);
+                assert!(!feature.reference_allele_row);
+                assert!(feature.freqs.is_empty() && feature.existing_variation.is_empty());
+                assert_eq!(feature.original_start, Some(100));
+            }
+        }
+
+        let mut a = InputVariant::new("21".into(), 5030602, 5030602, b"A".to_vec(), b"G".to_vec());
+        a.allele_index = 1;
+        a.record_allele_string_multi = Some("A/AA/G".into());
+        assert_eq!(apply_minimal_split(&mut a, 1), MinimalSplit::Trimmed);
+        assert!(rowless_features(&a).is_empty());
+
+        let mut unsplit = InputVariant::new("21".into(), 14, 14, b"G".to_vec(), b"C".to_vec());
+        unsplit.record_allele_string_multi = Some("G/T/C".into());
+        assert_eq!(
+            apply_minimal_split(&mut unsplit, 1),
+            MinimalSplit::Unchanged
+        );
+        assert!(rowless_features(&unsplit).is_empty());
     }
 
     /// A `*` the trim leaves writes no row: `21 10542415 x A *A,G` under `--minimal`
@@ -719,7 +807,7 @@ mod tests {
     /// A record none of whose alleles trims (`G/T/C`) is left as it stands with no
     /// mark, and an allele equal to the reference once trimmed (`A` of `A/A/G`)
     /// writes no row while its record's class is that of its trimmed pair, `-/-`,
-    /// `sequence_alteration`, as Ensembl VEP 116.2 prints for `21 10542415 x A A,G`;
+    /// `sequence_alteration`, as Ensembl VEP 116.3 prints for `21 10542415 x A A,G`;
     /// a record that carries a class already (a resolved identifier's stored
     /// `indel`) keeps it through the split.
     #[test]

@@ -1,6 +1,6 @@
 # tests/sv_validation/
 
-VCF test suite covering 41 VCF variant categories defined by the generator (`scripts/validation/generate_sv_test_vcfs.py`), spanning VCF v4.1-4.5 allele forms, for both GRCh37 and GRCh38 assemblies.
+VCF test set covering 41 VCF variant categories defined by the generator (`scripts/validation/generate_sv_test_vcfs.py`), spanning VCF v4.1-4.5 allele forms, for both GRCh37 and GRCh38 assemblies.
 
 ## Purpose
 
@@ -123,8 +123,8 @@ python3 scripts/validation/validate_test_vcfs.py \
 
 The vep-rs binary reads `.vcf.gz` files directly (bgzf support built-in). No decompression needed.
 
-`compare_sv_concordance.py` scores the `.vcf.gz` files directly inside `--input-dir`
-(default `tests/sv_validation/<assembly>`, so the 13 synthetic files) against Perl VEP
+`vep-sv-compare` scores the `.vcf.gz` files directly inside `--input-dir`
+(default `tests/sv_validation/<assembly>`, so the 13 synthetic files) against Ensembl VEP
 output for the same files in `--perl-dir` and vep-rs output in `--rust-dir`. To score
 the real-world files, point `--input-dir` at the `real_world/` directory (or at
 `.vep/vcf/<assembly>/sv/` directly) with matching output directories. Pass
@@ -132,14 +132,17 @@ the real-world files, point `--input-dir` at the `real_world/` directory (or at
 that mask as inactive.
 
 ```bash
+# The comparison tool's release build
+cargo build --release --locked --manifest-path tools/vep-sv-compare/Cargo.toml
+
 # GRCh37 synthetic set
-python3 scripts/validation/compare_sv_concordance.py --assembly grch37
+tools/vep-sv-compare/target/release/vep-sv-compare --assembly grch37
 
 # GRCh38 synthetic set
-python3 scripts/validation/compare_sv_concordance.py --assembly grch38
+tools/vep-sv-compare/target/release/vep-sv-compare --assembly grch38
 
 # GRCh37 real-world set
-python3 scripts/validation/compare_sv_concordance.py --assembly grch37 \
+tools/vep-sv-compare/target/release/vep-sv-compare --assembly grch37 \
   --input-dir tests/sv_validation/grch37/real_world \
   --perl-dir tmp/sv_perl/grch37_real_world --rust-dir tmp/sv_rust/grch37_real_world \
   --output-dir tmp/sv_concordance/grch37_real_world

@@ -1,6 +1,6 @@
 # An `in` list mixing a number and other text
 
-**The defect in one sentence.** Ensembl VEP 116.2 decides whether an `in` list compares a `text:number` or `text(number)` value through its number by one entry it picks from the list's hash. So a list that mixes a number and other text, `gene_hgnc_id in HGNC:2559,1132`, keeps one gene's rows under one Perl hash seed and another gene's under another. vep-rs decides the reading by the list's first written entry and keeps the same rows in every run.
+**The defect in one sentence.** Ensembl VEP 116.3 decides whether an `in` list compares a `text:number` or `text(number)` value through its number by one entry it picks from the list's hash. So a list that mixes a number and other text, `gene_hgnc_id in HGNC:2559,1132`, keeps one gene's rows under one Perl hash seed and another gene's under another. vep-rs decides the reading by the list's first written entry and keeps the same rows in every run.
 
 **Why this is a defect.** The `in` operator's list is kept as a hash of its entries. Before the comparison, the value read from the transcript is reduced to its number when the filter's value is a number, and for a list that filter value is the first key the hash yields. A hash yields its keys in an order that depends on the process's hash seed, which Perl draws at random unless `PERL_HASH_SEED` fixes it.
 
@@ -8,7 +8,7 @@ When the picked entry is `1132`, the transcript's `HGNC:1132` is read as `1132`,
 
 **What vep-rs does instead.** vep-rs decides the reading by the list's first written entry, the same in every run: `gene_hgnc_id in 1132,HGNC:2559` reads every value through its number and keeps the BTG3 rows, and `gene_hgnc_id in HGNC:2559,1132` compares every value whole and keeps the CXADR rows. Each of those is one of the two readings Ensembl VEP gives, chosen by the written order rather than by the seed. A list whose entries are all numbers, or none of them, reads the same on both engines in every run, and so does a list read from a file. The same rule governs `vep filter`, whose `filter_vep` counterpart shares the grammar.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2, `Bio/EnsEMBL/VEP/FilterSet.pm`):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3, `Bio/EnsEMBL/VEP/FilterSet.pm`):
 
 - Lines 391-392, `finish_filter_node`: a value with text on both sides of a comma is split on commas into a hash, one key per entry.
 - Lines 589-594, `get_input`: a defined value is matched by `([\w\.\-]+)?\:?\(?([\-\d\.e]*)\)?`, and the numeric reading runs when the number group is not empty; `CELL_TYPE` and the HGVS fields are exempt.
@@ -21,11 +21,11 @@ When the picked entry is `1132`, the transcript's `HGNC:1132` is read as `1132`,
 
 **The class it produces.** `transcript_filter_in_list_numeric_by_hash_order`: the rows a `--transcript_filter` keeps, and the lines or consequence entries a `vep filter` run keeps, under an `in` list some of whose entries are numbers and some other text, on a value shaped `text:number` or `text(number)`. Ensembl VEP keeps the rows of one reading or the other by hash seed; vep-rs keeps the rows of the reading the first written entry selects. The class is documented only: no committed flag set and no committed tool run passes such a list.
 
-**How often the shape occurs.** Tier 3: the shape is a value of `--transcript_filter`, or of `vep filter`'s `--filter`, that no ordinary command line carries. Of the 392 committed flag sets, 9 pass `--transcript_filter` and none passes an `in` list mixing a number and other text; of the 28 committed `vep filter` runs, one passes an `in` list, and its three entries are all consequence terms.
+**How often the shape occurs.** Tier 3: the shape is a value of `--transcript_filter`, or of `vep filter`'s `--filter`, that no ordinary command line carries. Of the 511 committed flag sets, 10 pass `--transcript_filter` and none passes an `in` list mixing a number and other text; of the 28 committed `vep filter` runs, one passes an `in` list, and its three entries are all consequence terms.
 
 ## 1. Two genes named one by HGNC identifier and one by its number
 
-**In short.** The record `tf_17608184`, `21 17608184 A>G`, lies within reach of 41 transcripts: 34 of BTG3 (`HGNC:1132`), 5 of BTG3-AS1 (`HGNC:53145`) and 2 of CXADR (`HGNC:2559`). Under `--transcript_filter 'gene_hgnc_id in HGNC:2559,1132'`, vep-rs writes the 2 CXADR rows. Ensembl VEP 116.2 writes the 34 BTG3 rows under `PERL_HASH_SEED=0` and the 2 CXADR rows under `PERL_HASH_SEED=11`, and the reversed list `1132,HGNC:2559` gives it the same two answers under the same two seeds, where vep-rs writes the 34 BTG3 rows.
+**In short.** The record `tf_17608184`, `21 17608184 A>G`, lies within reach of 41 transcripts: 34 of BTG3 (`HGNC:1132`), 5 of BTG3-AS1 (`HGNC:53145`) and 2 of CXADR (`HGNC:2559`). Under `--transcript_filter 'gene_hgnc_id in HGNC:2559,1132'`, vep-rs writes the 2 CXADR rows. Ensembl VEP 116.3 writes the 34 BTG3 rows under `PERL_HASH_SEED=0` and the 2 CXADR rows under `PERL_HASH_SEED=11`, and the reversed list `1132,HGNC:2559` gives it the same two answers under the same two seeds, where vep-rs writes the 34 BTG3 rows.
 
 ### 1.1 What a reader needs to know first
 
@@ -43,14 +43,14 @@ Both engines run `--symbol` over the GRCh38 release 116 cache, with the filter q
 
 ### 1.3 What each engine writes
 
-Ensembl VEP 116.2 under `PERL_HASH_SEED=0 PERL_PERTURB_KEYS=0`, with `--transcript_filter 'gene_hgnc_id in HGNC:2559,1132'`, writes 34 rows, every one on a BTG3 transcript; the first two:
+Ensembl VEP 116.3 under `PERL_HASH_SEED=0 PERL_PERTURB_KEYS=0`, with `--transcript_filter 'gene_hgnc_id in HGNC:2559,1132'`, writes 34 rows, every one on a BTG3 transcript; the first two:
 
 ```
 tf_17608184	21:17608184	G	ENSG00000154640	ENST00000339775	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=-1;SYMBOL=BTG3;SYMBOL_SOURCE=HGNC;HGNC_ID=HGNC:1132
 tf_17608184	21:17608184	G	ENSG00000154640	ENST00000348354	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=-1;SYMBOL=BTG3;SYMBOL_SOURCE=HGNC;HGNC_ID=HGNC:1132
 ```
 
-Ensembl VEP 116.2 under `PERL_HASH_SEED=11`, with the same filter, writes 2 rows:
+Ensembl VEP 116.3 under `PERL_HASH_SEED=11`, with the same filter, writes 2 rows:
 
 ```
 tf_17608184	21:17608184	G	ENSG00000154639	ENST00001092433	Transcript	downstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER;DISTANCE=426;STRAND=1;SYMBOL=CXADR;SYMBOL_SOURCE=HGNC;HGNC_ID=HGNC:2559
@@ -81,7 +81,7 @@ vep -i record.vcf -o out.txt --offline --json_cache <corpus>/json_cache \
   --transcript_filter 'gene_hgnc_id in HGNC:2559,1132'
 ```
 
-vep-rs writes the 2 CXADR rows; with `1132,HGNC:2559` the 34 BTG3 rows. Ensembl VEP 116.2 with the same filter over the GRCh38 release 116 cache writes 34 rows under `PERL_HASH_SEED=0 PERL_PERTURB_KEYS=0` and 2 under `PERL_HASH_SEED=11 PERL_PERTURB_KEYS=0`, with either written order. Writing the list as `2559,1132` or as `HGNC:2559,HGNC:1132` makes the engines agree under every seed, 36 rows each, since every entry then reads the same way.
+vep-rs writes the 2 CXADR rows; with `1132,HGNC:2559` the 34 BTG3 rows. Ensembl VEP 116.3 with the same filter over the GRCh38 release 116 cache writes 34 rows under `PERL_HASH_SEED=0 PERL_PERTURB_KEYS=0` and 2 under `PERL_HASH_SEED=11 PERL_PERTURB_KEYS=0`, with either written order. Writing the list as `2559,1132` or as `HGNC:2559,HGNC:1132` makes the engines agree under every seed, 36 rows each, since every entry then reads the same way.
 
 ### 1.7 How the comparator treats this class
 

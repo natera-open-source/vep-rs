@@ -1,0 +1,4 @@
+acceptor_forward_motif	toy:400	C	FWDG1	FWDT1	Transcript	splice_acceptor_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1;SOURCE=two_strand_acceptor.gff3.gz;LoF=HC;LoF_flags=NAGNAG_SITE;LoF_info=INTRON_SIZE:200
+acceptor_forward_motif	toy:400	C	REVG1	REVT1	Transcript	splice_acceptor_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=-1;SOURCE=two_strand_acceptor.gff3.gz;LoF=HC;LoF_flags=NON_CAN_SPLICE,NAGNAG_SITE;LoF_info=INTRON_SIZE:221
+acceptor_reverse_motif	toy:699	G	FWDG1	FWDT1	Transcript	splice_acceptor_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1;SOURCE=two_strand_acceptor.gff3.gz;LoF=HC;LoF_flags=NON_CAN_SPLICE;LoF_info=INTRON_SIZE:200
+acceptor_reverse_motif	toy:699	G	REVG1	REVT1	Transcript	splice_acceptor_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=-1;SOURCE=two_strand_acceptor.gff3.gz;LoF=HC;LoF_info=INTRON_SIZE:151

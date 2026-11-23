@@ -1,0 +1,6 @@
+##fileformat=VCFv4.2
+##a header that ends in CR LF
+##a header that ends in a lone CR
+#CHROM	POS	ID
+1	100	a variant that ends in CR LF
+1	200	a variant that ends in a lone CR

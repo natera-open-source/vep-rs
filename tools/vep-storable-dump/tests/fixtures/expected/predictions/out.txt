@@ -1,0 +1,103 @@
+### ENST00000000001
+{
+  '_variation_effect_feature_cache' => {
+    'other' => bless( {
+      'matrix' => 'shared blob',
+      'translation_md5' => 'ffff'
+    }, 'Bio::EnsEMBL::Variation::ProteinFunctionPredictionMatrix' ),
+    'peptide' => 'MKG',
+    'protein_function_predictions' => {
+      'empty' => 'none',
+      'no_matrix' => 'matrix:undef md5:only md5',
+      'no_md5' => 'matrix:5 md5:',
+      'number_matrix' => 'matrix:3 md5:42',
+      'polyphen_humdiv' => 'none',
+      'polyphen_humvar' => 'none',
+      'shared' => 'matrix:11 md5:ffff',
+      'shared_again' => 'matrix:11 md5:ffff',
+      'sift' => 'matrix:12 md5:abc123',
+      'text' => 'none',
+      'undef_matrix' => 'matrix:undef md5:',
+      'wide_matrix' => "matrix:8 md5:md5 \x{e9}",
+      'zero_class' => 'none'
+    }
+  },
+  'end' => 2,
+  'stable_id' => 'ENST00000000001.1',
+  'start' => 1
+}
+
+### ENST00000000002
+{
+  '_variation_effect_feature_cache' => bless( {
+    'peptide' => 'MKG',
+    'protein_function_predictions' => {
+      'sift' => {
+        'matrix' => 'kept whole',
+        'translation_md5' => 'x'
+      }
+    }
+  }, 'Some::Cache' ),
+  'end' => 2,
+  'stable_id' => 'ENST00000000002.1',
+  'start' => 1
+}
+
+### ENST00000000003
+{
+  '_variation_effect_feature_cache' => {
+    'protein_function_predictions' => bless( {
+      'sift' => {
+        'matrix' => 'kept whole'
+      }
+    }, 'Some::Predictions' )
+  },
+  'end' => 2,
+  'stable_id' => 'ENST00000000003.1',
+  'start' => 1
+}
+
+### ENST00000000004
+{
+  '_variation_effect_feature_cache' => {
+    'protein_function_predictions' => [
+      'a list'
+    ]
+  },
+  'end' => 2,
+  'stable_id' => 'ENST00000000004.1',
+  'start' => 1
+}
+
+### ENST00000000005
+{
+  '_variation_effect_feature_cache' => undef,
+  'end' => 2,
+  'stable_id' => 'ENST00000000005.1',
+  'start' => 1
+}
+
+### ENST00000000006
+{
+  '_variation_effect_feature_cache' => 'a string',
+  'end' => 2,
+  'stable_id' => 'ENST00000000006.1',
+  'start' => 1
+}
+
+### ENST00000000007
+{
+  '_variation_effect_feature_cache' => {
+    'protein_function_predictions' => {}
+  },
+  'end' => 2,
+  'stable_id' => 'ENST00000000007.1',
+  'start' => 1
+}
+
+### ENST00000000008
+{
+  'self' => undef,
+  'stable_id' => 'ENST00000000008.1'
+}
+

@@ -1,7 +1,7 @@
 entry = "dbnsfp_readme_description_text"
 page = "docs/plugins.md#dbnsfp"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the dbNSFP plugin's header, which says column descriptions are read from the dbNSFP README file found in the data file's directory (dbNSFP.pm:113-115; :485-543 reads it) and states no layout for its lines; not seen in the measured datasets"
 notes = "Two of the mechanisms the entry names: a README line whose colon is not followed by a space, and a line whose text is `0`; the third, one trailing space kept at the end of a header line, is not compared here: the compare keeps the default strip, which removes trailing whitespace from each value. The README is written beside a copy of the corpus table."
@@ -19,7 +19,7 @@ text = """
 [cache]
 species = "homo_sapiens"
 assembly = "GRCh38"
-json_cache = "tests/golden/116/GRCh38-plugin-dbnsfp/json_cache"
+json_cache = "tests/golden/116/GRCh38-plugin-dbnsfp-fixture/json_cache"
 
 [run]
 flags = ["--plugin", "dbNSFP,{stage}/dbNSFP4.9a_grch38_synthetic.gz,SIFT_score,Polyphen2_HDIV_score,SIFT_pred"]
@@ -36,4 +36,15 @@ ensembl_vep = [
 vep_rs = [
   "## Polyphen2_HDIV_score : (from dbNSFP4.9a_grch38_synthetic) a made-up description of the second column.",
   "## SIFT_pred : (from dbNSFP4.9a_grch38_synthetic) 0",
+]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/dbnsfp.rs::collapse_blanks",
+    "crates/vep-builtins/src/plugins/dbnsfp.rs::readme_descriptions",
+]
+tests = [
+    "crates/vep-builtins/src/plugins/dbnsfp.rs::tests::readme_blanks_are_the_ascii_ones",
+    "crates/vep-builtins/src/plugins/dbnsfp.rs::tests::readme_text_with_no_blank_after_the_colon_describes_the_column",
+    "crates/vep-builtins/src/plugins/dbnsfp.rs::tests::readme_zero_name_or_text_is_kept",
 ]

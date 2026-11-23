@@ -1,0 +1,9 @@
+z = 1
+[b.c]
+k = 1
+[a]
+k = 2
+[b]
+later = true
+[b.a]
+k = 3

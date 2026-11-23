@@ -37,7 +37,7 @@ the file's `6.89E-05` reaches the output as `6.89e-05` and its `1.38E-04` as
 A cell is read as `sprintf` numifies it (`LoFtool.pm` line 89): its
 leading number, so `1.5abc` scores `1.5`. A gene listed twice takes its
 later line. A cell with no leading number (`NA`) scores nothing, warned once at
-load. Ensembl VEP 116.2 formats it as `0`, which its truth test drops, so
+load. Ensembl VEP 116.3 formats it as `0`, which its truth test drops, so
 neither engine prints it.
 
 **Preparing the data.** Fetch `LoFtool_scores.txt` from the VEP_plugins
@@ -79,14 +79,14 @@ plugin's documentation describes matches once the version suffix is dropped.
 In `transcript` mode under `--refseq` or `--merged` the plugin warns that
 RefSeq ids never match an Ensembl stable id. The warning is printed on standard
 error, under `--quiet` too, and never written to the warnings file, as Ensembl
-VEP prints it. Ensembl VEP 116.2 tests the second parameter as given, so
+VEP prints it. Ensembl VEP 116.3 tests the second parameter as given, so
 `pLI,<path>,sigfig,transcript` warns here and not there (`pLI.pm` lines 109
 and 187).
 
 A cell is read as `sprintf` numifies it (`pLI.pm` line 145): its leading
 number, so `1.5abc` scores `1.50`. A key listed twice takes its later line.
 A cell with no leading number (`NA`) scores nothing, warned once at load.
-Ensembl VEP 116.2 prints the `0.00` its `sprintf` makes of it on every gene row.
+Ensembl VEP 116.3 prints the `0.00` its `sprintf` makes of it on every gene row.
 No distributed values file carries one, and the comparison tools set nothing
 aside for it.
 
@@ -107,8 +107,8 @@ Every parameter is `key=value`; a bare path is refused.
 
 | Parameter       | Meaning                                                                                                                                      |
 | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `file=<path>`   | The data file. Required. A catalog that is empty or lacks `CHR_ID`, `CHR_POS`, `SNPS`, `DISEASE/TRAIT` or `STRONGEST SNP-RISK ALLELE` is refused at plugin initialization, where Ensembl VEP 116.2 loads it and annotates nothing. A row whose SNP count differs from its location count puts every SNP at its one location, and is skipped when it names several; Ensembl VEP writes every SNP at every location of it, the shape `gwas_haplotype_cross_product` sets aside (the associations download holds one such row, `GCST002273`, three SNPs over two locations on chromosome 8). A chromosome written with a `chr` prefix or as `M` is read as the engine names it (`21`, `MT`); Ensembl VEP's plugin matches a `chr` prefix only, and the catalog writes neither. |
-| `type=<kind>`   | `curated` (the default), the associations download, or `sstate`, a harmonised summary-statistics file named `<PubMed id>-<study accession>-<trait accession>.<suffix>`, the catalog's `.h.tsv.gz` or the uncompressed `.h.tsv`. A file whose name lacks one of the three parts or the suffix is refused at plugin initialization, where Ensembl VEP 116.2 loads it and writes `GWAS_pmid`, `GWAS_study` and `GWAS_accessions` empty (`GWAS.pm` lines 139-142); a harmonised file without `hm_chrom` and `hm_pos` is refused by both engines. The file is read by its tab-separated columns throughout; Ensembl VEP 116.2's filter and sort count blank-separated fields, so a row with an empty cell before `hm_pos` can fail its index build and drop the plugin ([a documented class](../divergences/gwas-sstate-index-failure.md)). |
+| `file=<path>`   | The data file. Required. A catalog that is empty or lacks `CHR_ID`, `CHR_POS`, `SNPS`, `DISEASE/TRAIT` or `STRONGEST SNP-RISK ALLELE` is refused at plugin initialization, where Ensembl VEP 116.3 loads it and annotates nothing. A row whose SNP count differs from its location count puts every SNP at its one location, and is skipped when it names several; Ensembl VEP writes every SNP at every location of it, the shape `gwas_haplotype_cross_product` sets aside (the associations download holds one such row, `GCST002273`, three SNPs over two locations on chromosome 8). A chromosome written with a `chr` prefix or as `M` is read as the engine names it (`21`, `MT`); Ensembl VEP's plugin matches a `chr` prefix only, and the catalog writes neither. |
+| `type=<kind>`   | `curated` (the default), the associations download, or `sstate`, a harmonised summary-statistics file named `<PubMed id>-<study accession>-<trait accession>.<suffix>`, the catalog's `.h.tsv.gz` or the uncompressed `.h.tsv`. A file whose name lacks one of the three parts or the suffix is refused at plugin initialization, where Ensembl VEP 116.3 loads it and writes `GWAS_pmid`, `GWAS_study` and `GWAS_accessions` empty (`GWAS.pm` lines 139-142); a harmonised file without `hm_chrom` and `hm_pos` is refused by both engines. The file is read by its tab-separated columns throughout; Ensembl VEP 116.3's filter and sort count blank-separated fields, so a row with an empty cell before `hm_pos` can fail its index build and drop the plugin ([a documented class](../divergences/gwas-sstate-index-failure.md)). |
 | `verbose=1`     | Name every catalog row the plugin skips: one without a trait or without an `rs` id. A risk allele of `?` is read as none, with no message. |
 | `db=1`          | Refused: Ensembl VEP's plugin reads each SNP's locations from the Ensembl database under it, and vep-rs has no database connection.          |
 
@@ -120,7 +120,7 @@ Every parameter is `key=value`; a bare path is refused.
 **Preparing the data.** Download the associations TSV, or one study's
 harmonised summary-statistics file, from the catalog. The plugin reads either
 plain or gzipped, told apart by content, and locates its columns by header
-name, so no reformatting is needed. Ensembl VEP 116.2 tells a compressed catalog
+name, so no reformatting is needed. Ensembl VEP 116.3 tells a compressed catalog
 by its `gz` suffix (`GWAS.pm` line 366) and reads a summary-statistics file
 uncompressed only (`GWAS.pm` lines 437 and 460). A summary-statistics file
 keeps the name the catalog gives it,
@@ -161,8 +161,8 @@ Every parameter is `key=value`.
 
 | Parameter     | Meaning                                                                                                               |
 | ------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `file=<path>` | The scores table (mandatory): three columns, the gene symbol, `pHaplo` and `pTriplo`, read whole at start-up, gzip-compressed or plain; Ensembl VEP 116.2 reads the compressed form only (`Utils.pm` line 434). |
-| `cover=1`     | Write the scores only on a row whose variant spans the whole transcript, such as a deletion or duplication of the gene. `cover=0` is the default; every value but the string `1` is `0`, as Ensembl VEP 116.2 reads it (`DosageSensitivity.pm` line 101). |
+| `file=<path>` | The scores table (mandatory): three columns, the gene symbol, `pHaplo` and `pTriplo`, read whole at start-up, gzip-compressed or plain; Ensembl VEP 116.3 reads the compressed form only (`Utils.pm` line 434). |
+| `cover=1`     | Write the scores only on a row whose variant spans the whole transcript, such as a deletion or duplication of the gene. `cover=0` is the default; every value but the string `1` is `0`, as Ensembl VEP 116.3 reads it (`DosageSensitivity.pm` line 101). |
 
 ```bash
 --plugin DosageSensitivity,\
@@ -173,7 +173,7 @@ file=/path/to/Collins_rCNV_2022.dosage_sensitivity_scores.tsv.gz,cover=1
 
 ## Where these plugins differ from Ensembl VEP
 
-Nine behaviours of Ensembl VEP 116.2's plugins are not reproduced. The first
+Nine behaviours of Ensembl VEP 116.3's plugins are not reproduced. The first
 two are classes the comparison tools set aside. The other seven are documented
 classes no tool codes, since no committed row falls under them. Each section
 names the rows a comparison would set aside.
@@ -195,11 +195,11 @@ three others are:
 
 Sections 3 to 6 carry their tier under the rule of [Intended divergences from
 Ensembl VEP](../intended-divergences.md), which lists every class's tier. Tier 1
-is a shape the chromosome 21 population cuts carry with no flag. Tier 2 is one
+is a shape the chromosome 21 cuts carry with no flag. Tier 2 is one
 that needs a flag or plugin on ordinary data. Tier 3 is one ordinary data does
 not carry.
-The counts are over the cuts' 15,646,481 records, the 111 golden corpora and
-their 392 flag sets.
+The counts are over the cuts' 15,646,481 records, the 152 golden corpora and
+their 511 flag sets.
 
 ### 1. GWAS: every SNP of a haplotype row at every location of the row
 
@@ -212,7 +212,7 @@ full catalog, 590 rows carry an annotation from Ensembl VEP alone and 139 a
 different study or p-value on the two engines, every one at a site of such a
 row.
 
-The first SNP of an interaction row is the one exception in Ensembl VEP 116.2.
+The first SNP of an interaction row is the one exception in Ensembl VEP 116.3.
 Its risk allele keeps a trailing space (`GWAS.pm` lines 346-348) and never
 matches, so no site carries it ([section 3](#3-gwas-the-first-snp-of-an-interaction-row-never-matches-its-own-risk-allele)).
 
@@ -312,7 +312,7 @@ Behind both are the catalog's `GCST008413` lines holding `45427844` and
 
 #### 1.7 How the comparator treats this class
 
-The format comparator (`scripts/concordance/compare_vep_formats.py`) applies
+The format comparator (`tools/vep-formats-compare`) applies
 `gwas_haplotype_cross_product` when a comparison case names it. A `GWAS_` field
 the reference fills, or writes empty beside its filled fields, and the candidate
 leaves empty, or both fill differently, is set aside on covered rows. Covered
@@ -342,7 +342,7 @@ A plugin names the row kinds it runs on. DosageSensitivity's module names
 `Feature`, which Ensembl VEP reads as every kind, so the plugin is run on
 regulatory and motif rows as well as transcript rows. Ensembl VEP writes each
 distinct warning text once per run (`BaseVEP.pm`, lines 809-813, keep the
-texts already written). The message names the row's class, so ten failing
+texts already written). The message names the row's class, so nine failing
 rows of two kinds give two lines.
 
 #### 2.2 The record
@@ -354,7 +354,7 @@ and the published `Collins_rCNV_2022.dosage_sensitivity_scores.tsv.gz`.
 
 #### 2.3 What each engine writes
 
-Both engines write the same ten regulatory and motif rows, the first:
+Both engines write nine regulatory and motif rows, the first:
 
 ```
 del_covers_rf	21:5014322-5014344	-	-	ENSR21_536SRH	RegulatoryFeature	regulatory_region_ablation,regulatory_region_variant	-	-	-	-	-	-	IMPACT=MODIFIER;BIOTYPE=CTCF_binding_site
@@ -373,7 +373,7 @@ vep-rs's warnings file has no line for the records.
 
 `DosageSensitivity.pm`, line 169, reads `$tva->transcript->{_gene_symbol}` on
 every row it is run on. A regulatory or motif row's allele object has no
-`transcript` method, so the call dies. `OutputFactory.pm`, line 2244,
+`transcript` method, so the call dies. `OutputFactory.pm`, line 2253,
 catches the exception from the plugin's `run` and writes it as the warning.
 The row is then written without the plugin's fields.
 
@@ -571,7 +571,7 @@ and 14 flag sets run one of the two plugins.
 **In short.** Against a scores file that gives SOD1 the percentile `0.00E+00`,
 the GRCh38 record `21 31667290 14766 A C`
 (`tests/golden/116/GRCh38-plugin-loftool/variants.vcf`) has 26 SOD1 transcript
-rows. Ensembl VEP 116.2 writes no `LoFtool` on any of them. vep-rs writes
+rows. Ensembl VEP 116.3 writes no `LoFtool` on any of them. vep-rs writes
 `LoFtool=0` on all 26, as both engines write `LoFtool=0.126` against the bundled
 file's `1.26E-01`. With pLI, a cell `0` for SOD1 prints `pLI_gene_value=0.00` on
 both engines by default and under `sigfig` on vep-rs alone, as

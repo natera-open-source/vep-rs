@@ -1,0 +1,24 @@
+[package]
+name = "vep-storable-to-json"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.89"
+license = "Apache-2.0"
+description = "Converts an Ensembl VEP Storable cache into the JSON cache vep-rs annotates from, with a reader of Perl Storable images that needs no Perl"
+publish = false
+
+[dependencies]
+flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
+# Stock zlib, built from the source the crate carries: the one deflate whose bytes are
+# `Compress::Zlib::memGzip`'s.
+libz-sys = { version = "1", default-features = false, features = ["static"] }
+
+# Its own Cargo root: the repository workspace's commands do not reach this package, and
+# a cargo command for it names this manifest.
+[workspace]
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"

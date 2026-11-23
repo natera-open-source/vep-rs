@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 mod common;
 
 /// The ten deciles `00-10%` to `90-100%` of the chart on the corpus input, the
-/// chart Ensembl VEP 116.2 writes for the run without `--hgvs`.
+/// chart Ensembl VEP 116.3 writes for the run without `--hgvs`.
 const DECILES: [(&str, u32); 10] = [
     ("00-10%", 171),
     ("10-20%", 75),
@@ -29,7 +29,7 @@ const DECILES: [(&str, u32); 10] = [
 /// The rows the chart counts, the sum of its ten deciles.
 const ROWS: u32 = 1_053;
 
-/// The chart of the corpus's committed Ensembl VEP 116.2 report, a `--hgvs`
+/// The chart of the corpus's committed Ensembl VEP 116.3 report, a `--hgvs`
 /// run: the shifted positions, and the rows whose shifted start maps to no
 /// coding position left out.
 const ENSEMBL_HGVS_DECILES: [(&str, u32); 10] = [

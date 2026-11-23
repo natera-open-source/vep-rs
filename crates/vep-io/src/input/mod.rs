@@ -36,6 +36,7 @@ pub const MAX_LINE_BYTES: usize = 64 << 20;
 
 /// The error a bounded line read returns for a line past [`MAX_LINE_BYTES`].
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct LineTooLong {
     /// The line's number in the input, counted from 1.
     pub line: u64,
@@ -54,6 +55,11 @@ impl fmt::Display for LineTooLong {
 impl std::error::Error for LineTooLong {}
 
 impl LineTooLong {
+    /// The error for line `line` of the input, counted from 1.
+    pub fn new(line: u64) -> Self {
+        Self { line }
+    }
+
     /// `self` as the `InvalidData` I/O error a reader returns.
     pub fn into_io_error(self) -> io::Error {
         io::Error::new(io::ErrorKind::InvalidData, self)
@@ -127,6 +133,20 @@ pub fn empty_lines_warning(skipped: u64, from_line: u64) -> String {
     format!("Skipped {skipped} empty line{plural} from line {from_line}")
 }
 
+/// The warning for the lines of a list-based input that begin with `#`, which
+/// the region, Ensembl and HGVS readers pass over as comments and Ensembl VEP
+/// reads as records (ListBasedParser.pm:60, VEP_input.pm:61):
+/// `comments` such lines, the first at `first_line`.
+pub(crate) fn comment_lines_warning(comments: u64, first_line: u64) -> String {
+    if comments == 1 {
+        format!("Read 1 line that begins with '#' as a comment, at line {first_line}")
+    } else {
+        format!(
+            "Read {comments} lines that begin with '#' as comments, the first at line {first_line}"
+        )
+    }
+}
+
 /// Perl's `/\w+/` on `text`: whether it holds an ASCII letter, digit or `_`.
 /// `skip_empty_lines` reads past a record without one (Parser.pm:273).
 pub(crate) fn has_word_character(text: &str) -> bool {
@@ -142,15 +162,20 @@ pub(crate) fn has_word_character(text: &str) -> bool {
 /// builds no feature. A run of empty lines is warned about in
 /// `skip_empty_lines`'s words when the run ends, at the next line that counts
 /// as a record or at the end of the input (Parser.pm:273-290), the warning
-/// naming the run's first line.
+/// naming the run's first line. The `#` lines a reader passes over as comments
+/// are counted, and warned about once, at the end of the input
+/// (`comment_lines_warning`).
 #[derive(Debug, Default)]
 pub(crate) struct LineCount {
     /// Lines read so far: the number of the last line read.
     line: u64,
     /// The run of empty lines the last lines read make up.
     empty_run: u64,
-    /// The empty-line warnings since the last `take_warnings`, in the order the
-    /// runs ended.
+    /// The `#` lines passed over as comments so far.
+    comments: u64,
+    /// The number of the first of them.
+    first_comment: u64,
+    /// The warnings since the last `take_warnings`, in the order they arose.
     warnings: Vec<String>,
 }
 
@@ -168,9 +193,24 @@ impl LineCount {
         self.line += 1;
     }
 
-    /// The end of the input: ends a run of empty lines the input closes on.
+    /// The line `record_line` counted last begins with `#` and is
+    /// passed over as a comment.
+    pub(crate) fn comment_line(&mut self) {
+        if self.comments == 0 {
+            self.first_comment = self.line;
+        }
+        self.comments += 1;
+    }
+
+    /// The end of the input: ends a run of empty lines the input closes on,
+    /// then warns once about the `#` lines passed over as comments.
     pub(crate) fn end_of_input(&mut self) {
         self.end_empty_run();
+        let comments = std::mem::take(&mut self.comments);
+        if comments > 0 {
+            self.warnings
+                .push(comment_lines_warning(comments, self.first_comment));
+        }
     }
 
     /// Warns about the run of empty lines the last lines read make up, when
@@ -189,7 +229,7 @@ impl LineCount {
         self.line
     }
 
-    /// The empty-line warnings since the last call.
+    /// The warnings since the last call.
     pub(crate) fn take_warnings(&mut self) -> Vec<String> {
         std::mem::take(&mut self.warnings)
     }
@@ -248,6 +288,7 @@ pub trait TranscriptSource: Send + Sync {
 /// reference, the synonyms and the valid chromosomes, `Runner.pm:827`, reach it
 /// through the run's configuration).
 #[derive(Clone, Default)]
+#[non_exhaustive]
 pub struct ParserContext {
     /// The pattern a column-based input is split on.
     pub delimiter: Delimiter,
@@ -292,6 +333,7 @@ impl ParserContext {
 /// as the regular expression it is, by a splitter the caller compiles
 /// ([`Delimiter::from_flag`]).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum Delimiter {
     /// A tab: the default, and `detect_format`'s choice for a line with one.
     #[default]

@@ -1,0 +1,13 @@
+source_file	variant_type	direction	location	allele	feature	feature_type	consequence
+02_mnp_complex	Small_INS	only_perl	21:25954688-25954689	insertion	ENST01	Transcript	intron_variant,splice_acceptor_variant
+02_mnp_complex	Small_INS	only_rust	21:25954688-25954689	insertion	ENST01	Transcript	intron_variant
+04_large_explicit	DEL	only_perl	21:100-5000	deletion	ENST02	Transcript	transcript_ablation
+04_large_explicit	DEL	only_rust	21:100-5001	deletion	ENST02	Transcript	transcript_ablation
+09_breakends	BND	only_perl	21:7000	BND	ENST03	Transcript	intron_variant
+09_breakends	BND	only_rust	21:7000	BND	ENST04	Transcript	intron_variant
+09_breakends	BND	only_rust	21:7000	BND	ENSR05	RegulatoryFeature	regulatory_region_variant
+12_complex_imprecise	CNV	only_rust	21:9000-9900	duplication	ENST06	Transcript	transcript_amplification
+12_complex_imprecise	CNV	only_rust	21:9000-9900	duplication	ENST07	Transcript	transcript_amplification
+gnomad_sv	INV	only_perl	21:12000-12999	inversion	ENST08	Transcript	coding_sequence_variant
+gnomad_sv	INV	missing_in_rust	21:13000-13999	inversion	ENST09	Transcript	coding_sequence_variant
+gnomad_sv	INV	only_rust	22:13000-13500	inversion	ENST09	Transcript	coding_sequence_variant

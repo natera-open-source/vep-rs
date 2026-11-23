@@ -1,9 +1,9 @@
 entry = "hgvs_shifted_indel_written_span_gate"
 page = "docs/divergences/hgvs-shifted-indel-written-span-gate.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 137,702 per million · 23 flag sets, 104 corpora"
+input_class_basis = "2 · 137,702 per million · 95 flag sets, 144 corpora"
 notes = "A T inserted two bases before the first base of ENST00000602620; the shift carries it 17 bases into the transcript's opening run of Ts."
 
 [input]
@@ -29,3 +29,17 @@ columns = ["Consequence", "cDNA_position", "SHIFT_LENGTH", "HGVSc", "HGVS_OFFSET
 [expected]
 ensembl_vep = ["non_coding_transcript_exon_variant | 15-16 | 17 | - | -"]
 vep_rs = ["non_coding_transcript_exon_variant | 15-16 | 17 | ENST00000602620.2:n.15dup | 17"]
+
+[implementation]
+code = ["crates/vep-effects/src/hgvs.rs::generate_hgvs"]
+tests = [
+    "crates/vep-effects/src/hgvs.rs::tests::a_deletion_the_shift_carries_into_exon_1_is_described_at_its_shifted_span",
+    "crates/vep-effects/src/hgvs.rs::tests::a_deletion_the_shift_carries_over_the_last_base_is_described_over_the_bases_inside",
+    "crates/vep-effects/src/hgvs.rs::tests::an_insertion_anchored_further_before_a_reverse_strand_exon_1_takes_its_shifted_span",
+    "crates/vep-effects/src/hgvs.rs::tests::an_insertion_anchored_further_before_exon_1_takes_the_notation_of_its_shifted_span",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/shifted_indel.rs::shifted_indel_written_span_gate",
+    "tools/vep-golden-corpus/src/classify/hgvs.rs::shifted_indel_written_span_gate",
+    "tools/vep-plugin-pairs/src/rules/hgvs_offsets.rs::shifted_indel_written_span_gate",
+]

@@ -1,6 +1,6 @@
 # The stop-codon overlap of a shifted deletion under `--shift_3prime 1`
 
-**The defect in one sentence.** Under `--shift_3prime 1`, Ensembl VEP 116.2 tests whether an insertion or deletion overlaps the stop codon at the unshifted span while every other test of the row reads the shifted span. A deletion the shift carries over the stop codon from the bases before it, and whose result holds a stop codon at the old stop position, is therefore `coding_sequence_variant` where its shifted span is `stop_retained_variant`, the term vep-rs writes.
+**The defect in one sentence.** Under `--shift_3prime 1`, Ensembl VEP 116.3 tests whether an insertion or deletion overlaps the stop codon at the unshifted span while every other test of the row reads the shifted span. A deletion the shift carries over the stop codon from the bases before it, and whose result holds a stop codon at the old stop position, is therefore `coding_sequence_variant` where its shifted span is `stop_retained_variant`, the term vep-rs writes.
 
 On a forward-strand transcript, an insertion of one base after the stop codon's first base that the shift carries to directly after the codon keeps `stop_retained_variant` on Ensembl VEP's row beside `3_prime_UTR_variant`, where its shifted span carries `3_prime_UTR_variant` and no stop term. The overlap holds at the unshifted span, and the test of whether the stop codon is altered returns before testing where the shifted span has no CDS coordinate (line 1508).
 

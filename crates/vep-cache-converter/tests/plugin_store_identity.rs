@@ -244,7 +244,8 @@ fn hex(path: &Path) -> String {
 /// The table is replaced under its name after its store was converted, and
 /// the store is left as it was: the run prints the mean of the table it was
 /// given, and one warning names the store, the table and the source that
-/// differs.
+/// differs, in the refusal's own words, without those of a failed plugin
+/// load.
 #[test]
 fn a_table_replaced_after_conversion_is_read_in_place_of_its_store() {
     let dir = tempfile::tempdir().unwrap();
@@ -262,6 +263,11 @@ fn a_table_replaced_after_conversion_is_read_in_place_of_its_store() {
             && refused[0].contains(&format!("table={}", table.display()))
             && refused[0].contains("store source differs: the table"),
         "{}",
+        refused[0]
+    );
+    assert!(
+        !refused[0].contains("plugin initialization failed"),
+        "the plugin loads from the table: {}",
         refused[0]
     );
     assert_eq!(
@@ -355,10 +361,8 @@ fn the_backend_read_is_logged_with_the_table_and_both_digests() {
 /// columns the conversion's defaults read.
 fn score_at(path: &Path, position: u64) -> Vec<Vec<String>> {
     leave_callsite_interest_to_the_thread();
-    let config = TabixConfig {
-        file_path: path.to_path_buf(),
-        ..TabixConfig::default()
-    };
+    let mut config = TabixConfig::default();
+    config.file_path = path.to_path_buf();
     open_best_store(path, config)
         .unwrap()
         .query("21", position, position)
@@ -511,4 +515,199 @@ fn an_output_that_is_the_input_table_is_refused_and_the_table_kept() {
     );
     assert_eq!(hex(&indexed), digest);
     assert!(!dir.path().join("scores.vpd").exists());
+}
+
+/// The names of every entry directly under `dir`, sorted.
+fn entries(dir: &Path) -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    names
+}
+
+/// `vep-cache-converter convert-plugin-data` from `input` to `output`: its
+/// exit code and what it wrote to standard error.
+fn convert_to(input: &Path, output: &Path) -> (Option<i32>, String) {
+    let run = Command::new(env!("CARGO_BIN_EXE_vep-cache-converter"))
+        .arg("convert-plugin-data")
+        .arg("--input")
+        .arg(input)
+        .arg("--output")
+        .arg(output)
+        .output()
+        .unwrap();
+    (
+        run.status.code(),
+        String::from_utf8_lossy(&run.stderr).into_owned(),
+    )
+}
+
+/// An index of a table is read from four paths, `<table>.csi`, the stem's
+/// `.csi`, `<table>.tbi` and the stem's `.tbi`, and an `--output` at any of
+/// them is refused before anything is written, whether or not an index lies
+/// there: a store written at one would be read as the table's index. The
+/// table and its `.tbi` keep their bytes and no file appears.
+#[test]
+fn an_output_that_is_another_index_of_the_table_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let table = write_table(dir.path(), "cov.tsv.gz", 13826645, "9.0000e+00");
+    let tbi = PathBuf::from(format!("{}.tbi", table.display()));
+    let (digest, tbi_digest) = (hex(&table), hex(&tbi));
+    for name in ["cov.tsv.gz.csi", "cov.tsv.csi", "cov.tsv.tbi"] {
+        let output = dir.path().join(name);
+        let (code, stderr) = convert_to(&table, &output);
+        assert_eq!(code, Some(1), "{name}: {stderr}");
+        assert!(
+            stderr.contains(&format!(
+                "--output {} is an index path of the input table; name another --output",
+                output.display()
+            )),
+            "{name}: {stderr}"
+        );
+        assert_eq!(hex(&table), digest, "{name}: the table keeps its bytes");
+        assert_eq!(hex(&tbi), tbi_digest, "{name}: the index keeps its bytes");
+        assert_eq!(entries(dir.path()), ["cov.tsv.gz", "cov.tsv.gz.tbi"]);
+    }
+}
+
+/// An `--output` whose `.vpdi` path is a symbolic link to the table's `.tbi`
+/// would have the store's index written over the index the table is read by:
+/// it is refused naming the index path, and the `.tbi` keeps its bytes.
+#[cfg(unix)]
+#[test]
+fn an_output_whose_index_path_links_to_the_tables_index_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let table = write_table(dir.path(), "cov.tsv.gz", 13826645, "9.0000e+00");
+    let tbi = PathBuf::from(format!("{}.tbi", table.display()));
+    let tbi_digest = hex(&tbi);
+    let output = dir.path().join("store.vpd");
+    let index_path = dir.path().join("store.vpdi");
+    std::os::unix::fs::symlink(&tbi, &index_path).unwrap();
+
+    let (code, stderr) = convert_to(&table, &output);
+    assert_eq!(code, Some(1), "{stderr}");
+    assert!(
+        stderr.contains(&format!(
+            "the index of --output {}, {}, is the input table's index; name another --output",
+            output.display(),
+            index_path.display()
+        )),
+        "{stderr}"
+    );
+    assert_eq!(hex(&tbi), tbi_digest, "the table's index keeps its bytes");
+    assert!(index_path.is_symlink());
+    assert_eq!(
+        entries(dir.path()),
+        ["cov.tsv.gz", "cov.tsv.gz.tbi", "store.vpdi"]
+    );
+}
+
+/// An `--output` that is a hard link of the table is another name of the
+/// table's file. The store is renamed over that name and nothing is written
+/// through it, so the conversion succeeds: the table and its `.tbi` keep
+/// their bytes, and the output's name holds the store, which answers for the
+/// table.
+#[cfg(unix)]
+#[test]
+fn an_output_that_is_a_hard_link_of_the_table_leaves_the_table_whole() {
+    let dir = tempfile::tempdir().unwrap();
+    let table = write_table(dir.path(), "cov.tsv.gz", 13826645, "9.0000e+00");
+    let tbi = PathBuf::from(format!("{}.tbi", table.display()));
+    let (digest, tbi_digest) = (hex(&table), hex(&tbi));
+    let output = dir.path().join("cov.tsv.vpd");
+    std::fs::hard_link(&table, &output).unwrap();
+    assert_eq!(hex(&output), digest, "the output names the table's file");
+
+    let (code, stderr) = convert_to(&table, &output);
+    assert_eq!(code, Some(0), "{stderr}");
+    assert_eq!(hex(&table), digest, "the table keeps its bytes");
+    assert_eq!(hex(&tbi), tbi_digest, "the table's index keeps its bytes");
+    assert_ne!(hex(&output), digest, "the output's name holds the store");
+    assert_eq!(
+        score_at(&table, 13826645),
+        [["21", "13826645", "9.0000e+00"]],
+        "the store answers for the table"
+    );
+    assert_eq!(
+        entries(dir.path()),
+        [
+            "cov.tsv.gz",
+            "cov.tsv.gz.tbi",
+            "cov.tsv.vpd",
+            "cov.tsv.vpdi"
+        ]
+    );
+}
+
+/// The committed table `name` of `vep-builtins`, copied under `dir` with the
+/// index of `index_extension` beside it.
+fn limit_table(dir: &Path, name: &str, index_extension: &str) -> PathBuf {
+    let data = Path::new(env!("CARGO_MANIFEST_DIR")).join("../vep-builtins/tests/data");
+    let index = format!("{name}.{index_extension}");
+    std::fs::copy(data.join(name), dir.join(name)).unwrap();
+    std::fs::copy(data.join(&index), dir.join(&index)).unwrap();
+    dir.join(name)
+}
+
+/// The position past a record's end is no probe where the table's index does
+/// not hold it. `limit.tsv.gz` holds a row ending and a row starting at 2^29,
+/// the last position its `.tbi` holds, and `limit_csi.tsv.gz` the same rows
+/// at 2^38, the last one its `.csi` holds. Each conversion verifies thirteen
+/// positions, that last position among them and none past it, and the store
+/// answers both rows there and no row past it.
+#[test]
+fn a_position_past_the_last_one_the_index_holds_is_no_probe() {
+    // Each table's row that ends at the last position starts `span` bases
+    // before it.
+    for (name, index_extension, last, span) in [
+        ("limit.tsv.gz", "tbi", 1u64 << 29, 912),
+        ("limit_csi.tsv.gz", "csi", 1u64 << 38, 444),
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let table = limit_table(dir.path(), name, index_extension);
+        let store = PathBuf::from(table.to_str().unwrap().replace(".tsv.gz", ".tsv.vpd"));
+        let run = Command::new(env!("CARGO_BIN_EXE_vep-cache-converter"))
+            .arg("convert-plugin-data")
+            .arg("--input")
+            .arg(&table)
+            .arg("--output")
+            .arg(&store)
+            .args(["--end-col", "2"])
+            .output()
+            .unwrap();
+        let stderr = String::from_utf8_lossy(&run.stderr);
+        assert_eq!(run.status.code(), Some(0), "{name}: {stderr}");
+        assert!(
+            stderr.contains("Concordance: PASS (13/13 sampled positions match)"),
+            "{name}: {stderr}"
+        );
+
+        leave_callsite_interest_to_the_thread();
+        let mut config = TabixConfig::default();
+        config.file_path = table.clone();
+        config.end_col = Some(2);
+        let reader = open_best_store(&table, config).unwrap();
+        let rows_at = |position: u64| -> Vec<Vec<String>> {
+            reader
+                .query("21", position, position)
+                .unwrap()
+                .into_iter()
+                .map(|record| record.columns)
+                .collect()
+        };
+        let (start_of_first, at_last) = ((last - span).to_string(), last.to_string());
+        // A store keeps the chromosome in a record's cells, where the tabix
+        // reader moves it out, so the first cell shows the store answered.
+        assert_eq!(
+            rows_at(last),
+            [
+                ["21", &start_of_first, &at_last, "ends_at_limit"],
+                ["21", &at_last, &at_last, "starts_at_limit"]
+            ],
+            "{name}"
+        );
+        assert!(rows_at(last + 1).is_empty(), "{name}");
+    }
 }

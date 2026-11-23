@@ -1,0 +1,12 @@
+#Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	Extra
+bnd_own	21:26037668	N[22:26037668[	G	ENST22_M	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+bnd_prefix	21:30425651	N.	G	ENST21_A	Transcript	upstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+bnd_prefix	21:30425651	N.	G	ENST21_B	Transcript	feature_truncation,coding_sequence_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+bnd_accession	21:27000001	N.	G	ENST21_OWN	Transcript	upstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+bnd_bare	21:26032001	chromosome_breakpoint	G	ENST21_NEAR	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+bnd_bare	21:26032001	chromosome_breakpoint	G	ENST21_NEAR	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+bnd_bare	21:26032001	chromosome_breakpoint	G	ENST21_OWN	Transcript	upstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+bnd_bare	21:26032001	chromosome_breakpoint	G	ENST21_OWN	Transcript	upstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+bnd_far_mate	21:28000001	N.	-	-	-	intergenic_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+bnd_far_mate	21:28000001	N[21:2147478648[	-	-	-	intergenic_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+bnd_mate_read	1:14374334	]21:33034355]A	G	ENST21_MATE	Transcript	feature_truncation	-	-	-	-	-	-	IMPACT=MODIFIER

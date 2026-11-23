@@ -2,11 +2,11 @@
 
 An Ensembl VEP Storable cache converts to the JSON layout vep-rs annotates from; [Cache setup](cache-setup.md) covers building one natively with `vep-cache-builder`.
 
-The converter is `scripts/data/storable_to_json.pl`. It runs inside the `ensemblorg/ensembl-vep` container ([scripts/README.md](../scripts/README.md) gives the invocation), and its output goes straight to `--json_cache`.
+The converter is `tools/vep-storable-to-json`, a Rust tool that reads the Storable shards itself ([scripts/README.md](../scripts/README.md) gives the invocation), and its output goes straight to `--json_cache`.
 
 The converter reads an Ensembl VEP Storable cache directory and writes the same JSON layout for every chromosome directory the cache holds. Those are the assembled chromosomes and the patch, alternate-locus, unplaced-scaffold and `LRG_` directories alike, as Ensembl VEP itself lists them. Beside the transcripts it writes an `info.json` derived from the cache's `info.txt` and copies the cache's `chr_synonyms.txt`. The `info.json` holds `contig_order`: the converted contigs as autosomes by number, then X, Y and MT, then every other contig by name.
 
-Every field the cache dumper keeps on a transcript is carried, flattened or dropped under a rule the parity audit names (`scripts/concordance/cache_parity_audit.pl`):
+Every field the cache dumper keeps on a transcript is carried, flattened or dropped under a rule the parity audit names (`tools/vep-cache-parity-audit`):
 
 - Carried:
   - the gene, transcript and protein identifiers (UniProt isoforms included, and on a merged cache the source)
@@ -23,6 +23,8 @@ Every field the cache dumper keeps on a transcript is carried, flattened or drop
   - the per-exon and per-intron strand, which is the transcript's
   - a sequence edit's description
   - the dump-time flags
+
+Of the slice the converter keeps each chromosome's length and circular flag, written once a chromosome to `sequence_regions.tsv` beside `info.json` ([Genome checks](genome-checks.md#the-sequence-side-file)).
 
 A cache written with the Sereal serialiser (`serialiser_type sereal` in its `info.txt`, or `.sereal` shards) is refused with an error naming the serialiser. Only Storable caches convert. A run in which any shard fails to read or write stops with an error before `info.json` is written.
 
@@ -44,7 +46,11 @@ The cache's regulatory build, the `<start>-<end>_reg.gz` files beside the transc
 
 ## Other species
 
-Any species with an Ensembl or Ensembl Genomes cache converts the same way. [Other species](cache-species.md) gives the conversion and a run for each genome the golden corpora cover: mouse, the fruit fly, Arabidopsis and yeast. It also gives the genetic codes and chromosome names of each cache.
+Any species with an Ensembl or Ensembl Genomes cache converts the same way. [Other species](cache-species.md) gives a conversion and a run for each set of ready-made caches. It also tables the species the golden corpora cover, with the genetic codes and chromosome names of each cache.
+
+## Patches and alternate sequences
+
+For a sequence outside the reference assembly, a patch or an alternate locus, an Ensembl cache holds the transcript files of the megabases that sequence's own region lies in. Each file holds every transcript of the genes that overlap its megabase, so a transcript of such a gene can reach a megabase the cache holds no file for. Ensembl VEP reads, for a buffer of records, the files of the megabases its records reach with their flanks, so a record whose buffer reaches no file that holds the transcript gets no row of it. vep-rs reads such a transcript record by record: a record gets its row only where the record itself reaches one of those files.
 
 ## RefSeq and merged caches
 
@@ -60,30 +66,35 @@ A model the alignment corrected carries `bam_edit_status` `ok` beside its `_rna_
 
 ### A transcript model the cache carries at two loci under `--refseq` or `--merged`
 
-One behaviour of Ensembl VEP 116.2 on a RefSeq or merged cache is not reproduced. The format comparator sets it aside under the class named below, as [Intended divergences from Ensembl VEP](intended-divergences.md) lists it; its [How to read the counts](intended-divergences.md#how-to-read-the-counts) defines the terms. The class carries its tier under that page's rule: tier 1 is a shape the chromosome 21 population cuts carry with no flag, tier 2 one that needs a flag or plugin on ordinary data, tier 3 one ordinary data does not carry. The counts are over the cuts' 15,646,481 records, the 111 golden corpora and their 392 flag sets.
+One behaviour of Ensembl VEP 116.3 on a RefSeq or merged cache is not reproduced. The format comparator sets it aside under the class named below, as [Intended divergences from Ensembl VEP](intended-divergences.md) lists it; its [How to read the counts](intended-divergences.md#how-to-read-the-counts) defines the terms. The class carries its tier under that page's rule: tier 1 is a shape the chromosome 21 cuts carry with no flag, tier 2 one that needs a flag or plugin on ordinary data, tier 3 one ordinary data does not carry. The counts are over the cuts' 15,646,481 records, the 152 golden corpora and their 511 flag sets.
 
-**The defect in one sentence.** Under `--refseq` or `--merged`, Ensembl VEP keeps one transcript per stable identifier among the models a buffer loads, so a model the cache carries at two loci keeps only the copy listed first whenever the buffer's regions carry both.
+**The defect in one sentence.** Under `--refseq` or `--merged`, Ensembl VEP keeps one transcript per stable identifier among the models a buffer loads, so a model the cache carries at two loci keeps only its first-listed `ensembl`-sourced copy, else its lowest `dbID`, whenever the buffer's regions carry both.
 
-**Why this is a defect.** The method's own description says it "uniquifies" the list by `dbID`, the key that tells two features apart, and its first pass does that. A second pass for a RefSeq or merged source then keeps one transcript per stable identifier, the `ensembl`-sourced copy, else the lowest `dbID`: a rule for one model loaded from two sources at one locus. Run over every transcript of the regions the buffer loads, it also drops a distinct feature, with its own `dbID`, strand and exons, that merely shares the identifier, and which copy survives depends on what else the buffer holds.
+**Why this is a defect.** The method's own description says it "uniquifies" the list by `dbID`, the key that tells two features of one set apart, and its first pass does that; across the two sets of a merged cache that pass is the entry [`merged_same_dbid_collapse`](divergences/merged-same-dbid-collapse.md). A second pass for a RefSeq or merged source then keeps one transcript per stable identifier, the `ensembl`-sourced copy, else the lowest `dbID`: a rule for one model loaded from two sources at one locus. Run over every transcript of the regions the buffer loads, it also drops a distinct feature, with its own `dbID`, strand and exons, that merely shares the identifier, and which copy survives depends on what else the buffer holds.
 
-**What vep-rs does instead.** vep-rs keeps every transcript the cache distinguishes by source and `dbID`, so both loci of such a model are annotated whatever the buffer holds.
+**What vep-rs does instead.** vep-rs keeps every transcript the cache distinguishes by source and `dbID`, so both loci of such a model are annotated whatever the buffer holds. The cache's dump runs the same second pass over each region file, so a transcript that lost its identifier in one region's file can stand, whole, in the file of a neighbouring region its gene reaches. vep-rs reads a transcript that shares its identifier through the region files the annotated position reaches with its flank, a breakend's mate position apart from the record's own, so a row is only of a transcript those files hold.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3):
 
 - `Bio/EnsEMBL/VEP/AnnotationType/Transcript.pm`, lines 254-264 and 277-299, `merge_features`: the description and the `dbID` pass; lines 313-343: the pass per stable identifier, line 330 the `ensembl` preference, line 337 the lowest `dbID`.
 - `Bio/EnsEMBL/VEP/AnnotationSource.pm`, line 139, `get_all_features_by_InputBuffer`: the method runs over each buffer's features.
+- `Bio/EnsEMBL/VEP/Pipeline/DumpVEP/Dumper/Core.pm`, line 109, `get_dumpable_object`: the dump runs the method over the transcripts of each region file.
+- `Bio/EnsEMBL/VEP/AnnotationSource/Database/Transcript.pm`, lines 237 and 250: a region's transcripts are those of every gene that overlaps the region.
+- `Bio/EnsEMBL/VEP/AnnotationSource.pm`, line 190, `get_regions_from_coords`: a record's region files run from its start less the flank to its end plus the flank.
 
 **What correcting it would change.** The second pass would collapse only copies at one locus, and a model mapped to two places would keep both.
 
 **The class it produces.** `merged_same_stable_id_collapse`, which the format comparator applies when a comparison case names it. It accepts a transcript row vep-rs alone writes under `--refseq` or `--merged`, its `SOURCE` `RefSeq` or absent, on a record Ensembl VEP wrote a transcript row for, of a model Ensembl VEP wrote no row for on that record. A record whose every model is a lost copy, another allele's row of a kept model and a duplicated row stay differences, and the JSON record's `most_severe_consequence` is left uncompared.
 
+The outputs comparator applies the class where a comparison names the converted cache with `--json-cache`. It replays the pass over each of Ensembl VEP's buffers. It sets aside vep-rs's rows of each transcript the pass dropped, and Ensembl VEP's `intergenic_variant` row at a record left with no transcript. The two transcripts need not lie apart: a RefSeq cache can carry one identifier as an `ensembl`-sourced cDNA alignment and as a gene model of another source, and the pass keeps the alignment. [Class 18 of the registry's taxonomy](concordance-provenance/116.2-divergence-classes.md#18-the-classes-that-read-the-converted-cache) gives the conditions.
+
 The chromosome 21 of the GRCh38 merged cache carries 325 stable identifiers at more than one locus, every one a `compmerge.*` model that only `--all_refseq` admits, and the chromosome 21 GRCh38 RefSeq cache carries the same 325; the GRCh37 chromosome 21 caches carry none. The `GRCh38-merged` corpus's 76 records under `--merged --all_refseq` lose 128 rows on 59 identifiers in Ensembl VEP and none in vep-rs, with no other row differing; no committed flag set runs that pair. The `GRCh38-refseq` corpus's `--all_refseq` run keeps every row only by record placement: no record of that corpus loads the regions of its two dual-locus models' other copies.
 
-**How often the shape occurs.** Tier 2: the shape is a transcript whose stable identifier its cache carries at two or more loci. The count is over the caches committed with the golden corpora, not over the full caches of the paragraph above: of their 77,675 transcripts, 38 have the shape (489 per million), all in one corpus's cache. The buffer that loads both copies keeps the one listed first. One flag set runs `--all_refseq`, the GRCh38 RefSeq corpus's `--refseq --all_refseq`.
+**How often the shape occurs.** Tier 2: the shape is a transcript whose stable identifier its cache carries at two or more loci. The count is over the caches committed with the golden corpora, not over the full caches of the paragraph above: of their 116,165 transcripts, 38 have the shape (327 per million), all in one corpus's cache. The buffer that loads both copies keeps the one listed first. One flag set runs `--all_refseq`, the GRCh38 RefSeq corpus's `--refseq --all_refseq`.
 
 #### `compmerge.264.Heart.chr21` at two loci of chromosome 21
 
-**In short.** The `GRCh38-merged` golden corpus's cache holds `compmerge.264.Heart.chr21` twice, both copies from the RefSeq side: `dbID` 1733463 on the reverse strand at 32601667-32612845 and `dbID` 1631814 on the forward strand at 39451905-39515506. Under `--merged --all_refseq` over the corpus's 76 records, one buffer, vep-rs writes `non_coding_transcript_exon_variant` rows on that identifier for `rs1036535345` at `21:32612111` and for `rs745798146` at `21:39462549`, with `STRAND=-1` and `STRAND=1`. Ensembl VEP 116.2's second pass keeps the copy its buffer lists first, both carrying the source `ensembl`, and writes no row of the identifier for the records at the other locus; under `--merged` alone neither engine admits the model.
+**In short.** The `GRCh38-merged` golden corpus's cache holds `compmerge.264.Heart.chr21` twice, both copies from the RefSeq side: `dbID` 1733463 on the reverse strand at 32601667-32612845 and `dbID` 1631814 on the forward strand at 39451905-39515506. Under `--merged --all_refseq` over the corpus's 76 records, one buffer, vep-rs writes `non_coding_transcript_exon_variant` rows on that identifier for `rs1036535345` at `21:32612111` and for `rs745798146` at `21:39462549`, with `STRAND=-1` and `STRAND=1`. Ensembl VEP 116.3's second pass keeps the copy its buffer lists first, both carrying the source `ensembl`, and writes no row of the identifier for the records at the other locus; under `--merged` alone neither engine admits the model.
 
 A model whose first-listed copy overlaps no record loses every row: `compmerge.109.Heart.chr21` sits at 21:16194573-16607134 and at 21:17513092-17593914, no record lies in the first span, and Ensembl VEP writes no row for `21_17535482_G/T` on the second.
 
@@ -91,15 +102,17 @@ A model whose first-listed copy overlaps no record loses every row: `compmerge.1
 
 The published concordance figures were measured on such a conversion ([scripts/README.md](../scripts/README.md#reproducing-the-published-concordance)), which holds the transcript set identical between the two engines. The caches those figures were measured on carry 195,232 transcripts (GRCh37) and 505,231 (GRCh38), the canonical chromosomes only. The GRCh37 conversion is of the cache-version-113 Storable that Ensembl VEP release 115 ships for that assembly. It differs from the cache-version-115 build in 310 of those transcripts (the `storable_113_*` columns of `manuscript/data/transcript_set_parity.csv`).
 
-The conversion carries each translation's sequence edits, and vep-rs applies them the same way. The edits (`seq_edits`) are the initial-methionine, selenocysteine and amino-acid-substitution edits Ensembl VEP applies to the reference peptide at annotation time.
+The conversion carries each translation's sequence edits, and vep-rs applies them the same way. The edits (`seq_edits`) are the initial-methionine, selenocysteine, amino-acid-substitution and stop-codon-readthrough edits Ensembl VEP applies to the reference peptide at annotation time.
 
 A cache converted without that key, the published conversions among them, still loads. On such a cache, a variant at codon 1 of a transcript with an alternative initiation codon is called from the cached peptide rather than from the edit. Converting the cache again restores Ensembl VEP's call.
 
-A natively built cache carries no edit list either. Its peptide is the protein FASTA's sequence, with the edits already applied, and the builder writes none.
+`vep-cache-converter`, copying transcript files without the key, says so in its last line and names `seq_edits` under `left_out` in the cache's `info.json`. A run on that cache then says so once, as `vep recode` does; a cache whose `info.json` has no such name draws no line.
+
+A natively built cache carries the edit list where it is built with `--core-dumps`: the builder writes each translation's sequence edits from the dumps into the transcript record. Without the dumps it writes an empty list. Where the build takes a transcript's record of the protein FASTA, the peptide is that record's sequence, with the edits already applied.
 
 ## Where next
 
 - [Cache setup](cache-setup.md): building a cache natively, naming it, the reference FASTA and the chromosome names.
-- [Other species](cache-species.md): the conversion command and a run for mouse, the fruit fly, Arabidopsis and yeast.
+- [Other species](cache-species.md): a conversion command and a run for each set of ready-made caches.
 - [Regulatory and motif features](regulatory.md): the rows and fields a run writes from the cache's regulatory tree.
 - [Intended divergences](intended-divergences.md): where the two engines differ, and why.

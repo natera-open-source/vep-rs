@@ -254,7 +254,7 @@ html:not(.js) .hljs-addition {
 }
 
 /* Layout: a grid of the content column and the page table of contents. Text
-   keeps the measure; from 1280 px tables, code blocks, the chart and the
+   keeps the measure; from 1280 px tables, code blocks, an inline SVG and the
    release figure may use the wider content column. The stock .content is a scroll container
    (overflow-y: auto), which pins every sticky descendant to a box that never
    scrolls. */
@@ -297,19 +297,6 @@ html:not(.js) .hljs-addition {
         margin-inline: 0;
         max-width: var(--content-bleed-width);
         justify-self: stretch;
-    }
-
-    /* A page that inlines the chart: the chart keeps its first screen short,
-       and its blocks sit closer together. */
-    .content main > svg.benchmark-chart {
-        width: auto;
-        height: auto;
-        max-height: 36vh;
-    }
-
-    .content main:has(> svg.benchmark-chart) > p,
-    .content main:has(> svg.benchmark-chart) > pre {
-        margin-block: 0.75em;
     }
 
     .content main > :not(.table-scroll, .table-wrapper, pre, svg, details),
@@ -787,36 +774,6 @@ pre > code::-webkit-scrollbar-track {
 .content main svg {
     max-width: 100%;
     height: auto;
-}
-
-.bar-vep-rs {
-    fill: #2a78d6;
-}
-
-.bar-ensembl-vep {
-    fill: #eb6834;
-}
-
-.bar-fastvep {
-    fill: #1baf7a;
-}
-
-.navy .bar-vep-rs,
-.coal .bar-vep-rs,
-.ayu .bar-vep-rs {
-    fill: #3987e5;
-}
-
-.navy .bar-ensembl-vep,
-.coal .bar-ensembl-vep,
-.ayu .bar-ensembl-vep {
-    fill: #d95926;
-}
-
-.navy .bar-fastvep,
-.coal .bar-fastvep,
-.ayu .bar-fastvep {
-    fill: #199e70;
 }
 
 /* Home page: the opening sentence, the release figure and the row of

@@ -1,0 +1,89 @@
+{
+ "plugin_fixtures": {
+  "generator": "scripts/fixtures/cut_plugin_regions.py",
+  "flank": 5000,
+  "record_flank": 2000,
+  "exon_flank": 50,
+  "gerp_regions": "exons",
+  "tools": {
+   "bgzip": "bgzip (htslib) 1.9"
+  },
+  "files": {
+   "reference.fa.fai": "fbe17bc31bdab8b85d2e0005df30dbfcea50d791c90be414695cf98fee708dd4",
+   "reference.fa.gz": "188533ed7106b47848000981a80fbc26c8648c520f9b4767e8ea1210d7f24d05",
+   "reference.fa.gz.fai": "fbe17bc31bdab8b85d2e0005df30dbfcea50d791c90be414695cf98fee708dd4",
+   "reference.fa.gz.gzi": "99ad63646f2fff9a3cc498eaaf66dcfcf44078f90d6b379574a9fe5b804ec7b8"
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species bos_taurus --assembly ARS-UCD2.0 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "bos_taurus/116_ARS-UCD2.0",
+ "fasta": "the three sequences the records and the pruned cache's transcripts sit on (chromosome 25, MT and the unplaced scaffold NKLS02000103.1) at their full length from Bos_taurus.ARS-UCD2.0.dna.primary_assembly.25.fa, Bos_taurus.ARS-UCD2.0.dna.primary_assembly.MT.fa and Bos_taurus.ARS-UCD2.0.dna.nonchromosomal.fa of Ensembl release 116, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
+ "input": "variants.vcf: 342 records on chromosome 25, the mitochondrion and one unplaced scaffold. 303 are the records tools/vep-seeded-variants writes for the three sequences from the converted cache (generator version 2, seed 1, --records wide, every reference allele read from the genome sequence), their IDs naming the category and an ordinal; twelve of them name their sequence by a synonym of the cache. 39 are known variants of the cache's own variation files on those sequences (dbSNP 150), single-base substitutions whose first allele is the genome's base, sampled with seed 1, their IDs the cache's identifiers, six of them multi-allelic",
+ "sha256": {
+  "default.txt": "169f2600c9c15008f1ed40e66000db377c4fb11b0465d8b93a489c7412f6a7b7",
+  "tab.txt": "d2474747db5c6ce0da3c01744f62bca03cb5d67635febf85d061f7d146fccafd",
+  "vcf.vcf": "c17b85b6dcd9aaaa45bbcaa4c70ec2af822deb301bbd17684b31cf90b7ff583c",
+  "json.jsonl": "9ba61b97e700cd1ce1b415f5ce3733529c9aecc135331e18db40e8b6cd6b2202"
+ },
+ "variants_vcf_sha256": "893e08c34754d8e5f80042d80011620cf74f97af2f296e6ffed547a721d48a96",
+ "flag_sets": {
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species bos_taurus --assembly ARS-UCD2.0 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "bos_taurus/116_ARS-UCD2.0",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "46ad42bb242f66744b2c977f7182c46c9642c1f9274e2b0378897716fd924566",
+    "tab.txt": "4f0e6bea417274bc50a25520db7bebe216d08e4c98cb8a5808eb39c2b936e2d4",
+    "vcf.vcf": "b27bb3006339dcaa65031722f0b6af2e5cb6de4fba94268454082c9a289f534a",
+    "json.jsonl": "160c09b841a6dc4de99d3fe87fc8863a7b3e02bb7e7dc056b3514adfb65d20c4"
+   },
+   "flags": [
+    "--everything"
+   ],
+   "expected_dir": "expected_everything"
+  },
+  "hgvs-sift": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species bos_taurus --assembly ARS-UCD2.0 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs --sift b [--tab|--vcf|--json]",
+   "perl_cache": "bos_taurus/116_ARS-UCD2.0",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "cbb9e56a2a2e8fc15851bb82df3177e1c733c0857a844591b7c6d6f087faa826",
+    "tab.txt": "7bd2b456210cc868952e0ddae2bdb148b4470a268152b5318b311439e3f7f9a8",
+    "vcf.vcf": "575ac3fb4f7909e1eb0af010851a967f0c4417a0d849bfdf2dfb6ed62c0b0de9",
+    "json.jsonl": "555315e8a890e29af2f3de4fde20110ef25130c9ca2463b00b375a7d05b88a66"
+   },
+   "flags": [
+    "--hgvs",
+    "--sift",
+    "b"
+   ],
+   "expected_dir": "expected_hgvs-sift"
+  }
+ },
+ "generator": "tools/vep-seeded-variants --cache <converted cache> --seed 1 --records wide --fasta <genome sequence> --sequence MT --sequence 25 --sequence NKLS02000103.1 for the seeded records, and 300 single-base substitutions sampled with seed 1 from the converted cache's variation files of the three sequences for the known ones; Ensembl VEP over the two inputs under the corpus flags; tools/vep-golden-corpus select --release 116 --assembly ARS-UCD2.0 --species bos_taurus --dataset wide=<reference>=<the seeded records> --dataset known=<reference>=<the known variants> --k 2 --seed 1 --max-span 1000000 --max-records 500 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 6 --include <every seeded record and 24 known variants> --covers species-cattle-ars-ucd2 --covers genetic-code-tables --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_function_predictions --drop-except <the transcripts on which a record changes one residue, the rows SIFT scores> --perl-info <cache>/info.txt --cache-version 116 --variations <converted cache>/variations over the whole cache tools/vep-storable-to-json converts from the Ensembl VEP 116 ARS-UCD2.0 cache (protein features kept for the DOMAINS column of the everything set; the variation slices hold the known variants within one base of a record; the cache's regulatory data left out); scripts/fixtures/cut_plugin_regions.py --reference <genome sequence> --flank 5000 --record-flank 2000, the records read under the cache's names for their sequences; scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; tools/vep-golden-corpus flag-set (everything, hgvs-sift) and classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp --field HGVS_OFFSET for the everything set and --field HGVSc --field HGVSp --field SIFT --field HGVS_OFFSET for the hgvs-sift set); the HGVSc and HGVS_OFFSET entries of the insertion and the deletion within 1,000 bases of the scaffold's first base carry the class hgvs_shift_sequence_edge_window, which tools/vep-formats-compare --masks hgvs_shift_sequence_edge_window --json-cache <the corpus cache> --reference-fasta <the corpus reference> reads from the reference and the cache on both flag sets",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "25": 868,
+   "MT": 37,
+   "NKLS02000103.1": 1
+  },
+  "shards": 40,
+  "synonym_lines": 8,
+  "matrices_kept_on": 127,
+  "variation_slices": "the known variants within one base of a record under variations/<chr>/all_vars.gz with its .csi, as the Ensembl VEP cache lays them out: 116 on chromosome 25 and 19 on MT; the scaffold, which has none there, carries the empty indexed file"
+ }
+}

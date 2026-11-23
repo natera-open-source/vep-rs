@@ -2,15 +2,15 @@
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 //! Ensembl-format records whose alleles are given on the reverse strand annotate
-//! as Ensembl VEP 116.2 annotates them: the consequences, codons and HGVS
+//! as Ensembl VEP 116.3 annotates them: the consequences, codons and HGVS
 //! notations read the alleles on the forward strand, and the `Allele` column
 //! and the JSON keep them as written. A shifted insertion's HGVSp, shifted
 //! codons and printed allele turn the written allele as read on the
 //! transcript's strand, so a record and its spelling on the other strand
-//! annotate alike; Ensembl VEP 116.2 turns the written allele by the
+//! annotate alike; Ensembl VEP 116.3 turns the written allele by the
 //! transcript's strand alone (TranscriptVariationAllele.pm:1337-1339), a defect
 //! whose rows are named where an expected row departs from its output. Every
-//! other expected row is Ensembl VEP 116.2's output for the same record on the
+//! other expected row is Ensembl VEP 116.3's output for the same record on the
 //! release-116 GRCh38 cache.
 
 use std::path::{Path, PathBuf};
@@ -33,7 +33,7 @@ const CUT_LENGTH: usize = 46_302_700;
 /// A chromosome 21 FASTA of `length` bases holding the two windows the records
 /// below read, `N` elsewhere: 26021751-26022050 around the APP insertion site
 /// and 46302401-46302700 around the ENST00000291691 one (GRCh38). The
-/// chromosome runs to its GRCh38 length where Ensembl VEP 116.2's rows are the
+/// chromosome runs to its GRCh38 length where Ensembl VEP 116.3's rows are the
 /// expectation, since it reads one `N` for a sequence request past a FASTA's end
 /// (`FastaSequence.pm`, `_raw_seq`) and on a file ending inside ENST00000291691
 /// writes its HGVSc as `c.745_746insTGC`, where the complete chromosome gives
@@ -145,55 +145,30 @@ fn reverse_strand_snvs_annotate_on_their_forward_alleles() {
 /// construction complements opposite-strand alleles (TranscriptVariationAllele.pm:2413-2417).
 #[test]
 fn alphamissense_matches_real_transcript_peptides_on_both_strands() {
-    use std::io::Write;
-
-    use noodles::bgzf;
-    use noodles::core::Position;
     use noodles::csi::binning_index::index::header::Builder;
-    use noodles::csi::binning_index::index::reference_sequence::bin::Chunk;
 
     let dir = tempfile::tempdir().unwrap();
-    let data_path = dir.path().join("alphamissense.tsv.gz");
-    let mut writer = bgzf::io::Writer::new(std::fs::File::create(&data_path).unwrap());
-    let mut indexer = noodles::tabix::index::Indexer::default();
-    indexer.set_header(
+    // Controlled scores distinguish compatible peptides from decoys at the
+    // real SNV_RECORDS sites; AlphaMissense.pm:232-233 ignores positions and IDs.
+    let data_path = common::indexed_lines(
+        dir.path(),
+        "alphamissense.tsv.gz",
         Builder::default()
             .set_reference_sequence_name_index(0)
             .set_start_position_index(1)
             .build(),
+        &["#CHROM\tPOS\tREF\tALT\tgenome\tuniprot_id\ttranscript_id\tprotein_variant\tam_pathogenicity\tam_class"],
+        &[
+            "chr21\t13610310\tA\tG\thg38\tP1\tENST_OTHER\tC1R\t0.01\tlikely_benign",
+            "chr21\t13610310\tA\tG\thg38\tP1\tENST_OTHER\tC1G\t0.91\tlikely_pathogenic",
+            "chr21\t14109002\tG\tT\thg38\tP2\tENST_OTHER\tN1K\t0.02\tlikely_benign",
+            "chr21\t14109002\tG\tT\thg38\tP2\tENST_OTHER\tR1K\t0.45\tambiguous",
+        ],
+        |fields| {
+            let position = fields[1].parse::<usize>().unwrap();
+            (position, position)
+        },
     );
-    writeln!(
-        writer,
-        "#CHROM\tPOS\tREF\tALT\tgenome\tuniprot_id\ttranscript_id\tprotein_variant\tam_pathogenicity\tam_class"
-    )
-    .unwrap();
-    // Controlled scores distinguish compatible peptides from decoys at the
-    // real SNV_RECORDS sites; AlphaMissense.pm:232-233 ignores positions and IDs.
-    for row in [
-        "chr21\t13610310\tA\tG\thg38\tP1\tENST_OTHER\tC1R\t0.01\tlikely_benign",
-        "chr21\t13610310\tA\tG\thg38\tP1\tENST_OTHER\tC1G\t0.91\tlikely_pathogenic",
-        "chr21\t14109002\tG\tT\thg38\tP2\tENST_OTHER\tN1K\t0.02\tlikely_benign",
-        "chr21\t14109002\tG\tT\thg38\tP2\tENST_OTHER\tR1K\t0.45\tambiguous",
-    ] {
-        let fields: Vec<_> = row.split('\t').collect();
-        let position = Position::try_from(fields[1].parse::<usize>().unwrap()).unwrap();
-        let start = writer.virtual_position();
-        writeln!(writer, "{row}").unwrap();
-        indexer
-            .add_record(
-                fields[0],
-                position,
-                position,
-                Chunk::new(start, writer.virtual_position()),
-            )
-            .unwrap();
-    }
-    writer.finish().unwrap();
-    noodles::tabix::fs::write(
-        dir.path().join("alphamissense.tsv.gz.tbi"),
-        &indexer.build(),
-    )
-    .unwrap();
 
     let rows = annotate(
         dir.path(),
@@ -254,13 +229,13 @@ fn reverse_strand_record_json_keeps_the_written_alleles() {
 /// 3' like its forward twin `-/AAG 1`, takes the same HGVSc, `c.725_726insTTC`,
 /// and the same HGVSp, `insSer`, the `TTC` the notation names: the written
 /// `CTT` is the transcript's own strand, so the shift turns it left to `TTC`.
-/// Ensembl VEP 116.2 turns it by the transcript's strand alone, `seq_length -
+/// Ensembl VEP 116.3 turns it by the transcript's strand alone, `seq_length -
 /// shift_length` places (TranscriptVariationAllele.pm:1337-1339), to `TCT` and
 /// prints `p.Ala242_Asp243insLeu`, a defect. The insertion `-/CAG 1` at
 /// 46302557 moves four bases along a reverse-strand transcript, more than its
 /// three, so the allele turns by the remainder, one base, to `GCA` (`TGC` on
 /// the transcript), the `c.743_745dup` its HGVSc names: `p.Leu248dup`, as for
-/// its reverse-strand twin `-/CTG -1`; Ensembl VEP 116.2 turns nothing there,
+/// its reverse-strand twin `-/CTG -1`; Ensembl VEP 116.3 turns nothing there,
 /// its count being negative, and prints `p.Gln249delinsProGlu` for both.
 const HGVS_RECORDS: &str = "\
 21\t26021896\t26021896\tG/A\t-1\tcv1915683
@@ -273,7 +248,7 @@ const HGVS_RECORDS: &str = "\
 ";
 
 #[test]
-fn reverse_strand_records_take_ensembl_veps_hgvs() {
+fn reverse_strand_records_read_hgvs_on_the_transcript_strand() {
     let dir = tempfile::tempdir().unwrap();
     let fasta = write_fasta(dir.path(), CHROMOSOME_LENGTH);
     let rows = annotate(
@@ -299,7 +274,7 @@ fn reverse_strand_records_take_ensembl_veps_hgvs() {
 /// On a FASTA cut after 46302700, inside ENST00000291691 and 144 bases past the
 /// two insertions' site, the rows are those of the complete chromosome: vep-rs
 /// reads the bases a notation needs at their own coordinates, so the HGVSc stays
-/// `c.743_745dup`. Ensembl VEP 116.2 fetches the sequence past a FASTA's end as
+/// `c.743_745dup`. Ensembl VEP 116.3 fetches the sequence past a FASTA's end as
 /// one `N` (`FastaSequence.pm`, `_raw_seq`), keeps the transcript's sequence
 /// that many bases short, and writes `c.745_746insTGC`, a defect
 /// (`hgvs_dup_read_as_insertion_past_the_fasta_end`).
@@ -351,18 +326,18 @@ fn a_fasta_ending_inside_the_transcript_keeps_the_duplication() {
 /// on the transcript (`A/AS`), and the ENST00000291691 insertion, moved four
 /// bases, further than its length, turns by the remainder to `TGC` on the
 /// transcript and duplicates a leucine (`Q/LQ`, `inframe_insertion`). Ensembl
-/// VEP 116.2 turns the written allele by the transcript's strand alone
+/// VEP 116.3 turns the written allele by the transcript's strand alone
 /// (`:1337-1339`): the reverse-written APP insertion inserts `TCT` (`A/AL`) and
 /// the ENST00000291691 insertion keeps `CTG` and alters the protein (`Q/PE`,
 /// `protein_altering_variant`), each a defect. The columns from `Consequence`
 /// on are compared, then `Allele`: a row whose codon was read prints the turned
 /// allele (OutputFactory.pm:1347), `TTC` and `GAA` for the APP insertions
-/// (Ensembl VEP 116.2 prints `TCT` for the first), where the non-coding
+/// (Ensembl VEP 116.3 prints `TCT` for the first), where the non-coding
 /// ENST00000474136 row keeps the written `CTT` and `AAG`, and the
 /// ENST00000291691 rows print `GCA` and `TGC`, the written `CAG` and `CTG`
-/// turned one base (Ensembl VEP 116.2 keeps both as written).
+/// turned one base (Ensembl VEP 116.3 keeps both as written).
 #[test]
-fn shifted_codons_turn_the_allele_as_the_record_wrote_it() {
+fn shifted_codons_turn_the_allele_as_read_on_the_transcript_strand() {
     let dir = tempfile::tempdir().unwrap();
     let fasta = write_fasta(dir.path(), CHROMOSOME_LENGTH);
     let rows = annotate(

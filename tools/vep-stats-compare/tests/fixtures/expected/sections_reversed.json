@@ -1,0 +1,228 @@
+{
+ "mode": "stats",
+ "format": "stats",
+ "verdict": "red",
+ "reasons": [
+  "section [Variant classes] appears twice in the expected file",
+  "section [SIFT summary] appears twice in the expected file",
+  "section [SIFT summary] only in the expected file",
+  "section [SIFT summary] only in the expected file",
+  "section [Coding consequences] only in the actual file",
+  "the shared sections come in another order in the actual file",
+  "[General statistics]: 1 difference",
+  "[Position in protein]: 12 differences",
+  "[Variants by chromosome]: 12 differences"
+ ],
+ "tolerance": 0,
+ "masked_rows": [
+  "Command line options",
+  "End time",
+  "Input data",
+  "Input file",
+  "Output file",
+  "Run time",
+  "Start time"
+ ],
+ "sections": {
+  "expected": [
+   "VEP run statistics",
+   "Data version",
+   "General statistics",
+   "Variant classes",
+   "Consequences (most severe)",
+   "Consequences (all)",
+   "Position in protein",
+   "Variants by chromosome",
+   "SIFT summary",
+   "Variant classes",
+   "SIFT summary"
+  ],
+  "actual": [
+   "VEP run statistics",
+   "Data version",
+   "General statistics",
+   "Variant classes",
+   "Consequences (most severe)",
+   "Consequences (all)",
+   "Coding consequences",
+   "Variants by chromosome",
+   "Position in protein"
+  ],
+  "order_agrees": false
+ },
+ "compared": {
+  "sections": 8,
+  "rows": 96
+ },
+ "documented": [],
+ "differences": {
+  "SIFT summary": [
+   {
+    "kind": "section_missing"
+   }
+  ],
+  "Coding consequences": [
+   {
+    "kind": "section_unexpected"
+   }
+  ],
+  "General statistics": [
+   {
+    "kind": "value",
+    "row": "Overlapped genes",
+    "expected": "97",
+    "actual": "98"
+   }
+  ],
+  "Position in protein": [
+   {
+    "kind": "missing",
+    "row": "chr21",
+    "expected": 2,
+    "actual": null
+   },
+   {
+    "kind": "missing",
+    "row": "21",
+    "expected": 337,
+    "actual": null
+   },
+   {
+    "kind": "unexpected",
+    "row": "00-10%",
+    "expected": null,
+    "actual": 158
+   },
+   {
+    "kind": "unexpected",
+    "row": "10-20%",
+    "expected": null,
+    "actual": 50
+   },
+   {
+    "kind": "unexpected",
+    "row": "20-30%",
+    "expected": null,
+    "actual": 124
+   },
+   {
+    "kind": "unexpected",
+    "row": "30-40%",
+    "expected": null,
+    "actual": 71
+   },
+   {
+    "kind": "unexpected",
+    "row": "40-50%",
+    "expected": null,
+    "actual": 54
+   },
+   {
+    "kind": "unexpected",
+    "row": "50-60%",
+    "expected": null,
+    "actual": 76
+   },
+   {
+    "kind": "unexpected",
+    "row": "60-70%",
+    "expected": null,
+    "actual": 63
+   },
+   {
+    "kind": "unexpected",
+    "row": "70-80%",
+    "expected": null,
+    "actual": 83
+   },
+   {
+    "kind": "unexpected",
+    "row": "80-90%",
+    "expected": null,
+    "actual": 54
+   },
+   {
+    "kind": "unexpected",
+    "row": "90-100%",
+    "expected": null,
+    "actual": 45
+   }
+  ],
+  "Variants by chromosome": [
+   {
+    "kind": "missing",
+    "row": "00-10%",
+    "expected": 158,
+    "actual": null
+   },
+   {
+    "kind": "missing",
+    "row": "10-20%",
+    "expected": 50,
+    "actual": null
+   },
+   {
+    "kind": "missing",
+    "row": "20-30%",
+    "expected": 124,
+    "actual": null
+   },
+   {
+    "kind": "missing",
+    "row": "30-40%",
+    "expected": 71,
+    "actual": null
+   },
+   {
+    "kind": "missing",
+    "row": "40-50%",
+    "expected": 54,
+    "actual": null
+   },
+   {
+    "kind": "missing",
+    "row": "50-60%",
+    "expected": 76,
+    "actual": null
+   },
+   {
+    "kind": "missing",
+    "row": "60-70%",
+    "expected": 63,
+    "actual": null
+   },
+   {
+    "kind": "missing",
+    "row": "70-80%",
+    "expected": 83,
+    "actual": null
+   },
+   {
+    "kind": "missing",
+    "row": "80-90%",
+    "expected": 54,
+    "actual": null
+   },
+   {
+    "kind": "missing",
+    "row": "90-100%",
+    "expected": 45,
+    "actual": null
+   },
+   {
+    "kind": "unexpected",
+    "row": "chr21",
+    "expected": null,
+    "actual": 2
+   },
+   {
+    "kind": "unexpected",
+    "row": "21",
+    "expected": null,
+    "actual": 337
+   }
+  ]
+ },
+ "expected": "tests/fixtures/sections.summary.log",
+ "actual": "tests/fixtures/reference.summary.log"
+}

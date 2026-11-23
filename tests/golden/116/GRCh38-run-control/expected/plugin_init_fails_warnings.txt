@@ -1,4 +1,4 @@
-WARNING: Failed to instantiate plugin LoFtool: LoFtool: scores file <path> not found
+WARNING: Failed to instantiate plugin LoFtool: scores file <path> not found
 WARNING: line 13 skipped (21 30165800 multi_ins_del N <INS>,<DEL> . . EN...): INS/DEL is not a supported structural variant type
 WARNING: line 14 skipped (21 30165820 multi_inv_dup N <INV>,<DUP> . . EN...): INV/DUP is not a supported structural variant type
 WARNING: line 16 skipped (21 30165850 del_without_end N <DEL> . . SVTYPE=DEL): deletion looks incomplete

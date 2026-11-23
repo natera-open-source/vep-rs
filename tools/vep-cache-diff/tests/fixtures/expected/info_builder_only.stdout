@@ -1,0 +1,11 @@
+Comparing caches:
+  Baseline: {{FIXTURES}}/caches/info_builder_only/baseline
+  Builder:  {{FIXTURES}}/caches/info_builder_only/builder
+  Comparing transcripts...
+    0 shared, 0 matched, 0 differed, rate=0.0000
+  Comparing variations...
+    0 shared, 0 matched, 0 differed, rate=0.0000
+  Comparing info.json...
+    matches=False
+
+Report written to: {{REPORT}}

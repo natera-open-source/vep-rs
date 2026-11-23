@@ -1,0 +1,28 @@
+{
+  "version_a": "115",
+  "version_b": "113",
+  "transcripts": 8,
+  "per_class": {
+    "identical_after_normalisation": 1,
+    "peptide": 2,
+    "predictions": 1,
+    "protein_features": 3,
+    "other": 3
+  },
+  "class_combinations": {
+    "identical_after_normalisation": 1,
+    "peptide+predictions": 1,
+    "protein_features": 1,
+    "other+protein_features": 2,
+    "peptide": 1,
+    "other": 1,
+    "": 1
+  },
+  "json_cache": "json_cache",
+  "json_cache_peptide_matches": {
+    "both": 2,
+    "113": 1,
+    "absent": 2,
+    "neither": 3
+  }
+}

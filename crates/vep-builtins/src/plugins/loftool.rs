@@ -59,6 +59,8 @@ impl LoFtoolPlugin {
     }
 }
 
+impl crate::traits::sealed::Sealed for LoFtoolPlugin {}
+
 impl BuiltinPlugin for LoFtoolPlugin {
     fn name(&self) -> &str {
         "LoFtool"
@@ -123,13 +125,13 @@ mod tests {
     }
 
     fn row(symbol: &str) -> TranscriptConsequence {
-        TranscriptConsequence {
-            transcript: Some(Arc::new(Transcript {
-                gene_symbol: Some(symbol.into()),
-                ..Transcript::default()
-            })),
-            ..Default::default()
-        }
+        let mut consequence = TranscriptConsequence::default();
+        consequence.transcript = Some(Arc::new({
+            let mut transcript = Transcript::default();
+            transcript.gene_symbol = Some(symbol.into());
+            transcript
+        }));
+        consequence
     }
 
     /// A plugin loaded from `text` written to a file in a fresh directory, the
@@ -191,8 +193,8 @@ mod tests {
     /// A cell is read as `sprintf("%g", $score)` (LoFtool.pm:89) numifies it:
     /// `1.5abc` scores `1.5`, a cell with no leading number (`NA`) scores
     /// nothing, and the later of two lines for one gene wins, so a later `NA`
-    /// takes an earlier score away as the Perl hash's `0` does under the truth
-    /// test at `:118`.
+    /// takes an earlier score away as the Ensembl VEP hash's `0` does under the
+    /// truth test at `:118`.
     #[test]
     fn a_cell_is_read_as_perl_numifies_it() {
         let (plugin, _dir) = loaded(
@@ -333,14 +335,13 @@ mod tests {
     fn run_batch_writes_the_field_on_transcript_rows() {
         let (plugin, _dir) = loaded(b"Gene\tLoFtool_percentile\r\nSOD1\t0.85\r\n");
         let mut variants = vec![test_variant()];
-        variants[0].transcript_consequences.extend([
-            row("SOD1"),
-            row("SOD2"),
-            TranscriptConsequence {
-                feature_type: vep_core::consequence::FeatureType::RegulatoryFeature,
-                ..row("SOD1")
-            },
-        ]);
+        variants[0]
+            .transcript_consequences
+            .extend([row("SOD1"), row("SOD2"), {
+                let mut built = row("SOD1");
+                built.feature_type = vep_core::consequence::FeatureType::RegulatoryFeature;
+                built
+            }]);
         plugin.run_batch(&mut variants).unwrap();
         let written: Vec<Option<&String>> = variants[0]
             .transcript_consequences
@@ -350,10 +351,10 @@ mod tests {
         assert_eq!(written, [Some(&"0.85".to_string()), None, None]);
     }
 
-    /// Ensembl VEP 116.2 never hands LoFtool a structural variant: the module
+    /// Ensembl VEP 116.3 never hands LoFtool a structural variant: the module
     /// keeps the default `variant_feature_types` of `['VariationFeature']`
     /// (BaseVepPlugin.pm:100), which the dispatch checks before running a
-    /// plugin on a line (OutputFactory.pm:2220). The transcript rows of a
+    /// plugin on a line (OutputFactory.pm:2229). The transcript rows of a
     /// `<DEL>` over a scored gene carry no field, while the sequence variant's
     /// row of the same gene does.
     #[test]

@@ -1,0 +1,130 @@
+{
+  "totals": {
+    "reference_keys": 20001,
+    "scored_keys": 20001,
+    "intersection": 20001,
+    "reference_only": 0,
+    "scored_only": 0,
+    "reference_duplicate_keys": 0,
+    "scored_duplicate_keys": 0
+  },
+  "fields": {
+    "Uploaded_variation": {
+      "compared": 20001,
+      "equal": 1,
+      "differ": 20000,
+      "agreement": 5e-05,
+      "distinct_mismatch_shapes": 20000,
+      "top_mismatches": [
+        {
+          "reference": "r10",
+          "scored": "scored10",
+          "count": 1
+        },
+        {
+          "reference": "r100",
+          "scored": "scored100",
+          "count": 1
+        }
+      ]
+    },
+    "Gene": {
+      "compared": 20001,
+      "equal": 20000,
+      "differ": 1,
+      "agreement": 0.99995,
+      "distinct_mismatch_shapes": 1,
+      "top_mismatches": [
+        {
+          "reference": "ENSG1",
+          "scored": "ENSG2",
+          "count": 1
+        }
+      ]
+    },
+    "cDNA_position": {
+      "compared": 20001,
+      "equal": 13334,
+      "differ": 6667,
+      "agreement": 0.666667,
+      "distinct_mismatch_shapes": 1,
+      "top_mismatches": [
+        {
+          "reference": "5",
+          "scored": "6",
+          "count": 6667
+        }
+      ]
+    },
+    "CDS_position": {
+      "compared": 20001,
+      "equal": 20001,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "Protein_position": {
+      "compared": 20001,
+      "equal": 20001,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "Amino_acids": {
+      "compared": 20001,
+      "equal": 20001,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "Codons": {
+      "compared": 20001,
+      "equal": 20001,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "Existing_variation": {
+      "compared": 20001,
+      "equal": 20001,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    }
+  },
+  "extra": {
+    "IMPACT": {
+      "compared": 20001,
+      "equal": 20001,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "STRAND": {
+      "compared": 20001,
+      "equal": 20001,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    }
+  },
+  "inputs": {
+    "reference": "reference.txt",
+    "scored": "scored.txt"
+  },
+  "key": [
+    "Location",
+    "Allele",
+    "Feature",
+    "Feature_type",
+    "consequence_set"
+  ],
+  "comparison": "verbatim per field on tuples both sides emit under the same key"
+}

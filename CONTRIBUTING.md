@@ -17,6 +17,9 @@ cargo clippy --workspace --features vep-cli/bench -- -D warnings
 
 # Check formatting
 cargo fmt --all -- --check
+
+# Build the API documentation as CI does, with rustdoc's warnings denied
+scripts/check_api_docs.sh workspace
 ```
 
 For faster iteration during development:
@@ -39,7 +42,7 @@ pre-commit install
 
 ## Concordance Testing
 
-Concordance testing compares vep-rs output against Ensembl VEP release 116.2 (`ensemblorg/ensembl-vep:release_116.2`, the image `run_concordance.sh` pins; `--perl-vep-docker-image` selects another) to verify semantic parity. Requires Docker and an Ensembl VEP cache of that release.
+Concordance testing compares vep-rs output against Ensembl VEP release 116.3 (`ensemblorg/ensembl-vep:release_116.3`, the image `run_concordance.sh` pins; `--perl-vep-docker-image` selects another) to verify semantic parity. Requires Docker and an Ensembl VEP cache of that release.
 
 ```bash
 scripts/concordance/run_concordance.sh --mode smoke --smoke-variants 5000 \
@@ -49,7 +52,7 @@ scripts/concordance/run_concordance.sh --mode smoke --smoke-variants 5000 \
 
 `--perl-cache-dir` (the directory above `homo_sapiens/`), `--json-cache-dir` and `--fasta` (or an explicit `--no-fasta`) are required; the harness exits before annotating without them.
 
-When a release moves the Ensembl VEP reference, every entry of `docs/intended-divergences.md` is run again on the new release with `scripts/divergences/reevaluate.py`, an entry the release closes is retired with that release's number, and the page's `Verified against` column names the release last run.
+When a release moves the Ensembl VEP reference, every entry of `docs/intended-divergences.md` is run again on the new release with `tools/vep-divergence-reevaluate`, an entry the release closes is retired with that release's number, and the page's `Verified against` column names the release last run.
 
 The data tree and the measurement entrypoint behind the published concordance figures are in [scripts/README.md](scripts/README.md#reproducing-the-published-concordance).
 
@@ -101,12 +104,13 @@ mask classes applied to every run of the corpus before the comparison:
 `MotifFeature` rows for a corpus run under `--regulatory` or `--everything` against
 a cache converted without its regulatory tree, where vep-rs writes none, and
 `order_only` compares the `DOMAINS`,
-`FREQS`, `ZYG` and `NearestExonJB` items of both sides as multisets, and the
+`FREQS`, `ZYG` and `NearestExonJB` items and the `CLIN_SIG` lists of both sides
+as multisets, and the
 `5UTR_annotation` groups by their pairs, for a native cache that lists a
 transcript's protein features in another order than the Ensembl cache and for the
 orders Ensembl VEP prints from a hash: the samples of `--individual_zyg`, the exon
-items of NearestExonJB and the pairs of UTRAnnotator
-(`scripts/concordance/compare_vep_formats.py --masks` applies the same two classes, its
+items of NearestExonJB, the pairs of UTRAnnotator and the `CLIN_SIG` lists
+(`tools/vep-formats-compare --masks` applies the same two classes, its
 `order_only` over the same columns). Three further classes give `classify`
 nothing to apply and belong to the golden harness: `unloaded_module_plugin` sets aside
 the reference's warnings about a plugin module vep-rs cannot load,
@@ -121,8 +125,8 @@ refuses a class outside `MASK_CLASSES` (those five and the classes of the correc
 behaviours, each on `docs/intended-divergences.md`; the golden harness and the
 format comparator carry the same list), and `classify` applies the regulatory class
 to the reference and compares `DOMAINS`, `FREQS` and `ZYG` as multisets under `order_only`
-(the harness and the format comparator read `NearestExonJB` and the `5UTR_annotation`
-groups that way as well).
+(the harness and the format comparator read `NearestExonJB`, `CLIN_SIG` and the
+`5UTR_annotation` groups that way as well).
 `cargo test -p vep-cli --test golden --test format_parity` annotates each corpus
 once per run and compares every column of every format (the Parquet round trip
 reads the file back through the `parquet` crate, with no other tool). A failure lists every mismatch
@@ -133,22 +137,22 @@ and classes the keys only vep-rs emits for it `reference_skipped_record`, the
 one class under which the harness accepts a record-level VCF line or JSON
 object with no reference counterpart. A record Ensembl VEP's frequency filter
 dropped (`--check_frequency`, `--filter_common`) carries no warning: `classify`
-reads one neither engine wrote a row for as rowless by the run's nature, and
-classes the keys only vep-rs emits for one it kept because an allele's
-frequency is exactly 0 `frequency_filter_zero_value`. A manifest may also carry
+reads one neither engine wrote a row for as rowless by the run's nature. A
+manifest may also carry
 `reference_warnings`, the texts Ensembl VEP wrote to its warnings file about
 the run rather than about one record (the notice a `<CNV:TR>` record draws
 without a FASTA, for one); the harness expects them in the run's warnings file
 beside the numbered reasons. A flag set may carry its own list for its run
 alone; one without inherits the manifest's. Like `masks`, the list is written
 by hand, kept by `select` and by a `flag-set` rewrite of the set, and refused
-by `build_golden_corpus.py` and the golden tests alike when a text is empty.
+by `vep-golden-corpus` and the golden tests alike when a text is empty.
 
 A `runs` entry that passes `--stats_text` may expect a `stats_file`, the
 statistics report Ensembl VEP wrote for the same records
 (`expected/<format>.summary.log`), which the harness compares with the run's as
-`scripts/concordance/compare_vep_stats.py` does: the volatile rows by key alone,
-the paths masked, every chart section as a set.
+`tools/vep-stats-compare` does, its rules for the two documented
+differences excepted: the volatile rows by key alone, the paths masked,
+every chart section as a set.
 
 To add a release or assembly, run the generator where the VEP reference outputs,
 their inputs and the JSON cache are: select the exemplars, prune the cache, write
@@ -156,14 +160,23 @@ the four expected outputs with `generate_reference_output.sh --corpus`, then
 classify against the pinned vep-rs binary.
 
 ```sh
-scripts/golden/build_golden_corpus.py select
+cargo build --release --locked \
+    --manifest-path tools/vep-golden-corpus/Cargo.toml
+tools/vep-golden-corpus/target/release/vep-golden-corpus select
 scripts/golden/prune_json_cache.py --gzip --drop sorted_exons \
     --drop protein_features --drop protein_function_predictions \
     --perl-info <cache>/info.txt
 scripts/concordance/generate_reference_output.sh --corpus <dir> \
     --perl-cache-dir <perl cache>
-scripts/golden/build_golden_corpus.py classify
+tools/vep-golden-corpus/target/release/vep-golden-corpus identifiers <dir>
+tools/vep-golden-corpus/target/release/vep-golden-corpus classify
 ```
+
+`vep-golden-corpus identifiers <dir>` replaces an identifier under restricted
+redistribution terms that a source record or the annotation's cache brought into
+a stored file with the fabricated one of the same shape, and records the changed
+digests in `provenance.json` again; `select` does the same to every record it
+keeps, and `check` refuses a corpus in which it reads one in any other form.
 
 `generate_reference_output.sh --corpus` runs one Ensembl VEP container per format
 from the manifest's `assembly`, `flags` and `fasta`, records the image digest, the
@@ -211,7 +224,7 @@ supported in the pull request that lands its row) and `crates/vep-cli/tests/pari
 `CHANGELOG.md` follows Keep a Changelog, and the release page either copies the version's section word
 for word or restates its entries grouped by area, so each entry is written for the page: one bullet per
 user-visible change, on one physical line; the subject first (the flag, format, input or behaviour,
-identifiers in backticks), then what it now does; one sentence, a second only for a consequence the user
+identifiers in backticks), then what it does; one sentence, a second only for a consequence the user
 must act on; the measured effect inline where the change claims speed or memory; no type prefix, bold
 lead-in or author handle; a trailing `(#N)` naming the pull request; at most 30 words in the bullet a
 pull request adds, though a release's section may merge bullets into a longer one. A contributor's
@@ -286,14 +299,14 @@ Additions are welcome; the maintainers write or review the entry's page. An issu
 without the choice, naming an entry the index lacks, naming existing entries with no entry line or
 a line that says nothing after the entry, or proposing a divergence with an empty field, gets the
 `needs-divergence-check` label and one comment; an edit of the description that supplies what was
-missing removes the label and the comment reports the pass. An issue opened before the forms
-carried the choice is not asked.
+missing removes the label and the comment reports the pass. An issue opened before the first
+commit on `main` that carries this rule is not asked.
 
 ## Pull Requests
 
 Before submitting a PR:
 
-1. All CI checks pass on the toolchain `.github/workflows/ci.yml` pins: `cargo test --workspace --locked`, `cargo clippy --workspace --features vep-cli/bench -- -D warnings`, `cargo fmt --all -- --check`. The four tools under `tools/` are their own Cargo roots and run the same commands with `--manifest-path`; the Python tests under `scripts/` run with `python3 -m pytest -q <file>` after the `pip install` line the Comparator Tests job runs. The Advisory Reachability check holds the workspace's `Cargo.lock` with `scripts/check_advisory_reachability.sh`, which fails on an advisory reachable from the `vep` binary, and each tool's whole lockfile with `cargo audit --deny warnings --file tools/<name>/Cargo.lock`, which fails on any advisory.
+1. All CI checks pass on the toolchain `.github/workflows/ci.yml` pins: `cargo test --workspace --locked`, `cargo clippy --workspace --features vep-cli/bench -- -D warnings`, `cargo fmt --all -- --check`, `scripts/check_api_docs.sh workspace`. Each tool under `tools/`, its own Cargo root, runs them with `--manifest-path`, the last as `scripts/check_api_docs.sh tools`; the Python tests under `scripts/` run with `python3 -m pytest -q <file>` after the Comparator Tests job's `pip install` line. The Advisory Reachability job runs `scripts/check_advisory_reachability.sh` on the workspace's `Cargo.lock`, failing on an advisory reachable from the `vep` binary unless `scripts/advisory-reachability-allow.txt` holds an unexpired entry for it, and `cargo audit --deny warnings --file tools/<name>/Cargo.lock` on each tool's whole lockfile, failing on any advisory but an allowlisted one its row names with `--ignore`.
 2. Add tests for new features or defect fixes; the admission check below asks for a test change beside every code change. A test added to a file under `scripts/` raises that file's collected-count floor in `ci.yml`: name the new count under Verification for a maintainer to set.
 3. Update the affected page under `docs/`: the format's page under `output/` for output layouts, the mechanism's page under `plugins/` and the plugin table in `plugins.md` for plugins, `cache-setup.md` for the cache builder and `cache-conversion.md` for the converter. A flag is documented by its help text in `crates/vep-cli/src/args.rs` and by the option tables, from which the CLI reference (`cli-reference.md` and the group pages under `cli/`) is generated: regenerate it with `VEP_UPDATE_CLI_REFERENCE=1 cargo test -p vep-cli --test cli_reference` and commit the result. The home page, `docs/index.md`, is written by `scripts/docs/render_home_page.py` from `scripts/docs/home_page.template.md` and the current release's records: edit the template, run the script and commit both. The plugin wall-time section of `docs/benchmarks/current-release.md` is written by `scripts/docs/render_plugin_wall_time.py` from its record under `docs/concordance-provenance/`: run the script and commit the page. A page added under `docs/` is listed in `docs/SUMMARY.md` under a title no other page has and opens with a paragraph that says what the page covers.
 4. For consequence or plugin changes, run concordance smoke to confirm no regressions.
@@ -307,26 +320,27 @@ path of its page, and followed by what the change does to it and why the index's
 for this case; the third describes a proposed entry. A change to the index's own text or order names
 `docs/intended-divergences.md` itself under the second statement, a form only a change that edits
 the index may use. A change that edits `docs/intended-divergences.md`, a page it links or the
-reproduction registry under `scripts/divergences/reproductions/` (its README excepted) cannot claim
-the first.
-The section is the author's attestation, read by a maintainer: whether a code change that leaves
-those files alone also leaves every recorded behaviour alone is not something the check can prove.
+reproduction registry under `scripts/divergences/reproductions/` (its README excepted), or changes
+an item a record's `implementation` table lists, cannot claim the first.
+The section is the author's attestation, read by a maintainer: no check proves a change outside
+those items leaves every recorded behaviour alone.
 
 An admission check (the `Admission` workflow) runs on every pull request. It closes one that is
 behind `main`, changes code without a test that gains a line (a benchmark or an example asks for
 none), carries no model declaration, lacks a template section, or leaves the Intended divergences
 section unchecked, inconsistent, naming an entry the index lacks, naming the index itself while it
-leaves the index alone, or claiming none while it edits the index, a page it links or the
-reproduction registry. It also closes one that changes a crate without a changelog line, changes a
-file under `.github/workflows/`, fails the parity matrix or fails a required CI check. The comment
-it leaves names each miss and its fix; push the fixes to the same branch and reopen it.
+leaves the index alone, or claiming none while it edits the index, a page it links, the
+reproduction registry or such an item. It also closes one that changes a crate without a changelog
+line, changes a file under `.github/workflows/`, fails the parity matrix or a required CI check.
+Its comment names each miss and its fix; push the fixes to the same branch and reopen it.
 `python3 scripts/ci/admission.py --local --body-file <file>` applies the same rules to a saved
 description before you open the pull request.
 
 An unsigned commit is reported but never closes (the DCO check holds the merge; sign a pushed
 branch by opening a new pull request from a signed branch). Maintainers' and bots' pull requests,
-drafts and those opened before the check existed are commented but stay open, as is one opened
-before the Intended divergences section was asked, for that miss alone; a maintainer's
+drafts and those opened before the first commit on the base branch that carries the `Admission`
+workflow are commented but stay open, as is one opened before the first commit there that carries
+the Intended divergences rule, for that miss alone; a maintainer's
 `tests-not-needed` label waives the test requirement and `admission-override` holds the close for a
 justified exception. The check judges a pull request by its author, so a maintainer sets
 `admission-override` before pushing a workflow edit (a test floor in `ci.yml`) onto a contributor's
@@ -347,7 +361,7 @@ Keep the two-line license header and the blank line after it on every source fil
 ## Code Conventions
 
 - **Error handling**: `anyhow::Result` with `.context()` naming the file path in CLI and runner code; `thiserror` derives for typed errors in library crates.
-- **Logging**: `tracing` for every diagnostic (`info!` for user-facing status, `debug!` behind `--verbose`, `warn!` for a recoverable condition). In the `vep` binary every `warn!` event reaches the warning sink (`crates/vep-cli/src/warnings.rs`), which writes it to the warnings file as `WARNING: <text>` and echoes it on stderr unless `--quiet`; a record the run skips goes through the sink's `skipped_variant`, never through `warn!`, so it is counted for `--skipped_variants_file`. The only direct writes are the sink's, the `vep` banner, the `INFO:` lines of the setup checks, the progress line and the end-of-run summary on stderr (in `main.rs`, `runner.rs` and `pipeline.rs`, suppressed by `--quiet`), the repeated `-o` warning the `vep` script prints before any option is read (`main.rs`, whatever `--quiet` says), the lines a plugin prints as its Ensembl VEP module's bare `warn` prints them, the transcript-set warning under `--refseq` or `--merged` and dbNSFP's column warning, file-name version warning and per-row `ERROR:` lines (`print_on_stderr` and `warn_on_stderr` in `crates/vep-builtins/src/traits.rs`, whatever `--quiet` says, never in the warnings file), the one-line `ERROR: [<component>] <message>` a refusal or a failed run ends with, `vep-cache-converter`'s mismatch listing, and the `bench_plugins` tool's progress and report output. The `vep` run's own writes go through `crates/vep-cli/src/stderr.rs`, where the `vep` binary switches on dropping a write that standard error refuses, so an unwritable stream never ends its run; `eprintln!` panics on one.
+- **Logging**: `tracing` for every diagnostic (`info!` for user-facing status, `debug!` behind `--verbose`, `warn!` for a recoverable condition). In the `vep` binary every `warn!` event reaches the warning sink (`crates/vep-cli/src/warnings.rs`), which writes it to the warnings file as `WARNING: <text>` and echoes it on stderr unless `--quiet`; a record the run skips goes through the sink's `skipped_variant`, never through `warn!`, so it is counted for `--skipped_variants_file`. The only direct writes are the sink's, the `vep` banner, the `INFO:` lines of the setup checks, the progress line and the end-of-run summary on stderr (in `main.rs`, `runner.rs` and `pipeline.rs`, suppressed by `--quiet`), the repeated `-o` warning the `vep` script prints before any option is read (`main.rs`, whatever `--quiet` says), the lines a plugin prints as its Ensembl VEP module's bare `warn` prints them, the transcript-set warning under `--refseq` or `--merged` and dbNSFP's column warning, file-name version warning and per-row `ERROR:` lines (`print_on_stderr` and `warn_on_stderr` in `crates/vep-builtins/src/traits.rs`, whatever `--quiet` says, never in the warnings file), the one-line `ERROR: [<component>] <message>` a refusal or a failed run ends with, `vep-cache-converter`'s mismatch listing, and the `bench_plugins` tool's progress and report output. A write that standard error refuses is dropped, so an unwritable stream never ends a run or changes its exit status: these writes, `bench_plugins`' excepted, go through `crates/vep-core/src/stderr.rs` (re-exported as `vep_cli::stderr`), whose switch the `vep` binary, `vep-cache-builder` and `vep-cache-converter` set at their start, and the two cache tools log through its `Stream`; `vep filter` writes its `ERROR:` line itself, as the bytes of the input it quotes, and drops it the same way. `eprintln!` panics on such a stream.
 - **Output ordering**: consequence terms within a `TranscriptConsequence` are ordered by SO rank; Extra field keys follow VEP's flag-field order (`@FLAG_FIELDS`, the fields each active flag adds, in VEP's group order; IMPACT, DISTANCE, STRAND and FLAGS are always active), then every other key, plugin keys included, alphabetically; within a record, rows are ordered by feature kind (transcript, regulatory, motif; the transcript rows last on a record `--per_gene` or `--pick_allele_gene` reduced, `InputVariant::per_gene_pick`), then by Ensembl VEP's feature key (`TranscriptConsequence::ensembl_vep_key`: a transcript's stable id with `_` and its database id, a regulatory feature's stable id, a motif's database id), a structural variant's regulatory and motif rows instead in the order their features were met (`TranscriptConsequence::structural_feature_order`: the met rank, then the start and the stable id), then by ALT allele index, with one intergenic row per allele that overlapped no transcript last.
 - **Naming**: the `vep` binary resolves each input chromosome name to the cache's before any lookup, as Ensembl VEP's `get_source_chr_name` does (the name itself when the cache holds it, else a synonym from `--synonyms` or the cache's `chr_synonyms.txt`, else the `chr` prefix removed or added: `chr21` -> `21`; `chrM` reaches `MT` through a synonym), and `original_chr` keeps the input spelling for the Location column, as VEP does; struct fields follow Ensembl VEP's names where possible (`transcript_id`, `gene_symbol`); SO terms are Ensembl VEP's exact strings (`5_prime_UTR_variant`, `NMD_transcript_variant`).
 - **Plugin data**: `IndexMap<String, String>` keyed by field name, variant-level in `InputVariant.plugin_data` and transcript-level in `TranscriptConsequence.plugin_data` (dylib plugin results merge there, one Extra field per key of the returned JSON object); output order does not depend on the map: the default-format Extra column and the JSON writer list plugin keys alphabetically after the flag fields, and the tab, VCF and Parquet writers take their column order from the plugins' declared field lists.

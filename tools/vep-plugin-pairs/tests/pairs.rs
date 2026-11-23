@@ -1,21 +1,25 @@
 // Copyright (c) 2026-present Natera, Inc.
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-//! Runs the binary over small outputs, answering its questions as the scorer does, and
-//! reads what it hands over. The outputs are the ones the tests of
-//! `scripts/concordance/score_plugin_tuples.py` hold for each extraction rule; that module
-//! holds the binary's hand-over to the scorer's own report and residual files.
+//! Runs the passes over small outputs under a planted resolver and reads what they hand on:
+//! the counts of every input and engine and the files of the remainder. One test per
+//! extraction rule, the planted missing, extra and changed values, the rows a class reads,
+//! and the same bytes on any number of threads.
 
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 use std::fs;
-use std::io::{BufRead, BufReader, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::sync::Mutex;
+use vep_plugin_pairs::pair::{Counts, PROJECTIONS};
+use vep_plugin_pairs::resolve::{Answer, Registry, Resolver, Table};
+use vep_plugin_pairs::rules::{Refusal, Res};
+use vep_plugin_pairs::score::pass::{self, InputFacts, Options, Passed};
 
-const BIN: &str = env!("CARGO_BIN_EXE_vep-plugin-pairs");
 const HEADER: &str = "#Uploaded_variation\tLocation\tAllele\tGene\tFeature\tFeature_type\tConsequence\tcDNA_position\tCDS_position\tProtein_position\tAmino_acids\tCodons\tExisting_variation\tExtra\n";
 
 struct Scratch(PathBuf);
@@ -55,39 +59,150 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
-fn unhex(text: &str) -> Vec<u8> {
-    (0..text.len())
-        .step_by(2)
-        .map(|at| u8::from_str_radix(&text[at..at + 2], 16).unwrap())
-        .collect()
+/// A planted registry: `PLANT_*` is the plugin Planted's, `GWAS_*` the plugin GWAS's,
+/// `IMPACT` Ensembl VEP's own, `Refused` a field the registry refuses, and any other key no
+/// source's. A Location it is asked to settle is the Location as written, without its
+/// surrounding spaces. Every question is kept, as `field <hex>` or `location <hex>`.
+#[derive(Default)]
+struct Planted {
+    asked: Mutex<Vec<String>>,
 }
 
-/// The scorer's side of the dialogue over a planted registry: `PLANT_*` is the plugin
-/// Planted's, `GWAS_*` the plugin GWAS's, `IMPACT` Ensembl VEP's own, `Refused` a field
-/// the registry refuses, and any other key no source's. The answer to a `location`
-/// question is the Location as written, without its surrounding spaces.
-fn answer(question: &str) -> String {
-    let (asked, subject) = question.split_once(' ').unwrap();
-    let subject = unhex(subject);
-    if asked == "location" {
-        return format!(
-            "location {}",
-            hex(String::from_utf8_lossy(&subject).trim().as_bytes())
-        );
+impl Resolver for Planted {
+    fn field(&self, name: &[u8]) -> Res<Answer> {
+        let asked = format!("field {}", hex(name));
+        self.asked.lock().unwrap().push(asked);
+        match name {
+            name if name.starts_with(b"PLANT_") => Ok(Answer::Source("Planted".to_string())),
+            name if name.starts_with(b"GWAS_") => Ok(Answer::Source("GWAS".to_string())),
+            b"IMPACT" => Ok(Answer::Core),
+            b"Refused" => Err(Refusal(format!(
+                "the registry refuses the field {}",
+                hex(name)
+            ))),
+            _ => Ok(Answer::Unclaimed),
+        }
     }
-    assert_eq!(asked, "field");
-    match subject.as_slice() {
-        name if name.starts_with(b"PLANT_") => "source Planted".to_string(),
-        name if name.starts_with(b"GWAS_") => "source GWAS".to_string(),
-        b"IMPACT" => "core".to_string(),
-        b"Refused" => "refused".to_string(),
-        _ => "unclaimed".to_string(),
+
+    fn location(&self, written: &[u8]) -> Res<Vec<u8>> {
+        let asked = format!("location {}", hex(written));
+        self.asked.lock().unwrap().push(asked);
+        Ok(String::from_utf8_lossy(written).trim().as_bytes().to_vec())
     }
 }
 
+/// A JSON string of a source's name.
+fn quoted(text: &str) -> String {
+    let mut out = String::from("\"");
+    for character in text.chars() {
+        match character {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            control if control < ' ' => write!(out, "\\u{:04x}", control as u32).unwrap(),
+            other => out.push(other),
+        }
+    }
+    out.push('"');
+    out
+}
+
+fn object(entries: Vec<(String, String)>) -> String {
+    let mut entries = entries;
+    entries.sort();
+    let body: Vec<String> = entries
+        .into_iter()
+        .map(|(key, value)| format!("{key}: {value}"))
+        .collect();
+    format!("{{{}}}", body.join(", "))
+}
+
+fn stated_input(facts: &InputFacts) -> String {
+    let unclaimed = facts
+        .extracted
+        .unclaimed
+        .iter()
+        .map(|(name, times)| (quoted(&hex(name)), times.to_string()))
+        .collect();
+    format!(
+        "{{\"kind\": {}, \"sha256\": {}, \"lines\": {}, \"outside\": {}, \"header\": {}, \"unclaimed\": {}}}",
+        quoted(facts.kind.name()),
+        quoted(&facts.sha256),
+        facts.extracted.lines,
+        facts.extracted.outside,
+        quoted(&hex(&facts.extracted.header)),
+        object(unclaimed),
+    )
+}
+
+fn stated_projection(table: &Table, counts: &Counts) -> String {
+    let mut values = Vec::new();
+    for (field, name) in table.names.iter().enumerate() {
+        let (reference, engine) = (counts.values[0][field], counts.values[1][field]);
+        if reference > 0 || engine > 0 {
+            let stated = format!("[{reference}, {engine}, {}]", counts.paired[field]);
+            values.push((quoted(&hex(name)), stated));
+        }
+    }
+    let shared = table
+        .sources
+        .iter()
+        .zip(&counts.shared)
+        .filter(|(_, &keys)| keys > 0)
+        .map(|(source, keys)| (quoted(source), keys.to_string()))
+        .collect();
+    format!(
+        "{{\"values\": {}, \"shared_keys\": {}, \"remainder\": [{}, {}]}}",
+        object(values),
+        object(shared),
+        counts.left[0],
+        counts.left[1],
+    )
+}
+
+/// What the passes counted, as one text the tests read: per input its kind, the sha256 of
+/// the file as stored, its rows or tuple lines, the tuples outside every source, the column
+/// header and the unclaimed keys with their counts; per engine and projection each field's
+/// values on the reference's side and on the engine's with the pairs equal as text, the
+/// shared keys per source and the remainder's lines per side, then the rows written per
+/// side. Field names and the header are hexadecimal, since an input can carry bytes no
+/// text holds; every object lists its keys in ascending order.
+fn stated(passed: &Passed) -> String {
+    let mut text = String::from("{\n  \"inputs\": [\n");
+    let inputs: Vec<String> = passed
+        .inputs
+        .iter()
+        .map(|facts| format!("    {}", stated_input(facts)))
+        .collect();
+    text.push_str(&inputs.join(",\n"));
+    text.push_str("\n  ],\n  \"engines\": [\n");
+    let engines: Vec<String> = passed
+        .engines
+        .iter()
+        .map(|facts| {
+            let mut entries: Vec<String> = PROJECTIONS
+                .iter()
+                .zip(&facts.counts)
+                .map(|(name, counts)| {
+                    format!(
+                        "{}: {}",
+                        quoted(name),
+                        stated_projection(&facts.table, counts)
+                    )
+                })
+                .collect();
+            entries.push(format!("\"rows\": [{}, {}]", facts.rows[0], facts.rows[1]));
+            format!("    {{{}}}", entries.join(", "))
+        })
+        .collect();
+    text.push_str(&engines.join(",\n"));
+    text.push_str("\n  ]\n}\n");
+    text
+}
+
+/// One run of the passes: what they counted or the message they refused with, the
+/// directory of the remainder's files and the questions the resolver was asked.
 struct Done {
-    code: i32,
-    error: String,
+    outcome: Result<Passed, String>,
     out: PathBuf,
     asked: Vec<String>,
 }
@@ -98,14 +213,24 @@ impl Done {
     }
 
     fn pairs(&self) -> String {
-        assert_eq!((self.code, self.error.as_str()), (0, ""));
-        self.read("pairs.json")
+        match &self.outcome {
+            Ok(passed) => stated(passed),
+            Err(message) => panic!("the passes refused: {message}"),
+        }
     }
 
-    /// Every file handed over, by name.
+    /// The message the passes refused with, the scratch directory's name left out.
+    fn refused(&self, scratch: &Scratch) -> String {
+        let Err(message) = &self.outcome else {
+            panic!("the passes refused nothing");
+        };
+        assert!(!self.out.join("shards").exists());
+        message.replace(&format!("{}/", scratch.0.display()), "")
+    }
+
+    /// Every file of the remainder by name, and the counts as `counts`.
     fn files(&self) -> BTreeMap<String, Vec<u8>> {
-        assert_eq!((self.code, self.error.as_str()), (0, ""));
-        fs::read_dir(&self.out)
+        let mut files: BTreeMap<String, Vec<u8>> = fs::read_dir(&self.out)
             .unwrap()
             .map(|entry| entry.unwrap())
             .map(|entry| {
@@ -114,57 +239,34 @@ impl Done {
                     fs::read(entry.path()).unwrap(),
                 )
             })
-            .collect()
+            .collect();
+        files.insert("counts".to_string(), self.pairs().into_bytes());
+        files
     }
 }
 
-fn pair(scratch: &Scratch, tag: &str, reference: &Path, engines: &[&Path], extra: &[&str]) -> Done {
+fn pair(
+    scratch: &Scratch,
+    tag: &str,
+    reference: &Path,
+    engines: &[&Path],
+    options: &Options,
+) -> Done {
     let out = scratch.0.join(format!("out-{tag}"));
-    let mut command = Command::new(BIN);
-    command
-        .arg("--reference")
-        .arg(reference)
-        .arg("--out")
-        .arg(&out);
-    for engine in engines {
-        command.arg("--engine").arg(engine);
-    }
-    let mut child = command
-        .args(extra)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
-    let mut answers = child.stdin.take().unwrap();
-    let mut asked = Vec::new();
-    for question in BufReader::new(child.stdout.take().unwrap()).lines() {
-        let question = question.unwrap();
-        // A tool that has ended in a refusal reads no further answer.
-        let _ = writeln!(answers, "{}", answer(&question));
-        asked.push(question);
-    }
-    drop(answers);
-    let ended = child.wait_with_output().unwrap();
+    let planted = Planted::default();
+    let registry = Registry::new(&planted);
+    let engines: Vec<PathBuf> = engines.iter().map(|engine| engine.to_path_buf()).collect();
+    let outcome = pass::run(reference, &engines, &out, options, &registry, &|_| {});
+    let asked = planted.asked.lock().unwrap().clone();
     Done {
-        code: ended.status.code().unwrap(),
-        error: String::from_utf8(ended.stderr).unwrap(),
+        outcome: outcome.map_err(|Refusal(message)| message),
         out,
         asked,
     }
 }
 
 fn refusal(scratch: &Scratch, tag: &str, reference: &Path, engine: &Path) -> String {
-    let done = pair(scratch, tag, reference, &[engine], &[]);
-    assert_eq!(done.code, 2, "{}", done.error);
-    assert!(!done.out.join("pairs.json").exists() && !done.out.join("shards").exists());
-    let line = done
-        .error
-        .strip_prefix("ERROR: [vep-plugin-pairs] ")
-        .unwrap();
-    let message = line.strip_suffix('\n').unwrap();
-    let directory = format!("{}/", scratch.0.display());
-    message.replace(&directory, "")
+    pair(scratch, tag, reference, &[engine], &Options::new(false)).refused(scratch)
 }
 
 fn sha256(bytes: &[u8]) -> String {
@@ -210,7 +312,13 @@ fn reference_rows() -> Vec<String> {
 fn populated_fields_of_the_runs_sources_are_counted_and_every_other_key_is_set_apart() {
     let scratch = Scratch::new("populated");
     let reference = scratch.output("reference.txt", &reference_rows());
-    let done = pair(&scratch, "self", &reference, &[&reference], &[]);
+    let done = pair(
+        &scratch,
+        "self",
+        &reference,
+        &[&reference],
+        &Options::new(false),
+    );
     let digest = sha256(&fs::read(&reference).unwrap());
     let input = format!(
         "{{\"kind\": \"default\", \"sha256\": \"{digest}\", \"lines\": 5, \"outside\": 0, \"header\": \"{}\", \"unclaimed\": {{\"{}\": 1, \"{}\": 2}}}}",
@@ -254,16 +362,16 @@ fn populated_fields_of_the_runs_sources_are_counted_and_every_other_key_is_set_a
     assert_eq!(
         names,
         [
+            "counts",
             "input1.allele.engine",
             "input1.allele.reference",
             "input1.feature.engine",
-            "input1.feature.reference",
-            "pairs.json"
+            "input1.feature.reference"
         ]
     );
     assert!(files
         .iter()
-        .all(|(name, bytes)| name == "pairs.json" || bytes.is_empty()));
+        .all(|(name, bytes)| name == "counts" || bytes.is_empty()));
 }
 
 #[test]
@@ -297,7 +405,13 @@ fn planted_missing_extra_and_changed_values_come_out_in_the_remainder() {
             ),
         ],
     );
-    let done = pair(&scratch, "planted", &reference, &[&engine], &[]);
+    let done = pair(
+        &scratch,
+        "planted",
+        &reference,
+        &[&engine],
+        &Options::new(false),
+    );
     assert_eq!(
         done.read("input1.feature.reference"),
         "1:200\tT\tENST1\tPLANT_label\tmissing\n1:300\tT\tENST1\tPLANT_label\tbefore\n"
@@ -341,7 +455,13 @@ fn rows_that_share_a_key_are_never_collapsed_and_the_allele_projection_keeps_a_v
     let rows = reference_rows();
     let twice = scratch.output("twice.txt", &[rows.clone(), rows.clone()].concat());
     let once = scratch.output("once.txt", &rows);
-    let done = pair(&scratch, "shared", &twice, &[&once, &twice], &[]);
+    let done = pair(
+        &scratch,
+        "shared",
+        &twice,
+        &[&once, &twice],
+        &Options::new(false),
+    );
     let pairs = done.pairs();
     let score = hex(b"PLANT_score");
     let engines: Vec<&str> = pairs.split("\"feature\": ").skip(1).collect();
@@ -382,7 +502,13 @@ fn percent_encoded_value_pairs_with_its_decoded_form_in_a_tuple_file() {
         "engine.tsv",
         "1:100\tT\tENST1\tPLANT_label\ta;b=c\n1:100\tT\tENST1\tPLANT_score\t%3d\n1:100\tT\tENST1\tPLANT_none\t-\n1:100\tT\tENST1\tIMPACT\tLOW\n1:100\tT\tENST1\tStray\t1\n",
     );
-    let done = pair(&scratch, "percent", &reference, &[&engine], &[]);
+    let done = pair(
+        &scratch,
+        "percent",
+        &reference,
+        &[&engine],
+        &Options::new(false),
+    );
     let pairs = done.pairs();
     assert!(
         pairs.contains(&format!("\"{}\": [1, 1, 1]", hex(b"PLANT_label"))),
@@ -430,7 +556,13 @@ fn location_coordinates_compare_as_numbers_and_key_columns_lose_their_surroundin
             row("21:8.5", "T", "ENST1", "PLANT_score=1"),
         ],
     );
-    let done = pair(&scratch, "location", &reference, &[&engine], &[]);
+    let done = pair(
+        &scratch,
+        "location",
+        &reference,
+        &[&engine],
+        &Options::new(false),
+    );
     assert!(done
         .pairs()
         .contains(&format!("\"{}\": [4, 4, 3]", hex(b"PLANT_score"))));
@@ -446,7 +578,7 @@ fn location_coordinates_compare_as_numbers_and_key_columns_lose_their_surroundin
     let odd = format!("location {}", hex("21:\u{b2}".as_bytes()));
     assert!(
         done.asked.contains(&odd),
-        "a Location outside ASCII is the driver's to settle"
+        "a Location outside ASCII is the resolver's to settle"
     );
     assert!(done
         .asked
@@ -461,7 +593,7 @@ fn headerless_output_and_tuple_file_are_told_apart_by_the_first_data_line() {
     let rows = reference_rows();
     let reference = scratch.output("reference.txt", &rows);
     let bare = scratch.file("bare.txt", format!("\n\r\n{}", rows.concat()));
-    let done = pair(&scratch, "bare", &reference, &[&bare], &[]);
+    let done = pair(&scratch, "bare", &reference, &[&bare], &Options::new(false));
     let pairs = done.pairs();
     assert_eq!(pairs.matches("\"kind\": \"default\"").count(), 2, "{pairs}");
     assert!(
@@ -473,7 +605,13 @@ fn headerless_output_and_tuple_file_are_told_apart_by_the_first_data_line() {
         "listed.tsv",
         "\n1:100\tT\tENST1\tPLANT_score\t0.5\n\n#1:100\tT\tENST1\tPLANT_score\t0.5\n",
     );
-    let done = pair(&scratch, "listed", &reference, &[&listed], &[]);
+    let done = pair(
+        &scratch,
+        "listed",
+        &reference,
+        &[&listed],
+        &Options::new(false),
+    );
     assert!(done.pairs().contains("\"kind\": \"tuples\""));
     assert_eq!(
         done.read("input1.feature.engine"),
@@ -490,7 +628,7 @@ fn headerless_output_and_tuple_file_are_told_apart_by_the_first_data_line() {
 }
 
 #[test]
-fn last_column_header_is_handed_over_and_comments_and_line_ends_are_no_rows() {
+fn last_column_header_is_kept_and_comments_and_line_ends_are_no_rows() {
     let scratch = Scratch::new("header");
     let rows = reference_rows();
     let other = HEADER.replace("Extra", "Further");
@@ -507,7 +645,10 @@ fn last_column_header_is_handed_over_and_comments_and_line_ends_are_no_rows() {
         "header",
         &reference,
         &[&reference],
-        &["--block-bytes", "50"],
+        &Options {
+            block_bytes: 50,
+            ..Options::new(false)
+        },
     );
     let pairs = done.pairs();
     assert!(
@@ -566,11 +707,15 @@ fn malformed_inputs_are_refused_in_the_scorers_words() {
         "faulty",
         &reference,
         &[&faulty],
-        &["--block-bytes", "200", "--threads", "8"],
+        &Options {
+            block_bytes: 200,
+            threads: 8,
+            ..Options::new(false)
+        },
     );
     assert_eq!(
-        done.error.replace(&format!("{}/", scratch.0.display()), ""),
-        "ERROR: [vep-plugin-pairs] faulty.txt: line 152 has 2 columns; a default-format row has 14, a tuple file line 5\n"
+        done.refused(&scratch),
+        "faulty.txt: line 152 has 2 columns; a default-format row has 14, a tuple file line 5"
     );
     // One distinct key too many comes before a later fault, though no thread meets every key.
     let mut spread: Vec<String> = (0..400)
@@ -589,18 +734,16 @@ fn malformed_inputs_are_refused_in_the_scorers_words() {
         "spread",
         &reference,
         &[&spread],
-        &[
-            "--block-bytes",
-            "200",
-            "--threads",
-            "8",
-            "--distinct-keys",
-            "5",
-        ],
+        &Options {
+            block_bytes: 200,
+            threads: 8,
+            distinct_keys: 5,
+            ..Options::new(false)
+        },
     );
     assert_eq!(
-        done.error.replace(&format!("{}/", scratch.0.display()), ""),
-        "ERROR: [vep-plugin-pairs] spread.txt: more than 5 distinct keys that no source claims\n"
+        done.refused(&scratch),
+        "spread.txt: more than 5 distinct keys that no source claims"
     );
     let packed = gzip(&[&fs::read(&reference).unwrap()]);
     let cut = scratch.file("cut.txt.gz", &packed[..packed.len() - 12]);
@@ -615,18 +758,24 @@ fn malformed_inputs_are_refused_in_the_scorers_words() {
         "wide",
         &reference,
         &[&wide],
-        &["--distinct-keys", "2"],
+        &Options {
+            distinct_keys: 2,
+            ..Options::new(false)
+        },
     );
     assert_eq!(
-        done.error.replace(&format!("{}/", scratch.0.display()), ""),
-        "ERROR: [vep-plugin-pairs] wide.txt: more than 2 distinct keys that no source claims\n"
+        done.refused(&scratch),
+        "wide.txt: more than 2 distinct keys that no source claims"
     );
     let done = pair(
         &scratch,
         "narrow",
         &reference,
         &[&wide],
-        &["--distinct-keys", "3"],
+        &Options {
+            distinct_keys: 3,
+            ..Options::new(false)
+        },
     );
     assert!(done.pairs().contains(&format!("\"{}\": 2", hex(b"One"))));
     let refused = scratch.output("refused.txt", &[row("1:100", "T", "ENST1", "Refused=1")]);
@@ -650,7 +799,10 @@ fn gzip_input_is_read_whole_and_digested_as_stored() {
         "gzip",
         &packed,
         &[&plain, &packed],
-        &["--block-bytes", "64"],
+        &Options {
+            block_bytes: 64,
+            ..Options::new(false)
+        },
     );
     let pairs = done.pairs();
     assert_eq!(
@@ -714,7 +866,7 @@ fn rows_of_the_remainder_are_written_for_a_class_to_read() {
         "rows",
         &reference,
         &[&engine, &listed],
-        &["--rows"],
+        &Options::new(true),
     );
     let kept = |ordinal: usize, key: &str, row: &str| format!("{key}\t{ordinal:012}\t{}", row);
     let reference_rows = [
@@ -753,7 +905,13 @@ fn rows_of_the_remainder_are_written_for_a_class_to_read() {
         "1:200\tT\tENST1\tPLANT_label\tafter\n1:200\tT\tENST1\tPLANT_score\t0.25\n1:200\tT\tENST1\tPLANT_score\t0.25\n"
     );
     assert_eq!(done.pairs().matches("\"rows\": [3, 3]").count(), 2);
-    let without = pair(&scratch, "no-rows", &reference, &[&engine], &[]);
+    let without = pair(
+        &scratch,
+        "no-rows",
+        &reference,
+        &[&engine],
+        &Options::new(false),
+    );
     assert!(without.pairs().contains("\"rows\": [0, 0]"));
     assert!(
         !without.out.join("input1.rows.reference").exists()
@@ -779,7 +937,13 @@ fn engine_rows_of_a_remainder_location_are_written_whole_for_a_class_that_reads_
         &rows(&row("1:500", "T", "ENST1", "PLANT_score=0.5")),
     );
     let engine = scratch.output("engine.txt", &rows(&own));
-    let done = pair(&scratch, "record-rows", &reference, &[&engine], &["--rows"]);
+    let done = pair(
+        &scratch,
+        "record-rows",
+        &reference,
+        &[&engine],
+        &Options::new(true),
+    );
     assert_eq!(
         done.read("input1.feature.engine"),
         "1:500\tT\tENST1\tPLANT_score\t0.75\n"
@@ -898,29 +1062,30 @@ fn two_runs_write_the_same_bytes_whatever_the_threads_the_shards_and_the_blocks(
         "one",
         &reference,
         &engines,
-        &["--rows", "--threads", "1", "--shards", "1"],
+        &Options {
+            threads: 1,
+            shards: Some(1),
+            ..Options::new(true)
+        },
     )
     .files();
     assert!(
         first["input1.feature.reference"].len() > 1000 && first["input1.rows.engine"].len() > 1000
     );
     assert!(first["input2.rows.engine"].len() > 100 && first["input2.allele.engine"].len() > 100);
-    for (tag, threads, shards, block) in [
-        ("again", "1", "1", "8388608"),
-        ("many", "7", "13", "64"),
-        ("few", "3", "4", "1000"),
-        ("wide", "16", "64", "1"),
+    for (tag, threads, shards, block_bytes) in [
+        ("again", 1, 1, 8388608),
+        ("many", 7, 13, 64),
+        ("few", 3, 4, 1000),
+        ("wide", 16, 64, 1),
     ] {
-        let extra = [
-            "--rows",
-            "--threads",
+        let options = Options {
             threads,
-            "--shards",
-            shards,
-            "--block-bytes",
-            block,
-        ];
-        let other = pair(&scratch, tag, &reference, &engines, &extra).files();
+            shards: Some(shards),
+            block_bytes,
+            ..Options::new(true)
+        };
+        let other = pair(&scratch, tag, &reference, &engines, &options).files();
         let names: Vec<&String> = first.keys().collect();
         assert_eq!(other.keys().collect::<Vec<_>>(), names, "{tag}");
         for name in names {
@@ -929,7 +1094,7 @@ fn two_runs_write_the_same_bytes_whatever_the_threads_the_shards_and_the_blocks(
     }
     // Every file is in the order `sort` gives its lines under C collation.
     for (name, bytes) in &first {
-        if name != "pairs.json" {
+        if name != "counts" {
             let lines: Vec<&[u8]> = bytes
                 .split(|&byte| byte == b'\n')
                 .filter(|line| !line.is_empty())

@@ -8,7 +8,7 @@
 //!
 //! Built as a `cdylib`. The library's `vep_plugin_feature_types` lists all four
 //! kinds, which is what makes the host hand it every row, the intergenic ones
-//! included; compiled with the `no-feature-types` feature it exports no such
+//! included; compiled with `--cfg fixture_no_feature_types` it exports no such
 //! symbol, the fixture for the host's `Transcript` default. Every string handed
 //! to the host is a `CString::into_raw`, which `vep_plugin_free` reclaims with
 //! `CString::from_raw`.
@@ -83,7 +83,7 @@ pub unsafe extern "C" fn vep_plugin_header_info(_instance: *const c_void) -> *mu
 
 /// # Safety
 /// `instance` must be a live pointer returned by [`vep_plugin_create`].
-#[cfg(not(feature = "no-feature-types"))]
+#[cfg(not(fixture_no_feature_types))]
 #[no_mangle]
 pub unsafe extern "C" fn vep_plugin_feature_types(_instance: *const c_void) -> *mut c_char {
     CString::new(r#"["Transcript","RegulatoryFeature","MotifFeature","Intergenic"]"#)

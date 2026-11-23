@@ -1,0 +1,7 @@
+#Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	Extra
+rs1	1:100	T	ENSG1	ENST1	Transcript	missense_variant	10	5	2	A/V	gCc/gTc	-	IMPACT=MODERATE;STRAND=1
+rs2	1:200	G	ENSG1	ENST1	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1
+rs3	1:300	A	ENSG2	ENST2	Transcript	upstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER;DISTANCE=1500;STRAND=-1
+rs4	1:400	C	ENSG2	ENST2	Transcript	synonymous_variant	40	35	12	L	ctG/ctA	-	IMPACT=LOW;STRAND=-1
+rs5	1:500	T	ENSG3	ENST3	Transcript	intron_variant,splice_region_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1
+rs5	1:500	T	ENSG3	ENST3	Transcript	splice_region_variant,intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1

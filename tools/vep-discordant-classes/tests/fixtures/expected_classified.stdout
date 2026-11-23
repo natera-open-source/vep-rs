@@ -1,0 +1,25 @@
+======================================================================
+DISCORDANT CLASSIFICATION SUMMARY
+======================================================================
+
+Total discordants: 7
+
+By mismatch type:
+  consequence_swap                 3 ( 42.9%)
+  coordinate_only                  2 ( 28.6%)
+                                   1 ( 14.3%)
+  a label of its own               1 ( 14.3%)
+
+By mismatch type + direction:
+  consequence_swap          extra_in_rust        2
+  coordinate_only           missing_in_rust        1
+  coordinate_only           extra_in_rust        1
+  consequence_swap          missing_in_rust        1
+                            missing_in_rust        1
+  a label of its own        extra_in_rust        1
+
+By file + mismatch type (top 30):
+  o.txt                               consequence_swap                 3 ( 42.9%)
+  o.txt                               coordinate_only                  2 ( 28.6%)
+  o.txt                                                                1 ( 14.3%)
+  o.txt                               a label of its own               1 ( 14.3%)

@@ -130,7 +130,7 @@ fn loeuf_match_by_outside_gene_and_transcript_is_refused() {
         "LOEUF",
         "LOEUF,file={corpus}/data/loeuf_dataset_grch38.tsv.gz,match_by=gene",
         "LOEUF,file={corpus}/data/loeuf_dataset_grch38.tsv.gz,match_by=exon",
-        "LOEUF: LOEUF: match_by must be gene or transcript, not 'exon'",
+        "LOEUF: match_by must be gene or transcript, not 'exon'",
     );
 }
 
@@ -141,7 +141,7 @@ fn pli_mode_outside_gene_and_transcript_is_refused() {
         "pLI_gene_value",
         "pLI,{corpus}/plugin_data/pLI_values.txt,gene",
         "pLI,{corpus}/plugin_data/pLI_values.txt,exon",
-        "pLI: pLI: mode 'exon' is not gene or transcript",
+        "pLI: mode 'exon' is not gene or transcript",
     );
 }
 
@@ -152,6 +152,6 @@ fn conservation_word_after_max_is_refused() {
         "Conservation",
         "Conservation,{corpus}/plugin_data/gerp.bw,MAX",
         "Conservation,{corpus}/plugin_data/gerp.bw,MAX,foo",
-        "Conservation: Conservation: MAX must be the last parameter",
+        "Conservation: MAX must be the last parameter",
     );
 }

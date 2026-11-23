@@ -1,0 +1,1 @@
+ERROR: [parquet_to_vep_tab] errors/mixed.parquet/part-00001.parquet: its tab columns differ from errors/mixed.parquet/part-00000.parquet's

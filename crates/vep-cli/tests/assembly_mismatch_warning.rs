@@ -3,7 +3,7 @@
 
 //! The `Transcript-assembly mismatch` warning through the `vep` binary on the
 //! GRCh38 RefSeq golden corpus. Ensembl VEP draws it inside the output hash of
-//! each row it prints (OutputFactory.pm:1717-1718), after the row filters and
+//! each row it prints (OutputFactory.pm:1726-1727), after the row filters and
 //! the pick family have dropped theirs (:477-514), and never under `--summary`
 //! or `--most_severe`, which build no row hash (:387). `rs922296917`, a
 //! nineteen-base coding deletion on COL18A1, marks its rows on the edited models
@@ -164,6 +164,85 @@ fn a_marked_row_the_record_step_drops_warns_nothing() {
             let (models, warnings) = annotate(dir.path(), mode, &run);
             assert_eq!(models, ["-"], "{label}");
             assert!(warnings.is_empty(), "{label}: {warnings:?}");
+        }
+    }
+}
+
+/// The line of the corpus's input whose ID column is `id`.
+fn corpus_record(id: &str) -> String {
+    fs::read_to_string(corpus().join("variants.vcf"))
+        .unwrap()
+        .lines()
+        .find(|line| line.split('\t').nth(2) == Some(id))
+        .unwrap_or_else(|| panic!("the corpus holds no record {id}"))
+        .to_string()
+}
+
+/// A `--json` run names each record that draws the warning, one line a record,
+/// as the default-format run of the same two records does, and each name is the
+/// `id` of the record's JSON object. Ensembl VEP's JSON run builds each row on
+/// an empty hash (OutputFactory/JSON.pm:320), so the name its warning joins
+/// (OutputFactory.pm:1727) is missing and a process writes the one text once
+/// (BaseVEP.pm:809-813): the documented difference
+/// `json_mismatch_warning_names_no_record`.
+#[test]
+fn a_json_run_names_each_record_that_warns() {
+    let dir = tempfile::tempdir().unwrap();
+    let corpus = corpus();
+    let ids = ["rs922296917", "rs1247639677"];
+    let input = dir.path().join("two.vcf");
+    fs::write(
+        &input,
+        format!(
+            "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n{}\n{}\n",
+            corpus_record(ids[0]),
+            corpus_record(ids[1])
+        ),
+    )
+    .unwrap();
+    let named = ids.map(|id| format!("WARNING: Transcript-assembly mismatch in {id}"));
+    for mode in MODES {
+        for (format, flags) in [("json", &["--json"][..]), ("default", &[][..])] {
+            let label = format!("{mode} {format}");
+            let out = dir.path().join(format!("{mode}.{format}.out"));
+            let output = common::isolated_vep(dir.path())
+                .arg("-i")
+                .arg(&input)
+                .arg("-o")
+                .arg(&out)
+                .args(["--offline", "--cache", "--dir_cache"])
+                .arg(corpus.join("cache_root"))
+                .args(["--cache_version", "116", "--species", "homo_sapiens"])
+                .args(["--assembly", "GRCh38", "--refseq", "--fasta"])
+                .arg(corpus.join("reference.fa.gz"))
+                .args(["--force_overwrite", "--no_stats", "--quiet"])
+                .args(["--pipeline_mode", mode])
+                .args(flags)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{label}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let warnings =
+                fs::read_to_string(format!("{}_warnings.txt", out.display())).unwrap_or_default();
+            assert_eq!(
+                warnings.lines().collect::<Vec<_>>(),
+                named,
+                "{label}: the warnings file"
+            );
+            if format == "json" {
+                let written: Vec<String> = fs::read_to_string(&out)
+                    .unwrap()
+                    .lines()
+                    .map(|line| {
+                        let object: serde_json::Value = serde_json::from_str(line).unwrap();
+                        object["id"].as_str().unwrap_or_default().to_string()
+                    })
+                    .collect();
+                assert_eq!(written, ids, "{label}: the objects' ids");
+            }
         }
     }
 }

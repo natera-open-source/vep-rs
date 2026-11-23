@@ -23,7 +23,7 @@ pub fn perl_true(value: &str) -> bool {
 }
 
 /// The fields of `text` as Perl's list-context `split` returns them (ensembl-io
-/// BaseVCF4.pm:489 `[split(',',$alt_allele)]`, Parser.pm:669 `split(/[\/,]/, $type)`):
+/// BaseVCF4.pm:489 `[split(',',$alt_allele)]`, Parser.pm:670 `split(/[\/,]/, $type)`):
 /// a trailing empty field is no field, a middle one is kept, so `<DEL>,` is one ALT and
 /// `G,,T` three.
 pub fn perl_split<'a>(text: &'a str, separators: &'a [char]) -> impl Iterator<Item = &'a str> + 'a {
@@ -43,7 +43,8 @@ pub fn split_plugin_arg(arg: &str) -> (&str, Vec<String>) {
     (name, fields.map(String::from).collect())
 }
 
-/// The ALT column's fields with their written positions, read as Perl reads the list.
+/// The ALT column's fields with their written positions, read as Ensembl VEP reads the
+/// list.
 pub fn written_alts(alt_field: &str) -> Vec<(usize, &str)> {
     if !alt_field.contains(',') {
         // One field, or none for an empty column: what `perl_split` reads from a
@@ -64,7 +65,7 @@ pub fn written_alts(alt_field: &str) -> Vec<(usize, &str)> {
 /// whole. Ensembl VEP drops both shapes as unsupported types (`G/NON_REF`, `NON_REF`).
 /// Under a true INFO/SVTYPE a record carrying the block is structural
 /// (Parser/VCF.pm:237-245) and every ALT is an allele of it (`:469`), the block
-/// included: Ensembl VEP 116.2 writes two `deletion` rows per transcript for
+/// included: Ensembl VEP 116.3 writes two `deletion` rows per transcript for
 /// `G,<NON_REF>` with `SVTYPE=DEL`.
 pub fn variant_alts(alts: &mut Vec<(usize, &str)>, svtype: Option<&str>) {
     let is_block = |alt: &str| alt.eq_ignore_ascii_case("<NON_REF>");
@@ -336,7 +337,7 @@ pub fn sv_type_abbreviation(joined_alts: &str, svtype: Option<&str>) -> String {
     } else if upper.contains("CNV:TR") {
         "TREP".to_string()
     } else if names_a_copy_number(&upper) {
-        // Perl's `/^<?CN=?0>?$/` and `/^<?CN=?2>?$/` (Parser.pm:705-706) match the
+        // Ensembl VEP's `/^<?CN=?0>?$/` and `/^<?CN=?2>?$/` (Parser.pm:705-706) match the
         // whole string with at most one bracket on each side, in upper case only, so a
         // list of copy numbers, a `<cn0>` or a `<<CN0>>` is `CNV`.
         let bare = kind.strip_prefix('<').unwrap_or(&kind);
@@ -444,7 +445,7 @@ mod tests {
 
     /// `/CN=?[0-9]/i` (Parser.pm:702) needs a digit, so `<CN=X>` reaches the
     /// fall-through branch and names the type `CN=X`, which `%SO_TERMS` lacks: Ensembl
-    /// VEP 116.2 skips `<CN=X>` as `CN=X is not a supported structural variant type`,
+    /// VEP 116.3 skips `<CN=X>` as `CN=X is not a supported structural variant type`,
     /// writes `copy_number_variation` for `<CN=5>` and for `<CNX>,<CN3>`, and reads
     /// `SVTYPE=DEL` for `<CN=X>` (outside the VCF 4.4 forms) as `deletion`.
     #[test]
@@ -494,7 +495,7 @@ mod tests {
     /// The repeated-part normalisation strips one `<` and one `>` from each part
     /// (`s/^\<|\>$//g`, Parser.pm:674), so `<<DEL>>/<DEL>` is a list the fall-through
     /// branch reads as `DEL/DEL`, while the fall-through strips every bracket of a single
-    /// `<<DEL>>`; `/^<?CN=?0>?$/` allows one bracket a side. Ensembl VEP 116.2 writes
+    /// `<<DEL>>`; `/^<?CN=?0>?$/` allows one bracket a side. Ensembl VEP 116.3 writes
     /// `deletion` for `<<DEL>>`, skips `<<DEL>>,<DEL>` as `DEL/DEL is not a supported
     /// structural variant type`, and writes `copy_number_variation` for `<<CN0>>`.
     #[test]
@@ -509,7 +510,7 @@ mod tests {
 
     /// `/(INS|DEL):(ME):?([A-Z0-9]+)?/i` (Parser.pm:685) takes one optional colon
     /// before the element, so a second colon leaves the element empty: Ensembl VEP
-    /// 116.2 writes `mobile_element_insertion` for `<INS:ME::ALU>` and for `<INS:ME:>`,
+    /// 116.3 writes `mobile_element_insertion` for `<INS:ME::ALU>` and for `<INS:ME:>`,
     /// and `Alu_insertion` for `<INS:ME:ALU>`.
     #[test]
     fn a_mobile_element_takes_one_colon_before_its_name() {
@@ -531,7 +532,7 @@ mod tests {
         );
     }
 
-    /// `s/\:.+//g` (Parser.pm:715) needs a character after the colon: Ensembl VEP 116.2
+    /// `s/\:.+//g` (Parser.pm:715) needs a character after the colon: Ensembl VEP 116.3
     /// writes `deletion` for `<DEL:X>` and skips `<DEL:>` as `DEL: is not a supported
     /// structural variant type`.
     #[test]
@@ -567,9 +568,9 @@ mod tests {
     }
 
     /// Perl's list-context `split` drops trailing empty fields and keeps middle ones
-    /// (`split(",", "<DEL>,")` is one field, `"G,,T,,"` three): Ensembl VEP 116.2
+    /// (`split(",", "<DEL>,")` is one field, `"G,,T,,"` three): Ensembl VEP 116.3
     /// annotates `<DEL>,` with `SVTYPE=DEL` as a deletion, writes the one allele `G` for
-    /// `A G,`, and reads `SVTYPE=DEL/` as `DEL` (Parser.pm:669).
+    /// `A G,`, and reads `SVTYPE=DEL/` as `DEL` (Parser.pm:670).
     #[test]
     fn a_trailing_empty_field_is_no_field() {
         assert_eq!(written_alts("<DEL>,"), [(0, "<DEL>")]);

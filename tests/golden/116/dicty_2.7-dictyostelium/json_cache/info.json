@@ -1,0 +1,17 @@
+{
+  "assembly": "dicty_2.7",
+  "cache_version": 63,
+  "contig_order": [
+    "6",
+    "CH709148",
+    "CH709182"
+  ],
+  "polyphen": "",
+  "regulatory": false,
+  "sift": "",
+  "source_versions": {
+    "assembly": "dicty_2.7",
+    "genebuild": "2009-08-ENA"
+  },
+  "species": "dictyostelium_discoideum"
+}

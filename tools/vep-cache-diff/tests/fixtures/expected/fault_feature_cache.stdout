@@ -1,0 +1,4 @@
+Comparing caches:
+  Baseline: {{FIXTURES}}/caches/faults/feature_cache/baseline
+  Builder:  {{FIXTURES}}/caches/faults/feature_cache/builder
+  Comparing transcripts...

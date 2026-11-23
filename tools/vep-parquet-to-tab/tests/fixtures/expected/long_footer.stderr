@@ -1,0 +1,1 @@
+ERROR: [parquet_to_vep_tab] Parquet file size is 12 bytes, smaller than the size reported by footer's (2147483647bytes)

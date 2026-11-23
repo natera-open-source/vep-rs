@@ -18,8 +18,8 @@ use crate::sv_routing::{
     sv_type_string, variant_alts,
 };
 use crate::sv_span::{
-    deletion_looks_incomplete, perl_numeric_f64, structural_end, structural_start, svlen_values,
-    SpanClass, SpanError,
+    deletion_looks_incomplete, end_coordinate, perl_numeric_f64, structural_end, structural_start,
+    svlen_values, SpanClass, SpanError,
 };
 use crate::variant::{InputVariant, VariantClass, WrittenEnd};
 use crate::vcf_info::InfoFields;
@@ -29,6 +29,7 @@ pub const DEFAULT_MAX_SV_SIZE: u64 = 10_000_000;
 
 /// Why a structural record writes no allele.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum StructuralRecordError {
     /// Ensembl VEP skips the record on its span (`validate_vf`).
     Span(SpanError),
@@ -117,6 +118,21 @@ pub fn structural_variants(
     // record whose only ALT is `.` never reaches here (`vcf_parser.rs` reads it as a
     // non-variant record first).
     let classes = per_alt_classes(&alts, record_class, svtype);
+    // The length each allele states for itself is read where every written ALT of the
+    // record is `<CNV:TR>`, a block or a `*` beside one included, so that the INFO lists
+    // follow the ALTs one to one.
+    let (stated_bases, as_long_as_the_run) = if written.iter().all(|&(_, alt)| alt == "<CNV:TR>")
+        && classes
+            .iter()
+            .all(|&(_, _, class)| class == VariantClass::TandemRepeat)
+    {
+        (
+            tandem_repeat_stated_bases(info, classes.len()),
+            tandem_repeat_alleles_as_long_as_the_run(info, classes.len(), pos),
+        )
+    } else {
+        (Vec::new(), Vec::new())
+    };
     let svlen_text = info.value_written("SVLEN");
     let end_text = info.value_written("END");
     let ci_pos = parse_ci_field(info.value("CIPOS"));
@@ -124,7 +140,7 @@ pub fn structural_variants(
     let imprecise = info.field("IMPRECISE").is_some();
 
     for (k, &(allele_idx, alt, sv_class)) in classes.iter().enumerate() {
-        // SVLEN=0 or END=POS leaves the pair `start = POS + 1, end = POS` Perl carries
+        // SVLEN=0 or END=POS leaves the pair `start = POS + 1, end = POS` Ensembl VEP carries
         // for every class: the event between the two bases, read with the predicates
         // of a sequence insertion.
         let sv_start = structural_start(pos, sv_class);
@@ -152,6 +168,16 @@ pub fn structural_variants(
                 svlen_text,
                 end_text,
             );
+        // An allele that states fewer bases than the run from `sv_start` to
+        // `sv_end_val` is a loss of repeat units, whatever the reference sequence.
+        variant.states_a_loss = stated_bases
+            .get(k)
+            .copied()
+            .flatten()
+            .is_some_and(|bases| sv_end_val >= sv_start && bases < sv_end_val - sv_start + 1);
+        // An allele the record states to be exactly as long as that run leaves the
+        // run's length as it is.
+        variant.states_the_run_length = as_long_as_the_run.get(k).copied().unwrap_or(false);
         variant.record_so_term = record_term.map(|(term, _)| term.to_string());
         variant.uploaded_allele_string = Some(uploaded.clone());
         variant.record_allele_string_multi = record_string.clone();
@@ -173,7 +199,7 @@ pub fn structural_variants(
             .map(|record| allele_idx as u32 + 1 + u32::from(record.reference_prefixed));
         // A translocation allele of a record with no parsed breakend is a single
         // breakend: the native `N.` and `.N` forms, and a symbolic `<BND>` without a
-        // mate, which Perl holds as `N/<BND>` with no breakend string
+        // mate, which Ensembl VEP holds as `N/<BND>` with no breakend string
         // (Parser/VCF.pm:499, `StructuralVariationFeature.pm` `_parse_breakends`).
         variant.is_single_breakend = sv_class == VariantClass::Translocation;
         match breakpoint
@@ -335,7 +361,7 @@ fn breakend_record(
     }
 }
 
-/// Perl's `/^<?BND>?$/i` (Parser/VCF.pm:495).
+/// Ensembl VEP's `/^<?BND>?$/i` (Parser/VCF.pm:495).
 fn is_bare_bnd_alt(alt: &str) -> bool {
     let inner = alt.strip_prefix('<').unwrap_or(alt);
     inner
@@ -376,7 +402,7 @@ fn bracket_breakend(part: &str) -> Option<(&str, u64)> {
 /// `_parse_breakends`' reading of a part its bracket match refuses
 /// (StructuralVariationFeature.pm:1281, `^[\.]?([ACGTN]+)[\.]?$`): the ACGTN run of a
 /// bare base or a dot-bounded single breakend, and `None` for anything else, which
-/// Perl assigns as undef.
+/// Ensembl VEP assigns as undef.
 fn single_breakend_base(part: &str) -> Option<&str> {
     let run = part.strip_prefix('.').unwrap_or(part);
     let run = run.strip_suffix('.').unwrap_or(run);
@@ -393,7 +419,7 @@ fn single_breakend_base(part: &str) -> Option<&str> {
 /// own breakend, written `N.` or `.N` (`StructuralVariationFeature.pm`
 /// `_parse_breakends` names it from the bracket or synthesised mate allele alone),
 /// from a record whose only ALT is a single breakend, whose Allele is the bare class
-/// term `chromosome_breakpoint` (`OutputFactory.pm:2029`,
+/// term `chromosome_breakpoint` (`OutputFactory.pm:2038`,
 /// `$vfoa->{breakend}->{string} || $svf->class_SO_term`). Ensembl VEP never reads
 /// MATEID, so one on a record without a bracket mate names nothing and is not kept.
 fn mark_paired_breakend_record(
@@ -423,8 +449,8 @@ fn mark_paired_breakend_record(
 /// truncates (`:419`), a missing count no repeats. `None` keeps the symbolic reading:
 /// without RUS or without RUC and RB (`:385`), when any sequence's unit length times
 /// its count exceeds `max_sv_size` (`:403`, `:417-418`, `:428`; `None`, the flag's
-/// `-1`, oversizes every sequence and `0` falls to 5000), and where Perl's RB division
-/// by a unit of no bases ends its run. The string is Perl's: an allele of no sequences
+/// `-1`, oversizes every sequence and `0` falls to 5000), and where Ensembl VEP's RB division
+/// by a unit of no bases ends its run. The string is Ensembl VEP's: an allele of no sequences
 /// is an empty part (`RN=0,1` gives `REF//<repeats>`), which the reader of the string
 /// takes as a `-` allele (VariationFeatureOverlap.pm:466).
 pub fn tandem_repeat_allele_string(
@@ -468,7 +494,7 @@ pub fn tandem_repeat_allele_string(
         let mut repeat = String::new();
         let mut sequences = 0.0;
         // Once both lists are shifted out every further sequence is undef times undef,
-        // no bases, so the walk stops there where Perl's range would run on.
+        // no bases, so the walk stops there where Ensembl VEP's range would run on.
         while sequences < records && (next_unit < rus.len() || next_count < count_list.len()) {
             sequences += 1.0;
             let unit: &str = match rus.get(next_unit).copied() {
@@ -490,7 +516,7 @@ pub fn tandem_repeat_allele_string(
                 entry
             };
             let bases = unit.len() as f64 * count;
-            // A product past the address space is Perl's out-of-memory end.
+            // A product past the address space is Ensembl VEP's out-of-memory end.
             if bases > cap || bases > isize::MAX as f64 {
                 return None;
             }
@@ -499,6 +525,229 @@ pub fn tandem_repeat_allele_string(
         repeats.push(repeat);
     }
     Some(format!("{reference}/{}", repeats.join("/")))
+}
+
+/// The bases each alternate allele of a `<CNV:TR>` record states for itself, one
+/// entry per tandem-repeat ALT in the record's order: the sum, over the repeat
+/// sequences INFO/RN gives the allele (one where RN is absent), of the unit's length
+/// times its RUC entry, or of its RB entry where the record carries no RUC, the
+/// lists consumed in order as `tandem_repeat_allele_string` consumes them. `None`
+/// where the record does not state the allele's length in whole units of a written
+/// unit: no RUS, no RUC and no RB, a CIRUC or CIRB interval around the counts, an RN
+/// that is not one whole number per allele, an allele of no sequence, a `.` or
+/// empty unit, a count that is not a whole number, an RB that is no whole multiple
+/// of its unit, or a list that ends before the allele's sequences do.
+pub fn tandem_repeat_stated_bases(info: &InfoFields<'_>, alleles: usize) -> Vec<Option<u64>> {
+    stated_alleles(info, alleles)
+        .into_iter()
+        .map(|allele| allele.map(|allele| allele.bases))
+        .collect()
+}
+
+/// Whether each alternate allele of the `<CNV:TR>` record at VCF position `pos` is
+/// exactly as long as the reference run the record spans, one entry per
+/// tandem-repeat ALT in the record's order. The run is the bases from `pos + 1` to
+/// the end SVLEN or END gives ([`structural_end`]), and an allele is as long as it
+/// where all of these hold:
+///
+/// - the record states the allele's length ([`tandem_repeat_stated_bases`]) and
+///   that length is the run's;
+/// - the run is longer than one base. VCF 4.4 (section 5.7) writes a repeat the
+///   reference lacks with an SVLEN of 1 at the base before the inserted sequence,
+///   and a record with neither SVLEN nor END spans one base, so a span of one base
+///   names no reference run of one base;
+/// - every SVLEN value is the same number, and an END written beside SVLEN names
+///   the run's end. SVLEN holds one reference length for each allele and Ensembl
+///   VEP spans every allele of the record with the largest
+///   (Parser/VCF.pm:505-511), so under unequal values the run is not each allele's
+///   own reference;
+/// - no other field states another length for the allele: each RUC entry of its
+///   repeat sequences counts the sequence's units, each RB entry is the
+///   sequence's bases, each RUL entry the length of the sequence's unit, the
+///   record carries no RUB, which gives each unit a length of its own, and the
+///   allele's entry of INFO/CN, its length over its reference's, is the number 1.
+///
+/// RUC, RB, RUL, RUB and CN count as written wherever the INFO column carries the
+/// key at all, each list split on its commas with an entry at the place of its
+/// sequence in RUS (CN: of its allele). A value of `0` or `.`, an empty value, a
+/// bare flag and a list that ends before the allele's entries each leave the
+/// allele unmarked.
+pub fn tandem_repeat_alleles_as_long_as_the_run(
+    info: &InfoFields<'_>,
+    alleles: usize,
+    pos: u64,
+) -> Vec<bool> {
+    let svlen = info.value_written("SVLEN");
+    let end_text = info.value_written("END");
+    let start = structural_start(pos, VariantClass::TandemRepeat);
+    let end = structural_end(pos, svlen, end_text, SpanClass::Tandem).ok();
+    let run = end.filter(|end| *end >= start).map(|end| end - start + 1);
+    let longer_than_one_base = run.is_some_and(|run| run > 1);
+    let one_reference_length = svlen.is_none_or(|text| {
+        let values: Vec<f64> = perl_split(text, &[',']).map(perl_numeric_f64).collect();
+        values.windows(2).all(|pair| pair[0] == pair[1])
+    });
+    let end_names_the_run = end_text.is_none_or(|text| end_coordinate(text) == end);
+    let entries = |key: &str| -> Option<Vec<&str>> {
+        info.value(key)
+            .map(|text| perl_split(text, &[',']).collect())
+    };
+    let ruc = entries("RUC");
+    let rb = entries("RB");
+    let rul = entries("RUL");
+    let no_rub = info.field("RUB").is_none();
+    let copy_numbers = entries("CN");
+    stated_alleles(info, alleles)
+        .iter()
+        .enumerate()
+        .map(|(allele, stated)| {
+            stated.as_ref().is_some_and(|stated| {
+                let ruc_agrees = ruc.as_ref().is_none_or(|ruc| {
+                    stated.sequences.iter().all(|sequence| {
+                        ruc.get(sequence.place)
+                            .copied()
+                            .and_then(whole_number)
+                            .and_then(|count| sequence.unit_bases.checked_mul(count))
+                            == Some(sequence.bases)
+                    })
+                });
+                let rb_agrees = rb.as_ref().is_none_or(|rb| {
+                    stated.sequences.iter().all(|sequence| {
+                        rb.get(sequence.place).copied().and_then(whole_number)
+                            == Some(sequence.bases)
+                    })
+                });
+                let rul_agrees = rul.as_ref().is_none_or(|rul| {
+                    stated.sequences.iter().all(|sequence| {
+                        rul.get(sequence.place).copied().and_then(whole_number)
+                            == Some(sequence.unit_bases)
+                    })
+                });
+                let one_copy = copy_numbers.as_ref().is_none_or(|copy_numbers| {
+                    copy_numbers
+                        .get(allele)
+                        .and_then(|entry| entry.parse::<f64>().ok())
+                        == Some(1.0)
+                });
+                Some(stated.bases) == run
+                    && longer_than_one_base
+                    && one_reference_length
+                    && end_names_the_run
+                    && ruc_agrees
+                    && rb_agrees
+                    && rul_agrees
+                    && no_rub
+                    && one_copy
+            })
+        })
+        .collect()
+}
+
+/// A repeat sequence of an allele whose length its record states: its place in the
+/// record's RUS, RUC, RB and RUL lists, the length of its unit and its own length,
+/// both in bases.
+struct StatedSequence {
+    place: usize,
+    unit_bases: u64,
+    bases: u64,
+}
+
+/// An alternate allele of a `<CNV:TR>` record whose length the record states: its
+/// bases and its repeat sequences in the record's order.
+struct StatedAllele {
+    bases: u64,
+    sequences: Vec<StatedSequence>,
+}
+
+/// The number `text` writes in digits alone, where 64 bits hold it.
+fn whole_number(text: &str) -> Option<u64> {
+    (!text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit()))
+        .then(|| text.parse().ok())
+        .flatten()
+}
+
+/// Each alternate allele of a `<CNV:TR>` record as the record states it, by the
+/// rules of [`tandem_repeat_stated_bases`]: `None` where the record does not state
+/// the allele's length.
+fn stated_alleles(info: &InfoFields<'_>, alleles: usize) -> Vec<Option<StatedAllele>> {
+    let value = |key: &str| info.value(key).filter(|v| perl_true(v));
+    let list = |key: &str| -> Vec<&str> {
+        value(key)
+            .map(|v| perl_split(v, &[',']).collect())
+            .unwrap_or_default()
+    };
+    let unstated = || (0..alleles).map(|_| None).collect();
+    if value("RUS").is_none()
+        || (value("RUC").is_none() && value("RB").is_none())
+        || value("CIRUC").is_some()
+        || value("CIRB").is_some()
+    {
+        return unstated();
+    }
+    let sequences: Vec<u64> = match value("RN") {
+        None => vec![1; alleles],
+        Some(rn) => match perl_split(rn, &[','])
+            .map(whole_number)
+            .collect::<Option<Vec<u64>>>()
+        {
+            Some(counts) if counts.len() == alleles => counts,
+            _ => return unstated(),
+        },
+    };
+    let rus = list("RUS");
+    let ruc = list("RUC");
+    let rb = list("RB");
+    let by_count = !ruc.is_empty();
+    let counts = if by_count { &ruc } else { &rb };
+    let mut next = 0usize;
+    sequences
+        .into_iter()
+        .map(|own| {
+            // An allele that asks for more sequences than the lists still hold states
+            // no length and leaves none for the alleles after it.
+            let Some(own) = usize::try_from(own)
+                .ok()
+                .filter(|own| *own <= rus.len().saturating_sub(next))
+            else {
+                next = rus.len();
+                return None;
+            };
+            let mut bases = 0u64;
+            let mut stated = true;
+            let mut own_sequences = Vec::with_capacity(own);
+            for (place, &unit) in rus.iter().enumerate().skip(next).take(own) {
+                let sequence = match counts.get(place).copied().and_then(whole_number) {
+                    Some(entry) if !unit.is_empty() && unit != "." => {
+                        let unit_bases = unit.len() as u64;
+                        let sequence_bases = if by_count {
+                            unit_bases.checked_mul(entry)
+                        } else {
+                            (entry % unit_bases == 0).then_some(entry)
+                        };
+                        sequence_bases.map(|bases| StatedSequence {
+                            place,
+                            unit_bases,
+                            bases,
+                        })
+                    }
+                    _ => None,
+                };
+                match sequence
+                    .as_ref()
+                    .and_then(|sequence| bases.checked_add(sequence.bases))
+                {
+                    Some(sum) => bases = sum,
+                    None => stated = false,
+                }
+                own_sequences.extend(sequence);
+            }
+            next += own;
+            (stated && own > 0).then_some(StatedAllele {
+                bases,
+                sequences: own_sequences,
+            })
+        })
+        .collect()
 }
 
 /// Parse a VCF confidence interval INFO field (CIPOS or CIEND).
@@ -517,7 +766,7 @@ mod tests {
     use crate::sv_routing::written_alts;
 
     /// `_parse_breakends`' match allows whitespace around the brackets, the name and the
-    /// colon (`\s*`): Ensembl VEP 116.2 names the mate `21:30425700` for `N[ 21 : 30425700 [`
+    /// colon (`\s*`): Ensembl VEP 116.3 names the mate `21:30425700` for `N[ 21 : 30425700 [`
     /// and for the `N[ 21:30425700[` that `CHR2= 21` builds, printing the text as written;
     /// a space inside the name, an empty name or a signed position names no mate.
     #[test]
@@ -543,7 +792,7 @@ mod tests {
     }
 
     /// BaseVCF4.pm:582's two-element list assignment keeps the text between the first
-    /// and second `=`, so `END2=30425700=5` names the mate at 30425700 (Ensembl VEP 116.2
+    /// and second `=`, so `END2=30425700=5` names the mate at 30425700 (Ensembl VEP 116.3
     /// writes `N[21:30425700[` beside the own `N.`).
     #[test]
     fn an_info_value_ends_at_a_second_equals_sign() {
@@ -612,10 +861,11 @@ mod tests {
     /// shifted-out RUC entry (`RUC=1,`) is undef and repeats nothing, a unit past the RUS
     /// list is undef and adds no bases; a unit of no bases (`RUS=,AC`) is an empty part
     /// under RUC (`R/`, which Perl's `split` reads as no allele) and a division by zero
-    /// under RB, which keeps the symbolic reading; a false RN (`RN=0`) is an absent one; `RN=0,1` gives its first
-    /// allele no sequence (Ensembl VEP 116.2 reads `21 30425587 x N <CNV:TR>,<CNV:TR>`
-    /// with `SVLEN=9;RN=0,1;RUS=AGC;RUC=4` and a FASTA as `AGCAGCAGC/-`, the run deleted)
-    /// and its second one sequence of four units; a count the list lacks is no repeats.
+    /// under RB, which keeps the symbolic reading; a false RN (`RN=0`) is an absent one; `RN=0,1`
+    /// gives its first allele no sequence (Ensembl VEP 116.3 reads
+    /// `21 30425587 x N <CNV:TR>,<CNV:TR>` with `SVLEN=9;RN=0,1;RUS=AGC;RUC=4` and a FASTA as
+    /// `AGCAGCAGC/-`, the run deleted) and its second one sequence of four units; a count the list
+    /// lacks is no repeats.
     /// A RUC of empty fields alone (`RUC=,`) is a true value whose list Perl's `split`
     /// leaves empty, so the record counts by RB, and by nothing without one.
     #[test]
@@ -684,7 +934,7 @@ mod tests {
         );
     }
 
-    /// The allele string Ensembl VEP 116.2 builds over the run `TCATCATCA` of
+    /// The allele string Ensembl VEP 116.3 builds over the run `TCATCATCA` of
     /// `21 13620283 x G <CNV:TR>` with a FASTA: `RUC=4` and `RB=12` give four units,
     /// `RUC=4.9` four (`x` truncates), `RN=2;RUS=TCA,TC;RUC=3,1` the two sequences
     /// joined, `RUS=.` the base `N`, `RUS=tca` the unit as written; two alleles give
@@ -756,7 +1006,7 @@ mod tests {
 
     /// `([0-9]+)` matches ASCII digits alone: a mate written with fullwidth digits
     /// (`21 30425650 x N <BND> . . SVTYPE=BND;CHR2=21;END2=\u{ff13}\u{ff10}`) names no
-    /// breakend, as in Ensembl VEP 116.2, whose rows are the bare `chromosome_breakpoint`;
+    /// breakend, as in Ensembl VEP 116.3, whose rows are the bare `chromosome_breakpoint`;
     /// the multi-byte digit before the closing bracket is no boundary to slice at.
     #[test]
     fn a_mate_position_in_fullwidth_digits_names_no_breakend() {
@@ -793,7 +1043,7 @@ mod tests {
 
     /// A `*` beside another ALT under a true INFO/SVTYPE is an allele of the structural
     /// record (StructuralVariationOverlap.pm:64-77 numbers every `/`-part of `G/*`):
-    /// Ensembl VEP 116.2 writes two `deletion` rows per transcript for
+    /// Ensembl VEP 116.3 writes two `deletion` rows per transcript for
     /// `21 30289183 x C G,* . . SVTYPE=DEL;END=30289190`, `ALLELE_NUM=1` and
     /// `ALLELE_NUM=2`, both at 21:30289184-30289190 with `frameshift_variant,stop_lost,
     /// feature_truncation` and the JSON `"allele_string":"G/*"`; `C *,G` the same, and
@@ -841,7 +1091,7 @@ mod tests {
         }
     }
 
-    /// Ensembl VEP 116.2 writes `21 30425650 x N N[21:30425700[,<NON_REF> . . .` as the
+    /// Ensembl VEP 116.3 writes `21 30425650 x N N[21:30425700[,<NON_REF> . . .` as the
     /// breakpoint `N/N[21:30425700[/<NON_REF>` (Parser/VCF.pm:469 joins every ALT), its
     /// rows the own `N.` and the mate: the block part is in the string and names no row.
     /// A gVCF site `<DEL>,<NON_REF>` without SVTYPE is its `<DEL>` allele, a deletion.
@@ -913,5 +1163,363 @@ mod tests {
                 "{alt}"
             );
         }
+    }
+
+    /// The length an allele states for itself: the unit's length times its RUC, or its
+    /// RB where the record carries no RUC, summed over the sequences RN gives it.
+    #[test]
+    fn a_tandem_repeat_allele_states_its_bases_in_whole_units_of_a_written_unit() {
+        let stated = |info: &str, alleles: usize| {
+            tandem_repeat_stated_bases(&InfoFields::new(info), alleles)
+        };
+        assert_eq!(stated("SVLEN=9;RUS=XYZ;RUC=2", 1), [Some(6)]);
+        assert_eq!(
+            stated("SVLEN=9;RN=1,1;RUS=XYZ,XYZ;RUC=4,2", 2),
+            [Some(12), Some(6)]
+        );
+        assert_eq!(stated("SVLEN=9;RUS=XYZ;RB=12", 1), [Some(12)]);
+        assert_eq!(stated("SVLEN=9;RN=2;RUS=XYZ,XY;RUC=3,1", 1), [Some(11)]);
+        // An allele of no sequence states nothing, and the next takes the first unit.
+        assert_eq!(stated("SVLEN=9;RN=0,1;RUS=XYZ;RUC=4", 2), [None, Some(12)]);
+        // A list that ends before an allele's sequences leaves that allele unstated.
+        assert_eq!(
+            stated("SVLEN=9;RN=1,1;RUS=XYZ;RUC=4,2", 2),
+            [Some(12), None]
+        );
+        // No unit, no count, a `.` unit, a fractional count, an RB that is no whole
+        // number of units, an RN that is not one whole number per allele and a
+        // confidence interval around the count state nothing.
+        for info in [
+            "SVLEN=9",
+            "SVLEN=9;RUS=XYZ",
+            "SVLEN=9;RUC=2",
+            "SVLEN=9;RN=1;RUS=.;RUC=4",
+            "SVLEN=9;RN=1;RUS=XYZ;RUC=4.9",
+            "SVLEN=9;RUS=XYZ;RB=10",
+            "SVLEN=9;RN=.;RUS=XYZ;RUC=2",
+            "SVLEN=9;RN=1,1;RUS=XYZ,XYZ;RUC=2,2",
+            "SVLEN=9;RN=1;RUS=XYZ;RUC=2;CIRUC=-1,2",
+            "SVLEN=9;RN=1;RUS=XYZ;RB=6;CIRB=-3,6",
+        ] {
+            assert_eq!(stated(info, 1), [None], "{info}");
+        }
+        // A stated length holds up to 64 bits: a count, a product or a sum of sequences
+        // past them states nothing, and neither does an RN past the lists.
+        assert_eq!(
+            stated("SVLEN=9;RUS=XYZ;RUC=6148914691236517205", 1),
+            [Some(u64::MAX)]
+        );
+        for info in [
+            "SVLEN=9;RUS=XYZ;RUC=18446744073709551616",
+            "SVLEN=9;RUS=XYZ;RUC=6148914691236517206",
+            "SVLEN=9;RN=2;RUS=XYZ,XYZ;RUC=6148914691236517205,1",
+            "SVLEN=9;RN=18446744073709551615;RUS=XYZ;RUC=4",
+        ] {
+            assert_eq!(stated(info, 1), [None], "{info}");
+        }
+    }
+
+    /// An allele is marked a loss where its stated bases are fewer than the run the
+    /// largest SVLEN gives; an allele as long as the run, a longer one and one whose
+    /// length the record does not state are not, nor is a record of another class.
+    #[test]
+    fn an_allele_that_states_fewer_bases_than_its_run_is_marked_a_loss() {
+        let marks = |info: &str, alts: &str| -> Vec<bool> {
+            structural_variants(
+                "21",
+                100,
+                "N",
+                &written_alts(alts),
+                &InfoFields::new(info),
+                None,
+            )
+            .unwrap()
+            .iter()
+            .map(|variant| variant.states_a_loss)
+            .collect()
+        };
+        assert_eq!(marks("SVLEN=9;RN=1;RUS=XYZ;RUC=2", "<CNV:TR>"), [true]);
+        assert_eq!(marks("SVLEN=9;RN=1;RUS=XYZ;RUC=3", "<CNV:TR>"), [false]);
+        assert_eq!(marks("SVLEN=9;RN=1;RUS=XYZ;RUC=4", "<CNV:TR>"), [false]);
+        assert_eq!(marks("END=109;RN=1;RUS=XYZ;RUC=2", "<CNV:TR>"), [true]);
+        assert_eq!(
+            marks("SVLEN=9,6;RN=1,1;RUS=XYZ,XYZ;RUC=4,1", "<CNV:TR>,<CNV:TR>"),
+            [false, true]
+        );
+        assert_eq!(marks("SVLEN=9;RN=1;RUS=.;RUC=4", "<CNV:TR>"), [false]);
+        assert_eq!(marks("SVLEN=9", "<CNV:TR>"), [false]);
+        // A block written beside the allele leaves the record unmarked.
+        assert!(marks("SVLEN=9;RN=1;RUS=XYZ;RUC=2", "<CNV:TR>,<NON_REF>")
+            .iter()
+            .all(|marked| !marked));
+        assert_eq!(marks("SVTYPE=DEL;END=109", "<DEL>"), [false]);
+    }
+
+    /// The marks of each allele of the record `21 100 . N <alts>` with INFO `info`: as
+    /// long as its run, then a loss.
+    fn length_marks(info: &str, alts: &str) -> Vec<(bool, bool)> {
+        structural_variants(
+            "21",
+            100,
+            "N",
+            &written_alts(alts),
+            &InfoFields::new(info),
+            None,
+        )
+        .unwrap()
+        .iter()
+        .map(|variant| (variant.states_the_run_length, variant.states_a_loss))
+        .collect()
+    }
+
+    const SAME: (bool, bool) = (true, false);
+    const LOSS: (bool, bool) = (false, true);
+    const NEITHER: (bool, bool) = (false, false);
+
+    /// An allele is marked as long as its run where its stated bases equal the run
+    /// SVLEN or END gives, by RUC or by RB; an allele one base longer or shorter, one
+    /// whose length the record does not state, one on the pair of a record with no
+    /// run and one of another class are not.
+    #[test]
+    fn an_allele_that_states_as_many_bases_as_its_run_is_marked_and_no_other() {
+        for info in [
+            "SVLEN=9;RN=1;RUS=XYZ;RUC=3",
+            "END=109;RN=1;RUS=XYZ;RUC=3",
+            "SVLEN=9;RUS=XYZ;RUC=3",
+            "SVLEN=9;RUS=XYZ;RB=9",
+            "SVLEN=9;RUS=X;RUC=9",
+            // Two sequences of one allele, three bases and six.
+            "SVLEN=9;RN=2;RUS=XYZ,XY;RUC=1,3",
+            // An RN of `0` is false to Perl and reads as no RN (Parser/VCF.pm:394-397).
+            "SVLEN=9;RN=0;RUS=XYZ;RUC=3",
+        ] {
+            assert_eq!(length_marks(info, "<CNV:TR>"), [SAME], "{info}");
+        }
+        // One base more than the run and one base fewer, by the count and by the run.
+        assert_eq!(length_marks("SVLEN=9;RUS=X;RUC=10", "<CNV:TR>"), [NEITHER]);
+        assert_eq!(length_marks("SVLEN=9;RUS=X;RUC=8", "<CNV:TR>"), [LOSS]);
+        assert_eq!(length_marks("SVLEN=8;RUS=XYZ;RUC=3", "<CNV:TR>"), [NEITHER]);
+        assert_eq!(length_marks("SVLEN=10;RUS=XYZ;RUC=3", "<CNV:TR>"), [LOSS]);
+        // No unit, a confidence interval around the count, a count of four and a half
+        // two-base units, a `.` unit counted nine times and an RB of nine bases in
+        // two-base units state no length.
+        for info in [
+            "SVLEN=9",
+            "SVLEN=9;RUC=3",
+            "SVLEN=9;RN=1;RUS=XYZ;RUC=3;CIRUC=-1,1",
+            "SVLEN=9;RUS=XYZ;RB=9;CIRB=-3,3",
+            "SVLEN=9;RN=1;RUS=XY;RUC=4.5",
+            "SVLEN=9;RN=1;RUS=.;RUC=9",
+            "SVLEN=9;RUS=XY;RB=9",
+        ] {
+            assert_eq!(length_marks(info, "<CNV:TR>"), [NEITHER], "{info}");
+        }
+        // Each allele of a record is read against the record's one run, and the first
+        // allele of `RN=0,1`, one of no sequence, states no length.
+        for (info, expected) in [
+            ("SVLEN=9,9;RN=1,1;RUS=XYZ,XYZ;RUC=3,2", [SAME, LOSS]),
+            ("SVLEN=9,9;RN=1,1;RUS=XYZ,XYZ;RUC=2,3", [LOSS, SAME]),
+            ("SVLEN=9;RN=1,1;RUS=XYZ,XYZ;RUC=4,3", [NEITHER, SAME]),
+            ("SVLEN=9;RN=0,1;RUS=XYZ;RUC=3", [NEITHER, SAME]),
+        ] {
+            assert_eq!(length_marks(info, "<CNV:TR>,<CNV:TR>"), expected, "{info}");
+        }
+        // An allele of no base on the pair `start = POS + 1, end = POS` has no run.
+        for info in [
+            "SVLEN=0;RN=2;RUS=XYZ,XYZ;RUC=0,0",
+            "END=100;RN=2;RUS=XYZ,XYZ;RUC=0,0",
+        ] {
+            assert_eq!(length_marks(info, "<CNV:TR>"), [NEITHER], "{info}");
+        }
+        // A block written beside the allele leaves the record unmarked.
+        assert!(
+            length_marks("SVLEN=9;RN=1;RUS=XYZ;RUC=3", "<CNV:TR>,<NON_REF>")
+                .iter()
+                .all(|marked| *marked == NEITHER)
+        );
+        assert_eq!(
+            length_marks("SVTYPE=DUP;SVLEN=9;RUS=XYZ;RUC=3", "<DUP>"),
+            [NEITHER]
+        );
+    }
+
+    /// SVLEN holds one reference length for each allele and the run is the largest
+    /// (Parser/VCF.pm:505-511), so under unequal values no allele is marked as long as
+    /// its run, whichever allele states the run's nine bases; the loss mark stands.
+    #[test]
+    fn an_allele_of_a_record_with_unequal_svlen_values_is_not_marked_as_long_as_its_run() {
+        for (info, expected) in [
+            ("SVLEN=9,6;RN=1,1;RUS=XYZ,XYZ;RUC=2,3", [LOSS, NEITHER]),
+            ("SVLEN=9,6;RN=1,1;RUS=XYZ,XYZ;RUC=3,2", [NEITHER, LOSS]),
+            ("SVLEN=6,9;RN=1,1;RUS=XYZ,XYZ;RUC=4,3", [NEITHER, NEITHER]),
+            // Values a fraction apart are two numbers, and `9.0` is the number 9.
+            ("SVLEN=9,9.7;RN=1,1;RUS=XYZ,XYZ;RUC=3,3", [NEITHER, NEITHER]),
+            ("SVLEN=9.7,9;RN=1,1;RUS=XYZ,XYZ;RUC=3,3", [NEITHER, NEITHER]),
+            ("SVLEN=9,9.0;RN=1,1;RUS=XYZ,XYZ;RUC=3,3", [SAME, SAME]),
+        ] {
+            assert_eq!(length_marks(info, "<CNV:TR>,<CNV:TR>"), expected, "{info}");
+        }
+        assert_eq!(
+            length_marks("SVLEN=9,6;RUS=XYZ;RUC=3", "<CNV:TR>"),
+            [NEITHER]
+        );
+    }
+
+    /// A span of one base names no one-base reference run: VCF 4.4 writes a repeat
+    /// the reference lacks with an SVLEN of 1. A run of two bases is marked.
+    #[test]
+    fn an_allele_of_one_base_on_a_run_of_one_base_is_not_marked_as_long_as_its_run() {
+        assert_eq!(length_marks("SVLEN=1;RUS=X;RUC=1", "<CNV:TR>"), [NEITHER]);
+        assert_eq!(length_marks("END=101;RUS=X;RUC=1", "<CNV:TR>"), [NEITHER]);
+        assert_eq!(length_marks("SVLEN=2;RUS=X;RUC=2", "<CNV:TR>"), [SAME]);
+    }
+
+    /// A record with neither SVLEN nor END spans the one base after POS, which is no
+    /// stated run.
+    #[test]
+    fn an_allele_of_a_record_with_neither_svlen_nor_end_is_not_marked_as_long_as_its_run() {
+        assert_eq!(length_marks("RUS=X;RUC=1", "<CNV:TR>"), [NEITHER]);
+        assert_eq!(length_marks("RN=1;RUS=X;RB=1", "<CNV:TR>"), [NEITHER]);
+    }
+
+    /// An END written beside SVLEN names the end of the run SVLEN gives, or the
+    /// record states two runs and no allele is marked as long as either.
+    #[test]
+    fn an_allele_of_a_record_whose_end_disagrees_with_its_svlen_is_not_marked() {
+        assert_eq!(
+            length_marks("END=109;SVLEN=9;RUS=XYZ;RUC=3", "<CNV:TR>"),
+            [SAME]
+        );
+        for info in [
+            "END=112;SVLEN=9;RUS=XYZ;RUC=3",
+            "END=109;SVLEN=12;RUS=XYZ;RUC=4",
+            "END=abc;SVLEN=9;RUS=XYZ;RUC=3",
+        ] {
+            assert_eq!(length_marks(info, "<CNV:TR>"), [NEITHER], "{info}");
+        }
+    }
+
+    /// An RB written beside RUC states each sequence's bases a second time: the
+    /// allele is marked where every entry is its unit's length times its count, and
+    /// not where one differs, is `.` or `0`, or the list ends early.
+    #[test]
+    fn an_allele_whose_rb_disagrees_with_its_ruc_is_not_marked_as_long_as_its_run() {
+        for info in [
+            "SVLEN=9;RUS=XYZ;RUC=3;RB=9",
+            "SVLEN=9;RN=2;RUS=XYZ,XY;RUC=1,3;RB=3,6",
+        ] {
+            assert_eq!(length_marks(info, "<CNV:TR>"), [SAME], "{info}");
+        }
+        for info in [
+            "SVLEN=9;RUS=XYZ;RUC=3;RB=12",
+            "SVLEN=9;RUS=XYZ;RUC=3;RB=.",
+            "SVLEN=9;RUS=XYZ;RUC=3;RB=0",
+            "SVLEN=9;RN=2;RUS=XYZ,XY;RUC=1,3;RB=3,5",
+            "SVLEN=9;RN=2;RUS=XYZ,XY;RUC=1,3;RB=3",
+        ] {
+            assert_eq!(length_marks(info, "<CNV:TR>"), [NEITHER], "{info}");
+        }
+        assert_eq!(
+            length_marks(
+                "SVLEN=9;RN=1,1;RUS=XYZ,XYZ;RUC=3,3;RB=9,6",
+                "<CNV:TR>,<CNV:TR>"
+            ),
+            [SAME, NEITHER]
+        );
+        // Ensembl VEP counts by RB where it reads RUC as false or as an empty list
+        // (Parser/VCF.pm:399-401, 414). The record still writes that RUC, a count its
+        // RB does not agree with.
+        assert_eq!(length_marks("SVLEN=9;RUS=XYZ;RB=9", "<CNV:TR>"), [SAME]);
+        for ruc in ["RUC=0", "RUC=", "RUC", "RUC=,"] {
+            let info = format!("SVLEN=9;RUS=XYZ;{ruc};RB=9");
+            assert_eq!(length_marks(&info, "<CNV:TR>"), [NEITHER], "{info}");
+        }
+    }
+
+    /// An RUL states each unit's length a second time: the allele is marked where
+    /// every entry is the length of its RUS unit, and not where one differs, is `.`
+    /// or `0`, or the list ends early.
+    #[test]
+    fn an_allele_whose_rul_disagrees_with_its_rus_is_not_marked_as_long_as_its_run() {
+        for info in [
+            "SVLEN=9;RUS=XYZ;RUL=3;RUC=3",
+            "SVLEN=9;RN=2;RUS=XYZ,XY;RUL=3,2;RUC=1,3",
+            "SVLEN=9;RUS=XYZ;RUL=3;RB=9",
+        ] {
+            assert_eq!(length_marks(info, "<CNV:TR>"), [SAME], "{info}");
+        }
+        for info in [
+            "SVLEN=9;RUS=XYZ;RUL=4;RUC=3",
+            "SVLEN=9;RUS=XYZ;RUL=.;RUC=3",
+            "SVLEN=9;RUS=XYZ;RUL=0;RUC=3",
+            "SVLEN=9;RN=2;RUS=XYZ,XY;RUL=3,3;RUC=1,3",
+            "SVLEN=9;RN=2;RUS=XYZ,XY;RUL=3;RUC=1,3",
+            "SVLEN=9;RUS=XYZ;RUL=1;RB=9",
+        ] {
+            assert_eq!(length_marks(info, "<CNV:TR>"), [NEITHER], "{info}");
+        }
+    }
+
+    /// An RUB gives each repeat unit a length of its own, so a record that carries
+    /// one states no allele's length by its RUS and RUC alone.
+    #[test]
+    fn an_allele_of_a_record_with_an_rub_is_not_marked_as_long_as_its_run() {
+        for info in [
+            "SVLEN=9;RUS=XYZ;RUC=3;RUB=3,3,3",
+            "SVLEN=9;RUS=XYZ;RUC=3;RUB=2,3,4",
+            "SVLEN=9;RUS=XYZ;RUC=3;RUB=0",
+            "SVLEN=9;RUS=XYZ;RUC=3;RUB",
+        ] {
+            assert_eq!(length_marks(info, "<CNV:TR>"), [NEITHER], "{info}");
+        }
+    }
+
+    /// INFO/CN is an allele's length over its reference's (VCF 4.4, section 5.7), 1
+    /// for an allele as long as its run: an allele is marked where its CN entry is the
+    /// number 1 and not where it is another number, `.`, `0` or absent from the list.
+    #[test]
+    fn an_allele_whose_copy_number_is_not_one_is_not_marked_as_long_as_its_run() {
+        for info in ["SVLEN=9;RUS=XYZ;RUC=3;CN=1", "SVLEN=9;RUS=XYZ;RUC=3;CN=1.0"] {
+            assert_eq!(length_marks(info, "<CNV:TR>"), [SAME], "{info}");
+        }
+        for info in [
+            "SVLEN=9;RUS=XYZ;RUC=3;CN=3",
+            "SVLEN=9;RUS=XYZ;RUC=3;CN=0.9666",
+            "SVLEN=9;RUS=XYZ;RUC=3;CN=.",
+            "SVLEN=9;RUS=XYZ;RUC=3;CN=0",
+            "SVLEN=9;RUS=XYZ;RUC=3;CN=1x",
+        ] {
+            assert_eq!(length_marks(info, "<CNV:TR>"), [NEITHER], "{info}");
+        }
+        for (info, expected) in [
+            ("SVLEN=9;RN=1,1;RUS=XYZ,XYZ;RUC=3,3;CN=1,1", [SAME, SAME]),
+            ("SVLEN=9;RN=1,1;RUS=XYZ,XYZ;RUC=3,3;CN=1,2", [SAME, NEITHER]),
+            ("SVLEN=9;RN=1,1;RUS=XYZ,XYZ;RUC=3,3;CN=1", [SAME, NEITHER]),
+            (
+                "SVLEN=9;RN=1,1;RUS=XYZ,XYZ;RUC=3,2;CN=1,0.6667",
+                [SAME, LOSS],
+            ),
+        ] {
+            assert_eq!(length_marks(info, "<CNV:TR>,<CNV:TR>"), expected, "{info}");
+        }
+    }
+
+    /// RB beside RUC, RUL, RUB and CN count as written wherever the INFO column
+    /// carries the key: a value of `0`, which Perl reads as false, a `.`, an empty
+    /// value and a bare flag each leave an allele unmarked that the record marks
+    /// without the field.
+    #[test]
+    fn a_field_written_as_zero_a_dot_an_empty_value_or_a_bare_flag_leaves_the_allele_unmarked() {
+        assert_eq!(length_marks("SVLEN=9;RUS=XYZ;RUC=3", "<CNV:TR>"), [SAME]);
+        let mut marked = Vec::new();
+        for field in ["RB", "RUL", "RUB", "CN"] {
+            for spelling in ["=0", "=.", "=", ""] {
+                let info = format!("SVLEN=9;RUS=XYZ;RUC=3;{field}{spelling}");
+                if length_marks(&info, "<CNV:TR>") != [NEITHER] {
+                    marked.push(info);
+                }
+            }
+        }
+        assert_eq!(marked, Vec::<String>::new());
     }
 }

@@ -5,7 +5,7 @@
 //! `spdi_genomic` on the variation feature as the parser leaves it, and the
 //! GA4GH VRS allele (`GA4GH_VRS`) built from it.
 //!
-//! Perl citations name modules of ensembl-vep release/116.2
+//! Ensembl VEP source citations name modules of ensembl-vep release/116.3
 //! (`Bio/EnsEMBL/VEP/...`) unless another repository is named.
 
 use std::collections::HashMap;
@@ -19,6 +19,7 @@ use crate::consequences::EffectsConfig;
 
 /// What `--spdi` and `--ga4gh_vrs` compute.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct SpdiOptions {
     /// Build `InputVariant::ga4gh_vrs` (`--ga4gh_vrs`) from the SPDI named by
     /// the RefSeq accession each cache chromosome name maps to; a chromosome
@@ -192,7 +193,7 @@ mod tests {
         variant.spdi.clone()
     }
 
-    /// Ensembl VEP 116.2 under `--spdi --offline` names the chromosome as the
+    /// Ensembl VEP 116.3 under `--spdi --offline` names the chromosome as the
     /// cache does on every transcript row (`21` for an input `chr21`), and as
     /// the FASTA does on an intergenic row (`chr21` when the FASTA's record is
     /// `chr21`, whatever the input wrote); an intergenic row without a FASTA,
@@ -215,12 +216,11 @@ mod tests {
             Some("chr21:49:A:C")
         );
         let mut regulatory_only = variant("21", 50, 50, "A", "C");
-        regulatory_only
-            .transcript_consequences
-            .push(TranscriptConsequence {
-                feature_type: FeatureType::RegulatoryFeature,
-                ..TranscriptConsequence::default()
-            });
+        regulatory_only.transcript_consequences.push({
+            let mut consequence = TranscriptConsequence::default();
+            consequence.feature_type = FeatureType::RegulatoryFeature;
+            consequence
+        });
         assert_eq!(
             spdi_of(&mut regulatory_only, &with_fasta).as_deref(),
             Some("chr21:49:A:C")
@@ -267,7 +267,7 @@ mod tests {
         assert_eq!(spdi_of(&mut spanning, &config), None);
     }
 
-    /// Ensembl VEP 116.2 with a database under `--ga4gh_vrs` writes, for
+    /// Ensembl VEP 116.3 with a database under `--ga4gh_vrs` writes, for
     /// `21 10538885 A C`, the allele of `NC_000021.9:10538884:A:C`; here the
     /// accession is the one the synonyms map gives the cache's chromosome name,
     /// and a chromosome with none gets no object. The SPDI column keeps the

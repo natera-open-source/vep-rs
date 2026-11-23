@@ -1,0 +1,4 @@
+species	homo_sapiens
+assembly	GRCh38
+regulatory	1
+cell_types	from,the,file

@@ -1,17 +1,17 @@
 # The `--output_format` value read in its given case
 
-**The defect in one sentence.** Ensembl VEP 116.2 lower-cases the `--output_format` value to choose the writer and keeps the spelling as typed for two later readers. So `--output_format VCF` selects the VCF writer and then leaves a gene symbol's whitespace unescaped, and `--output_format JSON` selects the JSON writer and then encodes the `GA4GH_VRS` object into a string. vep-rs reads the value once, lower-cased, so every spelling of a format gives the writer and the rows of the lower-case spelling.
+**The defect in one sentence.** Ensembl VEP 116.3 lower-cases the `--output_format` value to choose the writer and keeps the spelling as typed for two later readers. So `--output_format VCF` selects the VCF writer and then leaves a gene symbol's whitespace unescaped, and `--output_format JSON` selects the JSON writer and then encodes the `GA4GH_VRS` object into a string. vep-rs reads the value once, lower-cased, so every spelling of a format gives the writer and the rows of the lower-case spelling.
 
 **Why this is a defect.** The value names a writer, and the engine's own test of it says the spelling does not matter: `Vcf`, `VCF` and `vcf` all select the VCF writer. The two readers that then test the spelling describe themselves as tests of the format, one encoding a symbol's spaces for VCF, the other avoiding a double encoding when the output is JSON. Under another spelling of the same word each takes the other format's branch. A VCF output then carries a symbol's whitespace as `_`, the `--no_escape` form, where `vcf` writes `%20`, and a JSON output carries the `GA4GH_VRS` object as a string inside the JSON. Nothing but the case of one word differs.
 
 **What vep-rs does instead.** vep-rs reads the value once, lower-cased, before the option sets and every reader see it, so every spelling of a format gives the writer and the rows of the lower-case spelling.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3):
 
 - `Bio/EnsEMBL/VEP/Config.pm`, line 81: `output_format` takes any string, and nothing in `Config.pm` tests its value.
 - `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 225-238, `new`: a copy of the value is lower-cased (line 229) and looked up in `%FORMAT_MAP` (lines 97-103), which names the writer class; an unknown value is refused.
 - `Bio/EnsEMBL/VEP/OutputFactory.pm`, line 150, and `Bio/EnsEMBL/VEP/BaseVEP.pm`, lines 755-764, `add_shortcuts`: the factory copies the parameter as typed into its own `output_format` key.
-- `Bio/EnsEMBL/VEP/OutputFactory.pm`, line 1527: a symbol's whitespace becomes `%20` only when that key is exactly `vcf` and `--no_escape` is off.
+- `Bio/EnsEMBL/VEP/OutputFactory.pm`, line 1536: a symbol's whitespace becomes `%20` only when that key is exactly `vcf` and `--no_escape` is off.
 - `Bio/EnsEMBL/VEP/OutputFactory/VCF.pm`, line 403: the VCF writer then turns any whitespace left in a value into `_`.
 - `Bio/EnsEMBL/VEP/OutputFactory.pm`, line 1409: the `GA4GH_VRS` value is encoded into a JSON string unless that key is exactly `json`, a step meant to skip the encoding when the writer is the JSON one.
 
@@ -23,7 +23,7 @@
 
 ## 1. `--output_format VCF` on a gene whose symbol holds a space
 
-**In short.** The record `4 12007993 chr4_mnv2_12007993_TC_AG TC AG` of the Arabidopsis TAIR10 dataset (`tests/golden/116/TAIR10-arabidopsis/variants.vcf`) overlaps the gene AT4G22890, whose symbol in the cache is `PGR5-LIKE A`. Run with `--symbol --output_format VCF`, Ensembl VEP 116.2 writes `PGR5-LIKE_A` in the `SYMBOL` field of every `CSQ` entry of that gene and vep-rs writes `PGR5-LIKE%20A`. Spelled `vcf`, or given as `--vcf`, both engines write `PGR5-LIKE%20A`; under `--no_escape` both write `PGR5-LIKE_A`. The default, tab and JSON outputs of the record are the same in both engines under either spelling.
+**In short.** The record `4 12007993 chr4_mnv2_12007993_TC_AG TC AG` of the Arabidopsis TAIR10 dataset (`tests/golden/116/TAIR10-arabidopsis/variants.vcf`) overlaps the gene AT4G22890, whose symbol in the cache is `PGR5-LIKE A`. Run with `--symbol --output_format VCF`, Ensembl VEP 116.3 writes `PGR5-LIKE_A` in the `SYMBOL` field of every `CSQ` entry of that gene and vep-rs writes `PGR5-LIKE%20A`. Spelled `vcf`, or given as `--vcf`, both engines write `PGR5-LIKE%20A`; under `--no_escape` both write `PGR5-LIKE_A`. The default, tab and JSON outputs of the record are the same in both engines under either spelling.
 
 ### 1.1 What a reader needs to know first
 
@@ -39,7 +39,7 @@ Both engines run `--symbol --output_format VCF` against the dataset's cache and 
 
 ### 1.3 What each engine writes
 
-Ensembl VEP 116.2, the `CSQ` entry for AT4G22890.1:
+Ensembl VEP 116.3, the `CSQ` entry for AT4G22890.1:
 
 ```
 AG|splice_region_variant&synonymous_variant|LOW|PGR5-LIKE_A|AT4G22890|Transcript|AT4G22890.1||||||484-485|313-314|105|S|TCt/AGt|||1||EntrezGene|
@@ -69,7 +69,7 @@ vep -i record.vcf -o out.vcf --offline --json_cache <corpus>/json_cache \
   --fasta <corpus>/reference.fa.gz --symbol --output_format VCF
 ```
 
-vep-rs writes `PGR5-LIKE%20A`. Ensembl VEP 116.2 writes `PGR5-LIKE_A`. Spelling the value `vcf` makes the engines agree.
+vep-rs writes `PGR5-LIKE%20A`. Ensembl VEP 116.3 writes `PGR5-LIKE_A`. Spelling the value `vcf` makes the engines agree.
 
 ### 1.7 How the comparator treats this class
 
@@ -77,7 +77,7 @@ The reproduction `scripts/divergences/reproductions/output_format_flag_read_in_i
 
 ## 2. `--output_format JSON` with `--ga4gh_vrs`
 
-**In short.** Under `--ga4gh_vrs`, every transcript entry of the JSON output carries a `ga4gh_vrs` key. Spelled `--output_format json`, Ensembl VEP 116.2 writes the key's value as a JSON object; spelled `--output_format JSON`, it writes the same object encoded as one JSON string. vep-rs writes the object under either spelling. Ensembl VEP computes the notation in database mode alone and writes no `ga4gh_vrs` key offline, so the shape is reached only there.
+**In short.** Under `--ga4gh_vrs`, every transcript entry of the JSON output carries a `ga4gh_vrs` key. Spelled `--output_format json`, Ensembl VEP 116.3 writes the key's value as a JSON object; spelled `--output_format JSON`, it writes the same object encoded as one JSON string. vep-rs writes the object under either spelling. Ensembl VEP computes the notation in database mode alone and writes no `ga4gh_vrs` key offline, so the shape is reached only there.
 
 ### 2.1 What a reader needs to know first
 
@@ -93,7 +93,7 @@ The record of the GRCh38 identifiers dataset (`tests/golden/116/GRCh38-identifie
 
 ### 2.3 What each engine writes
 
-Ensembl VEP 116.2 under `--output_format json`, the first transcript entry's key:
+Ensembl VEP 116.3 under `--output_format json`, the first transcript entry's key:
 
 ```
 "ga4gh_vrs":{"state":{"type":"SequenceState","sequence":"TA"},"type":"Allele","location":{"interval":{"end":10451779,"start":10451779,"type":"SimpleInterval"},"type":"SequenceLocation","sequence_id":"refseq:NC_000021.9"}}
@@ -123,7 +123,7 @@ vep -i record.vcf -o out.jsonl --offline --json_cache <corpus>/json_cache \
   --ga4gh_vrs --output_format JSON
 ```
 
-vep-rs writes the `ga4gh_vrs` object. Ensembl VEP 116.2, run with `--database --db_version 116` in place of the cache arguments, writes it as a string. Spelling the value `json` makes the engines agree.
+vep-rs writes the `ga4gh_vrs` object. Ensembl VEP 116.3, run with `--database --db_version 116` in place of the cache arguments, writes it as a string. Spelling the value `json` makes the engines agree.
 
 ### 2.7 How the comparator treats this class
 

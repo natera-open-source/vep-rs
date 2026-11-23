@@ -278,6 +278,20 @@
      "expected_divergence": "stop_codon_removed_without_stop_codon_test"
     },
     {
+     "location": "21:44817966-44817968",
+     "allele": "-",
+     "feature": "ENST00000397893",
+     "feature_type": "Transcript",
+     "record_indices": [
+      134
+     ],
+     "vep_consequence_set": "inframe_deletion",
+     "vep_rs_consequence_sets": [
+      "inframe_deletion,start_lost"
+     ],
+     "expected_divergence": "start_codon_removed_without_five_prime_utr"
+    },
+    {
      "location": "21:45981851-45981852",
      "allele": "A",
      "feature": "ENST00000361866",
@@ -362,6 +376,62 @@
      "expected_divergence": "start_cooccurrence_swap"
     },
     {
+     "location": "MT:15886-15887",
+     "allele": "A",
+     "feature": "ENST00000361789",
+     "feature_type": "Transcript",
+     "record_indices": [
+      161
+     ],
+     "vep_consequence_set": "coding_sequence_variant,incomplete_terminal_codon_variant,inframe_insertion",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
+     "location": "MT:15887-15888",
+     "allele": "AT",
+     "feature": "ENST00000361789",
+     "feature_type": "Transcript",
+     "record_indices": [
+      162
+     ],
+     "vep_consequence_set": "3_prime_UTR_variant,coding_sequence_variant,incomplete_terminal_codon_variant",
+     "vep_rs_consequence_sets": [
+      "3_prime_UTR_variant,coding_sequence_variant"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
+     "location": "MT:4260-4261",
+     "allele": "GCT",
+     "feature": "ENST00000361390",
+     "feature_type": "Transcript",
+     "record_indices": [
+      152
+     ],
+     "vep_consequence_set": "incomplete_terminal_codon_variant,inframe_insertion",
+     "vep_rs_consequence_sets": [
+      "inframe_insertion"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
+     "location": "MT:4261",
+     "allele": "C",
+     "feature": "ENST00000361390",
+     "feature_type": "Transcript",
+     "record_indices": [
+      153
+     ],
+     "vep_consequence_set": "coding_sequence_variant,incomplete_terminal_codon_variant",
+     "vep_rs_consequence_sets": [
+      "stop_lost"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
      "location": "MT:9989-9991",
      "allele": "-",
      "feature": "ENST00000362079",
@@ -371,17 +441,32 @@
      ],
      "vep_consequence_set": "3_prime_UTR_variant,stop_retained_variant",
      "vep_rs_consequence_sets": [
-      "3_prime_UTR_variant,coding_sequence_variant"
+      "3_prime_UTR_variant,stop_lost"
      ],
-     "expected_divergence": "stop_retained_without_stop_codon_test"
+     "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+    },
+    {
+     "location": "MT:9990",
+     "allele": "-",
+     "feature": "ENST00000362079",
+     "feature_type": "Transcript",
+     "record_indices": [
+      156
+     ],
+     "vep_consequence_set": "incomplete_terminal_codon_variant,protein_altering_variant",
+     "vep_rs_consequence_sets": [
+      "stop_lost"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
     }
    ],
    "vep_rs_only_tuples": [],
    "divergence_summary": {
     "stop_codon_overlap_genomic_span": 12,
     "start_cooccurrence_swap": 7,
-    "stop_codon_removed_without_stop_codon_test": 2,
-    "stop_retained_without_stop_codon_test": 1
+    "stop_codon_removed_without_stop_codon_test": 3,
+    "start_codon_removed_without_five_prime_utr": 1,
+    "stop_codon_completed_by_polyadenylation": 5
    },
    "vep_rs_only_summary": {}
   },
@@ -607,6 +692,20 @@
      "expected_divergence": "stop_codon_removed_without_stop_codon_test"
     },
     {
+     "location": "21:44817966-44817968",
+     "allele": "-",
+     "feature": "ENST00000397893",
+     "feature_type": "Transcript",
+     "record_indices": [
+      134
+     ],
+     "vep_consequence_set": "inframe_deletion",
+     "vep_rs_consequence_sets": [
+      "inframe_deletion,start_lost"
+     ],
+     "expected_divergence": "start_codon_removed_without_five_prime_utr"
+    },
+    {
      "location": "21:45981851-45981852",
      "allele": "A",
      "feature": "ENST00000361866",
@@ -677,6 +776,62 @@
      "expected_divergence": "start_cooccurrence_swap"
     },
     {
+     "location": "MT:15886-15887",
+     "allele": "A",
+     "feature": "ENST00000361789",
+     "feature_type": "Transcript",
+     "record_indices": [
+      161
+     ],
+     "vep_consequence_set": "coding_sequence_variant,incomplete_terminal_codon_variant,inframe_insertion",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
+     "location": "MT:15887-15888",
+     "allele": "AT",
+     "feature": "ENST00000361789",
+     "feature_type": "Transcript",
+     "record_indices": [
+      162
+     ],
+     "vep_consequence_set": "3_prime_UTR_variant,coding_sequence_variant,incomplete_terminal_codon_variant",
+     "vep_rs_consequence_sets": [
+      "3_prime_UTR_variant,coding_sequence_variant"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
+     "location": "MT:4260-4261",
+     "allele": "GCT",
+     "feature": "ENST00000361390",
+     "feature_type": "Transcript",
+     "record_indices": [
+      152
+     ],
+     "vep_consequence_set": "incomplete_terminal_codon_variant,inframe_insertion",
+     "vep_rs_consequence_sets": [
+      "inframe_insertion"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
+     "location": "MT:4261",
+     "allele": "C",
+     "feature": "ENST00000361390",
+     "feature_type": "Transcript",
+     "record_indices": [
+      153
+     ],
+     "vep_consequence_set": "coding_sequence_variant,incomplete_terminal_codon_variant",
+     "vep_rs_consequence_sets": [
+      "stop_lost"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
      "location": "MT:9989-9991",
      "allele": "-",
      "feature": "ENST00000362079",
@@ -686,17 +841,32 @@
      ],
      "vep_consequence_set": "3_prime_UTR_variant,stop_retained_variant",
      "vep_rs_consequence_sets": [
-      "3_prime_UTR_variant,coding_sequence_variant"
+      "3_prime_UTR_variant,stop_lost"
      ],
-     "expected_divergence": "stop_retained_without_stop_codon_test"
+     "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+    },
+    {
+     "location": "MT:9990",
+     "allele": "-",
+     "feature": "ENST00000362079",
+     "feature_type": "Transcript",
+     "record_indices": [
+      156
+     ],
+     "vep_consequence_set": "incomplete_terminal_codon_variant,protein_altering_variant",
+     "vep_rs_consequence_sets": [
+      "stop_lost"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
     }
    ],
    "vep_rs_only_tuples": [],
    "divergence_summary": {
     "stop_codon_overlap_genomic_span": 12,
     "start_cooccurrence_swap": 6,
-    "stop_codon_removed_without_stop_codon_test": 1,
-    "stop_retained_without_stop_codon_test": 1
+    "stop_codon_removed_without_stop_codon_test": 2,
+    "start_codon_removed_without_five_prime_utr": 1,
+    "stop_codon_completed_by_polyadenylation": 5
    },
    "vep_rs_only_summary": {}
   },
@@ -782,6 +952,62 @@
      "expected_divergence": "start_cooccurrence_swap"
     },
     {
+     "location": "MT:15886-15887",
+     "allele": "A",
+     "feature": "ENST00000361789",
+     "feature_type": "Transcript",
+     "record_indices": [
+      161
+     ],
+     "vep_consequence_set": "coding_sequence_variant,incomplete_terminal_codon_variant,inframe_insertion",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
+     "location": "MT:15887-15888",
+     "allele": "AT",
+     "feature": "ENST00000361789",
+     "feature_type": "Transcript",
+     "record_indices": [
+      162
+     ],
+     "vep_consequence_set": "3_prime_UTR_variant,coding_sequence_variant,incomplete_terminal_codon_variant",
+     "vep_rs_consequence_sets": [
+      "3_prime_UTR_variant,coding_sequence_variant"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
+     "location": "MT:4260-4261",
+     "allele": "GCT",
+     "feature": "ENST00000361390",
+     "feature_type": "Transcript",
+     "record_indices": [
+      152
+     ],
+     "vep_consequence_set": "incomplete_terminal_codon_variant,inframe_insertion",
+     "vep_rs_consequence_sets": [
+      "inframe_insertion"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
+     "location": "MT:4261",
+     "allele": "C",
+     "feature": "ENST00000361390",
+     "feature_type": "Transcript",
+     "record_indices": [
+      153
+     ],
+     "vep_consequence_set": "coding_sequence_variant,incomplete_terminal_codon_variant",
+     "vep_rs_consequence_sets": [
+      "stop_lost"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
      "location": "MT:9989-9991",
      "allele": "-",
      "feature": "ENST00000362079",
@@ -791,16 +1017,31 @@
      ],
      "vep_consequence_set": "3_prime_UTR_variant,stop_retained_variant",
      "vep_rs_consequence_sets": [
-      "3_prime_UTR_variant,coding_sequence_variant"
+      "3_prime_UTR_variant,stop_lost"
      ],
-     "expected_divergence": "stop_retained_without_stop_codon_test"
+     "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+    },
+    {
+     "location": "MT:9990",
+     "allele": "-",
+     "feature": "ENST00000362079",
+     "feature_type": "Transcript",
+     "record_indices": [
+      156
+     ],
+     "vep_consequence_set": "incomplete_terminal_codon_variant,protein_altering_variant",
+     "vep_rs_consequence_sets": [
+      "stop_lost"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
     }
    ],
    "vep_rs_only_tuples": [],
    "divergence_summary": {
     "stop_codon_overlap_genomic_span": 1,
     "start_cooccurrence_swap": 3,
-    "stop_retained_without_stop_codon_test": 1
+    "stop_codon_completed_by_polyadenylation": 5,
+    "stop_codon_removed_without_stop_codon_test": 1
    },
    "vep_rs_only_summary": {}
   },
@@ -1040,6 +1281,20 @@
      "expected_divergence": "stop_codon_removed_without_stop_codon_test"
     },
     {
+     "location": "21:44817966-44817968",
+     "allele": "-",
+     "feature": "ENST00000397893",
+     "feature_type": "Transcript",
+     "record_indices": [
+      134
+     ],
+     "vep_consequence_set": "inframe_deletion",
+     "vep_rs_consequence_sets": [
+      "inframe_deletion,start_lost"
+     ],
+     "expected_divergence": "start_codon_removed_without_five_prime_utr"
+    },
+    {
      "location": "21:45981851-45981852",
      "allele": "A",
      "feature": "ENST00000361866",
@@ -1124,6 +1379,62 @@
      "expected_divergence": "start_cooccurrence_swap"
     },
     {
+     "location": "MT:15886-15887",
+     "allele": "A",
+     "feature": "ENST00000361789",
+     "feature_type": "Transcript",
+     "record_indices": [
+      161
+     ],
+     "vep_consequence_set": "coding_sequence_variant,incomplete_terminal_codon_variant,inframe_insertion",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
+     "location": "MT:15887-15888",
+     "allele": "AT",
+     "feature": "ENST00000361789",
+     "feature_type": "Transcript",
+     "record_indices": [
+      162
+     ],
+     "vep_consequence_set": "3_prime_UTR_variant,coding_sequence_variant,incomplete_terminal_codon_variant",
+     "vep_rs_consequence_sets": [
+      "3_prime_UTR_variant,coding_sequence_variant"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
+     "location": "MT:4260-4261",
+     "allele": "GCT",
+     "feature": "ENST00000361390",
+     "feature_type": "Transcript",
+     "record_indices": [
+      152
+     ],
+     "vep_consequence_set": "incomplete_terminal_codon_variant,inframe_insertion",
+     "vep_rs_consequence_sets": [
+      "inframe_insertion"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
+     "location": "MT:4261",
+     "allele": "C",
+     "feature": "ENST00000361390",
+     "feature_type": "Transcript",
+     "record_indices": [
+      153
+     ],
+     "vep_consequence_set": "coding_sequence_variant,incomplete_terminal_codon_variant",
+     "vep_rs_consequence_sets": [
+      "stop_lost"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
      "location": "MT:9989-9991",
      "allele": "-",
      "feature": "ENST00000362079",
@@ -1133,17 +1444,32 @@
      ],
      "vep_consequence_set": "3_prime_UTR_variant,stop_retained_variant",
      "vep_rs_consequence_sets": [
-      "3_prime_UTR_variant,coding_sequence_variant"
+      "3_prime_UTR_variant,stop_lost"
      ],
-     "expected_divergence": "stop_retained_without_stop_codon_test"
+     "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+    },
+    {
+     "location": "MT:9990",
+     "allele": "-",
+     "feature": "ENST00000362079",
+     "feature_type": "Transcript",
+     "record_indices": [
+      156
+     ],
+     "vep_consequence_set": "incomplete_terminal_codon_variant,protein_altering_variant",
+     "vep_rs_consequence_sets": [
+      "stop_lost"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
     }
    ],
    "vep_rs_only_tuples": [],
    "divergence_summary": {
     "stop_codon_overlap_genomic_span": 12,
     "start_cooccurrence_swap": 7,
-    "stop_codon_removed_without_stop_codon_test": 2,
-    "stop_retained_without_stop_codon_test": 1
+    "stop_codon_removed_without_stop_codon_test": 3,
+    "start_codon_removed_without_five_prime_utr": 1,
+    "stop_codon_completed_by_polyadenylation": 5
    },
    "vep_rs_only_summary": {}
   },
@@ -1384,6 +1710,20 @@
      "expected_divergence": "stop_codon_removed_without_stop_codon_test"
     },
     {
+     "location": "21:44817966-44817968",
+     "allele": "-",
+     "feature": "ENST00000397893",
+     "feature_type": "Transcript",
+     "record_indices": [
+      134
+     ],
+     "vep_consequence_set": "inframe_deletion",
+     "vep_rs_consequence_sets": [
+      "inframe_deletion,start_lost"
+     ],
+     "expected_divergence": "start_codon_removed_without_five_prime_utr"
+    },
+    {
      "location": "21:45981851-45981852",
      "allele": "A",
      "feature": "ENST00000361866",
@@ -1468,6 +1808,62 @@
      "expected_divergence": "start_cooccurrence_swap"
     },
     {
+     "location": "MT:15886-15887",
+     "allele": "A",
+     "feature": "ENST00000361789",
+     "feature_type": "Transcript",
+     "record_indices": [
+      161
+     ],
+     "vep_consequence_set": "coding_sequence_variant,incomplete_terminal_codon_variant,inframe_insertion",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
+     "location": "MT:15887-15888",
+     "allele": "AT",
+     "feature": "ENST00000361789",
+     "feature_type": "Transcript",
+     "record_indices": [
+      162
+     ],
+     "vep_consequence_set": "3_prime_UTR_variant,coding_sequence_variant,incomplete_terminal_codon_variant",
+     "vep_rs_consequence_sets": [
+      "3_prime_UTR_variant,coding_sequence_variant"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
+     "location": "MT:4260-4261",
+     "allele": "GCT",
+     "feature": "ENST00000361390",
+     "feature_type": "Transcript",
+     "record_indices": [
+      152
+     ],
+     "vep_consequence_set": "incomplete_terminal_codon_variant,inframe_insertion",
+     "vep_rs_consequence_sets": [
+      "inframe_insertion"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
+     "location": "MT:4261",
+     "allele": "C",
+     "feature": "ENST00000361390",
+     "feature_type": "Transcript",
+     "record_indices": [
+      153
+     ],
+     "vep_consequence_set": "coding_sequence_variant,incomplete_terminal_codon_variant",
+     "vep_rs_consequence_sets": [
+      "stop_lost"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
      "location": "MT:9989-9991",
      "allele": "-",
      "feature": "ENST00000362079",
@@ -1477,17 +1873,32 @@
      ],
      "vep_consequence_set": "3_prime_UTR_variant,stop_retained_variant",
      "vep_rs_consequence_sets": [
-      "3_prime_UTR_variant,coding_sequence_variant"
+      "3_prime_UTR_variant,stop_lost"
      ],
-     "expected_divergence": "stop_retained_without_stop_codon_test"
+     "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+    },
+    {
+     "location": "MT:9990",
+     "allele": "-",
+     "feature": "ENST00000362079",
+     "feature_type": "Transcript",
+     "record_indices": [
+      156
+     ],
+     "vep_consequence_set": "incomplete_terminal_codon_variant,protein_altering_variant",
+     "vep_rs_consequence_sets": [
+      "stop_lost"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
     }
    ],
    "vep_rs_only_tuples": [],
    "divergence_summary": {
     "stop_codon_overlap_genomic_span": 12,
     "start_cooccurrence_swap": 7,
-    "stop_codon_removed_without_stop_codon_test": 2,
-    "stop_retained_without_stop_codon_test": 1
+    "stop_codon_removed_without_stop_codon_test": 3,
+    "start_codon_removed_without_five_prime_utr": 1,
+    "stop_codon_completed_by_polyadenylation": 5
    },
    "vep_rs_only_summary": {}
   },
@@ -1731,6 +2142,20 @@
      "expected_divergence": "stop_codon_removed_without_stop_codon_test"
     },
     {
+     "location": "21:44817966-44817968",
+     "allele": "-",
+     "feature": "ENST00000397893",
+     "feature_type": "Transcript",
+     "record_indices": [
+      134
+     ],
+     "vep_consequence_set": "inframe_deletion",
+     "vep_rs_consequence_sets": [
+      "inframe_deletion,start_lost"
+     ],
+     "expected_divergence": "start_codon_removed_without_five_prime_utr"
+    },
+    {
      "location": "21:45981851-45981852",
      "allele": "A",
      "feature": "ENST00000361866",
@@ -1815,6 +2240,62 @@
      "expected_divergence": "start_cooccurrence_swap"
     },
     {
+     "location": "MT:15886-15887",
+     "allele": "A",
+     "feature": "ENST00000361789",
+     "feature_type": "Transcript",
+     "record_indices": [
+      161
+     ],
+     "vep_consequence_set": "coding_sequence_variant,incomplete_terminal_codon_variant,inframe_insertion",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
+     "location": "MT:15887-15888",
+     "allele": "AT",
+     "feature": "ENST00000361789",
+     "feature_type": "Transcript",
+     "record_indices": [
+      162
+     ],
+     "vep_consequence_set": "3_prime_UTR_variant,coding_sequence_variant,incomplete_terminal_codon_variant",
+     "vep_rs_consequence_sets": [
+      "3_prime_UTR_variant,coding_sequence_variant"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
+     "location": "MT:4260-4261",
+     "allele": "GCT",
+     "feature": "ENST00000361390",
+     "feature_type": "Transcript",
+     "record_indices": [
+      152
+     ],
+     "vep_consequence_set": "incomplete_terminal_codon_variant,inframe_insertion",
+     "vep_rs_consequence_sets": [
+      "inframe_insertion"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
+     "location": "MT:4261",
+     "allele": "C",
+     "feature": "ENST00000361390",
+     "feature_type": "Transcript",
+     "record_indices": [
+      153
+     ],
+     "vep_consequence_set": "coding_sequence_variant,incomplete_terminal_codon_variant",
+     "vep_rs_consequence_sets": [
+      "stop_lost"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
      "location": "MT:9989-9991",
      "allele": "-",
      "feature": "ENST00000362079",
@@ -1824,17 +2305,32 @@
      ],
      "vep_consequence_set": "3_prime_UTR_variant,stop_retained_variant",
      "vep_rs_consequence_sets": [
-      "3_prime_UTR_variant,coding_sequence_variant"
+      "3_prime_UTR_variant,stop_lost"
      ],
-     "expected_divergence": "stop_retained_without_stop_codon_test"
+     "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+    },
+    {
+     "location": "MT:9990",
+     "allele": "-",
+     "feature": "ENST00000362079",
+     "feature_type": "Transcript",
+     "record_indices": [
+      156
+     ],
+     "vep_consequence_set": "incomplete_terminal_codon_variant,protein_altering_variant",
+     "vep_rs_consequence_sets": [
+      "stop_lost"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
     }
    ],
    "vep_rs_only_tuples": [],
    "divergence_summary": {
     "stop_codon_overlap_genomic_span": 12,
     "start_cooccurrence_swap": 7,
-    "stop_codon_removed_without_stop_codon_test": 2,
-    "stop_retained_without_stop_codon_test": 1
+    "stop_codon_removed_without_stop_codon_test": 3,
+    "start_codon_removed_without_five_prime_utr": 1,
+    "stop_codon_completed_by_polyadenylation": 5
    },
    "vep_rs_only_summary": {}
   },
@@ -2076,6 +2572,20 @@
      "expected_divergence": "stop_codon_removed_without_stop_codon_test"
     },
     {
+     "location": "21:44817966-44817968",
+     "allele": "-",
+     "feature": "ENST00000397893",
+     "feature_type": "Transcript",
+     "record_indices": [
+      134
+     ],
+     "vep_consequence_set": "inframe_deletion",
+     "vep_rs_consequence_sets": [
+      "inframe_deletion,start_lost"
+     ],
+     "expected_divergence": "start_codon_removed_without_five_prime_utr"
+    },
+    {
      "location": "21:45981851-45981852",
      "allele": "A",
      "feature": "ENST00000361866",
@@ -2160,6 +2670,62 @@
      "expected_divergence": "start_cooccurrence_swap"
     },
     {
+     "location": "MT:15886-15887",
+     "allele": "A",
+     "feature": "ENST00000361789",
+     "feature_type": "Transcript",
+     "record_indices": [
+      161
+     ],
+     "vep_consequence_set": "coding_sequence_variant,incomplete_terminal_codon_variant,inframe_insertion",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
+     "location": "MT:15887-15888",
+     "allele": "AT",
+     "feature": "ENST00000361789",
+     "feature_type": "Transcript",
+     "record_indices": [
+      162
+     ],
+     "vep_consequence_set": "3_prime_UTR_variant,coding_sequence_variant,incomplete_terminal_codon_variant",
+     "vep_rs_consequence_sets": [
+      "3_prime_UTR_variant,coding_sequence_variant"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
+     "location": "MT:4260-4261",
+     "allele": "GCT",
+     "feature": "ENST00000361390",
+     "feature_type": "Transcript",
+     "record_indices": [
+      152
+     ],
+     "vep_consequence_set": "incomplete_terminal_codon_variant,inframe_insertion",
+     "vep_rs_consequence_sets": [
+      "inframe_insertion"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
+     "location": "MT:4261",
+     "allele": "C",
+     "feature": "ENST00000361390",
+     "feature_type": "Transcript",
+     "record_indices": [
+      153
+     ],
+     "vep_consequence_set": "coding_sequence_variant,incomplete_terminal_codon_variant",
+     "vep_rs_consequence_sets": [
+      "stop_lost"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
      "location": "MT:9989-9991",
      "allele": "-",
      "feature": "ENST00000362079",
@@ -2169,17 +2735,32 @@
      ],
      "vep_consequence_set": "3_prime_UTR_variant,stop_retained_variant",
      "vep_rs_consequence_sets": [
-      "3_prime_UTR_variant,coding_sequence_variant"
+      "3_prime_UTR_variant,stop_lost"
      ],
-     "expected_divergence": "stop_retained_without_stop_codon_test"
+     "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+    },
+    {
+     "location": "MT:9990",
+     "allele": "-",
+     "feature": "ENST00000362079",
+     "feature_type": "Transcript",
+     "record_indices": [
+      156
+     ],
+     "vep_consequence_set": "incomplete_terminal_codon_variant,protein_altering_variant",
+     "vep_rs_consequence_sets": [
+      "stop_lost"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
     }
    ],
    "vep_rs_only_tuples": [],
    "divergence_summary": {
     "stop_codon_overlap_genomic_span": 12,
     "start_cooccurrence_swap": 7,
-    "stop_codon_removed_without_stop_codon_test": 2,
-    "stop_retained_without_stop_codon_test": 1
+    "stop_codon_removed_without_stop_codon_test": 3,
+    "start_codon_removed_without_five_prime_utr": 1,
+    "stop_codon_completed_by_polyadenylation": 5
    },
    "vep_rs_only_summary": {}
   },
@@ -2420,6 +3001,20 @@
      "expected_divergence": "stop_codon_removed_without_stop_codon_test"
     },
     {
+     "location": "21:44817966-44817968",
+     "allele": "-",
+     "feature": "ENST00000397893",
+     "feature_type": "Transcript",
+     "record_indices": [
+      134
+     ],
+     "vep_consequence_set": "inframe_deletion",
+     "vep_rs_consequence_sets": [
+      "inframe_deletion,start_lost"
+     ],
+     "expected_divergence": "start_codon_removed_without_five_prime_utr"
+    },
+    {
      "location": "21:45981851-45981852",
      "allele": "A",
      "feature": "ENST00000361866",
@@ -2504,6 +3099,62 @@
      "expected_divergence": "start_cooccurrence_swap"
     },
     {
+     "location": "MT:15886-15887",
+     "allele": "A",
+     "feature": "ENST00000361789",
+     "feature_type": "Transcript",
+     "record_indices": [
+      161
+     ],
+     "vep_consequence_set": "coding_sequence_variant,incomplete_terminal_codon_variant,inframe_insertion",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
+     "location": "MT:15887-15888",
+     "allele": "AT",
+     "feature": "ENST00000361789",
+     "feature_type": "Transcript",
+     "record_indices": [
+      162
+     ],
+     "vep_consequence_set": "3_prime_UTR_variant,coding_sequence_variant,incomplete_terminal_codon_variant",
+     "vep_rs_consequence_sets": [
+      "3_prime_UTR_variant,coding_sequence_variant"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
+     "location": "MT:4260-4261",
+     "allele": "GCT",
+     "feature": "ENST00000361390",
+     "feature_type": "Transcript",
+     "record_indices": [
+      152
+     ],
+     "vep_consequence_set": "incomplete_terminal_codon_variant,inframe_insertion",
+     "vep_rs_consequence_sets": [
+      "inframe_insertion"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
+     "location": "MT:4261",
+     "allele": "C",
+     "feature": "ENST00000361390",
+     "feature_type": "Transcript",
+     "record_indices": [
+      153
+     ],
+     "vep_consequence_set": "coding_sequence_variant,incomplete_terminal_codon_variant",
+     "vep_rs_consequence_sets": [
+      "stop_lost"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
      "location": "MT:9989-9991",
      "allele": "-",
      "feature": "ENST00000362079",
@@ -2513,17 +3164,32 @@
      ],
      "vep_consequence_set": "3_prime_UTR_variant,stop_retained_variant",
      "vep_rs_consequence_sets": [
-      "3_prime_UTR_variant,coding_sequence_variant"
+      "3_prime_UTR_variant,stop_lost"
      ],
-     "expected_divergence": "stop_retained_without_stop_codon_test"
+     "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+    },
+    {
+     "location": "MT:9990",
+     "allele": "-",
+     "feature": "ENST00000362079",
+     "feature_type": "Transcript",
+     "record_indices": [
+      156
+     ],
+     "vep_consequence_set": "incomplete_terminal_codon_variant,protein_altering_variant",
+     "vep_rs_consequence_sets": [
+      "stop_lost"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
     }
    ],
    "vep_rs_only_tuples": [],
    "divergence_summary": {
     "stop_codon_overlap_genomic_span": 12,
     "start_cooccurrence_swap": 7,
-    "stop_codon_removed_without_stop_codon_test": 2,
-    "stop_retained_without_stop_codon_test": 1
+    "stop_codon_removed_without_stop_codon_test": 3,
+    "start_codon_removed_without_five_prime_utr": 1,
+    "stop_codon_completed_by_polyadenylation": 5
    },
    "vep_rs_only_summary": {}
   },
@@ -2764,6 +3430,20 @@
      "expected_divergence": "stop_codon_removed_without_stop_codon_test"
     },
     {
+     "location": "21:44817966-44817968",
+     "allele": "-",
+     "feature": "ENST00000397893",
+     "feature_type": "Transcript",
+     "record_indices": [
+      134
+     ],
+     "vep_consequence_set": "inframe_deletion",
+     "vep_rs_consequence_sets": [
+      "inframe_deletion,start_lost"
+     ],
+     "expected_divergence": "start_codon_removed_without_five_prime_utr"
+    },
+    {
      "location": "21:45981851-45981852",
      "allele": "A",
      "feature": "ENST00000361866",
@@ -2848,6 +3528,62 @@
      "expected_divergence": "start_cooccurrence_swap"
     },
     {
+     "location": "MT:15886-15887",
+     "allele": "A",
+     "feature": "ENST00000361789",
+     "feature_type": "Transcript",
+     "record_indices": [
+      161
+     ],
+     "vep_consequence_set": "coding_sequence_variant,incomplete_terminal_codon_variant,inframe_insertion",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
+     "location": "MT:15887-15888",
+     "allele": "AT",
+     "feature": "ENST00000361789",
+     "feature_type": "Transcript",
+     "record_indices": [
+      162
+     ],
+     "vep_consequence_set": "3_prime_UTR_variant,coding_sequence_variant,incomplete_terminal_codon_variant",
+     "vep_rs_consequence_sets": [
+      "3_prime_UTR_variant,coding_sequence_variant"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
+     "location": "MT:4260-4261",
+     "allele": "GCT",
+     "feature": "ENST00000361390",
+     "feature_type": "Transcript",
+     "record_indices": [
+      152
+     ],
+     "vep_consequence_set": "incomplete_terminal_codon_variant,inframe_insertion",
+     "vep_rs_consequence_sets": [
+      "inframe_insertion"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
+     "location": "MT:4261",
+     "allele": "C",
+     "feature": "ENST00000361390",
+     "feature_type": "Transcript",
+     "record_indices": [
+      153
+     ],
+     "vep_consequence_set": "coding_sequence_variant,incomplete_terminal_codon_variant",
+     "vep_rs_consequence_sets": [
+      "stop_lost"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
      "location": "MT:9989-9991",
      "allele": "-",
      "feature": "ENST00000362079",
@@ -2857,17 +3593,32 @@
      ],
      "vep_consequence_set": "3_prime_UTR_variant,stop_retained_variant",
      "vep_rs_consequence_sets": [
-      "3_prime_UTR_variant,coding_sequence_variant"
+      "3_prime_UTR_variant,stop_lost"
      ],
-     "expected_divergence": "stop_retained_without_stop_codon_test"
+     "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+    },
+    {
+     "location": "MT:9990",
+     "allele": "-",
+     "feature": "ENST00000362079",
+     "feature_type": "Transcript",
+     "record_indices": [
+      156
+     ],
+     "vep_consequence_set": "incomplete_terminal_codon_variant,protein_altering_variant",
+     "vep_rs_consequence_sets": [
+      "stop_lost"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
     }
    ],
    "vep_rs_only_tuples": [],
    "divergence_summary": {
     "stop_codon_overlap_genomic_span": 12,
     "start_cooccurrence_swap": 7,
-    "stop_codon_removed_without_stop_codon_test": 2,
-    "stop_retained_without_stop_codon_test": 1
+    "stop_codon_removed_without_stop_codon_test": 3,
+    "start_codon_removed_without_five_prime_utr": 1,
+    "stop_codon_completed_by_polyadenylation": 5
    },
    "vep_rs_only_summary": {}
   },
@@ -3114,6 +3865,20 @@
      "expected_divergence": "stop_codon_removed_without_stop_codon_test"
     },
     {
+     "location": "21:44817966-44817968",
+     "allele": "-",
+     "feature": "ENST00000397893",
+     "feature_type": "Transcript",
+     "record_indices": [
+      134
+     ],
+     "vep_consequence_set": "inframe_deletion",
+     "vep_rs_consequence_sets": [
+      "inframe_deletion,start_lost"
+     ],
+     "expected_divergence": "start_codon_removed_without_five_prime_utr"
+    },
+    {
      "location": "21:45981851-45981852",
      "allele": "A",
      "feature": "ENST00000361866",
@@ -3198,6 +3963,62 @@
      "expected_divergence": "start_cooccurrence_swap"
     },
     {
+     "location": "MT:15886-15887",
+     "allele": "A",
+     "feature": "ENST00000361789",
+     "feature_type": "Transcript",
+     "record_indices": [
+      161
+     ],
+     "vep_consequence_set": "coding_sequence_variant,incomplete_terminal_codon_variant,inframe_insertion",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
+     "location": "MT:15887-15888",
+     "allele": "AT",
+     "feature": "ENST00000361789",
+     "feature_type": "Transcript",
+     "record_indices": [
+      162
+     ],
+     "vep_consequence_set": "3_prime_UTR_variant,coding_sequence_variant,incomplete_terminal_codon_variant",
+     "vep_rs_consequence_sets": [
+      "3_prime_UTR_variant,coding_sequence_variant"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
+     "location": "MT:4260-4261",
+     "allele": "GCT",
+     "feature": "ENST00000361390",
+     "feature_type": "Transcript",
+     "record_indices": [
+      152
+     ],
+     "vep_consequence_set": "incomplete_terminal_codon_variant,inframe_insertion",
+     "vep_rs_consequence_sets": [
+      "inframe_insertion"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
+     "location": "MT:4261",
+     "allele": "C",
+     "feature": "ENST00000361390",
+     "feature_type": "Transcript",
+     "record_indices": [
+      153
+     ],
+     "vep_consequence_set": "coding_sequence_variant,incomplete_terminal_codon_variant",
+     "vep_rs_consequence_sets": [
+      "stop_lost"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
      "location": "MT:9989-9991",
      "allele": "-",
      "feature": "ENST00000362079",
@@ -3207,17 +4028,32 @@
      ],
      "vep_consequence_set": "3_prime_UTR_variant,stop_retained_variant",
      "vep_rs_consequence_sets": [
-      "3_prime_UTR_variant,coding_sequence_variant"
+      "3_prime_UTR_variant,stop_lost"
      ],
-     "expected_divergence": "stop_retained_without_stop_codon_test"
+     "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+    },
+    {
+     "location": "MT:9990",
+     "allele": "-",
+     "feature": "ENST00000362079",
+     "feature_type": "Transcript",
+     "record_indices": [
+      156
+     ],
+     "vep_consequence_set": "incomplete_terminal_codon_variant,protein_altering_variant",
+     "vep_rs_consequence_sets": [
+      "stop_lost"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
     }
    ],
    "vep_rs_only_tuples": [],
    "divergence_summary": {
     "stop_codon_overlap_genomic_span": 12,
     "start_cooccurrence_swap": 7,
-    "stop_codon_removed_without_stop_codon_test": 2,
-    "stop_retained_without_stop_codon_test": 1
+    "stop_codon_removed_without_stop_codon_test": 3,
+    "start_codon_removed_without_five_prime_utr": 1,
+    "stop_codon_completed_by_polyadenylation": 5
    },
    "vep_rs_only_summary": {},
    "fields_compared": [
@@ -3475,6 +4311,20 @@
      "expected_divergence": "stop_codon_removed_without_stop_codon_test"
     },
     {
+     "location": "21:44817966-44817968",
+     "allele": "-",
+     "feature": "ENST00000397893",
+     "feature_type": "Transcript",
+     "record_indices": [
+      134
+     ],
+     "vep_consequence_set": "inframe_deletion",
+     "vep_rs_consequence_sets": [
+      "inframe_deletion,start_lost"
+     ],
+     "expected_divergence": "start_codon_removed_without_five_prime_utr"
+    },
+    {
      "location": "21:45981851-45981852",
      "allele": "A",
      "feature": "ENST00000361866",
@@ -3559,6 +4409,62 @@
      "expected_divergence": "start_cooccurrence_swap"
     },
     {
+     "location": "MT:15886-15887",
+     "allele": "A",
+     "feature": "ENST00000361789",
+     "feature_type": "Transcript",
+     "record_indices": [
+      161
+     ],
+     "vep_consequence_set": "coding_sequence_variant,incomplete_terminal_codon_variant,inframe_insertion",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
+     "location": "MT:15887-15888",
+     "allele": "AT",
+     "feature": "ENST00000361789",
+     "feature_type": "Transcript",
+     "record_indices": [
+      162
+     ],
+     "vep_consequence_set": "3_prime_UTR_variant,coding_sequence_variant,incomplete_terminal_codon_variant",
+     "vep_rs_consequence_sets": [
+      "3_prime_UTR_variant,coding_sequence_variant"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
+     "location": "MT:4260-4261",
+     "allele": "GCT",
+     "feature": "ENST00000361390",
+     "feature_type": "Transcript",
+     "record_indices": [
+      152
+     ],
+     "vep_consequence_set": "incomplete_terminal_codon_variant,inframe_insertion",
+     "vep_rs_consequence_sets": [
+      "inframe_insertion"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
+     "location": "MT:4261",
+     "allele": "C",
+     "feature": "ENST00000361390",
+     "feature_type": "Transcript",
+     "record_indices": [
+      153
+     ],
+     "vep_consequence_set": "coding_sequence_variant,incomplete_terminal_codon_variant",
+     "vep_rs_consequence_sets": [
+      "stop_lost"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
+    },
+    {
      "location": "MT:9989-9991",
      "allele": "-",
      "feature": "ENST00000362079",
@@ -3568,22 +4474,37 @@
      ],
      "vep_consequence_set": "3_prime_UTR_variant,stop_retained_variant",
      "vep_rs_consequence_sets": [
-      "3_prime_UTR_variant,coding_sequence_variant"
+      "3_prime_UTR_variant,stop_lost"
      ],
-     "expected_divergence": "stop_retained_without_stop_codon_test"
+     "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+    },
+    {
+     "location": "MT:9990",
+     "allele": "-",
+     "feature": "ENST00000362079",
+     "feature_type": "Transcript",
+     "record_indices": [
+      156
+     ],
+     "vep_consequence_set": "incomplete_terminal_codon_variant,protein_altering_variant",
+     "vep_rs_consequence_sets": [
+      "stop_lost"
+     ],
+     "expected_divergence": "stop_codon_completed_by_polyadenylation"
     }
    ],
    "vep_rs_only_tuples": [],
    "divergence_summary": {
     "stop_codon_overlap_genomic_span": 12,
     "start_cooccurrence_swap": 7,
-    "stop_codon_removed_without_stop_codon_test": 2,
-    "stop_retained_without_stop_codon_test": 1
+    "stop_codon_removed_without_stop_codon_test": 3,
+    "start_codon_removed_without_five_prime_utr": 1,
+    "stop_codon_completed_by_polyadenylation": 5
    },
    "vep_rs_only_summary": {}
   }
  ],
- "suites": {
+ "datasets": {
   "attributes": {
    "reference": "attributes.ref.txt",
    "input": "attributes.vcf",
@@ -4675,7 +5596,7 @@
  },
  "records": [
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t5597440\tnb_y_rna_rfam\tA\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -4683,7 +5604,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t8987026\trs1988325939\tAGCCGCGGGGATC\tA\t.\t.\t.",
    "combinations": [
     "mature_miRNA_variant",
@@ -4691,7 +5612,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t8987044\t.\tG\tT\t.\t.\t.",
    "combinations": [
     "mature_miRNA_variant",
@@ -4699,14 +5620,14 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t10414912\trs1600775702\tG\tGTGCTTCATCTTC\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t10482800\tnb_readthrough_exon\tG\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -4715,7 +5636,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t10603633\trs1281258100\tGTATGAATATAATAGA\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
@@ -4723,7 +5644,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t13843300\tnb_cyp4f29p_entrez\tG\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -4731,7 +5652,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t14165216\trs551950541\tC\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_region_variant",
@@ -4741,7 +5662,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t14216335\trs1391685509\tCAT\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant,stop_lost",
@@ -4751,7 +5672,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t14622621\trs2123345541\tG\tC\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -4759,14 +5680,14 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t15105118\trs752575819\tC\tT\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t15283784\t21:15283784:T:TA\tT\tTA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -4775,7 +5696,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t15477784\trs1601121900\tTCA\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -4784,21 +5705,21 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t15575269\trs1361934799\tC\tCAG\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t18171655\trs1568921854\tC\tA\t.\t.\t.",
    "combinations": [
     "intron_variant"
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t18256505\t.\tTCAGGCCA\tT\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -4807,14 +5728,14 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t18256600\tnb_chodl_cds\tA\tG\t.\t.\t.",
    "combinations": [
     "synonymous_variant"
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t18398250\tnb_tmprss15_cds\tT\tC\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -4822,7 +5743,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t18398251\tnb_tmprss15_cds2\tT\tC\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -4830,7 +5751,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t18686120\tnb_mir548x\tC\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -4838,7 +5759,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t18918000\tnb_lncrna_no_symbol\tC\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -4846,28 +5767,28 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t19268555\trs937007124\tC\tT\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t20204701\t21:20204701:T:C\tT\tC\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant"
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t23254313\t21:23254313:G:GA\tG\tGA\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t23432233\trs1983579045\tTA\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -4876,7 +5797,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t24526341\t.\tAGAC\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -4885,7 +5806,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t25729793\trs1237301162\tATGCTGATTC\tA\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant,splice_acceptor_variant",
@@ -4897,7 +5818,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t26483402\t.\tTCTCTCCTATC\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,coding_sequence_variant,intron_variant,splice_acceptor_variant",
@@ -4908,7 +5829,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t28885369\trs575418327\tC\tT\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -4919,7 +5840,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t29006645\t21:29006645:TCTGAGTC:T\tTCTGAGTC\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -4931,7 +5852,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t31659979\tsynth_mnp_0574\tGGTCG\tAGTTG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -4946,7 +5867,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t32567827\trs776557022\tT\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -4956,7 +5877,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t32893769\trs2045243839\tG\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -4965,7 +5886,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t33065835\t21:33065835:GGTTTCAGAG:G\tGGTTTCAGAGTGAGATTCT\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -4976,7 +5897,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t33072052\trs1327468266\tG\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -4986,7 +5907,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t33485728\t.\tA\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -4996,7 +5917,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t33836987\trs1200767520\tG\tGAATC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant",
@@ -5008,7 +5929,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t33903747\trs1987132913\tT\tTTACCTC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -5020,7 +5941,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t34142409\trs1184816984\tT\tTG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant",
@@ -5032,7 +5953,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t34518083\t.\tTT\tAA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,coding_sequence_variant",
@@ -5042,7 +5963,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t34526662\t.\tCC\tGG\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,splice_donor_variant",
@@ -5053,7 +5974,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t34613786\t.\tC\tCA\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_region_variant",
@@ -5062,7 +5983,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t34613787\t.\tA\tC\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -5071,7 +5992,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t34613794\t.\tATTC\tA\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,start_lost,start_retained_variant",
@@ -5080,7 +6001,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t34613795\t.\tTT\tAA\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,start_lost",
@@ -5089,7 +6010,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t34614278\t.\tCC\tGG\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,splice_region_variant",
@@ -5100,7 +6021,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t34614758\t.\tAC\tA\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_donor_variant",
@@ -5109,7 +6030,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t34614758\t.\tACCC\tA\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,splice_donor_variant",
@@ -5118,7 +6039,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t34614760\t.\tC\tCGCT\t.\t.\t.",
    "combinations": [
     "inframe_insertion,splice_region_variant",
@@ -5127,7 +6048,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t34615010\t.\tA\tAA\t.\t.\t.",
    "combinations": [
     "frameshift_variant,start_lost",
@@ -5136,7 +6057,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t34615010\t.\tA\tAGCT\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant",
@@ -5145,7 +6066,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t34615011\t.\tTCCC\tT\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -5154,84 +6075,84 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t34645251\t.\tG\tGGCT\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t34648343\t.\tCT\tC\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t34648349\t.\tAGGA\tA\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t34657344\t.\tCA\tGC\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t34657462\t.\tCCTG\tC\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t34658323\t.\tTC\tT\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_acceptor_variant"
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t34658331\t.\tAG\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant"
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t34663853\t.\tTTAC\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_donor_5th_base_variant"
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t34663861\t.\tCTGC\tC\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant,splice_region_variant"
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t34669602\t.\tG\tGGCT\t.\t.\t.",
    "combinations": [
     "protein_altering_variant,stop_gained"
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t34707389\t.\tGGTA\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_donor_region_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t34707943\t.\tGGAA\tG\t.\t.\t.",
    "combinations": [
     "inframe_deletion,splice_region_variant",
@@ -5239,35 +6160,35 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t34709543\t.\tATCT\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,splice_donor_region_variant"
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t34724044\t.\tAC\tA\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t34746017\t.\tGTAA\tG\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_donor_region_variant,splice_donor_variant"
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t34746021\t.\tG\tGGCT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant,splice_donor_region_variant"
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t34748182\trs193193818\tC\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -5275,7 +6196,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t34762246\t.\tGG\tTT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -5283,7 +6204,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t34859477\tnb_runx1_oncogenic\tG\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -5294,7 +6215,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t34859534\tnb_runx1_likely_oncogenic\tG\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -5305,7 +6226,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t36374328\trs1433696562\tCG\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -5315,7 +6236,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t39916525\trs1470200400\tA\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -5324,7 +6245,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t39929109\trs2087638767\tT\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -5335,7 +6256,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t41345735\t.\tT\tTAGACCTTAATTC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_insertion,stop_gained",
@@ -5346,7 +6267,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t41584973\trs1249262350\tC\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -5354,7 +6275,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42312256\t.\tT\tTGCT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -5365,7 +6286,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42312257\t.\tC\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -5376,7 +6297,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42312267\t.\tAT\tCA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant",
@@ -5386,7 +6307,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42312269\t.\tT\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant",
@@ -5396,7 +6317,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42312269\t.\tTC\tAG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,splice_acceptor_variant",
@@ -5405,7 +6326,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42312270\t.\tC\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,splice_acceptor_variant",
@@ -5414,7 +6335,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42312270\t.\tCTGC\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant",
@@ -5423,7 +6344,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42312271\t.\tT\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,splice_acceptor_variant",
@@ -5432,7 +6353,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42312271\t.\tTG\tAT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant",
@@ -5441,7 +6362,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42312274\t.\tAA\tCC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant",
@@ -5450,7 +6371,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42313477\t.\tG\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_region_variant",
@@ -5460,7 +6381,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42313484\t.\tC\tCGCT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant",
@@ -5471,7 +6392,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42313484\t.\tCC\tGG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,splice_donor_variant",
@@ -5481,7 +6402,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42313485\t.\tC\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant",
@@ -5492,7 +6413,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42313485\t.\tCTGC\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant",
@@ -5502,7 +6423,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42313534\t.\tGT\tTA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant",
@@ -5512,7 +6433,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42313535\t.\tT\tTA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,stop_lost",
@@ -5522,7 +6443,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42313535\t.\tTCAA\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_deletion,stop_lost",
@@ -5532,7 +6453,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42313536\t.\tC\tCGCT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_insertion,stop_retained_variant",
@@ -5542,7 +6463,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42313575\t.\tC\tCGCT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,stop_gained",
@@ -5553,7 +6474,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42313580\t.\tG\tGGCT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_insertion",
@@ -5563,7 +6484,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42313600\t.\tGT\tTA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -5574,7 +6495,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42313602\t.\tC\tCGCT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,protein_altering_variant",
@@ -5584,7 +6505,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42313609\t.\tTGGC\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_deletion",
@@ -5596,7 +6517,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42313628\t.\tGCAG\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_deletion,splice_region_variant",
@@ -5608,7 +6529,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42313631\t.\tG\tGGCT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_insertion,splice_region_variant",
@@ -5622,7 +6543,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42313631\t.\tG\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_polypyrimidine_tract_variant",
@@ -5635,7 +6556,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42313632\t.\tCT\tGA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_polypyrimidine_tract_variant",
@@ -5647,7 +6568,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42313688\t.\tTG\tAT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -5657,7 +6578,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42315285\t.\tGTAC\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -5668,7 +6589,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42315291\t.\tA\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -5679,7 +6600,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42315291\t.\tACAC\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,coding_sequence_variant,splice_donor_variant",
@@ -5690,7 +6611,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42315292\t.\tC\tCGCT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -5702,7 +6623,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42315292\t.\tCA\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant,splice_region_variant",
@@ -5714,7 +6635,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42315293\t.\tA\tAA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant,splice_region_variant",
@@ -5725,7 +6646,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42315293\t.\tAC\tCG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -5737,7 +6658,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42315305\t.\tACTC\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,coding_sequence_variant,splice_donor_variant",
@@ -5747,7 +6668,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42315306\t.\tCT\tGA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,coding_sequence_variant,splice_donor_variant",
@@ -5757,7 +6678,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42315319\t.\tCT\tGA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,synonymous_variant",
@@ -5766,7 +6687,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42315320\t.\tT\tTA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -5775,7 +6696,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42315336\t.\tC\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,synonymous_variant",
@@ -5785,7 +6706,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42315336\t.\tCA\tGC\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,coding_sequence_variant",
@@ -5795,7 +6716,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42315372\t.\tC\tCA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant,start_lost",
@@ -5804,7 +6725,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42315373\t.\tA\tAGCT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,start_lost",
@@ -5813,7 +6734,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42315373\t.\tATGA\tA\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,NMD_transcript_variant,start_lost",
@@ -5822,7 +6743,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t42315409\t.\tC\tCGCT\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -5831,7 +6752,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t42426705\trs771158307\tC\tCCTT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_insertion",
@@ -5839,7 +6760,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t42482619\t408130\tACATGCTCCGCAACTTAC\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -5849,7 +6770,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t42863432\t3336333\tCCACCTA\tACACCTG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -5860,7 +6781,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t43161261\trs1985621170\tG\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -5868,7 +6789,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t43683285\trs755653178\tG\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -5878,7 +6799,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t43774760\t4725737\tC\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -5891,7 +6812,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t43776268\t423466\tA\tAAT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -5901,7 +6822,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t43801711\trs2085093698\tCGCGTCAGTGAGGT\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -5916,7 +6837,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t44499780\t.\tGCCTCAGCGTGT\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -5925,7 +6846,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t44529793\trs781794878\tCTAACCATAGG\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_donor_region_variant,splice_donor_variant",
@@ -5936,7 +6857,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t44612102\t.\tTGGCTGACGCCTG\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -5945,7 +6866,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t44817965\t.\tACAT\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_deletion,start_lost",
@@ -5956,7 +6877,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t45268500\tnb_cds_start_nf_intron\tG\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -5967,7 +6888,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t45379117\trs1374160967\tC\tT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -5976,7 +6897,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t45537772\t.\tT\tTATTCCAGAA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,protein_altering_variant,splice_region_variant,stop_gained",
@@ -5990,7 +6911,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t45595661\trs1282250887\tTGTAA\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -6000,7 +6921,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t45981851\t.\tA\tAA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant,start_lost,start_retained_variant",
@@ -6010,7 +6931,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t45986944\t.\tG\tGGCT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,protein_altering_variant,splice_region_variant,stop_gained",
@@ -6021,7 +6942,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t45990377\t.\tG\tGGCT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_insertion,splice_region_variant",
@@ -6032,7 +6953,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t45990378\t.\tG\tGGCT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_insertion,splice_region_variant,stop_gained",
@@ -6043,7 +6964,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t45992746\t.\tAGGG\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,coding_sequence_variant,splice_acceptor_variant",
@@ -6053,7 +6974,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t45997452\t.\tA\tAA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant,stop_gained",
@@ -6064,7 +6985,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t45997452\t.\tACCG\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_deletion,stop_gained",
@@ -6075,7 +6996,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t46001305\t.\tCA\tGC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -6088,7 +7009,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t46002335\t.\tTGAC\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,stop_lost",
@@ -6100,7 +7021,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "21\t46005048\t.\tC\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -6110,7 +7031,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "21\t46658922\t.\tT\tTTAAGGAGTTTTTTTCAAAGCCCAAGTATAACCACATTTTGAAACCAG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -6127,7 +7048,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "MT\t600\tnb_mt_trna\tA\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -6136,7 +7057,7 @@
    ]
   },
   {
-   "suite": "attributes",
+   "dataset": "attributes",
    "vcf": "MT\t3400\tnb_mt_nd1\tC\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -6145,7 +7066,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "MT\t4260\t.\tC\tCGCT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -6154,7 +7075,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "MT\t4261\t.\tT\tC\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,incomplete_terminal_codon_variant",
@@ -6163,7 +7084,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "MT\t5091\t.\tT\tTA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -6172,7 +7093,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "MT\t9988\t.\tCTTA\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,stop_retained_variant",
@@ -6182,7 +7103,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "MT\t9989\t.\tTT\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -6191,7 +7112,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "MT\t12339\t.\tA\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -6200,7 +7121,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "MT\t14149\t.\tCCTA\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -6209,7 +7130,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "MT\t14747\t.\tA\tAA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -6218,7 +7139,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "MT\t15806\t.\tG\tGGCT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -6227,7 +7148,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "MT\t15886\t.\tC\tCA\t.\t.\t.",
    "combinations": [
     "coding_sequence_variant,incomplete_terminal_codon_variant,inframe_insertion",
@@ -6236,7 +7157,7 @@
    ]
   },
   {
-   "suite": "frame",
+   "dataset": "frame",
    "vcf": "MT\t15887\t.\tTG\tAT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,coding_sequence_variant,incomplete_terminal_codon_variant",
@@ -6246,9 +7167,16 @@
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
+ "excludes": {
+  "variation_records_named": [
+   "^COSV\\d",
+   "^(C[A-Z]|BM|HM)\\d{6}"
+  ],
+  "reason": "COSMIC and HGMD-PUBLIC identifiers are not redistributed; those records carry no alleles in the variation database, so the variation flag set runs with --exclude_null_alleles and Ensembl VEP's reference names none of them either"
+ },
  "divergences": [
   {
    "location": "21:33836987-33836988",
@@ -6461,6 +7389,20 @@
    "expected_divergence": "stop_codon_removed_without_stop_codon_test"
   },
   {
+   "location": "21:44817966-44817968",
+   "allele": "-",
+   "feature": "ENST00000397893",
+   "feature_type": "Transcript",
+   "record_indices": [
+    134
+   ],
+   "vep_consequence_set": "inframe_deletion",
+   "vep_rs_consequence_sets": [
+    "inframe_deletion,start_lost"
+   ],
+   "expected_divergence": "start_codon_removed_without_five_prime_utr"
+  },
+  {
    "location": "21:45981851-45981852",
    "allele": "A",
    "feature": "ENST00000361866",
@@ -6545,6 +7487,62 @@
    "expected_divergence": "start_cooccurrence_swap"
   },
   {
+   "location": "MT:15886-15887",
+   "allele": "A",
+   "feature": "ENST00000361789",
+   "feature_type": "Transcript",
+   "record_indices": [
+    161
+   ],
+   "vep_consequence_set": "coding_sequence_variant,incomplete_terminal_codon_variant,inframe_insertion",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant"
+   ],
+   "expected_divergence": "stop_codon_completed_by_polyadenylation"
+  },
+  {
+   "location": "MT:15887-15888",
+   "allele": "AT",
+   "feature": "ENST00000361789",
+   "feature_type": "Transcript",
+   "record_indices": [
+    162
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,coding_sequence_variant,incomplete_terminal_codon_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,coding_sequence_variant"
+   ],
+   "expected_divergence": "stop_codon_completed_by_polyadenylation"
+  },
+  {
+   "location": "MT:4260-4261",
+   "allele": "GCT",
+   "feature": "ENST00000361390",
+   "feature_type": "Transcript",
+   "record_indices": [
+    152
+   ],
+   "vep_consequence_set": "incomplete_terminal_codon_variant,inframe_insertion",
+   "vep_rs_consequence_sets": [
+    "inframe_insertion"
+   ],
+   "expected_divergence": "stop_codon_completed_by_polyadenylation"
+  },
+  {
+   "location": "MT:4261",
+   "allele": "C",
+   "feature": "ENST00000361390",
+   "feature_type": "Transcript",
+   "record_indices": [
+    153
+   ],
+   "vep_consequence_set": "coding_sequence_variant,incomplete_terminal_codon_variant",
+   "vep_rs_consequence_sets": [
+    "stop_lost"
+   ],
+   "expected_divergence": "stop_codon_completed_by_polyadenylation"
+  },
+  {
    "location": "MT:9989-9991",
    "allele": "-",
    "feature": "ENST00000362079",
@@ -6554,24 +7552,32 @@
    ],
    "vep_consequence_set": "3_prime_UTR_variant,stop_retained_variant",
    "vep_rs_consequence_sets": [
-    "3_prime_UTR_variant,coding_sequence_variant"
+    "3_prime_UTR_variant,stop_lost"
    ],
-   "expected_divergence": "stop_retained_without_stop_codon_test"
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "MT:9990",
+   "allele": "-",
+   "feature": "ENST00000362079",
+   "feature_type": "Transcript",
+   "record_indices": [
+    156
+   ],
+   "vep_consequence_set": "incomplete_terminal_codon_variant,protein_altering_variant",
+   "vep_rs_consequence_sets": [
+    "stop_lost"
+   ],
+   "expected_divergence": "stop_codon_completed_by_polyadenylation"
   }
  ],
  "vep_rs_only_tuples": [],
  "divergence_summary": {
   "stop_codon_overlap_genomic_span": 12,
   "start_cooccurrence_swap": 7,
-  "stop_codon_removed_without_stop_codon_test": 2,
-  "stop_retained_without_stop_codon_test": 1
+  "stop_codon_removed_without_stop_codon_test": 3,
+  "start_codon_removed_without_five_prime_utr": 1,
+  "stop_codon_completed_by_polyadenylation": 5
  },
- "vep_rs_only_summary": {},
- "excludes": {
-  "variation_records_named": [
-   "^COSV\\d",
-   "^(C[A-Z]|BM|HM)\\d{6}"
-  ],
-  "reason": "COSMIC and HGMD-PUBLIC identifiers are not redistributed; those records carry no alleles in the variation database, so the variation flag set runs with --exclude_null_alleles and Ensembl VEP's reference names none of them either"
- }
+ "vep_rs_only_summary": {}
 }

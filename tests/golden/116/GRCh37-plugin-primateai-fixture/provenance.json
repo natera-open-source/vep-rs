@@ -1,17 +1,17 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh37",
  "fasta": "none on either side",
  "input": "14 hand-built VCF records on chromosome 21 of the release-116 GRCh37 cache: an intronic SNV, an intergenic SNV, single-base substitutions called synonymous (one lower-case), stop_lost, missense (one with two alternate alleles), start_lost and stop_gained on transcripts of both strands, a deletion, an insertion, a two-base substitution and a missense SNV the score file leaves out",
  "sha256": {
-  "default.txt": "a55170721d494e5f7581b77a65bee9bea49545f065ebe2fb95efea97ca232b07",
-  "tab.txt": "7b370b606d7e4db4673715f126735f9ffa989514ba104d7b62e7653567ed93e0",
-  "vcf.vcf": "2bd8fbd4d6fe7dbad3203b273a50409ea22f414d917aee5cd749909b092cb8b4",
-  "json.jsonl": "4b16685804371dfa489f38bb4d0a94c258e17fb86b54d1d447b8f2be1e620646"
+  "default.txt": "a30f3452fadad44da1ffd31a93799a8821e79c33ef80d9896882a40b6907d51f",
+  "tab.txt": "a541af406f137ee45153e1dc29b8175a648965d05c9d589fb33795331fbbb63f",
+  "vcf.vcf": "25a3461e8a357143152c7fad0b5d2702dde37d91e96e69bdcf49852a480cce16",
+  "json.jsonl": "5ebd808a4ec83f1e8511366f0a37adff6a209c8354ef37ba21ac121db886f717"
  },
  "variants_vcf_sha256": "84e8ee50c44725f8ad6f1d5b6a398b9932cfb8ff251c547049713fd9c45492da",
  "plugin_fixtures": {
@@ -41,23 +41,36 @@
  },
  "flag_sets": {
   "primateai": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {corpus}/data --plugin PrimateAI,{corpus}/data/PrimateAI_scores_v0.2_GRCh37_sorted_synthetic.tsv.bgz [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh37",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "3b7ce8fb65eb892730e11fb4277a49da6cf3a758c794250e132b9769489119fd",
+    "tab.txt": "9035a74ed95a82276c12806a73c978662c98c420a038c4af19c6aea3939ae814",
+    "vcf.vcf": "405e90a01af8a7a64242c984d71b1f1a2f94df6eaf00b160a5130e43016fca1e",
+    "json.jsonl": "0142cbeb7fa4953251f9e16b7320a6e7361bc83cb233dcc4e551ce7b097a1559"
+   },
+   "flags": [
+    "--dir_plugins",
+    "{corpus}/data",
+    "--plugin",
+    "PrimateAI,{corpus}/data/PrimateAI_scores_v0.2_GRCh37_sorted_synthetic.tsv.bgz"
+   ],
+   "expected_dir": "expected_primateai",
    "formats_compared": [
     "default",
     "tab",
     "vcf",
     "json"
-   ],
-   "expected_dir": "expected_primateai",
-   "sha256": {
-    "default.txt": "3197eb7244ce5d7063eeeca44b43000375519977c3cb5edb68d1c8959f3467f4",
-    "tab.txt": "5ad5aeb5699aa46991cd319ef190006a125e23534ba0c542d2c3cf34df6fc172",
-    "vcf.vcf": "046c442deea5b3b71d4f3e058dc316f8d75ba774daf40b46031f3c7a3112df91",
-    "json.jsonl": "000ed09e4010b756badd009d65f2fa850f002a5c9c324e5ce99b12c6bed140d6"
-   }
+   ]
   }
  },
- "generator": "data/PrimateAI_scores_v0.2_GRCh37_sorted_synthetic.tsv.bgz: scripts/fixtures/plugin_score_fixtures.py from variants.vcf, the layout the plugin's documentation gives (PrimateAI.pm:57-62 and 65: a `#` in front of the column description line, line twelve), in the fixture eleven comment lines above that line and `chr`-prefixed chromosome names, with fabricated scores, one row per alternate base at every single-base site (the row the plugin must pick beside two it must not), no row at the unscored site, bgzip and tabix -s 1 -b 2 -e 2 (seed and digests under plugin_fixtures); the file's name is the name the plugin's documentation gives (PrimateAI.pm:32), with the word `synthetic` added before the extension to say that the file is made up; json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice scripts/data/storable_to_json.pl converted from the Ensembl VEP 116 GRCh37 cache; expected outputs: scripts/concordance/generate_reference_output.sh --corpus for the manifest's run, and one Ensembl VEP 116.2 container run per format for each flag set from the vep command recorded under its flag_sets entry, the corpus mounted read-only at /work/corpus and the PrimateAI plugin read from the container's plugin directory; manifest: scripts/golden/build_golden_corpus.py select --include for every record, flag-set, then classify for the manifest's run and each flag set against the committed tree's binary",
+ "generator": "data/PrimateAI_scores_v0.2_GRCh37_sorted_synthetic.tsv.bgz: scripts/fixtures/plugin_score_fixtures.py from variants.vcf, the layout the plugin's documentation gives (PrimateAI.pm:57-62 and 65: a `#` in front of the column description line, line twelve), in the fixture eleven comment lines above that line and `chr`-prefixed chromosome names, with fabricated scores, one row per alternate base at every single-base site (the row the plugin must pick beside two it must not), no row at the unscored site, bgzip and tabix -s 1 -b 2 -e 2 (seed and digests under plugin_fixtures); the file's name is the name the plugin's documentation gives (PrimateAI.pm:32), with the word `synthetic` added before the extension to say that the file is made up; json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice tools/vep-storable-to-json converts from the Ensembl VEP 116 GRCh37 cache; expected outputs: scripts/concordance/generate_reference_output.sh --corpus for the manifest's run, and one Ensembl VEP 116.3 container run per format for each flag set from the vep command recorded under its flag_sets entry, the corpus mounted read-only at /work/corpus and the PrimateAI plugin read from the container's plugin directory; manifest: tools/vep-golden-corpus select --include for every record, flag-set, then classify for the manifest's run and each flag set against the committed tree's binary",
  "pruned_cache_transcripts": {
   "21": 87
  }

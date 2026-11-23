@@ -2,6 +2,8 @@
 
 `vep filter` filters an annotated output line by line, as Ensembl VEP's `filter_vep` does, over a VCF or tab output of `vep` or of Ensembl VEP. It takes the same options, read as Getopt::Long reads them: after one dash or two, in any case, and abbreviated to any prefix that names one option. A repeated option keeps its last value, and every `--filter` given is kept. The short forms are `-i`, `-o`, `-f`, `-s`, `-c`, `-l` and `-y`.
 
+An abbreviation is resolved against the options of the release that reads it, so a later release that adds an option can give a prefix to that option or make it name two options, which is refused (exit 2). A script that must keep working writes each option's full name.
+
 ```bash
 # The lines with a moderate-impact missense entry
 vep filter -i annotated.vcf \
@@ -33,6 +35,8 @@ A command-line word is read as bytes too, so a value, a field name or a file nam
 `--ontology` rewrites `Consequence is <term>` to `Consequence is_child <term>`, which passes an entry whose term is the parent or lies below it in the Sequence Ontology. The answer comes from the built-in table of consequence terms rather than an Ensembl database, and the connection flags are refused by name. Where `vep filter` reads a line differently from `filter_vep` is stated on [Abbreviated fields, `is_child` and the regex dialect](../divergences/transcript-filter-fields.md#vep-filter).
 
 Every error is one line `ERROR: [filter] <message>` on standard error and exit 1; a command-line syntax error is exit 2.
+
+A line that standard error refuses, on a full device or a pipe without a reader, is dropped and changes no exit status. A run that ends with the warning of lines without the consequence field exits 0 with its output whole, and a refusal exits 1. `filter_vep` completes on a full device too, a refusal still ending non-zero; on a pipe without a reader it is killed by `SIGPIPE` (exit 141) at its warning or its error, with none of its output written.
 
 ## Input and output
 

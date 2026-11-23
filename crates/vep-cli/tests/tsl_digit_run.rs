@@ -4,16 +4,18 @@
 //! A `TSL` attribute value outside the one-digit vocabulary of an Ensembl gene
 //! set, as a GFF3 given to the cache builder can carry it: the level is the
 //! digit run after `tsl` as text in the text formats and the number it spells
-//! in the JSON format (`OutputFactory.pm:1609-1613` with `numberify`), and the
+//! in the JSON format (`OutputFactory.pm:1618-1622` with `numberify`), and the
 //! pick order's `tsl` category ranks the run as a number and ties it as text
 //! (`:750-755`, `:789-796`).
 
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
 use vep_core::cache_manifest::CacheManifest;
+
+mod common;
 
 /// The native-builder corpus, whose cache carries `TSL` attributes alone (no
 /// top-level `tsl` key).
@@ -87,7 +89,7 @@ fn run(dir: &Path, cache: &Path, pos: u64, flags: &[&str]) -> String {
     .unwrap();
     let out = dir.join("out.txt");
     let _ = fs::remove_file(&out);
-    let output = Command::new(env!("CARGO_BIN_EXE_vep"))
+    let output = common::isolated_vep(dir)
         .stdin(Stdio::null())
         .arg("-i")
         .arg(&input)

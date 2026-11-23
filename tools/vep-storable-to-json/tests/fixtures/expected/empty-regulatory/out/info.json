@@ -1,0 +1,11 @@
+{
+   "assembly" : "GRCh38",
+   "cell_types" : [],
+   "contig_order" : [
+      "21"
+   ],
+   "regulatory" : true,
+   "regulatory_schema" : 1,
+   "source_versions" : {},
+   "species" : "homo_sapiens"
+}

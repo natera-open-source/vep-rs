@@ -1,0 +1,49 @@
+{
+ "mode": "stats",
+ "format": "stats",
+ "verdict": "green",
+ "reasons": [],
+ "tolerance": 0,
+ "masked_rows": [
+  "Command line options",
+  "End time",
+  "Input data",
+  "Input file",
+  "Output file",
+  "Run time",
+  "Start time"
+ ],
+ "sections": {
+  "expected": [
+   "VEP run statistics",
+   "Data version",
+   "General statistics",
+   "Variant classes",
+   "Consequences (most severe)",
+   "Consequences (all)",
+   "Coding consequences",
+   "Variants by chromosome",
+   "Position in protein"
+  ],
+  "actual": [
+   "VEP run statistics",
+   "Data version",
+   "General statistics",
+   "Variant classes",
+   "Consequences (most severe)",
+   "Consequences (all)",
+   "Coding consequences",
+   "Variants by chromosome",
+   "Position in protein"
+  ],
+  "order_agrees": true
+ },
+ "compared": {
+  "sections": 9,
+  "rows": 105
+ },
+ "documented": [],
+ "differences": {},
+ "expected": "tests/fixtures/reference.summary.log.gz",
+ "actual": "tests/fixtures/reference.summary.log"
+}

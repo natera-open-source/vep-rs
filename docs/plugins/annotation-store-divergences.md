@@ -1,7 +1,7 @@
 # Where the annotation-store plugins differ from Ensembl VEP
 
 Where vep-rs's AlphaMissense, CADD, SpliceVault, TranscriptAnnotator, gnomADMt,
-LOEUF and OpenTargets output differs from Ensembl VEP 116.2's: eight classes,
+LOEUF and OpenTargets output differs from Ensembl VEP 116.3's: eight classes,
 each with a worked example.
 
 In each the plugin annotates a row, or describes a field, in a way the record or
@@ -90,7 +90,7 @@ digests and both commands, are in
 
 ### 1.7 How the comparator treats this class
 
-The format comparator (`scripts/concordance/compare_vep_formats.py`) applies
+The format comparator (`tools/vep-formats-compare`) applies
 `alphamissense_two_digit_transcript_version` when a comparison case names it in
 `masks`. An `am_` field, or the JSON `alphamissense` object, that the candidate
 fills where the reference has none is set aside, counted once per row. A
@@ -123,8 +123,8 @@ strand of its own. Ensembl VEP writes each distinct warning text once per run.
 
 ### 2.2 The record
 
-A hand-written `<INV>` record over the span the `GRCh38-plugin-cadd-sv` golden
-corpus's synthetic structural-variant file scores (`tests/golden/116/GRCh38-plugin-cadd-sv/plugin_data/`), and the same span as a deletion:
+A hand-written `<INV>` record over the span the `GRCh38-plugin-cadd-sv-fixture` golden
+corpus's synthetic structural-variant file scores (`tests/golden/116/GRCh38-plugin-cadd-sv-fixture/plugin_data/`), and the same span as a deletion:
 
 ```
 21	5029000	inv	T	<INV>	.	.	SVTYPE=INV;END=5047000
@@ -194,7 +194,7 @@ three-entry table (`insertion`, `deletion`, `duplication`). An inversion, a
 tandem duplication or a copy-number class therefore gets an undefined allele
 string. `trim_sequences` in `ensembl-variation`'s `Utils/Sequence.pm` (line 968)
 throws on it for every row whose span the file covers. `OutputFactory.pm`, line
-2244, catches each exception as the warning, which `BaseVEP.pm`, lines 809-813,
+2253, catches each exception as the warning, which `BaseVEP.pm`, lines 809-813,
 write once per distinct text. A record over a span with no file row never
 reaches the match and throws nothing.
 
@@ -419,7 +419,7 @@ rank. They write that object back onto the cached row (line 190).
 
 The next transcript row of the record reads the same cached row. Line 183,
 `for my $event (@$top_events)`, meets the object where it expects a list and
-dies. `OutputFactory.pm`, line 2244, catches the error as the warning and writes
+dies. `OutputFactory.pm`, line 2253, catches the error as the warning and writes
 the row without the object. The text formats return the cached row unchanged
 (lines 192-194), so every row carries the fields there.
 
@@ -770,14 +770,14 @@ engines.
 **How often the shape occurs.** Tier 3 under the rule of [Intended divergences
 from Ensembl VEP](../intended-divergences.md): ordinary data does not carry the
 shape. None of the 69 rows of the committed export has a bare `0` in an output
-column. 4 of the 392 committed flag sets run the plugin.
+column. 4 of the 511 committed flag sets run the plugin.
 
 ### 8.1 A locus-to-gene score of `0` on an insertion
 
 **In short.** Against a copy of the committed export in which the
 `gwasLocusToGeneScore` cell of one record, `0.84708172082901`, is changed to
 `0`, the record `ot_gwas_insertion_lead` (`21 14979687 G GT`) has 15 transcript
-rows. Ensembl VEP 116.2 writes `OpenTargets_gwasLocusToGeneScore=NA` on every
+rows. Ensembl VEP 116.3 writes `OpenTargets_gwasLocusToGeneScore=NA` on every
 one; vep-rs writes `OpenTargets_gwasLocusToGeneScore=0`, and both write `0` in
 the row's JSON object. Every other field of the rows agrees, the two empty QTL
 cells printing `NA` on both engines; against the unchanged export both write

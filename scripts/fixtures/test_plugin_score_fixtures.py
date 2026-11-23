@@ -586,6 +586,77 @@ def test_spliceai_sites_take_the_other_forms_of_the_layout(tmp_path: Path):
         psf.record_forms_for("spliceai_snv", ["21:100"], ["21:100"], [], [])
 
 
+def test_spliceai_entries_stand_in_the_order_and_the_draws_their_site_is_told(tmp_path: Path, capsys):
+    """Under `--entry-order` a site holds one record per allele whose entries are the ones
+    its word lists, in that order: entry `I` is the value of the allele's record of place
+    `I` as that record writes it, and entry `I:D` names the same allele and symbol with
+    scores drawn again for draw `D`, so one symbol stands in several entries of a record,
+    with equal scores under one draw and with other scores under another. A draw is the
+    same on every run, a site under no option keeps its records, the class counts the rows
+    written and the form its records, and `main` records the words. A place past the
+    allele's records, a malformed word, a site named twice and a site under another form
+    are refused."""
+    corpus, symbols_file = write_spliceai_corpus(tmp_path)
+    records = psf.read_records(corpus / "variants.vcf")
+    symbols = {"21:100": ["SOD1", "OTHER"], "21:200": ["GENE2"], "21:300": ["DELG", "DELH"]}
+    plain, _ = psf.spliceai_rows(records, symbols, "spliceai_snv", 9, "bare", set())
+    value = {tuple(cells[:5]) + (cells[7].split("|")[1],): cells[7].removeprefix("SpliceAI=") for cells in (row.split("\t") for row in plain)}
+
+    def entries_at(words: list[str], site: str = "21\t100\t") -> list[tuple[str, list[str]]]:
+        forms = psf.record_forms_for("spliceai_snv", [], [], [], [], entry_order=words)
+        rows, _ = psf.spliceai_rows(records, symbols, "spliceai_snv", 9, "bare", set(), forms)
+        return [(cells[4], cells[7].removeprefix("SpliceAI=").split(",")) for cells in (row.split("\t") for row in rows) if "\t".join(cells).startswith(site)]
+
+    for alt, entries in entries_at(["21:100=2,2"]):
+        own = value[("21", "100", ".", "A", alt, "SOD1")]
+        assert entries == [own, own]
+    for alt, entries in entries_at(["21:100=2,2:2,1,2:3"]):
+        own, other = value[("21", "100", ".", "A", alt, "SOD1")], value[("21", "100", ".", "A", alt, "OTHER")]
+        assert entries[0] == own and entries[2] == other
+        assert [entry.split("|")[:2] for entry in entries] == [[alt, "SOD1"], [alt, "SOD1"], [alt, "OTHER"], [alt, "SOD1"]]
+        assert len({entries[0], entries[1], entries[3]}) == 3
+        assert all(len(entry.split("|")) == 10 for entry in entries)
+    assert entries_at(["21:100=2,2:2,1,2:3"]) == entries_at(["21:100=2,2:2,1,2:3"])
+    assert entries_at(["21:100=1,2:2"])[0][1][1] == entries_at(["21:100=2:2,2:2"])[0][1][0]
+
+    forms = psf.record_forms_for("spliceai_snv", [], [], [], [], entry_order=["21:100=1,1:2", "21:200=1,1"])
+    rows, counts = psf.spliceai_rows(records, symbols, "spliceai_snv", 9, "bare", set(), forms)
+    assert counts == {"snv": 6, "non_snv": 0, "miss": 0, "entry_order": 6}
+    assert [row.split("\t")[7].count(",") + 1 for row in rows] == [2] * 6
+    indel = psf.record_forms_for("spliceai_indel", [], [], [], [], entry_order=["21:300=2,1,2:2"])
+    rows, counts = psf.spliceai_rows(records, symbols, "spliceai_indel", 9, "bare", set(), indel)
+    assert [[entry.split("|")[1] for entry in row.split("\t")[7].split(",")] for row in rows] == [["DELH", "DELG", "DELH"]]
+    assert counts == {"snv": 0, "non_snv": 1, "miss": 0, "entry_order": 1}
+
+    words = ["--entry-order", "21:100=1,1:2", "--entry-order", "21:200=1,1"]
+    if all(shutil.which(tool) for tool in psf.TOOLS):
+        assert psf.main(["--corpus", str(corpus), "--shape", "spliceai_snv", "--name", "spliceai.synthetic.vcf.gz", "--dir", "plugin_data", "--seed", "9", "--symbols", str(symbols_file), *words]) == 0
+        assert "entry_order 6" in capsys.readouterr().out
+        recorded = json.loads((corpus / "provenance.json").read_text(encoding="utf-8"))["plugin_fixtures"]["spliceai.synthetic.vcf.gz"]
+        assert recorded["record_forms"] == {"entry_order": ["21:100=1,1:2", "21:200=1,1"]} and recorded["rows"]["entry_order"] == 6
+
+    with pytest.raises(SystemExit, match="--entry-order names entry 2 of 21:200, whose alleles have 1 record each"):
+        psf.spliceai_rows(records, symbols, "spliceai_snv", 9, "bare", set(), psf.record_forms_for("spliceai_snv", [], [], [], [], entry_order=["21:200=1,2"]))
+    with pytest.raises(SystemExit, match="--entry-order names 21:900, a site with no record in this file"):
+        psf.spliceai_rows(records, symbols, "spliceai_snv", 9, "bare", set(), psf.record_forms_for("spliceai_snv", [], [], [], [], entry_order=["21:900=1,1"]))
+    # `str.isdigit` passes a superscript two, which `int` refuses.
+    for word in ("21:100", "21:100=", "21:100=1,x", "21:100=1:,1", "chr=1,1", "21:100=1,1:2:3", f"21:100=1,{chr(0xB2)}", f"21:100=1,1:{chr(0xB2)}"):
+        with pytest.raises(SystemExit, match=r"--entry-order names a site and its entries as chr:pos=I\[:D\],I\[:D\],\.\.\., got"):
+            psf.record_forms_for("spliceai_snv", [], [], [], [], entry_order=[word])
+    with pytest.raises(SystemExit, match="--entry-order 21:100=1: a record of several entries holds two or more"):
+        psf.record_forms_for("spliceai_snv", [], [], [], [], entry_order=["21:100=1"])
+    with pytest.raises(SystemExit, match="--entry-order 21:100=0,1: a place and a draw count from 1"):
+        psf.record_forms_for("spliceai_snv", [], [], [], [], entry_order=["21:100=0,1"])
+    with pytest.raises(SystemExit, match="--entry-order 21:100=1,1:0: a place and a draw count from 1"):
+        psf.record_forms_for("spliceai_snv", [], [], [], [], entry_order=["21:100=1,1:0"])
+    with pytest.raises(SystemExit, match="--entry-order names 21:100 twice; a site's entries stand in one order"):
+        psf.record_forms_for("spliceai_snv", [], [], [], [], entry_order=["21:100=1,1", "21:100=1,2"])
+    with pytest.raises(SystemExit, match="21:100 stands under --join-entries and --entry-order; a site takes one form"):
+        psf.record_forms_for("spliceai_snv", ["21:100"], [], [], [], entry_order=["21:100=1,1"])
+    with pytest.raises(SystemExit, match="are given with --shape spliceai_snv or spliceai_indel and with no other shape"):
+        psf.record_forms_for("clinpred", [], [], [], [], entry_order=["21:100=1,1"])
+
+
 def test_spliceai_lines_stand_as_many_times_as_their_site_is_told(tmp_path: Path):
     """Under `--repeat-lines` every record line of a site stands N times, the copies next
     to each other: the plain lines of a site under no other option, and the lines of the
@@ -959,3 +1030,126 @@ def test_main_writes_the_cadd_fixtures_and_their_indexes(tmp_path: Path, capsys)
         psf.main(["--corpus", str(corpus), "--shape", "clinpred", "--name", "x_synthetic.gz", "--seed", "1", "--assembly", "GRCh38"])
     with pytest.raises(SystemExit, match="GRCh38 alone"):
         psf.main(["--corpus", str(corpus), "--shape", "cadd_sv", "--name", "sv_synthetic.tsv.gz", "--seed", "1", "--assembly", "GRCh37", "--force"])
+
+
+def write_exon_cache(corpus: Path, transcripts: dict[str, list[dict]], compress: bool = False) -> Path:
+    """A `json_cache` under `corpus` holding one shard per chromosome of `transcripts`."""
+    cache = corpus / "json_cache"
+    for chrom, items in transcripts.items():
+        shard_dir = cache / "transcripts" / chrom
+        shard_dir.mkdir(parents=True, exist_ok=True)
+        text = json.dumps(items)
+        if compress:
+            with gzip.open(shard_dir / "1-1000000.json.gz", "wt", encoding="utf-8") as fh:
+                fh.write(text)
+        else:
+            (shard_dir / "1-1000000.json").write_text(text, encoding="utf-8")
+    return cache
+
+
+def exon(start: int, end: int) -> dict:
+    return {"start": start, "end": end}
+
+
+LOFTEE_GERP_TRANSCRIPTS = {
+    "21": [
+        {"stable_id": "ENST_A", "exons": [exon(100, 110), exon(300, 305)]},
+        {"stable_id": "ENST_B", "exons": [exon(108, 120)]},
+        None,
+        {"stable_id": "ENST_NO_EXONS"},
+    ],
+    "22": [{"stable_id": "ENST_C", "exons": [exon(2, 4)]}],
+}
+
+
+def test_loftee_gerp_rows_score_every_exon_base_from_the_seed_and_the_base_alone(tmp_path: Path):
+    """The regions are the cached exons with the flank either side, merged where they overlap
+    or touch and never below base 1; every base of a region gets one row of chromosome,
+    position and a two-decimal score inside the shape's bounds; a base's score is the same
+    in a table over a cache that holds more transcripts, and moves with the seed; a missed
+    base gets no row; a compressed shard reads as a plain one."""
+    corpus = write_corpus(tmp_path)
+    cache = write_exon_cache(corpus, LOFTEE_GERP_TRANSCRIPTS)
+    assert psf.read_exon_regions(cache, 0) == {"21": [(100, 120), (300, 305)], "22": [(2, 4)]}
+    assert psf.read_exon_regions(cache, 3) == {"21": [(97, 123), (297, 308)], "22": [(1, 7)]}
+    assert psf.read_exon_regions(cache, 90) == {"21": [(10, 395)], "22": [(1, 94)]}
+    regions = psf.read_exon_regions(cache, 3)
+    rows, counts = psf.loftee_gerp_rows(regions, 37, "bare", set())
+    cells = [row.split("\t") for row in rows]
+    assert [(c[0], int(c[1])) for c in cells] == [("21", p) for p in [*range(97, 124), *range(297, 309)]] + [("22", p) for p in range(1, 8)]
+    assert counts == {"bases": 46, "regions": 3, "miss": 0}
+    low, high = (bound / 100 for bound in psf.LOFTEE_GERP_HUNDREDTHS)
+    assert all(len(c) == 3 and re.fullmatch(r"-?\d\.\d\d", c[2]) and low <= float(c[2]) <= high for c in cells)
+    assert "-0.00" not in {c[2] for c in cells}
+    assert len({c[2] for c in cells}) > 20, "the scores vary from base to base"
+    assert cells[0][2] == psf.loftee_gerp_score(37, "21", 97) == f"{random.Random('37:loftee_gerp:21:97::').randint(-300, 500) / 100:.2f}"
+
+    wider = tmp_path / "wider"
+    wider.mkdir()
+    more = {**LOFTEE_GERP_TRANSCRIPTS, "21": [*LOFTEE_GERP_TRANSCRIPTS["21"], {"stable_id": "ENST_D", "exons": [exon(200, 210)]}]}
+    wider_rows, wider_counts = psf.loftee_gerp_rows(psf.read_exon_regions(write_exon_cache(wider, more, compress=True), 3), 37, "bare", set())
+    assert wider_counts == {"bases": 63, "regions": 4, "miss": 0}
+    assert set(rows) < set(wider_rows), "a base both tables hold carries one score"
+
+    other_seed, _ = psf.loftee_gerp_rows(regions, 38, "bare", set())
+    assert [row.rsplit("\t", 1)[0] for row in other_seed] == [row.rsplit("\t", 1)[0] for row in rows]
+    assert sum(a != b for a, b in zip(rows, other_seed)) > 40
+    missed, missed_counts = psf.loftee_gerp_rows(regions, 37, "bare", {"21:100", "22:7", "21:5000"})
+    assert missed == [row for row in rows if row.split("\t")[:2] not in (["21", "100"], ["22", "7"])]
+    assert missed_counts == {"bases": 44, "regions": 3, "miss": 2}
+    prefixed, _ = psf.loftee_gerp_rows(regions, 37, "chr", set())
+    assert [row.split("\t")[:2] for row in prefixed] == [[f"chr{c[0]}", c[1]] for c in cells]
+    marker = "## LoFTEE GERP layout: a synthetic conservation table for a vep-rs golden corpus; the scores are fabricated from a seed and carry no meaning"
+    assert psf.headers_for("loftee_gerp", None) == [marker, "#chrom\tpos\tscore"]
+
+
+def test_main_writes_the_loftee_gerp_table_and_records_its_flank(tmp_path: Path, capsys):
+    """The tool writes the table under the named directory behind its two `#` lines, indexed
+    on its first two columns, so `tabix <file> chr:start-end` returns the rows of a span
+    and their third fields total as the plugin totals them; provenance records the shape,
+    the seed, the flank and the counts; the flank option is refused with another shape, a
+    negative flank, a corpus without a cache and a cache without an exon are refused."""
+    missing = [tool for tool in psf.TOOLS if shutil.which(tool) is None]
+    if missing:
+        pytest.skip(f"{', '.join(missing)} not on PATH")
+    corpus = write_corpus(tmp_path)
+    name = "GERP_scores.synthetic.txt.gz"
+    args = ["--corpus", str(corpus), "--shape", "loftee_gerp", "--name", name, "--seed", "37", "--dir", "plugin_data"]
+    with pytest.raises(SystemExit, match="corpus has no json_cache/transcripts"):
+        psf.main(args)
+    write_exon_cache(corpus, LOFTEE_GERP_TRANSCRIPTS)
+    assert psf.main([*args, "--exon-flank", "3"]) == 0
+    assert capsys.readouterr().out.strip() == f"wrote plugin_data/{name} and its .tbi: 46 rows (bases 46, regions 3, missed sites 0), seed 37"
+    out = corpus / "plugin_data" / name
+    with gzip.open(out, "rt", encoding="utf-8") as fh:
+        lines = fh.read().splitlines()
+    assert lines[:2] == [psf.LOFTEE_GERP_MARKER, psf.LOFTEE_GERP_HEADER] and len(lines) == 48
+    expected, _ = psf.loftee_gerp_rows(psf.read_exon_regions(corpus / "json_cache", 3), 37, "bare", set())
+    assert lines[2:] == expected
+    queried = subprocess.run(["tabix", str(out), "21:118-300"], capture_output=True, text=True, check=True).stdout.splitlines()
+    assert [line.split("\t")[1] for line in queried] == [str(p) for p in [*range(118, 124), *range(297, 301)]]
+    assert sum(float(line.split("\t")[2]) for line in queried) == sum(float(row.split("\t")[2]) for row in expected[21:31])
+    listed = subprocess.run(["tabix", "-l", str(out)], capture_output=True, text=True, check=True).stdout.split()
+    assert listed == ["21", "22"]
+    entry = json.loads((corpus / "provenance.json").read_text(encoding="utf-8"))["plugin_fixtures"][name]
+    assert entry["shape"] == "loftee_gerp" and entry["seed"] == 37 and entry["exon_flank"] == 3
+    assert entry["rows"] == {"bases": 46, "regions": 3, "miss": 0}
+    assert sorted(entry["files"]) == [f"plugin_data/{name}", f"plugin_data/{name}.tbi"]
+    first = out.read_bytes()
+    assert psf.main([*args, "--exon-flank", "3", "--force"]) == 0 and out.read_bytes() == first
+    capsys.readouterr()
+    assert psf.main([*args, "--force"]) == 0
+    # 21:50-170, 21:250-355 and 22:1-54 under the default flank of 50.
+    assert capsys.readouterr().out.strip().endswith("(bases 281, regions 3, missed sites 0), seed 37")
+    assert json.loads((corpus / "provenance.json").read_text(encoding="utf-8"))["plugin_fixtures"][name]["exon_flank"] == psf.DEFAULT_EXON_FLANK == 50
+
+    with pytest.raises(SystemExit, match="--exon-flank is given with --shape loftee_gerp"):
+        psf.main(["--corpus", str(corpus), "--shape", "clinpred", "--name", "x_synthetic.gz", "--seed", "1", "--exon-flank", "3"])
+    with pytest.raises(SystemExit, match="--exon-flank is a count of bases, got -1"):
+        psf.main([*args, "--exon-flank", "-1", "--force"])
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    (empty / "variants.vcf").write_text(VCF, encoding="utf-8")
+    write_exon_cache(empty, {"21": [{"stable_id": "ENST_NO_EXONS"}]})
+    with pytest.raises(SystemExit, match="no exon base to score"):
+        psf.main(["--corpus", str(empty), "--shape", "loftee_gerp", "--name", name, "--seed", "37"])

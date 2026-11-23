@@ -37,9 +37,7 @@ use std::sync::Arc;
 use serde_json::json;
 use vep_cli::variation_source::ReadFailure;
 use vep_cli::vcf_parser::parse_vcf_line;
-use vep_cli::{
-    AnnotationResources, Annotator, Config, InputVariant, LazyTranscriptIndexes, PredictionConfig,
-};
+use vep_cli::{AnnotationResources, Annotator, Config, InputVariant, LazyTranscriptIndexes};
 
 mod common;
 
@@ -829,14 +827,9 @@ fn reference(fasta: &Path) -> Arc<vep_fasta::IndexedFasta> {
 /// The resources a library caller assembles by hand: its own index and, in
 /// the effects configuration, the reference sequence at `fasta`.
 fn caller_resources(transcripts: LazyTranscriptIndexes, fasta: &Path) -> AnnotationResources {
-    AnnotationResources {
-        transcripts: Arc::new(transcripts),
-        variation_source: None,
-        regulatory_source: None,
-        cell_types: None,
-        sv_source: None,
-        colocation: Default::default(),
-        effects_config: vep_cli::annotator::build_effects_config(
+    AnnotationResources::new(
+        Arc::new(transcripts),
+        vep_cli::annotator::build_effects_config(
             (5_000, 5_000),
             Some(reference(fasta)),
             false,
@@ -845,15 +838,7 @@ fn caller_resources(transcripts: LazyTranscriptIndexes, fasta: &Path) -> Annotat
             false,
             false,
         ),
-        builtin_plugins: Arc::new(vep_builtins::BuiltinRegistry::new()),
-        dylib_plugins: Arc::new(vep_plugin::PluginRegistry::new()),
-        prediction_config: PredictionConfig::default(),
-        nearest: None,
-        transcript_filter: None,
-        synonyms: Arc::new(vep_core::synonyms::ChromosomeSynonyms::new()),
-        custom_sources: None,
-        custom_source_infos: Vec::new(),
-    }
+    )
 }
 
 /// An annotator over `transcripts` as an embedder assembles one, from
@@ -955,7 +940,7 @@ fn an_embedder_with_the_reference_reads_every_record_as_the_binary_does() {
 /// reads as its twin's in every compared cell. Ensembl VEP's total is the
 /// exons' length alone, since the transcript its cache stores carries no
 /// `edits_enabled` and `Transcript::length` then leaves the edits out
-/// (OutputFactory.pm:1728; Transcript.pm:1675-1678).
+/// (OutputFactory.pm:1737; Transcript.pm:1675-1678).
 #[test]
 fn total_length_counts_the_bases_an_edit_adds() {
     let dir = tempfile::tempdir().unwrap();

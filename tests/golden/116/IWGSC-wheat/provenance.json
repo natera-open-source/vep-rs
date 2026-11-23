@@ -1,0 +1,87 @@
+{
+ "plugin_fixtures": {
+  "generator": "scripts/fixtures/cut_plugin_regions.py",
+  "flank": 5000,
+  "record_flank": 2000,
+  "exon_flank": 50,
+  "gerp_regions": "exons",
+  "tools": {
+   "bgzip": "bgzip (htslib) 1.9"
+  },
+  "files": {
+   "reference.fa.fai": "49dfb79de891360f737c5233c32b6e6a3eabb527418fe6e56cf019df017fdd0b",
+   "reference.fa.gz": "d6f9adda263cc474a0e35ab8a786341f3c4856d42cff616a2eb0f31e47a65ca7",
+   "reference.fa.gz.fai": "49dfb79de891360f737c5233c32b6e6a3eabb527418fe6e56cf019df017fdd0b",
+   "reference.fa.gz.gzi": "7183c63f0cb11e7d5421bf033ad63d54ebc765942d0b34963bf9531165a1a47e"
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 63,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species triticum_aestivum --assembly IWGSC --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "triticum_aestivum/63_IWGSC",
+ "fasta": "chromosome 5D at its full length (566,080,677 bases) from Triticum_aestivum.IWGSC.dna.chromosome.5D.fa of Ensembl Plants release 63, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; the runs that wrote the expected outputs received the decompressed file as --fasta",
+ "input": "variants.vcf: 272 records on chromosome 5D, 37 of them naming it by its synonym LS992094.1. 251 are seeded records that tools/vep-seeded-variants derived from the converted cache and the chromosome's sequence, their IDs naming the category and its ordinal: start codons, stop codons gained and lost, missense and synonymous substitutions on each strand, splice donor and acceptor sites, both untranslated regions, introns, upstream, downstream and intergenic positions, frameshift insertions and deletions, in-frame deletions, and the first and the last base of the chromosome. 21 are known variants of the cache's variation file (Ensembl Plants release 63), sampled with seed 1, every one a single-nucleotide substitution under its Ensembl identifier. Eight exemplars per consequence-set combination the two references show, stratified by variant class and strand, 24 per combination carrying a protein-level term, plus the records the manifest's included_records name: the first and the last base of the chromosome, two records named by the synonym, three of the generator's first-sequence category, and twelve seeded records and eight known variants past position 536,870,912, the reach of a .tbi index. 39 records lie past that position. Every transcript of the cache reads genetic code table 1, and the cache holds no organelle and no circular sequence",
+ "sha256": {
+  "default.txt": "eea672aff4859f36aa78cd85ac07602dad058937b319fd75c99f581cd34bb88a",
+  "tab.txt": "8d6fb1e7a1bd852fb54968cc44af8d63db55b1dba0ca562de96b1c802cc14467",
+  "vcf.vcf": "911d265c52c8d5d21b32557604402556f02db441a7270740c6cf65786dab0ff5",
+  "json.jsonl": "744476f08c91dd691ae686ae2aef1fa0f677c1f7d2327a7ddcdc5e9a7c6cc6c2"
+ },
+ "variants_vcf_sha256": "9cc82e65bb14dec65063391eff0e5e4ac1db68119c498d7f51e79e04282b69b1",
+ "flag_sets": {
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species triticum_aestivum --assembly IWGSC --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "triticum_aestivum/63_IWGSC",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "2b585217f41fa303ece1567dea3b79020c6244338add0065b0669718f168f5e4",
+    "tab.txt": "92502b3ae16ae5f93d3437659df071ef5f25671d6c827b0caa9a911f4c8535fd",
+    "vcf.vcf": "137f83d2294f7c285216fe43055f2b2c01c727abadd48bca7e4b33cc45085adb",
+    "json.jsonl": "9d2118898f7bc4d7defba779de00a776c184c700189b88b2b15d35f14cd9e0c5"
+   },
+   "flags": [
+    "--everything"
+   ],
+   "expected_dir": "expected_everything"
+  },
+  "hgvs-sift": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species triticum_aestivum --assembly IWGSC --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs --sift b [--tab|--vcf|--json]",
+   "perl_cache": "triticum_aestivum/63_IWGSC",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "875c562e4e78d33691e7657470520d177ce5ea06379724fa85355e546cd72306",
+    "tab.txt": "d789d6a308a2bb1ca315eec11ef66da619d84f543c755ebd6765763d6f6d299c",
+    "vcf.vcf": "8e55712cc02e7d8b474e8e4630c11812f35d9a46473ac727d6fbbd85171935ca",
+    "json.jsonl": "db83b92c96eb78a26ead1640b761cf7a898631ef2dd678ff1fbf528d92153ff5"
+   },
+   "flags": [
+    "--hgvs",
+    "--sift",
+    "b"
+   ],
+   "expected_dir": "expected_hgvs-sift"
+  }
+ },
+ "generator": "tools/vep-seeded-variants --records wide --per-category 100 --seed 1 --sequence 5D --fasta <the chromosome's sequence> over the converted cache, and 300 single-nucleotide known variants sampled with seed 1 from the cache's variation file of the same chromosome; Ensembl VEP over the two inputs under the corpus flags; tools/vep-golden-corpus select --release 63 --assembly IWGSC --species triticum_aestivum --dataset wide=<reference>=<the seeded records> --dataset known=<reference>=<the known variants> --k 8 --seed 1 --max-span 1000000 --max-records 500 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 24 --include <the named records> --covers species-wheat-iwgsc --covers genetic-code-tables --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --flank 5000 --gzip --drop sorted_exons --drop protein_function_predictions --drop-except <the transcripts on which a record changes one residue, the rows SIFT scores> --perl-info <cache>/info.txt --cache-version 63 --variations <converted cache>/variations over the whole cache tools/vep-storable-to-json converts from the Ensembl Plants 63 IWGSC cache; scripts/fixtures/cut_plugin_regions.py --reference <the chromosome's sequence> --flank 5000 --record-flank 2000 over a copy of the records that names the chromosome as the cache does; tools/vep-golden-corpus flag-set (everything, hgvs-sift); scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; tools/vep-golden-corpus classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp --field SIFT for the hgvs-sift set)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "5D": 536
+  },
+  "shards": 187,
+  "synonym_lines": 2,
+  "matrices_kept_on": 94,
+  "variation_slices": "the 67 known variants within one base of a record under variations/5D/all_vars.gz with its .csi, as the Ensembl VEP cache lays them out; 22 of them lie past position 536,870,912"
+ }
+}

@@ -15,7 +15,7 @@
 
 **What correcting it would change.** The class vanishes: the HGVSp of every reverse-strand frameshift and stop-loss row of a `--gtf` or `--gff` run carries the count the transcript's sequence gives, as the same transcript's row from the Ensembl cache does.
 
-**The class it produces.** `gxf_reverse_strand_utr_sequence`, applied by the format comparator to the `HGVSp` field of a `STRAND` -1 row whose two values differ in the digits after `fsTer` or `extTer` alone. The concordance figures score consequence sets and never see the field, so nothing is set aside in them.
+**The class it produces.** `gxf_reverse_strand_utr_sequence`, applied by the format comparator to the `HGVSp` field of a `STRAND` -1 row of a transcript Ensembl VEP read from the file, where the two values differ in the digits after `fsTer` or `extTer` alone. The concordance figures score consequence sets and never see the field, so nothing is set aside in them.
 
 Tuple, pair, set aside, charged and the other scoring terms are defined in [How to read the counts](../intended-divergences.md#how-to-read-the-counts).
 
@@ -113,6 +113,8 @@ The bases behind both counts can be read from the FASTA: the reverse complement 
 
 ### 1.7 How the comparator treats this class
 
-The format comparator (`scripts/concordance/compare_vep_formats.py`) applies `gxf_reverse_strand_utr_sequence` when a comparison case names it in `masks`. Under the class a differing `HGVSp` (the JSON `hgvsp`) on a row whose `STRAND` is -1 is accepted when both values are present and equal once the digits, or `?`, after `fsTer` or `extTer` are set aside. A difference anywhere else in the notation, on a forward-strand row, or where one engine prints no HGVSp stays a difference.
+The format comparator (`tools/vep-formats-compare`) applies `gxf_reverse_strand_utr_sequence` when a comparison case names it in `masks`. Under the class a differing `HGVSp` (the JSON `hgvsp`) is accepted on a row whose `STRAND` is -1 and whose `SOURCE` (the JSON `source`) in Ensembl VEP's output names the file. Both values must be present and equal once the digits, or `?`, after `fsTer` or `extTer` are set aside. A difference anywhere else in the notation, on a forward-strand row, or where one engine prints no HGVSp stays a difference.
+
+The `SOURCE` says whether the row's transcript was read from the file or from a cache. Ensembl VEP stamps every transcript it builds from a GTF or GFF file with the file's base name and writes the stamp as the row's `SOURCE` ([The `SOURCE` field of a GTF or GFF3 read as the transcript source](file-cache-writes-no-source-field.md)). A row of a cache transcript carries no `SOURCE`, or the `Ensembl` or `RefSeq` of a merged cache, and its `HGVSp` stays a difference under the class: the cache stores that transcript's UTR, so the misread cannot be the cause of a difference there. A file whose own name is `Ensembl` or `RefSeq` reads as a merged cache's row and stays a difference too.
 
 Each accepted row is counted once under the class, so a comparison case of the `--gtf` or `--gff` route under `--hgvs` over the chromosome 21 ClinVar records reports under the class the number of rows it accepts. No golden corpus runs those routes under `--hgvs`, so no corpus manifest documents a row of the class.

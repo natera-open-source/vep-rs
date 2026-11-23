@@ -1,6 +1,6 @@
 # Allele frequencies and co-located variants
 
-These flags report the population allele frequencies, PubMed identifiers and gene-phenotype associations of co-located known variants, and filter the input by frequency. `--check_existing`, which reports the co-located variants themselves, is listed under [Output control](output-control.md); the frequency flags `--everything` switches on are listed under [option sets](../cli-reference.md#option-sets-configpm351-593).
+These flags report the population allele frequencies, PubMed identifiers and gene-phenotype associations of co-located known variants, and filter the input by frequency. `--check_existing`, which reports the co-located variants themselves, is listed under [Output control](output-control.md#co-located-variants); the frequency flags `--everything` switches on are listed under [option sets](../cli-reference.md#option-sets-configpm351-593).
 
 ## Flags
 

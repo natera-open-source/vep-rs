@@ -1,0 +1,22 @@
+{
+  'aa_to_element' => \5,
+  'first_ref' => \'shared scalar',
+  'number' => ${$VAR1->{'aa_to_element'}},
+  'second_ref' => $VAR1->{'first_ref'},
+  'target' => 'pointed at',
+  'to_array_ref' => \[
+      1,
+      2
+    ],
+  'to_hash_ref' => \{
+      'k' => [
+        'v'
+      ]
+    },
+  'to_number' => \17,
+  'to_ref' => \\'deep',
+  'to_ref_ref' => \\\'deeper',
+  'to_string' => \'a string',
+  'to_undef' => \undef,
+  'zz_to_element' => \$VAR1->{'target'}
+}

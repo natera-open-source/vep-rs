@@ -8,9 +8,12 @@
 //! a GFF3 and in a GTF, on either strand; one whose exon ranks run against
 //! its strand; one whose translation would end at an offset outside the exon
 //! it is counted in, its exon ranks running against position there or an exon
-//! nesting in its last coding one; and a model whose every transcript a build
-//! of the cache's content sets aside. Beside them, the models whose CDS lines
-//! leave the exons between the translation's two ends: they build.
+//! nesting in its last coding one; one on the reverse strand whose
+//! translation ends in an exon nested in the exon it starts in; one whose
+//! exon ranks run against position with both ends of the translation inside
+//! their exons; and a model whose every transcript a build of the cache's
+//! content sets aside. Beside them, the models whose CDS lines leave the
+//! exons between the translation's two ends: they build.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -337,6 +340,168 @@ fn a_translation_offset_outside_its_exon_is_refused_and_writes_nothing() {
         "Failed to build cache: {model} line 5: the coding sequence of transcript T1, \
          1100-1450, ends after 1300-1350, the first exon in transcript order that it overlaps",
     );
+}
+
+/// The cDNA coding span of the one transcript among the files a build wrote,
+/// its first base and its last.
+fn cdna_coding_span(files: &BTreeMap<String, Vec<u8>>) -> (u64, u64) {
+    let shard = files
+        .iter()
+        .find(|(name, _)| name.starts_with("transcripts"))
+        .map(|(_, bytes)| bytes)
+        .expect("the build wrote a shard");
+    let records: Vec<serde_json::Value> = serde_json::from_slice(shard).unwrap();
+    assert_eq!(records.len(), 1);
+    let base = |key: &str| records[0][key].as_u64().unwrap();
+    (base("cdna_coding_start"), base("cdna_coding_end"))
+}
+
+/// A coding sequence's last base comes at or after its first in the
+/// transcript's sequence. Exons are laid along it by position, so on the
+/// reverse strand the exon 1300-1350 comes before the exon 1000-1500 it is
+/// nested in: a coding sequence that opens in the outer exon, above the
+/// nested one, and closes inside the nested one, ranked second, would be
+/// written with its end before its start and a length of the start exon's
+/// phase padding alone. The build is refused before a file or a directory is
+/// written, naming the CDS line that sets the end and both exons, whether
+/// the coding sequence opens inside the outer exon or at its first base,
+/// behind a phase or none, on one CDS line or two. Those ranks run against
+/// position too, the nested exon starting after the outer one, and the
+/// build names the nested end, which it looks at first. The same lines without
+/// ranks, as a GFF3 and as a GTF, put the nested exon first in transcript
+/// order and are refused for a coding sequence that opens outside it. A
+/// coding sequence that stays inside the nested exon builds without ranks,
+/// its span the 31 bases of its CDS line.
+#[test]
+fn a_translation_that_ends_in_an_exon_nested_in_its_start_exon_is_refused_and_writes_nothing() {
+    let ranked: [Exon; 2] = [(1000, 1500, Some(1)), (1300, 1350, Some(2))];
+    let unranked: [Exon; 2] = [(1000, 1500, None), (1300, 1350, None)];
+    let refusal = |line: usize, (start, end): (u64, u64)| {
+        format!(
+            "Failed to build cache: {{model}} line {line}: CDS {start}-{end} of transcript T1 \
+             ends the translation in exon 1300-1350, which lies inside exon 1000-1500, where \
+             the translation starts"
+        )
+    };
+    for (name, cds) in [
+        ("opens_inside", (1320, 1450)),
+        ("opens_at_the_first_base", (1320, 1500)),
+        ("both_exons_whole", (1300, 1500)),
+    ] {
+        assert_model_refused(
+            &format!("nested_end_{name}.gff3"),
+            "--gff3",
+            &gff3_of('-', &ranked, &[cds]),
+            &refusal(6, cds),
+        );
+    }
+    let behind_a_phase = gff3_of('-', &ranked, &[(1320, 1500)]).replace(
+        "\t-\t0\tParent=transcript:T1;protein_id",
+        "\t-\t1\tParent=transcript:T1;protein_id",
+    );
+    assert!(behind_a_phase.contains("\tCDS\t1320\t1500\t.\t-\t1\t"));
+    assert_model_refused(
+        "nested_end_behind_a_phase.gff3",
+        "--gff3",
+        &behind_a_phase,
+        &refusal(6, (1320, 1500)),
+    );
+    assert_model_refused(
+        "nested_end_two_lines.gff3",
+        "--gff3",
+        &gff3_of('-', &ranked, &[(1400, 1450), (1320, 1350)]),
+        &refusal(7, (1320, 1350)),
+    );
+
+    let opens_outside = |line: usize| {
+        format!(
+            "Failed to build cache: {{model}} line {line}: the coding sequence of transcript \
+             T1, 1320-1450, ends after 1300-1350, the first exon in transcript order that it \
+             overlaps"
+        )
+    };
+    assert_model_refused(
+        "nested_end_unranked.gff3",
+        "--gff3",
+        &gff3_of('-', &unranked, &[(1320, 1450)]),
+        &opens_outside(6),
+    );
+    assert_model_refused(
+        "nested_end.gtf",
+        "--gtf",
+        &gtf_of('-', &unranked, &[(1320, 1450)]),
+        &opens_outside(5),
+    );
+
+    let inside = [(1310, 1340)];
+    for files in [
+        built("--gff3", "gff3", &gff3_of('-', &unranked, &inside)),
+        built("--gtf", "gtf", &gtf_of('-', &unranked, &inside)),
+    ] {
+        assert_eq!(cdna_coding_span(&files), (11, 41));
+    }
+}
+
+/// Exon ranks that run against position past the first exon, 1, 3, 2 over
+/// three exons, leave every CDS line inside an exon and both ends of the
+/// translation inside the exons they are counted in, where the coding
+/// sequence ends in the exon ranked last: the GFF3 is refused before a file
+/// or a directory is written, on either strand, naming the file, the first
+/// exon in rank order that is out of place, the exon ranked before it and
+/// both ranks. Ensembl VEP places each exon at its `rank` there and writes
+/// an exon's bases as an intron's. A transcript of no coding sequence is
+/// refused for the same ranks. The same lines as a GTF carry no rank and
+/// build the cache of the exons in position order.
+#[test]
+fn exon_ranks_out_of_order_past_the_first_exon_are_refused_and_write_nothing() {
+    let forward: [Exon; 3] = [
+        (1000, 1200, Some(1)),
+        (1400, 1500, Some(3)),
+        (1700, 2000, Some(2)),
+    ];
+    let forward_coding = [(1102, 1200), (1400, 1450)];
+    let reverse: [Exon; 3] = [
+        (1000, 1200, Some(2)),
+        (1400, 1500, Some(3)),
+        (1700, 2000, Some(1)),
+    ];
+    let reverse_coding = [(1700, 1798), (1450, 1500)];
+    let forward_refusal = "{model}: exon 1400-1500 of transcript T1, ranked 3, starts before \
+                           exon 1700-2000, ranked 2: the exon ranks run against position";
+    let reverse_refusal = "{model}: exon 1400-1500 of transcript T1, ranked 3, starts after \
+                           exon 1000-1200, ranked 2: the exon ranks run against position";
+    for (name, strand, exons, coding, refusal) in [
+        ("forward", '+', &forward, &forward_coding, forward_refusal),
+        ("reverse", '-', &reverse, &reverse_coding, reverse_refusal),
+    ] {
+        assert_model_refused(
+            &format!("ranks_past_the_first_{name}.gff3"),
+            "--gff3",
+            &gff3_of(strand, exons, coding),
+            &format!("Failed to build cache: {refusal}"),
+        );
+        assert_model_refused(
+            &format!("ranks_past_the_first_{name}_no_cds.gff3"),
+            "--gff3",
+            &gff3_of(strand, exons, &[]),
+            &format!("Failed to build cache: {refusal}"),
+        );
+        let by_position: Vec<Exon> = {
+            let mut sorted = exons.to_vec();
+            sorted.sort_by_key(|(start, _, _)| *start);
+            if strand == '-' {
+                sorted.reverse();
+            }
+            (1u32..)
+                .zip(sorted)
+                .map(|(rank, (start, end, _))| (start, end, Some(rank)))
+                .collect()
+        };
+        let from_gtf = built("--gtf", "gtf", &gtf_of(strand, exons, coding));
+        let ranked_by_position = built("--gtf", "gtf", &gtf_of(strand, &by_position, coding));
+        assert!(from_gtf == ranked_by_position, "{name} as a GTF");
+        built("--gff3", "gff3", &gff3_of(strand, &by_position, coding));
+    }
 }
 
 /// Of several transcripts a build refuses, the one named is the same on

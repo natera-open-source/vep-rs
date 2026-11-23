@@ -4,7 +4,7 @@ A difference in which HGVS transcript and protein inputs resolve, on an input fo
 
 Ensembl VEP refuses HGVS input offline (`Parser/HGVS.pm` line 104) and resolves a `c.` or `n.` notation through its core database. The transcript is found by stable id, or by external name for an `NM_` or `XM_` reference, else as the likely transcript of the gene the reference names (`VariationFeatureAdaptor.pm` lines 1829-1849 and 2146-2226). The position is resolved through the transcript's exon mapper (lines 1608-1751), and the alleles against the genome on the transcript's strand (lines 2054-2142).
 
-vep-rs resolves the same notations from its transcript cache and the reference FASTA, with the same positions, alleles, strand, warnings and refusals, and the `tests/golden/116/GRCh38-input-hgvs` corpus compares its rows with Ensembl VEP 116.2's database-mode output. The cache has no index by identifier, so a run with transcript or protein notations in its input reads the cache's assembled chromosomes and scaffolds once before the first lookup. The cache's alternate loci, patches and LRG regions are read only for an id none of the assembled chromosomes and scaffolds carries.
+vep-rs resolves the same notations from its transcript cache and the reference FASTA, with the same positions, alleles, strand, warnings and refusals, and the `tests/golden/116/GRCh38-input-hgvs` corpus compares its rows with Ensembl VEP 116.3's database-mode output. The cache has no index by identifier, so a run with transcript or protein notations in its input reads the cache's assembled chromosomes and scaffolds once before the first lookup. The cache's alternate loci, patches and LRG regions are read only for an id none of the assembled chromosomes and scaffolds carries.
 
 Five readings differ:
 
@@ -18,7 +18,7 @@ Five readings differ:
 
 A `p.` notation resolves the way Ensembl VEP's protein branch resolves it (`VariationFeatureAdaptor.pm` lines 1900-1986). The transcript is found by the translation's stable id, by the transcript's stable id for an `ENST` reference written with `p.`, else as every transcript of the gene the reference names, tried in turn, the first to yield a variant taken. A substitution or `delins` is the one nucleotide path with the fewest changes from the genome's codon to a codon of the new residue (lines 2232-2319), the codon placed through `pep2genomic` (`TranscriptMapper.pm` lines 372-388). A deletion is the bases of its codons (lines 2323-2354). A frameshift is refused (line 1903).
 
-Ensembl VEP lists every equally short path only under `--ambiguous_hgvs`, which vep-rs refuses. A residue change with several shortest paths (`Asp2Glu` on `GAC`, a base away from `GAA` and from `GAG`) is therefore skipped with the message Ensembl VEP writes for it without that flag, `Could not uniquely determine nucleotide change`. The corpus's twenty protein notations, on the forward-strand CRYAA and reverse-strand TFF3 transcripts, compare with Ensembl VEP 116.2's database-mode output.
+Ensembl VEP lists every equally short path only under `--ambiguous_hgvs`, which vep-rs refuses. A residue change with several shortest paths (`Asp2Glu` on `GAC`, a base away from `GAA` and from `GAG`) is therefore skipped with the message Ensembl VEP writes for it without that flag, `Could not uniquely determine nucleotide change`. The corpus's twenty protein notations, on the forward-strand CRYAA and reverse-strand TFF3 transcripts, compare with Ensembl VEP 116.3's database-mode output.
 
 Six readings of the protein branch differ:
 

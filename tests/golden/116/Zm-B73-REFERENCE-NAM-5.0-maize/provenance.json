@@ -1,0 +1,88 @@
+{
+ "plugin_fixtures": {
+  "generator": "scripts/fixtures/cut_plugin_regions.py",
+  "flank": 5000,
+  "record_flank": 2000,
+  "exon_flank": 50,
+  "gerp_regions": "exons",
+  "tools": {
+   "bgzip": "bgzip (htslib) 1.9"
+  },
+  "files": {
+   "reference.fa.fai": "746d595cb5afca1827de0c99e962b50e7e4a013e1d1e1daa0d8da87b28ac99e4",
+   "reference.fa.gz": "ee93c7d4be23bc5d5eff256bd93c6c62981b8ee6087087af94a4d3f73e92123b",
+   "reference.fa.gz.fai": "746d595cb5afca1827de0c99e962b50e7e4a013e1d1e1daa0d8da87b28ac99e4",
+   "reference.fa.gz.gzi": "af1aa764ba444419208a555bf38e6df6ba7d62fd4bc73d3a347fa09b065025d6"
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 63,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species zea_mays --assembly Zm-B73-REFERENCE-NAM-5.0 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "zea_mays/63_Zm-B73-REFERENCE-NAM-5.0",
+ "fasta": "the two contigs the records and the pruned cache's transcripts sit on (10 and scaf_307) at their full length from Zea_mays.Zm-B73-REFERENCE-NAM-5.0.dna.chromosome.10.fa.gz and Zea_mays.Zm-B73-REFERENCE-NAM-5.0.dna.nonchromosomal.fa.gz of Ensembl Plants release 63, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
+ "input": "variants.vcf: 254 records on chromosome 10 and the unplaced scaffold scaf_307. 189 come from tools/vep-seeded-variants (--records wide, seed 1, generator version 2) run over the converted cache and the genome sequence of the two sequences, their IDs naming the situation and an ordinal: under the standard genetic code a start codon, a stop gained and a stop lost; a missense and a synonymous change on each strand; a splice donor and a splice acceptor; both untranslated regions; an intron; upstream, downstream and between genes; a frameshift insertion, a frameshift deletion and an in-frame deletion; the first and the last base of each sequence; and exon records on the first sequence, the last sequence and the scaffold. 65 are single-base substitutions sampled with seed 1 from the cache's known variants on the two sequences, their IDs the cache's identifiers; all 65 lie on chromosome 10. Two exemplars per consequence-set combination the two references show, stratified by variant class and strand, six per combination carrying a protein-level term, plus the records the manifest's included_records name: the first eight generated records of each situation, every first-base and last-base record, and sixty known variants evenly spaced along chromosome 10. Every transcript of the cache names genetic code 1, no sequence of the cache is circular and its synonyms file is empty, so the generator writes no record for a codon read differently, for an origin or for a synonym. The chromosome names are the cache's on both sides and no synonyms file is needed",
+ "sha256": {
+  "default.txt": "86a40fac314d8c135a524aa0972baa50e599e8cb0c26fe509e8fdf590933b4f5",
+  "tab.txt": "dc720ca451e3c37408b8087e29a6b459a705fb687dbf56dc2ad87127af8f3803",
+  "vcf.vcf": "dce5fa3afa592ac54572940a191f6075f378e5fdfe583518b1e7994e397d980a",
+  "json.jsonl": "7d3d4432ec614a4f9a303a28083a6aa7e072a3353cbd8163f954ddf9c987a25e"
+ },
+ "variants_vcf_sha256": "c673270f1f78da24a87f35b1ebc57a21ac1ef33b545ecd59bccd87332ea3ce73",
+ "flag_sets": {
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species zea_mays --assembly Zm-B73-REFERENCE-NAM-5.0 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "zea_mays/63_Zm-B73-REFERENCE-NAM-5.0",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "325c3c60dd906e9f43b23d603b0a937b3f22d77df2e26fd07642328ca829d28e",
+    "tab.txt": "0214a3188386e57ed26045fe256c6981c35d331fa740a0ae0da84c7f3199e043",
+    "vcf.vcf": "2937839c52168e519c49eb023b4fbee8e300c2da8cb84d9b9571d0bcfdb7f0d3",
+    "json.jsonl": "2d0183ed2f3767f596c1921ccc5ad80144edef4c8942af9ec9bee772a5568abb"
+   },
+   "flags": [
+    "--everything"
+   ],
+   "expected_dir": "expected_everything"
+  },
+  "hgvs-sift": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species zea_mays --assembly Zm-B73-REFERENCE-NAM-5.0 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs --sift b [--tab|--vcf|--json]",
+   "perl_cache": "zea_mays/63_Zm-B73-REFERENCE-NAM-5.0",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "ddbc5ea123628f8170990f7c91365b5b3e2160f7f9069a8751a9bbc9dc9b7b6d",
+    "tab.txt": "f23b83194b92c8c77451dd4c83ead5f48979c2dc2acd5ac1a263529ec27db023",
+    "vcf.vcf": "eb67aa989b52161b2c3a53272ea9e6a06aaa8234460860e46b3d0693a0ddf8ad",
+    "json.jsonl": "809a4f4bd33070c732e126f289165064ffe5069df6688a6b22577da77d5bab56"
+   },
+   "flags": [
+    "--hgvs",
+    "--sift",
+    "b"
+   ],
+   "expected_dir": "expected_hgvs-sift"
+  }
+ },
+ "generator": "tools/vep-seeded-variants --records wide --seed 1 --sequence 10 --sequence scaf_307 --fasta <the genome sequence> over the converted cache, and 300 single-base substitutions sampled with seed 1 from the cache's known variants on the same sequences; Ensembl VEP over the two inputs under the corpus flags; tools/vep-golden-corpus select --release 63 --assembly Zm-B73-REFERENCE-NAM-5.0 --species zea_mays --dataset wide=<reference>=<the generated records> --dataset known=<reference>=<the sampled known variants> --k 2 --seed 1 --max-span 1000000 --max-records 500 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 6 --include <the named records> --covers species-maize-b73-nam5 --covers genetic-code-tables --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --flank 5000 --gzip --drop sorted_exons --drop protein_function_predictions --drop-except <the transcripts on which a record changes one residue, the rows SIFT scores> --perl-info <cache>/info.txt --cache-version 63 --variations <converted cache>/variations over the whole cache tools/vep-storable-to-json converts from the Ensembl VEP 63 Zm-B73-REFERENCE-NAM-5.0 cache (protein features kept for the DOMAINS column of the everything set; the variation slices hold the known variants within one base of a record); scripts/fixtures/cut_plugin_regions.py --reference <the genome sequence> --flank 5000 --record-flank 2000; scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; tools/vep-golden-corpus flag-set (everything, hgvs-sift) and classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp --field SIFT for the hgvs-sift set)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "10": 585,
+   "scaf_307": 11
+  },
+  "shards": 95,
+  "synonym_lines": 0,
+  "matrices_kept_on": 124,
+  "variation_slices": "the known variants within one base of a record under variations/<chr>/all_vars.gz with its .csi, as the Ensembl VEP cache lays them out: 91 on chromosome 10; scaf_307, none of whose known variants lies within one base of a record, carries the empty indexed file the cache carries for a sequence without variants"
+ }
+}

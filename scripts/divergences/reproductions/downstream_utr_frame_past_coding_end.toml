@@ -1,9 +1,9 @@
 entry = "downstream_utr_frame_past_coding_end"
 page = "docs/divergences/downstream-utr-frame-past-coding-end.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 59,328 per million · 6 flag sets, 97 corpora"
+input_class_basis = "2 · 59,328 per million · 6 flag sets, 136 corpora"
 notes = "The ClinVar record of the page's first example, on GRCh37. On the reverse-strand ENST00000259008 it deletes coding bases 3747 to 3750, the third base of codon 1249 and the stop codon, and leaves 3,746 coding bases. Ensembl VEP's plugin takes its downstream translation from offset 3747 - (3747 % 3) = 3747, one past that end (Downstream.pm:113-115): substr returns nothing, the 3' UTR is read from its first base, a stop codon, and DownstreamProtein is empty. vep-rs reads the two bases left of codon 1249 with the UTR, in frame, and writes three residues. Both engines write p.Lys1249AsnfsTer4 and ProteinLengthChange=2, three residues and a stop. The cache slice and the masked reference are the corpus's; Ensembl VEP reads its own GRCh37 cache, which must hold chromosome 17, and its plugin loads offline only with a FASTA."
 
 [input]
@@ -30,3 +30,14 @@ columns = ["Feature", "Consequence", "CDS_position", "HGVSp", "ProteinLengthChan
 [expected]
 ensembl_vep = ["ENST00000259008 | frameshift_variant,stop_lost | 3747-3750 | ENSP00000259008.2:p.Lys1249AsnfsTer4 | 2 |"]
 vep_rs = ["ENST00000259008 | frameshift_variant,stop_lost | 3747-3750 | ENSP00000259008.2:p.Lys1249AsnfsTer4 | 2 | NNT"]
+
+[implementation]
+code = ["crates/vep-builtins/src/plugins/downstream.rs::translate_change"]
+tests = [
+    "crates/vep-builtins/src/plugins/downstream.rs::tests::a_clinvar_deletion_to_the_last_coding_base_reads_the_utr_in_frame",
+    "crates/vep-builtins/src/plugins/downstream.rs::tests::a_deletion_to_the_last_coding_base_reads_the_utr_in_the_changed_frame",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/downstream.rs::downstream_start_rule_class",
+    "tools/vep-plugin-pairs/src/rules/downstream/classes.rs::downstream_start_rule_class",
+]

@@ -17,8 +17,9 @@ use std::path::PathBuf;
 use clap::{Arg, ArgAction, Command, CommandFactory};
 use vep_cli::args::Args;
 use vep_cli::argv::{
-    perl_options, prepass, unresolved_perl_spellings, COMMAND_LINE_ONLY, DEFAULT_DIR, ENV_PREFIX,
-    INI_FILE,
+    parser_options, perl_options, prepass, resolve, resolve_spelling, spell_as_declared,
+    unresolved_perl_spellings, COMMAND_LINE_ONLY, DEFAULT_DIR, ENV_PREFIX, INI_FILE,
+    VERSION_SHORT_BESIDE_ARGUMENTS,
 };
 use vep_cli::config::{Treatment, COMPONENTS, ENVIRONMENT, ERROR_TABLE};
 use vep_cli::filter_cli::FilterArgs;
@@ -103,7 +104,12 @@ are refused by name. Where `vep filter` reads a line differently from `filter_ve
 [Abbreviated fields, `is_child` and the regex \
 dialect](../divergences/transcript-filter-fields.md#vep-filter).\n\n\
 Every error is one line `ERROR: [filter] <message>` on standard error and exit 1; a command-line \
-syntax error is exit 2.\n\n";
+syntax error is exit 2.\n\n\
+A line that standard error refuses, on a full device or a pipe without a reader, is dropped and \
+changes no exit status. A run that ends with the warning of lines without the consequence field \
+exits 0 with its output whole, and a refusal exits 1. `filter_vep` completes on a full device \
+too, a refusal still ending non-zero; on a pipe without a reader it is killed by `SIGPIPE` (exit \
+141) at its warning or its error, with none of its output written.\n\n";
 
 /// The `vep filter` page: its introduction and one flag table per `--help`
 /// heading of its command line.
@@ -179,17 +185,23 @@ the variant on the allele it spells.\n\n\
 The warnings raised while an input is read or annotated are carried in the output, under `warnings` \
 on the next object written. `--buffer_size`, 1 by default, is the number of inputs read before an \
 object is written, as in `variant_recoder`. A run that writes no object is one object of its warnings \
-alone, and `--warning_file` writes them to a file as well.\n\n\
+alone, and `--warning_file` writes them to a file as well. A `--warning_file` that cannot be \
+written is refused before the input is annotated; a pipe or a device is first met by the write, \
+once the input is annotated.\n\n\
 The synonyms and the co-located variants are the cache's variation data, where `variant_recoder` \
 reads the Ensembl database. The cache's synonyms are the ClinVar, OMIM, UniProt, PharmGKB, PhenCode \
 and COSMIC identifiers and never the merged dbSNP identifiers (`Archive dbSNP`) the database adds; \
-the comparator's class `archive_dbsnp_synonyms` leaves those out. `variant_recoder --var_synonyms` \
+the comparator's class `archive_dbsnp_synonyms` leaves those out. A run that writes `var_synonyms` \
+says so in its `INFO:` line. `variant_recoder --var_synonyms` \
 stops with an error on a VCF input and on the identifier of a failed variant, where `vep recode` \
 writes the cache's synonyms of the variant the ID column or the identifier names.\n\n\
-A RefSeq notation (`NM_`, `NP_`, `XM_`, `XP_`) appears only with a merged cache. An LRG notation never appears, as `--lrg` is refused, and a protein notation \
-resolves to one variant, as `--ambiguous_hgvs` is refused. A ClinGen allele identifier (`CA...`) is \
-not an input. `ga4gh_vrs` holds a GA4GH VRS Allele object only for a chromosome whose synonyms name \
-an `NC_` accession, and is an empty list for any other. \
+A RefSeq notation (`NM_`, `NP_`, `XM_`, `XP_`) is written from a merged cache, and no variant is \
+mapped to an LRG, as `--lrg` is refused. Every run that completes says the latter in one `INFO:` \
+line on standard error, which no flag withholds, and the former where its cache is read as the \
+Ensembl set. An input given on an LRG region the cache holds keeps its own notation.\n\n\
+A protein notation resolves to one variant, as `--ambiguous_hgvs` is refused. A ClinGen allele \
+identifier (`CA...`) is not an input. `ga4gh_vrs` holds a GA4GH VRS Allele object only for a \
+chromosome whose synonyms name an `NC_` accession, and is an empty list for any other. \
 The database connection flags (`--host`, `--port`, `--user`, `--password`, `--registry`, \
 `--db_version`, `--genomes`, `--is_multispecies`) and `--bam` are refused with an error naming the \
 flag. `--mane_select` is for human alone.\n\n\
@@ -203,26 +215,67 @@ An Ensembl VEP Storable cache is not one, and a cache of the Ensembl set alone i
 Where the directory of the Ensembl set is there and holds no cache the run can read, the run is \
 refused as it is without a merged cache, and `--merged` reads the merged one.\n\n\
 `--refseq` is refused with `Can't use --refseq and --merged together`, as `variant_recoder` refuses \
-it, and with `--gencode_basic` the error names that flag instead. A RefSeq cache, which is read \
-under `--refseq` alone, is not an input; a merged cache carries the RefSeq models beside the \
-Ensembl ones.\n\n\
+it, and with `--gencode_basic` the error names that flag instead. A cache whose `info.json` \
+declares the RefSeq set is not an input: `--refseq` alone reads it, and a run that names it is \
+refused under the `cache` component. A `--json_cache` directory of RefSeq models converted \
+without the `source_type` key is checked against nothing and read as the Ensembl set, its RefSeq \
+models annotated. A merged cache carries the RefSeq models beside the Ensembl ones.\n\n\
 Every error is one line `ERROR: [<component>] <message>` on standard error and exit 1, the \
-component naming what refused the run (`recode`, `config`, `input`, `cache`, `fasta` or `filter`); \
-a command-line syntax error is exit 2.\n\n";
+component naming what refused the run (`recode`, `config`, `input`, `output`, `cache`, `fasta` or \
+`filter`). A command-line syntax error is exit 2, a value outside the list of `--format`, \
+`--pick_order` or `--shift_hgvs` among them.\n\n\
+A `--transcript_filter` that names `_source_cache` or `dbID` over a cache built from a GTF or \
+GFF3, whose transcripts carry neither, draws one `INFO:` line for each key, as under `vep` \
+([the two keys](../divergences/transcript-filter-fields.md#a-gtf-or-gff3-as-the-transcript-source)). \
+A run that completes writes them before its own line, and no flag withholds them.\n\n\
+The annotation run's notices of what it left out of what it was given to read are written the \
+same way. A FASTA file passed over for want of its index draws one `INFO:` line \
+([Reference FASTA](../cache-setup.md#reference-fasta)). One line names each chromosome on \
+which an entry the run writes is without an `hgvsg` or an `hgvsc` that takes the FASTA's \
+sequence to write \
+([the notations there](../cache-setup.md#a-contig-the-fasta-lacks)). One more counts the \
+insertion and deletion alleles whose `hgvsc`, written as a field or in a `mane_select` triple, \
+is on a transcript edited away from the genome \
+([such a model](../output/refseq-and-merged.md#hgvsc-on-an-edited-model)). A run that completes \
+writes these before its own line as well, in the order `vep` prints them, and no flag withholds \
+them.\n\n\
+A line that standard error refuses, on a full device or a pipe without a reader, is dropped. A \
+refusal exits 1 without its `ERROR:` line, and a run that completes exits 0 without its `INFO:` \
+lines, all it writes there, its \
+warnings going into the output. `variant_recoder` completes on such a stream too, writing nothing \
+there; its refusal ends non-zero, with another exit status than on a readable stream or killed by \
+`SIGPIPE` (exit 141).\n\n";
 
 /// The `vep recode` page.
 fn render_recode() -> String {
     render_tool("vep recode", RECODE_INTRO, RecodeArgs::command())
 }
 
-/// A companion tool's page: its title, its introduction and one flag table per
+/// What an abbreviated option of a companion tool rests on, the paragraph
+/// after the one that offers the abbreviation: [`spell_as_declared`] resolves
+/// a prefix against the options the tool's parser declares and nothing else,
+/// so an option of the same prefix leaves it resolving to neither, a name
+/// written with two dashes, whatever its own, for clap to refuse, and an
+/// option named as the prefix takes it.
+const TOOL_ABBREVIATIONS: &str = "An abbreviation is resolved against the options of the release \
+that reads it, so a later release that adds an option can give a prefix to that option or make it \
+name two options, which is refused (exit 2). A script that must keep working \
+writes each option's full name.\n\n";
+
+/// A companion tool's page: its title, its introduction, with
+/// [`TOOL_ABBREVIATIONS`] after its opening paragraph, and one flag table per
 /// `--help` heading of its command line.
 fn render_tool(title: &str, intro: &str, mut command: Command) -> String {
     command.build();
     let sections = flag_sections(&command);
     let mut out = String::new();
     writeln!(out, "# {title}\n").unwrap();
-    out.push_str(intro);
+    let (opening, rest) = intro
+        .split_once("\n\n")
+        .unwrap_or_else(|| panic!("the introduction of {title} opens with a paragraph"));
+    writeln!(out, "{opening}\n").unwrap();
+    out.push_str(TOOL_ABBREVIATIONS);
+    out.push_str(rest);
     for (heading, _) in &sections {
         writeln!(out, "## {heading}\n").unwrap();
         flag_table(&mut out, heading, &sections);
@@ -253,9 +306,9 @@ struct Group {
 const SPECIES_FLAGS: &str = "### Flags that read data Ensembl ships for human alone\n\n\
 Ensembl ships SIFT and PolyPhen predictions, population frequencies, the MANE, APPRIS, TSL and \
 CCDS attributes and the GENCODE sets for human, and some of them for mouse. A flag that reads \
-such data behaves on a cache of a species that lacks it as Ensembl VEP behaves: refused for SIFT, \
-PolyPhen and, on a cache that declares variation columns, `--af_gnomad`, switched off under \
-`--everything`, and otherwise as the table states. \
+such data behaves on a cache of a species that lacks it as Ensembl VEP behaves: refused for SIFT \
+and PolyPhen, which `--everything` switches off, and, on a cache that declares variation \
+columns, for `--af_gnomad`, and otherwise as the table states. \
 A column flag declares its columns in the header and leaves every cell empty, a transcript-set \
 flag drops every transcript, a frequency filter whose population is accepted keeps or drops every \
 record and `--regulatory` writes no regulatory row.\n\n\
@@ -333,8 +386,9 @@ const GROUPS: &[Group] = &[
     Group {
         file: "docs/cli/cache-species-runtime.md",
         title: "Cache, species and runtime",
-        covers: "The cache directory and its layout, the reference FASTA, species and assembly, \
-                 the batch size, thread counts and distances.",
+        covers: "The cache directory and its layout, the reference FASTA, the 3' shifting of \
+                 insertions and deletions, species and assembly, the batch size, thread counts \
+                 and distances.",
         intro: "These flags name the annotation cache and the reference FASTA, the species and \
                 assembly, and the batch size, thread counts and distances of a run. The cache is \
                 found as Ensembl VEP finds it, under `--dir_cache`, `--species` and \
@@ -343,9 +397,13 @@ const GROUPS: &[Group] = &[
                 beside human, with each cache's release, genetic codes and chromosome names, \
                 under [Other species](../cache-species.md). The flags that read data Ensembl \
                 ships for human alone are listed under [Species and \
-                assembly](#flags-that-read-data-ensembl-ships-for-human-alone).\n\n",
+                assembly](#flags-that-read-data-ensembl-ships-for-human-alone).\n\n\
+                The flags under [3' shifting](#3-shifting) move an insertion or deletion to its \
+                most 3' position on a transcript before it is annotated or described in HGVS, \
+                and report how far it moved.\n\n",
         sections: &[
             ("Cache / Offline", "Cache and offline"),
+            ("3' Shifting", "3' shifting"),
             ("Species / Assembly", "Species and assembly"),
             ("Runtime", "Runtime"),
         ],
@@ -355,11 +413,18 @@ const GROUPS: &[Group] = &[
         file: "docs/cli/output-control.md",
         title: "Output control",
         covers: "The field flags, `--everything` among them, that choose which annotation \
-                 columns appear.",
-        intro: "These flags choose which annotation fields appear in the output. `--everything` \
-                switches on exactly Ensembl VEP's `--everything` set, listed under \
+                 columns appear, the flags that report co-located known variants, and the two \
+                 flags that drop rows.",
+        intro: "These flags choose which annotation fields appear in the output, report the \
+                known variants co-located with each input variant, and drop the rows outside a \
+                coding sequence or outside every transcript. `--everything` switches on exactly \
+                Ensembl VEP's `--everything` set, listed under \
                 [option sets](../cli-reference.md#option-sets-configpm351-593).\n\n",
-        sections: &[("Output Control", "Flags")],
+        sections: &[
+            ("Annotation Fields", "Annotation fields"),
+            ("Co-located Variants", "Co-located variants"),
+            ("Dropped Rows", "Dropped rows"),
+        ],
         trailers: &[],
     },
     Group {
@@ -370,8 +435,8 @@ const GROUPS: &[Group] = &[
         intro: "These flags report the population allele frequencies, PubMed identifiers and \
                 gene-phenotype associations of co-located known variants, and filter the input by \
                 frequency. `--check_existing`, which reports the co-located variants themselves, \
-                is listed under [Output control](output-control.md); the frequency flags \
-                `--everything` switches on are listed under \
+                is listed under [Output control](output-control.md#co-located-variants); the \
+                frequency flags `--everything` switches on are listed under \
                 [option sets](../cli-reference.md#option-sets-configpm351-593).\n\n",
         sections: &[("Allele Frequencies", "Flags")],
         trailers: &[],
@@ -379,23 +444,30 @@ const GROUPS: &[Group] = &[
     Group {
         file: "docs/cli/filtering-picking.md",
         title: "Filtering, picking and transcript sets",
-        covers: "The pick and flag-pick families, the allele columns, the transcript filter and \
-                 the transcript-set flags.",
+        covers: "The pick and flag-pick families, the transcript filter, the allele and position \
+                 columns, the transcript-set flags and the reference allele a row reads.",
         intro: "These flags reduce the rows reported per record, allele or gene, flag the ones a \
-                pick would drop, shape the allele columns and filter transcripts by their \
-                attributes. The transcript-set flags select the cache read and the transcript \
-                set annotated: the GENCODE basic or primary set, and on a RefSeq or merged cache \
-                the RefSeq accessions unless `--all_refseq` keeps every model.\n\n",
+                pick would drop and filter transcripts by their attributes. The flags under \
+                [Alleles and positions](#alleles-and-positions) add the allele columns, trim the \
+                alleles and add the total length to the positions. The transcript-set flags \
+                select the cache read and the transcript set annotated: the GENCODE basic or \
+                primary set, and on a RefSeq or merged cache the RefSeq accessions unless \
+                `--all_refseq` keeps every model. The flags under \
+                [Reference allele](#reference-allele) choose whether a row's reference allele is \
+                the transcript's or the input's.\n\n",
         sections: &[
             ("Filtering / Picking", "Filtering and picking"),
+            ("Alleles / Positions", "Alleles and positions"),
             ("Transcript Sets", "Transcript sets"),
+            ("Reference Allele", "Reference allele"),
         ],
         trailers: &[("Filtering and picking", TRANSCRIPT_FILTER_LISTS)],
     },
     Group {
         file: "docs/cli/plugins.md",
         title: "Plugins",
-        covers: "Loading built-in and dynamic-library plugins.",
+        covers: "Loading built-in and dynamic-library plugins, and the custom annotation \
+                 sources with their bigWig and conservation-score shortcuts.",
         intro: "These flags load the built-in plugins and dynamic-library plugins, and name the \
                 directory the latter are searched in. The built-in plugins, their parameters and \
                 their data files are described under [Plugins](../plugins.md); the C ABI a \
@@ -404,21 +476,28 @@ const GROUPS: &[Group] = &[
                 Ensembl VEP plugin vep-rs does not provide ends the run with an error naming the \
                 reason, with or without `--safe`, as does a Perl module (`Name.pm` by path, or \
                 `Name` with `Name.pm` under the plugins directory). The \
-                [support table](../plugins.md) lists every Ensembl VEP plugin and its status.\n\n",
-        sections: &[("Plugins", "Flags")],
+                [support table](../plugins.md) lists every Ensembl VEP plugin and its status.\n\n\
+                The flags under [Custom annotation](#custom-annotation) name the `--custom` \
+                sources, their bigWig and conservation-score shortcuts, and how a VCF source's \
+                values are written. The sources themselves are described under \
+                [Custom annotation](../custom-annotation.md).\n\n",
+        sections: &[
+            ("Plugins", "Loading plugins"),
+            ("Custom Annotation", "Custom annotation"),
+        ],
         trailers: &[],
     },
     Group {
         file: "docs/cli/statistics-verbosity-misc.md",
-        title: "Statistics, verbosity and miscellaneous",
-        covers: "The statistics flags, logging, and the flags that change how a record is \
-                 handled.",
+        title: "Statistics, verbosity and record handling",
+        covers: "The statistics flags, logging, and the two flags that keep a record a run would \
+                 otherwise skip.",
         intro: "These flags cover the statistics report written beside the output, the logging \
-                level, and the flags that change how a record is handled.\n\n",
+                level, and the two flags that keep a record a run would otherwise skip.\n\n",
         sections: &[
             ("Statistics", "Statistics"),
             ("Verbosity", "Verbosity"),
-            ("Miscellaneous", "Miscellaneous"),
+            ("Record Handling", "Record handling"),
         ],
         trailers: &[],
     },
@@ -618,6 +697,33 @@ fn named_options(flags: &[&str]) -> Option<(String, &'static str)> {
     })
 }
 
+/// What follows the names of a flag `--help` leaves out.
+const HIDDEN_MARK: &str = " (hidden)";
+
+/// What the mark means, the close of the sentences a page of `vep`'s flags
+/// carries under its first table with a marked row. The parser declares a
+/// hidden flag like any other, so the pre-pass reads it from the command line,
+/// from a configuration file's key and from its `VEP_<FLAG>` variable.
+const HIDDEN_NOTE: &str = "are left out of `--help` and are kept for tuning and diagnosis. The \
+name, the values, the default and the effect of such a flag may change, and the flag may be \
+removed, in any release, however it is given: on the command line, in a configuration file or in \
+a `VEP_<FLAG>` variable ([configuration sources](compatibility.md#configuration-sources)).\n\n";
+
+/// The sentences on the mark for a page with `marked` marked rows.
+fn hidden_note(marked: usize) -> String {
+    format!("Flags marked `(hidden)`, {marked} on this page, {HIDDEN_NOTE}")
+}
+
+/// The rows of a `--help` heading's table that carry the mark.
+fn marked_rows(heading: &str, sections: &[FlagSection]) -> usize {
+    sections
+        .iter()
+        .filter(|(h, _)| h == heading)
+        .flat_map(|(_, rows)| rows)
+        .filter(|row| row[0].ends_with(HIDDEN_MARK))
+        .count()
+}
+
 /// `--long`, then `-s`, then the visible aliases, each in code.
 fn flag_names(arg: &Arg) -> String {
     let mut names = Vec::new();
@@ -635,7 +741,7 @@ fn flag_names(arg: &Arg) -> String {
     }
     let mut out = names.join(", ");
     if arg.is_hide_set() {
-        out.push_str(" (hidden)");
+        out.push_str(HIDDEN_MARK);
     }
     out
 }
@@ -796,20 +902,39 @@ fn flag_table(out: &mut String, heading: &str, sections: &[FlagSection]) {
 }
 
 /// A group page: its title, its introduction and one flag table per `--help`
-/// heading it carries.
+/// heading it carries, with [`hidden_note`] under the first table that marks
+/// a flag.
 fn render_group(group: &Group, sections: &[FlagSection]) -> String {
     let mut out = String::new();
     writeln!(out, "# {}\n", group.title).unwrap();
     out.push_str(group.intro);
+    let marked: usize = group
+        .sections
+        .iter()
+        .map(|(heading, _)| marked_rows(heading, sections))
+        .sum();
+    let mut noted = false;
     for (heading, section) in group.sections {
         writeln!(out, "## {section}\n").unwrap();
         flag_table(&mut out, heading, sections);
+        if !noted && marked_rows(heading, sections) > 0 {
+            out.push_str(&hidden_note(marked));
+            noted = true;
+        }
         if let Some((_, trailer)) = group.trailers.iter().find(|(title, _)| title == section) {
             out.push_str(trailer);
         }
     }
     out
 }
+
+/// The landing page's note under the option-set table: the table prints
+/// [`OPTION_SETS`], Ensembl VEP's text, whose `--phyloP` row spells the
+/// source's short name as `Config.pm:555` does, while the run names the source
+/// as its file is named.
+const PHYLOP_ROW_NOTE: &str = "The `--phyloP` row is Ensembl VEP's own text, the short name \
+`phlyoP%phyloP%way` included; vep-rs names that source `phyloP<N>way` \
+([The key of a `--phyloP` source](divergences/phylop-short-name.md)).\n\n";
 
 /// The landing page: what the command line is, the group pages, how a flag is
 /// read, and Ensembl VEP's option rules applied as data.
@@ -840,8 +965,9 @@ fn render_landing(command: &Command) -> String {
 
     out.push_str("## Option groups\n\n");
     out.push_str(
-        "Every flag has a row on one of these pages, grouped as `--help` groups them: its names, \
-         its value type, its default and its description. A default of `false` is a switch that \
+        "Every flag has a row on one of these pages, grouped by the `--help` heading the command \
+         line declares for it: its names, its value type, its default and its description. `--help` \
+         itself leaves out the flags marked `(hidden)`. A default of `false` is a switch that \
          is off; `none` marks a flag with no declared default, and where a value applies in its \
          absence the description names it.\n\n",
     );
@@ -859,9 +985,10 @@ fn render_landing(command: &Command) -> String {
         out,
         "A repeated single-value flag keeps its last value, as Getopt::Long does. `-o` \
          accumulates and the last wins with a warning, as the `vep` script does (vep:32-33). A \
-         long option is also read in any case, as a unique prefix and after one dash, and from \
-         the `--config` file, `vep.ini` and the `VEP_*` variables ([configuration \
-         sources]({}#configuration-sources)).\n",
+         long option is also read in any case, after one dash and as a unique prefix, which is \
+         resolved against the flags of the release that reads it ([option \
+         spellings]({0}#option-spellings-configpm62)), and from the `--config` file, `vep.ini` \
+         and the `VEP_*` variables ([configuration sources]({0}#configuration-sources)).\n",
         site_link(COMPATIBILITY)
     )
     .unwrap();
@@ -873,7 +1000,7 @@ fn render_landing(command: &Command) -> String {
     out.push_str("## Option rules\n\n");
     out.push_str(
         "Ensembl VEP's option rules are applied as data, from `Config.pm:327-645` at \
-         release/116.2, in this order after parsing. A flag the error table refuses is refused \
+         release/116.3, in this order after parsing. A flag the error table refuses is refused \
          first. Then the option sets switch on the flags they imply, in the order below, a set's \
          value overwriting an explicit one (`apply_option_sets`, `Config.pm:816-884`). Then the \
          checks of `check_config` (`Config.pm:944-985`) run: valid values, incompatible pairs, \
@@ -906,10 +1033,12 @@ fn render_landing(command: &Command) -> String {
         "`--everything` therefore reaches `--hgvsc` and `--hgvsp` through `--hgvs`, \
          `--mane_select` and `--mane_plus_clinical` through `--mane`, and `--check_existing` \
          through the frequency flags; it does not switch on `--allele_number` or `--hgvsg`. \
-         `--regulatory` is switched on and emits RegulatoryFeature and MotifFeature rows, with \
-         every motif field, when the converted cache carries regulatory data; `CELL_TYPE` needs \
-         `--cell_type`, which is not in Ensembl VEP's set either.\n\n",
+         `--regulatory` is switched on and emits RegulatoryFeature and MotifFeature rows when \
+         the cache carries regulatory features, with every motif field where it carries the \
+         binding matrices' counts; `CELL_TYPE` needs `--cell_type`, which is not in Ensembl \
+         VEP's set either.\n\n",
     );
+    out.push_str(PHYLOP_ROW_NOTE);
     out.push_str("### Incompatible flags (`Config.pm:615-632`)\n\n");
     out.push_str(
         "`Can't use --<flag> and --<other> together`, naming the first pair in this table's \
@@ -1030,6 +1159,18 @@ fn render_landing(command: &Command) -> String {
     out
 }
 
+/// What an abbreviated flag of `vep` rests on, an item of the compatibility
+/// page's list of option spellings: [`resolve_spelling`] resolves a prefix
+/// against the names the parser declares, aliases and hidden flags among them,
+/// and only then against Ensembl VEP's list. A flag named as the prefix takes
+/// it, and a flag of the same prefix leaves it to Ensembl VEP's list, which
+/// resolves it or leaves the token for clap to refuse.
+const VEP_ABBREVIATIONS: &str = "- An abbreviation is resolved against the flags of the release \
+that reads it, its aliases and its hidden flags included. A later release that adds a flag can \
+give a prefix to that flag, or make a prefix that Ensembl VEP's list does not resolve name two \
+flags, which is refused (exit 2); a script that must keep working writes each flag's full \
+name.\n";
+
 /// The compatibility page: the database flags, the error table, where
 /// `Config.pm` is not followed, the configuration sources, the option
 /// spellings and the exit status.
@@ -1047,13 +1188,17 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
          shows.\n\n",
     );
     flag_table(&mut out, heading, sections);
+    let marked = marked_rows(heading, sections);
+    if marked > 0 {
+        out.push_str(&hidden_note(marked));
+    }
 
     out.push_str("## Consequence terms never assigned\n\n");
     out.push_str(
         "One term is never assigned: the root `sequence_variant` has no predicate, and Ensembl \
          VEP's consequence engine never assigns it either. The other 40 of Ensembl VEP's 41 \
          Sequence Ontology terms are assigned; the six regulatory and motif terms need \
-         `--regulatory` (or `--everything`) and a cache converted with its regulatory features \
+         `--regulatory` (or `--everything`) and a cache that carries regulatory features \
          ([Regulatory and motif features](../regulatory.md)).\n\n",
     );
 
@@ -1066,11 +1211,12 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
     out.push_str("## Refused flags\n\n");
     out.push_str(
         "Every flag vep-rs refuses, with the line it prints and what Ensembl VEP does with the \
-         flag (cited to its source at release/116.2). A refused flag exits 1 with the message \
+         flag (cited to its source at release/116.3). A refused flag exits 1 with the message \
          below under the `cli` component, and the help text of a declared one is this table's \
-         message.\n\n",
+         message. The `-V` row is the exception: `-V` is the version's short, and its help text \
+         is the version's.\n\n",
     );
-    let rows: Vec<Vec<String>> = ERROR_TABLE
+    let mut rows: Vec<Vec<String>> = ERROR_TABLE
         .iter()
         .filter_map(|entry| match entry.treatment {
             Treatment::Refused { component, message } => Some(vec![
@@ -1081,13 +1227,21 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
             Treatment::AcceptedWithoutEffect { .. } => None,
         })
         .collect();
+    rows.push(vec![
+        "`-V` beside other arguments (caught before parsing)".to_string(),
+        code(&format!("ERROR: [cli] {VERSION_SHORT_BESIDE_ARGUMENTS}")),
+        cell(
+            "Config.pm:159 declares verbose|v, and Getopt::Long's `ignore_case`, left on at :62, \
+             reads `-V` as that option, so the run proceeds verbosely",
+        ),
+    ]);
     table(&mut out, &["Flag", "Error", "Ensembl VEP"], &rows);
 
     out.push_str("## Accepted without effect\n\n");
     out.push_str(
-        "Every flag in the table below parses and changes nothing. The table is the error \
+        "Every flag in the table below parses and changes no annotation. The table is the error \
          table's: each flag's help is its reason, and the Ensembl VEP column cites what Ensembl \
-         VEP does with it at release/116.2.\n\n",
+         VEP does with it at release/116.3.\n\n",
     );
     let rows: Vec<Vec<String>> = ERROR_TABLE
         .iter()
@@ -1118,7 +1272,7 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
     out.push_str("## Where `Config.pm` is not followed\n\n");
     out.push_str(
         "- An output file matching `stdout` in any case does not force `--quiet` or drop \
-         `--verbose` (`Config.pm:933-937`). The status lines go to standard error, so the \
+         `--verbose` (`Config.pm:934-937`). The status lines go to standard error, so the \
          annotation on standard output is clean either way, and `--quiet --verbose` stays \
          refused with `-o STDOUT` as without. `--quiet` silences those lines and nothing else: \
          the statistics report is written in full under it, as Ensembl VEP keys its counters \
@@ -1172,8 +1326,8 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
          - `--freq_gt_lt` takes `gt` or `lt` and `--freq_filter` `exclude` or `include`; any \
          other word is an argument syntax error (exit 2). Ensembl VEP declares both as `=s` \
          (`Config.pm:137, 139`) and checks neither: an unknown direction passes no allele \
-         (`BaseCacheVariation.pm:467-468`), and any filter but `include` reads as `exclude` \
-         (`:319`).\n\
+         (`BaseCacheVariation.pm:468-469`), and any filter but `include` reads as `exclude` \
+         (`:320`).\n\
          - `--shift_hgvs` takes `0` or `1`; any other value is an argument syntax error \
          (exit 2). Ensembl VEP's `shift_hgvs=i` (`Config.pm:201`) takes any integer and \
          `BaseRunner.pm:498` matches it against `/(0|1)/` as a substring. So `2` leaves the \
@@ -1189,11 +1343,17 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
          (`Config.pm:119, 147, 151, 154, 239`), so `1_0` reads as 10 there and \
          `--cache_version 11_6` selects release 116. `--shift_3prime` and `--shift_genomic` \
          read an integer as Getopt::Long spells one, the underscores included.\n\
-         - `-V` is the version, where Getopt::Long's `ignore_case` reads it as `-v`, and an \
-         upper-case short names no flag here. A short with its value attached (`-ofile.txt`) \
-         and a cluster of switches (`-qv`) are clap's readings, where Getopt::Long refuses the \
-         token. A `+` before an option name, which Getopt::Long accepts, is not an option \
-         here.\n\
+         - `-V` is the version, where Getopt::Long's `ignore_case` reads it as `-v`. Beside any \
+         other token `-V` is refused (exit 1) with a line naming `-v` and `--version`, unless \
+         `--help` or `--version` is given too.\n\
+         - `-A`, `-E`, `-I`, `-O`, `-S`, `-T` and `-U` are argument syntax errors (exit 2), \
+         where `ignore_case` reads each as its lower-case short. Four upper-case letters name \
+         an option, as they do in Ensembl VEP: `-J` is `--json`, `-Q` `--quiet`, `-W` \
+         `--warning_file` and `-X` `--xref_refseq`. Any other upper-case letter is refused by \
+         both (vep:30).\n\
+         - A short with its value attached (`-ofile.txt`) and a cluster of switches (`-qv`) are \
+         clap's readings, where Getopt::Long refuses the token. A `+` before an option name, \
+         which Getopt::Long accepts, is not an option here.\n\
          - A flag written with `=` and nothing after it (`--tmpdir=`, `--convert=`) carries \
          the empty value, as `--tmpdir ''` does. Getopt::Long leaves such a token of a flag \
          that requires a value unread, and Ensembl VEP refuses it as an extra parameter \
@@ -1201,12 +1361,13 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
          - A trailing comma or a comma-joined value of `--sift`, `--polyphen`, `--terms`, \
          `--nearest`, `--compress_output` or `--format` (`--sift b,`) is an argument syntax \
          error (exit 2). Ensembl VEP's `check_config` splits such a value on commas before its \
-         `%VALID` test (`Config.pm:946`) and reads the first token by prefix \
-         (`OutputFactory.pm:1808`), so `--sift b,` annotates there (`SIFT=tolerated(0.19)` on one \
+         `%VALID` test (`Config.pm:946`), and `--sift` and `--polyphen` read its first letter \
+         (`OutputFactory.pm:1815-1817`), so `--sift b,` annotates there \
+         (`SIFT=tolerated(0.19)` on one \
          transcript of `21 14216193 C G`). A `0` or empty value of such a flag (`--sift 0`, \
          `--sift ''`, `--polyphen 0`, `--nearest 0`) is an argument syntax error too (exit 2). \
-         Ensembl VEP reads a value Perl reads as false as the flag unset \
-         (`Config.pm:904-905, 945`) and annotates without the column (`OutputFactory.pm:1805`, \
+         For `--sift`, `--polyphen` and `--nearest` Ensembl VEP reads it as the flag unset \
+         (`Config.pm:904-905, 945`) and annotates without the column (`OutputFactory.pm:1814`, \
          `AnnotationType/Transcript.pm:170`).\n\
          - The `-o` value names the output file as given. Ensembl VEP opens it with Perl's \
          two-argument `open` (`BaseRunner.pm:226`), which strips surrounding whitespace and \
@@ -1234,7 +1395,7 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
          `>skipped.txt` here.\n\
          - A `--skipped_variants_file` value Perl reads as false, `0` or the empty value, \
          leaves the flag unset there (`Runner.pm:176`), so no file is written. vep-rs writes a \
-         file named `0`, and the empty value fails the run as it ends, the output written, with \
+         file named `0`, and the empty value is refused before the first record is read, with \
          `Could not write to skipped variants file` (exit 1). A false `--warning_file` value is \
          the default warnings file in both engines (`BaseVEP.pm:890`).\n\n",
     );
@@ -1251,6 +1412,14 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
          is drawn from the same counts, with Ensembl VEP's colours where its `COLOUR_KEYS` names \
          the key (`Constants.pm:299-346`); a click on a chart selects nothing, where the chart \
          library highlights the table row.\n\
+         - Under each chart's heading the HTML report carries the chart's counts in an HTML \
+         comment. The comment holds the statement Ensembl VEP's page hands its chart library \
+         for that chart, `var <id> = draw<Type>(…, \
+         google.visualization.arrayToDataTable([…]), …);` (`Stats.pm:955-963`), written from \
+         the counts the drawing and the table show. A program that collects reports and reads \
+         a chart's counts from that line of Ensembl VEP's page, as MultiQC's module for \
+         Ensembl VEP does, finds the line here. Nothing in the page runs the statement, and \
+         the page calls no chart library.\n\
          - The `Start time` and `End time` rows are UTC, the clock of the `## Output produced \
          at` header line, where Ensembl VEP prints local time (`Utils.pm:467-488`); `Run time` \
          is whole seconds in both.\n\
@@ -1262,14 +1431,22 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
          `chr21`) print in key order, where Ensembl VEP prints them in its hash order, which \
          changes between runs.\n\
          - The `Distribution of variants on chromosome` charts need the chromosome lengths, \
-         which vep-rs reads from the index of the `--fasta` file alone, one chart per \
+         which vep-rs reads from the index of the run's reference FASTA alone, one chart per \
          chromosome spelled as the FASTA names it. Ensembl VEP reads them from its database \
          when one is connected and from the FASTA otherwise (`BaseVEP.pm:550-580`). Without a \
-         FASTA neither engine writes a distribution chart.\n\
+         FASTA vep-rs writes no distribution chart, and Ensembl VEP writes one only from a \
+         connected database. A vep-rs run that writes a report without a FASTA says so in \
+         one `INFO:` line on standard error, which `--quiet` withholds.\n\
          - The report is checked for an existing file before the output and the \
          skipped-variants file are, as Ensembl VEP checks it (`Runner.pm:144-148`, before \
-         `:202`). The three files are created only once every check passes, so a refused \
-         output leaves no empty report behind, where Ensembl VEP leaves one.\n\n",
+         `:202`).\n\
+         - Before its first record the run tests that it can write the report, the output, \
+         a warnings file that `--warning_file` names, then the skipped-variants file, a pipe \
+         or a device excepted. The first that fails is refused by name, and no report, \
+         output or skipped-variants file is created or emptied before every check and test \
+         has passed; a warning drawn earlier is written to the warnings file. So such a \
+         refusal leaves those earlier files as they were and no empty report, where Ensembl \
+         VEP leaves one behind a refused output.\n\n",
     );
 
     out.push_str("## Configuration sources\n\n");
@@ -1359,6 +1536,18 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
          The variables are read in name order.\n"
     )
     .unwrap();
+    writeln!(
+        out,
+        "No variable sets `--phyloP` or `--phastCons`, the two flags whose names hold a capital \
+         letter: `{ENV_PREFIX}PHYLOP=100` is read as `phylop`, which names nothing, and the run \
+         adds no source and prints no message. Ensembl VEP reads the variable the same way: it \
+         stores the value under `phylop`, which its option set never reads, and echoes \
+         `--phylop 100` in the `## VEP command-line:` header (`Config.pm:1140, 1158`, `:553`). \
+         The command line and a configuration file's `phyloP` key set the flag, and \
+         `{ENV_PREFIX}CUSTOM=<bigWig>,phyloP100way,bigwig,exact` adds from the environment the \
+         source `--phyloP 100` names.\n"
+    )
+    .unwrap();
     out.push_str(
         "Environment variables vep-rs reads outside this mechanism, which Ensembl VEP has no \
          counterpart for:\n\n",
@@ -1383,8 +1572,11 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
          starts with it, `--pa` `--password`, `--ve` `--verbose`.\n\
          - A prefix that names one flag of this version resolves to it (`--bio` is `--biotype`). \
          A prefix of several flags that Getopt::Long resolves no better (`--fo`), or a name no \
-         option has, is an argument syntax error (exit 2).\n\
-         - A single-letter short is clap's and is matched by case: `-v` is `--verbose`, `-h` \
+         option has, is an argument syntax error (exit 2).\n",
+    );
+    out.push_str(VEP_ABBREVIATIONS);
+    out.push_str(
+        "- A single-letter short is clap's and is matched by case: `-v` is `--verbose`, `-h` \
          the help and `-V` the version, `-qv` the cluster `-q -v`, and `-ofile.txt` the value \
          `file.txt` of `-o`, a spelling Getopt::Long refuses. Ensembl VEP refuses `-h`, a \
          prefix of eight of its options, and has no `--version`.\n\n",
@@ -1425,13 +1617,23 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
     out.push_str("## Exit status and errors\n\n");
     out.push_str(
         "- `0`: the run completed; also `--help`, `--version` and an empty command line.\n\
-         - `1`: a refusal or a failed run. One line `ERROR: [<component>] <message>` is written \
-         to standard error, where `<message>` is Ensembl VEP's text where it has one, without \
-         its own `ERROR: ` prefix; a refused `--custom` string carries Ensembl VEP's second \
-         line, `LINE: --custom <string>`, where Ensembl VEP prints it. The components are \
+         - `1`: a refusal or a failed run. `ERROR: [<component>] <message>` is written to \
+         standard error, on one line unless the message carries a second. `<message>` carries \
+         Ensembl VEP's text, without its own `ERROR: ` prefix, where vep-rs quotes that text, \
+         and is in vep-rs's own words elsewhere: for example, the `--af_exac` refusal names the \
+         flag to use, where Ensembl VEP reports an unexpected parameter. The components are \
          listed below.\n\
          - `2`: an argument syntax error, in clap's words with its `error:` prefix: an unknown \
          flag, a prefix of several flags, a missing value, a value outside an enumeration.\n\
+         - Two refusals carry Ensembl VEP's text in parentheses after vep-rs's own words, as \
+         `(Ensembl VEP: <text>)`: the `--lrg` refusal and the refusal of a GFF or GTF \
+         transcript source without a FASTA. Alone, either text would point to a database \
+         connection, which vep-rs never makes.\n\
+         - Three refusals carry a second line, as Ensembl VEP's own messages do. A refused \
+         `--custom` string carries `LINE: --custom <string>` where Ensembl VEP prints it. An \
+         unsupported `--regulatory_gff` key carries `Supported keys: ` and the keys the flag \
+         reads, and a `--cell_type` name the cache's regulatory data lacks carries the cache's \
+         cell types.\n\
          - A compressed input cut inside a gzip member is a `run` failure, exit 1 with nothing \
          past the header written, where Ensembl VEP writes the records before the cut and \
          exits 0 ([the divergence page](../divergences/compressed-input.md)).\n\
@@ -1441,15 +1643,20 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
          header alone written.\n\
          - A line of the run that standard error refuses (the banner, a status, progress or \
          summary line, a warning's echo, the `ERROR:` line) is dropped and never changes the \
-         exit status. A completed run exits 0 on a full device or a pipe without a reader, and \
-         a refusal exits 1. Ensembl VEP completes on a full device too; on a pipe without a \
-         reader it completes when it has nothing to write there and is killed by `SIGPIPE` \
-         (exit 141, no output) at its first warning (`BaseVEP.pm:821`).\n\
-         - An unwritable `--warning_file` is an `output` failure, exit 1, raised after the \
-         batch that warned, with that batch's rows written and each warning echoed on standard \
-         error unless `--quiet`; under `--show_cache_info` it is raised before the print, with \
-         nothing printed. Ensembl VEP dies inside the first warning (`BaseVEP.pm:894`), with the \
-         header alone written and no warning echoed.\n\
+         exit status. So is a line a plugin prints itself, and every line of \
+         [`vep filter`](filter.md), [`vep recode`](recode.md), `vep-cache-builder` and \
+         `vep-cache-converter`. A completed run exits 0 on a full device or a pipe without a \
+         reader, and a refusal exits 1. Ensembl VEP completes on a full device too; on a pipe \
+         without a reader it completes when it has nothing to write there and is killed by \
+         `SIGPIPE` (exit 141, no output) at its first warning (`BaseVEP.pm:821`).\n\
+         - A `--warning_file` that cannot be written is an `output` failure, exit 1, raised \
+         before the first record is read, with nothing written, whether or not the run would \
+         warn; under `--show_cache_info`, once a warning is drawn and before the print. A \
+         default warnings file, a pipe or a device that cannot be written fails only at the \
+         warning that writes it: the run ends once any batch in hand is written, and a \
+         Parquet run then publishes nothing. Ensembl VEP opens every warnings file at its \
+         first warning and dies where that fails (`BaseVEP.pm:894`), with any buffer in \
+         hand unwritten and no warning echoed.\n\
          - The process ends as soon as its outputs are written and closed: the loaded cache is \
          left to the operating system, which reclaims it in one step, instead of being freed \
          one allocation at a time. An allocator asked to report at exit (`MIMALLOC_SHOW_STATS`, \
@@ -1570,6 +1777,296 @@ fn cli_reference_is_current() {
     }
 }
 
+/// The `--help` heading `command` lists `flag` under.
+fn heading_of<'a>(command: &'a Command, flag: &str) -> &'a str {
+    command
+        .get_arguments()
+        .find(|arg| arg.get_long() == Some(flag))
+        .and_then(Arg::get_help_heading)
+        .unwrap_or_else(|| panic!("--{flag} has no help heading"))
+}
+
+/// The headings `--help` prints over its flag lists, in its order: clap
+/// prints a heading where it first meets a flag that carries it. `Options`,
+/// which holds clap's own `--help` and `--version`, is left out.
+fn help_headings(command: &mut Command) -> Vec<String> {
+    command
+        .render_help()
+        .to_string()
+        .lines()
+        .filter(|line| !line.starts_with(' '))
+        .filter_map(|line| line.strip_suffix(':'))
+        .filter(|heading| *heading != "Options")
+        .map(str::to_string)
+        .collect()
+}
+
+/// A heading's anchor on the site, as mdBook derives it: letters and digits
+/// in lower case, `_` and `-` kept, each blank a `-`, every other character
+/// dropped.
+fn anchor(heading: &str) -> String {
+    heading
+        .chars()
+        .filter_map(|c| {
+            if c.is_alphanumeric() || c == '_' || c == '-' {
+                Some(c.to_ascii_lowercase())
+            } else if c.is_whitespace() {
+                Some('-')
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+/// Each `--help` heading of `vep` names what its flags do. The shift flags,
+/// the co-located variant flags, the two flags that drop rows, the allele and
+/// position columns, the reference allele flags, the custom annotation flags
+/// and the two flags that keep a record a run would skip each stand under a
+/// heading of their own; `--mirna`, `--lrg` and `--tmpdir` stand under the
+/// heading of their kind. `--help` prints the headings in this order, and
+/// none reads `Miscellaneous`.
+#[test]
+fn flags_of_one_kind_share_a_help_heading() {
+    let mut command = Args::command_with_error_table();
+    command.build();
+    let headings: [(&str, &[&str]); 11] = [
+        (
+            "3' Shifting",
+            &[
+                "shift_3prime",
+                "shift_hgvs",
+                "shift_genomic",
+                "shift_length",
+            ],
+        ),
+        (
+            "Co-located Variants",
+            &[
+                "check_existing",
+                "no_check_alleles",
+                "exclude_null_alleles",
+                "failed",
+                "clin_sig_allele",
+                "clinvar_somatic_classification",
+                "var_synonyms",
+                "check_svs",
+            ],
+        ),
+        ("Dropped Rows", &["coding_only", "no_intergenic"]),
+        (
+            "Alleles / Positions",
+            &[
+                "allele_number",
+                "show_ref_allele",
+                "uploaded_allele",
+                "ambiguity",
+                "minimal",
+                "total_length",
+            ],
+        ),
+        (
+            "Reference Allele",
+            &["use_transcript_ref", "use_given_ref", "bam"],
+        ),
+        ("Plugins", &["plugin", "dir_plugins", "safe", "debug"]),
+        (
+            "Custom Annotation",
+            &[
+                "custom",
+                "bigwig",
+                "phyloP",
+                "phastCons",
+                "ucsc_assembly",
+                "ucsc_data_root",
+                "custom_multi_allelic",
+                "custom_suppress_filter",
+                "gff",
+                "gtf",
+            ],
+        ),
+        ("Record Handling", &["dont_skip", "allow_non_variant"]),
+        (
+            "Annotation Fields",
+            &["symbol", "hgvs", "regulatory", "mirna"],
+        ),
+        ("Database", &["database", "lrg"]),
+        ("Runtime", &["buffer_size", "tmpdir"]),
+    ];
+    for (heading, flags) in headings {
+        for flag in flags {
+            assert_eq!(heading_of(&command, flag), heading, "--{flag}");
+        }
+    }
+    assert_eq!(
+        help_headings(&mut command),
+        [
+            "Input",
+            "Output",
+            "Cache / Offline",
+            "3' Shifting",
+            "Species / Assembly",
+            "Database",
+            "Runtime",
+            "Annotation Fields",
+            "Co-located Variants",
+            "Dropped Rows",
+            "Allele Frequencies",
+            "Filtering / Picking",
+            "Alleles / Positions",
+            "Plugins",
+            "Custom Annotation",
+            "Transcript Sets",
+            "Reference Allele",
+            "Statistics",
+            "Verbosity",
+            "Record Handling",
+        ]
+    );
+}
+
+/// `vep recode` lists the six flags that tune the annotation behind the
+/// translation and select no transcript under a heading of their own, printed
+/// after `Transcript selection`.
+#[test]
+fn recode_flags_that_select_no_transcript_have_their_own_heading() {
+    let mut command = RecodeArgs::command();
+    command.build();
+    for flag in [
+        "minimal",
+        "buffer_size",
+        "failed",
+        "shift_hgvs",
+        "use_transcript_ref",
+        "use_given_ref",
+    ] {
+        assert_eq!(heading_of(&command, flag), "Annotation run", "--{flag}");
+    }
+    for flag in ["merged", "transcript_filter", "pick", "pick_order"] {
+        assert_eq!(
+            heading_of(&command, flag),
+            "Transcript selection",
+            "--{flag}"
+        );
+    }
+    assert_eq!(
+        help_headings(&mut command),
+        [
+            "Input",
+            "Output",
+            "Cache, species and assembly",
+            "Transcript selection",
+            "Annotation run",
+            "Database",
+        ]
+    );
+}
+
+/// Each page carries one section per kind of flag, in this order, and a link
+/// from a page's text to a section of the same page names a section the page
+/// has, so a lead that names its sections cannot outlive one of them.
+#[test]
+fn pages_carry_a_section_per_kind_of_flag() {
+    let mut command = Args::command_with_error_table();
+    command.build();
+    let pages: BTreeMap<&str, String> = render(&command).into_iter().collect();
+    let sections_of = |file: &str| -> Vec<&str> {
+        pages[file]
+            .lines()
+            .filter_map(|line| line.strip_prefix("## "))
+            .collect()
+    };
+    assert_eq!(
+        sections_of("docs/cli/cache-species-runtime.md"),
+        [
+            "Cache and offline",
+            "3' shifting",
+            "Species and assembly",
+            "Runtime"
+        ]
+    );
+    assert_eq!(
+        sections_of("docs/cli/output-control.md"),
+        ["Annotation fields", "Co-located variants", "Dropped rows"]
+    );
+    assert_eq!(
+        sections_of("docs/cli/filtering-picking.md"),
+        [
+            "Filtering and picking",
+            "Alleles and positions",
+            "Transcript sets",
+            "Reference allele"
+        ]
+    );
+    assert_eq!(
+        sections_of("docs/cli/plugins.md"),
+        ["Loading plugins", "Custom annotation"]
+    );
+    assert_eq!(
+        sections_of("docs/cli/statistics-verbosity-misc.md"),
+        ["Statistics", "Verbosity", "Record handling"]
+    );
+    assert_eq!(
+        sections_of(RECODE_PAGE),
+        [
+            "Input",
+            "Output",
+            "Cache, species and assembly",
+            "Transcript selection",
+            "Annotation run",
+            "Database",
+        ]
+    );
+    assert!(
+        pages["docs/cli/allele-frequencies.md"]
+            .contains("[Output control](output-control.md#co-located-variants)"),
+        "{}",
+        pages["docs/cli/allele-frequencies.md"]
+    );
+    for (file, text) in &pages {
+        let anchors: Vec<String> = text
+            .lines()
+            .filter(|line| line.starts_with('#'))
+            .map(|line| anchor(line.trim_start_matches('#').trim()))
+            .collect();
+        for link in text.split("](#").skip(1) {
+            let target = link.split(')').next().unwrap_or_default();
+            assert!(
+                anchors.iter().any(|a| a == target),
+                "{file} links #{target}, a section it does not have"
+            );
+        }
+    }
+}
+
+/// The option-set table prints Ensembl VEP's text, so its `--phyloP` row
+/// carries the source's short name as `Config.pm:555` spells it. The sentence
+/// under the table says whose text the row is and links the page of that
+/// difference.
+#[test]
+fn option_set_table_says_whose_spelling_its_phylop_row_is() {
+    let mut command = Args::command_with_error_table();
+    command.build();
+    let landing = render_landing(&command);
+    let row = landing
+        .find("| `--phyloP` | `--custom ")
+        .expect("the option-set table has a --phyloP row");
+    let row_text = landing[row..].lines().next().unwrap_or_default();
+    assert!(
+        row_text.contains(",phlyoP%phyloP%way,bigwig,exact`"),
+        "{row_text}"
+    );
+    let note = landing
+        .find(PHYLOP_ROW_NOTE)
+        .expect("the landing page carries the note on the --phyloP row");
+    let next_table = landing
+        .find("### Incompatible flags")
+        .expect("the incompatible-flags table follows the option sets");
+    assert!(row < note && note < next_table);
+    assert!(PHYLOP_ROW_NOTE.contains("(divergences/phylop-short-name.md)"));
+    assert!(repo_path("docs/divergences/phylop-short-name.md").is_file());
+}
+
 /// Every table-backed flag's help is the table's text, verbatim, so `--help`
 /// and the page cannot drift from the refusal.
 #[test]
@@ -1588,6 +2085,92 @@ fn help_of_table_backed_flags_is_the_tables() {
             entry.flag
         );
     }
+}
+
+/// The compatibility page's sentences on an upper-case letter are the parser's
+/// readings. A letter reaches an option where the pre-pass spells it as one:
+/// the four that are a prefix of one option of `@VEP_PARAMS`. Every other but
+/// `-V` is an unknown argument, seven of them the upper-case form of a short
+/// that `@VEP_PARAMS` declares, which Getopt::Long's `ignore_case`
+/// (`Config.pm:62`) reads as that short. `-V` keeps the version's help text,
+/// which the refusals table's lead-in says of its row.
+#[test]
+fn upper_case_letters_are_read_as_the_compatibility_page_says() {
+    let mut command = Args::command_with_error_table();
+    command.build();
+    let dir = tempfile::tempdir().unwrap();
+    let perl = perl_options();
+    let perl_shorts: Vec<String> = perl
+        .iter()
+        .flat_map(|o| o.names.iter())
+        .filter(|n| n.len() == 1)
+        .cloned()
+        .collect();
+    let mut named = Vec::new();
+    let mut refused_shorts = Vec::new();
+    let mut refused_by_both = Vec::new();
+    for letter in ('A'..='Z').filter(|l| *l != 'V') {
+        let home = (OsString::from("HOME"), dir.path().as_os_str().to_owned());
+        let argv = prepass(vec!["vep".into(), format!("-{letter}").into()], [home]).unwrap();
+        let spelled = argv[1].to_str().unwrap();
+        let long = spelled
+            .strip_prefix("--")
+            .filter(|long| command.get_arguments().any(|a| a.get_long() == Some(*long)));
+        let in_perl =
+            vep_cli::argv::resolve(&letter.to_string(), &perl).map(|o| o.canonical.as_str());
+        if let Some(long) = long {
+            assert_eq!(in_perl, Some(long), "-{letter}");
+            named.push((letter, long.to_string()));
+            continue;
+        }
+        let error = command.clone().try_get_matches_from(&argv).unwrap_err();
+        assert_eq!(
+            error.kind(),
+            clap::error::ErrorKind::UnknownArgument,
+            "{argv:?}"
+        );
+        if perl_shorts.contains(&letter.to_ascii_lowercase().to_string()) {
+            refused_shorts.push(letter);
+        } else {
+            assert_eq!(in_perl, None, "-{letter}");
+            refused_by_both.push(letter);
+        }
+    }
+    let named: Vec<(char, &str)> = named.iter().map(|(l, long)| (*l, long.as_str())).collect();
+    assert_eq!(
+        named,
+        [
+            ('J', "json"),
+            ('Q', "quiet"),
+            ('W', "warning_file"),
+            ('X', "xref_refseq")
+        ]
+    );
+    assert_eq!(refused_shorts, ['A', 'E', 'I', 'O', 'S', 'T', 'U']);
+    assert_eq!(refused_by_both.len(), 14, "{refused_by_both:?}");
+    let version = command
+        .get_arguments()
+        .find(|a| a.get_short() == Some('V'))
+        .expect("the version's short");
+    assert_eq!(version.get_long(), Some("version"));
+    assert_eq!(flag_help(version), "Print version");
+    let pages: BTreeMap<&str, String> = render(&command).into_iter().collect();
+    for sentence in [
+        "- `-A`, `-E`, `-I`, `-O`, `-S`, `-T` and `-U` are argument syntax errors (exit 2), where \
+         `ignore_case` reads each as its lower-case short. Four upper-case letters name an \
+         option, as they do in Ensembl VEP: `-J` is `--json`, `-Q` `--quiet`, `-W` \
+         `--warning_file` and `-X` `--xref_refseq`. Any other upper-case letter is refused by \
+         both (vep:30).\n",
+        "and the help text of a declared one is this table's message. The `-V` row is the \
+         exception: `-V` is the version's short, and its help text is the version's.\n\n",
+    ] {
+        assert!(
+            pages[COMPATIBILITY].contains(sentence),
+            "{}",
+            pages[COMPATIBILITY]
+        );
+    }
+    assert!(!pages[COMPATIBILITY].contains("an upper-case short names no flag here"));
 }
 
 /// The repeatable and comma-separated flags the pages list as collected or
@@ -1700,5 +2283,271 @@ fn repeatable_flags_list_the_declared_ones_and_name_the_refused() {
     );
     for page in pages.values() {
         assert!(!page.contains("option this version lacks"), "{page}");
+    }
+}
+
+/// The long names of the flags `command` hides from `--help`.
+fn hidden_flags(command: &Command) -> Vec<&str> {
+    command
+        .get_arguments()
+        .filter(|arg| arg.is_hide_set())
+        .filter_map(Arg::get_long)
+        .collect()
+}
+
+/// A page's table rows whose first cell, the flag's names, ends with the mark.
+fn marked_lines(page: &str) -> Vec<&str> {
+    page.lines()
+        .filter(|line| {
+            line.strip_prefix("| `--")
+                .and_then(|row| row.split(" | ").next())
+                .is_some_and(|names| names.ends_with(HIDDEN_MARK))
+        })
+        .collect()
+}
+
+/// Whether a help text lists `flag`: one of its option lines, which clap
+/// indents by at most six columns, opens with the long name after any short
+/// form.
+fn help_lists(help: &str, flag: &str) -> bool {
+    let name = format!("--{flag}");
+    help.lines().any(|line| {
+        let option = line.trim_start();
+        let after_short = match option.split_once(", ") {
+            Some((short, rest)) if short.len() == 2 && short.starts_with('-') => rest,
+            _ => option,
+        };
+        line.len() - option.len() <= 6
+            && after_short
+                .strip_prefix(&name)
+                .is_some_and(|rest| !rest.starts_with(|c: char| c.is_alphanumeric() || c == '_'))
+    })
+}
+
+/// `--help` prints every flag but the ones the parser hides, and the
+/// reference lists each hidden flag on one row that carries the mark; no
+/// other row carries it. A page with a marked row says once, under the table
+/// that holds its first one, what the mark means, with its own count of such
+/// rows, and a page without one does not. The companion tools hide no flag,
+/// so their pages carry no such sentence.
+#[test]
+fn hidden_flags_carry_the_mark_and_their_page_says_once_what_it_means() {
+    let mut command = Args::command_with_error_table();
+    command.build();
+    let hidden = hidden_flags(&command);
+    for help in [
+        command.clone().render_help().to_string(),
+        command.clone().render_long_help().to_string(),
+    ] {
+        for flag in command.get_arguments().filter_map(Arg::get_long) {
+            assert_eq!(
+                help_lists(&help, flag),
+                !hidden.contains(&flag),
+                "--{flag} in --help"
+            );
+        }
+    }
+    for mut tool in [FilterArgs::command(), RecodeArgs::command()] {
+        tool.build();
+        assert!(hidden_flags(&tool).is_empty(), "{}", tool.get_name());
+    }
+
+    let pages = render(&command);
+    let mut marked = Vec::new();
+    for (file, text) in &pages {
+        let rows = marked_lines(text);
+        let notes = text.matches(HIDDEN_NOTE).count();
+        if rows.is_empty() {
+            assert_eq!(notes, 0, "{file} marks no flag");
+        } else {
+            assert_eq!(notes, 1, "{file} marks {} flags", rows.len());
+            let note = hidden_note(rows.len());
+            let table_end = text.find(rows[0]).unwrap();
+            let after_table = text[table_end..].find("|\n\n").unwrap() + table_end + 3;
+            assert!(text[after_table..].starts_with(&note), "{file}: {note}");
+        }
+        marked.extend(rows);
+    }
+    assert_eq!(marked.len(), hidden.len(), "{marked:?}");
+    for flag in &hidden {
+        let row = format!("| `--{flag}`");
+        assert_eq!(
+            marked.iter().filter(|line| line.starts_with(&row)).count(),
+            1,
+            "--{flag}"
+        );
+    }
+}
+
+/// The sentence on hidden flags names three ways a run gives one: the command
+/// line, a configuration file and a `VEP_<FLAG>` variable. The pre-pass spells
+/// each hidden flag from all three, as it spells any declared flag.
+#[test]
+fn a_hidden_flag_is_read_from_each_source_its_sentence_names() {
+    let mut command = Args::command_with_error_table();
+    command.build();
+    let dir = tempfile::tempdir().unwrap();
+    let home = || (OsString::from("HOME"), dir.path().as_os_str().to_owned());
+    let names = |argv: Vec<OsString>, flag: &str| {
+        let option = format!("--{flag}");
+        let with_value = format!("--{flag}=1");
+        argv.iter().any(|t| *t == *option || *t == *with_value)
+    };
+    for flag in hidden_flags(&command) {
+        let upper = flag.to_ascii_uppercase();
+        // A name in another case is written as declared only when the pre-pass
+        // resolves it; any other name stays as typed.
+        let typed = prepass(vec!["vep".into(), format!("--{upper}").into()], [home()]).unwrap();
+        assert!(names(typed, flag), "--{upper} on the command line");
+
+        let config = dir.path().join(format!("{flag}.txt"));
+        fs::write(&config, format!("{flag} 1\n")).unwrap();
+        let from_file = prepass(
+            vec!["vep".into(), "--config".into(), config.into_os_string()],
+            [home()],
+        )
+        .unwrap();
+        assert!(names(from_file, flag), "{flag} in a configuration file");
+
+        let variable = format!("{ENV_PREFIX}{}", flag.to_ascii_uppercase());
+        let from_environment = prepass(
+            vec!["vep".into()],
+            [home(), (OsString::from(&variable), OsString::from("1"))],
+        )
+        .unwrap();
+        assert!(names(from_environment, flag), "{variable}");
+    }
+}
+
+/// `command` with one more switch, named `long`, built.
+fn with_switch(command: &Command, long: &'static str) -> Command {
+    let mut added = command
+        .clone()
+        .arg(Arg::new(long).long(long).action(ArgAction::SetTrue));
+    added.build();
+    added
+}
+
+/// The three pages that offer abbreviated option names each say once, where
+/// they offer them, what an abbreviation rests on: the compatibility page in
+/// its list of option spellings, the companion tools' pages in the paragraph
+/// after the opening one. No other page carries either text.
+#[test]
+fn the_pages_that_offer_abbreviations_say_what_they_rest_on() {
+    let mut command = Args::command_with_error_table();
+    command.build();
+    let pages: BTreeMap<&str, String> = render(&command).into_iter().collect();
+    for (file, text) in &pages {
+        let of_vep = usize::from(*file == COMPATIBILITY);
+        let of_a_tool = usize::from([FILTER_PAGE, RECODE_PAGE].contains(file));
+        assert_eq!(text.matches(VEP_ABBREVIATIONS).count(), of_vep, "{file}");
+        assert_eq!(
+            text.matches(TOOL_ABBREVIATIONS).count(),
+            of_a_tool,
+            "{file}"
+        );
+    }
+    let spellings = pages[COMPATIBILITY]
+        .split("\n## ")
+        .find(|section| section.starts_with("Option spellings"))
+        .expect("the compatibility page has a section on option spellings");
+    assert!(spellings.contains("abbreviated to any prefix that names one option"));
+    assert!(spellings.contains(VEP_ABBREVIATIONS), "{spellings}");
+    for file in [FILTER_PAGE, RECODE_PAGE] {
+        let mut paragraphs = pages[file].split("\n\n").skip(1);
+        let opening = paragraphs.next().unwrap_or_default();
+        assert!(
+            opening.contains("abbreviated to any prefix that names one option"),
+            "{file}: {opening}"
+        );
+        assert_eq!(
+            paragraphs.next(),
+            Some(TOOL_ABBREVIATIONS.trim_end()),
+            "{file}"
+        );
+    }
+}
+
+/// What the abbreviation sentences say of the readers. `vep` resolves a
+/// prefix against the names its parser declares, aliases and hidden flags
+/// among them, then against Ensembl VEP's list: one more flag under the same
+/// prefix leaves a prefix that list does not resolve to no flag, a flag named
+/// as the prefix takes it, and a prefix that list resolves keeps its flag
+/// beside one more flag under it. A companion tool resolves against its own
+/// options alone: one more option under the same prefix leaves the name,
+/// written with two dashes after one dash as after two, for clap to refuse
+/// with exit 2, and an option named as the prefix takes it.
+#[test]
+fn an_added_option_takes_an_abbreviation_or_leaves_it_to_none() {
+    let mut command = Args::command_with_error_table();
+    command.build();
+    let perl = perl_options();
+    let reached = |command: &Command, prefix: &str| {
+        let known = parser_options(command);
+        resolve_spelling(prefix, &known, &perl).map(|option| option.canonical.clone())
+    };
+    let known = parser_options(&command);
+    for arg in command.get_arguments() {
+        let Some(long) = arg.get_long() else {
+            continue;
+        };
+        let names = &known.iter().find(|o| o.canonical == long).unwrap().names;
+        for alias in arg.get_all_aliases().into_iter().flatten() {
+            assert!(names.iter().any(|n| n == alias), "--{long}: {alias}");
+        }
+    }
+    for flag in hidden_flags(&command) {
+        assert_eq!(reached(&command, flag).as_deref(), Some(flag));
+    }
+
+    assert_eq!(
+        reached(&command, "parquet").as_deref(),
+        Some("parquet_partition")
+    );
+    assert!(resolve("parquet", &perl).is_none());
+    let beside = with_switch(&command, "parquet_other");
+    assert_eq!(reached(&beside, "parquet"), None);
+    let named = with_switch(&command, "parquet");
+    assert_eq!(reached(&named, "parquet").as_deref(), Some("parquet"));
+    assert_eq!(reached(&command, "bio").as_deref(), Some("biotype"));
+    let beside = with_switch(&command, "biotype_other");
+    assert_eq!(reached(&beside, "bio").as_deref(), Some("biotype"));
+
+    for (tool, prefix, option, beside, program) in [
+        (
+            FilterArgs::command(),
+            "lim",
+            "limit",
+            "lim_other",
+            "vep filter",
+        ),
+        (
+            RecodeArgs::command(),
+            "mane",
+            "mane_select",
+            "mane_other",
+            "vep recode",
+        ),
+    ] {
+        let mut tool = tool;
+        tool.build();
+        let typed = [OsString::from(format!("--{prefix}"))];
+        let spelled = |command: &Command| spell_as_declared(&typed, command);
+        assert_eq!(spelled(&tool), [OsString::from(format!("--{option}"))]);
+
+        let tied = with_switch(&tool, beside);
+        assert_eq!(spelled(&tied), typed, "{program}");
+        let one_dash = [OsString::from(format!("-{prefix}"))];
+        assert_eq!(spell_as_declared(&one_dash, &tied), typed, "{program}");
+        let refusal = tied
+            .clone()
+            .try_get_matches_from(std::iter::once(OsString::from(program)).chain(spelled(&tied)))
+            .unwrap_err();
+        assert_eq!(refusal.kind(), clap::error::ErrorKind::UnknownArgument);
+        assert_eq!(refusal.exit_code(), 2, "{program}");
+
+        let named = with_switch(&tool, prefix);
+        let taken = resolve(prefix, &parser_options(&named)).map(|o| o.canonical.clone());
+        assert_eq!(taken.as_deref(), Some(prefix), "{program}");
     }
 }

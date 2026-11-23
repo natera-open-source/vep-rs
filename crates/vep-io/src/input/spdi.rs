@@ -3,7 +3,7 @@
 
 //! SPDI input (Sequence, Position, Deletion, Insertion: NCBI's variation
 //! notation), read as `Parser/SPDI.pm` `create_VariationFeatures`
-//! (release/116.2, lines 133-208) reads it over ensembl-variation's
+//! (release/116.3, lines 133-208) reads it over ensembl-variation's
 //! `VariationFeatureAdaptor::fetch_by_spdi_notation` (release/116,
 //! lines 2477-2611):
 //!
@@ -545,7 +545,7 @@ mod tests {
 
     /// The position is 0-based (`:2524`): `21:0:T:G` is the first base, start
     /// and end 1, and `21:0::G` an insertion before it, start 1 and end 0, which
-    /// prints as `21:0-1` as Ensembl VEP 116.2 prints it; the reference's first
+    /// prints as `21:0-1` as Ensembl VEP 116.3 prints it; the reference's first
     /// base is read for the check.
     #[test]
     fn pos0_to_start() {
@@ -564,7 +564,7 @@ mod tests {
 
     /// The sequence name resolves through the synonyms to the chromosome the
     /// cache holds, and the record prints under that name as Ensembl VEP prints
-    /// the slice's (`:196`; Ensembl VEP 116.2 prints `21:10538885` for
+    /// the slice's (`:196`; Ensembl VEP 116.3 prints `21:10538885` for
     /// `NC_000021.9:10538884:A:C`, `chr21:...` and `nc_000021.9:...:a:c`), while
     /// its name keeps the notation as written. A name no synonym reaches is
     /// `Sequence name <name> not valid` (`:2536`), and an insertion on it fails
@@ -611,7 +611,7 @@ mod tests {
     /// colon count (`:2494-2495`), then a name, a position of digits and word
     /// characters in the deletion and insertion (`:2516-2518`), then a deletion
     /// or insertion outside the four branches (`:2600`). The texts are Ensembl
-    /// VEP 116.2's, as its warnings file carries them.
+    /// VEP 116.3's, as its warnings file carries them.
     #[test]
     fn bad_shape_error_text() {
         let could_not_parse = |spdi: &str, tail: &str| {
@@ -648,7 +648,7 @@ mod tests {
     }
 
     /// Shared bases at either end of a bi-allelic indel are trimmed as
-    /// `post_process_vfs` trims them (Parser.pm:862-881): Ensembl VEP 116.2
+    /// `post_process_vfs` trims them (Parser.pm:862-881): Ensembl VEP 116.3
     /// annotates `NC_000021.9:13630970:AATCCTGTGGGATTACCAGAAAACC:A` at
     /// 13630972-13630995 with Allele `-`; here `21:3:ATAC:A` is `TAC/-` over 5
     /// to 7, the written alleles kept for `UPLOADED_ALLELE` and the name. A
@@ -759,7 +759,7 @@ mod tests {
     /// A span past the end of a sequence the reference holds is refused naming
     /// the span and the sequence's length, where a sequence the reference lacks
     /// keeps `Sequence name <name> not valid` (`:2536`): on the 38-base `21`,
-    /// `21:38::A` inserts after the last base and is read (Ensembl VEP 116.2
+    /// `21:38::A` inserts after the last base and is read (Ensembl VEP 116.3
     /// annotates `NC_000021.9:46709983::A` at `21:46709983-46709984` on the
     /// 46,709,983-base chromosome), `21:39::A` falls between bases 39 and 40,
     /// `21:38:1:` deletes base 39, `21:35:5:` runs to base 40 and `21:37:NN:A`

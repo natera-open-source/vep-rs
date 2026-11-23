@@ -277,7 +277,7 @@ fn space_delimited_vcf_line_is_re_emitted_as_ensembl_vep_joins_it() {
 /// A `--delimiter` value with a regular-expression character is the pattern
 /// Ensembl VEP hands to Perl's `split` (ensembl-io ColumnBasedParser.pm:250):
 /// `[ ,]` reads an Ensembl-format file whose columns a space or a comma
-/// separates, and the two records annotate as Ensembl VEP 116.2 annotates them
+/// separates, and the two records annotate as Ensembl VEP 116.3 annotates them
 /// under the same flag, the rows below its output on the same file; they are
 /// the records' VCF twins' rows too. The JSON `input` joins the fields with the
 /// pattern's text, as `join($self->{delimiter}, ...)` does
@@ -483,8 +483,9 @@ fn lower_case_alleles_annotate_as_upper_case() {
 /// read past (`:273-277`), so the number is the first empty line's place in a
 /// count that takes the empty lines as records, here 3 after a `#` line and one
 /// record. Ensembl VEP's own Ensembl-format parser dies on such a line
-/// (Parser/VEP_input.pm:136). A `#` line is read past without a warning and
-/// counted, as Ensembl VEP counts the record it reads there (`:119`).
+/// (Parser/VEP_input.pm:136). A `#` line is read past and counted, as Ensembl
+/// VEP counts the record it reads there (`:119`), and warned about once at
+/// the end of the input.
 #[test]
 fn empty_lines_are_skipped_with_a_warning() {
     let dir = tempfile::tempdir().unwrap();
@@ -575,7 +576,7 @@ fn unsupported_class_word_is_warned_and_annotated() {
 }
 
 /// A `*` or `<DEL:*>` allele of an Ensembl-format line takes its number and
-/// writes no row (VariationFeatureOverlap.pm:483-484), as Ensembl VEP 116.2
+/// writes no row (VariationFeatureOverlap.pm:483-484), as Ensembl VEP 116.3
 /// writes them: `C/A/*` is the one row `A` with ALLELE_NUM 1, `C/*/A` the row
 /// `A` with ALLELE_NUM 2, `C/A/<DEL:*>` the row `A`, and `C/*`, `C/<DEL:*>` or
 /// an intergenic `A/*` write no row in the default and tab formats, a VCF line
@@ -709,7 +710,7 @@ fn star_alleles_write_no_row() {
 /// An Ensembl-format allele in parenthesised tandem notation is expanded before
 /// `--spdi` tests its characters, as `spdi_genomic` expands it
 /// (VariationFeature.pm:2156, 2170; `expand`, Utils/Sequence.pm:116-119):
-/// Ensembl VEP 116.2 prints `SPDI=21:30282168:ACACAC:` on every row of
+/// Ensembl VEP 116.3 prints `SPDI=21:30282168:ACACAC:` on every row of
 /// `21 30282169 30282174 (AC)3/- 1`.
 #[test]
 fn tandem_notation_allele_gets_its_expanded_spdi() {
@@ -741,13 +742,14 @@ fn tandem_notation_allele_gets_its_expanded_spdi() {
 /// `create_VariationFeatures` numbers the line (Parser/VEP_input.pm:119,
 /// `$self->line_number($self->line_number + 1);`) and reads its columns as a
 /// record. For `#chr start end allele strand id`, a record and
-/// `21 1 20000000 C/A 1 big`, Ensembl VEP 116.2 writes `WARNING: line 1 skipped
+/// `21 1 20000000 C/A 1 big`, Ensembl VEP 116.3 writes `WARNING: line 1 skipped
 /// (#chr start end allele strand id): allele is not a supported structural
 /// variant type`, `WARNING: line 1 skipped (#chr start end allele strand id):
 /// Invalid start 'start' or end 'end' coordinate` and `WARNING: line 3 skipped
 /// (21 1 20000000 C/A 1 big): variant size (19999999) is bigger than
-/// --max_sv_size (10000000)`; here the `#` line is a comment, passed over
-/// without a word, and the third line is line 3 all the same.
+/// --max_sv_size (10000000)`; here the `#` line is a comment, passed over and
+/// counted in one warning at the end of the input, and the third line is line
+/// 3 all the same.
 #[test]
 fn a_hash_line_counts_toward_the_line_numbers() {
     let dir = tempfile::tempdir().unwrap();
@@ -772,7 +774,10 @@ fn a_hash_line_counts_toward_the_line_numbers() {
             .lines()
             .filter(|l| l.starts_with("WARNING"))
             .collect::<Vec<_>>(),
-        ["WARNING: line 3 skipped (21 1 20000000 C/A 1 big): variant size (19999999) is bigger than --max_sv_size (10000000)"]
+        [
+            "WARNING: line 3 skipped (21 1 20000000 C/A 1 big): variant size (19999999) is bigger than --max_sv_size (10000000)",
+            "WARNING: Read 1 line that begins with '#' as a comment, at line 1",
+        ]
     );
     let plain = write(dir.path(), "plain.txt", ENSEMBL_RECORDS);
     let plain_rows = annotate(dir.path(), &plain, &["--format", "ensembl"]);
@@ -786,6 +791,49 @@ fn a_hash_line_counts_toward_the_line_numbers() {
     assert_eq!(snv(&rows(&out)), snv(&plain_rows));
 }
 
+/// The Parquet writer's order refusal names an Ensembl-format record by the
+/// line the skip warnings give it, the count of every line read with `#`
+/// lines and empty lines included. The input holds a `#` line, a record at
+/// position 100, an empty line, a record on a chromosome the cache lacks and
+/// a record at position 50: the fourth line is skipped as line 4 and the
+/// fifth is refused as line 5. The run exits 1 and leaves no output; its
+/// reader reached the end of the input, so the warnings file counts the `#`
+/// line.
+#[cfg(feature = "parquet")]
+#[test]
+fn parquet_order_refusal_names_the_line_the_skip_warnings_count() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = write(
+        dir.path(),
+        "unsorted.txt",
+        "# header\n21\t100\t100\tA/G\t1\n\nZ\t1000\t1000\tA/G\t1\n21\t50\t50\tA/G\t1\n",
+    );
+    let out = dir.path().join("out.parquet");
+    let output = vep(
+        dir.path(),
+        &input,
+        &out,
+        &["--format", "ensembl", "--output_format", "parquet"],
+    );
+    assert_eq!(output.status.code(), Some(1), "{}", stderr(&output));
+    assert_eq!(
+        stderr(&output).lines().collect::<Vec<_>>(),
+        ["ERROR: [parquet] input is not sorted by chromosome and position at line 5 (21:50 after 21:100); sort the input or pass --no_check_variants_order"]
+    );
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("out.parquet_warnings.txt"))
+            .unwrap()
+            .lines()
+            .collect::<Vec<_>>(),
+        [
+            "WARNING: Skipped 1 empty line from line 3",
+            "WARNING: line 4 skipped (Z 1000 1000 A/G 1): Chromosome Z not found in annotation sources or synonyms; chromosome Z does not overlap any features",
+            "WARNING: Read 1 line that begins with '#' as a comment, at line 1",
+        ]
+    );
+    assert!(!out.exists(), "the refused run leaves no output");
+}
+
 /// A record whose reference allele ends in a character outside `ACGTN-` after
 /// expansion (`AR/CA`) is annotated under `--spdi`, and under `--ga4gh_vrs`,
 /// with no `SPDI` and no `GA4GH_VRS` pair on any row (`spdi_genomic` in
@@ -793,7 +841,7 @@ fn a_hash_line_counts_toward_the_line_numbers() {
 /// `GA4GH_VRS` half runs against the identifiers corpus's cache, whose synonyms
 /// table carries `NC_000021.9`, beside an SNV that gets both pairs, since the
 /// release-116 cache has no synonyms and writes no `GA4GH_VRS` to any record.
-/// Ensembl VEP 116.2's `spdi_genomic` throws on the record
+/// Ensembl VEP 116.3's `spdi_genomic` throws on the record
 /// (VariationFeature.pm:2159 `if( $ref_allele =~ m/[^ACGTN\-]$/ig ){`, :2160
 /// `throw("No supported SPDI genomic is available for Variation Feature
 /// $reference_name:$vf_start-$vf_end ($vf_strand)")`), with no `eval` around the

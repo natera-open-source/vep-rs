@@ -9,7 +9,8 @@ documentation = "https://natera-open-source.github.io/vep-rs/cache-conversion.ht
 rust-version.workspace = true
 keywords.workspace = true
 categories = ["science::bioinformatics", "command-line-utilities"]
-description = "Validates JSON caches for vep-cli runtime use and converts tabix plugin data to the binary annotation-store format"
+description = "Cache and plugin-data converter of vep-rs, a Rust reimplementation of Ensembl VEP: copies a JSON transcript cache into the runtime layout and converts tabix plugin data to the binary annotation store"
+exclude = ["tests/"]
 
 [[bin]]
 name = "vep-cache-converter"

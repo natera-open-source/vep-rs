@@ -20,7 +20,7 @@
 //! A positional parameter after the mode is not read, as `:108-109` read the
 //! first two alone; it is logged. A mode other than the two is refused: Ensembl
 //! VEP's plugin accepts it and then returns no hash from any row (`:218-229`),
-//! which its output factory reports row by row (OutputFactory.pm:2228-2236).
+//! which its output factory reports row by row (OutputFactory.pm:2237-2245).
 //!
 //! The file has two whitespace-separated columns under a header naming its key
 //! column, `gene` or `transcript`: the last line containing either word in
@@ -171,6 +171,8 @@ impl PliPlugin {
     }
 }
 
+impl crate::traits::sealed::Sealed for PliPlugin {}
+
 impl BuiltinPlugin for PliPlugin {
     fn name(&self) -> &str {
         "pLI"
@@ -281,23 +283,23 @@ mod tests {
     }
 
     fn gene_row(symbol: &str) -> TranscriptConsequence {
-        TranscriptConsequence {
-            transcript: Some(Arc::new(Transcript {
-                gene_symbol: Some(symbol.into()),
-                ..Transcript::default()
-            })),
-            ..Default::default()
-        }
+        let mut consequence = TranscriptConsequence::default();
+        consequence.transcript = Some(Arc::new({
+            let mut transcript = Transcript::default();
+            transcript.gene_symbol = Some(symbol.into());
+            transcript
+        }));
+        consequence
     }
 
     fn transcript_row(stable_id: &str) -> TranscriptConsequence {
-        TranscriptConsequence {
-            transcript: Some(Arc::new(Transcript {
-                stable_id: stable_id.into(),
-                ..Transcript::default()
-            })),
-            ..Default::default()
-        }
+        let mut consequence = TranscriptConsequence::default();
+        consequence.transcript = Some(Arc::new({
+            let mut transcript = Transcript::default();
+            transcript.stable_id = stable_id.into();
+            transcript
+        }));
+        consequence
     }
 
     fn params(tokens: &[&str]) -> Vec<String> {
@@ -721,14 +723,13 @@ mod tests {
     fn run_batch_writes_the_field_on_transcript_rows() {
         let (plugin, _dir) = loaded(GENE_FILE, &[]);
         let mut variants = vec![test_variant()];
-        variants[0].transcript_consequences.extend([
-            gene_row("AGRN"),
-            gene_row("SOD1"),
-            TranscriptConsequence {
-                feature_type: vep_core::consequence::FeatureType::RegulatoryFeature,
-                ..gene_row("AGRN")
-            },
-        ]);
+        variants[0]
+            .transcript_consequences
+            .extend([gene_row("AGRN"), gene_row("SOD1"), {
+                let mut row = gene_row("AGRN");
+                row.feature_type = vep_core::consequence::FeatureType::RegulatoryFeature;
+                row
+            }]);
         plugin.run_batch(&mut variants).unwrap();
         let written: Vec<Option<&String>> = variants[0]
             .transcript_consequences
@@ -738,10 +739,10 @@ mod tests {
         assert_eq!(written, [Some(&"0.17".to_string()), None, None]);
     }
 
-    /// Ensembl VEP 116.2 never hands pLI a structural variant: the module keeps
+    /// Ensembl VEP 116.3 never hands pLI a structural variant: the module keeps
     /// the default `variant_feature_types` of `['VariationFeature']`
     /// (BaseVepPlugin.pm:100), which the dispatch checks before running a
-    /// plugin on a line (OutputFactory.pm:2220). The transcript rows of a
+    /// plugin on a line (OutputFactory.pm:2229). The transcript rows of a
     /// `<DEL>` over a scored gene carry no field, while the sequence variant's
     /// row of the same gene does.
     #[test]

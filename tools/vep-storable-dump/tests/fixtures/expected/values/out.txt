@@ -1,0 +1,347 @@
+### ENST00000000001
+{
+  '_ccds' => 'CCDS30547.2',
+  '_gene_hgnc_id' => 'HGNC:14825',
+  '_gene_stable_id' => 'ENSG00000186092',
+  '_gene_symbol' => 'OR4F5',
+  '_gene_symbol_source' => 'HGNC',
+  '_gene_version' => '7',
+  '_protein' => 'ENSP00000493376.2',
+  '_swissprot' => 'Q8NH21.170',
+  '_trans_exon_array' => [
+    bless( {
+      'adaptor' => undef,
+      'created_date' => 1218705593,
+      'dbID' => 5060,
+      'end' => 199,
+      'end_phase' => -1,
+      'modified_date' => 1218705593,
+      'phase' => 0,
+      'slice' => bless( {
+        'coord_system' => bless( {
+          'adaptor' => undef,
+          'dbID' => 4,
+          'name' => 'chromosome',
+          'version' => 'GRCh38'
+        }, 'Bio::EnsEMBL::CoordSystem' ),
+        'end' => 248956422,
+        'seq_region_name' => '1',
+        'start' => 1,
+        'strand' => 1
+      }, 'Bio::EnsEMBL::Slice' ),
+      'stable_id' => 'ENSE00000000100',
+      'start' => 100,
+      'strand' => 1,
+      'version' => 1
+    }, 'Bio::EnsEMBL::Exon' ),
+    bless( {
+      'adaptor' => undef,
+      'created_date' => 1218705593,
+      'dbID' => 5061,
+      'end' => 900,
+      'end_phase' => -1,
+      'modified_date' => 1218705593,
+      'phase' => 0,
+      'slice' => $VAR1->{'_trans_exon_array'}[0]{'slice'},
+      'stable_id' => 'ENSE00000000300',
+      'start' => 300,
+      'strand' => 1,
+      'version' => 1
+    }, 'Bio::EnsEMBL::Exon' )
+  ],
+  '_trembl' => undef,
+  '_uniparc' => 'UPI0000041BC1',
+  '_variation_effect_feature_cache' => {
+    'codon_table' => 1,
+    'five_prime_utr' => undef,
+    'introns' => [
+      bless( {
+        'adaptor' => undef,
+        'dbID' => undef,
+        'end' => 299,
+        'next' => $VAR1->{'_trans_exon_array'}[1],
+        'prev' => $VAR1->{'_trans_exon_array'}[0],
+        'slice' => $VAR1->{'_trans_exon_array'}[0]{'slice'},
+        'start' => 200,
+        'strand' => 1
+      }, 'Bio::EnsEMBL::Intron' )
+    ],
+    'mapper' => bless( {
+      'exon_coord_mapper' => bless( {
+        '_pair_cdna' => {
+          'CDNA' => [
+            bless( {
+              'from' => bless( {
+                'end' => 100,
+                'id' => 'cdna',
+                'start' => 1
+              }, 'Bio::EnsEMBL::Mapper::Unit' ),
+              'ori' => 1,
+              'to' => bless( {
+                'end' => 199,
+                'id' => 'genome',
+                'start' => 100
+              }, 'Bio::EnsEMBL::Mapper::Unit' )
+            }, 'Bio::EnsEMBL::Mapper::Pair' )
+          ]
+        },
+        'from' => 'cdna',
+        'pair_count' => 2,
+        'to' => 'genomic'
+      }, 'Bio::EnsEMBL::Mapper' )
+    }, 'Bio::EnsEMBL::TranscriptMapper' ),
+    'peptide' => 'MKG',
+    'protein_features' => [
+      bless( {
+        '_display_label' => undef,
+        'adaptor' => undef,
+        'analysis' => bless( {
+          '_display_label' => 'Pfam',
+          'adaptor' => undef,
+          'created' => '0 days 00:00:00',
+          'dbID' => 7
+        }, 'Bio::EnsEMBL::Analysis' ),
+        'dbID' => 5064,
+        'end' => 34,
+        'hend' => '23',
+        'hseqname' => 'PF13853',
+        'hstart' => 1,
+        'p_value' => '1.2e-10',
+        'percent_id' => 0,
+        'score' => '45.5',
+        'start' => '12'
+      }, 'Bio::EnsEMBL::ProteinFeature' )
+    ],
+    'protein_function_predictions' => {
+      'polyphen_humvar' => 'none',
+      'sift' => 'matrix:269 md5:03a0ea31cfc2b5a2e06dd4b0e9aa3c10'
+    },
+    'seq_edits' => [],
+    'sorted_exons' => [
+      $VAR1->{'_trans_exon_array'}[0],
+      $VAR1->{'_trans_exon_array'}[1]
+    ],
+    'three_prime_utr' => undef,
+    'translateable_seq' => 'ATGAAAGGGTAA'
+  },
+  'adaptor' => undef,
+  'attributes' => [
+    bless( {
+      'code' => 'gencode_basic',
+      'description' => undef,
+      'name' => 'GENCODE basic',
+      'value' => '1'
+    }, 'Bio::EnsEMBL::Attribute' ),
+    bless( {
+      'code' => 'TSL',
+      'description' => 'it\'s a level',
+      'name' => 'Transcript Support Level',
+      'value' => 'tslNA'
+    }, 'Bio::EnsEMBL::Attribute' )
+  ],
+  'biotype' => 'protein_coding',
+  'cdna_coding_end' => '300',
+  'cdna_coding_start' => 1,
+  'created_date' => 1218705593,
+  'dbID' => 5062,
+  'end' => '900',
+  'flagged' => {
+    'dbID' => 3,
+    'digits' => '456',
+    "k\x{263a}" => '7',
+    'wide' => "smile \x{263a}"
+  },
+  'is_canonical' => 1,
+  'modified_date' => 1541010690,
+  'refs' => {
+    'blessed_array' => bless( [
+      '1',
+      'b',
+      {
+        'dbID' => 9
+      }
+    ], 'Some::List' ),
+    'blessed_scalar' => bless( do{\(my $o = '99')}, 'Some::Scalar' ),
+    'element' => \\17,
+    'first' => {
+      'dbID' => 1,
+      'keep' => 'x',
+      'value' => '5'
+    },
+    'holes' => [
+      undef,
+      undef,
+      '4'
+    ],
+    'immortals' => [
+      1,
+      '',
+      undef,
+      ${\$VAR1->{'refs'}{'immortals'}[0]},
+      ${\$VAR1->{'refs'}{'immortals'}[1]}
+    ],
+    'list' => [
+      $VAR1->{'refs'}{'first'},
+      $VAR1->{'refs'}{'first'}
+    ],
+    'pattern' => qr/a\/b/i,
+    'ring' => [
+      $VAR1->{'refs'}{'ring'},
+      '3'
+    ],
+    'second' => $VAR1->{'refs'}{'first'},
+    'to_array_ref' => \[
+        '1',
+        {
+          'dbID' => 2,
+          'x' => '2'
+        }
+      ],
+    'to_digits' => \'123',
+    'to_number' => ${$VAR1->{'refs'}{'element'}},
+    'to_ref' => \\'42',
+    'to_string' => \'a string',
+    'to_undef' => \undef,
+    'version' => v1.22.333,
+    'version_digits' => v49.50,
+    'version_ref' => \v9.8,
+    'zero_class' => bless( {
+      'dbID' => 4,
+      'n' => '6'
+    }, '0' )
+  },
+  'scalars' => {
+    '_gene_version' => 8,
+    'adaptor' => {
+      'dbID' => 1,
+      'kept' => 'no'
+    },
+    'backslash' => 'a\\b',
+    'created_date' => 5,
+    'dbID' => 77,
+    'decimal' => '1.5',
+    'digits_string' => '12345',
+    'eleven_chars' => '12345678901',
+    'empty' => '',
+    'exponent' => '1e3',
+    'high_bytes' => '€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ ¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ',
+    'huge_double' => '1e+20',
+    'integer' => 42,
+    'long_zeros' => '0000000000000000000000000012',
+    'minus_eleven' => '-1234567890',
+    'minus_zero' => '-0',
+    'modified_date' => 6,
+    'most_negative' => '-9223372036854775808',
+    'negative' => -7,
+    'newline_number' => '12
+',
+    'padded' => '007',
+    'past_negative' => '-9223372036854775809',
+    'past_unsigned' => '18446744073709551616',
+    'quote' => 'it\'s',
+    'spaced' => ' 12',
+    'undefined' => undef,
+    'unsigned' => '18446744073709551615',
+    'whole_double' => 3
+  },
+  'slice' => $VAR1->{'_trans_exon_array'}[0]{'slice'},
+  'source' => 'ensembl_havana',
+  'stable_id' => 'ENST00000000001.1',
+  'start' => 100,
+  'strand' => 1,
+  'translation' => bless( {
+    'adaptor' => undef,
+    'created_date' => 1218705593,
+    'dbID' => 5063,
+    'end' => 99,
+    'end_exon' => $VAR1->{'_trans_exon_array'}[1],
+    'modified_date' => 1541010690,
+    'stable_id' => 'ENSP00000493376',
+    'start' => 1,
+    'start_exon' => $VAR1->{'_trans_exon_array'}[0],
+    'transcript' => bless( {
+      '_ccds' => 'CCDS30547.2',
+      '_gene_hgnc_id' => 'HGNC:14825',
+      '_gene_stable_id' => 'ENSG00000186092',
+      '_gene_symbol' => 'OR4F5',
+      '_gene_symbol_source' => 'HGNC',
+      '_gene_version' => '7',
+      '_protein' => 'ENSP00000493376.2',
+      '_swissprot' => 'Q8NH21.170',
+      '_trans_exon_array' => $VAR1->{'_trans_exon_array'},
+      '_trembl' => undef,
+      '_uniparc' => 'UPI0000041BC1',
+      '_variation_effect_feature_cache' => {
+        'codon_table' => 1,
+        'five_prime_utr' => undef,
+        'introns' => $VAR1->{'_variation_effect_feature_cache'}{'introns'},
+        'mapper' => $VAR1->{'_variation_effect_feature_cache'}{'mapper'},
+        'peptide' => 'MKG',
+        'protein_features' => $VAR1->{'_variation_effect_feature_cache'}{'protein_features'},
+        'protein_function_predictions' => {
+          'polyphen_humvar' => undef,
+          'sift' => bless( {
+            'adaptor' => undef,
+            'analysis' => 'sift',
+            'matrix' => ' 	
+ !"#$%&\'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ ¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿit\'s a \\ blob',
+            'matrix_compressed' => 1,
+            'peptide_length' => 3,
+            'sub_analysis' => undef,
+            'translation_md5' => '03a0ea31cfc2b5a2e06dd4b0e9aa3c10'
+          }, 'Bio::EnsEMBL::Variation::ProteinFunctionPredictionMatrix' )
+        },
+        'seq_edits' => $VAR1->{'_variation_effect_feature_cache'}{'seq_edits'},
+        'sorted_exons' => $VAR1->{'_variation_effect_feature_cache'}{'sorted_exons'},
+        'three_prime_utr' => undef,
+        'translateable_seq' => 'ATGAAAGGGTAA'
+      },
+      'adaptor' => undef,
+      'attributes' => $VAR1->{'attributes'},
+      'biotype' => 'protein_coding',
+      'cdna_coding_end' => '300',
+      'cdna_coding_start' => 1,
+      'created_date' => 1218705593,
+      'dbID' => 5062,
+      'end' => '900',
+      'flagged' => $VAR1->{'flagged'},
+      'is_canonical' => 1,
+      'modified_date' => 1541010690,
+      'refs' => $VAR1->{'refs'},
+      'scalars' => $VAR1->{'scalars'},
+      'slice' => $VAR1->{'_trans_exon_array'}[0]{'slice'},
+      'source' => 'ensembl_havana',
+      'stable_id' => 'ENST00000000001.1',
+      'start' => 100,
+      'strand' => 1,
+      'translation' => $VAR1->{'translation'},
+      'version' => 4
+    }, 'Bio::EnsEMBL::Transcript' ),
+    'version' => 2
+  }, 'Bio::EnsEMBL::Translation' ),
+  'version' => 4
+}
+
+### ENST00000000002
+{
+  'doubles' => [
+    '1.5',
+    3,
+    0,
+    '10000000000',
+    '123456789012345',
+    '1e+20',
+    '0.3',
+    -2
+  ],
+  'end' => '4294967297.5',
+  'integers' => [
+    0,
+    -1,
+    4294967296,
+    '10000000000000001'
+  ],
+  'stable_id' => 'ENST00000000002.1',
+  'start' => 4294967296
+}
+

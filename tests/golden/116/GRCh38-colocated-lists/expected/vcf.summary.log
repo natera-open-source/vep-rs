@@ -1,10 +1,10 @@
 [VEP run statistics]
-VEP version (API)	 116.2 (116)
+VEP version (API)	 116.3 (116)
 Annotation sources	Cache: /work/cache/homo_sapiens/116_GRCh38
 Species	homo_sapiens
 Command line options	vep --af --af_1kg --af_gnomade --af_gnomadg --assembly GRCh38 --cache --cache_version 116 --check_existing --clinvar_somatic_classification --database 0 --dir_cache [PATH]/cache --dir_plugins /plugins --failed --force_overwrite --fork --format vcf --input_file [PATH]/input.vcf --max_af --offline --output_file [PATH]/vcf.vcf --pubmed --quiet --stats_text --var_synonyms --vcf
-Start time	2026-11-12 20:24:44
-End time	2026-11-12 20:24:44
+Start time	2026-11-20 13:43:00
+End time	2026-11-20 13:43:00
 Run time	0 seconds
 Input file	/work/input.vcf
 Output file	/work/perl_out/vcf.vcf

@@ -1,0 +1,16 @@
+Perl rows: 3
+Rust rows: 60
+Unique keys: 62
+
+
+============================================================
+SUMMARY
+============================================================
+Total compared:    1
+Total discordant:  0
+Missing in Rust:   2
+Missing in Perl:   59
+
+Field divergence counts:
+
+Top consequence divergence patterns:

@@ -36,8 +36,8 @@ file names `M`. `BayesDel.pm` line 151 splits a row into five variables by
 place, so the header's names decide nothing.
 
 `ensembl_vep.other_pair.txt` and `ensembl_vep.own_pair.txt` are the outputs
-of Ensembl VEP 116.2 in the default format, one per score file, from the image
-`ensemblorg/ensembl-vep:release_116.2` with this directory mounted read-only
+of Ensembl VEP 116.3 in the default format, one per score file, from the image
+`ensemblorg/ensembl-vep:release_116.3` with this directory mounted read-only
 at `/work/corpus` as the working directory:
 
 ```bash
@@ -48,7 +48,7 @@ vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> \
   --plugin BayesDel,file=/work/corpus/scores_<pair>_synthetic.txt.gz --no_headers
 ```
 
-Ensembl VEP 116.2 wrote, on this fixture, 22 rows for each record against
+Ensembl VEP 116.3 wrote, on this fixture, 22 rows for each record against
 either file. Against `scores_other_pair_synthetic.txt.gz` no row of either record
 carries a `BayesDel` item. Against `scores_own_pair_synthetic.txt.gz` every row of
 `scored` carries `BayesDel=` with the score of the row for the record's own

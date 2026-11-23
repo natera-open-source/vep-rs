@@ -22,8 +22,6 @@
 use std::borrow::Cow;
 
 use indexmap::IndexMap;
-use noodles::csi::binning_index::index::header::format::CoordinateSystem;
-use noodles::csi::binning_index::BinningIndex;
 use tracing::{debug, warn};
 
 use crate::annotation_store::{check_table_or_store, open_best_store_with, AnnotationStore};
@@ -31,10 +29,11 @@ use crate::custom::grammar::truthy;
 use crate::params::{Grammar, PluginParams};
 use crate::tabix::allele_match::{self, KeyPosition};
 use crate::tabix::{
-    header_lines, split_field_count, table_contig, BatchQueryResult, TabixAnnotator, TabixConfig,
-    TabixRecord,
+    find_index_path, header_lines, indexed_table_config, split_field_count, table_contig,
+    BatchQueryResult, TabixAnnotator, TabixConfig, TabixRecord,
 };
 use crate::traits::{BuiltinPlugin, PluginError, PrefetchData};
+use vep_core::allele_trim::{strip_shared_first_base, trim_directions, trim_sequences, CaseRule};
 use vep_core::assembly::Assembly;
 use vep_core::consequence::{RowKind, TranscriptConsequence};
 use vep_core::variant::InputVariant;
@@ -100,6 +99,37 @@ struct CaddSource {
     raw_col: Option<usize>,
 }
 
+/// The query configuration the header of a score file names, for a file that
+/// has no tabix index: the `#Chrom` column, which opens the header line, the
+/// position column and the `End` column where the header has one, with a
+/// zero-based start where the position column is `Start`.
+///
+/// The plugin's own comparison gives each column its coordinate. A sequence
+/// variant is matched at its start against the row's `Pos` cell (CADD.pm:209,
+/// 243, 249, 266), so a `Pos` cell is a one-based position. A structural
+/// variant is matched at its start less one against the row's `Start` cell
+/// (CADD.pm:220, 243, 249, 266), so a `Start` cell is a zero-based start,
+/// which `tabix` reads as the span from the base after it to the row's end.
+/// The lookup runs from two bases before the matched position to the
+/// variant's end (CADD.pm:227), and the plugin filters no returned row by
+/// position (CADD.pm:110-111).
+fn header_named_config(
+    file_path: std::path::PathBuf,
+    position_col: usize,
+    position_is_start: bool,
+    end_col: Option<usize>,
+) -> TabixConfig {
+    TabixConfig {
+        file_path,
+        chr_col: 0,
+        start_col: position_col,
+        end_col,
+        ref_col: None,
+        alt_col: None,
+        zero_based: position_is_start,
+    }
+}
+
 /// One side of an allele match: a reference and alternate allele at a position,
 /// `-` for an empty allele, as `get_matched_variant_alleles` takes them.
 #[derive(Clone, Copy)]
@@ -126,51 +156,24 @@ impl<'a> Alleles<'a> {
     /// The common bases trimmed from both alleles, from the start and then the
     /// end, or with `end_first` the other way round; the position moves past
     /// each base trimmed from the start, and an allele trimmed to nothing is
-    /// `-` (`trim_sequences` with `$empty_to_dash`, Sequence.pm:976-1035).
-    fn trimmed(self, end_first: bool) -> Trimmed<'a> {
-        let (mut reference, mut alternate, mut position) =
-            (self.reference, self.alternate, self.position);
-        let trim_start = |reference: &mut &'a [u8],
-                          alternate: &mut &'a [u8],
-                          position: &mut KeyPosition<'a>| {
-            while let ([first, rest_ref @ ..], [other, rest_alt @ ..]) = (*reference, *alternate) {
-                if first != other {
-                    break;
-                }
-                *reference = rest_ref;
-                *alternate = rest_alt;
-                *position = position.moved();
-            }
-        };
-        let trim_end = |reference: &mut &'a [u8], alternate: &mut &'a [u8]| {
-            while let ([rest_ref @ .., last], [rest_alt @ .., other]) = (*reference, *alternate) {
-                if last != other {
-                    break;
-                }
-                *reference = rest_ref;
-                *alternate = rest_alt;
-            }
-        };
-        if end_first {
-            trim_end(&mut reference, &mut alternate);
-            trim_start(&mut reference, &mut alternate, &mut position);
-        } else {
-            trim_start(&mut reference, &mut alternate, &mut position);
-            trim_end(&mut reference, &mut alternate);
-        }
-        let dash = |allele: &'a [u8]| if allele.is_empty() { &b"-"[..] } else { allele };
-        (dash(reference), dash(alternate), position)
+    /// `-` (`trim_sequences` with `$empty_to_dash`, Sequence.pm:976-1035). The
+    /// bases the alleles share are found under `case`.
+    fn trimmed(self, end_first: bool, case: CaseRule) -> Trimmed<'a> {
+        let trimmed = trim_sequences(self.reference, self.alternate, end_first, case);
+        (
+            trimmed.reference,
+            trimmed.alt,
+            self.position.moved_by(trimmed.left as u64),
+        )
     }
 
-    fn trimmed_forms(self) -> TrimmedForms<'a> {
-        let end_first = if self.reference.len() > 1 || self.alternate.len() > 1 {
-            Some(self.trimmed(true))
-        } else {
-            None
-        };
+    fn trimmed_forms(self, case: CaseRule) -> TrimmedForms<'a> {
+        let mut orders = trim_directions(self.reference, self.alternate).iter();
         TrimmedForms {
-            start_first: self.trimmed(false),
-            end_first,
+            start_first: self.trimmed(*orders.next().expect("the start-first order"), case),
+            end_first: orders
+                .next()
+                .map(|end_first| self.trimmed(*end_first, case)),
         }
     }
 }
@@ -181,15 +184,15 @@ impl<'a> TrimmedForms<'a> {
     }
 
     /// Whether the two sides name one allele change: a form of one equals a
-    /// form of the other (`get_matched_variant_alleles`, Sequence.pm:1190-1241).
-    /// Case-sensitive, as the key comparison is.
-    fn matches(&self, other: &TrimmedForms<'_>) -> bool {
+    /// form of the other (`get_matched_variant_alleles`, Sequence.pm:1190-1241),
+    /// the alleles compared under `case`.
+    fn matches(&self, other: &TrimmedForms<'_>, case: CaseRule) -> bool {
         self.forms().any(|(reference, alternate, position)| {
             other
                 .forms()
                 .any(|(other_reference, other_alternate, other_position)| {
-                    other_reference == reference
-                        && other_alternate == alternate
+                    case.same_allele(other_reference, reference)
+                        && case.same_allele(other_alternate, alternate)
                         && position.equals(other_position)
                 })
         })
@@ -204,6 +207,12 @@ struct VariantSide<'v> {
     /// The position matched: the variant's start, or one base before a
     /// structural variant's (CADD.pm:209, 220).
     position: u64,
+    /// How a table row's alleles are compared with this side's. A sequence
+    /// variant's row is read in either letter case, where Ensembl VEP's key
+    /// is compared as written (Sequence.pm:1207, 1232; the documented class
+    /// `tabix_allele_case_insensitive_match`); a structural variant's class
+    /// word is compared as written.
+    case: CaseRule,
 }
 
 impl VariantSide<'_> {
@@ -259,8 +268,9 @@ pub struct CaddPlugin {
     /// A file was given under `snv=` or `indels=` (CADD.pm:116, 128): without
     /// `force_annotate`, no structural variant is annotated (CADD.pm:218).
     sequence_file_named: bool,
-    /// Target assembly from `--assembly`, injected before `init()`; a data file
-    /// whose header does not name it is rejected (CADD.pm:151-157).
+    /// The run's assembly (the cache's own, else the value of `--assembly`),
+    /// injected before `init()`; a data file whose header does not name it is
+    /// rejected (CADD.pm:151-157).
     assembly: Option<Assembly>,
 }
 
@@ -283,7 +293,9 @@ impl CaddPlugin {
 
     /// Open a score file: its header lines are checked for the assembly and the
     /// column names, its index read for the columns and coordinate system the
-    /// region queries use, as `tabix` reads them.
+    /// region queries use, as `tabix` reads them. A file with no index is read
+    /// from the `.vpd` store beside it alone, and only from a store built on
+    /// the columns the header names (`header_named_config`).
     fn open_source(path: &str, requested: Option<Assembly>) -> Result<CaddSource, PluginError> {
         // `add_file` runs before any header is read (CADD.pm:135).
         check_table_or_store(std::path::Path::new(path))?;
@@ -296,8 +308,8 @@ impl CaddPlugin {
                 .any(|line| line.contains(assembly.as_str()))
             {
                 return Err(PluginError::Init(format!(
-                    "{NAME}: --assembly is {assembly} but the data file '{path}' does not name \
-                     {assembly} in its header. Supply the {assembly} CADD file."
+                    "{NAME}: the run's assembly is {assembly} but the data file '{path}' does \
+                     not name {assembly} in its header. Supply the {assembly} CADD file."
                 )));
             }
         }
@@ -342,15 +354,42 @@ impl CaddPlugin {
         let ref_col = column(&["Ref"]);
         let end_col = column(&["End"]);
 
-        let config = indexed_config(path)?;
+        let indexed = find_index_path(std::path::Path::new(path)).is_ok();
+        let config = indexed_table_config(std::path::Path::new(path), |index_path| {
+            format!(
+                "index {} carries no tabix header, so its records cannot be mapped to \
+                 chromosomes; index the file with tabix",
+                index_path.display()
+            )
+        })?;
+        // With no index the columns above are the ones the store beside the
+        // file was built on, whatever they are. The store is opened on the
+        // columns the header names, so one built on other columns is refused
+        // by the flags that rebuild it.
+        let config = if indexed {
+            config
+        } else {
+            header_named_config(
+                config.file_path,
+                position_col,
+                column(&["Pos"]).is_none(),
+                end_col,
+            )
+        };
         // The last score cell keeps its trailing whitespace, which Ensembl VEP's
         // `split /\t/` leaves in the value it prints (CADD.pm:261, 274).
-        let store = open_best_store_with(
+        let mut store = open_best_store_with(
             std::path::Path::new(path),
             config,
             requested,
             TabixAnnotator::keeping_trailing_whitespace,
         )?;
+
+        // The index names no allele column, so the frame check is told the
+        // header's `Ref`.
+        if let Some(frame) = store.mitochondrial_frame_mut() {
+            frame.set_allele_column(ref_col);
+        }
 
         debug!(
             file = path,
@@ -398,6 +437,7 @@ impl CaddPlugin {
                 reference: Cow::Borrowed(b"-"),
                 alternate: Cow::Borrowed(class),
                 position: variant.start.checked_sub(1)?,
+                case: CaseRule::AsWritten,
             });
         }
         let (reference, alternate) = variant.forward_strand_alleles();
@@ -412,33 +452,9 @@ impl CaddPlugin {
             reference,
             alternate,
             position: variant.start,
+            case: CaseRule::EitherCase,
         })
     }
-}
-
-/// The query configuration of a file as its tabix index describes it: the
-/// sequence, start and end columns and whether the start is zero-based, so a
-/// file indexed as BED (start zero-based, end exclusive) and a file indexed on
-/// a one-based position column are both read as `tabix` reads them.
-fn indexed_config(path: &str) -> Result<TabixConfig, PluginError> {
-    let index_path = crate::tabix::find_index_path(std::path::Path::new(path))?;
-    let index = crate::tabix::load_index(&index_path)?;
-    let header = index.header().ok_or_else(|| {
-        PluginError::Init(format!(
-            "index {} carries no tabix header, so its records cannot be mapped to \
-             chromosomes; index the file with tabix",
-            index_path.display()
-        ))
-    })?;
-    Ok(TabixConfig {
-        file_path: path.into(),
-        chr_col: header.reference_sequence_name_index(),
-        start_col: header.start_position_index(),
-        end_col: header.end_position_index(),
-        ref_col: None,
-        alt_col: None,
-        zero_based: header.format().coordinate_system() == CoordinateSystem::Bed,
-    })
 }
 
 /// The row's side of the match, as `parse_data` builds it (CADD.pm:257-298)
@@ -468,6 +484,7 @@ fn indexed_config(path: &str) -> Result<TabixConfig, PluginError> {
 fn row_side<'r>(
     record: &'r TabixRecord,
     source: &CaddSource,
+    case: CaseRule,
 ) -> Result<Option<RowSide<'r>>, PluginError> {
     // `$data{"Pos"} || $data{"Start"}` (:266): a Perl-false cell, `0` or empty,
     // and a missing one alike are the undefined value, which `!$b->{pos}`
@@ -508,22 +525,16 @@ fn row_side<'r>(
         }
     };
     let mut alternate: &[u8] = alternate.as_bytes();
-    if alternate.len() != reference.len() && reference.first() == alternate.first() {
+    if let Some((stripped_reference, stripped_alternate)) =
+        strip_shared_first_base(reference, alternate, case)
+    {
         if cell(source.end_col).is_some_and(truthy) {
             position = Cow::Owned(allele_match::perl_increment(position_text));
         } else {
             moved = 1;
         }
-        reference = if reference.len() > 1 {
-            &reference[1..]
-        } else {
-            b"-"
-        };
-        alternate = if alternate.len() > 1 {
-            &alternate[1..]
-        } else {
-            b"-"
-        };
+        reference = stripped_reference;
+        alternate = stripped_alternate;
     }
     if moved == 0 && !truthy(&position) {
         return Ok(None);
@@ -549,11 +560,12 @@ fn first_match<'a>(
     sources: &'a [CaddSource],
     records: &[Vec<&'a TabixRecord>],
     forms: &TrimmedForms<'_>,
+    case: CaseRule,
 ) -> Result<Option<(&'a CaddSource, &'a TabixRecord)>, PluginError> {
     for (source, rows) in sources.iter().zip(records) {
         for &record in rows {
-            if let Some(row) = row_side(record, source)? {
-                if forms.matches(&row.alleles().trimmed_forms()) {
+            if let Some(row) = row_side(record, source, case)? {
+                if forms.matches(&row.alleles().trimmed_forms(case), case) {
                     return Ok(Some((source, record)));
                 }
             }
@@ -573,6 +585,8 @@ fn record_cap_warning(chr: &str, start: u64, end: u64, count: usize) -> String {
     )
 }
 
+impl crate::traits::sealed::Sealed for CaddPlugin {}
+
 impl BuiltinPlugin for CaddPlugin {
     fn name(&self) -> &str {
         NAME
@@ -581,7 +595,7 @@ impl BuiltinPlugin for CaddPlugin {
     /// The Ensembl VEP module declares `['Feature', 'Intergenic']`: every row,
     /// the intergenic row included.
     fn feature_types(&self) -> &[RowKind] {
-        &RowKind::ALL
+        RowKind::ALL
     }
 
     /// The Ensembl VEP module declares `['VariationFeature',
@@ -621,6 +635,12 @@ impl BuiltinPlugin for CaddPlugin {
 
     fn set_assembly(&mut self, assembly: Option<Assembly>) {
         self.assembly = assembly;
+    }
+
+    fn set_reference_fasta(&mut self, fasta: Option<std::sync::Arc<vep_fasta::IndexedFasta>>) {
+        for source in &mut self.sources {
+            source.store.set_reference_fasta(fasta.clone());
+        }
     }
 
     fn init(&mut self, params: &[String]) -> Result<(), PluginError> {
@@ -696,7 +716,7 @@ impl BuiltinPlugin for CaddPlugin {
     }
 
     /// Scores each variant from the first matching row of its region
-    /// ([`first_match`]). A variant whose rows hold, before that row, one whose
+    /// (`first_match`). A variant whose rows hold, before that row, one whose
     /// alternate allele is undefined is the variant Ensembl VEP's `run` dies on
     /// (CADD.pm:237-253, Sequence.pm:968).
     fn annotate(
@@ -721,6 +741,7 @@ impl BuiltinPlugin for CaddPlugin {
             let answered: usize = records.iter().map(Vec::len).sum();
             if answered > RECORD_CAP && !self.force_annotate {
                 warn!(
+                    input_record = variant.input_record,
                     "{}",
                     record_cap_warning(&variant.original_chr, side.position, variant.end, answered)
                 );
@@ -732,8 +753,8 @@ impl BuiltinPlugin for CaddPlugin {
             // is the undefined value, the empty value here, and an empty cell
             // before a filled one the empty string, named in the record's
             // `plugin_empty_strings`.
-            let forms = side.alleles().trimmed_forms();
-            match first_match(&self.sources, &records, &forms) {
+            let forms = side.alleles().trimmed_forms(side.case);
+            match first_match(&self.sources, &records, &forms, side.case) {
                 Ok(Some((source, record))) => {
                     let present = split_field_count(&record.columns);
                     for (field, col) in
@@ -743,13 +764,12 @@ impl BuiltinPlugin for CaddPlugin {
                             continue;
                         };
                         let cell = record.columns.get(col).filter(|_| col < present);
-                        variant
-                            .plugin_data
-                            .insert(field.to_string(), cell.cloned().unwrap_or_default());
-                        variant.plugin_empty_strings.retain(|key| key != field);
-                        if cell.is_some_and(String::is_empty) {
-                            variant.plugin_empty_strings.push(field.to_string());
-                        }
+                        variant.set_plugin_value(
+                            field.to_string(),
+                            cell.cloned().unwrap_or_default(),
+                            cell.is_some(),
+                            self.feature_types(),
+                        );
                     }
                 }
                 Ok(None) => {}
@@ -786,6 +806,7 @@ impl BuiltinPlugin for CaddPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tabix::TabixConfig;
     use crate::test_fixtures::{write_bgzf_bytes, write_tabix_fixture, IndexSpec};
     use std::collections::{BTreeMap, HashMap};
     use std::path::{Path, PathBuf};
@@ -1165,8 +1186,8 @@ mod tests {
         assert_eq!(
             message,
             format!(
-                "CADD: --assembly is GRCh38 but the data file '{}' does not name GRCh38 in \
-                 its header. Supply the GRCh38 CADD file.",
+                "CADD: the run's assembly is GRCh38 but the data file '{}' does not name \
+                 GRCh38 in its header. Supply the GRCh38 CADD file.",
                 g37.display()
             )
         );
@@ -1306,8 +1327,9 @@ mod tests {
     }
 
     /// Ensembl VEP dies when no header line names the assembly (CADD.pm:151-157),
-    /// so a file without its provenance line is refused under `--assembly` and
-    /// loads without it, where there is nothing to check against.
+    /// so a file without its provenance line is refused where the plugin was
+    /// handed an assembly and loads where it was handed none, with nothing to
+    /// check against.
     #[test]
     fn header_without_assembly_token_is_an_init_error() {
         let dir = tempfile::tempdir().unwrap();
@@ -1323,7 +1345,7 @@ mod tests {
         plugin.set_assembly(Some(Assembly::Grch38));
         let message = init_message(plugin.init(&[format!("snv={}", path.display())]));
         assert!(
-            message.starts_with("CADD: --assembly is GRCh38 but the data file")
+            message.starts_with("CADD: the run's assembly is GRCh38 but the data file")
                 && message.contains("does not name GRCh38 in its header"),
             "{message}"
         );
@@ -1331,13 +1353,13 @@ mod tests {
         let mut plugin = CaddPlugin::new();
         plugin
             .init(&[format!("snv={}", path.display())])
-            .expect("no --assembly means nothing to check");
+            .expect("no assembly means nothing to check");
     }
 
     /// A record given on the reverse strand scores the row of its forward-strand
     /// alleles: `get_matched_variant_alleles` (CADD.pm:239) reverse-complements
     /// them, so `T/C -1` at 43774726 takes the `A G` row's 25.0 and 2.5, as
-    /// Ensembl VEP 116.2 with CADD.pm prints for this record over these two rows,
+    /// Ensembl VEP 116.3 with CADD.pm prints for this record over these two rows,
     /// and not the `T C` row's 88.0.
     #[test]
     fn reverse_strand_record_scores_the_complemented_row() {
@@ -1381,7 +1403,7 @@ mod tests {
         );
     }
 
-    /// Without `--assembly` there is nothing to contradict, so any file loads.
+    /// Without an assembly there is nothing to contradict, so any file loads.
     #[test]
     fn no_requested_assembly_skips_the_guard() {
         let dir = tempfile::tempdir().unwrap();
@@ -1390,7 +1412,7 @@ mod tests {
         let mut plugin = CaddPlugin::new();
         plugin
             .init(&[format!("snv={}", g37.display())])
-            .expect("no --assembly means no mismatch to detect");
+            .expect("no assembly means no mismatch to detect");
     }
 
     /// An indel row is written VCF-style with its anchor base, which `parse_data`
@@ -1439,10 +1461,10 @@ mod tests {
         assert_eq!(scores(&variants[3]), (None, None), "another allele");
     }
 
-    /// Ensembl VEP annotates an allele of `ACGT-` alone (CADD.pm:214) and
-    /// compares alleles as written (Sequence.pm:1232), so an ambiguous allele
-    /// takes no score, and so would a lower-case one, which the parsers of both
-    /// engines upper-case before any plugin runs (Parser.pm:554).
+    /// Ensembl VEP annotates an allele of `ACGT-` alone (CADD.pm:214), so an
+    /// ambiguous allele of the record takes no score, and so would a
+    /// lower-case one, which the parsers of both engines upper-case before
+    /// any plugin runs (Parser.pm:554).
     #[test]
     fn lower_case_or_ambiguous_alternate_allele_is_not_scored() {
         let dir = tempfile::tempdir().unwrap();
@@ -1456,6 +1478,40 @@ mod tests {
         plugin.run_batch(&mut variants).unwrap();
         assert_eq!(scores(&variants[0]), (None, None));
         assert_eq!(scores(&variants[1]), (None, None));
+    }
+
+    /// A row whose allele cells are written in lower case scores the
+    /// upper-case record it describes, where Ensembl VEP's key is compared as
+    /// written (`get_matched_variant_alleles`, Sequence.pm:1207, 1232, on the
+    /// cells CADD.pm:239-251 hands it): a substitution, and a deletion written
+    /// with its anchor base, whose shared first base is found in either case
+    /// (CADD.pm:279-289). Another allele at the row's position takes nothing.
+    #[test]
+    fn a_row_with_lower_case_alleles_scores_its_record() {
+        let dir = tempfile::tempdir().unwrap();
+        let lines = [
+            "##CADD GRCh38-v1.7 made-up fixture, every score invented",
+            SNV_HEADER,
+            "21\t5030000\ta\tc\t0.345678\t5.432",
+            "21\t5030010\tat\tA\t0.5\t7.0",
+        ];
+        let path = write_tabix_fixture(
+            dir.path(),
+            "synthetic_cadd_lower_case.tsv.gz",
+            &lines,
+            IndexSpec::standard(),
+        );
+        let mut plugin = CaddPlugin::new();
+        plugin.init(&[format!("snv={}", path.display())]).unwrap();
+        let mut variants = vec![
+            InputVariant::new("21".into(), 5030000, 5030000, b"A".to_vec(), b"C".to_vec()),
+            InputVariant::new("21".into(), 5030011, 5030011, b"T".to_vec(), b"-".to_vec()),
+            InputVariant::new("21".into(), 5030000, 5030000, b"A".to_vec(), b"G".to_vec()),
+        ];
+        plugin.run_batch(&mut variants).unwrap();
+        assert_eq!(scores(&variants[0]), (Some("5.432"), Some("0.345678")));
+        assert_eq!(scores(&variants[1]), (Some("7.0"), Some("0.5")));
+        assert_eq!(scores(&variants[2]), (None, None));
     }
 
     /// A CADD-SV row matches a structural variant by its class word and by its
@@ -1503,6 +1559,41 @@ mod tests {
             scores(&variants[4]),
             (Some("5.5"), Some("0.3")),
             "insertion"
+        );
+    }
+
+    /// A CADD-SV row whose class word is written in lower case scores no
+    /// structural variant: the word is compared as written with the variant's
+    /// own (`$SV_TERMS{$so_term}`, CADD.pm:223, in the key of Sequence.pm:1207,
+    /// 1232), where a sequence variant's row is read in either letter case.
+    /// The row in capitals over another span scores its deletion.
+    #[test]
+    fn a_class_word_in_lower_case_scores_no_structural_variant() {
+        let dir = tempfile::tempdir().unwrap();
+        let lines = [
+            SV_MARKER,
+            SV_HEADER,
+            "21\t5028999\t5047000\tdel\tsynthetic_lower_case_word\t12.3\t0.45",
+            "21\t5050099\t5060000\tDEL\tsynthetic_upper_case_word\t20.0\t1.5",
+        ];
+        let path = write_tabix_fixture(
+            dir.path(),
+            "synthetic_cadd_sv_lower_case.tsv.gz",
+            &lines,
+            IndexSpec::standard().with_span_cols(1, 2, 3).zero_based(),
+        );
+        let mut plugin = CaddPlugin::new();
+        plugin.init(&[format!("sv={}", path.display())]).unwrap();
+        let mut variants = vec![
+            structural(VariantClass::StructuralDeletion, 5029000, 5047000),
+            structural(VariantClass::StructuralDeletion, 5050100, 5060000),
+        ];
+        plugin.run_batch(&mut variants).unwrap();
+        assert_eq!(scores(&variants[0]), (None, None), "lower-case word");
+        assert_eq!(
+            scores(&variants[1]),
+            (Some("20.0"), Some("1.5")),
+            "upper-case word"
         );
     }
 
@@ -1607,6 +1698,23 @@ mod tests {
              annotation file with structural variant as input. If you still want to annotate \
              please use force_annotate=1."
         );
+
+        // The warning names the input record it is about, for a run that
+        // holds a batch's warnings to place it with that record.
+        let warnings = std::sync::Arc::new(crate::test_fixtures::Warnings::default());
+        let mut plugin = CaddPlugin::new();
+        plugin.init(&args(&[&format!("sv={sv}")])).unwrap();
+        let mut variants = vec![variant.clone()];
+        variants[0].input_record = 17;
+        let data = PrefetchData::new(vec![BatchQueryResult::from_records(records.clone())]);
+        tracing::subscriber::with_default(std::sync::Arc::clone(&warnings), || {
+            plugin.annotate(&mut variants, data).unwrap();
+        });
+        assert_eq!(
+            *warnings.0.lock().unwrap(),
+            [record_cap_warning("21", 5028999, 5200000, RECORD_CAP + 1)]
+        );
+        assert_eq!(*warnings.1.lock().unwrap(), [17]);
     }
 
     /// CADD.pm:261 splits the line htslib hands over, the line end alone
@@ -1677,11 +1785,11 @@ mod tests {
             position: KeyPosition::Number(100),
         };
         assert_eq!(
-            alleles.trimmed(false),
+            alleles.trimmed(false, CaseRule::AsWritten),
             (&b"C"[..], &b"-"[..], KeyPosition::Number(101))
         );
         assert_eq!(
-            alleles.trimmed(true),
+            alleles.trimmed(true, CaseRule::AsWritten),
             (&b"C"[..], &b"-"[..], KeyPosition::Number(101))
         );
 
@@ -1691,14 +1799,14 @@ mod tests {
             position: KeyPosition::Number(100),
         };
         assert_eq!(
-            repeat.trimmed(false),
+            repeat.trimmed(false, CaseRule::AsWritten),
             (&b"TA"[..], &b"-"[..], KeyPosition::Number(101))
         );
         assert_eq!(
-            repeat.trimmed(true),
+            repeat.trimmed(true, CaseRule::AsWritten),
             (&b"AT"[..], &b"-"[..], KeyPosition::Number(100))
         );
-        let forms = repeat.trimmed_forms();
+        let forms = repeat.trimmed_forms(CaseRule::AsWritten);
         assert_eq!(
             forms.start_first,
             (&b"TA"[..], &b"-"[..], KeyPosition::Number(101))
@@ -1717,16 +1825,25 @@ mod tests {
             alternate: b"-",
             position: KeyPosition::Number(101),
         };
-        assert!(forms.matches(&left_row.trimmed_forms()));
-        assert!(forms.matches(&right_row.trimmed_forms()));
+        assert!(forms.matches(
+            &left_row.trimmed_forms(CaseRule::AsWritten),
+            CaseRule::AsWritten
+        ));
+        assert!(forms.matches(
+            &right_row.trimmed_forms(CaseRule::AsWritten),
+            CaseRule::AsWritten
+        ));
 
         let snv = Alleles {
             reference: b"A",
             alternate: b"G",
             position: KeyPosition::Number(100),
         };
-        assert_eq!(snv.trimmed_forms().end_first, None);
-        assert!(!snv.trimmed_forms().matches(&left_row.trimmed_forms()));
+        assert_eq!(snv.trimmed_forms(CaseRule::AsWritten).end_first, None);
+        assert!(!snv.trimmed_forms(CaseRule::AsWritten).matches(
+            &left_row.trimmed_forms(CaseRule::AsWritten),
+            CaseRule::AsWritten
+        ));
     }
 
     /// The error `run_batch` returns for a row Ensembl VEP's match dies on, with
@@ -2043,14 +2160,16 @@ mod tests {
         assert_eq!(
             alleles(row_side(
                 &record(&["21", "5030000", "A", " ", "0.5", "9.0"]),
-                source
+                source,
+                CaseRule::AsWritten
             )),
             Some((b"A".to_vec(), b" ".to_vec(), "5030000".to_string(), 0))
         );
         assert_eq!(
             alleles(row_side(
                 &record(&["21", "5030000", "", "G", "0.5", "9.0"]),
-                source
+                source,
+                CaseRule::AsWritten
             )),
             Some((b"-".to_vec(), b"G".to_vec(), "5030000".to_string(), 0))
         );
@@ -2060,15 +2179,26 @@ mod tests {
             &["21", "5030000", "A"][..],
             &["21", "5030000", "A", ""][..],
         ] {
-            let error = row_side(&record(columns), source).err();
+            let error = row_side(&record(columns), source, CaseRule::AsWritten).err();
             assert!(
                 matches!(&error, Some(PluginError::Run(message)) if message.contains("at 21:5030000 has no reference or alternate allele cell")),
                 "{columns:?}: {error:?}"
             );
         }
-        assert_eq!(alleles(row_side(&record(&["21", "", "A"]), source)), None);
         assert_eq!(
-            alleles(row_side(&record(&["21", "", "A", "G"]), source)),
+            alleles(row_side(
+                &record(&["21", "", "A"]),
+                source,
+                CaseRule::AsWritten
+            )),
+            None
+        );
+        assert_eq!(
+            alleles(row_side(
+                &record(&["21", "", "A", "G"]),
+                source,
+                CaseRule::AsWritten
+            )),
             None
         );
         // A `0` reference is `-` (`$data{"Ref"} || "-"`, :267); a `0` position is
@@ -2078,11 +2208,19 @@ mod tests {
         assert_eq!(
             alleles(row_side(
                 &record(&["21", "5030000", "0", "G", "0.5", "9.0"]),
-                source
+                source,
+                CaseRule::AsWritten
             )),
             Some((b"-".to_vec(), b"G".to_vec(), "5030000".to_string(), 0))
         );
-        assert_eq!(alleles(row_side(&record(&["21", "0", "A"]), source)), None);
+        assert_eq!(
+            alleles(row_side(
+                &record(&["21", "0", "A"]),
+                source,
+                CaseRule::AsWritten
+            )),
+            None
+        );
 
         let sv = sv_fixture(dir.path());
         let mut plugin = CaddPlugin::new();
@@ -2091,16 +2229,25 @@ mod tests {
         assert_eq!(
             alleles(row_side(
                 &record(&["21", "5028999", "5047000", "", "name", "1.0", "0.1"]),
-                source
+                source,
+                CaseRule::AsWritten
             )),
             Some((b"-".to_vec(), b"".to_vec(), "5028999".to_string(), 0))
         );
         assert!(matches!(
-            row_side(&record(&["21", "5028999", "5047000"]), source),
+            row_side(
+                &record(&["21", "5028999", "5047000"]),
+                source,
+                CaseRule::AsWritten
+            ),
             Err(PluginError::Run(_))
         ));
         assert!(matches!(
-            row_side(&record(&["21", "5028999", "5047000", "", ""]), source),
+            row_side(
+                &record(&["21", "5028999", "5047000", "", ""]),
+                source,
+                CaseRule::AsWritten
+            ),
             Err(PluginError::Run(_))
         ));
     }
@@ -2195,11 +2342,17 @@ mod tests {
                     reference: Cow::Borrowed(var_ref),
                     alternate: Cow::Borrowed(var_alt),
                     position: start,
+                    case: CaseRule::AsWritten,
                 };
-                let forms = variant.alleles().trimmed_forms();
-                row_side(&record(pos, reference, alt), source)
+                let forms = variant.alleles().trimmed_forms(CaseRule::AsWritten);
+                row_side(&record(pos, reference, alt), source, CaseRule::AsWritten)
                     .unwrap()
-                    .is_some_and(|row| forms.matches(&row.alleles().trimmed_forms()))
+                    .is_some_and(|row| {
+                        forms.matches(
+                            &row.alleles().trimmed_forms(CaseRule::AsWritten),
+                            CaseRule::AsWritten,
+                        )
+                    })
             };
         assert!(!matches("6e3", "A", "G", 6000, b"A", b"G"));
         assert!(matches("6e3", "GA", "G", 6001, b"A", b"-"));
@@ -2214,7 +2367,7 @@ mod tests {
         // A Perl-true cell that is no integer beside an undefined alternate fails
         // the variant, as the match dies on the allele after passing the cell.
         assert!(matches!(
-            row_side(&record("2000.5", "A", ""), source),
+            row_side(&record("2000.5", "A", ""), source, CaseRule::AsWritten),
             Err(PluginError::Run(_))
         ));
 
@@ -2249,7 +2402,7 @@ mod tests {
             header: None,
         };
         let stepped = |pos: &str, end: &str| {
-            row_side(&end_row(pos, end), source)
+            row_side(&end_row(pos, end), source, CaseRule::AsWritten)
                 .unwrap()
                 .map(|row| (row.position.to_string(), row.moved))
         };
@@ -2267,5 +2420,144 @@ mod tests {
             (Some("2.0"), Some("0.2")),
             "0200 moved once is 201"
         );
+    }
+
+    /// Writes beside `table`, under the name the plugin looks for, a store of
+    /// one made-up row bound to the table's content and built on the columns
+    /// of `built_on`. A store is accepted or refused for its columns and its
+    /// content before a row of it is read.
+    fn store_built_on(table: &Path, built_on: TabixConfig) -> PathBuf {
+        use crate::binary_store::{BinaryStoreWriter, ContentIdentity};
+        use std::sync::Arc;
+
+        let store = PathBuf::from(table.to_str().unwrap().replace(".tsv.gz", ".tsv.vpd"));
+        let header: Vec<String> = ["Chrom", "Start", "Name"].map(String::from).to_vec();
+        let record = TabixRecord {
+            chr: "21".to_string(),
+            start: 100,
+            end: 100,
+            columns: ["21", "100", "B"].map(String::from).to_vec(),
+            header: Some(Arc::new(header.clone())),
+        };
+        BinaryStoreWriter::new(store.clone())
+            .write(
+                &header,
+                &[("21".to_string(), vec![record])],
+                &TabixConfig {
+                    file_path: table.to_path_buf(),
+                    ..built_on
+                },
+                &ContentIdentity::of_file(table).unwrap(),
+            )
+            .unwrap();
+        store
+    }
+
+    /// The columns the header of a file names, read as the plugin's own
+    /// comparison reads them: a `Pos` cell is the base's own position
+    /// (CADD.pm:209), a `Start` cell the base before a structural variant's
+    /// first (CADD.pm:220), and an `End` column ends the row's span.
+    #[test]
+    fn header_named_config_places_a_pos_cell_one_based_and_a_start_cell_zero_based() {
+        let columns = |position_col, position_is_start, end_col| {
+            let config = header_named_config(
+                PathBuf::from("scores.tsv.gz"),
+                position_col,
+                position_is_start,
+                end_col,
+            );
+            (
+                config.chr_col,
+                config.start_col,
+                config.end_col,
+                config.ref_col,
+                config.alt_col,
+                config.zero_based,
+            )
+        };
+        // A header with a `Pos` column.
+        assert_eq!(columns(1, false, None), (0, 1, None, None, None, false));
+        // A header with a `Start` and an `End` column.
+        assert_eq!(columns(1, true, Some(2)), (0, 1, Some(2), None, None, true));
+        // A header with a `Pos` and an `End` column.
+        assert_eq!(
+            columns(1, false, Some(2)),
+            (0, 1, Some(2), None, None, false)
+        );
+    }
+
+    /// A file with no index is read from the store beside it only where the
+    /// store was built on the columns the header names. A store built on
+    /// other columns would be read by them: its rows placed one base along,
+    /// or as points where the file holds spans. It is refused instead, and
+    /// the line that ends the load names the missing index, the store, its
+    /// flags, the flags that rebuild it and the flag the conversion needs on
+    /// a file with no index.
+    #[test]
+    fn a_file_with_no_index_is_read_from_a_store_built_on_the_columns_its_header_names() {
+        let positions = TabixConfig::default();
+        let zero_based_positions = TabixConfig {
+            zero_based: true,
+            ..TabixConfig::default()
+        };
+        let zero_based_spans = TabixConfig {
+            end_col: Some(2),
+            zero_based: true,
+            ..TabixConfig::default()
+        };
+        let one_based_spans = TabixConfig {
+            end_col: Some(2),
+            ..TabixConfig::default()
+        };
+        let load = |table: &Path, built_on: &TabixConfig| {
+            let store = store_built_on(table, built_on.clone());
+            let outcome = CaddPlugin::open_source(table.to_str().unwrap(), None)
+                .err()
+                .map(|error| error.to_string());
+            (store, outcome)
+        };
+        let refusal = |table: &Path, store: &Path, built_on: &str, named: &str| {
+            format!(
+                "plugin initialization failed: tabix index {table}.tbi not found; a plugin data \
+                 file needs its .tbi index beside it, so index it with tabix without -C; the \
+                 store {store} beside the table is refused: store columns `{built_on}` differ \
+                 from the table's `{named}`; convert the table again with vep-cache-converter \
+                 convert-plugin-data and the table's flags; a data file with no index is \
+                 converted with --no-verify",
+                table = table.display(),
+                store = store.display()
+            )
+        };
+
+        let dir = tempfile::tempdir().unwrap();
+        let snv = cadd_fixture(dir.path(), "synthetic_snv.tsv.gz", "GRCh38");
+        std::fs::remove_file(dir.path().join("synthetic_snv.tsv.gz.tbi")).unwrap();
+        assert_eq!(load(&snv, &positions).1, None, "a store of positions");
+        let (store, outcome) = load(&snv, &zero_based_positions);
+        assert_eq!(
+            outcome,
+            Some(refusal(
+                &snv,
+                &store,
+                "--chr-col 0 --start-col 1 --zero-based",
+                "--chr-col 0 --start-col 1"
+            ))
+        );
+
+        let sv = sv_fixture(dir.path());
+        std::fs::remove_file(dir.path().join("synthetic_cadd_sv.tsv.gz.tbi")).unwrap();
+        assert_eq!(
+            load(&sv, &zero_based_spans).1,
+            None,
+            "a store of zero-based spans"
+        );
+        let named = "--chr-col 0 --start-col 1 --end-col 2 --zero-based";
+        for (built_on, flags) in [
+            (&positions, "--chr-col 0 --start-col 1"),
+            (&one_based_spans, "--chr-col 0 --start-col 1 --end-col 2"),
+        ] {
+            let (store, outcome) = load(&sv, built_on);
+            assert_eq!(outcome, Some(refusal(&sv, &store, flags, named)));
+        }
     }
 }

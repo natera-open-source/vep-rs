@@ -1,0 +1,119 @@
+{"text":"fn first() {}\n\nfn second() {\n    first();\n}\n","item":"first","first":1,"last":1}
+{"text":"fn first() {}\n\nfn second() {\n    first();\n}\n","item":"second","first":3,"last":5}
+{"text":"fn first() {}\n","item":"second","first":null,"last":null}
+{"text":"","item":"anything","first":null,"last":null}
+{"text":"// a note\n/// Doc line.\n/// More.\n#[inline]\npub fn documented() -> u8 {\n    1\n}\n","item":"documented","first":2,"last":7}
+{"text":"/** Block doc. */\nfn block_documented() {}\n","item":"block_documented","first":1,"last":2}
+{"text":"/* plain */\nfn plain_comment() {}\n","item":"plain_comment","first":2,"last":2}
+{"text":"//// four slashes\nfn four() {}\n","item":"four","first":2,"last":2}
+{"text":"/*** three stars */\nfn stars() {}\n/**/\nfn empty_comment() {}\n","item":"stars","first":2,"last":2}
+{"text":"/*** three stars */\nfn stars() {}\n/**/\nfn empty_comment() {}\n","item":"empty_comment","first":4,"last":4}
+{"text":"#![allow(dead_code)]\n//! Module doc.\n/*! More module doc. */\nfn after_inner() {}\n","item":"after_inner","first":4,"last":4}
+{"text":"#[derive(\n    Debug,\n    Clone\n)]\nstruct Derived {\n    field: u8,\n}\n","item":"Derived","first":1,"last":7}
+{"text":"#[doc = \"a ] bracket\"]\nfn attributed() {}\n","item":"attributed","first":1,"last":2}
+{"text":"pub(crate) async unsafe fn modified() {}\npub const fn constant_function() -> u8 { 1 }\n","item":"modified","first":1,"last":1}
+{"text":"pub(crate) async unsafe fn modified() {}\npub const fn constant_function() -> u8 { 1 }\n","item":"constant_function","first":2,"last":2}
+{"text":"pub(in crate::outer) fn scoped() {}\n","item":"scoped","first":1,"last":1}
+{"text":"extern \"C\" fn callback(x: i32) -> i32 {\n    x\n}\n","item":"callback","first":1,"last":3}
+{"text":"fn r#type() {}\n","item":"type","first":1,"last":1}
+{"text":"struct Thing;\n\nimpl Thing {\n    fn method(&self) {}\n\n    /// Doc.\n    pub fn other(&self) -> u8 {\n        2\n    }\n}\n","item":"Thing","first":1,"last":1}
+{"text":"struct Thing;\n\nimpl Thing {\n    fn method(&self) {}\n\n    /// Doc.\n    pub fn other(&self) -> u8 {\n        2\n    }\n}\n","item":"Thing::method","first":4,"last":4}
+{"text":"struct Thing;\n\nimpl Thing {\n    fn method(&self) {}\n\n    /// Doc.\n    pub fn other(&self) -> u8 {\n        2\n    }\n}\n","item":"Thing::other","first":6,"last":9}
+{"text":"struct Thing;\n\nimpl Thing {\n    fn method(&self) {}\n\n    /// Doc.\n    pub fn other(&self) -> u8 {\n        2\n    }\n}\n","item":"method","first":null,"last":null}
+{"text":"struct Thing;\n\nimpl Thing {\n    fn method(&self) {}\n\n    /// Doc.\n    pub fn other(&self) -> u8 {\n        2\n    }\n}\n","item":"Thing::missing","first":null,"last":null}
+{"text":"impl std::fmt::Display for Thing {\n    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {\n        write!(f, \"{}\", 1)\n    }\n}\n","item":"Thing::fmt","first":2,"last":4}
+{"text":"impl std::fmt::Display for Thing {\n    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {\n        write!(f, \"{}\", 1)\n    }\n}\n","item":"Display::fmt","first":null,"last":null}
+{"text":"impl std::fmt::Display for Thing {\n    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {\n        write!(f, \"{}\", 1)\n    }\n}\n","item":"Thing","first":1,"last":5}
+{"text":"impl<'a, T: Clone + 'a> Wrapper<'a, T> {\n    fn get(&self) -> T { self.0.clone() }\n}\n","item":"Wrapper::get","first":2,"last":2}
+{"text":"impl<T> From<T> for Holder<T> where T: Into<u8> {\n    fn from(value: T) -> Self { Holder(value) }\n}\n","item":"Holder::from","first":2,"last":2}
+{"text":"impl Iterator for outer::inner::Walk<u8> {\n    type Item = u8;\n    fn next(&mut self) -> Option<u8> { None }\n}\n","item":"Walk::next","first":3,"last":3}
+{"text":"impl Iterator for outer::inner::Walk<u8> {\n    type Item = u8;\n    fn next(&mut self) -> Option<u8> { None }\n}\n","item":"Walk::Item","first":2,"last":2}
+{"text":"impl<'a> Marker for &'a mut Borrowed {\n    fn mark(&self) {}\n}\n","item":"Borrowed::mark","first":2,"last":2}
+{"text":"impl<F> Runner<F> where for<'a> F: Fn(&'a str) -> u8 {\n    fn run(&self) {}\n}\n","item":"Runner::run","first":2,"last":2}
+{"text":"impl<const N: usize> Sized2 for Array<N> {\n    fn len(&self) -> usize { N }\n}\n","item":"Array::len","first":2,"last":2}
+{"text":"unsafe impl Send for Shared {}\nimpl !Sync for Shared {}\n","item":"Shared","first":1,"last":1}
+{"text":"impl Marker for (u8, u8) {\n    fn mark(&self) {}\n}\nfn after_tuple() {}\n","item":"mark","first":null,"last":null}
+{"text":"impl Marker for (u8, u8) {\n    fn mark(&self) {}\n}\nfn after_tuple() {}\n","item":"after_tuple","first":4,"last":4}
+{"text":"impl Marker for dyn Other {\n    fn mark(&self) {}\n}\n","item":"Other::mark","first":2,"last":2}
+{"text":"impl Thing {\n    #[cfg(unix)]\n    fn pick() -> u8 { 1 }\n}\nimpl Thing {\n    #[cfg(not(unix))]\n    fn pick() -> u8 { 2 }\n}\n","item":"Thing::pick","first":2,"last":3}
+{"text":"fn twice() {}\nfn twice() {}\n","item":"twice","first":1,"last":1}
+{"text":"pub trait Shape {\n    const SIDES: u8;\n    type Unit;\n    fn area(&self) -> f64;\n    /// Doc.\n    fn name(&self) -> &'static str {\n        \"shape\"\n    }\n}\n","item":"Shape","first":1,"last":9}
+{"text":"pub trait Shape {\n    const SIDES: u8;\n    type Unit;\n    fn area(&self) -> f64;\n    /// Doc.\n    fn name(&self) -> &'static str {\n        \"shape\"\n    }\n}\n","item":"Shape::area","first":4,"last":4}
+{"text":"pub trait Shape {\n    const SIDES: u8;\n    type Unit;\n    fn area(&self) -> f64;\n    /// Doc.\n    fn name(&self) -> &'static str {\n        \"shape\"\n    }\n}\n","item":"Shape::name","first":5,"last":8}
+{"text":"pub trait Shape {\n    const SIDES: u8;\n    type Unit;\n    fn area(&self) -> f64;\n    /// Doc.\n    fn name(&self) -> &'static str {\n        \"shape\"\n    }\n}\n","item":"Shape::SIDES","first":2,"last":2}
+{"text":"pub trait Shape {\n    const SIDES: u8;\n    type Unit;\n    fn area(&self) -> f64;\n    /// Doc.\n    fn name(&self) -> &'static str {\n        \"shape\"\n    }\n}\n","item":"Shape::Unit","first":3,"last":3}
+{"text":"fn helper() {}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n    fn helper_runs() {\n        helper();\n    }\n\n    mod deeper {\n        #[test]\n        fn nested() {}\n    }\n}\n","item":"tests","first":3,"last":16}
+{"text":"fn helper() {}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n    fn helper_runs() {\n        helper();\n    }\n\n    mod deeper {\n        #[test]\n        fn nested() {}\n    }\n}\n","item":"tests::helper_runs","first":7,"last":10}
+{"text":"fn helper() {}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n    fn helper_runs() {\n        helper();\n    }\n\n    mod deeper {\n        #[test]\n        fn nested() {}\n    }\n}\n","item":"helper_runs","first":null,"last":null}
+{"text":"fn helper() {}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n    fn helper_runs() {\n        helper();\n    }\n\n    mod deeper {\n        #[test]\n        fn nested() {}\n    }\n}\n","item":"tests::deeper::nested","first":13,"last":14}
+{"text":"fn helper() {}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n    fn helper_runs() {\n        helper();\n    }\n\n    mod deeper {\n        #[test]\n        fn nested() {}\n    }\n}\n","item":"tests::deeper","first":12,"last":15}
+{"text":"fn helper() {}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n    fn helper_runs() {\n        helper();\n    }\n\n    mod deeper {\n        #[test]\n        fn nested() {}\n    }\n}\n","item":"deeper::nested","first":null,"last":null}
+{"text":"mod declared;\npub(crate) mod other;\nfn next_item() {}\n","item":"declared","first":1,"last":1}
+{"text":"mod declared;\npub(crate) mod other;\nfn next_item() {}\n","item":"other","first":2,"last":2}
+{"text":"mod outer {\n    pub struct Inner;\n    impl Inner {\n        pub fn make() -> Inner { Inner }\n    }\n}\n","item":"outer::Inner::make","first":4,"last":4}
+{"text":"const LIMIT: usize = 4;\npub static NAME: &str = \"name\";\nstatic mut COUNTER: u32 = 0;\ntype Pair = (u8, u8);\n","item":"LIMIT","first":1,"last":1}
+{"text":"const LIMIT: usize = 4;\npub static NAME: &str = \"name\";\nstatic mut COUNTER: u32 = 0;\ntype Pair = (u8, u8);\n","item":"NAME","first":2,"last":2}
+{"text":"const LIMIT: usize = 4;\npub static NAME: &str = \"name\";\nstatic mut COUNTER: u32 = 0;\ntype Pair = (u8, u8);\n","item":"COUNTER","first":3,"last":3}
+{"text":"const LIMIT: usize = 4;\npub static NAME: &str = \"name\";\nstatic mut COUNTER: u32 = 0;\ntype Pair = (u8, u8);\n","item":"mut","first":null,"last":null}
+{"text":"const LIMIT: usize = 4;\npub static NAME: &str = \"name\";\nstatic mut COUNTER: u32 = 0;\ntype Pair = (u8, u8);\n","item":"Pair","first":4,"last":4}
+{"text":"/// The table.\nconst TABLE: [Row; 2] = [\n    Row { a: 1, b: [0; 2] },\n    Row { a: 2, b: [1; 2] },\n];\nfn after_table() {}\n","item":"TABLE","first":1,"last":5}
+{"text":"/// The table.\nconst TABLE: [Row; 2] = [\n    Row { a: 1, b: [0; 2] },\n    Row { a: 2, b: [1; 2] },\n];\nfn after_table() {}\n","item":"after_table","first":6,"last":6}
+{"text":"static CELL: Lazy<Vec<u8>> = Lazy::new(|| {\n    let v = vec![1];\n    v\n});\n","item":"CELL","first":1,"last":4}
+{"text":"const SUM: Point = Point { x: 1 } + Point {\n    x: 2,\n};\nconst NEXT: u8 = 1;\n","item":"SUM","first":1,"last":3}
+{"text":"const SUM: Point = Point { x: 1 } + Point {\n    x: 2,\n};\nconst NEXT: u8 = 1;\n","item":"NEXT","first":4,"last":4}
+{"text":"const _: () = assert!(true);\nconst SHIFTED: u32 = 1 << 3;\nfn after_shift() {}\n","item":"_","first":null,"last":null}
+{"text":"const _: () = assert!(true);\nconst SHIFTED: u32 = 1 << 3;\nfn after_shift() {}\n","item":"SHIFTED","first":2,"last":2}
+{"text":"const _: () = assert!(true);\nconst SHIFTED: u32 = 1 << 3;\nfn after_shift() {}\n","item":"after_shift","first":3,"last":3}
+{"text":"pub struct Point {\n    x: i64,\n    y: i64,\n}\nstruct Tuple(u8, u8);\nstruct Unit;\n","item":"Point","first":1,"last":4}
+{"text":"pub struct Point {\n    x: i64,\n    y: i64,\n}\nstruct Tuple(u8, u8);\nstruct Unit;\n","item":"Tuple","first":5,"last":5}
+{"text":"pub struct Point {\n    x: i64,\n    y: i64,\n}\nstruct Tuple(u8, u8);\nstruct Unit;\n","item":"Unit","first":6,"last":6}
+{"text":"enum Kind {\n    Plain,\n    Named { a: u8 },\n    Valued = 3,\n}\nunion Bits {\n    a: u8,\n    b: i8,\n}\n","item":"Kind","first":1,"last":5}
+{"text":"enum Kind {\n    Plain,\n    Named { a: u8 },\n    Valued = 3,\n}\nunion Bits {\n    a: u8,\n    b: i8,\n}\n","item":"Bits","first":6,"last":9}
+{"text":"enum Kind {\n    Plain,\n    Named { a: u8 },\n    Valued = 3,\n}\n","item":"Kind::Named","first":null,"last":null}
+{"text":"struct Generic<T: Clone, const N: usize> where T: Default {\n    items: [T; N],\n}\n","item":"Generic","first":1,"last":3}
+{"text":"fn outer() {\n    fn inner() {}\n    struct Local;\n    impl Local {\n        fn method(&self) {}\n    }\n    inner();\n}\n","item":"outer","first":1,"last":8}
+{"text":"fn outer() {\n    fn inner() {}\n    struct Local;\n    impl Local {\n        fn method(&self) {}\n    }\n    inner();\n}\n","item":"inner","first":null,"last":null}
+{"text":"fn outer() {\n    fn inner() {}\n    struct Local;\n    impl Local {\n        fn method(&self) {}\n    }\n    inner();\n}\n","item":"Local::method","first":null,"last":null}
+{"text":"fn outer() {\n    fn inner() {}\n}\n","item":"outer::inner","first":null,"last":null}
+{"text":"use std::{\n    fmt,\n    io::{self, Read},\n};\nextern crate alloc;\nfn after_imports() {}\n","item":"after_imports","first":6,"last":6}
+{"text":"extern \"C\" {\n    fn foreign(x: i32) -> i32;\n    static GLOBAL: i32;\n}\nfn after_extern() {}\n","item":"foreign","first":null,"last":null}
+{"text":"extern \"C\" {\n    fn foreign(x: i32) -> i32;\n    static GLOBAL: i32;\n}\nfn after_extern() {}\n","item":"after_extern","first":5,"last":5}
+{"text":"macro_rules! twice {\n    ($x:expr) => {\n        $x * 2\n    };\n}\nfn after_macro() {}\n","item":"twice","first":1,"last":5}
+{"text":"macro_rules! twice {\n    ($x:expr) => {\n        $x * 2\n    };\n}\nfn after_macro() {}\n","item":"after_macro","first":6,"last":6}
+{"text":"macro_rules! paren (\n    () => {};\n);\nfn after_paren() {}\n","item":"paren","first":1,"last":3}
+{"text":"macro_rules! paren (\n    () => {};\n);\nfn after_paren() {}\n","item":"after_paren","first":4,"last":4}
+{"text":"thread_local! {\n    static SLOT: u8 = 1;\n}\nlazy_static::lazy_static! {\n    static ref NAMES: Vec<u8> = vec![];\n}\nfn after_invocations() {}\n","item":"SLOT","first":null,"last":null}
+{"text":"thread_local! {\n    static SLOT: u8 = 1;\n}\nlazy_static::lazy_static! {\n    static ref NAMES: Vec<u8> = vec![];\n}\nfn after_invocations() {}\n","item":"after_invocations","first":7,"last":7}
+{"text":"invoke!(fn hidden() {});\nfn after_call() {}\n","item":"hidden","first":null,"last":null}
+{"text":"invoke!(fn hidden() {});\nfn after_call() {}\n","item":"after_call","first":2,"last":2}
+{"text":"fn text() -> &'static str {\n    \"fn fake() { not code }\"\n}\nfn after_text() {}\n","item":"text","first":1,"last":3}
+{"text":"fn text() -> &'static str {\n    \"fn fake() { not code }\"\n}\nfn after_text() {}\n","item":"fake","first":null,"last":null}
+{"text":"fn text() -> &'static str {\n    \"fn fake() { not code }\"\n}\nfn after_text() {}\n","item":"after_text","first":4,"last":4}
+{"text":"fn raw() -> &'static str {\n    r#\"a \"quoted\" } brace\n second line }\"#\n}\nfn after_raw() {}\n","item":"raw","first":1,"last":4}
+{"text":"fn raw() -> &'static str {\n    r#\"a \"quoted\" } brace\n second line }\"#\n}\nfn after_raw() {}\n","item":"after_raw","first":5,"last":5}
+{"text":"fn bytes() -> (&'static [u8], u8, &'static std::ffi::CStr) {\n    (b\"}\", b'}', c\"}\")\n}\nfn after_bytes() {}\n","item":"after_bytes","first":4,"last":4}
+{"text":"fn characters() -> [char; 5] {\n    ['{', '}', '\\'', '\\\\', '\\u{7d}']\n}\nfn after_characters() {}\n","item":"characters","first":1,"last":3}
+{"text":"fn characters() -> [char; 5] {\n    ['{', '}', '\\'', '\\\\', '\\u{7d}']\n}\nfn after_characters() {}\n","item":"after_characters","first":4,"last":4}
+{"text":"fn wide() -> (char, &'static str) {\n    ('\u00e9', \"\u00e9\u4e2d}\")\n}\nfn after_wide() {}\n","item":"after_wide","first":4,"last":4}
+{"text":"fn labelled<'a>(x: &'a str) -> &'a str {\n    'outer: loop {\n        break 'outer;\n    }\n    x\n}\nfn after_label() {}\n","item":"labelled","first":1,"last":6}
+{"text":"fn labelled<'a>(x: &'a str) -> &'a str {\n    'outer: loop {\n        break 'outer;\n    }\n    x\n}\nfn after_label() {}\n","item":"after_label","first":7,"last":7}
+{"text":"fn commented() {\n    // a } brace\n    /* a } brace /* nested } */ still } */\n}\nfn after_comments() {}\n","item":"commented","first":1,"last":4}
+{"text":"fn commented() {\n    // a } brace\n    /* a } brace /* nested } */ still } */\n}\nfn after_comments() {}\n","item":"after_comments","first":5,"last":5}
+{"text":"fn multi() -> &'static str {\n    \"line one\nline two \\\" }\nline three\"\n}\nfn after_multi() {}\n","item":"after_multi","first":6,"last":6}
+{"text":"fn sized(x: [u8; { 1 + 1 }]) -> u8 {\n    x[0]\n}\n","item":"sized","first":1,"last":3}
+{"text":"fn framed() -> Grid<{ 1 + 1 }> {\n    Grid::new()\n}\nfn after_framed() {}\n","item":"framed","first":1,"last":3}
+{"text":"fn framed() -> Grid<{ 1 + 1 }> {\n    Grid::new()\n}\nfn after_framed() {}\n","item":"after_framed","first":4,"last":4}
+{"text":"impl Rows<{ 2 }> for Table {\n    fn rows(&self) -> u8 {\n        2\n    }\n}\n","item":"Table::rows","first":2,"last":4}
+{"text":"impl Rows<{ 2 }> for Table {\n    fn rows(&self) -> u8 {\n        2\n    }\n}\n","item":"Rows","first":null,"last":null}
+{"text":"struct Fixed<const N: usize = { 3 }> {\n    cells: [u8; N],\n}\nfn after_fixed() {}\n","item":"Fixed","first":1,"last":3}
+{"text":"fn bounded<T>() -> u8\nwhere\n    Assert<{ 1 < 2 }>: IsTrue,\n{\n    1\n}\nfn after_bounded() {}\n","item":"bounded","first":1,"last":6}
+{"text":"fn bounded<T>() -> u8\nwhere\n    Assert<{ 1 < 2 }>: IsTrue,\n{\n    1\n}\nfn after_bounded() {}\n","item":"after_bounded","first":7,"last":7}
+{"text":"fn arrows<F: Fn(u8) -> Vec<u8>>(f: F) -> impl Iterator<Item = u8>\nwhere\n    F: Clone,\n{\n    f(1).into_iter()\n}\nfn after_arrows() {}\n","item":"arrows","first":1,"last":6}
+{"text":"fn arrows<F: Fn(u8) -> Vec<u8>>(f: F) -> impl Iterator<Item = u8>\nwhere\n    F: Clone,\n{\n    f(1).into_iter()\n}\nfn after_arrows() {}\n","item":"after_arrows","first":7,"last":7}
+{"text":"fn static_reference(x: &'static str) -> &'static str { x }\n","item":"static_reference","first":1,"last":1}
+{"text":"fn closed() {}\nfn open() {\n","item":"open","first":null,"last":null}
+{"text":"fn closed() {}\nfn open() {\n","item":"closed","first":1,"last":1}
+{"text":"}\nfn after_stray() {}\n","item":"after_stray","first":2,"last":2}
+{"text":"struct Braced {};\nfn after_semicolon() {}\n","item":"after_semicolon","first":2,"last":2}
+{"text":"fn windows() {}\r\nfn second_line() {\r\n}\r\n","item":"second_line","first":2,"last":3}
+{"text":"fn no_final_newline() {}","item":"no_final_newline","first":1,"last":1}

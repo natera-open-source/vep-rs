@@ -156,11 +156,15 @@ impl ThreadStats {
         self.records += 1;
         // The record's one variation feature is keyed on the input's chromosome
         // spelling and, for a `--minimal` split, its own start (the rejoin
-        // restores it, OutputFactory.pm:2291-2293).
+        // restores it, OutputFactory.pm:2300-2302).
         let start = first.original_start.unwrap_or(first.start);
         self.log_position(&first.original_chr, start);
+        // The feature's verdict is read from its alternate alleles alone
+        // (VariationFeature.pm:1000-1013), so a reference allele's row
+        // (`--process_ref_homs`) adds nothing to it.
         let display = record
             .iter()
+            .filter(|v| !v.reference_allele_row)
             .filter_map(|v| v.display_consequence)
             .min()
             .unwrap_or(Consequence::IntergenicVariant);
@@ -203,7 +207,7 @@ impl ThreadStats {
                     }
                     if let (Some(start), Some(length)) = (tc.protein_start, tc.protein_total) {
                         if length > 0 {
-                            // Perl's `int(10 * ($protein_pos / $protein_length))`,
+                            // Ensembl VEP's `int(10 * ($protein_pos / $protein_length))`,
                             // in its floating-point order.
                             let decile = (10.0 * (f64::from(start) / f64::from(length))) as usize;
                             self.deciles[decile.min(10)] += 1;
@@ -311,7 +315,9 @@ impl ThreadStats {
     }
 
     /// `class_SO_term` of the record's variation feature: the class of the
-    /// record's whole allele string, not of each allele.
+    /// record's whole allele string, not of each allele, or the class the
+    /// record carries (`record_so_term`), which a `--minimal` split of a record
+    /// without one sets to that of its first alternate allele's trimmed pair.
     fn log_class(&mut self, first: &InputVariant) {
         if first.is_structural
             || first.variant_class.is_structural()
@@ -650,7 +656,7 @@ pub(crate) struct Report {
     pub run_stats: Vec<(String, String)>,
     pub data_version: Vec<(String, String)>,
     /// The `[General statistics]` rows; a `None` value is Perl's undefined
-    /// value, which `dump_text` drops and prints the label alone.
+    /// value, which Ensembl VEP's `dump_text` drops and prints the label alone.
     pub general_stats: Vec<(String, Option<String>)>,
     pub charts: Vec<Chart>,
 }
@@ -908,7 +914,7 @@ fn charts(stats: &RunStats, ctx: &ReportContext) -> Vec<Chart> {
             continue;
         };
         // Under `s` the term is logged as the database words it; under `p` and
-        // `b` after the column's rewrite (OutputFactory.pm:1826-1827, 1846).
+        // `b` after the column's rewrite (OutputFactory.pm:1835-1836, 1855).
         let score_only = mode.starts_with(['s', 'S']);
         let mut rows: Vec<(String, u64)> = counts
             .iter()
@@ -1041,7 +1047,7 @@ fn chr_sort_key(name: &str) -> f64 {
 }
 
 /// The order of the distribution charts (`Stats.pm:580`), which is not
-/// [`sort_as_chr`]: Perl compares two names as numbers only when one is digits
+/// [`sort_as_chr`]: Ensembl VEP compares two names as numbers only when one is digits
 /// alone, the other opens with a digit and neither opens with a digit and a
 /// word character, so a name of two or more digits always compares as a string
 /// and the pairs left (a single digit against a single digit or a digit before
@@ -1054,11 +1060,14 @@ fn sort_as_distribution_charts(rows: &mut [(String, u64)]) {
 
 /// The root the report files are named from (`BaseRunner.pm:254`):
 /// `--stats_file` when its value is true in Perl, else `<output>_summary` on
-/// the output file as the command line spelled it.
-pub(crate) fn stats_file_root(stats_file: Option<&str>, output_file_as_spelled: &str) -> String {
+/// `output_file`, the name the run's default names are made from
+/// (`config::default_names_stem`): the output file as the command line
+/// spelled it, a Parquet output without the separators and the `.` steps
+/// that end it.
+pub(crate) fn stats_file_root(stats_file: Option<&str>, output_file: &str) -> String {
     match stats_file.filter(|file| crate::argv::truthy(file)) {
         Some(file) => file.to_string(),
-        None => format!("{output_file_as_spelled}_summary"),
+        None => format!("{output_file}_summary"),
     }
 }
 
@@ -1102,6 +1111,22 @@ pub(crate) fn report_files(config: &Config) -> Vec<(StatsFormat, String)> {
     .collect()
 }
 
+/// The line a run prints when it writes a report and found no FASTA: the
+/// chromosome lengths the `Distribution of variants on chromosome` charts are
+/// binned over come from the FASTA's index alone, so the report holds none of
+/// them. Ensembl VEP, which reads the lengths from its database when one is
+/// connected (`BaseVEP.pm:550-580`), prints no such line.
+pub(crate) const NO_DISTRIBUTION_CHARTS_NOTICE: &str = "INFO: No FASTA file found; the statistics report leaves out the \"Distribution of variants on chromosome\" charts, which need the chromosome lengths (see --fasta)";
+
+/// [`NO_DISTRIBUTION_CHARTS_NOTICE`] for a run that writes at least one of
+/// `files` without a FASTA; `None` for a run with a FASTA or with no report.
+pub(crate) fn distribution_charts_notice(
+    files: &[(StatsFormat, String)],
+    fasta_found: bool,
+) -> Option<&'static str> {
+    (!files.is_empty() && !fasta_found).then_some(NO_DISTRIBUTION_CHARTS_NOTICE)
+}
+
 /// The refusal of a report file that exists without `--force_overwrite`
 /// (`BaseRunner.pm:275-276`).
 pub(crate) fn refuse_existing(path: &str, force_overwrite: bool) -> Result<(), CliError> {
@@ -1116,14 +1141,15 @@ pub(crate) fn refuse_existing(path: &str, force_overwrite: bool) -> Result<(), C
     Ok(())
 }
 
-/// The refusal of a report file that cannot be created or written.
-fn unwritable(path: &str) -> CliError {
+/// The refusal of a report file that cannot be created or written
+/// (`BaseRunner.pm:280`).
+pub(crate) fn unwritable(path: &str) -> CliError {
     CliError::new("output", format!("Could not write to stats file {path}"))
 }
 
 /// Creates the report file, empty, before the first variant is annotated
-/// (`Runner.pm:144-148`), so a path that cannot be written fails the run
-/// there (`BaseRunner.pm:280`).
+/// (`Runner.pm:144-148`), once the run has tested the files it tests before
+/// its first record (`Runner::refuse_files_that_cannot_be_written`).
 pub(crate) fn create_stats_file(path: &str) -> Result<(), CliError> {
     std::fs::File::create(path).map_err(|_| unwritable(path))?;
     Ok(())
@@ -1162,7 +1188,7 @@ mod tests {
 
     pub(super) fn context() -> ReportContext {
         ReportContext {
-            vep_version: "116.2".to_string(),
+            vep_version: "116.3".to_string(),
             api_version: "116".to_string(),
             annotation_sources: vec!["Cache: <kbd>/cache/116_GRCh38</kbd>".to_string()],
             species: "homo_sapiens".to_string(),
@@ -1195,23 +1221,22 @@ mod tests {
 
     /// A transcript row of rank 0, counted by name.
     fn transcript_row(id: &str, gene: &str, terms: &[Consequence]) -> TranscriptConsequence {
-        TranscriptConsequence {
-            transcript: Some(Arc::new(Transcript {
-                stable_id: Arc::from(id),
-                gene_stable_id: Arc::from(gene),
-                ..Transcript::default()
-            })),
-            consequences: terms.iter().copied().collect(),
-            ..Default::default()
-        }
+        let mut consequence = TranscriptConsequence::default();
+        consequence.transcript = Some(Arc::new({
+            let mut transcript = Transcript::default();
+            transcript.stable_id = Arc::from(id);
+            transcript.gene_stable_id = Arc::from(gene);
+            transcript
+        }));
+        consequence.consequences = terms.iter().copied().collect();
+        consequence
     }
 
     /// A transcript row of a loaded transcript, its id's rank on its chromosome.
     fn ranked_row(id: &str, gene: &str, rank: u32, terms: &[Consequence]) -> TranscriptConsequence {
-        TranscriptConsequence {
-            id_rank: rank,
-            ..transcript_row(id, gene, terms)
-        }
+        let mut consequence = transcript_row(id, gene, terms);
+        consequence.id_rank = rank;
+        consequence
     }
 
     /// A loaded transcript `id` of `gene` on `chr` at `rank`.
@@ -1222,12 +1247,11 @@ mod tests {
     }
 
     fn regulatory_row(id: &str) -> TranscriptConsequence {
-        TranscriptConsequence {
-            feature_id: Some(Arc::from(id)),
-            feature_type: FeatureType::RegulatoryFeature,
-            consequences: smallvec![Consequence::RegulatoryRegionVariant],
-            ..Default::default()
-        }
+        let mut consequence = TranscriptConsequence::default();
+        consequence.feature_id = Some(Arc::from(id));
+        consequence.feature_type = FeatureType::RegulatoryFeature;
+        consequence.consequences = smallvec![Consequence::RegulatoryRegionVariant];
+        consequence
     }
 
     /// Logs one record whose rows are `tcs` against its first allele, an
@@ -1347,6 +1371,23 @@ mod tests {
         assert!(files(&["--no_stats", "--stats_text", "--stats_html"]).is_empty());
     }
 
+    /// A run that writes a report in either format and found no FASTA has the
+    /// notice; a run with a FASTA has none, nor has a run that writes no report.
+    #[test]
+    fn distribution_charts_notice_is_for_a_report_without_a_fasta() {
+        let html = [(StatsFormat::Html, "out.txt_summary.html".to_string())];
+        let text = [(StatsFormat::Text, "out.txt_summary.txt".to_string())];
+        for files in [&html, &text] {
+            assert_eq!(
+                distribution_charts_notice(files, false),
+                Some(NO_DISTRIBUTION_CHARTS_NOTICE)
+            );
+            assert_eq!(distribution_charts_notice(files, true), None);
+        }
+        assert_eq!(distribution_charts_notice(&[], false), None);
+        assert!(NO_DISTRIBUTION_CHARTS_NOTICE.starts_with("INFO: "));
+    }
+
     /// `dump_text` (`Stats.pm:812-828`): the three bracketed tables, a blank
     /// line between each, then every chart under its title with no blank line
     /// after the last row.
@@ -1381,13 +1422,13 @@ mod tests {
                 "[Variants by chromosome]",
             ]
         );
-        assert!(text.starts_with("[VEP run statistics]\nVEP version (API)\t 116.2 (116)\n"));
+        assert!(text.starts_with("[VEP run statistics]\nVEP version (API)\t 116.3 (116)\n"));
         assert!(text.contains("\n\n[Data version]\nassembly\tGRCh38.p14\n\n[General statistics]\n"));
         assert!(text.contains("\n\n[Variant classes]\nSNV\t1\n\n[Consequences (most severe)]\n"));
         assert!(text.ends_with("[Variants by chromosome]\n21\t1\n"));
     }
 
-    /// Perl prints equal sort keys in hash order; the fixture's two such pairs
+    /// Ensembl VEP prints equal sort keys in hash order; the fixture's two such pairs
     /// are put in key order, which is how this report breaks the tie.
     fn in_key_order(fixture: &str) -> String {
         fixture
@@ -1489,7 +1530,7 @@ mod tests {
                 "Output file",
             ]
         );
-        assert_eq!(report.run_stats[0].1, " 116.2 (116)");
+        assert_eq!(report.run_stats[0].1, " 116.3 (116)");
         assert_eq!(report.run_stats[1].1, "Cache: <kbd>/cache/116_GRCh38</kbd>");
         assert_eq!(report.run_stats[4].1, "2001-09-09 01:46:40");
         assert_eq!(report.run_stats[6].1, "2 seconds");
@@ -1547,9 +1588,10 @@ mod tests {
     fn novel_existing_row_formats_percentages_and_dash() {
         let mut thread = ThreadStats::new();
         let mut known = record("21", 100, "A", "G");
-        known.colocated_variants.push(ColocatedVariant {
-            id: "rs1".to_string(),
-            ..Default::default()
+        known.colocated_variants.push({
+            let mut colocated = ColocatedVariant::default();
+            colocated.id = "rs1".to_string();
+            colocated
         });
         let novel = record("21", 200, "A", "G");
         for v in [&known, &novel, &novel, &novel] {
@@ -1752,6 +1794,31 @@ mod tests {
         );
     }
 
+    /// `Stats.pm:241` reads `display_consequence`, which
+    /// `get_all_OverlapConsequences` builds from the alternate alleles of the
+    /// feature's overlaps and sets to the intergenic term when there are none
+    /// (VariationFeature.pm:1000-1013). A reference allele's row
+    /// (`--process_ref_homs`) is no alternate allele: a record whose rows are a
+    /// reference row and an allele counts the allele's verdict, and a feature
+    /// only a reference row stands for, the split feature of an allele that
+    /// writes no row, counts `intergenic_variant` whatever the row overlaps.
+    #[test]
+    fn most_severe_chart_passes_over_a_reference_alleles_row() {
+        let mut thread = ThreadStats::new();
+        let mut allele = record("21", 100, "A", "G");
+        allele.display_consequence = Some(Consequence::IntronVariant);
+        let mut row = allele.reference_allele_row();
+        row.display_consequence = Some(Consequence::MissenseVariant);
+        log(&mut thread, &[&row, &allele], &[]);
+        log(&mut thread, &[&row], &[]);
+        let report = report_of(thread, &context());
+        assert_eq!(
+            rows(chart(&report, "Consequences (most severe)")),
+            [("intron_variant", 1), ("intergenic_variant", 1)]
+        );
+        assert_eq!(general(&report, "Variants processed"), Some("2"));
+    }
+
     /// `Stats.pm:282`: every term of every output row, in the `--terms`
     /// vocabulary; an intergenic row adds `intergenic_variant`, a `--summary`
     /// row adds nothing, and a row the pick family removed is never seen.
@@ -1832,7 +1899,7 @@ mod tests {
         thread
     }
 
-    /// `OutputFactory.pm:1826-1827, 1846`: under `p` and `b` the term is logged
+    /// `OutputFactory.pm:1835-1836, 1855`: under `p` and `b` the term is logged
     /// with its spaces replaced, under `s` as the database words it; the chart
     /// prints only under the flag, sorted by count then key.
     #[test]
@@ -2223,7 +2290,7 @@ mod tests {
     }
 
     /// `generate_general_stats` on a run that logged no feature: `lines_read`
-    /// and `var_count` are undefined in Perl, and `dump_text` prints the labels
+    /// and `var_count` are undefined in Perl, and Ensembl VEP's `dump_text` prints the labels
     /// alone (`grep {defined($_)}`).
     #[test]
     fn empty_run_prints_the_undefined_rows_as_labels_alone() {
@@ -2252,35 +2319,61 @@ mod tests {
     }
 
     /// `Runner.pm:144-148`, `BaseRunner.pm:280`: the report file exists, empty,
-    /// before the first variant is annotated, so a run that fails at its output
-    /// leaves it behind as Ensembl VEP does.
+    /// before the first variant is annotated, so a run that fails while it
+    /// reads its input, here a gzip input cut inside its member, leaves it
+    /// behind as Ensembl VEP does. It is created once the run has tested that
+    /// its output can be written, so a run whose output cannot leaves none.
     #[test]
     fn summary_file_is_created_before_the_first_variant() {
         let _guard = crate::warnings::sink_test_guard();
         let dir = tempfile::tempdir().unwrap();
         let stats_file = dir.path().join("s.txt");
-        let out = dir.path().join("no-such-dir").join("out.txt");
         let corpus = corpus();
-        let config = Config::from_argv([
-            "vep",
-            "-i",
-            corpus.join("variants.vcf").to_str().unwrap(),
-            "--offline",
-            "--json_cache",
-            corpus.join("json_cache").to_str().unwrap(),
-            "--quiet",
-            "--stats_text",
-            "--stats_file",
-            stats_file.to_str().unwrap(),
-            "-o",
-            out.to_str().unwrap(),
-        ])
-        .unwrap();
-        let error = Runner::new(config).unwrap().run().unwrap_err();
+        let run = |input: &Path, out: &Path| {
+            let config = Config::from_argv([
+                "vep",
+                "-i",
+                input.to_str().unwrap(),
+                "--offline",
+                "--json_cache",
+                corpus.join("json_cache").to_str().unwrap(),
+                "--quiet",
+                "--stats_text",
+                "--stats_file",
+                stats_file.to_str().unwrap(),
+                "-o",
+                out.to_str().unwrap(),
+            ])
+            .unwrap();
+            Runner::new(config).unwrap().run().unwrap_err()
+        };
+
+        let error = run(
+            &corpus.join("variants.vcf"),
+            &dir.path().join("no-such-dir").join("out.txt"),
+        );
         assert!(
             error.to_string().contains("Could not write to output file"),
             "{error}"
         );
+        assert!(
+            !stats_file.exists(),
+            "a run whose output cannot be written created its report"
+        );
+
+        let mut member = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        std::io::Write::write_all(
+            &mut member,
+            &std::fs::read(corpus.join("variants.vcf")).unwrap(),
+        )
+        .unwrap();
+        let mut member = member.finish().unwrap();
+        member.truncate(member.len() - 64);
+        let cut = dir.path().join("cut.vcf.gz");
+        std::fs::write(&cut, member).unwrap();
+        let out = dir.path().join("out.txt");
+        let error = run(&cut, &out);
+        assert!(out.exists(), "{error}");
         assert_eq!(std::fs::read_to_string(&stats_file).unwrap(), "");
     }
 

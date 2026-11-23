@@ -1,0 +1,1 @@
+ERROR: [vep-storable-digest-join] parity-no-assembly.csv: the table has no column 'assembly'

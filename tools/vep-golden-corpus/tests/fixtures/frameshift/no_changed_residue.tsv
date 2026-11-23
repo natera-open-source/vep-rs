@@ -1,0 +1,19 @@
+Leu11LeufsTer?		frameshift_variant		1
+(Leu11LeufsTer?)		frameshift_variant		1
+Ser204SerfsTer?		frameshift_variant,splice_region_variant	cds_end_NF	1
+Sec5SecfsTer?		frameshift_variant,stop_lost		1
+Leu11LeufsTer?	Leu11ProfsTer5	frameshift_variant		0
+Leu11LeufsTer?	Leu11LeufsTer4	frameshift_variant		0
+Leu11LeufsTer?	Leu11=	frameshift_variant		0
+(Leu11LeufsTer?)	(Leu11ProfsTer5)	frameshift_variant		0
+	Leu11LeufsTer?	frameshift_variant		0
+Leu11ProfsTer?		frameshift_variant		0
+Leu11LeufsTer4		frameshift_variant		0
+Ter11TerfsTer?		frameshift_variant		0
+Leu0LeufsTer?		frameshift_variant		0
+Leu11LeufsTer?Val		frameshift_variant		0
+Leu11del		frameshift_variant		0
+Leu11LeufsTer?		inframe_deletion		0
+(Leu11LeufsTer?		frameshift_variant		0
+Leu11LeufsTer?)		frameshift_variant		0
+((Leu11LeufsTer?))		frameshift_variant		0

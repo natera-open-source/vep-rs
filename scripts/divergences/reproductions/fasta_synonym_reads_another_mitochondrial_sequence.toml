@@ -1,0 +1,142 @@
+entry = "fasta_synonym_reads_another_mitochondrial_sequence"
+page = "docs/divergences/fasta-synonym-reads-another-mitochondrial-sequence.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "unobserved"
+input_class_basis = "well-formed under the --fasta contract, \"a FASTA file or a directory containing FASTA files\", which sets no rule on the sequences a file holds (Ensembl VEP documentation, \"Running Ensembl VEP\", --fasta); not seen in the measured datasets"
+notes = "The cache slice is GRCh37's MT with a synonym table that links MT to chrM. The prepared FASTA holds one record, chrM, of 16,571 bases: the made-up reference of 16,569 bases with its first two bases put in front once more, so its base at a position is the reference's base two positions back. The compared record's REF is the reference's base at MT:3349 and the first base of the row's reference codon; the prepared file holds another base there. Ensembl VEP reads chrM for MT through the synonym and writes that base as the reference of HGVSc and HGVSg; vep-rs reads no base and writes neither notation. The other records give the entry's page its rows: a record whose REF equals the prepared file's base, the two written under the names chrM, chrMT, NC_012920.1 and M, and a deletion and an insertion in a non-coding transcript, whose shift and duplication test Ensembl VEP makes over the prepared file's bases."
+# The made-up reference renamed chrM with two bases in front, and the index line samtools faidx writes for it.
+prepare = [
+  "{ echo '>chrM'; grep -v '^>' \"$REPO/crates/vep-cli/tests/fixtures/mitochondrial-frame-check/reference_synthetic.fa\" | tr -d '\\n' | awk '{ print substr($0, 1, 2) $0 }' | fold -w 60; } > \"$STAGE/chrM_two_bases_longer_synthetic.fa\"",
+  "printf 'chrM\\t16571\\t6\\t60\\t61\\n' > \"$STAGE/chrM_two_bases_longer_synthetic.fa.fai\"",
+  # For the further runs: that record listed before a record chrMT that is the made-up reference,
+  # and the made-up reference named chrM listed before a record chrMT two bases longer.
+  "{ echo '>chrM'; grep -v '^>' \"$REPO/crates/vep-cli/tests/fixtures/mitochondrial-frame-check/reference_synthetic.fa\" | tr -d '\\n' | awk '{ print substr($0, 1, 2) $0 }' | fold -w 60; echo '>chrMT'; grep -v '^>' \"$REPO/crates/vep-cli/tests/fixtures/mitochondrial-frame-check/reference_synthetic.fa\"; } > \"$STAGE/chrM_two_bases_longer_beside_chrMT_synthetic.fa\"",
+  "printf 'chrM\\t16571\\t6\\t60\\t61\\nchrMT\\t16569\\t16861\\t60\\t61\\n' > \"$STAGE/chrM_two_bases_longer_beside_chrMT_synthetic.fa.fai\"",
+  "{ echo '>chrM'; grep -v '^>' \"$REPO/crates/vep-cli/tests/fixtures/mitochondrial-frame-check/reference_synthetic.fa\"; echo '>chrMT'; grep -v '^>' \"$REPO/crates/vep-cli/tests/fixtures/mitochondrial-frame-check/reference_synthetic.fa\" | tr -d '\\n' | awk '{ print substr($0, 1, 2) $0 }' | fold -w 60; } > \"$STAGE/chrMT_two_bases_longer_beside_chrM_synthetic.fa\"",
+  "printf 'chrM\\t16569\\t6\\t60\\t61\\nchrMT\\t16571\\t16859\\t60\\t61\\n' > \"$STAGE/chrMT_two_bases_longer_beside_chrM_synthetic.fa.fai\"",
+]
+
+[input]
+format = "vcf"
+text = """
+MT	3349	other_base_two_back	A	C	.	.	.
+MT	3350	same_base_two_back	T	A	.	.	.
+chrM	3349	other_base_two_back_named_chrm	A	C	.	.	.
+chrMT	3349	other_base_two_back_named_chrmt	A	C	.	.	.
+NC_012920.1	3349	other_base_two_back_named_by_accession	A	C	.	.	.
+NC_012920.1	3350	same_base_two_back_named_by_accession	T	A	.	.	.
+M	3349	other_base_two_back_named_m	A	C	.	.	.
+MT	2953	deletion_shifted_over_the_longer_file	TT	T	.	.	.
+MT	2959	insertion_duplicated_over_the_longer_file	G	GA	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh37"
+json_cache = "crates/vep-cli/tests/fixtures/bayesdel-mitochondrial-contig/json_cache"
+fasta = "{stage}/chrM_two_bases_longer_synthetic.fa"
+# Ensembl VEP places every record but the one written M on the cache's MT, under the names the input writes.
+chromosomes = ["MT"]
+
+[run]
+flags = ["--hgvs", "--hgvsg"]
+
+[compare]
+kind = "rows"
+where = { record = "other_base_two_back", feature = "ENST00000361390" }
+columns = ["Location", "Allele", "Feature", "Consequence", "Codons", "HGVSc", "HGVSg"]
+
+[expected]
+ensembl_vep = ["MT:3349 | C | ENST00000361390 | missense_variant | Atc/Ctc | ENST00000361390.2:c.43G>C | MT:m.3349G>C"]
+vep_rs = ["MT:3349 | C | ENST00000361390 | missense_variant | Atc/Ctc | - | -"]
+
+# A FASTA that holds chrM two bases longer beside chrMT, the made-up reference, in the order of
+# the UCSC hg19 file set that adds the assembly's sequence: the two reference checks.
+[[also]]
+notes = "The FASTA of this run holds two records: chrM, the record of the entry's own run, of 16,571 bases, and after it chrMT, the made-up reference of 16,569 bases. The first two records are written MT at one position and state the base chrMT holds there and the base chrM holds there. Ensembl VEP names the slice of a record written MT, or by the accession, after chrM, the synonym the cache's table gives, before it tries the name with chr before it, so it compares REF with the base of chrM: it refuses the record that states the reference's base and admits the other as one intergenic_variant row. vep-rs reads chrMT for MT, the record of the assembly's length, admits the first on the transcripts of MT and refuses the second."
+
+[also.input]
+format = "vcf"
+text = """
+MT	3349	stating_the_base_of_chrmt	A	C	.	.	.
+MT	3349	stating_the_base_of_chrm	G	C	.	.	.
+NC_012920.1	3349	by_accession_stating_the_base_of_chrmt	A	C	.	.	.
+chrMT	3349	named_chrmt_stating_its_base	A	C	.	.	.
+"""
+
+[also.run]
+flags = ["--check_ref", "--fasta", "{stage}/chrM_two_bases_longer_beside_chrMT_synthetic.fa"]
+
+[also.compare]
+kind = "rows"
+where = { record = ["stating_the_base_of_chrmt", "stating_the_base_of_chrm"], feature = ["-", "ENST00000361390"] }
+columns = ["Uploaded_variation", "Location", "Feature", "Consequence"]
+
+[also.expected]
+ensembl_vep = ["stating_the_base_of_chrm | MT:3349 | - | intergenic_variant"]
+vep_rs = ["stating_the_base_of_chrmt | MT:3349 | ENST00000361390 | missense_variant"]
+
+[[also]]
+notes = "The same FASTA under --lookup_ref. Ensembl VEP gives a record written MT, or by the accession, the base of chrM as its reference and writes it as one intergenic_variant row; vep-rs gives it the base of chrMT and writes it on the transcripts of MT."
+
+[also.input]
+format = "vcf"
+text = """
+MT	3349	stating_the_base_of_chrmt	A	C	.	.	.
+NC_012920.1	3349	by_accession_stating_the_base_of_chrmt	A	C	.	.	.
+"""
+
+[also.run]
+flags = ["--lookup_ref", "--show_ref_allele", "--fasta", "{stage}/chrM_two_bases_longer_beside_chrMT_synthetic.fa"]
+
+[also.compare]
+kind = "rows"
+where = { feature = ["-", "ENST00000361390"] }
+columns = ["Uploaded_variation", "Location", "Feature", "Consequence", "REF_ALLELE"]
+
+[also.expected]
+ensembl_vep = ["stating_the_base_of_chrmt | MT:3349 | - | intergenic_variant | G", "by_accession_stating_the_base_of_chrmt | NC_012920.1:3349 | - | intergenic_variant | G"]
+vep_rs = ["stating_the_base_of_chrmt | MT:3349 | ENST00000361390 | missense_variant | A", "by_accession_stating_the_base_of_chrmt | NC_012920.1:3349 | ENST00000361390 | missense_variant | A"]
+
+# A FASTA that holds the made-up reference under chrM beside a chrMT two bases longer: the
+# notation flags.
+[[also]]
+notes = "The FASTA of this run holds chrM, the made-up reference of 16,569 bases, and after it chrMT, of 16,571 bases, whose base at a position is the reference's base two positions back. Ensembl VEP reads chrMT for the transcript's slice MT, the name with chr before it, and writes that record's base as the reference of HGVSc and HGVSg; vep-rs reads chrM, the record of the assembly's length, and writes the reference's base, which is the record's REF."
+
+[also.input]
+format = "vcf"
+text = """
+MT	3349	stating_the_base_of_chrm_of_the_assembly_length	A	C	.	.	.
+"""
+
+[also.run]
+flags = ["--hgvs", "--hgvsg", "--fasta", "{stage}/chrMT_two_bases_longer_beside_chrM_synthetic.fa"]
+
+[also.compare]
+kind = "rows"
+where = { feature = "ENST00000361390" }
+columns = ["Location", "Allele", "Feature", "Consequence", "Codons", "HGVSc", "HGVSg"]
+
+[also.expected]
+ensembl_vep = ["MT:3349 | C | ENST00000361390 | missense_variant | Atc/Ctc | ENST00000361390.2:c.43G>C | MT:m.3349G>C"]
+vep_rs = ["MT:3349 | C | ENST00000361390 | missense_variant | Atc/Ctc | ENST00000361390.2:c.43A>C | MT:m.3349A>C"]
+
+[implementation]
+code = [
+    "crates/vep-fasta/src/lib.rs::IndexedFasta::add_synonyms",
+    "crates/vep-fasta/src/lib.rs::IndexedFasta::keep_grch37_mitochondrial_pairs_apart",
+    "crates/vep-fasta/src/lib.rs::IndexedFasta::synonym_record",
+    "crates/vep-fasta/src/lib.rs::built_in_spellings",
+    "crates/vep-fasta/src/lib.rs::claim_on",
+    "crates/vep-fasta/src/lib.rs::synonym_names_the_record",
+]
+tests = [
+    "crates/vep-cli/tests/mitochondrial_record_over_another_sequence.rs::a_record_on_mt_takes_no_reference_base_from_a_chrm_of_another_length",
+    "crates/vep-cli/tests/two_mitochondrial_records_in_one_fasta.rs::a_looked_up_reference_of_a_record_on_mt_is_the_base_of_chrmt",
+    "crates/vep-cli/tests/two_mitochondrial_records_in_one_fasta.rs::a_reference_check_holds_a_record_on_mt_to_chrmt_beside_a_chrm_of_another_length",
+    "crates/vep-cli/tests/two_mitochondrial_records_in_one_fasta.rs::beside_a_chrmt_of_another_length_mt_reads_the_chrm_of_the_assembly_length",
+    "crates/vep-fasta/src/lib.rs::tests::mt_reads_chrmt_over_the_layout_that_lists_chrm_before_it",
+    "crates/vep-fasta/src/lib.rs::tests::on_grch37_no_synonym_reaches_a_mitochondrial_record_of_another_length",
+    "crates/vep-fasta/src/lib.rs::tests::two_mitochondrial_records_are_reached_alike_whichever_the_fasta_lists_first",
+]

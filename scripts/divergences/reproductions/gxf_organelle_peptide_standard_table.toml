@@ -1,9 +1,9 @@
 entry = "gxf_organelle_peptide_standard_table"
 page = "docs/cache-from-gtf-or-gff3.md#the-reference-peptide-of-a-mitochondrial-transcript-read-from-a-gtf-or-gff3"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 247 of 487 MT records · 0 flag sets, 7 corpora"
+input_class_basis = "2 · 267 of 1,198 MT records · 0 flag sets, 18 corpora"
 notes = "Codon 31 of MT-ND1 is ATA, methionine under the vertebrate mitochondrial code and isoleucine under the standard one; an in-frame insertion after it names that residue in its HGVSp, read from the stored peptide. The GTF lines of MT-ND1 are the Ensembl GTF's gene, transcript, exon and CDS lines for ENST00000361390 over the corpus FASTA's MT record."
 # Ensembl VEP reads the GTF; vep-rs reads a cache built from it with the mitochondrial table.
 prepare = [
@@ -43,3 +43,14 @@ where = { record = "nd1_insertion_after_codon_31", feature = "ENST00000361390" }
 [expected]
 ensembl_vep = ["ENSP00000354687.1:p.Ile31_Gln32insAla"]
 vep_rs = ["ENSP00000354687.1:p.Met31_Gln32insAla"]
+
+[implementation]
+code = [
+    "crates/vep-cache-builder/src/builder.rs::codon_table",
+    "crates/vep-cache-builder/src/builder.rs::translate",
+]
+tests = [
+    "crates/vep-cache-builder/src/builder.rs::tests::a_build_from_a_synthetic_gff3_under_table_three_writes_three",
+    "crates/vep-cache-builder/src/builder.rs::tests::codon_table_is_the_regions_attribute_or_the_flag_never_the_name",
+    "crates/vep-cache-builder/src/builder.rs::tests::peptide_is_translated_when_no_protein_fasta_is_given",
+]

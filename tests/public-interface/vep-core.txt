@@ -1,0 +1,1451 @@
+# Written by scripts/check_public_interface.py --update, which reads the tree; the script's opening comment gives the format.
+library	vep_core
+module	vep_core	mod
+constant	vep_core::VEP_API_MODULE_VERSIONS	const: &[(&str, &str)]
+constant	vep_core::VEP_SUB_VERSION	const: u32
+constant	vep_core::VEP_VERSION	const: u32
+module	vep_core::allele	mod
+auto traits	vep_core::allele::TsTv	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_core::allele::TsTv	enum
+implementation	vep_core::allele::TsTv	impl core::clone::Clone for vep_core::allele::TsTv
+implementation	vep_core::allele::TsTv	impl core::cmp::Eq for vep_core::allele::TsTv
+implementation	vep_core::allele::TsTv	impl core::cmp::PartialEq for vep_core::allele::TsTv
+implementation	vep_core::allele::TsTv	impl core::fmt::Debug for vep_core::allele::TsTv
+implementation	vep_core::allele::TsTv	impl core::marker::Copy for vep_core::allele::TsTv
+variant	vep_core::allele::TsTv::Transition	no fields
+variant	vep_core::allele::TsTv::Transversion	no fields
+method	vep_core::allele::TsTv::short_name	fn(self) -> &'static str
+function	vep_core::allele::ambiguity_code	fn(bases: &[u8]) -> core::option::Option<u8>
+function	vep_core::allele::classify_ts_tv	fn(ref_base: u8, alt_base: u8) -> core::option::Option<vep_core::allele::TsTv>
+function	vep_core::allele::trim_alleles	fn(ref_allele: &[u8], alt_allele: &[u8]) -> (alloc::vec::Vec<u8>, alloc::vec::Vec<u8>, usize)
+module	vep_core::assembly	mod
+auto traits	vep_core::assembly::Assembly	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_core::assembly::Assembly	enum; #[non_exhaustive]
+implementation	vep_core::assembly::Assembly	impl core::clone::Clone for vep_core::assembly::Assembly
+implementation	vep_core::assembly::Assembly	impl core::cmp::Eq for vep_core::assembly::Assembly
+implementation	vep_core::assembly::Assembly	impl core::cmp::PartialEq for vep_core::assembly::Assembly
+implementation	vep_core::assembly::Assembly	impl core::fmt::Debug for vep_core::assembly::Assembly
+implementation	vep_core::assembly::Assembly	impl core::fmt::Display for vep_core::assembly::Assembly
+implementation	vep_core::assembly::Assembly	impl core::hash::Hash for vep_core::assembly::Assembly
+implementation	vep_core::assembly::Assembly	impl core::marker::Copy for vep_core::assembly::Assembly
+associated constant	vep_core::assembly::Assembly::ALL	const: &'static [vep_core::assembly::Assembly]
+variant	vep_core::assembly::Assembly::Grch37	no fields
+variant	vep_core::assembly::Assembly::Grch38	no fields
+method	vep_core::assembly::Assembly::as_str	fn(&self) -> &'static str
+method	vep_core::assembly::Assembly::parse	fn(value: &str) -> core::option::Option<Self>
+method	vep_core::assembly::Assembly::ucsc_name	fn(&self) -> &'static str
+module	vep_core::binding_matrix	mod
+auto traits	vep_core::binding_matrix::BindingMatrix	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::binding_matrix::BindingMatrix	impl core::clone::Clone for vep_core::binding_matrix::BindingMatrix
+implementation	vep_core::binding_matrix::BindingMatrix	impl core::cmp::PartialEq for vep_core::binding_matrix::BindingMatrix
+implementation	vep_core::binding_matrix::BindingMatrix	impl core::fmt::Debug for vep_core::binding_matrix::BindingMatrix
+implementation	vep_core::binding_matrix::BindingMatrix	impl<'de> serde_core::de::Deserialize<'de> for vep_core::binding_matrix::BindingMatrix
+struct	vep_core::binding_matrix::BindingMatrix	struct; named fields, some private
+field	vep_core::binding_matrix::BindingMatrix::frequencies	alloc::vec::Vec<[f64; 4]>
+method	vep_core::binding_matrix::BindingMatrix::from_table_entry	fn(stable_id: &str, entry: vep_core::binding_matrix::BindingMatrix) -> core::result::Result<Self, alloc::string::String>
+method	vep_core::binding_matrix::BindingMatrix::has_frequencies	fn(&self) -> bool
+method	vep_core::binding_matrix::BindingMatrix::is_position_informative	fn(&self, position: u32) -> bool
+field	vep_core::binding_matrix::BindingMatrix::length	u64
+field	vep_core::binding_matrix::BindingMatrix::name	core::option::Option<alloc::string::String>
+method	vep_core::binding_matrix::BindingMatrix::new	fn(stable_id: &str, length: u64, frequencies: alloc::vec::Vec<[f64; 4]>, transcription_factors: alloc::sync::Arc<[alloc::sync::Arc<str>]>) -> core::result::Result<Self, alloc::string::String>
+method	vep_core::binding_matrix::BindingMatrix::relative_similarity	fn(&self, sequence: &[u8]) -> core::option::Option<f64>
+field	vep_core::binding_matrix::BindingMatrix::source	core::option::Option<alloc::string::String>
+field	vep_core::binding_matrix::BindingMatrix::stable_id	alloc::sync::Arc<str>
+field	vep_core::binding_matrix::BindingMatrix::threshold	core::option::Option<f64>
+field	vep_core::binding_matrix::BindingMatrix::transcription_factors	alloc::sync::Arc<[alloc::sync::Arc<str>]>
+constant	vep_core::binding_matrix::INFORMATIVE_BITS	const: f64
+constant	vep_core::binding_matrix::NUCLEOTIDES	const: [u8; 4]
+module	vep_core::cache_info	mod
+auto traits	vep_core::cache_info::CacheInfo	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::cache_info::CacheInfo	impl core::clone::Clone for vep_core::cache_info::CacheInfo
+implementation	vep_core::cache_info::CacheInfo	impl core::default::Default for vep_core::cache_info::CacheInfo
+implementation	vep_core::cache_info::CacheInfo	impl core::fmt::Debug for vep_core::cache_info::CacheInfo
+implementation	vep_core::cache_info::CacheInfo	impl serde_core::ser::Serialize for vep_core::cache_info::CacheInfo
+implementation	vep_core::cache_info::CacheInfo	impl<'de> serde_core::de::Deserialize<'de> for vep_core::cache_info::CacheInfo where vep_core::cache_info::CacheInfo: core::default::Default
+struct	vep_core::cache_info::CacheInfo	struct; named fields; #[non_exhaustive]
+field	vep_core::cache_info::CacheInfo::assembly	core::option::Option<alloc::string::String>
+field	vep_core::cache_info::CacheInfo::bam	core::option::Option<alloc::string::String>
+field	vep_core::cache_info::CacheInfo::build	core::option::Option<alloc::string::String>
+field	vep_core::cache_info::CacheInfo::cache_version	core::option::Option<u32>
+field	vep_core::cache_info::CacheInfo::cell_types	alloc::vec::Vec<alloc::string::String>
+field	vep_core::cache_info::CacheInfo::contig_order	alloc::vec::Vec<alloc::string::String>
+method	vep_core::cache_info::CacheInfo::leaves_out	fn(&self, name: &str) -> bool
+field	vep_core::cache_info::CacheInfo::left_out	alloc::vec::Vec<alloc::string::String>
+field	vep_core::cache_info::CacheInfo::polyphen	core::option::Option<alloc::string::String>
+field	vep_core::cache_info::CacheInfo::regulatory	bool
+field	vep_core::cache_info::CacheInfo::regulatory_schema	core::option::Option<u32>
+field	vep_core::cache_info::CacheInfo::serialiser_type	core::option::Option<alloc::string::String>
+field	vep_core::cache_info::CacheInfo::sift	core::option::Option<alloc::string::String>
+field	vep_core::cache_info::CacheInfo::source_type	core::option::Option<alloc::string::String>
+field	vep_core::cache_info::CacheInfo::source_versions	alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>
+field	vep_core::cache_info::CacheInfo::species	alloc::string::String
+field	vep_core::cache_info::CacheInfo::var_type	core::option::Option<alloc::string::String>
+field	vep_core::cache_info::CacheInfo::variation_cols	alloc::vec::Vec<alloc::string::String>
+method	vep_core::cache_info::CacheInfo::variation_columns	fn(&self) -> core::option::Option<vep_core::cache_info::VariationColumns>
+method	vep_core::cache_info::CacheInfo::variation_is_tabix	fn(&self) -> bool
+auto traits	vep_core::cache_info::VariationColumns	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::cache_info::VariationColumns	impl core::clone::Clone for vep_core::cache_info::VariationColumns
+implementation	vep_core::cache_info::VariationColumns	impl core::cmp::Eq for vep_core::cache_info::VariationColumns
+implementation	vep_core::cache_info::VariationColumns	impl core::cmp::PartialEq for vep_core::cache_info::VariationColumns
+implementation	vep_core::cache_info::VariationColumns	impl core::fmt::Debug for vep_core::cache_info::VariationColumns
+struct	vep_core::cache_info::VariationColumns	struct; named fields, some private
+method	vep_core::cache_info::VariationColumns::frequency_columns	fn(&self) -> impl core::iter::traits::iterator::Iterator<Item = &str>
+method	vep_core::cache_info::VariationColumns::names	fn(&self) -> &[alloc::string::String]
+method	vep_core::cache_info::VariationColumns::new	fn(names: alloc::vec::Vec<alloc::string::String>) -> Self
+method	vep_core::cache_info::VariationColumns::position	fn(&self, name: &str) -> core::option::Option<usize>
+module	vep_core::cache_manifest	mod
+auto traits	vep_core::cache_manifest::CacheManifest	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::cache_manifest::CacheManifest	impl core::clone::Clone for vep_core::cache_manifest::CacheManifest
+implementation	vep_core::cache_manifest::CacheManifest	impl core::fmt::Debug for vep_core::cache_manifest::CacheManifest
+struct	vep_core::cache_manifest::CacheManifest	struct; named fields, some private
+method	vep_core::cache_manifest::CacheManifest::absent	fn(dir: impl core::convert::AsRef<std::path::Path>) -> Self
+method	vep_core::cache_manifest::CacheManifest::is_empty	fn(&self) -> bool
+method	vep_core::cache_manifest::CacheManifest::is_present	fn(&self) -> bool
+method	vep_core::cache_manifest::CacheManifest::len	fn(&self) -> usize
+method	vep_core::cache_manifest::CacheManifest::load	fn(dir: impl core::convert::AsRef<std::path::Path>) -> core::result::Result<Self, vep_core::cache_manifest::ManifestError>
+method	vep_core::cache_manifest::CacheManifest::mark_unfinished	fn(dir: impl core::convert::AsRef<std::path::Path>) -> core::result::Result<(), vep_core::cache_manifest::ManifestError>
+method	vep_core::cache_manifest::CacheManifest::mismatch	fn(&self, relative: alloc::string::String) -> vep_core::cache_manifest::ManifestError
+method	vep_core::cache_manifest::CacheManifest::relative	fn(&self, path: &std::path::Path) -> core::result::Result<alloc::string::String, vep_core::cache_manifest::ManifestError>
+method	vep_core::cache_manifest::CacheManifest::require_complete	fn(&self) -> core::result::Result<(), vep_core::cache_manifest::ManifestError>
+method	vep_core::cache_manifest::CacheManifest::require_listed	fn(&self, path: &std::path::Path) -> core::result::Result<(), vep_core::cache_manifest::ManifestError>
+method	vep_core::cache_manifest::CacheManifest::verify_bytes	fn(&self, path: &std::path::Path, bytes: &[u8]) -> core::result::Result<(), vep_core::cache_manifest::ManifestError>
+method	vep_core::cache_manifest::CacheManifest::verify_digest	fn(&self, path: &std::path::Path, digest: &vep_core::cache_manifest::Digest) -> core::result::Result<(), vep_core::cache_manifest::ManifestError>
+method	vep_core::cache_manifest::CacheManifest::write	fn(dir: impl core::convert::AsRef<std::path::Path>) -> core::result::Result<usize, vep_core::cache_manifest::ManifestError>
+type alias	vep_core::cache_manifest::Digest	type = [u8; 32]
+auto traits	vep_core::cache_manifest::HashingReader	RefUnwindSafe where R: core::panic::unwind_safe::RefUnwindSafe, Send where R: core::marker::Send, Sync where R: core::marker::Sync, Unpin where R: core::marker::Unpin, UnwindSafe where R: core::panic::unwind_safe::UnwindSafe
+implementation	vep_core::cache_manifest::HashingReader	impl<R: std::io::Read> std::io::Read for vep_core::cache_manifest::HashingReader<R>
+struct	vep_core::cache_manifest::HashingReader	struct<R>; named fields, some private
+method	vep_core::cache_manifest::HashingReader::digest_to_end	fn(self) -> std::io::error::Result<vep_core::cache_manifest::Digest>; in impl<R: std::io::Read> vep_core::cache_manifest::HashingReader<R>
+method	vep_core::cache_manifest::HashingReader::new	fn(inner: R) -> Self; in impl<R: std::io::Read> vep_core::cache_manifest::HashingReader<R>
+auto traits	vep_core::cache_manifest::HashingWriter	RefUnwindSafe where W: core::panic::unwind_safe::RefUnwindSafe, Send where W: core::marker::Send, Sync where W: core::marker::Sync, Unpin where W: core::marker::Unpin, UnwindSafe where W: core::panic::unwind_safe::UnwindSafe
+implementation	vep_core::cache_manifest::HashingWriter	impl<W: std::io::Write> std::io::Write for vep_core::cache_manifest::HashingWriter<W>
+struct	vep_core::cache_manifest::HashingWriter	struct<W>; named fields, some private
+method	vep_core::cache_manifest::HashingWriter::finish	fn(self) -> (W, vep_core::cache_manifest::Digest); in impl<W: std::io::Write> vep_core::cache_manifest::HashingWriter<W>
+method	vep_core::cache_manifest::HashingWriter::new	fn(inner: W) -> Self; in impl<W: std::io::Write> vep_core::cache_manifest::HashingWriter<W>
+constant	vep_core::cache_manifest::MANIFEST_FILE	const: &str
+auto traits	vep_core::cache_manifest::ManifestError	!RefUnwindSafe, Send, Sync, Unpin, !UnwindSafe
+enum	vep_core::cache_manifest::ManifestError	enum; #[non_exhaustive]
+implementation	vep_core::cache_manifest::ManifestError	impl core::error::Error for vep_core::cache_manifest::ManifestError
+implementation	vep_core::cache_manifest::ManifestError	impl core::fmt::Debug for vep_core::cache_manifest::ManifestError
+implementation	vep_core::cache_manifest::ManifestError	impl core::fmt::Display for vep_core::cache_manifest::ManifestError
+variant	vep_core::cache_manifest::ManifestError::Io	named fields
+field	vep_core::cache_manifest::ManifestError::Io::path	alloc::string::String
+field	vep_core::cache_manifest::ManifestError::Io::source	std::io::error::Error
+variant	vep_core::cache_manifest::ManifestError::Malformed	named fields
+field	vep_core::cache_manifest::ManifestError::Malformed::line	usize
+field	vep_core::cache_manifest::ManifestError::Malformed::path	alloc::string::String
+field	vep_core::cache_manifest::ManifestError::Malformed::reason	alloc::string::String
+variant	vep_core::cache_manifest::ManifestError::Mismatch	named fields
+field	vep_core::cache_manifest::ManifestError::Mismatch::dir	alloc::string::String
+field	vep_core::cache_manifest::ManifestError::Mismatch::relative	alloc::string::String
+variant	vep_core::cache_manifest::ManifestError::Missing	named fields
+field	vep_core::cache_manifest::ManifestError::Missing::dir	alloc::string::String
+field	vep_core::cache_manifest::ManifestError::Missing::relative	alloc::string::String
+variant	vep_core::cache_manifest::ManifestError::Outside	named fields
+field	vep_core::cache_manifest::ManifestError::Outside::dir	alloc::string::String
+field	vep_core::cache_manifest::ManifestError::Outside::path	alloc::string::String
+variant	vep_core::cache_manifest::ManifestError::TooDeep	named fields
+field	vep_core::cache_manifest::ManifestError::TooDeep::path	alloc::string::String
+variant	vep_core::cache_manifest::ManifestError::Unfinished	named fields
+field	vep_core::cache_manifest::ManifestError::Unfinished::dir	alloc::string::String
+function	vep_core::cache_manifest::file_digest	fn(path: &std::path::Path) -> std::io::error::Result<vep_core::cache_manifest::Digest>
+function	vep_core::cache_manifest::parse	fn(text: &str, path: &std::path::Path) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, vep_core::cache_manifest::Digest>, vep_core::cache_manifest::ManifestError>
+function	vep_core::cache_manifest::render	fn(entries: &alloc::collections::btree::map::BTreeMap<alloc::string::String, vep_core::cache_manifest::Digest>) -> alloc::string::String
+module	vep_core::codon	mod
+function	vep_core::codon::aa_three_letter	fn(aa: u8) -> &'static str
+function	vep_core::codon::complement_base	fn(base: u8) -> u8
+function	vep_core::codon::is_start_codon	fn(codon: &[u8], table: u8) -> bool
+function	vep_core::codon::is_ter_codon	fn(codon: &[u8], table: u8) -> bool
+function	vep_core::codon::known_table	fn(table: u8) -> bool
+function	vep_core::codon::module_table	fn(table: u8) -> u8
+function	vep_core::codon::reverse_complement	fn(seq: &[u8]) -> alloc::vec::Vec<u8>
+function	vep_core::codon::seq_is_dna	fn(allele: &[u8]) -> bool
+function	vep_core::codon::translate_codon	fn(codon: &[u8]) -> u8
+function	vep_core::codon::translate_codon_with_table	fn(codon: &[u8], codon_table: u8) -> u8
+function	vep_core::codon::translate_sequence	fn(seq: &[u8], table: u8) -> alloc::vec::Vec<u8>
+module	vep_core::consequence	mod
+auto traits	vep_core::consequence::Activity	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_core::consequence::Activity	enum; #[non_exhaustive]
+implementation	vep_core::consequence::Activity	impl core::clone::Clone for vep_core::consequence::Activity
+implementation	vep_core::consequence::Activity	impl core::cmp::Eq for vep_core::consequence::Activity
+implementation	vep_core::consequence::Activity	impl core::cmp::PartialEq for vep_core::consequence::Activity
+implementation	vep_core::consequence::Activity	impl core::fmt::Debug for vep_core::consequence::Activity
+implementation	vep_core::consequence::Activity	impl core::marker::Copy for vep_core::consequence::Activity
+implementation	vep_core::consequence::Activity	impl serde_core::ser::Serialize for vep_core::consequence::Activity
+implementation	vep_core::consequence::Activity	impl<'de> serde_core::de::Deserialize<'de> for vep_core::consequence::Activity
+variant	vep_core::consequence::Activity::Active	no fields
+variant	vep_core::consequence::Activity::Inactive	no fields
+variant	vep_core::consequence::Activity::Na	no fields
+variant	vep_core::consequence::Activity::Poised	no fields
+variant	vep_core::consequence::Activity::Repressed	no fields
+method	vep_core::consequence::Activity::as_str	fn(self) -> &'static str
+auto traits	vep_core::consequence::CellTypeActivity	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::consequence::CellTypeActivity	impl core::clone::Clone for vep_core::consequence::CellTypeActivity
+implementation	vep_core::consequence::CellTypeActivity	impl core::cmp::Eq for vep_core::consequence::CellTypeActivity
+implementation	vep_core::consequence::CellTypeActivity	impl core::cmp::PartialEq for vep_core::consequence::CellTypeActivity
+implementation	vep_core::consequence::CellTypeActivity	impl core::fmt::Debug for vep_core::consequence::CellTypeActivity
+implementation	vep_core::consequence::CellTypeActivity	impl core::fmt::Display for vep_core::consequence::CellTypeActivity
+implementation	vep_core::consequence::CellTypeActivity	impl serde_core::ser::Serialize for vep_core::consequence::CellTypeActivity
+implementation	vep_core::consequence::CellTypeActivity	impl<'de> serde_core::de::Deserialize<'de> for vep_core::consequence::CellTypeActivity
+struct	vep_core::consequence::CellTypeActivity	struct; named fields
+field	vep_core::consequence::CellTypeActivity::activity	vep_core::consequence::Activity
+field	vep_core::consequence::CellTypeActivity::name	alloc::sync::Arc<str>
+auto traits	vep_core::consequence::Consequence	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_core::consequence::Consequence	enum; #[non_exhaustive]
+implementation	vep_core::consequence::Consequence	impl core::clone::Clone for vep_core::consequence::Consequence
+implementation	vep_core::consequence::Consequence	impl core::cmp::Eq for vep_core::consequence::Consequence
+implementation	vep_core::consequence::Consequence	impl core::cmp::Ord for vep_core::consequence::Consequence
+implementation	vep_core::consequence::Consequence	impl core::cmp::PartialEq for vep_core::consequence::Consequence
+implementation	vep_core::consequence::Consequence	impl core::cmp::PartialOrd for vep_core::consequence::Consequence
+implementation	vep_core::consequence::Consequence	impl core::fmt::Debug for vep_core::consequence::Consequence
+implementation	vep_core::consequence::Consequence	impl core::fmt::Display for vep_core::consequence::Consequence
+implementation	vep_core::consequence::Consequence	impl core::hash::Hash for vep_core::consequence::Consequence
+implementation	vep_core::consequence::Consequence	impl core::marker::Copy for vep_core::consequence::Consequence
+implementation	vep_core::consequence::Consequence	impl serde_core::ser::Serialize for vep_core::consequence::Consequence
+implementation	vep_core::consequence::Consequence	impl<'de> serde_core::de::Deserialize<'de> for vep_core::consequence::Consequence
+associated constant	vep_core::consequence::Consequence::ALL	const: &'static [vep_core::consequence::Consequence]
+variant	vep_core::consequence::Consequence::CodingSequenceVariant	no fields
+variant	vep_core::consequence::Consequence::CodingTranscriptVariant	no fields
+variant	vep_core::consequence::Consequence::DownstreamGeneVariant	no fields
+variant	vep_core::consequence::Consequence::FeatureElongation	no fields
+variant	vep_core::consequence::Consequence::FeatureTruncation	no fields
+variant	vep_core::consequence::Consequence::FivePrimeUtrVariant	no fields
+variant	vep_core::consequence::Consequence::FrameshiftVariant	no fields
+variant	vep_core::consequence::Consequence::IncompleteTerminalCodonVariant	no fields
+variant	vep_core::consequence::Consequence::InframeDeletion	no fields
+variant	vep_core::consequence::Consequence::InframeInsertion	no fields
+variant	vep_core::consequence::Consequence::IntergenicVariant	no fields
+variant	vep_core::consequence::Consequence::IntronVariant	no fields
+variant	vep_core::consequence::Consequence::MatureMirnaVariant	no fields
+variant	vep_core::consequence::Consequence::MissenseVariant	no fields
+variant	vep_core::consequence::Consequence::NmdTranscriptVariant	no fields
+variant	vep_core::consequence::Consequence::NonCodingTranscriptExonVariant	no fields
+variant	vep_core::consequence::Consequence::NonCodingTranscriptVariant	no fields
+variant	vep_core::consequence::Consequence::ProteinAlteringVariant	no fields
+variant	vep_core::consequence::Consequence::RegulatoryRegionAblation	no fields
+variant	vep_core::consequence::Consequence::RegulatoryRegionAmplification	no fields
+variant	vep_core::consequence::Consequence::RegulatoryRegionVariant	no fields
+variant	vep_core::consequence::Consequence::SequenceVariant	no fields
+variant	vep_core::consequence::Consequence::SpliceAcceptorVariant	no fields
+variant	vep_core::consequence::Consequence::SpliceDonor5thBaseVariant	no fields
+variant	vep_core::consequence::Consequence::SpliceDonorRegionVariant	no fields
+variant	vep_core::consequence::Consequence::SpliceDonorVariant	no fields
+variant	vep_core::consequence::Consequence::SplicePolypyrimidineTractVariant	no fields
+variant	vep_core::consequence::Consequence::SpliceRegionVariant	no fields
+variant	vep_core::consequence::Consequence::StartLost	no fields
+variant	vep_core::consequence::Consequence::StartRetainedVariant	no fields
+variant	vep_core::consequence::Consequence::StopGained	no fields
+variant	vep_core::consequence::Consequence::StopLost	no fields
+variant	vep_core::consequence::Consequence::StopRetainedVariant	no fields
+variant	vep_core::consequence::Consequence::SynonymousVariant	no fields
+variant	vep_core::consequence::Consequence::TfBindingSiteVariant	no fields
+variant	vep_core::consequence::Consequence::TfbsAblation	no fields
+variant	vep_core::consequence::Consequence::TfbsAmplification	no fields
+variant	vep_core::consequence::Consequence::ThreePrimeUtrVariant	no fields
+variant	vep_core::consequence::Consequence::TranscriptAblation	no fields
+variant	vep_core::consequence::Consequence::TranscriptAmplification	no fields
+variant	vep_core::consequence::Consequence::UpstreamGeneVariant	no fields
+method	vep_core::consequence::Consequence::display_term	fn(self) -> &'static str
+method	vep_core::consequence::Consequence::from_so_term	fn(term: &str) -> core::option::Option<vep_core::consequence::Consequence>
+method	vep_core::consequence::Consequence::impact	fn(self) -> vep_core::consequence::Impact
+method	vep_core::consequence::Consequence::is_coding_include	fn(self) -> bool
+method	vep_core::consequence::Consequence::most_severe	fn(consequences: &[vep_core::consequence::Consequence]) -> core::option::Option<vep_core::consequence::Consequence>
+method	vep_core::consequence::Consequence::ncbi_term	fn(self) -> &'static str
+method	vep_core::consequence::Consequence::rank	fn(self) -> u32
+method	vep_core::consequence::Consequence::so_accession	fn(self) -> &'static str
+method	vep_core::consequence::Consequence::so_term	fn(self) -> &'static str
+type alias	vep_core::consequence::ConsequenceList	type = smallvec::SmallVec<[vep_core::consequence::Consequence; 8]>
+auto traits	vep_core::consequence::FeatureType	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_core::consequence::FeatureType	enum
+implementation	vep_core::consequence::FeatureType	impl core::clone::Clone for vep_core::consequence::FeatureType
+implementation	vep_core::consequence::FeatureType	impl core::cmp::Eq for vep_core::consequence::FeatureType
+implementation	vep_core::consequence::FeatureType	impl core::cmp::Ord for vep_core::consequence::FeatureType
+implementation	vep_core::consequence::FeatureType	impl core::cmp::PartialEq for vep_core::consequence::FeatureType
+implementation	vep_core::consequence::FeatureType	impl core::cmp::PartialOrd for vep_core::consequence::FeatureType
+implementation	vep_core::consequence::FeatureType	impl core::convert::From<vep_core::consequence::FeatureType> for vep_core::consequence::RowKind
+implementation	vep_core::consequence::FeatureType	impl core::fmt::Debug for vep_core::consequence::FeatureType
+implementation	vep_core::consequence::FeatureType	impl core::fmt::Display for vep_core::consequence::FeatureType
+implementation	vep_core::consequence::FeatureType	impl core::hash::Hash for vep_core::consequence::FeatureType
+implementation	vep_core::consequence::FeatureType	impl core::marker::Copy for vep_core::consequence::FeatureType
+implementation	vep_core::consequence::FeatureType	impl serde_core::ser::Serialize for vep_core::consequence::FeatureType
+implementation	vep_core::consequence::FeatureType	impl<'de> serde_core::de::Deserialize<'de> for vep_core::consequence::FeatureType
+variant	vep_core::consequence::FeatureType::MotifFeature	no fields
+variant	vep_core::consequence::FeatureType::RegulatoryFeature	no fields
+variant	vep_core::consequence::FeatureType::Transcript	no fields
+method	vep_core::consequence::FeatureType::as_str	fn(self) -> &'static str
+auto traits	vep_core::consequence::Impact	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_core::consequence::Impact	enum
+implementation	vep_core::consequence::Impact	impl core::clone::Clone for vep_core::consequence::Impact
+implementation	vep_core::consequence::Impact	impl core::cmp::Eq for vep_core::consequence::Impact
+implementation	vep_core::consequence::Impact	impl core::cmp::Ord for vep_core::consequence::Impact
+implementation	vep_core::consequence::Impact	impl core::cmp::PartialEq for vep_core::consequence::Impact
+implementation	vep_core::consequence::Impact	impl core::cmp::PartialOrd for vep_core::consequence::Impact
+implementation	vep_core::consequence::Impact	impl core::fmt::Debug for vep_core::consequence::Impact
+implementation	vep_core::consequence::Impact	impl core::fmt::Display for vep_core::consequence::Impact
+implementation	vep_core::consequence::Impact	impl core::hash::Hash for vep_core::consequence::Impact
+implementation	vep_core::consequence::Impact	impl core::marker::Copy for vep_core::consequence::Impact
+implementation	vep_core::consequence::Impact	impl serde_core::ser::Serialize for vep_core::consequence::Impact
+implementation	vep_core::consequence::Impact	impl<'de> serde_core::de::Deserialize<'de> for vep_core::consequence::Impact
+variant	vep_core::consequence::Impact::HIGH	no fields
+variant	vep_core::consequence::Impact::LOW	no fields
+variant	vep_core::consequence::Impact::MODERATE	no fields
+variant	vep_core::consequence::Impact::MODIFIER	no fields
+method	vep_core::consequence::Impact::as_str	fn(self) -> &'static str
+auto traits	vep_core::consequence::LofteeContext	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::consequence::LofteeContext	impl core::clone::Clone for vep_core::consequence::LofteeContext
+implementation	vep_core::consequence::LofteeContext	impl core::fmt::Debug for vep_core::consequence::LofteeContext
+implementation	vep_core::consequence::LofteeContext	impl serde_core::ser::Serialize for vep_core::consequence::LofteeContext
+implementation	vep_core::consequence::LofteeContext	impl<'de> serde_core::de::Deserialize<'de> for vep_core::consequence::LofteeContext
+struct	vep_core::consequence::LofteeContext	struct; named fields; #[non_exhaustive]
+field	vep_core::consequence::LofteeContext::cdna_coding_end	core::option::Option<u64>
+field	vep_core::consequence::LofteeContext::cdna_coding_start	core::option::Option<u64>
+field	vep_core::consequence::LofteeContext::cds_end_nf	bool
+field	vep_core::consequence::LofteeContext::cds_start_nf	bool
+field	vep_core::consequence::LofteeContext::coding_region_end	core::option::Option<u64>
+field	vep_core::consequence::LofteeContext::coding_region_start	core::option::Option<u64>
+field	vep_core::consequence::LofteeContext::exons	alloc::vec::Vec<vep_core::transcript::Exon>
+method	vep_core::consequence::LofteeContext::from_transcript	fn(transcript: &vep_core::transcript::Transcript) -> Self
+field	vep_core::consequence::LofteeContext::introns	alloc::vec::Vec<vep_core::transcript::Intron>
+field	vep_core::consequence::LofteeContext::strand	i8
+field	vep_core::consequence::LofteeContext::translation_end	core::option::Option<u64>
+field	vep_core::consequence::LofteeContext::translation_start	core::option::Option<u64>
+auto traits	vep_core::consequence::MotifFields	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::consequence::MotifFields	impl core::clone::Clone for vep_core::consequence::MotifFields
+implementation	vep_core::consequence::MotifFields	impl core::cmp::PartialEq for vep_core::consequence::MotifFields
+implementation	vep_core::consequence::MotifFields	impl core::fmt::Debug for vep_core::consequence::MotifFields
+implementation	vep_core::consequence::MotifFields	impl serde_core::ser::Serialize for vep_core::consequence::MotifFields
+implementation	vep_core::consequence::MotifFields	impl<'de> serde_core::de::Deserialize<'de> for vep_core::consequence::MotifFields
+struct	vep_core::consequence::MotifFields	struct; named fields; #[non_exhaustive]
+field	vep_core::consequence::MotifFields::factors	alloc::sync::Arc<[alloc::sync::Arc<str>]>
+field	vep_core::consequence::MotifFields::high_inf_pos	core::option::Option<bool>
+field	vep_core::consequence::MotifFields::name	alloc::sync::Arc<str>
+method	vep_core::consequence::MotifFields::new	fn(name: alloc::sync::Arc<str>, pos: core::option::Option<u32>, high_inf_pos: core::option::Option<bool>, score_change: core::option::Option<f64>, factors: alloc::sync::Arc<[alloc::sync::Arc<str>]>) -> Self
+field	vep_core::consequence::MotifFields::pos	core::option::Option<u32>
+field	vep_core::consequence::MotifFields::score_change	core::option::Option<f64>
+auto traits	vep_core::consequence::OwnSpanPositions	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::consequence::OwnSpanPositions	impl core::clone::Clone for vep_core::consequence::OwnSpanPositions
+implementation	vep_core::consequence::OwnSpanPositions	impl core::cmp::Eq for vep_core::consequence::OwnSpanPositions
+implementation	vep_core::consequence::OwnSpanPositions	impl core::cmp::PartialEq for vep_core::consequence::OwnSpanPositions
+implementation	vep_core::consequence::OwnSpanPositions	impl core::fmt::Debug for vep_core::consequence::OwnSpanPositions
+implementation	vep_core::consequence::OwnSpanPositions	impl serde_core::ser::Serialize for vep_core::consequence::OwnSpanPositions
+implementation	vep_core::consequence::OwnSpanPositions	impl<'de> serde_core::de::Deserialize<'de> for vep_core::consequence::OwnSpanPositions
+struct	vep_core::consequence::OwnSpanPositions	struct; named fields
+field	vep_core::consequence::OwnSpanPositions::cdna	core::option::Option<alloc::string::String>
+field	vep_core::consequence::OwnSpanPositions::cds	core::option::Option<alloc::string::String>
+field	vep_core::consequence::OwnSpanPositions::protein	core::option::Option<alloc::string::String>
+auto traits	vep_core::consequence::ProteinIdDisplay	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_core::consequence::ProteinIdDisplay	enum; #[non_exhaustive]
+implementation	vep_core::consequence::ProteinIdDisplay	impl core::clone::Clone for vep_core::consequence::ProteinIdDisplay
+implementation	vep_core::consequence::ProteinIdDisplay	impl core::cmp::Eq for vep_core::consequence::ProteinIdDisplay
+implementation	vep_core::consequence::ProteinIdDisplay	impl core::cmp::PartialEq for vep_core::consequence::ProteinIdDisplay
+implementation	vep_core::consequence::ProteinIdDisplay	impl core::default::Default for vep_core::consequence::ProteinIdDisplay
+implementation	vep_core::consequence::ProteinIdDisplay	impl core::fmt::Debug for vep_core::consequence::ProteinIdDisplay
+implementation	vep_core::consequence::ProteinIdDisplay	impl core::marker::Copy for vep_core::consequence::ProteinIdDisplay
+variant	vep_core::consequence::ProteinIdDisplay::AsCached	no fields
+variant	vep_core::consequence::ProteinIdDisplay::Hidden	no fields
+variant	vep_core::consequence::ProteinIdDisplay::Versioned	1 positional field
+field	vep_core::consequence::ProteinIdDisplay::Versioned::0	u32
+auto traits	vep_core::consequence::RowKind	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_core::consequence::RowKind	enum; #[non_exhaustive]
+implementation	vep_core::consequence::RowKind	impl core::clone::Clone for vep_core::consequence::RowKind
+implementation	vep_core::consequence::RowKind	impl core::cmp::Eq for vep_core::consequence::RowKind
+implementation	vep_core::consequence::RowKind	impl core::cmp::PartialEq for vep_core::consequence::RowKind
+implementation	vep_core::consequence::RowKind	impl core::convert::From<vep_core::consequence::FeatureType> for vep_core::consequence::RowKind
+implementation	vep_core::consequence::RowKind	impl core::fmt::Debug for vep_core::consequence::RowKind
+implementation	vep_core::consequence::RowKind	impl core::hash::Hash for vep_core::consequence::RowKind
+implementation	vep_core::consequence::RowKind	impl core::marker::Copy for vep_core::consequence::RowKind
+associated constant	vep_core::consequence::RowKind::ALL	const: &'static [vep_core::consequence::RowKind]
+associated constant	vep_core::consequence::RowKind::DEFAULT	const: [vep_core::consequence::RowKind; 1]
+variant	vep_core::consequence::RowKind::Intergenic	no fields
+variant	vep_core::consequence::RowKind::MotifFeature	no fields
+variant	vep_core::consequence::RowKind::RegulatoryFeature	no fields
+variant	vep_core::consequence::RowKind::Transcript	no fields
+method	vep_core::consequence::RowKind::as_str	fn(self) -> &'static str
+method	vep_core::consequence::RowKind::of_row	fn(feature: core::option::Option<vep_core::consequence::FeatureType>) -> Self
+method	vep_core::consequence::RowKind::parse	fn(name: &str) -> core::option::Option<Self>
+re-export	vep_core::consequence::SourceCache	pub use vep_core::transcript::SourceCache
+constant	vep_core::consequence::TRANSCRIPT_CONSEQUENCE_KEYS	const: &[(&str, bool)]
+auto traits	vep_core::consequence::TranscriptConsequence	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::consequence::TranscriptConsequence	impl core::clone::Clone for vep_core::consequence::TranscriptConsequence
+implementation	vep_core::consequence::TranscriptConsequence	impl core::default::Default for vep_core::consequence::TranscriptConsequence
+implementation	vep_core::consequence::TranscriptConsequence	impl core::fmt::Debug for vep_core::consequence::TranscriptConsequence
+implementation	vep_core::consequence::TranscriptConsequence	impl serde_core::ser::Serialize for vep_core::consequence::TranscriptConsequence
+struct	vep_core::consequence::TranscriptConsequence	struct; named fields; #[non_exhaustive]
+field	vep_core::consequence::TranscriptConsequence::amino_acids	core::option::Option<alloc::string::String>
+method	vep_core::consequence::TranscriptConsequence::appris	fn(&self) -> core::option::Option<&str>
+field	vep_core::consequence::TranscriptConsequence::bam_edit_status	core::option::Option<vep_core::transcript::BamEditStatus>
+method	vep_core::consequence::TranscriptConsequence::biotype	fn(&self) -> core::option::Option<&str>
+field	vep_core::consequence::TranscriptConsequence::canonical	bool
+method	vep_core::consequence::TranscriptConsequence::ccds	fn(&self) -> core::option::Option<&str>
+method	vep_core::consequence::TranscriptConsequence::cdna_length	fn(&self) -> u32
+field	vep_core::consequence::TranscriptConsequence::cdna_position	core::option::Option<alloc::string::String>
+field	vep_core::consequence::TranscriptConsequence::cdna_total	core::option::Option<u32>
+method	vep_core::consequence::TranscriptConsequence::cds_length	fn(&self) -> core::option::Option<u32>
+field	vep_core::consequence::TranscriptConsequence::cds_position	core::option::Option<alloc::string::String>
+field	vep_core::consequence::TranscriptConsequence::cds_total	core::option::Option<u32>
+field	vep_core::consequence::TranscriptConsequence::cell_type	core::option::Option<alloc::boxed::Box<[vep_core::consequence::CellTypeActivity]>>
+field	vep_core::consequence::TranscriptConsequence::codons	core::option::Option<alloc::string::String>
+field	vep_core::consequence::TranscriptConsequence::consequences	vep_core::consequence::ConsequenceList
+field	vep_core::consequence::TranscriptConsequence::distance	core::option::Option<u64>
+field	vep_core::consequence::TranscriptConsequence::domains	alloc::vec::Vec<(alloc::string::String, alloc::string::String)>
+method	vep_core::consequence::TranscriptConsequence::ensembl_vep_key	fn(&self) -> impl core::iter::traits::iterator::Iterator<Item = u8> + '_
+field	vep_core::consequence::TranscriptConsequence::exon	core::option::Option<alloc::string::String>
+field	vep_core::consequence::TranscriptConsequence::exon_ids	core::option::Option<alloc::sync::Arc<[alloc::sync::Arc<str>]>>
+field	vep_core::consequence::TranscriptConsequence::feature_biotype	core::option::Option<alloc::sync::Arc<str>>
+field	vep_core::consequence::TranscriptConsequence::feature_end	u64
+field	vep_core::consequence::TranscriptConsequence::feature_id	core::option::Option<alloc::sync::Arc<str>>
+method	vep_core::consequence::TranscriptConsequence::feature_overlap	fn(&self, variant_start: u64, variant_end: u64) -> core::option::Option<(u64, f64)>
+field	vep_core::consequence::TranscriptConsequence::feature_start	u64
+field	vep_core::consequence::TranscriptConsequence::feature_type	vep_core::consequence::FeatureType
+method	vep_core::consequence::TranscriptConsequence::flags	fn(&self) -> &[alloc::string::String]
+method	vep_core::consequence::TranscriptConsequence::for_transcript	fn(transcript: &alloc::sync::Arc<vep_core::transcript::Transcript>) -> Self
+method	vep_core::consequence::TranscriptConsequence::gencode_primary	fn(&self) -> bool
+method	vep_core::consequence::TranscriptConsequence::gene_id	fn(&self) -> &str
+method	vep_core::consequence::TranscriptConsequence::gene_id_handle	fn(&self) -> core::option::Option<&alloc::sync::Arc<str>>
+method	vep_core::consequence::TranscriptConsequence::gene_phenotype	fn(&self) -> bool
+method	vep_core::consequence::TranscriptConsequence::gene_symbol	fn(&self) -> core::option::Option<&str>
+method	vep_core::consequence::TranscriptConsequence::gene_symbol_source	fn(&self) -> core::option::Option<&str>
+method	vep_core::consequence::TranscriptConsequence::gene_version	fn(&self) -> core::option::Option<u32>
+method	vep_core::consequence::TranscriptConsequence::hgnc_id	fn(&self) -> core::option::Option<&str>
+field	vep_core::consequence::TranscriptConsequence::hgvs_intron_offsets	core::option::Option<(i32, i32)>
+field	vep_core::consequence::TranscriptConsequence::hgvs_offset	core::option::Option<i64>
+field	vep_core::consequence::TranscriptConsequence::hgvs_offset_of_hgvsc_alone	bool
+field	vep_core::consequence::TranscriptConsequence::hgvsc	core::option::Option<alloc::string::String>
+field	vep_core::consequence::TranscriptConsequence::hgvsp	core::option::Option<alloc::string::String>
+field	vep_core::consequence::TranscriptConsequence::id_rank	u32
+field	vep_core::consequence::TranscriptConsequence::impact	vep_core::consequence::Impact
+field	vep_core::consequence::TranscriptConsequence::intron	core::option::Option<alloc::string::String>
+field	vep_core::consequence::TranscriptConsequence::loftee_ctx	core::option::Option<alloc::boxed::Box<vep_core::consequence::LofteeContext>>
+method	vep_core::consequence::TranscriptConsequence::mane_plus_clinical	fn(&self) -> core::option::Option<&str>
+method	vep_core::consequence::TranscriptConsequence::mane_select	fn(&self) -> core::option::Option<&str>
+field	vep_core::consequence::TranscriptConsequence::mirna	alloc::vec::Vec<alloc::string::String>
+field	vep_core::consequence::TranscriptConsequence::motif	core::option::Option<alloc::boxed::Box<vep_core::consequence::MotifFields>>
+field	vep_core::consequence::TranscriptConsequence::motif_db_id	core::option::Option<u64>
+field	vep_core::consequence::TranscriptConsequence::own_span_positions	core::option::Option<alloc::boxed::Box<vep_core::consequence::OwnSpanPositions>>
+method	vep_core::consequence::TranscriptConsequence::peptides	fn(&self) -> core::option::Option<(&str, &str)>
+field	vep_core::consequence::TranscriptConsequence::picked	bool
+field	vep_core::consequence::TranscriptConsequence::plugin_data	indexmap::map::IndexMap<alloc::string::String, alloc::string::String>
+field	vep_core::consequence::TranscriptConsequence::plugin_empty_strings	alloc::vec::Vec<alloc::string::String>
+field	vep_core::consequence::TranscriptConsequence::polyphen	core::option::Option<alloc::string::String>
+field	vep_core::consequence::TranscriptConsequence::polyphen_term	core::option::Option<vep_core::prediction::PredictionTerm>
+method	vep_core::consequence::TranscriptConsequence::protein_id	fn(&self) -> core::option::Option<alloc::borrow::Cow<'_, str>>
+field	vep_core::consequence::TranscriptConsequence::protein_id_display	vep_core::consequence::ProteinIdDisplay
+field	vep_core::consequence::TranscriptConsequence::protein_position	core::option::Option<alloc::string::String>
+field	vep_core::consequence::TranscriptConsequence::protein_start	core::option::Option<u32>
+field	vep_core::consequence::TranscriptConsequence::protein_total	core::option::Option<u32>
+field	vep_core::consequence::TranscriptConsequence::record_span_in_cds	bool
+method	vep_core::consequence::TranscriptConsequence::refseq	fn(&self) -> core::option::Option<&str>
+method	vep_core::consequence::TranscriptConsequence::refseq_match	fn(&self) -> core::option::Option<&[alloc::boxed::Box<str>]>
+field	vep_core::consequence::TranscriptConsequence::refseq_offset	core::option::Option<i64>
+method	vep_core::consequence::TranscriptConsequence::remove_plugin_value	fn(&mut self, key: &str)
+method	vep_core::consequence::TranscriptConsequence::set_plugin_value	fn(&mut self, key: alloc::string::String, value: alloc::string::String, empty_string: bool)
+field	vep_core::consequence::TranscriptConsequence::shift_length	u64
+field	vep_core::consequence::TranscriptConsequence::shifted_allele	core::option::Option<alloc::sync::Arc<str>>
+field	vep_core::consequence::TranscriptConsequence::sift	core::option::Option<alloc::string::String>
+field	vep_core::consequence::TranscriptConsequence::sift_term	core::option::Option<vep_core::prediction::PredictionTerm>
+method	vep_core::consequence::TranscriptConsequence::source_cache	fn(&self) -> core::option::Option<&vep_core::transcript::SourceCache>
+field	vep_core::consequence::TranscriptConsequence::strand	i8
+method	vep_core::consequence::TranscriptConsequence::structural_feature_order	fn(&self, other: &Self) -> core::cmp::Ordering
+method	vep_core::consequence::TranscriptConsequence::swissprot	fn(&self) -> core::option::Option<&str>
+field	vep_core::consequence::TranscriptConsequence::transcript	core::option::Option<alloc::sync::Arc<vep_core::transcript::Transcript>>
+method	vep_core::consequence::TranscriptConsequence::transcript	fn(&self) -> core::option::Option<&vep_core::transcript::Transcript>
+field	vep_core::consequence::TranscriptConsequence::transcript_assembly_mismatch	bool
+method	vep_core::consequence::TranscriptConsequence::transcript_id	fn(&self) -> &str
+method	vep_core::consequence::TranscriptConsequence::transcript_id_handle	fn(&self) -> core::option::Option<&alloc::sync::Arc<str>>
+field	vep_core::consequence::TranscriptConsequence::transcript_sequences	core::option::Option<alloc::boxed::Box<vep_core::consequence::TranscriptSequences>>
+method	vep_core::consequence::TranscriptConsequence::transcript_version	fn(&self) -> core::option::Option<u32>
+method	vep_core::consequence::TranscriptConsequence::trembl	fn(&self) -> core::option::Option<&str>
+method	vep_core::consequence::TranscriptConsequence::tsl	fn(&self) -> core::option::Option<&str>
+method	vep_core::consequence::TranscriptConsequence::uniparc	fn(&self) -> core::option::Option<&str>
+method	vep_core::consequence::TranscriptConsequence::uniprot_isoform	fn(&self) -> core::option::Option<&str>
+field	vep_core::consequence::TranscriptConsequence::used_ref	core::option::Option<alloc::sync::Arc<str>>
+auto traits	vep_core::consequence::TranscriptSequences	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::consequence::TranscriptSequences	impl core::clone::Clone for vep_core::consequence::TranscriptSequences
+implementation	vep_core::consequence::TranscriptSequences	impl core::cmp::Eq for vep_core::consequence::TranscriptSequences
+implementation	vep_core::consequence::TranscriptSequences	impl core::cmp::PartialEq for vep_core::consequence::TranscriptSequences
+implementation	vep_core::consequence::TranscriptSequences	impl core::fmt::Debug for vep_core::consequence::TranscriptSequences
+struct	vep_core::consequence::TranscriptSequences	struct; named fields; #[non_exhaustive]
+field	vep_core::consequence::TranscriptSequences::cds	alloc::boxed::Box<str>
+field	vep_core::consequence::TranscriptSequences::codon_table	u8
+method	vep_core::consequence::TranscriptSequences::from_transcript	fn(transcript: &vep_core::transcript::Transcript, three_prime_utr: core::option::Option<alloc::vec::Vec<u8>>) -> core::option::Option<Self>
+method	vep_core::consequence::TranscriptSequences::new	fn(cds: alloc::boxed::Box<str>, three_prime_utr: core::option::Option<alloc::boxed::Box<str>>, peptide: core::option::Option<alloc::boxed::Box<str>>, codon_table: u8) -> Self
+field	vep_core::consequence::TranscriptSequences::peptide	core::option::Option<alloc::boxed::Box<str>>
+field	vep_core::consequence::TranscriptSequences::three_prime_utr	core::option::Option<alloc::boxed::Box<str>>
+module	vep_core::coordinate	mod
+auto traits	vep_core::coordinate::GenomicPosition	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::coordinate::GenomicPosition	impl core::clone::Clone for vep_core::coordinate::GenomicPosition
+implementation	vep_core::coordinate::GenomicPosition	impl core::cmp::Eq for vep_core::coordinate::GenomicPosition
+implementation	vep_core::coordinate::GenomicPosition	impl core::cmp::PartialEq for vep_core::coordinate::GenomicPosition
+implementation	vep_core::coordinate::GenomicPosition	impl core::fmt::Debug for vep_core::coordinate::GenomicPosition
+implementation	vep_core::coordinate::GenomicPosition	impl core::fmt::Display for vep_core::coordinate::GenomicPosition
+implementation	vep_core::coordinate::GenomicPosition	impl core::hash::Hash for vep_core::coordinate::GenomicPosition
+implementation	vep_core::coordinate::GenomicPosition	impl serde_core::ser::Serialize for vep_core::coordinate::GenomicPosition
+implementation	vep_core::coordinate::GenomicPosition	impl<'de> serde_core::de::Deserialize<'de> for vep_core::coordinate::GenomicPosition
+struct	vep_core::coordinate::GenomicPosition	struct; named fields; #[non_exhaustive]
+field	vep_core::coordinate::GenomicPosition::chr	alloc::string::String
+field	vep_core::coordinate::GenomicPosition::pos	u64
+field	vep_core::coordinate::GenomicPosition::strand	vep_core::coordinate::Strand
+auto traits	vep_core::coordinate::GenomicRange	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::coordinate::GenomicRange	impl core::clone::Clone for vep_core::coordinate::GenomicRange
+implementation	vep_core::coordinate::GenomicRange	impl core::cmp::Eq for vep_core::coordinate::GenomicRange
+implementation	vep_core::coordinate::GenomicRange	impl core::cmp::PartialEq for vep_core::coordinate::GenomicRange
+implementation	vep_core::coordinate::GenomicRange	impl core::fmt::Debug for vep_core::coordinate::GenomicRange
+implementation	vep_core::coordinate::GenomicRange	impl core::fmt::Display for vep_core::coordinate::GenomicRange
+implementation	vep_core::coordinate::GenomicRange	impl core::hash::Hash for vep_core::coordinate::GenomicRange
+implementation	vep_core::coordinate::GenomicRange	impl serde_core::ser::Serialize for vep_core::coordinate::GenomicRange
+implementation	vep_core::coordinate::GenomicRange	impl<'de> serde_core::de::Deserialize<'de> for vep_core::coordinate::GenomicRange
+struct	vep_core::coordinate::GenomicRange	struct; named fields; #[non_exhaustive]
+method	vep_core::coordinate::GenomicRange::cache_region_index	fn(pos: u64, region_size: u64) -> u64
+field	vep_core::coordinate::GenomicRange::chr	alloc::string::String
+field	vep_core::coordinate::GenomicRange::end	u64
+method	vep_core::coordinate::GenomicRange::is_empty	fn(&self) -> bool
+method	vep_core::coordinate::GenomicRange::len	fn(&self) -> u64
+method	vep_core::coordinate::GenomicRange::new	fn(chr: alloc::string::String, start: u64, end: u64, strand: vep_core::coordinate::Strand) -> Self
+method	vep_core::coordinate::GenomicRange::overlaps	fn(&self, other: &vep_core::coordinate::GenomicRange) -> bool
+field	vep_core::coordinate::GenomicRange::start	u64
+field	vep_core::coordinate::GenomicRange::strand	vep_core::coordinate::Strand
+constant	vep_core::coordinate::MAX_COORD	const: u64
+auto traits	vep_core::coordinate::Strand	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_core::coordinate::Strand	enum
+implementation	vep_core::coordinate::Strand	impl core::clone::Clone for vep_core::coordinate::Strand
+implementation	vep_core::coordinate::Strand	impl core::cmp::Eq for vep_core::coordinate::Strand
+implementation	vep_core::coordinate::Strand	impl core::cmp::PartialEq for vep_core::coordinate::Strand
+implementation	vep_core::coordinate::Strand	impl core::fmt::Debug for vep_core::coordinate::Strand
+implementation	vep_core::coordinate::Strand	impl core::fmt::Display for vep_core::coordinate::Strand
+implementation	vep_core::coordinate::Strand	impl core::hash::Hash for vep_core::coordinate::Strand
+implementation	vep_core::coordinate::Strand	impl core::marker::Copy for vep_core::coordinate::Strand
+implementation	vep_core::coordinate::Strand	impl serde_core::ser::Serialize for vep_core::coordinate::Strand
+implementation	vep_core::coordinate::Strand	impl<'de> serde_core::de::Deserialize<'de> for vep_core::coordinate::Strand
+variant	vep_core::coordinate::Strand::Forward	no fields
+variant	vep_core::coordinate::Strand::Reverse	no fields
+method	vep_core::coordinate::Strand::as_i8	fn(self) -> i8
+method	vep_core::coordinate::Strand::from_i8	fn(val: i8) -> core::option::Option<Self>
+function	vep_core::coordinate::is_cache_path_component	fn(name: &str) -> bool
+function	vep_core::coordinate::normalize_chromosome	fn(chr: &str) -> alloc::string::String
+function	vep_core::coordinate::parse_coordinate	fn(text: &str) -> core::option::Option<u64>
+function	vep_core::coordinate::parse_pos	fn(text: &str) -> core::option::Option<u64>
+module	vep_core::custom_annotation	mod
+auto traits	vep_core::custom_annotation::CustomAnnotations	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::custom_annotation::CustomAnnotations	impl core::clone::Clone for vep_core::custom_annotation::CustomAnnotations
+implementation	vep_core::custom_annotation::CustomAnnotations	impl core::cmp::PartialEq for vep_core::custom_annotation::CustomAnnotations
+implementation	vep_core::custom_annotation::CustomAnnotations	impl core::fmt::Debug for vep_core::custom_annotation::CustomAnnotations
+implementation	vep_core::custom_annotation::CustomAnnotations	impl serde_core::ser::Serialize for vep_core::custom_annotation::CustomAnnotations
+implementation	vep_core::custom_annotation::CustomAnnotations	impl<'de> serde_core::de::Deserialize<'de> for vep_core::custom_annotation::CustomAnnotations
+struct	vep_core::custom_annotation::CustomAnnotations	struct; named fields; #[non_exhaustive]
+field	vep_core::custom_annotation::CustomAnnotations::matched	bool
+method	vep_core::custom_annotation::CustomAnnotations::new	fn(short_name: alloc::sync::Arc<str>, records: alloc::vec::Vec<vep_core::custom_annotation::CustomRecord>, matched: bool, stats: core::option::Option<vep_core::custom_annotation::CustomStats>) -> Self
+field	vep_core::custom_annotation::CustomAnnotations::records	alloc::vec::Vec<vep_core::custom_annotation::CustomRecord>
+field	vep_core::custom_annotation::CustomAnnotations::short_name	alloc::sync::Arc<str>
+field	vep_core::custom_annotation::CustomAnnotations::stats	core::option::Option<vep_core::custom_annotation::CustomStats>
+auto traits	vep_core::custom_annotation::CustomFieldValue	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_core::custom_annotation::CustomFieldValue	enum
+implementation	vep_core::custom_annotation::CustomFieldValue	impl core::clone::Clone for vep_core::custom_annotation::CustomFieldValue
+implementation	vep_core::custom_annotation::CustomFieldValue	impl core::cmp::PartialEq for vep_core::custom_annotation::CustomFieldValue
+implementation	vep_core::custom_annotation::CustomFieldValue	impl core::fmt::Debug for vep_core::custom_annotation::CustomFieldValue
+implementation	vep_core::custom_annotation::CustomFieldValue	impl serde_core::ser::Serialize for vep_core::custom_annotation::CustomFieldValue
+implementation	vep_core::custom_annotation::CustomFieldValue	impl<'de> serde_core::de::Deserialize<'de> for vep_core::custom_annotation::CustomFieldValue
+variant	vep_core::custom_annotation::CustomFieldValue::List	1 positional field
+field	vep_core::custom_annotation::CustomFieldValue::List::0	alloc::vec::Vec<alloc::string::String>
+variant	vep_core::custom_annotation::CustomFieldValue::Text	1 positional field
+field	vep_core::custom_annotation::CustomFieldValue::Text::0	alloc::string::String
+variant	vep_core::custom_annotation::CustomFieldValue::Undefined	no fields
+auto traits	vep_core::custom_annotation::CustomRecord	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::custom_annotation::CustomRecord	impl core::clone::Clone for vep_core::custom_annotation::CustomRecord
+implementation	vep_core::custom_annotation::CustomRecord	impl core::cmp::PartialEq for vep_core::custom_annotation::CustomRecord
+implementation	vep_core::custom_annotation::CustomRecord	impl core::fmt::Debug for vep_core::custom_annotation::CustomRecord
+implementation	vep_core::custom_annotation::CustomRecord	impl serde_core::ser::Serialize for vep_core::custom_annotation::CustomRecord
+implementation	vep_core::custom_annotation::CustomRecord	impl<'de> serde_core::de::Deserialize<'de> for vep_core::custom_annotation::CustomRecord
+struct	vep_core::custom_annotation::CustomRecord	struct; named fields; #[non_exhaustive]
+field	vep_core::custom_annotation::CustomRecord::allele	core::option::Option<alloc::vec::Vec<u8>>
+field	vep_core::custom_annotation::CustomRecord::fields	indexmap::map::IndexMap<alloc::string::String, vep_core::custom_annotation::CustomFieldValue>
+field	vep_core::custom_annotation::CustomRecord::name	alloc::string::String
+method	vep_core::custom_annotation::CustomRecord::new	fn(name: alloc::string::String, allele: core::option::Option<alloc::vec::Vec<u8>>, fields: indexmap::map::IndexMap<alloc::string::String, vep_core::custom_annotation::CustomFieldValue>, score: core::option::Option<vep_core::custom_annotation::CustomValue>) -> Self
+field	vep_core::custom_annotation::CustomRecord::score	core::option::Option<vep_core::custom_annotation::CustomValue>
+auto traits	vep_core::custom_annotation::CustomStats	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_core::custom_annotation::CustomStats	enum
+implementation	vep_core::custom_annotation::CustomStats	impl core::clone::Clone for vep_core::custom_annotation::CustomStats
+implementation	vep_core::custom_annotation::CustomStats	impl core::cmp::PartialEq for vep_core::custom_annotation::CustomStats
+implementation	vep_core::custom_annotation::CustomStats	impl core::fmt::Debug for vep_core::custom_annotation::CustomStats
+implementation	vep_core::custom_annotation::CustomStats	impl serde_core::ser::Serialize for vep_core::custom_annotation::CustomStats
+implementation	vep_core::custom_annotation::CustomStats	impl<'de> serde_core::de::Deserialize<'de> for vep_core::custom_annotation::CustomStats
+variant	vep_core::custom_annotation::CustomStats::Undefined	no fields
+variant	vep_core::custom_annotation::CustomStats::Values	1 positional field
+field	vep_core::custom_annotation::CustomStats::Values::0	indexmap::map::IndexMap<alloc::string::String, vep_core::custom_annotation::CustomValue>
+auto traits	vep_core::custom_annotation::CustomValue	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_core::custom_annotation::CustomValue	enum
+implementation	vep_core::custom_annotation::CustomValue	impl core::clone::Clone for vep_core::custom_annotation::CustomValue
+implementation	vep_core::custom_annotation::CustomValue	impl core::cmp::PartialEq for vep_core::custom_annotation::CustomValue
+implementation	vep_core::custom_annotation::CustomValue	impl core::fmt::Debug for vep_core::custom_annotation::CustomValue
+implementation	vep_core::custom_annotation::CustomValue	impl serde_core::ser::Serialize for vep_core::custom_annotation::CustomValue
+implementation	vep_core::custom_annotation::CustomValue	impl<'de> serde_core::de::Deserialize<'de> for vep_core::custom_annotation::CustomValue
+variant	vep_core::custom_annotation::CustomValue::Number	1 positional field
+field	vep_core::custom_annotation::CustomValue::Number::0	f64
+variant	vep_core::custom_annotation::CustomValue::Text	1 positional field
+field	vep_core::custom_annotation::CustomValue::Text::0	alloc::string::String
+variant	vep_core::custom_annotation::CustomValue::Undefined	no fields
+module	vep_core::minimal	mod
+auto traits	vep_core::minimal::MinimalSplit	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_core::minimal::MinimalSplit	enum; #[non_exhaustive]
+implementation	vep_core::minimal::MinimalSplit	impl core::clone::Clone for vep_core::minimal::MinimalSplit
+implementation	vep_core::minimal::MinimalSplit	impl core::cmp::Eq for vep_core::minimal::MinimalSplit
+implementation	vep_core::minimal::MinimalSplit	impl core::cmp::PartialEq for vep_core::minimal::MinimalSplit
+implementation	vep_core::minimal::MinimalSplit	impl core::fmt::Debug for vep_core::minimal::MinimalSplit
+implementation	vep_core::minimal::MinimalSplit	impl core::marker::Copy for vep_core::minimal::MinimalSplit
+variant	vep_core::minimal::MinimalSplit::NoAllele	no fields
+variant	vep_core::minimal::MinimalSplit::Trimmed	no fields
+variant	vep_core::minimal::MinimalSplit::Unchanged	no fields
+function	vep_core::minimal::apply_minimal_split	fn(variant: &mut vep_core::variant::InputVariant, own: usize) -> vep_core::minimal::MinimalSplit
+function	vep_core::minimal::feature_on_its_own	fn(variant: &mut vep_core::variant::InputVariant, own: u32)
+function	vep_core::minimal::minimise_bi_allelic	fn(variant: &mut vep_core::variant::InputVariant)
+function	vep_core::minimal::rejoined_reference	fn(working: &str, reference_rows: bool) -> alloc::string::String
+function	vep_core::minimal::rowless_alternate_allele	fn(reference: &str, alt: &str) -> bool
+function	vep_core::minimal::rowless_features	fn(allele: &vep_core::variant::InputVariant) -> alloc::vec::Vec<(usize, vep_core::variant::InputVariant)>
+function	vep_core::minimal::rowless_first_feature	fn(allele: &vep_core::variant::InputVariant) -> core::option::Option<vep_core::variant::InputVariant>
+function	vep_core::minimal::split_changes_record	fn<'a>(reference: &str, alts: impl core::iter::traits::collect::IntoIterator<Item = &'a str>) -> bool
+function	vep_core::minimal::split_reference_row	fn(allele: &vep_core::variant::InputVariant, own: usize) -> vep_core::variant::InputVariant
+function	vep_core::minimal::trim_sequences	fn(reference: &[u8], alt: &[u8], start: u64, end: u64) -> (alloc::vec::Vec<u8>, alloc::vec::Vec<u8>, u64, u64, bool)
+module	vep_core::pick	mod
+auto traits	vep_core::pick::Rank	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_core::pick::Rank	enum<'a>; #[non_exhaustive]
+implementation	vep_core::pick::Rank	impl<'a> core::clone::Clone for vep_core::pick::Rank<'a>
+implementation	vep_core::pick::Rank	impl<'a> core::cmp::Eq for vep_core::pick::Rank<'a>
+implementation	vep_core::pick::Rank	impl<'a> core::cmp::PartialEq for vep_core::pick::Rank<'a>
+implementation	vep_core::pick::Rank	impl<'a> core::fmt::Debug for vep_core::pick::Rank<'a>
+implementation	vep_core::pick::Rank	impl<'a> core::marker::Copy for vep_core::pick::Rank<'a>
+variant	vep_core::pick::Rank::Number	1 positional field
+field	vep_core::pick::Rank::Number::0	i64
+variant	vep_core::pick::Rank::Text	1 positional field
+field	vep_core::pick::Rank::Text::0	&'a str
+method	vep_core::pick::Rank::numeric_cmp	fn(self, other: Self) -> core::cmp::Ordering; in impl vep_core::pick::Rank<'_>
+method	vep_core::pick::Rank::text_eq	fn(self, other: Self) -> bool; in impl vep_core::pick::Rank<'_>
+method	vep_core::pick::Rank::tsl	fn(level: core::option::Option<&str>) -> vep_core::pick::Rank<'_>; in impl vep_core::pick::Rank<'_>
+function	vep_core::pick::pick_by_categories	fn<'a, C: core::marker::Copy>(candidates: &[usize], categories: &[C], value: impl core::ops::function::Fn(usize, C) -> vep_core::pick::Rank<'a>) -> core::option::Option<usize>
+module	vep_core::prediction	mod
+auto traits	vep_core::prediction::AnalysisType	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_core::prediction::AnalysisType	enum; #[non_exhaustive]
+implementation	vep_core::prediction::AnalysisType	impl core::clone::Clone for vep_core::prediction::AnalysisType
+implementation	vep_core::prediction::AnalysisType	impl core::cmp::Eq for vep_core::prediction::AnalysisType
+implementation	vep_core::prediction::AnalysisType	impl core::cmp::PartialEq for vep_core::prediction::AnalysisType
+implementation	vep_core::prediction::AnalysisType	impl core::fmt::Debug for vep_core::prediction::AnalysisType
+implementation	vep_core::prediction::AnalysisType	impl core::marker::Copy for vep_core::prediction::AnalysisType
+variant	vep_core::prediction::AnalysisType::PolyPhenHumDiv	no fields
+variant	vep_core::prediction::AnalysisType::PolyPhenHumVar	no fields
+variant	vep_core::prediction::AnalysisType::Sift	no fields
+auto traits	vep_core::prediction::Prediction	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::prediction::Prediction	impl core::clone::Clone for vep_core::prediction::Prediction
+implementation	vep_core::prediction::Prediction	impl core::cmp::PartialEq for vep_core::prediction::Prediction
+implementation	vep_core::prediction::Prediction	impl core::fmt::Debug for vep_core::prediction::Prediction
+implementation	vep_core::prediction::Prediction	impl core::marker::Copy for vep_core::prediction::Prediction
+struct	vep_core::prediction::Prediction	struct; named fields
+method	vep_core::prediction::Prediction::label	fn(&self) -> &'static str
+field	vep_core::prediction::Prediction::score	f64
+field	vep_core::prediction::Prediction::term	vep_core::prediction::PredictionTerm
+auto traits	vep_core::prediction::PredictionTerm	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_core::prediction::PredictionTerm	enum; #[non_exhaustive]
+implementation	vep_core::prediction::PredictionTerm	impl core::clone::Clone for vep_core::prediction::PredictionTerm
+implementation	vep_core::prediction::PredictionTerm	impl core::cmp::Eq for vep_core::prediction::PredictionTerm
+implementation	vep_core::prediction::PredictionTerm	impl core::cmp::PartialEq for vep_core::prediction::PredictionTerm
+implementation	vep_core::prediction::PredictionTerm	impl core::fmt::Debug for vep_core::prediction::PredictionTerm
+implementation	vep_core::prediction::PredictionTerm	impl core::hash::Hash for vep_core::prediction::PredictionTerm
+implementation	vep_core::prediction::PredictionTerm	impl core::marker::Copy for vep_core::prediction::PredictionTerm
+variant	vep_core::prediction::PredictionTerm::Benign	no fields
+variant	vep_core::prediction::PredictionTerm::Deleterious	no fields
+variant	vep_core::prediction::PredictionTerm::DeleteriousLowConfidence	no fields
+variant	vep_core::prediction::PredictionTerm::PossiblyDamaging	no fields
+variant	vep_core::prediction::PredictionTerm::ProbablyDamaging	no fields
+variant	vep_core::prediction::PredictionTerm::Tolerated	no fields
+variant	vep_core::prediction::PredictionTerm::ToleratedLowConfidence	no fields
+variant	vep_core::prediction::PredictionTerm::Unknown	no fields
+method	vep_core::prediction::PredictionTerm::label	fn(self) -> &'static str
+method	vep_core::prediction::PredictionTerm::polyphen	fn(index: usize) -> core::option::Option<Self>
+method	vep_core::prediction::PredictionTerm::sift	fn(index: usize) -> core::option::Option<Self>
+method	vep_core::prediction::PredictionTerm::spaced_label	fn(self) -> &'static str
+method	vep_core::prediction::PredictionTerm::tool_index	fn(self) -> usize
+function	vep_core::prediction::analysis_from_name	fn(name: &str) -> core::option::Option<vep_core::prediction::AnalysisType>
+function	vep_core::prediction::decode_prediction	fn(data: &[u8], position: usize, amino_acid: u8, analysis: vep_core::prediction::AnalysisType) -> core::option::Option<vep_core::prediction::Prediction>
+function	vep_core::prediction::format_prediction	fn(prediction: &vep_core::prediction::Prediction, mode: &str) -> alloc::string::String
+function	vep_core::prediction::gunzip_matrix	fn(compressed: &[u8]) -> core::result::Result<alloc::vec::Vec<u8>, std::io::error::Error>
+module	vep_core::regulatory_gff	mod
+constant	vep_core::regulatory_gff::EXTENDED_BOUNDS_TYPES	const: [&str; 1]
+constant	vep_core::regulatory_gff::MOTIF_FEATURE_TYPES	const: [&str; 1]
+constant	vep_core::regulatory_gff::REGULATORY_FEATURE_TYPES	const: [&str; 8]
+function	vep_core::regulatory_gff::decode_attribute	fn(value: &[u8]) -> alloc::borrow::Cow<'_, str>
+function	vep_core::regulatory_gff::decode_type	fn(column: &[u8]) -> alloc::borrow::Cow<'_, str>
+function	vep_core::regulatory_gff::duplicate_identifier_warning	fn(stable_id: &str, file: &str) -> alloc::string::String
+function	vep_core::regulatory_gff::feature_id	fn<'a>(id: core::option::Option<&'a str>, name: core::option::Option<&'a str>, chr: &str, start: u64, end: u64, feature_type: &str) -> alloc::borrow::Cow<'a, str>
+function	vep_core::regulatory_gff::ignored_bound_warning	fn(attribute: &str, value: &str, feature_type: &str, stable_id: &str, file: &str) -> alloc::string::String
+function	vep_core::regulatory_gff::index_columns	fn(line: &[u8]) -> impl core::iter::traits::iterator::Iterator<Item = &[u8]>
+function	vep_core::regulatory_gff::transcription_factors	fn(value: core::option::Option<&[u8]>) -> alloc::vec::Vec<alloc::borrow::Cow<'_, str>>
+function	vep_core::regulatory_gff::undecodable_attribute_error	fn(format: &str, key: &str, value: &str) -> alloc::string::String
+function	vep_core::regulatory_gff::unindexed_coordinate	fn(line: &[u8]) -> core::option::Option<(&'static str, &[u8])>
+function	vep_core::regulatory_gff::unsupported_type_warning	fn(feature_type: &str, file: &str) -> alloc::string::String
+function	vep_core::regulatory_gff::uri_unescape	fn(text: &str) -> alloc::borrow::Cow<'_, [u8]>
+module	vep_core::so_ontology	mod
+function	vep_core::so_ontology::accession	fn(name: &str) -> core::option::Option<&'static str>
+function	vep_core::so_ontology::descendants	fn(parent: &str) -> core::option::Option<alloc::vec::Vec<&'static str>>
+function	vep_core::so_ontology::is_term	fn(name: &str) -> bool
+module	vep_core::spdi	mod
+auto traits	vep_core::spdi::SiblingSpdi	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::spdi::SiblingSpdi	impl core::clone::Clone for vep_core::spdi::SiblingSpdi
+implementation	vep_core::spdi::SiblingSpdi	impl core::cmp::Eq for vep_core::spdi::SiblingSpdi
+implementation	vep_core::spdi::SiblingSpdi	impl core::cmp::PartialEq for vep_core::spdi::SiblingSpdi
+implementation	vep_core::spdi::SiblingSpdi	impl core::fmt::Debug for vep_core::spdi::SiblingSpdi
+implementation	vep_core::spdi::SiblingSpdi	impl serde_core::ser::Serialize for vep_core::spdi::SiblingSpdi
+implementation	vep_core::spdi::SiblingSpdi	impl<'de> serde_core::de::Deserialize<'de> for vep_core::spdi::SiblingSpdi
+struct	vep_core::spdi::SiblingSpdi	struct; named fields
+field	vep_core::spdi::SiblingSpdi::allele	alloc::string::String
+field	vep_core::spdi::SiblingSpdi::ga4gh_vrs	core::option::Option<vep_core::spdi::VrsAllele>
+field	vep_core::spdi::SiblingSpdi::spdi	alloc::string::String
+auto traits	vep_core::spdi::VrsAllele	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::spdi::VrsAllele	impl core::clone::Clone for vep_core::spdi::VrsAllele
+implementation	vep_core::spdi::VrsAllele	impl core::cmp::Eq for vep_core::spdi::VrsAllele
+implementation	vep_core::spdi::VrsAllele	impl core::cmp::PartialEq for vep_core::spdi::VrsAllele
+implementation	vep_core::spdi::VrsAllele	impl core::fmt::Debug for vep_core::spdi::VrsAllele
+implementation	vep_core::spdi::VrsAllele	impl serde_core::ser::Serialize for vep_core::spdi::VrsAllele
+implementation	vep_core::spdi::VrsAllele	impl<'de> serde_core::de::Deserialize<'de> for vep_core::spdi::VrsAllele
+struct	vep_core::spdi::VrsAllele	struct; named fields
+method	vep_core::spdi::VrsAllele::encoded	fn(&self) -> alloc::string::String
+field	vep_core::spdi::VrsAllele::end	u64
+field	vep_core::spdi::VrsAllele::sequence	alloc::string::String
+field	vep_core::spdi::VrsAllele::sequence_id	alloc::string::String
+field	vep_core::spdi::VrsAllele::start	u64
+function	vep_core::spdi::ga4gh_vrs_from_spdi	fn(spdi: &str) -> core::option::Option<vep_core::spdi::VrsAllele>
+function	vep_core::spdi::spdi_genomic	fn(reference_name: &str, start: u64, end: u64, reference: &[u8], alt: &[u8], reverse: bool) -> core::option::Option<alloc::string::String>
+module	vep_core::stderr	mod
+auto traits	vep_core::stderr::Stream	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::stderr::Stream	impl core::clone::Clone for vep_core::stderr::Stream
+implementation	vep_core::stderr::Stream	impl core::default::Default for vep_core::stderr::Stream
+implementation	vep_core::stderr::Stream	impl core::fmt::Debug for vep_core::stderr::Stream
+implementation	vep_core::stderr::Stream	impl core::marker::Copy for vep_core::stderr::Stream
+implementation	vep_core::stderr::Stream	impl std::io::Write for vep_core::stderr::Stream
+struct	vep_core::stderr::Stream	struct; no fields
+function	vep_core::stderr::drop_refused_writes	fn()
+function	vep_core::stderr::progress	fn(args: core::fmt::Arguments<'_>)
+function	vep_core::stderr::progress_or_drop	fn(args: core::fmt::Arguments<'_>)
+function	vep_core::stderr::write	fn(args: core::fmt::Arguments<'_>)
+function	vep_core::stderr::write_or_drop	fn(args: core::fmt::Arguments<'_>)
+module	vep_core::sv_record	mod
+constant	vep_core::sv_record::DEFAULT_MAX_SV_SIZE	const: u64
+auto traits	vep_core::sv_record::StructuralRecordError	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_core::sv_record::StructuralRecordError	enum; #[non_exhaustive]
+implementation	vep_core::sv_record::StructuralRecordError	impl core::clone::Clone for vep_core::sv_record::StructuralRecordError
+implementation	vep_core::sv_record::StructuralRecordError	impl core::cmp::Eq for vep_core::sv_record::StructuralRecordError
+implementation	vep_core::sv_record::StructuralRecordError	impl core::cmp::PartialEq for vep_core::sv_record::StructuralRecordError
+implementation	vep_core::sv_record::StructuralRecordError	impl core::convert::From<vep_core::sv_span::SpanError> for vep_core::sv_record::StructuralRecordError
+implementation	vep_core::sv_record::StructuralRecordError	impl core::error::Error for vep_core::sv_record::StructuralRecordError
+implementation	vep_core::sv_record::StructuralRecordError	impl core::fmt::Debug for vep_core::sv_record::StructuralRecordError
+implementation	vep_core::sv_record::StructuralRecordError	impl core::fmt::Display for vep_core::sv_record::StructuralRecordError
+variant	vep_core::sv_record::StructuralRecordError::Span	1 positional field
+field	vep_core::sv_record::StructuralRecordError::Span::0	vep_core::sv_span::SpanError
+variant	vep_core::sv_record::StructuralRecordError::UnsupportedType	1 positional field
+field	vep_core::sv_record::StructuralRecordError::UnsupportedType::0	alloc::string::String
+function	vep_core::sv_record::parse_ci_field	fn(value: core::option::Option<&str>) -> core::option::Option<(i64, i64)>
+function	vep_core::sv_record::structural_variants	fn(chr: &str, pos: u64, ref_allele: &str, written: &[(usize, &str)], info: &vep_core::vcf_info::InfoFields<'_>, id: core::option::Option<&str>) -> core::result::Result<alloc::vec::Vec<vep_core::variant::InputVariant>, vep_core::sv_record::StructuralRecordError>
+function	vep_core::sv_record::tandem_repeat_allele_string	fn(info: &vep_core::vcf_info::InfoFields<'_>, alleles: usize, max_sv_size: core::option::Option<u64>, reference: &str) -> core::option::Option<alloc::string::String>
+function	vep_core::sv_record::tandem_repeat_alleles_as_long_as_the_run	fn(info: &vep_core::vcf_info::InfoFields<'_>, alleles: usize, pos: u64) -> alloc::vec::Vec<bool>
+function	vep_core::sv_record::tandem_repeat_stated_bases	fn(info: &vep_core::vcf_info::InfoFields<'_>, alleles: usize) -> alloc::vec::Vec<core::option::Option<u64>>
+module	vep_core::sv_routing	mod
+function	vep_core::sv_routing::classify_symbolic_alt	fn(alt: &str, svtype: core::option::Option<&str>) -> vep_core::variant::VariantClass
+function	vep_core::sv_routing::is_symbolic_alt	fn(alt: &str) -> bool
+function	vep_core::sv_routing::joined	fn(alts: &[(usize, &str)], sep: &str) -> alloc::string::String
+function	vep_core::sv_routing::per_alt_classes	fn<'a>(alts: &[(usize, &'a str)], record_class: core::option::Option<vep_core::variant::VariantClass>, svtype: core::option::Option<&str>) -> alloc::vec::Vec<(usize, &'a str, vep_core::variant::VariantClass)>
+function	vep_core::sv_routing::perl_split	fn<'a>(text: &'a str, separators: &'a [char]) -> impl core::iter::traits::iterator::Iterator<Item = &'a str> + 'a
+function	vep_core::sv_routing::perl_true	fn(value: &str) -> bool
+function	vep_core::sv_routing::routes_to_structural	fn(ref_allele: &str, alts: &[(usize, &str)], svtype: core::option::Option<&str>) -> bool
+function	vep_core::sv_routing::split_plugin_arg	fn(arg: &str) -> (&str, alloc::vec::Vec<alloc::string::String>)
+function	vep_core::sv_routing::sv_so_term_and_class	fn(abbrev: &str) -> core::option::Option<(&'static str, vep_core::variant::VariantClass)>
+function	vep_core::sv_routing::sv_type_abbreviation	fn(joined_alts: &str, svtype: core::option::Option<&str>) -> alloc::string::String
+function	vep_core::sv_routing::sv_type_string	fn(joined_alts: &str, svtype: core::option::Option<&str>) -> alloc::string::String
+function	vep_core::sv_routing::variant_alts	fn(alts: &mut alloc::vec::Vec<(usize, &str)>, svtype: core::option::Option<&str>)
+function	vep_core::sv_routing::written_alts	fn(alt_field: &str) -> alloc::vec::Vec<(usize, &str)>
+module	vep_core::sv_span	mod
+auto traits	vep_core::sv_span::SpanClass	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_core::sv_span::SpanClass	enum; #[non_exhaustive]
+implementation	vep_core::sv_span::SpanClass	impl core::clone::Clone for vep_core::sv_span::SpanClass
+implementation	vep_core::sv_span::SpanClass	impl core::cmp::Eq for vep_core::sv_span::SpanClass
+implementation	vep_core::sv_span::SpanClass	impl core::cmp::PartialEq for vep_core::sv_span::SpanClass
+implementation	vep_core::sv_span::SpanClass	impl core::fmt::Debug for vep_core::sv_span::SpanClass
+implementation	vep_core::sv_span::SpanClass	impl core::marker::Copy for vep_core::sv_span::SpanClass
+variant	vep_core::sv_span::SpanClass::Breakpoint	no fields
+variant	vep_core::sv_span::SpanClass::Other	no fields
+variant	vep_core::sv_span::SpanClass::Tandem	no fields
+method	vep_core::sv_span::SpanClass::of	fn(class: vep_core::variant::VariantClass) -> Self
+auto traits	vep_core::sv_span::SpanError	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_core::sv_span::SpanError	enum; #[non_exhaustive]
+implementation	vep_core::sv_span::SpanError	impl core::clone::Clone for vep_core::sv_span::SpanError
+implementation	vep_core::sv_span::SpanError	impl core::cmp::Eq for vep_core::sv_span::SpanError
+implementation	vep_core::sv_span::SpanError	impl core::cmp::PartialEq for vep_core::sv_span::SpanError
+implementation	vep_core::sv_span::SpanError	impl core::convert::From<vep_core::sv_span::SpanError> for vep_core::sv_record::StructuralRecordError
+implementation	vep_core::sv_span::SpanError	impl core::error::Error for vep_core::sv_span::SpanError
+implementation	vep_core::sv_span::SpanError	impl core::fmt::Debug for vep_core::sv_span::SpanError
+implementation	vep_core::sv_span::SpanError	impl core::fmt::Display for vep_core::sv_span::SpanError
+variant	vep_core::sv_span::SpanError::EndNotACoordinate	1 positional field
+field	vep_core::sv_span::SpanError::EndNotACoordinate::0	alloc::string::String
+variant	vep_core::sv_span::SpanError::StartPastCeiling	1 positional field
+field	vep_core::sv_span::SpanError::StartPastCeiling::0	u64
+variant	vep_core::sv_span::SpanError::StartPastEnd	named fields
+field	vep_core::sv_span::SpanError::StartPastEnd::end	i64
+field	vep_core::sv_span::SpanError::StartPastEnd::start	u64
+function	vep_core::sv_span::deletion_looks_incomplete	fn(so_term: &str, start: u64, end: u64, svlen: core::option::Option<&str>, end_text: core::option::Option<&str>) -> bool
+function	vep_core::sv_span::end_text_before_start	fn(pos: u64, end_text: &str) -> bool
+function	vep_core::sv_span::structural_end	fn(pos: u64, svlen: core::option::Option<&str>, end: core::option::Option<&str>, class: vep_core::sv_span::SpanClass) -> core::result::Result<u64, vep_core::sv_span::SpanError>
+function	vep_core::sv_span::structural_start	fn(pos: u64, class: vep_core::variant::VariantClass) -> u64
+function	vep_core::sv_span::svlen_values	fn(svlen: &str) -> alloc::vec::Vec<i64>
+module	vep_core::synonyms	mod
+auto traits	vep_core::synonyms::ChromosomeSynonyms	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::synonyms::ChromosomeSynonyms	impl core::clone::Clone for vep_core::synonyms::ChromosomeSynonyms
+implementation	vep_core::synonyms::ChromosomeSynonyms	impl core::default::Default for vep_core::synonyms::ChromosomeSynonyms
+implementation	vep_core::synonyms::ChromosomeSynonyms	impl core::fmt::Debug for vep_core::synonyms::ChromosomeSynonyms
+struct	vep_core::synonyms::ChromosomeSynonyms	struct; named fields, some private
+method	vep_core::synonyms::ChromosomeSynonyms::add_synonym	fn(&mut self, a: &str, b: &str)
+method	vep_core::synonyms::ChromosomeSynonyms::aliases_of	fn(&self, name: &str) -> alloc::vec::Vec<alloc::string::String>
+method	vep_core::synonyms::ChromosomeSynonyms::held_synonyms	fn(&self, chr: &str, holds: impl core::ops::function::Fn(&str) -> bool) -> alloc::vec::Vec<&str>
+method	vep_core::synonyms::ChromosomeSynonyms::is_empty	fn(&self) -> bool
+method	vep_core::synonyms::ChromosomeSynonyms::load_from_file	fn(path: &std::path::Path) -> std::io::error::Result<Self>
+method	vep_core::synonyms::ChromosomeSynonyms::names	fn(&self) -> impl core::iter::traits::iterator::Iterator<Item = &str>
+method	vep_core::synonyms::ChromosomeSynonyms::new	fn() -> Self
+method	vep_core::synonyms::ChromosomeSynonyms::parse	fn(text: &str) -> Self
+method	vep_core::synonyms::ChromosomeSynonyms::sequence_chr_name	fn(&self, chr: &str, holds: impl core::ops::function::Fn(&str) -> bool) -> alloc::string::String
+method	vep_core::synonyms::ChromosomeSynonyms::source_chr_name	fn(&self, chr: &str, holds: impl core::ops::function::Fn(&str) -> bool) -> alloc::string::String
+method	vep_core::synonyms::ChromosomeSynonyms::synonyms_of	fn(&self, chr: &str) -> &[alloc::string::String]
+module	vep_core::terms	mod
+auto traits	vep_core::terms::Vocabulary	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_core::terms::Vocabulary	enum; #[non_exhaustive]
+implementation	vep_core::terms::Vocabulary	impl core::clone::Clone for vep_core::terms::Vocabulary
+implementation	vep_core::terms::Vocabulary	impl core::cmp::Eq for vep_core::terms::Vocabulary
+implementation	vep_core::terms::Vocabulary	impl core::cmp::PartialEq for vep_core::terms::Vocabulary
+implementation	vep_core::terms::Vocabulary	impl core::default::Default for vep_core::terms::Vocabulary
+implementation	vep_core::terms::Vocabulary	impl core::fmt::Debug for vep_core::terms::Vocabulary
+implementation	vep_core::terms::Vocabulary	impl core::marker::Copy for vep_core::terms::Vocabulary
+variant	vep_core::terms::Vocabulary::Display	no fields
+variant	vep_core::terms::Vocabulary::Ncbi	no fields
+variant	vep_core::terms::Vocabulary::So	no fields
+method	vep_core::terms::Vocabulary::from_flag	fn(value: &str) -> core::option::Option<vep_core::terms::Vocabulary>
+method	vep_core::terms::Vocabulary::term	fn(self, consequence: vep_core::consequence::Consequence) -> &'static str
+module	vep_core::transcript	mod
+auto traits	vep_core::transcript::Attribute	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::transcript::Attribute	impl core::clone::Clone for vep_core::transcript::Attribute
+implementation	vep_core::transcript::Attribute	impl core::fmt::Debug for vep_core::transcript::Attribute
+implementation	vep_core::transcript::Attribute	impl serde_core::ser::Serialize for vep_core::transcript::Attribute
+implementation	vep_core::transcript::Attribute	impl<'de> serde_core::de::Deserialize<'de> for vep_core::transcript::Attribute
+struct	vep_core::transcript::Attribute	struct; named fields
+field	vep_core::transcript::Attribute::code	alloc::sync::Arc<str>
+field	vep_core::transcript::Attribute::value	alloc::string::String
+auto traits	vep_core::transcript::BamEditStatus	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_core::transcript::BamEditStatus	enum
+implementation	vep_core::transcript::BamEditStatus	impl core::clone::Clone for vep_core::transcript::BamEditStatus
+implementation	vep_core::transcript::BamEditStatus	impl core::cmp::Eq for vep_core::transcript::BamEditStatus
+implementation	vep_core::transcript::BamEditStatus	impl core::cmp::PartialEq for vep_core::transcript::BamEditStatus
+implementation	vep_core::transcript::BamEditStatus	impl core::fmt::Debug for vep_core::transcript::BamEditStatus
+implementation	vep_core::transcript::BamEditStatus	impl core::hash::Hash for vep_core::transcript::BamEditStatus
+implementation	vep_core::transcript::BamEditStatus	impl core::marker::Copy for vep_core::transcript::BamEditStatus
+implementation	vep_core::transcript::BamEditStatus	impl serde_core::ser::Serialize for vep_core::transcript::BamEditStatus
+implementation	vep_core::transcript::BamEditStatus	impl<'de> serde_core::de::Deserialize<'de> for vep_core::transcript::BamEditStatus
+variant	vep_core::transcript::BamEditStatus::Failed	no fields
+variant	vep_core::transcript::BamEditStatus::Ok	no fields
+method	vep_core::transcript::BamEditStatus::column_text	fn(self) -> &'static str
+auto traits	vep_core::transcript::Exon	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::transcript::Exon	impl core::clone::Clone for vep_core::transcript::Exon
+implementation	vep_core::transcript::Exon	impl core::fmt::Debug for vep_core::transcript::Exon
+implementation	vep_core::transcript::Exon	impl serde_core::ser::Serialize for vep_core::transcript::Exon
+implementation	vep_core::transcript::Exon	impl<'de> serde_core::de::Deserialize<'de> for vep_core::transcript::Exon
+struct	vep_core::transcript::Exon	struct; named fields
+field	vep_core::transcript::Exon::end	u64
+field	vep_core::transcript::Exon::end_phase	i8
+field	vep_core::transcript::Exon::phase	i8
+field	vep_core::transcript::Exon::rank	u32
+field	vep_core::transcript::Exon::start	u64
+auto traits	vep_core::transcript::ExonCoordMapper	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::transcript::ExonCoordMapper	impl core::clone::Clone for vep_core::transcript::ExonCoordMapper
+implementation	vep_core::transcript::ExonCoordMapper	impl core::fmt::Debug for vep_core::transcript::ExonCoordMapper
+implementation	vep_core::transcript::ExonCoordMapper	impl serde_core::ser::Serialize for vep_core::transcript::ExonCoordMapper
+implementation	vep_core::transcript::ExonCoordMapper	impl<'de> serde_core::de::Deserialize<'de> for vep_core::transcript::ExonCoordMapper
+struct	vep_core::transcript::ExonCoordMapper	struct; named fields, some private
+method	vep_core::transcript::ExonCoordMapper::build_genomic_index	fn(pairs: &[vep_core::transcript::MapperPair]) -> alloc::vec::Vec<u32>
+method	vep_core::transcript::ExonCoordMapper::by_genomic_start	fn(&self) -> &[u32]
+method	vep_core::transcript::ExonCoordMapper::cdna2genomic	fn(&self, start: i64, end: i64) -> alloc::vec::Vec<vep_core::transcript::MappedPiece>
+method	vep_core::transcript::ExonCoordMapper::new	fn(pairs: alloc::vec::Vec<vep_core::transcript::MapperPair>) -> Self
+method	vep_core::transcript::ExonCoordMapper::pair_count	fn(&self) -> usize
+field	vep_core::transcript::ExonCoordMapper::pairs	alloc::vec::Vec<vep_core::transcript::MapperPair>
+method	vep_core::transcript::ExonCoordMapper::rebuild_genomic_index	fn(&mut self)
+auto traits	vep_core::transcript::FeatureOrdinals	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::transcript::FeatureOrdinals	impl core::clone::Clone for vep_core::transcript::FeatureOrdinals
+implementation	vep_core::transcript::FeatureOrdinals	impl core::cmp::Eq for vep_core::transcript::FeatureOrdinals
+implementation	vep_core::transcript::FeatureOrdinals	impl core::cmp::PartialEq for vep_core::transcript::FeatureOrdinals
+implementation	vep_core::transcript::FeatureOrdinals	impl core::fmt::Debug for vep_core::transcript::FeatureOrdinals
+struct	vep_core::transcript::FeatureOrdinals	struct; named fields; #[non_exhaustive]
+field	vep_core::transcript::FeatureOrdinals::exons	alloc::boxed::Box<[(i64, i64)]>
+field	vep_core::transcript::FeatureOrdinals::introns	alloc::boxed::Box<[(i64, i64)]>
+auto traits	vep_core::transcript::IndelEdit	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::transcript::IndelEdit	impl core::clone::Clone for vep_core::transcript::IndelEdit
+implementation	vep_core::transcript::IndelEdit	impl core::cmp::Eq for vep_core::transcript::IndelEdit
+implementation	vep_core::transcript::IndelEdit	impl core::cmp::PartialEq for vep_core::transcript::IndelEdit
+implementation	vep_core::transcript::IndelEdit	impl core::fmt::Debug for vep_core::transcript::IndelEdit
+implementation	vep_core::transcript::IndelEdit	impl core::marker::Copy for vep_core::transcript::IndelEdit
+implementation	vep_core::transcript::IndelEdit	impl serde_core::ser::Serialize for vep_core::transcript::IndelEdit
+implementation	vep_core::transcript::IndelEdit	impl<'de> serde_core::de::Deserialize<'de> for vep_core::transcript::IndelEdit
+struct	vep_core::transcript::IndelEdit	struct; named fields; #[non_exhaustive]
+field	vep_core::transcript::IndelEdit::length_change	i64
+field	vep_core::transcript::IndelEdit::start	i64
+auto traits	vep_core::transcript::Intron	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::transcript::Intron	impl core::clone::Clone for vep_core::transcript::Intron
+implementation	vep_core::transcript::Intron	impl core::fmt::Debug for vep_core::transcript::Intron
+implementation	vep_core::transcript::Intron	impl serde_core::ser::Serialize for vep_core::transcript::Intron
+implementation	vep_core::transcript::Intron	impl<'de> serde_core::de::Deserialize<'de> for vep_core::transcript::Intron
+struct	vep_core::transcript::Intron	struct; named fields
+field	vep_core::transcript::Intron::end	u64
+method	vep_core::transcript::Intron::is_frameshift	fn(&self) -> bool
+field	vep_core::transcript::Intron::rank	u32
+field	vep_core::transcript::Intron::start	u64
+auto traits	vep_core::transcript::MappedPiece	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_core::transcript::MappedPiece	enum
+implementation	vep_core::transcript::MappedPiece	impl core::clone::Clone for vep_core::transcript::MappedPiece
+implementation	vep_core::transcript::MappedPiece	impl core::cmp::Eq for vep_core::transcript::MappedPiece
+implementation	vep_core::transcript::MappedPiece	impl core::cmp::PartialEq for vep_core::transcript::MappedPiece
+implementation	vep_core::transcript::MappedPiece	impl core::fmt::Debug for vep_core::transcript::MappedPiece
+implementation	vep_core::transcript::MappedPiece	impl core::marker::Copy for vep_core::transcript::MappedPiece
+variant	vep_core::transcript::MappedPiece::Coordinate	named fields
+field	vep_core::transcript::MappedPiece::Coordinate::end	i64
+field	vep_core::transcript::MappedPiece::Coordinate::start	i64
+field	vep_core::transcript::MappedPiece::Coordinate::strand	vep_core::coordinate::Strand
+variant	vep_core::transcript::MappedPiece::Gap	named fields
+field	vep_core::transcript::MappedPiece::Gap::end	i64
+field	vep_core::transcript::MappedPiece::Gap::start	i64
+auto traits	vep_core::transcript::MapperPair	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::transcript::MapperPair	impl core::clone::Clone for vep_core::transcript::MapperPair
+implementation	vep_core::transcript::MapperPair	impl core::fmt::Debug for vep_core::transcript::MapperPair
+implementation	vep_core::transcript::MapperPair	impl serde_core::ser::Serialize for vep_core::transcript::MapperPair
+implementation	vep_core::transcript::MapperPair	impl<'de> serde_core::de::Deserialize<'de> for vep_core::transcript::MapperPair
+struct	vep_core::transcript::MapperPair	struct; named fields
+field	vep_core::transcript::MapperPair::from_end	u64
+field	vep_core::transcript::MapperPair::from_start	u64
+field	vep_core::transcript::MapperPair::ori	i8
+field	vep_core::transcript::MapperPair::to_end	u64
+field	vep_core::transcript::MapperPair::to_start	u64
+auto traits	vep_core::transcript::PredictionMatrix	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::transcript::PredictionMatrix	impl core::clone::Clone for vep_core::transcript::PredictionMatrix
+implementation	vep_core::transcript::PredictionMatrix	impl core::fmt::Debug for vep_core::transcript::PredictionMatrix
+implementation	vep_core::transcript::PredictionMatrix	impl serde_core::ser::Serialize for vep_core::transcript::PredictionMatrix
+implementation	vep_core::transcript::PredictionMatrix	impl<'de> serde_core::de::Deserialize<'de> for vep_core::transcript::PredictionMatrix
+struct	vep_core::transcript::PredictionMatrix	struct; named fields, some private
+field	vep_core::transcript::PredictionMatrix::analysis	alloc::string::String
+method	vep_core::transcript::PredictionMatrix::from_compressed	fn(analysis: alloc::string::String, sub_analysis: core::option::Option<alloc::string::String>, peptide_length: usize, compressed: alloc::vec::Vec<u8>) -> Self
+method	vep_core::transcript::PredictionMatrix::from_inflated	fn(analysis: alloc::string::String, sub_analysis: core::option::Option<alloc::string::String>, peptide_length: usize, inflated: alloc::vec::Vec<u8>) -> Self
+method	vep_core::transcript::PredictionMatrix::is_inflated	fn(&self) -> bool
+method	vep_core::transcript::PredictionMatrix::lookup	fn(&self, position: usize, amino_acid: u8, analysis: vep_core::prediction::AnalysisType) -> core::option::Option<vep_core::prediction::Prediction>
+field	vep_core::transcript::PredictionMatrix::peptide_length	usize
+method	vep_core::transcript::PredictionMatrix::predictions_data	fn(&self) -> core::option::Option<&[u8]>
+field	vep_core::transcript::PredictionMatrix::sub_analysis	core::option::Option<alloc::string::String>
+auto traits	vep_core::transcript::ProteinFeature	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::transcript::ProteinFeature	impl core::clone::Clone for vep_core::transcript::ProteinFeature
+implementation	vep_core::transcript::ProteinFeature	impl core::fmt::Debug for vep_core::transcript::ProteinFeature
+implementation	vep_core::transcript::ProteinFeature	impl serde_core::ser::Serialize for vep_core::transcript::ProteinFeature
+implementation	vep_core::transcript::ProteinFeature	impl<'de> serde_core::de::Deserialize<'de> for vep_core::transcript::ProteinFeature
+struct	vep_core::transcript::ProteinFeature	struct; named fields
+field	vep_core::transcript::ProteinFeature::analysis	core::option::Option<alloc::string::String>
+field	vep_core::transcript::ProteinFeature::end	u64
+field	vep_core::transcript::ProteinFeature::hseqname	alloc::string::String
+field	vep_core::transcript::ProteinFeature::start	u64
+auto traits	vep_core::transcript::ProteinFunctionPredictions	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::transcript::ProteinFunctionPredictions	impl core::clone::Clone for vep_core::transcript::ProteinFunctionPredictions
+implementation	vep_core::transcript::ProteinFunctionPredictions	impl core::default::Default for vep_core::transcript::ProteinFunctionPredictions
+implementation	vep_core::transcript::ProteinFunctionPredictions	impl core::fmt::Debug for vep_core::transcript::ProteinFunctionPredictions
+implementation	vep_core::transcript::ProteinFunctionPredictions	impl serde_core::ser::Serialize for vep_core::transcript::ProteinFunctionPredictions
+implementation	vep_core::transcript::ProteinFunctionPredictions	impl<'de> serde_core::de::Deserialize<'de> for vep_core::transcript::ProteinFunctionPredictions
+struct	vep_core::transcript::ProteinFunctionPredictions	struct; named fields
+field	vep_core::transcript::ProteinFunctionPredictions::polyphen_humdiv	core::option::Option<vep_core::transcript::PredictionMatrix>
+field	vep_core::transcript::ProteinFunctionPredictions::polyphen_humvar	core::option::Option<vep_core::transcript::PredictionMatrix>
+field	vep_core::transcript::ProteinFunctionPredictions::sift	core::option::Option<vep_core::transcript::PredictionMatrix>
+auto traits	vep_core::transcript::RefSeqAlignment	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::transcript::RefSeqAlignment	impl core::clone::Clone for vep_core::transcript::RefSeqAlignment
+implementation	vep_core::transcript::RefSeqAlignment	impl core::cmp::Eq for vep_core::transcript::RefSeqAlignment
+implementation	vep_core::transcript::RefSeqAlignment	impl core::cmp::PartialEq for vep_core::transcript::RefSeqAlignment
+implementation	vep_core::transcript::RefSeqAlignment	impl core::fmt::Debug for vep_core::transcript::RefSeqAlignment
+implementation	vep_core::transcript::RefSeqAlignment	impl serde_core::ser::Serialize for vep_core::transcript::RefSeqAlignment
+implementation	vep_core::transcript::RefSeqAlignment	impl<'de> serde_core::de::Deserialize<'de> for vep_core::transcript::RefSeqAlignment
+struct	vep_core::transcript::RefSeqAlignment	struct; named fields; #[non_exhaustive]
+field	vep_core::transcript::RefSeqAlignment::first_edit_bases	core::option::Option<alloc::boxed::Box<str>>
+field	vep_core::transcript::RefSeqAlignment::indel_edits	alloc::boxed::Box<[vep_core::transcript::IndelEdit]>
+field	vep_core::transcript::RefSeqAlignment::match_codes	alloc::sync::Arc<[alloc::boxed::Box<str>]>
+method	vep_core::transcript::RefSeqAlignment::misalignment_offset	fn(&self, variant_cdna_start: core::option::Option<i64>) -> i64
+auto traits	vep_core::transcript::SeqEdit	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::transcript::SeqEdit	impl core::clone::Clone for vep_core::transcript::SeqEdit
+implementation	vep_core::transcript::SeqEdit	impl core::fmt::Debug for vep_core::transcript::SeqEdit
+implementation	vep_core::transcript::SeqEdit	impl serde_core::ser::Serialize for vep_core::transcript::SeqEdit
+implementation	vep_core::transcript::SeqEdit	impl<'de> serde_core::de::Deserialize<'de> for vep_core::transcript::SeqEdit
+struct	vep_core::transcript::SeqEdit	struct; named fields
+field	vep_core::transcript::SeqEdit::alt_seq	alloc::string::String
+field	vep_core::transcript::SeqEdit::end	u64
+field	vep_core::transcript::SeqEdit::start	u64
+auto traits	vep_core::transcript::SourceCache	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_core::transcript::SourceCache	enum; #[non_exhaustive]
+implementation	vep_core::transcript::SourceCache	impl core::clone::Clone for vep_core::transcript::SourceCache
+implementation	vep_core::transcript::SourceCache	impl core::cmp::Eq for vep_core::transcript::SourceCache
+implementation	vep_core::transcript::SourceCache	impl core::cmp::PartialEq for vep_core::transcript::SourceCache
+implementation	vep_core::transcript::SourceCache	impl core::fmt::Debug for vep_core::transcript::SourceCache
+implementation	vep_core::transcript::SourceCache	impl core::hash::Hash for vep_core::transcript::SourceCache
+implementation	vep_core::transcript::SourceCache	impl serde_core::ser::Serialize for vep_core::transcript::SourceCache
+implementation	vep_core::transcript::SourceCache	impl<'de> serde_core::de::Deserialize<'de> for vep_core::transcript::SourceCache
+variant	vep_core::transcript::SourceCache::Custom	1 positional field
+field	vep_core::transcript::SourceCache::Custom::0	alloc::sync::Arc<str>
+variant	vep_core::transcript::SourceCache::Ensembl	no fields
+variant	vep_core::transcript::SourceCache::GeneModelFile	named fields
+field	vep_core::transcript::SourceCache::GeneModelFile::order	u32
+field	vep_core::transcript::SourceCache::GeneModelFile::short_name	alloc::sync::Arc<str>
+variant	vep_core::transcript::SourceCache::RefSeq	no fields
+method	vep_core::transcript::SourceCache::column_text	fn(&self) -> &str
+method	vep_core::transcript::SourceCache::file_order	fn(&self) -> core::option::Option<u32>
+auto traits	vep_core::transcript::Transcript	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::transcript::Transcript	impl core::clone::Clone for vep_core::transcript::Transcript
+implementation	vep_core::transcript::Transcript	impl core::default::Default for vep_core::transcript::Transcript
+implementation	vep_core::transcript::Transcript	impl core::fmt::Debug for vep_core::transcript::Transcript
+implementation	vep_core::transcript::Transcript	impl serde_core::ser::Serialize for vep_core::transcript::Transcript
+implementation	vep_core::transcript::Transcript	impl<'de> serde_core::de::Deserialize<'de> for vep_core::transcript::Transcript
+struct	vep_core::transcript::Transcript	struct; named fields; #[non_exhaustive]
+field	vep_core::transcript::Transcript::appris	core::option::Option<alloc::string::String>
+field	vep_core::transcript::Transcript::attributes	alloc::vec::Vec<vep_core::transcript::Attribute>
+field	vep_core::transcript::Transcript::bam_edit_status	core::option::Option<vep_core::transcript::BamEditStatus>
+field	vep_core::transcript::Transcript::biotype	alloc::sync::Arc<str>
+field	vep_core::transcript::Transcript::canonical	bool
+field	vep_core::transcript::Transcript::ccds	core::option::Option<alloc::string::String>
+field	vep_core::transcript::Transcript::cdna_coding_end	core::option::Option<u64>
+field	vep_core::transcript::Transcript::cdna_coding_start	core::option::Option<u64>
+field	vep_core::transcript::Transcript::cdna_sequence	core::option::Option<alloc::vec::Vec<u8>>
+method	vep_core::transcript::Transcript::cds_length	fn(&self) -> core::option::Option<u32>
+field	vep_core::transcript::Transcript::chr	alloc::string::String
+field	vep_core::transcript::Transcript::circular_length	core::option::Option<u64>
+field	vep_core::transcript::Transcript::coding_region_end	core::option::Option<u64>
+field	vep_core::transcript::Transcript::coding_region_start	core::option::Option<u64>
+field	vep_core::transcript::Transcript::db_id	core::option::Option<u64>
+field	vep_core::transcript::Transcript::derived	vep_core::transcript::TranscriptDerived
+field	vep_core::transcript::Transcript::end	u64
+method	vep_core::transcript::Transcript::exon_count	fn(&self) -> usize
+field	vep_core::transcript::Transcript::exon_ids	core::option::Option<alloc::sync::Arc<[alloc::sync::Arc<str>]>>
+field	vep_core::transcript::Transcript::exons	alloc::vec::Vec<vep_core::transcript::Exon>
+method	vep_core::transcript::Transcript::facts	fn(&self) -> &vep_core::transcript::TranscriptFacts
+method	vep_core::transcript::Transcript::feature_ordinals	fn(&self) -> &vep_core::transcript::FeatureOrdinals
+field	vep_core::transcript::Transcript::flags	alloc::sync::Arc<[alloc::string::String]>
+field	vep_core::transcript::Transcript::gencode_basic	bool
+field	vep_core::transcript::Transcript::gencode_primary	bool
+field	vep_core::transcript::Transcript::gene_phenotype	core::option::Option<u32>
+field	vep_core::transcript::Transcript::gene_stable_id	alloc::sync::Arc<str>
+field	vep_core::transcript::Transcript::gene_symbol	core::option::Option<alloc::sync::Arc<str>>
+field	vep_core::transcript::Transcript::gene_symbol_id	core::option::Option<alloc::sync::Arc<str>>
+field	vep_core::transcript::Transcript::gene_symbol_source	core::option::Option<alloc::sync::Arc<str>>
+field	vep_core::transcript::Transcript::gene_version	core::option::Option<u32>
+method	vep_core::transcript::Transcript::genomic_length	fn(&self) -> u64
+method	vep_core::transcript::Transcript::has_cds	fn(&self) -> bool
+field	vep_core::transcript::Transcript::hgnc_id	core::option::Option<alloc::sync::Arc<str>>
+field	vep_core::transcript::Transcript::id_rank	u32
+method	vep_core::transcript::Transcript::indel_edits	fn(&self) -> &[vep_core::transcript::IndelEdit]
+method	vep_core::transcript::Transcript::intron_count	fn(&self) -> usize
+field	vep_core::transcript::Transcript::introns	alloc::vec::Vec<vep_core::transcript::Intron>
+method	vep_core::transcript::Transcript::is_nmd_transcript	fn(&self) -> bool
+method	vep_core::transcript::Transcript::is_non_coding_context_transcript	fn(&self) -> bool
+method	vep_core::transcript::Transcript::is_protein_coding	fn(&self) -> bool
+field	vep_core::transcript::Transcript::mane_plus_clinical	core::option::Option<alloc::string::String>
+field	vep_core::transcript::Transcript::mane_select	core::option::Option<alloc::string::String>
+field	vep_core::transcript::Transcript::protein_id	core::option::Option<alloc::sync::Arc<str>>
+field	vep_core::transcript::Transcript::protein_sequence	core::option::Option<alloc::vec::Vec<u8>>
+field	vep_core::transcript::Transcript::refseq	core::option::Option<alloc::string::String>
+method	vep_core::transcript::Transcript::refseq_alignment	fn(&self) -> core::option::Option<&alloc::sync::Arc<vep_core::transcript::RefSeqAlignment>>
+field	vep_core::transcript::Transcript::region_files	core::option::Option<alloc::sync::Arc<[(u64, u64)]>>
+method	vep_core::transcript::Transcript::rseq_codes	fn(&self) -> &[alloc::boxed::Box<str>]
+field	vep_core::transcript::Transcript::source	alloc::string::String
+field	vep_core::transcript::Transcript::source_cache	core::option::Option<vep_core::transcript::SourceCache>
+method	vep_core::transcript::Transcript::spliced_length	fn(&self) -> u32
+method	vep_core::transcript::Transcript::spliced_seq	fn(&self) -> core::option::Option<&str>
+field	vep_core::transcript::Transcript::stable_id	alloc::sync::Arc<str>
+field	vep_core::transcript::Transcript::start	u64
+field	vep_core::transcript::Transcript::strand	vep_core::coordinate::Strand
+field	vep_core::transcript::Transcript::swissprot	core::option::Option<alloc::string::String>
+field	vep_core::transcript::Transcript::translation	core::option::Option<vep_core::transcript::Translation>
+field	vep_core::transcript::Transcript::translation_end	core::option::Option<u64>
+field	vep_core::transcript::Transcript::translation_start	core::option::Option<u64>
+field	vep_core::transcript::Transcript::trembl	core::option::Option<alloc::string::String>
+field	vep_core::transcript::Transcript::tsl	core::option::Option<alloc::string::String>
+field	vep_core::transcript::Transcript::uniparc	core::option::Option<alloc::string::String>
+field	vep_core::transcript::Transcript::uniprot_isoform	core::option::Option<alloc::string::String>
+field	vep_core::transcript::Transcript::vefc	core::option::Option<vep_core::transcript::TranscriptVEFC>
+field	vep_core::transcript::Transcript::version	core::option::Option<u32>
+auto traits	vep_core::transcript::TranscriptDerived	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::transcript::TranscriptDerived	impl core::clone::Clone for vep_core::transcript::TranscriptDerived
+implementation	vep_core::transcript::TranscriptDerived	impl core::default::Default for vep_core::transcript::TranscriptDerived
+implementation	vep_core::transcript::TranscriptDerived	impl core::fmt::Debug for vep_core::transcript::TranscriptDerived
+struct	vep_core::transcript::TranscriptDerived	struct; named fields, some private
+auto traits	vep_core::transcript::TranscriptFacts	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::transcript::TranscriptFacts	impl core::clone::Clone for vep_core::transcript::TranscriptFacts
+implementation	vep_core::transcript::TranscriptFacts	impl core::cmp::Eq for vep_core::transcript::TranscriptFacts
+implementation	vep_core::transcript::TranscriptFacts	impl core::cmp::PartialEq for vep_core::transcript::TranscriptFacts
+implementation	vep_core::transcript::TranscriptFacts	impl core::fmt::Debug for vep_core::transcript::TranscriptFacts
+implementation	vep_core::transcript::TranscriptFacts	impl core::marker::Copy for vep_core::transcript::TranscriptFacts
+struct	vep_core::transcript::TranscriptFacts	struct; named fields; #[non_exhaustive]
+field	vep_core::transcript::TranscriptFacts::cds_end_nf	bool
+field	vep_core::transcript::TranscriptFacts::cds_start_nf	bool
+field	vep_core::transcript::TranscriptFacts::has_coding_model	bool
+field	vep_core::transcript::TranscriptFacts::has_frameshift_intron	bool
+field	vep_core::transcript::TranscriptFacts::is_mirna	bool
+field	vep_core::transcript::TranscriptFacts::is_nmd	bool
+field	vep_core::transcript::TranscriptFacts::is_non_coding_context	bool
+field	vep_core::transcript::TranscriptFacts::is_protein_coding	bool
+field	vep_core::transcript::TranscriptFacts::start_phase_offset	i8
+field	vep_core::transcript::TranscriptFacts::vefc_has_frameshift_intron	bool
+auto traits	vep_core::transcript::TranscriptMapper	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::transcript::TranscriptMapper	impl core::clone::Clone for vep_core::transcript::TranscriptMapper
+implementation	vep_core::transcript::TranscriptMapper	impl core::fmt::Debug for vep_core::transcript::TranscriptMapper
+implementation	vep_core::transcript::TranscriptMapper	impl serde_core::ser::Serialize for vep_core::transcript::TranscriptMapper
+implementation	vep_core::transcript::TranscriptMapper	impl<'de> serde_core::de::Deserialize<'de> for vep_core::transcript::TranscriptMapper
+struct	vep_core::transcript::TranscriptMapper	struct; named fields
+field	vep_core::transcript::TranscriptMapper::cdna_coding_end	u64
+field	vep_core::transcript::TranscriptMapper::cdna_coding_start	u64
+field	vep_core::transcript::TranscriptMapper::exon_coord_mapper	vep_core::transcript::ExonCoordMapper
+field	vep_core::transcript::TranscriptMapper::start_phase	i8
+auto traits	vep_core::transcript::TranscriptVEFC	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::transcript::TranscriptVEFC	impl core::clone::Clone for vep_core::transcript::TranscriptVEFC
+implementation	vep_core::transcript::TranscriptVEFC	impl core::default::Default for vep_core::transcript::TranscriptVEFC
+implementation	vep_core::transcript::TranscriptVEFC	impl core::fmt::Debug for vep_core::transcript::TranscriptVEFC
+implementation	vep_core::transcript::TranscriptVEFC	impl serde_core::ser::Serialize for vep_core::transcript::TranscriptVEFC
+implementation	vep_core::transcript::TranscriptVEFC	impl<'de> serde_core::de::Deserialize<'de> for vep_core::transcript::TranscriptVEFC
+struct	vep_core::transcript::TranscriptVEFC	struct; named fields; #[non_exhaustive]
+field	vep_core::transcript::TranscriptVEFC::codon_table	u8
+field	vep_core::transcript::TranscriptVEFC::five_prime_utr	core::option::Option<alloc::string::String>
+field	vep_core::transcript::TranscriptVEFC::introns	alloc::vec::Vec<vep_core::transcript::Intron>
+field	vep_core::transcript::TranscriptVEFC::mapper	core::option::Option<vep_core::transcript::TranscriptMapper>
+field	vep_core::transcript::TranscriptVEFC::peptide	core::option::Option<alloc::string::String>
+field	vep_core::transcript::TranscriptVEFC::protein_features	alloc::vec::Vec<vep_core::transcript::ProteinFeature>
+field	vep_core::transcript::TranscriptVEFC::protein_function_predictions	core::option::Option<vep_core::transcript::ProteinFunctionPredictions>
+field	vep_core::transcript::TranscriptVEFC::seq_edits	alloc::vec::Vec<vep_core::transcript::SeqEdit>
+field	vep_core::transcript::TranscriptVEFC::sorted_exons	alloc::vec::Vec<vep_core::transcript::Exon>
+field	vep_core::transcript::TranscriptVEFC::spliced_seq	core::option::Option<alloc::string::String>
+field	vep_core::transcript::TranscriptVEFC::three_prime_utr	core::option::Option<alloc::string::String>
+field	vep_core::transcript::TranscriptVEFC::translateable_seq	core::option::Option<alloc::string::String>
+auto traits	vep_core::transcript::Translation	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::transcript::Translation	impl core::clone::Clone for vep_core::transcript::Translation
+implementation	vep_core::transcript::Translation	impl core::fmt::Debug for vep_core::transcript::Translation
+implementation	vep_core::transcript::Translation	impl serde_core::ser::Serialize for vep_core::transcript::Translation
+implementation	vep_core::transcript::Translation	impl<'de> serde_core::de::Deserialize<'de> for vep_core::transcript::Translation
+struct	vep_core::transcript::Translation	struct; named fields
+field	vep_core::transcript::Translation::db_id	core::option::Option<u64>
+field	vep_core::transcript::Translation::end	u64
+field	vep_core::transcript::Translation::seq	core::option::Option<alloc::string::String>
+field	vep_core::transcript::Translation::stable_id	alloc::string::String
+field	vep_core::transcript::Translation::start	u64
+field	vep_core::transcript::Translation::version	core::option::Option<u32>
+function	vep_core::transcript::file_order_key_suffix	fn(order: u32) -> alloc::string::String
+function	vep_core::transcript::tsl_level	fn(value: &str) -> core::option::Option<&str>
+module	vep_core::variant	mod
+auto traits	vep_core::variant::ColocatedVariant	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::variant::ColocatedVariant	impl core::clone::Clone for vep_core::variant::ColocatedVariant
+implementation	vep_core::variant::ColocatedVariant	impl core::default::Default for vep_core::variant::ColocatedVariant
+implementation	vep_core::variant::ColocatedVariant	impl core::fmt::Debug for vep_core::variant::ColocatedVariant
+implementation	vep_core::variant::ColocatedVariant	impl serde_core::ser::Serialize for vep_core::variant::ColocatedVariant
+implementation	vep_core::variant::ColocatedVariant	impl<'de> serde_core::de::Deserialize<'de> for vep_core::variant::ColocatedVariant
+struct	vep_core::variant::ColocatedVariant	struct; named fields; #[non_exhaustive]
+field	vep_core::variant::ColocatedVariant::allele_string	core::option::Option<alloc::string::String>
+method	vep_core::variant::ColocatedVariant::applies_to_allele	fn(&self, allele: &str) -> bool
+field	vep_core::variant::ColocatedVariant::chr	core::option::Option<alloc::string::String>
+field	vep_core::variant::ColocatedVariant::clin_sig	core::option::Option<alloc::string::String>
+method	vep_core::variant::ColocatedVariant::clin_sig_terms	fn(&self) -> core::option::Option<impl core::iter::traits::iterator::Iterator<Item = &str>>
+field	vep_core::variant::ColocatedVariant::clinvar	core::option::Option<alloc::boxed::Box<vep_core::variation::ClinVarDetail>>
+field	vep_core::variant::ColocatedVariant::end	u64
+field	vep_core::variant::ColocatedVariant::frequency_strings	std::collections::hash::map::HashMap<alloc::string::String, alloc::string::String>
+field	vep_core::variant::ColocatedVariant::id	alloc::string::String
+field	vep_core::variant::ColocatedVariant::matched_alleles	alloc::vec::Vec<vep_core::variant::MatchedAllele>
+field	vep_core::variant::ColocatedVariant::phenotype	bool
+method	vep_core::variant::ColocatedVariant::prefix_rank	fn(&self) -> u8
+field	vep_core::variant::ColocatedVariant::pubmed	core::option::Option<alloc::string::String>
+method	vep_core::variant::ColocatedVariant::pubmed_ids	fn(&self) -> core::option::Option<impl core::iter::traits::iterator::Iterator<Item = &str>>
+method	vep_core::variant::ColocatedVariant::record_allele_for	fn(&self, allele: &str) -> core::option::Option<&str>
+field	vep_core::variant::ColocatedVariant::somatic	bool
+field	vep_core::variant::ColocatedVariant::start	u64
+field	vep_core::variant::ColocatedVariant::strand	i8
+method	vep_core::variant::ColocatedVariant::synonyms	fn(&self) -> core::option::Option<&str>
+field	vep_core::variant::ColocatedVariant::var_synonyms	core::option::Option<alloc::string::String>
+auto traits	vep_core::variant::InputVariant	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::variant::InputVariant	impl core::clone::Clone for vep_core::variant::InputVariant
+implementation	vep_core::variant::InputVariant	impl core::default::Default for vep_core::variant::InputVariant
+implementation	vep_core::variant::InputVariant	impl core::fmt::Debug for vep_core::variant::InputVariant
+implementation	vep_core::variant::InputVariant	impl serde_core::ser::Serialize for vep_core::variant::InputVariant
+struct	vep_core::variant::InputVariant	struct; named fields; #[non_exhaustive]
+method	vep_core::variant::InputVariant::against_reference_allele	fn(&self, reference: &[u8]) -> vep_core::variant::InputVariant
+field	vep_core::variant::InputVariant::allele_index	usize
+field	vep_core::variant::InputVariant::allele_num	core::option::Option<u32>
+field	vep_core::variant::InputVariant::allele_string	alloc::string::String
+method	vep_core::variant::InputVariant::alt_allele	fn(&self) -> &[u8]
+field	vep_core::variant::InputVariant::alt_alleles	alloc::vec::Vec<alloc::vec::Vec<u8>>
+method	vep_core::variant::InputVariant::ambiguity_code	fn(&self) -> core::option::Option<u8>
+field	vep_core::variant::InputVariant::annotation_chr	core::option::Option<alloc::string::String>
+field	vep_core::variant::InputVariant::annotation_end	core::option::Option<u64>
+field	vep_core::variant::InputVariant::annotation_start	core::option::Option<u64>
+field	vep_core::variant::InputVariant::breakend_mates	alloc::vec::Vec<(alloc::string::String, u64)>
+field	vep_core::variant::InputVariant::check_ref_failed	bool
+field	vep_core::variant::InputVariant::chr	alloc::string::String
+field	vep_core::variant::InputVariant::ci_end	core::option::Option<(i64, i64)>
+field	vep_core::variant::InputVariant::ci_pos	core::option::Option<(i64, i64)>
+method	vep_core::variant::InputVariant::class_so_term	fn(&self) -> alloc::string::String
+field	vep_core::variant::InputVariant::colocated_variants	alloc::vec::Vec<vep_core::variant::ColocatedVariant>
+field	vep_core::variant::InputVariant::copy_ordinal	u32
+field	vep_core::variant::InputVariant::custom_annotations	alloc::vec::Vec<vep_core::custom_annotation::CustomAnnotations>
+method	vep_core::variant::InputVariant::display_allele	fn(&self) -> alloc::string::String
+method	vep_core::variant::InputVariant::display_allele_shifted	fn(&self, shift: u64, strand: i8) -> alloc::string::String
+field	vep_core::variant::InputVariant::display_consequence	core::option::Option<vep_core::consequence::Consequence>
+field	vep_core::variant::InputVariant::end	u64
+field	vep_core::variant::InputVariant::existing_variation	alloc::vec::Vec<alloc::string::String>
+field	vep_core::variant::InputVariant::filtered_allele_string	core::option::Option<alloc::sync::Arc<str>>
+method	vep_core::variant::InputVariant::forward_strand_alleles	fn(&self) -> (alloc::borrow::Cow<'_, [u8]>, alloc::borrow::Cow<'_, [u8]>)
+field	vep_core::variant::InputVariant::freqs	alloc::vec::Vec<alloc::string::String>
+field	vep_core::variant::InputVariant::ga4gh_vrs	core::option::Option<vep_core::spdi::VrsAllele>
+field	vep_core::variant::InputVariant::genotype	alloc::vec::Vec<alloc::string::String>
+field	vep_core::variant::InputVariant::hgvsg	core::option::Option<alloc::string::String>
+field	vep_core::variant::InputVariant::hom_ref	bool
+field	vep_core::variant::InputVariant::id	core::option::Option<alloc::string::String>
+field	vep_core::variant::InputVariant::imprecise	bool
+field	vep_core::variant::InputVariant::individual	core::option::Option<alloc::sync::Arc<str>>
+field	vep_core::variant::InputVariant::input_chr	core::option::Option<alloc::sync::Arc<str>>
+field	vep_core::variant::InputVariant::input_line_name	core::option::Option<alloc::sync::Arc<str>>
+field	vep_core::variant::InputVariant::input_position	u64
+field	vep_core::variant::InputVariant::input_record	u64
+field	vep_core::variant::InputVariant::intergenic_overlap	bool
+field	vep_core::variant::InputVariant::intergenic_pick	bool
+field	vep_core::variant::InputVariant::intergenic_row_plugin_keys	alloc::vec::Vec<alloc::string::String>
+field	vep_core::variant::InputVariant::intergenic_shift	core::option::Option<u64>
+field	vep_core::variant::InputVariant::is_single_breakend	bool
+field	vep_core::variant::InputVariant::is_structural	bool
+method	vep_core::variant::InputVariant::location	fn(&self) -> alloc::string::String
+method	vep_core::variant::InputVariant::location_shifted	fn(&self, shift: u64, strand: i8) -> alloc::string::String
+field	vep_core::variant::InputVariant::mate_chr	core::option::Option<alloc::string::String>
+field	vep_core::variant::InputVariant::mate_id	core::option::Option<alloc::string::String>
+field	vep_core::variant::InputVariant::mate_pos	core::option::Option<u64>
+field	vep_core::variant::InputVariant::minimised	bool
+field	vep_core::variant::InputVariant::most_severe_consequence	core::option::Option<vep_core::consequence::Consequence>
+field	vep_core::variant::InputVariant::nearest	core::option::Option<alloc::vec::Vec<alloc::string::String>>
+method	vep_core::variant::InputVariant::new	fn(chr: alloc::string::String, start: u64, end: u64, ref_allele: alloc::vec::Vec<u8>, alt_allele: alloc::vec::Vec<u8>) -> Self
+field	vep_core::variant::InputVariant::no_allele	bool
+method	vep_core::variant::InputVariant::on_forward_strand	fn(&self) -> vep_core::variant::InputVariant
+field	vep_core::variant::InputVariant::original_allele_string	core::option::Option<alloc::string::String>
+field	vep_core::variant::InputVariant::original_chr	alloc::string::String
+field	vep_core::variant::InputVariant::original_end	core::option::Option<u64>
+field	vep_core::variant::InputVariant::original_start	core::option::Option<u64>
+field	vep_core::variant::InputVariant::overlapping_svs	alloc::vec::Vec<alloc::string::String>
+field	vep_core::variant::InputVariant::oversize_sv	bool
+field	vep_core::variant::InputVariant::per_gene_pick	bool
+field	vep_core::variant::InputVariant::plugin_data	indexmap::map::IndexMap<alloc::string::String, alloc::string::String>
+field	vep_core::variant::InputVariant::plugin_empty_strings	alloc::vec::Vec<alloc::string::String>
+field	vep_core::variant::InputVariant::plugin_records	indexmap::map::IndexMap<alloc::string::String, alloc::vec::Vec<vep_core::variant::PluginRecord>>
+field	vep_core::variant::InputVariant::raw_input	core::option::Option<alloc::sync::Arc<str>>
+field	vep_core::variant::InputVariant::raw_input_bytes	core::option::Option<alloc::sync::Arc<[u8]>>
+method	vep_core::variant::InputVariant::record_allele_string	fn(&self) -> alloc::string::String
+field	vep_core::variant::InputVariant::record_allele_string_multi	core::option::Option<alloc::sync::Arc<str>>
+field	vep_core::variant::InputVariant::record_so_term	core::option::Option<alloc::string::String>
+field	vep_core::variant::InputVariant::ref_allele	alloc::vec::Vec<u8>
+field	vep_core::variant::InputVariant::reference_allele_row	bool
+method	vep_core::variant::InputVariant::reference_allele_row	fn(&self) -> vep_core::variant::InputVariant
+field	vep_core::variant::InputVariant::reference_row_shift_allele	core::option::Option<alloc::sync::Arc<str>>
+field	vep_core::variant::InputVariant::rejoin_key_prefix	core::option::Option<alloc::sync::Arc<str>>
+method	vep_core::variant::InputVariant::same_record	fn(&self, other: &vep_core::variant::InputVariant) -> bool
+field	vep_core::variant::InputVariant::sample_zygosities	core::option::Option<alloc::sync::Arc<vep_core::variant::ZygosityList>>
+method	vep_core::variant::InputVariant::set_plugin_value	fn(&mut self, key: alloc::string::String, value: alloc::string::String, empty_string: bool, kinds: &[vep_core::consequence::RowKind])
+field	vep_core::variant::InputVariant::sibling_spdi	alloc::vec::Vec<vep_core::spdi::SiblingSpdi>
+field	vep_core::variant::InputVariant::spdi	core::option::Option<alloc::string::String>
+field	vep_core::variant::InputVariant::split_first_feature_rowless	bool
+field	vep_core::variant::InputVariant::standalone_feature	core::option::Option<u32>
+field	vep_core::variant::InputVariant::start	u64
+field	vep_core::variant::InputVariant::states_a_loss	bool
+field	vep_core::variant::InputVariant::states_the_run_length	bool
+field	vep_core::variant::InputVariant::strand	vep_core::coordinate::Strand
+field	vep_core::variant::InputVariant::summary_terms	core::option::Option<vep_core::consequence::ConsequenceList>
+field	vep_core::variant::InputVariant::sv_end	core::option::Option<u64>
+field	vep_core::variant::InputVariant::sv_len	core::option::Option<i64>
+field	vep_core::variant::InputVariant::sv_type	core::option::Option<alloc::string::String>
+field	vep_core::variant::InputVariant::transcript_consequences	alloc::vec::Vec<vep_core::consequence::TranscriptConsequence>
+method	vep_core::variant::InputVariant::uploaded_allele	fn(&self, minimal: bool) -> core::option::Option<alloc::string::String>
+field	vep_core::variant::InputVariant::uploaded_allele_string	core::option::Option<alloc::sync::Arc<str>>
+method	vep_core::variant::InputVariant::uploaded_variation	fn(&self) -> alloc::string::String
+field	vep_core::variant::InputVariant::variant_class	vep_core::variant::VariantClass
+method	vep_core::variant::InputVariant::variation_name	fn(&self) -> alloc::string::String
+field	vep_core::variant::InputVariant::vep_skip	bool
+method	vep_core::variant::InputVariant::without_allele	fn<'a>(chr: alloc::string::String, pos: u64, ref_allele: &'a str, alts: impl core::iter::traits::collect::IntoIterator<Item = &'a str>) -> Self
+method	vep_core::variant::InputVariant::working_allele_str	fn(&self) -> &str
+method	vep_core::variant::InputVariant::working_allele_string	fn(&self) -> alloc::string::String
+method	vep_core::variant::InputVariant::write_display_allele	fn(&self, out: &mut alloc::vec::Vec<u8>)
+method	vep_core::variant::InputVariant::write_location	fn(&self, out: &mut alloc::vec::Vec<u8>)
+method	vep_core::variant::InputVariant::write_uploaded_variation	fn(&self, out: &mut alloc::vec::Vec<u8>)
+field	vep_core::variant::InputVariant::written_case_allele_string	core::option::Option<alloc::sync::Arc<str>>
+field	vep_core::variant::InputVariant::written_end	vep_core::variant::WrittenEnd
+method	vep_core::variant::InputVariant::zygosity	fn(&self) -> core::option::Option<alloc::string::String>
+auto traits	vep_core::variant::MatchedAllele	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::variant::MatchedAllele	impl core::clone::Clone for vep_core::variant::MatchedAllele
+implementation	vep_core::variant::MatchedAllele	impl core::cmp::Eq for vep_core::variant::MatchedAllele
+implementation	vep_core::variant::MatchedAllele	impl core::cmp::PartialEq for vep_core::variant::MatchedAllele
+implementation	vep_core::variant::MatchedAllele	impl core::default::Default for vep_core::variant::MatchedAllele
+implementation	vep_core::variant::MatchedAllele	impl core::fmt::Debug for vep_core::variant::MatchedAllele
+implementation	vep_core::variant::MatchedAllele	impl serde_core::ser::Serialize for vep_core::variant::MatchedAllele
+implementation	vep_core::variant::MatchedAllele	impl<'de> serde_core::de::Deserialize<'de> for vep_core::variant::MatchedAllele
+struct	vep_core::variant::MatchedAllele	struct; named fields
+field	vep_core::variant::MatchedAllele::input_allele	alloc::string::String
+field	vep_core::variant::MatchedAllele::input_index	usize
+field	vep_core::variant::MatchedAllele::record_allele	alloc::string::String
+field	vep_core::variant::MatchedAllele::record_index	usize
+type alias	vep_core::variant::PluginRecord	type = indexmap::map::IndexMap<alloc::string::String, core::option::Option<alloc::string::String>>
+constant	vep_core::variant::STORED_LIST_CAP	const: usize
+auto traits	vep_core::variant::SampleZygosity	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::variant::SampleZygosity	impl core::clone::Clone for vep_core::variant::SampleZygosity
+implementation	vep_core::variant::SampleZygosity	impl core::cmp::Eq for vep_core::variant::SampleZygosity
+implementation	vep_core::variant::SampleZygosity	impl core::cmp::PartialEq for vep_core::variant::SampleZygosity
+implementation	vep_core::variant::SampleZygosity	impl core::fmt::Debug for vep_core::variant::SampleZygosity
+implementation	vep_core::variant::SampleZygosity	impl core::fmt::Display for vep_core::variant::SampleZygosity
+implementation	vep_core::variant::SampleZygosity	impl serde_core::ser::Serialize for vep_core::variant::SampleZygosity
+implementation	vep_core::variant::SampleZygosity	impl<'de> serde_core::de::Deserialize<'de> for vep_core::variant::SampleZygosity
+struct	vep_core::variant::SampleZygosity	struct; named fields
+field	vep_core::variant::SampleZygosity::sample	alloc::sync::Arc<str>
+field	vep_core::variant::SampleZygosity::zygosity	vep_core::variant::Zygosity
+auto traits	vep_core::variant::VariantClass	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_core::variant::VariantClass	enum; #[non_exhaustive]
+implementation	vep_core::variant::VariantClass	impl core::clone::Clone for vep_core::variant::VariantClass
+implementation	vep_core::variant::VariantClass	impl core::cmp::Eq for vep_core::variant::VariantClass
+implementation	vep_core::variant::VariantClass	impl core::cmp::PartialEq for vep_core::variant::VariantClass
+implementation	vep_core::variant::VariantClass	impl core::fmt::Debug for vep_core::variant::VariantClass
+implementation	vep_core::variant::VariantClass	impl core::hash::Hash for vep_core::variant::VariantClass
+implementation	vep_core::variant::VariantClass	impl core::marker::Copy for vep_core::variant::VariantClass
+implementation	vep_core::variant::VariantClass	impl serde_core::ser::Serialize for vep_core::variant::VariantClass
+implementation	vep_core::variant::VariantClass	impl<'de> serde_core::de::Deserialize<'de> for vep_core::variant::VariantClass
+variant	vep_core::variant::VariantClass::ComplexStructural	no fields
+variant	vep_core::variant::VariantClass::CopyNumberVariation	no fields
+variant	vep_core::variant::VariantClass::Deletion	no fields
+variant	vep_core::variant::VariantClass::Duplication	no fields
+variant	vep_core::variant::VariantClass::Indel	no fields
+variant	vep_core::variant::VariantClass::Insertion	no fields
+variant	vep_core::variant::VariantClass::Inversion	no fields
+variant	vep_core::variant::VariantClass::MobileElementDeletion	no fields
+variant	vep_core::variant::VariantClass::MobileElementInsertion	no fields
+variant	vep_core::variant::VariantClass::ReferenceBlock	no fields
+variant	vep_core::variant::VariantClass::SequenceAlteration	no fields
+variant	vep_core::variant::VariantClass::Snv	no fields
+variant	vep_core::variant::VariantClass::StructuralDeletion	no fields
+variant	vep_core::variant::VariantClass::StructuralInsertion	no fields
+variant	vep_core::variant::VariantClass::Substitution	no fields
+variant	vep_core::variant::VariantClass::TandemDuplication	no fields
+variant	vep_core::variant::VariantClass::TandemRepeat	no fields
+variant	vep_core::variant::VariantClass::Translocation	no fields
+method	vep_core::variant::VariantClass::is_span_type	fn(self) -> bool
+method	vep_core::variant::VariantClass::is_structural	fn(self) -> bool
+method	vep_core::variant::VariantClass::so_term	fn(self) -> &'static str
+auto traits	vep_core::variant::WrittenEnd	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_core::variant::WrittenEnd	enum; #[non_exhaustive]
+implementation	vep_core::variant::WrittenEnd	impl core::clone::Clone for vep_core::variant::WrittenEnd
+implementation	vep_core::variant::WrittenEnd	impl core::cmp::Eq for vep_core::variant::WrittenEnd
+implementation	vep_core::variant::WrittenEnd	impl core::cmp::PartialEq for vep_core::variant::WrittenEnd
+implementation	vep_core::variant::WrittenEnd	impl core::fmt::Debug for vep_core::variant::WrittenEnd
+implementation	vep_core::variant::WrittenEnd	impl core::marker::Copy for vep_core::variant::WrittenEnd
+variant	vep_core::variant::WrittenEnd::Absent	no fields
+variant	vep_core::variant::WrittenEnd::Other	no fields
+variant	vep_core::variant::WrittenEnd::Position	no fields
+variant	vep_core::variant::WrittenEnd::SpanEnd	no fields
+method	vep_core::variant::WrittenEnd::of	fn(written: core::option::Option<&str>, position: u64, span_end: u64) -> Self
+auto traits	vep_core::variant::Zygosity	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_core::variant::Zygosity	enum; #[non_exhaustive]
+implementation	vep_core::variant::Zygosity	impl core::clone::Clone for vep_core::variant::Zygosity
+implementation	vep_core::variant::Zygosity	impl core::cmp::Eq for vep_core::variant::Zygosity
+implementation	vep_core::variant::Zygosity	impl core::cmp::PartialEq for vep_core::variant::Zygosity
+implementation	vep_core::variant::Zygosity	impl core::fmt::Debug for vep_core::variant::Zygosity
+implementation	vep_core::variant::Zygosity	impl core::fmt::Display for vep_core::variant::Zygosity
+implementation	vep_core::variant::Zygosity	impl core::marker::Copy for vep_core::variant::Zygosity
+implementation	vep_core::variant::Zygosity	impl serde_core::ser::Serialize for vep_core::variant::Zygosity
+implementation	vep_core::variant::Zygosity	impl<'de> serde_core::de::Deserialize<'de> for vep_core::variant::Zygosity
+variant	vep_core::variant::Zygosity::Het	no fields
+variant	vep_core::variant::Zygosity::HetRef	no fields
+variant	vep_core::variant::Zygosity::Hom	no fields
+variant	vep_core::variant::Zygosity::HomRef	no fields
+method	vep_core::variant::Zygosity::label	fn(self) -> &'static str
+method	vep_core::variant::Zygosity::of	fn<A: core::convert::AsRef<str>>(genotype: &[A], hom_ref: bool) -> Self
+auto traits	vep_core::variant::ZygosityList	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::variant::ZygosityList	impl core::clone::Clone for vep_core::variant::ZygosityList
+implementation	vep_core::variant::ZygosityList	impl core::cmp::Eq for vep_core::variant::ZygosityList
+implementation	vep_core::variant::ZygosityList	impl core::cmp::PartialEq for vep_core::variant::ZygosityList
+implementation	vep_core::variant::ZygosityList	impl core::default::Default for vep_core::variant::ZygosityList
+implementation	vep_core::variant::ZygosityList	impl core::fmt::Debug for vep_core::variant::ZygosityList
+implementation	vep_core::variant::ZygosityList	impl serde_core::ser::Serialize for vep_core::variant::ZygosityList
+implementation	vep_core::variant::ZygosityList	impl<'de> serde_core::de::Deserialize<'de> for vep_core::variant::ZygosityList
+struct	vep_core::variant::ZygosityList	struct; named fields, some private
+field	vep_core::variant::ZygosityList::entries	alloc::vec::Vec<vep_core::variant::SampleZygosity>
+method	vep_core::variant::ZygosityList::joined	fn(&self, separator: &str) -> alloc::borrow::Cow<'_, str>
+method	vep_core::variant::ZygosityList::new	fn(entries: alloc::vec::Vec<vep_core::variant::SampleZygosity>) -> Self
+function	vep_core::variant::allele_pair	fn(reference: &[u8], alt: &[u8]) -> alloc::string::String
+function	vep_core::variant::ambiguity_code	fn(allele_string: &str) -> core::option::Option<u8>
+function	vep_core::variant::classify_variant	fn(ref_allele: &[u8], alt_allele: &[u8]) -> vep_core::variant::VariantClass
+function	vep_core::variant::colocated_in_output_order	fn(variants: &[vep_core::variant::ColocatedVariant]) -> alloc::vec::Vec<&vep_core::variant::ColocatedVariant>
+function	vep_core::variant::first_vcf_id	fn(field: &str) -> core::option::Option<&str>
+function	vep_core::variant::id_names_record	fn(id: &str) -> bool
+function	vep_core::variant::keeps_uploaded_spelling	fn(allele_string: &str, minimal: bool) -> bool
+function	vep_core::variant::push_decimal	fn(out: &mut alloc::vec::Vec<u8>, n: u64)
+function	vep_core::variant::so_variation_class	fn(allele_string: &str) -> &'static str
+function	vep_core::variant::whole_items	fn<'a>(stored: &'a str, separators: &[&str]) -> &'a str
+function	vep_core::variant::written_pubmed	fn(stored: core::option::Option<&str>) -> core::option::Option<&str>
+function	vep_core::variant::written_synonyms	fn(stored: core::option::Option<&str>) -> core::option::Option<&str>
+module	vep_core::variation	mod
+auto traits	vep_core::variation::CachedVariation	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::variation::CachedVariation	impl core::clone::Clone for vep_core::variation::CachedVariation
+implementation	vep_core::variation::CachedVariation	impl core::cmp::PartialEq for vep_core::variation::CachedVariation
+implementation	vep_core::variation::CachedVariation	impl core::default::Default for vep_core::variation::CachedVariation
+implementation	vep_core::variation::CachedVariation	impl core::fmt::Debug for vep_core::variation::CachedVariation
+implementation	vep_core::variation::CachedVariation	impl serde_core::ser::Serialize for vep_core::variation::CachedVariation
+implementation	vep_core::variation::CachedVariation	impl<'de> serde_core::de::Deserialize<'de> for vep_core::variation::CachedVariation
+struct	vep_core::variation::CachedVariation	struct; named fields; #[non_exhaustive]
+field	vep_core::variation::CachedVariation::allele_string	alloc::string::String
+field	vep_core::variation::CachedVariation::chr	core::option::Option<alloc::string::String>
+field	vep_core::variation::CachedVariation::clin_sig	core::option::Option<alloc::string::String>
+method	vep_core::variation::CachedVariation::clin_sig_allele_entries	fn(&self) -> alloc::vec::Vec<(&str, &str)>
+field	vep_core::variation::CachedVariation::clinvar	core::option::Option<alloc::boxed::Box<vep_core::variation::ClinVarDetail>>
+field	vep_core::variation::CachedVariation::end	u64
+field	vep_core::variation::CachedVariation::failed	u8
+field	vep_core::variation::CachedVariation::frequencies	std::collections::hash::map::HashMap<alloc::string::String, alloc::string::String>
+field	vep_core::variation::CachedVariation::phenotype_or_disease	u8
+field	vep_core::variation::CachedVariation::pubmed	core::option::Option<alloc::string::String>
+field	vep_core::variation::CachedVariation::somatic	u8
+field	vep_core::variation::CachedVariation::start	u64
+field	vep_core::variation::CachedVariation::strand	i8
+field	vep_core::variation::CachedVariation::var_synonyms	core::option::Option<alloc::string::String>
+field	vep_core::variation::CachedVariation::variation_name	alloc::string::String
+auto traits	vep_core::variation::ClinVarDetail	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::variation::ClinVarDetail	impl core::clone::Clone for vep_core::variation::ClinVarDetail
+implementation	vep_core::variation::ClinVarDetail	impl core::cmp::Eq for vep_core::variation::ClinVarDetail
+implementation	vep_core::variation::ClinVarDetail	impl core::cmp::PartialEq for vep_core::variation::ClinVarDetail
+implementation	vep_core::variation::ClinVarDetail	impl core::default::Default for vep_core::variation::ClinVarDetail
+implementation	vep_core::variation::ClinVarDetail	impl core::fmt::Debug for vep_core::variation::ClinVarDetail
+implementation	vep_core::variation::ClinVarDetail	impl serde_core::ser::Serialize for vep_core::variation::ClinVarDetail
+implementation	vep_core::variation::ClinVarDetail	impl<'de> serde_core::de::Deserialize<'de> for vep_core::variation::ClinVarDetail
+struct	vep_core::variation::ClinVarDetail	struct; named fields; #[non_exhaustive]
+field	vep_core::variation::ClinVarDetail::clin_sig_allele	core::option::Option<alloc::string::String>
+method	vep_core::variation::ClinVarDetail::clin_sig_allele_entries	fn(&self) -> alloc::vec::Vec<(&str, &str)>
+field	vep_core::variation::ClinVarDetail::clin_sig_ref_allele	core::option::Option<alloc::string::String>
+field	vep_core::variation::ClinVarDetail::clinical_impact	core::option::Option<alloc::string::String>
+function	vep_core::variation::perl_number_string	fn(value: f64) -> alloc::string::String
+function	vep_core::variation::perl_numeric	fn(text: &str) -> f64
+function	vep_core::variation::reverse_comp	fn(sequence: &str) -> alloc::string::String
+module	vep_core::vcf_header	mod
+function	vep_core::vcf_header::fileformat_refusal	fn(line: &[u8]) -> core::option::Option<alloc::string::String>
+function	vep_core::vcf_header::incompatible_version	fn(major: impl core::fmt::Display, minor: impl core::fmt::Display) -> alloc::string::String
+module	vep_core::vcf_info	mod
+auto traits	vep_core::vcf_info::InfoFields	!RefUnwindSafe, Send, !Sync, Unpin, UnwindSafe
+implementation	vep_core::vcf_info::InfoFields	impl<'a> core::fmt::Debug for vep_core::vcf_info::InfoFields<'a>
+struct	vep_core::vcf_info::InfoFields	struct<'a>; named fields, some private
+method	vep_core::vcf_info::InfoFields::field	fn(&self, key: &str) -> core::option::Option<core::option::Option<&'a str>>; in impl<'a> vep_core::vcf_info::InfoFields<'a>
+method	vep_core::vcf_info::InfoFields::new	fn(text: &'a str) -> Self; in impl<'a> vep_core::vcf_info::InfoFields<'a>
+method	vep_core::vcf_info::InfoFields::value	fn(&self, key: &str) -> core::option::Option<&'a str>; in impl<'a> vep_core::vcf_info::InfoFields<'a>
+method	vep_core::vcf_info::InfoFields::value_written	fn(&self, key: &str) -> core::option::Option<&'a str>; in impl<'a> vep_core::vcf_info::InfoFields<'a>
+function	vep_core::vcf_info::info_field	fn<'a>(info: &'a str, key: &str) -> core::option::Option<core::option::Option<&'a str>>
+function	vep_core::vcf_info::info_value	fn<'a>(info: &'a str, key: &str) -> core::option::Option<&'a str>
+function	vep_core::vcf_info::info_value_written	fn<'a>(info: &'a str, key: &str) -> core::option::Option<&'a str>
+module	vep_core::warning_hold	mod
+auto traits	vep_core::warning_hold::Held	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_core::warning_hold::Held	impl core::clone::Clone for vep_core::warning_hold::Held
+implementation	vep_core::warning_hold::Held	impl core::cmp::Eq for vep_core::warning_hold::Held
+implementation	vep_core::warning_hold::Held	impl core::cmp::PartialEq for vep_core::warning_hold::Held
+implementation	vep_core::warning_hold::Held	impl core::fmt::Debug for vep_core::warning_hold::Held
+struct	vep_core::warning_hold::Held	struct; named fields
+field	vep_core::warning_hold::Held::input_record	u64
+field	vep_core::warning_hold::Held::text	alloc::string::String
+constant	vep_core::warning_hold::RECORD_FIELD	const: &str
+function	vep_core::warning_hold::hand_on	fn(warnings: alloc::vec::Vec<vep_core::warning_hold::Held>) -> alloc::vec::Vec<vep_core::warning_hold::Held>
+function	vep_core::warning_hold::holding	fn<T>(work: impl core::ops::function::FnOnce() -> T) -> (T, alloc::vec::Vec<vep_core::warning_hold::Held>)
+function	vep_core::warning_hold::offer	fn(input_record: u64, text: alloc::string::String) -> core::result::Result<(), alloc::string::String>

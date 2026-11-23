@@ -1,0 +1,6 @@
+# the fly's chromosome arms
+2L,2R
+
+  # 3L and 3R are left out
+X 4	Y
+mitochondrion_genome

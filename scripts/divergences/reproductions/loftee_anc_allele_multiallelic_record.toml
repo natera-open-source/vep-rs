@@ -1,9 +1,9 @@
 entry = "loftee_anc_allele_multiallelic_record"
 page = "docs/plugins/loftee.md#4-the-ancestral-allele-filter-withheld-from-every-allele-of-a-multi-allelic-record"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 248.7 per million · 4 flag sets, 61 corpora"
+input_class_basis = "2 · 248.7 per million · 10 flag sets, 77 corpora"
 notes = "Ensembl VEP's LoF plugin is the LOFTEE repository's grch38 branch (--extra-dir loftee=<checkout>), and it reads the ancestral base through `samtools faidx`, which the image lacks: the run needs --tool-dir with samtools. The one-allele record is the control: both engines filter its T allele ANC_ALLELE."
 
 # At 21:32314600 the reference reads C, the corpus's ancestral FASTA reads T, and C>T is a stop gain on ENST00000339944.
@@ -43,3 +43,8 @@ vep_rs = [
   "one | 21:32314600 | T | ENST00000339944 | stop_gained | LC | END_TRUNC,ANC_ALLELE",
   "two | 21:32314600 | T | ENST00000339944 | stop_gained | LC | END_TRUNC,ANC_ALLELE",
 ]
+
+[implementation]
+code = ["crates/vep-builtins/src/plugins/loftee.rs::LofteePlugin::is_ancestral_allele"]
+tests = ["crates/vep-cli/tests/plugin_documented_rows.rs::loftee_filters_an_ancestral_allele_beside_a_sibling_allele"]
+rules = ["tools/vep-plugin-pairs/src/rules/loftee.rs::anc_allele_multiallelic_record"]

@@ -1,7 +1,7 @@
 entry = "opentargets_duplicate_study_type_and_missing_islead"
 page = "docs/divergences/opentargets-duplicate-study-type-and-missing-islead.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the OpenTargets plugin's header: study_types can be all, QTL or a colon-separated list of study types found in the file, with no sentence against QTL as a list item or a repeated item, and the header names no column that its data file must carry; not seen in the measured datasets"
 notes = "Of the two shapes the entry names this reproduces the first, `study_types=QTL:QTL` on the committed export: Ensembl VEP writes `Failed to instantiate plugin OpenTargets: Not an ARRAY reference` to its warnings file and no row carries an OpenTargets_ field, vep-rs the QTL columns of the record's lead sQTL association. The second, an export whose header lacks `isLead` under the default filter, differs in the header lines alone: Ensembl VEP prints the five `## OpenTargets_` lines over rows without a field, vep-rs refuses the plugin as it loads."
@@ -33,4 +33,14 @@ ensembl_vep = [
 vep_rs = [
   "21:15551809 | A | ENST00000634644 | dorsolateral prefrontal cortex | ENSG00000229425",
   "21:15551809 | A | ENST00000634708 | dorsolateral prefrontal cortex | ENSG00000229425",
+]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/open_targets.rs::OpenTargetsPlugin::init",
+    "crates/vep-builtins/src/plugins/open_targets.rs::StudyTypes::parse",
+]
+tests = [
+    "crates/vep-builtins/src/plugins/open_targets.rs::tests::a_repeated_qtl_token_selects_the_qtl_study_types_once",
+    "crates/vep-builtins/src/plugins/open_targets.rs::tests::header_refusals_name_the_fault",
 ]

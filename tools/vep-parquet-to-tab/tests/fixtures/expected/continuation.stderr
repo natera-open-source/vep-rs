@@ -1,0 +1,1 @@
+ERROR: [parquet_to_vep_tab] 'utf-8' codec can't decode bytes in position 11-12: invalid continuation byte

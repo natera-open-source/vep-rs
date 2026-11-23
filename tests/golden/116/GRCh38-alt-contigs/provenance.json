@@ -1,7 +1,7 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "divergences_classified_against": {
   "engine": "vep-rs",
@@ -10,22 +10,22 @@
   "arch": "arm64",
   "flags_passed": []
  },
- "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "none on either side",
  "input": "records on four non-primary contigs of the GRCh38 cache: the assembly patch HG1012_PATCH, the alternate haplotype HSCHR17_1_CTG1, the unplaced scaffold KI270728.1 and the LRG region LRG_1; positions placed from the contigs' transcript models (exon boundaries, splice sites, codons, UTRs, introns, 5 kb flanks) with the reference alleles read from the GRCh38 assembly sequence of each contig",
  "sha256": {
-  "default.txt": "845fda02368f148f721e49425fbd83db6b32c7dd38cc4b93507f488848c4f977",
-  "tab.txt": "9ce4d00e6f590b09ff6e2f6de676d7242f490140465c5273263b969ca2cb8562",
-  "vcf.vcf": "3bc6823d93dfc1c0b74c4e7699b29a7d08d7250690ef5701c8ef20aa43c977af",
-  "json.jsonl": "fc24a2f79d0eebd17179b821558ade5eedc5595229ab1a85134a6836a80ce4eb",
-  "default.summary.log": "b159d2bbb07785dc1c7b21d1e2c09ebc5f99babdbc7214f02ef2cbfab51a4006",
-  "tab.summary.log": "e5107eb036f58bd43b52a63edb601b43e7a7a3ddecbc4aea77ce3e5faf21d2a3",
-  "vcf.summary.log": "5d498b49f7e53ec4a9e16247fedf662cb23111b02df6c65e6cfebbcd1f967e8b",
-  "json.summary.log": "0631256a1ba2ded069d811a80c167a3e6b386d678f76a3088655b2b69deb1bfb"
+  "default.txt": "2375f372cec13b60816d8e81d559a67365f45306d67dc31f0a0848867af7e8eb",
+  "tab.txt": "cdbb7b0025e72b9ad3f0412b9f790f94b10b3083a6c5dcb36827df00baecaecd",
+  "vcf.vcf": "291d4a287c3e83d3b01666986eb082d00516ee2a2cfa4284bbe5b6aed1c11101",
+  "json.jsonl": "4fa099ec7ac5578342f2f0dde979936ae1ca260e9adf64f797ead41a554d4963",
+  "default.summary.log": "7c99e6885c4f27eee4b4f6ece551ba27d6dc72922bd9287b33cf4736ef7dad7a",
+  "tab.summary.log": "c9f3c7aeba229bcf9636b3e538734e4ffb59bef9245059224f07ce5707d294e1",
+  "vcf.summary.log": "8106c5104718ad7ebd5abcda5bf88cdebe92161a8daf200eaea0a61ecdd0f38f",
+  "json.summary.log": "1aa0ee12a4d345f0ac7cb948b4207d6b1a432a5c6241ef07ad5256be68084f3b"
  },
  "variants_vcf_sha256": "2a8ff673f1f8cb210a5df88ce4bfbbfeb969e009e27cc42e52381435bfe86321",
- "generator": "candidate records on five non-primary contigs annotated with Ensembl VEP, then scripts/golden/build_golden_corpus.py select --k 1 --seed 1 --max-records 300 --cache <converted slice>; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the slice scripts/data/storable_to_json.pl converted from the Ensembl VEP cache's HG1012_PATCH, HSCHR17_1_CTG1, KI270728.1, GL000008.2 and LRG_1 directories (no GL000008.2 record was selected); scripts/golden/build_golden_corpus.py classify",
+ "generator": "candidate records on five non-primary contigs annotated with Ensembl VEP, then tools/vep-golden-corpus select --k 1 --seed 1 --max-records 300 --cache <converted slice>; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the slice tools/vep-storable-to-json converts from the Ensembl VEP cache's HG1012_PATCH, HSCHR17_1_CTG1, KI270728.1, GL000008.2 and LRG_1 directories (no GL000008.2 record was selected); tools/vep-golden-corpus classify",
  "pruned_cache": {
   "transcripts_per_chromosome": {
    "HG1012_PATCH": 83,

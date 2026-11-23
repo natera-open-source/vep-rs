@@ -1,7 +1,7 @@
 entry = "gnomadmt_mt_named_contig"
 page = "docs/divergences/gnomadmt-mt-named-contig.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the VCF 4.2 specification, section 1.4.1 \"Fixed fields\", CHROM, which admits MT as a contig name, and the gnomADMt plugin's header, \"file : (mandatory) Tabix-indexed VCF file from gnomAD\", which fixes no contig name; not seen in the measured datasets"
 notes = "Against the slice as committed, whose contig is chrM, both engines write the five haplogroup fields on this row."
@@ -32,3 +32,10 @@ columns = ["Location", "Allele", "Feature", "Consequence", "gnomAD_hap_AC_het", 
 [expected]
 ensembl_vep = ["MT:3 | C | ENST00000387314 | upstream_gene_variant | - | -"]
 vep_rs = ["MT:3 | C | ENST00000387314 | upstream_gene_variant | 0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|1|0|0|0|0|0|0 | 2680|1537|868|603|34|282|91|14784|701|934|3144|2732|663|2977|4724|5672|126|1|1298|366|7|393|3080|6037|1234|819|546|12|89"]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/gnomadmt.rs::GnomadMtPlugin::init",
+    "crates/vep-builtins/src/tabix.rs::chromosome_query_candidates",
+]
+tests = ["crates/vep-cli/tests/plugin_documented_rows.rs::a_gnomadmt_file_whose_contig_is_named_mt_annotates_a_record_on_mt"]

@@ -1,0 +1,10 @@
+--version-a
+1
+--dump-a
+a.tsv
+--version-b
+2
+--dump-b
+not-utf8.tsv
+--out-dir
+out

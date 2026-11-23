@@ -1,0 +1,96 @@
+{
+ "mode": "stats",
+ "format": "stats",
+ "verdict": "red",
+ "reasons": [
+  "the expected file carries no [section] header",
+  "section [VEP run statistics] only in the actual file",
+  "section [Data version] only in the actual file",
+  "section [General statistics] only in the actual file",
+  "section [Variant classes] only in the actual file",
+  "section [Consequences (most severe)] only in the actual file",
+  "section [Consequences (all)] only in the actual file",
+  "section [Coding consequences] only in the actual file",
+  "section [Variants by chromosome] only in the actual file",
+  "section [Position in protein] only in the actual file"
+ ],
+ "tolerance": 0,
+ "masked_rows": [
+  "Command line options",
+  "End time",
+  "Input data",
+  "Input file",
+  "Output file",
+  "Run time",
+  "Start time"
+ ],
+ "sections": {
+  "expected": [],
+  "actual": [
+   "VEP run statistics",
+   "Data version",
+   "General statistics",
+   "Variant classes",
+   "Consequences (most severe)",
+   "Consequences (all)",
+   "Coding consequences",
+   "Variants by chromosome",
+   "Position in protein"
+  ],
+  "order_agrees": true
+ },
+ "compared": {
+  "sections": 0,
+  "rows": 0
+ },
+ "documented": [],
+ "differences": {
+  "VEP run statistics": [
+   {
+    "kind": "section_unexpected"
+   }
+  ],
+  "Data version": [
+   {
+    "kind": "section_unexpected"
+   }
+  ],
+  "General statistics": [
+   {
+    "kind": "section_unexpected"
+   }
+  ],
+  "Variant classes": [
+   {
+    "kind": "section_unexpected"
+   }
+  ],
+  "Consequences (most severe)": [
+   {
+    "kind": "section_unexpected"
+   }
+  ],
+  "Consequences (all)": [
+   {
+    "kind": "section_unexpected"
+   }
+  ],
+  "Coding consequences": [
+   {
+    "kind": "section_unexpected"
+   }
+  ],
+  "Variants by chromosome": [
+   {
+    "kind": "section_unexpected"
+   }
+  ],
+  "Position in protein": [
+   {
+    "kind": "section_unexpected"
+   }
+  ]
+ },
+ "expected": "tests/fixtures/blank.summary.log",
+ "actual": "tests/fixtures/reference.summary.log"
+}

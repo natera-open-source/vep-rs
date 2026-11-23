@@ -2,12 +2,15 @@
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 //! The `--custom` string through the `vep` binary: a malformed one, a remote
-//! one, a transcript model and a file that cannot be opened each end the run
+//! one, a transcript model without a FASTA and a file that cannot be opened each end the run
 //! with one `ERROR: [custom] ...` message, exit status 1, before any output is
 //! written. The texts are Ensembl VEP's where it has one
-//! (`AnnotationSourceAdaptor.pm:327-460` at release/116.2), less its `ERROR: `
-//! prefix. A `num_records` outside the whole numbers from 0 runs, with one
-//! warnings-file line naming the value and the reading.
+//! (`AnnotationSourceAdaptor.pm:327-460` at release/116.3), less its `ERROR: `
+//! prefix; the one for a transcript model without a FASTA names the FASTA
+//! before Ensembl VEP's text (`BaseGXF.pm:105-106`). A `num_records` outside
+//! the whole numbers from 0 runs, with one warnings-file line naming the value
+//! and the reading. Two strings naming one short name print the statistics of
+//! the one that asked for them.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -139,11 +142,15 @@ fn malformed_custom_strings_exit_1_with_ensembl_vep_text_before_any_output() {
     assert!(output.stdout.is_empty(), "the cache info was printed");
 }
 
-/// A remote file and a GFF or GTF transcript model are refused with a text of
-/// vep-rs's own naming the route: a local copy, or the two-step cache recipe
-/// the GTF and GFF3 page (`docs/cache-from-gtf-or-gff3.md`) states.
+/// A remote file is refused with a text of vep-rs's own naming the route, a
+/// local copy. A GFF or GTF transcript model is a transcript source read
+/// beside the cache, which needs a sequence to read: a run without a FASTA
+/// is refused naming the FASTA, the one remedy of a run that reads no
+/// database, and then Ensembl VEP's text (`BaseGXF.pm:105-106`). The GTF and
+/// GFF3 page (`docs/cache-from-gtf-or-gff3.md`) states both routes for such a
+/// file.
 #[test]
-fn remote_files_and_transcript_models_are_refused_with_their_route() {
+fn remote_files_are_refused_with_their_route_and_transcript_models_without_a_fasta() {
     let dir = tempfile::tempdir().unwrap();
     assert_refused(
         dir.path(),
@@ -152,16 +159,14 @@ fn remote_files_and_transcript_models_are_refused_with_their_route() {
         "ERROR: [custom] remote files are not read; copy http://example.org/a.vcf.gz to a local path",
     );
     for custom in ["file=a.gtf.gz,format=gtf", "a.gff.gz,A,gff"] {
-        let output = run_with_custom(dir.path(), custom, &[]);
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        assert_eq!(output.status.code(), Some(1), "{custom}: {stderr}");
-        assert!(
-            stderr.starts_with(
-                "ERROR: [custom] a GFF or GTF source in transcript mode is not read; build a cache from the file and the genome, then annotate against it: vep-cache-builder --species <species> --assembly <assembly> --release <N> --gtf <file> --genome-fasta <genome.fa> --output-dir <dir> (--gff3 <file> for a GFF3), then vep -i <in> -o <out> --offline --json_cache <dir> --fasta <genome.fa>; the page docs/cache-from-gtf-or-gff3.md states the route"
-            ),
-            "{custom}: {stderr}"
+        assert_refused(
+            dir.path(),
+            custom,
+            &[],
+            "ERROR: [custom] a GFF or GTF transcript source needs a FASTA file (--fasta) for its \
+             sequences: vep-rs never connects to an Ensembl database (Ensembl VEP: GXF annotation \
+             requires either database access (--database or --cache) or a FASTA file (--fasta))",
         );
-        assert_eq!(stderr.lines().count(), 1, "{custom}: {stderr}");
     }
     let page = fs::read_to_string(
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../docs/cache-from-gtf-or-gff3.md"),
@@ -180,7 +185,7 @@ fn remote_files_and_transcript_models_are_refused_with_their_route() {
 
 /// A fractional or negative `num_records` is read as its integer part, at least
 /// 0, and the warnings file carries one line naming the value and the reading;
-/// Ensembl VEP 116.2 keeps the text and compares the record count with it as a
+/// Ensembl VEP 116.3 keeps the text and compares the record count with it as a
 /// number (`AnnotationSource/File.pm:337`, `:436-439`), so its listing differs
 /// there. The run otherwise proceeds: a deletion over three BED records lists
 /// two and the `...` record under `2.5`, the `...` record alone under `-1`. A
@@ -239,6 +244,84 @@ fn a_fractional_or_negative_num_records_warns_once_and_lists_its_integer_part() 
     }
 }
 
+/// Two sources given one short name, one asking for `count` and one for no
+/// statistic: Ensembl VEP keeps one statistics hash per short name, which
+/// only a source that asked closes (`AnnotationSource/File.pm:344-352`), and
+/// prints it with the name's records whichever source listed them
+/// (`OutputFactory.pm:1004-1013`, `:1307-1309`; in JSON first in the name's
+/// list, `OutputFactory/JSON.pm:254-256`). So the rows carry the asking
+/// source's count in either order of the two, its 0 beside the other
+/// source's record where it matched none.
+#[test]
+fn a_shared_short_name_prints_the_statistics_of_the_source_that_asked() {
+    let source = |name: &str| {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/golden/116/GRCh38-custom/custom")
+            .join(name)
+    };
+    let asking = |extra: &str| {
+        format!(
+            "file={},short_name=shared,format=bed,summary_stats=count{extra}",
+            source("regions.bed.gz").display()
+        )
+    };
+    let silent = format!(
+        "file={},short_name=shared,format=bed",
+        source("regions_chr.bed.gz").display()
+    );
+    // One record of each file spans the first input record alone. The second
+    // lies inside a three-base record, which an `exact` source does not match.
+    let both_hold = (
+        "21\t5380280\t.\tA\tC\t.\t.\t.",
+        asking(""),
+        "exact_2,exact_2",
+        1,
+    );
+    let asking_holds_none = (
+        "21\t5028998\t.\tC\tT\t.\t.\t.",
+        asking(",type=exact"),
+        "exact_1",
+        0,
+    );
+    for (record, asking, names, count) in [both_hold, asking_holds_none] {
+        for (first, second) in [(&asking, &silent), (&silent, &asking)] {
+            let dir = tempfile::tempdir().unwrap();
+            let output = run_custom_on(dir.path(), record, first, &["--custom", second]);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert_eq!(output.status.code(), Some(0), "{first}: {stderr}");
+            let out = fs::read_to_string(dir.path().join("out.txt")).unwrap();
+            let rows: Vec<&str> = out.lines().filter(|line| !line.starts_with('#')).collect();
+            assert!(!rows.is_empty(), "{first}: no row\n{out}");
+            for row in rows {
+                let extra: Vec<&str> = row.rsplit('\t').next().unwrap().split(';').collect();
+                assert!(extra.contains(&format!("shared={names}").as_str()), "{row}");
+                assert!(
+                    extra.contains(&format!("shared_count={count}").as_str()),
+                    "{first}: {row}"
+                );
+            }
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let output = run_custom_on(
+            dir.path(),
+            record,
+            &asking,
+            &["--custom", &silent, "--json"],
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(0), "{asking}: {stderr}");
+        let out = fs::read_to_string(dir.path().join("out.txt")).unwrap();
+        let object: serde_json::Value = serde_json::from_str(out.lines().next().unwrap()).unwrap();
+        let listed = object["custom_annotations"]["shared"].as_array().unwrap();
+        assert_eq!(listed[0], serde_json::json!({ "count": count }), "{out}");
+        let listed_names: Vec<&str> = listed[1..]
+            .iter()
+            .map(|record| record["name"].as_str().unwrap())
+            .collect();
+        assert_eq!(listed_names.join(","), names, "{out}");
+    }
+}
+
 /// A source file that is not there, or has no index beside it, ends the run
 /// before the input is read and the output is created; a `###CHR###` file
 /// matching nothing prints the text of `AnnotationSourceAdaptor.pm:452`, less
@@ -281,49 +364,11 @@ fn a_source_file_that_cannot_be_opened_exits_1_before_the_output_is_written() {
     );
 }
 
-/// A bgzipped VCF at `<dir>/<name>` with its tabix index beside it: the
-/// `header` lines, the `#CHROM` line, then the one `record`.
-fn indexed_vcf(dir: &Path, name: &str, header: &[&str], record: &str) -> PathBuf {
-    use std::io::Write;
-
-    use noodles::bgzf;
-    use noodles::core::Position;
-    use noodles::csi::binning_index::index::header::Builder as HeaderBuilder;
-    use noodles::csi::binning_index::index::reference_sequence::bin::Chunk;
-
-    let path = dir.join(name);
-    let mut writer = bgzf::io::Writer::new(fs::File::create(&path).unwrap());
-    for line in header {
-        writeln!(writer, "{line}").unwrap();
-    }
-    writeln!(writer, "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO").unwrap();
-    let start = writer.virtual_position();
-    writeln!(writer, "{record}").unwrap();
-    let end = writer.virtual_position();
-    writer.finish().unwrap();
-    let fields: Vec<&str> = record.split('\t').collect();
-    let pos: usize = fields[1].parse().unwrap();
-    let mut indexer = noodles::tabix::index::Indexer::default();
-    indexer.set_header(HeaderBuilder::vcf().build());
-    indexer
-        .add_record(
-            fields[0],
-            Position::try_from(pos).unwrap(),
-            Position::try_from(pos + fields[3].len() - 1).unwrap(),
-            Chunk::new(start, end),
-        )
-        .unwrap();
-    let mut index_path = path.as_os_str().to_owned();
-    index_path.push(".tbi");
-    noodles::tabix::fs::write(index_path, &indexer.build()).unwrap();
-    path
-}
-
 /// Ensembl VEP opens a `--custom` VCF through its input parser, which ends
 /// the run on a `##fileformat` line naming a major version other than 4
 /// (`VCF4Tabix.pm:55-58`, `BaseVCF4.pm:125`) or a value with no
 /// `<digits>.<digits>` (`:129`) before any output is written; a `VCFv4.5` line
-/// and a file with no `##fileformat` line are read. Measured on 116.2 with
+/// and a file with no `##fileformat` line are read. Measured on 116.3 with
 /// each shape as the first header line of a sites file: exit 2 and no output
 /// for `VCFv3.3` and `VCFv4`, the annotated row for the other three.
 #[test]
@@ -349,7 +394,7 @@ fn a_vcf_source_whose_fileformat_is_not_vcf_4_exits_1_before_the_output_is_writt
             "The script can't read the VCF file format version of 'fileformat'",
         ),
     ] {
-        let file = indexed_vcf(dir.path(), name, &[line, info], record);
+        let file = common::indexed_vcf(dir.path(), name, &[line, info], record);
         assert_refused(
             dir.path(),
             &custom(&file),
@@ -366,7 +411,7 @@ fn a_vcf_source_whose_fileformat_is_not_vcf_4_exits_1_before_the_output_is_writt
         ("none.vcf.gz", None),
     ] {
         let header: Vec<&str> = line.into_iter().chain([info]).collect();
-        let file = indexed_vcf(dir.path(), name, &header, record);
+        let file = common::indexed_vcf(dir.path(), name, &header, record);
         let output = run_with_custom(dir.path(), &custom(&file), &[]);
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert_eq!(output.status.code(), Some(0), "{name}: {stderr}");

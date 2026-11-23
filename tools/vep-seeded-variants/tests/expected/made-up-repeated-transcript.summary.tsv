@@ -1,0 +1,34 @@
+category	wanted	written	passed_over	reason
+code4_changed_codon	1	0	0	no codon this code reads differently
+code4_start_codon	1	1	0	-
+code4_stop_gained	1	1	0	-
+code4_stop_lost	1	1	0	-
+code4_made_codon_synonymous	1	1	0	-
+code4_made_codon_missense	1	1	0	-
+code4_made_codon_stop	1	0	0	no substitution makes a codon this code reads differently
+code11_changed_codon	1	1	0	-
+code11_start_codon	1	1	0	-
+code11_stop_gained	1	1	0	-
+code11_stop_lost	1	1	0	-
+first_sequence	1	1	0	-
+last_sequence	1	1	0	-
+organelle	1	1	0	-
+synonym	1	0	0	no synonym
+missense_forward	1	1	0	-
+missense_reverse	1	1	0	-
+synonymous_forward	1	1	0	-
+synonymous_reverse	1	1	0	-
+splice_donor	1	0	0	no multi-exon transcript
+splice_acceptor	1	0	0	no multi-exon transcript
+five_prime_utr	1	0	0	no untranslated region
+three_prime_utr	1	0	0	no untranslated region
+intron	1	0	0	no multi-exon transcript
+upstream	1	1	0	-
+downstream	1	1	0	-
+intergenic	1	1	0	-
+frameshift_insertion	1	1	0	-
+frameshift_deletion	1	1	0	-
+inframe_deletion	1	1	0	-
+first_base	1	1	0	-
+last_base	1	1	0	-
+origin	1	0	0	no circular sequence

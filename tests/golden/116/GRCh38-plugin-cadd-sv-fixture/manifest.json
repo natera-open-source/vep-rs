@@ -1,0 +1,340 @@
+{
+ "release": "116",
+ "species": "homo_sapiens",
+ "assembly": "GRCh38",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 100,
+ "included_records": {
+  "cadd": [
+   "deletion_at_anchor",
+   "deletion_before_sv",
+   "deletion_sv",
+   "duplication_sv",
+   "insertion_and_snv_at_sv_end",
+   "insertion_at_anchor",
+   "insertion_at_sv_start",
+   "insertion_sv",
+   "inversion_sv",
+   "snv_after_sv",
+   "snv_and_insertion_at_sv_end",
+   "snv_at_anchor",
+   "snv_at_sv_end",
+   "snv_at_sv_start",
+   "snv_inside_sv",
+   "snv_inside_sv_two_alts",
+   "snv_two_alts",
+   "tandem_duplication_sv",
+   "transcript_deletion_sv",
+   "transcript_duplication_sv",
+   "unscored_deletion_sv"
+  ]
+ },
+ "max_span": 1000000,
+ "cache_cost_flank": 5000,
+ "flags": [
+  "--dir_plugins",
+  "{plugins}",
+  "--plugin",
+  "CADD,sv={corpus}/plugin_data/1000G_phase3_SVs_synthetic.tsv.gz"
+ ],
+ "covers": [
+  "CADD"
+ ],
+ "datasets": {
+  "cadd": {
+   "reference": "cand.txt",
+   "input": "cand.vcf",
+   "rows": 53,
+   "combinations": 7
+  }
+ },
+ "combinations": {
+  "3_prime_UTR_variant,5_prime_UTR_variant,coding_sequence_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,intron_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 3
+  },
+  "downstream_gene_variant": {
+   "observed_rows": 8,
+   "exemplar_records": 3
+  },
+  "intergenic_variant": {
+   "observed_rows": 19,
+   "exemplar_records": 16
+  },
+  "intron_variant": {
+   "observed_rows": 8,
+   "exemplar_records": 3
+  },
+  "transcript_ablation": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 12,
+   "exemplar_records": 3
+  }
+ },
+ "variant_classes": {
+  "deletion": 2,
+  "insertion": 2,
+  "mnv_or_complex": 2,
+  "snv": 25,
+  "symbolic_deletion": 3,
+  "symbolic_duplication": 2,
+  "symbolic_insertion": 1,
+  "symbolic_inversion": 8,
+  "symbolic_tandem_duplication": 8
+ },
+ "records": [
+  {
+   "dataset": "cadd",
+   "vcf": "21\t5028997\tdeletion_before_sv\tTCA\tT\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "dataset": "cadd",
+   "vcf": "21\t5028998\tdeletion_at_anchor\tCAT\tC\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "dataset": "cadd",
+   "vcf": "21\t5028999\tinsertion_at_anchor\tA\tAT\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "dataset": "cadd",
+   "vcf": "21\t5028999\tsnv_at_anchor\tA\tG\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "dataset": "cadd",
+   "vcf": "21\t5029000\tdeletion_sv\tT\t<DEL>\t.\t.\tSVTYPE=DEL;END=5047000",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "dataset": "cadd",
+   "vcf": "21\t5029000\tsnv_at_sv_start\tT\tC\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "dataset": "cadd",
+   "vcf": "21\t5029000\tinsertion_at_sv_start\tT\tTG\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "dataset": "cadd",
+   "vcf": "21\t5030100\tduplication_sv\tC\t<DUP>\t.\t.\tSVTYPE=DUP;END=5035000",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "dataset": "cadd",
+   "vcf": "21\t5030192\tsnv_inside_sv\tA\tG\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "dataset": "cadd",
+   "vcf": "21\t5030602\tsnv_inside_sv_two_alts\tA\tC,T\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "dataset": "cadd",
+   "vcf": "21\t5031000\tinsertion_sv\tA\t<INS>\t.\t.\tSVTYPE=INS",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "dataset": "cadd",
+   "vcf": "21\t5033000\tunscored_deletion_sv\tG\t<DEL>\t.\t.\tSVTYPE=DEL;END=5034000",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "dataset": "cadd",
+   "vcf": "21\t5047000\tsnv_at_sv_end\tT\tA\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "dataset": "cadd",
+   "vcf": "21\t5047000\tsnv_and_insertion_at_sv_end\tT\tA,TG\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ],
+   "strata": [
+    "multi_allelic_indel_trimmable"
+   ]
+  },
+  {
+   "dataset": "cadd",
+   "vcf": "21\t5047000\tinsertion_and_snv_at_sv_end\tT\tTG,A\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ],
+   "strata": [
+    "multi_allelic_indel_trimmable"
+   ]
+  },
+  {
+   "dataset": "cadd",
+   "vcf": "21\t5047001\tsnv_after_sv\tT\tA\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "dataset": "cadd",
+   "vcf": "21\t30282000\ttranscript_duplication_sv\tA\t<DUP>\t.\t.\tSVTYPE=DUP;END=30283000",
+   "combinations": [
+    "3_prime_UTR_variant,5_prime_UTR_variant,coding_sequence_variant"
+   ]
+  },
+  {
+   "dataset": "cadd",
+   "vcf": "21\t30396000\ttranscript_deletion_sv\tA\t<DEL>\t.\t.\tSVTYPE=DEL;END=30397000",
+   "combinations": [
+    "transcript_ablation"
+   ]
+  },
+  {
+   "dataset": "cadd",
+   "vcf": "21\t44195000\tinversion_sv\tC\t<INV>\t.\t.\tSVTYPE=INV;END=44195100",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "cadd",
+   "vcf": "21\t44195140\tsnv_two_alts\tG\tA,C\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "upstream_gene_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "dataset": "cadd",
+   "vcf": "21\t44195200\ttandem_duplication_sv\tC\t<DUP:TANDEM>\t.\t.\tSVTYPE=DUP;END=44195300",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "upstream_gene_variant"
+   ]
+  }
+ ],
+ "multi_allelic_per_dataset": 4,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "plugin_files": {
+  "CADD": [
+   "plugin_data/1000G_phase3_SVs_synthetic.tsv.gz",
+   "plugin_data/1000G_phase3_SVs_synthetic.tsv.gz.tbi",
+   "plugin_data/whole_genome_SNVs_synthetic.tsv.gz",
+   "plugin_data/whole_genome_SNVs_synthetic.tsv.gz.tbi"
+  ]
+ },
+ "flag_sets": [
+  {
+   "name": "cadd-sv-and-snv",
+   "flags": [
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "CADD,sv={corpus}/plugin_data/1000G_phase3_SVs_synthetic.tsv.gz,snv={corpus}/plugin_data/whole_genome_SNVs_synthetic.tsv.gz"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_cadd-sv-and-snv",
+   "covers": [
+    "CADD"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "cadd-sv-and-snv-forced",
+   "flags": [
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "CADD,sv={corpus}/plugin_data/1000G_phase3_SVs_synthetic.tsv.gz,snv={corpus}/plugin_data/whole_genome_SNVs_synthetic.tsv.gz,force_annotate=1"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_cadd-sv-and-snv-forced",
+   "covers": [
+    "CADD"
+   ],
+   "reference_warnings": [
+    "could not fetch sequence for tandem repeats; consequence calculation for tandem repeats is less precise when using --offline without --fasta",
+    "Using snv and/or indels CADD annotation file with structural variant can increase run time exponentially. Consider creating separate input files for SNV/indels and SV and use appropriate CADD annotation file."
+   ],
+   "reference": "the warning is Ensembl VEP's own, printed by CADD.pm:137-139 on standard error when force_annotate is set; vep-rs writes it to its warnings file",
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  }
+ ],
+ "reference_warnings": [
+  "could not fetch sequence for tandem repeats; consequence calculation for tandem repeats is less precise when using --offline without --fasta"
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {}
+}

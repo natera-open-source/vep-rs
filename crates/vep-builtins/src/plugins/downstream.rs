@@ -74,6 +74,8 @@ impl DownstreamPlugin {
     }
 }
 
+impl crate::traits::sealed::Sealed for DownstreamPlugin {}
+
 impl BuiltinPlugin for DownstreamPlugin {
     fn name(&self) -> &str {
         "Downstream"
@@ -328,23 +330,22 @@ mod tests {
     const UTR: &str = "GGGCCCAAATAGCCC";
 
     fn sequences(utr: Option<&str>) -> TranscriptSequences {
-        TranscriptSequences {
-            cds: Box::from(CDS),
-            three_prime_utr: utr.map(Box::from),
-            peptide: Some(Box::from("MKTLAVRG")),
-            codon_table: 1,
-        }
+        TranscriptSequences::new(
+            Box::from(CDS),
+            utr.map(Box::from),
+            Some(Box::from("MKTLAVRG")),
+            1,
+        )
     }
 
     fn row(terms: &[Consequence], cds: Option<&str>, strand: i8) -> TranscriptConsequence {
-        TranscriptConsequence {
-            consequences: terms.iter().copied().collect(),
-            cds_position: cds.map(str::to_string),
-            strand,
-            feature_type: FeatureType::Transcript,
-            transcript_sequences: Some(Box::new(sequences(Some(UTR)))),
-            ..TranscriptConsequence::default()
-        }
+        let mut consequence = TranscriptConsequence::default();
+        consequence.consequences = terms.iter().copied().collect();
+        consequence.cds_position = cds.map(str::to_string);
+        consequence.strand = strand;
+        consequence.feature_type = FeatureType::Transcript;
+        consequence.transcript_sequences = Some(Box::new(sequences(Some(UTR))));
+        consequence
     }
 
     /// A frameshift row under `--hgvs` whose notations moved `offset` bases 3'
@@ -506,12 +507,12 @@ mod tests {
         strand: i8,
     ) -> TranscriptConsequence {
         let mut row = row(&[Consequence::FrameshiftVariant], Some(column), strand);
-        row.transcript_sequences = Some(Box::new(TranscriptSequences {
-            cds: Box::from(cds),
-            three_prime_utr: utr.map(Box::from),
-            peptide: None,
-            codon_table: 1,
-        }));
+        row.transcript_sequences = Some(Box::new(TranscriptSequences::new(
+            Box::from(cds),
+            utr.map(Box::from),
+            None,
+            1,
+        )));
         row
     }
 
@@ -530,7 +531,7 @@ GCTTCGACACCGAATACCGGTCCCGCGGCTGCAGCAACCAGTACCTGGTGACGCAC";
     /// and nothing lies downstream. `1 1168308 GC G` on ENST00000379198
     /// (coding base 651) turns codon 217 from `GGC` to `GGT`, the same
     /// glycine, which the 59 residues `p.Tyr218ThrfsTer60` counts follow.
-    /// Ensembl VEP 116.2 starts each one codon later (`Downstream.pm:112-115`)
+    /// Ensembl VEP 116.3 starts each one codon later (`Downstream.pm:112-115`)
     /// and writes the thirteen residues, the residues the bases after the new
     /// stop spell, and the 59 without the glycine.
     #[test]
@@ -564,7 +565,7 @@ GCTTCGACACCGAATACCGGTCCCGCGGCTGCAGCAACCAGTACCTGGTGACGCAC";
     /// 30 bases, and the changed protein reads `AGC AGC TGT TGG CCA ATG GTG
     /// CCA GGC AGC` to the transcript's end: ten residues from codon 911, nine
     /// more than the reference protein, the row's own `ProteinLengthChange`.
-    /// Ensembl VEP 116.2 translates the UTR from its first base, `CAG CTG TTG
+    /// Ensembl VEP 116.3 translates the UTR from its first base, `CAG CTG TTG
     /// GCC AAT GGT GCC AGG CAG CCT` (`Downstream.pm:113-119`), ten residues of
     /// a frame the changed transcript does not have.
     #[test]
@@ -620,7 +621,7 @@ GCTTCGACACCGAATACCGGTCCCGCGGCTGCAGCAACCAGTACCTGGTGACGCAC";
     /// An insertion the notation moves onto a seam keeps its own point: `AA`
     /// written between bases 4 and 5 of `ATG AAA` stays there under `--hgvs`,
     /// `ATG AAA AAA CTC TTG ...`, and the bases 7 to 9 the model carries above
-    /// base 6 stay in place. Ensembl VEP 116.2 under `--hgvs` maps the shifted
+    /// base 6 stay in place. Ensembl VEP 116.3 under `--hgvs` maps the shifted
     /// point (`BaseTranscriptVariation.pm:513`) and puts the allele in those
     /// three bases' place, where the same record without the flag keeps them.
     #[test]
@@ -649,12 +650,12 @@ GAGGAGGAGGAGGAGGAGGAGGAAGAGGAGGAGGCTGCAGCGGCGGCGGCGGCGAACGTGGACGACGTAGTGGTC";
     /// protein, so the length change counts the window's own residues.
     fn alms1_row(column: &str) -> TranscriptConsequence {
         let mut row = row(&[Consequence::FrameshiftVariant], Some(column), 1);
-        row.transcript_sequences = Some(Box::new(TranscriptSequences {
-            cds: Box::from(ALMS1_1),
-            three_prime_utr: None,
-            peptide: None,
-            codon_table: 1,
-        }));
+        row.transcript_sequences = Some(Box::new(TranscriptSequences::new(
+            Box::from(ALMS1_1),
+            None,
+            None,
+            1,
+        )));
         row
     }
 
@@ -662,7 +663,7 @@ GAGGAGGAGGAGGAGGAGGAGGAAGAGGAGGAGGCTGCAGCGGCGGCGGCGGCGAACGTGGACGACGTAGTGGTC";
     /// the notation's point is the seam's, the record's own lies between bases
     /// 72 and 73. The plugin reads the own point under `--hgvs` as without it
     /// and keeps the model's three bases: 17 residues from codon 25 before a
-    /// stop inside the window, the value Ensembl VEP 116.2 writes without
+    /// stop inside the window, the value Ensembl VEP 116.3 writes without
     /// `--hgvs`. With the flag Ensembl VEP reads the span 75-77 and puts the
     /// rotated bases in the three's place, a changed protein one residue
     /// shorter.
@@ -744,19 +745,19 @@ GAGGAGGAGGAGGAGGAGGAGGAAGAGGAGGAGGCTGCAGCGGCGGCGGCGGCGAACGTGGACGACGTAGTGGTC";
     /// on the transcript) between bases 6 and 7: the notation moves it seven
     /// bases 3' to the run's end. The row's own reading gives `ATG AAA CAC ACA
     /// CAC TTG CTG TCC GTG GTT AA`, `HTHLLSVVKGPNS` from codon 3, with and
-    /// without `--hgvs`. Ensembl VEP 116.2 under `--hgvs` splices the written
+    /// without `--hgvs`. Ensembl VEP 116.3 under `--hgvs` splices the written
     /// bases unrotated at the shifted position, its count of places
     /// `seq_length - shift_length` being negative
     /// (TranscriptVariationAllele.pm:1338-1339), `ATG AAA CAC ACA CCA TTG ...`,
     /// and writes `PLLSVVKGPNS`, a protein the variant never produces.
     #[test]
     fn a_reverse_transcripts_insertion_moved_past_its_own_length_reads_its_own_span() {
-        let repeat = TranscriptSequences {
-            cds: Box::from("ATGAAACACACACTTGCTGTCCGTGGTTAA"),
-            three_prime_utr: Some(Box::from(UTR)),
-            peptide: Some(Box::from("MKHTLAVRG")),
-            codon_table: 1,
-        };
+        let repeat = TranscriptSequences::new(
+            Box::from("ATGAAACACACACTTGCTGTCCGTGGTTAA"),
+            Some(Box::from(UTR)),
+            Some(Box::from("MKHTLAVRG")),
+            1,
+        );
         let insertion = variant(1007, 1006, b"-", b"TG");
         let own = Some("HTHLLSVVKGPNS".to_string());
         let mut plain = row(&[Consequence::FrameshiftVariant], Some("6-7"), -1);
@@ -784,12 +785,12 @@ GAGGAGGAGGAGGAGGAGGAGGAAGAGGAGGAGGCTGCAGCGGCGGCGGCGGCGAACGTGGACGACGTAGTGGTC";
     ) -> TranscriptConsequence {
         let window_column = format!("{}-{}", column.0 + 1 - first, column.1 + 1 - first);
         let mut row = shifted_row(&window_column, strand, offset);
-        row.transcript_sequences = Some(Box::new(TranscriptSequences {
-            cds: Box::from(cds),
-            three_prime_utr: None,
-            peptide: None,
-            codon_table: 1,
-        }));
+        row.transcript_sequences = Some(Box::new(TranscriptSequences::new(
+            Box::from(cds),
+            None,
+            None,
+            1,
+        )));
         row
     }
 
@@ -804,7 +805,7 @@ AAATGCTGTCCTACAACCTCTATGACTTGCTGAGAAACACCAATT";
 
     /// Four two-base insertions on GRCh38 transcripts that the notation moves
     /// one base 3' inside the codon they are written in, so the row's own
-    /// reading starts at the codon Ensembl VEP 116.2's shifted reading starts
+    /// reading starts at the codon Ensembl VEP 116.3's shifted reading starts
     /// at and the protein is the value it prints under `--hgvs`. On
     /// ENST00000398960 (forward strand): `21 37490297 C/CGC` between coding
     /// bases 787 and 788, in `CGA` of codon 263 (`c.787_788dup`); `21 37490201
@@ -861,7 +862,7 @@ AAATGCTGTCCTACAACCTCTATGACTTGCTGAGAAACACCAATT";
     /// sequence runs to the transcript's last base, each window read from the
     /// GRCh37 Ensembl cache from a codon's first base to that last base. The
     /// notation places either deletion over the last base, where Ensembl VEP
-    /// 116.2's `hgvs_protein` finds no translation coordinate and returns
+    /// 116.3's `hgvs_protein` finds no translation coordinate and returns
     /// before the shift (TranscriptVariationAllele.pm:1730-1738), so its plugin
     /// reads the record's own span under `--hgvs` too, the span vep-rs reads
     /// on every row, and the two engines write the same fields.
@@ -924,9 +925,11 @@ AAATGCTGTCCTACAACCTCTATGACTTGCTGAGAAACACCAATT";
             to_end,
             ori: 1,
         };
-        Arc::new(Transcript {
-            vefc: Some(TranscriptVEFC {
-                mapper: Some(TranscriptMapper {
+        Arc::new({
+            let mut transcript = Transcript::default();
+            transcript.vefc = Some({
+                let mut vefc = TranscriptVEFC::default();
+                vefc.mapper = Some(TranscriptMapper {
                     start_phase: 0,
                     cdna_coding_start: 1,
                     cdna_coding_end: 27,
@@ -934,10 +937,10 @@ AAATGCTGTCCTACAACCTCTATGACTTGCTGAGAAACACCAATT";
                         pair(1, 8, 1001, 1008),
                         pair(9 + block, 27, 1009 + gap, 1027 + gap - block),
                     ]),
-                }),
-                ..TranscriptVEFC::default()
-            }),
-            ..Transcript::default()
+                });
+                vefc
+            });
+            transcript
         })
     }
 

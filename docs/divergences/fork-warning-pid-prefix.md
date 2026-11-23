@@ -6,7 +6,7 @@
 
 **What vep-rs does instead.** vep-rs writes every warning as the condition alone, `WARNING: <text>`, at every worker count, the shape Ensembl VEP writes without `--fork`. Its annotation rows, their order and its statistics are the same at every count, as Ensembl VEP's are.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3):
 
 - `Bio/EnsEMBL/VEP/Runner.pm`, lines 387-392, `next_output_line`: a true `--fork` value takes the forked path; no flag or `--fork 0` is the serial one.
 - `Bio/EnsEMBL/VEP/Runner.pm`, lines 659-662, `_forked_process`: the child points the warning handle at its standard error, then closes and reopens standard error into a string, so every warning the child raises while annotating its chunk accumulates there.
@@ -18,11 +18,13 @@
 
 **The class it produces.** `fork_warning_pid_prefix`: a warnings-file line that differs between the engines by the `<pid> : ` Ensembl VEP's parent wrote before a forked child's text, the text after it equal to vep-rs's line. The class covers the first line of each relayed block; the block's later lines are bare in both engines. It covers a child's interpreter warning as well, which the relay writes as `WARNING: <pid> : <text>` with no second `WARNING:`. The format comparator's warnings mode sets the prefix aside under this class and counts the lines, and the golden datasets record each reference warning as the condition alone, so their comparison reads the serial shape.
 
-**How often the shape occurs.** Tier 2: every committed reference run was made under `--fork 1`, so every flag set takes the forked path, and 12 of the 392 committed flag sets raise a warning inside a child's annotation. Six, in 2 datasets, have a RefSeq transcript whose sequence disagrees with the assembly; one has a plugin that returns the wrong kind of value; five raise an interpreter warning while annotating, one under `--coding_only` and four, in 2 datasets, in the Downstream plugin. The reference warnings of those 12 flag sets, in 6 datasets, carry the prefix.
+**How often the shape occurs.** Tier 2: every committed reference run was made under `--fork 1`, so every flag set takes the forked path, and 17 of the 511 committed flag sets raise a warning inside a child's annotation.
+
+Six, in 2 datasets, have a RefSeq transcript whose sequence disagrees with the assembly: the relayed block opens with the mismatch warning in three formats and with an interpreter warning in the JSON run ([`json_mismatch_warning_names_no_record`](json-mismatch-warning-names-no-record.md)). One has a plugin that returns the wrong kind of value. Ten raise an interpreter warning alone, one under `--coding_only`, four, in 2 datasets, in the Downstream plugin and five in the LoF plugin. The reference warnings of those 17 flag sets, in 7 datasets, carry the prefix.
 
 ## 1. A transcript-assembly mismatch under `--fork 1`
 
-**In short.** The record `rs922296917` of the GRCh38 RefSeq dataset (`tests/golden/116/GRCh38-refseq/variants.vcf`), a deletion whose RefSeq transcript carries a base the assembly does not, raises `Transcript-assembly mismatch in rs922296917`. Ensembl VEP 116.2 writes `WARNING: Transcript-assembly mismatch in rs922296917` to the warnings file under `--fork 0` and `WARNING: 11 : WARNING: Transcript-assembly mismatch in rs922296917` under `--fork 1` and `--fork 4`. vep-rs writes the first form at every worker count. The six annotation rows are the same in every run of either engine.
+**In short.** The record `rs922296917` of the GRCh38 RefSeq dataset (`tests/golden/116/GRCh38-refseq/variants.vcf`), a deletion whose RefSeq transcript carries a base the assembly does not, raises `Transcript-assembly mismatch in rs922296917`. Ensembl VEP 116.3 writes `WARNING: Transcript-assembly mismatch in rs922296917` to the warnings file under `--fork 0` and `WARNING: 11 : WARNING: Transcript-assembly mismatch in rs922296917` under `--fork 1` and `--fork 4`. vep-rs writes the first form at every worker count. The six annotation rows are the same in every run of either engine.
 
 ### 1.1 What a reader needs to know first
 
@@ -38,7 +40,7 @@ Both engines run `--refseq` against the dataset's RefSeq cache and FASTA, Ensemb
 
 ### 1.3 What each engine writes
 
-Ensembl VEP 116.2's warnings file under `--fork 0`:
+Ensembl VEP 116.3's warnings file under `--fork 0`:
 
 ```
 WARNING: Transcript-assembly mismatch in rs922296917
@@ -75,7 +77,7 @@ vep -i record.vcf -o out.txt --offline --cache --dir_cache <corpus>/cache_root \
 cat out.txt_warnings.txt
 ```
 
-vep-rs prints `WARNING: Transcript-assembly mismatch in rs922296917`. Ensembl VEP 116.2 prints the same line after `WARNING: <pid> : `, and the bare line when `--fork 4` is dropped.
+vep-rs prints `WARNING: Transcript-assembly mismatch in rs922296917`. Ensembl VEP 116.3 prints the same line after `WARNING: <pid> : `, and the bare line when `--fork 4` is dropped.
 
 ### 1.7 How the comparator treats this class
 

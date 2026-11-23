@@ -18,7 +18,7 @@ body:
     attributes:
       label: Ensembl VEP version
       description: Release, or the Docker image tag.
-      placeholder: ensemblorg/ensembl-vep:release_116.2
+      placeholder: ensemblorg/ensembl-vep:release_116.3
     validations:
       required: true
   - type: input

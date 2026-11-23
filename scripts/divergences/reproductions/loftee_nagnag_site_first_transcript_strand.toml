@@ -1,0 +1,101 @@
+entry = "loftee_nagnag_site_first_transcript_strand"
+page = "docs/divergences/loftee-nagnag-site-first-transcript-strand.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "unobserved"
+input_class_basis = "well-formed under the GFF3 specification, which lets genes on opposite strands overlap; not seen in the measured datasets"
+notes = "A made-up sequence `toy` of 1,000 bases and a made-up model of two protein-coding genes on opposite strands whose introns end on the same bases: 399-400 and 699-700 are the acceptor bases of the forward transcript FWDT1 and of the reverse transcript REVT1. The nine bases around 400 hold the `NAGNAG_SITE` motif read on the forward strand and not on the reverse, and the nine around 699 on the reverse strand alone. Ensembl VEP's LoF plugin is the LOFTEE repository's grch38 branch, outside the VEP_plugins checkout: the run needs --extra-dir loftee=<LOFTEE checkout>. `use_gerp_end_trunc:0` selects the rule that reads no GERP file in both engines; an acceptor row reads none under either rule. Ensembl VEP reads the nine bases once per record on the strand of the first transcript, FWDT1 (LoF.pm:489-494), so both rows of a record carry the flag or neither; vep-rs reads them on each row's own strand."
+prepare = [
+  '''cat > "$STAGE/two_strand_acceptor.fa" <<'FASTA'
+>toy
+CCGCGGGCCGCGCGGCGCGCGGGCGCCCGCGCCGCCGGCGCGGCGCGCGGCGGGGCCCCG
+CGGGGCCCGCCGCCCGGCGCCGGCGGCCGCCCGCCGCCGCCGCCCGGCCCCGGGGGGCCC
+CCCGCCCCGCGCCCGCGCGCCCCCCGGCGATGCGGGGCCGCCGCGCGGGCGGGCGGCCGC
+CCGGCCGCGGGCCGCCCCGCGTGGCCCGGGCGCCGGCGCCCCCCCGGCGGCGGGCCGGCC
+GGGCGGGGCGCGCGGCCGCGCCCGCGGCCGGGGGCGCGCGCCCGCCCCCGGGCCCGCCCG
+CCCCGCCGGGCCCGGGGCGCCCGCGCGGGCCGCCCCCGCCCCCCGCGCTTACCGGCCCGG
+GGCGCGGCCCCCCGGGCCCCGCGCGGCGCGCGGCCAGCAGGCGGGGGCGCCCCCGCCGGG
+CGGGGCGGGGCGCCCGCGCGCGCCGCGCGGCCCCGCGGCGGGGGGGGGGCGGCCCCCGCG
+CCGGGGGCCCGGCGGGCCCGGTGGGCCCCGCGGCGCCGCGGGCGCCGGCCCGCCGGGCGC
+GGCCGCGCGCCGGCCGCGCCCCCCGGGCGCCCGGCCGCGGCCGCGGCGGGGGGCGCGCGG
+GGGGCCGGGGCCCCCCCACGCGGGCGCCGCGGGCCGGCCGGCCCGCCGGCGCCCCGCGGG
+CCCGCCCGCCGCGGCGGGGGGGCCCCCGCGCGCGGGGCCTGCTCCGGCGCCCGCCGCCCC
+GGCGGGGCCGGCGGCCCCGGCCCGGCGTAAGCCCCGGGGCGCCGGCGCGGGCGCGCGGGC
+CCGGGGCCCGGGCGGGGGGCCCCCCGCGGGCCGGGCCCGCGCGGGGGCGCCCCCGGGGGC
+CCCGCCCACCCGGCGCGCCGCCGCGCCGCGGGGCGCGGCCGGGGCGGCGCCCCCGCGCAT
+GGGCGCGGCCCGCCGCCGCGGCGCGGCCGCGCGCGGGCCCGCGGCGGCGGGGGGCGCCGG
+GCGCCCCGCGCGGGGCCGGGCGCGCGGCGCGGGGGGCCGC
+FASTA''',
+  "printf 'toy\t1000\t5\t60\t61\\n' > \"$STAGE/two_strand_acceptor.fa.fai\"",
+  '''cat > "$STAGE/two_strand_acceptor.gff3" <<'GFF'
+##gff-version 3
+toy	made_up	gene	101	800	.	+	.	ID=gene:FWDG1;Name=FWD1;biotype=protein_coding;gene_id=FWDG1;version=1
+toy	made_up	mRNA	101	800	.	+	.	ID=transcript:FWDT1;Parent=gene:FWDG1;Name=FWD1-201;biotype=protein_coding;transcript_id=FWDT1;version=1
+toy	made_up	exon	101	200	.	+	.	Parent=transcript:FWDT1;Name=FWDE1;exon_id=FWDE1;rank=1;version=1
+toy	made_up	CDS	150	200	.	+	0	ID=CDS:FWDP1;Parent=transcript:FWDT1;protein_id=FWDP1;version=1
+toy	made_up	gene	320	950	.	-	.	ID=gene:REVG1;Name=REV1;biotype=protein_coding;gene_id=REVG1;version=1
+toy	made_up	mRNA	320	950	.	-	.	ID=transcript:REVT1;Parent=gene:REVG1;Name=REV1-201;biotype=protein_coding;transcript_id=REVT1;version=1
+toy	made_up	exon	320	398	.	-	.	Parent=transcript:REVT1;Name=REVE3;exon_id=REVE3;rank=3;version=1
+toy	made_up	CDS	349	398	.	-	2	ID=CDS:REVP1;Parent=transcript:REVT1;protein_id=REVP1;version=1
+toy	made_up	exon	401	500	.	+	.	Parent=transcript:FWDT1;Name=FWDE2;exon_id=FWDE2;rank=2;version=1
+toy	made_up	CDS	401	500	.	+	0	ID=CDS:FWDP1;Parent=transcript:FWDT1;protein_id=FWDP1;version=1
+toy	made_up	exon	620	698	.	-	.	Parent=transcript:REVT1;Name=REVE2;exon_id=REVE2;rank=2;version=1
+toy	made_up	CDS	620	698	.	-	0	ID=CDS:REVP1;Parent=transcript:REVT1;protein_id=REVP1;version=1
+toy	made_up	exon	701	800	.	+	.	Parent=transcript:FWDT1;Name=FWDE3;exon_id=FWDE3;rank=3;version=1
+toy	made_up	CDS	701	750	.	+	2	ID=CDS:FWDP1;Parent=transcript:FWDT1;protein_id=FWDP1;version=1
+toy	made_up	exon	850	950	.	-	.	Parent=transcript:REVT1;Name=REVE1;exon_id=REVE1;rank=1;version=1
+toy	made_up	CDS	850	900	.	-	0	ID=CDS:REVP1;Parent=transcript:REVT1;protein_id=REVP1;version=1
+GFF''',
+  "bgzip -c \"$STAGE/two_strand_acceptor.gff3\" > \"$STAGE/two_strand_acceptor.gff3.gz\" && tabix -p gff \"$STAGE/two_strand_acceptor.gff3.gz\"",
+  "\"$VEP_CACHE_BUILDER\" --species homo_sapiens --assembly GRCh38 --release 116 --gff3 \"$STAGE/two_strand_acceptor.gff3\" --genome-fasta \"$STAGE/two_strand_acceptor.fa\" --output-dir \"$STAGE/json_cache\"",
+]
+
+[input]
+format = "vcf"
+text = """
+toy	400	acceptor_forward_motif	G	C	.	.	.
+toy	699	acceptor_reverse_motif	C	G	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "{stage}/json_cache"
+gxf = "{stage}/two_strand_acceptor.gff3.gz"
+gxf_kind = "gff"
+fasta = "{stage}/two_strand_acceptor.fa"
+
+[run]
+flags = [
+  "--dir_plugins", "{loftee}",
+  "--plugin", "LoF,loftee_path:{loftee},use_gerp_end_trunc:0,run_splice_predictions:0",
+]
+
+# The two rows of each record; in vep-rs alone the flag follows the row's own strand.
+[compare]
+kind = "rows"
+where = { record = ["acceptor_forward_motif", "acceptor_reverse_motif"] }
+columns = ["Location", "Feature", "Consequence", "LoF", "LoF_flags"]
+
+[expected]
+ensembl_vep = [
+  "toy:400 | FWDT1 | splice_acceptor_variant | HC | NAGNAG_SITE",
+  "toy:400 | REVT1 | splice_acceptor_variant | HC | NON_CAN_SPLICE,NAGNAG_SITE",
+  "toy:699 | FWDT1 | splice_acceptor_variant | HC | NON_CAN_SPLICE",
+  "toy:699 | REVT1 | splice_acceptor_variant | HC | -",
+]
+vep_rs = [
+  "toy:400 | FWDT1 | splice_acceptor_variant | HC | NAGNAG_SITE",
+  "toy:400 | REVT1 | splice_acceptor_variant | HC | NON_CAN_SPLICE",
+  "toy:699 | FWDT1 | splice_acceptor_variant | HC | NON_CAN_SPLICE",
+  "toy:699 | REVT1 | splice_acceptor_variant | HC | NAGNAG_SITE",
+]
+
+[implementation]
+code = ["crates/vep-builtins/src/plugins/loftee.rs::LofteePlugin::nagnag_site"]
+tests = [
+    "crates/vep-builtins/src/plugins/loftee.rs::tests::nagnag_site_follows_each_transcript_strand_in_either_row_order",
+    "crates/vep-builtins/src/plugins/loftee.rs::tests::nagnag_site_matches_the_motif_on_the_transcript_strand",
+    "crates/vep-cli/tests/plugins_builtin.rs::loftee_nagnag_site_follows_the_strand_of_each_rows_transcript",
+]
+rules = ["tools/vep-formats-compare/src/rules/loftee.rs::nagnag_site_first_transcript_strand_row"]

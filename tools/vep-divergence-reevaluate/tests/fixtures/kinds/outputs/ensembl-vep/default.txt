@@ -1,0 +1,7 @@
+## ENSEMBL VARIANT EFFECT PREDICTOR v116.2
+## HGVSp : HGVS protein sequence name
+## DISTANCE : Shortest distance from variant to transcript
+#Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	Extra
+rec1	21:100	A	ENSG1	ENST1	Transcript	missense_variant,splice_region_variant	10	10	4	L/P	ctA/ccA	-	IMPACT=MODERATE;HGVSp=ENSP1:p.Leu4Pro;PICK=1
+rec1	21:100	A	ENSG1	ENST2	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+rec2	21:300	C	ENSG3	ENST3	Transcript	downstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER;DISTANCE=4000;FILE=/opt/vep/data/x.gz  

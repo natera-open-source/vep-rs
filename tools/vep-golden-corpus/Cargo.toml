@@ -1,0 +1,33 @@
+[package]
+name = "vep-golden-corpus"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.89"
+license = "Apache-2.0"
+description = "Golden corpus builder: exemplar records for every consequence set of an Ensembl VEP reference output, the documented divergences of a vep-rs run and the corpus manifest, fixed to the byte"
+publish = false
+
+[dependencies]
+# Stock zlib, built from the source the libz-sys crate carries and linked statically: the
+# cost `select --cache` orders candidates by is the length of zlib's deflate stream, so the
+# deflate library is part of the contract and the host's own is not read.
+flate2 = { version = "1", default-features = false, features = ["zlib"] }
+libz-sys = { version = "1", default-features = false, features = ["static"] }
+memchr = "2"
+regex = "1"
+sha2 = "0.11"
+
+# Its own Cargo root: the repository workspace's commands do not reach this package, and
+# a cargo command for it names this manifest.
+[workspace]
+
+# zlib is built with its optimisations in a test build too: the tests cost every transcript
+# record of the committed corpus caches.
+[profile.dev.package.libz-sys]
+opt-level = 3
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"

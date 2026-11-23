@@ -62,7 +62,7 @@ fn warnings_beside(out: &Path) -> String {
 }
 
 /// The corpus's protein notations annotate at the nucleotide change Ensembl
-/// VEP 116.2 resolves them to in database mode, every row's `Location` and
+/// VEP 116.3 resolves them to in database mode, every row's `Location` and
 /// `Allele` as it writes them: a one-base change for a residue a base away
 /// from the written one, a two-base change for tryptophan (`Phe10Trp`), the
 /// whole codon when the first and third base change (`Arg12Trp`, `TGG` carried
@@ -142,7 +142,7 @@ fn protein_notations_resolve_to_ensembl_veps_nucleotide_changes() {
 /// A gene name as the reference tries every transcript of the gene in turn and
 /// takes the first that yields a variant (`VariationFeatureAdaptor.pm:1933`,
 /// 1946-1985), with the gene-identifier warning (Parser/HGVS.pm:219-229):
-/// Ensembl VEP 116.2 in database mode writes `CRYAA:p.Thr4Ala` at 21:43169109
+/// Ensembl VEP 116.3 in database mode writes `CRYAA:p.Thr4Ala` at 21:43169109
 /// with the allele `G`, `CRYAA:p.Met1Ala` at 21:43169100-43169101 with `GC`
 /// and `TFF3:p.Ala2Gly` at 21:42315370 with `G`, the rows of the translations'
 /// own notations; the warning is written once per gene name, as Ensembl VEP's
@@ -202,7 +202,7 @@ fn gene_names_and_qualifiers_resolve_as_ensembl_vep_resolves_them() {
 }
 
 /// A protein notation Ensembl VEP's resolver refuses is skipped with its
-/// message, the text Ensembl VEP 116.2 writes in database mode for the same
+/// message, the text Ensembl VEP 116.3 writes in database mode for the same
 /// line: a residue change with two equally short codon paths (`Asp2Glu`, a
 /// base from `GAA` and from `GAG`), a frameshift, a residue no codon codes
 /// (`fs`, `?`, `X`), a synonymous change whose only codon is the reference's,

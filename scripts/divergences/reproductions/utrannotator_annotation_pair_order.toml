@@ -1,7 +1,7 @@
 entry = "utrannotator_annotation_pair_order"
 page = "docs/divergences/utrannotator-annotation-pair-order.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
 input_class_basis = "2 · 574.2 per million by output rows · 4 flag sets, 2 corpora"
 notes = "The record is ClinVar variation 4159501, a substitution of the last base of an upstream ORF's start codon on ENST00000619120; both engines report the lost start codon with the same seven pairs. Ensembl VEP writes the pairs by walking a hash's keys (UTRAnnotator.pm:282-283): the order recorded here under the fixed seed of this run, and other orders under Perl's own seed. vep-rs writes them in byte order of their keys."
@@ -30,3 +30,13 @@ where = { record = "4159501", feature = "ENST00000619120" }
 [expected]
 ensembl_vep = ["KozakContext=ATAATGG:type=OutOfFrame_oORF:KozakStrength=Strong:DistanceToStop=24:DistanceToCDS=23:CapDistanceToStart=407:Evidence=False"]
 vep_rs = ["CapDistanceToStart=407:DistanceToCDS=23:DistanceToStop=24:Evidence=False:KozakContext=ATAATGG:KozakStrength=Strong:type=OutOfFrame_oORF"]
+
+[implementation]
+code = ["crates/vep-builtins/src/plugins/utr_annotator.rs::render_effects"]
+tests = [
+    "crates/vep-builtins/src/plugins/utr_annotator.rs::tests::text_rendering_joins_effects_with_colon_and_comma",
+]
+rules = [
+    "tools/vep-formats-compare/src/lists.rs::reordered_pair_groups",
+    "tools/vep-plugin-pairs/src/rules/utrannotator.rs::reordered_pair_groups",
+]

@@ -1,7 +1,7 @@
 entry = "splice_family_swap"
 page = "docs/divergences/defect-a.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
 input_class_basis = "1 · 7.3 per million · no flag needed"
 notes = "GTA to CTT changes exon bases 3 and 5 of BRCA2 exon 6 and leaves base 4: two differing regions, the first inside the splice-region window, the second outside it."
@@ -28,3 +28,15 @@ where = { record = "630437", feature = "ENST00000380152" }
 [expected]
 ensembl_vep = ["13:32900381-32900383 | CTT | ENST00000380152 | missense_variant"]
 vep_rs = ["13:32900381-32900383 | CTT | ENST00000380152 | missense_variant,splice_region_variant"]
+
+[implementation]
+code = ["crates/vep-effects/src/consequences.rs::add_exonic_splice_region"]
+tests = [
+    "crates/vep-effects/src/consequences.rs::tests::a_differing_region_in_the_splice_region_window_beside_an_unchanged_donor_base",
+    "crates/vep-effects/src/consequences.rs::tests::test_exonic_splice_region_accumulates_across_regions",
+]
+rules = [
+    "tools/vep-formats-compare/src/shared.rs::_is_covered_splice_region_swap",
+    "tools/vep-outputs-compare/src/rules/pair.rs::is_covered_splice_region_swap",
+    "tools/vep-plugin-pairs/src/rules/term_pair.rs::covered_splice_region_swap",
+]

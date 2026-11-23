@@ -1,0 +1,26 @@
+{
+  "total_annotation_lines": 4,
+  "consequence_counts": {
+    "zeta": 2,
+    "alpha": 2,
+    "caf\u00e9 \"quoted\"\\back": 1,
+    "\ud834\udd1e": 1,
+    "beta\u007f\u0001": 1
+  },
+  "existing_variation_count": 1,
+  "clin_sig_count": 0,
+  "hgvsc_count": 0,
+  "hgvsp_count": 0,
+  "frequency_field_counts": {
+    "AF": 0,
+    "gnomADe_AF": 0,
+    "gnomADg_AF": 0,
+    "MAX_AF": 0,
+    "EUR_AF": 0,
+    "AFR_AF": 0,
+    "AMR_AF": 0,
+    "EAS_AF": 0,
+    "SAS_AF": 0
+  },
+  "elapsed_seconds": 99999999999999999999999
+}

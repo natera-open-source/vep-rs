@@ -1,0 +1,38 @@
+{
+ "mode": "warnings",
+ "format": "warnings",
+ "verdict": "red",
+ "reasons": [
+  "warnings: 2 entries only in the expected file",
+  "warnings: 2 entries only in the actual file"
+ ],
+ "warnings": {
+  "expected": "<<T>>/w-expected.txt",
+  "actual": "<<T>>/w-actual.txt",
+  "expected_entries": 3,
+  "actual_entries": 3,
+  "shared": 1,
+  "expected_only": [
+   {
+    "line": 3,
+    "description": "only here"
+   },
+   {
+    "line": null,
+    "description": "4711 : WARNING: relayed text"
+   }
+  ],
+  "actual_only": [
+   {
+    "line": 9,
+    "description": "skipped text <path>"
+   },
+   {
+    "line": null,
+    "description": "only there"
+   }
+  ],
+  "regulatory_notice_missing": false,
+  "masks_applied": {}
+ }
+}

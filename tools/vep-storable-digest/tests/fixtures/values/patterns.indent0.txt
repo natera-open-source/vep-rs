@@ -1,0 +1,1 @@
+{'class' => qr/[\/]x/,'flags' => qr/a.b/msix,'plain' => qr/abc/,'reblessed' => bless( qr/x+/, 'My::Pattern' ),'slash' => qr/a\/b\/c/,'version' => v1.22.333,'version_ref' => \v9.8}

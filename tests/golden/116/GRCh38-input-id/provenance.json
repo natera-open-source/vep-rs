@@ -1,24 +1,25 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
- "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --uploaded_allele --variant_class --mask_header_cache_path [--tab|--vcf|--json]",
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --uploaded_allele --variant_class --mask_header_cache_path [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh38",
+ "json_cache": "the transcript shards scripts/golden/prune_json_cache.py --gzip --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 writes for variants.vcf over the chromosome 21 cache tools/vep-storable-to-json converts from the homo_sapiens/116_GRCh38 cache; the variation slice is the one the same command writes with --variations <cache> --exclude-variation '^COSV\\d' --exclude-variation '^(C[A-Z]|BM|HM)\\d{6}': the 74 records of 21/all_vars.gz whose start lies within one base of an input record's span, with 21 more left out by name; no run of this corpus reads a protein feature or a prediction matrix",
  "fasta": "none on the Ensembl VEP side; reference.fa.gz on the vep-rs side, given to every run of this corpus: GRCh38 chromosome 21 at its full length from Homo_sapiens.GRCh38.dna.primary_assembly.fa (scripts/golden/extract_reference.py --contig 21), every base outside 2,000 bases of a record masked to N, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; its bases are the ones the database-mode VCF outputs carry as the anchor base of each indel record; a regeneration of expected/ through the corpus generator gives Ensembl VEP the same file, and the outputs are unchanged because the VCF records carry their reference bases and the identifier runs read theirs from the database",
  "input": "16 identifiers of the release 116 GRCh38 variation cache on chromosome 21, each as a VCF record at its site (variants.vcf) and, record for record in the same order, as one identifier per line (variants.id.txt): substitutions (rs781261918, rs2123538435, rs267606642), multi-allelic substitutions (rs779189159 C/A/G, rs2838519 G/A/C, rs142566111 T/A/G), the insertion rs797045539 (-/T), the deletions rs886039732 (TTTGT/-) and rs398123645 (A/-), three features the cache stores un-minimised, which Ensembl VEP minimises before annotation (rs1601245742 TTTTT/TTTTTT, rs2057997486 GGG/GG, rs759281545 TGTGTGTG/TGTGTG), the multi-allelic indel rs1160505542 it leaves un-minimised, rs2838519 written again in upper case (RS2838519), and two variants whose feature has no alternate allele (rs1979841086 and rs782416306, allele string dbSNP_novariation), for which Ensembl VEP writes no default or tab row, a JSON object whose most_severe_consequence is ? and a VCF line; their VCF twins are substitutions at the same sites. The VCF records carry the reference base before each indel from the GRCh38 primary assembly.",
  "sha256": {
-  "default.txt": "e96ff1097c1294d4d883f7c42e13444f25b97d1ac1b97df4b17f9e6e7adf0d17",
-  "tab.txt": "90bc579fd61ae8b495c0a74628fbede841849c92ead2e658419c664023bd0099",
-  "vcf.vcf": "c5aade84a50d76d338da68cb375a33dfd7ee06c73803b02df4584095bcf8cfa9",
-  "json.jsonl": "f024e60d995d354928d2ff2e6b124e5d583d76b9258f59fecca39874e85d77f6"
+  "default.txt": "4d0e4b00b38157cd5c747bc15923ec247eedce357b62039d371ed48255b7e6d6",
+  "tab.txt": "31376816f7c018a8cb576486a591276636d3162b18e4e8e8310fdd36b4c9e8d3",
+  "vcf.vcf": "52db18961c23ef6d85886341fb9c248aaa03262ce51124e56e688250a25383b1",
+  "json.jsonl": "a440913470fe416c263e2eeaa4abd5b6334efafd577f557f94b694238b6683a7"
  },
  "variants_vcf_sha256": "e47b45ecd3645e3ef1489c0d1008ceb2fa6809ca4e18221ff8169815cf431ad8",
  "flag_sets": {
   "id": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "perl_mode": "database",
    "database": {
     "host": "ensembldb.ensembl.org",
@@ -35,19 +36,19 @@
     "json"
    ],
    "sha256": {
-    "default.txt": "1bc6ee20a9feaf0a095b73db0d467b87c8be65f0e03c1b98eed4ace6cadea452",
-    "tab.txt": "c46c34e368e910f1ab0d4e59f51ccf9b0d0773abc8f85b9ed5ac84f0f77ed71a",
-    "vcf.vcf": "a9161391ab5af8960aa319ecd8abd07437ee6e4d72c7f0f2647ea86569be40b5",
-    "json.jsonl": "8089bd300389a5e8e0e20a681c7a8098b22b6057930f1147feaa86099f55c417"
+    "default.txt": "4066311a771dd98702df1f63badbb74562e7ae4d96909e9fd43b747789eed18a",
+    "tab.txt": "0c873df164b375f474c6ce5cf8c141218137b1641d173b5c9c423de0a24df404",
+    "vcf.vcf": "a05bef30be906107f51b83fb6330215e57b421419d15275ab6857fcd0d094d4d",
+    "json.jsonl": "be28b4e85f066d0e2c87b85a1fb3181e036c1d5f5dfa4c1ba54d8db0425e7442"
    },
    "vep_command": "vep -i variants.id.txt -o <out> --database --host ensembldb.ensembl.org --port 3306 --user anonymous --db_version 116 --species homo_sapiens --assembly GRCh38 --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --uploaded_allele --variant_class --mask_header_cache_path --format id [--tab|--vcf|--json]",
    "input_notes": "the identifiers of variants.vcf's ID column, one per line and in its order; Ensembl VEP resolves them through its variation database, which it reads for this format alone, and annotates each mapping against the database's transcripts; vep-rs resolves them from the corpus cache's variation slice (json_cache/variations/21/all_vars.gz)",
    "warnings": "none for the default-format run (every identifier resolves)"
   },
   "id-guess": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "perl_mode": "database",
    "database": {
     "host": "ensembldb.ensembl.org",
@@ -64,10 +65,10 @@
     "json"
    ],
    "sha256": {
-    "default.txt": "1bc6ee20a9feaf0a095b73db0d467b87c8be65f0e03c1b98eed4ace6cadea452",
-    "tab.txt": "c46c34e368e910f1ab0d4e59f51ccf9b0d0773abc8f85b9ed5ac84f0f77ed71a",
-    "vcf.vcf": "a9161391ab5af8960aa319ecd8abd07437ee6e4d72c7f0f2647ea86569be40b5",
-    "json.jsonl": "8089bd300389a5e8e0e20a681c7a8098b22b6057930f1147feaa86099f55c417"
+    "default.txt": "4066311a771dd98702df1f63badbb74562e7ae4d96909e9fd43b747789eed18a",
+    "tab.txt": "0c873df164b375f474c6ce5cf8c141218137b1641d173b5c9c423de0a24df404",
+    "vcf.vcf": "a05bef30be906107f51b83fb6330215e57b421419d15275ab6857fcd0d094d4d",
+    "json.jsonl": "be28b4e85f066d0e2c87b85a1fb3181e036c1d5f5dfa4c1ba54d8db0425e7442"
    },
    "vep_command": "vep -i variants.id.txt -o <out> --database --host ensembldb.ensembl.org --port 3306 --user anonymous --db_version 116 --species homo_sapiens --assembly GRCh38 --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --uploaded_allele --variant_class --mask_header_cache_path [--tab|--vcf|--json]",
    "expected_outputs": "the id set's files (expected_id): Ensembl VEP detects the format from the first data line, a single field that is neither a region, an SPDI, a CAid nor an HGVS notation, so its output for the list without --format is the output of the id set",

@@ -1,0 +1,66 @@
+location	allele	transcript_id	cds_start	cds_end	translation_start	translation_end	ref_codon	alt_codon	ref_peptide	alt_peptide	consequence_set
+21:1000	A	ENST001	10	10	4	4	gCa	gTa	A	V	missense_variant
+21:1000	A	ENST002	20	20	7	7	aGt	aTt	S	I	missense_variant,splice_region_variant
+21:2000	T	ENST003	30	30	10	10	cGa	tGa	R	*	stop_gained
+21:2000	T	ENST004	124	125	42	42					inframe_deletion
+21:2000	-	ENST005	40	41	14	14	gCa	g	A	X	frameshift_variant
+
+21:3000	G	ENST006	50	50	17	17	gCa	gGa	A	G	missense_variant
+
+21:3000	G	ENST007	50	50	17	17	gCa	gGa	A	G	missense_variant
+21:3000	G	ENST008	50	50	17	17	gCa	gGa	A	G	missense_variant
+21:3000	G	ENST009	50	50	17	17	gCa	gGa	A	G	missense_variant
+21:3000	G	ENST010	60	60	20	20	gcA	gcG	A	A	synonymous_variant
+21:3000	G	ENST010b	60	60	20	20	gcA	gcG	A	A	synonymous_variant
+21:3000	G	ENST011	12	12	4	4					coding_sequence_variant
+21:3000	G	ENST011b	12	12	4	4					coding_sequence_variant
+21:3000	G	ENST012									intron_variant
+21:4000	C	ENST013									intron_variant
+21:6000	A	ENST015	80	80	27	27					stop_gained
+21:6000	A	ENST015	81	81	27	27					missense_variant
+21:6000	A	ENST016	90	90	30	30					missense_variant
+21:7000	A	ENST017					ß	ŉ			missense_variant
+21:7000	A	ENST017b					é	x			missense_variant
+21:8000	A	ENST018									"splice_donor_variant
+second line"
+"21:8100"	A	"ENST""019"									"intron_variant"x
+21:8200	A	ENST020									missense_variant
+21:8200	A	ENST021									missense_variant,,&
+21:900	A	ENST022									intron_variant
+21:900	A	ENST022									intron_variant
+21:900	A	ENST022									intron_variant
+21:9000	A	ENST022									intron_variant
+21:90	A	ENST022									intron_variant
+3:1	A	ENST022									intron_variant
+10:1	A	ENST022									intron_variant
+X:1	A	ENST022									intron_variant
+21:9100	A	ENSTP00									trace_term_00
+21:9101	A	ENSTP01									trace_term_01
+21:9102	A	ENSTP02									trace_term_02
+21:9103	A	ENSTP03									trace_term_03
+21:9104	A	ENSTP04									trace_term_04
+21:9105	A	ENSTP05									trace_term_05
+21:9106	A	ENSTP06									trace_term_06
+21:9107	A	ENSTP07									trace_term_07
+21:9108	A	ENSTP08									trace_term_08
+21:9109	A	ENSTP09									trace_term_09
+21:9110	A	ENSTP10									trace_term_10
+21:9111	A	ENSTP11									trace_term_11
+21:9112	A	ENSTP12									trace_term_12
+21:9113	A	ENSTP13									trace_term_13
+21:9114	A	ENSTP14									trace_term_14
+21:9115	A	ENSTP15									trace_term_15
+21:9116	A	ENSTP16									trace_term_16
+21:9117	A	ENSTP17									trace_term_17
+21:9118	A	ENSTP18									trace_term_18
+21:9119	A	ENSTP19									trace_term_19
+21:9120	A	ENSTP20									trace_term_20
+21:9121	A	ENSTP21									trace_term_21
+21:9200	A	ENSTQ									three_times
+21:9201	A	ENSTQ									three_times
+21:9202	A	ENSTQ									three_times
+21:1000	C	ENSTR									twice
+21:1001	C	ENSTR									twice
+21:9300	A	ENST023									intron_variant	thirteenth
+21:9400	A	ENST024									intron_variant
+21:9500	A	ENST025									intron_variant

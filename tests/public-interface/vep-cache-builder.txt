@@ -1,0 +1,36 @@
+# Written by scripts/check_public_interface.py --update, which reads the tree; the script's opening comment gives the format.
+library	vep_cache_builder
+feature	build	dep:clap dep:mysql dep:reqwest dep:tracing-subscriber
+feature	default	build
+module	vep_cache_builder	mod
+module	vep_cache_builder::gene_model	mod
+auto traits	vep_cache_builder::gene_model::Format	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_cache_builder::gene_model::Format	enum; #[non_exhaustive]
+implementation	vep_cache_builder::gene_model::Format	impl core::clone::Clone for vep_cache_builder::gene_model::Format
+implementation	vep_cache_builder::gene_model::Format	impl core::cmp::Eq for vep_cache_builder::gene_model::Format
+implementation	vep_cache_builder::gene_model::Format	impl core::cmp::PartialEq for vep_cache_builder::gene_model::Format
+implementation	vep_cache_builder::gene_model::Format	impl core::fmt::Debug for vep_cache_builder::gene_model::Format
+implementation	vep_cache_builder::gene_model::Format	impl core::marker::Copy for vep_cache_builder::gene_model::Format
+variant	vep_cache_builder::gene_model::Format::Gff3	no fields
+variant	vep_cache_builder::gene_model::Format::Gtf	no fields
+constant	vep_cache_builder::gene_model::GRCH37_MITOCHONDRIAL_NAMING	const: &str
+auto traits	vep_cache_builder::gene_model::GeneModel	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_cache_builder::gene_model::GeneModel	impl core::fmt::Debug for vep_cache_builder::gene_model::GeneModel
+struct	vep_cache_builder::gene_model::GeneModel	struct; named fields; #[non_exhaustive]
+field	vep_cache_builder::gene_model::GeneModel::off_record	alloc::collections::btree::map::BTreeMap<alloc::string::String, vep_cache_builder::gene_model::OffRecord>
+field	vep_cache_builder::gene_model::GeneModel::set_apart	alloc::collections::btree::map::BTreeMap<alloc::string::String, usize>
+field	vep_cache_builder::gene_model::GeneModel::shards	alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::vec::Vec<u8>>
+field	vep_cache_builder::gene_model::GeneModel::skipped_types	alloc::vec::Vec<alloc::string::String>
+auto traits	vep_cache_builder::gene_model::OffRecord	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_cache_builder::gene_model::OffRecord	impl core::clone::Clone for vep_cache_builder::gene_model::OffRecord
+implementation	vep_cache_builder::gene_model::OffRecord	impl core::cmp::Eq for vep_cache_builder::gene_model::OffRecord
+implementation	vep_cache_builder::gene_model::OffRecord	impl core::cmp::PartialEq for vep_cache_builder::gene_model::OffRecord
+implementation	vep_cache_builder::gene_model::OffRecord	impl core::fmt::Debug for vep_cache_builder::gene_model::OffRecord
+struct	vep_cache_builder::gene_model::OffRecord	struct; named fields; #[non_exhaustive]
+field	vep_cache_builder::gene_model::OffRecord::coding	usize
+field	vep_cache_builder::gene_model::OffRecord::codon_table	u8
+method	vep_cache_builder::gene_model::OffRecord::finding	fn(&self) -> alloc::string::String
+field	vep_cache_builder::gene_model::OffRecord::record	alloc::string::String
+field	vep_cache_builder::gene_model::OffRecord::record_length	u64
+field	vep_cache_builder::gene_model::OffRecord::transcripts	usize
+function	vep_cache_builder::gene_model::read	fn(path: &std::path::Path, format: vep_cache_builder::gene_model::Format, genome: &vep_fasta::IndexedFasta, assembly: core::option::Option<&str>) -> anyhow::Result<vep_cache_builder::gene_model::GeneModel>

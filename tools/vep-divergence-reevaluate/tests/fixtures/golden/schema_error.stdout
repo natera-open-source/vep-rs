@@ -1,0 +1,9 @@
+number_fixture	error	cache.json_cache is not a string
+
+| verdict | entries |
+| --- | --- |
+| still-present | 0 |
+| closed | 0 |
+| changed | 0 |
+| error | 1 |
+| total | 1 |

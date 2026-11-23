@@ -1,0 +1,87 @@
+{
+ "plugin_fixtures": {
+  "generator": "scripts/fixtures/cut_plugin_regions.py",
+  "flank": 5000,
+  "record_flank": 2000,
+  "exon_flank": 50,
+  "gerp_regions": "exons",
+  "tools": {
+   "bgzip": "bgzip (htslib) 1.9"
+  },
+  "files": {
+   "reference.fa.fai": "dc189f7a7c2245e793098e6a62d81885c4936eb2fd84f6db0c15f9321373b035",
+   "reference.fa.gz": "adbceb370fd6989f17cd175f57372832971ac0f95996d7086f59d20e44082d82",
+   "reference.fa.gz.fai": "dc189f7a7c2245e793098e6a62d81885c4936eb2fd84f6db0c15f9321373b035",
+   "reference.fa.gz.gzi": "a4aa25e2cd740c7b11baec1a97cf9e94b4041056299f41942ca5876f339e1740"
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 63,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species spironucleus_salmonicida --assembly GCA000497125v2 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "spironucleus_salmonicida/63_GCA000497125v2",
+ "fasta": "the three sequences the records and the pruned cache's transcripts sit on (CM035318, CM035324 and AUWU02000032) at their full length from Spironucleus_salmonicida.GCA000497125v2.dna.primary_assembly.CM035318.fa.gz, Spironucleus_salmonicida.GCA000497125v2.dna.primary_assembly.CM035324.fa.gz and Spironucleus_salmonicida.GCA000497125v2.dna.nonchromosomal.fa.gz of Ensembl Protists (release 63 of Ensembl Genomes), each file held to the sum of the directory's CHECKSUMS; every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
+ "input": "variants.vcf: 293 records, 215 on the chromosome CM035318 (two of them name it by the cache's synonyms 3 and chr3), 34 on the chromosome CM035324 (five name it by CM035324.1 and chr9) and 44 on the unplaced scaffold AUWU02000032 (twelve name it by AUWU02000032.1 and tig00000055). 233 come from the seeded generator tools/vep-seeded-variants (generator version 3, seed 1, 36 records a category, on those three sequences, every reference allele read from the genome sequence), their IDs the generator's category and ordinal. 60 are designed records (their IDs begin code6_designed_) in six coding transcripts of CM035318, three a strand, on and around the two codons that genetic code table 6 translates as a residue and the standard code as a stop. For each of the two codons and each transcript: a substitution inside such a codon that keeps the residue (within_codon_kept) and one that changes it (within_codon_changed), a substitution that makes the codon from a codon of the same residue (made_codon_kept) and one that makes it from a codon of another residue (made_codon_changed). For each transcript besides: the closing stop codon turned into the one of the two codons a single substitution reaches (closing_stop_to_codon) and a stop codon made inside the coding sequence (made_stop). Each reference base of a designed record was read from the genome sequence and held to the cached coding sequence. Two exemplars per consequence-set combination the two references show, stratified by variant class and strand, six per combination carrying a protein-level term, plus the records the manifest's included_records name: every generator record at a sequence's first and last base, the first twelve of every other generator category and the 60 designed records. The cache names no known variant, so no record carries a variation identifier. The generator wrote no record in an untranslated region (no transcript of the cache has one), none across an origin (the cache flags no sequence circular) and none for an organelle (the cache holds none); it wrote two each at a splice donor, at a splice acceptor and inside an intron (two transcripts of the three sequences hold an intron of more than 40 bases) and three between genes. Every coding transcript of the three sequences translates under genetic code table 6, each transcript's codon_table in the cache",
+ "sha256": {
+  "default.txt": "e93e02208694b7043b0aa2ca2786f3a44874ffad18dbebb263072e32f2c40f3f",
+  "tab.txt": "1b93580b6071a53bd236965ee33d271b7f3e7a423bf4082309d7ff9b90d01d2d",
+  "vcf.vcf": "002efd3941b1a4abcdfba75da7c49ab5757eee1f0c775e8f5963726a822a8261",
+  "json.jsonl": "a175640e013da29ebde165d7b4a120434d152ebee953e6aaec1a5dc32116dd7b"
+ },
+ "variants_vcf_sha256": "b7bc7ab35aa1b4a38441a9e28b62957dc910dd08ed9ce8b59c1e43d09e3e16dd",
+ "flag_sets": {
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species spironucleus_salmonicida --assembly GCA000497125v2 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "spironucleus_salmonicida/63_GCA000497125v2",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "a66064402ef7abecb5395cf8bb4ea595a1d05623da4637ae27f683f57466a70d",
+    "tab.txt": "6a52f8727c152bd378ac1b2301a466ec8c14a941348c753f5037457b679fad98",
+    "vcf.vcf": "069a429a55d9767cee267abcc722a4c13d171a0db1535bce5ceda51957749d0b",
+    "json.jsonl": "7f22aeea1977f41423c55eb1bd612f420b2aa6002802c93d03762f0ccd4ceb39"
+   },
+   "flags": [
+    "--everything"
+   ],
+   "expected_dir": "expected_everything"
+  },
+  "hgvs": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species spironucleus_salmonicida --assembly GCA000497125v2 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs [--tab|--vcf|--json]",
+   "perl_cache": "spironucleus_salmonicida/63_GCA000497125v2",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "3c35c255e79356793894a956d34f71e38555c3b44ca4ca4e7a282675eb0506dc",
+    "tab.txt": "784461cee975b186237068f0be3ecf30d5614cf28d2a9ae7ad7ed5521b7a3816",
+    "vcf.vcf": "d30971ffbd79d4f13c9c75264351853e792b7497759b597f754d3efab817bbd9",
+    "json.jsonl": "8e8bacd2aded67e6b3f1ae3b9b7d44f3d12f841358712a5a7fa9f42cbc8d1f7b"
+   },
+   "flags": [
+    "--hgvs"
+   ],
+   "expected_dir": "expected_hgvs"
+  }
+ },
+ "generator": "tools/vep-seeded-variants --seed 1 --records wide --per-category 36 --fasta <genome sequence> --sequence CM035324 --sequence AUWU02000032 --sequence CM035318 over the whole cache tools/vep-storable-to-json converts from the Ensembl Protists release 63 GCA000497125v2 cache, beside the 60 designed records; Ensembl VEP over the two inputs under the default flags; tools/vep-golden-corpus select --release 63 --assembly GCA000497125v2 --species spironucleus_salmonicida --dataset wide=<reference>=<the generator's records> --dataset designed=<reference>=<the designed records> --k 2 --seed 1 --max-span 1000000 --max-records 500 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 6 --include <the named records> --covers species-spironucleus-gca000497125v2 --covers genetic-code-tables --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --flank 5000 --gzip --drop sorted_exons --perl-info <cache>/info.txt --cache-version 63 over that converted cache (protein features kept for the DOMAINS column of the everything set; the cache holds no variation file, so the slice holds none); scripts/fixtures/cut_plugin_regions.py --reference <genome sequence> --flank 5000 --record-flank 2000 over the records under the cache's own sequence names; tools/vep-golden-corpus flag-set (everything, hgvs); scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; tools/vep-golden-corpus classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp --field HGVS_OFFSET for each flag set)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "AUWU02000032": 15,
+   "CM035318": 543,
+   "CM035324": 149
+  },
+  "shards": 4,
+  "synonym_lines": 8,
+  "variation_slices": "none: the Ensembl VEP cache holds no variation file"
+ },
+ "genetic_code_check": "every row of expected/default.txt.gz that names one reference codon and one alternate codon (200 rows) was held to genetic code table 6 as the reference image's Bio::Tools::CodonTable gives it (/opt/vep/src/ensembl-vep/Bio/Tools/CodonTable.pm line 234, beside table 1 at line 229): the Amino_acids column equals the table on all 200, and 71 of them, on 71 records, hold a codon the two tables read differently. The 60 designed records each have their row on the transcript they were designed in with the codons as designed: 24 synonymous_variant rows and 24 missense_variant rows on the two codons table 6 reads as a residue, 6 stop_lost rows at the closing stop codon and 6 stop_gained rows at the one stop codon of table 6; the standard code would name 54 of those 60 otherwise. Under --hgvs, 29 frameshift rows carry a protein notation: recomputed from the cached coding sequence, the notation vep-rs writes equals table 6 on all 29, and Ensembl VEP's equals the standard code's reading of the altered sequence on all 29; the two differ on the 20 rows the manifest documents under organelle_peptide_paths_translation_table"
+}

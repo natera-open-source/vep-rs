@@ -6,7 +6,7 @@
 
 **What vep-rs does instead.** vep-rs counts the position its `Protein_position` column prints, under `--hgvs` and without it, so its chart is the same in both runs and equals Ensembl VEP's chart for the run without `--hgvs`.
 
-**Where it is in Ensembl VEP's source** (`ensembl-variation` at release/116, `ensembl-vep` at release/116.2):
+**Where it is in Ensembl VEP's source** (`ensembl-variation` at release/116, `ensembl-vep` at release/116.3):
 
 - `Bio/EnsEMBL/Variation/TranscriptVariationAllele.pm`, lines 1724-1733, `hgvs_protein`: when an allele carries a shift, the TranscriptVariation's `translation_start` and `translation_end` are deleted and recomputed with the shift's offset, and the recomputed values stay cached.
 - `Bio/EnsEMBL/VEP/Stats.pm`, line 359, `log_BaseTranscriptVariationAllele`: the chart counts `translation_start` as the object holds it.
@@ -73,7 +73,7 @@ The statistics logger counts a row's protein position from the TranscriptVariati
 
 The two charts also count different numbers of rows, 1,053 and 1,032, the sums of the two vectors above. A shifted start that maps to no coding position, an insertion or deletion carried past the stop codon into the 3' UTR or across an exon boundary into the intron, is stored as undefined (`BaseTranscriptVariation.pm`, line 375). The logger counts only a row whose `translation_start` is defined (`Stats.pm`, line 359), while a start the shift moves from an intron into the coding sequence is counted for the first time. The 21 rows are the balance of the two.
 
-Source (`ensembl-variation` at release/116, `ensembl-vep` at release/116.2):
+Source (`ensembl-variation` at release/116, `ensembl-vep` at release/116.3):
 
 - `Bio/EnsEMBL/Variation/TranscriptVariationAllele.pm`, lines 1724-1733: the cached positions deleted and recomputed with the shift.
 - `Bio/EnsEMBL/Variation/BaseTranscriptVariation.pm`, lines 365-380: a shifted coordinate the mapper returns as a gap stored as an undefined position.
@@ -102,13 +102,13 @@ The `Protein_position` column is identical across the four outputs, and the firs
 
 ### 1.7 How the comparator treats this class
 
-No comparator of this repository reads the statistics report of a `--hgvs` run. The format comparator (`scripts/concordance/compare_vep_formats.py`) compares the annotation outputs and the warnings files, and the golden harness compares the statistics text of the `GRCh38-statistics` corpus, whose runs carry no `--hgvs`, so the two charts agree there. The class `stats_protein_position_chart` names the section a comparison of a `--hgvs` run's statistics report sets aside, with every other section compared as written.
+No comparator of this repository reads the statistics report of a `--hgvs` run. The format comparator (`tools/vep-formats-compare`) compares the annotation outputs and the warnings files, and the golden harness compares the statistics text of the `GRCh38-statistics` corpus, whose runs carry no `--hgvs`, so the two charts agree there. The class `stats_protein_position_chart` names the section a comparison of a `--hgvs` run's statistics report sets aside, with every other section compared as written.
 
 ## 2. An eleventh row for a position past the end of a short peptide
 
 **In short.** On `21 39428463 tiny_cds_end T C`, both engines write the same coding row on `ENST00000451131` (LCA5L, reverse strand, a `cds_end_NF` model of 10 residues): `incomplete_terminal_codon_variant` with `coding_sequence_variant`, `Protein_position` 11. Ensembl VEP's `[Position in protein]` chart prints that row under an eleventh key, `110-120%`, and `0` under `90-100%`; vep-rs counts it under `90-100%`, the only decile a position at or past a protein's end can belong to.
 
-The shape is tier 2 of [Intended divergences from Ensembl VEP](../intended-divergences.md): 19 of the 77,675 transcripts of the committed caches (245 per million) end in a partial codon after at most ten residues, in 6 corpora, and 6 flag sets run `--stats_text`. No comparison of this repository reads such a report, so nothing is set aside.
+The shape is tier 2 of [Intended divergences from Ensembl VEP](../intended-divergences.md): 20 of the 116,165 transcripts of the committed caches (172 per million) end in a partial codon after at most ten residues, in 7 corpora, and 6 flag sets run `--stats_text`. No comparison of this repository reads such a report, so nothing is set aside.
 
 ### 2.1 The record
 

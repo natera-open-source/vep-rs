@@ -1,7 +1,7 @@
 entry = "opentargets_study_types_and_false"
 page = "docs/plugins/annotation-store.md#opentargets"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the file option of the OpenTargets plugin's header (GWAS or QTL annotations, or both); not seen in the measured datasets; classed by its most reachable shape, a one-family export under the default study_types: lead_variants_only=false breaks the header's \"1 (filtered) or 0 (unfiltered)\""
 notes = "Of the two behaviours the entry names this reproduces the first, a GWAS-only export under the default study_types; Ensembl VEP writes `Failed to instantiate plugin OpenTargets` to its warnings file and no row carries an OpenTargets_ field. The second, `lead_variants_only=false`, is read as true by Ensembl VEP and refused by vep-rs."
@@ -32,3 +32,14 @@ columns = ["Feature", "OpenTargets_gwasLocusToGeneScore", "OpenTargets_gwasGeneI
 [expected]
 ensembl_vep = ["ENST00000318948 | - | - | -"]
 vep_rs = ["ENST00000318948 | 0.84708172082901 | ENSG00000180530 | EFO_0009188"]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/open_targets.rs::OpenTargetsPlugin::columns_to_write",
+    "crates/vep-builtins/src/plugins/open_targets.rs::OpenTargetsPlugin::init",
+    "crates/vep-builtins/src/plugins/open_targets.rs::StudyTypes::parse",
+]
+tests = [
+    "crates/vep-builtins/src/plugins/open_targets.rs::tests::lead_variants_only_filters",
+    "crates/vep-builtins/src/plugins/open_targets.rs::tests::study_types_filters",
+]

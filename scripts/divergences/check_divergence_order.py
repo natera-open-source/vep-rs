@@ -8,7 +8,7 @@ header is ``| Entry | In one sentence | Tier and count | Verified against | Page
 each sits under a category heading, a ``##`` heading or a ``###`` heading inside
 one, and the first cell of a row links the entry's key in code font. The
 ``Verified against`` cell names the Ensembl VEP release the entry's reproduction
-was last run against, as a release number such as ``116.2``; with
+was last run against, as a release number such as ``116.3``; with
 ``--reference`` every cell must name that release. The table is
 tab-separated, ``#`` lines being comments, with at least the columns ``entry``,
 ``tier``, ``records_total``, ``records_with_shape``, ``per_million``,

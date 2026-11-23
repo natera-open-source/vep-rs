@@ -1,0 +1,92 @@
+{
+ "plugin_fixtures": {
+  "generator": "scripts/fixtures/cut_plugin_regions.py",
+  "flank": 5000,
+  "record_flank": 2000,
+  "exon_flank": 50,
+  "gerp_regions": "exons",
+  "tools": {
+   "bgzip": "bgzip (htslib) 1.9"
+  },
+  "files": {
+   "reference.fa.fai": "83bd29ceb3983abc8771e18378a1e96a9b14650f3a1b0a10e4d2982b51878b14",
+   "reference.fa.gz": "f66e0dd3ed3ccbeb868f9d1c1c4197a822768570d90e543f8d4e438495caa470",
+   "reference.fa.gz.fai": "83bd29ceb3983abc8771e18378a1e96a9b14650f3a1b0a10e4d2982b51878b14",
+   "reference.fa.gz.gzi": "30e5dc6c9e15ab67d405586eb043791e33039e4d467bf632c002bb14cd48c3a5"
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 63,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species sorghum_bicolor --assembly Sorghum_bicolor_NCBIv3 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "sorghum_bicolor/63_Sorghum_bicolor_NCBIv3",
+ "fasta": "the two sequences the records sit on (chromosome 9 and the unplaced scaffold super_1165) at their full length, from Sorghum_bicolor.Sorghum_bicolor_NCBIv3.dna.chromosome.9.fa and the super_1165 record of Sorghum_bicolor.Sorghum_bicolor_NCBIv3.dna.nonchromosomal.fa of Ensembl Plants release 63, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
+ "input": "variants.vcf: 293 records on chromosome 9 and the unplaced scaffold super_1165. 214 are seeded records that tools/vep-seeded-variants wrote from the converted cache and the genome sequence (generator version 1, seed 1, --records wide), their IDs naming the category and an ordinal: start and stop codons, missense and synonymous changes on each strand, splice donors and acceptors, both untranslated regions, introns, upstream, downstream and intergenic positions, frameshift insertions and deletions, in-frame deletions, and the first and last base of each sequence. 79 are known variants of the cache's variation files on chromosome 9, single-base substitutions sampled with seed 1 whose first allele is the genome's base, each under the cache's identifier, one of them multi-allelic. Twelve records name their sequence by a synonym the cache resolves: CM000768.3 and NC_012878.2 for chromosome 9 and KV917702.1 for super_1165",
+ "sha256": {
+  "default.txt": "855e1593da065aec82492c8b0f3866352a6b81fe3f41da0f115c1eb7c9103023",
+  "tab.txt": "890ec81edf391c44e0c4cae21447667cfcce03d550fca6e5ed52f75f8484343b",
+  "vcf.vcf": "5149ea8b4204fbcffef3d840734eead1d1530cbf96001f382fbc3e19fe04f6f8",
+  "json.jsonl": "4777441d6260b7c77c5e3938ec79334aaefd4947cdd19833a5a149cf598174d1"
+ },
+ "variants_vcf_sha256": "f1edd1a24751f9c4e29dd8d5501a010650fd259b4eb9a23f03df8d78485bcf66",
+ "flag_sets": {
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species sorghum_bicolor --assembly Sorghum_bicolor_NCBIv3 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "sorghum_bicolor/63_Sorghum_bicolor_NCBIv3",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "67b72295fb6943a23b76a7cbb2c3a5f99b591ceb95fa9abc43331cd5f04f6126",
+    "tab.txt": "7c9a1a8a669caca45bf07895f9b33887ba01765a2c67d494d7c1b0038e9e1957",
+    "vcf.vcf": "e32ab2d90629f414481e3a11ff0bff012a48718f5036af195aac806ff0f74002",
+    "json.jsonl": "96a1a4e49050633b1e064c6cfaea8c1d7cbf46d971c75da9e785b6b854f67a21"
+   },
+   "flags": [
+    "--everything"
+   ],
+   "expected_dir": "expected_everything"
+  },
+  "hgvs-sift": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species sorghum_bicolor --assembly Sorghum_bicolor_NCBIv3 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs --sift b [--tab|--vcf|--json]",
+   "perl_cache": "sorghum_bicolor/63_Sorghum_bicolor_NCBIv3",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "e841c67965d4d48a9c1cb501079efdc6617f505f515479a864412e2d5a8d4386",
+    "tab.txt": "6ec9a315ecee698b3400f87e1eea5d11a426ef0622f2f22d51af5dc4179067f7",
+    "vcf.vcf": "95ebae050bafa2617408764f7bfba6df590bebfa56b42504dbaa01f2cabdb96b",
+    "json.jsonl": "a41177e320c87fa43ea6073046da47859b41ea0f46b0fe3b1db9500de7e5ebff"
+   },
+   "flags": [
+    "--hgvs",
+    "--sift",
+    "b"
+   ],
+   "expected_dir": "expected_hgvs-sift"
+  }
+ },
+ "generator": "tools/vep-storable-to-json over the Ensembl Plants release 63 Sorghum_bicolor_NCBIv3 cache; tools/vep-seeded-variants --seed 1 --records wide --sequence 9 --sequence super_1165 --fasta <genome sequence> over the converted cache, and up to 300 known single-base substitutions sampled with seed 1 from the converted cache's variation files of the same sequences; Ensembl VEP over the two inputs under the default flags; tools/vep-golden-corpus select --release 63 --assembly Sorghum_bicolor_NCBIv3 --species sorghum_bicolor --dataset wide=<reference>=<the seeded records> --dataset known=<reference>=<the known variants> --k 30 --seed 1 --max-span 1000000 --max-records 500 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 90 --include <the named records> --covers species-sorghum-ncbiv3 --covers genetic-code-tables --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --flank 5000 --gzip --drop sorted_exons --drop protein_function_predictions --drop-except <the transcripts on which a record changes one residue, the rows SIFT scores> --perl-info <cache>/info.txt --cache-version 63 --variations <converted cache>/variations over the whole converted cache (protein features kept for the DOMAINS column of the everything set; the variation slices hold the known variants within one base of a record); scripts/fixtures/cut_plugin_regions.py --reference <genome sequence> --flank 5000 --record-flank 2000, each record named by a synonym read under the cache's name for its sequence; scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; tools/vep-golden-corpus flag-set (everything, hgvs-sift) and classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp --field SIFT for the hgvs-sift set)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "9": 721,
+   "super_1165": 2
+  },
+  "shards": 43,
+  "synonym_lines": 4,
+  "matrices_kept_on": 116,
+  "variation_records_per_chromosome": {
+   "9": 99,
+   "super_1165": 0
+  },
+  "variation_slices": "the known variants within one base of a record under variations/9/all_vars.gz with its .csi, as the Ensembl VEP cache lays them out; super_1165, which carries no known variant, keeps an empty indexed file"
+ }
+}

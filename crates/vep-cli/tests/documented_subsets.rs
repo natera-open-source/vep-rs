@@ -55,12 +55,13 @@ fn check_ref_exclusion_is_documented() {
     assert_page_states(
         "cache-setup.md",
         &[
-            "Under `--check_ref` the same contig skips the record at every position with the \
-             sub-slice warning and then the mismatch warning; an insertion, naming no reference \
-             base, passes under either flag in both engines (`Parser.pm` lines 600-602 and 636)",
-            "Ensembl VEP annotates a one-base record there whose reference is written `N`, and \
-             refuses one written otherwise with the mismatch warning alone (`Parser.pm` lines \
-             614-631)",
+            "Under `--check_ref` vep-rs skips the record at every position of that contig with \
+             the sub-slice warning and then the mismatch warning; an insertion, naming no \
+             reference base, passes under either flag in both engines (`Parser.pm` lines 600-602 \
+             and 636)",
+            "Ensembl VEP annotates a one-base record at position 1 whose reference is written \
+             `N`, and refuses one written otherwise with the mismatch warning alone (`Parser.pm` \
+             lines 614-631)",
         ],
     );
     assert_page_states(
@@ -93,8 +94,129 @@ fn id_input_exclusion_is_documented() {
     );
 }
 
+/// `stats-chart-variant-classes`: the statistics page gives the `[Variant
+/// classes]` key of a record `--minimal` splits as the class of its first
+/// alternate allele's trimmed pair and excepts a record resolved from a variant
+/// identifier, which carries a stored class before the split and keeps it:
+/// VariationFeature.pm:1117 computes a class only where none is set, and the
+/// split copies every key of the record (InputBuffer.pm:670). The index row of
+/// `stats_variant_classes_minimal` states the same exception. The run holds
+/// vep-rs to the sentence on an identifier of the `GRCh38-input-id` corpus whose
+/// two stored alternate alleles are shorter and longer than its reference
+/// allele: the record is split into a deletion and an insertion, and every row
+/// and the report name the stored class, `indel`.
+#[test]
+fn statistics_page_excepts_an_identifier_record_from_the_split_class() {
+    const PAGE: &str = "divergences/statistics-report-counts.md";
+    assert_page_states(
+        PAGE,
+        &[
+            "The `[Variant classes]` key of a record `--minimal` splits is the class of its first \
+             alternate allele's trimmed pair, the class both engines print as `VARIANT_CLASS` for \
+             the split record. A record resolved from a variant identifier is the exception: it \
+             carries a stored class before the split ([Identifier input resolved from the \
+             cache's variation files](id-input.md) says where each engine reads it), and both \
+             engines keep that class and count it. Ensembl VEP computes a record's class once \
+             and keeps it (`VariationFeature.pm:1112-1119`).",
+        ],
+    );
+    assert!(
+        !page_text(PAGE).contains("for the split record. Ensembl VEP computes"),
+        "docs/{PAGE} gives the split record's class without the identifier exception"
+    );
+    // The rejoin makes its output-hash call at OutputFactory.pm:2298 and
+    // restores the record's allele string at :2300.
+    assert_page_states(
+        PAGE,
+        &[
+            "(`OutputFactory.pm:967`, reached during the rejoin at `:2298`); otherwise its \
+             logger meets the record's restored allele string first (`:2300`, `Stats.pm:247`).",
+        ],
+    );
+    for one_line_short in ["during the rejoin at `:2297`", "string first (`:2299`"] {
+        assert!(
+            !page_text(PAGE).contains(one_line_short),
+            "docs/{PAGE} cites {one_line_short:?}, one line above the statement"
+        );
+    }
+    assert!(
+        page_text("divergences/id-input.md")
+            .starts_with("# Identifier input resolved from the cache's variation files\n"),
+        "docs/divergences/id-input.md is not titled as docs/{PAGE} links it"
+    );
+    let index = page_text("intended-divergences.md");
+    let row = index
+        .lines()
+        .find(|l| l.starts_with("| [`stats_variant_classes_minimal`]"))
+        .expect("docs/intended-divergences.md has no `stats_variant_classes_minimal` row");
+    assert_states(
+        "the `stats_variant_classes_minimal` row of docs/intended-divergences.md",
+        row,
+        &[
+            "vep-rs counts the first allele's class in both runs; a record resolved from a \
+             variant identifier keeps its stored class in both engines |",
+        ],
+    );
+    assert!(
+        !row.contains("in both runs |"),
+        "the `stats_variant_classes_minimal` row of docs/intended-divergences.md lacks the \
+         identifier exception"
+    );
+
+    let dir = tempfile::tempdir().unwrap();
+    let list = dir.path().join("one.id.txt");
+    std::fs::write(&list, "rs1160505542\n").unwrap();
+    let out = dir.path().join("one.out");
+    let report = dir.path().join("one.stats.txt");
+    let cache = format!(
+        "{}/../../tests/golden/116/GRCh38-input-id/json_cache",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let status = common::isolated_vep(dir.path())
+        .stdin(std::process::Stdio::null())
+        .arg("-i")
+        .arg(&list)
+        .arg("-o")
+        .arg(&out)
+        .args(["--format", "id", "--json_cache", &cache])
+        .args(["--minimal", "--variant_class", "--stats_text"])
+        .arg("--stats_file")
+        .arg(&report)
+        .args(["--quiet", "--force_overwrite"])
+        .status()
+        .unwrap();
+    assert!(status.success(), "{status}");
+    let written = std::fs::read_to_string(&out).unwrap();
+    let rows: Vec<&str> = written.lines().filter(|l| !l.starts_with('#')).collect();
+    assert!(!rows.is_empty(), "the identifier wrote no row");
+    for (index, row) in rows.iter().enumerate() {
+        let extra: Vec<&str> = row.rsplit('\t').next().unwrap().split(';').collect();
+        assert!(
+            extra.contains(&"MINIMISED=1") && extra.contains(&"VARIANT_CLASS=indel"),
+            "row {index} is not a split row of the stored class: {extra:?}"
+        );
+    }
+    let deletions = rows
+        .iter()
+        .filter(|row| row.split('\t').nth(2) == Some("-"))
+        .count();
+    assert!(
+        0 < deletions && deletions < rows.len(),
+        "the split features are not a deletion and an insertion: {deletions} of {} rows delete",
+        rows.len()
+    );
+    let report = std::fs::read_to_string(&report).unwrap();
+    let classes: Vec<&str> = report
+        .lines()
+        .skip_while(|l| *l != "[Variant classes]")
+        .skip(1)
+        .take_while(|l| !l.is_empty())
+        .collect();
+    assert_eq!(classes, ["indel\t1"]);
+}
+
 /// `default-format-header-lines`: the `## Output produced at` time is UTC, where
-/// Utils.pm:467-468 reads `localtime`, the Perl API and database header lines
+/// Utils.pm:467-468 reads `localtime`, Ensembl's Perl API and database header lines
 /// have no counterpart, and the `--custom` header lines follow the plugin lines
 /// (OutputFactory/VEP_output.pm:167).
 #[test]
@@ -114,21 +236,46 @@ fn default_format_header_lines_exclusion_is_documented() {
     );
 }
 
-/// `vcf-csq-info-header`: the `##VEP=` line carries no Perl API component
-/// versions, the `--custom` `##INFO` lines follow the plugin lines
-/// (OutputFactory/VCF.pm:234-263, 273-276), and a header without a `#CHROM`
-/// line gets the eight-column line, where VCF.pm:224 pops the last `#` line of
-/// the input whatever it is.
+/// `vcf-csq-info-header`: the `##VEP=` line carries Ensembl VEP's tokens in its
+/// order, the API module versions of the reference release among them, which
+/// the page says are that release's and shows as `vep_core` holds them; its
+/// time is UTC, where Utils.pm:467-468 reads `localtime`; the `--custom`
+/// `##INFO` lines follow the plugin lines (OutputFactory/VCF.pm:234-263,
+/// 273-276); and a header without a `#CHROM` line gets the eight-column line,
+/// where VCF.pm:224 pops the last `#` line of the input whatever it is.
 #[test]
 fn vcf_csq_info_header_exclusion_is_documented() {
+    let release = format!("{}.{}", vep_core::VEP_VERSION, vep_core::VEP_SUB_VERSION);
+    let modules = vep_core::VEP_API_MODULE_VERSIONS
+        .iter()
+        .map(|(module, version)| format!("{module}={version}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let (first, last) = (
+        vep_core::VEP_API_MODULE_VERSIONS[0].0,
+        vep_core::VEP_API_MODULE_VERSIONS[vep_core::VEP_API_MODULE_VERSIONS.len() - 1].0,
+    );
     assert_page_states(
         "output/vcf.md",
         &[
-            "Ensembl VEP's `##VEP=` line also carries its Perl API component versions \
-             (`ensembl=116.0d85231 ...`), which have no counterpart here",
-            "Its `##INFO=<ID=<short>_<field>,...>` lines for `--custom` sources follow the \
+            &format!("cache=\"[PATH]/116\" {modules} 1000genomes=\"phase3\""),
+            "The `##VEP=` line carries the tokens Ensembl VEP writes on a cache run, in its \
+             order (`OutputFactory/VCF.pm` lines 234-263)",
+            &format!(
+                "Its keys `{first}=` to `{last}=` state the Ensembl API module versions of the \
+                 Ensembl VEP {release} image (`ensemblorg/ensembl-vep:release_{release}`): they \
+                 are the reference release's modules, none of which runs in vep-rs, whose own \
+                 version the `##vep-rs=` line gives"
+            ),
+            "The `time` token is UTC, where Ensembl VEP prints the process's local time \
+             (`Utils.pm` lines 467-468)",
+            "The `##INFO=<ID=<short>_<field>,...>` lines for `--custom` sources follow the \
              plugin lines, one per key of each source",
         ],
+    );
+    assert!(
+        !page_text("output/vcf.md").contains("have no counterpart"),
+        "docs/output/vcf.md still says the API module versions have no counterpart"
     );
     assert_page_states(
         "divergences/vcf-without-chrom-line.md",
@@ -145,19 +292,44 @@ fn vcf_csq_info_header_exclusion_is_documented() {
 
 /// `single-dash-long-options`: a multi-letter one-dash name reads as Getopt::Long
 /// reads it under Config.pm:62, and the tokens that differ (`-qv`, `-ofile.txt`,
-/// an upper-case single-letter short, `+name`) are clap's readings.
+/// `+name`) are clap's readings. An upper-case letter is the version (`-V`),
+/// the one option it is read as a prefix of (`-J`, `-Q`, `-W`, `-X`), or an
+/// argument syntax error, seven of them shorts under Getopt::Long's
+/// `ignore_case`. The refusals table's lead-in excepts the `-V` row from its
+/// sentence on help texts, `-V` being the version's short.
 #[test]
 fn single_dash_long_options_exclusion_is_documented() {
+    let path = "cli/compatibility.md";
     assert_page_states(
-        "cli/compatibility.md",
+        path,
         &[
             "A short with its value attached (`-ofile.txt`) and a cluster of switches (`-qv`) \
              are clap's readings, where Getopt::Long refuses the token",
             "A `+` before an option name, which Getopt::Long accepts, is not an option here",
             "A single-letter short is clap's and is matched by case",
             "Ensembl VEP refuses `-h`, a prefix of eight of its options, and has no `--version`",
+            "- `-V` is the version, where Getopt::Long's `ignore_case` reads it as `-v`. Beside \
+             any other token `-V` is refused (exit 1)",
+            "- `-A`, `-E`, `-I`, `-O`, `-S`, `-T` and `-U` are argument syntax errors (exit 2), \
+             where `ignore_case` reads each as its lower-case short.",
+            "Four upper-case letters name an option, as they do in Ensembl VEP: `-J` is `--json`, \
+             `-Q` `--quiet`, `-W` `--warning_file` and `-X` `--xref_refseq`.",
+            "Any other upper-case letter is refused by both (vep:30).",
+            "A refused flag exits 1 with the message below under the `cli` component, and the \
+             help text of a declared one is this table's message. The `-V` row is the \
+             exception: `-V` is the version's short, and its help text is the version's.",
         ],
     );
+    let text = page_text(path)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for refused in [
+        "an upper-case short names no flag here",
+        "the help text of a declared one is this table's message. | Flag",
+    ] {
+        assert!(!text.contains(refused), "docs/{path} states {refused:?}");
+    }
 }
 
 /// `stdin-input`, `gzip-bgzip-compressed-input`, `gzip-bgzip-input`: gzip or
@@ -181,9 +353,263 @@ fn compressed_input_exclusion_is_documented() {
     );
 }
 
+/// `domains_order_region_file_copy` in the JSON format: JSON.pm:363-371 re-splits each
+/// `DOMAINS` entry with `(\w+):(\w+)`, and an entry the pattern does not match pushes the
+/// captures of the last match once more, so two orders of one list give arrays that repeat
+/// different objects. The page says so and how each comparison reads the array: the format
+/// comparison through `arrays_of_one_domains_list`, which `same_items` asks under the
+/// marker of the `domains` array, the golden harness as a multiset of the objects.
+#[test]
+fn domains_order_page_says_what_two_orders_of_one_list_give_the_json_array() {
+    assert_page_states(
+        "divergences/domains-order-region-file-copy.md",
+        &[
+            "In the JSON format the `domains` array is built from the list in its order.",
+            "Both engines re-split each entry into `db` and `name` with the pattern \
+             `(\\w+):(\\w+)` (`OutputFactory/JSON.pm`, lines 363-371).",
+            "An entry the pattern does not match, such as `Low_complexity_(Seg):seg`, repeats \
+             the object of the last entry that matched, and adds none where no earlier entry \
+             matched.",
+            "Two orders of one list can therefore give two arrays of the same objects that \
+             differ in the object repeated or in the number of objects.",
+            "Under `order_only` the format comparator accepts two arrays that one list gives \
+             in two orders.",
+            "The golden harness compares the array's objects as a multiset.",
+        ],
+    );
+    let file = |path: &str| -> String {
+        std::fs::read_to_string(format!("{}/../../{path}", env!("CARGO_MANIFEST_DIR")))
+            .unwrap_or_else(|e| panic!("{path}: {e}"))
+    };
+    assert_states(
+        "tools/vep-formats-compare/src/lists.rs",
+        &file("tools/vep-formats-compare/src/lists.rs"),
+        &[
+            "pub fn arrays_of_one_domains_list(",
+            "(\"domains\", \"json\")",
+            "pub const JSON_ARRAY: &str = \"json\";",
+            "if separator == JSON_ARRAY => {",
+            "arrays_of_one_domains_list(&expected_items, &actual_items)",
+        ],
+    );
+    assert_states(
+        "crates/vep-cli/tests/common/mod.rs",
+        &file("crates/vep-cli/tests/common/mod.rs"),
+        &["the JSON `domains` array's objects by their compact text"],
+    );
+    assert_states(
+        "crates/vep-io/src/output/json.rs",
+        &file("crates/vep-io/src/output/json.rs"),
+        &[
+            "fn domains_json(",
+            "fn domains_json_resplit_truncates_at_non_word(",
+        ],
+    );
+}
+
+/// The protein features behind `DOMAINS` on a native cache: the builder reads
+/// each row of the release's `protein_feature` table once and no `interpro`
+/// table beside it, where Ensembl's API joins the `interpro` table by hit name
+/// (ProteinFeatureAdaptor.pm:289-291) and a cache Ensembl publishes can hold
+/// the features of another release's table. The setup page and the builder's
+/// README say so, and neither says that the two caches hold the same features.
+#[test]
+fn native_cache_pages_say_whose_protein_features_a_table_built_cache_holds() {
+    assert_page_states(
+        "cache-setup.md",
+        &[
+            "A native cache holds each row of the release's `protein_feature` table once, so \
+             `DOMAINS` can also name other features than Ensembl VEP names on a cache Ensembl \
+             publishes.",
+            "Ensembl's API joins each feature to the `interpro` table by its hit name \
+             (`ProteinFeatureAdaptor.pm`, lines 289-291), and such a cache lists a feature once \
+             for each row the join returns.",
+            "Three hits of `saccharomyces_cerevisiae` stand twice at release 116.",
+            "A cache Ensembl publishes can also hold the features of another release's table.",
+            "The Ensembl site's release 116 cache of `saccharomyces_cerevisiae` holds those of \
+             release 115, which differ from the release's own on 2,392 of 6,600 translations; \
+             the Ensembl Genomes site's cache of the same release holds the release's own.",
+        ],
+    );
+    let readme = cache_builder_readme();
+    assert_states(
+        "crates/vep-cache-builder/README.md",
+        &readme,
+        &[
+            "a native cache lists each row of the `protein_feature` table once, by feature \
+             identifier, so `DOMAINS` may name the features in another order.",
+            "An Ensembl cache can also hold other features than the release's table: one row \
+             for each `interpro` row a hit joins, and the rows of another release's table \
+             (`docs/cache-setup.md` gives both for `saccharomyces_cerevisiae`).",
+        ],
+    );
+    assert!(
+        !readme.contains("may name the same features in another order"),
+        "crates/vep-cache-builder/README.md still says that the two caches hold the same features"
+    );
+    let reader = std::fs::read_to_string(format!(
+        "{}/../vep-cache-builder/src/core_dumps.rs",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .unwrap();
+    assert_states(
+        "crates/vep-cache-builder/src/core_dumps.rs",
+        &reader,
+        &["read_table(dir, \"protein_feature\", 15)"],
+    );
+    assert!(
+        !reader.contains("\"interpro\""),
+        "crates/vep-cache-builder/src/core_dumps.rs reads the interpro table: the pages say \
+         a native cache holds each protein_feature row once"
+    );
+}
+
+/// The analysis names of `DOMAINS` on a native cache: the builder writes the
+/// display label the release's `analysis_description` table gives an analysis,
+/// the label Ensembl VEP's dumper keeps (Transcript.pm:476) and its writer
+/// prints with each blank as an underscore (OutputFactory.pm:1512-1515), and a
+/// cache Ensembl publishes can carry another label. The setup page tabulates
+/// the three analyses that the Ensembl Genomes site's release 63 cache of
+/// `arabidopsis_thaliana` names otherwise, and the builder's README counts
+/// their rows. The published cache's side of every figure is counted here, in
+/// the stored Ensembl VEP rows of the corpus the page names.
+#[test]
+fn native_cache_pages_say_whose_analysis_labels_a_table_built_cache_writes() {
+    use std::io::Read;
+    let path = format!(
+        "{}/expected_everything/tab.txt.gz",
+        committed_corpus("TAIR10-arabidopsis")
+    );
+    let bytes = std::fs::read(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
+    let mut text = String::new();
+    flate2::read::MultiGzDecoder::new(&bytes[..])
+        .read_to_string(&mut text)
+        .unwrap_or_else(|e| panic!("{path}: {e}"));
+    let domains = text
+        .lines()
+        .find(|line| line.starts_with("#Uploaded_variation"))
+        .unwrap_or_else(|| panic!("{path}: no column line"))
+        .split('\t')
+        .position(|column| column == "DOMAINS")
+        .unwrap_or_else(|| panic!("{path}: no DOMAINS column"));
+    // The DOMAINS items of each stored row, as (analysis name, hit name).
+    let rows: Vec<Vec<(&str, &str)>> = text
+        .lines()
+        .filter(|line| !line.starts_with('#'))
+        .map(|line| {
+            line.split('\t')
+                .nth(domains)
+                .unwrap_or_else(|| panic!("{path}: a row ends before DOMAINS"))
+                .split(',')
+                .filter_map(|item| item.split_once(':'))
+                .collect()
+        })
+        .collect();
+    assert_eq!(
+        rows.len(),
+        2396,
+        "{path}: the page gives the corpus's --everything run 2,396 rows"
+    );
+
+    // The analysis, the name a native cache writes for it, the name the
+    // published cache writes, and how often a row of the published cache lists
+    // each of its hits; a native cache lists each once.
+    let analyses = [
+        ("alphafold", "AFDB-ENSP_mappings", "AFDB-ENSP_mapping", 1),
+        ("signalp_gp", "SIGNALP_GP", "SignalP_GRAM_POSITIVE", 2),
+        ("signalp_gn", "SignalP_GN", "SignalP_GRAM_NEGATIVE", 2),
+    ];
+    let mut table = vec![
+        "A cache Ensembl publishes can also name an analysis by another label than the \
+         release's `analysis_description` table:"
+            .to_string(),
+        "| Analysis of `arabidopsis_thaliana` at release 63 | `DOMAINS` on a native cache | \
+         `DOMAINS` on the Ensembl Genomes site's cache | Rows of the 2,396 that `--everything` \
+         writes for `tests/golden/116/TAIR10-arabidopsis` |"
+            .to_string(),
+    ];
+    for (analysis, native, published, times) in analyses {
+        let named: Vec<&Vec<(&str, &str)>> = rows
+            .iter()
+            .filter(|items| items.iter().any(|(name, _)| *name == published))
+            .collect();
+        for items in &named {
+            for (_, hit) in items.iter().filter(|(name, _)| *name == published) {
+                let listed = items
+                    .iter()
+                    .filter(|(name, other)| *name == published && other == hit)
+                    .count();
+                assert_eq!(
+                    listed, times,
+                    "{path}: a row lists {published}:{hit} {listed} times, the page says {times}"
+                );
+            }
+        }
+        assert!(
+            rows.iter().flatten().all(|(name, _)| *name != native),
+            "{path}: a stored row names {native}, which the page gives to a native cache alone"
+        );
+        // The page says how often each cache lists a hit where the two differ.
+        let (once, repeated) = match times {
+            1 => ("", String::new()),
+            2 => (", each hit once", ", each hit twice".to_string()),
+            _ => panic!("the page has no word for a hit listed {times} times"),
+        };
+        table.push(format!(
+            "| `{analysis}` | `{native}`{once} | `{published}`{repeated} | {} |",
+            named.len()
+        ));
+    }
+    let any = rows
+        .iter()
+        .filter(|items| {
+            items.iter().any(|(name, _)| {
+                analyses
+                    .iter()
+                    .any(|(_, _, published, _)| name == published)
+            })
+        })
+        .count();
+    table.push(format!("| Any of the three | | | {any} |"));
+    let table: Vec<&str> = table.iter().map(String::as_str).collect();
+    assert_page_states("cache-setup.md", &table);
+
+    let readme = cache_builder_readme();
+    assert_states(
+        "crates/vep-cache-builder/README.md",
+        &readme,
+        &[
+            "An Ensembl cache can also name an analysis by another label than the release's \
+             `analysis_description` table, whose label a native cache writes.",
+            &format!(
+                "The Ensembl Genomes site's release 63 cache of `arabidopsis_thaliana` names \
+                 three analyses so, on {any} of the 2,396 rows that `--everything` writes for \
+                 the input of `tests/golden/116/TAIR10-arabidopsis` (`docs/cache-setup.md` \
+                 tabulates them)."
+            ),
+        ],
+    );
+
+    // The builder takes each feature's label from the table by the feature's
+    // analysis identifier.
+    let reader = std::fs::read_to_string(format!(
+        "{}/../vep-cache-builder/src/core_dumps.rs",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .unwrap();
+    assert_states(
+        "crates/vep-cache-builder/src/core_dumps.rs",
+        &reader,
+        &[
+            "read_table(dir, \"analysis_description\", 5)",
+            "display_label: display_labels.get(row.field(7)).cloned().flatten(),",
+        ],
+    );
+}
+
 /// `attributes-cds-start-end-nf`: a native cache lists `cds_start_NF` before
 /// `cds_end_NF` on every transcript carrying both, where the Ensembl cache keeps
-/// its database's order (Dumper/Core.pm:203-207) and OutputFactory.pm:1477 prints
+/// its database's order (Dumper/Core.pm:203-207) and OutputFactory.pm:1486 prints
 /// it, `cds_end_NF` first on a few GRCh38 transcripts.
 #[test]
 fn cds_flag_order_exclusion_is_documented() {
@@ -253,7 +679,8 @@ fn cache_builder_readme() -> String {
 /// prebuilt archive and checks its `sum` against the directory's CHECKSUMS, and
 /// `--CACHEDIR`, `--CACHE_VERSION`, `--CACHEURL` and `--FASTAURL`
 /// (INSTALL.pl:217-220, 273-280) have counterparts where the API, plugin and
-/// build options have none.
+/// build options have none. The installation brings each part of the archive
+/// that a file of the release carries and names at its end what it left out.
 #[test]
 fn install_pl_auto_subset_is_documented() {
     assert_page_states(
@@ -265,11 +692,78 @@ fn install_pl_auto_subset_is_documented() {
              inside it",
             "A file whose BSD `sum` differs from its `CHECKSUMS` line stops the installation, \
              naming the file",
-            "an existing release directory is never written into",
+            "The downloads, about 32 GB for GRCh38 and 16 GB for GRCh37, land under \
+             `<dir_cache>/tmp/` and go once the cache is in place; an existing release \
+             directory is never written into.",
+            "`--chromosomes` narrows the variation VCFs and not the table dumps.",
+            "A species with one variation VCF also fetches the `variation_feature` table for a \
+             sequence of its cache that file holds no record on.",
             "The cache is built from the release files, never from Ensembl VEP's prebuilt cache \
              archive, whose Storable format `vep` does not read",
-            "`--include-predictions` adds the SIFT and PolyPhen matrices",
-            "`--include-variations` the variation data below",
+            "Beside the transcripts the installation brings, with no switch, each part of \
+             Ensembl VEP's own cache that a file of the release carries for the genome:",
+            "| Part, or cell of the part above | Read from | Left out |",
+            "| The known variants with their ClinVar columns ([Variation data in a native \
+             cache](cache-variation-data.md)) | The variation VCFs and the variation \
+             database's table dumps; its `variation_feature` table for a sequence on which the \
+             one VCF of a species other than human holds no record | Where the tree publishes \
+             no variation VCF of the genome |",
+            "| Their 1000 Genomes frequencies | `1000GENOMES-phase_3.vcf.gz`, a file of human \
+             on GRCh38 alone | On GRCh37, whose tree lists no such file |",
+            "| Their PubMed identifiers and synonyms | The variation database's `variation`, \
+             `variation_citation`, `publication`, `variation_synonym` and `source` tables | On \
+             GRCh37, whose tree lists no `variation` table |",
+            "| The failed variants and their flag | The failed-variants GVF and the \
+             `failed_variation` table | Where the tree lists neither |",
+            "| Their gnomAD frequencies | No file of the release | In every installation |",
+            "| The SIFT and PolyPhen matrices ([SIFT and PolyPhen \
+             predictions](cache-predictions.md)) | The variation database's table dumps, for \
+             any species whose database holds them | On GRCh37 without `--include-predictions` \
+             |",
+            "| The regulatory and motif features ([Regulatory and motif \
+             features](regulatory.md#baking-the-files-into-a-cache)) | The regulatory-feature \
+             and motif-feature GFF3 files | For a genome without a regulation directory; the \
+             motif features where the directory lists no motif file |",
+            "| The regulatory features' activity by cell type | The activity file beside the \
+             GFF3 files | Where their directory lists no such file |",
+            "| The motif features' `HIGH_INF_POS` and `MOTIF_SCORE_CHANGE` | The funcgen \
+             database's `binding_matrix` and `binding_matrix_frequencies` tables | Where the \
+             tree publishes no funcgen database that lists both tables |",
+            "A part the site publishes no file of for the genome is left out without an error.",
+            "A build with `--output-dir` and none of `--include-variations`, \
+             `--include-predictions`, `--regulatory-gff` and `--motif-gff` builds a cache \
+             without the parts.",
+            "`--include-variations` changes nothing beside `--auto`, and `--regulatory-gff`, \
+             `--emars-gff` and `--motif-gff` are refused beside it.",
+            "The installation ends on one line saying the cache holds each of those parts, or \
+             on one warning for each part left out: `No <part> in the cache of <species> \
+             <assembly>: <reason>`.",
+            "Warnings of the same form name each cell left out; a converted cache holds them \
+             ([Cache conversion](cache-conversion.md)).",
+        ],
+    );
+    // What a GRCh37 installation holds of the matrices and of the frequencies
+    // stands on the pages of those subjects.
+    assert_page_states(
+        "cache-predictions.md",
+        &[
+            "The GRCh37 tree publishes the matrices table without the `translation_md5` table \
+             that keys it.",
+            "So a GRCh37 installation holds no matrices, and its closing warning names \
+             `--include-predictions`.",
+            "Beside `--auto` that switch fetches the matrices from Ensembl's MySQL server \
+             instead, for human on GRCh37 (`--mysql-port 3337`) and GRCh38 alone.",
+        ],
+    );
+    assert_page_states(
+        "cache-variation-data.md",
+        &[
+            "The 1000 Genomes file exists for GRCh38 only, so a GRCh37 native cache has no \
+             frequency column.",
+            "The GRCh37 tree lists the failed-variants file and no `variation` table, so a \
+             GRCh37 installation holds the failed variants and no `pubmed` or `var_synonyms`.",
+            "No native cache carries a gnomAD frequency.",
+            "A build with `--include-variations` reads none of these files.",
         ],
     );
     assert_states(
@@ -280,11 +774,204 @@ fn install_pl_auto_subset_is_documented() {
              and FASTA steps alone",
             "`--dir_cache` is `--CACHEDIR`, `--release` is `--CACHE_VERSION` and `--site` \
              stands for both `--CACHEURL` and `--FASTAURL`",
-            "`--include-predictions` and `--include-variations` add what that archive carries \
-             by default",
+            "Of what that archive carries beside the transcripts, an `--auto` install brings \
+             each part that a file of the release carries for the genome: the known variants \
+             with their 1000 Genomes frequencies, PubMed identifiers, synonyms and failed flag, \
+             the SIFT and PolyPhen matrices and the regulatory and motif features with their \
+             cell-type activity and matrix counts.",
+            "It ends on one warning for each part left out, with the reason, and on warnings \
+             for the cells it did not bring: the gnomAD frequencies, which no file of the \
+             release carries, and each cell whose file or table the genome's tree lacks, as \
+             the GRCh37 tree lacks the tables of the PubMed identifiers and the variant \
+             synonyms; a conversion of that archive carries each.",
+            "`--include-variations` changes nothing beside `--auto`, and `--include-predictions` \
+             fetches the matrices from Ensembl's MySQL server instead of the release's table \
+             dumps, the route to the GRCh37 matrices, whose key table the GRCh37 tree does not \
+             publish; that tree publishes no 1000 Genomes file either.",
+            "`--regulatory-gff`, `--emars-gff` and `--motif-gff` are refused beside `--auto`, \
+             which reads no EMAR file, and a build with `--output-dir` takes them.",
+            "An install holds the Ensembl transcript set alone, since vep-rs builds no RefSeq \
+             or merged cache.",
             "`--GITHUB_TOKEN` and the `VEP_*` environment variables have no counterpart",
+            "`--HELP` is `--help`; `--NO_PLUGINS` and `--SKIP_PLUGINS` have no counterpart, because \
+             the supported plugins are built into `vep`, and `--BIOPERL` has none, because nothing \
+             depends on BioPerl.",
         ],
     );
+    // The two switches alone do not make an install the archive's equal.
+    assert!(
+        !cache_builder_readme().contains("add what that archive carries by default"),
+        "crates/vep-cache-builder/README.md says the two switches add what the archive carries"
+    );
+
+    // The form of a closing warning and the reason of the gnomAD frequencies
+    // are the installer's own words.
+    let installer = std::fs::read_to_string(format!(
+        "{}/../vep-cache-builder/src/install.rs",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .unwrap();
+    for words in [
+        "format!(\"No {part} in the cache of {species} {assembly}: {reason}\")",
+        "\"gnomAD frequencies\"",
+        "format!(\"no file of the release carries them; {CONVERSION_CARRIES}\")",
+    ] {
+        assert!(
+            installer.contains(words),
+            "crates/vep-cache-builder/src/install.rs lacks {words:?}"
+        );
+    }
+}
+
+/// A native cache holds a known variant only on a sequence the builder read
+/// a variation record on, and an `--auto` installation ends on one warning
+/// that names the sequences of its cache it read none on, ten by name
+/// (`sequences_without_known_variants`, `named_sequences` and `left_out` of
+/// the cache builder's `src/install.rs`, whose `sequences_left_out` words the
+/// warning for the installation and for a build named one input at a time).
+/// A variation record is a record of a variation VCF or, in an installation
+/// of a species whose variation VCF is one file, a displayed row of the
+/// `variation_feature` table, read for a sequence that file holds no record
+/// on. The yeast corpus holds the shape
+/// the page names: Ensembl VEP's stored rows carry a known variant on three
+/// records of `Mito`, the sequence the release's variation VCF holds no
+/// record on.
+#[test]
+fn sequences_an_installation_read_no_variation_record_on_are_documented() {
+    assert_page_states(
+        "cache-variation-data.md",
+        &[
+            "A native cache holds a known variant only on a sequence the builder read a \
+             variation record on.",
+            "The one file of a species other than human can hold no record on a sequence whose \
+             known variants Ensembl VEP's own cache carries.",
+            "The yeast file of Ensembl Genomes release 63, `saccharomyces_cerevisiae.vcf.gz`, \
+             holds none on `Mito`, where the release's GVF file holds 2,481.",
+            "An installation reads such a sequence from the `variation_feature` table, 2,481 \
+             known variants on `Mito`; a build with `--include-variations` reads the file \
+             alone.",
+            "For `homo_sapiens` the release publishes a file for each of chromosomes 1-22, X, Y \
+             and MT and for no scaffold, and Ensembl VEP's own caches of release 116 hold no \
+             known variant on a scaffold either.",
+            "An installation's last lines name the sequences of the cache it read no variation \
+             record on, the first ten by name and the rest by their count.",
+            "A conversion of Ensembl VEP's cache carries any known variant that cache holds \
+             there.",
+        ],
+    );
+    assert_page_states(
+        "cache-setup.md",
+        &["One more names the sequences of the cache that hold no known variant."],
+    );
+    assert_states(
+        "crates/vep-cache-builder/README.md",
+        &cache_builder_readme(),
+        &[
+            "Between the warnings of the parts and of those cells, one of the same form names \
+             the sequences of the cache that hold no known variant, the first ten by name and \
+             the rest by their count: `sequences_without_known_variants` reads them from the \
+             built cache, each sequence of `contig_order` whose variation file is absent or \
+             holds no record.",
+            "Between the two it names, in one warning, the sequences of the cache it read no \
+             variation record on, where a conversion of that archive carries any known variant \
+             the archive holds.",
+        ],
+    );
+
+    // A string continuation of the source joins its two lines with no blank.
+    let installer = std::fs::read_to_string(format!(
+        "{}/../vep-cache-builder/src/install.rs",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .unwrap()
+    .split("\\\n")
+    .map(str::trim_start)
+    .collect::<String>();
+    for words in [
+        "fn sequences_without_known_variants(",
+        "const NAMED_SEQUENCES: usize = 10;",
+        "\"known variants on {}\"",
+        "sequences_left_out(without_variants, \"installation\")",
+        "the {reader} read no variation record there, in a variation VCF or in the \
+         variation_feature table; a conversion of Ensembl VEP's cache carries any known \
+         variant that cache holds there (docs/cache-conversion.md)",
+    ] {
+        assert!(
+            installer.contains(words),
+            "crates/vep-cache-builder/src/install.rs lacks {words:?}"
+        );
+    }
+
+    // On `Mito`, Ensembl VEP's stored rows name a known variant on three
+    // records of the yeast corpus.
+    let corpus = format!(
+        "{}/../../tests/golden/116/R64-1-1-yeast",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let input = std::fs::read_to_string(format!("{corpus}/variants.vcf")).unwrap();
+    let records: Vec<&str> = input.lines().collect();
+    let placed = [17, 159, 172].map(|line: usize| {
+        let cells: Vec<&str> = records[line - 1].split('\t').collect();
+        format!("{}:{}", cells[0], cells[1])
+    });
+    assert_eq!(placed, ["Mito:3957", "Mito:75620", "Mito:75663"]);
+    let mut stored = String::new();
+    std::io::Read::read_to_string(
+        &mut flate2::read::MultiGzDecoder::new(
+            std::fs::File::open(format!("{corpus}/expected_everything/default.txt.gz")).unwrap(),
+        ),
+        &mut stored,
+    )
+    .unwrap();
+    let known: Vec<(&str, &str)> = stored
+        .lines()
+        .filter(|line| !line.starts_with('#'))
+        .map(|line| line.split('\t').collect::<Vec<_>>())
+        .filter(|row| row[1].starts_with("Mito:") && row[12] != "-")
+        .map(|row| (row[1], row[12]))
+        .collect();
+    assert_eq!(known.len(), 22);
+    let mut named = known.clone();
+    named.sort_unstable();
+    named.dedup();
+    assert_eq!(
+        named,
+        [
+            ("Mito:3957", "sm-3957"),
+            ("Mito:75620", "sm-75620"),
+            ("Mito:75663", "sm-75663")
+        ]
+    );
+}
+
+/// `sift`, `polyphen`: a cache vep-rs builds carries the matrices only when
+/// its build read them, an `--auto` installation where the release publishes
+/// them or a build with `--include-predictions`, so a cache built without them
+/// fails the availability check both engines make (the `check_sift_polyphen` of
+/// AnnotationSource/Cache/Transcript.pm:148-176), a case Ensembl VEP's own
+/// caches of a species with predictions never present.
+#[test]
+fn sift_and_polyphen_native_cache_exclusion_is_documented() {
+    assert_page_states(
+        "cache-predictions.md",
+        &[
+            "A natively built cache names no tool version.",
+            "A native cache of a species with predictions whose build read no matrix is \
+             therefore the one case the flags refuse that Ensembl VEP's own caches never \
+             present: a build with `--output-dir` and no `--include-predictions`, or a GRCh37 \
+             installation without the switch.",
+        ],
+    );
+    for flag in ["--sift", "--polyphen"] {
+        assert_flag_row_states(
+            "cli/output-control.md",
+            flag,
+            &[
+                "(a native cache carries the matrices when its build read them: an `--auto` \
+                 installation where the release publishes them, or `--include-predictions`)",
+            ],
+        );
+    }
 }
 
 /// `fasta-download-and-indexing`: the installer takes `dna_index/` before
@@ -301,7 +988,7 @@ fn fasta_download_and_indexing_subset_is_documented() {
         "cache-setup.md",
         &[
             "the `dna_index/` file with its published `.fai` and `.gzi`, else the `dna/` file, \
-             recompressed to bgzip and indexed by the builder",
+             recompressed unless already BGZF, and indexed by the builder",
             "the shape of Ensembl's `dna_index/` files and of the file `vep-cache-builder \
              --auto` places in the cache directory",
             "An index the file lacks is written beside it as `samtools faidx` writes it, as \
@@ -323,6 +1010,37 @@ fn fasta_download_and_indexing_subset_is_documented() {
         "getting-started/quick-start.md",
         &["The FASTA `--auto` places in the cache directory is found without a flag"],
     );
+    let page = page_text("cache-setup.md")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let every_dna_file_recompressed = "recompressed to bgzip and indexed by the builder";
+    assert!(
+        !page.contains(every_dna_file_recompressed),
+        "docs/cache-setup.md states {every_dna_file_recompressed:?}"
+    );
+}
+
+/// The cache builder's README names the two shard shapes `vep` reads and the
+/// tools that write the bare array: the builder, and `tools/vep-storable-to-json`,
+/// whose `transcripts.rs` writes one array for a hash root and for an array
+/// root alike. It does not say that a converted cache carries the map shape.
+#[test]
+fn cache_builder_readme_names_the_tools_that_write_an_array_shard() {
+    let text = cache_builder_readme();
+    assert!(
+        !text.contains("the map shape an Ensembl VEP-converted cache carries"),
+        "crates/vep-cache-builder/README.md says a converted cache carries the map shape"
+    );
+    assert_states(
+        "crates/vep-cache-builder/README.md",
+        &text,
+        &[
+            "`crates/vep-cli/src/json_cache.rs` loads the shards named by `--json_cache`: a bare \
+             array of transcripts, which this crate and `tools/vep-storable-to-json` each write, \
+             or a map of such arrays.",
+        ],
+    );
 }
 
 /// `af-1kg-columns`: a native cache writes no 1000 Genomes entry for an allele
@@ -331,7 +1049,7 @@ fn fasta_download_and_indexing_subset_is_documented() {
 #[test]
 fn af_1kg_columns_exclusion_is_documented() {
     assert_page_states(
-        "cache-setup.md",
+        "cache-variation-data.md",
         &[
             "The file states no panel-wide frequency, so `AF` is the allele's count over the \
              panel's 5,008 chromosomes",
@@ -343,13 +1061,61 @@ fn af_1kg_columns_exclusion_is_documented() {
     );
 }
 
+/// `minor-allele-columns`: the two columns are carried and echoed in the JSON
+/// `colocated_variants` object, and the frequency filter does not read them:
+/// under `1KG_ALL` it reads the cache's `AF` column, where Ensembl VEP filters
+/// by `minor_allele_freq` for the minor allele and gives the one allele left
+/// one minus it (AnnotationSource/Cache/BaseCacheVariation.pm:215-230, 249-252).
+#[test]
+fn minor_allele_columns_exclusion_is_documented() {
+    assert_page_states(
+        "divergences/filter-common-1kg-all.md",
+        &[
+            "Ensembl VEP 116.3 filters under `1KG_ALL` by `minor_allele_freq` and fills the \
+             one remaining allele with one minus it, while vep-rs still reads `AF`",
+        ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "on a cache declaring the pre-108 minor-allele columns it filters by \
+             `minor_allele_freq`; vep-rs reads the cache's `AF` column",
+        ],
+    );
+}
+
+/// `info-source-versions`: a native cache states the core `meta` table's
+/// `assembly`, `gencode` and `genebuild`, or the GTF header's, an installed
+/// one the regulatory build's `regbuild` as well, and none of the versions
+/// an Ensembl cache's `info.txt` takes from the variation database, each of
+/// which CacheDir.pm:468-470 reads into the versions the headers print.
+#[test]
+fn info_source_versions_exclusion_is_documented() {
+    assert_page_states(
+        "cache-setup.md",
+        &[
+            "`source_versions`: on a native cache the core `meta` table's `assembly`, `gencode` \
+             and `genebuild`, or the GTF header's, and an installation's `regbuild`; [no \
+             version of the variation database](cache-variation-data.md#what-a-native-cache-lacks).",
+        ],
+    );
+    assert_page_states(
+        "cache-variation-data.md",
+        &[
+            "The dbSNP, ClinVar, COSMIC and gnomAD versions an Ensembl cache's `info.txt` \
+             lists come from the variation database.",
+            "The builder takes no version from it, so a native cache's headers print none.",
+        ],
+    );
+}
+
 /// `allele_string`: a native cache holds the export's right-trimmed indel
 /// alleles (ensembl-variation VariationFeature.pm:2390), where the Ensembl cache
 /// holds the database's string over the whole run (Database/Variation.pm:193).
 #[test]
 fn allele_string_exclusion_is_documented() {
     assert_page_states(
-        "cache-setup.md",
+        "cache-variation-data.md",
         &[
             "The Ensembl cache keeps dbSNP's alleles over the whole run an indel can shift \
              along (`CCCCC/CCCC` at 5030241-5030245), which the export trims to `CC/C` at \
@@ -359,6 +1125,78 @@ fn allele_string_exclusion_is_documented() {
              record's second base",
             "so the input co-locates with the native record alone",
         ],
+    );
+}
+
+/// `alternate_codon_past_the_coding_end`: the alternate half of `Codons` holds
+/// coding bases alone and `Amino_acids` the residue read from them, where
+/// TranscriptVariationAllele.pm:2422-2433 joins the 3' UTR onto the alternate
+/// coding sequence, emptied where it is shorter than one codon, and :877 cuts
+/// the alternate codon from that string. The page's two corpus figures are
+/// held to the manifests: a row is one Location, Allele and Feature that a
+/// `field_divergences` list names under the class. Row tests: the four
+/// partial-codon and short-sequence tests of `vep-effects`'s `display.rs`.
+#[test]
+fn alternate_codon_past_the_coding_end_divergence_is_documented() {
+    const CLASS: &str = "alternate_codon_past_the_coding_end";
+    let path = "divergences/alternate-codon-past-the-coding-end.md";
+    assert_page_states(
+        path,
+        &[
+            "Ensembl VEP 116.3 cuts a row's alternate codon from the coding sequence with the 3' \
+             UTR joined on",
+            "vep-rs cuts both codons from coding bases alone.",
+            "lines 2427-2433 join the 3' UTR onto what comes back.",
+            "line 2537 assigns the trimmed length where a comparison was meant.",
+            "`alternate_codon_past_the_coding_end` reads `Codons` and `Amino_acids` on a \
+             `Transcript` row, in two shapes.",
+            "| Ensembl VEP 116.3 | `X/K` | `Ga/Aag` |",
+            "| vep-rs | `X` | `Ga/Aa` |",
+            "| ENST00000454028 | `t` | `a` |",
+            "The six whole-genome datasets hold 51 rows of the class.",
+            "The golden corpora `GRCh37` and `GRCh38` carry 3 and 15 rows, documented in their \
+             manifests.",
+        ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "[`alternate_codon_past_the_coding_end`](divergences/alternate-codon-past-the-coding-end.md) \
+             | Ensembl VEP cuts a row's alternate codon from the coding sequence with the 3' UTR \
+             joined on",
+            "| 3 · none on the cuts · 511 flag sets, 2 corpora | 116.3 | [The alternate codon \
+             that holds bases of the 3' UTR](divergences/alternate-codon-past-the-coding-end.md) |",
+        ],
+    );
+    let mut carriers = Vec::new();
+    for corpus in common::corpora() {
+        let lists = std::iter::once(&corpus.manifest["field_divergences"]).chain(
+            corpus.manifest["flag_sets"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|flag_set| &flag_set["field_divergences"]),
+        );
+        let rows: std::collections::BTreeSet<String> = lists
+            .flat_map(|list| list.as_array().into_iter().flatten())
+            .filter(|entry| entry["expected_divergence"] == CLASS)
+            .map(|entry| {
+                format!(
+                    "{}|{}|{}",
+                    entry["location"], entry["allele"], entry["feature"]
+                )
+            })
+            .collect();
+        if !rows.is_empty() {
+            carriers.push((corpus.name.clone(), rows.len()));
+        }
+    }
+    carriers.sort();
+    assert_eq!(
+        carriers,
+        [("GRCh37".to_string(), 3), ("GRCh38".to_string(), 15)],
+        "the corpora whose manifests document a row under {CLASS}, with their rows: docs/{path} \
+         states them"
     );
 }
 
@@ -386,6 +1224,8 @@ fn byte_transparent_input_exclusion_is_documented() {
              character as Ensembl VEP's bytes do.",
             "`vep-cache-builder` decodes the escapes the same way and refuses a line holding such \
              a byte raw, naming the line.",
+            "Its regulatory bake skips such a line of a type it does not keep, as the run-time \
+             reader does.",
         ],
     );
 }
@@ -488,7 +1328,8 @@ fn dont_skip_exclusion_is_documented() {
              shape",
             "It reads an Ensembl-format, region or HGVS line opening with `#` as a comment, \
              counted toward the line numbers that follow, as Ensembl VEP counts the record it \
-             reads there, and otherwise skipped without a word",
+             reads there, and otherwise passed over",
+            "One warning at the end of the input counts such lines and names the first",
             "A region or HGVS `#` line with no other word character is an empty line to both \
              engines (`Parser.pm` lines 273-275), counted and warned about as one",
             "a region, SPDI or HGVS transcript record whose span exceeds `--max_sv_size`",
@@ -498,7 +1339,7 @@ fn dont_skip_exclusion_is_documented() {
 
 /// `flag_pick`, `flag_pick_allele`, `flag_pick_allele_gene`, `spdi`: under
 /// `--minimal` the pick family runs once over the rejoined record, where Ensembl
-/// VEP's rejoin filters each split feature first (OutputFactory.pm:2289, 2303
+/// VEP's rejoin filters each split feature first (OutputFactory.pm:2298, 2312
 /// reaching :514 and :609-626) and the marks persist into the merged pass (:301),
 /// so a split record carries one PICK per split feature; and a split allele's
 /// SPDI and GA4GH VRS are its own, where :1398 builds the table from the rejoined
@@ -533,7 +1374,7 @@ fn flag_pick_minimal_exclusion_is_documented() {
 
 /// `no_intergenic`: under `--minimal --no_intergenic` the genic allele of a
 /// multi-allelic record keeps its transcript row, where the rejoin leaves the
-/// rejoined feature's intergenic overlap defined (OutputFactory.pm:2323-2338)
+/// rejoined feature's intergenic overlap defined (OutputFactory.pm:2332-2347)
 /// and :482 drops every overlap of the record.
 #[test]
 fn no_intergenic_minimal_exclusion_is_documented() {
@@ -570,8 +1411,74 @@ fn hgvsg_exclusion_is_documented() {
             "the row prints another allele's notation",
             "vep-rs computes each row's notation from the row's own allele at its trimmed \
              span, so a repeated or reference-equal entry changes no other row's value",
-            "| `refeq`, `C` | 1 | `21:g.34775850dup` | `21:g.34775850A>C` |",
-            "| `dupalt`, `G` | 2 | `21:g.34775850A>C` | `21:g.34775850A>G` |",
+            "Neither engine writes a row for the allele that equals the reference. The row's \
+             `ALLELE_NUM` differs too: vep-rs prints the allele's place in the record, where \
+             Ensembl VEP prints its count",
+            "| `refeq`, `C` | 1 and 2 | `21:g.34775850dup` | `21:g.34775850A>C` |",
+            "| `dupalt`, `G` | 2 and 3 | `21:g.34775850A>C` | `21:g.34775850A>G` |",
+        ],
+    );
+}
+
+/// `allele_number`: an alternate prints the number of its place in the record,
+/// where Ensembl VEP counts the alleles left once a repeated allele and an
+/// allele equal to the reference are dropped (VariationFeatureOverlap.pm:463,
+/// 477-491), so the `T` of `C G,G,T` prints 2 there and 3 here. Row tests:
+/// `tests/allele_number_written_place.rs`.
+#[test]
+fn allele_number_place_divergence_is_documented() {
+    assert_page_states(
+        "divergences/allele-number-repeated-or-reference-equal-alt.md",
+        &[
+            "Under `--allele_number`, Ensembl VEP 116.3 counts a record's alternate alleles \
+             after it has dropped a repeated allele and an allele equal to the reference, so \
+             every allele written after one prints a number below its place in the record. \
+             vep-rs prints the place.",
+            "vep-rs numbers every alternate that has a row by its place in the record's ALT \
+             column: 1 for the alternate listed first, 2 for the one listed second, 3 for the \
+             third.",
+            "A repeated allele and an allele equal to the reference have no row in either \
+             engine, and each still holds its place. So does a `*`, which both engines number \
+             and give no row.",
+            "An Ensembl-format line is numbered the same way, by the places of its allele string.",
+            "`VariationFeatureOverlap.pm`, lines 459-467: the alleles of the string are made \
+             unique. An allele seen before is dropped at line 463, and the reference is the \
+             first one seen.",
+            "`VariationFeatureOverlap.pm`, lines 477-491: the alleles left are counted.",
+            "`allele_number_repeated_or_reference_equal_alt`: the `ALLELE_NUM` of a row whose \
+             record lists a repeated or reference-equal alternate before the row's allele.",
+            "| `dup_alt`, `T` | `stop_retained_variant` | 2 | 3 |",
+            "| `after_reference`, `T` | `stop_retained_variant` | 1 | 2 |",
+            "| `after_star`, `G` | `stop_lost` | 2 | 2 |",
+            "| `after_star`, `T` | `stop_retained_variant` | 3 | 4 |",
+            "Under `--minimal` the engines agree on a record the flag splits",
+            "The flag does not split `dup_alt`, none of whose alternates trims, so its rows keep \
+             the numbers of the table.",
+            "On a pair no manifest documents, with or without a manifest, it accepts an \
+             `ALLELE_NUM` pair under the class only where three things hold:",
+            "- both rows print the same `UPLOADED_ALLELE`;",
+            "- vep-rs's number is the place of the row's allele in that list;",
+            "- Ensembl VEP's number is that place less the repeated and reference-equal entries \
+             before it.",
+            "The entry states `rows_alike` 4, the count of rows on its key on which both \
+             engines print one number. So the golden tests hold the two rows that differ to \
+             vep-rs's number, compare the other four like any row, and hold the count of those \
+             four.",
+            "An allele that fits one entry as written and another with that base taken off, at \
+             two places, leaves the pair a difference.",
+            "A pair on rows that print no list, as in a run without `--uploaded_allele`, stays a \
+             difference.",
+        ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "[`allele_number_repeated_or_reference_equal_alt`](divergences/allele-number-repeated-or-reference-equal-alt.md) \
+             | Under `--allele_number`, Ensembl VEP counts a record's alternate alleles after \
+             dropping a repeated allele and an allele equal to the reference, so every allele \
+             written after one prints a number below its place in the record, the number of \
+             another written allele; vep-rs prints each allele's place in the record's ALT \
+             column | 3 · none on the cuts · 21 flag sets, 2 corpora | 116.3 |",
         ],
     );
 }
@@ -581,7 +1488,8 @@ fn hgvsg_exclusion_is_documented() {
 /// records the synonym and reads nothing on the first call; `e` names `end` on
 /// a transcript without a symbol, where the undefined `external_*` keys
 /// Dumper/Core.pm:172 keeps make it ambiguous (FilterSet.pm:574-580); a pattern
-/// takes the `regex` crate's dialect, where Perl's engine runs `\Z` (:714-715);
+/// is read as Perl reads it and compiled with the `regex` crate, which cannot
+/// express `\X`, where Perl's engine runs it (:714-715);
 /// `is_child` walks a Sequence Ontology table where `vep` has no ontology
 /// adaptor and dies (:736, AnnotationSource.pm:87-90).
 #[test]
@@ -607,6 +1515,31 @@ fn transcript_filter_exclusion_is_documented() {
     );
 }
 
+/// `transcript_filter_abbreviated_fields`: the entry's index row names what
+/// vep-rs refuses as a pattern the `regex` crate cannot express. A pattern is
+/// read as Perl reads it and rewritten for the crate (`filter_regex`), so an
+/// escape the crate's own syntax lacks (`\Z`, `\K`) compiles, while `\X` and a
+/// possessive quantifier are refused. The row may not have a pattern outside
+/// the crate's dialect refused.
+#[test]
+fn transcript_filter_index_row_says_which_pattern_is_refused() {
+    let index = page_text("intended-divergences.md");
+    let row = index
+        .lines()
+        .find(|line| line.starts_with("| [`transcript_filter_abbreviated_fields`]"))
+        .expect("docs/intended-divergences.md has no row of the entry");
+    let stated = "refuses a pattern the `regex` crate cannot express, and walks";
+    assert!(
+        row.contains(stated),
+        "the entry's row of docs/intended-divergences.md lacks {stated:?}"
+    );
+    let refused = "pattern outside the `regex` crate's dialect";
+    assert!(
+        !index.contains(refused),
+        "docs/intended-divergences.md states {refused:?}"
+    );
+}
+
 /// `transcript_filter`, `transcript-filter-grammar` and `filter-vep`: an `in`
 /// list is a hash (FilterSet.pm:391-392), and `get_input` picks one key of it
 /// to stand for the filter's value before the numeric reading of a
@@ -620,14 +1553,14 @@ fn transcript_filter_in_list_numeric_by_hash_order_divergence_is_documented() {
     assert_page_states(
         "divergences/transcript-filter-in-list-numeric-by-hash-order.md",
         &[
-            "Ensembl VEP 116.2 decides whether an `in` list compares a `text:number` or \
+            "Ensembl VEP 116.3 decides whether an `in` list compares a `text:number` or \
              `text(number)` value through its number by one entry it picks from the list's hash",
             "Lines 596-599: when the filter's value is a hash, `(keys %{$value})[0]` replaces it \
              by the first key the hash yields, under the comment `Assumes that all the values are \
              of similar format`",
             "vep-rs decides the reading by the list's first written entry, the same in every run",
             "Under `--transcript_filter 'gene_hgnc_id in HGNC:2559,1132'`, vep-rs writes the 2 \
-             CXADR rows. Ensembl VEP 116.2 writes the 34 BTG3 rows under `PERL_HASH_SEED=0` and \
+             CXADR rows. Ensembl VEP 116.3 writes the 34 BTG3 rows under `PERL_HASH_SEED=0` and \
              the 2 CXADR rows under `PERL_HASH_SEED=11`",
             "Of the seeds 0 to 20, sixteen give the 34 BTG3 rows and five (11, 13, 15, 17 and 19) \
              the 2 CXADR rows.",
@@ -646,8 +1579,8 @@ fn transcript_filter_in_list_numeric_by_hash_order_divergence_is_documented() {
             "so a list mixing a number and other text, `gene_hgnc_id in HGNC:2559,1132`, keeps \
              the BTG3 rows under one hash seed and the CXADR rows under another, in \
              `--transcript_filter` and `filter_vep` alike; vep-rs decides by the list's first \
-             written entry, the same in every run | 3 · 0 of 392 flag sets · 9 flag sets, 0 \
-             corpora | 116.2 |",
+             written entry, the same in every run | 3 · 0 of 511 flag sets · 10 flag sets, 0 \
+             corpora | 116.3 |",
         ],
     );
     assert_page_states(
@@ -694,7 +1627,7 @@ fn transcript_filter_zero_field_divergence_is_documented() {
     assert_page_states(
         "divergences/transcript-filter-zero-field.md",
         &[
-            "Ensembl VEP 116.2 tests whether a filter unit has its field yet with Perl's truth \
+            "Ensembl VEP 116.3 tests whether a filter unit has its field yet with Perl's truth \
              test, and the string `0` is false to Perl. So a unit whose first word is `0` loses \
              that word",
             "Lines 260-262: the field slot is filled while `!$current->{field}` holds; `0` is \
@@ -702,7 +1635,7 @@ fn transcript_filter_zero_field_divergence_is_documented() {
             "vep-rs reads the first word of a unit as its field whatever the word is, so `0` \
              names a field called `0`, which no transcript key and no output column is named or \
              begins with, undefined everywhere.",
-            "Under `--transcript_filter '0 is 1'`, Ensembl VEP 116.2 refuses the run with `ERROR: \
+            "Under `--transcript_filter '0 is 1'`, Ensembl VEP 116.3 refuses the run with `ERROR: \
              No such operator \"1\"` and writes nothing; vep-rs runs and writes the record's one \
              `intergenic_variant` row",
             "Under `--transcript_filter '0 ne'`, Ensembl VEP writes that intergenic row and \
@@ -721,8 +1654,8 @@ fn transcript_filter_zero_field_divergence_is_documented() {
             "so a unit whose first word is `0` loses it: `0 is 1` reads `is` as the field and \
              refuses `1` as `No such operator`, and `0 ne` tests a field named `ne`; vep-rs reads \
              `0` as the field, which no transcript key matches, so `0 is 1` keeps nothing and \
-             `0 ne` keeps every transcript | 3 · 0 of 392 flag sets · 9 flag sets, 0 corpora | \
-             116.2 |",
+             `0 ne` keeps every transcript | 3 · 0 of 511 flag sets · 10 flag sets, 0 corpora | \
+             116.3 |",
         ],
     );
 }
@@ -738,14 +1671,14 @@ fn transcript_filter_list_file_two_argument_open_divergence_is_documented() {
     assert_page_states(
         "divergences/transcript-filter-list-file-two-argument-open.md",
         &[
-            "Ensembl VEP 116.2 opens the file an `in` list names with Perl's two-argument `open`, \
+            "Ensembl VEP 116.3 opens the file an `in` list names with Perl's two-argument `open`, \
              which reads a mode out of the name",
             "Line 397: `open IN, $list or throw(\"ERROR: Could not read from file $list\\n\")`, \
              the two-argument form",
             "vep-rs opens the file of the written name and reads its lines, whatever characters \
              the name holds.",
             "Under `--transcript_filter 'stable_id in <ids.txt'`, vep-rs keeps the one row of \
-             `ENST00000624153` on the record `tf_7130369`; Ensembl VEP 116.2 reads `ids.txt` \
+             `ENST00000624153` on the record `tf_7130369`; Ensembl VEP 116.3 reads `ids.txt` \
              instead and keeps the two rows of `ENST00001020056` on the record `tf_32493707`.",
             "`stable_id in true|` keeps that row on vep-rs, where Ensembl VEP runs the command \
              `true`, reads an empty list and drops every transcript.",
@@ -765,7 +1698,7 @@ fn transcript_filter_list_file_two_argument_open_divergence_is_documented() {
              with `>` truncates another file, and a file whose name ends in a vertical bar is \
              tested for and the rest of its name is run as a command, its output read as the \
              list; vep-rs opens the file of the written name and never replicates the mode \
-             reading | 3 · 0 of 392 flag sets · 9 flag sets, 0 corpora | 116.2 |",
+             reading | 3 · 0 of 511 flag sets · 10 flag sets, 0 corpora | 116.3 |",
         ],
     );
 }
@@ -782,14 +1715,14 @@ fn transcript_filter_list_directory_divergence_is_documented() {
     assert_page_states(
         "divergences/transcript-filter-list-directory.md",
         &[
-            "Ensembl VEP 116.2 reads a directory named as an `in` list file as an empty list: the \
+            "Ensembl VEP 116.3 reads a directory named as an `in` list file as an empty list: the \
              open succeeds, every read of the handle fails, the loop ends with nothing read",
             "Lines 398-410: `while(<IN>)` reads the handle; `read(2)` on a directory fails with \
              `EISDIR`, `readline` returns nothing, the body never runs and the list stays empty.",
             "vep-rs refuses the run with `ERROR: [filter] Could not read from file <name>`, the \
              message Ensembl VEP prints when its own open fails, exit status 1 and no output. The \
              empty reading is never replicated",
-            "Ensembl VEP 116.2 writes the record `tf_7130369`, within reach of 3 transcripts, as \
+            "Ensembl VEP 116.3 writes the record `tf_7130369`, within reach of 3 transcripts, as \
              one `intergenic_variant` row and prints nothing on its error stream",
             "Over the corpus's 32 records, Ensembl VEP writes 35 intergenic rows and none of the \
              952 transcript rows.",
@@ -802,8 +1735,8 @@ fn transcript_filter_list_directory_divergence_is_documented() {
         &[
             "the open succeeding and every read of the handle failing, so every transcript is \
              dropped and each record is written as intergenic with no message; vep-rs refuses the \
-             run as a list it could not read | 3 · 0 of 392 flag sets · 9 flag sets, 0 corpora | \
-             116.2 |",
+             run as a list it could not read | 3 · 0 of 511 flag sets · 10 flag sets, 0 corpora | \
+             116.3 |",
         ],
     );
     assert_page_states(
@@ -829,7 +1762,7 @@ fn tsl_pick_order_past_sixty_four_bits_divergence_is_documented() {
     assert_page_states(
         "divergences/tsl-pick-order-past-sixty-four-bits.md",
         &[
-            "Ensembl VEP 116.2's pick order compares two transcript support levels with Perl's \
+            "Ensembl VEP 116.3's pick order compares two transcript support levels with Perl's \
              `<=>`, which holds a level past 64 bits as a double and rounds a 64-bit integer \
              within one step of it to the same double",
             "vep-rs orders two levels by their exact values: two levels within 64 bits as \
@@ -837,11 +1770,11 @@ fn tsl_pick_order_past_sixty_four_bits_divergence_is_documented() {
              doubles",
             "Line 789: the candidates are sorted by `$a->{$cat} <=> $b->{$cat}`, a numeric \
              comparison of those strings",
-            "Under `--pick --pick_order tsl`, Ensembl VEP 116.2 keeps ENST00001110244, the row \
+            "Under `--pick --pick_order tsl`, Ensembl VEP 116.3 keeps ENST00001110244, the row \
              listed first; vep-rs keeps ENST00001113783, the lower level.",
             "The class is documented only: no comparator codes it, since no committed flag set \
              reaches it.",
-            "Of the 392 committed flag sets, 14 pass a pick-family flag with `tsl` in the order \
+            "Of the 511 committed flag sets, 14 pass a pick-family flag with `tsl` in the order \
              and none passes such a level; no committed HGVS input names a gene.",
         ],
     );
@@ -849,8 +1782,8 @@ fn tsl_pick_order_past_sixty_four_bits_divergence_is_documented() {
         "intended-divergences.md",
         &[
             "so two such levels tie and its stable sort keeps the row listed first; vep-rs orders \
-             the levels by exact value and keeps the lower | 3 · 0 of 392 flag sets · 14 flag \
-             sets, 0 corpora | 116.2 |",
+             the levels by exact value and keeps the lower | 3 · 0 of 511 flag sets · 14 flag \
+             sets, 0 corpora | 116.3 |",
         ],
     );
     assert_page_states(
@@ -903,11 +1836,211 @@ fn shift_3prime_shared_predicates_exclusion_is_documented() {
     );
 }
 
-/// `validate-vf-checks`: a POS that is not a number is refused in every form,
-/// where Ensembl VEP's anchor chop of a sequence indel runs `$start++` on the
-/// text before `validate_vf` (Parser/VCF.pm:310, 334; Parser.pm:475): `12abc`
-/// numifies to 13 and the record is annotated, `abc` increments to `abd` and
-/// is refused quoting that text.
+/// One transcript of the committed GRCh38 release cache, by the region file of
+/// chromosome 21 that holds it and its stable id.
+fn release_cache_transcript(region_file: &str, stable_id: &str) -> serde_json::Value {
+    use std::io::Read;
+    let path = format!(
+        "{}/../../tests/golden/116/GRCh38-release116/json_cache/transcripts/21/{region_file}",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let bytes = std::fs::read(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
+    let mut text = String::new();
+    flate2::read::MultiGzDecoder::new(&bytes[..])
+        .read_to_string(&mut text)
+        .unwrap_or_else(|e| panic!("{path}: {e}"));
+    let parsed: serde_json::Value =
+        serde_json::from_str(&text).unwrap_or_else(|e| panic!("{path}: {e}"));
+    parsed
+        .as_array()
+        .unwrap_or_else(|| panic!("{path}: not a list of transcripts"))
+        .iter()
+        .find(|transcript| transcript["stable_id"] == stable_id)
+        .unwrap_or_else(|| panic!("{path}: no {stable_id}"))
+        .clone()
+}
+
+/// The reproduction record of a documented difference, by its entry.
+fn reproduction_record(entry: &str) -> String {
+    let path = format!(
+        "{}/../../scripts/divergences/reproductions/{entry}.toml",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"))
+}
+
+/// The first and last base that the input line of `record` whose ID is `id`
+/// deletes: a VCF line whose ALT is the one base its REF opens with.
+fn deleted_span(record: &str, id: &str) -> (u64, u64) {
+    let fields: Vec<&str> = record
+        .lines()
+        .map(|line| line.split('\t').collect::<Vec<_>>())
+        .find(|fields| fields.get(2) == Some(&id))
+        .unwrap_or_else(|| panic!("no input line {id}"));
+    let pos: u64 = fields[1].parse().unwrap();
+    assert_eq!(fields[4].len(), 1, "{id}");
+    assert!(fields[3].starts_with(fields[4]), "{id}");
+    (pos + 1, pos + fields[3].len() as u64 - 1)
+}
+
+/// Two worked records under `--shift_3prime 1` are described as the committed
+/// cache places them. The cache starts exon 10 of ENST00000435744 at
+/// 21:13065558, cDNA position 1287, so the intron before it ends at 13065557
+/// and the deletion that the record of `shift_intron_term_unshifted_span`
+/// writes at 13065551, seven bases before the exon, lies after its shift of
+/// eight bases on the exon's second base, `n.1288`. The `miRNA` attribute of
+/// ENST00000584048 ends the mature sequence at 21:26953985, the first base
+/// that the record of `mature_mirna_unshifted_span` deletes. The two pages and
+/// the `notes` of both records say so. A deletion of four bases whose shift is
+/// three lies before a copy of its first three, and the `notes` of that record
+/// name those seven bases as the repeat.
+#[test]
+fn shifted_span_records_are_described_as_the_committed_cache_places_them() {
+    let transcript = release_cache_transcript("13000001-14000000.json.gz", "ENST00000435744");
+    assert_eq!(transcript["strand"], 1);
+    let exons: Vec<(u64, u64)> = transcript["exons"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|exon| {
+            (
+                exon["start"].as_u64().unwrap(),
+                exon["end"].as_u64().unwrap(),
+            )
+        })
+        .collect();
+    let record = reproduction_record("shift_intron_term_unshifted_span");
+    // The record's rows of the transcript carry `SHIFT_LENGTH` 8.
+    assert_states(
+        "the record of shift_intron_term_unshifted_span",
+        &record,
+        &["ENST00000435744.5:n.1288del | 8 | 8"],
+    );
+    let (deleted, last_deleted) = deleted_span(&record, "rs544638589");
+    assert_eq!(deleted, last_deleted);
+    let shifted = deleted + 8;
+    let rank = exons
+        .iter()
+        .position(|(start, end)| (*start..=*end).contains(&shifted))
+        .expect("the shifted deletion lies in an exon");
+    let exon_start = exons[rank].0;
+    let cdna = exons[..rank]
+        .iter()
+        .map(|(start, end)| end - start + 1)
+        .sum::<u64>()
+        + shifted
+        - exon_start
+        + 1;
+    assert_eq!(
+        (rank + 1, exon_start, exon_start - deleted, shifted, cdna),
+        (10, 13_065_558, 7, 13_065_559, 1288)
+    );
+    let page = "divergences/shift-intron-term-unshifted-span.md";
+    assert_page_states(
+        page,
+        &[
+            &format!(
+                "at {deleted}-{shifted}, whose last two bases are the first two of exon {} of \
+                 ENST00000435744, a forward-strand transcript; the intron ends at {}.",
+                rank + 1,
+                exon_start - 1
+            ),
+            &format!("the deletion moves eight bases, onto the exon's second base, `n.{cdna}`"),
+            "the shift carries them past the acceptor to after the exon's second base",
+            "or a deletion of the exon's first or second base touches no intron base away from \
+             the splice site",
+            "`splice_region_variant,non_coding_transcript_exon_variant` on the exon's second base",
+        ],
+    );
+    let text = page_text(page);
+    for phrase in [
+        "whose last base is the first base of exon",
+        "the intron ends at 13065558",
+        "the exon's first base,",
+        "the exon's first base.",
+    ] {
+        assert!(!text.contains(phrase), "docs/{page} states {phrase:?}");
+    }
+    let notes = |record: &str| -> String {
+        record
+            .lines()
+            .find(|line| line.starts_with("notes = "))
+            .expect("a notes line")
+            .to_string()
+    };
+    let shift_notes = notes(&record);
+    assert_states(
+        "the notes of shift_intron_term_unshifted_span",
+        &shift_notes,
+        &[
+            "the second, seven bases before an exon of ENST00000435744, shifts eight bases past \
+             the acceptor onto the exon's second base, where the row has no acceptor term",
+        ],
+    );
+    assert!(!shift_notes.contains("exon's first base"), "{shift_notes}");
+
+    let mirna = release_cache_transcript("26000001-27000000.json.gz", "ENST00000584048");
+    assert_eq!(mirna["strand"], 1);
+    let mature = mirna["attributes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|attribute| attribute["code"] == "miRNA")
+        .and_then(|attribute| attribute["value"].as_str())
+        .expect("a miRNA attribute");
+    assert_eq!(mature, "5-25");
+    let mature_end = mirna["start"].as_u64().unwrap() + 25 - 1;
+    let mirna_record = reproduction_record("mature_mirna_unshifted_span");
+    let (first_deleted, last_deleted) = deleted_span(&mirna_record, "rs1324558451");
+    assert_eq!(
+        (first_deleted, last_deleted - first_deleted + 1),
+        (mature_end, 4)
+    );
+    assert_page_states(
+        "divergences/mature-mirna-unshifted-span.md",
+        &[&format!(
+            "The deletion's first base, {first_deleted}, is the mature sequence's last, `n.25`"
+        )],
+    );
+    // The record's rows carry `SHIFT_LENGTH` 3, so the three bases after the
+    // four deleted ones are a copy of the first three of them.
+    assert_states(
+        "the record of mature_mirna_unshifted_span",
+        &mirna_record,
+        &["ENST00000584048.1:n.28_31del | 3 | 3"],
+    );
+    let deleted_bases = mirna_record
+        .lines()
+        .map(|line| line.split('\t').collect::<Vec<_>>())
+        .find(|fields| fields.get(2) == Some(&"rs1324558451"))
+        .map(|fields| &fields[3][1..])
+        .expect("an input line");
+    let mirna_notes = notes(&mirna_record);
+    assert_states(
+        "the notes of mature_mirna_unshifted_span",
+        &mirna_notes,
+        &[
+            "whose written span begins on the last base of the mature sequence of MIR4759 \
+             (ENST00000584048)",
+            &format!(
+                "the shift carries it three bases along the repeat {deleted_bases}{} onto the \
+                 bases after the mature sequence",
+                &deleted_bases[..3]
+            ),
+        ],
+    );
+    assert!(
+        !mirna_notes.contains("ends on the last base of the mature sequence"),
+        "{mirna_notes}"
+    );
+}
+
+/// `validate-vf-checks`, `skipped-variant-semantics`: a POS that is not a
+/// number is refused in every form, where Ensembl VEP's anchor chop of a
+/// sequence indel runs `$start++` on the text before `validate_vf`
+/// (Parser/VCF.pm:310, 334; Parser.pm:475): `12abc` numifies to 13 and the
+/// record is annotated, `abc` increments to `abd` and is refused quoting that
+/// text.
 #[test]
 fn validate_vf_checks_exclusion_is_documented() {
     assert_page_states(
@@ -1000,8 +2133,8 @@ fn lookup_ref_exclusion_is_documented() {
     assert_page_states(
         "cache-setup.md",
         &[
-            "Under `--lookup_ref` a contig the FASTA lacks skips the record at every position \
-             with the could-not-fetch warning",
+            "Under `--lookup_ref` vep-rs skips the record at every position of a contig the FASTA \
+             lacks with the could-not-fetch warning",
             "where Ensembl VEP's one-base placeholder slice (`BaseVEP.pm` lines 424-434) gives a \
              one-base record at position 1 the reference `N`",
         ],
@@ -1015,7 +2148,9 @@ fn lookup_ref_exclusion_is_documented() {
 /// BaseRunner.pm:371-376 prints the `input_file` parameter as typed (the `*IN`
 /// glob of Runner.pm:818-820 under `--input_data`), `%-40.40s` counts the bytes
 /// of the undecoded line and BaseVEP.pm:850's `substr` cuts byte 46 inside a
-/// character.
+/// character. Under a `--delimiter` other than a tab the re-joined fields are a
+/// VCF line's (`read_vcf_lines` in `pipeline.rs`); a line of another format
+/// is quoted as read (`read_parsed`), as BaseVEP.pm:846-849 quotes it.
 #[test]
 fn skipped_variants_file_exclusion_is_documented() {
     assert_page_states(
@@ -1036,8 +2171,251 @@ fn skipped_variants_file_exclusion_is_documented() {
              a line with a multi-byte character pads to a different width",
             "On a line of ASCII characters under `-i <path>`, `-i STDIN` in any letter case or \
              no `-i`, the two files are byte-identical",
+            "the blanks around a VCF line read under `--delimiter`",
+            "re-joins VCF fields with tabs first",
+            "the skip warning and the record column quote a VCF line's fields re-joined with \
+             tabs before the collapse",
+            "An Ensembl-format line is quoted as read, as Ensembl VEP quotes it",
         ],
     );
+    let text = page_text("divergences/skipped-variants-file-header.md")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for older in [
+        "quote the line's fields re-joined with tabs",
+        "re-joins the fields with tabs first",
+    ] {
+        assert!(
+            !text.contains(older),
+            "docs/divergences/skipped-variants-file-header.md gives the re-join to a line of \
+             any format: {older:?}"
+        );
+    }
+}
+
+/// `nearest-algorithm`: a start site on a record's first base, or one base
+/// above it, is the candidate above the start. TranscriptTree.pm:165 at
+/// release/116.3 stores a site at `t` as the half-open interval from `t - 1`
+/// to `t`, and :235 asks `fetch_nearest_up` with the 1-based start, which
+/// returns only an interval that begins above it, so that search returns
+/// neither site. Ensembl VEP names such a site only where `:234`, its search
+/// at or below the record's end, returns it, and `:239` returns an empty list
+/// where neither search returns a site. Row tests:
+/// `tests/nearest_site_above_start.rs`.
+#[test]
+fn nearest_start_site_one_base_above_divergence_is_documented() {
+    assert_page_states(
+        "divergences/nearest-start-site-one-base-above.md",
+        &[
+            "Under `--nearest`, Ensembl VEP 116.3's search above a record begins two bases above \
+             the record's first base and never returns a protein-coding start site on the first \
+             base or one base above it.",
+            "Such a site is named only where the search at or below the record's end returns \
+             it: the record must reach the site and cover no higher one.",
+            "On any other record where the searches return a site but none nearer, Ensembl VEP \
+             names a farther site in its place, or only one of two sites at one distance.",
+            "vep-rs searches from the first base as well, so the lowest site at or above it is \
+             a candidate on every record.",
+            "For the record one base below it alone, it names the nearest of the sites its two \
+             searches return, which can lie thousands of bases away; where neither search returns \
+             one, it returns an empty list (`TranscriptTree.pm`, line 239) and names no site.",
+            "the lowest site at or above the record's start, which Ensembl VEP's search above \
+             the start passes over where it lies on the first base or one base above it.",
+            "Where the record covers a higher site as well, the site on the first base is not \
+             named, though no site Ensembl VEP names is nearer.",
+            "On one more shape the engines agree: a record of three or more positions that \
+             covers a site on its second base alone, with a site one base above its last base.",
+            "`TranscriptTree.pm`, lines 233-236: the two candidates are \
+             `fetch_nearest_down($e)` and `fetch_nearest_up($s)`, the record's end and start as \
+             given.",
+            "`nearest_start_site_one_base_above`: a `NEAREST` value on a row whose record has a \
+             protein-coding start site on its first base or one base above it.",
+            "Ensembl VEP's value names the nearest of the sites its two searches return, and \
+             vep-rs's the nearest of those sites and of the lowest site at or above the first \
+             base.",
+            "The two values agree where Ensembl VEP's search at or below the end returns that \
+             lowest site, or where one of its searches returns a nearer site.",
+            "IMPACT=MODIFIER;DISTANCE=1;STRAND=1;NEAREST=SMIM11",
+            "IMPACT=MODIFIER;DISTANCE=1;STRAND=1;NEAREST=KCNE2",
+            "Together 481 of the 15,646,481 records of the cuts carry a shape, 30.7 per million",
+            "It writes `NEAREST=CLDN17` for the second record and `NEAREST=CLDN8` for the first.",
+            // The closing fence marks Ensembl VEP's row: vep-rs's row opens with the same text.
+            "IMPACT=MODIFIER;DISTANCE=0;STRAND=-1;NEAREST=ENST00000966231 ```",
+            "IMPACT=MODIFIER;DISTANCE=0;STRAND=-1;NEAREST=ENST00000966231,ENST00000966232",
+            "Ensembl VEP 116.3 writes `NEAREST=ENST00000400566` for the first two records and \
+             `NEAREST=ENST00000959353` for the third.",
+            "Nearest means nearest among the candidates. As in Ensembl VEP, only the sites the \
+             searches return are candidates, however near an end of the record another site \
+             lies.",
+            "In both engines a site below a record that covers a site is never a candidate.",
+            "The lowest site above a record of two or more positions is a candidate exactly \
+             where the record covers no site two bases or more above its first base, the place \
+             Ensembl VEP's search above the start begins.",
+            "A candidate is measured to the nearer end of the record. A candidate inside a \
+             longer record is measured the same way, so it is at distance zero only on an end. \
+             Two candidates at the smallest distance are both printed.",
+            "Where two sites it has found lie at one distance, Ensembl VEP prints both \
+             (`TranscriptTree.pm`, lines 250-253).",
+        ],
+    );
+    let page = page_text("divergences/nearest-start-site-one-base-above.md")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    // `nearest_points` measures the sites its three searches return, and its
+    // search from two bases above the start can return a site above the record.
+    // Ensembl VEP's search at or below the end returns a site on the first base,
+    // or one base above it, of a record that reaches it and covers no higher
+    // site, so no text may read as if its value never named such a site.
+    // Where neither of its searches returns a site its list is empty
+    // (`TranscriptTree.pm:239`), so no text may read as if it named a site on
+    // every record.
+    for phrase in [
+        "a site beyond one the record covers is no candidate",
+        "two sites at one distance are both printed",
+        "Two sites at one distance are both printed",
+        "passes over a protein-coding start site that lies exactly one base above",
+        "It names a farther site in its place",
+        "so it names such a site",
+        "with those two sites passed over by the search above the start",
+        "the site the search above the start passes over.",
+        "One more record brings the third candidate into play",
+        "it names the higher site alone",
+        "it names a site that can lie thousands of bases away",
+    ] {
+        assert!(
+            !page.contains(phrase),
+            "docs/divergences/nearest-start-site-one-base-above.md still says {phrase:?}"
+        );
+    }
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "[`nearest_start_site_one_base_above`](divergences/nearest-start-site-one-base-above.md) \
+             | Under `--nearest`, Ensembl VEP 116.3 asks its interval tree for the nearest start \
+             site above a record with the record's 1-based start",
+            "a site on a record's first base or one base above it is named only where the \
+             search at or below the record's end returns it, and on any other record where \
+             the two searches return a site but none nearer, a farther site, or one of two at one \
+             distance, is named in its place; vep-rs searches from the first base as well, so \
+             the lowest site at or above it is a candidate on every record \
+             | 2 · 30.7 per million · 3 flag sets, 34 corpora | 116.3 | [A start site on or one \
+             base above a record's first base under \
+             `--nearest`](divergences/nearest-start-site-one-base-above.md) |",
+        ],
+    );
+    // The texts of the format comparator that state the class: its `--masks`
+    // help, the doc comment of the class's name and that of the rule.
+    let tool_text = |path: &str| {
+        std::fs::read_to_string(format!("{}/../../{path}", env!("CARGO_MANIFEST_DIR")))
+            .unwrap_or_else(|e| panic!("{path}: {e}"))
+            .split_whitespace()
+            .filter(|word| *word != "///")
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    let index = page_text("intended-divergences.md")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let help = tool_text("tools/vep-formats-compare/data/help.txt");
+    let classes = tool_text("tools/vep-formats-compare/src/classes.rs");
+    let rule = tool_text("tools/vep-formats-compare/src/nearest.rs");
+    assert_states(
+        "tools/vep-formats-compare/data/help.txt",
+        &help,
+        &[
+            "nearest_start_site_one_base_above (with --nearest-sites, a NEAREST on a row whose \
+             Location has a start site on its first base or one base above it, where the \
+             reference's value names the sites its two searches keep, the upper one beginning \
+             two bases above the start, the candidate's the sites kept with a third search from \
+             the start, and the two sets differ),",
+        ],
+    );
+    assert_states(
+        "tools/vep-formats-compare/src/classes.rs",
+        &classes,
+        &[
+            "so the search above the start returns neither a site on the start nor a site one \
+             base above it. Such a site is named only where the search at or below the end \
+             returns it; on any other record where the two searches return a site but none \
+             nearer, a farther site, or one of two sites at one distance, is named in its place. \
+             The candidate searches from the start as well.",
+            "where the reference's two searches keep one set of sites and the candidate's \
+             three another, the reference's values name the first set and the candidate's the \
+             second.",
+        ],
+    );
+    assert_states(
+        "tools/vep-formats-compare/src/nearest.rs",
+        &rule,
+        &[
+            "the two searches of `TranscriptTree.pm:233-236` keep one set of sites, those two \
+             searches and a third that begins on the first base keep another, the reference's \
+             values name the first set and the candidate's the second.",
+        ],
+    );
+    for (what, text, phrase) in [
+        (
+            "tools/vep-formats-compare/src/nearest.rs",
+            &rule,
+            "with those two passed over by the search above the start",
+        ),
+        (
+            "docs/intended-divergences.md",
+            &index,
+            "is passed over and a farther site, or one of two at one distance, named",
+        ),
+        (
+            "tools/vep-formats-compare/data/help.txt",
+            &help,
+            "with those two passed over above the start",
+        ),
+        (
+            "tools/vep-formats-compare/src/classes.rs",
+            &classes,
+            "are passed over, and a farther site, or one of two sites at one distance, is named",
+        ),
+        (
+            "tools/vep-formats-compare/src/classes.rs",
+            &classes,
+            "with those two passed over above the start",
+        ),
+    ] {
+        assert!(!text.contains(phrase), "{what} still says {phrase:?}");
+    }
+    assert_page_states(
+        "output/vep-and-tab.md",
+        &[
+            "The candidates are the highest site at or below the record's end, the lowest at or \
+             above its start, and the lowest two bases or more above its start. Ensembl VEP \
+             takes the first and the last: its search above the start passes over a site on \
+             the start and a site one base above it, an [intended \
+             divergence](../divergences/nearest-start-site-one-base-above.md).",
+            "Each candidate is measured to the nearer end of the record. The nearest are \
+             reported, the site at or below the end first.",
+        ],
+    );
+    let output_page = page_text("output/vep-and-tab.md")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    // The page states the search above the start, and which candidates are
+    // reported, in no other words: of three candidates the two farther ones
+    // can lie at one distance, and `nearest_points` keeps the nearest alone.
+    for phrase in [
+        "at or above its start plus two",
+        "is never a candidate",
+        "the lowest site above its start",
+        "The two candidates are",
+        "Those that tie are reported",
+    ] {
+        assert!(
+            !output_page.contains(phrase),
+            "docs/output/vep-and-tab.md still says {phrase:?}"
+        );
+    }
 }
 
 /// `nearest`, `nearest-algorithm` and `cache-transcript-gene-tss`: every
@@ -1079,7 +2457,7 @@ fn nearest_exclusion_is_documented() {
 #[test]
 fn variation_coordinates_exclusion_is_documented() {
     assert_page_states(
-        "cache-setup.md",
+        "cache-variation-data.md",
         &[
             "A native cache holds the trimmed form, which minimises from the right end to the \
              same alleles and position as the Ensembl cache's record",
@@ -1090,6 +2468,60 @@ fn variation_coordinates_exclusion_is_documented() {
             "An input spelled at the run's right end co-locates with neither, its start lying \
              outside the one-base window the start-indexed files answer",
         ],
+    );
+}
+
+/// `assembly`: the core crate's README says which name a run parses its
+/// `Assembly` from. `cache_resolve::resolve` settles that name as the cache's
+/// own (its `info.json`, else the name of its directory) and as the value of
+/// `--assembly` only where the cache names none, so a run without the flag
+/// still gives the plugins their hint
+/// (`assembly_inferred_from_cache_feeds_plugin_hint` in `cache_resolve.rs`).
+/// A row that names the flag alone is refused.
+#[test]
+fn core_readme_names_the_cache_before_the_flag_as_the_parsed_assembly_name() {
+    let path = format!("{}/../vep-core/README.md", env!("CARGO_MANIFEST_DIR"));
+    let readme = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
+    let row = readme
+        .lines()
+        .find(|l| l.starts_with("| `assembly.rs`"))
+        .expect("crates/vep-core/README.md has an assembly.rs row");
+    assert_states(
+        "the assembly.rs row of crates/vep-core/README.md",
+        row,
+        &[
+            "`Assembly`, the reference genome parsed from a run's assembly name (the cache's \
+             own, else the value of `--assembly`) by its whole aliases (`GRCh37`, `hg19` and \
+             `37` are one value)",
+        ],
+    );
+    assert!(
+        !readme.contains("parsed from `--assembly`"),
+        "crates/vep-core/README.md says an Assembly is parsed from the flag alone"
+    );
+}
+
+/// The command-line crate's README says what passes through `src/stderr.rs`.
+/// `vep recode` writes every line of its standard error through the module:
+/// the notices it holds for its annotation run and its own line (`recode.rs`)
+/// and its errors (`recode_cli.rs`), as the module's own documentation says.
+/// A row that names the tool's error lines alone is refused.
+#[test]
+fn cli_readme_says_every_line_of_vep_recode_passes_through_the_stderr_module() {
+    let path = format!("{}/README.md", env!("CARGO_MANIFEST_DIR"));
+    let readme = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
+    let row = readme
+        .lines()
+        .find(|l| l.starts_with("| `src/stderr.rs`"))
+        .expect("crates/vep-cli/README.md has a src/stderr.rs row");
+    assert_states(
+        "the src/stderr.rs row of crates/vep-cli/README.md",
+        row,
+        &["the warning of `vep filter` and the lines of `vep recode` pass through"],
+    );
+    assert!(
+        !readme.contains("the error lines of `vep recode`"),
+        "crates/vep-cli/README.md names the error lines of vep recode alone"
     );
 }
 
@@ -1111,6 +2543,29 @@ fn vep_environment_variables_exclusion_is_documented() {
             "A value from a file or the environment that the parser refuses (`fork many`, an \
              empty `format`) is an argument syntax error (exit 2)",
             "Ensembl VEP's `is_valid_param` drops the line (`Config.pm:1046-1047`)",
+        ],
+    );
+}
+
+/// `vep-environment-variables`: no variable names `--phyloP` or `--phastCons`.
+/// The name is lower-cased and then matched exactly, as Config.pm:1140
+/// lower-cases it and :1158 stores it under a key the option sets of :553 and
+/// :560 never read, while a configuration file's key (:1094-1097) and a
+/// `VEP_CUSTOM` variable (:1150-1152) reach the same source.
+#[test]
+fn environment_closed_to_the_capital_letter_flags_is_documented() {
+    assert_page_states(
+        "cli/compatibility.md",
+        &[
+            "No variable sets `--phyloP` or `--phastCons`, the two flags whose names hold a \
+             capital letter: `VEP_PHYLOP=100` is read as `phylop`, which names nothing, and the \
+             run adds no source and prints no message.",
+            "Ensembl VEP reads the variable the same way: it stores the value under `phylop`, \
+             which its option set never reads, and echoes `--phylop 100` in the `## VEP \
+             command-line:` header (`Config.pm:1140, 1158`, `:553`).",
+            "The command line and a configuration file's `phyloP` key set the flag, and \
+             `VEP_CUSTOM=<bigWig>,phyloP100way,bigwig,exact` adds from the environment the \
+             source `--phyloP 100` names.",
         ],
     );
 }
@@ -1186,32 +2641,1119 @@ fn tilde_expansion_exclusion_is_documented() {
     );
 }
 
-/// `option_rule_tables`: a comma-joined or trailing-comma value of a `%VALID`
-/// scalar flag is an argument syntax error here, where Config.pm:946 splits the
-/// value on commas before the `%VALID` test and OutputFactory.pm:1808 reads
+/// `option_rule_tables`, `sift-polyphen-value-grammar`: a comma-joined or
+/// trailing-comma value of a `%VALID` scalar flag (`--sift` and `--polyphen`
+/// among them) is an argument syntax error here, where Config.pm:946 splits the
+/// value on commas before the `%VALID` test and OutputFactory.pm:1817 reads
 /// `--sift b,` by its first letter; so is a `0` or empty value, which Config.pm:904-905
 /// (`return 0 unless defined($config->{$flag}); return ... : $config->{$flag};`)
 /// and :945 (`grep {$self->_is_flag_active($config, $_)} keys %VALID`) read as the
-/// flag unset and OutputFactory.pm:1805 (`if (my $opt = $self->{$lc_tool})`) and
+/// flag unset and OutputFactory.pm:1814 (`if (my $opt = $self->{$lc_tool})`) and
 /// AnnotationType/Transcript.pm:170 (`if(my $nearest_type = $self->{nearest})`)
 /// print no column for.
 #[test]
 fn option_rule_tables_exclusion_is_documented() {
+    let path = "cli/compatibility.md";
     assert_page_states(
-        "cli/compatibility.md",
+        path,
         &[
             "A trailing comma or a comma-joined value of `--sift`, `--polyphen`, `--terms`, \
              `--nearest`, `--compress_output` or `--format` (`--sift b,`) is an argument syntax \
              error (exit 2)",
             "Ensembl VEP's `check_config` splits such a value on commas before its `%VALID` test \
-             (`Config.pm:946`) and reads the first token by prefix (`OutputFactory.pm:1808`)",
+             (`Config.pm:946`), and `--sift` and `--polyphen` read its first letter \
+             (`OutputFactory.pm:1815-1817`)",
             "A `0` or empty value of such a flag (`--sift 0`, `--sift ''`, `--polyphen 0`, \
              `--nearest 0`) is an argument syntax error too (exit 2)",
-            "Ensembl VEP reads a value Perl reads as false as the flag unset \
+            "For `--sift`, `--polyphen` and `--nearest` Ensembl VEP reads it as the flag unset \
              (`Config.pm:904-905, 945`) and annotates without the column \
-             (`OutputFactory.pm:1805`, `AnnotationType/Transcript.pm:170`)",
+             (`OutputFactory.pm:1814`, `AnnotationType/Transcript.pm:170`)",
         ],
     );
+    let text = page_text(path)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for refused in [
+        "reads the first token by prefix",
+        "Ensembl VEP reads a value Perl reads as false as the flag unset",
+    ] {
+        assert!(!text.contains(refused), "docs/{path} states {refused:?}");
+    }
+}
+
+/// The `cli` row of the exit-status table names what the component carries
+/// beside a flag the error table refuses and a combination the option rules
+/// refuse: a `--` left on the command line (`parse_command_line`), a
+/// `--regulatory_gff` value (`RegulatoryGff::parse`) or file
+/// (`GffRegulatorySource::open`) the run refuses, and a `--cell_type` name
+/// the cache's regulatory data lacks (`split_cell_types`). Each of those
+/// refusals is run here: it exits 1 and its line names the component.
+#[test]
+fn exit_status_table_says_what_the_cli_component_carries() {
+    let flags_and_rules_alone =
+        "| `cli` | an unsupported flag, or a combination the option rules refuse |";
+    let row = "| `cli` | an unsupported flag, a combination the option rules refuse, or a `--` \
+               and what follows it; a `--regulatory_gff` value that is malformed or names a \
+               remote URL, a missing file or a file without a usable tabix index; or a \
+               `--cell_type` name the cache's regulatory data lacks |";
+    let page = page_text("cli/compatibility.md");
+    assert!(
+        !page.contains(flags_and_rules_alone),
+        "docs/cli/compatibility.md states {flags_and_rules_alone:?}"
+    );
+    assert!(
+        page.lines().any(|line| line == row),
+        "docs/cli/compatibility.md lacks the row {row:?}"
+    );
+
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("in.vcf");
+    std::fs::write(
+        &input,
+        "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n\
+         21\t106\tr\tC\tG\t.\t.\t.\n",
+    )
+    .unwrap();
+    let cache = common::regulatory_cache(dir.path());
+    let output = dir.path().join("out.txt");
+    let unindexed = dir.path().join("features.gff3.gz");
+    std::fs::copy(
+        format!(
+            "{}/tests/fixtures/regulatory-gff/EMARs.gff.gz",
+            env!("CARGO_MANIFEST_DIR")
+        ),
+        &unindexed,
+    )
+    .unwrap();
+    let missing = dir.path().join("missing.gff3.gz");
+    let refusal_line = |args: &[&str]| {
+        let run = common::isolated_vep(dir.path())
+            .stdin(std::process::Stdio::null())
+            .args(["--json_cache", cache.to_str().unwrap()])
+            .args(["--assembly", "GRCh38", "--no_fasta", "--no_stats"])
+            .args(["--force_overwrite", "--quiet"])
+            .arg("--input_file")
+            .arg(&input)
+            .arg("--output_file")
+            .arg(&output)
+            .args(args)
+            .output()
+            .unwrap();
+        let stderr = String::from_utf8(run.stderr).unwrap();
+        assert_eq!(run.status.code(), Some(1), "{args:?}: {stderr}");
+        assert!(!output.exists(), "{args:?} left an output file");
+        stderr
+            .lines()
+            .find(|line| line.starts_with("ERROR: "))
+            .unwrap_or_else(|| panic!("{args:?} printed no ERROR line: {stderr}"))
+            .to_string()
+    };
+    let missing_value = format!("emars={}", missing.display());
+    let unindexed_value = unindexed.display().to_string();
+    for (args, line) in [
+        (
+            vec!["--"],
+            "ERROR: [cli] Unexpected extra command-line parameter(s): --".to_string(),
+        ),
+        (
+            vec!["--", "--regulatory"],
+            "ERROR: [cli] Unexpected extra command-line parameter(s): --, --regulatory".to_string(),
+        ),
+        (
+            vec!["--regulatory_gff", "file=a.gff3.gz,motifs"],
+            "ERROR: [cli] Failed to parse --regulatory_gff parameter \"motifs\"; expected \
+             key=value"
+                .to_string(),
+        ),
+        (
+            vec![
+                "--regulatory_gff",
+                "file=https://example.org/features.gff3.gz",
+            ],
+            "ERROR: [cli] --regulatory_gff file=https://example.org/features.gff3.gz is a remote \
+             URL; vep-rs reads a local file alone"
+                .to_string(),
+        ),
+        (
+            vec!["--regulatory_gff", &missing_value],
+            format!("ERROR: [cli] --regulatory_gff {missing_value} not found"),
+        ),
+        (
+            vec!["--regulatory_gff", &unindexed_value],
+            format!("ERROR: [cli] --regulatory_gff file={unindexed_value} has no tabix index"),
+        ),
+        (
+            vec!["--cell_type", "bogus"],
+            "ERROR: [cli] Cell type \"bogus\" unavailable; available cell types are:".to_string(),
+        ),
+    ] {
+        assert_eq!(refusal_line(&args), line, "{args:?}");
+    }
+}
+
+/// The `output` row of the exit-status table names the statistics report
+/// beside the output file, the warnings file and the skipped-variants file,
+/// and says that each file is tested before the first record is read, a
+/// pipe, a device and the default warnings file excepted (`can_be_written`
+/// and `refuse_files_that_cannot_be_written` of `runner.rs`).
+/// A report file that exists without `--force_overwrite` (`refuse_existing`
+/// of `stats.rs`), under the name `--stats_file` gives or under its default
+/// name beside the output, and a report file that cannot be written
+/// (`unwritable` beside it), in either format, each end the run under that
+/// component. Each of those refusals is run here: it exits 1, leaves no
+/// output file and its line names the component.
+#[test]
+fn exit_status_table_says_the_output_component_carries_the_statistics_report() {
+    let older_rows = [
+        "| `output` | the output file or format, the warnings file or the skipped-variants file |",
+        "| `output` | the output file or format, the statistics report, the warnings file or the \
+         skipped-variants file |",
+        "| `output` | the output file or format, the statistics report, the warnings file or the \
+         skipped-variants file; each file is tested before the first record is read, a pipe or \
+         a device excepted |",
+    ];
+    let row = "| `output` | the output file or format, the statistics report, the warnings file \
+               or the skipped-variants file; each file is tested before the first record is \
+               read, a pipe, a device and the default warnings file excepted |";
+    let page = page_text("cli/compatibility.md");
+    for older in older_rows {
+        assert!(
+            !page.contains(older),
+            "docs/cli/compatibility.md states {older:?}"
+        );
+    }
+    assert!(
+        page.lines().any(|line| line == row),
+        "docs/cli/compatibility.md lacks the row {row:?}"
+    );
+
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("in.vcf");
+    std::fs::write(
+        &input,
+        "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n\
+         21\t106\tr\tC\tG\t.\t.\t.\n",
+    )
+    .unwrap();
+    let cache = common::regulatory_cache(dir.path());
+    let output = dir.path().join("out.txt");
+    let refusal_line = |args: &[&str]| {
+        let run = common::isolated_vep(dir.path())
+            .stdin(std::process::Stdio::null())
+            .args(["--json_cache", cache.to_str().unwrap()])
+            .args(["--assembly", "GRCh38", "--no_fasta", "--quiet"])
+            .arg("--input_file")
+            .arg(&input)
+            .arg("--output_file")
+            .arg(&output)
+            .args(args)
+            .output()
+            .unwrap();
+        let stderr = String::from_utf8(run.stderr).unwrap();
+        assert_eq!(run.status.code(), Some(1), "{args:?}: {stderr}");
+        assert!(!output.exists(), "{args:?} left an output file");
+        stderr
+            .lines()
+            .find(|line| line.starts_with("ERROR: "))
+            .unwrap_or_else(|| panic!("{args:?} printed no ERROR line: {stderr}"))
+            .to_string()
+    };
+    let already_exists = |report: &std::path::Path| {
+        format!(
+            "ERROR: [output] Stats file {} already exists. Specify a different output file with \
+             --stats_file, overwrite existing file with --force_overwrite or disable stats with \
+             --no_stats",
+            report.display()
+        )
+    };
+
+    let named = dir.path().join("report.html");
+    std::fs::write(&named, "an earlier report").unwrap();
+    let named_value = named.display().to_string();
+    assert_eq!(
+        refusal_line(&["--stats_file", &named_value]),
+        already_exists(&named)
+    );
+    assert_eq!(
+        std::fs::read_to_string(&named).unwrap(),
+        "an earlier report",
+        "a refused run rewrote the report it found"
+    );
+
+    for (format, name) in [
+        ("--stats_html", "report.html"),
+        ("--stats_text", "report.txt"),
+    ] {
+        let unwritable = dir.path().join("no-such-directory").join(name);
+        let unwritable_value = unwritable.display().to_string();
+        assert_eq!(
+            refusal_line(&[format, "--stats_file", &unwritable_value]),
+            format!("ERROR: [output] Could not write to stats file {unwritable_value}"),
+            "{format}"
+        );
+        assert!(!unwritable.exists(), "{format} left a report");
+    }
+
+    let default_name = dir.path().join("out.txt_summary.html");
+    std::fs::write(&default_name, "an earlier report").unwrap();
+    assert_eq!(refusal_line(&[]), already_exists(&default_name));
+    assert_eq!(
+        std::fs::read_to_string(&default_name).unwrap(),
+        "an earlier report",
+        "a refused run rewrote the report it found"
+    );
+}
+
+/// The ten rows of the exit-status table below `cli` and `output` name every
+/// kind of fault their component ends a command line on. Each row is held
+/// whole and its shorter form refused, and one refusal of each kind a row
+/// gained is run here: it exits 1 and its line names the component. A run that
+/// is refused before its output opens leaves no output file; two refusals
+/// come after it has opened: a sample the header lacks at the first record and
+/// a transcript record at the read of its shard.
+#[test]
+fn exit_status_table_rows_name_the_faults_their_components_end_a_run_on() {
+    let rows = [
+        (
+            "| `input` | the input: a file that does not exist, standard input without \
+             `--format`, a first data line of no known format, BCF input, CAid input (looked up \
+             in the Ensembl variation database, which vep-rs does not reach), an identifier list \
+             against a cache without variation files, a region, SPDI or HGVS input without \
+             `--fasta`, or a region input with `--check_ref` |",
+            "| `input` | the input: an input name that is empty or `0`, a file that does not \
+             exist, standard input without `--format`, an input with no data line or whose first \
+             data line is of no known format, a malformed BGZF block, a line longer than 64 MiB, \
+             a VCF `##fileformat` line whose version cannot be read or has a major number other \
+             than 4, an `--individual` or `--individual_zyg` sample the VCF header lacks, BCF \
+             input, CAid input (looked up in the Ensembl variation database, which vep-rs does \
+             not reach), an identifier list against a cache without variation files or without \
+             their column list, a region, SPDI or HGVS input in a run with no reference FASTA, or \
+             a region input with `--check_ref` |",
+        ),
+        (
+            "| `parquet` | the Parquet writer: input out of chromosome and position order without \
+             `--no_check_variants_order`, or an output directory holding files vep-rs did not \
+             write |",
+            "| `parquet` | the Parquet writer: input out of chromosome and position order without \
+             `--no_check_variants_order`; a statistics report, warnings file or \
+             skipped-variants file named at the output path or inside the output directory; an \
+             output path that is a symbolic link or a file vep-rs did not write; an output \
+             directory holding a symbolic link or files vep-rs did not write; or a previous \
+             output that cannot be removed or replaced |",
+        ),
+        (
+            "| `parquet` | the Parquet writer: input out of chromosome and position order without \
+             `--no_check_variants_order`; an output path that is a symbolic link or a file vep-rs \
+             did not write; an output directory holding a symbolic link or files vep-rs did not \
+             write; or a previous output that cannot be removed or replaced |",
+            "| `parquet` | the Parquet writer: input out of chromosome and position order without \
+             `--no_check_variants_order`; a statistics report, warnings file or \
+             skipped-variants file named at the output path or inside the output directory; an \
+             output path that is a symbolic link or a file vep-rs did not write; an output \
+             directory holding a symbolic link or files vep-rs did not write; or a previous \
+             output that cannot be removed or replaced |",
+        ),
+        (
+            "| `plugin` | a `--plugin` naming an Ensembl VEP plugin vep-rs does not provide, or a \
+             Perl module (a `.pm` file by path or under the plugins directories), with or without \
+             `--safe`; under `--safe`, a plugin that cannot be loaded or a plugins directory that \
+             does not exist |",
+            "| `plugin` | a `--plugin` naming an Ensembl VEP plugin vep-rs does not provide, or a \
+             Perl module (a file named by path that has the suffix `.pm` or opens with a \
+             `package` line, or a `.pm` file under the plugins directories), with or without \
+             `--safe`; under `--safe`, a plugin that cannot be loaded or a plugins directory that \
+             does not exist or is not a directory |",
+        ),
+        (
+            "| `cache` | the cache: nothing resolves at the configured path, its layout or \
+             metadata is unusable, a transcript or regulatory shard cannot be read (a transcript \
+             an HGVS input names included), or a regulatory chromosome directory holds files but \
+             no shard, its assembly disagrees with `--assembly` or with its own directory name, \
+             or a variation file cannot be opened or read |",
+            "| `cache` | the cache: nothing resolves at the configured path, `--species` names \
+             `homo_sapiens_refseq` or `homo_sapiens_merged`, the cache version has several \
+             assemblies and no `--assembly` names one, its layout or metadata is unusable, its \
+             checksum manifest refuses the cache or a file of it, it declares another transcript \
+             set than the flags select, it lacks the SIFT or PolyPhen predictions `--sift` or \
+             `--polyphen` asks for or the gnomAD exome frequencies `--af_gnomad` asks for, \
+             `--check_frequency` names no population or one its variation columns lack, a \
+             transcript or regulatory shard cannot be read (a transcript an HGVS input names \
+             included), a transcript record holds a value vep-rs refuses, a regulatory chromosome \
+             directory holds files but no shard, its `chr_synonyms.txt` or its binding matrices \
+             cannot be read, a `--regulatory_gff` file cannot be read after it is opened or holds \
+             a record that is refused, its assembly disagrees with `--assembly` or with its own \
+             directory name, or a variation file cannot be opened or read |",
+        ),
+        (
+            "| `fasta` | the reference FASTA: the file or directory named cannot be read as an \
+             indexed FASTA, or a flag that reads it (`--hgvs`, `--hgvsg`, `--check_ref`, \
+             `--lookup_ref`, `--use_transcript_ref`, `--shift_3prime 1`) was given and none was \
+             named or found in the cache directory |",
+            "| `fasta` | the reference FASTA: the file or directory named, or the FASTA found in \
+             the cache directory, cannot be read as an indexed FASTA; an index the file lacks, \
+             its `.fai` or a BGZF file's `.gzi`, cannot be written beside it, because the lock \
+             file or the index cannot be written there, no `.fai` describes the file's layout, \
+             or a BGZF block of it cannot be read; a FASTA is opened while `VEP_FASTA_STORAGE` \
+             holds a value that names no storage mode; or none was named or found in the cache \
+             directory and a flag reads it (`--hgvs`, `--hgvsg`, `--check_ref`, `--lookup_ref`, \
+             `--use_transcript_ref`, `--shift_3prime 1`) or a BAM-edited cache switches \
+             `--use_transcript_ref` on |",
+        ),
+        (
+            "| `fasta` | the reference FASTA: the file or directory named, or the FASTA found in \
+             the cache directory, cannot be read as an indexed FASTA; a FASTA is opened while \
+             `VEP_FASTA_STORAGE` holds a value that names no storage mode; or none was named or \
+             found in the cache directory and a flag reads it (`--hgvs`, `--hgvsg`, \
+             `--check_ref`, `--lookup_ref`, `--use_transcript_ref`, `--shift_3prime 1`) or a \
+             BAM-edited cache switches `--use_transcript_ref` on |",
+            "| `fasta` | the reference FASTA: the file or directory named, or the FASTA found in \
+             the cache directory, cannot be read as an indexed FASTA; an index the file lacks, \
+             its `.fai` or a BGZF file's `.gzi`, cannot be written beside it, because the lock \
+             file or the index cannot be written there, no `.fai` describes the file's layout, \
+             or a BGZF block of it cannot be read; a FASTA is opened while `VEP_FASTA_STORAGE` \
+             holds a value that names no storage mode; or none was named or found in the cache \
+             directory and a flag reads it (`--hgvs`, `--hgvsg`, `--check_ref`, `--lookup_ref`, \
+             `--use_transcript_ref`, `--shift_3prime 1`) or a BAM-edited cache switches \
+             `--use_transcript_ref` on |",
+        ),
+        (
+            "| `filter` | a `--transcript_filter` Ensembl VEP would refuse, or whose regular \
+             expression is outside the supported dialect |",
+            "| `filter` | a `--transcript_filter` Ensembl VEP would refuse, or whose regular \
+             expression is outside the supported dialect; or one of three that Ensembl VEP \
+             accepts: an `in` list that names a directory, a unit whose first word is `0` and \
+             whose second is no operator, or a field prefix that fits two of vep-rs's keys and \
+             at most one of Ensembl VEP's |",
+        ),
+        (
+            "| `check_svs` | the `--check_svs` file: it is not a file, has no `.csi` or `.tbi` \
+             index beside it, or cannot be read |",
+            "| `check_svs` | the `--check_svs` file: it is not a file, has no `.csi` or `.tbi` \
+             index beside it, its index cannot be read or is no tabix index, or the file cannot \
+             be read |",
+        ),
+        (
+            "| `custom` | a `--custom` source: its string is malformed (Ensembl VEP's text), it \
+             names what vep-rs does not read (a remote URL), its file cannot be opened or read, \
+             or it is a GFF or GTF transcript source in a run without a cache or without a FASTA \
+             |",
+            "| `custom` | a `--custom` source, or the source `--gff`, `--gtf`, `--bigwig`, \
+             `--phyloP` or `--phastCons` names: its string is malformed (Ensembl VEP's text), it \
+             names what vep-rs does not read (a remote URL, which the default `--ucsc_data_root` \
+             of `--phyloP` and `--phastCons` is), no file fits its `###CHR###` pattern, its file \
+             cannot be opened or read, or it is a GFF or GTF transcript source in a run where \
+             no cache stands at the configured path or that has no FASTA |",
+        ),
+        (
+            "| `config` | the `--config` file, or a `vep.ini` that is a file, cannot be read; or \
+             a configuration value the parser accepts but the run cannot use, such as a \
+             `--distance` part that is not an integer |",
+            "| `config` | the `--config` file, a `vep.ini` that is a file, or the `--synonyms` \
+             file cannot be read; or a `--distance` or `--delimiter` value the parser accepts but \
+             the run cannot use, such as a `--distance` part that is not an integer |",
+        ),
+        (
+            "| `run` | any other failure of the annotation run, with its cause chain |",
+            "| `run` | any other failure of the run, with its cause chain, whether the run \
+             annotates or prints its resolved settings and ends (`--resolved_config`) |",
+        ),
+    ];
+    let page = page_text("cli/compatibility.md");
+    for (shorter, row) in rows {
+        assert!(
+            !page.contains(shorter),
+            "docs/cli/compatibility.md states {shorter:?}"
+        );
+        assert!(
+            page.lines().any(|line| line == row),
+            "docs/cli/compatibility.md lacks the row {row:?}"
+        );
+    }
+
+    struct Refusal {
+        args: Vec<String>,
+        variable: Option<(&'static str, &'static str)>,
+        line: String,
+        // Where `whole` is false the line opens with `line` and ends with `ends`.
+        whole: bool,
+        ends: &'static str,
+        before_the_output_opens: bool,
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let at = |name: &str| dir.path().join(name);
+    let text = |path: &std::path::Path| path.display().to_string();
+    let write = |name: &str, bytes: &[u8]| {
+        let path = at(name);
+        std::fs::write(&path, bytes).unwrap();
+        path
+    };
+    let cache_holding = |name: &str, info: &str| {
+        let cache = at(name);
+        std::fs::create_dir_all(cache.join("transcripts/21")).unwrap();
+        std::fs::write(cache.join("transcripts/21/1-1000000.json"), "[]").unwrap();
+        std::fs::write(cache.join("info.json"), info).unwrap();
+        cache
+    };
+    let fixture = |name: &str| {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures")
+            .join(name)
+    };
+    let header = "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n";
+    let record = "21\t106\tr\tC\tG\t.\t.\t.\n";
+    let input = write("in.vcf", format!("{header}{record}").as_bytes());
+    let grch38 = r#"{"assembly":"GRCh38"}"#;
+    let cache = cache_holding("cache", grch38);
+    let output = at("out.txt");
+    let strings = |words: &[&str]| {
+        words
+            .iter()
+            .map(|word| word.to_string())
+            .collect::<Vec<_>>()
+    };
+    // A run of `input` over `cache`, with the reference FASTA the `fasta`
+    // flags name, then `rest`.
+    let run_reading =
+        |cache: &std::path::Path, input: &str, fasta: &[&str], rest: &[&str]| -> Vec<String> {
+            let mut args = strings(&["--json_cache", &text(cache), "--assembly", "GRCh38"]);
+            args.extend(strings(&["--no_stats", "--force_overwrite", "--quiet"]));
+            args.extend(strings(&["--input_file", input]));
+            args.extend(strings(&["--output_file", &text(&output)]));
+            args.extend(strings(fasta));
+            args.extend(strings(rest));
+            args
+        };
+    let run_over = |cache: &std::path::Path, rest: &[&str]| {
+        run_reading(cache, &text(&input), &["--no_fasta"], rest)
+    };
+    let refused = |args: Vec<String>, line: String| Refusal {
+        args,
+        variable: None,
+        line,
+        whole: true,
+        ends: "",
+        before_the_output_opens: true,
+    };
+    let mut refusals = Vec::new();
+
+    // `input`.
+    refusals.push(refused(
+        run_reading(&cache, "0", &["--no_fasta"], &[]),
+        "ERROR: [input] No input file given".to_string(),
+    ));
+    let no_data_line = write("empty.txt", b"");
+    refusals.push(refused(
+        run_reading(&cache, &text(&no_data_line), &["--no_fasta"], &[]),
+        "ERROR: [input] Can't detect input format".to_string(),
+    ));
+    let malformed_block = fixture("malformed/bgzf_isize_over_limit.vcf.gz");
+    refusals.push(refused(
+        run_reading(&cache, &text(&malformed_block), &["--no_fasta"], &[]),
+        format!(
+            "ERROR: [input] malformed BGZF block at offset 0 in {}",
+            malformed_block.display()
+        ),
+    ));
+    let cap = vep_io::input::MAX_LINE_BYTES;
+    assert_eq!(cap, 64 << 20, "the row gives the limit as 64 MiB");
+    let mut long_line = format!("{header}21\t106\tr\tC\tG\t.\t.\t").into_bytes();
+    long_line.extend(std::iter::repeat_n(b'x', cap));
+    long_line.push(b'\n');
+    let long_line = write("long-third-line.vcf", &long_line);
+    refusals.push(refused(
+        run_reading(&cache, &text(&long_line), &["--no_fasta"], &[]),
+        format!("ERROR: [input] line 3 is longer than the {cap}-byte limit for one line of input"),
+    ));
+    let older_version = write(
+        "older-version.vcf",
+        format!("{}{record}", header.replace("VCFv4.2", "VCFv3.3")).as_bytes(),
+    );
+    refusals.push(refused(
+        run_reading(&cache, &text(&older_version), &["--no_fasta"], &[]),
+        "ERROR: [input] The VCF file format version 3.3 is not compatible with the parser \
+         version (VCF v4.2)"
+            .to_string(),
+    ));
+    refusals.push(Refusal {
+        whole: false,
+        ends: " given (S9) do not match samples from VCF ()",
+        before_the_output_opens: false,
+        ..refused(
+            run_over(&cache, &["--individual", "S9"]),
+            "ERROR: [input] ".to_string(),
+        )
+    });
+    let files_without_columns = cache_holding("files-without-columns", grch38);
+    std::fs::create_dir_all(files_without_columns.join("variations/21")).unwrap();
+    let identifiers = write("identifiers.txt", b"rs1\n");
+    refusals.push(refused(
+        run_reading(
+            &files_without_columns,
+            &text(&identifiers),
+            &["--no_fasta"],
+            &["--format", "id"],
+        ),
+        format!(
+            "ERROR: [input] Cannot use ID format with a cache whose info.json names no \
+             variation_cols for the files under {}/variations",
+            files_without_columns.display()
+        ),
+    ));
+
+    // `plugin`.
+    let module = write("Bar.pl", b"package Bar;\n1;\n");
+    refusals.push(refused(
+        run_over(&cache, &["--plugin", &text(&module)]),
+        format!(
+            "ERROR: [plugin] {} is an Ensembl VEP Perl plugin; vep-rs runs no Perl plugin, see \
+             docs/plugins.md",
+            module.display()
+        ),
+    ));
+    let no_directory = write("a-file", b"");
+    refusals.push(refused(
+        run_over(&cache, &["--safe", "--dir_plugins", &text(&no_directory)])
+            .into_iter()
+            .chain(strings(&["--plugin", "NMD"]))
+            .collect(),
+        format!(
+            "ERROR: [plugin] Plugins directory '{}' not found.",
+            no_directory.display()
+        ),
+    ));
+
+    // `cache`.
+    let root = at("root");
+    for assembly in ["GRCh37", "GRCh38"] {
+        std::fs::create_dir_all(root.join(format!("homo_sapiens/116_{assembly}"))).unwrap();
+    }
+    let under_the_root = |rest: &[&str]| {
+        let mut args = strings(&["--dir_cache", &text(&root), "--cache_version", "116"]);
+        args.extend(strings(&["--no_stats", "--force_overwrite", "--quiet"]));
+        args.extend(strings(&["--input_file", &text(&input)]));
+        args.extend(strings(&["--output_file", &text(&output), "--no_fasta"]));
+        args.extend(strings(rest));
+        args
+    };
+    refusals.push(refused(
+        under_the_root(&["--species", "homo_sapiens_refseq"]),
+        "ERROR: [cache] Should not use homo_sapiens_refseq as --species. Try using flags \
+         --refseq or --merged with --species homo_sapiens"
+            .to_string(),
+    ));
+    refusals.push(refused(
+        under_the_root(&[]),
+        "ERROR: [cache] Multiple assemblies found for cache version 116 (GRCh37, GRCh38) - \
+         specify one using --assembly [assembly]"
+            .to_string(),
+    ));
+    let other_checksum = cache_holding("other-checksum", grch38);
+    std::fs::write(
+        other_checksum.join("CHECKSUMS.sha256"),
+        format!("{}  info.json\n", "0".repeat(64)),
+    )
+    .unwrap();
+    refusals.push(refused(
+        run_over(&other_checksum, &[]),
+        format!(
+            "ERROR: [cache] checksum mismatch for info.json in {}",
+            other_checksum.display()
+        ),
+    ));
+    let ensembl_set = cache_holding(
+        "ensembl-set",
+        r#"{"assembly":"GRCh38","source_type":"ensembl"}"#,
+    );
+    refusals.push(refused(
+        run_over(&ensembl_set, &["--refseq"]),
+        format!(
+            "ERROR: [cache] --refseq names the RefSeq transcript set but {}/info.json declares \
+             source_type ensembl",
+            ensembl_set.display()
+        ),
+    ));
+    refusals.push(refused(
+        run_over(&cache, &["--sift", "b"]),
+        "ERROR: [cache] SIFT not available".to_string(),
+    ));
+    let columns_without_gnomad = cache_holding(
+        "columns-without-gnomad",
+        r#"{"assembly":"GRCh38","variation_cols":["variation_name","failed","somatic","start","end","allele_string","strand","minor_allele","minor_allele_freq"]}"#,
+    );
+    refusals.push(refused(
+        run_over(&columns_without_gnomad, &["--af_gnomad"]),
+        "ERROR: [cache] gnomAD data is not available in this cache".to_string(),
+    ));
+    refusals.push(refused(
+        run_over(
+            &columns_without_gnomad,
+            &["--check_frequency", "--freq_pop", "BOGUS"],
+        )
+        .into_iter()
+        .chain(strings(&["--freq_freq", "0.1", "--freq_gt_lt", "gt"]))
+        .chain(strings(&["--freq_filter", "exclude"]))
+        .collect(),
+        "ERROR: [cache] Invalid population BOGUS specified".to_string(),
+    ));
+    let refused_record = cache_holding("refused-record", grch38);
+    std::fs::write(
+        refused_record.join("transcripts/21/1-1000000.json"),
+        r#"[{"stable_id":"ENST21","gene_stable_id":"ENSG21","chr":"21","start":100,"end":1099,"strand":1,"biotype":"lncRNA","source":"Ensembl","variation_effect_feature_cache":{"codon_table":99}}]"#,
+    )
+    .unwrap();
+    refusals.push(Refusal {
+        before_the_output_opens: false,
+        ..refused(
+            run_over(&refused_record, &[]),
+            "ERROR: [cache] codon table 99 of transcript ENST21 is not a genetic code vep-rs \
+             translates with"
+                .to_string(),
+        )
+    });
+    let synonyms_directory = cache_holding("synonyms-directory", grch38);
+    std::fs::create_dir(synonyms_directory.join("chr_synonyms.txt")).unwrap();
+    refusals.push(refused(
+        run_over(&synonyms_directory, &[]),
+        format!(
+            "ERROR: [cache] Could not read synonyms file {}/chr_synonyms.txt: Is a directory",
+            synonyms_directory.display()
+        ),
+    ));
+    let other_matrices = common::regulatory_cache(&at("other-matrices"));
+    std::fs::write(
+        other_matrices.join("regulatory/binding_matrices.json"),
+        "[]",
+    )
+    .unwrap();
+    refusals.push(refused(
+        run_over(&other_matrices, &["--regulatory"]),
+        format!(
+            "ERROR: [cache] parsing {}/regulatory/binding_matrices.json: invalid type: sequence, \
+             expected a map at line 1 column 0",
+            other_matrices.display()
+        ),
+    ));
+    let whole_features = std::fs::read(fixture("regulatory-gff/EMARs.gff.gz")).unwrap();
+    let cut_features = write("cut.gff.gz", &whole_features[..300]);
+    std::fs::copy(
+        fixture("regulatory-gff/EMARs.gff.gz.tbi"),
+        at("cut.gff.gz.tbi"),
+    )
+    .unwrap();
+    refusals.push(refused(
+        run_over(
+            &cache,
+            &[
+                "--regulatory_gff",
+                &format!("emars={}", cut_features.display()),
+            ],
+        ),
+        format!(
+            "ERROR: [cache] {}: failed to fill whole buffer",
+            cut_features.display()
+        ),
+    ));
+
+    // `fasta`.
+    let edited = cache_holding("edited", r#"{"assembly":"GRCh38","bam":"x.bam"}"#);
+    refusals.push(refused(
+        run_over(&edited, &[]),
+        "ERROR: [fasta] Cannot use transcript reference sequences (--use_transcript_ref) without \
+         a FASTA file (see --fasta); you may wish to use --use_given_ref"
+            .to_string(),
+    ));
+    let reference = write("reference.fa", b">21\nNNNNNNNN\n");
+    write("reference.fa.fai", b"21\t8\t4\t8\t9\n");
+    refusals.push(Refusal {
+        variable: Some(("VEP_FASTA_STORAGE", "bogus")),
+        ..refused(
+            run_reading(&cache, &text(&input), &["--fasta", &text(&reference)], &[]),
+            "ERROR: [fasta] invalid VEP_FASTA_STORAGE=\"bogus\": expected 'mmap' or 'memory'"
+                .to_string(),
+        )
+    });
+    let holding_a_fasta = cache_holding("holding-a-fasta", grch38);
+    std::fs::write(holding_a_fasta.join("found.fa"), ">21\nNNNNNNNN\n").unwrap();
+    std::fs::write(holding_a_fasta.join("found.fa.fai"), "21\tlong\t4\t8\t9\n").unwrap();
+    refusals.push(refused(
+        run_reading(&holding_a_fasta, &text(&input), &[], &[]),
+        format!(
+            "ERROR: [fasta] invalid FASTA index line in {}/found.fa.fai: line 1: bad len",
+            holding_a_fasta.display()
+        ),
+    ));
+    // A file given without its index is indexed before it is read
+    // (`vep_fasta::index::open_indexed`), and each refusal of that writing is
+    // a line of the component.
+    let uneven = write("uneven.fa", b">21\nNNNN\nNNNNNNNN\n");
+    refusals.push(refused(
+        run_reading(&cache, &text(&input), &["--fasta", &text(&uneven)], &[]),
+        format!(
+            "ERROR: [fasta] failed to index {}: line 3 of sequence 21 is longer than its first \
+             line: wrap every line of a sequence but its last to one width",
+            uneven.display()
+        ),
+    ));
+    let cut_block = write("cut-block.fa.gz", &whole_features[..300]);
+    refusals.push(refused(
+        run_reading(&cache, &text(&input), &["--fasta", &text(&cut_block)], &[]),
+        format!(
+            "ERROR: [fasta] failed to index {}: truncated block at offset 0",
+            cut_block.display()
+        ),
+    ));
+
+    // `filter`.
+    let list_directory = at("list-directory");
+    std::fs::create_dir(&list_directory).unwrap();
+    for (filter, line) in [
+        (
+            format!("stable_id in {}", list_directory.display()),
+            format!(
+                "ERROR: [filter] Could not read from file {}",
+                list_directory.display()
+            ),
+        ),
+        (
+            "0 biotype is protein_coding".to_string(),
+            "ERROR: [filter] No such operator \"biotype\"".to_string(),
+        ),
+        (
+            "_s".to_string(),
+            "ERROR: [filter] Multiple data fields found matching query field \"_s\": _swissprot, \
+             _source_cache"
+                .to_string(),
+        ),
+    ] {
+        refusals.push(refused(
+            run_over(&cache, &["--transcript_filter", &filter]),
+            line,
+        ));
+    }
+
+    // `check_svs`.
+    let structural = at("structural_variants.vcf.gz");
+    std::fs::copy(
+        format!(
+            "{}/../../tests/golden/116/GRCh38-checksvs/structural_variants.vcf.gz",
+            env!("CARGO_MANIFEST_DIR")
+        ),
+        &structural,
+    )
+    .unwrap();
+    write("structural_variants.vcf.gz.tbi", b"not an index\n");
+    refusals.push(refused(
+        run_over(&cache, &["--check_svs", &text(&structural)]),
+        format!(
+            "ERROR: [check_svs] opening {0}: tabix index {0}.tbi is malformed: the index ends \
+             inside its magic",
+            structural.display()
+        ),
+    ));
+
+    // `custom`.
+    refusals.push(refused(
+        run_over(&cache, &["--phyloP", "100", "--ucsc_assembly", "hg38"]),
+        "ERROR: [custom] --phyloP needs --ucsc_data_root to name a local directory laid out as \
+         <root>/<assembly>/phyloP<N>way/<assembly>.phyloP<N>way.bw; the same source is --custom \
+         file=<local>.bw,format=bigwig,type=exact"
+            .to_string(),
+    ));
+    let pattern = at("none.###CHR###.bed.gz");
+    refusals.push(refused(
+        run_over(
+            &cache,
+            &[
+                "--custom",
+                &format!("file={},format=bed", pattern.display()),
+            ],
+        ),
+        format!(
+            "ERROR: [custom] No files with pattern {} were found",
+            pattern.display()
+        ),
+    ));
+    let no_scores = at("absent.bw");
+    refusals.push(refused(
+        run_over(&cache, &["--bigwig", &text(&no_scores)]),
+        format!(
+            "ERROR: [custom] cannot open the --custom source {}: No such file or directory (os \
+             error 2)",
+            no_scores.display()
+        ),
+    ));
+    let no_cache = at("absent-cache");
+    let mut beside_no_cache = strings(&["--json_cache", &text(&no_cache), "--assembly", "GRCh38"]);
+    beside_no_cache.extend(strings(&["--no_stats", "--force_overwrite", "--quiet"]));
+    beside_no_cache.extend(strings(&["--input_file", &text(&input)]));
+    beside_no_cache.extend(strings(&["--output_file", &text(&output), "--no_fasta"]));
+    beside_no_cache.extend(strings(&["--gtf", &text(&at("absent.gtf.gz"))]));
+    refusals.push(Refusal {
+        whole: false,
+        ..refused(
+            beside_no_cache,
+            format!(
+                "ERROR: [custom] a GFF or GTF transcript source is read beside a cache, and this \
+                 run has none (Directory {} does not exist); name the cache of the run with \
+                 --json_cache <dir>",
+                no_cache.display()
+            ),
+        )
+    });
+
+    // `config`.
+    let no_synonyms = at("absent-synonyms.txt");
+    refusals.push(refused(
+        run_over(&cache, &["--synonyms", &text(&no_synonyms)]),
+        format!(
+            "ERROR: [config] Could not read synonyms file {}: No such file or directory",
+            no_synonyms.display()
+        ),
+    ));
+
+    // `parquet`: the refused paths never hold this run's output.
+    #[cfg(all(feature = "parquet", unix))]
+    {
+        let parquet_run = |out: &std::path::Path, rest: &[&str]| {
+            let mut args = strings(&["--json_cache", &text(&cache), "--assembly", "GRCh38"]);
+            args.extend(strings(&["--no_fasta", "--no_stats", "--quiet"]));
+            args.extend(strings(&["--input_file", &text(&input)]));
+            args.extend(strings(&["--output_format", "parquet"]));
+            args.extend(strings(&["--output_file", &text(out)]));
+            args.extend(strings(rest));
+            args
+        };
+        let not_an_output = write("file.parquet", b"text\n");
+        refusals.push(refused(
+            parquet_run(&not_an_output, &["--force_overwrite"]),
+            format!(
+                "ERROR: [parquet] output path {} is a file vep-rs did not write",
+                not_an_output.display()
+            ),
+        ));
+        let named = at("named.parquet");
+        let skipped_inside = named.join("skipped.txt");
+        refusals.push(refused(
+            parquet_run(&named, &["--skipped_variants_file", &text(&skipped_inside)]),
+            format!(
+                "ERROR: [parquet] skipped-variants file {} lies inside the output directory {}; \
+                 name it outside that directory with --skipped_variants_file",
+                skipped_inside.display(),
+                named.display()
+            ),
+        ));
+        let link = at("link.parquet");
+        std::os::unix::fs::symlink(at("nowhere"), &link).unwrap();
+        refusals.push(refused(
+            parquet_run(&link, &[]),
+            format!(
+                "ERROR: [parquet] output path {} is a symbolic link",
+                link.display()
+            ),
+        ));
+        let earlier = at("earlier.parquet");
+        let first = common::isolated_vep(dir.path())
+            .stdin(std::process::Stdio::null())
+            .args(parquet_run(&earlier, &[]))
+            .output()
+            .unwrap();
+        assert_eq!(
+            first.status.code(),
+            Some(0),
+            "{}",
+            String::from_utf8_lossy(&first.stderr)
+        );
+        std::os::unix::fs::symlink(&input, earlier.join("extra")).unwrap();
+        refusals.push(refused(
+            parquet_run(&earlier, &["--force_overwrite"]),
+            format!(
+                "ERROR: [parquet] output directory entry {} is a symbolic link",
+                earlier.join("extra").display()
+            ),
+        ));
+    }
+
+    let mut wrong = Vec::new();
+    for refusal in &refusals {
+        let mut command = common::isolated_vep(dir.path());
+        command
+            .stdin(std::process::Stdio::null())
+            .args(&refusal.args);
+        if let Some((name, value)) = refusal.variable {
+            command.env(name, value);
+        }
+        let run = command.output().unwrap();
+        let stderr = String::from_utf8_lossy(&run.stderr);
+        let printed = stderr
+            .lines()
+            .find(|line| line.starts_with("ERROR: "))
+            .unwrap_or("no ERROR line");
+        let as_expected = if refusal.whole {
+            printed == refusal.line
+        } else {
+            printed.starts_with(&refusal.line) && printed.ends_with(refusal.ends)
+        };
+        if run.status.code() != Some(1) || !as_expected {
+            wrong.push(format!(
+                "{:?}: exit {:?}, {printed:?} where {:?} and {:?} are expected",
+                refusal.args,
+                run.status.code(),
+                refusal.line,
+                refusal.ends
+            ));
+        }
+        if output.exists() {
+            if refusal.before_the_output_opens {
+                wrong.push(format!("{:?} left an output file", refusal.args));
+            }
+            std::fs::remove_file(&output).unwrap();
+        }
+    }
+
+    // `fasta`: in a directory closed to the run neither the lock file of a file
+    // with no index beside it nor the `.gzi` of a BGZF file that has its `.fai`
+    // can be written.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let closed = at("closed");
+        std::fs::create_dir(&closed).unwrap();
+        let bare = closed.join("bare.fa");
+        std::fs::write(&bare, ">21\nNNNNNNNN\n").unwrap();
+        let corpus_fasta = format!("{}/reference.fa.gz", committed_corpus("GRCh38-identifiers"));
+        let half_indexed = closed.join("half-indexed.fa.gz");
+        std::fs::copy(&corpus_fasta, &half_indexed).unwrap();
+        std::fs::copy(
+            format!("{corpus_fasta}.fai"),
+            format!("{}.fai", half_indexed.display()),
+        )
+        .unwrap();
+        std::fs::set_permissions(&closed, std::fs::Permissions::from_mode(0o555)).unwrap();
+        // A user whose writes ignore the mode writes both, and nothing is
+        // refused.
+        let unwritable = std::fs::write(closed.join("probe"), "").is_err();
+        let runs = [
+            (
+                &bare,
+                format!(
+                    "ERROR: [fasta] Could not write to FASTA lock file {}.vep.lock: Permission \
+                     denied (os error 13); index the FASTA with samtools faidx, or link it into \
+                     a directory the run can write",
+                    bare.display()
+                ),
+            ),
+            (
+                &half_indexed,
+                format!(
+                    "ERROR: [fasta] failed to write BGZF index {}.gzi: Permission denied (os \
+                     error 13)",
+                    half_indexed.display()
+                ),
+            ),
+        ]
+        .map(|(fasta, line)| {
+            let run = common::isolated_vep(dir.path())
+                .stdin(std::process::Stdio::null())
+                .args(run_reading(
+                    &cache,
+                    &text(&input),
+                    &["--fasta", &text(fasta)],
+                    &[],
+                ))
+                .output()
+                .unwrap();
+            (fasta, line, run)
+        });
+        std::fs::set_permissions(&closed, std::fs::Permissions::from_mode(0o755)).unwrap();
+        for (fasta, line, run) in runs {
+            let stderr = String::from_utf8_lossy(&run.stderr);
+            let printed = stderr.lines().find(|line| line.starts_with("ERROR: "));
+            if unwritable && (run.status.code() != Some(1) || printed != Some(line.as_str())) {
+                wrong.push(format!(
+                    "{} in a directory closed to the run: exit {:?}, {stderr:?}",
+                    fasta.display(),
+                    run.status.code()
+                ));
+            }
+            if output.exists() {
+                if unwritable {
+                    wrong.push(format!("{} left an output file", fasta.display()));
+                }
+                std::fs::remove_file(&output).unwrap();
+            }
+        }
+    }
+
+    // `parquet`: an earlier output the user may not list cannot be removed.
+    #[cfg(all(feature = "parquet", unix))]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let earlier = at("unlisted.parquet");
+        let mut args = strings(&["--json_cache", &text(&cache), "--assembly", "GRCh38"]);
+        args.extend(strings(&["--no_fasta", "--no_stats", "--quiet"]));
+        args.extend(strings(&["--input_file", &text(&input)]));
+        args.extend(strings(&["--output_format", "parquet"]));
+        args.extend(strings(&["--output_file", &text(&earlier)]));
+        let first = common::isolated_vep(dir.path())
+            .stdin(std::process::Stdio::null())
+            .args(&args)
+            .output()
+            .unwrap();
+        assert_eq!(
+            first.status.code(),
+            Some(0),
+            "{}",
+            String::from_utf8_lossy(&first.stderr)
+        );
+        std::fs::set_permissions(&earlier, std::fs::Permissions::from_mode(0o000)).unwrap();
+        // A user whose reads ignore the mode lists the directory, and nothing
+        // is refused.
+        if std::fs::read_dir(&earlier).is_err() {
+            let run = common::isolated_vep(dir.path())
+                .stdin(std::process::Stdio::null())
+                .args(&args)
+                .arg("--force_overwrite")
+                .output()
+                .unwrap();
+            let stderr = String::from_utf8_lossy(&run.stderr).into_owned();
+            std::fs::set_permissions(&earlier, std::fs::Permissions::from_mode(0o755)).unwrap();
+            if run.status.code() != Some(1)
+                || stderr.lines().next()
+                    != Some(
+                        "ERROR: [parquet] could not remove the previous output: Permission \
+                         denied (os error 13)",
+                    )
+            {
+                wrong.push(format!(
+                    "an earlier Parquet output of mode 000: exit {:?}, {stderr:?}",
+                    run.status.code()
+                ));
+            }
+        } else {
+            std::fs::set_permissions(&earlier, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+    }
+
+    // `run`: the print `--resolved_config` asks for, on a standard output
+    // that takes no byte.
+    let print = common::isolated_vep(dir.path())
+        .stdin(std::process::Stdio::null())
+        .stdout(common::unwritable("a pipe whose reader has gone"))
+        .args(run_over(&cache, &["--resolved_config"]))
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&print.stderr);
+    if print.status.code() != Some(1)
+        || stderr.lines().next() != Some("ERROR: [run] Broken pipe (os error 32)")
+    {
+        wrong.push(format!(
+            "--resolved_config on a closed standard output: exit {:?}, {stderr:?}",
+            print.status.code()
+        ));
+    }
+
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
 /// `tab-column-order-and-placeholder`: a plugin header key the registry lists
@@ -1234,8 +3776,70 @@ fn tab_column_order_exclusion_is_documented() {
     );
 }
 
+/// `json_non_finite_number_token`: OutputFactory/JSON.pm:288 numifies every
+/// value of an output hash that Perl's number test admits under a key it
+/// does not exempt, whatever wrote it (Utils.pm:231), so the class takes a
+/// table's cell and a score a plugin prints alike (MaxEntScan.pm:245 prints
+/// `Inf`, `-Inf` or `NaN`). The index row and the entry's page name both,
+/// and neither says that a cell alone reaches the class.
+#[test]
+fn json_non_finite_number_token_names_a_cell_and_a_printed_score() {
+    let index = page_text("intended-divergences.md");
+    let row = index
+        .lines()
+        .find(|line| line.starts_with("| [`json_non_finite_number_token`]"))
+        .expect("docs/intended-divergences.md has a json_non_finite_number_token row");
+    assert_states(
+        "the json_non_finite_number_token row of docs/intended-divergences.md",
+        row,
+        &[
+            "so a plugin or annotation value spelling an infinity, a not-a-number or a number \
+             past the double's range (`Inf`, `NaN`, `1e400`), a table's cell or a score a plugin \
+             prints, leaves the record's line outside the JSON grammar; vep-rs writes the \
+             value's text as a JSON string |",
+        ],
+    );
+    let path = "divergences/json-non-finite-number-token.md";
+    assert_page_states(
+        path,
+        &[
+            "vep-rs writes such a value as a JSON string holding its text.",
+            "vep-rs writes the value as a JSON string holding its text, `\"Inf\"`, `\"NaN\"` or \
+             `\"1e400\"`, the text its default, tab and VCF outputs print",
+            "The row's plugin or custom-annotation value, a table's cell or a score the plugin \
+             prints, spells an infinity, a not-a-number, or a number whose double overflows.",
+            "No committed table carries such a cell and no committed run prints such a score, so \
+             no manifest names the class and no comparator applies it",
+            "So does a score a plugin prints: MaxEntScan writes `Inf`, `-Inf` or `NaN` for a \
+             score over a matrix entry that is an infinity or a not-a-number (`MaxEntScan.pm` \
+             line 245), and Ensembl VEP writes `\"maxentscan_ref\":inf` where vep-rs writes \
+             `\"maxentscan_ref\":\"Inf\"`.",
+            "No committed table carries a cell spelling an infinity, a not-a-number or an \
+             overflowing number, and no committed run prints such a score, so no committed flag \
+             set meets the shape and no manifest names the class.",
+        ],
+    );
+    let page = page_text(path)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for refused in [
+        "a plugin or annotation cell spelling",
+        "vep-rs writes the cell's text as a JSON string",
+        "as a JSON string holding the cell's text",
+        "The row's plugin or custom-annotation cell spells",
+    ] {
+        assert!(
+            !row.contains(refused),
+            "the json_non_finite_number_token row of docs/intended-divergences.md states \
+             {refused:?}"
+        );
+        assert!(!page.contains(refused), "docs/{path} states {refused:?}");
+    }
+}
+
 /// `output_format`: OutputFactory.pm:229 lower-cases a copy of the value to pick
-/// the writer while :150 keeps the spelling as typed, which :1527 (a symbol's
+/// the writer while :150 keeps the spelling as typed, which :1536 (a symbol's
 /// `%20` under exactly `vcf`) and :1409 (the GA4GH_VRS string unless exactly
 /// `json`) read case-sensitively; vep-rs reads the value once, lower-cased.
 #[test]
@@ -1243,7 +3847,7 @@ fn output_format_given_case_divergence_is_documented() {
     assert_page_states(
         "divergences/output-format-flag-case.md",
         &[
-            "Ensembl VEP 116.2 lower-cases the `--output_format` value to choose the writer and \
+            "Ensembl VEP 116.3 lower-cases the `--output_format` value to choose the writer and \
              keeps the spelling as typed for two later readers",
             "`output_format_flag_read_in_its_given_case`: a `SYMBOL` in a VCF output selected \
              with `--output_format` spelled other than `vcf`, whose whitespace Ensembl VEP writes \
@@ -1279,9 +3883,69 @@ fn output_format_given_case_divergence_is_documented() {
     );
 }
 
-/// `AVI`, `OpenTargets`: OutputFactory.pm:2291-2293 restore the record's span and
-/// allele string on the first split feature and :2314 points every later allele's
-/// overlaps at it before :2226 runs the plugins, so AVI.pm:130-134 reads the
+/// The Polars recipe of `docs/output/parquet.md` orders its rows before it
+/// selects its columns. A Polars `select` gives a frame of the columns it names
+/// and no other, so a `sort` that follows it can name those alone, and the
+/// recipe orders by `contig_index`, which it does not select: written with the
+/// `select` first, Polars 2.1.0 ends the recipe on a default run's output with
+/// `ColumnNotFoundError: unable to find column "contig_index"`. The DuckDB and
+/// Spark recipes of the page order by a column outside their select list and
+/// run as written.
+#[test]
+fn polars_recipe_orders_its_rows_before_it_selects_its_columns() {
+    let page = page_text("output/parquet.md");
+    let recipe: Vec<&str> = page
+        .lines()
+        .skip_while(|line| *line != "### Polars")
+        .skip_while(|line| *line != "```python")
+        .skip(1)
+        .take_while(|line| *line != "```")
+        .collect();
+    let quoted = |call: &str| -> Vec<String> {
+        call.split('"')
+            .skip(1)
+            .step_by(2)
+            .map(str::to_string)
+            .collect()
+    };
+    let mut selected: Option<Vec<String>> = None;
+    for line in &recipe {
+        let call = line.trim_start();
+        if call.starts_with(".select(") {
+            selected = Some(quoted(call));
+        } else if call.starts_with(".sort(") {
+            for column in quoted(call) {
+                assert!(
+                    selected.as_ref().is_none_or(|kept| kept.contains(&column)),
+                    "the Polars recipe of docs/output/parquet.md sorts by `{column}` after a \
+                     select that leaves the column out"
+                );
+            }
+        }
+    }
+    assert_eq!(
+        recipe,
+        [
+            "import polars as pl",
+            "",
+            "rows = pl.scan_parquet(\"out.parquet/**/*.parquet\", hive_partitioning=False)",
+            "hits = (",
+            "    rows.filter(",
+            "        pl.col(\"Consequence\").list.contains(\"missense_variant\")",
+            "        & (pl.col(\"IMPACT\") == \"MODERATE\")",
+            "    )",
+            "    .sort(\"contig_index\", \"pos\")",
+            "    .select(\"chrom\", \"pos\", \"ref\", \"alt\", \"Feature\", \"Consequence\")",
+            "    .collect()",
+            ")",
+        ],
+        "the Polars recipe of docs/output/parquet.md"
+    );
+}
+
+/// `AVI`, `OpenTargets`: OutputFactory.pm:2300-2302 restore the record's span and
+/// allele string on the first split feature and :2323 points every later allele's
+/// overlaps at it before :2235 runs the plugins, so AVI.pm:130-134 reads the
 /// record's span (no score on a split record) and OpenTargets.pm:349 the record's
 /// alleles (a match on every allele's rows); vep-rs hands each split allele its own.
 #[test]
@@ -1293,9 +3957,9 @@ fn minimal_plugin_rejoined_record_divergence_is_documented() {
              its span and allele string restored, so a plugin that reads the record's span or \
              alleles values every split allele by the record and not by the allele's own trimmed \
              form",
-            "vep-rs writes each allele's row with its score and link; Ensembl VEP 116.2 writes \
+            "vep-rs writes each allele's row with its score and link; Ensembl VEP 116.3 writes \
              both rows without an AVI field, since the rejoined record spans two bases",
-            "Under `--minimal` Ensembl VEP 116.2 writes the association's five fields on all six \
+            "Under `--minimal` Ensembl VEP 116.3 writes the association's five fields on all six \
              rows of the record; vep-rs writes them on the first allele's three rows alone",
             "gnomADc, gnomADMt, Conservation, NearestExonJB, TSSDistance and GWAS read the same \
              feature, and vep-rs hands them the allele's own span and alleles too",
@@ -1364,6 +4028,160 @@ fn minimal_plugin_rejoined_record_divergence_is_documented() {
     );
 }
 
+/// `DosageSensitivity`: the plugin names `Feature` as its row kind
+/// (DosageSensitivity.pm:117-119) and its `run` reads a transcript on every row
+/// (DosageSensitivity.pm:169), so under `--regulatory` it fails once on each
+/// regulatory and motif row. Section 2 of the page counts those rows on its
+/// worked run, the first five records of the `GRCh38-regulatory` corpus:
+/// Ensembl VEP's are read from the corpus's stored output and vep-rs's from a
+/// run of the page's own command. One motif row of the run differs between the
+/// engines in `MOTIF_SCORE_CHANGE`, under `motif_score_reverse_strand_mnv`, so
+/// the page gives the count and the first row and does not call the rows equal.
+#[test]
+fn dosage_sensitivity_section_counts_the_rows_its_worked_run_writes() {
+    const WORKED_RECORDS: usize = 5;
+    const COUNT_WORDS: [&str; 13] = [
+        "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+        "eleven", "twelve",
+    ];
+    let root = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
+    let corpus = format!("{root}/tests/golden/116/GRCh38-regulatory");
+    let corpus_input = std::fs::read_to_string(format!("{corpus}/variants.vcf")).unwrap();
+    let mut worked_input = String::new();
+    let mut records = 0;
+    for line in corpus_input.lines() {
+        if !line.starts_with('#') {
+            if records == WORKED_RECORDS {
+                break;
+            }
+            records += 1;
+        }
+        worked_input.push_str(line);
+        worked_input.push('\n');
+    }
+    assert_eq!(records, WORKED_RECORDS);
+
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("variants.vcf");
+    std::fs::write(&input, worked_input).unwrap();
+    let out = dir.path().join("out.txt");
+    let run = common::isolated_vep(dir.path())
+        .stdin(std::process::Stdio::null())
+        .arg("-i")
+        .arg(&input)
+        .arg("-o")
+        .arg(&out)
+        .args(["--offline", "--json_cache", &format!("{corpus}/json_cache")])
+        .args(["--fasta", &format!("{corpus}/reference.fa.gz")])
+        .args(["--assembly", "GRCh38", "--regulatory", "--plugin"])
+        .arg(format!(
+            "DosageSensitivity,file={root}/tests/golden/116/GRCh38-plugin-dosage-sensitivity/data/\
+             Collins_rCNV_2022.dosage_sensitivity_scores.tsv.gz"
+        ))
+        .output()
+        .unwrap();
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    let written = std::fs::read_to_string(&out).unwrap();
+    // A plugin that cannot be loaded costs the run a warning alone: it still
+    // exits 0 and writes the same regulatory and motif rows.
+    let warned =
+        std::fs::read_to_string(format!("{}_warnings.txt", out.display())).unwrap_or_default();
+    assert_eq!(warned, "", "the run of the page's command warned");
+
+    // The data rows of the first `WORKED_RECORDS` names a default-format output
+    // writes, which both engines write in input order.
+    let rows_of_the_worked_records = |text: &str| -> Vec<String> {
+        let mut names: Vec<&str> = Vec::new();
+        let mut rows = Vec::new();
+        for line in text.lines().filter(|line| !line.starts_with('#')) {
+            let name = line.split('\t').next().unwrap();
+            if !names.contains(&name) {
+                if names.len() == WORKED_RECORDS {
+                    break;
+                }
+                names.push(name);
+            }
+            rows.push(line.to_string());
+        }
+        assert_eq!(names.len(), WORKED_RECORDS, "{names:?}");
+        rows
+    };
+    let of_kind = |rows: &[String], kind: &str| -> Vec<String> {
+        rows.iter()
+            .filter(|row| row.split('\t').nth(5) == Some(kind))
+            .cloned()
+            .collect()
+    };
+    let feature_rows = |rows: &[String]| -> Vec<String> {
+        rows.iter()
+            .filter(|row| {
+                matches!(
+                    row.split('\t').nth(5),
+                    Some("RegulatoryFeature" | "MotifFeature")
+                )
+            })
+            .cloned()
+            .collect()
+    };
+    let key = |row: &String| -> Vec<String> {
+        let cells: Vec<&str> = row.split('\t').collect();
+        [0, 1, 2, 4, 5, 6]
+            .iter()
+            .map(|&i| cells[i].to_string())
+            .collect()
+    };
+
+    let vep_rs_rows = rows_of_the_worked_records(&written);
+    let ensembl_vep_rows = rows_of_the_worked_records(&common::read_expected(
+        std::path::Path::new(&corpus),
+        "default.txt",
+    ));
+    let vep_rs = feature_rows(&vep_rs_rows);
+    let ensembl_vep = feature_rows(&ensembl_vep_rows);
+    assert_eq!(
+        vep_rs.iter().map(key).collect::<Vec<_>>(),
+        ensembl_vep.iter().map(key).collect::<Vec<_>>(),
+    );
+    assert_eq!(vep_rs.first(), ensembl_vep.first());
+    for kind in ["RegulatoryFeature", "MotifFeature"] {
+        assert!(!of_kind(&ensembl_vep, kind).is_empty(), "no {kind} row");
+    }
+
+    let count = COUNT_WORDS[ensembl_vep.len()];
+    assert_page_states(
+        "plugins/flat-file.md",
+        &[
+            &format!(
+                "The message names the row's class, so {count} failing rows of two kinds give \
+                 two lines."
+            ),
+            &format!("Both engines write {count} regulatory and motif rows, the first:"),
+        ],
+    );
+    let page = page_text("plugins/flat-file.md");
+    assert!(
+        page.contains(&format!("```\n{}\n```", vep_rs[0])),
+        "docs/plugins/flat-file.md does not print the first row: {}",
+        vep_rs[0]
+    );
+    let collapsed = page.split_whitespace().collect::<Vec<_>>().join(" ");
+    for other in COUNT_WORDS.iter().filter(|word| **word != count) {
+        for refused in [
+            format!("{other} failing rows of two kinds"),
+            format!("{other} regulatory and motif rows"),
+        ] {
+            assert!(
+                !collapsed.contains(&refused),
+                "docs/plugins/flat-file.md states {refused:?}"
+            );
+        }
+    }
+}
+
 /// `fork`: Runner.pm:662 captures a child's standard error into a string and :565
 /// relays it through `warning_msg` behind the child's pid, so BaseVEP.pm:806
 /// writes `WARNING: <pid> : WARNING: <text>`; vep-rs writes `WARNING: <text>` at
@@ -1401,6 +4219,135 @@ fn fork_warning_pid_prefix_divergence_is_documented() {
              warnings file as one block headed by the child's process id, so the block's first \
              line reads `WARNING: <pid> : WARNING: <text>` where a run without the flag writes \
              `WARNING: <text>`; vep-rs writes the condition alone at every worker count",
+        ],
+    );
+}
+
+/// `json_mismatch_warning_names_no_record`: the format comparator's warnings mode sets the
+/// reference's unnamed line and vep-rs's named lines aside under the class, and the entry's
+/// page, its record and the comparator's help name that rule.
+#[test]
+fn json_mismatch_page_says_what_the_warnings_comparison_sets_aside() {
+    const PAGE: &str = "divergences/json-mismatch-warning-names-no-record.md";
+    const RULE: &str = "without_unnamed_mismatch_warning";
+    assert_page_states(
+        PAGE,
+        &[
+            "The warnings mode of the format comparator sets those lines aside under the class",
+            "The warnings mode of the format comparator (`tools/vep-formats-compare`) applies \
+             the class where `--masks` names it, and to this shape alone: the reference's file \
+             holds the unnamed line and no named one, and vep-rs's file holds a named one",
+            "It sets aside the reference's unnamed lines and vep-rs's named lines and counts \
+             them under `masks_applied`",
+            "A file of vep-rs's that names no record leaves the reference's line a difference",
+            "Where the reference run was forked, the class also sets aside the interpreter \
+             warnings of the statement that wrote the unnamed line",
+            "It reads that statement from the line directly before the unnamed line, so an \
+             interpreter warning of any other statement stays a difference",
+        ],
+    );
+    let page = page_text(PAGE);
+    for replaced in [
+        "The class is documented only",
+        "No comparison tool has a rule for the class",
+        "lists the unnamed line as the reference's alone",
+    ] {
+        assert!(!page.contains(replaced), "docs/{PAGE} states {replaced:?}");
+    }
+    let record = reproduction_record("json_mismatch_warning_names_no_record");
+    assert!(
+        record.contains(&format!(
+            "rules = [\"tools/vep-formats-compare/src/warnings.rs::{RULE}\"]"
+        )),
+        "the entry's record names no comparison rule"
+    );
+    let tool = |file: &str| {
+        let path = format!(
+            "{}/../../tools/vep-formats-compare/{file}",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"))
+    };
+    assert!(tool("src/warnings.rs").contains(&format!("pub fn {RULE}(")));
+    let help = tool("data/help.txt")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert_states(
+        "tools/vep-formats-compare/data/help.txt",
+        &help,
+        &[
+            "json_mismatch_warning_names_no_record (--warnings mode: where the reference holds \
+             the Transcript-assembly mismatch warning of a --json run, which names no record, \
+             and the candidate holds it with a record's name, those lines are set aside",
+        ],
+    );
+}
+
+/// `gxf_reverse_strand_utr_sequence`: the format comparator takes the stop count of a
+/// reverse-strand row only where Ensembl VEP's row names, in `SOURCE`, the file that holds
+/// its transcript (BaseGXF.pm:635, OutputFactory.pm:1592); a cache transcript's row
+/// carries none, or a merged cache's `Ensembl` or `RefSeq` (MergeVEP.pm:103 and :110).
+/// The entry's page, its record and the comparator's help name that rule.
+#[test]
+fn file_transcript_utr_page_says_which_rows_the_comparator_takes() {
+    const PAGE: &str = "divergences/gxf-reverse-utr.md";
+    const RULE: &str = "file_transcript_stop_count_pair";
+    assert_page_states(
+        PAGE,
+        &[
+            "applied by the format comparator to the `HGVSp` field of a `STRAND` -1 row of a \
+             transcript Ensembl VEP read from the file, where the two values differ in the \
+             digits after `fsTer` or `extTer` alone",
+            "Under the class a differing `HGVSp` (the JSON `hgvsp`) is accepted on a row whose \
+             `STRAND` is -1 and whose `SOURCE` (the JSON `source`) in Ensembl VEP's output \
+             names the file",
+            "Both values must be present and equal once the digits, or `?`, after `fsTer` or \
+             `extTer` are set aside",
+            "The `SOURCE` says whether the row's transcript was read from the file or from a \
+             cache",
+            "A row of a cache transcript carries no `SOURCE`, or the `Ensembl` or `RefSeq` of a \
+             merged cache, and its `HGVSp` stays a difference under the class",
+            "A file whose own name is `Ensembl` or `RefSeq` reads as a merged cache's row and \
+             stays a difference too",
+        ],
+    );
+    let page = page_text(PAGE);
+    for replaced in [
+        "of a `STRAND` -1 row whose two values differ",
+        "on a row whose `STRAND` is -1 is accepted when both values are present",
+    ] {
+        assert!(!page.contains(replaced), "docs/{PAGE} states {replaced:?}");
+    }
+    let record = reproduction_record("gxf_reverse_strand_utr_sequence");
+    assert!(
+        record.contains(&format!(
+            "rules = [\"tools/vep-formats-compare/src/rules/file_transcript.rs::{RULE}\"]"
+        )),
+        "the entry's record names no comparison rule"
+    );
+    let tool = |file: &str| {
+        let path = format!(
+            "{}/../../tools/vep-formats-compare/{file}",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"))
+    };
+    let rule = tool("src/rules/file_transcript.rs");
+    assert!(rule.contains(&format!("pub fn {RULE}(")));
+    // The two names the page gives a merged cache's rows are the two the rule holds.
+    assert!(rule.contains("pub const ENSEMBL_SOURCE: &str = \"Ensembl\";"));
+    assert!(tool("src/compare.rs").contains("pub const REFSEQ_SOURCE: &str = \"RefSeq\";"));
+    let help = tool("data/help.txt")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert_states(
+        "tools/vep-formats-compare/data/help.txt",
+        &help,
+        &[
+            "gxf_reverse_strand_utr_sequence (the fsTer or extTer count of an HGVSp on a \
+             reverse-strand transcript read from a GTF or GFF file)",
         ],
     );
 }
@@ -1470,7 +4417,11 @@ fn output_file_exclusion_is_documented() {
 
 /// `assembly`: `--assembly` is compared exactly and case-sensitively, as
 /// CacheDir.pm:347 and :407 compare it with `ne`, with one addition Ensembl VEP
-/// lacks: `hg19` and `hg38` read as `GRCh37` and `GRCh38`.
+/// lacks: `hg19` and `hg38` read as `GRCh37` and `GRCh38`. The hint the
+/// built-in plugins take is read from the run's assembly name by
+/// `Assembly::parse` of `vep-core`, which reads six names in any letter case,
+/// so the flag's row lists those six and says a plugin warns under a name that
+/// gives no hint: a cache named `38` or `grch37` draws no warning.
 #[test]
 fn assembly_alias_exclusion_is_documented() {
     assert_page_states(
@@ -1480,13 +4431,34 @@ fn assembly_alias_exclusion_is_documented() {
              with one addition: `hg19` and `hg38` are read as `GRCh37` and `GRCh38`",
         ],
     );
+    let page = "cli/cache-species-runtime.md";
+    assert_flag_row_states(
+        page,
+        "--assembly",
+        &[
+            "must equal the cache's own name exactly; hg19 and hg38 are read as GRCh37 and \
+             GRCh38",
+            "A built-in plugin takes its GRCh37 or GRCh38 hint from the cache's own name, else \
+             from this flag: GRCh37, hg19 or 37 and GRCh38, hg38 or 38 give it, in any letter \
+             case",
+            "Under a name that gives none, each built-in plugin warns, as it loads, that it \
+             runs without the hint",
+        ],
+    );
+    let wider_than_the_code = "every built-in plugin loaded under it warns";
+    assert!(
+        !page_text(page).contains(wider_than_the_code),
+        "docs/{page} states {wider_than_the_code:?}"
+    );
 }
 
 /// `freq_filter` and `check_frequency` under `--minimal`: a split record none of
 /// whose alleles writes a row stays one record under a `--check_frequency` drop,
 /// where Ensembl VEP's buffer, its rejoin cancelled by the drop
-/// (BaseCacheVariation.pm:365-368 `if($filtered_count) { $buffer->reset_buffer();`,
-/// InputBuffer.pm:535-537), writes each of its features as its own; and the reset
+/// (BaseCacheVariation.pm:366-369 `if($filtered_count) { $buffer->reset_buffer();`,
+/// InputBuffer.pm:535-537), writes each of its features as its own and logs each
+/// (OutputFactory.pm:1022, Stats.pm:235), so its report counts one processed
+/// variant per feature; and the reset
 /// reaches the dropped record's chromosome run within a `--buffer_size` batch of
 /// input lines here (`runs_reset_by_a_drop` in `pipeline.rs`), where it reaches
 /// Ensembl VEP's buffer of one chromosome's records (InputBuffer.pm:191-199
@@ -1500,6 +4472,10 @@ fn minimal_frequency_filter_exclusion_is_documented() {
             "A split record none of whose alleles writes a row (`GG *,GG`) stays one VCF line \
              and one JSON object under a reset, where Ensembl VEP writes each of its features \
              as its own",
+            "The statistics report counts it once among `Variants processed`, and once in each \
+             count taken with it, where Ensembl VEP's report counts each feature that stays",
+            "A feature that writes no row and survives a reset is a record of its own too, as \
+             in Ensembl VEP",
             "The reach of the reset differs. Here it is the dropped record's run of one \
              chromosome within a batch of `--buffer_size` input lines counted from the file's \
              first data line, skipped lines included",
@@ -1514,6 +4490,8 @@ fn minimal_frequency_filter_exclusion_is_documented() {
         &[
             "a split record none of whose alleles writes a row (`GG *,GG`) stays one VCF line \
              and one JSON object here",
+            "the statistics report counts it once among `Variants processed` where Ensembl \
+             VEP's counts each feature",
             "Ensembl VEP's reach is its buffer of one chromosome's records up to \
              `--buffer_size`, or under `--fork` a chunk of it, and vep-rs's the dropped \
              record's chromosome run within a batch of `--buffer_size` input lines counted \
@@ -1542,6 +4520,129 @@ fn shift_hgvs_exclusion_is_documented() {
              `1`)",
         ],
     );
+}
+
+/// The page of `hgvs_shift_shared_across_alleles` says what the committed
+/// corpora hold of the class, and the manifests decide whether it says so
+/// truly. No list of a manifest holds an entry of the class and no run names
+/// it in `masks`. Each of the two corpora the page names holds records of two
+/// or more insertion or deletion alleles, the shape the page says the index
+/// row counts, under a flag set that passes `--hgvs` over the corpus's own
+/// input. The three mouse records whose rows the page gives are not among the
+/// mouse corpus's records.
+#[test]
+fn the_shared_shift_page_says_what_the_committed_corpora_hold_of_its_class() {
+    const CLASS: &str = "hgvs_shift_shared_across_alleles";
+    let path = "divergences/multiallelic-hgvs-shift.md";
+    let names_class = |run: &serde_json::Value| {
+        ["divergences", "vep_rs_only_tuples", "field_divergences"]
+            .iter()
+            .flat_map(|list| run[*list].as_array().into_iter().flatten())
+            .any(|entry| entry["expected_divergence"] == CLASS)
+            || run["masks"]
+                .as_array()
+                .is_some_and(|masks| masks.iter().any(|mask| mask == CLASS))
+    };
+    // The VCF cells of each record a manifest lists.
+    let records_of = |manifest: &serde_json::Value| -> Vec<Vec<String>> {
+        manifest["records"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|record| record["vcf"].as_str())
+            .map(|line| line.split('\t').map(str::to_string).collect())
+            .collect()
+    };
+    // A record that writes two or more alternate alleles of another length
+    // than its reference allele's.
+    let two_indel_alleles = |cells: &[String]| {
+        cells.len() > 4
+            && cells[4]
+                .split(',')
+                .filter(|alt| {
+                    !alt.starts_with('<')
+                        && !matches!(*alt, "." | "*")
+                        && alt.len() != cells[3].len()
+                })
+                .count()
+                >= 2
+    };
+    let page = page_text(path);
+    let mut named = Vec::new();
+    for corpus in common::corpora() {
+        let label = format!("{}/{}", corpus.release, corpus.name);
+        assert!(
+            !names_class(&corpus.manifest),
+            "{label}: the manifest's own run documents {CLASS}, which docs/{path} says no corpus does"
+        );
+        let flag_sets: Vec<&serde_json::Value> = corpus.manifest["flag_sets"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .collect();
+        for flag_set in &flag_sets {
+            assert!(
+                !names_class(flag_set),
+                "{label}: the flag set {} documents {CLASS}, which docs/{path} says no corpus does",
+                flag_set["name"]
+            );
+        }
+        if !matches!(corpus.name.as_str(), "GRCm39-mouse" | "TAIR10-arabidopsis") {
+            continue;
+        }
+        let records = records_of(&corpus.manifest);
+        assert!(
+            records.iter().any(|cells| two_indel_alleles(cells)),
+            "{label}: no record of two or more insertion or deletion alleles"
+        );
+        // A flag set without an `input` key reads the default run's input.
+        assert!(
+            flag_sets.iter().any(|flag_set| {
+                flag_set
+                    .get("input")
+                    .is_none_or(|input| input == "variants.vcf")
+                    && flag_set["flags"]
+                        .as_array()
+                        .is_some_and(|flags| flags.iter().any(|flag| flag == "--hgvs"))
+            }),
+            "{label}: no flag set passes --hgvs over the corpus's own input"
+        );
+        if corpus.name == "GRCm39-mouse" {
+            for id in ["rs265482355", "rs3389480233", "rs3408733889"] {
+                assert!(page.contains(id), "docs/{path} lacks the record {id}");
+                assert!(
+                    records.iter().all(|cells| cells[2] != id),
+                    "{label}: the corpus holds {id}, a record docs/{path} says it leaves out"
+                );
+            }
+        }
+        named.push(corpus.name);
+    }
+    assert_eq!(
+        named,
+        ["GRCm39-mouse", "TAIR10-arabidopsis"],
+        "the two corpora docs/{path} names"
+    );
+    assert_page_states(
+        path,
+        &[
+            "The golden harness and the format comparator apply it from the manifest; no \
+             committed corpus holds such a row \
+             ([section 1.7](#17-how-the-comparator-treats-this-class)).",
+            "No committed corpus holds a row of the class, so no manifest names it.",
+            "counts the corpora that hold a record of two or more insertion or deletion alleles, \
+             the shape a record needs before the difference can occur.",
+            "The GRCm39 and TAIR10 golden corpora hold such records and annotate them under \
+             `--hgvs`; they leave out the records on which a later allele's rows differ.",
+        ],
+    );
+    let text = page.split_whitespace().collect::<Vec<_>>().join(" ");
+    for refused in [
+        "leave the records of this shape out",
+        "where a corpus carries such a record",
+    ] {
+        assert!(!text.contains(refused), "docs/{path} states {refused:?}");
+    }
 }
 
 /// `fasta_dir`: two files tied on both preferences are ordered by name, the
@@ -1637,6 +4738,398 @@ fn hgvs_transcript_input_exclusion_is_documented() {
     assert_page_states(
         "intended-divergences.md",
         &["five readings of the transcript branch and six of the protein branch differ"],
+    );
+}
+
+/// `hgvs-protein-input`: `--ambiguous_hgvs` is refused, so a residue change
+/// with several equally short nucleotide paths is skipped with the message
+/// Ensembl VEP writes without the flag (VariationFeatureAdaptor.pm:1956), where
+/// under it Ensembl VEP lists every path (Parser/HGVS.pm:178-186); and no
+/// external name is read, where Ensembl VEP finds a RefSeq or a UniProt
+/// reference through its database (VariationFeatureAdaptor.pm:1915-1917, 1929).
+#[test]
+fn hgvs_protein_input_exclusion_is_documented() {
+    assert_page_states(
+        "divergences/hgvs-transcript-input.md",
+        &[
+            "Ensembl VEP lists every equally short path only under `--ambiguous_hgvs`, which \
+             vep-rs refuses.",
+            "vep-rs reads no external name: a RefSeq protein or transcript id resolves where \
+             the cache carries the RefSeq model (under `--refseq` or `--merged`) and is \
+             otherwise refused, and a UniProt accession is read as a gene name and refused.",
+        ],
+    );
+    assert_flag_row_states(
+        "cli/input-output.md",
+        "--format",
+        &[
+            "several equally short paths are skipped with Ensembl VEP's message, as \
+             `--ambiguous_hgvs` is not accepted",
+        ],
+    );
+}
+
+/// `json-output-key-set`: an object carries the keys Ensembl VEP's JSON factory
+/// writes (OutputFactory/JSON.pm:235-247 for the record's own), the documented
+/// intended divergences aside, and one more, `vep_rs_version`, which that
+/// factory does not write. A `colocated_variants` object carries every set
+/// column of the known variant's cache record (JSON.pm:407-476), `minor_allele`
+/// and `minor_allele_freq` among them on a cache whose `variation_cols` declare
+/// the two, and the page's list of the columns names both.
+#[test]
+fn json_output_key_set_difference_is_documented() {
+    assert_page_states(
+        "output/json.md",
+        &[
+            "The object's keys are Ensembl VEP's plus `vep_rs_version`, except for the \
+             documented intended divergences.",
+            "on every object; Ensembl VEP writes no such key",
+            "- `minor_allele` and `minor_allele_freq`, on a cache whose `variation_cols` \
+             declare them",
+        ],
+    );
+}
+
+/// `hgvsp_shifted_indel_written_span_gate`: the rule that writes the shifted
+/// allele's protein notation asks whether the coding sequence ends on its stop
+/// codon, and the page states what that means as the doc comment of
+/// `coding_sequence_ends_on_its_stop_codon` in vep-effects' `coding.rs` does: a
+/// whole number of codons, the last of them a stop codon, on a transcript
+/// without the flag `cds_end_NF`. The codons are the triplets from the first
+/// base, which the start exon's phase pads into frame (`Transcript.pm`
+/// `translateable_seq`), so the last three bases of a coding sequence that ends
+/// inside a codon are no codon, and the flag `cds_start_NF` does not enter the
+/// test. On any other coding sequence the notation is written where the whole
+/// codons of the sequence give it, as the doc comment of
+/// `held_codons_give_the_protein_notation` says: a frameshift whose first
+/// differing residue and its replacement are whole codons, and a change of
+/// whole codons that changes a residue of the sequence's whole codons.
+#[test]
+fn shifted_indel_page_states_when_a_coding_sequence_ends_on_its_stop_codon() {
+    let page = "divergences/hgvsp-shifted-indel-written-span-gate.md";
+    assert_page_states(
+        page,
+        &[
+            "A coding sequence ends on its stop codon when it is a whole number of codons, the \
+             last of them a stop codon, and the transcript does not carry the flag `cds_end_NF`, \
+             which marks a coding sequence whose end is not found.",
+            "One that ends inside a codon does not end on a stop codon, whatever its last three \
+             bases spell: the codons are counted from the start of the sequence.",
+            "The flag `cds_start_NF`, which marks a coding sequence whose start is not found, \
+             does not enter that test.",
+            "Such a sequence can open inside a codon: the phase of its first exon pads it into \
+             frame, and the codons of the test and the residue numbers are counted from the first \
+             padded base.",
+            "On a transcript flagged `cds_end_NF`, with or without `cds_start_NF`, and on any \
+             other whose coding sequence does not end on its stop codon, vep-rs writes the \
+             notation that the whole codons of the sequence give.",
+            "A frameshift is described from the first residue that differs, so that residue and \
+             the one in its place must both be whole codons of known bases.",
+            "The changed frame is read through the coding sequence and any bases the transcript \
+             holds after it, and the new stop is counted on them.",
+            "Where the frame meets none before the transcript's last base, the count is the \
+             unknown one, `fsTer?`, as both engines write it for a change given in an exon.",
+            "A change of whole codons must change a residue of the sequence's whole codons.",
+            "Deleted, duplicated or inserted residues do where the sequence after them does \
+             anything but repeat them in the same order.",
+            "Where no whole codon of the sequence differs, vep-rs leaves the HGVSp empty as \
+             Ensembl VEP does, unless Ensembl VEP's wider test fills it.",
+            "A frameshifting deletion in the last whole codon of a sequence with no base after it \
+             leaves no whole codon for the residue in its place, and a frameshift whose new frame \
+             keeps every residue to the sequence's end changes none.",
+            "Residues deleted, duplicated or inserted where the sequence ends, or where it only \
+             repeats them to its end, change none either: HGVS describes such a change at its \
+             last place in the protein, which can lie past that end.",
+            "vep-rs reads no residue from a codon the sequence does not complete.",
+        ],
+    );
+    for replaced in [
+        "complete when its last three bases are a stop codon",
+        "carries neither the flag `cds_start_NF` nor the flag `cds_end_NF`",
+        "On a transcript that carries one of the flags",
+        "vep-rs leaves the HGVSp empty on every row on which Ensembl VEP leaves it empty",
+        "the flag `cds_end_NF` keeps its HGVSp empty in vep-rs",
+        "The class takes no row whose `FLAGS` field names `cds_end_NF`",
+        "a residue after them that is not a copy of theirs",
+        "in a run of the same residue that reaches its end",
+    ] {
+        assert!(
+            !page_text(page).contains(replaced),
+            "docs/{page} states {replaced:?}"
+        );
+    }
+
+    let source = "crates/vep-effects/src/coding.rs";
+    let code = std::fs::read_to_string(format!("{}/../../{source}", env!("CARGO_MANIFEST_DIR")))
+        .unwrap_or_else(|e| panic!("{source}: {e}"));
+    let lines: Vec<&str> = code.lines().collect();
+    let doc_comment_of = |function: &str| {
+        let opening = format!("fn {function}(");
+        let rule = lines
+            .iter()
+            .position(|line| line.starts_with(&opening))
+            .unwrap_or_else(|| panic!("{source} has no `{opening}` line"));
+        lines[..rule]
+            .iter()
+            .rev()
+            .take_while(|line| line.starts_with("///"))
+            .map(|line| line.trim_start_matches('/').trim())
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    assert_states(
+        &format!("the doc comment of coding_sequence_ends_on_its_stop_codon in {source}"),
+        &doc_comment_of("coding_sequence_ends_on_its_stop_codon"),
+        &[
+            "it is a whole number of codons, the last of them a stop codon of the transcript's \
+             codon table",
+            "a coding sequence that ends inside a codon does not end on a stop codon, whatever \
+             its last three bases spell",
+            "The `cds_start_NF` flag does not enter the test",
+        ],
+    );
+    assert_states(
+        &format!("the doc comment of held_codons_give_the_protein_notation in {source}"),
+        &doc_comment_of("held_codons_give_the_protein_notation"),
+        &[
+            "both that residue and the one that replaces it are whole codons of known bases",
+            "a frame that meets none before the transcript's last base is written with the \
+             unknown count",
+            "Where no residue of the sequence follows them none differs",
+        ],
+    );
+}
+
+/// `hgvsp_shifted_indel_written_span_start_test`: the protein notation reads
+/// the frameshift and the residues on the allele moved 3', and Ensembl VEP
+/// 116.3 reads `start_lost` beside them on the allele as the record writes it
+/// (TranscriptVariationAllele.pm:1796 deletes the shift before :2053 and :2161
+/// ask; VariationEffect.pm:855-862, 977-981). vep-rs reads the start codon on
+/// the moved allele, so the page states that rule and both engines' `HGVSp`
+/// for each of its three records.
+#[test]
+fn shifted_indel_page_states_the_start_codon_is_read_on_the_moved_allele() {
+    let page = "divergences/hgvsp-shifted-indel-written-span-start-test.md";
+    assert_page_states(
+        page,
+        &[
+            "Under `--hgvs`, Ensembl VEP 116.3 reads the frameshift, the deleted residues and the \
+             peptides of a shifted insertion or deletion on the allele moved 3', and makes its \
+             start codon test on the allele as the record writes it.",
+            "An allele can pass Ensembl VEP's coding test as written, have no start codon test \
+             there, and reach the first codon only at its 3' place.",
+            "Ensembl VEP writes such an allele as a frameshift at residue 1 with the unknown \
+             count, or as a deletion of residues from the first.",
+            "vep-rs makes the start codon test on the moved allele, and writes the notation it \
+             writes for the same allele given at its 3' place.",
+            "vep-rs reads the start codon on the moved allele, where both engines read the \
+             frameshift and the residues.",
+            "Where the whole coding sequence stands after the allele, the first residue is \
+             unchanged and vep-rs writes `p.Met1=`.",
+            "Where no start codon stands after the allele, vep-rs writes the lost start over the \
+             residues of the moved span: `p.Met1_?3` for a deletion of a frameshift length that \
+             ends in residue 3, and `p.Met1?` where the span ends inside the first codon.",
+            "vep-rs names every residue that Ensembl VEP's deletion spans, then `1_?` and the \
+             last residue's number: `p.MetValPro1_?3`.",
+            "| `HGVSp` | `ENSP00000383044.2:p.Met1AsnfsTer?` | `ENSP00000383044.2:p.Met1%3D` |",
+            "| `HGVSp` | `ENSP00000498568.1:p.Met1ProfsTer?` | `ENSP00000498568.1:p.Met1_?3` |",
+            "| `HGVSp` | `ENSP00000498568.1:p.Met1_Pro3del` | \
+             `ENSP00000498568.1:p.MetValPro1_?3` |",
+        ],
+    );
+    let text = page_text(page)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for refused in [
+        "the notation follows the allele as written",
+        "vep-rs makes the start codon test on the allele as the record writes it",
+        "vep-rs reads the start codon on the allele as written",
+    ] {
+        assert!(!text.contains(refused), "docs/{page} states {refused:?}");
+    }
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "[`hgvsp_shifted_indel_written_span_start_test`]\
+             (divergences/hgvsp-shifted-indel-written-span-start-test.md)",
+            "vep-rs makes the start codon test on the moved allele and writes the first residue \
+             unchanged where the whole coding sequence stands after the allele, and the lost \
+             start where no start codon does",
+            "[The HGVSp of an indel shifted 3' into the first codon]\
+             (divergences/hgvsp-shifted-indel-written-span-start-test.md)",
+        ],
+    );
+}
+
+/// `hgvsp_start_codon_test_past_the_shifted_allele`: under `--shift_3prime 1`
+/// Ensembl VEP 116.3 makes the second start codon test of `start_lost` the
+/// shift length past the allele (OutputFactory.pm:297-318 and
+/// TranscriptVariationAllele.pm:502-527 serve the cDNA span with the shift;
+/// VariationEffect.pm:920, 928-930 add the shift length again), so a row
+/// whose coding sequence stands whole can carry no `start_lost` and a
+/// notation read from the coding sequence alone
+/// (TranscriptVariationAllele.pm:2161, 2394-2439). vep-rs tests the start
+/// codon at the moved allele, so the page states that rule and both engines'
+/// `HGVSp` for each of its records.
+#[test]
+fn shift_flag_page_states_the_start_codon_is_tested_at_the_moved_allele() {
+    let page = "divergences/hgvsp-start-codon-test-past-the-shifted-allele.md";
+    assert_page_states(
+        page,
+        &[
+            "Under `--shift_3prime 1`, Ensembl VEP 116.3 makes the second start codon test of \
+             `start_lost` at a place that lies the shift length past the allele.",
+            "Its output step reads the allele's cDNA span at the shifted place, and the test \
+             adds the shift length to that span again.",
+            "vep-rs tests the start codon at the moved allele and writes the first residue \
+             unchanged, `p.Met1=`.",
+            "The unchanged first residue is the cell vep-rs writes for the same allele written \
+             at its 3' place without the flag.",
+            "A row with no `SHIFT_LENGTH` field is not of the class.",
+            "| `HGVSp` | `ENSP00000512892.1:p.Met1TrpfsTer?` | `ENSP00000512892.1:p.Met1%3D` |",
+            "| `HGVSp`, ENST00000481605 | `ENSP00000512892.1:p.Asn0_Asn1insLys` | \
+             `ENSP00000512892.1:p.Met1%3D` |",
+            "| `HGVSp`, ENST00000400183 | `ENSP00000383044.2:p.Arg0_Arg1insThr` | \
+             `ENSP00000383044.2:p.Met1%3D` |",
+        ],
+    );
+    let text = page_text(page)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for refused in [
+        "vep-rs makes the second start codon test the shift length past the allele",
+        "vep-rs adds the shift length to that span again",
+        "vep-rs tests the start codon on the allele as written",
+    ] {
+        assert!(!text.contains(refused), "docs/{page} states {refused:?}");
+    }
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "[`hgvsp_start_codon_test_past_the_shifted_allele`]\
+             (divergences/hgvsp-start-codon-test-past-the-shifted-allele.md)",
+            "vep-rs tests the start codon at the moved allele and writes the first residue \
+             unchanged",
+            "[The HGVSp of an indel moved onto the start codon]\
+             (divergences/hgvsp-start-codon-test-past-the-shifted-allele.md)",
+        ],
+    );
+}
+
+/// `hgvsp_shifted_indel_written_span_gate`: the entry holds for an allele
+/// written before the coding start as for one written in an intron inside
+/// the coding region, as `annotated_before_the_coding_start` in vep-effects'
+/// `coding.rs` reads it: a span that does not overlap the coding region gets
+/// `utr` and never `coding`
+/// (BaseVariationFeatureOverlapAllele.pm:523-525). The page, the index row and
+/// that doc comment state it, the page says which rows the class takes from
+/// the row alone and which from the cache's exon spans, and its eighth example
+/// is the record the entry's reproduction writes in the 5' UTR.
+#[test]
+fn shifted_indel_page_states_what_an_allele_written_before_the_coding_start_gets() {
+    let page = "divergences/hgvsp-shifted-indel-written-span-gate.md";
+    assert_page_states(
+        page,
+        &[
+            "for an insertion or deletion written in an intron inside the coding region, or \
+             before the coding start, that the 3' shift carries wholly into the coding sequence",
+            "It fills the HGVSp only for one written in such an intron within 12 bases of an \
+             exon, on a transcript that has an intron of 13 bases or fewer.",
+            "The record writes the allele in an intron inside the coding region, or before the \
+             coding start: in the 5' UTR or an intron of it.",
+            "The second is an allele written before the coding start whose shifted change is \
+             not wholly coding: both engines leave its HGVSp empty.",
+            "Nor is it for a span before the coding region, which lines 523-525 give `utr`.",
+            "with no CDS or protein position, and with a cDNA position only beside the term \
+             `5_prime_UTR_variant`",
+            "A row without a cDNA position is written in an intron, and the table gives what \
+             shows that the class holds for it.",
+            "| a cDNA position beside `5_prime_UTR_variant` | nothing more is asked |",
+            "the allele as the row's Location writes it lies wholly in the intron before the \
+             exon that holds the shifted change, whether that intron lies inside the coding \
+             region or in the 5' UTR; without the cache the row is not set aside",
+            "| no cDNA position, and a duplication that begins before the coding start | the row \
+             alone: the record is written before the coding start, or in an intron that the \
+             duplicated bases span |",
+            "| no cDNA position, and any other notation of coding bases | the exon spans of \
+             vep-rs's cache, which the comparison takes as `--json-cache`:",
+            "Eight worked examples follow.",
+            "## 8. Seven bases added in the 5' UTR of ENST00000409508",
+            "| the made-up record | vep-rs | the same | `<a frameshift at residue 3 with a new \
+             stop 105 residues on>`: the changed codon 2 keeps its residue, and the class takes \
+             the row |",
+        ],
+    );
+    for replaced in [
+        "The second is an allele written in an intron of the 5' UTR",
+        "The intron has to lie inside the coding region",
+        "A row whose counted base is below coding base 2 is not set aside",
+        "with no cDNA, CDS or protein position",
+        "Seven worked examples follow",
+    ] {
+        assert!(
+            !page_text(page).contains(replaced),
+            "docs/{page} states {replaced:?}"
+        );
+    }
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "so one written in an intron, or before the coding start, whose 3' shift carries \
+             it wholly into the coding sequence gets the shifted HGVSc and no HGVSp, except in \
+             an intron near an exon of a transcript with a frameshift intron",
+        ],
+    );
+
+    let record = std::fs::read_to_string(format!(
+        "{}/../../scripts/divergences/reproductions/hgvsp_shifted_indel_written_span_gate.toml",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .expect("the entry's reproduction");
+    assert_states(
+        "the reproduction of hgvsp_shifted_indel_written_span_gate",
+        &record,
+        &[
+            "\"utr_dup_7_21582861 | ENST00000409508 | 5_prime_UTR_variant | - | - | \
+             ENST00000409508.3:c.-2_5dup | 7 | -\",",
+            "\"utr_dup_7_21582861 | ENST00000409508 | 5_prime_UTR_variant | - | - | \
+             ENST00000409508.3:c.-2_5dup | 7 | ENSP00000475939.1:p.Ala3AsnfsTer105\",",
+            "\"coding_dup_7_21582868 | ENST00000409508 | frameshift_variant | 5-6 | 2 | \
+             ENST00000409508.3:c.-2_5dup | - | ENSP00000475939.1:p.Ala3AsnfsTer105\",",
+        ],
+    );
+
+    let source = "crates/vep-effects/src/coding.rs";
+    let code = std::fs::read_to_string(format!("{}/../../{source}", env!("CARGO_MANIFEST_DIR")))
+        .unwrap_or_else(|e| panic!("{source}: {e}"));
+    let lines: Vec<&str> = code.lines().collect();
+    let rule = lines
+        .iter()
+        .position(|line| line.starts_with("pub(crate) fn annotated_before_the_coding_start("))
+        .unwrap_or_else(|| panic!("{source} has no `annotated_before_the_coding_start`"));
+    let doc_comment = lines[..rule]
+        .iter()
+        .rev()
+        .take_while(|line| line.starts_with("///"))
+        .map(|line| line.trim_start_matches('/').trim())
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert_states(
+        &format!("the doc comment of annotated_before_the_coding_start in {source}"),
+        &doc_comment,
+        &[
+            "wholly before its coding region in the transcript's direction, in the 5' UTR or \
+             in an intron of it",
+            "reads it `utr` and not `coding` (BaseVariationFeatureOverlapAllele.pm:523-525)",
+        ],
     );
 }
 
@@ -1744,7 +5237,7 @@ fn individual_minimal_trimmed_record_exclusion_is_documented() {
 /// where the default and tab factories rejoin the record (OutputFactory.pm:294)
 /// and then clear the cDNA coordinates (:297-298 `reset_shifted_positions`,
 /// TranscriptVariationAllele.pm:515-517 `delete($tv->{cdna_start});
-/// delete($tv->{cdna_end});`), so the miRNA block (OutputFactory.pm:1630 `my
+/// delete($tv->{cdna_end});`), so the miRNA block (OutputFactory.pm:1639 `my
 /// ($cdna_start, $cdna_end) = ($tv->cdna_start, $tv->cdna_end);`) reads the
 /// rejoined record's span.
 #[test]
@@ -1753,7 +5246,7 @@ fn mirna_minimal_split_exclusion_is_documented() {
         "divergences/minimal-split-hgvsp.md",
         &[
             "and the `miRNA` terms of a split allele on a miRNA transcript",
-            "The `miRNA` column reads the same cleared coordinates (`OutputFactory.pm` line 1630 \
+            "The `miRNA` column reads the same cleared coordinates (`OutputFactory.pm` line 1639 \
              takes `cdna_start` and `cdna_end`, which `clear_shifting_variables` deleted, \
              `TranscriptVariationAllele.pm` lines 515-517). So the default and tab factories \
              compute a split allele's hairpin terms over the record's restored span, and the VCF \
@@ -1797,6 +5290,896 @@ fn region_unsupported_structural_word_exclusion_is_documented() {
     );
 }
 
+/// `exit-codes-and-error-text`: a refusal's `<message>` carries Ensembl VEP's
+/// text where vep-rs quotes that text and is in vep-rs's own words elsewhere,
+/// as the `--af_exac` refusal of the error table is, where Ensembl VEP reports
+/// an unexpected parameter (vep:30). Two refusals carry Ensembl VEP's text in
+/// parentheses after vep-rs's own words: `--lrg` is the one flag of the error
+/// table refused so (the text is that of Runner.pm:766), and a GFF or GTF
+/// transcript source without a FASTA is the other (BaseGXF.pm:105-106), which
+/// the page on gene-model files quotes whole.
+#[test]
+fn refusals_that_quote_ensembl_vep_after_their_own_words_are_documented() {
+    use vep_cli::config::{Treatment, ERROR_TABLE};
+
+    assert_page_states(
+        "cli/compatibility.md",
+        &[
+            "`<message>` carries Ensembl VEP's text, without its own `ERROR: ` prefix, where \
+             vep-rs quotes that text, and is in vep-rs's own words elsewhere: for example, the \
+             `--af_exac` refusal names the flag to use, where Ensembl VEP reports an unexpected \
+             parameter.",
+            "Two refusals carry Ensembl VEP's text in parentheses after vep-rs's own words, as \
+             `(Ensembl VEP: <text>)`: the `--lrg` refusal and the refusal of a GFF or GTF \
+             transcript source without a FASTA.",
+            "Alone, either text would point to a database connection, which vep-rs never makes.",
+        ],
+    );
+    let text = page_text("cli/compatibility.md")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for older in [
+        "`<message>` is Ensembl VEP's text",
+        "Ensembl VEP's text where it has one",
+    ] {
+        assert!(
+            !text.contains(older),
+            "docs/cli/compatibility.md states {older:?}, which claims Ensembl VEP's text for \
+             every refusal Ensembl VEP has a text for"
+        );
+    }
+
+    let af_exac = ERROR_TABLE
+        .iter()
+        .find(|entry| entry.flag == "af_exac")
+        .expect("the error table holds --af_exac");
+    assert_eq!(
+        af_exac.treatment,
+        Treatment::Refused {
+            component: "cli",
+            message: "--af_exac was removed in Ensembl VEP release 107: use --af_gnomade",
+        },
+        "the --af_exac refusal, in vep-rs's own words"
+    );
+    assert!(
+        af_exac
+            .ensembl_vep
+            .contains("Ensembl VEP refuses it as an unexpected parameter (vep:30)"),
+        "the error table's cell on what Ensembl VEP does with --af_exac: {}",
+        af_exac.ensembl_vep
+    );
+
+    let quoted_after_own_words: Vec<(&str, &str)> = ERROR_TABLE
+        .iter()
+        .filter_map(|entry| match entry.treatment {
+            Treatment::Refused { message, .. } if message.contains("(Ensembl VEP: ") => {
+                Some((entry.flag, message))
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        quoted_after_own_words,
+        [(
+            "lrg",
+            "--lrg is not supported: LRG mapping needs the Ensembl core database (Ensembl VEP: \
+             Cannot map to LRGs in offline mode)"
+        )],
+        "the flags of the error table whose refusal quotes Ensembl VEP's text"
+    );
+    assert_page_states(
+        "cache-from-gtf-or-gff3.md",
+        &[
+            "`ERROR: [custom] a GFF or GTF transcript source needs a FASTA file (--fasta) for its \
+             sequences: vep-rs never connects to an Ensembl database (Ensembl VEP: GXF annotation \
+             requires either database access (--database or --cache) or a FASTA file (--fasta))`",
+        ],
+    );
+}
+
+/// The directory of the committed corpus `name` under `tests/golden/116`.
+fn committed_corpus(name: &str) -> String {
+    format!(
+        "{}/../../tests/golden/116/{name}",
+        env!("CARGO_MANIFEST_DIR")
+    )
+}
+
+/// A `vep` command over the cache of the committed corpus `corpus`, writing
+/// under `dir`; `input` is the corpus's own records, or a VCF of header lines
+/// alone where the run is to open its sources and annotate nothing.
+fn vep_over_corpus(
+    dir: &std::path::Path,
+    corpus: &str,
+    input: Option<&str>,
+) -> std::process::Command {
+    let corpus = committed_corpus(corpus);
+    let input = match input {
+        Some(file) => std::path::PathBuf::from(format!("{corpus}/{file}")),
+        None => {
+            let empty = dir.join("header-only.vcf");
+            std::fs::write(
+                &empty,
+                "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n",
+            )
+            .unwrap();
+            empty
+        }
+    };
+    let mut command = common::isolated_vep(dir);
+    command
+        .stdin(std::process::Stdio::null())
+        .arg("-i")
+        .arg(input)
+        .arg("-o")
+        .arg(dir.join("out.txt"))
+        .args(["--format", "vcf", "--offline", "--json_cache"])
+        .arg(format!("{corpus}/json_cache"))
+        .args(["--no_stats", "--quiet", "--force_overwrite"]);
+    command
+}
+
+/// The lines `vep` writes to standard error from its `ERROR: ` line on, for a
+/// run over the committed corpus `corpus` that `flags` end with exit status 1.
+fn refusal_lines(corpus: &str, flags: &[&str]) -> Vec<String> {
+    let dir = tempfile::tempdir().unwrap();
+    let output = vep_over_corpus(dir.path(), corpus, Some("variants.vcf"))
+        .args(flags)
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert_eq!(output.status.code(), Some(1), "{flags:?}: {stderr}");
+    let from = stderr
+        .find("ERROR: ")
+        .unwrap_or_else(|| panic!("{flags:?} writes no ERROR line: {stderr}"));
+    stderr[from..].lines().map(str::to_owned).collect()
+}
+
+/// The Rust files below `root`, a directory named from the repository root,
+/// each with its path from that root and its text; a directory named `target`
+/// is passed over.
+fn rust_files_below(root: &str) -> Vec<(String, String)> {
+    fn walk(repository: &std::path::Path, dir: &std::path::Path, out: &mut Vec<(String, String)>) {
+        let mut entries: Vec<std::path::PathBuf> = std::fs::read_dir(dir)
+            .unwrap_or_else(|e| panic!("{}: {e}", dir.display()))
+            .map(|entry| entry.unwrap().path())
+            .collect();
+        entries.sort();
+        for path in entries {
+            if path.is_dir() {
+                if path.file_name().is_some_and(|name| name != "target") {
+                    walk(repository, &path, out);
+                }
+            } else if path.extension().is_some_and(|extension| extension == "rs") {
+                let text = std::fs::read_to_string(&path)
+                    .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+                let name = path.strip_prefix(repository).unwrap();
+                out.push((name.to_string_lossy().into_owned(), text));
+            }
+        }
+    }
+    let repository = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let repository = repository.canonicalize().unwrap();
+    let mut out = Vec::new();
+    walk(&repository, &repository.join(root), &mut out);
+    out
+}
+
+/// The code lines of a source file: its lines outside its test modules,
+/// whole-line comments dropped. A test module runs from a `#[cfg(test)]` line
+/// that a `mod <name> {` line follows to the brace that closes it, alone on a
+/// line at the indentation of the `mod` line.
+fn code_lines(text: &str) -> Vec<&str> {
+    let lines: Vec<&str> = text.lines().collect();
+    let opens_a_module = |line: &str| {
+        let line = line.trim();
+        let declaration = line
+            .strip_prefix("pub(crate) ")
+            .or_else(|| line.strip_prefix("pub "))
+            .unwrap_or(line);
+        declaration.starts_with("mod ") && declaration.ends_with('{')
+    };
+    let indentation = |line: &str| line.len() - line.trim_start().len();
+    let mut code = Vec::new();
+    let mut at = 0;
+    while at < lines.len() {
+        let opening = at + 1;
+        if lines[at].trim() == "#[cfg(test)]"
+            && lines.get(opening).is_some_and(|next| opens_a_module(next))
+        {
+            let closes =
+                |line: &str| line.trim() == "}" && indentation(line) == indentation(lines[opening]);
+            at = (opening + 1..lines.len())
+                .find(|&below| closes(lines[below]))
+                .map_or(lines.len(), |close| close + 1);
+            continue;
+        }
+        if !lines[at].trim_start().starts_with("//") {
+            code.push(lines[at]);
+        }
+        at += 1;
+    }
+    code
+}
+
+/// The modules the source file `name` declares for tests alone, each as the
+/// path of its file without the `.rs` ending, which is also the path of its
+/// directory: a `#[cfg(test)]` line that a `mod <name>;` line follows, neither
+/// indented, declares one, and an indented pair is passed over, since the
+/// inline module that holds it puts a directory of its own name in that path.
+/// A `lib.rs`, a `main.rs`, a `mod.rs` and the root file of a binary in
+/// `src/bin` hold their modules in their own directory, any other file in the
+/// directory of its own name.
+fn modules_declared_for_tests_alone(name: &str, text: &str) -> Vec<String> {
+    let (directory, file) = name.rsplit_once('/').unwrap_or((".", name));
+    let stem = file.strip_suffix(".rs").unwrap_or(file);
+    let holder = if matches!(stem, "lib" | "main" | "mod") || directory.ends_with("/src/bin") {
+        directory.to_string()
+    } else {
+        format!("{directory}/{stem}")
+    };
+    let lines: Vec<&str> = text.lines().collect();
+    lines
+        .windows(2)
+        .filter(|pair| pair[0].trim_end() == "#[cfg(test)]")
+        .filter_map(|pair| {
+            let line = pair[1].trim_end();
+            let declaration = line
+                .strip_prefix("pub(crate) ")
+                .or_else(|| line.strip_prefix("pub "))
+                .unwrap_or(line);
+            declaration.strip_prefix("mod ")?.strip_suffix(';')
+        })
+        .map(|module| format!("{holder}/{module}"))
+        .collect()
+}
+
+/// The files of the crates' `src` directories whose code lines
+/// ([`code_lines`]) name one of `calls`; the FASTA crate's own files and the
+/// files compiled for tests alone are left out: a file of tests by its name
+/// (`tests.rs`, `*_tests.rs`), and the file of a module declared for tests
+/// alone ([`modules_declared_for_tests_alone`]) with every file below that
+/// module's directory.
+fn crate_sources_that_call(calls: &[&str]) -> Vec<String> {
+    let sources = rust_files_below("crates");
+    let for_tests_alone: Vec<String> = sources
+        .iter()
+        .flat_map(|(name, text)| modules_declared_for_tests_alone(name, text))
+        .collect();
+    sources
+        .into_iter()
+        .filter(|(name, _)| {
+            let file = name.rsplit('/').next().unwrap_or(name);
+            name.contains("/src/")
+                && !name.starts_with("crates/vep-fasta/")
+                && file != "tests.rs"
+                && !file.ends_with("_tests.rs")
+                && !for_tests_alone.iter().any(|module| {
+                    name.strip_prefix(module.as_str())
+                        .is_some_and(|rest| rest == ".rs" || rest.starts_with('/'))
+                })
+        })
+        .filter(|(_, text)| {
+            code_lines(text)
+                .iter()
+                .any(|line| calls.iter().any(|call| line.contains(call)))
+        })
+        .map(|(name, _)| name)
+        .collect()
+}
+
+/// `exit-codes-and-error-text`: the `ERROR:` text of a refusal is one line
+/// unless its message carries a second, and three refusals carry one, each as
+/// Ensembl VEP prints it: a refused `--custom` string its `LINE: --custom
+/// <string>` (AnnotationSourceAdaptor.pm:373-377), an unsupported
+/// `--regulatory_gff` key the supported keys (AnnotationSourceAdaptor.pm:248-251)
+/// and a `--cell_type` name the cache's regulatory data lacks the cache's cell
+/// types (AnnotationType/RegFeat.pm:87-92).
+#[test]
+fn refusals_that_carry_a_second_line_are_documented() {
+    assert_page_states(
+        "cli/compatibility.md",
+        &[
+            "`ERROR: [<component>] <message>` is written to standard error, on one line unless \
+             the message carries a second.",
+            "Three refusals carry a second line, as Ensembl VEP's own messages do.",
+            "A refused `--custom` string carries `LINE: --custom <string>` where Ensembl VEP \
+             prints it.",
+            "An unsupported `--regulatory_gff` key carries `Supported keys: ` and the keys the \
+             flag reads, and a `--cell_type` name the cache's regulatory data lacks carries the \
+             cache's cell types.",
+        ],
+    );
+    let text = page_text("cli/compatibility.md")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert!(
+        !text.contains("One line `ERROR: [<component>] <message>`"),
+        "docs/cli/compatibility.md states that every refusal is one line"
+    );
+
+    assert_eq!(
+        refusal_lines("GRCh38", &["--regulatory_gff", "nokey=x"]),
+        [
+            "ERROR: [cli] Unsupported --regulatory_gff key(s): nokey",
+            "Supported keys: emars, file, motifs",
+        ]
+    );
+    let info: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(format!(
+            "{}/json_cache/info.json",
+            committed_corpus("GRCh38-regulatory")
+        ))
+        .unwrap(),
+    )
+    .unwrap();
+    let cell_types: Vec<&str> = info["cell_types"]
+        .as_array()
+        .expect("the regulatory corpus's cache lists its cell types")
+        .iter()
+        .map(|name| name.as_str().unwrap())
+        .collect();
+    assert_eq!(
+        refusal_lines(
+            "GRCh38-regulatory",
+            &["--regulatory", "--cell_type", "nosuch"]
+        ),
+        [
+            "ERROR: [cli] Cell type \"nosuch\" unavailable; available cell types are:".to_owned(),
+            cell_types.join(","),
+        ]
+    );
+    assert_eq!(
+        refusal_lines("GRCh38", &["--custom", "no-such-file"]),
+        [
+            "ERROR: [custom] No format specified for custom annotation source.",
+            "LINE: --custom no-such-file",
+        ]
+    );
+    let one_line = refusal_lines("GRCh38", &["--database"]);
+    assert_eq!(one_line.len(), 1, "{one_line:?}");
+}
+
+/// `--tmpdir`: the flag places no file. `vep` leaves the directory it names
+/// untouched. `vep recode`, which has no such flag, writes its run's output
+/// to a file under the system temporary directory, so the row does not say
+/// that vep-rs writes no temporary file. Ensembl VEP's FATHMM plugin reads
+/// the flag (`FATHMM.pm:77, 108`), so the row does not say that no module of
+/// Ensembl VEP reads it.
+#[test]
+fn tmpdir_row_says_the_flag_places_no_file() {
+    use vep_cli::config::{Treatment, ERROR_TABLE};
+
+    const REASON: &str = "no module of the ensembl-vep repository reads it; Ensembl VEP's FATHMM \
+         plugin, which vep-rs does not port, puts its input and output files there; it places \
+         no file vep-rs writes";
+    const CITED: &str = "read by no module of the ensembl-vep repository; FATHMM.pm:77, 108 of \
+         the `VEP_plugins` repository at release/116 read it, and :109-110 name the plugin's \
+         files under it";
+    assert_flag_row_states("cli/compatibility.md", "--tmpdir", &[REASON, CITED]);
+    assert_flag_row_states("cli/cache-species-runtime.md", "--tmpdir", &[REASON]);
+    for page in ["cli/compatibility.md", "cli/cache-species-runtime.md"] {
+        assert!(
+            !page_text(page).contains("writes no temporary file"),
+            "docs/{page} states that vep-rs writes no temporary file, which `vep recode` does"
+        );
+        assert!(
+            !page_text(page).contains("no module of Ensembl VEP reads it"),
+            "docs/{page} states that no module of Ensembl VEP reads --tmpdir, which a plugin does"
+        );
+    }
+    let tmpdir = ERROR_TABLE
+        .iter()
+        .find(|entry| entry.flag == "tmpdir")
+        .expect("the error table holds --tmpdir");
+    assert_eq!(
+        tmpdir.treatment,
+        Treatment::AcceptedWithoutEffect { reason: REASON },
+        "the --tmpdir row of the error table, which the pages and the help print"
+    );
+
+    let dir = tempfile::tempdir().unwrap();
+    let named = dir.path().join("named-by-tmpdir");
+    let status = vep_over_corpus(dir.path(), "GRCh38-identifiers", None)
+        .arg("--tmpdir")
+        .arg(&named)
+        .status()
+        .unwrap();
+    assert!(status.success(), "{status}");
+    assert!(
+        !named.exists(),
+        "the run wrote under the directory --tmpdir names"
+    );
+
+    let corpus = committed_corpus("GRCh38-identifiers");
+    let missing = dir.path().join("no-such-temporary-directory");
+    let output = common::isolated_vep(dir.path())
+        .stdin(std::process::Stdio::null())
+        .arg("recode")
+        .args(["--json_cache", &format!("{corpus}/json_cache")])
+        .args(["--fasta", &format!("{corpus}/reference.fa.gz")])
+        .args(["-i", &format!("{corpus}/variants.vcf")])
+        .env("TMPDIR", &missing)
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert!(
+        stderr.contains(&format!(
+            "ERROR: [output] Could not write to output file {}/vep-recode-",
+            missing.display()
+        )),
+        "`vep recode` writes its run's output under the system temporary directory: {stderr}"
+    );
+}
+
+/// What Ensembl VEP reads of the flags accepted without effect, by the
+/// Ensembl VEP column of the error table. No module reads `--condel`,
+/// `--hgnc`, `--keep_ann` or `--solr`, and none reads `--sereal`: the
+/// serialiser comes from the cache's info file (`CacheDir.pm:147`). No module
+/// of the ensembl-vep repository reads `--tmpdir`, which the FATHMM plugin
+/// reads (`FATHMM.pm:77, 108`). Ensembl VEP reads `--debug` (`Runner.pm:920,
+/// 941`), `--offline` (`Config.pm:464-469`) and `--phased`
+/// (`Parser/VCF.pm:107, 654, 734`). The page for a user of Ensembl VEP sorts
+/// the flags so and names each one, and the matrix README likens such a flag
+/// to Ensembl VEP where Ensembl VEP reads nothing from it; a sentence that
+/// says so of every such flag is refused in each.
+#[test]
+fn texts_on_flags_accepted_without_effect_say_which_ensembl_vep_reads() {
+    use vep_cli::config::{Treatment, ERROR_TABLE};
+
+    const ITEM: &str = "- Of the flags accepted without effect, Ensembl VEP itself reads nothing \
+         from `--condel`, `--hgnc`, `--keep_ann`, `--sereal` and `--solr`, nor from `--tmpdir`, \
+         which its FATHMM plugin reads. It reads `--debug`, `--offline` and `--phased`; the \
+         compatibility page's table of these flags cites what it does with each.";
+    assert_page_states("getting-started/coming-from-ensembl-vep.md", &[ITEM]);
+    assert!(
+        !page_text("getting-started/coming-from-ensembl-vep.md")
+            .contains("are the ones Ensembl VEP itself reads nothing from"),
+        "docs/getting-started/coming-from-ensembl-vep.md says Ensembl VEP reads nothing from \
+         every flag accepted without effect"
+    );
+
+    let cited = |flag: &str| {
+        ERROR_TABLE
+            .iter()
+            .find(|entry| entry.flag == flag)
+            .unwrap_or_else(|| panic!("the error table holds no --{flag}"))
+            .ensembl_vep
+    };
+    for entry in ERROR_TABLE {
+        if matches!(entry.treatment, Treatment::AcceptedWithoutEffect { .. }) {
+            assert!(
+                ITEM.contains(&format!("`--{}`", entry.flag)),
+                "the item names no --{}, which the error table accepts without effect",
+                entry.flag
+            );
+        }
+    }
+    for flag in ["condel", "hgnc", "keep_ann", "solr"] {
+        assert!(
+            cited(flag).ends_with("read by no module"),
+            "--{flag}: {}",
+            cited(flag)
+        );
+    }
+    for (flag, citation) in [
+        (
+            "sereal",
+            "CacheDir.pm:147 takes the serialiser from the cache's info file",
+        ),
+        (
+            "tmpdir",
+            "read by no module of the ensembl-vep repository; FATHMM.pm:77, 108",
+        ),
+        ("debug", "Runner.pm:920, 941"),
+        ("offline", "the option set at :464-469 switches on --cache"),
+        ("phased", "Parser/VCF.pm:107, 654, 734 set phased"),
+    ] {
+        assert!(cited(flag).contains(citation), "--{flag}: {}", cited(flag));
+    }
+
+    let path = format!(
+        "{}/../../tests/parity/README.md",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let readme = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
+    assert_states(
+        "tests/parity/README.md",
+        &readme,
+        &["records, as in Ensembl VEP where it reads nothing from the flag;"],
+    );
+    assert!(
+        !readme.contains("records, as in Ensembl VEP;"),
+        "tests/parity/README.md likens every flag accepted without effect to Ensembl VEP"
+    );
+}
+
+/// The flags accepted without effect. A run records each one it is given in
+/// its command line (`vep_command_line` of `runner.rs`), except a
+/// `--tmpdir /tmp`, which is Ensembl VEP's default and is left out of the
+/// line as every default value is. The header of a default, tab or VCF
+/// output, the footer of a Parquet part and the statistics report carry that
+/// line and a JSON output does not, and `--debug` prints one `INFO:` line
+/// (`debug_lists_nothing` of `config.rs`). The sentence that opens the page's
+/// table says that such a flag changes no annotation, and the matrix README's
+/// definition of `accepted_noop` names both changes; a sentence that ends at
+/// "changes nothing" is refused in each.
+#[test]
+fn accepted_without_effect_opening_sentence_names_what_such_a_flag_changes() {
+    assert_page_states(
+        "cli/compatibility.md",
+        &["Every flag in the table below parses and changes no annotation."],
+    );
+    assert!(
+        !page_text("cli/compatibility.md").contains("parses and changes nothing."),
+        "docs/cli/compatibility.md says a flag accepted without effect changes nothing at all"
+    );
+    let path = format!(
+        "{}/../../tests/parity/README.md",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let readme = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
+    assert_states(
+        "tests/parity/README.md",
+        &readme,
+        &[
+            "`accepted_noop`: the flag parses and changes nothing but the command line the run \
+             records, as in Ensembl VEP where it reads nothing from the flag; `--debug` also \
+             prints one `INFO:` line.",
+        ],
+    );
+    assert!(
+        !readme.contains("the flag parses and changes nothing, as in Ensembl VEP"),
+        "tests/parity/README.md says a flag accepted without effect changes nothing at all"
+    );
+}
+
+/// Test 1 of a row of target `accepted_noop`. The helper such a row's test
+/// calls, `assert_no_effect_in` of `cli_noops.rs`, compares the output of a
+/// run with the flag and of a run without it once `without_volatile_headers`
+/// has taken out the header lines that hold the command line, which names the
+/// flag, and the time of the run. The matrix README's sentence on that test
+/// says so; a sentence that calls the two outputs byte-identical is refused.
+#[test]
+fn accepted_noop_test_sentence_names_the_header_lines_two_runs_differ_in() {
+    let path = format!(
+        "{}/../../tests/parity/README.md",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let readme = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("{path}: {e}"))
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert_states(
+        "tests/parity/README.md",
+        &readme,
+        &[
+            "`accepted_noop`: the output is the same with and without the flag, apart from the \
+             header lines that record the command line and the time of the run.",
+        ],
+    );
+    assert!(
+        !readme.contains("byte-identical with and without the flag"),
+        "tests/parity/README.md calls the output of a run with such a flag byte-identical"
+    );
+}
+
+/// `vep recode`'s errors: a refusal is one line under the component that
+/// refused the run and exit 1, and the page names each component a run of the
+/// tool raises, `output` among them, since the annotation run behind the tool
+/// writes its output to a file under the system temporary directory. A value
+/// outside the list of `--format`, `--pick_order` or `--shift_hgvs` is refused
+/// by the tool's own parser with exit 2, as any command-line syntax error is.
+#[test]
+fn recode_page_says_how_the_tool_ends_a_refused_run() {
+    const COMPONENTS: [&str; 7] = [
+        "recode", "config", "input", "output", "cache", "fasta", "filter",
+    ];
+    assert_page_states(
+        "cli/recode.md",
+        &[
+            "Every error is one line `ERROR: [<component>] <message>` on standard error and \
+             exit 1, the component naming what refused the run (`recode`, `config`, `input`, \
+             `output`, `cache`, `fasta` or `filter`).",
+            "A command-line syntax error is exit 2, a value outside the list of `--format`, \
+             `--pick_order` or `--shift_hgvs` among them.",
+        ],
+    );
+    let page = page_text("cli/recode.md")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert!(
+        !page.contains("(`recode`, `config`, `input`, `cache`, `fasta` or `filter`)"),
+        "docs/cli/recode.md lists the components without `output`"
+    );
+
+    let corpus = committed_corpus("GRCh38-identifiers");
+    let cache = format!("{corpus}/json_cache");
+    let fasta = format!("{corpus}/reference.fa.gz");
+    let input = format!("{corpus}/variants.vcf");
+    let dir = tempfile::tempdir().unwrap();
+    let absent = |name: &str| dir.path().join(name).to_string_lossy().into_owned();
+    let run = |cache: &str, fasta: &str, input: &str, flags: &[&str], temporary: Option<&str>| {
+        let mut command = common::isolated_vep(dir.path());
+        command
+            .stdin(std::process::Stdio::null())
+            .arg("recode")
+            .args(["--json_cache", cache, "--fasta", fasta, "-i", input])
+            .args(flags);
+        if let Some(temporary) = temporary {
+            command.env("TMPDIR", temporary);
+        }
+        let output = command.output().unwrap();
+        (
+            output.status.code(),
+            String::from_utf8(output.stdout).unwrap(),
+            String::from_utf8(output.stderr).unwrap(),
+        )
+    };
+
+    // One refusal under each component the page names: exit 1, nothing on
+    // standard output, and the error on one line that opens with the component.
+    let no_config = absent("no-such-config.ini");
+    let no_input = absent("no-such-input.vcf");
+    let no_cache = absent("no-such-cache");
+    let no_fasta = absent("no-such-reference.fa");
+    let no_temporary = absent("no-such-temporary-directory");
+    let own = [cache.as_str(), fasta.as_str(), input.as_str()];
+    let mut raised = Vec::new();
+    let mut refused =
+        |component: &'static str, sources: [&str; 3], flags: &[&str], temporary: Option<&str>| {
+            let [cache, fasta, input] = sources;
+            let (code, stdout, stderr) = run(cache, fasta, input, flags, temporary);
+            assert_eq!(code, Some(1), "{component}: {stderr}");
+            assert_eq!(stdout, "", "{component}");
+            let errors: Vec<&str> = stderr
+                .lines()
+                .filter(|line| line.starts_with("ERROR: "))
+                .collect();
+            assert_eq!(errors.len(), 1, "{component}: {stderr}");
+            assert!(
+                errors[0].starts_with(&format!("ERROR: [{component}] ")),
+                "{component}: {stderr}"
+            );
+            assert!(
+                stderr
+                    .lines()
+                    .all(|line| line.starts_with("ERROR: ") || line.starts_with("INFO: ")),
+                "{component}: the error runs past one line: {stderr}"
+            );
+            raised.push(component);
+        };
+    refused("recode", own, &["--host", "x"], None);
+    refused("config", own, &["--config", &no_config], None);
+    refused("input", [&cache, &fasta, &no_input], &[], None);
+    refused("output", own, &[], Some(&no_temporary));
+    refused("cache", [&no_cache, &fasta, &input], &[], None);
+    refused("fasta", [&cache, &no_fasta, &input], &[], None);
+    refused(
+        "filter",
+        own,
+        &["--transcript_filter", "stable_id nosuchoperator x"],
+        None,
+    );
+    assert_eq!(raised, COMPONENTS);
+
+    // A command-line syntax error, an unknown option or a value outside its
+    // option's list: exit 2 from the tool's own parser, and no `ERROR:` line.
+    for flags in [
+        vec!["--no_such_option"],
+        vec!["--format", "foo"],
+        vec!["--pick_order", "foo"],
+        vec!["--shift_hgvs", "2"],
+    ] {
+        let (code, stdout, stderr) = run(&cache, &fasta, &input, &flags, None);
+        assert_eq!(code, Some(2), "{flags:?}: {stderr}");
+        assert_eq!(stdout, "", "{flags:?}");
+        assert!(stderr.starts_with("error: "), "{flags:?}: {stderr}");
+        assert!(!stderr.contains("ERROR: "), "{flags:?}: {stderr}");
+    }
+}
+
+/// `VEP_FASTA_STORAGE`: the reader takes seven spellings in any letter case
+/// (`FromStr` of `FastaStorageMode`), refuses every other value where a FASTA
+/// is opened through `IndexedFasta::from_path`, which reads the variable, and
+/// holds for each file a program of the workspace opens so: the run's
+/// reference, which `index::open_indexed` opens through it, the two plugins'
+/// files and the cache builder's genome. The
+/// builder reads its protein FASTA with a reader of its own, which the
+/// variable does not reach. No program is built from a module compiled for
+/// tests alone, so the list of files leaves one out however it is declared:
+/// inside a file, as a file of tests by its name, or as a file of its own
+/// below a `#[cfg(test)]` line.
+#[test]
+fn fasta_storage_variable_row_names_its_spellings_and_its_readers() {
+    assert_flag_row_states(
+        "cli/compatibility.md",
+        "VEP_FASTA_STORAGE",
+        &[
+            "`mmap` (default; also written `map` or `mapped`) maps the file",
+            "`memory` (also `mem`, `ram` or `owned`) reads it into RAM",
+            "The value is read in any letter case.",
+            "The variable holds for the reference of `vep` and `vep recode`, the FASTA files the \
+             AncestralAllele and LoFTEE plugins read and the genome `vep-cache-builder` reads.",
+            "A value outside these spellings, an empty one included, is refused where such a \
+             file is opened, and in a plugin the refusal fails the plugin's load.",
+        ],
+    );
+    assert!(
+        !page_text("cli/compatibility.md").contains("any other value is an error"),
+        "docs/cli/compatibility.md names two values of VEP_FASTA_STORAGE as the only ones read"
+    );
+
+    let corpus = committed_corpus("GRCh38-identifiers");
+    let run = |value: &str, fasta: bool| {
+        let dir = tempfile::tempdir().unwrap();
+        let mut command = vep_over_corpus(dir.path(), "GRCh38-identifiers", None);
+        if fasta {
+            command.args(["--fasta", &format!("{corpus}/reference.fa.gz")]);
+        }
+        let output = command.env("VEP_FASTA_STORAGE", value).output().unwrap();
+        (
+            output.status.code(),
+            String::from_utf8(output.stderr).unwrap(),
+        )
+    };
+    for value in [
+        "mmap", "map", "mapped", "memory", "mem", "ram", "owned", "MMAP", "Ram",
+    ] {
+        let (code, stderr) = run(value, true);
+        assert_eq!(code, Some(0), "VEP_FASTA_STORAGE={value}: {stderr}");
+    }
+    for value in ["disk", ""] {
+        let (code, stderr) = run(value, true);
+        assert_eq!(code, Some(1), "VEP_FASTA_STORAGE={value:?}: {stderr}");
+        assert_eq!(
+            stderr,
+            format!(
+                "ERROR: [fasta] invalid VEP_FASTA_STORAGE={value:?}: expected 'mmap' or 'memory'\n"
+            )
+        );
+    }
+    let (code, stderr) = run("disk", false);
+    assert_eq!(code, Some(0), "a run that opens no FASTA: {stderr}");
+
+    let ancestral = committed_corpus("GRCh38-plugin-ancestral");
+    let plugin =
+        format!("AncestralAllele,{ancestral}/ancestral/homo_sapiens_ancestor_21.slice.fa.gz");
+    for (value, refused) in [("ram", false), ("disk", true)] {
+        let dir = tempfile::tempdir().unwrap();
+        let status = vep_over_corpus(dir.path(), "GRCh38-plugin-ancestral", None)
+            .args(["--plugin", &plugin])
+            .env("VEP_FASTA_STORAGE", value)
+            .status()
+            .unwrap();
+        assert!(status.success(), "VEP_FASTA_STORAGE={value}: {status}");
+        let warnings =
+            std::fs::read_to_string(dir.path().join("out.txt_warnings.txt")).unwrap_or_default();
+        assert_eq!(
+            warnings.contains(
+                "WARNING: Failed to instantiate plugin AncestralAllele: invalid \
+                 VEP_FASTA_STORAGE=\"disk\": expected 'mmap' or 'memory'"
+            ),
+            refused,
+            "VEP_FASTA_STORAGE={value}: {warnings}"
+        );
+    }
+
+    assert_eq!(
+        modules_declared_for_tests_alone(
+            "crates/made-up/src/lib.rs",
+            "pub mod traits;\n\n#[cfg(test)]\nmod fixtures;\n\npub mod plugins;\n"
+        ),
+        ["crates/made-up/src/fixtures"],
+        "a module a crate root declares below a `#[cfg(test)]` line"
+    );
+    assert_eq!(
+        modules_declared_for_tests_alone(
+            "crates/made-up/src/plugins.rs",
+            "#[cfg(test)]\npub(crate) mod fixtures;\n"
+        ),
+        ["crates/made-up/src/plugins/fixtures"],
+        "a module a file other than a crate root or a `mod.rs` declares so"
+    );
+    assert_eq!(
+        modules_declared_for_tests_alone(
+            "crates/made-up/src/bin/tool.rs",
+            "#[cfg(test)]\nmod fixtures;\n"
+        ),
+        ["crates/made-up/src/bin/fixtures"],
+        "a module the root file of a binary in `src/bin` declares so"
+    );
+    assert_eq!(
+        modules_declared_for_tests_alone(
+            "crates/made-up/src/plugins/mod.rs",
+            "#[cfg(test)]\nmod tests {\n}\n#[cfg(feature = \"bench\")]\nmod bench;\n\
+             #[cfg(test)]\nuse crate::fixtures;\nmod plain;\n\
+             mod inline {\n    #[cfg(test)]\n    mod nested;\n}\n"
+        ),
+        Vec::<String>::new(),
+        "an inline module, a module below another attribute, a module below no attribute and \
+         a module an inline module declares"
+    );
+    assert_eq!(
+        crate_sources_that_call(&["IndexedFasta::from_path(", "index::open_indexed("]),
+        [
+            "crates/vep-builtins/src/plugins/ancestral_allele.rs",
+            "crates/vep-builtins/src/plugins/loftee.rs",
+            "crates/vep-cache-builder/src/fasta_index.rs",
+            "crates/vep-cache-builder/src/install.rs",
+            "crates/vep-cache-builder/src/main.rs",
+            "crates/vep-cli/src/bin/bench_plugins.rs",
+            "crates/vep-cli/src/runner.rs",
+        ],
+        "the files that open a FASTA under VEP_FASTA_STORAGE, which the row names by their \
+         programs (`bench_plugins` is a development binary no page documents)"
+    );
+    assert_eq!(
+        crate_sources_that_call(&[
+            "IndexedFasta::from_path_mmap(",
+            "IndexedFasta::from_path_in_memory(",
+            "IndexedFasta::from_path_with_storage(",
+        ]),
+        Vec::<String>::new(),
+        "a FASTA opened with a storage mode the variable does not set"
+    );
+}
+
+/// The checksum page names, among the caches a run finds without a manifest,
+/// one converted by `tools/vep-storable-to-json`, whose sources write none,
+/// beside the caches of releases that wrote none and a cache whose manifest
+/// was deleted; `vep-cache-builder` and `vep-cache-converter` write one.
+#[test]
+fn checksum_page_names_the_converter_that_writes_no_manifest() {
+    assert_page_states(
+        "cache-checksums.md",
+        &[
+            "A cache converted from an Ensembl VEP cache by `tools/vep-storable-to-json` carries \
+             none: that tool writes no manifest, so converting again leaves the cache without \
+             one.",
+            "Caches built or converted by releases before 0.5.0 carry none either, and deleting \
+             the manifest returns a cache to that state.",
+            "`vep-cache-builder` and `vep-cache-converter` write one when a cache is built or \
+             converted with them again.",
+            "For any cache, write the manifest in the cache directory:",
+        ],
+    );
+    assert!(
+        !page_text("cache-checksums.md").contains("Build or convert the cache again"),
+        "docs/cache-checksums.md states that converting a cache again gives it a manifest"
+    );
+
+    const MANIFEST_NAMES: [&str; 3] = ["CHECKSUMS.sha256", "CacheManifest", "cache_manifest"];
+    let names_the_manifest = |root: &str| -> Vec<String> {
+        rust_files_below(root)
+            .into_iter()
+            .filter(|(_, text)| MANIFEST_NAMES.iter().any(|name| text.contains(name)))
+            .map(|(name, _)| name)
+            .collect()
+    };
+    assert_eq!(
+        names_the_manifest("tools/vep-storable-to-json/src"),
+        Vec::<String>::new(),
+        "a source file of the Storable converter names the checksum manifest"
+    );
+    for (root, writer) in [
+        ("crates/vep-cache-builder/src", "CacheManifest::write("),
+        ("crates/vep-cache-converter/src", "CacheManifest::write("),
+    ] {
+        assert!(
+            rust_files_below(root)
+                .iter()
+                .any(|(_, text)| text.contains(writer)),
+            "{root} writes no checksum manifest"
+        );
+    }
+}
+
 /// `chromosome-synonyms`: a name two hops from a cache chromosome under a chained
 /// or whitespace-led `--synonyms` table is skipped as not found whatever came
 /// before it (`known_as` in `pipeline.rs` tests one hop and `validate.rs` writes
@@ -1831,6 +6214,194 @@ fn chromosome_synonyms_two_hop_exclusion_is_documented() {
     );
 }
 
+/// `chromosome-synonyms` and `cache-chr-synonyms`: a name the synonyms give to
+/// two or more chromosomes the cache holds is read as none of them
+/// (`ChromosomeSynonyms::sequence_chr_name` in vep-core's `synonyms.rs`, which
+/// `cache_chr_name` in `pipeline.rs` calls) and `validate.rs` skips the record
+/// with a warning that names them, where BaseVEP.pm:711-716 (`foreach my
+/// $syn(keys %{$synonyms->{$chr} || {}})`) takes the first of the name's
+/// synonyms the cache holds in the order `keys` returns them, which differs
+/// between runs of one command: a documented intended divergence, set aside by
+/// a comparison that is given the Ensembl VEP cache.
+#[test]
+fn synonym_of_several_sequences_by_hash_order_divergence_is_documented() {
+    assert_page_states(
+        "divergences/synonym-of-several-sequences-by-hash-order.md",
+        &[
+            "Where a cache's synonyms file gives one name to two or more sequences the cache \
+             holds, Ensembl VEP 116.3 reads a record under that name on whichever of them comes \
+             first in Perl's hash order.",
+            "vep-rs skips the record with a warning that names the sequences, since the file does \
+             not say which of them the name stands for.",
+            "The record is skipped with the warning `Chromosome <name> is a synonym of <n> \
+             chromosomes of the cache (<first>, <second>, ...) and is read as none of them`.",
+            "Under `--dont_skip`, and for a structural record whose span is over \
+             `--max_sv_size`, it is kept as written and gets its `intergenic_variant` row.",
+            "The entry covers the records of a VCF, an Ensembl-format and a region input, whose \
+             names the cache resolves.",
+            "Each of those still takes the first of several sequences in the file's order.",
+            "`BaseVEP.pm`, lines 711-716: the loop walks `keys` of the name's synonyms and takes \
+             the first the cache holds.",
+            "| *Anopheles coluzzii* | AcolN3 | 518 | 351 |",
+            "| *Anopheles funestus* | idAnoFuneDA-416_04 | 1,322 | 581 |",
+            "| *Anopheles gambiae* | GCA943734735v2 | 576 | 166 |",
+            "| *Drosophila miranda* | D.miranda_PacBio2.1 | 527 | 212 |",
+            "| Human | GRCh38 | 3,373 | 0 |",
+            "| Human | GRCh37 | 856 | 0 |",
+            "One name of the *Anopheles coluzzii* file is given to 105 held sequences.",
+            "Ensembl VEP 116.3 writes the 2 rows of chromosome X under `PERL_HASH_SEED=0` and the \
+             13 rows of chromosome 21 under `PERL_HASH_SEED=11`, each with `PERL_PERTURB_KEYS=0`.",
+            "WARNING: line 1 skipped (shared_name 28885369 shared_name_record C T . . .): \
+             Chromosome shared_name is a synonym of 2 chromosomes of the cache (21, X) and is read \
+             as none of them",
+            "An engine that picks one of several sequences, by hash order or by the file's order, \
+             is right for one of them at most and says nothing when it is wrong.",
+            "vep-rs does not find the right sequence either. It writes no row and says why, the \
+             same on every run.",
+            "It sets aside the reference's rows at a Location whose sequence name that cache does \
+             not hold and whose synonyms name two or more sequences it holds, where vep-rs wrote \
+             no row at that Location.",
+            "It does so only for a reference output whose header states a command line that \
+             names no `--synonyms`, since only such a run read the cache's own file.",
+        ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "| [`synonym_of_several_sequences_by_hash_order`]\
+             (divergences/synonym-of-several-sequences-by-hash-order.md) | Where a cache's \
+             synonyms file gives one name to two or more sequences the cache holds, Ensembl VEP \
+             reads a record under that name on whichever of them comes first in Perl's hash \
+             order, which changes between runs of the same command; vep-rs skips the record with \
+             a warning that names the sequences, since the file does not say which of them the \
+             name stands for | 3 · none on the cuts · 511 flag sets, 0 corpora | 116.3 |",
+            "for `synonym_of_several_sequences_by_hash_order`, one given the reference's cache \
+             sets aside the reference's rows of a record vep-rs skipped.",
+        ],
+    );
+    assert_page_states(
+        "concordance-provenance/116.2-divergence-classes.md",
+        &[
+            "### 19. `synonym_of_several_sequences_by_hash_order`",
+            "The reference reads the record on whichever of them comes first in the order `keys` \
+             returns the name's synonyms.",
+            "Treatment: set aside in the SNP/indel comparator when it is given `--ensembl-cache \
+             <dir>`, the Ensembl VEP cache directory the reference run read, under the `116.2` \
+             and `116.3` references.",
+            "Set aside are the reference's rows at a Location under such a name where vep-rs \
+             wrote no row at that Location",
+            "- a record vep-rs wrote a row for, as it does under `--dont_skip`;",
+            "- every row of a reference output whose header states a command line that names \
+             `--synonyms`, or no command line: only a run without that flag read the cache's \
+             own file;",
+        ],
+    );
+    assert_page_states(
+        "cache-setup.md",
+        &[
+            "2. else its one synonym the cache holds ([two or more skip the record]\
+             (divergences/synonym-of-several-sequences-by-hash-order.md));",
+        ],
+    );
+    assert_page_states(
+        "genome-checks.md",
+        &[
+            "A job that holds the Ensembl cache, not a converted cache alone, names it to the \
+             comparator, which then sets aside Ensembl VEP's rows of [a record under a name the \
+             synonyms file gives to several sequences]\
+             (divergences/synonym-of-several-sequences-by-hash-order.md).",
+            "On a cache whose synonyms file gives the name of the generator's `synonym` record to \
+             several sequences, that record is one vep-rs skips.",
+        ],
+    );
+}
+
+/// The page of `synonym_of_several_sequences_by_hash_order` says which other
+/// record of an input changes the rows Ensembl VEP 116.3 writes for a record
+/// under a name the synonyms file gives to several sequences. A buffer ends
+/// where the written name changes (`InputBuffer.pm:195-200` and `224-234`),
+/// and the cache source lists for it, beside the region files of the sequence
+/// chosen at `AnnotationSource.pm:179`, only those of a breakend record's mate
+/// (`AnnotationSource.pm:250-257`). A record stays on the sequence of the
+/// first loaded transcript it is matched with, a breakend record through a
+/// mate too (`InputBuffer.pm:335-342`), and a breakend record stays on the
+/// sequences its mates name as well (`AnnotationType/Transcript.pm:122-143`).
+/// Listed region files held in memory are taken before the others
+/// (`AnnotationSource.pm:119-131` and `134`), and line 143 keeps of each
+/// sequence the transcripts near the span the buffer covers on it, so such a
+/// mate can give the record all or part of its sequence's rows.
+#[test]
+fn synonym_page_says_which_record_of_a_buffer_moves_a_record_to_another_sequence() {
+    let path = "divergences/synonym-of-several-sequences-by-hash-order.md";
+    assert_page_states(
+        path,
+        &[
+            "A breakend record in the same buffer whose mate lies on another of those sequences \
+             can move the record to the mate's sequence, as section 1.4 shows.",
+            "`AnnotationType/Transcript.pm`, lines 122-143, keeps a record on the sequence of the \
+             first transcript it is matched with, a breakend record through a mate too \
+             (`InputBuffer.pm`, lines 335-342), and keeps a breakend record on the sequences its \
+             mates name as well.",
+            "`InputBuffer.pm`, lines 195-200 and 224-234: a buffer ends where the written name \
+             changes.",
+            "`AnnotationSource.pm`, lines 250-257, lists region files of a further sequence only \
+             for the mate of a breakend record.",
+            "In a buffer with no such mate on another of the name's sequences, the region files \
+             chosen at `AnnotationSource.pm` line 179 therefore decide every row of a record \
+             that is no breakend.",
+            "With one, lines 119-131 take the listed region files held in memory first, line 134 \
+             reads the others, and line 143 filters each sequence's transcripts, as section 1.4 \
+             shows.",
+            "Where no breakend record of the record's buffer has its mate on another of them, \
+             Ensembl VEP 116.3 writes, for a record that is no breakend, the rows of one of \
+             those sequences, chosen by hash order. Section 1.4 gives the other case.",
+            "`InputBuffer.pm`, lines 348-357, reached from `AnnotationType/Transcript.pm`, line \
+             108, through `InputBuffer.pm`, lines 286-345: the record matches a loaded \
+             transcript of any held sequence the name is a synonym of.",
+            "A breakend record in the record's buffer can change this where its mate lies on \
+             another of the name's sequences.",
+            "With the line below written before the record, Ensembl VEP 116.3 writes the 13 rows \
+             of chromosome 21 for the record under both seeds.",
+            "With the mate at `X:28885400` it writes the 2 rows of chromosome X under both.",
+            "In both inputs the breakend record itself gets rows on the transcripts of its mate's \
+             chromosome alone.",
+            "shared_name 5000000 mate_on_21 C C[21:28885400[ . . SVTYPE=BND",
+            "The cache source lists the megabases around the mate too, and the record stays on \
+             the sequence of the first loaded transcript it matches.",
+            "A breakend record is also matched through its mates, and stays on that sequence and \
+             on those its mates name.",
+            "Listed files the previous buffer left in memory are walked first.",
+            "The others follow in the input's order: a record's own megabases, then its mates', \
+             each span widened by the 5,000 bases of the default `--distance`.",
+            "With the breakend at position 28885300 or 28885500 instead, the chosen chromosome's \
+             file comes first, and the seed decides the record's rows as in section 1.3.",
+            "Of each sequence, Ensembl VEP keeps the transcripts within that distance of the \
+             span the buffer covers on it, which for the mate's chromosome can be the mate alone.",
+            "With the breakend at position 5000000 and its mate at `21:28875000`, the record gets \
+             10 of the 13 rows of chromosome 21 under seed 0 and all 13 under seed 11.",
+            "With the mate at `21:28100000`, no transcript kept around the mate reaches the \
+             record, and the seed decides.",
+            "A record written `21` or `X` is read in another buffer, so it ends the buffer of the \
+             records written before it, and otherwise acts only through the files it leaves in \
+             memory.",
+            "With `21 28885400` written before the breakend at position 28885300 with its mate \
+             at `21:28885400`, the record gets the 13 rows of chromosome 21 under seed 0.",
+            "vep-rs skips the record in each of these inputs, and each breakend record with it.",
+        ],
+    );
+    let text = page_text(path)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for refused in [
+        "The region files chosen at `AnnotationSource.pm` line 179 therefore decide every row.",
+        "writes the rows of one of those sequences, chosen by hash order. vep-rs writes",
+        "`InputBuffer.pm`, lines 348-357, called from `AnnotationType/Transcript.pm`, line 108",
+    ] {
+        assert!(!text.contains(refused), "docs/{path} states {refused:?}");
+    }
+}
+
 /// `fasta`: the pseudoautosomal `Y` to `X` redirect is armed from the assembly
 /// the cache resolves to (`open_fasta` in `runner.rs` sets the opened FASTA's
 /// assembly to the one `cache_resolve::resolve` took, `info.json` first), where
@@ -1844,7 +6415,9 @@ fn chromosome_synonyms_two_hop_exclusion_is_documented() {
 ///
 /// A FASTA record is also reached through the aliases `contig_aliases` in
 /// vep-fasta's `lib.rs` builds in (`chr` added or removed, and the
-/// `MT`/`M`/`chrM`/`chrMT` set, matched after `to_ascii_lowercase`), where
+/// `MT`/`M`/`chrM`/`chrMT` set, matched after `to_ascii_lowercase`; on GRCh37
+/// `claim_on` leaves a record whose length is not
+/// `GRCH37_MITOCHONDRIAL_LENGTH` no name of the other pair), where
 /// BaseVEP.pm:413 maps a chromosome onto the FASTA's record names through
 /// `get_source_chr_name` (:689-738: the name, a synonym, `chr` added or removed)
 /// and FastaSequence.pm:380-389 retries the same three at the read, so `MT`
@@ -1872,14 +6445,19 @@ fn fasta_exclusion_is_documented() {
              written and vep-rs reads `X`",
             "Beyond the table, a record is reached by its name with the prefix `chr` added or \
              removed and, for a record named `MT`, `M`, `chrM` or `chrMT`, by any of the four \
-             names, matched in any letter case: aliases vep-rs builds in",
+             names outside GRCh37, matched in any letter case: aliases vep-rs builds in",
+            "On GRCh37 all four reach only a record of the assembly's 16,569 bases.",
+            "A record of another length is taken for [another sequence]\
+             (divergences/fasta-synonym-reads-another-mitochondrial-sequence.md), which no name \
+             of the other pair reaches (`MT` pairs with `chrMT`, `M` with `chrM`).",
             "Ensembl VEP tries the exact name, a synonym and the `chr` variants alone \
              (`BaseVEP.pm` lines 413 and 689-738, `Utils/FastaSequence.pm` lines 380-389), so a \
              cache's `MT` over a FASTA record named `chrM`, with no synonym linking the two, \
              reaches no sequence there",
             "That chromosome gets the one-base placeholder slice described above (`BaseVEP.pm` \
              lines 425-426), so under `--check_ref` a record such as `MT 3308 T G` is skipped \
-             with the sub-slice and mismatch warnings, where vep-rs annotates it",
+             with the sub-slice and mismatch warnings, where vep-rs annotates it wherever `MT` \
+             reaches the `chrM` record",
             "Neither engine warns on the read: Ensembl VEP's `FASTA does not contain sequence \
              for X` (line 599) is raised at warning level 2000, above the verbosity of 1999 a run \
              sets (`BaseRunner.pm` line 491)",
@@ -1895,18 +6473,389 @@ fn fasta_exclusion_is_documented() {
              `--json_cache`, prints it, arms the redirect from it",
             "on the FASTA side vep-rs also reaches a record by the name with the prefix `chr` \
              added or removed or, for a record named `MT`, `M`, `chrM` or `chrMT`, by any of the \
-             four names in any letter case, where Ensembl VEP tries the exact name, a synonym \
-             and the `chr` variants alone, so a record such as `MT 3308 T G` on a cache's `MT` \
-             over a FASTA record named `chrM`, with no synonym linking them, annotates here under \
-             `--check_ref` and is skipped there",
+             four names outside GRCh37, in any letter case, and on GRCh37 by all four only where \
+             it has the assembly's 16,569 bases, a record of another length being reached by no \
+             name of the other pair (`MT` pairs with `chrMT`, `M` with `chrM`), where Ensembl \
+             VEP tries the exact name, a synonym and the `chr` variants alone, so a record such \
+             as `MT 3308 T G` on a cache's `MT` over a FASTA record named `chrM` that `MT` \
+             reaches here, with no synonym linking them, annotates here under `--check_ref` and \
+             is skipped there",
             "vep-rs returns the flanking `Y` bases with the `N`s, and neither engine prints a \
              warning for the read",
         ],
     );
+    for (path, refused) in [
+        (
+            "cache-setup.md",
+            "by any of the four names, matched in any letter case",
+        ),
+        (
+            "cache-setup.md",
+            "mismatch warnings, where vep-rs annotates it.",
+        ),
+        (
+            "intended-divergences.md",
+            "by any of the four names in any letter case, where Ensembl VEP",
+        ),
+        (
+            "intended-divergences.md",
+            "named `chrM`, with no synonym linking them, annotates here",
+        ),
+    ] {
+        let text = page_text(path)
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(!text.contains(refused), "docs/{path} states {refused:?}");
+    }
+}
+
+/// A reference FASTA whose only mitochondrial record is named `chrM` and is
+/// another sequence than GRCh37's: Ensembl VEP serves reads for the cache's
+/// `MT` from it through the synonym the cache's table gives, testing only
+/// that a record exists (`Variation/Utils/FastaSequence.pm:378-397`,
+/// `BaseVEP.pm:413` and `:708-716`); vep-rs reads a mitochondrial record of
+/// another length under its own pair of names alone. The page states the
+/// class by flag and by the name a record is written with, and the bound of
+/// vep-rs's test, the record's length.
+#[test]
+fn a_fasta_chrm_of_another_sequence_read_for_mt_is_documented() {
+    assert_page_states(
+        "divergences/fasta-synonym-reads-another-mitochondrial-sequence.md",
+        &[
+            "On GRCh37, where a run's reference FASTA holds its only mitochondrial record under \
+             the name `chrM`, Ensembl VEP serves every read for the cache's `MT` from that FASTA \
+             record, because the cache's synonym table links the two names.",
+            "It tests only that the FASTA record exists, so where it is another sequence Ensembl \
+             VEP builds its notations and its reference checks from that sequence's bases; \
+             vep-rs reads no base there.",
+            "On GRCh37 vep-rs takes a mitochondrial FASTA record whose length is not 16,569 for \
+             another sequence than the assembly's.",
+            "Such a FASTA record is read under its own pair of names alone, `chrM` and `M`, or \
+             `MT` and `chrMT`.",
+            "A read for `MT` reaches no FASTA record in such a run, so `MT` is [a contig the \
+             FASTA lacks](../cache-setup.md#a-contig-the-fasta-lacks): a substitution or a \
+             deletion gets no HGVSc, an insertion the HGVSc it has unshifted, and no input record \
+             an HGVSg.",
+            "Under the two reference checks an input record's own reference is read under the \
+             cache's name and, where that reaches no FASTA record, under the input record's own \
+             name.",
+            "An input record written `MT` or `NC_012920.1` is skipped.",
+            "An input record written `chrM` or `M` is skipped before any check: over such a file \
+             it is on [a sequence the cache does not hold]\
+             (mitochondrial-record-of-another-sequence-placed-on-mt.md).",
+            "The length is how vep-rs tells the other sequence, and the one test it makes.",
+            "The rule holds on GRCh37 alone",
+            "`Bio/EnsEMBL/Variation/Utils/FastaSequence.pm`, lines 378-397",
+            "`BaseVEP.pm`, line 413",
+            "| `--hgvs`, `--hgvsg` | a substitution written `MT`, `chrMT` or `NC_012920.1` | the \
+             notation's reference base is the FASTA record's base | no HGVSc, no HGVSg |",
+            "| `--hgvs`, `--hgvsg` | a deletion or an insertion written `MT`, in a non-coding \
+             transcript | shifted and tested for a duplication along the FASTA record's bases | \
+             no HGVSc for a deletion, the unshifted HGVSc for an insertion, no HGVSg |",
+            "| `--check_ref` | written `MT` or `NC_012920.1` | REF compared with the FASTA \
+             record's base: refused with the mismatch warning alone, or admitted | skipped with \
+             the sub-slice warning, then the mismatch warning |",
+            "| `--lookup_ref` | written `MT` or `NC_012920.1` | the FASTA record's base given as \
+             the reference | skipped with the could-not-fetch warning |",
+            "The table holds the cells this page measured, each flag alone and the first two \
+             together: on forward-strand transcripts, over a FASTA record of 16,571 bases, at \
+             positions that record holds.",
+            "Under either reference check an input record written `chrMT` reaches no FASTA \
+             record in Ensembl VEP, which skips it as vep-rs does.",
+            "An input record written `chrM` or `M` is a position of the FASTA record `chrM`, and \
+             vep-rs skips it in every run of the table, with and without a reference check.",
+            "Its rows are the entry [`mitochondrial_record_of_another_sequence_placed_on_mt`]\
+             (mitochondrial-record-of-another-sequence-placed-on-mt.md).",
+            "A substitution was measured in a coding transcript, and a deletion and an insertion \
+             under the name `MT` alone, in a non-coding one.",
+            "No comparison sets these rows aside",
+            "`HGVSc=ENST00000361390.2:c.43G>C` and `HGVSg=MT:m.3349G>C`",
+            "| `MT 2953 TT T`, a deletion | `--hgvs --hgvsg` | `n.1286del`, `MT:m.2956del`, \
+             `HGVS_OFFSET=2`; over the reference `n.1284del`, `MT:m.2954del` | no HGVSc, no HGVSg |",
+            "| `MT 2959 G GA`, an insertion | `--hgvs --hgvsg` | `n.1289dup`, `MT:m.2959dup`; over \
+             the reference `n.1289_1290insA`, `MT:m.2959_2960insA` | `n.1289_1290insA`, no HGVSg |",
+        ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "| [`fasta_synonym_reads_another_mitochondrial_sequence`]\
+             (divergences/fasta-synonym-reads-another-mitochondrial-sequence.md) | On GRCh37, \
+             over a reference FASTA whose only mitochondrial record is named `chrM` and is not \
+             the assembly's 16,569-base sequence,",
+            "vep-rs reads a mitochondrial record of another length under its own names alone, \
+             so `MT` is a contig the FASTA lacks there",
+        ],
+    );
+    let page = page_text("divergences/fasta-synonym-reads-another-mitochondrial-sequence.md")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let every_run = "vep-rs skips it in every run.";
+    assert!(
+        !page.contains(every_run),
+        "the page states {every_run:?}, where `--dont_skip` and a `--custom` file that lists the \
+         chromosome keep such an input record"
+    );
+}
+
+/// A reference FASTA that holds `chrMT` beside `chrM`: vep-rs reads, for the
+/// cache's `MT`, the record of the assembly's length whichever the file
+/// lists first (`built_in_spellings` of the crate `vep-fasta`), and Ensembl
+/// VEP reads `chrMT` for a notation (`Variation/Utils/FastaSequence.pm:384`)
+/// and `chrM` for the reference checks of a record written `MT`
+/// (`BaseVEP.pm:413` and `:708-716`). The page's second section states the
+/// rule and the cells, its class sentence names the section, and the index
+/// row names the shape.
+#[test]
+fn a_fasta_of_two_mitochondrial_records_is_documented() {
+    assert_page_states(
+        "divergences/fasta-synonym-reads-another-mitochondrial-sequence.md",
+        &[
+            "The cells of [section 2](#2-a-fasta-that-holds-chrmt-beside-chrm), over a FASTA of \
+             two mitochondrial records, are of the class as well.",
+            "## 2. A FASTA that holds `chrMT` beside `chrM`",
+            "The UCSC hg19 file set that adds the assembly's sequence, `hg19.p13.plusMT`, lists \
+             `chrM` of 16,571 bases as the 91st of its 298 sequences and `chrMT` of 16,569 bases \
+             as the last.",
+            "Over a file of that layout vep-rs reads `chrMT` for the cache's `MT` under every \
+             flag, whichever of the two the file lists first.",
+            "Under the two reference checks it reads `chrM` for an input record written `MT` or \
+             `NC_012920.1`.",
+            "Under a reference check a run with no database takes the name of an input record's \
+             slice from the FASTA's record names (`BaseVEP.pm`, line 413).",
+            "Lines 708-716 give a name the FASTA lacks the first of its synonyms the FASTA holds, \
+             and lines 719-731 try the name with `chr` before it only where no synonym was taken.",
+            "For a notation the reader tries the name with `chr` before it first \
+             (`FastaSequence.pm`, line 384) and reads `chrMT`.",
+            "A FASTA record's own name, in any letter case, reads that record.",
+            "A name that no FASTA record bears goes to one record by the steps below, tried in \
+             turn, and the order of the file's records does not enter:",
+            "1. On GRCh37, for `MT` and `chrMT`: a mitochondrial record of 16,569 bases, one \
+             named `MT` or `chrMT` before one named `chrM` or `M`.",
+            "2. The record whose name is the asked name with `chr` put before it or taken off: \
+             `chrMT` for `MT`, `chrM` for `M`.",
+            "3. For a mitochondrial name, a record of the other pair of names, on GRCh37 only \
+             one of 16,569 bases.",
+            "Where two records stand alike at a step, as `M` and `chrM` do for `MT`, the one \
+             whose name sorts first by byte is read, `M` there.",
+            "A synonym of the cache's table or of `--synonyms` is tried after the three steps, \
+             under the rule this page gives above for a record of another length.",
+            "The last row is charged to Ensembl VEP on the length alone: its reader takes the \
+             name with `chr` before it as it takes a synonym, testing only that the FASTA record \
+             exists.",
+            "| `--check_ref` | written `MT` or `NC_012920.1`, REF the base of `chrMT` | refused: \
+             REF compared with the base of `chrM` | annotated on the transcripts of `MT` |",
+            "| `--check_ref` | written `MT` or `NC_012920.1`, REF the base of `chrM` | admitted: \
+             one `intergenic_variant` row | refused with the mismatch warning alone |",
+            "| `--lookup_ref` | written `MT` or `NC_012920.1` | `REF_ALLELE=G`, the base of \
+             `chrM`, on one `intergenic_variant` row | `REF_ALLELE=A`, the base of `chrMT`, on \
+             the transcripts of `MT` |",
+            "| `--hgvs`, `--hgvsg` | written `MT`, over the `chrMT` two bases longer | `c.43G>C` \
+             and `MT:m.3349G>C`, the base of `chrMT` | `c.43A>C` and `MT:m.3349A>C`, the base of \
+             `chrM` |",
+            "Each cell was measured with its flag alone, the two notation flags also together.",
+            "Over the first file both engines write the same rows under `--hgvs` and `--hgvsg`, \
+             for an input record written `MT`, `chrMT` or `NC_012920.1`, and under either check \
+             both compare an input record written `chrMT` with `chrMT`.",
+            "This section says nothing of an input record written `chrM` or `M`.",
+            "Two made-up records of 16,569 bases each, with different bases at the position, \
+             were measured as well under the four flags: vep-rs reads `chrMT` for `MT`, and \
+             Ensembl VEP reads `chrM` under the two reference checks.",
+            "No committed run passes a FASTA of two mitochondrial records.",
+        ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "gives them under `--lookup_ref`, which it does also where the FASTA holds a \
+             16,569-base `chrMT` beside that record;",
+            "so `MT` is a contig the FASTA lacks there, and it reads the 16,569-base record for \
+             `MT` where the FASTA holds one as well | 3 · 0 of 1,198 MT records · 97 flag sets, \
+             0 corpora | 116.3 |",
+        ],
+    );
+    let page = page_text("divergences/fasta-synonym-reads-another-mitochondrial-sequence.md")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for placed_on_mt in [
+        "Both engines place an input record written `MT`, `chrM`, `chrMT` or `NC_012920.1`",
+        "An input record written `chrM` is so compared with the FASTA record of that name",
+        "a substitution written `MT`, `chrM`, `chrMT` or `NC_012920.1`",
+        "vep-rs writes it on the transcripts of `MT`",
+        "in vep-rs alone, whatever the FASTA holds",
+    ] {
+        assert!(
+            !page.contains(placed_on_mt),
+            "the page states {placed_on_mt:?}, as if vep-rs placed a record written `chrM` or \
+             `M` on `MT` over such a file"
+        );
+    }
+}
+
+/// The page of the fastVEP output normaliser says which outputs the rewrite
+/// changes. fastVEP writes `Transcript` in the Feature_type cell of an
+/// intergenic row through v0.4.0 alone and `-` from v0.5.0, so the page bounds
+/// the sentence by version.
+#[test]
+fn fastvep_feature_type_rewrite_names_the_versions_it_holds_for() {
+    let path = "tools/vep-fastvep-normalize/README.md";
+    let text = std::fs::read_to_string(format!("{}/../../{path}", env!("CARGO_MANIFEST_DIR")))
+        .unwrap_or_else(|e| panic!("{path}: {e}"))
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert_states(
+        path,
+        &text,
+        &[
+            "fastVEP through v0.4.0 writes `Transcript` in the Feature_type cell of a row whose \
+             Gene and Feature cells are `-`; Ensembl VEP writes `-` there.",
+            "so without the rewrite every intergenic row of such an output scores as a \
+             discordant tuple.",
+            "From v0.5.0 fastVEP writes `-` there itself, and the tool rewrites no row of such \
+             an output.",
+            "The Feature_type cell is the one difference the tool removes, in an output of \
+             fastVEP through v0.4.0.",
+        ],
+    );
+    for unbounded in [
+        "Ensembl VEP writes. fastVEP writes `Transcript`",
+        "every intergenic row of a fastVEP output scores",
+        "the one difference the tool removes. Two more",
+    ] {
+        assert!(
+            !text.contains(unbounded),
+            "{path} states {unbounded:?} for every fastVEP version"
+        );
+    }
+}
+
+/// An input record written `chrM` or `M` on GRCh37, over a reference FASTA
+/// whose record of that pair of names is another sequence than the
+/// assembly's: Ensembl VEP places it by its name alone, on the cache's `MT`
+/// through the synonym (`AnnotationSource.pm:179`, `BaseVEP.pm:708-716`) or,
+/// under a reference check, on a slice named after the FASTA record that no
+/// transcript shares (`BaseVEP.pm:413` and `:425-433`,
+/// `AnnotationType/Transcript.pm:141`); vep-rs skips it as on a sequence no
+/// annotation source holds. The page states the class by flag and by name,
+/// the warning and where the placement on `MT` stands, and the three pages
+/// that speak of those names point at it.
+#[test]
+fn a_record_named_for_another_mitochondrial_sequence_placed_on_mt_is_documented() {
+    assert_page_states(
+        "divergences/mitochondrial-record-of-another-sequence-placed-on-mt.md",
+        &[
+            "On GRCh37, Ensembl VEP places an input record written `chrM` on the cache's `MT` \
+             through the cache's synonym table, whatever sequence the run's reference FASTA \
+             holds under that name.",
+            "Where the FASTA record `chrM` is not the assembly's sequence, it writes the rows of \
+             the transcripts of `MT` at the input record's number, or one `intergenic_variant` \
+             row where a reference check reads the input record's base; vep-rs skips the input \
+             record with a warning.",
+            "An input record written `chrM` or `M` whose name reads such a FASTA record is taken \
+             as on a chromosome the cache does not hold.",
+            "Beside a `--custom` file that lists the chromosome, under the cache's name or the \
+             input record's, it is kept as any input record on a chromosome such a file lists is",
+            "It is then written on no transcript, with no warning, and takes the file's records \
+             under either name.",
+            "`Chromosome chrM is the FASTA record chrM of 16571 bases, another sequence than the \
+             cache's MT of 16569 bases, and is read as no chromosome of the cache`",
+            "The chromosome test comes before the reference checks, so the warning is the same \
+             with and without `--check_ref` or `--lookup_ref`, and no notation flag changes it.",
+            "Under `--dont_skip` the input record is kept as every input record on such a \
+             chromosome is, as one `intergenic_variant` row beside the warning.",
+            "The placement on `MT` stands wherever nothing tells the two sequences apart: in a \
+             run with no reference FASTA, over a FASTA that holds no record under `chrM` or `M`, \
+             and over a FASTA record under either name of 16,569 bases.",
+            "The length is the one test vep-rs makes, and its own bound.",
+            "The rule holds on GRCh37 alone",
+            "Under a `--synonyms` table that links no name to `MT`, both engines rename a bare \
+             `M` to `MT` (`Parser.pm`, lines 794-796), and it is an input record on `MT` from \
+             then on.",
+            "so the same substitution is there `chrM 3309 T G`, whose REF is the file's base.",
+            "Over that file Ensembl VEP 116.3 writes it as `start_retained_variant` with Codons \
+             `atA/atG`, the codon's third base.",
+            "Ensembl VEP writes that row here without the flag and with no warning, for a \
+             sequence on which the cache holds no feature.",
+            "`Parser.pm`, lines 770-802 (`_have_chr`)",
+            "`AnnotationSource.pm`, line 179, and `BaseVEP.pm`, lines 708-716",
+            "`AnnotationType/Transcript.pm`, lines 141 and 143",
+            "| none | written `chrM` | the rows of the transcripts of `MT` at its number | \
+             skipped with the warning |",
+            "| none | written `M` | one `intergenic_variant` row | skipped with the warning |",
+            "| `--lookup_ref` | written `chrM` or `M` | one `intergenic_variant` row, its \
+             reference the FASTA record's base | skipped with the warning |",
+            "| `--check_ref` | written `chrM` or `M`, REF the FASTA record's base | one \
+             `intergenic_variant` row | skipped with the warning |",
+            "| `--check_ref` | written `chrM` or `M`, REF another base | refused with the \
+             mismatch warning | skipped with the warning |",
+            "No comparison sets these rows aside",
+            "No deletion and no other input format was measured.",
+            "An insertion states no reference base: by the code Ensembl VEP reads no slice for \
+             it under either check (`Parser.pm`, lines 600-603 and 636) and so writes it as it \
+             does without one.",
+        ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "| [`mitochondrial_record_of_another_sequence_placed_on_mt`]\
+             (divergences/mitochondrial-record-of-another-sequence-placed-on-mt.md) | On GRCh37, \
+             over a reference FASTA whose record named `chrM` or `M` is not the assembly's \
+             16,569-base sequence,",
+            "vep-rs reads such an input record as on a sequence the cache does not hold and \
+             skips it with a warning that names the FASTA record and both lengths | 3 · 0 of 1,198 \
+             MT records · 511 flag sets, 0 corpora | 116.3 |",
+        ],
+    );
+    assert_page_states(
+        "divergences/bare-m-chromosome.md",
+        &[
+            "One run is apart: on GRCh37, over a reference FASTA whose record named `chrM` or \
+             `M` is not the assembly's sequence, vep-rs skips a record written `M` or `chrM`",
+        ],
+    );
+    assert_page_states(
+        "cache-setup.md",
+        &[
+            "On GRCh37 a `chrM` or `M` resolves to nothing as well where the reference FASTA \
+             holds, under that name, a record of another length than 16,569",
+        ],
+    );
+}
+
+/// The index row of that entry gives Ensembl VEP's one `intergenic_variant`
+/// row for an input record written `M` where Ensembl VEP admits the record,
+/// in the words of the entry's page: under `--check_ref` it refuses one whose
+/// REF is not the FASTA record's base (`Parser.pm`, lines 596-632).
+#[test]
+fn index_row_of_another_mitochondrial_sequence_writes_m_where_ensembl_vep_admits_it() {
+    let path = "intended-divergences.md";
+    let text = page_text(path)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert_states(
+        &format!("docs/{path}"),
+        &text,
+        &[
+            "or one `intergenic_variant` row under a reference check, as it does wherever it \
+             admits one written `M`; vep-rs reads such an input record",
+        ],
+    );
+    let every_run = "as it does in every run for one written `M`";
+    assert!(
+        !text.contains(every_run),
+        "docs/{path} states {every_run:?}, where Ensembl VEP refuses under `--check_ref` an \
+         input record whose REF is not the FASTA record's base"
+    );
 }
 
 /// `synonyms`: a `--synonyms` file holding a byte that is not UTF-8 is refused
-/// (`ChromosomeSynonyms::load_from_file` in vep-core's `synonyms.rs` reads it
+/// (`load_synonyms` in vep-cli's `cache_resolve.rs` reads it
 /// with `read_to_string`, worded `Could not read synonyms file <file>: stream
 /// did not contain valid UTF-8`, exit 1), where Ensembl VEP reads the file as
 /// bytes; and the flag's value is a file name as given (`load_synonyms` in
@@ -1944,6 +6893,161 @@ fn synonyms_file_encoding_exclusion_is_documented() {
     );
 }
 
+/// The page of the fastVEP output normaliser says why the consequence
+/// vocabulary is left as written. The four terms it names stand in fastVEP's
+/// consequence terms through v0.5.0 alone, so the page bounds the difference
+/// by version.
+#[test]
+fn fastvep_vocabulary_difference_names_the_versions_it_holds_for() {
+    let path = "tools/vep-fastvep-normalize/README.md";
+    let text = std::fs::read_to_string(format!("{}/../../{path}", env!("CARGO_MANIFEST_DIR")))
+        .unwrap_or_else(|e| panic!("{path}: {e}"))
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert_states(
+        path,
+        &text,
+        &[
+            "fastVEP through v0.5.0 emits VCF 4.4 copy-number terms that Ensembl VEP release 115 \
+             never emits",
+            "From v0.6.0 fastVEP emits none of the four terms.",
+        ],
+    );
+    assert!(
+        !text.contains("The consequence vocabulary does. fastVEP emits"),
+        "{path} states the difference for every fastVEP version"
+    );
+}
+
+/// The page of the fastVEP output normaliser says which differences the tool
+/// leaves as written. The tab format of every fastVEP release through v0.6.2
+/// names `IMPACT`, `DISTANCE`, `STRAND` and `FLAGS` as columns after
+/// `Existing_variation`, where Ensembl VEP's default format writes one `Extra`
+/// column, and the vocabulary difference stands through v0.5.0 alone, so the
+/// page bounds each of the two by version. The measurement script is held to
+/// the format the page names.
+#[test]
+fn fastvep_column_count_difference_names_the_versions_it_holds_for() {
+    let root = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
+    let path = "tools/vep-fastvep-normalize/README.md";
+    let text = std::fs::read_to_string(format!("{root}/{path}"))
+        .unwrap_or_else(|e| panic!("{path}: {e}"))
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert_states(
+        path,
+        &text,
+        &[
+            "Two more are left as fastVEP writes them, the first in a tab output of every \
+             fastVEP release through v0.6.2 and the second in an output of fastVEP through \
+             v0.5.0:",
+            "The harness's own command asks fastVEP for its tab format, whose header names 17 \
+             columns where Ensembl VEP's default format has 14.",
+            "After `Existing_variation` it names `IMPACT`, `DISTANCE`, `STRAND` and `FLAGS` as \
+             columns of their own, which Ensembl VEP writes as keys of its one `Extra` column.",
+            "The 13 columns before them stand in the same order in both, the five fields of the \
+             key among them, so the difference lies outside the key and does not affect \
+             concordance.",
+        ],
+    );
+    assert!(
+        !text.contains("Two more separate a fastVEP output from Ensembl VEP's"),
+        "{path} counts two more differences for every fastVEP version"
+    );
+
+    let script = "scripts/concordance/run_clone_measurement.sh";
+    let runs = std::fs::read_to_string(format!("{root}/{script}"))
+        .unwrap_or_else(|e| panic!("{script}: {e}"));
+    let lines: Vec<&str> = runs.lines().collect();
+    let mut commands = Vec::new();
+    for (at, line) in lines.iter().enumerate() {
+        if line.trim_start().starts_with('#') || !line.trim_end().ends_with(" annotate \\") {
+            continue;
+        }
+        let mut command = String::new();
+        for part in &lines[at..] {
+            command.push_str(part.trim());
+            command.push(' ');
+            if !part.trim_end().ends_with('\\') {
+                break;
+            }
+        }
+        commands.push(command);
+    }
+    assert_eq!(
+        commands.len(),
+        2,
+        "{script}: its fastVEP `annotate` commands: {commands:?}"
+    );
+    for command in &commands {
+        // The first command ends inside a command substitution, so its value is written `tab)`.
+        let format = command
+            .split_whitespace()
+            .skip_while(|word| *word != "--output-format")
+            .nth(1)
+            .map(|word| word.trim_end_matches(')'));
+        assert_eq!(
+            format,
+            Some("tab"),
+            "{script} asks fastVEP for another format than {path} names: {command}"
+        );
+    }
+}
+
+/// The fastVEP output normaliser names the fastVEP format it is given: the
+/// tab format, which the measurement script asks fastVEP for. fastVEP's own
+/// default format is VCF, and `default-format` names Ensembl VEP's 13 columns
+/// and `Extra` wherever else the tree writes it, so the page's first sentence,
+/// the package description and the module documentation each name a tab
+/// output.
+#[test]
+fn fastvep_normaliser_names_the_tab_output_it_is_given() {
+    let root = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
+    for (path, opening, sentence) in [
+        (
+            "tools/vep-fastvep-normalize/README.md",
+            "\nRewrites a fastVEP tab output",
+            "Rewrites a fastVEP tab output so that its intergenic rows carry the Feature_type \
+             that Ensembl VEP writes.",
+        ),
+        (
+            "tools/vep-fastvep-normalize/Cargo.toml",
+            "\ndescription = \"Rewrites a fastVEP tab output",
+            "description = \"Rewrites a fastVEP tab output so that its intergenic rows carry \
+             the Feature_type Ensembl VEP writes\"",
+        ),
+        (
+            "tools/vep-fastvep-normalize/src/main.rs",
+            "\n//! Rewrites a fastVEP tab output",
+            "Rewrites a fastVEP tab output so that its intergenic rows carry the Feature_type \
+             Ensembl VEP writes.",
+        ),
+    ] {
+        let file = std::fs::read_to_string(format!("{root}/{path}"))
+            .unwrap_or_else(|e| panic!("{path}: {e}"));
+        // A comment marker opens each line of a comment and is no word of its text.
+        let text = file
+            .split_whitespace()
+            .filter(|word| !matches!(*word, "//!" | "///" | "//" | "#"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert_states(path, &text, &[sentence]);
+        // The sentence opens a line of the place that holds it: a `//!` line is module
+        // documentation, and the `description` key is the package's.
+        assert!(
+            file.contains(opening),
+            "{path} has no line that opens with {:?}",
+            opening.trim_start()
+        );
+        assert!(
+            !text.contains("fastVEP default-format"),
+            "{path} names another format than the tab output the tool is given"
+        );
+    }
+}
+
 /// `chr`: a chromosome literally named `1-5` is refused silently under `--chr 1-5`
 /// (`ChromosomeList::new` in `validate.rs` files the token under `ranges`), where
 /// Parser.pm:471 (`grep {$vf->{chr} eq $_} @{$self->{chr}}`) admits it by
@@ -1955,6 +7059,64 @@ fn chr_literal_range_name_exclusion_is_documented() {
         &[
             "A chromosome literally named `1-5`, which Ensembl VEP admits under that token, is \
              refused silently here, as a record `--chr` leaves out is in both engines",
+        ],
+    );
+}
+
+/// `delimiter`: an empty value, one the pattern compiler refuses, one holding
+/// a zero-width assertion or one matching the empty string is an error
+/// (`from_flag` in `delimiter.rs`), where Ensembl VEP hands any string to
+/// Perl's `split` (Config.pm:82; ensembl-io ColumnBasedParser.pm:250). A VCF
+/// field holding a tab is cut at it once the record is re-joined with tabs
+/// (`rejoin_with_tabs` in `pipeline.rs`), and the two-character value `\t` joins
+/// the JSON `input` with a tab, where OutputFactory/JSON.pm:247 joins with the
+/// value as typed.
+#[test]
+fn delimiter_exclusions_are_documented() {
+    assert_flag_row_states(
+        "cli/input-output.md",
+        "--delimiter",
+        &[
+            "\\t for a tab (a JSON `input` then joins its fields with a tab, where Ensembl VEP \
+             writes the two characters)",
+            "(an empty value, one the `regex` crate's syntax refuses, Perl's look-around \
+             included, one with a class or property over characters outside ASCII, or one that \
+             could match part of a UTF-8 character, holds a zero-width assertion or matches the \
+             empty string is an error)",
+            "a VCF record read under another delimiter is re-joined with tabs, so a field holding \
+             a tab is cut at it in the JSON `input` and the VCF line, where Ensembl VEP keeps the \
+             field whole",
+        ],
+    );
+    let page = page_text("cli/input-output.md");
+    let row = page
+        .lines()
+        .find(|l| l.starts_with("| `--delimiter`"))
+        .expect("docs/cli/input-output.md has no --delimiter row");
+    let refused = "a value its syntax refuses";
+    assert!(
+        !row.contains(refused),
+        "the --delimiter row of docs/cli/input-output.md states {refused:?}"
+    );
+}
+
+/// `bigwig`: the flag names a `--custom` bigWig source (Config.pm:545-550), and
+/// a file named by a URL is refused as every `--custom` file is (`parse_custom`
+/// in `custom/grammar.rs`), where Ensembl VEP hands a URL to its bigWig open
+/// (AnnotationSourceAdaptor.pm:378 refuses one only under a `no_remote` option
+/// no flag sets; AnnotationSource/File/BigWig.pm:126).
+#[test]
+fn bigwig_remote_file_exclusion_is_documented() {
+    assert_page_states(
+        "output/custom-bigwig.md",
+        &["`--bigwig <file>` stands for `--custom <file>,,bigwig,exact`."],
+    );
+    assert_page_states(
+        "custom-annotation.md",
+        &[
+            "A remote file (`http://`, `https://`, `ftp://` or any other URL scheme) is not read \
+             and is refused with an error that names the route. Ensembl VEP reads it over the \
+             network; vep-rs reads local files only, so copy the file to a local path.",
         ],
     );
 }
@@ -2005,6 +7167,54 @@ fn cache_without_a_transcript_shard_refusal_is_documented() {
     );
 }
 
+/// `json_cache`: the directory the flag names must hold `transcripts/` and
+/// `info.json`, so a Storable cache directory is refused, where the directory
+/// Ensembl VEP's `--full_cache_dir` names is such a cache and one without an
+/// `info.txt` is read with no metadata (CacheDir.pm:462).
+#[test]
+fn json_cache_exclusion_is_documented() {
+    assert_page_states(
+        "cache-setup.md",
+        &[
+            "Either way the directory must hold `transcripts/` and `info.json`, so a \
+             Storable cache or a mistyped path fails instead of annotating nothing.",
+        ],
+    );
+}
+
+/// A failure to resolve the cache ends the run on one `ERROR:` line, and the
+/// cache page names that line's component for each kind. `load_synonyms` in
+/// `cache_resolve.rs` reports a `--synonyms` file that cannot be read under
+/// `config`. In a run that names a GFF or GTF transcript source,
+/// `resolve_cache` in `runner.rs` hands a refusal that `no_cache` of
+/// `cache_resolve.rs` raises, one for a run with no cache where it names
+/// one, to `without_a_cache` of `gene_model.rs`, which reports it under
+/// `custom`. Every other refusal of the resolution is reported under `cache`.
+/// The tests of `transcript_source_beside_a_refused_cache.rs` run each kind
+/// with and without such a source.
+#[test]
+fn cache_resolution_sentence_names_the_component_of_each_failure() {
+    assert_page_states(
+        "cache-setup.md",
+        &[
+            "Every failure to resolve a cache exits 1 before the input is opened with one \
+             `ERROR: [<component>] ...` line, in Ensembl VEP's words where it has them.",
+            "The line's component is `config` for a `--synonyms` file that cannot be read, \
+             `custom` where a run that names a GFF or GTF transcript source has no cache at the \
+             configured path, and `cache` otherwise.",
+        ],
+    );
+    let page = page_text("cache-setup.md")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let one_component_for_every_failure = "with one `ERROR: [cache] ...` line";
+    assert!(
+        !page.contains(one_component_for_every_failure),
+        "docs/cache-setup.md states {one_component_for_every_failure:?}"
+    );
+}
+
 /// `info-var-type-serialiser`: a cache whose `var_type` contradicts the
 /// variation files a chromosome directory holds, or whose `variation_cols`
 /// names columns but no `start` or does not begin with `chr` under `var_type
@@ -2048,6 +7258,363 @@ fn var_type_layout_refusal_is_documented() {
     );
 }
 
+/// `cache_variation_line_without_a_start`: under `--check_existing` Ensembl
+/// VEP reads a record's known variants until the tabix iterator returns no
+/// line (VariationTabix.pm:229, :232), and the iterator returns none once it
+/// has read a line whose start cell holds no number, so a record whose lookup
+/// reads such a line first is written with no known variant.
+/// `crates/vep-cli/tests/known_variants_past_an_unreadable_line.rs` holds
+/// vep-rs's rows.
+#[test]
+fn cache_variation_line_without_a_start_divergence_is_documented() {
+    assert_page_states(
+        "divergences/cache-variation-line-without-a-start.md",
+        &[
+            "Under `--check_existing`, a line of a cache's `all_vars.gz` whose start cell holds \
+             no number ends Ensembl VEP 116.3's lookup of every record that reads the line first, \
+             so those records are written with no known variant.",
+            "vep-rs passes over the line and names the known variants the file holds.",
+            "A line whose start cell no integer leads names no position, so it is no known \
+             variant: vep-rs passes over it and reads on.",
+            "`AnnotationSource/Cache/VariationTabix.pm`, lines 224-229: one tabix query for each \
+             record, from one base before its start to one base after its end.",
+            "Line 232: the loop reads lines until the iterator returns none, and no line tests \
+             why it stopped.",
+            "| `at_the_line` | `21:84` | `-` | `var_first` |",
+            "| `past_the_line` | `21:6052` | `-` | `var_second` |",
+            "| `past_the_bin` | `21:16419` | `var_third` | `var_third` |",
+            "| Human, GRCh38 | 1,904 | 1,487,415,922 | 0 |",
+            "| Human, GRCh37 | 699 | 1,129,087,916 | 0 |",
+            "| *Anopheles funestus*, AfunF3 | 3 | 14,489,964 | 1 |",
+            "No comparator sets these rows aside.",
+        ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &["[`cache_variation_line_without_a_start`]\
+             (divergences/cache-variation-line-without-a-start.md) | Under `--check_existing`, a \
+             line of a cache's `all_vars.gz` whose start cell holds no number ends Ensembl VEP's \
+             tabix lookup of every record that reads the line first, so those records are \
+             written with no known variant, exit 0; vep-rs passes over the line and names the \
+             known variants the file holds | 3 · 0 of 35,796 table rows · 53 flag sets, 0 \
+             corpora | 116.3 |"],
+    );
+}
+
+/// `clin_sig_allele_term_order`: Ensembl VEP writes a known variant's
+/// `clin_sig_allele` from the keys of a hash (Database/Variation.pm:200-213),
+/// so its `allele:term` pairs stand in the order of a Perl hash, where
+/// `vep-cache-builder` writes them in the order of the ClinVar records'
+/// identifiers. The committed native cache decides three statements: the
+/// page's count of the known variant rows whose cell gives one allele two or
+/// more terms, the same count in the index row's cell, and the cell the page's
+/// table gives that cache for `rs1569061768`.
+/// `crates/vep-cli/tests/clinvar_terms_of_one_allele_on_a_native_cache.rs`
+/// holds vep-rs's rows, and
+/// `crates/vep-cache-builder/tests/variation_cache_from_dumps.rs` the order
+/// the builder writes.
+#[test]
+fn clin_sig_allele_term_order_divergence_is_documented() {
+    use std::io::Read;
+    const PAGE: &str = "divergences/clin-sig-allele-term-order.md";
+    const CACHE: &str = "tests/golden/116/GRCh38-native-builder/json_cache";
+    const COUNT_WORDS: [&str; 13] = [
+        "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",
+        "Eleven", "Twelve",
+    ];
+    let cache = format!("{}/../../{CACHE}", env!("CARGO_MANIFEST_DIR"));
+    let info: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(format!("{cache}/info.json"))
+            .unwrap_or_else(|e| panic!("{cache}/info.json: {e}")),
+    )
+    .unwrap_or_else(|e| panic!("{cache}/info.json: {e}"));
+    let column = |name: &str| -> usize {
+        info["variation_cols"]
+            .as_array()
+            .unwrap_or_else(|| panic!("{cache}/info.json lists no variation columns"))
+            .iter()
+            .position(|c| c == name)
+            .unwrap_or_else(|| panic!("{cache}/info.json lists no {name} column"))
+    };
+    let (named, cell) = (column("variation_name"), column("clin_sig_allele"));
+    // The name and the `clin_sig_allele` cell of every known variant row of
+    // the cache, over the variation file of each of its sequences.
+    let mut rows: Vec<(String, String)> = Vec::new();
+    let variations = format!("{cache}/variations");
+    for sequence in std::fs::read_dir(&variations)
+        .unwrap_or_else(|e| panic!("{variations}: {e}"))
+        .flatten()
+        .filter(|entry| entry.path().is_dir())
+    {
+        let path = sequence.path().join("all_vars.gz");
+        let file = std::fs::File::open(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+        let mut text = String::new();
+        flate2::read::MultiGzDecoder::new(file)
+            .read_to_string(&mut text)
+            .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+        for line in text.lines() {
+            let fields: Vec<&str> = line.split('\t').collect();
+            rows.push((fields[named].to_string(), fields[cell].to_string()));
+        }
+    }
+    // A cell gives an allele two or more terms where two of its pairs name
+    // that allele.
+    let gives_an_allele_two_terms = |cell: &str| {
+        let alleles: Vec<&str> = cell
+            .split(';')
+            .filter_map(|pair| pair.split_once(':'))
+            .map(|(allele, _)| allele)
+            .collect();
+        alleles
+            .iter()
+            .enumerate()
+            .any(|(at, allele)| alleles[..at].contains(allele))
+    };
+    let of_the_shape = rows
+        .iter()
+        .filter(|(_, cell)| gives_an_allele_two_terms(cell))
+        .count();
+    let of_the_record: Vec<&str> = rows
+        .iter()
+        .filter(|(name, _)| name == "rs1569061768")
+        .map(|(_, cell)| cell.as_str())
+        .collect();
+    assert_eq!(
+        of_the_record.len(),
+        1,
+        "rows of {CACHE} that name rs1569061768"
+    );
+
+    assert_page_states(
+        PAGE,
+        &[
+            "When Ensembl VEP 116.3 reads its variation database, it collects a known variant's \
+             ClinVar entries, each an `allele:term` pair, as the keys of a hash and writes \
+             `clin_sig_allele` from those keys.",
+            "No comparison names a class for it.",
+            &format!(
+                "{} rows of the committed native cache, `{CACHE}`, hold it, and one committed \
+                 run of that corpus, its flag set `variation`, passes `--check_existing`.",
+                COUNT_WORDS[of_the_shape]
+            ),
+            "| Ensembl VEP's own, release 116, GRCh38 | \
+             `A:likely_pathogenic;C:likely_pathogenic;A:pathogenic;C:uncertain_significance` |",
+            &format!("| The committed native cache | `{}` |", of_the_record[0]),
+        ],
+    );
+    assert!(
+        page_text(PAGE).starts_with("# The order of one allele's ClinVar terms\n"),
+        "docs/{PAGE} is not titled as the index row links it"
+    );
+    let index = page_text("intended-divergences.md");
+    let row = index
+        .lines()
+        .find(|l| l.starts_with("| [`clin_sig_allele_term_order`]"))
+        .expect("docs/intended-divergences.md has no `clin_sig_allele_term_order` row");
+    assert_states(
+        "the `clin_sig_allele_term_order` row of docs/intended-divergences.md",
+        row,
+        &[
+            "| [`clin_sig_allele_term_order`](divergences/clin-sig-allele-term-order.md) |",
+            &format!("| 2 · {of_the_shape} of 35,796 table rows · 1 flag set, 1 corpus | 116.3 |"),
+            "| [The order of one allele's ClinVar terms](divergences/clin-sig-allele-term-order.md) \
+             |",
+        ],
+    );
+    assert_page_states(
+        "cache-variation-data.md",
+        &[
+            "`clin_sig_allele`, which a build fills from the ClinVar records of the variation \
+             database's tables, lists their `allele:term` pairs in the order of the records' \
+             identifiers. Ensembl VEP's cache holds its pairs in [Perl's hash order]\
+             (divergences/clin-sig-allele-term-order.md), so `CLIN_SIG` can list one allele's \
+             terms in another order on the two caches.",
+        ],
+    );
+}
+
+/// `clin_sig_allele_value_cut_at_semicolon`: Ensembl VEP's adaptor cuts a
+/// ClinVar record's joined attributes at every semicolon
+/// (PhenotypeFeatureAdaptor.pm:1273-1276), so a significance of several
+/// classifications keeps its first alone in a known variant's
+/// `clin_sig_allele`, where `vep-cache-builder` writes a pair for each. Three
+/// files decide the page's tables: the rows of
+/// `tests/fixtures/clinvar-several-classifications` give the eight ClinVar
+/// records of `rs74315447`, the entry's reproduction record gives the two
+/// `clin_sig_allele` cells, and the committed native cache, of which the page
+/// says that no row holds the shape, holds no cell with a piece that is no
+/// pair.
+/// `crates/vep-cli/tests/clinvar_significance_of_several_classifications_on_a_native_cache.rs`
+/// holds vep-rs's rows, and
+/// `crates/vep-cache-builder/tests/variation_cache_from_dumps.rs` the cells
+/// the builder writes.
+#[test]
+fn clin_sig_allele_value_cut_at_semicolon_divergence_is_documented() {
+    use std::io::Read;
+    const PAGE: &str = "divergences/clin-sig-allele-value-cut-at-semicolon.md";
+    const CACHE: &str = "tests/golden/116/GRCh38-native-builder/json_cache";
+    let root = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
+    let read = |path: &str| -> String {
+        std::fs::read_to_string(format!("{root}/{path}")).unwrap_or_else(|e| panic!("{path}: {e}"))
+    };
+
+    // The ClinVar records of the page's variant, from the fixture's tables:
+    // the identifier of each `phenotype_feature` row that names it, with the
+    // record's `risk_allele` (attribute 483) and `clinvar_clin_sig` (480).
+    let fixture = "crates/vep-cli/tests/fixtures/clinvar-several-classifications";
+    let features = read(&format!("{fixture}/phenotype_feature.txt"));
+    let attributes = read(&format!("{fixture}/phenotype_feature_attrib.txt"));
+    let attribute = |record: &str, code: &str| -> String {
+        let values: Vec<&str> = attributes
+            .lines()
+            .map(|line| line.split('\t').collect::<Vec<_>>())
+            .filter(|cells| cells[0] == record && cells[1] == code)
+            .map(|cells| cells[2])
+            .collect();
+        assert_eq!(values.len(), 1, "attribute {code} of record {record}");
+        values[0].to_string()
+    };
+    let mut records: Vec<u64> = features
+        .lines()
+        .map(|line| line.split('\t').collect::<Vec<_>>())
+        .filter(|cells| cells[5] == "rs74315447")
+        .map(|cells| cells[0].parse().expect("a record's identifier"))
+        .collect();
+    records.sort_unstable();
+    assert_eq!(
+        records.len(),
+        8,
+        "ClinVar records of rs74315447 in {fixture}"
+    );
+    let record_rows: Vec<String> = records
+        .iter()
+        .map(|id| {
+            let id = id.to_string();
+            format!(
+                "| {id} | `{}` | {} |",
+                attribute(&id, "483"),
+                attribute(&id, "480")
+            )
+        })
+        .collect();
+    assert_eq!(
+        record_rows[0],
+        "| 299470652 | `C` | uncertain significance; risk factor |"
+    );
+
+    // The two cells of the page's table are the values the entry's record
+    // states for the two engines.
+    let record =
+        read("scripts/divergences/reproductions/clin_sig_allele_value_cut_at_semicolon.toml");
+    let expected = |engine: &str| -> String {
+        let key = format!("\n{engine} = [\"");
+        let (_, rest) = record
+            .split_once(&key)
+            .unwrap_or_else(|| panic!("the record states no {engine} value"));
+        rest.split_once('"').expect("the value ends").0.to_string()
+    };
+
+    // Every piece of every `clin_sig_allele` cell of the committed native
+    // cache is an `allele:term` pair.
+    let info: serde_json::Value = serde_json::from_str(&read(&format!("{CACHE}/info.json")))
+        .unwrap_or_else(|e| panic!("{CACHE}/info.json: {e}"));
+    let cell = info["variation_cols"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{CACHE}/info.json lists no variation columns"))
+        .iter()
+        .position(|c| c == "clin_sig_allele")
+        .unwrap_or_else(|| panic!("{CACHE}/info.json lists no clin_sig_allele column"));
+    let variations = format!("{root}/{CACHE}/variations");
+    let mut cells = 0;
+    for sequence in std::fs::read_dir(&variations)
+        .unwrap_or_else(|e| panic!("{variations}: {e}"))
+        .flatten()
+        .filter(|entry| entry.path().is_dir())
+    {
+        let path = sequence.path().join("all_vars.gz");
+        let file = std::fs::File::open(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+        let mut text = String::new();
+        flate2::read::MultiGzDecoder::new(file)
+            .read_to_string(&mut text)
+            .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+        for line in text.lines() {
+            let value = line.split('\t').nth(cell).expect("a clin_sig_allele cell");
+            if value == "." {
+                continue;
+            }
+            cells += 1;
+            for piece in value.split(';') {
+                assert!(
+                    piece
+                        .split_once(':')
+                        .is_some_and(|(_, term)| !term.is_empty()),
+                    "{}: {piece} is no pair",
+                    path.display()
+                );
+            }
+        }
+    }
+    assert!(cells > 0, "{CACHE} holds no clin_sig_allele cell");
+
+    let mut phrases: Vec<String> = vec![
+        "When Ensembl VEP 116.3 reads that database, it joins each record's attributes with a \
+         semicolon and cuts the joined string at every semicolon."
+            .to_string(),
+        "No comparison names a class for it.".to_string(),
+        format!(
+            "No row of the committed native cache, `{CACHE}`, holds it, and one committed run of \
+             that corpus, its flag set `variation`, runs under `--check_existing`."
+        ),
+        "| ClinVar records whose significance holds a semicolon | 127 |".to_string(),
+        "| Of them, germline records that name an allele | 120 |".to_string(),
+        "| Variants those 120 records belong to | 107 |".to_string(),
+        "| Variants with a classification that no record gives the allele alone or first | 94 |"
+            .to_string(),
+        "| Such pairs of an allele and a classification | 98 |".to_string(),
+        format!(
+            "| Ensembl VEP's own, `clin_sig_allele` | `{}` |",
+            expected("ensembl_vep")
+        ),
+        format!(
+            "| A native cache, `clin_sig_allele` | `{}` |",
+            expected("vep_rs")
+        ),
+    ];
+    phrases.extend(record_rows);
+    let phrases: Vec<&str> = phrases.iter().map(String::as_str).collect();
+    assert_page_states(PAGE, &phrases);
+    assert!(
+        page_text(PAGE)
+            .starts_with("# A ClinVar significance that holds several classifications\n"),
+        "docs/{PAGE} is not titled as the index row links it"
+    );
+    let index = page_text("intended-divergences.md");
+    let row = index
+        .lines()
+        .find(|l| l.starts_with("| [`clin_sig_allele_value_cut_at_semicolon`]"))
+        .expect("docs/intended-divergences.md has no `clin_sig_allele_value_cut_at_semicolon` row");
+    assert_states(
+        "the `clin_sig_allele_value_cut_at_semicolon` row of docs/intended-divergences.md",
+        row,
+        &[
+            "| [`clin_sig_allele_value_cut_at_semicolon`]\
+             (divergences/clin-sig-allele-value-cut-at-semicolon.md) |",
+            "| 3 · 0 of 35,796 table rows · 1 flag set, 0 corpora | 116.3 |",
+            "| [A ClinVar significance that holds several classifications]\
+             (divergences/clin-sig-allele-value-cut-at-semicolon.md) |",
+        ],
+    );
+    assert_page_states(
+        "cache-variation-data.md",
+        &[
+            "A record whose significance holds several classifications, such as `uncertain \
+             significance; risk factor`, gives a pair for each. Ensembl VEP's cache holds [a pair \
+             for the first alone](divergences/clin-sig-allele-value-cut-at-semicolon.md), so \
+             `CLIN_SIG` can list a term more on a native cache.",
+        ],
+    );
+}
+
 /// `hgvs`: under `--hgvs` a contig the FASTA lacks gives no HGVSc for a
 /// substitution or a deletion, whose reference bases cannot be read, where
 /// Ensembl VEP reads the transcript's slice as `N` per base
@@ -2058,20 +7625,46 @@ fn var_type_layout_refusal_is_documented() {
 /// genome's `c.764G>T`) and its deletion reads as over the genome (`c.632del`);
 /// an insertion's `c.307_308insC` and HGVSp agree, and neither engine warns
 /// (`a_contig_the_fasta_lacks_gives_no_hgvsc_for_a_substitution_or_deletion` in
-/// `input_hgvs.rs` runs the vep-rs side).
+/// `input_hgvs.rs` runs the vep-rs side). An insertion written outside a
+/// transcript has no HGVSc there in either engine: Ensembl VEP asks for a
+/// notation only on a row inside the transcript (OutputFactory.pm:1730), and
+/// vep-rs reads no base to place the added bases by
+/// (`a_row_whose_hgvsc_turns_on_bases_beside_the_record_draws_the_line` in
+/// `input_left_out_notices.rs` runs the vep-rs side). An insertion's HGVSc,
+/// and the HGVSp of an insertion or a deletion, are read where the record
+/// writes the allele: on such a contig `hgvs_variant_notation` and
+/// `hgvs_shift` of `hgvs.rs` in `vep-effects` read no base beside it to find a
+/// copy of it or to move it 3'. The notice of each table's last row is printed
+/// by `print_notices` of `runner.rs`, to standard error alone.
 #[test]
 fn hgvs_exclusion_is_documented() {
     assert_page_states(
         "cache-setup.md",
         &[
-            "Under `--hgvs` the same contig gives these notations; neither engine warns:",
+            "Under `--hgvs` and `--hgvsg` that contig gives these; neither engine warns, and each \
+             table ends on a notice, an `INFO:` line no warnings file holds:",
             "| Record on the contig under `--hgvs` | Ensembl VEP, whose transcript slice reads \
              `N` per base there (`Utils/FastaSequence.pm` lines 597-601) | vep-rs, which reads no \
              reference base there |",
-            "| A substitution | `c.764N>T`, the `N` standing for the genome's `G` | no HGVSc |",
+            "| A substitution | `c.764N>T`, the `N` standing for the `G` of the genome, a FASTA \
+             that holds the contig | no HGVSc |",
             "| A deletion | `c.632del`, as over the genome | no HGVSc |",
-            "| An insertion | `c.307_308insC` | `c.307_308insC` |",
-            "| HGVSp | as over the genome | as over the genome |",
+            "| An insertion | `c.307_308insC` | `c.307_308insC`, written where the record places \
+             the insertion: no base is read to find a copy of the inserted bases beside it or to \
+             shift it 3'. So the made-up insertion at `MT` 755 of the table below, a copy of the \
+             base before it, gets `n.108_109insG` where the genome gives `n.108dup` |",
+            "| An insertion written outside a transcript, before its first base or directly after \
+             its last | no HGVSc: a row outside a transcript is asked for none (`OutputFactory.pm` \
+             line 1730) | no HGVSc. Over a contig the FASTA holds, the 3' rule places such bases \
+             on the transcript where the sequence lets it \
+             ([`hgvs_added_bases_written_outside_the_transcript`](divergences/hgvs-added-bases-written-outside-the-transcript.md)); \
+             here no base is read to place them by |",
+            "| HGVSp | as over the genome | as over the genome, except that an insertion or a \
+             deletion the 3' shift moves over the genome is read where its record writes it, no \
+             base being read to shift it. Over a FASTA made up without chromosome 21, line 46 of \
+             `tests/golden/116/GRCh38-identifiers/variants.vcf`, a deletion the shift carries \
+             into an intron, gets `p.Lys392AsnfsTer17` on three rows and `p.Lys6AsnfsTer17` on a \
+             fourth, where the corpus's own FASTA gives the four no HGVSp |",
         ],
     );
     assert_page_states(
@@ -2084,6 +7677,199 @@ fn hgvs_exclusion_is_documented() {
              insertion's notation and HGVSp agree",
         ],
     );
+    let page = page_text("cache-setup.md")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for refused in [
+        "| An insertion | `c.307_308insC` | `c.307_308insC` |",
+        "| HGVSp | as over the genome | as over the genome |",
+    ] {
+        assert!(
+            !page.contains(refused),
+            "docs/cache-setup.md states {refused:?}"
+        );
+    }
+}
+
+/// `hgvsg`: under `--hgvsg` a contig the FASTA lacks gives no record an HGVSg,
+/// since both ends of a record must be bases the FASTA holds, where Ensembl VEP
+/// reads `N` per base there (FastaSequence.pm:597-601) and, for a record that
+/// takes a transcript's slice (AnnotationType/Transcript.pm:122), cuts the
+/// reference allele of its notation from the flank it read
+/// (VariationFeature.pm:1927, Sequence.pm:526), so its substitution names `N`
+/// (`MT:m.700N>C` for the genome's `MT:m.700A>C`). It tests a deletion and an
+/// insertion against the same bases, so it moves neither along a run of equal
+/// bases (VariationFeature.pm:1992, 2000-2003, Sequence.pm:805-820) and finds
+/// no copy of an inserted base (Sequence.pm:577-588): its notation is the
+/// genome's outside such a repeat and the record's own span inside one. The
+/// page's rows are those of the further run of the entry's reproduction record,
+/// and the index row's example is the substitution's notation among them.
+/// Neither engine warns, and the run names
+/// the chromosome in the notice it prints at its end
+/// (`a_contig_the_fasta_lacks_gives_no_hgvsg` and
+/// `a_chromosome_the_fasta_lacks_is_named_once_under_hgvsg` in
+/// `input_left_out_notices.rs` and the two tests of
+/// `contig_absent_from_fasta_genomic_notation.rs` that start the binary run the
+/// vep-rs side).
+#[test]
+fn hgvsg_contig_exclusion_is_documented() {
+    assert_page_states(
+        "cache-setup.md",
+        &[
+            "| Record on the contig under `--hgvsg` | Ensembl VEP, which reads `N` per base there \
+             (`Utils/FastaSequence.pm` lines 597-601) | vep-rs, which reads no reference base \
+             there |",
+            "| A substitution within a transcript or its upstream or downstream distance | \
+             `MT:m.700N>C` for `MT 700 A C`, where a FASTA that holds the contig gives \
+             `MT:m.700A>C`: the record takes the transcript's slice \
+             (`AnnotationType/Transcript.pm` line 122), and the `N` stands for the reference base \
+             `A`, which the FASTA does not hold | no HGVSg: the notation names the reference \
+             base, which is read from the FASTA and not from the record. By a rule of vep-rs's \
+             own a notation is written only where the FASTA holds the bases at both ends of the \
+             record, for an insertion the two bases beside it, so no record on the contig gets \
+             one |",
+            "| A deletion in the same reach whose next base differs from the deleted one | \
+             `MT:m.714del` for `MT 713 CA C`, the notation a FASTA that holds the contig gives: \
+             it names no reference base, and the deletion stands at its last possible position | \
+             no HGVSg, by that rule. Ensembl VEP's value is the correct one here |",
+            "| A deletion in the same reach whose next base equals the deleted one | \
+             `MT:m.736del` for `MT 735 AC A`, where a FASTA that holds the contig gives \
+             `MT:m.737del`: Ensembl VEP moves a deletion on while the next base it read equals \
+             the deleted base, which it takes from the record (`VariationFeature.pm` lines 1992 \
+             and 2000-2003, `Utils/Sequence.pm` lines 805-820), and the `N` it read is not the \
+             record's `C` | no HGVSg, by that rule. Ensembl VEP's value is not the correct one \
+             here |",
+            "| An insertion in the same reach that copies neither base beside it | \
+             `MT:m.745_746insC` for `MT 745 A AC`, the notation a FASTA that holds the contig \
+             gives | no HGVSg, by that rule. Ensembl VEP's value is the correct one here |",
+            "| An insertion in the same reach of a copy of the base before it | \
+             `MT:m.755_756insG` for `MT 755 G GG`, where a FASTA that holds the contig gives \
+             `MT:m.755dup`: Ensembl VEP looks for the copy in the bases it read \
+             (`Utils/Sequence.pm` lines 577-588), which are `N` | no HGVSg, by that rule. Ensembl \
+             VEP's value is not the correct one here |",
+            "Under `--hgvs` and `--hgvsg` that contig gives these; neither engine warns, and each \
+             table ends on a notice, an `INFO:` line no warnings file holds:",
+            "`INFO: The FASTA holds no sequence for chromosome <name>, which the input has \
+             records on: a record there gets no HGVSg`; where rows kept on the contig count for HGVSc \
+             as well, as the notice row of the table above says, the one line ends `a record \
+             there gets no HGVSg, and a substitution or a deletion no HGVSc, nor does an \
+             insertion written outside a transcript`.",
+        ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "[`contig_absent_from_fasta`](cache-setup.md#reference-fasta)",
+            "and under `--hgvsg` an HGVSg read from the same bases (`MT:m.700N>C`)",
+            "and under `--hgvsg` prints no HGVSg for any record there",
+        ],
+    );
+    assert_page_states(
+        "output/vep-and-tab.md",
+        &[
+            "Alleles outside `ACGT` or equal to the reference bases, structural variants and \
+             records on [contigs the FASTA lacks](../cache-setup.md#a-contig-the-fasta-lacks) \
+             carry no value.",
+        ],
+    );
+    let text = page_text("output/vep-and-tab.md")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert!(
+        !text.contains("the reference bases and a structural variant carry no value"),
+        "docs/output/vep-and-tab.md lists what carries no HGVSg without the contig the FASTA \
+         lacks"
+    );
+    // `hgvs_genomic` returns no notation for a record whose chromosome the
+    // FASTA lacks, so the records on such a contig are what carries no value.
+    assert!(
+        !text.contains("variant and [contigs the FASTA lacks]"),
+        "docs/output/vep-and-tab.md has the contigs the FASTA lacks, not the records on them, \
+         carry no HGVSg"
+    );
+    for page in ["cache-setup.md", "intended-divergences.md"] {
+        assert!(
+            !page_text(page).contains("21:g.10538885N>C"),
+            "docs/{page} states an HGVSg that the entry's reproduction record does not hold"
+        );
+    }
+}
+
+/// The notice rows of the two tables of `A contig the FASTA lacks` say which
+/// runs print the line: one that keeps a row on the contig without the
+/// notation the line names, because no reference base could be read. The line
+/// is read from the rows the output keeps, so `--chr` or a filter that leaves
+/// no such row, and rows of insertions written within their transcripts
+/// alone under `--hgvs`, draw no line for the notation, while a row whose
+/// HGVSc turns on bases beside the record draws it
+/// (`a_chromosome_the_fasta_lacks_is_named_where_a_kept_row_is_without_the_notation`,
+/// `insertions_draw_the_line_for_hgvsc_where_a_kept_row_lies_before_its_transcript`
+/// and `a_row_whose_hgvsc_turns_on_bases_beside_the_record_draws_the_line` in
+/// `input_left_out_notices.rs` run the binary). `--most_severe` and
+/// `--summary` write one row a record, returned before a row that carries a
+/// notation is built (OutputFactory.pm:387), and a tab or a VCF output writes
+/// the fields its `--fields` list names, so the line of such a run names no
+/// notation its output leaves out
+/// (`a_chromosome_the_fasta_lacks_is_named_for_the_notations_the_output_writes`
+/// in the same file).
+#[test]
+fn absent_contig_notice_rows_say_which_outputs_draw_the_line() {
+    assert_page_states(
+        "cache-setup.md",
+        &[
+            "| A notice at the end of a run that keeps a row on the contig whose HGVSc could not \
+             be read for want of a reference base, withheld under `--quiet` | none | `INFO: The \
+             FASTA holds no sequence for chromosome <name>, which the input has records on: a \
+             substitution or a deletion there gets no HGVSc, nor does an insertion written outside \
+             a transcript`; several chromosomes are counted and listed in the one line. The line \
+             is read from the rows the output keeps. A row counts where it has no HGVSc and its \
+             record's own bases give it one over a FASTA that holds the contig. A row without an \
+             HGVSc counts as well where its notation turns on bases beside the record: bases added \
+             before a transcript's first base or directly after its last that some sequence places \
+             on the transcript, and a deletion over a transcript's first or last base, by an \
+             allele that keeps bases of its reference, that some sequence lets be written wholly \
+             inside the transcript. The sequence alone could tell whether such a row owes a \
+             notation, so it counts whichever way the contig's bases would settle it. Neither \
+             counts under `--shift_hgvs 0`, and added bases count on no RefSeq model that carries \
+             an edit. Under `--shift_3prime 1` a row outside its transcript counts for nothing: \
+             the record's own shift reads the contig's bases too, so the record is annotated where \
+             it is written. No line names HGVSc where `--chr` or a filter leaves no such row, \
+             where the rows kept are of insertions written within their transcripts alone, under \
+             `--most_severe` or `--summary`, or in a tab or a VCF output whose `--fields` list \
+             leaves `HGVSc` out |",
+            "| A notice at the end of a run that keeps a row on the contig without its HGVSg \
+             because no reference base could be read, withheld under `--quiet` | none | `INFO: The \
+             FASTA holds no sequence for chromosome <name>, which the input has records on: a \
+             record there gets no HGVSg`; where rows kept on the contig count for HGVSc as well, \
+             as the notice row of the table above says, the one line ends `a record there gets no \
+             HGVSg, and a substitution or a deletion no HGVSc, nor does an insertion written \
+             outside a transcript`. Contigs whose kept rows are without different notations draw a \
+             line each. The line is read from the rows the output keeps. No line names HGVSg where \
+             `--chr` or a filter leaves no row on the contig, under `--most_severe` or \
+             `--summary`, or in a tab or a VCF output whose `--fields` list leaves `HGVSg` out |",
+        ],
+    );
+    let text = page_text("cache-setup.md")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for refused in [
+        "| A notice at the run's end, withheld under `--quiet` |",
+        "with `--hgvs` as well the one line ends",
+        "| A notice at the end of a run whose output writes HGVS",
+        "where the output writes HGVSc as well the one line ends",
+        "for an output that writes none",
+        "without its HGVSc because no reference base could be read",
+        "where the records kept are insertions alone",
+        "are without their HGVSc as well the one line ends",
+    ] {
+        assert!(
+            !text.contains(refused),
+            "docs/cache-setup.md states {refused:?}"
+        );
+    }
 }
 
 /// `warning_file`, `skipped_variants_file`: both values are file names as given,
@@ -2097,7 +7883,9 @@ fn hgvs_exclusion_is_documented() {
 /// `cli_run_control.rs` runs the vep-rs side). A false `--skipped_variants_file`
 /// value, `0` or empty, is a file name here too, where Runner.pm:176
 /// `$self->dump_skipped_variants if $self->param('skipped_variants_file');`
-/// writes nothing (`skipped_variants_file_false_value_is_a_file_name`).
+/// writes nothing (`skipped_variants_file_false_value_is_a_file_name`); the
+/// empty name cannot be written and is refused before the first record is
+/// read, as each file the run tests there is.
 #[test]
 fn warning_file_as_given_exclusion_is_documented() {
     assert_page_states(
@@ -2114,10 +7902,19 @@ fn warning_file_as_given_exclusion_is_documented() {
              writes `>skipped.txt` here",
             "A `--skipped_variants_file` value Perl reads as false, `0` or the empty value, leaves \
              the flag unset there (`Runner.pm:176`), so no file is written. vep-rs writes a file \
-             named `0`, and the empty value fails the run as it ends, the output written, with \
+             named `0`, and the empty value is refused before the first record is read, with \
              `Could not write to skipped variants file` (exit 1). A false `--warning_file` value \
              is the default warnings file in both engines (`BaseVEP.pm:890`)",
         ],
+    );
+    let page = page_text("cli/compatibility.md")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let refused = "the empty value fails the run as it ends, the output written";
+    assert!(
+        !page.contains(refused),
+        "docs/cli/compatibility.md states {refused:?}"
     );
 }
 
@@ -2136,6 +7933,40 @@ fn skipped_variants_file_timing_exclusion_is_documented() {
         &[
             "An existing file is refused before the run without `--force_overwrite`, where \
              Ensembl VEP checks when the run ends; both engines write the file as the run ends",
+        ],
+    );
+}
+
+/// `no_check_variants_order`: no text format checks the order of its input,
+/// where Ensembl VEP counts each record that starts more than 100 bases before
+/// the record before it and ends the run once the count passes 100
+/// (InputBuffer.pm:216-221, 240-249, 258-263; Constants.pm:348-349). The
+/// Parquet writer alone checks the order, and the flag skips that check.
+#[test]
+fn no_check_variants_order_exclusion_is_documented() {
+    assert_page_states(
+        "output/parquet.md",
+        &[
+            "This check is a documented subset of Ensembl VEP's.",
+            "vep-rs checks the Parquet output alone, strictly per record, and exempts the \
+             same four input formats, whose rows are written unchecked. Every text format \
+             annotates an input in any order and ignores the flag.",
+        ],
+    );
+    assert_page_states(
+        "divergences/unsorted-input.md",
+        &[
+            "It accepts `--no_check_variants_order`, and its text outputs hold the same rows \
+             with and without it",
+        ],
+    );
+    assert_flag_row_states(
+        "cli/input-output.md",
+        "--no_check_variants_order",
+        &[
+            "Every text format annotates an input in any order and ignores the flag; Ensembl \
+             VEP aborts after 100 records more than 100 bp behind their predecessor, whatever \
+             the output format",
         ],
     );
 }
@@ -2172,8 +8003,8 @@ fn hash_line_after_chrom_exclusion_is_documented() {
     assert_page_states(
         "intended-divergences.md",
         &[
-            "Two hundred and forty-eight differences lie outside every class",
-            "Each of the two hundred and forty-eight [differences outside the classes]",
+            "Two hundred and ninety differences lie outside every class",
+            "Each of the two hundred and ninety [differences outside the classes]",
             "Ensembl VEP takes a VCF header's last single-`#` line as its column line, so a `#` \
              line after the `#CHROM` line leaves its sample list empty: `--individual all` writes \
              no row, a list is refused, `--individual_zyg` writes no `ZYG`, and the VCF output \
@@ -2236,6 +8067,1444 @@ fn svlen_nan_deletion_exclusion_is_documented() {
     );
 }
 
+/// The SNP/indel comparator's output-only rule lets no `tandem_repeat` row admit a
+/// Location (`observe` and `close` of `tools/vep-outputs-compare/src/rules/scope.rs`).
+/// A `<CNV:TR>` record leaves its run without a reference row where Ensembl VEP reads
+/// a FASTA and either trims the expanded allele to other coordinates
+/// (Parser/VCF.pm:516-543; Parser.pm:862-881, 986-1011) or expands the record to no
+/// alternate allele or to the run itself (Parser/VCF.pm:410-428). Without a FASTA
+/// (Parser/VCF.pm:521-527, 560-576), and with one for a record of several alternate
+/// alleles (Parser.pm:978-984) or an allele that shares no base with the run, its
+/// rows are at the run. A sentence that gives the other Location without condition
+/// is refused.
+#[test]
+fn dropped_record_page_says_where_ensembl_vep_writes_a_tandem_repeat() {
+    let page = "divergences/defect-c.md";
+    let text = page_text(page)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert_states(
+        &format!("docs/{page}"),
+        &text,
+        &[
+            "and `tandem_repeat` does not admit a Location, because a `<CNV:TR>` record without \
+             Ensembl VEP rows at its run need not carry the mark.",
+            "With a FASTA, Ensembl VEP writes an expansion it trims at another Location (class \
+             12) and writes no row for an empty or unchanged one (class 19).",
+            "Without a FASTA, and with one where it writes the expanded allele whole, its rows \
+             stand at the run.",
+        ],
+    );
+    let without_condition =
+        "because Ensembl VEP keeps a `<CNV:TR>` record and writes it at another Location";
+    assert!(
+        !text.contains(without_condition),
+        "docs/{page} states {without_condition:?}"
+    );
+}
+
+/// The tandem-repeat page's one exception to the splice terms that stay charged: the
+/// polypyrimidine tract term of the symbolic reading, which Ensembl VEP evaluates for a
+/// structural allele over its whole span where the span overlaps no exon
+/// (Utils/Constants.pm:977-980, 985; StructuralVariationOverlapAllele.pm:210-214). The
+/// page's record is held to its line of the synthetic set and to the intron that the
+/// structural comparison's test of the binary reads.
+#[test]
+fn tandem_repeat_page_says_when_the_tract_term_of_the_run_is_set_aside() {
+    let root = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
+    let file = |path: &str| {
+        std::fs::read_to_string(format!("{root}/{path}")).unwrap_or_else(|e| panic!("{path}: {e}"))
+    };
+
+    let set = "tests/sv_validation/grch37/07_cnv_repeat.vcf.gz";
+    let bytes = std::fs::read(format!("{root}/{set}")).unwrap_or_else(|e| panic!("{set}: {e}"));
+    let mut records = String::new();
+    std::io::Read::read_to_string(
+        &mut flate2::read::MultiGzDecoder::new(&bytes[..]),
+        &mut records,
+    )
+    .unwrap_or_else(|e| panic!("{set}: {e}"));
+    let record: Vec<&str> = records
+        .lines()
+        .find(|line| line.split('\t').nth(2) == Some("synth_cnv_tr_0186"))
+        .unwrap_or_else(|| panic!("{set} holds no record synth_cnv_tr_0186"))
+        .split('\t')
+        .collect();
+    let info = |key: &str| -> i64 {
+        record[7]
+            .split(';')
+            .find_map(|field| field.strip_prefix(&format!("{key}=")))
+            .and_then(|value| value.parse().ok())
+            .unwrap_or_else(|| panic!("the record states no whole number under {key}"))
+    };
+    let (start, end) = (
+        record[1].parse::<i64>().expect("a position") + 1,
+        info("END"),
+    );
+    let lost = info("SVLEN") - info("RUC") * info("RUL");
+    assert_eq!((record[0], lost / info("RUL")), ("21", 2));
+    let run = format!("`21:{start}-{end}`");
+    let deletion = format!("`21:{}-{end}`", end - lost + 1);
+
+    let tool_test = file("tools/vep-sv-compare/tests/tandem_repeat_tract_term_of_the_run.rs");
+    let exon_end: i64 = tool_test
+        .lines()
+        .find_map(|line| line.strip_prefix("const EXON_END: i128 = "))
+        .and_then(|value| value.trim_end_matches(';').replace('_', "").parse().ok())
+        .expect("the tool's test states the end of the exon below the intron");
+    let (tract_low, tract_high) = (exon_end + 3, exon_end + 17);
+    assert_eq!(tract_high - start + 1, 2, "the run's bases in the tract");
+    assert!(
+        end - lost + 1 > tract_high,
+        "the deletion lies past the tract"
+    );
+
+    assert_page_states(
+        "divergences/cnv-tr.md",
+        &[
+            "Any other difference, a start or splice term one side carries and the other \
+             lacks, stays charged, with one exception.",
+            "The exception is `splice_polypyrimidine_tract_variant` on the symbolic reading.",
+            "It is the one splice term Ensembl VEP evaluates for a structural allele: it tests \
+             the whole run, where the run overlaps no exon (`ensembl-variation`, \
+             `Utils/Constants.pm` lines 977-980 and 985, `StructuralVariationOverlapAllele.pm` \
+             lines 210-214).",
+            "A comparison that names the cache with `--vep-rs-cache` sets the term aside where \
+             the transcript's exons show that the run overlaps an intron's tract and no exon, \
+             and that the literal reading's span overlaps no tract.",
+            "The term stays charged without the cache, where the run overlaps an exon, where \
+             the literal reading's span overlaps a tract too, and on a transcript with an \
+             intron of 13 bases or fewer.",
+            "One record of the two sets has that shape: `synth_cnv_tr_0186` of the GRCh37 set, \
+             a loss of two units.",
+            &format!(
+                "Its run, {run}, overlaps by two bases the tract `{tract_low}-{tract_high}` of \
+                 an intron of ENST00000400454 and ENST00000404019, both on the reverse strand."
+            ),
+            &format!("Its deletion, {deletion}, lies past the tract."),
+            "The symbolic rows read `splice_polypyrimidine_tract_variant,intron_variant` and \
+             the deletion's rows `intron_variant`.",
+            "Given the cache, the class is fully masked:",
+        ],
+    );
+    let page = page_text("divergences/cnv-tr.md");
+    for older in [
+        "the other lacks, stays charged.",
+        "\nThe class is fully masked:",
+    ] {
+        assert!(
+            !page.contains(older),
+            "docs/divergences/cnv-tr.md still states {older:?}"
+        );
+    }
+
+    let readme = file("tools/vep-sv-compare/README.md")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert_states(
+        "tools/vep-sv-compare/README.md",
+        &readme,
+        &[
+            "It reads the cache for one term: a `splice_polypyrimidine_tract_variant` on the \
+             symbolic reading alone is representation where a transcript's structure shows \
+             that the run overlaps the tract of an intron and no exon, and that the literal \
+             reading's span overlaps no tract; the term stays charged without a cache.",
+        ],
+    );
+}
+
+/// `tandem-repeats-cnv-tr`: with and without a FASTA the record is read as
+/// Ensembl VEP reads it, and the pages state three records that are read
+/// otherwise: a repeat unit of no bases counted by `RB` stays symbolic, where
+/// Parser/VCF.pm:414 divides by the unit's length, a leading `RN=0` allele of
+/// a record of two alleles is annotated beside the other, where the loop of
+/// Parser/VCF.pm:411 runs no iteration for it, and an allele kept symbolic
+/// that states a loss names `feature_truncation`, or no direction term where
+/// it states exactly its run's length, the entry the test
+/// `cnv_tr_symbolic_loss_named_a_gain_divergence_is_documented` holds.
+#[test]
+fn tandem_repeat_record_differences_are_documented() {
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "vep-rs reads the record symbolically with or without one, keeping the symbolic \
+             gain over the run where Ensembl VEP divides by the empty unit",
+        ],
+    );
+    assert_page_states(
+        "divergences/defect-o.md",
+        &[
+            "With a FASTA vep-rs annotates both alleles when the `RN=0` allele leads, while a \
+             trailing `RN=0` allele is lost in both engines.",
+        ],
+    );
+}
+
+/// `cnv_tr_symbolic_loss_named_a_gain`: the row of a `<CNV:TR>` allele kept
+/// symbolic whose record states fewer bases than its run names
+/// `feature_truncation`, and the row of one whose record states exactly as
+/// many names neither direction term and carries the IMPACT of its first term
+/// by rank (OutputFactory.pm:2043-2050), where Ensembl VEP reads every
+/// `tandem_repeat` as a copy-number gain (Utils/VariationEffect.pm:246-256)
+/// and names `feature_elongation` (:337-348). The page's records are lines 4
+/// and 5 of the tandem-repeat corpus's input, their Ensembl VEP rows the rows
+/// stored for them on ENST00000299443 and their vep-rs rows the constants the
+/// binary's test files hold the binary to. The three records the page names
+/// as stating no length are read from the corpus `GRCh37`. A sentence that
+/// gives both engines the gain reading whatever the count, or that leaves an
+/// allele as long as its run as Ensembl VEP writes it, is refused on each
+/// page that held one.
+#[test]
+fn cnv_tr_symbolic_loss_named_a_gain_divergence_is_documented() {
+    let root = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
+    let path = "divergences/cnv-tr-symbolic-loss-named-a-gain.md";
+    assert_page_states(
+        path,
+        &[
+            "Ensembl VEP 116.3 reads every `<CNV:TR>` allele it keeps symbolic as a copy-number \
+             gain, so its direction term is `feature_elongation` for an allele whose record \
+             states fewer bases than the run it replaces, and for one whose record states \
+             exactly as many.",
+            "Where the two lengths are equal and no field of the record states another, its row \
+             names neither direction term, and its IMPACT is that of the first term left by \
+             rank. Every other cell stands in both: the Location, the Allele, the region terms \
+             and the positions among them.",
+            "`Utils/VariationEffect.pm`, lines 246-256, `copy_number_gain`: true for every \
+             `tandem_repeat` (lines 282-309), with no test of a count.",
+            "Lines 1616-1649, `coding_unknown`, the test of `coding_sequence_variant`: for a \
+             structural allele, true where the run lies in the coding sequence and none of \
+             `inframe_insertion`, `inframe_deletion` and `frameshift` holds (line 1643). It asks \
+             no gain.",
+            "`OutputFactory.pm` of `ensembl-vep`, lines 2043-2050: a row's terms are sorted by \
+             rank, and its IMPACT is the first term's.",
+            "vep-rs reads a loss where the record states the allele's length in whole units of \
+             a written unit:",
+            "- every ALT of the record is `<CNV:TR>`;",
+            "- the record carries `RUS` with `RUC` or `RB`, and neither `CIRUC` nor `CIRB`, the \
+             confidence intervals around them; a value of `0` or of no characters reads as an \
+             absent field (as at `Parser/VCF.pm` line 385);",
+            "- `RN` is absent, which gives each allele one repeat sequence, or holds one whole \
+             number for each allele;",
+            "- the allele has at least one repeat sequence, and the `RUS` list and the count \
+             list, read in the alleles' order, hold a unit and a count for each of its sequences;",
+            "- each unit is not `.`, and each count is a whole-number `RUC` or, in a record \
+             without `RUC`, an `RB` that is a whole multiple of the unit's length.",
+            "The run is the row's Location: POS + 1 to the end that `SVLEN` gives, the largest \
+             where a record carries one for each allele, or `END` without `SVLEN`. A loss is a \
+             stated length under the run's length.",
+            "An allele that states exactly the run's length is read as [section \
+             2](#2-an-allele-as-long-as-its-run-read-without-the-reference-sequence) shows. \
+             Every other allele keeps Ensembl VEP's row: one that states more bases than the \
+             run, and one whose length the record does not state so.",
+            "Leaving them as Ensembl VEP writes them is vep-rs's choice of what it takes as \
+             proven.",
+            "Three of its alleles state a loss: `tr_loss` (line 4 of its input), the second \
+             allele of `tr_multi` (line 8) and the second allele of `tr_two_svlen` (line 9). One \
+             states exactly its run's length: `tr_same` (line 5).",
+            "The corpus's own run reads no reference sequence and carries eight rows of the \
+             class in each output format: six of a stated loss and two of `tr_same`. Its flag \
+             set `fasta-max10` carries four",
+            "In JSON the record's `most_severe_consequence` is `feature_elongation` in Ensembl \
+             VEP's output and `feature_truncation` in vep-rs's.",
+            "In JSON the record's `most_severe_consequence` is `feature_elongation` in Ensembl \
+             VEP's output and `coding_sequence_variant` in vep-rs's.",
+            "With the FASTA, in the corpus's flag sets `fasta` and `fasta-max10`, neither engine \
+             writes a default or tab row for the record.",
+            "Section 5.6 says of copy-number alleles: \"GT=0 is equivalent to a `<CNV>` ALT \
+             allele with INFO CN of 1 and should be treated identically.\"",
+            "This page does not claim it where the sequence is not read. With the sequence the \
+             engines find the allele equal to the run, base for base. Without it the record \
+             gives no base of the run, so vep-rs cannot tell the allele from one of other bases,",
+            "So vep-rs writes the row the record alone supports: it names where the run lies, by \
+             its Location and the region term `coding_sequence_variant`, and names no change of \
+             length.",
+            "That the allele adds no base is a claim about the record's fields, not about a \
+             sample:",
+            "[Class 19](defect-l.md#19-an-empty-or-unchanged-cnvtr-expansion-dropped-without-a-row) \
+             sets aside the symbolic rows vep-rs writes for such a record without a FASTA where \
+             Ensembl VEP, with one, wrote none.",
+            "vep-rs takes the equal length as proven where all of these hold:",
+            "- the record states the allele's length by the conditions of \
+             [1.5](#15-why-vep-rss-row-is-the-correct-one), and that length is the run's;",
+            "- the record writes `SVLEN` or `END`, and the run is longer than one base: for a \
+             repeat that the reference lacks, section 5.7 sets `SVLEN` to 1;",
+            "- every `SVLEN` value the record writes is the same number, and an `END` beside \
+             `SVLEN` names the run's end: `SVLEN` is one value for each allele (section 3), and \
+             Ensembl VEP takes the largest (`Parser/VCF.pm`, lines 504-511);",
+            "- no other field may state another length for the allele. An `RB` beside `RUC` must \
+             equal the unit's length times the count for each of its sequences. An `RUL`, the \
+             unit's length, must equal the length of its `RUS`. The record must write no `RUB`, \
+             the bases of each single unit, and an INFO `CN`, where written, must be 1 for the \
+             allele.",
+            "An allele that fails any of them keeps Ensembl VEP's row. Only the INFO fields are \
+             read: no sample column changes the reading.",
+            "Lines 732, 750 and 768 of the corpus `GRCh37`'s `variants.vcf` write an `RB` equal \
+             to `SVLEN` and still state no length by the conditions of 1.5: their `RUC` is \
+             fractional, and their `RN` counts more repeat sequences than their lists hold. \
+             They keep Ensembl VEP's rows.",
+            "The amplification terms of a run that covers a whole feature \
+             (`transcript_amplification`, `regulatory_region_amplification`, \
+             `TFBS_amplification`) are left as Ensembl VEP writes them, as a choice of scope: no \
+             committed record of this shape reaches one.",
+            "The manifest holds four entries: one for each of the two coding transcripts, in \
+             the corpus's own run and in `fasta-max10`.",
+            "The corpus tool writes the pair under the class: the manifest's two entries of the \
+             corpus's own run name `tr_same` beside the stated losses.",
+            "The format comparator reads the shape under the same class: the two lists of terms \
+             are equal but for Ensembl VEP's `feature_elongation`, where vep-rs writes no term.",
+            "Where Ensembl VEP read a FASTA and vep-rs did not, Ensembl VEP wrote nothing for \
+             the record, and vep-rs's rows at the run are set aside under",
+            "Where neither read one, the two symbolic rows pair: they differ in \
+             `feature_elongation` alone, since this comparator reads no IMPACT.",
+            "A record stays symbolic on two routes in vep-rs.",
+            "Where a FASTA holds no sequence for the run, both engines expand the record against \
+             its REF column (`Parser/VCF.pm`, lines 516-520).",
+            "So `feature_elongation`, of the third tier, is not written where the run covers the \
+             whole transcript, from its first base to its last, or overlaps the mature sequence \
+             of a miRNA.",
+            "The terms of a run that covers a whole feature stay too:",
+            "In the first shape vep-rs's row reads `feature_truncation` in that term's place. In \
+             the second vep-rs's row holds no term there, and its IMPACT is that of the terms \
+             left.",
+            "One committed corpus carries both shapes, `GRCh38-vcf-tandem-repeats`",
+        ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "[`cnv_tr_symbolic_loss_named_a_gain`](divergences/cnv-tr-symbolic-loss-named-a-gain.md) \
+             | Ensembl VEP reads every `<CNV:TR>` allele it keeps symbolic as a copy-number gain \
+             and writes `feature_elongation` where the record states an alternate allele shorter \
+             than the run it replaces, or exactly as long; vep-rs writes `feature_truncation` on \
+             the first row and no direction term on the second",
+            "| 3 · none on the cuts · 264 flag sets, 1 corpus | 116.3 | [A `<CNV:TR>` allele read \
+             symbolically that states a loss](divergences/cnv-tr-symbolic-loss-named-a-gain.md) |",
+            "its symbolic reading naming a truncation for an allele that states a loss and no \
+             direction term for one that states its run's length \
+             (`cnv_tr_symbolic_loss_named_a_gain`)",
+            "and the two symbolic rows of a stated loss or a stated run length |",
+        ],
+    );
+
+    // The two records and the two rows of each the page quotes, each a fenced block of
+    // its own.
+    let corpus = format!("{root}/tests/golden/116/GRCh38-vcf-tandem-repeats");
+    let input = std::fs::read_to_string(format!("{corpus}/variants.vcf"))
+        .unwrap_or_else(|e| panic!("{corpus}/variants.vcf: {e}"));
+    let record = input.lines().nth(3).expect("the input has a fourth line");
+    assert_eq!(record.split('\t').nth(2), Some("tr_loss"));
+    let record_as_long = input.lines().nth(4).expect("the input has a fifth line");
+    assert_eq!(record_as_long.split('\t').nth(2), Some("tr_same"));
+    let stored_path = format!("{corpus}/expected/default.txt.gz");
+    let bytes = std::fs::read(&stored_path).unwrap_or_else(|e| panic!("{stored_path}: {e}"));
+    let mut stored = String::new();
+    std::io::Read::read_to_string(
+        &mut flate2::read::MultiGzDecoder::new(&bytes[..]),
+        &mut stored,
+    )
+    .unwrap_or_else(|e| panic!("{stored_path}: {e}"));
+    let stored_row_of = |id: &str| -> &str {
+        stored
+            .lines()
+            .find(|row| row.starts_with(&format!("{id}\t")) && row.contains("\tENST00000299443\t"))
+            .unwrap_or_else(|| panic!("Ensembl VEP's stored row of {id} on ENST00000299443"))
+    };
+    // The row a test file of the binary holds the binary to, under the constant `name`.
+    let pinned_row_of = |binary_test: &str, name: &str| -> String {
+        std::fs::read_to_string(format!("{root}/{binary_test}"))
+            .unwrap_or_else(|e| panic!("{binary_test}: {e}"))
+            .lines()
+            .find_map(|line| line.strip_prefix(&format!("const {name}: &str = \"")))
+            .and_then(|rest| rest.strip_suffix("\";"))
+            .unwrap_or_else(|| panic!("{binary_test} holds no {name} on one line"))
+            .replace("\\t", "\t")
+    };
+    let reference_row = stored_row_of("tr_loss");
+    let pinned_row = pinned_row_of(
+        "crates/vep-cli/tests/tandem_repeat_loss_read_symbolically.rs",
+        "LOSS_ROW",
+    );
+    assert_eq!(
+        pinned_row,
+        reference_row.replacen("feature_elongation", "feature_truncation", 1),
+        "the row the binary is held to is Ensembl VEP's stored row with the one term named"
+    );
+    let reference_row_as_long = stored_row_of("tr_same");
+    let pinned_row_as_long = pinned_row_of(
+        "crates/vep-cli/tests/tandem_repeat_as_long_as_its_run_read_symbolically.rs",
+        "ROW_ON_THE_FIRST_CODING_TRANSCRIPT",
+    );
+    assert_eq!(
+        pinned_row_as_long,
+        reference_row_as_long
+            .replacen("feature_elongation,", "", 1)
+            .replacen(";IMPACT=HIGH;", ";IMPACT=MODIFIER;", 1),
+        "the row the binary is held to is Ensembl VEP's stored row without the direction term, \
+         its IMPACT that of `coding_sequence_variant` (Utils/Constants.pm:1061-1078)"
+    );
+    assert_eq!(
+        reference_row_as_long.replacen("tr_same\t", "tr_loss\t", 1),
+        reference_row,
+        "Ensembl VEP's stored rows of the two records are equal but for the name"
+    );
+
+    // The three records the page names as stating no length: `RB` equals `SVLEN`, `RUC`
+    // is no whole number and `RN` counts more repeat sequences than the `RUS` list holds.
+    let other_corpus = format!("{root}/tests/golden/116/GRCh37/variants.vcf");
+    let other_input =
+        std::fs::read_to_string(&other_corpus).unwrap_or_else(|e| panic!("{other_corpus}: {e}"));
+    for line in [732, 750, 768] {
+        let fields: Vec<&str> = other_input
+            .lines()
+            .nth(line - 1)
+            .unwrap_or_else(|| panic!("{other_corpus} has no line {line}"))
+            .split('\t')
+            .collect();
+        assert_eq!(fields[4], "<CNV:TR>", "line {line}");
+        let info = |key: &str| -> &str {
+            fields[7]
+                .split(';')
+                .find_map(|field| field.strip_prefix(&format!("{key}=")))
+                .unwrap_or_else(|| panic!("line {line} writes no {key}"))
+        };
+        assert_eq!(info("RB"), info("SVLEN"), "line {line}");
+        assert!(
+            info("RUC").contains('.') && info("RUC").parse::<f64>().is_ok_and(|n| n.fract() != 0.0),
+            "line {line}: RUC={}",
+            info("RUC")
+        );
+        let sequences: usize = info("RN")
+            .parse()
+            .unwrap_or_else(|e| panic!("line {line}: RN={}: {e}", info("RN")));
+        assert!(
+            sequences > info("RUS").split(',').count(),
+            "line {line}: RN={sequences} against RUS={}",
+            info("RUS")
+        );
+    }
+    // The entries the corpus's manifest holds under the class, by run.
+    let manifest: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(format!("{corpus}/manifest.json"))
+            .unwrap_or_else(|e| panic!("{corpus}/manifest.json: {e}")),
+    )
+    .unwrap_or_else(|e| panic!("{corpus}/manifest.json: {e}"));
+    let of_the_class = |list: &serde_json::Value| {
+        list.as_array()
+            .into_iter()
+            .flatten()
+            .filter(|entry| entry["expected_divergence"] == "cnv_tr_symbolic_loss_named_a_gain")
+            .count()
+    };
+    let mut by_run = vec![(
+        "its own run".to_string(),
+        of_the_class(&manifest["divergences"]),
+    )];
+    for flag_set in manifest["flag_sets"].as_array().into_iter().flatten() {
+        by_run.push((
+            flag_set["name"].as_str().unwrap_or_default().to_string(),
+            of_the_class(&flag_set["divergences"]),
+        ));
+    }
+    assert_eq!(
+        by_run,
+        [
+            ("its own run".to_string(), 2),
+            ("fasta".to_string(), 0),
+            ("fasta-max10".to_string(), 2)
+        ],
+        "the manifest's entries of the class by run: docs/{path} states them"
+    );
+    // The entries of the corpus's own run name the record as long as its run, by its
+    // place among the input's records, and its Consequence without a direction term.
+    let place = input
+        .lines()
+        .filter(|line| !line.starts_with('#'))
+        .position(|line| line.split('\t').nth(2) == Some("tr_same"))
+        .expect("the input holds the record tr_same");
+    for entry in manifest["divergences"].as_array().into_iter().flatten() {
+        let holds = |key: &str, value: serde_json::Value| {
+            entry[key]
+                .as_array()
+                .is_some_and(|list| list.contains(&value))
+        };
+        assert!(
+            holds("record_indices", place.into())
+                && holds("vep_rs_consequence_sets", "coding_sequence_variant".into()),
+            "the entry on {} names tr_same and its set of terms",
+            entry["feature"]
+        );
+    }
+
+    let page = page_text(path);
+    for quoted in [
+        record,
+        reference_row,
+        pinned_row.as_str(),
+        record_as_long,
+        reference_row_as_long,
+        pinned_row_as_long.as_str(),
+    ] {
+        assert!(
+            page.contains(&format!("```\n{quoted}\n```")),
+            "docs/{path} does not quote {quoted:?} whole"
+        );
+    }
+    for older in [
+        "one as long as it",
+        "one that states as many",
+        "carries six rows of the class",
+        "every other cell as Ensembl VEP does",
+        "the ten rows of the class",
+    ] {
+        assert!(!page.contains(older), "docs/{path} still states {older:?}");
+    }
+
+    assert_page_states(
+        "divergences/cnv-tr.md",
+        &[
+            "vep-rs names a loss there where the record [states \
+             one](cnv-tr-symbolic-loss-named-a-gain.md), and no direction where it states the \
+             run's own length.",
+            "vep-rs names a loss where the record states one, and no direction where it states \
+             the run's own length.",
+            "That term is `feature_elongation`, or in vep-rs `feature_truncation` for an allele \
+             that states a loss and no term for one that states the run's own length.",
+            "Where it states an allele exactly as long as the run, the row names neither.",
+            "or in vep-rs `feature_truncation` for a stated loss and no term for a stated length \
+             equal to the run's.",
+        ],
+    );
+    let tandem_repeat_page = page_text("divergences/cnv-tr.md");
+    for older in [
+        "annotate the run's span as a gain. Each engine gives the same reading",
+        "as a gain whatever the stated count. Both give",
+        "Nothing in either row is false",
+        "on the same terms",
+        "both engines give the symbolic gain",
+        "a gain whatever `RUC` says",
+        "a gain whatever the count",
+        "or in vep-rs as a loss where the record",
+        "vep-rs as a loss where the record states one. Both give",
+        "for an allele that states a loss.\n",
+        "in the place of `feature_elongation`.\n",
+        "for a stated loss.\n",
+    ] {
+        assert!(
+            !tandem_repeat_page.contains(older),
+            "docs/divergences/cnv-tr.md still states {older:?}"
+        );
+    }
+
+    let index = page_text("intended-divergences.md");
+    for older in [
+        "vep-rs writes `feature_truncation` on that row",
+        "for an allele that states a loss (`cnv_tr_symbolic_loss_named_a_gain`)",
+    ] {
+        assert!(
+            !index.contains(older),
+            "docs/intended-divergences.md still states {older:?}"
+        );
+    }
+
+    assert_page_states(
+        "output/structural-variants.md",
+        &[
+            "One transcript's rows differ only in `ALLELE_NUM`, which numbers the parts of \
+             Ensembl VEP's allele string from 1, and, for a [stated `<CNV:TR>` \
+             length](../divergences/cnv-tr-symbolic-loss-named-a-gain.md), in Consequence and \
+             IMPACT.",
+        ],
+    );
+    let output_page = page_text("output/structural-variants.md");
+    let older = "and in the direction term of a [stated `<CNV:TR>` loss]";
+    assert!(
+        !output_page.contains(older),
+        "docs/output/structural-variants.md still states {older:?}"
+    );
+}
+
+/// Two other pages show a record with an allele as long as its run: `same_ruc`
+/// on the page of Defect L and the fourth record on the page of Defect O, both
+/// on the run 21:30425588-30425596 of the cache of
+/// `tests/golden/116/GRCh38-release116`. Without a FASTA the row of such an
+/// allele on ENST00000390690 names `coding_sequence_variant` alone, where
+/// Ensembl VEP 116.3 names `feature_elongation` beside it
+/// (Utils/VariationEffect.pm:246-256), and every other allele of those pages
+/// keeps the gain reading, an allele of no repeat sequence included, which
+/// states no length. Each page's records are read from its own fenced block
+/// and run through the binary, and the page's cells are held to the rows.
+#[test]
+fn tandem_repeat_pages_show_no_direction_term_for_an_allele_as_long_as_its_run() {
+    let corpora = format!("{}/../../tests/golden/116", env!("CARGO_MANIFEST_DIR"));
+    let dir = tempfile::tempdir().unwrap();
+    // The rows on ENST00000390690 that the binary writes without a FASTA for the
+    // records a page shows on the run, each as its ID, ALLELE_NUM and Consequence.
+    let rows_of = |page: &str| -> Vec<(String, String, String)> {
+        let records: Vec<String> = page_text(page)
+            .lines()
+            .filter(|line| line.starts_with("21\t30425587\t"))
+            .map(str::to_string)
+            .collect();
+        let name = page.replace('/', "-");
+        let input = dir.path().join(format!("{name}.vcf"));
+        std::fs::write(
+            &input,
+            format!(
+                "##fileformat=VCFv4.4\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n{}\n",
+                records.join("\n")
+            ),
+        )
+        .unwrap();
+        let out = dir.path().join(format!("{name}.txt"));
+        let status = common::isolated_vep(dir.path())
+            .stdin(std::process::Stdio::null())
+            .arg("-i")
+            .arg(&input)
+            .arg("-o")
+            .arg(&out)
+            .args(["--format", "vcf", "--offline", "--json_cache"])
+            .arg(format!("{corpora}/GRCh38-release116/json_cache"))
+            .args(["--assembly", "GRCh38", "--allele_number"])
+            .args(["--no_stats", "--quiet", "--force_overwrite"])
+            .status()
+            .unwrap();
+        assert!(status.success(), "{page}: {status}");
+        std::fs::read_to_string(&out)
+            .unwrap()
+            .lines()
+            .filter(|line| !line.starts_with('#'))
+            .map(|line| line.split('\t').collect::<Vec<_>>())
+            .filter(|cells| cells[4] == "ENST00000390690")
+            .map(|cells| {
+                assert_eq!(
+                    [cells[1], cells[2]],
+                    ["21:30425588-30425596", "tandem_repeat"],
+                    "docs/{page}: {}",
+                    cells[0]
+                );
+                let allele = cells[13]
+                    .split(';')
+                    .find_map(|item| item.strip_prefix("ALLELE_NUM="))
+                    .unwrap_or_else(|| panic!("docs/{page}: {} has no ALLELE_NUM", cells[0]));
+                (
+                    cells[0].to_string(),
+                    allele.to_string(),
+                    cells[6].to_string(),
+                )
+            })
+            .collect()
+    };
+    let gain = "feature_elongation,coding_sequence_variant";
+    let no_direction = "coding_sequence_variant";
+    let row = |id: &str, allele: &str, consequence: &str| {
+        (id.to_string(), allele.to_string(), consequence.to_string())
+    };
+
+    let page = "divergences/defect-l.md";
+    assert_eq!(
+        rows_of(page),
+        [
+            row("same_ruc", "1", no_direction),
+            row("gain_rn_dot", "1", gain),
+            row("gain_ruc_abc", "1", gain),
+            row("gain_ruc_neg", "1", gain),
+            row("gain1_ruc", "1", gain),
+        ],
+        "docs/{page}"
+    );
+    assert_page_states(
+        page,
+        &[
+            "The vep-rs row, for each of the five records:",
+            "| Location | no row for the first four | `21:30425588-30425596` |",
+            "| Allele | | `tandem_repeat` |",
+            "| Feature | | `ENST00000390690` |",
+            &format!("| Consequence, `same_ruc` | | `{no_direction}` |"),
+            &format!("| Consequence, the other four | | `{gain}` |"),
+            "The first record states an allele exactly as long as its run, so its row names [no \
+             direction \
+             term](cnv-tr-symbolic-loss-named-a-gain.md#2-an-allele-as-long-as-its-run-read-without-the-reference-sequence).",
+            "A reference that wrote the symbolic rows (no FASTA) or the literal rows (a real \
+             gain) leaves this class nothing to set aside",
+        ],
+    );
+    let older = "| Consequence |  | `feature_elongation,coding_sequence_variant` |";
+    assert!(
+        !page_text(page).contains(older),
+        "docs/{page} still states {older:?}"
+    );
+
+    let page = "divergences/defect-o.md";
+    assert_eq!(
+        rows_of(page),
+        [
+            row("rn_0_1", "1", gain),
+            row("rn_0_1", "2", gain),
+            row("rn_1_0", "1", gain),
+            row("rn_1_0", "2", gain),
+            row("rn_2_0", "1", gain),
+            row("rn_2_0", "2", gain),
+            row("rn_0_1_ruc3", "1", gain),
+            row("rn_0_1_ruc3", "2", no_direction),
+        ],
+        "docs/{page}"
+    );
+    assert_page_states(
+        page,
+        &[
+            "so the fourth record's real allele, three units, is the run unchanged.",
+            "Without a FASTA both engines write the symbolic rows over the run for both alleles \
+             of every record. One term differs: vep-rs names no direction term for the fourth \
+             record's unchanged allele, which [states exactly its run's \
+             length](cnv-tr-symbolic-loss-named-a-gain.md).",
+            "These are the `feature_elongation` rows when the `RN=0` allele comes first and the \
+             real allele is a gain, because the reference kept the `RN=0` deletion (the first \
+             record).",
+            "When the `RN=0` allele comes first and the real allele is unchanged (the fourth \
+             record), the dropped allele's row names no direction term. The comparator sets \
+             aside the rows that lack the `feature_elongation` of the `RN=0` allele's rows. The \
+             `RN=0` allele's own rows pair with the reference's deletion under [class \
+             12](cnv-tr.md#12-cnvtr-read-symbolically-not-expanded). Where the scored run takes no \
+             length from the record and writes one `feature_elongation` tuple for both alleles, \
+             that tuple is set aside.",
+            "Without a FASTA both engines write the symbolic rows for both alleles and this \
+             class sets nothing aside.",
+        ],
+    );
+    for older in [
+        "so nothing differs",
+        "the real allele is a gain or unchanged",
+        "vep-rs reads both alleles as a gain, so",
+    ] {
+        assert!(
+            !page_text(page).contains(older),
+            "docs/{page} still states {older:?}"
+        );
+    }
+
+    // The page of the classes states the same rows for the fourth record of Defect O.
+    let page = "concordance-provenance/116.2-divergence-classes.md";
+    assert_page_states(
+        page,
+        &[
+            "An unchanged real allele behind a leading `RN=0` carries no direction term: its \
+             rows are the ones that lack the `feature_elongation` of the `RN=0` allele's rows.",
+            "vep-rs reads a symbolic `<CNV:TR>` allele as a gain unless the record [states a \
+             loss or the run's own \
+             length](../divergences/cnv-tr-symbolic-loss-named-a-gain.md) for it, and an allele \
+             of no repeat sequence states no length. Where the real allele is a gain, the two \
+             alleles' rows are therefore one `tandem_repeat` tuple per transcript.",
+            &format!(
+                "vep-rs writes `upstream_gene_variant` for both alleles, `{gain}` for the `RN=0` \
+                 allele and `{no_direction}` for the unchanged one. The last tuple is set aside, \
+                 and the `feature_elongation` tuple pairs with the reference's deletion under \
+                 class 3's `<CNV:TR>` pairing."
+            ),
+        ],
+    );
+    for older in [
+        "the unchanged allele included",
+        "the real allele is a gain or unchanged",
+        "for both alleles, and the second tuple is set aside",
+        "shares its symbolic tuple with the `RN=0` allele",
+    ] {
+        assert!(
+            !page_text(page).contains(older),
+            "docs/{page} still states {older:?}"
+        );
+    }
+
+    // The structural comparison's own tests of the row in the four pairings the pages
+    // state: the reference's symbolic row, an expansion the reference writes nothing
+    // for, a leading allele of no repeat sequence, and a literal reading of equal length.
+    let rule = "tools/vep-sv-compare/src/masks/cnv_tr.rs";
+    let source = std::fs::read_to_string(format!("{}/../../{rule}", env!("CARGO_MANIFEST_DIR")))
+        .unwrap_or_else(|e| panic!("{rule}: {e}"));
+    assert_states(
+        rule,
+        &source,
+        &[
+            "fn the_row_pairs_with_the_reference_symbolic_row_that_names_the_gain()",
+            "fn the_row_is_set_aside_where_the_reference_wrote_nothing_for_the_unchanged_expansion()",
+            "fn the_row_is_the_dropped_allele_behind_a_leading_allele_of_no_repeat_sequence()",
+            "fn the_row_pairs_with_a_literal_reading_as_long_as_the_run()",
+        ],
+    );
+}
+
+/// `allow_non_variant`: a record whose ALT column is `.` is a non-variant
+/// record whatever INFO/SVTYPE says, where Parser/VCF.pm:237-245 routes it to
+/// the structural path under a true INFO/SVTYPE before :259-267 read
+/// `--allow_non_variant`. Under such an SVTYPE the run warns about the record
+/// by its line, dropped or kept, and the page of the documented difference
+/// says so.
+#[test]
+fn missing_alt_under_svtype_is_documented() {
+    assert_page_states(
+        "output/structural-variants.md",
+        &[
+            "A record whose ALT column is `.` is dropped whatever INFO/SVTYPE says, and kept \
+             as a non-variant record under `--allow_non_variant`.",
+            "| ALT `.` under a true INFO/SVTYPE | no allele: dropped, or a non-variant record \
+             under `--allow_non_variant`; either way one warning names the record's line | a \
+             structural variant, annotated from INFO alone with or without \
+             `--allow_non_variant` ([Defect J](../divergences/defect-j.md)) |",
+        ],
+    );
+    assert_page_states(
+        "divergences/defect-j.md",
+        &[
+            "vep-rs writes no row for the record and one warning that names its line; under \
+             `--allow_non_variant` it is kept as a non-variant record.",
+            "Under a true INFO/SVTYPE one warning names the record's line, with or without \
+             `--allow_non_variant`, which keeps the record as a non-variant one; without \
+             `SVTYPE` there is no warning.",
+            "vep-rs passes the lone `.` over in every case, with no row and, under a true \
+             INFO/SVTYPE, one warning that names its line",
+        ],
+    );
+}
+
+/// The last record of the second shape of the list in section 12.7 of the
+/// `<CNV:TR>` page states an `SVLEN` that disagrees with its unit count, and
+/// that page and the taxonomy page say which engine and which run write which
+/// row of it on ENST00000334068. A run that reads a FASTA reads the record
+/// literally at 21:30430418-30434408 in both engines: the span begins in the
+/// coding sequence, holds the whole stop codon and ends past the transcript,
+/// so it has no cDNA end. Ensembl VEP 116.3 writes `stop_retained_variant`
+/// there with no stop codon test made (VariationEffect.pm:1376 and 1444 for
+/// `stop_lost`, 1318 and 1508 for `stop_retained`) and vep-rs `stop_lost`,
+/// the two rows of `stop_codon_removed_without_stop_codon_test`. A run that
+/// reads none writes the same symbolic rows over the run in both engines.
+/// Every row held here beside vep-rs's own is the row Ensembl VEP 116.3
+/// writes for the record in the same run, and the pages' quoted cells are
+/// read from those rows. The two sentences that name neither the engine nor
+/// the run of a row are refused on both pages.
+#[test]
+fn tandem_repeat_pages_say_which_engine_and_run_writes_which_stop_term() {
+    let read = |page: &str| -> String {
+        page_text(page)
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    let page = "divergences/cnv-tr.md";
+    let taxonomy = "concordance-provenance/116.2-divergence-classes.md";
+    let (page_words, taxonomy_words) = (read(page), read(taxonomy));
+    for unnamed in [
+        "the literal reading's stop term against the span's",
+        "against vep-rs's `stop_lost` with the span's terms",
+    ] {
+        for (path, text) in [(page, &page_words), (taxonomy, &taxonomy_words)] {
+            assert!(!text.contains(unnamed), "docs/{path} states {unnamed:?}");
+        }
+    }
+
+    let corpora = format!("{}/../../tests/golden/116", env!("CARGO_MANIFEST_DIR"));
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("svlen.vcf");
+    std::fs::write(
+        &input,
+        "##fileformat=VCFv4.4\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n\
+         21\t30430409\tsvlen4000\tN\t<CNV:TR>\t.\t.\tSVTYPE=CNV;SVLEN=4000;RUS=CT;RUC=5\n",
+    )
+    .unwrap();
+    // The data rows and the warnings file of one run over the record.
+    let run = |name: &str, reference: &[&str]| -> (Vec<String>, String) {
+        let out = dir.path().join(name);
+        let status = common::isolated_vep(dir.path())
+            .stdin(std::process::Stdio::null())
+            .arg("-i")
+            .arg(&input)
+            .arg("-o")
+            .arg(&out)
+            .args(["--format", "vcf", "--offline", "--json_cache"])
+            .arg(format!("{corpora}/GRCh38-release116/json_cache"))
+            .args(["--assembly", "GRCh38"])
+            .args(["--no_stats", "--quiet", "--force_overwrite"])
+            .args(reference)
+            .status()
+            .unwrap();
+        assert!(status.success(), "{name}: {status}");
+        let rows = std::fs::read_to_string(&out)
+            .unwrap()
+            .lines()
+            .filter(|line| !line.starts_with('#'))
+            .map(str::to_string)
+            .collect();
+        let warnings =
+            std::fs::read_to_string(format!("{}_warnings.txt", out.display())).unwrap_or_default();
+        (rows, warnings)
+    };
+    let fasta = format!("{corpora}/GRCh38-merged/reference.fa.gz");
+    let (literal, literal_warnings) = run("with-fasta", &["--fasta", &fasta]);
+    let (symbolic, symbolic_warnings) = run("without-fasta", &[]);
+
+    // With a FASTA: Ensembl VEP's row on the transcript, then vep-rs's, then
+    // the two rows both engines write alike.
+    let reference_stop_row = "svlen4000\t21:30430418-30434408\tC\tENSG00000186971\
+                              \tENST00000334068\tTranscript\
+                              \tstop_retained_variant,3_prime_UTR_variant\t199-?\t143-?\t48-?\
+                              \t-\t-\t-\tIMPACT=LOW;STRAND=1";
+    let own_stop_row = "svlen4000\t21:30430418-30434408\tC\tENSG00000186971\tENST00000334068\
+                        \tTranscript\tstop_lost,3_prime_UTR_variant\t199-?\t143-?\t48-?\t-\t-\t-\
+                        \tIMPACT=HIGH;STRAND=1";
+    let rows_alike = [
+        "svlen4000\t21:30430418-30434408\tC\tENSG00000240432\tENST00000390690\tTranscript\
+         \tupstream_gene_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER;DISTANCE=4492;STRAND=-1",
+        "svlen4000\t21:30430418-30434408\tC\tENSG00000233640\tENST00000418755\tTranscript\
+         \tdownstream_gene_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER;DISTANCE=2058;STRAND=-1",
+    ];
+    assert_eq!(
+        literal,
+        [own_stop_row, rows_alike[0], rows_alike[1]],
+        "with a FASTA"
+    );
+    assert_eq!(literal_warnings, "", "with a FASTA");
+    // Without one both engines write these rows and this warning.
+    assert_eq!(
+        symbolic,
+        [
+            "svlen4000\t21:30430410-30434409\ttandem_repeat\tENSG00000186971\tENST00000334068\
+             \tTranscript\tcoding_sequence_variant,3_prime_UTR_variant\t191-?\t135-?\t45-?\t-\t-\
+             \t-\tIMPACT=MODIFIER;STRAND=1;OverlapBP=617;OverlapPC=76.46",
+            "svlen4000\t21:30430410-30434409\ttandem_repeat\tENSG00000240432\tENST00000390690\
+             \tTranscript\tupstream_gene_variant\t-\t-\t-\t-\t-\t-\
+             \tIMPACT=MODIFIER;DISTANCE=4484;STRAND=-1",
+            "svlen4000\t21:30430410-30434409\ttandem_repeat\tENSG00000233640\tENST00000418755\
+             \tTranscript\tdownstream_gene_variant\t-\t-\t-\t-\t-\t-\
+             \tIMPACT=MODIFIER;DISTANCE=2057;STRAND=-1",
+        ],
+        "without a FASTA"
+    );
+    assert_eq!(
+        symbolic_warnings,
+        "WARNING: could not fetch sequence for tandem repeats; consequence calculation for \
+         tandem repeats is less precise when using --offline without --fasta\n",
+        "without a FASTA"
+    );
+
+    // The two rows with a FASTA have the shape of the entry the pages name:
+    // one term set against the other but for the two stop terms, the IMPACT
+    // that follows them, and no cDNA end on either row.
+    let reference_cells: Vec<&str> = reference_stop_row.split('\t').collect();
+    let own_cells: Vec<&str> = literal[0].split('\t').collect();
+    let differing: Vec<usize> = (0..reference_cells.len())
+        .filter(|&cell| reference_cells[cell] != own_cells[cell])
+        .collect();
+    assert_eq!(differing, [6, 13], "Consequence and Extra alone differ");
+    let terms = |cells: &[&str]| -> std::collections::BTreeSet<String> {
+        cells[6].split(',').map(str::to_string).collect()
+    };
+    let (reference_terms, own_terms) = (terms(&reference_cells), terms(&own_cells));
+    assert_eq!(
+        reference_terms
+            .difference(&own_terms)
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+        ["stop_retained_variant"]
+    );
+    let own_term: Vec<&str> = own_terms
+        .difference(&reference_terms)
+        .map(String::as_str)
+        .collect();
+    assert_eq!(own_term, ["stop_lost"]);
+    assert!(reference_cells[7].ends_with("-?") && own_cells[7].ends_with("-?"));
+
+    let symbolic_cells: Vec<&str> = symbolic[0].split('\t').collect();
+    let run_start = symbolic_cells[1]
+        .split_once(':')
+        .and_then(|(_, span)| span.split_once('-'))
+        .map(|(start, _)| start)
+        .unwrap();
+    let entry = "stop_codon_removed_without_stop_codon_test";
+    assert_states(
+        &format!("docs/{page}"),
+        &page_words,
+        &[
+            &format!(
+                "`SVLEN=4000;RUS=CT;RUC=5` on the run at {run_start} gives `{}` in Ensembl VEP.",
+                reference_cells[1..7].join(" ")
+            ),
+            &format!(
+                "vep-rs writes `{}` in that term's place, the documented difference \
+                 [`{entry}`](stop-codon-removed-without-stop-codon-test.md): one base replaces a \
+                 longer span that holds the whole stop codon and ends past the transcript.",
+                own_term[0]
+            ),
+            &format!(
+                "Without a FASTA both engines write `{} {}` with `{}`, and vep-rs's row pairs \
+                 with Ensembl VEP's literal row, the symbolic reading's \
+                 `coding_sequence_variant` against the literal reading's stop term;",
+                symbolic_cells[1], symbolic_cells[2], symbolic_cells[6]
+            ),
+        ],
+    );
+    assert_states(
+        &format!("docs/{taxonomy}"),
+        &taxonomy_words,
+        &[
+            &format!(
+                "`SVLEN=4000;RUS=CT;RUC=5` gives `{}` in the reference's literal row; without a \
+                 FASTA both engines write the symbolic row with `{}`, and vep-rs's pairs with \
+                 that literal row.",
+                reference_cells[6], symbolic_cells[6]
+            ),
+            &format!(
+                "With a FASTA vep-rs writes `{}` on the literal allele, one base for a longer \
+                 span, a pair \
+                 [`{entry}`](../divergences/stop-codon-removed-without-stop-codon-test.md) sets \
+                 aside ([17](#17-the-pair-classes-that-read-the-two-rows-of-a-pair)).",
+                own_cells[6]
+            ),
+            "### 17. The pair classes that read the two rows of a pair",
+            &format!(
+                "- [`{entry}`](../divergences/stop-codon-removed-without-stop-codon-test.md):"
+            ),
+        ],
+    );
+    // The entry's own page, which both sentences link to.
+    page_text("divergences/stop-codon-removed-without-stop-codon-test.md");
+}
+
+/// The first shape of the list in section 12.7 of the `<CNV:TR>` page is a
+/// repeat unit that is not DNA, and the page says what both engines do with
+/// it. A run that reads a FASTA repeats the unit as written across the run:
+/// Parser/VCF.pm:411-420 test no letter of it, and
+/// `tandem_repeat_allele_string` of `vep-core/src/sv_record.rs` follows them.
+/// A run that reads none keeps the record symbolic (Parser/VCF.pm:516-527).
+/// The four records are the page's own, on the run 21:30425588-30425596 of
+/// the cache of `tests/golden/116/GRCh38-release116`; every row held here is
+/// the row Ensembl VEP 116.3 writes for the same record in the same run, but
+/// for one: without a FASTA the row of the unit `*` counted nine times, nine
+/// characters on the run of nine, names no `feature_elongation`
+/// (`cnv_tr_symbolic_loss_named_a_gain`). The warning is the one Ensembl VEP
+/// writes without a FASTA. The page's quoted cells are read from those rows.
+/// A sentence that gives the literal reading to Ensembl VEP and the symbolic
+/// one to vep-rs is refused.
+#[test]
+fn tandem_repeat_page_says_which_run_keeps_a_unit_that_is_not_dna_symbolic() {
+    let page = "divergences/cnv-tr.md";
+    let text = page_text(page)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert_states(
+        &format!("docs/{page}"),
+        &text,
+        &[
+            "- a unit that is not DNA, which both engines repeat verbatim across the run with a \
+             FASTA and keep symbolic without one.",
+        ],
+    );
+    let engines_set_apart =
+        "which Ensembl VEP repeats verbatim across the run and vep-rs keeps symbolic";
+    assert!(
+        !text.contains(engines_set_apart),
+        "docs/{page} states {engines_set_apart:?}"
+    );
+
+    let corpora = format!("{}/../../tests/golden/116", env!("CARGO_MANIFEST_DIR"));
+    let dir = tempfile::tempdir().unwrap();
+    let units = [
+        ("unit_digits", "123", 4),
+        ("unit_r", "R", 10),
+        ("unit_star", "*", 9),
+        ("unit_x", "X", 10),
+    ];
+    let mut records =
+        String::from("##fileformat=VCFv4.4\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n");
+    for (id, unit, count) in units {
+        records.push_str(&format!(
+            "21\t30425587\t{id}\tN\t<CNV:TR>\t.\t.\tSVTYPE=CNV;END=30425596;SVLEN=9;RUS={unit};\
+             RUC={count}\n"
+        ));
+    }
+    let input = dir.path().join("units.vcf");
+    std::fs::write(&input, records).unwrap();
+    // The data rows and the warnings file of one run over the four records.
+    let run = |name: &str, reference: &[&str]| -> (Vec<String>, String) {
+        let out = dir.path().join(name);
+        let status = common::isolated_vep(dir.path())
+            .stdin(std::process::Stdio::null())
+            .arg("-i")
+            .arg(&input)
+            .arg("-o")
+            .arg(&out)
+            .args(["--format", "vcf", "--offline", "--json_cache"])
+            .arg(format!("{corpora}/GRCh38-release116/json_cache"))
+            .args(["--assembly", "GRCh38"])
+            .args(["--no_stats", "--quiet", "--force_overwrite"])
+            .args(reference)
+            .status()
+            .unwrap();
+        assert!(status.success(), "{name}: {status}");
+        let rows = std::fs::read_to_string(&out)
+            .unwrap()
+            .lines()
+            .filter(|line| !line.starts_with('#'))
+            .map(str::to_string)
+            .collect();
+        let warnings =
+            std::fs::read_to_string(format!("{}_warnings.txt", out.display())).unwrap_or_default();
+        (rows, warnings)
+    };
+    let fasta = format!("{corpora}/GRCh38-merged/reference.fa.gz");
+    let (expanded, expanded_warnings) = run("with-fasta", &["--fasta", &fasta]);
+    let (symbolic, symbolic_warnings) = run("without-fasta", &[]);
+    // `{x}` stands for the unit `X` as many times as its record counts it.
+    let unit_x_repeated = "X".repeat(10);
+    let expanded_rows: Vec<String> = [
+        "unit_digits\t21:30425588-30425596\t123123123123\tENSG00000186971\tENST00000334068\
+         \tTranscript\tupstream_gene_variant\t-\t-\t-\t-\t-\t-\
+         \tIMPACT=MODIFIER;DISTANCE=4624;STRAND=1",
+        "unit_digits\t21:30425588-30425596\t123123123123\tENSG00000240432\tENST00000390690\
+         \tTranscript\tcoding_sequence_variant\t331-339\t317-325\t106-109\t-\t-\t-\
+         \tIMPACT=MODIFIER;STRAND=-1",
+        "unit_r\t21:30425588-30425596\tRRRRRRRRRR\tENSG00000186971\tENST00000334068\
+         \tTranscript\tupstream_gene_variant\t-\t-\t-\t-\t-\t-\
+         \tIMPACT=MODIFIER;DISTANCE=4624;STRAND=1",
+        "unit_r\t21:30425588-30425596\tRRRRRRRRRR\tENSG00000240432\tENST00000390690\
+         \tTranscript\tframeshift_variant\t331-339\t317-325\t106-109\t-\
+         \taGCTGCTGCTcc/aYYYYYYYYYYcc\t-\tIMPACT=HIGH;STRAND=-1",
+        "unit_star\t21:30425588-30425596\t*********\tENSG00000186971\tENST00000334068\
+         \tTranscript\tupstream_gene_variant\t-\t-\t-\t-\t-\t-\
+         \tIMPACT=MODIFIER;DISTANCE=4624;STRAND=1",
+        "unit_star\t21:30425588-30425596\t*********\tENSG00000240432\tENST00000390690\
+         \tTranscript\tcoding_sequence_variant\t331-339\t317-325\t106-109\t-\t-\t-\
+         \tIMPACT=MODIFIER;STRAND=-1",
+        "unit_x\t21:30425588-30425596\t{x}\tENSG00000186971\tENST00000334068\
+         \tTranscript\tupstream_gene_variant\t-\t-\t-\t-\t-\t-\
+         \tIMPACT=MODIFIER;DISTANCE=4624;STRAND=1",
+        "unit_x\t21:30425588-30425596\t{x}\tENSG00000240432\tENST00000390690\
+         \tTranscript\tframeshift_variant\t331-339\t317-325\t106-109\t-\
+         \taGCTGCTGCTcc/a{x}cc\t-\tIMPACT=HIGH;STRAND=-1",
+    ]
+    .iter()
+    .map(|row| row.replace("{x}", &unit_x_repeated))
+    .collect();
+    assert_eq!(expanded, expanded_rows, "with a FASTA");
+    assert_eq!(expanded_warnings, "", "with a FASTA");
+    assert_eq!(
+        symbolic,
+        [
+            "unit_digits\t21:30425588-30425596\ttandem_repeat\tENSG00000186971\
+             \tENST00000334068\tTranscript\tupstream_gene_variant\t-\t-\t-\t-\t-\t-\
+             \tIMPACT=MODIFIER;DISTANCE=4624;STRAND=1",
+            "unit_digits\t21:30425588-30425596\ttandem_repeat\tENSG00000240432\
+             \tENST00000390690\tTranscript\tfeature_elongation,coding_sequence_variant\t331-339\
+             \t317-325\t106-109\t-\t-\t-\tIMPACT=HIGH;STRAND=-1;OverlapBP=9;OverlapPC=1.65",
+            "unit_r\t21:30425588-30425596\ttandem_repeat\tENSG00000186971\tENST00000334068\
+             \tTranscript\tupstream_gene_variant\t-\t-\t-\t-\t-\t-\
+             \tIMPACT=MODIFIER;DISTANCE=4624;STRAND=1",
+            "unit_r\t21:30425588-30425596\ttandem_repeat\tENSG00000240432\tENST00000390690\
+             \tTranscript\tfeature_elongation,coding_sequence_variant\t331-339\t317-325\
+             \t106-109\t-\t-\t-\tIMPACT=HIGH;STRAND=-1;OverlapBP=9;OverlapPC=1.65",
+            "unit_star\t21:30425588-30425596\ttandem_repeat\tENSG00000186971\tENST00000334068\
+             \tTranscript\tupstream_gene_variant\t-\t-\t-\t-\t-\t-\
+             \tIMPACT=MODIFIER;DISTANCE=4624;STRAND=1",
+            "unit_star\t21:30425588-30425596\ttandem_repeat\tENSG00000240432\tENST00000390690\
+             \tTranscript\tcoding_sequence_variant\t331-339\t317-325\
+             \t106-109\t-\t-\t-\tIMPACT=MODIFIER;STRAND=-1;OverlapBP=9;OverlapPC=1.65",
+            "unit_x\t21:30425588-30425596\ttandem_repeat\tENSG00000186971\tENST00000334068\
+             \tTranscript\tupstream_gene_variant\t-\t-\t-\t-\t-\t-\
+             \tIMPACT=MODIFIER;DISTANCE=4624;STRAND=1",
+            "unit_x\t21:30425588-30425596\ttandem_repeat\tENSG00000240432\tENST00000390690\
+             \tTranscript\tfeature_elongation,coding_sequence_variant\t331-339\t317-325\
+             \t106-109\t-\t-\t-\tIMPACT=HIGH;STRAND=-1;OverlapBP=9;OverlapPC=1.65",
+        ],
+        "without a FASTA"
+    );
+    assert_eq!(
+        symbolic_warnings,
+        "WARNING: could not fetch sequence for tandem repeats; consequence calculation for \
+         tandem repeats is less precise when using --offline without --fasta\n",
+        "without a FASTA"
+    );
+
+    // The cells of a record's row on the transcript the page names.
+    let cells_of = |rows: &[String], id: &str| -> Vec<String> {
+        rows.iter()
+            .find(|row| row.starts_with(&format!("{id}\t")) && row.contains("\tENST00000390690\t"))
+            .unwrap_or_else(|| panic!("{id}: no row on ENST00000390690"))
+            .split('\t')
+            .map(str::to_string)
+            .collect()
+    };
+    let mut quoted = Vec::new();
+    for (id, unit, count) in units {
+        let cells = cells_of(&expanded, id);
+        quoted.push(if id == "unit_digits" {
+            format!("`RUS={unit};RUC={count}` gives `{}`", cells[1..7].join(" "))
+        } else {
+            format!(
+                "`RUS={unit};RUC={count}` gives `{}` with `{}`",
+                cells[2], cells[6]
+            )
+        });
+        let cells = cells_of(&symbolic, id);
+        // The run is nine bases, and only the unit `*` counted nine times states as many.
+        let consequence = if unit.len() * count == 9 {
+            "coding_sequence_variant"
+        } else {
+            "feature_elongation,coding_sequence_variant"
+        };
+        assert_eq!(
+            [cells[2].as_str(), cells[6].as_str()],
+            ["tandem_repeat", consequence],
+            "{id} without a FASTA"
+        );
+        assert_eq!(consequence.contains(','), id != "unit_star", "{id}");
+    }
+    quoted.push(
+        "Each pairs with vep-rs's `tandem_repeat` tuple at the run, written without a FASTA: \
+         `feature_elongation,coding_sequence_variant`, or `coding_sequence_variant` alone for \
+         `RUS=*;RUC=9`, nine characters on the run of nine;"
+            .to_string(),
+    );
+    let quoted: Vec<&str> = quoted.iter().map(String::as_str).collect();
+    assert_states(&format!("docs/{page}"), &text, &quoted);
+}
+
+/// The third shape of the list in section 12.7 of the `<CNV:TR>` page is a
+/// multi-allelic record, and the page says what each run writes for it and
+/// which pairing of runs the comparison sets aside. A run that reads a FASTA
+/// builds a sequence record over the run from the expanded alleles
+/// (Parser/VCF.pm:516-543), each allele that differs from the run written
+/// whole; a run that reads none keeps every allele symbolic
+/// (Parser/VCF.pm:522-527). The record is the page's own, on the run
+/// 21:30425588-30425596 of the cache of `tests/golden/116/GRCh38-release116`;
+/// every row held here is the row Ensembl VEP 116.3 writes for the same record
+/// in the same run, but for two rows without a FASTA, where Ensembl VEP names
+/// `feature_elongation` (`cnv_tr_symbolic_loss_named_a_gain`): the row of the
+/// allele of two units, which states a loss, names `feature_truncation`, and
+/// the row of the allele of three units, which states the run's own length,
+/// names no direction term and carries the IMPACT of `coding_sequence_variant`.
+/// The warning is the one Ensembl VEP writes without a FASTA. The pairing starts
+/// from a vep-rs tuple whose Allele is `tandem_repeat`: a test of
+/// `tools/vep-sv-compare` holds a multi-allelic record's tuples to it in both
+/// pairings of runs, and that tool's README states the rule's two sides. A
+/// sentence that gives both engines one tuple for the three alleles without a
+/// FASTA, or that pairs the two readings whichever run read the FASTA, is
+/// refused, on this page and on the page of the classes.
+#[test]
+fn tandem_repeat_pages_say_which_pairing_of_runs_sets_a_multi_allelic_record_aside() {
+    let corpora = format!("{}/../../tests/golden/116", env!("CARGO_MANIFEST_DIR"));
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("multi.vcf");
+    std::fs::write(
+        &input,
+        "##fileformat=VCFv4.4\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n\
+         21\t30425587\tmulti\tN\t<CNV:TR>,<CNV:TR>,<CNV:TR>\t.\t.\
+         \tSVTYPE=CNV;END=30425596;SVLEN=9;RN=1,1,1;RUS=AGC,AGC,AGC;RUC=4,2,3\n",
+    )
+    .unwrap();
+    // The data rows and the warnings file of one run over the record.
+    let run = |name: &str, reference: &[&str]| -> (Vec<String>, String) {
+        let out = dir.path().join(name);
+        let status = common::isolated_vep(dir.path())
+            .stdin(std::process::Stdio::null())
+            .arg("-i")
+            .arg(&input)
+            .arg("-o")
+            .arg(&out)
+            .args(["--format", "vcf", "--offline", "--json_cache"])
+            .arg(format!("{corpora}/GRCh38-release116/json_cache"))
+            .args(["--assembly", "GRCh38"])
+            .args(["--no_stats", "--quiet", "--force_overwrite"])
+            .args(reference)
+            .status()
+            .unwrap();
+        assert!(status.success(), "{name}: {status}");
+        let rows = std::fs::read_to_string(&out)
+            .unwrap()
+            .lines()
+            .filter(|line| !line.starts_with('#'))
+            .map(str::to_string)
+            .collect();
+        let warnings =
+            std::fs::read_to_string(format!("{}_warnings.txt", out.display())).unwrap_or_default();
+        (rows, warnings)
+    };
+    let fasta = format!("{corpora}/GRCh38-merged/reference.fa.gz");
+    let (expanded, expanded_warnings) = run("with-fasta", &["--fasta", &fasta]);
+    let (symbolic, symbolic_warnings) = run("without-fasta", &[]);
+    assert_eq!(
+        expanded,
+        [
+            "multi\t21:30425588-30425596\tAGCAGCAGCAGC\tENSG00000186971\tENST00000334068\
+             \tTranscript\tupstream_gene_variant\t-\t-\t-\t-\t-\t-\
+             \tIMPACT=MODIFIER;DISTANCE=4624;STRAND=1",
+            "multi\t21:30425588-30425596\tAGCAGC\tENSG00000186971\tENST00000334068\
+             \tTranscript\tupstream_gene_variant\t-\t-\t-\t-\t-\t-\
+             \tIMPACT=MODIFIER;DISTANCE=4624;STRAND=1",
+            "multi\t21:30425588-30425596\tAGCAGCAGCAGC\tENSG00000240432\tENST00000390690\
+             \tTranscript\tprotein_altering_variant\t331-339\t317-325\t106-109\tSCCS/SCCCS\
+             \taGCTGCTGCTcc/aGCTGCTGCTGCTcc\t-\tIMPACT=MODERATE;STRAND=-1",
+            "multi\t21:30425588-30425596\tAGCAGC\tENSG00000240432\tENST00000390690\
+             \tTranscript\tinframe_deletion\t331-339\t317-325\t106-109\tSCCS/SCS\
+             \taGCTGCTGCTcc/aGCTGCTcc\t-\tIMPACT=MODERATE;STRAND=-1",
+        ],
+        "with a FASTA"
+    );
+    assert_eq!(expanded_warnings, "", "with a FASTA");
+    let upstream = "multi\t21:30425588-30425596\ttandem_repeat\tENSG00000186971\tENST00000334068\
+                    \tTranscript\tupstream_gene_variant\t-\t-\t-\t-\t-\t-\
+                    \tIMPACT=MODIFIER;DISTANCE=4624;STRAND=1";
+    let coding = "multi\t21:30425588-30425596\ttandem_repeat\tENSG00000240432\tENST00000390690\
+                  \tTranscript\tfeature_elongation,coding_sequence_variant\t331-339\t317-325\
+                  \t106-109\t-\t-\t-\tIMPACT=HIGH;STRAND=-1;OverlapBP=9;OverlapPC=1.65";
+    // The allele of two units states six bases on the run of nine.
+    let stated_loss = coding.replacen("feature_elongation", "feature_truncation", 1);
+    // The allele of three units states nine bases on the run of nine.
+    let as_long_as_the_run =
+        coding
+            .replacen("feature_elongation,", "", 1)
+            .replacen("IMPACT=HIGH", "IMPACT=MODIFIER", 1);
+    assert_eq!(
+        symbolic,
+        [
+            upstream,
+            upstream,
+            upstream,
+            coding,
+            stated_loss.as_str(),
+            as_long_as_the_run.as_str()
+        ],
+        "without a FASTA"
+    );
+    assert_eq!(
+        symbolic_warnings,
+        "WARNING: could not fetch sequence for tandem repeats; consequence calculation for \
+         tandem repeats is less precise when using --offline without --fasta\n",
+        "without a FASTA"
+    );
+
+    // The cells of the rows on the transcript the page names, by their Allele.
+    let cells_of = |rows: &[String], allele: &str| -> Vec<String> {
+        rows.iter()
+            .find(|row| {
+                row.contains(&format!("\t{allele}\t")) && row.contains("\tENST00000390690\t")
+            })
+            .unwrap_or_else(|| panic!("{allele}: no row on ENST00000390690"))
+            .split('\t')
+            .map(str::to_string)
+            .collect()
+    };
+    let four_units = cells_of(&expanded, "AGCAGCAGCAGC");
+    let two_units = cells_of(&expanded, "AGCAGC");
+    let one_tuple = cells_of(&symbolic, "tandem_repeat");
+
+    let collapsed = |text: String| text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let page = "divergences/cnv-tr.md";
+    let text = collapsed(page_text(page));
+    assert_states(
+        &format!("docs/{page}"),
+        &text,
+        &[
+            "the class pairs the reference's reading with a FASTA and vep-rs's without one.",
+            "so the comparator pairs the two readings rather than ranking them when the reference \
+             read a FASTA and vep-rs did not.",
+            "- a multi-allelic record, whose alleles both engines write whole over the run.",
+            &format!(
+                "`<CNV:TR>,<CNV:TR>,<CNV:TR>` with `RN=1,1,1;RUS=AGC,AGC,AGC;RUC=4,2,3` gives \
+                 `{}` for the allele of four units and `{}` with `{}` for the allele of two; the \
+                 allele of three units is the run and has no row.",
+                four_units[1..7].join(" "),
+                two_units[2],
+                two_units[6]
+            ),
+            &format!(
+                "Without a FASTA Ensembl VEP writes one tuple for all three alleles, `{}` \
+                 ([12.4](#124-why-ensembl-vep-writes-that)).",
+                one_tuple[1..7].join(" ")
+            ),
+            "vep-rs writes `feature_truncation` for `feature_elongation` on the allele of two, \
+             which states a loss, and no direction term on the allele of three, which states the \
+             run's own length. The reference's two literal tuples each pair with all three of \
+             vep-rs's tuples. With the reference run without a FASTA and vep-rs with one, no \
+             vep-rs tuple is `tandem_repeat`, so nothing is paired and the three tuples stay \
+             charged.",
+        ],
+    );
+    for refused in [
+        "both engines write one tuple for all three alleles",
+        "every allele a gain without a FASTA",
+        "both pair with that one tuple of vep-rs",
+        "the class pairs the readings of two runs that read the record differently",
+        "when one run read a FASTA and the other did not",
+        "each pair with both of vep-rs's tuples",
+    ] {
+        assert!(!text.contains(refused), "docs/{page} states {refused:?}");
+    }
+
+    let classes = "concordance-provenance/116.2-divergence-classes.md";
+    let text = collapsed(page_text(classes));
+    assert_states(
+        &format!("docs/{classes}"),
+        &text,
+        &[
+            "vep-rs gives the symbolic reading without a FASTA too, naming a loss where the \
+             record [states one](../divergences/cnv-tr-symbolic-loss-named-a-gain.md) and no \
+             direction where it states the run's own length. This shape pairs a vep-rs \
+             `tandem_repeat` row with the reference's where the two differ in the direction and \
+             coding terms alone.",
+            "A multi-allelic record is written whole over the run with a FASTA, one literal \
+             tuple for each allele that differs from the run, in both engines. Without one \
+             Ensembl VEP writes one symbolic tuple. vep-rs writes a further one with \
+             `feature_truncation` where an allele states a loss, and one with no direction term \
+             where an allele states the run's own length.",
+            &format!(
+                "`RN=1,1,1;RUS=AGC,AGC,AGC;RUC=4,2,3` gives `{}` for the allele of four units and \
+                 `{}` for the allele of two, and the reference's two tuples each pair with \
+                 vep-rs's three symbolic tuples.",
+                four_units[6], two_units[6]
+            ),
+            "With the reference run without a FASTA and vep-rs with one, no vep-rs tuple is \
+             `tandem_repeat`: nothing is paired and the tuples stay charged.",
+            "it pairs only the two symbolic rows of an allele that [states a loss or its run's \
+             own length](../divergences/cnv-tr-symbolic-loss-named-a-gain.md)",
+        ],
+    );
+    for refused in [
+        "vep-rs gives the same reading without a FASTA",
+        "as one symbolic tuple without one, in both engines",
+        "both pair with vep-rs's one symbolic tuple",
+        "pairs the rows of a run that read a FASTA with those of one that did not",
+        "with each of the alleles vep-rs expanded with one",
+        "against a gain and a loss",
+        "and vep-rs a second, with `feature_truncation`",
+        "pair with vep-rs's two symbolic tuples",
+    ] {
+        assert!(!text.contains(refused), "docs/{classes} states {refused:?}");
+    }
+
+    // The comparison tool's own statement of the rule's two sides, and its test of
+    // this record's tuples in both pairings of runs.
+    let tool = format!("{}/../../tools/vep-sv-compare", env!("CARGO_MANIFEST_DIR"));
+    let readme = collapsed(
+        std::fs::read_to_string(format!("{tool}/README.md"))
+            .unwrap_or_else(|e| panic!("tools/vep-sv-compare/README.md: {e}")),
+    );
+    assert_states(
+        "tools/vep-sv-compare/README.md",
+        &readme,
+        &[
+            "a tandem repeat's literal reading on the reference side and its symbolic reading on \
+             the scored side",
+        ],
+    );
+    let rule = std::fs::read_to_string(format!("{tool}/src/masks/cnv_tr.rs"))
+        .unwrap_or_else(|e| panic!("tools/vep-sv-compare/src/masks/cnv_tr.rs: {e}"));
+    assert_states(
+        "tools/vep-sv-compare/src/masks/cnv_tr.rs",
+        &rule,
+        &["fn test_a_multi_alt_record_pairs_only_where_the_scored_side_reads_it_symbolically()"],
+    );
+}
+
 /// `spdi`, `regulatory`: on a regulatory-only record's rows under
 /// `--regulatory`, Ensembl VEP's SPDI names the chromosome as the cache does,
 /// since AnnotationType/RegFeat.pm:126 `$vf->{slice} ||= $slice;` hands the
@@ -2257,100 +9526,624 @@ fn regulatory_spdi_chromosome_name_exclusion_is_documented() {
     );
 }
 
-/// The regulatory-rows page names the committed runs that carry the
-/// `regulatory_feature_rows` mask class, and the manifests decide which they
-/// are: each flag set naming the class is a `<corpus>` whose `<flag set>` the
-/// page's sentence must name, and a corpus the page names must carry it.
+/// `regulatory-files-as-input`: a run reads the `regulatory/` tree of a
+/// converted cache and never a `_reg.gz` file, and it refuses a tree it cannot
+/// read, where Ensembl VEP reads a region's file as the region is asked for
+/// and takes one that is absent as no feature
+/// (AnnotationSource/Cache/BaseSerialized.pm:263).
+#[test]
+fn regulatory_files_as_input_exclusion_is_documented() {
+    assert_page_states(
+        "regulatory.md",
+        &[
+            "The features come from the cache's `regulatory/` tree.",
+            "An Ensembl VEP cache converted with `tools/vep-storable-to-json`",
+            "carries it with every value this section tables.",
+            "A cache converted without the regulatory tree holds no regulatory features.",
+        ],
+    );
+    assert_page_states(
+        "divergences/damaged-cache-shard.md",
+        &[
+            "A regulatory shard is refused the same way, as the chromosome's regulatory \
+             shards load, with the loader's own words for the shard, exit 1, or as a checksum \
+             mismatch under a manifest:",
+            "Ensembl VEP reads a region file by its computed name, finds none in a directory \
+             without `_reg.gz` files (`BaseSerialized.pm` line 263) and writes every record \
+             there without regulatory rows, exit 0.",
+        ],
+    );
+}
+
+/// `info-regulatory-cell-types`: the epigenome names are the `cell_types`
+/// list that the conversion, or an installation that read the release's
+/// activity file, writes into `info.json`, and a tree whose `info.json`
+/// states no `regulatory_schema` is refused, where CacheDir.pm:174 splits the
+/// `cell_types` line of `info.txt` at each comma.
+#[test]
+fn info_regulatory_cell_types_exclusion_is_documented() {
+    assert_page_states(
+        "regulatory.md",
+        &[
+            "In `info.json` it sets `regulatory: true`, `regulatory_schema` (the shape of the \
+             tree) and `cell_types`, the epigenomes of the regulatory build.",
+            "A run refuses a regulatory tree without `regulatory_schema` with `ERROR: [cache] \
+             regulatory shards of <dir> declare no schema; this build reads schema 1: \
+             reconvert the cache`.",
+            "`info.json` carries `regulatory: true` and `regulatory_schema` and no \
+             `cell_types`.",
+            "| `<Species>.<assembly>.regulatory_activity.v<N>.tsv.gz`, the activity file beside \
+             the GFF3 files | Each regulatory feature's activity by cell type and `cell_types` \
+             in `info.json`: `--cell_type` takes a name and `CELL_TYPE` prints |",
+        ],
+    );
+    assert_page_states(
+        "divergences/cell-type-comma-names.md",
+        &[
+            "and the cache's comma-joined `cell_types` line the same way (`CacheDir.pm` line \
+             174)",
+        ],
+    );
+}
+
+/// `regulatory-feature-cell-types`: a feature's activity is one code for each
+/// name of `cell_types`, read from the cache's tree alone, a converted cache's
+/// or an installed one's, where the database source builds a map of names
+/// for each feature (AnnotationSource/Database/RegFeat.pm:196-203) and
+/// `--database` is refused.
+#[test]
+fn regulatory_feature_cell_types_exclusion_is_documented() {
+    assert_page_states(
+        "regulatory.md",
+        &[
+            "The activity is one code per epigenome of `cell_types`, in order.",
+            "| `-` | no record for that epigenome |",
+        ],
+    );
+    assert_page_states(
+        "getting-started/what-vep-rs-does-not-do.md",
+        &[
+            "The error for `--database` begins `ERROR: [cli] --database is not supported: \
+             vep-rs reads a local cache only and never connects to an Ensembl database`.",
+        ],
+    );
+}
+
+/// `motif-feature-fields`: a motif feature that names no binding matrix is
+/// refused as a corrupt shard, where OutputFactory.pm:1921 writes no row for
+/// such a motif and the run goes on.
+#[test]
+fn motif_feature_fields_exclusion_is_documented() {
+    assert_page_states(
+        "regulatory.md",
+        &[
+            "| a motif feature | its stable id, span, strand, database id, score, its sequence \
+             on its own strand and the stable id of its matrix |",
+            "Every motif feature names a matrix of `regulatory/binding_matrices.json`; the \
+             converter and the loader refuse a motif naming none as a corrupt shard.",
+        ],
+    );
+}
+
+/// `regulatory-feature-type`: a feature's type is carried whole and printed as
+/// `BIOTYPE` (OutputFactory.pm:1890); a shard holds regulatory and motif
+/// features alone and one that does not parse is refused, where
+/// AnnotationSource/Cache/RegFeat.pm:213-227 lists the features of every class
+/// a region file holds.
+#[test]
+fn regulatory_feature_type_statement_is_documented() {
+    assert_page_states(
+        "regulatory.md",
+        &[
+            "`regulatory/<chr>/<start>-<end>.json`, one shard per region holding the region's \
+             regulatory features and motif features",
+            "| a regulatory feature | its stable id, span, feature type, database id and \
+             activity |",
+        ],
+    );
+    assert_page_states(
+        "divergences/damaged-cache-shard.md",
+        &[
+            "A regulatory shard is refused the same way, as the chromosome's regulatory \
+             shards load, with the loader's own words for the shard, exit 1, or as a checksum \
+             mismatch under a manifest:",
+        ],
+    );
+}
+
+/// `regulatory-feature-fields`: a regulatory row carries the fields Ensembl
+/// VEP's carries (OutputFactory.pm:1886-1890); on a cache with no regulatory
+/// data a run warns once, where CacheDir.pm:168-176 leaves the source out
+/// without a line.
+#[test]
+fn regulatory_feature_fields_statement_is_documented() {
+    assert_page_states(
+        "regulatory.md",
+        &[
+            "A `RegulatoryFeature` row carries `BIOTYPE` whether or not `--biotype` is given, \
+             and no `STRAND`.",
+            "On a cache with no regulatory data, `--regulatory` writes one warnings-file line.",
+            "Ensembl VEP skips the source without a word (`CacheDir.pm` lines 168 to 176).",
+        ],
+    );
+    assert_page_states(
+        "divergences/regulatory-rows.md",
+        &[
+            "The regulatory and motif rows themselves, their terms and their fields are \
+             otherwise the same on both engines",
+        ],
+    );
+}
+
+/// The regulatory-rows page says which committed runs carry the
+/// `regulatory_feature_rows` mask class, and the manifests decide whether it
+/// says so truly: every flag set naming the class is the `everything` set of a
+/// corpus whose species directory is not `homo_sapiens` and whose cache holds
+/// no `regulatory` directory, and no manifest names the class for its own run.
+/// A pangenome assembly's species directory (`homo_sapiens_gca009914755v4`)
+/// adds its accession to the name, and its Ensembl VEP cache holds no
+/// regulatory data. The name compared is the corpus's species, the
+/// `--species` value, so a human RefSeq or merged corpus, whose species
+/// directory adds `_refseq` or `_merged` to it, is refused as a carrier too.
 #[test]
 fn regulatory_feature_rows_carriers_are_the_manifests() {
-    let mut carriers: Vec<(String, String)> = Vec::new();
+    let names_class = |masks: &serde_json::Value| {
+        masks
+            .as_array()
+            .is_some_and(|m| m.iter().any(|v| v == "regulatory_feature_rows"))
+    };
+    let mut carriers = 0;
     for corpus in common::corpora() {
-        let names_class = |masks: &serde_json::Value| {
-            masks
-                .as_array()
-                .is_some_and(|m| m.iter().any(|v| v == "regulatory_feature_rows"))
-        };
-        if names_class(&corpus.manifest["masks"]) {
-            carriers.push((corpus.name.clone(), "default".to_string()));
+        let label = format!("{}/{}", corpus.release, corpus.name);
+        assert!(
+            !names_class(&corpus.manifest["masks"]),
+            "{label}: the manifest's own run carries regulatory_feature_rows"
+        );
+        for flag_set in corpus.manifest["flag_sets"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|flag_set| names_class(&flag_set["masks"]))
+        {
+            carriers += 1;
+            assert_eq!(
+                flag_set["name"], "everything",
+                "{label}: a flag set other than `everything` carries regulatory_feature_rows"
+            );
+            assert!(
+                corpus.species != common::DEFAULT_SPECIES,
+                "{label}: a corpus of {} carries regulatory_feature_rows",
+                corpus.species
+            );
+            assert!(
+                !corpus.cache_dir().join("regulatory").exists(),
+                "{label}: the cache of a corpus carrying regulatory_feature_rows holds a regulatory tree"
+            );
         }
+    }
+    assert!(
+        carriers > 0,
+        "no committed run carries regulatory_feature_rows"
+    );
+    assert_page_states(
+        "divergences/regulatory-rows.md",
+        &[
+            "Of the committed corpora, the class is carried by `everything` flag sets alone, \
+             each of a corpus whose species directory is not `homo_sapiens` and whose \
+             converted cache holds no regulatory tree, whatever the cache of its reference \
+             run held",
+        ],
+    );
+}
+
+/// The regulatory page says whose words the refusals it names of a
+/// `--regulatory_gff` value carry. A value the grammar refuses is refused with
+/// Ensembl VEP's text (`AnnotationSourceAdaptor.pm:240-243`, `248-251` and
+/// `255-258`). A file that does not exist and a file without an index are
+/// refused in vep-rs's own words, the file named as `<key>=<file>` and a bare
+/// file name under the key `file`: Ensembl VEP writes the key, the word `file`
+/// and the path for the first (`AnnotationSourceAdaptor.pm:266`) and leaves
+/// the second to its tabix library (`AnnotationSource/File/RegFeat.pm:204-209`).
+#[test]
+fn regulatory_page_says_which_refusals_carry_ensembl_vep_text() {
+    let path = "regulatory.md";
+    assert_page_states(
+        path,
+        &[
+            "A file that does not exist, or has no index, stops the run with an error in \
+             vep-rs's own words, which names the file as `<key>=<file>`, a bare file name under \
+             the key `file`.",
+            "A value the grammar refuses stops it too, and that error carries Ensembl VEP's \
+             text.",
+        ],
+    );
+    let text = page_text(path)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let refused = "These errors carry Ensembl VEP's texts";
+    assert!(!text.contains(refused), "docs/{path} states {refused:?}");
+}
+
+/// `regulatory_gff`: a file is read from a local path. A name that opens
+/// `http://`, `https://` or `ftp://` is refused under the `cli` component
+/// before the output file and the statistics report exist, the file named as
+/// `<key>=<file>`. Ensembl VEP lets a name that opens `http://` or `ftp://`
+/// past its existence test (`AnnotationSourceAdaptor.pm:266-267`) and opens it
+/// through its tabix parser (`AnnotationSource/File/RegFeat.pm:204-209`), which
+/// hands the name to the tabix library (`TabixParser.pm:54-63` of ensembl-io).
+#[test]
+fn regulatory_gff_remote_file_exclusion_is_documented() {
+    assert_page_states(
+        "regulatory.md",
+        &[
+            "A file is read from a local path alone. A name that opens `http://`, `https://` or \
+             `ftp://` stops the run as a missing file does, with an error that says vep-rs \
+             reads a local file alone.",
+            "Ensembl VEP passes a name that opens `http://` or `ftp://` to its tabix reader, \
+             which reads the file over the network.",
+        ],
+    );
+    assert_page_states(
+        "getting-started/what-vep-rs-does-not-do.md",
+        &[
+            "`--regulatory_gff` reads local files alone as well. A file whose name opens \
+             `http://`, `https://` or `ftp://` is refused with an error that says so, where \
+             Ensembl VEP reads an `http://` or `ftp://` file over the network",
+        ],
+    );
+
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("in.vcf");
+    std::fs::write(
+        &input,
+        "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n\
+         21\t106\tr\tC\tG\t.\t.\t.\n",
+    )
+    .unwrap();
+    let cache = format!(
+        "{}/../../tests/golden/116/GRCh38-identifiers/json_cache",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let output = dir.path().join("out.txt");
+    let report = dir.path().join("out.txt_summary.html");
+    for (value, named) in [
+        (
+            "http://example.org/features.gff3.gz",
+            "file=http://example.org/features.gff3.gz",
+        ),
+        (
+            "emars=https://example.org/EMARs.gff.gz",
+            "emars=https://example.org/EMARs.gff.gz",
+        ),
+        (
+            "motifs=ftp://example.org/motifs.gff3.gz",
+            "motifs=ftp://example.org/motifs.gff3.gz",
+        ),
+    ] {
+        let result = common::isolated_vep(dir.path())
+            .stdin(std::process::Stdio::null())
+            .arg("-i")
+            .arg(&input)
+            .arg("-o")
+            .arg(&output)
+            .args(["--offline", "--json_cache", &cache])
+            .args(["--species", "homo_sapiens", "--assembly", "GRCh38"])
+            .args(["--regulatory_gff", value])
+            .output()
+            .unwrap();
+        assert_eq!(result.status.code(), Some(1), "{value}");
+        let refusal = format!(
+            "ERROR: [cli] --regulatory_gff {named} is a remote URL; vep-rs reads a local file \
+             alone"
+        );
+        let stderr = String::from_utf8_lossy(&result.stderr);
+        assert!(
+            stderr.lines().any(|line| line == refusal),
+            "{value}: {stderr}"
+        );
+        assert!(!output.exists(), "{value} left {}", output.display());
+        assert!(!report.exists(), "{value} left {}", report.display());
+    }
+}
+
+/// Every transcript of a corpus cache as (transcript directory, stable id,
+/// codon table): the `codon_table` of the record's
+/// `variation_effect_feature_cache`, table 1 where the record states none or 0.
+fn cache_codon_tables(corpus: &common::Corpus) -> Vec<(String, String, u64)> {
+    let mut filed = Vec::new();
+    for_each_cache_transcript(corpus, |directory, transcript| {
+        let stated = &transcript["variation_effect_feature_cache"]["codon_table"];
+        let table = stated
+            .as_u64()
+            .or_else(|| stated.as_str()?.parse().ok())
+            .filter(|table| *table != 0)
+            .unwrap_or(1);
+        let stable_id = transcript["stable_id"].as_str().unwrap_or_default();
+        filed.push((directory.to_string(), stable_id.to_string(), table));
+    });
+    filed
+}
+
+/// Calls `visit` once for every record of a corpus cache's transcript shards
+/// that states a stable id, with the name of the shard's directory, which is
+/// the sequence's name, and the record.
+fn for_each_cache_transcript(
+    corpus: &common::Corpus,
+    mut visit: impl FnMut(&str, &serde_json::Value),
+) {
+    use std::io::Read;
+    let transcripts = corpus.cache_dir().join("transcripts");
+    for region in std::fs::read_dir(&transcripts)
+        .unwrap_or_else(|e| panic!("{}: {e}", transcripts.display()))
+        .flatten()
+        .filter(|entry| entry.path().is_dir())
+    {
+        let name = region.file_name().to_string_lossy().into_owned();
+        for shard in std::fs::read_dir(region.path()).unwrap().flatten() {
+            let path = shard.path();
+            let bytes = std::fs::read(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+            let text = if path.extension().is_some_and(|ext| ext == "gz") {
+                let mut text = String::new();
+                flate2::read::GzDecoder::new(&bytes[..])
+                    .read_to_string(&mut text)
+                    .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+                text
+            } else {
+                String::from_utf8(bytes).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+            };
+            let parsed: serde_json::Value =
+                serde_json::from_str(&text).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+            // A converted cache wraps its transcripts in a range-keyed map.
+            let records: Vec<&serde_json::Value> = match &parsed {
+                serde_json::Value::Array(items) => items.iter().collect(),
+                serde_json::Value::Object(map) => map
+                    .values()
+                    .filter_map(|v| v.as_array())
+                    .flatten()
+                    .filter(|v| !v.is_null())
+                    .collect(),
+                other => panic!("{}: {other}", path.display()),
+            };
+            for transcript in records {
+                if transcript["stable_id"].is_string() {
+                    visit(&name, transcript);
+                }
+            }
+        }
+    }
+}
+
+/// `organelle_peptide_paths_translation_table` reaches every transcript whose
+/// sequence region names a genetic code other than the standard one, a nuclear
+/// transcript as an organelle's: the four translations that pass no table
+/// (TranscriptVariationAllele.pm:2333, :2450, :2492 and :2555) ask nothing of the
+/// sequence region. The page says so in its title and its leads, the index row
+/// carries the title, and the manifests decide the page's table of carriers:
+/// one row for each corpus whose manifest documents the class, with the codon
+/// table of the documented transcripts, the transcript directories of the
+/// corpus cache that hold a transcript under it (`all <n>` where each of
+/// several does) and the rows each run documents, the manifest's own run named
+/// `default`. Every documented row is the `HGVSp` of a frameshift on a
+/// transcript the cache files under a table other than 1. The corpus the page
+/// places on nuclear transcripts is the one whose every transcript directory is
+/// under the table, and the directories of the others are the mitochondrial
+/// ones named here.
+#[test]
+fn translation_table_class_carriers_are_the_manifests() {
+    use std::collections::BTreeSet;
+    const CLASS: &str = "organelle_peptide_paths_translation_table";
+    const PAGE: &str = "divergences/organelle-peptide-translation-table.md";
+    const TITLE: &str = "Frameshift, extension, duplication and deletion peptides on a transcript \
+                         whose genetic code is not the standard one";
+    let documented = |list: &serde_json::Value| -> Vec<serde_json::Value> {
+        list.as_array()
+            .into_iter()
+            .flatten()
+            .filter(|entry| entry["expected_divergence"] == CLASS)
+            .cloned()
+            .collect()
+    };
+    let mut rows = Vec::new();
+    let mut under_the_table_throughout = Vec::new();
+    let mut regions_of_the_other_corpora = BTreeSet::new();
+    for corpus in common::corpora() {
+        let label = format!("{}/{}", corpus.release, corpus.name);
+        let mut runs = vec![(
+            "default".to_string(),
+            documented(&corpus.manifest["field_divergences"]),
+        )];
         for flag_set in corpus.manifest["flag_sets"]
             .as_array()
             .into_iter()
             .flatten()
         {
-            if names_class(&flag_set["masks"]) {
-                let name = flag_set["name"].as_str().unwrap_or("").to_string();
-                carriers.push((corpus.name.clone(), name));
-            }
+            let name = flag_set["name"]
+                .as_str()
+                .unwrap_or_else(|| panic!("{label}: a flag set without a name"));
+            runs.push((name.to_string(), documented(&flag_set["field_divergences"])));
         }
+        runs.retain(|(_, entries)| !entries.is_empty());
+        if runs.is_empty() {
+            continue;
+        }
+        let filed = cache_codon_tables(&corpus);
+        let mut tables = BTreeSet::new();
+        for entry in runs.iter().flat_map(|(_, entries)| entries) {
+            assert_eq!(
+                entry["field"], "HGVSp",
+                "{label}: {CLASS} documents a field other than HGVSp"
+            );
+            let terms = entry["consequence_set"].as_str().unwrap_or("");
+            assert!(
+                terms.split(',').any(|term| term == "frameshift_variant"),
+                "{label}: a row of {terms:?} documented under {CLASS} is no frameshift"
+            );
+            let feature = entry["feature"].as_str().unwrap_or("");
+            let of_feature: BTreeSet<u64> = filed
+                .iter()
+                .filter(|(_, stable_id, _)| stable_id == feature)
+                .map(|(_, _, table)| *table)
+                .collect();
+            assert!(
+                !of_feature.is_empty(),
+                "{label}: the cache holds no transcript {feature}"
+            );
+            assert!(
+                !of_feature.contains(&1),
+                "{label}: {feature}, documented under {CLASS}, is filed under the standard code"
+            );
+            tables.extend(of_feature);
+        }
+        let regions: BTreeSet<&str> = filed.iter().map(|(region, _, _)| region.as_str()).collect();
+        let under: BTreeSet<&str> = filed
+            .iter()
+            .filter(|(_, _, table)| tables.contains(table))
+            .map(|(region, _, _)| region.as_str())
+            .collect();
+        let regions_cell = if under == regions && regions.len() > 1 {
+            assert!(
+                filed.iter().all(|(_, _, table)| tables.contains(table)),
+                "{label}: a transcript of the cache is under another table than the documented rows'"
+            );
+            under_the_table_throughout.push(corpus.name.clone());
+            format!("all {}", regions.len())
+        } else {
+            regions_of_the_other_corpora.extend(under.iter().copied().map(str::to_string));
+            let names: Vec<String> = under.iter().map(|region| format!("`{region}`")).collect();
+            names.join(", ")
+        };
+        let tables_cell: Vec<String> = tables.iter().map(u64::to_string).collect();
+        let runs_cell: Vec<String> = runs
+            .iter()
+            .map(|(name, entries)| format!("`{name}` {}", entries.len()))
+            .collect();
+        rows.push(format!(
+            "| `{}` | {} | {regions_cell} | {} |",
+            corpus.name,
+            tables_cell.join(", "),
+            runs_cell.join(", ")
+        ));
     }
-    carriers.sort();
-    assert!(
-        !carriers.is_empty(),
-        "no committed run carries regulatory_feature_rows"
-    );
-    let text = page_text("divergences/regulatory-rows.md");
-    let paragraph = text
-        .lines()
-        .find(|l| l.contains("Of the committed corpora, "))
-        .expect("docs/divergences/regulatory-rows.md names the runs carrying the class");
-    let start = paragraph.find("Of the committed corpora, ").unwrap();
-    let sentence = &paragraph[start..];
-    let sentence = &sentence[..sentence.find(". ").map_or(sentence.len(), |end| end + 1)];
-    for (corpus, flag_set) in &carriers {
-        assert!(
-            sentence.contains(&format!("`{corpus}`")),
-            "{sentence} lacks `{corpus}`"
-        );
-        assert!(
-            sentence.contains(&format!("`{flag_set}` flag set")),
-            "{sentence} lacks `{flag_set}` flag set"
-        );
-    }
-    let named: Vec<&str> = sentence
-        .split('`')
-        .skip(1)
-        .step_by(2)
-        .filter(|name| name.contains('-'))
-        .collect();
-    let carrying: std::collections::BTreeSet<&str> =
-        carriers.iter().map(|(c, _)| c.as_str()).collect();
-    for corpus in named {
-        assert!(
-            carrying.contains(corpus),
-            "{sentence} names `{corpus}`, which carries no such mask"
-        );
-    }
-    let count = format!(
-        "Of the committed corpora, {} carry the class",
-        number_word(carrying.len())
-    );
-    assert!(sentence.contains(&count), "{sentence} lacks {count:?}");
-}
+    assert!(!rows.is_empty(), "no committed run documents {CLASS}");
 
-/// The count word the page writes for `n` corpora.
-fn number_word(n: usize) -> &'static str {
-    [
-        "none", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
-    ][n]
+    let text = page_text(PAGE);
+    assert_eq!(
+        text.lines().next(),
+        Some(format!("# {TITLE}").as_str()),
+        "the title of docs/{PAGE}"
+    );
+    let header = "| Corpus | Codon table | Sequence regions of the cache under it | Rows by run |";
+    let table: Vec<&str> = text
+        .lines()
+        .skip_while(|line| *line != header)
+        .skip(2)
+        .take_while(|line| line.starts_with('|'))
+        .collect();
+    assert_eq!(
+        table, rows,
+        "docs/{PAGE}: the table of carriers is not the one the manifests and the caches give"
+    );
+    assert_eq!(
+        under_the_table_throughout,
+        ["GCA000497125v2-spironucleus"],
+        "the corpora the page's sentence on nuclear transcripts names"
+    );
+    assert_eq!(
+        regions_of_the_other_corpora.into_iter().collect::<Vec<_>>(),
+        ["MT", "Mito", "Mt", "mitochondrion_genome"],
+        "the sequence regions the page's sentence on mitochondrial transcripts stands on"
+    );
+    assert_page_states(
+        PAGE,
+        &[
+            "**Which transcripts it reaches.** Every transcript whose sequence region names a \
+             genetic code other than the standard one, a nuclear transcript as much as an \
+             organelle's.",
+            "So is a nuclear transcript whose sequence region names another code: every \
+             transcript of the committed Spironucleus salmonicida cache is under table 6, the \
+             ciliate, dasycladacean and hexamita nuclear code.",
+            "The class's name says `organelle`, but its rule reads the transcript's codon table \
+             and never the kind of sequence region.",
+            "The same difference reaches every transcript whose sequence region names a genetic \
+             code other than the standard one, nuclear transcripts among them; section 1.7 lists \
+             the committed corpora that carry it.",
+            "documented in the manifests of the corpora section 1.7 lists, under \
+             `field_divergences` for the `HGVSp` of the rows that change",
+            "The committed corpora whose manifests document the class, and the rows each run of \
+             theirs documents:",
+            "Every documented row is the `HGVSp` of a frameshift: no corpus documents a row of \
+             the lost-stop, duplication or empty-window deletion shape.",
+            "The `GCA000497125v2-spironucleus` rows stand on nuclear transcripts. Its cache names \
+             two chromosomes and one unplaced sequence, no organelle among them, and files every \
+             transcript under table 6.",
+            "The other corpora's rows stand on mitochondrial transcripts.",
+        ],
+    );
+    assert!(
+        !text.contains("organelle transcript"),
+        "docs/{PAGE} still words the class's reach as an organelle transcript"
+    );
+
+    let index = page_text("intended-divergences.md");
+    let opening = format!("| [`{CLASS}`]({PAGE}) |");
+    let row = index
+        .lines()
+        .find(|line| line.starts_with(&opening))
+        .unwrap_or_else(|| panic!("docs/intended-divergences.md has no row of {CLASS}"));
+    assert_states(
+        "the index row of the class",
+        row,
+        &[
+            "on a transcript whose sequence region, an organelle's or a nuclear one, names \
+             another codon table; vep-rs uses the transcript's codon table",
+        ],
+    );
+    assert!(
+        !row.contains("a mitochondrial or a plastid genome"),
+        "the index row of {CLASS} still bounds the class to an organelle genome"
+    );
+    assert!(
+        row.ends_with(&format!("| [{TITLE}]({PAGE}) |")),
+        "the index row of {CLASS} does not end with the page's title"
+    );
 }
 
 /// `fasta`: the three refusals at open the page's sentence counts each have a
 /// table row, the `.gzi` one included (`checked_gzi` in `vep-fasta`, whose
 /// `FastaError::GziMismatch` prints `BGZF index {gzi} does not describe {fasta}
-/// ({reason}): index the file again with samtools faidx`), and so has the
-/// malformed block the page names after them (`FastaError::MalformedBgzfBlock`,
-/// `malformed BGZF block at offset {offset} in {path}`).
+/// ({reason}): index the file again with samtools faidx`), and so have the two
+/// the page names after them: the malformed block
+/// (`FastaError::MalformedBgzfBlock`, `malformed BGZF block at offset {offset}
+/// in {path}`) and the RAZF file `RazfStorage::open` in `vep-fasta` refuses,
+/// one cut short or one whose header, index, closing lengths or first block
+/// does not read (`FastaError::MalformedRazf`, `{path} is not a readable RAZF
+/// file ({reason}): recompress the FASTA with bgzip and index it with samtools
+/// faidx`). The page's sentence names both, not the malformed block alone.
 #[test]
 fn fasta_open_refusals_are_each_tabulated() {
+    let malformed_block_alone = "So is a BGZF file holding a malformed block.";
+    let page = page_text("cache-setup.md")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert!(
+        !page.contains(malformed_block_alone),
+        "docs/cache-setup.md states {malformed_block_alone:?}"
+    );
     assert_page_states(
         "cache-setup.md",
         &[
-            "Three files are refused at open: a gzip file that is not BGZF, whose `.fai` offsets \
-             need the whole file inflated; a `.gzi` that does not match the file's blocks, \
+            "Three files are refused at open: a gzip file other than BGZF or RAZF, whose `.fai` \
+             offsets need the whole file inflated; a `.gzi` that does not match the file's blocks, \
              recompressed and not re-indexed; an `.fai` naming more bases than the file holds",
-            "So is a BGZF file holding a malformed block.",
-            "| A gzip file that is not BGZF | `ERROR: [fasta] <file> is gzip but not BGZF: \
+            "So are malformed BGZF blocks and unreadable RAZF files.",
+            "| A RAZF file cut short, or one whose header, index or closing lengths do not \
+             describe its bytes or whose first block does not inflate to its length | `ERROR: \
+             [fasta] <file> is not a readable RAZF file (<the first fault>): recompress the FASTA \
+             with bgzip and index it with samtools faidx` |",
+            "| A gzip file that is neither BGZF nor RAZF, the output of samtools 0.1's `razip`, \
+             which is read through its `.fai` | `ERROR: [fasta] <file> is gzip but not BGZF: \
              recompress with bgzip and index with samtools faidx` |",
             "| A `.gzi` that does not describe the file's blocks | `ERROR: [fasta] BGZF index \
              <file>.gzi does not describe <file> (<the first disagreement>): index the file again \
@@ -2399,9 +10192,60 @@ fn fasta_index_writing_is_tabulated() {
     );
 }
 
+/// The FASTA crate's README says what the crate uses `tracing` for, and names
+/// each call its code makes: the report of a BGZF block that does not inflate
+/// as its `.gzi` says and the report of a RAZF block that does not inflate to
+/// its length (`report_corrupt` of `BgzfStorage` and of `RazfStorage` in
+/// `lib.rs`), the debug line `write_missing` in `index.rs` logs when it has an
+/// index to write, and the warning `fai_records` there gives of a sequence
+/// name a file gives again. The code lines (`code_lines`) of the crate's
+/// source files name a `tracing::` path in those four calls and nowhere else,
+/// so a call the sentence leaves out fails here. A sentence that names one
+/// report alone is refused.
+#[test]
+fn fasta_readme_names_every_call_the_crate_makes_through_tracing() {
+    let path = format!("{}/../vep-fasta/README.md", env!("CARGO_MANIFEST_DIR"));
+    let readme = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
+    assert_states(
+        "crates/vep-fasta/README.md",
+        &readme,
+        &[
+            "`vep-fasta` itself uses `memmap2`, `noodles` (its `bgzf` module), `flate2` (the RAZF \
+             blocks), `thiserror`, `tracing` (the report of a BGZF block that does not inflate as \
+             its `.gzi` says, the report of a RAZF block that does not inflate to its length, the \
+             debug line that a file is being indexed and the warning of a sequence name a file \
+             gives again) and `vep-core` (the `ChromosomeSynonyms` table `add_synonyms` reads).",
+        ],
+    );
+    assert!(
+        !readme.contains("the one report of a compressed block"),
+        "crates/vep-fasta/README.md names one report as the crate's whole use of tracing"
+    );
+
+    let mut calls = Vec::new();
+    for (name, text) in rust_files_below("crates/vep-fasta/src") {
+        for line in code_lines(&text) {
+            if let Some(at) = line.find("tracing::") {
+                let call = line[at..].split('(').next().unwrap_or_default();
+                calls.push(format!("{name}: {call}"));
+            }
+        }
+    }
+    assert_eq!(
+        calls,
+        [
+            "crates/vep-fasta/src/index.rs: tracing::debug!",
+            "crates/vep-fasta/src/index.rs: tracing::warn!",
+            "crates/vep-fasta/src/lib.rs: tracing::error!",
+            "crates/vep-fasta/src/lib.rs: tracing::error!",
+        ],
+        "the calls the FASTA crate makes through tracing, each of which its README names"
+    );
+}
+
 /// `spdi`: a record whose expanded reference allele ends in a character outside
 /// `ACGTN-` is annotated with no `SPDI` (`spdi_genomic` in `vep-core/src/spdi.rs`
-/// returns `None` for it), where Ensembl VEP 116.2's `spdi_genomic` throws
+/// returns `None` for it), where Ensembl VEP 116.3's `spdi_genomic` throws
 /// (VariationFeature.pm:2159 `if( $ref_allele =~ m/[^ACGTN\-]$/ig ){`, :2160
 /// `throw("No supported SPDI genomic is available for Variation Feature ...")`),
 /// called with no `eval` from OutputFactory.pm:1398 under `--spdi` or
@@ -2462,7 +10306,7 @@ fn fasta_false_value_exclusion_is_documented() {
 }
 
 /// `api-feature-types-gating`: a shared library's `vep_plugin_feature_types` is
-/// its one interest check, where OutputFactory.pm:2220 also asks
+/// its one interest check, where OutputFactory.pm:2229 also asks
 /// `check_variant_feature_type`; a library exporting no list runs on transcript
 /// rows alone, as BaseVepPlugin.pm:99 defaults `feature_types` to `Transcript`.
 #[test]
@@ -2473,7 +10317,7 @@ fn feature_types_gating_exclusion_is_documented() {
             "The feature type is the one interest check a shared library has. Ensembl VEP also \
              asks each plugin whether it takes the variant's kind, `VariationFeature` or \
              `StructuralVariationFeature` (`check_variant_feature_type`, `OutputFactory.pm` line \
-             2220). The ABI has no such declaration, so a shared library sees sequence and \
+             2229). The ABI has no such declaration, so a shared library sees sequence and \
              structural variants alike",
             "A library that does not export the symbol runs on transcript rows alone, Ensembl \
              VEP's default for a plugin that does not override `feature_types` \
@@ -2483,8 +10327,8 @@ fn feature_types_gating_exclusion_is_documented() {
 }
 
 /// `api-filter-the-line`: a `run` that returns NULL or a non-object costs the
-/// row that plugin's fields and a warning, where OutputFactory.pm:2238-2240
-/// reads `undef` as a request to drop the line; :2234-2236 and :2243-2245 warn
+/// row that plugin's fields and a warning, where OutputFactory.pm:2247-2249
+/// reads `undef` as a request to drop the line; :2243-2245 and :2252-2254 warn
 /// and keep the line on a non-hashref or a die, as the host does.
 #[test]
 fn plugin_line_filter_exclusion_is_documented() {
@@ -2496,18 +10340,19 @@ fn plugin_line_filter_exclusion_is_documented() {
              value that is not an object writes `Plugin '<name>' did not return a hashref, \
              output ignored!` and is dropped the same way. The row is kept, the plugins after it \
              still run on it, and the run goes on, as Ensembl VEP keeps the line when a plugin \
-             returns something other than a hash or dies (`OutputFactory.pm` lines 2226-2245)",
+             returns something other than a hash or dies (`OutputFactory.pm` lines 2235-2254)",
             "Ensembl VEP reads a plugin's `undef` return as a request to drop the line from the \
-             output (`OutputFactory.pm` lines 2238-2240, the `BaseVepFilterPlugin` mechanism). \
+             output (`OutputFactory.pm` lines 2247-2249, the `BaseVepFilterPlugin` mechanism). \
              The ABI has no filter return, so a shared library cannot remove a row",
         ],
     );
 }
 
 /// `api-filter-the-line`, the overwrite half: a plugin key naming a column or
-/// field replaces its value in every format, as OutputFactory.pm:2231 writes
-/// every returned key into the line hash after the core fields; a Parquet
-/// column keeps its named type.
+/// field replaces its value in every format, as OutputFactory.pm:2240 writes
+/// every returned key into the line hash after the core fields. In Parquet a
+/// declared key is a string column (`ParquetOutputFormatter::new`) and the
+/// `TSL` column of an undeclared key keeps the type of its name.
 #[test]
 fn plugin_core_field_overwrite_is_documented() {
     assert_page_states(
@@ -2516,12 +10361,20 @@ fn plugin_core_field_overwrite_is_documented() {
             "A key a plugin returns that names a column or field of the output (`Codons`, \
              `TSL`, `SYMBOL`) replaces that value on the row in every format, as Ensembl \
              VEP's `$line_hash->{$key} = $plugin_results->{$key}` (`OutputFactory.pm` line \
-             2231) does after the core fields set theirs. A declared flag field the plugin \
+             2240) does after the core fields set theirs. A declared flag field the plugin \
              did not write keeps the row's own value under its flag and is empty without it.",
-            "A Parquet column keeps the type its name gives it \
-             ([Parquet output](../output/parquet.md)), so a value outside that type, a list \
-             in the INT32 `TSL` column, is stored NULL",
+            "In Parquet a declared key is a STRING column that keeps a list as written \
+             ([Parquet output](../output/parquet.md)); an undeclared `TSL` stays INT32, \
+             where a list is stored NULL",
         ],
+    );
+    let text = page_text("developers/writing-a-plugin.md")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert!(
+        !text.contains("A Parquet column keeps the type its name gives it"),
+        "docs/developers/writing-a-plugin.md gives a declared key the type of its name"
     );
 }
 
@@ -2557,6 +10410,33 @@ fn plugin_finish_hook_absence_is_documented() {
     );
 }
 
+/// The LoFTEE comparison section of the plugin developer page says what vep-rs
+/// derives the `END_TRUNC` cutoff from. The built-in reads it off the assembly
+/// the registry hands it before `init`, and `cache_resolve::resolve` settles
+/// that as the cache's own name (its `info.json`, else the name of its
+/// directory) and as the value of `--assembly` only where the cache names none
+/// (`assembly_inferred_from_cache_feeds_plugin_hint` in `cache_resolve.rs`).
+/// A sentence that names the flag as the source is refused.
+#[test]
+fn loftee_comparison_section_derives_the_cutoff_from_the_run_assembly() {
+    let path = "developers/writing-a-plugin.md";
+    assert_page_states(
+        path,
+        &[
+            "vep-rs derives it from the run's assembly, so pass `--assembly`, not \
+             `gerp_end_trunc_cutoff=`",
+        ],
+    );
+    let text = page_text(path)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert!(
+        !text.contains("derives it from `--assembly`"),
+        "docs/{path} says the cutoff is derived from the flag alone"
+    );
+}
+
 /// `api-per-line-hook`: a shared library receives the consequence and variant
 /// documents, never the rendered line, where BaseVepPlugin.pm:329-370 passes
 /// `run` the `$line_hash` of the whole output line.
@@ -2574,7 +10454,840 @@ fn plugin_per_line_hook_absence_is_documented() {
     );
 }
 
-/// `convert-cache-pl`: Ensembl VEP's `convert_cache.pl` (release/116.2, lines
+/// `tools/vep-genome-features` reads a converted cache: its README names the
+/// tool that writes that layout, `tools/vep-storable-to-json`. No README of a
+/// tool root names `storable_to_json.pl`, a script the repository does not hold.
+#[test]
+fn tool_readmes_name_the_converter_the_repository_holds() {
+    let tools = format!("{}/../../tools", env!("CARGO_MANIFEST_DIR"));
+    let path = format!("{tools}/vep-genome-features/README.md");
+    let text = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("{path}: {e}"))
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert_states(
+        "tools/vep-genome-features/README.md",
+        &text,
+        &[
+            "It reads one cache in the JSON layout `tools/vep-storable-to-json` writes, through \
+             the cache reader of [vep-seeded-variants](../vep-seeded-variants/README.md)",
+        ],
+    );
+    let mut readmes = 0;
+    for entry in std::fs::read_dir(&tools).unwrap_or_else(|e| panic!("{tools}: {e}")) {
+        let readme = entry.unwrap().path().join("README.md");
+        let Ok(bytes) = std::fs::read(&readme) else {
+            continue;
+        };
+        readmes += 1;
+        assert!(
+            !String::from_utf8_lossy(&bytes).contains("storable_to_json.pl"),
+            "{} names storable_to_json.pl",
+            readme.display()
+        );
+    }
+    assert!(readmes > 0, "no README under {tools}");
+}
+
+/// The corpus tool's README says where
+/// `loftee_gerp_walk_without_conservation_database` stands in the order the
+/// field classes are asked: before `hgvsp_frameshift_with_no_changed_residue`
+/// and before the sequence-edge class, which is asked last. The sentence names
+/// no class as asked directly before another.
+#[test]
+fn corpus_tool_readme_says_which_classes_are_asked_after_the_loftee_class() {
+    let path = "tools/vep-golden-corpus/README.md";
+    let readme = std::fs::read_to_string(format!("{}/../../{path}", env!("CARGO_MANIFEST_DIR")))
+        .unwrap_or_else(|e| panic!("{path}: {e}"))
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert_states(
+        path,
+        &readme,
+        &[
+            "the class is asked before `hgvsp_frameshift_with_no_changed_residue` and before \
+             the sequence-edge class, which is asked last, so that it takes a field no other \
+             class takes.",
+        ],
+    );
+    let older = "asked directly before the sequence-edge class";
+    assert!(!readme.contains(older), "{path} still states {older:?}");
+}
+
+/// A corpus's `provenance.json` says how its files were made. Where a record
+/// names the corpus tool it names `tools/vep-golden-corpus`, or the binary
+/// `vep-golden-corpus`, with one of the tool's subcommands after it (the help
+/// files under `tools/vep-golden-corpus/src/help`). Where it names the cache
+/// converter or the format comparison it names `tools/vep-storable-to-json` or
+/// `tools/vep-formats-compare`, or the binary of either: every option it gives
+/// the format comparison stands in that tool's help (`data/help.txt`), the
+/// value after `--format` among the formats that help lists, and every class
+/// after `--masks` in its class table (`data/classes.tsv`). The comparison's
+/// command runs on through a clause that opens with an option, and a bracket,
+/// a quote, a full stop or a comma may close its class list or its format's
+/// name. A clause that names the converter, which a semicolon or a sentence
+/// end closes, says what the tool does: `wrote` does not stand in it, and
+/// `converted` and `written` stand in it only as an adjective, as the first
+/// word of a placeholder (`<converted cache>`) or after an article, `that`,
+/// `its` or `whole`. A record's `source_cache.converter`
+/// names the converter under `tool` and holds no `script`, `image` or
+/// `image_digest` key. No record names
+/// `build_golden_corpus.py`, `storable_to_json.pl` or `compare_vep_formats.py`,
+/// scripts the repository does not hold.
+#[test]
+fn corpus_records_name_the_corpus_tool_the_repository_holds() {
+    const TOOL: &str = "vep-golden-corpus";
+    const CONVERTER: &str = "vep-storable-to-json";
+    const COMPARISON: &str = "vep-formats-compare";
+    const NOT_HELD: [&str; 3] = [
+        "build_golden_corpus.py",
+        "storable_to_json.pl",
+        "compare_vep_formats.py",
+    ];
+    // The verb forms that say which program made a slice, not what the tool does.
+    const PAST: [&str; 3] = ["converted", "wrote", "written"];
+    // The words after which a participle describes the noun that follows it.
+    const BEFORE_AN_ADJECTIVE: [&str; 6] = ["a", "an", "the", "that", "its", "whole"];
+    // What may close a class list or a format's name: a bracket, a quote, a full stop or a comma.
+    fn unclosed(word: &str) -> &str {
+        word.trim_end_matches(|c: char| ")]}>\"'`.,".contains(c))
+    }
+    // The clause that holds a place of a text: a semicolon closes a clause, and so does a full
+    // stop that a space follows.
+    fn clause_around(text: &str, at: usize) -> &str {
+        let from = [text[..at].rfind(';'), text[..at].rfind(". ")]
+            .into_iter()
+            .flatten()
+            .max()
+            .map_or(0, |end| end + 1);
+        let to = [text[at..].find(';'), text[at..].find(". ")]
+            .into_iter()
+            .flatten()
+            .min()
+            .map_or(text.len(), |end| at + end);
+        &text[from..to]
+    }
+    // Whether a clause holds a past form that is no adjective: `wrote` is never one, and a
+    // participle is one where the `<` of a placeholder opens it or a word of
+    // `BEFORE_AN_ADJECTIVE` stands before it.
+    fn in_the_past(clause: &str) -> bool {
+        let words: Vec<&str> = clause.split_whitespace().collect();
+        words.iter().enumerate().any(|(nth, word)| {
+            let past = word.trim_matches(|c: char| !c.is_ascii_alphanumeric());
+            let before = words[..nth].last().copied().unwrap_or_default();
+            let before = before.trim_start_matches(|c: char| "([{<\"'`".contains(c));
+            let adjective = word.contains('<')
+                || BEFORE_AN_ADJECTIVE
+                    .iter()
+                    .any(|listed| listed.eq_ignore_ascii_case(before));
+            PAST.contains(&past) && (past == "wrote" || !adjective)
+        })
+    }
+    // The path a record writes before a tool's name: empty for the binary.
+    fn folder_before(text: &str, at: usize) -> &str {
+        text[..at]
+            .rsplit(|c: char| !(c.is_ascii_alphanumeric() || "/._-".contains(c)))
+            .next()
+            .unwrap_or_default()
+    }
+    fn texts<'a>(value: &'a serde_json::Value, found: &mut Vec<&'a str>) {
+        match value {
+            serde_json::Value::String(text) => found.push(text),
+            serde_json::Value::Array(items) => items.iter().for_each(|item| texts(item, found)),
+            serde_json::Value::Object(map) => map.iter().for_each(|(key, item)| {
+                found.push(key);
+                texts(item, found);
+            }),
+            _ => {}
+        }
+    }
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let help = root.join("tools").join(TOOL).join("src/help");
+    let subcommands: std::collections::BTreeSet<String> = std::fs::read_dir(&help)
+        .unwrap_or_else(|e| panic!("{}: {e}", help.display()))
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "txt"))
+        .map(|path| path.file_stem().unwrap().to_string_lossy().into_owned())
+        .filter(|stem| stem != "top")
+        .collect();
+    for named in ["select", "flag-set", "classify", "identifiers"] {
+        assert!(
+            subcommands.contains(named),
+            "{} holds no help file for {named}",
+            help.display()
+        );
+    }
+    let converter_root = root.join("tools").join(CONVERTER);
+    assert!(
+        converter_root.join("Cargo.toml").is_file(),
+        "{} is no tool root",
+        converter_root.display()
+    );
+    let comparison_data = root.join("tools").join(COMPARISON).join("data");
+    let read = |name: &str| {
+        let path = comparison_data.join(name);
+        std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+    };
+    let (help_text, class_table) = (read("help.txt"), read("classes.tsv"));
+    // An option opens its own line of the help, two spaces in. The descriptions beside the
+    // options name flags of Ensembl VEP, which the tool does not take.
+    let options: std::collections::BTreeSet<&str> = help_text
+        .lines()
+        .filter(|line| line.starts_with("  -"))
+        .filter_map(|line| line.split_whitespace().find(|word| word.starts_with("--")))
+        .collect();
+    let classes: std::collections::BTreeSet<&str> = class_table
+        .lines()
+        .skip(1)
+        .filter_map(|line| line.split('\t').next())
+        .collect();
+    // The option's own line of the help lists the formats between braces.
+    let formats: std::collections::BTreeSet<&str> = help_text
+        .lines()
+        .find_map(|line| line.strip_prefix("  --format {"))
+        .and_then(|rest| rest.split('}').next())
+        .map(|list| list.split(',').collect())
+        .unwrap_or_default();
+    assert!(
+        formats.contains("default") && formats.contains("recoder"),
+        "{}/help.txt lists no formats after --format",
+        comparison_data.display()
+    );
+    let golden = root.join("tests/golden");
+    let (mut records, mut naming) = (0, 0);
+    let (mut naming_the_converter, mut naming_the_comparison, mut converter_keys) = (0, 0, 0);
+    for release in
+        std::fs::read_dir(&golden).unwrap_or_else(|e| panic!("{}: {e}", golden.display()))
+    {
+        let Ok(corpora) = std::fs::read_dir(release.unwrap().path()) else {
+            continue;
+        };
+        for corpus in corpora {
+            let path = corpus.unwrap().path().join("provenance.json");
+            let Ok(text) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            records += 1;
+            let record: serde_json::Value =
+                serde_json::from_str(&text).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+            let mut found = Vec::new();
+            texts(&record, &mut found);
+            if let Some(converter) = record.pointer("/source_cache/converter") {
+                converter_keys += 1;
+                assert_eq!(
+                    converter.get("tool").and_then(serde_json::Value::as_str),
+                    Some("tools/vep-storable-to-json"),
+                    "{}: source_cache.converter names another tool, or none",
+                    path.display()
+                );
+                for key in ["script", "image", "image_digest"] {
+                    assert!(
+                        converter.get(key).is_none(),
+                        "{}: source_cache.converter holds the key {key} beside its tool",
+                        path.display()
+                    );
+                }
+            }
+            let mut names_the_tool = false;
+            let (mut names_the_converter, mut names_the_comparison) = (false, false);
+            for text in found {
+                for script in NOT_HELD {
+                    assert!(!text.contains(script), "{} names {script}", path.display());
+                }
+                for tool in [CONVERTER, COMPARISON] {
+                    for (at, _) in text.match_indices(tool) {
+                        let folder = folder_before(text, at);
+                        // A name that runs on past the tool's own is another program's.
+                        let rest = text[at + tool.len()..]
+                            .split(|c: char| !(c.is_ascii_alphanumeric() || "._-".contains(c)))
+                            .next()
+                            .unwrap_or_default()
+                            .trim_end_matches('.');
+                        assert!(
+                            (folder.is_empty() || folder == "tools/") && rest.is_empty(),
+                            "{} names {folder}{tool}{rest}, which is neither tools/{tool} nor the \
+                             binary",
+                            path.display()
+                        );
+                        if tool == CONVERTER {
+                            names_the_converter = true;
+                            assert!(
+                                !in_the_past(clause_around(text, at)),
+                                "{} says in the past tense what was converted or written, in the \
+                                 clause that names {tool}; a record says what the tool does",
+                                path.display()
+                            );
+                            continue;
+                        }
+                        names_the_comparison = true;
+                        // The command runs to the clause's end and on through each clause that
+                        // opens with an option; a word after `--masks` is its comma-separated
+                        // class list and a word after `--format` one of the help's formats.
+                        let mut clauses = text[at + tool.len()..].split(';');
+                        let mut command = vec![clauses.next().unwrap_or_default()];
+                        command.extend(clauses.take_while(|clause| {
+                            clause
+                                .trim_start()
+                                .trim_start_matches(|c: char| "([{<\"'`".contains(c))
+                                .starts_with("--")
+                        }));
+                        let mut words = command.iter().flat_map(|clause| clause.split_whitespace());
+                        while let Some(word) = words.next() {
+                            // A bracket or a quote may stand before an option.
+                            let word = word.trim_start_matches(|c: char| "([{<\"'`".contains(c));
+                            if !word.starts_with("--") {
+                                continue;
+                            }
+                            let option =
+                                word.trim_end_matches(|c: char| !c.is_ascii_alphanumeric());
+                            assert!(
+                                options.contains(option),
+                                "{} gives {COMPARISON} {option}, which is no option of the tool",
+                                path.display()
+                            );
+                            if option == "--format" {
+                                let format = unclosed(words.next().unwrap_or_default());
+                                assert!(
+                                    formats.contains(format),
+                                    "{} gives {COMPARISON} --format {format:?}, which is no \
+                                     format of the tool",
+                                    path.display()
+                                );
+                                continue;
+                            }
+                            if option != "--masks" {
+                                continue;
+                            }
+                            let list = unclosed(words.next().unwrap_or_default());
+                            for class in list.split(',') {
+                                assert!(
+                                    classes.contains(class),
+                                    "{} gives {COMPARISON} the class {class:?}, which its class \
+                                     table does not hold",
+                                    path.display()
+                                );
+                            }
+                        }
+                    }
+                }
+                for (at, _) in text.match_indices(TOOL) {
+                    names_the_tool = true;
+                    let folder = folder_before(text, at);
+                    assert!(
+                        folder.is_empty() || folder == "tools/",
+                        "{} names {folder}{TOOL}, which is neither tools/{TOOL} nor the binary",
+                        path.display()
+                    );
+                    let word = text[at + TOOL.len()..]
+                        .split_whitespace()
+                        .next()
+                        .unwrap_or_default()
+                        .trim_end_matches(|c: char| !c.is_ascii_alphanumeric());
+                    assert!(
+                        subcommands.contains(word),
+                        "{} names {TOOL} with {word:?} after it, which is no subcommand of the \
+                         tool",
+                        path.display()
+                    );
+                }
+            }
+            naming += usize::from(names_the_tool);
+            naming_the_converter += usize::from(names_the_converter);
+            naming_the_comparison += usize::from(names_the_comparison);
+        }
+    }
+    assert!(records > 0, "no provenance.json under {}", golden.display());
+    assert!(
+        naming > 0,
+        "no record under {} names {TOOL}",
+        golden.display()
+    );
+    assert!(
+        naming_the_converter > 0,
+        "no record under {} names {CONVERTER}",
+        golden.display()
+    );
+    assert!(
+        naming_the_comparison > 0,
+        "no record under {} names {COMPARISON}",
+        golden.display()
+    );
+    assert!(
+        converter_keys > 0,
+        "no record under {} holds source_cache.converter",
+        golden.display()
+    );
+}
+
+/// The entry of a frameshift's stop count after a stop codon that the
+/// transcript's protein reads as a residue, or holds as a stop and reads on
+/// past: its index row, the rule its page states for a new stop of another
+/// codon and of the same codon and for the bases the stop is sought through,
+/// the worked rows of its three examples and the figures of the genome-wide
+/// ClinVar files, of the Ensembl VEP and RefSeq caches and of the four
+/// population datasets.
+#[test]
+fn frameshift_count_past_a_stop_read_as_a_residue_divergence_is_documented() {
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "| [`hgvsp_frameshift_count_past_a_stop_read_as_a_residue`](divergences/hgvsp-frameshift-count-past-a-stop-read-as-a-residue.md) \
+             | Under `--hgvs`, Ensembl VEP counts a frameshift's residues to the first stop of \
+             the whole alternate translation,",
+            "whether the protein reads it as a residue, a selenocysteine codon among them, or \
+             holds it as a stop and names the residues after it, as a polymorphic pseudogene's \
+             does,",
+            "vep-rs counts from the first changed residue to the new frame's first stop where \
+             the bases of that stop are not those of any stop codon the protein reads as a \
+             residue, and keeps the unknown count where they are \
+             | 3 · none on the cuts · 95 flag sets, 0 corpora | 116.3 |",
+        ],
+    );
+    assert_page_states(
+        "divergences/hgvsp-frameshift-count-past-a-stop-read-as-a-residue.md",
+        &[
+            "It writes that count where the three bases of that stop are not those of any stop \
+             codon the protein reads as a residue.",
+            "No defect is charged to Ensembl VEP on such a row, and vep-rs keeps the unknown \
+             count, as Ensembl VEP writes it.",
+            "Ensembl VEP writes `<protein>:p.Gly111ArgfsTer?`; vep-rs writes \
+             `<protein>:p.Gly111ArgfsTer3`.",
+            "| ENST00000589115 | residue 189, other bases | `fsTer?` | `fsTer28` |",
+            "| ENST00000354171 | residue 220, the same bases | `fsTer?` | `fsTer?` |",
+            "On GRCh38, 9 of 4,398,127 records carry a row on which vep-rs writes a count where \
+             Ensembl VEP writes none, 17 rows in all.",
+            "On GRCh37, 6 of 4,388,172 records carry 10 such rows.",
+            "The protein reads such a codon as a residue, such as a selenocysteine codon, or \
+             holds it as a stop and names the residues after it, as a polymorphic pseudogene's \
+             does.",
+            "The stop is sought through the alternate coding sequence and the transcript's 3' \
+             UTR, the bases Ensembl VEP's count reads, and no farther.",
+            "On ENST00000348028 Ensembl VEP writes `<protein>:p.Ala2344ValfsTer?`; vep-rs writes \
+             `<protein>:p.Ala2344ValfsTer367`.",
+            "| ENST00000348028 | residue 2710 | `fsTer?` | `fsTer367` |",
+            "| ENST00000349350 | residue 2801 | `fsTer?` | `fsTer458` |",
+            "| ENST00000421100 | residue 2590 | `fsTer?` | `fsTer247` |",
+            "| ENST00000427578 | residue 2713 | `fsTer?` | `fsTer370` |",
+            "| ENST00000443370 | residue 2613 | `fsTer?` | `fsTer270` |",
+            "| ENST00000449052 | residue 2678 | `fsTer?` | `fsTer335` |",
+            "on ENST00000348028 both engines write `<protein>:p.Gly1924ArgfsTer799`.",
+            "A protein holds a stop on 91 transcripts of the Ensembl VEP release 116 cache of \
+             GRCh37 and on 156 of GRCh38.",
+            "The RefSeq caches of release 116 hold such proteins too, on 220 transcripts of \
+             GRCh37 and 615 of GRCh38.",
+            "In the ClinVar files the record of section 3 is the one frameshift after a stop \
+             that a protein holds: one further record of the GRCh37 file, with six rows, and \
+             none of the GRCh38 file.",
+            "| 1000 Genomes Phase 3, GRCh37 | 28 | 28 |",
+            "| gnomAD v2.1.1 genomes, GRCh37 | 174 | 159 |",
+            "| 1000 Genomes high coverage, GRCh38 | 27 | 25 |",
+            "| gnomAD v4.1 genomes, GRCh38 | 936 | 888 |",
+        ],
+    );
+}
+
+/// The third shape of the entry of a frameshift's stop count: a frameshift
+/// whose first changed residue is a stop, which both engines write as an
+/// extension named at that stop. The clause of its index row, the sentences
+/// its page states for the form, the count and its bound, the lines of
+/// Ensembl VEP's source, the figures of the four population datasets, and, for
+/// the two records of the fourth example, the counts that the two engines'
+/// recorded rows carry.
+#[test]
+fn frameshift_count_page_counts_the_extension_named_at_a_stop_the_protein_holds() {
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "so a frameshift after such a codon, and the extension that names a frameshift whose \
+             first changed residue is a stop behind one the protein holds, is written with the \
+             unknown count whatever stop the new frame meets;",
+        ],
+    );
+    let path = "divergences/hgvsp-frameshift-count-past-a-stop-read-as-a-residue.md";
+    assert_page_states(
+        path,
+        &[
+            "A frameshift whose first changed residue is a stop is written by both engines as an \
+             extension named at that stop, `Ter<n><Xaa>extTer<count>`. Where a stop that the \
+             protein holds stands before it, Ensembl VEP writes `extTer?` the same way. vep-rs \
+             writes the count from the lost stop to the new frame's stop.",
+            "Where no stop stands before it, Ensembl VEP writes that length itself, as section 4 \
+             shows.",
+            "For the extension, where Ensembl VEP's count is not positive, vep-rs counts from \
+             the lost stop to the first stop codon the new frame meets. The count is the new \
+             stop's residue number less the lost stop's: the residue in the lost stop's place is \
+             counted and the new stop is not. The lost stop is a stop the protein holds, as in \
+             section 4, or the stop codon that closes the coding sequence behind one. The stop \
+             is sought through the alternate coding sequence and the 3' UTR and no farther, and \
+             the unknown count stays where the new frame meets none there.",
+            "vep-rs counts an extension so only on a protein that holds a stop, reads no stop \
+             codon as a residue and is the translation of its coding sequence at every codon. On \
+             any other protein such an extension keeps the count Ensembl VEP writes. The test of \
+             the new stop's bases, above, belongs to the frameshift's own count and is not made \
+             for an extension.",
+            "Where the first changed residue is a stop, line 2007 takes the extension, line 2009 \
+             takes one off the count, which leaves the new stop out, and line 2010 writes \
+             `extTer` and the count.",
+            "The count is 2721 - 2464, 257: residue 2464 and the 256 after it.",
+            "On each of those 28 a stop the protein holds stands before the lost one. On the \
+             other 8, rows of short immunoglobulin segments, the new frame meets no stop through \
+             the 3' UTR, and both engines write `extTer?`.",
+            "On one of the 28 the lost stop is the stop codon that closes the coding sequence, \
+             behind the one stop its protein holds.",
+            "Ensembl VEP writes `<protein>:p.Ter278HisextTer?`; vep-rs writes \
+             `<protein>:p.Ter278HisextTer7`.",
+            "The class reads a pair of extensions too, on a row whose terms hold \
+             `frameshift_variant`:",
+            "## 4. Two bases deleted before a later stop that the same pseudogene's protein holds",
+            "On ENST00000348028 Ensembl VEP writes `<protein>:p.Ter2464SerextTer?`; vep-rs writes \
+             `<protein>:p.Ter2464SerextTer257`.",
+            "The same four datasets hold 43 rows on which a frameshift's first changed residue is \
+             a stop of such a protein and both engines write the extension; the ClinVar files \
+             hold none. On 7 of them both engines write the count: no stop stands before the \
+             changed one, and the new frame meets a stop.",
+            "| 1000 Genomes Phase 3, GRCh37 | 0 | 0 |",
+            "| gnomAD v2.1.1 genomes, GRCh37 | 8 | 7 |",
+            "| 1000 Genomes high coverage, GRCh38 | 3 | 3 |",
+            "| gnomAD v4.1 genomes, GRCh38 | 25 | 18 |",
+            "Of the two records of the fourth example it compares the six rows of the first on \
+             those six transcripts and the one row of the second.",
+        ],
+    );
+    let page = page_text(path);
+    let record = reproduction_record("hgvsp_frameshift_count_past_a_stop_read_as_a_residue");
+    let recorded = |name: &str, transcript: &str| -> [String; 2] {
+        let counts: Vec<String> = record
+            .lines()
+            .filter(|line| {
+                line.trim_start()
+                    .starts_with(&format!("\"{name} | {transcript} | "))
+            })
+            .filter_map(|line| line.rsplit(":p.").next())
+            .map(|notation| notation.trim_end_matches("\",").to_string())
+            .collect();
+        counts
+            .try_into()
+            .unwrap_or_else(|_| panic!("the record holds no two rows of {name} on {transcript}"))
+    };
+    for (transcript, new_stop) in [
+        ("ENST00000348028", 2721),
+        ("ENST00000349350", 2812),
+        ("ENST00000421100", 2601),
+        ("ENST00000427578", 2724),
+        ("ENST00000443370", 2624),
+        ("ENST00000449052", 2689),
+    ] {
+        let [ensembl_vep, vep_rs] =
+            recorded("pseudogene_later_stop_deletion_7_100388594", transcript);
+        assert_eq!(ensembl_vep, "Ter2464SerextTer?", "{transcript}");
+        assert_eq!(
+            vep_rs,
+            format!("Ter2464SerextTer{}", new_stop - 2464),
+            "{transcript}"
+        );
+        let row = format!(
+            "| {transcript} | residue {new_stop} | `extTer?` | `extTer{}` |",
+            new_stop - 2464
+        );
+        assert!(
+            page.lines().any(|line| line == row),
+            "docs/{path} has no row {row:?}"
+        );
+    }
+    let [ensembl_vep, vep_rs] = recorded(
+        "pseudogene_first_stop_deletion_17_79614932",
+        "ENST00000572675",
+    );
+    assert_eq!(ensembl_vep, vep_rs);
+    assert_page_states(
+        path,
+        &[&format!(
+            "both engines write `<protein>:p.{vep_rs}`. The new frame's first stop is residue \
+             356, the last codon of its alternate coding sequence, 127 residues from the lost \
+             stop."
+        )],
+    );
+}
+
+/// The entry of a frameshift-length allele whose first base lies inside the
+/// codon of a stop the protein holds: its index row, the sentences its page
+/// states for the term, the notation and their bounds, the lines of Ensembl
+/// VEP's source, the figures of the four population datasets, and the two
+/// tables of section 1.3 held to the rows that the two engines' recorded
+/// runs carry.
+#[test]
+fn held_stop_codon_page_states_the_frameshift_and_the_rows_both_engines_write() {
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "| [`frameshift_inside_a_held_stop_codon`]\
+             (divergences/frameshift-inside-a-held-stop-codon.md) | For an insertion or a \
+             deletion whose length change is no multiple of three and whose first base lies \
+             inside the codon of a stop that the transcript's protein holds and names the \
+             residues after,",
+            "Ensembl VEP writes no `frameshift_variant` but `coding_sequence_variant`, \
+             `inframe_deletion`, or `inframe_insertion` with `coding_sequence_variant`, and \
+             under `--hgvs` it names the stop unchanged or in a deletion-insertion; vep-rs \
+             writes `frameshift_variant` and names the first residue that changes | 3 · none on \
+             the cuts · 511 flag sets, 0 corpora | 116.3 |",
+        ],
+    );
+    let path = "divergences/frameshift-inside-a-held-stop-codon.md";
+    assert_page_states(
+        path,
+        &[
+            "Ensembl VEP 116.3 writes no `frameshift_variant` for it, and under `--hgvs` it \
+             names the stop unchanged or in a deletion-insertion. vep-rs writes \
+             `frameshift_variant` and names the first residue that changes.",
+            "Ensembl VEP writes the frameshift itself when the same change is spelled one base \
+             on.",
+            "vep-rs asks whether the first residue of the allele's codons is a stop that the \
+             protein holds with a residue named after it. Where it is, the allele's length \
+             decides the frameshift, as at any other codon.",
+            "Where the stop becomes a residue, the stop is the first residue that changes, and \
+             the notation is the extension both engines write for a frameshift whose first \
+             changed residue is a stop. Where the new frame leaves a stop codon in the stop's \
+             place, the protein goes on past it as before, and the notation names the first \
+             changed residue after it.",
+            "The stop codon that closes a coding sequence has no residue after it, and an \
+             allele that begins inside it is no frameshift in either engine: its row says \
+             whether that stop is lost or kept. The same holds for one that begins at a stop the \
+             protein holds as its last residue, with none named after it.",
+            "lines 1541-1586, `frameshift`: line 1554 returns 0 where the reference residues of \
+             the allele's codons begin with a stop.",
+            "lines 2320-2365, `_get_fs_peptides`: lines 2354-2357 end the walk for a \
+             frameshift's first changed residue at a stop that both proteins hold, and write it \
+             unchanged.",
+            "`frameshift_inside_a_held_stop_codon`: vep-rs's row holds `frameshift_variant` \
+             where Ensembl VEP's holds `coding_sequence_variant`, `inframe_deletion`, or \
+             `inframe_insertion` with `coding_sequence_variant`.",
+            "The new frame meets its first stop at residue 373, 34 residues after the lost stop.",
+            "The second record is the same sequence, and Ensembl VEP writes exactly that row \
+             for it. For the first it writes a term that names no change of the protein and a \
+             notation that says the stop is unchanged.",
+            "Residue 340, a glutamate, is the first that changes, to a serine, and the new \
+             frame's first stop after it is residue 373, the 34th residue counted from the \
+             changed one: `p.Glu340SerfsTer34`. The stop of residue 339 stands before the changed \
+             residue, so the count is the one",
+            "The `Amino_acids` cells are equal, open with `*` and hold `X` after the `/`. The \
+             `Codons` cells are equal, and their two parts differ in length by no multiple of \
+             three.",
+            "A pair on which Ensembl VEP writes `stop_retained_variant`, `stop_lost` or \
+             `frameshift_variant` is not of the class,",
+            "The four whole-genome population datasets hold 55 such rows, on 53 records and 18 \
+             transcripts; the genome-wide ClinVar files hold none. A record is counted in each \
+             dataset that holds it, and one record lies on three of the transcripts.",
+            "Beside either in-frame term Ensembl VEP's `IMPACT` is `MODERATE`, and its HGVSp is \
+             a deletion-insertion that ends in a stop.",
+            "| 1000 Genomes Phase 3 (GRCh37) | 1 |",
+            "| gnomAD v2.1.1 genomes (GRCh37) | 2 |",
+            "| 1000 Genomes high coverage (GRCh38) | 1 |",
+            "| gnomAD v4.1 genomes (GRCh38) | 51 |",
+            "| The stop becomes a residue | 42 | `coding_sequence_variant` |",
+            "| The stop becomes a residue | 6 | `inframe_deletion` |",
+            "| The stop codon is kept | 4 | `inframe_insertion,coding_sequence_variant` |",
+            "| The stop codon is kept | 2 | `inframe_deletion` |",
+            "| The stop codon is kept | 1 | `coding_sequence_variant` |",
+            "Eleven of them meet none there and keep `extTer?`.",
+            "One form inside a stop that the protein goes on past keeps Ensembl VEP's row. \
+             Where the allele's alternate codons are one whole codon that is a stop codon, and \
+             one or two bases more, both engines write `stop_retained_variant`.",
+            "Ensembl VEP writes `stop_retained_variant` for them and vep-rs writes the same. On \
+             the 7 rows above whose stop codon is kept, the alternate residues hold `X`, and \
+             that test is not passed. This entry makes no claim about those eight rows.",
+        ],
+    );
+    let page = page_text(path);
+    let record = reproduction_record("frameshift_inside_a_held_stop_codon");
+    let recorded: Vec<Vec<&str>> = record
+        .lines()
+        .map(str::trim_start)
+        .filter(|line| line.contains(" | ENST00000435769 | "))
+        .map(|line| {
+            line.trim_start_matches('"')
+                .trim_end_matches("\",")
+                .split(" | ")
+                .collect()
+        })
+        .collect();
+    assert_eq!(recorded.len(), 10, "five rows an engine in the record");
+    let (ensembl_vep, vep_rs) = recorded.split_at(5);
+    let table = |heading: &str| -> Vec<&str> {
+        page.lines()
+            .skip_while(|line| *line != heading)
+            .skip(1)
+            .skip_while(|line| !line.starts_with("| `"))
+            .take_while(|line| line.starts_with("| `"))
+            .collect()
+    };
+    for (heading, rows) in [
+        (
+            "The rows of ENST00000435769. Ensembl VEP 116.3:",
+            ensembl_vep,
+        ),
+        ("vep-rs:", vep_rs),
+    ] {
+        let written = table(heading);
+        assert_eq!(written.len(), 5, "docs/{path}: the table under {heading:?}");
+        for row in rows {
+            let notation = row[7]
+                .rsplit(':')
+                .next()
+                .expect("a protein notation")
+                .replace("%3D", "=");
+            let line = format!(
+                "| `{}` | `{}` | `{}` | `{notation}` |",
+                row[0], row[2], row[3]
+            );
+            assert!(
+                written.contains(&line.as_str()),
+                "docs/{path} has no row {line:?} under {heading:?}"
+            );
+        }
+    }
+    for (rows, coding) in [(ensembl_vep, "c.1015del"), (vep_rs, "c.1015del")] {
+        let lost: Vec<&&str> = rows
+            .iter()
+            .filter(|row| row[0].contains("base_lost") && !row[0].contains("kept"))
+            .map(|row| &row[6])
+            .collect();
+        assert_eq!(lost.len(), 2);
+        assert!(lost.iter().all(|hgvsc| hgvsc.ends_with(coding)), "{lost:?}");
+    }
+}
+
+/// The entry of a frameshift whose alternate protein ends before a residue
+/// differs from the reference protein: its index row, the rule its page
+/// states, the rows of its five examples, the figures of the six whole-genome
+/// datasets, and the sentence of the stop count page that names the four rows
+/// the two entries share.
+#[test]
+fn frameshift_with_no_changed_residue_divergence_is_documented() {
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "| [`hgvsp_frameshift_with_no_changed_residue`](divergences/hgvsp-frameshift-with-no-changed-residue.md) \
+             | Under `--hgvs`, where the alternate protein of a frameshift ends before any \
+             residue differs from the reference protein,",
+            "Ensembl VEP's walk for the first changed residue leaves by its bound and writes the \
+             last residue it compared, at the number after it, as changed to itself",
+            "vep-rs writes no HGVSp, since the transcript's bases give the frameshift no changed \
+             residue | 3 · none on the cuts · 95 flag sets, 1 corpus | 116.3 |",
+        ],
+    );
+    assert_page_states(
+        "divergences/hgvsp-frameshift-with-no-changed-residue.md",
+        &[
+            "Where the alternate protein ends before any residue differs from the reference \
+             protein, it writes the last residue it compared, at the number after it, as changed \
+             to itself: `p.Leu11LeufsTer?` on a protein of ten residues.",
+            "Where it ends before a residue differs from the reference protein, the transcript's \
+             bases give the frameshift no changed residue to be named by, and vep-rs writes no \
+             HGVSp.",
+            "vep-rs keeps that reading and names no residue from such a pair, as section 4 \
+             shows.",
+            "Line 2364 is the defect: it returns the position and the two residues with no test \
+             of how the walk ended.",
+            "Ensembl VEP writes `<protein>:p.Leu61LeufsTer?`; vep-rs writes no HGVSp.",
+            "On ENST00000518685 Ensembl VEP writes `<protein>:p.Pro405ProfsTer?`, and on \
+             ENST00000557224 `<protein>:p.Pro457ProfsTer?`.",
+            "Ensembl VEP writes `<protein>:p.Ala118AlafsTer?`; vep-rs writes no HGVSp.",
+            "Ensembl VEP writes `<protein>:p.Pro153ProfsTer?`; vep-rs writes no HGVSp.",
+            "Ensembl VEP writes `<protein>:p.Leu11LeufsTer?`; vep-rs writes no HGVSp.",
+            "The Ensembl VEP 116.3 outputs of the six whole-genome datasets under `--hgvs` hold \
+             it on 300 rows.",
+            "| ClinVar, GRCh38 | 56 |",
+            "| ClinVar, GRCh37 | 78 |",
+            "| 1000 Genomes Phase 3, GRCh37 | 1 |",
+            "| gnomAD v2.1.1 genomes, GRCh37 | 36 |",
+            "| 1000 Genomes high coverage, GRCh38 | 4 |",
+            "| gnomAD v4.1 genomes, GRCh38 | 125 |",
+            "The ClinVar rows stand on 55 of 4,398,127 records of the GRCh38 file and on 73 of \
+             4,388,172 of the GRCh37 file.",
+            "the reference protein holds nothing on 154 rows",
+            "It holds its stop on 33, as in section 2, and a residue on 113, as in sections 3 \
+             and 4.",
+            "Of the 300 rows, 247 stand on transcripts flagged `cds_end_NF`, with `cds_start_NF` \
+             or without it, 7 on transcripts flagged `cds_start_NF` alone and 46 on transcripts \
+             that no flag marks incomplete.",
+            "Of the 300 rows counted below, the reference protein holds a residue at the number \
+             written on 113, and on 23 of those such a pair spells another residue.",
+            "One committed corpus holds a row of the form: line 80 of \
+             `tests/golden/116/GRCz11-zebrafish/variants.vcf`",
+            "Ensembl VEP writes `<protein>:p.Cys849CysfsTer?`, the cysteine of residue 848 at \
+             849, where the reference protein holds a proline.",
+        ],
+    );
+    assert_page_states(
+        "divergences/hgvsp-frameshift-count-past-a-stop-read-as-a-residue.md",
+        &[
+            "Of the other rows, four stand on short immunoglobulin segments, where the alternate \
+             sequence ends before a residue differs and vep-rs writes [no \
+             HGVSp](hgvsp-frameshift-with-no-changed-residue.md).",
+        ],
+    );
+}
+
+/// The entry of a frameshift's stop count where the first changed residue is
+/// residue 1: its index row, the rule its page states for a transcript on
+/// which no start codon stands and for one on which a start codon stands, the
+/// worked rows of its flagged and its unflagged example, the other records of
+/// its reproduction and its figures.
+#[test]
+fn frameshift_count_at_the_first_residue_divergence_is_documented() {
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "| [`hgvsp_frameshift_count_at_the_first_residue`](divergences/hgvsp-frameshift-count-at-the-first-residue.md) \
+             | Under `--hgvs`, Ensembl VEP writes the unknown count for every frameshift whose \
+             first changed residue is residue 1,",
+            "because its count routine returns nothing for the position before the first \
+             residue, also where the new frame meets a stop codon;",
+            "on a transcript at whose coding start no start codon stands, flagged `cds_start_NF` \
+             or showing none, vep-rs counts to the first stop codon of the new frame, and keeps \
+             the unknown count where a start codon stands \
+             | 2 · 108,184 per million · 95 flag sets, 142 corpora | 116.3 |",
+        ],
+    );
+    assert_page_states(
+        "divergences/hgvsp-frameshift-count-at-the-first-residue.md",
+        &[
+            "On a transcript at whose coding start no start codon stands, the count is owed, and \
+             vep-rs writes it.",
+            "Before residue 1 the number is 0, which Perl reads as false.",
+            "The stop is sought through the alternate coding sequence and the transcript's 3' \
+             UTR, the bases Ensembl VEP's count reads, and no farther.",
+            "Where a start codon stands, Ensembl VEP's test of that number withholds the count as \
+             well, and there no count is owed. vep-rs keeps the unknown count, as Ensembl VEP \
+             writes it.",
+            "On such a transcript that translation is not shown to be the variant's protein.",
+            "This entry charges no defect to Ensembl VEP on such a row and changes nothing in it.",
+            "the divergence needs `--hgvs` or a flag that switches it on, such as `--everything`",
+            "Of the records, 1,692,699 hold one, 108,184 per million.",
+            "vep-rs writes a count for a frameshift named at residue 1 on 34 rows of flagged \
+             transcripts on GRCh38 and on 26 on GRCh37.",
+            "Ensembl VEP 116.3 writes `p.Glu1LysfsTer?` and vep-rs writes `p.Glu1LysfsTer4`, \
+             each after the protein's identifier.",
+            "| ENST00000381318 | 1394 | `p.Glu1394LysfsTer4` | `p.Glu1394LysfsTer4` |",
+            "| ENST00000420666 | 2 | `p.Glu2LysfsTer4` | `p.Glu2LysfsTer4` |",
+            "| ENST00000415023 | 1 | `p.Glu1LysfsTer?` | `p.Glu1LysfsTer4` |",
+            "| `second_codon_two_bases_deleted` | ENST00000415023 | `p.Asn2HisfsTer3` | \
+             `p.Asn2HisfsTer3` |",
+            "| `deletion_from_before_the_first_base` | ENST00000419241 | `p.His1AsnfsTer?` | \
+             `p.His1AsnfsTer30` |",
+            "| `base_inserted_before_a_start_codon` | ENST00000381318 | `p.Met1AsnfsTer?` | \
+             `p.Met1AsnfsTer?` |",
+            "A count of 26 would give that length to a protein the record leaves as it was.",
+            "Ensembl VEP 116.3 writes `p.Leu1IlefsTer?` and vep-rs writes `p.Leu1IlefsTer16`.",
+            "A comparison that is given no cache sets nothing aside under this class, and each \
+             such row stays a difference.",
+        ],
+    );
+}
+
+/// `convert-cache-pl`: Ensembl VEP's `convert_cache.pl` (release/116.3, lines
 /// 70-87 and 375-436) rewrites its own cache's `<start>-<end>_var.gz` region
 /// files as one bgzipped, tabix-indexed `all_vars.gz` per chromosome and, under
 /// `--sereal`, its transcript and regulatory shards as Sereal. The cache
@@ -2597,33 +11310,260 @@ fn convert_cache_pl_is_stated_not_applicable() {
     );
 }
 
-/// `library-embedding`: the contract page states the surface (the `pub use`
-/// list of `lib.rs`), the git-dependency recipe, the proof and the version
-/// rule, so a rewrite that drops one of them fails here; the module doc of
-/// `lib.rs` names the page.
+/// `vefc-seq-edits`: the conversion carries each edit's positions and
+/// replacement and drops its description, and a cache without the list is read
+/// from the cached peptide, where Ensembl VEP fetches the edits of a transcript
+/// that lacks them from the database (BaseTranscriptVariation.pm:1171-1182), so
+/// a variant at codon 1 of a transcript with an alternative initiation codon
+/// can be called otherwise. The list holds the edits of the four codes
+/// `get_all_SeqEdits` reads (ensembl core Translation.pm:1111), which the dump
+/// stores whole (AnnotationSource/Database/Transcript.pm:484); a sentence that
+/// names three of the four is refused.
+#[test]
+fn vefc_seq_edits_exclusion_is_documented() {
+    assert_page_states(
+        "cache-conversion.md",
+        &[
+            "- Dropped: - the Perl object references (the slice, the gene object, the exon \
+             coordinate mapper's trees) - the per-exon and per-intron strand, which is the \
+             transcript's - a sequence edit's description",
+            "The edits (`seq_edits`) are the initial-methionine, selenocysteine, \
+             amino-acid-substitution and stop-codon-readthrough edits Ensembl VEP applies to the \
+             reference peptide at annotation time.",
+            "A cache converted without that key, the published conversions among them, still \
+             loads.",
+            "On such a cache, a variant at codon 1 of a transcript with an alternative \
+             initiation codon is called from the cached peptide rather than from the edit.",
+        ],
+    );
+    let three_of_four = "selenocysteine and amino-acid-substitution edits";
+    assert!(
+        !page_text("cache-conversion.md").contains(three_of_four),
+        "docs/cache-conversion.md states {three_of_four:?}"
+    );
+}
+
+/// A natively built cache's sequence edits. With `--core-dumps` the builder
+/// reads each translation's edits from the `translation_attrib` rows
+/// (`CoreDumps::load` of `crates/vep-cache-builder/src/core_dumps.rs`) and
+/// writes them into the transcript record's `seq_edits` (`build_transcript`
+/// of `crates/vep-cache-builder/src/builder.rs`); without the dumps the list
+/// it writes is empty. The record's peptide is the protein FASTA's sequence
+/// where the build takes the transcript's record of that file. A sentence
+/// that says a natively built cache carries no edit list, or that the builder
+/// writes none, is refused.
+#[test]
+fn native_cache_edit_list_is_stated_for_a_build_with_and_without_the_core_dumps() {
+    let page = "cache-conversion.md";
+    assert_page_states(
+        page,
+        &[
+            "A natively built cache carries the edit list where it is built with \
+             `--core-dumps`: the builder writes each translation's sequence edits from the \
+             dumps into the transcript record.",
+            "Without the dumps it writes an empty list.",
+            "Where the build takes a transcript's record of the protein FASTA, the peptide is \
+             that record's sequence, with the edits already applied.",
+        ],
+    );
+    let text = page_text(page)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for refused in [
+        "A natively built cache carries no edit list",
+        "and the builder writes none",
+    ] {
+        assert!(!text.contains(refused), "docs/{page} states {refused:?}");
+    }
+}
+
+/// The two entries whose reproduction builds a synthetic Ensembl VEP cache name, on
+/// their pages, the tool that converts the built cache and the tool that runs the
+/// entry. No page under `docs/` names the Perl converter or the Python runner, which
+/// the repository does not hold.
+#[test]
+fn built_cache_reproductions_name_the_converter_and_the_runner() {
+    assert_page_states(
+        "divergences/transcript-across-circular-origin.md",
+        &[
+            "a prepare step holds it to the conversion of the built cache by \
+             `tools/vep-storable-to-json`.",
+            "`tools/vep-divergence-reevaluate`, given `--entry \
+             transcript_across_circular_origin`, runs it on both engines and holds each row to \
+             the recorded one.",
+        ],
+    );
+    assert_page_states(
+        "divergences/pachysolen-nuclear-code-read-as-standard.md",
+        &[
+            "convert it with `tools/vep-storable-to-json` and check that the `json_cache` \
+             equals the conversion.",
+            "`tools/vep-divergence-reevaluate`, given `--entry \
+             pachysolen_nuclear_code_read_as_standard`, runs both engines and holds each row \
+             to the recorded one.",
+            "It needs Docker, `cargo` and the Ensembl VEP image, named with `--image`.",
+        ],
+    );
+    let docs = format!("{}/../../docs", env!("CARGO_MANIFEST_DIR"));
+    let mut pending = vec![std::path::PathBuf::from(&docs)];
+    let mut pages = 0;
+    while let Some(directory) = pending.pop() {
+        for entry in std::fs::read_dir(&directory).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                pending.push(path);
+            } else if path.extension().is_some_and(|e| e == "md") {
+                pages += 1;
+                let text = std::fs::read_to_string(&path).unwrap();
+                for script in ["storable_to_json.pl", "reevaluate.py"] {
+                    assert!(!text.contains(script), "{} names {script}", path.display());
+                }
+            }
+        }
+    }
+    assert!(pages > 0, "no page under {docs}");
+}
+
+/// The plugin that a line names twice in a row after `Failed to instantiate
+/// plugin`, where it names one so.
+fn plugin_named_twice(line: &str) -> Option<&str> {
+    line.split("Failed to instantiate plugin ")
+        .skip(1)
+        .find_map(|rest| {
+            let (name, text) = rest.split_once(": ")?;
+            text.strip_prefix(name)?.starts_with(": ").then_some(name)
+        })
+}
+
+/// A built-in plugin that fails to load is named once in its line: the loader
+/// writes the plugin's name and then the plugin's text without the name that
+/// opens it (`failed_to_instantiate` in `crates/vep-cli/src/annotator.rs`), as
+/// Ensembl VEP's line carries the module once before the constructor's text
+/// (Runner.pm:950). The pages that quote such a line of vep-rs quote it so, and
+/// no page under `docs/` and no crate README names a plugin twice in a row
+/// there.
+#[test]
+fn pages_quote_a_failed_plugin_load_with_the_plugin_named_once() {
+    assert_page_states(
+        "plugins/conservation.md",
+        &[
+            "`Failed to instantiate plugin Conservation: no bigWig file given; use \
+             Conservation,<file.bw> or Conservation,<file.bw>,MAX`",
+            "`Failed to instantiate plugin Conservation: <path> is not a readable bigWig: \
+             <reason>`",
+        ],
+    );
+    assert_page_states(
+        "plugins/transcript-model.md",
+        &["`Failed to instantiate plugin UTRAnnotator: uORF file <path> not found`"],
+    );
+    assert_page_states(
+        "divergences/plugin-unknown-mode-word-refused.md",
+        &[
+            "WARNING: Failed to instantiate plugin LOEUF: match_by must be gene or transcript, \
+             not 'exon'",
+            "WARNING: Failed to instantiate plugin pLI: mode 'exon' is not gene or transcript",
+            "WARNING: Failed to instantiate plugin Conservation: MAX must be the last parameter",
+        ],
+    );
+    assert_page_states(
+        "divergences/maxentscan-matrix-line-not-a-number.md",
+        &["WARNING: Failed to instantiate plugin MaxEntScan: \
+             <synthetic_matrices>/splicemodels/me2x3acc1 line 1024 is not a number: '0.5x'"],
+    );
+    assert_page_states(
+        "divergences/opentargets-duplicate-study-type-and-missing-islead.md",
+        &[
+            "WARNING: Failed to instantiate plugin OpenTargets: lead_variants_only=1 needs an \
+             isLead column, which the header of no_islead.tsv.gz lacks; pass \
+             lead_variants_only=0",
+        ],
+    );
+
+    assert_eq!(
+        plugin_named_twice("WARNING: Failed to instantiate plugin GWAS: GWAS: no file specified"),
+        Some("GWAS")
+    );
+    assert_eq!(
+        plugin_named_twice("WARNING: Failed to instantiate plugin LoF: LoFTEE: no GERP file"),
+        None
+    );
+    let collapsed = |text: &str| text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let wrapped = collapsed("WARNING: Failed to instantiate plugin GWAS:\nGWAS: no file specified");
+    assert_eq!(plugin_named_twice(&wrapped), Some("GWAS"));
+    let root = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
+    let mut pending = vec![std::path::PathBuf::from(format!("{root}/docs"))];
+    let mut texts = Vec::new();
+    while let Some(directory) = pending.pop() {
+        for entry in std::fs::read_dir(&directory).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                pending.push(path);
+            } else if path.extension().is_some_and(|e| e == "md") {
+                texts.push(path);
+            }
+        }
+    }
+    let pages = texts.len();
+    for entry in std::fs::read_dir(format!("{root}/crates")).unwrap() {
+        let readme = entry.unwrap().path().join("README.md");
+        if readme.is_file() {
+            texts.push(readme);
+        }
+    }
+    assert!(pages > 0, "no page under {root}/docs");
+    assert!(texts.len() > pages, "no README under {root}/crates");
+    for path in texts {
+        let text = std::fs::read_to_string(&path).unwrap();
+        for (number, line) in text.lines().enumerate() {
+            assert_eq!(
+                plugin_named_twice(line),
+                None,
+                "{} line {} names a plugin twice in a failed load",
+                path.display(),
+                number + 1
+            );
+        }
+        let page = collapsed(&text);
+        assert_eq!(
+            plugin_named_twice(&page),
+            None,
+            "{} names a plugin twice in a failed load across a line break",
+            path.display()
+        );
+    }
+}
+
+/// `library-embedding`: the contract page states the surface (what the API
+/// documentation of `vep-cli` shows), the git-dependency recipe, the proof and
+/// the page that states what the version number covers, so a rewrite that
+/// drops one of them fails here; the module doc of `lib.rs` names the page.
 #[test]
 fn embedding_contract_is_documented() {
     assert_page_states(
         "developers/embedding.md",
         &[
-            "The release workflow publishes the workspace's crates to crates.io when a \
-             maintainer publishes a release page",
+            "The `crates.io` workflow (`.github/workflows/crates-io.yml`) publishes the \
+             workspace's crates to crates.io when a maintainer publishes a release page",
             "A program adds `vep-cli` from crates.io at a published version, or as a git \
              dependency pinned to a release's tag",
             "[dependencies.vep-cli] git = \"https://github.com/natera-open-source/vep-rs\" \
              tag = \"vX.Y.Z\"",
-            "The surface is the list of `pub use` re-exports at the top of \
-             `crates/vep-cli/src/lib.rs`",
-            "everything else in `vep_cli` is a module of the binary, reachable at its module path \
-             but not bound by this page",
+            "The surface is what the API documentation of `vep-cli` shows: the items re-exported \
+             at the root of the crate, the modules `annotator`, `argv`, `config`, `pick`, \
+             `row_filter`, `runner`, `transcript_index` and `vcf_parser`, and the types their \
+             signatures and public fields name",
+            "An item the documentation does not show is the binary's own and may change in any \
+             release",
             "The library has no skip step",
             "the binary writes no JSON object for a record whose span exceeds `--max_sv_size`",
             "`crates/vep-cli/tests/library_embedding.rs` runs this path over every record of the \
              `tests/golden/116/GRCh37` dataset",
             "the two are equal byte for byte",
-            "While the version is 0.y.z, a release that changes any crate's public API, this \
-             surface included, raises the minor number; a patch release keeps every public item's \
-             name and signature",
+            "The [Versioning and compatibility](../project/versioning.md) page says what the \
+             version number covers. Of the libraries it covers the documented part, this surface \
+             included",
         ],
     );
     let module_doc_names_the_page = include_str!("../src/lib.rs")
@@ -2633,6 +11573,443 @@ fn embedding_contract_is_documented() {
         module_doc_names_the_page,
         "the lib.rs module doc names the page"
     );
+}
+
+/// The versioning page states what the version number covers and what may
+/// change in any release, with the rule for an annotation row a release
+/// corrects, for caches and plugin stores, for the minimum Rust version, for a
+/// retired flag or library item, for the release that receives fixes and for
+/// a move of the reference release, so a rewrite that drops one of them fails
+/// here.
+#[test]
+fn versioning_page_states_what_the_number_covers_and_what_may_change() {
+    assert_page_states(
+        "project/versioning.md",
+        &[
+            "The version number covers five things: the documented flags and what they do, the \
+             output formats, the exit codes, the plugin interface and the documented part of the \
+             libraries.",
+            "Four things may change in any release: hidden tuning flags, abbreviations, message \
+             wording and library internals.",
+            "A release that corrects an annotation row is a fix and never a breaking change.",
+            "A release inside a major version may need caches and plugin stores built again, and \
+             its release notes say when.",
+            "The minimum Rust version may rise in a minor release, and that release's notes name \
+             the new figure.",
+            "A documented flag or library item that is retired is marked for at least one minor \
+             release, and it is removed only in a release that raises the major number.",
+            "Fixes go to the newest release only.",
+            "A move of the reference Ensembl VEP release is a minor release, and the rows that \
+             change with it are not a breaking change.",
+        ],
+    );
+}
+
+/// The index's glossary names the tool behind each comparison of the
+/// comparison oracle as `scripts/concordance/feature_oracle.sh` starts them:
+/// `compare_cmd` and `warnings_cmd` build their commands on the format
+/// comparator, a build of `tools/vep-formats-compare`, and `stats_cmd` on the
+/// statistics comparator, a build of `tools/vep-stats-compare`. The runner
+/// builds a comparison command on no third tool, and the line holds no
+/// sentence that gives every comparison to the format comparator.
+#[test]
+fn the_oracle_glossary_line_names_the_comparator_behind_each_comparison() {
+    let page = "intended-divergences.md";
+    assert_page_states(
+        page,
+        &[
+            "- **The oracle**: the comparison oracle: the harness that runs Ensembl VEP and \
+             vep-rs on the same inputs and compares every column of every row in every output \
+             format (`scripts/concordance/feature_oracle.sh`). It runs the comparison cases of a \
+             case table in two tiers: the fixture tier's cases take the golden corpora's inputs, \
+             the population tier's the measured datasets. The format comparator makes each \
+             comparison of two outputs in one output format; the statistics comparator, \
+             `tools/vep-stats-compare`, compares the two statistics reports of a case that names \
+             `stats` among its formats.",
+        ],
+    );
+    let refused = "each comparison made by the format comparator";
+    assert!(
+        !page_text(page)
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+            .contains(refused),
+        "docs/{page} states {refused:?}"
+    );
+
+    let path = "scripts/concordance/feature_oracle.sh";
+    let runner = std::fs::read_to_string(format!("{}/../../{path}", env!("CARGO_MANIFEST_DIR")))
+        .unwrap_or_else(|e| panic!("{path}: {e}"));
+    assert_states(
+        path,
+        &runner,
+        &[
+            r#"COMPARATOR_NAMED="${VEP_FORMATS_COMPARATOR:-$REPO_DIR/tools/vep-formats-compare/target/release/vep-formats-compare}""#,
+            r#"STATS_COMPARATOR_NAMED="${VEP_STATS_COMPARATOR:-$REPO_DIR/tools/vep-stats-compare/target/release/vep-stats-compare}""#,
+        ],
+    );
+    let comparison_commands: Vec<&str> = runner
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.starts_with(r#"CMD=("$"#) && line.contains(r#"COMPARATOR" "#))
+        .collect();
+    assert_eq!(
+        comparison_commands,
+        [
+            r#"CMD=("$COMPARATOR" --format "$fmt" --expected "$2" --actual "$3" --report "$4")"#,
+            r#"CMD=("$COMPARATOR" --warnings --expected "$1" --actual "$2" --report "$3")"#,
+            r#"CMD=("$STATS_COMPARATOR" --expected "$1" --actual "$2" --report "$3")"#,
+        ],
+        "the comparison commands of {path}"
+    );
+}
+
+/// The index states the second body its counts are measured on: the corpora
+/// (the directories under `tests/golden/116/` that hold a `provenance.json`),
+/// their flag sets and the tool runs (the entries of the records'
+/// `tool_cases`). A flag set is one committed run of a corpus: its default
+/// run, where the record holds a top-level `vep_command`, and one for each
+/// entry of its `flag_sets`.
+#[test]
+fn index_states_the_corpora_their_flag_sets_and_the_tool_runs_the_tree_holds() {
+    let page = "intended-divergences.md";
+    let golden = format!("{}/../../tests/golden/116", env!("CARGO_MANIFEST_DIR"));
+    let (mut corpora, mut flag_sets, mut tool_runs) = (0, 0, 0);
+    for corpus in std::fs::read_dir(&golden).unwrap_or_else(|e| panic!("{golden}: {e}")) {
+        let path = corpus.unwrap().path().join("provenance.json");
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let record: serde_json::Value =
+            serde_json::from_str(&text).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+        let entries = |key: &str| match &record[key] {
+            serde_json::Value::Object(named) => named.len(),
+            serde_json::Value::Array(listed) => listed.len(),
+            _ => 0,
+        };
+        corpora += 1;
+        flag_sets += usize::from(record.get("vep_command").is_some()) + entries("flag_sets");
+        tool_runs += entries("tool_cases");
+    }
+    assert_page_states(
+        page,
+        &[&format!(
+            "The second body is the {corpora} golden corpora under `tests/golden/116/` with \
+             their {flag_sets} committed flag sets, a flag set being one committed run of a \
+             corpus, its flags and output formats. Beside the flag sets stand the {tool_runs} \
+             committed runs of `vep filter` and `vep recode`, the tool runs."
+        )],
+    );
+}
+
+/// A count below one hundred in the words the index spells it with.
+fn count_in_words(count: usize) -> String {
+    const UNITS: [&str; 20] = [
+        "zero",
+        "one",
+        "two",
+        "three",
+        "four",
+        "five",
+        "six",
+        "seven",
+        "eight",
+        "nine",
+        "ten",
+        "eleven",
+        "twelve",
+        "thirteen",
+        "fourteen",
+        "fifteen",
+        "sixteen",
+        "seventeen",
+        "eighteen",
+        "nineteen",
+    ];
+    const TENS: [&str; 8] = [
+        "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety",
+    ];
+    match count {
+        0..=19 => UNITS[count].to_string(),
+        20..=99 if count.is_multiple_of(10) => TENS[count / 10 - 2].to_string(),
+        20..=99 => format!("{}-{}", TENS[count / 10 - 2], UNITS[count % 10]),
+        _ => panic!("no spelling for a count of {count}"),
+    }
+}
+
+/// The index's opening counts the entries of its last section of entry
+/// tables, `Differences only malformed input reaches`: the rows of that
+/// section, the defects among them apart from the differences outside the
+/// classes. A row is a defect's where its page cell names a class after the
+/// page's link (`), class 21`, `), classes 3 and 4`).
+#[test]
+fn index_counts_the_entries_only_malformed_input_reaches_as_its_last_section_lists_them() {
+    let page = "intended-divergences.md";
+    let index = page_text(page);
+    let (_, section) = index
+        .split_once("\n## Differences only malformed input reaches")
+        .expect("docs/intended-divergences.md heads `Differences only malformed input reaches`");
+    let (section, _) = section
+        .split_once("\n## ")
+        .expect("a `##` heading follows the section of malformed input");
+    let rows: Vec<&str> = section
+        .lines()
+        .filter(|line| line.starts_with("| [`"))
+        .collect();
+    let defects = rows
+        .iter()
+        .filter(|row| {
+            let page_cell = row.trim_end().trim_end_matches('|').rsplit(" | ").next();
+            page_cell.is_some_and(|cell| {
+                ["), class ", "), classes "].iter().any(|lead| {
+                    cell.split(lead)
+                        .skip(1)
+                        .any(|rest| rest.starts_with(|c: char| c.is_ascii_digit()))
+                })
+            })
+        })
+        .count();
+    assert!(
+        defects < rows.len(),
+        "the section lists {} rows, {defects} of them a defect's",
+        rows.len()
+    );
+    let differences = count_in_words(rows.len() - defects);
+    let of_the_defects = if defects == 0 {
+        String::new()
+    } else {
+        format!(", and {} of the defects,", count_in_words(defects))
+    };
+    assert_page_states(
+        page,
+        &[&format!(
+            "{}{} of these differences{of_the_defects} are reached by malformed input alone and \
+             stand in the last section of entries",
+            differences[..1].to_uppercase(),
+            &differences[1..]
+        )],
+    );
+}
+
+/// The names of the index's entries: the first cell of every row of its entry
+/// tables, which stand between the headings `How the entries are ordered` and
+/// `Concordance figures and classes`.
+fn index_entry_names() -> std::collections::BTreeSet<String> {
+    let index = page_text("intended-divergences.md");
+    let (_, rest) = index
+        .split_once("\n## How the entries are ordered")
+        .expect("docs/intended-divergences.md holds the heading `How the entries are ordered`");
+    let (tables, _) = rest
+        .split_once("\n## Concordance figures and classes")
+        .expect("docs/intended-divergences.md holds the heading `Concordance figures and classes`");
+    tables
+        .lines()
+        .filter_map(|line| {
+            let cell = line.strip_prefix('|')?.split('|').next()?.trim();
+            let cell = cell.strip_prefix('[').unwrap_or(cell);
+            let (name, rest) = cell.strip_prefix('`')?.split_once('`')?;
+            (name_shaped_words(name).eq([name]) && (rest.is_empty() || rest.starts_with("](")))
+                .then(|| name.to_string())
+        })
+        .collect()
+}
+
+/// The runs of ASCII lower-case letters, digits and underscores in `text`: the
+/// only words of a file that can be an entry's name.
+fn name_shaped_words(text: &str) -> impl Iterator<Item = &str> {
+    text.split(|c: char| !(c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_'))
+        .filter(|word| !word.is_empty())
+}
+
+/// Whether a file under `dir` holds one of `names` as a whole word. A
+/// directory that does not exist holds none.
+fn holds_one_of(dir: &std::path::Path, names: &std::collections::BTreeSet<String>) -> bool {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return false;
+    };
+    entries.flatten().any(|entry| {
+        let path = entry.path();
+        if path.is_dir() {
+            return holds_one_of(&path, names);
+        }
+        std::fs::read(&path).is_ok_and(|bytes| {
+            name_shaped_words(&String::from_utf8_lossy(&bytes)).any(|word| names.contains(word))
+        })
+    })
+}
+
+/// The index says which comparisons set an entry's rows aside under the
+/// entry's name, and each of the seven holds entries' names as its classes:
+/// the golden harness in the class lists of `common/mod.rs`, the format
+/// comparator in `data/classes.tsv`, its warnings mode in the column
+/// `WARNING_TEXT_CLASSES` of that table, the plugin tuple scorer in
+/// `scripts/concordance/plugin_class_table.tsv`, the statistics comparator in
+/// `EXISTING_VARIANTS_CLASS` of `src/report.rs`, the SNP/indel comparator in
+/// `data/divergence_classes.tsv` and the structural-variant comparator, which
+/// compiles that comparator's rules, in `src/registry.rs`. Each writes the
+/// class beside what it set aside but the harness, which counts one total, so
+/// the sentence says under which class the rows are set aside and not under
+/// which they are counted. One more root under `tools/` holds an entry's name
+/// in its sources: `tools/vep-golden-corpus`, whose `classify` writes the
+/// lists the harness and the format comparator apply and gives no verdict of
+/// its own. The glossary defines every comparison of the sentence but the
+/// scorer, which the sentence names by its path. Mask classes are among the
+/// nineteen concordance classes, so a clause that puts none there is refused:
+/// `splice_family_swap` and `start_cooccurrence_swap`, classes 1 and 3 of the
+/// page's class table, stand in `CORRECTED_BEHAVIOUR_CLASSES` of
+/// `common/mod.rs`, in `data/classes.tsv` and in `BUILTIN_MASKS` of
+/// `scripts/concordance/feature_oracle.sh`.
+#[test]
+fn index_names_every_comparison_that_sets_an_entrys_rows_aside_under_its_name() {
+    let page = "intended-divergences.md";
+    assert_page_states(
+        page,
+        &[
+            "The name is the class the golden harness, the warnings comparison, the plugin tuple \
+             scorer (`tools/vep-plugin-pairs`) or the format, statistics, SNP/indel or \
+             structural-variant comparator sets the entry's rows aside under, where one does. \
+             [How to read the counts](#how-to-read-the-counts) defines all but the scorer.",
+            "- **The comparators**: the SNP/indel comparator is `tools/vep-outputs-compare`,",
+            "the structural-variant comparator is `tools/vep-sv-compare`,",
+            "- **The format comparator**: `tools/vep-formats-compare`,",
+            "- **The warnings comparison**: the format comparator's `--warnings` mode,",
+            "- **The golden harness**: the test harness under `crates/vep-cli/tests/` \
+             (`common/mod.rs`),",
+            "the statistics comparator, `tools/vep-stats-compare`,",
+        ],
+    );
+    let text = page_text(page)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for refused in [
+        "the format comparator or the warnings comparison counts the entry's rows under",
+        "defines those tools",
+        "no mask class is among",
+        "a mask class is not one of the nineteen",
+    ] {
+        assert!(!text.contains(refused), "docs/{page} states {refused:?}");
+    }
+
+    let names = index_entry_names();
+    for name in [
+        "splice_term_past_the_record_span",
+        "stats_existing_variants_check_frequency",
+        "utrannotator_annotation_pair_order",
+    ] {
+        assert!(
+            names.contains(name),
+            "the entry tables of docs/{page} hold no row of {name}"
+        );
+    }
+
+    let root = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
+    let read = |path: &str| {
+        std::fs::read_to_string(format!("{root}/{path}")).unwrap_or_else(|e| panic!("{path}: {e}"))
+    };
+    for (comparison, path) in [
+        ("the golden harness", "crates/vep-cli/tests/common/mod.rs"),
+        (
+            "the format comparator",
+            "tools/vep-formats-compare/data/classes.tsv",
+        ),
+        (
+            "the plugin tuple scorer",
+            "scripts/concordance/plugin_class_table.tsv",
+        ),
+        (
+            "the statistics comparator",
+            "tools/vep-stats-compare/src/report.rs",
+        ),
+        (
+            "the SNP/indel comparator",
+            "tools/vep-outputs-compare/data/divergence_classes.tsv",
+        ),
+        (
+            "the structural-variant comparator",
+            "tools/vep-sv-compare/src/registry.rs",
+        ),
+    ] {
+        assert!(
+            name_shaped_words(&read(path)).any(|word| names.contains(word)),
+            "{comparison}: {path} holds no entry's name"
+        );
+    }
+    let classes = read("tools/vep-formats-compare/data/classes.tsv");
+    let mut rows = classes
+        .lines()
+        .map(|line| line.split('\t').collect::<Vec<_>>());
+    let column = rows
+        .next()
+        .and_then(|header| {
+            header
+                .iter()
+                .position(|cell| *cell == "WARNING_TEXT_CLASSES")
+        })
+        .expect("data/classes.tsv has a WARNING_TEXT_CLASSES column");
+    assert!(
+        rows.any(
+            |row| row.get(column).is_some_and(|cell| !cell.is_empty()) && names.contains(row[0])
+        ),
+        "the warnings comparison: no class of the WARNING_TEXT_CLASSES column is an entry's name"
+    );
+
+    let tools = format!("{root}/tools");
+    let holders: Vec<String> = {
+        let mut roots: Vec<_> = std::fs::read_dir(&tools)
+            .unwrap_or_else(|e| panic!("{tools}: {e}"))
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|dir| {
+                ["src", "data"]
+                    .iter()
+                    .any(|part| holds_one_of(&dir.join(part), &names))
+            })
+            .map(|dir| dir.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        roots.sort();
+        roots
+    };
+    assert_eq!(
+        holders,
+        [
+            "vep-formats-compare",
+            "vep-golden-corpus",
+            "vep-outputs-compare",
+            "vep-plugin-pairs",
+            "vep-stats-compare",
+            "vep-sv-compare",
+        ],
+        "the roots under tools/ whose sources or data hold an entry's name: the five that hold a \
+         comparison the sentence names and the corpus builder"
+    );
+}
+
+/// The intron-span page says that the golden harness and the format comparator
+/// set the worked row of its section 1 aside under the entry's name, as the
+/// index has it. The format comparator counts a manifest item under its class
+/// (`applied` of `tools/vep-formats-compare/src/manifest.rs`). The harness sets
+/// a manifest item aside by its row key and counts one total for every class
+/// (`Documented::for_run` and `skipped_documented` of `common/mod.rs`), so a
+/// sentence that has both count the row under the class is refused.
+#[test]
+fn intron_span_page_says_both_comparisons_set_the_worked_row_aside_under_the_class() {
+    let page = "divergences/refseq-edited-model-intron-span-coding-reference.md";
+    assert_page_states(
+        page,
+        &[
+            "The golden harness and the format comparator set the worked row of section 1 aside \
+             under it, in the corpus `GRCh38-refseq-intron-span`; section 1.7 gives the shape \
+             they read.",
+        ],
+    );
+    let text = page_text(page)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let refused = "the format comparator count the worked row";
+    assert!(!text.contains(refused), "docs/{page} states {refused:?}");
 }
 
 /// `source-cache`, `info-bam` and `bam-edit-status-rna-edit`: the conversion
@@ -2688,10 +12065,207 @@ fn refseq_cache_fields_and_bam_notice_subset_is_documented() {
     );
 }
 
+/// `use_transcript_ref_cache_cdna` on the cache's own genome: past the own edit
+/// of a model whose alignment correction failed, TranscriptVariation.pm:462-463
+/// index the exons joined without that edit by a cDNA number that counts it, so
+/// the reference allele is read one position on where the edit adds a position
+/// and one position back where it removes one. The page states both directions,
+/// the ten models and the class the format comparator sets the rows aside under,
+/// with the two notations and the JSON record's most severe term that follow the
+/// base read under `--hgvs` (TranscriptVariationAllele.pm:1510-1513 and :1793);
+/// a page that says nothing is set aside, names one direction alone, counts five
+/// cells or says the record's term stays compared fails.
+#[test]
+fn transcript_reference_past_a_failed_edit_models_own_edit_is_documented() {
+    let page = "divergences/use-transcript-ref-cache-cdna.md";
+    assert_page_states(
+        page,
+        &[
+            "Nothing is set aside in the concordance figures; a format comparison sets aside \
+             seven cells of the rows of \
+             [section 1](#1-a-refseq-model-whose-alignment-correction-failed).",
+            "One exception stands on the cache's own genome: a RefSeq model with \
+             `BAM_EDIT=FAILED` that carries an edit of its own. Past that edit Ensembl VEP reads \
+             the reference allele one position away from the record's, and vep-rs reads it at \
+             the record's position. Where the model holds a base the genome lacks, Ensembl VEP \
+             reads one position further along the transcript. Where the model lacks a base the \
+             genome holds, it reads one position back.",
+            "Three models of `PEG10` write one cDNA position as two bases, so each holds one \
+             position the genome lacks. Seven models of `OAZ1`, `OAZ2` and `OAZ3` write one cDNA \
+             position as no base, so each lacks one position the genome holds.",
+            "`TranscriptVariation.pm`, lines 457 and 462-463: the reference allele is cut from \
+             the cached sequence or, without one, from `spliced_seq`, at the row's cDNA start.",
+            "`spliced_seq` joins the exons and applies the edits only when `edits_enabled` is \
+             set (line 866). On a cached model it is not, so the join holds no edit.",
+            "The format comparator `tools/vep-formats-compare` holds the class \
+             `use_transcript_ref_cache_cdna`. It reads a `Transcript` row of a one-base allele \
+             that carries `BAM_EDIT=FAILED` in both engines' outputs.",
+            "The rows of a FASTA that disagrees with the cache are not told from the rows alone, \
+             and nothing is set aside for them.",
+            "`TranscriptVariationAllele.pm`, lines 1510-1513 and 1793: under `--hgvs`, the \
+             `HGVSc` of a model that carries an `_rna_edit` names the reference allele so cut \
+             as the base changed, and the `HGVSp` takes its reference residue from the \
+             reference codon.",
+            "On such a row the class sets aside seven cells, each only where the base Ensembl \
+             VEP read explains it:",
+            "- an `HGVSc` of one substitution in each output, both at one position, whose base \
+             changed is Ensembl VEP's `USED_REF` in its output and the `GIVEN_REF` in vep-rs's, \
+             on the transcript's strand;",
+            "- an `HGVSp` of one residue in each output, both at one position, each naming the \
+             residue of its own reference codon as the residue changed, where the two reference \
+             codons give different residues and neither is a stop codon.",
+            "In the JSON format the class leaves uncompared the `most_severe_consequence` of a \
+             record that holds a row whose `Consequence` it sets aside.",
+            "`HGVSc` differs on all 24: Ensembl VEP's names the base it read, its `USED_REF` on \
+             the transcript's strand, as the base changed. The position differs on all 24 as \
+             well: vep-rs counts it along the genome's exons, and Ensembl VEP writes it with the \
+             model's edit counted.",
+            "That is a difference in the numbering, not in the base read. [The HGVSc position \
+             past the own edit of a failed-edit RefSeq model]\
+             (refseq-failed-edit-model-hgvsc-offset.md) documents it, and a comparison that \
+             names that entry's class beside this one sets the cell aside.",
+            "`HGVSp` differs on the 15 rows whose `Amino_acids` differ: each output names the \
+             residue of its own reference codon.",
+            "In JSON the record's `most_severe_consequence` differs on two of the nine records, \
+             the two whose rows differ in `Consequence`:",
+        ],
+    );
+    let text = page_text(page)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for refused in [
+        "disagrees with the cache; nothing is set aside.",
+        "after the one base a RefSeq model with `BAM_EDIT=FAILED` holds and the genome lacks, \
+         Ensembl VEP cuts the reference allele one position further along the transcript",
+        "sets aside five cells",
+        "`most_severe_consequence` stays compared",
+        "a comparison keeps it as a difference",
+        "The 18 coding rows name one position in both outputs.",
+    ] {
+        assert!(
+            !text.contains(refused),
+            "docs/{page} still states {refused:?}"
+        );
+    }
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "and its `USED_REF` and terms are the cache's; on the cache's own genome the two \
+             differ past the own edit of a RefSeq model whose alignment correction failed \
+             (`BAM_EDIT=FAILED`), where Ensembl VEP cuts the reference allele one position off |",
+        ],
+    );
+}
+
+/// `refseq_failed_edit_model_hgvsc_offset`: past the own edit of a model whose
+/// alignment correction failed, Ensembl VEP numbers an HGVSc position with the
+/// edit counted, a one-base coding substitution at the cached CDS start
+/// (TranscriptVariationAllele.pm:1519-1522) and any other notation along the
+/// exons plus the offset `get_misalignment_offset` sums (:1614, :1617), where
+/// vep-rs counts along the genome's exons, the transcript's own bases. The page
+/// states the lines, the rows of both engines on a model whose edit adds a
+/// position and on one whose edit takes one out, the count that gives vep-rs's
+/// number and what the format comparator reads; the index row names the entry,
+/// and the pages of the neighbouring entries and of the output columns point
+/// at it. A page that numbers the positions on the cached model fails.
+#[test]
+fn hgvsc_position_past_a_failed_edit_models_own_edit_is_documented() {
+    let page = "divergences/refseq-failed-edit-model-hgvsc-offset.md";
+    assert_page_states(
+        page,
+        &[
+            "Under `--hgvs`, on a RefSeq model whose alignment correction failed \
+             (`BAM_EDIT=FAILED`) and whose own edit changes the length of the cDNA, Ensembl VEP \
+             116.3 numbers an HGVSc position past the edit with the edit counted.",
+            "vep-rs counts every position along the genome's exons, which are the model's \
+             transcript.",
+            "RefSeq's record gives its coding sequence as a join that reads one position twice, \
+             on the three models of `PEG10`, or passes over one, on the seven of `OAZ1`, `OAZ2` \
+             and `OAZ3`.",
+            "Line 1617 adds the length of the text of an edit of three fields, whatever span \
+             the text replaces.",
+            "Lines 1519-1522: a one-base substitution that has a CDS position is numbered at \
+             the row's CDS start, a number of the cached map, which counts the edit.",
+            "| `HGVSc` | `NM_015068.3:c.*1776G>A` | `NM_015068.3:c.*1775T>A` |",
+            "| `HGVSc` | `NM_015068.3:c.1178G>C` | `NM_015068.3:c.1177A>C` |",
+            "| a coding deletion past the edit | 1247 | `c.1248del` | `c.1246del` |",
+            "| a coding deletion past the edit | 312 | `c.312del` | `c.313del` |",
+            "| an intron substitution past the edit | none | `c.465+12G>A` | `c.465+12G>A` |",
+            "The first base of the start codon is `7:94663557`, in the same exon as the coding \
+             record. The record's base is the 1,177th base from it, `c.1177`.",
+            "The last coding base is `7:94665682`, and the three reference bases that end \
+             there are a stop codon. The 3' UTR record lies in the same exon, 1,775 bases past \
+             it.",
+            "It reads the candidate's cache, given as `--json-cache`, for the edits of the \
+             row's transcript that change the cDNA's length, and for the model's cached coding \
+             start and end. Without the cache it sets nothing aside.",
+            "For a one-base substitution on a row with one CDS position, Ensembl VEP's \
+             coordinate must be that CDS position, and vep-rs's the coding position of the same \
+             base counted along the genome's exons. For any other notation, each of Ensembl \
+             VEP's coordinates must be vep-rs's count plus the offset summed over the edits \
+             before the row, read between the cached coding start and end.",
+            "For a substitution whose base differs as well, the comparison must also name \
+             `use_transcript_ref_cache_cdna`, which reads the base.",
+            "Each notation must also stand at its row. A one-base substitution stands at the \
+             row's cDNA position. Any other notation stands within the row's `HGVS_OFFSET` and \
+             its allele's length of the row's positions.",
+            "An edit that takes a position out has no cached position of its own, and the row \
+             of the first base past it is a row of the class.",
+        ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "| [`refseq_failed_edit_model_hgvsc_offset`]\
+             (divergences/refseq-failed-edit-model-hgvsc-offset.md) | Under `--hgvs`, on a \
+             RefSeq model whose alignment correction failed (`BAM_EDIT=FAILED`) and whose own \
+             edit changes the cDNA's length,",
+            "a one-base coding substitution at the cached model's number and any other notation \
+             along the exons plus the offset it sums for the edit; vep-rs counts every position \
+             along the genome's exons, the model's transcript | 3 · 0 of 116,165 cache \
+             transcripts · 7 flag sets, 0 corpora | 116.3 |",
+        ],
+    );
+    let text = page_text(page)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for refused in [
+        "vep-rs numbers every position on the cached model",
+        "A coding position is the row's `CDS_position`.",
+    ] {
+        assert!(
+            !text.contains(refused),
+            "docs/{page} still states {refused:?}"
+        );
+    }
+    assert_page_states(
+        "output/refseq-and-merged.md",
+        &[
+            "A model whose correction failed (`BAM_EDIT=FAILED`) keeps none of the alignment's \
+             edits, and its HGVSc is counted along the genome's exons",
+        ],
+    );
+    assert_page_states(
+        "divergences/refseq-failed-edit-model-insertion-term.md",
+        &[
+            "Section 1.4 describes it, and [The HGVSc position past the own edit of a \
+             failed-edit RefSeq model](refseq-failed-edit-model-hgvsc-offset.md) is its entry.",
+            "The position inside the `HGVSc` of the second record's rows, whose `cDNA_position` \
+             the engines write alike, is the offset's, and the format comparator sets it aside \
+             where the comparison names that entry's class, \
+             `refseq_failed_edit_model_hgvsc_offset`.",
+            "Counted along the exons it is cDNA 1438, `c.959` from the coding start, the \
+             position vep-rs writes and the record's own position of that base.",
+        ],
+    );
+}
+
 /// `attributes-rseq-refseq-compare` and `refseq-match-bam-edit-source-columns`:
 /// the `rseq_*` attributes print as `REFSEQ_MATCH`, the `enst_refseq_compare`
 /// attribute is carried and printed by neither engine (`grep {$_->code =~
-/// /^rseq/}`, OutputFactory.pm:1547), `SOURCE` and `REFSEQ_OFFSET` follow their
+/// /^rseq/}`, OutputFactory.pm:1556), `SOURCE` and `REFSEQ_OFFSET` follow their
 /// rules, and an edited model's HGVSc is numbered against the edited model,
 /// with Ensembl VEP's unedited numbering stated as the intended divergence.
 #[test]
@@ -2790,6 +12364,221 @@ fn refseq_exclusions_are_documented() {
     );
 }
 
+/// `exclude_predicted`: the option set adds the filter Ensembl VEP's adds
+/// (Config.pm:566-571), which reads every transcript of the run
+/// (AnnotationType/Transcript.pm:116), so the flag changes rows wherever a
+/// cache, or a GTF or GFF3 read beside one, holds a matching identifier.
+#[test]
+fn exclude_predicted_exclusion_is_documented() {
+    assert_flag_row_states(
+        "cli/filtering-picking.md",
+        "--exclude_predicted",
+        &[
+            "The filter reads every transcript of the run, so the flag takes effect wherever \
+             an identifier matches the pattern",
+            "on a GTF or GFF3 that holds such models, built into a cache or read beside one",
+            "Where none matches, it changes no annotation",
+        ],
+    );
+    let page = page_text("cli/filtering-picking.md");
+    let row = page
+        .lines()
+        .find(|l| l.starts_with("| `--exclude_predicted`"))
+        .expect("docs/cli/filtering-picking.md has no --exclude_predicted row");
+    for refused in [
+        "An Ensembl cache carries no predicted model",
+        "no RefSeq or merged cache is built natively",
+    ] {
+        assert!(
+            !row.contains(refused),
+            "the --exclude_predicted row of docs/cli/filtering-picking.md states {refused:?}"
+        );
+    }
+}
+
+/// The cells of the record lines of a reproduction record's inline input: each
+/// line of the record that holds eight tab-separated columns, a VCF record.
+fn reproduction_input_records(record: &str) -> Vec<Vec<&str>> {
+    record
+        .lines()
+        .map(|line| line.split('\t').collect::<Vec<_>>())
+        .filter(|cells| cells.len() == 8)
+        .collect()
+}
+
+/// The rows a reproduction record lists under `key` of its `[expected]` table
+/// for the input record `id`, each as its cells.
+fn reproduction_expected_rows<'a>(record: &'a str, key: &str, id: &str) -> Vec<Vec<&'a str>> {
+    let opening = format!("{key} = [");
+    record
+        .lines()
+        .skip_while(|line| *line != opening)
+        .skip(1)
+        .take_while(|line| *line != "]")
+        .map(|line| {
+            line.trim()
+                .trim_start_matches('"')
+                .trim_end_matches(',')
+                .trim_end_matches('"')
+                .split(" | ")
+                .collect::<Vec<_>>()
+        })
+        .filter(|cells| cells[0] == id)
+        .collect()
+}
+
+/// The page of `refseq_edited_model_seam_insertion_hgvsc` shows the insertion
+/// in three forms, and the entry's reproduction is one run that holds a record
+/// of each: the three records of section 1, written on such bases inside a
+/// coding sequence, one written on the two bases that `NM_001083591.1` and
+/// `NM_001025076.2` hold in their 3' untranslated region, and one that the 3'
+/// shift moves onto the three bases of `NM_015120.4`. The page says so in
+/// sections 1.6, 2.6 and 3.6, quotes the two further records as the record
+/// file writes them, and gives of each the positions and the `HGVSc` that the
+/// record file holds for both engines.
+#[test]
+fn seam_insertion_page_says_which_records_its_reproduction_runs() {
+    let page = "divergences/refseq-edited-model-seam-insertion-hgvsc.md";
+    let record = reproduction_record("refseq_edited_model_seam_insertion_hgvsc");
+    assert!(
+        !record.contains("[[also]]"),
+        "the record holds a further run, and the page says its reproduction is one run"
+    );
+    let records = reproduction_input_records(&record);
+    let ids: Vec<&str> = records.iter().map(|cells| cells[2]).collect();
+    assert_eq!(
+        ids,
+        [
+            "shifted_onto_the_bases",
+            "seam_one_base",
+            "551063",
+            "1167157",
+            "untranslated_one_base",
+        ],
+        "the records the reproduction runs"
+    );
+    assert_page_states(
+        page,
+        &[
+            "The entry's reproduction is one run of both engines, on GRCh38, of five records: \
+             these three and the two of 2.6 and 3.6.",
+            "A run reads one cache, so the reproduction converts the two region files of Ensembl \
+             VEP's cache that hold its models, here `2/73000001-74000000`.",
+            "It also writes a FASTA that holds the genomic bases of one exon at each place, \
+             here the 435 of the model's first exon, and `N` elsewhere.",
+            "The entry's reproduction, on GRCh38, does not run these three: it runs a record \
+             written for this form.",
+            "The entry's reproduction, on GRCh38, does not run this record: it runs one written \
+             for this form.",
+        ],
+    );
+    let text = page_text(page);
+    let collapsed = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    for refused in [
+        "is one run, of these three records",
+        "has no reproduction of its own",
+        "the one region file",
+    ] {
+        assert!(
+            !collapsed.contains(refused),
+            "docs/{page} still states {refused:?}"
+        );
+    }
+    // The region files the record's first prepare step copies out of Ensembl
+    // VEP's cache are the two the page names.
+    let region_files: Vec<&str> = record
+        .split("\"$PERL_CACHE/")
+        .skip(1)
+        .filter_map(|copied| copied.split_once('"'))
+        .filter_map(|(path, _)| path.strip_suffix(".gz"))
+        .collect();
+    assert_eq!(
+        region_files,
+        ["2/73000001-74000000", "10/11000001-12000000"],
+        "the region files the record converts"
+    );
+    for region_file in region_files {
+        assert!(
+            text.contains(&format!("`{region_file}`")),
+            "docs/{page} lacks the region file {region_file}"
+        );
+    }
+    // Each of the two further records as its line of the record file reads, and
+    // in the table that quotes it, of each of its rows, the position cell that
+    // tells its form as a whole word and each engine's notation in the row that
+    // opens with the engine's name, the reference name left out as on the page.
+    for (id, position_column) in [("untranslated_one_base", 1), ("shifted_onto_the_bases", 2)] {
+        let cells = records
+            .iter()
+            .find(|cells| cells[2] == id)
+            .unwrap_or_else(|| panic!("the record holds no input line {id}"));
+        let quoted = format!("`{}`", cells[..5].join(" "));
+        assert!(
+            text.contains(&quoted),
+            "docs/{page} lacks the record {quoted}"
+        );
+        let table: Vec<&str> = text
+            .lines()
+            .skip_while(|line| !line.contains(&quoted))
+            .take_while(|line| line.starts_with('|'))
+            .collect();
+        for (key, engine) in [("ensembl_vep", "Ensembl VEP"), ("vep_rs", "vep-rs")] {
+            let rows = reproduction_expected_rows(&record, key, id);
+            assert!(!rows.is_empty(), "the record holds no {key} row of {id}");
+            let opening = format!("| {engine} ");
+            let engine_row = table
+                .iter()
+                .find(|line| line.starts_with(&opening))
+                .unwrap_or_else(|| panic!("docs/{page} has no {engine} row of {id}"));
+            for row in rows {
+                let position = row[position_column];
+                assert!(
+                    table
+                        .iter()
+                        .any(|line| line.split([' ', ',']).any(|word| word == position)),
+                    "docs/{page} lacks the position {position} of {id}"
+                );
+                let notation = row
+                    .last()
+                    .and_then(|hgvsc| hgvsc.split_once(':'))
+                    .map(|(_, notation)| format!("`{notation}`"))
+                    .unwrap_or_else(|| panic!("a {key} row of {id} holds no HGVSc"));
+                assert!(
+                    engine_row.contains(&format!("| {notation}")),
+                    "docs/{page} lacks the {key} notation {notation} of {id}"
+                );
+            }
+        }
+    }
+}
+
+/// The page of `refseq_edited_model_inserted_span_codons` says what the nearest
+/// class, `refseq_edited_model_deleted_span_codons`, takes beside its codons.
+/// That class's rule in the format comparator
+/// (`deleted_span_coding_reference_cell`) takes the `Amino_acids` of a row
+/// whose two `Codons` have the class's shape, so no text may read as if the
+/// class left the amino acids compared.
+#[test]
+fn inserted_span_codons_page_says_what_the_deleted_span_class_takes_beside_its_codons() {
+    let path = "divergences/refseq-edited-model-inserted-span-codons.md";
+    assert_page_states(
+        path,
+        &[
+            "Its test asks for a `USED_REF` longer than the CDS span and a difference in an \
+             upper-case base, and it takes the amino acids only beside codons of that shape.",
+        ],
+    );
+    let page = page_text(path)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let refused = "the amino acids are compared beside it";
+    assert!(
+        !page.contains(refused),
+        "docs/{path} still says {refused:?}"
+    );
+}
+
 /// `merged`: the pages state what a `--merged` run annotates (every Ensembl
 /// model, and of the RefSeq-sourced ones the accessions alone,
 /// `AnnotationType/Transcript.pm:240`), that the `source_cache` stamp is read
@@ -2821,6 +12610,376 @@ fn merged_exclusions_are_documented() {
         "--transcript_filter",
         &["`_source_cache` (`Ensembl` or `RefSeq` on a merged cache's transcripts, undefined elsewhere"],
     );
+}
+
+/// `merged_same_dbid_collapse`: `merge_features` keeps one transcript per
+/// `dbID` among those a buffer loads (`AnnotationType/Transcript.pm:283-287`),
+/// and a merged region file joins the two sets' lists with each transcript's
+/// own `dbID` (`Pipeline/DumpVEP/MergeVEP.pm:94-120`), so a transcript of one
+/// set drops a transcript of the other that shares the number; the loader keys
+/// on the set and the `dbID` (`merged_cache_shared_dbid.rs` holds its rows).
+/// The SNP/indel comparator sets the entry's rows aside in a comparison that
+/// names the converted cache, by a replay of the reference's buffers.
+#[test]
+fn merged_same_dbid_collapse_divergence_is_documented() {
+    assert_page_states(
+        "divergences/merged-same-dbid-collapse.md",
+        &[
+            "Under `--merged`, Ensembl VEP keeps one transcript per `dbID` among the transcripts \
+             a buffer loads. A merged cache numbers its Ensembl-set and its RefSeq-set \
+             transcripts apart, so one `dbID` can name a transcript of each set.",
+            "The transcript read second loses every row, and a record on no other transcript is \
+             written as `intergenic_variant`. vep-rs keeps every transcript the cache \
+             distinguishes by set and `dbID`.",
+            "line 283 reads the transcript's `dbID`, lines 284-287 skip a transcript whose `dbID` \
+             an earlier one of the list carried, and line 297 records it",
+            "The two committed human merged caches, GRCh38 and GRCh37 on chromosome 21, hold no \
+             such transcript, and neither does any other sequence of Ensembl's release 116 human \
+             merged caches. In each whole cache the two sets number their transcripts in ranges \
+             that do not meet.",
+            "`AnnotationType/Transcript.pm`, lines 236-248, `filter_transcript`: without \
+             `--all_refseq`, a RefSeq-set transcript of a merged cache is kept only where its \
+             identifier is a RefSeq accession, or on `MT` a mitochondrial gene identifier. Line \
+             241 of `AnnotationSource/Cache/Transcript.pm` calls it as a region file is read, \
+             so a transcript it drops never reaches `merge_features`. Line 244 also keeps a \
+             transcript by the identifier of its `display_xref`, a field the cache dump deletes \
+             from every transcript it writes (`Pipeline/DumpVEP/Dumper/Core.pm`, lines 113 and \
+             155-173).",
+            "The shape is a transcript of a merged cache whose `dbID` a transcript of the other \
+             set carries on the same sequence, where the run reads both. Without \
+             `--all_refseq`, both engines read a RefSeq-set transcript only where its \
+             identifier is a RefSeq accession, such as XM_015636078.1, or on `MT` a \
+             mitochondrial gene identifier. Tier 3: no committed cache carries the shape under \
+             the flags of a committed run. [How the entries are \
+             ordered](../intended-divergences.md#differences-outside-the-classes) defines the \
+             tiers and a flag set, one committed run of a corpus.",
+            "Ensembl's release 116 merged cache of the great tit (*Parus major*, \
+             `Parus_major1.1`) carries the shape. A region file that both sets' caches held \
+             flags each transcript with its set. Among those transcripts the Ensembl set's \
+             `dbID`s run from 38 to 35,314 and the RefSeq set's from 1 to 46,874. 34,586 \
+             `dbID`s name a transcript of each set. For 1,398 of them both transcripts lie on \
+             one sequence and the RefSeq-set transcript's identifier is a RefSeq accession. Any \
+             such pair collides in a buffer that loads both transcripts. For 54 pairs one \
+             region file holds both transcripts. For 7 of those a record can lie within 5,000 \
+             bases of both, and such a record loses a row annotated alone.",
+            "A pair that one record reaches, the first pair here and the pair of section 1, \
+             loses a row whenever that record is annotated: with the record alone, the row of \
+             the transcript that starts later. Any other pair loses a row only in a buffer that \
+             loads both transcripts. In each case the transcript the buffer reads first is kept.",
+            "Under `--merged`, Ensembl VEP 116.3 writes 19 rows for the record and none of \
+             ENSPMJT00000005922. vep-rs writes 20, the row of that transcript among them.",
+            "Under `--buffer_size 1` Ensembl VEP writes the row of XR_000002.1 for the third \
+             record, as vep-rs does, and still no row of ENSEXT00000000001. vep-rs writes the \
+             same four rows at every buffer size.",
+            "The SNP/indel comparator sets both aside in a comparison that names the converted \
+             cache with `--json-cache`",
+            "The class is `merged_same_dbid_collapse` in the 116.3 registry of the SNP/indel \
+             comparator, `tools/vep-outputs-compare`. The rows alone cannot tell a row of the \
+             class from a row vep-rs writes too many, so the comparator applies the class only \
+             in a comparison that names the converted cache with `--json-cache`.",
+            "A comparison that names no cache reports each such row as a row one engine alone \
+             writes, and so does one whose reference run the replay does not follow.",
+        ],
+    );
+    let page = page_text("divergences/merged-same-dbid-collapse.md")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for refused in [
+        "No comparison holds a rule for the class",
+        "No comparison sets a row of this class aside",
+    ] {
+        assert!(!page.contains(refused), "the page still states {refused:?}");
+    }
+    assert_page_states(
+        "concordance-provenance/116.2-divergence-classes.md",
+        &[
+            "### 18. The classes that read the converted cache",
+            "Treatment: both are set aside by the SNP/indel comparator, in a comparison that \
+             names the converted cache with `--json-cache`.",
+            "A comparison that names no cache applies neither class, and its reports list \
+             neither.",
+        ],
+    );
+    assert_page_states(
+        "cache-conversion.md",
+        &[
+            "across the two sets of a merged cache that pass is the entry \
+             [`merged_same_dbid_collapse`](divergences/merged-same-dbid-collapse.md)",
+        ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "so a transcript whose `dbID` a transcript of the other set carries loses its rows \
+             whenever the buffer read the other first, and a record on no other transcript is \
+             written as `intergenic_variant`; vep-rs keeps every transcript the cache \
+             distinguishes by set and `dbID` | 3 · 0 of 116,165 cache transcripts · 8 flag sets, \
+             0 corpora | 116.3 |",
+            "For [`merged_same_dbid_collapse` and `merged_same_stable_id_collapse`]\
+             (concordance-provenance/116.2-divergence-classes.md\
+             #18-the-classes-that-read-the-converted-cache) a comparison that names the \
+             converted cache sets aside rows of a transcript the reference dropped, and the \
+             reference's intergenic row at a record left with none.",
+            "For all but nineteen nothing is set aside in the concordance figures",
+        ],
+    );
+}
+
+/// `merged_same_stable_id_collapse` has a rule in the outputs comparison, which
+/// replays the pass of AnnotationType/Transcript.pm:314-343 over the converted
+/// cache. The entry's section, the taxonomy and the genome checks page say
+/// where the rule is applied and what it takes, and the entry's record names
+/// the rule's two functions; a page that leaves the rule out fails here.
+#[test]
+fn merged_same_stable_id_collapse_comparison_rule_is_documented() {
+    assert_page_states(
+        "cache-conversion.md",
+        &[
+            "The outputs comparator applies the class where a comparison names the converted \
+             cache with `--json-cache`.",
+            "It sets aside vep-rs's rows of each transcript the pass dropped, and Ensembl VEP's \
+             `intergenic_variant` row at a record left with no transcript.",
+            "The two transcripts need not lie apart: a RefSeq cache can carry one identifier as \
+             an `ensembl`-sourced cDNA alignment and as a gene model of another source, and the \
+             pass keeps the alignment.",
+            "[Class 18 of the registry's taxonomy](concordance-provenance/\
+             116.2-divergence-classes.md#18-the-classes-that-read-the-converted-cache) gives \
+             the conditions.",
+        ],
+    );
+    assert_page_states(
+        "concordance-provenance/116.2-divergence-classes.md",
+        &[
+            "`merged_same_stable_id_collapse` is the documented difference [A transcript model \
+             the cache carries at two loci](../cache-conversion.md\
+             #a-transcript-model-the-cache-carries-at-two-loci-under---refseq-or---merged).",
+            "It keeps the `ensembl`-sourced one, else the one of the lowest `dbID`.",
+            "Source: `AnnotationType/Transcript.pm:275, 303-311, 314-343`, \
+             `AnnotationSource.pm:109-145`.",
+            "the replay dropped transcripts of the identifier within 5,000 bases of a record at \
+             that Location, at least as many as the rows;",
+            "where the reference wrote a row of the identifier there, the transcript the replay \
+             kept lies within 5,000 bases of the record too.",
+            "and `merged_same_stable_id_collapse` one that ran under `--refseq` or `--merged`.",
+            "The comparator then writes to standard error one line with the reason for each \
+             class the run concerns.",
+        ],
+    );
+    assert_page_states(
+        "genome-checks.md",
+        &[
+            "For a genome checked on its RefSeq or its merged cache the comparison names the \
+             converted cache.",
+            "It so sets aside the rows of the documented difference \
+             [`merged_same_stable_id_collapse`](cache-conversion.md\
+             #a-transcript-model-the-cache-carries-at-two-loci-under---refseq-or---merged) and, \
+             on a merged cache, of [`merged_same_dbid_collapse`]\
+             (divergences/merged-same-dbid-collapse.md).",
+        ],
+    );
+    let record = reproduction_record("merged_same_stable_id_collapse");
+    for rule in [
+        "\"tools/vep-outputs-compare/src/dbid_replay.rs::kept_of\",",
+        "\"tools/vep-outputs-compare/src/rules/shared_stable_id.rs::apply_shared_stable_id_rule\",",
+    ] {
+        assert!(record.contains(rule), "the record names no rule {rule}");
+    }
+}
+
+/// `merged_same_stable_id_collapse`: the entry's one-sentence statement and its
+/// index row name the copy the pass per stable identifier keeps as
+/// AnnotationType/Transcript.pm:330 and :337 choose it: the first transcript of
+/// the buffer's list whose source is `ensembl`, else the one of the lowest
+/// `dbID`. A page on which the pass keeps the copy listed first, whatever the
+/// copies' sources, fails here. The page's sentence on the committed caches
+/// keeps "listed first": of two `ensembl`-sourced copies the pass keeps the
+/// first.
+#[test]
+fn merged_same_stable_id_collapse_statement_names_the_copy_the_pass_keeps() {
+    let kept = "so a model the cache carries at two loci keeps only its first-listed \
+                `ensembl`-sourced copy, else its lowest `dbID`, whenever the buffer's regions \
+                carry both";
+    assert_page_states(
+        "cache-conversion.md",
+        &[
+            kept,
+            "The buffer that loads both copies keeps the one listed first.",
+        ],
+    );
+    assert_page_states("intended-divergences.md", &[kept]);
+    let refused = "keeps only the copy listed first";
+    for path in ["cache-conversion.md", "intended-divergences.md"] {
+        let page = page_text(path)
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(
+            !page.contains(refused),
+            "docs/{path} still states {refused:?}"
+        );
+    }
+}
+
+/// The page of `merged_same_dbid_collapse` says how often its shape stands in
+/// the committed caches, and the tree decides whether it says so truly. Without
+/// `--all_refseq` a run reads a RefSeq-set transcript of a merged cache only
+/// where its stable id is a RefSeq accession, the test Ensembl VEP makes as a
+/// region file is read (`AnnotationType/Transcript.pm:236-248`, called at
+/// `AnnotationSource/Cache/Transcript.pm:241`), before `merge_features` sees a
+/// transcript. A `dbID` that a transcript of each set carries on one sequence
+/// is therefore the shape only where the run reads the RefSeq-set transcript.
+/// The page counts the corpora with a run that passes `--merged`, those runs
+/// and the ones among them that pass `--all_refseq`, and for each such corpus
+/// the `dbID`s its cache holds under both sets on one sequence. The index
+/// row's cell counts the runs, and the corpora whose cache holds a pair that a
+/// run without `--all_refseq` reads whole. A pair on `MT`, where the test
+/// keeps other identifiers too, is counted as read.
+#[test]
+fn merged_dbid_page_counts_the_merged_runs_and_shared_numbers_as_the_tree_holds_them() {
+    use std::collections::{BTreeMap, BTreeSet};
+    const PAGE: &str = "divergences/merged-same-dbid-collapse.md";
+    let passes = |run: &common::Run, flag: &str| run.flags.iter().any(|given| given == flag);
+    let is_accession = |stable_id: &str| {
+        let id = stable_id.as_bytes();
+        id.len() >= 4
+            && id[0].is_ascii_uppercase()
+            && id[1].is_ascii_uppercase()
+            && id[2] == b'_'
+            && id[3].is_ascii_digit()
+    };
+    let (mut merged_runs, mut with_all_refseq) = (0, 0);
+    let mut shared = Vec::new();
+    for corpus in common::corpora() {
+        let runs = common::runs(&corpus);
+        let merged = runs.iter().filter(|run| passes(run, "--merged")).count();
+        if merged == 0 {
+            continue;
+        }
+        merged_runs += merged;
+        with_all_refseq += runs
+            .iter()
+            .filter(|run| passes(run, "--merged") && passes(run, "--all_refseq"))
+            .count();
+        // The stable ids of each set under one `dbID` of one sequence.
+        let mut by_number: BTreeMap<(String, u64), [BTreeSet<String>; 2]> = BTreeMap::new();
+        for_each_cache_transcript(&corpus, |sequence, transcript| {
+            let set = match transcript["source_cache"].as_str() {
+                Some("Ensembl") => 0,
+                Some("RefSeq") => 1,
+                _ => return,
+            };
+            let (Some(number), Some(stable_id)) = (
+                transcript["dbID"].as_u64(),
+                transcript["stable_id"].as_str(),
+            ) else {
+                return;
+            };
+            by_number.entry((sequence.to_string(), number)).or_default()[set]
+                .insert(stable_id.to_string());
+        });
+        let pairs: Vec<_> = by_number
+            .iter()
+            .filter(|(_, [ensembl, refseq])| !ensembl.is_empty() && !refseq.is_empty())
+            .collect();
+        let read_whole = pairs
+            .iter()
+            .filter(|((sequence, _), [_, refseq])| {
+                sequence == "MT" || refseq.iter().any(|id| is_accession(id))
+            })
+            .count();
+        shared.push((corpus.name.clone(), pairs.len(), read_whole));
+    }
+    shared.sort();
+    let stated: Vec<(&str, usize, usize)> = shared
+        .iter()
+        .map(|(name, pairs, read_whole)| (name.as_str(), *pairs, *read_whole))
+        .collect();
+    assert_eq!(
+        stated,
+        [
+            ("ARS-UCD2.0-cattle-merged", 7, 0),
+            ("GRCh37-merged", 0, 0),
+            ("GRCh38-merged", 0, 0),
+            ("GRCm39-mouse-merged", 1, 0),
+        ],
+        "each corpus with a run that passes --merged, the dbIDs its cache holds under both \
+         sets on one sequence, and those of them whose RefSeq-set transcript a run without \
+         --all_refseq reads: docs/{PAGE} states them"
+    );
+    assert_eq!(
+        (merged_runs, with_all_refseq),
+        (8, 0),
+        "the committed runs that pass --merged, and those of them that pass --all_refseq: \
+         docs/{PAGE} states both figures"
+    );
+    assert_page_states(
+        PAGE,
+        &[
+            "Eight committed flag sets, of four corpora, pass `--merged`, and none of them \
+             passes `--all_refseq`.",
+            "In the committed cattle and mouse merged caches, seven `dbID`s and one name a \
+             transcript of each set on one sequence. In each of those eight pairs, none of them \
+             on `MT`, the RefSeq-set transcript's identifier is no RefSeq accession, so a run \
+             reads that transcript under `--all_refseq` alone.",
+        ],
+    );
+    let page = page_text(PAGE)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for refused in [
+        "the caches of the committed corpora do not carry the shape",
+        "Three committed flag sets pass `--merged`",
+        "For 55 pairs one region file holds both transcripts",
+    ] {
+        assert!(!page.contains(refused), "docs/{PAGE} states {refused:?}");
+    }
+    let index = page_text("intended-divergences.md");
+    let row = index
+        .lines()
+        .find(|line| line.starts_with("| [`merged_same_dbid_collapse`]"))
+        .expect("docs/intended-divergences.md has a row of merged_same_dbid_collapse");
+    let with_the_shape = shared
+        .iter()
+        .filter(|(_, _, read_whole)| *read_whole > 0)
+        .count();
+    let cell = format!(" cache transcripts · {merged_runs} flag sets, {with_the_shape} corpora |");
+    assert!(
+        row.contains(&cell),
+        "the row of merged_same_dbid_collapse in docs/intended-divergences.md lacks {cell:?}"
+    );
+    let record_path = format!(
+        "{}/../../scripts/divergences/reproductions/merged_same_dbid_collapse.toml",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let record =
+        std::fs::read_to_string(&record_path).unwrap_or_else(|e| panic!("{record_path}: {e}"));
+    assert_states(
+        "the reproduction record of merged_same_dbid_collapse",
+        &record,
+        &[
+            "seen in Ensembl's release 116 merged cache of the great tit: 1,398 dbIDs are \
+             carried on one sequence by a transcript of each set that a run under --merged \
+             reads, and one region file holds both transcripts of 54 of them",
+            "No committed cache holds the shape under the flags of a committed run: the two \
+             sets of the human merged caches number their transcripts in ranges that do not \
+             meet, and in each pair of the committed cattle and mouse merged caches the \
+             RefSeq-set transcript, whose identifier is no RefSeq accession, is read under \
+             --all_refseq alone. So inputs/merged_same_dbid_collapse/make_cache.pl builds the \
+             cache in the Ensembl VEP image and vep-rs reads the committed json_cache beside \
+             it, the conversion of that cache.",
+        ],
+    );
+    for refused in [
+        "No committed cache holds the shape, since",
+        "one region file holds both transcripts of 55 of them",
+    ] {
+        assert!(
+            !record.contains(refused),
+            "the reproduction record of merged_same_dbid_collapse states {refused:?}"
+        );
+    }
 }
 
 /// `filter_vep_consequence_field_pattern`: `vep filter` takes a VCF line's
@@ -2874,17 +13033,50 @@ fn filter_vep_short_entry_reads_info_key_is_documented() {
     );
 }
 
+/// `filter-vep-ontology`: `vep filter --ontology` answers `is_child` from the
+/// built-in table of consequence terms and refuses the connection flags, where
+/// `filter_vep` connects to an Ensembl database and asks its ontology adaptor
+/// for the descendants of the term (filter_vep:92-97, 113-133;
+/// FilterSet.pm:740-744).
+#[test]
+fn filter_vep_ontology_exclusion_is_documented() {
+    assert_page_states(
+        "getting-started/what-vep-rs-does-not-do.md",
+        &[
+            "Its `--ontology` is answered from the built-in Sequence Ontology table instead \
+             of an Ensembl database.",
+            "The database connection flags (`--host`, `--port`, `--user`, `--pass`, \
+             `--version`, `--registry`) are refused with an error naming the flag.",
+        ],
+    );
+    assert_page_states(
+        "cli/filter.md",
+        &[
+            "The answer comes from the built-in table of consequence terms rather than an \
+             Ensembl database, and the connection flags are refused by name.",
+        ],
+    );
+    assert_page_states(
+        "divergences/transcript-filter-fields.md",
+        &["A parent the table lacks is refused before the input is read"],
+    );
+}
+
 /// `variant_recoder`: the `vep recode` page and the companion-tools section
 /// state the subset the cache alone can give (`VariantRecoder.pm:96-109` forces
 /// `database`, `merged` and `lrg`; `:425-437` reads the synonyms from the
-/// database): no LRG notation (`--lrg` refused), one variant per protein
-/// notation (`--ambiguous_hgvs` refused), the synonyms from the cache's
+/// database): no variant mapped to an LRG (`--lrg` refused), one variant per
+/// protein notation (`--ambiguous_hgvs` refused), the synonyms from the cache's
 /// variation data, no ClinGen allele identifier input, `--refseq` refused as
 /// the recoder's forced `merged` (`:98`) refuses it (`Config.pm:621`), the
 /// merged set read without `--merged` wherever the cache named holds it, so
-/// RefSeq notations only with a merged cache, and a GA4GH VRS allele only for
-/// a chromosome whose synonyms name an `NC_` accession, the list empty for any
-/// other.
+/// RefSeq notations from a merged cache, the `INFO:` line a run says both in,
+/// the lines of a `--transcript_filter` on a key a cache built from a GTF or
+/// GFF3 leaves undefined, which the tool writes before that one, as it writes
+/// the annotation run's notices of a FASTA file passed over, of a chromosome
+/// the FASTA lacks and of the `hgvsc` it writes on edited transcripts,
+/// and a GA4GH VRS allele only for a chromosome whose synonyms name an `NC_`
+/// accession, the list empty for any other.
 #[test]
 fn recode_exclusions_are_documented() {
     assert_page_states(
@@ -2892,9 +13084,26 @@ fn recode_exclusions_are_documented() {
         &[
             "The synonyms and the co-located variants are the cache's variation data, where \
              `variant_recoder` reads the Ensembl database.",
-            "A RefSeq notation (`NM_`, `NP_`, `XM_`, `XP_`) appears only with a merged cache.",
-            "An LRG notation never appears, as `--lrg` is refused, and a protein notation resolves \
-             to one variant, as `--ambiguous_hgvs` is refused.",
+            "A run that writes `var_synonyms` says so in its `INFO:` line.",
+            "A RefSeq notation (`NM_`, `NP_`, `XM_`, `XP_`) is written from a merged cache, and no \
+             variant is mapped to an LRG, as `--lrg` is refused.",
+            "Every run that completes says the latter in one `INFO:` line on standard error, which \
+             no flag withholds, and the former where its cache is read as the Ensembl set.",
+            "An input given on an LRG region the cache holds keeps its own notation.",
+            "A `--transcript_filter` that names `_source_cache` or `dbID` over a cache built from a \
+             GTF or GFF3, whose transcripts carry neither, draws one `INFO:` line for each key, as \
+             under `vep`",
+            "A run that completes writes them before its own line, and no flag withholds them.",
+            "A FASTA file passed over for want of its index draws one `INFO:` line",
+            "One line names each chromosome on which an entry the run writes is without an \
+             `hgvsg` or an `hgvsc` that takes the FASTA's sequence to write",
+            "One more counts the insertion and deletion alleles whose `hgvsc`, written as a field \
+             or in a `mane_select` triple, is on a transcript edited away from the genome",
+            "A run that completes writes these before its own line as well, in the order `vep` \
+             prints them, and no flag withholds them.",
+            "a run that completes exits 0 without its `INFO:` lines, all it writes there, its \
+             warnings going into the output.",
+            "A protein notation resolves to one variant, as `--ambiguous_hgvs` is refused.",
             "A ClinGen allele identifier (`CA...`) is not an input.",
             "`ga4gh_vrs` holds a GA4GH VRS Allele object only for a chromosome whose synonyms name \
              an `NC_` accession, and is an empty list for any other.",
@@ -2915,8 +13124,11 @@ fn recode_exclusions_are_documented() {
             "`--refseq` is refused with `Can't use --refseq and --merged together`, as \
              `variant_recoder` refuses it, and with `--gencode_basic` the error names that flag \
              instead.",
-            "A RefSeq cache, which is read under `--refseq` alone, is not an input; a merged cache \
-             carries the RefSeq models beside the Ensembl ones.",
+            "A cache whose `info.json` declares the RefSeq set is not an input: `--refseq` alone \
+             reads it, and a run that names it is refused under the `cache` component.",
+            "A `--json_cache` directory of RefSeq models converted without the `source_type` key \
+             is checked against nothing and read as the Ensembl set, its RefSeq models annotated.",
+            "A merged cache carries the RefSeq models beside the Ensembl ones.",
             "An option is read from the four sources `vep` reads its own from, the first that names \
              it winning: the command line, the `--config` file, `<dir>/vep.ini`, where `<dir>` is \
              the file's `dir` or else `~/.vep`, then the environment variable `VEP_<OPTION>`.",
@@ -2932,15 +13144,32 @@ fn recode_exclusions_are_documented() {
              reads it and applies it ([the class](../divergences/recode-config-file.md)).",
         ],
     );
+    let recode_page = page_text("cli/recode.md")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for refused in [
+        "A RefSeq cache, which is read under `--refseq` alone, is not an input",
+        "alleles with a notation on a transcript edited away from the genome",
+        "Where the fields name `hgvsg` or need the HGVS flag",
+        "Where the run writes `hgvsg` or `hgvsc`",
+        "lacks its `hgvsg` or `hgvsc` for want of the FASTA's sequence",
+    ] {
+        assert!(
+            !recode_page.contains(refused),
+            "docs/cli/recode.md states {refused:?}"
+        );
+    }
     assert_page_states(
         "getting-started/what-vep-rs-does-not-do.md",
         &[
             "`variant_recoder` is `vep recode` ([its page](../cli/recode.md)): the same options \
              over the cache alone.",
             "`--lrg` and `--ambiguous_hgvs` are refused with the database connection flags.",
-            "A RefSeq notation appears only with a merged cache, a ClinGen allele identifier is \
-             not an input, and `ga4gh_vrs` is written only for a chromosome whose synonyms name \
-             an `NC_` accession.",
+            "A RefSeq notation is written from a merged cache, and a run on a cache read as the \
+             Ensembl set says so.",
+            "A ClinGen allele identifier is not an input, and `ga4gh_vrs` is written only for a \
+             chromosome whose synonyms name an `NC_` accession.",
         ],
     );
     assert_flag_row_states(
@@ -2965,11 +13194,135 @@ fn recode_exclusions_are_documented() {
     );
 }
 
-/// `custom`: a `--custom` source is read against a cache, where Config.pm:993
-/// lets the source alone satisfy the run's source check; a remote file and a
-/// GFF or GTF transcript model are refused (`AnnotationSourceAdaptor.pm:378`
-/// reads a `no_remote` option no flag sets; `GFF.pm:154-156` reads the model in
-/// place of the cache).
+/// `custom_exact_source_allele_record_accumulation`, the shape of a short name
+/// that spells a list field: the input record's hash holds the
+/// `--individual_zyg` list, the nearest names and the overlapping structural
+/// variants as lists (OutputFactory.pm:987, :1017, :963), every row's hash
+/// shares them (:391) and each row pushes its allele's record onto the one
+/// list (:1426-1435), so Ensembl VEP prints the record once for each row.
+/// The field table writes the list and then the record once
+/// (`write_list_beside_custom_values` of `fields.rs`).
+#[test]
+fn custom_exact_record_under_a_list_field_key_is_documented() {
+    let page = "custom-annotation.md";
+    assert_page_states(
+        page,
+        &[
+            "Each row would list the allele's record once, as vep-rs does and as Ensembl VEP \
+             does when the variant's hash holds no list under the short name.",
+            "#### 1.2 An `exact` record under a short name that spells a list field",
+            "A second shape of the class needs no whole-variant record: the short name spells a \
+             list Ensembl VEP keeps in the variant's hash, `ZYG` under `--individual_zyg` \
+             (`OutputFactory.pm` line 987), `NEAREST` under `--nearest` (line 1017) or `SV` under \
+             `--check_svs` (line 963).",
+            "Each row pushes its allele's record of an `exact` source onto that list.",
+            "vep-rs writes the list, then the record once.",
+            "| `ZYG=S1:HET,seqrec,seqrec,seqrec,seqrec,seqrec,seqrec,seqrec,seqrec,seqrec` | \
+             `ZYG=S1:HET,seqrec` |",
+            "| the eight zygosities, then `made_up_1,made_up_1` | the eight zygosities, then \
+             `made_up_1` |",
+            "| `NEAREST=SON`, then `multi_7` 16 times | `NEAREST=SON,multi_7` |",
+            "| Example 2 with its source read as `type=overlap`, whose record belongs to the whole \
+             variant and is pushed once | the eight zygosities, then `made_up_1` | the same |",
+            "| Example 2 or 3 with its source under the short name `sites` | `sites=made_up_1`, or \
+             `sites=multi_7` | the same |",
+            "| Example 2 or 3 with its flag off | `ZYG=made_up_1`, or `NEAREST=multi_7` | the same |",
+            "| The `ZYG_AF` and `ZYG_FILTER` lists of example 2, which each row starts for itself \
+             | `0.25` and `PASS` | the same |",
+            "| not run: Ensembl VEP refuses the flag without a database, and line 963 sets the \
+             list as line 987 does |",
+            "Each example's cell stands on every row of the variant, the flag's list first; a \
+             one-row variant shows no difference.",
+            "Ensembl VEP's tab and VCF outputs carry the key's column twice \
+             ([`duplicate_output_column_collapsed`](divergences/duplicate-output-column.md)).",
+            "The engines order the zygosities differently \
+             ([`individual_zyg_list_order`](divergences/individual-zyg-order.md)).",
+            "No committed flag set names a source `ZYG`, `NEAREST` or `SV`.",
+            "Beside a `...` marker the `<short_name>` list alone differs. In the shape of 1.2 the \
+             flag's list comes first.",
+        ],
+    );
+    assert!(
+        !page_text(page).contains("has no whole-variant record at the variant"),
+        "docs/{page} still says that a short name without a whole-variant record lists the \
+         allele's record once"
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "or an `exact` source's short name spells a list the variant's hash holds (`ZYG` under \
+             `--individual_zyg`, `NEAREST`, `SV`), Ensembl VEP 116.3 lists the allele's record \
+             once for each row of its own allele, on every row of the variant",
+        ],
+    );
+}
+
+/// A VCF source of `type=exact` hands a record to the match by span
+/// (AnnotationSource/File/VCF.pm:380-387) where the input record is
+/// structural (:382), or where the record's ALT is not bases alone (:384) and
+/// the record carries an `SVTYPE` or its ALT a breakend or a bracketed form
+/// with no `*` inside it (:385), and builds the record without an allele
+/// (:247-263); `routes_to_structural` of
+/// `crates/vep-builtins/src/custom/vcf.rs` holds the source record's side of
+/// it. The source list of the page's first class states that condition, and
+/// no item of that list says that an `SVTYPE` alone sends a record there.
+#[test]
+fn custom_page_says_which_record_of_an_exact_source_matches_by_span() {
+    let page = "custom-annotation.md";
+    assert_page_states(
+        page,
+        &[
+            "`Bio/EnsEMBL/VEP/AnnotationSource/File/VCF.pm`, lines 380-387 and 247-263, with \
+             `Bio/EnsEMBL/VEP/AnnotationSource/File.pm`, lines 571-574: an `exact` source's \
+             record matches by span and has no `allele` where its ALT is symbolic without `*`, \
+             a breakend, or not bases alone beside an `SVTYPE`, or the input record is \
+             structural.",
+        ],
+    );
+    let svtype_alone = "(a symbolic allele, a breakend or an `SVTYPE`) matches by span";
+    assert!(
+        !page_text(page).contains(svtype_alone),
+        "docs/{page} states {svtype_alone:?}"
+    );
+}
+
+/// The four types are read against a VCF source record's span where its ALT
+/// holds a bracketed form with no `*` inside it or a single breakend, or is
+/// not bases alone beside a true `SVTYPE`
+/// (AnnotationSource/File/VCF.pm:384-385; `routes_to_structural` of
+/// `crates/vep-builtins/src/custom/vcf.rs`). A record with a bracket in its
+/// ALT or an `SVTYPE` in its INFO starts one past `POS` and ends at
+/// `POS + |SVLEN|`, at its `END` or at its start (`BaseVCF4.pm:262, 310`;
+/// `feature_start` and `feature_end` of `vcf.rs`), where a single breakend
+/// with no `SVTYPE`, no `SVLEN` and no `END` ends at `POS + length(REF) - 1`
+/// (`BaseVCF4.pm:314`). The page's matching section gives those spans to the
+/// records both rules hold for, and no sentence of it gives them to every
+/// record with an `SVTYPE`.
+#[test]
+fn custom_page_says_which_vcf_record_the_types_read_against_its_structural_span() {
+    let page = "custom-annotation.md";
+    assert_page_states(
+        page,
+        &[
+            "A structural VCF record (its ALT symbolic without `*`, a bracketed breakend, or not \
+             bases alone beside an `SVTYPE`) spans:",
+            "Against those spans, and against a structural input record whatever the record, the \
+             four types read as Ensembl VEP's.",
+        ],
+    );
+    let every_svtype = "(an `SVTYPE`, a symbolic or a breakend allele)";
+    assert!(
+        !page_text(page).contains(every_svtype),
+        "docs/{page} states {every_svtype:?}"
+    );
+}
+
+/// `custom`, `custom-argument-grammar`: a `--custom` source is read against a
+/// cache, where Config.pm:993 accepts the source alone as the run's annotation
+/// source; a remote file is refused (`AnnotationSourceAdaptor.pm:378` reads a
+/// `no_remote` option no flag sets), and a GFF or GTF transcript model is read
+/// beside the cache, where `GFF.pm:155-165` also reads it as a run's only
+/// source.
 #[test]
 fn custom_exclusions_are_documented() {
     assert_page_states(
@@ -2979,7 +13332,8 @@ fn custom_exclusions_are_documented() {
              source as a run's only annotation source",
             "Ensembl VEP reads it over the network; vep-rs reads local files only, so copy the \
              file to a local path",
-            "which Ensembl VEP reads in place of its cache",
+            "is a transcript source read beside the cache, as `--gff <file>` and `--gtf <file>` \
+             name it",
         ],
     );
     assert_page_states(
@@ -2987,7 +13341,8 @@ fn custom_exclusions_are_documented() {
         &[
             "A remote file (`http://`, `ftp://` or any URL) is refused with an error naming a \
              local copy, where Ensembl VEP reads it over the network",
-            "A GFF or GTF transcript model is refused with the two-step cache recipe, where \
+            "A GFF or GTF transcript model is read beside a cache in the same run (`--gff`, \
+             `--gtf`); a run with the file alone is refused with the two-step cache recipe, where \
              Ensembl VEP reads it in place of its cache",
             "A `--custom` run still reads a cache, where Ensembl VEP accepts the source as the \
              run's only annotation source",
@@ -2995,9 +13350,106 @@ fn custom_exclusions_are_documented() {
     );
 }
 
+/// `custom_key_list_shared_across_rows`: a `--custom` key that spells a column
+/// or a flag field lists the source's values and the row's own items, each
+/// once (`write_frequency_field_value`, `write_column_beside_a_custom_key` and
+/// `write_list_beside_custom_values` of `fields.rs`), where the rows of a
+/// record share a list of the record's hash (OutputFactory.pm:391, :1003-1014,
+/// :1017) and each row adds to it: its allele's frequency (:1247), the
+/// co-located identifiers (:1086), the synonyms (:1090), `MANE_Select`
+/// (:1601) or its allele's records (:1426-1435). So Ensembl VEP writes one
+/// row's items on other rows.
+#[test]
+fn custom_key_list_shared_across_rows_divergence_is_documented() {
+    assert_page_states(
+        "divergences/custom-key-list-shared-across-rows.md",
+        &[
+            "A `--custom` key that spells a column or a flag field can hold a list in the hash \
+             of the input record. Ensembl VEP 116.3 builds every row of the record over that \
+             one list, so what one row adds to the key prints on other rows too",
+            "vep-rs lists on each row the source's values and the row's own items, each once",
+            "vep-rs builds each row's cell from the row: the values the source's key carries on \
+             it and what the row's own field holds, each item once",
+            "vep-rs lists the source's values and then each frequency of the row's own allele \
+             that none of them spells",
+            "A row of an allele without a frequency holds the source's values alone",
+            "Without the flag the engines agree: the key holds the source's values alone",
+            "They agree as well where the source's record names an allele, as an `exact` source's \
+             does",
+            "The `overlap` match of lines 389-404 returns a truth value and a percentage, so an \
+             `overlap` source's record names no allele",
+            "each row's hash starts as `my %copy = %$hash;` (line 391). The copy is one level \
+             deep, so the key of every row names the one list of the record's hash",
+            "Line 1247 adds it to the list under the column's key, `merge_arrays($hash->{$out_key} \
+             ||= [], [$f])`, the one statement every frequency column is written through",
+            "the VCF writer does the same for each record \
+             (`Bio/EnsEMBL/VEP/OutputFactory/VCF.pm`, lines 342-345)",
+            "the JSON factory moves the source's records to `custom_annotations` and reads each \
+             allele's frequencies into a hash of its own, so no list is shared there",
+            "line 1301, in the same `_add_custom_annotations_to_hash`: each record's name is \
+             pushed onto a list under the short name alone",
+            "Its line 1086 pushes each co-located variant's name onto the list under \
+             `Existing_variation`, and line 1090 its synonyms onto the list under `VAR_SYNONYMS`",
+            "Line 1141 then joins the `VAR_SYNONYMS` list into a string, which replaces the key \
+             of the row's own hash",
+            "line 1601 pushes `MANE_Select` onto the list under `MANE`",
+            "line 1017, sets `NEAREST` in the record's hash to the list the nearest search left \
+             on the input record",
+            "| `rs1444031311` | `G` | `0.004,7.994e-06` | `0.004` |",
+            "| `alleles_reversed` | `G` | `0.004,7.994e-06` | `0.004` |",
+            "| `rs766964238` | `C` | `0.005,3.593e-05,1.794e-05` | `0.005,3.593e-05` |",
+            "| `rs766964238` | `T` | `0.005,3.593e-05,1.794e-05` | `0.005,1.794e-05` |",
+            "`gnomADg_AFR_AF` is `2.801e-05` on the rows of `C` and `0` on the rows of `T`, and \
+             `gnomADg_SAS_AF` is `0` and `0.001082`",
+            "Without `--af_gnomadg`, both engines write `0.004` on both rows. With the same file \
+             read as `type=exact`, both write `0.004,7.994e-06` on the row of `C` and no value on \
+             the row of `G`",
+            "its row of `G` is built before the row of `C` adds the frequency, and prints it too",
+            "| `rs1444031311` | 2 | `exact_2,rs1444031311,rs1444031311` | `exact_2,rs1444031311` |",
+            "| `alleles_reversed` | 2 | `exact_2,rs1444031311,rs1444031311` | \
+             `exact_2,rs1444031311` |",
+            "| `rs766964238` | 4 | `overlap_2,rs766964238,rs766964238,rs766964238,rs766964238` | \
+             `overlap_2,rs766964238` |",
+            "Without `--check_existing` the cell is `exact_2` on both rows. Under `--summary`, \
+             with `--check_existing` kept, the one row's cell is `exact_2`: a summary row lists \
+             no identifier in either engine. With the same file read as `type=exact` the cell is \
+             `exact_2,rs1444031311` on the row of `C`, the allele the source's record names, and \
+             `rs1444031311` on the row of `G`",
+            "With the same file read as `type=exact`, both engines write vep-rs's cells of the \
+             table under `MANE` and under `VAR_SYNONYMS`",
+            "The class therefore names a VCF row for the frequency key alone, and the JSON output \
+             of those runs was not compared",
+            "| `MANE` | `multi_7,MANE_Select` on all sixteen rows | `multi_7,MANE_Select` on the \
+             row of `ENST00000356577`, `multi_7` on the other fifteen |",
+            "| `VAR_SYNONYMS` | `multi_7`, then the synonyms once on the first row, twice on the \
+             second and sixteen times on the sixteenth | `multi_7` and the synonyms once on every \
+             row |",
+            "| `NEAREST` | `SON`, then `multi_7` sixteen times, on all sixteen rows | \
+             `SON,multi_7` on every row |",
+            "`MANE_SELECT` is one of them: it names `NM_138927.4` on the row of \
+             `ENST00000356577` alone",
+            "No committed flag set names such a source beside the flag that fills the field, so \
+             no manifest names the class and the class is documented only",
+        ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "| [`custom_key_list_shared_across_rows`]\
+             (divergences/custom-key-list-shared-across-rows.md) | Where a `--custom` key that \
+             spells a column or a flag field holds a list in the hash of the input record",
+            "Ensembl VEP 116.3 builds every row of the record over that one list, so a row \
+             prints what other rows added: another allele's frequency, a co-located identifier \
+             or an allele's record once for each row, `MANE_Select` on every row; vep-rs lists \
+             on each row the source's values and the row's own items, each once | \
+             3 · 0 of 511 flag sets · 0 flag sets, 0 corpora | 116.3 |",
+        ],
+    );
+}
+
 /// `custom-output-fields`: `--custom` adds the `SOURCE` column (Constants.pm:101),
-/// whose value is the transcript's `_source_cache` (OutputFactory.pm:1583), set
-/// by a GFF or GTF model read in place of the cache and by a merged cache; a
+/// whose value is the transcript's `_source_cache` (OutputFactory.pm:1592), set
+/// by a GFF or GTF model read as a transcript source and by a merged cache; a
 /// plain cache's transcripts leave it empty, and a cache built from a GTF or GFF
 /// carries no source name and leaves it empty too. A source named `SOURCE`
 /// lists its names there (`:1301`), in the one column where Ensembl VEP's tab
@@ -3007,9 +13459,10 @@ fn custom_output_source_column_is_documented() {
     assert_page_states(
         "custom-annotation.md",
         &[
-            "`--custom` also adds the `SOURCE` column, which names the cache a merged cache's \
-             transcript came from, `Ensembl` or `RefSeq`, and is empty on a transcript of a \
-             single-source cache, a cache built from a GTF or GFF included",
+            "`--custom` also adds the `SOURCE` column. It names the cache a merged cache's \
+             transcript came from, `Ensembl` or `RefSeq`, and the short name of the GFF or GTF \
+             source a transcript was read from beside the cache. It is empty on a transcript of \
+             a single-source cache, a cache built from a GTF or GFF included",
             "A source named `SOURCE` lists its record names in that column, under the one key; \
              Ensembl VEP's tab and VCF writers list the column twice, vep-rs once \
              ([the class](divergences/duplicate-output-column.md)).",
@@ -3018,11 +13471,303 @@ fn custom_output_source_column_is_documented() {
     );
 }
 
+/// `custom_key_named_as_a_plain_value_field`: a `--custom` key that spells a
+/// flag field Ensembl VEP sets as a plain value before it pushes the source's
+/// values under the same key ends its run (OutputFactory.pm:1301 and :1303
+/// under the `use strict` of :65); the field table writes the field's value
+/// and the pushed values after it (`pushed_after_a_plain_value` of
+/// `fields.rs`). The page's table names each of the fourteen fields once. A
+/// statistic a source asks for is assigned as a plain value as well
+/// (:1307-1309), and the key holds it and then the values of the row's allele
+/// records (`custom_items_pushed_after_a_statistic` of `fields.rs`).
+#[test]
+fn custom_key_named_as_a_plain_value_field_divergence_is_documented() {
+    let page = "divergences/custom-key-named-as-a-plain-value-field.md";
+    assert_page_states(
+        page,
+        &[
+            "Ensembl VEP 116.3 files a `--custom` source's values under the source's key by \
+             pushing them onto a list.",
+            "Where that key spells a flag field it has already set as one plain value, such as \
+             `VARIANT_CLASS` under `--variant_class` or `IMPACT`, the push fails and the run ends \
+             on a Perl error.",
+            "vep-rs writes every row and, under the key, the field's value followed by the \
+             source's values.",
+            "vep-rs writes the field's value, then each value Ensembl VEP pushes after it, in the \
+             order of its pushes.",
+            "The first takes the source records that name no allele and belongs to the input \
+             record.",
+            "The second is made on each row and takes the source records that name the row's \
+             allele.",
+            "A field set before both pushes is followed by the values of both.",
+            "A field set between them replaces the values of the first push and is followed by \
+             the values of the second alone.",
+            "In JSON both engines write the field's own value under its key and the source's \
+             records under `custom_annotations`.",
+            "Lines 1297-1312, `_add_custom_annotations_to_hash`: line 1301 pushes a record's name \
+             onto the list under the short name, and line 1303 a field's value onto the list \
+             under the short name, `_` and the field.",
+            "`OutputFactory/JSON.pm`, lines 249-258: the JSON writer takes the custom annotations \
+             off the input record before any field is set, so it makes no push.",
+            "The reference, Ensembl VEP's side of a comparison, ends there, with exit status 255 \
+             under `--fork` and 25 without it.",
+            "Can't use string (\"SNV\") as an ARRAY ref while \"strict refs\" in use",
+            "vep-rs writes both rows, `SNV,exact` on the first allele's and `SNV` on the other's.",
+            "Under the same two sources of `type=exact` Ensembl VEP dies at the second push.",
+            "vep-rs writes `MODIFIER,exact_2` and `1,exact_2` on the row of `C`, and `MODIFIER` \
+             and `-` on the row of `G`.",
+            "A push adds a value to the end of the list under a key.",
+            "Under `--individual_zyg` the field `ZYG` is a list, which a push appends to, and `IND` \
+             is not set: that list is not one of the fourteen, and vep-rs writes it followed by \
+             the source's values.",
+            "Under a source whose records name no allele Ensembl VEP therefore completes, and \
+             both engines write the field's value alone on a row that sets the field.",
+            "Under a source whose records each name an allele both engines write the field's \
+             value alone there.",
+            "Where one names none, Ensembl VEP dies at the first push when the field is one of \
+             the first five, and vep-rs writes the field's value and the source's after it.",
+            "They are not among the fourteen: [section \
+             4](#4-the-three-columns-that-name-a-row) gives each engine's cells under them.",
+            "The push fails the same way under a key that holds a statistic of a source, a plain \
+             number; there vep-rs writes the statistic, then the values of the source records \
+             that name the row's allele.",
+            "Ensembl VEP holds it as a plain value too",
+            "vep-rs writes the statistic, then the values of the source records that name the \
+             row's allele.",
+            "It ends on `Can't use string (\"1\") as an ARRAY ref while \"strict refs\" in use`, at \
+             line 1301 of `OutputFactory.pm`, with the exit statuses of section 1.",
+            "exact_2 1,exact_2",
+            "Ensembl VEP 116.3 dies at line 1303, the push of a field's value, and vep-rs writes \
+             `1,7` under `S_count` on the row of `C` and `1` on the row of `G`.",
+            "Lines 1307-1309: the sub assigns each statistic as a plain value.",
+            "The row of `C` therefore holds the statistic and then the name, and the row of `G` \
+             the statistic alone.",
+            "Of those two orders vep-rs takes the one in which Ensembl VEP completes.",
+            "It writes `1` on both rows, the cell of every run Ensembl VEP completes, whichever \
+             of the two sources the command names first.",
+        ],
+    );
+    let text = page_text(page);
+    let alone_under_exact =
+        "Under a source of `type=exact` both engines write the field's value alone there";
+    assert!(
+        !text.contains(alone_under_exact),
+        "docs/{page} states {alone_under_exact:?}"
+    );
+    let fields: Vec<&str> = text
+        .lines()
+        .skip_while(|line| *line != "## 2. The fourteen fields")
+        .skip(1)
+        .take_while(|line| !line.starts_with("## "))
+        .filter_map(|line| line.strip_prefix("| `"))
+        .filter_map(|row| row.split('`').next())
+        .collect();
+    assert_eq!(
+        fields,
+        [
+            "VARIANT_CLASS",
+            "IND",
+            "ZYG",
+            "MINIMISED",
+            "AMBIGUITY",
+            "CHECK_REF",
+            "IMPACT",
+            "ALLELE_NUM",
+            "REF_ALLELE",
+            "UPLOADED_ALLELE",
+            "PICK",
+            "HGVSg",
+            "SPDI",
+            "GA4GH_VRS",
+        ],
+        "the fields of the table of docs/{page}"
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "Ensembl VEP 116.3 pushes a `--custom` source's values onto a list under the source's \
+             key and, where the key spells a flag field it has set as one plain value \
+             (`VARIANT_CLASS` under `--variant_class`, `IMPACT`, `ALLELE_NUM` under \
+             `--allele_number` and eleven more) or a statistic it has assigned as one plain \
+             number (`S_count` beside a source `S` that asks for `count`), dies at the first row \
+             that reaches the push with `Can't use string (\"SNV\") as an ARRAY ref` (`(\"1\")` \
+             under the statistic), exit status 255 and no row written; vep-rs writes every row \
+             and, under the key, the field's value or the statistic followed by the source's \
+             values; the push fails as well under a key that spells `Uploaded_variation`, \
+             `Location` or `Allele`, the columns that name a row, where vep-rs writes the \
+             column's value and then the source's; a key one source declares as a record field \
+             and as a statistic Ensembl VEP describes twice, its tab header with the statistic's \
+             text alone, and vep-rs once, with the statistic's text and then the field's | 3 · 0 \
+             of 511 flag sets · 19 flag sets, 0 corpora | 116.3 |",
+        ],
+    );
+}
+
+/// The three columns that name a row join the entry
+/// `custom_key_named_as_a_plain_value_field`: Ensembl VEP holds
+/// `Uploaded_variation` and `Location` (OutputFactory.pm:895, :931) and
+/// `Allele` (:1347) as plain values at a push (:1301, :1303), and vep-rs
+/// writes the column's value and then the values pushed after it
+/// (`write_naming_column_then_pushed_values` of `fields.rs`). The page's
+/// section 4 gives each engine's cells in one table, and no sentence of the
+/// page says that the three columns are written without the source's values.
+#[test]
+fn custom_key_named_as_a_column_that_names_the_row_is_documented() {
+    let page = "divergences/custom-key-named-as-a-plain-value-field.md";
+    assert_page_states(
+        page,
+        &[
+            "Each table row is a command on the record and source of section 1, the source \
+             named as the column, under `--tab` unless the row says otherwise.",
+            "| `Location`, `type=exact` | ends at line 1301 | `21:5380280,exact_2` on the row of \
+             `C`, `21:5380280` on the row of `G` |",
+            "| `Location`, `type=overlap` | ends at line 1301, under `--most_severe` or \
+             `--summary` too | `21:5380280,exact_2` on every row, the `--most_severe` or \
+             `--summary` row included |",
+            "| `Location`, `type=exact`, `--most_severe` or `--summary` | `21:5380280`: line 387 \
+             returns that row before the rows of the alleles are built, so it takes no second \
+             push | `21:5380280` |",
+            "| `Location`, either type, under `--shift_3prime 1 --shift_genomic 1`, on the row of \
+             any sequence variant against a transcript: lines 1711-1715 assign the row's \
+             location again, after the call that makes the second push | ends at line 1301 | \
+             the location that assignment gives, alone, since it replaces the list |",
+            "| `Location`, either type, under the same two flags, on the intergenic row of an \
+             inserted or deleted alternate allele: lines 2001-2007 assign the row's location \
+             again, before the call that makes the second push | ends at line 1301 | the \
+             location that assignment gives, then the names of the records that name the row's \
+             allele, and none of a record that names no allele |",
+            "| `Uploaded_variation`, either type | ends or completes as in the first three table \
+             rows | as in those three, with `rs1444031311` in place of `21:5380280`; no row \
+             assigns the identifier again |",
+            "| `Uploaded_variation` as the key of a source named `Uploaded` whose records carry a \
+             field `variation` that it asks for, either type | ends at line 1303 where a matched \
+             record carries the field; completes where none does, and under `type=exact` on a \
+             `--most_severe` or `--summary` row | `rs1444031311`, then the field's values, on \
+             the output rows that hold `exact_2` in the first three table rows |",
+            "| `Allele`, `type=exact` | ends at line 1301 | `C,exact_2` on the row of `C`, `G` on \
+             the row of `G` |",
+            "| `Allele`, `type=exact`, `--most_severe` or `--summary` | `-`, since that row sets \
+             no allele and takes no second push | `-` |",
+            "| `Allele`, `type=exact,num_records=0`, a limit under which the source lists no \
+             record but one named `...`, three dots, that names no allele | the row's allele; \
+             the name `...` on a `--most_severe` or `--summary` row | the same |",
+            "| `Allele`, `type=overlap` | the row's allele; `exact_2` on a `--most_severe` or \
+             `--summary` row | the same |",
+            "| any of the three, `--json` | the input record's own `id`, coordinates and alleles, \
+             and the source's record under `custom_annotations` | the same |",
+            "`Uploaded_variation` and `Location` are set at lines 895 and 931, before both \
+             pushes, and behave as the first five fields of section 2, `Location` on a row that \
+             does not assign it again.",
+            "the shape is a `--custom` source whose key spells one of the fourteen fields, a \
+             statistic Ensembl VEP assigns a source or one of the three columns of section 4.",
+            "`Allele` is set at line 1347, between the pushes, and behaves as the other nine.",
+            "Every other cell is as under another source name.",
+        ],
+    );
+    assert!(
+        !page_text(page).contains("vep-rs writes those three columns from the input record alone"),
+        "docs/{page} still says the three columns are written without the source's values"
+    );
+}
+
+/// Ensembl VEP matches a `--custom` VCF source of `type=exact` by position
+/// where the input record is structural, or where the source's record, its
+/// ALT not bases alone, carries an `SVTYPE` or a symbolic or breakend allele
+/// (AnnotationSource/File/VCF.pm:380-387), and builds the matched record
+/// without an allele (:247-263); `match_record` of
+/// `crates/vep-builtins/src/custom/vcf.rs` does the same. The `...` record of
+/// a `num_records` limit names no allele either
+/// (AnnotationSource/File.pm:436-439). The two pages that introduce such a
+/// source except a structural record from the match of alleles, and neither
+/// says that every record of the source names one allele.
+#[test]
+fn pages_that_introduce_an_exact_custom_source_except_a_structural_record() {
+    let sentences = [
+        "A VCF source of `type=exact` matches an input record's alleles one by one unless \
+         either record is structural, and a record so matched names one allele.",
+        "Any other match is by position; its record names none.",
+    ];
+    let names_one_allele = "so its record names one allele";
+    for page in [
+        "divergences/custom-key-named-as-a-plain-value-field.md",
+        "divergences/custom-key-named-ensp-under-protein-version.md",
+    ] {
+        assert_page_states(page, &sentences);
+        assert!(
+            !page_text(page).contains(names_one_allele),
+            "docs/{page} states {names_one_allele:?}"
+        );
+    }
+}
+
+/// `custom_key_named_max_af`: under `--max_af` a `--custom` key spelled
+/// `MAX_AF` lists the source's values, then the row's maximum
+/// (`write_max_af_after_custom_values` of `fields.rs`), and `MAX_AF_POPS`
+/// lists its populations, where OutputFactory.pm:1267-1274 compares the
+/// maximum with the list the source pushed at :1301 or :1303 and writes
+/// neither; :1247 merges every frequency column into the key's list.
+#[test]
+fn custom_key_named_max_af_divergence_is_documented() {
+    assert_page_states(
+        "divergences/custom-key-named-max-af.md",
+        &[
+            "Under `--max_af`, Ensembl VEP 116.3 writes neither the maximum frequency nor \
+             `MAX_AF_POPS` on a row where a `--custom` source's key is spelled `MAX_AF` and \
+             holds a value",
+            "vep-rs writes the source's values and then the maximum under `MAX_AF`, and the \
+             maximum's populations under `MAX_AF_POPS`",
+            "vep-rs lists the values the source's key carries on the row, then the row's \
+             maximum, joined as the output format joins a list",
+            "The maximum follows the source's values on every such row, also where one of them \
+             is the same text. So the last value of the cell is the maximum wherever the flag \
+             writes `MAX_AF_POPS` on the row, and the values before it are the source's",
+            "A row with a source value and no frequency holds the source's values alone and no \
+             `MAX_AF_POPS`. A row with a frequency and no record of the source holds the maximum \
+             alone, with its populations",
+            "Line 1301 pushes a record's name under the short name, and line 1303 each field's \
+             value under the short name, an underscore and the field",
+            "the routine takes `$hash->{MAX_AF}` as the running maximum (`my $current_max = \
+             $hash->{MAX_AF} ||= 0`, line 1267)",
+            "With the source's list under the key, `$current_max` is a reference, which Perl \
+             reads in a comparison as a number far above 1, so both tests fail",
+            "Line 1247: `merge_arrays($hash->{$out_key} ||= [], [$f])` adds each frequency \
+             column's value to the list its key holds, where the list lacks it",
+            "Ensembl VEP 116.3 writes `MAX_AF=0.004` and no `MAX_AF_POPS`. vep-rs writes \
+             `MAX_AF=0.004,1.993e-05` and `MAX_AF_POPS=gnomADg_NFE`",
+            "| `short_name=MAX_AF`, whose key lists the record's name | first alternate allele | \
+             `exact_2` and `-` | `exact_2,1.993e-05` and `gnomADg_NFE` |",
+            "| the same source | second alternate allele | `0.004` and `-` | `0.004` and `-` |",
+            "Under `--af_gnomadg`, the same record with the source named `gnomADg` prints \
+             `gnomADg_AF=0.004,7.994e-06` in each: the source's value, then the cache's frequency",
+            "A frequency column lists a frequency once where a source value is the same text \
+             (line 1247)",
+            "vep-rs writes the maximum after the source's values even then, for example \
+             `1.993e-05,1.993e-05`",
+            "Where the flag writes `MAX_AF_POPS` on the row, the last value is the maximum; where \
+             it writes none, every value is the source's",
+            "No committed flag set names such a source, so no manifest names the class and the \
+             class is documented only",
+        ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "Under `--max_af`, Ensembl VEP 116.3 compares a row's maximum frequency with the list \
+             a `--custom` source pushed under a key spelled `MAX_AF` (a source named `MAX` asked \
+             for `AF`, or one named `MAX_AF`), which Perl reads as a number above every \
+             frequency, so the row keeps the source's values alone and carries neither the \
+             maximum nor `MAX_AF_POPS`; vep-rs lists the source's values, then the maximum, and \
+             writes the maximum's populations | 3 · 0 of 511 flag sets · 0 flag sets, 0 corpora | \
+             116.3 |",
+        ],
+    );
+}
+
 /// `duplicate_output_column_collapsed`, `recode_config_file_vep_option`: a plugin
-/// key or a `--custom` short name equal to a flag column prints one tab column
-/// and one `CSQ` field (`fields.rs`, `fields_of_groups` and `set_plugin_fields`),
+/// key or a `--custom` key equal to a flag column prints one tab column
+/// and one `CSQ` field (`tab_columns` of `fields.rs`, `build_csq_field_list` of `vcf_output.rs`),
 /// where Tab.pm:195 and VCF.pm:449 append the key a second time after the
-/// uniquified flag columns (OutputFactory.pm:2530-2534); `vep recode` drops a
+/// uniquified flag columns (OutputFactory.pm:2539-2543); `vep recode` drops a
 /// configuration line naming an option its own command line lacks (`argv.rs`,
 /// `with_config_file`), where Config.pm:1100-1101 admits every `vep` option and
 /// applies one the recoder never declares.
@@ -3031,21 +13776,27 @@ fn duplicate_column_and_recode_config_file_classes_are_documented() {
     assert_page_states(
         "divergences/duplicate-output-column.md",
         &[
-            "Ensembl VEP's tab and VCF writers append every plugin key and every `--custom` short \
-             name to the column list after the flag columns, without testing whether the list \
+            "Ensembl VEP's tab and VCF writers append every plugin key and every `--custom` key \
+             to the column list after the flag columns, without testing whether the list \
              already carries the name.",
-            "A plugin key or a custom short name that equals a flag column takes the flag's place \
+            "So a source named `SOURCE`, a source's `gnomADg_AF` under `--af_gnomadg`, a dbNSFP \
+             column named `TSL` under `--tsl`, or a plugin named twice heads two columns of the \
+             tab output and two fields of the VCF's `CSQ` list, each carrying the one value the \
+             row holds.",
+            "A plugin or custom key that equals a flag column takes the flag's place \
              under its flag, and a plugin key handed twice is one column: one tab column, one \
              description line and one `CSQ` field, carrying the value the row holds.",
+            "in which Ensembl VEP lists a plugin or custom key a second time, and the row cells \
+             under the second listing; vep-rs lists each once.",
             "`Bio/EnsEMBL/VEP/OutputFactory/Tab.pm`, lines 187-202, `fields`: the 13 default columns \
              (line 193), the flag columns (194), then every plugin header key and every custom \
              header key (195), appended with no test against the names already listed.",
             "`Bio/EnsEMBL/VEP/OutputFactory/VCF.pm`, lines 434-455, `fields`: the flag columns are \
              filtered against the VCF's own fixed columns alone (445-447), and the plugin and custom \
              keys are appended untested (449).",
-            "With REVEL named twice, Ensembl VEP 116.2's tab output has two `REVEL` columns",
+            "With REVEL named twice, Ensembl VEP 116.3's tab output has two `REVEL` columns",
             "Ensembl VEP's tab header carries `## SOURCE : Source of transcript` twice, vep-rs's once.",
-            "Under `--tsl` with `TSL` asked of the plugin, Ensembl VEP 116.2's tab output has two `TSL` \
+            "Under `--tsl` with `TSL` asked of the plugin, Ensembl VEP 116.3's tab output has two `TSL` \
              columns and its `CSQ` list two `TSL` fields",
         ],
     );
@@ -3067,12 +13818,237 @@ fn duplicate_column_and_recode_config_file_classes_are_documented() {
     assert_page_states(
         "intended-divergences.md",
         &[
-            "so a source named `SOURCE`, a dbNSFP column named `TSL` under `--tsl`, or a plugin named twice heads \
+            "Ensembl VEP's tab and VCF writers append every plugin key and `--custom` key after \
+             the flag columns without testing whether the list already carries the name, so a \
+             source named `SOURCE`, a source's field key `gnomADg_AF` under `--af_gnomadg`, a \
+             dbNSFP column named `TSL` under `--tsl`, or a plugin named twice heads \
              two tab columns, two description lines and two `CSQ` fields, each holding the row's one \
              value; vep-rs lists the column once",
             "`vep recode` reads a source as its own command line and drops the line",
         ],
     );
+    for (path, refused) in [
+        (
+            "divergences/duplicate-output-column.md",
+            "every `--custom` short name to the column list",
+        ),
+        (
+            "divergences/duplicate-output-column.md",
+            "a custom short name that equals a flag column",
+        ),
+        (
+            "divergences/duplicate-output-column.md",
+            "plugin key or custom short name a second time",
+        ),
+        (
+            "intended-divergences.md",
+            "every plugin key and `--custom` short name after the flag columns",
+        ),
+    ] {
+        let text = page_text(path)
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(!text.contains(refused), "docs/{path} states {refused:?}");
+    }
+}
+
+/// A key one `--custom` source declares twice, as a record field and a
+/// statistic of one name, in the entry `custom_key_named_as_a_plain_value_field`:
+/// `custom_headers` of `fields.rs` lists the key once, with the statistic's
+/// text and then the field's, where OutputFactory.pm:2451 tests a source's
+/// keys against the keys of the earlier sources alone and pushes a pair for
+/// each declaration (:2493, :2503-2506), whose later text alone Tab.pm:149
+/// keeps and which VCF.pm:276 prints as two `##INFO` lines of one ID.
+#[test]
+fn a_custom_key_one_source_declares_twice_is_documented() {
+    assert_page_states(
+        "divergences/custom-key-named-as-a-plain-value-field.md",
+        &[
+            "A key that one source declares as a field and as a statistic has one description \
+             line in the tab and VCF headers, which carries both texts",
+            "Ensembl VEP tests a source's keys against the keys of the earlier sources alone, so \
+             it lists this key twice, each time with its own text.",
+            "| Tab | `## S_count : count data from F`, twice | `## S_count : count data from F; A \
+             made-up field named as a statistic. count field from F`, once |",
+            "| VCF | two `##INFO=<ID=S_count,...>` lines, with the field's text and then with the \
+             statistic's | one line, with the statistic's text, `; ` and the field's |",
+            "| Default | a `## S_count :` line with the field's text, then one with the \
+             statistic's | the same two lines |",
+            "| Columns | two `S_count` tab columns and two `CSQ` fields, each with the row's one \
+             value | one column and one field |",
+            "its one line in the tab and VCF headers carries both texts, the statistic's first.",
+            "It holds the field's values alone where Ensembl VEP assigns no statistic.",
+            "No `min` is assigned, and both engines print the field's `7` in the cell.",
+            "`OutputFactory.pm`, lines 2444-2512, `get_custom_headers`: line 2451 reads the keys \
+             listed so far, once a source, before the source's own are pushed; lines 2482 and \
+             2499 test a field's and a statistic's key against that reading; lines 2493 and \
+             2503-2506 push the key with its text.",
+            "`AnnotationSource/File.pm`, line 346: `count` is set for every source that asks for \
+             it; lines 424-434: `min`, `max` and the sum behind `mean` and `sum` are set only \
+             where a matched record carries a score.",
+        ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "a key one source declares as a record field and as a statistic Ensembl VEP describes \
+             twice, its tab header with the statistic's text alone, and vep-rs once, with the \
+             statistic's text and then the field's |",
+        ],
+    );
+    assert_page_states(
+        "custom-annotation.md",
+        &[
+            "| a key that one source declares as a field and as a statistic | both texts: on one \
+             line, the statistic's first, joined by `; `, in the tab and VCF headers, and on a \
+             line for each declaration in the default format ([the key declared twice]\
+             (divergences/custom-key-named-as-a-plain-value-field.md\
+             #36-the-description-of-a-key-one-source-declares-twice)) |",
+        ],
+    );
+}
+
+/// A key that two `--custom` sources of one short name declare apart, one as
+/// a record field and one as a statistic, in the entry
+/// `custom_repeated_short_name_header_lines`: `custom_header_pairs` of
+/// `fields.rs` appends a later source's file to the text of the declaration
+/// that source repeats and gives a declaration the key lacks a text of its
+/// own, where OutputFactory.pm:2482-2484 and :2499-2501 append the file to the
+/// text the key has, whatever it declares. The lines the page tables are the
+/// ones `custom_key_sources_of_one_short_name_declare.rs` holds the binary to.
+#[test]
+fn a_custom_key_two_sources_declare_apart_is_documented() {
+    assert_page_states(
+        "divergences/pc-description-text.md",
+        &[
+            "On the key's own line Ensembl VEP appends the file to the text that line has, \
+             whatever the second source declares the key as.",
+            "A field's file joins the field's text and a statistic's the statistic's. A \
+             declaration the key's texts lack is described by a text of its own.",
+            "The same file, line 2451: the keys and texts listed so far are read once a source, \
+             before the source's own are pushed. Lines 2482 and 2499 test a field's and a \
+             statistic's key against that reading. Where the key is found, lines 2484 and 2501 \
+             append the file to the later of the key's listed texts, whatever it declares, and \
+             the text of the second source's declaration (lines 2493 and 2503-2506) is not \
+             pushed.",
+            "`count data from [PATH]/b.vcf.gz; The first file's made-up field. count field from \
+             [PATH]/a.vcf.gz`",
+            "| Tab | `## S_count : F,B` | `## S_count : count data from B; F` |",
+            "| VCF | one `##INFO` line of `S_count`, with `F,B` | one line, with `count data from \
+             B; F` |",
+            "| Default | `## S_count : F,B` | `## S_count : F`, then `## S_count : count data from \
+             B` |",
+            "Under `type=exact` a record belongs to the allele it names, `C`, and its value is \
+             listed after the statistic: vep-rs's row of `C` reads `1,7`.",
+            "| field; field and statistic | `F,B,B` | `count data from B; F,B` |",
+            "| statistic; field | `count data from A,B` | `count data from A; F2` |",
+            "| statistic; field and statistic | `count data from A,B,B` | `count data from A,B; \
+             F2` |",
+            "| field and statistic; field | `F` / `count data from A,B` | `count data from A; F,B` |",
+            "| field and statistic; both | `F` / `count data from A,B,B` | `count data from A,B; \
+             F,B` |",
+            "| field and statistic; statistic | `F` / `count data from A,B` | `count data from \
+             A,B; F` |",
+            "With a `QUAL` on the records the cell holds the asking source's statistic. With none \
+             it holds the field's values: `7` under the command above, and `7,9` where the second \
+             source names the field as well.",
+        ],
+    );
+    assert_page_states(
+        "custom-annotation.md",
+        &[
+            "Two sources under one short name that declare a key alike share one line, which \
+             lists both files.",
+            "| a key that two sources of one short name declare, one as a field and one as a \
+             statistic | both texts, each with the files of the sources that declare it: on one \
+             line, the statistic's first, in the tab and VCF headers, and on separate lines in \
+             the default format (",
+        ],
+    );
+    let declared_twice = "divergences/custom-key-named-as-a-plain-value-field.md";
+    assert_page_states(
+        declared_twice,
+        &[
+            "There the later source's file joins, after a comma, the text of the declaration \
+             that source repeats",
+        ],
+    );
+    let in_both_engines = "takes the later source's file after a comma in both engines";
+    assert!(
+        !page_text(declared_twice).contains(in_both_engines),
+        "docs/{declared_twice} states {in_both_engines:?}"
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "and on the key's own line to the text it finds there, whatever the second source \
+             declares the key as; vep-rs appends the file to the key's own header line, whatever \
+             its letters, on the text of the declaration the second source repeats, and \
+             describes a record field and a statistic that the two sources declare under one \
+             key by a text each |",
+        ],
+    );
+}
+
+/// The removed-stop page counts the corpora whose manifests record a row under
+/// `stop_codon_removed_without_stop_codon_test` and the entries they hold, and
+/// the manifests decide whether it counts truly. An entry is one item of a
+/// `divergences` list whose `expected_divergence` is the class. A manifest
+/// holds one such list for the corpus's own run and one for each flag set that
+/// carries its own, a flag set without one inheriting the manifest's, and the
+/// page states the entries of the two kinds of list apart.
+#[test]
+fn the_removed_stop_page_counts_its_corpus_entries_as_the_manifests_hold_them() {
+    const CLASS: &str = "stop_codon_removed_without_stop_codon_test";
+    let path = "divergences/stop-codon-removed-without-stop-codon-test.md";
+    let entries = |list: &serde_json::Value| {
+        list.as_array()
+            .into_iter()
+            .flatten()
+            .filter(|entry| entry["expected_divergence"] == CLASS)
+            .count()
+    };
+    let (mut corpora, mut own_runs, mut flag_sets) = (0, 0, 0);
+    for corpus in common::corpora() {
+        let of_own_run = entries(&corpus.manifest["divergences"]);
+        let of_flag_sets: usize = corpus.manifest["flag_sets"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|flag_set| entries(&flag_set["divergences"]))
+            .sum();
+        if of_own_run + of_flag_sets > 0 {
+            corpora += 1;
+        }
+        own_runs += of_own_run;
+        flag_sets += of_flag_sets;
+    }
+    assert_eq!(
+        (corpora, own_runs, flag_sets, own_runs + flag_sets),
+        (19, 490, 103, 593),
+        "the corpora whose manifests record {CLASS}, the entries in the lists of the corpora's own \
+         runs, the entries in the lists their flag sets carry and the sum: docs/{path} states the \
+         four figures"
+    );
+    assert_page_states(
+        path,
+        &[
+            "The manifests of 19 committed corpora hold 593 such entries: 490 in the lists of \
+             the corpora's own runs and 103 in the lists that their flag sets carry.",
+        ],
+    );
+    let text = page_text(path)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for refused in [
+        "16 committed corpora",
+        "566 such entries",
+        "582 such entries",
+    ] {
+        assert!(!text.contains(refused), "docs/{path} states {refused:?}");
+    }
 }
 
 /// `plugin_cols_names_matched_exactly`: a `cols` name is matched to the
@@ -3092,52 +14068,460 @@ fn plugin_cols_names_matched_exactly_class_is_documented() {
              `cols` name against the file's column names as an anchored regular expression, so a \
              name holding a metacharacter heads a column of undefined values; vep-rs matches names \
              exactly and refuses one the header lacks.",
-            "`OpenTargets.pm`, lines 219-224: `_parse_colnames` splits `cols` on `:`, stores the \
+            "`OpenTargets.pm`, lines 218-224: `_parse_colnames` splits `cols` on `:`, stores the \
              names as typed and pushes a name to `@invalid_cols` unless `grep(/^$col$/, @{ \
              $self->{colnames} })` finds a column.",
             "`AlphaMissense.pm`, lines 149-163: the same test on the `am_`-prefixed names, the \
              refusal listing the valid columns.",
             "`TranscriptAnnotator.pm`, lines 134-150: `grep /^$col$/` over the column names keeps a \
-             name as typed and warns about the others; the plugin dies only when no name passes.",
+             name as typed and warns about the others; the plugin dies only when no name passes. \
+             Line 200 filters the header by the stored names.",
             "`MaveDB.pm`, line 123, and `PromoterAI.pm`, line 117, validate `cols` with the same \
              test; `EVE.pm`, line 136, tests `class_number` and `GO.pm`, line 131, tests `match` \
              the same way. None of the four is ported.",
+            "The idiom runs the other way in `GWAS.pm`, line 446, where each summary-statistics \
+             header name is the pattern and the required names are tested against it. There the \
+             text comes from the file, not the command line; vep-rs reads those header names \
+             exactly, and a header spelt with a metacharacter is a malformed table outside this \
+             class.",
+            "In `TranscriptAnnotator.pm`, line 115, the text is the module's own: each of the \
+             five names of line 113 is tested against the header's names as a case-insensitive \
+             pattern anchored at its start. That is a prefix test, which vep-rs makes too.",
+            "Line 219 has stored the name as typed, and line 286 prefixes it to \
+             `OpenTargets_gwasGeneI.`.",
+            "Line 180 prefixes it to `transcript_annotator_SIFT_.core`. Line 200 reads the header \
+             hash by that key",
             "OpenTargets_gwasGeneI.=NA,NA,NA,NA",
-            "WARNING: Failed to instantiate plugin OpenTargets: OpenTargets: columns not found in \
+            "WARNING: Failed to instantiate plugin OpenTargets: columns not found in \
              the header of <file>: gwasGeneI.",
             "Under `cols=gwas.*`, a pattern matching every GWAS column, Ensembl VEP writes one \
              column, `OpenTargets_gwas.*`, with every value `NA`",
             "Unmatched ( in regex",
-            "WARNING: Failed to instantiate plugin AlphaMissense: AlphaMissense: the following \
+            "WARNING: Failed to instantiate plugin AlphaMissense: the following \
              columns were not found in file header: am_pathogenicit.; valid columns are: am_genome, \
              am_uniprot_id, am_transcript_id, am_protein_variant, am_pathogenicity, am_class",
-            "WARNING: Failed to instantiate plugin TranscriptAnnotator: TranscriptAnnotator: no \
+            "WARNING: Failed to instantiate plugin TranscriptAnnotator: no \
              valid columns selected. Valid column names: SIFT_score, SIFT_pred, Comment",
         ],
     );
+    // OpenTargets.pm:218 splits `cols` and :219 stores the names, :220 being blank;
+    // TranscriptAnnotator.pm:200 filters the header, :199 being a comment.
+    // GWAS.pm:446 makes each header name a pattern anchored at both ends. In
+    // TranscriptAnnotator.pm:115 the pattern is one of the five names of :113, anchored at
+    // its start and case-insensitive, and the header's names are the strings it is tested
+    // against: the prefix test `init` of `transcript_annotator.rs` makes on each header name.
+    let path = "divergences/plugin-cols-names-matched-exactly.md";
+    let text = page_text(path)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for refused in [
+        "lines 219-224",
+        "Line 220 has stored",
+        "Line 199 filters",
+        "Line 199 reads",
+        "unanchored",
+        "header names exactly too",
+    ] {
+        assert!(!text.contains(refused), "docs/{path} states {refused:?}");
+    }
     assert_page_states(
         "intended-divergences.md",
         &[
-            "Two hundred and forty-eight differences lie outside every class",
-            "Each of the two hundred and forty-eight [differences outside the classes]",
+            "Two hundred and ninety differences lie outside every class",
+            "Each of the two hundred and ninety [differences outside the classes]",
             "so a name holding a regular-expression metacharacter (`gwasGeneI.`) passes the test \
              and heads a column, named by the pattern's text, whose every value is undefined; \
              vep-rs matches the name to the column names exactly and refuses one the header lacks, \
-             listing the valid names | 3 · 0 of 392 flag sets · 15 flag sets, 0 corpora | 116.2 |",
+             listing the valid names | 3 · 0 of 511 flag sets · 15 flag sets, 0 corpora | 116.3 |",
         ],
     );
     assert_page_states(
         "plugins/annotation-store.md",
         &[
-            "A name the header lacks is refused with the valid names listed; Ensembl VEP 116.2 \
+            "A name the header lacks is refused with the valid names listed; Ensembl VEP 116.3 \
              tests each name as a pattern ([a documented \
              class](../divergences/plugin-cols-names-matched-exactly.md)).",
-            "A name the header lacks is refused with the valid names listed; Ensembl VEP 116.2 \
+            "A name the header lacks is refused with the valid names listed; Ensembl VEP 116.3 \
              tests each name as a pattern, so `cols=gwasGeneI.` loads there with every value \
              `NA` ([a documented class](../divergences/plugin-cols-names-matched-exactly.md)).",
-            "A name is matched to the header names exactly; Ensembl VEP 116.2 tests each name as \
+            "A name is matched to the header names exactly; Ensembl VEP 116.3 tests each name as \
              a pattern and keeps it as typed, so `SIFT_.core` heads an empty column there \
              ([a documented class](../divergences/plugin-cols-names-matched-exactly.md)).",
+        ],
+    );
+}
+
+/// The sentence that defines `splice_term_past_the_record_span` excepts a term
+/// of an insertion written after the span. An allele that opens with its whole
+/// reference allele of two or more bases differs only at indices past that
+/// allele's end (VariationFeatureOverlapAllele.pm:418, :428-429), which
+/// Ensembl VEP places on the bases after the span
+/// (BaseTranscriptVariationAllele.pm:117-118); vep-rs reads it as the
+/// insertion between the span's last base and the base after it. An insertion
+/// draws the tract term from either base beside it
+/// (BaseTranscriptVariationAllele.pm:152-161), so where the base after the
+/// span is a base of the tract vep-rs writes that term though the span holds
+/// no base of the tract. The page, the index, the taxonomy page, the class
+/// file of the outputs comparison and the `--masks` help of the format
+/// comparison state the exception with the rule.
+#[test]
+fn splice_span_class_sentence_excepts_an_insertion_written_after_the_span() {
+    const SENTENCE: &str = "On a record whose alternate allele is longer than its reference \
+         allele, Ensembl VEP writes a splice donor, splice acceptor, donor fifth base, donor \
+         region, polypyrimidine tract or intron term from positions past the end of the \
+         record's span; where no base of the span lies in a window of that term, vep-rs does \
+         not write it, unless it is a term of an insertion written after the span";
+    const RULE: &str = "window of that term, vep-rs does not write it";
+    const EXCEPTION: &str = "unless it is a term of an insertion written after the span";
+    let collapsed = |text: &str| text.split_whitespace().collect::<Vec<_>>().join(" ");
+    // Every statement of the rule carries the exception before its sentence or cell ends.
+    let excepted = |text: &str| {
+        text.match_indices(RULE).all(|(at, rule)| {
+            let rest = &text[at + rule.len()..];
+            let sentence = rest.split(". ").next().unwrap_or(rest);
+            let sentence = sentence.split(" |").next().unwrap_or(sentence);
+            sentence.contains(EXCEPTION)
+        })
+    };
+
+    assert_page_states(
+        "divergences/splice-term-past-the-record-span.md",
+        &[format!("| `splice_term_past_the_record_span` | {SENTENCE}. |").as_str()],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[format!(
+            "[`splice_term_past_the_record_span`](divergences/splice-term-past-the-record-span.md) \
+             | {SENTENCE} | 1 · "
+        )
+        .as_str()],
+    );
+    assert_page_states(
+        "concordance-provenance/116.2-divergence-classes.md",
+        &[
+            "Where no base of the span lies in a window of that term, vep-rs does not write it, \
+             with or without `splice_region_variant` or `splice_donor_region_variant` in its \
+             place, unless it is a term of an insertion written after the span. For the intron \
+             term the window is the intron.",
+        ],
+    );
+    for page in [
+        "divergences/splice-term-past-the-record-span.md",
+        "intended-divergences.md",
+        "concordance-provenance/116.2-divergence-classes.md",
+    ] {
+        let text = collapsed(&page_text(page));
+        assert!(text.contains(RULE), "docs/{page} lacks {RULE:?}");
+        assert!(
+            excepted(&text),
+            "docs/{page} states {RULE:?} without {EXCEPTION:?}"
+        );
+    }
+
+    let tool_text = |path: &str| {
+        let path = format!("{}/../../tools/{path}", env!("CARGO_MANIFEST_DIR"));
+        collapsed(&std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}")))
+    };
+    for file in [
+        "vep-outputs-compare/data/divergence_classes.tsv",
+        "vep-formats-compare/data/help.txt",
+    ] {
+        let text = tool_text(file);
+        assert!(
+            text.contains(&format!("{SENTENCE}. ")),
+            "tools/{file} lacks the class's sentence"
+        );
+        assert!(
+            excepted(&text),
+            "tools/{file} states {RULE:?} without {EXCEPTION:?}"
+        );
+    }
+}
+
+/// The page of `splice_term_past_the_record_span` states, beside the shape's
+/// rate over the chromosome 21 records, the rows of those records on which the
+/// two engines' terms differ: 12 rows of two records of the 1000 Genomes cut,
+/// each read as the insertion it writes after the bases it keeps. The page
+/// does not say that the terms differ on no row of them.
+#[test]
+fn splice_span_page_counts_the_chromosome_21_rows_its_terms_change_on() {
+    let path = "divergences/splice-term-past-the-record-span.md";
+    assert_page_states(
+        path,
+        &[
+            "That rate is an upper bound: the transcript decides whether a position past the end \
+             of the span lies in a window that the span does not reach. The terms change on 12 \
+             rows of those chromosome 21 records. On the genome-wide ClinVar dataset they change \
+             on 1,787 rows on GRCh38 and 386 on GRCh37.",
+        ],
+    );
+    let text = page_text(path)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for claim in [
+        "change on no row",
+        "on no row of those chromosome 21 records",
+    ] {
+        assert!(!text.contains(claim), "docs/{path} states {claim:?}");
+    }
+}
+
+/// The texts of the two comparison tools give the allele that opens with its
+/// whole reference allele no lower bound of two bases. The rule of
+/// `splice_term_past_the_record_span` reads a reference allele of one base
+/// that opens the allele as well (`insertion_after_one_base` of
+/// `tools/vep-formats-compare/src/shared.rs` and of
+/// `tools/vep-outputs-compare/src/rules/row.rs`): Ensembl VEP reads that base
+/// as changed (VariationFeatureOverlapAllele.pm:418, :452-454), so on such a
+/// row the reference alone may hold `splice_region_variant`. Rows printed
+/// under `--terms display` are read by the three names the seven terms print
+/// there, with the record's alleles alone (`display_vocabulary_pair`).
+#[test]
+fn splice_span_class_texts_take_an_allele_that_opens_with_one_reference_base() {
+    let text = |path: &str| {
+        std::fs::read_to_string(format!("{}/../../{path}", env!("CARGO_MANIFEST_DIR")))
+            .unwrap_or_else(|e| panic!("{path}: {e}"))
+            .split_whitespace()
+            .filter(|word| *word != "///")
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    let help = "tools/vep-formats-compare/data/help.txt";
+    let class = "tools/vep-formats-compare/src/classes.rs";
+    let readme = "tools/vep-outputs-compare/README.md";
+    let registry = "tools/vep-outputs-compare/src/rules/mod.rs";
+    assert_states(
+        readme,
+        &text(readme),
+        &[
+            "A pair whose allele opens with its whole reference allele is put to the row-aware \
+             rules also where a set rule classifies it without setting it aside",
+        ],
+    );
+    assert_states(
+        help,
+        &text(help),
+        &[
+            "A record whose alternate allele opens with its whole reference allele changes no \
+             base of its span.",
+            "the reference bases are two or more, or one base that opens the allele, and as \
+             many as the Location's positions",
+            "After one reference base Ensembl VEP reads that base as changed, and the reference \
+             alone may hold splice_region_variant as well.",
+            "Rows printed under --terms display are read by the names the six terms and \
+             splice_region_variant print there, ESSENTIAL_SPLICE_SITE, SPLICE_SITE and \
+             INTRONIC, with the record's alleles alone.",
+        ],
+    );
+    for (file, bound) in [
+        (
+            readme,
+            "whole reference allele of two or more bases is put to the row-aware rules",
+        ),
+        (
+            registry,
+            "whole reference allele of two or more bases is put to the row-aware rules",
+        ),
+        (
+            help,
+            "whole reference allele of two or more bases changes no base of its span",
+        ),
+        (
+            class,
+            "whole reference allele of two or more bases changes no base of its span",
+        ),
+        (help, "the reference bases are two or more and as many as"),
+    ] {
+        assert!(!text(file).contains(bound), "{file} states {bound:?}");
+    }
+}
+
+/// The page of the splice-region defect gives the rule that sets its pairs
+/// aside one name, the registry's: `EXCLUSION_REGISTRY` of the outputs
+/// comparison lists the excluding rule `covered_splice_region_swap`, whose
+/// predicate is `is_covered_splice_region_swap`, and the class table files that
+/// rule under the class `splice_family_swap`, the name the format comparison
+/// and the golden harness hold. The page's paragraph on an allele of another
+/// length than its reference keeps the definition its section gives: a
+/// differing region is a run of positions at which the two alleles, compared
+/// position by position, do not hold the same base, also where the allele
+/// leaves the bases there as they were
+/// (VariationFeatureOverlapAllele.pm:427-429 collects the positions at which
+/// the two alleles hold different bytes and :432-450 joins neighbouring ones
+/// into regions). The count paragraph of the structural-variant section is
+/// whole sentences.
+#[test]
+fn splice_region_defect_page_names_one_rule_and_keeps_its_definition_of_a_differing_region() {
+    const RULE: &str = "covered_splice_region_swap";
+    const PREDICATE: &str = "is_covered_splice_region_swap";
+    const CLASS: &str = "splice_family_swap";
+    let page = "divergences/defect-a.md";
+    let collapsed = |text: &str| text.split_whitespace().collect::<Vec<_>>().join(" ");
+
+    assert_page_states(
+        page,
+        &[
+            format!(
+                "The comparators name the class `{CLASS}`. The rule that decides a pair is \
+                 `{RULE}` of the SNP/indel comparator \
+                 ([1.7](#17-how-the-comparator-treats-this-class)); the format comparator and \
+                 the golden harness set the same pair aside under the class's name."
+            )
+            .as_str(),
+            "Past a place where such an allele adds or removes bases, each base the two alleles \
+             share is compared with a base one or more positions away, so the bases compared can \
+             differ at some positions and agree at others. One such place can therefore give \
+             several differing regions, some over bases the allele leaves as they were: each is \
+             still a run of positions at which the two alleles, so compared, do not hold the \
+             same base.",
+            format!(
+                "The rule of this class is `{RULE}`. Its predicate, `{PREDICATE}` in \
+                 `tools/vep-outputs-compare/src/rules/pair.rs`, matches a pair when every term \
+                 in Ensembl VEP's set is also in vep-rs's"
+            )
+            .as_str(),
+            format!(
+                "The structural-variant sets are scored by a different comparator from the \
+                 SNP/indel datasets, but they contain sequence variants too (the synthetic \
+                 complex-substitution set is nothing else). Nothing new happens in either \
+                 engine; the second comparator applies the same rule, `{RULE}`."
+            )
+            .as_str(),
+            format!(
+                "The rules are `start_cooccurrence_swap` and `{RULE}`, the rule of \
+                 [1.7](#17-how-the-comparator-treats-this-class). Both stand in \
+                 `EXCLUSION_REGISTRY` in `tools/vep-outputs-compare/src/rules/mod.rs`, a file \
+                 `tools/vep-sv-compare` compiles in so the two comparators cannot drift."
+            )
+            .as_str(),
+            format!(
+                "`{RULE}` matches 20 pairs on the GRCh38 set and none on the GRCh37 set. Nineteen \
+                 are the transcripts of `synth_cpx_sub_0780`."
+            )
+            .as_str(),
+            format!(
+                "Both members of each pair are set aside; the report counts them as \
+                 `excluded_registry_swap_rust` and `excluded_registry_swap_perl`, split by rule \
+                 in `excluded_registry_swap_by_bucket` (`{RULE}`)."
+            )
+            .as_str(),
+        ],
+    );
+    let text = collapsed(&page_text(page));
+    for refused in [
+        "some of unchanged bases",
+        "The comparators name it",
+        "the SNP/indel comparator's excluding rule decides the pair",
+        "the same predicate is applied by the second comparator",
+        "scored by a different script",
+        "Counts: 20 pairs",
+        "Fully masked",
+    ] {
+        assert!(!text.contains(refused), "docs/{page} states {refused:?}");
+    }
+    // A paragraph that names the rule's predicate names the rule itself as well.
+    for paragraph in page_text(page)
+        .lines()
+        .filter(|line| line.contains(&format!("`{PREDICATE}`")))
+    {
+        assert!(
+            paragraph.contains(&format!("`{RULE}`")),
+            "docs/{page} names `{PREDICATE}` without `{RULE}`: {paragraph}"
+        );
+    }
+
+    let source = |path: &str| {
+        let path = format!("{}/../../{path}", env!("CARGO_MANIFEST_DIR"));
+        std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"))
+    };
+    let rules = "tools/vep-outputs-compare/src/rules";
+    assert!(
+        collapsed(&source(&format!("{rules}/mod.rs"))).contains(&format!(
+            "ExclusionRule {{ bucket: \"{RULE}\", classifies: false, excludes: true, \
+             predicate: Predicate::Sets(pair::{PREDICATE}), }}"
+        )),
+        "{rules}/mod.rs lists no excluding rule `{RULE}` whose predicate is `{PREDICATE}`"
+    );
+    assert!(
+        source(&format!("{rules}/pair.rs")).contains(&format!("pub fn {PREDICATE}(")),
+        "{rules}/pair.rs defines no `{PREDICATE}`"
+    );
+    let table = collapsed(&source(&format!("{rules}/table.rs")));
+    let row = table
+        .split("DivergenceClass {")
+        .find(|row| {
+            row.trim_start()
+                .starts_with(&format!("bucket: \"{RULE}\","))
+        })
+        .unwrap_or_else(|| panic!("{rules}/table.rs has no row of `{RULE}`"));
+    assert_states(
+        &format!("the row of `{RULE}` in {rules}/table.rs"),
+        row,
+        &[
+            "excludes: true,",
+            format!("taxonomy_class: \"{CLASS}\",").as_str(),
+        ],
+    );
+    for (path, line) in [
+        (
+            "tools/vep-formats-compare/src/classes.rs",
+            format!("pub const SPLICE_FAMILY_SWAP: &str = \"{CLASS}\";"),
+        ),
+        (
+            "crates/vep-cli/tests/common/mod.rs",
+            format!("    \"{CLASS}\","),
+        ),
+        (
+            "tools/vep-sv-compare/src/lib.rs",
+            "#[path = \"../../vep-outputs-compare/src/rules/mod.rs\"]".to_string(),
+        ),
+    ] {
+        assert!(
+            source(path).lines().any(|held| held == line),
+            "{path} lacks the line {line:?}"
+        );
+    }
+}
+
+/// `start_cooccurrence_swap` under `--hgvs`: on an insertion or deletion that
+/// leaves the whole coding sequence standing behind a start codon the 5' UTR
+/// forms again, Ensembl VEP writes the notation of a lost start
+/// (`TranscriptVariationAllele.pm:2161-2164`) and vep-rs the first residue,
+/// unchanged. The page states both cells of its record's row, the test by
+/// which vep-rs reads the coding sequence as whole
+/// (`VariationEffect.pm:1071`), and the two readings it leaves alone.
+#[test]
+fn start_pair_page_states_the_protein_notation_of_a_coding_sequence_left_whole() {
+    assert_page_states(
+        "divergences/defect-b.md",
+        &[
+            "The rows of 3.3 were written without `--hgvs`.",
+            "| Ensembl VEP | `ENSP00000438019.1:p.Met1?` |",
+            "| vep-rs | `ENSP00000438019.1:p.Met1%3D` |",
+            "Its `hgvs_protein` asks `start_lost` alone (`TranscriptVariationAllele.pm` lines \
+             2161-2164), which the loss test of 3.4 answers for this allele, and writes `?` for \
+             the new protein.",
+            "vep-rs writes the first residue, unchanged, `p.Met1=`.",
+            "The default output of either engine writes the `=` of an `HGVSp` as `%3D`.",
+            "The edited molecule does not read that frame: its start codon stands one base \
+             upstream, and every codon after it is the reference's.",
+            "Translation from that codon gives the reference protein, which is what `p.Met1=` \
+             says and what the row's own term, `start_retained_variant`, says.",
+            "The edit shortens the 5' UTR by one base and changes nothing else,",
+            "The row's `frameshift_variant`, with the `Amino_acids` and `Codons` cells that go \
+             with it, is the term of 3.5's last paragraph, which both engines write alike.",
+            "On a matching pair of 3.7, vep-rs writes `p.Met1=` for an insertion or deletion of \
+             any length wherever the retention test passes by its last comparison alone: the \
+             rebuilt string ends in the whole coding sequence (`VariationEffect.pm` line 1071).",
+            "The transcript's first codon stands at the old UTR length behind an unchanged 5' \
+             UTR, which is the retention test's first comparison (lines 1061-1065).",
+            "Translation is read from that codon, and vep-rs writes the notation of the change \
+             it shows there, such as a frameshift from a later residue or a duplication.",
+            "Its span opens before the coding sequence and has no protein position to start at, \
+             so neither engine writes an `HGVSp`.",
+            "The comparators set a matching pair aside whole, so this cell is not compared.",
         ],
     );
 }
@@ -3164,18 +14548,27 @@ fn custom_readers_exclusions_are_documented() {
 /// `stats-charts-distribution-per-chromosome`: the per-chromosome distribution
 /// charts read the chromosome lengths from the FASTA's index alone, where
 /// Ensembl VEP reads them from its database when one is connected
-/// (`BaseVEP.pm:550-580`); offline without a FASTA neither engine writes one.
+/// (`BaseVEP.pm:550-580`), so without a FASTA it writes one only from a
+/// connected database; a vep-rs run that writes a report without a FASTA
+/// prints an `INFO:` line.
 #[test]
 fn stats_distribution_exclusion_is_documented() {
     assert_page_states(
         "cli/compatibility.md",
         &[
             "The `Distribution of variants on chromosome` charts need the chromosome lengths, \
-             which vep-rs reads from the index of the `--fasta` file alone, one chart per \
+             which vep-rs reads from the index of the run's reference FASTA alone, one chart per \
              chromosome spelled as the FASTA names it. Ensembl VEP reads them from its database \
              when one is connected and from the FASTA otherwise (`BaseVEP.pm:550-580`). Without \
-             a FASTA neither engine writes a distribution chart.",
+             a FASTA vep-rs writes no distribution chart, and Ensembl VEP writes one only from a \
+             connected database. A vep-rs run that writes a report without a FASTA says so in \
+             one `INFO:` line on standard error, which `--quiet` withholds.",
         ],
+    );
+    // A connected database gives Ensembl VEP the lengths without a FASTA.
+    assert!(
+        !page_text("cli/compatibility.md").contains("neither engine writes a distribution chart"),
+        "docs/cli/compatibility.md says neither engine writes a chart without a FASTA"
     );
     assert_flag_row_states(
         "cli/statistics-verbosity-misc.md",
@@ -3187,7 +14580,9 @@ fn stats_distribution_exclusion_is_documented() {
 /// `stats-html-chart-technology`: the HTML report keeps `dump_html`'s sections,
 /// ids, titles, tables and sort orders (`Stats.pm:846-915`) and draws its charts
 /// as inline SVG, where Ensembl VEP's page loads a remote chart library and two
-/// images (`Stats.pm:1001-1003, 1138, 1142`).
+/// images (`Stats.pm:1001-1003, 1138, 1142`); each chart's counts stand under
+/// its heading as the statement Ensembl VEP's page writes for it
+/// (`Stats.pm:955-963`), in a comment.
 #[test]
 fn stats_html_technology_exclusion_is_documented() {
     assert_page_states(
@@ -3197,6 +14592,14 @@ fn stats_html_technology_exclusion_is_documented() {
              VEP's (`Stats.pm` `dump_html`), rendered as inline SVG without Ensembl VEP's remote \
              chart loader and images. The page is one file that loads no script, no chart library \
              and no image, so it opens without a network connection.",
+            "Under each chart's heading the HTML report carries the chart's counts in an HTML \
+             comment. The comment holds the statement Ensembl VEP's page hands its chart library \
+             for that chart, `var <id> = draw<Type>(…, \
+             google.visualization.arrayToDataTable([…]), …);` (`Stats.pm:955-963`), written from \
+             the counts the drawing and the table show. A program that collects reports and reads \
+             a chart's counts from that line of Ensembl VEP's page, as MultiQC's module for \
+             Ensembl VEP does, finds the line here. Nothing in the page runs the statement, and \
+             the page calls no chart library.",
         ],
     );
     assert_flag_row_states(
@@ -3206,16 +14609,192 @@ fn stats_html_technology_exclusion_is_documented() {
     );
 }
 
-/// `quiet-and-q`: an output named `stdout` does not force `--quiet`
-/// (`Config.pm:933-937`), and `--quiet` leaves the statistics report complete,
-/// as Ensembl VEP keys its counters on `--no_stats` alone (`Stats.pm:230, 277`).
+/// The annotation-store page says where CADD and AlphaMissense refuse a data
+/// file of the other assembly: wherever the run has an assembly, which
+/// `cache_resolve::resolve` settles as the cache's own name (its `info.json`,
+/// else the name of its directory) and as the value of `--assembly` only where
+/// the cache names none (`assembly_inferred_from_cache_feeds_plugin_hint` in
+/// `cache_resolve.rs`). Ensembl VEP's CADD plugin tests the assembly parameter
+/// (`CADD.pm` lines 141 and 151-157), which the cache's assembly does not
+/// reach before the plugins are built (`Runner.pm` lines 125-128). A sentence
+/// that makes the flag the condition of either vep-rs refusal is refused.
+#[test]
+fn annotation_store_page_ties_the_build_refusals_to_the_run_assembly() {
+    let path = "plugins/annotation-store.md";
+    assert_page_states(
+        path,
+        &[
+            "A file whose header does not name the run's assembly is refused, as Ensembl VEP's \
+             plugin refuses it under `--assembly` (`CADD.pm` lines 151-157).",
+            "A file whose rows name another assembly than the run's is refused.",
+        ],
+    );
+    let text = page_text(path)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for flag_as_condition in [
+        "Under `--assembly`, a file",
+        "is refused under `--assembly`",
+    ] {
+        assert!(
+            !text.contains(flag_as_condition),
+            "docs/{path} states {flag_as_condition:?}"
+        );
+    }
+}
+
+/// The OpenTargets section and the index row say which `lead_variants_only`
+/// values are read: `1`, `0` and the empty value, the last two switching the
+/// filter off in both engines, and any other refused by vep-rs alone. Ensembl
+/// VEP's plugin keeps the value as written and tests it by Perl truth
+/// (`OpenTargets.pm` lines 262-267 and 352), to which `0` and the empty string
+/// are false, and its parameter hash keeps the empty field after the `=`
+/// (`BaseVepPlugin.pm` line 126). The run holds both pages to the binary on
+/// the record of the plugin's corpus whose one association is no lead: under
+/// `lead_variants_only=` its row is the one Ensembl VEP 116.3 writes for that
+/// value, the rows of `lead_variants_only=0`, and `false` draws the refusal
+/// the page quotes. A sentence that has every value but `0` and `1` refused
+/// is refused on both pages.
+#[test]
+fn open_targets_page_says_an_empty_lead_filter_value_switches_the_filter_off() {
+    let page = "plugins/annotation-store.md";
+    let index = "intended-divergences.md";
+    assert_page_states(
+        page,
+        &[
+            "`lead_variants_only` takes `1` or `0`; `0` or an empty value switches the filter \
+             off in both engines. vep-rs drops the plugin at load on any other value, with the \
+             warning `lead_variants_only must be 0 or 1, not '<value>'`.",
+            "so `lead_variants_only=false`, a true string, keeps the filter on there without a \
+             warning",
+        ],
+    );
+    assert_page_states(
+        index,
+        &[
+            "refuses a `lead_variants_only` value other than `0`, `1` or the empty value, which \
+             it reads as `0`",
+        ],
+    );
+    for (path, empty_value_refused) in [
+        (
+            page,
+            "and `0` switches the filter off in both engines. vep-rs drops the plugin at load \
+             on any other value",
+        ),
+        (
+            index,
+            "refuses a `lead_variants_only` value other than `0` or `1`",
+        ),
+    ] {
+        let text = page_text(path)
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(
+            !text.contains(empty_value_refused),
+            "docs/{path} states {empty_value_refused:?}"
+        );
+    }
+
+    let corpus = format!(
+        "{}/../../tests/golden/116/GRCh38-plugin-opentargets",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let dir = tempfile::tempdir().unwrap();
+    // The annotation rows and the warnings file of one run over the corpus's
+    // records, `parameters` following the plugin's file.
+    let run = |name: &str, parameters: &str| -> (Vec<String>, String) {
+        let out = dir.path().join(name);
+        let status = common::isolated_vep(dir.path())
+            .stdin(std::process::Stdio::null())
+            .arg("-i")
+            .arg(format!("{corpus}/variants.vcf"))
+            .arg("-o")
+            .arg(&out)
+            .args(["--offline", "--json_cache"])
+            .arg(format!("{corpus}/json_cache"))
+            .args(["--species", "homo_sapiens", "--assembly", "GRCh38"])
+            .args([
+                "--format",
+                "vcf",
+                "--no_stats",
+                "--quiet",
+                "--force_overwrite",
+            ])
+            .arg("--plugin")
+            .arg(format!(
+                "OpenTargets,file={corpus}/open_targets_vep.slice.tsv.gz{parameters}"
+            ))
+            .status()
+            .unwrap();
+        assert!(status.success(), "{name}: {status}");
+        let rows = std::fs::read_to_string(&out)
+            .unwrap()
+            .lines()
+            .filter(|line| !line.starts_with('#'))
+            .map(str::to_string)
+            .collect();
+        let warnings =
+            std::fs::read_to_string(format!("{}_warnings.txt", out.display())).unwrap_or_default();
+        (rows, warnings)
+    };
+    let row_of = |rows: &[String]| -> String {
+        rows.iter()
+            .find(|row| {
+                row.starts_with("ot_gwas_nonlead_only\t") && row.contains("\tENST00000391262\t")
+            })
+            .cloned()
+            .expect("the record's row on ENST00000391262")
+    };
+    let filtered = "ot_gwas_nonlead_only\t21:15610527\tA\tENSG00000212564\tENST00000391262\t\
+                    Transcript\tupstream_gene_variant\t-\t-\t-\t-\t-\t-\t\
+                    IMPACT=MODIFIER;DISTANCE=3756;STRAND=1";
+    let unfiltered = format!(
+        "{filtered};OpenTargets_gwasDiseases=OBA_2045267;\
+         OpenTargets_gwasGeneId=ENSG00000155313;\
+         OpenTargets_gwasLocusToGeneScore=0.5527451634407043;\
+         OpenTargets_qtlBiosampleName=NA;OpenTargets_qtlGeneId=NA"
+    );
+
+    let (default_rows, _) = run("default.txt", "");
+    assert_eq!(row_of(&default_rows), filtered);
+
+    let (empty_rows, empty_warnings) = run("empty.txt", ",lead_variants_only=");
+    assert_eq!(row_of(&empty_rows), unfiltered);
+    assert!(
+        !empty_warnings.contains("OpenTargets"),
+        "an empty lead_variants_only drew a warning: {empty_warnings}"
+    );
+    let (zero_rows, _) = run("zero.txt", ",lead_variants_only=0");
+    assert_eq!(empty_rows, zero_rows);
+
+    let (false_rows, false_warnings) = run("false.txt", ",lead_variants_only=false");
+    assert!(
+        false_warnings.lines().any(|line| {
+            line == "WARNING: Failed to instantiate plugin OpenTargets: \
+                     lead_variants_only must be 0 or 1, not 'false'"
+        }),
+        "{false_warnings}"
+    );
+    assert!(
+        false_rows.iter().all(|row| !row.contains("OpenTargets_")),
+        "a refused plugin annotated a row"
+    );
+}
+
+/// `quiet-and-q`, `stdout-output`: an output named `stdout` does not force
+/// `--quiet` (`Config.pm:934-937`), and `--quiet` leaves the statistics report
+/// complete, as Ensembl VEP keys its counters on `--no_stats` alone
+/// (`Stats.pm:230, 277`).
 #[test]
 fn quiet_exclusion_is_documented() {
     assert_page_states(
         "cli/compatibility.md",
         &[
             "An output file matching `stdout` in any case does not force `--quiet` or drop \
-             `--verbose` (`Config.pm:933-937`). The status lines go to standard error, so the \
+             `--verbose` (`Config.pm:934-937`). The status lines go to standard error, so the \
              annotation on standard output is clean either way, and `--quiet --verbose` stays \
              refused with `-o STDOUT` as without. `--quiet` silences those lines and nothing \
              else: the statistics report is written in full under it, as Ensembl VEP keys its \
@@ -3224,10 +14803,369 @@ fn quiet_exclusion_is_documented() {
     );
 }
 
+/// The first worked example of the page of `hgvs_shift_sequence_edge_window`
+/// says what each of its counts counts. The 27 forward-strand rows of the
+/// deletion `MT:6468-15586` are those of the fifteen transcripts it contains
+/// whole, of the two it overlaps in part and of ten within 5,000 bases of it.
+/// The four ClinVar records are named and their 20 rows of the class are
+/// counted by record. The source list of 1.4 cites the walk at the loop of
+/// `perform_shift` (TranscriptVariationAllele.pm:306-349), which reads `pre_seq`
+/// at :315 for a reverse-strand transcript and turns the allele by one base
+/// after a match (:331-333): line 462 is the call, and a walk reads one of the
+/// two sequences.
+#[test]
+fn sequence_edge_page_first_example_says_what_each_count_counts() {
+    let path = "divergences/hgvs-shift-near-sequence-edge.md";
+    assert_page_states(
+        path,
+        &[
+            "The 27 are the rows of the fifteen forward-strand transcripts the deletion contains \
+             whole, of the two it overlaps in part and of ten more within 5,000 bases of it, \
+             which get an upstream or a downstream row.",
+            "vep-rs writes `HGVS_OFFSET=2` on the fifteen forward-strand transcripts it contains \
+             whole",
+            "After each match it turns the deleted bases by one, last base to the front, so a \
+             walk can run further than their length.",
+            "lines 306-349, the loop of `perform_shift`, which line 462 calls: the walk. For a \
+             reverse-strand transcript it reads `pre_seq` from its last base backwards, at line \
+             315, and takes a step for each match.",
+            "hold four insertions or deletions with rows of the class: the two human deletions \
+             of 1.1 (`MT:15934` and `MT:6468-15586`), an insertion between `MT:15939` and \
+             `MT:15940` and a deletion of `MT:15940`.",
+            "Under `--hgvs` the four give 20 rows of the class on each assembly, which differ in \
+             `HGVS_OFFSET` on all 20 and in `HGVSc` on five.",
+            "The deletion `MT:6468-15586` gives 17 of the 20: the fifteen transcripts it contains \
+             whole, where `HGVS_OFFSET` alone differs, and the two it overlaps in part. Its ten \
+             forward-strand upstream and downstream rows carry neither a notation nor an offset \
+             in either engine.",
+            "Each of the other three records gives one row, on the transcript `ENST00000387460`. \
+             `HGVSc` differs on those three rows and on the rows of the two transcripts the long \
+             deletion overlaps in part, five in all.",
+        ],
+    );
+    let text = page_text(path)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for replaced in ["the walk over the two sequences", "carry four"] {
+        assert!(
+            !text.contains(replaced),
+            "docs/{path} still holds {replaced:?}"
+        );
+    }
+}
+
+/// The opening section and the first worked example of the page of
+/// `hgvs_shift_sequence_edge_window` say which of the 27 forward-strand rows of
+/// the deletion `MT:6468-15586` differs in its terms, what a comparison reports
+/// under the shift flags and which inputs of the comparison oracle hold a record
+/// of the class. On the row of `ENST00000361624` Ensembl VEP writes
+/// `stop_retained_variant` and vep-rs `stop_lost`, the entry
+/// `stop_codon_removed_without_stop_codon_test`, so the terms agree on 26 rows.
+/// The genome-wide ClinVar files hold the four records of the class
+/// and the chromosome 21 files none. `HGVS_OFFSET` takes the transcript's strand
+/// as its sign (OutputFactory.pm:1764). A clamped end is one held at the
+/// transcript's last base (TranscriptVariationAllele.pm:2733), which the test at
+/// :1472 refuses when an offset is added to it.
+#[test]
+fn sequence_edge_page_says_which_row_differs_and_which_inputs_hold_its_records() {
+    let path = "divergences/hgvs-shift-near-sequence-edge.md";
+    assert_page_states(
+        path,
+        &[
+            "Some of its rows then differ for another reason. Wherever the flank is read whole, \
+             Ensembl VEP writes no `HGVSc` for a deletion that contains a transcript whole and \
+             admits a shift towards that transcript's 3' end, the documented difference \
+             [`hgvs_shifted_indel_written_span_gate`](hgvs-shifted-indel-written-span-gate.md).",
+            "Ensembl VEP writes `SHIFT_LENGTH=0` and vep-rs `SHIFT_LENGTH=2`; on its nine \
+             reverse-strand rows both write 0.",
+            "The two engines write the same `Consequence` on 26 of the 27 rows. On the row of \
+             `ENST00000361624`, one of the two transcripts the deletion overlaps in part, \
+             Ensembl VEP writes `stop_retained_variant` and vep-rs `stop_lost`, each beside \
+             `3_prime_UTR_variant`, with these flags and without them.",
+            "That row's terms are another documented difference, \
+             [`stop_codon_removed_without_stop_codon_test`]\
+             (stop-codon-removed-without-stop-codon-test.md), and no part of this one.",
+            "`Protein_position` one place further on one of them, `ENST00000361789`;",
+            "ends 983 bases before the region's end and admits a shift of two towards that end.",
+            "`HGVS_OFFSET` reports how many bases the notation's position moved from the \
+             record's. On a reverse-strand transcript the 3' direction is towards lower genomic \
+             coordinates and the offset is negative; on a forward-strand transcript it is \
+             positive.",
+            "(`perform_shift`, line 320 for the first and line 315 for the second, by the strand \
+             it is given at line 462)",
+            "Where Ensembl VEP's walk stops at zero, both engines write the same `HGVSc`, the \
+             deletion of the transcript's first to last base, and the rows differ in \
+             `HGVS_OFFSET` alone.",
+            "Where a deletion runs past a transcript's last base, Ensembl VEP holds the end of \
+             the notation at that base, a clamped end (line 2733 of \
+             `TranscriptVariationAllele.pm`). The test at line 1472 of the same file refuses a \
+             notation whose clamped end the offset would carry past that base, and only a \
+             zero offset passes it.",
+            "where that shift is not zero the test refuses a notation with a clamped end.",
+            "The HGVSp names residue 149 where `Protein_position` reads 148. Residues 148 and \
+             149 are both lysine, so the protein that loses either is the same, and the \
+             notation names the last of the two, the HGVS rule for a run of equal residues. \
+             Without `--shift_3prime 1`, `Protein_position` keeps the record's place, as the \
+             other position columns do.",
+            "The HGVSp is equal on the two rows because every placement of the deletion that \
+             1.5 lists leaves the same coding sequence.",
+            "four bases from the record's 291-293",
+            "The comparison oracle is the harness that runs both engines over the same inputs, \
+             and its population cases are the ones that annotate the datasets the concordance \
+             figures are measured on. The chromosome 21 files they annotate under `--hgvs` hold \
+             no record within 1,000 bases of that chromosome's ends.",
+            "The population cases that annotate the genome-wide ClinVar files run under \
+             `--everything`, which turns `--hgvs` on: they read the four records of the next \
+             paragraph, and its counts hold for them.",
+            "No corpus manifest documents these rows: the format comparator decides all 20 \
+             beside the reference FASTA and vep-rs's JSON cache (2.7).",
+        ],
+    );
+    let text = page_text(path)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for replaced in [
+        "with the same `Consequence`",
+        "carry no such record under `--hgvs` either",
+    ] {
+        assert!(
+            !text.contains(replaced),
+            "docs/{path} still holds {replaced:?}"
+        );
+    }
+    // The page the row's terms are documented on stands in the tree.
+    assert!(
+        page_text("divergences/stop-codon-removed-without-stop-codon-test.md")
+            .contains("stop_codon_removed_without_stop_codon_test")
+    );
+}
+
+/// The page of `hgvs_shift_sequence_edge_window` says which fields the class reads under
+/// `--shift_3prime 1`. Each engine prints the length of its own walk as `SHIFT_LENGTH`
+/// (OutputFactory.pm:1699-1704) and the positions of the span that walk moved the allele to
+/// (:1734-1750), so the format comparison sets those fields aside where each value is its
+/// engine's walk's, and the class's row of the comparison's class table names them. Of the
+/// 14 insertions or deletions the genome-wide ClinVar file of each assembly holds within
+/// 1,000 bases of an end of a region, eight are such records, all mitochondrial.
+#[test]
+fn sequence_edge_page_says_which_fields_the_class_reads_under_the_shift_flags() {
+    let path = "divergences/hgvs-shift-near-sequence-edge.md";
+    assert_page_states(
+        path,
+        &[
+            "Each engine annotates the deletion at the span its own walk moved it to, so every \
+             field that gives a place on the transcript follows that walk.",
+            "The class covers `SHIFT_LENGTH` and these three position fields too. Given the \
+             reference FASTA and vep-rs's JSON cache, the format comparator sets aside a \
+             `SHIFT_LENGTH` where Ensembl VEP's value is the length of the walk along its \
+             clipped slice and vep-rs's the length the sequence admits.",
+            "It sets aside a `cDNA_position`, a `CDS_position` or a `Protein_position` where \
+             each engine's value is the one the transcript gives the span that engine's walk \
+             moved the allele to.",
+            "A position printed with a total under `--total_length` stays a difference. So do \
+             the codons, the amino acids and the consequence terms of a row, which this class \
+             never takes.",
+            "Under `--shift_3prime 1 --shift_length`, eight of the 14 insertions or deletions \
+             that the genome-wide ClinVar file of each assembly holds within 1,000 bases of an \
+             end of a region have rows that differ in these fields, all on the mitochondrial \
+             genome.",
+            "They are the four of 1.7, two more within 1,000 bases of the region's end and two \
+             within 1,000 bases of its start.",
+            "The four others give no row of the class under `--hgvs`: on the strand whose walk \
+             is misled they have downstream rows alone, which carry no notation and still \
+             print `SHIFT_LENGTH`.",
+            "Near the start Ensembl VEP's walk on the reverse strand runs one base for one \
+             record and two for the other, where the sequence admits none.",
+            "On each assembly the eight give 69 rows that differ in `SHIFT_LENGTH`; of those, \
+             five differ in `cDNA_position`, two in `CDS_position` and one in \
+             `Protein_position`. The comparator sets all of them aside.",
+            "Under `--shift_3prime 1` the comparator accepts a `SHIFT_LENGTH` and a position \
+             field in the same way, each engine's value the one its walk gives.",
+        ],
+    );
+    let text = page_text(path)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for replaced in [
+        "The class names `HGVSc`, `HGVSp` and `HGVS_OFFSET` alone.",
+        "as differences, though their cause is this defect",
+        "No class takes them.",
+        "holds eight insertions or deletions whose rows differ in these fields",
+    ] {
+        assert!(
+            !text.contains(replaced),
+            "docs/{path} still holds {replaced:?}"
+        );
+    }
+    let class_table = format!(
+        "{}/../../tools/vep-formats-compare/data/classes.tsv",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let classes =
+        std::fs::read_to_string(&class_table).unwrap_or_else(|e| panic!("{class_table}: {e}"));
+    let row = classes
+        .lines()
+        .find(|row| row.starts_with("hgvs_shift_sequence_edge_window\t"))
+        .unwrap_or_else(|| panic!("{class_table} has no row of the class"));
+    // The third cell of a row lists the field names its class reads.
+    let read: Vec<&str> = row.split('\t').nth(2).unwrap_or("").split(',').collect();
+    for field in [
+        "SHIFT_LENGTH",
+        "cDNA_position",
+        "CDS_position",
+        "Protein_position",
+    ] {
+        assert!(
+            read.contains(&field),
+            "{class_table}: the row of the class does not name {field}"
+        );
+    }
+}
+
+/// The opening sentence of the page of `hgvs_insertion_left_where_the_shift_stops`
+/// gives the bound of Ensembl VEP's 3' shift on either strand. `perform_shift`
+/// (TranscriptVariationAllele.pm:303-306) moves an insertion at most 1001 less
+/// its length positions, and at most 1,000 where :304 resets a negative limit:
+/// an allele over 1,000 bases going 3', and one over 1,001 going 5', where :303
+/// adds 1 to the limit and the loop counts from 1. An allele of 1,001 bases on
+/// a reverse-strand transcript keeps the limit 0 and is not moved, so the
+/// sentence does not give it the bound 1,000.
+#[test]
+fn shift_stop_page_opening_gives_the_shift_bound_on_either_strand() {
+    let path = "divergences/hgvs-insertion-left-where-the-shift-stops.md";
+    assert_page_states(
+        path,
+        &[
+            "Ensembl VEP 116.3 shifts an insertion 3' at most 1001 positions less its count of \
+             bases, or 1,000 for an allele over 1,000 bases (over 1,001 on a reverse-strand \
+             transcript), so one repeating the reference further is described where that walk \
+             stops.",
+        ],
+    );
+    let text = page_text(path)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let replaced = "or 1,000 for an allele over 1,000 bases, so one";
+    assert!(
+        !text.contains(replaced),
+        "docs/{path} still holds {replaced:?}"
+    );
+}
+
+/// The UTRAnnotator pair-order page counts the `5UTR_annotation` rows of the
+/// chromosome 21 records of the ClinVar GRCh38 dataset as ten runs of Ensembl
+/// VEP 116.3 wrote them, says how many of those rows vep-rs writes, and holds
+/// no count of fewer rows or of another release's runs.
+#[test]
+fn the_pair_order_page_counts_its_dataset_rows_over_ten_runs() {
+    let path = "divergences/utrannotator-annotation-pair-order.md";
+    assert_page_states(
+        path,
+        &[
+            "On the chromosome 21 records of the ClinVar GRCh38 dataset, Ensembl VEP 116.3 writes \
+             the field on 598 rows of 161 records.",
+            "Over ten runs every one of them changed its text between two runs: 572 in the order \
+             of their pairs alone, and 26 because the plugin also reported another effect \
+             ([its own page](utrannotator-consequence-precedence.md)).",
+            "On the 63 rows whose value has two or more groups in every run, the groups changed \
+             their order as well.",
+            "vep-rs writes the field on 596 of those rows, on 160 records.",
+            "The other two are the rows of one deletion, on which Ensembl VEP alone reports a \
+             gained start ([the window of the gained-start \
+             test](../plugins/transcript-model.md#1-utrannotator-the-window-of-the-gained-start-test)).",
+        ],
+    );
+    let text = page_text(path)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for refused in [
+        "596 rows of 160 records carry the field",
+        "Over ten runs of Ensembl VEP",
+        "571 in the order of their pairs alone",
+        "25 because the plugin also reported another effect",
+    ] {
+        assert!(!text.contains(refused), "docs/{path} states {refused:?}");
+    }
+}
+
+/// The insertion range page counts the corpora that record a row under
+/// `stop_codon_overlap_insertion_range` and the entries they hold, and the
+/// manifests decide whether it counts truly. An entry is one item of a
+/// `divergences` list whose `expected_divergence` is the class. A manifest
+/// holds one such list for the corpus's own run and one for each flag set that
+/// carries its own, a flag set without one inheriting the manifest's, so a
+/// row that several runs write is one entry in each list that documents it.
+#[test]
+fn the_insertion_range_page_counts_its_corpus_entries_as_the_manifests_hold_them() {
+    const CLASS: &str = "stop_codon_overlap_insertion_range";
+    let path = "divergences/stop-codon-overlap-insertion-range.md";
+    let entries = |list: &serde_json::Value| {
+        list.as_array()
+            .into_iter()
+            .flatten()
+            .filter(|entry| entry["expected_divergence"] == CLASS)
+            .count()
+    };
+    let (mut corpora, mut own_runs, mut flag_sets) = (0, 0, 0);
+    for corpus in common::corpora() {
+        let of_own_run = entries(&corpus.manifest["divergences"]);
+        let of_flag_sets: usize = corpus.manifest["flag_sets"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|flag_set| entries(&flag_set["divergences"]))
+            .sum();
+        if of_own_run + of_flag_sets > 0 {
+            corpora += 1;
+        }
+        own_runs += of_own_run;
+        flag_sets += of_flag_sets;
+    }
+    assert_eq!(
+        (corpora, own_runs + flag_sets),
+        (10, 271),
+        "the corpora whose manifests record {CLASS} and the entries they hold, {own_runs} of \
+         the corpora's own runs and {flag_sets} of their flag sets: docs/{path} states both \
+         figures"
+    );
+    assert_page_states(
+        path,
+        &[
+            "Section 1.5 says what that means for the worked record. Ten golden corpora record \
+             the class.",
+            "with the terms vep-rs writes. Ten corpora hold 271 such entries over their runs. \
+             On a corpus, the golden harness checks",
+        ],
+    );
+    let text = page_text(path)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for refused in [
+        "Nine golden corpora",
+        "Nine corpora",
+        "270 entries",
+        "270 such entries",
+    ] {
+        assert!(!text.contains(refused), "docs/{path} states {refused:?}");
+    }
+}
+
 /// `force-overwrite-scope`: the three guarded files are checked report first,
 /// then output, then skipped-variants file, and created only once every check
 /// passes (`Runner.pm:144-148` opens the report before `:202` opens the output;
-/// `BaseRunner.pm:337-340` checks the skipped file as the run ends).
+/// `BaseRunner.pm:337-340` checks the skipped file as the run ends). The run
+/// then tests that it can write the report, the output, a warnings file that
+/// `--warning_file` names and the skipped-variants file, a pipe or a device
+/// excepted, before the first record is read and before a report, an output
+/// or a skipped-variants file is created or emptied
+/// (`refuse_files_that_cannot_be_written` in `runner.rs`;
+/// `run_files_tested_before_the_first_record.rs` runs each refusal).
 #[test]
 fn force_overwrite_scope_exclusion_is_documented() {
     assert_flag_row_states(
@@ -3248,17 +15186,104 @@ fn force_overwrite_scope_exclusion_is_documented() {
         &[
             "The report is checked for an existing file before the output and the \
              skipped-variants file are, as Ensembl VEP checks it (`Runner.pm:144-148`, before \
-             `:202`). The three files are created only once every check passes, so a refused \
-             output leaves no empty report behind, where Ensembl VEP leaves one.",
+             `:202`).",
+            "Before its first record the run tests that it can write the report, the output, a \
+             warnings file that `--warning_file` names, then the skipped-variants file, a pipe \
+             or a device excepted. The first that fails is refused by name, and no report, \
+             output or skipped-variants file is created or emptied before every check and test \
+             has passed; a warning drawn earlier is written to the warnings file. So such a \
+             refusal leaves those earlier files as they were and no empty report, where Ensembl \
+             VEP leaves one behind a refused output.",
         ],
+    );
+    let page = page_text("cli/compatibility.md")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for refused in [
+        "The three files are created only once every check passes, so a refused output",
+        "the run tests that it can write each file it names",
+    ] {
+        assert!(
+            !page.contains(refused),
+            "docs/cli/compatibility.md states {refused:?}"
+        );
+    }
+}
+
+/// `warning-file-test`: a file that `--warning_file` names and that cannot be
+/// written is refused before the first record is read, whether or not the run
+/// would draw a warning (`refuse_files_that_cannot_be_written` in
+/// `runner.rs`), where Ensembl VEP opens every warnings file inside its first
+/// warning (BaseVEP.pm:817 calls `warning_fh`, whose `:894` reads
+/// `$fh->open(">".$file) or throw("ERROR: Could not write to warnings file
+/// $file\n");`). The warnings file under its default name, a pipe and a
+/// device are opened by the warning that writes them, in vep-rs as there, so
+/// a run that draws no warning never meets one. The annotation run of
+/// `vep recode` tests the tool's own `--warning_file` with its files, a pipe
+/// or a device excepted, which the tool first meets when it writes the
+/// warnings (`run_files_tested_before_the_first_record.rs` and, in
+/// `cli_run_control.rs`, `unwritable_warnings_file_fails_the_run` and
+/// `a_warnings_file_that_fails_at_its_first_write_ends_the_run_after_the_batch_that_warned`
+/// run each). Ensembl VEP's die leaves any buffer in hand unwritten: `run`
+/// prints a buffer's rows once `next_output_line` has rendered the whole
+/// buffer (Runner.pm:208-209, 387-392), and a warning that `init` draws
+/// (`:200`) precedes the opening of the output (`:202`).
+#[test]
+fn warnings_file_tested_before_the_first_record_is_documented() {
+    assert_page_states(
+        "cli/compatibility.md",
+        &[
+            "A `--warning_file` that cannot be written is an `output` failure, exit 1, raised \
+             before the first record is read, with nothing written, whether or not the run would \
+             warn; under `--show_cache_info`, once a warning is drawn and before the print. A \
+             default warnings file, a pipe or a device that cannot be written fails only at the \
+             warning that writes it: the run ends once any batch in hand is written, and a \
+             Parquet run then publishes nothing. Ensembl VEP opens every warnings file at its \
+             first warning and dies where that fails (`BaseVEP.pm:894`), with any buffer in \
+             hand unwritten and no warning echoed.",
+        ],
+    );
+    assert_page_states(
+        "cli/recode.md",
+        &[
+            "`--warning_file` writes them to a file as well. A `--warning_file` that cannot be \
+             written is refused before the input is annotated; a pipe or a device is first met \
+             by the write, once the input is annotated.",
+        ],
+    );
+    let page = page_text("cli/compatibility.md")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for refused in [
+        "An unwritable `--warning_file` is an `output` failure, exit 1, raised after",
+        "A pipe or a device fails at the warning that writes it",
+    ] {
+        assert!(
+            !page.contains(refused),
+            "docs/cli/compatibility.md states {refused:?}"
+        );
+    }
+    let recode_page = page_text("cli/recode.md")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let refused = "is refused before the input is annotated. ";
+    assert!(
+        !recode_page.contains(refused),
+        "docs/cli/recode.md states {refused:?}"
     );
 }
 
-/// `conservation-shortcuts`: the pages state the two exclusions of the bigWig
+/// `conservation-shortcuts`, and `ucsc_data_root`, `phyloP` and `phastCons` for
+/// the refused default root: the pages state the two exclusions of the bigWig
 /// shortcuts. The remote root Ensembl VEP reads by default (`Config.pm:314`) is
-/// refused with the local tree's layout and the `--custom` form of the same source,
-/// and a variant whose span the span rule's per-record walk covers is annotated
-/// once where Ensembl VEP 116.2 lists its records twice (`BigWig.pm:195-204`).
+/// refused in a line that names each shortcut the command gives, the local
+/// tree's layout of the file that shortcut reads (`Config.pm:555, 562`) and the
+/// `--custom` form of the same source, and the page tabulates the three lines;
+/// a variant whose span the span rule's per-record walk covers is annotated
+/// once where Ensembl VEP 116.3 lists its records twice (`BigWig.pm:195-204`).
 /// The `--phyloP` short name is spelt `phyloP<N>way`, not Ensembl VEP's
 /// `phlyoP<N>way` (`Config.pm:555`).
 #[test]
@@ -3267,11 +15292,24 @@ fn conservation_exclusions_are_documented() {
         "output/custom-bigwig.md",
         &[
             "The default root is Ensembl VEP's remote `http://hgdownload.cse.ucsc.edu/goldenpath/`.",
-            "exits 1 with `ERROR: [custom] --ucsc_data_root must name a local directory laid out as \
-             <root>/<assembly>/phyloP<N>way/<assembly>.phyloP<N>way.bw; the same source is \
-             --custom file=<local>.bw,format=bigwig,type=exact`.",
+            "vep-rs reads local files only, so a shortcut under the default root, or under any \
+             `--ucsc_data_root` holding a URL scheme, exits 1.",
+            "Its one `ERROR:` line names each shortcut the command gives and the layout of the \
+             file that shortcut reads:",
+            "| `--phyloP` | `ERROR: [custom] --phyloP needs --ucsc_data_root to name a local \
+             directory laid out as <root>/<assembly>/phyloP<N>way/<assembly>.phyloP<N>way.bw; the \
+             same source is --custom file=<local>.bw,format=bigwig,type=exact` |",
+            "| `--phastCons` | `ERROR: [custom] --phastCons needs --ucsc_data_root to name a local \
+             directory laid out as \
+             <root>/<assembly>/phastCons<N>way/<assembly>.phastCons<N>way.bw; the same source is \
+             --custom file=<local>.bw,format=bigwig,type=exact` |",
+            "| both | `ERROR: [custom] --phyloP and --phastCons need --ucsc_data_root to name a \
+             local directory laid out as \
+             <root>/<assembly>/phyloP<N>way/<assembly>.phyloP<N>way.bw and \
+             <root>/<assembly>/phastCons<N>way/<assembly>.phastCons<N>way.bw; each is the same \
+             source as --custom file=<local>.bw,format=bigwig,type=exact` |",
             "A local mirror of the UCSC tree, or the bigWig itself through `--custom`, is the route.",
-            "Every variant is annotated once on that path; Ensembl VEP 116.2 lists each record of a \
+            "Every variant is annotated once on that path; Ensembl VEP 116.3 lists each record of a \
              shorter variant twice there.",
             "vep-rs prints the one form on both paths.",
             "The `--phyloP <N>` source's short name, its output key, is `phyloP<N>way`.",
@@ -3296,6 +15334,338 @@ fn conservation_exclusions_are_documented() {
         "--phyloP",
         &["so the column is phyloP\\<N\\>way"],
     );
+    let page = page_text("output/custom-bigwig.md")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let one_line_for_every_shortcut = "--ucsc_data_root must name a local directory";
+    assert!(
+        !page.contains(one_line_for_every_shortcut),
+        "docs/output/custom-bigwig.md states {one_line_for_every_shortcut:?}"
+    );
+    // Each row's line is the one the binary prints for the shortcuts its first
+    // cell names, under the default root.
+    for (given, shortcuts) in [
+        ("`--phyloP`", &["--phyloP", "100"][..]),
+        ("`--phastCons`", &["--phastCons", "100"][..]),
+        ("both", &["--phyloP", "100", "--phastCons", "100"][..]),
+    ] {
+        let flags = [shortcuts, &["--ucsc_assembly", "hg38"]].concat();
+        let lines = refusal_lines("GRCh38-custom", &flags);
+        let row = format!("| {given} | `{}` |", lines[0]);
+        assert!(
+            page.contains(&row),
+            "docs/output/custom-bigwig.md lacks the row {row:?}"
+        );
+    }
+}
+
+/// The format comparison's class `refseq_edited_model_equal_span_insertion_term`
+/// is one of the classes that read, for a default or tab row named by an
+/// identifier, the bases the row's allele stands in for from the records of
+/// `--input` (the column `RECORD_REFERENCE_CLASSES` of `data/classes.tsv`). The
+/// entry's page, the tool's help, the doc comment of the class's name, the
+/// harness README and the comparison runner's list of the classes that read
+/// the input say so. Neither the page nor the doc comment says that a two-base
+/// allele under an identifier stays a difference whatever the comparison is
+/// given, and neither the help nor that README lists the classes that read
+/// those bases without this one.
+#[test]
+fn equal_span_insertion_class_texts_say_how_a_row_under_an_identifier_is_read() {
+    const CLASS: &str = "refseq_edited_model_equal_span_insertion_term";
+    let text_of = |path: &str| {
+        std::fs::read_to_string(format!("{}/../../{path}", env!("CARGO_MANIFEST_DIR")))
+            .unwrap_or_else(|e| panic!("{path}: {e}"))
+    };
+    let collapsed = |path: &str| {
+        text_of(path)
+            .split_whitespace()
+            .filter(|word| !matches!(*word, "///" | "#"))
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+
+    // The class table: the class has a place in the column.
+    let table = text_of("tools/vep-formats-compare/data/classes.tsv");
+    let mut rows = table
+        .lines()
+        .map(|line| line.split('\t').collect::<Vec<_>>());
+    let column = rows
+        .next()
+        .and_then(|header| {
+            header
+                .iter()
+                .position(|name| *name == "RECORD_REFERENCE_CLASSES")
+        })
+        .expect("data/classes.tsv has the column RECORD_REFERENCE_CLASSES");
+    let placed = rows
+        .find(|row| row[0] == CLASS)
+        .and_then(|row| row.get(column).map(|cell| cell.parse::<usize>().is_ok()));
+    assert_eq!(
+        placed,
+        Some(true),
+        "data/classes.tsv gives {CLASS} no place in RECORD_REFERENCE_CLASSES"
+    );
+
+    let page = "docs/divergences/refseq-edited-model-equal-span-insertion-term.md";
+    assert_states(
+        page,
+        &collapsed(page),
+        &[
+            "has a built-in class of the entry's name, which reads the shape from the row and, \
+             for a row named by an identifier, from its record in the input VCF.",
+            "A default or tab row named by an identifier spells no alleles.",
+            "A comparison given the input VCF reads from its records the bases the row's allele \
+             stands in for: an insertion is taken whatever its length, and bases a record \
+             replaces are not.",
+            "Where no record gives the row its bases, with the input or without it, a two-base \
+             allele reads as two replaced bases there and stays a difference, and two bases \
+             replaced by a sequence of another length read as an insertion.",
+        ],
+    );
+    let help = "tools/vep-formats-compare/data/help.txt";
+    assert_states(
+        help,
+        &collapsed(help),
+        &[
+            "refseq_edited_model_equal_span_insertion_term and \
+             hgvsp_frameshift_count_at_the_first_residue, which read from it the reference \
+             bases of a row under an identifier)",
+            "missense_variant in the candidate; an insertion's row is read as \
+             stop_codon_overlap_insertion_range reads it, from the records of --input for a row \
+             under an identifier, and where no record gives the row its bases by an allele of \
+             another length than two; the cells term_pair_following_cell reads",
+        ],
+    );
+    let names = "tools/vep-formats-compare/src/classes.rs";
+    assert_states(
+        names,
+        &collapsed(names),
+        &[
+            "A default or tab row under an identifier spells no alleles: the class is one of \
+             `RECORD_REFERENCE_CLASSES`, and a comparison given the input reads the row's \
+             reference bases from its records, taking an insertion of any length and refusing \
+             bases a record replaces. Where no record gives a row its bases, with the input or \
+             without it, a two-base allele reads as two replaced bases and stays a difference, \
+             and two bases replaced by a sequence of another length read as an insertion. pub \
+             const REFSEQ_EDITED_MODEL_EQUAL_SPAN_INSERTION_TERM",
+        ],
+    );
+    let harness = "scripts/concordance/README.md";
+    assert_states(
+        harness,
+        &collapsed(harness),
+        &["and under `splice_term_past_the_record_span` and \
+             `stop_codon_overlap_insertion_range` with their plugin value classes, \
+             `stop_codon_completed_by_polyadenylation`, `stop_codon_overlap_without_stop_codon`, \
+             `stop_codon_behind_last_residue_without_stop_codon`, \
+             `start_codon_overlap_without_start_codon`, \
+             `refseq_edited_model_equal_span_insertion_term` and \
+             `hgvsp_frameshift_count_at_the_first_residue`, which take the reference bases the \
+             allele of a row under an identifier stands in for"],
+    );
+    let runner = "scripts/concordance/feature_oracle.sh";
+    let runner_text = text_of(runner);
+    let listed = runner_text
+        .lines()
+        .find_map(|line| line.strip_prefix("INPUT_READING_MASKS=\""))
+        .unwrap_or_else(|| panic!("{runner} has no INPUT_READING_MASKS line"));
+    assert!(
+        listed
+            .trim_end_matches('"')
+            .split(' ')
+            .any(|name| name == CLASS),
+        "{runner}: INPUT_READING_MASKS does not name {CLASS}"
+    );
+    assert_states(
+        runner,
+        &collapsed(runner),
+        &[
+            "the classes that read the reference bases of a row under an identifier (the two \
+             classes of splice_term_past_the_record_span, stop_codon_overlap_insertion_range, \
+             plugin_value_follows_stop_codon_term_pair, \
+             refseq_edited_model_equal_span_insertion_term and \
+             hgvsp_frameshift_count_at_the_first_residue)",
+        ],
+    );
+
+    // No text states the reading of a row without its record as the whole rule, or lists
+    // the classes that read those bases without this class.
+    for (path, older) in [
+        (
+            page,
+            "So does a two-base allele on a default or tab row named by an identifier",
+        ),
+        (page, "which reads the shape from the row alone"),
+        (
+            names,
+            "So does a two-base allele under an identifier in a format that carries no record \
+             alleles",
+        ),
+        (
+            help,
+            "with their plugin value classes, which read from it the reference bases",
+        ),
+        (
+            harness,
+            "with their plugin value classes, which take the reference bases",
+        ),
+    ] {
+        assert!(!collapsed(path).contains(older), "{path} states {older:?}");
+    }
+}
+
+/// `conservation-shortcuts`: the page of the `--phyloP` key gives each shortcut
+/// the file its own source reads. `Config.pm:555` builds the `--phyloP` path
+/// under `phyloP<N>way` and `Config.pm:562` the `--phastCons` path under
+/// `phastCons<N>way`, the two layouts `docs/output/custom-bigwig.md` lists; a
+/// sentence that gives the phyloP path as the file of both is refused.
+#[test]
+fn phylop_key_page_gives_each_shortcut_the_file_it_reads() {
+    assert_page_states(
+        "divergences/phylop-short-name.md",
+        &[
+            "Each expands into one source whose file lies in a UCSC tree, \
+             `<root>/<assembly>/phyloP<N>way/<assembly>.phyloP<N>way.bw` for `--phyloP` and \
+             `<root>/<assembly>/phastCons<N>way/<assembly>.phastCons<N>way.bw` for \
+             `--phastCons`, where `--ucsc_assembly` names `<assembly>` and `--ucsc_data_root` \
+             names `<root>`.",
+        ],
+    );
+    let page = page_text("divergences/phylop-short-name.md")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let one_path_for_both = "whose file lies in a UCSC tree, \
+                             `<root>/<assembly>/phyloP<N>way/<assembly>.phyloP<N>way.bw`, where";
+    assert!(
+        !page.contains(one_path_for_both),
+        "docs/divergences/phylop-short-name.md gives the phyloP path as the file of both shortcuts"
+    );
+}
+
+/// `tools/vep-formats-compare` keys a VCF line or a JSON object that names no
+/// input record by its own ordinal in its output, looks a manifest item up by
+/// an entry's Location or input record ordinal, and leaves the items out of the
+/// applied counts where the outputs hold an entry and none has either, a
+/// built-in class then reading the row's own cells. The Contract section of its
+/// README states each.
+#[test]
+fn format_comparison_readme_states_the_key_of_a_line_that_names_no_input_record() {
+    let path = format!(
+        "{}/../../tools/vep-formats-compare/README.md",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let text = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("{path}: {e}"))
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert_states(
+        "tools/vep-formats-compare/README.md",
+        &text,
+        &[
+            "A VCF line names its input record by its first five columns, and a JSON object by \
+             the first five columns of its `input`.",
+            "A line or object that names no line of `--input` is keyed by its own ordinal in its \
+             output, counted over the data lines of a VCF output and over every line of a JSON \
+             output.",
+            "The VCF format of an input that is not a VCF writes such lines.",
+            "A manifest item is looked up by an entry's Location, then by its input record's \
+             ordinal.",
+            "Where `--input` is an input no run of the manifest names, the lists number another \
+             input's records and no item is looked up by ordinal.",
+            "Where the outputs hold an entry and none has a Location or an ordinal an item is \
+             looked up by, no item meets a row and the items are left out of `masks.applied`.",
+            "A built-in class then takes a row from the row's own cells and counts it once, and \
+             a class the manifest alone carries sets nothing aside.",
+        ],
+    );
+}
+
+/// The species page says that a record past position 2^29 is annotated from a
+/// cache like any other, that a cache's own known-variant file and a
+/// `--custom` file are read through a `.csi` index, on how many ready-made
+/// caches and records each statement was compared, and which documented
+/// divergence shows there. It names genetic code 26 by a link to that code's
+/// own divergence page and lacks the clause `holds no table for code 26`,
+/// which the linked page explains. The wheat corpus is the committed input of
+/// both statements: its records reach past the bound and its known variants
+/// carry a `.csi` index alone.
+#[test]
+fn species_page_says_how_long_sequences_and_csi_indexed_files_are_read() {
+    let bound: u64 = 1 << 29;
+    assert_eq!(bound, 536_870_912, "the bound the page states is 2^29");
+    assert_page_states(
+        "cache-species.md",
+        &[
+            "Genetic code 26 has a page of its own: [A transcript on genetic code 26, which \
+             Ensembl VEP reads under the standard code](divergences/pachysolen-nuclear-code-read-as-standard.md).",
+            "## Long sequences and CSI-indexed files",
+            "A record past position 536,870,912 (2^29), the reach of a `.tbi` index, is annotated \
+             from a cache like any other record.",
+            "150 ready-made caches hold a sequence longer than that, the longest of 1,805,244,829 \
+             bases.",
+            "On 31,314 records past that position, spread over the 150 caches, vep-rs matches \
+             Ensembl VEP exactly except for the documented divergences.",
+            "One shows there, on five rows of the Tasmanian devil's merged cache: [Two transcripts \
+             of a merged cache that carry one `dbID`](divergences/merged-same-dbid-collapse.md).",
+            "A cache's own known-variant file and a `--custom` file are read through a `.csi` \
+             index, which reaches past that position.",
+            "Run beside a `--custom` BED file that carries a `.csi` index, the same 31,314 records \
+             carry the file's value alike in both engines, on every row both write.",
+            "On 90 ready-made caches of genomes other than human that carry known variants in \
+             such a file, ten records a cache, 89 name the same known variants in both engines.",
+            "The Anopheles funestus AfunF3 cache differs on nine rows: [Known variants behind a \
+             cache variation line with no start](divergences/cache-variation-line-without-a-start.md).",
+        ],
+    );
+    let page = page_text("cache-species.md")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let replaced = "holds no table for code 26";
+    assert!(
+        !page.contains(replaced),
+        "docs/cache-species.md still says of genetic code 26: {replaced:?}"
+    );
+    for linked in [
+        "divergences/pachysolen-nuclear-code-read-as-standard.md",
+        "divergences/merged-same-dbid-collapse.md",
+        "divergences/cache-variation-line-without-a-start.md",
+    ] {
+        assert!(
+            !page_text(linked).is_empty(),
+            "docs/{linked}, which the species page links, is empty"
+        );
+    }
+
+    let corpus = format!(
+        "{}/../../tests/golden/116/IWGSC-wheat",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let input = std::fs::read_to_string(format!("{corpus}/variants.vcf"))
+        .unwrap_or_else(|e| panic!("{corpus}/variants.vcf: {e}"));
+    let past_the_bound = input
+        .lines()
+        .filter(|line| !line.starts_with('#'))
+        .filter_map(|line| line.split('\t').nth(1))
+        .filter_map(|position| position.parse::<u64>().ok())
+        .filter(|position| *position > bound)
+        .count();
+    assert!(
+        past_the_bound > 0,
+        "{corpus}/variants.vcf holds no record past position {bound}"
+    );
+    let known_variants = format!("{corpus}/json_cache/variations/5D/all_vars.gz");
+    assert!(
+        std::path::Path::new(&format!("{known_variants}.csi")).is_file(),
+        "{known_variants} carries no .csi index"
+    );
+    assert!(
+        !std::path::Path::new(&format!("{known_variants}.tbi")).exists(),
+        "{known_variants} carries a .tbi index, which cannot reach its sequence's end"
+    );
 }
 
 /// The text of the repository README, whitespace collapsed.
@@ -3308,20 +15678,24 @@ fn readme() -> String {
 }
 
 /// `species_statement`: the README and the species page state the genomes the
-/// concordance measurement covers (human on both assemblies and the four other
-/// golden corpora), what any other species gets (a cache and the codon tables
-/// it names, no measurement), and how the flags that read human-only data
-/// behave on another cache.
+/// concordance measurement covers (human on both assemblies and the other
+/// species with a golden corpus), what every other genome with a ready-made
+/// cache gets (one comparison on a small generated input), what a cache built
+/// from a GFF3 gets (the codon tables it names, no measurement), and how the
+/// flags that read human-only data behave on another cache.
 #[test]
 fn species_statement_is_documented() {
     let statements = [
-        "vep-rs is verified by concordance against Ensembl VEP 116.2 on human GRCh37 and GRCh38, the \
-         whole-genome datasets of the current release, and on mouse GRCm39, fruit fly BDGP6.54, \
-         Arabidopsis thaliana TAIR10 and yeast R64-1-1.",
-        "Each of the four has a golden corpus of its own",
-        "Any other species in Ensembl release 116 or Ensembl Genomes release 63 with a GFF3 and a \
-         peptide FASTA, or with an Ensembl VEP cache to convert, builds a cache",
-        "annotates under the codon tables the cache names, without a concordance measurement.",
+        "vep-rs is verified by concordance against Ensembl VEP 116.3 on human GRCh37 and GRCh38, the \
+         whole-genome datasets of the current release, and on 35 other species, among them mouse \
+         GRCm39, fruit fly BDGP6.54, Arabidopsis thaliana TAIR10 and yeast R64-1-1.",
+        "Each of the 35 has a golden corpus of its own",
+        "Every other genome with a ready-made Ensembl VEP cache is compared once, under default \
+         flags, on a small generated input",
+        "Any species in Ensembl release 116 or Ensembl Genomes release 63 with a GFF3 and a peptide \
+         FASTA also builds a cache from those files",
+        "A cache built that way annotates under the codon tables it names, without a concordance \
+         measurement.",
         "`--sift` and `--polyphen` refuse on a cache without their data, and `--af_gnomad` on a \
          cache that declares variation columns without the gnomAD exome column; every other flag \
          that reads data Ensembl ships for human alone runs there as [the flag table](",
@@ -3329,6 +15703,281 @@ fn species_statement_is_documented() {
     ];
     assert_states("README.md", &readme(), &statements);
     assert_page_states("cache-species.md", &statements);
+}
+
+/// An insertion or deletion that overlaps the start codon of a transcript
+/// with no 5' UTR and leaves a start codon at the start of the coding
+/// sequence: Ensembl VEP makes its kept-start test behind a 5' UTR alone
+/// (VariationEffect.pm:1061-1065), reads a deletion as an altered start
+/// (:1069) and an insertion by the comparison of :1071, which reads it as
+/// kept only where the edited sequence still ends with the whole coding
+/// sequence, and otherwise writes no `start_retained_variant`, and
+/// `start_lost` by :870 or :878-882. vep-rs
+/// makes the test at the transcript's first base
+/// (`PerlCodingEval::ins_del_start_altered`), and the tests of
+/// `crates/vep-cli/tests/start_codon_kept_without_a_five_prime_utr.rs` hold
+/// the rows this page quotes.
+#[test]
+fn start_codon_kept_without_five_prime_utr_divergence_is_documented() {
+    assert_page_states(
+        "divergences/start-codon-kept-without-five-prime-utr.md",
+        &[
+            "For an insertion or deletion at the start codon of a transcript with no 5' UTR that \
+             leaves a start codon there, Ensembl VEP 116.3 writes `start_retained_variant` only \
+             where the edited sequence ends with the whole coding sequence, and vep-rs always \
+             writes it.",
+            "An insertion whose last bases repeat the codon's bases before it leaves the whole \
+             coding sequence at the end of the edited sequence.",
+            "Behind a 5' UTR Ensembl VEP writes `start_retained_variant` for every one of these \
+             alleles.",
+            "On a transcript with no 5' UTR vep-rs therefore writes the row it writes for the \
+             same allele behind a 5' UTR.",
+            "On the transcript with a 5' UTR Ensembl VEP writes `start_retained_variant` for \
+             each of the four alleles.",
+            "That pair of start terms on one row is the entry \
+             [`start_cooccurrence_swap`](defect-b.md), under which vep-rs keeps \
+             `start_retained_variant` alone.",
+            "`Bio/EnsEMBL/Variation/Utils/VariationEffect.pm`, lines 1028-1075, \
+             `_ins_del_start_altered`: the routine.",
+            "The same file, lines 1062-1065: the kept-start test, inside `if ($utr)` at line \
+             1061.",
+            "The same file, line 1069: an edited sequence shorter than the coding sequence is \
+             answered as altered.",
+            "Line 1071 compares the last bases of the edited sequence, as many as the coding \
+             sequence holds, with the coding sequence, and answers altered where they differ.",
+            "The same file, lines 947-963, `start_retained_variant`: for an allele that changes \
+             the length, the negation of the routine's answer (line 961).",
+            "The same file, lines 851-904, `start_lost`: line 870 writes the term where the \
+             routine answers altered and the row is no in-frame insertion or deletion.",
+            "Lines 878-882 write it from the peptides, where the row's first residue is residue \
+             1 and the alternate peptide neither opens nor ends with the reference peptide.",
+            "`Bio/EnsEMBL/Variation/TranscriptVariationAllele.pm`, lines 2161-2164: a row that \
+             carries `start_lost` gets `?` for the new peptide in its HGVSp.",
+            "| Ensembl VEP | `ENST00000339944` | `frameshift_variant,start_lost` | `p.Ala2_?1` |",
+            "| vep-rs | `ENST00000339944` | `frameshift_variant,start_retained_variant` | \
+             `p.Ala2ProfsTer15` |",
+            "| Ensembl VEP | `ENST00000339944` | `inframe_insertion` | `p.Met1_Ala2insLeu` |",
+            "| vep-rs | `ENST00000339944` | `inframe_insertion,start_retained_variant` | \
+             `p.Met1_Ala2insLeu` |",
+            "| Ensembl VEP | `ENST00000339944` | `frameshift_variant,start_lost` | `p.Ala2?` |",
+            "| vep-rs | `ENST00000339944` | `frameshift_variant,start_retained_variant` | \
+             `p.Ala2ProfsTer30` |",
+            "| Ensembl VEP | `ENST00000339944` | `start_lost,inframe_deletion` | \
+             `p.AlaAsnGly2_?4` |",
+            "| vep-rs | `ENST00000339944` | `inframe_deletion,start_retained_variant` | \
+             `p.Ala2_Gly4del` |",
+            "The five chromosome 21 record sets the index calls the cuts hold 2,154,724 such \
+             records among 15,646,481, the index's 137,713 per million.",
+        ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "| [`start_codon_kept_without_five_prime_utr`]\
+             (divergences/start-codon-kept-without-five-prime-utr.md) | For an insertion or \
+             deletion that overlaps the start codon of a transcript with no 5' UTR and leaves a \
+             start codon at the start of the coding sequence,",
+            "vep-rs makes the test at the transcript's first base and writes \
+             `start_retained_variant` and no `start_lost`, the row it writes for the same \
+             allele behind a 5' UTR | 1 · 137,713 per million · no flag needed | 116.3 |",
+            "For all but nineteen nothing is set aside in the concordance figures",
+            "and [eight stop/start codon entries]",
+        ],
+    );
+    assert_page_states(
+        "concordance-provenance/116.2-divergence-classes.md",
+        &[
+            "Sixteen pair classes read the two rows of a pair.",
+            "- [`start_codon_kept_without_five_prime_utr`]\
+             (../divergences/start-codon-kept-without-five-prime-utr.md): on a row of an \
+             insertion or deletion whose cDNA position equals its CDS position and starts on \
+             one of the first three coding bases",
+            "The sixteenth differs in a start codon term on a row of an insertion or deletion \
+             at the start codon of a transcript without a 5' UTR.",
+            "the next twelve, the fifteenth and the sixteenth in its SNP and indel calling table",
+            "For the eleventh, the twelfth, the fourteenth, the fifteenth and the sixteenth \
+             classes the comparators read the two outputs and nothing else",
+        ],
+    );
+    for (path, gone) in [
+        (
+            "intended-divergences.md",
+            "For all but eleven nothing is set aside",
+        ),
+        (
+            "concordance-provenance/116.2-divergence-classes.md",
+            "Eight pair classes read the two rows of a pair",
+        ),
+    ] {
+        let text = page_text(path)
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(!text.contains(gone), "docs/{path} still says {gone:?}");
+    }
+}
+
+/// The Arabidopsis section of the species page gives the installer's command
+/// beside the conversion, the command that annotates from the installed
+/// cache, and the opening words of the warning an installation prints where
+/// the indexes published beside the genome FASTA do not open it. The quoted
+/// words are the installer's own, with the file's name in place of `{name}`,
+/// and the section the page points at for the installer's inputs has the two
+/// headings the sentence names.
+#[test]
+fn arabidopsis_section_gives_the_installer_command_and_its_index_warning() {
+    let page = page_text("cache-species.md");
+    let section = page
+        .split("\n## ")
+        .find(|section| section.starts_with("Arabidopsis thaliana\n"))
+        .expect("docs/cache-species.md has no Arabidopsis thaliana section");
+    let collapsed = section.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert_states(
+        "the Arabidopsis thaliana section of docs/cache-species.md",
+        &collapsed,
+        &[
+            "tools/vep-storable-to-json/target/release/vep-storable-to-json \\ \
+             \"$VEP_CACHE/arabidopsis_thaliana/63_TAIR10\" /path/to/arabidopsis_cache",
+            "[Build a cache](cache-setup.md#build-a-cache) says what the installer fetches and \
+             what each input supplies.",
+            "The installer builds a cache of the same genome from the release's own files and \
+             reads both organelle tables from the release's core dumps:",
+            "# Install the cache in one command vep-cache-builder --auto arabidopsis_thaliana \
+             TAIR10 \\ --release 63 --dir_cache /path/to/vep_dir",
+            "# Annotate from the installed cache vep -i arabidopsis.vcf -o \
+             arabidopsis_installed.txt --offline \\ --dir_cache /path/to/vep_dir --species \
+             arabidopsis_thaliana \\ --cache_version 63 --assembly TAIR10",
+            "The installer writes both indexes from the genome FASTA it fetched, and the \
+             installation ends with exit status 0.",
+            "Another line counts the four one-exon transcripts of the next paragraph, each built \
+             as the release's `translation` table places its coding sequence, and no protein \
+             FASTA record is set aside.",
+            "A `dna_index/` file that its published `.fai` and `.gzi` do not open is indexed by \
+             the builder, with a warning.",
+            "The installed cache holds the known variants, with synonyms on 181,418 of them as \
+             in Ensembl VEP's own cache, and the SIFT matrices the release publishes for the \
+             genome.",
+            "The installation's last lines name what the cache lacks: PolyPhen predictions, \
+             regulatory features and known variants on `Mt` and `Pt`, on which it read no \
+             variation record, in the variation VCF or in the `variation_feature` table.",
+        ],
+    );
+
+    let setup = page_text("cache-setup.md");
+    let build_section = setup
+        .split("\n## ")
+        .find(|section| section.starts_with("Build a cache\n"))
+        .expect("docs/cache-setup.md has no Build a cache section");
+    assert!(
+        build_section.contains("\n### What each input supplies\n"),
+        "the Build a cache section of docs/cache-setup.md lacks the heading \
+         `What each input supplies`"
+    );
+
+    // A string continuation of the source joins its two lines with no blank.
+    let installer = std::fs::read_to_string(format!(
+        "{}/../vep-cache-builder/src/install.rs",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .unwrap()
+    .split("\\\n")
+    .map(str::trim_start)
+    .collect::<String>();
+    let warning = "The .fai and .gzi published beside {name} do not open it, so both are written \
+                   here from the file itself: {refusal}";
+    assert!(
+        installer.contains(warning),
+        "crates/vep-cache-builder/src/install.rs lacks the warning {warning:?}"
+    );
+    let quoted = warning
+        .strip_suffix(": {refusal}")
+        .unwrap()
+        .replace("{name}", "Arabidopsis_thaliana.TAIR10.dna.toplevel.fa.gz");
+    assert_states(
+        "the Arabidopsis thaliana section of docs/cache-species.md",
+        &collapsed,
+        &[&format!(
+            "At release 63 the installation prints a warning that opens `{quoted}`."
+        )],
+    );
+}
+
+/// The Arabidopsis section of the species page says where four one-exon
+/// mitochondrial transcripts start their coding sequences: the release's
+/// GFF3 gives each a `CDS` line over its whole exon, the `translation` table
+/// starts each after the untranslated bases, and a build that reads the core
+/// dumps follows the table, where a build without them takes the line as
+/// written and sets the four protein FASTA records aside. The setup page
+/// states the rule for any one-exon transcript, and the builder holds the
+/// line that counts such transcripts. The section states neither that a
+/// warning of the installation counts the four records nor that every build
+/// from the GFF3 and protein FASTA sets them aside.
+#[test]
+fn arabidopsis_section_says_where_four_mitochondrial_coding_sequences_start() {
+    let page = page_text("cache-species.md");
+    let section = page
+        .split("\n## ")
+        .find(|section| section.starts_with("Arabidopsis thaliana\n"))
+        .expect("docs/cache-species.md has no Arabidopsis thaliana section");
+    let collapsed = section.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert_states(
+        "the Arabidopsis thaliana section of docs/cache-species.md",
+        &collapsed,
+        &[
+            "The release's GFF3 gives four one-exon mitochondrial transcripts a `CDS` line over \
+             the whole exon: `ATMG00410.1`, `ATMG00730.1`, `ATMG01080.1` and `ATMG01170.1`.",
+            "The release's `translation` table starts each coding sequence after the bases the \
+             file's own `five_prime_UTR` line covers, as Ensembl VEP's cache does.",
+            "A build that reads the core dumps, the installer's among them, starts each coding \
+             sequence where the table does.",
+            "A build without the core dumps takes each `CDS` line as written and sets the four \
+             protein FASTA records aside: each record's length is neither its transcript's \
+             whole codons nor one fewer.",
+            "With `--genome-fasta` that build translates the four peptides from the genome; \
+             without it the four transcripts carry no peptide.",
+        ],
+    );
+    for replaced in [
+        "Another warning counts the four protein FASTA records",
+        "A cache built with `vep-cache-builder` from the release's GFF3 and protein FASTA sets \
+         aside the FASTA records of four mitochondrial transcripts.",
+    ] {
+        assert!(
+            !collapsed.contains(replaced),
+            "the Arabidopsis thaliana section of docs/cache-species.md still states {replaced:?}"
+        );
+    }
+
+    assert_page_states(
+        "cache-setup.md",
+        &[
+            "It also places a one-exon transcript's coding sequence where its row of the \
+             `translation` table does, as Ensembl VEP's cache holds it, when the GFF3's `CDS` \
+             lines place it otherwise, and counts such transcripts in one line.",
+        ],
+    );
+
+    // A string continuation of the source joins its two lines with no blank.
+    let builder = std::fs::read_to_string(format!(
+        "{}/../vep-cache-builder/src/builder.rs",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .unwrap()
+    .split("\\\n")
+    .map(str::trim_start)
+    .collect::<String>();
+    for line in [
+        "{} {} a coding sequence that the translation table of the core dumps places otherwise \
+         than the model's CDS lines: {} built as the table places it",
+        "{} {} a coding sequence that the translation table of the core dumps places otherwise \
+         than the model's CDS lines, at a place its exon identifiers alone do not give: {} built \
+         as the CDS lines place it",
+    ] {
+        assert!(
+            builder.contains(line),
+            "crates/vep-cache-builder/src/builder.rs lacks the line {line:?}"
+        );
+    }
 }
 
 /// `os_and_architecture_matrix`: the installation page tables every platform
@@ -3352,8 +16001,8 @@ fn os_and_architecture_table_is_documented() {
             "| Windows | none | the container image under Docker, or the Linux x86_64 archive under \
              WSL2; neither is tested on Windows |",
             "| FreeBSD, Linux with musl | none | not built |",
-            "There is no Homebrew formula: macOS users install from the release archive or build from \
-             source.",
+            "There is no Homebrew formula: macOS users install from the release archive or the \
+             Bioconda package, or build from source.",
         ],
     );
 }
@@ -3394,6 +16043,283 @@ fn container_image_platforms_are_documented() {
     );
 }
 
+/// The default reference release of the comparison tools: `tools/vep-outputs-compare` and
+/// `tools/vep-sv-compare` each declare the Ensembl VEP release a run is scored against
+/// where it names none, and the two declare the same one. The pages, READMEs, help text
+/// and harness comment that state the comparators' default state that release, and none
+/// of them calls another release of the tools' list the default.
+#[test]
+fn comparison_tool_default_release_is_stated_as_the_tools_declare_it() {
+    let file = |path: &str| {
+        std::fs::read_to_string(format!("{}/../../{path}", env!("CARGO_MANIFEST_DIR")))
+            .unwrap_or_else(|e| panic!("{path}: {e}"))
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    // The texts between double quotes of the one declaration of `name` in a tool's source.
+    let declared = |path: &str, name: &str| -> Vec<String> {
+        let source = file(path);
+        let (_, after) = source
+            .split_once(&format!("const {name}: "))
+            .unwrap_or_else(|| panic!("{path} declares no {name}"));
+        let (_, value) = after.split_once(" = ").expect("a declaration has a value");
+        let (value, _) = value.split_once(';').expect("a declaration ends");
+        value
+            .split('"')
+            .skip(1)
+            .step_by(2)
+            .map(str::to_string)
+            .collect()
+    };
+    let outputs = "tools/vep-outputs-compare/src/main.rs";
+    let structural = "tools/vep-sv-compare/src/masks/mod.rs";
+    let default = declared(outputs, "DEFAULT_REFERENCE_RELEASE");
+    assert_eq!(default.len(), 1, "{outputs} declares one default");
+    assert_eq!(
+        declared(structural, "DEFAULT_REFERENCE_RELEASE"),
+        default,
+        "the two tools' default"
+    );
+    let default = default[0].as_str();
+    let releases = declared(structural, "REFERENCE_RELEASES");
+    assert_eq!(declared(outputs, "REFERENCE_RELEASES"), releases);
+    assert!(releases.iter().any(|release| release == default));
+    let series = default.split('.').next().expect("a release has a series");
+    let option = format!(
+        "`--reference-release {{{}}}` (default {default})",
+        releases.join(",")
+    );
+
+    let stated = [
+        (
+            "docs/intended-divergences.md",
+            format!("`--reference-release` chooses the release, and `{default}` is the default."),
+        ),
+        (
+            "docs/intended-divergences.md",
+            format!("chosen by `--reference-release`, and `{default}` is the default."),
+        ),
+        (
+            "docs/concordance-provenance/116.2-divergence-classes.md",
+            format!("and under `{default}`, the default, the same classes."),
+        ),
+        (
+            "scripts/README.md",
+            format!("Its {option} selects the masks"),
+        ),
+        (
+            "scripts/README.md",
+            format!("and {option} selects the one-sided classes"),
+        ),
+        (
+            "scripts/concordance/README.md",
+            format!("and {option} selects the one-sided classes"),
+        ),
+        (
+            "tools/vep-sv-compare/README.md",
+            format!("| `--reference-release` | `{default}` |"),
+        ),
+        (
+            "tools/vep-sv-compare/src/help.txt",
+            format!("{default} (default)"),
+        ),
+        (
+            "scripts/concordance/test_run_clone_measurement.sh",
+            format!("# The comparators default to a {series} release's registry."),
+        ),
+    ];
+    for (path, phrase) in &stated {
+        assert_eq!(
+            file(path).matches(phrase.as_str()).count(),
+            1,
+            "{path} states {phrase:?} once"
+        );
+    }
+    for release in releases
+        .iter()
+        .filter(|release| release.as_str() != default)
+    {
+        for (path, _) in &stated {
+            let text = file(path);
+            for refused in [
+                format!("`{release}` is the default"),
+                format!("`{release}`, the default"),
+                format!("(default {release})"),
+                format!("{release} (default)"),
+                format!("| `--reference-release` | `{release}` |"),
+                format!("default to the {release} registry"),
+            ] {
+                assert!(
+                    !text.contains(&refused),
+                    "{path} calls {release} the default: {refused:?}"
+                );
+            }
+        }
+    }
+}
+
+/// The `implementation` table of a reproduction record: every record under
+/// `scripts/divergences/reproductions/` holds one, and the registry check of
+/// `tools/vep-divergence-reevaluate` refuses a record without it and a record that no row
+/// of the index names. The three texts that list what a record holds (the index, the row
+/// of the re-evaluation tool in `scripts/README.md` and that tool's README) name the
+/// table among the record's parts, the `--check` clause of `scripts/README.md` names both
+/// refusals among what the check holds, and none of the three keeps a list that ends
+/// before the table.
+#[test]
+fn texts_that_list_what_a_reproduction_holds_name_its_implementation_table() {
+    let root = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
+    let file = |path: &str| {
+        std::fs::read_to_string(format!("{root}/{path}")).unwrap_or_else(|e| panic!("{path}: {e}"))
+    };
+    let collapsed = |path: &str| file(path).split_whitespace().collect::<Vec<_>>().join(" ");
+
+    let registry = "scripts/divergences/reproductions";
+    let mut records = 0;
+    for entry in std::fs::read_dir(format!("{root}/{registry}")).expect("the registry is read") {
+        let name = entry
+            .expect("a directory entry")
+            .file_name()
+            .into_string()
+            .expect("a record's name is UTF-8");
+        if !name.ends_with(".toml") {
+            continue;
+        }
+        records += 1;
+        assert!(
+            file(&format!("{registry}/{name}"))
+                .lines()
+                .any(|line| line == "[implementation]"),
+            "{registry}/{name} holds no implementation table"
+        );
+    }
+    assert!(records > 0, "{registry} holds no record");
+    let check = file("tools/vep-divergence-reevaluate/src/check.rs");
+    for refusal in [
+        "\"the record has no implementation table\"",
+        "\"{}: a reproduction with no row on the page\"",
+    ] {
+        assert!(
+            check.contains(refusal),
+            "the registry check lacks {refusal}"
+        );
+    }
+
+    let names = "names the code, the tests and the comparison rules that implement the entry";
+    let stated = [
+        (
+            "docs/intended-divergences.md",
+            format!(
+                "the field or row where the engines differ and both engines' recorded values. \
+                 Its `implementation` table {names}. `tools/vep-divergence-reevaluate` runs \
+                 every reproduction"
+            ),
+        ),
+        (
+            "scripts/README.md",
+            format!(
+                "both engines' recorded values, the entry's input class with its basis, and \
+                 the `implementation` table that {names}; the schema is \
+                 `reproductions/README.md`)"
+            ),
+        ),
+        (
+            "scripts/README.md",
+            "the page's `Verified against` cell agrees, no reproduction lacks a row of the \
+             page, every reproduction names its input class"
+                .to_string(),
+        ),
+        (
+            "scripts/README.md",
+            "the section its row stands in, every reproduction holds an `implementation` \
+             table whose rows each name a file of the repository and an item that file \
+             defines, and every `Tier and count` cell"
+                .to_string(),
+        ),
+        (
+            "tools/vep-divergence-reevaluate/README.md",
+            format!(
+                "the field or row where the engines differ, both engines' recorded values and \
+                 the `implementation` table that {names}. The schema of a record,"
+            ),
+        ),
+    ];
+    for (path, phrase) in &stated {
+        assert_eq!(
+            collapsed(path).matches(phrase.as_str()).count(),
+            1,
+            "{path} states {phrase:?} once"
+        );
+    }
+    for (path, refused) in [
+        (
+            "docs/intended-divergences.md",
+            "both engines' recorded values. `tools/vep-divergence-reevaluate` runs",
+        ),
+        (
+            "scripts/README.md",
+            "and the entry's input class with its basis; the schema is",
+        ),
+        (
+            "scripts/README.md",
+            "the section its row stands in, and every `Tier and count` cell",
+        ),
+        (
+            "tools/vep-divergence-reevaluate/README.md",
+            "and both engines' recorded values. The schema of a record,",
+        ),
+    ] {
+        assert!(
+            !collapsed(path).contains(refused),
+            "{path} lists what a record holds, or what the check holds, without the table: \
+             {refused:?}"
+        );
+    }
+}
+
+/// `scripts/genomes/check_genome.sh` gives both engines `--use_given_ref` on a
+/// cache whose converted `info.json` names an alignment file under `bam`, and
+/// on no other cache, so the job's row of `scripts/README.md` names that
+/// option beside the default flags.
+#[test]
+fn genome_job_row_names_the_option_given_on_a_cache_that_names_an_alignment_file() {
+    let root = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
+    let file = |path: &str| {
+        std::fs::read_to_string(format!("{root}/{path}")).unwrap_or_else(|e| panic!("{path}: {e}"))
+    };
+    let job = file("scripts/genomes/check_genome.sh");
+    for line in [
+        "case \"$(alignment_file_of \"$JSON_CACHE/info.json\")\" in",
+        "*) REFERENCE_FLAG=\"--use_given_ref\" ;;",
+        "ENSEMBL_VEP_COMMAND=\"$ENSEMBL_VEP_COMMAND $REFERENCE_FLAG\"",
+        "--assembly \"$ASSEMBLY\" $SET_FLAG $REFERENCE_FLAG \\",
+    ] {
+        assert!(
+            job.contains(line),
+            "scripts/genomes/check_genome.sh lacks {line:?}"
+        );
+    }
+    let text = file("scripts/README.md")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert_states(
+        "scripts/README.md",
+        &text,
+        &[
+            "run Ensembl VEP and vep-rs offline under default flags (both are also given \
+             `--use_given_ref` on a cache whose converted `info.json` names an alignment file \
+             under `bam`), compare the outputs with `vep-outputs-compare`",
+        ],
+    );
+    let older = "offline under default flags, compare the outputs";
+    assert!(
+        !text.contains(older),
+        "scripts/README.md gives the genome job default flags alone: {older:?}"
+    );
+}
+
 /// `singularity-apptainer`: the installation page states how Apptainer and
 /// Singularity pull the image into a single file, which binary each tag gives,
 /// that the container runs as the invoking user with the current directory,
@@ -3416,6 +16342,54 @@ fn singularity_and_apptainer_pull_is_documented() {
             "`singularity pull` and `singularity exec` take the same arguments.",
         ],
     );
+}
+
+/// `scripts/concordance/run_concordance.sh` runs the `vep` binary of this
+/// workspace beside Ensembl VEP, so the script's README names the second engine
+/// `vep-rs` in the script's row and in the report list of a run. That list
+/// gives `discordant.tsv` one row for each tuple one output alone holds, as
+/// `merge_keys` of `tools/vep-outputs-compare/src/merge.rs` writes it, and
+/// `summary.json` its tuple counts, the counts `FileMetrics::json` of
+/// `tools/vep-outputs-compare/src/report.rs` writes.
+#[test]
+fn concordance_readme_names_the_engine_run_beside_ensembl_vep() {
+    let directory = format!("{}/../../scripts/concordance", env!("CARGO_MANIFEST_DIR"));
+    let read = |name: &str| {
+        let path = format!("{directory}/{name}");
+        std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"))
+    };
+    let script = read("run_concordance.sh");
+    for line in ["PERL_VEP_MODE=\"docker\"", "-p vep-cli -- \\"] {
+        assert!(
+            script.contains(line),
+            "scripts/concordance/run_concordance.sh lacks {line:?}"
+        );
+    }
+    let text = read("README.md")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert_states(
+        "scripts/concordance/README.md",
+        &text,
+        &[
+            "runs Ensembl VEP (Docker) + vep-rs on one input",
+            "- `summary.json`: machine-readable metrics (precision, recall, F1, tuple counts)",
+            "- `discordant.tsv`: every tuple that the output of Ensembl VEP or of vep-rs holds \
+             and the other lacks, one row each",
+        ],
+    );
+    for older in [
+        "+ Rust on one input",
+        "and Rust disagree",
+        "all variants where",
+        "variant counts",
+    ] {
+        assert!(
+            !text.contains(older),
+            "scripts/concordance/README.md states {older:?}"
+        );
+    }
 }
 
 /// `memory_footprint_statement`: the installation page states the loading model
@@ -3471,7 +16445,7 @@ fn workflow_manager_mapping_is_documented() {
             "--cache --cache_version <version> --dir_cache <cache> --fork <cpus>",
             "Every flag of that line is honoured by vep-rs",
             "The cache the module stages must be a vep-rs cache",
-            "a `--gtf` input in place of the cache is refused",
+            "A `--gtf` or `--gff` file named there is read beside the staged cache in the same run",
             "container = 'ghcr.io/natera-open-source/vep-rs:X.Y.Z'",
             "ext.args = '--vcf --everything'",
             "the vep-rs image answers the `tabix` line alone",
@@ -3481,6 +16455,9 @@ fn workflow_manager_mapping_is_documented() {
              fails the task with `Unable to evaluate output` after the annotation has been written",
             "A copy of the module patched with `nf-core modules patch ensemblvep/vep` drops the \
              `versions_perlmathcdf` output",
+            "annotates each part with `vep -i <part> -o out.vcf --vcf --config <vep.ini>`",
+            "The filter command is `filter_vep --format vcf -i vep.raw.vcf -o out.vcf \
+             --force_overwrite --only_matched -filter \"<expression>\"`.",
             "vep-rs reads the same `--config` file, one flag per line as `<name> <value>` without the \
              dashes, and `vep filter` takes `filter_vep`'s options under the same spellings",
             "its `filter_vep` command becomes `vep filter`, since the image carries no executable of \
@@ -3494,6 +16471,28 @@ fn workflow_manager_mapping_is_documented() {
             "The Perl modules the `bio/vep/plugins` rule downloads into `--dir_plugins` are not loaded",
             "vep-rs is the Bioconda package `vep-rs`",
         ],
+    );
+}
+
+/// `nextflow-nf-core-drop-in`: the workflow-managers page says what a program
+/// that collects reports reads from the statistics report the nf-core module
+/// gives as its `*.html` output, the general statistics table and a chart's
+/// counts, and links the section of the compatibility page that states how
+/// the HTML report carries them.
+#[test]
+fn workflow_managers_page_says_what_a_report_collector_reads() {
+    assert_page_states(
+        "getting-started/workflow-managers.md",
+        &[
+            "The module's `*.html` output is the statistics report: a program that collects \
+             reports, as MultiQC's module for Ensembl VEP does, reads the general statistics table \
+             and a chart's counts from it, and finds both in the vep-rs report ([The statistics \
+             report](../cli/compatibility.md#the-statistics-report)).",
+        ],
+    );
+    assert!(
+        page_text("cli/compatibility.md").contains("\n## The statistics report\n"),
+        "docs/cli/compatibility.md lacks the section `The statistics report`"
     );
 }
 
@@ -3513,18 +16512,802 @@ fn plugin_data_download_exclusion_is_documented() {
     );
 }
 
-/// `bioconda-distribution`: the limitations page states that the Bioconda
-/// package's version can trail the newest release, the forms every release is
-/// published in, and what a pipeline that installs Ensembl VEP from Bioconda
-/// changes.
+/// The data-files page says which index versions a plugin refuses a `.vpd`
+/// store for and what a refused store leaves: any version but the reader's
+/// is refused, and the data file is read through tabix only with its `.tbi`
+/// beside it. Without it the plugin is not loaded, and for a store refused
+/// for its index version the refusal names the store, that version and the
+/// conversion (`check_table_or_store` and `open_backend` of
+/// `crates/vep-builtins/src/annotation_store.rs`, which
+/// `refused_store_beside_a_table_without_its_index.rs` runs). Beside a data
+/// file with no index a refusal that names the conversion ends with the flag
+/// the conversion needs there (`beside_refused_store` of the same file; the
+/// same test file holds the line, and
+/// `crates/vep-cache-converter/tests/refused_store_of_a_table_without_an_index.rs`
+/// runs the conversion it names).
+#[test]
+fn plugin_data_page_says_what_a_refused_store_leaves() {
+    assert_page_states(
+        "plugins/data-files.md",
+        &[
+            "It also refuses a store whose index is of any version but the one it reads, an \
+             earlier version as a later one, naming the conversion that rebuilds it.",
+            "Every store built by the converter of release 0.6.0 or earlier is one.",
+            "A refused store leaves the data file read through tabix, which needs the data \
+             file's `.tbi` index beside it.",
+            "Without that index the plugin is not loaded.",
+            "For a store refused for its index version, the plugin's refusal names the missing \
+             `.tbi`, the store, the version its index carries and the conversion that rebuilds \
+             it.",
+            "Beside a data file with no index, a refusal that names the conversion ends with \
+             `--no-verify`, the flag the conversion needs on such a file.",
+        ],
+    );
+    let text = page_text("plugins/data-files.md")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for claim in [
+        "a store of an earlier index version",
+        "A refused store leaves the data file read through tabix.",
+    ] {
+        assert!(
+            !text.contains(claim),
+            "docs/plugins/data-files.md states {claim:?}"
+        );
+    }
+}
+
+/// The data-files page says what the converter holds its layout flags to: the
+/// columns, the end column and the starts of the data file's tabix index,
+/// which flags it refuses and which draw a warning
+/// (`check_indexed_columns` of `crates/vep-cache-converter/src/main.rs`, which
+/// `crates/vep-cache-converter/tests/layout_flags_beside_the_table_index.rs`
+/// runs on the committed tables of made-up scores).
+#[test]
+fn plugin_data_page_says_what_the_converter_holds_its_layout_flags_to() {
+    assert_page_states(
+        "plugins/data-files.md",
+        &[
+            "The converter holds its layout flags to the data file's tabix index before the \
+             data file is read.",
+            "It refuses `--chr-col` and `--start-col` naming other columns than the index was \
+             built on.",
+            "Beyond those two, the flags name either the end column and the starts the index \
+             declares or single one-based positions: any other `--end-col` given without \
+             `--ref-col` is refused.",
+            "So is any other `--zero-based`, unless it is given with `--end-col` and \
+             `--ref-col` under an index that declares zero-based starts.",
+            "An index of tabix's `vcf` or `sam` preset declares one-based starts and no end \
+             column.",
+            "The refusal names the flags that match the index.",
+            "Where the flags name single one-based positions and the index declares an end \
+             column or zero-based starts, the converter prints a warning naming the flags that \
+             match the index and converts: CADD refuses that store.",
+            "A data file without an index is not compared.",
+        ],
+    );
+    let text = page_text("plugins/data-files.md")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for claim in [
+        "The converter compares `--chr-col` and `--start-col` with the columns",
+        "Flags naming other columns are refused before the data file is read",
+        "any other `--end-col`, given without `--ref-col`, or `--zero-based` is refused",
+    ] {
+        assert!(
+            !text.contains(claim),
+            "docs/plugins/data-files.md states {claim:?}"
+        );
+    }
+}
+
+/// The converter crate's README says which layout flags the index check
+/// refuses (`check_indexed_columns` of
+/// `crates/vep-cache-converter/src/main.rs`): an `--end-col` given without
+/// `--ref-col`, and a `--zero-based` unless it is given with `--end-col` and
+/// `--ref-col` under an index of zero-based starts, where the starts are the
+/// index's and the end column is not compared. Flags that name the index's
+/// own layout or single one-based positions are not refused. A sentence that
+/// refuses every other `--zero-based` is refused.
+#[test]
+fn converter_readme_says_which_layout_flags_the_index_check_refuses() {
+    let path = format!(
+        "{}/../vep-cache-converter/README.md",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let readme = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
+    let row = readme
+        .lines()
+        .find(|l| l.starts_with("| `check_indexed_columns`"))
+        .expect("crates/vep-cache-converter/README.md has a check_indexed_columns row");
+    assert_states(
+        "the check_indexed_columns row of crates/vep-cache-converter/README.md",
+        row,
+        &[
+            "any end column given without `--ref-col` and any zero-based starts but those given \
+             with an end column and `--ref-col` under an index of zero-based starts",
+        ],
+    );
+    assert_states(
+        "crates/vep-cache-converter/README.md",
+        &readme,
+        &[
+            "and any `--end-col` given without `--ref-col`, or `--zero-based` but one given with \
+             `--end-col` and `--ref-col` under an index of zero-based starts, unless the flags \
+             name the end column and the starts the index declares or single one-based positions",
+        ],
+    );
+    for claim in [
+        "and any `--end-col`, given without `--ref-col`, or `--zero-based` unless the flags name",
+        "any end column, given without `--ref-col`, or zero-based starts but the index's own",
+    ] {
+        assert!(
+            !readme.contains(claim),
+            "crates/vep-cache-converter/README.md states {claim:?}"
+        );
+    }
+}
+
+/// The data-files page says that a `.vpd` store is the one exception to the
+/// index a data file needs, that a store built on other columns than its data
+/// file's is refused, and where CADD takes the columns it reads: the data
+/// file's tabix index and, for a data file with no index, the names in the
+/// file's header (`CaddPlugin::open_source` and `header_named_config` of
+/// `crates/vep-builtins/src/plugins/cadd.rs`, which
+/// `refused_store_beside_a_table_without_its_index.rs` runs on the committed
+/// tables of made-up scores, with and without their index), and how a data
+/// file with no index is converted (`convert_plugin_data` of
+/// `crates/vep-cache-converter/src/main.rs`, which
+/// `crates/vep-cache-converter/tests/cadd_store_of_a_table_without_an_index.rs`
+/// runs with and without the flag).
+#[test]
+fn plugin_data_page_says_where_cadd_takes_its_columns_from() {
+    assert_page_states(
+        "plugins/data-files.md",
+        &[
+            "The one exception is a `.vpd` binary store built from the data file by \
+             `vep-cache-converter convert-plugin-data`, with its `.vpdi` index beside it.",
+            "A plugin refuses a store whose columns differ from its data file's, naming the \
+             flags that rebuild it.",
+            "CADD takes the columns it reads from the data file's tabix index.",
+            "A data file with no index is read from its store alone, and CADD then takes the \
+             columns from the names in the file's header.",
+            "It reads a `Pos` column as one-based positions and a `Start` column as zero-based \
+             starts, as the plugin's own comparison reads them (`CADD.pm` lines 209 and 220).",
+            "An `End` column, where the header names one, ends each row.",
+            "A store built on other columns is refused there, and the refusal names the flags \
+             that rebuild it.",
+            "The converter checks a store through the data file's index, so a data file with \
+             no index is converted with `--no-verify`.",
+        ],
+    );
+}
+
+/// A README under `tests/fixtures` that says which Ensembl VEP release wrote
+/// the fixture's rows, or names the image they came from, names release 116.3,
+/// the release whose rows the tests of those fixtures hold; every fixture the
+/// test lists carries such a record. The UTRAnnotator pair-order page counts
+/// the orders that release wrote over ten runs.
+#[test]
+fn fixture_records_name_the_release_that_wrote_their_rows() {
+    const RELEASE: &str = "116.3";
+    let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let mut naming = std::collections::BTreeSet::new();
+    for entry in std::fs::read_dir(&fixtures).unwrap() {
+        let directory = entry.unwrap().path();
+        let readme = directory.join("README.md");
+        if !readme.is_file() {
+            continue;
+        }
+        let text = std::fs::read_to_string(&readme)
+            .unwrap_or_else(|e| panic!("{}: {e}", readme.display()));
+        let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        for marker in ["Ensembl VEP ", "ensemblorg/ensembl-vep:release_"] {
+            for (at, _) in text.match_indices(marker) {
+                let named: String = text[at + marker.len()..]
+                    .chars()
+                    .take_while(|c| c.is_ascii_digit() || *c == '.')
+                    .collect();
+                let named = named.trim_end_matches('.');
+                if named.is_empty() {
+                    continue;
+                }
+                assert_eq!(named, RELEASE, "{}: {marker}{named}", directory.display());
+                naming.insert(
+                    directory
+                        .file_name()
+                        .unwrap()
+                        .to_string_lossy()
+                        .into_owned(),
+                );
+            }
+        }
+    }
+    for directory in [
+        "avi-cells",
+        "bayesdel-cells",
+        "bayesdel-mitochondrial-contig",
+        "clinpred-cells",
+        "dosage-sensitivity-cells",
+        "loftee-acceptor-on-both-strands",
+        "plugin-shared-key",
+        "primateai-cells",
+        "spliceai-two-streams",
+        "splicevault-cells",
+    ] {
+        assert!(
+            naming.contains(directory),
+            "tests/fixtures/{directory}/README.md names no release"
+        );
+    }
+    assert_page_states(
+        "divergences/utrannotator-annotation-pair-order.md",
+        &[
+            "Ensembl VEP 116.3 wrote the pairs in ten different orders over ten runs of one \
+             command; vep-rs writes them in byte order of their keys on every run.",
+        ],
+    );
+}
+
+/// The flag set `domains` of the corpus `GRCh38-native-builder` compares under
+/// the class `order_only`, and its record says under `mask_class` what the
+/// class reads there. The golden runner and the format comparison hold the
+/// class's columns under the same two names with the same values, the set's
+/// outputs carry `DOMAINS` alone of them, and a `masks` key may name any class
+/// of the lists the runner's and the corpus tool's refusals read: the note
+/// names those lists and states no count of columns or of classes.
+#[test]
+fn domains_set_mask_note_names_the_lists_the_comparisons_read() {
+    /// The string literals of the constant `name` of `source`, from the `=` of
+    /// its declaration to the `;` that ends it.
+    fn literals(source: &str, path: &str, name: &str) -> Vec<String> {
+        let declared = format!("const {name}:");
+        let at = source
+            .find(&declared)
+            .unwrap_or_else(|| panic!("{path} declares no {name}"));
+        let value = source[at..]
+            .split_once('=')
+            .and_then(|(_, value)| value.split_once(';'))
+            .map(|(value, _)| value)
+            .unwrap_or_else(|| panic!("{path}: {name} has no value"));
+        value
+            .split('"')
+            .skip(1)
+            .step_by(2)
+            .map(str::to_string)
+            .collect()
+    }
+    const CORPUS: &str = "tests/golden/116/GRCh38-native-builder";
+    const RUNNER: &str = "crates/vep-cli/tests/common/mod.rs";
+    const FORMAT_COMPARISON: &str = "tools/vep-formats-compare/src/lists.rs";
+    const TOOL_CLASSES: &str = "tools/vep-golden-corpus/src/constants.rs";
+    const TOOL_REFUSAL: &str = "tools/vep-golden-corpus/src/manifest.rs";
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let read = |path: &str| {
+        std::fs::read_to_string(root.join(path)).unwrap_or_else(|e| panic!("{path}: {e}"))
+    };
+    let flat = |path: &str| read(path).split_whitespace().collect::<Vec<_>>().join(" ");
+
+    let record_path = format!("{CORPUS}/provenance.json");
+    let record: serde_json::Value =
+        serde_json::from_str(&read(&record_path)).unwrap_or_else(|e| panic!("{record_path}: {e}"));
+    let set = &record["flag_sets"]["domains"];
+    let what = format!("flag_sets.domains.mask_class of {record_path}");
+    assert_eq!(
+        set["masks"],
+        serde_json::json!([common::ORDER_ONLY]),
+        "the masks of the flag set domains of {record_path}"
+    );
+    let note = set["mask_class"]
+        .as_str()
+        .unwrap_or_else(|| panic!("{what} is no text"));
+    assert_states(
+        &what,
+        note,
+        &[
+            "in the golden runner (crates/vep-cli/tests/common/mod.rs, whose class covers the \
+             columns of its ORDER_ONLY_COLUMNS and its ORDER_ONLY_PAIR_GROUP_COLUMN)",
+            "--masks order_only (the same columns); the set's outputs carry no other column of \
+             the class, and every other column compares exactly.",
+            "the tool and the golden runner each refuse a class that their own lists do not \
+             hold (the tool's mask_classes; the runner's MASK_CLASSES and \
+             CORRECTED_BEHAVIOUR_CLASSES)",
+        ],
+    );
+    for phrase in [
+        "DOMAINS and FREQS",
+        "the same two columns",
+        "refuse a class other than",
+    ] {
+        assert!(!note.contains(phrase), "{what} states {phrase:?}");
+    }
+
+    let class_columns = |path: &str| {
+        let source = read(path);
+        let mut columns = literals(&source, path, "ORDER_ONLY_COLUMNS");
+        columns.extend(literals(&source, path, "ORDER_ONLY_PAIR_GROUP_COLUMN"));
+        columns
+    };
+    let columns = class_columns(RUNNER);
+    assert_eq!(
+        columns,
+        class_columns(FORMAT_COMPARISON),
+        "{RUNNER} and {FORMAT_COMPARISON} differ in the columns of order_only"
+    );
+    assert!(
+        columns.iter().any(|column| column == "DOMAINS"),
+        "{RUNNER}: order_only reads no DOMAINS column"
+    );
+
+    let expected_dir = set["expected_dir"]
+        .as_str()
+        .unwrap_or_else(|| panic!("the flag set domains of {record_path} names no expected_dir"));
+    let tab_path = root.join(CORPUS).join(expected_dir).join("tab.txt.gz");
+    let mut tab = String::new();
+    std::io::Read::read_to_string(
+        &mut flate2::read::GzDecoder::new(
+            std::fs::File::open(&tab_path)
+                .unwrap_or_else(|e| panic!("{}: {e}", tab_path.display())),
+        ),
+        &mut tab,
+    )
+    .unwrap_or_else(|e| panic!("{}: {e}", tab_path.display()));
+    let header: Vec<&str> = tab
+        .lines()
+        .find(|line| line.starts_with("#Uploaded_variation"))
+        .unwrap_or_else(|| panic!("{} has no column line", tab_path.display()))
+        .split('\t')
+        .collect();
+    for column in &columns {
+        assert_eq!(
+            header.contains(&column.as_str()),
+            column == "DOMAINS",
+            "{}: the column {column}",
+            tab_path.display()
+        );
+    }
+
+    assert_states(
+        RUNNER,
+        &flat(RUNNER),
+        &["assert!( MASK_CLASSES.contains(&class.as_str()) || \
+           CORRECTED_BEHAVIOUR_CLASSES.contains(&class.as_str()), \"{label}: unknown mask class \
+           {class}\" );"],
+    );
+    assert_states(
+        TOOL_CLASSES,
+        &flat(TOOL_CLASSES),
+        &["pub fn mask_classes() -> Vec<&'static str> {"],
+    );
+    assert_states(
+        TOOL_REFUSAL,
+        &flat(TOOL_REFUSAL),
+        &[
+            "let classes = mask_classes();",
+            "names unknown classes {} (the classes are {})",
+        ],
+    );
+}
+
+/// The three-base stop codon test page counts the corpora whose manifests list
+/// a row under `stop_retained_three_base_stop_codon_test` and the rows they
+/// list, and the manifests decide whether it counts truly. A listed row is one
+/// item of a `divergences` list whose `expected_divergence` is the class. The
+/// manifest's own list holds the rows of the corpus's default run, and a flag
+/// set that has a list holds the rows of its own run, so a row that two runs
+/// write is counted once for each. The page's worked record is a record of the
+/// GRCh38 corpus, whose default run lists its row.
+#[test]
+fn the_three_base_stop_codon_test_page_counts_its_corpus_rows_as_the_manifests_list_them() {
+    const CLASS: &str = "stop_retained_three_base_stop_codon_test";
+    const WORKED_RECORD_ROW: [&str; 3] = ["21:26841550-26841553", "-", "ENST00001021815"];
+    let path = "divergences/stop-retained-three-base-stop-codon-test.md";
+    let rows_of_the_class = |list: &serde_json::Value| -> Vec<[String; 3]> {
+        list.as_array()
+            .into_iter()
+            .flatten()
+            .filter(|row| row["expected_divergence"] == CLASS)
+            .map(|row| {
+                ["location", "allele", "feature"]
+                    .map(|cell| row[cell].as_str().unwrap_or_default().to_string())
+            })
+            .collect()
+    };
+    let (mut corpora, mut default_run_rows) = (0, 0);
+    let (mut corpora_with_such_flag_sets, mut flag_sets, mut flag_set_rows) = (0, 0, 0);
+    let mut worked_record_row_is_listed = false;
+    for corpus in common::corpora() {
+        let of_the_default_run = rows_of_the_class(&corpus.manifest["divergences"]);
+        if corpus.release == "116" && corpus.name == "GRCh38" {
+            worked_record_row_is_listed =
+                of_the_default_run.contains(&WORKED_RECORD_ROW.map(str::to_string));
+        }
+        let mut sets_of_this_corpus = 0;
+        for flag_set in corpus.manifest["flag_sets"]
+            .as_array()
+            .into_iter()
+            .flatten()
+        {
+            let listed = rows_of_the_class(&flag_set["divergences"]);
+            if listed.is_empty() {
+                continue;
+            }
+            // A flag set without an `input` key reads the default run's input.
+            assert!(
+                flag_set
+                    .get("input")
+                    .is_none_or(|input| input == "variants.vcf"),
+                "{}: flag set {} reads another input than the default run",
+                corpus.name,
+                flag_set["name"]
+            );
+            for row in &listed {
+                assert!(
+                    of_the_default_run.contains(row),
+                    "{}: flag set {} lists {row:?}, which the default run's list lacks",
+                    corpus.name,
+                    flag_set["name"]
+                );
+            }
+            sets_of_this_corpus += 1;
+            flag_set_rows += listed.len();
+        }
+        if !of_the_default_run.is_empty() || sets_of_this_corpus > 0 {
+            corpora += 1;
+        }
+        if sets_of_this_corpus > 0 {
+            corpora_with_such_flag_sets += 1;
+        }
+        default_run_rows += of_the_default_run.len();
+        flag_sets += sets_of_this_corpus;
+    }
+    assert_eq!(
+        (
+            corpora,
+            default_run_rows + flag_set_rows,
+            default_run_rows,
+            flag_set_rows,
+            flag_sets,
+            corpora_with_such_flag_sets
+        ),
+        (9, 42, 33, 9, 4, 3),
+        "the corpora whose manifests list a row under {CLASS}, the rows they list, those of \
+         the default runs, those of flag sets, the flag sets that list one and the corpora \
+         of those flag sets: docs/{path} states all six figures"
+    );
+    assert!(
+        worked_record_row_is_listed,
+        "the manifest of tests/golden/116/GRCh38 lists no row {WORKED_RECORD_ROW:?} under \
+         {CLASS}: docs/{path} counts the worked record's row among the recorded ones"
+    );
+    assert_page_states(
+        path,
+        &[
+            "Nine committed golden corpora record rows of the class, the worked record's row \
+             among them.",
+            "The manifests of nine golden corpora list 42 such rows in their `divergences`, each \
+             with the terms vep-rs writes. Of the 42, 33 are rows of the corpora's default runs, \
+             and 9 are rows that four flag sets of three of those corpora write for the same \
+             records.",
+        ],
+    );
+    let text = page_text(path)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for refused in [
+        " 37 rows of the class",
+        " 37 such rows",
+        "seven corpora",
+        "seven golden corpora",
+    ] {
+        assert!(!text.contains(refused), "docs/{path} states {refused:?}");
+    }
+}
+
+/// The part of `text` that follows `open` and ends before the next `close`.
+fn clause_between<'a>(what: &str, text: &'a str, open: &str, close: &str) -> &'a str {
+    let rest = text
+        .split_once(open)
+        .unwrap_or_else(|| panic!("{what} lacks {open:?}"))
+        .1;
+    rest.split_once(close)
+        .unwrap_or_else(|| panic!("{what} lacks {close:?} after {open:?}"))
+        .0
+}
+
+/// The ways a clause lists after `written `: the items its commas part, the
+/// last without its `or`.
+fn listed_ways(what: &str, clause: &str) -> Vec<String> {
+    let list = clause
+        .split_once("written ")
+        .unwrap_or_else(|| panic!("{what} lacks `written `: {clause:?}"))
+        .1;
+    list.split(", ")
+        .map(|way| way.strip_prefix("or ").unwrap_or(way).to_string())
+        .collect()
+}
+
+/// `hgvsp_stop_codon_protein_comparison`: the opening paragraph of the entry's
+/// page lists the ways Ensembl VEP writes a change that keeps the whole
+/// protein as the entry's index row lists them, the last of them no protein
+/// notation at all (section 10 of the page). The second way is an insertion
+/// before the stop or before an earlier residue, the last one or one further
+/// back (section 9 of the page); the paragraph names that residue without the
+/// row's second `before`.
+#[test]
+fn the_stop_codon_page_opening_lists_the_ways_its_index_row_lists() {
+    let path = "divergences/hgvsp-stop-codon-protein-comparison.md";
+    let page = page_text(path);
+    let opening = page
+        .lines()
+        .find(|line| line.starts_with("**The defect in one sentence.**"))
+        .unwrap_or_else(|| panic!("docs/{path} has no opening paragraph"));
+    let index = page_text("intended-divergences.md");
+    let row = index
+        .lines()
+        .find(|line| line.starts_with("| [`hgvsp_stop_codon_protein_comparison`]"))
+        .expect("docs/intended-divergences.md has no row of the entry");
+    let opening_ways = listed_ways(
+        "the opening paragraph",
+        clause_between(
+            "the opening paragraph",
+            opening,
+            "A change that keeps the whole protein is ",
+            ". ",
+        ),
+    );
+    let row_ways: Vec<String> = listed_ways(
+        "the index row",
+        clause_between(
+            "the index row",
+            row,
+            "a change that keeps the whole protein is ",
+            ", and a change that reaches",
+        ),
+    )
+    .iter()
+    .map(|way| way.replace(" or before an earlier residue", " or an earlier residue"))
+    .collect();
+    let inserted = "as an insertion before the stop or an earlier residue";
+    assert!(
+        opening_ways.iter().any(|way| way == inserted),
+        "the opening paragraph of docs/{path} lacks the way {inserted:?}: {opening_ways:?}"
+    );
+    assert_eq!(
+        opening_ways, row_ways,
+        "the ways the opening paragraph of docs/{path} lists against the entry's row of \
+         docs/intended-divergences.md"
+    );
+    assert_eq!(
+        row_ways.last().map(String::as_str),
+        Some("not at all"),
+        "the last way the entry's row of docs/intended-divergences.md lists"
+    );
+    let refused = "or as the stop unchanged where the stop is lost.";
+    assert!(!page.contains(refused), "docs/{path} states {refused:?}");
+}
+
+/// `hgvsp_stop_codon_protein_comparison`, a stop lost on a transcript whose
+/// peptide holds a stop: the page's paragraph on the count Ensembl VEP leaves
+/// unknown or short, the opening sentence of its section, the bound of the
+/// search, the sentences on the class's eleventh shape, the counts of the two
+/// records that the entry's reproduction does not hold, the control row of
+/// the record that one transcript closes with the lost codon, and, for each
+/// such record of the entry's reproduction that the section tables, the
+/// counts that the two engines' recorded rows carry.
+#[test]
+fn the_stop_codon_page_counts_an_extension_from_a_stop_the_peptide_holds() {
+    let path = "divergences/hgvsp-stop-codon-protein-comparison.md";
+    assert_page_states(
+        path,
+        &[
+            "Where a transcript's peptide goes on past a stop codon inside the coding sequence, \
+             as a residue or a held stop, Ensembl VEP leaves a lost stop's extension count \
+             unknown or short. It takes one and the peptide's length from the first stop's place \
+             in the whole alternate translation. vep-rs counts from the lost stop to the next \
+             stop (sections 7 and 11).",
+            "## 11. A stop lost on a transcript whose peptide holds a stop",
+            "**In short.** Ensembl VEP writes these extensions with the unknown count, or with \
+             a count from the peptide's last residue; vep-rs counts from the lost stop to the \
+             next stop of the frame.",
+            "The next stop is sought from the lost stop through the coding sequence and the 3' \
+             UTR, and no farther.",
+            "The eleventh, an extension on a transcript whose peptide holds a stop, is read \
+             from vep-rs's cache as section 11 lists.",
+            "a row whose `FLAGS` name `cds_end_NF` is a row of the eleventh alone.",
+            "| The same record | ENST00000606380, whose peptide of 123 residues holds no stop.",
+            "| `<protein>:p.Ter253SerextTer?` | `<protein>:p.Ter253SerextTer27` |",
+            "| `<protein>:p.Ter52CysextTer35` | `<protein>:p.Ter52CysextTer92` |",
+            "| `<protein>:p.Ter124CysextTer92` | `<protein>:p.Ter124CysextTer92` |",
+        ],
+    );
+    let page = page_text(path);
+    let record = std::fs::read_to_string(format!(
+        "{}/../../scripts/divergences/reproductions/hgvsp_stop_codon_protein_comparison.toml",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .expect("the entry's reproduction record reads");
+    for (name, place) in [
+        (
+            "held_stop_substitution_4_100268190",
+            "GRCh37, chromosome 4, position 100268190",
+        ),
+        (
+            "held_stop_substitution_12_6940463",
+            "GRCh37, chromosome 12, position 6940463",
+        ),
+        (
+            "closing_stop_behind_a_held_stop_18_61390631",
+            "GRCh37, chromosome 18, position 61390631",
+        ),
+    ] {
+        let recorded: Vec<&str> = record
+            .lines()
+            .filter(|line| line.trim_start().starts_with(&format!("\"{name} | ")))
+            .filter_map(|line| line.rsplit(":p.").next())
+            .map(|notation| notation.trim_end_matches("\","))
+            .collect();
+        let [ensembl_vep, vep_rs] = recorded[..] else {
+            panic!("the record holds {} rows of {name}", recorded.len());
+        };
+        let row = page
+            .lines()
+            .find(|line| line.starts_with(&format!("| {place} |")))
+            .unwrap_or_else(|| panic!("docs/{path} has no row of {place}"));
+        assert!(
+            row.ends_with(&format!(
+                "| `<protein>:p.{ensembl_vep}` | `<protein>:p.{vep_rs}` |"
+            )),
+            "the row of {place} does not carry {ensembl_vep} and {vep_rs}"
+        );
+    }
+}
+
+/// `hgvsp_stop_codon_protein_comparison`, a deletion of whole residues that
+/// takes a stop on a transcript whose peptide holds a stop: the page's rows
+/// on what vep-rs writes for it, on the stop its count runs from and on
+/// what stays, the row of the lines the count comes from, the two rows on
+/// what the class reads for it, the rows of the records that the entry's
+/// reproduction does not hold, the control row of a peptide that holds no
+/// stop, the counts of the rows in real data, and, for each such record of
+/// the entry's reproduction, the counts that the two engines' recorded rows
+/// carry. The page does not say that such a deletion keeps the value both
+/// engines write.
+#[test]
+fn the_stop_codon_page_counts_a_deletion_through_a_stop_the_peptide_holds() {
+    let path = "divergences/hgvsp-stop-codon-protein-comparison.md";
+    assert_page_states(
+        path,
+        &[
+            "| A deletion of whole residues that takes a stop the peptide holds, or the \
+             closing stop behind one | The form both engines write, the residues deleted and \
+             then `delextTer`, with a count. The count is the residue number that the first \
+             stop at or after the first residue that differs has in the protein after the \
+             deletion, less the number the lost stop had before it. On a peptide that holds \
+             no stop the same subtraction is the figure Ensembl VEP writes, so nothing \
+             changes there. |",
+            "| The stop a deletion's count runs from | The first stop among the residues \
+             deleted. The description names it only where its range opens or ends at that \
+             stop. |",
+            "| A stop the peptide holds, or the closing stop behind one, deleted alone | Both \
+             engines write the stop as deleted and then an extension's count: Ensembl VEP \
+             the unknown count, vep-rs the count derived as above.",
+            "| A deletion of either of the two rows above whose count so derived is not above \
+             nought | The unknown count both engines write. Ensembl VEP's own figure is not \
+             above nought there either, and lines 2519-2525 give no count for such a figure \
+             on any transcript. |",
+            "| A frameshift whose first changed residue is a stop the peptide holds | An \
+             extension named at that stop in both engines. Its count is another entry's: \
+             [`hgvsp_frameshift_count_past_a_stop_read_as_a_residue`]\
+             (hgvsp-frameshift-count-past-a-stop-read-as-a-residue.md). |",
+            "| A deletion's count is asked for the same way | Lines 1916 and 1922 |",
+            "| Both values | An extension at one residue number with one first residue, or \
+             one deletion with an extension's count after it, alone or inside prediction \
+             parentheses. |",
+            "| `CDS_position`, for a deletion | The coding bases the row names are three for \
+             each residue the deletion names. With them out of the cache's coding sequence, \
+             and the 3' UTR read after it, the first residue that differs is the deletion's \
+             first.",
+            "The codon window types the change a deletion, so both engines write the \
+             deletion and the count; vep-rs writes the frameshift of this page's opening \
+             part only for a range that the codon window types a deletion-insertion. |",
+            "| `<protein>:p.Gly41_Gly52delextTer?` | `<protein>:p.Gly41_Gly52delextTer46` |",
+            "| `<protein>:p.Arg4223_Asp4252delextTer?` | \
+             `<protein>:p.Arg4223_Asp4252delextTer24` |",
+            "| `<protein>:p.Ter6131_Ser6136delextTer?` | \
+             `<protein>:p.Ter6131_Ser6136delextTer34` |",
+            "| `<protein>:p.Thr5344_Ter5347delextTer?` | \
+             `<protein>:p.Thr5344_Ter5347delextTer22` |",
+            "| `<protein>:p.Ala289_Thr292delextTer?` | `<protein>:p.Ala289_Thr292delextTer11` |",
+            "| `<protein>:p.Asn4375_Trp4384delextTer?` | \
+             `<protein>:p.Asn4375_Trp4384delextTer?` |",
+            "| `<protein>:p.Val572_Ter573delextTer15` | `<protein>:p.Val572_Ter573delextTer15` |",
+            "Rows on which both write the unknown count: the count is not above nought, or no \
+             stop follows |",
+            "| 1000 Genomes high coverage, GRCh38 | 5 | 3 |",
+            "| gnomAD v4.1, GRCh38 | 97 | 37 |",
+            "| The committed mouse corpora (`tests/golden/116/GRCm39-mouse` and \
+             `GRCm39-mouse-merged`), one record of GRCm39 | 1 | 0 |",
+        ],
+    );
+    let page = page_text(path);
+    let refused = "An in-frame deletion that takes a stop the peptide holds, and a frameshift";
+    assert!(!page.contains(refused), "docs/{path} states {refused:?}");
+    let record = std::fs::read_to_string(format!(
+        "{}/../../scripts/divergences/reproductions/hgvsp_stop_codon_protein_comparison.toml",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .expect("the entry's reproduction record reads");
+    for (name, place) in [
+        (
+            "held_stop_deletion_4_100268187",
+            "GRCh37, chromosome 4, position 100268187, 6 bases deleted",
+        ),
+        (
+            "held_stop_opening_deletion_12_6940460",
+            "GRCh37, chromosome 12, position 6940460, 6 bases deleted",
+        ),
+        (
+            "closing_stop_deletion_behind_a_held_stop_18_61390627",
+            "GRCh37, chromosome 18, position 61390627, 6 bases deleted",
+        ),
+    ] {
+        let recorded: Vec<&str> = record
+            .lines()
+            .filter(|line| line.trim_start().starts_with(&format!("\"{name} | ")))
+            .filter_map(|line| line.rsplit(":p.").next())
+            .map(|notation| notation.trim_end_matches("\","))
+            .collect();
+        let [ensembl_vep, vep_rs] = recorded[..] else {
+            panic!("the record holds {} rows of {name}", recorded.len());
+        };
+        let row = page
+            .lines()
+            .find(|line| line.starts_with(&format!("| {place}")))
+            .unwrap_or_else(|| panic!("docs/{path} has no row of {place}"));
+        assert!(
+            row.ends_with(&format!(
+                "| `<protein>:p.{ensembl_vep}` | `<protein>:p.{vep_rs}` |"
+            )),
+            "the row of {place} does not carry {ensembl_vep} and {vep_rs}"
+        );
+    }
+}
+
+/// `bioconda-distribution`: the installation page states the channel's
+/// package, its platforms, the command that installs it, the binaries it
+/// brings and why its version can trail a release; the limitations page
+/// states that the package's version can trail the newest release, the forms
+/// every release is published in and what a pipeline that installs Ensembl
+/// VEP from Bioconda changes; both say what `vep --version` prints; neither
+/// page nor the workflow-managers page denies the package.
 #[test]
 fn bioconda_status_is_documented() {
+    assert_page_states(
+        "getting-started/installation.md",
+        &[
+            "Install vep-rs in one of four ways: a pre-built `vep` binary for Linux or macOS, a \
+             build from source, the container image, or the Bioconda package.",
+            "The Bioconda channel carries vep-rs as the package `vep-rs`, built for Linux and macOS \
+             on x86_64 and arm64.",
+            "It installs `vep`, `vep-cache-builder` and `vep-cache-converter`:",
+            "conda install -c conda-forge -c bioconda vep-rs",
+            "The channel builds a release from its own copy of the recipe, `recipes/vep-rs` in \
+             [bioconda-recipes](https://github.com/bioconda/bioconda-recipes), once that copy names \
+             the release, so the version it serves can trail the newest release.",
+            "`vep --version` prints the installed one.",
+        ],
+    );
     assert_page_states(
         "getting-started/what-vep-rs-does-not-do.md",
         &[
             "The Bioconda channel carries vep-rs as the package `vep-rs`, and the version it serves \
              can trail the newest release: the channel builds a release once its own copy of the \
              recipe names it ([Installation](installation.md#bioconda)).",
+            "`vep --version` prints the release the installed package holds.",
             "Every release is published as pre-built binaries on the \
              [Releases](https://github.com/natera-open-source/vep-rs/releases) page, as source and \
              as the container image ([Installation](installation.md)).",
@@ -3533,6 +17316,19 @@ fn bioconda_status_is_documented() {
              container image or the release archive ([Workflow managers](workflow-managers.md)).",
         ],
     );
+    for path in [
+        "getting-started/installation.md",
+        "getting-started/what-vep-rs-does-not-do.md",
+        "getting-started/workflow-managers.md",
+    ] {
+        let text = page_text(path)
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        for denial in ["no Bioconda package", "not a channel package"] {
+            assert!(!text.contains(denial), "docs/{path} states {denial:?}");
+        }
+    }
 }
 
 /// `bioconda-distribution`: the installation page states the channel's package,
@@ -3582,14 +17378,14 @@ fn file_cache_gencode_flags_divergence_is_documented() {
     assert_page_states(
         "divergences/file-cache-honours-gencode-basic.md",
         &[
-            "Ensembl VEP 116.2 applies `--gencode_basic` and `--gencode_primary` in one routine, \
+            "Ensembl VEP 116.3 applies `--gencode_basic` and `--gencode_primary` in one routine, \
              `filter_transcript`, that its cache and database sources call and its `--gff` and \
              `--gtf` sources never do, so under either file source both flags are accepted and \
              change nothing: every transcript of the file is annotated.",
             "vep-rs reads a GTF or GFF3 into its cache and annotates against that cache, so the two \
              flags apply as they do on every cache: a transcript without the attribute is left out \
              of the annotation.",
-            "Under `--gencode_basic`, Ensembl VEP 116.2 reading the GTF through `--gtf` writes the \
+            "Under `--gencode_basic`, Ensembl VEP 116.3 reading the GTF through `--gtf` writes the \
              same two rows, and vep-rs annotating the cache built from that GTF writes the \
              `ENST00000419431` row alone.",
         ],
@@ -3612,12 +17408,12 @@ fn file_cache_gencode_flags_divergence_is_documented() {
              either file source both flags are accepted and every transcript of the file is \
              annotated; a cache vep-rs builds from the same file honours the flags as every cache \
              does, and the rows on the transcripts without the tag are not written | 2 · 876 of \
-             77,675 cache transcripts · 2 flag sets, 2 corpora | 116.2 |",
+             116,165 cache transcripts · 2 flag sets, 2 corpora | 116.3 |",
         ],
     );
 }
 
-/// `gff-gtf-transcript-source`: `_record_get_parent_ids` (GFF.pm:242-256) keeps the
+/// `gff-gtf-transcript-source`: `_record_get_parent_ids` (GFF.pm:243-257) keeps the
 /// empty first field of `Parent=,gene:X`, `_get_parent_child_structure`
 /// (BaseGXF.pm:385-401) files the record under the gene and the prune at :430-435
 /// reads the first field alone, so `_create_transcripts` (:311-345) visits the
@@ -3629,7 +17425,7 @@ fn gff_parent_list_empty_field_divergence_is_documented() {
     assert_page_states(
         "divergences/gff-parent-list-with-an-empty-field.md",
         &[
-            "Ensembl VEP 116.2's `--gff` source links a record to every set identifier in its \
+            "Ensembl VEP 116.3's `--gff` source links a record to every set identifier in its \
              `Parent` list but keeps the record at the top level whenever the list's first field \
              is empty. A transcript line written `Parent=,gene:X` is therefore visited twice, as \
              the gene's child and as a record of its own, and its gene identifier, symbol and \
@@ -3637,7 +17433,7 @@ fn gff_parent_list_empty_field_divergence_is_documented() {
             "vep-rs reads a transcript line whose `Parent` list opens with an empty field as the \
              transcript of the gene line a later field names, once, and gives it that gene's \
              identifier, symbol and version.",
-            "Ensembl VEP 116.2 reading the file through `--gff` writes the same row under one hash \
+            "Ensembl VEP 116.3 reading the file through `--gff` writes the same row under one hash \
              seed and a row with `-` for the gene and no `SYMBOL` under another, with a Perl \
              warning about an undefined value.",
         ],
@@ -3649,8 +17445,8 @@ fn gff_parent_list_empty_field_divergence_is_documented() {
              empty field, `Parent=,gene:X`, to the gene it names and keeps it at the top level as \
              well, so the transcript is visited twice and its `Gene`, `SYMBOL` and gene version are \
              the gene's or empty by Perl hash order; a cache vep-rs builds from the file makes the \
-             transcript the named gene's, once | 3 · 0 of 964 table rows · 14 flag sets, 0 corpora \
-             | 116.2 |",
+             transcript the named gene's, once | 3 · 0 of 1,928 table rows · 14 flag sets, 0 \
+             corpora | 116.3 |",
         ],
     );
     assert_page_states(
@@ -3675,7 +17471,7 @@ fn gff_parent_list_empty_field_divergence_is_documented() {
 }
 
 /// `gff-gtf-transcript-source`: `prefetch_transcript_ids` (Database/Transcript.pm:616-624)
-/// is the only writer of a transcript's `_ccds`, which OutputFactory.pm:1534-1537
+/// is the only writer of a transcript's `_ccds`, which OutputFactory.pm:1543-1546
 /// prints under `--ccds` and :740 ranks at the `ccds` step of `--pick`, and
 /// `_add_identifiers` (BaseGXF.pm:632-703) reads no `ccdsid`, so a `--gff` run prints
 /// no `CCDS` and ranks every transcript as without one; the builder reads the
@@ -3685,7 +17481,7 @@ fn file_cache_ccdsid_divergence_is_documented() {
     assert_page_states(
         "divergences/file-cache-reads-ccdsid.md",
         &[
-            "Ensembl VEP 116.2 fills a transcript's CCDS identifier from the database's xrefs \
+            "Ensembl VEP 116.3 fills a transcript's CCDS identifier from the database's xrefs \
              alone, when it reads the database or builds its cache, so its `--gff` and `--gtf` \
              sources never set one. A transcript built from an Ensembl GFF3 line that carries \
              `ccdsid=CCDS42939.1`, or from a GTF line that carries `ccds_id \"CCDS42939\"`, \
@@ -3717,7 +17513,7 @@ fn file_cache_ccdsid_divergence_is_documented() {
              line carrying `ccdsid` or a GTF line carrying `ccds_id` prints no `CCDS` under `--ccds` \
              and ranks as a transcript without a CCDS at the `ccds` step of `--pick`; a cache vep-rs \
              builds from the file reads the attribute, prints it and ranks the transcript as Ensembl \
-             VEP's cache does | 2 · 235 of 77,675 cache transcripts · 1 flag set, 2 corpora | 116.2 |",
+             VEP's cache does | 2 · 235 of 116,165 cache transcripts · 1 flag set, 2 corpora | 116.3 |",
         ],
     );
 }
@@ -3727,54 +17523,313 @@ fn file_cache_ccdsid_divergence_is_documented() {
 /// non-coding gene, so `_get_records_by_coords` (BaseGXF.pm:224) drops the gene
 /// line and `_get_parent_child_structure` (BaseGXF.pm:430-435) prunes every
 /// transcript whose `Parent` names it; release 116.3 adds the type, and the
-/// builder reads the line as a gene, a documented intended divergence.
+/// builder reads the line as a gene. The page states each reading under its
+/// release.
 #[test]
-fn file_cache_ncrna_gene_lines_divergence_is_documented() {
-    assert_page_states(
-        "divergences/file-cache-reads-ncrna-gene-lines.md",
-        &[
-            "Ensembl VEP 116.2's `--gff` source reads a line only when its type is on a fixed \
-             list, and `ncRNA_gene`, the type an Ensembl GFF3 gives every non-coding gene, is \
-             not on it. The gene line is skipped, every transcript whose `Parent` names it is \
-             pruned, and a record inside the gene is written as `intergenic_variant`.",
-            "vep-rs reads an `ncRNA_gene` line as a gene, as it reads `gene` and `pseudogene`, \
-             and the cache it builds carries the gene's transcripts.",
-            "Of the 646,577 transcript lines of the GRCh38 release-116 GFF3, 199,386 belong to \
-             the 42,155 genes written as `ncRNA_gene`, and the file source annotates none of \
-             them. Release 116.3 adds `ncRNA_gene` to the list.",
-            "vep-rs annotating the cache built from the file writes two \
-             `non_coding_transcript_exon_variant` rows; Ensembl VEP 116.2 reading the file \
-             through `--gff` writes one `intergenic_variant` row.",
-            "The committed caches hold 313 transcripts built from a file whose biotype an Ensembl \
-             GFF3 writes under an `ncRNA_gene` line. 23 are in the cache built from a GTF, 266 in \
-             the cache built from a GFF3 and 24 in a mitochondrial shard built from the GFF3 that \
-             a third corpus splices into a converted cache.",
-        ],
-    );
+fn ncrna_gene_line_reading_is_documented_by_release() {
     assert_page_states(
         "cache-from-gtf-or-gff3.md",
         &[
-            "Ensembl VEP 116.2's `--gff` source skips an `ncRNA_gene` line and drops every \
-             transcript whose `Parent` names one, a documented intended divergence, \
-             [`file_cache_reads_ncrna_gene_lines`](divergences/file-cache-reads-ncrna-gene-lines.md)",
+            "The `--gff` source of Ensembl VEP releases before 116.3 skips an `ncRNA_gene` line \
+             and drops every transcript whose `Parent` names one; Ensembl VEP 116.3 reads the \
+             line as a gene, as vep-rs does.",
+        ],
+    );
+}
+
+/// The mature miRNA arms of a cache built from a gene-model file alone. An
+/// Ensembl GTF or GFF3 writes a miRNA gene's transcript and no arm, and a
+/// RefSeq GFF3 writes each mature product as a `miRNA` record under its
+/// `primary_transcript`, which Ensembl VEP's file source passes over
+/// (BaseGXF.pm:513-514) and the builder drops. The page says which files
+/// hold the arms and that neither engine reads them.
+#[test]
+fn gene_model_page_says_which_files_hold_the_mature_mirna_arms() {
+    const PAGE: &str = "cache-from-gtf-or-gff3.md";
+    assert_page_states(
+        PAGE,
+        &[
+            "No Ensembl GTF or GFF3 carries them, and a RefSeq GFF3 holds each in a record \
+             neither engine reads, a `miRNA` under a `primary_transcript` (`BaseGXF.pm` lines 513 \
+             to 514), so `mature_miRNA_variant` is never assigned on a cache built without \
+             `--core-dumps`.",
+            "A record under a transcript (a `miRNA` under a `primary_transcript`) is dropped \
+             without one.",
+        ],
+    );
+    assert!(
+        !page_text(PAGE).contains("No GTF or GFF3 carries them"),
+        "docs/{PAGE} says no GFF3 carries the mature miRNA arms"
+    );
+}
+
+/// `gff-gtf-transcript-source`: the row counts the page gives for the release-116
+/// GFF3 slice name the release that wrote each. `%INCLUDE_FEATURE_TYPES` lacks
+/// `ncRNA_gene` at release/116.2 (GFF.pm:71-116) and lists it at release/116.3
+/// (GFF.pm:84), so the two releases write different counts on a file whose
+/// transcripts sit under such lines. The slice's line counts and the corpus's
+/// record count are read from the files the page names.
+#[test]
+fn gene_model_slice_row_counts_are_stated_by_release() {
+    let root = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
+    let slice_path = "crates/vep-cache-builder/tests/fixtures/grch38_chr21/slice.gff3";
+    let corpus = "tests/golden/116/GRCh38-native-builder";
+    let read = |path: &str| {
+        std::fs::read_to_string(format!("{root}/{path}")).unwrap_or_else(|e| panic!("{path}: {e}"))
+    };
+    let slice = read(slice_path);
+    let lines: Vec<Vec<&str>> = slice
+        .lines()
+        .filter(|line| !line.starts_with('#'))
+        .map(|line| line.split('\t').collect())
+        .collect();
+    let attribute = |line: &[&str], key: &str| -> Option<String> {
+        line[8]
+            .split(';')
+            .find_map(|field| field.strip_prefix(key))
+            .map(str::to_string)
+    };
+    let ncrna_genes: std::collections::BTreeSet<String> = lines
+        .iter()
+        .filter(|line| line[2] == "ncRNA_gene")
+        .filter_map(|line| attribute(line, "ID="))
+        .collect();
+    let transcripts: Vec<&Vec<&str>> = lines
+        .iter()
+        .filter(|line| attribute(line, "ID=").is_some_and(|id| id.starts_with("transcript:")))
+        .collect();
+    let tagged = |tag: &str| {
+        transcripts
+            .iter()
+            .filter(|line| {
+                attribute(line, "tag=").is_some_and(|tags| tags.split(',').any(|t| t == tag))
+            })
+            .count()
+    };
+    let under_ncrna_genes = transcripts
+        .iter()
+        .filter(|line| {
+            attribute(line, "Parent=").is_some_and(|parent| ncrna_genes.contains(&parent))
+        })
+        .count();
+    let records_on_21 = read(&format!("{corpus}/variants.vcf"))
+        .lines()
+        .filter(|line| line.starts_with("21\t"))
+        .count();
+    assert_page_states(
+        "divergences/file-cache-honours-gencode-basic.md",
+        &[
+            &format!(
+                "The GRCh38 release-116 chromosome 21 slice `{slice_path}` holds {} transcript \
+                 lines, which carry `gencode_basic` on {} and `gencode_primary` on {}.",
+                transcripts.len(),
+                tagged("gencode_basic"),
+                tagged("gencode_primary"),
+            ),
+            &format!(
+                "On the {records_on_21} chromosome 21 records of the corpus `{corpus}`, Ensembl \
+                 VEP 116.3 writes 186 rows under each of the three flag states, and vep-rs on the \
+                 cache built from the slice writes 186, 174 and 159.",
+            ),
+            &format!(
+                "Ensembl VEP 116.2 wrote 173 under each, skipping the slice's `ncRNA_gene` lines, \
+                 which hold {under_ncrna_genes} of the transcripts and which Ensembl VEP 116.3 \
+                 reads.",
+            ),
+        ],
+    );
+}
+
+/// `file_beside_cache_same_id_row_order`: a transcript a cache and a
+/// gene-model file read beside it both hold has one row per source, which
+/// Ensembl VEP writes in the text order of the identifier and a count of the
+/// transcripts its file source built before (BaseGXF.pm:489,
+/// BaseVariationFeature.pm:310-321, VariationFeature.pm:666) and vep-rs
+/// cache first. The page and its index row state both orders, the record that
+/// shows them and how the committed flag sets compare.
+#[test]
+fn file_beside_cache_row_order_divergence_is_documented() {
+    assert_page_states(
+        "divergences/file-beside-cache-same-id-row-order.md",
+        &[
+            "Ensembl VEP orders them by a count of the transcripts it has built from the file.",
+            "vep-rs writes the cache's row first, then each file's row in argument order.",
+            "So an unrelated record moves the two rows, and two runs of one command can differ \
+             byte for byte.",
+            "`Bio/EnsEMBL/VEP/AnnotationSource/File/BaseGXF.pm`, line 489, `_create_transcript`: \
+             `dbID => $self->{_tr_dbID}++`, one counter per source, advanced per transcript \
+             built.",
+            "under `--fork` a buffer is annotated in child processes, a chunk each, and the count \
+             starts again in every child.",
+            "so a count of zero leaves the bare identifier.",
+            "Line 666: the rows are returned in `sort keys` order, a text sort.",
+            "The class is documented only: no comparison counts rows under it.",
+            "Run alone, Ensembl VEP 116.3 writes the file's row first. Behind two earlier records \
+             of a sorted input, it writes the cache's row first. vep-rs writes the cache's row \
+             first in both runs.",
+            "With `--buffer_size 1` under `--fork 1`, Ensembl VEP writes the file's row first \
+             again on that three-record input.",
+            "Five wrote the file's row first on `ENST00000452969` and the cache's row first on \
+             `ENST00000613967`. The other five wrote each pair the other way.",
+            "The corpus's two flag sets whose file shares identifiers with the cache, `gtf` and \
+             `two-files`, are marked so.",
         ],
     );
     assert_page_states(
         "intended-divergences.md",
         &[
-            "so the gene line is skipped, every transcript whose `Parent` names it is pruned and a \
-             record inside the gene is written as `intergenic_variant`; a cache vep-rs builds from \
-             the file reads the line as a gene, as release 116.3 does, and annotates its \
-             transcripts | 2 · 313 of 77,675 cache transcripts · 0 flag sets, 3 corpora | 116.2 |",
+            "[`file_beside_cache_same_id_row_order`](divergences/file-beside-cache-same-id-row-order.md) \
+             | A transcript that a cache and a GTF or GFF3 read beside it both hold has two rows, \
+             which Ensembl VEP orders by a count of the transcripts it has built from the file, \
+             so their order changes with the input's other records and between runs; vep-rs \
+             writes the cache's row first, then each file's in argument order | 2 · 56 of 964 \
+             table rows · 5 flag sets, 1 corpus | 116.3 |",
         ],
+    );
+}
+
+/// `file_beside_cache_same_id_row_order`: the page counts the transcripts of
+/// its shape among the feature lines of the corpus's GTF, the lines that are
+/// no comment, which the entry's index row counts as table rows. The file
+/// opens with comment lines, so the count of its lines is a larger figure,
+/// and a page that gives the feature lines' count as the lines' is refused.
+/// Both counts are read from the file the page names.
+#[test]
+fn file_beside_cache_row_order_page_counts_the_feature_lines_of_its_gtf() {
+    use std::io::Read;
+    const PAGE: &str = "divergences/file-beside-cache-same-id-row-order.md";
+    let path = format!(
+        "{}/../../tests/golden/116/GRCh38-gene-model-beside-cache/chr21_genes.gtf.gz",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let bytes = std::fs::read(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
+    let mut text = String::new();
+    flate2::read::MultiGzDecoder::new(&bytes[..])
+        .read_to_string(&mut text)
+        .unwrap_or_else(|e| panic!("{path}: {e}"));
+    let lines = text.lines().count();
+    let feature_lines = text.lines().filter(|line| !line.starts_with('#')).count();
+    assert_eq!((lines, feature_lines), (969, 964), "{path}");
+    assert_page_states(
+        PAGE,
+        &[
+            "Of the 964 feature lines of the committed GTF `chr21_genes.gtf.gz`, 56 are such \
+             transcripts.",
+        ],
+    );
+    let page = page_text(PAGE)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let refused = "Of the 964 lines of the committed GTF";
+    assert!(!page.contains(refused), "docs/{PAGE} states {refused:?}");
+}
+
+/// `file_beside_cache_chrm_transcripts_dropped`: on GRCh37 vep-rs reads a
+/// gene-model file's `chrM` as `MT` within two bounds, and the entry's page
+/// names both. A region written `M` or `chrM` is left out where the FASTA
+/// record read under `MT` has another length than the assembly's
+/// (`SequenceNames::of_fasta` and `SequenceNames::keeps_apart_from_mt` of
+/// `crates/vep-cache-builder/src/gff3.rs`). A mitochondrial region is left
+/// out where one or more of its coding transcripts are tested on the FASTA
+/// record they are cut from and none reads as a coding sequence
+/// (`grch37_mitochondrial_regions_off_their_record` of
+/// `crates/vep-cache-builder/src/builder.rs`). `load` of
+/// `crates/vep-cli/src/gene_model.rs` warns of each. A page that counts one
+/// bound is refused.
+#[test]
+fn chrm_beside_a_cache_page_names_both_bounds_of_the_reading_on_grch37() {
+    let page = "divergences/file-beside-cache-chrm-transcripts-dropped.md";
+    assert_page_states(
+        page,
+        &[
+            "On GRCh37 alone there are two bounds. Over a FASTA whose mitochondrial record has \
+             another length than the assembly's 16,569 bases, vep-rs leaves the file's `chrM` \
+             transcripts out with a warning, as [A file beside a cache in one \
+             run](../cache-from-gtf-or-gff3.md#a-file-beside-a-cache-in-one-run) describes. It \
+             does the same for a mitochondrial region that has tested coding transcripts, none \
+             of which reads as a coding sequence on the FASTA record it is cut from.",
+        ],
+    );
+    let text = page_text(page)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let refused = "there is one bound";
+    assert!(!text.contains(refused), "docs/{page} states {refused:?}");
+}
+
+/// `gff`, `gtf` and `gff-gtf-with-cache`: a GFF or GTF transcript model is
+/// read beside a cache in one run, any number of files
+/// (AnnotationSourceAdaptor.pm:94-105 builds the custom sources after the
+/// cache's), each row of a file's transcript carrying the source's short name
+/// as `SOURCE` (BaseGXF.pm:635, OutputFactory.pm:1592). The page states what
+/// the run reads and writes and where it parts from Ensembl VEP: the file is
+/// read whole without its index, rows of one identifier come cache first
+/// where Ensembl VEP's order changes with the input's other records and between
+/// runs (BaseGXF.pm:489 numbers a file's transcripts as it builds them, the
+/// documented difference `file_beside_cache_same_id_row_order`), and a run
+/// with the file alone, which
+/// Ensembl VEP annotates (BaseGXF.pm:105-106 asks for a FASTA only), is refused
+/// with the two-step cache route.
+#[test]
+fn gene_model_file_beside_a_cache_subset_is_documented() {
+    assert_page_states(
+        "cache-from-gtf-or-gff3.md",
+        &[
+            "`--gff <file>` or `--gtf <file>` names a GFF3 or a GTF whose transcripts `vep` \
+             annotates beside the cache's",
+            "A run takes one `--gff`, one `--gtf` and any number of `--custom` strings.",
+            "Each file is read once, whole, when the run starts: plain, or gzipped or bgzipped \
+             under a name ending `.gz`. No tabix index is read, where Ensembl VEP needs the file \
+             bgzipped and indexed. Nothing is written into the cache.",
+            "Every row of a file's transcript carries `SOURCE=<short name>`, as Ensembl VEP \
+             writes it.",
+            "A transcript the cache and a file both hold, under one stable identifier, is written \
+             once per source.",
+            "The rows of one identifier come cache first, then each file's in argument order",
+            "Ensembl VEP orders such rows by a count of the transcripts it has built from the \
+             file, which changes with the input's other records and between runs, a documented \
+             intended divergence, \
+             [`file_beside_cache_same_id_row_order`](divergences/file-beside-cache-same-id-row-order.md).",
+            "A run that has no cache at the place its flags name ends with an error that opens \
+             `ERROR: [custom] a GFF or GTF transcript source is read beside a cache, and this run \
+             has none`. The error names the cache flags and the two steps at the top of this \
+             page, the route a run with the file alone takes.",
+            "Every other refusal met while the cache is resolved ends the run on the line it \
+             draws without the file, under `cache` or `config`.",
+            "Among them: a cache that is there and is refused, a `--species` or `--assembly` \
+             value the cache's layout refuses, and a `--synonyms` file that cannot be read.",
+            "A file read beside a cache is filtered the same way: a transcript of the file \
+             without the flag's tag writes no row.",
+            "Without one the run ends with `ERROR: [custom] a GFF or GTF transcript source needs \
+             a FASTA file (--fasta) for its sequences: vep-rs never connects to an Ensembl \
+             database (Ensembl VEP: GXF annotation requires either database access (--database \
+             or --cache) or a FASTA file (--fasta))`.",
+            "Neither database route is a remedy here: `--database` is refused, and the cache is \
+             read without a database.",
+        ],
+    );
+    assert_page_states(
+        "custom-annotation.md",
+        &["## GFF and GTF transcript models"],
+    );
+    let page = page_text("cache-from-gtf-or-gff3.md")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let every_refusal_under_one_line = "A run whose cache cannot be resolved ends with an error";
+    assert!(
+        !page.contains(every_refusal_under_one_line),
+        "docs/cache-from-gtf-or-gff3.md states {every_refusal_under_one_line:?}"
     );
 }
 
 /// `gff-gtf-transcript-source`: `--gtf` and `--gff` are `--custom` sources
 /// (Config.pm:531-543) whose short name, the file's base name (File.pm:154-158),
 /// `_add_identifiers` stamps on every transcript (BaseGXF.pm:635) and
-/// OutputFactory.pm:1583 prints as `SOURCE`, with the source's own column and
-/// header lines (Constants.pm:101, OutputFactory.pm:2435-2453); a cache built
+/// OutputFactory.pm:1592 prints as `SOURCE`, with the source's own column and
+/// header lines (Constants.pm:101, OutputFactory.pm:2444-2462); a cache built
 /// from the file names no source, so `without_transcript_source` in
 /// `common/mod.rs` sets the field aside, a documented intended divergence.
 #[test]
@@ -3797,7 +17852,7 @@ fn file_cache_no_source_field_divergence_is_documented() {
             "The class is coded: the golden harness sets the field, the column and the header \
              lines aside before comparing a run on a file-built cache with Ensembl VEP reading \
              the file.",
-            "The committed caches hold 1,082 transcripts built from a file (of 77,675): 1,045 in \
+            "The committed caches hold 1,082 transcripts built from a file (of 116,165): 1,045 in \
              the two caches built whole from a GTF or a GFF3, and 37 in a mitochondrial shard \
              built from the GFF3 that a third corpus splices into a converted cache.",
             "A corpus with such a reference names the class in its manifest's `masks`, so the \
@@ -3817,9 +17872,123 @@ fn file_cache_no_source_field_divergence_is_documented() {
         "intended-divergences.md",
         &[
             "a cache vep-rs builds from the file names no source, so a run on it writes none of \
-             them | 2 · 1,082 of 77,675 cache transcripts · 2 flag sets, 3 corpora | 116.2 |",
+             them | 2 · 1,082 of 116,165 cache transcripts · 2 flag sets, 3 corpora | 116.3 |",
         ],
     );
+}
+
+/// `custom_key_named_ensp_under_protein_version`: without `--protein` the key
+/// `ENSP` holds the list a `--custom` source of that short name pushed
+/// (OutputFactory.pm:1301, called at :1426-1435), and the version append
+/// (:1569-1574) turns it into the text of its address; the field table writes
+/// the source's values (`write_row_field_value` of `fields.rs`). The page's
+/// table holds the cells the reproduction records, each address read as the
+/// record's one masked word.
+#[test]
+fn custom_key_named_ensp_under_protein_version_divergence_is_documented() {
+    let page = "divergences/custom-key-named-ensp-under-protein-version.md";
+    assert_page_states(
+        page,
+        &[
+            "Under `--protein_version` without `--protein`, Ensembl VEP 116.3 appends a \
+             translation's version to the value under the key `ENSP`, which is the list a \
+             `--custom` source of that name filed there.",
+            "Its cell then reads `ARRAY(0xaaab21c79598).2`, the list's memory address and the \
+             version, in place of the source's values.",
+            "vep-rs prints the source's values on every row.",
+            "It is the text Perl gives a reference to a list: an address in the memory of the \
+             process, different in every run.",
+            "With `--protein` off the row has no protein identifier, so `--protein_version` has \
+             nothing to add a version to and changes no cell.",
+            "With both flags on, a row whose transcript has a protein identifier holds that \
+             identifier with its version in place of the source's values, in both engines.",
+            "Lines 1565-1568: where `--protein` is on and the transcript has a protein \
+             identifier, `ENSP` is assigned that identifier.",
+            "Lines 1569-1574: under `--protein_version`, where the key holds a true value that \
+             does not end in a dot and digits and the transcript's translation has a version, \
+             `.=` appends a dot and that version to the key's value.",
+            "No committed flag set names a `--custom` source whose short name is `ENSP`.",
+            "vep-rs prints `multi_7` on all sixteen.",
+            "The digits after `0x` change with every run of Ensembl VEP, and the thirteen cells \
+             of one run hold thirteen addresses.",
+            "No comparator sets the class aside: a comparison of such a run reports each of \
+             these cells as a difference.",
+            "Each row still turns its own copy of the reference into text, so the thirteen cells \
+             of such a run hold one address.",
+            "In JSON neither engine writes a `protein_id` without `--protein`, and the source's \
+             record stands under the input record's `custom_annotations`.",
+            "That row holds the values filed on the input record: the name of a record that \
+             names no allele, and nothing of a record that names one, which is filed on the rows \
+             of its allele.",
+        ],
+    );
+    let nothing_of_exact = "nothing of an `exact` record";
+    assert!(
+        !page_text(page).contains(nothing_of_exact),
+        "docs/{page} states {nothing_of_exact:?}"
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "so the cell reads as the list's memory address and the version \
+             (`ARRAY(0xaaab21c79598).2`) on every row of a transcript whose translation has a \
+             version; vep-rs writes the source's values on every row | 3 · 0 of 511 flag sets · \
+             0 flag sets, 0 corpora | 116.3 |",
+        ],
+    );
+
+    // The table of section 1.3: a transcript, then each engine's cell.
+    let text = page_text(page);
+    let masked = |cell: &str| -> String {
+        let cell = cell.trim_matches('`');
+        match cell
+            .strip_prefix("ARRAY(0x")
+            .and_then(|rest| rest.split_once(")."))
+        {
+            Some((address, version)) => {
+                assert_eq!(address.len(), 12, "{cell}");
+                assert!(address.bytes().all(|b| b.is_ascii_hexdigit()), "{cell}");
+                format!("<masked>.{version}")
+            }
+            None => cell.to_string(),
+        }
+    };
+    let mut ensembl_vep = Vec::new();
+    let mut vep_rs = Vec::new();
+    for line in text.lines().filter(|l| l.starts_with("| `ENST")) {
+        let cells: Vec<&str> = line.trim_matches('|').split('|').map(str::trim).collect();
+        assert_eq!(cells.len(), 3, "{line}");
+        let transcript = cells[0].trim_matches('`');
+        ensembl_vep.push(format!("{transcript}={}", masked(cells[1])));
+        vep_rs.push(format!("{transcript}={}", masked(cells[2])));
+    }
+    assert_eq!(ensembl_vep.len(), 16, "the rows of the page's table");
+
+    // The reproduction's two lists of `<transcript>=<cell>`, Ensembl VEP's first.
+    let record = std::fs::read_to_string(format!(
+        "{}/../../scripts/divergences/reproductions/custom_key_named_ensp_under_protein_version.toml",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .unwrap();
+    let recorded: Vec<&str> = record
+        .lines()
+        .filter_map(|l| l.trim().strip_prefix("\"ENST"))
+        .map(|l| l.trim_end_matches(',').trim_end_matches('"'))
+        .collect();
+    assert_eq!(
+        recorded.len(),
+        32,
+        "the record's two lists of sixteen cells"
+    );
+    let recorded: Vec<String> = recorded.iter().map(|cell| format!("ENST{cell}")).collect();
+    assert_eq!(ensembl_vep, recorded[..16], "Ensembl VEP's cells");
+    assert_eq!(vep_rs, recorded[16..], "vep-rs's cells");
+    let with_an_address = ensembl_vep
+        .iter()
+        .filter(|cell| cell.contains("=<masked>."))
+        .count();
+    assert_eq!(with_an_address, 13);
+    assert!(vep_rs.iter().all(|cell| cell.ends_with("=multi_7")));
 }
 
 /// `gff-gtf-transcript-source`: `_add_translation` (BaseGXF.pm:719-734) reads
@@ -3835,7 +18004,7 @@ fn gff_cds_without_protein_id_hgvsp_divergence_is_documented() {
     assert_page_states(
         "divergences/gff-cds-without-protein-id-hgvsp.md",
         &[
-            "Ensembl VEP 116.2's `--gff` source takes a translation's protein identifier from the \
+            "Ensembl VEP 116.3's `--gff` source takes a translation's protein identifier from the \
              transcript's first CDS line in transcript order, and when that line carries no \
              `protein_id` it builds the translation with none. Its HGVSp writer then names the \
              reference sequence as the empty identifier followed by the version, so the protein \
@@ -3845,7 +18014,7 @@ fn gff_cds_without_protein_id_hgvsp_divergence_is_documented() {
              a translation whose first CDS line names no protein, as both engines write none for a \
              transcript without a translation. A build of the cache's content that reads the core \
              table dumps takes their identifier and writes both.",
-            "Ensembl VEP 116.2 reading the file through `--gff` writes `HGVSp=.1:p.Pro6Leu` and \
+            "Ensembl VEP 116.3 reading the file through `--gff` writes `HGVSp=.1:p.Pro6Leu` and \
              no `ENSP`; vep-rs writes neither.",
         ],
     );
@@ -3864,10 +18033,128 @@ fn gff_cds_without_protein_id_hgvsp_divergence_is_documented() {
         &[
             "and its HGVSp writer names the reference as the empty identifier plus the version, \
              `.1:p.Pro6Leu`; a cache vep-rs builds from the file and the genome writes no HGVSp \
-             for such a translation, as both engines write no ENSP | 3 · 0 of 964 table rows · \
-             0 flag sets, 0 corpora | 116.2 |",
+             for such a translation, as both engines write no ENSP | 3 · 0 of 1,928 table rows · \
+             0 flag sets, 0 corpora | 116.3 |",
         ],
     );
+}
+
+/// `hgvsp_stop_named_on_incomplete_coding_sequence`: `_get_fs_peptides` closes
+/// the reference translation of a frameshift with a stop whatever the coding
+/// sequence's end (`TranscriptVariationAllele.pm:2338`), so a frameshift that
+/// the 3' rule carries past the last whole codon names a stop on a transcript
+/// no flag marks incomplete. The page and the index row name that cause beside
+/// the unknown residue of a partial codon. The row of such a transcript shows
+/// no incomplete coding sequence, so the page says where a comparison reads
+/// it, the candidate's cache, and the oracle runner hands the format comparator
+/// that cache for the class. Where that cache shows polyadenylation completing
+/// the transcript's stop codon the reference protein holds the stop, and the
+/// page says that the class takes no row there. The second example names the
+/// `cds_start_NF` flag of its transcript and the lines that make the unknown
+/// residue of its first codon: the base `translateable_seq` puts before a
+/// coding sequence whose start exon has a phase above zero
+/// (`Transcript.pm:917-920`), the codon `peptide` translates
+/// (`TranscriptVariationAllele.pm:730-736`), and the two peptides
+/// `hgvs_protein` hands the notation (`:1791-1793`).
+#[test]
+fn stop_named_page_names_the_frameshift_cause_and_the_cache_a_comparison_reads() {
+    let path = "divergences/hgvsp-stop-named-on-incomplete-coding-sequence.md";
+    assert_page_states(
+        path,
+        &[
+            "It names one too where a frameshift reaches past the last whole codon, since it \
+             closes a frameshift's reference protein with a stop whatever the coding sequence's \
+             end.",
+            "Lines 2320-2365, `_get_fs_peptides`: line 2338 closes the reference translation of \
+             a frameshift with a stop whatever the coding sequence's end, so the residue after \
+             the last whole codon is read as a stop.",
+            "A row on a transcript that no flag marks incomplete, whose terms hold no such term, \
+             is shown by the candidate's cache: the format comparator, given `--json-cache`, and \
+             the corpus builder read there that the transcript's coding sequence is no whole \
+             number of codons.",
+            "A comparison that names no cache leaves such a row a difference.",
+            "Given the candidate's cache, the class takes no row on a transcript whose record \
+             shows polyadenylation completing its stop codon: the reference protein holds that \
+             stop.",
+            "a forward-strand transcript flagged `cds_start_NF` whose coding sequence opens on \
+             the second base of its first codon",
+            "`Bio/EnsEMBL/Transcript.pm` of Ensembl core at release/116, lines 917-920, \
+             `translateable_seq`, puts one unknown base before such a coding sequence, and \
+             Ensembl VEP's cache stores the result \
+             (`Bio/EnsEMBL/VEP/AnnotationSource/Database/Transcript.pm` of `ensembl-vep` at \
+             release/116.3, line 351).",
+            "Lines 730-736, `peptide`, translate that codon, and a codon with an unknown first \
+             base names the unknown residue, on the reference and on the changed allele.",
+            "Lines 1791-1793, `hgvs_protein`, take the two peptides as the notation's, and lines \
+             2181-2182, listed above, write both as the stop.",
+        ],
+    );
+    let text = page_text(path)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let refused = "stays a difference in the format comparator";
+    assert!(!text.contains(refused), "docs/{path} states {refused:?}");
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "as the stop, and closes the reference protein of a frameshift with a stop whatever \
+             the coding sequence's end, and so names a stop at a residue where the reference \
+             protein holds none",
+        ],
+    );
+    let runner = "scripts/concordance/feature_oracle.sh";
+    let script = std::fs::read_to_string(format!("{}/../../{runner}", env!("CARGO_MANIFEST_DIR")))
+        .unwrap_or_else(|e| panic!("{runner}: {e}"));
+    assert!(
+        script.lines().any(|line| {
+            line.starts_with("CACHE_READING_MASKS=")
+                && line
+                    .split(|c: char| c == '"' || c.is_whitespace())
+                    .any(|word| word == "hgvsp_stop_named_on_incomplete_coding_sequence")
+        }),
+        "{runner} hands the comparator no cache for the class"
+    );
+}
+
+/// Under `--hgvs` a frameshift whose first changed codon the transcript's
+/// last base cuts short is the first of its residues with `fs` in vep-rs
+/// (`hgvsp_format` of `crates/vep-effects/src/coding.rs`, where
+/// `PerlCodingEval::cut_short_frameshift_names_its_first_residue` holds),
+/// and those residues deleted with an extension of unknown length in Ensembl
+/// VEP (`TranscriptVariationAllele.pm:2342-2346`, then `:1916-1936`). The
+/// page of the class that sets the pair aside states both forms, and neither
+/// it nor the texts of the format comparison give the deletion alone as
+/// vep-rs's.
+#[test]
+fn stop_end_page_states_the_frameshift_form_of_a_notation_the_coding_end_cuts_short() {
+    let path = "divergences/stop-codon-overlap-without-stop-codon.md";
+    assert_page_states(
+        path,
+        &[
+            "Where the transcript's last base cuts a frameshift's first changed codon short, \
+             Ensembl VEP writes the deleted residues with an extension of unknown length and \
+             vep-rs the first residue with `fs`.",
+            "Ensembl VEP 116.3 p.<First><n>delextTer? p.<First><n>_<Last><m>delextTer?",
+            "vep-rs p.<First><n>fs p.<First><n>fs",
+        ],
+    );
+    let refused = "deleted residues alone";
+    let root = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
+    for file in [
+        "docs/divergences/stop-codon-overlap-without-stop-codon.md",
+        "tools/vep-formats-compare/src/classes.rs",
+        "tools/vep-formats-compare/src/rules/coding_end_pairs.rs",
+        "tools/vep-formats-compare/data/help.txt",
+    ] {
+        let text = std::fs::read_to_string(format!("{root}/{file}"))
+            .unwrap_or_else(|e| panic!("{file}: {e}"))
+            .split_whitespace()
+            .filter(|word| !matches!(*word, "///" | "//"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(!text.contains(refused), "{file} states {refused:?}");
+    }
 }
 
 /// `gff-gtf-transcript-source`: `_create_transcript` stores each CDS child under
@@ -3884,7 +18171,7 @@ fn gff_cds_lines_sharing_a_start_divergence_is_documented() {
     assert_page_states(
         "divergences/gff-cds-lines-sharing-a-start.md",
         &[
-            "Ensembl VEP 116.2's `--gff` source stores a transcript's CDS lines in a hash keyed by \
+            "Ensembl VEP 116.3's `--gff` source stores a transcript's CDS lines in a hash keyed by \
              their start, so when two CDS lines of one transcript share a start one replaces the \
              other. The later line of the file is kept when the two follow their transcript \
              line, as a sorted file reads them. Everything the dropped line alone stated is lost \
@@ -3916,8 +18203,8 @@ fn gff_cds_lines_sharing_a_start_divergence_is_documented() {
         "intended-divergences.md",
         &[
             "a cache vep-rs builds from the file reads every line, the coding span their union \
-             and the identifiers from the line that opens the coding sequence | 3 · 0 of 964 \
-             table rows · 14 flag sets, 0 corpora | 116.2 |",
+             and the identifiers from the line that opens the coding sequence | 3 · 0 of 1,928 \
+             table rows · 14 flag sets, 0 corpora | 116.3 |",
         ],
     );
 }
@@ -3926,7 +18213,7 @@ fn gff_cds_lines_sharing_a_start_divergence_is_documented() {
 /// `version`, else `transcript_version` (BaseGXF.pm:481), `_add_identifiers`
 /// the gene line's `version` (:639) and `_add_translation` the first CDS
 /// record's `version`, `|| 1` (:727), each as text; the `Gene`, `Feature` and
-/// `ENSP` writers (OutputFactory.pm:1469, :1465, :1560-1565) and the HGVS
+/// `ENSP` writers (OutputFactory.pm:1478, :1474, :1569-1574) and the HGVS
 /// reference names (TranscriptVariationAllele.pm:1499-1500, :1759-1760) append
 /// it unless the identifier already ends in `.` and digits, so Ensembl VEP
 /// prints `ENST00001113783.v2`; the builder holds every version as a number
@@ -3937,7 +18224,7 @@ fn gff_version_not_a_number_divergence_is_documented() {
     assert_page_states(
         "divergences/gff-version-not-a-number.md",
         &[
-            "Ensembl VEP 116.2's `--gff` source takes the text of a `version` attribute as the \
+            "Ensembl VEP 116.3's `--gff` source takes the text of a `version` attribute as the \
              version of the gene, the transcript or the translation without reading it as a \
              number.",
             "vep-rs holds every version as a number. A `version` whose text is not a whole number \
@@ -3950,13 +18237,13 @@ fn gff_version_not_a_number_divergence_is_documented() {
              one field alone. Ensembl VEP writes `HGVSc=ENST00001113783.0:c.17C>T`, or \
              `ENST00001113783.:c.17C>T` for the empty value, and `ENST00001113783` in `Feature` \
              even under `--transcript_version`; vep-rs writes the bare identifier in both.",
-            "Ensembl VEP 116.2 reading the file through `--gff` writes `ENSP=ENSP00000783588.v2` \
+            "Ensembl VEP 116.3 reading the file through `--gff` writes `ENSP=ENSP00000783588.v2` \
              and `HGVSp=ENSP00000783588.v2:p.Pro6Leu`; vep-rs refuses to build a cache from the \
              file at that CDS line.",
-            "On `tmprss3_codon6`, Ensembl VEP 116.2 writes `ENST00001113783.v2` in `Feature` and \
+            "On `tmprss3_codon6`, Ensembl VEP 116.3 writes `ENST00001113783.v2` in `Feature` and \
              `HGVSc=ENST00001113783.v2:c.17C>T`; vep-rs refuses to build a cache from the file at \
              the transcript line.",
-            "On `tmprss3_codon6`, Ensembl VEP 116.2 writes `ENSG00000160183.v2` in `Gene`; vep-rs \
+            "On `tmprss3_codon6`, Ensembl VEP 116.3 writes `ENSG00000160183.v2` in `Gene`; vep-rs \
              refuses to build a cache from the file at the gene line.",
             "Without `--transcript_version` Ensembl VEP writes `ENST00001113783` in `Feature` and \
              `.v2` in the HGVSc reference name still.",
@@ -3988,8 +18275,8 @@ fn gff_version_not_a_number_divergence_is_documented() {
              `version` is set to text that is no whole number, naming the line and the text \
              (`version \"v2\" is not a whole number`); `01` prints as `1`, and digits above \
              4294967295, the cache's 32-bit limit, are refused the same way, naming the limit, \
-             where Ensembl VEP prints them | 3 · 0 of 964 table rows · 14 flag sets, 0 \
-             corpora | 116.2 |",
+             where Ensembl VEP prints them | 3 · 0 of 1,928 table rows · 14 flag sets, 0 \
+             corpora | 116.3 |",
         ],
     );
 }
@@ -4001,7 +18288,7 @@ fn gff_version_not_a_number_divergence_is_documented() {
 /// `decode_string`, `uri_unescape` (GXF.pm:303-307); `_add_identifiers`
 /// (BaseGXF.pm:632-703) takes the symbol from that hash, so a gene line's
 /// `Name=A%2CB` prints `A%2CB`, and the `gencode_promoter` overlay's
-/// `_create_records` (GFF.pm:198-201) takes `ID` and `gene_id` from the same
+/// `_create_records` (GFF.pm:199-202) takes `ID` and `gene_id` from the same
 /// hash (BaseGXF.pm:289); the builder and the overlay decode every `%XX`
 /// escape, in either letter case, after the tests Ensembl VEP runs on the
 /// written value, a documented intended divergence. A GTF value is decoded by
@@ -4012,7 +18299,7 @@ fn gff_attribute_escapes_read_raw_divergence_is_documented() {
     assert_page_states(
         "divergences/gff-attribute-escapes-read-raw.md",
         &[
-            "Ensembl VEP 116.2's `--gff` and `--custom` GFF promoter sources read every attribute \
+            "Ensembl VEP 116.3's `--gff` and `--custom` GFF promoter sources read every attribute \
              value of the ninth column as written, so a value carrying a GFF3 escape prints the \
              escape in place of the character: `Name=A%2CB` prints the symbol `A%2CB` and \
              `ID=PROM%2c1%3E` the `feature_id` `PROM%2c1%3E`.",
@@ -4027,7 +18314,7 @@ fn gff_attribute_escapes_read_raw_divergence_is_documented() {
              whether it is set and where its list splits on `,`, run on the written value here \
              too; the decoding follows them. The pair split is the parser's, so `Name=a=b` reads \
              `a` on both engines, and only the decoding differs.",
-            "`GFF.pm`, lines 198-201, `_create_records`: a `gff_type=gencode_promoter` source's \
+            "`GFF.pm`, lines 199-202, `_create_records`: a `gff_type=gencode_promoter` source's \
              `feature_id` is the hash's `ID` and its `associated_gene` the hash's `gene_id`, the \
              same hash of `BaseGXF.pm`, line 289, so a promoter window's two fields print as \
              written.",
@@ -4039,7 +18326,7 @@ fn gff_attribute_escapes_read_raw_divergence_is_documented() {
              that way on both engines, and in its `CSQ` entry the same, the spelling every `CSQ` \
              value gives a `;`.",
             "On the record `tmprss3_codon6`, `21 42395401 G>A`, a `missense_variant` on that \
-             transcript, vep-rs writes `SYMBOL=A,B`. Ensembl VEP 116.2 reading the file through \
+             transcript, vep-rs writes `SYMBOL=A,B`. Ensembl VEP 116.3 reading the file through \
              `--gff` writes `SYMBOL=A%2CB` in every format",
             "The Saccharomyces cerevisiae R64-1-1 GFF3 names three genes with a comma \
              (`ADE5%2C7`, `ARG5%2C6`, `DUR1%2C2`) and the Arabidopsis thaliana TAIR10 GFF3 115 \
@@ -4059,8 +18346,8 @@ fn gff_attribute_escapes_read_raw_divergence_is_documented() {
              promoter window's `ID` or `gene_id`, holding a GFF3 escape prints the escape in \
              place of the character, `A%2CB` for the symbol a file spells `A%2CB`; a cache \
              vep-rs builds from the file, and its promoter overlay, decode every `%XX` escape \
-             and print `A,B`, the name Ensembl's own cache carries | 3 · 0 of 1,022 table rows · \
-             15 flag sets, 0 corpora | 116.2 |",
+             and print `A,B`, the name Ensembl's own cache carries | 3 · 0 of 1,986 table rows · \
+             19 flag sets, 0 corpora | 116.3 |",
         ],
     );
     assert_page_states(
@@ -4110,13 +18397,427 @@ fn gff_attribute_escapes_read_raw_divergence_is_documented() {
     );
 }
 
+/// The four tool roots that read Storable images state what holds their output:
+/// the reference bytes of the runs under `tests/fixtures/expected/`, made by perl
+/// with the modules each README names, and the tool's own bytes where a run meets
+/// a case in which the tool does not write what Perl writes. Each README counts
+/// the runs its root holds. No README of a root and no comment of its source and
+/// test files states one of the listed phrases that name the bytes, the run, the
+/// walk or the patterns of a Perl program, since the repository holds no such
+/// program.
+#[test]
+fn storable_tool_texts_say_what_holds_their_output() {
+    // The Rust files under `dir`, the fixture directories left out.
+    fn rust_files(dir: &std::path::Path, found: &mut Vec<std::path::PathBuf>) {
+        let entries = std::fs::read_dir(dir).unwrap_or_else(|e| panic!("{}: {e}", dir.display()));
+        for entry in entries {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                if path.file_name().is_some_and(|name| name != "fixtures") {
+                    rust_files(&path, found);
+                }
+            } else if path.extension().is_some_and(|extension| extension == "rs") {
+                found.push(path);
+            }
+        }
+    }
+    // A text as one line of words, without the markers a wrapped comment line opens with.
+    fn words(path: &std::path::Path) -> String {
+        std::fs::read_to_string(path)
+            .unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+            .split_whitespace()
+            .filter(|word| !matches!(*word, "//!" | "///" | "//"))
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    let tools = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tools");
+    let failed_write = "ends the run with `cannot write <out>: <reason>`, where Perl's `print` \
+                        returns false and ends nothing.";
+    let roots: [(&str, usize, &str, &[&str]); 4] = [
+        (
+            "vep-storable-to-json",
+            62,
+            "Storable 3.23, JSON::XS 4.04 and zlib 1.2.11",
+            &[
+                "states nothing after it, and a run of the same steps in Perl can end with exit \
+                 code 0.",
+            ],
+        ),
+        (
+            "vep-storable-digest",
+            24,
+            "Storable 3.23, Data::Dumper 2.179, Digest::MD5 2.58 and IO::Uncompress::Gunzip 2.102",
+            &[failed_write],
+        ),
+        (
+            "vep-storable-dump",
+            32,
+            "Storable 3.23, Data::Dumper 2.179 and IO::Uncompress::Gunzip 2.102",
+            &[failed_write],
+        ),
+        (
+            "vep-cache-parity-audit",
+            24,
+            "Storable 3.23, JSON::PP 4.06 and File::Find 1.39",
+            &[
+                "The manifest of a reference run is the one perl wrote, with the keys of every \
+                 object in the order of their names and, in a run whose sample spans several \
+                 files, the number of the ids under `parity_gap_examples` in the place of the \
+                 ids; standard error and the exit code are fixed to the byte.",
+                "holds the tool's bytes for it, the ids of the second case excepted.",
+                "in, as `File::Find` reports them: the same cache copied to another file system \
+                 can give another sample for one seed. The reference run of such a sample \
+                 holds, under `parity_gap_examples`, the number of the ids of each gap in the \
+                 place of the ids.",
+                "An array that holds itself: the same walk in Perl has no end; the tool stops and \
+                 says so.",
+                "A file name with a single quote in it is read as the file it names; a shell \
+                 given `gunzip -c` and that name in single quotes does not read that file.",
+                "`tests/fixtures/rules/cases.tsv` (the mapped path and the rule of each path, as \
+                 perl 5.34.0 gives them)",
+            ],
+        ),
+    ];
+    for (tool, runs, modules, sentences) in roots {
+        let root = tools.join(tool);
+        let readme = root.join("README.md");
+        let stated = words(&readme);
+        assert_states(
+            &format!("tools/{tool}/README.md"),
+            &stated,
+            &[
+                &format!(
+                    "`tests/fixtures/expected/` holds the reference bytes of {runs} runs, made \
+                     by perl 5.34.0 with {modules}, and `cargo test` holds the binary to them."
+                ),
+                "**Where the tool does not write what Perl writes.** A reference run that meets \
+                 one of these cases holds the tool's bytes for it",
+            ],
+        );
+        assert_states(&format!("tools/{tool}/README.md"), &stated, sentences);
+        let expected = root.join("tests/fixtures/expected");
+        let held = std::fs::read_dir(&expected)
+            .unwrap_or_else(|e| panic!("{}: {e}", expected.display()))
+            .filter(|entry| entry.as_ref().unwrap().path().is_dir())
+            .count();
+        assert_eq!(
+            held, runs,
+            "tools/{tool}/README.md counts {runs} reference runs and the root holds {held}"
+        );
+        let mut texts = vec![readme];
+        rust_files(&root.join("src"), &mut texts);
+        rust_files(&root.join("tests"), &mut texts);
+        for path in texts {
+            let text = words(&path);
+            for phrase in [
+                "bytes are not Perl's",
+                "Perl goes on in silence",
+                "under Perl the run",
+                "a Perl program",
+                "In Perl every transcript",
+                "Perl's `reftype`",
+                "Perl's lines under",
+                "the Perl manifest",
+                "as Perl's does",
+                "Perl hands the name",
+                "the Perl patterns",
+                "the Perl walk",
+                "Perl walks an array",
+                "which Perl does not look at",
+            ] {
+                assert!(
+                    !text.contains(phrase),
+                    "{} states {phrase:?}",
+                    path.display()
+                );
+            }
+        }
+    }
+}
+
+/// `tools/vep-storable-to-json` ends the run on a regulatory shard it refuses
+/// with one line that names the shard and then what is wrong in it (`fail` of
+/// `src/run.rs`, called with the shard's path first). After the shard the line
+/// names the feature by its stable id for an activity outside the five values,
+/// for a motif whose sequence does not fill its span and for a missing key a
+/// motif alone carries; the feature class and the key for a missing
+/// `stable_id`, `start`, `end` or `dbID`; the matrix's id and the shard that
+/// first carried it for a matrix that differs from that copy; and the part of
+/// another shape for a shard of another shape (`check_shape`, `feature`,
+/// `activity` and `binding_matrix` of `src/regulatory.rs`, `record` of
+/// `src/run.rs`). The README says so, each clause is held to the first line a
+/// reference run of the root holds on standard error, and a sentence that has
+/// every such message name the feature is refused.
+#[test]
+fn storable_converter_readme_says_what_the_message_of_a_refused_regulatory_shard_names() {
+    let root = format!(
+        "{}/../../tools/vep-storable-to-json",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let path = format!("{root}/README.md");
+    let text = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("{path}: {e}"))
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert_states(
+        "tools/vep-storable-to-json/README.md",
+        &text,
+        &[
+            "A shard of another shape, a feature without a required key, an activity outside the \
+             five values, a motif whose sequence does not fill its span, and a matrix that differs \
+             from an earlier copy under the same id each stop the run with a message that names \
+             the shard. After the shard, the message for an activity, for a span and for a missing \
+             key a motif alone carries names the feature by its stable id. For a missing key every \
+             feature carries, it names the feature class and the key; for a matrix, its id and the \
+             shard that holds the earlier copy; for a shape, the part of another shape (the image, \
+             a chromosome entry or a feature list).",
+        ],
+    );
+    assert!(
+        !text.contains("with a message that names the feature"),
+        "tools/vep-storable-to-json/README.md says every refusal of a regulatory shard names the \
+         feature"
+    );
+    for (run, reason) in [
+        ("reg-root-array", "invalid regulatory Storable image"),
+        (
+            "reg-chromosome-entry",
+            "invalid regulatory chromosome entry",
+        ),
+        ("reg-feature-list", "invalid regulatory feature list"),
+        ("reg-lacks-key", "RegulatoryFeature lacks dbID"),
+        ("reg-lacks-strand", "MotifFeature ENSM1 lacks strand"),
+        ("reg-lacks-score", "MotifFeature ENSM1 lacks score"),
+        (
+            "reg-lacks-sequence",
+            "MotifFeature ENSM1 lacks its sequence",
+        ),
+        (
+            "no-matrix",
+            "MotifFeature ENSM_NO_MATRIX lacks binding_matrix",
+        ),
+        (
+            "badactivity",
+            "RegulatoryFeature ENSR_SIXTH has activity 'UNKNOWN' in HepG2; expected one of \
+             ACTIVE, INACTIVE, NA, POISED, REPRESSED",
+        ),
+        (
+            "reg-span",
+            "MotifFeature ENSM1 has a sequence of 6 bases on a span of 11",
+        ),
+        (
+            "matrixdiffers",
+            "binding matrix ENSPFM0363 differs from its copy in \
+             matrixdiffers/21/45000001-46000000_reg.gz",
+        ),
+    ] {
+        let shard = format!("{run}/21/45000001-46000000_reg.gz");
+        let path = format!("{root}/tests/fixtures/expected/{run}/stderr");
+        let stderr = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
+        let line = format!("ERROR: [storable_to_json] {shard}: {reason}");
+        assert_eq!(stderr.lines().next(), Some(line.as_str()), "{path}");
+    }
+}
+
+/// A fatal error of `tools/vep-storable-to-json` is one line that opens
+/// `ERROR: [storable_to_json]` and exit code 1 (`fail` of `src/run.rs`, which
+/// ends the message with a line end). The two calls that end the run on a
+/// regulatory shard, in `collect_cell_types` and in `chromosome` of the same
+/// file, pass a message that ends with a line end of its own, so an empty line
+/// follows that line. The README says so, the sentence is held to every
+/// `stderr` file of the root's reference runs that holds such a line (an empty
+/// line after it where the message names a `_reg.gz` shard and nowhere else),
+/// and a sentence that gives every fatal error the one line alone is refused.
+#[test]
+fn storable_converter_readme_says_which_fatal_error_an_empty_line_follows() {
+    let root = format!(
+        "{}/../../tools/vep-storable-to-json",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let path = format!("{root}/README.md");
+    let text = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("{path}: {e}"))
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert_states(
+        "tools/vep-storable-to-json/README.md",
+        &text,
+        &[
+            "A fatal error is one line `ERROR: [storable_to_json] <message>`, followed by an \
+             empty line for a regulatory shard that cannot be converted, and exit code 1.",
+        ],
+    );
+    assert!(
+        !text.contains("`ERROR: [storable_to_json] <message>` and exit code 1"),
+        "tools/vep-storable-to-json/README.md gives every fatal error one line with nothing \
+         after it"
+    );
+    let expected = format!("{root}/tests/fixtures/expected");
+    let (mut followed, mut alone) = (0, 0);
+    for entry in std::fs::read_dir(&expected).unwrap_or_else(|e| panic!("{expected}: {e}")) {
+        let path = entry.unwrap().path().join("stderr");
+        // A reference run's standard error can hold bytes that are not UTF-8.
+        let stderr = std::fs::read(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+        let stderr = String::from_utf8_lossy(&stderr);
+        let Some(at) = stderr.find("ERROR: [storable_to_json] ") else {
+            continue;
+        };
+        let line = stderr[at..].lines().next().unwrap_or_default();
+        let after = &stderr[at + line.len()..];
+        if line.contains("_reg.gz: ") {
+            assert_eq!(after, "\n\n", "{}", path.display());
+            followed += 1;
+        } else {
+            assert_eq!(after, "\n", "{}", path.display());
+            alone += 1;
+        }
+    }
+    assert!(
+        followed > 0 && alone > 0,
+        "{expected}: {followed} runs refuse a regulatory shard and {alone} end on another fatal \
+         error"
+    );
+}
+
+/// `tools/vep-storable-to-json` writes every feature of a regulatory shard
+/// with the key `feature_type`, which holds the name of the feature class the
+/// feature's list stands under, `RegulatoryFeature` or `MotifFeature`:
+/// `feature` of `src/regulatory.rs` writes `kind` under that key for a feature
+/// of either class. The README names the key in both lists of keys with the
+/// value it holds, each list is held to the keys of every feature of its class
+/// in the regulatory shard of the reference run `regulatory`, and a list that
+/// opens with `stable_id` is refused. A regulatory feature whose cache entry
+/// gives no biotype is written without the key `biotype` (`feature` writes it
+/// under `if let Some`), as features of the reference run `regulatory-shapes`
+/// are; the list says so, and one that gives every such feature the key is
+/// refused.
+#[test]
+fn storable_converter_readme_lists_the_class_key_of_regulatory_and_motif_features() {
+    let root = format!(
+        "{}/../../tools/vep-storable-to-json",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let path = format!("{root}/README.md");
+    let text = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("{path}: {e}"))
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let path = format!(
+        "{root}/tests/fixtures/expected/regulatory/out/regulatory/21/45000001-46000000.json"
+    );
+    let shard = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
+    let shard: serde_json::Value =
+        serde_json::from_str(&shard).unwrap_or_else(|e| panic!("{path}: {e}"));
+    let features = shard
+        .as_array()
+        .unwrap_or_else(|| panic!("{path}: no list of features"));
+    let mut held = 0;
+    for (class, sentence, keys) in [
+        (
+            "RegulatoryFeature",
+            "A regulatory feature is `feature_type` (its feature class, `RegulatoryFeature`), \
+             `stable_id`, `start`, `end`, `dbid`, `biotype` where the cache gives one and \
+             `activity`: one letter per name of `cell_types`,",
+            &[
+                "feature_type",
+                "stable_id",
+                "start",
+                "end",
+                "dbid",
+                "biotype",
+                "activity",
+            ][..],
+        ),
+        (
+            "MotifFeature",
+            "A motif feature is `feature_type` (`MotifFeature`), `stable_id`, `start`, `end`, \
+             `dbid`, `strand`, `score`, `seq` and `matrix`, the stable id of its binding matrix;",
+            &[
+                "feature_type",
+                "stable_id",
+                "start",
+                "end",
+                "dbid",
+                "strand",
+                "score",
+                "seq",
+                "matrix",
+            ][..],
+        ),
+    ] {
+        assert_states("tools/vep-storable-to-json/README.md", &text, &[sentence]);
+        let mut listed = keys.to_vec();
+        for key in &listed {
+            assert!(
+                sentence.contains(&format!("`{key}`")),
+                "{sentence:?} lacks {key}"
+            );
+        }
+        listed.sort_unstable();
+        let of_the_class: Vec<&serde_json::Value> = features
+            .iter()
+            .filter(|feature| feature["feature_type"] == class)
+            .collect();
+        assert!(!of_the_class.is_empty(), "{path} holds no {class}");
+        for feature in &of_the_class {
+            let mut written: Vec<&str> = feature
+                .as_object()
+                .unwrap_or_else(|| panic!("{path}: a feature that is no object"))
+                .keys()
+                .map(String::as_str)
+                .collect();
+            written.sort_unstable();
+            assert_eq!(written, listed, "{path}: the keys of a {class}");
+        }
+        held += of_the_class.len();
+    }
+    assert_eq!(held, features.len(), "{path}: a feature of neither class");
+    for phrase in [
+        "A regulatory feature is `stable_id`",
+        "A motif feature is `stable_id`",
+    ] {
+        assert!(
+            !text.contains(phrase),
+            "tools/vep-storable-to-json/README.md states {phrase:?}, a list without \
+             `feature_type`"
+        );
+    }
+    let path = format!(
+        "{root}/tests/fixtures/expected/regulatory-shapes/out/regulatory/21/1-1000000.json"
+    );
+    let shard = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
+    let shard: serde_json::Value =
+        serde_json::from_str(&shard).unwrap_or_else(|e| panic!("{path}: {e}"));
+    let without_biotype = shard
+        .as_array()
+        .unwrap_or_else(|| panic!("{path}: no list of features"))
+        .iter()
+        .filter(|feature| feature["feature_type"] == "RegulatoryFeature")
+        .filter(|feature| feature.get("biotype").is_none())
+        .count();
+    assert!(
+        without_biotype > 0,
+        "{path}: every regulatory feature holds a biotype"
+    );
+    let every_feature = "`dbid`, `biotype` and `activity`";
+    assert!(
+        !text.contains(every_feature),
+        "tools/vep-storable-to-json/README.md states {every_feature:?}, a biotype on every \
+         regulatory feature"
+    );
+}
+
 /// `gff-gtf-transcript-source`: the `--gtf` source reads the ninth column
 /// through `GTF::get_attributes` (GTF.pm:116-136), which lists a key's values
 /// when the key is written twice after a defined value (:128-131); the source
 /// reads the list where it expects one value, so a symbol, biotype or protein
 /// identifier prints joined (Utils.pm:185-193 `convert_arrayref`), a version
-/// prints the list's address (OutputFactory.pm:1465, :1560-1565), a support
-/// level prints no TSL (:1609-1612) and a record or exon whose identifier or
+/// prints the list's address (OutputFactory.pm:1474, :1569-1574), a support
+/// level prints no TSL (:1618-1621) and a record or exon whose identifier or
 /// parent is the list is lost (GTF.pm:133-141, :156-158). The cache builder
 /// refuses the line, a documented intended divergence. The same page states
 /// the line-end reading: both engines read a tabix-indexed line without its
@@ -4127,7 +18828,7 @@ fn gtf_repeated_attribute_key_divergence_is_documented() {
     assert_page_states(
         "divergences/gtf-repeated-attribute-key.md",
         &[
-            "Ensembl VEP 116.2's `--gtf` source reads a key written twice on one line as a list of \
+            "Ensembl VEP 116.3's `--gtf` source reads a key written twice on one line as a list of \
              both values and, wherever it expects one value, prints the list joined by commas, \
              prints the list's memory address, or loses the record.",
             "`vep-cache-builder` refuses the line: `ERROR: [cache-builder] Failed to parse GTF: \
@@ -4137,7 +18838,7 @@ fn gtf_repeated_attribute_key_divergence_is_documented() {
              value. A key written bare and then with a value, `gene_id; gene_id \"G\"`, is one \
              value to both engines.",
             "On the record `tmprss3_codon6`, `21 42395401 G>A`, a `missense_variant` on that \
-             transcript, Ensembl VEP 116.2 reading the file through `--gtf` writes \
+             transcript, Ensembl VEP 116.3 reading the file through `--gtf` writes \
              `SYMBOL=TMPRSS3,OTHER` in every format.",
             "| `transcript_version` | transcript | `Feature` and the HGVSc reference name \
              `ENST00001113783.ARRAY(0xaaaafe585258)`, another address in the next run |",
@@ -4157,7 +18858,7 @@ fn gtf_repeated_attribute_key_divergence_is_documented() {
              reads `downstream_gene_variant` with `DISTANCE=324` in place of `missense_variant` |",
             "| `exon_id`, `ccds_id`, `protein_version` | exon, transcript, CDS | the control \
              file's rows |",
-            "Ensembl VEP 116.2 reading the file through `--gtf` keeps the blanks in the symbol and \
+            "Ensembl VEP 116.3 reading the file through `--gtf` keeps the blanks in the symbol and \
              writes `SYMBOL=TMPRSS3 `; vep-rs reads the line without the blanks that pad it and \
              writes `SYMBOL=TMPRSS3`.",
             "A file whose lines end in `\\r\\n` reads as one whose lines end in `\\n` on both \
@@ -4181,12 +18882,12 @@ fn gtf_repeated_attribute_key_divergence_is_documented() {
              version (and a protein identifier under its version flag) as the list's address, no \
              `TSL` for a support level, and loses the transcript or exon whose identifier or \
              parent the list was; vep-rs refuses to build a cache from the file, naming the line \
-             and the key | 3 · 0 of 964 table rows · 14 flag sets, 0 corpora | 116.2 |",
+             and the key | 3 · 0 of 1,928 table rows · 14 flag sets, 0 corpora | 116.3 |",
             "keep the blanks that pad a line's last attribute value when its pair closes without \
              `;`, so a symbol prints as `TMPRSS3 `, `TMPRSS3%20%20%20` in a VCF; a cache vep-rs \
              builds from the file reads the padded line as the unpadded one and prints `TMPRSS3`, \
-             the name the file encodes | 3 · 0 of 964 table rows · 14 flag sets, 0 corpora | \
-             116.2 |",
+             the name the file encodes | 3 · 0 of 1,928 table rows · 14 flag sets, 0 corpora | \
+             116.3 |",
         ],
     );
     assert_page_states(
@@ -4211,13 +18912,83 @@ fn gtf_repeated_attribute_key_divergence_is_documented() {
         &[
             "A byte that is not UTF-8 in a record is read as U+FFFD by `--regulatory_gff` and \
              printed so ([input bytes that are not UTF-8](divergences/non-utf8-input.md)), a type \
-             so read skipping its record with a warning, where `vep-cache-builder` refuses the \
-             file, naming the line.",
+             so read skipping its record with a warning.",
+            "`vep-cache-builder` skips a record of such a type too, whatever bytes its line \
+             holds, and refuses a record of a type it keeps whose line holds the byte, naming \
+             the line.",
         ],
     );
 }
 
-/// `gxf_malformed_coordinate_line_refused`: Ensembl VEP 116.2's `--gff`,
+/// A key whose declarations give different descriptions, in the entry
+/// `duplicate_output_column_collapsed`: `column_description` of `fields.rs`
+/// gives the key's one tab line the description of each declaration, the
+/// plugins' from the last loaded to the first and then the source's, where
+/// Tab.pm:149 reads the text of every line of the key from one hash in which
+/// the pair listed last stands; under `--most_severe` and `--summary` it gives
+/// the line that hash's one text: the source's, else that of the plugin loaded
+/// last. The runs of the rows of the first table of the page's section 4.3 are
+/// held by `tab_description_of_a_key_declared_more_than_once.rs`.
+#[test]
+fn a_key_whose_declarations_give_different_descriptions_is_documented() {
+    assert_page_states(
+        "divergences/duplicate-output-column.md",
+        &[
+            "Where the plugins and sources that declare a key outside Ensembl VEP's own fields give \
+             it different descriptions, the one description line carries each of them, or under \
+             `--most_severe` and `--summary` the one text Ensembl VEP prints",
+            "A key no flag describes takes its text from one hash of the plugin and custom pairs \
+             (149), where the pair listed last stands.",
+            "Ensembl VEP 116.3's tab header gives every line of the key one of them, the source's or \
+             else the last plugin's, which is false of a row whose cell holds another \
+             declaration's value.",
+            "vep-rs's one line carries every declaration's description, joined by `; `, except under \
+             `--most_severe` and `--summary`.",
+            "| REVEL and the source | `## REVEL : [PATH]/site.vcf.gz`, twice | `## REVEL : Rare \
+             Exome Variant Ensemble Learner; [PATH]/site.vcf.gz`, once |",
+            "| TranscriptAnnotator, then CADD | `## CADD_PHRED : <CADD's text>`, twice | `## \
+             CADD_PHRED : <CADD's text>; column from <table>`, once |",
+            "| CADD, then TranscriptAnnotator | `## CADD_PHRED : column from <table>`, twice | `## \
+             CADD_PHRED : column from <table>; <CADD's text>`, once |",
+            "| REVEL and the source | `ENST00000284987` | `0.176`, REVEL's score |",
+            "| REVEL and the source | the other five | `site_1`, the source's record |",
+            "So a key declared twice is described by its last declaration: the source's where a \
+             source declares it, else the last plugin's.",
+            "vep-rs writes them in the order one value stands over another in a cell: the last \
+             plugin first, then each plugin before it, back to the first, then the source.",
+            "Under `--most_severe` and `--summary` neither engine writes a plugin's value on a row: \
+             Ensembl VEP runs no plugin there (`OutputFactory.pm` line 387).",
+            "vep-rs prints that one description there, as Ensembl VEP does.",
+            "| REVEL and the source, under `--most_severe` or `--summary` | `## REVEL : \
+             [PATH]/site.vcf.gz`, twice | `## REVEL : [PATH]/site.vcf.gz`, once |",
+            "| TranscriptAnnotator, then CADD, under `--most_severe` | `## CADD_PHRED : <CADD's \
+             text>`, twice | `## CADD_PHRED : <CADD's text>`, once |",
+            "| CADD, then TranscriptAnnotator, under `--most_severe` | `## CADD_PHRED : column from \
+             <table>`, twice | `## CADD_PHRED : column from <table>`, once |",
+            "A column named as one of Ensembl VEP's own fields, a default column or a field one of \
+             its flags adds, keeps that field's description in both engines, its flag on or off, \
+             so the two do not differ there (sections 1 and 2). Equal descriptions print once \
+             (section 3).",
+            "| TranscriptAnnotator, then CADD with no row | `## CADD_PHRED : <CADD's text>`, twice | \
+             `## CADD_PHRED : <CADD's text>; column from <table>`, once |",
+            "| TranscriptAnnotator, then CADD with no row | `ENST00000618007` | `7.5`, the table's \
+             cell |",
+        ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "vep-rs lists the column once, and where the plugins and sources that declare a key \
+             outside Ensembl VEP's own fields give it different descriptions (two plugins that \
+             write one key, a `--custom` short name that is a plugin's key) its one tab \
+             description line carries each, where every such line of Ensembl VEP's carries the \
+             last declaration's, except under `--most_severe` and `--summary`, where no plugin \
+             writes a row and both print the last declaration's",
+        ],
+    );
+}
+
+/// `gxf_malformed_coordinate_line_refused`: Ensembl VEP 116.3's `--gff`,
 /// `--gtf`, `--regulatory_gff` and `--custom` GFF sources read the records the
 /// `tabix` index returns (BaseGXF.pm:211, 222-237; RegFeat.pm:291-325), and
 /// the release's own `tabix` (htslib 1.9, `tbx.c:95,105,235-236`) indexes a
@@ -4230,7 +19001,7 @@ fn gtf_repeated_attribute_key_divergence_is_documented() {
 /// at the first kept line with such a coordinate and at any line whose start
 /// or end no number leads or whose end is below zero, naming the file, the
 /// line, the column and the value; `--regulatory_gff` refuses the record, and
-/// such a start or end on a line it skips, when its chromosome is first read;
+/// such a start or end on a line it skips, before the output file is created;
 /// a `--custom` source refuses the index a line at the file's head bloats,
 /// reads a start or end as Perl reads it, an `exact` VCF match aside, and
 /// lists no window whose end the index build fails; a zero-padded column is
@@ -4306,7 +19077,7 @@ fn gxf_malformed_coordinate_line_refused_divergence_is_documented() {
              leads | lists no such window, and loses the window after it for a record that \
              listed one before it | lists no such window, and every window after it; at the \
              file's head the line leaves the index of section 5 |",
-            "its `--custom` sources take the number Perl reads, `exact` VCF matches aside.",
+            "its `--custom` sources take Perl's number, an `exact` VCF match the text.",
             "| `1e2`, an exponent (`+1e2`, `1.5e2`, `2000e-1`) | index reader: the integer that \
              leads, 1 (2000 for `2000e-1`); Perl: the number spelled, 100 (150, 200), so a \
              promoter window runs from 100 for the records the index returns it to | builder and \
@@ -4330,6 +19101,40 @@ fn gxf_malformed_coordinate_line_refused_divergence_is_documented() {
              is `xyz` or `-9` | loses the records after it in its block, exit 0 (section 6) | \
              refuses the file at run time, `the end of exon record <ID> of chromosome 21 is not \
              a whole number: xyz`, and at the bake |",
+            "| a `--regulatory_gff` line that opens with a tab, or with white space and a tab, \
+             indexed as written behind a record at its sequence's first base | writes the \
+             file's other rows, exit 0: `tabix` fails the line's parse and files it there, and \
+             no query returns it | refuses the file at run time, `the start of a record of type \
+             Ensembl of chromosome 21 is not a whole number: enhancer`, the source column read \
+             as the type, and at the bake |",
+            "| a `--regulatory_gff` record whose start or end a NUL byte ends | builds the \
+             feature on the digits, with Perl's `isn't numeric` warning | refuses the record, \
+             as for `100x` (section 8) |",
+            "| a `--regulatory_gff` record whose start or end holds a NUL byte among its digits \
+             | writes no row for the record: `tabix` ends the column at the byte and files the \
+             record where no query returns it | refuses the record |",
+            "| a `--regulatory_gff` line of any type with a NUL byte in its sequence name or its \
+             source, or inside its type, indexed as written behind a record at its sequence's \
+             first base | writes the file's other rows and none for the line, exit 0: `tabix` \
+             ends a column at the byte, reads the type or its tail where a start stands and \
+             fails the line, and no query returns it | refuses the file at run time, `the start \
+             of enhancer record <ID> of chromosome 21 is not a whole number: enhancer`, and at \
+             the bake: both read the start where `tabix` reads one |",
+            "| a `--regulatory_gff` line of any type whose start or end a NUL byte leads | as for \
+             a start `abc` or an end `xyz`: `tabix` reads an empty column, and `strtol` stops \
+             at the byte | refuses the file at run time and at the bake, naming the empty \
+             column |",
+            "| a `--regulatory_gff` line whose every column a NUL byte ends, of any type, numbers \
+             in its fourth and fifth | skips it, `Ignoring '' feature type`, a record it would \
+             state lost | matched: skipped at run time and at the bake; with a start no number \
+             leads, refused by both |",
+            "| a `--regulatory_gff` record of nine columns whose sequence name ends in three NUL \
+             bytes before a source that is a number | builds the feature where a query reaches \
+             the base `tabix` files the line at, the source's number: `tabix` reads the name up \
+             to its first NUL byte, and the source reads the record the index returns whatever \
+             its first column (`RegFeat.pm`, lines 311-315) | passes over the line at run time \
+             and skips it at the bake: the sequence name as written is no chromosome's, as on \
+             the line whose every column a NUL byte ends |",
             "| a `--custom` GFF window, BED record or VCF row whose start is `-5` | \
              lists it from the sequence's first base to its end, under the number Perl reads | \
              matched: lists the same record under the same number |",
@@ -4339,7 +19144,7 @@ fn gxf_malformed_coordinate_line_refused_divergence_is_documented() {
              [`tabix_row_with_an_end_below_its_start`](tabix-row-with-an-end-below-its-start.md)'s.",
             "htslib 1.22.1's `tabix` refuses a column no number leads and an end below its start \
              with exit 1, so a file indexed with it meets the refusal before either engine runs.",
-            "Ensembl VEP 116.2 reading the file through `--gff` writes `5_prime_UTR_variant` and \
+            "Ensembl VEP 116.3 reading the file through `--gff` writes `5_prime_UTR_variant` and \
              `HGVSc=ENST00001113783.1:c.-78C>T`, where the released file gives \
              `missense_variant` and `c.17C>T`; vep-rs refuses to build a cache from the file at \
              that CDS line.",
@@ -4348,7 +19153,7 @@ fn gxf_malformed_coordinate_line_refused_divergence_is_documented() {
              line |",
             "writing `5_prime_UTR_variant` and `HGVSc=ENST00001113783.1:c.-77C>T` for \
              `tmprss3_codon6`, exit 0; vep-rs refuses the build at the line.",
-            "Ensembl VEP 116.2 builds the transcript without those exons and dies under its CDS, \
+            "Ensembl VEP 116.3 builds the transcript without those exons and dies under its CDS, \
              `Can't call method \"seq\" on an undefined value at .../Bio/EnsEMBL/Transcript.pm \
              line 828`, exit 255; vep-rs refuses the build at the line.",
             "A `five_prime_UTR` line with the same end, a type the model skips, kills Ensembl \
@@ -4383,8 +19188,8 @@ fn gxf_malformed_coordinate_line_refused_divergence_is_documented() {
              a comment: skips it and reads the records behind it |",
             "| the first line beginning with `>` that a sequence follows: the next line that is \
              neither blank nor a comment exists and has fewer than four columns, or a start or \
-             end `tabix` fails; a column ends at a tab, here and in every row, where `tabix` \
-             ends one at a NUL byte too; a line longer than 16777216 bytes is a sequence's only \
+             end `tabix` fails; a column ends at a tab or at a NUL byte, here and in every \
+             row, as `tabix` ends one; a line longer than 16777216 bytes is a sequence's only \
              where no tab stands in it, its 16777217th byte aside: one in which a tab stands \
              elsewhere opens no section and is refused for its length, as on any line of the \
              file | fails the `>` line's parse or, where it can parse it, places it as a \
@@ -4423,7 +19228,7 @@ fn gxf_malformed_coordinate_line_refused_divergence_is_documented() {
              follows.",
             "vep-rs refuses to open the source, since the index decompresses past its \
              268435456-byte bound, and writes no row.",
-            "With the enhancer's end rewritten `xyz`, Ensembl VEP 116.2 loses it and the enhancer \
+            "With the enhancer's end rewritten `xyz`, Ensembl VEP 116.3 loses it and the enhancer \
              after it in its block, writing `intergenic_variant` alone for `in_lost` and \
              `in_last`, exit 0; vep-rs refuses the file, naming the record.",
             "ERROR: [cache] reg_start_zero.gff3.gz: the coordinates 0-5014200 of enhancer record \
@@ -4491,9 +19296,11 @@ fn gxf_malformed_coordinate_line_refused_divergence_is_documented() {
         "regulatory.md",
         &[
             "A record whose start or end is not a whole number, whose start is 0 or whose end is \
-             below its start stops the run when its chromosome is first read, after the output \
-             file is opened, naming the record and the file. So does any other line whose start \
-             or end no number leads or whose end is below zero. A start or end no number leads \
+             below its start stops the run before the output file and the statistics report \
+             exist, naming the record and the file. So does any other line whose start or end \
+             no number leads or whose end is below zero. Every record of the files is checked, \
+             on every chromosome they list, so a record on a chromosome the input never names \
+             stops the run too. A start or end no number leads \
              at the file's first line leaves an index vep-rs refuses as malformed; such a start \
              on a later sequence leaves none. Ensembl VEP reads on past a line its \
              `tabix` could not place and, when the end was the fault, loses the later records \
@@ -4505,7 +19312,7 @@ fn gxf_malformed_coordinate_line_refused_divergence_is_documented() {
         "intended-divergences.md",
         &[
             "[`gxf_malformed_coordinate_line_refused`](divergences/gxf-malformed-coordinate-line-refused.md) | \
-             Ensembl VEP 116.2's `--gff`, `--gtf`, `--regulatory_gff` and `--custom` GFF sources \
+             Ensembl VEP 116.3's `--gff`, `--gtf`, `--regulatory_gff` and `--custom` GFF sources \
              read the records the release's own `tabix` indexes",
             "and the sources place a CDS line by its start alone, whatever exon its span leaves, \
              so the model is built without the line or on the span as written",
@@ -4514,10 +19321,729 @@ fn gxf_malformed_coordinate_line_refused_divergence_is_documented() {
             "and at any line whose start or end no number leads or whose end is below zero, \
              refuses such a `--regulatory_gff` record or line at run time",
             "decimal; a skipped-type line the index build parses is matched |",
-            "| 3 · 0 of 28,494 table rows · 21 flag sets, 0 corpora | 116.2 | [A GFF3 or GTF line \
+            "| 3 · 0 of 29,458 table rows · 26 flag sets, 0 corpora | 116.3 | [A GFF3 or GTF line \
              whose coordinates are malformed](divergences/gxf-malformed-coordinate-line-refused.md) |",
         ],
     );
+}
+
+/// `gxf_malformed_coordinate_line_refused`: the page counts the lines that
+/// could carry the shape among the feature lines of the committed GTF,
+/// promoter GFF and regulatory GFF files, the lines that are no comment,
+/// which the entry's index row counts as table rows. Five of the six files
+/// hold comment lines, so the count of their lines is a larger figure, and a
+/// page that gives the feature lines' count as the lines' is refused. Both
+/// counts are read from the files.
+#[test]
+fn gxf_malformed_coordinate_page_counts_the_feature_lines_of_the_committed_files() {
+    use std::io::Read;
+    const PAGE: &str = "divergences/gxf-malformed-coordinate-line-refused.md";
+    let (mut lines, mut feature_lines) = (0, 0);
+    for file in [
+        "GRCh38-gene-model-beside-cache/chr21_genes.gtf.gz",
+        "GRCh38-custom/custom/promoters.gff.gz",
+        "GRCh38-regulatory-gff/gff/EMARs.gff.gz",
+        "GRCh38-regulatory-gff/gff/motif_features.gff3.gz",
+        "GRCh38-regulatory-gff/gff/regulatory_features.gff3.gz",
+        "GRCh38-regulatory-gff/gff/regulatory_features.unnamed-chr21.gff3.gz",
+    ] {
+        let path = format!(
+            "{}/../../tests/golden/116/{file}",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let bytes = std::fs::read(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
+        let mut text = String::new();
+        flate2::read::MultiGzDecoder::new(&bytes[..])
+            .read_to_string(&mut text)
+            .unwrap_or_else(|e| panic!("{path}: {e}"));
+        lines += text.lines().count();
+        feature_lines += text.lines().filter(|line| !line.starts_with('#')).count();
+    }
+    assert_eq!((lines, feature_lines), (28_505, 28_494));
+    assert_page_states(
+        PAGE,
+        &[
+            "None of the 28,494 feature lines of the committed GTF, promoter and regulatory GFF \
+             files carries it",
+        ],
+    );
+    let page = page_text(PAGE)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let refused = "None of the 28,494 lines of the committed GTF";
+    assert!(!page.contains(refused), "docs/{PAGE} states {refused:?}");
+}
+
+/// `stats_existing_variants_check_frequency`: under `--check_frequency` Ensembl
+/// VEP reads every variant's frequency data with a `foreach` over its list of
+/// known variants, which creates the list, empty, where there was none
+/// (BaseCacheVariation.pm:316-317, :195), and its report counts a variant as
+/// existing when the list is a true value (Stats.pm:244), so the row counts
+/// every processed variant. `crates/vep-cli/tests/stats_existing_variants.rs`
+/// holds vep-rs's rows, and `tools/vep-stats-compare` holds the row of two
+/// reports to the class: the page states its rule and names no row label for
+/// `--mask-row`.
+#[test]
+fn stats_existing_variants_check_frequency_divergence_is_documented() {
+    assert_page_states(
+        "divergences/stats-existing-variants-check-frequency.md",
+        &[
+            "Under `--check_frequency`, the `Novel / existing variants` row of Ensembl VEP's \
+             statistics report counts every variant the run processes as existing, whether or \
+             not the cache holds a known variant at its position.",
+            "vep-rs counts a processed variant as existing when one of its alleles has a \
+             co-located known variant, with `--check_frequency` and without it.",
+            "`Bio/EnsEMBL/VEP/Stats.pm`, line 244, `log_VariationFeature`: the count rises when \
+             the variant holds the list, and a list is true whether or not it is empty.",
+            "On `21 30107044 . T C`, which has a known variant at its position, and \
+             `21 33030010 . A G`, which has none, Ensembl VEP 116.3 prints `0 (0.0) / 2 (100.0)` \
+             under `--check_frequency` and `1 (50.0) / 1 (50.0)` under `--check_existing` alone.",
+            "vep-rs prints `1 (50.0) / 1 (50.0)` in both runs.",
+            "Novel / existing variants 0 (0.0) / 2 (100.0)",
+            "Novel / existing variants 1 (50.0) / 1 (50.0)",
+            "| `--check_frequency`, the second record alone | `0 (0.0) / 1 (100.0)` | `-` |",
+            "| `--check_frequency`, the corpus's 15 records | `0 (0.0) / 11 (100.0)` | \
+             `1 (9.1) / 10 (90.9)` |",
+            "The repository's comparison of two statistics reports, `tools/vep-stats-compare`, \
+             holds the row to this class.",
+            "The rule applies where Ensembl VEP's report names `--check_frequency` or \
+             `--filter_common` in its `Command line options` row and its \
+             `Novel / existing variants` row counts every one of its `Variants processed` as \
+             existing.",
+            "vep-rs's row then agrees when it is `-`, or a split whose two counts sum to that \
+             total, each with its percentage of the total at one decimal.",
+            "Any other value is a difference, every other row and section is compared as \
+             written, and the comparison's report lists the row under `documented` with the \
+             class's name.",
+        ],
+    );
+    let page = page_text("divergences/stats-existing-variants-check-frequency.md");
+    for denial in ["--mask-row", "sets that row's value aside"] {
+        assert!(
+            !page.contains(denial),
+            "docs/divergences/stats-existing-variants-check-frequency.md states {denial:?}"
+        );
+    }
+    assert_page_states(
+        "intended-divergences.md",
+        &["[`stats_existing_variants_check_frequency`]\
+             (divergences/stats-existing-variants-check-frequency.md) | Under \
+             `--check_frequency`, Ensembl VEP's frequency routine leaves an empty list of known \
+             variants on a variant that has none, and its statistics report counts the list's \
+             presence, so `Novel / existing variants` counts every processed variant as \
+             existing; vep-rs counts the variants a known variant is co-located with, as both \
+             engines do without the flag | 2 · 5 of 511 flag sets · 5 flag sets, 2 corpora | \
+             116.3 |"],
+    );
+}
+
+/// The golden harness compares a manifest run's `stats_file` as
+/// `tools/vep-stats-compare` compares two reports, two rules excepted: the
+/// tool holds the `Novel / existing variants` row of a run under a frequency
+/// check to `stats_existing_variants_check_frequency` and a key of
+/// `[Consequences (all)]` that names no consequence type, in a run under a
+/// `--custom` source keyed `Consequence`, to
+/// `stats_consequences_custom_key_named_consequence`, and
+/// `compare_summary_sections` compares both as written. `CONTRIBUTING.md`,
+/// `scripts/concordance/README.md` and the doc comments of the harness's
+/// comparison and of its test name the exception. The two reports of the
+/// tool's case `frequency_check_sets_the_row_aside`, and those of its case
+/// `custom_key_named_consequence_sets_the_name_aside`, which the tool reads
+/// green with the row or the key set aside, differ under the harness on that
+/// row or that key alone.
+#[test]
+fn golden_harness_statistics_comparison_names_the_rules_the_tool_alone_holds() {
+    let root = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
+    let read = |path: &str| -> String {
+        std::fs::read_to_string(format!("{root}/{path}")).unwrap_or_else(|e| panic!("{path}: {e}"))
+    };
+    let fixtures = "tools/vep-stats-compare/tests/fixtures";
+    assert_states(
+        &format!("{fixtures}/cases.tsv"),
+        &read(&format!("{fixtures}/cases.tsv")),
+        &["frequency_check_sets_the_row_aside\t0\tbytes\t--expected\t\
+           tests/fixtures/frequency_expected.summary.log\t--actual\t\
+           tests/fixtures/frequency_actual.summary.log\t"],
+    );
+    assert_eq!(
+        read(&format!(
+            "{fixtures}/expected/frequency_check_sets_the_row_aside.stdout"
+        )),
+        "stats: green\n  [General statistics]: Novel / existing variants set aside as \
+         stats_existing_variants_check_frequency\n"
+    );
+    assert_states(
+        &format!("{fixtures}/cases.tsv"),
+        &read(&format!("{fixtures}/cases.tsv")),
+        &[
+            "custom_key_named_consequence_sets_the_name_aside\t0\tbytes\t--expected\t\
+           tests/fixtures/consequence_key_expected.summary.log\t--actual\t\
+           tests/fixtures/consequence_key_actual.summary.log\t",
+        ],
+    );
+    assert_eq!(
+        read(&format!(
+            "{fixtures}/expected/custom_key_named_consequence_sets_the_name_aside.stdout"
+        )),
+        "stats: green\n  [Consequences (all)]: exact_3 set aside as \
+         stats_consequences_custom_key_named_consequence\n"
+    );
+    let exception = "its rules for the two documented differences excepted";
+    assert_eq!(
+        common::compare_summary_sections(
+            &read(&format!("{fixtures}/consequence_key_expected.summary.log")),
+            &read(&format!("{fixtures}/consequence_key_actual.summary.log")),
+        ),
+        "  [Consequences (all)]: MISSING in vep-rs: exact_3\t9\n",
+        "the harness's comparison of the key moved: CONTRIBUTING.md, \
+         scripts/concordance/README.md and two doc comments state {exception:?}"
+    );
+    assert_eq!(
+        common::compare_summary_sections(
+            &read(&format!("{fixtures}/frequency_expected.summary.log")),
+            &read(&format!("{fixtures}/frequency_actual.summary.log")),
+        ),
+        "  [General statistics]: Novel / existing variants: expected \"0 (0.0) / 11 (100.0)\", \
+         vep-rs \"1 (9.1) / 10 (90.9)\"\n",
+        "the harness's comparison of the row moved: CONTRIBUTING.md, \
+         scripts/concordance/README.md and two doc comments state {exception:?}"
+    );
+    let collapsed = |text: &str| text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let guide = collapsed(&read("CONTRIBUTING.md"));
+    assert_states(
+        "CONTRIBUTING.md",
+        &guide,
+        &[
+            "which the harness compares with the run's as `tools/vep-stats-compare` does, its \
+             rules for the two documented differences excepted: the volatile rows by key \
+             alone, the paths masked, every chart section as a set.",
+        ],
+    );
+    assert!(
+        !guide.contains("as `tools/vep-stats-compare` does: the volatile rows"),
+        "CONTRIBUTING.md says the harness compares as the tool does and names no exception"
+    );
+    assert!(
+        !guide.contains("its rule for the documented row"),
+        "CONTRIBUTING.md names one documented row where the tool holds two differences"
+    );
+    assert_states(
+        "scripts/concordance/README.md",
+        &collapsed(&read("scripts/concordance/README.md")),
+        &[
+            "the golden harness applies the same rules, those of the two documented \
+             differences excepted, to a manifest run's `stats_file`",
+        ],
+    );
+    // A doc comment as one line: the comment markers dropped, the whitespace collapsed.
+    let doc_text = |path: &str| -> String {
+        let text = read(path);
+        let lines: Vec<&str> = text
+            .lines()
+            .filter_map(|line| line.trim_start().strip_prefix("///"))
+            .collect();
+        collapsed(&lines.join(" "))
+    };
+    for (path, opening) in [
+        (
+            "crates/vep-cli/tests/common/mod.rs",
+            "Compares two `--stats_text` reports as `tools/vep-stats-compare` does, ",
+        ),
+        (
+            "crates/vep-cli/tests/cli_run_control.rs",
+            "with the reference's as `tools/vep-stats-compare` does, ",
+        ),
+    ] {
+        assert_states(path, &doc_text(path), &[&format!("{opening}{exception}")]);
+    }
+}
+
+/// `stats_consequences_custom_key_named_consequence`: under a `--custom` VCF
+/// source of `type=exact` keyed `Consequence`, Ensembl VEP counts every item of
+/// the row's `Consequence` list (`Stats.pm:282`), the names of the allele's
+/// source records among them (`OutputFactory.pm:1301`), so its report lists a
+/// record's name in `[Consequences (all)]`; vep-rs counts the rows' terms
+/// alone; a documented intended divergence.
+#[test]
+fn stats_consequences_custom_key_named_consequence_divergence_is_documented() {
+    assert_page_states(
+        "divergences/stats-consequences-custom-key-named-consequence.md",
+        &[
+            "the `[Consequences (all)]` section of Ensembl VEP's statistics report counts the \
+             name of each matching source record as a consequence type, once for each output \
+             row of the allele the record names. The name is the ID of the record's line. \
+             vep-rs counts the consequence terms of the run's rows and nothing else.",
+            "`Bio/EnsEMBL/VEP/Stats.pm`, line 282, `log_VariationFeatureOverlapAllele`: every \
+             item of the list is counted as a consequence type.",
+            "Ensembl VEP 116.3 writes the line `exact_2 1` above `intergenic_variant 2` in \
+             `[Consequences (all)]` of a default, tab or VCF run. In a JSON run it writes the \
+             term's line alone. vep-rs writes the term's line alone in all four formats",
+            "The cache's region file for bases 5,000,001 to 6,000,000 of chromosome 21 holds 71 \
+             transcripts. None lies within 5,000 bases of position 5380280",
+            "Ensembl VEP 116.3 writes `exact_3 9` in `[Consequences (all)]` of a tab run: one \
+             count for each of the allele's nine rows.",
+            "A line of `[Consequences (all)]` that Ensembl VEP's report alone holds, with an \
+             integer as its count, is then set aside when its name is no consequence type in \
+             any vocabulary `--terms` chooses: `SO`, `display` or `NCBI`.",
+            "A source record whose name spells a consequence type, `missense_variant` say, \
+             raises that type's count in Ensembl VEP's section.",
+            "Ensembl VEP's tab and VCF outputs also list the key `Consequence` a second time, \
+             as one more column and one more `CSQ` field: the documented difference \
+             [`duplicate_output_column_collapsed`](duplicate-output-column.md).",
+        ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &["| [`stats_consequences_custom_key_named_consequence`]\
+             (divergences/stats-consequences-custom-key-named-consequence.md) | Under a \
+             `--custom` VCF source of `type=exact` whose key is `Consequence`, Ensembl VEP's \
+             statistics report counts the name of each matching source record in \
+             `[Consequences (all)]` as a consequence type, once for each row of the allele the \
+             record names, in a default, tab or VCF run and not in a JSON run; vep-rs counts \
+             the rows' consequence terms alone in every format | 3 · 0 of 511 flag sets · 19 \
+             flag sets, 0 corpora | 116.3 |"],
+    );
+}
+
+/// A transcript whose cache record names genetic code 26: Ensembl VEP reads
+/// the id under the last table of `Bio::Tools::CodonTable`, the standard
+/// residues (`CodonTable.pm:328-338`, `:412-460`), and writes leucine for
+/// `CTG`; vep-rs reads the codon as alanine, as NCBI's table gives the code;
+/// a documented intended divergence.
+#[test]
+fn pachysolen_nuclear_code_read_as_standard_divergence_is_documented() {
+    assert_page_states(
+        "divergences/pachysolen-nuclear-code-read-as-standard.md",
+        &[
+            "Ensembl VEP translates every codon under the standard code and reads `CTG` as \
+             leucine, where the code gives alanine.",
+            "For an id it lacks, the module warns `Not a valid codon table ID [26]` and \
+             translates under its last table, whose residues are the standard code's.",
+            "Where a stored residue is the one the module's last table gives its codon, vep-rs \
+             translates that codon again under code 26, and it keeps any other stored residue.",
+            "contig:1009 | synonymous_variant | 9 | 3 | L | ctG/ctA | LOW",
+            "contig:1009 | missense_variant | 9 | 3 | A/L | ctG/ctA | MODERATE",
+            "The rule sets aside both tuples of a pair whose sets differ by Ensembl VEP's \
+             `synonymous_variant` against vep-rs's `missense_variant` alone.",
+            "A row on which both engines write `missense_variant` has one tuple in both \
+             outputs, so it is no pair",
+        ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "| [`pachysolen_nuclear_code_read_as_standard`]\
+             (divergences/pachysolen-nuclear-code-read-as-standard.md) | On a transcript whose \
+             cache record names genetic code 26,",
+            "vep-rs reads `CTG` as alanine, as NCBI's genetic code table gives the code, and \
+             writes the missense change | 3 · 0 of 116,165 cache transcripts · 511 flag sets, 0 \
+             corpora | 116.3 |",
+            "For all but nineteen nothing is set aside in the concordance figures",
+            "For `splice_term_past_the_record_span`, `pachysolen_nuclear_code_read_as_standard`, \
+             `start_codon_removed_without_five_prime_utr`, [five coding-end]\
+             (concordance-provenance/116.2-divergence-classes.md#how-the-coding-ends-are-read) \
+             and [eight stop/start codon entries]",
+        ],
+    );
+    assert_page_states(
+        "concordance-provenance/116.2-divergence-classes.md",
+        &[
+            "Sixteen pair classes read the two rows of a pair.",
+            "- exactly one of the two codons is `CTG`, in any letter case;",
+        ],
+    );
+    for (path, gone) in [
+        (
+            "divergences/pachysolen-nuclear-code-read-as-standard.md",
+            "No comparison sets these rows aside",
+        ),
+        (
+            "intended-divergences.md",
+            "For all but six nothing is set aside",
+        ),
+        (
+            "concordance-provenance/116.2-divergence-classes.md",
+            "Six pair classes read the two rows of a pair",
+        ),
+    ] {
+        let text = page_text(path)
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(!text.contains(gone), "docs/{path} still says {gone:?}");
+    }
+}
+
+/// A deletion of whole codons from the first coding base of a transcript
+/// without a 5' UTR: Ensembl VEP's length test reads the start as altered and
+/// is set aside for an in-frame deletion (VariationEffect.pm:870, :1069),
+/// `_inv_start_altered` returns before its edit (:926) and the peptide test on
+/// the empty alternate peptide (:875), so the row carries no `start_lost`.
+/// vep-rs reads the edited coding sequence
+/// (`PerlCodingEval::start_codon_removed_without_five_prime_utr`), and the
+/// tests of `crates/vep-cli/tests/start_codon_removed_without_a_five_prime_utr.rs`
+/// hold the rows this page quotes.
+#[test]
+fn start_codon_removed_without_five_prime_utr_divergence_is_documented() {
+    assert_page_states(
+        "divergences/start-codon-removed-without-five-prime-utr.md",
+        &[
+            "On a transcript that holds no 5' UTR, Ensembl VEP writes `inframe_deletion` and no \
+             start term for it.",
+            "It writes `start_lost` unless they code methionine under the transcript's genetic \
+             code.",
+            "vep-rs makes the test where the coding sequence opens on a start codon that codes \
+             methionine.",
+            "That test reads the start as altered here, at line 1069, but the row is an in-frame \
+             deletion, so the line passes on.",
+            "Line 926 returns 0 before the edit when the transcript has no 5' UTR.",
+            "Line 875 returns 0 when the alternate peptide is empty, as it is when whole codons \
+             are removed.",
+            "| `start_codon_removed` | `ENST00000339944` | `inframe_deletion` | `p.Met1del` |",
+            "| `start_codon_removed` | `ENST00000339944` | `start_lost,inframe_deletion` | \
+             `p.Met1?` |",
+            "| `two_codons_removed` | `ENST00000339944` | `start_lost,inframe_deletion` | \
+             `p.MetAla1_?2` |",
+            "The five chromosome 21 record sets the index calls the cuts hold 229,923 such \
+             records among 15,646,481, the index's 14,695 per million.",
+            "A coding sequence that opens on a codon that is no methionine start codon of its \
+             genetic code, on a transcript without `cds_start_NF`",
+        ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "| [`start_codon_removed_without_five_prime_utr`]\
+             (divergences/start-codon-removed-without-five-prime-utr.md) | For a deletion of \
+             whole codons from the first base of a coding sequence that opens on its \
+             transcript's first base,",
+            "vep-rs reads the edited coding sequence and writes `start_lost` where it opened on \
+             a start codon that codes methionine and opens on no methionine codon afterwards | \
+             1 · 14,695 per million · no flag needed | 116.3 |",
+            "For all but nineteen nothing is set aside in the concordance figures",
+            "`start_codon_removed_without_five_prime_utr`, [five coding-end]\
+             (concordance-provenance/116.2-divergence-classes.md#how-the-coding-ends-are-read) \
+             and [eight stop/start codon entries]",
+        ],
+    );
+    assert_page_states(
+        "concordance-provenance/116.2-divergence-classes.md",
+        &[
+            "Sixteen pair classes read the two rows of a pair.",
+            "- [`start_codon_removed_without_five_prime_utr`]\
+             (../divergences/start-codon-removed-without-five-prime-utr.md): on a row of a \
+             deletion whose cDNA position and CDS position both start at 1",
+            "The fifteenth differs in `start_lost` on a row of a deletion of whole codons from the \
+             first coding base of a transcript without a 5' UTR.",
+        ],
+    );
+    for (path, gone) in [
+        (
+            "intended-divergences.md",
+            "For all but eleven nothing is set aside",
+        ),
+        (
+            "concordance-provenance/116.2-divergence-classes.md",
+            "Eight pair classes read the two rows of a pair",
+        ),
+    ] {
+        let text = page_text(path)
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(!text.contains(gone), "docs/{path} still says {gone:?}");
+    }
+}
+
+/// `total_length`, the JSON format: the end key of a position range. Under the
+/// flag OutputFactory.pm:1737, :1747 and :1751 at release/116.3 append the
+/// total after the range (`484-487/2674`), and OutputFactory/JSON.pm:335-337
+/// write the part after the hyphen under the end key only where it is all
+/// digits or holds a `?`, else the part before it, so the end key repeats the
+/// start and a range of unknown start loses both keys (:340-341). vep-rs
+/// writes the last position with its total. Row tests:
+/// `tests/total_length_json_range_end.rs`.
+#[test]
+fn total_length_json_range_end_divergence_is_documented() {
+    assert_page_states(
+        "divergences/total-length-json-range-end.md",
+        &[
+            "Under `--total_length`, Ensembl VEP 116.3's JSON output writes the first position \
+             of a cDNA, coding or protein position range under both the start key and the end \
+             key, and writes neither key for a range whose first position is unknown.",
+            "vep-rs writes the range's last position, with its total, under the end key.",
+            "`OutputFactory/JSON.pm`, line 337: the end key takes `$e` only when it is all \
+             digits or holds a `?`, else `$s`.",
+            "`total_length_json_range_end`: the `cdna_end`, `cds_end` or `protein_end` of a \
+             JSON consequence object under `--total_length`",
+            "\"cdna_start\":484,\"cdna_end\":484,",
+            "\"cdna_start\":484,\"cdna_end\":\"487/2674\",",
+            "\"cdna_end\":\"435/2674\",\"cds_end\":\"67/1602\",\"protein_end\":\"23/533\"",
+            "1,759,673 of the 15,646,481 records of the cuts carry it, 112,464 per million.",
+        ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "[`total_length_json_range_end`](divergences/total-length-json-range-end.md) | \
+             Under `--total_length`, Ensembl VEP 116.3's JSON output writes the first position \
+             of a cDNA, coding or protein position range under both the start and the end key",
+            "| 2 · 112,464 per million · 1 flag set, 142 corpora | 116.3 | [The end key of a \
+             position range in JSON under `--total_length`](divergences/total-length-json-range-end.md) |",
+        ],
+    );
+    assert_page_states(
+        "output/json.md",
+        &[
+            "A range with its total (`428-430/1200`) prints its start as the number `428` and \
+             its end as the string `\"430/1200\"`. Ensembl VEP prints `428` under both keys, an \
+             [intended divergence](../divergences/total-length-json-range-end.md).",
+        ],
+    );
+    // The sentence that would give the start at both ends as vep-rs's own output.
+    assert!(
+        !page_text("output/json.md").contains("prints its start, `428`, at both ends"),
+        "docs/output/json.md says a range prints its start at both ends"
+    );
+}
+
+/// LoFTEE's `NAGNAG_SITE` test reads the nine bases on the strand of the row's
+/// own transcript (`nagnag_site` in `loftee.rs`, held by
+/// `loftee_nagnag_site_follows_the_strand_of_each_rows_transcript` in
+/// `plugins_builtin.rs`), where Ensembl VEP's plugin keeps the first
+/// transcript's reading for the whole record (LoF.pm:489-494).
+#[test]
+fn loftee_nagnag_site_on_the_first_transcript_strand_is_documented() {
+    assert_page_states(
+        "divergences/loftee-nagnag-site-first-transcript-strand.md",
+        &[
+            "reads the nine bases around a splice-acceptor variant once per record, on the \
+             strand of the first transcript whose acceptor row it tests, and keeps them for the \
+             record's other transcripts",
+            "vep-rs reads the nine bases on each row's own strand",
+            "Ensembl VEP 116.3 flags both rows at `toy:400` and neither at `toy:699`",
+        ],
+    );
+    assert_page_states(
+        "plugins/loftee.md",
+        &[
+            "Six behaviours of the LoF plugin",
+            "`loftee_nagnag_site_first_transcript_strand`, tier 3",
+        ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &["[`loftee_nagnag_site_first_transcript_strand`](divergences/loftee-nagnag-site-first-transcript-strand.md)"],
+    );
+}
+
+/// An alternate allele whose known bases settle a stop codon before its first
+/// unknown base is translated, a gained stop codon or the transcript's own
+/// that an insertion keeps (`reading_unknown_bases` in `coding.rs`, held by
+/// `stop_codon_before_unknown_bases.rs` and
+/// `stop_codon_kept_before_unknown_bases.rs`), where Ensembl VEP reads no
+/// peptide for an allele that holds a letter other than A, C, G and T
+/// (TranscriptVariationAllele.pm:701). An allele written in an intron has its
+/// notation read where the 3' rule places it (`hgvs_protein` in `coding.rs`,
+/// held by `unknown_bases_notation_at_the_shifted_placement.rs`).
+#[test]
+fn stop_codon_settled_before_unknown_bases_is_documented() {
+    assert_page_states(
+        "divergences/stop-codon-settled-before-unknown-bases.md",
+        &[
+            "Ensembl VEP translates no allele that holds a letter other than A, C, G and T, so \
+             it writes no residues, no `stop_gained` and no HGVSp for it",
+            "vep-rs writes the row that every completion of the unknown bases shares",
+            "Where the stop codon is the transcript's own, kept at its place by an insertion, \
+             the term Ensembl VEP leaves out is `inframe_insertion`",
+            "takes `inframe_insertion` beside `stop_retained_variant` (section 3)",
+            "An allele the record writes in an intron is read there too, where the 3' rule \
+             places it in the coding sequence (section 2.1)",
+            "On a row of an allele written in an intron (section 2.1) only the HGVSp and the \
+             `HGVS_OFFSET` differ",
+            "On 14 rows of 2 more GRCh38 records and on 2 rows of 1 more GRCh37 record the \
+             allele is written in an intron",
+            "### 2.1 An allele the record writes in an intron",
+            "| first, whole codons | vep-rs | `p.Ser22_Pro23insGluTer` | 4 |",
+            "| second, a frameshift | vep-rs | `p.Pro23GlufsTer2` | 4 |",
+            "| third, the second completed | Ensembl VEP | `-` | 4 |",
+            "| fifth, reverse strand | vep-rs | `p.Leu216GlufsTer2` | -4 |",
+            "A row of section 2.1 has neither a `Codons` cell nor an HGVSc",
+            "Where a stop codon stands among the whole codons before the first codon that holds \
+             a letter other than A, C, G and T, it translates the allele as any other",
+            "`Bio/EnsEMBL/Variation/TranscriptVariationAllele.pm`, line 701, in `peptide`",
+            "| `stop_then_unknown_inframe` | `coding_sequence_variant` | `-` | `-` |",
+            "| `stop_then_unknown_inframe` | `stop_gained,inframe_insertion` | `-/E*XX` | \
+             `p.Asn141_Ile142insGluTer` |",
+            "| frameshift | vep-rs | `stop_gained,frameshift_variant` | `p.Ile142GlufsTer2` |",
+            "| shifted | vep-rs | `stop_gained,inframe_insertion` | `p.Ile142_Leu143insTer` |",
+            "| forward, seven bases | Ensembl VEP | `frameshift_variant` | `-` |",
+            "| forward, nine bases | Ensembl VEP | `coding_sequence_variant` | `-` |",
+            "| reverse, both | Ensembl VEP | `stop_retained_variant` | `-` |",
+            "| forward, both | vep-rs | `inframe_insertion,stop_retained_variant` | `p.Ter534=` |",
+            "| reverse, both | vep-rs | `inframe_insertion,stop_retained_variant` | `p.Ter461=` |",
+            "A stop codon that stands only after the unknown bases",
+            "A row to which a test of the start codon or of the stop codon gives its term",
+            "and `stop_retained_variant` on a span that replaces reference bases",
+            "A kept stop codon behind a codon that holds an unknown base",
+            "A kept stop codon where vep-rs does not compare the two proteins",
+            "A kept stop codon whose peptide is the stop alone",
+            "An allele with an unknown base in its last codons, where reference residues are \
+             compared with them",
+            "A stop codon that restates the protein's own end",
+            "Where that cut stops at an unknown base of the alternate allele beside a reference \
+             base",
+            "An HGVSp for an allele that is not inside one exon",
+            "The HGVSc. The completions share its positions and not its inserted bases",
+            "The plugin tuple scorer (`tools/vep-plugin-pairs`) takes a row by the format \
+             comparator's test of the `Codons` cell, the residues and the terms",
+            "it sets aside an `NMD` or LoFTEE field that vep-rs alone writes, where Ensembl \
+             VEP's terms keep the plugin out, under its class \
+             `plugin_value_follows_stop_codon_term_pair`",
+            "A plugin field both engines write stays a difference",
+            "Where Ensembl VEP writes `stop_retained_variant` without making its stop codon \
+             test, vep-rs writes the same terms in that term's place",
+            "On 36 of those rows of GRCh38 and 8 of GRCh37, on 6 and 4 records, Ensembl VEP \
+             writes `stop_retained_variant`",
+            "Each of the three takes a row of section 4 under this class as well",
+            "The class `stop_retained_without_stop_codon_test` takes no row on which vep-rs \
+             writes `stop_gained`",
+            "## 4. A row Ensembl VEP calls `stop_retained_variant`",
+            "30165952 - 13 = 30165939",
+            "| unknown | Ensembl VEP | `stop_retained_variant` | `-` |",
+            "| unknown | vep-rs | `stop_gained,frameshift_variant` | `p.Tyr223GlufsTer2` |",
+            "| completed | Ensembl VEP | `stop_gained,frameshift_variant` | \
+             `p.Tyr223GlufsTer2` |",
+            "vep-rs writes `stop_gained,frameshift_variant` on 22 and 7 of them, \
+             `stop_gained,inframe_insertion` on 13 and 1, and `stop_gained` alone on 1 row of \
+             GRCh38",
+        ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "[`stop_codon_settled_before_unknown_bases`](divergences/stop-codon-settled-before-unknown-bases.md)",
+            "no `inframe_insertion` beside a stop codon an insertion keeps",
+            "vep-rs writes the row every completion of the unknown bases shares | 1 · 0.26 per \
+             million · no flag needed | 116.3 |",
+            "For all but nineteen nothing is set aside in the concordance figures",
+            "and [eight stop/start codon entries]",
+        ],
+    );
+    assert_page_states(
+        "concordance-provenance/116.2-divergence-classes.md",
+        &[
+            "Sixteen pair classes read the two rows of a pair",
+            "[`stop_codon_settled_before_unknown_bases`](../divergences/stop-codon-settled-before-unknown-bases.md): \
+             on a row of an allele that holds an unknown base",
+            "In place of a `stop_retained_variant` the reference writes without its stop \
+             codon test, it stands with `frameshift_variant`, one of those three terms or \
+             alone",
+            "there vep-rs writes `inframe_insertion` beside `stop_retained_variant`",
+        ],
+    );
+}
+
+/// A row on which Ensembl VEP writes `stop_retained_variant` for a stop codon test it does
+/// not make and vep-rs writes `stop_gained`, for a stop codon the allele's known bases
+/// settle, is a row of `stop_codon_settled_before_unknown_bases`
+/// (`stop_codon_settled_before_unknown_bases_pair` in the three comparison tools). The page
+/// of `stop_retained_without_stop_codon_test` counts the rows left to its own class on the
+/// genome-wide ClinVar dataset, and neither it nor the page of
+/// `stop_codon_removed_without_stop_codon_test` states the counts that held those rows.
+#[test]
+fn untested_stop_retained_page_leaves_a_gained_stop_to_the_settled_stop_entry() {
+    let page = "divergences/stop-retained-without-stop-codon-test.md";
+    assert_page_states(
+        page,
+        &[
+            "One on which it writes `stop_gained` belongs to \
+             [`stop_codon_settled_before_unknown_bases`](stop-codon-settled-before-unknown-bases.md)",
+            "The engines differ in this entry's way on 272 rows of GRCh38 and 62 of GRCh37",
+            "vep-rs writes `coding_sequence_variant` in the term's place on 203 and 49 of them \
+             and `frameshift_variant` on 68 and 13",
+            "The three kinds sum to the class: 106 + 164 + 2 = 272 and 22 + 40 + 0 = 62",
+            "On 36 and 8 it writes `stop_gained`, rows of \
+             `stop_codon_settled_before_unknown_bases`",
+            "272 + 5,068 + 36 + 55 = 5,431 and 62 + 1,002 + 8 + 4 = 1,076",
+            "the class sets aside the 272 rows of GRCh38 and the 62 of GRCh37",
+            "`IMPACT` is set aside on 106 and 26 rows",
+            "`NMD` is set aside on 54 and 12 rows",
+            "LOFTEE's `LoF` is set aside on 54 rows of GRCh38",
+        ],
+    );
+    let removed = "divergences/stop-codon-removed-without-stop-codon-test.md";
+    assert_page_states(
+        removed,
+        &[
+            "That entry's class sets aside 272 and 62 rows in all",
+            "The 36 and 8 on which vep-rs writes `stop_gained` are rows of \
+             [`stop_codon_settled_before_unknown_bases`](stop-codon-settled-before-unknown-bases.md)",
+        ],
+    );
+    for (path, phrase) in [
+        (page, "308 rows of GRCh38"),
+        (page, "308 and 70"),
+        (page, "142 + 164 + 2"),
+        (page, "`IMPACT` is set aside on 142 and 34 rows"),
+        (removed, "308 and 70"),
+    ] {
+        let text = page_text(path)
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(
+            !text.contains(phrase),
+            "docs/{path} still states {phrase:?}"
+        );
+    }
+}
+
+/// The GERP table that the page of
+/// `loftee_gerp_walk_without_conservation_database` and the entry's
+/// reproduction build is made up, every base scoring 1, and both name it
+/// `GERP_scores.synthetic.txt.gz`: Ensembl VEP writes the run's command line,
+/// the `--plugin` value in it, into the header of its output
+/// (`OutputFactory/BaseTab.pm` line 134, `OutputFactory/VCF.pm` line 278) and
+/// into its statistics report (`Stats.pm` line 658), so an output of such a
+/// run names the table as made up.
+#[test]
+fn the_gerp_walk_page_and_reproduction_name_their_made_up_table_synthetic() {
+    let page_path = "divergences/loftee-gerp-walk-without-the-conservation-database.md";
+    let page = page_text(page_path);
+    assert_states(
+        &format!("docs/{page_path}"),
+        &page,
+        &[
+            "--plugin LoF,loftee_path:<loftee>,gerp_file:GERP_scores.synthetic.txt.gz,\
+             human_ancestor_fa:false,run_splice_predictions:0",
+            "| bgzip > GERP_scores.synthetic.txt.gz",
+            "tabix -s 1 -b 2 -e 2 GERP_scores.synthetic.txt.gz",
+            "--plugin LoF,gerp_file:GERP_scores.synthetic.txt.gz,human_ancestor_fa:false,\
+             run_splice_predictions:0",
+        ],
+    );
+    let entry = "loftee_gerp_walk_without_conservation_database";
+    let record = reproduction_record(entry);
+    assert_states(
+        &format!("the reproduction of {entry}"),
+        &record,
+        &[
+            r#"| bgzip > "$STAGE/GERP_scores.synthetic.txt.gz""#,
+            r#"tabix -s 1 -b 2 -e 2 "$STAGE/GERP_scores.synthetic.txt.gz""#,
+            "gerp_file:{stage}/GERP_scores.synthetic.txt.gz,human_ancestor_fa:false",
+        ],
+    );
+    for (what, text) in [
+        (format!("docs/{page_path}"), page),
+        (format!("the reproduction of {entry}"), record),
+    ] {
+        assert!(
+            !text.contains("GERP_scores.txt.gz"),
+            "{what} names a made-up GERP table without `synthetic`"
+        );
+    }
 }
 
 /// The index's count of the differences outside every class is its entry
@@ -4530,12 +20056,262 @@ fn the_index_counts_its_entries_outside_the_classes() {
         .lines()
         .filter(|line| line.starts_with("| [`"))
         .count();
-    assert_eq!(rows, 264, "entry rows of docs/intended-divergences.md");
+    assert_eq!(rows, 306, "entry rows of docs/intended-divergences.md");
     assert_page_states(
         "intended-divergences.md",
         &[
-            "Two hundred and forty-eight differences lie outside every class",
-            "Each of the two hundred and forty-eight [differences outside the classes]",
+            "Two hundred and ninety differences lie outside every class",
+            "Each of the two hundred and ninety [differences outside the classes]",
         ],
     );
+}
+
+/// UTRAnnotator declares that it needs the reference (`requires_reference_fasta`
+/// in `utr_annotator.rs`), so a run without one refuses it at load
+/// (`utrannotator_without_a_reference_warns_and_is_fatal_under_safe` in
+/// `cli_run_control.rs`), where Ensembl VEP's module prints a notice and
+/// writes its five fields from no sequence (UTRAnnotator.pm:88, 170-173,
+/// 291-298).
+#[test]
+fn utrannotator_without_a_reference_is_documented() {
+    assert_page_states(
+        "plugins/transcript-model.md",
+        &[
+            "A run without one refuses the plugin when it loads and goes on with no header line \
+             or row naming any of its five fields",
+            "`Failed to instantiate plugin UTRAnnotator: a reference FASTA is needed; pass \
+             --fasta`, a warning, or the run's error under `--safe`",
+            "Ensembl VEP's plugin prints a notice on standard output and runs on, under `--safe` \
+             too",
+        ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "[`utrannotator_without_reference`](plugins/transcript-model.md#utrannotator)",
+            "vep-rs refuses the plugin when it loads and the run goes on without it, its five \
+             fields absent from the header and the rows, or ends on the plugin's error under \
+             `--safe`, where Ensembl VEP's run goes on",
+        ],
+    );
+}
+
+/// The plugin support table words a data file's terms from the plugin's own
+/// text: the Terms column's definition; the EVE row, whose module carries a
+/// licence header (`EVE.pm` lines 1-16) and names no terms below it; and
+/// LoFTEE's GERP table of the older assembly, whose download the `master`
+/// branch's `README.md` names at lines 111-113 with no terms. No page of the
+/// table says what a data provider left unsaid.
+#[test]
+fn plugin_data_terms_are_worded_from_the_plugins_own_text() {
+    assert_page_states(
+        "plugins.md",
+        &[
+            "The Terms column states the data provider's licence and whether it permits \
+             commercial use, as the plugin or the provider states it; \"terms not stated by the \
+             plugin\" means the plugin's module names none.",
+            "| terms not stated by the plugin, whose licence header covers the module alone \
+             (`EVE.pm` lines 1-16) | GRCh38 | not ported | missense-only evolutionary scores, \
+             popEVE included since release 116; AlphaMissense covers missense pathogenicity |",
+            "on GRCh37 the bundle's GERP table, for which the plugin states no terms (the \
+             `master` branch's `README.md` lines 111-113 name its download alone), is not \
+             redistributed here, so the comparison with Ensembl VEP runs on genome-wide ClinVar, \
+             gnomAD v2.1.1 and 1000 Genomes Phase 3 with a synthetic GERP table and a synthetic \
+             conservation database;",
+        ],
+    );
+    assert_page_states(
+        "plugins/loftee.md",
+        &[
+            "| Builds | GRCh38, verified on real data; on GRCh37 the comparison with Ensembl VEP \
+             runs on genome-wide ClinVar, gnomAD v2.1.1 and 1000 Genomes Phase 3 with a \
+             synthetic GERP table and a synthetic conservation database, because the bundle's \
+             GERP table is not redistributed here |",
+        ],
+    );
+    let fixtures_readme = std::fs::read_to_string(format!(
+        "{}/../../scripts/fixtures/README.md",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .expect("scripts/fixtures/README.md");
+    let pages = [
+        ("docs/plugins.md", page_text("plugins.md")),
+        ("docs/plugins/loftee.md", page_text("plugins/loftee.md")),
+        ("scripts/fixtures/README.md", fixtures_readme),
+    ];
+    for (path, text) in pages {
+        let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        for claim in [
+            "neither names any",
+            "no data terms stated",
+            "without stated data terms",
+            "carries no licence text",
+        ] {
+            assert!(!text.contains(claim), "{path} states {claim:?}");
+        }
+    }
+}
+
+/// LoFTEE's page words the GERP file of GRCh37, which the tree does not
+/// redistribute, from the plugin's own source: the `master` branch names the
+/// file at `LoF.pm` line 132 and reads it with `tabix` at lines 138-141, and
+/// `gerp_dist.pl` lines 92-96 and 119-121 take the third tab-separated field
+/// of a row as one base's score. Neither a LoFTEE page nor the README of
+/// `vep-builtins` says in what form that file's download comes.
+#[test]
+fn the_loftee_page_words_the_grch37_gerp_file_from_the_plugins_source() {
+    assert_page_states(
+        "plugins/loftee.md",
+        &[
+            "per assembly: `GRCh38/` (GERP bigWig) or `GRCh37/` (GERP table), plus \
+             human_ancestor.fa |",
+            "None of these files needs converting. vep-rs reads the bgzipped \
+             `human_ancestor.fa.gz` through the `.fai` and `.gzi` beside it.",
+            "# GRCh37: the master branch reads its GERP file with tabix (LoF.pm lines # \
+             138-141), and a run names run_splice_predictions=0 or is refused",
+            "| `gerp_tabix` | both | GERP as a tabix-indexed TSV with its `.tbi` beside it, read \
+             as the `master` branch reads its GERP file with `tabix`: the third tab-separated \
+             field of each row a region returns is one base's score (`LoF.pm` lines 138-141; \
+             `gerp_dist.pl` lines 92-96 and 119-121). That file's default name is \
+             `GERP_scores.final.sorted.txt.gz` (`LoF.pm` line 132). Same filter, different \
+             on-disk format. Alias `gerp_scores`. Alias `gerp_file`, the `master` branch's own \
+             key. |",
+        ],
+    );
+    let builtins_readme = std::fs::read_to_string(format!(
+        "{}/../vep-builtins/README.md",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .expect("crates/vep-builtins/README.md");
+    assert_states(
+        "crates/vep-builtins/README.md",
+        &builtins_readme
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" "),
+        &[
+            "LoFTEE reads GERP from a tabix TSV on GRCh37 (`gerp_tabix=`) and from a bigWig on \
+             GRCh38 (`gerp_bigwig=`), the form each branch of Ensembl VEP's plugin reads \
+             (`LoF.pm` lines 138-141 of `master`, line 130 of `grch38`), or, when no GERP word \
+             is given,",
+        ],
+    );
+    let pages = [
+        ("docs/plugins.md", page_text("plugins.md")),
+        ("docs/plugins/loftee.md", page_text("plugins/loftee.md")),
+        (
+            "docs/plugins/loftee-grch37.md",
+            page_text("plugins/loftee-grch37.md"),
+        ),
+        ("crates/vep-builtins/README.md", builtins_readme),
+    ];
+    for (path, text) in pages {
+        let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        for claim in [
+            "used as shipped",
+            "ships GERP as a tabix",
+            "shipped in the upstream `master`",
+            "GRCh37 bundle ships",
+            "(GERP tabix TSV)",
+            "its upstream bundles ship",
+        ] {
+            assert!(!text.contains(claim), "{path} states {claim:?}");
+        }
+    }
+}
+
+/// Section 4 of LoFTEE's page gives the ancestral-allele routine at its lines
+/// on both branches of Ensembl VEP's LoF plugin: `grch38`, and `master`, the
+/// branch Ensembl VEP runs on GRCh37. The routine is the same text on both,
+/// fourteen lines apart: `LoF.pm` lines 312-313, 531 and 535-544 of `grch38`
+/// are lines 326-327, 545 and 549-558 of `master`. The section cites neither
+/// branch alone, and the `samtools` call the GRCh37 page cites at lines
+/// 552-553 lies inside the comparison's range on `master`.
+#[test]
+fn the_ancestral_allele_section_cites_the_routine_on_both_plugin_branches() {
+    let page = page_text("plugins/loftee.md");
+    let section = clause_between(
+        "docs/plugins/loftee.md",
+        &page,
+        "\n### 4. The ancestral-allele filter withheld",
+        "\n### 5. ",
+    )
+    .split_whitespace()
+    .collect::<Vec<_>>()
+    .join(" ");
+    assert_states(
+        "section 4 of docs/plugins/loftee.md",
+        &section,
+        &[
+            "**Where it is in Ensembl VEP's source** (`LoF.pm`, the `grch38` and `master` \
+             branches; `ensembl-vep` at release/116.3):",
+            "| The same statement of `LoF.pm` | On the `grch38` branch | On the `master` branch, \
+             which Ensembl VEP runs on GRCh37 |",
+            "| `run` pushes `ANC_ALLELE` | lines 312-313 | lines 326-327 |",
+            "| `check_for_ancestral_allele` tests the allele string | line 531 | line 545 |",
+            "| It compares the allele with the ancestral base | lines 535-544 | lines 549-558 |",
+        ],
+    );
+    for one_branch_alone in [
+        "(`LoF.pm`, the `grch38` branch;",
+        "`LoF.pm`, lines 312-313, `run`",
+        "`LoF.pm`, line 531, `check_for_ancestral_allele`",
+    ] {
+        assert!(
+            !section.contains(one_branch_alone),
+            "section 4 of docs/plugins/loftee.md states {one_branch_alone:?}"
+        );
+    }
+    assert_page_states(
+        "plugins/loftee-grch37.md",
+        &["`samtools` for a region under the name of the variant's sequence (`LoF.pm` lines 552-553)"],
+    );
+}
+
+/// The sources that name LoFTEE's GERP file of GRCh37 word it as the page
+/// does, from the plugin's own source (`LoF.pm` lines 132 and 138-141,
+/// `gerp_dist.pl` lines 92-96 and 119-121 of `master`), and none says in what
+/// form that file's download comes or what its rows hold. A source is read
+/// with its comment markers dropped and its whitespace runs collapsed, so a
+/// phrase wrapped over two comment lines is found.
+#[test]
+fn the_loftee_sources_word_the_grch37_gerp_file_from_the_plugins_source() {
+    let sources: [(&str, &[&str]); 4] = [
+        (
+            "crates/vep-builtins/src/plugins/loftee.rs",
+            &[
+                "data bundles are structurally different",
+                "(`master` branch) ships",
+                "#chrom pos GERP",
+                "one row per base",
+                "the upstream GRCh37",
+                "GRCh37 bundle ships",
+                "Real GRCh37 GERP layout",
+            ],
+        ),
+        (
+            "crates/vep-builtins/src/traits.rs",
+            &["Per-assembly bundles", "upstream GERP data"],
+        ),
+        (
+            "crates/vep-core/src/assembly.rs",
+            &["structurally different bundles", "GERP data is a tabix TSV"],
+        ),
+        (
+            "crates/vep-cli/tests/cli_run_control.rs",
+            &["GRCh37 bundle ships", "#chrom pos GERP", "one row per base"],
+        ),
+    ];
+    for (path, claims) in sources {
+        let text = std::fs::read_to_string(format!("{}/../../{path}", env!("CARGO_MANIFEST_DIR")))
+            .unwrap_or_else(|error| panic!("{path}: {error}"));
+        let text = text
+            .split_whitespace()
+            .filter(|word| !matches!(*word, "///" | "//!" | "//"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        for &claim in claims {
+            assert!(!text.contains(claim), "{path} states {claim:?}");
+        }
+    }
 }

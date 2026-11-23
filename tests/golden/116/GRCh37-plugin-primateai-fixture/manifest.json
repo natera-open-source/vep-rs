@@ -27,7 +27,7 @@
  "covers": [
   "PrimateAI"
  ],
- "suites": {
+ "datasets": {
   "GRCh37-plugin-primateai-fixture": {
    "reference": "default.txt",
    "input": "variants.vcf",
@@ -121,35 +121,35 @@
  },
  "records": [
   {
-   "suite": "GRCh37-plugin-primateai-fixture",
+   "dataset": "GRCh37-plugin-primateai-fixture",
    "vcf": "21\t17616932\tintron_snv\tG\tA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant"
    ]
   },
   {
-   "suite": "GRCh37-plugin-primateai-fixture",
+   "dataset": "GRCh37-plugin-primateai-fixture",
    "vcf": "21\t26078748\tintergenic_snv\tT\tC\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh37-plugin-primateai-fixture",
+   "dataset": "GRCh37-plugin-primateai-fixture",
    "vcf": "21\t31661647\tsynonymous_rev\tT\tC\t.\t.\t.",
    "combinations": [
     "synonymous_variant"
    ]
   },
   {
-   "suite": "GRCh37-plugin-primateai-fixture",
+   "dataset": "GRCh37-plugin-primateai-fixture",
    "vcf": "21\t33416423\tstop_lost_fwd\tT\tC\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "GRCh37-plugin-primateai-fixture",
+   "dataset": "GRCh37-plugin-primateai-fixture",
    "vcf": "21\t36252953\tmissense_rev\tC\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,stop_retained_variant",
@@ -157,7 +157,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-primateai-fixture",
+   "dataset": "GRCh37-plugin-primateai-fixture",
    "vcf": "21\t40762624\tstart_lost_fwd\tA\tT\t.\t.\t.",
    "combinations": [
     "missense_variant,splice_region_variant",
@@ -167,7 +167,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-primateai-fixture",
+   "dataset": "GRCh37-plugin-primateai-fixture",
    "vcf": "21\t43505445\tmissense_fwd_two_alts\tC\tG,T\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -180,7 +180,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-primateai-fixture",
+   "dataset": "GRCh37-plugin-primateai-fixture",
    "vcf": "21\t43505446\tdeletion_fwd\tTG\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -188,7 +188,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-primateai-fixture",
+   "dataset": "GRCh37-plugin-primateai-fixture",
    "vcf": "21\t43505450\tinsertion_fwd\tG\tGA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -196,7 +196,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-primateai-fixture",
+   "dataset": "GRCh37-plugin-primateai-fixture",
    "vcf": "21\t43505452\tcoding_mnv\tAA\tCC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -204,7 +204,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-primateai-fixture",
+   "dataset": "GRCh37-plugin-primateai-fixture",
    "vcf": "21\t43505455\tmissense_fwd_unscored\tT\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -212,7 +212,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-primateai-fixture",
+   "dataset": "GRCh37-plugin-primateai-fixture",
    "vcf": "21\t44492302\tstart_lost_rev\tA\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -222,7 +222,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-primateai-fixture",
+   "dataset": "GRCh37-plugin-primateai-fixture",
    "vcf": "21\t45720003\tsynonymous_fwd_lowercase\tc\tt\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,synonymous_variant",
@@ -232,7 +232,7 @@
    ]
   },
   {
-   "suite": "GRCh37-plugin-primateai-fixture",
+   "dataset": "GRCh37-plugin-primateai-fixture",
    "vcf": "21\t47734737\tstop_gained_rev\tC\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,stop_gained",
@@ -242,7 +242,7 @@
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "flag_sets": [

@@ -3,7 +3,9 @@
 
 //! A GTF and a genome FASTA build a cache on their own: the GTF is the
 //! transcript model when no GFF3 is given, and with the genome and no protein
-//! FASTA each peptide is translated, so the build reads nothing else.
+//! FASTA each peptide is translated, so the build reads nothing else. The
+//! rows a run writes over a built cache follow Ensembl VEP's transcript key
+//! order.
 
 use std::path::Path;
 use std::process::Command;
@@ -110,7 +112,7 @@ fn gtf_and_genome_build_a_cache_without_a_protein_fasta() {
 /// The regulatory files bake beside the GTF model as the run-time reader
 /// reads them: a promoter's `extended_start` that is not a whole number is
 /// ignored with the warning naming the record and the attribute (Ensembl VEP
-/// 116.2 compares the text as a number, `RegFeat.pm:363-364`); two distinct
+/// 116.3 compares the text as a number, `RegFeat.pm:363-364`); two distinct
 /// records sharing an `ID` are both baked, in file order, with the collision
 /// warned about once (`RegFeat.pm:478-497`); a type column that is not UTF-8
 /// once its escapes are decoded, or unsupported once decoded, is skipped with
@@ -207,4 +209,96 @@ fn regulatory_files_bake_with_their_source_and_order_and_the_readers_warnings() 
             ("EMAR", 5, 20, 1, 0),
         ]
     );
+}
+
+/// Three single-exon transcripts of one strand on the genome above: `TRX`
+/// and `TRX-ALT`, whose identifier continues the first with a hyphen, after
+/// a third.
+const PREFIX_PAIR_GFF3: &str = "##gff-version 3\n\
+21\tmade\tgene\t1\t8\t.\t+\t.\tID=gene:G0;biotype=lncRNA\n\
+21\tmade\tlnc_RNA\t1\t8\t.\t+\t.\tID=transcript:AAA;Parent=gene:G0;biotype=lncRNA\n\
+21\tmade\texon\t1\t8\t.\t+\t.\tParent=transcript:AAA\n\
+21\tmade\tgene\t11\t20\t.\t+\t.\tID=gene:G1;biotype=lncRNA\n\
+21\tmade\tlnc_RNA\t11\t20\t.\t+\t.\tID=transcript:TRX;Parent=gene:G1;biotype=lncRNA\n\
+21\tmade\texon\t11\t20\t.\t+\t.\tParent=transcript:TRX\n\
+21\tmade\tgene\t31\t40\t.\t+\t.\tID=gene:G2;biotype=lncRNA\n\
+21\tmade\tlnc_RNA\t31\t40\t.\t+\t.\tID=transcript:TRX-ALT;Parent=gene:G2;biotype=lncRNA\n\
+21\tmade\texon\t31\t40\t.\t+\t.\tParent=transcript:TRX-ALT\n";
+
+/// A cache built from a GFF3 holds no database id, and a record's rows
+/// follow Ensembl VEP's key order all the same. Ensembl VEP 116.3 keys a
+/// file's transcript by its stable id and, for every transcript but the
+/// first it builds, `_` and the count of the transcripts built before it
+/// (`BaseGXF.pm:489`, `BaseVariationFeature.pm:310-321`), so of two
+/// numbered identifiers where one continues the other with `-` the longer
+/// keys first, `-` sorting before `_`. A record between the pair writes the
+/// longer identifier's row before the shorter's.
+#[test]
+fn a_transcript_id_that_prefixes_another_ranks_as_ensembl_vep_keys_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let genome = write_genome(dir.path());
+    let gff3 = dir.path().join("model.gff3");
+    std::fs::write(&gff3, PREFIX_PAIR_GFF3).unwrap();
+    let cache = dir.path().join("cache");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_vep-cache-builder"))
+        .args(["--release", "116", "--assembly", "GRCh38", "--gff3"])
+        .arg(&gff3)
+        .arg("--genome-fasta")
+        .arg(&genome)
+        .arg("--output-dir")
+        .arg(&cache)
+        .output()
+        .expect("vep-cache-builder runs");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stderr}");
+
+    let shard = std::fs::read_to_string(cache.join("transcripts/21/1-1000000.json")).unwrap();
+    let records: Vec<Value> = serde_json::from_str(&shard).unwrap();
+    assert_eq!(records.len(), 3);
+    assert!(records.iter().all(|tr| tr.get("dbID").is_none()), "{shard}");
+
+    // One base between the pair, changed to another base.
+    let sequence = std::fs::read_to_string(&genome).unwrap();
+    let reference = sequence.lines().nth(1).unwrap().as_bytes()[24] as char;
+    let alternate = if reference == 'A' { 'C' } else { 'A' };
+    let input = dir.path().join("between_the_pair.vcf");
+    std::fs::write(
+        &input,
+        format!(
+            "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n\
+             21\t25\tbetween_the_pair\t{reference}\t{alternate}\t.\t.\t.\n"
+        ),
+    )
+    .unwrap();
+    let out = dir.path().join("out.txt");
+    let cache_s = cache.display().to_string();
+    let genome_s = genome.display().to_string();
+    let input_s = input.display().to_string();
+    let out_s = out.display().to_string();
+    let argv = vec![
+        "vep",
+        "--offline",
+        "--json_cache",
+        &cache_s,
+        "--fasta",
+        &genome_s,
+        "--no_stats",
+        "--quiet",
+        "--force_overwrite",
+        "-i",
+        &input_s,
+        "-o",
+        &out_s,
+    ];
+    let config = vep_cli::Config::from_argv(argv).unwrap();
+    vep_cli::runner::Runner::new(config).unwrap().run().unwrap();
+
+    let written = std::fs::read_to_string(&out).unwrap();
+    let features: Vec<&str> = written
+        .lines()
+        .filter(|line| !line.starts_with('#'))
+        .map(|line| line.split('\t').nth(4).unwrap())
+        .collect();
+    assert_eq!(features, ["AAA", "TRX-ALT", "TRX"], "{written}");
 }

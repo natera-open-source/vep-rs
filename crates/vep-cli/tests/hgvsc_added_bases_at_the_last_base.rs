@@ -135,7 +135,7 @@ fn assert_rows(corpus: &Path, flags: &[&str], records: &str, expected: &[Row]) {
 /// differ in length, and each allele then stands as written:
 /// `21 10576584 TTAA TTAAA,TT` keeps `TAA`, the last three bases of the forward
 /// pseudogene ENST00000616920, and adds `A` directly past its last base
-/// `n.296`. Ensembl VEP 116.2 does not shift an allele of a record whose
+/// `n.296`. Ensembl VEP 116.3 does not shift an allele of a record whose
 /// alternates differ in class (TranscriptVariationAllele.pm:120-123), and its
 /// clip leaves an insertion where the record's span ends (:2204-2284), a
 /// position that has a coordinate only on a reverse-strand transcript, one
@@ -323,7 +323,7 @@ fn bases_added_at_the_last_base_of_a_span_that_runs_past_it_are_a_duplication() 
 /// after the span repeat the added bases up to the last base, so the same
 /// sequence results from adding them directly past the last base, their most
 /// 3' placement, where they repeat the transcript's last bases. Ensembl VEP
-/// 116.2 does not shift the allele (TranscriptVariationAllele.pm:120-123) and
+/// 116.3 does not shift the allele (TranscriptVariationAllele.pm:120-123) and
 /// writes the insertion its clip leaves where the span ends (:2204-2284), the
 /// row under `--shift_hgvs 0`. `21 10576582 GTTT GTTTA,GT` adds `A` after
 /// `n.294` of ENST00000616920, whose last two bases `n.295` and `n.296` are
@@ -468,6 +468,12 @@ fn a_span_written_twice_and_carried_to_the_last_base_duplicates_the_last_bases()
 /// four: the same duplication with `HGVS_OFFSET` -4, and under
 /// `--shift_hgvs 0` the insertion where the span ends. The transcript is in
 /// the merged cache, and `--all_refseq` keeps its rows.
+/// On the chromosome the first record's allele opens with its three reference
+/// bases, so its consequence terms read the four further bases after the
+/// span's last base there, between the acceptor's two bases `c.665-1` and
+/// `c.665-2`: `splice_acceptor_variant` and no `intron_variant`, the terms of
+/// that insertion written minimally, beside `coding_sequence_variant` for the
+/// exon bases the span holds.
 #[test]
 fn a_duplication_that_starts_in_the_last_intron_carries_its_intron_offset() {
     let records = concat!(
@@ -483,7 +489,7 @@ fn a_duplication_that_starts_in_the_last_intron_carries_its_intron_offset() {
                 record: "intron_on",
                 transcript: "CCDS42909.1",
                 allele: "TTCTTTC",
-                consequence: "splice_acceptor_variant,coding_sequence_variant,intron_variant",
+                consequence: "splice_acceptor_variant,coding_sequence_variant",
                 shifted: ["CCDS42909.1:c.665-2_666dup", "", "-2", "0"],
                 unshifted: ABSENT,
             },
@@ -689,7 +695,7 @@ fn a_plain_insertion_shifted_to_the_last_base_is_a_duplication_with_an_offset() 
 
 /// Away from a transcript's ends an allele that keeps the reference bases of
 /// its record is not moved, although the bases after its span repeat the added
-/// base: Ensembl VEP 116.2 does not shift an allele of a record whose
+/// base: Ensembl VEP 116.3 does not shift an allele of a record whose
 /// alternates differ in class (TranscriptVariationAllele.pm:120-123), and its
 /// clip leaves the insertion where the record's span ends (:2204-2284).
 /// `21 10576441 GAGA GAGAT,GA` adds `T` after `n.153` of ENST00000616920,

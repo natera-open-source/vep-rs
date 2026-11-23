@@ -1,15 +1,17 @@
 entry = "refseq_edited_model_shifted_insertion_bases"
 page = "docs/divergences/refseq-edited-model-shifted-insertion-bases.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 136 of 77,675 cache transcripts · 1 flag set, 4 corpora"
-notes = "GA inserted after c.203 of the forward-strand model NM_006933.7, whose three _rna_edit substitutions lie far from the site; both engines shift the insertion one base past the G it repeats, and Ensembl VEP keeps the written bases in the HGVSc of a model carrying an _rna_edit attribute while vep-rs rotates them along the shift."
+input_class_basis = "2 · 160 of 116,165 cache transcripts · 7 flag sets, 10 corpora"
+notes = "GA inserted after c.203 (ins_cds) and after c.*1348 (utr3_ins) of the forward-strand model NM_006933.7, and after c.-58 (utr5_ins) of the reverse-strand model NM_001395858.1, each far from the model's _rna_edit substitutions; both engines shift each insertion one base past the G it repeats. Under --shift_3prime 1 Ensembl VEP rotates the bases on the coding row and keeps the written bases in the HGVSc of the two untranslated-region rows, while vep-rs rotates them on every row; without the flag Ensembl VEP keeps the written bases on the coding row as well (c.204_205insGA)."
 
 [input]
 format = "vcf"
 text = """
 21	35467700	ins_cds	T	TGA	.	.	.
+21	35471002	utr3_ins	T	TGA	.	.	.
+21	16031362	utr5_ins	C	CTC	.	.	.
 """
 
 [cache]
@@ -21,13 +23,54 @@ corpus = "tests/golden/116/GRCh37-refseq"
 fasta = "tests/golden/116/GRCh37-refseq/reference.fa.gz"
 
 [run]
-flags = ["--refseq", "--hgvs"]
+flags = ["--refseq", "--hgvs", "--shift_3prime", "1"]
 
 [compare]
 kind = "rows"
-where = { record = "ins_cds", feature = "NM_006933.7" }
+where = { record = ["ins_cds", "utr3_ins", "utr5_ins"], feature = ["NM_001395858.1", "NM_006933.7"] }
 columns = ["Location", "Allele", "Feature", "BAM_EDIT", "HGVSc", "HGVS_OFFSET"]
 
 [expected]
-ensembl_vep = ["21:35467700-35467701 | GA | NM_006933.7 | OK | NM_006933.7:c.204_205insGA | 1"]
-vep_rs = ["21:35467700-35467701 | GA | NM_006933.7 | OK | NM_006933.7:c.204_205insAG | 1"]
+ensembl_vep = [
+    "21:16031362-16031363 | TC | NM_001395858.1 | OK | NM_001395858.1:c.-57_-56insGA | -1",
+    "21:35467700-35467701 | AG | NM_006933.7 | OK | NM_006933.7:c.204_205insAG | 1",
+    "21:35471002-35471003 | GA | NM_006933.7 | OK | NM_006933.7:c.*1349_*1350insGA | 1",
+]
+vep_rs = [
+    "21:16031362-16031363 | TC | NM_001395858.1 | OK | NM_001395858.1:c.-57_-56insAG | -1",
+    "21:35467700-35467701 | AG | NM_006933.7 | OK | NM_006933.7:c.204_205insAG | 1",
+    "21:35471002-35471003 | GA | NM_006933.7 | OK | NM_006933.7:c.*1349_*1350insAG | 1",
+]
+
+[[also]]
+notes = "The same three records under --refseq --hgvs alone: Ensembl VEP keeps the written bases on every row, the coding one among them, and vep-rs rotates them on each."
+
+[also.run]
+flags = ["--refseq", "--hgvs"]
+
+[also.expected]
+ensembl_vep = [
+    "21:16031362-16031363 | TC | NM_001395858.1 | OK | NM_001395858.1:c.-57_-56insGA | -1",
+    "21:35467700-35467701 | GA | NM_006933.7 | OK | NM_006933.7:c.204_205insGA | 1",
+    "21:35471002-35471003 | GA | NM_006933.7 | OK | NM_006933.7:c.*1349_*1350insGA | 1",
+]
+vep_rs = [
+    "21:16031362-16031363 | TC | NM_001395858.1 | OK | NM_001395858.1:c.-57_-56insAG | -1",
+    "21:35467700-35467701 | GA | NM_006933.7 | OK | NM_006933.7:c.204_205insAG | 1",
+    "21:35471002-35471003 | GA | NM_006933.7 | OK | NM_006933.7:c.*1349_*1350insAG | 1",
+]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/hgvs.rs::normalized_hgvs_alt_allele",
+    "crates/vep-effects/src/hgvs.rs::rotate_sequence_for_transcript_3prime",
+]
+tests = [
+    "crates/vep-cli/tests/edited_model_shifted_insertion_bases_runs.rs::both_runs_of_the_record_spell_the_rotated_bases_on_every_row",
+    "crates/vep-effects/src/hgvs.rs::tests::edited_model_hgvsc_rotates_a_shifted_insertion_on_an_untranslated_row",
+    "crates/vep-effects/src/hgvs.rs::tests::edited_model_hgvsc_spells_a_shifted_insertion_from_the_rotated_allele",
+    "crates/vep-effects/src/hgvs.rs::tests::reverse_strand_edited_model_hgvsc_spells_a_shifted_insertion_from_the_rotated_allele",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/edited_model.rs::edited_model_shifted_insertion_bases",
+]

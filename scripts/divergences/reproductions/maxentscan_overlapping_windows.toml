@@ -1,9 +1,9 @@
 entry = "maxentscan_overlapping_windows"
 page = "docs/plugins/transcript-model.md#2-maxentscan-two-splice-site-windows-over-one-substitution"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 862,250 per million · 6 flag sets, 104 corpora"
+input_class_basis = "2 · 862,250 per million · 6 flag sets, 143 corpora"
 notes = "The page's record stands in the GRCh38 MaxEntScan fixture corpus and a record of the same shape in the GRCh37 one; this two-base exon of the committed fly corpus shows the shape on a third cache."
 # The matrix directory of the MaxEntScan fixture corpora, a made-up directory.
 prepare = [
@@ -36,3 +36,14 @@ columns = ["Location", "Allele", "Feature", "MaxEntScan_ref_seq", "MaxEntScan_al
 [expected]
 ensembl_vep = ["2L:21019776 | G | FBtr0331199 | GATGTGGCA | GACGTGGCA"]
 vep_rs = ["2L:21019776 | G | FBtr0331199 | GGTGAGAGAGTGAGGAAGAGATG | GGTGAGAGAGTGAGGAAGAGACG"]
+
+[implementation]
+code = ["crates/vep-builtins/src/plugins/maxentscan.rs::Row::mes"]
+tests = [
+    "crates/vep-cli/tests/plugin_documented_rows.rs::a_substitution_in_two_maxentscan_windows_is_scored_in_the_acceptor_window_before_its_exon",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/splice_windows.rs::SpliceWindows::holds",
+    "tools/vep-golden-corpus/src/classify/introns.rs::maxentscan_overlapping_windows_pair",
+    "tools/vep-plugin-pairs/src/rules/maxentscan.rs::overlapping_windows",
+]

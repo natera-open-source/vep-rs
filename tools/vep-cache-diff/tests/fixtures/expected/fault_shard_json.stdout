@@ -1,0 +1,4 @@
+Comparing caches:
+  Baseline: {{FIXTURES}}/caches/faults/shard_json/baseline
+  Builder:  {{FIXTURES}}/caches/faults/shard_json/builder
+  Comparing transcripts...

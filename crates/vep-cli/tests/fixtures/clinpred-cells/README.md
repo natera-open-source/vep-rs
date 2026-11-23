@@ -9,11 +9,11 @@ positions of the GRCh38 ClinPred fixture corpus: a row at `21:30282172` for
 a row at `21:30396087` for `A>G` of four cells, with no score cell; and a row at
 `21:30396091` for `C>T` scored `0.411650`. `variants.vcf` holds the four records.
 
-`ClinPred.pm` line 127 splits a row into five variables, so Perl keeps a
+`ClinPred.pm` line 127 splits a row into five variables, so Ensembl VEP keeps a
 trailing empty cell as the empty string and leaves a missing cell undefined,
 and lines 116 to 122 return the matched row's result either way.
 
-Ensembl VEP 116.2 wrote, on this fixture: for the two rows whose fifth cell is
+Ensembl VEP 116.3 wrote, on this fixture: for the two rows whose fifth cell is
 empty, `ClinPred=` in the default format, an empty cell in the tab format, an
 empty CSQ field in the VCF format and `"clinpred": ""` in JSON; for the
 four-cell row, `ClinPred=` in the default format, `-` in the tab format, an

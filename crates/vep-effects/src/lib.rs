@@ -123,86 +123,85 @@ pub(crate) mod test_helpers {
             },
         ];
 
-        let vefc = TranscriptVEFC {
-            spliced_seq: None,
-            codon_table: 1,
-            five_prime_utr: None,
-            three_prime_utr: None,
-            translateable_seq: Some(cds),
-            peptide: None,
-            introns: introns.clone(),
-            sorted_exons: exons.clone(),
-            mapper: Some(TranscriptMapper {
-                start_phase: 0,
-                cdna_coding_start: 51,
-                cdna_coding_end: 900,
-                exon_coord_mapper: ExonCoordMapper::new(mapper_pairs),
-            }),
-            protein_features: vec![],
-            protein_function_predictions: None,
-            seq_edits: vec![],
-        };
+        let mut vefc = TranscriptVEFC::default();
+        vefc.spliced_seq = None;
+        vefc.codon_table = 1;
+        vefc.five_prime_utr = None;
+        vefc.three_prime_utr = None;
+        vefc.translateable_seq = Some(cds);
+        vefc.peptide = None;
+        vefc.introns = introns.clone();
+        vefc.sorted_exons = exons.clone();
+        vefc.mapper = Some(TranscriptMapper {
+            start_phase: 0,
+            cdna_coding_start: 51,
+            cdna_coding_end: 900,
+            exon_coord_mapper: ExonCoordMapper::new(mapper_pairs),
+        });
+        vefc.protein_features = vec![];
+        vefc.protein_function_predictions = None;
+        vefc.seq_edits = vec![];
 
-        Transcript {
-            stable_id: "ENST00000000001".into(),
+        let mut transcript = Transcript::default();
+        transcript.stable_id = "ENST00000000001".into();
+        transcript.version = Some(1);
+        transcript.db_id = None;
+        transcript.gene_stable_id = "ENSG00000000001".into();
+        transcript.gene_version = None;
+        transcript.chr = "21".into();
+        transcript.start = 25_000_000;
+        transcript.end = 25_006_000;
+        transcript.strand = Strand::Forward;
+        transcript.biotype = "protein_coding".into();
+        transcript.source = "Ensembl".into();
+        transcript.gene_symbol = Some("TEST1".into());
+        transcript.gene_symbol_source = Some("HGNC".into());
+        transcript.gene_symbol_id = None;
+        transcript.hgnc_id = Some("HGNC:0001".into());
+        transcript.gene_phenotype = None;
+        transcript.canonical = true;
+        transcript.mane_select = None;
+        transcript.mane_plus_clinical = None;
+        transcript.tsl = None;
+        transcript.appris = None;
+        transcript.ccds = None;
+        transcript.protein_id = Some("ENSP00000000001".into());
+        transcript.refseq = None;
+        transcript.swissprot = None;
+        transcript.trembl = None;
+        transcript.uniparc = None;
+        transcript.uniprot_isoform = None;
+        transcript.exons = exons.clone();
+        transcript.exon_ids = None;
+        transcript.introns = introns;
+        transcript.cdna_coding_start = Some(51);
+        transcript.cdna_coding_end = Some(900);
+        transcript.coding_region_start = Some(25_000_050);
+        transcript.coding_region_end = Some(25_004_299);
+        transcript.translation_start = Some(25_000_050);
+        transcript.translation_end = Some(25_004_299);
+        transcript.translation = Some(Translation {
+            stable_id: "ENSP00000000001".into(),
             version: Some(1),
             db_id: None,
-            gene_stable_id: "ENSG00000000001".into(),
-            gene_version: None,
-            chr: "21".into(),
-            start: 25_000_000,
-            end: 25_006_000,
-            strand: Strand::Forward,
-            biotype: "protein_coding".into(),
-            source: "Ensembl".into(),
-            gene_symbol: Some("TEST1".into()),
-            gene_symbol_source: Some("HGNC".into()),
-            gene_symbol_id: None,
-            hgnc_id: Some("HGNC:0001".into()),
-            gene_phenotype: None,
-            canonical: true,
-            mane_select: None,
-            mane_plus_clinical: None,
-            tsl: None,
-            appris: None,
-            ccds: None,
-            protein_id: Some("ENSP00000000001".into()),
-            refseq: None,
-            swissprot: None,
-            trembl: None,
-            uniparc: None,
-            uniprot_isoform: None,
-            exons: exons.clone(),
-            exon_ids: None,
-            introns,
-            cdna_coding_start: Some(51),
-            cdna_coding_end: Some(900),
-            coding_region_start: Some(25_000_050),
-            coding_region_end: Some(25_004_299),
-            translation_start: Some(25_000_050),
-            translation_end: Some(25_004_299),
-            translation: Some(Translation {
-                stable_id: "ENSP00000000001".into(),
-                version: Some(1),
-                db_id: None,
-                start: 51,
-                end: 300,
-                start_exon_index: 0,
-                end_exon_index: 2,
-                seq: None,
-            }),
-            cdna_sequence: None,
-            protein_sequence: None,
-            flags: Arc::from([]),
-            gencode_basic: false,
-            gencode_primary: false,
-            attributes: vec![],
-            vefc: Some(vefc),
-            source_cache: None,
-            bam_edit_status: None,
-            derived: Default::default(),
-            id_rank: 0,
-        }
+            start: 51,
+            end: 300,
+            seq: None,
+        });
+        transcript.cdna_sequence = None;
+        transcript.protein_sequence = None;
+        transcript.flags = Arc::from([]);
+        transcript.gencode_basic = false;
+        transcript.gencode_primary = false;
+        transcript.attributes = vec![];
+        transcript.vefc = Some(vefc);
+        transcript.source_cache = None;
+        transcript.bam_edit_status = None;
+        transcript.circular_length = None;
+        transcript.region_files = None;
+        transcript.derived = Default::default();
+        transcript.id_rank = 0;
+        transcript
     }
 
     /// The 5' UTR length of [`make_single_exon_transcript`].
@@ -244,85 +243,84 @@ pub(crate) mod test_helpers {
             to_end: end,
             ori,
         }];
-        let vefc = TranscriptVEFC {
-            spliced_seq: None,
-            codon_table: 1,
-            five_prime_utr: None,
-            three_prime_utr: Some(utr3.to_string()),
-            translateable_seq: Some(cds.to_string()),
-            peptide: None,
-            introns: vec![],
-            sorted_exons: exons.clone(),
-            mapper: Some(TranscriptMapper {
-                start_phase: 0,
-                cdna_coding_start: SINGLE_EXON_UTR5 + 1,
-                cdna_coding_end: SINGLE_EXON_UTR5 + cds_len,
-                exon_coord_mapper: ExonCoordMapper::new(pairs),
-            }),
-            protein_features: vec![],
-            protein_function_predictions: None,
-            seq_edits: vec![],
-        };
-        Transcript {
-            stable_id: "ENST00000000001".into(),
+        let mut vefc = TranscriptVEFC::default();
+        vefc.spliced_seq = None;
+        vefc.codon_table = 1;
+        vefc.five_prime_utr = None;
+        vefc.three_prime_utr = Some(utr3.to_string());
+        vefc.translateable_seq = Some(cds.to_string());
+        vefc.peptide = None;
+        vefc.introns = vec![];
+        vefc.sorted_exons = exons.clone();
+        vefc.mapper = Some(TranscriptMapper {
+            start_phase: 0,
+            cdna_coding_start: SINGLE_EXON_UTR5 + 1,
+            cdna_coding_end: SINGLE_EXON_UTR5 + cds_len,
+            exon_coord_mapper: ExonCoordMapper::new(pairs),
+        });
+        vefc.protein_features = vec![];
+        vefc.protein_function_predictions = None;
+        vefc.seq_edits = vec![];
+        let mut transcript = Transcript::default();
+        transcript.stable_id = "ENST00000000001".into();
+        transcript.version = Some(1);
+        transcript.db_id = None;
+        transcript.gene_stable_id = "ENSG00000000001".into();
+        transcript.gene_version = None;
+        transcript.chr = "21".into();
+        transcript.start = START;
+        transcript.end = end;
+        transcript.strand = strand;
+        transcript.biotype = "protein_coding".into();
+        transcript.source = "Ensembl".into();
+        transcript.gene_symbol = Some("TEST1".into());
+        transcript.gene_symbol_source = Some("HGNC".into());
+        transcript.gene_symbol_id = None;
+        transcript.hgnc_id = Some("HGNC:0001".into());
+        transcript.gene_phenotype = None;
+        transcript.canonical = true;
+        transcript.mane_select = None;
+        transcript.mane_plus_clinical = None;
+        transcript.tsl = None;
+        transcript.appris = None;
+        transcript.ccds = None;
+        transcript.protein_id = Some("ENSP00000000001".into());
+        transcript.refseq = None;
+        transcript.swissprot = None;
+        transcript.trembl = None;
+        transcript.uniparc = None;
+        transcript.uniprot_isoform = None;
+        transcript.exons = exons;
+        transcript.exon_ids = None;
+        transcript.introns = vec![];
+        transcript.cdna_coding_start = Some(SINGLE_EXON_UTR5 + 1);
+        transcript.cdna_coding_end = Some(SINGLE_EXON_UTR5 + cds_len);
+        transcript.coding_region_start = Some(crs);
+        transcript.coding_region_end = Some(cre);
+        transcript.translation_start = Some(crs);
+        transcript.translation_end = Some(cre);
+        transcript.translation = Some(Translation {
+            stable_id: "ENSP00000000001".into(),
             version: Some(1),
             db_id: None,
-            gene_stable_id: "ENSG00000000001".into(),
-            gene_version: None,
-            chr: "21".into(),
-            start: START,
-            end,
-            strand,
-            biotype: "protein_coding".into(),
-            source: "Ensembl".into(),
-            gene_symbol: Some("TEST1".into()),
-            gene_symbol_source: Some("HGNC".into()),
-            gene_symbol_id: None,
-            hgnc_id: Some("HGNC:0001".into()),
-            gene_phenotype: None,
-            canonical: true,
-            mane_select: None,
-            mane_plus_clinical: None,
-            tsl: None,
-            appris: None,
-            ccds: None,
-            protein_id: Some("ENSP00000000001".into()),
-            refseq: None,
-            swissprot: None,
-            trembl: None,
-            uniparc: None,
-            uniprot_isoform: None,
-            exons,
-            exon_ids: None,
-            introns: vec![],
-            cdna_coding_start: Some(SINGLE_EXON_UTR5 + 1),
-            cdna_coding_end: Some(SINGLE_EXON_UTR5 + cds_len),
-            coding_region_start: Some(crs),
-            coding_region_end: Some(cre),
-            translation_start: Some(crs),
-            translation_end: Some(cre),
-            translation: Some(Translation {
-                stable_id: "ENSP00000000001".into(),
-                version: Some(1),
-                db_id: None,
-                start: SINGLE_EXON_UTR5 + 1,
-                end: SINGLE_EXON_UTR5 + cds_len,
-                start_exon_index: 0,
-                end_exon_index: 0,
-                seq: None,
-            }),
-            cdna_sequence: None,
-            protein_sequence: None,
-            flags: Arc::from([]),
-            gencode_basic: false,
-            gencode_primary: false,
-            attributes: vec![],
-            vefc: Some(vefc),
-            source_cache: None,
-            bam_edit_status: None,
-            derived: Default::default(),
-            id_rank: 0,
-        }
+            start: SINGLE_EXON_UTR5 + 1,
+            end: SINGLE_EXON_UTR5 + cds_len,
+            seq: None,
+        });
+        transcript.cdna_sequence = None;
+        transcript.protein_sequence = None;
+        transcript.flags = Arc::from([]);
+        transcript.gencode_basic = false;
+        transcript.gencode_primary = false;
+        transcript.attributes = vec![];
+        transcript.vefc = Some(vefc);
+        transcript.source_cache = None;
+        transcript.bam_edit_status = None;
+        transcript.circular_length = None;
+        transcript.region_files = None;
+        transcript.derived = Default::default();
+        transcript.id_rank = 0;
+        transcript
     }
 
     /// A single-exon gene segment whose coding sequence `cds` runs to the transcript's
@@ -382,6 +380,44 @@ pub(crate) mod test_helpers {
         InputVariant::new("21".into(), a.min(b), a.max(b), r, b"-".to_vec())
     }
 
+    /// The first base of the second half of exon 3 in
+    /// [`make_test_transcript_with_exon_3_in_two`]: five bases shared with the
+    /// first half, and the base after its last.
+    pub const EXON_3_SECOND_HALF_STARTS: [u64; 2] = [25_004_096, 25_004_101];
+
+    /// [`make_test_transcript`] with exon 3 written as two exons,
+    /// 25_004_000-25_004_100 and `second_start`-25_006_000, that overlap or abut,
+    /// and the intron between them in both intron lists: its start, 25_004_101,
+    /// lies past its end, `second_start - 1`.
+    pub fn make_test_transcript_with_exon_3_in_two(second_start: u64) -> Transcript {
+        assert!(second_start <= 25_004_101);
+        let mut tx = make_test_transcript();
+        let last = tx.exons.pop().expect("three exons");
+        tx.exons.push(Exon {
+            start: 25_004_000,
+            end: 25_004_100,
+            rank: 3,
+            phase: 0,
+            end_phase: 0,
+        });
+        tx.exons.push(Exon {
+            start: second_start,
+            end: last.end,
+            rank: 4,
+            phase: 0,
+            end_phase: -1,
+        });
+        tx.introns.push(Intron {
+            start: 25_004_101,
+            end: second_start - 1,
+            rank: 3,
+        });
+        let vefc = tx.vefc.as_mut().expect("the test transcript has a VEFC");
+        vefc.introns = tx.introns.clone();
+        vefc.sorted_exons = tx.exons.clone();
+        tx
+    }
+
     /// Build the standard test transcript with transcript flags applied.
     pub fn make_test_transcript_with_flags(flags: &[&str]) -> Transcript {
         let mut tx = make_test_transcript();
@@ -430,3 +466,45 @@ mod concordance_tests;
 
 #[cfg(test)]
 mod stop_codon_tests;
+
+#[cfg(test)]
+mod lost_stop_deletion_count_tests;
+
+#[cfg(test)]
+mod start_codon_tests;
+
+#[cfg(test)]
+mod frameshift_stop_count_tests;
+
+#[cfg(test)]
+mod frameshift_inside_a_held_stop_tests;
+
+#[cfg(test)]
+mod frameshift_no_changed_residue_tests;
+
+#[cfg(test)]
+mod frameshift_cut_short_tests;
+
+#[cfg(test)]
+mod lost_stop_extension_count_tests;
+
+#[cfg(test)]
+mod retained_start_notation_tests;
+
+#[cfg(test)]
+mod genetic_code_path_tests;
+
+#[cfg(test)]
+mod cut_off_coding_sequence_tests;
+
+#[cfg(test)]
+mod shifted_leading_utr_notation_tests;
+
+#[cfg(test)]
+mod shifted_intron_notation_tests;
+
+#[cfg(test)]
+mod start_codon_removed_tests;
+
+#[cfg(test)]
+mod kept_start_without_five_prime_utr_tests;

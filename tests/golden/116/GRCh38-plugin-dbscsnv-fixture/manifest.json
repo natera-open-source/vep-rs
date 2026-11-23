@@ -1,0 +1,303 @@
+{
+ "release": "116",
+ "species": "homo_sapiens",
+ "assembly": "GRCh38",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 3,
+ "included_records": {
+  "dbscsnv": [
+   "deletion_rev",
+   "intron_snv",
+   "missense_rev",
+   "missense_splice_region",
+   "splice_acceptor",
+   "splice_donor",
+   "splice_region_synonymous",
+   "splice_region_two_alts",
+   "splice_region_two_consequences",
+   "synonymous_fwd"
+  ]
+ },
+ "max_span": 1000000,
+ "covers": [
+  "dbscSNV"
+ ],
+ "plugin_files": {
+  "dbscSNV": [
+   "plugin_data/dbscSNV1.1_synthetic_GRCh38.txt.gz",
+   "plugin_data/dbscSNV1.1_synthetic_GRCh38.txt.gz.tbi"
+  ]
+ },
+ "datasets": {
+  "dbscsnv": {
+   "reference": "default.txt.gz",
+   "input": "GRCh38-plugin-dbscsnv-fixture.input.vcf",
+   "rows": 391,
+   "combinations": 23
+  }
+ },
+ "combinations": {
+  "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant": {
+   "observed_rows": 29,
+   "exemplar_records": 2
+  },
+  "NMD_transcript_variant,intron_variant": {
+   "observed_rows": 24,
+   "exemplar_records": 3
+  },
+  "NMD_transcript_variant,intron_variant,splice_region_variant": {
+   "observed_rows": 48,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,missense_variant,splice_region_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,splice_donor_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,splice_region_variant,synonymous_variant": {
+   "observed_rows": 18,
+   "exemplar_records": 1
+  },
+  "downstream_gene_variant": {
+   "observed_rows": 42,
+   "exemplar_records": 5
+  },
+  "frameshift_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "intron_variant": {
+   "observed_rows": 64,
+   "exemplar_records": 4
+  },
+  "intron_variant,non_coding_transcript_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 2
+  },
+  "intron_variant,splice_donor_region_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "intron_variant,splice_region_variant": {
+   "observed_rows": 74,
+   "exemplar_records": 1
+  },
+  "missense_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 2
+  },
+  "missense_variant,splice_region_variant": {
+   "observed_rows": 19,
+   "exemplar_records": 2
+  },
+  "non_coding_transcript_exon_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "non_coding_transcript_exon_variant,splice_region_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 2
+  },
+  "non_coding_transcript_variant,splice_donor_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "splice_acceptor_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "splice_donor_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 1
+  },
+  "splice_region_variant,synonymous_variant": {
+   "observed_rows": 37,
+   "exemplar_records": 1
+  },
+  "synonymous_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 7,
+   "exemplar_records": 3
+  }
+ },
+ "variant_classes": {
+  "deletion": 1,
+  "snv": 390
+ },
+ "records": [
+  {
+   "dataset": "dbscsnv",
+   "vcf": "21\t20204701\tintron_snv\tT\tC\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "dataset": "dbscsnv",
+   "vcf": "21\t30282172\tmissense_rev\tT\tC\t.\t.\t.",
+   "combinations": [
+    "missense_variant"
+   ]
+  },
+  {
+   "dataset": "dbscsnv",
+   "vcf": "21\t30396092\tsynonymous_fwd\tC\tA\t.\t.\t.",
+   "combinations": [
+    "synonymous_variant"
+   ]
+  },
+  {
+   "dataset": "dbscsnv",
+   "vcf": "21\t30881493\tdeletion_rev\tGA\tG\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant"
+   ]
+  },
+  {
+   "dataset": "dbscsnv",
+   "vcf": "21\t33447139\tmissense_splice_region\tA\tT\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant",
+    "NMD_transcript_variant,intron_variant",
+    "NMD_transcript_variant,missense_variant,splice_region_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "missense_variant,splice_region_variant",
+    "non_coding_transcript_exon_variant,splice_region_variant"
+   ]
+  },
+  {
+   "dataset": "dbscsnv",
+   "vcf": "21\t42390035\tsplice_region_two_consequences\tC\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant",
+    "intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant",
+    "missense_variant,splice_region_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "dbscsnv",
+   "vcf": "21\t44316522\tsplice_region_synonymous\tC\tT\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant",
+    "NMD_transcript_variant,splice_region_variant,synonymous_variant",
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant,splice_region_variant",
+    "splice_region_variant,synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "dbscsnv",
+   "vcf": "21\t45505528\tsplice_acceptor\tG\tA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "intron_variant",
+    "splice_acceptor_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "dbscsnv",
+   "vcf": "21\t46126244\tsplice_region_two_alts\tG\tA,T\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant,splice_region_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "intron_variant,splice_donor_region_variant",
+    "intron_variant,splice_region_variant",
+    "missense_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "dataset": "dbscsnv",
+   "vcf": "21\t46351541\tsplice_donor\tG\tC\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "NMD_transcript_variant,splice_donor_variant",
+    "downstream_gene_variant",
+    "non_coding_transcript_variant,splice_donor_variant",
+    "splice_donor_variant"
+   ]
+  }
+ ],
+ "multi_allelic_per_dataset": 4,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "flag_sets": [
+  {
+   "name": "dbscsnv",
+   "flags": [
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "dbscSNV,{corpus}/plugin_data/dbscSNV1.1_synthetic_GRCh38.txt.gz"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_dbscsnv",
+   "covers": [
+    "dbscSNV"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "dbscsnv-assembly-override",
+   "flags": [
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "dbscSNV,{corpus}/plugin_data/dbscSNV1.1_synthetic_GRCh38.txt.gz,GRCh38"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_dbscsnv-assembly-override",
+   "covers": [
+    "dbscSNV"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  }
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {}
+}

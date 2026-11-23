@@ -1,0 +1,17 @@
+{
+  "assembly": "OKI_Apl_1.0",
+  "cache_version": 63,
+  "contig_order": [
+    "DF978536.1",
+    "DF980041.1",
+    "NC_007788.1"
+  ],
+  "polyphen": "",
+  "regulatory": false,
+  "sift": "",
+  "source_versions": {
+    "assembly": "OKI_Apl_1.0",
+    "genebuild": "OKIApl1v0.0"
+  },
+  "species": "acanthaster_planci_gca001949145v1"
+}

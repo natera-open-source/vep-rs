@@ -6,12 +6,12 @@
 
 **What vep-rs does instead.** vep-rs writes `3_prime_UTR_variant` on the row, with the same cDNA position: the base lies in the model's last exon, after the coding sequence, and every base the edited mapper numbers is a base of the model. Under `--total_length` it prints the cDNA's length beside `cDNA_position`, the exons and the edits together, on every row measured across ten models whose edits lengthen them, six mitochondrial and four nuclear.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2, `ensembl-variation` at release/116, `ensembl` at release/116):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3, `ensembl-variation` at release/116, `ensembl` at release/116):
 
 - `Bio/EnsEMBL/TranscriptMapper.pm`, lines 168-221, `_load_mapper`: an insertion edit moves the cDNA start of every later pair by the inserted length (lines 207-211), so the model's final mapped bases carry cDNA coordinates above the sum of its exon lengths. The cache stores that mapper (`mapper` under `variation_effect_feature_cache`).
 - `Bio/EnsEMBL/Variation/Utils/VariationEffect.pm`, lines 670-694, `within_cdna`: a coordinate counts only when its start is at most `$feat->length` (line 680). Lines 744-756, `within_3_prime_utr`, require `within_cdna`.
 - `Bio/EnsEMBL/Transcript.pm`, lines 1666-1682, `length`: the sum of the exon lengths, plus each edit's length difference only when `edits_enabled` is set (line 1675). The transcript object the cache stores carries no `edits_enabled`, so the length returned is the unedited one.
-- `Bio/EnsEMBL/VEP/OutputFactory.pm`, line 1728, and line 2138 for a structural variant: under `--total_length` the total appended to `cDNA_position` is `$tr->length`, the same unedited length. The coding total of line 1738 is the length of the cached coding sequence, which holds the edits.
+- `Bio/EnsEMBL/VEP/OutputFactory.pm`, line 1737, and line 2147 for a structural variant: under `--total_length` the total appended to `cDNA_position` is `$tr->length`, the same unedited length. The coding total of line 1747 is the length of the cached coding sequence, which holds the edits.
 - `Bio/EnsEMBL/Variation/BaseVariationFeatureOverlapAllele.pm`, line 285: with no predicate true, `$DEFAULT_OVERLAP_CONSEQUENCE` is assigned; `Bio/EnsEMBL/Variation/Utils/Constants.pm`, lines 636-649: the default is `intergenic_variant`.
 
 **What correcting it would change.** Every such row would carry `3_prime_UTR_variant`, as the rows one base further into the exon do. No position column changes: the cDNA position already printed is the edited mapper's. Under `--total_length` the total beside `cDNA_position` would be the edited length on every row of such a model, and no cDNA position would exceed it.

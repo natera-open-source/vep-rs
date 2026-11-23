@@ -1,20 +1,20 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "none on either side",
- "input": "variants.vcf: 12 records of the suite reference's exemplars and two multi-allelic records at one of their loci (21:5047000 T/TG,A and T/A,TG), whose alleles trim to different spans under --minimal, the insertion's past the end of nsv6146554",
+ "input": "variants.vcf: 12 records of the dataset reference's exemplars and two multi-allelic records at one of their loci (21:5047000 T/TG,A and T/A,TG), whose alleles trim to different spans under --minimal, the insertion's past the end of nsv6146554",
  "sha256": {
-  "default.txt": "6f897762076c02d8d03cec0e833aac02d42a063c094e179fa08a5e3ab1427a1b",
-  "tab.txt": "116fee33f6695095aff3918ee8ee69c58584eadef8ce041c891a7aeb3ac4ba39",
-  "vcf.vcf": "dc629d588cb49bfcaccebea3a950e3e1512d4f4fa0f6447b0dd110811e6d3648",
-  "json.jsonl": "99354e4623dd60e11d33b1b61496a18dde08788e2a42b2b3f55a3e6da12c9f7e"
+  "default.txt": "af69d9c3b6db255ab6b2ac42328633bc3225c8c97cfc5854859bfbe3d71e23a4",
+  "tab.txt": "4a9134cfd948633c05103ab1dea516b7790862f0acb426c7cb23930ccf93048a",
+  "vcf.vcf": "4cdffd5977a5579b6c97f1d78b749f8ada33d290e99a9426289c7688760cffd9",
+  "json.jsonl": "e032dbca37546aa75b3004f33bcb8dd4a08a9527e8ccaa4c2628e33477b24356"
  },
  "variants_vcf_sha256": "33bda167d7dd0f8f9b8bba7ce1f9e053209f6fb893e78dc16359751fa87a0da3",
- "generator": "scripts/golden/build_golden_corpus.py select; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; scripts/concordance/generate_reference_output.sh --corpus (the default run); the check-svs and check-svs-minimal flag sets' outputs from the vep command recorded under each flag_sets entry, run in the same image with a connection to Ensembl's public database, since Ensembl VEP refuses --check_svs offline; scripts/golden/build_golden_corpus.py flag-set; scripts/golden/build_golden_corpus.py classify",
+ "generator": "tools/vep-golden-corpus select; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; scripts/concordance/generate_reference_output.sh --corpus (the default run); the check-svs and check-svs-minimal flag sets' outputs from the vep command recorded under each flag_sets entry, run in the same image with a connection to Ensembl's public database, since Ensembl VEP refuses --check_svs offline; tools/vep-golden-corpus flag-set; tools/vep-golden-corpus classify",
  "flag_sets": {
   "check-svs": {
    "flags": [
@@ -26,11 +26,14 @@
    "vep_command": "vep -i variants.vcf -o <out> --cache --dir_cache <cache> --cache_version 116 --db_version 116 --check_svs --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
    "vep_mode": "transcripts from the release-116 cache, structural variants from homo_sapiens_variation_116_38 on ensembldb.ensembl.org:3306 (Config.pm:287-289 defaults), the database structural_variant_slice.source is dumped from; the output headers name the connection and the DB version, which the golden comparators set aside",
    "sha256": {
-    "default.txt": "756e1d8874f7d77519bfdddf791d5e5097f289d7f7e71d71d7d059f7daccf090",
-    "tab.txt": "9771c2da41cb57e1b134a02ee490456ee05cc06d53a4dea2a1c250da2cc21161",
-    "vcf.vcf": "660a245eea779e814f54d51e5c9020406dc40548efd18eef73821226a25d0ec5",
-    "json.jsonl": "c651d05815566992b2379c260508e667a12174ca9586db6f7f5f350fe75ac47b"
-   }
+    "default.txt": "b55c737e2547e5acff7c5b8868013168963fb6cb3ede746039374766476bb842",
+    "tab.txt": "e4248d7b67ffc859ae4a92342c09c7640ab5b9029f01b6206f7bafa15e2e33a8",
+    "vcf.vcf": "bf16b929051bf10bd1bcb6dbcc84d95e7402ee117fdb1b245179dfa55ecde548",
+    "json.jsonl": "71fa28808659a3f430265fb0199a1a2d0daefdcbb86f6c818c06756ecbfd8b37"
+   },
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3"
   },
   "check-svs-minimal": {
    "flags": [
@@ -43,11 +46,14 @@
    "vep_command": "vep -i variants.vcf -o <out> --cache --dir_cache <cache> --cache_version 116 --db_version 116 --minimal --check_svs --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
    "vep_mode": "transcripts from the release-116 cache, structural variants from homo_sapiens_variation_116_38 on ensembldb.ensembl.org:3306 (Config.pm:287-289 defaults), the database structural_variant_slice.source is dumped from; the output headers name the connection and the DB version, which the golden comparators set aside",
    "sha256": {
-    "default.txt": "bd12f68a33e03b202ea84b689af42948e067ac5ba131ad123bd244546d45e1cc",
-    "tab.txt": "de296d827d01bf7999d0725b76243febffbab971db9e39746a5d787c624d317e",
-    "vcf.vcf": "83f955fc851bc5c8af736143eb531c75f665459b42b8350de4c19603449ff22d",
-    "json.jsonl": "d01cb59b41b3c9dee475d710116c3b0d42266d389f92e88fd7b72baf9e83433a"
-   }
+    "default.txt": "e14b31790aaa1a1b7fdc5b9c1e46e04217c0f16a863f4261930b9724a477b69b",
+    "tab.txt": "e801079c3a5901e41efadada239d58e40c2bc40d2e5736ef1cab5754e706102b",
+    "vcf.vcf": "27d5662067647f8c99949969b4f2838e9c13b2fcacc9a29c1cc963325922946c",
+    "json.jsonl": "554cb1d9a3469bdadbecebb5b75416ef95ac6e705ed1d5cce97eafa764a61a39"
+   },
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3"
   }
  },
  "structural_variant_slice": {
@@ -225,6 +231,6 @@
    }
   },
   "database_check": "chromosome 21 of homo_sapiens_variation_116_38: every one of the file's 96,903 top-level records has an identical (name, POS + 1, END) row among the 97,616 germline, non-evidence, non-probe, non-failed features; the other 713 database rows are further mappings of names the file carries (708 of a name it carries once, 5 of a name it carries twice), so the file and the database name the same 96,869 variants, and the further mappings lie under the same name's file mapping except at 590 of the chromosome's 46,709,983 positions (586 runs), where the database names a feature the file lacks; no feature has start > end; failed_structural_variation holds none of them; the 2,470 somatic features are absent from the dump",
-  "slice_check": "Ensembl VEP 116.2 with --check_svs against the database and vep-rs with --check_svs on this slice name the same structural variants for every record (the expected_check-svs outputs); every input span's name set is the same in the file and in the database"
+  "slice_check": "Ensembl VEP 116.3 with --check_svs against the database and vep-rs with --check_svs on this slice name the same structural variants for every record (the expected_check-svs outputs); every input span's name set is the same in the file and in the database"
  }
 }

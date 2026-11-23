@@ -1,0 +1,1073 @@
+{"pattern":"\"clinpred\":","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"\"clinpred\":","text":"{\"clinpred\":0.5,\"x\":1}","spans":[[1,12]],"groups":["\"clinpred\":"],"match":null,"fullmatch":false,"sub":"{<masked>0.5,\"x\":1}","split":["{","0.5,\"x\":1}"]}
+{"pattern":"(?<=^##VEP-command-line=).*","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"(?<=^##VEP-command-line=).*","text":"##VEP-command-line='vep -i /work/in/record.vcf'","spans":[[19,47]],"groups":["'vep -i /work/in/record.vcf'"],"match":null,"fullmatch":false,"sub":"##VEP-command-line=<masked>","split":["##VEP-command-line=",""]}
+{"pattern":"(?<=delins)(?:[A-Z][a-z]{2}){6}$","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"(?<=delins)(?:[A-Z][a-z]{2}){6}$","text":"ENST00000624291:c.1delinsGluGluGluGluGluGlu","spans":[[25,43]],"groups":["GluGluGluGluGluGlu"],"match":null,"fullmatch":false,"sub":"ENST00000624291:c.1delins<masked>","split":["ENST00000624291:c.1delins",""]}
+{"pattern":".","text":"## HGVSp : HGVS protein sequence name","spans":[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,8],[8,9],[9,10],[10,11],[11,12],[12,13],[13,14],[14,15],[15,16],[16,17],[17,18],[18,19],[19,20],[20,21],[21,22],[22,23],[23,24],[24,25],[25,26],[26,27],[27,28],[28,29],[29,30],[30,31],[31,32],[32,33],[33,34],[34,35],[35,36],[36,37]],"groups":["#"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked>","split":["","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""]}
+{"pattern":".","text":"## SpliceAI_pred_DP_AG : x","spans":[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,8],[8,9],[9,10],[10,11],[11,12],[12,13],[13,14],[14,15],[15,16],[16,17],[17,18],[18,19],[19,20],[20,21],[21,22],[22,23],[23,24],[24,25],[25,26]],"groups":["#"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked>","split":["","","","","","","","","","","","","","","","","","","","","","","","","","",""]}
+{"pattern":".","text":"## LOEUF : y","spans":[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,8],[8,9],[9,10],[10,11],[11,12]],"groups":["#"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked>","split":["","","","","","","","","","","","",""]}
+{"pattern":".","text":"## cons : conservation","spans":[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,8],[8,9],[9,10],[10,11],[11,12],[12,13],[13,14],[14,15],[15,16],[16,17],[17,18],[18,19],[19,20],[20,21],[21,22]],"groups":["#"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked><masked>","split":["","","","","","","","","","","","","","","","","","","","","","",""]}
+{"pattern":".","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"Cannot read the transcript cache","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"Could not read synonyms file","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"ENST\\d{11}","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"ENST\\d{11}","text":"ENST00000624291:c.1delinsGluGluGluGluGluGlu","spans":[[0,15]],"groups":["ENST00000624291"],"match":[0,15],"fullmatch":false,"sub":"<masked>:c.1delinsGluGluGluGluGluGlu","split":["",":c.1delinsGluGluGluGluGluGlu"]}
+{"pattern":"Failed to inflate","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"IND=S1;","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"No such operator","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"No variant found with ID","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"PICK=1","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"Plugin 'CADD' went wrong","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"Plugin 'CADD' went wrong","text":"Plugin 'CADD' went wrong","spans":[[0,24]],"groups":["Plugin 'CADD' went wrong"],"match":[0,24],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"Plugin 'DosageSensitivity' went wrong","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"Transcript-assembly mismatch","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"Unable to parse HGVS notation","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"[,}].*$","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"[,}].*$","text":"99000001,99000002,","spans":[[8,18]],"groups":[",99000002,"],"match":null,"fullmatch":false,"sub":"99000001<masked>","split":["99000001",""]}
+{"pattern":"[,}].*$","text":"{\"clinpred\":0.5,\"x\":1}","spans":[[15,22]],"groups":[",\"x\":1}"],"match":null,"fullmatch":false,"sub":"{\"clinpred\":0.5<masked>","split":["{\"clinpred\":0.5",""]}
+{"pattern":"[,}].*$","text":"0.5,\"x\":1}","spans":[[3,10]],"groups":[",\"x\":1}"],"match":null,"fullmatch":false,"sub":"0.5<masked>","split":["0.5",""]}
+{"pattern":"[,}].*$","text":"at /a/b,/c/d","spans":[[7,12]],"groups":[",/c/d"],"match":null,"fullmatch":false,"sub":"at /a/b<masked>","split":["at /a/b",""]}
+{"pattern":"[A-Z]{50}$","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"^## (Polyphen2_HDIV_score|SIFT_pred) :","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name"}
+{"pattern":"^## (Polyphen2_HDIV_score|SIFT_pred) :","text":"## Polyphen2_HDIV_score : p","spans":[[0,25]],"groups":["## Polyphen2_HDIV_score :","Polyphen2_HDIV_score"],"match":[0,25],"fullmatch":false,"sub":"<masked> p"}
+{"pattern":"^## (cons|SITES|SITES_AF) : ","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name"}
+{"pattern":"^## (cons|SITES|SITES_AF) : ","text":"## cons : conservation","spans":[[0,10]],"groups":["## cons : ","cons"],"match":[0,10],"fullmatch":false,"sub":"<masked>conservation"}
+{"pattern":"^## (cons|SITES|SITES_AF) : ","text":"## SITES_AF : z","spans":[[0,14]],"groups":["## SITES_AF : ","SITES_AF"],"match":[0,14],"fullmatch":false,"sub":"<masked>z"}
+{"pattern":"^## LOEUF : ","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"^## LOEUF : ","text":"## LOEUF : y","spans":[[0,11]],"groups":["## LOEUF : "],"match":[0,11],"fullmatch":false,"sub":"<masked>y","split":["","y"]}
+{"pattern":"^## SpliceAI_pred","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"^## SpliceAI_pred","text":"## SpliceAI_pred_DP_AG : x","spans":[[0,16]],"groups":["## SpliceAI_pred"],"match":[0,16],"fullmatch":false,"sub":"<masked>_DP_AG : x","split":["","_DP_AG : x"]}
+{"pattern":"^## gnomAD_(AC_het|AC_hom|AF_het|AF_hom|common_low_heteroplasmy) :","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name"}
+{"pattern":"^## gnomAD_(AC_het|AC_hom|AF_het|AF_hom|common_low_heteroplasmy) :","text":"## gnomAD_AC_het : 1","spans":[[0,18]],"groups":["## gnomAD_AC_het :","AC_het"],"match":[0,18],"fullmatch":false,"sub":"<masked> 1"}
+{"pattern":"^## oneone_","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"^## oneone_","text":"## oneone_x","spans":[[0,10]],"groups":["## oneone_"],"match":[0,10],"fullmatch":false,"sub":"<masked>x","split":["","x"]}
+{"pattern":"^## ph(ly|yl)oP100way : ","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name"}
+{"pattern":"^## ph(ly|yl)oP100way : ","text":"## phyloP100way : s","spans":[[0,18]],"groups":["## phyloP100way : ","yl"],"match":[0,18],"fullmatch":false,"sub":"<masked>s"}
+{"pattern":"^## ph(ly|yl)oP100way : ","text":"## phlyoP100way : t","spans":[[0,18]],"groups":["## phlyoP100way : ","ly"],"match":[0,18],"fullmatch":false,"sub":"<masked>t"}
+{"pattern":"^## regions_PC : ","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"^## regions_PC : ","text":"## regions_PC : r","spans":[[0,16]],"groups":["## regions_PC : "],"match":[0,16],"fullmatch":false,"sub":"<masked>r","split":["","r"]}
+{"pattern":"^#(CHROM|#source=|#VEP-command-line=)","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name"}
+{"pattern":"^#(CHROM|#source=|#VEP-command-line=)","text":"#CHROM\tPOS\tID","spans":[[0,6]],"groups":["#CHROM","CHROM"],"match":[0,6],"fullmatch":false,"sub":"<masked>\tPOS\tID"}
+{"pattern":"^#(CHROM|#source=|#VEP-command-line=)","text":"##source=x","spans":[[0,9]],"groups":["##source=","#source="],"match":[0,9],"fullmatch":false,"sub":"<masked>x"}
+{"pattern":"^#(CHROM|#source=|#VEP-command-line=)","text":"##VEP-command-line='vep -i /work/in/record.vcf'","spans":[[0,19]],"groups":["##VEP-command-line=","#VEP-command-line="],"match":[0,19],"fullmatch":false,"sub":"<masked>'vep -i /work/in/record.vcf'"}
+{"pattern":"^#Uploaded_variation","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"^#Uploaded_variation","text":"#Uploaded_variation\tLocation","spans":[[0,19]],"groups":["#Uploaded_variation"],"match":[0,19],"fullmatch":false,"sub":"<masked>\tLocation","split":["","\tLocation"]}
+{"pattern":"^.*\"clinpred\":","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"^.*\"clinpred\":","text":"{\"clinpred\":0.5,\"x\":1}","spans":[[0,12]],"groups":["{\"clinpred\":"],"match":[0,12],"fullmatch":false,"sub":"<masked>0.5,\"x\":1}","split":["","0.5,\"x\":1}"]}
+{"pattern":"^21\t","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"^21\t","text":"21\t100\trec\tG\tA","spans":[[0,3]],"groups":["21\t"],"match":[0,3],"fullmatch":false,"sub":"<masked>100\trec\tG\tA","split":["","100\trec\tG\tA"]}
+{"pattern":"^99000001,(?:99[0-9]{6},){111}","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"^WARNING: \\d+ : ","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"^WARNING: \\d+ : ","text":"WARNING: 12 : skipped","spans":[[0,14]],"groups":["WARNING: 12 : "],"match":[0,14],"fullmatch":false,"sub":"<masked>skipped","split":["","skipped"]}
+{"pattern":"gene_symbol","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"gene_symbol","text":"gene_symbol","spans":[[0,11]],"groups":["gene_symbol"],"match":[0,11],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"malformed BGZF block|length error","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"malformed BGZF block|length error","text":"malformed BGZF block","spans":[[0,20]],"groups":["malformed BGZF block"],"match":[0,20],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"malformed BGZF block|length error","text":"length error","spans":[[0,12]],"groups":["length error"],"match":[0,12],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"no transcript shards","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"p\\.(?:Glu){3}25","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"p\\.(?:Glu){3}25","text":"p.GluGluGlu25","spans":[[0,13]],"groups":["p.GluGluGlu25"],"match":[0,13],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"regulatory","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"regulatory","text":"regulatory","spans":[[0,10]],"groups":["regulatory"],"match":[0,10],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"says var_type","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"says var_type","text":"says var_type","spans":[[0,13]],"groups":["says var_type"],"match":[0,13],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"went wrong","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"went wrong","text":"Plugin 'CADD' went wrong","spans":[[14,24]],"groups":["went wrong"],"match":null,"fullmatch":false,"sub":"Plugin 'CADD' <masked>","split":["Plugin 'CADD' ",""]}
+{"pattern":"(?<![\\w.*/-])/(?:[\\w.+@%:,=~-]+/)*[\\w.+@%:,=~-]+","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"(?<![\\w.*/-])/(?:[\\w.+@%:,=~-]+/)*[\\w.+@%:,=~-]+","text":"##VEP-command-line='vep -i /work/in/record.vcf'","spans":[[27,46]],"groups":["/work/in/record.vcf"],"match":null,"fullmatch":false,"sub":"##VEP-command-line='vep -i <masked>'","split":["##VEP-command-line='vep -i ","'"]}
+{"pattern":"(?<![\\w.*/-])/(?:[\\w.+@%:,=~-]+/)*[\\w.+@%:,=~-]+","text":"WARNING: line 3 : skipped /host/in.vcf","spans":[[26,38]],"groups":["/host/in.vcf"],"match":null,"fullmatch":false,"sub":"WARNING: line 3 : skipped <masked>","split":["WARNING: line 3 : skipped ",""]}
+{"pattern":"(?<![\\w.*/-])/(?:[\\w.+@%:,=~-]+/)*[\\w.+@%:,=~-]+","text":"b at /opt/vep/src/x.pm line 3","spans":[[5,22]],"groups":["/opt/vep/src/x.pm"],"match":null,"fullmatch":false,"sub":"b at <masked> line 3","split":["b at "," line 3"]}
+{"pattern":"(?<![\\w.*/-])/(?:[\\w.+@%:,=~-]+/)*[\\w.+@%:,=~-]+","text":"gzip: /work/in/x.bgz: not in gzip format","spans":[[6,21]],"groups":["/work/in/x.bgz:"],"match":null,"fullmatch":false,"sub":"gzip: <masked> not in gzip format","split":["gzip: "," not in gzip format"]}
+{"pattern":"^seen in (?P<where>[^\\s:](?:(?!: ).)*)(?<=\\S): (?P<what>\\S.*)$","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name"}
+{"pattern":"^seen in (?P<where>[^\\s:](?:(?!: ).)*)(?<=\\S): (?P<what>\\S.*)$","text":"seen in a: b: c","spans":[[0,15]],"groups":["seen in a: b: c","a","b: c"],"match":[0,15],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"^seen in (?P<where>[^\\s:](?:(?!: ).)*)(?<=\\S): (?P<what>\\S.*)$","text":"seen in a population dataset: 4,158 pairs","spans":[[0,41]],"groups":["seen in a population dataset: 4,158 pairs","a population dataset","4,158 pairs"],"match":[0,41],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"^(?P<marks>#{2,4}) (?P<title>.+)$","text":"## HGVSp : HGVS protein sequence name","spans":[[0,37]],"groups":["## HGVSp : HGVS protein sequence name","##","HGVSp : HGVS protein sequence name"],"match":[0,37],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"^(?P<marks>#{2,4}) (?P<title>.+)$","text":"## SpliceAI_pred_DP_AG : x","spans":[[0,26]],"groups":["## SpliceAI_pred_DP_AG : x","##","SpliceAI_pred_DP_AG : x"],"match":[0,26],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"^(?P<marks>#{2,4}) (?P<title>.+)$","text":"## LOEUF : y","spans":[[0,12]],"groups":["## LOEUF : y","##","LOEUF : y"],"match":[0,12],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"^(?P<marks>#{2,4}) (?P<title>.+)$","text":"## cons : conservation","spans":[[0,22]],"groups":["## cons : conservation","##","cons : conservation"],"match":[0,22],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"^(?P<marks>#{2,4}) (?P<title>.+)$","text":"#CHROM\tPOS\tID","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"#CHROM\tPOS\tID"}
+{"pattern":"\\s*\\{#[^}]*\\}$","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"\\s*\\{#[^}]*\\}$","text":"### Sub {#id}","spans":[[7,13]],"groups":[" {#id}"],"match":null,"fullmatch":false,"sub":"### Sub<masked>","split":["### Sub",""]}
+{"pattern":"^\\[`(?P<key>[a-z0-9_]+)`\\]\\([^)]+\\)$","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name"}
+{"pattern":"^\\[`(?P<key>[a-z0-9_]+)`\\]\\([^)]+\\)$","text":"[`key_1`](x.md)","spans":[[0,15]],"groups":["[`key_1`](x.md)","key_1"],"match":[0,15],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"(?P<link>\\[)?`(?P<key>[a-z0-9_]+)`(?(link)\\]\\([^)]+\\))","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name"}
+{"pattern":"(?P<link>\\[)?`(?P<key>[a-z0-9_]+)`(?(link)\\]\\([^)]+\\))","text":"[`key_1`](x.md)","spans":[[0,15]],"groups":["[`key_1`](x.md)","[","key_1"],"match":[0,15],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"(?P<link>\\[)?`(?P<key>[a-z0-9_]+)`(?(link)\\]\\([^)]+\\))","text":"`bare` and [`linked`](y.md) and [`open`]","spans":[[0,6],[11,27],[33,39]],"groups":["`bare`",null,"bare"],"match":[0,6],"fullmatch":false,"sub":"<masked> and <masked> and [<masked>]"}
+{"pattern":"^[0-9]+(?:\\.[0-9]+)*$","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"^(?P<tier>[1-3]) \u00b7 (?P<figure>[^\u00b7]+?) \u00b7 (?P<tail>.+)$","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name"}
+{"pattern":"^(?P<tier>[1-3]) \u00b7 (?P<figure>[^\u00b7]+?) \u00b7 (?P<tail>.+)$","text":"1 \u00b7 7.3 per million \u00b7 no flag needed","spans":[[0,36]],"groups":["1 \u00b7 7.3 per million \u00b7 no flag needed","1","7.3 per million","no flag needed"],"match":[0,36],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"^(?P<tier>[1-3]) \u00b7 (?P<figure>[^\u00b7]+?) \u00b7 (?P<tail>.+)$","text":"2 \u00b7 156.8 per million \u00b7 0 flag sets, 28 corpora","spans":[[0,47]],"groups":["2 \u00b7 156.8 per million \u00b7 0 flag sets, 28 corpora","2","156.8 per million","0 flag sets, 28 corpora"],"match":[0,47],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"^(?P<tier>[1-3]) \u00b7 (?P<figure>[^\u00b7]+?) \u00b7 (?P<tail>.+)$","text":"3 \u00b7 none on the cuts \u00b7 9 flag sets, 2 corpora","spans":[[0,45]],"groups":["3 \u00b7 none on the cuts \u00b7 9 flag sets, 2 corpora","3","none on the cuts","9 flag sets, 2 corpora"],"match":[0,45],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"(?<!\\\\)\\|$","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"(?<!\\\\)\\|$","text":"| a | b \\| c | d |","spans":[[17,18]],"groups":["|"],"match":null,"fullmatch":false,"sub":"| a | b \\| c | d <masked>","split":["| a | b \\| c | d ",""]}
+{"pattern":"(?<!\\\\)\\|","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"(?<!\\\\)\\|","text":"21:100 | -/A | ENST1 | x","spans":[[7,8],[13,14],[21,22]],"groups":["|"],"match":null,"fullmatch":false,"sub":"21:100 <masked> -/A <masked> ENST1 <masked> x","split":["21:100 "," -/A "," ENST1 "," x"]}
+{"pattern":"(?<!\\\\)\\|","text":"| a | b \\| c | d |","spans":[[0,1],[4,5],[13,14],[17,18]],"groups":["|"],"match":[0,1],"fullmatch":false,"sub":"<masked> a <masked> b \\| c <masked> d <masked>","split":[""," a "," b \\| c "," d ",""]}
+{"pattern":"(?<!\\\\)\\|","text":"a|b","spans":[[1,2]],"groups":["|"],"match":null,"fullmatch":false,"sub":"a<masked>b","split":["a","b"]}
+{"pattern":"(?<!\\\\)\\|","text":"a\\|b|c","spans":[[4,5]],"groups":["|"],"match":null,"fullmatch":false,"sub":"a\\|b<masked>c","split":["a\\|b","c"]}
+{"pattern":"##INFO=<ID=([^,]+),.*Format: ([^\"]+)\"","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name"}
+{"pattern":"\\{[a-z][a-z0-9_]*\\}","text":"## HGVSp : HGVS protein sequence name","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"## HGVSp : HGVS protein sequence name","split":["## HGVSp : HGVS protein sequence name"]}
+{"pattern":"\\{[a-z][a-z0-9_]*\\}","text":"{corpus}/x {stage} {Bad} {a_1}","spans":[[0,8],[11,18],[25,30]],"groups":["{corpus}"],"match":[0,8],"fullmatch":false,"sub":"<masked>/x <masked> {Bad} <masked>","split":["","/x "," {Bad} ",""]}
+{"pattern":"\\{[a-z][a-z0-9_]*\\}","text":"{a}","spans":[[0,3]],"groups":["{a}"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[^.\\[\\]]+|\\[[^\\]]*\\]","text":"## HGVSp : HGVS protein sequence name","spans":[[0,37]],"groups":["## HGVSp : HGVS protein sequence name"],"match":[0,37],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[^.\\[\\]]+|\\[[^\\]]*\\]","text":"## SpliceAI_pred_DP_AG : x","spans":[[0,26]],"groups":["## SpliceAI_pred_DP_AG : x"],"match":[0,26],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[^.\\[\\]]+|\\[[^\\]]*\\]","text":"## LOEUF : y","spans":[[0,12]],"groups":["## LOEUF : y"],"match":[0,12],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[^.\\[\\]]+|\\[[^\\]]*\\]","text":"## cons : conservation","spans":[[0,22]],"groups":["## cons : conservation"],"match":[0,22],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[^.\\[\\]]+|\\[[^\\]]*\\]","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"[a-z][a-z0-9_]*","text":"## HGVSp : HGVS protein sequence name","spans":[[7,8],[16,23],[24,32],[33,37]],"groups":["p"],"match":null,"fullmatch":false,"sub":"## HGVS<masked> : HGVS <masked> <masked> <masked>","split":["## HGVS"," : HGVS "," "," ",""]}
+{"pattern":"[a-z][a-z0-9_]*","text":"## SpliceAI_pred_DP_AG : x","spans":[[4,9],[12,17],[25,26]],"groups":["plice"],"match":null,"fullmatch":false,"sub":"## S<masked>AI_<masked>DP_AG : <masked>","split":["## S","AI_","DP_AG : ",""]}
+{"pattern":"[a-z][a-z0-9_]*","text":"## LOEUF : y","spans":[[11,12]],"groups":["y"],"match":null,"fullmatch":false,"sub":"## LOEUF : <masked>","split":["## LOEUF : ",""]}
+{"pattern":"[a-z][a-z0-9_]*","text":"## cons : conservation","spans":[[3,7],[10,22]],"groups":["cons"],"match":null,"fullmatch":false,"sub":"## <masked> : <masked>","split":["## "," : ",""]}
+{"pattern":"[a-z][a-z0-9_]*","text":"#CHROM\tPOS\tID","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"#CHROM\tPOS\tID","split":["#CHROM\tPOS\tID"]}
+{"pattern":"a","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"a","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"a","text":"aab","spans":[[0,1],[1,2]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>b","split":["","","b"]}
+{"pattern":"a","text":"aaa","spans":[[0,1],[1,2],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked><masked>","split":["","","",""]}
+{"pattern":"a","text":"abab","spans":[[0,1],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked>b<masked>b","split":["","b","b"]}
+{"pattern":"\\.","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"\\.","text":"a.c","spans":[[1,2]],"groups":["."],"match":null,"fullmatch":false,"sub":"a<masked>c","split":["a","c"]}
+{"pattern":"\\.","text":"$5.00","spans":[[2,3]],"groups":["."],"match":null,"fullmatch":false,"sub":"$5<masked>00","split":["$5","00"]}
+{"pattern":"\\x41","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"\\x41","text":"A","spans":[[0,1]],"groups":["A"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"\\x41","text":"STRASSE","spans":[[3,4]],"groups":["A"],"match":null,"fullmatch":false,"sub":"STR<masked>SSE","split":["STR","SSE"]}
+{"pattern":"\u00e9","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"\u00e9","text":"caf\u00e9","spans":[[3,4]],"groups":["\u00e9"],"match":null,"fullmatch":false,"sub":"caf<masked>","split":["caf",""]}
+{"pattern":"\\U0001F600","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"\\U0001F600","text":"\ud83d\ude00","spans":[[0,1]],"groups":["\ud83d\ude00"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"\\U0001F600","text":"x\ud83d\ude00y","spans":[[1,2]],"groups":["\ud83d\ude00"],"match":null,"fullmatch":false,"sub":"x<masked>y","split":["x","y"]}
+{"pattern":"\\101","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"\\101","text":"A","spans":[[0,1]],"groups":["A"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"\\101","text":"STRASSE","spans":[[3,4]],"groups":["A"],"match":null,"fullmatch":false,"sub":"STR<masked>SSE","split":["STR","SSE"]}
+{"pattern":"\\0","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"\\07","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"\\n","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"\\n","text":"a\nb","spans":[[1,2]],"groups":["\n"],"match":null,"fullmatch":false,"sub":"a<masked>b","split":["a","b"]}
+{"pattern":"\\n","text":"\n","spans":[[0,1]],"groups":["\n"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"\\n","text":"ab\ncd\n","spans":[[2,3],[5,6]],"groups":["\n"],"match":null,"fullmatch":false,"sub":"ab<masked>cd<masked>","split":["ab","cd",""]}
+{"pattern":"\\t","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"\\t","text":"a\tc","spans":[[1,2]],"groups":["\t"],"match":null,"fullmatch":false,"sub":"a<masked>c","split":["a","c"]}
+{"pattern":"\\\\","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"\\\\","text":"a\\|b|c","spans":[[1,2]],"groups":["\\"],"match":null,"fullmatch":false,"sub":"a<masked>|b|c","split":["a","|b|c"]}
+{"pattern":"\\\\","text":"\\","spans":[[0,1]],"groups":["\\"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"\\/","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"\\/","text":"/","spans":[[0,1]],"groups":["/"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"\\/","text":"//","spans":[[0,1],[1,2]],"groups":["/"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>","split":["","",""]}
+{"pattern":"\\ ","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"\\ ","text":"ABC abc","spans":[[3,4]],"groups":[" "],"match":null,"fullmatch":false,"sub":"ABC<masked>abc","split":["ABC","abc"]}
+{"pattern":"\\ ","text":"foo bar_baz 42","spans":[[3,4],[11,12]],"groups":[" "],"match":null,"fullmatch":false,"sub":"foo<masked>bar_baz<masked>42","split":["foo","bar_baz","42"]}
+{"pattern":"\\ ","text":"  lead and trail  ","spans":[[0,1],[1,2],[6,7],[10,11],[16,17],[17,18]],"groups":[" "],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>lead<masked>and<masked>trail<masked><masked>","split":["","","lead","and","trail","",""]}
+{"pattern":"\\ ","text":"| x | y |","spans":[[1,2],[3,4],[5,6],[7,8]],"groups":[" "],"match":null,"fullmatch":false,"sub":"|<masked>x<masked>|<masked>y<masked>|","split":["|","x","|","y","|"]}
+{"pattern":"\\-","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"\\-","text":"a-c","spans":[[1,2]],"groups":["-"],"match":null,"fullmatch":false,"sub":"a<masked>c","split":["a","c"]}
+{"pattern":"[\\]]","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"[\\]]","text":"[a]","spans":[[2,3]],"groups":["]"],"match":null,"fullmatch":false,"sub":"[a<masked>","split":["[a",""]}
+{"pattern":"[]a]","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"[]a]","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[]a]","text":"aab","spans":[[0,1],[1,2]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>b","split":["","","b"]}
+{"pattern":"[]a]","text":"aaa","spans":[[0,1],[1,2],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked><masked>","split":["","","",""]}
+{"pattern":"[]a]","text":"abab","spans":[[0,1],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked>b<masked>b","split":["","b","b"]}
+{"pattern":"[^]a]","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"[^]a]","text":"b","spans":[[0,1]],"groups":["b"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[^]a]","text":"ab","spans":[[1,2]],"groups":["b"],"match":null,"fullmatch":false,"sub":"a<masked>","split":["a",""]}
+{"pattern":"[^]a]","text":"abc","spans":[[1,2],[2,3]],"groups":["b"],"match":null,"fullmatch":false,"sub":"a<masked><masked>","split":["a","",""]}
+{"pattern":"[^]a]","text":"aab","spans":[[2,3]],"groups":["b"],"match":null,"fullmatch":false,"sub":"aa<masked>","split":["aa",""]}
+{"pattern":"[a\\-z]","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"[a\\-z]","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[a\\-z]","text":"aab","spans":[[0,1],[1,2]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>b","split":["","","b"]}
+{"pattern":"[a\\-z]","text":"aaa","spans":[[0,1],[1,2],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked><masked>","split":["","","",""]}
+{"pattern":"[a\\-z]","text":"abab","spans":[[0,1],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked>b<masked>b","split":["","b","b"]}
+{"pattern":"[a-z0-9_]+","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"[a-z0-9_]+","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[a-z0-9_]+","text":"b","spans":[[0,1]],"groups":["b"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[a-z0-9_]+","text":"ab","spans":[[0,2]],"groups":["ab"],"match":[0,2],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[a-z0-9_]+","text":"abc","spans":[[0,3]],"groups":["abc"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[\\d\\s]+","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"[\\d\\s]+","text":"a\nb","spans":[[1,2]],"groups":["\n"],"match":null,"fullmatch":false,"sub":"a<masked>b","split":["a","b"]}
+{"pattern":"[\\d\\s]+","text":"\n","spans":[[0,1]],"groups":["\n"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[\\d\\s]+","text":"ab\ncd\n","spans":[[2,3],[5,6]],"groups":["\n"],"match":null,"fullmatch":false,"sub":"ab<masked>cd<masked>","split":["ab","cd",""]}
+{"pattern":"[\\d\\s]+","text":"ABC abc","spans":[[3,4]],"groups":[" "],"match":null,"fullmatch":false,"sub":"ABC<masked>abc","split":["ABC","abc"]}
+{"pattern":"[^\\W\\d]+","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"[^\\W\\d]+","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[^\\W\\d]+","text":"b","spans":[[0,1]],"groups":["b"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[^\\W\\d]+","text":"ab","spans":[[0,2]],"groups":["ab"],"match":[0,2],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[^\\W\\d]+","text":"abc","spans":[[0,3]],"groups":["abc"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[\\x00-\\x1f]","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"[\\x00-\\x1f]","text":"a\nb","spans":[[1,2]],"groups":["\n"],"match":null,"fullmatch":false,"sub":"a<masked>b","split":["a","b"]}
+{"pattern":"[\\x00-\\x1f]","text":"\n","spans":[[0,1]],"groups":["\n"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[\\x00-\\x1f]","text":"ab\ncd\n","spans":[[2,3],[5,6]],"groups":["\n"],"match":null,"fullmatch":false,"sub":"ab<masked>cd<masked>","split":["ab","cd",""]}
+{"pattern":"[\\x00-\\x1f]","text":"a\tc","spans":[[1,2]],"groups":["\t"],"match":null,"fullmatch":false,"sub":"a<masked>c","split":["a","c"]}
+{"pattern":"[\u0400-\u04ff]","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"[\ud83d\ude00-\ud83d\ude02]","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"[\ud83d\ude00-\ud83d\ude02]","text":"\ud83d\ude00","spans":[[0,1]],"groups":["\ud83d\ude00"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[\ud83d\ude00-\ud83d\ude02]","text":"x\ud83d\ude00y","spans":[[1,2]],"groups":["\ud83d\ude00"],"match":null,"fullmatch":false,"sub":"x<masked>y","split":["x","y"]}
+{"pattern":"[a-]","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"[a-]","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[a-]","text":"aab","spans":[[0,1],[1,2]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>b","split":["","","b"]}
+{"pattern":"[a-]","text":"aaa","spans":[[0,1],[1,2],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked><masked>","split":["","","",""]}
+{"pattern":"[a-]","text":"abab","spans":[[0,1],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked>b<masked>b","split":["","b","b"]}
+{"pattern":"[-a]","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"[-a]","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[-a]","text":"aab","spans":[[0,1],[1,2]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>b","split":["","","b"]}
+{"pattern":"[-a]","text":"aaa","spans":[[0,1],[1,2],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked><masked>","split":["","","",""]}
+{"pattern":"[-a]","text":"abab","spans":[[0,1],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked>b<masked>b","split":["","b","b"]}
+{"pattern":"[a-c-e]","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"[a-c-e]","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[a-c-e]","text":"b","spans":[[0,1]],"groups":["b"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[a-c-e]","text":"ab","spans":[[0,1],[1,2]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>","split":["","",""]}
+{"pattern":"[a-c-e]","text":"abc","spans":[[0,1],[1,2],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked><masked>","split":["","","",""]}
+{"pattern":"[\\w-]","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"[\\w-]","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[\\w-]","text":"b","spans":[[0,1]],"groups":["b"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[\\w-]","text":"ab","spans":[[0,1],[1,2]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>","split":["","",""]}
+{"pattern":"[\\w-]","text":"abc","spans":[[0,1],[1,2],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked><masked>","split":["","","",""]}
+{"pattern":"\\d+","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"\\d+","text":"x1y22z333","spans":[[1,2],[3,5],[6,9]],"groups":["1"],"match":null,"fullmatch":false,"sub":"x<masked>y<masked>z<masked>","split":["x","y","z",""]}
+{"pattern":"\\d+","text":"foo bar_baz 42","spans":[[12,14]],"groups":["42"],"match":null,"fullmatch":false,"sub":"foo bar_baz <masked>","split":["foo bar_baz ",""]}
+{"pattern":"\\d+","text":"\u0661\u0662","spans":[[0,2]],"groups":["\u0661\u0662"],"match":[0,2],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"\\d+","text":"a{2}","spans":[[2,3]],"groups":["2"],"match":null,"fullmatch":false,"sub":"a{<masked>}","split":["a{","}"]}
+{"pattern":"\\D+","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"\\D+","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"\\D+","text":"b","spans":[[0,1]],"groups":["b"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"\\D+","text":"ab","spans":[[0,2]],"groups":["ab"],"match":[0,2],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"\\D+","text":"abc","spans":[[0,3]],"groups":["abc"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"\\s+","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"\\s+","text":"a\nb","spans":[[1,2]],"groups":["\n"],"match":null,"fullmatch":false,"sub":"a<masked>b","split":["a","b"]}
+{"pattern":"\\s+","text":"\n","spans":[[0,1]],"groups":["\n"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"\\s+","text":"ab\ncd\n","spans":[[2,3],[5,6]],"groups":["\n"],"match":null,"fullmatch":false,"sub":"ab<masked>cd<masked>","split":["ab","cd",""]}
+{"pattern":"\\s+","text":"ABC abc","spans":[[3,4]],"groups":[" "],"match":null,"fullmatch":false,"sub":"ABC<masked>abc","split":["ABC","abc"]}
+{"pattern":"\\S+","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"\\S+","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"\\S+","text":"b","spans":[[0,1]],"groups":["b"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"\\S+","text":"ab","spans":[[0,2]],"groups":["ab"],"match":[0,2],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"\\S+","text":"abc","spans":[[0,3]],"groups":["abc"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"\\w+","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"\\w+","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"\\w+","text":"b","spans":[[0,1]],"groups":["b"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"\\w+","text":"ab","spans":[[0,2]],"groups":["ab"],"match":[0,2],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"\\w+","text":"abc","spans":[[0,3]],"groups":["abc"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"\\W+","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"\\W+","text":"a\nb","spans":[[1,2]],"groups":["\n"],"match":null,"fullmatch":false,"sub":"a<masked>b","split":["a","b"]}
+{"pattern":"\\W+","text":"\n","spans":[[0,1]],"groups":["\n"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"\\W+","text":"ab\ncd\n","spans":[[2,3],[5,6]],"groups":["\n"],"match":null,"fullmatch":false,"sub":"ab<masked>cd<masked>","split":["ab","cd",""]}
+{"pattern":"\\W+","text":"ABC abc","spans":[[3,4]],"groups":[" "],"match":null,"fullmatch":false,"sub":"ABC<masked>abc","split":["ABC","abc"]}
+{"pattern":"\\b\\w+\\b","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"\\b\\w+\\b","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"\\b\\w+\\b","text":"b","spans":[[0,1]],"groups":["b"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"\\b\\w+\\b","text":"ab","spans":[[0,2]],"groups":["ab"],"match":[0,2],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"\\b\\w+\\b","text":"abc","spans":[[0,3]],"groups":["abc"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"\\B","text":"","spans":[[0,0]],"groups":[""],"match":[0,0],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"\\B","text":"a","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"a","split":["a"]}
+{"pattern":"\\B","text":"ab","spans":[[1,1]],"groups":[""],"match":null,"fullmatch":false,"sub":"a<masked>b","split":["a","b"]}
+{"pattern":"\\B","text":"abc","spans":[[1,1],[2,2]],"groups":[""],"match":null,"fullmatch":false,"sub":"a<masked>b<masked>c","split":["a","b","c"]}
+{"pattern":"\\B","text":"abab","spans":[[1,1],[2,2],[3,3]],"groups":[""],"match":null,"fullmatch":false,"sub":"a<masked>b<masked>a<masked>b","split":["a","b","a","b"]}
+{"pattern":"\\b","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"\\b","text":"a","spans":[[0,0],[1,1]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>a<masked>","split":["","a",""]}
+{"pattern":"\\b","text":"ab","spans":[[0,0],[2,2]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>ab<masked>","split":["","ab",""]}
+{"pattern":"\\b","text":"abc","spans":[[0,0],[3,3]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>abc<masked>","split":["","abc",""]}
+{"pattern":"\\b","text":"abab","spans":[[0,0],[4,4]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>abab<masked>","split":["","abab",""]}
+{"pattern":"\\Aabc","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"\\Aabc","text":"abc","spans":[[0,3]],"groups":["abc"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"abc\\Z","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"abc\\Z","text":"abc","spans":[[0,3]],"groups":["abc"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"abc\\Z","text":"abcabc","spans":[[3,6]],"groups":["abc"],"match":null,"fullmatch":false,"sub":"abc<masked>","split":["abc",""]}
+{"pattern":"abc\\Z","text":"ABC abc","spans":[[4,7]],"groups":["abc"],"match":null,"fullmatch":false,"sub":"ABC <masked>","split":["ABC ",""]}
+{"pattern":"abc\\z","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"abc\\z","text":"abc","spans":[[0,3]],"groups":["abc"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"abc\\z","text":"abcabc","spans":[[3,6]],"groups":["abc"],"match":null,"fullmatch":false,"sub":"abc<masked>","split":["abc",""]}
+{"pattern":"abc\\z","text":"ABC abc","spans":[[4,7]],"groups":["abc"],"match":null,"fullmatch":false,"sub":"ABC <masked>","split":["ABC ",""]}
+{"pattern":"^a","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"^a","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"a$","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"a$","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"a$","text":"aaa","spans":[[2,3]],"groups":["a"],"match":null,"fullmatch":false,"sub":"aa<masked>","split":["aa",""]}
+{"pattern":"a$","text":"aaaa","spans":[[3,4]],"groups":["a"],"match":null,"fullmatch":false,"sub":"aaa<masked>","split":["aaa",""]}
+{"pattern":"a$","text":"ba","spans":[[1,2]],"groups":["a"],"match":null,"fullmatch":false,"sub":"b<masked>","split":["b",""]}
+{"pattern":"(?m)^a","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?m)^a","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?m)a$","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?m)a$","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?m)a$","text":"aaa","spans":[[2,3]],"groups":["a"],"match":null,"fullmatch":false,"sub":"aa<masked>","split":["aa",""]}
+{"pattern":"(?m)a$","text":"aaaa","spans":[[3,4]],"groups":["a"],"match":null,"fullmatch":false,"sub":"aaa<masked>","split":["aaa",""]}
+{"pattern":"(?m)a$","text":"ba","spans":[[1,2]],"groups":["a"],"match":null,"fullmatch":false,"sub":"b<masked>","split":["b",""]}
+{"pattern":"(?m)^","text":"","spans":[[0,0]],"groups":[""],"match":[0,0],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?m)^","text":"a\nb","spans":[[0,0],[2,2]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>a\n<masked>b","split":["","a\n","b"]}
+{"pattern":"(?m)^","text":"\n","spans":[[0,0],[1,1]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>\n<masked>","split":["","\n",""]}
+{"pattern":"(?m)^","text":"ab\ncd\n","spans":[[0,0],[3,3],[6,6]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>ab\n<masked>cd\n<masked>","split":["","ab\n","cd\n",""]}
+{"pattern":"(?m)$","text":"","spans":[[0,0]],"groups":[""],"match":[0,0],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?m)$","text":"a","spans":[[1,1]],"groups":[""],"match":null,"fullmatch":false,"sub":"a<masked>","split":["a",""]}
+{"pattern":"(?m)$","text":"ab","spans":[[2,2]],"groups":[""],"match":null,"fullmatch":false,"sub":"ab<masked>","split":["ab",""]}
+{"pattern":"(?m)$","text":"abc","spans":[[3,3]],"groups":[""],"match":null,"fullmatch":false,"sub":"abc<masked>","split":["abc",""]}
+{"pattern":"$","text":"","spans":[[0,0]],"groups":[""],"match":[0,0],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"$","text":"a","spans":[[1,1]],"groups":[""],"match":null,"fullmatch":false,"sub":"a<masked>","split":["a",""]}
+{"pattern":"$","text":"ab","spans":[[2,2]],"groups":[""],"match":null,"fullmatch":false,"sub":"ab<masked>","split":["ab",""]}
+{"pattern":"$","text":"abc","spans":[[3,3]],"groups":[""],"match":null,"fullmatch":false,"sub":"abc<masked>","split":["abc",""]}
+{"pattern":"^","text":"","spans":[[0,0]],"groups":[""],"match":[0,0],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"^$","text":"","spans":[[0,0]],"groups":[""],"match":[0,0],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"^$","text":"a","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"a","split":["a"]}
+{"pattern":"a.c","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"a.c","text":"abc","spans":[[0,3]],"groups":["abc"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"a.c","text":"abcabc","spans":[[0,3],[3,6]],"groups":["abc"],"match":[0,3],"fullmatch":false,"sub":"<masked><masked>","split":["","",""]}
+{"pattern":"a.c","text":"ABC abc","spans":[[4,7]],"groups":["abc"],"match":null,"fullmatch":false,"sub":"ABC <masked>","split":["ABC ",""]}
+{"pattern":"a.c","text":"a.c","spans":[[0,3]],"groups":["a.c"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?s)a.c","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?s)a.c","text":"abc","spans":[[0,3]],"groups":["abc"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?s)a.c","text":"abcabc","spans":[[0,3],[3,6]],"groups":["abc"],"match":[0,3],"fullmatch":false,"sub":"<masked><masked>","split":["","",""]}
+{"pattern":"(?s)a.c","text":"ABC abc","spans":[[4,7]],"groups":["abc"],"match":null,"fullmatch":false,"sub":"ABC <masked>","split":["ABC ",""]}
+{"pattern":"(?s)a.c","text":"a.c","spans":[[0,3]],"groups":["a.c"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?s).","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?s).","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?s).","text":"b","spans":[[0,1]],"groups":["b"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?s).","text":"ab","spans":[[0,1],[1,2]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>","split":["","",""]}
+{"pattern":"(?s).","text":"abc","spans":[[0,1],[1,2],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked><masked>","split":["","","",""]}
+{"pattern":".*","text":"","spans":[[0,0]],"groups":[""],"match":[0,0],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":".*","text":"a","spans":[[0,1],[1,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked><masked>","split":["","",""]}
+{"pattern":".*","text":"b","spans":[[0,1],[1,1]],"groups":["b"],"match":[0,1],"fullmatch":true,"sub":"<masked><masked>","split":["","",""]}
+{"pattern":".*","text":"ab","spans":[[0,2],[2,2]],"groups":["ab"],"match":[0,2],"fullmatch":true,"sub":"<masked><masked>","split":["","",""]}
+{"pattern":".+","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":".+","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":".+","text":"b","spans":[[0,1]],"groups":["b"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":".+","text":"ab","spans":[[0,2]],"groups":["ab"],"match":[0,2],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":".+","text":"abc","spans":[[0,3]],"groups":["abc"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":".*?","text":"","spans":[[0,0]],"groups":[""],"match":[0,0],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":".*?","text":"a","spans":[[0,0],[0,1],[1,1]],"groups":[""],"match":[0,0],"fullmatch":true,"sub":"<masked><masked><masked>","split":["","","",""]}
+{"pattern":".*?","text":"ab","spans":[[0,0],[0,1],[1,1],[1,2],[2,2]],"groups":[""],"match":[0,0],"fullmatch":true,"sub":"<masked><masked><masked><masked><masked>","split":["","","","","",""]}
+{"pattern":".*?","text":"abc","spans":[[0,0],[0,1],[1,1],[1,2],[2,2],[2,3],[3,3]],"groups":[""],"match":[0,0],"fullmatch":true,"sub":"<masked><masked><masked><masked><masked><masked><masked>","split":["","","","","","","",""]}
+{"pattern":"a*","text":"","spans":[[0,0]],"groups":[""],"match":[0,0],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"a*","text":"a","spans":[[0,1],[1,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked><masked>","split":["","",""]}
+{"pattern":"a*","text":"b","spans":[[0,0],[1,1]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>b<masked>","split":["","b",""]}
+{"pattern":"a*","text":"ab","spans":[[0,1],[1,1],[2,2]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>b<masked>","split":["","","b",""]}
+{"pattern":"a+","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"a+","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"a+","text":"aab","spans":[[0,2]],"groups":["aa"],"match":[0,2],"fullmatch":false,"sub":"<masked>b","split":["","b"]}
+{"pattern":"a+","text":"aaa","spans":[[0,3]],"groups":["aaa"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"a+","text":"abab","spans":[[0,1],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked>b<masked>b","split":["","b","b"]}
+{"pattern":"a?","text":"","spans":[[0,0]],"groups":[""],"match":[0,0],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"a?","text":"a","spans":[[0,1],[1,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked><masked>","split":["","",""]}
+{"pattern":"a?","text":"b","spans":[[0,0],[1,1]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>b<masked>","split":["","b",""]}
+{"pattern":"a?","text":"ab","spans":[[0,1],[1,1],[2,2]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>b<masked>","split":["","","b",""]}
+{"pattern":"a{2}","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"a{2}","text":"aab","spans":[[0,2]],"groups":["aa"],"match":[0,2],"fullmatch":false,"sub":"<masked>b","split":["","b"]}
+{"pattern":"a{2}","text":"aaaa","spans":[[0,2],[2,4]],"groups":["aa"],"match":[0,2],"fullmatch":false,"sub":"<masked><masked>","split":["","",""]}
+{"pattern":"a{2}","text":"baaa","spans":[[1,3]],"groups":["aa"],"match":null,"fullmatch":false,"sub":"b<masked>a","split":["b","a"]}
+{"pattern":"a{2,}","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"a{2,}","text":"aab","spans":[[0,2]],"groups":["aa"],"match":[0,2],"fullmatch":false,"sub":"<masked>b","split":["","b"]}
+{"pattern":"a{2,}","text":"aaa","spans":[[0,3]],"groups":["aaa"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"a{2,}","text":"aaaa","spans":[[0,4]],"groups":["aaaa"],"match":[0,4],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"a{2,}","text":"baaa","spans":[[1,4]],"groups":["aaa"],"match":null,"fullmatch":false,"sub":"b<masked>","split":["b",""]}
+{"pattern":"a{,3}","text":"","spans":[[0,0]],"groups":[""],"match":[0,0],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"a{,3}","text":"a","spans":[[0,1],[1,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked><masked>","split":["","",""]}
+{"pattern":"a{,3}","text":"b","spans":[[0,0],[1,1]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>b<masked>","split":["","b",""]}
+{"pattern":"a{,3}","text":"ab","spans":[[0,1],[1,1],[2,2]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>b<masked>","split":["","","b",""]}
+{"pattern":"a{2,3}","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"a{2,3}","text":"aab","spans":[[0,2]],"groups":["aa"],"match":[0,2],"fullmatch":false,"sub":"<masked>b","split":["","b"]}
+{"pattern":"a{2,3}","text":"aaa","spans":[[0,3]],"groups":["aaa"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"a{2,3}","text":"baaa","spans":[[1,4]],"groups":["aaa"],"match":null,"fullmatch":false,"sub":"b<masked>","split":["b",""]}
+{"pattern":"a*?","text":"","spans":[[0,0]],"groups":[""],"match":[0,0],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"a*?","text":"a","spans":[[0,0],[0,1],[1,1]],"groups":[""],"match":[0,0],"fullmatch":true,"sub":"<masked><masked><masked>","split":["","","",""]}
+{"pattern":"a*?","text":"b","spans":[[0,0],[1,1]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>b<masked>","split":["","b",""]}
+{"pattern":"a*?","text":"ab","spans":[[0,0],[0,1],[1,1],[2,2]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked><masked><masked>b<masked>","split":["","","","b",""]}
+{"pattern":"a+?","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"a+?","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"a+?","text":"aab","spans":[[0,1],[1,2]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>b","split":["","","b"]}
+{"pattern":"a+?","text":"aaa","spans":[[0,1],[1,2],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked><masked><masked>","split":["","","",""]}
+{"pattern":"a+?","text":"abab","spans":[[0,1],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked>b<masked>b","split":["","b","b"]}
+{"pattern":"a??","text":"","spans":[[0,0]],"groups":[""],"match":[0,0],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"a??","text":"a","spans":[[0,0],[0,1],[1,1]],"groups":[""],"match":[0,0],"fullmatch":true,"sub":"<masked><masked><masked>","split":["","","",""]}
+{"pattern":"a??","text":"b","spans":[[0,0],[1,1]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>b<masked>","split":["","b",""]}
+{"pattern":"a??","text":"ab","spans":[[0,0],[0,1],[1,1],[2,2]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked><masked><masked>b<masked>","split":["","","","b",""]}
+{"pattern":"a{2,3}?","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"a{2,3}?","text":"aab","spans":[[0,2]],"groups":["aa"],"match":[0,2],"fullmatch":false,"sub":"<masked>b","split":["","b"]}
+{"pattern":"a{2,3}?","text":"aaaa","spans":[[0,2],[2,4]],"groups":["aa"],"match":[0,2],"fullmatch":false,"sub":"<masked><masked>","split":["","",""]}
+{"pattern":"a{2,3}?","text":"baaa","spans":[[1,3]],"groups":["aa"],"match":null,"fullmatch":false,"sub":"b<masked>a","split":["b","a"]}
+{"pattern":"a*+","text":"","spans":[[0,0]],"groups":[""],"match":[0,0],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"a*+","text":"a","spans":[[0,1],[1,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked><masked>","split":["","",""]}
+{"pattern":"a*+","text":"b","spans":[[0,0],[1,1]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>b<masked>","split":["","b",""]}
+{"pattern":"a*+","text":"ab","spans":[[0,1],[1,1],[2,2]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>b<masked>","split":["","","b",""]}
+{"pattern":"a++","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"a++","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"a++","text":"aab","spans":[[0,2]],"groups":["aa"],"match":[0,2],"fullmatch":false,"sub":"<masked>b","split":["","b"]}
+{"pattern":"a++","text":"aaa","spans":[[0,3]],"groups":["aaa"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"a++","text":"abab","spans":[[0,1],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked>b<masked>b","split":["","b","b"]}
+{"pattern":"a?+","text":"","spans":[[0,0]],"groups":[""],"match":[0,0],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"a?+","text":"a","spans":[[0,1],[1,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked><masked>","split":["","",""]}
+{"pattern":"a?+","text":"b","spans":[[0,0],[1,1]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>b<masked>","split":["","b",""]}
+{"pattern":"a?+","text":"ab","spans":[[0,1],[1,1],[2,2]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>b<masked>","split":["","","b",""]}
+{"pattern":"a{2,3}+","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"a{2,3}+","text":"aab","spans":[[0,2]],"groups":["aa"],"match":[0,2],"fullmatch":false,"sub":"<masked>b","split":["","b"]}
+{"pattern":"a{2,3}+","text":"aaa","spans":[[0,3]],"groups":["aaa"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"a{2,3}+","text":"baaa","spans":[[1,4]],"groups":["aaa"],"match":null,"fullmatch":false,"sub":"b<masked>","split":["b",""]}
+{"pattern":"a*+a","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(ab)*","text":"","spans":[[0,0]],"groups":["",null],"match":[0,0],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"(ab)*","text":"a","spans":[[0,0],[1,1]],"groups":["",null],"match":[0,0],"fullmatch":false,"sub":"<masked>a<masked>"}
+{"pattern":"(ab)*","text":"ab","spans":[[0,2],[2,2]],"groups":["ab","ab"],"match":[0,2],"fullmatch":true,"sub":"<masked><masked>"}
+{"pattern":"(ab)*","text":"abc","spans":[[0,2],[2,2],[3,3]],"groups":["ab","ab"],"match":[0,2],"fullmatch":false,"sub":"<masked><masked>c<masked>"}
+{"pattern":"(ab)+?","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":""}
+{"pattern":"(ab)+?","text":"ab","spans":[[0,2]],"groups":["ab","ab"],"match":[0,2],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"(ab)+?","text":"aab","spans":[[1,3]],"groups":["ab","ab"],"match":null,"fullmatch":false,"sub":"a<masked>"}
+{"pattern":"(ab)+?","text":"abab","spans":[[0,2],[2,4]],"groups":["ab","ab"],"match":[0,2],"fullmatch":true,"sub":"<masked><masked>"}
+{"pattern":"(ab)+?","text":"ababab","spans":[[0,2],[2,4],[4,6]],"groups":["ab","ab"],"match":[0,2],"fullmatch":true,"sub":"<masked><masked><masked>"}
+{"pattern":"(?:ab){2,3}","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?:ab){2,3}","text":"abab","spans":[[0,4]],"groups":["abab"],"match":[0,4],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?:ab){2,3}","text":"ababab","spans":[[0,6]],"groups":["ababab"],"match":[0,6],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(a|b)*c","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":""}
+{"pattern":"(a|b)*c","text":"abc","spans":[[0,3]],"groups":["abc","b"],"match":[0,3],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"(a|b)*c","text":"abcabc","spans":[[0,3],[3,6]],"groups":["abc","b"],"match":[0,3],"fullmatch":false,"sub":"<masked><masked>"}
+{"pattern":"(a|b)*c","text":"ab\ncd\n","spans":[[3,4]],"groups":["c",null],"match":null,"fullmatch":false,"sub":"ab\n<masked>d\n"}
+{"pattern":"(a|b)*c","text":"Abc","spans":[[1,3]],"groups":["bc","b"],"match":null,"fullmatch":false,"sub":"A<masked>"}
+{"pattern":"(a*)*","text":"","spans":[[0,0]],"groups":["",""],"match":[0,0],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"(a*)*","text":"a","spans":[[0,1],[1,1]],"groups":["a",""],"match":[0,1],"fullmatch":true,"sub":"<masked><masked>"}
+{"pattern":"(a*)*","text":"b","spans":[[0,0],[1,1]],"groups":["",""],"match":[0,0],"fullmatch":false,"sub":"<masked>b<masked>"}
+{"pattern":"(a*)*","text":"ab","spans":[[0,1],[1,1],[2,2]],"groups":["a",""],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>b<masked>"}
+{"pattern":"(a*)+","text":"","spans":[[0,0]],"groups":["",""],"match":[0,0],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"(a*)+","text":"a","spans":[[0,1],[1,1]],"groups":["a",""],"match":[0,1],"fullmatch":true,"sub":"<masked><masked>"}
+{"pattern":"(a*)+","text":"b","spans":[[0,0],[1,1]],"groups":["",""],"match":[0,0],"fullmatch":false,"sub":"<masked>b<masked>"}
+{"pattern":"(a*)+","text":"ab","spans":[[0,1],[1,1],[2,2]],"groups":["a",""],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>b<masked>"}
+{"pattern":"(a|)+","text":"","spans":[[0,0]],"groups":["",""],"match":[0,0],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"(a|)+","text":"a","spans":[[0,1],[1,1]],"groups":["a",""],"match":[0,1],"fullmatch":true,"sub":"<masked><masked>"}
+{"pattern":"(a|)+","text":"b","spans":[[0,0],[1,1]],"groups":["",""],"match":[0,0],"fullmatch":false,"sub":"<masked>b<masked>"}
+{"pattern":"(a|)+","text":"ab","spans":[[0,1],[1,1],[2,2]],"groups":["a",""],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>b<masked>"}
+{"pattern":"(?:a?)*?b","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?:a?)*?b","text":"b","spans":[[0,1]],"groups":["b"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?:a?)*?b","text":"ab","spans":[[0,2]],"groups":["ab"],"match":[0,2],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?:a?)*?b","text":"aab","spans":[[0,3]],"groups":["aab"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?:a?)*?b","text":"abab","spans":[[0,2],[2,4]],"groups":["ab"],"match":[0,2],"fullmatch":false,"sub":"<masked><masked>","split":["","",""]}
+{"pattern":"(?:a*)*?b","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?:a*)*?b","text":"b","spans":[[0,1]],"groups":["b"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?:a*)*?b","text":"ab","spans":[[0,2]],"groups":["ab"],"match":[0,2],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?:a*)*?b","text":"aab","spans":[[0,3]],"groups":["aab"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?:a*)*?b","text":"abab","spans":[[0,2],[2,4]],"groups":["ab"],"match":[0,2],"fullmatch":false,"sub":"<masked><masked>","split":["","",""]}
+{"pattern":"(?:ab)*+a","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?:ab)*+a","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?:ab)*+a","text":"aaa","spans":[[0,1],[1,2],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked><masked>","split":["","","",""]}
+{"pattern":"(?:ab)*+a","text":"foo bar_baz 42","spans":[[5,6],[9,10]],"groups":["a"],"match":null,"fullmatch":false,"sub":"foo b<masked>r_b<masked>z 42","split":["foo b","r_b","z 42"]}
+{"pattern":"(?:ab)*+a","text":"  lead and trail  ","spans":[[4,5],[7,8],[13,14]],"groups":["a"],"match":null,"fullmatch":false,"sub":"  le<masked>d <masked>nd tr<masked>il  ","split":["  le","d ","nd tr","il  "]}
+{"pattern":"(?:ab|a)*+b","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?:ab|a)*+b","text":"b","spans":[[0,1]],"groups":["b"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?:ab|a)*+b","text":"ab","spans":[[1,2]],"groups":["b"],"match":null,"fullmatch":false,"sub":"a<masked>","split":["a",""]}
+{"pattern":"(?:ab|a)*+b","text":"aab","spans":[[2,3]],"groups":["b"],"match":null,"fullmatch":false,"sub":"aa<masked>","split":["aa",""]}
+{"pattern":"(?:ab|a)*+b","text":"abab","spans":[[1,2],[3,4]],"groups":["b"],"match":null,"fullmatch":false,"sub":"a<masked>a<masked>","split":["a","a",""]}
+{"pattern":"x{","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"x{","text":"x{","spans":[[0,2]],"groups":["x{"],"match":[0,2],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"x{}","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"x{}","text":"x{}","spans":[[0,3]],"groups":["x{}"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"x{a}","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"x{1","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"x{1,","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"x{,}","text":"","spans":[[0,0]],"groups":[""],"match":[0,0],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"x{,}","text":"a","spans":[[0,0],[1,1]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>a<masked>","split":["","a",""]}
+{"pattern":"x{,}","text":"ab","spans":[[0,0],[1,1],[2,2]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>a<masked>b<masked>","split":["","a","b",""]}
+{"pattern":"x{,}","text":"abc","spans":[[0,0],[1,1],[2,2],[3,3]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>a<masked>b<masked>c<masked>","split":["","a","b","c",""]}
+{"pattern":"a{0}","text":"","spans":[[0,0]],"groups":[""],"match":[0,0],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"a{0}","text":"a","spans":[[0,0],[1,1]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>a<masked>","split":["","a",""]}
+{"pattern":"a{0}","text":"ab","spans":[[0,0],[1,1],[2,2]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>a<masked>b<masked>","split":["","a","b",""]}
+{"pattern":"a{0}","text":"abc","spans":[[0,0],[1,1],[2,2],[3,3]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>a<masked>b<masked>c<masked>","split":["","a","b","c",""]}
+{"pattern":"a{0,0}b","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"a{0,0}b","text":"b","spans":[[0,1]],"groups":["b"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"a{0,0}b","text":"ab","spans":[[1,2]],"groups":["b"],"match":null,"fullmatch":false,"sub":"a<masked>","split":["a",""]}
+{"pattern":"a{0,0}b","text":"aab","spans":[[2,3]],"groups":["b"],"match":null,"fullmatch":false,"sub":"aa<masked>","split":["aa",""]}
+{"pattern":"a{0,0}b","text":"abab","spans":[[1,2],[3,4]],"groups":["b"],"match":null,"fullmatch":false,"sub":"a<masked>a<masked>","split":["a","a",""]}
+{"pattern":"(a)(b)?","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":""}
+{"pattern":"(a)(b)?","text":"a","spans":[[0,1]],"groups":["a","a",null],"match":[0,1],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"(a)(b)?","text":"ab","spans":[[0,2]],"groups":["ab","a","b"],"match":[0,2],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"(a)(b)?","text":"aab","spans":[[0,1],[1,3]],"groups":["a","a",null],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>"}
+{"pattern":"(a)(b)?","text":"aaa","spans":[[0,1],[1,2],[2,3]],"groups":["a","a",null],"match":[0,1],"fullmatch":false,"sub":"<masked><masked><masked>"}
+{"pattern":"(?P<n>a)(?P=n)","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":""}
+{"pattern":"(?P<n>a)(?P=n)","text":"aab","spans":[[0,2]],"groups":["aa","a"],"match":[0,2],"fullmatch":false,"sub":"<masked>b"}
+{"pattern":"(?P<n>a)(?P=n)","text":"aaaa","spans":[[0,2],[2,4]],"groups":["aa","a"],"match":[0,2],"fullmatch":false,"sub":"<masked><masked>"}
+{"pattern":"(?P<n>a)(?P=n)","text":"baaa","spans":[[1,3]],"groups":["aa","a"],"match":null,"fullmatch":false,"sub":"b<masked>a"}
+{"pattern":"(a)\\1","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":""}
+{"pattern":"(a)\\1","text":"aab","spans":[[0,2]],"groups":["aa","a"],"match":[0,2],"fullmatch":false,"sub":"<masked>b"}
+{"pattern":"(a)\\1","text":"aaaa","spans":[[0,2],[2,4]],"groups":["aa","a"],"match":[0,2],"fullmatch":false,"sub":"<masked><masked>"}
+{"pattern":"(a)\\1","text":"baaa","spans":[[1,3]],"groups":["aa","a"],"match":null,"fullmatch":false,"sub":"b<masked>a"}
+{"pattern":"(?:a)","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?:a)","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?:a)","text":"aab","spans":[[0,1],[1,2]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>b","split":["","","b"]}
+{"pattern":"(?:a)","text":"aaa","spans":[[0,1],[1,2],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked><masked>","split":["","","",""]}
+{"pattern":"(?:a)","text":"abab","spans":[[0,1],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked>b<masked>b","split":["","b","b"]}
+{"pattern":"(?#comment)a","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?#comment)a","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?#comment)a","text":"aab","spans":[[0,1],[1,2]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>b","split":["","","b"]}
+{"pattern":"(?#comment)a","text":"aaa","spans":[[0,1],[1,2],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked><masked>","split":["","","",""]}
+{"pattern":"(?#comment)a","text":"abab","spans":[[0,1],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked>b<masked>b","split":["","b","b"]}
+{"pattern":"(?i)abc","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?i)abc","text":"abc","spans":[[0,3]],"groups":["abc"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)abc","text":"abcabc","spans":[[0,3],[3,6]],"groups":["abc"],"match":[0,3],"fullmatch":false,"sub":"<masked><masked>","split":["","",""]}
+{"pattern":"(?i)abc","text":"Abc","spans":[[0,3]],"groups":["Abc"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)abc","text":"ABC abc","spans":[[0,3],[4,7]],"groups":["ABC"],"match":[0,3],"fullmatch":false,"sub":"<masked> <masked>","split":[""," ",""]}
+{"pattern":"(?i:a)b","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?i:a)b","text":"ab","spans":[[0,2]],"groups":["ab"],"match":[0,2],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i:a)b","text":"aab","spans":[[1,3]],"groups":["ab"],"match":null,"fullmatch":false,"sub":"a<masked>","split":["a",""]}
+{"pattern":"(?i:a)b","text":"abab","spans":[[0,2],[2,4]],"groups":["ab"],"match":[0,2],"fullmatch":false,"sub":"<masked><masked>","split":["","",""]}
+{"pattern":"(?i:a)b","text":"ababab","spans":[[0,2],[2,4],[4,6]],"groups":["ab"],"match":[0,2],"fullmatch":false,"sub":"<masked><masked><masked>","split":["","","",""]}
+{"pattern":"(?i)a(?-i:b)c","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?i)a(?-i:b)c","text":"abc","spans":[[0,3]],"groups":["abc"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)a(?-i:b)c","text":"abcabc","spans":[[0,3],[3,6]],"groups":["abc"],"match":[0,3],"fullmatch":false,"sub":"<masked><masked>","split":["","",""]}
+{"pattern":"(?i)a(?-i:b)c","text":"Abc","spans":[[0,3]],"groups":["Abc"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)a(?-i:b)c","text":"ABC abc","spans":[[4,7]],"groups":["abc"],"match":null,"fullmatch":false,"sub":"ABC <masked>","split":["ABC ",""]}
+{"pattern":"(?s-i:a.b)","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?s-i:a.b)","text":"aab","spans":[[0,3]],"groups":["aab"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?s-i:a.b)","text":"a\nb","spans":[[0,3]],"groups":["a\nb"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?s-i:a.b)","text":"a|b","spans":[[0,3]],"groups":["a|b"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?s-i:a.b)","text":"a*b+c?","spans":[[0,3]],"groups":["a*b"],"match":[0,3],"fullmatch":false,"sub":"<masked>+c?","split":["","+c?"]}
+{"pattern":"(?x) a b # c\n c","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?x) a b # c\n c","text":"abc","spans":[[0,3]],"groups":["abc"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?x) a b # c\n c","text":"abcabc","spans":[[0,3],[3,6]],"groups":["abc"],"match":[0,3],"fullmatch":false,"sub":"<masked><masked>","split":["","",""]}
+{"pattern":"(?x) a b # c\n c","text":"ABC abc","spans":[[4,7]],"groups":["abc"],"match":null,"fullmatch":false,"sub":"ABC <masked>","split":["ABC ",""]}
+{"pattern":"(?x)a\\ b","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?a)\\w+","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?a)\\w+","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?a)\\w+","text":"b","spans":[[0,1]],"groups":["b"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?a)\\w+","text":"ab","spans":[[0,2]],"groups":["ab"],"match":[0,2],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?a)\\w+","text":"abc","spans":[[0,3]],"groups":["abc"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?u)\\w+","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?u)\\w+","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?u)\\w+","text":"b","spans":[[0,1]],"groups":["b"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?u)\\w+","text":"ab","spans":[[0,2]],"groups":["ab"],"match":[0,2],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?u)\\w+","text":"abc","spans":[[0,3]],"groups":["abc"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?im)^a","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?im)^a","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?im)^a","text":"A","spans":[[0,1]],"groups":["A"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?a)\\d+","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?a)\\d+","text":"x1y22z333","spans":[[1,2],[3,5],[6,9]],"groups":["1"],"match":null,"fullmatch":false,"sub":"x<masked>y<masked>z<masked>","split":["x","y","z",""]}
+{"pattern":"(?a)\\d+","text":"foo bar_baz 42","spans":[[12,14]],"groups":["42"],"match":null,"fullmatch":false,"sub":"foo bar_baz <masked>","split":["foo bar_baz ",""]}
+{"pattern":"(?a)\\d+","text":"a{2}","spans":[[2,3]],"groups":["2"],"match":null,"fullmatch":false,"sub":"a{<masked>}","split":["a{","}"]}
+{"pattern":"(?a)\\d+","text":"$5.00","spans":[[1,2],[3,5]],"groups":["5"],"match":null,"fullmatch":false,"sub":"$<masked>.<masked>","split":["$",".",""]}
+{"pattern":"(?a)\\s+","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?a)\\s+","text":"a\nb","spans":[[1,2]],"groups":["\n"],"match":null,"fullmatch":false,"sub":"a<masked>b","split":["a","b"]}
+{"pattern":"(?a)\\s+","text":"\n","spans":[[0,1]],"groups":["\n"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?a)\\s+","text":"ab\ncd\n","spans":[[2,3],[5,6]],"groups":["\n"],"match":null,"fullmatch":false,"sub":"ab<masked>cd<masked>","split":["ab","cd",""]}
+{"pattern":"(?a)\\s+","text":"ABC abc","spans":[[3,4]],"groups":[" "],"match":null,"fullmatch":false,"sub":"ABC<masked>abc","split":["ABC","abc"]}
+{"pattern":"(?a)\\b.","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?a)\\b.","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?a)\\b.","text":"b","spans":[[0,1]],"groups":["b"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?a)\\b.","text":"a\nb","spans":[[0,1],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked>\n<masked>","split":["","\n",""]}
+{"pattern":"(?a)\\b.","text":"ab\ncd\n","spans":[[0,1],[3,4]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked>b\n<masked>d\n","split":["","b\n","d\n"]}
+{"pattern":"(?=a)a","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?=a)a","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?=a)a","text":"aab","spans":[[0,1],[1,2]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>b","split":["","","b"]}
+{"pattern":"(?=a)a","text":"aaa","spans":[[0,1],[1,2],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked><masked>","split":["","","",""]}
+{"pattern":"(?=a)a","text":"abab","spans":[[0,1],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked>b<masked>b","split":["","b","b"]}
+{"pattern":"(?!a).","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?!a).","text":"b","spans":[[0,1]],"groups":["b"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?!a).","text":"ab","spans":[[1,2]],"groups":["b"],"match":null,"fullmatch":false,"sub":"a<masked>","split":["a",""]}
+{"pattern":"(?!a).","text":"abc","spans":[[1,2],[2,3]],"groups":["b"],"match":null,"fullmatch":false,"sub":"a<masked><masked>","split":["a","",""]}
+{"pattern":"(?!a).","text":"aab","spans":[[2,3]],"groups":["b"],"match":null,"fullmatch":false,"sub":"aa<masked>","split":["aa",""]}
+{"pattern":"(?<=a)b","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?<=a)b","text":"ab","spans":[[1,2]],"groups":["b"],"match":null,"fullmatch":false,"sub":"a<masked>","split":["a",""]}
+{"pattern":"(?<=a)b","text":"aab","spans":[[2,3]],"groups":["b"],"match":null,"fullmatch":false,"sub":"aa<masked>","split":["aa",""]}
+{"pattern":"(?<=a)b","text":"abab","spans":[[1,2],[3,4]],"groups":["b"],"match":null,"fullmatch":false,"sub":"a<masked>a<masked>","split":["a","a",""]}
+{"pattern":"(?<=a)b","text":"ababab","spans":[[1,2],[3,4],[5,6]],"groups":["b"],"match":null,"fullmatch":false,"sub":"a<masked>a<masked>a<masked>","split":["a","a","a",""]}
+{"pattern":"(?<!a)b","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?<!a)b","text":"b","spans":[[0,1]],"groups":["b"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?<!a)b","text":"a\nb","spans":[[2,3]],"groups":["b"],"match":null,"fullmatch":false,"sub":"a\n<masked>","split":["a\n",""]}
+{"pattern":"(?<!a)b","text":"Abc","spans":[[1,2]],"groups":["b"],"match":null,"fullmatch":false,"sub":"A<masked>c","split":["A","c"]}
+{"pattern":"(?<!a)b","text":"foo bar_baz 42","spans":[[4,5],[8,9]],"groups":["b"],"match":null,"fullmatch":false,"sub":"foo <masked>ar_<masked>az 42","split":["foo ","ar_","az 42"]}
+{"pattern":"(?<=^ab)c","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?<=^ab)c","text":"abc","spans":[[2,3]],"groups":["c"],"match":null,"fullmatch":false,"sub":"ab<masked>","split":["ab",""]}
+{"pattern":"(?<=a|b)c","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?<=a|b)c","text":"abc","spans":[[2,3]],"groups":["c"],"match":null,"fullmatch":false,"sub":"ab<masked>","split":["ab",""]}
+{"pattern":"(?<=a|b)c","text":"abcabc","spans":[[2,3],[5,6]],"groups":["c"],"match":null,"fullmatch":false,"sub":"ab<masked>ab<masked>","split":["ab","ab",""]}
+{"pattern":"(?<=a|b)c","text":"ABC abc","spans":[[6,7]],"groups":["c"],"match":null,"fullmatch":false,"sub":"ABC ab<masked>","split":["ABC ab",""]}
+{"pattern":"(?<=a|b)c","text":"ac","spans":[[1,2]],"groups":["c"],"match":null,"fullmatch":false,"sub":"a<masked>","split":["a",""]}
+{"pattern":"(?<=(a))b","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":""}
+{"pattern":"(?<=(a))b","text":"ab","spans":[[1,2]],"groups":["b","a"],"match":null,"fullmatch":false,"sub":"a<masked>"}
+{"pattern":"(?<=(a))b","text":"aab","spans":[[2,3]],"groups":["b","a"],"match":null,"fullmatch":false,"sub":"aa<masked>"}
+{"pattern":"(?<=(a))b","text":"abab","spans":[[1,2],[3,4]],"groups":["b","a"],"match":null,"fullmatch":false,"sub":"a<masked>a<masked>"}
+{"pattern":"(?<=(a))b","text":"ababab","spans":[[1,2],[3,4],[5,6]],"groups":["b","a"],"match":null,"fullmatch":false,"sub":"a<masked>a<masked>a<masked>"}
+{"pattern":"(a)(?<=\\1)b","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":""}
+{"pattern":"(a)(?<=\\1)b","text":"ab","spans":[[0,2]],"groups":["ab","a"],"match":[0,2],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"(a)(?<=\\1)b","text":"aab","spans":[[1,3]],"groups":["ab","a"],"match":null,"fullmatch":false,"sub":"a<masked>"}
+{"pattern":"(a)(?<=\\1)b","text":"abab","spans":[[0,2],[2,4]],"groups":["ab","a"],"match":[0,2],"fullmatch":false,"sub":"<masked><masked>"}
+{"pattern":"(a)(?<=\\1)b","text":"ababab","spans":[[0,2],[2,4],[4,6]],"groups":["ab","a"],"match":[0,2],"fullmatch":false,"sub":"<masked><masked><masked>"}
+{"pattern":"(?!)","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?=)","text":"","spans":[[0,0]],"groups":[""],"match":[0,0],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?=)","text":"a","spans":[[0,0],[1,1]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>a<masked>","split":["","a",""]}
+{"pattern":"(?=)","text":"ab","spans":[[0,0],[1,1],[2,2]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>a<masked>b<masked>","split":["","a","b",""]}
+{"pattern":"(?=)","text":"abc","spans":[[0,0],[1,1],[2,2],[3,3]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>a<masked>b<masked>c<masked>","split":["","a","b","c",""]}
+{"pattern":"(?!|)","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?<=)a","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?<=)a","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?<=)a","text":"aab","spans":[[0,1],[1,2]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>b","split":["","","b"]}
+{"pattern":"(?<=)a","text":"aaa","spans":[[0,1],[1,2],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked><masked>","split":["","","",""]}
+{"pattern":"(?<=)a","text":"abab","spans":[[0,1],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked>b<masked>b","split":["","b","b"]}
+{"pattern":"(?<!)a","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(a)?(?(1)b|c)","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":""}
+{"pattern":"(a)?(?(1)b|c)","text":"ab","spans":[[0,2]],"groups":["ab","a"],"match":[0,2],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"(a)?(?(1)b|c)","text":"abc","spans":[[0,2],[2,3]],"groups":["ab","a"],"match":[0,2],"fullmatch":false,"sub":"<masked><masked>"}
+{"pattern":"(a)?(?(1)b|c)","text":"aab","spans":[[1,3]],"groups":["ab","a"],"match":null,"fullmatch":false,"sub":"a<masked>"}
+{"pattern":"(a)?(?(1)b|c)","text":"abab","spans":[[0,2],[2,4]],"groups":["ab","a"],"match":[0,2],"fullmatch":false,"sub":"<masked><masked>"}
+{"pattern":"(?P<x>a)?(?(x)b)","text":"","spans":[[0,0]],"groups":["",null],"match":[0,0],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"(?P<x>a)?(?(x)b)","text":"a","spans":[[0,0],[1,1]],"groups":["",null],"match":[0,0],"fullmatch":false,"sub":"<masked>a<masked>"}
+{"pattern":"(?P<x>a)?(?(x)b)","text":"ab","spans":[[0,2],[2,2]],"groups":["ab","a"],"match":[0,2],"fullmatch":true,"sub":"<masked><masked>"}
+{"pattern":"(?P<x>a)?(?(x)b)","text":"abc","spans":[[0,2],[2,2],[3,3]],"groups":["ab","a"],"match":[0,2],"fullmatch":false,"sub":"<masked><masked>c<masked>"}
+{"pattern":"(a)?(?(1)b|)","text":"","spans":[[0,0]],"groups":["",null],"match":[0,0],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"(a)?(?(1)b|)","text":"a","spans":[[0,0],[1,1]],"groups":["",null],"match":[0,0],"fullmatch":false,"sub":"<masked>a<masked>"}
+{"pattern":"(a)?(?(1)b|)","text":"ab","spans":[[0,2],[2,2]],"groups":["ab","a"],"match":[0,2],"fullmatch":true,"sub":"<masked><masked>"}
+{"pattern":"(a)?(?(1)b|)","text":"abc","spans":[[0,2],[2,2],[3,3]],"groups":["ab","a"],"match":[0,2],"fullmatch":false,"sub":"<masked><masked>c<masked>"}
+{"pattern":"(?(1)a|b)(c)","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":""}
+{"pattern":"(?(1)a|b)(c)","text":"abc","spans":[[1,3]],"groups":["bc","c"],"match":null,"fullmatch":false,"sub":"a<masked>"}
+{"pattern":"(?(1)a|b)(c)","text":"abcabc","spans":[[1,3],[4,6]],"groups":["bc","c"],"match":null,"fullmatch":false,"sub":"a<masked>a<masked>"}
+{"pattern":"(?(1)a|b)(c)","text":"ABC abc","spans":[[5,7]],"groups":["bc","c"],"match":null,"fullmatch":false,"sub":"ABC a<masked>"}
+{"pattern":"(?(1)a|b)(c)","text":"bc","spans":[[0,2]],"groups":["bc","c"],"match":[0,2],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"(?>a+)a","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?>a|ab)c","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?>a|ab)c","text":"ac","spans":[[0,2]],"groups":["ac"],"match":[0,2],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?>a*)b","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?>a*)b","text":"b","spans":[[0,1]],"groups":["b"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?>a*)b","text":"ab","spans":[[0,2]],"groups":["ab"],"match":[0,2],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?>a*)b","text":"aab","spans":[[0,3]],"groups":["aab"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?>a*)b","text":"abab","spans":[[0,2],[2,4]],"groups":["ab"],"match":[0,2],"fullmatch":false,"sub":"<masked><masked>","split":["","",""]}
+{"pattern":"a|b|c","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"a|b|c","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"a|b|c","text":"b","spans":[[0,1]],"groups":["b"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"a|b|c","text":"ab","spans":[[0,1],[1,2]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>","split":["","",""]}
+{"pattern":"a|b|c","text":"abc","spans":[[0,1],[1,2],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked><masked>","split":["","","",""]}
+{"pattern":"|a","text":"","spans":[[0,0]],"groups":[""],"match":[0,0],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"|a","text":"a","spans":[[0,0],[0,1],[1,1]],"groups":[""],"match":[0,0],"fullmatch":true,"sub":"<masked><masked><masked>","split":["","","",""]}
+{"pattern":"|a","text":"b","spans":[[0,0],[1,1]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>b<masked>","split":["","b",""]}
+{"pattern":"|a","text":"ab","spans":[[0,0],[0,1],[1,1],[2,2]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked><masked><masked>b<masked>","split":["","","","b",""]}
+{"pattern":"a|","text":"","spans":[[0,0]],"groups":[""],"match":[0,0],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"a|","text":"a","spans":[[0,1],[1,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked><masked>","split":["","",""]}
+{"pattern":"a|","text":"b","spans":[[0,0],[1,1]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>b<masked>","split":["","b",""]}
+{"pattern":"a|","text":"ab","spans":[[0,1],[1,1],[2,2]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>b<masked>","split":["","","b",""]}
+{"pattern":"(|a)b","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":""}
+{"pattern":"(|a)b","text":"b","spans":[[0,1]],"groups":["b",""],"match":[0,1],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"(|a)b","text":"ab","spans":[[0,2]],"groups":["ab","a"],"match":[0,2],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"(|a)b","text":"aab","spans":[[1,3]],"groups":["ab","a"],"match":null,"fullmatch":false,"sub":"a<masked>"}
+{"pattern":"(|a)b","text":"abab","spans":[[0,2],[2,4]],"groups":["ab","a"],"match":[0,2],"fullmatch":false,"sub":"<masked><masked>"}
+{"pattern":"ab|ac","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"ab|ac","text":"ab","spans":[[0,2]],"groups":["ab"],"match":[0,2],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"ab|ac","text":"aab","spans":[[1,3]],"groups":["ab"],"match":null,"fullmatch":false,"sub":"a<masked>","split":["a",""]}
+{"pattern":"ab|ac","text":"abab","spans":[[0,2],[2,4]],"groups":["ab"],"match":[0,2],"fullmatch":false,"sub":"<masked><masked>","split":["","",""]}
+{"pattern":"ab|ac","text":"ababab","spans":[[0,2],[2,4],[4,6]],"groups":["ab"],"match":[0,2],"fullmatch":false,"sub":"<masked><masked><masked>","split":["","","",""]}
+{"pattern":"a|ab","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"a|ab","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"a|ab","text":"aab","spans":[[0,1],[1,2]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>b","split":["","","b"]}
+{"pattern":"a|ab","text":"aaa","spans":[[0,1],[1,2],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked><masked>","split":["","","",""]}
+{"pattern":"a|ab","text":"abab","spans":[[0,1],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked>b<masked>b","split":["","b","b"]}
+{"pattern":"(?:a|ab)(?:c|bcd)(?:d*)","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?:a|ab)(?:c|bcd)(?:d*)","text":"abc","spans":[[0,3]],"groups":["abc"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?:a|ab)(?:c|bcd)(?:d*)","text":"abcabc","spans":[[0,3],[3,6]],"groups":["abc"],"match":[0,3],"fullmatch":false,"sub":"<masked><masked>","split":["","",""]}
+{"pattern":"(?:a|ab)(?:c|bcd)(?:d*)","text":"ABC abc","spans":[[4,7]],"groups":["abc"],"match":null,"fullmatch":false,"sub":"ABC <masked>","split":["ABC ",""]}
+{"pattern":"(?:a|ab)(?:c|bcd)(?:d*)","text":"ac","spans":[[0,2]],"groups":["ac"],"match":[0,2],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)stra\u00dfe","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?i)stra\u00dfe","text":"stra\u00dfe","spans":[[0,6]],"groups":["stra\u00dfe"],"match":[0,6],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)\u017f","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?i)\u017f","text":"stra\u00dfe","spans":[[0,1]],"groups":["s"],"match":[0,1],"fullmatch":false,"sub":"<masked>tra\u00dfe","split":["","tra\u00dfe"]}
+{"pattern":"(?i)\u017f","text":"STRASSE","spans":[[0,1],[4,5],[5,6]],"groups":["S"],"match":[0,1],"fullmatch":false,"sub":"<masked>TRA<masked><masked>E","split":["","TRA","","E"]}
+{"pattern":"(?i)\u017f","text":"\u017f","spans":[[0,1]],"groups":["\u017f"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)\u017f","text":"S","spans":[[0,1]],"groups":["S"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)[k-s]+","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?i)[k-s]+","text":"foo bar_baz 42","spans":[[1,3],[6,7]],"groups":["oo"],"match":null,"fullmatch":false,"sub":"f<masked> ba<masked>_baz 42","split":["f"," ba","_baz 42"]}
+{"pattern":"(?i)[k-s]+","text":"  lead and trail  ","spans":[[2,3],[8,9],[12,13],[15,16]],"groups":["l"],"match":null,"fullmatch":false,"sub":"  <masked>ead a<masked>d t<masked>ai<masked>  ","split":["  ","ead a","d t","ai","  "]}
+{"pattern":"(?i)[k-s]+","text":"\u00c9cole","spans":[[2,4]],"groups":["ol"],"match":null,"fullmatch":false,"sub":"\u00c9c<masked>e","split":["\u00c9c","e"]}
+{"pattern":"(?i)[k-s]+","text":"stra\u00dfe","spans":[[0,1],[2,3]],"groups":["s"],"match":[0,1],"fullmatch":false,"sub":"<masked>t<masked>a\u00dfe","split":["","t","a\u00dfe"]}
+{"pattern":"(?i)\u03c3+","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?i)\u03c3+","text":"\u03c3\u03c2\u03a3","spans":[[0,3]],"groups":["\u03c3\u03c2\u03a3"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)[a-z]+","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?i)[a-z]+","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)[a-z]+","text":"b","spans":[[0,1]],"groups":["b"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)[a-z]+","text":"ab","spans":[[0,2]],"groups":["ab"],"match":[0,2],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)[a-z]+","text":"abc","spans":[[0,3]],"groups":["abc"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)\u01c6","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?i)\u01c6","text":"\u01c5","spans":[[0,1]],"groups":["\u01c5"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)\u01c6","text":"\u01c4\u01c6","spans":[[0,1],[1,2]],"groups":["\u01c4"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>","split":["","",""]}
+{"pattern":"(?i)\u0130","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?i)\u0130","text":"  lead and trail  ","spans":[[14,15]],"groups":["i"],"match":null,"fullmatch":false,"sub":"  lead and tra<masked>l  ","split":["  lead and tra","l  "]}
+{"pattern":"(?i)\u0130","text":"\u0130","spans":[[0,1]],"groups":["\u0130"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)\u0130","text":"i","spans":[[0,1]],"groups":["i"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)\u0130","text":"I","spans":[[0,1]],"groups":["I"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)i","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?i)i","text":"  lead and trail  ","spans":[[14,15]],"groups":["i"],"match":null,"fullmatch":false,"sub":"  lead and tra<masked>l  ","split":["  lead and tra","l  "]}
+{"pattern":"(?i)i","text":"\u0130","spans":[[0,1]],"groups":["\u0130"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)i","text":"i","spans":[[0,1]],"groups":["i"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)i","text":"I","spans":[[0,1]],"groups":["I"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?ai)\u00e9","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?ai)\u00e9","text":"caf\u00e9","spans":[[3,4]],"groups":["\u00e9"],"match":null,"fullmatch":false,"sub":"caf<masked>","split":["caf",""]}
+{"pattern":"(?i)(a)\\1","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":""}
+{"pattern":"(?i)(a)\\1","text":"aab","spans":[[0,2]],"groups":["aa","a"],"match":[0,2],"fullmatch":false,"sub":"<masked>b"}
+{"pattern":"(?i)(a)\\1","text":"aaaa","spans":[[0,2],[2,4]],"groups":["aa","a"],"match":[0,2],"fullmatch":false,"sub":"<masked><masked>"}
+{"pattern":"(?i)(a)\\1","text":"baaa","spans":[[1,3]],"groups":["aa","a"],"match":null,"fullmatch":false,"sub":"b<masked>a"}
+{"pattern":"(?i)\u00b5","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?i)\u00b5","text":"\u00b5","spans":[[0,1]],"groups":["\u00b5"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)\u00b5","text":"\u03bc","spans":[[0,1]],"groups":["\u03bc"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)[\u00b5x]","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?i)[\u00b5x]","text":"x1y22z333","spans":[[0,1]],"groups":["x"],"match":[0,1],"fullmatch":false,"sub":"<masked>1y22z333","split":["","1y22z333"]}
+{"pattern":"(?i)[\u00b5x]","text":"\u00b5","spans":[[0,1]],"groups":["\u00b5"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)[\u00b5x]","text":"\u03bc","spans":[[0,1]],"groups":["\u03bc"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)[\u00b5x]","text":"| x | y |","spans":[[2,3]],"groups":["x"],"match":null,"fullmatch":false,"sub":"| <masked> | y |","split":["| "," | y |"]}
+{"pattern":"(?i)[^k]","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?i)[^k]","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)[^k]","text":"b","spans":[[0,1]],"groups":["b"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)[^k]","text":"ab","spans":[[0,1],[1,2]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>","split":["","",""]}
+{"pattern":"(?i)[^k]","text":"abc","spans":[[0,1],[1,2],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked><masked>","split":["","","",""]}
+{"pattern":"(?i)[\\U00010400-\\U0001044f]","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?i)\ud801\udc00","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?i)[\ud801\udc00x]","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?i)[\ud801\udc00x]","text":"x1y22z333","spans":[[0,1]],"groups":["x"],"match":[0,1],"fullmatch":false,"sub":"<masked>1y22z333","split":["","1y22z333"]}
+{"pattern":"(?i)[\ud801\udc00x]","text":"| x | y |","spans":[[2,3]],"groups":["x"],"match":null,"fullmatch":false,"sub":"| <masked> | y |","split":["| "," | y |"]}
+{"pattern":"(?i)\u212a","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?i)\u212a","text":"K","spans":[[0,1]],"groups":["K"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)\u212a","text":"\u212a","spans":[[0,1]],"groups":["\u212a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)k","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?i)k","text":"K","spans":[[0,1]],"groups":["K"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)k","text":"\u212a","spans":[[0,1]],"groups":["\u212a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)[^\\W\\d_]+","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?i)[^\\W\\d_]+","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)[^\\W\\d_]+","text":"b","spans":[[0,1]],"groups":["b"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)[^\\W\\d_]+","text":"ab","spans":[[0,2]],"groups":["ab"],"match":[0,2],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)[^\\W\\d_]+","text":"abc","spans":[[0,3]],"groups":["abc"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)\\w+","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?i)\\w+","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)\\w+","text":"b","spans":[[0,1]],"groups":["b"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)\\w+","text":"ab","spans":[[0,2]],"groups":["ab"],"match":[0,2],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)\\w+","text":"abc","spans":[[0,3]],"groups":["abc"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?ai)[k-s]+","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?ai)[k-s]+","text":"foo bar_baz 42","spans":[[1,3],[6,7]],"groups":["oo"],"match":null,"fullmatch":false,"sub":"f<masked> ba<masked>_baz 42","split":["f"," ba","_baz 42"]}
+{"pattern":"(?ai)[k-s]+","text":"  lead and trail  ","spans":[[2,3],[8,9],[12,13],[15,16]],"groups":["l"],"match":null,"fullmatch":false,"sub":"  <masked>ead a<masked>d t<masked>ai<masked>  ","split":["  ","ead a","d t","ai","  "]}
+{"pattern":"(?ai)[k-s]+","text":"\u00c9cole","spans":[[2,4]],"groups":["ol"],"match":null,"fullmatch":false,"sub":"\u00c9c<masked>e","split":["\u00c9c","e"]}
+{"pattern":"(?ai)[k-s]+","text":"stra\u00dfe","spans":[[0,1],[2,3]],"groups":["s"],"match":[0,1],"fullmatch":false,"sub":"<masked>t<masked>a\u00dfe","split":["","t","a\u00dfe"]}
+{"pattern":"(?ai)K","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?ai)K","text":"K","spans":[[0,1]],"groups":["K"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(a)|b\\1","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":""}
+{"pattern":"(a)|b\\1","text":"a","spans":[[0,1]],"groups":["a","a"],"match":[0,1],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"(a)|b\\1","text":"aab","spans":[[0,1],[1,2]],"groups":["a","a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>b"}
+{"pattern":"(a)|b\\1","text":"aaa","spans":[[0,1],[1,2],[2,3]],"groups":["a","a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked><masked>"}
+{"pattern":"(a)|b\\1","text":"abab","spans":[[0,1],[2,3]],"groups":["a","a"],"match":[0,1],"fullmatch":false,"sub":"<masked>b<masked>b"}
+{"pattern":"(?:(a)|b)*\\1","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":""}
+{"pattern":"(?:(a)|b)*\\1","text":"aab","spans":[[0,2]],"groups":["aa","a"],"match":[0,2],"fullmatch":false,"sub":"<masked>b"}
+{"pattern":"(?:(a)|b)*\\1","text":"aaa","spans":[[0,3]],"groups":["aaa","a"],"match":[0,3],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"(?:(a)|b)*\\1","text":"abab","spans":[[0,3]],"groups":["aba","a"],"match":[0,3],"fullmatch":false,"sub":"<masked>b"}
+{"pattern":"(?:(a)|b)*\\1","text":"ababab","spans":[[0,5]],"groups":["ababa","a"],"match":[0,5],"fullmatch":false,"sub":"<masked>b"}
+{"pattern":"(?:(a)c|a(b))\\1","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":""}
+{"pattern":"(?:(a)c|a(b))(?(1)a|z)","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":""}
+{"pattern":"(?:(a)c|a(b))(?(1)a|z)","text":"abz","spans":[[0,3]],"groups":["abz",null,"b"],"match":[0,3],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"(a|b)*?c","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":""}
+{"pattern":"(a|b)*?c","text":"abc","spans":[[0,3]],"groups":["abc","b"],"match":[0,3],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"(a|b)*?c","text":"abcabc","spans":[[0,3],[3,6]],"groups":["abc","b"],"match":[0,3],"fullmatch":false,"sub":"<masked><masked>"}
+{"pattern":"(a|b)*?c","text":"ab\ncd\n","spans":[[3,4]],"groups":["c",null],"match":null,"fullmatch":false,"sub":"ab\n<masked>d\n"}
+{"pattern":"(a|b)*?c","text":"Abc","spans":[[1,3]],"groups":["bc","b"],"match":null,"fullmatch":false,"sub":"A<masked>"}
+{"pattern":"x*","text":"","spans":[[0,0]],"groups":[""],"match":[0,0],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"x*","text":"a","spans":[[0,0],[1,1]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>a<masked>","split":["","a",""]}
+{"pattern":"x*","text":"ab","spans":[[0,0],[1,1],[2,2]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>a<masked>b<masked>","split":["","a","b",""]}
+{"pattern":"x*","text":"abc","spans":[[0,0],[1,1],[2,2],[3,3]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>a<masked>b<masked>c<masked>","split":["","a","b","c",""]}
+{"pattern":"|ab","text":"","spans":[[0,0]],"groups":[""],"match":[0,0],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"|ab","text":"a","spans":[[0,0],[1,1]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>a<masked>","split":["","a",""]}
+{"pattern":"|ab","text":"ab","spans":[[0,0],[0,2],[2,2]],"groups":[""],"match":[0,0],"fullmatch":true,"sub":"<masked><masked><masked>","split":["","","",""]}
+{"pattern":"|ab","text":"abc","spans":[[0,0],[0,2],[2,2],[3,3]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked><masked><masked>c<masked>","split":["","","","c",""]}
+{"pattern":"(a+)+b","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":""}
+{"pattern":"(a+)+b","text":"ab","spans":[[0,2]],"groups":["ab","a"],"match":[0,2],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"(a+)+b","text":"aab","spans":[[0,3]],"groups":["aab","aa"],"match":[0,3],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"(a+)+b","text":"abab","spans":[[0,2],[2,4]],"groups":["ab","a"],"match":[0,2],"fullmatch":false,"sub":"<masked><masked>"}
+{"pattern":"(a+)+b","text":"ababab","spans":[[0,2],[2,4],[4,6]],"groups":["ab","a"],"match":[0,2],"fullmatch":false,"sub":"<masked><masked><masked>"}
+{"pattern":"(a|ab)(c|bcd)(d*)","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":""}
+{"pattern":"(a|ab)(c|bcd)(d*)","text":"abc","spans":[[0,3]],"groups":["abc","ab","c",""],"match":[0,3],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"(a|ab)(c|bcd)(d*)","text":"abcabc","spans":[[0,3],[3,6]],"groups":["abc","ab","c",""],"match":[0,3],"fullmatch":false,"sub":"<masked><masked>"}
+{"pattern":"(a|ab)(c|bcd)(d*)","text":"ABC abc","spans":[[4,7]],"groups":["abc","ab","c",""],"match":null,"fullmatch":false,"sub":"ABC <masked>"}
+{"pattern":"(a|ab)(c|bcd)(d*)","text":"ac","spans":[[0,2]],"groups":["ac","a","c",""],"match":[0,2],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"(?:(?:a)*)*b","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?:(?:a)*)*b","text":"b","spans":[[0,1]],"groups":["b"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?:(?:a)*)*b","text":"ab","spans":[[0,2]],"groups":["ab"],"match":[0,2],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?:(?:a)*)*b","text":"aab","spans":[[0,3]],"groups":["aab"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?:(?:a)*)*b","text":"abab","spans":[[0,2],[2,4]],"groups":["ab"],"match":[0,2],"fullmatch":false,"sub":"<masked><masked>","split":["","",""]}
+{"pattern":"((a)|(b))+","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":""}
+{"pattern":"((a)|(b))+","text":"a","spans":[[0,1]],"groups":["a","a","a",null],"match":[0,1],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"((a)|(b))+","text":"b","spans":[[0,1]],"groups":["b","b",null,"b"],"match":[0,1],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"((a)|(b))+","text":"ab","spans":[[0,2]],"groups":["ab","b","a","b"],"match":[0,2],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"((a)|(b))+","text":"aab","spans":[[0,3]],"groups":["aab","b","a","b"],"match":[0,3],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"(?:a(?=b)|ab)c?","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?:a(?=b)|ab)c?","text":"ab","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>b","split":["","b"]}
+{"pattern":"(?:a(?=b)|ab)c?","text":"aab","spans":[[1,2]],"groups":["a"],"match":null,"fullmatch":false,"sub":"a<masked>b","split":["a","b"]}
+{"pattern":"(?:a(?=b)|ab)c?","text":"abab","spans":[[0,1],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked>b<masked>b","split":["","b","b"]}
+{"pattern":"(?:a(?=b)|ab)c?","text":"ababab","spans":[[0,1],[2,3],[4,5]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked>b<masked>b<masked>b","split":["","b","b","b"]}
+{"pattern":"\\d{1,3}(?:,\\d{3})*","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"\\d{1,3}(?:,\\d{3})*","text":"x1y22z333","spans":[[1,2],[3,5],[6,9]],"groups":["1"],"match":null,"fullmatch":false,"sub":"x<masked>y<masked>z<masked>","split":["x","y","z",""]}
+{"pattern":"\\d{1,3}(?:,\\d{3})*","text":"foo bar_baz 42","spans":[[12,14]],"groups":["42"],"match":null,"fullmatch":false,"sub":"foo bar_baz <masked>","split":["foo bar_baz ",""]}
+{"pattern":"\\d{1,3}(?:,\\d{3})*","text":"\u0661\u0662","spans":[[0,2]],"groups":["\u0661\u0662"],"match":[0,2],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"\\d{1,3}(?:,\\d{3})*","text":"a{2}","spans":[[2,3]],"groups":["2"],"match":null,"fullmatch":false,"sub":"a{<masked>}","split":["a{","}"]}
+{"pattern":"[A-Z][a-z]{2}","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"[A-Z][a-z]{2}","text":"Abc","spans":[[0,3]],"groups":["Abc"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?:[A-Z][a-z]{2}){2}$","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"^\\s*$","text":"","spans":[[0,0]],"groups":[""],"match":[0,0],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"^\\s*$","text":"a","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"a","split":["a"]}
+{"pattern":"^\\s*$","text":"\n","spans":[[0,1]],"groups":["\n"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"^\\s*$","text":"\u2028","spans":[[0,1]],"groups":["\u2028"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"\\S+@\\S+","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"[^\\s:](?:(?!: ).)*","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"[^\\s:](?:(?!: ).)*","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[^\\s:](?:(?!: ).)*","text":"b","spans":[[0,1]],"groups":["b"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[^\\s:](?:(?!: ).)*","text":"ab","spans":[[0,2]],"groups":["ab"],"match":[0,2],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[^\\s:](?:(?!: ).)*","text":"abc","spans":[[0,3]],"groups":["abc"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?<=\\S): ","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"[\\s\\S]","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"[\\s\\S]","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[\\s\\S]","text":"b","spans":[[0,1]],"groups":["b"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[\\s\\S]","text":"ab","spans":[[0,1],[1,2]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>","split":["","",""]}
+{"pattern":"[\\s\\S]","text":"abc","spans":[[0,1],[1,2],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked><masked>","split":["","","",""]}
+{"pattern":"[^\\s\\S]","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"[\\d\\D]+","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"[\\d\\D]+","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[\\d\\D]+","text":"b","spans":[[0,1]],"groups":["b"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[\\d\\D]+","text":"ab","spans":[[0,2]],"groups":["ab"],"match":[0,2],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[\\d\\D]+","text":"abc","spans":[[0,3]],"groups":["abc"],"match":[0,3],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)[\\s\\S]","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?i)[\\s\\S]","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)[\\s\\S]","text":"b","spans":[[0,1]],"groups":["b"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?i)[\\s\\S]","text":"ab","spans":[[0,1],[1,2]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>","split":["","",""]}
+{"pattern":"(?i)[\\s\\S]","text":"abc","spans":[[0,1],[1,2],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked><masked>","split":["","","",""]}
+{"pattern":"[\\W\\w]","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"[\\W\\w]","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[\\W\\w]","text":"b","spans":[[0,1]],"groups":["b"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"[\\W\\w]","text":"ab","spans":[[0,1],[1,2]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>","split":["","",""]}
+{"pattern":"[\\W\\w]","text":"abc","spans":[[0,1],[1,2],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked><masked>","split":["","","",""]}
+{"pattern":"\\d\\b","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"\\d\\b","text":"x1y22z333","spans":[[8,9]],"groups":["3"],"match":null,"fullmatch":false,"sub":"x1y22z33<masked>","split":["x1y22z33",""]}
+{"pattern":"\\d\\b","text":"foo bar_baz 42","spans":[[13,14]],"groups":["2"],"match":null,"fullmatch":false,"sub":"foo bar_baz 4<masked>","split":["foo bar_baz 4",""]}
+{"pattern":"\\d\\b","text":"\u0661\u0662","spans":[[1,2]],"groups":["\u0662"],"match":null,"fullmatch":false,"sub":"\u0661<masked>","split":["\u0661",""]}
+{"pattern":"\\d\\b","text":"a{2}","spans":[[2,3]],"groups":["2"],"match":null,"fullmatch":false,"sub":"a{<masked>}","split":["a{","}"]}
+{"pattern":"a{1,2}{","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"a{1,2}{","text":"a{2}","spans":[[0,2]],"groups":["a{"],"match":[0,2],"fullmatch":false,"sub":"<masked>2}","split":["","2}"]}
+{"pattern":"a{2}{3}x","error":"multiple repeat at position 4","kind":"PatternError"}
+{"pattern":"\\8a","error":"invalid group reference 8 at position 1","kind":"PatternError"}
+{"pattern":"[\\8]","error":"bad escape \\8 at position 1","kind":"PatternError"}
+{"pattern":"(?:)","text":"","spans":[[0,0]],"groups":[""],"match":[0,0],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?:)","text":"a","spans":[[0,0],[1,1]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>a<masked>","split":["","a",""]}
+{"pattern":"(?:)","text":"ab","spans":[[0,0],[1,1],[2,2]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>a<masked>b<masked>","split":["","a","b",""]}
+{"pattern":"(?:)","text":"abc","spans":[[0,0],[1,1],[2,2],[3,3]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>a<masked>b<masked>c<masked>","split":["","a","b","c",""]}
+{"pattern":"(?:)*","text":"","spans":[[0,0]],"groups":[""],"match":[0,0],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?:)*","text":"a","spans":[[0,0],[1,1]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>a<masked>","split":["","a",""]}
+{"pattern":"(?:)*","text":"ab","spans":[[0,0],[1,1],[2,2]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>a<masked>b<masked>","split":["","a","b",""]}
+{"pattern":"(?:)*","text":"abc","spans":[[0,0],[1,1],[2,2],[3,3]],"groups":[""],"match":[0,0],"fullmatch":false,"sub":"<masked>a<masked>b<masked>c<masked>","split":["","a","b","c",""]}
+{"pattern":"()*","text":"","spans":[[0,0]],"groups":["",""],"match":[0,0],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"()*","text":"a","spans":[[0,0],[1,1]],"groups":["",""],"match":[0,0],"fullmatch":false,"sub":"<masked>a<masked>"}
+{"pattern":"()*","text":"ab","spans":[[0,0],[1,1],[2,2]],"groups":["",""],"match":[0,0],"fullmatch":false,"sub":"<masked>a<masked>b<masked>"}
+{"pattern":"()*","text":"abc","spans":[[0,0],[1,1],[2,2],[3,3]],"groups":["",""],"match":[0,0],"fullmatch":false,"sub":"<masked>a<masked>b<masked>c<masked>"}
+{"pattern":"(?:)+a","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":"","split":[""]}
+{"pattern":"(?:)+a","text":"a","spans":[[0,1]],"groups":["a"],"match":[0,1],"fullmatch":true,"sub":"<masked>","split":["",""]}
+{"pattern":"(?:)+a","text":"aab","spans":[[0,1],[1,2]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked>b","split":["","","b"]}
+{"pattern":"(?:)+a","text":"aaa","spans":[[0,1],[1,2],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked><masked><masked>","split":["","","",""]}
+{"pattern":"(?:)+a","text":"abab","spans":[[0,1],[2,3]],"groups":["a"],"match":[0,1],"fullmatch":false,"sub":"<masked>b<masked>b","split":["","b","b"]}
+{"pattern":"(a?)*?b","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":""}
+{"pattern":"(a?)*?b","text":"b","spans":[[0,1]],"groups":["b",null],"match":[0,1],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"(a?)*?b","text":"ab","spans":[[0,2]],"groups":["ab","a"],"match":[0,2],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"(a?)*?b","text":"aab","spans":[[0,3]],"groups":["aab","a"],"match":[0,3],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"(a?)*?b","text":"abab","spans":[[0,2],[2,4]],"groups":["ab","a"],"match":[0,2],"fullmatch":false,"sub":"<masked><masked>"}
+{"pattern":"(a*?)*b","text":"","spans":[],"groups":null,"match":null,"fullmatch":false,"sub":""}
+{"pattern":"(a*?)*b","text":"b","spans":[[0,1]],"groups":["b",""],"match":[0,1],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"(a*?)*b","text":"ab","spans":[[0,2]],"groups":["ab",""],"match":[0,2],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"(a*?)*b","text":"aab","spans":[[0,3]],"groups":["aab",""],"match":[0,3],"fullmatch":true,"sub":"<masked>"}
+{"pattern":"(a*?)*b","text":"abab","spans":[[0,2],[2,4]],"groups":["ab",""],"match":[0,2],"fullmatch":false,"sub":"<masked><masked>"}
+{"pattern":"(","error":"missing ), unterminated subpattern at position 0","kind":"PatternError"}
+{"pattern":"[","error":"unterminated character set at position 0","kind":"PatternError"}
+{"pattern":"(?P<x","error":"missing >, unterminated name at position 4","kind":"PatternError"}
+{"pattern":"a\nb(","error":"missing ), unterminated subpattern at position 3 (line 2, column 2)","kind":"PatternError"}
+{"pattern":"(?<=a+)b","error":"look-behind requires fixed-width pattern","kind":"PatternError"}
+{"pattern":"*","error":"nothing to repeat at position 0","kind":"PatternError"}
+{"pattern":"a**","error":"multiple repeat at position 2","kind":"PatternError"}
+{"pattern":"a{2,1}","error":"min repeat greater than max repeat at position 2","kind":"PatternError"}
+{"pattern":"(?i","error":"missing -, : or ) at position 3","kind":"PatternError"}
+{"pattern":"\\","error":"bad escape (end of pattern) at position 0","kind":"PatternError"}
+{"pattern":"(?P<a>x)(?P<a>y)","error":"redefinition of group name 'a' as group 2; was group 1 at position 12","kind":"PatternError"}
+{"pattern":"(?z)","error":"unknown extension ?z at position 1","kind":"PatternError"}
+{"pattern":"a(?i)","error":"global flags not at the start of the expression at position 1","kind":"PatternError"}
+{"pattern":"\\1","error":"invalid group reference 1 at position 1","kind":"PatternError"}
+{"pattern":"(a)\\2","error":"invalid group reference 2 at position 4","kind":"PatternError"}
+{"pattern":"[b-a]","error":"bad character range b-a at position 1","kind":"PatternError"}
+{"pattern":"\\q","error":"bad escape \\q at position 0","kind":"PatternError"}
+{"pattern":"(?P=n)","error":"unknown group name 'n' at position 4","kind":"PatternError"}
+{"pattern":"(?(1)a|b|c)","error":"conditional backref with more than two branches at position 8","kind":"PatternError"}
+{"pattern":")","error":"unbalanced parenthesis at position 0","kind":"PatternError"}
+{"pattern":"a{99999999999}","error":"the repetition number is too large","kind":"OverflowError"}
+{"pattern":"a{4294967295}","error":"the repetition number is too large","kind":"OverflowError"}
+{"pattern":"a{1,4294967295}","error":"the repetition number is too large","kind":"OverflowError"}
+{"pattern":"+","error":"nothing to repeat at position 0","kind":"PatternError"}
+{"pattern":"?","error":"nothing to repeat at position 0","kind":"PatternError"}
+{"pattern":"{1}","error":"nothing to repeat at position 0","kind":"PatternError"}
+{"pattern":"a|*","error":"nothing to repeat at position 2","kind":"PatternError"}
+{"pattern":"(*)","error":"nothing to repeat at position 1","kind":"PatternError"}
+{"pattern":"(?:*)","error":"nothing to repeat at position 3","kind":"PatternError"}
+{"pattern":"^*","error":"nothing to repeat at position 1","kind":"PatternError"}
+{"pattern":"$+","error":"nothing to repeat at position 1","kind":"PatternError"}
+{"pattern":"\\b*","error":"nothing to repeat at position 2","kind":"PatternError"}
+{"pattern":"\\A?","error":"nothing to repeat at position 2","kind":"PatternError"}
+{"pattern":"a*?*","error":"multiple repeat at position 3","kind":"PatternError"}
+{"pattern":"a+++","error":"multiple repeat at position 3","kind":"PatternError"}
+{"pattern":"a{1}{2}{3}","error":"multiple repeat at position 4","kind":"PatternError"}
+{"pattern":"a?{2}","error":"multiple repeat at position 2","kind":"PatternError"}
+{"pattern":"[a","error":"unterminated character set at position 0","kind":"PatternError"}
+{"pattern":"[a-","error":"unterminated character set at position 0","kind":"PatternError"}
+{"pattern":"[]","error":"unterminated character set at position 0","kind":"PatternError"}
+{"pattern":"[^]","error":"unterminated character set at position 0","kind":"PatternError"}
+{"pattern":"[\\d-a]","error":"bad character range \\d-a at position 1","kind":"PatternError"}
+{"pattern":"[a-\\d]","error":"bad character range a-\\d at position 1","kind":"PatternError"}
+{"pattern":"[\\w-\\w]","error":"bad character range \\w-\\w at position 1","kind":"PatternError"}
+{"pattern":"[z-a]","error":"bad character range z-a at position 1","kind":"PatternError"}
+{"pattern":"[\\x4-a]","error":"incomplete escape \\x4 at position 1","kind":"PatternError"}
+{"pattern":"[\\b-\\a]","error":"bad character range \\b-\\a at position 1","kind":"PatternError"}
+{"pattern":"\\x","error":"incomplete escape \\x at position 0","kind":"PatternError"}
+{"pattern":"\\x4","error":"incomplete escape \\x4 at position 0","kind":"PatternError"}
+{"pattern":"\\xg","error":"incomplete escape \\x at position 0","kind":"PatternError"}
+{"pattern":"\\u123","error":"incomplete escape \\u123 at position 0","kind":"PatternError"}
+{"pattern":"\\u","error":"incomplete escape \\u at position 0","kind":"PatternError"}
+{"pattern":"\\U0001F60","error":"incomplete escape \\U0001F60 at position 0","kind":"PatternError"}
+{"pattern":"\\U00110000","error":"bad escape \\U00110000 at position 0","kind":"PatternError"}
+{"pattern":"\\N","error":"missing { at position 2","kind":"PatternError"}
+{"pattern":"\\N{","error":"missing character name at position 3","kind":"PatternError"}
+{"pattern":"\\N{}","error":"missing character name at position 3","kind":"PatternError"}
+{"pattern":"\\N{NO SUCH NAME}","error":"undefined character name 'NO SUCH NAME' at position 0","kind":"PatternError"}
+{"pattern":"\\N{x","error":"missing }, unterminated name at position 3","kind":"PatternError"}
+{"pattern":"[\\x]","error":"incomplete escape \\x at position 1","kind":"PatternError"}
+{"pattern":"[\\u12]","error":"incomplete escape \\u12 at position 1","kind":"PatternError"}
+{"pattern":"[\\U0011FFFF]","error":"bad escape \\U0011FFFF at position 1","kind":"PatternError"}
+{"pattern":"[\\N]","error":"missing { at position 3","kind":"PatternError"}
+{"pattern":"[\\N{}]","error":"missing character name at position 4","kind":"PatternError"}
+{"pattern":"\\400","error":"octal escape value \\400 outside of range 0-0o377 at position 0","kind":"PatternError"}
+{"pattern":"\\777","error":"octal escape value \\777 outside of range 0-0o377 at position 0","kind":"PatternError"}
+{"pattern":"[\\400]","error":"octal escape value \\400 outside of range 0-0o377 at position 1","kind":"PatternError"}
+{"pattern":"[\\8]","error":"bad escape \\8 at position 1","kind":"PatternError"}
+{"pattern":"[\\9]","error":"bad escape \\9 at position 1","kind":"PatternError"}
+{"pattern":"\\8","error":"invalid group reference 8 at position 1","kind":"PatternError"}
+{"pattern":"\\9","error":"invalid group reference 9 at position 1","kind":"PatternError"}
+{"pattern":"\\10","error":"invalid group reference 10 at position 1","kind":"PatternError"}
+{"pattern":"\\100","error":null,"kind":null}
+{"pattern":"(a)\\10","error":"invalid group reference 10 at position 4","kind":"PatternError"}
+{"pattern":"\\c","error":"bad escape \\c at position 0","kind":"PatternError"}
+{"pattern":"\\e","error":"bad escape \\e at position 0","kind":"PatternError"}
+{"pattern":"\\g","error":"bad escape \\g at position 0","kind":"PatternError"}
+{"pattern":"\\p","error":"bad escape \\p at position 0","kind":"PatternError"}
+{"pattern":"\\A[\\A]","error":"bad escape \\A at position 3","kind":"PatternError"}
+{"pattern":"[\\B]","error":"bad escape \\B at position 1","kind":"PatternError"}
+{"pattern":"[\\Z]","error":"bad escape \\Z at position 1","kind":"PatternError"}
+{"pattern":"[\\z]","error":"bad escape \\z at position 1","kind":"PatternError"}
+{"pattern":"\\y","error":"bad escape \\y at position 0","kind":"PatternError"}
+{"pattern":"\\_","error":null,"kind":null}
+{"pattern":"\\j","error":"bad escape \\j at position 0","kind":"PatternError"}
+{"pattern":"(?","error":"unexpected end of pattern at position 2","kind":"PatternError"}
+{"pattern":"(?P","error":"unexpected end of pattern at position 3","kind":"PatternError"}
+{"pattern":"(?P<","error":"missing group name at position 4","kind":"PatternError"}
+{"pattern":"(?P<>a)","error":"missing group name at position 4","kind":"PatternError"}
+{"pattern":"(?P<1a>x)","error":"bad character in group name '1a' at position 4","kind":"PatternError"}
+{"pattern":"(?P<a b>x)","error":"bad character in group name 'a b' at position 4","kind":"PatternError"}
+{"pattern":"(?P<a","error":"missing >, unterminated name at position 4","kind":"PatternError"}
+{"pattern":"(?P=","error":"missing group name at position 4","kind":"PatternError"}
+{"pattern":"(?P=)","error":"missing group name at position 4","kind":"PatternError"}
+{"pattern":"(?P=a","error":"missing ), unterminated name at position 4","kind":"PatternError"}
+{"pattern":"(?P=1a)","error":"bad character in group name '1a' at position 4","kind":"PatternError"}
+{"pattern":"(?Px)","error":"unknown extension ?Px at position 1","kind":"PatternError"}
+{"pattern":"(?P>x)","error":"unknown extension ?P> at position 1","kind":"PatternError"}
+{"pattern":"(a)(?P=1)","error":"bad character in group name '1' at position 7","kind":"PatternError"}
+{"pattern":"(?#","error":"missing ), unterminated comment at position 0","kind":"PatternError"}
+{"pattern":"(?#abc","error":"missing ), unterminated comment at position 0","kind":"PatternError"}
+{"pattern":"(?<","error":"unexpected end of pattern at position 3","kind":"PatternError"}
+{"pattern":"(?<a","error":"unknown extension ?<a at position 1","kind":"PatternError"}
+{"pattern":"(?<x>a)","error":"unknown extension ?<x at position 1","kind":"PatternError"}
+{"pattern":"(?=a","error":"missing ), unterminated subpattern at position 0","kind":"PatternError"}
+{"pattern":"(?!a","error":"missing ), unterminated subpattern at position 0","kind":"PatternError"}
+{"pattern":"(?<=a","error":"missing ), unterminated subpattern at position 0","kind":"PatternError"}
+{"pattern":"(?<!a","error":"missing ), unterminated subpattern at position 0","kind":"PatternError"}
+{"pattern":"(?<=a|bc)","error":"look-behind requires fixed-width pattern","kind":"PatternError"}
+{"pattern":"(?<=a*)","error":"look-behind requires fixed-width pattern","kind":"PatternError"}
+{"pattern":"(?<=a{1,2})","error":"look-behind requires fixed-width pattern","kind":"PatternError"}
+{"pattern":"(?<!a|bc)d","error":"look-behind requires fixed-width pattern","kind":"PatternError"}
+{"pattern":"(?<=(?:a|bb))c","error":"look-behind requires fixed-width pattern","kind":"PatternError"}
+{"pattern":"(?<=a(?=b+))c","error":null,"kind":null}
+{"pattern":"(?(","error":"missing group name at position 3","kind":"PatternError"}
+{"pattern":"(?()a)","error":"missing group name at position 3","kind":"PatternError"}
+{"pattern":"(?(0)a)","error":"bad group number at position 3","kind":"PatternError"}
+{"pattern":"(?(1)a)","error":"invalid group reference 1 at position 3","kind":"PatternError"}
+{"pattern":"(?(2)a)(b)","error":"invalid group reference 2 at position 3","kind":"PatternError"}
+{"pattern":"(?(x)a)","error":"unknown group name 'x' at position 3","kind":"PatternError"}
+{"pattern":"(?(1a)a)","error":"bad character in group name '1a' at position 3","kind":"PatternError"}
+{"pattern":"(?(1)a","error":"missing ), unterminated subpattern at position 0","kind":"PatternError"}
+{"pattern":"(?(1)a|b","error":"missing ), unterminated subpattern at position 0","kind":"PatternError"}
+{"pattern":"(?(1073741823)a)","error":"invalid group reference 1073741823 at position 3","kind":"PatternError"}
+{"pattern":"(?(99999999999999999999999999)a)","error":"invalid group reference 99999999999999999999999999 at position 3","kind":"PatternError"}
+{"pattern":"(a)(?(1)","error":"missing ), unterminated subpattern at position 3","kind":"PatternError"}
+{"pattern":"(?(01)a)(b)","error":null,"kind":null}
+{"pattern":"(?(00)a)","error":"bad group number at position 3","kind":"PatternError"}
+{"pattern":"(?>","error":"missing ), unterminated subpattern at position 0","kind":"PatternError"}
+{"pattern":"(?>a","error":"missing ), unterminated subpattern at position 0","kind":"PatternError"}
+{"pattern":"(?i:","error":"missing ), unterminated subpattern at position 0","kind":"PatternError"}
+{"pattern":"(?i:a","error":"missing ), unterminated subpattern at position 0","kind":"PatternError"}
+{"pattern":"(?ix","error":"missing -, : or ) at position 4","kind":"PatternError"}
+{"pattern":"(?i-","error":"missing flag at position 4","kind":"PatternError"}
+{"pattern":"(?i-:a)","error":"missing flag at position 4","kind":"PatternError"}
+{"pattern":"(?i-x","error":"missing : at position 5","kind":"PatternError"}
+{"pattern":"(?i-x:","error":"missing ), unterminated subpattern at position 0","kind":"PatternError"}
+{"pattern":"(?-","error":"missing flag at position 3","kind":"PatternError"}
+{"pattern":"(?-:a)","error":"missing flag at position 3","kind":"PatternError"}
+{"pattern":"(?-i","error":"missing : at position 4","kind":"PatternError"}
+{"pattern":"(?-i)","error":"missing : at position 4","kind":"PatternError"}
+{"pattern":"(?-i)a","error":"missing : at position 4","kind":"PatternError"}
+{"pattern":"(?iz)","error":"unknown flag at position 3","kind":"PatternError"}
+{"pattern":"(?i z)","error":"missing -, : or ) at position 3","kind":"PatternError"}
+{"pattern":"(?i-z:a)","error":"unknown flag at position 4","kind":"PatternError"}
+{"pattern":"(?i-s z:a)","error":"missing : at position 5","kind":"PatternError"}
+{"pattern":"(?i-i:a)","error":"bad inline flags: flag turned on and off at position 5","kind":"PatternError"}
+{"pattern":"(?L)a","error":"bad inline flags: cannot use 'L' flag with a str pattern at position 3","kind":"PatternError"}
+{"pattern":"(?L:a)","error":"bad inline flags: cannot use 'L' flag with a str pattern at position 3","kind":"PatternError"}
+{"pattern":"(?au)a","error":"bad inline flags: flags 'a', 'u' and 'L' are incompatible at position 4","kind":"PatternError"}
+{"pattern":"(?ua)a","error":"bad inline flags: flags 'a', 'u' and 'L' are incompatible at position 4","kind":"PatternError"}
+{"pattern":"(?a-u:a)","error":"bad inline flags: cannot turn off flags 'a', 'u' and 'L' at position 5","kind":"PatternError"}
+{"pattern":"(?-a:a)","error":"bad inline flags: cannot turn off flags 'a', 'u' and 'L' at position 4","kind":"PatternError"}
+{"pattern":"(?-u:a)","error":"bad inline flags: cannot turn off flags 'a', 'u' and 'L' at position 4","kind":"PatternError"}
+{"pattern":"(?i-L:a)","error":"bad inline flags: cannot turn off flags 'a', 'u' and 'L' at position 5","kind":"PatternError"}
+{"pattern":"(?a)(?u)a","error":"ASCII and UNICODE flags are incompatible","kind":"ValueError"}
+{"pattern":"a(?i)b","error":"global flags not at the start of the expression at position 1","kind":"PatternError"}
+{"pattern":"(?i)a(?m)","error":"global flags not at the start of the expression at position 5","kind":"PatternError"}
+{"pattern":"(a)(?i)","error":"global flags not at the start of the expression at position 3","kind":"PatternError"}
+{"pattern":"(?:(?i)a)","error":"global flags not at the start of the expression at position 3","kind":"PatternError"}
+{"pattern":"(?i)(?m)a","error":null,"kind":null}
+{"pattern":"(?i)|(?m)a","error":"global flags not at the start of the expression at position 5","kind":"PatternError"}
+{"pattern":"a|(?i)b","error":"global flags not at the start of the expression at position 2","kind":"PatternError"}
+{"pattern":"(?<=(a)\\1)","error":"cannot refer to group defined in the same lookbehind subpattern at position 9","kind":"PatternError"}
+{"pattern":"(?<=(?P<n>a)(?P=n))","error":"cannot refer to group defined in the same lookbehind subpattern at position 18","kind":"PatternError"}
+{"pattern":"(a)(?<=(?(1)b|cc))","error":"look-behind requires fixed-width pattern","kind":"PatternError"}
+{"pattern":"(?<=(?(1)a))(b)","error":"cannot refer to an open group at position 9","kind":"PatternError"}
+{"pattern":"(?<=\\1)(a)","error":"invalid group reference 1 at position 5","kind":"PatternError"}
+{"pattern":"((?<=\\1)a)","error":"cannot refer to an open group at position 5","kind":"PatternError"}
+{"pattern":"(a\\1)","error":"cannot refer to an open group at position 2","kind":"PatternError"}
+{"pattern":"(?P<n>a(?P=n))","error":"cannot refer to an open group at position 11","kind":"PatternError"}
+{"pattern":"(a(?(1)b))","error":null,"kind":null}
+{"pattern":"(?<=(a))(?<=(?(1)b))","error":"look-behind requires fixed-width pattern","kind":"PatternError"}
+{"pattern":"a)","error":"unbalanced parenthesis at position 1","kind":"PatternError"}
+{"pattern":"(a))","error":"unbalanced parenthesis at position 3","kind":"PatternError"}
+{"pattern":"())","error":"unbalanced parenthesis at position 2","kind":"PatternError"}
+{"pattern":"(?:a))","error":"unbalanced parenthesis at position 5","kind":"PatternError"}
+{"pattern":"a{1,2","error":null,"kind":null}
+{"pattern":"((a)","error":"missing ), unterminated subpattern at position 0","kind":"PatternError"}
+{"pattern":"(a","error":"missing ), unterminated subpattern at position 0","kind":"PatternError"}
+{"pattern":"(a|b","error":"missing ), unterminated subpattern at position 0","kind":"PatternError"}
+{"pattern":"(?:a|b","error":"missing ), unterminated subpattern at position 0","kind":"PatternError"}
+{"pattern":"(?i:a|b","error":"missing ), unterminated subpattern at position 0","kind":"PatternError"}
+{"pattern":"(?P<n>a","error":"missing ), unterminated subpattern at position 0","kind":"PatternError"}
+{"pattern":"(a\n","error":"missing ), unterminated subpattern at position 0 (line 1, column 1)","kind":"PatternError"}
+{"pattern":"a\n(\nb","error":"missing ), unterminated subpattern at position 2 (line 2, column 1)","kind":"PatternError"}
+{"pattern":"x\n\ny[","error":"unterminated character set at position 4 (line 3, column 2)","kind":"PatternError"}
+{"pattern":"(?x)a #c\\","error":"bad escape (end of pattern) at position 8","kind":"PatternError"}
+{"pattern":"a\\","error":"bad escape (end of pattern) at position 1","kind":"PatternError"}
+{"pattern":"[a\\","error":"bad escape (end of pattern) at position 2","kind":"PatternError"}
+{"pattern":"(?#\\","error":"bad escape (end of pattern) at position 3","kind":"PatternError"}
+{"pattern":"(?P<\u00e9>a)","error":null,"kind":null}
+{"pattern":"(?P<a\u00e9>b)(?P=a\u00e9)","error":null,"kind":null}
+{"pattern":"(?P<\u0661>a)","error":"bad character in group name '\u0661' at position 4","kind":"PatternError"}
+{"pattern":"(?P<a\u0661>a)","error":null,"kind":null}
+{"pattern":"(?P<_>a)(?(_)b)","error":null,"kind":null}
+{"pattern":"(?P<n>a)(?(m)b)","error":"unknown group name 'm' at position 11","kind":"PatternError"}
+{"pattern":"(?P<n>a)(?P=m)","error":"unknown group name 'm' at position 12","kind":"PatternError"}
+{"pattern":"(?P<n>a)(?P<m>b)(?P<n>c)","error":"redefinition of group name 'n' as group 3; was group 1 at position 20","kind":"PatternError"}
+{"pattern":"(?P<class>a)","error":null,"kind":null}
+{"pattern":"(?i-i)","error":"missing : at position 5","kind":"PatternError"}
+{"pattern":"(?s-s:a)","error":"bad inline flags: flag turned on and off at position 5","kind":"PatternError"}
+{"pattern":"(?m-","error":"missing flag at position 4","kind":"PatternError"}
+{"pattern":"(?m-i","error":"missing : at position 5","kind":"PatternError"}
+{"pattern":"(?m-i\u00e9:a)","error":"unknown flag at position 5","kind":"PatternError"}
+{"pattern":"(?m\u00e9)","error":"unknown flag at position 3","kind":"PatternError"}
+{"pattern":"(?m1)","error":"missing -, : or ) at position 3","kind":"PatternError"}
+{"pattern":"(?m-1:a)","error":"missing flag at position 4","kind":"PatternError"}
+{"pattern":"(?-m1:a)","error":"missing : at position 4","kind":"PatternError"}
+{"pattern":"(?i\\a)","error":"missing -, : or ) at position 3","kind":"PatternError"}
+{"pattern":"(?P\\a)","error":"unknown extension ?P\\a at position 1","kind":"PatternError"}
+{"pattern":"(?<\\a)","error":"unknown extension ?<\\a at position 1","kind":"PatternError"}
+{"pattern":"(?\\a)","error":"unknown extension ?\\a at position 1","kind":"PatternError"}

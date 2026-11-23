@@ -1,20 +1,20 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --grch37 [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh37",
  "fasta": "none on either side",
  "input": "variants.vcf",
  "sha256": {
-  "default.txt": "e2060596106b07fcbd119606713dd09b7980a2bab17e64b193de128edf167b5a",
-  "tab.txt": "2455a5606cc5fa06eb398eb6e70052aaf1b44ef032d060ddc53a2f006eb3f822",
-  "vcf.vcf": "74176a4f5420924f7962aafe6b6ed4c9a4168cbb507bec915011b8d8c74af072",
-  "json.jsonl": "d415223c6dedc678facdd69ff055463dd20ae4d52ecf984e2650eab72a0fe28d"
+  "default.txt": "fc9e8d928ed17dd926f336619db3f89be3ab96b0da54e1e9befd9383d4821a20",
+  "tab.txt": "4e3a3c39dbb0c9ac3c018749b96bd7cf70f0be3185e63c513ec0ab056a09a494",
+  "vcf.vcf": "3916a6da8d680a04fe7ccceafd1bf459ba8b1693e5f649c3726fca89cdbb2cb0",
+  "json.jsonl": "28ba458c3e73ef8ef949037ec520a5e34a532f47d2b9a182ef1229d8283a4bec"
  },
  "variants_vcf_sha256": "4efe3d712f76440ad7fc45caf7ab1befd6c089b2293219f4aee069fa3a9a98b5",
- "generator": "scripts/golden/build_golden_corpus.py select; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 --variations <cache> --exclude-variation '^COSV\\d' --exclude-variation '^(C[A-Z]|BM|HM)\\d{6}'; scripts/concordance/generate_reference_output.sh --corpus; scripts/golden/build_golden_corpus.py classify",
+ "generator": "tools/vep-golden-corpus select; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 --variations <cache> --exclude-variation '^COSV\\d' --exclude-variation '^(C[A-Z]|BM|HM)\\d{6}'; scripts/concordance/generate_reference_output.sh --corpus; tools/vep-golden-corpus classify",
  "variation_slice": {
   "source": "homo_sapiens/116_GRCh37/21/all_vars.gz of the Ensembl VEP release-116 indexed cache",
   "window": "records whose start lies within one base of an input record's span",
@@ -29,10 +29,24 @@
    "all_vars.gz": "0fc008b11830d9338f84932f54f69af90b63a54169062c7618e9cf975f1eaf75",
    "all_vars.gz.csi": "3ee5d1f09144ae05896710ca7a53a027d7608b24435f63b6f5dc7a461a7b8165"
   },
-  "slice_check": "Ensembl VEP 116.2 run on this slice and on the full cache with --grch37 --check_existing --af --af_1kg --af_gnomade --af_gnomadg --max_af --pubmed --var_synonyms --clinvar_somatic_classification --failed 1 wrote identical default-format output for every record"
+  "slice_check": "Ensembl VEP 116.3 run on this slice and on the full cache with --grch37 --check_existing --af --af_1kg --af_gnomade --af_gnomadg --max_af --pubmed --var_synonyms --clinvar_somatic_classification --failed 1 wrote identical default-format output for every record"
  },
  "flag_sets": {
   "colocated": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --grch37 --check_existing --af --af_1kg --af_gnomade --af_gnomadg --max_af --pubmed --var_synonyms --clinvar_somatic_classification --failed 1 [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh37",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "8fdbd460f094841945e906228b717ebf2e854e8804f92dc49a0ebb74e4b913fd",
+    "tab.txt": "d63887f2bc04b86fa7bd04608fcd130707c9323015079968c3c183e0a63d407c",
+    "vcf.vcf": "d646595fb8bd7dad499c572ea83073e2a7829f984fee1747fe28962da7ca24a0",
+    "json.jsonl": "115f6dda182ba415c2cc97afe82dcdb7589d0e9ba0abd47504e019ec869fc301"
+   },
    "flags": [
     "--grch37",
     "--check_existing",
@@ -47,14 +61,7 @@
     "--failed",
     "1"
    ],
-   "input": "variants.vcf",
-   "expected_dir": "expected_colocated",
-   "sha256": {
-    "default.txt": "3a1f534ff1fa9263e62a64a91d3d4447cc192d554b8054eb7e3716bc2a54ee53",
-    "tab.txt": "eab74191baad6ed8d521a829138028ba162a9a06e896fb5705149c6541b365ee",
-    "vcf.vcf": "544716bbca1941b83ce9dd25720042a17f6f97abde79a189ff83463e132055be",
-    "json.jsonl": "c950f17396910b94692e508575dcd711eba4891be5871b32f184e7d2d7405136"
-   }
+   "expected_dir": "expected_colocated"
   }
  }
 }

@@ -1,7 +1,7 @@
 entry = "cnv_tr_representation_pair"
 page = "docs/divergences/cnv-tr.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the VCF 4.4 specification, section 5.7 \"Representing tandem repeats\" (a <CNV:TR> record with SVLEN, RN, RUS and RUC, which the Ensembl VEP documentation, \"Data formats\", \"Structural variant types\", names as supported); not seen in the measured datasets"
 notes = "The two readings of one record: Ensembl VEP reads the FASTA and expands the allele to an insertion of one unit after the run; vep-rs runs without a FASTA and keeps the symbolic tandem_repeat over the run. With a FASTA on both sides, or on neither, the engines agree."
@@ -29,3 +29,17 @@ columns = ["Location", "Allele", "Feature", "Consequence"]
 [expected]
 ensembl_vep = ["21:13620292-13620293 | TCA | ENST00000299443 | inframe_insertion"]
 vep_rs = ["21:13620284-13620292 | tandem_repeat | ENST00000299443 | feature_elongation,coding_sequence_variant"]
+
+[implementation]
+code = ["crates/vep-cli/src/vcf_parser.rs::tandem_repeat_record"]
+tests = [
+    "crates/vep-cli/src/vcf_parser.rs::tests::cnv_tr_expanded_with_fasta",
+    "crates/vep-cli/src/vcf_parser.rs::tests::cnv_tr_stays_sv_without_fasta",
+    "crates/vep-effects/src/sv/mod.rs::tests::tandem_repeat_without_a_reference_sequence_is_the_symbolic_gain_over_the_run",
+]
+rules = [
+    "tools/vep-sv-compare/src/masks/cnv_tr.rs::filter_cnv_tr_expansion_divergences",
+    "tools/vep-sv-compare/src/masks/cnv_tr.rs::is_cnv_tr_representation_pair",
+    "tools/vep-sv-compare/src/masks/cnv_tr.rs::span_overlaps_a_tract",
+    "tools/vep-sv-compare/src/masks/cnv_tr.rs::tract_is_of_the_run_alone",
+]

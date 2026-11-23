@@ -1,0 +1,9 @@
+file_name	source	location	allele	feature	feature_type	consequence_set	mismatch_type
+o.txt	missing_in_rust	1:100-200					coordinate_only
+o.txt	extra_in_rust	1:100-300					coordinate_only
+o.txt	missing_in_rust	2:5	A				transcript_selection
+o.txt	extra_in_rust	2:5	A	T			transcript_selection
+o.txt	missing_in_rust	3:7	C	T3	Transcript		consequence_swap
+o.txt	extra_in_rust	3:7	C	T3	Transcript	x	consequence_swap
+o.txt	missing_in_rust	4:1	G	T4	Transcript	y	true_missing
+o.txt	extra_in_rust	5:1					true_extra

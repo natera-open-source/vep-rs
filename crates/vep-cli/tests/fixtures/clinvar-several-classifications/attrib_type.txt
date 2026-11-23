@@ -1,0 +1,3 @@
+480	clinvar_clin_sig	ClinVar clinical significance	The clinical significance of a variant as reported by ClinVar
+483	risk_allele	Risk allele	Risk allele in phenotype association
+583	clinvar_ref_allele	ClinVar reference allele	The ClinVar reference allele in phenotype association

@@ -18,7 +18,7 @@
 //! NULL; and
 //! `expected_transcripts.json`, the fields of the same transcripts in the
 //! Ensembl cache (the release 116 GRCh38 Storable converted by
-//! `scripts/data/storable_to_json.pl`). Attributes and protein features are
+//! `tools/vep-storable-to-json`). Attributes and protein features are
 //! compared as sets: the Ensembl cache lists them in the database's row
 //! order, which no dump carries.
 
@@ -476,7 +476,8 @@ fn files_under(dir: &Path) -> Vec<PathBuf> {
 /// The `--core-dumps` bullet of `docs/cache-setup.md` states the documented
 /// exclusion of a cache built from the GFF3 alone: no symbol source, HGNC id
 /// or mature miRNA arm, and on GRCh37, whose release 87 GFF3 carries no
-/// `transcript_support_level`, no TSL.
+/// `Ensembl_canonical` tag, no CANONICAL; TSL is empty on GRCh37 with the
+/// dumps too, since that gene set carries no level.
 #[test]
 fn gff3_only_exclusions_are_documented() {
     let page = std::fs::read_to_string(
@@ -488,12 +489,18 @@ fn gff3_only_exclusions_are_documented() {
         "Without it the `SYMBOL_SOURCE`, `HGNC_ID`, `MANE_SELECT`, `MANE_PLUS_CLINICAL`, \
          `APPRIS`, `miRNA`, `RefSeq`, `SWISSPROT`, `TREMBL`, `UNIPARC`, `UNIPROT_ISOFORM`, \
          `DOMAINS` and `GENE_PHENO` columns are empty on a native cache",
-        "on GRCh37, whose release-87 GFF3 carries no `transcript_support_level` and no \
-         `Ensembl_canonical` tag, so are `TSL` and `CANONICAL`",
+        "on GRCh37, whose release-87 GFF3 carries no `Ensembl_canonical` tag, so is \
+         `CANONICAL`. `TSL` is empty on GRCh37 with or without it: that gene set carries no \
+         level.",
     ] {
         assert!(
             text.contains(phrase),
             "docs/cache-setup.md lacks {phrase:?}"
         );
     }
+    // The dumps fill no `TSL` on GRCh37.
+    assert!(
+        !text.contains("so are `TSL` and `CANONICAL`"),
+        "docs/cache-setup.md implies that --core-dumps fills TSL on GRCh37"
+    );
 }

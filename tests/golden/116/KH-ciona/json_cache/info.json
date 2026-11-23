@@ -1,0 +1,17 @@
+{
+  "assembly": "KH",
+  "cache_version": 116,
+  "contig_order": [
+    "6",
+    "MT",
+    "HT001032.1"
+  ],
+  "polyphen": "",
+  "regulatory": false,
+  "sift": "",
+  "source_versions": {
+    "assembly": "KH",
+    "genebuild": "2012-03"
+  },
+  "species": "ciona_intestinalis"
+}

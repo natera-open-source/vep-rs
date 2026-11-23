@@ -1,9 +1,9 @@
 entry = "utrannotator_frameshift_at_stop_boundary"
 page = "docs/divergences/utrannotator-frameshift-at-stop-boundary.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 63,698 per million · 4 flag sets, 93 corpora"
+input_class_basis = "2 · 63,698 per million · 4 flag sets, 132 corpora"
 notes = "The constructed record inserts one base after the first base of the start codon at cDNA 474 (5' UTR index 473) of ENST00001008934, a reverse-strand transcript. The base repeats the codon's first, so the changed sequence is the reference with one base directly before the codon. The uORF that begins 414 bases before the coding sequence ends on the stop codon that begins at the codon's second base, and the inserted base shifts it and the uORF that begins 359 bases before the coding sequence. Ensembl VEP lists the second alone; vep-rs lists both, as both engines do for the same base written directly before the codon."
 
 [input]
@@ -29,3 +29,23 @@ where = { record = "utr_ins_at_stop_boundary", feature = "ENST00001008934" }
 [expected]
 ensembl_vep = ["alt_type_length=12:KozakContext=GGCATGT:KozakStrength=Moderate:ref_type_length=33:ref_type=uORF:alt_type=uORF:Evidence=False:ref_StartDistanceToCDS=359"]
 vep_rs = ["Evidence=False:KozakContext=TGCATGG:KozakStrength=Moderate:alt_type=uORF:alt_type_length=102:ref_StartDistanceToCDS=414:ref_type=uORF:ref_type_length=66,Evidence=False:KozakContext=GGCATGT:KozakStrength=Moderate:alt_type=uORF:alt_type_length=12:ref_StartDistanceToCDS=359:ref_type=uORF:ref_type_length=33"]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/utr_annotator.rs::MutatedUtr::keeps_its_length",
+    "crates/vep-builtins/src/plugins/utr_annotator.rs::MutatedUtr::uframeshift",
+    "crates/vep-builtins/src/plugins/utr_annotator.rs::insertion_writings",
+]
+tests = [
+    "crates/vep-builtins/src/plugins/utr_annotator.rs::tests::insertion_before_the_stop_codon_inside_a_moved_start_codon_shifts_its_orf",
+    "crates/vep-builtins/src/plugins/utr_annotator.rs::tests::insertion_that_moves_a_start_codon_on_is_read_directly_before_it",
+    "crates/vep-builtins/src/plugins/utr_annotator.rs::tests::insertion_that_moves_a_start_codon_on_leaves_out_the_orf_that_still_ends_inside_it",
+    "crates/vep-builtins/src/plugins/utr_annotator.rs::tests::repeated_bases_before_a_start_codon_leave_out_the_orf_that_keeps_its_length_at_every_index",
+    "crates/vep-cli/tests/utrannotator_insertion_at_start_codon.rs::insertion_before_a_start_codon_leaves_out_the_orf_that_keeps_its_length",
+    "crates/vep-cli/tests/utrannotator_insertion_at_start_codon.rs::insertion_that_moves_a_start_codon_on_and_keeps_a_stop_codon_inside_it_shifts_nothing",
+    "crates/vep-cli/tests/utrannotator_insertion_at_start_codon.rs::insertion_that_moves_a_start_codon_on_shifts_the_orf_that_ends_inside_it",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/utrannotator.rs::frameshift_at_stop_boundary_row",
+    "tools/vep-plugin-pairs/src/rules/utrannotator.rs::frameshift_at_stop_boundary_row",
+]

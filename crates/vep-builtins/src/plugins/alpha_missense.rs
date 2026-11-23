@@ -26,8 +26,9 @@
 //! (`:117-137`): `genome uniprot_id transcript_id protein_variant
 //! am_pathogenicity am_class` in this module's fixtures. The reader reads the
 //! build in the `genome` column, and a file whose rows name the other build is
-//! refused under `--assembly`, since the two builds' files share one layout and
-//! the wrong one annotates nothing at exit 0.
+//! refused wherever the plugin was handed the run's assembly (the cache's own,
+//! else the value of `--assembly`), since the two builds' files share one
+//! layout and the wrong one annotates nothing at exit 0.
 //!
 //! # Matching
 //!
@@ -58,6 +59,7 @@
 use std::path::Path;
 
 use tracing::debug;
+use vep_core::allele_trim::CaseRule;
 use vep_core::assembly::Assembly;
 use vep_core::consequence::{Consequence, TranscriptConsequence};
 use vep_core::sv_routing::perl_true;
@@ -66,8 +68,8 @@ use vep_core::variant::InputVariant;
 use crate::annotation_store::{check_table_or_store, open_best_store_with, AnnotationStore};
 use crate::params::{Grammar, PluginParams};
 use crate::tabix::{
-    allele_match, parse_header, split_field_count, BatchQueryResult, TabixAnnotator, TabixConfig,
-    TabixRecord,
+    allele_match, parse_header, split_field_count, table_contig, BatchQueryResult, TabixAnnotator,
+    TabixConfig, TabixRecord,
 };
 use crate::traits::{warn_on_stderr, BuiltinPlugin, PluginError, PrefetchData};
 
@@ -313,11 +315,17 @@ impl AlphaMissensePlugin {
     ) -> Vec<&'a TabixRecord> {
         let (start, end) = Self::window(variant);
         batch
-            .lookup(&variant.chr, start, end)
+            .lookup(table_contig(variant, self.assembly), start, end)
             .into_iter()
             .filter(|record| {
                 allele_match::matched_variant_alleles(
-                    &allele_match::vcf_adjusted_row(record, POS_COL, REF_COL, ALT_COL),
+                    &allele_match::vcf_adjusted_row(
+                        record,
+                        POS_COL,
+                        REF_COL,
+                        ALT_COL,
+                        CaseRule::EitherCase,
+                    ),
                     variant,
                     POS_COL,
                     REF_COL,
@@ -344,9 +352,9 @@ impl AlphaMissensePlugin {
             && !declared.eq_ignore_ascii_case(requested.as_str())
         {
             return Err(PluginError::Init(format!(
-                "{NAME}: --assembly is {requested} but '{}' declares genome '{declared}'. \
-                 AlphaMissense publishes one file per build; point --plugin {NAME} at the \
-                 {requested} file.",
+                "{NAME}: the run's assembly is {requested} but '{}' declares genome \
+                 '{declared}'. AlphaMissense publishes one file per build; point --plugin \
+                 {NAME} at the {requested} file.",
                 self.file
             )));
         }
@@ -359,6 +367,8 @@ impl Default for AlphaMissensePlugin {
         Self::new()
     }
 }
+
+impl crate::traits::sealed::Sealed for AlphaMissensePlugin {}
 
 impl BuiltinPlugin for AlphaMissensePlugin {
     fn name(&self) -> &str {
@@ -417,13 +427,13 @@ impl BuiltinPlugin for AlphaMissensePlugin {
             alt_col: Some(ALT_COL),
             zero_based: false,
         };
-        // Opened on no assembly, so a mitochondrial record reads the table under
-        // every spelling on GRCh37 as on GRCh38: the published GRCh37 table spells
-        // the contig `chrM` and states each row at the assembly's `MT` position.
+        // On GRCh37 a contig the table names under the other pair of
+        // mitochondrial names than the record's is read where the table's rows
+        // state the reference bases (`MitochondrialFrame`).
         self.store = Some(open_best_store_with(
             path,
             config,
-            None,
+            self.assembly,
             TabixAnnotator::keeping_trailing_whitespace,
         )?);
         // After the index check, as `AlphaMissense.pm:182-190` orders them.
@@ -444,6 +454,12 @@ impl BuiltinPlugin for AlphaMissensePlugin {
 
     fn set_assembly(&mut self, assembly: Option<Assembly>) {
         self.assembly = assembly;
+    }
+
+    fn set_reference_fasta(&mut self, fasta: Option<std::sync::Arc<vep_fasta::IndexedFasta>>) {
+        if let Some(store) = self.store.as_mut() {
+            store.set_reference_fasta(fasta);
+        }
     }
 
     fn set_transcript_set(&mut self, refseq: bool, merged: bool) {
@@ -468,7 +484,7 @@ impl BuiltinPlugin for AlphaMissensePlugin {
             .filter(|v| !v.is_structural)
             .map(|v| {
                 let (start, end) = Self::window(v);
-                (v.chr.as_str(), start, end)
+                (table_contig(v, self.assembly), start, end)
             })
             .collect();
         if regions.is_empty() {
@@ -576,15 +592,15 @@ mod tests {
         consequence: Consequence,
         amino_acids: &str,
     ) -> TranscriptConsequence {
-        TranscriptConsequence {
-            transcript: Some(Arc::new(Transcript {
-                stable_id: transcript_id.into(),
-                ..Transcript::default()
-            })),
-            consequences: smallvec![consequence],
-            amino_acids: Some(amino_acids.to_string()),
-            ..Default::default()
-        }
+        let mut row = TranscriptConsequence::default();
+        row.transcript = Some(Arc::new({
+            let mut transcript = Transcript::default();
+            transcript.stable_id = transcript_id.into();
+            transcript
+        }));
+        row.consequences = smallvec![consequence];
+        row.amino_acids = Some(amino_acids.to_string());
+        row
     }
 
     fn snv(pos: u64, reference: &[u8], alt: &[u8]) -> InputVariant {
@@ -715,6 +731,35 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["am_class", "am_uniprot_id"]
         );
+    }
+
+    /// `AlphaMissense.pm:185` takes the `cols` value or, when it is Perl-false,
+    /// the two default names. An empty `cols=` reaches it as a defined empty
+    /// string (`BaseVepPlugin.pm:126-127`), so the one-character zero and the
+    /// empty value both select the default pair, never every column.
+    #[test]
+    fn a_false_cols_value_selects_the_two_default_columns() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = fixture(
+            dir.path(),
+            "am_synthetic.tsv.gz",
+            &["chr21\t9068417\tC\tA\thg38\tQ9NQ38\tENST00000400001.4\tA2B\t0.9123\tlikely_pathogenic"],
+        );
+        let default_columns = loaded(&[format!("file={path}")]).header_info();
+        assert_eq!(
+            default_columns
+                .iter()
+                .map(|(name, _)| name.as_str())
+                .collect::<Vec<_>>(),
+            ["am_pathogenicity", "am_class"]
+        );
+        for false_value in ["cols=0", "cols="] {
+            assert_eq!(
+                loaded(&[format!("file={path}"), false_value.to_string()]).header_info(),
+                default_columns,
+                "{false_value}"
+            );
+        }
     }
 
     /// `AlphaMissense.pm:216` and `:279` key the header and the row's values by
@@ -894,10 +939,11 @@ mod tests {
             row("ENST00000400003", Consequence::MissenseVariant, "Q/L"),
             row("ENST00000400004", Consequence::SynonymousVariant, "Q"),
             row("ENST00000400005", Consequence::MissenseVariant, "QH/HH"),
-            TranscriptConsequence {
-                feature_type: FeatureType::RegulatoryFeature,
-                consequences: smallvec![Consequence::RegulatoryRegionVariant],
-                ..TranscriptConsequence::default()
+            {
+                let mut consequence = TranscriptConsequence::default();
+                consequence.feature_type = FeatureType::RegulatoryFeature;
+                consequence.consequences = smallvec![Consequence::RegulatoryRegionVariant];
+                consequence
             },
         ]);
         let scored = vec!["am_pathogenicity=0.9123", "am_class=likely_pathogenic"];
@@ -1171,16 +1217,28 @@ mod tests {
             &["chr21\t9907250\tC\tA\thg19\tQ9NQ38\tENST1\tA1B\t0.9123\tlikely_pathogenic"],
         );
 
-        let message = init_message(Some(Assembly::Grch37), &[format!("file={hg38}")]);
-        assert!(message.contains("hg38"), "got: {message}");
-        let message = init_message(Some(Assembly::Grch38), &[format!("file={hg19}")]);
-        assert!(message.contains("hg19"), "got: {message}");
+        assert_eq!(
+            init_message(Some(Assembly::Grch37), &[format!("file={hg38}")]),
+            format!(
+                "AlphaMissense: the run's assembly is GRCh37 but '{hg38}' declares genome \
+                 'hg38'. AlphaMissense publishes one file per build; point --plugin \
+                 AlphaMissense at the GRCh37 file."
+            )
+        );
+        assert_eq!(
+            init_message(Some(Assembly::Grch38), &[format!("file={hg19}")]),
+            format!(
+                "AlphaMissense: the run's assembly is GRCh38 but '{hg19}' declares genome \
+                 'hg19'. AlphaMissense publishes one file per build; point --plugin \
+                 AlphaMissense at the GRCh38 file."
+            )
+        );
 
         loaded(&[format!("file={hg38}")]);
         let mut plugin = AlphaMissensePlugin::new();
         plugin
             .init(&[format!("file={hg19}")])
-            .expect("no --assembly must not block loading");
+            .expect("no assembly must not block loading");
     }
 
     /// Every selected column is a key of the matched row's result
@@ -1394,5 +1452,92 @@ mod tests {
             .downcast()
             .expect("a batch result");
         assert_eq!(batch.lookup("21", 1, 2).len(), 2);
+    }
+
+    /// On GRCh37, with the run's reference sequence, a table naming its
+    /// mitochondrial contig `chrM` is read for a record on `MT` or `chrMT`
+    /// when its rows state the reference bases at their own positions, and
+    /// not when they state the bases one position on: there the row at the
+    /// record's site carries the record's alleles, the reference repeating
+    /// its base, and its score is the neighbouring base's. Without a reference
+    /// sequence neither table is read for such a record, as
+    /// `BaseVepTabixPlugin.pm:693-708` reads neither; a record on `chrM`
+    /// reads both.
+    #[test]
+    fn on_grch37_a_table_under_the_other_pair_is_read_only_when_its_rows_state_the_reference() {
+        use crate::test_fixtures::{
+            made_up_alternate, made_up_reference, made_up_rows, repeated_base,
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let (reference, bases) = made_up_reference(dir.path(), 1600);
+        let site = repeated_base(&bases, 100);
+        let base = bases[site - 1];
+        let record_spelt = |spelling: &str| {
+            let mut record = InputVariant::new(
+                spelling.into(),
+                site as u64,
+                site as u64,
+                vec![base],
+                vec![made_up_alternate(base)],
+            );
+            record.transcript_consequences.push(row(
+                "ENST00000400001",
+                Consequence::MissenseVariant,
+                "A/B",
+            ));
+            record
+        };
+        let scored = vec![vec![
+            format!("am_pathogenicity=0.{site}"),
+            "am_class=ambiguous".to_string(),
+        ]];
+        let unscored: Vec<Vec<String>> = vec![Vec::new()];
+        for (frame, offset, with_reference) in [
+            ("stating_the_reference", 0, &scored),
+            ("one_position_on", 1, &unscored),
+        ] {
+            let rows = made_up_rows(
+                "chrM",
+                &bases,
+                10..1590,
+                offset,
+                |contig, position, reference, alt| {
+                    format!(
+                        "{contig}\t{position}\t{reference}\t{alt}\thg19\tP00001\t\
+                         ENST00000400001.4\tA2B\t0.{position}\tambiguous"
+                    )
+                },
+            );
+            let rows: Vec<&str> = rows.iter().map(String::as_str).collect();
+            let path = fixture(
+                dir.path(),
+                &format!("AlphaMissense_{frame}_synthetic.tsv.gz"),
+                &rows,
+            );
+            for (fasta, expected) in [
+                (Some(Arc::clone(&reference)), with_reference),
+                (None, &unscored),
+            ] {
+                let given = fasta.is_some();
+                let mut plugin = AlphaMissensePlugin::new();
+                plugin.set_assembly(Some(Assembly::Grch37));
+                plugin
+                    .init(&[format!("file={path}")])
+                    .expect("fixture loads");
+                plugin.set_reference_fasta(fasta);
+                for record in ["MT", "chrMT"] {
+                    assert_eq!(
+                        &fields(&plugin, record_spelt(record)),
+                        expected,
+                        "{frame}, record {record}, reference given: {given}"
+                    );
+                }
+                assert_eq!(
+                    fields(&plugin, record_spelt("chrM")),
+                    scored,
+                    "{frame}: a record of the table's own pair"
+                );
+            }
+        }
     }
 }

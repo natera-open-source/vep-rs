@@ -208,12 +208,12 @@ fn hgvs_records_annotate_as_their_vcf_twins_and_are_named_by_the_notation() {
 /// non-coding transcript annotate on its exons and introns (`n.135+5` is the
 /// fifth intronic base past a splice donor). A gene name as the reference
 /// picks the gene's likely transcript (its MANE Select) with Ensembl VEP's
-/// warning (Parser/HGVS.pm:219-229), and Ensembl VEP 116.2 in database mode
+/// warning (Parser/HGVS.pm:219-229), and Ensembl VEP 116.3 in database mode
 /// writes the rows of `CRYAA:c.100T>C` and `TFF3:c.5C>T` as it writes those of
 /// the two transcripts' own notations. A transcript the cache lacks, a
 /// position before the transcript's first base and a reference allele the
 /// genome contradicts are skipped with the resolver's messages, the texts
-/// Ensembl VEP 116.2 writes for the same lines.
+/// Ensembl VEP 116.3 writes for the same lines.
 #[test]
 fn transcript_notations_resolve_through_the_cache_and_warn_about_gene_names() {
     let dir = tempfile::tempdir().unwrap();
@@ -366,7 +366,7 @@ fn a_genomic_notation_before_the_transcript_notation_meets_the_same_cache_refusa
         "21:g.30282169C>A\nENST00000518498:c.5C>T\n",
     );
     let prefix = format!(
-        "ERROR: [cache] Cannot read the transcript cache for chr21: Failed to inflate {}: ",
+        "ERROR: [cache] Cannot read the transcript cache for chromosome 21: Failed to inflate {}: ",
         shard.display()
     );
     assert_run_refused(dir.path(), &input, &cache, &prefix);
@@ -409,8 +409,55 @@ fn unresolvable_notations_are_skipped_with_the_warning() {
     );
 }
 
+/// An `r.` notation is skipped with the resolver's warning and the run reads
+/// on, wherever the line stands in the list and whether the format is named or
+/// detected: Ensembl VEP's resolver reads the letter as a type, has no branch
+/// for it and throws `HGVS type r not recognised for <notation>`, the letter as
+/// written (ensembl-variation DBSQL/VariationFeatureAdaptor.pm:1789 and
+/// `:1989`), which its parser warns about before it reads the next line
+/// (Parser/HGVS.pm:204-216). The notation beside it writes the rows it writes
+/// alone, and nothing reaches standard error.
+#[test]
+fn an_rna_notation_is_skipped_with_the_warning_and_the_run_reads_on() {
+    let dir = tempfile::tempdir().unwrap();
+    let alone = write(dir.path(), "alone.hgvs", "21:g.30282169C>A\n");
+    let alone_out = dir.path().join("alone.txt");
+    let alone_rows = annotate(dir.path(), &alone, &alone_out, &["--format", "hgvs"]);
+    assert!(alone_rows.iter().all(|row| name(row) == "21:g.30282169C>A"));
+    assert!(!alone_rows.is_empty());
+
+    for (file, text, warning) in [
+        (
+            "first.hgvs",
+            "ENST00000366667:r.803C>T\n21:g.30282169C>A\n",
+            "WARNING: line 1 skipped (ENST00000366667:r.803C>T): Unable to parse HGVS notation \
+             'ENST00000366667:r.803C>T': HGVS type r not recognised for ENST00000366667:r.803C>T\n",
+        ),
+        (
+            "later.hgvs",
+            "21:g.30282169C>A\nENST00000366667:R.803C>T\n",
+            "WARNING: line 2 skipped (ENST00000366667:R.803C>T): Unable to parse HGVS notation \
+             'ENST00000366667:R.803C>T': HGVS type R not recognised for ENST00000366667:R.803C>T\n",
+        ),
+    ] {
+        let input = write(dir.path(), file, text);
+        for (label, extra) in [("named", &["--format", "hgvs"][..]), ("detected", &[][..])] {
+            // The warnings file is created at the first warning, so a run that
+            // raised none would leave another run's file in place at a shared path.
+            let out = dir.path().join(format!("{file}.{label}.txt"));
+            let output = vep(dir.path(), &input, &out, true, extra);
+            assert_eq!(output.status.code(), Some(0), "{file} {extra:?}");
+            assert_eq!(stderr(&output), "", "{file} {extra:?}");
+            assert_eq!(rows(&out), alone_rows, "{file} {extra:?}");
+            let warnings =
+                std::fs::read_to_string(format!("{}_warnings.txt", out.display())).unwrap();
+            assert_eq!(warnings, warning, "{file} {extra:?}");
+        }
+    }
+}
+
 /// A genomic span past the sequence's last base (chromosome 21 of GRCh38 ends at
-/// 46709983) is skipped with the FASTA's refusal, where Ensembl VEP 116.2 reads
+/// 46709983) is skipped with the FASTA's refusal, where Ensembl VEP 116.3 reads
 /// the span from its slice padded with `N` (`VariationFeatureAdaptor.pm:2060-2062`,
 /// `SequenceAdaptor.pm:148-152` and `:222-233`), so `21:g.46709984del` is `N/-` at
 /// 46709984 and `21:g.46709983_46709984insA` the insertion `-/A` after the last
@@ -454,7 +501,7 @@ fn a_span_past_the_last_base_is_skipped_with_the_fastas_refusal() {
 /// `NC_000021:g.30282169C>A` is skipped with the FASTA's refusal and writes no
 /// row, while `NC_000021.9:g.30282169C>A` and its lower-case spelling
 /// `nc_000021.9:g.30282169C>A` each annotate as `21:30282169 A`, named as written.
-/// Ensembl VEP 116.2 fetches the slice through `fetch_by_region('chromosome',
+/// Ensembl VEP 116.3 fetches the slice through `fetch_by_region('chromosome',
 /// $reference) || fetch_by_region(undef, $reference)`
 /// (`VariationFeatureAdaptor.pm:1889`), whose synonym lookup retries the name as
 /// a prefix (`SliceAdaptor.pm:2870-2884`, `"$escaped_seq_region_name%"`), so there
@@ -498,7 +545,7 @@ fn a_version_less_accession_is_skipped_with_the_fastas_refusal() {
 /// (`_hgvs_from_components` tests `/dup/` in lower case only,
 /// VariationFeatureAdaptor.pm:2071), which the genome's `T` replaces (`:2096-2097`)
 /// beside the empty alternate `dup([A-Z]*)$` captured, and `validate_vf`'s split
-/// drops that empty field (Parser.pm:575), so Ensembl VEP 116.2 annotates no allele
+/// drops that empty field (Parser.pm:575), so Ensembl VEP 116.3 annotates no allele
 /// and writes no row and no warning for it; `21:g.30282172_30282173ins` is the
 /// same shape (`-/`). The lower-case `dup` beside them annotates the same rows
 /// with and without `--lookup_ref`: its alleles are the `-` and the genome's
@@ -563,7 +610,7 @@ fn placed_by_name(rows: &[String]) -> BTreeMap<&str, (&str, &str, &str)> {
 /// upper-cased (`post_process_vfs`, Parser.pm:852, then `validate_vf`, :554):
 /// `21:g.30282168_30282170TCA>TCG` annotates as `A/G` at `21:30282170`, and
 /// `21:g.30282168_30282170delinsGGa` keeps its `A`/`a` pair and annotates as `GGA`
-/// over `21:30282168-30282170`, as Ensembl VEP 116.2 does; a trim of the
+/// over `21:30282168-30282170`, as Ensembl VEP 116.3 does; a trim of the
 /// upper-cased pair would drop the shared `A` and annotate `GG` over two bases.
 /// `UPLOADED_ALLELE` prints the pair as the notation built it, `TCA/TCG`,
 /// `TCA/GGa` and `TCA/TCg`, the `original_allele_string` the trim records
@@ -722,7 +769,8 @@ fn max_sv_size_bounds_the_span_of_a_notation() {
 /// `$self->line_number($self->line_number + 1);`) and hands its text to the
 /// resolver, which refuses it (`:204-216`, `WARNING: Unable to parse HGVS
 /// notation '#c'` with the resolver's message, and the next record is read);
-/// here such a line is a comment, passed over without a word. A `#` line with no
+/// here such a line is a comment, passed over and counted in one warning at
+/// the end of the input. A `#` line with no
 /// word character is an empty line to `skip_empty_lines` (Parser.pm:273,
 /// `$parser->{record} !~ /\w+/`), warned about and counted as one. So for
 /// `21:g.30282169C>A`, `# c`, `21:g.30282169G>A` the refusal names line 3, and
@@ -749,7 +797,7 @@ fn a_hash_line_counts_toward_the_line_numbers() {
     assert!(!rows.is_empty());
     assert_eq!(
         std::fs::read_to_string(format!("{}_warnings.txt", out.display())).unwrap(),
-        refusal
+        format!("{refusal}WARNING: Read 1 line that begins with '#' as a comment, at line 2\n")
     );
     let bare = write(
         dir.path(),
@@ -770,8 +818,8 @@ fn a_hash_line_counts_toward_the_line_numbers() {
 /// while an insertion, which reads no base, keeps its notation and HGVSp is
 /// unchanged on every row; no warning is written. Over the corpus reference the
 /// same records print `c.764G>T`, `c.307_308insC`, `c.632del` and `c.196_197del`,
-/// the notations Ensembl VEP 116.2 prints over the GRCh38 primary assembly.
-/// Over a FASTA holding chromosome 22 alone Ensembl VEP 116.2 reads the
+/// the notations Ensembl VEP 116.3 prints over the GRCh38 primary assembly.
+/// Over a FASTA holding chromosome 22 alone Ensembl VEP 116.3 reads the
 /// transcript's slice as `N` per base (`Utils/FastaSequence.pm:597-601`, `return
 /// 'N' x (($end - $start) + 1)`), hands it to `hgvs_variant_notation` as the
 /// reference (`TranscriptVariationAllele.pm:1474-1476`) and cuts the reference

@@ -1,0 +1,82 @@
+entry = "hgvsp_frameshift_with_no_changed_residue"
+page = "docs/divergences/hgvsp-frameshift-with-no-changed-residue.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "observed"
+input_class_basis = "seen in the genome-wide ClinVar GRCh38 and GRCh37 files: 55 of 4,398,127 records and 73 of 4,388,172, on 56 and 78 rows under --hgvs"
+notes = "Five records on GRCh38, each a deletion written inside the last codons of a coding sequence that has no 3' UTR behind it. Four are ClinVar records: variation 4081419 deletes the third base of the last whole codon of ENST00000464732, flagged cds_end_NF, and keeps its residue; variation 11411 deletes the last base of the last residue's codon and the first base of the stop codon of ENST00000518685 and ENST00000557224, which no flag marks incomplete; variation 3367156 deletes the third base of codon 117 and the whole of codon 118 of ENST00000564568; variation 2972051 deletes one base of codon 152 of ENST00000566187, whose three bases are equal, and leaves two bases after codon 152. The fifth is a gnomAD v4.1 record on the immunoglobulin segment ENST00000390571, whose protein of ten residues holds three stops. On each row no whole codon of the changed sequence differs from the reference protein, and Ensembl VEP names the residue after the last one it compared by that one's name; vep-rs writes no HGVSp."
+
+prepare = [
+  '''[ -n "$PERL_CACHE" ] || { echo "no homo_sapiens/116_GRCh38 with chromosomes 3, 14, 16 and X under the --perl-cache-dir roots" >&2; exit 1; }
+cut="$STAGE/perl-cache/homo_sapiens/116_GRCh38"
+mkdir -p "$cut/3" "$cut/14" "$cut/16" "$cut/X"
+cp "$PERL_CACHE/info.txt" "$PERL_CACHE/chr_synonyms.txt" "$cut/"
+cp "$PERL_CACHE/3/158000001-159000000.gz" "$cut/3/"
+cp "$PERL_CACHE/14/105000001-106000000.gz" "$cut/14/"
+cp "$PERL_CACHE/16/1000001-2000000.gz" "$PERL_CACHE/16/57000001-58000000.gz" "$cut/16/"
+cp "$PERL_CACHE/X/49000001-50000000.gz" "$cut/X/"''',
+  '''cargo run --release --locked --quiet --manifest-path "$REPO/tools/vep-storable-to-json/Cargo.toml" -- "$STAGE/perl-cache/homo_sapiens/116_GRCh38" "$STAGE/json-cache" 3,14,16,X > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
+]
+
+[input]
+format = "vcf"
+text = """
+3	158646779	open_end_deletion_3_158646779	TG	T	.	.	.
+X	49251335	stop_codon_broken_X_49251335	CAG	C	.	.	.
+16	1460840	next_residue_deleted_16_1460840	GGCCA	G	.	.	.
+16	57651588	two_bases_left_16_57651588	GC	G	.	.	.
+14	105886031	segment_deletion_14_105886031	GT	G	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "{stage}/json-cache"
+perl_cache = "{stage}/perl-cache"
+
+[run]
+flags = [
+  "--hgvs",
+  "--fasta", "{grch38_fasta}/Homo_sapiens.GRCh38.dna.primary_assembly.fa",
+]
+
+[compare]
+kind = "rows"
+where = { record = ["open_end_deletion_3_158646779", "stop_codon_broken_X_49251335", "next_residue_deleted_16_1460840", "two_bases_left_16_57651588", "segment_deletion_14_105886031"], feature = ["ENST00000390571", "ENST00000464732", "ENST00000518685", "ENST00000557224", "ENST00000564568", "ENST00000566187"] }
+columns = ["Uploaded_variation", "Feature", "Consequence", "CDS_position", "Protein_position", "HGVSc", "HGVSp", "FLAGS"]
+
+[expected]
+ensembl_vep = [
+  "next_residue_deleted_16_1460840 | ENST00000564568 | frameshift_variant | 351-354 | 117-118 | ENST00000564568.1:c.351_354del | ENSP00000454845.1:p.Ala118AlafsTer? | cds_end_NF",
+  "open_end_deletion_3_158646779 | ENST00000464732 | frameshift_variant | 180 | 60 | ENST00000464732.1:c.180del | ENSP00000417532.1:p.Leu61LeufsTer? | cds_end_NF",
+  "segment_deletion_14_105886031 | ENST00000390571 | frameshift_variant | 30 | 10 | ENST00000390571.1:c.30del | ENSP00000429952.1:p.Leu11LeufsTer? | cds_start_NF,cds_end_NF",
+  "stop_codon_broken_X_49251335 | ENST00000518685 | frameshift_variant,stop_lost | 1212-1213 | 404-405 | ENST00000518685.6:c.1212_1213del | ENSP00000428952.2:p.Pro405ProfsTer? | -",
+  "stop_codon_broken_X_49251335 | ENST00000557224 | frameshift_variant,stop_lost | 1368-1369 | 456-457 | ENST00000557224.6:c.1368_1369del | ENSP00000451208.1:p.Pro457ProfsTer? | -",
+  "two_bases_left_16_57651588 | ENST00000566187 | frameshift_variant | 454 | 152 | ENST00000566187.1:c.456del | ENSP00000457178.1:p.Pro153ProfsTer? | cds_end_NF",
+]
+vep_rs = [
+  "next_residue_deleted_16_1460840 | ENST00000564568 | frameshift_variant | 351-354 | 117-118 | ENST00000564568.1:c.351_354del | - | cds_end_NF",
+  "open_end_deletion_3_158646779 | ENST00000464732 | frameshift_variant | 180 | 60 | ENST00000464732.1:c.180del | - | cds_end_NF",
+  "segment_deletion_14_105886031 | ENST00000390571 | frameshift_variant | 30 | 10 | ENST00000390571.1:c.30del | - | cds_start_NF,cds_end_NF",
+  "stop_codon_broken_X_49251335 | ENST00000518685 | frameshift_variant,stop_lost | 1212-1213 | 404-405 | ENST00000518685.6:c.1212_1213del | - | -",
+  "stop_codon_broken_X_49251335 | ENST00000557224 | frameshift_variant,stop_lost | 1368-1369 | 456-457 | ENST00000557224.6:c.1368_1369del | - | -",
+  "two_bases_left_16_57651588 | ENST00000566187 | frameshift_variant | 454 | 152 | ENST00000566187.1:c.456del | - | cds_end_NF",
+]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/coding.rs::hgvsp_fs_peptides",
+]
+tests = [
+    "crates/vep-cli/tests/frameshift_with_no_changed_residue.rs::a_frameshift_that_changes_no_residue_the_transcript_holds_has_no_protein_notation",
+    "crates/vep-effects/src/frameshift_no_changed_residue_tests.rs::a_deletion_that_keeps_every_residue_and_breaks_the_stop_codon_has_no_protein_notation",
+    "crates/vep-effects/src/frameshift_no_changed_residue_tests.rs::a_deletion_that_keeps_every_residue_of_an_open_coding_sequence_has_no_protein_notation",
+    "crates/vep-effects/src/frameshift_no_changed_residue_tests.rs::a_deletion_that_leaves_no_base_of_the_next_residue_has_no_protein_notation",
+    "crates/vep-effects/src/frameshift_no_changed_residue_tests.rs::an_insertion_that_keeps_every_residue_of_an_open_coding_sequence_has_no_protein_notation",
+    "crates/vep-effects/src/frameshift_no_changed_residue_tests.rs::two_bases_after_the_last_whole_codon_that_spell_another_residue_have_no_protein_notation",
+    "crates/vep-effects/src/frameshift_no_changed_residue_tests.rs::two_bases_after_the_last_whole_codon_that_spell_the_same_residue_have_no_protein_notation",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/frameshift_no_changed_residue.rs::frameshift_with_no_changed_residue",
+    "tools/vep-golden-corpus/src/classify/protein.rs::frameshift_with_no_changed_residue_pair",
+]

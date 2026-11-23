@@ -1,0 +1,17 @@
+{
+  "assembly": "GCA000002765v3",
+  "cache_version": 63,
+  "contig_order": [
+    "Pf3D7_05_v3",
+    "Pf3D7_API_v3",
+    "Pf3D7_MIT_v3"
+  ],
+  "polyphen": "",
+  "regulatory": false,
+  "sift": "",
+  "source_versions": {
+    "assembly": "GCA000002765v3",
+    "genebuild": "VEuPathDB-2020-09-01"
+  },
+  "species": "plasmodium_falciparum"
+}

@@ -1,0 +1,71 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 63,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species hordeum_vulgare --assembly MorexV3_pseudomolecules_assembly --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "hordeum_vulgare/63_MorexV3_pseudomolecules_assembly",
+ "fasta": "chromosome 1H, the one sequence the records and the pruned cache's transcripts sit on, at its full length (516,505,932 bases) from Hordeum_vulgare.MorexV3_pseudomolecules_assembly.dna.primary_assembly.1H.fa.gz of Ensembl Plants (release 63 of Ensembl Genomes), every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000; 3,564,752 bases in all) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
+ "input": "variants.vcf: 252 records on chromosome 1H, the shortest of the seven chromosomes. 242 are seeded records that tools/vep-seeded-variants writes from the converted cache and the chromosome's sequence (--records wide, seed 1), their IDs naming the category and an ordinal, twelve a category: a start codon, a stop gained and a stop lost under the standard genetic code, a missense and a synonymous change on each strand, a splice donor and an acceptor, both untranslated regions, an intron, upstream, downstream and between genes, a frameshift insertion, a frameshift deletion, an in-frame deletion, twelve records on the first sequence and twelve that name the chromosome by its synonym LR890096.1; one record sits at the chromosome's first base and one at its last. 10 are known variants of the cache's own variation file, each a single-nucleotide substitution under its Ensembl Plants identifier, three of them multi-allelic. The generator wrote no record for a codon another genetic code reads differently (every transcript reads the standard code), for an organelle sequence (the cache names none), for the origin of a circular sequence (the cache has none) or for the last sequence (the corpus sits on one)",
+ "sha256": {
+  "default.txt": "4e7aeef8b4ddfc0e6b6e2375e643c56040ed7fc675429131135bdac0d746c37d",
+  "tab.txt": "f50608e4b31746a65361174f0e26c57afe99d91a68ff22b75577dfb2ff9394a7",
+  "vcf.vcf": "4c604cc947c917370b2e32e2de65cba3e0dcc1541410aa6527c156133806d64a",
+  "json.jsonl": "01f2ff8cde1ec8324acc24a88239f83b041c625e628cb81e1ad212207edce250"
+ },
+ "variants_vcf_sha256": "4121a399302037b2ded5a468485c48716d85e905bf4b4db98cbc6caaca329d71",
+ "flag_sets": {
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species hordeum_vulgare --assembly MorexV3_pseudomolecules_assembly --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "hordeum_vulgare/63_MorexV3_pseudomolecules_assembly",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "cadaa5b47814eb890e983924030355dd216f698d3c52f898194d26ac4e1dc00c",
+    "tab.txt": "0e7704fa6ce82d325a213a3a5c263ddfa1d41a1899129b9d59fc5f0e4c215d3f",
+    "vcf.vcf": "2534af8627c5e1dcd27e7765e76f1ceda6eac5d242067c9d36dbfcea73e00e85",
+    "json.jsonl": "b4218c821068b5f4835bf95283dd82bde9cfa3ed7876891f890a9cd778e80e48"
+   },
+   "flags": [
+    "--everything"
+   ],
+   "expected_dir": "expected_everything"
+  },
+  "hgvs-sift": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species hordeum_vulgare --assembly MorexV3_pseudomolecules_assembly --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs --sift b [--tab|--vcf|--json]",
+   "perl_cache": "hordeum_vulgare/63_MorexV3_pseudomolecules_assembly",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "bb19263b7f5535d48f46705a5068fdb6ca9011e3df4cd99d2f8a5539e966ee8c",
+    "tab.txt": "bdc1aaddfd8a071c6d0ecf4b560a3b4e32ed5fdff579da5d3f25a806179aa475",
+    "vcf.vcf": "38ccba4b06a69883053a4dd3c218eb6691965876cf9636ba373c8a96bbf3c39b",
+    "json.jsonl": "75c5f3d57cd0c052a938c51a53afaa56645e3433ca7529e86baf3ffe4d062aaa"
+   },
+   "flags": [
+    "--hgvs",
+    "--sift",
+    "b"
+   ],
+   "expected_dir": "expected_hgvs-sift"
+  }
+ },
+ "generator": "tools/vep-seeded-variants --records wide --seed 1 --fasta <the chromosome> --sequence 1H over the cache tools/vep-storable-to-json converts from the Ensembl VEP 63 MorexV3_pseudomolecules_assembly cache of Ensembl Plants, and 300 single-nucleotide substitutions sampled under the same seed from that cache's known variants of the chromosome; Ensembl VEP over the two inputs under the corpus flags; tools/vep-golden-corpus select --release 63 --assembly MorexV3_pseudomolecules_assembly --species hordeum_vulgare --dataset wide=<reference>=<the seeded records> --dataset known=<reference>=<the sampled known variants> --k 2 --seed 1 --max-span 1000000 --max-records 500 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 6 --include <every seeded record> --covers species-barley-morexv3 --covers genetic-code-tables --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_function_predictions --drop-except <the transcripts on which a record changes one residue, the rows SIFT scores> --perl-info <cache>/info.txt --cache-version 63 --variations <cache>/variations over the whole converted cache (protein features kept for the DOMAINS column of the everything set); scripts/fixtures/cut_plugin_regions.py --reference <the chromosome> --flank 5000 --record-flank 2000, the twelve synonym-named records read under the cache's name for the chromosome; scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; tools/vep-golden-corpus flag-set (everything, hgvs-sift) and classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp --field SIFT for the hgvs-sift set)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "1H": 341
+  },
+  "shards": 153,
+  "synonym_lines": 1,
+  "matrices_kept_on": 67,
+  "variation_slices": "the known variants within one base of a record under variations/1H/all_vars.gz with its .csi, as the Ensembl VEP cache lays them out (13 records)"
+ }
+}

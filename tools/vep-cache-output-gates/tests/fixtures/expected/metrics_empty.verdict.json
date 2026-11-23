@@ -1,0 +1,46 @@
+{
+  "verdict": "PASS",
+  "gates": [
+    {
+      "gate": "consequence_f1",
+      "threshold": 0.999,
+      "actual": 1.0,
+      "passed": true
+    },
+    {
+      "gate": "total_annotations_delta",
+      "threshold": 0.001,
+      "baseline": 0,
+      "builder": 0,
+      "actual": 0.0,
+      "passed": true
+    },
+    {
+      "gate": "colocated_variant_delta",
+      "threshold": 0.01,
+      "baseline": 0,
+      "builder": 0,
+      "actual": 0.0,
+      "passed": true
+    },
+    {
+      "gate": "frequency_field_delta",
+      "threshold": 0.01,
+      "actual": 0.0,
+      "details": {},
+      "passed": true
+    },
+    {
+      "gate": "per_consequence_type_delta",
+      "threshold": 0.01,
+      "actual": 0.0,
+      "details": {},
+      "passed": true
+    }
+  ],
+  "cache_diff_summary": {
+    "transcript_match_rate": null,
+    "variation_match_rate": null,
+    "info_json_matches": null
+  }
+}

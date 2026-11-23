@@ -1,0 +1,11 @@
+{
+  "version_a": "x",
+  "version_b": "y",
+  "transcripts": 8,
+  "per_class": {
+    "identical_after_normalisation": 8
+  },
+  "class_combinations": {
+    "identical_after_normalisation": 8
+  }
+}

@@ -1,0 +1,10 @@
+--version-a
+1
+--dump-a
+a.txt
+--version-b
+2
+--dump-b
+no-line-end.txt
+--out-dir
+out

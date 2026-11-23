@@ -1,7 +1,7 @@
 entry = "safe_individual_minimal"
 page = "docs/divergences/safe-individual-minimal.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
 input_class_basis = "2 · 4 of 373 records with sample columns · 0 flag sets, 3 corpora"
 notes = "The first mechanism of the entry: S1's 1/2 copy of multi_trim names two alleles that trim, so both engines split it; Ensembl VEP's split takes the hash order of the copy's alleles, and its first allele decides REF_ALLELE, VARIANT_CLASS and UPLOADED_ALLELE for every row of the copy."
@@ -36,4 +36,14 @@ ensembl_vep = [
 vep_rs = [
   "21:10542419-10542423 | - | 2 | frameshift_variant | A | SNV | AGCAA/CGCAA/A",
   "21:10542419-10542423 | C | 1 | synonymous_variant | A | SNV | AGCAA/CGCAA/A",
+]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/individuals.rs::CalledGenotype::read",
+    "crates/vep-cli/src/individuals.rs::individual_copy",
+    "crates/vep-cli/src/vcf_parser.rs::split_minimal_record",
+]
+tests = [
+    "crates/vep-cli/tests/individuals.rs::safe_individual_minimal_keeps_a_bi_allelic_copy_of_a_multi_allelic_record",
 ]

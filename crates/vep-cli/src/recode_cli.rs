@@ -3,8 +3,8 @@
 
 //! `vep recode`: the command line of the companion tool that translates a
 //! variant between its notations, as Ensembl VEP's `variant_recoder` does
-//! (`variant_recoder` at release/116.2, whose line numbers the citations below
-//! name). The translation itself is [`crate::recode`].
+//! (`variant_recoder` at release/116.3, whose line numbers the citations below
+//! name). The translation itself is `crate::recode`.
 //!
 //! The options are `variant_recoder`'s (36-95) less the ones that name an
 //! Ensembl database connection or a RefSeq alignment file, which are refused by
@@ -17,21 +17,26 @@
 //! Behind the command line, the `--config` file, `<dir>/vep.ini` and the
 //! `VEP_*` variables are read as `Config->new` reads them for the recoder,
 //! each lower source yielding to the ones above it (`Config.pm:701-708`,
-//! [`crate::argv::with_config_file`]), the options the recoder presets or
-//! reads before them left to the command line ([`PRESET_OPTIONS`]).
+//! `crate::argv::with_config_file`), the options the recoder presets or
+//! reads before them left to the command line (`PRESET_OPTIONS`).
 //! Every error is one line `ERROR: [<component>] <message>` on standard error
 //! and exit 1, the component naming what refused the run (`recode`, `config`,
-//! `input`, `cache`, `fasta` or `filter`); a command-line syntax error is
-//! clap's, exit 2; no argument at all prints the usage and exits 0 (97).
+//! `input`, `output`, `cache`, `fasta` or `filter`); a command-line syntax
+//! error, a value outside its option's list among them
+//! (`ListedByTheAnnotationRun`), is clap's, exit 2; no argument at all prints
+//! the usage and exits 0 (97).
 
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::io::{self, Write};
 
+use clap::builder::{PossibleValue, PossibleValuesParser, TypedValueParser};
 use clap::error::ErrorKind as ClapErrorKind;
-use clap::{ArgAction, CommandFactory, Parser};
+use clap::{Arg, ArgAction, Command, CommandFactory, Parser};
 
+use crate::args::Args;
 use crate::argv;
 use crate::config::CliError;
+use crate::option_rules::{split_list_flag, LIST_FLAGS};
 use crate::recode;
 
 const COMPONENT: &str = "recode";
@@ -45,7 +50,7 @@ const COMPONENT: &str = "recode";
 /// a source's value adds none; `pretty` and `vcf_string` are no options of
 /// `@VEP_PARAMS`, which `is_valid_param` (`Config.pm:1046`) drops. Each is set
 /// on the command line alone.
-pub const PRESET_OPTIONS: &[&str] = &[
+pub(crate) const PRESET_OPTIONS: &[&str] = &[
     "fields",
     "buffer_size",
     "failed",
@@ -63,6 +68,56 @@ fn error(message: impl Into<String>) -> CliError {
     CliError::new(COMPONENT, message)
 }
 
+/// The value parser of an option whose value the annotation run's parser holds
+/// to a list: `--format`, `--pick_order` and `--shift_hgvs`. The list is read
+/// from that parser's own declaration of the option of the same name, so the
+/// two cannot differ, and a value outside it is a command-line syntax error of
+/// this tool, exit 2 with the list, as `vep` ends the same value. A
+/// comma-separated option ([`LIST_FLAGS`]) is checked field by field, as
+/// [`crate::args`] checks `--pick_order`.
+#[derive(Clone)]
+struct ListedByTheAnnotationRun(&'static str);
+
+impl ListedByTheAnnotationRun {
+    /// The values the annotation run's parser lists for the option.
+    fn listed(&self) -> Vec<PossibleValue> {
+        Args::command()
+            .get_arguments()
+            .find(|arg| arg.get_long() == Some(self.0))
+            .map(Arg::get_possible_values)
+            .unwrap_or_default()
+    }
+}
+
+impl TypedValueParser for ListedByTheAnnotationRun {
+    type Value = String;
+
+    fn parse_ref(
+        &self,
+        cmd: &Command,
+        arg: Option<&Arg>,
+        value: &OsStr,
+    ) -> Result<String, clap::Error> {
+        let Some(text) = value.to_str() else {
+            return Err(clap::Error::new(ClapErrorKind::InvalidUtf8).with_cmd(cmd));
+        };
+        let listed = PossibleValuesParser::new(self.listed());
+        let fields = if LIST_FLAGS.contains(&self.0) {
+            split_list_flag(text)
+        } else {
+            vec![text.to_string()]
+        };
+        for field in &fields {
+            listed.parse_ref(cmd, arg, OsStr::new(field))?;
+        }
+        Ok(text.to_string())
+    }
+
+    fn possible_values(&self) -> Option<Box<dyn Iterator<Item = PossibleValue> + '_>> {
+        Some(Box::new(self.listed().into_iter()))
+    }
+}
+
 /// The command line of `vep recode`, `variant_recoder`'s options (36-95),
 /// `--config` (41) and `--debug` (94) among them. A repeated option overrides
 /// itself, as Getopt::Long assigns each occurrence of a scalar option over the
@@ -78,7 +133,7 @@ fn error(message: impl Into<String>) -> CliError {
     args_override_self = true
 )]
 pub struct RecodeArgs {
-    /// A configuration file, one option per line as <name> <value> without the dashes (cache_version 116, pick 1); an option the command line also gives keeps the command line's value
+    /// A configuration file, one option per line as `<name> <value>` without the dashes (cache_version 116, pick 1); an option the command line also gives keeps the command line's value
     #[arg(long = "config", value_name = "FILE", help_heading = "Input")]
     pub config: Option<String>,
 
@@ -100,8 +155,13 @@ pub struct RecodeArgs {
     )]
     pub input_data: Option<String>,
 
-    /// The input format: ensembl, vcf, hgvs, id, spdi or region, detected from the first line when absent
-    #[arg(long = "format", value_name = "FORMAT", help_heading = "Input")]
+    /// The input format: ensembl, vcf, hgvs, id, spdi or region; guess, or no format given, detects it from the first line
+    #[arg(
+        long = "format",
+        value_name = "FORMAT",
+        value_parser = ListedByTheAnnotationRun("format"),
+        help_heading = "Input"
+    )]
     pub format: Option<String>,
 
     /// The column delimiter of an Ensembl-format or VCF input
@@ -148,7 +208,7 @@ pub struct RecodeArgs {
     )]
     pub json_cache: Option<String>,
 
-    /// The cache root: the cache read is <dir_cache>/<species>/<cache_version>_<assembly>, the species directory suffixed _merged when the merged set is read, as Ensembl VEP lays it out
+    /// The cache root: the cache read is `<dir_cache>/<species>/<cache_version>_<assembly>`, the species directory suffixed _merged when the merged set is read, as Ensembl VEP lays it out
     #[arg(
         long = "dir_cache",
         value_name = "DIR",
@@ -233,7 +293,7 @@ pub struct RecodeArgs {
     pub exclude_predicted: bool,
 
     /// Convert each input allele to its minimal representation before annotation
-    #[arg(long = "minimal", help_heading = "Transcript selection")]
+    #[arg(long = "minimal", help_heading = "Annotation run")]
     pub minimal: bool,
 
     /// Keep one consequence per variant
@@ -256,6 +316,7 @@ pub struct RecodeArgs {
     #[arg(
         long = "pick_order",
         value_name = "LIST",
+        value_parser = ListedByTheAnnotationRun("pick_order"),
         help_heading = "Transcript selection"
     )]
     pub pick_order: Option<String>,
@@ -264,32 +325,29 @@ pub struct RecodeArgs {
     #[arg(
         long = "buffer_size",
         value_name = "N",
-        help_heading = "Transcript selection"
+        help_heading = "Annotation run"
     )]
     pub buffer_size: Option<usize>,
 
     /// The highest failed value a known variant may carry and still be reported; default 1
-    #[arg(
-        long = "failed",
-        value_name = "N",
-        help_heading = "Transcript selection"
-    )]
+    #[arg(long = "failed", value_name = "N", help_heading = "Annotation run")]
     pub failed: Option<i64>,
 
     /// Describe an insertion or deletion at its most 3' position in HGVS (1, the default) or where the input placed it (0)
     #[arg(
         long = "shift_hgvs",
         value_name = "0|1",
-        help_heading = "Transcript selection"
+        value_parser = ListedByTheAnnotationRun("shift_hgvs"),
+        help_heading = "Annotation run"
     )]
     pub shift_hgvs: Option<String>,
 
     /// Read each allele's reference from the transcript instead of the input
-    #[arg(long = "use_transcript_ref", help_heading = "Transcript selection")]
+    #[arg(long = "use_transcript_ref", help_heading = "Annotation run")]
     pub use_transcript_ref: bool,
 
     /// Keep the input's reference allele on a cache that would otherwise switch --use_transcript_ref on
-    #[arg(long = "use_given_ref", help_heading = "Transcript selection")]
+    #[arg(long = "use_given_ref", help_heading = "Annotation run")]
     pub use_given_ref: bool,
 
     /// Refused: variant_recoder reads an Ensembl database; vep recode reads a local cache alone
@@ -424,7 +482,7 @@ pub fn run(argv: Vec<OsString>) -> i32 {
         match argv::with_config_file(&command, &spelled, std::env::vars_os(), PRESET_OPTIONS) {
             Ok(spelled) => spelled,
             Err(error) => {
-                eprintln!("{error}");
+                crate::stderr::write(format_args!("{error}\n"));
                 return 1;
             }
         };
@@ -443,7 +501,7 @@ pub fn run(argv: Vec<OsString>) -> i32 {
     match recode::run(args, &mut out).and_then(|()| out.flush().map_err(|e| error(e.to_string()))) {
         Ok(()) => 0,
         Err(error) => {
-            eprintln!("{error}");
+            crate::stderr::write(format_args!("{error}\n"));
             1
         }
     }
@@ -567,5 +625,81 @@ mod tests {
             assert_eq!(refused.component, "recode");
         }
         assert!(parsed(&["--id", "rs699"]).refused_flag().is_none());
+    }
+
+    /// Every option of the tool that the annotation run's parser declares
+    /// under the same name with a list of values lists the same values, so
+    /// the tool's own parser refuses what that parser would: `--format`,
+    /// `--pick_order` and `--shift_hgvs` are the three.
+    #[test]
+    fn options_the_annotation_run_holds_to_a_list_are_held_to_the_same_list() {
+        let names = |values: Vec<PossibleValue>| -> Vec<String> {
+            values
+                .iter()
+                .map(|value| value.get_name().to_string())
+                .collect()
+        };
+        let run = Args::command();
+        let mut held = Vec::new();
+        for own in RecodeArgs::command().get_arguments() {
+            let Some(long) = own.get_long() else { continue };
+            let Some(theirs) = run.get_arguments().find(|arg| arg.get_long() == Some(long)) else {
+                continue;
+            };
+            let listed = names(theirs.get_possible_values());
+            if listed.is_empty() || !theirs.get_action().takes_values() {
+                continue;
+            }
+            assert_eq!(names(own.get_possible_values()), listed, "--{long}");
+            held.push(long.to_string());
+        }
+        assert_eq!(held, ["format", "pick_order", "shift_hgvs"]);
+    }
+
+    /// A value outside its option's list is clap's refusal of this tool's own
+    /// command line, naming the value and the list; a listed value of
+    /// `--format` and of `--shift_hgvs`, and a `--pick_order` list of two, are
+    /// taken as given.
+    #[test]
+    fn a_value_outside_its_options_list_is_refused_by_the_tools_own_parser() {
+        let refusal = |argv: &[&str]| {
+            let argv: Vec<OsString> = argv.iter().map(OsString::from).collect();
+            RecodeArgs::try_parse_from(std::iter::once(OsString::from("vep recode")).chain(argv))
+                .expect_err("the value is outside the list")
+        };
+        for (argv, text) in [
+            (
+                ["--format", "foo"],
+                "error: invalid value 'foo' for '--format <FORMAT>'\n  [possible values: \
+                 ensembl, vcf, hgvs, id, spdi, region, guess]\n\nFor more information, try \
+                 '--help'.\n",
+            ),
+            (
+                ["--pick_order", "rank,foo"],
+                "error: invalid value 'foo' for '--pick_order <LIST>'\n  [possible values: \
+                 mane_select, mane_plus_clinical, canonical, appris, tsl, biotype, ccds, rank, \
+                 length, ensembl, refseq]\n\nFor more information, try '--help'.\n",
+            ),
+            (
+                ["--shift_hgvs", "2"],
+                "error: invalid value '2' for '--shift_hgvs <0|1>'\n  [possible values: 0, \
+                 1]\n\nFor more information, try '--help'.\n",
+            ),
+        ] {
+            let error = refusal(&argv);
+            assert_eq!(error.kind(), ClapErrorKind::InvalidValue, "{argv:?}");
+            assert_eq!(error.to_string(), text, "{argv:?}");
+        }
+        let args = parsed(&[
+            "--format",
+            "guess",
+            "--pick_order",
+            "rank,length",
+            "--shift_hgvs",
+            "0",
+        ]);
+        assert_eq!(args.format.as_deref(), Some("guess"));
+        assert_eq!(args.pick_order.as_deref(), Some("rank,length"));
+        assert_eq!(args.shift_hgvs.as_deref(), Some("0"));
     }
 }

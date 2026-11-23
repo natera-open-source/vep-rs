@@ -1,0 +1,199 @@
+{
+ "mode": "stats",
+ "format": "stats",
+ "verdict": "red",
+ "reasons": [
+  "[VEP run statistics]: 6 differences",
+  "[Data version]: 2 differences",
+  "[General statistics]: 2 differences",
+  "[Variant classes]: 8 differences",
+  "[Consequences (all)]: 2 differences"
+ ],
+ "tolerance": 0,
+ "masked_rows": [
+  "Command line options",
+  "End time",
+  "Input data",
+  "Input file",
+  "Output file",
+  "Run time",
+  "Start time"
+ ],
+ "sections": {
+  "expected": [
+   "VEP run statistics",
+   "Data version",
+   "General statistics",
+   "Variant classes",
+   "Consequences (most severe)",
+   "Consequences (all)",
+   "Coding consequences",
+   "Variants by chromosome",
+   "Position in protein"
+  ],
+  "actual": [
+   "VEP run statistics",
+   "Data version",
+   "General statistics",
+   "Variant classes",
+   "Consequences (most severe)",
+   "Consequences (all)",
+   "Coding consequences",
+   "Variants by chromosome",
+   "Position in protein"
+  ],
+  "order_agrees": true
+ },
+ "compared": {
+  "sections": 9,
+  "rows": 108
+ },
+ "documented": [],
+ "differences": {
+  "VEP run statistics": [
+   {
+    "kind": "duplicate",
+    "row": "Species",
+    "side": "expected"
+   },
+   {
+    "kind": "missing",
+    "row": "Plugins",
+    "expected": "none"
+   },
+   {
+    "kind": "unexpected",
+    "row": "Run time",
+    "actual": "1 seconds"
+   },
+   {
+    "kind": "order",
+    "expected": [
+     "VEP version (API)",
+     "Annotation sources",
+     "Species",
+     "Command line options",
+     "End time",
+     "Start time",
+     "Input file",
+     "Output file"
+    ],
+    "actual": [
+     "VEP version (API)",
+     "Annotation sources",
+     "Species",
+     "Command line options",
+     "Start time",
+     "End time",
+     "Input file",
+     "Output file"
+    ]
+   },
+   {
+    "kind": "value",
+    "row": "Annotation sources",
+    "expected": "Cache: [PATH]; Custom: [PATH] (vcf)",
+    "actual": "Cache: [PATH]"
+   },
+   {
+    "kind": "value",
+    "row": "Species",
+    "expected": "mus_musculus",
+    "actual": "homo_sapiens"
+   }
+  ],
+  "Data version": [
+   {
+    "kind": "value",
+    "row": "dbSNP",
+    "expected": "157",
+    "actual": "156"
+   },
+   {
+    "kind": "value",
+    "row": "sift",
+    "expected": null,
+    "actual": "6.2.1"
+   }
+  ],
+  "General statistics": [
+   {
+    "kind": "value",
+    "row": "Variants filtered out",
+    "expected": null,
+    "actual": "0"
+   },
+   {
+    "kind": "value",
+    "row": "Overlapped genes",
+    "expected": "97",
+    "actual": "98"
+   }
+  ],
+  "Variant classes": [
+   {
+    "kind": "duplicate",
+    "row": "SNV",
+    "side": "expected"
+   },
+   {
+    "kind": "count",
+    "row": "indel",
+    "expected": null,
+    "actual": 7
+   },
+   {
+    "kind": "count",
+    "row": "deletion",
+    "expected": 38,
+    "actual": 35
+   },
+   {
+    "kind": "count",
+    "row": "insertion",
+    "expected": "37.0",
+    "actual": 37
+   },
+   {
+    "kind": "count",
+    "row": "SNV",
+    "expected": 244,
+    "actual": 243
+   },
+   {
+    "kind": "missing",
+    "row": "inversion",
+    "expected": 1,
+    "actual": null
+   },
+   {
+    "kind": "missing",
+    "row": "translocation",
+    "expected": 5,
+    "actual": null
+   },
+   {
+    "kind": "unexpected",
+    "row": "duplication",
+    "expected": null,
+    "actual": 1
+   }
+  ],
+  "Consequences (all)": [
+   {
+    "kind": "count",
+    "row": "intron_variant",
+    "expected": 964,
+    "actual": 963
+   },
+   {
+    "kind": "count",
+    "row": "upstream_gene_variant",
+    "expected": 1680,
+    "actual": 1682
+   }
+  ]
+ },
+ "expected": "tests/fixtures/rows.summary.log",
+ "actual": "tests/fixtures/reference.summary.log"
+}

@@ -1,0 +1,35 @@
+{
+ "records": [
+  {
+   "dataset": "pool",
+   "vcf": "21\t7000\tsnv_one_gene\tA\tC\t.\t.\t.",
+   "combinations": []
+  }
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {},
+ "fields_compared": [
+  "SpliceAI_pred"
+ ],
+ "field_divergences": [
+  {
+   "location": "21:7000",
+   "allele": "C",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "intron_variant",
+   "field": "SpliceAI_pred",
+   "vep": "GENEA|0.15|0.08|0.06|0.17|-6|-41|-17|-9,C|GENEA|0.31|0.00|0.44|0.09|3|-2|11|-30",
+   "vep_rs": "GENEA|0.31|0.00|0.44|0.09|3|-2|11|-30",
+   "expected_divergence": "unexplained_residual"
+  }
+ ],
+ "field_divergence_summary": {
+  "unexplained_residual": 1
+ }
+}

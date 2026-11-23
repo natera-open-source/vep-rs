@@ -153,6 +153,29 @@ BASE_ROWS = [
 ] + [row(flag.replace("-", "_")) for flag in FLAGS[5:]]
 
 
+# The reference list of the fixture tree, in byte order: two scripts, modules of the three
+# repositories and the BioPerl package.
+REFERENCE_FILES = [
+    "Bio::Tools::CodonTable",
+    "Config.pm",
+    "INSTALL.pl",
+    "IO/Parser/BaseVCF4.pm",
+    "Parser/VCF.pm",
+    "Variation/Utils/Sequence.pm",
+    "vep",
+]
+REFERENCE_LIST = "tests/parity/reference_files.txt"
+
+
+def names_no_file(cell: str, where: str = "tests/parity/matrix.tsv:4: symbol") -> str:
+    """The error for a `perl_reference` that is no line of the list and no plugin's module, on
+    the `symbol` row unless `where` names another."""
+    return (
+        f"{where}: perl_reference {cell} names no file of "
+        f"{REFERENCE_LIST} and no module of a plugin of the support table"
+    )
+
+
 def rows_with(item, **fields) -> list[str]:
     """BASE_ROWS with the row for `item` replaced by `row(item, **fields)`."""
     return [row(item, **fields) if r.startswith(item + "\t") else r for r in BASE_ROWS]
@@ -190,6 +213,7 @@ def build_tree(
     with_corpus=True,
     args_rs=ARGS_RS,
     table=(),
+    reference_files=REFERENCE_FILES,
 ) -> Path:
     root = tmp_path / "repo"
     (root / "crates" / "vep-cli" / "src").mkdir(parents=True)
@@ -211,6 +235,7 @@ def build_tree(
     (root / "tests" / "parity" / "matrix.tsv").write_text(
         HEADER + "".join(BASE_ROWS if rows is None else rows)
     )
+    (root / REFERENCE_LIST).write_text("".join(f"{name}\n" for name in reference_files))
     return root
 
 
@@ -313,17 +338,273 @@ def test_landed_removed_row_needs_its_flag_gone(tmp_path):
     assert errors_of(build_tree(tmp_path / "gone", rows, args_rs=gone)) == []
 
 
+# The pin file of a fixture tree: helpers, then one test for each way a test reads a public
+# text, then one for each shape that reads none.
+PIN_FILE = "crates/vep-cli/tests/documented_subsets.rs"
+PIN_FILE_RS = r"""
+mod common;
+
+fn page_text(path: &str) -> String {
+    std::fs::read_to_string(format!("{}/../../docs/{path}", env!("CARGO_MANIFEST_DIR"))).unwrap()
+}
+
+fn assert_page_states(path: &str, phrase: &str) {
+    assert!(page_text(path).contains(phrase), "docs/{path} lacks {phrase:?}");
+}
+
+fn readme() -> String {
+    std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/README.md")).unwrap()
+}
+
+fn first_line() -> String {
+    readme().lines().next().unwrap().to_string()
+}
+
+fn turns() -> usize {
+    turns_back()
+}
+
+fn turns_back() -> usize {
+    turns()
+}
+
+fn help_of(flag: &str) -> String {
+    let command = Args::command();
+    let argument = command.get_arguments().find(|a| a.get_long() == Some(flag)).unwrap();
+    argument.get_long_help().or(argument.get_help()).unwrap().to_string()
+}
+
+#[test]
+fn names_a_page() {
+    assert_page_states("cache-setup.md", "is left out");
+}
+
+#[test]
+fn includes_a_page() {
+    assert!(include_str!("../../../docs/output/known-variants.md").contains("is left out"));
+}
+
+#[test]
+fn calls_a_reader() {
+    assert!(readme().contains("is left out"));
+}
+
+#[test]
+fn calls_a_reader_through_another() {
+    assert!(first_line().contains("vep-rs"));
+}
+
+#[test]
+fn asks_an_argument_for_its_help() {
+    assert!(help_of("symbol").contains("is left out"));
+}
+
+#[test]
+fn asks_an_argument_for_its_short_help() {
+    let command = Args::command();
+    let argument = command.get_arguments().next().unwrap();
+    assert!(argument.get_help().unwrap().to_string().contains("is left out"));
+}
+
+#[test]
+fn renders_the_help() {
+    assert!(Args::command().render_help().to_string().contains("is left out"));
+}
+
+#[test]
+fn renders_the_long_help() {
+    assert!(Args::command().render_long_help().to_string().contains("is left out"));
+}
+
+#[test]
+fn behaviour_alone() {
+    assert_eq!(consequence_of("21\t5\t.\tA\tG"), "missense_variant");
+}
+
+#[test]
+fn page_named_in_a_comment() {
+    // docs/cache-setup.md states the exclusion.
+    /* "cache-setup.md" */
+    assert_eq!(1 + 1, 2);
+}
+
+#[test]
+fn page_named_outside_a_literal() {
+    let row = Row::default();
+    assert!(row.md.is_empty());
+}
+
+#[test]
+fn checksum_file_named_in_a_literal() {
+    assert!(std::path::Path::new("variants.md5").exists());
+}
+
+#[test]
+fn reader_of_another_file() {
+    assert!(common::readme().contains("is left out"));
+}
+
+#[test]
+fn reader_called_on_a_value() {
+    assert!(Pages::default().readme().is_empty());
+}
+
+#[test]
+fn reader_named_and_never_called() {
+    assert_eq!("readme".len(), 6);
+}
+
+#[test]
+fn help_named_in_a_literal() {
+    assert_eq!("get_long_help".len(), 13);
+}
+
+#[test]
+fn calls_two_functions_that_call_each_other() {
+    assert_eq!(turns(), 0);
+}
+
+#[test]
+fn page_named_inside_a_message() {
+    assert_eq!(refusal(), "convert the cache instead (docs/cache-conversion.md), or build it");
+}
+
+#[test]
+fn page_named_at_the_end_of_a_message() {
+    assert_eq!(refusal(), "the file is not read, see docs/plugins.md");
+}
+
+#[test]
+fn page_quoted_inside_a_raw_literal() {
+    assert_eq!(refusal(), r#"the page "docs/plugins.md" states it"#);
+}
+
+fn names_a_page_without_a_test_attribute() {
+    assert_page_states("cache-setup.md", "is left out");
+}
+"""
+READS_A_PUBLIC_TEXT = [
+    "names_a_page",
+    "includes_a_page",
+    "calls_a_reader",
+    "calls_a_reader_through_another",
+    "asks_an_argument_for_its_help",
+    "asks_an_argument_for_its_short_help",
+    "renders_the_help",
+    "renders_the_long_help",
+]
+READS_NO_PUBLIC_TEXT = [
+    "behaviour_alone",
+    "page_named_in_a_comment",
+    "page_named_outside_a_literal",
+    "checksum_file_named_in_a_literal",
+    "reader_of_another_file",
+    "reader_called_on_a_value",
+    "reader_named_and_never_called",
+    "help_named_in_a_literal",
+    "calls_two_functions_that_call_each_other",
+    "page_named_inside_a_message",
+    "page_named_at_the_end_of_a_message",
+    "page_quoted_inside_a_raw_literal",
+]
+SUBSET_WITHOUT_ITS_TEXT = (
+    "tests/parity/matrix.tsv:4: symbol: landed documented_subset with no test1 that reads a "
+    "public text: a string literal that is a Markdown file's path or a help text asked of clap"
+)
+
+
+def stated(fn: str) -> str:
+    """The `test1` entry of a test of the fixture pin file."""
+    return f"{PIN_FILE}::{fn}"
+
+
+def write_pin_file(root: Path) -> None:
+    (root / PIN_FILE).write_text(PIN_FILE_RS)
+
+
+def subset_rows(test1: str, state: str = "landed:documented_subset") -> list[str]:
+    return rows_with("symbol", target="documented_subset", state=state, test1=test1, test2=TEST2)
+
+
 def test_landed_documented_subset_row_with_both_tests_passes(tmp_path):
-    rows = rows_with(
-        "symbol",
-        target="documented_subset",
-        state="landed:documented_subset",
-        test1=TEST1,
-        test2=TEST2,
-    )
-    errors, summary = cpm.check(build_tree(tmp_path, rows))
+    root = build_tree(tmp_path, subset_rows(f"{TEST1};{stated('names_a_page')}"))
+    write_pin_file(root)
+    errors, summary = cpm.check(root)
     assert errors == []
     assert summary.endswith("1 landed, 0 interim entries resolve, 0 support table rows")
+
+
+def test_landed_documented_subset_row_needs_a_test_that_reads_a_public_text(tmp_path):
+    # A behaviour test resolves and states no exclusion.
+    root = build_tree(tmp_path, subset_rows(TEST1))
+    assert errors_of(root) == [SUBSET_WITHOUT_ITS_TEXT]
+
+
+@pytest.mark.parametrize("fn", READS_A_PUBLIC_TEXT)
+def test_a_test_that_reads_a_public_text_lands_a_documented_subset_row(tmp_path, fn):
+    root = build_tree(tmp_path, subset_rows(f"{TEST1};{stated(fn)}"))
+    write_pin_file(root)
+    assert errors_of(root) == []
+    assert cpm.reads_public_text(cpm.rust_source(PIN_FILE_RS), fn)
+
+
+@pytest.mark.parametrize("fn", READS_NO_PUBLIC_TEXT)
+def test_a_test_that_reads_no_public_text_lands_no_documented_subset_row(tmp_path, fn):
+    # Each stands in the pin file: the file a test stands in shows nothing of what it reads.
+    root = build_tree(tmp_path, subset_rows(stated(fn)))
+    write_pin_file(root)
+    assert errors_of(root) == [SUBSET_WITHOUT_ITS_TEXT]
+    assert not cpm.reads_public_text(cpm.rust_source(PIN_FILE_RS), fn)
+
+
+def test_a_public_text_is_read_by_a_unit_test_beside_the_code(tmp_path):
+    entry = "crates/vep-cli/src/fields.rs::exclusion_is_stated"
+    root = build_tree(tmp_path, subset_rows(entry))
+    (root / "crates" / "vep-cli" / "src" / "fields.rs").write_text(
+        'fn page() -> String {\n    std::fs::read_to_string("docs/output.md").unwrap()\n}\n\n'
+        "#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n"
+        '    fn exclusion_is_stated() {\n        assert!(page().contains("is left out"));\n    }\n}\n'
+    )
+    assert errors_of(root) == []
+
+
+def test_only_a_landed_documented_subset_row_is_asked_for_a_public_text(tmp_path):
+    assert errors_of(build_tree(tmp_path / "open", subset_rows(TEST1, state="open"))) == []
+    implemented = rows_with("symbol", state="landed:implemented", test1=TEST1, test2=TEST2)
+    assert errors_of(build_tree(tmp_path / "implemented", implemented)) == []
+
+
+def test_a_test1_entry_that_does_not_resolve_reads_no_public_text(tmp_path):
+    missing = "crates/vep-cli/tests/absent.rs::exclusion_is_stated"
+    helper = stated("names_a_page_without_a_test_attribute")
+    root = build_tree(tmp_path, subset_rows(f"{missing};{helper}"))
+    write_pin_file(root)
+    assert errors_of(root) == [
+        SUBSET_WITHOUT_ITS_TEXT,
+        f"tests/parity/matrix.tsv:4: symbol: test1 {missing} crates/vep-cli/tests/absent.rs does not exist",
+        (
+            f"tests/parity/matrix.tsv:4: symbol: test1 {helper} {PIN_FILE} declares no test fn "
+            "names_a_page_without_a_test_attribute"
+        ),
+    ]
+    # A reader that is no test reads nothing for a row either.
+    assert not cpm.reads_public_text(cpm.rust_source(PIN_FILE_RS), "readme")
+
+
+def test_function_bodies_are_read_from_the_brace_after_the_signature():
+    source = (
+        "trait Reader {\n    fn declared_alone(&self) -> [u8; 2];\n}\n"
+        "fn with_brackets(x: [u8; 2], f: impl Fn(u8) -> u8) -> Vec<(u8, u8)>\nwhere\n    u8: Copy,\n"
+        '{\n    let open = "{";\n    if x[0] > 0 { inner() }\n}\n'
+        "fn inner() {}\n"
+    )
+    code = cpm.strip_comments(source)
+    bodies = cpm.function_bodies(code)
+    assert sorted(bodies) == ["inner", "with_brackets"]
+    ((_, start, end),) = bodies["with_brackets"]
+    assert code[start:end] == '{\n    let open = " ";\n    if x[0] > 0 { inner() }\n}'
+    ((_, start, end),) = bodies["inner"]
+    assert code[start:end] == "{}"
 
 
 def test_landed_row_has_no_interim(tmp_path):
@@ -348,7 +629,7 @@ def test_test1_must_name_an_existing_function(tmp_path):
     assert errors == [
         "tests/parity/matrix.tsv:4: symbol: test1 crates/vep-cli/src/fields.rs::no_such_fn crates/vep-cli/src/fields.rs declares no test fn no_such_fn",
         "tests/parity/matrix.tsv:4: symbol: test1 crates/vep-cli/src/gone.rs::x crates/vep-cli/src/gone.rs does not exist",
-        "tests/parity/matrix.tsv:4: symbol: test1 docs/a.rs::y is not <path>.rs::<fn> under crates/ or scripts/<dir>/test_<name>.py::<fn>",
+        "tests/parity/matrix.tsv:4: symbol: test1 docs/a.rs::y is not <path>.rs::<fn> under crates/, scripts/<dir>/test_<name>.py::<fn>, scripts/[<dir>/]test_<name>.sh::<check> or tools/<tool>/<path>.rs::<fn>",
         "tests/parity/matrix.tsv:4: symbol: test1 crates/../tests/parity/x.rs::outside has a `..` segment",
     ]
 
@@ -433,9 +714,9 @@ def test_scripts_test_entry_shapes(tmp_path):
     )
     root = with_script_test(build_tree(tmp_path, rows))
     assert errors_of(root) == [
-        "tests/parity/matrix.tsv:4: symbol: test1 scripts/parity/check_parity_matrix.py::test_x is not <path>.rs::<fn> under crates/ or scripts/<dir>/test_<name>.py::<fn>",
-        "tests/parity/matrix.tsv:4: symbol: test1 scripts/test_top.py::test_x is not <path>.rs::<fn> under crates/ or scripts/<dir>/test_<name>.py::<fn>",
-        f"tests/parity/matrix.tsv:4: symbol: test1 {SCRIPT_TEST}::helper is not <path>.rs::<fn> under crates/ or scripts/<dir>/test_<name>.py::<fn>",
+        "tests/parity/matrix.tsv:4: symbol: test1 scripts/parity/check_parity_matrix.py::test_x is not <path>.rs::<fn> under crates/, scripts/<dir>/test_<name>.py::<fn>, scripts/[<dir>/]test_<name>.sh::<check> or tools/<tool>/<path>.rs::<fn>",
+        "tests/parity/matrix.tsv:4: symbol: test1 scripts/test_top.py::test_x is not <path>.rs::<fn> under crates/, scripts/<dir>/test_<name>.py::<fn>, scripts/[<dir>/]test_<name>.sh::<check> or tools/<tool>/<path>.rs::<fn>",
+        f"tests/parity/matrix.tsv:4: symbol: test1 {SCRIPT_TEST}::helper is not <path>.rs::<fn> under crates/, scripts/<dir>/test_<name>.py::<fn>, scripts/[<dir>/]test_<name>.sh::<check> or tools/<tool>/<path>.rs::<fn>",
         "tests/parity/matrix.tsv:4: symbol: test1 scripts/parity/test_gone.py::test_x scripts/parity/test_gone.py does not exist",
         "tests/parity/matrix.tsv:4: symbol: test1 scripts/../scripts/parity/test_check_parity_matrix.py::test_x has a `..` segment",
         f"tests/parity/matrix.tsv:4: symbol: interim {SCRIPT_TEST}::test_decorated is not <path>.rs::<fn> under crates/",
@@ -460,6 +741,364 @@ def test_process_row_perl_reference_is_dash(tmp_path):
     assert errors_of(root) == []
     # The crate shape alone keeps the row an Ensembl VEP row, whose perl_reference names a module.
     assert errors_of(build_tree(tmp_path / "crate", rows_with("symbol", test1=TEST1))) == []
+
+
+TOOL_TEST = "tools/vep-any-compare/tests/reports.rs"
+
+
+def with_tool_test(root: Path) -> Path:
+    (root / "tools" / "vep-any-compare" / "tests").mkdir(parents=True)
+    (root / TOOL_TEST).write_text("#[test]\nfn the_verdict_is_red() {}\n\nfn helper() {}\n")
+    return root
+
+
+def test_tools_test_entry_resolves_to_a_test_fn_and_makes_a_process_row(tmp_path):
+    """A `test1` entry may name a test of a tool's own Cargo root: it resolves as a crate entry
+    does, and its row is a process row, whose perl_reference is `-`."""
+    rows = rows_with("symbol", test1=f"{TOOL_TEST}::the_verdict_is_red", perl="-")
+    assert errors_of(with_tool_test(build_tree(tmp_path, rows))) == []
+    rows = rows_with("symbol", test1=f"{TOOL_TEST}::the_verdict_is_red")
+    assert errors_of(with_tool_test(build_tree(tmp_path / "module", rows))) == [
+        "tests/parity/matrix.tsv:4: symbol: a process row names no Ensembl VEP module; perl_reference must be -"
+    ]
+
+
+def test_tools_test_entry_shapes(tmp_path):
+    """The tools shape is `tools/<tool>/<path>.rs::<fn>` with no `..` segment, naming a function
+    under a test attribute in an existing file; `interim` keeps the crate shape."""
+    rows = rows_with(
+        "symbol",
+        test1=(
+            f"{TOOL_TEST}::helper;tools/vep-any-compare/tests/gone.rs::x;tools/reports.rs::x;"
+            "tools/vep-any-compare/../x.rs::outside"
+        ),
+        interim=f"{TOOL_TEST}::the_verdict_is_red",
+        perl="-",
+    )
+    assert errors_of(with_tool_test(build_tree(tmp_path, rows))) == [
+        f"tests/parity/matrix.tsv:4: symbol: test1 {TOOL_TEST}::helper {TOOL_TEST} declares no test fn helper",
+        "tests/parity/matrix.tsv:4: symbol: test1 tools/vep-any-compare/tests/gone.rs::x tools/vep-any-compare/tests/gone.rs does not exist",
+        "tests/parity/matrix.tsv:4: symbol: test1 tools/reports.rs::x is not <path>.rs::<fn> under crates/, scripts/<dir>/test_<name>.py::<fn>, scripts/[<dir>/]test_<name>.sh::<check> or tools/<tool>/<path>.rs::<fn>",
+        "tests/parity/matrix.tsv:4: symbol: test1 tools/vep-any-compare/../x.rs::outside has a `..` segment",
+        f"tests/parity/matrix.tsv:4: symbol: interim {TOOL_TEST}::the_verdict_is_red is not <path>.rs::<fn> under crates/",
+    ]
+
+
+SHELL_SUITE = "scripts/data/test_layout.sh"
+
+# A suite in the shape the tree's shell suites have: `ok` prints a passed check's line, and the
+# helpers `same`, `refused` and `refused_twice` hand their first argument on to it.
+SUITE_SH = r"""#!/usr/bin/env bash
+PASS=0
+FAIL=0
+ok() {
+    PASS=$((PASS + 1))
+    echo "  ok   $1"
+}
+bad() {
+    FAIL=$((FAIL + 1))
+    echo "  FAIL $1"
+}
+same() { # same <name> <expected> <found>
+    if [ "$2" = "$3" ]; then ok "$1: equal"; else bad "$1: expected [$2], found [$3]"; fi
+}
+refused() {
+    local name="$1" want="$2"
+    shift 2
+    if ! "$@" 2>/dev/null; then
+        ok "$name"
+    else
+        bad "$name: ran"
+    fi
+}
+refused_twice() { refused "$1" "$2" false; }
+note() { echo "$1"; }
+quiet() {
+    # ok "$1"
+    echo "$1"
+}
+second() { ok "$2"; }
+
+bash -n "$0" && ok "the suite parses" || bad "the suite has a syntax error"
+if true; then ok 'a single-quoted name'; else bad 'a single-quoted name'; fi
+same "the layout is the committed one" a a
+refused "a missing file is refused" x false
+refused_twice "a helper of a helper" x
+# ok "a commented-out check"
+note "a line a helper prints"
+quiet "a helper whose call of ok is a comment"
+echo "an echoed line"
+second x "a second argument"
+ok "a longer name than the entry"
+ok "counted $PASS checks"
+"""
+
+
+def with_shell_suite(root: Path, source: str = SUITE_SH) -> Path:
+    (root / "scripts" / "data").mkdir(parents=True)
+    (root / SHELL_SUITE).write_text(source)
+    (root / "scripts" / "test_top.sh").write_text('ok() { echo "  ok   $1"; }\nok "at the top"\n')
+    return root
+
+
+@pytest.mark.parametrize(
+    ("name", "declared"),
+    [
+        ("the suite parses", True),
+        ("a single-quoted name", True),
+        ("the layout is the committed one", True),
+        ("a missing file is refused", True),
+        ("a helper of a helper", True),
+        ("the suite has a syntax error", False),
+        ("a commented-out check", False),
+        ("a line a helper prints", False),
+        ("a helper whose call of ok is a comment", False),
+        ("an echoed line", False),
+        ("a second argument", False),
+        ("a longer name", False),
+        ("name than the entry", False),
+    ],
+)
+def test_shell_suite_entry_resolves_to_a_named_check(tmp_path, name, declared):
+    """A `test1` entry may name a check of a shell suite under `scripts/`: the text the suite
+    gives, whole and quoted, as the first argument of `ok` or of a function of its own that hands
+    its first argument on to `ok`, directly or through another such function. The text of a `bad`
+    call alone, a comment line of the suite or of a function's body, a call of any other function,
+    a later argument and a part of a longer name declare nothing."""
+    assert cpm.shell_check_functions(SUITE_SH) == {"ok", "same", "refused", "refused_twice"}
+    assert cpm.declares_shell_check(SUITE_SH, name) is declared
+    rows = rows_with("symbol", test1=f"{SHELL_SUITE}::{name}", perl="-")
+    errors = errors_of(with_shell_suite(build_tree(tmp_path, rows)))
+    if declared:
+        assert errors == []
+    else:
+        reason = f"{SHELL_SUITE} names no check {name!r} in a call of a check function"
+        assert errors == [
+            f"tests/parity/matrix.tsv:4: symbol: test1 {SHELL_SUITE}::{name} {reason}"
+        ]
+
+
+# Shapes of shell text that are no call of a check function, beside the ones that are: a quoted
+# text, an argument of another command, a comment after code, a here-document, a script of the
+# same name; and the ends of a body: a one-line definition with a comment after it, a closing
+# brace that is redirected, a function inside a function, a definition line whose comment ends
+# in a brace. A quoted text of several lines is no code on any of its lines, a closing brace
+# inside one ends no body, a brace inside a quoted text on a definition's line closes nothing,
+# a call after a body's closing brace is outside the body, a here-document's word may stand
+# after a backslash or hold a hyphen, a call may follow assignments, and the text of a `$( )`
+# inside double quotes is code.
+SHAPES_SH = (
+    r"""#!/usr/bin/env bash
+ok() { echo "  ok   $1"; }
+nope() { echo "not ok $1"; }
+shown() { echo ok "$1"; }
+later() { true # ok "$1"
+}
+loud() { ok "$1"; } # one line, with a comment after it
+plain() { echo "$1"; }
+redirected() {
+    ok "$1"
+} >&2
+after_redirect() { echo "$1"; }
+outer() {
+    inner() { ok "$1"; }
+    echo "$1"
+}
+commented_brace() { # prints {x}
+    ok "$1"
+}
+function keyword_form {
+    ok "$1"
+}
+local_script() {
+    ./ok "$1"
+}
+quoted_brace() {
+    awk '
+BEGIN { n = 1
+}
+' /dev/null
+    ok "$1"
+}
+brace_in_text() { echo "}"
+    ok "$1"
+}
+tailed() {
+    echo "$1"
+}; ok "$1"
+cat >"$TMP/stub.sh" <<'STUB'
+stubbed() { ok "$1"; }
+ok "a call inside a here-document"
+STUB
+cat <<\PLAIN
+ok "a call inside a here-document whose word follows a backslash"
+PLAIN
+cat <<'END-OF-TEXT'
+ok "a call inside a here-document whose word holds a hyphen"
+END-OF-TEXT
+awk '
+    { ok "a call inside a quoted program of several lines" }
+' /dev/null
+text="two lines
+ok 'a call inside a quoted text of several lines'
+"
+stub='
+quoted_stub() { ok "$1"; }
+'; ok "a call on the line that closes a quoted text"
+"""
+    + 'cat <<-TABBED\n\tok "a call inside an indented here-document"\n\tTABBED\n'
+    + r"""nope "the text of a failure printer"
+shown "an argument of echo"
+later "a call after a comment sign in a body"
+loud "a one-line helper with a comment after it"
+plain "the helper after the one-line helper"
+redirected "a helper whose closing brace is redirected"
+after_redirect "the helper after the redirected one"
+outer "an outer function that hands nothing on"
+inner "an inner function"
+commented_brace "a helper whose definition line ends in a commented brace"
+keyword_form "a helper defined with the function keyword"
+local_script "a script of the same name"
+stubbed "a function defined inside a here-document"
+quoted_brace "a helper whose body holds a closing brace in a quoted program"
+brace_in_text "a helper whose definition line holds a closing brace in a quoted text"
+tailed "a helper whose closing brace a call follows"
+quoted_stub "a function defined inside a quoted text"
+LC_ALL=C loud "a call of a helper after an assignment"
+LC_ALL=C TZ="U T C" ok "a call after two assignments"
+echo LC_ALL=C ok "an assignment that is an argument of echo"
+echo "$(ok "a call inside a substitution in double quotes")"
+mark="$(printf '%s' '"')"; ok "a call after a double quote inside a substitution"
+echo ok "an echoed call"
+true # ok "a call behind a comment sign"
+ok "a call after the here-documents"
+"""
+)
+
+
+@pytest.mark.parametrize(
+    ("name", "declared"),
+    [
+        ("a one-line helper with a comment after it", True),
+        ("a helper whose closing brace is redirected", True),
+        ("an inner function", True),
+        ("a helper whose definition line ends in a commented brace", True),
+        ("a helper defined with the function keyword", True),
+        ("a call after the here-documents", True),
+        ("a helper whose body holds a closing brace in a quoted program", True),
+        ("a helper whose definition line holds a closing brace in a quoted text", True),
+        ("a call on the line that closes a quoted text", True),
+        ("a call of a helper after an assignment", True),
+        ("a call after two assignments", True),
+        ("a call inside a substitution in double quotes", True),
+        ("a call after a double quote inside a substitution", True),
+        ("the text of a failure printer", False),
+        ("an argument of echo", False),
+        ("a call after a comment sign in a body", False),
+        ("the helper after the one-line helper", False),
+        ("the helper after the redirected one", False),
+        ("an outer function that hands nothing on", False),
+        ("a script of the same name", False),
+        ("a function defined inside a here-document", False),
+        ("a call inside a here-document", False),
+        ("a call inside an indented here-document", False),
+        ("an echoed call", False),
+        ("a call behind a comment sign", False),
+        ("a helper whose closing brace a call follows", False),
+        ("a function defined inside a quoted text", False),
+        ("a call inside a here-document whose word follows a backslash", False),
+        ("a call inside a here-document whose word holds a hyphen", False),
+        ("a call inside a quoted program of several lines", False),
+        ("a call inside a quoted text of several lines", False),
+        ("an assignment that is an argument of echo", False),
+    ],
+)
+def test_shell_suite_is_read_as_code(name, declared):
+    """A call of a check function is a command outside quotes, comments and here-documents, and
+    a function's body ends where shell ends it: a failure printer whose text holds the word, an
+    argument of another command, a script of the same name and a here-document's lines call
+    nothing, and a helper that follows a one-line definition, a redirected closing brace or an
+    inner function takes nothing from the body before it. A quote stays open over the lines it
+    spans, so a call, a definition and a closing brace inside it are text, and a call on the
+    line that closes it is one; the text of a `$( )` inside double quotes is code with quotes
+    of its own; a call after a body's closing brace is no part of the body; and assignments
+    before a command's name leave it a command."""
+    assert cpm.shell_check_functions(SHAPES_SH) == {
+        "ok",
+        "loud",
+        "redirected",
+        "inner",
+        "commented_brace",
+        "keyword_form",
+        "quoted_brace",
+        "brace_in_text",
+    }
+    assert cpm.declares_shell_check(SHAPES_SH, name) is declared
+
+
+def test_shell_suite_that_ends_inside_a_quote_is_read_line_by_line():
+    """A quote stays open over the lines after it only in a suite whose quotes pair to its end:
+    where the reader is left inside a quote at the file's end (an escaped quote inside
+    `$'...'` reads as an opening one), every quote ends with its line, so a check after that
+    line resolves."""
+    source = (
+        'ok() { echo "  ok   $1"; }\n'
+        "apostrophe=$'\\''\n"
+        'ok "a call after a quote the reader cannot pair"\n'
+    )
+    assert cpm.shell_code_lines(source) == cpm.shell_code_lines(source, spanning=False)
+    assert cpm.shell_code_lines(source)[2] == 'ok "a call after a quote the reader cannot pair"'
+    assert cpm.declares_shell_check(source, "a call after a quote the reader cannot pair")
+
+
+def test_shell_suite_entry_shapes(tmp_path):
+    """The shell shape is `scripts/[<dir>/]test_<name>.sh::<check>` with no `..` segment, in an
+    existing suite; a name the suite computes is no entry, a suite that defines no `ok` names no
+    check, and `test2` and `interim` keep their own shapes."""
+    shapes = (
+        "is not <path>.rs::<fn> under crates/, scripts/<dir>/test_<name>.py::<fn>, "
+        "scripts/[<dir>/]test_<name>.sh::<check> or tools/<tool>/<path>.rs::<fn>"
+    )
+    rows = rows_with(
+        "symbol",
+        test1=(
+            f"{SHELL_SUITE}::counted $PASS checks;scripts/data/layout.sh::the suite parses;"
+            "docs/test_layout.sh::the suite parses;scripts/data/test_gone.sh::the suite parses;"
+            "scripts/../scripts/data/test_layout.sh::the suite parses;"
+            "scripts/test_top.sh::at the top;scripts/data/test_plain.sh::the suite parses"
+        ),
+        test2=f"{SHELL_SUITE}::the suite parses",
+        interim=f"{SHELL_SUITE}::the suite parses",
+        perl="-",
+    )
+    root = with_shell_suite(build_tree(tmp_path, rows))
+    (root / "scripts" / "data" / "test_plain.sh").write_text('echo "the suite parses"\n')
+    where = "tests/parity/matrix.tsv:4: symbol:"
+    no_ok = (
+        "scripts/data/test_plain.sh names no check 'the suite parses' in a call of a check function"
+    )
+    assert errors_of(root) == [
+        f"{where} test1 {SHELL_SUITE}::counted $PASS checks {shapes}",
+        f"{where} test1 scripts/data/layout.sh::the suite parses {shapes}",
+        f"{where} test1 docs/test_layout.sh::the suite parses {shapes}",
+        f"{where} test1 scripts/data/test_gone.sh::the suite parses scripts/data/test_gone.sh does not exist",
+        f"{where} test1 scripts/../scripts/data/test_layout.sh::the suite parses has a `..` segment",
+        f"{where} test1 scripts/data/test_plain.sh::the suite parses {no_ok}",
+        f"{where} test2 {SHELL_SUITE}::the suite parses is not tests/golden/<set>/<corpus>",
+        f"{where} interim {SHELL_SUITE}::the suite parses is not <path>.rs::<fn> under crates/",
+    ]
+
+
+def test_shell_suite_entry_makes_a_process_row(tmp_path):
+    """A row proven by a check of a shell suite is a process row, as one proven by a pytest
+    function is: its perl_reference is `-`, beside a crate entry too."""
+    entry = f"{SHELL_SUITE}::the suite parses"
+    rows = rows_with("symbol", test1=entry)
+    assert errors_of(with_shell_suite(build_tree(tmp_path, rows))) == [
+        "tests/parity/matrix.tsv:4: symbol: a process row names no Ensembl VEP module; perl_reference must be -"
+    ]
+    rows = rows_with("symbol", test1=f"{entry};{TEST1}", perl="-")
+    assert errors_of(with_shell_suite(build_tree(tmp_path / "dash", rows))) == []
 
 
 def test_process_row_test2_is_a_covering_corpus(tmp_path):
@@ -547,6 +1186,29 @@ STRIP_CASES = [
 @pytest.mark.parametrize("source,stripped", STRIP_CASES)
 def test_strip_comments_blanks_literals_and_drops_comments(source, stripped):
     assert cpm.strip_comments(source) == stripped
+
+
+# What survives of each source of STRIP_CASES when the literals are kept: the comments alone go.
+KEPT_LITERALS = [
+    'let s = "fn in_a_string";',
+    'let s = "a\\"b"; ',
+    'let s = r#"*/ and // "#; x',
+    'let s = r##"q"# fn ghost() {}"##;',
+    'let b = b"/* bytes */";',
+    "let c = '\\''; let d = '\"'; let e = 'x';",
+    "fn f<'a>(x: &'a str) {}",
+    "a  b",
+    "a \nb",
+    'let s = "two\nlines";',
+]
+
+
+@pytest.mark.parametrize(
+    "source,stripped,kept", [(*case, kept) for case, kept in zip(STRIP_CASES, KEPT_LITERALS)]
+)
+def test_strip_comments_keeps_literals_index_for_index(source, stripped, kept):
+    assert cpm.strip_comments(source, keep_literals=True) == kept
+    assert len(kept) == len(stripped)
 
 
 def test_a_test_declaration_inside_a_literal_declares_nothing():
@@ -715,6 +1377,77 @@ def test_missing_files_are_reported(tmp_path):
     assert errors_of(root) == ["crates/vep-cli/src/args.rs is missing"]
 
 
+@pytest.mark.parametrize(
+    "cell",
+    [
+        "-",
+        "Config.pm",
+        "Config.pm::read_config_from_file",
+        "Parser/VCF.pm",
+        "Parser/VCF.pm::create_VariationFeatures",
+        "Variation/Utils/Sequence.pm",
+        "IO/Parser/BaseVCF4.pm::get_IDs",
+        "vep",
+        "INSTALL.pl",
+        "Bio::Tools::CodonTable",
+    ],
+)
+def test_reference_in_a_form_the_readme_gives_passes(tmp_path, cell):
+    """A cell is `-`, a line of the reference list (a script, a module by its path, the BioPerl
+    package), or such a line with one identifier after `::`."""
+    assert errors_of(build_tree(tmp_path, rows_with("symbol", perl=cell))) == []
+
+
+@pytest.mark.parametrize(
+    "cell",
+    [
+        "VCF.pm",
+        "VCF.pm::create_VariationFeatures",
+        "Utils/Sequence.pm",
+        "Sequence.pm",
+        "BaseVCF4.pm",
+        "modules/Bio/EnsEMBL/VEP/Config.pm",
+        "config.pm",
+        "filter_vep",
+        "Bio::Tools::SeqStats",
+        "Nonesuch.pm",
+    ],
+)
+def test_reference_that_names_no_listed_file_fails(tmp_path, cell):
+    """A module named by its last components, by its whole path in the repository or in another
+    letter case, a script or a package the list lacks and a `.pm` name that is no module of a
+    plugin of the support table are refused, each at its row."""
+    assert errors_of(build_tree(tmp_path, rows_with("symbol", perl=cell))) == [names_no_file(cell)]
+
+
+@pytest.mark.parametrize("sub", ["", "read config", "2nd", "a::b", "status_msg()"])
+def test_reference_names_one_identifier_after_the_file(tmp_path, sub):
+    """What follows `::` after a listed file, a sub or a parameter, is one identifier."""
+    cell = f"Config.pm::{sub}"
+    expected = (
+        names_no_file(cell)
+        if sub == "a::b"
+        else f"tests/parity/matrix.tsv:4: symbol: perl_reference {cell}: {sub!r} after `::` is not one identifier"
+    )
+    assert errors_of(build_tree(tmp_path, rows_with("symbol", perl=cell))) == [expected]
+
+
+def test_reference_list_is_read_whole(tmp_path):
+    """A tree without the list, and a list with a line that is not one name or that does not sort
+    after the line before it (a repeated line among them), stop the check at the list."""
+    root = build_tree(tmp_path)
+    (root / REFERENCE_LIST).unlink()
+    assert errors_of(root) == [f"{REFERENCE_LIST} is missing"]
+    lines = ["Config.pm", "", "Parser/ VCF.pm", "Parser/VCF.pm", "Parser/VCF.pm", "INSTALL.pl"]
+    root = build_tree(tmp_path / "malformed", reference_files=lines)
+    assert errors_of(root) == [
+        f"{REFERENCE_LIST}:2: '' is not one name",
+        f"{REFERENCE_LIST}:3: 'Parser/ VCF.pm' is not one name",
+        f"{REFERENCE_LIST}:5: Parser/VCF.pm does not sort after Parser/VCF.pm",
+        f"{REFERENCE_LIST}:6: INSTALL.pl does not sort after Parser/VCF.pm",
+    ]
+
+
 def run_cli(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
         [sys.executable, str(SCRIPT), *args],
@@ -806,12 +1539,13 @@ def test_not_ported_status_requires_error(tmp_path):
     ]
     # A landed `documented_subset` target matches no phrase either.
     rows = [
-        row("AVADA", target="documented_subset", perl="AVADA.pm", state="landed:documented_subset", test1=TEST1, test2=TEST2)
+        row("AVADA", target="documented_subset", perl="AVADA.pm", state="landed:documented_subset", test1=stated("names_a_page"), test2=TEST2)
         if r.startswith("AVADA\t")
         else r
         for r in PLUGIN_ROWS
     ]
     root = build_tree(tmp_path / "subset", rows, covers=PLUGIN_COVERS + ("AVADA",), table=PLUGIN_TABLE)
+    write_pin_file(root)
     assert errors_of(root) == [
         f"{PAGE}: support table row AVADA status not ported does not match target documented_subset"
     ]
@@ -834,6 +1568,34 @@ def test_loftee_row_resolves_through_the_table(tmp_path):
     rows = [row("LoFTEE", target="error", perl="LoF.pm", state="landed:error", test1=TEST1) if r.startswith("LoFTEE\t") else r for r in PLUGIN_ROWS]
     assert errors_of(build_tree(tmp_path / "target", rows, covers=PLUGIN_COVERS, table=PLUGIN_TABLE)) == [
         f"{PAGE}: support table row LoFTEE status {REAL} does not match target error"
+    ]
+
+
+def test_reference_to_a_plugin_module_resolves_through_the_table(tmp_path):
+    """A row that is no plugin row may name the module of a plugin of the support table, `<Name>.pm`
+    or LoFTEE's `LoF.pm`, with a sub after it too. A `.pm` name that is no such module is refused:
+    a plugin's name in another letter case, `LoFTEE.pm`, which is no file, on any row, and `LoF.pm`
+    where the table holds no LoFTEE. A row's own `<item>.pm` with a sub after it is refused when
+    the item is no plugin of the table: the table rule reads the bare cell alone."""
+    for index, cell in enumerate(["AVADA.pm", "AlphaMissense.pm::get_header_info", "LoF.pm", "LoF.pm::run"]):
+        rows = [row("symbol", perl=cell) if r.startswith("symbol\t") else r for r in PLUGIN_ROWS]
+        assert errors_of(build_tree(tmp_path / str(index), rows, covers=PLUGIN_COVERS, table=PLUGIN_TABLE)) == []
+    for cell in ["Avada.pm", "LoFTEE.pm"]:
+        rows = [row("symbol", perl=cell) if r.startswith("symbol\t") else r for r in PLUGIN_ROWS]
+        assert errors_of(build_tree(tmp_path / cell, rows, covers=PLUGIN_COVERS, table=PLUGIN_TABLE)) == [
+            names_no_file(cell)
+        ]
+    rows = [r.replace("\tLoF.pm\t", "\tLoFTEE.pm\t") if r.startswith("LoFTEE\t") else r for r in PLUGIN_ROWS]
+    assert errors_of(build_tree(tmp_path / "loftee", rows, covers=PLUGIN_COVERS, table=PLUGIN_TABLE)) == [
+        names_no_file("LoFTEE.pm", "tests/parity/matrix.tsv:20: LoFTEE")
+    ]
+    rows = [row("symbol", perl="LoF.pm") if r.startswith("symbol\t") else r for r in PLUGIN_ROWS]
+    assert errors_of(build_tree(tmp_path / "absent", rows, covers=PLUGIN_COVERS, table=PLUGIN_TABLE[:2])) == [
+        names_no_file("LoF.pm")
+    ]
+    rows = [row("symbol", perl="symbol.pm::run") if r.startswith("symbol\t") else r for r in PLUGIN_ROWS]
+    assert errors_of(build_tree(tmp_path / "own", rows, covers=PLUGIN_COVERS, table=PLUGIN_TABLE)) == [
+        names_no_file("symbol.pm::run")
     ]
 
 

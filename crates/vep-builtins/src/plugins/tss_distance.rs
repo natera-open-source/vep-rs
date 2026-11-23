@@ -50,6 +50,8 @@ impl TssDistancePlugin {
     }
 }
 
+impl crate::traits::sealed::Sealed for TssDistancePlugin {}
+
 impl BuiltinPlugin for TssDistancePlugin {
     fn name(&self) -> &str {
         "TSSDistance"
@@ -116,13 +118,12 @@ mod tests {
 
     /// A transcript row spanning `start..=end` on `strand`.
     fn row(strand: i8, start: u64, end: u64) -> TranscriptConsequence {
-        TranscriptConsequence {
-            strand,
-            feature_start: start,
-            feature_end: end,
-            feature_type: FeatureType::Transcript,
-            ..TranscriptConsequence::default()
-        }
+        let mut consequence = TranscriptConsequence::default();
+        consequence.strand = strand;
+        consequence.feature_start = start;
+        consequence.feature_end = end;
+        consequence.feature_type = FeatureType::Transcript;
+        consequence
     }
 
     fn span(start: u64, end: u64) -> InputVariant {
@@ -272,7 +273,7 @@ mod tests {
     /// batch dispatch handing the plugin the structural variant because
     /// TSSDistance.pm:73-75 declares `BaseVariationFeature`, where a plugin
     /// with Ensembl VEP's default `variant_feature_types` would be skipped
-    /// (`OutputFactory.pm:2220`).
+    /// (`OutputFactory.pm:2229`).
     #[test]
     fn a_structural_variant_row_is_annotated() {
         let plugin = plugin(&[]);

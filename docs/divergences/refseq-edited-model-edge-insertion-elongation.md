@@ -1,12 +1,12 @@
 # A structural insertion point just outside a RefSeq model whose edits renumber its end base
 
-**The defect in one sentence.** On a RefSeq model whose `_rna_edit` attributes renumber its outermost genomic base, Ensembl VEP 116.2 writes `feature_elongation` for a symbolic insertion point lying between that base and the base beyond the model, beside the `upstream_gene_variant` or `downstream_gene_variant` that vep-rs writes alone, with `IMPACT=MODIFIER`.
+**The defect in one sentence.** On a RefSeq model whose `_rna_edit` attributes renumber its outermost genomic base, Ensembl VEP 116.3 writes `feature_elongation` for a symbolic insertion point lying between that base and the base beyond the model, beside the `upstream_gene_variant` or `downstream_gene_variant` that vep-rs writes alone, with `IMPACT=MODIFIER`.
 
 **Why this is a defect.** The point's outer neighbour is not a base of the model: no exon holds it, and the row's own `upstream_gene_variant` or `downstream_gene_variant` says the variant begins beyond the model's end. The row prints no cDNA position, where a `feature_elongation` row of an insertion point inside a model prints one. On a model without edits the same point reads `upstream_gene_variant` or `downstream_gene_variant` alone, and so it does on an edited model unless its first base is numbered above 1 or its last base below the sum of its exon lengths. `feature_elongation` has HIGH impact, so the row's `IMPACT` changes with the term.
 
 **What vep-rs does instead.** vep-rs reads an insertion point by its two neighbouring bases. A point with a neighbour outside the model's span lies outside the model, and its row carries `upstream_gene_variant` or `downstream_gene_variant` alone, with `IMPACT=MODIFIER`, on an edited model as on any other.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2, `ensembl-variation`, `ensembl` and `ensembl-io` at release/116, the modules the Ensembl VEP 116.2 image holds):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3, `ensembl-variation`, `ensembl` and `ensembl-io` at release/116, the modules the Ensembl VEP 116.3 image holds):
 
 - `Bio/EnsEMBL/IO/Parser/BaseVCF4.pm`, lines 262-264, `get_start`: a record with a symbolic allele starts one base after its `POS`. Lines 302-309, `get_end`: its end is counted from `SVLEN` where the record has one, and is its `END` otherwise. A symbolic record with no `SVLEN` whose `END` is its `POS` therefore has its start one above its end.
 - `Bio/EnsEMBL/Variation/Utils/VariationEffect.pm`, lines 337-348, `feature_elongation`: the term needs `within_cdna`, `complete_within_feature` and an insertion or a gain. `Bio/EnsEMBL/Variation/Utils/Constants.pm`, lines 810-813: its filter does not ask for a variant within the feature.
@@ -23,9 +23,9 @@
 
 The 32 files of the two structural-variant sets hold 10,212 symbolic insertions and no point. Each of their 3,527 symbolic records with `END` at `POS` carries an `SVLEN` that makes it a span.
 
-The committed caches hold 136 models with an `_rna_edit` attribute, each counted once in every cache that holds it, all in the four RefSeq and merged corpora. On 8 of them the last base is numbered below the sum of the exon lengths, all on chromosome 21: `NM_130444.3` and `NM_030582.4` in `GRCh37-refseq`, `GRCh38-refseq` and `GRCh38-merged`, and `NM_198689.3` in `GRCh37-refseq` and `GRCh37-merged`. On none is the first base numbered above 1.
+The committed caches hold 160 models with an `_rna_edit` attribute, each counted once in every cache that holds it, in ten corpora: eight RefSeq and merged corpora, `AaegL5-aedes` and `AgamP4-anopheles`. On 14 of them the last base is numbered below the sum of the exon lengths: 6 in `AaegL5-aedes` and 8 on chromosome 21, `NM_130444.3` and `NM_030582.4` in `GRCh37-refseq`, `GRCh38-refseq` and `GRCh38-merged`, and `NM_198689.3` in `GRCh37-refseq` and `GRCh37-merged`. On none is the first base numbered above 1.
 
-The inputs of those four corpora hold 244 records, 22 of them symbolic and none a point. Of the 8,065 lines of the committed Ensembl VEP outputs that carry `feature_elongation`, none carries it beside an upstream or downstream term.
+The inputs of those ten corpora hold 1,508 records, 22 of them symbolic and none a point. Of the 8,113 lines of the committed Ensembl VEP outputs that carry `feature_elongation`, none carries it beside an upstream or downstream term.
 
 A set of 39 hand-written points on the RefSeq GRCh38 cache of release 116 gives 455 rows in each engine under `--refseq`. On 282 of them the point lies just outside the row's own model. On 9 of the 282 the model's first base is numbered above 1 or its last base below the sum of its exon lengths, and there Ensembl VEP writes `feature_elongation` on all 9 and vep-rs on none. On the other 273 neither engine writes it, and the engines' other 446 rows are equal in every column. Eight of the 9 lie at a model's 5' end and one at a 3' end.
 
@@ -59,7 +59,7 @@ The cache holds, for the model, the `_rna_edit` attribute `1 0` followed by 213 
 
 The row of `NM_012234.7`, by column:
 
-| Field | Ensembl VEP 116.2 | vep-rs |
+| Field | Ensembl VEP 116.3 | vep-rs |
 | --- | --- | --- |
 | Location | `3:72446623-72446624` | `3:72446623-72446624` |
 | Consequence | `feature_elongation,upstream_gene_variant` | `upstream_gene_variant` |
@@ -97,7 +97,7 @@ vep-rs runs on the conversion of that cache ([Cache conversion](../cache-convers
 
 ### 1.7 How the comparator treats this class
 
-Nothing is set aside. The format comparator (`scripts/concordance/compare_vep_formats.py`) has no class of this shape, and no committed corpus holds a row of it. A disagreement of the shape is reported as a difference in `Consequence` and `IMPACT` and charged to vep-rs.
+Nothing is set aside. The format comparator (`tools/vep-formats-compare`) has no class of this shape, and no committed corpus holds a row of it. A disagreement of the shape is reported as a difference in `Consequence` and `IMPACT` and charged to vep-rs.
 
 Rows beside the shape are no part of this entry. A point inside a model gets `feature_elongation` beside a cDNA position from both engines. A point just outside a model whose end base is not renumbered gets the upstream or downstream term alone from both.
 
@@ -133,7 +133,7 @@ The point's lower neighbour, `21:45513720`, is the last base of all three models
 
 ### 2.3 What each engine writes
 
-The three models' rows in the default format. Ensembl VEP 116.2:
+The three models' rows in the default format. Ensembl VEP 116.3:
 
 ```
 col18a1_end_point	21:45513720-45513721	insertion	80781	NM_001379500.1	Transcript	downstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER;DISTANCE=0;STRAND=1
@@ -184,7 +184,7 @@ vep -i point.vcf -o out.txt --offline --cache \
 grep -E 'NM_(130444|030582|001379500)' out.txt
 ```
 
-vep-rs prints the three rows of 2.3 with `downstream_gene_variant` alone. Ensembl VEP 116.2 takes the same record and `--refseq` with its RefSeq GRCh38 cache of release 116 and the cache options of [Reproducing these examples](reproducing.md). It prints `feature_elongation,downstream_gene_variant` on the two edited models' rows.
+vep-rs prints the three rows of 2.3 with `downstream_gene_variant` alone. Ensembl VEP 116.3 takes the same record and `--refseq` with its RefSeq GRCh38 cache of release 116 and the cache options of [Reproducing these examples](reproducing.md). It prints `feature_elongation,downstream_gene_variant` on the two edited models' rows.
 
 The entry's reproduction, `scripts/divergences/reproductions/refseq_edited_model_edge_insertion_elongation.toml`, runs this record on both engines and holds the three rows to their recorded values.
 

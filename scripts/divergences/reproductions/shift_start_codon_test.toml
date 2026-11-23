@@ -1,9 +1,9 @@
 entry = "shift_start_codon_test"
 page = "docs/divergences/shift-start-codon-test.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 74,048 per million · 3 flag sets, 101 corpora"
+input_class_basis = "2 · 74,048 per million · 4 flag sets, 141 corpora"
 notes = "A deletion of the last intron base and the first three bases of the last exon of CLIC6, shifted one base into the exon; ENST00000360731 has no 5' UTR, so the start-codon test read from an undefined unshifted cDNA start adds start_lost and a ? HGVSp."
 
 [input]
@@ -29,3 +29,10 @@ columns = ["Consequence", "Protein_position", "HGVSp", "HGVS_OFFSET"]
 [expected]
 ensembl_vep = ["frameshift_variant,start_lost,splice_region_variant | 652-653 | ENSP00000353959.3:p.Ile652_?653 | 1"]
 vep_rs = ["frameshift_variant,splice_region_variant | 652-653 | ENSP00000353959.3:p.Ile652TrpfsTer14 | 1"]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/coding.rs::PerlCodingEval::overlaps_start_codon",
+    "crates/vep-effects/src/consequences.rs::consequences_of_the_record",
+]
+tests = ["crates/vep-cli/tests/consequence_documented_rows.rs::a_deletion_shifted_into_an_exon_is_tested_against_the_start_codon_where_it_lands"]

@@ -1,0 +1,23 @@
+{
+  'array' => bless( [
+    1,
+    2
+  ], 'Some::List' ),
+  'hash' => bless( {
+    'a' => 1
+  }, 'Bio::EnsEMBL::Exon' ),
+  'main' => bless( {}, 'main' ),
+  'named_hash' => bless( [
+    7
+  ], 'HASH' ),
+  'nested' => bless( {
+    'inner' => bless( [
+      bless( {}, 'C' )
+    ], 'B' )
+  }, 'A' ),
+  'quoted' => bless( {}, 'It\'s::Odd' ),
+  'scalar' => bless( do{\(my $o = 'held')}, 'Some::Scalar' ),
+  'zero' => bless( {
+    'z' => 1
+  }, '0' )
+}

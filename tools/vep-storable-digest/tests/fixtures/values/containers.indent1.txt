@@ -1,0 +1,43 @@
+{
+  'empty_array' => [],
+  'empty_hash' => {},
+  'hash_one' => {
+    'only' => 1
+  },
+  'holes' => [
+    'first',
+    undef,
+    undef,
+    'fourth'
+  ],
+  'nested' => [
+    [],
+    {},
+    [
+      [
+        1,
+        [
+          2,
+          [
+            3
+          ]
+        ]
+      ]
+    ],
+    {
+      'a' => {
+        'b' => {
+          'c' => []
+        }
+      }
+    }
+  ],
+  'one' => [
+    1
+  ],
+  'undefs' => [
+    undef,
+    1,
+    undef
+  ]
+}

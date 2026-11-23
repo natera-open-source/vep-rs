@@ -22,7 +22,7 @@
  "covers": [
   "LOEUF"
  ],
- "suites": {
+ "datasets": {
   "plugin-loeuf": {
    "reference": "cand37_loeuf.vep.txt",
    "input": "cand37_loeuf.vcf",
@@ -74,14 +74,14 @@
  },
  "records": [
   {
-   "suite": "plugin-loeuf",
+   "dataset": "plugin-loeuf",
    "vcf": "21\t24000000\tintergenic\tT\tC\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "plugin-loeuf",
+   "dataset": "plugin-loeuf",
    "vcf": "21\t27484317\tapp_exon\tG\tA\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -90,7 +90,7 @@
    ]
   },
   {
-   "suite": "plugin-loeuf",
+   "dataset": "plugin-loeuf",
    "vcf": "21\t30670000\tbach1_upstream_in_gene\tA\tG\t.\t.\t.",
    "combinations": [
     "intron_variant",
@@ -98,14 +98,14 @@
    ]
   },
   {
-   "suite": "plugin-loeuf",
+   "dataset": "plugin-loeuf",
    "vcf": "21\t30693621\tbach1_exon\tC\tT\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "plugin-loeuf",
+   "dataset": "plugin-loeuf",
    "vcf": "21\t31992919\tkrtap20_4_deletion\tTTCAAACTGAGAAAAATAATTCCCTGATCCACAACTGAAACATCCACTTCTGAACACCATGTCCTACTACAGCCATCTTTCTGGTGGCCTGGGCTGCGGCTTGGCTGTGGCTGTGACTATGGGAAGGACTGTGGCTGTGGCTGAGTATGGCAGGTGCAGACATGGCTGCCACTCATCTTACTCTGCCAGGTAATGACACCATGGATTCCACTGAGGAACACCTAGAGCAGTTCAGTCTACTGCACTCCTCCAGCTTGATTT\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -113,7 +113,7 @@
    ]
   },
   {
-   "suite": "plugin-loeuf",
+   "dataset": "plugin-loeuf",
    "vcf": "21\t31993019\tkrtap20_4_snv\tT\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -121,7 +121,7 @@
    ]
   },
   {
-   "suite": "plugin-loeuf",
+   "dataset": "plugin-loeuf",
    "vcf": "21\t33029935\tsod1_upstream\tT\tC\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -129,7 +129,7 @@
    ]
   },
   {
-   "suite": "plugin-loeuf",
+   "dataset": "plugin-loeuf",
    "vcf": "21\t33036113\tsod1_exon2\tG\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -139,7 +139,7 @@
    ]
   },
   {
-   "suite": "plugin-loeuf",
+   "dataset": "plugin-loeuf",
    "vcf": "21\t33037500\tsod1_intron\tT\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -148,7 +148,7 @@
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "flag_sets": [

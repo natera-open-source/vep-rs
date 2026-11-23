@@ -1,7 +1,7 @@
 entry = "gff_cds_lines_sharing_a_start"
 page = "docs/divergences/gff-cds-lines-sharing-a-start.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the GFF3 specification, \"The Canonical Gene\" (its example gives one mRNA two CDS features, cds00003 and cds00004, whose lines share a start); not seen in the measured datasets"
 notes = "The GRCh38 release-116 GFF3 lines of PWP2 and ENST00000456705 with the transcript's first and last CDS lines each written twice at one start, the later line of each pair naming the protein ENSP00000411750 version 2 and the later of the last pair ending six bases before the earlier, beside the TMPRSS3 transcript ENST00001113783 as written, the control. Ensembl VEP keeps one CDS record per start, the later line of the file (BaseGXF.pm:511), so the translation takes the later first line's identifier and version (:723-734) and ends where the later last line ends (:749-756): `ENSP00000411750.2` on every row and `3_prime_UTR_variant` for the record inside the earlier last line alone. vep-rs reads every CDS line: the coding span is their union, the identifier and version come from the earlier line of the two sharing the lowest start on the forward strand (the later on the reverse), and the record is `missense_variant`; the control transcript's rows agree."
@@ -71,4 +71,14 @@ vep_rs = [
   "21:44107424 | C | ENST00000456705 | missense_variant | ENSP00000411749.1 | ENSP00000411749.1:p.Phe3Ser",
   "21:44115741 | A | ENST00000456705 | missense_variant | ENSP00000411749.1 | ENSP00000411749.1:p.Arg186His",
   "21:42395401 | A | ENST00001113783 | missense_variant | ENSP00000783588.1 | ENSP00000783588.1:p.Pro6Leu",
+]
+
+[implementation]
+code = [
+    "crates/vep-cache-builder/src/builder.rs::build_transcript",
+    "crates/vep-cache-builder/src/builder.rs::cds_span",
+]
+tests = [
+    "crates/vep-cache-builder/src/builder.rs::tests::translation_identifiers_come_from_the_five_prime_cds_line",
+    "crates/vep-cli/tests/documented_subsets.rs::gff_cds_lines_sharing_a_start_divergence_is_documented",
 ]

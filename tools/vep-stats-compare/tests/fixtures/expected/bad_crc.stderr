@@ -1,0 +1,1 @@
+ERROR: [compare_vep_stats] cannot read tests/fixtures/bad_crc.summary.log.gz: CRC check failed 0xfcf1f536 != 0xfcf1f537

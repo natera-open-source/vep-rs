@@ -13,25 +13,26 @@
 
 mod common;
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 use common::{
     apply_masks, compare_entries, compare_run, compare_warnings, corpora,
     list_columns_as_multisets, masked_reference_text, nearest_as_coordinates, output_path,
     parse_default, parse_json, parse_vcf, parse_vcf_info_in_order, protein_coding_start_sites,
-    read_expected, runs, vep_command, Corpus, Documented, Entry, CONSERVATION_SHORT_NAME_SPELLING,
-    DEFAULT_SPECIES, ORDER_ONLY, PC_DESCRIPTION_TEXT, REFERENCE_SKIPPED_RECORD,
-    REGULATORY_FEATURE_ROWS, UNLOADED_MODULE_PLUGIN, WITH_REFERENCE_SETS,
+    read_expected, run_vep, runs, vep_command, Corpus, Documented, Entry,
+    CONSERVATION_SHORT_NAME_SPELLING, DEFAULT_SPECIES, ORDER_ONLY, PC_DESCRIPTION_TEXT,
+    REFERENCE_SKIPPED_RECORD, REGULATORY_FEATURE_ROWS, UNLOADED_MODULE_PLUGIN, WITH_REFERENCE_SETS,
 };
 
 /// Every run's default-format output matches the reference, and the warnings
 /// file the run writes beside it names the records the reference skipped, with
 /// their reasons (the manifest's `reference_warning` strings), and the warnings
 /// the reference wrote about the run as a whole (its `reference_warnings`
-/// list), and no other.
+/// list), and beyond them only the lines [`compare_warnings`] sets aside.
 #[test]
 fn default_output_matches_vep_on_every_corpus() {
     let corpora = corpora();
@@ -57,6 +58,72 @@ fn default_output_matches_vep_on_every_corpus() {
         }
     }
     assert!(failures.is_empty(), "\n{}", failures.join("\n"));
+}
+
+/// Adds to `found` the directory `dir`, every directory under it and every
+/// file under it, each with the time it was last written, a file with its
+/// length as well. A directory's time moves when an entry is created in it or
+/// removed from it, so a file written and removed again shows in its directory.
+fn files_under(dir: &Path, found: &mut BTreeMap<PathBuf, (u64, SystemTime)>) {
+    let written = fs::metadata(dir).unwrap().modified().unwrap();
+    found.insert(dir.to_path_buf(), (0, written));
+    for entry in fs::read_dir(dir).unwrap().flatten() {
+        let metadata = entry.metadata().unwrap();
+        if metadata.is_dir() {
+            files_under(&entry.path(), found);
+        } else {
+            found.insert(entry.path(), (metadata.len(), metadata.modified().unwrap()));
+        }
+    }
+}
+
+/// No run writes into a corpus directory: after every run of every corpus,
+/// under its own flags and in the first format it compares, each corpus
+/// directory holds the files and directories it held before, none written,
+/// and none that gained or lost an entry on the way. A run's process
+/// starts in its corpus directory ([`vep_command`]), where a file the binary
+/// names from a flag lands unless the output path [`run_vep`] appends after
+/// the run's flags names it elsewhere: the warnings and summary files of a
+/// flag set that names standard output as its output are such files.
+#[test]
+fn flag_set_runs_leave_the_corpus_directory_as_committed() {
+    let corpora = corpora();
+    assert!(!corpora.is_empty(), "no corpus found under tests/golden");
+    let files = || {
+        let mut found = BTreeMap::new();
+        for corpus in &corpora {
+            files_under(&corpus.dir, &mut found);
+        }
+        found
+    };
+    let before = files();
+    let tmp = tempfile::tempdir().unwrap();
+    for corpus in &corpora {
+        for run in runs(corpus) {
+            let format = run
+                .formats
+                .first()
+                .unwrap_or_else(|| panic!("{} compares no format", run.label()));
+            run_vep(&run, format, tmp.path(), &[]);
+        }
+    }
+    let after = files();
+    let mut moved = Vec::new();
+    for (path, state) in &after {
+        match before.get(path) {
+            None => moved.push(format!("written: {}", path.display())),
+            Some(was) if was != state => moved.push(format!("changed: {}", path.display())),
+            Some(_) => {}
+        }
+    }
+    for path in before.keys().filter(|path| !after.contains_key(*path)) {
+        moved.push(format!("removed: {}", path.display()));
+    }
+    assert!(
+        moved.is_empty(),
+        "a run wrote into a corpus directory:\n{}",
+        moved.join("\n")
+    );
 }
 
 /// The manifest is internally consistent with the committed inputs and
@@ -728,6 +795,86 @@ fn each_corpus_fits_its_size_budget() {
     }
 }
 
+/// Whether a run's flags load Ensembl VEP's LoF plugin, under its own name or
+/// under `LoFTEE`, the second name vep-rs reads for it.
+fn names_the_lof_plugin(flags: &[String]) -> bool {
+    let separate = flags
+        .windows(2)
+        .filter(|pair| pair[0] == "--plugin")
+        .map(|pair| pair[1].as_str());
+    let joined = flags
+        .iter()
+        .filter_map(|word| word.strip_prefix("--plugin="));
+    separate
+        .chain(joined)
+        .any(|value| matches!(value.split(',').next(), Some("LoF" | "LoFTEE")))
+}
+
+/// The branch and the full commit id a `plugin_source` text states, in the
+/// words `at its <branch> branch, commit <40 lower-case hexadecimal digits>`.
+fn stated_checkout(source: &str) -> Option<(String, String)> {
+    let (_, rest) = source.split_once(" at its ")?;
+    let (branch, rest) = rest.split_once(" branch, commit ")?;
+    let commit: String = rest
+        .chars()
+        .take_while(|c| matches!(c, '0'..='9' | 'a'..='f'))
+        .collect();
+    let ends = !rest[commit.len()..].starts_with(|c: char| c.is_ascii_alphanumeric());
+    let one_word = !branch.is_empty() && !branch.contains(char::is_whitespace);
+    (one_word && commit.len() == 40 && ends).then(|| (branch.to_string(), commit))
+}
+
+/// Ensembl VEP's LoF plugin is a repository of its own with one branch an
+/// assembly, and the reference image holds no copy of it: a reference run
+/// mounts a checkout as `--dir_plugins`. A run that names the plugin therefore
+/// states that checkout under `plugin_source`, in its flag set's record of the
+/// corpus's `provenance.json` or in the corpus's own: the branch and the full
+/// commit id, which the stored rows need to be written again from the same
+/// plugin code. `GRCh38-plugin-loftee` records the commit of the `grch38`
+/// branch that the plugin's tag `v1.0.4_GRCh38` names.
+#[test]
+fn a_run_of_the_lof_plugin_records_the_checkout_its_reference_ran() {
+    let mut recorded = std::collections::BTreeMap::<String, BTreeSet<(String, String)>>::new();
+    for corpus in corpora() {
+        let label = format!("{}/{}", corpus.release, corpus.name);
+        let text = fs::read_to_string(corpus.dir.join("provenance.json"))
+            .unwrap_or_else(|e| panic!("{label}: provenance.json: {e}"));
+        let record: serde_json::Value =
+            serde_json::from_str(&text).unwrap_or_else(|e| panic!("{label}: provenance.json: {e}"));
+        for run in runs(&corpus) {
+            if !names_the_lof_plugin(&run.flags) {
+                continue;
+            }
+            let source = record["flag_sets"][run.name.as_str()]["plugin_source"]
+                .as_str()
+                .or_else(|| record["plugin_source"].as_str())
+                .unwrap_or_else(|| {
+                    panic!(
+                        "{label} [{}]: no plugin_source states the LoF plugin checkout the reference ran",
+                        run.name
+                    )
+                });
+            let checkout = stated_checkout(source).unwrap_or_else(|| {
+                panic!(
+                    "{label} [{}]: plugin_source names no branch with a full commit id",
+                    run.name
+                )
+            });
+            recorded
+                .entry(corpus.name.clone())
+                .or_default()
+                .insert(checkout);
+        }
+    }
+    assert_eq!(
+        recorded.get("GRCh38-plugin-loftee"),
+        Some(&BTreeSet::from([(
+            "grch38".to_string(),
+            "a46b502a68c812c8ae0c5a5721c0603fe81cae8d".to_string()
+        )]))
+    );
+}
+
 /// Under `--nearest transcript` a run's `NEAREST` values compare as the start
 /// sites of the named transcripts: the reference names one transcript at a
 /// winning site and the output every transcript there, so the ids differ where
@@ -943,6 +1090,152 @@ fn documented_numeric_field_value_compares_across_formats() {
     );
 }
 
+/// A documented field on a key and consequence set several records share: an
+/// item that states `rows_alike` holds the rows that differ to its value, a row
+/// on which both engines print one value is compared like any other, and the
+/// rows found alike are held to the item's count. Three records write the allele
+/// `T` at one position, numbered 1, 2 and 2 by the reference; the third record
+/// repeats an alternate, so its row prints 3 here. Without `rows_alike` every row
+/// of the key is held to the item's value, as a second field of the same key is
+/// whose item states none.
+#[test]
+fn a_documented_field_on_a_shared_key_holds_the_rows_that_differ() {
+    let item = |field: &str, vep: &str, vep_rs: &str, rows_alike: Option<u64>| {
+        let mut item = serde_json::json!({
+            "location": "21:30289183", "allele": "T", "feature": "ENST1",
+            "feature_type": "Transcript", "record_indices": [0, 1, 2],
+            "consequence_set": "stop_retained_variant", "field": field,
+            "vep": vep, "vep_rs": vep_rs,
+            "expected_divergence": "allele_number_repeated_or_reference_equal_alt",
+        });
+        if let Some(count) = rows_alike {
+            item["rows_alike"] = count.into();
+        }
+        item
+    };
+    let documented = |items: Vec<serde_json::Value>| {
+        Documented::from_manifest(&serde_json::json!({ "field_divergences": items }))
+    };
+    let number = |rows_alike: Option<u64>| item("ALLELE_NUM", "2", "3", rows_alike);
+    let header = "#Uploaded_variation\tLocation\tAllele\tGene\tFeature\tFeature_type\tConsequence\tcDNA_position\tCDS_position\tProtein_position\tAmino_acids\tCodons\tExisting_variation\tExtra\n";
+    let rows = |numbers: [&str; 3], strands: [&str; 3]| {
+        let mut text = header.to_string();
+        for ((name, number), strand) in ["plain", "second", "repeat"]
+            .iter()
+            .zip(numbers)
+            .zip(strands)
+        {
+            text.push_str(&format!(
+                "{name}\t21:30289183\tT\tENSG1\tENST1\tTranscript\tstop_retained_variant\t\
+                 332\t308\t103\t*\ttGa/tAa\t-\tALLELE_NUM={number};IMPACT=LOW;STRAND={strand}\n"
+            ));
+        }
+        parse_default(&text)
+    };
+    let compare = |actual: [&str; 3], documented: &Documented| {
+        compare_entries(
+            &rows(["1", "2", "2"], ["-1"; 3]),
+            &rows(actual, ["-1"; 3]),
+            documented,
+            true,
+        )
+    };
+    let shared = documented(vec![number(Some(2))]);
+    assert_eq!(compare(["1", "2", "3"], &shared), "");
+    // The row that differs is held to the item's value.
+    let stale = compare(["1", "2", "4"], &shared);
+    assert!(
+        stale.contains("field ALLELE_NUM documented as \"3\", vep-rs now prints \"4\""),
+        "{stale}"
+    );
+    // A row of another record that differs, and not by the item's value, is stale too.
+    let stale = compare(["2", "2", "3"], &shared);
+    assert!(stale.contains("documented as"), "{stale}");
+    // The rows found alike are held to the item's count: no row differs any more.
+    let stale = compare(["1", "2", "2"], &shared);
+    assert!(
+        stale.contains("21:30289183|T|ENST1: field ALLELE_NUM documents 2 rows alike, 3 are"),
+        "{stale}"
+    );
+    let stale = compare(["1", "2", "3"], &documented(vec![number(Some(1))]));
+    assert!(
+        stale.contains("field ALLELE_NUM documents 1 rows alike, 2 are"),
+        "{stale}"
+    );
+    // A row of another record that prints the item's value leaves one row alike,
+    // and the count alone refuses it.
+    let stale = compare(["1", "3", "3"], &shared);
+    assert!(
+        stale.contains("field ALLELE_NUM documents 2 rows alike, 1 are"),
+        "{stale}"
+    );
+    assert!(!stale.contains("documented as"), "{stale}");
+    // An item that states no `rows_alike` holds every row of its key.
+    let stale = compare(["1", "2", "3"], &documented(vec![number(None)]));
+    assert!(
+        stale.contains("field ALLELE_NUM documented as \"3\", vep-rs now prints \"1\""),
+        "{stale}"
+    );
+    // A second field of the key whose item states none is held on every row, in
+    // either order of the two items.
+    let strand = item("STRAND", "-1", "1", None);
+    for both in [
+        vec![number(Some(2)), strand.clone()],
+        vec![strand, number(Some(2))],
+    ] {
+        let both = documented(both);
+        let compare = |strands: [&str; 3]| {
+            compare_entries(
+                &rows(["1", "2", "2"], ["-1"; 3]),
+                &rows(["1", "2", "3"], strands),
+                &both,
+                true,
+            )
+        };
+        assert_eq!(compare(["1"; 3]), "");
+        let stale = compare(["-1", "1", "1"]);
+        assert!(
+            stale.contains("field STRAND documented as \"1\", vep-rs now prints \"-1\""),
+            "{stale}"
+        );
+    }
+
+    // The JSON format finds the rows by their records.
+    let inputs: Vec<String> = [("plain", "T"), ("second", "G,T"), ("repeat", "G,G,T")]
+        .iter()
+        .map(|(name, alts)| format!("21\t30289183\t{name}\tC\t{alts}\t.\t.\t."))
+        .collect();
+    let objects = |numbers: [&str; 3]| {
+        let mut text = String::new();
+        for (input, number) in inputs.iter().zip(numbers) {
+            let name = input.split('\t').nth(2).unwrap();
+            text.push_str(&format!(
+                "{{\"input\":\"{}\",\"id\":\"{name}\",\"transcript_consequences\":[{{\
+                 \"variant_allele\":\"T\",\"transcript_id\":\"ENST1\",\
+                 \"consequence_terms\":[\"stop_retained_variant\"],\"allele_num\":{number}}}]}}\n",
+                input.replace('\t', "\\t")
+            ));
+        }
+        parse_json(&text, &inputs)
+    };
+    let compare = |actual: [&str; 3], documented: &Documented| {
+        compare_entries(
+            &objects(["1", "2", "2"]),
+            &objects(actual),
+            documented,
+            true,
+        )
+    };
+    assert_eq!(compare(["1", "2", "3"], &shared), "");
+    let stale = compare(["1", "2", "2"], &shared);
+    assert!(
+        stale.contains("field ALLELE_NUM documents 2 rows alike, 3 are"),
+        "{stale}"
+    );
+    let stale = compare(["1", "2", "2"], &documented(vec![number(None)]));
+    assert!(stale.contains("documented as"), "{stale}");
+}
+
 /// A record-level row a `--summary` run documents, which names no feature and
 /// carries the terms of every feature, is found by its Location in the default
 /// format, where a row printing another set is stale. The JSON format's record
@@ -990,6 +1283,123 @@ fn documented_record_level_row_has_nothing_to_observe_on_a_json_record_object() 
     assert_eq!(compare("intron_variant,coding_sequence_variant"), "");
     let stale = compare("intron_variant,frameshift_variant");
     assert!(stale.contains("vep-rs now emits"), "{stale}");
+}
+
+/// A key several records share is documented with VEP's own set beside
+/// another among vep-rs's sets: every `<CNV:TR>` record of one position writes
+/// one Location and Allele, and the row of one record alone differs. That row
+/// is held to the documented sets. A row on which vep-rs writes VEP's set is
+/// compared like any other, so a field that differs on it is reported, and a
+/// row that writes a set the item does not state is stale. A key documented
+/// with VEP's own set alone is set aside whole.
+#[test]
+fn documented_key_several_records_share_keeps_its_agreeing_rows_compared() {
+    const GAIN: &str = "feature_elongation,coding_sequence_variant";
+    const LOSS: &str = "feature_truncation,coding_sequence_variant";
+    const SAME: &str = "coding_sequence_variant";
+    let documented = Documented::from_manifest(&serde_json::json!({
+        "divergences": [{
+            "location": "7:1001-1009", "allele": "tandem_repeat", "feature": "ENST1",
+            "feature_type": "Transcript",
+            "record_indices": [1],
+            "vep_consequence_set": "coding_sequence_variant,feature_elongation",
+            "vep_rs_consequence_sets": [
+                "coding_sequence_variant,feature_elongation",
+                "coding_sequence_variant,feature_truncation"
+            ],
+            "expected_divergence": "cnv_tr_symbolic_loss_named_a_gain",
+        }]
+    }));
+    let header = "#Uploaded_variation\tLocation\tAllele\tGene\tFeature\tFeature_type\tConsequence\tcDNA_position\tCDS_position\tProtein_position\tAmino_acids\tCodons\tExisting_variation\tExtra\n";
+    let row = |name: &str, terms: &str, strand: &str| {
+        format!(
+            "{name}\t7:1001-1009\ttandem_repeat\t-\tENST1\tTranscript\t{terms}\t-\t-\t-\t-\t-\t-\tIMPACT=HIGH;STRAND={strand}\n"
+        )
+    };
+    let rows = |gain_strand: &str, loss: &str, loss_strand: &str| {
+        let gain = row("tr_gain", GAIN, gain_strand);
+        format!("{header}{gain}{}", row("tr_loss", loss, loss_strand))
+    };
+    let compare = |gain_strand: &str, loss: &str, loss_strand: &str| {
+        compare_entries(
+            &parse_default(&rows("1", GAIN, "1")),
+            &parse_default(&rows(gain_strand, loss, loss_strand)),
+            &documented,
+            true,
+        )
+    };
+    assert_eq!(compare("1", LOSS, "1"), "");
+    // The row that differs is the documented one: its other fields are not read.
+    assert_eq!(compare("1", LOSS, "-1"), "");
+    // The gain's row agrees with VEP's, so its fields are compared.
+    let report = compare("-1", LOSS, "1");
+    assert!(report.contains("FIELD STRAND: 1 mismatching"), "{report}");
+    // The loss's row with VEP's own set is a row like any other as well.
+    assert_eq!(compare("1", GAIN, "1"), "");
+    let report = compare("1", GAIN, "-1");
+    assert!(report.contains("FIELD STRAND: 1 mismatching"), "{report}");
+    let stale = compare("1", "feature_elongation,3_prime_UTR_variant", "1");
+    assert!(stale.contains("vep-rs now emits"), "{stale}");
+    // An item of three sets, the third VEP's without `feature_elongation`: the row of an
+    // allele as long as its run writes it with the IMPACT of the term left, and is the
+    // documented one as the loss's row is.
+    let three_sets = Documented::from_manifest(&serde_json::json!({
+        "divergences": [{
+            "location": "7:1001-1009", "allele": "tandem_repeat", "feature": "ENST1",
+            "feature_type": "Transcript",
+            "record_indices": [1, 2],
+            "vep_consequence_set": "coding_sequence_variant,feature_elongation",
+            "vep_rs_consequence_sets": [
+                "coding_sequence_variant",
+                "coding_sequence_variant,feature_elongation",
+                "coding_sequence_variant,feature_truncation"
+            ],
+            "expected_divergence": "cnv_tr_symbolic_loss_named_a_gain",
+        }]
+    }));
+    let three_rows = |gain_strand: &str, same: &str| {
+        let rows = rows(gain_strand, LOSS, "1");
+        format!(
+            "{rows}tr_same\t7:1001-1009\ttandem_repeat\t-\tENST1\tTranscript\t{same}\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER;STRAND=1\n"
+        )
+    };
+    let expected = format!("{}{}", rows("1", GAIN, "1"), row("tr_same", GAIN, "1"));
+    let compare_three = |gain_strand: &str, same: &str| {
+        compare_entries(
+            &parse_default(&expected),
+            &parse_default(&three_rows(gain_strand, same)),
+            &three_sets,
+            true,
+        )
+    };
+    assert_eq!(compare_three("1", SAME), "");
+    let report = compare_three("-1", SAME);
+    assert!(report.contains("FIELD STRAND: 1 mismatching"), "{report}");
+    let stale = compare_three("1", "3_prime_UTR_variant");
+    assert!(stale.contains("vep-rs now emits"), "{stale}");
+    // Under the item of two sets the same row is stale.
+    let stale = compare_entries(
+        &parse_default(&expected),
+        &parse_default(&three_rows("1", SAME)),
+        &documented,
+        true,
+    );
+    assert!(stale.contains("vep-rs now emits"), "{stale}");
+    // An item that states VEP's own set and no other sets the key aside whole.
+    let whole = Documented::from_manifest(&serde_json::json!({
+        "divergences": [{
+            "location": "7:1001-1009", "allele": "tandem_repeat", "feature": "ENST1",
+            "vep_rs_consequence_sets": ["coding_sequence_variant,feature_elongation"],
+            "expected_divergence": "minimal_symbolic_alleles",
+        }]
+    }));
+    let report = compare_entries(
+        &parse_default(&rows("1", GAIN, "1")),
+        &parse_default(&rows("-1", GAIN, "1")),
+        &whole,
+        true,
+    );
+    assert_eq!(report, "");
 }
 
 /// A `divergences` item that states vep-rs's sets for a run with a reference
@@ -1084,6 +1494,58 @@ fn documented_item_with_a_malformed_reference_key_is_refused() {
         }] }),
         false,
     );
+}
+
+/// An unordered run pairs the entries that share a key by what they hold: two
+/// rows of one transcript, the cache's and a gene-model file's, compare equal
+/// whichever engine wrote which first, and a row whose content differs still
+/// reports its field.
+#[test]
+fn unordered_entries_sharing_a_key_pair_by_content() {
+    let text = |rows: &[&str]| -> String {
+        let mut lines = vec![
+            "#Uploaded_variation\tLocation\tAllele\tGene\tFeature\tFeature_type\tConsequence\t\
+             cDNA_position\tCDS_position\tProtein_position\tAmino_acids\tCodons\t\
+             Existing_variation\tExtra"
+                .to_string(),
+        ];
+        lines.extend(rows.iter().map(|extra| {
+            format!(
+                "rs1\t21:100\tC\tENSG1\tENST1\tTranscript\tintron_variant\t-\t-\t-\t-\t-\t-\t{extra}"
+            )
+        }));
+        lines.join("\n") + "\n"
+    };
+    let cache = "IMPACT=MODIFIER;HGNC_ID=HGNC:1";
+    let file = "IMPACT=MODIFIER;SOURCE=genes.gtf.gz";
+    let entries = |rows: &[&str]| {
+        let mut entries = parse_default(&text(rows));
+        common::number_shared_keys_by_content(&mut entries);
+        entries
+    };
+    let none = Documented::from_manifest(&serde_json::json!({}));
+    assert_eq!(
+        compare_entries(
+            &entries(&[file, cache]),
+            &entries(&[cache, file]),
+            &none,
+            false
+        ),
+        ""
+    );
+    let as_written = (
+        parse_default(&text(&[file, cache])),
+        parse_default(&text(&[cache, file])),
+    );
+    assert!(compare_entries(&as_written.0, &as_written.1, &none, false).contains("SOURCE"));
+    let other = "IMPACT=MODIFIER;SOURCE=other.gtf.gz";
+    assert!(compare_entries(
+        &entries(&[file, cache]),
+        &entries(&[cache, other]),
+        &none,
+        false
+    )
+    .contains("SOURCE"));
 }
 
 /// Under `order_only` the items of the columns [`ORDER_ONLY`] names compare as
@@ -1285,6 +1747,119 @@ fn order_only_mask_compares_domains_as_a_multiset() {
     );
 }
 
+/// `CLIN_SIG` under `--clin_sig_allele 1` holds each different term list of a row's
+/// known variants once, joined by `;` in Ensembl VEP's hash order
+/// (OutputFactory.pm:1120, 1143-1144) and in vep-rs's order of the known variants. Under
+/// `order_only` the lists compare as a multiset, each list whole: the default format's
+/// `%3B` between them (the field and the raw `Extra` text), the tab format's `;` and
+/// the VCF's `%3B` between lists whose terms `&` joins. A changed term, a list written
+/// twice, a list fewer and the terms of one list in another order still differ.
+#[test]
+fn order_only_mask_compares_the_clin_sig_lists_as_a_multiset() {
+    let documented = Documented::from_manifest(&serde_json::json!({}));
+    let inputs = vec!["21\t500\t.\tA\tG\t.\t.\t.".to_string()];
+    let compare = |format: &str, expected: &str, actual: &str| -> String {
+        let parse = |text: &str| -> Vec<Entry> {
+            let mut entries = match format {
+                "default" | "tab" => parse_default(text),
+                _ => parse_vcf(text, &inputs),
+            };
+            list_columns_as_multisets(&mut entries, format);
+            entries
+        };
+        compare_entries(&parse(expected), &parse(actual), &documented, true)
+    };
+
+    let header = "#Uploaded_variation\tLocation\tAllele\tGene\tFeature\tFeature_type\tConsequence\tcDNA_position\tCDS_position\tProtein_position\tAmino_acids\tCodons\tExisting_variation\tExtra\n";
+    let row = |clin_sig: &str| {
+        format!(
+            "{header}rs1\t21:500\tG\tENSG1\tENST1\tTranscript\tmissense_variant\t-\t-\t-\t-\t-\trs9920000001,rs9920000002\tIMPACT=MODERATE;CLIN_SIG={clin_sig};PHENO=1,1\n"
+        )
+    };
+    let reference = row("likely_pathogenic,pathogenic%3Blikely_pathogenic");
+    assert_eq!(
+        compare(
+            "default",
+            &reference,
+            &row("likely_pathogenic%3Blikely_pathogenic,pathogenic")
+        ),
+        ""
+    );
+    for changed in [
+        "likely_pathogenic%3Blikely_pathogenic,benign",
+        "likely_pathogenic%3Blikely_pathogenic%3Blikely_pathogenic,pathogenic",
+        "likely_pathogenic%3Bpathogenic,likely_pathogenic",
+        "likely_pathogenic",
+    ] {
+        let report = compare("default", &reference, &row(changed));
+        assert!(
+            report.contains("FIELD CLIN_SIG: 1 mismatching"),
+            "{changed}: {report}"
+        );
+        assert!(
+            report.contains("FIELD Extra: 1 mismatching"),
+            "{changed}: {report}"
+        );
+    }
+    // The terms of one known variant, or of `--clin_sig_allele 0`, are no lists of
+    // their own.
+    let terms = compare(
+        "default",
+        &row("likely_pathogenic,pathogenic"),
+        &row("pathogenic,likely_pathogenic"),
+    );
+    assert!(terms.contains("FIELD CLIN_SIG: 1 mismatching"), "{terms}");
+
+    let tab = |clin_sig: &str| {
+        format!(
+            "#Uploaded_variation\tLocation\tAllele\tGene\tFeature\tFeature_type\tConsequence\tCLIN_SIG\n\
+             rs1\t21:500\tG\tENSG1\tENST1\tTranscript\tmissense_variant\t{clin_sig}\n"
+        )
+    };
+    assert_eq!(
+        compare(
+            "tab",
+            &tab("likely_pathogenic,pathogenic;likely_pathogenic"),
+            &tab("likely_pathogenic;likely_pathogenic,pathogenic")
+        ),
+        ""
+    );
+    let changed_tab = compare(
+        "tab",
+        &tab("likely_pathogenic,pathogenic;likely_pathogenic"),
+        &tab("likely_pathogenic;pathogenic,likely_pathogenic"),
+    );
+    assert!(
+        changed_tab.contains("FIELD CLIN_SIG: 1 mismatching"),
+        "{changed_tab}"
+    );
+
+    let vcf = |clin_sig: &str| {
+        format!(
+            "##fileformat=VCFv4.2\n##INFO=<ID=CSQ,Number=.,Type=String,Description=\"Consequence annotations from Ensembl VEP. Format: Allele|Consequence|IMPACT|Feature_type|Feature|CLIN_SIG\">\n\
+             #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n\
+             21\t500\t.\tA\tG\t.\t.\tCSQ=G|missense_variant|MODERATE|Transcript|ENST1|{clin_sig}\n"
+        )
+    };
+    assert_eq!(
+        compare(
+            "vcf",
+            &vcf("likely_pathogenic&pathogenic%3Blikely_pathogenic"),
+            &vcf("likely_pathogenic%3Blikely_pathogenic&pathogenic")
+        ),
+        ""
+    );
+    let changed_vcf = compare(
+        "vcf",
+        &vcf("likely_pathogenic&pathogenic%3Blikely_pathogenic"),
+        &vcf("likely_pathogenic%3Bpathogenic&likely_pathogenic"),
+    );
+    assert!(
+        changed_vcf.contains("FIELD CLIN_SIG: 1 mismatching"),
+        "{changed_vcf}"
+    );
+}
+
 /// Under [`UNLOADED_MODULE_PLUGIN`] the reference's run-time warnings about the
 /// plugin module (`did not return a hashref`, `went wrong`) are set aside and
 /// vep-rs's one `Failed to load plugin <Name>` line stands in for them: a
@@ -1326,6 +1901,62 @@ fn unloaded_module_plugin_mask_stands_the_load_warning_in_for_the_reference() {
     assert!(
         report.contains("warning not in the reference")
             && report.contains("Plugin 'Faulty' went wrong"),
+        "{report}"
+    );
+}
+
+/// A run that asks for known variants from a cache without variation data
+/// leaves one line about it in the warnings file, which Ensembl VEP, attaching
+/// no variation source to such a cache (`CacheDir.pm:179`), never writes. On a
+/// corpus whose cache holds no `variations` directory that line agrees with a
+/// reference that warns of nothing, and any other line is still a line the
+/// reference lacks; on a corpus whose cache holds variation files the same line
+/// is reported.
+#[test]
+fn variation_notice_is_set_aside_on_a_cache_without_variation_data() {
+    let notice = "WARNING: [cache] no variation data under /somewhere/json_cache: \
+                  Existing_variation and the frequency columns stay empty under \
+                  --check_existing; a cache from vep-cache-builder --auto or \
+                  --include-variations, or a conversion of Ensembl VEP's cache, holds it \
+                  (docs/cache-variation-data.md)\n";
+    let corpus_named = |name: &str| {
+        corpora()
+            .into_iter()
+            .find(|c| c.release == "116" && c.name == name)
+            .unwrap_or_else(|| panic!("the {name} corpus"))
+    };
+    let report_of = |corpus: &Corpus, text: &str| {
+        let run = common::default_run(corpus);
+        let tmp = tempfile::tempdir().unwrap();
+        let warnings = format!(
+            "{}_warnings.txt",
+            output_path(&run, "default", tmp.path()).display()
+        );
+        fs::write(&warnings, text).unwrap();
+        compare_warnings(&run, tmp.path())
+    };
+
+    let without = corpus_named("GRCh38-alt-contigs");
+    assert!(!without.cache_dir().join("variations").exists());
+    assert_eq!(report_of(&without, ""), "");
+    assert_eq!(report_of(&without, notice), "");
+    let report = report_of(
+        &without,
+        &format!("{notice}WARNING: something else went wrong\n"),
+    );
+    assert!(
+        report.contains("warning not in the reference")
+            && report.contains("something else went wrong")
+            && !report.contains("no variation data"),
+        "{report}"
+    );
+
+    let with = corpus_named("GRCh38-colocated");
+    assert!(with.cache_dir().join("variations").is_dir());
+    assert_eq!(report_of(&with, ""), "");
+    let report = report_of(&with, notice);
+    assert!(
+        report.contains("warning not in the reference") && report.contains("no variation data"),
         "{report}"
     );
 }
@@ -1473,7 +2104,7 @@ rs1\t21:5028998-5028999\tregions_PC=100.000,50.000;{plain}
 /// A GTF or GFF reference loses its transcript source before the comparison:
 /// the `SOURCE` column Ensembl VEP fills with the source's short name on every
 /// transcript it reads (`AnnotationSource/File/BaseGXF.pm:635` sets
-/// `_source_cache`, `OutputFactory.pm:1583` prints it, `Constants.pm:101` lists
+/// `_source_cache`, `OutputFactory.pm:1592` prints it, `Constants.pm:101` lists
 /// the column once a custom source is loaded), the source's own annotation
 /// column (empty on every row, since a transcript source annotates no record)
 /// and the header lines describing both, in each format; every other column,
@@ -1481,7 +2112,7 @@ rs1\t21:5028998-5028999\tregions_PC=100.000,50.000;{plain}
 #[test]
 fn transcript_source_reference_loses_its_source_column_and_header_lines() {
     let default_text = "\
-## ENSEMBL VARIANT EFFECT PREDICTOR v116.2
+## ENSEMBL VARIANT EFFECT PREDICTOR v116.3
 ## Using API version 116, DB version ?
 ## Extra column keys:
 ## IMPACT : Subjective impact classification of consequence type
@@ -1494,7 +2125,7 @@ rs1\t21:100\tG\tENSG1\tENST1\tTranscript\tmissense_variant\t-\t-\t-\t-\t-\t-\tIM
 rs2\t21:200\tA\t-\t-\t-\tintergenic_variant\t-\t-\t-\t-\t-\t-\tSOURCE=genes.gtf.gz
 ";
     let default_masked = "\
-## ENSEMBL VARIANT EFFECT PREDICTOR v116.2
+## ENSEMBL VARIANT EFFECT PREDICTOR v116.3
 ## Using API version 116, DB version ?
 ## Extra column keys:
 ## IMPACT : Subjective impact classification of consequence type
@@ -1574,7 +2205,8 @@ rs1\t21:100\tG\tMODERATE\tgenes.gtf.gz\t-\tPWP2
     );
 }
 
-/// The custom-annotation corpus and the GTF-route corpus keep their size: every
+/// The custom-annotation corpus, the GTF-route corpus and the corpus of a
+/// gene-model file read beside the cache keep their size: every
 /// run's reference holds at least the rows the committed references hold, the
 /// corpora their records, and each custom source annotates at least the rows
 /// it annotates in the committed references (the default-format rows carrying
@@ -1667,8 +2299,44 @@ fn custom_and_transcript_source_corpora_keep_their_floors() {
         ),
         Floor("GRCh38-gtf-builder", "default", 862, None),
         Floor("GRCh38-gtf-builder", "filter-biotype", 714, None),
+        // A gene-model file read beside the cache: the rows of the file's
+        // transcripts carry `SOURCE`, the cache's rows none.
+        Floor(
+            "GRCh38-gene-model-beside-cache",
+            "default",
+            1919,
+            Some(("SOURCE", 862)),
+        ),
+        Floor(
+            "GRCh38-gene-model-beside-cache",
+            "filter-source",
+            862,
+            Some(("SOURCE", 862)),
+        ),
+        Floor(
+            "GRCh38-gene-model-beside-cache",
+            "gtf",
+            1919,
+            Some(("SOURCE", 862)),
+        ),
+        Floor(
+            "GRCh38-gene-model-beside-cache",
+            "two-files",
+            2781,
+            Some(("SOURCE", 1724)),
+        ),
+        Floor(
+            "GRCh38-gene-model-beside-cache",
+            "gff",
+            1919,
+            Some(("SOURCE", 862)),
+        ),
     ];
-    let records: [(&str, usize); 2] = [("GRCh38-custom", 73), ("GRCh38-gtf-builder", 74)];
+    let records: [(&str, usize); 3] = [
+        ("GRCh38-custom", 73),
+        ("GRCh38-gtf-builder", 74),
+        ("GRCh38-gene-model-beside-cache", 74),
+    ];
     let corpora = corpora();
     let corpus_named = |name: &str| {
         corpora

@@ -16,14 +16,20 @@
 //! with rayon's `par_iter_mut`; the pipeline's tasks call `annotate_one` on the
 //! same pool.
 //!
-//! Perl citations name modules of ensembl-vep release/116 (`Bio/EnsEMBL/VEP/...`).
+//! Ensembl VEP source citations name modules of ensembl-vep (`Bio/EnsEMBL/VEP/...`);
+//! `VariationEffect.pm` and `FastaSequence.pm` are under `Bio/EnsEMBL/Variation/Utils/`,
+//! `VariationFeatureAdaptor.pm` is under `Bio/EnsEMBL/Variation/DBSQL/`, and
+//! `BaseVariationFeature.pm`, `IntergenicVariationAllele.pm`,
+//! `ProteinFunctionPredictionMatrix.pm`, `StructuralVariationFeature.pm`,
+//! `TranscriptVariation.pm`, `TranscriptVariationAllele.pm` and `VariationFeature.pm` are
+//! under `Bio/EnsEMBL/Variation/`, all in ensembl-variation.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Cursor, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::Context;
@@ -43,6 +49,7 @@ use crate::config::{
 };
 use crate::filter_set::FilterSet;
 use crate::frequency_filter::{check_frequency_filter, FrequencyFilter};
+use crate::gene_model::GeneModelFile;
 use crate::individuals::{IndividualMode, IndividualRequest};
 use crate::input_shape::InputShape;
 use crate::nearest::NearestType;
@@ -52,7 +59,9 @@ use crate::pipeline;
 use crate::row_filter::RowFilters;
 use crate::stats;
 use crate::sv_source::{self, SvSource};
-use crate::transcript_index::{LazyTranscriptIndexes, TranscriptIndex, TranscriptSet};
+use crate::transcript_index::{
+    LazyTranscriptIndexes, TranscriptIndex, TranscriptSet, UnreadNotations,
+};
 use crate::transcript_lookup::TranscriptLookup;
 use crate::variation_matcher::{self, ColocationRules};
 use crate::variation_name_index;
@@ -61,21 +70,22 @@ use vep_builtins::custom::{self, CustomRunOptions, CustomSources, CustomSpec};
 use vep_builtins::BuiltinRegistry;
 use vep_core::cache_info::CacheInfo;
 use vep_core::cache_manifest::CacheManifest;
-use vep_core::consequence::{Consequence, FeatureType, Impact, RowKind};
+use vep_core::consequence::{Consequence, FeatureType, Impact, RowKind, TranscriptConsequence};
 use vep_core::sv_routing::perl_true;
 use vep_core::synonyms::ChromosomeSynonyms;
 use vep_core::variant::{InputVariant, VariantClass};
+use vep_core::warning_hold::{holding, Held};
 use vep_io::input::detect::{self, InputFormat};
 use vep_io::input::id::IdParser;
 use vep_io::input::{Delimiter, ParserContext, ReferenceSequence};
 use vep_io::output::fields::{
-    ClinSigAllele, CustomSourceInfo, ExtraFieldsPlan, FieldOptions, PluginHeader,
+    record_rows, ClinSigAllele, CustomSourceInfo, ExtraFieldsPlan, FieldOptions, PluginHeader,
 };
 use vep_io::output::json::JsonOutputFormatter;
 #[cfg(feature = "parquet")]
 use vep_io::output::parquet::{
-    InputOrder, ParquetDirectoryWriter, ParquetOutputFormatter, Partition, PublishError,
-    UnpublishedOutput, UNCHECKED_ORDER_WARNING,
+    unchecked_order_warning, InputOrder, ParquetDirectoryWriter, ParquetOutputFormatter, Partition,
+    PublishError, UnpublishedOutput,
 };
 use vep_io::output::tab::TabOutputFormatter;
 use vep_io::output::vcf_output::VcfOutputFormatter;
@@ -220,6 +230,12 @@ fn check_input_file_exists(config: &Config) -> Result<(), CliError> {
         "input",
         format!("File \"{}\" does not exist", config.input_file),
     ))
+}
+
+/// Ensembl VEP's text for an input format its `%FORMAT_MAP` lacks
+/// (Parser.pm:154), the refusal of a format the run opens no reader for.
+fn unread_format_refusal(format: InputFormat) -> String {
+    format!("Unknown or unsupported input format '{format}'")
 }
 
 /// Ends the run on the warnings sink's failure, if a warning so far could not
@@ -550,6 +566,71 @@ fn unwritable_output(path: &str) -> CliError {
     CliError::new("output", format!("Could not write to output file {path}"))
 }
 
+/// The refusal of the Parquet format in a build with no Parquet writer.
+#[cfg(not(feature = "parquet"))]
+fn no_parquet_writer() -> CliError {
+    CliError::new(
+        "output",
+        "this build has no Parquet writer: --output_format parquet is not available",
+    )
+}
+
+/// Whether a file can be created or written at `path`, tested without
+/// changing what stands there: a file is opened for writing and not emptied,
+/// a name nothing stands at is created and removed again, and a symbolic
+/// link that leads nowhere is followed to the name it gives. A pipe or a
+/// device is taken as writable, since opening one can block or consume it,
+/// so it is first met by the write itself.
+pub(crate) fn can_be_written(path: &Path) -> bool {
+    /// A chain of symbolic links longer than this is refused as a loop.
+    const LINKS_FOLLOWED: usize = 40;
+    let mut path = path.to_path_buf();
+    for _ in 0..=LINKS_FOLLOWED {
+        if let Ok(found) = std::fs::metadata(&path) {
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::FileTypeExt;
+                let kind = found.file_type();
+                if kind.is_fifo() || kind.is_char_device() || kind.is_block_device() {
+                    return true;
+                }
+            }
+            #[cfg(not(unix))]
+            if !found.is_file() && !found.is_dir() {
+                return true;
+            }
+            match std::fs::OpenOptions::new().write(true).open(&path) {
+                Ok(_) => return true,
+                // A file that the test of another run removes between the
+                // two calls leaves a name that is tested again.
+                Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+                Err(_) => return false,
+            }
+        }
+        let Ok(target) = std::fs::read_link(&path) else {
+            match std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&path)
+            {
+                Ok(_) => {
+                    let _ = std::fs::remove_file(&path);
+                    return true;
+                }
+                // A name that another run creates between the two calls is
+                // tested again.
+                Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+                Err(_) => return false,
+            }
+        };
+        path = match path.parent() {
+            Some(parent) => parent.join(target),
+            None => target,
+        };
+    }
+    false
+}
+
 /// `error` with the temporary directory a failed Parquet run could not remove
 /// named after it, on the run's one error line.
 #[cfg(feature = "parquet")]
@@ -846,6 +927,7 @@ fn inflaters_for(bgzf: bool, workers: usize) -> usize {
 /// `pipeline_mode` prints as asked: a run with plugins, `--custom` sources, a
 /// known-variant source open or the `--check_frequency` filter is batched
 /// whatever it says (`pipeline::Coordinator::streaming`).
+#[doc(hidden)]
 pub fn write_resolved_config(config: &Config, out: &mut dyn Write) -> anyhow::Result<()> {
     check_input_file_exists(config)?;
     let shape = input_shape(config);
@@ -920,7 +1002,7 @@ pub(crate) struct PipelineStats {
     consequences_calculated: AtomicU64,
     /// The features `--check_frequency` dropped whole, input records and
     /// `--minimal` split features alike, Ensembl VEP's `filtered_variants`
-    /// counter (`BaseCacheVariation.pm:362-373`).
+    /// counter (`BaseCacheVariation.pm:363-374`).
     records_filtered: AtomicU64,
 }
 
@@ -945,6 +1027,56 @@ impl PipelineStats {
     pub(crate) fn record_filtered(&self, records: u64) {
         self.records_filtered.fetch_add(records, Ordering::Relaxed);
     }
+}
+
+/// The `INFO:` lines a run owes for the `.fa` and `.fa.gz` files its FASTA
+/// detection passed over for want of their indexes, one a file by name: those
+/// of a `--fasta` directory, whose indexed files alone are read, and those of
+/// the cache directory when the run looks there (no `--fasta`, no `--no_fasta`
+/// and no file chosen by `--fasta_dir`), where the first indexed file is
+/// taken or none. Each names the file, the reader's refusal of it, which says what
+/// it lacks and what writes that, and what stands in its place: for the cache
+/// directory the run's reference FASTA, or none. The line is printed before
+/// `open_fasta` checks that file against the cache's checksum manifest, which
+/// can still refuse it, and a FASTA a plugin reads for itself is no reference
+/// FASTA, so the line says neither that the run reads the file nor that it
+/// reads no FASTA. Ensembl
+/// VEP indexes such a file and reads it (`Utils/FastaSequence.pm:308-358`).
+pub(crate) fn fasta_passed_over_notices(config: &Config, cache: &ResolvedCache) -> Vec<String> {
+    let chosen_by_fasta_dir = config.fasta_dir.as_ref().is_some_and(|dir| {
+        matches!(
+            vep_fasta::fasta_dir_match(Path::new(dir), &config.species, cache.assembly.as_deref()),
+            Ok(Some(_))
+        )
+    });
+    if chosen_by_fasta_dir {
+        return Vec::new();
+    }
+    let (dir, place, reads) = match &config.fasta {
+        Some(given) => (
+            given.as_str(),
+            "--fasta",
+            "its sequences are not read".to_string(),
+        ),
+        None if config.no_fasta => return Vec::new(),
+        None => (
+            cache.dir.as_str(),
+            "cache",
+            match &cache.fasta {
+                Some(found) => format!("the run's reference FASTA is {found}"),
+                None => "the run has no reference FASTA".to_string(),
+            },
+        ),
+    };
+    vep_fasta::unindexed_fasta_files(Path::new(dir))
+        .into_iter()
+        .map(|(passed_over, refusal)| {
+            format!(
+                "INFO: FASTA file {} in the {place} directory was passed over ({refusal}); {reads}",
+                passed_over.display()
+            )
+        })
+        .collect()
 }
 
 /// The reference FASTA of a run, as `BaseVEP.pm:488-529` settles it: the file
@@ -1071,6 +1203,33 @@ fn fai_end(fai: &[u8]) -> Option<u64> {
     Some(end)
 }
 
+/// The rows whose HGVSc, or whose HGVSg, an output writes: the rows
+/// [`count_indels_on_edited_models`] counts the HGVSc of, and the rows
+/// [`note_notations_the_reference_lacks`] reads either notation of.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum NotationRows {
+    /// Every row the record step leaves.
+    Every,
+    /// The rows that carry `MANE_SELECT` alone: `vep recode --mane_select`
+    /// writes the notations of each such entry in its triple, and no other
+    /// where its fields leave the notation's key out.
+    ManeSelect,
+    /// No row.
+    None,
+}
+
+impl NotationRows {
+    /// Whether the notation of the row of `tc` is written; `tc` is `None` for
+    /// a row against no feature, which carries no `MANE_SELECT`.
+    fn hold(self, tc: Option<&TranscriptConsequence>) -> bool {
+        match self {
+            Self::Every => true,
+            Self::ManeSelect => tc.is_some_and(|tc| tc.mane_select().is_some_and(perl_true)),
+            Self::None => false,
+        }
+    }
+}
+
 /// Pipeline runner for VEP.
 pub struct Runner {
     config: Config,
@@ -1080,11 +1239,28 @@ pub struct Runner {
     cache: ResolvedCache,
     /// The invocation as VEP prints it in `## VEP command-line:`.
     command_line: String,
+    /// The lines this run builds for what it gives less of
+    /// (`print_own_notices`), kept here in place of standard error for a
+    /// caller that asked for them ([`Self::holding_own_notices`]).
+    held_own_notices: Option<Mutex<Vec<String>>>,
+    /// The transcript rows whose HGVSc the run's caller writes
+    /// ([`Self::writing_hgvsc_of`]): every row, for a run whose output is the
+    /// one it writes itself.
+    caller_hgvsc_rows: NotationRows,
+    /// The rows whose HGVSg the run's caller writes
+    /// ([`Self::writing_hgvsg_of`]): every row, for a run whose output is the
+    /// one it writes itself.
+    caller_hgvsg_rows: NotationRows,
+    /// A file the caller writes once the run has ended, with the refusal of
+    /// a run that cannot write it ([`Self::testing_a_file_of_the_caller`]).
+    file_of_the_caller: Option<(PathBuf, CliError)>,
 }
 
 /// What a finished run does with what it loaded: the transcript indexes, the
 /// open sources, the reference and the worker pool.
+#[doc(hidden)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Teardown {
     /// Frees them before the run returns, as a caller that keeps running expects.
     Release,
@@ -1144,7 +1320,7 @@ impl FastaChecks {
 /// A refusal of the FASTA checks with the `INFO:` lines settled before it,
 /// which the caller prints before the error: Ensembl VEP prints the
 /// `--everything` notice as it reaches it (Runner.pm:752, BaseVEP.pm:785) and
-/// throws after (:759-762).
+/// throws after (Runner.pm:759-762).
 #[derive(Debug)]
 pub(crate) struct FastaRefusal {
     pub(crate) notices: Vec<&'static str>,
@@ -1225,7 +1401,7 @@ pub(crate) struct PredictionChecks {
 }
 
 /// Ensembl VEP's `check_sift_polyphen` (`AnnotationSource/Cache/Transcript.pm:148-176`
-/// at release/116.2), run as the cache is opened: a tool asked for on a cache whose
+/// at release/116.3), run as the cache is opened: a tool asked for on a cache whose
 /// metadata names no version of it (the `source_sift` and `source_polyphen` lines
 /// of `info.txt`, `CacheDir.pm:468-470`) stops the run with
 /// `ERROR: <tool> not available`, or, under `--everything` or `--safe`, is
@@ -1292,7 +1468,7 @@ const HEADER_SKIPPED_OPTIONS: [&str; 7] = [
 /// stringifies it (`distance` is `UPSTREAM_DISTANCE . ',' . DOWNSTREAM_DISTANCE`,
 /// both 5000, `VariationEffect.pm:60-63`). `pick_order`, an array reference
 /// there, is left out, as `eq` against one never holds; `dir`,
-/// `$ENV{HOME}.'/.vep'` (`:294`), is read by [`perl_default`].
+/// `$ENV{HOME}.'/.vep'` (`Config.pm:294`), is read by [`perl_default`].
 const PERL_DEFAULTS: &[(&str, &str)] = &[
     ("database", "1"),
     ("host", "ensembldb.ensembl.org"),
@@ -1354,7 +1530,7 @@ fn perl_stored_value(option: &str, value: &str) -> String {
     }
 }
 
-/// The `%DEFAULTS` value of an option ([`PERL_DEFAULTS`]); `dir` is
+/// Ensembl VEP's `%DEFAULTS` value of an option ([`PERL_DEFAULTS`]); `dir` is
 /// `$ENV{HOME}.'/.vep'` with `HOME` read here, `/.vep` without one, as Perl's
 /// undefined `$ENV{HOME}` concatenates; `None` for an option the table lacks.
 fn perl_default(flag: &str) -> Option<String> {
@@ -1381,8 +1557,8 @@ fn perl_default(flag: &str) -> Option<String> {
 /// the parser's names for a flag only vep-rs has. A flag outside
 /// `@ALLOW_MULTIPLE` given more than once prints its last value, the one
 /// Getopt::Long keeps (vep:33 for `--output_file`); a repeatable flag prints
-/// once per value, in order (`:740`). A value of exactly `1` prints as the flag
-/// alone (`:745`, `$value eq 1`), so `--fork 1` prints `--fork`; the value is
+/// once per value, in order (`Config.pm:740`). A value of exactly `1` prints as the
+/// flag alone (`:745`, `$value eq 1`), so `--fork 1` prints `--fork`; the value is
 /// the one Getopt::Long stores ([`perl_stored_value`]), the integer an `=i`
 /// option's text reads as, so `--buffer_size 01` prints `--buffer_size`. The
 /// [`HEADER_SKIPPED_OPTIONS`] are left out under every spelling, as is an
@@ -1392,7 +1568,7 @@ fn perl_default(flag: &str) -> Option<String> {
 /// value prints (`--distance 5000` against `5000,5000`). `--database 0`, which
 /// the `vep` script's own default puts in Ensembl VEP's line (vep:35), is
 /// absent, `--database` being refused here. Trailing blanks are trimmed
-/// (`:749`), so an empty value at the end of the line leaves none.
+/// (`Config.pm:749`), so an empty value at the end of the line leaves none.
 fn vep_command_line(args: impl Iterator<Item = String>) -> String {
     let mut command = crate::args::Args::command_with_error_table();
     command.build();
@@ -1542,7 +1718,7 @@ pub(crate) fn mark_oversize_sv(variant: &mut InputVariant, max_sv_size: Option<u
 /// A `--minimal` split record's rows print the co-located variants, the
 /// known structural variants and the `NEAREST` list of its first feature, the
 /// first alternate allele trimmed on its own span: the rejoin
-/// (OutputFactory.pm:2272-2353) moves the later features' consequences into
+/// (OutputFactory.pm:2281-2362) moves the later features' consequences into
 /// the first and leaves `existing`, `overlapping_svs` and `nearest` where they
 /// are, and every row is built from the first feature (:342-349, :1046, :962,
 /// :1017). Each row keeps the names that apply to its own allele (:1081-1083).
@@ -1612,13 +1788,13 @@ pub(crate) fn apply_record_rules(
         // A `--minimal` split record has one intergenic variation: the rejoin
         // moves a later feature's intergenic alleles into the first intergenic
         // feature's and leaves that feature's reference allele behind
-        // (OutputFactory.pm:2323-2338), so of the reference rows
+        // (OutputFactory.pm:2332-2347), so of the reference rows
         // (`--process_ref_homs`) the split features carry, the first that overlaps
         // no transcript writes the record's intergenic row and the others none.
         // A feature with regulatory or motif rows alone is intergenic too
         // (VariationFeature.pm:826-839), and the rejoin moves its regulatory
-        // variations whole, reference allele included (:2311-2318), so a later
-        // such row loses its intergenic row and keeps the rest.
+        // variations whole, reference allele included (OutputFactory.pm:2320-2327),
+        // so a later such row loses its intergenic row and keeps the rest.
         let intergenic_reference_rows = alleles.iter_mut().filter(|v| {
             v.reference_allele_row
                 && v.original_start.is_some()
@@ -1667,6 +1843,93 @@ fn settle_breakend_record(alleles: &mut [InputVariant], loaded: Option<&LazyTran
     }
 }
 
+/// The most chromosome names `hgvs_left_out_notices` lists in its line.
+const NAMED_CHROMOSOMES: usize = 10;
+
+/// The `INFO:` lines a run that wrote HGVS notations owes at its end for what
+/// the notations left out: the chromosomes on which a row the output keeps is
+/// without a notation because the FASTA holds no sequence for them
+/// ([`note_notations_the_reference_lacks`]); and the count of insertion and
+/// deletion alleles with a notation on a model edited away from the genome,
+/// which is shifted 3' along the genome, and along the model's own sequence
+/// only on bases the genome lacks. On a chromosome without sequence no record
+/// has an HGVSg, and a substitution or a deletion has no HGVSc
+/// (`vep_effects::hgvsg` and `vep_effects::hgvs` read no reference base
+/// there; Ensembl VEP reads `N` per base, `Utils/FastaSequence.pm:597-601`);
+/// nor has an insertion written outside a transcript, whose bases the 3'
+/// rule places on the transcript only along bases it reads.
+/// A line names the notations its chromosomes' kept rows are without, the
+/// first `NAMED_CHROMOSOMES` chromosomes by name and the count of the rest:
+/// one line for the chromosomes without both notations, one for those
+/// without an HGVSg alone and one for those without an HGVSc alone. A run
+/// none of whose kept rows is without a notation for want of the sequence
+/// draws no such line.
+fn hgvs_left_out_notices(transcripts: &LazyTranscriptIndexes) -> Vec<String> {
+    const BOTH: UnreadNotations = UnreadNotations {
+        hgvsg: true,
+        hgvsc: true,
+    };
+    const GENOMIC: UnreadNotations = UnreadNotations {
+        hgvsg: true,
+        hgvsc: false,
+    };
+    const CODING: UnreadNotations = UnreadNotations {
+        hgvsg: false,
+        hgvsc: true,
+    };
+    let mut notices = Vec::new();
+    let unread = transcripts.unread_notations();
+    for (notations, left_out) in [
+        (
+            BOTH,
+            "a record there gets no HGVSg, and a substitution or a deletion no HGVSc, nor does an insertion written outside a transcript",
+        ),
+        (GENOMIC, "a record there gets no HGVSg"),
+        (
+            CODING,
+            "a substitution or a deletion there gets no HGVSc, nor does an insertion written outside a transcript",
+        ),
+    ] {
+        let lacking: Vec<&str> = unread
+            .iter()
+            .filter(|(_, without)| *without == notations)
+            .map(|(chr, _)| chr.as_str())
+            .collect();
+        let named = lacking
+            .iter()
+            .take(NAMED_CHROMOSOMES)
+            .copied()
+            .collect::<Vec<_>>()
+            .join(", ");
+        let lacks = match lacking.len() {
+            0 => continue,
+            1 => format!("chromosome {named}, which the input has records on"),
+            n if n <= NAMED_CHROMOSOMES => {
+                format!("{n} chromosomes the input has records on ({named})")
+            }
+            n => format!(
+                "{n} chromosomes the input has records on ({named} and {} more)",
+                n - NAMED_CHROMOSOMES
+            ),
+        };
+        notices.push(format!(
+            "INFO: The FASTA holds no sequence for {lacks}: {left_out}"
+        ));
+    }
+    let edited = transcripts.indels_on_edited_models();
+    if edited > 0 {
+        let alleles = if edited == 1 {
+            "1 insertion or deletion allele has".to_string()
+        } else {
+            format!("{edited} insertion or deletion alleles have")
+        };
+        notices.push(format!(
+            "INFO: {alleles} an HGVS notation on a transcript whose sequence is edited away from the genome: the notation is shifted 3' along the genome, and along the transcript's own sequence only on bases the genome lacks"
+        ));
+    }
+    notices
+}
+
 /// Prints each notice to stderr unless `--quiet`, as `status_msg` does
 /// (BaseVEP.pm:782).
 fn print_notices(quiet: bool, notices: &[&str]) {
@@ -1690,13 +1953,72 @@ impl Runner {
         if !config.show_cache_info {
             print_notices(config.quiet, &config.notices);
         }
-        let cache = crate::cache_resolve::resolve(&mut config)?;
+        let cache = resolve_cache(&mut config)?;
         let command_line = vep_command_line(config.command_line.iter().cloned());
         Ok(Self {
             config,
             cache,
             command_line,
+            held_own_notices: None,
+            caller_hgvsc_rows: NotationRows::Every,
+            caller_hgvsg_rows: NotationRows::Every,
+            file_of_the_caller: None,
         })
+    }
+
+    /// Has the run keep the lines it builds for what it gives less of and
+    /// print none of them, under `--quiet` as well, in the order a run prints
+    /// them: what the cache's record says it leaves out
+    /// (`cache_left_out::notices`), the FASTA files passed over
+    /// ([`fasta_passed_over_notices`]), the
+    /// lines a `--transcript_filter` owes for a key its transcripts lack
+    /// ([`unset_filter_key_notices`]) and what the HGVS notations left out
+    /// (`hgvs_left_out_notices`). `vep recode` runs its annotation quiet and
+    /// writes them itself once its run completes.
+    pub(crate) fn holding_own_notices(mut self) -> Self {
+        self.held_own_notices = Some(Mutex::default());
+        self
+    }
+
+    /// Has the run count, for its line on edited models
+    /// ([`count_indels_on_edited_models`]), the notations of `rows` alone, and
+    /// name HGVSc in its line for a chromosome the FASTA lacks
+    /// (`hgvs_left_out_notices`) only where a row of `rows` is without one
+    /// ([`note_notations_the_reference_lacks`]).
+    /// `vep recode` reads the run's JSON output and writes the `hgvsc` of the
+    /// entries its fields settle, which can be fewer than the output holds.
+    pub(crate) fn writing_hgvsc_of(mut self, rows: NotationRows) -> Self {
+        self.caller_hgvsc_rows = rows;
+        self
+    }
+
+    /// Has the run name HGVSg in its line for a chromosome the FASTA lacks
+    /// (`hgvs_left_out_notices`) only where a row of `rows` is without one
+    /// ([`note_notations_the_reference_lacks`]). `vep recode` writes the
+    /// `hgvsg` of the entries its fields settle, as it writes their `hgvsc`.
+    pub(crate) fn writing_hgvsg_of(mut self, rows: NotationRows) -> Self {
+        self.caller_hgvsg_rows = rows;
+        self
+    }
+
+    /// Has the run test `file`, which the caller writes once the run has
+    /// ended, where it tests the files it names itself, after them: a run
+    /// that cannot write it ends with `refusal` before its first record is
+    /// read. `vep recode` names its `--warning_file` so.
+    pub(crate) fn testing_a_file_of_the_caller(mut self, file: PathBuf, refusal: CliError) -> Self {
+        self.file_of_the_caller = Some((file, refusal));
+        self
+    }
+
+    /// The lines the run kept, which leaves none behind; a runner that was not
+    /// asked to keep them has none.
+    pub(crate) fn take_own_notices(&self) -> Vec<String> {
+        self.held_own_notices
+            .as_ref()
+            .map(|held| {
+                std::mem::take(&mut *held.lock().unwrap_or_else(|poisoned| poisoned.into_inner()))
+            })
+            .unwrap_or_default()
     }
 
     /// Writes the version data as `<key>\t<value>` lines, sorted by key: the
@@ -1717,6 +2039,50 @@ impl Runner {
         print_notices(self.config.quiet, notices);
     }
 
+    /// `print_notices` for lines built for this run, which name what
+    /// it left out of what it was given to read or what a filter's key
+    /// lacks. A runner asked to keep them ([`Self::holding_own_notices`])
+    /// prints none and keeps each, under `--quiet` as well.
+    fn print_own_notices(&self, notices: &[String]) {
+        if let Some(held) = &self.held_own_notices {
+            held.lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .extend_from_slice(notices);
+            return;
+        }
+        let notices: Vec<&str> = notices.iter().map(String::as_str).collect();
+        self.print_notices(&notices);
+    }
+
+    /// The consequence settings of the run: `reference_fasta` is the FASTA it
+    /// opened, `compute_hgvs` the value `fasta_setup_checks` settled once the
+    /// FASTA is known, and `builtin` the loaded built-in plugins, which name
+    /// the rows that carry the transcript model and its sequences.
+    fn effects_config(
+        &self,
+        reference_fasta: Option<Arc<vep_fasta::IndexedFasta>>,
+        compute_hgvs: bool,
+        builtin: &BuiltinRegistry,
+    ) -> vep_effects::EffectsConfig {
+        let mut effects = vep_effects::EffectsConfig::default();
+        effects.upstream_distance = self.config.distance.0;
+        effects.downstream_distance = self.config.distance.1;
+        effects.reference_fasta = reference_fasta;
+        effects.enable_indel_3prime_shift = self.config.shift_3prime;
+        effects.hgvs = hgvs_options(&self.config);
+        effects.loftee_context = loftee_context_rows(builtin);
+        effects.context_sequences = context_sequence_rows(builtin);
+        effects.compute_hgvs = compute_hgvs;
+        effects.compute_exon_intron_numbers = needs_exon_intron_numbers(&self.config);
+        effects.protein_version = self.config.protein_version;
+        effects.hgvsg = hgvsg_options(&self.config, &self.cache.synonyms);
+        effects.spdi = spdi_options(&self.config, &self.cache.synonyms);
+        effects.domains = self.config.domains;
+        effects.use_transcript_ref = self.config.use_transcript_ref;
+        effects.process_ref_homs = self.config.process_ref_homs;
+        effects
+    }
+
     /// Which optional output fields the configuration switches on, shared by
     /// every output format; `run` replaces `hgvs` with the value
     /// [`fasta_setup_checks`] settled once the FASTA is known, `sift` and
@@ -1727,87 +2093,88 @@ impl Runner {
     /// ([`custom_source_infos`]).
     fn field_options(&self) -> FieldOptions {
         let c = &self.config;
-        FieldOptions {
-            allele_number: c.allele_number,
-            show_ref_allele: c.show_ref_allele,
-            uploaded_allele: c.uploaded_allele,
-            // `@FLAG_FIELDS` lists PICK under the three flagging variants alone
-            // (Constants.pm:75-77); the removing variants add no column.
-            include_pick: c.flag_pick || c.flag_pick_allele || c.flag_pick_allele_gene,
-            // `flag_fields` keeps a list flag's group only when the list holds a
-            // name (OutputFactory.pm:2523-2525), and `,` or `""` splits to none.
-            individual: c.individual.as_ref().is_some_and(|names| !names.is_empty()),
-            individual_zyg: c
-                .individual_zyg
-                .as_ref()
-                .is_some_and(|names| !names.is_empty()),
-            process_ref_homs: c.process_ref_homs,
-            refseq: c.refseq,
-            merged: c.merged,
-            use_transcript_ref: c.use_transcript_ref,
-            bam_edited: c.bam_edited,
-            custom_sources: Vec::new(),
-            variant_class: c.variant_class,
-            minimal: c.minimal,
-            clinvar_somatic_classification: c.clinvar_somatic_classification,
-            symbol: c.symbol,
-            biotype: c.biotype,
-            canonical: c.canonical,
-            mane_select: c.mane_select,
-            mane: c.mane,
-            mane_plus_clinical: c.mane_plus_clinical,
-            tsl: c.tsl,
-            gencode_primary: c.flag_gencode_primary,
-            appris: c.appris,
-            ccds: c.ccds,
-            protein: c.protein,
-            uniprot: c.uniprot,
-            xref_refseq: c.xref_refseq,
-            gene_phenotype: c.gene_phenotype,
-            sift: c.sift.is_some(),
-            polyphen: c.polyphen.is_some(),
-            numbers: c.numbers,
-            domains: c.domains,
-            mirna: c.mirna,
-            hgvs: c.hgvs,
-            hgvsg: c.hgvsg,
-            spdi: c.spdi,
-            ga4gh_vrs: c.ga4gh_vrs,
-            af: c.af,
-            af_1kg: c.af_1kg,
-            af_gnomad: c.af_gnomad,
-            af_gnomade: c.af_gnomade,
-            af_gnomadg: c.af_gnomadg,
-            max_af: c.max_af,
-            check_frequency: c.check_frequency,
-            check_existing: c.check_existing,
-            pubmed: c.pubmed,
-            check_svs: c.check_svs.is_some(),
-            dont_skip: c.dont_skip,
-            overlaps: c.overlaps,
-            nearest: c.nearest.is_some(),
-            shift_length: c.shift_length,
-            shift_3prime: c.shift_3prime,
-            shift_genomic: c.shift_genomic,
-            var_synonyms: c.var_synonyms,
-            regulatory: c.regulatory,
-            cell_type: c.cell_type.is_some(),
-            transcript_version: c.transcript_version,
-            gene_version: c.gene_version,
-            ambiguity: c.ambiguity,
-            no_escape: c.no_escape,
-            terms: c.terms,
-            total_length: c.total_length,
-            positions_of_own_span: rejoins_on_own_span(c),
-            clin_sig_allele: if c.clin_sig_allele {
-                ClinSigAllele::PerAllele
-            } else {
-                ClinSigAllele::WholeVariant
-            },
-            plugin_row_kinds: Arc::default(),
-            plugin_fields: Arc::default(),
-            unflagged_plugin_fields: Arc::default(),
-        }
+        let mut options = FieldOptions::default();
+        options.allele_number = c.allele_number;
+        options.show_ref_allele = c.show_ref_allele;
+        options.uploaded_allele = c.uploaded_allele;
+        // `@FLAG_FIELDS` lists PICK under the three flagging variants alone
+        // (Constants.pm:75-77); the removing variants add no column.
+        options.include_pick = c.flag_pick || c.flag_pick_allele || c.flag_pick_allele_gene;
+        // `flag_fields` keeps a list flag's group only when the list holds a
+        // name (OutputFactory.pm:2532-2534), and `,` or `""` splits to none.
+        options.individual = c.individual.as_ref().is_some_and(|names| !names.is_empty());
+        options.individual_zyg = c
+            .individual_zyg
+            .as_ref()
+            .is_some_and(|names| !names.is_empty());
+        options.process_ref_homs = c.process_ref_homs;
+        options.refseq = c.refseq;
+        options.merged = c.merged;
+        options.use_transcript_ref = c.use_transcript_ref;
+        options.bam_edited = c.bam_edited;
+        options.custom_sources = Vec::new();
+        options.variant_class = c.variant_class;
+        options.minimal = c.minimal;
+        options.clinvar_somatic_classification = c.clinvar_somatic_classification;
+        options.symbol = c.symbol;
+        options.biotype = c.biotype;
+        options.canonical = c.canonical;
+        options.mane_select = c.mane_select;
+        options.mane = c.mane;
+        options.mane_plus_clinical = c.mane_plus_clinical;
+        options.tsl = c.tsl;
+        options.gencode_primary = c.flag_gencode_primary;
+        options.appris = c.appris;
+        options.ccds = c.ccds;
+        options.protein = c.protein;
+        options.uniprot = c.uniprot;
+        options.xref_refseq = c.xref_refseq;
+        options.gene_phenotype = c.gene_phenotype;
+        options.sift = c.sift.is_some();
+        options.polyphen = c.polyphen.is_some();
+        options.numbers = c.numbers;
+        options.domains = c.domains;
+        options.mirna = c.mirna;
+        options.hgvs = c.hgvs;
+        options.hgvsg = c.hgvsg;
+        options.spdi = c.spdi;
+        options.ga4gh_vrs = c.ga4gh_vrs;
+        options.af = c.af;
+        options.af_1kg = c.af_1kg;
+        options.af_gnomad = c.af_gnomad;
+        options.af_gnomade = c.af_gnomade;
+        options.af_gnomadg = c.af_gnomadg;
+        options.max_af = c.max_af;
+        options.check_frequency = c.check_frequency;
+        options.check_existing = c.check_existing;
+        options.pubmed = c.pubmed;
+        options.check_svs = c.check_svs.is_some();
+        options.dont_skip = c.dont_skip;
+        options.overlaps = c.overlaps;
+        options.nearest = c.nearest.is_some();
+        options.shift_length = c.shift_length;
+        options.shift_3prime = c.shift_3prime;
+        options.shift_genomic = c.shift_genomic;
+        options.var_synonyms = c.var_synonyms;
+        options.regulatory = c.regulatory;
+        options.cell_type = c.cell_type.is_some();
+        options.transcript_version = c.transcript_version;
+        options.gene_version = c.gene_version;
+        options.ambiguity = c.ambiguity;
+        options.no_escape = c.no_escape;
+        options.terms = c.terms;
+        options.total_length = c.total_length;
+        options.summary_rows = c.summary || c.most_severe;
+        options.positions_of_own_span = rejoins_on_own_span(c);
+        options.clin_sig_allele = if c.clin_sig_allele {
+            ClinSigAllele::PerAllele
+        } else {
+            ClinSigAllele::WholeVariant
+        };
+        options.plugin_row_kinds = Arc::default();
+        options.plugin_fields = Arc::default();
+        options.unflagged_plugin_fields = Arc::default();
+        options
     }
 
     /// The run's identity for the Parquet footer: version, assembly, cache and
@@ -1850,7 +2217,10 @@ impl Runner {
     /// a cache whose metadata lacks the key ranks as one that carries it, then
     /// the reference FASTA's other sequences in its index's order, so a
     /// record `--dont_skip` keeps on a contig the cache lacks has a rank of its
-    /// own when the reference names the contig.
+    /// own when the reference names the contig. A reference sequence is listed
+    /// under the name a record written with its name ranks by
+    /// (`reference_contig_entry`), so one the cache holds under another name
+    /// adds no entry.
     #[cfg(feature = "parquet")]
     fn parquet_contig_order(
         &self,
@@ -1860,17 +2230,21 @@ impl Runner {
         use std::collections::HashSet;
         let mut cache_chromosomes: Vec<&str> = transcripts.chromosomes().collect();
         cache_chromosomes.sort_by_key(|&chr| crate::variation_source::karyotype_rank(chr));
-        let fasta_names = fasta.into_iter().flat_map(|fasta| fasta.record_names());
-        let mut listed: HashSet<&str> = HashSet::new();
+        let holds = |name: &str| transcripts.contains_key(name);
+        let fasta_names = fasta
+            .into_iter()
+            .flat_map(|fasta| fasta.record_names())
+            .map(|name| reference_contig_entry(name, &self.cache.synonyms, holds));
+        let mut listed: HashSet<String> = HashSet::new();
         self.cache
             .info
             .contig_order
             .iter()
             .map(String::as_str)
             .chain(cache_chromosomes)
-            .chain(fasta_names)
-            .filter(|chr| listed.insert(chr))
             .map(str::to_string)
+            .chain(fasta_names)
+            .filter(|chr| listed.insert(chr.clone()))
             .collect()
     }
 
@@ -1919,6 +2293,8 @@ impl Runner {
         &self,
         upstream_distance: u64,
         downstream_distance: u64,
+        gene_models: &[GeneModelFile],
+        fasta: Option<&vep_fasta::IndexedFasta>,
     ) -> anyhow::Result<LazyTranscriptIndexes> {
         let indexes = LazyTranscriptIndexes::new_with_manifest(
             &self.cache.dir,
@@ -1926,19 +2302,38 @@ impl Runner {
             downstream_distance,
             Arc::clone(&self.cache.manifest),
         )?;
-        Ok(indexes
-            .with_transcript_set(TranscriptSet::from_config(&self.config))
-            .with_exon_ids(crate::annotator::exon_ids_wanted(&self.config.plugin)))
+        let keep_exon_ids = crate::annotator::exon_ids_wanted(&self.config.plugin);
+        let transcript_set = TranscriptSet::from_config(&self.config);
+        let indexes = indexes
+            .with_transcript_set(transcript_set)
+            .with_exon_ids(keep_exon_ids);
+        if gene_models.is_empty() {
+            return Ok(indexes);
+        }
+        let from_files = crate::gene_model::load(
+            gene_models,
+            crate::gene_model::Reference {
+                fasta,
+                assembly: self.cache.assembly.as_deref(),
+            },
+            &self.cache.synonyms,
+            |name| indexes.contains_key(name),
+            &transcript_set,
+            keep_exon_ids,
+            self.config.nearest.is_some(),
+        )?;
+        Ok(indexes.with_file_transcripts(from_files))
     }
 
     /// Execute the full VEP pipeline, releasing everything the run loaded
-    /// before returning ([`Teardown::Release`]).
+    /// before returning (`Teardown::Release`).
     pub fn run(&self) -> anyhow::Result<()> {
         self.run_with(Teardown::Release)
     }
 
     /// Execute the full VEP pipeline, then end as `teardown` says. Every output
     /// of the run is written and closed before this returns, whichever way.
+    #[doc(hidden)]
     pub fn run_with(&self, teardown: Teardown) -> anyhow::Result<()> {
         let loaded = self.run_to_completion().inspect_err(|_| {
             crate::warnings::global().write_plugin_failures();
@@ -1977,6 +2372,115 @@ impl Runner {
         }
         #[cfg(not(feature = "parquet"))]
         self.run_stages()
+    }
+
+    /// Refuses the first file the run would write at its Parquet output path
+    /// or inside its output directory, tested in this order: the warnings
+    /// file, the statistics reports, the skipped-variants file. The binary
+    /// tests the warnings file before it resolves the command line
+    /// (`config::warnings_file_in_the_parquet_output`), since a warning
+    /// creates it.
+    #[cfg(feature = "parquet")]
+    fn refuse_files_in_the_output(&self, output: &UnpublishedOutput) -> Result<(), CliError> {
+        let config = &self.config;
+        let warnings = crate::warnings::global()
+            .file()
+            .map(|path| ("warnings file", path, "--warning_file"));
+        let reports = stats::report_files(config)
+            .into_iter()
+            .map(|(_, path)| ("statistics report", PathBuf::from(path), "--stats_file"));
+        let skipped = config.skipped_variants_file.as_ref().map(|path| {
+            (
+                "skipped-variants file",
+                PathBuf::from(path),
+                "--skipped_variants_file",
+            )
+        });
+        let refusal =
+            warnings
+                .into_iter()
+                .chain(reports)
+                .chain(skipped)
+                .find_map(|(what, path, flag)| {
+                    crate::config::file_in_the_parquet_output(
+                        output,
+                        &config.output_file,
+                        what,
+                        &path,
+                        flag,
+                    )
+                });
+        match refusal {
+            Some(refusal) => Err(refusal),
+            None => Ok(()),
+        }
+    }
+
+    /// Whether the output goes to standard output. The plain output opens
+    /// through Perl's two-argument `open` (BaseRunner.pm:226), for which `>-`
+    /// is standard output; the compressed output's shell redirection (:217)
+    /// writes a file named `-`, the Parquet writer a directory.
+    fn writes_to_standard_output(&self) -> bool {
+        let config = &self.config;
+        let dash_is_stdout = config.output_file == "-"
+            && config.compress_output.is_none()
+            && config.output_format != "parquet";
+        config.output_file == "STDOUT" || dash_is_stdout
+    }
+
+    /// Refuses the first file the run names that cannot be written, each
+    /// tested with `can_be_written` in the order the run meets them: the
+    /// statistics reports, the output, a warnings file that `--warning_file`
+    /// names, the skipped-variants file. The test of a Parquet output is the
+    /// creation of the temporary directory the run writes into (`parquet`),
+    /// which a refused run removes; a build with no Parquet writer refuses
+    /// the format in its place. The warnings file under its default name is
+    /// not tested: the first warning creates it, as Ensembl VEP's does
+    /// (BaseVEP.pm:817, 890-894), so a run that draws no warning never meets
+    /// it. A warnings file an earlier warning opened is not tested again,
+    /// and one it could not open is the refusal. A file the caller named
+    /// (`testing_a_file_of_the_caller`) is tested last.
+    fn refuse_files_that_cannot_be_written(
+        &self,
+        reports: &[(stats::StatsFormat, String)],
+        #[cfg(feature = "parquet")] parquet: Option<&mut UnpublishedOutput>,
+    ) -> Result<(), CliError> {
+        for (_, path) in reports {
+            if !can_be_written(Path::new(path)) {
+                return Err(stats::unwritable(path));
+            }
+        }
+        let output = &self.config.output_file;
+        if self.config.output_format == "parquet" {
+            // A path with no final name has no directory to write beside.
+            #[cfg(feature = "parquet")]
+            parquet
+                .ok_or_else(|| unwritable_output(output))?
+                .create()
+                .map_err(|_| unwritable_output(output))?;
+            #[cfg(not(feature = "parquet"))]
+            return Err(no_parquet_writer());
+        } else if !self.writes_to_standard_output() && !can_be_written(Path::new(output)) {
+            return Err(unwritable_output(output));
+        }
+        check_warnings_file_written()?;
+        let sink = crate::warnings::global();
+        if let Some(path) = sink.file_to_test() {
+            if !can_be_written(&path) {
+                return Err(crate::warnings::warnings_file_unwritable(&path));
+            }
+        }
+        if let Some(path) = sink.skipped_variants_file() {
+            if !can_be_written(&path) {
+                return Err(crate::warnings::skipped_file_unwritable(&path));
+            }
+        }
+        if let Some((path, refusal)) = &self.file_of_the_caller {
+            if !can_be_written(path) {
+                return Err(refusal.clone());
+            }
+        }
+        Ok(())
     }
 
     /// The stages of [`Self::run_to_completion`]. `unpublished` takes the
@@ -2038,16 +2542,44 @@ impl Runner {
             // warning so far before a custom file is opened, a source's own
             // once it is.
             check_warnings_file_written()?;
+            // A gene-model file among them is a transcript source, read with
+            // the run's transcripts and not here: it draws the refusals of a
+            // source being built, a run without a FASTA and a file that is
+            // not there, and the FASTA stays closed.
+            let (custom_specs, gene_models) =
+                split_custom_specs(custom_specs, reference_fasta.as_deref())?;
             open_custom_sources(
                 custom_specs,
                 reference_fasta.as_deref(),
                 &self.cache.synonyms,
                 custom_run_options(&self.config),
+                self.cache.assembly.as_deref(),
             )?;
+            if !gene_models.is_empty() {
+                crate::gene_model::check(
+                    &gene_models,
+                    fasta_source(&self.config, &self.cache).is_some(),
+                )?;
+            }
             check_warnings_file_written()?;
             check_input_file_exists(&self.config)?;
             self.write_cache_info(&mut io::stdout().lock())?;
             return Ok(None);
+        }
+
+        // The publication of a Parquet output takes only what the Parquet
+        // writer wrote, so a file of the run named at the output path or
+        // inside it is refused here, before the input is opened.
+        #[cfg(feature = "parquet")]
+        let parquet_run_id = run_id();
+        #[cfg(feature = "parquet")]
+        if self.config.output_format == "parquet" {
+            *unpublished =
+                UnpublishedOutput::beside(Path::new(&self.config.output_file), &parquet_run_id);
+        }
+        #[cfg(feature = "parquet")]
+        if let Some(output) = unpublished.as_ref() {
+            self.refuse_files_in_the_output(output)?;
         }
 
         // Runner.pm:128, :133-138 and :200-202: after the configuration's notice
@@ -2062,24 +2594,51 @@ impl Runner {
         check_gnomad_columns(&self.config, &self.cache.info)?;
         check_frequency_filter(&self.config, &self.cache.info)?;
         let custom_specs = parse_custom_specs(&self.config)?;
+        self.print_own_notices(&crate::cache_left_out::notices(
+            &self.config,
+            &self.cache.info,
+            !custom_specs.is_empty(),
+        ));
+        self.print_own_notices(&fasta_passed_over_notices(&self.config, &self.cache));
         let reference_fasta = open_fasta(&self.config, &self.cache)?;
         let fasta_found = reference_fasta.is_some();
+        let (custom_specs, gene_models) =
+            split_custom_specs(custom_specs, reference_fasta.as_deref())?;
         let custom_sources = open_custom_sources(
             custom_specs,
             reference_fasta.as_deref(),
             &self.cache.synonyms,
             custom_run_options(&self.config),
+            self.cache.assembly.as_deref(),
         )?;
         // Indexed lazily per chromosome: the key set comes from a `read_dir`
-        // walk, so the Perl-parity presence predicates are complete immediately.
+        // walk, so the Ensembl VEP-parity presence predicates are complete immediately.
         // A chromosome's JSON is parsed into its index by `prewarm` alone: as
         // the reader reaches the chromosome or `--prewarm_ahead` names it from
         // the input's index, as a batch naming it is warmed, or as an HGVS
         // transcript notation resolves to a transcript on it.
         let transcripts = Arc::new(
-            self.transcript_indexes(self.config.distance.0, self.config.distance.1)?
-                .with_reference(reference_fasta.clone()),
+            self.transcript_indexes(
+                self.config.distance.0,
+                self.config.distance.1,
+                &gene_models,
+                reference_fasta.as_deref(),
+            )?
+            .with_reference(reference_fasta.clone()),
         );
+        // Under --quiet the lines are withheld, so the cache is not read for
+        // them unless the caller keeps them.
+        let kept = self.held_own_notices.is_some();
+        if let Some(filter) = transcript_filter.as_deref().filter(|filter| {
+            (kept || !self.config.quiet)
+                && (filter.names_key("_source_cache") || filter.names_key("dbID"))
+        }) {
+            self.print_own_notices(&unset_filter_key_notices(
+                filter,
+                first_transcript_carries_db_id(&transcripts),
+                !gene_models.is_empty(),
+            ));
+        }
         let OpenedInput {
             source: pending,
             bgzf_file,
@@ -2125,13 +2684,6 @@ impl Runner {
         // --force_overwrite will replace is checked, and anything vep-rs did
         // not write refuses the run.
         #[cfg(feature = "parquet")]
-        let parquet_run_id = run_id();
-        #[cfg(feature = "parquet")]
-        if self.config.output_format == "parquet" {
-            *unpublished =
-                UnpublishedOutput::beside(Path::new(&self.config.output_file), &parquet_run_id);
-        }
-        #[cfg(feature = "parquet")]
         if let Some(output) = unpublished.as_ref() {
             output
                 .check_destination()
@@ -2169,23 +2721,8 @@ impl Runner {
         let LoadedPlugins { builtin, dylib } =
             self.load_plugins(reference_fasta.clone(), checks.hgvs)?;
 
-        let effects_config = Arc::new(vep_effects::EffectsConfig {
-            upstream_distance: self.config.distance.0,
-            downstream_distance: self.config.distance.1,
-            reference_fasta: reference_fasta.clone(),
-            enable_indel_3prime_shift: self.config.shift_3prime,
-            hgvs: hgvs_options(&self.config),
-            loftee_context: loftee_context_rows(&builtin),
-            context_sequences: context_sequence_rows(&builtin),
-            compute_hgvs: checks.hgvs,
-            compute_exon_intron_numbers: needs_exon_intron_numbers(&self.config),
-            protein_version: self.config.protein_version,
-            hgvsg: hgvsg_options(&self.config, &self.cache.synonyms),
-            spdi: spdi_options(&self.config, &self.cache.synonyms),
-            domains: self.config.domains,
-            use_transcript_ref: self.config.use_transcript_ref,
-            process_ref_homs: self.config.process_ref_homs,
-        });
+        let effects_config =
+            Arc::new(self.effects_config(reference_fasta.clone(), checks.hgvs, &builtin));
 
         let builtin_plugins = Arc::new(builtin);
         let dylib_plugins = Arc::new(dylib);
@@ -2203,7 +2740,10 @@ impl Runner {
         info!("Transcript cache: {} (lazy per-chromosome)", self.cache.dir);
 
         let variation_source = open_variation_source(&self.config, &self.cache)?;
-        let sv_source = open_sv_source(&self.config)?;
+        let sv_source = open_sv_source(&self.config, self.cache.assembly.as_deref())?;
+        if sv_source.is_some() {
+            self.print_notices(&[crate::sv_source::DUMP_LACKS_NOTICE]);
+        }
         // Every annotation source is built in `init` (Runner.pm:128,
         // AnnotationSourceAdaptor.pm:97-105), so a `--regulatory_gff` file that
         // is not there (AnnotationSourceAdaptor.pm:266) or a `--cell_type` the
@@ -2216,10 +2756,29 @@ impl Runner {
             self.config.cell_type.as_deref(),
             regulatory_source.as_deref(),
         )?;
-        // Created empty before the first variant (BaseRunner.pm:280), so a path
-        // that cannot be written fails the run here.
+        // Every record of the `--regulatory_gff` files meets the reader's
+        // refusals here, on a chromosome the input never names too, so a
+        // refused record leaves no statistics report and no output behind.
+        if let Some(source) = regulatory_source.as_deref() {
+            source
+                .check_gff_records()
+                .map_err(pipeline::regulatory_load_error)?;
+        }
+        // The files the run names are tested before one of them is created
+        // or emptied and before the first record is read, so a refused run
+        // leaves each as it was. The warnings file is the exception: where
+        // an earlier warning opened it, it is written before the test, and
+        // under its default name it is left to the first warning.
+        #[cfg(feature = "parquet")]
+        self.refuse_files_that_cannot_be_written(&stats_files, unpublished.as_mut())?;
+        #[cfg(not(feature = "parquet"))]
+        self.refuse_files_that_cannot_be_written(&stats_files)?;
+        // Created empty before the first variant (BaseRunner.pm:280).
         for (_, path) in &stats_files {
             stats::create_stats_file(path)?;
+        }
+        if let Some(notice) = stats::distribution_charts_notice(&stats_files, fasta_found) {
+            self.print_notices(&[notice]);
         }
 
         let output_format = self.config.output_format.as_str();
@@ -2244,28 +2803,22 @@ impl Runner {
                 .filter(|(_, kinds)| !runs_on_every_kind(kinds))
                 .collect(),
         );
-        options.custom_sources =
-            custom_source_infos(custom_sources.as_deref(), custom_run_options(&self.config));
+        options.custom_sources = custom_source_infos(
+            custom_sources.as_deref(),
+            &gene_models,
+            custom_run_options(&self.config),
+        );
         let extra_plan = ExtraFieldsPlan::new(options.clone());
 
-        // The plain output opens through Perl's two-argument `open`
-        // (BaseRunner.pm:226), for which `>-` is standard output; the
-        // compressed output's shell redirection (:217) writes a file named
-        // `-`, the Parquet writer a directory.
-        let dash_is_stdout = self.config.output_file == "-"
-            && self.config.compress_output.is_none()
-            && !parquet_output;
-        let output_is_stdout = self.config.output_file == "STDOUT" || dash_is_stdout;
+        let output_is_stdout = self.writes_to_standard_output();
         let mut compressed_output = None;
         #[cfg(feature = "parquet")]
         let mut parquet_formatter: Option<Arc<ParquetOutputFormatter>> = None;
         let mut writer = if parquet_output {
+            // In a build with no Parquet writer the test of the run's files
+            // refuses the format, so this return only types the expression.
             #[cfg(not(feature = "parquet"))]
-            return Err(CliError::new(
-                "output",
-                "this build has no Parquet writer: --output_format parquet is not available",
-            )
-            .into());
+            return Err(no_parquet_writer().into());
             #[cfg(feature = "parquet")]
             {
                 let contig_order =
@@ -2276,28 +2829,28 @@ impl Runner {
                     plugin_fields.clone(),
                     contig_order,
                 ));
+                let partition = self
+                    .config
+                    .parquet_partition
+                    .is_some()
+                    .then_some(Partition::Chrom);
                 let order = if self.config.no_check_variants_order || unsortable {
-                    warn!("{}", UNCHECKED_ORDER_WARNING);
+                    warn!("{}", unchecked_order_warning(partition));
                     InputOrder::Unchecked
                 } else {
                     InputOrder::Checked {
                         unlisted_rank: formatter.unlisted_rank(),
                     }
                 };
-                let partition = self
-                    .config
-                    .parquet_partition
-                    .is_some()
-                    .then_some(Partition::Chrom);
                 let path = &self.config.output_file;
-                // A path with no final name has no directory to write beside.
+                // The temporary directory stands since the run's files were
+                // tested.
                 let output = unpublished
-                    .as_mut()
+                    .as_ref()
                     .ok_or_else(|| unwritable_output(path))?;
-                output.create().map_err(|_| unwritable_output(path))?;
                 let directory = ParquetDirectoryWriter::create(
                     output.path(),
-                    Arc::clone(formatter.schema()),
+                    &formatter,
                     kv_metadata,
                     order,
                     partition,
@@ -2488,6 +3041,20 @@ impl Runner {
             } else {
                 None
             };
+        // A tab or a VCF output writes the fields its `--fields` list names,
+        // and every other output reads no such list.
+        let writes_field = |name: &str| {
+            !matches!(output_format, "tab" | "vcf")
+                || self
+                    .config
+                    .fields
+                    .as_ref()
+                    .is_none_or(|fields| fields.iter().any(|field| field == name))
+        };
+        // `--most_severe` and `--summary` write one row a record, returned
+        // before any row that carries a notation is built
+        // (OutputFactory.pm:387).
+        let notation_rows = !(self.config.most_severe || self.config.summary);
         let annotation_resources = AnnotationResources {
             transcripts,
             variation_source,
@@ -2508,6 +3075,17 @@ impl Runner {
             nearest: self.config.nearest,
             frequency_filter,
             warn_assembly_mismatch: !self.config.use_given_ref,
+            hgvsc_rows: if notation_rows && writes_field("HGVSc") {
+                self.caller_hgvsc_rows
+            } else {
+                NotationRows::None
+            },
+            hgvsg_rows: if notation_rows && self.config.hgvsg && writes_field("HGVSg") {
+                self.caller_hgvsg_rows
+            } else {
+                NotationRows::None
+            },
+            oversize_rows_written: !matches!(output_format, "vcf" | "json"),
             custom_sources,
         };
 
@@ -2635,6 +3213,7 @@ impl Runner {
         if let Some(warning) = annotation_resources.transcripts.gencode_set_warning() {
             sink.warn(&warning);
         }
+        self.print_own_notices(&hgvs_left_out_notices(&annotation_resources.transcripts));
 
         // Runner.pm:175-182: the statistics report is written, then the
         // skipped-variants file, then the warnings file is closed, once the
@@ -2651,6 +3230,7 @@ impl Runner {
                     annotation_sources: annotation_source_entries(
                         &self.header_cache_dir(),
                         annotation_resources.custom_sources.as_deref(),
+                        &gene_models,
                     ),
                     species: self.config.species.clone(),
                     command_line: self.command_line.clone(),
@@ -2684,12 +3264,6 @@ impl Runner {
             }
         }
         sink.finish(&self.config.input_file)?;
-
-        // The summary line overwrites the progress line from its start, so a
-        // run past the first progress threshold returns the carriage first.
-        if progress && variant_count >= 10000 {
-            crate::stderr::write(format_args!("\r"));
-        }
 
         // A block the .gzi misdescribed answered its reads as "no reference",
         // so the output written from them is not the file's annotation.
@@ -2745,11 +3319,12 @@ impl Runner {
     /// directory. A name that resolves to neither is warned about and skipped, or
     /// is an error under `--safe` ([`crate::annotator::load_plugins`]).
     ///
-    /// The run's assembly (`--assembly`, else the cache's) is passed through so
-    /// assembly-sensitive plugins (REVEL's dual coordinate columns, LoFTEE's
-    /// per-assembly GERP format) can select the right column and reader, and so
-    /// plugins carrying an assembly marker in their data file can reject a
-    /// mismatched one.
+    /// The run's assembly (`--assembly`, else the cache's) is passed through
+    /// with where it was read, so assembly-sensitive plugins (REVEL's dual
+    /// coordinate columns, LoFTEE's per-assembly GERP format) can select the
+    /// right column and reader, plugins carrying an assembly marker in their
+    /// data file can reject a mismatched one, and the warning about a name
+    /// that gives no hint says where the name came from.
     fn load_plugins(
         &self,
         reference_fasta: Option<Arc<vep_fasta::IndexedFasta>>,
@@ -2760,7 +3335,7 @@ impl Runner {
             &self.config.dir_plugins,
             self.config.safe,
             reference_fasta,
-            self.cache.assembly.as_deref(),
+            crate::annotator::RunAssembly::of(&self.config, &self.cache),
             crate::annotator::run_context(&self.config, hgvs),
         )
     }
@@ -2863,21 +3438,19 @@ impl Runner {
                 (format, detection.delimiter)
             }
         };
-        let context = ParserContext {
-            delimiter: delimiter.clone(),
-            fasta: reference_fasta.map(|fasta| {
-                Arc::new(FastaReference(Arc::clone(fasta))) as Arc<dyn ReferenceSequence>
-            }),
-            synonyms: Arc::clone(&self.cache.synonyms),
-            chromosomes: Arc::new(transcripts.chromosomes().map(str::to_string).collect()),
-            max_sv_size: config.max_sv_size,
-            minimal: config.minimal,
-            transcripts: Some(Arc::new(TranscriptLookup::new(
-                Arc::clone(transcripts),
-                &self.cache.info.contig_order,
-                config.refseq,
-            ))),
-        };
+        let mut context = ParserContext::default();
+        context.delimiter = delimiter.clone();
+        context.fasta = reference_fasta
+            .map(|fasta| Arc::new(FastaReference(Arc::clone(fasta))) as Arc<dyn ReferenceSequence>);
+        context.synonyms = Arc::clone(&self.cache.synonyms);
+        context.chromosomes = Arc::new(transcripts.chromosomes().map(str::to_string).collect());
+        context.max_sv_size = config.max_sv_size;
+        context.minimal = config.minimal;
+        context.transcripts = Some(Arc::new(TranscriptLookup::new(
+            Arc::clone(transcripts),
+            &self.cache.info.contig_order,
+            config.refseq,
+        )));
 
         // VCF is read line by line because header passthrough needs the lines;
         // every other format goes through its parser, which reads through a
@@ -2963,6 +3536,9 @@ impl Runner {
                 )
             }
             InputFormat::Caid => return Err(input_error("Cannot use CAid format in offline mode")),
+            // A format with no reader above is refused as Ensembl VEP refuses one
+            // `%FORMAT_MAP` lacks (Parser.pm:154).
+            _ => return Err(input_error(&unread_format_refusal(format))),
         };
         let names_its_records = matches!(
             format,
@@ -3081,13 +3657,41 @@ fn run_id() -> String {
     format!("{nanos:x}-{pid:x}-{random:016x}")
 }
 
+/// The entry of the Parquet `contig_order` for a reference sequence named
+/// `name`, given which names the cache holds: the name a record written with
+/// it is annotated under, the cache's own where the name, a synonym of it or
+/// its `chr` spelling reaches a cache chromosome
+/// ([`ChromosomeSynonyms::source_chr_name`]), else `name` as written. A name
+/// the cache lacks and the synonyms link to two or more cache chromosomes is
+/// listed as written, an entry no row ranks by.
+#[cfg(feature = "parquet")]
+fn reference_contig_entry(
+    name: &str,
+    synonyms: &ChromosomeSynonyms,
+    holds: impl Fn(&str) -> bool,
+) -> String {
+    let linked = |name: &str| {
+        synonyms
+            .synonyms_of(name)
+            .iter()
+            .filter(|s| holds(s))
+            .count()
+    };
+    if !holds(name) && linked(name) > 1 {
+        return name.to_string();
+    }
+    synonyms.source_chr_name(name, holds)
+}
+
 /// The variation source a run reads its co-located variants from: `None`
 /// without `--check_existing` (which the frequency and PubMed flags imply,
 /// `Config.pm:449-452`); otherwise the resolved cache's variation files, opened
 /// once [`check_gnomad_columns`] and [`check_frequency_filter`] pass on the
 /// cache's declared columns (`CacheDir.pm:188-207` runs both as it builds the
 /// variation source). A cache without variation data warns once through the
-/// run's sink, where Ensembl VEP would annotate silently (`CacheDir.pm:179`).
+/// run's sink, where Ensembl VEP would annotate silently (`CacheDir.pm:179`);
+/// the warning names the flags that ask for known variants
+/// (`cache_left_out::no_variation_data_warning`).
 pub(crate) fn open_variation_source(
     config: &Config,
     cache: &ResolvedCache,
@@ -3111,7 +3715,11 @@ pub(crate) fn open_variation_source(
             Ok(Some(Arc::new(source)))
         }
         None => {
-            crate::warnings::global().warn(&VariationSource::missing_warning(cache_dir));
+            crate::warnings::global().warn(&crate::cache_left_out::no_variation_data_warning(
+                config,
+                &cache.info,
+                cache_dir,
+            ));
             Ok(None)
         }
     }
@@ -3119,12 +3727,18 @@ pub(crate) fn open_variation_source(
 
 /// The structural-variant source of `--check_svs <file>`, `None` without the
 /// flag; a file that cannot be opened is the `check_svs` error.
-pub(crate) fn open_sv_source(config: &Config) -> anyhow::Result<Option<Arc<SvSource>>> {
+pub(crate) fn open_sv_source(
+    config: &Config,
+    assembly: Option<&str>,
+) -> anyhow::Result<Option<Arc<SvSource>>> {
     let Some(path) = &config.check_svs else {
         return Ok(None);
     };
-    let source = SvSource::open(Path::new(path))
-        .map_err(|error| CliError::new("check_svs", format!("{error:#}")))?;
+    let source = SvSource::open(
+        Path::new(path),
+        crate::annotator::resolve_assembly(assembly),
+    )
+    .map_err(|error| CliError::new("check_svs", format!("{error:#}")))?;
     info!("Structural variants: {path}");
     Ok(Some(Arc::new(source)))
 }
@@ -3136,6 +3750,41 @@ pub(crate) fn open_sv_source(config: &Config) -> anyhow::Result<Option<Arc<SvSou
 /// `###CHR###` file stays as written until [`open_custom_sources`].
 pub(crate) fn parse_custom_specs(config: &Config) -> Result<Vec<CustomSpec>, CliError> {
     custom::parse_all(&config.custom).map_err(|error| CliError::new("custom", error.to_string()))
+}
+
+/// The cache the configuration names, resolved. A run that names a gene-model
+/// file reads it beside a cache, so where no cache stands at the place the run
+/// names, the refusal is reported with both routes
+/// ([`crate::gene_model::without_a_cache`]). Every other refusal of the
+/// resolution, of a cache that stands there or of a flag's value, is reported
+/// as it is in a run that names no such file.
+pub(crate) fn resolve_cache(config: &mut Config) -> Result<ResolvedCache, CliError> {
+    let named = crate::gene_model::named_in(&config.custom);
+    crate::cache_resolve::resolve_or_refusal(config).map_err(|refusal| {
+        if named && refusal.no_cache {
+            crate::gene_model::without_a_cache(&refusal.error)
+        } else {
+            refusal.error
+        }
+    })
+}
+
+/// `specs` split into the sources that annotate records and the gene-model
+/// files ([`crate::gene_model::split`]), each `###CHR###` file expanded first
+/// so that every file keeps its place in the argument order
+/// (`AnnotationSourceAdaptor.pm:436-456`). A run naming no gene-model file
+/// gets its specifications back as given.
+pub(crate) fn split_custom_specs(
+    specs: Vec<CustomSpec>,
+    fasta: Option<&vep_fasta::IndexedFasta>,
+) -> Result<(Vec<CustomSpec>, Vec<GeneModelFile>), CliError> {
+    if !specs.iter().any(CustomSpec::is_transcript_source) {
+        return Ok((specs, Vec::new()));
+    }
+    let chromosomes = chr_placeholder_chromosomes(fasta);
+    let specs = custom::expand_all(specs, &chromosomes)
+        .map_err(|error| CliError::new("custom", error.to_string()))?;
+    Ok(crate::gene_model::split(specs))
 }
 
 /// The chromosomes a `###CHR###` file stands for: each of the FASTA's sequence
@@ -3161,10 +3810,11 @@ pub(crate) fn chr_placeholder_chromosomes(fasta: Option<&vep_fasta::IndexedFasta
 
 /// The run-wide flags the custom sources read.
 pub(crate) fn custom_run_options(config: &Config) -> CustomRunOptions {
-    CustomRunOptions {
-        multi_allelic: config.custom_multi_allelic,
-        suppress_filter: config.custom_suppress_filter,
-    }
+    let mut options = CustomRunOptions::default();
+    options.multi_allelic = config.custom_multi_allelic;
+    options.suppress_filter = config.custom_suppress_filter;
+    options.assembly = None;
+    options
 }
 
 /// The `--custom` sources, opened; `None` without a specification. A
@@ -3173,17 +3823,20 @@ pub(crate) fn custom_run_options(config: &Config) -> CustomRunOptions {
 /// each for its chromosome names while the input parser is built
 /// (`Runner.pm:827`, `BaseRunner.pm:453`, `File.pm:371`), before the output
 /// opens. `synonyms` is the cache's chromosome synonym table, which each
-/// source maps input names through, and `options` the run-wide flags a
-/// source reads.
+/// source maps input names through, `options` the run-wide flags a source
+/// reads and `assembly` the run's, which each source is opened on.
 pub(crate) fn open_custom_sources(
     specs: Vec<CustomSpec>,
     fasta: Option<&vep_fasta::IndexedFasta>,
     synonyms: &Arc<ChromosomeSynonyms>,
     options: CustomRunOptions,
+    assembly: Option<&str>,
 ) -> Result<Option<Arc<CustomSources>>, CliError> {
     if specs.is_empty() {
         return Ok(None);
     }
+    let mut options = options;
+    options.assembly = crate::annotator::resolve_assembly(assembly);
     let chromosomes = chr_placeholder_chromosomes(fasta);
     let specs = custom::expand_all(specs, &chromosomes)
         .map_err(|error| CliError::new("custom", error.to_string()))?;
@@ -3208,38 +3861,62 @@ pub(crate) fn open_custom_sources(
 /// specification carries), the statistics, the overlap share's direction and a
 /// VCF source's `##INFO` descriptions; a VCF source with `fields` carries
 /// `FILTER` on its records unless `--custom_suppress_filter` leaves it out
-/// (`File/VCF.pm:219-223`). Empty without a source.
+/// (`File/VCF.pm:219-223`). A gene-model file is listed at its place among
+/// them with its file and key alone: it annotates no record, so its column
+/// stays empty. Empty without a source.
 pub(crate) fn custom_source_infos(
     sources: Option<&CustomSources>,
+    gene_models: &[GeneModelFile],
     options: CustomRunOptions,
 ) -> Vec<CustomSourceInfo> {
-    let Some(sources) = sources else {
-        return Vec::new();
-    };
-    sources
-        .iter()
+    let overlays = sources
+        .into_iter()
+        .flat_map(|sources| sources.iter())
         .map(|source| {
             let spec = source.spec();
             let fields: Vec<String> = spec.fields.clone().unwrap_or_default();
             let filter_field = spec.format == custom::CustomFormat::Vcf
                 && !fields.is_empty()
                 && (!options.suppress_filter || fields.iter().any(|field| field == "FILTER"));
-            CustomSourceInfo {
-                file: spec.file.clone(),
-                short_name: spec.short_name.clone(),
-                fields,
-                filter_field,
-                summary_stats: spec
-                    .summary_stats
-                    .iter()
-                    .flatten()
-                    .map(|stat| stat.as_str().to_string())
-                    .collect(),
-                reciprocal: spec.reciprocal,
-                field_descriptions: source.field_descriptions().cloned().unwrap_or_default(),
-            }
+            let mut source_info = CustomSourceInfo::default();
+            source_info.file = spec.file.clone();
+            source_info.short_name = spec.short_name.clone();
+            source_info.fields = fields;
+            source_info.filter_field = filter_field;
+            source_info.summary_stats = spec
+                .summary_stats
+                .iter()
+                .flatten()
+                .map(|stat| stat.as_str().to_string())
+                .collect();
+            source_info.reciprocal = spec.reciprocal;
+            source_info.field_descriptions =
+                source.field_descriptions().cloned().unwrap_or_default();
+            source_info
+        });
+    let files = gene_models.iter().map(|file| {
+        (file.position, {
+            let mut source = CustomSourceInfo::default();
+            source.file = file.spec.file.clone();
+            source.short_name = file.spec.short_name.clone();
+            source.fields = file.spec.fields.clone().unwrap_or_default();
+            source
         })
-        .collect()
+    });
+    in_argument_order(overlays, files)
+}
+
+/// The run's custom sources in argument order: `overlays` in their own order,
+/// each gene-model file's entry at the place it holds among all of them.
+fn in_argument_order<T>(
+    overlays: impl Iterator<Item = T>,
+    files: impl Iterator<Item = (usize, T)>,
+) -> Vec<T> {
+    let mut merged: Vec<T> = overlays.collect();
+    for (position, entry) in files {
+        merged.insert(position.min(merged.len()), entry);
+    }
+    merged
 }
 
 /// The entries of the statistics report's `Annotation sources` row
@@ -3249,22 +3926,22 @@ pub(crate) fn custom_source_infos(
 /// type `overlap`, `within`, `surrounding` or `exact` (:673-675, one entry per
 /// `custom_info` hashref, `File.pm:170`); a `###CHR###` file is one entry per
 /// file it stood for (`AnnotationSourceAdaptor.pm:438-449`). The database
-/// entry of `:670-672` never prints, since every run is offline.
+/// entry of `Stats.pm:670-672` never prints, since every run is offline.
 pub(crate) fn annotation_source_entries(
     cache_dir: &str,
     sources: Option<&CustomSources>,
+    gene_models: &[GeneModelFile],
 ) -> Vec<String> {
+    let entry = |spec: &CustomSpec| format!("Custom: {} ({})", spec.file, spec.match_type.as_str());
+    let overlays = sources
+        .into_iter()
+        .flat_map(|sources| sources.iter())
+        .map(|source| entry(source.spec()));
+    let files = gene_models
+        .iter()
+        .map(|file| (file.position, entry(&file.spec)));
     let mut entries = vec![format!("Cache: <kbd>{cache_dir}</kbd>")];
-    if let Some(sources) = sources {
-        for source in sources.iter() {
-            let spec = source.spec();
-            entries.push(format!(
-                "Custom: {} ({})",
-                spec.file,
-                spec.match_type.as_str()
-            ));
-        }
-    }
+    entries.extend(in_argument_order(overlays, files));
     entries
 }
 
@@ -3321,8 +3998,28 @@ pub(crate) struct AnnotationResources {
     frequency_filter: Option<Arc<FrequencyFilter>>,
     /// Whether a row Ensembl VEP reads as an invalid variant on an edited
     /// RefSeq transcript warns (`Transcript-assembly mismatch`,
-    /// OutputFactory.pm:1717-1718): every run but one under `--use_given_ref`.
+    /// OutputFactory.pm:1726-1727): every run but one under `--use_given_ref`.
     warn_assembly_mismatch: bool,
+    /// The transcript rows whose HGVSc the output writes, which
+    /// [`count_indels_on_edited_models`] counts the notations of and
+    /// [`note_notations_the_reference_lacks`] reads for the run's line for a
+    /// chromosome the FASTA lacks: none under `--most_severe` or `--summary`
+    /// or in a tab or a VCF output whose `--fields` list leaves the field
+    /// out, and in every other output the rows the run's caller writes it of
+    /// (`Runner::writing_hgvsc_of`).
+    hgvsc_rows: NotationRows,
+    /// The rows whose HGVSg the output writes, which
+    /// [`note_notations_the_reference_lacks`] reads for the same line: none
+    /// without `--hgvsg`, under `--most_severe` or `--summary` or in a tab or
+    /// a VCF output whose `--fields` list leaves the field out, and in every
+    /// other output the rows the run's caller writes it of
+    /// (`Runner::writing_hgvsg_of`).
+    hgvsg_rows: NotationRows,
+    /// Whether the output writes the rows of a record over `--max_sv_size`
+    /// ([`InputVariant::oversize_sv`]): the default, tab and Parquet outputs
+    /// do, the VCF output carries the record's line without them and the JSON
+    /// output leaves the record out.
+    oversize_rows_written: bool,
     /// The `--custom` sources, `None` without a specification; they annotate
     /// each batch after the plugins ([`annotate_batch`]).
     custom_sources: Option<Arc<CustomSources>>,
@@ -3340,6 +4037,60 @@ pub(crate) fn compile_transcript_filter(
     FilterSet::transcript_filter(filters)
         .map(|filter| Some(Arc::new(filter)))
         .map_err(|e| CliError::new("filter", e.to_string()))
+}
+
+/// The notices a `--transcript_filter` owes for `_source_cache` and `dbID`,
+/// which a transcript vep-rs builds from a GTF or GFF3 does not carry as
+/// Ensembl VEP's transcript of the file does
+/// (`AnnotationSource/File/BaseGXF.pm:489, 635`). `cache_carries_db_id` is
+/// what the first transcript of the cache says, `None` for a cache without
+/// one: a converted cache carries a `dbID` on every transcript and a built one
+/// on none, and the builder writes no `_source_cache` either, so a built cache
+/// draws one line for each of the two keys `filter` names. Under
+/// `beside_files`, a gene-model file read beside the cache, `_source_cache`
+/// draws no line, since the file's transcripts carry it, and `dbID` draws a
+/// line for the file's transcripts, which carry none over any cache.
+pub(crate) fn unset_filter_key_notices(
+    filter: &FilterSet,
+    cache_carries_db_id: Option<bool>,
+    beside_files: bool,
+) -> Vec<String> {
+    let mut notices = Vec::new();
+    if cache_carries_db_id == Some(false) {
+        for key in ["_source_cache", "dbID"] {
+            if filter.names_key(key) && !(beside_files && key == "_source_cache") {
+                notices.push(format!(
+                    "INFO: --transcript_filter names {key}, which no transcript of this cache \
+                     carries: a cache built from a GTF or GFF3 leaves it undefined, so exists \
+                     and a comparison on it fail for each of its transcripts"
+                ));
+            }
+        }
+    }
+    if beside_files && filter.names_key("dbID") {
+        notices.push(
+            "INFO: --transcript_filter names dbID, which no transcript of a file read beside \
+             the cache carries: a GTF or GFF3 read under --gtf or --gff leaves it undefined, so \
+             exists and a comparison on it fail for each of its transcripts"
+                .to_string(),
+        );
+    }
+    notices
+}
+
+/// Whether the first transcript found in the cache's shards carries a `dbID`,
+/// `None` for a cache in which none is found; a shard that cannot be read is
+/// passed over.
+fn first_transcript_carries_db_id(transcripts: &LazyTranscriptIndexes) -> Option<bool> {
+    transcripts
+        .chromosomes()
+        .find_map(|chr| {
+            let shards = transcripts.shards_of(chr)?;
+            shards
+                .iter()
+                .find_map(|shard| transcripts.load_shard(chr, shard).ok()?.into_iter().next())
+        })
+        .map(|transcript| transcript.db_id.is_some())
 }
 
 impl AnnotationResources {
@@ -3510,6 +4261,8 @@ pub(crate) fn prewarm_chromosomes(
 /// prefetches, which [`annotate_batch`] applies. Fetched by the pipeline's
 /// prefetch stage while the coordinator annotates the batch before, so a
 /// source's read-ahead for a batch never displaces the one its lookups read.
+/// A `warn!` event a plugin's or a `--custom` source's prefetch raises is
+/// kept inside its prefetch and raised when [`annotate_batch`] applies it.
 #[derive(Default)]
 pub(crate) struct BatchPrefetch {
     variation: Option<crate::variation_source::Prefetch>,
@@ -3620,16 +4373,23 @@ pub(crate) fn check_variation_reads(failure: &ReadFailure) -> anyhow::Result<()>
     }
 }
 
-/// The warnings the records of a slice draw once they are annotated and
-/// filtered (`Unable to assign consequence type`, `Transcript-assembly mismatch
-/// in <Uploaded_variation>`), each with the index in the slice of the record's
-/// first variant. Ensembl VEP writes them while it renders the buffer, record by
-/// record in buffer order (OutputFactory.pm:300-303), so the pass that filters
-/// a slice collects them and reports them in record order once it is done,
-/// whatever order its threads finished in.
+/// The warnings the records of a slice draw: the `warn!` events the annotation
+/// of a variant raises (the one a RefSeq model's deleted bases draw, for one),
+/// each with the variant's index in the slice, and those drawn once the slice
+/// is annotated and filtered (`Unable to assign consequence type`,
+/// `Transcript-assembly mismatch in <Uploaded_variation>`), each with the index
+/// in the slice of the record's first variant. Ensembl VEP writes the latter
+/// while it renders the buffer, record by record in buffer order
+/// (OutputFactory.pm:300-303), so the pass that annotates and filters a slice
+/// collects them all and reports them in record order once it is done,
+/// whatever order its threads finished in. The `warn!` events a plugin or a
+/// `--custom` source raises while it annotates the whole slice stand with the
+/// record each names ([`Self::place`]); those that name none follow the
+/// records' warnings, in the order raised.
 #[derive(Debug, Default)]
 pub(crate) struct RecordWarnings {
     drawn: Vec<(usize, String)>,
+    of_no_record: Vec<String>,
 }
 
 impl RecordWarnings {
@@ -3638,10 +4398,49 @@ impl RecordWarnings {
         self.drawn.push((index, text));
     }
 
-    /// The texts in record order; a record's own in the order it drew them.
+    /// Runs `annotate`, the annotation of the variant at `index`, and records
+    /// the `warn!` events this thread raises meanwhile as that variant's.
+    pub(crate) fn annotating<T>(&mut self, index: usize, annotate: impl FnOnce() -> T) -> T {
+        let (result, events) = crate::warnings::holding_events(annotate);
+        for text in events {
+            self.push(index, text);
+        }
+        result
+    }
+
+    /// Records the events `held` while a pass annotated the whole of
+    /// `variants`: each under the index of the first variant of the input
+    /// record it names, and one naming no record of the slice among those
+    /// that follow the records' warnings.
+    pub(crate) fn place(&mut self, variants: &[InputVariant], held: Vec<Held>) {
+        if held.is_empty() {
+            return;
+        }
+        let mut first_of_record: HashMap<u64, usize> = HashMap::new();
+        for (index, variant) in variants.iter().enumerate() {
+            if variant.input_record != 0 {
+                first_of_record.entry(variant.input_record).or_insert(index);
+            }
+        }
+        for Held { input_record, text } in held {
+            match first_of_record.get(&input_record) {
+                Some(&index) => self.push(index, text),
+                None => self.of_no_record.push(text),
+            }
+        }
+    }
+
+    /// The texts by the index each is recorded under, those of one index in
+    /// the order recorded, then those of no record. What the annotation of a
+    /// record's second or further variant raised therefore follows all that
+    /// is recorded under its first variant.
     pub(crate) fn into_texts(mut self) -> Vec<String> {
         self.drawn.sort_by_key(|(index, _)| *index);
-        self.drawn.into_iter().map(|(_, text)| text).collect()
+        self.drawn
+            .into_iter()
+            .map(|(_, text)| text)
+            .chain(self.of_no_record)
+            .collect()
     }
 }
 
@@ -3662,10 +4461,12 @@ pub(crate) fn annotate_one(
     // Annotate with transcript consequences. Every variant, a breakend spanning
     // more than VEP's 10 Mb `--max_sv_size` included, is annotated against the
     // chromosome's complete transcript set, so the output of one record never
-    // depends on which other records share its batch. VEP marks such breakends
-    // skipped at cache-region load and then annotates them against whatever
-    // transcripts their batch-mates happened to load; that batch dependence is a
-    // VEP defect and is not reproduced here.
+    // depends on which other records share its batch. Ensembl VEP 116.3 drops
+    // such a breakend in its parser (Parser.pm:189-191, 494-499) and, when
+    // `--dont_skip` keeps it, loads no cache region for it
+    // (AnnotationSource.pm:238) and annotates it against whatever transcripts
+    // its batch-mates happened to load; that batch dependence is an Ensembl VEP
+    // defect and is not reproduced here.
     let is_paired_breakend = variant.variant_class == VariantClass::Translocation
         && !variant.is_single_breakend
         && variant.mate_chr.is_some()
@@ -3742,13 +4543,14 @@ pub(crate) fn annotate_one(
 /// for the records of `slice`, laid out in record order, from the rows left on
 /// them once the record step has run, each text handed to `warn` with the index
 /// of the record's first variant. Ensembl VEP draws the warning inside the
-/// output hash of each row it prints (OutputFactory.pm:1717-1718 at
-/// release/116.2), after the row filters and the pick family have dropped
+/// output hash of each row it prints (OutputFactory.pm:1726-1727 at
+/// release/116.3), after the row filters and the pick family have dropped
 /// theirs (`:477-514`, then `:389-404`) and never under `--summary` or
 /// `--most_severe`, which build no row hash (`:387`): a record whose marked rows
 /// the record step dropped draws nothing, and a record with a printed marked
 /// row draws once, as its repeated text is dropped there (BaseVEP.pm:809-813)
-/// and by the sink here. Nothing is drawn under `--use_given_ref` (`:1717`).
+/// and by the sink here. Nothing is drawn under `--use_given_ref`
+/// (`OutputFactory.pm:1726`).
 pub(crate) fn warn_transcript_assembly_mismatches(
     slice: &[InputVariant],
     resources: &AnnotationResources,
@@ -3781,6 +4583,508 @@ pub(crate) fn transcript_assembly_mismatch_warning(variant: &InputVariant) -> Op
                 variant.uploaded_variation()
             )
         })
+}
+
+/// Whether the output writes the rows of `record`, the alleles of one input
+/// record: every record's but, in an output that leaves them out, those of a
+/// record over `--max_sv_size` (`AnnotationResources::oversize_rows_written`).
+fn rows_written(record: &[InputVariant], resources: &AnnotationResources) -> bool {
+    resources.oversize_rows_written || !record.iter().any(|variant| variant.oversize_sv)
+}
+
+/// Counts, for the line the run prints at its end, the insertion and deletion
+/// alleles of `slice`, laid out in record order, that keep a row with an HGVSc
+/// on a model whose sequence is edited away from the genome
+/// (`LazyTranscriptIndexes::note_indel_on_edited_model`), read from the rows
+/// left on `slice` once the record step has run: a row the row filters or the
+/// pick family dropped is not written, and `--most_severe` and `--summary`
+/// leave no transcript row (`OutputFactory.pm:426-459`). Nothing is counted
+/// with the HGVS shift off, where no notation is shifted, on a row whose
+/// HGVSc the output does not write (`AnnotationResources::hgvsc_rows`), or
+/// for a record over `--max_sv_size` whose rows the output leaves out
+/// (`AnnotationResources::oversize_rows_written`).
+pub(crate) fn count_indels_on_edited_models(
+    slice: &[InputVariant],
+    resources: &AnnotationResources,
+) {
+    let config = &resources.effects_config;
+    let rows = resources.hgvsc_rows;
+    if !(config.compute_hgvs && config.hgvs.shift_hgvs && rows != NotationRows::None) {
+        return;
+    }
+    for variant in slice
+        .chunk_by(InputVariant::same_record)
+        .filter(|record| rows_written(record, resources))
+        .flatten()
+    {
+        if !matches!(
+            variant.variant_class,
+            VariantClass::Insertion | VariantClass::Deletion
+        ) {
+            continue;
+        }
+        let on_edited_model = variant.transcript_consequences.iter().any(|tc| {
+            tc.hgvsc.is_some()
+                && rows.hold(Some(tc))
+                && tc.transcript.as_ref().is_some_and(|transcript| {
+                    transcript
+                        .refseq_alignment()
+                        .is_some_and(|alignment| alignment.first_edit_bases.is_some())
+                })
+        });
+        if on_edited_model {
+            // Under `--individual` the variant is one individual's copy of an
+            // allele of its record (`Parser/VCF.pm:627-662`), and every copy
+            // of that allele is the same allele of the input.
+            let copy_of = variant
+                .individual
+                .is_some()
+                .then_some((variant.input_record, variant.allele_index));
+            resources.transcripts.note_indel_on_edited_model(copy_of);
+        }
+    }
+}
+
+/// Notes, for the line the run prints at its end for a chromosome the FASTA
+/// holds no sequence for, each chromosome of `slice`, laid out in record
+/// order, on which a row left once the record step has run is without a
+/// notation the output writes of it, for want of that sequence
+/// (`LazyTranscriptIndexes::note_unread_notations`). The rows are the ones the
+/// writers list ([`record_rows`]): a record `--chr` or a frequency filter left
+/// out has none, a row the row filters or the pick family dropped is not
+/// written, and a record over `--max_sv_size` is read only where the output
+/// writes its rows (`AnnotationResources::oversize_rows_written`). An HGVSg
+/// stands on every row of its allele, and on the reference row of a record
+/// with one alternate allele ([`apply_record_rules`]), and an HGVSc on its
+/// transcript's row, each read only on the rows the output writes it of
+/// (`AnnotationResources::hgvsg_rows`, `AnnotationResources::hgvsc_rows`) and
+/// only where the row would hold the notation had its reference bases been
+/// read ([`hgvsg_wants_the_reference`], [`hgvsc_wants_the_reference`]).
+pub(crate) fn note_notations_the_reference_lacks(
+    slice: &[InputVariant],
+    resources: &AnnotationResources,
+) {
+    let config = &resources.effects_config;
+    let Some(fasta) = config.reference_fasta.as_deref() else {
+        return;
+    };
+    let hgvsg_rows = resources.hgvsg_rows;
+    let hgvsc_rows = if config.compute_hgvs {
+        resources.hgvsc_rows
+    } else {
+        NotationRows::None
+    };
+    if hgvsg_rows == NotationRows::None && hgvsc_rows == NotationRows::None {
+        return;
+    }
+    // The records of a slice stand in the input's order, a chromosome's
+    // together, so the last answer serves the next record.
+    let mut answered: Option<(&str, bool)> = None;
+    for record in slice.chunk_by(InputVariant::same_record) {
+        let chr = record[0].chr.as_str();
+        let lacking = match answered {
+            Some((last, lacking)) if last == chr => lacking,
+            _ => fasta.record_name(chr).is_none(),
+        };
+        answered = Some((chr, lacking));
+        if !lacking || !rows_written(record, resources) {
+            continue;
+        }
+        let alleles: Vec<&InputVariant> = record.iter().collect();
+        // The reference row of a bi-allelic record prints its alternate
+        // allele's HGVSg (`apply_record_rules`), so it is without one where
+        // that allele is.
+        let printed_on_the_reference_row = match record {
+            [reference, alternate]
+                if reference.reference_allele_row
+                    && !alternate.reference_allele_row
+                    && alternate.working_allele_string().split('/').count() == 2 =>
+            {
+                Some(alternate)
+            }
+            _ => None,
+        };
+        let mut unread = UnreadNotations::default();
+        for (variant, tc) in record_rows(&alleles) {
+            let described = printed_on_the_reference_row
+                .filter(|_| variant.reference_allele_row)
+                .unwrap_or(variant);
+            unread.hgvsg |= hgvsg_rows.hold(tc) && hgvsg_wants_the_reference(described);
+            unread.hgvsc |= hgvsc_rows.hold(tc)
+                && tc.is_some_and(|tc| hgvsc_wants_the_reference(variant, tc, resources));
+        }
+        resources.transcripts.note_unread_notations(chr, unread);
+    }
+}
+
+/// Whether `variant`, on a chromosome the FASTA holds no sequence of, is
+/// without an HGVSg for want of that sequence alone: a sequence allele of
+/// `ACGT-` other than the reference allele, which `vep_effects::hgvsg`
+/// describes from the reference's bases wherever it reads them. A structural
+/// variant, an allele outside `ACGT-` and an allele equal to the reference
+/// allele have no notation over any FASTA, and a reference allele's row has
+/// none of its own: the one it prints is its record's alternate allele's
+/// ([`apply_record_rules`]), which [`note_notations_the_reference_lacks`]
+/// asks of that allele.
+fn hgvsg_wants_the_reference(variant: &InputVariant) -> bool {
+    let alt = variant.alt_allele();
+    variant.hgvsg.is_none()
+        && !variant.is_structural
+        && !variant.reference_allele_row
+        && alt != variant.ref_allele.as_slice()
+        && alt
+            .iter()
+            .all(|b| matches!(b.to_ascii_uppercase(), b'A' | b'C' | b'G' | b'T' | b'-'))
+}
+
+/// Whether the row of `tc`, on a chromosome the FASTA holds no sequence of,
+/// is without an HGVSc for want of that sequence alone: the row has none,
+/// and either has one where its reference bases are read from the record, as
+/// `vep_effects::hgvs` reads them in a run without a FASTA, or has one over
+/// some bases beside the record that a rule at a transcript's end reads
+/// ([`hgvsc_turns_on_bases_beside_the_record`]: bases added before a
+/// transcript's first base or directly after its last, and a kept allele's
+/// deletion over either). Whether such a row holds a notation over the
+/// chromosome's own bases cannot be told without them, so the row counts as
+/// without one. A structural variant's row is asked for no notation. The record is read as the row
+/// was computed ([`annotate_variant`], `vep_effects::calculate_consequences`):
+/// one sequence length on against a transcript stored across the origin of a
+/// circular sequence, and against the reference allele the row used
+/// (`TranscriptConsequence::used_ref`) where `--use_transcript_ref` read
+/// another than the record's.
+fn hgvsc_wants_the_reference(
+    variant: &InputVariant,
+    tc: &TranscriptConsequence,
+    resources: &AnnotationResources,
+) -> bool {
+    if tc.hgvsc.is_some() || variant.is_structural {
+        return false;
+    }
+    let Some(transcript) = tc.transcript.as_ref() else {
+        return false;
+    };
+    let (start, end) = structural_variant_bounds(variant);
+    let moved = resources
+        .transcripts
+        .get(&variant.chr)
+        .and_then(|index| index.origin_shift(transcript, start, end))
+        .map(|length| one_turn_on(variant, length));
+    let placed = moved.as_ref().unwrap_or(variant);
+    let reread = tc
+        .used_ref
+        .as_deref()
+        .filter(|reference| reference.as_bytes() != placed.ref_allele.as_slice())
+        .map(|reference| placed.against_reference_allele(reference.as_bytes()));
+    let read = reread.as_ref().unwrap_or(placed);
+    let options = resources.effects_config.hgvs;
+    vep_effects::hgvs::generate_hgvs(read, transcript, None, options)
+        .hgvsc
+        .is_some()
+        || hgvsc_turns_on_bases_beside_the_record(read, transcript, options)
+}
+
+/// Whether some bases of a chromosome that cannot be read give `variant` an
+/// HGVSc on `transcript` that its record's own bases do not: the two rules
+/// by which `vep_effects::hgvs` decides a notation from bases beside the
+/// record, each read here with every base beside the record unknown. Bases
+/// added outside the transcript, or to a reference kept whole at a point
+/// that is not between two bases of it, take the notation of their last
+/// placement where the run of their placements reaches the transcript
+/// (`added_bases_at_a_transcript_end`), which some bases allow where
+/// [`added_bases_reach_the_transcript_on_some_bases`] says so; the rule is
+/// not applied under `--shift_hgvs 0` nor to a model with an `_rna_edit`,
+/// and a row outside the transcript is asked for a notation only as its
+/// record writes it, so not under `--shift_3prime 1`. An insertion of a
+/// record whose class does not shift (`vep_effects::shift_motif`) stays
+/// where it is written and has a notation only where its run ends there.
+/// An allele that keeps bases of its reference and deletes others over the
+/// transcript's first or last base has a notation where the deleted bases
+/// can be written wholly inside the transcript
+/// (`kept_allele_deletes_over_a_transcript_end`): it turns on the bases
+/// beside the span where the deleted bases, as the span aligns them, lie
+/// partly inside the transcript, the span's own bases leave them over that
+/// end and the bases that carry them farthest do not.
+fn hgvsc_turns_on_bases_beside_the_record(
+    variant: &InputVariant,
+    transcript: &vep_core::transcript::Transcript,
+    options: vep_effects::hgvs::HgvsOptions,
+) -> bool {
+    let numbered = transcript
+        .vefc
+        .as_ref()
+        .and_then(|vefc| vefc.mapper.as_ref())
+        .is_some_and(|mapper| !mapper.exon_coord_mapper.pairs.is_empty());
+    if !numbered || !options.shift_hgvs {
+        return false;
+    }
+    let reverse = transcript.strand == vep_core::coordinate::Strand::Reverse;
+    // The allele on the transcript's strand, its gap character dropped.
+    let on_the_transcript = |allele: &[u8]| {
+        let mut allele = allele.to_ascii_uppercase();
+        allele.retain(|&base| base != b'-');
+        if variant.strand != transcript.strand {
+            allele.reverse();
+            for base in &mut allele {
+                *base = vep_core::codon::complement_base(*base);
+            }
+        }
+        allele
+    };
+    let reference = on_the_transcript(&variant.ref_allele);
+    let alt = on_the_transcript(variant.alt_allele());
+    // An allele with a character outside `ACGT` has no notation.
+    if !alt
+        .iter()
+        .all(|base| matches!(base, b'A' | b'C' | b'G' | b'T'))
+    {
+        return false;
+    }
+    // The span in positions along the transcript, 1 its first base.
+    let along = |genomic: u64| {
+        if reverse {
+            transcript.end as i64 - genomic as i64 + 1
+        } else {
+            genomic as i64 - transcript.start as i64 + 1
+        }
+    };
+    let (raw_start, raw_end) = if reverse {
+        (along(variant.end), along(variant.start))
+    } else {
+        (along(variant.start), along(variant.end))
+    };
+    let tr_len = transcript.end as i64 - transcript.start as i64 + 1;
+    let outside = variant.end < transcript.start || variant.start > transcript.end;
+    let edited = transcript
+        .refseq_alignment()
+        .is_some_and(|alignment| alignment.first_edit_bases.is_some());
+    // Bases added to a reference kept whole are placed by the rule wherever
+    // the record stands, and a plain insertion's where its row lies outside
+    // the transcript; a row outside it is asked for a notation only as its
+    // record writes it, and on a model without an edit.
+    let added = if edited || (outside && options.shift_3prime) {
+        None
+    } else if reference.is_empty() {
+        outside.then_some((raw_end, &alt[..]))
+    } else {
+        bases_added_to_a_kept_reference(&reference, &alt, raw_start)
+    };
+    // The bases of the record's own span are read; every other is not.
+    let in_the_span = |pos: i64| {
+        usize::try_from(pos - raw_start)
+            .ok()
+            .and_then(|offset| reference.get(offset).copied())
+    };
+    if let Some((point, inserted)) = added {
+        // The rule carries bases added to a kept reference, and the record's
+        // own shift an insertion of a class that shifts.
+        let moves = !reference.is_empty() || vep_effects::shift_motif(variant).is_some();
+        return added_bases_reach_the_transcript_on_some_bases(
+            tr_len,
+            &in_the_span,
+            point,
+            inserted,
+            moves,
+        );
+    }
+    if outside {
+        return false;
+    }
+    let front_cut = (raw_start.max(1) - raw_start) as usize;
+    let back_cut = (raw_end - raw_end.min(tr_len)) as usize;
+    let over_an_end = |base_at: &dyn Fn(i64) -> Option<u8>| {
+        kept_allele_deletes_over_a_transcript_end(
+            tr_len, base_at, &reference, &alt, raw_start, front_cut, back_cut,
+        )
+    };
+    // The notation describes the deleted bases as the span aligns them, those
+    // of them inside the transcript: bases aligned wholly outside it leave
+    // the row without one wherever they could be carried.
+    let (lead, tail) = shared_ends_aligned_3prime(&alt, &reference);
+    let deletes_inside = raw_start + lead as i64 <= tr_len && raw_end - tail as i64 >= 1;
+    deletes_inside && over_an_end(&|_| None) && {
+        // A walk goes on while the base the deleted bases leave equals the
+        // base they take in, as many bases on as are deleted, so the bases
+        // that carry them farthest repeat the span's own at that length.
+        let (len, deleted) = (reference.len() as i64, (reference.len() - alt.len()) as i64);
+        let repeated = |pos: i64| {
+            let offset = pos - raw_start;
+            let within = if offset < 0 {
+                offset.rem_euclid(deleted)
+            } else {
+                len - deleted + (offset - len + deleted).rem_euclid(deleted)
+            };
+            Some(reference[within as usize])
+        };
+        !over_an_end(&repeated)
+    }
+}
+
+/// The bases `alt` shares with `reference` at its start, then at its end,
+/// the start taken first: an allele that keeps its reference but for one run
+/// of bases added or deleted has that run at the most 3' place of its span
+/// (`shared_ends_aligned_3prime` of `vep_effects::hgvs`).
+fn shared_ends_aligned_3prime(alt: &[u8], reference: &[u8]) -> (usize, usize) {
+    let lead = alt
+        .iter()
+        .zip(reference)
+        .take_while(|(a, r)| a == r)
+        .count();
+    let tail = alt[lead..]
+        .iter()
+        .rev()
+        .zip(reference[lead..].iter().rev())
+        .take_while(|(a, r)| a == r)
+        .count();
+    (lead, tail)
+}
+
+/// The bases `alt` adds to a `reference` it keeps whole, on the transcript's
+/// strand, with the position along the transcript they stand directly after,
+/// where `reference` starts at `raw_start`
+/// (`bases_added_to_a_kept_reference` of `vep_effects::hgvs`). `None` for an
+/// allele that changes or drops a base of its reference.
+fn bases_added_to_a_kept_reference<'a>(
+    reference: &[u8],
+    alt: &'a [u8],
+    raw_start: i64,
+) -> Option<(i64, &'a [u8])> {
+    if reference.is_empty() || alt.len() <= reference.len() {
+        return None;
+    }
+    let (lead, tail) = shared_ends_aligned_3prime(alt, reference);
+    (lead + tail == reference.len())
+        .then(|| (raw_start + lead as i64 - 1, &alt[lead..alt.len() - tail]))
+}
+
+/// Whether some bases give `inserted`, added directly after position `point`
+/// along a transcript of `tr_len` bases, a description on it: whether some
+/// run of points at which the added bases give the same sequence is one
+/// `added_bases_at_a_transcript_end` of `vep_effects::hgvs` describes.
+/// `base_at` gives the bases that are read, those of the record's own span,
+/// and `None` for every other. The run goes on towards the 3' end while the
+/// base after it repeats the added bases, and towards the 5' end while the
+/// base before it does: a base that is read settles a step, and a base that
+/// is not leaves the run free to stop there or to go on as far as the rule
+/// reads. A run whose most 3' point lies directly past the last base is a
+/// duplication of the transcript's last bases; one that starts at or before
+/// the first base and ends between two bases of the transcript is a
+/// duplication there, or an insertion where it spans fewer bases than are
+/// added; any other run has no description. Bases that do not move from
+/// `point` (`moves` false) have a description only where the run's most 3'
+/// point is `point`.
+fn added_bases_reach_the_transcript_on_some_bases(
+    tr_len: i64,
+    base_at: &dyn Fn(i64) -> Option<u8>,
+    point: i64,
+    inserted: &[u8],
+    moves: bool,
+) -> bool {
+    let len = inserted.len() as i64;
+    if len == 0 {
+        return false;
+    }
+    // The points the run can end at, from the nearest to the farthest.
+    let mut carried = 0;
+    let mut farthest_carried = None;
+    while point + carried <= tr_len {
+        match base_at(point + carried + 1) {
+            Some(base) if base == inserted[(carried % len) as usize] => carried += 1,
+            Some(_) => break,
+            None => {
+                farthest_carried = Some(tr_len - point + 1);
+                break;
+            }
+        }
+    }
+    if !moves {
+        if carried > 0 {
+            return false;
+        }
+        farthest_carried = None;
+    }
+    let mut back = 0;
+    let mut farthest_back = None;
+    while point - back > -len {
+        match base_at(point - back) {
+            Some(base) if base == inserted[(len - 1 - back % len) as usize] => back += 1,
+            Some(_) => break,
+            None => {
+                farthest_back = Some(point + len);
+                break;
+            }
+        }
+    }
+    let (nearest_last, farthest_last) =
+        (point + carried, point + farthest_carried.unwrap_or(carried));
+    let (farthest_first, nearest_first) = (point - farthest_back.unwrap_or(back), point - back);
+    let duplicates_the_last_bases = nearest_last <= tr_len
+        && tr_len <= farthest_last
+        && len <= tr_len
+        && farthest_first <= tr_len - len;
+    let (inside_from, inside_to) = (nearest_last.max(1), farthest_last.min(tr_len - 1));
+    let starts_by = nearest_first.min(0);
+    let described_inside = inside_from <= inside_to
+        && farthest_first <= starts_by
+        && (inside_to >= len || inside_from - starts_by < len);
+    duplicates_the_last_bases || described_inside
+}
+
+/// Whether an allele that keeps bases of its reference deletes bases over
+/// the first or last base of a transcript of `tr_len` bases that can be
+/// written nowhere wholly inside it, as `vep_effects::hgvs` decides it
+/// (`kept_allele_deletes_over_a_transcript_end`). `reference` holds the
+/// span's bases from position `raw_start` along the transcript, `front_cut`
+/// of them before the first base and `back_cut` past the last, and
+/// `base_at` gives the base at a position beside the span. The deleted bases
+/// stand at the most 3' place of the span, then are carried towards the
+/// transcript's inside while the base they leave equals the base they take
+/// in, no farther than the end they run over.
+fn kept_allele_deletes_over_a_transcript_end(
+    tr_len: i64,
+    base_at: &dyn Fn(i64) -> Option<u8>,
+    reference: &[u8],
+    alt: &[u8],
+    raw_start: i64,
+    front_cut: usize,
+    back_cut: usize,
+) -> bool {
+    if front_cut + back_cut == 0 || alt.is_empty() || alt.len() >= reference.len() {
+        return false;
+    }
+    let (lead, tail) = shared_ends_aligned_3prime(alt, reference);
+    if lead + tail != alt.len() {
+        return false;
+    }
+    let raw_end = raw_start + reference.len() as i64 - 1;
+    let base = |pos: i64| {
+        if (raw_start..=raw_end).contains(&pos) {
+            Some(reference[(pos - raw_start) as usize])
+        } else {
+            base_at(pos)
+        }
+    };
+    let (first, last) = (raw_start + lead as i64, raw_end - tail as i64);
+    let to_the_first_base = if front_cut > 0 { 1 - first } else { 0 };
+    let mut towards_3prime = 0;
+    while towards_3prime < to_the_first_base
+        && base(first + towards_3prime)
+            .is_some_and(|leaving| base(last + towards_3prime + 1) == Some(leaving))
+    {
+        towards_3prime += 1;
+    }
+    let to_the_last_base = if back_cut > 0 { last - tr_len } else { 0 };
+    let mut towards_5prime = 0;
+    while towards_5prime < to_the_last_base
+        && base(last - towards_5prime)
+            .is_some_and(|leaving| base(first - towards_5prime - 1) == Some(leaving))
+    {
+        towards_5prime += 1;
+    }
+    let over_the_first_base =
+        front_cut > 0 && first + towards_3prime < 1 && last + towards_3prime >= 1;
+    let over_the_last_base =
+        back_cut > 0 && first - towards_5prime <= tr_len && last - towards_5prime > tr_len;
+    over_the_first_base || over_the_last_base
 }
 
 /// The bases an intergenic insertion or deletion moves under `--shift_3prime 1`:
@@ -3819,6 +5123,15 @@ pub(crate) fn intergenic_shift(
 ///
 /// After consequence assignment, built-in plugins annotate the entire buffer
 /// in one pass (enabling batched tabix queries), then the `--custom` sources.
+///
+/// Returns the `warn!` events the consequence assignment raised, each under
+/// the index of its variant, with those the plugins and the `--custom` sources
+/// raised over the batch, its read-ahead included, each under the record it
+/// names ([`RecordWarnings::place`]), for the caller to report with the
+/// batch's other record warnings. A plugin or a source raises its events on
+/// the pool, so each pass holds them on the thread that runs it
+/// (`vep_core::warning_hold`) and none reaches the warnings file ahead of the
+/// batch.
 pub(crate) fn annotate_batch(
     batch: &mut Vec<InputVariant>,
     resources: &AnnotationResources,
@@ -3827,7 +5140,7 @@ pub(crate) fn annotate_batch(
     stats: &PipelineStats,
     stats_enabled: bool,
     prefetch: BatchPrefetch,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<RecordWarnings> {
     let batch_len = batch.len();
     let annotation_phase_start = Instant::now();
     let BatchPrefetch {
@@ -3835,17 +5148,34 @@ pub(crate) fn annotate_batch(
         custom: custom_prefetch,
         ..
     } = prefetch;
+    // The events the plugins and the sources raise over the batch, held on the
+    // thread that runs each pass.
+    let mut held: Vec<Held> = Vec::new();
 
     let failure = ReadFailure::default();
-    let annotate_one =
-        |variant: &mut InputVariant| -> u64 { annotate_one(variant, resources, &failure) };
+    // The events each variant's annotation raised, under the variant's index:
+    // held on the thread that annotates it, so the pass reports them in record
+    // order and not as its threads reach them.
+    let drawn: Mutex<Vec<(usize, String)>> = Mutex::default();
+    let annotate_one = |index: usize, variant: &mut InputVariant| -> u64 {
+        let (csqs, events) =
+            crate::warnings::holding_events(|| annotate_one(variant, resources, &failure));
+        if !events.is_empty() {
+            drawn
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .extend(events.into_iter().map(|text| (index, text)));
+        }
+        csqs
+    };
 
     if use_parallel {
         if stats_enabled {
             let (vars, csqs) = pool.install(|| {
                 batch
                     .par_iter_mut()
-                    .map(|v| (1u64, annotate_one(v)))
+                    .enumerate()
+                    .map(|(index, v)| (1u64, annotate_one(index, v)))
                     .reduce(|| (0u64, 0u64), |a, b| (a.0 + b.0, a.1 + b.1))
             });
             stats.variants_processed.fetch_add(vars, Ordering::Relaxed);
@@ -3854,16 +5184,16 @@ pub(crate) fn annotate_batch(
                 .fetch_add(csqs, Ordering::Relaxed);
         } else {
             pool.install(|| {
-                batch.par_iter_mut().for_each(|v| {
-                    annotate_one(v);
+                batch.par_iter_mut().enumerate().for_each(|(index, v)| {
+                    annotate_one(index, v);
                 });
             });
         }
     } else if stats_enabled {
         let mut vars = 0u64;
         let mut csqs = 0u64;
-        for v in batch.iter_mut() {
-            csqs += annotate_one(v);
+        for (index, v) in batch.iter_mut().enumerate() {
+            csqs += annotate_one(index, v);
             vars += 1;
         }
         stats.variants_processed.fetch_add(vars, Ordering::Relaxed);
@@ -3871,9 +5201,16 @@ pub(crate) fn annotate_batch(
             .consequences_calculated
             .fetch_add(csqs, Ordering::Relaxed);
     } else {
-        batch.iter_mut().for_each(|v| {
-            annotate_one(v);
+        batch.iter_mut().enumerate().for_each(|(index, v)| {
+            annotate_one(index, v);
         });
+    }
+    let mut warnings = RecordWarnings::default();
+    for (index, text) in drawn
+        .into_inner()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+    {
+        warnings.push(index, text);
     }
     // A read failure the lookups recorded ends the run before this batch is
     // rendered.
@@ -3892,10 +5229,13 @@ pub(crate) fn annotate_batch(
     if !resources.builtin_plugins.is_empty() {
         let plugin_phase_start = Instant::now();
         let registry = &resources.builtin_plugins;
-        let outcome = pool.install(|| match plugin_prefetch {
-            Some(prefetch) => registry.annotate_batch(batch, prefetch),
-            None => registry.run_batch(batch),
+        let (outcome, raised) = pool.install(|| {
+            holding(|| match plugin_prefetch {
+                Some(prefetch) => registry.annotate_batch(batch, prefetch),
+                None => registry.run_batch(batch),
+            })
         });
+        held.extend(raised);
         crate::annotator::report_plugin_failures(outcome);
         let plugin_elapsed = plugin_phase_start.elapsed();
         debug!(
@@ -3912,11 +5252,14 @@ pub(crate) fn annotate_batch(
     // rendered.
     if let Some(sources) = &resources.custom_sources {
         let custom_phase_start = Instant::now();
-        pool.install(|| match custom_prefetch {
-            Some(prefetch) => sources.annotate(batch, prefetch),
-            None => sources.run_batch(batch),
-        })
-        .map_err(|error| CliError::new("custom", error.to_string()))?;
+        let (annotated, raised) = pool.install(|| {
+            holding(|| match custom_prefetch {
+                Some(prefetch) => sources.annotate(batch, prefetch),
+                None => sources.run_batch(batch),
+            })
+        });
+        annotated.map_err(|error| CliError::new("custom", error.to_string()))?;
+        held.extend(raised);
         debug!(
             batch_size = batch_len,
             custom_ms = custom_phase_start.elapsed().as_millis() as u64,
@@ -3924,7 +5267,8 @@ pub(crate) fn annotate_batch(
         );
     }
 
-    Ok(())
+    warnings.place(batch, held);
+    Ok(warnings)
 }
 
 /// The sequences a plugin translates from, for a row the sequence gate names:
@@ -3939,6 +5283,19 @@ fn transcript_sequences(
         config.reference_fasta.as_deref(),
     );
     vep_core::consequence::TranscriptSequences::from_transcript(transcript, utr).map(Box::new)
+}
+
+/// `variant` with its coordinates one sequence length on, where a transcript
+/// stored across the origin of a circular sequence carries the sequence's
+/// first bases ([`Transcript::circular_length`]).
+fn one_turn_on(variant: &InputVariant, length: u64) -> InputVariant {
+    let mut moved = variant.clone();
+    moved.start += length;
+    moved.end += length;
+    moved.original_start = moved.original_start.map(|position| position + length);
+    moved.original_end = moved.original_end.map(|position| position + length);
+    moved.sv_end = moved.sv_end.map(|position| position + length);
+    moved
 }
 
 /// Capacity a variant's `transcript_consequences` takes at its first row: a
@@ -3968,9 +5325,8 @@ pub(crate) fn annotate_variant(
     // computed (`against_reference_allele` under --use_transcript_ref) carries
     // no finished row.
     let mut rows = std::mem::take(&mut variant.transcript_consequences);
-    // For structural variants, use sv_end to query the full SV span so all
-    // overlapping transcripts are found (not just those at the 1bp anchor).
-    transcripts.for_each_overlapping(variant_start, variant_end, |transcript| {
+    let mut annotate = |variant: &InputVariant,
+                        transcript: &Arc<vep_core::transcript::Transcript>| {
         if transcript_filter.is_some_and(|filter| !filter.evaluate(transcript.as_ref())) {
             return;
         }
@@ -3996,10 +5352,29 @@ pub(crate) fn annotate_variant(
             }
             rows.push(tc);
         }
+    };
+    // For structural variants, use sv_end to query the full SV span so all
+    // overlapping transcripts are found (not just those at the 1bp anchor).
+    transcripts.for_each_overlapping(variant_start, variant_end, |transcript| {
+        // A transcript stored across the origin of a circular sequence that
+        // the record lies nearer one turn on takes its row below.
+        if transcripts
+            .origin_shift(transcript, variant_start, variant_end)
+            .is_none()
+        {
+            annotate(variant, transcript);
+        }
+    });
+    // A record among the first bases of a circular sequence lies on a
+    // transcript stored across the origin one sequence length on from where it
+    // is written; its row is computed there and keeps the record's own
+    // coordinates everywhere else.
+    transcripts.for_each_across_origin(variant_start, variant_end, |transcript, length| {
+        annotate(&one_turn_on(variant, length), transcript);
     });
     variant.transcript_consequences = rows;
 
-    // `<*>` without INFO/SVTYPE is a sequence allele at POS (Perl's structural ALT regex
+    // `<*>` without INFO/SVTYPE is a sequence allele at POS (Ensembl VEP's structural ALT regex
     // `[<\[\]][^\*]+[>\]\[]` excludes it) whose length is unknown, so a frameshift the
     // sequence predicates derive reads as coding_sequence_variant. With SVTYPE the record
     // is structural and the allele takes the record's class, outside this step.
@@ -4060,7 +5435,7 @@ fn substituted_residue(amino_acids: Option<&str>) -> Option<u8> {
 
 /// Fills the `SIFT` and `PolyPhen` columns of a transcript consequence from the
 /// matrices cached on its transcript (`OutputFactory.pm` `add_sift_polyphen`,
-/// release/116.2): a prediction is looked up for a single-residue substitution
+/// release/116.3): a prediction is looked up for a single-residue substitution
 /// ([`substituted_residue`]) at its residue, each tool rendered under its flag's
 /// value, PolyPhen from the HumVar matrix or under `--humdiv` the HumDiv one; a
 /// cache without a tool's matrix leaves its column empty.
@@ -4143,7 +5518,7 @@ pub(crate) fn append_bnd_mate_consequences(
     };
 
     // The mate's own chromosome having loaded transcripts is the only requirement,
-    // and `get` below enforces it. No gate on the local chromosome: Perl loads a
+    // and `get` below enforces it. No gate on the local chromosome: Ensembl VEP loads a
     // region because a variant overlaps it, and the mate coordinate is such a
     // variant; nothing in `AnnotationSource::Cache` conditions the mate's region
     // on the local chromosome being cached.
@@ -4167,10 +5542,12 @@ pub(crate) fn append_bnd_mate_consequences(
 
     let mut appended = 0usize;
     for tc in mate_consequences {
-        let already_has = variant
-            .transcript_consequences
-            .iter()
-            .any(|existing| existing.transcript_id() == tc.transcript_id());
+        // One row per transcript and source: a gene-model file's transcript
+        // and the cache's of the same stable id are two transcripts.
+        let already_has = variant.transcript_consequences.iter().any(|existing| {
+            existing.transcript_id() == tc.transcript_id()
+                && existing.source_cache() == tc.source_cache()
+        });
         if !already_has {
             variant.transcript_consequences.push(tc);
             appended += 1;
@@ -4220,6 +5597,7 @@ pub(crate) fn warm_and_annotate_batch(
         stats_enabled,
         BatchPrefetch::default(),
     )
+    .map(drop)
 }
 
 /// Annotate one VCF line through the CLI path and return per-variant
@@ -4241,10 +5619,11 @@ pub(crate) fn annotate_batch_for_test(
         cell_types: None,
         sv_source: None,
         colocation: ColocationRules::default(),
-        effects_config: Arc::new(vep_effects::EffectsConfig {
-            upstream_distance: 5_000,
-            downstream_distance: 5_000,
-            ..Default::default()
+        effects_config: Arc::new({
+            let mut effects = vep_effects::EffectsConfig::default();
+            effects.upstream_distance = 5_000;
+            effects.downstream_distance = 5_000;
+            effects
         }),
         builtin_plugins: Arc::new(BuiltinRegistry::new()),
         dylib_plugins: Arc::new(PluginRegistry::new()),
@@ -4254,6 +5633,9 @@ pub(crate) fn annotate_batch_for_test(
         nearest: None,
         frequency_filter: None,
         warn_assembly_mismatch: true,
+        hgvsc_rows: NotationRows::Every,
+        hgvsg_rows: NotationRows::Every,
+        oversize_rows_written: true,
         custom_sources: None,
     };
     let stats = PipelineStats::new();
@@ -4302,10 +5684,11 @@ pub(crate) fn default_rows_for_test(
         cell_types: None,
         sv_source: None,
         colocation: ColocationRules::default(),
-        effects_config: Arc::new(vep_effects::EffectsConfig {
-            upstream_distance: 5_000,
-            downstream_distance: 5_000,
-            ..Default::default()
+        effects_config: Arc::new({
+            let mut effects = vep_effects::EffectsConfig::default();
+            effects.upstream_distance = 5_000;
+            effects.downstream_distance = 5_000;
+            effects
         }),
         builtin_plugins: Arc::new(BuiltinRegistry::new()),
         dylib_plugins: Arc::new(PluginRegistry::new()),
@@ -4315,6 +5698,9 @@ pub(crate) fn default_rows_for_test(
         nearest: None,
         frequency_filter: None,
         warn_assembly_mismatch: true,
+        hgvsc_rows: NotationRows::Every,
+        hgvsg_rows: NotationRows::Every,
+        oversize_rows_written: true,
         custom_sources: None,
     };
     let stats = PipelineStats::new();
@@ -4328,6 +5714,19 @@ pub(crate) fn default_rows_for_test(
     String::from_utf8(out).unwrap()
 }
 
+/// [`resources_over`] with the built-in plugins of `plugins` loaded, for the
+/// pipeline tests of a run a plugin keeps batched.
+#[cfg(test)]
+pub(crate) fn resources_over_with_plugins(
+    transcripts: Arc<LazyTranscriptIndexes>,
+    plugins: BuiltinRegistry,
+) -> AnnotationResources {
+    AnnotationResources {
+        builtin_plugins: Arc::new(plugins),
+        ..resources_over(transcripts)
+    }
+}
+
 /// Resources over `transcripts` alone, for the runner and pipeline tests.
 /// Test-only, outside `mod tests` so the pipeline tests can reach it.
 #[cfg(test)]
@@ -4339,10 +5738,11 @@ pub(crate) fn resources_over(transcripts: Arc<LazyTranscriptIndexes>) -> Annotat
         cell_types: None,
         sv_source: None,
         colocation: ColocationRules::default(),
-        effects_config: Arc::new(vep_effects::EffectsConfig {
-            upstream_distance: 5_000,
-            downstream_distance: 5_000,
-            ..Default::default()
+        effects_config: Arc::new({
+            let mut effects = vep_effects::EffectsConfig::default();
+            effects.upstream_distance = 5_000;
+            effects.downstream_distance = 5_000;
+            effects
         }),
         builtin_plugins: Arc::new(BuiltinRegistry::new()),
         dylib_plugins: Arc::new(PluginRegistry::new()),
@@ -4352,7 +5752,23 @@ pub(crate) fn resources_over(transcripts: Arc<LazyTranscriptIndexes>) -> Annotat
         nearest: None,
         frequency_filter: None,
         warn_assembly_mismatch: true,
+        hgvsc_rows: NotationRows::Every,
+        hgvsg_rows: NotationRows::Every,
+        oversize_rows_written: true,
         custom_sources: None,
+    }
+}
+
+/// [`resources_over`] with `source` as the run's known variants, for a
+/// pipeline test whose lookups read a variation file.
+#[cfg(test)]
+pub(crate) fn resources_over_with_variations(
+    transcripts: Arc<LazyTranscriptIndexes>,
+    source: VariationSource,
+) -> AnnotationResources {
+    AnnotationResources {
+        variation_source: Some(Arc::new(source)),
+        ..resources_over(transcripts)
     }
 }
 
@@ -4392,13 +5808,12 @@ pub(crate) fn set_lengths(
         db_id: None,
         start: 1,
         end: u64::from(cds),
-        start_exon_index: 0,
-        end_exon_index: 0,
         seq: None,
     });
-    transcript.vefc = cds.map(|cds| TranscriptVEFC {
-        translateable_seq: Some("A".repeat(cds as usize)),
-        ..Default::default()
+    transcript.vefc = cds.map(|cds| {
+        let mut vefc = TranscriptVEFC::default();
+        vefc.translateable_seq = Some("A".repeat(cds as usize));
+        vefc
     });
 }
 
@@ -4435,57 +5850,59 @@ pub(crate) fn make_runner_test_transcript(
         rank: 1,
     }];
 
-    Transcript {
-        stable_id: stable_id.into(),
-        version: None,
-        db_id: None,
-        gene_stable_id: gene_id.into(),
-        gene_version: None,
-        chr: chr.into(),
-        start,
-        end: start + 999,
-        strand: Strand::Forward,
-        biotype: "lncRNA".into(),
-        source: "Ensembl".into(),
-        gene_symbol: Some(stable_id.into()),
-        gene_symbol_source: Some("TEST".into()),
-        gene_symbol_id: None,
-        hgnc_id: None,
-        gene_phenotype: None,
-        canonical: true,
-        mane_select: None,
-        mane_plus_clinical: None,
-        tsl: None,
-        appris: None,
-        ccds: None,
-        protein_id: None,
-        refseq: None,
-        swissprot: None,
-        trembl: None,
-        uniparc: None,
-        uniprot_isoform: None,
-        exons,
-        exon_ids: None,
-        introns,
-        cdna_coding_start: None,
-        cdna_coding_end: None,
-        coding_region_start: None,
-        coding_region_end: None,
-        translation_start: None,
-        translation_end: None,
-        translation: None,
-        cdna_sequence: None,
-        protein_sequence: None,
-        flags: Arc::from([]),
-        gencode_basic: false,
-        gencode_primary: false,
-        attributes: vec![],
-        vefc: None,
-        source_cache: None,
-        bam_edit_status: None,
-        derived: Default::default(),
-        id_rank: 0,
-    }
+    let mut transcript = Transcript::default();
+    transcript.stable_id = stable_id.into();
+    transcript.version = None;
+    transcript.db_id = None;
+    transcript.gene_stable_id = gene_id.into();
+    transcript.gene_version = None;
+    transcript.chr = chr.into();
+    transcript.start = start;
+    transcript.end = start + 999;
+    transcript.strand = Strand::Forward;
+    transcript.biotype = "lncRNA".into();
+    transcript.source = "Ensembl".into();
+    transcript.gene_symbol = Some(stable_id.into());
+    transcript.gene_symbol_source = Some("TEST".into());
+    transcript.gene_symbol_id = None;
+    transcript.hgnc_id = None;
+    transcript.gene_phenotype = None;
+    transcript.canonical = true;
+    transcript.mane_select = None;
+    transcript.mane_plus_clinical = None;
+    transcript.tsl = None;
+    transcript.appris = None;
+    transcript.ccds = None;
+    transcript.protein_id = None;
+    transcript.refseq = None;
+    transcript.swissprot = None;
+    transcript.trembl = None;
+    transcript.uniparc = None;
+    transcript.uniprot_isoform = None;
+    transcript.exons = exons;
+    transcript.exon_ids = None;
+    transcript.introns = introns;
+    transcript.cdna_coding_start = None;
+    transcript.cdna_coding_end = None;
+    transcript.coding_region_start = None;
+    transcript.coding_region_end = None;
+    transcript.translation_start = None;
+    transcript.translation_end = None;
+    transcript.translation = None;
+    transcript.cdna_sequence = None;
+    transcript.protein_sequence = None;
+    transcript.flags = Arc::from([]);
+    transcript.gencode_basic = false;
+    transcript.gencode_primary = false;
+    transcript.attributes = vec![];
+    transcript.vefc = None;
+    transcript.source_cache = None;
+    transcript.bam_edit_status = None;
+    transcript.circular_length = None;
+    transcript.region_files = None;
+    transcript.derived = Default::default();
+    transcript.id_rank = 0;
+    transcript
 }
 
 #[cfg(test)]
@@ -4513,9 +5930,12 @@ mod tests {
                 .unwrap(),
         );
         let svs = Arc::new(
-            SvSource::open(Path::new(&format!(
-                "{golden}/GRCh38-checksvs/structural_variants.vcf.gz"
-            )))
+            SvSource::open(
+                Path::new(&format!(
+                    "{golden}/GRCh38-checksvs/structural_variants.vcf.gz"
+                )),
+                None,
+            )
             .unwrap(),
         );
         let transcripts = Arc::new(LazyTranscriptIndexes::new(&cache, 5_000, 5_000).unwrap());
@@ -4615,13 +6035,14 @@ mod tests {
             Vec::new(),
             Some(&fasta),
             &Arc::default(),
-            CustomRunOptions::default()
+            CustomRunOptions::default(),
+            None
         )
         .unwrap()
         .is_none());
     }
 
-    /// Ensembl VEP 116.2 lists the statistics report's `Annotation sources` as
+    /// Ensembl VEP 116.3 lists the statistics report's `Annotation sources` as
     /// the cache, then `Custom: <file> (<type>)` per `--custom` source in the
     /// order given, the file as given and the `type` as given or `overlap`
     /// (Stats.pm:666-675, `File.pm:159` and `:170`); a run without a source
@@ -4642,7 +6063,7 @@ mod tests {
         let sources =
             CustomSources::open(specs, Arc::default(), CustomRunOptions::default()).unwrap();
         assert_eq!(
-            annotation_source_entries("/cache/116_GRCh38", Some(&sources)),
+            annotation_source_entries("/cache/116_GRCh38", Some(&sources), &[]),
             [
                 "Cache: <kbd>/cache/116_GRCh38</kbd>".to_string(),
                 format!("Custom: {custom_dir}/sites.vcf.gz (exact)"),
@@ -4650,7 +6071,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            annotation_source_entries("[PATH]/json_cache", None),
+            annotation_source_entries("[PATH]/json_cache", None, &[]),
             ["Cache: <kbd>[PATH]/json_cache</kbd>"]
         );
     }
@@ -4721,6 +6142,116 @@ mod tests {
             0x1f, 0x8b, 8, 4, 0, 0, 0, 0, 0, 0xff, 6, 0, b'X', b'Y', 2, 0, 1, 2,
         ];
         assert_eq!(bgzf_block_size(&other_subfield), None);
+    }
+
+    /// The test of a file a run names changes nothing: a file keeps its bytes,
+    /// a name nothing stands at is left unmade, and a directory, a name in a
+    /// directory that does not exist and a file closed to writing cannot be
+    /// written.
+    #[test]
+    fn the_test_that_a_file_can_be_written_leaves_the_directory_as_it_was() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("file.txt");
+        std::fs::write(&file, "kept").unwrap();
+        assert!(can_be_written(&file));
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "kept");
+
+        let new = dir.path().join("new.txt");
+        assert!(can_be_written(&new));
+        assert!(!new.exists(), "the test left the file it created");
+
+        assert!(!can_be_written(dir.path()));
+        assert!(!can_be_written(&dir.path().join("absent").join("new.txt")));
+        assert!(!can_be_written(Path::new("")));
+
+        let mut closed = std::fs::metadata(&file).unwrap().permissions();
+        closed.set_readonly(true);
+        std::fs::set_permissions(&file, closed).unwrap();
+        // The superuser opens a file closed to writing, so the file tells
+        // nothing there.
+        if std::fs::OpenOptions::new().write(true).open(&file).is_err() {
+            assert!(!can_be_written(&file));
+        }
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "kept");
+    }
+
+    /// A symbolic link that leads nowhere is tested at the name it gives, a
+    /// loop of links cannot be written, and a device is taken as writable.
+    #[cfg(unix)]
+    #[test]
+    fn the_test_follows_a_link_that_leads_nowhere_and_opens_no_device() {
+        use std::os::unix::fs::symlink;
+        let dir = tempfile::tempdir().unwrap();
+        symlink("target.txt", dir.path().join("link")).unwrap();
+        assert!(can_be_written(&dir.path().join("link")));
+        assert!(!dir.path().join("target.txt").exists());
+        assert!(dir.path().join("link").is_symlink());
+
+        symlink("absent/target.txt", dir.path().join("lost")).unwrap();
+        assert!(!can_be_written(&dir.path().join("lost")));
+
+        symlink("b", dir.path().join("a")).unwrap();
+        symlink("a", dir.path().join("b")).unwrap();
+        assert!(!can_be_written(&dir.path().join("a")));
+
+        assert!(can_be_written(Path::new("/dev/null")));
+    }
+
+    /// Runs that test one name at the same moment each find it writable: a
+    /// name another test creates or removes between two steps is tested again.
+    #[cfg(unix)]
+    #[test]
+    fn the_test_holds_while_other_runs_test_the_same_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let shared = dir.path().join("shared.txt");
+        let refused: usize = std::thread::scope(|scope| {
+            let tests: Vec<_> = (0..4)
+                .map(|_| scope.spawn(|| (0..500).filter(|_| !can_be_written(&shared)).count()))
+                .collect();
+            tests.into_iter().map(|test| test.join().unwrap()).sum()
+        });
+        assert_eq!(refused, 0, "a test refused a name another test held");
+        assert!(!shared.exists(), "the tests left the file they created");
+    }
+
+    /// A build with no Parquet writer refuses the format where the run tests
+    /// its output, so the refused run creates no report.
+    #[cfg(not(feature = "parquet"))]
+    #[test]
+    fn a_build_with_no_parquet_writer_refuses_the_format_before_a_report_is_created() {
+        let _in_turn = crate::warnings::sink_test_guard();
+        let cache = write_json_cache("no_parquet_writer", &[("21", 1_000)]);
+        let dir = tempfile::tempdir().unwrap();
+        let input = dir.path().join("in.vcf");
+        std::fs::write(
+            &input,
+            "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n21\t1500\t.\tA\tG\t.\t.\t.\n",
+        )
+        .unwrap();
+        let report = dir.path().join("s.txt");
+        let runner = runner_over(
+            &cache,
+            &[
+                "-i",
+                input.to_str().unwrap(),
+                "-o",
+                dir.path().join("out.parquet").to_str().unwrap(),
+                "--output_format",
+                "parquet",
+                "--stats_text",
+                "--stats_file",
+                report.to_str().unwrap(),
+                "--quiet",
+            ],
+        );
+        let error = runner.run().unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("this build has no Parquet writer"),
+            "{error}"
+        );
+        assert!(!report.exists(), "the refused run created its report");
     }
 
     /// A BGZF stream cut inside a block delivers the blocks before the cut and
@@ -5158,7 +6689,7 @@ mod tests {
     }
 
     /// Config.pm `full_command` prints every flag with its value, so Ensembl VEP
-    /// 116.2's header reads `--max_sv_size -1` for the unlimited span; the negative
+    /// 116.3's header reads `--max_sv_size -1` for the unlimited span; the negative
     /// number stays with its flag, while a flag followed by another flag stays bare
     /// and an ordinary `--flag value` pair is unchanged.
     #[test]
@@ -5184,7 +6715,7 @@ mod tests {
     /// spelling. An `=i` option holds the integer Getopt::Long read, so
     /// `--buffer_size 01` prints bare and `--max_sv_size +10000000` is its
     /// default, while the `=f` `--freq_freq 0.010` stays as written against
-    /// `0.01`. Ensembl VEP 116.2 prints `--buffer_size`, `--fork`, `--plugin
+    /// `0.01`. Ensembl VEP 116.3 prints `--buffer_size`, `--fork`, `--plugin
     /// Other --plugin Dummy` and `--shift_3prime`, and no `--species`, for
     /// `--fork 1 --plugin Other --buffer_size 01 --species homo_sapiens
     /// --max_sv_size 10000000` beside a config file's `plugin Dummy`,
@@ -5358,6 +6889,183 @@ mod tests {
         assert_eq!(left, released);
     }
 
+    /// A quiet run over a cache whose transcript carries no `dbID` keeps the
+    /// line of a filter naming that key for a caller that asked for it, hands
+    /// it over once, and keeps nothing for a caller that did not ask.
+    #[test]
+    fn a_quiet_run_keeps_the_filter_key_line_for_a_caller_that_asked() {
+        let _in_turn = crate::warnings::sink_test_guard();
+        let cache = write_json_cache("held_filter_line", &[("21", 1_000)]);
+        let dir = tempfile::tempdir().unwrap();
+        let input = dir.path().join("in.vcf");
+        std::fs::write(
+            &input,
+            "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n21\t1500\t.\tA\tG\t.\t.\t.\n",
+        )
+        .unwrap();
+        let out = dir.path().join("out.txt");
+        let quiet_runner = |filter: &str| {
+            runner_over(
+                &cache,
+                &[
+                    "-i",
+                    input.to_str().unwrap(),
+                    "-o",
+                    out.to_str().unwrap(),
+                    "--no_stats",
+                    "--quiet",
+                    "--force_overwrite",
+                    "--transcript_filter",
+                    filter,
+                ],
+            )
+        };
+        let line = "INFO: --transcript_filter names dbID, which no transcript of this cache \
+                    carries: a cache built from a GTF or GFF3 leaves it undefined, so exists and \
+                    a comparison on it fail for each of its transcripts";
+
+        let asked = quiet_runner("dbID exists").holding_own_notices();
+        assert!(asked.take_own_notices().is_empty(), "before the run");
+        asked.run().unwrap();
+        assert_eq!(asked.take_own_notices(), [line]);
+        assert!(asked.take_own_notices().is_empty(), "handed over once");
+
+        let other_key = quiet_runner("biotype is lncRNA").holding_own_notices();
+        other_key.run().unwrap();
+        assert!(other_key.take_own_notices().is_empty());
+
+        let not_asked = quiet_runner("dbID exists");
+        not_asked.run().unwrap();
+        assert!(not_asked.take_own_notices().is_empty());
+    }
+
+    /// `lines` bgzip-compressed at `<dir>/<name>` with a tabix index that files
+    /// the last line under the contig of its first column, at the position of
+    /// its second; the lines before it belong to no chunk.
+    fn indexed_last_line(dir: &Path, name: &str, lines: &[&str]) -> String {
+        use noodles::core::Position;
+        use noodles::csi::binning_index::index::header::Builder as HeaderBuilder;
+        use noodles::csi::binning_index::index::reference_sequence::bin::Chunk;
+
+        let path = dir.join(name);
+        let (record, head) = lines.split_last().unwrap();
+        let mut writer = bgzf::io::Writer::new(File::create(&path).unwrap());
+        for line in head {
+            writeln!(writer, "{line}").unwrap();
+        }
+        let start = writer.virtual_position();
+        writeln!(writer, "{record}").unwrap();
+        let end = writer.virtual_position();
+        writer.finish().unwrap();
+        let mut fields = record.split('\t');
+        let contig = fields.next().unwrap();
+        let position: usize = fields.next().unwrap().parse().unwrap();
+        let position = Position::try_from(position).unwrap();
+        let mut indexer = noodles::tabix::index::Indexer::default();
+        indexer.set_header(
+            HeaderBuilder::default()
+                .set_reference_sequence_name_index(0)
+                .set_start_position_index(1)
+                .build(),
+        );
+        indexer
+            .add_record(contig, position, position, Chunk::new(start, end))
+            .unwrap();
+        noodles::tabix::fs::write(format!("{}.tbi", path.display()), &indexer.build()).unwrap();
+        path.display().to_string()
+    }
+
+    /// The run's assembly reaches the `--check_svs` reader and each `--custom`
+    /// source on the binary's path and on the library's
+    /// (`Annotator::from_config`). On GRCh37 `MT` and `chrMT` name the
+    /// assembly's mitochondrial sequence and `chrM` and `M` another one, so a
+    /// record on `MT` takes the structural variant and the BED feature of the
+    /// files naming the contig `MT` and none of the files naming it `M`.
+    #[test]
+    fn on_grch37_the_sv_file_and_a_custom_source_are_read_for_mt_under_its_own_pair_alone() {
+        let _in_turn = crate::warnings::sink_test_guard();
+        let cache = format!(
+            "{}/tests/fixtures/bayesdel-mitochondrial-contig/json_cache",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let input = dir.path().join("in.vcf");
+        std::fs::write(
+            &input,
+            "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\nMT\t3556\t.\tA\tC\t.\t.\t.\n",
+        )
+        .unwrap();
+        for (contig, read) in [("M", false), ("MT", true)] {
+            let svs = indexed_last_line(
+                dir.path(),
+                &format!("svs_{contig}.vcf.gz"),
+                &[
+                    "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO",
+                    &format!("{contig}\t3500\tnsv1\tN\t<deletion>\t.\t.\tSVTYPE=deletion;END=3600"),
+                ],
+            );
+            let bed = indexed_last_line(
+                dir.path(),
+                &format!("features_{contig}.bed.gz"),
+                &[&format!("{contig}\t3500\t3600\tfeature")],
+            );
+            let out = dir.path().join(format!("{contig}.txt"));
+            let custom = format!("file={bed},short_name=T,format=bed,type=overlap");
+            let config = config_from(&[
+                "--json_cache",
+                &cache,
+                "--assembly",
+                "GRCh37",
+                "-i",
+                input.to_str().unwrap(),
+                "-o",
+                out.to_str().unwrap(),
+                "--check_svs",
+                &svs,
+                "--custom",
+                &custom,
+                "--fork",
+                "1",
+                "--no_stats",
+                "--quiet",
+                "--force_overwrite",
+            ]);
+
+            let annotator = crate::annotator::Annotator::from_config(&config).unwrap();
+            let annotated = annotator
+                .try_annotate_rows(&[crate::annotator::RawRow {
+                    chrom: "MT".to_string(),
+                    pos: 3556,
+                    ref_allele: "A".to_string(),
+                    alt_allele: "C".to_string(),
+                }])
+                .remove(0)
+                .unwrap();
+            assert_eq!(
+                annotated.overlapping_svs.is_empty(),
+                !read,
+                "{contig}: the library's structural variants"
+            );
+            assert_eq!(
+                annotated.custom_annotations.is_empty(),
+                !read,
+                "{contig}: the library's custom annotations"
+            );
+
+            Runner::new(config)
+                .unwrap()
+                .run_with(Teardown::Release)
+                .unwrap();
+            let text = std::fs::read_to_string(&out).unwrap();
+            let rows: Vec<&str> = text.lines().filter(|row| !row.starts_with('#')).collect();
+            assert!(!rows.is_empty(), "{contig}");
+            for row in rows {
+                assert_eq!(row.contains("SV=nsv1"), read, "{contig}: {row}");
+                assert_eq!(row.contains("T=feature"), read, "{contig}: {row}");
+            }
+        }
+    }
+
     /// A one-shard chromosome 21 cache holding three transcripts: one in the
     /// GENCODE basic set alone, one in both sets, one in neither.
     fn write_gencode_cache(tag: &str) -> tempfile::TempDir {
@@ -5387,7 +7095,7 @@ mod tests {
 
     /// The chromosome 21 transcripts a runner's indexes hold, sorted.
     fn indexed_transcripts(runner: &Runner) -> Vec<String> {
-        let indexes = runner.transcript_indexes(5_000, 5_000).unwrap();
+        let indexes = runner.transcript_indexes(5_000, 5_000, &[], None).unwrap();
         indexes.prewarm("21").unwrap();
         let mut ids = Vec::new();
         indexes
@@ -5447,8 +7155,176 @@ mod tests {
         assert!(flag_fields(&both.field_options()).contains(&"ENSP"));
     }
 
+    /// The fields of `options` in declaration order, each with its name and
+    /// its value as `{:#?}` prints it.
+    fn field_values(options: &FieldOptions) -> Vec<(String, String)> {
+        let mut fields: Vec<(String, String)> = Vec::new();
+        for line in format!("{options:#?}").lines() {
+            let Some(rest) = line.strip_prefix("    ") else {
+                continue;
+            };
+            // A line at the first indent opens a field unless it closes a list
+            // or a map; a deeper line continues the value before it.
+            if rest.starts_with([' ', ']', '}', ')']) {
+                let (_, value) = fields.last_mut().expect("a field before the line");
+                value.push_str(rest.trim());
+            } else {
+                let (name, value) = rest.split_once(": ").expect("a field and its value");
+                fields.push((name.to_string(), value.to_string()));
+            }
+        }
+        fields
+    }
+
+    /// A run that gives no output flag, `vep --json_cache <dir>`, builds the
+    /// output settings `FieldOptions::default()` holds. The two are compared
+    /// one field at a time, so a field the run sets apart from the default
+    /// fails here by its name with both values, as the one field `--symbol`
+    /// sets does.
+    #[test]
+    fn a_run_without_an_output_flag_builds_the_default_output_settings() {
+        let cache = write_json_cache("default_output_settings", &[("21", 1_000)]);
+        let default = FieldOptions::default();
+        let differing = |flags: &[&str]| -> Vec<String> {
+            field_values(&runner_over(&cache, flags).field_options())
+                .into_iter()
+                .zip(field_values(&default))
+                .filter(|(built, default)| built != default)
+                .map(|((name, built), (_, default))| {
+                    let default = default.trim_end_matches(',');
+                    format!("{name}: {built} where the default holds {default}")
+                })
+                .collect()
+        };
+        assert_eq!(differing(&[]), [] as [&str; 0]);
+        assert_eq!(runner_over(&cache, &[]).field_options(), default);
+        assert_eq!(
+            differing(&["--symbol"]),
+            ["symbol: true, where the default holds false"]
+        );
+    }
+
+    /// A run that gives neither `--custom_multi_allelic` nor
+    /// `--custom_suppress_filter` builds the settings
+    /// `CustomRunOptions::default()` holds, compared one field at a time as
+    /// the output settings are. `assembly` follows no flag of the sources:
+    /// `open_custom_sources` assigns it the run's assembly once a source is
+    /// named.
+    #[test]
+    fn a_run_without_a_custom_source_flag_builds_the_default_custom_run_options() {
+        /// The fields of `options` in declaration order, each with its name
+        /// and its value as `{:#?}` prints it.
+        fn option_values(options: &CustomRunOptions) -> Vec<(String, String)> {
+            let mut fields: Vec<(String, String)> = Vec::new();
+            for line in format!("{options:#?}").lines() {
+                let Some(rest) = line.strip_prefix("    ") else {
+                    continue;
+                };
+                // A line at the first indent opens a field unless it closes a
+                // value; a deeper line continues the value before it.
+                if rest.starts_with([' ', ']', '}', ')']) {
+                    let (_, value) = fields.last_mut().expect("a field before the line");
+                    value.push_str(rest.trim());
+                } else {
+                    let (name, value) = rest.split_once(": ").expect("a field and its value");
+                    fields.push((name.to_string(), value.to_string()));
+                }
+            }
+            fields
+        }
+        let default = CustomRunOptions::default();
+        let differing = |flags: &[&str]| -> Vec<String> {
+            option_values(&custom_run_options(&config_from(flags)))
+                .into_iter()
+                .zip(option_values(&default))
+                .filter(|(built, default)| built != default)
+                .map(|((name, built), (_, default))| {
+                    let default = default.trim_end_matches(',');
+                    format!("{name}: {built} where the default holds {default}")
+                })
+                .collect()
+        };
+        assert_eq!(differing(&[]), [] as [&str; 0]);
+        assert_eq!(custom_run_options(&config_from(&[])), default);
+        assert_eq!(
+            differing(&["--custom", "x.vcf.gz,X,vcf", "--custom_multi_allelic"]),
+            ["multi_allelic: true, where the default holds false"]
+        );
+    }
+
+    /// A run that gives no flag of the consequence settings, `vep --json_cache
+    /// <dir>` over a cache with no FASTA beside it, builds the settings
+    /// `EffectsConfig::default()` holds. The two are compared one field at a
+    /// time, so a field the run sets apart from the default fails here by its
+    /// name, as the one field `--protein_version` sets does.
+    #[test]
+    fn a_run_without_a_consequence_flag_builds_the_default_effects_config() {
+        let cache = write_json_cache("default_effects_config", &[("21", 1_000)]);
+        let default = vep_effects::EffectsConfig::default();
+        let differing = |flags: &[&str]| -> Vec<&'static str> {
+            let runner = runner_over(&cache, flags);
+            let fasta = open_fasta(&runner.config, &runner.cache).unwrap();
+            let checks = fasta_setup_checks(&runner.config, fasta.is_some()).unwrap();
+            let LoadedPlugins { builtin, .. } =
+                runner.load_plugins(fasta.clone(), checks.hgvs).unwrap();
+            let built = runner.effects_config(fasta, checks.hgvs, &builtin);
+            let same_fasta = built.reference_fasta.as_ref().map(Arc::as_ptr)
+                == default.reference_fasta.as_ref().map(Arc::as_ptr);
+            [
+                (
+                    "upstream_distance",
+                    built.upstream_distance == default.upstream_distance,
+                ),
+                (
+                    "downstream_distance",
+                    built.downstream_distance == default.downstream_distance,
+                ),
+                ("reference_fasta", same_fasta),
+                (
+                    "enable_indel_3prime_shift",
+                    built.enable_indel_3prime_shift == default.enable_indel_3prime_shift,
+                ),
+                ("hgvs", built.hgvs == default.hgvs),
+                (
+                    "loftee_context",
+                    built.loftee_context == default.loftee_context,
+                ),
+                (
+                    "context_sequences",
+                    built.context_sequences == default.context_sequences,
+                ),
+                ("compute_hgvs", built.compute_hgvs == default.compute_hgvs),
+                (
+                    "compute_exon_intron_numbers",
+                    built.compute_exon_intron_numbers == default.compute_exon_intron_numbers,
+                ),
+                (
+                    "protein_version",
+                    built.protein_version == default.protein_version,
+                ),
+                ("hgvsg", built.hgvsg == default.hgvsg),
+                ("spdi", built.spdi == default.spdi),
+                ("domains", built.domains == default.domains),
+                (
+                    "use_transcript_ref",
+                    built.use_transcript_ref == default.use_transcript_ref,
+                ),
+                (
+                    "process_ref_homs",
+                    built.process_ref_homs == default.process_ref_homs,
+                ),
+            ]
+            .into_iter()
+            .filter(|(_, equal)| !equal)
+            .map(|(name, _)| name)
+            .collect()
+        };
+        assert_eq!(differing(&[]), [] as [&str; 0]);
+        assert_eq!(differing(&["--protein_version"]), ["protein_version"]);
+    }
+
     /// `flag_fields` keeps a list flag's field group only when its list holds a
-    /// name (OutputFactory.pm:2523-2525, `scalar @{$_->[1]}`), and `Config.pm:760`
+    /// name (OutputFactory.pm:2532-2534, `scalar @{$_->[1]}`), and `Config.pm:760`
     /// splits `,` and `""` to no name, so `--individual ,` declares neither IND nor
     /// ZYG and `--individual_zyg ""` declares no ZYG, in every header; a list with a
     /// name declares them.
@@ -5614,10 +7490,10 @@ mod tests {
         assert!(!config.shift_3prime);
     }
 
-    /// Ensembl VEP 116.2 prints the `--everything` notice as it reaches it
+    /// Ensembl VEP 116.3 prints the `--everything` notice as it reaches it
     /// (Runner.pm:752, BaseVEP.pm:785) and throws after it for `--hgvsg`,
     /// `--check_ref`, `--lookup_ref` and `--use_transcript_ref` without a FASTA
-    /// (:759-762), so each refusal carries that notice for the caller to print
+    /// (Runner.pm:759-762), so each refusal carries that notice for the caller to print
     /// before the error, the `--shift_3prime 1` refusal of this implementation
     /// with them, and nothing after the throw: the `--shift_hgvs 0` line (:793)
     /// is not reached. A refusal `--everything` did not precede carries no
@@ -5740,10 +7616,8 @@ mod tests {
         assert_eq!(checks.sift.as_deref(), Some("s"));
         assert_eq!(checks.polyphen.as_deref(), Some("p"));
         assert!(checks.notices.is_empty());
-        let native = vep_core::cache_info::CacheInfo {
-            sift: Some("b".to_string()),
-            ..Default::default()
-        };
+        let mut native = vep_core::cache_info::CacheInfo::default();
+        native.sift = Some("b".to_string());
         let checks = prediction_checks(&config_from(&["--sift", "b"]), &native).unwrap();
         assert_eq!(checks.sift.as_deref(), Some("b"));
         let checks =
@@ -5832,9 +7706,10 @@ mod tests {
     ) -> vep_core::consequence::TranscriptConsequence {
         let mut transcript = make_runner_test_transcript("ENST_CODING", "ENSG_CODING", "21", 1_000);
         transcript.biotype = "protein_coding".into();
-        transcript.vefc = Some(vep_core::transcript::TranscriptVEFC {
-            protein_function_predictions: Some(matrices),
-            ..Default::default()
+        transcript.vefc = Some({
+            let mut vefc = vep_core::transcript::TranscriptVEFC::default();
+            vefc.protein_function_predictions = Some(matrices);
+            vefc
         });
         let transcript = Arc::new(transcript);
         let mut tc = vep_core::consequence::TranscriptConsequence::for_transcript(&transcript);
@@ -5873,7 +7748,7 @@ mod tests {
     /// `tolerated(0.35)` and `tolerated(1)` for a whole score; a two-residue
     /// change, an insertion, a deletion, an unknown alternate residue and a
     /// residue the matrix has no cell for print nothing. Each flag value renders
-    /// its own shape (`p`, `s`, `b`; OutputFactory.pm:1798-1851).
+    /// its own shape (`p`, `s`, `b`; OutputFactory.pm:1807-1860).
     #[test]
     fn sift_eligibility_single_residue_substitution() {
         assert_eq!(substituted_residue(Some("A/D")), Some(b'D'));
@@ -6031,9 +7906,9 @@ mod tests {
 
     /// An intergenic insertion or deletion carries the forward-strand genomic
     /// shift only under `--shift_3prime 1` (`IntergenicVariationAllele_to_output_hash`
-    /// runs `genomic_shift` behind that flag, OutputFactory.pm:1992), and the
+    /// runs `genomic_shift` behind that flag, OutputFactory.pm:2001), and the
     /// Location and Allele columns print it only when `--shift_genomic 1` is on
-    /// too (:1994-1997); a transcript row prints its own shift.
+    /// too (:2003-2006); a transcript row prints its own shift.
     #[test]
     fn shift_genomic_shifts_intergenic_rows_only_with_shift_3prime() {
         use vep_io::output::fields::field_value;
@@ -6049,10 +7924,11 @@ mod tests {
             let fasta_file = Arc::new(vep_fasta::IndexedFasta::from_path(&fasta).unwrap());
             let transcripts = Arc::new(LazyTranscriptIndexes::new(dir, 5_000, 5_000).unwrap());
             let mut resources = resources_over(transcripts);
-            resources.effects_config = Arc::new(vep_effects::EffectsConfig {
-                reference_fasta: Some(fasta_file),
-                enable_indel_3prime_shift: runner.config.shift_3prime,
-                ..Default::default()
+            resources.effects_config = Arc::new({
+                let mut effects = vep_effects::EffectsConfig::default();
+                effects.reference_fasta = Some(fasta_file);
+                effects.enable_indel_3prime_shift = runner.config.shift_3prime;
+                effects
             });
             let mut batch = parse_vcf_line(line, false).unwrap();
             let pool = build_thread_pool(1).unwrap();
@@ -6145,6 +8021,27 @@ mod tests {
         );
     }
 
+    /// Every input format `InputFormat::ALL` lists is opened or refused by an
+    /// arm of its own, so none is refused as a format the run has no reader
+    /// for.
+    #[test]
+    fn every_listed_input_format_has_its_own_arm() {
+        let cache = write_json_cache("formats", &[("21", 1_000)]);
+        let transcripts = Arc::new(LazyTranscriptIndexes::empty());
+        for &format in InputFormat::ALL {
+            let mut runner = runner_over(&cache, &["--input_data", "21 1500 1500 A/G +"]);
+            runner.config.format = format.as_str().to_string();
+            assert_eq!(InputFormat::from_flag(&runner.config.format), Some(format));
+            if let Err(error) = runner.open_input(None, &transcripts) {
+                let refusal = format!("{error:#}");
+                assert!(
+                    !refusal.contains(&unread_format_refusal(format)),
+                    "{format}: {refusal}"
+                );
+            }
+        }
+    }
+
     /// `--show_cache_info` writes the cache's source versions as sorted
     /// `<key>\t<value>` lines and nothing else (vep:39-43).
     #[test]
@@ -6160,7 +8057,7 @@ mod tests {
     }
 
     /// Under `--regulatory_gff` the lines carry `regulatory_gff\t<file>` beside
-    /// the cache's source versions, the first file of the flag: Ensembl VEP 116.2
+    /// the cache's source versions, the first file of the flag: Ensembl VEP 116.3
     /// prints the version data of every annotation source, first source first
     /// (BaseRunner.pm:415-417), and a regulatory GFF source's is its file
     /// (RegFeat.pm:674-677).
@@ -6254,7 +8151,7 @@ mod tests {
         assert_eq!(collapse_paths("=/a/b"), "=[PATH]/b");
     }
 
-    /// Ensembl VEP 116.2 on the GRCh38-release116 corpus prints
+    /// Ensembl VEP 116.3 on the GRCh38-release116 corpus prints
     /// `## Using cache in [PATH]/116_GRCh38` under `--mask_header_cache_path`
     /// (BaseRunner.pm `get_output_header_info`): the default and tab headers,
     /// the VCF `cache=` token and the Parquet footer all take the masked path.
@@ -6302,6 +8199,39 @@ mod tests {
         .unwrap();
         assert_eq!(resolved.header_cache_dir(), "[PATH]/116_GRCh38");
         assert_eq!(resolved.assembly_name().as_deref(), Some("GRCh38"));
+    }
+
+    /// A reference sequence enters the Parquet `contig_order` under the name a
+    /// record written with it is annotated under (`BaseVEP.pm:697-734`): the
+    /// cache's own where the cache holds the name, a synonym of it or its
+    /// `chr` spelling, and the name as written where it reaches no cache
+    /// chromosome. A name the table links to two cache chromosomes is the
+    /// exception and stays as written; one the cache holds is itself whatever
+    /// the table links it to.
+    #[cfg(feature = "parquet")]
+    #[test]
+    fn a_reference_sequence_is_listed_under_the_cache_chromosome_it_names() {
+        let synonyms = ChromosomeSynonyms::parse(
+            "21\tNC_000021.9\n21\tCM000683.2\n22\tNC_000022.11\n21\tshared\n22\tshared\n21\t22\n",
+        );
+        let holds = |name: &str| matches!(name, "21" | "22" | "MT");
+        let entry = |name: &str| reference_contig_entry(name, &synonyms, holds);
+        assert_eq!(entry("21"), "21");
+        assert_eq!(entry("22"), "22");
+        assert_eq!(entry("NC_000021.9"), "21");
+        assert_eq!(entry("CM000683.2"), "21");
+        assert_eq!(entry("NC_000022.11"), "22");
+        assert_eq!(entry("chr22"), "22");
+        assert_eq!(entry("M"), "MT");
+        assert_eq!(entry("KI270728.1"), "KI270728.1");
+        assert_eq!(entry("chrUn_KI270728v1"), "chrUn_KI270728v1");
+        assert_eq!(entry("shared"), "shared");
+        let none = ChromosomeSynonyms::new();
+        assert_eq!(
+            reference_contig_entry("NC_000021.9", &none, holds),
+            "NC_000021.9"
+        );
+        assert_eq!(reference_contig_entry("chr21", &none, holds), "21");
     }
 
     /// The exon/intron ordinals reach the output only under `--numbers`; a VCF
@@ -6397,8 +8327,6 @@ mod tests {
             db_id: None,
             start: 1,
             end: 300,
-            start_exon_index: 0,
-            end_exon_index: 0,
             seq: None,
         });
         tx.attributes.push(Attribute {
@@ -6412,11 +8340,12 @@ mod tests {
             to_end,
             ori: 1,
         };
-        tx.vefc = Some(TranscriptVEFC {
-            codon_table: 1,
-            translateable_seq: Some(format!("ATGCGGG{}", &"GCT".repeat(99)[..296])),
-            sorted_exons: tx.exons.clone(),
-            mapper: Some(TranscriptMapper {
+        tx.vefc = Some({
+            let mut vefc = TranscriptVEFC::default();
+            vefc.codon_table = 1;
+            vefc.translateable_seq = Some(format!("ATGCGGG{}", &"GCT".repeat(99)[..296]));
+            vefc.sorted_exons = tx.exons.clone();
+            vefc.mapper = Some(TranscriptMapper {
                 start_phase: 0,
                 cdna_coding_start: 1,
                 cdna_coding_end: 303,
@@ -6424,8 +8353,8 @@ mod tests {
                     pair(1, 4, 1_000, 1_003),
                     pair(8, 303, 1_004, 1_299),
                 ]),
-            }),
-            ..Default::default()
+            });
+            vefc
         });
         tx
     }
@@ -6444,14 +8373,14 @@ mod tests {
     }
 
     /// Ensembl VEP's `Transcript-assembly mismatch in <Uploaded_variation>`
-    /// (OutputFactory.pm:1717-1718): a row whose alternate allele equals the
+    /// (OutputFactory.pm:1726-1727): a row whose alternate allele equals the
     /// bases of an edited transcript's first `_rna_edit` on the codon path is
     /// marked (`invalid_alleles`, TranscriptVariationAllele.pm:826-837), a row
     /// whose allele differs from the edit's bases is not, and the annotation
     /// writes nothing itself: the text is drawn from the marked rows left on
     /// each record, once per record and in record order, by
     /// [`warn_transcript_assembly_mismatches`], which draws nothing under
-    /// `--use_given_ref` (`:1717`).
+    /// `--use_given_ref` (`OutputFactory.pm:1726`).
     #[test]
     fn transcript_assembly_mismatch_warning_follows_the_first_rna_edit() {
         let mut by_chr = HashMap::new();
@@ -6502,7 +8431,7 @@ mod tests {
 
     /// The warning is drawn from the rows the record step leaves, as Ensembl
     /// VEP draws it inside the output hash of each row it prints
-    /// (OutputFactory.pm:1717-1718), after the row filters and the pick family
+    /// (OutputFactory.pm:1726-1727), after the row filters and the pick family
     /// have dropped theirs (`:477-514`) and never under `--summary` or
     /// `--most_severe` (`:387`). An edited coding model and a canonical unedited
     /// model share the locus: `--pick` keeps the canonical model and the record
@@ -6576,10 +8505,744 @@ mod tests {
         assert_eq!(assembly_mismatches_drawn(&batch, &resources), both);
     }
 
+    /// The count of insertion and deletion alleles with an HGVSc on an edited
+    /// model is read from the rows the record step leaves
+    /// ([`count_indels_on_edited_models`]). An edited coding model and a
+    /// canonical unedited model share the locus, and every row of the two
+    /// insertions carries a notation: with no record step, under `--flag_pick`
+    /// and under `--coding_only` the edited model's row is left and both
+    /// alleles count; `--pick` leaves the canonical model's row,
+    /// `--most_severe` leaves no row, and neither counts. An edited model's
+    /// row without a notation, a substitution, a run with the HGVS shift off,
+    /// a run without HGVS notations and an output with no place for the field
+    /// count nothing, a record over `--max_sv_size` counts where the output
+    /// writes its rows alone, and two individuals' copies of one allele count
+    /// once. An output that writes the notation of MANE Select rows alone
+    /// counts an allele by its edited model's row where that model carries
+    /// the attribute with a value, whatever the unedited model carries.
+    #[test]
+    fn indels_on_edited_models_are_counted_from_the_rows_the_record_step_leaves() {
+        // The two models over the locus, each with its `MANE_Select` attribute.
+        let models_with = |edited_partner: Option<&str>, canonical_partner: Option<&str>| {
+            let mut edited = edited_coding_model();
+            edited.canonical = false;
+            edited.mane_select = edited_partner.map(str::to_string);
+            let mut canonical = mapped_runner_test_transcript("NM_000002.1", "GENE1", 1_000);
+            canonical.mane_select = canonical_partner.map(str::to_string);
+            let mut by_chr = HashMap::new();
+            by_chr.insert(
+                "21".to_string(),
+                TranscriptIndex::new(vec![edited, canonical], 5_000, 5_000),
+            );
+            resources_over(Arc::new(LazyTranscriptIndexes::from_indexes(by_chr)))
+        };
+        let annotating = models_with(None, None);
+        let failure = ReadFailure::default();
+        // The records of `lines`, annotated over `models`, each row given a
+        // notation.
+        let annotated_over = |models: &AnnotationResources, lines: &[&str]| {
+            let mut batch = Vec::new();
+            for line in lines {
+                batch.extend(parse_vcf_line(line, true).expect("parse"));
+            }
+            for variant in batch.iter_mut() {
+                annotate_one(variant, models, &failure);
+                for tc in variant.transcript_consequences.iter_mut() {
+                    tc.hgvsc = Some(format!("{}:c.10_11insGGG", tc.transcript_id()));
+                }
+            }
+            apply_record_rules(&mut batch, None);
+            batch
+        };
+        let annotated = |lines: &[&str]| annotated_over(&annotating, lines);
+        let insertions = || {
+            annotated(&[
+                "21\t1009\trs1\tT\tTGGG\t.\t.\t.",
+                "21\t1009\trs2\tT\tTGGG\t.\t.\t.",
+            ])
+        };
+        let models = |variant: &InputVariant| -> Vec<String> {
+            variant
+                .transcript_consequences
+                .iter()
+                .map(|tc| tc.transcript_id().to_string())
+                .collect()
+        };
+        let hgvs = |shift_hgvs: bool| {
+            Arc::new({
+                let mut effects = vep_effects::EffectsConfig::default();
+                effects.compute_hgvs = true;
+                effects.hgvs = {
+                    let mut options = vep_effects::hgvs::HgvsOptions::default();
+                    options.shift_hgvs = shift_hgvs;
+                    options
+                };
+                effects
+            })
+        };
+        // What a run under `--hgvs`, changed by `set`, counts over `batch`.
+        let counted = |batch: &[InputVariant], set: &dyn Fn(&mut AnnotationResources)| -> u64 {
+            let mut resources = resources_over(Arc::new(LazyTranscriptIndexes::empty()));
+            resources.effects_config = hgvs(true);
+            set(&mut resources);
+            count_indels_on_edited_models(batch, &resources);
+            resources.transcripts.indels_on_edited_models()
+        };
+        let config = |set: fn(&mut FilterConfig)| {
+            let mut config = FilterConfig::default();
+            set(&mut config);
+            config
+        };
+
+        let batch = insertions();
+        assert_eq!(models(&batch[0]), ["NM_000001.1", "NM_000002.1"]);
+        assert_eq!(counted(&batch, &|_| ()), 2);
+
+        let mut batch = insertions();
+        crate::pick::apply_to_batch(&mut batch, &config(|c| c.pick = true));
+        assert_eq!(models(&batch[0]), ["NM_000002.1"]);
+        assert_eq!(models(&batch[1]), ["NM_000002.1"]);
+        assert_eq!(counted(&batch, &|_| ()), 0);
+
+        let mut batch = insertions();
+        crate::pick::apply_to_batch(&mut batch, &config(|c| c.flag_pick = true));
+        assert_eq!(models(&batch[0]), ["NM_000001.1", "NM_000002.1"]);
+        assert_eq!(counted(&batch, &|_| ()), 2);
+
+        let mut batch = insertions();
+        crate::pick::apply_to_batch(&mut batch, &config(|c| c.most_severe = true));
+        assert!(batch.iter().all(|v| v.transcript_consequences.is_empty()));
+        assert_eq!(counted(&batch, &|_| ()), 0);
+
+        let mut batch = insertions();
+        crate::pick::apply_to_batch(&mut batch, &config(|c| c.row_filters.coding_only = true));
+        assert_eq!(models(&batch[0]), ["NM_000001.1"]);
+        assert_eq!(counted(&batch, &|_| ()), 2);
+
+        // The edited model's row of the first insertion without a notation.
+        let mut batch = insertions();
+        batch[0].transcript_consequences[0].hgvsc = None;
+        assert_eq!(counted(&batch, &|_| ()), 1);
+
+        let substitution = annotated(&["21\t1009\trs3\tT\tG\t.\t.\t."]);
+        assert_eq!(models(&substitution[0]), ["NM_000001.1", "NM_000002.1"]);
+        assert_eq!(counted(&substitution, &|_| ()), 0);
+
+        let batch = insertions();
+        assert_eq!(counted(&batch, &|r| r.effects_config = hgvs(false)), 0);
+        assert_eq!(
+            counted(&batch, &|r| r.effects_config = Arc::default()),
+            0,
+            "no HGVS notations"
+        );
+        assert_eq!(counted(&batch, &|r| r.hgvsc_rows = NotationRows::None), 0);
+
+        // The two insertions where the output writes the notation of MANE
+        // Select rows alone, by the attribute each model carries.
+        let counted_on_mane_select_rows =
+            |edited_partner: Option<&str>, canonical_partner: Option<&str>| {
+                let batch = annotated_over(
+                    &models_with(edited_partner, canonical_partner),
+                    &[
+                        "21\t1009\trs1\tT\tTGGG\t.\t.\t.",
+                        "21\t1009\trs2\tT\tTGGG\t.\t.\t.",
+                    ],
+                );
+                assert_eq!(models(&batch[0]), ["NM_000001.1", "NM_000002.1"]);
+                counted(&batch, &|r| r.hgvsc_rows = NotationRows::ManeSelect)
+            };
+        assert_eq!(counted_on_mane_select_rows(None, None), 0);
+        assert_eq!(
+            counted_on_mane_select_rows(None, Some("ENST00000000002.1")),
+            0
+        );
+        assert_eq!(
+            counted_on_mane_select_rows(Some("ENST00000000001.1"), None),
+            2
+        );
+        assert_eq!(
+            counted_on_mane_select_rows(Some("ENST00000000001.1"), Some("ENST00000000002.1")),
+            2
+        );
+        assert_eq!(
+            counted_on_mane_select_rows(Some(""), None),
+            0,
+            "an attribute without a value writes no `MANE_SELECT`"
+        );
+
+        // The first insertion's record over `--max_sv_size`.
+        let mut over = insertions();
+        over[0].oversize_sv = true;
+        assert_eq!(counted(&over, &|_| ()), 2);
+        assert_eq!(counted(&over, &|r| r.oversize_rows_written = false), 1);
+
+        // `--individual`: the first insertion as two individuals carry it.
+        let mut copies = vec![batch[0].clone(), batch[0].clone(), batch[1].clone()];
+        copies[0].individual = Some("S1".into());
+        copies[1].individual = Some("S2".into());
+        copies[2].individual = Some("S1".into());
+        copies[2].input_record = copies[0].input_record + 1;
+        assert_eq!(counted(&copies, &|_| ()), 2);
+    }
+
+    /// The chromosomes the run's line names for want of the FASTA's sequence
+    /// are read from the rows the record step leaves
+    /// ([`note_notations_the_reference_lacks`]). The FASTA holds chromosome 1
+    /// alone. Two models share a locus of chromosome 21, where a substitution
+    /// has no HGVSc on either row and an insertion has one on both; a second
+    /// substitution, on chromosome 22, overlaps no model and has the
+    /// intergenic row alone; no record has an HGVSg. With no record step
+    /// chromosome 21 is noted for both notations and chromosome 22 for
+    /// HGVSg, and the insertion alone is noted for HGVSg; a row the pick
+    /// family drops is not read; under `--no_intergenic` the second record
+    /// has no row and is not noted; a notation the output writes on no row,
+    /// or on MANE Select rows alone where no kept row carries the attribute,
+    /// is not noted; a structural variant and an allele outside `ACGT` want
+    /// no sequence; a chromosome the FASTA holds and a run without a FASTA
+    /// are not noted; a record over `--max_sv_size` is read only where the
+    /// output writes its rows; and a reference row the pick keeps alone, which
+    /// prints its record's alternate allele's HGVSg, is noted for HGVSg.
+    #[test]
+    fn notations_the_reference_lacks_are_noted_from_the_rows_the_record_step_leaves() {
+        let dir = tempfile::tempdir().unwrap();
+        let fasta_of = |name: &str, sequence: &str| {
+            let fa = dir.path().join(format!("{name}.fa"));
+            let line = sequence.len();
+            std::fs::write(&fa, format!(">{name}\n{sequence}\n")).unwrap();
+            std::fs::write(
+                dir.path().join(format!("{name}.fa.fai")),
+                format!("{name}\t{line}\t{}\t{line}\t{}\n", name.len() + 2, line + 1),
+            )
+            .unwrap();
+            Arc::new(vep_fasta::IndexedFasta::from_path(&fa).unwrap())
+        };
+        let chromosome_1_alone = fasta_of("1", "ACGTACGTACGTACGTACGT");
+        // A run under `--hgvs` and `--hgvsg` over `fasta`.
+        let under_both_flags = |fasta: &Arc<vep_fasta::IndexedFasta>| {
+            Arc::new({
+                let mut effects = vep_effects::EffectsConfig::default();
+                effects.upstream_distance = 5_000;
+                effects.downstream_distance = 5_000;
+                effects.compute_hgvs = true;
+                effects.reference_fasta = Some(Arc::clone(fasta));
+                effects.hgvsg = Some({
+                    let mut options = vep_effects::hgvsg::HgvsgOptions::default();
+                    options.shift = true;
+                    options.accessions = None;
+                    options
+                });
+                effects
+            })
+        };
+        let models_with = |first_partner: Option<&str>| {
+            let mut first = mapped_runner_test_transcript("NM_000001.1", "GENE1", 1_000);
+            first.canonical = false;
+            first.mane_select = first_partner.map(str::to_string);
+            let second = mapped_runner_test_transcript("NM_000002.1", "GENE1", 1_000);
+            let far = mapped_runner_test_transcript("NM_000003.1", "GENE2", 900_000);
+            let mut by_chr = HashMap::new();
+            by_chr.insert(
+                "21".to_string(),
+                TranscriptIndex::new(vec![first, second], 5_000, 5_000),
+            );
+            by_chr.insert(
+                "22".to_string(),
+                TranscriptIndex::new(vec![far], 5_000, 5_000),
+            );
+            let mut models = resources_over(Arc::new(LazyTranscriptIndexes::from_indexes(by_chr)));
+            models.effects_config = under_both_flags(&chromosome_1_alone);
+            models
+        };
+        let failure = ReadFailure::default();
+        const SUBSTITUTION: &str = "21\t1009\trs1\tT\tG\t.\t.\t.";
+        const INSERTION: &str = "21\t1009\trs2\tT\tTG\t.\t.\t.";
+        const INTERGENIC: &str = "22\t1009\trs3\tT\tG\t.\t.\t.";
+        // The records of `lines` annotated over `models`.
+        let annotated_over = |models: &AnnotationResources, lines: &[&str]| {
+            let mut batch = Vec::new();
+            for line in lines {
+                batch.extend(parse_vcf_line(line, true).expect("parse"));
+            }
+            for variant in batch.iter_mut() {
+                annotate_one(variant, models, &failure);
+            }
+            apply_record_rules(&mut batch, None);
+            batch
+        };
+        let annotated = |lines: &[&str]| annotated_over(&models_with(None), lines);
+        let models = |variant: &InputVariant| -> Vec<String> {
+            variant
+                .transcript_consequences
+                .iter()
+                .map(|tc| tc.transcript_id().to_string())
+                .collect()
+        };
+        let notations = |variant: &InputVariant| -> Vec<bool> {
+            variant
+                .transcript_consequences
+                .iter()
+                .map(|tc| tc.hgvsc.is_some())
+                .collect()
+        };
+        // What a run under both flags over the FASTA of chromosome 1,
+        // changed by `set`, notes over `batch`.
+        let noted = |batch: &[InputVariant], set: &dyn Fn(&mut AnnotationResources)| {
+            let mut resources = resources_over(Arc::new(LazyTranscriptIndexes::empty()));
+            resources.effects_config = under_both_flags(&chromosome_1_alone);
+            set(&mut resources);
+            note_notations_the_reference_lacks(batch, &resources);
+            resources.transcripts.unread_notations()
+        };
+        let config = |set: fn(&mut FilterConfig)| {
+            let mut config = FilterConfig::default();
+            set(&mut config);
+            config
+        };
+        let on = |chr: &str, hgvsg: bool, hgvsc: bool| {
+            (chr.to_string(), UnreadNotations { hgvsg, hgvsc })
+        };
+
+        let batch = annotated(&[SUBSTITUTION, INSERTION, INTERGENIC]);
+        assert_eq!(models(&batch[0]), ["NM_000001.1", "NM_000002.1"]);
+        assert_eq!(notations(&batch[0]), [false, false]);
+        assert_eq!(notations(&batch[1]), [true, true]);
+        assert!(batch[2].transcript_consequences.is_empty());
+        assert_eq!(
+            batch[2].most_severe_consequence,
+            Some(Consequence::IntergenicVariant)
+        );
+        assert!(batch.iter().all(|variant| variant.hgvsg.is_none()));
+        let every_row = [on("21", true, true), on("22", true, false)];
+        assert_eq!(noted(&batch, &|_| ()), every_row);
+        assert_eq!(noted(&batch[1..2], &|_| ()), [on("21", true, false)]);
+
+        // The row of the substitution the pick keeps, given a notation, and
+        // the row without one that the pick drops.
+        let mut batch = annotated(&[SUBSTITUTION, INTERGENIC]);
+        batch[0].transcript_consequences[1].hgvsc = Some("NM_000002.1:n.10T>G".into());
+        assert_eq!(noted(&batch, &|_| ()), every_row);
+        crate::pick::apply_to_batch(&mut batch, &config(|c| c.pick = true));
+        assert_eq!(models(&batch[0]), ["NM_000002.1"]);
+        assert_eq!(
+            noted(&batch, &|_| ()),
+            [on("21", true, false), on("22", true, false)]
+        );
+
+        let mut batch = annotated(&[SUBSTITUTION, INTERGENIC]);
+        crate::pick::apply_to_batch(&mut batch, &config(|c| c.row_filters.no_intergenic = true));
+        assert_eq!(noted(&batch, &|_| ()), [on("21", true, true)]);
+
+        let batch = annotated(&[SUBSTITUTION, INTERGENIC]);
+        assert_eq!(
+            noted(&batch, &|r| r.hgvsg_rows = NotationRows::None),
+            [on("21", false, true)]
+        );
+        assert_eq!(
+            noted(&batch, &|r| r.hgvsc_rows = NotationRows::None),
+            [on("21", true, false), on("22", true, false)]
+        );
+        assert_eq!(
+            noted(&batch, &|r| {
+                r.hgvsg_rows = NotationRows::None;
+                r.hgvsc_rows = NotationRows::None;
+            }),
+            []
+        );
+        // A run under `--hgvsg` alone asks for no HGVSc.
+        assert_eq!(
+            noted(&batch, &|r| {
+                r.effects_config = Arc::new({
+                    let mut effects = vep_effects::EffectsConfig::default();
+                    effects.reference_fasta = Some(Arc::clone(&chromosome_1_alone));
+                    effects
+                });
+            }),
+            [on("21", true, false), on("22", true, false)]
+        );
+        // A FASTA that holds chromosome 21, and a run without a FASTA.
+        let chromosome_21_alone = fasta_of("21", "ACGTACGTACGTACGTACGT");
+        assert_eq!(
+            noted(&batch, &|r| r.effects_config =
+                under_both_flags(&chromosome_21_alone)),
+            [on("22", true, false)]
+        );
+        assert_eq!(noted(&batch, &|r| r.effects_config = Arc::default()), []);
+
+        // An output that writes both notations of MANE Select rows alone.
+        let on_mane_select_rows = |r: &mut AnnotationResources| {
+            r.hgvsg_rows = NotationRows::ManeSelect;
+            r.hgvsc_rows = NotationRows::ManeSelect;
+        };
+        assert_eq!(noted(&batch, &on_mane_select_rows), []);
+        let with_the_attribute = models_with(Some("ENST00000000001.1"));
+        let batch = annotated_over(&with_the_attribute, &[SUBSTITUTION, INTERGENIC]);
+        assert_eq!(noted(&batch, &on_mane_select_rows), [on("21", true, true)]);
+        let batch = annotated_over(&with_the_attribute, &[INSERTION, INTERGENIC]);
+        assert_eq!(notations(&batch[0]), [true, true]);
+        assert_eq!(noted(&batch, &on_mane_select_rows), [on("21", true, false)]);
+
+        // A structural variant, and an allele outside `ACGT`.
+        let mut structural = annotated(&[SUBSTITUTION]);
+        structural[0].is_structural = true;
+        assert_eq!(noted(&structural, &|_| ()), []);
+        let outside_acgt = annotated(&["21\t1009\trs4\tT\tN\t.\t.\t."]);
+        assert_eq!(models(&outside_acgt[0]), ["NM_000001.1", "NM_000002.1"]);
+        assert_eq!(noted(&outside_acgt, &|_| ()), []);
+
+        // The first record over `--max_sv_size`.
+        let mut over = annotated(&[SUBSTITUTION, INTERGENIC]);
+        over[0].oversize_sv = true;
+        assert_eq!(noted(&over, &|_| ()), every_row);
+        assert_eq!(
+            noted(&over, &|r| r.oversize_rows_written = false),
+            [on("22", true, false)]
+        );
+
+        // The reference row of the substitution's record, which prints the
+        // substitution's HGVSg, kept alone by the pick.
+        let mut record = parse_vcf_line(SUBSTITUTION, true).expect("parse");
+        crate::individuals::add_reference_allele_row(&mut record);
+        let over_models = models_with(None);
+        for variant in record.iter_mut() {
+            annotate_one(variant, &over_models, &failure);
+        }
+        apply_record_rules(&mut record, None);
+        assert!(record[0].reference_allele_row && !record[1].reference_allele_row);
+        assert_eq!(noted(&record, &|_| ()), [on("21", true, true)]);
+        crate::pick::apply_to_batch(&mut record, &config(|c| c.pick = true));
+        assert_eq!(models(&record[0]).len(), 1);
+        assert!(record[1].transcript_consequences.is_empty());
+        assert_eq!(noted(&record, &|_| ()), [on("21", true, false)]);
+        assert_eq!(noted(&record, &|r| r.hgvsg_rows = NotationRows::None), []);
+    }
+
+    /// The alleles [`hgvsg_wants_the_reference`] reads as without an HGVSg for
+    /// want of the sequence are the ones `vep_effects::hgvsg` writes a
+    /// notation of where it reads the bases. Over a FASTA that holds
+    /// chromosome 21 a substitution, an insertion, a deletion and a longer
+    /// replacement have an HGVSg; an allele outside `ACGT`, an allele equal
+    /// to the reference allele, a reference allele's row and a structural
+    /// variant have none. Each allele, taken without its notation, is read
+    /// the same way, and an allele that has its notation wants nothing.
+    #[test]
+    fn the_alleles_that_want_the_sequence_are_those_the_genomic_notation_describes() {
+        let dir = tempfile::tempdir().unwrap();
+        let fa = dir.path().join("ref.fa");
+        let sequence = "ACGT".repeat(10);
+        std::fs::write(&fa, format!(">21\n{sequence}\n")).unwrap();
+        std::fs::write(dir.path().join("ref.fa.fai"), "21\t40\t4\t40\t41\n").unwrap();
+        let mut config = vep_effects::EffectsConfig::default();
+        config.reference_fasta = Some(Arc::new(vep_fasta::IndexedFasta::from_path(&fa).unwrap()));
+        config.hgvsg = Some({
+            let mut options = vep_effects::hgvsg::HgvsgOptions::default();
+            options.shift = true;
+            options.accessions = None;
+            options
+        });
+        // Position 10 of the sequence is `C` and position 11 `G`.
+        let allele = |start: u64, end: u64, reference: &[u8], alt: &[u8]| {
+            InputVariant::new("21".into(), start, end, reference.to_vec(), alt.to_vec())
+        };
+        let mut structural = allele(10, 10, b"C", b"T");
+        structural.is_structural = true;
+        let cases = [
+            ("substitution", allele(10, 10, b"C", b"T"), true),
+            ("insertion", allele(11, 10, b"-", b"A"), true),
+            ("deletion", allele(11, 11, b"G", b"-"), true),
+            ("replacement", allele(10, 11, b"CG", b"TA"), true),
+            ("outside ACGT", allele(10, 10, b"C", b"N"), false),
+            ("equal to the reference", allele(10, 10, b"C", b"C"), false),
+            (
+                "reference row",
+                allele(10, 10, b"C", b"T").reference_allele_row(),
+                false,
+            ),
+            ("structural", structural, false),
+        ];
+        for (name, mut variant, described) in cases {
+            vep_effects::hgvsg::annotate(&mut variant, &config);
+            assert_eq!(variant.hgvsg.is_some(), described, "{name}");
+            assert!(!hgvsg_wants_the_reference(&variant) || !described, "{name}");
+            variant.hgvsg = None;
+            assert_eq!(hgvsg_wants_the_reference(&variant), described, "{name}");
+        }
+    }
+
+    /// The rows whose HGVSc turns on bases beside the record
+    /// (`hgvsc_turns_on_bases_beside_the_record`) are those some reference
+    /// gives an HGVSc, held to what `vep_effects::hgvs` writes over every
+    /// reference of ten bases of two letters: a transcript of four bases with
+    /// three bases on either side, and one of two bases with four, on each
+    /// strand. Each record is an insertion of one to three bases at every
+    /// point of the reference, in a record whose class shifts and in one
+    /// whose class does not, one or two bases added to one to three
+    /// reference bases kept whole, anywhere, or an allele that keeps a start
+    /// and an end of two to four reference bases over the transcript's first
+    /// or last base and deletes the rest. A record its own bases give a notation is asked
+    /// nothing; every other record turns on the bases beside it exactly where
+    /// one of the references that hold its bases gives it a notation.
+    #[test]
+    fn the_rows_that_turn_on_bases_beside_the_record_are_those_some_reference_gives_an_hgvsc() {
+        use std::collections::BTreeMap;
+        use vep_core::coordinate::Strand;
+        use vep_core::transcript::{ExonCoordMapper, MapperPair, TranscriptMapper, TranscriptVEFC};
+        const BASES: usize = 10;
+        /// The span, the reference allele and the alternate allele of a record,
+        /// and whether the record's class shifts.
+        type Record = (u64, u64, Vec<u8>, Vec<u8>, bool);
+        /// Whether a record's own bases give it a notation, whether it turns on
+        /// the bases beside it, and whether some reference gives it a notation.
+        struct Read {
+            own: bool,
+            turns: bool,
+            some_reference_writes_one: bool,
+        }
+        let word = |bits: usize, len: usize| -> Vec<u8> {
+            (0..len).map(|i| b"AC"[(bits >> i) & 1]).collect()
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let fa = dir.path().join("ref.fa");
+        let (mut text, mut index) = (String::new(), String::new());
+        for bits in 0..1usize << BASES {
+            let header = format!(">r{bits}\n");
+            let offset = text.len() + header.len();
+            index.push_str(&format!(
+                "r{bits}\t{BASES}\t{offset}\t{BASES}\t{}\n",
+                BASES + 1
+            ));
+            text.push_str(&header);
+            text.push_str(std::str::from_utf8(&word(bits, BASES)).unwrap());
+            text.push('\n');
+        }
+        std::fs::write(&fa, text).unwrap();
+        std::fs::write(dir.path().join("ref.fa.fai"), index).unwrap();
+        let fasta = vep_fasta::IndexedFasta::from_path(&fa).unwrap();
+        let options = vep_effects::hgvs::HgvsOptions::default();
+        let transcript = |strand: Strand, start: u64, end: u64| {
+            let mut tx = make_runner_test_transcript("ENST00000000001", "GENE1", "r0", start);
+            tx.exons.truncate(1);
+            tx.exons[0].end = end;
+            tx.introns.clear();
+            tx.end = end;
+            tx.strand = strand;
+            tx.vefc = Some({
+                let mut vefc = TranscriptVEFC::default();
+                vefc.codon_table = 1;
+                vefc.sorted_exons = tx.exons.clone();
+                vefc.mapper = Some(TranscriptMapper {
+                    start_phase: 0,
+                    cdna_coding_start: 0,
+                    cdna_coding_end: 0,
+                    exon_coord_mapper: ExonCoordMapper::new(vec![MapperPair {
+                        from_start: 1,
+                        from_end: end - start + 1,
+                        to_start: start,
+                        to_end: end,
+                        ori: if strand == Strand::Reverse { -1 } else { 1 },
+                    }]),
+                });
+                vefc
+            });
+            tx
+        };
+        let (mut turning, mut settled) = (0, 0);
+        for (start, end) in [(4u64, 7u64), (5, 6)] {
+            for strand in [Strand::Forward, Strand::Reverse] {
+                let tx = transcript(strand, start, end);
+                let mut records: BTreeMap<Record, Read> = BTreeMap::new();
+                for bits in 0..1usize << BASES {
+                    let reference = word(bits, BASES);
+                    let mut ask = |from: u64, to: u64, given: &[u8], alt: &[u8], shifts: bool| {
+                        let mut variant = InputVariant::new(
+                            format!("r{bits}"),
+                            from,
+                            to,
+                            given.to_vec(),
+                            alt.to_vec(),
+                        );
+                        if !shifts {
+                            // A `*` allele beside the insertion: the record's
+                            // class is no insertion's.
+                            variant.record_allele_string_multi =
+                                Some(format!("-/{}/*", String::from_utf8_lossy(alt)).into());
+                        }
+                        let written = |fasta| {
+                            vep_effects::hgvs::generate_hgvs(&variant, &tx, fasta, options)
+                                .hgvsc
+                                .is_some()
+                        };
+                        let read = records
+                            .entry((from, to, given.to_vec(), alt.to_vec(), shifts))
+                            .or_insert_with(|| Read {
+                                own: written(None),
+                                turns: hgvsc_turns_on_bases_beside_the_record(
+                                    &variant, &tx, options,
+                                ),
+                                some_reference_writes_one: false,
+                            });
+                        // A record its own bases give a notation is asked
+                        // nothing, and one reference that writes one is enough.
+                        if !read.own && !read.some_reference_writes_one {
+                            read.some_reference_writes_one = written(Some(&fasta));
+                        }
+                    };
+                    for point in 1..BASES as u64 {
+                        for inserted in [&b"A"[..], b"C", b"AC", b"CA", b"AA", b"ACA", b"CCA"] {
+                            ask(point + 1, point, b"-", inserted, true);
+                            ask(point + 1, point, b"-", inserted, false);
+                        }
+                    }
+                    // Bases added to one to three reference bases kept whole.
+                    for len in 1..=3usize {
+                        for from in 1..=BASES - len + 1 {
+                            let given = &reference[from - 1..from + len - 1];
+                            for at in 0..=len {
+                                for inserted in [&b"A"[..], b"C", b"AC", b"CA"] {
+                                    let alt = [&given[..at], inserted, &given[at..]].concat();
+                                    ask(from as u64, (from + len - 1) as u64, given, &alt, true);
+                                }
+                            }
+                        }
+                    }
+                    for len in 2..=4usize {
+                        for from in 1..=BASES - len + 1 {
+                            let to = from + len - 1;
+                            let (from_base, to_base) = (from as u64, to as u64);
+                            let over_an_end = to_base >= start
+                                && from_base <= end
+                                && (from_base < start || to_base > end);
+                            if !over_an_end {
+                                continue;
+                            }
+                            let given = &reference[from - 1..to];
+                            for kept in 1..len {
+                                for lead in 0..=kept {
+                                    let alt =
+                                        [&given[..lead], &given[len - (kept - lead)..]].concat();
+                                    ask(from_base, to_base, given, &alt, true);
+                                }
+                            }
+                        }
+                    }
+                }
+                for (record, read) in records {
+                    let Read {
+                        own,
+                        turns,
+                        some_reference_writes_one,
+                    } = read;
+                    if own {
+                        continue;
+                    }
+                    assert_eq!(
+                        turns,
+                        some_reference_writes_one,
+                        "{start}-{end} {strand:?}: {}-{} {} to {}, shifts {}",
+                        record.0,
+                        record.1,
+                        String::from_utf8_lossy(&record.2),
+                        String::from_utf8_lossy(&record.3),
+                        record.4,
+                    );
+                    if turns {
+                        turning += 1;
+                    } else {
+                        settled += 1;
+                    }
+                }
+            }
+        }
+        assert!(turning > 0 && settled > 0);
+
+        // Bases added before the first base are asked nothing where the rule
+        // is not applied: with the HGVS shift off, on a row the record's own
+        // shift places, and on a model with an `_rna_edit`.
+        let before_the_first_base = |chr: &str, at: u64| {
+            InputVariant::new(chr.into(), at, at - 1, b"-".to_vec(), b"A".to_vec())
+        };
+        let plain = transcript(Strand::Forward, 4, 7);
+        let added = before_the_first_base("r0", 4);
+        assert!(hgvsc_turns_on_bases_beside_the_record(
+            &added, &plain, options
+        ));
+        // A base outside `ACGT` has no notation over any reference.
+        let unknown = InputVariant::new("r0".into(), 4, 3, b"-".to_vec(), b"N".to_vec());
+        assert!(!hgvsc_turns_on_bases_beside_the_record(
+            &unknown, &plain, options
+        ));
+        assert!(
+            vep_effects::hgvs::generate_hgvs(&unknown, &plain, Some(&fasta), options)
+                .hgvsc
+                .is_none()
+        );
+        for unapplied in [
+            {
+                let mut hgvs_options = options;
+                hgvs_options.shift_hgvs = false;
+                hgvs_options
+            },
+            {
+                let mut hgvs_options = options;
+                hgvs_options.shift_3prime = true;
+                hgvs_options
+            },
+        ] {
+            assert!(!hgvsc_turns_on_bases_beside_the_record(
+                &added, &plain, unapplied
+            ));
+            assert!(
+                vep_effects::hgvs::generate_hgvs(&added, &plain, None, unapplied)
+                    .hgvsc
+                    .is_none()
+            );
+        }
+        let edited = edited_coding_model();
+        let added = before_the_first_base("21", 1_000);
+        assert!(!hgvsc_turns_on_bases_beside_the_record(
+            &added, &edited, options
+        ));
+        let mut unedited = edited.clone();
+        unedited.attributes.clear();
+        assert!(hgvsc_turns_on_bases_beside_the_record(
+            &added, &unedited, options
+        ));
+    }
+
+    /// The line for the chromosomes the FASTA holds no sequence for names the
+    /// notations their kept rows are without (`hgvs_left_out_notices`): the
+    /// chromosomes without both in one line, those without an HGVSg alone in
+    /// a second and those without an HGVSc alone in a third, each with one
+    /// chromosome named, several counted and listed, or the first ten listed
+    /// and the rest counted; a run that noted none prints no such line.
+    #[test]
+    fn the_line_for_a_chromosome_without_sequence_names_what_its_kept_rows_are_without() {
+        let set = LazyTranscriptIndexes::empty();
+        assert!(hgvs_left_out_notices(&set).is_empty());
+        let unread = |hgvsg: bool, hgvsc: bool| UnreadNotations { hgvsg, hgvsc };
+        set.note_unread_notations("MT", unread(true, false));
+        assert_eq!(
+            hgvs_left_out_notices(&set),
+            ["INFO: The FASTA holds no sequence for chromosome MT, which the input has records on: a record there gets no HGVSg"]
+        );
+        for chr in 1..=12 {
+            set.note_unread_notations(&chr.to_string(), unread(true, true));
+        }
+        set.note_unread_notations("X", unread(false, true));
+        set.note_unread_notations("Y", unread(false, true));
+        assert_eq!(
+            hgvs_left_out_notices(&set),
+            [
+                "INFO: The FASTA holds no sequence for 12 chromosomes the input has records on (1, 10, 11, 12, 2, 3, 4, 5, 6, 7 and 2 more): a record there gets no HGVSg, and a substitution or a deletion no HGVSc, nor does an insertion written outside a transcript",
+                "INFO: The FASTA holds no sequence for chromosome MT, which the input has records on: a record there gets no HGVSg",
+                "INFO: The FASTA holds no sequence for 2 chromosomes the input has records on (X, Y): a substitution or a deletion there gets no HGVSc, nor does an insertion written outside a transcript",
+            ]
+        );
+    }
+
     /// The warnings a slice's records draw are reported in record order
     /// whatever order the pass drew them in, as Ensembl VEP writes them while
-    /// it renders the buffer record by record (OutputFactory.pm:300-303); a
-    /// record's own keep the order it drew them in.
+    /// it renders the buffer record by record (OutputFactory.pm:300-303);
+    /// those recorded under one index keep the order they were recorded in.
     #[test]
     fn record_warnings_come_out_in_record_order() {
         let mut warnings = RecordWarnings::default();
@@ -6596,6 +9259,52 @@ mod tests {
                 "second record",
                 "second record, later",
                 "third record",
+            ]
+        );
+    }
+
+    /// The events a pass over the whole batch held stand with the record each
+    /// names, under the record's first allele and after what that allele had
+    /// drawn before the pass; an event that names no record, or a record the
+    /// batch does not hold, follows every record's warnings, in the order
+    /// raised, also where a variant of the batch carries no record number.
+    #[test]
+    fn held_warnings_stand_with_the_record_they_name() {
+        let allele = |input_record: u64| {
+            let mut variant = parse_vcf_line("21\t20000\trs1\tA\tG\t.\t.\t.", true)
+                .expect("parse")
+                .remove(0);
+            variant.input_record = input_record;
+            variant
+        };
+        let batch = [allele(0), allele(10), allele(10), allele(11), allele(12)];
+        let held = |input_record: u64, text: &str| Held {
+            input_record,
+            text: text.to_string(),
+        };
+        let mut warnings = RecordWarnings::default();
+        warnings.push(4, "annotation of record 12".to_string());
+        warnings.place(
+            &batch,
+            vec![
+                held(12, "plugin of record 12"),
+                held(0, "of no record"),
+                held(10, "source of record 10"),
+                held(99, "of a record outside the batch"),
+                held(11, "plugin of record 11"),
+            ],
+        );
+        warnings.push(1, "record step of record 10".to_string());
+        assert_eq!(
+            warnings.into_texts(),
+            [
+                "source of record 10",
+                "record step of record 10",
+                "plugin of record 11",
+                "annotation of record 12",
+                "plugin of record 12",
+                "of no record",
+                "of a record outside the batch",
             ]
         );
     }
@@ -6677,7 +9386,7 @@ mod tests {
             .expect_err("a truncated shard must abort the batch, not annotate as intergenic");
         let msg = format!("{err:#}");
         assert!(
-            msg.contains("chr21"),
+            msg.contains("chromosome 21"),
             "error must name the chromosome, got: {msg}"
         );
     }
@@ -6698,13 +9407,11 @@ mod tests {
             .join("1-1000000_var.gz");
         std::fs::create_dir_all(region.parent().unwrap()).unwrap();
         std::fs::write(&region, "not a gzip body").unwrap();
-        let info = vep_core::cache_info::CacheInfo {
-            variation_cols: ["variation_name", "failed", "start", "end", "allele_string"]
-                .iter()
-                .map(|name| name.to_string())
-                .collect(),
-            ..Default::default()
-        };
+        let mut info = vep_core::cache_info::CacheInfo::default();
+        info.variation_cols = ["variation_name", "failed", "start", "end", "allele_string"]
+            .iter()
+            .map(|name| name.to_string())
+            .collect();
         let source = VariationSource::open(
             dir.path(),
             &info,
@@ -6770,13 +9477,11 @@ mod tests {
             .join("1-1000000_var.gz");
         std::fs::create_dir_all(region.parent().unwrap()).unwrap();
         std::fs::write(&region, "not a gzip body").unwrap();
-        let info = vep_core::cache_info::CacheInfo {
-            variation_cols: ["variation_name", "failed", "start", "end", "allele_string"]
-                .iter()
-                .map(|name| name.to_string())
-                .collect(),
-            ..Default::default()
-        };
+        let mut info = vep_core::cache_info::CacheInfo::default();
+        info.variation_cols = ["variation_name", "failed", "start", "end", "allele_string"]
+            .iter()
+            .map(|name| name.to_string())
+            .collect();
         let source = VariationSource::open(
             dir.path(),
             &info,
@@ -7159,7 +9864,7 @@ mod tests {
 
     #[test]
     fn test_annotate_batch_interchrom_bnd_mate_annotation() {
-        // Inter-chromosomal paired BND: local annotation suppressed (Perl parity),
+        // Inter-chromosomal paired BND: local annotation suppressed (Ensembl VEP parity),
         // but mate-side annotation enabled via append_bnd_mate_consequences.
         // Single-breakend form gets local annotation but not mate annotation.
         let local_tx = make_runner_test_transcript("ENSTLOCAL", "ENSGLOCAL", "1", 1_000);
@@ -7194,6 +9899,9 @@ mod tests {
             nearest: None,
             frequency_filter: None,
             warn_assembly_mismatch: true,
+            hgvsc_rows: NotationRows::Every,
+            hgvsg_rows: NotationRows::Every,
+            oversize_rows_written: true,
             custom_sources: None,
         };
         let stats = PipelineStats::new();
@@ -7255,6 +9963,9 @@ mod tests {
             nearest: None,
             frequency_filter: None,
             warn_assembly_mismatch: true,
+            hgvsc_rows: NotationRows::Every,
+            hgvsg_rows: NotationRows::Every,
+            oversize_rows_written: true,
             custom_sources: None,
         };
         let stats = PipelineStats::new();
@@ -7284,10 +9995,11 @@ mod tests {
 
     /// A giant breakend (span above VEP's 10 Mb `--max_sv_size` default) is annotated
     /// against the chromosome's complete transcript set, and its output does not depend
-    /// on which other records share its batch. VEP marks such breakends skipped at
-    /// cache-region load and annotates them only against transcripts their batch-mates
-    /// loaded. This pins batch independence: the same tuples alone as with a neighbour,
-    /// and the breakend's own distant transcripts are among them.
+    /// on which other records share its batch. Ensembl VEP 116.3 drops such a breakend
+    /// in its parser (Parser.pm:189-191, 494-499) and, when `--dont_skip` keeps it,
+    /// annotates it only against transcripts its batch-mates loaded
+    /// (AnnotationSource.pm:238). This pins batch independence: the same tuples alone
+    /// as with a neighbour, and the breakend's own distant transcripts are among them.
     #[test]
     fn test_annotate_batch_large_bnd_is_batch_independent() {
         fn run(with_neighbor: bool) -> Vec<(bool, Vec<String>)> {
@@ -7316,6 +10028,9 @@ mod tests {
                 nearest: None,
                 frequency_filter: None,
                 warn_assembly_mismatch: true,
+                hgvsc_rows: NotationRows::Every,
+                hgvsg_rows: NotationRows::Every,
+                oversize_rows_written: true,
                 custom_sources: None,
             };
             let stats = PipelineStats::new();
@@ -7384,10 +10099,11 @@ mod tests {
     ) -> vep_core::transcript::Transcript {
         use vep_core::transcript::{ExonCoordMapper, MapperPair, TranscriptMapper, TranscriptVEFC};
         let mut tx = make_runner_test_transcript(stable_id, gene_id, "21", start);
-        tx.vefc = Some(TranscriptVEFC {
-            introns: tx.introns.clone(),
-            sorted_exons: tx.exons.clone(),
-            mapper: Some(TranscriptMapper {
+        tx.vefc = Some({
+            let mut vefc = TranscriptVEFC::default();
+            vefc.introns = tx.introns.clone();
+            vefc.sorted_exons = tx.exons.clone();
+            vefc.mapper = Some(TranscriptMapper {
                 start_phase: -1,
                 cdna_coding_start: 0,
                 cdna_coding_end: 0,
@@ -7407,8 +10123,8 @@ mod tests {
                         ori: 1,
                     },
                 ]),
-            }),
-            ..Default::default()
+            });
+            vefc
         });
         tx
     }
@@ -7473,6 +10189,61 @@ mod tests {
             default_rows(&[joined]),
             "snv\t21:1500\tG\t-\t-\t-\tintergenic_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER\n"
         );
+    }
+
+    /// A transcript read from a gene-model file is annotated beside the cache's
+    /// transcript of the same stable id, one row per source, as each of Ensembl
+    /// VEP's sources annotates the input on its own
+    /// (`AnnotationType/Transcript.pm:92-190`); the file's row carries its
+    /// source, and `--transcript_filter` reads it as `_source_cache`
+    /// (`AnnotationSourceAdaptor.pm:399-403` hands a file source the filter).
+    #[test]
+    fn a_file_transcript_is_annotated_beside_its_cache_twin_under_its_source() {
+        let from_file = |short_name: &str, order: u32| {
+            let mut transcript = mapped_runner_test_transcript("ENSTTWIN", "ENSGTEST", 1_000);
+            transcript.source_cache = Some(vep_core::transcript::SourceCache::GeneModelFile {
+                short_name: Arc::from(short_name),
+                order,
+            });
+            transcript
+        };
+        let mut all = vec![
+            from_file("second", 2),
+            mapped_runner_test_transcript("ENSTTWIN", "ENSGTEST", 1_000),
+            from_file("first", 1),
+        ];
+        crate::json_cache::assign_id_ranks(&mut all);
+        let mut by_chr = HashMap::new();
+        by_chr.insert("21".to_string(), TranscriptIndex::new(all, 5_000, 5_000));
+        let transcripts = Arc::new(LazyTranscriptIndexes::from_indexes(by_chr));
+        let sources = |filters: &[&str]| -> Vec<Option<String>> {
+            let mut resources = resources_over(Arc::clone(&transcripts));
+            if !filters.is_empty() {
+                resources.transcript_filter =
+                    Some(Arc::new(FilterSet::transcript_filter(filters).unwrap()));
+            }
+            let mut batch = parse_vcf_line("21\t1500\tsnv\tA\tG\t.\t.\t.", true).unwrap();
+            let pool = build_thread_pool(1).unwrap();
+            let stats = PipelineStats::new();
+            warm_and_annotate_batch(&mut batch, &resources, &pool, false, &stats, false).unwrap();
+            let mut rows: Vec<(u32, Option<String>)> = batch[0]
+                .transcript_consequences
+                .iter()
+                .map(|tc| {
+                    (
+                        tc.id_rank,
+                        tc.source_cache().map(|s| s.column_text().to_string()),
+                    )
+                })
+                .collect();
+            rows.sort();
+            rows.into_iter().map(|(_, source)| source).collect()
+        };
+        let named = |name: &str| Some(name.to_string());
+
+        assert_eq!(sources(&[]), [None, named("first"), named("second")]);
+        assert_eq!(sources(&["_source_cache is second"]), [named("second")]);
+        assert_eq!(sources(&["not _source_cache"]), [None]);
     }
 
     /// A `<NON_REF>` record spanning a transcript yields no transcript row and one
@@ -7605,7 +10376,7 @@ mod tests {
     /// A breakend record neither of whose breakends lies within the transcript
     /// distance of a transcript is intergenic: one `intergenic_variant` row per allele,
     /// the record's own breakend as `N.` and the bracket mate as written, Feature `-`,
-    /// `IMPACT=MODIFIER` and no STRAND, the shape Ensembl VEP 116.2 writes for the
+    /// `IMPACT=MODIFIER` and no STRAND, the shape Ensembl VEP 116.3 writes for the
     /// `bnd_intergenic_pair_a` record of the GRCh38-release116 golden corpus
     /// (ensembl-variation `StructuralVariationOverlap::new`, every allele of an
     /// `IntergenicStructuralVariation`).
@@ -7656,7 +10427,7 @@ mod tests {
 
     /// A record whose only ALT is a single breakend (`.N`) has one allele, and when it
     /// lies within the transcript distance of nothing that allele gets one intergenic
-    /// row labelled with the class term `chromosome_breakpoint`, as 116.2 writes
+    /// row labelled with the class term `chromosome_breakpoint`, as 116.3 writes
     /// `bnd_single_intergenic_left` (ensembl-vep `OutputFactory.pm`
     /// `BaseStructuralVariationOverlapAllele_to_output_hash`: an allele without a
     /// breakend prints `class_SO_term`).
@@ -7757,14 +10528,13 @@ mod tests {
             batch.push(v);
         }
         assert_eq!(batch.len(), 2);
-        batch[0]
-            .transcript_consequences
-            .push(TranscriptConsequence {
-                feature_id: Some("ENSR1".into()),
-                feature_type: FeatureType::RegulatoryFeature,
-                consequences: smallvec::smallvec![Consequence::RegulatoryRegionVariant],
-                ..Default::default()
-            });
+        batch[0].transcript_consequences.push({
+            let mut consequence = TranscriptConsequence::default();
+            consequence.feature_id = Some("ENSR1".into());
+            consequence.feature_type = FeatureType::RegulatoryFeature;
+            consequence.consequences = smallvec::smallvec![Consequence::RegulatoryRegionVariant];
+            consequence
+        });
         batch[0].intergenic_overlap = true;
         batch[0].most_severe_consequence = Some(Consequence::RegulatoryRegionVariant);
         apply_record_rules(&mut batch, None);
@@ -7778,16 +10548,16 @@ mod tests {
             Some(Consequence::IntergenicVariant)
         );
         // A transcript row on either allele makes the record genic.
-        batch[1]
-            .transcript_consequences
-            .push(TranscriptConsequence {
-                transcript: Some(Arc::new(Transcript {
-                    stable_id: "ENST1".into(),
-                    ..Transcript::default()
-                })),
-                consequences: smallvec::smallvec![Consequence::IntronVariant],
-                ..Default::default()
-            });
+        batch[1].transcript_consequences.push({
+            let mut consequence = TranscriptConsequence::default();
+            consequence.transcript = Some(Arc::new({
+                let mut transcript = Transcript::default();
+                transcript.stable_id = "ENST1".into();
+                transcript
+            }));
+            consequence.consequences = smallvec::smallvec![Consequence::IntronVariant];
+            consequence
+        });
         batch[1].most_severe_consequence = None;
         apply_record_rules(&mut batch, None);
         assert_eq!(batch[1].most_severe_consequence, None);
@@ -7832,9 +10602,9 @@ mod tests {
 
     /// A `--minimal` split record's rows print the first feature's co-located
     /// variants and structural variant names (the rejoin leaves both on each
-    /// feature and the rows read the first, OutputFactory.pm:2272-2353, 1046,
+    /// feature and the rows read the first, OutputFactory.pm:2281-2362, 1046,
     /// 962), each row keeping the names matched on its own allele (:1081-1083):
-    /// on `21 5230609 A C,AT` Ensembl VEP 116.2 prints `rs1979841086,rs373402393`
+    /// on `21 5230609 A C,AT` Ensembl VEP 116.3 prints `rs1979841086,rs373402393`
     /// on the C row and `rs1979841086`, the span match, on the T row, and under
     /// `--check_svs` the same names on both rows (`21 5047000 T TG,A` prints the
     /// insertion feature's five names on the A row). A reference row of the
@@ -7845,13 +10615,14 @@ mod tests {
         use crate::vcf_parser::split_minimal_record;
         use vep_core::variant::{ColocatedVariant, MatchedAllele};
 
-        let known = |id: &str, start: u64, end: u64, matched: &[&str]| ColocatedVariant {
-            id: id.to_string(),
-            start,
-            end,
-            allele_string: Some("A/C".to_string()),
-            strand: 1,
-            matched_alleles: matched
+        let known = |id: &str, start: u64, end: u64, matched: &[&str]| {
+            let mut colocated = ColocatedVariant::default();
+            colocated.id = id.to_string();
+            colocated.start = start;
+            colocated.end = end;
+            colocated.allele_string = Some("A/C".to_string());
+            colocated.strand = 1;
+            colocated.matched_alleles = matched
                 .iter()
                 .map(|allele| MatchedAllele {
                     input_allele: allele.to_string(),
@@ -7859,8 +10630,8 @@ mod tests {
                     record_allele: allele.to_string(),
                     record_index: 0,
                 })
-                .collect(),
-            ..ColocatedVariant::default()
+                .collect();
+            colocated
         };
         let mut batch = Vec::new();
         for (n, line) in [
@@ -7946,7 +10717,7 @@ mod tests {
     /// reads the string's second allele for every row of such a record), and none
     /// when it has three, a `*` ALT counted although it writes no row: `C T,*` is
     /// the string `C/T/*` with the one alternate row, and its reference row prints
-    /// no `HGVSg`, as Ensembl VEP 116.2 writes it.
+    /// no `HGVSg`, as Ensembl VEP 116.3 writes it.
     #[test]
     fn reference_row_takes_the_alternate_hgvsg_on_a_two_allele_string_alone() {
         use crate::individuals::RecordReading;
@@ -8003,7 +10774,7 @@ mod tests {
     /// reference row (`--process_ref_homs`), the first split feature's: the rejoin
     /// moves a later feature's intergenic alleles into the first intergenic
     /// variation and leaves that feature's reference allele behind
-    /// (OutputFactory.pm:2323-2338), as Ensembl VEP 116.2 writes `T` 0, `A` 1 and
+    /// (OutputFactory.pm:2332-2347), as Ensembl VEP 116.3 writes `T` 0, `A` 1 and
     /// `AA` 2 for `21 20000326 TT TA,TTAA`; a record whose first feature overlaps a
     /// transcript takes its intergenic reference row from the first that does not.
     #[test]
@@ -8055,15 +10826,15 @@ mod tests {
             parse_vcf_line_with("21\t20000326\tx\tTT\tTA,TTAA\t.\t.\t.", &parse).unwrap(),
         );
         intergenic(&mut batch);
-        batch[0]
-            .transcript_consequences
-            .push(TranscriptConsequence {
-                transcript: Some(Arc::new(Transcript {
-                    stable_id: "ENST1".into(),
-                    ..Transcript::default()
-                })),
-                ..Default::default()
-            });
+        batch[0].transcript_consequences.push({
+            let mut consequence = TranscriptConsequence::default();
+            consequence.transcript = Some(Arc::new({
+                let mut transcript = Transcript::default();
+                transcript.stable_id = "ENST1".into();
+                transcript
+            }));
+            consequence
+        });
         apply_record_rules(&mut batch, None);
         let verdicts: Vec<bool> = batch
             .iter()
@@ -8078,8 +10849,8 @@ mod tests {
     /// row is the first feature's that overlaps no transcript, whether that
     /// feature carries regulatory rows or none: the rejoin appends a later
     /// feature's intergenic alleles to the first intergenic variation and leaves
-    /// its reference allele behind (OutputFactory.pm:2323-2338) but moves its
-    /// regulatory variation whole, reference allele included (:2311-2318). A
+    /// its reference allele behind (OutputFactory.pm:2332-2347) but moves its
+    /// regulatory variation whole, reference allele included (:2320-2327). A
     /// later reference row with regulatory rows alone keeps those rows and
     /// writes no intergenic row, in either order of the two features, and a
     /// record whose first feature overlaps a transcript takes the one intergenic
@@ -8108,13 +10879,13 @@ mod tests {
             }
             batch
         };
-        let row =
-            |id: &str, feature_type: FeatureType, consequence: Consequence| TranscriptConsequence {
-                feature_id: Some(id.into()),
-                feature_type,
-                consequences: std::iter::once(consequence).collect(),
-                ..Default::default()
-            };
+        let row = |id: &str, feature_type: FeatureType, consequence: Consequence| {
+            let mut row = TranscriptConsequence::default();
+            row.feature_id = Some(id.into());
+            row.feature_type = feature_type;
+            row.consequences = std::iter::once(consequence).collect();
+            row
+        };
         let intergenic = |v: &mut InputVariant| {
             v.most_severe_consequence = Some(Consequence::IntergenicVariant);
         };

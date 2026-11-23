@@ -1,0 +1,6 @@
+Perl rows: 4
+Rust rows: 60
+Unique keys: 60
+
+match	21:1000	A	ENST001		perl_cons=missense_variant	rust_cons=missense_variant	perl_cds=10-10	perl_pep=A/V	rust_aa=A/V	perl_codon=gCa/gTa	rust_codon=gCa/gTa
+DISCORD	21:1000	A	ENST002	consequence	perl_cons=stop_gained	rust_cons=splice_region_variant&missense_variant	perl_cds=20-20	perl_pep=S/I	rust_aa=S/I	perl_codon=aGt/aTt	rust_codon=AGT/ATT

@@ -1,0 +1,204 @@
+# Written by scripts/check_public_interface.py --update, which reads the tree; the script's opening comment gives the format.
+library	vep_effects
+module	vep_effects	mod
+re-export	vep_effects::EffectsConfig	pub use vep_effects::consequences::EffectsConfig
+re-export	vep_effects::LofteeContextRows	pub use vep_effects::consequences::LofteeContextRows
+re-export	vep_effects::calculate_consequences	pub use vep_effects::consequences::calculate_consequences
+module	vep_effects::coding	mod
+auto traits	vep_effects::coding::CodonChange	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_effects::coding::CodonChange	impl core::clone::Clone for vep_effects::coding::CodonChange
+implementation	vep_effects::coding::CodonChange	impl core::fmt::Debug for vep_effects::coding::CodonChange
+struct	vep_effects::coding::CodonChange	struct; named fields; #[non_exhaustive]
+field	vep_effects::coding::CodonChange::alt_amino_acid	u8
+field	vep_effects::coding::CodonChange::alt_codon	alloc::string::String
+field	vep_effects::coding::CodonChange::codon_number	u64
+field	vep_effects::coding::CodonChange::is_frameshift	bool
+field	vep_effects::coding::CodonChange::ref_amino_acid	u8
+field	vep_effects::coding::CodonChange::ref_codon	alloc::string::String
+function	vep_effects::coding::get_codon_change	fn(variant: &vep_core::variant::InputVariant, transcript: &vep_core::transcript::Transcript, cds_pos: u64) -> core::option::Option<vep_effects::coding::CodonChange>
+function	vep_effects::coding::perl_coding_terms	fn(variant: &vep_core::variant::InputVariant, transcript: &vep_core::transcript::Transcript, span_start: u64, span_end: u64, fasta: core::option::Option<&vep_fasta::IndexedFasta>) -> core::option::Option<alloc::vec::Vec<vep_core::consequence::Consequence>>
+function	vep_effects::coding::perl_hgvs_protein	fn(variant: &vep_core::variant::InputVariant, shifted: core::option::Option<(&vep_core::variant::InputVariant, u64, u64)>, transcript: &vep_core::transcript::Transcript, fasta: core::option::Option<&vep_fasta::IndexedFasta>, predicates_on_shifted: bool) -> core::option::Option<alloc::string::String>
+module	vep_effects::consequences	mod
+auto traits	vep_effects::consequences::EffectsConfig	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_effects::consequences::EffectsConfig	impl core::default::Default for vep_effects::consequences::EffectsConfig
+struct	vep_effects::consequences::EffectsConfig	struct; named fields; #[non_exhaustive]
+field	vep_effects::consequences::EffectsConfig::compute_exon_intron_numbers	bool
+field	vep_effects::consequences::EffectsConfig::compute_hgvs	bool
+field	vep_effects::consequences::EffectsConfig::context_sequences	vep_effects::consequences::LofteeContextRows
+field	vep_effects::consequences::EffectsConfig::domains	bool
+field	vep_effects::consequences::EffectsConfig::downstream_distance	u64
+field	vep_effects::consequences::EffectsConfig::enable_indel_3prime_shift	bool
+field	vep_effects::consequences::EffectsConfig::hgvs	vep_effects::hgvs::HgvsOptions
+field	vep_effects::consequences::EffectsConfig::hgvsg	core::option::Option<vep_effects::hgvsg::HgvsgOptions>
+field	vep_effects::consequences::EffectsConfig::loftee_context	vep_effects::consequences::LofteeContextRows
+field	vep_effects::consequences::EffectsConfig::process_ref_homs	bool
+field	vep_effects::consequences::EffectsConfig::protein_version	bool
+field	vep_effects::consequences::EffectsConfig::reference_fasta	core::option::Option<alloc::sync::Arc<vep_fasta::IndexedFasta>>
+field	vep_effects::consequences::EffectsConfig::spdi	core::option::Option<vep_effects::spdi::SpdiOptions>
+field	vep_effects::consequences::EffectsConfig::upstream_distance	u64
+field	vep_effects::consequences::EffectsConfig::use_transcript_ref	bool
+auto traits	vep_effects::consequences::LofteeContextRows	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_effects::consequences::LofteeContextRows	enum; #[non_exhaustive]
+implementation	vep_effects::consequences::LofteeContextRows	impl core::clone::Clone for vep_effects::consequences::LofteeContextRows
+implementation	vep_effects::consequences::LofteeContextRows	impl core::cmp::Eq for vep_effects::consequences::LofteeContextRows
+implementation	vep_effects::consequences::LofteeContextRows	impl core::cmp::PartialEq for vep_effects::consequences::LofteeContextRows
+implementation	vep_effects::consequences::LofteeContextRows	impl core::default::Default for vep_effects::consequences::LofteeContextRows
+implementation	vep_effects::consequences::LofteeContextRows	impl core::fmt::Debug for vep_effects::consequences::LofteeContextRows
+implementation	vep_effects::consequences::LofteeContextRows	impl core::marker::Copy for vep_effects::consequences::LofteeContextRows
+variant	vep_effects::consequences::LofteeContextRows::Every	no fields
+variant	vep_effects::consequences::LofteeContextRows::None	no fields
+variant	vep_effects::consequences::LofteeContextRows::WithTerm	1 positional field
+field	vep_effects::consequences::LofteeContextRows::WithTerm::0	vep_core::consequence::Consequence
+method	vep_effects::consequences::LofteeContextRows::wants	fn(self, consequences: &[vep_core::consequence::Consequence]) -> bool
+function	vep_effects::consequences::calculate_consequences	fn(variant: &vep_core::variant::InputVariant, transcript: &alloc::sync::Arc<vep_core::transcript::Transcript>, config: &vep_effects::consequences::EffectsConfig) -> core::option::Option<vep_core::consequence::TranscriptConsequence>
+function	vep_effects::consequences::shift_indel_3prime	fn(variant: &vep_core::variant::InputVariant, strand: vep_core::coordinate::Strand, fasta: &vep_fasta::IndexedFasta) -> core::option::Option<(u64, u64)>
+function	vep_effects::consequences::shift_indel_3prime_coords	fn(variant: &vep_core::variant::InputVariant, transcript: &vep_core::transcript::Transcript, fasta: &vep_fasta::IndexedFasta) -> core::option::Option<(u64, u64)>
+function	vep_effects::consequences::shift_motif	fn(variant: &vep_core::variant::InputVariant) -> core::option::Option<alloc::vec::Vec<u8>>
+module	vep_effects::display	mod
+auto traits	vep_effects::display::DisplayFields	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_effects::display::DisplayFields	impl core::clone::Clone for vep_effects::display::DisplayFields
+implementation	vep_effects::display::DisplayFields	impl core::cmp::Eq for vep_effects::display::DisplayFields
+implementation	vep_effects::display::DisplayFields	impl core::cmp::PartialEq for vep_effects::display::DisplayFields
+implementation	vep_effects::display::DisplayFields	impl core::default::Default for vep_effects::display::DisplayFields
+implementation	vep_effects::display::DisplayFields	impl core::fmt::Debug for vep_effects::display::DisplayFields
+struct	vep_effects::display::DisplayFields	struct; named fields, some private; #[non_exhaustive]
+field	vep_effects::display::DisplayFields::amino_acids	core::option::Option<alloc::string::String>
+field	vep_effects::display::DisplayFields::cdna_position	core::option::Option<alloc::string::String>
+field	vep_effects::display::DisplayFields::cdna_total	core::option::Option<u32>
+field	vep_effects::display::DisplayFields::cds_position	core::option::Option<alloc::string::String>
+field	vep_effects::display::DisplayFields::cds_total	core::option::Option<u32>
+field	vep_effects::display::DisplayFields::codons	core::option::Option<alloc::string::String>
+field	vep_effects::display::DisplayFields::own_span_positions	core::option::Option<alloc::boxed::Box<vep_core::consequence::OwnSpanPositions>>
+field	vep_effects::display::DisplayFields::protein_position	core::option::Option<alloc::string::String>
+field	vep_effects::display::DisplayFields::protein_start	core::option::Option<i64>
+field	vep_effects::display::DisplayFields::protein_total	core::option::Option<u32>
+field	vep_effects::display::DisplayFields::record_span_in_cds	bool
+field	vep_effects::display::DisplayFields::translation_span	core::option::Option<(i64, i64)>
+function	vep_effects::display::display_fields	fn(variant: &vep_core::variant::InputVariant, transcript: &vep_core::transcript::Transcript) -> vep_effects::display::DisplayFields
+re-export	vep_effects::find_overlapping_transcripts	pub use vep_effects::overlap::find_overlapping_transcripts
+module	vep_effects::hgvs	mod
+auto traits	vep_effects::hgvs::HgvsNotation	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_effects::hgvs::HgvsNotation	impl core::clone::Clone for vep_effects::hgvs::HgvsNotation
+implementation	vep_effects::hgvs::HgvsNotation	impl core::cmp::Eq for vep_effects::hgvs::HgvsNotation
+implementation	vep_effects::hgvs::HgvsNotation	impl core::cmp::PartialEq for vep_effects::hgvs::HgvsNotation
+implementation	vep_effects::hgvs::HgvsNotation	impl core::default::Default for vep_effects::hgvs::HgvsNotation
+implementation	vep_effects::hgvs::HgvsNotation	impl core::fmt::Debug for vep_effects::hgvs::HgvsNotation
+struct	vep_effects::hgvs::HgvsNotation	struct; named fields; #[non_exhaustive]
+field	vep_effects::hgvs::HgvsNotation::hgvsc	core::option::Option<alloc::string::String>
+field	vep_effects::hgvs::HgvsNotation::hgvsp	core::option::Option<alloc::string::String>
+field	vep_effects::hgvs::HgvsNotation::intron_offsets	core::option::Option<(i64, i64)>
+field	vep_effects::hgvs::HgvsNotation::offset	core::option::Option<i64>
+field	vep_effects::hgvs::HgvsNotation::offset_of_hgvsc_alone	bool
+field	vep_effects::hgvs::HgvsNotation::refseq_offset	core::option::Option<i64>
+auto traits	vep_effects::hgvs::HgvsOptions	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_effects::hgvs::HgvsOptions	impl core::clone::Clone for vep_effects::hgvs::HgvsOptions
+implementation	vep_effects::hgvs::HgvsOptions	impl core::cmp::Eq for vep_effects::hgvs::HgvsOptions
+implementation	vep_effects::hgvs::HgvsOptions	impl core::cmp::PartialEq for vep_effects::hgvs::HgvsOptions
+implementation	vep_effects::hgvs::HgvsOptions	impl core::default::Default for vep_effects::hgvs::HgvsOptions
+implementation	vep_effects::hgvs::HgvsOptions	impl core::fmt::Debug for vep_effects::hgvs::HgvsOptions
+implementation	vep_effects::hgvs::HgvsOptions	impl core::marker::Copy for vep_effects::hgvs::HgvsOptions
+struct	vep_effects::hgvs::HgvsOptions	struct; named fields; #[non_exhaustive]
+field	vep_effects::hgvs::HgvsOptions::hgvsp_use_prediction	bool
+field	vep_effects::hgvs::HgvsOptions::remove_hgvsp_version	bool
+field	vep_effects::hgvs::HgvsOptions::shift_3prime	bool
+field	vep_effects::hgvs::HgvsOptions::shift_hgvs	bool
+function	vep_effects::hgvs::generate_hgvs	fn(variant: &vep_core::variant::InputVariant, transcript: &vep_core::transcript::Transcript, reference_fasta: core::option::Option<&vep_fasta::IndexedFasta>, options: vep_effects::hgvs::HgvsOptions) -> vep_effects::hgvs::HgvsNotation
+function	vep_effects::hgvs::generate_hgvsc	fn(variant: &vep_core::variant::InputVariant, transcript: &vep_core::transcript::Transcript, reference_fasta: core::option::Option<&vep_fasta::IndexedFasta>) -> core::option::Option<alloc::string::String>
+function	vep_effects::hgvs::generate_hgvsp	fn(variant: &vep_core::variant::InputVariant, transcript: &vep_core::transcript::Transcript, reference_fasta: core::option::Option<&vep_fasta::IndexedFasta>) -> core::option::Option<alloc::string::String>
+module	vep_effects::hgvsg	mod
+auto traits	vep_effects::hgvsg::HgvsgOptions	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_effects::hgvsg::HgvsgOptions	impl core::clone::Clone for vep_effects::hgvsg::HgvsgOptions
+implementation	vep_effects::hgvsg::HgvsgOptions	impl core::cmp::Eq for vep_effects::hgvsg::HgvsgOptions
+implementation	vep_effects::hgvsg::HgvsgOptions	impl core::cmp::PartialEq for vep_effects::hgvsg::HgvsgOptions
+implementation	vep_effects::hgvsg::HgvsgOptions	impl core::default::Default for vep_effects::hgvsg::HgvsgOptions
+implementation	vep_effects::hgvsg::HgvsgOptions	impl core::fmt::Debug for vep_effects::hgvsg::HgvsgOptions
+struct	vep_effects::hgvsg::HgvsgOptions	struct; named fields; #[non_exhaustive]
+field	vep_effects::hgvsg::HgvsgOptions::accessions	core::option::Option<std::collections::hash::map::HashMap<alloc::string::String, alloc::string::String>>
+field	vep_effects::hgvsg::HgvsgOptions::shift	bool
+function	vep_effects::hgvsg::annotate	fn(variant: &mut vep_core::variant::InputVariant, config: &vep_effects::consequences::EffectsConfig)
+function	vep_effects::hgvsg::nc_accession	fn<'a>(synonyms: impl core::iter::traits::collect::IntoIterator<Item = &'a str>) -> core::option::Option<&'a str>
+function	vep_effects::hgvsg::refseq_name	fn<'a>(synonyms: impl core::iter::traits::collect::IntoIterator<Item = &'a str>) -> core::option::Option<&'a str>
+module	vep_effects::mapper	mod
+auto traits	vep_effects::mapper::CdsSpanBounds	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_effects::mapper::CdsSpanBounds	impl core::clone::Clone for vep_effects::mapper::CdsSpanBounds
+implementation	vep_effects::mapper::CdsSpanBounds	impl core::cmp::Eq for vep_effects::mapper::CdsSpanBounds
+implementation	vep_effects::mapper::CdsSpanBounds	impl core::cmp::PartialEq for vep_effects::mapper::CdsSpanBounds
+implementation	vep_effects::mapper::CdsSpanBounds	impl core::fmt::Debug for vep_effects::mapper::CdsSpanBounds
+implementation	vep_effects::mapper::CdsSpanBounds	impl core::marker::Copy for vep_effects::mapper::CdsSpanBounds
+struct	vep_effects::mapper::CdsSpanBounds	struct; named fields; #[non_exhaustive]
+field	vep_effects::mapper::CdsSpanBounds::cds_end	u64
+field	vep_effects::mapper::CdsSpanBounds::cds_start	u64
+field	vep_effects::mapper::CdsSpanBounds::translation_end	u64
+field	vep_effects::mapper::CdsSpanBounds::translation_start	u64
+auto traits	vep_effects::mapper::TranscriptPosition	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_effects::mapper::TranscriptPosition	enum; #[non_exhaustive]
+implementation	vep_effects::mapper::TranscriptPosition	impl core::clone::Clone for vep_effects::mapper::TranscriptPosition
+implementation	vep_effects::mapper::TranscriptPosition	impl core::fmt::Debug for vep_effects::mapper::TranscriptPosition
+variant	vep_effects::mapper::TranscriptPosition::Coding	named fields
+field	vep_effects::mapper::TranscriptPosition::Coding::cdna_pos	u64
+field	vep_effects::mapper::TranscriptPosition::Coding::cds_pos	u64
+field	vep_effects::mapper::TranscriptPosition::Coding::codon_pos	u8
+field	vep_effects::mapper::TranscriptPosition::Coding::protein_pos	u64
+variant	vep_effects::mapper::TranscriptPosition::Downstream	named fields
+field	vep_effects::mapper::TranscriptPosition::Downstream::distance	u64
+variant	vep_effects::mapper::TranscriptPosition::FivePrimeUtr	named fields
+field	vep_effects::mapper::TranscriptPosition::FivePrimeUtr::cdna_pos	u64
+variant	vep_effects::mapper::TranscriptPosition::Intron	named fields
+field	vep_effects::mapper::TranscriptPosition::Intron::dist_to_acceptor	u64
+field	vep_effects::mapper::TranscriptPosition::Intron::dist_to_donor	u64
+field	vep_effects::mapper::TranscriptPosition::Intron::intron_number	u32
+field	vep_effects::mapper::TranscriptPosition::Intron::total_introns	u32
+variant	vep_effects::mapper::TranscriptPosition::NonCodingExon	named fields
+field	vep_effects::mapper::TranscriptPosition::NonCodingExon::cdna_pos	u64
+field	vep_effects::mapper::TranscriptPosition::NonCodingExon::exon_number	u32
+field	vep_effects::mapper::TranscriptPosition::NonCodingExon::total_exons	u32
+variant	vep_effects::mapper::TranscriptPosition::ThreePrimeUtr	named fields
+field	vep_effects::mapper::TranscriptPosition::ThreePrimeUtr::cdna_pos	u64
+variant	vep_effects::mapper::TranscriptPosition::Upstream	named fields
+field	vep_effects::mapper::TranscriptPosition::Upstream::distance	u64
+function	vep_effects::mapper::map_genomic_span_to_cds_bounds	fn(span_start: u64, span_end: u64, transcript: &vep_core::transcript::Transcript) -> core::option::Option<vep_effects::mapper::CdsSpanBounds>
+function	vep_effects::mapper::map_genomic_to_transcript	fn(genomic_pos: u64, transcript: &vep_core::transcript::Transcript, upstream_distance: u64, downstream_distance: u64) -> core::option::Option<vep_effects::mapper::TranscriptPosition>
+module	vep_effects::overlap	mod
+function	vep_effects::overlap::find_overlapping_transcripts	fn<'a>(variant: &vep_core::variant::InputVariant, transcripts: &'a [vep_core::transcript::Transcript], upstream_distance: u64, downstream_distance: u64) -> alloc::vec::Vec<&'a vep_core::transcript::Transcript>
+module	vep_effects::regulatory	mod
+auto traits	vep_effects::regulatory::Allele	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_effects::regulatory::Allele	impl<'a> core::clone::Clone for vep_effects::regulatory::Allele<'a>
+implementation	vep_effects::regulatory::Allele	impl<'a> core::fmt::Debug for vep_effects::regulatory::Allele<'a>
+implementation	vep_effects::regulatory::Allele	impl<'a> core::marker::Copy for vep_effects::regulatory::Allele<'a>
+struct	vep_effects::regulatory::Allele	struct<'a>; named fields; #[non_exhaustive]
+field	vep_effects::regulatory::Allele::alternate	&'a [u8]
+field	vep_effects::regulatory::Allele::end	u64
+method	vep_effects::regulatory::Allele::new	fn(start: u64, end: u64, reference: &'a [u8], alternate: &'a [u8]) -> Self; in impl<'a> vep_effects::regulatory::Allele<'a>
+field	vep_effects::regulatory::Allele::reference	&'a [u8]
+field	vep_effects::regulatory::Allele::start	u64
+auto traits	vep_effects::regulatory::Motif	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_effects::regulatory::Motif	impl<'a> core::clone::Clone for vep_effects::regulatory::Motif<'a>
+implementation	vep_effects::regulatory::Motif	impl<'a> core::fmt::Debug for vep_effects::regulatory::Motif<'a>
+implementation	vep_effects::regulatory::Motif	impl<'a> core::marker::Copy for vep_effects::regulatory::Motif<'a>
+struct	vep_effects::regulatory::Motif	struct<'a>; named fields; #[non_exhaustive]
+field	vep_effects::regulatory::Motif::end	u64
+field	vep_effects::regulatory::Motif::matrix	&'a vep_core::binding_matrix::BindingMatrix
+method	vep_effects::regulatory::Motif::new	fn(start: u64, end: u64, strand: i8, seq: core::option::Option<&'a [u8]>, matrix: &'a vep_core::binding_matrix::BindingMatrix) -> Self; in impl<'a> vep_effects::regulatory::Motif<'a>
+field	vep_effects::regulatory::Motif::seq	core::option::Option<&'a [u8]>
+field	vep_effects::regulatory::Motif::start	u64
+field	vep_effects::regulatory::Motif::strand	i8
+function	vep_effects::regulatory::motif_fields	fn(motif: &vep_effects::regulatory::Motif<'_>, allele: &vep_effects::regulatory::Allele<'_>) -> vep_core::consequence::MotifFields
+function	vep_effects::regulatory::regulatory_terms	fn(variant: &vep_core::variant::InputVariant, start: u64, end: u64, feature_type: vep_core::consequence::FeatureType, feature_start: u64, feature_end: u64) -> vep_core::consequence::ConsequenceList
+re-export	vep_effects::shift_indel_3prime	pub use vep_effects::consequences::shift_indel_3prime
+re-export	vep_effects::shift_motif	pub use vep_effects::consequences::shift_motif
+module	vep_effects::spdi	mod
+auto traits	vep_effects::spdi::SpdiOptions	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_effects::spdi::SpdiOptions	impl core::clone::Clone for vep_effects::spdi::SpdiOptions
+implementation	vep_effects::spdi::SpdiOptions	impl core::cmp::Eq for vep_effects::spdi::SpdiOptions
+implementation	vep_effects::spdi::SpdiOptions	impl core::cmp::PartialEq for vep_effects::spdi::SpdiOptions
+implementation	vep_effects::spdi::SpdiOptions	impl core::default::Default for vep_effects::spdi::SpdiOptions
+implementation	vep_effects::spdi::SpdiOptions	impl core::fmt::Debug for vep_effects::spdi::SpdiOptions
+struct	vep_effects::spdi::SpdiOptions	struct; named fields; #[non_exhaustive]
+field	vep_effects::spdi::SpdiOptions::cache_name_on_every_row	bool
+field	vep_effects::spdi::SpdiOptions::vrs_accessions	core::option::Option<std::collections::hash::map::HashMap<alloc::string::String, alloc::string::String>>
+function	vep_effects::spdi::annotate	fn(variant: &mut vep_core::variant::InputVariant, config: &vep_effects::consequences::EffectsConfig)
+module	vep_effects::sv	mod
+module	vep_effects::sv::breakend	mod
+function	vep_effects::sv::breakend::calculate	fn(variant: &vep_core::variant::InputVariant, transcript: &alloc::sync::Arc<vep_core::transcript::Transcript>, upstream_distance: u64, downstream_distance: u64) -> core::option::Option<vep_core::consequence::TranscriptConsequence>
+function	vep_effects::sv::breakend::calculate_paired_mate	fn(variant: &vep_core::variant::InputVariant, transcript: &alloc::sync::Arc<vep_core::transcript::Transcript>, config: &vep_effects::consequences::EffectsConfig) -> core::option::Option<vep_core::consequence::TranscriptConsequence>
+function	vep_effects::sv::calculate_sv_consequences	fn(variant: &vep_core::variant::InputVariant, transcript: &alloc::sync::Arc<vep_core::transcript::Transcript>, upstream_distance: u64, downstream_distance: u64) -> core::option::Option<vep_core::consequence::TranscriptConsequence>

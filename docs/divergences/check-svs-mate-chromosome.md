@@ -17,7 +17,7 @@ The records below are a substitution and, one base after it, a breakend whose ma
 21	5047001	.	T	T[22:5035000[	.	.	SVTYPE=BND
 ```
 
-Both engines write the substitution with six names, the measured Ensembl VEP 116.2 row of the `GRCh38-checksvs` corpus:
+Both engines write the substitution with six names, the measured Ensembl VEP 116.3 row of the `GRCh38-checksvs` corpus:
 
 ```
 SV=nsv2770691,nsv3109934,nsv3163927,nsv3167562,nsv533679,nsv6146554
@@ -31,4 +31,4 @@ SV=nsv2770691,nsv3109934,nsv3163927,nsv3167562,nsv533679
 
 The flag names the structural variants a record overlaps, and a position on another chromosome overlaps no chromosome 21 variant, so the chromosome-blind match is a defect of the lookup and not a reading vep-rs reproduces.
 
-To reproduce in Ensembl VEP 116.2: the flag reads the structural variation database, so run [the command of the closing section](reproducing.md#reproducing-these-examples) with `--cache --db_version 116 --check_svs` in place of `--offline`, the two records in one file. In vep-rs: the same records with `--check_svs tests/golden/116/GRCh38-checksvs/structural_variants.vcf.gz` over the GRCh38 cache.
+To reproduce in Ensembl VEP 116.3: the flag reads the structural variation database, so run [the command of the closing section](reproducing.md#reproducing-these-examples) with `--cache --db_version 116 --check_svs` in place of `--offline`, the two records in one file. In vep-rs: the same records with `--check_svs tests/golden/116/GRCh38-checksvs/structural_variants.vcf.gz` over the GRCh38 cache.

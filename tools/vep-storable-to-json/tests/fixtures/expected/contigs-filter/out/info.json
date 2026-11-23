@@ -1,0 +1,16 @@
+{
+   "assembly" : "GRCh38",
+   "contig_order" : [
+      "21",
+      "X",
+      "MT"
+   ],
+   "source_versions" : {},
+   "species" : "homo_sapiens",
+   "var_type" : "tabix",
+   "variation_cols" : [
+      "chr",
+      "variation_name",
+      "failed"
+   ]
+}

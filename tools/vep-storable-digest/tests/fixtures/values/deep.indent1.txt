@@ -1,0 +1,54 @@
+{
+  'deep' => {
+    'down' => [
+      {
+        'down' => [
+          {
+            'down' => [
+              {
+                'down' => [
+                  {
+                    'down' => [
+                      {
+                        'down' => [
+                          {
+                            'down' => [
+                              {
+                                'down' => [
+                                  {
+                                    'down' => [
+                                      {
+                                        'down' => [
+                                          {
+                                            'down' => [
+                                              {
+                                                'down' => [
+                                                  {
+                                                    'leaf' => 1
+                                                  }
+                                                ]
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  'leaf_again' => $VAR1->{'deep'}{'down'}[0]{'down'}[0]{'down'}[0]{'down'}[0]{'down'}[0]{'down'}[0]{'down'}[0]{'down'}[0]{'down'}[0]{'down'}[0]{'down'}[0]{'down'}[0]
+}

@@ -1,7 +1,7 @@
 entry = "transcript_filter_list_directory_read_as_empty"
 page = "docs/divergences/transcript-filter-list-directory.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "malformed"
 input_class_basis = "the value of the in operator is either a comma-separated list or a file containing values on separate lines (Ensembl VEP documentation, \"Filtering results\", Operators, in): the filter names a directory as its list file"
 notes = "The corpus record tf_7130369 lies within reach of 3 transcripts. The stage holds an empty directory, which the filter names as its `in` list. FilterSet.pm:396 finds it with `-e`, :397's open succeeds (open(2) on a directory for reading succeeds on Linux), and the first readline of :398 fails with EISDIR, which the while loop reads as the end of the file: the list is empty, every transcript is dropped, and the record is written as intergenic_variant with nothing on the error stream. vep-rs refuses the run with `ERROR: [filter] Could not read from file <path>`, exit status 1 and no output, the message Ensembl VEP prints when its own open fails."
@@ -32,3 +32,7 @@ where = { record = "tf_7130369" }
 ensembl_vep = ["-"]
 vep_rs = []
 vep_rs_exit = 1
+
+[implementation]
+code = ["crates/vep-cli/src/filter_set.rs::read_list"]
+tests = ["crates/vep-cli/tests/filter_report_and_run_documented_rows.rs::a_directory_named_as_an_in_list_is_refused"]

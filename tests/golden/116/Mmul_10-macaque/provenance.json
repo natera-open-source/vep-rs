@@ -1,0 +1,70 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species macaca_mulatta --assembly Mmul_10 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "macaca_mulatta/116_Mmul_10",
+ "fasta": "the three sequences the records and the pruned cache's transcripts sit on (19, MT and QNVO02002606.1) at their full length from Macaca_mulatta.Mmul_10.dna.primary_assembly.19.fa, Macaca_mulatta.Mmul_10.dna.primary_assembly.MT.fa and Macaca_mulatta.Mmul_10.dna.nonchromosomal.fa of Ensembl release 116, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
+ "input": "variants.vcf: 341 records on chromosome 19, the mitochondrion MT and the unplaced scaffold QNVO02002606.1, every one written by tools/vep-seeded-variants from the converted cache and the genome sequence under seed 1, its ID naming its category and its ordinal there: a codon the vertebrate mitochondrial code reads differently, start codons and stops gained and lost under each of the two genetic codes, missense and synonymous changes on each strand, splice donors and acceptors, both untranslated regions, introns, upstream, downstream and intergenic positions, frameshift insertions and deletions, in-frame deletions, and the first and the last base of each of the three sequences. 26 records name chromosome 19 by a synonym of the cache (NC_041772.1, CM014354.1). The cache ships no known variant, so no record carries a known identifier",
+ "sha256": {
+  "default.txt": "b1ded45a554e02cdaf36fd13b9bd11f567ce43332427e18e67cf967a6f4fa180",
+  "tab.txt": "bd1ceccd86da8630d5a98b7a9c9c47a9172321f68d397615f111caf11bb540bb",
+  "vcf.vcf": "c415eda08da8c23fc80d5516c67fe3d15be3b59b104ee3e1d731f0851555dfbf",
+  "json.jsonl": "35f3d40e5f49c1dd9c3cde15fef4b5d3375e399df4f7b7553a318902ca54070c"
+ },
+ "variants_vcf_sha256": "15187911a58d4c82bbdea0d01a101e28dde6b7b693078be358932a7fe0d85ea3",
+ "flag_sets": {
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species macaca_mulatta --assembly Mmul_10 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "macaca_mulatta/116_Mmul_10",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "3500840f2135ffe2b30f4a985bc351767df63a3e094b9f467b008e597d3bae5d",
+    "tab.txt": "be6fba196db058948c55ac43c581b5dfb0dde1c20320f00d708249ef37e2ffc0",
+    "vcf.vcf": "1f2679a8f64243272e66ce7dc64bbe067423cbe9036c9302384e003ba81796bb",
+    "json.jsonl": "0ae1131de7604e2a81e13d3f981aecdf0e3464fb1a292a324ea6915ead0e322c"
+   },
+   "flags": [
+    "--everything"
+   ],
+   "expected_dir": "expected_everything"
+  },
+  "hgvs": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species macaca_mulatta --assembly Mmul_10 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs [--tab|--vcf|--json]",
+   "perl_cache": "macaca_mulatta/116_Mmul_10",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "86685bd3d75eb7104c751ff91c3758a5fd387709fcb0ffccdf2276d7a559f73b",
+    "tab.txt": "aa473e5acd7bac1143f7cf9006b911f8acd94ba17ba2cd0628846bde940ab255",
+    "vcf.vcf": "ac69453ab243ec69111e0aaaac8f2bf6aec721e2296501882d97c9a91afd4f5e",
+    "json.jsonl": "157c793c757a89dba1e57d2b89904e3a949d557282b02490564aab9076febc1f"
+   },
+   "flags": [
+    "--hgvs"
+   ],
+   "expected_dir": "expected_hgvs"
+  }
+ },
+ "generator": "tools/vep-seeded-variants --seed 1 --records wide --per-category 150 --fasta <the three sequences> --sequence MT --sequence 19 --sequence QNVO02002606.1 over the whole cache tools/vep-storable-to-json converts from the Ensembl VEP 116 Mmul_10 cache (3,082 seeded records); Ensembl VEP over them under the corpus flags with the unmasked sequences as --fasta; tools/vep-golden-corpus select --release 116 --assembly Mmul_10 --species macaca_mulatta --dataset wide=<reference>=<the seeded records> --k 2 --seed 1 --max-span 1000000 --max-records 500 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 6 --include <the first ten records of each category> --covers species-macaque-mmul10 --covers genetic-code-tables --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --flank 5000 --gzip --drop sorted_exons --perl-info <cache>/info.txt --cache-version 116 --variations <converted cache>/variations; scripts/fixtures/cut_plugin_regions.py --reference <the three sequences> --flank 5000 --record-flank 2000, the records read with each sequence under the cache's own name; tools/vep-golden-corpus flag-set (everything, hgvs); scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; tools/vep-golden-corpus classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp for the hgvs set)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "19": 533,
+   "MT": 37,
+   "QNVO02002606.1": 1
+  },
+  "shards": 44,
+  "synonym_lines": 4,
+  "variation_slices": "an empty all_vars.gz with its index under variations/<chr>/ for each of the three sequences: every variation file of the Ensembl VEP cache is empty"
+ }
+}

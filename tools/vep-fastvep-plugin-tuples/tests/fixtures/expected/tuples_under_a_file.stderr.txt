@@ -1,0 +1,1 @@
+ERROR: [fastvep_plugin_tuples] cannot write the tuple file tests/fixtures/inputs/empty.tab/tuples.tsv: Not a directory

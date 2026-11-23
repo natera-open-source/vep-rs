@@ -17,7 +17,7 @@
 //! (`:98`); or the transcript has one exon (`:109`). Every other row carries
 //! nothing, a structural variant's rows included: Ensembl VEP hands a plugin
 //! only the variant classes its `variant_feature_types` names
-//! (`OutputFactory.pm:2220`), and `NMD.pm` keeps the default, sequence
+//! (`OutputFactory.pm:2229`), and `NMD.pm` keeps the default, sequence
 //! variants alone (`BaseVepPlugin.pm:100`).
 //!
 //! Exon coordinates come from [`TranscriptConsequence::loftee_ctx`], the
@@ -70,6 +70,8 @@ impl NmdPlugin {
     }
 }
 
+impl crate::traits::sealed::Sealed for NmdPlugin {}
+
 impl BuiltinPlugin for NmdPlugin {
     fn name(&self) -> &str {
         "NMD"
@@ -107,7 +109,7 @@ impl BuiltinPlugin for NmdPlugin {
 fn escapes_nmd(consequence: &TranscriptConsequence, variant: &InputVariant) -> bool {
     // A structural deletion inside one coding exon carries `frameshift_variant`
     // and a CDS position too, but Ensembl VEP never runs this plugin on a
-    // `StructuralVariationFeature` (OutputFactory.pm:2220, BaseVepPlugin.pm:100).
+    // `StructuralVariationFeature` (OutputFactory.pm:2229, BaseVepPlugin.pm:100).
     if variant.is_structural {
         return false;
     }
@@ -182,41 +184,41 @@ mod tests {
     /// A transcript of `exons`, given as genomic `(start, end)` pairs in
     /// transcript order, on `strand`.
     fn context(strand: i8, exons: &[(u64, u64)]) -> LofteeContext {
-        LofteeContext {
-            exons: exons
-                .iter()
-                .enumerate()
-                .map(|(i, &(start, end))| Exon {
-                    start,
-                    end,
-                    rank: i as u32 + 1,
-                    phase: 0,
-                    end_phase: 0,
-                })
-                .collect(),
-            introns: Vec::new(),
-            strand,
-            coding_region_start: None,
-            coding_region_end: None,
-            translation_start: None,
-            translation_end: None,
-            cdna_coding_start: None,
-            cdna_coding_end: None,
-            cds_start_nf: false,
-            cds_end_nf: false,
-        }
+        let mut context =
+            LofteeContext::from_transcript(&vep_core::transcript::Transcript::default());
+        context.exons = exons
+            .iter()
+            .enumerate()
+            .map(|(i, &(start, end))| Exon {
+                start,
+                end,
+                rank: i as u32 + 1,
+                phase: 0,
+                end_phase: 0,
+            })
+            .collect();
+        context.introns = Vec::new();
+        context.strand = strand;
+        context.coding_region_start = None;
+        context.coding_region_end = None;
+        context.translation_start = None;
+        context.translation_end = None;
+        context.cdna_coding_start = None;
+        context.cdna_coding_end = None;
+        context.cds_start_nf = false;
+        context.cds_end_nf = false;
+        context
     }
 
     /// A transcript row carrying `terms` and the `CDS_position` column `cds`.
     fn row(terms: &[Consequence], cds: Option<&str>, ctx: LofteeContext) -> TranscriptConsequence {
-        TranscriptConsequence {
-            consequences: terms.iter().copied().collect(),
-            cds_position: cds.map(str::to_string),
-            strand: ctx.strand,
-            feature_type: FeatureType::Transcript,
-            loftee_ctx: Some(Box::new(ctx)),
-            ..TranscriptConsequence::default()
-        }
+        let mut consequence = TranscriptConsequence::default();
+        consequence.consequences = terms.iter().copied().collect();
+        consequence.cds_position = cds.map(str::to_string);
+        consequence.strand = ctx.strand;
+        consequence.feature_type = FeatureType::Transcript;
+        consequence.loftee_ctx = Some(Box::new(ctx));
+        consequence
     }
 
     /// A single-base substitution at `pos`.

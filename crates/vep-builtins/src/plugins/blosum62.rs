@@ -13,11 +13,21 @@
 //! matrix (`:50-73`); a pair outside the matrix (a stop, an unknown residue)
 //! and every other row carry nothing (`:114-121`). A structural variant's rows
 //! carry nothing: Ensembl VEP hands a plugin only the variant classes its
-//! `variant_feature_types` names (`OutputFactory.pm:2220`), and `Blosum62.pm`
+//! `variant_feature_types` names (`OutputFactory.pm:2229`), and `Blosum62.pm`
 //! keeps the default, sequence variants alone (`BaseVepPlugin.pm:100`).
 //!
 //! The amino-acid change is read from the row's `Amino_acids` column, which
-//! prints `pep_allele_string` as the plugin reads it.
+//! prints `pep_allele_string` as the plugin reads it. On a row of the
+//! documented class `alternate_codon_past_the_coding_end` the column's
+//! alternate half is read from vep-rs's own alternate codon, and neither
+//! engine writes a score there: in both, the reference codons or the alternate
+//! ones end in a partial codon (`TranscriptVariationAllele.pm:774-776`).
+//! Under any other documented class whose rows differ between the engines in
+//! that column, each engine scores the residues it reads itself, so a score
+//! can differ or stand in one engine alone: under
+//! `hgvs_shift_shared_across_alleles` Ensembl VEP alone can write one, on a
+//! later allele's row, which the class
+//! `blosum62_hgvs_shift_shared_across_alleles` reads.
 //!
 //! Per-transcript plugin: returns annotation from [`crate::BuiltinPlugin::run`]
 //! via the default [`crate::BuiltinPlugin::run_batch`] dispatcher.
@@ -110,6 +120,8 @@ impl Blosum62Plugin {
     }
 }
 
+impl crate::traits::sealed::Sealed for Blosum62Plugin {}
+
 impl BuiltinPlugin for Blosum62Plugin {
     fn name(&self) -> &str {
         "Blosum62"
@@ -165,11 +177,10 @@ mod tests {
     use vep_core::consequence::FeatureType;
 
     fn row(amino_acids: Option<&str>) -> TranscriptConsequence {
-        TranscriptConsequence {
-            amino_acids: amino_acids.map(str::to_string),
-            feature_type: FeatureType::Transcript,
-            ..TranscriptConsequence::default()
-        }
+        let mut consequence = TranscriptConsequence::default();
+        consequence.amino_acids = amino_acids.map(str::to_string);
+        consequence.feature_type = FeatureType::Transcript;
+        consequence
     }
 
     fn snv() -> InputVariant {

@@ -1,9 +1,9 @@
 entry = "hgvs_clipped_reference_against_whole_alternate"
 page = "docs/divergences/hgvs-clipped-reference-against-whole-alternate.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 86.7 per million · 23 flag sets, 53 corpora"
+input_class_basis = "2 · 86.7 per million · 95 flag sets, 58 corpora"
 notes = "Six records whose span runs over the first base of ENST00000290239 (34915350): one changed base inside, every base inside unchanged, a multi-allelic record's alleles still carrying a shared outside base, a multi-allelic record's shorter alternate repeating the base inside, a multi-allelic record's deletion reaching over the first base behind a shared outside base, and one deleting the two bases inside behind it. The deletion reaching over the first base can be written at no other window, so vep-rs writes no HGVSc for it: the HGVS nomenclature describes a deletion extending beyond the transcribed region by genomic coordinates alone. The deletion of the two bases inside lies wholly inside the transcript and keeps its notation."
 
 [input]
@@ -55,4 +55,22 @@ vep_rs = [
   "fwd5_straddle_del_anchor_multi | TGGGC | 5_prime_UTR_variant | ?-2 | ENST00000290239.6:c.-48_-47insC",
   "fwd5_two_del_anchor_multi | TG | 5_prime_UTR_variant | ?-2 | ENST00000290239.6:c.-49_-48del",
   "fwd5_two_del_anchor_multi | TGGGC | 5_prime_UTR_variant | ?-2 | ENST00000290239.6:c.-48_-47insC",
+]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/hgvs.rs::alt_cut_as_reference",
+    "crates/vep-effects/src/hgvs.rs::kept_allele_deletes_over_a_transcript_end",
+    "crates/vep-effects/src/hgvs.rs::shared_ends_aligned_3prime",
+]
+tests = [
+    "crates/vep-cli/tests/hgvsc_deletion_over_a_transcript_end.rs::a_kept_allele_deleting_over_the_first_base_has_no_hgvsc",
+    "crates/vep-effects/src/hgvs.rs::tests::a_kept_allele_deleting_over_a_transcript_end_with_no_window_inside_has_no_notation",
+    "crates/vep-effects/src/hgvs.rs::tests::test_hgvsc_allele_changing_only_bases_before_the_first_genomic_base_has_no_notation",
+    "crates/vep-effects/src/hgvs.rs::tests::test_hgvsc_substitution_running_over_an_edge_describes_the_bases_that_change_inside",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/clipped.rs::clipped_reference_against_whole_alternate",
+    "tools/vep-golden-corpus/src/classify/hgvs.rs::clipped_reference_against_whole_alternate",
+    "tools/vep-plugin-pairs/src/rules/hgvs_offsets.rs::clipped_reference_against_whole_alternate",
 ]

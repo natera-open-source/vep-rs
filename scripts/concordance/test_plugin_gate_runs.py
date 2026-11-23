@@ -17,22 +17,26 @@ import plugin_gate_rows as pgr
 import reproduce_plugin_concordance as driver
 
 RUNS_FILE = HERE / "plugin_gate_runs.toml"
+CLASS_TABLE = HERE / "plugin_class_table.tsv"
+ORACLE = HERE / "feature_oracle.sh"
 LAYOUT = ROOT / "scripts/data/plugin_data_layout.sh"
 GOLDEN = ROOT / "tests/golden/116"
 WORD_FIELDS = ("vep_rs", "vep_rs_env", "ensembl_vep", "score", "data_indexes")
 SCOPES = ("grch37", "grch38", "assembly_agnostic")
-LAYOUT_ROLES = ("file", "ancestor", "ancestor_bgzf", "gerp")
+LAYOUT_ROLES = ("file", "ancestor", "ancestor_bgzf", "gerp", "synthetic_gerp", "synthetic_conservation", "synthetic_ancestor_bgzf")
 INDEX_SUFFIXES = (".tbi", ".csi", ".fai", ".gzi")
 # The module a plugin word names, where it is not the support table's name of the plugin.
 MODULE_NAMES = {"LoF": "LoFTEE"}
-# Plugins of the whole runs whose data file the layout script names no path for.
-NOT_IN_LAYOUT = {"gnomADMt", "UTRAnnotator"}
 WHOLE_FAMILIES = {
     "plugins_grch37": ("GRCh37", "clinvar_grch37"),
     "plugins_grch38": ("GRCh38", "clinvar_grch38"),
     "gwas": ("GRCh38", "clinvar_grch38"),
     "loftee_grch38": ("GRCh38", "clinvar_grch38"),
+    "loftee_grch37": ("GRCh37", "clinvar_grch37"),
 }
+# The scorer's class of a value on a record the reference dropped. It reads the lines of the
+# input as the classes feature_oracle.sh lists under INPUT_READING_MASKS do.
+SKIPPED_RECORD_VALUE_CLASS = "plugin_value_on_reference_skipped_record"
 
 
 def runs() -> list[dict]:
@@ -58,6 +62,21 @@ def plugin_words(run: dict, field: str) -> list[str]:
     return [flags[i + 1] for i, word in enumerate(flags) if word == "--plugin"]
 
 
+def input_reading_classes() -> set[str]:
+    """The classes a comparison decides from the lines of the run's input: those on the one
+    line of feature_oracle.sh that lists them, which that runner's own tests hold to the
+    comparator's lists, and the scorer's class of a value on a record the reference dropped."""
+    (listed,) = re.findall(r'^INPUT_READING_MASKS="([^"\n]*)"$', ORACLE.read_text(encoding="utf-8"), flags=re.MULTILINE)
+    return set(listed.split()) | {SKIPPED_RECORD_VALUE_CLASS}
+
+
+def declared_classes(plugin: str) -> set[str]:
+    """The classes the class table declares for a plugin."""
+    lines = CLASS_TABLE.read_text(encoding="utf-8").splitlines()
+    rows = [line.split("\t") for line in lines if line and not line.startswith("#")]
+    return {row[0] for row in rows if plugin in row[1].split(";")}
+
+
 def layout(function: str, *arguments: str) -> list[str]:
     """The lines a function of the layout script prints, or none where it refuses."""
     done = subprocess.run(
@@ -67,7 +86,7 @@ def layout(function: str, *arguments: str) -> list[str]:
     return done.stdout.split() if done.returncode == 0 else []
 
 
-def test_the_file_holds_the_four_whole_runs_and_every_set_once() -> None:
+def test_the_file_holds_the_five_whole_runs_and_every_set_once() -> None:
     keys = [driver.run_key(run) for run in runs()]
     assert len(keys) == len(set(keys))
     whole = {run["family"]: (run["assembly"], run["dataset"]) for run in runs() if "family" in run}
@@ -125,6 +144,30 @@ def test_a_whole_run_that_loads_revel_hands_its_table_to_the_scorer() -> None:
     assert seen == 2
 
 
+def test_a_whole_run_that_scores_a_class_that_reads_the_input_hands_it_to_the_scorer() -> None:
+    """The records of a whole run's input stand under identifiers, and a row under an
+    identifier states neither the alleles of its record nor the reference bases its allele
+    stands in for. A class that reads either is handed them from the lines of the input and
+    sets aside no row that needs them without those lines, so a whole run that scores a
+    plugin the class table declares such a class for names ``{input}`` after ``--input``
+    among its score words."""
+    reading = input_reading_classes()
+    assert SKIPPED_RECORD_VALUE_CLASS in declared_classes("UTRAnnotator")
+    held = []
+    for run in runs():
+        if "family" not in run:
+            continue
+        named = run["score"][run["score"].index("--plugins") + 1].split(",")
+        read = sorted({klass for plugin in named for klass in declared_classes(plugin)} & reading)
+        if not read:
+            continue
+        key = driver.run_key(run)
+        assert run["score"].count("--input") == 1, (key, read)
+        assert run["score"][run["score"].index("--input") + 1] == "{input}", key
+        held.append(key)
+    assert held == ["plugins_grch37", "plugins_grch38", "loftee_grch38", "loftee_grch37"]
+
+
 def test_the_plugin_arguments_of_the_two_engines_are_equal() -> None:
     for run in runs():
         ours, theirs = plugin_words(run, "vep_rs"), plugin_words(run, "ensembl_vep")
@@ -145,7 +188,6 @@ def test_no_word_names_a_place_outside_the_tree_and_every_named_input_is_listed(
 
 
 def test_a_plugin_data_path_is_the_layout_scripts_for_its_plugin_and_assembly() -> None:
-    unheld = set()
     checked = 0
     for run in runs():
         if "family" not in run:
@@ -158,21 +200,16 @@ def test_a_plugin_data_path_is_the_layout_scripts_for_its_plugin_and_assembly() 
                 name = MODULE_NAMES.get(word.split(",")[0], word.split(",")[0])
                 paths = driver.PLUGIN_DATA_PATH_RE.findall(word)
                 held = {path for role in LAYOUT_ROLES for path in layout("plugin_data_file", name, role, assembly)}
-                if paths and not held:
-                    unheld.add(name)
                 staged = layout("plugin_staged_files", name, assembly)
                 for path in paths:
                     scope, _, relative = path.removeprefix("{plugin_data}/").partition("/")
                     assert scope in (assembly, "assembly_agnostic"), path
-                    if not held:
-                        continue
                     assert relative in held, (name, path)
                     wanted = {f"{path}{suffix}" for suffix in INDEX_SUFFIXES if f"{relative}{suffix}" in staged}
                     assert wanted <= indexes, (name, path)
                     assert {index for index in indexes if index.startswith(f"{path}.")} == wanted, (name, path)
                     checked += 1
-    assert unheld == NOT_IN_LAYOUT
-    assert checked >= 20
+    assert checked >= 26
 
 
 def test_every_index_stands_beside_a_data_file_the_run_names() -> None:
@@ -273,4 +310,4 @@ def test_every_run_names_the_image_the_generator_pins() -> None:
     pinned = driver.pinned_image()
     assert re.fullmatch(r"ensemblorg/ensembl-vep@sha256:[0-9a-f]{64}", pinned)
     assert {run["ensembl_vep_image"] for run in runs()} == {pinned}
-    assert [driver.run_key(run) for run in runs() if run.get("ensembl_vep_tools")] == ["loftee_grch38"]
+    assert [driver.run_key(run) for run in runs() if run.get("ensembl_vep_tools")] == ["loftee_grch38", "loftee_grch37"]

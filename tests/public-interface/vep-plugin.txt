@@ -1,0 +1,74 @@
+# Written by scripts/check_public_interface.py --update, which reads the tree; the script's opening comment gives the format.
+library	vep_plugin
+module	vep_plugin	mod
+re-export	vep_plugin::FeatureType	pub use vep_core::consequence::RowKind
+re-export	vep_plugin::LoadedPlugin	pub use vep_plugin::loader::LoadedPlugin
+auto traits	vep_plugin::PluginError	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_plugin::PluginError	enum; #[non_exhaustive]
+implementation	vep_plugin::PluginError	impl core::error::Error for vep_plugin::PluginError
+implementation	vep_plugin::PluginError	impl core::fmt::Debug for vep_plugin::PluginError
+implementation	vep_plugin::PluginError	impl core::fmt::Display for vep_plugin::PluginError
+variant	vep_plugin::PluginError::AbiMismatch	named fields
+field	vep_plugin::PluginError::AbiMismatch::expected	u32
+field	vep_plugin::PluginError::AbiMismatch::got	u32
+variant	vep_plugin::PluginError::Init	1 positional field
+field	vep_plugin::PluginError::Init::0	alloc::string::String
+variant	vep_plugin::PluginError::Load	1 positional field
+field	vep_plugin::PluginError::Load::0	alloc::string::String
+variant	vep_plugin::PluginError::Run	1 positional field
+field	vep_plugin::PluginError::Run::0	alloc::string::String
+re-export	vep_plugin::PluginRegistry	pub use vep_plugin::registry::PluginRegistry
+module	vep_plugin::abi	mod
+constant	vep_plugin::abi::VEP_PLUGIN_ABI_VERSION	const: u32
+module	vep_plugin::abi::ffi	mod
+type alias	vep_plugin::abi::ffi::PluginAbiVersionFn	type = unsafe extern "C" fn() -> u32
+type alias	vep_plugin::abi::ffi::PluginCreateFn	type = unsafe extern "C" fn() -> *mut core::ffi::c_void
+type alias	vep_plugin::abi::ffi::PluginDestroyFn	type = unsafe extern "C" fn(_: *mut core::ffi::c_void)
+type alias	vep_plugin::abi::ffi::PluginFeatureTypesFn	type = unsafe extern "C" fn(_: *const core::ffi::c_void) -> *mut core::ffi::primitives::c_char
+type alias	vep_plugin::abi::ffi::PluginFreeFn	type = unsafe extern "C" fn(_: *mut core::ffi::primitives::c_char)
+type alias	vep_plugin::abi::ffi::PluginHeaderInfoFn	type = unsafe extern "C" fn(_: *const core::ffi::c_void) -> *mut core::ffi::primitives::c_char
+type alias	vep_plugin::abi::ffi::PluginInitFn	type = unsafe extern "C" fn(_: *mut core::ffi::c_void, _: *const *const core::ffi::primitives::c_char, _: usize) -> i32
+type alias	vep_plugin::abi::ffi::PluginNameFn	type = unsafe extern "C" fn(_: *const core::ffi::c_void) -> *const core::ffi::primitives::c_char
+type alias	vep_plugin::abi::ffi::PluginRunFn	type = unsafe extern "C" fn(_: *const core::ffi::c_void, _: *const core::ffi::primitives::c_char, _: *const core::ffi::primitives::c_char) -> *mut core::ffi::primitives::c_char
+type alias	vep_plugin::abi::ffi::PluginVersionFn	type = unsafe extern "C" fn(_: *const core::ffi::c_void) -> *const core::ffi::primitives::c_char
+module	vep_plugin::abi::symbol_names	mod
+constant	vep_plugin::abi::symbol_names::ABI_VERSION	const: &[u8]
+constant	vep_plugin::abi::symbol_names::CREATE	const: &[u8]
+constant	vep_plugin::abi::symbol_names::DESTROY	const: &[u8]
+constant	vep_plugin::abi::symbol_names::FEATURE_TYPES	const: &[u8]
+constant	vep_plugin::abi::symbol_names::FREE	const: &[u8]
+constant	vep_plugin::abi::symbol_names::HEADER_INFO	const: &[u8]
+constant	vep_plugin::abi::symbol_names::INIT	const: &[u8]
+constant	vep_plugin::abi::symbol_names::NAME	const: &[u8]
+constant	vep_plugin::abi::symbol_names::RUN	const: &[u8]
+constant	vep_plugin::abi::symbol_names::VERSION	const: &[u8]
+module	vep_plugin::loader	mod
+auto traits	vep_plugin::loader::LoadedPlugin	RefUnwindSafe, Unpin, UnwindSafe
+implementation	vep_plugin::loader::LoadedPlugin	impl core::fmt::Debug for vep_plugin::loader::LoadedPlugin
+implementation	vep_plugin::loader::LoadedPlugin	impl core::marker::Send for vep_plugin::loader::LoadedPlugin
+implementation	vep_plugin::loader::LoadedPlugin	impl core::marker::Sync for vep_plugin::loader::LoadedPlugin
+implementation	vep_plugin::loader::LoadedPlugin	impl core::ops::drop::Drop for vep_plugin::loader::LoadedPlugin
+struct	vep_plugin::loader::LoadedPlugin	struct; named fields, some private
+method	vep_plugin::loader::LoadedPlugin::feature_types	fn(&self) -> &[vep_core::consequence::RowKind]
+method	vep_plugin::loader::LoadedPlugin::header_info	fn(&self) -> &[(alloc::string::String, alloc::string::String)]
+method	vep_plugin::loader::LoadedPlugin::load	fn(path: &std::path::Path, params: &[alloc::string::String]) -> core::result::Result<Self, vep_plugin::PluginError>
+method	vep_plugin::loader::LoadedPlugin::name	fn(&self) -> &str
+method	vep_plugin::loader::LoadedPlugin::run	fn(&self, consequence_json: &core::ffi::c_str::CStr, variant_json: &core::ffi::c_str::CStr) -> core::result::Result<alloc::string::String, vep_plugin::PluginError>
+method	vep_plugin::loader::LoadedPlugin::runs_on	fn(&self, row: vep_core::consequence::RowKind) -> bool
+method	vep_plugin::loader::LoadedPlugin::version	fn(&self) -> &str
+module	vep_plugin::registry	mod
+auto traits	vep_plugin::registry::PluginRegistry	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_plugin::registry::PluginRegistry	impl core::default::Default for vep_plugin::registry::PluginRegistry
+implementation	vep_plugin::registry::PluginRegistry	impl core::fmt::Debug for vep_plugin::registry::PluginRegistry
+struct	vep_plugin::registry::PluginRegistry	struct; named fields, some private
+method	vep_plugin::registry::PluginRegistry::all_header_info	fn(&self) -> alloc::vec::Vec<(alloc::string::String, alloc::string::String)>
+method	vep_plugin::registry::PluginRegistry::field_row_kinds	fn(&self) -> alloc::vec::Vec<(alloc::string::String, alloc::vec::Vec<vep_core::consequence::RowKind>)>
+method	vep_plugin::registry::PluginRegistry::is_empty	fn(&self) -> bool
+method	vep_plugin::registry::PluginRegistry::load_from_args	fn(&mut self, plugin_args: &[alloc::string::String], plugin_dirs: &[alloc::string::String]) -> core::result::Result<(), vep_plugin::PluginError>
+method	vep_plugin::registry::PluginRegistry::new	fn() -> Self
+method	vep_plugin::registry::PluginRegistry::plugin_count	fn(&self) -> usize
+method	vep_plugin::registry::PluginRegistry::plugins	fn(&self) -> &[vep_plugin::loader::LoadedPlugin]
+method	vep_plugin::registry::PluginRegistry::plugins_wanting_regulatory_features	fn(&self) -> alloc::vec::Vec<&str>
+method	vep_plugin::registry::PluginRegistry::run_all	fn(&self, consequence_json: &str, variant_json: &str) -> core::result::Result<alloc::vec::Vec<(alloc::string::String, alloc::string::String)>, vep_plugin::PluginError>
+method	vep_plugin::registry::PluginRegistry::runs_on	fn(&self, row: vep_core::consequence::RowKind) -> bool
+function	vep_plugin::registry::names_a_file	fn(token: &str) -> bool

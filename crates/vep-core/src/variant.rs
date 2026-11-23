@@ -6,12 +6,13 @@
 use std::borrow::Cow;
 use std::sync::{Arc, OnceLock};
 
-use crate::consequence::{Consequence, ConsequenceList, TranscriptConsequence};
+use crate::consequence::{Consequence, ConsequenceList, RowKind, TranscriptConsequence};
 use crate::coordinate::{normalize_chromosome, Strand};
 use crate::custom_annotation::CustomAnnotations;
 use crate::sv_routing::{
     perl_split, perl_true, sv_so_term_and_class, sv_type_abbreviation, sv_type_string,
 };
+use crate::sv_span::end_coordinate;
 
 /// Classification of variant types based on Sequence Ontology (SO) variant classes.
 ///
@@ -19,6 +20,7 @@ use crate::sv_routing::{
 /// substitution) and structural variants (symbolic VCF alleles like `<DEL>`,
 /// `<DUP>`, `<INV>`, BND breakpoints, etc.).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub enum VariantClass {
     Snv,
     Insertion,
@@ -133,6 +135,7 @@ impl VariantClass {
 /// position plus that length and leaves `END` unread (BaseVCF4.pm `get_end`,
 /// lines 297-317).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum WrittenEnd {
     /// The record writes no `END=`.
     Absent,
@@ -146,14 +149,19 @@ pub enum WrittenEnd {
 
 impl WrittenEnd {
     /// Reads `written`, the text after `END=` (`None` for a record without
-    /// one), for the record at `position` whose span ends at `span_end`.
+    /// one), for the record at `position` whose span ends at `span_end`. The
+    /// text names the coordinate the span reader reads from it
+    /// (`end_coordinate`): a whole number, with a plus sign, leading zeros or
+    /// blanks around it. Any other spelling is [`WrittenEnd::Other`], a
+    /// fraction, an exponent and a closing point among them, which Ensembl
+    /// VEP's `looks_like_number` (Parser.pm:475) passes.
     pub fn of(written: Option<&str>, position: u64, span_end: u64) -> Self {
         let Some(text) = written else {
             return WrittenEnd::Absent;
         };
-        match text.trim_ascii().parse::<u64>() {
-            Ok(end) if end == position => WrittenEnd::Position,
-            Ok(end) if end == span_end => WrittenEnd::SpanEnd,
+        match end_coordinate(text) {
+            Some(end) if end == position => WrittenEnd::Position,
+            Some(end) if end == span_end => WrittenEnd::SpanEnd,
             _ => WrittenEnd::Other,
         }
     }
@@ -172,6 +180,7 @@ pub type PluginRecord = indexmap::IndexMap<String, Option<String>>;
 /// (transcript consequences, co-located variants, plugin data) that are
 /// populated during the pipeline.
 #[derive(Debug, Clone, serde::Serialize)]
+#[non_exhaustive]
 pub struct InputVariant {
     /// Chromosome name, normalized for cache lookup (e.g., "21", "X", "MT").
     pub chr: String,
@@ -200,13 +209,14 @@ pub struct InputVariant {
     /// The specific alternate allele this variant represents
     /// (for multi-allelic sites split into separate records).
     pub allele_index: usize,
-    /// The ALLELE_NUM Ensembl VEP prints when it is not `allele_index + 1`: the
+    /// The ALLELE_NUM a row prints when it is not `allele_index + 1`: the
     /// position of the allele in a breakpoint record's allele string, whose reference
     /// base is part 1 (`N/<BND>` prints 2; StructuralVariationOverlap.pm:64-77), with 0
-    /// for the record's own breakend and 1 upward for its mates (`:89-101`); or the
-    /// allele's number among the alleles Ensembl VEP kept, counted from 1, of a
-    /// sequence record whose earlier ALT was dropped as a repeat or the reference
-    /// (VariationFeatureOverlap.pm:459-491; `T` of `C G,G,T` prints 2).
+    /// for the record's own breakend and 1 upward for its mates (`:89-101`); the
+    /// allele's number along an individual's copy of a record, or among the alleles
+    /// a frequency filter left. A sequence record's allele prints its written place
+    /// whichever ALT before it was dropped as a repeat or the reference (`T` of
+    /// `C G,G,T` prints 3).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub allele_num: Option<u32>,
     /// The record's name as Ensembl VEP's parser stores it before `validate_vf`: the
@@ -219,7 +229,7 @@ pub struct InputVariant {
     /// Consequence annotations computed during annotation phase.
     pub transcript_consequences: Vec<TranscriptConsequence>,
     /// The allele overlaps no transcript and its rows are regulatory and motif
-    /// rows alone, so it carries an `intergenic_variant` row beside them: Perl's
+    /// rows alone, so it carries an `intergenic_variant` row beside them: Ensembl VEP's
     /// intergenic row is decided by transcripts alone
     /// (VariationFeature.pm:826-839; StructuralVariationFeature.pm:674-690).
     #[serde(default)]
@@ -277,7 +287,7 @@ pub struct InputVariant {
     pub original_allele_string: Option<String>,
     /// The record's start before its `--minimal` split, for every allele of a
     /// multi-allelic record the split trimmed: `rejoin_variants_in_InputBuffer`
-    /// (OutputFactory.pm:2291-2293) restores the record's own string and span
+    /// (OutputFactory.pm:2300-2302) restores the record's own string and span
     /// before the output hash is built, so Location, the JSON `start` and `end`
     /// and the generated name read the record's span while the alleles and their
     /// consequences stay the trimmed ones. `None` for any other record.
@@ -287,7 +297,7 @@ pub struct InputVariant {
     /// The prefix Ensembl VEP's rejoin puts on this allele's transcript keys when
     /// it merges the alleles of a `--minimal` split back into the record: an
     /// allele after the first is stored under `<its allele string>_<transcript
-    /// key>` (OutputFactory.pm:2316) and the rows print in the sorted key order
+    /// key>` (OutputFactory.pm:2325) and the rows print in the sorted key order
     /// (VariationFeature.pm:666), so `-/T_ENST...` sorts before the first
     /// allele's bare `ENST...` and `G/T_ENST...` after it. `None` for the first
     /// allele and for every record the split left alone.
@@ -297,7 +307,7 @@ pub struct InputVariant {
     /// before the rejoin: every row it had was filtered on the feature's own span,
     /// or it has no alternate allele and no reference row. Ensembl VEP caches
     /// `ref_allele_string` on the first row it builds (OutputFactory.pm:1357,
-    /// called at :2289 before the rejoin restores the record's string;
+    /// called at :2298 before the rejoin restores the record's string;
     /// VariationFeature.pm:1533-1539), so with no such row every row of the
     /// record prints the record's own reference as `REF_ALLELE`. Set by the row
     /// filters; `false` for every other record. Not part of the variant's JSON
@@ -307,7 +317,7 @@ pub struct InputVariant {
     /// The feature this allele, or the reference row leading it, stands alone as
     /// once `--check_frequency` dropped an allele of its batch: its position among
     /// the alternate alleles of the `--minimal` split record. Ensembl VEP's drop
-    /// resets the buffer (BaseCacheVariation.pm:365-369, InputBuffer.pm:535-537),
+    /// resets the buffer (BaseCacheVariation.pm:366-370, InputBuffer.pm:535-537),
     /// which cancels the rejoin of every split record in it (OutputFactory.pm:294),
     /// so each surviving feature is written as a record of its own, on its own
     /// span with its own string, and [`Self::same_record`] keeps two features of
@@ -329,7 +339,7 @@ pub struct InputVariant {
     /// The names of [`Self::colocated_variants`] that print on this allele's rows,
     /// in Ensembl VEP's order: non-somatic variants first, then by name prefix
     /// ([`colocated_in_output_order`]), keeping those matched on this allele or on
-    /// their span alone (`OutputFactory.pm:1069-1086` at release/116.2).
+    /// their span alone (`OutputFactory.pm:1069-1086` at release/116.3).
     pub existing_variation: Vec<String>,
     /// The names of the known structural variants overlapping the variant under
     /// `--check_svs`, sorted and unique as Ensembl VEP prints them in `SV`
@@ -433,6 +443,23 @@ pub struct InputVariant {
     /// (`--json` sets the REST mode in which the parser skips it).
     #[serde(default)]
     pub oversize_sv: bool,
+    /// A `<CNV:TR>` allele kept symbolic whose record states an alternate allele
+    /// shorter than the run it spans: fewer bases under INFO/RUS with RUC or RB than
+    /// SVLEN or END gives the run (`sv_record::tandem_repeat_stated_bases`). Its row
+    /// names `feature_truncation` where Ensembl VEP, which reads every tandem repeat
+    /// as a copy-number gain (Utils/VariationEffect.pm:246-256), names
+    /// `feature_elongation`.
+    #[serde(default)]
+    pub states_a_loss: bool,
+    /// A `<CNV:TR>` allele kept symbolic whose record states an alternate allele
+    /// exactly as long as the run it spans: as many bases under INFO/RUS with RUC or
+    /// RB as SVLEN or END gives a run of more than one base, and no field that states
+    /// another length (`sv_record::tandem_repeat_alleles_as_long_as_the_run`). Its row
+    /// names neither `feature_elongation` nor `feature_truncation` where Ensembl VEP,
+    /// which reads every tandem repeat as a copy-number gain
+    /// (Utils/VariationEffect.pm:246-256), names `feature_elongation`.
+    #[serde(default)]
+    pub states_the_run_length: bool,
     /// The record of a line none of whose ALTs is an allele to annotate: every ALT a
     /// `*` (the VCF marker for a base an upstream deletion covers) or a `<DEL:*>`,
     /// equal to the reference or a repeat of an earlier ALT, or the `.` of a
@@ -456,10 +483,20 @@ pub struct InputVariant {
     /// Optional annotation target end position override.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub annotation_end: Option<u64>,
-    /// Ordinal of the input record this allele came from (1-based line count of
-    /// the input). Every allele split from one record shares it, which is how the
-    /// writers reassemble a record's rows in VEP's order and emit one VCF line or
-    /// one JSON object per record.
+    /// The number the reader gave the input record this allele came from, 1 or
+    /// more; 0 on an allele no reader numbered. Every allele split from one
+    /// record shares it and each record has its own, which is how
+    /// [`Self::same_record`] groups a record's alleles. The Parquet writer's
+    /// order check names a record out of order by it. What it counts follows
+    /// the input format. A VCF record carries the count of data records read up
+    /// to it, `#` lines and empty lines left out; an SPDI record, the count of
+    /// records and empty lines read up to it; an Ensembl-format record, the
+    /// count of lines read up to it, `#` lines and empty lines included. Each
+    /// of the three is the line number the run's skip warnings give the record.
+    /// A region, HGVS or identifier record carries the count of records read up
+    /// to it, each mapping of an identifier being a record of its own; its skip
+    /// warnings name its line of the input instead, every line counted, one
+    /// line for every mapping of an identifier.
     #[serde(default)]
     pub input_record: u64,
     /// The position column of the record's input line as written, 1-based: a
@@ -541,7 +578,7 @@ pub struct InputVariant {
     /// The record's `--summary` or `--most_severe` row, carried by one allele of
     /// the record: the unique consequence terms of the rows left after the row
     /// filters and the pick family, in rank order (`--summary`), or the first of
-    /// them alone (`--most_severe`); `OutputFactory.pm:426-458` at release/116.2.
+    /// them alone (`--most_severe`); `OutputFactory.pm:426-458` at release/116.3.
     /// The allele then has no transcript consequences, its
     /// `most_severe_consequence` is the first term, and the other alleles of the
     /// record carry no row.
@@ -550,7 +587,7 @@ pub struct InputVariant {
     /// The allele's intergenic row is the one a `--flag_pick`, `--flag_pick_allele`
     /// or `--flag_pick_allele_gene` run picked, so it prints `PICK=1`: Ensembl VEP
     /// flags the intergenic allele of a record that overlaps no transcript as it
-    /// flags a transcript allele (`OutputFactory.pm:1363` at release/116.2).
+    /// flags a transcript allele (`OutputFactory.pm:1363` at release/116.3).
     #[serde(default)]
     pub intergenic_pick: bool,
     /// The record's rows are the ones a removing per-gene pick (`--per_gene`,
@@ -566,21 +603,21 @@ pub struct InputVariant {
     /// row: the row's own result, held with the variant because the intergenic
     /// row has no consequence of its own, so the writers print them on that row
     /// alone, as Ensembl VEP keeps a plugin's result in the hash of the row it
-    /// ran on (`OutputFactory.pm:2220-2235`). Empty for every other variant. Not
+    /// ran on (`OutputFactory.pm:2229-2244`). Empty for every other variant. Not
     /// part of the variant's JSON form.
     #[serde(skip)]
     pub intergenic_row_plugin_keys: Vec<String>,
     /// The `FREQS` entries of the record under `--check_frequency`, one
     /// `POPULATION:ALLELE:frequency` per alternate allele of the record as
     /// uploaded, the alleles the filter dropped included, `NA` for an allele
-    /// with no frequency (`BaseCacheVariation.pm:434-440`,
-    /// `OutputFactory.pm:1148-1163` at release/116.2); empty when no
+    /// with no frequency (`BaseCacheVariation.pm:435-441`,
+    /// `OutputFactory.pm:1148-1163` at release/116.3); empty when no
     /// co-located variant carried frequency data for the population. Every
     /// allele of the record carries the same list.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub freqs: Vec<String>,
     /// The record's allele string after `--check_frequency` dropped alleles:
-    /// the reference and the kept alternates (`BaseCacheVariation.pm:355`),
+    /// the reference and the kept alternates (`BaseCacheVariation.pm:356`),
     /// which the JSON `allele_string` and `AMBIGUITY` read in place of the
     /// uploaded one, and `UPLOADED_ALLELE` where Ensembl VEP prints the
     /// feature's string ([`Self::uploaded_allele`]), as Ensembl VEP rewrites
@@ -712,6 +749,8 @@ impl Default for InputVariant {
             breakend_mates: Vec::new(),
             vep_skip: false,
             oversize_sv: false,
+            states_a_loss: false,
+            states_the_run_length: false,
             no_allele: false,
             annotation_chr: None,
             annotation_start: None,
@@ -743,6 +782,34 @@ impl Default for InputVariant {
 }
 
 impl InputVariant {
+    /// Stores `value` under `key` as a value a plugin wrote for the whole
+    /// record, over any value an earlier plugin left there, with the key's
+    /// mark in [`Self::plugin_empty_strings`]; `empty_string` names an empty
+    /// `value` there as Ensembl VEP's empty string. `kinds` are the kinds of row
+    /// the writing plugin runs on: a value an earlier plugin wrote under the key
+    /// on a row of those kinds is removed with its mark, so the later value
+    /// prints there, as Ensembl VEP's `run_plugins` assigns each key of a
+    /// plugin's result over the line's hash in load order
+    /// (`OutputFactory.pm:2239-2241`).
+    pub fn set_plugin_value(
+        &mut self,
+        key: String,
+        value: String,
+        empty_string: bool,
+        kinds: &[RowKind],
+    ) {
+        for row in &mut self.transcript_consequences {
+            if kinds.contains(&RowKind::from(row.feature_type)) {
+                row.remove_plugin_value(&key);
+            }
+        }
+        self.plugin_empty_strings.retain(|marked| *marked != key);
+        if empty_string && value.is_empty() {
+            self.plugin_empty_strings.push(key.clone());
+        }
+        self.plugin_data.insert(key, value);
+    }
+
     /// Create a new input variant.
     ///
     /// The chromosome name is normalized at construction time (stripping `chr`
@@ -814,6 +881,8 @@ impl InputVariant {
             breakend_mates: Vec::new(),
             vep_skip: false,
             oversize_sv: false,
+            states_a_loss: false,
+            states_the_run_length: false,
             no_allele: false,
             record_allele_string_multi: None,
             written_case_allele_string: None,
@@ -869,8 +938,9 @@ impl InputVariant {
     }
 
     /// Whether two alleles were split from one input record for the same
-    /// individual: both carry the same record ordinal, or, when neither carries
-    /// one (alleles built from a line alone), they share the line's identity; and
+    /// individual: both carry the same [`Self::input_record`], or, when
+    /// neither carries one (alleles built from a line alone), they share the
+    /// line's identity; and
     /// the same [`Self::individual`] at the same [`Self::copy_ordinal`], since
     /// each individual's copy of a record is a feature of its own in Ensembl VEP,
     /// picked and written apart from the others; and the same
@@ -1160,8 +1230,8 @@ impl InputVariant {
     /// or `.A`, and a translocation allele without a breakend string, a single
     /// breakend on its own or a bare `<BND>`, the class term `chromosome_breakpoint`:
     /// Ensembl VEP's `$vfoa->{breakend}->{string} || $svf->class_SO_term`
-    /// (`OutputFactory.pm:2029`). A type the term table lacks prints the type
-    /// string Ensembl VEP keeps as the `class_SO_term` ([`Self::structural_type_string`]:
+    /// (`OutputFactory.pm:2038`). A type the term table lacks prints the type
+    /// string Ensembl VEP keeps as the `class_SO_term` (`Self::structural_type_string`:
     /// `<CPX>` for a bare `<CPX>`, `CPX` under `SVTYPE=CPX`).
     /// For `<NON_REF>` alleles, returns the raw allele string since Ensembl VEP outputs
     /// the literal `<NON_REF>` (it has no SO term mapping).
@@ -1236,7 +1306,7 @@ impl InputVariant {
     /// a resolved identifier) or else [`so_variation_class`] of
     /// [`Self::working_allele_string`] upper-cased, the allele string the whole
     /// record works with after `validate_vf` (`Parser.pm:554`) and after
-    /// `--check_frequency` dropped alleles (BaseCacheVariation.pm:333, :355 rewrite
+    /// `--check_frequency` dropped alleles (BaseCacheVariation.pm:334, :356 rewrite
     /// the feature's string before any source reads its class, the filtering
     /// source being sorted first at AnnotationSourceAdaptor.pm:98, and
     /// VariationFeature.pm:1118 classes that string), so every allele of a
@@ -1301,8 +1371,8 @@ impl InputVariant {
 
     /// [`Self::location`] after a 3' shift of `shift` bases along `strand`
     /// (`--shift_genomic 1`): a transcript row moves by `shift_length * strand`
-    /// (OutputFactory.pm:1705), an intergenic row towards higher coordinates
-    /// (:1997).
+    /// (OutputFactory.pm:1714), an intergenic row towards higher coordinates
+    /// (:2006).
     pub fn location_shifted(&self, shift: u64, strand: i8) -> String {
         let moved = |pos: u64| {
             if strand < 0 {
@@ -1575,13 +1645,14 @@ pub fn ambiguity_code(allele_string: &str) -> Option<u8> {
 }
 
 /// The `ZYG` value of one genotype (`OutputFactory.pm:974-976` and `:984-985` at
-/// release/116.2): `HET` when the called alleles hold more than one distinct
+/// release/116.3): `HET` when the called alleles hold more than one distinct
 /// value, else `HOM` (a genotype with no called allele included), with `REF`
 /// appended when the individual carries no alternate allele of the record.
 /// Serialised as the printed label, so a serialised [`InputVariant`] names the
 /// zygosity as every output format does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum Zygosity {
     Het,
     Hom,
@@ -1879,6 +1950,7 @@ pub fn classify_variant(ref_allele: &[u8], alt_allele: &[u8]) -> VariantClass {
 
 /// A known variant from the variation cache that co-locates with an input variant.
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct ColocatedVariant {
     /// The chromosome column of the start-indexed variation file, the file's own
     /// chromosome; `None` for a record of the per-region layout, which has none.
@@ -1898,13 +1970,13 @@ pub struct ColocatedVariant {
     pub somatic: bool,
     /// The record's clinical significance terms as the cache stores them,
     /// joined by `,`; [`clin_sig_terms`](Self::clin_sig_terms) splits them.
-    #[serde(with = "stored_list_as_array")]
+    #[serde(default, with = "stored_list_as_array")]
     pub clin_sig: Option<String>,
     /// Phenotype/disease association flag.
     pub phenotype: bool,
     /// The record's PubMed ids as the cache stores them, joined by `,`;
     /// [`pubmed_ids`](Self::pubmed_ids) splits them, less an id the cache cut.
-    #[serde(with = "pubmed_as_array")]
+    #[serde(default, with = "pubmed_as_array")]
     pub pubmed: Option<String>,
     /// The input alleles the record's alleles were matched to, as
     /// `Utils/Sequence.pm` `get_matched_variant_alleles` returns them (ensembl-variation
@@ -1934,7 +2006,7 @@ impl ColocatedVariant {
     /// Whether the record prints on the rows of `allele` (the row's `Allele`
     /// column): a record matched on its span alone prints on every row, a record
     /// matched by allele only on the rows of an allele it matched
-    /// (`OutputFactory.pm:1081-1083` at release/116.2).
+    /// (`OutputFactory.pm:1081-1083` at release/116.3).
     pub fn applies_to_allele(&self, allele: &str) -> bool {
         self.matched_alleles.is_empty()
             || self
@@ -1954,7 +2026,7 @@ impl ColocatedVariant {
 
     /// The terms of [`clin_sig`](Self::clin_sig) as Ensembl VEP lists them
     /// (`OutputFactory.pm:1125-1126` and `OutputFactory/JSON.pm:469` at
-    /// release/116.2): `None` for a value Perl reads as false, that is unset,
+    /// release/116.3): `None` for a value Perl reads as false, that is unset,
     /// empty or `0`. Any other value yields its `,`-separated fields as stored,
     /// every trailing empty one dropped and a leading or middle one kept.
     pub fn clin_sig_terms(&self) -> Option<impl Iterator<Item = &str>> {
@@ -2009,7 +2081,7 @@ pub const STORED_LIST_CAP: usize = 1024;
 /// The whole items of a stored list of a known variant. A value of exactly
 /// [`STORED_LIST_CAP`] bytes that ends in none of `separators` is cut inside
 /// its last item, which Ensembl VEP prints as an id (`OutputFactory.pm:1090`
-/// and `:1126`, `OutputFactory/JSON.pm:452-456` and `:469` at release/116.2):
+/// and `:1126`, `OutputFactory/JSON.pm:452-456` and `:469` at release/116.3):
 /// it reads as the text before its last separator, empty when it has none. A
 /// last item as long as a whole one cannot be told from a cut one and goes
 /// too. Every other value, one of that length ending in a separator included,
@@ -2132,6 +2204,152 @@ pub fn colocated_in_output_order(variants: &[ColocatedVariant]) -> Vec<&Colocate
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::consequence::FeatureType;
+
+    /// Ensembl VEP keeps a record's END as the text written (BaseVCF4.pm:307-308)
+    /// and reads it as a number only to test it (`looks_like_number`,
+    /// Parser.pm:475) and to compare it with the start (Parser/VCF.pm:555,
+    /// Parser.pm:483). The spellings the POS reader takes (`parse_pos`) are
+    /// read here as the span reader reads an END: a whole number is its
+    /// coordinate under a plus sign, leading zeros or blanks, and an exponent,
+    /// a fraction or a closing point names no coordinate, so such a text is
+    /// `Other` at the number Perl reads from it, which its row gives, as at
+    /// any other. A whole number past the coordinate bound names none either.
+    #[test]
+    fn a_written_end_names_the_coordinate_the_span_reader_reads() {
+        use crate::coordinate::MAX_COORD;
+        use crate::sv_span::{structural_end, SpanClass, SpanError};
+
+        let elsewhere = 25_000_000_u64;
+        for (text, end) in [
+            ("30425949", 30_425_949_u64),
+            (" 30425949", 30_425_949),
+            ("30425949 ", 30_425_949),
+            ("+30425949", 30_425_949),
+            ("030425949", 30_425_949),
+            ("0", 0),
+        ] {
+            assert_eq!(
+                structural_end(end.saturating_sub(300), None, Some(text), SpanClass::Other),
+                Ok(end),
+                "{text:?}"
+            );
+            for (position, span_end, read) in [
+                (end, elsewhere, WrittenEnd::Position),
+                (elsewhere, end, WrittenEnd::SpanEnd),
+                (end, end, WrittenEnd::Position),
+                (elsewhere, elsewhere, WrittenEnd::Other),
+            ] {
+                assert_eq!(
+                    WrittenEnd::of(Some(text), position, span_end),
+                    read,
+                    "{text:?} at {position} to {span_end}"
+                );
+            }
+        }
+
+        let no_coordinate = |text: &str, numbers: &[u64]| {
+            assert_eq!(
+                structural_end(30_425_649, None, Some(text), SpanClass::Other),
+                Err(SpanError::EndNotACoordinate(text.to_string())),
+                "{text:?}"
+            );
+            for &number in numbers {
+                for (position, span_end) in
+                    [(number, elsewhere), (elsewhere, number), (number, number)]
+                {
+                    assert_eq!(
+                        WrittenEnd::of(Some(text), position, span_end),
+                        WrittenEnd::Other,
+                        "{text:?} at {position} to {span_end}"
+                    );
+                }
+            }
+        };
+        for (text, number) in [
+            ("3e7", 30_000_000),
+            ("30425949.0", 30_425_949),
+            ("30425949.", 30_425_949),
+            ("3.0425949E7", 30_425_949),
+            ("1e3", 1000),
+            ("4611686018427387904", MAX_COORD + 1),
+            ("4611686018427387904.0", MAX_COORD + 1),
+            ("4.611686018427388e18", MAX_COORD + 1),
+        ] {
+            no_coordinate(text, &[number]);
+        }
+        for text in [
+            "30425949.5",
+            "30_425_949",
+            "0x1D04A1D",
+            "\u{ff13}\u{ff10}",
+            ".",
+            "",
+            "-5",
+            "-0.0",
+            "NaN",
+            "Inf",
+            "1e400",
+        ] {
+            no_coordinate(text, &[0, 30, 30_425_949]);
+        }
+
+        assert_eq!(
+            WrittenEnd::of(None, 30_425_949, 30_425_949),
+            WrittenEnd::Absent
+        );
+    }
+
+    /// A value a plugin writes for the whole record replaces the record's
+    /// earlier value and mark under the key and removes, with its mark, the
+    /// value an earlier plugin wrote on a row of the kinds the writer runs on;
+    /// a row of another kind keeps its own.
+    #[test]
+    fn a_plugin_value_written_for_the_record_replaces_the_rows_values_of_its_kinds() {
+        let row = |feature_type: FeatureType| {
+            let mut row = TranscriptConsequence {
+                feature_type,
+                ..Default::default()
+            };
+            row.set_plugin_value("First".to_string(), "1".to_string(), false);
+            row.set_plugin_value("K".to_string(), String::new(), true);
+            row.set_plugin_value("Last".to_string(), "9".to_string(), false);
+            row
+        };
+        let mut variant = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        variant.transcript_consequences = vec![
+            row(FeatureType::Transcript),
+            row(FeatureType::RegulatoryFeature),
+        ];
+
+        variant.set_plugin_value("K".to_string(), String::new(), true, &RowKind::DEFAULT);
+        assert_eq!(variant.plugin_data["K"], "");
+        assert_eq!(variant.plugin_empty_strings, ["K"]);
+        let [transcript, regulatory] = &variant.transcript_consequences[..] else {
+            panic!("two rows");
+        };
+        assert_eq!(
+            transcript.plugin_data.keys().collect::<Vec<_>>(),
+            ["First", "Last"]
+        );
+        assert!(transcript.plugin_empty_strings.is_empty());
+        assert_eq!(regulatory.plugin_data["K"], "");
+        assert_eq!(regulatory.plugin_empty_strings, ["K"]);
+
+        variant.set_plugin_value("K".to_string(), "k".to_string(), true, RowKind::ALL);
+        assert_eq!(variant.plugin_data["K"], "k");
+        assert!(variant.plugin_empty_strings.is_empty());
+        assert!(!variant.transcript_consequences[1]
+            .plugin_data
+            .contains_key("K"));
+        assert!(variant.transcript_consequences[1]
+            .plugin_empty_strings
+            .is_empty());
+
+        variant.set_plugin_value("K".to_string(), String::new(), false, RowKind::ALL);
+        assert_eq!(variant.plugin_data["K"], "");
+        assert!(variant.plugin_empty_strings.is_empty());
+    }
 
     /// A stored list is split as Perl's `split(',', ...)` splits it
     /// (`OutputFactory.pm:1125-1126`, `OutputFactory/JSON.pm:469`): trailing empty
@@ -2195,6 +2413,52 @@ mod tests {
         let read: ColocatedVariant = serde_json::from_value(document).unwrap();
         assert_eq!(read.clin_sig.as_deref(), Some("benign,likely_benign"));
         assert_eq!(read.pubmed, None);
+    }
+
+    /// A serialised known variant that lacks the `clin_sig` or the `pubmed`
+    /// key reads as one storing no such list, as it reads without any other
+    /// key a variant may lack; a variant storing neither still writes both
+    /// keys, each an empty array.
+    #[test]
+    fn a_known_variant_without_its_list_keys_is_read() {
+        let cv = ColocatedVariant {
+            id: "rs9920000001".to_string(),
+            start: 100,
+            end: 100,
+            allele_string: Some("A/G".to_string()),
+            strand: 1,
+            clin_sig: Some("benign".to_string()),
+            pubmed: Some("99000001,99000002".to_string()),
+            ..Default::default()
+        };
+        let whole = serde_json::to_value(&cv).unwrap();
+        for absent in [&["clin_sig"][..], &["pubmed"], &["clin_sig", "pubmed"]] {
+            let mut document = whole.clone();
+            for key in absent {
+                assert!(
+                    document.as_object_mut().unwrap().remove(*key).is_some(),
+                    "{key}"
+                );
+            }
+            let read: ColocatedVariant = serde_json::from_value(document)
+                .unwrap_or_else(|e| panic!("without {absent:?}: {e}"));
+            assert_eq!(read.id, cv.id);
+            assert_eq!((read.start, read.end, read.strand), (100, 100, 1));
+            let kept = |key: &str, stored: &Option<String>| {
+                (!absent.contains(&key)).then(|| stored.clone()).flatten()
+            };
+            assert_eq!(read.clin_sig, kept("clin_sig", &cv.clin_sig), "{absent:?}");
+            assert_eq!(read.pubmed, kept("pubmed", &cv.pubmed), "{absent:?}");
+        }
+
+        let neither = ColocatedVariant {
+            clin_sig: None,
+            pubmed: None,
+            ..cv
+        };
+        let document = serde_json::to_value(&neither).unwrap();
+        assert_eq!(document["clin_sig"], serde_json::json!([]));
+        assert_eq!(document["pubmed"], serde_json::json!([]));
     }
 
     /// `count` invented eight-digit PubMed ids, `99000001` onwards, joined by `,`.
@@ -2479,7 +2743,7 @@ mod tests {
         assert_eq!(ambiguity_code("N/A"), Some(b'N'));
         assert_eq!(ambiguity_code("a/c"), Some(b'M'));
         // The key is the joined allele strings, so a multi-base allele whose
-        // letters complete a set has a code (Ensembl VEP 116.2 prints these).
+        // letters complete a set has a code (Ensembl VEP 116.3 prints these).
         assert_eq!(ambiguity_code("G/AC"), Some(b'V'));
         assert_eq!(ambiguity_code("T/AC"), Some(b'H'));
         assert_eq!(ambiguity_code("T/AG"), Some(b'D'));
@@ -2575,7 +2839,7 @@ mod tests {
         alu.variant_class = VariantClass::MobileElementInsertion;
         alu.record_so_term = Some("Alu_insertion".into());
         assert_eq!(alu.class_so_term(), "Alu_insertion");
-        // A type the term table lacks has no record term; its row prints Perl's
+        // A type the term table lacks has no record term; its row prints Ensembl VEP's
         // type string in the Allele and VARIANT_CLASS columns (Parser/VCF.pm:469-481):
         // the ALT as written, or INFO/SVTYPE when that names the type.
         let mut cpx = InputVariant::new("21".into(), 101, 300, b"N".to_vec(), b"<CPX>".to_vec());
@@ -2615,7 +2879,7 @@ mod tests {
     /// the latter), and a structural row has none. An Ensembl-format column
     /// written `at/-` or `tt/-/t` therefore prints upper-cased, as `t/-` does, and
     /// a record whose reference `--lookup_ref` replaced prints the replaced string
-    /// (`A/A/G` for `T A,G` over a reference `A`, as Ensembl VEP 116.2 prints).
+    /// (`A/A/G` for `T A,G` over a reference `A`, as Ensembl VEP 116.3 prints).
     #[test]
     fn uploaded_allele_follows_perls_two_sources() {
         for (raw, kept) in [
@@ -2658,7 +2922,7 @@ mod tests {
     /// non-minimised indel does, and prints `indel`. The class is the rewritten
     /// string's because the filtering source annotates first
     /// (AnnotationSourceAdaptor.pm:98) and `class_SO_term` reads the feature's
-    /// string (VariationFeature.pm:1118): Ensembl VEP 116.2 prints
+    /// string (VariationFeature.pm:1118): Ensembl VEP 116.3 prints
     /// `VARIANT_CLASS=SNV` on every row of `21 31148973 GG G,GC` once the exclude
     /// filter drops its common `-` allele, `sequence_alteration` without the
     /// filter. A record whose ID Perl reads as false is named by Parser.pm:462
@@ -3142,8 +3406,8 @@ mod tests {
     }
 
     /// An allele of a record with parsed breakends carries `mate_id` and prints its text;
-    /// a bracket Perl's regex refuses (`N[21:abc[`) leaves the record without breakends,
-    /// and Ensembl VEP 116.2 prints `chromosome_breakpoint` for it.
+    /// a bracket Ensembl VEP's regex refuses (`N[21:abc[`) leaves the record without breakends,
+    /// and Ensembl VEP 116.3 prints `chromosome_breakpoint` for it.
     #[test]
     fn test_display_allele_paired_breakend_variants_keep_raw_allele() {
         let mut paired =

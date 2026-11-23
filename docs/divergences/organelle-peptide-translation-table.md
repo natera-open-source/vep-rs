@@ -1,10 +1,12 @@
-# Frameshift, extension, duplication and deletion peptides on an organelle transcript
+# Frameshift, extension, duplication and deletion peptides on a transcript whose genetic code is not the standard one
 
 **The defect in one sentence.** On a transcript whose sequence region names a genetic code other than the standard one, Ensembl VEP translates the reference peptide with that code but the alternate sequence of a frameshift, a lost stop, a duplication test or an empty-window deletion with the standard code. Its HGVSp for those four shapes therefore names residues and stop distances the record's codons do not encode. vep-rs translates both with the transcript's table, so its HGVSp for the four shapes names the residues the transcript's own code gives. An empty-window deletion is an in-frame deletion whose deleted bases name no whole residue of the reference peptide (section 1.4).
 
+**Which transcripts it reaches.** Every transcript whose sequence region names a genetic code other than the standard one, a nuclear transcript as much as an organelle's. The transcripts of the human `MT`, under table 2, are such transcripts. So is a nuclear transcript whose sequence region names another code: every transcript of the committed Spironucleus salmonicida cache is under table 6, the ciliate, dasycladacean and hexamita nuclear code. The class's name says `organelle`, but its rule reads the transcript's codon table and never the kind of sequence region.
+
 **Why this is a defect.** The transcript's codon table is a property of the transcript, stated by the cache's `codon_table` attribute of its sequence region. Ensembl VEP honours it on the same row everywhere else: the reference peptide it compares against, the `peptide` method behind every substitution's HGVSp, the consequence terms and the codons. Four routines translate an alternate sequence with no table argument, so they fall back to the standard code. Under the vertebrate mitochondrial code `AGA` and `AGG` are stop codons, `ATA` is methionine and `TGA` is tryptophan; a frameshift peptide that reads those codons under the standard code describes a protein the mitochondrial ribosome does not make.
 
-**What vep-rs does instead.** vep-rs translates both sides of every HGVSp path with the transcript's table, so a frameshift, extension, duplication or deletion string on an organelle transcript names the residues the transcript's own code gives. A missense, synonymous or nonsense HGVSp is identical on both engines, and a transcript under the standard code is unaffected.
+**What vep-rs does instead.** vep-rs translates both sides of every HGVSp path with the transcript's table, so a frameshift, extension, duplication or deletion string on such a transcript names the residues the transcript's own code gives. A missense, synonymous or nonsense HGVSp is identical on both engines, and a transcript under the standard code is unaffected.
 
 **Where it is in Ensembl VEP's source** (`ensembl-variation` at release/116, `Bio/EnsEMBL/Variation/TranscriptVariationAllele.pm`):
 
@@ -14,15 +16,15 @@
 - line 2555, `_get_del_peptides`: the deletion peptide, translated bare.
 - lines 712-736, `peptide`, and `_codon_table`: the substitution path, which passes the transcript's table; `_peptide` translates the reference through `Transcript::translate`, which honours it too.
 
-**What correcting it would change.** The class vanishes: every HGVSp on an organelle transcript follows the transcript's code, as the row's codons, terms and reference peptide already do.
+**What correcting it would change.** The class vanishes: every HGVSp on such a transcript follows the transcript's code, as the row's codons, terms and reference peptide already do.
 
-**The class it produces.** `organelle_peptide_paths_translation_table`, documented in the fly and yeast corpora's manifests under `field_divergences` for the `HGVSp` of the rows that change, and applied by the golden harness and the format comparator from the manifest. For an input without a manifest the format comparator decides the class from the transcript's codon table in the candidate cache and the shape of the two values, as section 1.7 states. The concordance figures score consequence sets and never see the field, so nothing is set aside in them.
+**The class it produces.** `organelle_peptide_paths_translation_table`, documented in the manifests of the corpora section 1.7 lists, under `field_divergences` for the `HGVSp` of the rows that change, and applied by the golden harness and the format comparator from the manifest. For an input without a manifest the format comparator decides the class from the transcript's codon table in the candidate cache and the shape of the two values, as section 1.7 states. The concordance figures score consequence sets and never see the field, so nothing is set aside in them.
 
 Tuple, pair, set aside, charged and the other scoring terms are defined in [How to read the counts](../intended-divergences.md#how-to-read-the-counts).
 
 ## 1. A frameshift in MT-ND1 whose new frame opens with a mitochondrial stop
 
-**In short.** Deleting the eighth base of MT-ND1 turns codon 3 into `AGG`, a stop under the vertebrate mitochondrial code. Ensembl VEP reads `AGG` as arginine under the standard code and runs twelve codons on to a `TAA`: `p.Met3ArgfsTer12`. vep-rs translates the new frame with the transcript's table and writes `p.Met3Ter`. The consequence terms, codons, positions and every other column agree; only the HGVSp differs.
+**In short.** Deleting the eighth base of MT-ND1 turns codon 3 into `AGG`, a stop under the vertebrate mitochondrial code. Ensembl VEP reads `AGG` as arginine under the standard code and runs twelve codons on to a `TAA`: `p.Met3ArgfsTer12`. vep-rs translates the new frame with the transcript's table and writes `p.Met3Ter`. The consequence terms, codons, positions and every other column agree; only the HGVSp differs. The same difference reaches every transcript whose sequence region names a genetic code other than the standard one, nuclear transcripts among them; section 1.7 lists the committed corpora that carry it.
 
 ### 1.1 What a reader needs to know first
 
@@ -96,11 +98,11 @@ vep -i records.vcf -o out.txt --offline --json_cache <cache> --fasta <fasta> \
 | `MT 7443 . A G` | lost stop, no 3' sequence | `p.Ter514GlyextTer?` | `p.Ter514GlyextTer?` |
 | `MT 4500 . TC T` | frameshift to a `TAA` under both codes | `p.Ser11LeufsTer12` | `p.Ser11LeufsTer12` |
 
-The last three agree: where the new frame's first difference and first stop are codons the two codes read alike, the four paths give the same string under either table. A human `MT` transcript has no 3' UTR, so a lost stop runs off the transcript under both codes (`extTer?`). The extension shape changes only on an organelle transcript with downstream sequence, and the empty-window deletion shape only on one with an intron, which no human `MT` transcript has.
+The last three agree: where the new frame's first difference and first stop are codons the two codes read alike, the four paths give the same string under either table. A human `MT` transcript has no 3' UTR, so a lost stop runs off the transcript under both codes (`extTer?`). The extension shape changes only on a transcript under another code that has downstream sequence, and the empty-window deletion shape only on one with an intron, which no human `MT` transcript has.
 
 ### 1.7 How the comparator treats this class
 
-The golden harness (`crates/vep-cli/tests/common/mod.rs`) and the format comparator (`scripts/concordance/compare_vep_formats.py`) apply `organelle_peptide_paths_translation_table` from a corpus manifest. A `field_divergences` entry of the class names the row and its `HGVSp` with the value vep-rs prints, and the comparison checks vep-rs's value against it. The two outputs alone do not decide the class, since the rows do not state the transcript's codon table.
+The golden harness (`crates/vep-cli/tests/common/mod.rs`) and the format comparator (`tools/vep-formats-compare`) apply `organelle_peptide_paths_translation_table` from a corpus manifest. A `field_divergences` entry of the class names the row and its `HGVSp` with the value vep-rs prints, and the comparison checks vep-rs's value against it. The two outputs alone do not decide the class, since the rows do not state the transcript's codon table.
 
 For an input without a manifest the format comparator reads that table from the candidate cache, named by `--json-cache`, and sets aside a differing `HGVSp` when all of these hold:
 
@@ -109,10 +111,25 @@ For an input without a manifest the format comparator reads that table from the 
 - The row's consequence set and the two descriptions place the difference in a frameshift's description, a lost stop's extension count, or a duplication that one engine writes as an insertion.
 - The two rows agree in everything else that states the coding change: the consequence set, the cDNA, CDS and protein positions, the amino acids, the codons, `HGVSc` and `HGVS_OFFSET`.
 
-A row that fails one of them stays a difference: the same pair on a transcript under the standard table, a substitution on an organelle transcript, a value one engine leaves empty. So does a row of the fourth shape, the empty-window deletion, which the third condition does not name. Without a manifest the comparison checks the shape of the pair, not the value vep-rs prints, which only a manifest row records.
+A row that fails one of them stays a difference: the same pair on a transcript under the standard table, a substitution on a transcript under another table, a value one engine leaves empty. So does a row of the fourth shape, the empty-window deletion, which the third condition does not name. Without a manifest the comparison checks the shape of the pair, not the value vep-rs prints, which only a manifest row records.
 
 One more row is refused by a rule of its own: an insertion of two or more bases on a reverse-strand transcript that is shifted past its own length by a length that is no multiple of it. Its `HGVSp` differs for another documented reason ([Allele on a coding row after a shift](../output/vep-and-tab.md#allele-on-a-coding-row-after-a-shift)).
 
-The `BDGP6.54-fly` corpus (table 5) documents 4 rows and the `R64-1-1-yeast` corpus (table 3) 14, in each of their `everything` and `hgvs` flag sets, every one a frameshift; the corpora carry no row of the lost-stop, duplication or empty-window deletion shape. The `GRCm39-mouse` corpus's `MT` rows are substitutions or shapes the two codes read alike, and the Arabidopsis `Mt` is table 1 and `Pt` table 11, whose readings the standard code shares on those rows, so no row of theirs changes.
+The committed corpora whose manifests document the class, and the rows each run of theirs documents:
+
+| Corpus | Codon table | Sequence regions of the cache under it | Rows by run |
+| --- | --- | --- | --- |
+| `ARS-UCD2.0-cattle` | 2 | `MT` | `everything` 2, `hgvs-sift` 2 |
+| `ARS-UI_Ramb_v3.0-sheep` | 2 | `MT` | `everything` 1, `hgvs-sift` 1 |
+| `ASM294v2-fission-yeast` | 4 | `MT` | `everything` 1, `hgvs` 1 |
+| `AgamP4-anopheles` | 5 | `Mt` | `everything` 2, `hgvs-sift` 2 |
+| `BDGP6.54-fly` | 5 | `mitochondrion_genome` | `everything` 4, `hgvs` 4 |
+| `GCA000497125v2-spironucleus` | 6 | all 3 | `everything` 20, `hgvs` 20 |
+| `GRCz11-zebrafish` | 2 | `MT` | `everything` 2, `hgvs-sift` 2 |
+| `R64-1-1-yeast` | 3 | `Mito` | `everything` 14, `hgvs` 14 |
+
+Every documented row is the `HGVSp` of a frameshift: no corpus documents a row of the lost-stop, duplication or empty-window deletion shape. The `GCA000497125v2-spironucleus` rows stand on nuclear transcripts. Its cache names two chromosomes and one unplaced sequence, no organelle among them, and files every transcript under table 6. That table reads `TAA` and `TAG` as glutamine, where the standard code reads a stop. The other corpora's rows stand on mitochondrial transcripts.
+
+The `GRCm39-mouse` corpus's `MT` rows are substitutions or shapes the two codes read alike, and the Arabidopsis `Mt` is table 1 and `Pt` table 11, whose readings the standard code shares on those rows, so no row of theirs changes.
 
 On real data the class is counted over the 3,122 mitochondrial records of the ClinVar dataset (table 2). Under `--hgvs` 24 rows differ on GRCh37 and the same 24 on GRCh38, every one a frameshift: 21 with a `?` count on Ensembl VEP's side and 3 with two numbers. The 6 lost-stop rows, the 16 insertion or duplication rows and the one in-frame deletion row of those records agree on both assemblies.

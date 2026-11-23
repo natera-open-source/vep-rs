@@ -1,9 +1,9 @@
 entry = "utrannotator_lost_stop_written_before_stop_codon"
 page = "docs/divergences/utrannotator-lost-stop-written-before-stop-codon.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 63,698 per million · 4 flag sets, 93 corpora"
+input_class_basis = "2 · 63,698 per million · 4 flag sets, 132 corpora"
 notes = "The constructed record inserts two bases directly before the start codon at cDNA 361 (5' UTR index 360) of ENST00001091162. The bases repeat the codon's first two, so the changed sequence is the reference with those two bases written after the codon's second base, inside the stop codon of the uORF that begins 133 bases before the coding sequence. That stop codon's index reads no stop codon in the changed sequence. Ensembl VEP reports the uORF's frameshift; vep-rs reports its lost stop, as Ensembl VEP does for the same bases written after the codon's second base."
 
 [input]
@@ -29,3 +29,23 @@ where = { record = "utr_ins_before_stop_codon", feature = "ENST00001091162" }
 [expected]
 ensembl_vep = ["5_prime_UTR_uORF_frameshift_variant"]
 vep_rs = ["5_prime_UTR_uORF_stop_codon_loss_variant"]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/utr_annotator.rs::MutatedUtr::loses_stop_codon",
+    "crates/vep-builtins/src/plugins/utr_annotator.rs::MutatedUtr::ustop_lost",
+    "crates/vep-builtins/src/plugins/utr_annotator.rs::insertion_writings",
+]
+tests = [
+    "crates/vep-builtins/src/plugins/utr_annotator.rs::tests::insertion_that_moves_a_start_codon_on_is_read_directly_before_it",
+    "crates/vep-builtins/src/plugins/utr_annotator.rs::tests::insertion_that_parts_a_start_codon_inside_a_stop_codon_has_one_term_at_either_index",
+    "crates/vep-builtins/src/plugins/utr_annotator.rs::tests::insertion_writable_before_and_inside_a_stop_codon_loses_it_only_out_of_frame",
+    "crates/vep-builtins/src/plugins/utr_annotator.rs::tests::insertion_written_inside_the_stop_codon_at_a_moved_start_codon_loses_that_stop",
+    "crates/vep-cli/tests/utrannotator_insertion_at_start_codon.rs::in_frame_insertion_writable_at_a_stop_codon_first_base_does_not_lose_it",
+    "crates/vep-cli/tests/utrannotator_insertion_at_start_codon.rs::insertion_that_parts_a_start_codon_inside_a_stop_codon_has_one_term_at_either_index",
+    "crates/vep-cli/tests/utrannotator_insertion_at_start_codon.rs::insertion_written_inside_the_stop_codon_at_a_moved_start_codon_reports_the_lost_stop",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/utrannotator.rs::lost_stop_written_before_stop_codon_row",
+    "tools/vep-plugin-pairs/src/rules/utrannotator.rs::lost_stop_written_before_stop_codon_row",
+]

@@ -27,7 +27,7 @@
  "covers": [
   "ClinPred"
  ],
- "suites": {
+ "datasets": {
   "GRCh38-plugin-clinpred-fixture": {
    "reference": "default.txt",
    "input": "variants.vcf",
@@ -77,35 +77,35 @@
  },
  "records": [
   {
-   "suite": "GRCh38-plugin-clinpred-fixture",
+   "dataset": "GRCh38-plugin-clinpred-fixture",
    "vcf": "21\t19268555\tintergenic_snv\tC\tT\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "GRCh38-plugin-clinpred-fixture",
+   "dataset": "GRCh38-plugin-clinpred-fixture",
    "vcf": "21\t20204701\tintron_snv\tT\tC\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant"
    ]
   },
   {
-   "suite": "GRCh38-plugin-clinpred-fixture",
+   "dataset": "GRCh38-plugin-clinpred-fixture",
    "vcf": "21\t30282169\tstop_lost_rev\tC\tA\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
-   "suite": "GRCh38-plugin-clinpred-fixture",
+   "dataset": "GRCh38-plugin-clinpred-fixture",
    "vcf": "21\t30282172\tmissense_rev\tT\tC\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "GRCh38-plugin-clinpred-fixture",
+   "dataset": "GRCh38-plugin-clinpred-fixture",
    "vcf": "21\t30282928\tmissense_rev_two_alts\tG\tT,A\t.\t.\t.",
    "combinations": [
     "missense_variant"
@@ -115,70 +115,70 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-clinpred-fixture",
+   "dataset": "GRCh38-plugin-clinpred-fixture",
    "vcf": "21\t30396087\tstart_lost_fwd\tA\tG\t.\t.\t.",
    "combinations": [
     "start_lost"
    ]
   },
   {
-   "suite": "GRCh38-plugin-clinpred-fixture",
+   "dataset": "GRCh38-plugin-clinpred-fixture",
    "vcf": "21\t30396091\tmissense_fwd\tC\tT\t.\t.\t.",
    "combinations": [
     "missense_variant"
    ]
   },
   {
-   "suite": "GRCh38-plugin-clinpred-fixture",
+   "dataset": "GRCh38-plugin-clinpred-fixture",
    "vcf": "21\t30396092\tsynonymous_fwd\tC\tA\t.\t.\t.",
    "combinations": [
     "synonymous_variant"
    ]
   },
   {
-   "suite": "GRCh38-plugin-clinpred-fixture",
+   "dataset": "GRCh38-plugin-clinpred-fixture",
    "vcf": "21\t30396095\tsynonymous_fwd_lowercase\tc\tt\t.\t.\t.",
    "combinations": [
     "synonymous_variant"
    ]
   },
   {
-   "suite": "GRCh38-plugin-clinpred-fixture",
+   "dataset": "GRCh38-plugin-clinpred-fixture",
    "vcf": "21\t30396101\tstop_gained_fwd\tC\tA\t.\t.\t.",
    "combinations": [
     "stop_gained"
    ]
   },
   {
-   "suite": "GRCh38-plugin-clinpred-fixture",
+   "dataset": "GRCh38-plugin-clinpred-fixture",
    "vcf": "21\t30396104\tcoding_mnv\tCT\tAG\t.\t.\t.",
    "combinations": [
     "stop_gained"
    ]
   },
   {
-   "suite": "GRCh38-plugin-clinpred-fixture",
+   "dataset": "GRCh38-plugin-clinpred-fixture",
    "vcf": "21\t30642890\tstart_lost_fwd_unscored\tT\tC\t.\t.\t.",
    "combinations": [
     "start_lost"
    ]
   },
   {
-   "suite": "GRCh38-plugin-clinpred-fixture",
+   "dataset": "GRCh38-plugin-clinpred-fixture",
    "vcf": "21\t30881493\tdeletion_rev\tGA\tG\t.\t.\t.",
    "combinations": [
     "frameshift_variant"
    ]
   },
   {
-   "suite": "GRCh38-plugin-clinpred-fixture",
+   "dataset": "GRCh38-plugin-clinpred-fixture",
    "vcf": "21\t30881500\tinsertion_rev\tT\tTA\t.\t.\t.",
    "combinations": [
     "frameshift_variant"
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "flag_sets": [

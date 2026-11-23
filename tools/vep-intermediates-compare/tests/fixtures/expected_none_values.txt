@@ -1,0 +1,21 @@
+Perl rows: 3
+Rust rows: 60
+Unique keys: 60
+
+DISCORD	21:1000	A	ENST001	alt_peptide	perl_cons=missense_variant	rust_cons=missense_variant	perl_cds=None-None	perl_pep=A/None	rust_aa=A/V	perl_codon=None/None	rust_codon=gCa/gTa
+DISCORD	21:2000	T	ENST003	consequence	perl_cons=stop_gained	rust_cons=missense_variant	perl_cds=30-30	perl_pep=R/*	rust_aa=R/*	perl_codon=cGa/tGa	rust_codon=cGa/tGa
+
+============================================================
+SUMMARY
+============================================================
+Total compared:    3
+Total discordant:  2
+Missing in Rust:   0
+Missing in Perl:   57
+
+Field divergence counts:
+  alt_peptide                1  (50.0%)
+  consequence                1  (50.0%)
+
+Top consequence divergence patterns:
+       1  perl=stop_gained rust=missense_variant

@@ -1,0 +1,114 @@
+{
+  "totals": {
+    "reference_keys": 3,
+    "scored_keys": 3,
+    "intersection": 2,
+    "reference_only": 1,
+    "scored_only": 1,
+    "reference_duplicate_keys": 1,
+    "scored_duplicate_keys": 0
+  },
+  "fields": {
+    "Uploaded_variation": {
+      "compared": 2,
+      "equal": 2,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "Gene": {
+      "compared": 2,
+      "equal": 2,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "cDNA_position": {
+      "compared": 2,
+      "equal": 2,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "CDS_position": {
+      "compared": 2,
+      "equal": 2,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "Protein_position": {
+      "compared": 2,
+      "equal": 2,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "Amino_acids": {
+      "compared": 2,
+      "equal": 2,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "Codons": {
+      "compared": 2,
+      "equal": 2,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "Existing_variation": {
+      "compared": 2,
+      "equal": 2,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    }
+  },
+  "extra": {
+    "BIOTYPE": {
+      "compared": 1,
+      "equal": 1,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "MOTIF_POS": {
+      "compared": 1,
+      "equal": 0,
+      "differ": 1,
+      "agreement": 0.0,
+      "distinct_mismatch_shapes": 1,
+      "top_mismatches": [
+        {
+          "reference": "3",
+          "scored": "4",
+          "count": 1
+        }
+      ]
+    }
+  },
+  "inputs": {
+    "reference": "tests/fixtures/regulatory_reference.txt.gz",
+    "scored": "tests/fixtures/regulatory_scored.txt.gz"
+  },
+  "key": [
+    "Location",
+    "Allele",
+    "Feature",
+    "Feature_type",
+    "consequence_set"
+  ],
+  "comparison": "verbatim per field on tuples both sides emit under the same key",
+  "keep_only": "regulatory_feature_rows"
+}

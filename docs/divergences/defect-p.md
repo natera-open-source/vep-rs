@@ -15,7 +15,7 @@ A bracket breakend names its mate inside the brackets of its allele, and Ensembl
 - `InputBuffer.pm`, lines 191-207 and 223-234: a buffer holds the records of one chromosome, so the records that share a buffer with a breakend are the ones on its own chromosome before it in the input.
 - `InputBuffer.pm`, lines 348-357: `_chr_matches_for_vf_overlap` resolves a chromosome name through `get_source_chr_name`, the synonym table of other names the cache knows a chromosome by, so a mate written `NC_000002.12` reaches the transcripts of chromosome 2. The slice test at `AnnotationType/Transcript.pm` line 134 compares the raw name, `chr` stripped, and `NC_000002.12` is not `2`. A mate written `Chr21` passes the slice test (the strip is case-insensitive) and fails the mate-allele test below, whose synonym lookup is verbatim and whose fallback is a case-folded equality of the whole name.
 
-(`ensembl-variation`): `StructuralVariationOverlap.pm` lines 86-102 and 144-160: a mate allele is added to a row only when `_close_to_feature` passes. That test compares the mate's `seq_region_name` with the transcript's through `_compare_seq_region_names` (`Utils/VariationEffect.pm` lines 111-124: the synonym table's keys verbatim, else a case-folded equality) and applies the 5,000-base window (`MAX_DISTANCE_FROM_TRANSCRIPT`, line 60). `StructuralVariationFeature.pm` lines 1300-1304: a breakend's slice is named after the chromosome exactly as the allele writes it.
+(`ensembl-variation`): `StructuralVariationOverlap.pm` lines 86-103 and 144-160: a mate allele is added to a row only when `_close_to_feature` passes. That test compares the mate's `seq_region_name` with the transcript's through `_compare_seq_region_names` (`Utils/VariationEffect.pm` lines 111-124: the synonym table's keys verbatim, else a case-folded equality) and applies the 5,000-base window (`MAX_DISTANCE_FROM_TRANSCRIPT`, line 60). `StructuralVariationFeature.pm` lines 1300-1304: a breakend's slice is named after the chromosome exactly as the allele writes it.
 
 **What correcting it would change.** If the slice test and the mate-allele test compared the record's own chromosome and each breakend's, resolved as the overlap resolves them, classes 23 and 24 would vanish. A bracket breakend's own-end rows and mate rows would be written whatever the order of the input and the spelling of the mate's chromosome.
 
@@ -27,7 +27,7 @@ A third shape of the same test, with no class number, is counted under the name 
 
 Tuple, pair, set aside, charged and the other scoring terms are defined in [How to read the counts](../intended-divergences.md#how-to-read-the-counts).
 
-**Defect D, retired.** Up to release 115.2 Ensembl VEP matched loaded transcripts to the records of a batch through one interval tree keyed on coordinates alone, with no chromosome. So a chromosome 21 record could be handed a chromosome X transcript whose coordinates overlapped its numbers and lose its `intergenic_variant` row to it (the paper's defect D, classes 9 and 10). Release 116.1 keys the overlap on the chromosome as well (`InputBuffer.pm` lines 286-345, `_chr_matches_for_vf_overlap` at lines 348-357). A record is handed to a transcript only when the record's chromosome, or one of its breakend mates', is the transcript's, names resolved through the synonym table. Neither class has a row against release 116.2.
+**Defect D, retired.** Up to release 115.2 Ensembl VEP matched loaded transcripts to the records of a batch through one interval tree keyed on coordinates alone, with no chromosome. So a chromosome 21 record could be handed a chromosome X transcript whose coordinates overlapped its numbers and lose its `intergenic_variant` row to it (the paper's defect D, classes 9 and 10). Release 116.1 keys the overlap on the chromosome as well (`InputBuffer.pm` lines 286-345, `_chr_matches_for_vf_overlap` at lines 348-357). A record is handed to a transcript only when the record's chromosome, or one of its breakend mates', is the transcript's, names resolved through the synonym table. Neither class has a row against release 116.3.
 
 ## 23. A bracket breakend's own-end rows lost to the first transcript that reaches it
 
@@ -140,7 +140,7 @@ The transcripts within 5,000 bases of the record's own breakpoint on chromosome 
 
 ### 23.6 Try it yourself
 
-Annotate the GRCh37 record with Ensembl VEP 116.2 (GRCh37 cache and FASTA, the command of [the closing section](reproducing.md)) in each of these inputs, and count its rows under the own-end allele `A.` and under the mate allele:
+Annotate the GRCh37 record with Ensembl VEP 116.3 (GRCh37 cache and FASTA, the command of [the closing section](reproducing.md)) in each of these inputs, and count its rows under the own-end allele `A.` and under the mate allele:
 
 | Input | Ensembl VEP rows for `synth_bnd_inter_0062_B`, own end / mate |
 | --- | --- |
@@ -163,7 +163,7 @@ The GRCh38 record behaves the same way: 1 / 41 alone, with its mate, after the S
 
 ### 23.7 How the comparator treats this class
 
-`filter_bnd_own_rows_lost` in `scripts/validation/compare_sv_concordance.py` runs under the cache authority (`--vep-rs-cache`, the transcript cache that says which chromosome a transcript is on). It sets aside a vep-rs tuple when all of these hold:
+`filter_bnd_own_rows_lost` in `tools/vep-sv-compare` runs under the cache authority (`--vep-rs-cache`, the transcript cache that says which chromosome a transcript is on). It sets aside a vep-rs tuple when all of these hold:
 
 - the Location is a bracket breakend's whose mate is on another chromosome;
 - Ensembl VEP wrote a Transcript row at the Location under the bracket allele and none under any own-end allele (`N.`, `.N` or `chromosome_breakpoint`);
@@ -171,7 +171,7 @@ The GRCh38 record behaves the same way: 1 / 41 alone, with its mate, after the S
 
 A vep-rs own-end row on a transcript farther than that, or on another chromosome, stays charged.
 
-The SNP/indel comparator, `scripts/concordance/compare_vep_outputs.py`, has no transcript-to-chromosome authority, so it counts the shape under the same name and sets nothing aside. The shape is a Location at which Ensembl VEP wrote rows under a bracket allele and none under an own-end allele, and vep-rs wrote own-end rows.
+The SNP/indel comparator, `tools/vep-outputs-compare`, has no transcript-to-chromosome authority, so it counts the shape under the same name and sets nothing aside. The shape is a Location at which Ensembl VEP wrote rows under a bracket allele and none under an own-end allele, and vep-rs wrote own-end rows.
 
 Counts (`excluded_bnd_own_rows_lost_rust`, per file in `excluded_bnd_own_rows_lost_by_file`):
 
@@ -254,9 +254,9 @@ The mate's chromosome is a fact of the allele, and `Chr21` names the chromosome 
 
 ### 24.6 Try it yourself
 
-Annotate the record with each spelling of the mate's chromosome, with Ensembl VEP 116.2 and vep-rs (GRCh38 cache and FASTA, the commands of [the closing section](reproducing.md); the GRCh37 counterpart of [24.2](#242-the-record) in parentheses):
+Annotate the record with each spelling of the mate's chromosome, with Ensembl VEP 116.3 and vep-rs (GRCh38 cache and FASTA, the commands of [the closing section](reproducing.md); the GRCh37 counterpart of [24.2](#242-the-record) in parentheses):
 
-| Mate | Ensembl VEP 116.2 rows | vep-rs rows |
+| Mate | Ensembl VEP 116.3 rows | vep-rs rows |
 | --- | --- | --- |
 | `N[21:30425700[` or `N[chr21:30425700[` | 4 (14): own end and mate | 4 (14) |
 | `N[Chr21:30425700[` | 2 (7): own end only | 4 (14) |
@@ -268,7 +268,7 @@ The capitalised prefix and an accession naming another chromosome produce the cl
 
 ### 24.7 How the comparator treats this class
 
-`filter_bnd_synonym_mate_rows` in `scripts/validation/compare_sv_concordance.py` runs under the cache authority. It sets aside a vep-rs tuple under a bracket allele when all of these hold:
+`filter_bnd_synonym_mate_rows` in `tools/vep-sv-compare` runs under the cache authority. It sets aside a vep-rs tuple under a bracket allele when all of these hold:
 
 - the mate name, `chr` stripped, is not a chromosome the cache files;
 - Ensembl VEP wrote rows at the Location and none under the bracket allele;

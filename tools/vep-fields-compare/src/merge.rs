@@ -215,8 +215,8 @@ fn slice(raw: &[u8], range: (usize, usize)) -> &[u8] {
     &raw[range.0..range.1]
 }
 
-/// `parse_extra`: `""` and `-` hold no pairs; parts split on `;`, empty parts skipped, a
-/// bare token is a key with value `""`, a repeated key keeps its last value.
+/// The pairs of an Extra column: `""` and `-` hold none; parts split on `;`, empty parts
+/// skipped, a bare token is a key with value `""`, a repeated key keeps its last value.
 fn parse_extra(raw: &[u8], out: &mut Vec<Pair>) {
     out.clear();
     if raw.is_empty() || raw == b"-" {
@@ -315,8 +315,8 @@ fn compare_extra(
     }
 }
 
-/// Merges the two sorted files as the Python does: rows are read in file order, keys compare
-/// bytewise, and a run of equal keys on one side counts its first row only.
+/// Merges the two sorted files: rows are read in file order, keys compare bytewise, and a
+/// run of equal keys on one side counts its first row only.
 pub fn merge(reference: &Path, scored: &Path) -> io::Result<MergeResult> {
     let mut reference_side = Side::open(reference)?;
     let mut scored_side = Side::open(scored)?;
@@ -404,7 +404,7 @@ mod tests {
     }
 
     #[test]
-    fn extra_parses_as_the_python_dict() {
+    fn extra_pairs_keep_first_seen_order_and_the_last_value_of_a_repeated_key() {
         assert_eq!(pairs(b""), owned(&[]));
         assert_eq!(pairs(b"-"), owned(&[]));
         assert_eq!(

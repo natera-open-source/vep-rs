@@ -7,7 +7,7 @@ Ensembl VEP percent-encodes the `=` of a synonymous HGVSp notation as `%3D` in e
 The record is `rs148468217`, `21 34655545 C T` on GRCh37, synonymous on ENST00000290200 (`tests/golden/116/GRCh37-output-flags/variants.vcf`, with that corpus's cache and the FASTA its manifest names, the GRCh37 chromosome 21 FASTA of the sibling `GRCh37-hgvs` corpus). Both engines run with `--hgvs --fasta <reference.fa> --output_format json`, and the `hgvsp` of the ENST00000290200 entry is:
 
 ```
-Ensembl VEP 116.2   "hgvsp":"ENSP00000290200.2:p.Asp215%3D"
+Ensembl VEP 116.3   "hgvsp":"ENSP00000290200.2:p.Asp215%3D"
 vep-rs              "hgvsp":"ENSP00000290200.2:p.Asp215="
 ```
 

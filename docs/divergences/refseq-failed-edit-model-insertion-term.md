@@ -24,11 +24,13 @@ The rule reads the status alone. A model the alignment corrected (`BAM_EDIT=OK`)
 - `BaseTranscriptVariation.pm`, lines 263-264, `cds_start`: the row's coding span runs from the first mapped result's start to the last one's end. Here the two are equal, a span of one position, where an insertion between two neighbours of one pair has an empty span.
 - `Bio/EnsEMBL/Variation/TranscriptVariationAllele.pm`, lines 851-877, `codon`, with lines 2409-2410 and 2421, `_get_alternate_cds`: the alternate coding sequence is the cached one with the allele spliced in place of the span, here one base in place of one.
 - `Bio/EnsEMBL/Variation/Utils/VariationEffect.pm`, lines 1556-1564, `frameshift`: the test compares the allele's length with the span's, one against one, and refuses. Line 1082, `synonymous_variant`, accepts where the two peptides are equal.
-- `ensembl-vep`, `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 1687, 1733-1737, 1751 and 1760: the term and the row's cells are asked first, with no 3' shift made, and each HGVS notation then makes its own shift. For a base equal to the bases after the point, the notations are built three bases on, where the span is an ordinary empty one.
+- `ensembl-vep`, `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 1696, 1742-1746, 1760 and 1769: the term and the row's cells are asked first, with no 3' shift made, and each HGVS notation then makes its own shift. For a base equal to the bases after the point, the notations are built three bases on, where the span is an ordinary empty one.
 - `ensembl-vep`, `Bio/EnsEMBL/VEP/AnnotationType/Transcript.pm`, lines 579, 621 and 624-625, `apply_edits`: a model is `failed` when its sequence, with the edit it came with and the alignment's edits applied, is not the RefSeq sequence the alignment holds. The alignment's edits are then removed, the edit the model came with stays, and no cDNA is cached.
-- `TranscriptVariationAllele.pm`, lines 1517, 1524-1525 and 1605-1617, `get_misalignment_offset`: the position inside the HGVSc is counted along the exons and moved on by an offset for the model's edit. For an edit that writes one position as two bases, line 1617 adds 2, where the cached coordinates gain 1.
+- `TranscriptVariationAllele.pm`, lines 1517, 1524-1525 and 1605-1617, `get_misalignment_offset`: the position inside the HGVSc is counted along the exons and moved on by an offset for the model's edit. For an edit that writes one position as two bases, line 1617 adds 2, where the transcript gains no base.
 
-**What correcting it would change.** Every row of an insertion written at such a position would carry the term of its inserted length: `frameshift_variant` for one base and `inframe_insertion` for three, where Ensembl VEP writes `synonymous_variant` and `frameshift_variant`. Its `IMPACT`, `cDNA_position`, `CDS_position`, `Codons` and `Amino_acids` would be an insertion's. On a row of a base that differs from the bases after the point, the HGVSp would be a frameshift. The position inside the HGVSc is a separate difference with a cause of its own, the offset of the last source line above, which section 1.4 describes. No row of a model the alignment corrected would change.
+**What correcting it would change.** Every row of an insertion written at such a position would carry the term of its inserted length: `frameshift_variant` for one base and `inframe_insertion` for three, where Ensembl VEP writes `synonymous_variant` and `frameshift_variant`. Its `IMPACT`, `cDNA_position`, `CDS_position`, `Codons` and `Amino_acids` would be an insertion's. On a row of a base that differs from the bases after the point, the HGVSp would be a frameshift.
+
+The position inside the HGVSc is a separate difference with a cause of its own, the offset of the last source line above. Section 1.4 describes it, and [The HGVSc position past the own edit of a failed-edit RefSeq model](refseq-failed-edit-model-hgvsc-offset.md) is its entry. No row of a model the alignment corrected would change.
 
 **The class it produces.** None. `refseq_failed_edit_model_insertion_term` names this entry in the index and in its reproduction, and no comparison tool holds a rule, a class or a test under that name. Nothing is set aside for these rows, so a difference on them is charged to vep-rs in the concordance figures. The reproduction also records the entry's input class, which is another attribute than a comparison class: `unobserved`, the index's word for an input that the format and the documentation allow and that no measured data carries.
 
@@ -42,7 +44,7 @@ Nothing the comparisons measure reaches the entry. The concordance datasets run 
 
 ## 1. The twice-read position of `NM_015068.3`
 
-**In short.** `NM_015068.3` (gene `PEG10`, forward strand, `BAM_EDIT=FAILED`) reads `7:94664513` on GRCh38 twice in its coding sequence. The cache writes the double reading as cDNA 1436, a position with no genomic base. For one base inserted between `7:94664512` and `7:94664513`, Ensembl VEP 116.2 writes `synonymous_variant` at `CDS_position` 957, and vep-rs writes `frameshift_variant` at `CDS_position` 956-957. The same base inserted one position on is `frameshift_variant` in both engines.
+**In short.** `NM_015068.3` (gene `PEG10`, forward strand, `BAM_EDIT=FAILED`) reads `7:94664513` on GRCh38 twice in its coding sequence. The cache writes the double reading as cDNA 1436, a position with no genomic base. For one base inserted between `7:94664512` and `7:94664513`, Ensembl VEP 116.3 writes `synonymous_variant` at `CDS_position` 957, and vep-rs writes `frameshift_variant` at `CDS_position` 956-957. The same base inserted one position on is `frameshift_variant` in both engines.
 
 ### 1.1 What a reader needs to know first
 
@@ -78,7 +80,7 @@ Three one-base insertions, written for this example as VCF lines, are run under 
 
 The first record inserts one copy of the run's base at the place, between `7:94664512` and `7:94664513`. Its row on `NM_015068.3`:
 
-| Cell | Ensembl VEP 116.2 | vep-rs |
+| Cell | Ensembl VEP 116.3 | vep-rs |
 | --- | --- | --- |
 | `Consequence` | `synonymous_variant` | `frameshift_variant` |
 | `cDNA_position` | 1436 | 1435-1436 |
@@ -86,15 +88,15 @@ The first record inserts one copy of the run's base at the place, between `7:946
 | `Protein_position` | 319 | 319 |
 | `Amino_acids` | one value | two halves |
 | `Codons` | two equal halves of 3 bases | halves of 3 and 4 bases |
-| `HGVSc` | a duplication at `c.961` | a duplication at `c.960` |
+| `HGVSc` | a duplication at `c.961` | a duplication at `c.959` |
 | `HGVSp` | a frameshift first changing residue 321 | the same notation |
 | `HGVS_OFFSET` | 3 | 3 |
 
-The second record inserts the same base one position on, between `7:94664513` and `7:94664514`. Both engines write `frameshift_variant`, `cDNA_position` 1437-1438, `CDS_position` 958-959 and the frameshift HGVSp of the first record. Each writes the duplication it writes on the first record, `c.961` in Ensembl VEP and `c.960` in vep-rs, with `HGVS_OFFSET=2`.
+The second record inserts the same base one position on, between `7:94664513` and `7:94664514`. Both engines write `frameshift_variant`, `cDNA_position` 1437-1438, `CDS_position` 958-959 and the frameshift HGVSp of the first record. Each writes the duplication it writes on the first record, `c.961` in Ensembl VEP and `c.959` in vep-rs, with `HGVS_OFFSET=2`.
 
 The third record inserts, at the place, one base that is not the run's. Its row on `NM_015068.3`:
 
-| Cell | Ensembl VEP 116.2 | vep-rs |
+| Cell | Ensembl VEP 116.3 | vep-rs |
 | --- | --- | --- |
 | `Consequence` | `synonymous_variant` | `frameshift_variant` |
 | `cDNA_position` | 1436 | 1435-1436 |
@@ -112,13 +114,13 @@ Six constructed records insert one base at the place, and on the three models th
 
 ### 1.4 The position inside the coding notation
 
-The rows of 1.3 differ in the position inside the HGVSc as well, by a second cause. Ensembl VEP counts that position along the exons and moves it on by an offset for the model's edit, the value it prints as `REFSEQ_OFFSET`. The offset is the number of bases the edit writes, 2, where the cached coordinates gain 1 position.
+The rows of 1.3 differ in the position inside the HGVSc as well, by a second cause. Ensembl VEP counts that position along the exons and moves it on by an offset for the model's edit, the value it prints as `REFSEQ_OFFSET`. The offset is the number of bases the edit writes, 2. vep-rs counts the position along the exons alone, which are the positions of RefSeq's record.
 
-The duplicated base is the run's last, `7:94664515`. Counted along the exons it is cDNA 1438, with the offset cDNA 1440, and from the coding start `c.961`. The cached mapper's coordinate of the same base is cDNA 1439, `c.960`, the position vep-rs writes. Under neither count does `c.961` hold the run's base, so Ensembl VEP's notation names a base that is not the one duplicated.
+The duplicated base is the run's last, `7:94664515`. Counted along the exons it is cDNA 1438, `c.959` from the coding start, the position vep-rs writes and the record's own position of that base. With the offset it is cDNA 1440, `c.961`. No count of the transcript's bases gives the run's last base that number, so Ensembl VEP's notation names a base that is not the one duplicated.
 
-For the third record, the two genomic bases around the place are cDNA 1435 and 1436 along the exons and 1437 and 1438 with the offset: `c.958` and `c.959`. On the cache's count those are `7:94664513` and `7:94664514`, so Ensembl VEP's `ins` stands one position past the insertion point. vep-rs writes the `ins` between `c.956`, the base 5' of the point, and `c.957`, the next position of the coding sequence.
+For the third record, the two genomic bases around the place are cDNA 1435 and 1436 along the exons, `c.956` and `c.957`, and vep-rs writes the `ins` between them. With the offset they are cDNA 1437 and 1438, `c.958` and `c.959`, so Ensembl VEP's `ins` stands two positions past the insertion point.
 
-On the three models Ensembl VEP's duplication is at `c.961`, `c.1063` and `c.1189`, and vep-rs's at `c.960`, `c.1062` and `c.1188`, on 12 of 12 duplication rows. The 12 are the 6 rows of the run's base at the place and the 6 rows of two records that write the run's base off the place, 3 rows each. One is written one position on, as the second record of section 1.3, and the other further on, at a point this page does not give. On those 6 both engines write `frameshift_variant` and a frameshift HGVSp. The offset accounts for the position on all 12, and for the two positions of Ensembl VEP's `ins` on the 12 rows of another base.
+On the three models Ensembl VEP's duplication is at `c.961`, `c.1063` and `c.1189`, and vep-rs's at `c.959`, `c.1061` and `c.1187`, on 12 of 12 duplication rows. The 12 are the 6 rows of the run's base at the place and the 6 rows of two records that write the run's base off the place, 3 rows each. One is written one position on, as the second record of section 1.3, and the other further on, at a point this page does not give. On those 6 both engines write `frameshift_variant` and a frameshift HGVSp. The offset accounts for the position on all 12, and for the two positions of Ensembl VEP's `ins` on the 12 rows of another base.
 
 ### 1.5 The other reading, and why vep-rs does not take it
 
@@ -132,7 +134,7 @@ vep-rs does not take that reading. RefSeq's record states the slip for the trans
 
 Constructed records insert two and three bases at the place, 3 rows each on the three models:
 
-| Inserted at the place | Ensembl VEP 116.2 | vep-rs |
+| Inserted at the place | Ensembl VEP 116.3 | vep-rs |
 | --- | --- | --- |
 | two bases | `frameshift_variant`, the cache's own position, `Codons` halves of 3 and 4 bases | `frameshift_variant`, the point's two positions, halves of 3 and 5 bases |
 | three bases | `frameshift_variant` | `inframe_insertion`, `IMPACT=MODERATE`, the point's two positions, halves of 3 and 6 bases |
@@ -149,7 +151,7 @@ On their 6 rows on the three models, vep-rs writes the term and the HGVSp of the
 
 ### 1.7 How the comparator treats these rows
 
-Nothing is set aside. No comparison tool holds a rule, a class or a test under this entry's name, and a comparison of the two engines' outputs counts every differing cell of these rows against vep-rs.
+Nothing is set aside under this entry's name: no comparison tool holds a rule, a class or a test under it. A comparison of the two engines' outputs counts every differing cell of these rows against vep-rs, but for one. The position inside the `HGVSc` of the second record's rows, whose `cDNA_position` the engines write alike, is the offset's, and the format comparator sets it aside where the comparison names that entry's class, `refseq_failed_edit_model_hgvsc_offset`.
 
 The reproduction `scripts/divergences/reproductions/refseq_failed_edit_model_insertion_term.toml` runs the three records of 1.3 on both engines and records nine cells of each row on `NM_015068.3`. No committed corpus's cache holds a model with `BAM_EDIT=FAILED`, so the reproduction converts the one region file that holds the three models from an Ensembl VEP RefSeq GRCh38 cache it is given. It holds no record of sections 1.6 and 2.
 
@@ -167,7 +169,7 @@ The row's span runs from the first mapped base's start to the last one's end (`B
 
 A constructed record has the two reference bases and, as its first alternate, those two with one other base between them. Its row on `NM_015068.3`:
 
-| Cell | Ensembl VEP 116.2 | vep-rs |
+| Cell | Ensembl VEP 116.3 | vep-rs |
 | --- | --- | --- |
 | `Consequence` | `synonymous_variant` | `frameshift_variant` |
 | `cDNA_position` | 1435-1437 | 1435-1437 |

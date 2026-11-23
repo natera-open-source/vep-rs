@@ -1,0 +1,184 @@
+{
+ "plugin_fixtures": {
+  "spliceai_scores.raw.snv.hg19.synthetic.vcf.gz": {
+   "generator": "scripts/fixtures/plugin_score_fixtures.py",
+   "shape": "spliceai_snv",
+   "seed": 19,
+   "chr_style": "bare",
+   "misses": [
+    "21:15746500"
+   ],
+   "variants_vcf_sha256": "ac24b3c0dbb2eabeb1b0adf30687b5f2761b244874272599781c3f1174f03dc9",
+   "rows": {
+    "snv": 81,
+    "non_snv": 0,
+    "miss": 1,
+    "join_entries": 24,
+    "entry_order": 18,
+    "repeat_lines": 15,
+    "rescore_lines": 6
+   },
+   "files": {
+    "plugin_data/spliceai_scores.raw.snv.hg19.synthetic.vcf.gz": "dff3abb3bd5977f39133e90655e176701a43ccd180498e20b31f66fa07413f3e",
+    "plugin_data/spliceai_scores.raw.snv.hg19.synthetic.vcf.gz.tbi": "b58a785aa301105c04fac9ac6198eb7e9b543892426a694a78ebe5023ba32c25"
+   },
+   "tools": {
+    "bgzip": "bgzip (htslib) 1.21",
+    "tabix": "tabix (htslib) 1.21"
+   },
+   "record_forms": {
+    "join_entries": [
+     "21:15481500",
+     "21:15481600",
+     "21:15481800",
+     "21:15481900"
+    ],
+    "entry_order": [
+     "21:15482100=1,1",
+     "21:15482200=1,1:2",
+     "21:15482300=1,1:2,1:3,1:4",
+     "21:15482400=1,1:2,2:3",
+     "21:15482500=1,2,1:2",
+     "21:15482600=2:2,1:2,1"
+    ],
+    "repeat_lines": [
+     "21:15481600=2",
+     "21:15481800=3"
+    ],
+    "rescore_lines": [
+     "21:15481900=2"
+    ]
+   },
+   "symbols": {
+    "plugin_data/spliceai_symbols.tsv": "04bf9718e214092d412d21d7835916638c8d5883d61525291baadbbbb132f9b3"
+   }
+  },
+  "spliceai_scores.raw.indel.hg19.synthetic.vcf.gz": {
+   "generator": "scripts/fixtures/plugin_score_fixtures.py",
+   "shape": "spliceai_indel",
+   "seed": 19,
+   "chr_style": "bare",
+   "misses": [],
+   "variants_vcf_sha256": "ac24b3c0dbb2eabeb1b0adf30687b5f2761b244874272599781c3f1174f03dc9",
+   "rows": {
+    "snv": 0,
+    "non_snv": 9,
+    "miss": 0,
+    "join_entries": 1
+   },
+   "files": {
+    "plugin_data/spliceai_scores.raw.indel.hg19.synthetic.vcf.gz": "5352d69927534248075c93aae8cb21a73feb27c9441957b2bacf6cee4c7fb5a2",
+    "plugin_data/spliceai_scores.raw.indel.hg19.synthetic.vcf.gz.tbi": "f6372a7454e64d2af43f2e111d1e0d667c4d05a4e863247d48f4f2a0f91a1068"
+   },
+   "tools": {
+    "bgzip": "bgzip (htslib) 1.21",
+    "tabix": "tabix (htslib) 1.21"
+   },
+   "record_forms": {
+    "join_entries": [
+     "21:15482000"
+    ]
+   },
+   "symbols": {
+    "plugin_data/spliceai_symbols.tsv": "04bf9718e214092d412d21d7835916638c8d5883d61525291baadbbbb132f9b3"
+   }
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --stats_text --quiet --force_overwrite --dir_plugins {plugins} --plugin SpliceAI,snv={corpus}/plugin_data/spliceai_scores.raw.snv.hg19.synthetic.vcf.gz,indel={corpus}/plugin_data/spliceai_scores.raw.indel.hg19.synthetic.vcf.gz [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh37",
+ "fasta": "GRCh37 chromosome 21 at its full length from Homo_sapiens.GRCh37.75.dna.primary_assembly.fa, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form",
+ "input": "31 hand-built VCF records on chromosome 21 of the release-116 GRCh37 cache: an intergenic SNV; an SNV at a two-gene site (ANKRD20A18P, AP001347.6) whose file names one gene alone; an SNV and a two-base deletion at a site two genes share (LIPI, AP001347.6), each score file holding both genes' entries in one record for each allele; four further SNVs in the span the two genes share: one whose record line of both genes' entries stands twice for each allele, one whose line of three entries, the two genes' and one of a symbol no transcript carries, stands three times, one scored by one record for each gene, and one scored by two record lines of both genes' entries whose scores differ; six further SNVs in that span whose score record names one gene in several entries: twice with equal scores, twice with other scores, four times, twice before the other gene's entry, on either side of it and twice behind it; a reverse-strand missense SNV, a three-base deletion and an SNV whose file record names a symbol no transcript carries (LIPI); an SNV with two alternate alleles, one the file leaves out and a one-base insertion (HSPA13); a synonymous SNV and a one-base insertion (USP25); an SNV written in lower case (C21orf37); a one-base deletion, a missense SNV and a two-base substitution (CXADR); splice-donor SNVs on both strands (USP16, C21orf54) and a reverse-strand splice-acceptor SNV (MCM3AP); a record carrying an SNV beside a one-base insertion (USP25) and one carrying a one-base deletion beside a two-base substitution (CXADR), whose alleles share no first base and stay unanchored",
+ "sha256": {
+  "default.txt": "6d0bfba09e155df9d7cf5436bd2a56c2639268630666f20904818e1937ed5fa5",
+  "tab.txt": "3310ffa759bfee9d0bc207d4323e80845948796b0e205fdc9f4a99d640ce6ea0",
+  "vcf.vcf": "838d160e170ffdebbad9241756f1af7c65e66eeee313c8fefb1f6b0608272243",
+  "json.jsonl": "9162ea7438ab66a328caf3ac89f8e5eef4291bc20809a4576bc591569dc0b7b7",
+  "default.summary.log": "283dc98090d653d34b234e415153bac62e143546b3e267cbfc88c93121375ec9",
+  "tab.summary.log": "c69e7b7a2fe10916dafb22e24e87d7087759c09648825aaaf9860afcfe4edce7",
+  "vcf.summary.log": "a3a5a18c23f64a17dd430311ef54be1617f5f076f0c27a182c1c8b92185329c9",
+  "json.summary.log": "60e9444af8ce7d241d15e4d69580049dae4d9a95fc9ee4cd2d6c00240e5526d0"
+ },
+ "variants_vcf_sha256": "ac24b3c0dbb2eabeb1b0adf30687b5f2761b244874272599781c3f1174f03dc9",
+ "plugin_files": {
+  "plugin_data/spliceai_scores.raw.snv.hg19.synthetic.vcf.gz": "dff3abb3bd5977f39133e90655e176701a43ccd180498e20b31f66fa07413f3e",
+  "plugin_data/spliceai_scores.raw.snv.hg19.synthetic.vcf.gz.tbi": "b58a785aa301105c04fac9ac6198eb7e9b543892426a694a78ebe5023ba32c25",
+  "plugin_data/spliceai_scores.raw.indel.hg19.synthetic.vcf.gz": "5352d69927534248075c93aae8cb21a73feb27c9441957b2bacf6cee4c7fb5a2",
+  "plugin_data/spliceai_scores.raw.indel.hg19.synthetic.vcf.gz.tbi": "f6372a7454e64d2af43f2e111d1e0d667c4d05a4e863247d48f4f2a0f91a1068"
+ },
+ "flag_sets": {
+  "split-output": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --dir_plugins {plugins} --plugin SpliceAI,snv={corpus}/plugin_data/spliceai_scores.raw.snv.hg19.synthetic.vcf.gz,indel={corpus}/plugin_data/spliceai_scores.raw.indel.hg19.synthetic.vcf.gz,split_output=1 [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh37",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "54eec40bebdd13d4000cb084ed694b553fa1b999d687330f8907fcddceb626b5",
+    "tab.txt": "0a0c8ce5bc95e74558411cd2fdb8775bb4ae2ae9af5ee64d8cbd88d9294c32b5",
+    "vcf.vcf": "72a8cde0dcfe0dd2ff05999dbaa479837fc30af248a552200fb53d7bccbc0587",
+    "json.jsonl": "f094f2a1995452cff9043ef9c016f0aabf3559bcdf33f0c79926dd61c1cc1b67"
+   },
+   "flags": [
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "SpliceAI,snv={corpus}/plugin_data/spliceai_scores.raw.snv.hg19.synthetic.vcf.gz,indel={corpus}/plugin_data/spliceai_scores.raw.indel.hg19.synthetic.vcf.gz,split_output=1"
+   ],
+   "expected_dir": "expected_split-output"
+  },
+  "cutoff": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --dir_plugins {plugins} --plugin SpliceAI,snv={corpus}/plugin_data/spliceai_scores.raw.snv.hg19.synthetic.vcf.gz,indel={corpus}/plugin_data/spliceai_scores.raw.indel.hg19.synthetic.vcf.gz,cutoff=0.5 [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh37",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "2d3aa989315086bc9ba442e359863902650b91484f0e7f4ed877defdfd1b9b36",
+    "tab.txt": "67072240ba2592270ba18a3c77680e69951c6b8c195f570e9cdaa66acb8101eb",
+    "vcf.vcf": "8ef47ed1b6dff2dc28c0896fed8d06c7f1adf7ffee3dcf5e6f829720984a6f3f",
+    "json.jsonl": "4dd965a450abf109e2823184a9598ce2463bae4f6ff0223ced782c6176cd404c"
+   },
+   "flags": [
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "SpliceAI,snv={corpus}/plugin_data/spliceai_scores.raw.snv.hg19.synthetic.vcf.gz,indel={corpus}/plugin_data/spliceai_scores.raw.indel.hg19.synthetic.vcf.gz,cutoff=0.5"
+   ],
+   "expected_dir": "expected_cutoff"
+  },
+  "split-output-cutoff": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --dir_plugins {plugins} --plugin SpliceAI,snv={corpus}/plugin_data/spliceai_scores.raw.snv.hg19.synthetic.vcf.gz,indel={corpus}/plugin_data/spliceai_scores.raw.indel.hg19.synthetic.vcf.gz,split_output=1,cutoff=0.5 [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh37",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "092f98473c41390899b91055cef87e1754a0f800523f2c75a9ec81dee6115b1f",
+    "tab.txt": "5bc72062068bcf36d6f819a30c402c5b088b02df31006318aab0c9668fe1b89b",
+    "vcf.vcf": "8faffcb12e5d84654afc7f9fcb59f65fc4c35d25a3dcf1b5308b9425f1d26bf9",
+    "json.jsonl": "0eeaed4c9e24ceb7424ce7e30aaca2bceee1a400d35a9c54f3892883847b6520"
+   },
+   "flags": [
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "SpliceAI,snv={corpus}/plugin_data/spliceai_scores.raw.snv.hg19.synthetic.vcf.gz,indel={corpus}/plugin_data/spliceai_scores.raw.indel.hg19.synthetic.vcf.gz,split_output=1,cutoff=0.5"
+   ],
+   "expected_dir": "expected_split-output-cutoff"
+  }
+ },
+ "generator": "plugin_data/spliceai_scores.raw.snv.hg19.synthetic.vcf.gz and plugin_data/spliceai_scores.raw.indel.hg19.synthetic.vcf.gz: scripts/fixtures/plugin_score_fixtures.py from variants.vcf and plugin_data/spliceai_symbols.tsv (the gene symbols of each site's transcript rows, the one-gene-scored sites listing one symbol and the symbol-mismatch site a symbol no transcript carries), the VCF columns SpliceAI.pm:326 splits a record line into, with fabricated scores, the snv shape one record per alternate base and per symbol at every single-base site, the indel shape one record per symbol for every other allele as the VCF writes it, the two entries of the substitution and of the deletion two genes share joined into one record for each allele (--join-entries), the record lines of two further single-base sites written two and three times (--repeat-lines), the record lines of one further site written again with other scores (--rescore-lines), the entries of six further single-base sites written in a stated order with one symbol in several of them, a further entry's scores drawn again (--entry-order), no record at the unscored site, bgzip and tabix -p vcf (seeds, misses, record forms and digests under plugin_fixtures); the two score files' names are the names the plugin's documentation gives (SpliceAI.pm:117-118), with the word `synthetic` added before the extension to say that the files are made up; json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice tools/vep-storable-to-json converts from the Ensembl VEP 116 GRCh37 cache; reference.fa.gz: the masked chromosome described under fasta, cut with the scripts/fixtures/cut_plugin_regions.py functions (Ensembl VEP's plugin matches an indel through the base before it, which it reads from the FASTA, so both engines run with one); expected outputs: scripts/concordance/generate_reference_output.sh --corpus --dir-plugins <VEP_plugins checkout> for the manifest's run and, with --flag-set and --no-stats, for each flag set; each line of a json.jsonl file orders its keys as one run of that command wrote them, and Ensembl VEP orders an object's keys otherwise from run to run, so another run writes the same objects and not the same bytes or digest; manifest: tools/vep-golden-corpus select --include for every record, flag-set, then classify for the manifest's run and each flag set against the committed tree's binary, with --field for the SpliceAI fields the run's default format writes and --spliceai-table for the two score files"
+}

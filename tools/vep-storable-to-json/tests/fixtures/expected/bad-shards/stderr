@@ -1,0 +1,17 @@
+WARN: bad-shards/21/10-11.gz: Magic number checking on storable file failed
+
+WARN: bad-shards/21/12-13.gz: Magic number checking on storable file failed
+
+WARN: bad-shards/21/16-17.gz: gzip -dc failed (wait status 512)
+
+WARN: bad-shards/21/2-3.gz: Not a HASH reference
+
+WARN: bad-shards/21/20-21.gz: malformed or illegal unicode character in string [ÿþcd], cannot convert to JSON
+
+WARN: bad-shards/21/4-5.gz: gzip -dc failed (wait status 256)
+
+WARN: bad-shards/21/6-7.gz: File is not a perl storable
+
+WARN: bad-shards/21/8-9.gz: fd_retrieve returned no data (truncated Storable image)
+
+ERROR: [storable_to_json] 8 of 12 shards failed to convert (see the WARN lines above)

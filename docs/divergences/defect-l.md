@@ -35,11 +35,11 @@ With a FASTA, Ensembl VEP expands a `<CNV:TR>` record to a literal allele string
 21	30425587	gain1_ruc	N	<CNV:TR>	.	.	SVTYPE=CNV;END=30425596;SVLEN=9;RUS=AGC;RUC=4
 ```
 
-The run at 30425588-30425596 is three copies of `AGC` in the GRCh38 sequence. Executed with `--fasta` (Ensembl's chromosome 21 of release 116) on Ensembl VEP 116.2.
+The run at 30425588-30425596 is three copies of `AGC` in the GRCh38 sequence. Executed with `--fasta` (Ensembl's chromosome 21 of release 116) on Ensembl VEP 116.3.
 
 ### 19.3 What each engine writes
 
-Ensembl VEP 116.2 with `--fasta`, two rows for the fifth record and none for the first four, with no warning; one table per row, the differing cells in bold. vep-rs without a FASTA, for each of the five records (the gain's literal reading pairs with the fifth under [class 12](cnv-tr.md#12-cnvtr-read-symbolically-not-expanded)), two rows, the last table showing the one on ENST00000390690 without its ID column; with a FASTA vep-rs writes what Ensembl VEP writes.
+Ensembl VEP 116.3 with `--fasta`, two rows for the fifth record and none for the first four, with no warning; one table per row, the differing cells in bold. vep-rs without a FASTA, for each of the five records (the gain's literal reading pairs with the fifth under [class 12](cnv-tr.md#12-cnvtr-read-symbolically-not-expanded)), two rows, the last table showing the one on ENST00000390690 without its ID column; with a FASTA vep-rs writes what Ensembl VEP writes.
 
 The fifth record, `gain1_ruc`, on ENST00000334068; vep-rs's row on this transcript, `upstream_gene_variant` over the run, is not shown:
 
@@ -74,7 +74,8 @@ The vep-rs row, for each of the five records:
 | Gene |  | `ENSG00000240432` |
 | Feature |  | `ENST00000390690` |
 | Feature_type |  | `Transcript` |
-| Consequence |  | `feature_elongation,coding_sequence_variant` |
+| Consequence, `same_ruc` |  | `coding_sequence_variant` |
+| Consequence, the other four |  | `feature_elongation,coding_sequence_variant` |
 
 ### 19.4 Why Ensembl VEP writes that
 
@@ -82,13 +83,13 @@ The vep-rs row, for each of the five records:
 
 ### 19.5 Why vep-rs's rows are the correct ones
 
-A record the input states is a variant and the parser accepts should be annotated or refused with a message, never dropped in silence; and the same record is annotated by both engines when no FASTA is given. The symbolic rows are that reading. With a FASTA vep-rs follows Ensembl VEP's expansion so that the two engines agree on every expanded record, this shape included.
+A record the input states is a variant and the parser accepts should be annotated or refused with a message, never dropped in silence; and the same record is annotated by both engines when no FASTA is given. The symbolic rows are that reading. The first record states an allele exactly as long as its run, so its row names [no direction term](cnv-tr-symbolic-loss-named-a-gain.md#2-an-allele-as-long-as-its-run-read-without-the-reference-sequence). With a FASTA vep-rs follows Ensembl VEP's expansion so that the two engines agree on every expanded record, this shape included.
 
 ### 19.6 Try it yourself
 
 ```bash
 printf '##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n21\t30425587\tsame_ruc\tN\t<CNV:TR>\t.\t.\tSVTYPE=CNV;END=30425596;SVLEN=9;RUS=AGC;RUC=3\n' > empty.vcf
-docker run --rm -v "$PWD":/work -v /path/to/vep-cache:/cache -v /path/to/fasta:/fasta ensemblorg/ensembl-vep:release_116.2 \
+docker run --rm -v "$PWD":/work -v /path/to/vep-cache:/cache -v /path/to/fasta:/fasta ensemblorg/ensembl-vep:release_116.3 \
   vep -i /work/empty.vcf -o /work/empty.perl.txt --offline --cache --dir_cache /cache --cache_version 116 \
   --assembly GRCh38 --species homo_sapiens --allele_number --no_stats --fasta /fasta/Homo_sapiens.GRCh38.dna.chromosome.21.fa
 vep -i empty.vcf -o empty.vep-rs.txt --offline --json_cache tests/golden/116/GRCh38-release116/json_cache --assembly GRCh38 --no_stats
@@ -96,7 +97,7 @@ vep -i empty.vcf -o empty.vep-rs.txt --offline --json_cache tests/golden/116/GRC
 
 ### 19.7 How the comparator treats this class
 
-The class is `cnv_tr_empty_expansion_dropped` in the 116.2 registry. The structural-variant comparator reads the input record and sets aside vep-rs's `tandem_repeat` rows at the run when the reference wrote nothing on the chromosome from the base before the run to the base after it. A reference that wrote the symbolic rows (no FASTA) or the literal rows (a real gain) leaves nothing to set aside, and so does a vep-rs run that read a FASTA, which writes nothing for the record either.
+The class is `cnv_tr_empty_expansion_dropped` in the 116.3 registry. The structural-variant comparator reads the input record and sets aside vep-rs's `tandem_repeat` rows at the run when the reference wrote nothing on the chromosome from the base before the run to the base after it. A reference that wrote the symbolic rows (no FASTA) or the literal rows (a real gain) leaves this class nothing to set aside, and so does a vep-rs run that read a FASTA, which writes nothing for the record either.
 
 The input record is a single `<CNV:TR>` of one of three shapes: its `RN` is `.`; its repeat counts, `RUC` or `RB` in whole units, truncated as Perl's `x` operator truncates them, repeat nothing; or its counts times the unit lengths equal `SVLEN`.
 

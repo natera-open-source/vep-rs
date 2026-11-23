@@ -1,0 +1,8 @@
+#Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	Extra
+rs1	1:100	G	ENSG01	ENST01	Transcript	missense_variant,splice_region_variant	10	10	4	K/R	aAg/aGg	rs1	IMPACT=MODERATE;CLIN_SIG=benign;AF=0.5;HGVSc=ENST01:c.10A>G;HGVSp=ENSP01:p.Lys4Arg
+v2	1:200	T	ENSG01	ENST01	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;gnomADe_AF=0.01;AF=
+v3	2:300	A	-	-	-	intergenic_variant	-	-	-	-	-	-	-
+## a comment
+#Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	Extra	CDS_position
+w1	1:800	G	ENSG01	ENST01	Transcript	stop_gained	CLIN_SIG=risk_factor;AF=0.9	12	5	Q/*	Cag/Tag	rs8	CLIN_SIG=;AF=
+w2	1:900	G	ENSG01	ENST01	Transcript	stop_gained,missense_variant	-	12

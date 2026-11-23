@@ -1,0 +1,40 @@
+{
+ "transcripts": {
+  "gtf": 39,
+  "cache": 1300,
+  "shared": 0,
+  "gtf_only": 39,
+  "cache_only": 1300
+ },
+ "per_code": {
+  "gencode_basic": {
+   "agree": 0,
+   "disagree": 0,
+   "present_in_gtf": 0,
+   "present_in_cache": 0,
+   "examples": []
+  },
+  "gencode_primary": {
+   "agree": 0,
+   "disagree": 0,
+   "present_in_gtf": 0,
+   "present_in_cache": 0,
+   "examples": []
+  },
+  "cds_start_NF": {
+   "agree": 0,
+   "disagree": 0,
+   "present_in_gtf": 0,
+   "present_in_cache": 0,
+   "examples": []
+  },
+  "cds_end_NF": {
+   "agree": 0,
+   "disagree": 0,
+   "present_in_gtf": 0,
+   "present_in_cache": 0,
+   "examples": []
+  }
+ },
+ "exact_agreement": true
+}

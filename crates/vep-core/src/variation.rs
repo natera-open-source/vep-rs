@@ -6,13 +6,14 @@
 use std::collections::HashMap;
 
 /// One known variant read from the variation cache, the hash Ensembl VEP's
-/// `BaseCacheVariation.pm::parse_variation` builds at release/116.2.
+/// `BaseCacheVariation.pm::parse_variation` builds at release/116.3.
 ///
 /// The named fields are the cache's fixed columns; every other column of the
 /// cache's `variation_cols` is a population frequency and lands in
 /// [`frequencies`](Self::frequencies) under its own name, so the record carries
 /// whatever populations the cache declares.
 #[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct CachedVariation {
     /// The chromosome column of the start-indexed layout, the file's own
     /// chromosome; `None` on the per-region layout, which has no such column.
@@ -60,6 +61,7 @@ impl CachedVariation {
 
 /// The ClinVar fields of a variation record beyond `clin_sig`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct ClinVarDetail {
     /// Significance per risk allele, `allele:term` pairs joined by `;`.
     pub clin_sig_allele: Option<String>,
@@ -74,7 +76,7 @@ impl ClinVarDetail {
     ///
     /// An entry is `allele:term`; the allele is the text before its first `:`
     /// and the term the text between the first and the second (`OutputFactory.pm:1106-1108`
-    /// at release/116.2), so an entry with no `:` has an empty term.
+    /// at release/116.3), so an entry with no `:` has an empty term.
     pub fn clin_sig_allele_entries(&self) -> Vec<(&str, &str)> {
         let Some(entries) = self.clin_sig_allele.as_deref() else {
             return Vec::new();

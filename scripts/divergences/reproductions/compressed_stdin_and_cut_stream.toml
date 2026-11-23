@@ -1,7 +1,7 @@
 entry = "compressed_stdin_and_cut_stream"
 page = "docs/divergences/compressed-input.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the --input_file contract (Ensembl VEP documentation, \"Running Ensembl VEP\", --input_file); not seen in the measured datasets; classed by its most reachable shape, compressed bytes on standard input: a stream cut inside a member breaks the member format (RFC 1952, section 2.3)"
 notes = "The first mechanism of the entry: the corpus's BGZF file piped to -i STDIN. Ensembl VEP reads the compressed bytes as text and writes no row for any of the 39 records; vep-rs decompresses the stream and writes the rows it writes for the file, this record's among them."
@@ -27,3 +27,15 @@ where = { record = "stop_ins1_keep_rev" }
 [expected]
 ensembl_vep = []
 vep_rs = ["21:30813030-30813031 | T | ENST00000329621 | stop_retained_variant"]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/runner.rs::BgzfBlockGuard::next_block",
+    "crates/vep-cli/src/runner.rs::Runner::open_input",
+    "crates/vep-cli/src/runner.rs::decompressed",
+]
+tests = [
+    "crates/vep-cli/tests/cli_input.rs::gzip_on_stdin_is_read",
+    "crates/vep-cli/tests/cli_input.rs::truncated_bgzf_input_is_a_read_error",
+    "crates/vep-cli/tests/documented_subsets.rs::compressed_input_exclusion_is_documented",
+]

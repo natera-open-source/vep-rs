@@ -1,19 +1,19 @@
 # A GTF attribute key written twice on one line, read as the transcript source
 
-**The defect in one sentence.** Ensembl VEP 116.2's `--gtf` source reads a key written twice on one line as a list of both values and, wherever it expects one value, prints the list joined by commas, prints the list's memory address, or loses the record. A transcript line's `gene_name "TMPRSS3"; gene_name "OTHER"` is the symbol `TMPRSS3,OTHER`; a second `transcript_version` makes the `Feature` `ENST00001113783.ARRAY(0xaaaafe585258)`; a second `gene_id` or `transcript_id` makes the transcript's records `intergenic_variant`, and on an exon line drops that exon. vep-rs refuses to build a cache from a file that repeats a key read as one value, naming the line and the key, and writes no row.
+**The defect in one sentence.** Ensembl VEP 116.3's `--gtf` source reads a key written twice on one line as a list of both values and, wherever it expects one value, prints the list joined by commas, prints the list's memory address, or loses the record. A transcript line's `gene_name "TMPRSS3"; gene_name "OTHER"` is the symbol `TMPRSS3,OTHER`; a second `transcript_version` makes the `Feature` `ENST00001113783.ARRAY(0xaaaafe585258)`; a second `gene_id` or `transcript_id` makes the transcript's records `intergenic_variant`, and on an exon line drops that exon. vep-rs refuses to build a cache from a file that repeats a key read as one value, naming the line and the key, and writes no row.
 
-**Why this is a defect.** A GTF gives a gene, a transcript, a biotype, a version or a protein one value per line, and repeats a key only where the value is a list, as the Ensembl files repeat `tag`. The parser keeps every value of a repeated key, as the `tag` list needs, but the source reads the list where it expects text. Perl joins a list printed as a field, prints its address when the list is appended to an identifier, and never matches it against the plain identifier on the transcript's other lines, so the record or an exon is lost.
+**Why this is a defect.** A GTF gives a gene, a transcript, a biotype, a version or a protein one value per line, and repeats a key only where the value is a list, as the Ensembl files repeat `tag`. The parser keeps every value of a repeated key, as the `tag` list needs, but the source reads the list where it expects text. Ensembl VEP joins a list printed as a field, prints its address when the list is appended to an identifier, and never matches it against the plain identifier on the transcript's other lines, so the record or an exon is lost.
 
 None of the three outputs is a value the file carries. The joined values and the address are written without a warning; the lost record alone draws one, naming the parent that was not found.
 
 **What vep-rs does instead.** `vep-cache-builder` refuses the line: `ERROR: [cache-builder] Failed to parse GTF: <file> line <n>: GTF attribute <key> is repeated; Ensembl VEP reads a repeated key as a list`, exit 1, and no cache is written from the file. The keys refused are the twenty the readers take as one value: `gene_id`, `transcript_id`, `exon_id`, `protein_id`, `version`, `protein_version`, `transcript_version`, `transcript_biotype`, `transcript_type`, `biotype`, `gene_name`, `gene`, `name`, `Name`, `transcript_support_level`, `tsl`, `ccdsid`, `ccds_id`, `dbxref` and `Dbxref`. `tag` is read as the list it is, and a repeated key no reader takes keeps its last value. A key written bare and then with a value, `gene_id; gene_id "G"`, is one value to both engines.
 
-**Where it is in Ensembl VEP's source** (`ensembl-io` at release/116, `ensembl-vep` at release/116.2):
+**Where it is in Ensembl VEP's source** (`ensembl-io` at release/116, `ensembl-vep` at release/116.3):
 
 - `Bio/EnsEMBL/IO/Parser/GTF.pm`, lines 116-136, `get_attributes`: line 128 tests whether the key already holds a defined value, lines 129-131 gather the earlier value and the new one into a list and store its reference, line 133 stores a first value. A key whose first piece has no value is undefined, so a second piece replaces it.
 - `Bio/EnsEMBL/VEP/AnnotationSource/File/GTF.pm`, lines 156-158, `_record_get_id`: a record's identifier is its `<type>_id` attribute, the list reference when the key is repeated. Lines 133-141, `_record_get_parent_ids`: a transcript's parents are its `gene_id` split on `,`, an exon's or a CDS line's its `transcript_id`, so the split of a reference's text names a parent no record has.
 - `Bio/EnsEMBL/VEP/AnnotationSource/File/BaseGXF.pm`, line 464: `transcript_id` as the stable identifier; line 481: `version` or `transcript_version`; line 638: `gene_id`; lines 662-666: `gene_name` or `gene` as the symbol; line 674: `transcript_support_level` or `tsl`, written `tsl` plus the value; line 723: `protein_id`. `File/GTF.pm`, lines 176-182, `_record_get_biotype`: `transcript_biotype`, `transcript_type` or `biotype`, else the source column.
-- `Bio/EnsEMBL/VEP/OutputFactory.pm`, line 1465: `Feature` gains `.` and the transcript's version, a reference's text when it is a list; lines 1560-1565: `ENSP` gains the translation's version the same way; lines 1609-1612: `TSL` prints the digits after `tsl`, which `tslARRAY(0x...)` has none of. `Bio/EnsEMBL/VEP/OutputFactory/VEP_output.pm`, lines 104 and 117, through `Bio/EnsEMBL/VEP/Utils.pm` lines 185-193, `convert_arrayref`: a list in a column or an `Extra` field prints its values joined by commas; the JSON writer prints the list itself.
+- `Bio/EnsEMBL/VEP/OutputFactory.pm`, line 1474: `Feature` gains `.` and the transcript's version, a reference's text when it is a list; lines 1569-1574: `ENSP` gains the translation's version the same way; lines 1618-1621: `TSL` prints the digits after `tsl`, which `tslARRAY(0x...)` has none of. `Bio/EnsEMBL/VEP/OutputFactory/VEP_output.pm`, lines 104 and 117, through `Bio/EnsEMBL/VEP/Utils.pm` lines 185-193, `convert_arrayref`: a list in a column or an `Extra` field prints its values joined by commas; the JSON writer prints the list itself.
 
 **What correcting it would change.** Were the source to read one value per key it takes as one, as every Ensembl GTF writes one, a line repeating such a key would print one of its values or refuse the file, and no record or exon would be lost. The release files repeat `tag` alone, so their rows would not change.
 
@@ -25,7 +25,7 @@ A repeated `exon_id`, `protein_version` or CCDS key, which the source never read
 
 ## 1. A TMPRSS3 transcript line carrying `gene_name` twice
 
-**In short.** The GRCh38 release-116 GTF lines of the gene TMPRSS3 and its transcript `ENST00001113783`, with a second `gene_name "OTHER"` written after the transcript line's `gene_name "TMPRSS3"`, make a two-gene file with the gene PWP2 and its transcript `ENST00000456705` as a control. On the record `tmprss3_codon6`, `21 42395401 G>A`, a `missense_variant` on that transcript, Ensembl VEP 116.2 reading the file through `--gtf` writes `SYMBOL=TMPRSS3,OTHER` in every format. vep-rs refuses to build a cache from the file, naming line 4 and the key, so it writes no row.
+**In short.** The GRCh38 release-116 GTF lines of the gene TMPRSS3 and its transcript `ENST00001113783`, with a second `gene_name "OTHER"` written after the transcript line's `gene_name "TMPRSS3"`, make a two-gene file with the gene PWP2 and its transcript `ENST00000456705` as a control. On the record `tmprss3_codon6`, `21 42395401 G>A`, a `missense_variant` on that transcript, Ensembl VEP 116.3 reading the file through `--gtf` writes `SYMBOL=TMPRSS3,OTHER` in every format. vep-rs refuses to build a cache from the file, naming line 4 and the key, so it writes no row.
 
 ### 1.1 What a reader needs to know first
 
@@ -51,7 +51,7 @@ A third record, `tmprss3_codon60`, `21 42395000 C>T` inside the transcript's thi
 
 ### 1.3 What each engine writes
 
-Ensembl VEP 116.2:
+Ensembl VEP 116.3:
 
 ```
 tmprss3_codon6	21:42395401	A	ENSG00000160183	ENST00001113783.1	Transcript	missense_variant	249	17	6	P/L	cCg/cTg	-	IMPACT=MODERATE;STRAND=-1;SYMBOL=TMPRSS3,OTHER;BIOTYPE=protein_coding;ENSP=ENSP00000783588.1;SOURCE=tmprss3_repeated_gene_name.gtf.gz;HGVSc=ENST00001113783.1:c.17C>T;HGVSp=ENSP00000783588.1:p.Pro6Leu
@@ -66,7 +66,7 @@ ERROR: [cache-builder] Failed to parse GTF: tmprss3_repeated_gene_name.gtf line 
 
 The tab output carries `TMPRSS3,OTHER` in its `SYMBOL` column, the JSON output the list `"gene_symbol":["TMPRSS3","OTHER"]`, and the VCF output's `CSQ` entry `TMPRSS3&OTHER`, the spelling a `,` inside a `CSQ` value takes. The rows of the control gene PWP2 are the control file's rows in every format. The same file with another key written twice, each measured on the same records:
 
-| Key written twice | Line | Ensembl VEP 116.2 |
+| Key written twice | Line | Ensembl VEP 116.3 |
 | --- | --- | --- |
 | `transcript_biotype` | transcript | `BIOTYPE=protein_coding,lncRNA`, a JSON list, `protein_coding&lncRNA` in the VCF |
 | `transcript_version` | transcript | `Feature` and the HGVSc reference name `ENST00001113783.ARRAY(0xaaaafe585258)`, another address in the next run |
@@ -96,7 +96,7 @@ vep-cache-builder --species homo_sapiens --assembly GRCh38 --release 116 \
   --output-dir cache
 ```
 
-vep-rs exits 1 with the `ERROR: [cache-builder]` line above and writes no cache. Ensembl VEP 116.2 with `--gtf tmprss3_repeated_gene_name.gtf.gz --symbol`, the file bgzipped and indexed, writes `SYMBOL=TMPRSS3,OTHER`. Removing the second `gene_name` makes the engines agree, as does writing the two values on one `tag` key, which both engines read as a list.
+vep-rs exits 1 with the `ERROR: [cache-builder]` line above and writes no cache. Ensembl VEP 116.3 with `--gtf tmprss3_repeated_gene_name.gtf.gz --symbol`, the file bgzipped and indexed, writes `SYMBOL=TMPRSS3,OTHER`. Removing the second `gene_name` makes the engines agree, as does writing the two values on one `tag` key, which both engines read as a list.
 
 ### 1.7 How the comparator treats this class
 
@@ -104,7 +104,7 @@ The reproduction `scripts/divergences/reproductions/gtf_repeated_attribute_key.t
 
 ## 2. A last value padded with blanks at the end of its line
 
-**In short.** The same TMPRSS3 lines with the transcript line's `gene_name "TMPRSS3"` moved to the end of the line, written without its closing `;` and followed by three blanks. Ensembl VEP 116.2 reading the file through `--gtf` keeps the blanks in the symbol and writes `SYMBOL=TMPRSS3   `; vep-rs reads the line without the blanks that pad it and writes `SYMBOL=TMPRSS3`. A GFF3 whose gene line ends `;Name=TMPRSS3   ` differs the same way. A file whose lines end in `\r\n` reads as one whose lines end in `\n` on both engines, in every format, so the line end itself makes no difference. This is a second mechanism, with its own entry, `gxf_last_value_trailing_blanks`, and its own reproduction.
+**In short.** The same TMPRSS3 lines with the transcript line's `gene_name "TMPRSS3"` moved to the end of the line, written without its closing `;` and followed by three blanks. Ensembl VEP 116.3 reading the file through `--gtf` keeps the blanks in the symbol and writes `SYMBOL=TMPRSS3   `; vep-rs reads the line without the blanks that pad it and writes `SYMBOL=TMPRSS3`. A GFF3 whose gene line ends `;Name=TMPRSS3   ` differs the same way. A file whose lines end in `\r\n` reads as one whose lines end in `\n` on both engines, in every format, so the line end itself makes no difference. This is a second mechanism, with its own entry, `gxf_last_value_trailing_blanks`, and its own reproduction.
 
 ### 2.1 What a reader needs to know first
 
@@ -128,7 +128,7 @@ The input and the flags are those of section 1.2.
 
 ### 2.3 What each engine writes
 
-Ensembl VEP 116.2, from the GTF, the three blanks inside the `SYMBOL` value:
+Ensembl VEP 116.3, from the GTF, the three blanks inside the `SYMBOL` value:
 
 ```
 tmprss3_codon6	21:42395401	A	ENSG00000160183	ENST00001113783.1	Transcript	missense_variant	249	17	6	P/L	cCg/cTg	-	IMPACT=MODERATE;STRAND=-1;SYMBOL=TMPRSS3   ;BIOTYPE=protein_coding;ENSP=ENSP00000783588.1;SOURCE=tmprss3_last_value_blanks.gtf.gz;HGVSc=ENST00001113783.1:c.17C>T;HGVSp=ENSP00000783588.1:p.Pro6Leu
@@ -160,7 +160,7 @@ vep -i record.vcf -o out.txt --offline --json_cache cache \
   --fasta <corpus>/reference.fa.gz --assembly GRCh38 --symbol
 ```
 
-vep-rs writes `SYMBOL=TMPRSS3`. Ensembl VEP 116.2 with `--gtf tmprss3_last_value_blanks.gtf.gz --symbol`, the file bgzipped and indexed, writes `SYMBOL=TMPRSS3   `. Closing the pair with `;` makes the engines agree, and so does deleting the blanks. A file whose lines end in `\r\n` is indexed and read by both engines as the same file with `\n` line ends. A line padded with blanks before its first column, or a comment line opening with blanks before its `#`, cannot be indexed by tabix, so Ensembl VEP cannot read such a file. vep-rs reads the first as the unpadded line and skips the second.
+vep-rs writes `SYMBOL=TMPRSS3`. Ensembl VEP 116.3 with `--gtf tmprss3_last_value_blanks.gtf.gz --symbol`, the file bgzipped and indexed, writes `SYMBOL=TMPRSS3   `. Closing the pair with `;` makes the engines agree, and so does deleting the blanks. A file whose lines end in `\r\n` is indexed and read by both engines as the same file with `\n` line ends. A line padded with blanks before its first column, or a comment line opening with blanks before its `#`, cannot be indexed by tabix, so Ensembl VEP cannot read such a file. vep-rs reads the first as the unpadded line and skips the second.
 
 ### 2.7 How the comparator treats this class
 

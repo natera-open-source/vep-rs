@@ -19,7 +19,7 @@ use std::cell::OnceCell;
 /// its text, so the split's memory is bounded whatever a line holds.
 const SPLIT_FIELD_LIMIT: usize = 1 << 16;
 
-/// One `;`-separated field as Perl's hash holds it: the key and `Some(value)`
+/// One `;`-separated field as Ensembl VEP's hash holds it: the key and `Some(value)`
 /// for `key=value`, `None` for a bare key.
 type Field<'a> = (&'a str, Option<&'a str>);
 
@@ -80,7 +80,7 @@ impl<'a> InfoFields<'a> {
     }
 
     /// The value of `key` when it is written `key=value`, the empty value included:
-    /// Perl's `defined $info->{KEY}`, which a bare `KEY` flag fails because its hash
+    /// Ensembl VEP's `defined $info->{KEY}`, which a bare `KEY` flag fails because its hash
     /// value is undef.
     pub fn value_written(&self, key: &str) -> Option<&'a str> {
         self.field(key).flatten()
@@ -93,7 +93,7 @@ impl<'a> InfoFields<'a> {
     }
 }
 
-/// One `;`-separated field as the hash entry Perl's two-element list assignment
+/// One `;`-separated field as the hash entry Ensembl VEP's two-element list assignment
 /// makes of it: `(key, Some(value))` for `key=value`, the value cut at a second
 /// `=`, and `(key, None)` for a bare key.
 fn field_entry(field: &str) -> Field<'_> {
@@ -121,8 +121,9 @@ pub fn info_value<'a>(info: &'a str, key: &str) -> Option<&'a str> {
     info_field(info, key).map(|value| value.unwrap_or(""))
 }
 
-/// The value of `key` when it is written `key=value`, the empty value included: Perl's
-/// `defined $info->{KEY}`, which a bare `KEY` flag fails because its hash value is undef.
+/// The value of `key` when it is written `key=value`, the empty value included: Ensembl
+/// VEP's `defined $info->{KEY}`, which a bare `KEY` flag fails because its hash value is
+/// undef.
 pub fn info_value_written<'a>(info: &'a str, key: &str) -> Option<&'a str> {
     info_field(info, key).flatten()
 }
@@ -181,9 +182,9 @@ mod tests {
     }
 
     /// Every field is an entry, the empty field between two `;` (key `""`, undef)
-    /// and a field opening with `=` (key `""`, the rest) included, as in Perl's hash;
-    /// the lone `.` of an absent column is read as no entry (Perl's hash holds it as
-    /// the key `.`, which nothing reads), while the `.` of `A=1;.` is a bare key.
+    /// and a field opening with `=` (key `""`, the rest) included, as in Ensembl VEP's
+    /// hash; the lone `.` of an absent column is read as no entry (Ensembl VEP's hash holds
+    /// it as the key `.`, which nothing reads), while the `.` of `A=1;.` is a bare key.
     #[test]
     fn every_field_is_an_entry_and_the_absent_column_none() {
         assert_eq!(field("A=1;;=5;.", "A"), Some(Some("1")));

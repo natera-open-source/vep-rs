@@ -6,17 +6,17 @@
 
 **What vep-rs does instead.** vep-rs keeps each allele's shift with that allele. Every row of a record is annotated at its own allele's coordinates, whatever the record's other alleles and whatever `--shift_hgvs` says.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2, `ensembl-variation` at release/116):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3, `ensembl-variation` at release/116):
 
 - `Bio/EnsEMBL/Variation/TranscriptVariationAllele.pm`, lines 1724-1733, `hgvs_protein`: the alleles of one record share one TranscriptVariation per transcript; when an allele's HGVSp is written, the shared object's `translation_start`, `translation_end` and `_translation_coords` are deleted and recomputed with that allele's 3' shift, and the recomputed values stay cached.
 - `Bio/EnsEMBL/Variation/BaseTranscriptVariation.pm`, lines 365-380, `translation_start`: a shifted coordinate the transcript mapper returns as a gap is stored as an undefined position, and a stored value, defined or not, is returned to every later caller.
-- `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 385-404 and 1682-1770: the rows are written one allele at a time in the record's ALT order, each row complete before the next begins and HGVSp its last field. A later allele's row therefore reads what the preceding allele's HGVSp left on the shared object.
+- `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 385-404 and 1691-1779: the rows are written one allele at a time in the record's ALT order, each row complete before the next begins and HGVSp its last field. A later allele's row therefore reads what the preceding allele's HGVSp left on the shared object.
 - `Bio/EnsEMBL/Variation/TranscriptVariationAllele.pm`, lines 798-830, `codon`: the codons and amino acids of a row are read at the positions the shared object holds.
 - The same file, lines 844-858 and 2404-2410, `codon` and `_get_alternate_cds`: where the shifted position has protein positions, the shared object's `cds_start` and `cds_end` are deleted and read again with the allele's shift, and that pair stays cached too.
 
 **What correcting it would change.** The class vanishes: every allele of a multi-allelic record is annotated at its own shifted position, as the same allele is on a record of its own.
 
-**The class it produces.** `hgvs_shift_shared_across_alleles`, documented, where a corpus carries such a record, in its manifest for the rows of a later allele whose consequence set or fields differ for this reason. The golden harness and the format comparator apply it from the manifest. With the candidate cache the format comparator also decides three columns of a later allele's row without one: `CDS_position`, `Protein_position` and `Amino_acids` ([section 2.7](#27-how-the-comparator-treats-this-class)). A class of its own, `blosum62_hgvs_shift_shared_across_alleles`, takes the Blosum62 plugin's score on such a row ([section 3.7](#37-how-the-comparator-treats-this-class)).
+**The class it produces.** `hgvs_shift_shared_across_alleles`, documented in a corpus's manifest for the rows of a later allele whose consequence set or fields differ for this reason. The golden harness and the format comparator apply it from the manifest; no committed corpus holds such a row ([section 1.7](#17-how-the-comparator-treats-this-class)). With the candidate cache the format comparator also decides three columns of a later allele's row without one: `CDS_position`, `Protein_position` and `Amino_acids` ([section 2.7](#27-how-the-comparator-treats-this-class)). A class of its own, `blosum62_hgvs_shift_shared_across_alleles`, takes the Blosum62 plugin's score on such a row ([section 3.7](#37-how-the-comparator-treats-this-class)).
 
 A consequence-set difference of the class is a pair the concordance figures would charge to vep-rs. The dataset measurements behind those figures run both engines without plugins and without `--hgvs`, so no such pair arises in them and none is set aside. The runs that measure the plugins verified on real data, on the genome-wide ClinVar files and on the population datasets, load those plugins under `--hgvs`. They are scored on plugin fields alone, never on a consequence set.
 
@@ -85,11 +85,11 @@ The second allele's row reads the shared object next. `codon` finds no protein p
 
 On this record the two engines' cDNA and CDS positions agree. The first allele's computation returned before it read the CDS pair again, because its shifted position has no protein position (`TranscriptVariationAllele.pm`, lines 1730-1738). Where it has one, the shared CDS pair moves too ([section 2](#2-a-record-whose-first-allele-moves-the-coding-positions-of-the-second)).
 
-Source (`ensembl-vep` at release/116.2, `ensembl-variation` at release/116):
+Source (`ensembl-vep` at release/116.3, `ensembl-variation` at release/116):
 
 - `Bio/EnsEMBL/Variation/TranscriptVariationAllele.pm`, lines 1724-1733: the shared protein positions deleted and recomputed with the calling allele's shift.
 - `Bio/EnsEMBL/Variation/BaseTranscriptVariation.pm`, lines 365-380: a gap stored as an undefined position and returned to every later caller.
-- `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 385-404 and 1682-1770: the rows written one allele at a time, HGVSp last.
+- `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 385-404 and 1691-1779: the rows written one allele at a time, HGVSp last.
 - `Bio/EnsEMBL/Variation/TranscriptVariationAllele.pm`, lines 798-830: the codons read at the shared positions.
 
 ### 1.5 Why vep-rs's row is the correct one
@@ -115,13 +115,15 @@ The statistics setting decides where the second allele's terms are read. Under `
 
 ### 1.7 How the comparator treats this class
 
-The golden harness (`crates/vep-cli/tests/common/mod.rs`) and the format comparator (`scripts/concordance/compare_vep_formats.py`) apply `hgvs_shift_shared_across_alleles` from a corpus manifest. A `divergences` entry of the class names a later allele's row with the consequence set vep-rs writes, and a `field_divergences` entry a field with the value vep-rs prints; the comparison checks vep-rs's row against the documented reading in place of Ensembl VEP's.
+The golden harness (`crates/vep-cli/tests/common/mod.rs`) and the format comparator (`tools/vep-formats-compare`) apply `hgvs_shift_shared_across_alleles` from a corpus manifest. A `divergences` entry of the class names a later allele's row with the consequence set vep-rs writes, and a `field_divergences` entry a field with the value vep-rs prints; the comparison checks vep-rs's row against the documented reading in place of Ensembl VEP's.
 
-No predicate decides a consequence set of the class from the two outputs, since the rows do not state which allele's shift set their positions. The three columns of section 2 and the plugin score of section 3 are decided from the candidate cache. The GRCm39 and TAIR10 golden corpora leave the records of this shape out, so the class applies to none of their rows; the oracle's population cases under `--hgvs` carry one alternate allele per record, so none has the shape.
+No predicate decides a consequence set of the class from the two outputs, since the rows do not state which allele's shift set their positions. The three columns of section 2 and the plugin score of section 3 are decided from the candidate cache.
+
+No committed corpus holds a row of the class, so no manifest names it. The entry's row of [Intended divergences from Ensembl VEP](../intended-divergences.md) counts the corpora that hold a record of two or more insertion or deletion alleles, the shape a record needs before the difference can occur. The GRCm39 and TAIR10 golden corpora hold such records and annotate them under `--hgvs`; they leave out the records on which a later allele's rows differ. The oracle's population cases under `--hgvs` carry one alternate allele per record, so none has the shape.
 
 ## 2. A record whose first allele moves the coding positions of the second
 
-**In short.** `21 47545369 . A AC,ACC`, a 1000 Genomes Phase 3 record on GRCh37, inserts one `C`, or two, after coding base 478 of ENST00000413758 (COL6A2, forward strand), in front of seven more `C`. Under `--hgvs` both notations move seven bases: `HGVS_OFFSET=7`. On the second allele's row Ensembl VEP 116.2 prints `CDS_position` `485-486`, `Protein_position` `162` and `Amino_acids` `P/TX`. vep-rs prints `478-479`, `160` and `T/TX`, the record's own position, as both engines do on the first allele's row.
+**In short.** `21 47545369 . A AC,ACC`, a 1000 Genomes Phase 3 record on GRCh37, inserts one `C`, or two, after coding base 478 of ENST00000413758 (COL6A2, forward strand), in front of seven more `C`. Under `--hgvs` both notations move seven bases: `HGVS_OFFSET=7`. On the second allele's row Ensembl VEP 116.3 prints `CDS_position` `485-486`, `Protein_position` `162` and `Amino_acids` `P/TX`. vep-rs prints `478-479`, `160` and `T/TX`, the record's own position, as both engines do on the first allele's row.
 
 ### 2.1 What a reader needs to know first
 
@@ -145,7 +147,7 @@ The rows on ENST00000413758, default format, with the `Extra` column cut to the 
 21_47545369_A/AC/ACC	21:47545369-47545370	C	ENSG00000142173	ENST00000413758	Transcript	frameshift_variant	478-479	478-479	160	T/TX	acc/aCcc	-	IMPACT=HIGH;STRAND=1;FLAGS=cds_start_NF,cds_end_NF;HGVSc=ENST00000413758.1:c.485dup;HGVSp=ENSP00000395751.1:p.Asp163ArgfsTer3;HGVS_OFFSET=7
 ```
 
-The second allele's row, Ensembl VEP 116.2:
+The second allele's row, Ensembl VEP 116.3:
 
 ```
 21_47545369_A/AC/ACC	21:47545369-47545370	CC	ENSG00000142173	ENST00000413758	Transcript	frameshift_variant	478-479	485-486	162	P/TX	acc/aCCcc	-	IMPACT=HIGH;STRAND=1;FLAGS=cds_start_NF,cds_end_NF;HGVSc=ENST00000413758.1:c.484_485dup;HGVSp=ENSP00000395751.1:p.Asp163GlnfsTer?;HGVS_OFFSET=7
@@ -169,12 +171,12 @@ That peptide stands at codon 160 because it was read before any row. The run sho
 
 The rows of section 1 are of a run without statistics (`--no_stats`). There an allele's consequences are first evaluated on its own row, at the positions the shared object then holds.
 
-Source (`ensembl-vep` at release/116.2, `ensembl-variation` at release/116):
+Source (`ensembl-vep` at release/116.3, `ensembl-variation` at release/116):
 
 - `Bio/EnsEMBL/Variation/TranscriptVariationAllele.pm`, lines 1724-1733: the shared protein positions deleted and read again with the calling allele's shift.
 - The same file, lines 844-858 and 2404-2410: the shared CDS pair deleted and read again with that shift, and left there.
 - The same file, lines 1780-1783 and 1793: the reference allele's peptide deleted and read again at the shifted positions.
-- `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 1733, 1737 and 1741: `Amino_acids`, `CDS_position` and `Protein_position` printed from the allele objects and the shared object.
+- `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 1742, 1746 and 1750: `Amino_acids`, `CDS_position` and `Protein_position` printed from the allele objects and the shared object.
 - `OutputFactory.pm`, lines 347 and 1022, and `Bio/EnsEMBL/VEP/Stats.pm`, line 241: the record's most severe consequence logged before its rows.
 - `Bio/EnsEMBL/Variation/VariationFeature.pm`, lines 1000-1002, and `Utils/VariationEffect.pm`, line 785: every allele's consequences evaluated, reading its peptide.
 
@@ -193,7 +195,7 @@ vep -i record.vcf -o out.txt --offline \
   --assembly GRCh37 --hgvs
 ```
 
-vep-rs writes `478-479`, `160` and `T/TX` on the second allele's row, and the same when that allele stands on a record of its own. Ensembl VEP 116.2, run on the two-allele record against its own GRCh37 cache with `--stats_text`, writes `485-486`, `162` and `P/TX`.
+vep-rs writes `478-479`, `160` and `T/TX` on the second allele's row, and the same when that allele stands on a record of its own. Ensembl VEP 116.3, run on the two-allele record against its own GRCh37 cache with `--stats_text`, writes `485-486`, `162` and `P/TX`.
 
 ### 2.7 How the comparator treats this class
 
@@ -205,7 +207,7 @@ A first allele's row, a first allele without an offset, a move of another size, 
 
 ## 3. A record whose first allele gives the second a Blosum62 score
 
-**In short.** `11 1092804 . C CAATA,CCCA`, a 1000 Genomes Phase 3 record on GRCh37, inserts four bases, or three, after coding base 4626 of ENST00000359061 (MUC2, forward strand), the last base of codon 1542. Under `--hgvs` the first allele's notation moves one base, `HGVS_OFFSET=1`; the second allele's does not move. On the second allele's row Ensembl VEP 116.2 prints `Amino_acids` `T/P`, the residue of codon 1543 over the inserted one, and its Blosum62 plugin scores that pair: `BLOSUM62=-1`. vep-rs prints `-/P`, an insertion between two codons, and writes no `BLOSUM62`.
+**In short.** `11 1092804 . C CAATA,CCCA`, a 1000 Genomes Phase 3 record on GRCh37, inserts four bases, or three, after coding base 4626 of ENST00000359061 (MUC2, forward strand), the last base of codon 1542. Under `--hgvs` the first allele's notation moves one base, `HGVS_OFFSET=1`; the second allele's does not move. On the second allele's row Ensembl VEP 116.3 prints `Amino_acids` `T/P`, the residue of codon 1543 over the inserted one, and its Blosum62 plugin scores that pair: `BLOSUM62=-1`. vep-rs prints `-/P`, an insertion between two codons, and writes no `BLOSUM62`.
 
 ### 3.1 What a reader needs to know first
 
@@ -229,7 +231,7 @@ The rows on ENST00000359061, default format, with the `Extra` column cut to the 
 11_1092804_C/CAATA/CCCA	11:1092804-1092805	AATA	ENSG00000198788	ENST00000359061	Transcript	frameshift_variant	4626-4627	4626-4627	1542-1543	-/NX	-/AATA	-	IMPACT=HIGH;STRAND=1;HGVSc=ENST00000359061.5:c.4627_4628insATAA;HGVSp=ENSP00000351956.5:p.Thr1543AsnfsTer?;HGVS_OFFSET=1
 ```
 
-The second allele's row, Ensembl VEP 116.2:
+The second allele's row, Ensembl VEP 116.3:
 
 ```
 11_1092804_C/CAATA/CCCA	11:1092804-1092805	CCA	ENSG00000198788	ENST00000359061	Transcript	inframe_insertion	4626-4627	4627-4628	1543	T/P	-/CCA	-	IMPACT=MODERATE;STRAND=1;HGVSc=ENST00000359061.5:c.4626_4627insCCA;HGVSp=ENSP00000351956.5:p.Thr1543Pro;BLOSUM62=-1
@@ -251,12 +253,12 @@ The second allele's row prints what the shared object holds. Its `Amino_acids` j
 
 The plugins run once a row is built. Blosum62 reads the same joined pair, finds one residue over one, and writes the matrix's score for threonine over proline, -1.
 
-Source (`VEP_plugins` and `ensembl-variation` at release/116, `ensembl-vep` at release/116.2):
+Source (`VEP_plugins` and `ensembl-variation` at release/116, `ensembl-vep` at release/116.3):
 
 - `Blosum62.pm`, line 110: a value only where the peptide pair is one capital letter over one. Lines 112-118 return the pair's score from the matrix of lines 50-71, in the residue order of line 73, as lines 84-88 index it.
 - `Bio/EnsEMBL/Variation/TranscriptVariationAllele.pm`, lines 618-630, `pep_allele_string`: the reference allele's peptide, a slash, the allele's own.
 - The same file, lines 1724-1733: the shared protein positions deleted and read again where the calling allele's shift is not zero. Lines 1780-1783 and 1793: the reference allele's peptide deleted there and read again.
-- `Bio/EnsEMBL/VEP/OutputFactory.pm`, line 1733: `Amino_acids` printed from `pep_allele_string`; line 398: the plugins run once the row is built.
+- `Bio/EnsEMBL/VEP/OutputFactory.pm`, line 1742: `Amino_acids` printed from `pep_allele_string`; line 398: the plugins run once the row is built.
 - The statistics lines of section 2.4: every allele's peptide read before the record's rows.
 
 ### 3.5 Why vep-rs's row is the correct one
@@ -274,7 +276,7 @@ vep -i record.vcf -o out.txt --offline \
   --assembly GRCh37 --hgvs --plugin Blosum62
 ```
 
-vep-rs writes `-/P` and no `BLOSUM62` on the second allele's rows of ENST00000359061 and ENST00000441003. Ensembl VEP 116.2, run with `--hgvs`, `--stats_text` and the plugin against its own GRCh37 cache, writes `T/P` and `BLOSUM62=-1` on both.
+vep-rs writes `-/P` and no `BLOSUM62` on the second allele's rows of ENST00000359061 and ENST00000441003. Ensembl VEP 116.3, run with `--hgvs`, `--stats_text` and the plugin against its own GRCh37 cache, writes `T/P` and `BLOSUM62=-1` on both.
 
 ### 3.7 How the comparator treats this class
 

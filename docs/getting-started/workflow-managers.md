@@ -29,7 +29,9 @@ Every flag of that line is honoured by vep-rs: `--dir_cache` with `--species` an
 
 The cache the module stages must be a vep-rs cache: `vep-cache-builder --auto <species> <assembly> --release <version> --dir_cache <cache>` writes one in that layout, where the module's own cache input is Ensembl's Storable archive, which `vep` does not read.
 
-The module's `ext.args` carry the output format and the annotation flags as for Ensembl VEP; a `--gtf` input in place of the cache is refused, because vep-rs reads a GTF only as a cache built from it ([A GTF or GFF3 as the transcript model](../cache-from-gtf-or-gff3.md)).
+The module's `ext.args` carry the output format and the annotation flags as for Ensembl VEP. A `--gtf` or `--gff` file named there is read beside the staged cache in the same run; a run with the file alone takes the two-step cache route ([A GTF or GFF3 as the transcript model](../cache-from-gtf-or-gff3.md)).
+
+The module's `*.html` output is the statistics report: a program that collects reports, as MultiQC's module for Ensembl VEP does, reads the general statistics table and a chart's counts from it, and finds both in the vep-rs report ([The statistics report](../cli/compatibility.md#the-statistics-report)).
 
 The module's `versions` outputs run `vep --help`, `tabix -h` and `perl -MMath::CDF` inside the container and read a version from each; the vep-rs image answers the `tabix` line alone. `vep --help` prints no `ensembl-vep` line, so the module's `ensemblvep` version reads empty. The image carries no `Math::CDF`, so the `perl -MMath::CDF` probe fails, and Nextflow fails the task with `Unable to evaluate output` after the annotation has been written. A copy of the module patched with `nf-core modules patch ensemblvep/vep` drops the `versions_perlmathcdf` output, and reads the `ensemblvep` version from `vep --version` or drops that output too.
 

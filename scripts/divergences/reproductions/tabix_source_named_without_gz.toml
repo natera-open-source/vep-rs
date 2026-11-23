@@ -1,7 +1,7 @@
 entry = "tabix_source_named_without_gz"
 page = "docs/divergences/tabix-source-named-without-gz.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the preparation rule for a --custom file, compressed using bgzip and indexed using tabix, which sets no rule on the file's name (Ensembl VEP documentation, \"Custom annotations\", Preparing files); not seen in the measured datasets"
 notes = "The corpus's bgzipped, tabix-indexed sites.vcf.gz copied with its index under a name without .gz: Ensembl VEP's tabix parser tests the name before opening the file (TabixParser.pm:52) and ends the run with `Input file is not bgzipped, cannot use tabix`, exit 255, no output; vep-rs opens the copy by content and writes the rows it writes for the original."
@@ -37,4 +37,14 @@ ensembl_vep = []
 vep_rs = [
   "21:5227532-5227533 | TTCCTCTCCTCTCTT | - | intergenic_variant | multi_1 | 0.003",
   "21:5227532-5227533 | TTCCTCTCTT | - | intergenic_variant | - | -",
+]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/custom/source.rs::TabixSource::open",
+    "crates/vep-builtins/src/tabix.rs::TabixAnnotator::open",
+    "crates/vep-cli/src/regulatory/gff.rs::GffRegulatorySource::open",
+]
+tests = [
+    "crates/vep-builtins/src/custom/source.rs::tests::a_bgzipped_source_opens_under_a_name_without_gz",
 ]

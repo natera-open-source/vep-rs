@@ -97,7 +97,7 @@ fn run(out_dir: &Path, input: &Path, cache: &Path, more: &[&str]) -> (Output, St
 #[test]
 fn a_custom_vcf_of_two_joined_streams_is_read_at_the_row_that_opens_the_second() {
     let fixture = fixture("spliceai-two-streams");
-    let corpus = corpus("GRCh38-plugin-spliceai");
+    let corpus = corpus("GRCh38-plugin-spliceai-fixture");
     let tmp = tempfile::tempdir().unwrap();
     let custom = format!(
         "file={},short_name=TwoStreams,format=vcf,type=exact,coords=0,fields=SpliceAI",

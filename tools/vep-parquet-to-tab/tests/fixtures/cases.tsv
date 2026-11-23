@@ -1,0 +1,81 @@
+cells	0	exact	cells.parquet
+cells_canonical	0	exact	--canonical	cells.parquet
+cells_input_option	0	exact	--input	cells.parquet
+cells_short_input_option	0	exact	-icells.parquet	-o-
+cells_trailing_slash	0	exact	./cells.parquet/
+parts	0	exact	parts.parquet
+parts_one_file	0	exact	parts.parquet/part-00001.parquet
+hive	0	exact	hive.parquet
+hive_canonical	0	exact	--canonical	hive.parquet
+nested	0	exact	nested.parquet
+canonical_parquet	0	exact	--canonical	canonical/out.parquet
+canonical_parquet_rows	0	exact	canonical/out.parquet
+canonical_tab	0	exact	--canonical	canonical/out.tab
+canonical_gzip	0	exact	--canonical	canonical/out.tab.gz
+canonical_again	0	exact	--canonical	canonical/again.tab
+canonical_separators	0	exact	--canonical	canonical/separators.tab
+canonical_members	0	exact	--canonical	canonical/members.tab.gz
+canonical_corners	0	exact	--canonical	canonical/corners.tab
+doubles	0	exact	doubles.parquet
+doubles_canonical	0	exact	--canonical	doubles.parquet
+widths	0	exact	widths.parquet
+widths_canonical	0	exact	--canonical	widths.parquet
+codecs	0	exact	codecs.parquet
+groups	0	exact	groups.parquet
+groups_canonical	0	exact	--canonical	groups.parquet
+keys_subset	0	exact	keys_subset.parquet
+shadowed	0	exact	shadowed.parquet
+shadowed_canonical	0	exact	--canonical	shadowed.parquet
+separators	0	exact	separators.parquet
+separators_canonical	0	exact	--canonical	separators.parquet
+absent	2	exact	absent.parquet
+absent_canonical	2	exact	--canonical	absent.tab
+absent_under_a_file	2	exact	cells.parquet/inside
+mixed	2	exact	errors/mixed.parquet
+headless	2	exact	--canonical	errors/headless.tab
+keys_only	2	exact	errors/keys.parquet
+later_keys_only	2	exact	errors/later_keys.parquet
+plain_tab	2	exact	errors/plain.tab
+corrupt	2	exact	errors/corrupt.parquet
+corrupt_canonical	2	exact	--canonical	errors/corrupt.parquet
+binary	2	exact	--canonical	errors/binary.tab
+truncated	2	exact	--canonical	errors/truncated.tab.gz
+two_headers	2	exact	--canonical	errors/two_headers.tab
+empty_tab	2	exact	--canonical	errors/empty.tab
+empty_tab_rows	2	exact	errors/empty.tab
+byte_order_mark	2	exact	--canonical	errors/bom.tab
+unconvertible	2	exact	--canonical	errors/unconvertible.tab
+continuation	2	exact	--canonical	errors/continuation.tab
+cut_short	2	exact	--canonical	errors/cut_short.tab
+surrogate	2	exact	--canonical	errors/surrogate.tab
+checksum	2	exact	--canonical	errors/checksum.tab.gz
+length	2	exact	--canonical	errors/length.tab.gz
+trailing	2	exact	--canonical	errors/trailing.tab.gz
+method	2	exact	--canonical	errors/method.tab.gz
+magic_only	2	exact	--canonical	errors/magic_only.tab.gz
+deflate	1	any	--canonical	errors/deflate.tab.gz
+gzip_then_bad_utf8	2	exact	--canonical	errors/gz_then_bad_utf8.tab.gz
+short	2	exact	errors/short.parquet
+long_footer	2	exact	errors/long_footer.parquet
+zero_part	2	exact	errors/zero_part.parquet
+short_part	2	exact	errors/short_part.parquet
+text_part	2	exact	errors/text_part.parquet
+no_parts	2	exact	errors/no_parts
+no_parts_canonical	2	exact	--canonical	errors/no_parts/
+output_directory_missing	2	exact	cells.parquet	--output	absent/out.tab
+output_is_a_directory	2	exact	cells.parquet	-o	errors
+output_empty_name	2	exact	cells.parquet	--output=
+usage_no_path	2	usage
+usage_empty_path	2	usage		--canonical
+usage_two_paths	2	usage	cells.parquet	parts.parquet
+usage_unknown_option	2	usage	--bogus	cells.parquet
+usage_missing_value	2	usage	cells.parquet	--output
+usage_flag_with_value	2	usage	--canonical=yes	cells.parquet
+usage_ambiguous	2	usage	--=x	cells.parquet
+help	0	any	--help
+help_before_an_unknown_option	0	any	--bogus	-h
+option_prefixes	0	exact	--can	--in	canonical/out.tab	--out	-
+last_value_wins	0	exact	--input	absent.parquet	--input	parts.parquet
+after_the_separator	0	exact	--canonical	--	canonical/out.tab
+dash_is_a_path	2	exact	-
+number_is_a_path	2	exact	-1

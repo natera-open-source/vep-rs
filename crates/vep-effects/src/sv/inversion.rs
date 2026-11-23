@@ -10,8 +10,9 @@
 //! transcript, and reports `coding_transcript_variant` for fully-contained
 //! protein-coding transcripts instead.
 //!
-//! Perl citations name modules of ensembl-variation release/115
-//! (`Bio/EnsEMBL/Variation/...`, `Config.pm` being `Utils/Config.pm`).
+//! Ensembl VEP source citations name modules of ensembl-variation release/116
+//! (`Bio/EnsEMBL/Variation/...`, `Config.pm` being `Utils/Config.pm`); `OutputFactory.pm`
+//! is in ensembl-vep release/116.3 (`Bio/EnsEMBL/VEP/`).
 
 use super::{
     engulfed_transcript_row_terms, frameshift_intron_span, is_mature_mirna_sv, overlaps_any_exon,
@@ -27,17 +28,17 @@ use vep_core::variant::InputVariant;
 
 /// Calculate consequences for a structural inversion against a transcript.
 ///
-/// Inversions produce region-based overlap consequences identical to Ensembl VEP:
+/// Inversions take the region-based overlap terms Ensembl VEP assigns:
 /// - `coding_sequence_variant`, `5_prime_UTR_variant`, `3_prime_UTR_variant`,
 ///   `intron_variant` when the INV overlaps those regions
 /// - `coding_transcript_variant` for protein-coding transcripts fully contained
 ///   within the INV (100% overlap) where the CDS/UTR/intron overlap is not
-///   individually resolved by Perl
+///   individually resolved by Ensembl VEP
 /// - `non_coding_transcript_exon_variant`, `non_coding_transcript_variant`
 ///   for non-coding transcripts
 /// - `upstream_gene_variant`, `downstream_gene_variant` when within distance
 ///   but not overlapping the transcript body
-pub fn calculate(
+pub(crate) fn calculate(
     variant: &InputVariant,
     transcript: &Arc<Transcript>,
     upstream_distance: u64,
@@ -74,12 +75,12 @@ pub fn calculate(
     // the context term as the sole consequence, with no regional breakdown.
     let fully_contains = sv_start <= tx_start && sv_end >= tx_end;
 
-    // mature_miRNA_variant is tier 2 in Perl's OverlapConsequence table
+    // mature_miRNA_variant is tier 2 in Ensembl VEP's OverlapConsequence table
     // (Config.pm rank 24). For a complete-overlap SV `_bvfo_preds`
     // (BaseVariationFeatureOverlapAllele.pm:465-477) sets only
     // `complete_overlap`/`within_feature`/<biotype>, so the miRNA predicate is
     // never skipped, and `get_all_OverlapConsequences` (267/277-279) pins
-    // `assigned_tier = 2` before every tier-3 context term: Perl emits
+    // `assigned_tier = 2` before every tier-3 context term: Ensembl VEP emits
     // mature_miRNA_variant alone. Tested here for the partial-overlap path, which has no miRNA
     // arm; `engulfed_transcript_context_terms` repeats the test for the `fully_contains` branch.
     if is_mature_mirna_sv(transcript, sv_start, sv_end) {
@@ -164,7 +165,7 @@ fn calculate_protein_coding_consequences(
         push_unique(consequences, Consequence::ThreePrimeUtrVariant);
     }
 
-    // Perl's `within_intron` reads the `intronic` flag from `_intron_effects`,
+    // Ensembl VEP's `within_intron` reads the `intronic` flag from `_intron_effects`,
     // set with the intron span trimmed by 2bp at each end
     // (BaseTranscriptVariationAllele.pm:143-150), so an inversion touching only
     // the donor/acceptor dinucleotides is not `intron_variant`.
@@ -194,7 +195,7 @@ fn calculate_non_coding_consequences(
     }
     // Ensembl VEP adds non_coding_transcript_variant to a non-coding transcript when
     // there is NO exon overlap and not mature_miRNA.
-    if !overlaps_exon && !transcript.facts().is_nmd {
+    if !overlaps_exon {
         push_unique(consequences, Consequence::NonCodingTranscriptVariant);
     }
 }
@@ -250,12 +251,11 @@ fn build_transcript_consequence(
     impact: Impact,
     distance: Option<u64>,
 ) -> TranscriptConsequence {
-    TranscriptConsequence {
-        consequences,
-        impact,
-        distance,
-        ..TranscriptConsequence::for_transcript(transcript)
-    }
+    let mut consequence = TranscriptConsequence::for_transcript(transcript);
+    consequence.consequences = consequences;
+    consequence.impact = impact;
+    consequence.distance = distance;
+    consequence
 }
 
 fn push_unique(consequences: &mut ConsequenceList, consequence: Consequence) {
@@ -274,7 +274,7 @@ mod tests {
     use vep_core::consequence::FeatureType;
     use vep_core::variant::VariantClass;
 
-    /// [`super::calculate`] on a transcript the test owns: the row shares a copy of
+    /// `super::calculate` on a transcript the test owns: the row shares a copy of
     /// it, as the index shares its handle.
     fn calculate(
         variant: &InputVariant,
@@ -311,9 +311,9 @@ mod tests {
     //   5' UTR: 25_000_000 - 25_000_049 (exon 1 portion)
     //   3' UTR: 25_004_300 - 25_006_000 (exon 3 portion)
 
-    /// Perl's 2bp-trimmed intron span.
+    /// Ensembl VEP's 2bp-trimmed intron span.
     ///
-    /// Perl's `within_intron` (VariationEffect.pm:629) returns the `intronic` flag
+    /// Ensembl VEP's `within_intron` (VariationEffect.pm:629) returns the `intronic` flag
     /// from `_intron_effects`, which is set with the intron span trimmed 2bp at each
     /// end (BaseTranscriptVariationAllele.pm:143-150):
     ///   `overlap($r_start, $r_end, $intron_start + 2, $intron_end - 2)`
@@ -334,7 +334,7 @@ mod tests {
         assert!(
             !csq.consequences.contains(&Consequence::IntronVariant),
             "INV touching only the 2bp donor dinucleotide must NOT be intron_variant \
-             (Perl trims intron_start+2), got: {:?}",
+             (Ensembl VEP trims intron_start+2), got: {:?}",
             csq.consequences
         );
         // The exonic overlap is still reported.
@@ -347,7 +347,7 @@ mod tests {
     }
 
     /// The row carries the transcript lengths the pick family ranks by
-    /// (OutputFactory.pm:743-748 at release/116.2), as every other row does.
+    /// (OutputFactory.pm:743-748 at release/116.3), as every other row does.
     #[test]
     fn inversion_rows_carry_the_transcript_lengths() {
         let tx = make_test_transcript();
@@ -375,13 +375,13 @@ mod tests {
         tx.protein_id = None;
 
         // Exon 1 = 25_000_000-25_000_299; INV reaches exactly 2bp into intron 1,
-        // i.e. only the donor dinucleotide, which Perl's `intronic` flag trims.
+        // i.e. only the donor dinucleotide, which Ensembl VEP's `intronic` flag trims.
         let v = make_inversion(25_000_200, 25_000_301);
         let csq = calculate(&v, &tx, 5000, 5000).expect("INV must annotate the transcript");
         assert!(
             !csq.consequences.contains(&Consequence::IntronVariant),
             "non-coding INV touching only the 2bp donor dinucleotide must NOT be \
-             intron_variant (Perl trims intron_start+2), got: {:?}",
+             intron_variant (Ensembl VEP trims intron_start+2), got: {:?}",
             csq.consequences
         );
         // The exonic overlap on the non-coding path is still reported.
@@ -427,7 +427,7 @@ mod tests {
     /// The miRNA tier-2 short-circuit on the inversion path.
     ///
     /// An inversion fully containing a mature miRNA must produce
-    /// `mature_miRNA_variant` alone (Perl tier-2 short-circuit), not the tier-3
+    /// `mature_miRNA_variant` alone (Ensembl VEP tier-2 short-circuit), not the tier-3
     /// `non_coding_transcript_variant`.
     #[test]
     fn test_inv_fully_containing_mirna_gives_mature_mirna_only() {
@@ -487,7 +487,7 @@ mod tests {
     }
 
     /// An INV engulfing a translated transcript of a non-`protein_coding` biotype
-    /// matches no context predicate and carries Perl's `intergenic_variant` fallback.
+    /// matches no context predicate and carries Ensembl VEP's `intergenic_variant` fallback.
     #[test]
     fn test_inv_spanning_entire_translated_ig_v_gene_is_intergenic_variant() {
         let mut tx = make_test_transcript();
@@ -588,7 +588,7 @@ mod tests {
     }
 
     /// As for a duplication: no 3' UTR exists when the coding region reaches the
-    /// transcript's first genomic base, and Perl's inverted `_before_coding`
+    /// transcript's first genomic base, and Ensembl VEP's inverted `_before_coding`
     /// window admits only a span that starts before the transcript.
     #[test]
     fn test_inv_reverse_strand_cds_start_nf_has_no_three_prime_utr() {
@@ -837,7 +837,7 @@ mod tests {
     }
 
     #[test]
-    fn test_inv_coding_transcript_variant_fallback() {
+    fn test_inv_over_an_intron_without_a_coding_region_is_intron_variant() {
         // With `coding_region_start` cleared, `has_cds` is false; the inversion over
         // the first intron yields `intron_variant`, so the empty-list fallback never runs.
         let mut tx = make_test_transcript();

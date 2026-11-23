@@ -1,12 +1,12 @@
 # A GWAS summary-statistics file with an empty cell before `hm_pos`
 
-**The defect in one sentence.** Under `type=sstate`, Ensembl VEP 116.2's GWAS plugin filters and sorts a harmonised summary-statistics file with `awk` and `sort` counting blank-separated fields, then indexes the sorted copy with `tabix` counting tab-separated columns. A row with an empty cell before `hm_pos` is filtered and sorted on the wrong columns, so when positions differ in their number of digits the copy is sorted as text, the index build fails and the plugin is dropped.
+**The defect in one sentence.** Under `type=sstate`, Ensembl VEP 116.3's GWAS plugin filters and sorts a harmonised summary-statistics file with `awk` and `sort` counting blank-separated fields, then indexes the sorted copy with `tabix` counting tab-separated columns. A row with an empty cell before `hm_pos` is filtered and sorted on the wrong columns, so when positions differ in their number of digits the copy is sorted as text, the index build fails and the plugin is dropped.
 
 **Why this is a defect.** The file is tab-separated, and the plugin reads its column numbers from the tab-separated header. An empty cell is a column like any other; only the two text tools, left at their default field splitting, read it as no field and shift every later column by one. The sort key the plugin asks for, the position as a number, becomes the position as text, under which `14482906` precedes `9053097`, and the index the plugin then builds on the tab columns meets positions out of order. The file's rows are well formed; the processing is not.
 
 **What vep-rs does instead.** vep-rs reads a summary-statistics file by its tab-separated columns throughout: the `hm_chrom` and `hm_pos` cells by the header's column numbers, an `NA` in either skipping the row, and the rows of a chromosome ordered by position as a number. An empty cell before `hm_pos` is read as the empty cell it is, so the file loads and both records are matched.
 
-**Where it is in Ensembl VEP's source** (`VEP_plugins` at release/116, `ensembl-vep` at release/116.2):
+**Where it is in Ensembl VEP's source** (`VEP_plugins` at release/116, `ensembl-vep` at release/116.3):
 
 - `GWAS.pm`, lines 434-451, `parse_sstate_header`: the header is split on tabs and `hm_chrom` and `hm_pos` are found by name; lines 127-131 turn their indices into the one-based column numbers `$c` and `$p`.
 - `GWAS.pm`, line 460: the rows are filtered with `awk '$c != "NA" && $p != "NA"'`, which, with no field separator set, splits a line on runs of blanks, tabs included, and skips leading blanks. A line opening with an empty cell starts with a tab, so `awk`'s field `$p` is the column after `hm_pos`.
@@ -20,7 +20,7 @@
 
 ## 1. Two rows with an empty `hm_variant_id` and positions of seven and eight digits
 
-**In short.** A harmonised file under the committed file's name, `17463246-GCST000028-EFO_0001360.h.tsv`, holds two rows whose first cell, `hm_variant_id`, is empty and whose positions are `9053097` and `14482906`. Run with `--plugin GWAS,type=sstate,file=<file>` on the two matching records, Ensembl VEP 116.2 fails to build the index of its sorted copy, drops the plugin and writes no `GWAS_` field and no `## GWAS_` header line. vep-rs writes the eight header lines and the eight fields on every row of both records. With the first cell filled, both engines write vep-rs's rows.
+**In short.** A harmonised file under the committed file's name, `17463246-GCST000028-EFO_0001360.h.tsv`, holds two rows whose first cell, `hm_variant_id`, is empty and whose positions are `9053097` and `14482906`. Run with `--plugin GWAS,type=sstate,file=<file>` on the two matching records, Ensembl VEP 116.3 fails to build the index of its sorted copy, drops the plugin and writes no `GWAS_` field and no `## GWAS_` header line. vep-rs writes the eight header lines and the eight fields on every row of both records. With the first cell filled, both engines write vep-rs's rows.
 
 ### 1.1 What a reader needs to know first
 
@@ -47,7 +47,7 @@ Both engines run `--plugin GWAS,type=sstate,file=<file>` with an empty `--dir` f
 
 ### 1.3 What each engine writes
 
-Ensembl VEP 116.2 writes the records' rows with no `GWAS_` field and no `## GWAS_` header line:
+Ensembl VEP 116.3 writes the records' rows with no `GWAS_` field and no `## GWAS_` header line:
 
 ```
 rs552964654	21:9053097	C	ENSG00000280436	ENST00000623201	Transcript	upstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER;DISTANCE=25;STRAND=1
@@ -95,7 +95,7 @@ vep -i record.vcf -o out.txt --offline --json_cache <corpus>/json_cache \
   --plugin GWAS,type=sstate,file=17463246-GCST000028-EFO_0001360.h.tsv
 ```
 
-vep-rs writes the eight `GWAS_` fields on every row of both records. Ensembl VEP 116.2 writes the index-build error and no field. Filling the first cell of both rows, or writing `NA` there as the catalog does, makes the engines agree.
+vep-rs writes the eight `GWAS_` fields on every row of both records. Ensembl VEP 116.3 writes the index-build error and no field. Filling the first cell of both rows, or writing `NA` there as the catalog does, makes the engines agree.
 
 ### 1.7 How the comparator treats this class
 

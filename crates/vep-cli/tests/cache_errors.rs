@@ -8,8 +8,10 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
-fn vep() -> Command {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_vep"));
+mod common;
+
+fn vep(dir: &Path) -> Command {
+    let mut cmd = common::isolated_vep(dir);
     cmd.stdin(Stdio::null());
     cmd
 }
@@ -104,7 +106,7 @@ fn run(dir: &Path, cache: &Path, flags: &[&str]) -> Output {
 fn run_on(dir: &Path, input: &Path, cache: &Path, flags: &[&str]) -> Output {
     let out = dir.join("out.txt");
     let _ = std::fs::remove_file(&out);
-    vep()
+    vep(dir)
         .arg("-i")
         .arg(input)
         .arg("-o")
@@ -126,7 +128,7 @@ fn run_on(dir: &Path, input: &Path, cache: &Path, flags: &[&str]) -> Output {
 
 /// `--af_gnomad` on a cache whose `variation_cols` lack `gnomADe` ends the run
 /// with Ensembl VEP's message, `ERROR: gnomAD data is not available in this
-/// cache` (CacheDir.pm:188-197 at release/116.2), under the `cache` component.
+/// cache` (CacheDir.pm:188-197 at release/116.3), under the `cache` component.
 /// The check reads that spelling alone: `--af_gnomade` on the same cache runs,
 /// `--everything` skips the check (reachable with `--safe`, since
 /// `--everything` switches `--af_gnomade` on and the pair is otherwise
@@ -211,7 +213,7 @@ fn af_gnomad_without_gnomade_column_is_ensembl_error() {
 /// of the frequency flags arises: Ensembl VEP builds its variation source,
 /// with the gnomAD check and the population check inside it, only where the
 /// cache declares variation columns (CacheDir.pm:179-207 and
-/// BaseCacheVariation.pm:93, 271-289 at release/116.2). `--af_gnomad` declares
+/// BaseCacheVariation.pm:93, 272-290 at release/116.3). `--af_gnomad` declares
 /// the gnomAD exome columns and leaves every cell empty, every `--freq_pop`
 /// name is accepted, among them one no cache declares and one Perl reads as
 /// false, and `--check_frequency` keeps every record under `--freq_filter
@@ -321,8 +323,8 @@ fn frequency_flags_on_a_cache_without_variation_columns_refuse_and_drop_nothing(
 
     // Where a cache declares columns the population check passes 1KG_ALL,
     // passes gnomADe_NFE if that column is declared, refuses NOSUCH_POP as
-    // undeclared and refuses 0, which Perl reads as no population
-    // (BaseCacheVariation.pm:274, 285).
+    // undeclared and refuses 0, which Ensembl VEP reads as no population
+    // (BaseCacheVariation.pm:275, 286).
     for population in ["1KG_ALL", "gnomADe_NFE", "NOSUCH_POP", "0"] {
         let named = annotate(&["--freq_pop", population, "--tab"]);
         assert!(
@@ -569,7 +571,7 @@ fn a_transcript_shard_the_cache_cannot_read_ends_a_vcf_run_under_cache() {
     )
     .unwrap();
     for mode in ["streaming", "batched"] {
-        let output = vep()
+        let output = vep(dir.path())
             .arg("-i")
             .arg(&input)
             .args(["-o", "STDOUT", "--offline", "--json_cache"])
@@ -589,7 +591,7 @@ fn a_transcript_shard_the_cache_cannot_read_ends_a_vcf_run_under_cache() {
         let err = stderr(&output);
         assert_eq!(output.status.code(), Some(1), "{mode}: {err}");
         let prefix = format!(
-            "ERROR: [cache] Cannot read the transcript cache for chr21: Failed to inflate {}: ",
+            "ERROR: [cache] Cannot read the transcript cache for chromosome 21: Failed to inflate {}: ",
             shard.display()
         );
         assert!(err.starts_with(&prefix), "{mode}: {err}");

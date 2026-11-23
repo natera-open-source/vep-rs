@@ -45,7 +45,7 @@
  ],
  "files": [
   {
-   "filename": "scripts/divergences/reevaluate.py",
+   "filename": "tools/vep-divergence-reevaluate/src/main.rs",
    "status": "modified",
    "additions": 12,
    "deletions": 3
@@ -57,7 +57,7 @@
    "deletions": 2
   },
   {
-   "filename": "scripts/divergences/test_reevaluate.py",
+   "filename": "tools/vep-divergence-reevaluate/tests/runs.rs",
    "status": "modified",
    "additions": 8,
    "deletions": 0

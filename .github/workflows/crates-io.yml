@@ -5,13 +5,25 @@ name: crates.io
 # job runs in the `crates-io` environment and exchanges its OIDC identity for a
 # short-lived crates.io token, which each crate's Trusted Publishing settings
 # accept from this workflow file in that environment alone. A prerelease is not
-# published. `workflow_dispatch`, run from the release's tag, publishes the
+# published. `workflow_dispatch` with the input `publish`, run from the
+# release's tag once the release page is published, publishes the
 # crates a failed run left out: a crate whose version crates.io already carries
 # is skipped, since a version can never be uploaded twice.
+#
+# Without that input `workflow_dispatch` runs the job `verify` alone, on any
+# ref, and uploads nothing: it holds no tag to the version and reads no
+# release page. Between two uploads the job `publish` waits until the sparse
+# index lists the crate before, and the job `read-back` prints one line
+# `published <crate> <version>` for each crate crates.io serves at the version.
 on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      publish:
+        description: Upload the crates crates.io lacks, from the tag of a published release
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -24,8 +36,8 @@ env:
   # Dependency order: each crate after every sibling it depends on. The job
   # fails when this list and the workspace's publishable members differ.
   CRATES: >-
-    vep-core vep-fasta vep-io vep-plugin vep-effects vep-builtins vep-cli
-    vep-cache-builder vep-cache-converter
+    vep-core vep-fasta vep-io vep-plugin vep-effects vep-builtins
+    vep-cache-builder vep-cli vep-cache-converter
 
 jobs:
   # Every crate is packaged and built from its packaged sources here, in a job
@@ -35,14 +47,57 @@ jobs:
     name: Check and verify the crates
     if: >-
       (github.event_name == 'release' && !github.event.release.prerelease) ||
-      (github.event_name == 'workflow_dispatch' && github.ref_type == 'tag')
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.meta.outputs.version }}
     steps:
+      # A manual start that asks for the upload runs from a tag whose release
+      # page is published and is no prerelease, so no crate is public before
+      # its release page. The releases API answers 404 for a tag whose release
+      # is a draft or absent. The token is sent only where the step has one.
+      - name: Check that the tag's release page is published
+        if: github.event_name == 'workflow_dispatch' && inputs.publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          REF_TYPE: ${{ github.ref_type }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [ "$REF_TYPE" != tag ]; then
+            echo "ERROR: [crates-io] a manual start uploads from a tag alone; this one runs on the $REF_TYPE $TAG." >&2
+            exit 1
+          fi
+          page="$(mktemp)"
+          auth=()
+          [ -z "${GH_TOKEN:-}" ] || auth=(-H "Authorization: Bearer $GH_TOKEN")
+          status="$(curl -sS -o "$page" -w '%{http_code}' --max-time 30 \
+            -H 'Accept: application/vnd.github+json' "${auth[@]}" \
+            "https://api.github.com/repos/$REPOSITORY/releases/tags/$TAG")"
+          case "$status" in
+            200) ;;
+            404)
+              echo "ERROR: [crates-io] tag $TAG has no published release page." >&2
+              exit 1
+              ;;
+            *)
+              echo "ERROR: [crates-io] GitHub answered $status for the release of $TAG." >&2
+              exit 1
+              ;;
+          esac
+          if [ "$(jq -r '.draft' "$page")" != false ]; then
+            echo "ERROR: [crates-io] tag $TAG has no published release page." >&2
+            exit 1
+          fi
+          if [ "$(jq -r '.prerelease' "$page")" != false ]; then
+            echo "ERROR: [crates-io] the release of $TAG is a prerelease." >&2
+            exit 1
+          fi
+
+      # The full ref: a bare tag name checks out a branch of that name first.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.release.tag_name || github.ref }}
+          ref: ${{ github.ref }}
           persist-credentials: false
 
       - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
@@ -53,20 +108,46 @@ jobs:
         id: meta
         env:
           TAG: ${{ github.event.release.tag_name || github.ref_name }}
+          UPLOAD: ${{ github.event_name == 'release' || inputs.publish }}
         run: |
           version="$(sed -nE 's/^version = "([^"]+)"$/\1/p' Cargo.toml | head -1)"
+          # A run that uploads nothing names a branch or a commit, not a tag.
+          [ "$UPLOAD" = true ] || TAG="v$version"
           if [ "$TAG" != "v$version" ]; then
             echo "ERROR: [crates-io] tag $TAG does not name the workspace version $version." >&2
             exit 1
           fi
           members="$(cargo metadata --no-deps --locked --format-version 1 |
             jq -r '.packages[] | select(.publish != []) | .name' | sort | tr '\n' ' ')"
+          # shellcheck disable=SC2086  # CRATES splits into one name a word.
           listed="$(printf '%s\n' $CRATES | sort | tr '\n' ' ')"
           if [ "$members" != "$listed" ]; then
             echo "ERROR: [crates-io] CRATES lists $listed; the workspace publishes $members." >&2
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # Trusted publishing uploads a version of a crate crates.io already
+      # holds and cannot create a crate, so a crate crates.io has never seen
+      # is refused here, before any crate of the list is uploaded.
+      - name: Check that crates.io knows every crate
+        run: |
+          for crate in $CRATES; do
+            status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 \
+              -A 'natera-open-source/vep-rs release workflow' \
+              "https://crates.io/api/v1/crates/$crate")"
+            case "$status" in
+              200) ;;
+              404)
+                echo "ERROR: [crates-io] $crate has never been published: its first publication is by hand." >&2
+                exit 1
+                ;;
+              *)
+                echo "ERROR: [crates-io] crates.io answered $status for $crate." >&2
+                exit 1
+                ;;
+            esac
+          done
 
       - name: Package and verify every crate
         run: cargo package --workspace --locked
@@ -76,6 +157,7 @@ jobs:
   publish:
     name: Publish the crates
     needs: verify
+    if: github.event_name == 'release' || (inputs.publish && github.ref_type == 'tag')
     runs-on: ubuntu-latest
     environment: crates-io
     permissions:
@@ -84,7 +166,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.release.tag_name || github.ref }}
+          ref: ${{ github.ref }}
           persist-credentials: false
 
       - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
@@ -94,12 +176,35 @@ jobs:
       - uses: rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9 # v1.0.6
         id: auth
 
+      # cargo packages a crate against the sparse index, where a sibling it
+      # depends on has to be listed at the version: one JSON line per version,
+      # at <first two letters>/<next two>/<name>. `cargo publish` waits one
+      # minute for the index after an upload, then warns and exits 0, so the
+      # loop waits itself, every ten seconds, for the crate before in the list.
+      # The token lasts thirty minutes: the waits of one run add up to ten
+      # minutes at most, which leaves the uploads the rest.
       - name: Publish the crates crates.io does not carry
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
           VERSION: ${{ needs.verify.outputs.version }}
         run: |
+          before=""
+          waits=0
           for crate in $CRATES; do
+            if [ -n "$before" ]; then
+              until curl -fsS --max-time 10 \
+                -A 'natera-open-source/vep-rs release workflow' \
+                "https://index.crates.io/${before:0:2}/${before:2:2}/$before" |
+                jq -e -s --arg version "$VERSION" 'any(.[]; .vers == $version)' > /dev/null; do
+                waits=$((waits + 1))
+                if [ "$waits" -gt 60 ]; then
+                  echo "ERROR: [crates-io] the index does not list $before $VERSION: the waits of this run reached ten minutes of the token's thirty." >&2
+                  exit 1
+                fi
+                sleep 10
+              done
+            fi
+            before="$crate"
             status="$(curl -sS -o /dev/null -w '%{http_code}' \
               -A 'natera-open-source/vep-rs release workflow' \
               "https://crates.io/api/v1/crates/$crate/$VERSION")"
@@ -112,3 +217,40 @@ jobs:
                 ;;
             esac
           done
+
+  # What a release's reader takes from the run: one line for each crate
+  # crates.io serves at the version, read every ten seconds for five minutes a
+  # crate at most, then one failure that names every crate it never served.
+  read-back:
+    name: Read every crate back
+    needs: [verify, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Read each crate's version on crates.io
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          missing=""
+          for crate in $CRATES; do
+            reads=0
+            while :; do
+              status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 \
+                -A 'natera-open-source/vep-rs release workflow' \
+                "https://crates.io/api/v1/crates/$crate/$VERSION")" || status=000
+              if [ "$status" = 200 ]; then
+                echo "published $crate $VERSION"
+                break
+              fi
+              reads=$((reads + 1))
+              if [ "$reads" -gt 30 ]; then
+                missing="$missing $crate"
+                break
+              fi
+              sleep 10
+            done
+          done
+          if [ -n "$missing" ]; then
+            echo "ERROR: [crates-io] not on crates.io after five minutes:$missing" >&2
+            exit 1
+          fi

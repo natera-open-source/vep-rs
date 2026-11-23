@@ -1,0 +1,3 @@
+WARN: regions-corrupt/1/1000001-2000000.gz: Magic number checking on storable file failed
+
+ERROR: [storable_to_json] 1 of 5 shards failed to convert (see the WARN lines above)

@@ -46,4 +46,4 @@ Without `--process_ref_homs` both engines write the deletion's vep-rs row. Over 
 
 Two more reference rows are of the kind. For `21 10521699 GC G` Ensembl VEP writes `splice_donor_region_variant,intron_variant` on ENST00000427445 where vep-rs writes `splice_region_variant,intron_variant`; for `21 15064746 CC C` it writes `splice_region_variant` on ENST00000318948 where vep-rs writes `splice_donor_variant`. The coding reference row of `21 10561150 AT A` agrees, `synonymous_variant` at `649`, `297` and `99` with the codons `ttT/ttT`.
 
-To reproduce: Ensembl VEP 116.2 with the GRCh38 cache and [the command of the closing section](reproducing.md#reproducing-these-examples), adding `--shift_3prime 1 --shift_length --hgvs`, and `--process_ref_homs` for the third record; vep-rs with the same flags over the same cache and FASTA.
+To reproduce: Ensembl VEP 116.3 with the GRCh38 cache and [the command of the closing section](reproducing.md#reproducing-these-examples), adding `--shift_3prime 1 --shift_length --hgvs`, and `--process_ref_homs` for the third record; vep-rs with the same flags over the same cache and FASTA.

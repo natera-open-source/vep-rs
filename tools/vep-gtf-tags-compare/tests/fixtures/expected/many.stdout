@@ -1,0 +1,16 @@
+transcripts: gtf 1,300 cache 1,300 shared 1,250 gtf_only 50 cache_only 50
+  gencode_basic    agree     1,187  disagree      63  present gtf      625 cache      562
+    M0060: gtf=True cache=False
+    M0080: gtf=True cache=False
+    M0100: gtf=True cache=False
+    M0120: gtf=True cache=False
+    M0140: gtf=True cache=False
+  gencode_primary  agree     1,238  disagree      12  present gtf      417 cache      421
+    M0107: gtf=False cache=True
+    M0307: gtf=False cache=True
+    M0309: gtf=True cache=False
+    M0407: gtf=False cache=True
+    M0607: gtf=False cache=True
+  cds_start_NF     agree     1,250  disagree       0  present gtf        0 cache        0
+  cds_end_NF       agree     1,249  disagree       1  present gtf        3 cache        2
+    M0401: gtf=True cache=False

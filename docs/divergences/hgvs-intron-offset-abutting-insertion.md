@@ -1,6 +1,6 @@
 # The HGVSIntronOffset offsets of an insertion directly beside a transcript
 
-**The defect in one sentence.** For an insertion directly beside a transcript's first or last base, Ensembl VEP 116.2's HGVSIntronOffset plugin writes `HGVS_IntronStartOffset` and `HGVS_IntronEndOffset` on a row that lies outside the transcript and carries no HGVSc. The row reads `upstream_gene_variant` or `downstream_gene_variant` with `DISTANCE=0`, and the two values are the offsets of a notation Ensembl VEP never prints. vep-rs writes the two fields beside an HGVSc and nowhere else: a row without an HGVSc carries neither.
+**The defect in one sentence.** For an insertion directly beside a transcript's first or last base, Ensembl VEP 116.3's HGVSIntronOffset plugin writes `HGVS_IntronStartOffset` and `HGVS_IntronEndOffset` on a row that lies outside the transcript and carries no HGVSc. The row reads `upstream_gene_variant` or `downstream_gene_variant` with `DISTANCE=0`, and the two values are the offsets of a notation Ensembl VEP never prints. vep-rs writes the two fields beside an HGVSc and nowhere else: a row without an HGVSc carries neither.
 
 **Why this is a defect.** The two fields are the intron parts of an HGVSc's start and end coordinates. Such an insertion falls between two neighbouring positions of which exactly one is a base of the transcript, its first or its last, so the record writes the inserted bases outside the transcript. The row's own term and `DISTANCE=0` say so, and Ensembl VEP gives the row no HGVSc. A row without a notation has no notation coordinates, and so no intron offsets of them. The values belong to another change: on most rows a substitution or a replacement of one base of the transcript, a base the record leaves as it is.
 
@@ -8,7 +8,7 @@
 
 **Where it is in Ensembl VEP's source** (`VEP_plugins`, `ensembl-vep` and `ensembl-variation` at release/116):
 
-- `HGVSIntronOffset.pm`, line 62: the plugin asks the allele for its transcript notation on every Transcript row. Ensembl VEP's own output asks only on a row inside the feature (`Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 1721 and 1751-1754), which is why the row has no HGVSc.
+- `HGVSIntronOffset.pm`, line 62: the plugin asks the allele for its transcript notation on every Transcript row. Ensembl VEP's own output asks only on a row inside the feature (`Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 1730 and 1760-1763), which is why the row has no HGVSc.
 - `Bio/EnsEMBL/Variation/TranscriptVariationAllele.pm`, lines 2689-2736, `_var2transcript_slice_coords`: an insertion's start is one above its end. Directly before the first base it maps to the slice coordinates (1, 0); directly after the last base of a slice of L bases, to (L+1, L). Line 2729 returns nothing only when both lie before the first base or both past the last, and lines 2732-2733 clamp the pair onto the edge base: (1, 1) or (L, L).
 - The same file, `hgvs_transcript`: lines 1446 and 1477-1478 add the length k of the insertion's 3' shift to both coordinates, and lines 1474-1483 describe the inserted bases against the one base there. That base is the edge base where k is 0, and base 1+k where the shift carries an insertion before the first base into the transcript. Lines 1543 and 1545 store the intron offsets of the notation's coordinates, which the plugin reads at its lines 64-65.
 - The same file, lines 2188-2248, `_clip_alleles`: the bases the notation's two alleles share at their start and at their end are stripped, and the notation's start or end moves by as many positions. An inserted allele that ends in the edge base and does not begin with it loses that base at lines 2231-2238, which move the notation's end one position down. At a forward-strand transcript's first base that is from slice coordinate 1 to 0, the position before the transcript.
@@ -30,7 +30,7 @@ On the other 64 and 269, those 35 and 167 among them, vep-rs writes an HGVSc wit
 
 ## 1. A `T` inserted just before the first base of ENST00000480892
 
-**In short.** `2 27670443 1365957 G GT`, a ClinVar record on GRCh37, inserts a `T` between 27670443 and 27670444. ENST00000480892, a reverse-strand transcript, runs from 27668808 to 27670443: its first base is 27670443, and the inserted base lies just outside, on its 5' side. Both engines write `upstream_gene_variant`, `DISTANCE=0` and no HGVSc. Ensembl VEP 116.2 adds `HGVS_IntronStartOffset=0` and `HGVS_IntronEndOffset=0`. vep-rs writes neither field.
+**In short.** `2 27670443 1365957 G GT`, a ClinVar record on GRCh37, inserts a `T` between 27670443 and 27670444. ENST00000480892, a reverse-strand transcript, runs from 27668808 to 27670443: its first base is 27670443, and the inserted base lies just outside, on its 5' side. Both engines write `upstream_gene_variant`, `DISTANCE=0` and no HGVSc. Ensembl VEP 116.3 adds `HGVS_IntronStartOffset=0` and `HGVS_IntronEndOffset=0`. vep-rs writes neither field.
 
 ### 1.1 What a reader needs to know first
 
@@ -50,7 +50,7 @@ Both engines run `--hgvs --plugin HGVSIntronOffset` on GRCh37 with a reference F
 
 ### 1.3 What each engine writes
 
-Ensembl VEP 116.2, default format:
+Ensembl VEP 116.3, default format:
 
 ```
 1365957	2:27670443-27670444	T	ENSG00000138002	ENST00000480892	Transcript	upstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER;DISTANCE=0;STRAND=-1;HGVS_IntronEndOffset=0;HGVS_IntronStartOffset=0
@@ -83,11 +83,11 @@ vep -i record.vcf -o out.txt --offline --json_cache <cache> --fasta <fasta> \
   --assembly GRCh37 --hgvs --plugin HGVSIntronOffset
 ```
 
-vep-rs's row for ENST00000480892 ends `DISTANCE=0;STRAND=-1`. Ensembl VEP 116.2 adds `HGVS_IntronEndOffset=0;HGVS_IntronStartOffset=0` to it, with `--hgvs` and without.
+vep-rs's row for ENST00000480892 ends `DISTANCE=0;STRAND=-1`. Ensembl VEP 116.3 adds `HGVS_IntronEndOffset=0;HGVS_IntronStartOffset=0` to it, with `--hgvs` and without.
 
 ### 1.7 How the comparator treats this class
 
-The format comparator's rule (`scripts/concordance/compare_vep_formats.py`, `intron_offset_abutting_insertion`) accepts both fields of the row, `hgvs_intronstartoffset` and `hgvs_intronendoffset` in JSON: Ensembl VEP's side alone carries them, the pair is 0 and 0, the row is an insertion's, and both engines give it `upstream_gene_variant`, `DISTANCE=0` and no HGVSc. The same pair on a row inside a transcript and a value on vep-rs's side stay differences. So does any pair but the three of the class, and so does 1 and 0 or 0 and -1 on a row other than the one the class names for it.
+The format comparator's rule (`tools/vep-formats-compare`, `intron_offset_abutting_insertion`) accepts both fields of the row, `hgvs_intronstartoffset` and `hgvs_intronendoffset` in JSON: Ensembl VEP's side alone carries them, the pair is 0 and 0, the row is an insertion's, and both engines give it `upstream_gene_variant`, `DISTANCE=0` and no HGVSc. The same pair on a row inside a transcript and a value on vep-rs's side stay differences. So does any pair but the three of the class, and so does 1 and 0 or 0 and -1 on a row other than the one the class names for it.
 
 ## 2. Four bases inserted just past the last base of ENST00000465204
 
@@ -107,7 +107,7 @@ The insertion's 3' shift is seven bases long. The pair (1, 0) is clamped to (1, 
 
 ## 4. An inserted allele that ends in the first base of ENST00001091162
 
-**In short.** `21 10521561 . A AAG`, a gnomAD v4.1 record on GRCh38, inserts `AG` between 10521561 and 10521562. ENST00001091162, a forward-strand transcript, runs from 10521562 to 10605709: its first base is 10521562, and the inserted bases lie just outside, on its 5' side. Both engines write `upstream_gene_variant`, `DISTANCE=0` and no HGVSc. Ensembl VEP 116.2 adds `HGVS_IntronStartOffset=0` and `HGVS_IntronEndOffset=-1`. vep-rs writes neither field.
+**In short.** `21 10521561 . A AAG`, a gnomAD v4.1 record on GRCh38, inserts `AG` between 10521561 and 10521562. ENST00001091162, a forward-strand transcript, runs from 10521562 to 10605709: its first base is 10521562, and the inserted bases lie just outside, on its 5' side. Both engines write `upstream_gene_variant`, `DISTANCE=0` and no HGVSc. Ensembl VEP 116.3 adds `HGVS_IntronStartOffset=0` and `HGVS_IntronEndOffset=-1`. vep-rs writes neither field.
 
 ### 4.1 The record
 
@@ -119,7 +119,7 @@ ENST00001091162 (ENSG00000274391) has its first exon at 10521562 to 10521694 and
 
 ### 4.2 What each engine writes
 
-Ensembl VEP 116.2, default format:
+Ensembl VEP 116.3, default format:
 
 ```
 21_10521561_A/AAG	21:10521561-10521562	AG	ENSG00000274391	ENST00001091162	Transcript	upstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER;DISTANCE=0;STRAND=1;AA=-;HGVS_IntronEndOffset=-1;HGVS_IntronStartOffset=0;LoFtool=0.0451;NearestExonJB=ENSE00004715058|0|start|133;TSSDistance=1;gnomAD_100x_cov=0.0000;gnomAD_10x_cov=0.0014;gnomAD_15x_cov=0.0004;gnomAD_1x_cov=0.0901;gnomAD_20x_cov=0.0001;gnomAD_25x_cov=0.0000;gnomAD_30x_cov=0.0000;gnomAD_50x_cov=0.0000;gnomAD_5x_cov=0.0123;gnomAD_mean_cov=0.2242;gnomAD_median_approx_cov=0.0000;gnomAD_total_DP_cov=163894.0000;pHaplo=0.139986193997075;pLI_gene_value=0.00;pTriplo=0.0764328113393634

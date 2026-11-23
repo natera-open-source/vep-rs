@@ -1,13 +1,13 @@
 // Copyright (c) 2026-present Natera, Inc.
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-//! Real Ensembl prediction matrices decoded under the Perl packing rule.
+//! Real Ensembl prediction matrices decoded under the Ensembl VEP packing rule.
 //!
 //! Two `protein_function_predictions.prediction_matrix` blobs from the public Ensembl
 //! variation database (`homo_sapiens_variation_115_38`), chosen for small peptides that
 //! carry several prediction categories, are embedded here gzip-compressed and
 //! base64-encoded. Every cell they hold was independently unpacked by the rule of
-//! `ProteinFunctionPredictionMatrix.pm` (ensembl-variation release/115; `unpack 'v'`,
+//! `ProteinFunctionPredictionMatrix.pm` (ensembl-variation release/116; `unpack 'v'`,
 //! category `>> 14`, score `& 0x3FF`, then `/ 1000`) to produce the expected counts
 //! and cells below, so a decoder that read the category from any other bit position
 //! fails here on real data.
@@ -72,7 +72,7 @@ fn sift_matrix_decodes_every_category_perl_unpacks() {
             ("tolerated_low_confidence", 2),
             ("deleterious_low_confidence", 55)
         ]),
-        "per-category counts under Perl's >> 14 rule"
+        "per-category counts under Ensembl VEP's >> 14 rule"
     );
     assert_eq!(counts.values().sum::<usize>(), 741);
     let p = decode_prediction(&data, 2, b'P', AnalysisType::Sift).unwrap();
@@ -100,7 +100,7 @@ fn polyphen_matrix_decodes_every_category_perl_unpacks() {
             ("possibly_damaging", 5),
             ("benign", 1)
         ]),
-        "per-category counts under Perl's >> 14 rule"
+        "per-category counts under Ensembl VEP's >> 14 rule"
     );
     assert_eq!(counts.values().sum::<usize>(), 38);
     let p = decode_prediction(&data, 1, b'A', AnalysisType::PolyPhenHumVar).unwrap();

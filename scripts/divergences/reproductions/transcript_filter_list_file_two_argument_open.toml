@@ -1,7 +1,7 @@
 entry = "transcript_filter_list_file_two_argument_open"
 page = "docs/divergences/transcript-filter-list-file-two-argument-open.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the in operator of the filter notation, whose value may be a file containing values on separate lines, with no rule on the characters of the file's name (Ensembl VEP documentation, \"Filtering results\", Operators, in); not seen in the measured datasets"
 notes = "The corpus record tf_7130369 lies within reach of 3 transcripts, ENST00000624153 among them. The stage holds a file named `true|`, one line ENST00000624153, beside a program named `true` that prints nothing. The filter names the file; FilterSet.pm:396 finds it with `-e`, and :397's two-argument `open` reads the trailing `|` as a pipe from the command `true`, the rest of the name, so the handle yields nothing, the list is empty and the record is written as intergenic_variant. vep-rs opens the file of the written name and keeps the transcript it lists. A name beginning with `<` reads the same way on Ensembl VEP: `<ids.txt` opens `ids.txt`, where vep-rs opens the file named `<ids.txt`."
@@ -32,3 +32,7 @@ where = { record = "tf_7130369" }
 [expected]
 ensembl_vep = ["-"]
 vep_rs = ["ENST00000624153"]
+
+[implementation]
+code = ["crates/vep-cli/src/filter_set.rs::read_list"]
+tests = ["crates/vep-cli/tests/filter_report_and_run_documented_rows.rs::an_in_list_file_is_opened_under_its_written_name"]

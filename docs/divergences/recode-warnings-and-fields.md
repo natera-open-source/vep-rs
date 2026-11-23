@@ -16,7 +16,7 @@ On a two-record input whose first record names a chromosome the cache lacks, bot
 
 **What vep-rs does instead.** `vep recode` adds each fill's warnings to the object of the input it belongs to, so a repeated input's object lists every warning raised across its fills, in input order.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3):
 
 - `Bio/EnsEMBL/VEP/VariantRecoder.pm`, line 468: the results hash is keyed by the input text, and `||=` reuses the object an earlier fill created for the same text. Line 485: `$results->{$line_id}->{warnings} = [...]`, a plain assignment of the current fill's list; line 486: the warning store is emptied for the next fill.
 - `Bio/EnsEMBL/VEP/Runner.pm`, lines 295-300, `internalise_warnings`: each fill starts with an empty warning string, so `warnings` holds that fill's alone. `Bio/EnsEMBL/VEP/InputBuffer.pm`, lines 211-212, with `VariantRecoder.pm`, lines 96-109: the buffer holds one input by default, so two occurrences are two fills.

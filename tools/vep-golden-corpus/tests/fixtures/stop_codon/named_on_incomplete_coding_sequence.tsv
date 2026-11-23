@@ -1,0 +1,19 @@
+Ter305=		incomplete_terminal_codon_variant,coding_sequence_variant	cds_end_NF	1
+Ter305=		incomplete_terminal_codon_variant,coding_sequence_variant		1
+Ter185del		protein_altering_variant,incomplete_terminal_codon_variant	cds_end_NF	1
+Ter185del		frameshift_variant	cds_start_NF,cds_end_NF	1
+Ter224Val		incomplete_terminal_codon_variant,coding_sequence_variant		1
+Ter176HisextTer?		frameshift_variant	cds_end_NF	1
+Ter176HisextTer12		frameshift_variant	cds_end_NF	1
+Ter1=		coding_sequence_variant	cds_start_NF	1
+Ter1=		coding_sequence_variant	cds_start_NF,cds_end_NF	1
+Ter305=		coding_sequence_variant		0
+Ter1=		coding_sequence_variant		0
+Ter5=		coding_sequence_variant	cds_start_NF	0
+Ter1Val		coding_sequence_variant	cds_start_NF	0
+Asp223_Ter224del		frameshift_variant	cds_end_NF	0
+Ter224delinsValHis		protein_altering_variant,incomplete_terminal_codon_variant	cds_end_NF	0
+Ter1_Val2insHis		inframe_insertion	cds_start_NF	0
+Asp223ValfsTer4		frameshift_variant	cds_end_NF	0
+Ter305=	Ter305HisextTer?	stop_lost	cds_end_NF	0
+	Ter305=	incomplete_terminal_codon_variant,coding_sequence_variant	cds_end_NF	0

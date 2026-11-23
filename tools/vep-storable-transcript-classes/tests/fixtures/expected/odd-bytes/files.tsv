@@ -1,0 +1,3 @@
+# Each line below: a file of files/, a tab, and the path the run writes those bytes to. In the path \uHHHH (H a hexadecimal digit) is the character of that code point, \" a double quote and \\ a backslash; a printable ASCII character other than those two stands for itself.
+classes.json	out/differing_v\u00e9\u263a_w\"\\_classes.json
+classes.tsv	out/differing_v\u00e9\u263a_w\"\\_classes.tsv

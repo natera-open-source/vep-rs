@@ -1,0 +1,43 @@
+entry = "utrannotator_without_reference"
+page = "docs/plugins/transcript-model.md#utrannotator"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "unobserved"
+input_class_basis = "well-formed under the --offline and --no_fasta options, which Ensembl VEP's option list admits together (Config.pm, lines 245 and 248), and the UTRAnnotator plugin's header, whose options name no reference; not seen in the measured datasets"
+notes = "The run has no reference. Ensembl VEP prints a notice on standard output, loads the plugin and counts over placeholder bases, so the row reads `Existing_uORFs=0` on a 5' UTR that holds one upstream ORF; vep-rs refuses the plugin with a warning and writes no UTRAnnotator field."
+
+[input]
+format = "vcf"
+text = """
+21	13609800	utr_snv_without_reference	G	A	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-utr-annotator/json_cache"
+
+[run]
+flags = ["--no_fasta", "--plugin", "UTRAnnotator"]
+
+[compare]
+kind = "field"
+field = "Existing_uORFs"
+where = { record = "utr_snv_without_reference", feature = "ENST00000299443" }
+
+[expected]
+ensembl_vep = ["0"]
+vep_rs = ["-"]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/utr_annotator.rs::UtrAnnotatorPlugin::requires_reference_fasta",
+    "crates/vep-builtins/src/registry.rs::load_builtin",
+]
+tests = [
+    "crates/vep-builtins/src/plugins/utr_annotator.rs::tests::missing_fasta_is_an_init_error",
+    "crates/vep-cli/tests/cli_run_control.rs::a_plugin_refused_for_what_the_run_lacks_writes_its_refusal_alone",
+    "crates/vep-cli/tests/cli_run_control.rs::utrannotator_without_a_reference_warns_and_is_fatal_under_safe",
+    "crates/vep-cli/tests/documented_subsets.rs::utrannotator_without_a_reference_is_documented",
+]
+rules = ["tools/vep-formats-compare/src/rules/utrannotator.rs::without_reference_row"]

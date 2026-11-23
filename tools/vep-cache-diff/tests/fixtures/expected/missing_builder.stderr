@@ -1,0 +1,1 @@
+ERROR: [diff_caches] builder directory not found: {{FIXTURES}}/caches/identical/cache/info.json

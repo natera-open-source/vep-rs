@@ -1,53 +1,65 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh37",
  "fasta": "none on either side",
  "input": "variants.vcf: hand-placed records named by their design, nine on chromosome 21: an intergenic substitution; an exonic substitution in APP; a substitution upstream of BACH1's canonical transcript and inside its longer transcripts; an exonic substitution in BACH1; a 260-base deletion covering the single-exon transcript of KRTAP20-4 whole and a substitution inside that exon; a substitution 2,000 bases upstream of SOD1 and one in each of its second exon and an intron and one on chromosome 22 in an exon shared by the transcripts of LINC01664 (gene ENSG00000235478), the gene whose stable id the plugin maps to the table's clone-based symbol AC006946.15. Reference alleles read from the GRCh37 primary assembly. Under cover=1 only the deletion's KRTAP20-4 row spans its transcript; APP, BACH1, SOD1, KRTAP20-4 and the remapped gene carry scores in the table, the SCAF4 rows downstream of the SOD1 records too.",
  "sha256": {
-  "default.txt": "804eea2bc1c168bdc5483fefdede2d40cfda9c4943b4eb93385e27d8410d0fc4",
-  "tab.txt": "330e4a7ee1f501ac2e97bd8dd43b427a130929300c66ce058474c0425f732815",
-  "vcf.vcf": "8c2d4e94dada8401e168f2a6e7d1381a029d1d4b4af444a6935c0da8a2cebefa",
-  "json.jsonl": "82a0a217a6d5239213e94e0a7f589e20e3b283ebf9e73f8222b26d3722f067cd"
+  "default.txt": "4a9a1b74ff3b877a8d1ebafdad87b62faf307173018e191969590d95fcfec424",
+  "tab.txt": "e5d7331371a52f46922b38f751411730568b15b36c430d25c072664c37098f99",
+  "vcf.vcf": "a2936dd4140d3ef4f3a14e48f8a070e9171eefec0c14289fff6773d9c0d7f598",
+  "json.jsonl": "01b0c4765fd976dae124b0b6ef69f4b4dbd33bbe53393a1558b3e02dabde4590"
  },
  "variants_vcf_sha256": "b28a801632fbb3e385acb676ac5f8e6f98a55dca27d3d85b53946f2a8ca7fe10",
  "flag_sets": {
   "file": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {corpus}/data --plugin DosageSensitivity,file={corpus}/data/Collins_rCNV_2022.dosage_sensitivity_scores.tsv.gz [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh37",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "1e0659a5de94d01f272ecb86e89ece29b3bac06d5f2be386a05287f3e95456f6",
+    "tab.txt": "c1d58cc15fec030597f3a48188ece3833e73cdb15e05c8be85eff3804f670226",
+    "vcf.vcf": "2948dc98c0abeb9b79af2c7fd23126c3bbaf1ff2fe75a9dd665950abb9e819ee",
+    "json.jsonl": "8ac93f7cbfd587a0f6dad25143ed70dbe528dca40fa93101b46e5d890d0792c3"
+   },
    "flags": [
     "--dir_plugins",
     "{corpus}/data",
     "--plugin",
     "DosageSensitivity,file={corpus}/data/Collins_rCNV_2022.dosage_sensitivity_scores.tsv.gz"
    ],
-   "input": "variants.vcf",
-   "expected_dir": "expected_file",
-   "sha256": {
-    "default.txt": "11c90be5c946b21bd63dffce536902de3829ecf1ff5d84703b9216bce44b9995",
-    "tab.txt": "f64e591f1283ba4addca3a71dfc37e6f1e5dcbbb63466087c762adbe10e026d2",
-    "vcf.vcf": "91a33e33efd1c086d89dfc710d74c68044c3ea64a8a1428e0ce08aeccc5de6cd",
-    "json.jsonl": "632c4ec31e3fbea4545bffa686943cc25c0a6f6435b3bf90548770049eec0cac"
-   }
+   "expected_dir": "expected_file"
   },
   "file-cover": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {corpus}/data --plugin DosageSensitivity,file={corpus}/data/Collins_rCNV_2022.dosage_sensitivity_scores.tsv.gz,cover=1 [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh37",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "7bc765626f98b07eef4877da805d0bee95e25fbdd00adaa8b1a704e88284095c",
+    "tab.txt": "9a34e64408a5f2a3a83bfaf8034d26bae3cd92c4b0364593d010a7f14c966fdf",
+    "vcf.vcf": "4d9840fbd09e84e53971b7522cbc9c703a84d8606c2e2696e9a36dc312969b2d",
+    "json.jsonl": "bd4cf4f86981453a8ed967a692d3cfb95952b65ba5a1a726f93f699997c2322f"
+   },
    "flags": [
     "--dir_plugins",
     "{corpus}/data",
     "--plugin",
     "DosageSensitivity,file={corpus}/data/Collins_rCNV_2022.dosage_sensitivity_scores.tsv.gz,cover=1"
    ],
-   "input": "variants.vcf",
-   "expected_dir": "expected_file-cover",
-   "sha256": {
-    "default.txt": "94174facabdb2e62cbaacd468dc131552c0a1bf81deff2b19eaee615c41a04eb",
-    "tab.txt": "c6e9f4af02f8def07f9ad7186d086daa386bebdbc0595f25b82e97f9cd90b6bd",
-    "vcf.vcf": "f482506b26cb37359ca7049a5cdcdc41d07f2c97fed77755fe88a89fdd29fdd9",
-    "json.jsonl": "e0e1634121ef6ee79142190a08fa9c2ae26da4b4df631d024dbad9fca83455fc"
-   }
+   "expected_dir": "expected_file-cover"
   }
  },
  "data": {
@@ -59,5 +71,5 @@
    "data/Collins_rCNV_2022.dosage_sensitivity_scores.tsv.gz": "2a8d001816b19c9662948ab2ff6da8b7f199a68da213d4549d4425b176d1cfbd"
   }
  },
- "generator": "manifest: scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh37 --suite plugin-dosage=<reference>=<candidates> --k 3 --seed 1 --include <each record's ID> --covers DosageSensitivity --matrix tests/parity/matrix.tsv, then flag-set for each flag_sets entry; json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 and 22 slices of the vep-rs JSON conversion of the Ensembl VEP 116 GRCh37 cache; expected outputs: scripts/concordance/generate_reference_output.sh --corpus for the default run and, per flag set, for a copy of the corpus carrying the set's flags as its own, whose outputs and record are the set's"
+ "generator": "manifest: tools/vep-golden-corpus select --release 116 --assembly GRCh37 --dataset plugin-dosage=<reference>=<candidates> --k 3 --seed 1 --include <each record's ID> --covers DosageSensitivity --matrix tests/parity/matrix.tsv, then flag-set for each flag_sets entry; json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 and 22 slices of the vep-rs JSON conversion of the Ensembl VEP 116 GRCh37 cache; expected outputs: scripts/concordance/generate_reference_output.sh --corpus for the default run and, per flag set, for a copy of the corpus carrying the set's flags as its own, whose outputs and record are the set's"
 }

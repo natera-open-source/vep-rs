@@ -9,7 +9,7 @@ use super::breakend::{
 };
 use super::scope::{Group, ReferenceRecordScope};
 use super::table::{DIVERGENCE_CLASSES_116_2, PAIR_RULE_COUNT};
-use crate::input::CACHE_CONTIG_NAMES;
+use crate::input::CacheContigNames;
 use std::collections::{HashMap, HashSet};
 
 pub const REFERENCE_SKIPPED_RECORD_BUCKET: &str = "reference_skipped_record";
@@ -43,7 +43,8 @@ impl Row {
 }
 
 /// A bucket's statistics: rows recognised, rows set aside, distinct (file, Location) pairs
-/// reached, and the set-aside rows per side.
+/// reached, the set-aside rows per side, and the rows that reached a test of the bucket the
+/// run could not make.
 #[derive(Default, Clone)]
 pub struct OneSidedStats {
     pub count: u64,
@@ -51,6 +52,7 @@ pub struct OneSidedStats {
     pub records: u64,
     pub perl: u64,
     pub rust: u64,
+    pub not_evaluated: u64,
 }
 
 struct Tally<'a> {
@@ -93,10 +95,15 @@ impl Tally<'_> {
 /// below zero, and both rows of a dot-breakend pair; counts without masking the two lost-row
 /// breakend shapes, the FASTA-named slice shape and the reference's rows at a record whose
 /// coordinate overflows the buffer. Returns the per-bucket statistics in registry order.
+///
+/// `cache_names` are the names the run's cache files its sequences under: without them the
+/// synonym test of a breakend's mate is not made, and the rows that reached it are counted
+/// as not evaluated.
 pub fn apply_116_2_one_sided_rules(
     rows: &[Row],
     masked: &mut HashSet<usize>,
     scope: &ReferenceRecordScope,
+    cache_names: &CacheContigNames,
 ) -> Vec<(&'static str, OneSidedStats)> {
     let stats = DIVERGENCE_CLASSES_116_2[PAIR_RULE_COUNT..]
         .iter()
@@ -119,7 +126,7 @@ pub fn apply_116_2_one_sided_rules(
 
     dot_breakend_and_coordinate_rows(rows, &mut tally, scope);
     let (perl_keys, rust_keys) = side_keys(rows, tally.masked);
-    record_rules(rows, &mut tally, scope);
+    record_rules(rows, &mut tally, scope, cache_names);
     fasta_named_slice(rows, &mut tally, &perl_keys, &rust_keys);
 
     let Tally {
@@ -227,7 +234,13 @@ fn side_keys<'a>(rows: &'a [Row], masked: &HashSet<usize>) -> (SideKeys<'a>, Sid
 
 /// The record-level rules: the reference's rows at a buffer-overflowing coordinate, vep-rs's
 /// rows at a dropped gVCF site or a skipped record, and the breakend rows the reference lost.
-fn record_rules(rows: &[Row], tally: &mut Tally, scope: &ReferenceRecordScope) {
+/// A mate is a synonym where the cache files no sequence under its name (`cache_names`).
+fn record_rules(
+    rows: &[Row],
+    tally: &mut Tally,
+    scope: &ReferenceRecordScope,
+    cache_names: &CacheContigNames,
+) {
     let mut own_rows_lost: HashSet<&Group> = HashSet::new();
     for (group, breakends) in &scope.breakends {
         let own = strip_chr(group.1.split_once(':').map_or(group.1.as_str(), |(c, _)| c));
@@ -279,11 +292,15 @@ fn record_rules(rows: &[Row], tally: &mut Tally, scope: &ReferenceRecordScope) {
             continue;
         }
         if let Some(mate) = reference_mate_chromosome(&row.allele) {
-            if !breakend.perl_alleles.is_empty()
-                && !breakend.perl_alleles.contains(&row.allele)
-                && !CACHE_CONTIG_NAMES.contains(&mate)
-            {
-                tally.hit(BND_SYNONYM_MATE_ROWS_LOST_BUCKET, idx, row, false);
+            if !breakend.perl_alleles.is_empty() && !breakend.perl_alleles.contains(&row.allele) {
+                match cache_names.holds(mate) {
+                    Some(false) => tally.hit(BND_SYNONYM_MATE_ROWS_LOST_BUCKET, idx, row, false),
+                    Some(true) => {}
+                    None => {
+                        bucket_entry(&mut tally.stats, BND_SYNONYM_MATE_ROWS_LOST_BUCKET)
+                            .not_evaluated += 1;
+                    }
+                }
             }
         }
     }

@@ -1,7 +1,7 @@
 entry = "gff_parent_list_with_an_empty_field"
 page = "docs/divergences/gff-parent-list-with-an-empty-field.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the GFF3 specification, \"Description of the Format\", column 9, which separates the values of a Parent list with commas and states no rule for an empty one; not seen in the measured datasets"
 notes = "The GRCh38 release-116 GFF3 lines of TMPRSS3 and ENST00001113783 with the transcript's Parent rewritten `,gene:ENSG00000160183`. Ensembl VEP files the transcript under the gene (BaseGXF.pm:391) and keeps it at the top level too (:432), visits it twice in _create_transcripts (:320) and keeps the gene of the last visit (:336), by hash order: under PERL_HASH_SEED=11 the gene is lost and the Gene and SYMBOL columns are empty, under seed 0 they are the gene's. vep-rs makes the transcript the gene's once."
@@ -47,3 +47,10 @@ columns = ["Location", "Allele", "Gene", "SYMBOL", "Consequence"]
 [expected]
 ensembl_vep = ["21:42395417 | C | - | - | start_lost"]
 vep_rs = ["21:42395417 | C | ENSG00000160183.19 | TMPRSS3 | start_lost"]
+
+[implementation]
+code = ["crates/vep-cache-builder/src/gff3.rs::parent_ids"]
+tests = [
+    "crates/vep-cache-builder/src/gff3.rs::tests::a_parent_list_opening_with_an_empty_field",
+    "crates/vep-cli/tests/documented_subsets.rs::gff_parent_list_empty_field_divergence_is_documented",
+]

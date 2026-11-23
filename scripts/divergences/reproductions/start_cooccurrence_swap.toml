@@ -1,7 +1,7 @@
 entry = "start_cooccurrence_swap"
 page = "docs/divergences/defect-b.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
 input_class_basis = "1 · 137,761 per million · no flag needed"
 notes = "The deleted A is the first base of RUNX1's start codon and the last base of a two-base run, so the codon re-forms one base upstream: the rebuilt coding sequence still begins with ATG."
@@ -16,6 +16,7 @@ text = """
 species = "homo_sapiens"
 assembly = "GRCh37"
 json_cache = "tests/golden/116/GRCh37/json_cache"
+fasta = "tests/golden/116/GRCh37-hgvs/reference.fa.gz"
 
 [run]
 flags = []
@@ -28,3 +29,54 @@ where = { record = "4629713", feature = "ENST00000486278" }
 [expected]
 ensembl_vep = ["21:36265246 | - | ENST00000486278 | frameshift_variant,start_lost,start_retained_variant"]
 vep_rs = ["21:36265246 | - | ENST00000486278 | frameshift_variant,start_retained_variant"]
+
+# The notation cell: the same record under --hgvs, and a made-up insertion of three bases after coding base 1
+# that end in that base. On each the coding sequence stands whole behind the start codon that forms again, so
+# vep-rs writes the first residue unchanged, where Ensembl VEP writes a lost start's.
+[[also]]
+
+[also.input]
+format = "vcf"
+text = """
+21	36265245	4629713	AT	A	.	.	.
+21	36265245	whole_codon_copy	A	ATGG	.	.	.
+"""
+
+[also.run]
+flags = ["--hgvs"]
+
+[also.compare]
+kind = "rows"
+where = { feature = "ENST00000486278" }
+columns = ["Location", "Allele", "Feature", "Consequence", "HGVSp"]
+
+[also.expected]
+ensembl_vep = [
+    "21:36265245-36265246 | TGG | ENST00000486278 | start_lost,start_retained_variant | ENSP00000438019.1:p.Ile1_?0",
+    "21:36265246 | - | ENST00000486278 | frameshift_variant,start_lost,start_retained_variant | ENSP00000438019.1:p.Met1?",
+]
+vep_rs = [
+    "21:36265245-36265246 | TGG | ENST00000486278 | start_retained_variant | ENSP00000438019.1:p.Met1%3D",
+    "21:36265246 | - | ENST00000486278 | frameshift_variant,start_retained_variant | ENSP00000438019.1:p.Met1%3D",
+]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/coding.rs::PerlCodingEval::keeps_the_coding_sequence_whole_behind_the_allele",
+    "crates/vep-effects/src/coding.rs::perl_coding_terms",
+    "crates/vep-effects/src/sv/insertion.rs::structural_start_lost",
+]
+tests = [
+    "crates/vep-cli/tests/retained_start_protein_notation.rs::a_deletion_that_leaves_the_coding_sequence_whole_behind_the_start_changes_no_residue",
+    "crates/vep-effects/src/concordance_tests.rs::concordance_one_base_deletion_in_start_codon_is_start_retained_not_lost",
+    "crates/vep-effects/src/concordance_tests.rs::concordance_start_lost_does_not_coemit_start_retained",
+    "crates/vep-effects/src/sv/deletion.rs::tests::test_start_lost_for_structural_deletion_with_both_ends_exonic",
+]
+rules = [
+    "tools/vep-formats-compare/src/coding_end_terms.rs::landed_rule_may_take",
+    "tools/vep-formats-compare/src/rules/coding_end_pairs.rs::stands_on_the_record",
+    "tools/vep-formats-compare/src/shared.rs::_is_start_cooccurrence_swap",
+    "tools/vep-outputs-compare/src/rules/pair.rs::is_start_cooccurrence_swap",
+    "tools/vep-outputs-compare/src/rules/row.rs::start_codon_stands",
+    "tools/vep-plugin-pairs/src/rules/term_pair.rs::start_cooccurrence_swap",
+]

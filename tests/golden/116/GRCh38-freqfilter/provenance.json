@@ -1,25 +1,39 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
- "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "none on either side",
  "input": "variants.vcf",
  "sha256": {
-  "default.txt": "582d38e6e673cc3ad1bd3b8b102b8df1cebfe10d40f476dd885e77921010733e",
-  "tab.txt": "d35394281049fb6211919ce128230d94388f1e4b637738311e625063da1496c1",
-  "vcf.vcf": "fa302acc428a04d9a258c1b6195dcae2169e21aa302e7725054884ebf4eb854b",
-  "json.jsonl": "53aafda796220263bd716cec11f6da618300f82d5f84728ed209a4d8bf878381",
-  "default.summary.log": "7ba456d724ba544463af775af04e4504dbbb5129d14d5d2f35f601497edba011",
-  "tab.summary.log": "2c3c55cd936d0915f2c2a55e2578a20cb5e50f3f5e644d4b06d23b159d19a360",
-  "vcf.summary.log": "4f3043fda63707c4b49228a9d8244f8e527f7926d12568787705eff6f9a2c02e",
-  "json.summary.log": "ec8f55b96bfbb99d8bcb14abdb06f1ac8a15cc24f89fe28341031f102102230a"
+  "default.txt": "c6556ced76135bcd6321baa060dc22b49eae9c551af65777e1746478efff71b9",
+  "tab.txt": "8616d9e974be51222bb3f183ece2a913db1a309f3abc9e968e37abe13e686aa9",
+  "vcf.vcf": "cbe716c29578917d029f06388ceb7b0cd9aff7a5bddf4c9e740e6ab1aa6a9b08",
+  "json.jsonl": "439dd51e8b6d1ccd40bcda0e2d2ab9b848fea139670ec191cc744cbd58abc7d9",
+  "default.summary.log": "8acb9920d6bf7bd464317d31a55d1db5b0e09ba1348030d6eb128e3f78603abf",
+  "tab.summary.log": "3efd6786f972fcc855a6b916e3dfa1ab27a798ef77f12d7c5e18396075aab844",
+  "vcf.summary.log": "624d6bea5fde1b923ada72e0a65a7416e61492ecb90e6290d7c6f275c7ae545c",
+  "json.summary.log": "ce564152d90e32aa54d07c6e552c6601511387a32aa5eac9ea03040ac0a4d17c"
  },
  "variants_vcf_sha256": "78342844cb3c6ef70b142100cc4320adae4003672ec9cc88d08eb1939545b790",
  "flag_sets": {
   "freqfilter": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --check_frequency --freq_pop AF --freq_freq 0.01 --freq_gt_lt gt --freq_filter exclude [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "10e08070007a07231a6e01aefccf05e243689b4b07cc94021373cf58df97ccbd",
+    "tab.txt": "2fbafb456a0a560e8526c14932321e7248c8ce4c2b13cf209fbf3bda01860e77",
+    "vcf.vcf": "9f12571398c068fababb714215210c629f10a2e5b269c4e0745ff2d7bfcc98e5",
+    "json.jsonl": "568a7406c7f29a38880ea7f09e2e883fc94c458b633f94f696ed5778fff9f307"
+   },
    "flags": [
     "--check_frequency",
     "--freq_pop",
@@ -31,31 +45,45 @@
     "--freq_filter",
     "exclude"
    ],
-   "input": "variants.vcf",
-   "expected_dir": "expected_freqfilter",
-   "sha256": {
-    "default.txt": "09bc015cf1c0fe83e78def0911dd12046423a88e6cc205f2f8db8bb1f8cb4490",
-    "tab.txt": "a05021d626fb113599cca368afbf27105023f4e9b02cbc4eaddd25d7f81f1e20",
-    "vcf.vcf": "fdd56ab2965cc6b4fea38e9a9f55b89e608aa051fe6e7a64431923488cd773ff",
-    "json.jsonl": "e81e0397a245568d254d6e39387229ba91b8cb5908a862bf657b1cb8c1cdb13f"
-   }
+   "expected_dir": "expected_freqfilter"
   },
   "filter-common": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --filter_common --freq_pop AF [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "d25292fa2157750f8f9500a453c5f693cc5fd4aaa5a711a747e1cc35200e81f8",
+    "tab.txt": "aa2d323484071a3d86a7887c0918dcb45f414e14ce465ed918ef4eb18b9615f9",
+    "vcf.vcf": "36ccc6024467f32088e8cb12cb7a7f9d75526a485e78f405a6032e87f42dc15b",
+    "json.jsonl": "b04507912009643f2aa612d30c82eef04d2a1ebaf2428b6a35d5e264f1396c65"
+   },
    "flags": [
     "--filter_common",
     "--freq_pop",
     "AF"
    ],
-   "input": "variants.vcf",
-   "expected_dir": "expected_filter-common",
-   "sha256": {
-    "default.txt": "81960c6cefefcd656da2b18e353f4897302af16a7333a3ab6f0e907d4e346966",
-    "tab.txt": "724ea7537bf3ac7bf46d0e5c44c248d2bb61abbef4b941de224c37d561786a20",
-    "vcf.vcf": "7d1ae38b2eb593c8d4d5b2a60ea819879bb795a5bee1f5f9c06fb6b81bf085f1",
-    "json.jsonl": "e939beb21f007d7e01a35141606850aab1462385173628dbb2d6c2b7702a5b8b"
-   }
+   "expected_dir": "expected_filter-common"
   },
   "minimal-freqfilter": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i minimal.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --minimal --check_frequency --freq_pop AF --freq_freq 0.0001 --freq_gt_lt gt --freq_filter include [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "minimal.vcf",
+   "sha256": {
+    "default.txt": "400ded7af04c3f902894d835da44b276fcf862e5affa0b1685007d00ece39dcf",
+    "tab.txt": "c6564b9633495567b8fac93b77d4268a0d06b81dd62466c7a6ff4e727cf41f05",
+    "vcf.vcf": "bc22e810c9bb94268a5ac3d0510dc1ce71bea36b77bf2818fb518799bb729c07",
+    "json.jsonl": "6dc859a297163456ad667a9a3688e2ef5a82c0ced00d7d0871326f6e64cfa773"
+   },
    "flags": [
     "--minimal",
     "--check_frequency",
@@ -68,17 +96,24 @@
     "--freq_filter",
     "include"
    ],
-   "input": "minimal.vcf",
    "expected_dir": "expected_minimal-freqfilter",
-   "sha256": {
-    "default.txt": "aba7125b4fdca7746c1e553f58d7cf1e8f43d1b9fffe86bcc79ce71dca367a35",
-    "tab.txt": "dacb2a4a05d849cf3c15b709697f427cc465c70dc3de58e9415876d768949cb0",
-    "vcf.vcf": "f217c5e6e9f7a271224444413270dd1477916efe5b5ba97ebc5e2ea0735c2388",
-    "json.jsonl": "a80d735f842804a19d41e003058f5528b3d499032a1525436b4e9e149aa13112"
-   },
    "input_notes": "variants.vcf with a second ALT on two records, `21 31148973 GG G,TG` and `21 42029386 GTG G,GAG`, so that the --minimal split runs and the frequency filter judges each split allele alone; the other 13 records as in variants.vcf"
   },
   "minimal-freqfilter-exclude": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i minimal.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --minimal --check_frequency --freq_pop AF --freq_freq 0.5 --freq_gt_lt gt --freq_filter exclude [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "minimal.vcf",
+   "sha256": {
+    "default.txt": "e98ec445a289bd25654327b3c6d51dac664a3ef46acd04908d76cd348f883aef",
+    "tab.txt": "55bc0436d9effece54e89c796327b305298f28fbfc053b6657a14effed7bcaba",
+    "vcf.vcf": "f799f2f3cf176a3bd558eabfa0ae3e13376e5f304634b085eda9eabf8f5395ad",
+    "json.jsonl": "aa7945abd33eda1964ce1c83aae78bb187eb381543f4a76c028d9cb2765d8766"
+   },
    "flags": [
     "--minimal",
     "--check_frequency",
@@ -91,18 +126,11 @@
     "--freq_filter",
     "exclude"
    ],
-   "input": "minimal.vcf",
    "expected_dir": "expected_minimal-freqfilter-exclude",
-   "sha256": {
-    "default.txt": "806d019785482e02f07b753880886869d5ef9c3d842af2123f05d04395317b9d",
-    "tab.txt": "290e7cad45e225473c4ad0f0b2dfe7d8e939559e33d3ec2daa574f69159d905c",
-    "vcf.vcf": "bdd3441d0124455e9a423fb9ed225c721b7e7627fa2ac82ac2d58b574ead6052",
-    "json.jsonl": "536f3b61d25b103c44fc1e1e1f2b8c5005f5480cfc1eaf839f3c130609a99064"
-   },
    "input_notes": "variants.vcf with a second ALT on two records, `21 31148973 GG G,TG` and `21 42029386 GTG G,GAG`, so that the --minimal split runs and the frequency filter judges each split allele alone; the other 13 records as in variants.vcf"
   }
  },
- "generator": "scripts/golden/build_golden_corpus.py select; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 --variations <cache> --exclude-variation '^COSV\\d' --exclude-variation '^(C[A-Z]|BM|HM)\\d{6}'; scripts/concordance/generate_reference_output.sh --corpus; scripts/golden/build_golden_corpus.py classify",
+ "generator": "tools/vep-golden-corpus select; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 --variations <cache> --exclude-variation '^COSV\\d' --exclude-variation '^(C[A-Z]|BM|HM)\\d{6}'; scripts/concordance/generate_reference_output.sh --corpus; tools/vep-golden-corpus classify",
  "variation_slice": {
   "source": "homo_sapiens/116_GRCh38/21/all_vars.gz of the Ensembl VEP release-116 indexed cache",
   "window": "records whose start lies within one base of an input record's span",
@@ -117,10 +145,10 @@
    "all_vars.gz": "397370cc6625eeaf9cb708789a102ab3824e1ba46a24e4c63422c6a69cdb82e1",
    "all_vars.gz.csi": "784e9f676514fc34283395c73a4ea190400def0fa72da1d558e081f9c9e274de"
   },
-  "slice_check": "Ensembl VEP 116.2 run on this slice and on the full cache wrote identical default-format output for every record under --check_frequency --freq_pop AF --freq_freq 0.01 --freq_gt_lt gt --freq_filter exclude, under --check_existing and under --check_existing --filter_common"
+  "slice_check": "Ensembl VEP 116.3 run on this slice and on the full cache wrote identical default-format output for every record under --check_frequency --freq_pop AF --freq_freq 0.01 --freq_gt_lt gt --freq_filter exclude, under --check_existing and under --check_existing --filter_common"
  },
  "filter_common_check": {
-  "statement": "Ensembl VEP 116.2 on variants.vcf against the full release-116 GRCh38 cache writes the same records with the same values under --check_existing --filter_common as under --check_existing: its 1KG_ALL population reads minor_allele, 1KG_ALL and ALL, which a release-116 cache lacks (BaseCacheVariation.pm:214-244), so --filter_common filters nothing and FREQS stays empty; vep-rs reads the AF column for 1KG_ALL (docs/intended-divergences.md)",
+  "statement": "Ensembl VEP 116.3 on variants.vcf against the full release-116 GRCh38 cache writes the same records with the same values under --check_existing --filter_common as under --check_existing: its 1KG_ALL population reads minor_allele, 1KG_ALL and ALL, which a release-116 cache lacks (BaseCacheVariation.pm:214-244), so --filter_common filters nothing and FREQS stays empty; vep-rs reads the AF column for 1KG_ALL (docs/intended-divergences.md)",
   "default": {
    "bodies_identical": true,
    "rows": 291
@@ -142,14 +170,14 @@
    "records": 15
   },
   "sha256": {
-   "check-existing.default": "bec4455498b5d82a37f6c777f0a2596fe001d555f6b89a57d41582fc0e22e501",
-   "check-existing.json": "0a19ed65f60757d48e539944c990004cb2697c7f0d13b435e1c0b64d24a7cfe3",
-   "check-existing.tab": "112e362033682df2dd63780a176eee39aabea25f34619e4c81fc84761b246e1f",
-   "check-existing.vcf": "24e290cda9efbb781744a9fede481ba312156e6c39d251e7555aea0183cb1280",
-   "filter-common.default": "4709bc02215e969d5018da9ce24c9deba497cf5bfe8e80a289ba64f758c30ed5",
-   "filter-common.json": "7f4aec36eb77c16edf14874bbb0cbaefcc8559ddda4d8ea094d76b6d4f99e050",
-   "filter-common.tab": "e2287b8be186a0e28cc638fe715f9f58afc7a89753420ef73f83a0ff9636e50d",
-   "filter-common.vcf": "97c633fa498b25f6c6a894ca21c1857adf7bfe3e788ffaf7951bc9a3b8b06aad"
+   "check-existing.default": "2350c106bda8cef30ed5adca64c48af6d437bd02b72aa42c88a826e72af5de70",
+   "check-existing.json": "d1119553240b99c249504cb7565a15147aacd7421d6af166a08488cb9f061c89",
+   "check-existing.tab": "25798bbe5bb1725ab95ad29a1959320bb60dd45c3adb1793af78b302496cb44e",
+   "check-existing.vcf": "fd1e866d19020c94e1ab8b19f55e11590fd5ed8f04c40b71fde05bda014ee12d",
+   "filter-common.default": "de3b10b68c9e8209ab6d33dace8d71cbf26289827d528c49a7c79f9f0aa0031a",
+   "filter-common.json": "a65b9a90527b00699dd212746ab44a05b68257f948c0f71b202375eda50db71e",
+   "filter-common.tab": "5b16982e384afbea1e2e0e877fcf78250841825978beeb75097b69693c62ba6a",
+   "filter-common.vcf": "196a709b5d537cbe48321871d55851df981fbcab5beb913ed67ff052f6da229a"
   }
  },
  "summary_log": {

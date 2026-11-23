@@ -3,18 +3,27 @@
 
 //! Build the variation files of a native cache from Ensembl's variation VCFs.
 //!
-//! Each chromosome's records are read from Ensembl's per-chromosome germline
-//! VCF, joined with the records of the genome-wide somatic, phenotype- and
-//! clinically-associated VCFs that the per-chromosome file lacks, given their
+//! Each chromosome's records are read from its germline VCF ([`GermlineVcf`]:
+//! the chromosome's own file, the layout Ensembl publishes for `homo_sapiens`,
+//! or the species' one genome-wide file), joined with the records of the
+//! genome-wide somatic, phenotype- and clinically-associated VCFs that the
+//! germline file lacks, given their
 //! 1000 Genomes frequencies from the frequency VCF and, with the variation
-//! database dumps, their ClinVar allele and somatic columns; then written as
+//! database dumps, their ClinVar allele and somatic columns; with the cells
+//! of [`crate::variant_cells`], their PubMed identifiers, their synonyms and
+//! their failed flag, beside the failed variants the VCFs leave out; then
+//! written as
 //! the file Ensembl VEP's dumper writes (`Pipeline/DumpVEP/Dumper/Variation.pm:
 //! 98-135, 211-270`): `variations/<chr>/all_vars.gz`, tab-delimited bgzip with
 //! the chromosome first and `.` for an empty cell, sorted by start and indexed
 //! by a `.csi` on the start column alone, its columns the `variation_cols` of
 //! `info.json`.
+//!
+//! A sequence no variation VCF holds a record on is written from the
+//! variation database's `variation_feature` table instead
+//! ([`write_sequences_from_tables`]).
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 
@@ -29,11 +38,19 @@ use noodles::csi::binning_index::index::Header;
 use noodles::csi::binning_index::Indexer;
 use noodles::vcf;
 use tracing::{debug, info, warn};
+use vep_core::allele_trim::{trim_directions, trim_sequences, CaseRule};
 use vep_core::cache_info::FIXED_VARIATION_COLUMNS;
 use vep_core::coordinate::is_cache_path_component;
 use vep_core::vcf_header::fileformat_refusal;
 
 use crate::core_dumps::read_table;
+use crate::count::counted;
+use crate::gvf::GvfFeature;
+use crate::variant_cells::VariantCells;
+
+mod feature_table;
+
+pub use feature_table::{write_sequences_from_tables, FeatureTables};
 
 /// The allele string of a COSMIC variant, whose alleles the variation database
 /// does not hold (`VariationFeature.pm:2355`).
@@ -56,7 +73,7 @@ const THOUSAND_GENOMES_POPULATIONS: [(&str, u64); 5] = [
 /// The frequency columns the 1000 Genomes file yields: the whole panel's
 /// frequency under the name the dumper gives its unnamed population
 /// (`Dumper/Variation.pm:191`), then the five continental populations.
-pub const THOUSAND_GENOMES_COLUMNS: [&str; 6] = ["AF", "AFR", "AMR", "EAS", "EUR", "SAS"];
+const THOUSAND_GENOMES_COLUMNS: [&str; 6] = ["AF", "AFR", "AMR", "EAS", "EUR", "SAS"];
 
 /// The chromosome and start columns of an `all_vars.gz` record, 0-based.
 const CHR_COLUMN: usize = 0;
@@ -65,7 +82,7 @@ const START_COLUMN: usize = 4;
 /// A variation record in the form the variation database holds it, the form
 /// Ensembl VEP's dumper writes.
 #[derive(Debug, Clone, Default, PartialEq)]
-pub struct VariationRecord {
+pub(crate) struct VariationRecord {
     pub variation_name: String,
     pub failed: u8,
     pub somatic: u8,
@@ -85,6 +102,12 @@ pub struct VariationRecord {
     pub clin_sig_ref_allele: Option<String>,
     /// ClinVar somatic classification, `phenotype(classification)` entries joined by `;`.
     pub clinical_impact: Option<String>,
+    /// The PubMed identifiers of the publications that cite the variant,
+    /// joined by `,`.
+    pub pubmed: Option<String>,
+    /// The variant's names under other sources, `source::name,name` groups
+    /// joined by `--`.
+    pub var_synonyms: Option<String>,
     /// Population frequencies by column name, `allele:frequency` entries joined
     /// by `,`.
     pub frequencies: HashMap<String, String>,
@@ -280,9 +303,9 @@ impl ClinVarAttribs {
             }
         }
         info!(
-            "Read ClinVar features of {} germline variants and {} somatic spans from {}",
-            out.germline.len(),
-            out.somatic.len(),
+            "Read ClinVar features of {} and {} from {}",
+            counted(out.germline.len(), "germline variant"),
+            counted(out.somatic.len(), "somatic span"),
             dir.display()
         );
         Ok(out)
@@ -298,12 +321,17 @@ impl ClinVarAttribs {
     ///
     /// A germline feature counts when its variation name is the record's: each
     /// `risk_allele:clinvar_clin_sig` pair (spaces in the term read `_`) once, joined
-    /// by `;`, and its `clinvar_ref_allele` as the reference allele. Every somatic
+    /// by `;`, and its `clinvar_ref_allele` as the reference allele. A significance
+    /// that holds several classifications, which the table joins with `; `, gives a
+    /// pair for each (`classifications`), where Ensembl VEP's adaptor cuts the
+    /// value at its first `;` and keeps the first alone
+    /// (`PhenotypeFeatureAdaptor.pm:1273-1276`). Every somatic
     /// feature on the record's database span counts, whatever its name, formatted by
     /// `_format_clinical_impact` (`:252-275`): the one span the record's own somatic
     /// features lie on when they lie on one, the tables holding the database's span
     /// where the record's may be the trimmed one, else the record's own. The
-    /// germline pairs keep their first-seen order where Perl's hash keys have none.
+    /// germline pairs keep their first-seen order where Ensembl VEP's Perl hash keys
+    /// have none.
     fn apply(&self, var: &mut VariationRecord, chr: &str) {
         let name_key = format!("{chr}:{}", var.variation_name);
 
@@ -314,13 +342,12 @@ impl ClinVarAttribs {
                 let Some(clin_sig) = &f.clinvar_clin_sig else {
                     continue;
                 };
-                let pair = format!(
-                    "{}:{}",
-                    f.risk_allele.as_deref().unwrap_or(""),
-                    clin_sig.replace(' ', "_")
-                );
-                if !pairs.contains(&pair) {
-                    pairs.push(pair);
+                let allele = f.risk_allele.as_deref().unwrap_or("");
+                for classification in classifications(clin_sig) {
+                    let pair = format!("{allele}:{}", classification.replace(' ', "_"));
+                    if !pairs.contains(&pair) {
+                        pairs.push(pair);
+                    }
                 }
                 if let Some(r) = f.clinvar_ref_allele.as_deref().filter(|r| !r.is_empty()) {
                     ref_allele = Some(r.to_string());
@@ -346,6 +373,22 @@ impl ClinVarAttribs {
     }
 }
 
+/// The classifications of one `clinvar_clin_sig` value, in the value's order.
+///
+/// The variation database joins the classifications ClinVar gives one record with
+/// `; ` (`uncertain significance; risk factor`). The first is the text before the
+/// first `;`, the value Ensembl VEP's adaptor keeps
+/// (`PhenotypeFeatureAdaptor.pm:1273-1276`); each later one is the text between
+/// two `;` without the blanks around it, and an empty one is passed over.
+fn classifications(value: &str) -> impl Iterator<Item = &str> {
+    let mut pieces = value.split(';');
+    pieces.next().into_iter().chain(
+        pieces
+            .map(str::trim)
+            .filter(|classification| !classification.is_empty()),
+    )
+}
+
 /// `Database/Variation.pm::_format_clinical_impact` (`:252-275`): for each somatic
 /// feature, `phenotype(somatic_clin_sig)` with the classification's commas read `;`,
 /// then `phenotype(oncogenicity:oncogenic_clin_sig)`, every entry joined by `;`.
@@ -362,6 +405,54 @@ fn format_clinical_impact(features: &[SomaticClinVar]) -> String {
     entries.join(";")
 }
 
+/// The VCF a chromosome's germline records are read from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GermlineVcf {
+    /// The chromosome's own file (`<species>-chr<N>.vcf.gz`, the form Ensembl
+    /// publishes for `homo_sapiens`): every record of it is the chromosome's,
+    /// whatever its CHROM column says.
+    Chromosome(PathBuf),
+    /// The species' one genome-wide file (`<species>.vcf.gz`, the form Ensembl
+    /// publishes for every other species): the records on the chromosome,
+    /// read through the file's index when one lies beside it.
+    Genome(PathBuf),
+}
+
+impl GermlineVcf {
+    pub fn path(&self) -> &Path {
+        match self {
+            Self::Chromosome(path) | Self::Genome(path) => path,
+        }
+    }
+}
+
+/// The sequences `vcf` holds records on: the names its `.csi` or `.tbi` lists,
+/// in the index's order, or, for a file without an index or with one that
+/// names no sequence, the CHROM values of its records in order of first
+/// appearance, read through once.
+pub fn sequence_names(vcf: &Path) -> Result<Vec<String>> {
+    if has_index(vcf) {
+        let reader = vcf::io::indexed_reader::Builder::default()
+            .build_from_path(vcf)
+            .with_context(|| format!("Failed to open indexed VCF: {}", vcf.display()))?;
+        if let Some(header) = reader.index().header() {
+            return Ok(header
+                .reference_sequence_names()
+                .iter()
+                .map(|name| name.to_string())
+                .collect());
+        }
+    }
+    let mut names: Vec<String> = Vec::new();
+    for_each_record(vcf, None, |fields| {
+        if !names.contains(&fields.chr) {
+            names.push(fields.chr);
+        }
+        Ok(())
+    })?;
+    Ok(names)
+}
+
 /// The genome-wide variation VCFs read beside a chromosome's own file.
 #[derive(Debug, Default)]
 pub struct GenomeWideInputs {
@@ -375,19 +466,29 @@ pub struct GenomeWideInputs {
 }
 
 /// Streams the variation records of chromosome `chr` to `emit` in start order:
-/// the per-chromosome VCF's, plus the records of the genome-wide files absent
-/// from it (a record is the same one when its name, position and alleles are),
+/// the germline records of `vcf` ([`GermlineVcf`]), plus the records of the
+/// genome-wide files absent from them (a record is the same one when its name,
+/// position and alleles are),
 /// the somatic file's flagged `somatic`, every non-somatic record given its 1000
-/// Genomes frequencies and, with `clinvar`, its ClinVar columns. The
-/// per-chromosome file is read in its position order and reordered through a
+/// Genomes frequencies and, with `clinvar`, its ClinVar columns. The germline
+/// records are read in their file's position order and reordered through a
 /// buffer, since a record's start lies within two bases of its position;
-/// records sharing a start come out in name order ([`StartOrder`]). Returns the
+/// records sharing a start come out in name order (`StartOrder`). Returns the
 /// number of records emitted.
-pub fn chromosome_records(
+///
+/// With `cells`, every record takes its `pubmed`, `var_synonyms` and `failed`
+/// cells by its name, and the features of the failed-variants GVF on the
+/// chromosome join the stream: a feature whose name a record of these VCFs
+/// carries adds nothing, that record being flagged and, where it starts
+/// where the feature does, given the feature's end; any other is emitted as
+/// a record of its own at its start, with `failed` 1, the cells of its name
+/// and its 1000 Genomes frequencies.
+fn chromosome_records(
     chr: &str,
-    vcf: &Path,
+    vcf: &GermlineVcf,
     inputs: &GenomeWideInputs,
     clinvar: Option<&ClinVarAttribs>,
+    cells: Option<&VariantCells>,
     mut emit: impl FnMut(VariationRecord) -> Result<()>,
 ) -> Result<usize> {
     let frequencies = match &inputs.frequencies {
@@ -416,28 +517,65 @@ pub fn chromosome_records(
         )?;
     }
 
+    let failed: Vec<VariationRecord> = cells
+        .map_or(&[][..], |cells| cells.failed_features(chr))
+        .iter()
+        .map(|feature| feature_record(feature, frequencies.as_ref()))
+        .collect();
+
     let mut emitted = 0usize;
-    let mut merge = StartOrder::new(held, |mut record: VariationRecord| {
+    let mut merge = StartOrder::new(held, failed, |mut record: VariationRecord| {
         if let Some(clinvar) = clinvar {
             clinvar.apply(&mut record, chr);
+        }
+        if let Some(cells) = cells {
+            cells.apply(&mut record)?;
         }
         emitted += 1;
         emit(record)
     });
-    parse_chromosome(vcf, None, false, frequencies.as_ref(), |fields, record| {
+    let (path, only) = match vcf {
+        GermlineVcf::Chromosome(path) => (path, None),
+        GermlineVcf::Genome(path) => (path, Some(chr)),
+    };
+    parse_chromosome(path, only, false, frequencies.as_ref(), |fields, record| {
         merge.push(fields, record)
     })?;
-    merge.finish()?;
-    info!("chr {}: {} variation records", chr, emitted);
+    let added = merge.finish()?;
+    if let Some(cells) = cells {
+        cells.count_added(added);
+    }
+    info!("chr {}: {}", chr, counted(emitted, "variation record"));
     Ok(emitted)
 }
 
+/// The record of a feature of the failed-variants GVF, with its 1000 Genomes
+/// frequencies. The dumper matches a record's own alleles at its own start
+/// to the frequency file's (`Dumper/Variation.pm:349-399`); a feature's
+/// alleles are matched at the start the GVF writes, the place the export of
+/// the frequency file anchors the same variant from.
+fn feature_record(feature: &GvfFeature, frequencies: Option<&ThousandGenomes>) -> VariationRecord {
+    let mut record = feature.record.clone();
+    if let (Some(frequencies), Some(position)) = (frequencies, feature.allele_position) {
+        let alleles = record.allele_string.clone();
+        let mut alleles = alleles.split('/');
+        let reference = alleles.next().unwrap_or_default();
+        let alternates: Vec<&str> = alleles.collect();
+        frequencies.apply(&mut record, position, reference, &alternates);
+    }
+    record
+}
+
 /// The start-ordered merge of a chromosome's records: the per-chromosome
-/// file's, each held back until the file's position passes its start, and the
-/// genome-wide files' records the per-chromosome file lacks. A record's start
-/// never precedes its position, so once the file's position passes a start
-/// nothing before that start is still to come. Records sharing a start come out
-/// in name order, the order the dumper's sort on the start column leaves them in
+/// file's, each held back until the file's position passes its start, the
+/// genome-wide files' records the per-chromosome file lacks, and the features
+/// of the failed-variants GVF whose name no record read by then carries. A
+/// record's start never precedes its position, so once the file's position
+/// passes a start nothing before that start is still to come; the export
+/// writes a variant's VCF record at or before the start the GVF gives it, so
+/// a feature's turn comes after the record of its name was read. Records
+/// sharing a start come out in name order, the order the dumper's sort on the
+/// start column leaves them in
 /// (`Dumper/Variation.pm:120`: `sort -k5,5n`, whose equal keys fall back to the
 /// whole line, which the name follows the chromosome on).
 struct StartOrder<F: FnMut(VariationRecord) -> Result<()>> {
@@ -451,11 +589,38 @@ struct StartOrder<F: FnMut(VariationRecord) -> Result<()>> {
     /// The genome-wide records; one leaves, written in the copy's place, when
     /// the per-chromosome file yields its copy.
     held: HashMap<RecordIdentity, VariationRecord>,
+    /// The features of the failed-variants GVF by start and name, descending,
+    /// so the next one is last.
+    failed: Vec<VariationRecord>,
+    /// The start and the end of each of those features, by its name.
+    failed_spans: HashMap<String, Vec<(u64, u64)>>,
+    /// The names of those features that a record of the VCFs carries.
+    carried: HashSet<String>,
+    /// The features emitted as records of their own.
+    added_from_gvf: u64,
     emit: F,
 }
 
 impl<F: FnMut(VariationRecord) -> Result<()>> StartOrder<F> {
-    fn new(held: HashMap<RecordIdentity, VariationRecord>, emit: F) -> Self {
+    fn new(
+        held: HashMap<RecordIdentity, VariationRecord>,
+        mut failed: Vec<VariationRecord>,
+        emit: F,
+    ) -> Self {
+        failed.sort_by(|a, b| (b.start, &b.variation_name).cmp(&(a.start, &a.variation_name)));
+        let mut failed_spans: HashMap<String, Vec<(u64, u64)>> = HashMap::new();
+        for feature in &failed {
+            failed_spans
+                .entry(feature.variation_name.clone())
+                .or_default()
+                .push((feature.start, feature.end));
+        }
+        // Every genome-wide record is written, as itself or as its copy.
+        let carried = held
+            .values()
+            .filter(|record| failed_spans.contains_key(&record.variation_name))
+            .map(|record| record.variation_name.clone())
+            .collect();
         let mut added: Vec<(u64, String, RecordIdentity)> = held
             .iter()
             .map(|(identity, record)| {
@@ -472,7 +637,29 @@ impl<F: FnMut(VariationRecord) -> Result<()>> StartOrder<F> {
             sequence: 0,
             added,
             held,
+            failed,
+            failed_spans,
+            carried,
+            added_from_gvf: 0,
             emit,
+        }
+    }
+
+    /// Notes that `record`, a record of the VCFs, carries the name of a
+    /// feature of the failed-variants GVF, and gives it the end of the
+    /// feature that starts where it does. A VCF states no end: the one read
+    /// from the record's alleles is not the database's where the alleles do
+    /// not fit the span the variant is mapped to, and the GVF writes the
+    /// database's own.
+    fn carry(&mut self, record: &mut VariationRecord) {
+        let Some(spans) = self.failed_spans.get(&record.variation_name) else {
+            return;
+        };
+        if let Some((_, end)) = spans.iter().find(|(start, _)| *start == record.start) {
+            record.end = *end;
+        }
+        if !self.carried.contains(&record.variation_name) {
+            self.carried.insert(record.variation_name.clone());
         }
     }
 
@@ -481,11 +668,12 @@ impl<F: FnMut(VariationRecord) -> Result<()>> StartOrder<F> {
     /// genome-wide copy of the record takes its place, so a variant the somatic
     /// file holds keeps that file's flag and goes without frequencies.
     fn push(&mut self, fields: &VcfFields, record: VariationRecord) -> Result<()> {
-        let record = if self.held.is_empty() {
+        let mut record = if self.held.is_empty() {
             record
         } else {
             self.held.remove(&fields.identity()).unwrap_or(record)
         };
+        self.carry(&mut record);
         self.flush(Some(fields.pos))?;
         self.sequence += 1;
         let key = (record.start, record.variation_name.clone(), self.sequence);
@@ -493,14 +681,24 @@ impl<F: FnMut(VariationRecord) -> Result<()>> StartOrder<F> {
         Ok(())
     }
 
-    /// Emits everything still held.
-    fn finish(mut self) -> Result<()> {
-        self.flush(None)
+    /// Emits everything still held; returns the number of features of the
+    /// failed-variants GVF emitted as records of their own.
+    fn finish(mut self) -> Result<u64> {
+        self.flush(None)?;
+        Ok(self.added_from_gvf)
     }
 
     /// Emits, by start then name, the held records whose start precedes `before`
-    /// (every held record when `None`).
+    /// (every held record when `None`). Of records sharing a start and a name
+    /// the per-chromosome file's comes first, then a genome-wide file's, then
+    /// a feature of the failed-variants GVF.
     fn flush(&mut self, before: Option<u64>) -> Result<()> {
+        #[derive(Clone, Copy)]
+        enum Next {
+            Buffered,
+            Added,
+            Failed,
+        }
         loop {
             let next_buffered = self
                 .buffered
@@ -511,25 +709,46 @@ impl<F: FnMut(VariationRecord) -> Result<()>> StartOrder<F> {
                 .added
                 .last()
                 .map(|(start, name, _)| (*start, name.as_str()));
-            let (take_buffered, start) = match (next_buffered, next_added) {
-                (None, None) => return Ok(()),
-                (Some(buffered), None) => (true, buffered.0),
-                (None, Some(added)) => (false, added.0),
-                (Some(buffered), Some(added)) if buffered <= added => (true, buffered.0),
-                (Some(_), Some(added)) => (false, added.0),
+            let next_failed = self
+                .failed
+                .last()
+                .map(|feature| (feature.start, feature.variation_name.as_str()));
+            // Of equal places the first listed is taken.
+            let next = [
+                (next_buffered, Next::Buffered),
+                (next_added, Next::Added),
+                (next_failed, Next::Failed),
+            ]
+            .into_iter()
+            .filter_map(|(place, next)| place.map(|place| (place, next)))
+            .min_by(|(a, _), (b, _)| a.cmp(b))
+            .map(|((start, _), next)| (start, next));
+            let Some((start, next)) = next else {
+                return Ok(());
             };
             if before.is_some_and(|position| start >= position) {
                 return Ok(());
             }
-            if take_buffered {
-                let (_, record) = self.buffered.pop_first().expect("peeked");
-                (self.emit)(record)?;
-            } else {
-                let (_, _, identity) = self.added.pop().expect("peeked");
-                // A genome-wide record the per-chromosome file also holds
-                // left the table when its copy was read.
-                if let Some(record) = self.held.remove(&identity) {
+            match next {
+                Next::Buffered => {
+                    let (_, record) = self.buffered.pop_first().expect("peeked");
                     (self.emit)(record)?;
+                }
+                Next::Added => {
+                    let (_, _, identity) = self.added.pop().expect("peeked");
+                    // A genome-wide record the per-chromosome file also holds
+                    // left the table when its copy was read.
+                    if let Some(mut record) = self.held.remove(&identity) {
+                        self.carry(&mut record);
+                        (self.emit)(record)?;
+                    }
+                }
+                Next::Failed => {
+                    let feature = self.failed.pop().expect("peeked");
+                    if !self.carried.contains(&feature.variation_name) {
+                        self.added_from_gvf += 1;
+                        (self.emit)(feature)?;
+                    }
                 }
             }
         }
@@ -581,7 +800,7 @@ impl AllVarsWriter {
     /// chromosome, then a tab-separated cell per column with `.` for an empty
     /// one; and indexes it by its start. A record starting before the previous
     /// one is an error: the index is built on the start column in file order.
-    pub fn write(&mut self, record: &VariationRecord) -> Result<()> {
+    fn write(&mut self, record: &VariationRecord) -> Result<()> {
         if record.start < self.last_start {
             anyhow::bail!(
                 "{} starts at {}, before the record written before it ({}): the variation \
@@ -634,36 +853,40 @@ impl AllVarsWriter {
         noodles::csi::fs::write(&self.index_path, &index)
             .with_context(|| format!("Failed to write {}", self.index_path.display()))?;
         info!(
-            "chr {}: wrote {} ({} records)",
+            "chr {}: wrote {} ({})",
             self.chr,
             self.path.display(),
-            self.count
+            counted(self.count, "record")
         );
         Ok(self.count)
     }
 
     /// Removes the file and any index beside it, leaving the chromosome without
     /// a variation file rather than with a partial one.
-    pub fn discard(self) {
+    fn discard(self) {
         let _ = std::fs::remove_file(&self.path);
         let _ = std::fs::remove_file(&self.index_path);
     }
 }
 
 /// Writes chromosome `chr`'s variation file from its inputs: the records of
-/// [`chromosome_records`] through an [`AllVarsWriter`] with `columns`. Returns
+/// `chromosome_records` through an [`AllVarsWriter`] with `columns`. Returns
 /// the number of records written; on an error the partial file and any index
 /// beside it are removed.
 pub fn write_chromosome(
     chr: &str,
-    vcf: &Path,
+    vcf: &GermlineVcf,
     inputs: &GenomeWideInputs,
     clinvar: Option<&ClinVarAttribs>,
+    cells: Option<&VariantCells>,
     columns: &[String],
     output_dir: &Path,
 ) -> Result<usize> {
     let mut writer = AllVarsWriter::create(output_dir, chr, columns)?;
-    match chromosome_records(chr, vcf, inputs, clinvar, |record| writer.write(&record)) {
+    let written = chromosome_records(chr, vcf, inputs, clinvar, cells, |record| {
+        writer.write(&record)
+    });
+    match written {
         Ok(_) => writer.finish(),
         Err(error) => {
             writer.discard();
@@ -710,7 +933,8 @@ impl VariationRecord {
             "clin_sig_allele" => self.clin_sig_allele.clone().unwrap_or_default(),
             "clin_sig_ref_allele" => self.clin_sig_ref_allele.clone().unwrap_or_default(),
             "clinical_impact" => self.clinical_impact.clone().unwrap_or_default(),
-            "pubmed" | "var_synonyms" => String::new(),
+            "pubmed" => self.pubmed.clone().unwrap_or_default(),
+            "var_synonyms" => self.var_synonyms.clone().unwrap_or_default(),
             population => self
                 .frequencies
                 .get(population)
@@ -813,8 +1037,8 @@ fn parse_chromosome(
         }
     })?;
     info!(
-        "Parsed {} variations from {} ({} skipped)",
-        parsed,
+        "Parsed {} from {} ({} skipped)",
+        counted(parsed, "variation"),
         path.display(),
         skipped + malformed
     );
@@ -1264,9 +1488,9 @@ impl ThousandGenomes {
             Ok(())
         })?;
         info!(
-            "chr {}: {} frequency records read from {} ({} skipped)",
+            "chr {}: {} read from {} ({} skipped)",
             chr,
-            alleles.len(),
+            counted(alleles.len(), "frequency record"),
             path.display(),
             malformed
         );
@@ -1342,60 +1566,32 @@ impl ThousandGenomes {
 /// right and, when either allele exceeds one base, from the right then the left,
 /// an emptied allele reading `-`.
 fn minimised_keys(pos: u64, reference: &str, alt: &str) -> Vec<String> {
-    let mut keys = vec![trim_key(pos, reference, alt, false)];
-    if reference.len() > 1 || alt.len() > 1 {
-        let right_first = trim_key(pos, reference, alt, true);
-        if right_first != keys[0] {
-            keys.push(right_first);
+    let mut keys: Vec<String> = Vec::with_capacity(2);
+    for &end_first in trim_directions(reference.as_bytes(), alt.as_bytes()) {
+        let key = trim_key(pos, reference, alt, end_first);
+        if !keys.contains(&key) {
+            keys.push(key);
         }
     }
     keys
 }
 
-/// `trim_sequences` (`Utils/Sequence.pm:965-1031`) on the forward strand, as the
-/// key `ref_alt_pos`: shared bases are removed from the left, moving the position
-/// right by one per base, and from the right, in the order `end_first` says, while
-/// both alleles still have a base.
+/// `trim_sequences` (`Utils/Sequence.pm:965-1038`) on the forward strand, as the
+/// key `ref_alt_pos`: the pair as [`trim_sequences`] leaves it, compared as
+/// written, and the position moved right by one per base trimmed from the left.
 fn trim_key(pos: u64, reference: &str, alt: &str, end_first: bool) -> String {
-    let (mut r, mut a, mut pos) = (reference.as_bytes(), alt.as_bytes(), pos);
-    let trim_left = |r: &mut &[u8], a: &mut &[u8], pos: &mut u64| {
-        while let (Some((r_first, r_rest)), Some((a_first, a_rest))) =
-            (r.split_first(), a.split_first())
-        {
-            if r_first != a_first {
-                break;
-            }
-            *r = r_rest;
-            *a = a_rest;
-            *pos += 1;
-        }
-    };
-    let trim_right = |r: &mut &[u8], a: &mut &[u8]| {
-        while let (Some((r_last, r_rest)), Some((a_last, a_rest))) =
-            (r.split_last(), a.split_last())
-        {
-            if r_last != a_last {
-                break;
-            }
-            *r = r_rest;
-            *a = a_rest;
-        }
-    };
-    if end_first {
-        trim_right(&mut r, &mut a);
-        trim_left(&mut r, &mut a, &mut pos);
-    } else {
-        trim_left(&mut r, &mut a, &mut pos);
-        trim_right(&mut r, &mut a);
-    }
-    let dash_if_empty = |s: &[u8]| {
-        if s.is_empty() {
-            "-".to_string()
-        } else {
-            String::from_utf8_lossy(s).into_owned()
-        }
-    };
-    format!("{}_{}_{}", dash_if_empty(r), dash_if_empty(a), pos)
+    let trimmed = trim_sequences(
+        reference.as_bytes(),
+        alt.as_bytes(),
+        end_first,
+        CaseRule::AsWritten,
+    );
+    format!(
+        "{}_{}_{}",
+        String::from_utf8_lossy(trimmed.reference),
+        String::from_utf8_lossy(trimmed.alt),
+        pos + trimmed.left as u64
+    )
 }
 
 /// A number as Perl's `sprintf('%.4g')` prints it: four significant digits,
@@ -1469,8 +1665,23 @@ mod tests {
         inputs: &GenomeWideInputs,
         clinvar: Option<&ClinVarAttribs>,
     ) -> Vec<VariationRecord> {
+        collect_from(
+            "21",
+            &GermlineVcf::Chromosome(vcf.to_path_buf()),
+            inputs,
+            clinvar,
+        )
+    }
+
+    /// The records [`chromosome_records`] emits for `chr` from `vcf`, in order.
+    fn collect_from(
+        chr: &str,
+        vcf: &GermlineVcf,
+        inputs: &GenomeWideInputs,
+        clinvar: Option<&ClinVarAttribs>,
+    ) -> Vec<VariationRecord> {
         let mut records = Vec::new();
-        let emitted = chromosome_records("21", vcf, inputs, clinvar, |record| {
+        let emitted = chromosome_records(chr, vcf, inputs, clinvar, None, |record| {
             records.push(record);
             Ok(())
         })
@@ -1602,16 +1813,16 @@ mod tests {
             dir.path(),
             "homo_sapiens-chr21.vcf",
             "21\t100\trs1\tA\t.\t.\t.\tdbSNP_156;TSA=SNV\n\
-             21\t1500\tCD990002\tAT\tA\t.\t.\tHGMD-PUBLIC_20204;TSA=deletion;E_Phenotype_or_Disease;AA=TA\n\
-             21\t4000\tCI990003\tA\t<.>\t.\t.\tHGMD-PUBLIC_20204;TSA=insertion;E_Phenotype_or_Disease\n",
+             21\t1500\tCD000000\tAT\tA\t.\t.\tHGMD-PUBLIC_20204;TSA=deletion;E_Phenotype_or_Disease;AA=TA\n\
+             21\t4000\tCI000000\tA\t<.>\t.\t.\tHGMD-PUBLIC_20204;TSA=insertion;E_Phenotype_or_Disease\n",
         );
         let somatic = write_vcf(
             dir.path(),
             "homo_sapiens_somatic.vcf",
-            "1\t100\tCOSV9900001\tT\t.\t.\t.\tCOSMIC_102;TSA=SNV;E_Phenotype_or_Disease;AA=T\n\
-             21\t1000\tCOSV9900002\tC\t.\t.\t.\tCOSMIC_102;TSA=SNV;E_Phenotype_or_Disease\n\
-             21\t2000\tCOSV9900003\tT\t.\t.\t.\tCOSMIC_102;TSA=insertion;E_Phenotype_or_Disease\n\
-             21\t3000\tCOSV9900004\tTTCT\t<.>\t.\t.\tCOSMIC_102;TSA=deletion;E_Phenotype_or_Disease\n\
+            "1\t100\tCOSV000000\tT\t.\t.\t.\tCOSMIC_102;TSA=SNV;E_Phenotype_or_Disease;AA=T\n\
+             21\t1000\tCOSV0000000\tC\t.\t.\t.\tCOSMIC_102;TSA=SNV;E_Phenotype_or_Disease\n\
+             21\t2000\tCOSV00000000\tT\t.\t.\t.\tCOSMIC_102;TSA=insertion;E_Phenotype_or_Disease\n\
+             21\t3000\tCOSV000000000\tTTCT\t<.>\t.\t.\tCOSMIC_102;TSA=deletion;E_Phenotype_or_Disease\n\
              21\t5000\trs2517045861\tA\tATCC\t.\t.\tClinVar_202509;TSA=insertion;E_Phenotype_or_Disease;CLIN_uncertain_significance\n",
         );
         let inputs = GenomeWideInputs {
@@ -1637,11 +1848,11 @@ mod tests {
         assert_eq!(
             summary,
             [
-                "COSV9900002 1000-1000 COSMIC_MUTATION somatic=1 pheno=1 clin_sig=-",
-                "CD990002 1501-1501 HGMD_MUTATION somatic=0 pheno=1 clin_sig=-",
-                "COSV9900003 2001-2000 COSMIC_MUTATION somatic=1 pheno=1 clin_sig=-",
-                "COSV9900004 3001-3003 COSMIC_MUTATION somatic=1 pheno=1 clin_sig=-",
-                "CI990003 4002-4001 HGMD_MUTATION somatic=0 pheno=1 clin_sig=-",
+                "COSV0000000 1000-1000 COSMIC_MUTATION somatic=1 pheno=1 clin_sig=-",
+                "CD000000 1501-1501 HGMD_MUTATION somatic=0 pheno=1 clin_sig=-",
+                "COSV00000000 2001-2000 COSMIC_MUTATION somatic=1 pheno=1 clin_sig=-",
+                "COSV000000000 3001-3003 COSMIC_MUTATION somatic=1 pheno=1 clin_sig=-",
+                "CI000000 4002-4001 HGMD_MUTATION somatic=0 pheno=1 clin_sig=-",
                 "rs2517045861 5002-5001 -/TCC somatic=1 pheno=1 clin_sig=uncertain_significance",
             ]
         );
@@ -2027,6 +2238,33 @@ mod tests {
             .is_empty());
     }
 
+    /// A `clinvar_clin_sig` value is one classification or several joined by `;`:
+    /// the first stands as written, a later one without the blanks around it, and
+    /// an empty later piece is none. A comma or a slash is part of a classification.
+    #[test]
+    fn a_significance_value_is_cut_into_its_classifications() {
+        let cut = |value: &'static str| classifications(value).collect::<Vec<_>>();
+        assert_eq!(cut("likely benign"), ["likely benign"]);
+        assert_eq!(
+            cut("uncertain significance; risk factor"),
+            ["uncertain significance", "risk factor"]
+        );
+        assert_eq!(
+            cut("conflicting classifications of pathogenicity; association; risk factor"),
+            [
+                "conflicting classifications of pathogenicity",
+                "association",
+                "risk factor"
+            ]
+        );
+        assert_eq!(
+            cut("pathogenic/pathogenic, low penetrance"),
+            ["pathogenic/pathogenic, low penetrance"]
+        );
+        assert_eq!(cut("benign;other"), ["benign", "other"]);
+        assert_eq!(cut("benign; ;  other ;"), ["benign", "other"]);
+    }
+
     /// A dump directory without the tables is an error naming the missing table.
     #[test]
     fn clinvar_dump_reader_names_the_missing_table() {
@@ -2140,8 +2378,9 @@ mod tests {
         let out = dir.path().join("cache");
         let error = write_chromosome(
             "21",
-            &vcf,
+            &GermlineVcf::Chromosome(vcf),
             &GenomeWideInputs::default(),
+            None,
             None,
             &variation_columns(false),
             &out,
@@ -2188,6 +2427,37 @@ mod tests {
                 ("rs9", 102),
                 ("del", 103)
             ]
+        );
+    }
+
+    /// A genome-wide file, the form Ensembl publishes for every species but
+    /// human, gives each chromosome the records on it, none to a chromosome it
+    /// holds no record on, and names the sequences it holds records on in
+    /// order of first appearance; read as a chromosome's own file it gives
+    /// that chromosome every record, whatever the CHROM column says.
+    #[test]
+    fn a_genome_wide_file_gives_each_chromosome_its_own_records() {
+        let dir = tempfile::tempdir().unwrap();
+        let vcf = write_vcf(
+            dir.path(),
+            "mus_musculus.vcf",
+            "2\t100\trs1\tA\tG\t.\t.\tdbSNP_156;TSA=SNV\n\
+             2\t300\trs2\tA\tG\t.\t.\tdbSNP_156;TSA=SNV\n\
+             19\t400\trs3\tA\tG\t.\t.\tdbSNP_156;TSA=SNV\n",
+        );
+        assert_eq!(sequence_names(&vcf).unwrap(), ["2", "19"]);
+        let names = |chr: &str, vcf: GermlineVcf| -> Vec<String> {
+            collect_from(chr, &vcf, &GenomeWideInputs::default(), None)
+                .into_iter()
+                .map(|record| record.variation_name)
+                .collect()
+        };
+        assert_eq!(names("2", GermlineVcf::Genome(vcf.clone())), ["rs1", "rs2"]);
+        assert_eq!(names("19", GermlineVcf::Genome(vcf.clone())), ["rs3"]);
+        assert!(names("X", GermlineVcf::Genome(vcf.clone())).is_empty());
+        assert_eq!(
+            names("19", GermlineVcf::Chromosome(vcf)),
+            ["rs1", "rs2", "rs3"]
         );
     }
 
@@ -2295,5 +2565,398 @@ mod tests {
                 "{header:?}"
             );
         }
+    }
+
+    /// The made-up files the cells are read from: `tables` as plain dumps,
+    /// each `(table, rows)`, and the failed-variants GVF of `features`, each
+    /// `(sequence, class, start, end, attributes after the name)` of a
+    /// variant named in `Dbxref`.
+    fn made_up_cells(
+        dir: &Path,
+        tables: &[(&str, &str)],
+        features: &[(&str, &str, u64, u64, &str, &str)],
+    ) -> VariantCells {
+        use crate::variant_cells::VariantCellInputs;
+        let mut inputs = VariantCellInputs {
+            scratch: dir.join("scratch"),
+            ..Default::default()
+        };
+        for (table, rows) in tables {
+            let path = dir.join(format!("{table}.txt"));
+            fs::write(&path, rows).unwrap();
+            let named = match *table {
+                "variation" => &mut inputs.variation,
+                "variation_citation" => &mut inputs.variation_citation,
+                "publication" => &mut inputs.publication,
+                "variation_synonym" => &mut inputs.variation_synonym,
+                "source" => &mut inputs.source,
+                "failed_variation" => &mut inputs.failed_variation,
+                other => panic!("no table {other}"),
+            };
+            *named = Some(path);
+        }
+        if !features.is_empty() {
+            let gvf: String = features
+                .iter()
+                .map(|(sequence, class, start, end, name, alleles)| {
+                    format!(
+                        "{sequence}\tmadeup\t{class}\t{start}\t{end}\t.\t+\t.\t\
+                         ID=1;Dbxref=madeup_1:{name};{alleles};ensembl_failure_reason=made up\n"
+                    )
+                })
+                .collect();
+            let path = dir.join("made_up_failed.gvf");
+            fs::write(&path, format!("##gff-version 3\n{gvf}")).unwrap();
+            inputs.failed_gvf = Some(path);
+        }
+        VariantCells::read(&inputs, &["21".to_string()]).unwrap()
+    }
+
+    /// A row of `variation` among the schema's twelve columns.
+    fn variation_row(id: u32, name: &str) -> String {
+        format!("{id}\t1\t{name}\t\\N\t2\t0\t\\N\t\\N\t\\N\t\\N\t\\N\t1\n")
+    }
+
+    /// The records [`chromosome_records`] emits for chromosome 21 with
+    /// `cells`, in order.
+    fn collect_with_cells(
+        vcf: &Path,
+        inputs: &GenomeWideInputs,
+        cells: &VariantCells,
+    ) -> Vec<VariationRecord> {
+        let mut records = Vec::new();
+        chromosome_records(
+            "21",
+            &GermlineVcf::Chromosome(vcf.to_path_buf()),
+            inputs,
+            None,
+            Some(cells),
+            |record| {
+                records.push(record);
+                Ok(())
+            },
+        )
+        .unwrap();
+        records
+    }
+
+    /// The features of the failed-variants GVF on the chromosome join its
+    /// records. A feature whose name a record of the chromosome's own file
+    /// carries (`mv200`; `mv400`, a deletion the VCF anchors one base before
+    /// the feature's start) or a record of a genome-wide file carries
+    /// (`mv600`) adds no record and flags that one, which takes the
+    /// feature's end where its alleles give another (`mv800`, three bases of
+    /// reference allele on a span of two; `mv650` of the genome-wide file,
+    /// two on a span of one). Any other becomes a
+    /// record with `failed` 1 at its start, in start order and, at one
+    /// start, in name order after nothing but the names before its own
+    /// (`mv2` before `mv300` at 300): an insertion one base after the end
+    /// the GVF writes (`mv299`, 301-300), an allele that is no sequence as
+    /// the string the GVF names (`mv150`), a feature after the file's last
+    /// record (`mv700`). A feature on another chromosome adds nothing here.
+    /// An added record takes the 1000 Genomes frequencies of its alleles,
+    /// matched at the start the GVF writes, as a VCF record's are matched at
+    /// its position.
+    #[test]
+    fn failed_gvf_features_flag_their_record_or_join_the_records_at_their_start() {
+        let dir = tempfile::tempdir().unwrap();
+        let vcf = write_vcf(
+            dir.path(),
+            "homo_sapiens-chr21.vcf",
+            "21\t100\tmv100\tA\tG\t.\t.\tdbSNP_156;TSA=SNV\n\
+             21\t200\tmv200\tA\tG\t.\t.\tdbSNP_156;TSA=SNV\n\
+             21\t300\tmv300\tA\tG\t.\t.\tdbSNP_156;TSA=SNV\n\
+             21\t400\tmv400\tAT\tA\t.\t.\tdbSNP_156;TSA=deletion\n\
+             21\t500\tmv500\tA\tG\t.\t.\tdbSNP_156;TSA=SNV\n\
+             21\t800\tmv800\tCAT\tCATG\t.\t.\tdbSNP_156;TSA=indel\n",
+        );
+        let genome_wide = write_vcf(
+            dir.path(),
+            "homo_sapiens_phenotype_associated.vcf",
+            "21\t600\tmv600\tC\tT\t.\t.\tdbSNP_156;TSA=SNV\n\
+             21\t650\tmv650\tGG\tGGA\t.\t.\tdbSNP_156;TSA=indel\n",
+        );
+        const POPULATIONS: &str = "AFR=0.5;AMR=0.25;EAS=0.125;EUR=0.75;SAS=0.0625";
+        let frequencies = write_vcf(
+            dir.path(),
+            "1000GENOMES-phase_3.vcf",
+            &format!(
+                "21\t250\tfa\tC\tT\t.\t.\tdbSNP_156;TSA=SNV;{POPULATIONS}\n\
+                 21\t299\tfb\tA\tAGG\t.\t.\tdbSNP_156;TSA=insertion;{POPULATIONS}\n"
+            ),
+        );
+        let inputs = GenomeWideInputs {
+            frequencies: Some(frequencies),
+            somatic: None,
+            germline: vec![genome_wide],
+        };
+        let cells = made_up_cells(
+            dir.path(),
+            &[],
+            &[
+                (
+                    "21",
+                    "SNV",
+                    700,
+                    700,
+                    "mv700",
+                    "Reference_seq=A;Variant_seq=C",
+                ),
+                (
+                    "21",
+                    "SNV",
+                    200,
+                    200,
+                    "mv200",
+                    "Reference_seq=A;Variant_seq=G",
+                ),
+                (
+                    "21",
+                    "SNV",
+                    250,
+                    250,
+                    "mv250",
+                    "Reference_seq=C;Variant_seq=T",
+                ),
+                (
+                    "21",
+                    "insertion",
+                    300,
+                    300,
+                    "mv299",
+                    "Reference_seq=-;Variant_seq=GG",
+                ),
+                (
+                    "21",
+                    "sequence_alteration",
+                    150,
+                    154,
+                    "mv150",
+                    "Reference_seq=.;Variant_seq=.;invalid_variant_strings=madeup_variant",
+                ),
+                (
+                    "21",
+                    "deletion",
+                    401,
+                    401,
+                    "mv400",
+                    "Reference_seq=T;Variant_seq=-",
+                ),
+                (
+                    "21",
+                    "SNV",
+                    300,
+                    300,
+                    "mv2",
+                    "Reference_seq=A;Variant_seq=C,T",
+                ),
+                ("22", "SNV", 50, 50, "mv50", "Reference_seq=A;Variant_seq=C"),
+                (
+                    "21",
+                    "SNV",
+                    600,
+                    600,
+                    "mv600",
+                    "Reference_seq=C;Variant_seq=T",
+                ),
+                (
+                    "21",
+                    "indel",
+                    800,
+                    801,
+                    "mv800",
+                    "Reference_seq=CAT;Variant_seq=CATG",
+                ),
+                (
+                    "21",
+                    "indel",
+                    650,
+                    650,
+                    "mv650",
+                    "Reference_seq=GG;Variant_seq=GGA",
+                ),
+            ],
+        );
+
+        let records = collect_with_cells(&vcf, &inputs, &cells);
+        let read: Vec<(u64, u64, &str, u8, &str)> = records
+            .iter()
+            .map(|r| {
+                (
+                    r.start,
+                    r.end,
+                    r.variation_name.as_str(),
+                    r.failed,
+                    r.allele_string.as_str(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            read,
+            [
+                (100, 100, "mv100", 0, "A/G"),
+                (150, 154, "mv150", 1, "madeup_variant"),
+                (200, 200, "mv200", 1, "A/G"),
+                (250, 250, "mv250", 1, "C/T"),
+                (300, 300, "mv2", 1, "A/C/T"),
+                (300, 300, "mv300", 0, "A/G"),
+                (301, 300, "mv299", 1, "-/GG"),
+                (401, 401, "mv400", 1, "T/-"),
+                (500, 500, "mv500", 0, "A/G"),
+                (600, 600, "mv600", 1, "C/T"),
+                (650, 650, "mv650", 1, "GG/GGA"),
+                (700, 700, "mv700", 1, "A/C"),
+                (800, 801, "mv800", 1, "CAT/CATG"),
+            ]
+        );
+        assert!(records.iter().all(|r| r.strand == 1 && r.somatic == 0));
+        let of = |name: &str| records.iter().find(|r| r.variation_name == name).unwrap();
+        assert_eq!(of("mv250").frequencies["AFR"], "T:0.5");
+        assert_eq!(of("mv250").frequencies["SAS"], "T:0.0625");
+        assert_eq!(of("mv299").frequencies["EUR"], "GG:0.75");
+        assert!(of("mv250").frequencies.contains_key("AF"));
+        for none in ["mv150", "mv2", "mv700", "mv100"] {
+            assert!(of(none).frequencies.is_empty(), "{none}");
+        }
+        let facts = cells.facts();
+        assert_eq!(
+            (facts.records_flagged_failed, facts.records_added_from_gvf),
+            (10, 5)
+        );
+        assert!(facts.failed_gvf_read && !facts.failed_variation_joined);
+    }
+
+    /// Every record takes its `pubmed` and `var_synonyms` cells by its name
+    /// from the joined tables, a record added from the failed-variants GVF
+    /// as one read from a VCF, and a record `failed_variation` names is
+    /// flagged where the GVF holds no feature of it. A build given no cells
+    /// writes the three empty.
+    #[test]
+    fn records_take_their_cells_by_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let vcf = write_vcf(
+            dir.path(),
+            "homo_sapiens-chr21.vcf",
+            "21\t100\tmv100\tA\tG\t.\t.\tdbSNP_156;TSA=SNV\n\
+             21\t500\tmv500\tA\tG\t.\t.\tdbSNP_156;TSA=SNV\n\
+             21\t900\t.\tA\tG\t.\t.\tdbSNP_156;TSA=SNV\n",
+        );
+        let variation = [
+            variation_row(1, "mv250"),
+            variation_row(2, "mv100"),
+            variation_row(3, "mv500"),
+        ]
+        .concat();
+        let cells = made_up_cells(
+            dir.path(),
+            &[
+                ("variation", &variation),
+                (
+                    "publication",
+                    "4\ta title\tAn Author\t123456\t\\N\t2020\t\\N\t\\N\n",
+                ),
+                ("variation_citation", "1\t4\t\\N\n2\t4\t\\N\n"),
+                (
+                    "source",
+                    "5\tmadeup_source\t1\t\\N\t\\N\t\\N\tgermline\tvariation_synonym\n",
+                ),
+                (
+                    "variation_synonym",
+                    "1\t2\t\\N\t5\tother100\n2\t1\t\\N\t5\tother250\n",
+                ),
+                ("failed_variation", "1\t3\t2\n"),
+            ],
+            &[(
+                "21",
+                "SNV",
+                250,
+                250,
+                "mv250",
+                "Reference_seq=C;Variant_seq=T",
+            )],
+        );
+        let inputs = GenomeWideInputs::default();
+        let records = collect_with_cells(&vcf, &inputs, &cells);
+        let read: Vec<(&str, u8, Option<&str>, Option<&str>)> = records
+            .iter()
+            .map(|r| {
+                (
+                    r.variation_name.as_str(),
+                    r.failed,
+                    r.pubmed.as_deref(),
+                    r.var_synonyms.as_deref(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            read,
+            [
+                ("mv100", 0, Some("123456"), Some("madeup_source::other100")),
+                ("mv250", 1, Some("123456"), Some("madeup_source::other250")),
+                ("mv500", 1, None, None),
+                ("", 0, None, None),
+            ]
+        );
+        let facts = cells.facts();
+        assert_eq!(
+            (
+                facts.records_with_pubmed,
+                facts.records_with_synonyms,
+                facts.records_flagged_failed,
+                facts.records_added_from_gvf
+            ),
+            (2, 2, 2, 1)
+        );
+
+        let without = collect(&vcf, &inputs, None);
+        assert_eq!(without.len(), 3);
+        assert!(without
+            .iter()
+            .all(|r| r.failed == 0 && r.pubmed.is_none() && r.var_synonyms.is_none()));
+    }
+
+    /// The three cells are printed in their columns (`Dumper/Variation.pm:
+    /// 239, 252-253`): `failed` as 1, the PubMed identifiers and the synonyms
+    /// as stored; a record without alleles, as the failed-variants GVF holds
+    /// one, prints `.` for its allele string.
+    #[test]
+    fn all_vars_lines_carry_the_three_cells() {
+        let dir = tempfile::tempdir().unwrap();
+        let with_cells = VariationRecord {
+            variation_name: "mv10".to_string(),
+            failed: 1,
+            start: 10,
+            end: 10,
+            strand: 1,
+            allele_string: "A/G".to_string(),
+            pubmed: Some("111,222".to_string()),
+            var_synonyms: Some("madeup::x1,x2--other::y1".to_string()),
+            ..Default::default()
+        };
+        let no_alleles = VariationRecord {
+            variation_name: "mv20".to_string(),
+            failed: 1,
+            start: 20,
+            end: 20,
+            strand: 1,
+            ..Default::default()
+        };
+        let columns = variation_columns(false);
+        let mut writer = AllVarsWriter::create(dir.path(), "21", &columns).unwrap();
+        for record in [&with_cells, &no_alleles] {
+            writer.write(record).unwrap();
+        }
+        assert_eq!(writer.finish().unwrap(), 2);
+        let mut text = String::new();
+        bgzf::io::Reader::new(
+            fs::File::open(dir.path().join("variations/21/all_vars.gz")).unwrap(),
+        )
+        .read_to_string(&mut text)
+        .unwrap();
+        assert_eq!(
+            text,
+            "21\tmv10\t1\t.\t10\t.\tA/G\t.\t.\t.\t.\t.\t.\t111,222\tmadeup::x1,x2--other::y1\n\
+             21\tmv20\t1\t.\t20\t.\t.\t.\t.\t.\t.\t.\t.\t.\t.\n"
+        );
     }
 }

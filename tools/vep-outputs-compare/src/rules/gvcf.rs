@@ -20,9 +20,12 @@ use std::sync::LazyLock;
 static GENERATED_NAME: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^.+?_[0-9]+_(.+)$").expect("regex"));
 
-/// Parser/VCF.pm:241, the ALT forms that route a line to the structural path.
-static STRUCTURAL_ALT_LIST: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"[<\[\]][^*]+[>\]\[]|^\.\w+|\w+\.$").expect("regex"));
+/// Parser/VCF.pm:241, the ALT forms that route a line to the structural path. The word class
+/// is CPython's `\w` on text, a letter, a number of any kind or `_`, and the closing dot may
+/// stand before one final line feed, as CPython's `$` reads it.
+static STRUCTURAL_ALT_LIST: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"[<\[\]][^*]+[>\]\[]|^\.[\p{L}\p{N}_]+|[\p{L}\p{N}_]+\.\n?$").expect("regex")
+});
 
 const NON_REF_BLOCK: &str = "<NON_REF>";
 
@@ -298,4 +301,29 @@ mod tests {
         assert!(GENERATED_NAME.is_match("21_100_A/G,<NON_REF>"));
         assert!(!GENERATED_NAME.is_match("21_١٠٠_A/G,<NON_REF>"));
     }
+
+    #[test]
+    fn a_word_character_of_a_structural_alt_is_a_letter_a_number_or_the_underscore() {
+        // A superscript digit, a fraction, a digit of another script, an accented letter and
+        // the underscore.
+        for alt in [".\u{b2}", "\u{bd}.", ".\u{663}", "\u{e9}.", "._"] {
+            assert!(!is_gvcf_variant_site(&[alt, "<NON_REF>"], None), "{alt:?}");
+        }
+        // A combining mark, a connector other than the underscore, a joiner and a circled
+        // letter.
+        for alt in [".\u{301}", "\u{203f}.", "\u{200d}.", ".\u{24b6}"] {
+            assert!(is_gvcf_variant_site(&[alt, "<NON_REF>"], None), "{alt:?}");
+        }
+    }
+
+    #[test]
+    fn the_closing_dot_of_a_structural_alt_may_stand_before_one_final_line_feed() {
+        assert!(!is_gvcf_variant_site(&["G.\n", "<NON_REF>"], None));
+        assert!(is_gvcf_variant_site(&["G.\n\n", "<NON_REF>"], None));
+        assert!(is_gvcf_variant_site(&["G.\r", "<NON_REF>"], None));
+    }
 }
+
+#[cfg(test)]
+#[path = "gvcf_variant_sites_tests.rs"]
+mod variant_sites_tests;

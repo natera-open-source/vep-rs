@@ -85,7 +85,7 @@ VEP hands the plugin sequence variants alone, and vep-rs does the same.
 
 ## Where AncestralAllele differs from Ensembl VEP
 
-Two behaviours of Ensembl VEP 116.2's plugin are not reproduced: one under
+Two behaviours of Ensembl VEP 116.3's plugin are not reproduced: one under
 `--minimal` alone, one on an uncompressed FASTA whose record ends before a
 variant's span. On a bgzipped FASTA without the flag the two engines write the
 same `AA` on every row. Each is a documented class: its section names the rows
@@ -97,12 +97,12 @@ defines the terms.
 
 The classes carry their tier under that page's rule:
 
-- tier 1 is a shape the chromosome 21 population cuts carry with no flag;
+- tier 1 is a shape the chromosome 21 cuts carry with no flag;
 - tier 2 is one that needs a flag or plugin on ordinary data;
 - tier 3 is one ordinary data does not carry.
 
-The counts are over the cuts' 15,646,481 records, the 111 golden corpora and
-their 392 flag sets.
+The counts are over the cuts' 15,646,481 records, the 152 golden corpora and
+their 511 flag sets.
 
 ### 1. The ancestral allele printed for a later allele of a `--minimal` split record
 
@@ -123,7 +123,7 @@ without the flag.
 trimmed span. A split record's rows therefore agree with Ensembl VEP's on the
 first allele and differ on a later allele whenever the two spans read differently.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2,
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3,
 `VEP_plugins` at release/116):
 
 - `AncestralAllele.pm`, lines 116-124, 148 and 151, `run`: the value is read
@@ -133,10 +133,10 @@ first allele and differ on a later allele whenever the two spans read differentl
 - `Bio/EnsEMBL/VEP/InputBuffer.pm`, lines 638-709, `split_variants`: a
   multi-allelic record one of whose alleles trims becomes one feature per allele
   on its trimmed span. The first is marked `first`, the others `merge_with`.
-- `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 2289 and 2303,
+- `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 2298 and 2312,
   `rejoin_variants_in_InputBuffer`: each split feature's rows are built once, so
-  each caches its own value. Lines 2291-2293 restore the first feature's
-  allele string and span. Line 2314 points every later allele's overlaps at the
+  each caches its own value. Lines 2300-2302 restore the first feature's
+  allele string and span. Line 2323 points every later allele's overlaps at the
   first feature, so the output pass reads its cached value for every allele.
 
 **What correcting it would change.** Every allele's rows would carry the
@@ -159,10 +159,10 @@ its value on the variation feature, so the class covers it alone; a plugin that
 reads the rejoined record's span or alleles without caching is the sibling class
 [`minimal_plugin_sees_the_rejoined_record`](../divergences/minimal-plugin-sees-the-rejoined-record.md).
 
-**How often the shape occurs.** Tier 2: 1,422 of the population cuts' records
+**How often the shape occurs.** Tier 2: 1,422 of the cuts' records
 (91 per million) are multi-allelic records one of whose alleles trims beyond the
 anchor, so that `--minimal` splits and rejoins them. The ancestral sequence
-decides the values. 19 corpora carry the shape and no committed flag set runs
+decides the values. 22 corpora carry the shape and no committed flag set runs
 the plugin under `--minimal`.
 
 #### 1.1 A two-allele indel whose second allele trims to an insertion
@@ -171,14 +171,14 @@ the plugin under `--minimal`.
 AncestralAllele corpus (`tests/golden/116/GRCh38-plugin-ancestral/variants.vcf`),
 run with the corpus's flags and `--minimal`, is `G/-/GT` at 21:42750001 once
 anchored. Its `GT` allele trims to the insertion of `T` after 21:42750001, an
-empty span, which the plugin's own rule values `-`. Ensembl VEP 116.2 writes
+empty span, which the plugin's own rule values `-`. Ensembl VEP 116.3 writes
 `AA=G` on all 120 rows of the record; vep-rs writes `AA=G` on the 60 rows of the
 `-` allele and `AA=-` on the 60 rows of the `T` allele, every other column
 agreeing. Without `--minimal` both engines write `AA=G` on every row, the
 record's one span being 21:42750001.
 
 On `21 42600001 TC CC,T`, whose later allele is the deletion of the `C` at
-21:42600002, Ensembl VEP 116.2 writes `AA=T` on that allele's rows, the first
+21:42600002, Ensembl VEP 116.3 writes `AA=T` on that allele's rows, the first
 allele's base at 21:42600001. The allele's own span reads `C`, which vep-rs
 writes, and the record's whole span `TC`, which both engines write on every row
 without `--minimal`.
@@ -186,7 +186,7 @@ without `--minimal`.
 ### 2. A span past the end of an uncompressed FASTA's record
 
 **The defect in one sentence.** From an uncompressed ancestral FASTA, Ensembl
-VEP 116.2 reads a span that lies wholly past the end of the chromosome's record
+VEP 116.3 reads a span that lies wholly past the end of the chromosome's record
 as that record's last base, one base whatever the span's length, where the
 bgzipped form of the same file gives the empty string.
 
@@ -204,7 +204,7 @@ span that runs past the end reports the bases up to it. These are the values
 the bgzipped form gives in both engines.
 
 **Where it is in Ensembl VEP's source** (`VEP_plugins` at release/116, BioPerl
-1.6.924, the release Ensembl VEP 116.2 installs):
+1.6.924, the release Ensembl VEP 116.3 installs):
 
 - `AncestralAllele.pm`, line 95: a path ending `.gz` is read through
   `Bio::DB::HTS::Faidx`, any other through `Bio::DB::Fasta`. Line 137 asks
@@ -242,7 +242,7 @@ no committed record lies past the end of its record.
 **In short.** The corpus's chromosome 21 record, cut to its first 14,439,400
 bases and written uncompressed, ends on the `C` at 21:14439400. Run against it,
 a three-base deletion 301 kb past the end and a substitution 4.8 Mb past it get
-`AA=C` from Ensembl VEP 116.2 on every row and `AA=` from vep-rs. The corpus's
+`AA=C` from Ensembl VEP 116.3 on every row and `AA=` from vep-rs. The corpus's
 `anc_intergenic_snv` at the last base gets `AA=C` from both, and the same cut
 bgzipped gives vep-rs's values in both engines.
 
@@ -281,7 +281,7 @@ Both engines run `--plugin AncestralAllele,cut.fa`.
 
 #### 2.3 What each engine writes
 
-Ensembl VEP 116.2 writes `AA=C` on every row of all three records. Its rows for
+Ensembl VEP 116.3 writes `AA=C` on every row of all three records. Its rows for
 the deletion (the first of its twenty-seven) and the later substitution:
 
 ```
@@ -336,7 +336,7 @@ vep -i record.vcf -o out.txt --offline --json_cache <corpus>/json_cache \
 `<corpus>` is the corpus directory, `tests/golden/116/GRCh38-plugin-ancestral`,
 and `record.vcf` holds the three records of 2.2.
 
-vep-rs writes `AA=` on the two records past the end. Ensembl VEP 116.2 writes
+vep-rs writes `AA=` on the two records past the end. Ensembl VEP 116.3 writes
 `AA=C`. Compressing `cut.fa` with `bgzip` and indexing it, then naming
 `cut.fa.gz`, makes the engines agree.
 

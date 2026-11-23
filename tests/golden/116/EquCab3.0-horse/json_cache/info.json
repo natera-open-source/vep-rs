@@ -1,0 +1,37 @@
+{
+  "assembly": "EquCab3.0",
+  "cache_version": 116,
+  "contig_order": [
+    "31",
+    "MT",
+    "PJAA01003991.1"
+  ],
+  "polyphen": "",
+  "regulatory": false,
+  "sift": "b",
+  "source_versions": {
+    "assembly": "EquCab3.0",
+    "dbSNP": "151",
+    "genebuild": "",
+    "sift": "sift6.2.1"
+  },
+  "species": "equus_caballus",
+  "var_type": "tabix",
+  "variation_cols": [
+    "chr",
+    "variation_name",
+    "failed",
+    "somatic",
+    "start",
+    "end",
+    "allele_string",
+    "strand",
+    "clin_sig",
+    "phenotype_or_disease",
+    "clin_sig_allele",
+    "clin_sig_ref_allele",
+    "clinical_impact",
+    "pubmed",
+    "var_synonyms"
+  ]
+}

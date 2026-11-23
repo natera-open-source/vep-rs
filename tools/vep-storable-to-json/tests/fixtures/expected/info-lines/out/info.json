@@ -1,0 +1,26 @@
+{
+   "" : "empty key",
+   "cache_version" : 116,
+   "café" : "valÿ \"q\" back\\slash",
+   "contig_order" : [
+      "21"
+   ],
+   "crlf" : "value\r",
+   "last" : "no newline",
+   "source_type" : "ensembl",
+   "source_versions" : {
+      "" : "empty source",
+      "assembly" : "GRCh38.p14",
+      "polyphen" : "2.2.3",
+      "sift" : "0",
+      "type" : "from the file"
+   },
+   "species" : "homo_sapiens_again",
+   "tabbed" : "first\tsecond",
+   "variation_cols" : [
+      "a",
+      "b",
+      "c"
+   ],
+   "variation_cols_more" : "a,,b"
+}

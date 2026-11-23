@@ -1,0 +1,86 @@
+{
+ "plugin_fixtures": {
+  "generator": "scripts/fixtures/cut_plugin_regions.py",
+  "flank": 5000,
+  "record_flank": 2000,
+  "exon_flank": 50,
+  "gerp_regions": "exons",
+  "tools": {
+   "bgzip": "bgzip (htslib) 1.9"
+  },
+  "files": {
+   "reference.fa.fai": "3bd427d99b4d06f4d89f25780d56c7b8108a5bdb9f47408073ef0bd726e5099e",
+   "reference.fa.gz": "0403be1efed0839164030f78c1a490ca5cbf59eb944190ba48903d0d26ae3613",
+   "reference.fa.gz.fai": "3bd427d99b4d06f4d89f25780d56c7b8108a5bdb9f47408073ef0bd726e5099e",
+   "reference.fa.gz.gzi": "b1f6210de42fdbfe19a23c9374166edafd28c1f1681d11b0554ad7836a495d5f"
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 63,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species dictyostelium_discoideum --assembly dicty_2.7 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "dictyostelium_discoideum/63_dicty_2.7",
+ "fasta": "the three sequences the records and the pruned cache's transcripts sit on (6, CH709148 and CH709182) at their full length from Dictyostelium_discoideum.dicty_2.7.dna.chromosome.6.fa.gz and Dictyostelium_discoideum.dicty_2.7.dna.nonchromosomal.fa.gz of Ensembl Genomes release 63 (Ensembl Protists), each file held to the sum of the directory's CHECKSUMS; every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
+ "input": "variants.vcf: 283 records on chromosome 6 (223 records) and the unplaced sequences CH709148 (29) and CH709182 (31); 24 of them name their sequence by a synonym the cache's chr_synonyms.txt lists (CM000155.2, CH709148.1, CH709182.1). All come from tools/vep-seeded-variants (generator version 2, seed 1, --records wide --per-category 36, one --sequence for each of the three sequences, every reference allele read from the genome file), their IDs naming the category and an ordinal: 23 categories, among them start and stop codons under the standard genetic code, a missense and a synonymous change on each strand, both splice sites, a 5' untranslated region, an intron, upstream, downstream and intergenic positions, a frameshift insertion, a frameshift deletion, an in-frame deletion and the first and the last base of a sequence. The cache holds no known variant, no transcript with a 3' untranslated region, no circular sequence and no genetic code but the standard one, so the corpus has no record of those kinds; no record is multi-allelic",
+ "sha256": {
+  "default.txt": "0b7c5ebb8056753f03973ea83d72645e096326ae446edb93bcdaf41b1c0f0c7e",
+  "tab.txt": "7156ad784a0ebd4109a80206a713a238cb43d77d769f5e32162a63f302538f35",
+  "vcf.vcf": "6d3edfb73a4b3e0217119094b0ca2ebaea822365879299ff021277cd5d0f08ac",
+  "json.jsonl": "3dfae44dde58265617e58824fa062e9f0dcc106ea64f76dd78e57d6ae47ca2e7"
+ },
+ "variants_vcf_sha256": "75c4c96df315edaa6487f3ced44ca6f6bf538d9e4d7f9141e673b4af64fcb19f",
+ "flag_sets": {
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species dictyostelium_discoideum --assembly dicty_2.7 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "dictyostelium_discoideum/63_dicty_2.7",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "f91fcc78c12f92d70b563a92e7cd9f5fe3e5567f2876b5079a026b62f520511b",
+    "tab.txt": "6c22127c38a99a89aab91b50d3a7c35781171f469fabd11299bad67a969568a8",
+    "vcf.vcf": "8b8b1d69967a75b02a1ebbc428c58dbc81cf2bbeb879c7ebee9a5c7b94151852",
+    "json.jsonl": "fe1bf4a56f8b65e884f6ae60ccff60601e6ea71d3a925f99e82f9f7b1f3a03fb"
+   },
+   "flags": [
+    "--everything"
+   ],
+   "expected_dir": "expected_everything"
+  },
+  "hgvs": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species dictyostelium_discoideum --assembly dicty_2.7 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs [--tab|--vcf|--json]",
+   "perl_cache": "dictyostelium_discoideum/63_dicty_2.7",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "8115d81c80c89606f467a173b45c89763a37bcb9fe9a1275489c21e1a5cbf4e1",
+    "tab.txt": "3d5936cf013510064c3a2172f09b0197799143ce6d3bd707818694f1dfc7c63b",
+    "vcf.vcf": "d4bda2ecd6c7b0ed1b9454c8b71324344cf78f47319e3d157605ed981c803018",
+    "json.jsonl": "0f7678e5815a8ba61d6ce20998dfb4bfc0a2510d58fbf58dcb4e758c5953bfda"
+   },
+   "flags": [
+    "--hgvs"
+   ],
+   "expected_dir": "expected_hgvs"
+  }
+ },
+ "generator": "Ensembl VEP over the record pool under the corpus flags; tools/vep-golden-corpus select --release 63 --assembly dicty_2.7 --species dictyostelium_discoideum --dataset wide=<reference>=<the generated records> --k 2 --seed 1 --max-span 1000000 --max-records 500 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 6 --include <the named records> --covers species-dictyostelium-dicty2 --covers genetic-code-tables --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --flank 5000 --gzip --drop sorted_exons --perl-info <cache>/info.txt --cache-version 63 over the whole cache tools/vep-storable-to-json converts from the Ensembl Protists release 63 dicty_2.7 cache (the cache carries no variation files, no SIFT or PolyPhen predictions and no regulatory data); scripts/fixtures/cut_plugin_regions.py --reference <the three sequences> --flank 5000 --record-flank 2000, run over the records with each sequence synonym written as the cache's name; scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; tools/vep-golden-corpus flag-set (everything, hgvs) and classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp for the hgvs set)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "6": 624,
+   "CH709148": 13,
+   "CH709182": 9
+  },
+  "shards": 6,
+  "synonym_lines": 3,
+  "variation_slices": "none: the cache holds no variation file"
+ }
+}

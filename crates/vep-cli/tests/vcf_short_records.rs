@@ -60,7 +60,7 @@ fn short_twin_output(dir: &Path, corpus: &Corpus, format_flag: &str) -> Vec<Stri
         .collect()
 }
 
-/// Ensembl VEP 116.2 run on the corpus's `variants.short.vcf` with the
+/// Ensembl VEP 116.3 run on the corpus's `variants.short.vcf` with the
 /// manifest's flags writes 46 JSON objects for its 52 records (six are skipped),
 /// and 43 of them carry the record's line as written as `input`
 /// (OutputFactory/JSON.pm:247 joins the fields Perl's `split` read), the 36

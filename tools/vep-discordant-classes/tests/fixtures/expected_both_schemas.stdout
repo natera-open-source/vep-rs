@@ -1,0 +1,18 @@
+======================================================================
+DISCORDANT CLASSIFICATION SUMMARY
+======================================================================
+
+Total discordants: 3
+
+By mismatch type:
+  coordinate_only                  2 ( 66.7%)
+  true_extra                       1 ( 33.3%)
+
+By mismatch type + direction:
+  coordinate_only           only_rust           1
+  coordinate_only           only_perl           1
+  true_extra                only_rust           1
+
+By file + mismatch type (top 30):
+  sv_a                                coordinate_only                  2 ( 66.7%)
+  sv_b                                true_extra                       1 ( 33.3%)

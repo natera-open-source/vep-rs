@@ -1,9 +1,9 @@
 entry = "edited_model_no_change_hgvsc"
 page = "docs/divergences/edited-model-no-change-hgvsc.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 19 of 77,675 cache transcripts · 1 flag set, 4 corpora"
+input_class_basis = "2 · 35 of 116,165 cache transcripts · 7 flag sets, 9 corpora"
 notes = "Two substitutions at the base NR_048535.1's alignment edited (`2023 2023 T`, so the model reads A on the forward strand where the genome reads C). The alternate equal to the edited base gets an HGVSc naming the base changed to itself from Ensembl VEP (hgvs_variant_notation compares it with the genome's base, TranscriptVariationAllele.pm:1508-1514 then respells both alleles from the model) and none from vep-rs; the alternate that differs gets the same notation from both. The BAM-edited cache turns the transcript's reference on, so USED_REF is the edited base on both rows."
 
 [input]
@@ -36,4 +36,10 @@ ensembl_vep = [
 vep_rs = [
   "A | 2023 | C | A | OK | -",
   "T | 2023 | C | A | OK | NR_048535.1:n.2023T>A",
+]
+
+[implementation]
+code = ["crates/vep-effects/src/consequences.rs::transcript_reference_allele"]
+tests = [
+    "crates/vep-effects/src/hgvs.rs::tests::edited_model_hgvsc_is_absent_for_an_alternate_equal_to_the_edited_base",
 ]

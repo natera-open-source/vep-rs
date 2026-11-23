@@ -1,0 +1,8 @@
+assembly,n,"multi
+line",note,storable_113_transcripts,storable_115_transcripts,storable_113_115_identical_transcripts,storable_113_115_differing_transcripts,storable_113_only,storable_115_only
+GRCh37,1,,,,,,,,
+GRCh38,2,"x
+y",z,,,,,,
+mouse,3tail,"q""q",'single',,,,,,
+"last, row",4,"open quote runs to the end
+",,5,6,3,2,1,2

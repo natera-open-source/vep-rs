@@ -5,22 +5,24 @@
 //!
 //! Exit status: 0 on success, and when the command line asks for help or the
 //! version or names no argument at all (the usage, as `vep` prints it, vep:29);
-//! 1 on a refusal or a failed run, after one line `ERROR: [<component>]
-//! <message>` on standard error; 2 on an argument syntax error, in clap's words.
-//! A line standard error refuses is dropped ([`vep_cli::stderr`]), and the exit
+//! 1 on a refusal or a failed run, after `ERROR: [<component>] <message>` on
+//! standard error, one line unless the message carries a second; 2 on an
+//! argument syntax error, in clap's words.
+//! A line standard error refuses is dropped (`vep_cli::stderr`), and the exit
 //! status is the run's either way.
 //!
 //! The command line is read through [`argv::prepass`] first, which adds the
 //! flags of the `--config` file, `<dir>/vep.ini` and the `VEP_*` variables
 //! behind the command line's own and spells every option as the parser
 //! declares it. `vep filter ...` and `vep recode ...` are the companion tools
-//! ([`vep_cli::filter_cli`], [`vep_cli::recode_cli`]), dispatched on their
-//! first word before any of that: each reads its own options, none of the
-//! sources above.
+//! (`vep_cli::filter_cli`, `vep_cli::recode_cli`), dispatched on their
+//! first word before any of that, and each reads its own options. `vep filter`
+//! reads none of the sources above; `vep recode` reads all three behind its
+//! command line (`argv::with_config_file`).
 //!
 //! The process ends as soon as its outputs are written and closed: the loaded
 //! cache is left to the operating system, which reclaims the heap in one step
-//! ([`Teardown::LeaveToExit`]), and the exit skips the runtime's and the
+//! (`Teardown::LeaveToExit`), and the exit skips the runtime's and the
 //! allocator's own teardown. An allocator asked to report at exit
 //! ([`allocator_reports_at_exit`]) gets the full teardown instead, so the
 //! report prints.
@@ -33,7 +35,7 @@ use tracing_subscriber::prelude::*;
 
 use vep_cli::config::{self, CliError, ParseFailure};
 use vep_cli::runner::Teardown;
-use vep_cli::{args, argv, stderr, warnings};
+use vep_cli::{args, argv, status_colour, stderr, warnings};
 
 /// The annotation path allocates and frees per (variant x transcript
 /// consequence), and glibc malloc dominates its profile; mimalloc's
@@ -75,15 +77,16 @@ fn allocator_reports_at_exit() -> bool {
 }
 
 /// Ends the process with `code` once every output is written and closed.
-/// Standard output is flushed first. Under [`Teardown::LeaveToExit`] the exit
+/// Standard output is flushed first. Under `Teardown::LeaveToExit` the exit
 /// skips the runtime's and the allocator's teardown, which would walk a heap the
-/// kernel is about to reclaim; under [`Teardown::Release`] it is the ordinary
+/// kernel is about to reclaim; under `Teardown::Release` it is the ordinary
 /// one, with the allocator's exit hook and its report.
 fn end_process(code: i32, teardown: Teardown) -> ! {
     let _ = std::io::stdout().flush();
     match teardown {
         Teardown::Release => std::process::exit(code),
         Teardown::LeaveToExit => exit_immediately(code),
+        _ => std::process::exit(code),
     }
 }
 
@@ -136,6 +139,10 @@ fn run(argv: Vec<OsString>, teardown: Teardown) -> i32 {
             stderr::write(format_args!("{error}\n"));
             return 1;
         }
+        Err(failure) => {
+            stderr::write(format_args!("{failure}\n"));
+            return 1;
+        }
     };
 
     // vep:32 warns before anything else and whatever --quiet says; its line
@@ -159,6 +166,7 @@ fn run(argv: Vec<OsString>, teardown: Teardown) -> i32 {
     };
     let quiet = parsed.args.quiet;
     let status = tracing_subscriber::fmt::layer()
+        .with_ansi(status_colour::on_standard_error())
         .with_writer(|| stderr::Stream)
         .with_filter(filter_fn(move |metadata| {
             *metadata.level() != tracing::Level::WARN && *metadata.level() <= status_level
@@ -173,11 +181,22 @@ fn run(argv: Vec<OsString>, teardown: Teardown) -> i32 {
     // Configured before the resolution, whose own warnings are the run's too. A
     // skip names no line number once --input_data is given, whatever its value
     // (BaseVEP.pm:854 tests `defined`), while the value decides what is read.
-    warnings::global().configure(
-        warnings::target_for(&config::warning_file_for(&parsed.args)),
-        quiet,
-        parsed.args.input_data.is_some(),
-    );
+    let warnings_target = warnings::target_for(&config::warning_file_for_parsed(&parsed));
+    // A warning creates the warnings file, and the resolution below can raise
+    // one, so a warnings file named at a Parquet output path or inside it is
+    // refused before the sink takes it.
+    #[cfg(feature = "parquet")]
+    if let Some(refusal) = config::warnings_file_in_the_parquet_output(&parsed, &warnings_target) {
+        stderr::write(format_args!("{refusal}\n"));
+        return 1;
+    }
+    warnings::global().configure(warnings_target, quiet, parsed.args.input_data.is_some());
+    // A file the flag names is tested with the run's other files; the file
+    // under the default name is opened by the first warning alone, as
+    // Ensembl VEP opens it (BaseVEP.pm:817).
+    if config::named_warning_file(&parsed.args).is_some() {
+        warnings::global().test_file_before_first_record();
+    }
 
     let config = match config::Config::from_parsed(parsed) {
         Ok(config) => config,

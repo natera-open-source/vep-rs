@@ -1,66 +1,66 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "reference.fa.gz",
  "input": "76 hand-built records on chromosome 21 and MT as a VCF (variants.vcf), each named by the HGVS notation it is the twin of, and, record for record in the same order, those notations (variants.hgvs.txt), each a g., m., c., n. or p. shape Ensembl VEP resolves through its database. The genomic notations: on KRTAP24-1 a stop-lost SNV written five ways (the plain notation, a lower-case alternate, the NC_000021.9 accession, the chr21 spelling and a (p.=) suffix), a missense and a synonymous SNV, an in-frame three-base deletion, a one-base frameshift deletion, a one-base frameshift insertion, a twenty-base deletion, a three-base delins and a three-base inversion of the same codon, a delins trimmed to the SNV and a one-for-two delins; on KRTAP25-1 a one-base duplication written as dup and as an insertion with its positions reversed; the stop-retained deletion on KRTAP26-1; the stop-lost deletion on KRTAP23-1, twice (its notation lists the deleted bases rightly and then wrongly); the five-base duplication and insertion on KRTAP13-4; the MT-ATP6 missense and the MT-TL1 tRNA SNV; an intergenic SNV. The transcript notations: on the forward-strand CRYAA MANE Select transcript a coding substitution written by stable id, by versioned id and with a gene qualifier, a start-lost substitution, a 5' UTR and a 3' UTR substitution, an intronic substitution past the first donor and one before the second acceptor, an in-frame deletion, a duplication, an insertion, a deletion-insertion, an inversion and a deletion spanning the first intron; the same shapes on the reverse-strand TFF3 MANE Select transcript; on two lncRNA transcripts of either strand a substitution, an intronic substitution and a deletion, and a 3' UTR position written on a non-coding transcript. The protein notations: on the CRYAA translation a missense substitution written by translation id, by versioned id, by an id with a version the release does not carry and with one-letter codes, and by the transcript id with p.; a two-base substitution to tryptophan; a substitution of the first and third codon base, which carries the unchanged middle base; a synonymous change; a stop gained written as Ter and as *; a stop lost; a delins without and with the written residue; a deletion of one residue and of a range; on the reverse-strand TFF3 translation a missense substitution, a stop gained, a synonymous change, a deletion of two residues and a substitution of the residue whose codon spans the first intron; and a substitution on a TFF3 translation whose coding sequence opens in phase 2",
  "sha256": {
-  "default.txt": "a40ef834567863027501fdc6fb6656bf41805bbd91d944e763c3dfe19174f010",
-  "tab.txt": "7c03b4f1e4a75c898abaa4d1bdecc0beff447576df3cd0ca5585403fd4c2db99",
-  "vcf.vcf": "6b42e6f597140935df67687ea08456fdfdd1b688b601ab419684ed8a7f93e77e",
-  "json.jsonl": "93f5663ba8c9a1d2a0696a84a1b6d1b897adbfeb407014924c8ad26a6049fc41"
+  "default.txt": "dabe08ec5bb93b019ddfc9aec628181232a40533152428674e71ac295f21e110",
+  "tab.txt": "6f876e1f025085517d3dbcd26666b23d65f842df90b44d93796bae5a99d86966",
+  "vcf.vcf": "e8999c63478072f9fbbcbd34805b8cbe9cf2f22b56bf8abb1e6939efa64bfc60",
+  "json.jsonl": "fdc548a5932e462b098b2e24f8eb2fb0d81f2d3019d4e5ab94590e8bf2cdac1c"
  },
  "variants_vcf_sha256": "bb79917108d0a35d506710bebf6facb09f4e5367e17ffd39ef7b34733c328e43",
  "flag_sets": {
   "hgvs": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "perl_mode": "database",
-   "database": "Connected to homo_sapiens_core_116_38 on useastdb.ensembl.org",
-   "database_host": "useastdb.ensembl.org",
+   "database": "Connected to homo_sapiens_core_116_38 on ensembldb.ensembl.org",
+   "database_host": "ensembldb.ensembl.org",
    "database_port": 3306,
    "db_version": 116,
    "perl_cache": "none: the transcripts, the slice sequence and the HGVS resolution come from the database",
    "fasta": "none on the Ensembl VEP side (the slice sequence comes from the database); reference.fa.gz on the vep-rs side",
-   "vep_command": "vep -i variants.hgvs.txt -o <out> --database --host useastdb.ensembl.org --port 3306 --user anonymous --db_version 116 --species homo_sapiens --assembly GRCh38 --format hgvs --buffer_size 5000 --fork 1 --no_stats --force_overwrite [--tab|--vcf|--json]",
+   "vep_command": "vep -i variants.hgvs.txt -o <out> --database --host ensembldb.ensembl.org --port 3306 --user anonymous --db_version 116 --species homo_sapiens --assembly GRCh38 --format hgvs --buffer_size 5000 --fork 1 --no_stats --force_overwrite [--tab|--vcf|--json]",
    "input": "variants.hgvs.txt",
    "expected_dir": "expected_hgvs",
    "sha256": {
-    "default.txt": "4100446cc5598340a2263acfd27f1eb2190595e6047228494262451ddbe66715",
-    "tab.txt": "d3e5b2085cc5f980704c41492ab1e7839e675bc96d0ee17808689bfc03f669d2",
-    "vcf.vcf": "77753a343670af23fdfc462ea27984879f3ac0eec696455a1ef708cee0ea7f6b",
-    "json.jsonl": "0a1e03c6f2a2b62c54e11f33eab293b9a252b86208f91f4749d8d22ac51608fd"
+    "default.txt": "6f206b067566cc6a5df3d13ea7317d91bdbd794e69ac197139f18774175c2523",
+    "tab.txt": "d3e4bed93d28190f60d8f6db975f9035a4fb07d8175042dd65520adeb53b4d38",
+    "vcf.vcf": "7917ceb2b05b06550f42329a2016e3c97acd1220600b903d76f574c742aa0b64",
+    "json.jsonl": "907c90f27f537ef23462c16ec8fadfdae4e2ccf30fee120af20ada35176adc31"
    },
    "database_snapshot": "Ensembl release 116 (db_version 116): the release databases are fixed snapshots, so the run reads the same transcripts and sequence whenever it is repeated"
   },
   "hgvs-guess": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "perl_mode": "database",
-   "database": "Connected to homo_sapiens_core_116_38 on useastdb.ensembl.org",
-   "database_host": "useastdb.ensembl.org",
+   "database": "Connected to homo_sapiens_core_116_38 on ensembldb.ensembl.org",
+   "database_host": "ensembldb.ensembl.org",
    "database_port": 3306,
    "db_version": 116,
    "perl_cache": "none: the transcripts, the slice sequence and the HGVS resolution come from the database",
    "fasta": "none on the Ensembl VEP side (the slice sequence comes from the database); reference.fa.gz on the vep-rs side",
-   "vep_command": "vep -i variants.hgvs.txt -o <out> --database --host useastdb.ensembl.org --port 3306 --user anonymous --db_version 116 --species homo_sapiens --assembly GRCh38 --buffer_size 5000 --fork 1 --no_stats --force_overwrite [--tab|--vcf|--json]",
+   "vep_command": "vep -i variants.hgvs.txt -o <out> --database --host ensembldb.ensembl.org --port 3306 --user anonymous --db_version 116 --species homo_sapiens --assembly GRCh38 --buffer_size 5000 --fork 1 --no_stats --force_overwrite [--tab|--vcf|--json]",
    "input": "variants.hgvs.txt",
    "expected_dir": "expected_hgvs",
    "sha256": {
-    "default.txt": "4100446cc5598340a2263acfd27f1eb2190595e6047228494262451ddbe66715",
-    "tab.txt": "d3e5b2085cc5f980704c41492ab1e7839e675bc96d0ee17808689bfc03f669d2",
-    "vcf.vcf": "77753a343670af23fdfc462ea27984879f3ac0eec696455a1ef708cee0ea7f6b",
-    "json.jsonl": "0a1e03c6f2a2b62c54e11f33eab293b9a252b86208f91f4749d8d22ac51608fd"
+    "default.txt": "6f206b067566cc6a5df3d13ea7317d91bdbd794e69ac197139f18774175c2523",
+    "tab.txt": "d3e4bed93d28190f60d8f6db975f9035a4fb07d8175042dd65520adeb53b4d38",
+    "vcf.vcf": "7917ceb2b05b06550f42329a2016e3c97acd1220600b903d76f574c742aa0b64",
+    "json.jsonl": "907c90f27f537ef23462c16ec8fadfdae4e2ccf30fee120af20ada35176adc31"
    },
    "database_snapshot": "Ensembl release 116 (db_version 116): the release databases are fixed snapshots, so the run reads the same transcripts and sequence whenever it is repeated",
    "expected_outputs": "the hgvs set's files (expected_hgvs): Ensembl VEP detects the format from the first data line, so its output for the input without --format is the output of the hgvs set"
   }
  },
  "variants_hgvs_txt_sha256": "3dc1b3bb44daa7b33d0a9e2a98cd6202a2a4c2496ad9526e630af0cffd573844",
- "generator": "variants.vcf and manifest.json by scripts/golden/build_golden_corpus.py select over Ensembl VEP's default output for the VCF, variants.hgvs.txt its ID column; expected/ by scripts/concordance/generate_reference_output.sh --corpus; expected_hgvs/ by one container run per format of the same image in database mode (--database --db_version 116, no cache, no FASTA) on variants.hgvs.txt, the four outputs gzipped and their sha256 recorded under flag_sets; json_cache by scripts/golden/prune_json_cache.py over the release-116 GRCh38 cache (--drop sorted_exons --drop protein_features --drop protein_function_predictions); reference.fa.gz is GRCh38 chromosome 21 with every base outside 2,000 bases of a record masked to N, and MT whole, bgzip-compressed with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form"
+ "generator": "variants.vcf and manifest.json by tools/vep-golden-corpus select over Ensembl VEP's default output for the VCF, variants.hgvs.txt its ID column; expected/ by scripts/concordance/generate_reference_output.sh --corpus; expected_hgvs/ by one container run per format of the same image in database mode (--database --db_version 116, no cache, no FASTA) on variants.hgvs.txt, the four outputs gzipped and their sha256 recorded under flag_sets; json_cache by scripts/golden/prune_json_cache.py over the release-116 GRCh38 cache (--drop sorted_exons --drop protein_features --drop protein_function_predictions); reference.fa.gz is GRCh38 chromosome 21 with every base outside 2,000 bases of a record masked to N, and MT whole, bgzip-compressed with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form"
 }

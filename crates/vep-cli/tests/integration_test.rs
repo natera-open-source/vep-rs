@@ -489,7 +489,7 @@ fn annotate_record(record: &str, format_flags: &[&str], extra: &[&str]) -> Vec<S
 /// A record of the release 116 corpus with transcript rows, for the output-flag tests.
 const CODING_RECORD: &str = "21\t30289183\tstop_ins1_lost_rev\tC\tCG\t.\t.\t.";
 
-/// `Runner.pm:run` 204-206 (release 116.2) prints the output factory's headers
+/// `Runner.pm:run` 204-206 (release 116.3) prints the output factory's headers
 /// unless `--no_headers`, so under the flag the default, tab and VCF outputs open
 /// with their first data line; the data lines are those of the run with headers.
 #[test]
@@ -509,7 +509,7 @@ fn no_headers_writes_no_hash_line_in_default_tab_and_vcf() {
     }
 }
 
-/// `BaseRunner.pm:get_output_file_handle` 207-219 (release 116.2) pipes the
+/// `BaseRunner.pm:get_output_file_handle` 207-219 (release 116.3) pipes the
 /// output through `gzip -c` or `bgzip -c` under `--compress_output`; the file
 /// written here is a gzip stream (one member) or a BGZF stream (gzip members
 /// ending in the empty end-of-file member) whose contents are the plain output.
@@ -566,11 +566,11 @@ fn row(location: &str, allele: &str, consequence: &str) -> (String, String, Stri
 /// A structural variant wider than the default `--max_sv_size` (`del_10_6_mb`
 /// of `tests/golden/116/GRCh38-release116`) is annotated, not dropped: the
 /// default output lists its transcript rows, the VCF output carries its line
-/// without `CSQ`, and the JSON output omits it. Ensembl VEP 116.2 writes nothing
+/// without `CSQ`, and the JSON output omits it. Ensembl VEP 116.3 writes nothing
 /// for the record in any format (`Parser.pm` `validate_vf` returns 0 at the
 /// size test); this is the documented divergence of `--max_sv_size`. With `-1`
 /// the limit is lifted and every format annotates the record, as Ensembl VEP
-/// 116.2 does under `-1`.
+/// 116.3 does under `-1`.
 #[test]
 fn oversize_structural_variant_is_annotated_not_dropped() {
     let record = "21\t17750000\tdel_10_6_mb\tN\t<DEL>\t.\t.\tEND=28350000;SVTYPE=DEL";
@@ -607,9 +607,9 @@ fn oversize_structural_variant_is_annotated_not_dropped() {
 
 /// A record whose only ALT is a single breakend prints `chromosome_breakpoint` and
 /// takes no `feature_truncation` whether or not INFO carries MATEID: Ensembl VEP
-/// 116.2 never reads MATEID, `_parse_breakends` finds no bracket in `.N`
+/// 116.3 never reads MATEID, `_parse_breakends` finds no bracket in `.N`
 /// (`StructuralVariationFeature.pm:1279-1283`), and the row's Allele falls to
-/// `class_SO_term` (`OutputFactory.pm:2029`).
+/// `class_SO_term` (`OutputFactory.pm:2038`).
 #[test]
 fn single_breakend_with_mateid_prints_the_class_term() {
     let without = annotate_record("21\t30425650\tsb\tN\t.N\t.\t.\tSVTYPE=BND", &[], &[]);
@@ -628,7 +628,7 @@ fn single_breakend_with_mateid_prints_the_class_term() {
 }
 
 /// A breakend record listing two bracket ALTs writes three rows, the record's own
-/// breakend `N.` and one per mate: Ensembl VEP 116.2 annotates `($vf, @$breakends)`
+/// breakend `N.` and one per mate: Ensembl VEP 116.3 annotates `($vf, @$breakends)`
 /// (`StructuralVariationOverlap.pm:90`), one `$vf` entry per record however many
 /// brackets the ALT column lists. Its JSON `allele_string` is the whole record, REF
 /// and both ALTs joined (`Parser/VCF.pm:469`, `:499`; `OutputFactory/JSON.pm:241`).
@@ -652,9 +652,9 @@ fn two_bracket_breakend_alts_write_three_rows() {
 }
 
 /// A bare `<BND>`, with neither CHR2 nor a span, prints `chromosome_breakpoint`:
-/// Ensembl VEP 116.2 keeps the ALT as written without CHR2 (the rewrite at
+/// Ensembl VEP 116.3 keeps the ALT as written without CHR2 (the rewrite at
 /// `Parser/VCF.pm:491-498` is skipped), `_parse_breakends` finds no bracket, and the
-/// Allele falls to `class_SO_term` (`OutputFactory.pm:2029`), with or without
+/// Allele falls to `class_SO_term` (`OutputFactory.pm:2038`), with or without
 /// INFO/MATEID.
 #[test]
 fn bare_symbolic_bnd_prints_the_class_term() {
@@ -675,13 +675,14 @@ fn bare_symbolic_bnd_prints_the_class_term() {
     }
 }
 
-/// Without a FASTA a `<CNV:TR>` record keeps Ensembl VEP's symbolic reading whatever
+/// Without a FASTA a `<CNV:TR>` record keeps the symbolic reading whatever
 /// `--max_sv_size` says (the expansion of `Parser/VCF.pm:382-431` needs the run's
-/// reference sequence, `:516-527`): a 200-base allele against a 300-base run is the
-/// gain over the run, `feature_elongation,coding_sequence_variant`, under the default
-/// and under `-1`, as Ensembl VEP 116.2 writes for a contraction read without a FASTA,
-/// and under a limit the run's 299-base span exceeds, where Ensembl VEP skips the
-/// record as oversize (`Parser.pm:491-501`) and vep-rs annotates it, the divergence
+/// reference sequence, `:516-527`): a 200-base allele against a 300-base run states a
+/// loss over the run, `feature_truncation,coding_sequence_variant`, under the default
+/// and under `-1`, where Ensembl VEP 116.3 writes `feature_elongation` for a contraction
+/// read without a FASTA (`cnv_tr_symbolic_loss_named_a_gain`), and under a limit the
+/// run's 299-base span exceeds, where Ensembl VEP skips the record as oversize
+/// (`Parser.pm:491-501`) and vep-rs annotates it, the divergence
 /// `docs/intended-divergences.md` documents for a record Ensembl VEP drops.
 #[test]
 fn a_tandem_repeat_without_a_fasta_keeps_the_symbolic_reading_under_every_max_sv_size() {
@@ -696,18 +697,18 @@ fn a_tandem_repeat_without_a_fasta_keeps_the_symbolic_reading_under_every_max_sv
     for extra in [&[][..], &["--max_sv_size", "-1"], &["--max_sv_size", "100"]] {
         assert_eq!(
             consequences(extra),
-            "feature_elongation,coding_sequence_variant",
+            "feature_truncation,coding_sequence_variant",
             "{extra:?}"
         );
     }
 }
 
-/// The rows Ensembl VEP 116.2 writes on ENST00000390690 (strand -1, 30425380-30425926) and
+/// The rows Ensembl VEP 116.3 writes on ENST00000390690 (strand -1, 30425380-30425926) and
 /// ENST00000334068 (4.5 kb upstream on +) for the record shapes the parser routes and
-/// classes as Perl does: an `N` reference base with `SVTYPE=DEL;END` is a deletion over
-/// END and alone a `coding_sequence_variant` SNV (no peptide from an ambiguous reference);
-/// `<*>` with `SVTYPE=DEL;END` is the same deletion; a lowercase `<ins:me:alu>` takes
-/// `SVTYPE=INS` as an `insertion` and `<del>` with `SVTYPE=DUP` is a `duplication`; a
+/// classes as Ensembl VEP does: an `N` reference base with `SVTYPE=DEL;END` is a deletion
+/// over END and alone a `coding_sequence_variant` SNV (no peptide from an ambiguous
+/// reference); `<*>` with `SVTYPE=DEL;END` is the same deletion; a lowercase `<ins:me:alu>`
+/// takes `SVTYPE=INS` as an `insertion` and `<del>` with `SVTYPE=DUP` is a `duplication`; a
 /// gVCF site `N G,<NON_REF>` is its `G` allele; `<BND>,<DEL>` with `SVTYPE=BND` puts both
 /// alleles at the point; a `<CNV:TR>` gain crossing the transcript's edge reads the
 /// region terms over its run; and the `<INS>` pair's DISTANCE is measured from its nearer
@@ -823,7 +824,7 @@ fn coordinates_past_the_ceiling_are_annotated_without_a_panic() {
     }
 }
 
-/// The Allele Ensembl VEP 116.2 writes for the type shapes at the edges of
+/// The Allele Ensembl VEP 116.3 writes for the type shapes at the edges of
 /// `get_SO_term`'s regexes: `mobile_element_insertion` for `<INS:ME::ALU>` (one colon
 /// before the element), `copy_number_variation` for `<<CN0>>` (one bracket a side in the
 /// copy-number test) and `deletion` for `<<DEL>>` and `<DEL:X>`; and the reference block
@@ -867,7 +868,7 @@ fn the_type_and_the_block_rows_follow_ensembl_vep() {
     assert_eq!(rows_on(&blocks, "blocks\t"), [block.clone(), block]);
 }
 
-/// The rows Ensembl VEP 116.2 writes on ENST00000390690 for the shapes Perl's `split` and
+/// The rows Ensembl VEP 116.3 writes on ENST00000390690 for the shapes Perl's `split` and
 /// breakend regex admit: `A G,` is the one allele `G` (`missense_variant`); `<DEL>,` with
 /// `SVTYPE=DEL` and `N.` with `SVTYPE=DEL/` are the deletion over END; `N[ 21 : 30425700 [`
 /// is the own breakend `N.` beside the mate `N[ 21 : 30425700 [` as written, both
@@ -954,7 +955,7 @@ fn trailing_fields_and_breakend_whitespace_follow_ensembl_vep() {
     assert!(site[0].3.contains("ALLELE_NUM=2"), "{}", site[0].3);
 }
 
-/// The rows Ensembl VEP 116.2 writes for the coordinate and allele spellings it numifies
+/// The rows Ensembl VEP 116.3 writes for the coordinate and allele spellings it numifies
 /// or upper-cases: a `<CNV:TR>` contraction's DISTANCE is the run's, 4484 for
 /// `21 30430409 x N <CNV:TR> . . SVTYPE=CNV;END=30430417;SVLEN=8;RUS=CT;RUC=3` on
 /// ENST00000390690 (30430410 - 30425926) and 75 for `21 30431100 x N <CNV:TR> . .
@@ -1059,7 +1060,7 @@ fn numified_and_upper_cased_spellings_follow_ensembl_vep() {
     );
 }
 
-/// A record whose every ALT is `*` names no allele. Ensembl VEP 116.2 writes
+/// A record whose every ALT is `*` names no allele. Ensembl VEP 116.3 writes
 /// `21 30425650 x N * . . .` with no row in the default format, carries the VCF line
 /// without CSQ and writes a JSON object with `"allele_string":"N/*"`, start and end
 /// 30425650 and `"most_severe_consequence":"?"`; with `SVTYPE=DEL;END=30425949` it
@@ -1088,10 +1089,12 @@ fn a_star_only_record_is_carried_without_rows() {
     }
 }
 
-/// Without a FASTA every allele of a `<CNV:TR>` record is the symbolic gain over the
-/// run, whatever its RN entry says (`RN=0,1`): two rows, numbered 1 and 2, each
-/// `feature_elongation,coding_sequence_variant`, as Ensembl VEP 116.2 writes a
-/// tandem repeat it could not read the sequence of.
+/// Without a FASTA an allele of a `<CNV:TR>` record that states neither a loss nor the
+/// length of its run is the symbolic gain over the run, whatever its RN entry says
+/// (`RN=0,1`, the first allele of no repeat sequence and the second of four units on a
+/// run of three): two rows, numbered 1 and 2, each
+/// `feature_elongation,coding_sequence_variant`, as Ensembl VEP 116.3 writes a tandem
+/// repeat it could not read the sequence of.
 #[test]
 fn every_allele_of_a_tandem_repeat_without_a_fasta_is_the_symbolic_gain() {
     let rows: Vec<(String, String)> = annotate_record(
@@ -1118,9 +1121,9 @@ fn every_allele_of_a_tandem_repeat_without_a_fasta_is_the_symbolic_gain() {
     );
 }
 
-/// The rows Ensembl VEP 116.2 writes on ENST00000390690 for the shapes the parser reads
-/// from INFO as Perl does: a mate named by CHR2 is `N[21:30425700[` beside the own `A.`
-/// of a record whose REF is `A`, and keeps `END2=00030425700` as written; `SVLEN=0` or
+/// The rows Ensembl VEP 116.3 writes on ENST00000390690 for the shapes the parser reads
+/// from INFO as Ensembl VEP does: a mate named by CHR2 is `N[21:30425700[` beside the own
+/// `A.` of a record whose REF is `A`, and keeps `END2=00030425700` as written; `SVLEN=0` or
 /// `SVLEN=abc` is the pair `21:30425650-30425651`, `feature_elongation` for a
 /// duplication and the region term alone for an inversion or a mate-less breakpoint;
 /// `.N` beside `N[21:30425700[` lends the own breakend its base and writes no row of its
@@ -1201,7 +1204,7 @@ fn the_pair_and_the_mate_text_follow_ensembl_vep() {
     );
 }
 
-/// The rows of a breakend record follow what it names, as Ensembl VEP 116.2 writes
+/// The rows of a breakend record follow what it names, as Ensembl VEP 116.3 writes
 /// them (`Parser/VCF.pm:484-499`): a `<BND>` with SVLEN and no CHR2 is one allele
 /// over its span, Allele `chromosome_breakpoint`, `coding_sequence_variant,
 /// 5_prime_UTR_variant` on ENST00000390690 and no `feature_truncation`; an INFO/END
@@ -1261,9 +1264,9 @@ fn breakend_rows_follow_what_the_record_names() {
 /// INFO/SVTYPE names the class of an ALT outside the VCF 4.4 forms
 /// (`Parser/VCF.pm:472-475`): `N.` with `SVTYPE=DEL` and END is a deletion over its
 /// span, `deletion` with `frameshift_variant,feature_truncation` on ENST00000390690,
-/// as Ensembl VEP 116.2 writes it. A comma-separated SVLEN reads its first value
+/// as Ensembl VEP 116.3 writes it. A comma-separated SVLEN reads its first value
 /// (BaseVCF4.pm:304) and a tandem repeat its largest (`Parser/VCF.pm:505-511`), the
-/// Locations Ensembl VEP 116.2 writes for `SVLEN=-300,400` and `SVLEN=300,400`.
+/// Locations Ensembl VEP 116.3 writes for `SVLEN=-300,400` and `SVLEN=300,400`.
 #[test]
 fn svtype_and_a_comma_separated_svlen_are_read_as_ensembl_vep_reads_them() {
     let location_and_terms =
@@ -1518,7 +1521,7 @@ fn test_builtin_plugin_names_are_recognized() {
         !stderr.contains(unknown) && !warnings.contains(unknown),
         "CADD should be recognized as a builtin plugin:\n{stderr}\n{warnings}"
     );
-    let dropped = "Failed to instantiate plugin CADD: CADD: no CADD files specified";
+    let dropped = "Failed to instantiate plugin CADD: no CADD files specified";
     assert!(
         result.status.success() && stderr.contains(dropped) && warnings.contains(dropped),
         "CADD without a data file is dropped with a warning:\n{stderr}\n{warnings}"

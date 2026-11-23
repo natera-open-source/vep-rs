@@ -1,0 +1,24 @@
+entry = "tool_kind"
+page = "docs/intended-divergences.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under VCF 4.2; not seen in the measured datasets"
+notes = "A test fixture of one compare kind."
+
+[input]
+format = "id"
+name = "ids.txt"
+text = "rs699"
+
+[run]
+tool = "recode"
+args = ["-i", "{input}", "-o", "{out}", "--warning_file", "{out}_warnings.txt", "--config", "{stage}/recode.ini", "--tool", "{repo}/scripts"]
+
+[compare]
+kind = "rows"
+columns = ["Uploaded_variation", "Extra"]
+
+[expected]
+ensembl_vep = ["rec1 | IMPACT=MODERATE;HGVSp=ENSP1:p.Leu4Pro;PICK=1", "rec1 | IMPACT=MODIFIER", "rec2 | IMPACT=MODIFIER;DISTANCE=4000;FILE=<path>"]
+vep_rs = ["nothing"]

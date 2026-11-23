@@ -1,0 +1,16 @@
+--version-a
+113
+--dump-a
+a.tsv
+--version-b
+115
+--dump-b
+b.tsv
+--out-dir
+out
+--parity-csv
+parity.csv
+--assembly
+GRCh38
+--sweep-id
+{sweep-id}

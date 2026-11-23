@@ -1,0 +1,29 @@
+cross-chromosome mask active over 2 chromosomes (13 transcripts)
+Found 1 input VCF files
+  Processing sv...
+    Input=8 Perl=8 Rust=13 Intersect=6 P=0.4615 R=0.7500 F1=0.5714
+
+Overall (adjusted): P=0.6667 R=1.0000 F1=0.8000  (excluded 4 Rust-extra + 2 Perl-extra transcript divergences)
+Overall (raw):      P=0.4615 R=0.7500 F1=0.5714
+  Perl tuples: 8
+  Rust tuples: 13
+  Intersection: 6
+  Only Perl: 2
+  Only Rust: 7
+  Excluded (Rust-extra transcripts): 4
+  Excluded (Perl-extra transcripts): 2
+
+Per-variant-type summary:
+  BND                   n=    2  F1=0.8889 <--
+  Complex_SV            n=    2  F1=0.4000 <--
+  NON_REF               n=    1  F1=0.0000 <--
+  Symbolic_DEL          n=    3  F1=0.4000 <--
+
+Per-file summary:
+  sv                                   Raw F1=0.5714  Adj F1=0.8000  (+0.2286)
+
+Reports written to: {{OUTPUT_DIR}}/
+  concordance_report.json
+  concordance_report.md
+  discordant.tsv (9 discordant records)
+  discordant_adjusted.tsv (3 one-sided records surviving every mask)

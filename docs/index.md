@@ -2,7 +2,7 @@
 
 vep-rs is a drop-in replacement for Ensembl VEP in Rust, with the same flags and output formats: it runs up to 432 times faster than Ensembl VEP and matches Ensembl VEP exactly except for [the documented divergences](intended-divergences.md).
 
-It does the work of Ensembl VEP, the Variant Effect Predictor: for each variant of a VCF file it writes the genes and transcripts affected and the consequence on each. [Install](#install) a binary, a container or the source.
+It does the work of Ensembl VEP, the Variant Effect Predictor: for each variant of a VCF file it writes the genes and transcripts affected and the consequence on each. [Install](#install) a binary, a container, the Bioconda package or the source.
 
 <figure class="home-figure">
 <a href="assets/comparison.png">
@@ -32,6 +32,7 @@ Counts are of the 31 plugins vep-rs supports, of Ensembl VEP's 87. Plugins vep-r
 ```bash
 https://github.com/natera-open-source/vep-rs/releases   # Binary
 docker pull ghcr.io/natera-open-source/vep-rs:latest    # Container
+conda install -c conda-forge -c bioconda vep-rs         # Bioconda
 cargo build --release                                   # Source
 ```
 

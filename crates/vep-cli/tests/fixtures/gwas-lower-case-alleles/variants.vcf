@@ -1,0 +1,4 @@
+##fileformat=VCFv4.2
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+21	13297803	upper_case_row	A	G	.	.	.
+21	33760786	lower_case_row	C	T	.	.	.

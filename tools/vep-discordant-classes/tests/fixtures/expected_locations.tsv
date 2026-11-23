@@ -1,0 +1,15 @@
+file_name	source	location	allele	feature	feature_type	consequence_set	mismatch_type
+o.txt	missing_in_rust	chr1:100	A	T1	Transcript	x	coordinate_only
+o.txt	extra_in_rust	chr2:100-150	A	T1	Transcript	x	coordinate_only
+o.txt	missing_in_rust	1:200:x-5	A	T2	Transcript	x	coordinate_only
+o.txt	extra_in_rust	2:200	A	T2	Transcript	x	coordinate_only
+o.txt	missing_in_rust	nocolon	A	T3	Transcript	x	coordinate_only
+o.txt	extra_in_rust	x:nocolon	A	T3	Transcript	x	coordinate_only
+o.txt	missing_in_rust	1:	A	T4	Transcript	x	coordinate_only
+o.txt	extra_in_rust	:-5	A	T4	Transcript	x	coordinate_only
+o.txt	missing_in_rust		A	T5	Transcript	x	true_missing
+o.txt	extra_in_rust	3:	A	T5	Transcript	y	true_extra
+o.txt	missing_in_rust	1:300-	A	T6	Transcript	x	transcript_selection
+o.txt	extra_in_rust	1:300	A	T7	Transcript	x	transcript_selection
+o.txt	missing_in_rust	no-colon	A	T8	Transcript	x	true_missing
+o.txt	extra_in_rust	no	A	T8	Transcript	x	true_extra

@@ -4,7 +4,7 @@
 //! The `RegulatoryFeature` and `MotifFeature` rows a variant gains from the
 //! features it overlaps (`AnnotationType/RegFeat.pm:114-150`), with the six
 //! regulatory terms of `Utils/Constants.pm:1271-1372` and the motif fields of
-//! `OutputFactory.pm:1900-1943`.
+//! `OutputFactory.pm:1909-1952`.
 
 use std::sync::Arc;
 
@@ -33,7 +33,7 @@ impl CellTypes {
     /// not built either (`CacheDir.pm:156-176`), so the GFF source's own
     /// warning stands for the flag, no name is checked, and the list is empty:
     /// a GFF feature carries no activity map, so `get_cell_types` keeps none of
-    /// the requested names (OutputFactory.pm:1959-1969) and every regulatory
+    /// the requested names (OutputFactory.pm:1968-1978) and every regulatory
     /// and motif row carries `CELL_TYPE` as the empty list.
     pub(crate) fn resolve(
         value: Option<&str>,
@@ -57,7 +57,7 @@ impl CellTypes {
     /// The `CELL_TYPE` list of a regulatory feature whose activity string is
     /// `activity`: each requested epigenome with the feature's activity in it,
     /// an epigenome the feature's map lacks (`-`) skipped, as `get_cell_types`
-    /// keeps the requested names the map has a value for (OutputFactory.pm:1965).
+    /// keeps the requested names the map has a value for (OutputFactory.pm:1974).
     fn project(&self, activity: &str) -> Box<[CellTypeActivity]> {
         let codes = activity.as_bytes();
         self.requested
@@ -114,7 +114,7 @@ impl RegulatorySource {
     /// Adds the variant's regulatory and motif rows; under `--cell_type` each
     /// carries its `CELL_TYPE` list, a regulatory row the projection of the
     /// requested epigenomes onto its feature's activity and a motif row the
-    /// empty list (OutputFactory.pm:1879, 1927, 2098-2099).
+    /// empty list (OutputFactory.pm:1888, 1936, 2107-2108).
     pub(crate) fn annotate_rows(&self, variant: &mut InputVariant, cell_types: Option<&CellTypes>) {
         if variant.no_allele || variant.variant_class == VariantClass::ReferenceBlock {
             return;
@@ -292,63 +292,56 @@ impl RegulatorySource {
                 ),
                 RowTerms::Default => smallvec::smallvec![Consequence::IntergenicVariant],
             };
-            let mut row = TranscriptConsequence {
-                feature_id: Some(Arc::clone(&feature.stable_id)),
-                feature_type,
-                // StructuralVariationOverlapAllele_to_output_hash does not call the
-                // regulatory/motif sequence-allele factories, so a structural row has
-                // no BIOTYPE and no motif fields.
-                feature_biotype: match &feature.kind {
-                    FeatureKind::Regulatory { biotype, .. } if !variant.is_structural => {
-                        biotype.clone()
-                    }
-                    _ => None,
-                },
-                strand: feature.strand,
-                feature_start: feature.start,
-                feature_end: feature.end,
-                impact: consequences[0].impact(),
-                consequences,
-                // A structural variant's rows come in the order the features were
-                // met (`StructuralVariationFeature.pm:495-509` reads the lists
-                // `AnnotationType/RegFeat.pm:135` fills as pushed); a sequence
-                // variant's motif rows by the motif's database id.
-                id_rank: if variant.is_structural {
-                    ranks.met
-                } else {
-                    ranks.motif
-                },
-                motif_db_id: match feature.kind {
-                    FeatureKind::Motif { .. } => feature.dbid,
-                    FeatureKind::Regulatory { .. } => None,
-                },
-                cell_type: cell_types.map(|requested| match &feature.kind {
-                    FeatureKind::Regulatory { activity, .. } => requested.project(activity),
-                    FeatureKind::Motif { .. } => Box::default(),
-                }),
-                ..Default::default()
+            let mut row = TranscriptConsequence::default();
+            row.feature_id = Some(Arc::clone(&feature.stable_id));
+            row.feature_type = feature_type;
+            // StructuralVariationOverlapAllele_to_output_hash does not call the
+            // regulatory/motif sequence-allele factories, so a structural row has
+            // no BIOTYPE and no motif fields.
+            row.feature_biotype = match &feature.kind {
+                FeatureKind::Regulatory { biotype, .. } if !variant.is_structural => {
+                    biotype.clone()
+                }
+                _ => None,
             };
+            row.strand = feature.strand;
+            row.feature_start = feature.start;
+            row.feature_end = feature.end;
+            row.impact = consequences[0].impact();
+            row.consequences = consequences;
+            // A structural variant's rows come in the order the features were
+            // met (`StructuralVariationFeature.pm:495-509` reads the lists
+            // `AnnotationType/RegFeat.pm:135` fills as pushed); a sequence
+            // variant's motif rows by the motif's database id.
+            row.id_rank = if variant.is_structural {
+                ranks.met
+            } else {
+                ranks.motif
+            };
+            row.motif_db_id = match feature.kind {
+                FeatureKind::Motif { .. } => feature.dbid,
+                FeatureKind::Regulatory { .. } => None,
+            };
+            row.cell_type = cell_types.map(|requested| match &feature.kind {
+                FeatureKind::Regulatory { activity, .. } => requested.project(activity),
+                FeatureKind::Motif { .. } => Box::default(),
+            });
             if let FeatureKind::Motif { seq, matrix, .. } = &feature.kind {
                 if !variant.is_structural {
-                    let motif = Motif {
-                        start: feature.start,
-                        end: feature.end,
-                        strand: feature.strand,
-                        seq: seq.as_deref(),
+                    let motif = Motif::new(
+                        feature.start,
+                        feature.end,
+                        feature.strand,
+                        seq.as_deref(),
                         matrix,
-                    };
+                    );
                     // The alleles on the forward strand of the genome: a record
                     // given on the reverse strand is complemented onto it, then
                     // `feature_seq` onto a reverse motif, together Ensembl VEP's
                     // one complement when the record's strand differs from the
                     // motif's (VariationFeatureOverlapAllele.pm:253-256).
                     let (reference, alternate) = variant.forward_strand_alleles();
-                    let allele = Allele {
-                        start,
-                        end,
-                        reference: &reference,
-                        alternate: &alternate,
-                    };
+                    let allele = Allele::new(start, end, &reference, &alternate);
                     row.motif = Some(Box::new(motif_fields(&motif, &allele)));
                 }
             }
@@ -574,7 +567,7 @@ mod tests {
     /// motif row carries its id's rank among the chromosome's motifs, which
     /// the writers order motif rows by, and the id itself, which keys the row
     /// behind the rejoin prefix of a `--minimal` split allele
-    /// (`OutputFactory.pm:2316`): a prefix opening with a letter sorts after
+    /// (`OutputFactory.pm:2325`): a prefix opening with a letter sorts after
     /// the first allele's digit-led keys, one opening with `-` before them. A
     /// regulatory row carries neither.
     #[test]
@@ -666,7 +659,7 @@ mod tests {
     /// requested, each with its activity decoded (A ACTIVE, I INACTIVE, P
     /// POISED, R REPRESSED, N NA) and a name the feature's map lacks (`-`)
     /// skipped, as `get_cell_types` keeps the names the map has a value for
-    /// (OutputFactory.pm:1959-1969); a motif row's list is empty, since a motif
+    /// (OutputFactory.pm:1968-1978); a motif row's list is empty, since a motif
     /// carries no map (`Database/RegFeat.pm:212-221`); without the flag no row
     /// carries one. The names come from the cache's list through the greedy
     /// split, so `A549_(m,_58_y)` is one epigenome.
@@ -721,7 +714,7 @@ mod tests {
             ]
         );
         // A structural variant's regulatory and motif rows carry the list too
-        // (OutputFactory.pm:2098-2099).
+        // (OutputFactory.pm:2107-2108).
         let mut sv = variant(100, 120, b"A", b"<DEL>");
         sv.is_structural = true;
         sv.variant_class = VariantClass::StructuralDeletion;
@@ -944,6 +937,7 @@ mod tests {
                 &synonyms,
                 &transcripts,
                 crate::validate::NO_CHECKS.source_chromosomes,
+                None,
             );
             assert!(own.is_single_breakend && own.mate_chr.is_none());
             source.annotate(own);

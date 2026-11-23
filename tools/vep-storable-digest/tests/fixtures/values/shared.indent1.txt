@@ -1,0 +1,29 @@
+bless( {
+  '_trans_exon_array' => [
+    bless( {
+      'end' => 9,
+      'start' => 1
+    }, 'Bio::EnsEMBL::Exon' ),
+    bless( {
+      'end' => 29,
+      'start' => 20
+    }, 'Bio::EnsEMBL::Exon' )
+  ],
+  'again' => $VAR1->{'_trans_exon_array'},
+  'ring' => [
+    $VAR1->{'ring'},
+    [
+      $VAR1->{'ring'}
+    ]
+  ],
+  'self' => $VAR1,
+  'sorted' => [
+    $VAR1->{'_trans_exon_array'}[1],
+    $VAR1->{'_trans_exon_array'}[0]
+  ],
+  'translation' => bless( {
+    'end_exon' => $VAR1->{'_trans_exon_array'}[1],
+    'start_exon' => $VAR1->{'_trans_exon_array'}[0],
+    'transcript' => $VAR1
+  }, 'Bio::EnsEMBL::Translation' )
+}, 'Bio::EnsEMBL::Transcript' )

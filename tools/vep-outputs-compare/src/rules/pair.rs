@@ -54,7 +54,7 @@ pub fn is_structural_allele(allele: &str) -> bool {
             .all(|b| matches!(b.to_ascii_uppercase(), b'A' | b'C' | b'G' | b'T' | b'N'))
 }
 
-/// `_is_splice_overcall_swap`: vep-rs adds splice terms, `intron_variant` admitted beside
+/// `splice_lastwrite_swap`: vep-rs adds splice terms, `intron_variant` admitted beside
 /// them, to a set Ensembl VEP wrote with nothing vep-rs lacks; of the fourteen writes in
 /// `_intron_effects` only `splice_region` is a plain assignment, so a term on the reference
 /// side alone is a vep-rs downgrade, never a reference loss.
@@ -70,7 +70,7 @@ pub fn is_splice_overcall_swap(perl_csq: &str, rust_csq: &str) -> bool {
     diff_r.iter().any(|t| SPLICE_TERMS.contains(t))
 }
 
-/// `_is_ppt_overcall_swap`: both sides carry `intron_variant`, the reference nothing vep-rs
+/// `ppt_overcall_swap`: both sides carry `intron_variant`, the reference nothing vep-rs
 /// lacks, and vep-rs adds a non-empty subset of the polypyrimidine-tract and splice-region
 /// terms.
 pub fn is_ppt_overcall_swap(perl_csq: &str, rust_csq: &str) -> bool {
@@ -88,7 +88,7 @@ pub fn is_ppt_overcall_swap(perl_csq: &str, rust_csq: &str) -> bool {
             .all(|t| *t == "splice_polypyrimidine_tract_variant" || *t == "splice_region_variant")
 }
 
-/// `_is_start_cooccurrence_swap`: Ensembl VEP writes `start_lost` and
+/// `start_cooccurrence_swap`: Ensembl VEP writes `start_lost` and
 /// `start_retained_variant` together for one allele (VariationEffect.pm:851-963,
 /// 1028-1075) and vep-rs writes the same set without the member the allele kind cannot
 /// support: `start_retained_variant` on a structural allele, `start_lost` on a sequence one.
@@ -109,7 +109,7 @@ pub fn is_start_cooccurrence_swap(perl_csq: &str, rust_csq: &str, allele: &str) 
     diff_p == [dropped]
 }
 
-/// `_is_frameshift_splice_cascade_swap`: an identical, non-empty strong-coding backbone on
+/// `frameshift_splice_cascade_swap`: an identical, non-empty strong-coding backbone on
 /// both sides, vep-rs adding splice sub-terms (`intron_variant` admitted) and nothing else,
 /// with at least one splice term among them.
 pub fn is_frameshift_splice_cascade_swap(perl_csq: &str, rust_csq: &str) -> bool {
@@ -137,7 +137,7 @@ pub fn is_frameshift_splice_cascade_swap(perl_csq: &str, rust_csq: &str) -> bool
     diff_r.iter().any(|t| SPLICE_TERMS.contains(t))
 }
 
-/// `_is_intronic_overcall_swap`: both sides pure-intronic sets, the reference's holding
+/// `intronic_overcall_swap`: both sides pure-intronic sets, the reference's holding
 /// `intron_variant`, vep-rs adding at least one term and lacking none.
 pub fn is_intronic_overcall_swap(perl_csq: &str, rust_csq: &str) -> bool {
     let (pset, rset) = (term_set(perl_csq), term_set(rust_csq));
@@ -150,7 +150,7 @@ pub fn is_intronic_overcall_swap(perl_csq: &str, rust_csq: &str) -> bool {
     rset.difference(&pset).next().is_some() && pset.difference(&rset).next().is_none()
 }
 
-/// `_is_covered_splice_region_swap`: the one shape `_intron_effects` can produce
+/// `covered_splice_region_swap`: the one shape `_intron_effects` can produce
 /// (BaseTranscriptVariationAllele.pm:99-224; the assignment at line 215 of a value
 /// `_intron_overlap` returns as a defined 0, Utils/VariationEffect.pm:107): the reference
 /// lacks nothing, and vep-rs adds `splice_region_variant`, `intron_variant` at most beside it.
@@ -165,3 +165,11 @@ pub fn is_covered_splice_region_swap(perl_csq: &str, rust_csq: &str) -> bool {
             .iter()
             .all(|t| *t == "splice_region_variant" || *t == "intron_variant")
 }
+
+#[cfg(test)]
+#[path = "pair_swap_shapes_tests.rs"]
+mod swap_shapes_tests;
+
+#[cfg(test)]
+#[path = "pair_substitution_tests.rs"]
+mod substitution_tests;

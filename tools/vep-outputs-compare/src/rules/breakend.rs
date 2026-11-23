@@ -198,7 +198,8 @@ fn span_exceeds_max_sv_size(loc: &str) -> bool {
         return false;
     };
     match (py_int(end), py_int(start)) {
-        (Some(end), Some(start)) => (end - start).abs() > MAX_SV_SIZE,
+        // The width of two 128-bit coordinates can pass 128 bits.
+        (Some(end), Some(start)) => end.abs_diff(start) > MAX_SV_SIZE.unsigned_abs(),
         _ => false,
     }
 }
@@ -234,7 +235,7 @@ pub fn is_breakend_allele(allele: &str) -> bool {
 /// The Locations at which vep-rs can write the point of a dot-notation breakend without
 /// SVTYPE whose reference row spans (chromosome, low, high): the span's start and the base
 /// after it, the reference taking the sequence rules for the coordinates
-/// (BaseVCF4.pm:264-275, 297-317).
+/// (BaseVCF4.pm:265-274, 297-317).
 pub fn dot_breakend_points(span: &(&str, Coordinate, Coordinate)) -> [String; 2] {
     let (chrom, start, _end) = span;
     [
@@ -245,7 +246,7 @@ pub fn dot_breakend_points(span: &(&str, Coordinate, Coordinate)) -> [String; 2]
 
 /// The mate chromosome of a bracket-notation breakend allele as the reference resolves it:
 /// a lower-case `chr` prefix removed and any other spelling kept, so `N[chr21:...[` names
-/// `21` and `N[Chr21:...[` names `Chr21` (StructuralVariationOverlap.pm:86-102).
+/// `21` and `N[Chr21:...[` names `Chr21` (StructuralVariationOverlap.pm:86-103).
 pub fn reference_mate_chromosome(allele: &str) -> Option<&str> {
     let m = BRACKET_MATE.captures(allele)?;
     let chrom = m.get(1).expect("chrom group").as_str();
@@ -391,4 +392,35 @@ mod tests {
         assert_eq!(reference_mate_chromosome("N[Chr21:١٢["), None);
         assert!(!is_breakend_allele("N[5:١٢["));
     }
+
+    #[test]
+    fn a_span_whose_width_passes_128_bits_exceeds_the_size_limit() {
+        let bound = i128::MAX;
+        // The width is 2^128 - 2, then 2^127 + 1, then 2^127 exactly.
+        for location in [
+            format!("21:{bound}--{bound}"),
+            format!("21:2--{bound}"),
+            format!("21:1--{bound}"),
+        ] {
+            assert!(span_exceeds_max_sv_size(&location), "{location}");
+            assert!(
+                batch_dependent_annotation_scope(&location, "deletion"),
+                "{location}"
+            );
+        }
+        let narrow = format!("21:{bound}-{}", bound - MAX_SV_SIZE);
+        assert!(!span_exceeds_max_sv_size(&narrow));
+        assert!(span_exceeds_max_sv_size(&format!(
+            "21:{bound}-{}",
+            bound - MAX_SV_SIZE - 1
+        )));
+    }
 }
+
+#[cfg(test)]
+#[path = "breakend_ten_digits_tests.rs"]
+mod ten_digits_tests;
+
+#[cfg(test)]
+#[path = "breakend_coordinate_readers_tests.rs"]
+mod coordinate_readers_tests;

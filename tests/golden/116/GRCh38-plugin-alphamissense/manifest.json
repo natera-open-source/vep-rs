@@ -40,7 +40,7 @@
  "covers": [
   "AlphaMissense"
  ],
- "suites": {
+ "datasets": {
   "GRCh38-plugin-alphamissense": {
    "reference": "default.txt",
    "input": "variants.vcf",
@@ -125,7 +125,7 @@
  },
  "records": [
   {
-   "suite": "GRCh38-plugin-alphamissense",
+   "dataset": "GRCh38-plugin-alphamissense",
    "vcf": "21\t10541137\t2333487\tG\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -134,7 +134,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-alphamissense",
+   "dataset": "GRCh38-plugin-alphamissense",
    "vcf": "21\t10561044\t2214242\tT\tC\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -143,7 +143,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-alphamissense",
+   "dataset": "GRCh38-plugin-alphamissense",
    "vcf": "21\t13610379\ttwo_alts_13610379\tG\tA,T\t.\t.\t.",
    "combinations": [
     "missense_variant"
@@ -153,7 +153,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-alphamissense",
+   "dataset": "GRCh38-plugin-alphamissense",
    "vcf": "21\t14189190\t4778445\tC\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -163,7 +163,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-alphamissense",
+   "dataset": "GRCh38-plugin-alphamissense",
    "vcf": "21\t26840472\t4227905\tA\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -174,7 +174,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-alphamissense",
+   "dataset": "GRCh38-plugin-alphamissense",
    "vcf": "21\t33241988\t2795057\tC\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -184,7 +184,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-alphamissense",
+   "dataset": "GRCh38-plugin-alphamissense",
    "vcf": "21\t33296209\t1010808\tC\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -197,7 +197,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-alphamissense",
+   "dataset": "GRCh38-plugin-alphamissense",
    "vcf": "21\t33550289\t2755022\tC\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -209,7 +209,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-alphamissense",
+   "dataset": "GRCh38-plugin-alphamissense",
    "vcf": "21\t34859535\t2808511\tC\tCCACAGATGGCTCTGTGGTA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -220,7 +220,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-alphamissense",
+   "dataset": "GRCh38-plugin-alphamissense",
    "vcf": "21\t34880704\t2088789\tG\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -229,7 +229,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-alphamissense",
+   "dataset": "GRCh38-plugin-alphamissense",
    "vcf": "21\t36230946\tshared_base_36230946\tGC\tGA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -238,7 +238,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-alphamissense",
+   "dataset": "GRCh38-plugin-alphamissense",
    "vcf": "21\t36230947\t2593703\tC\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -247,7 +247,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-alphamissense",
+   "dataset": "GRCh38-plugin-alphamissense",
    "vcf": "21\t37072524\t1357403\tG\tC\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -258,7 +258,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-alphamissense",
+   "dataset": "GRCh38-plugin-alphamissense",
    "vcf": "21\t42859685\t3190033\tC\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -270,7 +270,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-alphamissense",
+   "dataset": "GRCh38-plugin-alphamissense",
    "vcf": "21\t43774307\t1090993\tG\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -283,7 +283,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-alphamissense",
+   "dataset": "GRCh38-plugin-alphamissense",
    "vcf": "21\t43776225\t382295\tC\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -293,7 +293,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-alphamissense",
+   "dataset": "GRCh38-plugin-alphamissense",
    "vcf": "21\t45504431\t191317\tC\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -305,7 +305,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-alphamissense",
+   "dataset": "GRCh38-plugin-alphamissense",
    "vcf": "21\t45532029\t4584680\tG\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -315,7 +315,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-alphamissense",
+   "dataset": "GRCh38-plugin-alphamissense",
    "vcf": "21\t46112042\t3701203\tA\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -326,7 +326,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-alphamissense",
+   "dataset": "GRCh38-plugin-alphamissense",
    "vcf": "21\t46116018\t285962\tG\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -340,7 +340,7 @@
    ]
   },
   {
-   "suite": "GRCh38-plugin-alphamissense",
+   "dataset": "GRCh38-plugin-alphamissense",
    "vcf": "21\t46326451\t2887366\tC\tT\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -352,7 +352,7 @@
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "flag_sets": [

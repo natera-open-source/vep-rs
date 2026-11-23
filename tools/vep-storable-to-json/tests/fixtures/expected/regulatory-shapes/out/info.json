@@ -1,0 +1,19 @@
+{
+   "assembly" : "GRCh38",
+   "cell_types" : [
+      "A549",
+      "HepG2",
+      "K562",
+      "café, left",
+      "spleen, adult",
+      "☺_tissue"
+   ],
+   "contig_order" : [
+      "21",
+      "22"
+   ],
+   "regulatory" : true,
+   "regulatory_schema" : 1,
+   "source_versions" : {},
+   "species" : "homo_sapiens"
+}

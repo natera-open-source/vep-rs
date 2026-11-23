@@ -16,7 +16,7 @@ vep-rs's fixed key list also holds `_source_cache`, `_gene_symbol_id` and `_bam_
 
 So `_s` names `_swissprot` alone there on such a cache, and two keys here, where the run is refused as ambiguous. `_gene_symbol_` likewise names `_gene_symbol_source` alone on a transcript without the identifier, and two keys here. A filter naming any of the three keys in full reads the same value on both engines, undefined where the transcript lacks the key.
 
-A `match` or `nre` unit with no operand (`biotype match`) matches nothing here, so `match` keeps no transcript and `nre` every one. Ensembl VEP 116.2 compiles the missing operand under an `uninitialized value` warning (lines 714-715) and keeps every transcript under `match` and none under `nre`.
+A `match` or `nre` unit with no operand (`biotype match`) matches nothing here, so `match` keeps no transcript and `nre` every one. Ensembl VEP 116.3 compiles the missing operand under an `uninitialized value` warning (lines 714-715) and keeps every transcript under `match` and none under `nre`.
 
 The record below is the `tests/golden/116/GRCh38-transcript-filter` corpus's `tf_17608184`, within reach of 41 transcripts; the corpus's 32 records are used for the whole-corpus counts.
 
@@ -41,13 +41,13 @@ vep-rs's key list leaves the five out, so `e` names `end` on every transcript. O
 
 ## A GTF or GFF3 as the transcript source
 
-Ensembl VEP hands its `--gtf` and `--gff` sources the filter set its cache takes (`AnnotationSourceAdaptor.pm` line 401). Each transcript the file builds is evaluated against it (`AnnotationType/Transcript.pm` line 116). vep-rs reads such a file through a cache built from it ([A GTF or GFF3 as the transcript model](../cache-from-gtf-or-gff3.md)), and `--transcript_filter` and `--exclude_predicted` run on that cache as on any other.
+Ensembl VEP hands its `--gtf` and `--gff` sources the filter set its cache takes (`AnnotationSourceAdaptor.pm` line 401). Each transcript the file builds is evaluated against it (`AnnotationType/Transcript.pm` line 116). vep-rs reads such a file through a cache built from it, or beside a cache in the same run ([A GTF or GFF3 as the transcript model](../cache-from-gtf-or-gff3.md)), and `--transcript_filter` and `--exclude_predicted` read its transcripts as any other.
 
 On a key both engines fill, the two keep the same transcripts. Over a set of ClinVar GRCh38 chromosome 21 records against the release 116 GTF, `biotype is protein_coding` writes the same rows on both engines, on the same transcripts. Over a subset of those records against the RefSeq GRCh38 GFF3, `--exclude_predicted` writes the same rows on both, every `XM_` and `XR_` model dropped.
 
 The transcript Ensembl VEP builds from a GTF or GFF3 (`BaseGXF.pm`, `_create_transcript` and `_add_identifiers`) holds `stable_id`, `version`, `biotype`, `start`, `end`, `strand`, `dbID`, `slice`, `_trans_exon_array`, `_gene_stable_id`, `_gene_version`, `_gene_symbol` and `_source_cache`. It holds `is_canonical` when tagged and `attributes` when its line carries a support level or a tag. When coding it holds `_protein`, `translation`, `cdna_coding_start`, `cdna_coding_end` and `_variation_effect_feature_cache`. It holds no `source`, `_ccds`, `_gene_symbol_source`, `_gene_hgnc_id`, cross-reference or phenotype key, and no `_gene` or `_vep_lazy_loaded`.
 
-The cache vep-rs builds from the file holds the cache's keys, so a filter on a key the two hold differently reads differently. The table shows the three a filter is likely to name, over that subset against the release 116 GTF. Unfiltered, both engines write the same rows there; a record whose every transcript is dropped writes one `intergenic_variant` row.
+The cache vep-rs builds from the file holds the cache's keys, so a filter on a key the two hold differently reads differently. The table shows the three a filter is likely to name, over that subset against the release 116 GTF. Unfiltered, both engines write the same rows there; a record whose every transcript is dropped writes one `intergenic_variant` row. A filter naming `_source_cache` or `dbID` over such a cache draws one `INFO:` line for each on standard error before the input is read, which `--quiet` withholds. A file read beside a cache carries `_source_cache` and no `dbID`: the first then draws no line, and `dbID` draws one for the file's transcripts over any cache.
 
 | Filter | Ensembl VEP `--gtf` | vep-rs, the cache built from the GTF |
 | --- | --- | --- |
@@ -70,9 +70,9 @@ The crate lacks back-references, look-around, atomic, branch-reset and condition
 
 So `stable_id match ENST\X` runs in Ensembl VEP, where `\X` is one extended grapheme cluster and every stable id with a character after `ENST` passes. vep-rs refuses it before the input is opened, `ERROR: [filter] pattern "ENST\X" is not supported: unrecognized escape sequence`, exit 1. The flag's row on [Filtering, picking and transcript sets](../cli/filtering-picking.md) and the `filter` component on [Compatibility with Ensembl VEP](../cli/compatibility.md#exit-status-and-errors) state the dialect.
 
-Four readings differ beyond the refusals. An alternation of literal words matches a value's `ß` in Perl through a word that ends inside the fold of `ß`: `^(?:ss|s)$` matches `sß` there, where vep-rs compares the whole fold, `sss`, with each word and matches neither. A `u`, `a` or `aa` charset flag rules its own group alone in both engines, but Perl's optimizer merges some adjacent literals across that boundary and folds the merged run whole. So `^(?u:s)s$` matches `ß` there, where vep-rs reads each letter under the charset of its own scope and matches `ss` and `sS` alone.
+Three readings differ beyond the refusals. An alternation of literal words matches a value's `ß` in Perl through a word that ends inside the fold of `ß`: `^(?:ss|s)$` matches `sß` there, where vep-rs compares the whole fold, `sss`, with each word and matches neither. A `u`, `a` or `aa` charset flag rules its own group alone in both engines, but Perl's optimizer merges some adjacent literals across that boundary and folds the merged run whole. So `^(?u:s)s$` matches `ß` there, where vep-rs reads each letter under the charset of its own scope and matches `ss` and `sS` alone.
 
-Perl also keeps a `\N{U+}` escape of several characters as a run of its own, so `^\N{U+73.73}s$` matches `ßS` there and not `Sß`, where vep-rs folds the whole run and matches both. A possessive quantifier, `s++`, runs as the greedy `s+`, so `s++s$` matches `sss` in vep-rs and never in Perl.
+Perl also keeps a `\N{U+}` escape of several characters as a run of its own, so `^\N{U+73.73}s$` matches `ßS` there and not `Sß`, where vep-rs folds the whole run and matches both. A possessive quantifier, `s++`, is refused as the atomic group it abbreviates is, with `the possessive quantifier ++ is not supported` as its reason. Perl's `s++s$` never matches `sss`, since `s++` gives no character back, and the crate could read it only as the greedy `s+s$`, which does.
 
 ## `is_child`
 
@@ -80,7 +80,7 @@ Perl also keeps a `\N{U+}` escape of several characters as a run of its own, so 
 
 vep-rs matches the regex first and otherwise walks its built-in Sequence Ontology table of consequence terms, so a transcript the regex does not match is kept when its value is a descendant of the parent term and dropped otherwise. `biotype is_child transcript_variant` ends Ensembl VEP's run at the first transcript; in vep-rs no biotype is a descendant of `transcript_variant`, so every transcript is dropped and each of the corpus's 35 alleles prints an `intergenic_variant` row.
 
-To reproduce: Ensembl VEP 116.2 with the GRCh38 cache and [the command of the closing section](reproducing.md#reproducing-these-examples), adding `--transcript_filter` with the filter quoted; vep-rs with the same flags over the same cache.
+To reproduce: Ensembl VEP 116.3 with the GRCh38 cache and [the command of the closing section](reproducing.md#reproducing-these-examples), adding `--transcript_filter` with the filter quoted; vep-rs with the same flags over the same cache.
 
 ## `vep filter`
 

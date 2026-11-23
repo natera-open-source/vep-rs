@@ -5,7 +5,7 @@
 //! and its option spellings.
 //!
 //! Ensembl VEP takes a flag from five sources, the first that names it winning
-//! (`Config.pm:693-698` at release/116.2): the command line, the `--config`
+//! (`Config.pm:693-698` at release/116.3): the command line, the `--config`
 //! file, `<dir>/vep.ini`, a `VEP_<FLAG>` environment variable, the defaults.
 //! [`prepass`] reads the three sources behind the command line and lays their
 //! flags out around it, a flag the command line names dropped from every lower
@@ -36,9 +36,10 @@ use crate::args::Args;
 use crate::config::{error_table_entry, CliError, ERROR_TABLE};
 use crate::option_rules::ALLOW_MULTIPLE;
 
-/// `@VEP_PARAMS` (`Config.pm:73-276`): every option Ensembl VEP 116.2
+/// `@VEP_PARAMS` (`Config.pm:73-276`): every option Ensembl VEP 116.3
 /// declares, in Getopt::Long's notation (`name|alias=type`) and the source's
 /// order. The pre-pass measures its own prefix resolution against this list.
+#[doc(hidden)]
 pub const VEP_PARAMS: &[&str] = &[
     "help",
     "config=s",
@@ -224,23 +225,36 @@ pub const VEP_PARAMS: &[&str] = &[
 ];
 
 /// The name of the configuration file read from `--dir` (`Config.pm:704`).
+#[doc(hidden)]
 pub const INI_FILE: &str = "vep.ini";
 
 /// The prefix of an environment variable that sets a flag (`Config.pm:1133`).
+#[doc(hidden)]
 pub const ENV_PREFIX: &str = "VEP_";
 
 /// The directory `vep.ini` is read from when neither the command line nor the
 /// `--config` file names `--dir` (`Config.pm:294, 704`).
+#[doc(hidden)]
 pub const DEFAULT_DIR: &str = "~/.vep";
 
 /// Flags no source behind the command line can set: `config` names the file
 /// being read, and the `vep` script tests `help` before any file is opened
 /// (vep:29); `version` is the parser's own.
+#[doc(hidden)]
 pub const COMMAND_LINE_ONLY: &[&str] = &["config", "help", "version"];
+
+/// The refusal of `-V` on a command line that holds any other token, printed
+/// under the `cli` component. `-V` is the version's short, so such a line would
+/// print the version and annotate nothing, where Getopt::Long's `ignore_case`
+/// (`Config.pm:62`) reads the token as `-v` (`verbose|v`, `:159`) and Ensembl
+/// VEP runs.
+#[doc(hidden)]
+pub const VERSION_SHORT_BESIDE_ARGUMENTS: &str = "-V beside other arguments is not supported: it prints the version here, where Ensembl VEP reads it as -v (--verbose) and runs; write -v for a verbose run, or --version for the version";
 
 /// One option's names: the one it is stored under and every spelling that
 /// reaches it (its aliases, and a single-letter short as Getopt::Long reads
 /// one, as a name).
+#[doc(hidden)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OptionNames {
     pub canonical: String,
@@ -274,6 +288,7 @@ fn options_prefixed_by<'a>(
 /// The option a name reaches when read as Getopt::Long reads it: a name that
 /// is one of an option's names wins; otherwise the name is a prefix, in any
 /// case, of the names of exactly one option; otherwise none.
+#[doc(hidden)]
 pub fn resolve<'a>(name: &str, options: &'a [OptionNames]) -> Option<&'a OptionNames> {
     if name.is_empty() {
         return None;
@@ -326,6 +341,7 @@ fn perl_leaves_a_usage_token_unread(name: &str) -> bool {
 }
 
 /// Ensembl VEP's options as [`VEP_PARAMS`] declares them.
+#[doc(hidden)]
 pub fn perl_options() -> Vec<OptionNames> {
     VEP_PARAMS
         .iter()
@@ -443,6 +459,7 @@ fn declared_by_name<'a>(declared: &'a [Declared], name: &str) -> Option<&'a Decl
 }
 
 /// The parser's options, each with the names that reach it.
+#[doc(hidden)]
 pub fn parser_options(command: &Command) -> Vec<OptionNames> {
     declared_options(command)
         .into_iter()
@@ -455,7 +472,11 @@ pub fn parser_options(command: &Command) -> Vec<OptionNames> {
 /// written after one dash or two, in any case, or as a prefix of one option's
 /// names, becomes `--<long>` with its attached value; the token after an
 /// option that takes a value is that value however it is spelled; `--` ends
-/// the options. A name no option has is left for clap to refuse.
+/// the options. A name of two or more letters that is a prefix of several
+/// options is written with two dashes, so clap refuses it rather than reading
+/// its letters as short forms (`-li`). Any other name no option has is left as
+/// written for clap to refuse.
+#[doc(hidden)]
 pub fn spell_as_declared(argv: &[OsString], command: &Command) -> Vec<OsString> {
     let options = parser_options(command);
     let takes_value = |long: &str| {
@@ -495,6 +516,15 @@ pub fn spell_as_declared(argv: &[OsString], command: &Command) -> Vec<OsString> 
                 }));
                 value_next = attached.is_none() && takes_value(long);
             }
+            // Getopt::Long calls a prefix of several options ambiguous whatever
+            // its dashes; written with two, clap refuses the name instead of
+            // reading `-li` as `-l -i`.
+            None if name.chars().nth(1).is_some()
+                && options_prefixed_by(name, &options).next().is_some() =>
+            {
+                let two_dashes = Token::option(name, attached.map(OsString::from));
+                out.push(two_dashes.into_os_string());
+            }
             None => out.push(token.clone()),
         }
     }
@@ -523,6 +553,7 @@ fn known_options(declared: &[Declared]) -> Vec<OptionNames> {
 /// prefix a flag vep-rs adds makes ambiguous (`js`: `json` and `json_cache`)
 /// reads as Ensembl VEP reads it, and an Ensembl VEP option the binary lacks
 /// is named in full for the parser to refuse.
+#[doc(hidden)]
 pub fn resolve_spelling<'a>(
     name: &str,
     known: &'a [OptionNames],
@@ -534,6 +565,7 @@ pub fn resolve_spelling<'a>(
 /// A spelling Getopt::Long resolves to one Ensembl VEP option and the pre-pass
 /// does not: the option's own name or alias, or a prefix of one, that resolves
 /// to another option here or to none.
+#[doc(hidden)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnresolvedSpelling {
     /// The spelling as Getopt::Long takes it, without its dashes.
@@ -547,6 +579,7 @@ pub struct UnresolvedSpelling {
 /// Every spelling of an Ensembl VEP option the parser declares that
 /// Getopt::Long resolves and [`resolve_spelling`] does not, sorted by spelling;
 /// empty while every such spelling reaches the same option.
+#[doc(hidden)]
 pub fn unresolved_perl_spellings(command: &Command) -> Vec<UnresolvedSpelling> {
     let perl = perl_options();
     let declared = declared_options(command);
@@ -756,7 +789,7 @@ fn split_config_line(line: &str) -> Vec<String> {
 /// leading dash, is the key; the value of a repeatable key is every following
 /// word joined by one blank, of any other key the second word alone; a key
 /// with no value is dropped, as a key that names no option of Ensembl VEP's or
-/// the parser's is. The file is read as bytes, as Perl reads it; a byte that
+/// the parser's is. The file is read as bytes, as Ensembl VEP reads it; a byte that
 /// is not UTF-8 becomes the replacement character in a value and is skipped in
 /// a comment.
 fn read_config_file(
@@ -799,7 +832,11 @@ fn read_config_file(
 /// The flags of the environment, as `read_config_from_environment` reads them
 /// (`Config.pm:1127-1168`): every `VEP_<NAME>` variable with a non-empty value
 /// sets the flag `<name>`, lower-cased; the variables are taken in name order,
-/// where Perl takes them in hash order.
+/// where Ensembl VEP takes them in hash order. The lower-cased name is matched
+/// exactly, so no variable names `phyloP` or `phastCons`, the two keys spelled
+/// with a capital letter: Ensembl VEP stores such a variable under the
+/// lower-cased key (`:1140, 1158`), which its option sets never read
+/// (`:553, 560`).
 fn read_environment(
     env: &BTreeMap<String, String>,
     declared: &[Declared],
@@ -832,6 +869,10 @@ enum Token {
         /// (`Config.pm:734-745`).
         written: String,
         value: Option<OsString>,
+        /// Whether the token is the version asked by its one-letter short, `-V`,
+        /// the token Getopt::Long's `ignore_case` reads as `-v`
+        /// (`Config.pm:62, 159`).
+        version_short: bool,
     },
     /// A token left as written: a value, a short cluster, the `--` separator, an
     /// option the parser does not declare, or anything after `--`.
@@ -845,6 +886,7 @@ impl Token {
             long: long.to_string(),
             written: long.to_string(),
             value,
+            version_short: false,
         }
     }
 
@@ -933,7 +975,8 @@ fn glued_short<'a, 'n>(body: &'n str, declared: &'a [Declared]) -> Option<(&'a D
 /// parser refuses it by name; a name that is a prefix of several options is
 /// written with two dashes, so clap refuses it; a short flag with its value
 /// attached is written as the long form; `--` ends the options. Anything else,
-/// a cluster of switches or a name no option has, is left for clap.
+/// a cluster of switches or a name no option has, is left for clap. The
+/// version written as its one-letter short is marked as that.
 fn spell(options: &[OsString], declared: &[Declared]) -> Vec<Token> {
     let known = known_options(declared);
     let perl = perl_options();
@@ -977,10 +1020,12 @@ fn spell(options: &[OsString], declared: &[Declared]) -> Vec<Token> {
                 }
                 None => None,
             };
+            let version_short = long == "version" && name.len() == 1;
             tokens.push(Token::Option {
                 long,
                 written,
                 value,
+                version_short,
             });
             continue;
         }
@@ -1006,6 +1051,26 @@ fn spell(options: &[OsString], declared: &[Declared]) -> Vec<Token> {
         tokens.push(Token::Verbatim(token.clone()));
     }
     tokens
+}
+
+/// Whether the command line asks for the version by `-V` beside another token:
+/// the line holds more than one token, and every token of it that asks for the
+/// help or the version is the version's one-letter short, so none spells either
+/// out, which would win over every other token. A `-V` that is a flag's value,
+/// stands behind `--` or is a letter of a cluster is no such token.
+fn version_short_beside_arguments(tokens: &[Token]) -> bool {
+    let mut asked_by_the_short = tokens.iter().filter_map(|t| match t {
+        Token::Option {
+            long,
+            value: None,
+            version_short,
+            ..
+        } if long == "help" || long == "version" => Some(*version_short),
+        _ => None,
+    });
+    tokens.len() > 1
+        && asked_by_the_short.next() == Some(true)
+        && asked_by_the_short.all(|short| short)
 }
 
 /// The value the command line gives an option: the last occurrence's.
@@ -1077,7 +1142,7 @@ fn tokens_of(settings: &Settings, declared: &[Declared]) -> (Vec<OsString>, Vec<
 /// The switches Ensembl VEP reads by `defined()` rather than by truth, so a
 /// source's `0` or empty value sets them off but present: `var_synonyms`, which
 /// `Runner.pm:117` tests with `defined` before switching `check_existing` on.
-pub const DEFINED_SWITCHES: &[&str] = &["var_synonyms"];
+pub(crate) const DEFINED_SWITCHES: &[&str] = &["var_synonyms"];
 
 /// The [`DEFINED_SWITCHES`] a source set to a false value, each with that value
 /// (`0` or the empty string a quoted value leaves), which [`tokens_of`] adds
@@ -1184,7 +1249,7 @@ fn sources_behind(
         })
         .unwrap_or_else(|| OsString::from(DEFAULT_DIR));
     let ini_path = expand_tilde(&ini_dir, home).join(INI_FILE);
-    // Perl's `-e` then `open` on a directory reads nothing from it.
+    // In Ensembl VEP, Perl's `-e` then `open` on a directory reads nothing from it.
     let ini = if ini_path.is_file() {
         read_config_file(&ini_path, &ini_path.display().to_string(), declared, perl)?
     } else {
@@ -1230,10 +1295,10 @@ fn lay_out(
 
 /// A companion tool's command line, spelled by [`spell_as_declared`], with the
 /// sources behind it read as `Config->new` reads them for `variant_recoder`
-/// (`Config.pm:701-708`, `:1068-1110`, [`sources_behind`]): the `--config` file
+/// (`Config.pm:701-708`, `:1068-1110`, `sources_behind`): the `--config` file
 /// it names, `<dir>/vep.ini` under the file's `dir` or `~/.vep`, then the
 /// `VEP_*` variables of `env`, laid out around the command line by
-/// [`lay_out`], the command line keeping its own value of a flag a source
+/// `lay_out`, the command line keeping its own value of a flag a source
 /// names (`:1101`, `:1158`). A key a source names that `command` has no option
 /// for is dropped, as `is_valid_param` drops a key `@VEP_PARAMS` lacks
 /// (`:1096`, `:1100`), a `config` key inside a file is dropped too, and so is
@@ -1248,7 +1313,7 @@ fn lay_out(
 ///
 /// A `--config` file, or a `vep.ini` that is a file, that cannot be read:
 /// `ERROR: [config] Could not open config file "<path>"` (`Config.pm:1075`).
-pub fn with_config_file<I>(
+pub(crate) fn with_config_file<I>(
     command: &Command,
     spelled: &[OsString],
     env: I,
@@ -1317,7 +1382,7 @@ where
 }
 
 /// The command line clap parses, from the one given and the sources behind it
-/// ([`Prepassed::argv`] of [`prepass_with_sources`]).
+/// (`Prepassed::argv` of `prepass_with_sources`).
 ///
 /// The first element is the program name. A command line asking for the help or
 /// the version (`--help`, `-h`, `--version`, `-V`, in any spelling) is returned
@@ -1336,6 +1401,9 @@ where
 ///
 /// A `--config` file, or a `vep.ini` that is a file, that cannot be read:
 /// `ERROR: [config] Could not open config file "<path>"` (`Config.pm:1075`).
+/// A `-V` beside any other token, unless the command line spells `--help` or
+/// `--version` out: `ERROR: [cli]` with `VERSION_SHORT_BESIDE_ARGUMENTS`,
+/// before any source is read.
 pub fn prepass<I>(argv: Vec<OsString>, env: I) -> Result<Vec<OsString>, CliError>
 where
     I: IntoIterator<Item = (OsString, OsString)>,
@@ -1344,6 +1412,7 @@ where
 }
 
 /// A command line read through the pre-pass.
+#[doc(hidden)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Prepassed {
     /// The command line clap parses ([`prepass`]).
@@ -1360,6 +1429,7 @@ pub struct Prepassed {
 /// # Errors
 ///
 /// As [`prepass`].
+#[doc(hidden)]
 pub fn prepass_with_sources<I>(argv: Vec<OsString>, env: I) -> Result<Prepassed, CliError>
 where
     I: IntoIterator<Item = (OsString, OsString)>,
@@ -1374,6 +1444,9 @@ where
     let program = argv.next().unwrap_or_else(|| "vep".into());
     let options: Vec<OsString> = argv.collect();
     let tokens = spell(&options, &declared);
+    if version_short_beside_arguments(&tokens) {
+        return Err(CliError::cli(VERSION_SHORT_BESIDE_ARGUMENTS));
+    }
     let asks_help_or_version = tokens
         .iter()
         .any(|t| matches!(t, Token::Option { long, .. } if long == "help" || long == "version"));
@@ -1415,7 +1488,7 @@ where
 mod tests {
     use super::*;
 
-    /// `@VEP_PARAMS`, Config.pm:73-276 at release/116.2, the comments dropped.
+    /// `@VEP_PARAMS`, Config.pm:73-276 at release/116.3, the comments dropped.
     const CONFIG_PM_PARAMS: &str = r#"our @VEP_PARAMS = (
   'help',
   'config=s',
@@ -2015,8 +2088,8 @@ mod tests {
         );
 
         // A directory named vep.ini reads as nothing (Perl's open on a directory
-        // yields no line), and a --dir that reads as false is the default
-        // (`$config->{dir} || $DEFAULTS{dir}`).
+        // yields no line in Ensembl VEP), and a --dir that reads as false is the
+        // default (`$config->{dir} || $DEFAULTS{dir}`).
         let as_dir = home.join("as_dir");
         fs::create_dir_all(as_dir.join(INI_FILE)).unwrap();
         let as_dir = as_dir.display().to_string();
@@ -2052,7 +2125,7 @@ mod tests {
 
     /// A configuration file is read as bytes: a comment or a value holding a byte
     /// that is not UTF-8 does not make the file unreadable, as it does not for
-    /// Perl.
+    /// Ensembl VEP.
     #[test]
     fn config_file_bytes_outside_utf8_are_read() {
         let dir = tempfile::tempdir().unwrap();
@@ -2310,6 +2383,37 @@ mod tests {
         );
     }
 
+    /// No variable names a flag spelled with a capital letter: `VEP_PHYLOP`,
+    /// `VEP_phyloP` and `VEP_PHASTCONS` are read as `phylop` and `phastcons`,
+    /// which name nothing, as Ensembl VEP stores them under those keys
+    /// (`Config.pm:1140, 1158`) where its option sets read `phyloP` and
+    /// `phastCons` (`:553, 560`). `VEP_UCSC_ASSEMBLY` beside them sets its
+    /// flag, and `VEP_CUSTOM` adds the source such a flag would name.
+    #[test]
+    fn environment_names_no_flag_spelled_with_a_capital_letter() {
+        let dir = tempfile::tempdir().unwrap();
+        let out = run(
+            &["-i", "x.vcf"],
+            dir.path(),
+            &[
+                ("VEP_PHYLOP", "100"),
+                ("VEP_phyloP", "20"),
+                ("VEP_PHASTCONS", "30"),
+                ("VEP_UCSC_ASSEMBLY", "hg38"),
+                ("VEP_CUSTOM", "scores.bw,phyloP100way,bigwig,exact"),
+            ],
+        );
+        assert_eq!(
+            out,
+            owned(&[
+                "vep",
+                "--ucsc_assembly=hg38",
+                "--input_file=x.vcf",
+                "--custom=scores.bw,phyloP100way,bigwig,exact",
+            ])
+        );
+    }
+
     /// The command line's own spellings: one dash before a long name or a unique
     /// prefix (`-form`, `-sa`), any case, `=` values, the value after a flag left
     /// alone, a short cluster and a name no option has left as written, everything
@@ -2458,7 +2562,7 @@ mod tests {
         let cases: [(&[&str], &[&str]); 9] = [
             (&["--fork", "--help"], &["--fork", "--help"]),
             (&["--fork", "x", "--help"], &["--fork=x", "--help"]),
-            (&["--freq_freq", "-V"], &["--freq_freq", "--version"]),
+            (&["--freq_freq", "--version"], &["--freq_freq", "--version"]),
             (&["--buffer_size", "-help"], &["--buffer_size", "--help"]),
             (&["--fork", "4", "--help"], &["--fork=4", "--help"]),
             (
@@ -2466,7 +2570,7 @@ mod tests {
                 &["--pipeline_depth", "--help"],
             ),
             (
-                &["--writer_strategy", "-V"],
+                &["--writer_strategy", "--version"],
                 &["--writer_strategy", "--version"],
             ),
             (
@@ -2486,6 +2590,59 @@ mod tests {
             let mut want = vec!["vep"];
             want.extend(expected.iter().copied());
             assert_eq!(strings(&out), owned(&want), "{args:?}");
+        }
+    }
+
+    /// `-V` is the version when it is the only argument. Beside any other token
+    /// the line is refused before a source is read, since Getopt::Long's
+    /// `ignore_case` reads the token as `-v` (`verbose|v`, Config.pm:159) and
+    /// Ensembl VEP runs: a second `-V`, a `--help=1`, which asks for no help, and
+    /// a number option, which leaves the token unread, are such tokens. A `--help`
+    /// or `--version` spelled out wins, and a `-V` that is a string option's
+    /// value, a letter of a cluster or behind `--` is not the version's short.
+    #[test]
+    fn version_short_beside_another_token_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().to_str().unwrap();
+        let missing = dir.path().join("absent.ini").display().to_string();
+        let read = |args: &[&str]| {
+            let mut argv = vec!["vep"];
+            argv.extend(args.iter().copied());
+            prepass(self::argv(&argv), env(&[("HOME", home)]))
+                .map(|out| strings(&out))
+                .map_err(|e| e.to_string())
+        };
+        let refused: [&[&str]; 9] = [
+            &["-V", "-i", "in.vcf"],
+            &["-i", "in.vcf", "-o", "out.txt", "-V"],
+            &["-V", "--quiet"],
+            &["-V", "-V"],
+            &["--V", "--cache"],
+            &["--fork", "-V"],
+            &["-V", "--config", &missing],
+            &["-V", "--help=1"],
+            &["-V", "--", "x"],
+        ];
+        for args in refused {
+            assert_eq!(
+                read(args),
+                Err(format!("ERROR: [cli] {VERSION_SHORT_BESIDE_ARGUMENTS}")),
+                "{args:?}"
+            );
+        }
+        let passed: [(&[&str], &[&str]); 7] = [
+            (&["-V"], &["--version"]),
+            (&["-V", "--help"], &["--version", "--help"]),
+            (&["-h", "-V"], &["--help", "--version"]),
+            (&["-V", "--version"], &["--version", "--version"]),
+            (&["-i", "-V"], &["--input_file=-V"]),
+            (&["-qV"], &["-qV"]),
+            (&["--", "-V"], &["--", "-V"]),
+        ];
+        for (args, expected) in passed {
+            let mut want = vec!["vep"];
+            want.extend(expected.iter().copied());
+            assert_eq!(read(args), Ok(owned(&want)), "{args:?}");
         }
     }
 
@@ -2564,6 +2721,34 @@ mod tests {
         assert_eq!(
             split_config_line("plugin \"Foo bar"),
             ["plugin \"Foo", "bar"]
+        );
+    }
+
+    /// A companion tool's name that is a prefix of several options is written
+    /// with two dashes whatever its own, with its attached value, so clap
+    /// refuses the name instead of reading its letters as short forms. A
+    /// prefix of one option resolves; a single letter, a name no option has,
+    /// the value of an option and a token behind `--` stay as typed.
+    #[test]
+    fn a_companion_prefix_of_several_options_is_written_with_two_dashes() {
+        let switch =
+            |name: &'static str| clap::Arg::new(name).long(name).action(ArgAction::SetTrue);
+        let valued = |name: &'static str| clap::Arg::new(name).long(name).num_args(1);
+        let tool = Command::new("tool")
+            .arg(switch("list").short('l'))
+            .arg(valued("limit"))
+            .arg(valued("input_file").short('i'))
+            .arg(valued("pass"))
+            .arg(valued("port"));
+        let spelled = |args: &[&str]| strings(&spell_as_declared(&argv(args), &tool));
+        assert_eq!(spelled(&["-li", "x"]), ["--li", "x"]);
+        assert_eq!(spelled(&["--li", "x"]), ["--li", "x"]);
+        assert_eq!(spelled(&["-li=3"]), ["--li=3"]);
+        assert_eq!(spelled(&["-lis"]), ["--list"]);
+        assert_eq!(spelled(&["-lim", "-li"]), ["--limit", "-li"]);
+        assert_eq!(
+            spelled(&["-p", "-lx", "--", "-li"]),
+            ["-p", "-lx", "--", "-li"]
         );
     }
 }

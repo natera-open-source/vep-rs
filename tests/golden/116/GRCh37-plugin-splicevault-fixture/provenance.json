@@ -27,59 +27,85 @@
    }
   }
  },
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh37",
  "fasta": "none on either side",
  "input": "14 hand-built VCF records on chromosome 21 of the release-116 GRCh37 cache: splice donor and acceptor single-base substitutions on a forward-strand transcript and on a reverse-strand one (one lower-case), a donor site a second transcript shares, an acceptor site shared by two transcripts of opposite strands, a splice-region insertion and a donor deletion on each strand, an exonic splice-region substitution, an acceptor site whose only table row names a transcript the cache lacks, a donor site the table leaves out and an intergenic substitution",
  "sha256": {
-  "default.txt": "4200343749944d313d5fd987323fbb6c35dee2a642099fd54fdcac73bd204592",
-  "tab.txt": "f9d30b1646516d89a7a0b6499c3c53e5fcd1838fbd45a5f980fcebeb128bf8fe",
-  "vcf.vcf": "3dd3b58f6f922835b5eabdb6e2c2b2ffee0282dfea11ce714d2bfb4a1d650269",
-  "json.jsonl": "62333656fb3f29e3b092e7546a0bf0320856a930b4c433cfd5eaec0588764f8d",
-  "default.summary.log": "deacf8f5ca912872937f8c5824624e31b825f0bda07f653e0e64daac3aa4487e",
-  "tab.summary.log": "e94d7221a734a61b7ba018bb9c03bc9c7f5e285e2bab8d3ecd34fcd2f8faa2a6",
-  "vcf.summary.log": "f42665408814adee69962d8019334182cd60747ecb1d6bef4a3401f34e7e6187",
-  "json.summary.log": "6987a7867263e209d2f629cab05af9b0067d1f25b8216e04c45b9326d95ab3e9"
+  "default.txt": "260120060f266287553e851a4d410374a70e1cdd1c8176e4aae4a56715252ae7",
+  "tab.txt": "eaa898bcfd8fe6971e8a6741b283b795f72b773d3804bbc0c98a90615a35113e",
+  "vcf.vcf": "ef22e121d485855ec62bf09bee32d272ddd8a2a17e1b48d0ef12ea00b061bd36",
+  "json.jsonl": "b1b76360ccd646a18869c13610a06ab9383419d867820223db2953919de4f91f",
+  "default.summary.log": "307f2da5f35db0f323262746339c14593f9af0d08b8c04b2dd3a091d44cb83e8",
+  "tab.summary.log": "1cedd49d2bc29623d95373ee479cc7794b670b03cc7aab60637f979307da7dc8",
+  "vcf.summary.log": "fbcf117e5b218f639c78191346399a2bc6cf21d0aabc0b056e4b41e3558b481e",
+  "json.summary.log": "fe30c6ab3354a97409e61bfe7f23b11451737dc7d0daf42b7ca08fba33c01294"
  },
  "variants_vcf_sha256": "d982c75bc5455c86274693d97aac22472f4d46a7994de467c0c008f72d01d7da",
  "flag_sets": {
   "splicevault": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {corpus}/data --plugin SpliceVault,file={corpus}/data/SpliceVault_data_hg19_synthetic.tsv.gz [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh37",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "aac7e39b9105b2520ffc8847f4ee367a38ac68294696faeae097db64ba608157",
+    "tab.txt": "9ae0c0ef2a5008f3b86e95d458ec5eb212b7c39649f2816a79d1dca02988122a",
+    "vcf.vcf": "418c30917d1d9c22e1ead4c6a7a2baad4d73611b95019e0f3896c52d680dcd9e",
+    "json.jsonl": "79de7f3cd30ebb391f92b7c7e78d7242a562f4f6ed2b3d50e5021ede11082713"
+   },
+   "flags": [
+    "--dir_plugins",
+    "{corpus}/data",
+    "--plugin",
+    "SpliceVault,file={corpus}/data/SpliceVault_data_hg19_synthetic.tsv.gz"
+   ],
+   "expected_dir": "expected_splicevault",
    "formats_compared": [
     "default",
     "tab",
     "vcf",
     "json"
-   ],
-   "expected_dir": "expected_splicevault",
-   "sha256": {
-    "default.txt": "6616e114104e5e983995406178035d045e1a10474d5d61e002d53810b20dab74",
-    "tab.txt": "f05408826d59e9770bd25c63130736ac7cd7432894cee5cb1de7ccebedb96d6a",
-    "vcf.vcf": "2a393153db8edf6e05081c1604a7c7dfbd40d1f7317b4073f456f00df166a6d6",
-    "json.jsonl": "2c5213a58d15cad2c34e3117186f5f85f61babad3a0f5e016e3e94ce1eae7ecc"
-   }
+   ]
   },
   "splicevault-transcript-match-0": {
-   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {corpus}/data --plugin SpliceVault,file={corpus}/data/SpliceVault_data_hg19_synthetic.tsv.gz,transcript_match=0 [--tab|--vcf]",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {corpus}/data --plugin SpliceVault,file={corpus}/data/SpliceVault_data_hg19_synthetic.tsv.gz,transcript_match=0 [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh37",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "e478759629a0758f4dfc192f5f61f057dd9cc9ac87b6e77bd0e9c4d61c7055d9",
+    "tab.txt": "ca18ae48a510f919cdbae671d18df515f0a0f3a9dd27866a22ab411b6a72f39b",
+    "vcf.vcf": "732f3ae3ea029c2b617e7314f63e58128f5baf3f195be9919e72c64cb8c931b8"
+   },
+   "flags": [
+    "--dir_plugins",
+    "{corpus}/data",
+    "--plugin",
+    "SpliceVault,file={corpus}/data/SpliceVault_data_hg19_synthetic.tsv.gz,transcript_match=0"
+   ],
+   "expected_dir": "expected_splicevault-transcript-match-0",
    "formats_compared": [
     "default",
     "tab",
     "vcf"
    ],
-   "expected_dir": "expected_splicevault-transcript-match-0",
-   "sha256": {
-    "default.txt": "f5eacc5938b46730119594baf2ad547e9428aff1ba341278c83b5d3a010be14d",
-    "tab.txt": "201f1762efa4712059dfbdb92732c1cf97cef0c50342588fdffa4dd7f9105b6d",
-    "vcf.vcf": "ca227de5294f727fd68fbc57496df0ea08d779a9ec1d5c81d48c0d93fcf4f088"
-   },
    "note": "Ensembl VEP's JSON output is compared under the default transcript match alone: with transcript_match=0 the plugin rewrites a cached row's event list into a hash on the first transcript row of a record it annotates (SpliceVault.pm:190) and reads it as a list again on the record's next transcript row (:183), which dies, is caught, and leaves that row without its SpliceVault object under the warning \"Plugin 'SpliceVault' went wrong: Not an ARRAY reference\"; vep-rs writes the object on every row the text formats annotate, so the JSON reference of this run would record the defect, and only the three text formats are compared."
   }
  },
- "generator": "data/SpliceVault_data_hg19_synthetic.tsv.gz: scripts/fixtures/plugin_score_fixtures.py --shape splicevault from variants.vcf and data/splicevault_transcripts.tsv (the transcript ids rowed at each site, an id no transcript of the cache carries among them), the twelve tab-separated columns SpliceVault.pm:201 splits a line into, with fabricated events, one row per alternate base per listed transcript at every single-base site, one row per listed transcript with the anchored alleles at the insertion and deletion sites, no row at the unscored site, bgzip and tabix -s 1 -b 2 -e 2 (seed 7 and digests under plugin_fixtures); the SpliceVault file's name is the name the plugin's documentation gives (SpliceVault.pm:79), with the word `synthetic` added before the extension to say that the file is made up; json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice scripts/data/storable_to_json.pl converted from the Ensembl VEP 116 GRCh37 cache; expected outputs: scripts/concordance/generate_reference_output.sh --corpus for the manifest's run, and one Ensembl VEP 116.2 container run per format for each flag set from the vep command recorded under its flag_sets entry, the corpus mounted read-only at /work/corpus and the SpliceVault plugin read from the container's plugin directory; manifest: scripts/golden/build_golden_corpus.py select --include for every record, flag-set, then classify for the manifest's run and each flag set against the committed tree's binary",
+ "generator": "data/SpliceVault_data_hg19_synthetic.tsv.gz: scripts/fixtures/plugin_score_fixtures.py --shape splicevault from variants.vcf and data/splicevault_transcripts.tsv (the transcript ids rowed at each site, an id no transcript of the cache carries among them), the twelve tab-separated columns SpliceVault.pm:201 splits a line into, with fabricated events, one row per alternate base per listed transcript at every single-base site, one row per listed transcript with the anchored alleles at the insertion and deletion sites, no row at the unscored site, bgzip and tabix -s 1 -b 2 -e 2 (seed 7 and digests under plugin_fixtures); the SpliceVault file's name is the name the plugin's documentation gives (SpliceVault.pm:79), with the word `synthetic` added before the extension to say that the file is made up; json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice tools/vep-storable-to-json converts from the Ensembl VEP 116 GRCh37 cache; expected outputs: scripts/concordance/generate_reference_output.sh --corpus for the manifest's run, and one Ensembl VEP 116.3 container run per format for each flag set from the vep command recorded under its flag_sets entry, the corpus mounted read-only at /work/corpus and the SpliceVault plugin read from the container's plugin directory; manifest: tools/vep-golden-corpus select --include for every record, flag-set, then classify for the manifest's run and each flag set against the committed tree's binary",
  "pruned_cache_transcripts": {
   "21": 6
  }

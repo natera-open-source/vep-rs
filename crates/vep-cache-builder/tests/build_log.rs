@@ -8,7 +8,9 @@ use std::process::Command;
 /// A build logs one `chr <name>: <n> transcripts in <m> regions` line per
 /// chromosome it writes, in the byte order of the names, whatever order the
 /// model lists them in: eight chromosomes are logged `1`, `10`, `11`, `2`,
-/// `20`, `3`, `X`, `Y`.
+/// `20`, `3`, `X`, `Y`. A count of one takes its noun in the singular, as on
+/// each chromosome's line here, and any other count the plural, as on the
+/// two lines that count the whole model.
 #[test]
 fn chromosome_lines_are_logged_in_name_order() {
     let dir = tempfile::tempdir().unwrap();
@@ -38,7 +40,7 @@ fn chromosome_lines_are_logged_in_name_order() {
     assert!(output.status.success(), "{stderr}");
     let logged: Vec<&str> = stderr
         .lines()
-        .filter(|line| line.ends_with(" transcripts in 1 regions"))
+        .filter(|line| line.ends_with(": 1 transcript in 1 region"))
         .filter_map(|line| line.rsplit_once("chr ")?.1.split(':').next())
         .collect();
     assert_eq!(
@@ -46,4 +48,17 @@ fn chromosome_lines_are_logged_in_name_order() {
         ["1", "10", "11", "2", "20", "3", "X", "Y"],
         "{stderr}"
     );
+    for line in [
+        " INFO vep_cache_builder: Parsed 8 genes, 8 transcripts",
+        " INFO vep_cache_builder: Cache built: 8 transcripts across 8 chromosomes, 8 region files",
+    ] {
+        assert_eq!(
+            stderr
+                .lines()
+                .filter(|logged| logged.ends_with(line))
+                .count(),
+            1,
+            "{line}: {stderr}"
+        );
+    }
 }

@@ -1,6 +1,6 @@
 # A GFF3 or GTF line whose coordinates are malformed
 
-**The defect in one sentence.** Ensembl VEP 116.2's `--gff`, `--gtf`, `--regulatory_gff` and `--custom` GFF sources read the records the `tabix` index returns. The `tabix` the release ships, htslib 1.9, indexes a file past a line inside a sequence whose end no number leads or reads below zero, warning and exiting 0. It does the same past a start no number leads at the file's first line, and fails the build when that line sits on a later sequence. A start of 0 and an end below its start, not below zero, it indexes silently. The source then builds its model without the unparsed line, or on the span as written, and reports no fault in the file.
+**The defect in one sentence.** Ensembl VEP 116.3's `--gff`, `--gtf`, `--regulatory_gff` and `--custom` GFF sources read the records the `tabix` index returns. The `tabix` the release ships, htslib 1.9, indexes a file past a line inside a sequence whose end no number leads or reads below zero, warning and exiting 0. It does the same past a start no number leads at the file's first line, and fails the build when that line sits on a later sequence. A start of 0 and an end below its start, not below zero, it indexes silently. The source then builds its model without the unparsed line, or on the span as written, and reports no fault in the file.
 
 A variant in a CDS whose line was lost is a `5_prime_UTR_variant`; a transcript whose gene line was lost is intergenic; a GTF transcript whose first CDS line was lost has every codon renumbered.
 
@@ -10,7 +10,7 @@ A variant in a CDS whose line was lost is a `5_prime_UTR_variant`; a transcript 
 
 `--regulatory_gff` refuses a record whose start or end is not a whole number, whose start is 0 or whose end is below its start, naming the record. The builder's bake refuses the same, and both refuse a start or end no number leads, or an end below zero, on a line of any type. A `--custom` GFF or `--regulatory_gff` source is read through its index as Ensembl VEP reads it. An index that decompresses to more than 268435456 bytes is refused as malformed, the size `tabix` writes past an unparsed line at the file's head.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2, `ensembl-io` at release/116, htslib 1.9):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3, `ensembl-io` at release/116, htslib 1.9):
 
 | Source | What it does |
 | --- | --- |
@@ -22,7 +22,7 @@ A variant in a CDS whose line was lost is a `5_prime_UTR_variant`; a transcript 
 | `BaseGXF.pm`, lines 363-435, `_get_parent_child_structure`; line 719, `_add_translation` | A record whose parent the fetched records lack is an orphan, warned about and dropped with its children. The translation runs from the first CDS record in transcript order to the last, so a lost first CDS line moves the coding start to the next one. |
 | `BaseGXF.pm`, line 544, `_create_transcript`; lines 740-756, `_add_translation` | A CDS record is given to the exon that holds its start, and one whose start no exon holds is left out. The translation's ends are the first and last given records' distances from their exons' edges, with no test that either lies inside its exon. |
 
-**What correcting it would change.** With the source refusing a line whose coordinates are not a one-based ordered pair of numbers, every malformed file would fail before a row is written. Every file whose coordinates are plain decimal numbers would read as it reads in 116.2; a zero-padded coordinate is the exception, section 7. htslib's own index build refuses an end below its start from 1.10. A line no number leads it skips, with the same message and exit 0, from 1.10 to 1.21, and refuses from 1.22.
+**What correcting it would change.** With the source refusing a line whose coordinates are not a one-based ordered pair of numbers, every malformed file would fail before a row is written. Every file whose coordinates are plain decimal numbers would read as it reads in 116.3; a zero-padded coordinate is the exception, section 7. htslib's own index build refuses an end below its start from 1.10. A line no number leads it skips, with the same message and exit 0, from 1.10 to 1.21, and refuses from 1.22.
 
 **The class it produces.** `gxf_malformed_coordinate_line_refused`: a run over a GTF or GFF3 transcript model, a `--regulatory_gff` file or a `--custom` GFF holding a line of the class. On a kept line that is a start or end that is not a number, a start of 0 or an end below its start; on any line, a start or end no number leads or an end below zero. Ensembl VEP builds without the line or on the span as written, or dies in a Perl method. vep-rs refuses the build or the run at the line, naming it and the value, or refuses the source's index, each reader as tabled. A zero-padded coordinate is the class's extension (section 7).
 
@@ -37,11 +37,11 @@ At run time `--regulatory_gff` refuses such a skipped line as it does a kept one
 
 A skipped-type line the index build parses is matched (section 4). A `--custom` VCF row whose `END` lies below its position is [`tabix_row_with_an_end_below_its_start`](tabix-row-with-an-end-below-its-start.md)'s. No committed file carries a line of the class: it is documented only.
 
-**How often the shape occurs.** Tier 3: the shape is a coordinate column no release file carries. None of the 28,494 lines of the committed GTF, promoter GFF and regulatory GFF files carries it, and none of their starts or ends is zero-padded. 21 committed flag sets run a cache built from a GTF or GFF3, a `--custom` GFF or `--regulatory_gff`, and none runs Ensembl VEP over a file with the shape. htslib 1.22.1's `tabix` refuses a column no number leads and an end below its start with exit 1, so a file indexed with it meets the refusal before either engine runs.
+**How often the shape occurs.** Tier 3: the shape is a coordinate column no release file carries. None of the 28,494 feature lines of the committed GTF, promoter and regulatory GFF files carries it, and none of their starts or ends is zero-padded. 26 committed flag sets run a cache built from a GTF or GFF3, a `--custom` GFF or `--regulatory_gff`, and none runs Ensembl VEP over a file with the shape. htslib 1.22.1's `tabix` refuses a column no number leads and an end below its start with exit 1, so a file indexed with it meets the refusal before either engine runs.
 
 ## 1. A CDS line whose start is not a number
 
-**In short.** The GRCh38 release-116 GFF3 lines of the gene TMPRSS3 and its transcript `ENST00001113783`, with the start of the transcript's first CDS line in transcript order, the line at `42395324-42395417`, rewritten `abc`, beside the lines of PWP2 and its transcript `ENST00000456705` as released. On the record `tmprss3_codon6`, `21 42395401 G>A`, Ensembl VEP 116.2 reading the file through `--gff` writes `5_prime_UTR_variant` and `HGVSc=ENST00001113783.1:c.-78C>T`, where the released file gives `missense_variant` and `c.17C>T`; vep-rs refuses to build a cache from the file at that CDS line. On `pwp2_codon3` both engines write `missense_variant`.
+**In short.** The GRCh38 release-116 GFF3 lines of the gene TMPRSS3 and its transcript `ENST00001113783`, with the start of the transcript's first CDS line in transcript order, the line at `42395324-42395417`, rewritten `abc`, beside the lines of PWP2 and its transcript `ENST00000456705` as released. On the record `tmprss3_codon6`, `21 42395401 G>A`, Ensembl VEP 116.3 reading the file through `--gff` writes `5_prime_UTR_variant` and `HGVSc=ENST00001113783.1:c.-78C>T`, where the released file gives `missense_variant` and `c.17C>T`; vep-rs refuses to build a cache from the file at that CDS line. On `pwp2_codon3` both engines write `missense_variant`.
 
 ### 1.1 What a reader needs to know first
 
@@ -74,7 +74,7 @@ The index build, `tabix -p gff` of htslib 1.9, prints the line and exits 0:
 The offending line was: "21	havana_tagene	CDS	abc	42395417	.	-	0	ID=CDS:ENSP00000783588;Parent=transcript:ENST00001113783;protein_id=ENSP00000783588;version=1"
 ```
 
-Ensembl VEP 116.2, exit 0:
+Ensembl VEP 116.3, exit 0:
 
 ```
 tmprss3_codon6	21:42395401	A	ENSG00000160183	ENST00001113783	Transcript	5_prime_UTR_variant	249	-	-	-	-	-	IMPACT=MODIFIER;STRAND=-1;SYMBOL=TMPRSS3;SOURCE=cds_start_not_a_number.gff3.gz;HGVSc=ENST00001113783.1:c.-78C>T
@@ -89,7 +89,7 @@ ERROR: [cache-builder] Failed to parse GFF3: cds_start_not_a_number.gff3 line 6:
 
 The build exits 1 and writes no cache, so vep-rs annotates nothing from the file. The same start on another line, or the same line elsewhere:
 
-| The line with the start `abc` | Ensembl VEP 116.2 | vep-rs |
+| The line with the start `abc` | Ensembl VEP 116.3 | vep-rs |
 | --- | --- | --- |
 | the gene line | drops the gene, warning `Parent entries with the following IDs were not found or skipped due to invalid types: gene:ENSG00000160183`, drops the transcript as an orphan and writes `intergenic_variant` for `tmprss3_codon6` | refuses the file at line 2 |
 | the exon line at `42395942-42396122` | builds the transcript without an exon under its CDS and dies with `Can't call method "seq" on an undefined value at .../Bio/EnsEMBL/Transcript.pm line 828`, exit 255 | refuses the file at line 8 |
@@ -116,7 +116,7 @@ vep -i records.vcf -o out.txt --offline --json_cache cache \
   --fasta <corpus>/reference.fa.gz --assembly GRCh38 --symbol --hgvs
 ```
 
-vep-rs's cache builder refuses the file at its sixth line with the error above and writes no cache. Ensembl VEP 116.2 with `--gff cds_start_not_a_number.gff3.gz`, prepared by its documented recipe (`grep -v "#"`, `sort -k1,1 -k4,4n -k5,5n`, `bgzip`, its own `tabix -p gff`), writes `5_prime_UTR_variant`. Reading that index takes it about 10 GB of memory; under 4 GB it is killed. Restoring the start makes vep-rs build the cache and both engines write `missense_variant`.
+vep-rs's cache builder refuses the file at its sixth line with the error above and writes no cache. Ensembl VEP 116.3 with `--gff cds_start_not_a_number.gff3.gz`, prepared by its documented recipe (`grep -v "#"`, `sort -k1,1 -k4,4n -k5,5n`, `bgzip`, its own `tabix -p gff`), writes `5_prime_UTR_variant`. Reading that index takes it about 10 GB of memory; under 4 GB it is killed. Restoring the start makes vep-rs build the cache and both engines write `missense_variant`.
 
 ### 1.7 How the comparator treats this class
 
@@ -124,7 +124,7 @@ The reproduction `scripts/divergences/reproductions/gxf_malformed_coordinate_lin
 
 ## 2. A CDS line whose end is below its start, and a line whose start is 0
 
-**In short.** The same lines, with the first CDS line's coordinates swapped, `42395417-42395324`. The 1.9 `tabix` indexes the file silently and Ensembl VEP 116.2 builds on the span, writing `5_prime_UTR_variant` and `HGVSc=ENST00001113783.1:c.-77C>T` for `tmprss3_codon6`, exit 0; vep-rs refuses the build at the line. With the same line's start rewritten `0` instead, `tabix` indexes the file silently and Ensembl VEP dies before a row. Its message is `You must specify a region in the format chr, chr:start or chr:start-end at .../Bio/DB/HTS/Tabix.pm line 104`, exit 255; vep-rs refuses the build at the line.
+**In short.** The same lines, with the first CDS line's coordinates swapped, `42395417-42395324`. The 1.9 `tabix` indexes the file silently and Ensembl VEP 116.3 builds on the span, writing `5_prime_UTR_variant` and `HGVSc=ENST00001113783.1:c.-77C>T` for `tmprss3_codon6`, exit 0; vep-rs refuses the build at the line. With the same line's start rewritten `0` instead, `tabix` indexes the file silently and Ensembl VEP dies before a row. Its message is `You must specify a region in the format chr, chr:start or chr:start-end at .../Bio/DB/HTS/Tabix.pm line 104`, exit 255; vep-rs refuses the build at the line.
 
 ### 2.1 What a reader needs to know first
 
@@ -143,7 +143,7 @@ The input and the flags are those of 1.2, the files `cds_end_below_start.gff3` a
 
 ### 2.3 What each engine writes
 
-Ensembl VEP 116.2 on the swapped line, exit 0:
+Ensembl VEP 116.3 on the swapped line, exit 0:
 
 ```
 tmprss3_codon6	21:42395401	A	ENSG00000160183	ENST00001113783	Transcript	5_prime_UTR_variant	249	-	-	-	-	-	IMPACT=MODIFIER;STRAND=-1;SYMBOL=TMPRSS3;SOURCE=cds_end_below_start.gff3.gz;HGVSc=ENST00001113783.1:c.-77C>T
@@ -168,11 +168,11 @@ A pair that is not a one-based ordered span describes no segment, and a model bu
 
 ### 2.6 Try it yourself
 
-The commands of 1.6 on `cds_end_below_start.gff3` and `cds_start_zero.gff3`: vep-rs's cache builder refuses each at its sixth line with the errors above; Ensembl VEP 116.2 writes `5_prime_UTR_variant` on the first and dies on the second.
+The commands of 1.6 on `cds_end_below_start.gff3` and `cds_start_zero.gff3`: vep-rs's cache builder refuses each at its sixth line with the errors above; Ensembl VEP 116.3 writes `5_prime_UTR_variant` on the first and dies on the second.
 
 ## 3. A line whose end is not a number, mid-file
 
-**In short.** The same lines, with the end of the exon line at `42395942-42396122` rewritten `xyz`. The 1.9 `tabix` prints its message and exits 0, and a query returns neither that line nor the exon line after it in its block. Ensembl VEP 116.2 builds the transcript without those exons and dies under its CDS, `Can't call method "seq" on an undefined value at .../Bio/EnsEMBL/Transcript.pm line 828`, exit 255; vep-rs refuses the build at the line. A `five_prime_UTR` line with the same end, a type the model skips, kills Ensembl VEP's run the same way, and vep-rs refuses the build at that line too.
+**In short.** The same lines, with the end of the exon line at `42395942-42396122` rewritten `xyz`. The 1.9 `tabix` prints its message and exits 0, and a query returns neither that line nor the exon line after it in its block. Ensembl VEP 116.3 builds the transcript without those exons and dies under its CDS, `Can't call method "seq" on an undefined value at .../Bio/EnsEMBL/Transcript.pm line 828`, exit 255; vep-rs refuses the build at the line. A `five_prime_UTR` line with the same end, a type the model skips, kills Ensembl VEP's run the same way, and vep-rs refuses the build at that line too.
 
 ### 3.1 What a reader needs to know first
 
@@ -191,7 +191,7 @@ The input and the flags are those of 1.2, the files `exon_end_not_a_number.gff3`
 
 ### 3.3 What each engine writes
 
-Ensembl VEP 116.2 on either file writes no row and exits 255 with the `Transcript.pm` message above. vep-rs, building the cache from each file:
+Ensembl VEP 116.3 on either file writes no row and exits 255 with the `Transcript.pm` message above. vep-rs, building the cache from each file:
 
 ```
 ERROR: [cache-builder] Failed to parse GFF3: exon_end_not_a_number.gff3 line 8: GFF3 end "xyz" is not a number
@@ -210,13 +210,13 @@ Either line states an end no reader can place. No htslib parses it, and the rele
 
 ### 3.6 Try it yourself
 
-The commands of 1.6 on `exon_end_not_a_number.gff3` and `utr_end_not_a_number.gff3`: vep-rs's cache builder refuses each at its eighth line; Ensembl VEP 116.2 dies on both.
+The commands of 1.6 on `exon_end_not_a_number.gff3` and `utr_end_not_a_number.gff3`: vep-rs's cache builder refuses each at its eighth line; Ensembl VEP 116.3 dies on both.
 
 ## 4. A line of a type the model skips
 
 **In short.** A `five_prime_UTR` line added to the released lines, its columns rewritten. A start or end no number leads, or an end below zero, refuses vep-rs's build; Ensembl VEP writes the released rows, loses later lines or has no index. Other shapes the index build parses are matched.
 
-| The line's columns | Ensembl VEP 116.2 | vep-rs |
+| The line's columns | Ensembl VEP 116.3 | vep-rs |
 | --- | --- | --- |
 | start `abc`, the line the file's first | the released file's rows, through the index of section 1 | refuses the build at the line |
 | start `abc`, the line on a later sequence | no index to read: `tabix` exits 1 | refuses the build at the line |
@@ -226,14 +226,23 @@ The commands of 1.6 on `exon_end_not_a_number.gff3` and `utr_end_not_a_number.gf
 | start `0`; end below start, not below zero; a start a number leads without being one (`42395942x`, `-5`) | the released file's rows on either sequence of a two-sequence file, the line skipped by its type with `Ignoring 'five_prime_UTR' feature_type` | the released file's rows, the line skipped at its type |
 | an empty or blank start, the end a number below every later start of its sequence | the released file's rows on either sequence: `tabix` reads the end's number as the start, in silence | the released file's rows, the line skipped at its type |
 | a seqid of any text, the line at the file's end | the released file's rows, the line indexed as a sequence of its own | the released file's rows, the line skipped at its type |
+| a line whose columns NUL bytes end, numbers in its fourth and fifth: among the records, led by `>` before a placed line, or behind a placed line that begins with `>` | the released file's rows: `tabix` places the line, a column ending at a NUL byte to it, and the source reads one column in it, `Ignoring '' feature_type` | matched: the released file's rows, the line skipped as any placed line of fewer than nine columns |
+| one NUL byte inside the sequence name, the source or the type of a line | no index to read, `tabix` exits 1; on the file's first line, the index of section 1 | refuses the build at the line: the build reads a start one column on, the type or its part behind the NUL byte |
 
 A line the model keeps by its identifier is no skipped line; a `--custom` or `--regulatory_gff` source is read through its index:
 
-| The line | Ensembl VEP 116.2 | vep-rs |
+| The line | Ensembl VEP 116.3 | vep-rs |
 | --- | --- | --- |
 | an `unconfirmed_transcript` line whose `ID` opens with `gene:` or `transcript:`, the cache built with the release's protein FASTA or core dumps | skips it by its type | keeps it, as every line so named whatever its type, and holds it to the whole rule of section 2: a start of 0 refuses it |
 | the same line, the cache built from the genome alone | skips it by its type | skips it by its type: only a start or end no number leads, or an end below zero, refuses it |
 | a `--regulatory_gff` line of a type the reader skips, an `exon` line, whose end is `xyz` or `-9` | loses the records after it in its block, exit 0 (section 6) | refuses the file at run time, `the end of exon record <ID> of chromosome 21 is not a whole number: xyz`, and at the bake |
+| a `--regulatory_gff` line that opens with a tab, or with white space and a tab, indexed as written behind a record at its sequence's first base | writes the file's other rows, exit 0: `tabix` fails the line's parse and files it there, and no query returns it | refuses the file at run time, `the start of a record of type Ensembl of chromosome 21 is not a whole number: enhancer`, the source column read as the type, and at the bake |
+| a `--regulatory_gff` record whose start or end a NUL byte ends | builds the feature on the digits, with Perl's `isn't numeric` warning | refuses the record, as for `100x` (section 8) |
+| a `--regulatory_gff` record whose start or end holds a NUL byte among its digits | writes no row for the record: `tabix` ends the column at the byte and files the record where no query returns it | refuses the record |
+| a `--regulatory_gff` line of any type with a NUL byte in its sequence name or its source, or inside its type, indexed as written behind a record at its sequence's first base | writes the file's other rows and none for the line, exit 0: `tabix` ends a column at the byte, reads the type or its tail where a start stands and fails the line, and no query returns it | refuses the file at run time, `the start of enhancer record <ID> of chromosome 21 is not a whole number: enhancer`, and at the bake: both read the start where `tabix` reads one |
+| a `--regulatory_gff` line of any type whose start or end a NUL byte leads | as for a start `abc` or an end `xyz`: `tabix` reads an empty column, and `strtol` stops at the byte | refuses the file at run time and at the bake, naming the empty column |
+| a `--regulatory_gff` line whose every column a NUL byte ends, of any type, numbers in its fourth and fifth | skips it, `Ignoring '' feature type`, a record it would state lost | matched: skipped at run time and at the bake; with a start no number leads, refused by both |
+| a `--regulatory_gff` record of nine columns whose sequence name ends in three NUL bytes before a source that is a number | builds the feature where a query reaches the base `tabix` files the line at, the source's number: `tabix` reads the name up to its first NUL byte, and the source reads the record the index returns whatever its first column (`RegFeat.pm`, lines 311-315) | passes over the line at run time and skips it at the bake: the sequence name as written is no chromosome's, as on the line whose every column a NUL byte ends |
 | a `--custom` GFF promoter window with a start of 0 or an end below its start, not below zero | reads the index as `tabix` wrote it | matched: reads the same index |
 | a `--custom` GFF window, BED record or VCF row whose start is `-5` | lists it from the sequence's first base to its end, under the number Perl reads | matched: lists the same record under the same number |
 | a `--custom` window inside the file whose end no number leads, or a minus sign leads | lists no such window, and loses the window after it for a record that listed one before it | lists no such window, and every window after it; at the file's head the line leaves the index of section 5 |
@@ -244,7 +253,7 @@ A line the model keeps by its identifier is no skipped line; a `--custom` or `--
 | --- | --- | --- |
 | a blank line | sorted to the file's head by the recipe, it leaves the index of section 1 | skips it |
 | a `##FASTA` directive | a comment: `tabix` skips it and the recipe's `grep` drops it, so through the recipe the records behind a bare one are indexed and Ensembl VEP reads them; indexed as written, a query of the sequence behind it returns nothing | a comment: skips it and reads the records behind it |
-| the first line beginning with `>` that a sequence follows: the next line that is neither blank nor a comment exists and has fewer than four columns, or a start or end `tabix` fails; a column ends at a tab, here and in every row, where `tabix` ends one at a NUL byte too; a line longer than 16777216 bytes is a sequence's only where no tab stands in it, its 16777217th byte aside: one in which a tab stands elsewhere opens no section and is refused for its length, as on any line of the file | fails the `>` line's parse or, where it can parse it, places it as a sequence of its own; indexed as written it then fails the line behind it, and by that line the build has exited 1 where the line has fewer than four columns, as a sequence line has; section 4's table gives the outcome of a line of four or more | opens the sequence section: reads nothing from there on, and logs the line |
+| the first line beginning with `>` that a sequence follows: the next line that is neither blank nor a comment exists and has fewer than four columns, or a start or end `tabix` fails; a column ends at a tab or at a NUL byte, here and in every row, as `tabix` ends one; a line longer than 16777216 bytes is a sequence's only where no tab stands in it, its 16777217th byte aside: one in which a tab stands elsewhere opens no section and is refused for its length, as on any line of the file | fails the `>` line's parse or, where it can parse it, places it as a sequence of its own; indexed as written it then fails the line behind it, and by that line the build has exited 1 where the line has fewer than four columns, as a sequence line has; section 4's table gives the outcome of a line of four or more | opens the sequence section: reads nothing from there on, and logs the line |
 | a line beginning with `>` that a line of four or more columns follows, its start and end ones `tabix` parses, or that nothing follows | where it can parse it, places it as a sequence of its own, the first table's last row, and indexes the lines behind it; fails its parse otherwise: the build exits 1 or, on the file's first data line, leaves the index of section 1 | reads it as any other line: a record of its type at nine columns, skipped at four to eight where `tabix` parses its start and end, and refused at fewer than four, a record cut short |
 | a record inside the sequence section, nine or more columns whose fourth and fifth are whole numbers, neither a comment nor led by `>` | indexed as written, has exited 1 before the record where the line behind the section's `>` line has fewer than four columns, as a sequence line has; section 4's table gives the outcome of a line of four or more | refuses it, annotation the section has ended: `<file> line <n>: GFF3 annotation after the sequence section, which opens at line <m>` |
 | any other line of fewer than four columns | fails its parse | refuses it, a record cut short: `<file> line <n>: GFF3 line ends at column <k>, before its start` (`GTF` in a GTF) |
@@ -256,7 +265,7 @@ A tab-delimited file whose every data line `tabix` places opens no section.
 
 ## 5. A `--custom` GFF promoter window whose start is not a number
 
-**In short.** A promoter file of three windows, the second with its start rewritten `abc`, read as a `--custom` source in `gencode_promoter` mode beside the released transcript lines. The 1.9 `tabix` prints its message and writes an index naming 67.7 million sequences, 541 MB uncompressed for a three-line file; Ensembl VEP 116.2 reads it and lists the two sound windows, `PW1` on `tmprss3_codon6` and `PW2` on `pwp2_codon3`. vep-rs refuses to open the source, since the index decompresses past its 268435456-byte bound, and writes no row.
+**In short.** A promoter file of three windows, the second with its start rewritten `abc`, read as a `--custom` source in `gencode_promoter` mode beside the released transcript lines. The 1.9 `tabix` prints its message and writes an index naming 67.7 million sequences, 541 MB uncompressed for a three-line file; Ensembl VEP 116.3 reads it and lists the two sound windows, `PW1` on `tmprss3_codon6` and `PW2` on `pwp2_codon3`. vep-rs refuses to open the source, since the index decompresses past its 268435456-byte bound, and writes no row.
 
 ### 5.1 What a reader needs to know first
 
@@ -276,7 +285,7 @@ The input is the two records of 1.2. Both engines read the released transcript l
 
 ### 5.3 What each engine writes
 
-Ensembl VEP 116.2, exit 0:
+Ensembl VEP 116.3, exit 0:
 
 ```
 tmprss3_codon6	21:42395401	A	ENSG00000160183	ENST00001113783	Transcript	missense_variant	249	17	6	P/L	cCg/cTg	-	IMPACT=MODERATE;STRAND=-1;SOURCE=released.gff3.gz;GENCODE_PROMOTER=21:42395390-42395410;GENCODE_PROMOTER_associated_gene=ENSG00000160183;GENCODE_PROMOTER_feature_id=PW1;GENCODE_PROMOTER_type=promoter_window
@@ -305,11 +314,11 @@ vep -i records.vcf -o out.txt --offline --json_cache cache \
   --custom file=promoters.gff.gz,format=gff,gff_type=gencode_promoter
 ```
 
-With the file sorted, bgzipped and indexed by the 1.9 `tabix`, vep-rs refuses the source with the error above. Ensembl VEP 116.2 with the same `--custom` string and `--gff released.gff3.gz` lists `PW1` and `PW2`. Restoring the start makes both engines list the three windows; htslib 1.22.1's `tabix` writes no index for the file as it stands, so neither engine opens it. Nor does the 1.9 `tabix` when the window sits on the later sequence of a two-sequence file: it exits 1.
+With the file sorted, bgzipped and indexed by the 1.9 `tabix`, vep-rs refuses the source with the error above. Ensembl VEP 116.3 with the same `--custom` string and `--gff released.gff3.gz` lists `PW1` and `PW2`. Restoring the start makes both engines list the three windows; htslib 1.22.1's `tabix` writes no index for the file as it stands, so neither engine opens it. Nor does the 1.9 `tabix` when the window sits on the later sequence of a two-sequence file: it exits 1.
 
 ## 6. The same shapes through `--regulatory_gff`
 
-**In short.** A regulatory file of four records on chromosome 21, the second an enhancer `ENSR21_BZTD` at `5013566-5014200`, read through `--regulatory_gff` over the chromosome 21 cache, with records `in_first` at 21:5011400 inside `ENSR21_85ZF5`, `in_lost` at 21:5014000 inside `ENSR21_BZTD` and `in_last` at 21:5015600 inside `ENSR21_93ZQB`. With the enhancer's end rewritten `xyz`, Ensembl VEP 116.2 loses it and the enhancer after it in its block, writing `intergenic_variant` alone for `in_lost` and `in_last`, exit 0; vep-rs refuses the file, naming the record.
+**In short.** A regulatory file of four records on chromosome 21, the second an enhancer `ENSR21_BZTD` at `5013566-5014200`, read through `--regulatory_gff` over the chromosome 21 cache, with records `in_first` at 21:5011400 inside `ENSR21_85ZF5`, `in_lost` at 21:5014000 inside `ENSR21_BZTD` and `in_last` at 21:5015600 inside `ENSR21_93ZQB`. With the enhancer's end rewritten `xyz`, Ensembl VEP 116.3 loses it and the enhancer after it in its block, writing `intergenic_variant` alone for `in_lost` and `in_last`, exit 0; vep-rs refuses the file, naming the record.
 
 With its start rewritten `abc`, Ensembl VEP loses the enhancer alone; vep-rs refuses the index. With its coordinates swapped, Ensembl VEP writes a `RegulatoryFeature` row whose consequence is `intergenic_variant`; vep-rs refuses the file, naming the record. With its start rewritten `0`, Ensembl VEP gives the enhancer to `in_first` as well, the feature running from the chromosome's first base; vep-rs refuses the file. In a file of two sequences each shape reads the same on either sequence, but for the start `abc`, which on the later one fails the index build.
 
@@ -340,7 +349,7 @@ Both engines run `--regulatory_gff file=<file>` over the GRCh38 release-116 cach
 
 ### 6.3 What each engine writes
 
-Ensembl VEP 116.2 on the end `xyz`, exit 0:
+Ensembl VEP 116.3 on the end `xyz`, exit 0:
 
 ```
 in_first	21:5011400	C	-	ENSR21_85ZF5	RegulatoryFeature	regulatory_region_variant	-	-	-	-	-	-	IMPACT=MODIFIER;BIOTYPE=enhancer
@@ -370,7 +379,7 @@ in_first	21:5011400	C	-	ENSR21_BZTD	RegulatoryFeature	regulatory_region_variant	
 The enhancer runs from the chromosome's first base there. vep-rs refuses the three files, the first at its index:
 
 ```
-ERROR: [cli] --regulatory_gff file file reg_start_not_a_number.gff3.gz: plugin initialization failed: tabix index reg_start_not_a_number.gff3.gz.tbi is malformed: it decompresses to more than 268435456 bytes
+ERROR: [cli] --regulatory_gff file=reg_start_not_a_number.gff3.gz: tabix index reg_start_not_a_number.gff3.gz.tbi is malformed: it decompresses to more than 268435456 bytes
 ERROR: [cache] reg_end_below_start.gff3.gz: the coordinates 5014200-5013566 of enhancer record ENSR21_BZTD of chromosome 21 are not 1-based and ordered
 ERROR: [cache] reg_start_zero.gff3.gz: the coordinates 0-5014200 of enhancer record ENSR21_BZTD of chromosome 21 are not 1-based and ordered
 ```
@@ -400,11 +409,11 @@ vep -i records.vcf -o out.txt --offline --json_cache <corpus>/json_cache \
   --regulatory_gff file=reg_end_not_a_number.gff3.gz
 ```
 
-vep-rs refuses the file with the error above, and the swapped and zero-start files with theirs. Ensembl VEP 116.2 with the same `--regulatory_gff` string over its chromosome 21 cache writes `intergenic_variant` alone for `in_lost` and `in_last`. Restoring the end makes both engines write the three regulatory rows.
+vep-rs refuses the file with the error above, and the swapped and zero-start files with theirs. Ensembl VEP 116.3 with the same `--regulatory_gff` string over its chromosome 21 cache writes `intergenic_variant` alone for `in_lost` and `in_last`. Restoring the end makes both engines write the three regulatory rows.
 
 ## 7. A zero-padded coordinate: the index reader's octal
 
-**In short.** The released lines with the end of the transcript's first CDS line in transcript order, `42395417`, written `0042395417`. The 1.9 `tabix` reads a column in base 0, a leading `0` as octal up to the first digit above 7, so the end reads 275. The line is indexed silently with an end below its start, and no query over the CDS returns it. Ensembl VEP 116.2 builds the transcript without the line and writes `5_prime_UTR_variant` and `HGVSc=ENST00001113783.1:c.-78C>T` for `tmprss3_codon6`, exit 0, as in section 1. vep-rs reads the column in decimal, builds the released model and writes `missense_variant` and `c.17C>T`.
+**In short.** The released lines with the end of the transcript's first CDS line in transcript order, `42395417`, written `0042395417`. The 1.9 `tabix` reads a column in base 0, a leading `0` as octal up to the first digit above 7, so the end reads 275. The line is indexed silently with an end below its start, and no query over the CDS returns it. Ensembl VEP 116.3 builds the transcript without the line and writes `5_prime_UTR_variant` and `HGVSc=ENST00001113783.1:c.-78C>T` for `tmprss3_codon6`, exit 0, as in section 1. vep-rs reads the column in decimal, builds the released model and writes `missense_variant` and `c.17C>T`.
 
 ### 7.1 What a reader needs to know first
 
@@ -422,7 +431,7 @@ The input and the flags are those of 1.2, the file `cds_end_zero_padded.gff3`.
 
 ### 7.3 What each engine writes
 
-`tabix -p gff` of htslib 1.9 prints nothing and exits 0. Ensembl VEP 116.2, exit 0:
+`tabix -p gff` of htslib 1.9 prints nothing and exits 0. Ensembl VEP 116.3, exit 0:
 
 ```
 tmprss3_codon6	21:42395401	A	ENSG00000160183	ENST00001113783	Transcript	5_prime_UTR_variant	249	-	-	-	-	-	IMPACT=MODIFIER;STRAND=-1;SYMBOL=TMPRSS3;SOURCE=cds_end_zero_padded.gff3.gz;HGVSc=ENST00001113783.1:c.-78C>T
@@ -448,7 +457,7 @@ A GFF3 or GTF coordinate is a decimal integer, and Ensembl VEP's own model reads
 
 ### 7.6 Try it yourself
 
-The commands of 1.6 on `cds_end_zero_padded.gff3`: vep-rs builds the cache and writes `missense_variant` for both records. Ensembl VEP 116.2, the file sorted, bgzipped and indexed with its own `tabix -p gff`, writes `5_prime_UTR_variant` for `tmprss3_codon6`. htslib 1.10 and later refuse the file at index time: `Invalid record on sequence #1: end 275 < begin 42395324`.
+The commands of 1.6 on `cds_end_zero_padded.gff3`: vep-rs builds the cache and writes `missense_variant` for both records. Ensembl VEP 116.3, the file sorted, bgzipped and indexed with its own `tabix -p gff`, writes `5_prime_UTR_variant` for `tmprss3_codon6`. htslib 1.10 and later refuse the file at index time: `Invalid record on sequence #1: end 275 < begin 42395324`.
 
 ### 7.7 How the comparator treats this extension
 
@@ -456,9 +465,9 @@ The extension is the same class. The reproduction's last step builds the file of
 
 ## 8. How each reader reads a column's spelling
 
-A start or end a number leads without being a plain decimal number is read differently along the route. vep-rs's builder and its `--regulatory_gff` reader take a whole decimal number, a `+` allowed before it; its `--custom` sources take the number Perl reads, `exact` VCF matches aside. Each cell was measured on the pinned image over two-sequence files, the line on the first sequence and on a later one.
+A start or end a number leads without being a plain decimal number is read differently along the route. vep-rs's builder and its `--regulatory_gff` reader take a whole decimal number, a `+` allowed before it; its `--custom` sources take Perl's number, an `exact` VCF match the text. Each cell was measured on the pinned image over two-sequence files, the line on the first sequence and on a later one.
 
-| Spelling | Ensembl VEP 116.2 | vep-rs | Class |
+| Spelling | Ensembl VEP 116.3 | vep-rs | Class |
 | --- | --- | --- | --- |
 | `-5` as a start, a minus sign leading | index reader: -5, the line filed from the sequence's first base; Perl: -5, so a kept transcript line ends the run at `Tabix.pm` line 104, and a regulatory record or a promoter window runs from -5 | builder: refuses a kept line, leaves a skipped one unread; `--regulatory_gff`: refuses the record; `--custom`: -5, as Perl, the window listed from the first base | this entry; matched on `--custom` |
 | `+7`, a plus sign leads | index reader: 7; Perl: 7 | 7 in every reader | matched |

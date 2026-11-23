@@ -122,7 +122,7 @@ and its end to the exon's end. The shorter is the exon's distance. The
 exons at the smallest are reported when it lies within `max_range`. An exon is
 stretched by 12 bases on a transcript with an intron of at most 13 bases.
 
-vep-rs applies the stretch on every row. Ensembl VEP 116.2 applies it once an
+vep-rs applies the stretch on every row. Ensembl VEP 116.3 applies it once an
 earlier row has built the transcript's intron index. A row within 12 bases
 outside the first or last exon therefore answers by the records before it ([section 3 below](#3-nearestexonjb-a-value-on-an-upstream-or-downstream-row-that-depends-on-the-records-before-it), tier 2).
 
@@ -182,11 +182,11 @@ frames, as Ensembl VEP's `UTRAnnotator.pm` computes it.
 | Builds        | GRCh37, GRCh38                                                                                                                            |
 | Output fields | `5UTR_consequence`, `5UTR_annotation`, `Existing_uORFs`, `Existing_OutOfFrame_oORFs`, `Existing_InFrame_oORFs`, on rows carrying `5_prime_UTR_variant` |
 | Data source   | `uORF_5UTR_GRCh37_PUBLIC.txt` and `uORF_5UTR_GRCh38_PUBLIC.txt` of the Ensembl UTRannotator repository, the uORF evidence table             |
-| Needs         | `--fasta`: the 5' UTR and coding sequences are read from the reference through the exon model; without it no row is annotated and the run warns once. Ensembl VEP 116.2 warns once too and goes on, its exon slices reading as `N`, so it prints `-` for the two consequence fields and three `0` counts on every 5' UTR row |
+| Needs         | `--fasta`: the 5' UTR and coding sequences are read from the reference through the exon model. A run without one refuses the plugin when it loads and goes on with no header line or row naming any of its five fields. The refusal reads `Failed to instantiate plugin UTRAnnotator: a reference FASTA is needed; pass --fasta`, a warning, or the run's error under `--safe`. Ensembl VEP's plugin prints a notice on standard output and runs on, under `--safe` too, its exon slices reading as `N`. It declares the five fields and writes three `0` counts on a 5' UTR row, counts over bases it never read, and `-` for the two consequence fields, or a gained start where the alternate allele itself spells a start codon (`UTRAnnotator.pm`, lines 88, 170-173, 291-298 and 345-354). No committed run lacks a reference (tier 3 of [Intended divergences from Ensembl VEP](../intended-divergences.md)). |
 
 | Parameter               | Meaning                                                                                                     |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `file=<path>`           | The uORF evidence table (`chr pos gene strand type stop_pos`); without it every `Evidence` value is `NA`. A path that names no file is refused when the plugin loads (`Failed to instantiate plugin UTRAnnotator: UTRAnnotator: uORF file <path> not found`, a warning, or the run's error under `--safe`) and the run goes on without the plugin. Ensembl VEP's plugin tests the path, prints a warning on standard output and annotates with every `Evidence` value `NA`, as if `file=` were absent, although its own documentation marks the parameter `(Required)` (`UTRAnnotator.pm`, lines 40, 92 and 109-112; VEP_plugins at release/116). No committed run names a missing file (tier 3 of [Intended divergences from Ensembl VEP](../intended-divergences.md); 4 flag sets run the plugin). |
+| `file=<path>`           | The uORF evidence table (`chr pos gene strand type stop_pos`); without it every `Evidence` value is `NA`. A path that names no file is refused when the plugin loads (`Failed to instantiate plugin UTRAnnotator: uORF file <path> not found`, a warning, or the run's error under `--safe`) and the run goes on without the plugin. Ensembl VEP's plugin tests the path, prints a warning on standard output and annotates with every `Evidence` value `NA`, as if `file=` were absent, although its own documentation marks the parameter `(Required)` (`UTRAnnotator.pm`, lines 40, 92 and 109-112; VEP_plugins at release/116). No committed run names a missing file (tier 3 of [Intended divergences from Ensembl VEP](../intended-divergences.md); 4 flag sets run the plugin). |
 | `max_overlap=<percent>` | Leave out a UTR exon the variant covers at or above this share; the default is 100.                          |
 | a token without `=`     | Not read, as Ensembl VEP's plugin reads it (its parameter hash is empty without `=`), and noted in the warnings file; the plugin runs without the file. |
 
@@ -209,11 +209,18 @@ Five analyses run over the 5' UTR with the allele spliced in:
 effects: the Kozak context and strength around the start codon, its distance to
 the cap and to the coding sequence, and the evidence from the uORF table.
 
-A symbolic deletion inside one 5' UTR exon is analysed as its stated span's
-deletion. An `<INS>` whose `END` is absent, `POS` or `POS` plus `SVLEN` gets
-the frameshift its length decides and no key its bases would decide. Other
-symbolic alleles keep `-` in `5UTR_consequence` and `5UTR_annotation`
-([the rule](../output/structural-variants.md#utrannotator-on-a-symbolic-allele-the-text-del-scored-as-a-five-base-deletion)).
+| Symbolic allele | How it is analysed ([the rule](../output/structural-variants.md#utrannotator-on-a-symbolic-allele-the-text-del-scored-as-a-five-base-deletion)) |
+| --- | --- |
+| a deletion inside one 5' UTR exon | as the deletion of its stated span |
+| the loss alternate of a record with several alternates that writes `END`, inside one 5' UTR exon | as the deletion of the record's span |
+| an inversion inside one 5' UTR exon | as its span replaced by its reverse complement |
+| an `<INS>` whose `END` is absent, `POS` or `POS` plus `SVLEN` | the frameshift its length decides and no key its bases would decide |
+| any other | `-` in `5UTR_consequence` and `5UTR_annotation` |
+
+An insertion at a start codon whose bases repeat the bases beside them is read
+the same wherever its record writes it. Of two equal copies of a repeated
+start codon the one nearer the cap is named gained, as `UTRAnnotator.pm` lines
+345-353 name the window's first start codon.
 
 When more than one analysis fires, the flag is the first of `uAUG_gained`,
 `uSTOP_gained`, `uSTOP_lost`, `uAUG_lost`, `uFrameshift`. Ensembl VEP keeps
@@ -234,7 +241,8 @@ files the Ensembl VEP plugin opens (`MaxEntScan.pm` lines 104-105 and 824-831).
 | Builds        | GRCh37, GRCh38                                                                                                                             |
 | Output fields | `MaxEntScan_ref`, `MaxEntScan_alt`, `MaxEntScan_diff`; with `SWA` the `MES-SWA_donor_` and `MES-SWA_acceptor_` fields; with `NCSS` the `MES-NCSS_` fields |
 | Data source   | the directory of matrix files the Ensembl VEP plugin opens (`MaxEntScan.pm` lines 104-105 and 824-831): `me2x5`, `splicemodels/splice5sequences` and `splicemodels/me2x3acc1` to `me2x3acc9` |
-| Matrix lines  | Where Ensembl VEP's plugin reads on, vep-rs refuses a matrix file by its line: an empty line, text that is no number, a number followed by other text, or a word for an infinity or a NaN other than `inf`, `infinity` or `nan` in any letter case. |
+| Matrix lines  | Each line is the number Perl's arithmetic makes of its text (`MaxEntScan.pm` lines 689 and 860). A whole number is an integer, and a product of whole numbers is exact while it fits 64 bits. An infinity or a not-a-number stands in every spelling Perl converts without a warning. A line Perl converts only under its `isn't numeric` warning (an empty line, text that is no number, a number followed by other text) is refused by its file and line, where Ensembl VEP's plugin reads on ([its own page](../divergences/maxentscan-matrix-line-not-a-number.md)). |
+| No score      | Where the entries a k-mer reads multiply to zero or less, or its entries of `me2x3acc6` to `me2x3acc9` to zero, Ensembl VEP's plugin dies on the row (`MaxEntScan.pm` lines 796 and 860). The row carries none of the plugin's fields in either engine, and the warnings file names the failure. A score over an entry that is an infinity or a not-a-number prints `Inf`, `-Inf` or `NaN`, a string in the JSON output ([its own page](../divergences/json-non-finite-number-token.md)). |
 | Needs         | `--fasta`: every window is read from the reference                                                                                          |
 
 | Parameter   | Meaning                                                                                                                         |
@@ -266,7 +274,7 @@ transcript's span is tested against every intron.
 
 ## Where the transcript-model plugins differ from Ensembl VEP
 
-Four behaviours of Ensembl VEP 116.2's plugins are not reproduced here. The
+Four behaviours of Ensembl VEP 116.3's plugins are not reproduced here. The
 first two are classes the comparison tools set aside. The next two, on
 NearestExonJB and Downstream, are documented classes no tool codes, since no
 committed row falls under them. Each section names the rows a comparison would
@@ -290,9 +298,9 @@ The concordance figures score consequence sets and never read a plugin field, so
 nothing is set aside in them.
 
 Sections 3 and 4 carry their tier under that page's rule. Tier 1 is a shape the
-chromosome 21 population cuts carry with no flag. Tier 2 is one that needs a
+chromosome 21 cuts carry with no flag. Tier 2 is one that needs a
 flag or plugin on ordinary data. Tier 3 is one ordinary data does not carry. The counts
-are over the cuts' 15,646,481 records, the 111 golden corpora and their 392 flag
+are over the cuts' 15,646,481 records, the 152 golden corpora and their 511 flag
 sets.
 
 ### 1. UTRAnnotator: the window of the gained-start test
@@ -306,8 +314,7 @@ reports the gained start.
 
 #### 1.1 What a reader needs to know first
 
-UTRAnnotator's five analyses and the two fields that report them,
-`5UTR_consequence` and `5UTR_annotation`, are described under
+The five analyses and the two fields that report them are described under
 [UTRAnnotator](#utrannotator) above.
 
 #### 1.2 The record
@@ -346,8 +353,7 @@ hash order, read as a set.
 `UTRAnnotator.pm`, line 339, sets the variable that sizes the gained-start
 window, `$alt_coding`, to the reference allele. Line 345
 cuts the window from two bases before the variant to the reference allele's
-length plus one base after it. An insertion's window therefore holds four
-bases, and a codon the inserted bases begin reaches one base past it.
+length plus one base after it: four bases for an insertion.
 
 The transcript's 5' UTR reads `CCCATAATGCATTGC` around the site, with the
 start codon 63 bases from the cap. The inserted bases read `ATG` on the
@@ -365,21 +371,25 @@ Perl counts negative indices.
 #### 1.5 Why vep-rs's row is the correct one
 
 The mutated UTR sequence decides. An `ATG` stands at 64 in the mutated
-sequence where the reference has `TGC`, made by the inserted bases. The
-plugin's gained-start test exists to report exactly that. When a start is lost
-and another gained on one row, vep-rs reports the gain. A start codon that an
-insertion only moves on is neither: vep-rs reports it
+sequence where the reference has `TGC`, made by the inserted bases. When a
+start is lost and another gained on one row, vep-rs reports the gain. A start
+codon that an insertion only moves on is neither: vep-rs reports it
 [neither gained nor lost](../divergences/utrannotator-lost-start-after-insertion.md).
+
+A start codon duplicated directly after itself is missed too: for
+`21 10524585 G GATG` on `ENST00000427445`, Ensembl VEP's window holds no start
+codon. vep-rs names the copy nearer the cap (`CapDistanceToStart=145`), before
+the record's insertion point; `21 10524582 A AATG` writes the same sequence
+before the codon.
 
 #### 1.6 Try it yourself
 
 ```
+# record.vcf holds the record of 1.2; <cache> is the Ensembl 116 GRCh38
+# cache and <fasta> the GRCh38 reference FASTA.
 vep -i record.vcf -o out.txt --offline --json_cache <cache> --fasta <fasta> \
   --assembly GRCh38 --plugin UTRAnnotator,file=uORF_5UTR_GRCh38_PUBLIC.txt
 ```
-
-`record.vcf` holds the record of 1.2, `<cache>` is the Ensembl 116 GRCh38
-cache and `<fasta>` the GRCh38 reference FASTA.
 
 Ensembl VEP writes `5UTR_consequence=5_prime_UTR_premature_start_codon_loss_variant`
 on `ENST00000924761` and its siblings; vep-rs writes
@@ -569,8 +579,8 @@ most 12. The `GRCh38-plugin-computed` corpus's cache holds no transcript with an
 intron of 13 bases or fewer, so no row of its two comparison cases is set aside.
 
 **How often the shape occurs.** Tier 2: the shape is a transcript with an
-intron of 13 bases or fewer, 78 of the 77,675 transcripts of the committed
-caches (1,004 per million), in 12 corpora. A record within 12 bases of such an
+intron of 13 bases or fewer, 305 of the 116,165 transcripts of the committed
+caches (2,626 per million), in 36 corpora. A record within 12 bases of such an
 exon boundary shows it once an earlier record primed the stretch; 2 flag sets
 run the plugin.
 
@@ -581,7 +591,7 @@ run the plugin.
 `ENSE00003757672`, spans 6354264-6354522. For `21 6354255 . G T`, an
 `upstream_gene_variant` row with `DISTANCE=9`, vep-rs writes
 `NearestExonJB=ENSE00003757672|9|start|259`, the exon 9 bases away, 259 bases
-long. Ensembl VEP 116.2 writes it only when a record inside the transcript,
+long. Ensembl VEP 116.3 writes it only when a record inside the transcript,
 `21 6358575 . G T` in the first short intron, precedes it in the same buffer, so
 the upstream row of a position-sorted file gets no value. The
 intronic record's rows, `ENSE00003758864|1|end|20`, agree in every file.
@@ -646,8 +656,8 @@ and the `Allele` column too
 **How often the shape occurs.** Tier 2, a flag and a plugin being needed. The
 count is of the records whose allele a shift can rotate, not of the class's
 rows: an insertion or deletion of two or more bases not all one letter. They are
-1,203,766 of the 15,646,481 records of the five chromosome 21 population cuts
-(76,935 per million), in 89 golden corpora.
+1,203,766 of the 15,646,481 records of the five chromosome 21 cuts
+(76,935 per million), in 129 golden corpora.
 
 The transcript's strand and the shift's length decide
 whether the rotation goes wrong. The `GRCh38-plugin-computed` corpus runs the
@@ -660,7 +670,7 @@ frameshift rows shifts at all.
 `GAGAGAG` at 21:30166346-30166352, in the single exon of CLDN17
 (`ENST00000286808`, reverse strand). On the transcript the allele is `CT`,
 shifted seven bases to `c.271_272dup`, `HGVS_OFFSET=-7` on both engines. Ensembl
-VEP 116.2 counts `2 - 7` rotations, none, and splices `CT` unturned at the
+VEP 116.3 counts `2 - 7` rotations, none, and splices `CT` unturned at the
 shifted point: `TCC TCT TGA`, `p.Leu92SerfsTer2`, `DownstreamProtein=SS`.
 Turned one place (7 modulo 2) the bases are `TC`, codons `TCT CCT TGA`, and
 vep-rs writes `HGVSp=ENSP00000286808.3:p.Leu92ProfsTer2`.

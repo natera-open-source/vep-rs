@@ -2,9 +2,10 @@
 population records, the CHANGELOG section, CITATION.cff, Cargo.toml and the published SHA256SUMS digests),
 copied into a scratch repository that each test may edit; release and population records of the
 six-dataset shape that the tests build under the same version, on the instance classes and clone count a
-test names; and the repository's own 0.4.0 inputs, whose rendering is the published 0.4.0 page. The scratch
-release-notes file keeps the repository file's Upgrade notes under an opener within the renderer's budget; the
-tests of the page by area write their own notes file over the same scratch repository."""
+test names; and the repository's own 0.4.0 inputs, whose rendering states the published 0.4.0 page's
+concordance figures in the six-dataset page's shape. The scratch release-notes file keeps the repository
+file's Upgrade notes under an opener within the renderer's budget; the tests of the page by area write their
+own notes file over the same scratch repository."""
 
 from __future__ import annotations
 
@@ -53,7 +54,7 @@ PLATFORMS = {
     ),
     "vep-0.3.2-aarch64-apple-darwin.tar.gz": "macOS 11 or later on Apple silicon, any Apple M-series",
 }
-SUITES = (
+DATASETS = (
     ("s01", "ClinVar full", "GRCh37"),
     ("s02", "ClinVar full", "GRCh38"),
     ("s03", "gnomAD v2.1.1 chr21", "GRCh37"),
@@ -188,7 +189,7 @@ def expected_chromosome_21_rows() -> list[str]:
     conc = release_record()["concordance"]
     return [
         f"| {dataset} | {assembly} | {f1(conc[s]['intersection'], conc[s]['perl'], conc[s]['rust'])} | 1.000000000 |"
-        for s, dataset, assembly in SUITES
+        for s, dataset, assembly in DATASETS
     ]
 
 
@@ -316,7 +317,7 @@ def test_whole_genome_table_derives_every_cell_from_the_records(tmp_path: Path) 
     assert f"| 1000 Genomes high-coverage | {rows[3].split(' | ')[1]} | {adjusted} | " in page(repo)
 
 
-def test_chromosome_21_table_covers_the_eight_scored_suites_in_suite_order(tmp_path: Path) -> None:
+def test_chromosome_21_table_covers_the_eight_scored_cells_in_cell_order(tmp_path: Path) -> None:
     body = page(fixture_repo(tmp_path))
     rows = expected_chromosome_21_rows()
     assert "| Dataset | Assembly | Raw F1 | Adjusted F1 |\n| --- | --- | --- | --- |\n" + "\n".join(rows) + "\n" in body
@@ -350,7 +351,7 @@ def test_captions_carry_the_comparator_protocol_memory_and_record_link(tmp_path:
         edit_record(repo, "population", set_peak(mb))
         assert f"peak memory at most {shown} GB on any chromosome" in page(repo), mb
 
-    # The earlier page labels a pair of two generations as the six-dataset page does.
+    # The page with the chromosome 21 table labels a pair of two generations as the six-dataset page does.
     edit_record(repo, "population", lambda r: r["wall_time"]["vep_rs"].update(instance_types=NEWEST, n_clones_per_cell=5))
     assert f"medians of 5 machines at 16 threads on {pair(NEWEST)}, {NEWEST_LABEL}; peak memory at most" in page(repo)
 
@@ -868,7 +869,7 @@ def test_missing_records_or_changelog_section_fail(tmp_path: Path) -> None:
     assert f"no docs/concordance-provenance/*-release-v{VERSION}.json" in error(repo)
 
 
-def test_an_earlier_shape_record_whose_clinvar_grch37_cell_is_not_an_object_is_refused(tmp_path: Path) -> None:
+def test_a_record_not_of_the_six_dataset_shape_whose_clinvar_grch37_cell_is_not_an_object_is_refused(tmp_path: Path) -> None:
     repo = fixture_repo(tmp_path)
     edit_record(repo, "release", lambda r: r["concordance"].update(s01=7))
     assert "lacks concordance rows for ['s01']" in error(repo)
@@ -885,7 +886,7 @@ def test_a_record_that_is_not_an_object_is_refused_by_name(tmp_path: Path) -> No
     assert error(repo).rstrip("\n") == f"ERROR: [render_release_notes] {population.name} is not an object"
 
 
-def test_an_earlier_shape_record_whose_pooled_block_is_malformed_is_refused_by_name(tmp_path: Path) -> None:
+def test_a_record_not_of_the_six_dataset_shape_whose_pooled_block_is_malformed_is_refused_by_name(tmp_path: Path) -> None:
     repo = fixture_repo(tmp_path)
     edit_record(repo, "release", lambda r: r["population_concordance"]["pooled"].pop("excluded_perl"))
     assert error(repo).rstrip("\n") == "ERROR: [render_release_notes] population_concordance.pooled carries no excluded_perl"
@@ -893,9 +894,10 @@ def test_an_earlier_shape_record_whose_pooled_block_is_malformed_is_refused_by_n
     assert error(repo).rstrip("\n") == "ERROR: [render_release_notes] population_concordance.pooled carries no label"
 
 
-def test_a_flat_perl_reference_block_with_a_nested_object_keeps_the_earlier_shape(tmp_path: Path) -> None:
-    """A flat block whose one nested value sits under a key of no suite family is not the six-dataset shape: the
-    record's ClinVar GRCh37 cell carries no adjusted counts, so the earlier page renders, its caption from the block."""
+def test_a_flat_perl_reference_block_with_a_nested_object_is_not_the_six_dataset_shape(tmp_path: Path) -> None:
+    """A flat block whose one nested value sits under a key of no dataset family is not the six-dataset shape: the
+    record's ClinVar GRCh37 cell carries no adjusted counts, so the page with the chromosome 21 table renders, its
+    caption from the block."""
     repo = fixture_repo(tmp_path)
     block = {"image": "ensemblorg/ensembl-vep:release_115.2", "cache_version": 115, "cells": {"s01": {"scored": 1}}}
     edit_record(repo, "release", lambda r: r.update(perl_reference=block))
@@ -910,7 +912,7 @@ POPULATION = (  # dataset, label, assembly, perl, vep-rs, intersection, excluded
     ("1000g_phase3", "1000 Genomes Phase 3, whole genome", "GRCh37", 286_649_478, 286_649_478, 286_649_396, 82, 82),
     ("1000g_highcov", "1000 Genomes high-coverage, whole genome", "GRCh38", 699_522_065, 699_534_118, 699_521_778, 287, 12_340),
 )
-CLINVAR = {  # suite: label, perl, vep-rs, intersection, adj_perl, adj_rust, adj_intersection
+CLINVAR = {  # cell: label, perl, vep-rs, intersection, adj_perl, adj_rust, adj_intersection
     "s01": ("ClinVar GRCh37", 33_483_881, 33_483_881, 33_483_180, 33_483_180, 33_483_180, 33_483_180),
     "s02": ("ClinVar GRCh38", 125_572_619, 125_572_619, 125_569_159, 125_569_159, 125_569_159, 125_569_159),
 }
@@ -948,10 +950,10 @@ class FileCounts(NamedTuple):
     adj_intersection: int
 
 
-def sv_files(suite: str) -> dict[str, FileCounts]:
+def sv_files(dataset_id: str) -> dict[str, FileCounts]:
     """Per file of a structural-variant cell: perl, vep-rs and intersection counts, raw then adjusted. The
     integers differ per file and per cell, so no pooled figure equals a single file's."""
-    _, gnomad, base = SV_CELLS[suite]
+    _, gnomad, base = SV_CELLS[dataset_id]
     out = {}
     for k, name in enumerate((*SYNTHETIC_FILES, "1kg_sv_chr21", "clinvar_sv_chr21", gnomad), 1):
         perl = base + 311 * k
@@ -1314,27 +1316,27 @@ NO_RELEASE = (
 )
 
 
-def aggregate(record: dict, suite: str, arch: str) -> dict:
-    return next(a for a in record["per_cell_aggregates"] if (a["suite_id"], a["arch"]) == (suite, arch))
+def aggregate(record: dict, dataset_id: str, arch: str) -> dict:
+    return next(a for a in record["per_cell_aggregates"] if (a["suite_id"], a["arch"]) == (dataset_id, arch))
 
 
-def sv_blocks(record: dict, suite: str) -> tuple[dict, dict]:
-    cell = record["concordance"][suite]
+def sv_blocks(record: dict, dataset_id: str) -> tuple[dict, dict]:
+    cell = record["concordance"][dataset_id]
     return cell["per_file"], cell["per_file_adjusted"]
 
 
-def copy_file(record: dict, suite: str, source: str, name: str) -> None:
-    for block in sv_blocks(record, suite):
+def copy_file(record: dict, dataset_id: str, source: str, name: str) -> None:
+    for block in sv_blocks(record, dataset_id):
         block[name] = dict(block[source])
 
 
-def drop_file(record: dict, suite: str, name: str) -> None:
-    for block in sv_blocks(record, suite):
+def drop_file(record: dict, dataset_id: str, name: str) -> None:
+    for block in sv_blocks(record, dataset_id):
         del block[name]
 
 
-def zero_file(record: dict, suite: str, name: str) -> None:
-    for block in sv_blocks(record, suite):
+def zero_file(record: dict, dataset_id: str, name: str) -> None:
+    for block in sv_blocks(record, dataset_id):
         block[name] = {"perl_tuples": 0, "engine_tuples": 0, "intersection": 0, "f1": 1.0}
 
 
@@ -2014,6 +2016,247 @@ def test_a_malformed_same_day_block_is_refused_by_name_before_anything_is_printe
     assert (out.returncode, out.stdout, out.stderr) == (1, "", f"{ERR}{expected}\n")
 
 
+REEVALUATION = "the release record's divergence_reevaluation"
+VERDICTS = ("still-present", "closed", "changed", "error")
+
+
+def reevaluation_block(release: str = "116.2", before: str = "116.1") -> dict:
+    """A `divergence_reevaluation` block on `release`: nine made-up verdicts, two of them closed and three changed,
+    with the three changed divergences traced again."""
+    return {
+        "ensembl_vep": release,
+        "previous_ensembl_vep": before,
+        "image": f"ensemblorg/ensembl-vep@{REFERENCE['digest']}",
+        "plugins_commit": "0123456789abcdef0123456789abcdef01234567",
+        "entries_run": 9,
+        "verdicts": dict(zip(VERDICTS, (4, 2, 3, 0))),
+        "retired": [
+            {"entry": "first_made_up_divergence", "closed_by": release},
+            {"entry": "second_made_up_divergence", "closed_by": release},
+        ],
+        "retraced": ["fifth_made_up_divergence", "fourth_made_up_divergence", "third_made_up_divergence"],
+        "verdict_file_sha256": "d" * 64,
+    }
+
+
+def reevaluation(record: dict) -> dict:
+    return record["divergence_reevaluation"]
+
+
+def reevaluation_sentence(run: str, corrected: str, traced: str, release: str = "116.2") -> str:
+    return (
+        f"Of the {run} run again on Ensembl VEP {release}, {corrected} by that release and retired, and {traced} "
+        "again in its source."
+    )
+
+
+def test_the_divergences_run_again_render_as_one_caption_sentence_from_the_block_counts(tmp_path: Path) -> None:
+    """A release record without a `divergence_reevaluation` block renders the caption as it stands; one with the
+    block gains one sentence before the records clause, which becomes a sentence of its own: the documented
+    divergences run again on the Ensembl VEP release the block names, those that release corrects and those traced
+    again in its source, each number the block's own and each noun and verb agreeing with it. The sentence stands
+    after the same-day sentence when the population record carries that block, and nothing else on the page moves."""
+    repo = six_dataset_repo(tmp_path)
+    without = page(repo)
+    assert without.count("; tuple counts") == 1 and "run again" not in without
+    edit_record(repo, "release", lambda r: r.update(divergence_reevaluation=reevaluation_block()))
+    body = page(repo)
+    sentence = reevaluation_sentence("9 documented divergences", "2 are corrected", "3 were traced")
+    assert body == without.replace("; tuple counts", f". {sentence} Tuple counts")
+    caption = concordance_section(body).split("\n\n")[0]
+    assert caption.endswith(
+        "and a whole-file cell's own median where its campaign recorded one. "
+        f"{sentence} Tuple counts, per-chromosome rows and per-file counts are in the "
+        f"[provenance records]({REPO_URL}/tree/{TAG}/docs/concordance-provenance)."
+    )
+    assert "\n" not in caption and len(body.splitlines()) == len(without.splitlines())
+
+    # With the same-day block the caption carries that sentence, then this one, then the records clause.
+    edit_record(repo, "population", lambda r: r.update(previous_release_wall_time=six_dataset_same_day_block()))
+    both = f". {same_day_sentence(SAME_DAY_FIGURES)} {sentence} Tuple counts"
+    assert page(repo) == without.replace("; tuple counts", both)
+    edit_record(repo, "population", lambda r: r.pop("previous_release_wall_time"))
+    assert page(repo) == body
+
+    # It stands after the single-file clause when the release record carries one.
+    edit_record(repo, "release", lambda r: r.update(single_file_whole_genome=copy.deepcopy(SINGLE_FILE)))
+    assert f"recorded one{SINGLE_FILE_CLAUSE}. {sentence} Tuple counts, per-chromosome rows" in page(repo)
+    edit_record(repo, "release", lambda r: r.pop("single_file_whole_genome"))
+
+    # The keys the sentence does not state, the split of the verdicts it does not count and the names move nothing.
+    def rewrite_what_the_sentence_does_not_state(record: dict) -> None:
+        block = reevaluation(record)
+        block.update(
+            previous_ensembl_vep="115.9", image="ensemblorg/ensembl-vep@sha256:" + "8" * 64, plugins_commit="f" * 40,
+            verdict_file_sha256="e" * 64,
+        )
+        block["verdicts"].update({"still-present": 6, "changed": 1})
+        block["retraced"] = [f"{name}_renamed" for name in block["retraced"]]
+
+    edit_record(repo, "release", rewrite_what_the_sentence_does_not_state)
+    assert page(repo) == body
+
+    def caption_of(verdicts: tuple[int, int, int, int], release: str = "116.2") -> str:
+        """The caption once the block counts `verdicts`, in the order of `VERDICTS`, on `release`: one retired
+        divergence per closed verdict and one traced again per changed verdict."""
+
+        def edit(record: dict) -> None:
+            closed, changed = verdicts[1], verdicts[2]
+            reevaluation(record).update(
+                ensembl_vep=release, entries_run=sum(verdicts), verdicts=dict(zip(VERDICTS, verdicts)),
+                retired=[{"entry": f"made_up_divergence_{k}", "closed_by": release} for k in range(closed)],
+                retraced=[f"made_up_divergence_{k}" for k in range(closed, closed + changed)],
+            )
+
+        edit_record(repo, "release", edit)
+        return concordance_section(page(repo)).split("\n\n")[0]
+
+    # Every number is the block's own, the release it names included; a count of one takes the singular, zero the plural.
+    for verdicts, release, expected in (
+        ((32, 6, 2, 0), "117.1", reevaluation_sentence("40 documented divergences", "6 are corrected", "2 were traced", "117.1")),
+        ((0, 1, 0, 0), "116.2", reevaluation_sentence("1 documented divergence", "1 is corrected", "0 were traced")),
+        ((0, 0, 1, 0), "116.2", reevaluation_sentence("1 documented divergence", "0 are corrected", "1 was traced")),
+        ((3, 1, 1, 0), "116.2", reevaluation_sentence("5 documented divergences", "1 is corrected", "1 was traced")),
+        ((0, 0, 0, 0), "116.2", reevaluation_sentence("0 documented divergences", "0 are corrected", "0 were traced")),
+    ):
+        assert f" recorded one. {expected} Tuple counts, " in caption_of(verdicts, release), expected
+
+
+def test_the_fixture_repo_page_carries_the_reevaluation_sentence_in_its_own_caption(tmp_path: Path) -> None:
+    """The whole-genome caption of the page rendered from the `fixture_repo` repository takes the sentence at the same
+    place, after the same-day sentence when the population record carries that block, and refuses a malformed block
+    before anything is printed."""
+    repo = fixture_repo(tmp_path)
+    edit_record(repo, "release", lambda r: r.update(divergence_reevaluation=reevaluation_block("115.2", "115.1")))
+    sentence = reevaluation_sentence("9 documented divergences", "2 are corrected", "3 were traced", "115.2")
+    expected = expected_page(repo)
+    assert expected.count("; tuple counts and per-chromosome rows") == 1
+    assert page(repo) == expected.replace("; tuple counts", f". {sentence} Tuple counts")
+
+    datasets = release_record(repo)["population_concordance"]["per_dataset"]
+    block = same_day_block([(r["dataset"], r["label"], r["assembly"], 0.744, 1.005) for r in datasets])
+    edit_record(repo, "population", lambda r: r.update(previous_release_wall_time=block))
+    labels = ("gnomAD v4.1", "gnomAD v2.1.1", "1000 Genomes Phase 3", "1000 Genomes high-coverage")
+    ratios = same_day_sentence(", ".join(f"0.74 (ARM) and 1.01 (x86) for {label}" for label in labels))
+    assert page(repo) == expected.replace("; tuple counts", f". {ratios} {sentence} Tuple counts")
+
+    edit_record(repo, "release", lambda r: reevaluation(r).update(entries_run=10))
+    out = render(repo)
+    assert (out.returncode, out.stdout, out.stderr) == (1, "", f"{ERR}{REEVALUATION}.verdicts sums to 9 and entries_run is 10\n")
+
+
+def test_a_record_without_a_reevaluation_block_renders_its_page_unchanged(tmp_path: Path) -> None:
+    """A release record with no `divergence_reevaluation` block, or a null one, renders the page of either record
+    shape as the fixture renders it: the earlier page whole and the six-dataset page's section, neither with the
+    sentence."""
+    repo = fixture_repo(tmp_path / "earlier")
+    assert "divergence_reevaluation" not in release_record(repo)
+    unchanged = page(repo)
+    assert unchanged == expected_page(repo) and "run again" not in unchanged
+    edit_record(repo, "release", lambda r: r.update(divergence_reevaluation=None))
+    assert page(repo) == unchanged
+
+    repo = six_dataset_repo(tmp_path / "six")
+    unchanged = page(repo)
+    assert concordance_section(unchanged) == "\n\n".join(expected_six_dataset_section()) and "run again" not in unchanged
+    edit_record(repo, "release", lambda r: r.update(divergence_reevaluation=reevaluation_block()))
+    assert page(repo) != unchanged
+    edit_record(repo, "release", lambda r: r.pop("divergence_reevaluation"))
+    assert page(repo) == unchanged
+    edit_record(repo, "release", lambda r: r.update(divergence_reevaluation=None))
+    assert page(repo) == unchanged
+
+
+REEVALUATION_PROBES = [  # the release record's edit over the fixture block, then the exact ERROR line
+    pytest.param(lambda r: drop_keys(reevaluation(r), "entries_run"), f"{REEVALUATION} carries no entries_run", id="no-entries-run"),
+    pytest.param(lambda r: drop_keys(reevaluation(r), "verdicts"), f"{REEVALUATION} carries no verdicts", id="no-verdicts"),
+    pytest.param(lambda r: drop_keys(reevaluation(r), "retired"), f"{REEVALUATION} carries no retired", id="no-retired"),
+    pytest.param(lambda r: drop_keys(reevaluation(r), "retraced"), f"{REEVALUATION} carries no retraced", id="no-retraced"),
+    pytest.param(lambda r: drop_keys(reevaluation(r), "ensembl_vep"), f"{REEVALUATION} carries no ensembl_vep", id="no-ensembl-vep"),
+    pytest.param(
+        lambda r: drop_keys(reevaluation(r), "verdict_file_sha256", "plugins_commit", "image", "previous_ensembl_vep"),
+        f"{REEVALUATION} carries no previous_ensembl_vep, image, plugins_commit, verdict_file_sha256",
+        id="no-key-the-caption-does-not-read",
+    ),
+    pytest.param(lambda r: reevaluation(r).update(retraced=None), f"{REEVALUATION} carries no retraced", id="a-null-key"),
+    pytest.param(
+        lambda r: r.update(divergence_reevaluation=[reevaluation(r)]),
+        f"{REEVALUATION} carries no ensembl_vep, entries_run, verdicts, retired, retraced, previous_ensembl_vep, image, "
+        "plugins_commit, verdict_file_sha256",
+        id="a-block-that-is-not-an-object",
+    ),
+    pytest.param(
+        lambda r: drop_keys(reevaluation(r)["verdicts"], "changed"),
+        f"{REEVALUATION}.verdicts carries no changed", id="no-verdict-count",
+    ),
+    pytest.param(
+        lambda r: reevaluation(r).update(verdicts=[4, 2, 3, 0]),
+        f"{REEVALUATION}.verdicts carries no still-present, closed, changed, error", id="verdicts-that-are-not-an-object",
+    ),
+    pytest.param(
+        lambda r: reevaluation(r).update(entries_run=10),
+        f"{REEVALUATION}.verdicts sums to 9 and entries_run is 10", id="an-entries-run-above-the-sum-of-the-verdict-counts",
+    ),
+    pytest.param(
+        lambda r: reevaluation(r)["verdicts"].update(changed=2),
+        f"{REEVALUATION}.verdicts sums to 8 and entries_run is 9", id="verdict-counts-that-sum-below-entries-run",
+    ),
+    pytest.param(
+        lambda r: reevaluation(r)["verdicts"].update({"still-present": 3, "error": 1}),
+        f"{REEVALUATION}.verdicts carries error that is not zero: 1", id="an-error-verdict",
+    ),
+    pytest.param(
+        lambda r: reevaluation(r)["retired"].pop(),
+        f"{REEVALUATION}.retired lists 1 and verdicts.closed is 2", id="a-retired-list-shorter-than-the-closed-count",
+    ),
+    pytest.param(
+        lambda r: reevaluation(r)["retired"].append({"entry": "sixth_made_up_divergence", "closed_by": "116.2"}),
+        f"{REEVALUATION}.retired lists 3 and verdicts.closed is 2", id="a-retired-list-longer-than-the-closed-count",
+    ),
+    pytest.param(
+        lambda r: reevaluation(r).update(entries_run=9.0),
+        f"{REEVALUATION} carries entries_run that is not an integer: 9.0", id="a-count-that-is-a-float",
+    ),
+    pytest.param(
+        lambda r: reevaluation(r)["verdicts"].update(error=True),
+        f"{REEVALUATION}.verdicts carries error that is not an integer: True", id="a-count-that-is-true",
+    ),
+    pytest.param(
+        lambda r: reevaluation(r)["verdicts"].update(closed="2"),
+        f"{REEVALUATION}.verdicts carries closed that is not an integer: '2'", id="a-count-that-is-text",
+    ),
+    pytest.param(
+        lambda r: reevaluation(r)["verdicts"].update({"still-present": 5, "error": -1}),
+        f"{REEVALUATION}.verdicts carries error that is below zero: -1", id="a-count-below-zero-that-keeps-the-sum",
+    ),
+    pytest.param(
+        lambda r: reevaluation(r).update(retired={"entry": "first_made_up_divergence", "closed_by": "116.2"}),
+        f"{REEVALUATION}.retired is not a list", id="a-retired-that-is-not-a-list",
+    ),
+    pytest.param(
+        lambda r: reevaluation(r).update(retraced="third_made_up_divergence"),
+        f"{REEVALUATION}.retraced is not a list", id="a-retraced-that-is-not-a-list",
+    ),
+    pytest.param(
+        lambda r: reevaluation(r).update(ensembl_vep=116.2),
+        f"{REEVALUATION} carries ensembl_vep that is not a non-empty string: 116.2", id="a-release-that-is-not-a-string",
+    ),
+    pytest.param(
+        lambda r: reevaluation(r).update(ensembl_vep=" "),
+        f"{REEVALUATION} carries ensembl_vep that is not a non-empty string: ' '", id="a-release-that-is-blank",
+    ),
+]
+
+
+@pytest.mark.parametrize("edit, expected", REEVALUATION_PROBES)
+def test_a_malformed_reevaluation_block_is_refused_by_name_before_anything_is_printed(tmp_path: Path, edit, expected: str) -> None:
+    repo = six_dataset_repo(tmp_path)
+    edit_record(repo, "release", lambda r: r.update(divergence_reevaluation=reevaluation_block()))
+    edit_record(repo, "release", edit)
+    out = render(repo)
+    assert (out.returncode, out.stdout, out.stderr) == (1, "", f"{ERR}{expected}\n")
+
+
 def test_a_chromosome_peak_rss_that_is_absent_or_not_a_finite_number_is_refused_by_name(tmp_path: Path) -> None:
     repo = six_dataset_repo(tmp_path)
     where = f"{ERR}the population record's wall_time.vep_rs.per_cell[0] carries"
@@ -2026,8 +2269,8 @@ def test_a_chromosome_peak_rss_that_is_absent_or_not_a_finite_number_is_refused_
     ):
         edit_record(repo, "population", edit)
         assert error(repo) == f"{expected}\n"
-    # The earlier page builds its caption before its dataset rows, so an empty cell list reaches peak_rss_gb before
-    # the rows refuse it; the six-dataset page refuses it as a dataset without wall time first.
+    # The page with the chromosome 21 table builds its caption before its dataset rows, so an empty cell list reaches
+    # peak_rss_gb before the rows refuse it; the six-dataset page refuses it as a dataset without wall time first.
     repo = fixture_repo(tmp_path / "empty")
     edit_record(repo, "population", lambda r: r["wall_time"]["vep_rs"]["per_cell"].clear())
     assert error(repo) == f"{ERR}the population record's wall_time.vep_rs.per_cell is empty\n"
@@ -2042,7 +2285,7 @@ DIGESTS_040 = {
     "vep-0.4.0-x86_64-unknown-linux-gnu.tar.gz": "d72ff534447dd38ceef576c7d51d479cb7af354c09bba42c47f0991343bcb3a8",
     "vep-rs-0.4.0.tar.gz": "0ff936860386d74d5f532ef86d0b19f4c31eadc90998062d0291c5bc402756ab",
 }
-PUBLISHED_040_CAPTION = (
+RENDERED_040_CAPTION = (
     "Whole genome against Ensembl VEP 116.2: the population datasets one run per chromosome, each ClinVar release one "
     "genome-wide file; wall time is the sum of the per-chromosome medians of 20 machines at 16 threads on `c8gd.8xlarge` "
     "(ARM) and `c8id.8xlarge` (x86) for the population datasets, and the whole-file median of 20 machines on "
@@ -2053,7 +2296,7 @@ PUBLISHED_040_CAPTION = (
 )
 # The peak columns are the per-dataset maxima of the 0.4.0 population record's cells (gnomAD v4.1 2,502.7 and
 # 2,316.9 MB; the ClinVar aggregates of that campaign carry no peak), rounded up to one decimal.
-PUBLISHED_040_TABLES = """\
+RENDERED_040_TABLES = """\
 | Dataset | Raw F1 | Adjusted F1 | ARM (s) | x86 (s) | ARM peak (GB) | x86 peak (GB) |
 | --- | --- | --- | --- | --- | --- | --- |
 | gnomAD v4.1 | 0.999999353 | 1.000000000 | 881 | 1,365 | 2.6 | 2.4 |
@@ -2095,7 +2338,7 @@ def release_040_repo(tmp_path: Path) -> Path:
     return repo
 
 
-def test_the_0_4_0_records_render_the_published_concordance_section(tmp_path: Path) -> None:
+def test_the_0_4_0_records_render_the_published_concordance_figures(tmp_path: Path) -> None:
     """The repository's 0.4.0 records, timed on one generation per pair with the ClinVar files on another class
     than the whole genome, render the published page's concordance figures in the six-dataset page's shape: the
     caption without a label, then the two tables."""
@@ -2106,7 +2349,7 @@ def test_the_0_4_0_records_render_the_published_concordance_section(tmp_path: Pa
         capture_output=True, text=True, check=False,
     )
     assert out.returncode == 0, out.stderr
-    assert concordance_section(out.stdout) == f"{PUBLISHED_040_CAPTION}\n\n{PUBLISHED_040_TABLES}"
+    assert concordance_section(out.stdout) == f"{RENDERED_040_CAPTION}\n\n{RENDERED_040_TABLES}"
     assert NEWEST_LABEL not in out.stdout
     # A flat notes file, Highlights and Upgrade notes without an area section, keeps the published page's shape.
     assert [l for l in out.stdout.splitlines() if l.startswith("#")] == [
@@ -2303,11 +2546,11 @@ def test_a_block_of_fewer_kinds_of_data_renders_its_own_rows_and_numbers_under_t
     assert sentence.startswith("vep-rs supports 11 of the 67 Ensembl VEP plugins in its support table. The 56 it does not port ")
 
 
-def test_an_earlier_shape_record_carrying_a_plugin_block_is_refused(tmp_path: Path) -> None:
+def test_a_record_not_of_the_six_dataset_shape_carrying_a_plugin_block_is_refused(tmp_path: Path) -> None:
     repo = fixture_repo(tmp_path)
     edit_record(repo, "release", lambda r: r.update(plugin_concordance=plugin_block()))
     assert error(repo) == (
-        f"{ERR}{PLUGINS} is rendered after the structural-variant table, which a record of the earlier shape lacks\n"
+        f"{ERR}{PLUGINS} is rendered after the structural-variant table, which only a record of the six-dataset shape carries\n"
     )
 
 

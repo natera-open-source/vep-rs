@@ -1,0 +1,13 @@
+rs0	21:101	-	ENSG1	ENST1	Transcript	incomplete_terminal_codon_variant,coding_sequence_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1;FLAGS=cds_end_NF;HGVSp=ENSP1.1:p.(Ter305%3D)
+rs1	21:201	-	ENSG1	ENST1	Transcript	frameshift_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1;FLAGS=cds_start_NF,cds_end_NF;HGVSp=ENSP1.1:p.(Ter185del)
+rs2	21:301	-	ENSG1	ENST1	Transcript	incomplete_terminal_codon_variant,coding_sequence_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1;HGVSp=ENSP1.1:p.(Ter224Val)
+rs3	21:401	-	ENSG1	ENST1	Transcript	frameshift_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1;FLAGS=cds_end_NF;HGVSp=ENSP1.1:p.(Ter176HisextTer?)
+rs4	21:501	-	ENSG1	ENST1	Transcript	coding_sequence_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1;FLAGS=cds_start_NF;HGVSp=ENSP1.1:p.(Ter1%3D)
+rs5	21:601	-	ENSG1	ENST1	Transcript	incomplete_terminal_codon_variant,coding_sequence_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1;FLAGS=cds_end_NF;HGVSp=ENSP1.1:p.(Ter305%3D)
+rs6	21:701	-	ENSG1	ENST1	Transcript	incomplete_terminal_codon_variant,coding_sequence_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1;FLAGS=cds_end_NF;HGVSp=ENSP1.1:p.(Asp223_Ter224del)
+rs7	21:801	-	ENSG1	ENST1	Transcript	incomplete_terminal_codon_variant,coding_sequence_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1;FLAGS=cds_end_NF;HGVSp=ENSP1.1:p.(Ter224delinsValHis)
+rs8	21:901	-	ENSG1	ENST1	Transcript	coding_sequence_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1;HGVSp=ENSP1.1:p.(Ter305%3D)
+rs9	21:1001	-	ENSG1	ENST1	Transcript	coding_sequence_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1;FLAGS=cds_start_NF;HGVSp=ENSP1.1:p.(Ter5%3D)
+rs10	21:1101	-	ENSG1	ENST1	Transcript	incomplete_terminal_codon_variant,coding_sequence_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1;FLAGS=cds_end_NF;HGVSp=ENSP1.1:p.(Ter305%3D
+rs11	21:1201	-	ENSG1	ENST1	Transcript	incomplete_terminal_codon_variant,coding_sequence_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1;FLAGS=cds_end_NF;HGVSp=ENSP1.1:p.Ter305%3D)
+rs12	21:1301	-	ENSG1	ENST1	Transcript	incomplete_terminal_codon_variant,coding_sequence_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1;FLAGS=cds_end_NF;HGVSp=ENSP1.1:p.((Ter305%3D))

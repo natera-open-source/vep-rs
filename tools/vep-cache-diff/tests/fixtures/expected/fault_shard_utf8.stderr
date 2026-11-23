@@ -1,0 +1,1 @@
+ERROR: [vep-cache-diff] {{FIXTURES}}/caches/faults/shard_utf8/baseline/transcripts/1/1.json: control character or invalid UTF-8 in a string at byte 33

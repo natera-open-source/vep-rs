@@ -1,9 +1,9 @@
 // Copyright (c) 2026-present Natera, Inc.
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-//! The extraction of `score_plugin_tuples.py`, block by block on every thread: the
-//! populated fields of each row that a source of the run claims, written to the shard of
-//! the row's Location as one record per row.
+//! The extraction, block by block on every thread: the populated fields of each row that
+//! a source of the run claims, written to the shard of the row's Location as one record
+//! per row.
 //!
 //! A record is its length, then the key (Location, Allele and Feature, a tab after each),
 //! then the row's fields as their numbers and values, every length a varint.
@@ -11,7 +11,9 @@
 use crate::input::{lines, scratch_file, Input, Kind};
 use crate::order::{canonical_location, cmp_column, decode_extra, put_varint, strip};
 use crate::resolve::{Registry, Source};
-use crate::{Refusal, Res};
+use crate::rules::{Refusal, Res};
+use crate::score::interrupt;
+use crate::slots::{Slot, Slots};
 use memchr::{memchr, memchr_iter, memmem};
 use std::collections::HashMap;
 use std::fs::OpenOptions;
@@ -26,11 +28,13 @@ pub const DEFAULT_HEADER: &[u8] = b"#Uploaded_variation\tLocation\tAllele\tGene\
 
 /// What every pass of a run shares.
 pub struct Run<'a> {
-    pub registry: &'a Registry,
+    pub registry: &'a Registry<'a>,
     /// The Locations that start each shard but the first, ascending.
     pub splitters: &'a [Vec<u8>],
     pub scratch: &'a Path,
+    /// The threads a pass starts; as many of them work at one time as hold a slot.
     pub threads: usize,
+    pub slots: &'a Slots,
     pub distinct_keys: usize,
 }
 
@@ -83,7 +87,7 @@ impl<'a> Locator<'a> {
     }
 }
 
-/// One input after extraction, as the hand-over states it.
+/// One input after extraction.
 pub struct Extracted {
     /// The data rows of a default-format input, the lines of a tuple file.
     pub lines: u64,
@@ -207,7 +211,7 @@ impl Worker<'_> {
         Ok(())
     }
 
-    /// One default-format row: `extract` of the scorer from the split of its columns on.
+    /// One default-format row, from the split of its columns on.
     fn default_row(&mut self, row: &[u8]) -> Result<(), Fault> {
         let mut tabs = [0usize; 13];
         let mut found = 0;
@@ -328,30 +332,33 @@ impl Worker<'_> {
 }
 
 /// Of what the threads found, each with its block and its line there, the first in the
-/// file's order: the fault the scorer, reading line by line, ends on.
+/// file's order: the fault a reader of the file line by line ends on.
 fn first_in_the_file<T>(found: Vec<(usize, u64, T)>) -> Option<(usize, u64, T)> {
     found
         .into_iter()
         .min_by_key(|(block, line, _)| (*block, *line))
 }
 
-/// The last in the file's order: the column header the scorer holds at the file's end.
+/// The last in the file's order: the column header that stands at the file's end.
 fn last_in_the_file<T>(found: Vec<(usize, u64, T)>) -> Option<(usize, u64, T)> {
     found
         .into_iter()
         .max_by_key(|(block, line, _)| (*block, *line))
 }
 
-/// Extracts `input`, the run's input `number`, into its shards.
-pub fn extract(run: &Run, input: &Input, number: usize) -> Res<Extracted> {
+/// Extracts `input`, the run's input `number`, into its shards. The caller's slot, `own`,
+/// is lent while the pass's threads work.
+pub fn extract(run: &Run, input: &Input, number: usize, own: &mut Slot) -> Res<Extracted> {
     let next = AtomicUsize::new(0);
     // No block after the first one found at fault is read: the first fault is the one named.
     let faulty = AtomicUsize::new(usize::MAX);
     let locks: Vec<Mutex<()>> = (0..run.shards()).map(|_| Mutex::new(())).collect();
+    let lent = own.lent();
     let workers = std::thread::scope(|scope| {
         let handles: Vec<_> = (0..run.threads.min(input.blocks()).max(1))
             .map(|_| {
                 scope.spawn(|| {
+                    let _slot = run.slots.take();
                     let mut worker = Worker {
                         run,
                         input,
@@ -373,7 +380,10 @@ pub fn extract(run: &Run, input: &Input, number: usize) -> Res<Extracted> {
                     let mut block = Vec::new();
                     loop {
                         let index = next.fetch_add(1, Ordering::Relaxed);
-                        if index >= input.blocks() || index > faulty.load(Ordering::Relaxed) {
+                        if index >= input.blocks()
+                            || index > faulty.load(Ordering::Relaxed)
+                            || interrupt::requested()
+                        {
                             break;
                         }
                         if let Err(error) = input.read_block(index, &mut block) {
@@ -404,6 +414,7 @@ pub fn extract(run: &Run, input: &Input, number: usize) -> Res<Extracted> {
             .map(|handle| handle.join().expect("an extraction thread panicked"))
             .collect::<Vec<_>>()
     });
+    drop(lent);
 
     let mut lines_of = vec![0u64; input.blocks()];
     let mut rows_of = vec![0u64; input.blocks()];
@@ -432,8 +443,8 @@ pub fn extract(run: &Run, input: &Input, number: usize) -> Res<Extracted> {
             run.distinct_keys
         ))
     };
-    // The line on which the scorer, reading in the file's order, meets one distinct key too
-    // many, whichever threads met the keys: it reaches no fault after that line.
+    // The line on which a reader in the file's order meets one distinct key too many,
+    // whichever threads met the keys: it reaches no fault after that line.
     let overflow = (unclaimed.len() > run.distinct_keys).then(|| {
         let mut met: Vec<(usize, u64)> = unclaimed.values().map(|&(_, met)| met).collect();
         met.sort_unstable();

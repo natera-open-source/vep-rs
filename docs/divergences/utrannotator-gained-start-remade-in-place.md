@@ -21,13 +21,13 @@ When the inserted bases also hold a start codon of their own, vep-rs reports tha
 
 **The class it produces.** `utrannotator_gained_start_remade_in_place`: the `5UTR_consequence` and `5UTR_annotation` of an insertion's row on which Ensembl VEP reports a start codon gained at the place of a reference start codon the insertion is written inside, where vep-rs reports no gained start at that place. It is counted once per row. The concordance figures score consequence sets and never see the fields, so nothing is set aside in them.
 
-**How often the shape occurs.** The index, [Intended divergences from Ensembl VEP](../intended-divergences.md), places this entry at its tier 2: ordinary data carries the shape, and the difference needs a plugin. The shape a record alone shows is an insertion. Of the 15,646,481 records of the five chromosome 21 datasets the index counts shapes on, 996,643 are insertions (63,698 per million), and 93 of the golden corpora hold one. The 5' UTR sequence decides whether it stands inside a start codon and leaves it in place. Four committed flag sets run the plugin, two in each UTRAnnotator corpus. On the genome-wide ClinVar files Ensembl VEP 116.2 reports such a codon gained on 59 rows (GRCh37) and 147 rows (GRCh38).
+**How often the shape occurs.** The index, [Intended divergences from Ensembl VEP](../intended-divergences.md), places this entry at its tier 2: ordinary data carries the shape, and the difference needs a plugin. The shape a record alone shows is an insertion. Of the 15,646,481 records of the five chromosome 21 datasets the index counts shapes on, 996,643 are insertions (63,698 per million), and 132 of the golden corpora hold one. The 5' UTR sequence decides whether it stands inside a start codon and leaves it in place. Four committed flag sets run the plugin, two in each UTRAnnotator corpus. On the genome-wide ClinVar files Ensembl VEP 116.3 reports such a codon gained on 59 rows (GRCh37) and 147 rows (GRCh38).
 
 Tuple, pair, set aside, charged and the other scoring terms are defined in [How to read the counts](../intended-divergences.md#how-to-read-the-counts).
 
 ## 1. One base inserted after the second base of an upstream start codon
 
-**In short.** The constructed record `21 10524584 T TG` inserts a `G` between cDNA positions 147 and 148 of `ENST00000427445`, after the `T` of the upstream ORF's `ATG` at cDNA position 146. The codon reads `ATG` as before, and its own `G` follows it: the changed sequence is the reference with a `G` directly after the codon. Ensembl VEP 116.2 reports that start codon gained; vep-rs reports the frameshift of the codon's own ORF.
+**In short.** The constructed record `21 10524584 T TG` inserts a `G` between cDNA positions 147 and 148 of `ENST00000427445`, after the `T` of the upstream ORF's `ATG` at cDNA position 146. The codon reads `ATG` as before, and its own `G` follows it: the changed sequence is the reference with a `G` directly after the codon. Ensembl VEP 116.3 reports that start codon gained; vep-rs reports the frameshift of the codon's own ORF.
 
 ### 1.1 What a reader needs to know first
 
@@ -82,7 +82,7 @@ Ensembl VEP writes `5UTR_consequence=5_prime_UTR_premature_start_codon_gain_vari
 
 ### 1.7 How the comparator treats this class
 
-The format comparator (`scripts/concordance/compare_vep_formats.py`) applies `utrannotator_gained_start_remade_in_place` when a comparison case names it. It sets a row's `5UTR_consequence` and `5UTR_annotation` aside, counted once per row, when three things hold. The row's two cDNA positions are an insertion's two flanking bases. Ensembl VEP reports a gained start whose one `CapDistanceToStart` lies one below the lower of them on a row whose allele opens with `TG`, or two below it on a row whose allele opens with `G`. vep-rs's row carries the plugin's counts and reports no gained start at that index.
+The format comparator (`tools/vep-formats-compare`) applies `utrannotator_gained_start_remade_in_place` when a comparison case names it. It sets a row's `5UTR_consequence` and `5UTR_annotation` aside, counted once per row, when three things hold. The row's two cDNA positions are an insertion's two flanking bases. Ensembl VEP reports a gained start whose one `CapDistanceToStart` lies one below the lower of them on a row whose allele opens with `TG`, or two below it on a row whose allele opens with `G`. vep-rs's row carries the plugin's counts and reports no gained start at that index.
 
 The class reads the row. The lower cDNA position is the 5' UTR index of the base after the insertion, so a codon reported one or two below it holds the insertion after its first or second base, and the allele's first bases say whether it still reads `ATG`. The allele is read on the transcript's strand, reverse-complemented where the row's `STRAND` is `-1`; a row that states no strand is refused. Where a row's record states its alleles, a reference allele that is not empty refuses the row.
 

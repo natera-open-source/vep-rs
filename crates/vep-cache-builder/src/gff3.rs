@@ -5,7 +5,7 @@
 //!
 //! A file is read as Ensembl VEP reads a GFF3 or GTF given to it as an
 //! annotation source (`AnnotationSource/File/BaseGXF.pm`, `GFF.pm`,
-//! `GTF.pm`): only the feature types of [`GFF3_FEATURE_TYPES`] are taken; a
+//! `GTF.pm`): only the feature types of `GFF3_FEATURE_TYPES` are taken; a
 //! record is named by `ID`, `Name`, `id` or `name` and placed under each of
 //! its `Parent` records; a record without a parent is a gene when its type
 //! names one (`gene`, `pseudogene`, `ncRNA_gene`, a gene segment,
@@ -13,13 +13,13 @@
 //! and one whose parent list opens with `0` and names nothing set is
 //! dropped; a transcript's biotype is its `biotype`, `transcript_type` or
 //! `transcript_biotype` attribute, else the RefSeq rules of
-//! [`Records::biotype`]; its gene identifier is its `gene_id`, its `Dbxref`
+//! `Records::biotype`; its gene identifier is its `gene_id`, its `Dbxref`
 //! `GeneID`, or the gene line's; its symbol is its `gene_name` or `gene`, or
 //! the gene line's `name` or `Name`. An attribute whose value is empty or `0`
-//! is absent, as Ensembl VEP's truth tests read it ([`is_set`]), so each of
+//! is absent, as Ensembl VEP's truth tests read it (`is_set`), so each of
 //! those readers falls to its next alternative; the tests read a GFF3 value as
 //! written, and its escapes are decoded where the value becomes the cache's
-//! text ([`text`]). The same tree is built from a GTF by
+//! text (`text`). The same tree is built from a GTF by
 //! [`crate::gtf::parse_gtf_model`].
 //!
 //! An Ensembl GFF3 carries the shape the Ensembl core API writes
@@ -56,12 +56,15 @@ use vep_core::regulatory_gff::{
     decode_attribute, decode_type, undecodable_attribute_error, uri_unescape,
 };
 use vep_core::sv_routing::perl_split;
+use vep_core::variation::perl_numeric;
 
-/// The longest GFF3 line read, 16 MiB. A feature line's widest column is its
-/// attributes, a few kilobytes even for a gene with every cross-reference
-/// listed, so the cap refuses a file with no line end in it long before the
-/// line buffer grows to its size.
-const MAX_LINE_BYTES: usize = 16 << 20;
+use crate::count::{counted, one_or};
+pub(crate) use crate::line::without_byte_order_marks;
+use crate::line::{
+    check_indexed_coordinates, index_build_places, index_columns_may_differ, is_a_comment,
+    is_blank_or_a_comment, read_line, read_line_of_any_length, record_columns, Line,
+    MAX_LINE_BYTES,
+};
 
 /// The GFF3 feature types Ensembl VEP reads from a file given as an
 /// annotation source (`GFF.pm` `%INCLUDE_FEATURE_TYPES`; `ncRNA_gene` joins
@@ -69,7 +72,7 @@ const MAX_LINE_BYTES: usize = 16 << 20;
 /// counted (`BaseGXF.pm` `_get_records_by_coords`), unless the file is read
 /// for the Ensembl cache's content and the line's `ID` carries the Ensembl
 /// `gene:` or `transcript:` prefix ([`Reading`]).
-pub const GFF3_FEATURE_TYPES: [&str; 36] = [
+const GFF3_FEATURE_TYPES: [&str; 36] = [
     "aberrant_processed_transcript",
     "CDS",
     "C_gene_segment",
@@ -171,6 +174,10 @@ pub struct TranscriptRecord {
     /// `readthrough_tra` transcript attribute, as the GRCh38 file and the
     /// core API spell it.
     pub readthrough: bool,
+    /// `cds_start_NF` in `tag`: the model states that the coding sequence
+    /// is incomplete at its start, so its first codon need be no start
+    /// codon.
+    pub cds_start_nf: bool,
     pub exons: Vec<ExonRecord>,
     pub cds_regions: Vec<CdsRecord>,
 }
@@ -217,7 +224,7 @@ pub struct CdsRecord {
 
 /// The transcript model a file holds, which decides the biotype rules.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Model {
+pub(crate) enum Model {
     /// A GFF3: `GFF.pm` `_record_get_biotype`.
     Gff3,
     /// A GTF: `GTF.pm` `_record_get_biotype`.
@@ -226,11 +233,11 @@ pub enum Model {
 
 /// Which lines of a GFF3 make the tree, whether a parentless record is a
 /// gene by its type alone or by an Ensembl `gene:` identifier too
-/// ([`is_gene_line`]), and where a translation's version comes from when its
+/// (`is_gene_line`), and where a translation's version comes from when its
 /// CDS lines carry none, on a GTF as on a GFF3.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Reading {
-    /// The lines of the types in [`GFF3_FEATURE_TYPES`], as Ensembl VEP's
+    /// The lines of the types in `GFF3_FEATURE_TYPES`, as Ensembl VEP's
     /// `--gff` source reads a file (`BaseGXF.pm` `_get_records_by_coords`,
     /// `GFF.pm` `%INCLUDE_FEATURE_TYPES`): a line of another type is skipped
     /// whatever its `ID`, so an Ensembl `unconfirmed_transcript` (TEC) or
@@ -256,23 +263,23 @@ pub enum Reading {
 /// One line of the transcript model that is not an exon or a CDS: a gene, a
 /// transcript, or a feature the tree places under one of them.
 #[derive(Debug)]
-pub struct Feature {
+pub(crate) struct Feature {
     /// The record's identifier: `ID`, `Name`, `id` or `name` on a GFF3
     /// line, `<type>_id` on a GTF line, else the MD5 of the line
     /// (`GFF.pm` and `GTF.pm` `_record_get_id`).
     pub id: String,
-    /// The set identifiers of its parent records ([`parent_ids`]): the
+    /// The set identifiers of its parent records (`parent_ids`): the
     /// `Parent` list of a GFF3 line; `gene_id` on a GTF transcript line.
     pub parents: Vec<String>,
     /// Whether the parent list opens with a non-empty field
-    /// ([`names_a_parent`]), which makes the record a child, never a gene or
+    /// (`names_a_parent`), which makes the record a child, never a gene or
     /// a transcript of its own, whether or not a parent is set; a child whose
     /// `parents` is empty is dropped. A record whose list opens with an empty
     /// field is a child only when it is no gene and one of its `parents` is
     /// a gene line of the file ([`Records::assemble`]).
     pub child: bool,
     pub feature_type: String,
-    /// The record's version, read under [`feature_version_keys`] as the line
+    /// The record's version, read under `feature_version_keys` as the line
     /// is, so a version that is not a whole number, or one the cache cannot
     /// hold, is refused at its line whether or not the tree keeps the record.
     pub version: Option<u32>,
@@ -293,7 +300,7 @@ pub struct Feature {
 /// The records of one file, collected line by line and assembled into the
 /// gene tree once the file is read, since a child may precede its parent.
 #[derive(Debug, Default)]
-pub struct Records {
+pub(crate) struct Records {
     /// How the file is read.
     reading: Reading,
     features: Vec<Feature>,
@@ -329,29 +336,34 @@ struct Dropped {
 
 impl Records {
     /// An empty collection read under `reading`.
-    pub fn new(reading: Reading) -> Self {
+    pub(crate) fn new(reading: Reading) -> Self {
         Records {
             reading,
             ..Records::default()
         }
     }
 
+    /// The feature types of the lines skipped so far, in name order.
+    pub(crate) fn skipped_types(&self) -> Vec<String> {
+        self.skipped.keys().cloned().collect()
+    }
+
     /// Counts a line of a feature type the model does not read; `id` is the
-    /// identifier its attributes name ([`named_id`]), empty when they name
+    /// identifier its attributes name (`named_id`), empty when they name
     /// none.
-    pub fn skip(&mut self, feature_type: &str, id: &str) {
+    pub(crate) fn skip(&mut self, feature_type: &str, id: &str) {
         *self.skipped.entry(feature_type.to_string()).or_default() += 1;
         if !id.is_empty() {
             self.skipped_ids.insert(id.to_string());
         }
     }
 
-    pub fn add_feature(&mut self, feature: Feature) {
+    pub(crate) fn add_feature(&mut self, feature: Feature) {
         self.features.push(feature);
     }
 
     /// Lists `exon` under each of its parents.
-    pub fn add_exon(&mut self, parents: &[String], exon: ExonRecord) {
+    pub(crate) fn add_exon(&mut self, parents: &[String], exon: ExonRecord) {
         for parent in parents {
             self.exons
                 .entry(parent.clone())
@@ -361,7 +373,7 @@ impl Records {
     }
 
     /// Lists `cds` under each of its parents.
-    pub fn add_cds(&mut self, parents: &[String], cds: CdsRecord) {
+    pub(crate) fn add_cds(&mut self, parents: &[String], cds: CdsRecord) {
         for parent in parents {
             self.cds
                 .entry(parent.clone())
@@ -377,7 +389,7 @@ impl Records {
     /// identifier standing for the earlier; a parent in no line, or in a
     /// line of a type not read, is named in a warning, and a record whose
     /// list opens with such a parent is placed as its other parents place
-    /// it and otherwise dropped with its children ([`ORPHAN_RULE`]); one
+    /// it and otherwise dropped with its children (`ORPHAN_RULE`); one
     /// whose parent list opens with `0` and names nothing set is dropped
     /// without a warning; each record without a parent is a gene whose
     /// children are its transcripts, or, when its type names no gene, a
@@ -385,7 +397,7 @@ impl Records {
     /// an empty field ([`Feature::child`] false, `parents` set) is a child
     /// when it is no gene and one of its parents is a gene line, and a
     /// record without a parent otherwise.
-    pub fn assemble(self, model: Model, path: &Path) -> Result<HashMap<String, GeneRecord>> {
+    pub(crate) fn assemble(self, model: Model, path: &Path) -> Result<HashMap<String, GeneRecord>> {
         let Records {
             reading,
             features,
@@ -436,16 +448,18 @@ impl Records {
             .partition(|parent| skipped_ids.contains(*parent));
         if !absent.is_empty() {
             warn!(
-                "{} parent identifiers name no line of {}; {ORPHAN_RULE}: {}",
-                absent.len(),
+                "{} {} no line of {}; {ORPHAN_RULE}: {}",
+                counted(absent.len(), "parent identifier"),
+                one_or(absent.len(), "names", "name"),
                 path.display(),
                 listed(absent.iter().copied())
             );
         }
         if !skipped_parents.is_empty() {
             warn!(
-                "{} parent identifiers name a line of {} of a type not read; {ORPHAN_RULE}: {}",
-                skipped_parents.len(),
+                "{} {} a line of {} of a type not read; {ORPHAN_RULE}: {}",
+                counted(skipped_parents.len(), "parent identifier"),
+                one_or(skipped_parents.len(), "names", "name"),
                 path.display(),
                 listed(skipped_parents.iter().copied())
             );
@@ -552,15 +566,15 @@ impl Records {
 
         if !dropped.no_biotype.is_empty() {
             warn!(
-                "Unable to determine the biotype of {} transcripts, skipped: {}",
-                dropped.no_biotype.len(),
+                "Unable to determine the biotype of {}, skipped: {}",
+                counted(dropped.no_biotype.len(), "transcript"),
                 listed(dropped.no_biotype.iter().map(String::as_str))
             );
         }
         if !dropped.no_exons.is_empty() {
             warn!(
-                "No exons found for {} protein_coding transcripts, skipped: {}",
-                dropped.no_exons.len(),
+                "No exons found for {}, skipped: {}",
+                counted(dropped.no_exons.len(), "protein_coding transcript"),
                 listed(dropped.no_exons.iter().map(String::as_str))
             );
         }
@@ -575,7 +589,7 @@ impl Records {
     /// `microRNA ...` is `miRNA`, and otherwise `gbkey` is the biotype. A GTF
     /// record's is its `transcript_biotype`, `transcript_type` or
     /// `biotype`, else its source column (`GTF.pm` `_record_get_biotype`).
-    pub fn biotype(model: Model, tr: &Feature, gene: Option<&Feature>) -> Option<String> {
+    fn biotype(model: Model, tr: &Feature, gene: Option<&Feature>) -> Option<String> {
         match model {
             Model::Gtf => attribute_text(
                 model,
@@ -648,7 +662,7 @@ fn has_ensembl_id(attrs: &HashMap<String, String>) -> bool {
 
 /// Whether a record without a parent is a gene: its type contains `gene`, or
 /// is `processed_transcript` or `RNA`, the three tests of `BaseGXF.pm`
-/// `_record_is_gene` (lines 788-796), read in the letter case the Perl reads
+/// `_record_is_gene` (lines 788-796), read in the letter case Ensembl VEP reads
 /// them. Under [`Reading::GffSource`] the type decides alone, as it does for
 /// Ensembl VEP's `--gff` source, so a parentless `ID=gene:x` line of type
 /// `mRNA` is a transcript. Under [`Reading::EnsemblCache`] an Ensembl `gene:`
@@ -767,6 +781,7 @@ fn transcript_record(
         tsl: attribute_text(model, &record.attrs, &["transcript_support_level", "tsl"]),
         ccds: attribute_text(model, &record.attrs, &["ccdsid", "ccds_id"]),
         readthrough: tagged("readthrough_transcript") || tagged("readthrough_tra"),
+        cds_start_nf: tagged("cds_start_NF"),
         exons,
         cds_regions,
     })
@@ -857,7 +872,7 @@ fn listed<'a>(ids: impl Iterator<Item = &'a str>) -> String {
 ///
 /// Returns `HashMap<gene_id, GeneRecord>`. Fails when the file cannot be
 /// opened or read, and on a line it refuses, each error opening with the file
-/// and the line ([`located`]): a line longer than `MAX_LINE_BYTES`, a line
+/// and the line (`located`): a line longer than `MAX_LINE_BYTES`, a line
 /// that is not UTF-8, and, on a line whose type `reading` admits, a `start` or
 /// `end` column that is not a number, naming the column and the value, a
 /// start of 0 or an end before its start, a seqid that cannot name a
@@ -865,23 +880,30 @@ fn listed<'a>(ids: impl Iterator<Item = &'a str>) -> String {
 /// value, a source column or an attribute value whose escapes decode to bytes
 /// that are not UTF-8, naming the column or the key and the value, and a gene,
 /// transcript or CDS `version` that is not a whole number or is above the
-/// largest the cache holds ([`parse_version`]), naming the text or the limit.
+/// largest the cache holds (`parse_version`), naming the text or the limit,
+/// and a CDS phase Ensembl VEP's source does not take (`parse_phase`),
+/// naming the text.
 /// A line of a type it skips is read no further than its type, its `ID` and
 /// whether the index build parses its `start` and its `end`, and a line of
 /// fewer than nine columns no further than those two
-/// ([`check_skipped_coordinates`]): a column no number leads and an end
+/// (`check_indexed_coordinates`): a column no number leads and an end
 /// below zero are refused there as on a kept line, since no htslib's index
-/// build parses either (`tbx.c` `tbx_parse1`). Nothing else of the
+/// build parses either (`tbx.c` `tbx_parse1`). That build ends a column at
+/// a tab or at a NUL byte and a reader at a tab (`crate::line`): a line
+/// whose columns NUL bytes end is one the build places and one of fewer
+/// than nine columns to the reader, skipped as such, and a line of a kept
+/// type in which a NUL byte stands is held to the build's reading of its
+/// start and its end (`index_columns_may_differ`). Nothing else of the
 /// line refuses: the index build of Ensembl VEP's release (htslib 1.9)
 /// parses a zero start, an end before its start and any other column a
 /// number leads, takes any text as a seqid, and Ensembl VEP skips the line
 /// by its type. A byte-order mark at the start of a line is taken off
-/// before the line is read ([`without_byte_order_marks`]). A blank line is
+/// before the line is read (`without_byte_order_marks`). A blank line is
 /// skipped, and nothing is read from the first line that begins with `>`
 /// and has a sequence behind it to the file's end: the next line that is
 /// neither blank nor a comment exists and is one the index build could not
 /// place, of fewer than four columns or with a start or an end that build
-/// fails ([`sequence_follows`]). That is the sequence section the GFF3
+/// fails (`sequence_follows`). That is the sequence section the GFF3
 /// specification allows a file, and the log names the line it opens at. A
 /// `>` line with a line the index build places behind it, or with nothing,
 /// is read as any other line: one that reads as a record is a record whose
@@ -892,18 +914,35 @@ fn listed<'a>(ids: impl Iterator<Item = &'a str>) -> String {
 /// skips it as any comment, and the records behind one are read. A line
 /// inside the section that reads as a record, and is neither a comment nor
 /// led by `>`, is refused, naming its line and the line the section opens
-/// at ([`refuse_annotation_in_section`]).
+/// at (`refuse_annotation_in_section`).
 /// Any other line that is no comment and
-/// writes fewer than four columns is a record without its start, which the
-/// index build fails: it is refused, naming the column it ends at. A line
+/// writes fewer than four columns, as the index build ends them, is a
+/// record without its start, which that build fails: it is refused, naming
+/// the column it ends at. A line
 /// that opens with a tab is read at the columns the file writes, its seqid
 /// empty, as the index build reads it: a stray tab before a record puts its
 /// type where a start is read, and the line refuses, the record's type kept
 /// or skipped, unless a number leads the type's name. White space and a tab
 /// before a record refuse it for that type alike
-/// ([`opens_with_a_blank_column`]); a line led by spaces alone, no tab
-/// before its seqid, is read trimmed.
-pub fn parse_gff3(path: &Path, reading: Reading) -> Result<HashMap<String, GeneRecord>> {
+/// (`crate::line::opens_with_a_blank_column`); a line led by spaces alone,
+/// no tab before its seqid, is read trimmed. A record's sequence is named as
+/// `names` names its seqid ([`SequenceNames`]).
+pub fn parse_gff3(
+    path: &Path,
+    reading: Reading,
+    names: &SequenceNames,
+) -> Result<HashMap<String, GeneRecord>> {
+    Ok(parse_gff3_listing_skipped(path, reading, names)?.0)
+}
+
+/// [`parse_gff3`], with the feature types of the lines it skipped, in name
+/// order: the types Ensembl VEP's `--gff` source warns of as it passes over
+/// each such line (`BaseGXF.pm:239-243`).
+pub(crate) fn parse_gff3_listing_skipped(
+    path: &Path,
+    reading: Reading,
+    names: &SequenceNames,
+) -> Result<(HashMap<String, GeneRecord>, Vec<String>)> {
     let file =
         std::fs::File::open(path).with_context(|| format!("Cannot open {}", path.display()))?;
 
@@ -940,7 +979,6 @@ pub fn parse_gff3(path: &Path, reading: Reading) -> Result<HashMap<String, GeneR
         let written = String::from_utf8(line.written)
             .map_err(|_| anyhow!("GFF3 line is not UTF-8"))
             .with_context(|| located(path, line_number))?;
-        let line = written.trim();
         // A line that begins with `>` opens the sequence section when a
         // sequence follows it; with a line the index build places behind
         // it, or with nothing, it is a line like any other.
@@ -952,32 +990,25 @@ pub fn parse_gff3(path: &Path, reading: Reading) -> Result<HashMap<String, GeneR
             section_opens_at = Some(line_number);
             break;
         }
-        if line.is_empty() || line.starts_with('#') {
+        if is_blank_or_a_comment(written.as_bytes()) {
             continue;
         }
 
-        // A record's start is the fourth column the file writes; the index
-        // build fails a line that ends before it.
-        let columns = written.split('\t').count();
-        if columns < 4 {
-            return Err(anyhow!(
-                "GFF3 line ends at column {columns}, before its start"
-            ))
-            .with_context(|| located(path, line_number));
-        }
-        // A line that opens with a tab is read at the columns the file
-        // writes, where the index build reads them: its seqid is empty.
-        let line = if written.starts_with('\t') {
-            written.trim_end()
-        } else {
-            line
-        };
-        let fields: Vec<&str> = line.split('\t').collect();
+        // A record's start is the fourth column as the index build ends
+        // them, which fails a line that ends before it. A line that opens
+        // with a tab is read at the columns the file writes, where the
+        // index build reads them: its seqid is empty.
+        let (line, fields) = record_columns(&written)
+            .map_err(|columns| anyhow!("GFF3 line ends at column {columns}, before its start"))
+            .with_context(|| located(path, line_number))?;
         let coordinate = |column: &str, value: &str| {
             parse_coordinate(column, value).with_context(|| located(path, line_number))
         };
+        // A line the index build places in fewer than nine columns as a
+        // reader ends them, one whose columns NUL bytes end among them, is
+        // no record.
         if fields.len() < 9 {
-            check_skipped_coordinates(&written, coordinate)?;
+            check_indexed_coordinates(&written, coordinate)?;
             continue;
         }
 
@@ -999,7 +1030,7 @@ pub fn parse_gff3(path: &Path, reading: Reading) -> Result<HashMap<String, GeneR
             (!listed_type && reading == Reading::EnsemblCache).then(|| parse_attributes(fields[8]));
         let admitted = listed_type || unlisted_hash.as_ref().is_some_and(has_ensembl_id);
         if !admitted {
-            check_skipped_coordinates(&written, coordinate)?;
+            check_indexed_coordinates(&written, coordinate)?;
             let id = match &unlisted_hash {
                 Some(attrs) => named_id(attrs),
                 None => skipped_id(fields[8]),
@@ -1008,12 +1039,13 @@ pub fn parse_gff3(path: &Path, reading: Reading) -> Result<HashMap<String, GeneR
             continue;
         }
         // White space and a tab before a record are a column to the index
-        // build, which then reads the record's type as its start: the line
-        // is held to that reading, as its twin of a skipped type is.
-        if opens_with_a_blank_column(&written) {
-            check_skipped_coordinates(&written, coordinate)?;
+        // build, which then reads the record's type as its start, and a NUL
+        // byte ends a column to that build alone: the line is held to that
+        // reading, as its twin of a skipped type is.
+        if index_columns_may_differ(&written) {
+            check_indexed_coordinates(&written, coordinate)?;
         }
-        let chr = normalize_chr(fields[0]);
+        let chr = names.name(fields[0]);
         if !is_cache_path_component(chr) {
             return Err(anyhow!("invalid chromosome name '{}'", fields[0]))
                 .with_context(|| located(path, line_number));
@@ -1032,7 +1064,6 @@ pub fn parse_gff3(path: &Path, reading: Reading) -> Result<HashMap<String, GeneR
             "-" => -1,
             _ => 1,
         };
-        let phase: i8 = fields[7].parse().unwrap_or(-1);
         let attrs = unlisted_hash.unwrap_or_else(|| parse_attributes(fields[8]));
         let decoded = |key: &str| attrs.get(key).map(|value| text(Model::Gff3, value));
         let ensembl = has_ensembl_id(&attrs);
@@ -1059,7 +1090,8 @@ pub fn parse_gff3(path: &Path, reading: Reading) -> Result<HashMap<String, GeneR
                     start,
                     end,
                     strand,
-                    phase,
+                    phase: parse_phase(Model::Gff3, fields[7])
+                        .with_context(|| located(path, line_number))?,
                     protein_id: attribute_text(Model::Gff3, &attrs, &["protein_id"]),
                     protein_version: parse_version(Model::Gff3, &attrs, &["version"])
                         .with_context(|| located(path, line_number))?,
@@ -1101,52 +1133,8 @@ pub fn parse_gff3(path: &Path, reading: Reading) -> Result<HashMap<String, GeneR
         refuse_annotation_in_section(&mut reader, path, opened, read)?;
     }
 
-    records.assemble(Model::Gff3, path)
-}
-
-/// A line as the file writes it, without its line end and without the
-/// byte-order marks that open it ([`without_byte_order_marks`]): its first
-/// `MAX_LINE_BYTES` bytes, and whether those are the whole line.
-struct Line {
-    written: Vec<u8>,
-    whole: bool,
-}
-
-/// The next line behind `reader`, none at the file's end. The rest of a
-/// line longer than `MAX_LINE_BYTES` is left unread.
-fn read_line(reader: &mut impl BufRead, path: &Path) -> Result<Option<Line>> {
-    // The cap plus the line end: a line of exactly the cap is read whole.
-    let limit = MAX_LINE_BYTES as u64 + 1;
-    let mut written = Vec::new();
-    let read = (&mut *reader)
-        .take(limit)
-        .read_until(b'\n', &mut written)
-        .with_context(|| format!("Failed to read {}", path.display()))?;
-    if read == 0 {
-        return Ok(None);
-    }
-    let ended = written.last() == Some(&b'\n');
-    if ended {
-        written.pop();
-    }
-    let whole = ended || read as u64 != limit;
-    written.truncate(MAX_LINE_BYTES);
-    Ok(Some(Line {
-        written: without_byte_order_marks(written),
-        whole,
-    }))
-}
-
-/// [`read_line`] where a line may be a sequence's, of any length: the rest
-/// of a line longer than `MAX_LINE_BYTES` is passed over.
-fn read_line_of_any_length(reader: &mut impl BufRead, path: &Path) -> Result<Option<Line>> {
-    let line = read_line(reader, path)?;
-    if line.as_ref().is_some_and(|line| !line.whole) {
-        reader
-            .skip_until(b'\n')
-            .with_context(|| format!("Failed to read {}", path.display()))?;
-    }
-    Ok(line)
+    let skipped = records.skipped_types();
+    Ok((records.assemble(Model::Gff3, path)?, skipped))
 }
 
 /// Whether a sequence follows a line that begins with `>`, behind which
@@ -1211,19 +1199,6 @@ fn a_tab_stands_in_the_rest(reader: &mut impl BufRead, path: &Path) -> Result<bo
     }
 }
 
-/// Whether the index build of Ensembl VEP's release could place `line`, a
-/// whole line as the file writes it: the line has a start column, and that
-/// build parses its start and its end ([`check_skipped_coordinates`]). It
-/// places every line that reads as a record ([`reads_as_a_record`]), so the
-/// line that makes a `>` line a header is never a record the section leaves
-/// unread. Columns end at tabs here as in the rest of the reader; the index
-/// build ends one at a NUL byte too.
-fn index_build_places(line: &[u8]) -> bool {
-    let written = String::from_utf8_lossy(line);
-    let fails = |_: &str, _: &str| -> Result<u64> { Err(anyhow!("the index build fails it")) };
-    written.split('\t').nth(3).is_some() && check_skipped_coordinates(&written, fails).is_ok()
-}
-
 /// Refuses annotation inside the sequence section that opens at line
 /// `opened`, behind which `reader` stands with `read` lines of the file
 /// read: the first line there that reads as a record
@@ -1253,20 +1228,6 @@ fn refuse_annotation_in_section(
     Ok(())
 }
 
-/// Whether `line` is blank or a comment as [`parse_gff3`] reads one: nothing
-/// stands in it, or a `#` opens it, once the white space before is dropped.
-fn is_blank_or_a_comment(line: &[u8]) -> bool {
-    let text = String::from_utf8_lossy(line);
-    let text = text.trim_start();
-    text.is_empty() || text.starts_with('#')
-}
-
-/// Whether `line` is a comment as [`parse_gff3`] reads one before the
-/// section: a `#` opens it once the white space before it is dropped.
-fn is_a_comment(line: &[u8]) -> bool {
-    String::from_utf8_lossy(line).trim_start().starts_with('#')
-}
-
 /// Whether `line`, as the file writes it, reads as a record: nine or more
 /// columns, the fourth and the fifth whole numbers. It is the test of a
 /// record on a line inside the sequence section
@@ -1281,14 +1242,120 @@ fn reads_as_a_record(line: &[u8]) -> bool {
     number(columns.nth(3)) && number(columns.next()) && columns.nth(3).is_some()
 }
 
-/// Normalize chromosome names: remove "chr" prefix, "chrM" -> "MT".
-pub(crate) fn normalize_chr(chr: &str) -> &str {
-    let stripped = chr.strip_prefix("chr").unwrap_or(chr);
-    if stripped == "M" {
-        "MT"
-    } else {
-        stripped
+/// How a build names the sequences its annotation files name.
+///
+/// A leading `chr` is the UCSC spelling of a name where a digit or a capital
+/// letter follows it (`chr1`, `chrX`, `chrUn_KI270302v1`, `chrI`, `chr2L`) and
+/// is dropped there, and wherever the genome FASTA holds the shortened name
+/// and not the written one. Any other name that begins with the three letters
+/// (`chromosome_1`, `chrom3`) is a name of its own and is kept as written.
+///
+/// A mitochondrion written `M` or `chrM` is named `MT` where the build reads
+/// no genome FASTA, where the FASTA reader reaches a record under `MT` (a
+/// record named `M` or `chrM`, or `MT` or `chrMT` with those two letters in
+/// either case, as `Mt`), and where the FASTA names no organelle genome at
+/// all (a part of a genome, such as one chromosome). Under a FASTA that
+/// reaches no record under `MT` and names an organelle genome of its own
+/// (`Mito`, `mitochondrion_genome`, `Pt`:
+/// `crate::builder::is_organelle_name`) the name is kept as written, since
+/// `MT` would name a sequence the genome does not hold.
+///
+/// On GRCh37 `MT` is the assembly's mitochondrial sequence, of
+/// [`vep_fasta::GRCH37_MITOCHONDRIAL_LENGTH`] bases, and `chrM` and `M` also
+/// name the one of the UCSC hg19 naming, of another length, on which a
+/// file's models of that name can count. There the record the FASTA reader
+/// reaches under `MT` counts only where it has the assembly's length; over
+/// any other the name is kept as written, as under a FASTA that names an
+/// organelle genome of its own ([`Self::keeps_apart_from_mt`]).
+///
+/// The default reads no FASTA: the names of a build without one, and the
+/// reading `--codon-table` gives its regions.
+#[derive(Debug, Default)]
+pub struct SequenceNames {
+    fasta: Option<FastaNames>,
+    /// Whether the naming is GRCh37's over a FASTA whose reader reaches a
+    /// record of another length than the assembly's under `MT`, or reaches
+    /// none and names an organelle genome.
+    apart_on_grch37: bool,
+}
+
+/// What [`SequenceNames`] reads of a genome FASTA: its records' names, and
+/// whether it names an organelle genome while its reader reaches no record
+/// under `MT`, or on GRCh37 its reader reaches one of another length than
+/// the assembly's.
+#[derive(Debug)]
+struct FastaNames {
+    names: HashSet<String>,
+    names_its_own_organelle: bool,
+}
+
+impl SequenceNames {
+    /// The names of a build or a run that reads `fasta` as its genome, on
+    /// `assembly` where it names one.
+    pub fn of_fasta(fasta: &vep_fasta::IndexedFasta, assembly: Option<&str>) -> Self {
+        let names: HashSet<String> = fasta.record_names().map(str::to_string).collect();
+        let on_grch37 = assembly == Some("GRCh37");
+        let reached = fasta.sequence_length("MT");
+        // A record the run's synonym table gives for `MT` can be named like
+        // no organelle genome, so its length alone keeps the names apart.
+        let of_another_length = on_grch37
+            && reached.is_some_and(|length| length != vep_fasta::GRCH37_MITOCHONDRIAL_LENGTH);
+        let names_its_own_organelle = of_another_length
+            || (reached.is_none()
+                && names
+                    .iter()
+                    .any(|name| crate::builder::is_organelle_name(name)));
+        Self {
+            fasta: Some(FastaNames {
+                names,
+                names_its_own_organelle,
+            }),
+            apart_on_grch37: on_grch37 && names_its_own_organelle,
+        }
     }
+
+    /// Whether `named`, a name `Self::name` gives, is a mitochondrion this
+    /// naming keeps apart from GRCh37's `MT`: an `M` or a `chrM` kept as
+    /// written because the FASTA gives no record of the assembly's length
+    /// for `MT`.
+    pub fn keeps_apart_from_mt(&self, named: &str) -> bool {
+        self.apart_on_grch37 && matches!(named, "M" | "chrM")
+    }
+
+    /// The cache's name for the sequence an annotation file writes as
+    /// `written`.
+    pub(crate) fn name<'a>(&self, written: &'a str) -> &'a str {
+        let shortened = match written.strip_prefix("chr") {
+            None => written,
+            Some(rest) if is_ucsc_designation(rest) || self.holds_the_shortened(written, rest) => {
+                rest
+            }
+            Some(_) => return written,
+        };
+        if shortened != "M" {
+            return shortened;
+        }
+        match &self.fasta {
+            Some(fasta) if fasta.names_its_own_organelle => written,
+            _ => "MT",
+        }
+    }
+
+    /// Whether the genome FASTA holds a record named `rest` and none named
+    /// `written`.
+    fn holds_the_shortened(&self, written: &str, rest: &str) -> bool {
+        self.fasta
+            .as_ref()
+            .is_some_and(|fasta| fasta.names.contains(rest) && !fasta.names.contains(written))
+    }
+}
+
+/// Whether `rest`, what follows a leading `chr`, is the chromosome's
+/// designation of a UCSC name: it opens with a digit or a capital letter.
+fn is_ucsc_designation(rest: &str) -> bool {
+    rest.as_bytes()
+        .first()
+        .is_some_and(|byte| byte.is_ascii_digit() || byte.is_ascii_uppercase())
 }
 
 /// A column's text with its escapes decoded ([`uri_unescape`], the
@@ -1311,83 +1378,69 @@ fn parse_coordinate(column: &str, value: &str) -> Result<u64> {
         .map_err(|_| anyhow!("GFF3 {column} {value:?} is not a number"))
 }
 
+/// The longest leading part of a phase column read as a number: text past it
+/// has no part in the comparison with 1 and 2.
+const PHASE_HEAD_CHARS: usize = 64;
+
+/// The phase column of a CDS line as a number, -1 when it states none. The
+/// column is text Ensembl VEP's source takes for an exon's phase: text that
+/// holds a `.` states none (ensembl-io `GXF.pm:264`), text that reads as the
+/// number 1 or 2 is exchanged for the other by a comparison of numbers
+/// (`BaseGXF.pm:815-820`), so it is that number here whatever follows the
+/// digit, and any other text is `-1` or `0`, the values the exon takes
+/// beside them (core `Exon.pm:244-250`, whose `throw` ends Ensembl VEP's run
+/// with `Bad value (...) for exon phase`). Text the source does not take is
+/// an error naming the value.
+pub(crate) fn parse_phase(model: Model, value: &str) -> Result<i8> {
+    let head = value
+        .char_indices()
+        .nth(PHASE_HEAD_CHARS)
+        .map_or(value, |(at, _)| &value[..at]);
+    let number = perl_numeric(head);
+    if value.contains('.') {
+        return Ok(-1);
+    }
+    if number == 1.0 || number == 2.0 || matches!(value, "0" | "-1") {
+        return Ok(number as i8);
+    }
+    let format = match model {
+        Model::Gff3 => "GFF3",
+        Model::Gtf => "GTF",
+    };
+    bail!("{format} phase {value:?} is not a phase")
+}
+
 /// Holds the `start` and `end` of a line a reader skips, for its type or for
 /// having fewer than nine columns, to the one rule they keep there: `parse`,
-/// the reader's own reading of a column, runs on each of the two the line
-/// has and the index build fails, so its error refuses the line as it would
-/// a kept one. The index build fails a column no number leads
-/// ([`leads_a_number`]) and an end that reads below zero
-/// ([`reads_below_zero`], htslib 1.9 `tbx.c:142`); a start that does it
-/// takes as the first base (`tbx.c:99`). `written` is the line as the file
-/// writes it, whose fourth and fifth columns the index build reads: a blank
-/// one that ends the line is a column, and a line that opens with a tab
-/// keeps each column in its place. A kept line that opens with white space
-/// and a tab is held to the rule too ([`opens_with_a_blank_column`]): the
-/// index build reads its type where a reader reads its start.
+/// the reader's own reading of a column, runs on the first of the two the
+/// index build fails ([`vep_core::regulatory_gff::unindexed_coordinate`]),
+/// so its error refuses the line as it would a kept one. That build fails a
+/// column no number leads and an end that reads below zero, in every htslib,
+/// and parses any other text a number leads (`100x`, `-5`, `0x1A`, an empty
+/// start before a numeric end), which stays unread here. `written` is the
+/// line as the file writes it, whose fourth and fifth columns the index
+/// build reads: a blank one that ends the line is a column, and a line that
+/// opens with a tab keeps each column in its place. A kept line that opens
+/// with white space and a tab is held to the rule too
+/// ([`crate::line::opens_with_a_blank_column`]): the index build reads its
+/// type where a reader reads its start.
 pub(crate) fn check_skipped_coordinates(
     written: &str,
     parse: impl Fn(&str, &str) -> Result<u64>,
 ) -> Result<()> {
     // A carriage return that ends the line is no part of its last column.
     let written = written.strip_suffix('\r').unwrap_or(written);
-    let mut rest = written.splitn(4, '\t').nth(3);
-    for (column, fails_below_zero) in [("start", false), ("end", true)] {
-        let Some(text) = rest else { break };
-        let (value, after) = match text.split_once('\t') {
-            Some((value, after)) => (value, Some(after)),
-            None => (text, None),
-        };
-        if !leads_a_number(text) || (fails_below_zero && reads_below_zero(text)) {
-            parse(column, value)?;
-        }
-        rest = after;
+    if let Some((column, value)) =
+        vep_core::regulatory_gff::unindexed_coordinate(written.as_bytes())
+    {
+        parse(column, &String::from_utf8_lossy(value))?;
     }
     Ok(())
 }
 
-/// The blanks `strtol` skips before a number, the tab between two columns
-/// among them.
-const BLANKS: [char; 6] = [' ', '\t', '\n', '\x0b', '\x0c', '\r'];
-
-/// Whether a number leads `text`, a column and what follows it on its line,
-/// as `tabix`'s index build reads it (`strtol` with base 0, htslib 1.9
-/// `tbx.c:95` and `:105`): any blanks, the tab that closes an empty or blank
-/// column among them, one sign, then a digit. Text no number leads fails
-/// that parse in every htslib, so a reader refuses it on a line of any type;
-/// text a number leads (`100x`, `-5`, `0x1A`, an empty start before a numeric
-/// end) parses, so on a line a reader skips it is unread unless it is an end
-/// below zero.
-fn leads_a_number(text: &str) -> bool {
-    let text = text.trim_start_matches(BLANKS);
-    let unsigned = text.strip_prefix(['+', '-']).unwrap_or(text);
-    unsigned.starts_with(|first: char| first.is_ascii_digit())
-}
-
-/// Whether the number that leads `text` reads below zero as `strtol` with
-/// base 0 reads it: a minus sign, then digits, one of them not `0`, in the
-/// base a `0x` or `0` prefix sets. `-9`, `-0x1A` and `-010` do; `-0`, `-08`
-/// and `-0x` read zero.
-fn reads_below_zero(text: &str) -> bool {
-    let Some(digits) = text.trim_start_matches(BLANKS).strip_prefix('-') else {
-        return false;
-    };
-    let hexadecimal = digits
-        .strip_prefix("0x")
-        .or_else(|| digits.strip_prefix("0X"));
-    let (digits, radix) = match hexadecimal {
-        Some(hexadecimal) => (hexadecimal, 16),
-        None if digits.starts_with('0') => (digits, 8),
-        None => (digits, 10),
-    };
-    digits
-        .chars()
-        .take_while(|digit| digit.is_digit(radix))
-        .any(|digit| digit != '0')
-}
-
 /// An identifier without its `gene:` or `transcript:` prefix, in any letter
 /// case (`BaseGXF.pm` `s/^(gene|transcript)://i`).
-pub fn strip_gxf_prefix(id: &str) -> &str {
+fn strip_gxf_prefix(id: &str) -> &str {
     for prefix in [GENE_PREFIX, TRANSCRIPT_PREFIX] {
         if has_prefix(id, prefix) {
             return &id[prefix.len()..];
@@ -1429,35 +1482,6 @@ pub(crate) fn version_number(text: &str) -> Result<u32> {
 /// alone, at least one.
 pub(crate) fn is_whole_number(text: &str) -> bool {
     !text.is_empty() && text.bytes().all(|b| b.is_ascii_digit())
-}
-
-/// U+FEFF, the byte-order mark, as UTF-8 writes it.
-const BYTE_ORDER_MARK: &[u8] = "\u{feff}".as_bytes();
-
-/// `line` without the byte-order marks that open it, alone or behind white
-/// space. A mark at the start of a line changes nothing a reader reads: a
-/// file with marks parses as the same file without them.
-pub(crate) fn without_byte_order_marks(mut line: Vec<u8>) -> Vec<u8> {
-    let lead = line
-        .iter()
-        .take_while(|byte| byte.is_ascii_whitespace())
-        .count();
-    let marks = line[lead..]
-        .chunks_exact(BYTE_ORDER_MARK.len())
-        .take_while(|chunk| *chunk == BYTE_ORDER_MARK)
-        .count();
-    line.drain(lead..lead + marks * BYTE_ORDER_MARK.len());
-    line
-}
-
-/// Whether white space and then a tab open `written`, a line as the file
-/// writes it: a first column the index build reads and a reader's trim
-/// drops, so each column of the record sits one place further on to that
-/// build than to the reader.
-pub(crate) fn opens_with_a_blank_column(written: &str) -> bool {
-    written
-        .split_once('\t')
-        .is_some_and(|(first, _)| !first.is_empty() && first.trim().is_empty())
 }
 
 /// The place of a refused line, `<file> line <n>`, for the context of its
@@ -1571,7 +1595,8 @@ pub(crate) fn parse_attributes(attrs_str: &str) -> HashMap<String, String> {
 /// The pairs of a GFF3 attribute column in written order, each its key and
 /// its value as [`parse_attributes`] cuts them, `None` for a pair without `=`.
 fn attribute_pairs(column: &str) -> impl Iterator<Item = (&str, Option<&str>)> {
-    // Perl's `split` drops the trailing empty fields, so a closing `;` is no pair.
+    // Perl's `split` in Ensembl VEP drops the trailing empty fields, so a closing
+    // `;` is no pair.
     column.trim_end_matches(';').split(';').map(|pair| {
         let mut fields = pair.splitn(3, '=');
         (fields.next().unwrap_or_default(), fields.next())
@@ -1637,7 +1662,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("t.gff3");
         std::fs::write(&path, lines).unwrap();
-        parse_gff3(&path, reading)
+        parse_gff3(&path, reading, &SequenceNames::default())
     }
 
     /// Parses `lines` as Ensembl VEP's `--gff` source reads them.
@@ -1700,13 +1725,298 @@ NC_000017.11\tBestRefSeq\texon\t8100000\t8101000\t.\t+\t.\tID=exon-NR_5-1;Parent
 NC_000017.11\tRefSeq\tregion\t1\t83257441\t.\t+\t.\tID=NC_000017.11:1..83257441;Dbxref=taxon:9606;Name=17;chromosome=17;gbkey=Src;genome=chromosome;mol_type=genomic DNA\n\
 NC_000017.11\tRefSeq\tcDNA_match\t7668402\t7687550\t.\t-\t.\tID=aln1;Target=NM_000546.6 1 2512 +;gap_count=0\n";
 
+    /// A genome FASTA of one 60-base record per name, with its index.
+    fn fasta_holding(names: &[&str]) -> (tempfile::TempDir, vep_fasta::IndexedFasta) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("genome.fa");
+        let mut text = String::new();
+        let mut index = String::new();
+        for name in names {
+            text.push_str(&format!(">{name}\n"));
+            index.push_str(&format!("{name}\t60\t{}\t60\t61\n", text.len()));
+            text.push_str(&"N".repeat(60));
+            text.push('\n');
+        }
+        std::fs::write(&path, text).unwrap();
+        std::fs::write(dir.path().join("genome.fa.fai"), index).unwrap();
+        let fasta = vep_fasta::IndexedFasta::from_path(&path).unwrap();
+        (dir, fasta)
+    }
+
+    /// Without a genome FASTA a UCSC name loses its `chr` (a digit or a
+    /// capital letter follows it), `chrM` and a bare `M` are `MT`, and a name
+    /// that merely begins with the three letters, or with `Chr`, is kept as
+    /// written.
     #[test]
-    fn test_normalize_chr() {
-        assert_eq!(normalize_chr("chr1"), "1");
-        assert_eq!(normalize_chr("chrX"), "X");
-        assert_eq!(normalize_chr("chrM"), "MT");
-        assert_eq!(normalize_chr("1"), "1");
-        assert_eq!(normalize_chr("MT"), "MT");
+    fn a_ucsc_prefix_is_dropped_and_a_name_that_begins_with_chr_is_kept() {
+        let names = SequenceNames::default();
+        for (written, named) in [
+            ("chr1", "1"),
+            ("chrX", "X"),
+            ("chrM", "MT"),
+            ("chrMT", "MT"),
+            ("M", "MT"),
+            ("1", "1"),
+            ("MT", "MT"),
+            ("chrUn_KI270302v1", "Un_KI270302v1"),
+            ("chrI", "I"),
+            ("chr2L", "2L"),
+            ("chromosome_1", "chromosome_1"),
+            ("chrom3", "chrom3"),
+            ("chr_1", "chr_1"),
+            ("chr", "chr"),
+            ("Chr1", "Chr1"),
+            ("ChrM", "ChrM"),
+            ("Mito", "Mito"),
+        ] {
+            assert_eq!(names.name(written), named, "{written}");
+        }
+    }
+
+    /// Under a genome FASTA the name is the one the FASTA holds. A genome
+    /// whose mitochondrion is `Mito` keeps a `chrM` or an `M` as written,
+    /// where `MT` would name a sequence it does not hold, and its `chrI` is
+    /// `I`; a FASTA that spells its records `chr1` and `chrM`, or `1` and
+    /// `MT`, gives `1` and `MT`, the names a build without one gives, and so
+    /// does a FASTA that names no organelle genome at all (one chromosome of
+    /// a genome); a sequence named `chromosome_1` keeps its name; and a name
+    /// the three letters lead in lower case is shortened only where the
+    /// FASTA holds the shortened name and not the written one.
+    #[test]
+    fn a_sequence_is_named_as_the_genome_fasta_holds_it() {
+        let named = |records: &[&str], cases: &[(&str, &str)]| {
+            let (_dir, fasta) = fasta_holding(records);
+            let names = SequenceNames::of_fasta(&fasta, None);
+            for (written, named) in cases {
+                assert_eq!(names.name(written), *named, "{written} under {records:?}");
+            }
+        };
+        named(
+            &["I", "II", "Mito"],
+            &[
+                ("chrI", "I"),
+                ("II", "II"),
+                ("chrM", "chrM"),
+                ("M", "M"),
+                ("Mito", "Mito"),
+                ("chrMito", "Mito"),
+                ("MT", "MT"),
+            ],
+        );
+        named(
+            &["2L", "mitochondrion_genome"],
+            &[("chr2L", "2L"), ("chrM", "chrM"), ("M", "M")],
+        );
+        named(
+            &["chr1", "chrM"],
+            &[("chr1", "1"), ("chrM", "MT"), ("M", "MT"), ("1", "1")],
+        );
+        named(
+            &["1", "MT"],
+            &[("chr1", "1"), ("chrM", "MT"), ("chrMT", "MT"), ("M", "MT")],
+        );
+        named(&["21"], &[("chr21", "21"), ("chrM", "MT"), ("M", "MT")]);
+        named(
+            &["chromosome_1", "chromosome_2"],
+            &[("chromosome_1", "chromosome_1"), ("chrM", "MT")],
+        );
+        named(
+            &["chromosome_1", "Pt"],
+            &[("chromosome_1", "chromosome_1"), ("chrM", "chrM")],
+        );
+        named(&["scaffold_1", "x"], &[("chrx", "x")]);
+        named(&["scaffold_1", "chrx"], &[("chrx", "chrx")]);
+        named(&["x", "chrx"], &[("chrx", "chrx")]);
+    }
+
+    /// A genome FASTA of one record `name` of `length` unknown bases, with
+    /// its index.
+    fn fasta_of_length(name: &str, length: u64) -> (tempfile::TempDir, vep_fasta::IndexedFasta) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("genome.fa");
+        let header = format!(">{name}\n");
+        let mut text = header.clone();
+        let mut left = length;
+        while left > 0 {
+            let line = left.min(60);
+            text.push_str(&"N".repeat(line as usize));
+            text.push('\n');
+            left -= line;
+        }
+        std::fs::write(&path, text).unwrap();
+        std::fs::write(
+            dir.path().join("genome.fa.fai"),
+            format!("{name}\t{length}\t{}\t60\t61\n", header.len()),
+        )
+        .unwrap();
+        let fasta = vep_fasta::IndexedFasta::from_path(&path).unwrap();
+        (dir, fasta)
+    }
+
+    /// On GRCh37 a `chrM` or an `M` is `MT` only over a FASTA record of the
+    /// assembly's length, whatever name holds it, or over a FASTA that gives
+    /// no record for `MT` and names no organelle genome (the test after
+    /// this one). It is kept as written over a record of another length:
+    /// also where the run's synonym table gives that record for `MT`, as
+    /// the table of Ensembl's GRCh37 cache links `MT` and `chrM`, and where
+    /// the record is named `MT` itself. A name kept so is one the reader
+    /// keeps apart from `MT`. Another assembly, and a naming that states
+    /// none, reads either record as `MT`.
+    #[test]
+    fn on_grch37_a_chrm_is_mt_only_over_a_record_of_the_assemblys_length() {
+        let assembly_length = vep_fasta::GRCH37_MITOCHONDRIAL_LENGTH;
+        let named = |fasta: &vep_fasta::IndexedFasta, assembly: Option<&str>| {
+            let names = SequenceNames::of_fasta(fasta, assembly);
+            ["chrM", "M", "MT", "chrMT"].map(|written| {
+                let name = names.name(written).to_string();
+                let apart = names.keeps_apart_from_mt(&name);
+                (name, apart)
+            })
+        };
+        let all_mt = ["MT", "MT", "MT", "MT"].map(|name| (name.to_string(), false));
+        let kept = [("chrM", true), ("M", true), ("MT", false), ("MT", false)]
+            .map(|(name, apart)| (name.to_string(), apart));
+
+        for held in ["chrM", "M", "MT", "chrMT"] {
+            let (_dir, fasta) = fasta_of_length(held, assembly_length);
+            assert_eq!(named(&fasta, Some("GRCh37")), all_mt, "{held}");
+        }
+        for held in ["chrM", "M", "MT"] {
+            let (_dir, fasta) = fasta_of_length(held, assembly_length + 2);
+            assert_eq!(named(&fasta, Some("GRCh37")), kept, "{held}");
+            assert_eq!(named(&fasta, Some("GRCh38")), all_mt, "{held}");
+            assert_eq!(named(&fasta, None), all_mt, "{held}");
+        }
+
+        // The run's handle: the cache's synonyms, then the assembly.
+        let (_dir, mut fasta) = fasta_of_length("chrM", assembly_length + 2);
+        fasta.add_synonyms(&vep_core::synonyms::ChromosomeSynonyms::parse("MT\tchrM\n"));
+        fasta.set_assembly("GRCh37");
+        assert_eq!(named(&fasta, Some("GRCh37")), kept);
+
+        // Both sequences in one FASTA: `MT` is read from the record of the
+        // assembly's length.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("genome.fa");
+        let mut text = String::new();
+        let mut index = String::new();
+        for (name, length) in [("chrM", assembly_length + 2), ("chrMT", assembly_length)] {
+            text.push_str(&format!(">{name}\n"));
+            index.push_str(&format!("{name}\t{length}\t{}\t60\t61\n", text.len()));
+            let mut left = length;
+            while left > 0 {
+                let line = left.min(60);
+                text.push_str(&"N".repeat(line as usize));
+                text.push('\n');
+                left -= line;
+            }
+        }
+        std::fs::write(&path, text).unwrap();
+        std::fs::write(dir.path().join("genome.fa.fai"), index).unwrap();
+        let mut both = vep_fasta::IndexedFasta::from_path(&path).unwrap();
+        both.set_assembly("GRCh37");
+        assert_eq!(named(&both, Some("GRCh37")), all_mt);
+    }
+
+    /// On GRCh37, over a FASTA that gives no record for `MT`, a `chrM` or an
+    /// `M` is `MT` where the FASTA names no organelle genome, as one that
+    /// holds `21` alone, and is kept as written, apart from `MT`, where it
+    /// names an organelle genome of its own, as one that holds `Mito`. The
+    /// record's length decides neither.
+    #[test]
+    fn on_grch37_a_fasta_with_no_record_for_mt_gives_mt_only_where_it_names_no_organelle_genome() {
+        let assembly_length = vep_fasta::GRCH37_MITOCHONDRIAL_LENGTH;
+        let named = |held: &str, length: u64| {
+            let (_dir, fasta) = fasta_of_length(held, length);
+            assert_eq!(fasta.sequence_length("MT"), None, "{held}");
+            let names = SequenceNames::of_fasta(&fasta, Some("GRCh37"));
+            ["chrM", "M", "MT", "chrMT"].map(|written| {
+                let name = names.name(written).to_string();
+                let apart = names.keeps_apart_from_mt(&name);
+                (name, apart)
+            })
+        };
+        let all_mt = ["MT", "MT", "MT", "MT"].map(|name| (name.to_string(), false));
+        let kept = [("chrM", true), ("M", true), ("MT", false), ("MT", false)]
+            .map(|(name, apart)| (name.to_string(), apart));
+        for length in [assembly_length, assembly_length + 2] {
+            assert_eq!(named("21", length), all_mt, "21 of {length} bases");
+            assert_eq!(named("Mito", length), kept, "Mito of {length} bases");
+        }
+    }
+
+    /// A record the run's synonym table gives for `MT` counts by its length
+    /// whatever its name: on GRCh37 a `chrM` or an `M` is kept as written,
+    /// apart from `MT`, over a record of another length that is named like
+    /// no organelle genome, and is `MT` over one of the assembly's length.
+    /// Another assembly reads either record as `MT`.
+    #[test]
+    fn on_grch37_a_record_the_synonym_table_gives_for_mt_counts_by_its_length() {
+        let assembly_length = vep_fasta::GRCH37_MITOCHONDRIAL_LENGTH;
+        let under_the_table = |length: u64, assembly: &str| {
+            let (dir, mut fasta) = fasta_of_length("made_up_accession", length);
+            fasta.add_synonyms(&vep_core::synonyms::ChromosomeSynonyms::parse(
+                "MT\tmade_up_accession\n",
+            ));
+            fasta.set_assembly(assembly);
+            assert_eq!(fasta.sequence_length("MT"), Some(length));
+            (dir, SequenceNames::of_fasta(&fasta, Some(assembly)))
+        };
+        let (_dir, names) = under_the_table(assembly_length + 2, "GRCh37");
+        for written in ["chrM", "M"] {
+            assert_eq!(names.name(written), written);
+            assert!(names.keeps_apart_from_mt(written), "{written}");
+        }
+        assert_eq!(names.name("MT"), "MT");
+        assert!(!names.keeps_apart_from_mt("MT"));
+        for (length, assembly) in [(assembly_length, "GRCh37"), (assembly_length + 2, "GRCh38")] {
+            let (_dir, names) = under_the_table(length, assembly);
+            for written in ["chrM", "M"] {
+                assert_eq!(names.name(written), "MT", "{written} on {assembly}");
+                assert!(
+                    !names.keeps_apart_from_mt(written),
+                    "{written} on {assembly}"
+                );
+            }
+        }
+    }
+
+    /// The model reader names each record's sequence by that rule: of two
+    /// genes written on `chromosome_1` and `chrM`, the first keeps its name
+    /// without a FASTA and under one that holds it, and the second is on `MT`
+    /// without a FASTA and under one that holds a mitochondrion of that
+    /// family, and on `chrM` under one whose mitochondrion is `Mito`.
+    #[test]
+    fn the_model_reader_names_a_sequence_as_the_fasta_holds_it() {
+        let lines = format!(
+            "##gff-version 3\n{}{}",
+            TPTE_GENE.replacen("21", "chromosome_1", 1),
+            TPTE_GENE
+                .replacen("21", "chrM", 1)
+                .replace("ENSG00000274391", "ENSG00000000001")
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("t.gff3");
+        std::fs::write(&path, lines).unwrap();
+        let read = |names: &SequenceNames| {
+            let genes = parse_gff3(&path, Reading::GffSource, names).unwrap();
+            (
+                genes["ENSG00000274391"].chr.clone(),
+                genes["ENSG00000000001"].chr.clone(),
+            )
+        };
+        let on = |first: &str, second: &str| (first.to_string(), second.to_string());
+        assert_eq!(read(&SequenceNames::default()), on("chromosome_1", "MT"));
+        let (_dir, own_names) = fasta_holding(&["chromosome_1", "Mito"]);
+        assert_eq!(
+            read(&SequenceNames::of_fasta(&own_names, None)),
+            on("chromosome_1", "chrM")
+        );
+        let (_dir, as_written) = fasta_holding(&["chromosome_1", "chrM"]);
+        assert_eq!(
+            read(&SequenceNames::of_fasta(&as_written, None)),
+            on("chromosome_1", "MT")
+        );
     }
 
     /// The `gene:` and `transcript:` prefixes come off in any letter case,
@@ -2403,7 +2713,7 @@ NC_000017.11\tRefSeq\tcDNA_match\t7668402\t7687550\t.\t-\t.\tID=aln1;Target=NM_0
         let path = dir.path().join("t.gff3");
         let parsed = |text: &str| {
             std::fs::write(&path, text).unwrap();
-            let genes = parse_gff3(&path, Reading::GffSource)
+            let genes = parse_gff3(&path, Reading::GffSource, &SequenceNames::default())
                 .unwrap_or_else(|err| panic!("{text:?}: {err:#}"));
             let mut genes: Vec<_> = genes.into_iter().collect();
             genes.sort_by(|(one, _), (other, _)| one.cmp(other));
@@ -2722,46 +3032,6 @@ NC_000017.11\tRefSeq\tcDNA_match\t7668402\t7687550\t.\t-\t.\tID=aln1;Target=NM_0
         assert!(try_parse_as(&tec("1000", "2000"), Reading::EnsemblCache).is_ok());
     }
 
-    /// A number leads a column when, after any blanks and one sign, a digit
-    /// follows, the reading of `strtol` with base 0, which runs on past the
-    /// tab of an empty or blank column into the next: an empty start is led
-    /// by its end's number, an empty end by a score that is one, and neither
-    /// by a `.`, a sign alone or the line's end.
-    #[test]
-    fn a_number_leads_a_column_after_blanks_and_one_sign() {
-        for column in [
-            "7", "+7", "-7", " 7", "\x0b7", "7x", "0x1A", "007", "7.5", "7 ",
-        ] {
-            assert!(leads_a_number(column), "{column:?}");
-            assert!(leads_a_number(&format!("\t \t{column}\tx")), "{column:?}");
-        }
-        for column in ["", " ", "abc", "x7", "-", "+", "--7", "+-7", ".7", "- 7"] {
-            assert!(!leads_a_number(column), "{column:?}");
-            assert!(!leads_a_number(&format!("\t{column}\t\t")), "{column:?}");
-        }
-        assert!(leads_a_number("\t1100\t.\t+"));
-        assert!(leads_a_number("\t7\t+\t."));
-        assert!(!leads_a_number("\t.\t+\t."));
-        assert!(!leads_a_number("-\t7"));
-    }
-
-    /// A number reads below zero when a minus sign leads digits of which one
-    /// is not `0`, in the base `strtol` takes from a `0x` or `0` prefix: the
-    /// index build fails an end so read (`tbx.c:142`).
-    #[test]
-    fn a_number_reads_below_zero_after_a_minus_sign_unless_it_reads_zero() {
-        for text in [
-            "-9", "-1.5", "-010", "-0x1A", "-0X1a", " \t-9", "\t-3\t+", "-9x",
-        ] {
-            assert!(reads_below_zero(text), "{text:?}");
-        }
-        for text in [
-            "-0", "-00", "-08", "-0x", "-0xg", "-0.5", "9", "+9", "0", "", "-", "- 9", "--9", "abc",
-        ] {
-            assert!(!reads_below_zero(text), "{text:?}");
-        }
-    }
-
     /// The identifier read off a skipped line's column is the one its hash
     /// names, on each of these shapes: the keys tried in their own order
     /// whatever the column's, a later pair replacing an earlier one, a pair
@@ -3058,9 +3328,10 @@ NC_000017.11\tRefSeq\tcDNA_match\t7668402\t7687550\t.\t-\t.\tID=aln1;Target=NM_0
     }
 
     /// A seqid that would place the chromosome's directory outside the cache (a
-    /// parent-directory walk, a rooted path, a `chr` that normalises to nothing)
-    /// fails the parse, naming the file, the line, counted from the file's
-    /// first line with the header included, and the seqid as written.
+    /// parent-directory walk, a rooted path) fails the parse, naming the file,
+    /// the line, counted from the file's first line with the header included,
+    /// and the seqid as written. A seqid of the three letters `chr` alone is
+    /// a name, kept as written.
     #[test]
     fn seqid_that_is_not_one_path_component_fails_the_parse() {
         for (seqid, message) in [
@@ -3072,7 +3343,6 @@ NC_000017.11\tRefSeq\tcDNA_match\t7668402\t7687550\t.\t-\t.\tID=aln1;Target=NM_0
                 "/tmp/escaped",
                 "t.gff3 line 2: invalid chromosome name '/tmp/escaped'",
             ),
-            ("chr", "t.gff3 line 2: invalid chromosome name 'chr'"),
             ("..", "t.gff3 line 2: invalid chromosome name '..'"),
         ] {
             let lines = format!("##gff-version 3\n{}", TPTE_GENE.replacen("21", seqid, 1));
@@ -3084,6 +3354,11 @@ NC_000017.11\tRefSeq\tcDNA_match\t7668402\t7687550\t.\t-\t.\tID=aln1;Target=NM_0
             TPTE_GENE.replacen("21", "HSCHR6_MHC_COX", 1)
         ));
         assert_eq!(genes["ENSG00000274391"].chr, "HSCHR6_MHC_COX");
+        let genes = parse(&format!(
+            "##gff-version 3\n{}",
+            TPTE_GENE.replacen("21", "chr", 1)
+        ));
+        assert_eq!(genes["ENSG00000274391"].chr, "chr");
     }
 
     /// A line that is not UTF-8 (a Latin-1 `é`, 0xE9, in the gene's `Name`)
@@ -3099,7 +3374,7 @@ NC_000017.11\tRefSeq\tcDNA_match\t7668402\t7687550\t.\t-\t.\tID=aln1;Target=NM_0
         bytes.extend_from_slice(b"TPT\xe9");
         bytes.extend_from_slice(after_name.as_bytes());
         std::fs::write(&path, bytes).unwrap();
-        let err = parse_gff3(&path, Reading::GffSource).unwrap_err();
+        let err = parse_gff3(&path, Reading::GffSource, &SequenceNames::default()).unwrap_err();
         assert!(
             format!("{err:#}").ends_with("t.gff3 line 2: GFF3 line is not UTF-8"),
             "{err:#}"
@@ -3161,7 +3436,7 @@ NC_000017.11\tRefSeq\tcDNA_match\t7668402\t7687550\t.\t-\t.\tID=aln1;Target=NM_0
             bytes.extend(encoder.finish().unwrap());
         }
         std::fs::write(&path, bytes).unwrap();
-        let genes = parse_gff3(&path, Reading::GffSource).unwrap();
+        let genes = parse_gff3(&path, Reading::GffSource, &SequenceNames::default()).unwrap();
         assert_eq!(genes["ENSG00000274391"].transcripts.len(), 1);
         assert_eq!(transcript(&genes, "ENST00000622113").exons.len(), 1);
     }
@@ -3215,6 +3490,22 @@ NC_000017.11\tRefSeq\tcDNA_match\t7668402\t7687550\t.\t-\t.\tID=aln1;Target=NM_0
         let tr = transcript(&genes, "ENST00000622113");
         assert!(tr.gencode_basic);
         assert!(!tr.gencode_primary);
+    }
+
+    /// `cds_start_NF` in a transcript line's `tag` list is carried on the
+    /// record; a line without it carries none.
+    #[test]
+    fn the_start_incomplete_tag_is_carried_from_the_transcript_line() {
+        let genes = parse(&format!("{TPTE_GENE}{TPTE_205}{TPTE_205_EXON}"));
+        assert!(!transcript(&genes, "ENST00000622113").cds_start_nf);
+        let flagged = TPTE_205.replace(
+            "tag=gencode_basic,gencode_primary;",
+            "tag=gencode_basic,cds_start_NF;",
+        );
+        assert_ne!(flagged, TPTE_205);
+        let genes = parse(&format!("{TPTE_GENE}{flagged}{TPTE_205_EXON}"));
+        let tr = transcript(&genes, "ENST00000622113");
+        assert!(tr.cds_start_nf && tr.gencode_basic);
     }
 
     /// A `tag` list is split on `,` alone and each member compared whole
@@ -3340,6 +3631,40 @@ NC_000017.11\tRefSeq\tcDNA_match\t7668402\t7687550\t.\t-\t.\tID=aln1;Target=NM_0
         let cds = &transcript(&genes, "ENST00000622113").cds_regions[0];
         assert_eq!(cds.protein_id.as_deref(), Some("ENSP00000482040"));
         assert_eq!(cds.protein_version, None);
+    }
+
+    /// A phase column that reads as the number 1 or 2 is that number, blanks
+    /// before the digit or text behind it or not, as the comparison of
+    /// numbers reads it (`BaseGXF.pm:815-820`); text holding a `.` states
+    /// none; `0` and `-1` are themselves; any other text is refused, naming
+    /// the format and the value.
+    #[test]
+    fn a_phase_that_reads_as_one_or_two_is_that_number() {
+        for (value, phase) in [
+            ("0", 0),
+            ("1", 1),
+            ("2", 2),
+            ("-1", -1),
+            (".", -1),
+            ("0.5", -1),
+            ("1.0", -1),
+            ("1x", 1),
+            ("2x", 2),
+            (" 1", 1),
+            ("2 ", 2),
+            ("+1", 1),
+            ("01", 1),
+            ("1e0", 1),
+            ("1\0", 1),
+        ] {
+            assert_eq!(parse_phase(Model::Gff3, value).unwrap(), phase, "{value:?}");
+        }
+        for value in ["", "x", "7", "3", "00", "0\0", "-1x", "0x1"] {
+            assert_eq!(
+                parse_phase(Model::Gtf, value).unwrap_err().to_string(),
+                format!("GTF phase {value:?} is not a phase")
+            );
+        }
     }
 
     /// A `version` whose digits do not fit the cache's 32-bit field fails the
@@ -3640,7 +3965,7 @@ NC_000017.11\tRefSeq\tcDNA_match\t7668402\t7687550\t.\t-\t.\tID=aln1;Target=NM_0
     }
 
     /// A GFF3 that is not Ensembl's follows `GFF.pm` `_record_get_biotype`
-    /// (lines 304-339): an `mRNA` is `protein_coding`; an `ncRNA` takes its
+    /// (lines 305-340): an `mRNA` is `protein_coding`; an `ncRNA` takes its
     /// `ncrna_class` (`lncRNA`); a `V_gene_segment` is `IG_V_gene`, the
     /// segment letter upper-cased into the Ensembl biotype; a transcript of
     /// a gene whose `description` opens `microRNA` is `miRNA`; a `transcript`
@@ -3715,7 +4040,7 @@ NC_000017.11\tRefSeq\tcDNA_match\t7668402\t7687550\t.\t-\t.\tID=aln1;Target=NM_0
     /// Records are placed by their own identifiers, whatever prefix they
     /// carry: `rna1` is a transcript of `g1` because its `Parent` names
     /// `g1`, and an exon whose `Parent` list is `rna1,rna2` joins both
-    /// transcripts (`GFF.pm` `_record_get_parent_ids`, lines 248-251). A
+    /// transcripts (`GFF.pm` `_record_get_parent_ids`, lines 249-252). A
     /// record whose parent is in no line is dropped, as Ensembl VEP drops it
     /// with its `Parent entries ... not found` warning, and a record with no
     /// parent whose type names no gene is a transcript with no gene line,
@@ -3808,19 +4133,19 @@ NC_000017.11\tRefSeq\tcDNA_match\t7668402\t7687550\t.\t-\t.\tID=aln1;Target=NM_0
 
     /// An attribute whose value is `0` is absent, as Ensembl VEP's truth
     /// tests read it, so each reader falls to its next alternative: the gene
-    /// line `ID=0;Name=g1` is named `g1` (`GFF.pm` line 277, `ID || Name ||
+    /// line `ID=0;Name=g1` is named `g1` (`GFF.pm` line 278, `ID || Name ||
     /// id || name`) and its `version=0` is no version (`BaseGXF.pm` line 639
-    /// and `OutputFactory.pm` line 1469); the transcript's `Parent=0,g1`
+    /// and `OutputFactory.pm` line 1478); the transcript's `Parent=0,g1`
     /// names `g1` alone (`BaseGXF.pm` line 389, `next unless ($parent_id)`),
     /// its gene identifier passes `gene_id=0`, `GeneID:0` and the gene line's
     /// `gene_id=0` to reach the gene line's identifier (lines 638-659), its
     /// symbol passes `gene_name=0` and `gene=0` to the gene line's `Name`
     /// (lines 662-670), `biotype=0` leaves an `mRNA` `protein_coding`
-    /// (`GFF.pm` lines 310-319), `version=0` yields to `transcript_version`
+    /// (`GFF.pm` lines 311-320), `version=0` yields to `transcript_version`
     /// (`BaseGXF.pm` line 481), `transcript_support_level=0` to `tsl` (line
     /// 674), the CDS line's `protein_id=0` is no protein (line 723) and its
     /// `version=0` is version 1 (line 727). A `Parent=0` alone is no parent
-    /// (`GFF.pm` lines 248 and 251, the `||` then the truth test before the
+    /// (`GFF.pm` lines 249 and 252, the `||` then the truth test before the
     /// split), so the record is a transcript of its own, and
     /// `transcript_id=0` leaves the record its `ID` (`BaseGXF.pm` line 464).
     /// A `Parent=0,0` is a parent list with no set identifier: the record

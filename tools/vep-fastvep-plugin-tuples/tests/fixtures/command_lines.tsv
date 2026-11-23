@@ -1,0 +1,1207 @@
+usage	the following arguments are required: input, tuples			
+usage	the following arguments are required: tuples				in
+usage	the following arguments are required: tuples				out
+usage	the following arguments are required: tuples				
+usage	the following arguments are required: tuples				-
+usage	the following arguments are required: tuples				-5
+usage	the following arguments are required: tuples				a b
+usage	the following arguments are required: input, tuples				--
+usage	argument --fields: expected one argument				--fields
+usage	the following arguments are required: input, tuples				--fields=a
+usage	argument --field-map: expected one argument				--field-map
+usage	the following arguments are required: input, tuples				--field-map=m
+usage	ambiguous option: --f could match --field-map, --fields				--f
+usage	argument --field-map: expected one argument				--field-
+help					-h
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x
+help					-hx
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x
+usage	the following arguments are required: input, tuples				--bogus
+usage	the following arguments are required: input, tuples				-x
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1
+usage	the following arguments are required: tuples				-.5
+help					--he
+run	in	in	-	-	in	in
+run	in	out	-	-	in	out
+run	in		-	-	in	
+run	in	-	-	-	in	-
+run	in	-5	-	-	in	-5
+run	in	a b	-	-	in	a b
+usage	the following arguments are required: tuples				in	--
+usage	argument --fields: expected one argument				in	--fields
+usage	the following arguments are required: tuples				in	--fields=a
+usage	argument --field-map: expected one argument				in	--field-map
+usage	the following arguments are required: tuples				in	--field-map=m
+usage	ambiguous option: --f could match --field-map, --fields				in	--f
+usage	argument --field-map: expected one argument				in	--field-
+help					in	-h
+usage	argument -h/--help: ignored explicit argument 'x'				in	--help=x
+help					in	-hx
+usage	argument -h/--help: ignored explicit argument 'x'				in	-h=x
+usage	the following arguments are required: tuples				in	--bogus
+usage	the following arguments are required: tuples				in	-x
+usage	ambiguous option: --fi=1 could match --field-map, --fields				in	--fi=1
+run	in	-.5	-	-	in	-.5
+help					in	--he
+run	out	in	-	-	out	in
+run	out	out	-	-	out	out
+run	out		-	-	out	
+run	out	-	-	-	out	-
+run	out	-5	-	-	out	-5
+run	out	a b	-	-	out	a b
+usage	the following arguments are required: tuples				out	--
+usage	argument --fields: expected one argument				out	--fields
+usage	the following arguments are required: tuples				out	--fields=a
+usage	argument --field-map: expected one argument				out	--field-map
+usage	the following arguments are required: tuples				out	--field-map=m
+usage	ambiguous option: --f could match --field-map, --fields				out	--f
+usage	argument --field-map: expected one argument				out	--field-
+help					out	-h
+usage	argument -h/--help: ignored explicit argument 'x'				out	--help=x
+help					out	-hx
+usage	argument -h/--help: ignored explicit argument 'x'				out	-h=x
+usage	the following arguments are required: tuples				out	--bogus
+usage	the following arguments are required: tuples				out	-x
+usage	ambiguous option: --fi=1 could match --field-map, --fields				out	--fi=1
+run	out	-.5	-	-	out	-.5
+help					out	--he
+run		in	-	-		in
+run		out	-	-		out
+run			-	-		
+run		-	-	-		-
+run		-5	-	-		-5
+run		a b	-	-		a b
+usage	the following arguments are required: tuples					--
+usage	argument --fields: expected one argument					--fields
+usage	the following arguments are required: tuples					--fields=a
+usage	argument --field-map: expected one argument					--field-map
+usage	the following arguments are required: tuples					--field-map=m
+usage	ambiguous option: --f could match --field-map, --fields					--f
+usage	argument --field-map: expected one argument					--field-
+help						-h
+usage	argument -h/--help: ignored explicit argument 'x'					--help=x
+help						-hx
+usage	argument -h/--help: ignored explicit argument 'x'					-h=x
+usage	the following arguments are required: tuples					--bogus
+usage	the following arguments are required: tuples					-x
+usage	ambiguous option: --fi=1 could match --field-map, --fields					--fi=1
+run		-.5	-	-		-.5
+help						--he
+run	-	in	-	-	-	in
+run	-	out	-	-	-	out
+run	-		-	-	-	
+run	-	-	-	-	-	-
+run	-	-5	-	-	-	-5
+run	-	a b	-	-	-	a b
+usage	the following arguments are required: tuples				-	--
+usage	argument --fields: expected one argument				-	--fields
+usage	the following arguments are required: tuples				-	--fields=a
+usage	argument --field-map: expected one argument				-	--field-map
+usage	the following arguments are required: tuples				-	--field-map=m
+usage	ambiguous option: --f could match --field-map, --fields				-	--f
+usage	argument --field-map: expected one argument				-	--field-
+help					-	-h
+usage	argument -h/--help: ignored explicit argument 'x'				-	--help=x
+help					-	-hx
+usage	argument -h/--help: ignored explicit argument 'x'				-	-h=x
+usage	the following arguments are required: tuples				-	--bogus
+usage	the following arguments are required: tuples				-	-x
+usage	ambiguous option: --fi=1 could match --field-map, --fields				-	--fi=1
+run	-	-.5	-	-	-	-.5
+help					-	--he
+run	-5	in	-	-	-5	in
+run	-5	out	-	-	-5	out
+run	-5		-	-	-5	
+run	-5	-	-	-	-5	-
+run	-5	-5	-	-	-5	-5
+run	-5	a b	-	-	-5	a b
+usage	the following arguments are required: tuples				-5	--
+usage	argument --fields: expected one argument				-5	--fields
+usage	the following arguments are required: tuples				-5	--fields=a
+usage	argument --field-map: expected one argument				-5	--field-map
+usage	the following arguments are required: tuples				-5	--field-map=m
+usage	ambiguous option: --f could match --field-map, --fields				-5	--f
+usage	argument --field-map: expected one argument				-5	--field-
+help					-5	-h
+usage	argument -h/--help: ignored explicit argument 'x'				-5	--help=x
+help					-5	-hx
+usage	argument -h/--help: ignored explicit argument 'x'				-5	-h=x
+usage	the following arguments are required: tuples				-5	--bogus
+usage	the following arguments are required: tuples				-5	-x
+usage	ambiguous option: --fi=1 could match --field-map, --fields				-5	--fi=1
+run	-5	-.5	-	-	-5	-.5
+help					-5	--he
+run	a b	in	-	-	a b	in
+run	a b	out	-	-	a b	out
+run	a b		-	-	a b	
+run	a b	-	-	-	a b	-
+run	a b	-5	-	-	a b	-5
+run	a b	a b	-	-	a b	a b
+usage	the following arguments are required: tuples				a b	--
+usage	argument --fields: expected one argument				a b	--fields
+usage	the following arguments are required: tuples				a b	--fields=a
+usage	argument --field-map: expected one argument				a b	--field-map
+usage	the following arguments are required: tuples				a b	--field-map=m
+usage	ambiguous option: --f could match --field-map, --fields				a b	--f
+usage	argument --field-map: expected one argument				a b	--field-
+help					a b	-h
+usage	argument -h/--help: ignored explicit argument 'x'				a b	--help=x
+help					a b	-hx
+usage	argument -h/--help: ignored explicit argument 'x'				a b	-h=x
+usage	the following arguments are required: tuples				a b	--bogus
+usage	the following arguments are required: tuples				a b	-x
+usage	ambiguous option: --fi=1 could match --field-map, --fields				a b	--fi=1
+run	a b	-.5	-	-	a b	-.5
+help					a b	--he
+usage	the following arguments are required: tuples				--	in
+usage	the following arguments are required: tuples				--	out
+usage	the following arguments are required: tuples				--	
+usage	the following arguments are required: tuples				--	-
+usage	the following arguments are required: tuples				--	-5
+usage	the following arguments are required: tuples				--	a b
+usage	the following arguments are required: tuples				--	--
+usage	the following arguments are required: tuples				--	--fields
+usage	the following arguments are required: tuples				--	--fields=a
+usage	the following arguments are required: tuples				--	--field-map
+usage	the following arguments are required: tuples				--	--field-map=m
+usage	the following arguments are required: tuples				--	--f
+usage	the following arguments are required: tuples				--	--field-
+usage	the following arguments are required: tuples				--	-h
+usage	the following arguments are required: tuples				--	--help=x
+usage	the following arguments are required: tuples				--	-hx
+usage	the following arguments are required: tuples				--	-h=x
+usage	the following arguments are required: tuples				--	--bogus
+usage	the following arguments are required: tuples				--	-x
+usage	the following arguments are required: tuples				--	--fi=1
+usage	the following arguments are required: tuples				--	-.5
+usage	the following arguments are required: tuples				--	--he
+usage	the following arguments are required: input, tuples				--fields	in
+usage	the following arguments are required: input, tuples				--fields	out
+usage	the following arguments are required: input, tuples				--fields	
+usage	the following arguments are required: input, tuples				--fields	-
+usage	the following arguments are required: input, tuples				--fields	-5
+usage	the following arguments are required: input, tuples				--fields	a b
+usage	argument --fields: expected one argument				--fields	--
+usage	argument --fields: expected one argument				--fields	--fields
+usage	argument --fields: expected one argument				--fields	--fields=a
+usage	argument --fields: expected one argument				--fields	--field-map
+usage	argument --fields: expected one argument				--fields	--field-map=m
+usage	argument --fields: expected one argument				--fields	--f
+usage	argument --fields: expected one argument				--fields	--field-
+usage	argument --fields: expected one argument				--fields	-h
+usage	argument --fields: expected one argument				--fields	--help=x
+usage	argument --fields: expected one argument				--fields	-hx
+usage	argument --fields: expected one argument				--fields	-h=x
+usage	argument --fields: expected one argument				--fields	--bogus
+usage	argument --fields: expected one argument				--fields	-x
+usage	argument --fields: expected one argument				--fields	--fi=1
+usage	the following arguments are required: input, tuples				--fields	-.5
+usage	argument --fields: expected one argument				--fields	--he
+usage	the following arguments are required: tuples				--fields=a	in
+usage	the following arguments are required: tuples				--fields=a	out
+usage	the following arguments are required: tuples				--fields=a	
+usage	the following arguments are required: tuples				--fields=a	-
+usage	the following arguments are required: tuples				--fields=a	-5
+usage	the following arguments are required: tuples				--fields=a	a b
+usage	the following arguments are required: input, tuples				--fields=a	--
+usage	argument --fields: expected one argument				--fields=a	--fields
+usage	the following arguments are required: input, tuples				--fields=a	--fields=a
+usage	argument --field-map: expected one argument				--fields=a	--field-map
+usage	the following arguments are required: input, tuples				--fields=a	--field-map=m
+usage	ambiguous option: --f could match --field-map, --fields				--fields=a	--f
+usage	argument --field-map: expected one argument				--fields=a	--field-
+help					--fields=a	-h
+usage	argument -h/--help: ignored explicit argument 'x'				--fields=a	--help=x
+help					--fields=a	-hx
+usage	argument -h/--help: ignored explicit argument 'x'				--fields=a	-h=x
+usage	the following arguments are required: input, tuples				--fields=a	--bogus
+usage	the following arguments are required: input, tuples				--fields=a	-x
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fields=a	--fi=1
+usage	the following arguments are required: tuples				--fields=a	-.5
+help					--fields=a	--he
+usage	the following arguments are required: input, tuples				--field-map	in
+usage	the following arguments are required: input, tuples				--field-map	out
+usage	the following arguments are required: input, tuples				--field-map	
+usage	the following arguments are required: input, tuples				--field-map	-
+usage	the following arguments are required: input, tuples				--field-map	-5
+usage	the following arguments are required: input, tuples				--field-map	a b
+usage	argument --field-map: expected one argument				--field-map	--
+usage	argument --field-map: expected one argument				--field-map	--fields
+usage	argument --field-map: expected one argument				--field-map	--fields=a
+usage	argument --field-map: expected one argument				--field-map	--field-map
+usage	argument --field-map: expected one argument				--field-map	--field-map=m
+usage	argument --field-map: expected one argument				--field-map	--f
+usage	argument --field-map: expected one argument				--field-map	--field-
+usage	argument --field-map: expected one argument				--field-map	-h
+usage	argument --field-map: expected one argument				--field-map	--help=x
+usage	argument --field-map: expected one argument				--field-map	-hx
+usage	argument --field-map: expected one argument				--field-map	-h=x
+usage	argument --field-map: expected one argument				--field-map	--bogus
+usage	argument --field-map: expected one argument				--field-map	-x
+usage	argument --field-map: expected one argument				--field-map	--fi=1
+usage	the following arguments are required: input, tuples				--field-map	-.5
+usage	argument --field-map: expected one argument				--field-map	--he
+usage	the following arguments are required: tuples				--field-map=m	in
+usage	the following arguments are required: tuples				--field-map=m	out
+usage	the following arguments are required: tuples				--field-map=m	
+usage	the following arguments are required: tuples				--field-map=m	-
+usage	the following arguments are required: tuples				--field-map=m	-5
+usage	the following arguments are required: tuples				--field-map=m	a b
+usage	the following arguments are required: input, tuples				--field-map=m	--
+usage	argument --fields: expected one argument				--field-map=m	--fields
+usage	the following arguments are required: input, tuples				--field-map=m	--fields=a
+usage	argument --field-map: expected one argument				--field-map=m	--field-map
+usage	the following arguments are required: input, tuples				--field-map=m	--field-map=m
+usage	ambiguous option: --f could match --field-map, --fields				--field-map=m	--f
+usage	argument --field-map: expected one argument				--field-map=m	--field-
+help					--field-map=m	-h
+usage	argument -h/--help: ignored explicit argument 'x'				--field-map=m	--help=x
+help					--field-map=m	-hx
+usage	argument -h/--help: ignored explicit argument 'x'				--field-map=m	-h=x
+usage	the following arguments are required: input, tuples				--field-map=m	--bogus
+usage	the following arguments are required: input, tuples				--field-map=m	-x
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--field-map=m	--fi=1
+usage	the following arguments are required: tuples				--field-map=m	-.5
+help					--field-map=m	--he
+usage	ambiguous option: --f could match --field-map, --fields				--f	in
+usage	ambiguous option: --f could match --field-map, --fields				--f	out
+usage	ambiguous option: --f could match --field-map, --fields				--f	
+usage	ambiguous option: --f could match --field-map, --fields				--f	-
+usage	ambiguous option: --f could match --field-map, --fields				--f	-5
+usage	ambiguous option: --f could match --field-map, --fields				--f	a b
+usage	ambiguous option: --f could match --field-map, --fields				--f	--
+usage	ambiguous option: --f could match --field-map, --fields				--f	--fields
+usage	ambiguous option: --f could match --field-map, --fields				--f	--fields=a
+usage	ambiguous option: --f could match --field-map, --fields				--f	--field-map
+usage	ambiguous option: --f could match --field-map, --fields				--f	--field-map=m
+usage	ambiguous option: --f could match --field-map, --fields				--f	--f
+usage	ambiguous option: --f could match --field-map, --fields				--f	--field-
+usage	ambiguous option: --f could match --field-map, --fields				--f	-h
+usage	ambiguous option: --f could match --field-map, --fields				--f	--help=x
+usage	ambiguous option: --f could match --field-map, --fields				--f	-hx
+usage	ambiguous option: --f could match --field-map, --fields				--f	-h=x
+usage	ambiguous option: --f could match --field-map, --fields				--f	--bogus
+usage	ambiguous option: --f could match --field-map, --fields				--f	-x
+usage	ambiguous option: --f could match --field-map, --fields				--f	--fi=1
+usage	ambiguous option: --f could match --field-map, --fields				--f	-.5
+usage	ambiguous option: --f could match --field-map, --fields				--f	--he
+usage	the following arguments are required: input, tuples				--field-	in
+usage	the following arguments are required: input, tuples				--field-	out
+usage	the following arguments are required: input, tuples				--field-	
+usage	the following arguments are required: input, tuples				--field-	-
+usage	the following arguments are required: input, tuples				--field-	-5
+usage	the following arguments are required: input, tuples				--field-	a b
+usage	argument --field-map: expected one argument				--field-	--
+usage	argument --field-map: expected one argument				--field-	--fields
+usage	argument --field-map: expected one argument				--field-	--fields=a
+usage	argument --field-map: expected one argument				--field-	--field-map
+usage	argument --field-map: expected one argument				--field-	--field-map=m
+usage	argument --field-map: expected one argument				--field-	--f
+usage	argument --field-map: expected one argument				--field-	--field-
+usage	argument --field-map: expected one argument				--field-	-h
+usage	argument --field-map: expected one argument				--field-	--help=x
+usage	argument --field-map: expected one argument				--field-	-hx
+usage	argument --field-map: expected one argument				--field-	-h=x
+usage	argument --field-map: expected one argument				--field-	--bogus
+usage	argument --field-map: expected one argument				--field-	-x
+usage	argument --field-map: expected one argument				--field-	--fi=1
+usage	the following arguments are required: input, tuples				--field-	-.5
+usage	argument --field-map: expected one argument				--field-	--he
+help					-h	in
+help					-h	out
+help					-h	
+help					-h	-
+help					-h	-5
+help					-h	a b
+help					-h	--
+help					-h	--fields
+help					-h	--fields=a
+help					-h	--field-map
+help					-h	--field-map=m
+help					-h	--f
+help					-h	--field-
+help					-h	-h
+help					-h	--help=x
+help					-h	-hx
+help					-h	-h=x
+help					-h	--bogus
+help					-h	-x
+help					-h	--fi=1
+help					-h	-.5
+help					-h	--he
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	in
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	out
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	-
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	-5
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	a b
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	--
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	--fields
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	--fields=a
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	--field-map
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	--field-map=m
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	--f
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	--field-
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	-h
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	--help=x
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	-hx
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	-h=x
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	--bogus
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	-x
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	--fi=1
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	-.5
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	--he
+help					-hx	in
+help					-hx	out
+help					-hx	
+help					-hx	-
+help					-hx	-5
+help					-hx	a b
+help					-hx	--
+help					-hx	--fields
+help					-hx	--fields=a
+help					-hx	--field-map
+help					-hx	--field-map=m
+help					-hx	--f
+help					-hx	--field-
+help					-hx	-h
+help					-hx	--help=x
+help					-hx	-hx
+help					-hx	-h=x
+help					-hx	--bogus
+help					-hx	-x
+help					-hx	--fi=1
+help					-hx	-.5
+help					-hx	--he
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	in
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	out
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	-
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	-5
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	a b
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	--
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	--fields
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	--fields=a
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	--field-map
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	--field-map=m
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	--f
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	--field-
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	-h
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	--help=x
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	-hx
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	-h=x
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	--bogus
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	-x
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	--fi=1
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	-.5
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	--he
+usage	the following arguments are required: tuples				--bogus	in
+usage	the following arguments are required: tuples				--bogus	out
+usage	the following arguments are required: tuples				--bogus	
+usage	the following arguments are required: tuples				--bogus	-
+usage	the following arguments are required: tuples				--bogus	-5
+usage	the following arguments are required: tuples				--bogus	a b
+usage	the following arguments are required: input, tuples				--bogus	--
+usage	argument --fields: expected one argument				--bogus	--fields
+usage	the following arguments are required: input, tuples				--bogus	--fields=a
+usage	argument --field-map: expected one argument				--bogus	--field-map
+usage	the following arguments are required: input, tuples				--bogus	--field-map=m
+usage	ambiguous option: --f could match --field-map, --fields				--bogus	--f
+usage	argument --field-map: expected one argument				--bogus	--field-
+help					--bogus	-h
+usage	argument -h/--help: ignored explicit argument 'x'				--bogus	--help=x
+help					--bogus	-hx
+usage	argument -h/--help: ignored explicit argument 'x'				--bogus	-h=x
+usage	the following arguments are required: input, tuples				--bogus	--bogus
+usage	the following arguments are required: input, tuples				--bogus	-x
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--bogus	--fi=1
+usage	the following arguments are required: tuples				--bogus	-.5
+help					--bogus	--he
+usage	the following arguments are required: tuples				-x	in
+usage	the following arguments are required: tuples				-x	out
+usage	the following arguments are required: tuples				-x	
+usage	the following arguments are required: tuples				-x	-
+usage	the following arguments are required: tuples				-x	-5
+usage	the following arguments are required: tuples				-x	a b
+usage	the following arguments are required: input, tuples				-x	--
+usage	argument --fields: expected one argument				-x	--fields
+usage	the following arguments are required: input, tuples				-x	--fields=a
+usage	argument --field-map: expected one argument				-x	--field-map
+usage	the following arguments are required: input, tuples				-x	--field-map=m
+usage	ambiguous option: --f could match --field-map, --fields				-x	--f
+usage	argument --field-map: expected one argument				-x	--field-
+help					-x	-h
+usage	argument -h/--help: ignored explicit argument 'x'				-x	--help=x
+help					-x	-hx
+usage	argument -h/--help: ignored explicit argument 'x'				-x	-h=x
+usage	the following arguments are required: input, tuples				-x	--bogus
+usage	the following arguments are required: input, tuples				-x	-x
+usage	ambiguous option: --fi=1 could match --field-map, --fields				-x	--fi=1
+usage	the following arguments are required: tuples				-x	-.5
+help					-x	--he
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	in
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	out
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	-
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	-5
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	a b
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	--
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	--fields
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	--fields=a
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	--field-map
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	--field-map=m
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	--f
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	--field-
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	-h
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	--help=x
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	-hx
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	-h=x
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	--bogus
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	-x
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	--fi=1
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	-.5
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	--he
+run	-.5	in	-	-	-.5	in
+run	-.5	out	-	-	-.5	out
+run	-.5		-	-	-.5	
+run	-.5	-	-	-	-.5	-
+run	-.5	-5	-	-	-.5	-5
+run	-.5	a b	-	-	-.5	a b
+usage	the following arguments are required: tuples				-.5	--
+usage	argument --fields: expected one argument				-.5	--fields
+usage	the following arguments are required: tuples				-.5	--fields=a
+usage	argument --field-map: expected one argument				-.5	--field-map
+usage	the following arguments are required: tuples				-.5	--field-map=m
+usage	ambiguous option: --f could match --field-map, --fields				-.5	--f
+usage	argument --field-map: expected one argument				-.5	--field-
+help					-.5	-h
+usage	argument -h/--help: ignored explicit argument 'x'				-.5	--help=x
+help					-.5	-hx
+usage	argument -h/--help: ignored explicit argument 'x'				-.5	-h=x
+usage	the following arguments are required: tuples				-.5	--bogus
+usage	the following arguments are required: tuples				-.5	-x
+usage	ambiguous option: --fi=1 could match --field-map, --fields				-.5	--fi=1
+run	-.5	-.5	-	-	-.5	-.5
+help					-.5	--he
+help					--he	in
+help					--he	out
+help					--he	
+help					--he	-
+help					--he	-5
+help					--he	a b
+help					--he	--
+help					--he	--fields
+help					--he	--fields=a
+help					--he	--field-map
+help					--he	--field-map=m
+help					--he	--f
+help					--he	--field-
+help					--he	-h
+help					--he	--help=x
+help					--he	-hx
+help					--he	-h=x
+help					--he	--bogus
+help					--he	-x
+help					--he	--fi=1
+help					--he	-.5
+help					--he	--he
+usage	ambiguous option: --fi=1 could match --field-map, --fields				-x	--fi=1	in	-5	-.5	-h=	-h=
+usage	ambiguous option: --field could match --field-map, --fields				--field	--help=x	-f	-hx
+help					-	-hh	-	--field-	--bogus	--field-	-h-x
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields				-=x	--bogus	-a b
+help					-hh	--x y	-x	-h	-٣	-h-x
+usage	argument -h/--help: ignored explicit argument 'x'				a b	-hh=x	-h=x	--h	--fields=a	--=x	--he
+help					--field-map=m	-h	--he	x	-hx	in	--he
+usage	ambiguous option: --=x could match --help, --field-map, --fields				--field-m=q	--=x	-a b	out
+usage	argument --field-map: expected one argument				--field-	--f	--fields=	--fieldsx	-h=	--help=x
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	x	--help	--help
+usage	ambiguous option: --f could match --field-map, --fields				x	--f	
+usage	argument --field-map: expected one argument				--field-	--field-map=m	x	-h-x
+usage	argument -h/--help: ignored explicit argument 'x'				-٣	--field-map=m	-hh=x
+help					out	--h	--fields=a=b	--x y	-h=	--fields=
+usage	argument -h/--help: ignored explicit argument '-x'				-h-x	--help=x	-=x	-hh	--help	-hh=x	--f
+help					--help	--h	x	-a b	--fields=a
+usage	the following arguments are required: tuples				--fieldsx	-x	--fieldsx	-5	--fieldsx
+usage	ambiguous option: --field could match --field-map, --fields				--field	--f	-f	--field	--fields=a	--
+help					-h	--f	a b	a b	--=x	
+usage	unrecognized arguments: --fieldsx				-.5	--fieldsx	x
+usage	ambiguous option: --=x could match --help, --field-map, --fields				--fields=a	--field-map=m	--=x	--field-map=m	--x y	--field-m=q	--help=x
+help					-hx	-x	-=x	in	-=x
+usage	argument -h/--help: ignored explicit argument 'x'				-hh=x	x	--help	-h-x
+help					-hh	--he		--f	-a b
+help					-hh	-f	-5
+help					-h	-h=	--h
+help					-hx	-hx	-h=x	out	--he	--help	--fields=a
+usage	unrecognized arguments: -.5 --fields= --				--	-5	--=x	-.5	--fields=	--
+usage	argument -h/--help: ignored explicit argument 'x'				-hh=x	out	--fields=	--fields	-h	-x	--f
+help					--h	--field	-h=x
+usage	argument -h/--help: ignored explicit argument ''				-.5	-h=	--bogus	--f	--fields=
+usage	argument -h/--help: ignored explicit argument 'x'				-	-h=x	--he
+help					-a b	-h	-a b
+usage	ambiguous option: --f could match --field-map, --fields				--f	--field-m=q	--h	--fieldsx		-h=x	-h=
+usage	unrecognized arguments: 				--	--fields=a	--field-map=m	
+help					--h	--field-map=m	out
+usage	argument -h/--help: ignored explicit argument ''				--bogus	-h=	-h=	-h=x	-	--field	a b
+usage	ambiguous option: --fi=1 could match --field-map, --fields				-٣	--fi=1	--fields=a=b	--f
+usage	argument -h/--help: ignored explicit argument 'x'				--fields=a	-5	-hh=x	-=x	
+usage	argument --field-map: expected one argument				--field-	--fields=	--fields	-h-x	-a b	--fi=1
+run		--x y	=m	=a	--field-map=m	--fields=a		--x y
+usage	ambiguous option: --=x could match --help, --field-map, --fields				out	--=x	--help=x
+help					-hh	--=x	--=x	--f	--he
+usage	argument -h/--help: ignored explicit argument ''				--fields=a=b	a b	a b	-x	-.5	-h=	-
+usage	argument -h/--help: ignored explicit argument ''				-a b	-h=	
+usage	the following arguments are required: tuples				-f	--	--field
+help					-٣	--field-m=q	--field-m=q	-hh
+usage	argument -h/--help: ignored explicit argument 'x'				in	x	-h=x
+usage	ambiguous option: --f could match --field-map, --fields				--field-m=q	--field-map=m	--x y	--f	--help
+usage	ambiguous option: --field could match --field-map, --fields				--fieldsx	-٣	--field	-h-x
+help					-a b	-.5		--help	-
+usage	argument -h/--help: ignored explicit argument ''				--field-m=q	-a b	-h=
+usage	the following arguments are required: input, tuples				--bogus	--field-	-a b
+usage	the following arguments are required: tuples				-x	--fields=a	-f	--	--=x
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	a b	--field-map=m	-h=	--field-
+usage	ambiguous option: --f could match --field-map, --fields				--f	--fields=a	--help	--h
+usage	the following arguments are required: tuples				-	--field-	-٣
+help					--fields=	-h	-hh=x	x
+usage	ambiguous option: --field could match --field-map, --fields				-a b	--field	out
+usage	argument -h/--help: ignored explicit argument 'x'				-٣		--help=x	a b	--fi=1
+usage	ambiguous option: --field could match --field-map, --fields				-.5	--bogus	--field
+help					-h	-h=x	--he	-a b
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields				-=x	out	--fi=1
+usage	unrecognized arguments: a b				-	--field-map=m	in	a b
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	-h-x	-hh=x	-h
+usage	ambiguous option: --f could match --field-map, --fields				--f	-h		--fields=a=b	--h	-h=x
+usage	argument -h/--help: ignored explicit argument ''				-h=	-hh=x	-hh	--help=x
+usage	argument --field-map: expected one argument				-a b	-f	-٣	--field-map	--help=x	out	--fields=a
+help					-hh	--fieldsx	--field
+usage	ambiguous option: --field could match --field-map, --fields				--fields=	--field	-h-x	x	--field-map=m
+usage	argument -h/--help: ignored explicit argument ''				--field-map=m	-h=	--help=x	-hh	-h=x	--bogus	-
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields				-=x	--fieldsx	-x
+usage	argument -h/--help: ignored explicit argument ''				-٣	-h=	-a b	-h
+help					--he	--fields	out	--fieldsx	--help=x	x	
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	--he	-hh	--fields	-x	--field-m=q	--help=x
+usage	argument -h/--help: ignored explicit argument '-x'				-h-x	out	--field-map=m
+help					--h	--bogus	--h	-hh	--fields=	-h=x	-h=
+run	in	--f	-	-	--	in	--f
+usage	argument -h/--help: ignored explicit argument 'x'				--x y	in	-5	-.5	-h=x	-h=	-a b
+usage	argument -h/--help: ignored explicit argument 'x'				--bogus	--help=x	-hh=x	--fields=a	-x	
+usage	argument -h/--help: ignored explicit argument 'x'				x	--fields=a	--x y	-hh=x	in	--fields=	--field-
+usage	argument -h/--help: ignored explicit argument 'x'				-hh=x	-٣	-h=x	-f	-f	in
+usage	argument --field-map: expected one argument				--field-map	--field	--fields=	-h=	-hh=x
+help					--field-map	-	-hh	-hx	--help=x
+usage	argument -h/--help: ignored explicit argument ''				-h=	-hh=x	--fi=1	--help=x
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--field-	--x y	--fi=1	--fields=a	-.5	--f
+usage	argument --field-map: expected one argument				--fieldsx	out	-	--field-	--field-m=q	-a b
+usage	argument -h/--help: ignored explicit argument 'x'				-f	--help=x	-h=x	-h-x	-	--fields=a=b	--field-map=m
+help					--fieldsx	-	-a b	--help	--field-map=m
+help					-hx	-٣	-.5	-
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	--field	-h-x	out	-٣
+usage	ambiguous option: --=x could match --help, --field-map, --fields				--=x	out	--fi=1	--fields=	-.5
+usage	argument -h/--help: ignored explicit argument 'x'				--bogus	--help=x	--he	--	x	-hh
+usage	unrecognized arguments: --fi=1 --x y --=x				--	--x y	--fields=a	--fi=1	--x y	--=x
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields				-=x	--fi=1	in	-h-x	-.5	-=x	in
+usage	ambiguous option: --=x could match --help, --field-map, --fields				-f	a b	--=x
+help					--help	--field-map=m	--h	--fieldsx	-h=	--bogus	--fi=1
+help					--fields=a	--he	-
+usage	argument -h/--help: ignored explicit argument ''				-h=	-5	a b
+help					-hx	-h	--field-m=q
+help					--field-map=m	--fields=	-f	--field-map=m	--h
+usage	ambiguous option: --field could match --field-map, --fields				--field	--h	--bogus	--	--x y	--fields=a=b
+usage	the following arguments are required: tuples				-a b	--field-map=m	--fieldsx
+help					--h		--fi=1	out	--=x	-hx	in
+help					-hx	-a b	--field-map	--field-m=q	-5
+usage	argument --field-map: expected one argument				--field-map	--field-m=q	-f	--field-map=m	-h=	x
+usage	argument -h/--help: ignored explicit argument 'x'				--fieldsx	--help=x	--fields	--he
+usage	ambiguous option: --field could match --field-map, --fields				--field	--fields=a	--h
+usage	ambiguous option: --fi=1 could match --field-map, --fields				-f	--fi=1	--help	-=x	--fields=
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	-x	-hh
+usage	argument -h/--help: ignored explicit argument ''				-x	--x y	-	-h=	--f
+usage	ambiguous option: --f could match --field-map, --fields				--fields=a=b	--f	in	-h	--bogus	--field-map	in
+usage	ambiguous option: --=x could match --help, --field-map, --fields				-f	--=x	x	--fields=	-hh	-f	--f
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	-=x	--	--f	--help=x	--fields	-h=
+help					-x		--he	-5	in	--field	--fi=1
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	--f	--fields=a=b	--field-m=q	--fieldsx	-
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields				-=x	--field	--field-map=m	-5	--field-map=m
+help					-hh	--	--f	--fields=a=b	-f	-a b
+help					--he	--help	-hh=x	-=x	in
+usage	argument -h/--help: ignored explicit argument ''				--fieldsx	-h=	--f	--bogus
+usage	argument -h/--help: ignored explicit argument ''				-h=	--field-m=q	-x	out	out
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	--field-	out	-x	--field-	-	a b
+usage	argument --field-map: expected one argument					--field-map	-h=x	--fieldsx	--help=x	a b
+usage	unrecognized arguments: -f --bogus -f				--fields=a=b	-f	--	--f	-.5	--bogus	-f
+usage	argument -h/--help: ignored explicit argument 'x'				-f	-a b	-h=x
+usage	unrecognized arguments: --fi=1				in	--	out	--fi=1
+usage	argument --field-map: expected one argument				--field-	--fieldsx	--field	-h=	--bogus	-hx	--fields=a
+help					--he	-h=x	-.5	-h=	--fields=	--field-m=q
+usage	argument --field-map: expected one argument				x	--x y	-.5	--field-
+help					--fields=	--help	-	-٣	-5	-h=	--field-map
+help					--h	-hx	-٣	-h=	--help	--field-map	-5
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	--field-map	-a b	--fields=	--fields=a	-f	--field-
+help					a b	--he	-a b	-٣	--field	--
+usage	argument -h/--help: ignored explicit argument ''				--field-map=m	-h=	-hh=x
+usage	argument --fields: expected one argument				--fields	--fieldsx	--help=x	in
+usage	ambiguous option: --f could match --field-map, --fields				--fields=	--field-map=m	--f
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fields=a=b	--x y	x	--fi=1	-=x	in	-.5
+usage	ambiguous option: --f could match --field-map, --fields				-a b	--f	--fields=a	--x y	--field
+usage	argument -h/--help: ignored explicit argument ''				--field-map=m	-h=	--h	--bogus
+help					-	-٣	--help	--field-map	--field	-a b	-5
+usage	ambiguous option: --f could match --field-map, --fields					--f	--field-map=m	-٣	-h=x	--fields=a=b
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--x y	--fi=1	-hx
+usage	argument -h/--help: ignored explicit argument '-x'				-5	-h-x	--bogus	-f
+usage	argument -h/--help: ignored explicit argument 'x'				-hh=x	--fieldsx	-h	--fields	in	x
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields				-=x	-	--fields=a=b	--fields=
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields				--fields=a=b	-=x	--fields	-.5	--field-map	-h=x	--field-map=m
+help					--fields=a	--field-map=m	--fields=a	--he	--field-
+usage	unrecognized arguments: -				x	-a b	-
+usage	ambiguous option: --field could match --field-map, --fields				--field	-5	--field-m=q
+help					-a b	-h	-h=x	--help=x
+usage	argument -h/--help: ignored explicit argument '-x'				-h-x	-٣	-h=	-=x	--f	--field-map=m
+help					-hh	-a b	--help=x	--help	--x y	--fields=a	-a b
+usage	the following arguments are required: tuples					-x	-f
+usage	argument -h/--help: ignored explicit argument 'x'				-hh=x	-h=x	-=x	--field	-h=x	x	--field-map
+usage	argument -h/--help: ignored explicit argument ''				-h=	-٣	out	--fields=	-٣	-
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	--fi=1	-h=x	--field	-a b	--bogus	-
+usage	argument --field-map: expected one argument				--field-	--field	--help	--he	--field-m=q
+usage	argument -h/--help: ignored explicit argument '-x'				-h-x		-5	-hh
+help					-٣	-hx	--help=x
+usage	argument -h/--help: ignored explicit argument 'x'				--x y	-h=x	-hh=x	--h	-hh	--h
+help					--help		--field-map=m	-x	-x
+help					-hh	--fieldsx	--field-m=q	-x
+usage	argument --fields: expected one argument				--fields=a		--bogus	--fields
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	-f	-hx
+usage	argument -h/--help: ignored explicit argument 'x'				in	-.5	--help=x	--he
+usage	the following arguments are required: tuples				-5	--field-	-
+usage	ambiguous option: --field could match --field-map, --fields				--field	-x	-h=	x
+usage	ambiguous option: --field could match --field-map, --fields				--field-m=q	--fieldsx	-5	-	-5	--field	--fields=a
+usage	ambiguous option: --f could match --field-map, --fields				--fields=a	--f	--field-m=q	a b	-.5
+usage	ambiguous option: --f could match --field-map, --fields					--f	-.5	-=x	--bogus	--help	--field-m=q
+help					a b	a b	-a b	-hx	x
+usage	ambiguous option: --field could match --field-map, --fields				--field	--field	--fields=	--fi=1
+help					-	--fields	a b	-hh	--bogus
+help					--x y	--fields=	--h	
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	--fieldsx	--h	--field
+help					--field-m=q	--bogus	--h	--fields=	--help=x	--h
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	--	-x	--fields	--help
+help					--fields=	-5	--field-m=q	-hx
+usage	unrecognized arguments: --x y -x --bogus				--	--bogus	-=x	--x y	-x	--bogus
+help					-hh	-hx	--=x	--field-map=m	--fields=a	--	--x y
+usage	argument --field-map: expected one argument				--field-map	-=x	out	--help	-hh=x	--x y	-5
+usage	argument -h/--help: ignored explicit argument 'x'				--fields=	-٣	--help=x	out	--fi=1
+usage	argument -h/--help: ignored explicit argument 'x'				--field-map=m	-.5	-hh=x	--=x	-h=
+usage	argument -h/--help: ignored explicit argument 'x'				--field-map	-a b	-x	-h=x	--help=x	
+help					-٣	-hh	--=x	x	--field-	x	--field
+usage	argument -h/--help: ignored explicit argument '-x'				-h-x	--fieldsx	--field	-.5	--fields	out	-a b
+usage	ambiguous option: --f could match --field-map, --fields				--f	x	-h=x	-5	--h	-h-x	--=x
+help					-5	-h	-x	--	--h	--fi=1
+help						--field-	--x y	--h	-hx	-h=
+usage	ambiguous option: --=x could match --help, --field-map, --fields				--=x	--h	--field-map	--fields=a=b
+usage	argument -h/--help: ignored explicit argument 'x'				--bogus	-hh=x	out	--	x	--f
+help					-hx	-	-=x	x	--fields	a b	-hx
+usage	argument --field-map: expected one argument				--x y	--fields=a	--field-	--field	-h=x
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	--	--fi=1	out	-h-x
+usage	argument -h/--help: ignored explicit argument 'x'				-hh=x	--fields=a	--fieldsx	-h=x	--field	-x	--fi=1
+help					--fields=	-hx	-a b	-hh	-h=	--field-map=m	--he
+usage	the following arguments are required: tuples				--fields=a	--	--fields=a=b
+help					-.5	-h	-x	-5
+usage	argument -h/--help: ignored explicit argument 'x'				x	--help=x	-5	--x y	-=x	-h
+help					-hh	--	--field-m=q
+help					-h	-h=	--fields	--f	-h=x
+usage	ambiguous option: --field could match --field-map, --fields				--field	-h-x	-hh=x
+usage	argument -h/--help: ignored explicit argument ''				-h=	--field-	out	--
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	--field	-.5	--field-m=q	--f	--field
+help					--h	x	-hx
+usage	ambiguous option: --=x could match --help, --field-map, --fields				--=x	in	-	--bogus
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields				-=x	--fields	-a b
+help					out	-a b	--fieldsx	--h	--fields=a	-h=
+usage	ambiguous option: --=x could match --help, --field-map, --fields				--=x	-h=x	--fi=1
+usage	argument -h/--help: ignored explicit argument '-x'					-٣	-h-x	-	--field	-h-x	-=x
+help					-hx	-h	-a b	-h-x	-h=	--fields=a
+usage	argument -h/--help: ignored explicit argument '-x'				-h-x	-٣	a b	--fields=a
+help					--fieldsx		--he
+usage	unrecognized arguments: -f				--fields=a=b	--field-m=q	-5	-f	-٣
+help						-hx	--field-map	--fields	-hh	out	--fields=a=b
+usage	ambiguous option: --=x could match --help, --field-map, --fields				--=x	--fields	-hh	--field-	-hx	--fieldsx
+help					--he	-h-x	--fields=	-x	-h=x	-f	--fields
+usage	argument -h/--help: ignored explicit argument 'x'				x	-a b	out	-h=x	--field-m=q
+usage	argument -h/--help: ignored explicit argument ''				-٣	-h=	-h=
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	a b	--he	a b	--field
+help					-hh	--he	-h-x	--fields=a=b	in	in	--fields=a
+help					-hh	out	-x	-a b
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	-a b	--field-	--fi=1
+usage	argument -h/--help: ignored explicit argument ''				-	-h=	in	-٣	-x
+usage	unrecognized arguments: a b				-5	-5	a b
+usage	ambiguous option: --field could match --field-map, --fields				-	--field	--fields=a=b		--field	-hh=x
+usage	argument --field-map: expected one argument				out	--field-	--fi=1	-=x	-hx
+usage	argument -h/--help: ignored explicit argument 'x'				--fields=a	--help=x	-	--fieldsx	-.5	--field
+usage	ambiguous option: --field could match --field-map, --fields				--field	-.5	--fields=a	--f	-h=	--=x	--fields=a
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--field-map=m	-f	-5	--fields=a	a b	--fi=1
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--x y	x	--fi=1	-hh=x	-x
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	-٣	--fields=	in
+usage	ambiguous option: --=x could match --help, --field-map, --fields				--=x	--f	--field-
+help					-.5	-hx	-.5
+usage	ambiguous option: --field could match --field-map, --fields				--field-m=q	a b	--field
+usage	argument --fields: expected one argument				--fields	--fields=a	-hx	-h=x	--f	--bogus
+run	--x y	a b	=m	-	--x y	--field-map=m	a b
+help					--field-map=m	--he	-h=x
+usage	ambiguous option: --f could match --field-map, --fields				--x y	--f	--field	--field	-h	-.5
+usage	argument -h/--help: ignored explicit argument ''				-h=	--	--bogus	-x	-hx	--field-	--fields=a=b
+help					--field-m=q	out	x	--h	-h
+usage	ambiguous option: --f could match --field-map, --fields					--f	--bogus	--field
+help					-hh	--f	--fi=1	--f
+help					x	--field-map=m	-hx
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields				-=x	-h=x	--fields=	--field-map=m	--help	--he	--help
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields					--x y	-=x	--f	--fields	--fields=	out
+usage	ambiguous option: --field could match --field-map, --fields				--field	--field-	--field-	--help
+usage	ambiguous option: --field could match --field-map, --fields				--field	x	--h	--bogus
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields				--fields=a	-=x	--fields=a	--help	--he	--fields=a
+usage	argument -h/--help: ignored explicit argument 'x'				-a b	-h=x	-h	-5	--fields=a=b
+help					-٣	a b	--h	--field-map	--fields
+help					in	-h	--f	-=x	a b	--fields=a
+usage	ambiguous option: --field could match --field-map, --fields				--fields=a=b	-a b	--field	-h-x	--field	-h	x
+usage	argument -h/--help: ignored explicit argument 'x'				--field-map=m	-hh=x	--field-map=m	-5	-h-x	--he
+usage	argument -h/--help: ignored explicit argument 'x'				a b	-f	--help=x	--help	--field-map	--fields	-h=x
+help					--he	--field-map=m	-h=
+usage	ambiguous option: --=x could match --help, --field-map, --fields				--=x	--fieldsx	a b
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	--fieldsx	--=x	--help	-h=	--field	-=x
+usage	argument -h/--help: ignored explicit argument ''				-h=	-٣	-=x	--fi=1		--field	a b
+help					-hx	x	--fieldsx	-a b
+usage	argument -h/--help: ignored explicit argument 'x'				-	-hh=x	-hh	--help	--field-	--x y
+help					--help	-hh	in
+help					--x y	--h	--field	--he	--fi=1
+help					--he	--field	-f	-	--field	--h	out
+usage	argument -h/--help: ignored explicit argument 'x'				-٣	-f	-hh=x	--fields	-x	--=x	--fieldsx
+help					-h	x	x
+help					-x	in	--h
+usage	ambiguous option: --f could match --field-map, --fields				-٣	--f	--fieldsx	--he
+usage	argument --field-map: expected one argument				--field-map	--fields=a	-f
+help					--he	--fieldsx	-hx	-5	-a b
+usage	argument -h/--help: ignored explicit argument 'x'				-f	--fieldsx	--field-m=q		-hh=x	--field-
+usage	the following arguments are required: tuples				--fields=a	--field-	-5		--bogus
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	--x y	--
+usage	argument --field-map: expected one argument					--field-	-=x	--
+usage	argument --field-map: expected one argument				a b	--field-map	-hx	--field-map=m	--fields=a=b	--field-map	--he
+usage	ambiguous option: --fi=1 could match --field-map, --fields				a b	in	--fields=a	--fields=a=b	--fi=1
+help					--he	-hx	--	-h=x
+usage	ambiguous option: --field could match --field-map, --fields				--fieldsx	--field	-h=	--fields=a=b	-x
+help					--field-map=m	-h	a b	-hh=x	--h	-h=x	--he
+usage	argument -h/--help: ignored explicit argument 'x'				-hh=x	--	--fieldsx	--x y	--x y
+usage	unrecognized arguments: -٣				in	out	-٣
+usage	argument -h/--help: ignored explicit argument 'x'				--fields=a	--field-map=m	--field-map=m	-h=x	--x y	-hh	-hh
+help					-f	--bogus	-h	-h
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	-=x	in	-f
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	--help	--field-m=q	
+usage	the following arguments are required: tuples				a b	-f	--bogus
+usage	argument -h/--help: ignored explicit argument '-x'				--fields=	-h-x	
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	--	--fields=	--bogus	--fields		--field-map
+help					--help	--fields=a	in		--h	-hh
+usage	argument -h/--help: ignored explicit argument 'x'				-f	-hh=x	--fields=a
+usage	argument -h/--help: ignored explicit argument 'x'				a b	--help=x	--fields	--help=x	-h
+usage	argument --field-map: expected one argument				-5	--field-map	-x	-hh=x
+run	-a b	x	=-a b	-	--field-map	-a b	-a b	x
+usage	argument -h/--help: ignored explicit argument 'x'				-hh=x	--	--=x	-hx	--x y
+usage	ambiguous option: --f could match --field-map, --fields				--bogus	--f	-hh
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields				--x y	-=x	-.5
+usage	argument -h/--help: ignored explicit argument 'x'				-x	-a b	x	--bogus	a b	-hh=x	in
+usage	argument --fields: expected one argument				--fields	-h	-
+help					-٣	-hx	--h	--fields=
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	--field-	--fields=	-hx	-	-h=x
+usage	argument -h/--help: ignored explicit argument 'x'				-f	x	--help=x	--fields=a		--bogus	--
+usage	unrecognized arguments: -- -h=x --fields				-5	--	-hx	--	-h=x	--fields
+usage	unrecognized arguments: --=x in -- --				--	--fields=a	-hh	--=x	in	--	--
+help					--help	--field-map	--fields=a=b	--bogus
+help					a b	-hh	--field-map=m	-x
+help					--fieldsx	-hh	--
+usage	argument --fields: expected one argument				--fields	--=x	--field-map
+usage	ambiguous option: --=x could match --help, --field-map, --fields				--=x	in	--fields=a	--fi=1
+usage	argument -h/--help: ignored explicit argument 'x'				-x	--bogus	-hh=x	--fields	out	--f
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fields=	--fi=1	-.5
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields				a b	--fields=a=b	-=x	--h
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	-٣	-a b	-=x	-hh
+usage	unrecognized arguments: -x --field-map=m -h=				-x	--field-m=q	--	-hh=x	--fi=1	--field-map=m	-h=
+usage	ambiguous option: --=x could match --help, --field-map, --fields				-	-f	--=x	-	--fields	--fields=a=b	-hx
+usage	argument -h/--help: ignored explicit argument 'x'				-	-5	-hh=x	-h-x	-5	-hx	out
+usage	argument -h/--help: ignored explicit argument ''				-h=	x	-.5	-h-x	--f
+usage	unrecognized arguments: -5 --fields				--field-m=q	--	--help=x	x	-5	--fields
+usage	unrecognized arguments: --=x				--	-=x	a b	--=x
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	--x y	--fi=1	-5	--field-m=q	--	
+usage	argument --fields: expected one argument				-	--field-m=q	--fields	--h	--fields=a=b
+usage	argument -h/--help: ignored explicit argument 'x'				out	-f	-.5	-h=x		--x y
+usage	argument -h/--help: ignored explicit argument 'x'				-hh=x	--help	-hx	--field	--=x
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	--bogus	a b	x	--f	--he	--field-m=q
+help					-hh	--fieldsx	out	-h-x	in	-hh=x	--f
+usage	argument --field-map: expected one argument				--field-map	--fieldsx	--field-
+usage	ambiguous option: --fi=1 could match --field-map, --fields				a b	-5	--bogus	--fi=1	--f	--field-map	-٣
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	--help=x	-a b	--
+usage	argument -h/--help: ignored explicit argument '-x'				a b	a b	-h-x	-5	-a b	-hh=x	--fi=1
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x		-hh	--field-map=m	out	--field-m=q
+help					--field-map=m		-f	-.5	-hx	a b	--fieldsx
+usage	argument -h/--help: ignored explicit argument 'x'				--bogus	--help=x	--fields=a=b
+usage	the following arguments are required: tuples				--fields=	--field-map	-٣	a b
+usage	argument --field-map: expected one argument				--field-map	--bogus	-h=	a b
+usage	argument --field-map: expected one argument				--field-	--help=x	-=x	-f	--help=x
+usage	ambiguous option: --field could match --field-map, --fields				--field	--field-m=q	--field	--fieldsx	-.5	--field-map	--f
+usage	argument -h/--help: ignored explicit argument ''				-h=	x	-.5	--fields=
+help					--fields=a=b	-hh	--f	--fieldsx
+help					-hx	--fields=a=b	--help=x	in	--	--fields=a=b	--x y
+usage	ambiguous option: --f could match --field-map, --fields				--f	--field-	-h-x	--field-	--field-	-h	--x y
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields				-=x	-hx	x	x	-
+help					--h	-f	-x	--fi=1
+usage	argument --field-map: expected one argument				--field-	-=x	--field	--he	--field	--fi=1
+usage	argument -h/--help: ignored explicit argument 'x'				--field-m=q	-hh=x	--he	--x y	-h=x
+usage	argument -h/--help: ignored explicit argument 'x'				--field-m=q	--help=x	--field-	--field
+usage	argument -h/--help: ignored explicit argument 'x'				a b	--field-map=m	--help=x	-a b	-f	-=x
+help					out	-hx	-hx
+usage	argument -h/--help: ignored explicit argument 'x'				--x y	-hh=x	--field-map
+help					-hx	--	-a b	-hh=x	
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	--fields=a	--x y	-hh	--	-	out
+help					-5	--x y	--fieldsx	-x	-hh	-٣	-x
+usage	the following arguments are required: tuples				-a b	--fields=a	--fieldsx
+help					-hx	--field-map	-hh	--h	-h-x	--h
+run	out	--bogus	=q	-	--field-m=q	--	out	--bogus
+help					-h	--	--
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	--field	out
+help					-hx	-hh=x	--field-map	-hh=x	
+usage	argument -h/--help: ignored explicit argument '-x'				-h-x	--field-map	a b	out	--fields	-=x	--field-map
+usage	ambiguous option: --=x could match --help, --field-map, --fields				--=x	--field-	--he	--=x
+run	-٣	out	-	=a=b	--fields=a=b	-٣	out
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields				-=x	-	-f	--field-map=m	out
+help					-hh	-.5	--=x	--help=x	--h	--he	-h=
+help					-٣	-f	--x y		-hh	-	-h=x
+usage	unrecognized arguments: -h=x -- -5 -				in	-٣	--	-h=x	--	-5	-
+help					--he	-hh=x	--bogus
+help					-hh	--field-m=q	--field-	--fields=a=b	-hx	-h=
+usage	argument -h/--help: ignored explicit argument '-x'				--fields=	-h-x	-h-x	-hh=x	-f	--bogus
+usage	unrecognized arguments: -.5 --fields=a=b				--	--field-	-hh	-.5	--fields=a=b
+usage	ambiguous option: --=x could match --help, --field-map, --fields				--fields=a	--=x	--field-m=q	-٣	in	--h
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields				--bogus	-=x	-f	out
+usage	argument -h/--help: ignored explicit argument '-x'				-5	-h-x	-٣	-٣	-x
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fieldsx	--x y	--fi=1	-hh
+usage	argument -h/--help: ignored explicit argument 'x'				-hh=x		--fi=1	--field-map
+usage	argument -h/--help: ignored explicit argument ''				-x	-x	-h=	--fieldsx
+usage	argument --fields: expected one argument				--x y	--field-map=m	--fields	--f	-h=
+usage	ambiguous option: --f could match --field-map, --fields				-	--f	--f	--field-map
+help					-5	-hx	--field-map=m	--fieldsx	-=x	-hh=x
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields				-=x	-٣	--bogus	--x y	-	-h=x
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	--field	-5
+usage	argument --field-map: expected one argument				--field-m=q	a b	--field-map	-f	--fields=a	--=x
+usage	argument -h/--help: ignored explicit argument ''				-h=	a b	-h-x	--fields=a=b
+help					--he	--help	-f	--
+help					--fields=	-h	--fields	--help=x
+usage	argument -h/--help: ignored explicit argument '-x'				-h-x	-hh	--field-	
+usage	argument -h/--help: ignored explicit argument 'x'				--field-map=m	x	-hh=x	x	--fields=a=b	-x
+usage	argument -h/--help: ignored explicit argument '-x'				--field-	--x y	in	in	--field-m=q	-h-x
+help					--he	-a b	--fields=	--fi=1	--he	--fields	--field-map=m
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fields=	--fi=1	--fields=a=b	--field-m=q	-f	--x y
+usage	argument -h/--help: ignored explicit argument ''				-٣	-h=	--field-
+usage	argument --field-map: expected one argument				--field-m=q	x	--field-	--field-map=m	--fi=1	-.5	-h
+usage	argument -h/--help: ignored explicit argument ''				-h=		-f	--x y	--help	-٣
+help					--he	-٣	-f	--=x	--f
+help					-f	--fieldsx	-hh	--help	--x y	--f
+usage	argument --field-map: expected one argument				-x	--field-	--fields=a=b	--field
+usage	argument --fields: expected one argument				-f	--fields	--bogus
+help					-5	-f	-a b	--he	-٣	--
+usage	ambiguous option: --fi=1 could match --field-map, --fields				-f	--fi=1	--	--help=x	-f	--field-map
+usage	ambiguous option: --=x could match --help, --field-map, --fields				--=x	-a b	-hx	--h	-5
+usage	argument -h/--help: ignored explicit argument ''				-x	-h=	--field	-	--field-map	-h	-h=
+help					-h	-h=x	--x y
+help					--x y	--he	-h	--fieldsx
+usage	ambiguous option: --f could match --field-map, --fields				-5	--field-m=q	-5	--f	out	--fields=a	--bogus
+help					-hh	--fields=	--h
+help					--bogus	in	-h	out	-=x	-h=
+usage	ambiguous option: --=x could match --help, --field-map, --fields				-.5	--=x	-.5	-hh	--fieldsx	-a b	--fields=a
+help					--x y	--field-m=q	x	-.5	--bogus	-hx	--=x
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields				-٣	-x	-=x	--fields=a	-a b
+usage	argument -h/--help: ignored explicit argument 'x'				-hh=x	-	--h	--bogus	-=x	a b
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	--field		--=x	--	--fieldsx
+usage	ambiguous option: --field could match --field-map, --fields				--field	-hh=x	--fi=1	-hx		--fields=a=b
+help					--help	--f	--field-m=q	-hx	-.5	--fields=a	-=x
+usage	ambiguous option: --=x could match --help, --field-map, --fields				--=x	--f	--help	--field-m=q	--fields=a=b
+help					--field-m=q	-	-٣	--help	a b	-h	--f
+help					--h	--fields=a=b	--=x	in	--h	--fi=1	-.5
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	-=x	--	out	out	--field-
+help					-hh	--field-m=q	--h	--field-map
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields				-.5	-=x		a b	--fi=1	-h=	--fields=a
+usage	ambiguous option: --field could match --field-map, --fields				--field	--field-m=q	--	--=x	--fi=1
+usage	ambiguous option: --field could match --field-map, --fields				--field	-h=x	--fields=a=b
+usage	the following arguments are required: tuples				-f	-	--field-m=q
+usage	ambiguous option: --=x could match --help, --field-map, --fields				--fields=	x	--=x	--fields=	
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	--fields	--fields=a	-a b
+usage	argument --field-map: expected one argument				--field-	--field-m=q	--fields=a	--fields=	--field-map
+help					--help	-hh	--he	--field	--
+usage	argument -h/--help: ignored explicit argument 'x'				-hh=x	--fields=a=b	--field-map=m	-x	--help	-h	-.5
+usage	unrecognized arguments: --bogus				--bogus	--		--field-m=q
+help					-h	-	--fi=1	-٣
+usage	argument -h/--help: ignored explicit argument ''				-x	-h=	--=x	x	--fields=	-٣	a b
+usage	unrecognized arguments: -f -f				--fields=a	-f	--fields	--x y	-f	-	-a b
+usage	argument -h/--help: ignored explicit argument 'x'				-a b	-hh=x	in	-
+help					--fields=a=b	-h	--fields=	out	-x	-hh=x
+usage	argument --field-map: expected one argument				--fields=a	--x y	--field-	--fieldsx
+usage	argument -h/--help: ignored explicit argument 'x'				--fieldsx	--help=x	--h	--fields=	-٣	--	-h-x
+usage	ambiguous option: --f could match --field-map, --fields				--f	-٣	-h	--field-map=m	out	-hx
+help					-h	--fi=1	in		--field	--field	--he
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields				-=x	--fields=a=b	--field	in
+usage	argument --fields: expected one argument				--fields	--fi=1	--field-m=q	out	--field-	--fields=a=b
+usage	ambiguous option: --field could match --field-map, --fields				--field	--fields=a=b	--h	--fields=a	out
+usage	argument -h/--help: ignored explicit argument ''				-h=	-a b	-.5	--f	--field-	--fi=1	
+usage	ambiguous option: --f could match --field-map, --fields				--f	--h	--fields=a=b	-h-x	--fi=1	a b	--field-
+help					-.5	-٣	-.5	-hx	-hh
+usage	argument -h/--help: ignored explicit argument 'x'				-hh=x		-٣
+usage	argument -h/--help: ignored explicit argument 'x'				--field-m=q	-.5	-f		-hh=x
+usage	unrecognized arguments: --fields=a				--	--bogus	--field-map=m	--fields=a
+usage	argument -h/--help: ignored explicit argument '-x'				-h-x	x		--x y
+usage	argument -h/--help: ignored explicit argument 'x'				x	-h=x	--	--help=x
+help					-h	-=x	--field-	-.5	-x
+usage	the following arguments are required: tuples				a b	-x	-f	--fields=
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	out	--he	-	--fields=	in
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields					-=x	--he	--he	-hh=x
+usage	argument -h/--help: ignored explicit argument '-x'				-	--fields=a=b	-h-x	--field-
+help					a b	-h	out	--fields=a
+usage	argument --field-map: expected one argument				--field-map	--fieldsx	--=x	--fields	--help=x	--fields=a=b
+usage	ambiguous option: --f could match --field-map, --fields				-f	-x	--field-map=m		--f	-hh=x	--field-
+help					--fields=a	a b	-hh	--h	--field-m=q	-
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	-h=x	x	--x y	--field-	a b	--help=x
+usage	argument -h/--help: ignored explicit argument 'x'				-٣	--x y	--fields=a=b	--x y	in	--field-m=q	-hh=x
+usage	argument -h/--help: ignored explicit argument ''				--fields=a=b	-h=	--field-map	-h-x	--
+usage	argument --field-map: expected one argument				-.5	--field-m=q	-5	--field-	-f	--help	-x
+usage	the following arguments are required: tuples				-f	--fields=	in	--fields=a
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	--help	-.5	--x y
+usage	argument --fields: expected one argument				--fields	--fieldsx	-hh=x	-hx	-h-x
+help					--h	-h-x	-h=x	--=x	-h-x	-5
+usage	ambiguous option: --field could match --field-map, --fields				-.5	-a b	--field	--field-map=m	--fields=	-h=	-hx
+help					--x y	--h	-٣	--fi=1	--fi=1
+help					-	-	--h
+usage	argument -h/--help: ignored explicit argument 'x'				--field-map=m	-h=x	--field-map	--	-h
+help					--fields=a=b	--h	-hx	-hh=x	--help=x
+help					-a b	-hh	--=x	--fields=a=b	-h=x
+usage	ambiguous option: --=x could match --help, --field-map, --fields				--=x	--help	in	--field	-h	a b
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	-٣	--fields=a=b
+help					-h	--help=x	--fields=a	-.5	in	-h=x	-=x
+help					x	-hh	-a b	--fields=
+help					-hx	-f	in
+help					-x	--he	-.5
+usage	argument -h/--help: ignored explicit argument ''				-h=	-h=x		--fields=	--f
+usage	ambiguous option: --field could match --field-map, --fields				--field	--field	-٣	--fi=1	-h=	--fields=a	--f
+usage	argument -h/--help: ignored explicit argument '-x'				--fields=a	--field-m=q	-h-x	-	-h-x		--
+help					--fields=a=b	--help	--field-map		--f	--help	--
+help					--fields=a	-h	--fi=1	--=x	--fields=
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	--fields	-	in
+usage	argument -h/--help: ignored explicit argument ''				-h=	-	--fields
+help					--h	--=x	--he
+help						--h	--field-map=m
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields				-	--fieldsx	--field-	-.5	-=x	--field-map
+usage	argument --fields: expected one argument				--fields	-h-x	--fields=a=b	--field-map	--fields=	--field-	--h
+help					-hh	--	--fields=a	out	--fi=1	--=x	--field-map=m
+help					in	--field-m=q	-.5	--he	--
+help					-a b	-5	--h	--fields=a	-=x	--field-m=q
+usage	argument -h/--help: ignored explicit argument '-x'				in	-.5	--x y	x	-h-x	--field
+help					--field-m=q	-.5	--fields=	--field-m=q	--help	in
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields				--fields=a	-=x	in	--fields=a
+usage	argument --field-map: expected one argument				-a b	a b	x	--fields=a	--field-
+usage	ambiguous option: --=x could match --help, --field-map, --fields				-a b	--=x	--field-map=m	--x y	--field-map
+usage	argument --fields: expected one argument				--fields	--bogus	--field-	-5	--field
+usage	unrecognized arguments: -x --fieldsx				-	-٣	--field-map	-٣	-x	--fieldsx	--field-map=m
+usage	the following arguments are required: tuples				--field-m=q	--fields=a	--fields=	--field-m=q	--field-m=q	-a b
+usage	argument -h/--help: ignored explicit argument 'x'					-hh=x	-hx	--f	--=x
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	--he	-x	out	--he
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields				-=x	out	--fields=a	-f
+help					-h	--field-map	--he	--field-map=m		--fields=
+usage	the following arguments are required: tuples				--bogus	x	-f
+usage	unrecognized arguments: --field-map --fields=a --field-map --help=x				--	-	--field-m=q	--field-map	--fields=a	--field-map	--help=x
+help					--field-m=q	--help	--	--bogus	-h-x
+usage	argument -h/--help: ignored explicit argument ''				--field-m=q	-.5	--fields=a	x	a b	-h=
+help					--help	a b	-h-x	--help
+usage	ambiguous option: --fi=1 could match --field-map, --fields				-5	--fi=1	x	--field-map
+help					--bogus	-hh	--x y	--fields=	--f
+usage	ambiguous option: --=x could match --help, --field-map, --fields				--bogus	--=x	--fields=a=b	--field
+usage	argument --field-map: expected one argument				x	--field-	--field-map	out	--f	-.5	--field-map
+usage	argument --fields: expected one argument				--fields	-=x	--field-	x	--h	--fields	--fields
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	-f	--field-m=q	--x y	--help=x	--he	-٣
+usage	ambiguous option: --field could match --field-map, --fields				--field	--	--field-map=m	-a b	-x
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields				--fields=a=b	-=x	--h	-hh=x	--field-map=m	--field-map=m
+help					--h	--field-map	--field-	-hh
+usage	argument -h/--help: ignored explicit argument 'x'				--field-m=q	--bogus	-f	--help=x	-x	--fields	-h-x
+help					-h	-x	in	-h-x	--=x
+usage	ambiguous option: --=x could match --help, --field-map, --fields				-٣	--=x	out	--help=x
+usage	argument --field-map: expected one argument				-	-.5	--field-map	-hx	-x	-h=x
+help					x	-hx	x	-٣	--field-	in
+help					-hx	--h	--fields=a	-f	--field-map=m	--field-m=q	-hx
+usage	unrecognized arguments: -f --field-map - --fields=a				-f	-.5	--	-h-x	--field-map	-	--fields=a
+help					--fields=	--fields=a=b	-h
+usage	argument --field-map: expected one argument				--field-	--	-h=x	-=x
+usage	argument --field-map: expected one argument				--field-	-h	--field	a b	in
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	-x	--=x	--help	--field-map=m
+help					--h	--help=x	-5	--field-m=q
+help					--fields=a	-hx	-a b	--fields=a	in
+help					--field-map=m	a b	--fields	a b	--h
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fields=a	in	-.5	out	--fi=1	-h=x	--field-m=q
+help					--fieldsx	-h	x	--fields=a
+usage	argument -h/--help: ignored explicit argument '-x'				--fields=a=b	--fieldsx	-h-x	-=x	--f	-x	--
+help					--help	--field-	-h=x	--=x
+usage	argument --fields: expected one argument				-a b	--fields	--fieldsx	-f	-h=
+usage	ambiguous option: --f could match --field-map, --fields				--bogus	--f	-5	--h
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	-h=x	-x	-hh	--f	-٣
+usage	ambiguous option: --f could match --field-map, --fields					--f	--f	-h=		-hx	-h-x
+usage	argument --field-map: expected one argument				--fields=a	-a b	-.5	--fields=a=b	--field-map	-h=x
+help					--field-map=m	-hx	-٣	--field-m=q	--fieldsx
+usage	argument --fields: expected one argument				--fields	--f	-a b
+help					--he	-x	--fields=a=b	-=x	--=x
+help					--field-map=m	--x y	--help	--fields=	x	--field-m=q	--
+run	in	--x y	-	-	--	in	--x y
+usage	argument -h/--help: ignored explicit argument '-x'				--fields=a	-h-x	--field	--fields=a=b	out	-=x	--help
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields				-=x	-h=x	-5	-a b
+usage	ambiguous option: --f could match --field-map, --fields				--f	--help=x	-=x	--he	--he	--fields=	--he
+usage	argument --field-map: expected one argument				-a b	--field-	--field	--=x	-hh	-.5
+usage	argument -h/--help: ignored explicit argument '-x'				-h-x	-hh	-hx	-f	--x y	-h=x
+usage	ambiguous option: --=x could match --help, --field-map, --fields				--=x	--fields	--=x	-.5	-hh=x
+usage	ambiguous option: --f could match --field-map, --fields				--f	-hh=x	--help=x	out	--fi=1	-x	out
+usage	argument -h/--help: ignored explicit argument '-x'				--fields=a	-	-	-h-x	--help	-hx	--field-map
+usage	argument -h/--help: ignored explicit argument ''				--fields	x	-a b	-h=	out	--help=x	--x y
+usage	argument -h/--help: ignored explicit argument 'x'				x	--fieldsx	-	-h=x	-	--help=x
+help					-h	--=x	out	-x
+usage	argument -h/--help: ignored explicit argument ''				-.5	--fieldsx	--field-map	-٣	-h=	--bogus
+usage	ambiguous option: --f could match --field-map, --fields				--f	-h-x	--he	--fields=a=b	-hx
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	--field	in	-x	--fieldsx	--help	--=x
+help					-a b	--h	--h
+help					--h	-x	-h-x	-	--field-	-h=	-f
+usage	ambiguous option: --=x could match --help, --field-map, --fields				--x y	--fields=	--field-map=m	--=x	-
+usage	argument -h/--help: ignored explicit argument 'x'				-٣	--fields=a=b	-h=x	-h	-h=
+usage	ambiguous option: --=x could match --help, --field-map, --fields				--=x	--fi=1	--field-map
+usage	argument --field-map: expected one argument				--field-	-h	--f	-5	-h=	-h=x	--field-map=m
+usage	unrecognized arguments: --fieldsx --x y --=x -٣				--fieldsx	--	--field-m=q	--field-map	--x y	--=x	-٣
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	--fi=1	out
+usage	ambiguous option: --field could match --field-map, --fields				--field	-hh	--he	--bogus	--field-	-h=x	-h=
+help					--he	--field-	-hx	-hh=x
+help					-hx	--field-map	-.5	-h=
+usage	argument -h/--help: ignored explicit argument ''				-h=	out	-.5	-.5	-hh	-a b
+usage	argument -h/--help: ignored explicit argument ''				-h=	in	--fi=1	--	--help=x	--help	--h
+usage	argument -h/--help: ignored explicit argument ''				-h=	-h=	--fi=1
+help					--h	--field-	-f
+usage	ambiguous option: --f could match --field-map, --fields				--f	--help	a b		a b
+help					--help	-hh=x	-a b	--fields=a=b
+usage	argument -h/--help: ignored explicit argument '-x'				--fields=	x	a b	--x y	-h-x
+help					--x y	--h	--fieldsx	--fields=a=b	--bogus	-h-x
+help					-5	-h	--fi=1	out
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	--	-.5	-hx	--fields=a	--field-	-hh=x
+usage	unrecognized arguments: --bogus -h				--bogus	--	-.5	-	-h
+usage	the following arguments are required: tuples				--field-map=m	--	-h
+usage	ambiguous option: --f could match --field-map, --fields				--f	--he	--=x	--field-map=m	--field-map	-	-h-x
+usage	ambiguous option: --field could match --field-map, --fields				--field	-h=x	-h	--=x	--fieldsx	--field-map=m
+usage	argument --field-map: expected one argument				--bogus	-x	--fields=a=b	-a b	--field-	-h-x
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields				-=x	in	-f
+usage	ambiguous option: --f could match --field-map, --fields				a b	--fields=	--field-	--x y	--f	--fields=	-a b
+usage	ambiguous option: --fi=1 could match --field-map, --fields				-x	-.5	in	--fi=1	-.5	-hh	--field-map=m
+usage	argument -h/--help: ignored explicit argument '-x'				-٣		-h-x	-5
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	-hx	-	-.5
+usage	ambiguous option: --=x could match --help, --field-map, --fields				-x	x	--=x	-hh	--h	
+usage	ambiguous option: --field could match --field-map, --fields				-5	--field-m=q	--fields=a=b	--field	in	-hh=x
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	--fi=1	--fieldsx	--x y	--fields=a	-٣
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	-h=	-a b	--fieldsx
+usage	argument -h/--help: ignored explicit argument ''				--field-m=q	-5	a b	-h=	-h=
+help					--fields=a	--help	--field-m=q	-h=
+usage	ambiguous option: --=x could match --help, --field-map, --fields				-f	--=x	-h-x	--field-	-5
+usage	argument --fields: expected one argument				--fields	-h-x	--field	in	--fieldsx
+help					--fieldsx	-hx	--f	--field	-.5
+usage	argument -h/--help: ignored explicit argument '-x'				-5	-.5	-h-x
+help					out	x	--help
+usage	ambiguous option: --field could match --field-map, --fields				--field	-h	--field-map	a b	--h	-a b	--field-
+usage	argument -h/--help: ignored explicit argument 'x'				x	-hh=x	-h=	-5	--field-m=q	-
+help					-f	-h	-h=x	--	--fieldsx
+usage	argument -h/--help: ignored explicit argument 'x'				--field-m=q	--field-map=m	--help=x	--	--fields=	--fields=a=b	--=x
+usage	argument --field-map: expected one argument				in	--field-	-x
+usage	unrecognized arguments: -a b --bogus					a b	-a b	--bogus
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields				-=x	--fields	--fields=	--f
+usage	unrecognized arguments: --he --x y				--	-h=	-٣	--he	--x y
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	--he	--help=x	-a b	--field-map=m	--fields=a
+usage	ambiguous option: --field could match --field-map, --fields				--field	--field-	in	-.5	--field-m=q	--=x
+usage	argument -h/--help: ignored explicit argument 'x'					--help=x	-.5	-=x	-a b	-=x	-.5
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	-f	--field-	--field-m=q	-h=x
+usage	argument -h/--help: ignored explicit argument '-x'				-h-x	--field-	--field-map=m
+help					--fields=a=b	--help	--field	out	--field-map	-hh=x
+usage	argument --field-map: expected one argument				--field-	--field-	-h=	
+usage	argument --field-map: expected one argument				--field-	--f	--h
+help					-h		--he	-٣	--fieldsx	--=x
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields				x	-=x	--he	--h	--fieldsx	--fields=a	a b
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fi=1	-=x	-=x	in	--h	-hx	-h=
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields				--bogus	-=x	--fields	--fieldsx	--field-m=q
+usage	argument -h/--help: ignored explicit argument 'x'				-h=x	-h=x	-a b	-h=	--f	-
+help					-hh	-5	--field-map=m	-hh	--help=x	a b	
+help					in	--fields=a	x	--h
+help					-hx	a b	-.5
+usage	ambiguous option: --fi=1 could match --field-map, --fields				x	a b	--bogus	--fi=1	-h=x
+help					--h	--h	--field-map=m	-	--bogus	-٣	-٣
+usage	unrecognized arguments: -h=x --field-map --field --bogus				--	out	--fieldsx	-h=x	--field-map	--field	--bogus
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields				-=x	--fields=a=b	--bogus	-h	-h=	-٣
+usage	unrecognized arguments: --bogus				in	--bogus	--	
+usage	argument -h/--help: ignored explicit argument ''				-h=	-=x	-a b	--fields
+usage	argument -h/--help: ignored explicit argument 'x'				--bogus	-h=x	-=x	
+help					--h	--h	-hh	-h=
+usage	argument --fields: expected one argument				--field-m=q	--fields	--he	--field-map=m
+usage	unrecognized arguments: -f - -- -5				-٣	-f	-٣	-	--	-5
+usage	unrecognized arguments: --help --fieldsx				--fields=a=b	x	--	-h-x	--help	--fieldsx
+help					-hx	--fields=a		--field-	--he	
+usage	argument --fields: expected one argument				--fields	--=x		--fields
+usage	ambiguous option: --f could match --field-map, --fields				-5	--f	-5	--help=x
+usage	argument -h/--help: ignored explicit argument 'x'				--help=x	-hh=x	--field	--fi=1	--fields=a
+help					-a b	-a b	-h	--field
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields				-f	-=x	--field-map=m	-hh=x	--he	-h=
+usage	argument -h/--help: ignored explicit argument 'x'				--field-map=m		--help=x	-h	-hh	-hh	-h=
+help					--h	-h=x	-h	--fields=a=b	in	--help=x
+help					out	--he	-h	--fields=a	-f	in
+usage	unrecognized arguments: --fields -f				--	--x y	-=x	--fields	-f
+usage	ambiguous option: --f could match --field-map, --fields				--fieldsx	--x y	--f	--fields=	in	--=x	--he
+help					--x y	--fields=a	--x y	--fields=	--h	-	--help=x
+help					--x y	-hx	--fields=a=b	-x	-hh=x	in	--h
+usage	unrecognized arguments: -٣				x	-.5	-٣	--fields=
+usage	argument -h/--help: ignored explicit argument 'x'				--fields=a=b	--fields=a		-x	-h=x
+usage	the following arguments are required: tuples				-a b	--field-map=m	--field-map=m
+help					--fields=a=b	-hx	--field	--	--field	--help	--field
+run	in	--x y	=q	-	--field-map=m	in	--x y	--field-m=q
+usage	argument -h/--help: ignored explicit argument '-x'				-f	out	-h-x	--fields	-5	--field-map=m	-5
+help					--he	-hh=x	-=x	-hx	--fieldsx	-=x	-٣
+usage	the following arguments are required: tuples				--field-	-5	--	-a b
+help					-hh	out	--x y	--fields=	-
+help					--he	-	x	-.5	--fields	--=x
+help					--x y	--field-map=m	-h	--he
+help					--h	--=x	--field-map	x	-٣	--field-map=m	--field-map
+usage	argument -h/--help: ignored explicit argument 'x'				-hh=x	-	x	--=x	-x
+help					--field-m=q	--he	-h-x	-hx	-a b
+help					--h		-x		--fields
+usage	argument --fields: expected one argument				-x	--fields	-hh
+usage	argument --field-map: expected one argument				--field-map	-x	--f	--help=x
+help					-hx	--fields=a=b	-a b	x	--=x	-=x
+usage	argument -h/--help: ignored explicit argument 'x'				--fields=a=b	-.5	-f	-hh=x	a b	-.5
+help					--field-m=q	-h	-hh=x	--fields	--fi=1	-=x
+help					-hh	-.5	out	--=x	-hh	--fieldsx
+help						--help	-a b	--x y	--help=x	--h	--field-m=q
+usage	argument -h/--help: ignored explicit argument 'x'				-hh=x	-f	-5	-hx	-h
+usage	argument -h/--help: ignored explicit argument '-x'				--field-map=m	-5	-	-h-x	-5	--he	--field-m=q
+help					-f	-5	--help	--fi=1	--field-map	-	--field
+usage	argument -h/--help: ignored explicit argument ''				-h=	--he	--fields	-٣
+help						a b	a b	--h	--field-map
+usage	argument --field-map: expected one argument				--field-map	--fields=a=b	--field-map=m
+usage	ambiguous option: --field could match --field-map, --fields				--fields=	--field	--field-m=q	--help
+help					--fields=a=b	-hh	--field-map=m
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fields=a=b	--fi=1	--field-m=q	-hh=x		--he	-h=x
+usage	argument --fields: expected one argument				--fields=	--fields	--fields=
+help					--x y	--field-map=m	-hh	--fields=	--fields=a	-	out
+usage	the following arguments are required: tuples				out	--field-map=m	--fields=a
+usage	the following arguments are required: tuples				--fields=	-.5	-f	-f	--field-map=m
+usage	ambiguous option: --fi=1 could match --field-map, --fields				--fields=a	--x y	-5		--fi=1	--	-5
+usage	argument -h/--help: ignored explicit argument 'x'				--bogus	-hh=x	--field-	--	--fields=a	--bogus
+help					-.5	--help	--he	--x y
+usage	ambiguous option: --f could match --field-map, --fields				out	--f	--fields	--field-map=m	out	-hh=x
+usage	argument --field-map: expected one argument				--field-map=m	--field-map	--help	--he	x	in	--h
+usage	unrecognized arguments: --help=x -h-x in				a b	--fields=a=b	--	--x y	--help=x	-h-x	in
+usage	argument --field-map: expected one argument				--field-map	-hh=x	--field	--bogus	--f
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields				-a b	--field-	a b	-=x	--fields=a	--fi=1
+usage	argument -h/--help: ignored explicit argument '-x'				-h-x	a b	--	--field-map	--fields	--=x
+usage	argument -h/--help: ignored explicit argument '-x'				--fields=	-h-x	--h	--field-m=q	--fields	--fi=1
+help					--help	--he	-h	out	--fields=a=b	--fields=a	--help
+help					-hx	--field	--field-	-.5	--he	-hh=x	-h-x
+help					-٣		-h	-h=x	-=x	--bogus
+usage	ambiguous option: --field could match --field-map, --fields				--field	-hx	--
+usage	argument -h/--help: ignored explicit argument 'x'				-a b	-hh=x	-	--fields=a	-hh=x	--fields=a=b
+help					-f	-h	--he	-hh=x	--fields	-h=	-
+usage	ambiguous option: -=x could match -h, --help, --field-map, --fields				-=x		-h-x
+usage	ambiguous option: --f could match --field-map, --fields				--f	-a b	--fi=1
+usage	argument -h/--help: ignored explicit argument ''				-h=	--fields=	--help	-x	--

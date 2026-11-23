@@ -35,36 +35,36 @@ use vep_io::output::json::JsonOutputFormatter;
 
 /// One annotated transcript consequence resembling a typical missense hit.
 fn make_transcript_consequence(transcript_id: &str, gene_id: &str) -> TranscriptConsequence {
-    TranscriptConsequence {
-        transcript: Some(Arc::new(Transcript {
-            stable_id: transcript_id.into(),
-            gene_stable_id: gene_id.into(),
-            gene_symbol: Some("MRPL39".into()),
-            gene_symbol_source: Some("HGNC".into()),
-            hgnc_id: Some("HGNC:16650".into()),
-            biotype: "protein_coding".into(),
-            ..Transcript::default()
-        })),
-        consequences: smallvec![Consequence::MissenseVariant],
-        impact: Impact::MODERATE,
-        feature_type: FeatureType::Transcript,
-        canonical: true,
-        cdna_position: Some("1033".into()),
-        cds_position: Some("991".into()),
-        protein_position: Some("331".into()),
-        amino_acids: Some("A/V".into()),
-        codons: Some("Gca/Gta".into()),
-        strand: -1,
-        hgvsc: Some("ENST00000352957.4:c.991G>A".into()),
-        hgvsp: Some("ENSP00000284967.4:p.Ala331Val".into()),
-        sift: Some("deleterious(0.02)".into()),
-        polyphen: Some("probably_damaging(0.95)".into()),
-        domains: vec![
-            ("Pfam".into(), "PF00080".into()),
-            ("PROSITE_profiles".into(), "PS51402".into()),
-        ],
-        ..Default::default()
-    }
+    let mut consequence = TranscriptConsequence::default();
+    consequence.transcript = Some(Arc::new({
+        let mut transcript = Transcript::default();
+        transcript.stable_id = transcript_id.into();
+        transcript.gene_stable_id = gene_id.into();
+        transcript.gene_symbol = Some("MRPL39".into());
+        transcript.gene_symbol_source = Some("HGNC".into());
+        transcript.hgnc_id = Some("HGNC:16650".into());
+        transcript.biotype = "protein_coding".into();
+        transcript
+    }));
+    consequence.consequences = smallvec![Consequence::MissenseVariant];
+    consequence.impact = Impact::MODERATE;
+    consequence.feature_type = FeatureType::Transcript;
+    consequence.canonical = true;
+    consequence.cdna_position = Some("1033".into());
+    consequence.cds_position = Some("991".into());
+    consequence.protein_position = Some("331".into());
+    consequence.amino_acids = Some("A/V".into());
+    consequence.codons = Some("Gca/Gta".into());
+    consequence.strand = -1;
+    consequence.hgvsc = Some("ENST00000352957.4:c.991G>A".into());
+    consequence.hgvsp = Some("ENSP00000284967.4:p.Ala331Val".into());
+    consequence.sift = Some("deleterious(0.02)".into());
+    consequence.polyphen = Some("probably_damaging(0.95)".into());
+    consequence.domains = vec![
+        ("Pfam".into(), "PF00080".into()),
+        ("PROSITE_profiles".into(), "PS51402".into()),
+    ];
+    consequence
 }
 
 /// Build a representative annotated variant with `n_tc` transcript
@@ -87,12 +87,13 @@ fn make_variant_with_tcs(n_tc: usize) -> InputVariant {
             )
         })
         .collect();
-    variant.colocated_variants = vec![ColocatedVariant {
-        id: "rs999".into(),
-        start: 25_585_733,
-        end: 25_585_733,
-        allele_string: Some("A/G".into()),
-        ..Default::default()
+    variant.colocated_variants = vec![{
+        let mut colocated = ColocatedVariant::default();
+        colocated.id = "rs999".into();
+        colocated.start = 25_585_733;
+        colocated.end = 25_585_733;
+        colocated.allele_string = Some("A/G".into());
+        colocated
     }];
     variant.existing_variation = vec!["rs999".into()];
     variant

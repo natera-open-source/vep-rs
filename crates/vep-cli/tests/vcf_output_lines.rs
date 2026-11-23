@@ -5,8 +5,9 @@
 //! comes back byte for byte, a line that is not UTF-8 included, with the
 //! annotation appended to its INFO column and its sample columns after it, and
 //! a record of another input format gets the line Ensembl VEP builds for it.
-//! The golden harness's comparison of a database-mode reference's `##VEP=`
-//! line, by its tokens, is tested here too.
+//! The golden harness's comparison of a `##VEP=` line by its tokens is tested
+//! here too, with the API module versions that line carries, which are held
+//! to the ones Ensembl VEP's stored outputs state.
 
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -278,11 +279,11 @@ fn database_mode_vep_header_compares_by_its_tokens() {
         lines.join("\n") + "\n"
     };
     let reference = header(
-        "##VEP=\"v116.2\" API=\"v116\" time=\"2026-01-01 00:00:00\" db=\"homo_sapiens_core_116_38@host\" assembly=\"GRCh38.p14\" gencode=\"GENCODE 50\" genebuild=\"GENCODE50\"",
+        "##VEP=\"v116.3\" API=\"v116\" time=\"2026-01-01 00:00:00\" db=\"homo_sapiens_core_116_38@host\" assembly=\"GRCh38.p14\" gencode=\"GENCODE 50\" genebuild=\"GENCODE50\"",
         false,
     );
     let output = header(
-        "##VEP=\"v116.2\" API=\"v116\" time=\"2026-02-02 00:00:00\" cache=\"[PATH]/116_GRCh38\" 1000genomes=\"phase3\" assembly=\"GRCh38.p14\" gencode=\"GENCODE 50\" genebuild=\"GENCODE50\" gnomADe=\"v4.1\"",
+        "##VEP=\"v116.3\" API=\"v116\" time=\"2026-02-02 00:00:00\" cache=\"[PATH]/116_GRCh38\" 1000genomes=\"phase3\" assembly=\"GRCh38.p14\" gencode=\"GENCODE 50\" genebuild=\"GENCODE50\" gnomADe=\"v4.1\"",
         true,
     );
     assert_eq!(
@@ -293,7 +294,7 @@ fn database_mode_vep_header_compares_by_its_tokens() {
     assert!(difference.starts_with("header line 2:"), "{difference}");
 
     let other_build = header(
-        "##VEP=\"v116.2\" API=\"v116\" assembly=\"GRCh38.p14\" gencode=\"GENCODE 49\" genebuild=\"GENCODE50\"",
+        "##VEP=\"v116.3\" API=\"v116\" assembly=\"GRCh38.p14\" gencode=\"GENCODE 49\" genebuild=\"GENCODE50\"",
         false,
     );
     let difference = common::compare_database_vcf_headers(&other_build, &output);
@@ -301,9 +302,175 @@ fn database_mode_vep_header_compares_by_its_tokens() {
     assert!(difference.contains("gencode=GENCODE 49"), "{difference}");
 
     let missing_token = header(
-        "##VEP=\"v116.2\" API=\"v116\" assembly=\"GRCh38.p14\" gencode=\"GENCODE 50\" genebuild=\"GENCODE50\" sift=\"6.2.1\"",
+        "##VEP=\"v116.3\" API=\"v116\" assembly=\"GRCh38.p14\" gencode=\"GENCODE 50\" genebuild=\"GENCODE50\" sift=\"6.2.1\"",
         false,
     );
     let difference = common::compare_database_vcf_headers(&missing_token, &output);
     assert!(difference.starts_with("header line 2:"), "{difference}");
+}
+
+/// The golden harness holds the API module tokens of a `##VEP=` line as it
+/// holds the source versions: the `time` and `cache` tokens may differ, and a
+/// module whose version differs from the reference's, a module the output
+/// lacks and two modules in the other order are each a difference.
+#[test]
+fn vep_header_comparison_holds_the_api_module_tokens() {
+    let identity = format!("##vep-rs={}", env!("CARGO_PKG_VERSION"));
+    let header = |vep_line: &str, with_identity: bool| -> String {
+        let mut lines = vec!["##fileformat=VCFv4.1".to_string(), vep_line.to_string()];
+        if with_identity {
+            lines.push(identity.clone());
+        }
+        lines.push("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO".to_string());
+        lines.join("\n") + "\n"
+    };
+    let reference = header(
+        "##VEP=\"v116.3\" API=\"v116\" time=\"2026-01-01 00:00:00\" cache=\"/work/cache/homo_sapiens/116_GRCh38\" ensembl=116.0d85231 ensembl-io=116.6afb5dc assembly=\"GRCh38.p14\"",
+        false,
+    );
+    let output = |modules: &str| -> String {
+        header(
+            &format!(
+                "##VEP=\"v116.3\" API=\"v116\" time=\"2026-02-02 00:00:00\" cache=\"[PATH]/116_GRCh38\"{modules} assembly=\"GRCh38.p14\""
+            ),
+            true,
+        )
+    };
+    assert_eq!(
+        common::compare_vcf_headers(
+            &reference,
+            &output(" ensembl=116.0d85231 ensembl-io=116.6afb5dc")
+        ),
+        ""
+    );
+    for modules in [
+        " ensembl=116.0000000 ensembl-io=116.6afb5dc",
+        " ensembl=116.0d85231",
+        "",
+        " ensembl-io=116.6afb5dc ensembl=116.0d85231",
+    ] {
+        let difference = common::compare_vcf_headers(&reference, &output(modules));
+        assert!(
+            difference.starts_with("header line 2:"),
+            "{modules:?}: {difference}"
+        );
+    }
+}
+
+/// The `key=value` tokens of a `##VEP=` line in the line's order, split at the
+/// blanks outside a quoted value, each value without its quotes.
+fn vep_line_tokens(line: &str) -> Vec<(String, String)> {
+    let mut tokens = Vec::new();
+    let mut rest = line.trim_start_matches('#');
+    while let Some(equals) = rest.find('=') {
+        let key = rest[..equals].trim_start();
+        let value = &rest[equals + 1..];
+        let (value, after) = match value.strip_prefix('"') {
+            Some(quoted) => {
+                let close = quoted.find('"').unwrap_or(quoted.len());
+                (&quoted[..close], &quoted[(close + 1).min(quoted.len())..])
+            }
+            None => value.split_at(value.find(' ').unwrap_or(value.len())),
+        };
+        tokens.push((key.to_string(), value.to_string()));
+        rest = after;
+    }
+    tokens
+}
+
+/// `vep_core::VEP_API_MODULE_VERSIONS` holds what Ensembl VEP's own outputs
+/// state: every `##VEP=` line of every VCF output stored under an `expected`
+/// directory of `tests/golden/116` names the release of `vep_core::VEP_VERSION`
+/// and `vep_core::VEP_SUB_VERSION` and carries exactly the constant's modules,
+/// in its order, each with its version (`OutputFactory/VCF.pm` lines 244-256).
+/// A reference release whose image reports another version for a module fails
+/// here by the module's name.
+#[test]
+fn api_module_versions_are_the_ones_the_stored_reference_outputs_state() {
+    let release = format!("v{}.{}", vep_core::VEP_VERSION, vep_core::VEP_SUB_VERSION);
+    let golden = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden/116");
+    let mut outputs: Vec<PathBuf> = Vec::new();
+    for corpus in std::fs::read_dir(&golden).unwrap() {
+        let corpus = corpus.unwrap().path();
+        if !corpus.is_dir() {
+            continue;
+        }
+        for expected in std::fs::read_dir(&corpus).unwrap() {
+            let expected = expected.unwrap().path();
+            let named_expected = expected
+                .file_name()
+                .is_some_and(|name| name.to_string_lossy().starts_with("expected"));
+            if !named_expected || !expected.is_dir() {
+                continue;
+            }
+            for name in ["vcf.vcf.gz", "vcf.vcf"] {
+                let output = expected.join(name);
+                if output.is_file() {
+                    outputs.push(output);
+                }
+            }
+        }
+    }
+    outputs.sort();
+    let mut lines = 0;
+    for output in &outputs {
+        let bytes = if output.extension().is_some_and(|e| e == "gz") {
+            gunzip(output)
+        } else {
+            std::fs::read(output).unwrap()
+        };
+        let header: Vec<&[u8]> = bytes
+            .lines()
+            .take_while(|line| line.starts_with(b"#"))
+            .collect();
+        let before = lines;
+        for line in header.iter().filter(|line| line.starts_with(b"##VEP=")) {
+            lines += 1;
+            let tokens = vep_line_tokens(&line.to_str_lossy());
+            assert_eq!(
+                tokens
+                    .first()
+                    .map(|(key, value)| (key.as_str(), value.as_str())),
+                Some(("VEP", release.as_str())),
+                "{}: the line names another release than vep_core::VEP_VERSION and \
+                 vep_core::VEP_SUB_VERSION",
+                output.display()
+            );
+            let stated: Vec<(&str, &str)> = tokens
+                .iter()
+                .filter(|(key, _)| key == "ensembl" || key.starts_with("ensembl-"))
+                .map(|(key, value)| (key.as_str(), value.as_str()))
+                .collect();
+            for &(module, version) in vep_core::VEP_API_MODULE_VERSIONS {
+                let found = stated
+                    .iter()
+                    .find(|(key, _)| *key == module)
+                    .map(|(_, value)| *value);
+                assert_eq!(
+                    found,
+                    Some(version),
+                    "{module}: {} states another version than \
+                     vep_core::VEP_API_MODULE_VERSIONS",
+                    output.display()
+                );
+            }
+            assert_eq!(
+                stated,
+                vep_core::VEP_API_MODULE_VERSIONS,
+                "{}: the modules of the line and of vep_core::VEP_API_MODULE_VERSIONS \
+                 differ in number or order",
+                output.display()
+            );
+        }
+        assert!(
+            header.is_empty() || lines > before,
+            "{}: a header without a `##VEP=` line",
+            output.display()
+        );
+    }
+    assert!(
+        outputs.len() >= 100 && lines >= 100,
+        "{} stored VCF outputs, {lines} `##VEP=` lines",
+        outputs.len()
+    );
 }

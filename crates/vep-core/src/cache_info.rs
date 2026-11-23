@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 /// feature the stable id, span, strand, database id, score, stranded sequence
 /// and the stable id of its binding matrix; the matrices once in
 /// `regulatory/binding_matrices.json`.
+#[doc(hidden)]
 pub const REGULATORY_SCHEMA: u32 = 1;
 
 /// Metadata from a VEP cache info.txt file.
@@ -19,12 +20,13 @@ pub const REGULATORY_SCHEMA: u32 = 1;
 /// the same object as `info.json`; every field is optional there.
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
+#[non_exhaustive]
 pub struct CacheInfo {
     /// Species name (e.g., "homo_sapiens").
     pub species: String,
     /// Genome assembly (e.g., "GRCh38"); `None` when the key is absent, and
     /// `Some("")` for a present but empty value, which Ensembl VEP's reader keeps
-    /// and compares (`CacheDir.pm:466, 475, 407` at release/116.2). An absent key
+    /// and compares (`CacheDir.pm:466, 475, 407` at release/116.3). An absent key
     /// stays absent when the object is written.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub assembly: Option<String>,
@@ -39,14 +41,14 @@ pub struct CacheInfo {
     /// The epigenomes of the regulatory build, as the converter lists them: the
     /// sorted union of every regulatory feature's activity-map keys (epigenome
     /// short names with spaces as `_`, `Database/RegFeat.pm:196-203` at
-    /// release/116.2). A regulatory feature's `activity` string holds one code
+    /// release/116.3). A regulatory feature's `activity` string holds one code
     /// per name in this order. Ensembl VEP's own `cell_types` line is a
     /// comma-joined string the names cannot be split back from (some contain
     /// commas), so a cache converted without the list has none.
     pub cell_types: Vec<String>,
     /// The shape of the regulatory shards and of
     /// `regulatory/binding_matrices.json`, written by the converter beside
-    /// `regulatory`; the current shape is [`REGULATORY_SCHEMA`], and a cache
+    /// `regulatory`; the current shape is `REGULATORY_SCHEMA`, and a cache
     /// whose regulatory tree declares none holds an unversioned shape. An
     /// absent key stays absent when the object is written.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -61,7 +63,7 @@ pub struct CacheInfo {
     pub build: Option<String>,
     /// The alignment file the transcript models were edited against, the `bam`
     /// line of a RefSeq or merged cache's `info.txt` (`Dumper/Otherfeatures.pm:80`
-    /// at release/116.2); a cache with the key switches `--use_transcript_ref`
+    /// at release/116.3); a cache with the key switches `--use_transcript_ref`
     /// on (`CacheDir.pm:412-416`). An absent key stays absent when the object
     /// is written.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -80,11 +82,65 @@ pub struct CacheInfo {
     /// contig by name; a `--core-dumps` build of the builder lists the dumps'
     /// karyotype first, by rank. Empty when the cache's metadata lacks the key.
     pub contig_order: Vec<String>,
+    /// What the tool that made the cache left out of it, each entry a name of
+    /// `left_out`: a key of this cache layout with no counterpart in Ensembl
+    /// VEP's `info.txt`. The builder and the converter write it and a run
+    /// reads it to name what its command asks for and the cache does not
+    /// carry. Empty when the cache's metadata lacks the key; an empty list
+    /// stays absent when the object is written, and a name this build does
+    /// not know is passed over.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub left_out: Vec<String>,
+}
+
+/// The names a cache's `left_out` list holds ([`CacheInfo::left_out`]).
+#[doc(hidden)]
+pub mod left_out {
+    /// A build that read no core table dumps: the cache holds no symbol
+    /// source, HGNC identifier, MANE or APPRIS value, mature miRNA arm,
+    /// RefSeq or UniProt cross-reference, protein feature or gene phenotype
+    /// flag.
+    pub const CORE_TABLES: &str = "core_tables";
+    /// A build that read a GTF or GFF3 as the transcript model itself: the
+    /// transcripts name no source for the `SOURCE` field.
+    pub const SOURCE: &str = "source";
+    /// A build whose 1000 Genomes `AF` is each allele's count over the
+    /// panel's chromosomes, recovered from the continental frequencies: the
+    /// cache holds no panel-wide frequency as the release states it.
+    pub const PANEL_FREQUENCY: &str = "panel_frequency";
+    /// A conversion of transcript shards whose translations hold no
+    /// `seq_edits` list: the cache holds no sequence edit.
+    pub const SEQ_EDITS: &str = "seq_edits";
+    /// A `homo_sapiens` build with variation files and no 1000 Genomes file:
+    /// the cache holds none of the `AF`, `AFR`, `AMR`, `EAS`, `EUR` and `SAS`
+    /// columns Ensembl VEP's own cache of the genome holds.
+    pub const THOUSAND_GENOMES_FREQUENCIES: &str = "thousand_genomes_frequencies";
+    /// A `homo_sapiens` build with variation files: the cache holds none of
+    /// the gnomAD columns Ensembl VEP's own cache of the genome holds.
+    pub const GNOMAD_FREQUENCIES: &str = "gnomad_frequencies";
+    /// A build with variation files that read no table of the citations:
+    /// the `pubmed` column is declared and holds no identifier.
+    pub const PUBMED: &str = "pubmed";
+    /// A build with variation files that read no table of the synonyms: the
+    /// `var_synonyms` column is declared and holds no synonym.
+    pub const VAR_SYNONYMS: &str = "var_synonyms";
+    /// A build with variation files that read neither the failed-variants
+    /// GVF nor the `failed_variation` table: no record carries the `failed`
+    /// flag.
+    pub const FAILED_VARIANTS: &str = "failed_variants";
+    /// A regulatory tree baked from a regulatory-feature GFF3 without an
+    /// activity file: no feature carries its activity in a cell type, and
+    /// the record lists no `cell_types`.
+    pub const CELL_TYPE_ACTIVITY: &str = "cell_type_activity";
+    /// A regulatory tree baked with a motif-feature GFF3 in which a binding
+    /// matrix a motif names carries no counts, or a motif no sequence: the
+    /// two that `HIGH_INF_POS` and `MOTIF_SCORE_CHANGE` are read from.
+    pub const MOTIF_SCORES: &str = "motif_scores";
 }
 
 impl CacheInfo {
     /// Whether the variation files are one indexed `all_vars.gz` per chromosome
-    /// (`var_type tabix`, `CacheDir.pm:184` at release/116.2) rather than one
+    /// (`var_type tabix`, `CacheDir.pm:184` at release/116.3) rather than one
     /// `<start>-<end>_var.gz` per region.
     pub fn variation_is_tabix(&self) -> bool {
         self.var_type.as_deref() == Some("tabix")
@@ -95,12 +151,19 @@ impl CacheInfo {
         (!self.variation_cols.is_empty())
             .then(|| VariationColumns::new(self.variation_cols.clone()))
     }
+
+    /// Whether the cache's `left_out` list holds `name`, a name of
+    /// `left_out`.
+    pub fn leaves_out(&self, name: &str) -> bool {
+        self.left_out.iter().any(|entry| entry == name)
+    }
 }
 
 /// The columns Ensembl VEP's variation dumper writes before the population
 /// frequencies (`Database/Variation.pm:70-80` and
-/// `Pipeline/DumpVEP/Dumper/Variation.pm:181-188, 195` at release/116.2); every
+/// `Pipeline/DumpVEP/Dumper/Variation.pm:181-188, 195` at release/116.3); every
 /// other name in `variation_cols` is a population frequency column.
+#[doc(hidden)]
 pub const FIXED_VARIATION_COLUMNS: &[&str] = &[
     "chr",
     "variation_name",
@@ -142,7 +205,7 @@ impl VariationColumns {
     }
 
     /// The population frequency columns: every name outside
-    /// [`FIXED_VARIATION_COLUMNS`], in file order.
+    /// `FIXED_VARIATION_COLUMNS`, in file order.
     pub fn frequency_columns(&self) -> impl Iterator<Item = &str> {
         self.names
             .iter()
@@ -243,6 +306,31 @@ mod tests {
         assert!(!written.contains("source_type"), "{written}");
     }
 
+    /// `left_out` is a JSON array of names: a record without the key reads as
+    /// an empty list and is written without it, a record with the key keeps
+    /// its names through a write and a read, and a name outside [`left_out`]
+    /// is kept and matches no name of the module.
+    #[test]
+    fn left_out_names_round_trip_and_an_absent_key_stays_absent() {
+        let plain: CacheInfo = serde_json::from_str(r#"{"species":"homo_sapiens"}"#).unwrap();
+        assert!(plain.left_out.is_empty());
+        assert!(!plain.leaves_out(left_out::CORE_TABLES));
+        let written = serde_json::to_string(&plain).unwrap();
+        assert!(!written.contains("left_out"), "{written}");
+
+        let stated: CacheInfo = serde_json::from_str(
+            r#"{"species":"homo_sapiens","left_out":["core_tables","seq_edits","a_later_name"]}"#,
+        )
+        .unwrap();
+        assert!(stated.leaves_out(left_out::CORE_TABLES));
+        assert!(stated.leaves_out(left_out::SEQ_EDITS));
+        assert!(!stated.leaves_out(left_out::SOURCE));
+        assert!(!stated.leaves_out(left_out::PANEL_FREQUENCY));
+        let written = serde_json::to_string(&stated).unwrap();
+        let read: CacheInfo = serde_json::from_str(&written).unwrap();
+        assert_eq!(read.left_out, ["core_tables", "seq_edits", "a_later_name"]);
+    }
+
     /// `cell_types` is a JSON array of the epigenome names, so a name holding a
     /// comma (77 of the 112 GRCh38 names) survives a write and a read intact and
     /// in place, where Ensembl VEP's comma-joined `cell_types` line cannot be
@@ -325,6 +413,7 @@ mod tests {
             source_type: Some("ensembl".to_string()),
             source_versions,
             contig_order: vec!["1".to_string(), "X".to_string(), "MT".to_string()],
+            left_out: Vec::new(),
         };
         assert_eq!(info.species, "homo_sapiens");
         assert_eq!(info.assembly.as_deref(), Some("GRCh38"));

@@ -1,0 +1,4 @@
+WARNING: --canonical-contigs requested but --assembly is , which names no canonical set; the filter is OFF for this run. Name the set with --canonical-contigs <file or list> (a cache's info.json contig_order) or pass --no-canonical-contigs to silence this warning.
+prepared ucsc.vcf -> ucsc.vcf (mode=keep, variants=16, headers=4)
+prepared ensembl.vcf.gz -> ensembl.vcf (mode=keep, variants=15, headers=3)
+wrote manifest: {{OUTPUT_DIR}}/manifest.json

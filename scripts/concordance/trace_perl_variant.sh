@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# trace_perl_variant.sh - Run Perl VEP on a SINGLE variant with injected predicate tracing.
+# trace_perl_variant.sh - Run Ensembl VEP on a SINGLE variant with injected predicate tracing.
 #
-# Perl VEP has no built-in debug output for consequence logic. This script:
+# Ensembl VEP has no built-in debug output for consequence logic. This script:
 #   1. Creates a minimal single-variant VCF
 #   2. Patches 3 Perl modules with warn() trace statements via Docker volume mounts
-#   3. Runs Perl VEP on the single variant
+#   3. Runs Ensembl VEP on the single variant
 #   4. Parses stderr TRACE lines into a structured predicate report
 #
 # Requires:
-#   - Docker with ensemblorg/ensembl-vep:release_116.2
+#   - Docker with ensemblorg/ensembl-vep:release_116.3
 #   - Reference Perl modules at --reference-dir (extracted by extract_perl_reference.sh)
-#   - Perl VEP cache at --cache-dir
+#   - Ensembl VEP cache at --cache-dir
 #
 # Usage:
 #   trace_perl_variant.sh --variant 21:26960070:G:A --assembly GRCh37
@@ -26,7 +26,7 @@ SPECIES="homo_sapiens"
 CACHE_DIR="${VEP_PERL_CACHE_DIR:-./.vep/cache}"
 REFERENCE_DIR="${VEP_PERL_REF_DIR:-./.vep/perl_reference}"
 WORK_DIR="${VEP_WORK_DIR:-./.vep/work}/perl_debug"
-DOCKER_IMAGE="ensemblorg/ensembl-vep:release_116.2"
+DOCKER_IMAGE="ensemblorg/ensembl-vep:release_116.3"
 
 VARIANT=""
 VCF_LINE=""
@@ -37,7 +37,7 @@ KEEP_TEMP=0
 # --- Usage ---
 usage() {
 	cat <<'EOF'
-Run Perl VEP on a single variant with predicate-level trace output.
+Run Ensembl VEP on a single variant with predicate-level trace output.
 
 Usage:
   trace_perl_variant.sh --variant CHR:POS:REF:ALT --assembly ASSEMBLY [options]
@@ -60,7 +60,7 @@ Optional:
                           --dir_cache (default: ${VEP_PERL_CACHE_DIR:-./.vep/cache})
   --reference-dir DIR     Unpatched Perl module directory (default: ${VEP_PERL_REF_DIR:-./.vep/perl_reference})
   --work-dir DIR          Working directory for temp files (default: ${VEP_WORK_DIR:-./.vep/work}/perl_debug)
-  --docker-image IMAGE    Docker image (default: ensemblorg/ensembl-vep:release_116.2)
+  --docker-image IMAGE    Docker image (default: ensemblorg/ensembl-vep:release_116.3)
   --keep-temp             Do not clean up temp files
   --help                  Print this help
 EOF
@@ -127,7 +127,7 @@ if [[ -z "${ASSEMBLY}" ]]; then
 	echo "ERROR: --assembly is required (the cache slice's assembly, GRCh37, GRCh38, R64-1-1, ...)" >&2
 	exit 1
 fi
-# The two are directory names under the cache root (CacheDir.pm:306-329 at release/116.2).
+# The two are directory names under the cache root (CacheDir.pm:306-329 at release/116.3).
 if [[ ! "${ASSEMBLY}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
 	echo "ERROR: --assembly must be an assembly name, got: ${ASSEMBLY}" >&2
 	exit 1
@@ -182,7 +182,7 @@ fi
 TMP_DIR="${WORK_DIR}/tmp"
 mkdir -p "${TMP_DIR}"
 mkdir -p "${WORK_DIR}/patched"
-# The Perl VEP Docker image runs as a non-root user, so the bind-mounted
+# The Ensembl VEP Docker image runs as a non-root user, so the bind-mounted
 # output dir (/work/tmp) must be world-writable or VEP fails with
 # "Could not write to output file /work/tmp/output.txt". chmod is best-effort
 # (no-op / harmless if the caller already owns the dir as root).
@@ -255,7 +255,7 @@ elif [[ -n "${VCF_FILE}" ]]; then
 	VARIANT_DESC="${CHR}:${POS} ${REF}>${ALT}"
 fi
 
-echo "=== Perl VEP Predicate Trace ===" >&2
+echo "=== Ensembl VEP Predicate Trace ===" >&2
 echo "Variant: ${VARIANT_DESC} (${SPECIES} ${ASSEMBLY})" >&2
 echo "" >&2
 
@@ -263,7 +263,7 @@ echo "" >&2
 echo "Patching Perl modules..." >&2
 
 python3 - "${REFERENCE_DIR}" "${WORK_DIR}/patched" <<'PYEOF'
-"""Patch Perl VEP modules to inject warn()-based TRACE output at sub boundaries."""
+"""Patch Ensembl VEP's Perl modules to inject warn()-based TRACE output at sub boundaries."""
 import sys
 import re
 import os
@@ -322,7 +322,7 @@ def patch_ve_module(src):
         if in_sub is not None:
             brace_depth += line.count("{") - line.count("}")
 
-            # Return-statement patching (predicates only). The predicate subs use
+            # Return-statement patching (every sub). The subs use
             # three return shapes; each needs a different rewrite. A
             # postfix-conditional or multi-line return must not become
             # `my $_trace_val = (EXPR if COND);`: that is invalid Perl and aborts
@@ -402,7 +402,7 @@ def patch_ve_module(src):
 
             # End of sub (closing brace at depth 0)
             if brace_depth <= 0:
-                # For predicates, add a trace before the final }
+                # For every sub, add a trace before the final }
                 if instrument_sub(in_sub):
                     stripped = line.rstrip()
                     if stripped == "}":
@@ -583,8 +583,8 @@ for mod in "${MODULES[@]}"; do
 	fi
 done
 
-# --- Step 3: Run Perl VEP with patched modules ---
-echo "Running Perl VEP with trace instrumentation..." >&2
+# --- Step 3: Run Ensembl VEP with patched modules ---
+echo "Running Ensembl VEP with trace instrumentation..." >&2
 
 STDERR_LOG="${TMP_DIR}/perl_stderr.log"
 VEP_OUTPUT="${TMP_DIR}/output.txt"
@@ -608,7 +608,7 @@ docker run --rm \
 	--species "${SPECIES}" --assembly "${ASSEMBLY}" \
 	--fork 1 --buffer_size 1 --force --no_stats \
 	2>"${STDERR_LOG}" || {
-	echo "ERROR: Perl VEP Docker run failed. Stderr:" >&2
+	echo "ERROR: Ensembl VEP Docker run failed. Stderr:" >&2
 	cat "${STDERR_LOG}" >&2
 	exit 1
 }
@@ -619,7 +619,7 @@ echo "" >&2
 
 # --- Step 4: Parse and format trace output ---
 python3 - "${STDERR_LOG}" "${VEP_OUTPUT}" "${VARIANT_DESC}" "${ASSEMBLY}" "${SPECIES}" <<'PYEOF'
-"""Parse Perl VEP TRACE output and VEP result into a structured report."""
+"""Parse Ensembl VEP TRACE output and VEP result into a structured report."""
 import sys
 import re
 from collections import defaultdict, OrderedDict
@@ -696,7 +696,7 @@ for line in vep_lines:
         }
 
 # --- Build the report ---
-print(f"=== Perl VEP Predicate Trace ===")
+print(f"=== Ensembl VEP Predicate Trace ===")
 print(f"Variant: {variant_desc} ({species} {assembly})")
 print()
 
@@ -704,7 +704,7 @@ print()
 # Group predicates: show which ones fired (nonzero/true) vs didn't
 if ve_traces:
     # Deduplicate: for each predicate, keep the last value seen
-    # (Perl VEP may evaluate predicates multiple times per transcript)
+    # (Ensembl VEP may evaluate predicates multiple times per transcript)
     pred_values = OrderedDict()
     for name, val in ve_traces:
         pred_values.setdefault(name, []).append(val)

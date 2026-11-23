@@ -1,0 +1,2 @@
+1	dbSNP	156	Variants (including SNPs and indels) imported from dbSNP	http://www.ncbi.nlm.nih.gov/projects/SNP/	\N	mixed	variation
+32	ClinVar	202509	Variants of clinical significance imported from ClinVar	https://www.ncbi.nlm.nih.gov/clinvar/	\N	germline	variation,variation_synonym,phenotype_feature

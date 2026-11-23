@@ -1,7 +1,7 @@
 entry = "loftee_incomplete_cds_every_row"
 page = "docs/plugins/loftee.md#2-check_complete_cds-filters-every-multi-exon-transcript"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the check_complete_cds option of the LoF plugin that Ensembl VEP runs for LoFTEE, which the plugin's documentation describes as a check of the Ensembl Complete CDS annotation, off by default, and which the value true turns on; not seen in the measured datasets"
 notes = "Ensembl VEP's LoF plugin is the LOFTEE repository's grch38 branch, outside the VEP_plugins checkout: the run needs --extra-dir loftee=<LOFTEE checkout>."
@@ -42,4 +42,14 @@ vep_rs = [
   "ENST00000400427 | stop_gained | - | HC | -",
   "ENST00000408910 | stop_gained | - | HC | -",
   "ENST00000408989 | stop_gained | - | HC | -",
+]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/loftee.rs::LofteePlugin::annotate",
+    "crates/vep-core/src/consequence.rs::LofteeContext::from_transcript",
+]
+tests = [
+    "crates/vep-cli/tests/plugins_builtin.rs::loftee_check_complete_cds_leaves_a_row_without_an_exon_number",
+    "crates/vep-cli/tests/plugins_builtin.rs::loftee_check_complete_cds_reads_any_case_of_true_only",
 ]

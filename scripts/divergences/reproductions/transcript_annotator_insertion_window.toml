@@ -1,7 +1,7 @@
 entry = "transcript_annotator_insertion_window"
 page = "docs/plugins/annotation-store.md#10-transcriptannotator-a-table-row-written-at-an-insertions-start"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the TranscriptAnnotator plugin's header, which asks for chromosome, position, reference allele, alternative allele and transcript ID as the first 5 columns and sets no convention for the position or the alleles of an insertion's row; not seen in the measured datasets"
 notes = "Both engines print the insertion at 21:10541124-10541125; Ensembl VEP's window is 10541123-10541124 and the row sits at 10541125. The same row written as `21 10541124 T TA` lies inside both windows and both engines write it."
@@ -33,3 +33,11 @@ where = { record = "insA", feature = "ENST00000618007" }
 [expected]
 ensembl_vep = ["-"]
 vep_rs = ["0.42"]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/transcript_annotator.rs::TranscriptAnnotatorPlugin::window",
+]
+tests = [
+    "crates/vep-builtins/src/plugins/transcript_annotator.rs::tests::a_row_with_no_allele_cell_fails_only_inside_the_window_ensembl_vep_reads",
+]

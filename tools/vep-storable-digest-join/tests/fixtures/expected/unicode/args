@@ -1,0 +1,10 @@
+--version-a
+vé☺
+--dump-a
+unicode.tsv
+--version-b
+w"\
+--dump-b
+a.tsv
+--out-dir
+out

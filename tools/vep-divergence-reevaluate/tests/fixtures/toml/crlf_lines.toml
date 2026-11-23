@@ -1,0 +1,6 @@
+entry = "crlf_lines"
+notes = """
+first
+second"""
+[input]
+text = "x"

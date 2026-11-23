@@ -17,6 +17,7 @@ use crate::consequence::Consequence;
 
 /// The vocabulary `--terms` names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum Vocabulary {
     /// Sequence Ontology terms, the default.
     #[default]
@@ -121,7 +122,7 @@ mod tests {
     use super::*;
 
     /// `%OVERLAP_CONSEQUENCES` of ensembl-variation `Utils/Constants.pm` at
-    /// release/116 (lines 653-1390, plus `$DEFAULT_OVERLAP_CONSEQUENCE` at
+    /// release/116 (lines 653-1388, plus `$DEFAULT_OVERLAP_CONSEQUENCE` at
     /// 636-650 for `intergenic_variant`): every entry's `SO_term`, its
     /// `display_term` and its `NCBI_term`, an absent key written as `-`.
     const OVERLAP_CONSEQUENCES: &str = "\
@@ -168,9 +169,10 @@ intergenic_variant INTERGENIC -
 sequence_variant SEQUENCE_VARIANT -
 ";
 
-    /// Every consequence renders in each vocabulary as the Perl table says,
-    /// the SO term standing in where the table has no label: 32 display
-    /// labels and 9 NCBI labels over the 41 terms.
+    /// Every consequence renders in each vocabulary as the Ensembl VEP table
+    /// says, the SO term standing in where the table has no label: 32 display
+    /// labels and 9 NCBI labels over the 41 terms. `Consequence::ALL` lists each
+    /// term of the table once.
     #[test]
     fn display_and_ncbi_vocabularies_match_ensembl_variation() {
         let mut seen = 0;
@@ -183,6 +185,7 @@ sequence_variant SEQUENCE_VARIANT -
                 cells.next().unwrap(),
             );
             let c = Consequence::from_so_term(so).unwrap_or_else(|| panic!("{so}"));
+            assert!(Consequence::ALL.contains(&c), "{so} in Consequence::ALL");
             let expected = |label: &'static str| if label == "-" { so } else { label };
             assert_eq!(c.display_term(), expected(display), "{so} display_term");
             assert_eq!(c.ncbi_term(), expected(ncbi), "{so} NCBI_term");
@@ -194,6 +197,7 @@ sequence_variant SEQUENCE_VARIANT -
             seen += 1;
         }
         assert_eq!((seen, display_labels, ncbi_labels), (41, 32, 9));
+        assert_eq!(Consequence::ALL.len(), seen);
     }
 
     /// The `--terms` values are Ensembl VEP's `%VALID` spellings, case included;

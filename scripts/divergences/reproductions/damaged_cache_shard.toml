@@ -1,7 +1,7 @@
 entry = "damaged_cache_shard"
 page = "docs/divergences/damaged-cache-shard.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "malformed"
 input_class_basis = "each member of a gzip file has a header, its compressed blocks, then CRC32 and ISIZE (RFC 1952, section 2.3 \"Member format\"): the transcript region file of the cache is cut short inside its compressed blocks and carries neither CRC32 nor ISIZE"
 notes = "Region 43000001-44000000 of chromosome 21 is cut to half its bytes in both caches; the record lies 208,610 bases inside that region, so Ensembl VEP reads the cut file alone. The vep-rs copy drops CHECKSUMS.sha256 so the inflater, not the checksum, refuses the shard."
@@ -35,4 +35,15 @@ pattern = "Cannot read the transcript cache"
 
 [expected]
 ensembl_vep = []
-vep_rs = ["ERROR: [cache] Cannot read the transcript cache for chr21: Failed to inflate <path> incomplete deflate stream"]
+vep_rs = ["ERROR: [cache] Cannot read the transcript cache for chromosome 21: Failed to inflate <path> incomplete deflate stream"]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/json_cache.rs::read_shard",
+    "crates/vep-cli/src/pipeline.rs::refuse_unreadable_shard",
+    "crates/vep-cli/src/transcript_index.rs::ShardUnreadable::fmt",
+]
+tests = [
+    "crates/vep-cli/src/pipeline.rs::tests::a_shard_the_cache_cannot_read_is_refused_under_the_cache_component",
+    "crates/vep-cli/tests/cache_errors.rs::a_transcript_shard_the_cache_cannot_read_ends_a_vcf_run_under_cache",
+]

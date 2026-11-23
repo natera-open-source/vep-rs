@@ -75,7 +75,7 @@ pub(crate) fn perl_numeric_f64(text: &str) -> f64 {
     rest[..end].parse::<f64>().unwrap_or(0.0)
 }
 
-/// Every comma-separated SVLEN value as Perl reads the list (BaseVCF4.pm:304 and
+/// Every comma-separated SVLEN value as Ensembl VEP reads the list (BaseVCF4.pm:304 and
 /// Parser/VCF.pm:505 `split(',', $svlen)`, a trailing empty field no field, then the
 /// numeric reading of each), so `-300,` is the one value -300; a list with no field
 /// (`SVLEN=`, `SVLEN=,`) is the one value 0, what `abs` and `max` make of it.
@@ -90,6 +90,7 @@ pub fn svlen_values(svlen: &str) -> Vec<i64> {
 
 /// How a record's class reads its span.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum SpanClass {
     /// `chromosome_breakpoint`: INFO/END is deleted before the end is read.
     Breakpoint,
@@ -123,6 +124,7 @@ pub fn structural_start(pos: u64, class: VariantClass) -> u64 {
 
 /// Why Ensembl VEP skips a record on its span.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum SpanError {
     /// INFO/END, the text as written, is no coordinate vep-rs can hold. An END that
     /// is no number to Perl either fails `validate_vf`'s coordinate test
@@ -152,6 +154,17 @@ impl fmt::Display for SpanError {
 }
 
 impl std::error::Error for SpanError {}
+
+/// The coordinate an INFO/END text names: a whole number no larger than
+/// [`MAX_COORD`], read with the blanks around it dropped, which `looks_like_number`
+/// (Parser.pm:475) admits. Ensembl VEP keeps the text as written (BaseVCF4.pm:307-308)
+/// and reads it as a number only where it tests it (Parser.pm:475) or compares it
+/// with the start (Parser/VCF.pm:555, Parser.pm:483), so a fraction, an exponent or a
+/// closing point (`30425949.0`, `3e7`, `30425949.`) passes there and names no
+/// coordinate here.
+pub(crate) fn end_coordinate(text: &str) -> Option<u64> {
+    parse_coordinate(text.trim_ascii())
+}
 
 /// The end of the symbolic record at VCF position `pos` (its first base is `pos + 1`)
 /// with the INFO values `svlen` and `end` as written (`END=` is `Some("")`), `None` for
@@ -195,8 +208,7 @@ pub fn structural_end(
         (SpanClass::Breakpoint, Some("0")) => Err(SpanError::StartPastEnd { start, end: 0 }),
         (SpanClass::Breakpoint, _) | (_, None) => Ok(start),
         (_, Some(text)) => {
-            // `looks_like_number` (Parser.pm:475) admits blanks around the number.
-            let end = parse_coordinate(text.trim_ascii())
+            let end = end_coordinate(text)
                 .ok_or_else(|| SpanError::EndNotACoordinate(text.to_string()))?;
             if end.saturating_add(1) < start {
                 return Err(SpanError::StartPastEnd {
@@ -215,7 +227,7 @@ pub fn structural_end(
 /// nor END, `svlen` and `end` here as written (`None` for an absent key). Ensembl VEP
 /// warns `deletion looks incomplete`, marks the record `vep_skip` and drops it unless
 /// `--dont_skip` keeps it (`validate_svf`, Parser.pm:821-826), so `21 30165850 x N <DEL>`
-/// with `SVTYPE=DEL` alone and with `END=30165850` are both dropped by 116.2.
+/// with `SVTYPE=DEL` alone and with `END=30165850` are both dropped by 116.3.
 pub fn deletion_looks_incomplete(
     so_term: &str,
     start: u64,
@@ -241,7 +253,7 @@ mod tests {
     use super::*;
 
     /// The deletion test runs on the term, or on the type string of a type the table
-    /// lacks, and reads an END at or before POS as an empty span: 116.2 drops `<DEL>`
+    /// lacks, and reads an END at or before POS as an empty span: 116.3 drops `<DEL>`
     /// without SVLEN or END, `<DEL>` with `END=POS` (`start > end`), `<CN0>` (term
     /// `deletion`) without an extent and `<INS>,<DEL>` (type string `<INS>/<DEL>`)
     /// without one, and keeps `<DEL>` with `SVLEN=-100`, with `END=POS+1`, and a
@@ -315,7 +327,7 @@ mod tests {
     }
 
     /// `$start > $end` on an END text that is no coordinate here (Parser/VCF.pm:555):
-    /// Ensembl VEP 116.2 writes no `deletion looks incomplete` line for
+    /// Ensembl VEP 116.3 writes no `deletion looks incomplete` line for
     /// `21 30165850 x N <DEL>` with `END=30165900abc`, `END=30165900.0`, `END=3.01659e7`,
     /// `END=Inf` or `END=NaN` (their numbers are not below the start, 30165851), and
     /// writes it for `END=abc`, `END=.`, `END=` and `END=-Inf`, which read as 0 or below.
@@ -337,7 +349,7 @@ mod tests {
         }
     }
 
-    /// Perl's `abs()` numifies the string: Ensembl VEP 116.2 ends a `<DUP>` at POS 30425650
+    /// Perl's `abs()` numifies the string: Ensembl VEP 116.3 ends a `<DUP>` at POS 30425650
     /// at 30425950 for `SVLEN=300abc`, `SVLEN= 300` and `SVLEN=3e2`, and at 30425650 (the
     /// insertion pair) for `SVLEN=abc`, `SVLEN=` and `SVLEN=0`.
     #[test]
@@ -373,7 +385,7 @@ mod tests {
     }
 
     /// `get_end` (BaseVCF4.pm:302-315): SVLEN first, by its first value, else END, else the
-    /// start; Ensembl VEP 116.2 writes `21:30425651-30425950` for `<DEL>` with
+    /// start; Ensembl VEP 116.3 writes `21:30425651-30425950` for `<DEL>` with
     /// `SVLEN=-100;SVLEN=-300` read as its last value by the caller, `21:30425651-30425950`
     /// for `SVLEN=-300,400`, and the pair `21:30425650-30425651` for `SVLEN=0`, `SVLEN=abc`
     /// and `END=30425650`.
@@ -439,7 +451,7 @@ mod tests {
     /// Perl's `split` drops a trailing empty field (Parser/VCF.pm:505
     /// `uniq(split(/,/, $info->{SVLEN}))`), so `SVLEN=-300,` is the one value -300 and
     /// a tandem class ends at `$start + max(@svlen) - 1` (`:511`), before its start:
-    /// Ensembl VEP 116.2 skips `21 30165850 x N <CNV:TR> . . SVTYPE=CNV;SVLEN=-300,`
+    /// Ensembl VEP 116.3 skips `21 30165850 x N <CNV:TR> . . SVTYPE=CNV;SVLEN=-300,`
     /// with `start > end+1 : (START=30165851, END=30165550)`, and `<DUP:TANDEM>` the
     /// same. The first value of every other class is the same with or without the
     /// comma (`SVLEN=300,` ends a `<DUP>` at POS + 300), and a list of no value
@@ -478,7 +490,7 @@ mod tests {
         );
     }
 
-    /// `validate_vf` (Parser.pm:475-488) skips the record: Ensembl VEP 116.2 writes
+    /// `validate_vf` (Parser.pm:475-488) skips the record: Ensembl VEP 116.3 writes
     /// `start > end+1 : (START=30425651, END=0)` for `<DUP>` with `END=0`, the same for
     /// `END=30425000`, and `Invalid start '30425651' or end '' coordinate` for `END=`.
     #[test]
@@ -516,7 +528,7 @@ mod tests {
     }
 
     /// A breakpoint's END is deleted before the end is read again (Parser/VCF.pm:487-489),
-    /// so Ensembl VEP 116.2 writes `21:30425651` for `<BND>` with `END=30425750` and with
+    /// so Ensembl VEP 116.3 writes `21:30425651` for `<BND>` with `END=30425750` and with
     /// `END=abc`; the deletion is skipped for an END Perl reads as false, so `END=0` keeps
     /// the 0 (`start > end+1`) and `END=` the empty string (invalid coordinate), and the
     /// record is skipped. With SVLEN the span is SVLEN's whatever END says.

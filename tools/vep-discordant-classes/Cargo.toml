@@ -1,0 +1,21 @@
+[package]
+name = "vep-discordant-classes"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.89"
+license = "Apache-2.0"
+description = "Classes the rows of a discordant-tuple table by pairing the reference-only rows with the scored-only rows, as a table and a summary fixed to the byte"
+publish = false
+
+[dependencies]
+memchr = "2"
+
+# Its own Cargo root: the repository workspace's commands do not reach this package, and
+# a cargo command for it names this manifest.
+[workspace]
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"

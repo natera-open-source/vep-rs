@@ -1,0 +1,38 @@
+{
+  "generated_at_utc": "{{GENERATED_AT}}",
+  "input_dir": "{{INPUT_DIR}}",
+  "output_dir": "{{OUTPUT_DIR}}",
+  "requested_chrom_mode": "auto",
+  "cache_dir": null,
+  "max_variants": null,
+  "assembly": null,
+  "canonical_contigs_policy": "disabled",
+  "canonical_contigs_filter_active": false,
+  "canonical_contigs_set": null,
+  "files": [
+    {
+      "input_file": "{{INPUT_DIR}}/ucsc.vcf",
+      "output_file": "{{OUTPUT_DIR}}/ucsc.vcf",
+      "detected_input_chrom_style": "chr",
+      "detected_cache_chrom_style": "unknown",
+      "normalization_mode": "keep",
+      "headers_written": 4,
+      "variants_written": 16,
+      "variants_dropped_non_canonical": 0,
+      "output_sha256": "8da0c3af82713e70b047fb19219048b17957a8d7f371be9a9a5f296fb37e59e6",
+      "chr_stripped": false
+    },
+    {
+      "input_file": "{{INPUT_DIR}}/ensembl.vcf.gz",
+      "output_file": "{{OUTPUT_DIR}}/ensembl.vcf",
+      "detected_input_chrom_style": "plain",
+      "detected_cache_chrom_style": "unknown",
+      "normalization_mode": "keep",
+      "headers_written": 3,
+      "variants_written": 15,
+      "variants_dropped_non_canonical": 0,
+      "output_sha256": "73ea7a3824d273d4010192dd0325b329d9a136d95a1d5a0f650b4b7e8e6f7153",
+      "chr_stripped": false
+    }
+  ]
+}

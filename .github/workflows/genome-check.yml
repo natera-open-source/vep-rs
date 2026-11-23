@@ -1,0 +1,136 @@
+name: Genome check
+
+# Checks genomes of the table under tests/genomes against their ready-made Ensembl VEP
+# caches. It builds vep, the three tools and the cache converter from the checked-out
+# tree, pulls the Ensembl VEP image the tree pins, and runs scripts/genomes/test_genome.sh
+# on the genomes the inputs name: the keys given, or a sample of one set.
+# docs/genome-checks.md describes the two modes and the line each genome prints.
+#
+# The workflow starts by hand alone: it has no schedule and no push or pull-request
+# trigger. A genome whose cache archive is larger than `max_bytes` is skipped, since the
+# runner's disk holds the archive, its extraction and its conversion at once. Each
+# genome's row, job record and comparison report are kept as one artifact.
+on:
+  workflow_dispatch:
+    inputs:
+      keys:
+        description: Genome keys, comma-separated; empty to sample a set
+        required: false
+        default: ""
+      set:
+        description: The set to sample when no key is given
+        required: false
+        default: ""
+      sample:
+        description: How many genomes of the set to sample
+        required: false
+        default: "3"
+      mode:
+        description: recheck runs vep-rs alone; parity runs both engines
+        type: choice
+        options:
+          - recheck
+          - parity
+        default: recheck
+      max_bytes:
+        description: Skip a genome whose cache archive is larger than this many bytes
+        required: false
+        default: "1000000000"
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  genomes:
+    name: Genome check
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Refuse inputs that name no genome
+        env:
+          KEYS: ${{ inputs.keys }}
+          SET: ${{ inputs.set }}
+        run: |
+          if [ -z "${KEYS// /}" ] && [ -z "${SET// /}" ]; then
+            echo "ERROR: [genome-check] give keys, or a set to sample" >&2
+            exit 1
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
+        with:
+          toolchain: 1.97.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: |
+            .
+            tools/vep-seeded-variants
+            tools/vep-outputs-compare
+            tools/vep-genome-table
+            tools/vep-storable-to-json
+      - name: Build vep and the three tools
+        run: |
+          set -euo pipefail
+          cargo build --release --locked -p vep-cli --bin vep
+          for tool in vep-seeded-variants vep-outputs-compare vep-genome-table; do
+            cargo build --release --locked --manifest-path "tools/$tool/Cargo.toml"
+          done
+      # The per-genome job converts each cache with this build, which it mounts into the
+      # image; test_genome.sh skips every genome without it.
+      - name: Build the cache converter
+        run: cargo build --release --locked --manifest-path tools/vep-storable-to-json/Cargo.toml
+      # The reference and its digest are read from the script that pins them, so the
+      # image this workflow runs is the one the tree's reference outputs come from.
+      - name: Pull the Ensembl VEP image the tree pins
+        id: image
+        run: |
+          set -euo pipefail
+          script=scripts/concordance/generate_reference_output.sh
+          reference=$(sed -n 's/^PERL_IMAGE="\([^"]*\)"$/\1/p' "$script")
+          digest=$(sed -n 's/^PERL_IMAGE_DIGEST=.*:-\(sha256:[0-9a-f]\{64\}\)}"$/\1/p' "$script")
+          if [ -z "$reference" ] || [ -z "$digest" ]; then
+            echo "ERROR: [genome-check] $script pins no image reference with a digest" >&2
+            exit 1
+          fi
+          docker pull "$reference"
+          if ! docker image inspect --format '{{join .RepoDigests ","}}' "$reference" | grep -qF "@$digest"; then
+            echo "ERROR: [genome-check] the pulled $reference does not carry the digest $digest" >&2
+            exit 1
+          fi
+          echo "reference=$reference" >> "$GITHUB_OUTPUT"
+      - name: Check the genomes
+        env:
+          KEYS: ${{ inputs.keys }}
+          SET: ${{ inputs.set }}
+          SAMPLE: ${{ inputs.sample }}
+          MODE: ${{ inputs.mode }}
+          MAX_BYTES: ${{ inputs.max_bytes }}
+          IMAGE: ${{ steps.image.outputs.reference }}
+        run: |
+          set -euo pipefail
+          args=(--mode "$MODE" --max-bytes "$MAX_BYTES" --vep-image "$IMAGE" --work "$RUNNER_TEMP/genomes")
+          if [ -n "${KEYS// /}" ]; then
+            IFS=, read -r -a keys <<< "${KEYS// /}"
+            for key in "${keys[@]}"; do
+              [ -z "$key" ] || args+=(--key "$key")
+            done
+          else
+            args+=(--set "$SET" --sample "$SAMPLE")
+          fi
+          bash scripts/genomes/test_genome.sh "${args[@]}"
+      - name: Keep each genome's row, job record and comparison report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: genome-check
+          path: |
+            ${{ runner.temp }}/genomes/*/out/row.tsv
+            ${{ runner.temp }}/genomes/*/out/job.json
+            ${{ runner.temp }}/genomes/*/out/comparison/
+            ${{ runner.temp }}/genomes/*/job.log
+          if-no-files-found: warn

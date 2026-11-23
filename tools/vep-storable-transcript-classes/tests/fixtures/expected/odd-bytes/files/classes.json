@@ -1,0 +1,14 @@
+{
+  "version_a": "v\u00e9\u263a",
+  "version_b": "w\"\\",
+  "transcripts": 4,
+  "per_class": {
+    "other": 2,
+    "peptide": 1
+  },
+  "class_combinations": {
+    "other": 2,
+    "peptide": 1,
+    "": 1
+  }
+}

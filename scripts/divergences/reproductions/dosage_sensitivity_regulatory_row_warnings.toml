@@ -1,9 +1,9 @@
 entry = "dosage_sensitivity_regulatory_row_warnings"
 page = "docs/plugins/flat-file.md#2-dosagesensitivity-a-warning-per-row-kind-on-regulatory-and-motif-rows"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 5,810 of 5,810 regulatory features · 0 flag sets, 4 corpora"
+input_class_basis = "2 · 6,931 of 6,931 regulatory features · 0 flag sets, 5 corpora"
 notes = "The first records of the regulatory corpus, which overlap regulatory features and motifs, against the committed DosageSensitivity table; both engines write the rows without a field."
 
 [input]
@@ -39,3 +39,11 @@ ensembl_vep = [
   "WARNING: Plugin 'DosageSensitivity' went wrong: Can't locate object method \"transcript\" via package \"Bio::EnsEMBL::Variation::MotifFeatureVariationAllele\" at <path> line 169, <__ANONIO__> line 6.",
 ]
 vep_rs = []
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/dosage_sensitivity.rs::DosageSensitivityPlugin::run_batch",
+]
+tests = [
+    "crates/vep-cli/tests/plugin_documented_rows.rs::dosage_sensitivity_writes_no_warning_on_regulatory_and_motif_rows",
+]

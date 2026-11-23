@@ -16,7 +16,8 @@ use std::path::{Path, PathBuf};
 pub const DEFAULT_MEMORY_BOUND: usize = 1 << 30;
 
 /// The environment variable under which a debug build exchanges the last two keys of every
-/// sort, so that a test of the whole tool can hand the merge keys that do not ascend. A
+/// sort, so that a test of the whole tool can hand the merge keys that do not ascend; under
+/// the value `collapsed` it exchanges those of the sorts of context-collapsed keys alone. A
 /// release build never reads it.
 #[cfg(debug_assertions)]
 const EXCHANGE_LAST_KEYS_ENV: &str = "VEP_OUTPUTS_COMPARE_DEBUG_EXCHANGE_LAST_KEYS";
@@ -29,12 +30,26 @@ fn exchange_last_keys_where_asked(bounds: &mut [(usize, usize)]) {
     }
 }
 
+/// [`exchange_last_keys_where_asked`] on the keys of one sort, `collapsed` saying whether they
+/// are context-collapsed ones: the value `collapsed` leaves the keys of every other sort in
+/// order.
+#[cfg(debug_assertions)]
+fn exchange_last_keys_of_a_sort_where_asked(bounds: &mut [(usize, usize)], collapsed: bool) {
+    let collapsed_alone =
+        std::env::var_os(EXCHANGE_LAST_KEYS_ENV).is_some_and(|value| value == "collapsed");
+    if collapsed || !collapsed_alone {
+        exchange_last_keys_where_asked(bounds);
+    }
+}
+
 pub struct KeySorter {
     arena: Vec<u8>,
     bounds: Vec<(usize, usize)>,
     memory_bound: usize,
     runs: Vec<PathBuf>,
     scratch: PathBuf,
+    #[cfg(debug_assertions)]
+    collapsed: bool,
 }
 
 impl KeySorter {
@@ -46,7 +61,16 @@ impl KeySorter {
             memory_bound,
             runs: Vec::new(),
             scratch: scratch.join(tag),
+            #[cfg(debug_assertions)]
+            collapsed: false,
         }
+    }
+
+    /// Says whether the keys pushed are context-collapsed ones, which a debug build can be
+    /// asked to exchange alone.
+    #[cfg(debug_assertions)]
+    pub fn holds_collapsed_keys(&mut self, collapsed: bool) {
+        self.collapsed = collapsed;
     }
 
     /// Adds one key, given without its newline.
@@ -66,7 +90,7 @@ impl KeySorter {
         bounds.sort_unstable_by(|a, b| arena[a.0..a.0 + a.1].cmp(&arena[b.0..b.0 + b.1]));
         bounds.dedup_by(|a, b| arena[a.0..a.0 + a.1] == arena[b.0..b.0 + b.1]);
         #[cfg(debug_assertions)]
-        exchange_last_keys_where_asked(&mut bounds);
+        exchange_last_keys_of_a_sort_where_asked(&mut bounds, self.collapsed);
         bounds
     }
 
@@ -133,11 +157,18 @@ fn line_bounds(arena: &[u8]) -> Vec<(usize, usize)> {
 impl SortedKeys {
     /// The keys of `arena`, a newline after each, ordered bytewise with duplicates dropped.
     pub fn from_lines(arena: Vec<u8>) -> SortedKeys {
+        SortedKeys::sorted(arena, false)
+    }
+
+    /// [`SortedKeys::from_lines`]; `collapsed` says whether the keys are context-collapsed
+    /// ones, which a debug build can be asked to exchange alone.
+    #[cfg_attr(not(debug_assertions), allow(unused_variables))]
+    fn sorted(arena: Vec<u8>, collapsed: bool) -> SortedKeys {
         let mut bounds = line_bounds(&arena);
         bounds.sort_unstable_by(|a, b| arena[a.0..a.0 + a.1].cmp(&arena[b.0..b.0 + b.1]));
         bounds.dedup_by(|a, b| arena[a.0..a.0 + a.1] == arena[b.0..b.0 + b.1]);
         #[cfg(debug_assertions)]
-        exchange_last_keys_where_asked(&mut bounds);
+        exchange_last_keys_of_a_sort_where_asked(&mut bounds, collapsed);
         SortedKeys { arena, bounds }
     }
 
@@ -170,7 +201,7 @@ impl SortedKeys {
             push_collapsed_key(&self.arena[start..start + len], &mut arena);
             arena.push(b'\n');
         }
-        SortedKeys::from_lines(arena)
+        SortedKeys::sorted(arena, true)
     }
 
     pub fn len(&self) -> usize {
@@ -242,3 +273,7 @@ fn merge_runs(runs: &[PathBuf], out: &mut impl Write) -> io::Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "sort_collation_tests.rs"]
+mod collation_tests;

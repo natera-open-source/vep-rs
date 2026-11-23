@@ -1,7 +1,7 @@
 entry = "spliceai_chopped_multiallelic"
 page = "docs/plugins/spliceai.md#a-substitution-beside-a-deletion-in-one-record"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
 input_class_basis = "2 · 0.064 per million · 8 flag sets, 4 corpora"
 notes = "The chopped substitution allele A at 26965500 is the SNV fixture's `C A` row; the deletion allele has no indel row in either engine."
@@ -15,8 +15,8 @@ text = """
 [cache]
 species = "homo_sapiens"
 assembly = "GRCh38"
-json_cache = "tests/golden/116/GRCh38-plugin-spliceai/json_cache"
-fasta = "tests/golden/116/GRCh38-plugin-spliceai/reference.fa.gz"
+json_cache = "tests/golden/116/GRCh38-plugin-spliceai-fixture/json_cache"
+fasta = "tests/golden/116/GRCh38-plugin-spliceai-fixture/reference.fa.gz"
 
 [run]
 flags = [
@@ -43,3 +43,10 @@ vep_rs = [
   "ENST00001108183=ADAMTS5|0.05|0.71|0.72|0.66|-47|-14|3|17",
   "ENST00001131497=ADAMTS5|0.05|0.71|0.72|0.66|-47|-14|3|17",
 ]
+
+[implementation]
+code = ["crates/vep-builtins/src/plugins/spliceai.rs::SpliceAiPlugin::is_variant_record"]
+tests = [
+    "crates/vep-cli/tests/plugin_documented_rows.rs::a_spliceai_substitution_beside_a_deletion_in_one_record_scores_its_own_row",
+]
+rules = ["tools/vep-plugin-pairs/src/rules/spliceai.rs::chopped_multiallelic"]

@@ -1,0 +1,4 @@
+location	allele	transcript_id	consequence_set	ref_peptide	alt_peptide	cds_start	cds_end	ref_codon	alt_codon
+21:1000	A	ENST001	missense_variant	A
+21:1000	A	ENST002	missense_variant,splice_region_variant
+21:2000	T	ENST003	stop_gained	R	*	30	30	cGa	tGa

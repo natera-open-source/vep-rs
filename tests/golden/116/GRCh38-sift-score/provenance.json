@@ -1,21 +1,21 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
- "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --sift s --polyphen p [--tab|--vcf|--json]",
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --sift s --polyphen p [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "none on either side",
  "input": "32 single-base substitutions on chromosome 21 whose alternate residue the converted Ensembl VEP 116 cache's SIFT and PolyPhen HumVar matrices predict in each category, so the bare scores of --sift s (0, 1 and decimals) and the bare predictions of --polyphen p are all present; the reference base is the GRCh38 primary assembly's",
  "sha256": {
-  "default.txt": "8a544f98aa390140056527c927718ad24b02a603924f6523d2da20e4df105798",
-  "tab.txt": "a12021b572d61ea73ffc74e7a0ae47f84a2ee7ab16094998598ea66ae47afb97",
-  "vcf.vcf": "85fa764f86e318c27a8444b22342561b65976abfdfb487912c0fc08d5b83b108",
-  "json.jsonl": "5f97ac191d94379a34be7b4497803af15c4ae99cd001dd132b44336594e6f917",
-  "default.summary.log": "4198621dd3fee84b9f0fc18c6dd1df2dc7ba98ad0ebadf518b0710b10a7912a3",
-  "tab.summary.log": "808fcf1db5a4f660dd77c67a4eb89607c74a90eeec52c12006e202a6d2f9ab40",
-  "vcf.summary.log": "45000912c8fc544b81fb51805c543f67c201358009957ccec3feed65ddea5a4f",
-  "json.summary.log": "0b4858a03f54a885dbab9dd3569f63b6b9c799bd631f59bee3faaae10b2ec2fc"
+  "default.txt": "e310a3b1db7e47062e4043c60aa247351e4886ebe1f2411b14d05feaf2facd79",
+  "tab.txt": "9bb25a66ec38bd6db180e23ee77ffd5eac68bddb23671600f1e7d67f968f3960",
+  "vcf.vcf": "48f3b2c89fd555e757b33690d57d83085f274b07d7852130ab26aa8c4bdf61fc",
+  "json.jsonl": "4149809595f34eaddc356c22b1500c28905875d7a1c2fa1bd521d85f4bc45f92",
+  "default.summary.log": "6c0231ef222b4b50a4696b44f7d741abc762a0818032cccac2d3e07e3079ed4f",
+  "tab.summary.log": "789df25351751e2c648026aab346febb571d69220350117e2221532bf11cf690",
+  "vcf.summary.log": "6a4197c3003169bebf22ac3b54c5f3d829639d3a0db78a386cb8f48216be838d",
+  "json.summary.log": "00ccbf7fc505832b5285653846f08b81b3f63dd80d381981e691138ac5eadc3c"
  },
  "variants_vcf_sha256": "8e8f2807575b89a91ef26bc3181299fcc8723bb9707b5e1526cab013a10ce8be",
  "divergences_classified_against": {
@@ -30,7 +30,7 @@
    "p"
   ]
  },
- "generator": "candidate records annotated with Ensembl VEP under the corpus flags, then scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite pool38=<reference>=<candidates> --k 200 --seed 1 --cache <converted slice> --family-columns SIFT,PolyPhen --covers ... --matrix tests/parity/matrix.tsv --flag=--sift --flag=s --flag=--polyphen --flag=p; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --drop-except naming the coding transcripts the records reach, so those keep protein_features and protein_function_predictions and every other transcript drops them --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice scripts/data/storable_to_json.pl converted from the Ensembl VEP 116 GRCh38 cache; scripts/concordance/generate_reference_output.sh --corpus; scripts/golden/build_golden_corpus.py classify",
+ "generator": "candidate records annotated with Ensembl VEP under the corpus flags, then tools/vep-golden-corpus select --release 116 --assembly GRCh38 --dataset pool38=<reference>=<candidates> --k 200 --seed 1 --cache <converted slice> --family-columns SIFT,PolyPhen --covers ... --matrix tests/parity/matrix.tsv --flag=--sift --flag=s --flag=--polyphen --flag=p; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --drop-except naming the coding transcripts the records reach, so those keep protein_features and protein_function_predictions and every other transcript drops them --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice tools/vep-storable-to-json converts from the Ensembl VEP 116 GRCh38 cache; scripts/concordance/generate_reference_output.sh --corpus; tools/vep-golden-corpus classify",
  "pruned_cache": {
   "transcripts_per_chromosome": {
    "21": 162

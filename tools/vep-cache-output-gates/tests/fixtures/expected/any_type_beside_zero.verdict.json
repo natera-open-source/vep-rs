@@ -1,0 +1,105 @@
+{
+  "verdict": "FAIL",
+  "gates": [
+    {
+      "gate": "consequence_f1",
+      "threshold": 0.999,
+      "actual": 1.0,
+      "passed": true
+    },
+    {
+      "gate": "total_annotations_delta",
+      "threshold": 0.001,
+      "baseline": 0,
+      "builder": "many",
+      "actual": 1.0,
+      "passed": false
+    },
+    {
+      "gate": "colocated_variant_delta",
+      "threshold": 0.01,
+      "baseline": 0,
+      "builder": [
+        1,
+        {
+          "a": null,
+          "b": "it's \"x\""
+        },
+        2.5,
+        "\u00e9\u200b",
+        true
+      ],
+      "actual": 1.0,
+      "passed": false
+    },
+    {
+      "gate": "frequency_field_delta",
+      "threshold": 0.01,
+      "actual": 1.0,
+      "details": {
+        "AF": {
+          "baseline": 0,
+          "builder": "x",
+          "delta": 1.0
+        },
+        "AFR_AF": {
+          "baseline": 0,
+          "builder": false,
+          "delta": 0.0
+        },
+        "AMR_AF": {
+          "baseline": 0,
+          "builder": 0.0,
+          "delta": 0.0
+        },
+        "EAS_AF": {
+          "baseline": 0,
+          "builder": 340282366920938463463374607431768211456,
+          "delta": 1.0
+        },
+        "EUR_AF": {
+          "baseline": 0,
+          "builder": [
+            1.5
+          ],
+          "delta": 1.0
+        },
+        "MAX_AF": {
+          "baseline": 0,
+          "builder": null,
+          "delta": 1.0
+        },
+        "SAS_AF": {
+          "baseline": 0,
+          "builder": {
+            "k": "v"
+          },
+          "delta": 1.0
+        },
+        "gnomADe_AF": {
+          "baseline": 0,
+          "builder": "a\ud800",
+          "delta": 1.0
+        },
+        "gnomADg_AF": {
+          "baseline": 0,
+          "builder": 0,
+          "delta": 0.0
+        }
+      },
+      "passed": false
+    },
+    {
+      "gate": "per_consequence_type_delta",
+      "threshold": 0.01,
+      "actual": 0.0,
+      "details": {},
+      "passed": true
+    }
+  ],
+  "cache_diff_summary": {
+    "transcript_match_rate": 1.0,
+    "variation_match_rate": 1.0,
+    "info_json_matches": true
+  }
+}

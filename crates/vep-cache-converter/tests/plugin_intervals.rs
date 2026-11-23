@@ -30,11 +30,10 @@ fn scratch() -> tempfile::TempDir {
 /// The layout of a table at `path` indexed on its second and third columns,
 /// one-based, as `tabix -s 1 -b 2 -e 3` indexes it.
 fn interval_config(path: &Path) -> TabixConfig {
-    TabixConfig {
-        file_path: path.to_path_buf(),
-        end_col: Some(2),
-        ..TabixConfig::default()
-    }
+    let mut config = TabixConfig::default();
+    config.file_path = path.to_path_buf();
+    config.end_col = Some(2);
+    config
 }
 
 /// The table through the tabix reader as the conversion's verification opens
@@ -274,20 +273,12 @@ fn point_only_queries_keep_exact_bounds_at_the_end_of_a_large_index() {
     let vpd = dir.path().join("points.vpd");
     // A store opens for the table whose content its index records, so the
     // records written here are bound to a file standing in for their table.
-    let cfg = TabixConfig {
-        file_path: dir.path().join("points.tsv.gz"),
-        ..TabixConfig::default()
-    };
+    let mut cfg = TabixConfig::default();
+    cfg.file_path = dir.path().join("points.tsv.gz");
     fs::write(&cfg.file_path, b"stand-in").unwrap();
     let source = ContentIdentity::of_file(&cfg.file_path).unwrap();
     let records: Vec<TabixRecord> = (1..=10_000)
-        .map(|start| TabixRecord {
-            chr: "21".into(),
-            start,
-            end: start,
-            columns: Vec::new(),
-            header: None,
-        })
+        .map(|start| TabixRecord::new("21".into(), start, start, Vec::new(), None))
         .collect();
     BinaryStoreWriter::new(vpd.clone())
         .write(&[], &[("21".into(), records)], &cfg, &source)
@@ -413,11 +404,9 @@ fn production_conversion_keeps_same_start_order_and_multiplicity() {
 fn zero_based_intervals_and_same_column_points_verify_against_tabix() {
     let dir = scratch();
     for end_col in [1, 2] {
-        let cfg = TabixConfig {
-            end_col: Some(end_col),
-            zero_based: true,
-            ..interval_config(&dir.path().join("zero-based.tsv.gz"))
-        };
+        let mut cfg = interval_config(&dir.path().join("zero-based.tsv.gz"));
+        cfg.end_col = Some(end_col);
+        cfg.zero_based = true;
         write_indexed_table(&["21\t99\t100\tfirst", "21\t199\t210\tsecond"], &cfg);
         let vpd = dir.path().join("zero-based.tsv.vpd");
         let end_col_flag = end_col.to_string();
@@ -464,16 +453,15 @@ fn zero_based_intervals_and_same_column_points_verify_against_tabix() {
 }
 
 /// A failed verification names how many positions it probed, `total` under
-/// `--verify-all` and `sampled` without it, lists the position that differs
-/// and leaves no store: here the table's index predates its last row, so the
-/// tabix reader finds no row at the position the store holds one.
+/// `--verify-all` and `sampled` without it, lists the position that differs,
+/// ends on the count of mismatches and leaves no store: here the table's
+/// index predates its last row, so the tabix reader finds no row at the
+/// position the store holds one.
 #[test]
 fn a_failed_verification_names_its_positions_total_under_verify_all() {
     let dir = scratch();
-    let cfg = TabixConfig {
-        file_path: dir.path().join("stale.tsv.gz"),
-        ..TabixConfig::default()
-    };
+    let mut cfg = TabixConfig::default();
+    cfg.file_path = dir.path().join("stale.tsv.gz");
     let index = format!("{}.tbi", cfg.file_path.display());
     write_indexed_table(&["21\t100\t100\tfirst"], &cfg);
     let stale_index = fs::read(&index).unwrap();
@@ -484,11 +472,11 @@ fn a_failed_verification_names_its_positions_total_under_verify_all() {
     for (flags, failed) in [
         (
             &["--verify-all"][..],
-            "Concordance: FAIL (1 mismatches in 6 total positions)",
+            "Concordance: FAIL (1 mismatch in 6 total positions)",
         ),
         (
             &[][..],
-            "Concordance: FAIL (1 mismatches in 6 sampled positions)",
+            "Concordance: FAIL (1 mismatch in 6 sampled positions)",
         ),
     ] {
         let output = convert(&cfg.file_path, &vpd, flags);
@@ -499,6 +487,73 @@ fn a_failed_verification_names_its_positions_total_under_verify_all() {
             stderr.contains("\n  21:200 record count: table=0, store=1\n"),
             "{stderr}"
         );
+        assert!(
+            stderr.ends_with(
+                "\nERROR: [cache-converter] Concordance verification failed: 1 mismatch\n"
+            ),
+            "{stderr}"
+        );
         assert!(!vpd.exists() && !vpd.with_extension("vpdi").exists());
     }
+}
+
+/// `line` with each elapsed time, ` in <seconds>s`, written ` in <time>`.
+fn without_times(line: &str) -> String {
+    let mut shown = String::new();
+    let mut rest = line;
+    while let Some(at) = rest.find(" in ") {
+        let (head, tail) = rest.split_at(at + " in ".len());
+        shown.push_str(head);
+        let seconds = tail.len()
+            - tail
+                .trim_start_matches(|c: char| c.is_ascii_digit() || c == '.')
+                .len();
+        rest = match tail[seconds..].strip_prefix('s') {
+            Some(after) if seconds > 0 => {
+                shown.push_str("<time>");
+                after
+            }
+            _ => tail,
+        };
+    }
+    shown + rest
+}
+
+/// The whole log of the conversion of a table of one record: each line
+/// without its timestamp, its elapsed times masked, and each count of one
+/// beside its noun in the singular. The verification probes the record's
+/// position and the one on either side of it.
+#[test]
+fn a_table_of_one_record_is_counted_in_the_singular() {
+    let dir = scratch();
+    let mut cfg = TabixConfig::default();
+    cfg.file_path = dir.path().join("one.tsv.gz");
+    write_indexed_table(&["21\t100\t100\tfirst"], &cfg);
+    let vpd = dir.path().join("one.tsv.vpd");
+
+    let output = convert(&cfg.file_path, &vpd, &[]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stderr}");
+    let logged: Vec<String> = stderr
+        .lines()
+        .map(|line| without_times(line.split_once(' ').map_or(line, |(_, rest)| rest)))
+        .collect();
+    // The paths pass through the mask of the lines that hold them, so a
+    // scratch directory whose name holds ` in <seconds>s` reads alike on
+    // both sides.
+    let shown = |path: &Path| without_times(&path.display().to_string());
+    let (input, store) = (shown(&cfg.file_path), shown(&vpd));
+    assert_eq!(
+        logged,
+        [
+            format!(" INFO vep_cache_converter: Converting {input} to binary store"),
+            " INFO vep_cache_converter: Read 1 record across 1 chromosome in <time>".to_string(),
+            " INFO vep_cache_converter: Wrote 1 record: data=0.0 MB, index=0.2 KB in <time>"
+                .to_string(),
+            " INFO vep_cache_converter: Concordance: PASS (3/3 sampled positions match) in <time>"
+                .to_string(),
+            format!(" INFO vep_cache_converter: Conversion complete in <time>: {input} -> {store}"),
+        ],
+        "{stderr}"
+    );
 }

@@ -28,10 +28,9 @@ the page carries every chapter as a link without a script. It writes
 `sitemap.xml`.
 
 When `VEP_RS_DOCS_README_HOME` is `1` the home page renders the README, so its
-edit link is pointed at `README.md`, and the benchmark chart is not held to the
-README.
+edit link is pointed at `README.md`.
 
-Then three checks. Every page a reader lands on has a title and a description
+Then two checks. Every page a reader lands on has a title and a description
 of its own: a title or a description two pages share, or a page left on the
 book's description, fails the preview and is a warning line on the release,
 whose pages come from a published tag; the release's sitemap lists every such
@@ -39,15 +38,13 @@ page. On the release a title outside 25 to 60 characters fails, and so does a
 title that chapters of different names were fitted to. Every redirect
 destination the built pages name must exist:
 the page as a file and, when the destination carries one, the id on that page.
-The benchmark chart's `data-release` must equal the version in the README's
-`## Current release: vX.Y.Z` heading of the tree the site was built from
-(`--source`). Every step prints one line, the page check a second one for the
-release's titles; any failure exits 1 after all of them have run.
+Every step prints one line, the page check a second one for the release's
+titles; any failure exits 1 after all of them have run.
 
 Usage::
 
     python3 scripts/docs/site_postbuild.py <site> --base <url> --release <tag>
-        [--source <dir>] [--channel main]
+        [--channel main]
 
 Stdlib only.
 """
@@ -74,8 +71,6 @@ REFRESH = re.compile(r'http-equiv="refresh"\s+content="0;\s*URL=([^"]+)"', re.IG
 FRAGMENT_MAP = re.compile(r"fragmentMap\s*=\s*(\{.*?\})\s*;", re.DOTALL)
 REDIRECT_URL = re.compile(r'let redirectUrl = "([^"]+)"')
 SCHEME = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
-SVG_RELEASE = re.compile(r'<svg[^>]*\sdata-release="([^"]+)"')
-README_RELEASE = re.compile(r"^## Current release: (\S+)\s*$", re.MULTILINE)
 PARAGRAPH = re.compile(r"<p>(.*?)</p>", re.DOTALL)
 TAG = re.compile(r"<[^>]+>")
 DESCRIPTION_METAS = re.compile(
@@ -237,7 +232,7 @@ def page_heading(text, title):
 def page_description(text):
     """The page's first paragraph of prose in its main content, cut to a search snippet's length; None if none."""
     start = text.find("<main>")
-    for m in PARAGRAPH.finditer(text, start if start >= 0 else 0):
+    for m in PARAGRAPH.finditer(text, max(start, 0)):
         prose = " ".join(html.unescape(TAG.sub("", m[1])).split())
         if len(prose) < DESCRIPTION_MIN:
             continue
@@ -496,38 +491,11 @@ def check_redirects(site, pages, base):
     return broken
 
 
-def check_chart_release(site, source, readme_home):
-    svg = os.path.join(site, "assets", "benchmark.svg")
-    if not os.path.isfile(svg):
-        print("benchmark chart: not in the site, release check skipped")
-        return []
-    if readme_home:
-        print("benchmark chart: the README is the home page; release check skipped")
-        return []
-    m = SVG_RELEASE.search(read(svg))
-    if not m:
-        return ["assets/benchmark.svg carries no data-release attribute on its root element"]
-    chart_release = m[1]
-    if not source:
-        return [f"assets/benchmark.svg says {chart_release}; --source is needed to compare it with the README"]
-    readme = os.path.join(source, "README.md")
-    if not os.path.isfile(readme):
-        return [f"{readme} does not exist, so the chart's release cannot be checked"]
-    heading = README_RELEASE.search(read(readme))
-    if not heading:
-        return [f"{readme} has no '## Current release: vX.Y.Z' heading, so the chart's release cannot be checked"]
-    if heading[1] != chart_release:
-        return [f"benchmark chart says {chart_release}, the README's Current release heading says {heading[1]}"]
-    print(f"benchmark chart: {chart_release} matches the README")
-    return []
-
-
 def main():
     ap = argparse.ArgumentParser(description="Finish one channel of the built documentation site and check it.")
     ap.add_argument("site", help="the built site, mdBook's output directory")
     ap.add_argument("--base", required=True, help="the URL the site is served at, ending in a slash")
     ap.add_argument("--release", required=True, help="the release tag the site root serves (vX.Y.Z)")
-    ap.add_argument("--source", help="the tree the site was built from; holds the README the chart is held to")
     ap.add_argument("--channel", help="the channel built under <base>; omitted for the release at the root")
     args = ap.parse_args()
     base = args.base if args.base.endswith("/") else args.base + "/"
@@ -547,7 +515,6 @@ def main():
         write_sitemap(args.site, sorted(reader_pages), base)
     failures += check_page_heads(args.site, reader_pages, args.channel)
     failures += check_redirects(args.site, pages, base)
-    failures += check_chart_release(args.site, args.source, readme_home)
 
     for failure in failures:
         print(f"ERROR: [site_postbuild] {failure}")

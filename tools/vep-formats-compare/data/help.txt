@@ -1,0 +1,1536 @@
+usage: vep-formats-compare [-h] [--self-parity | --warnings]
+                           [--format {default,tab,vcf,json,parquet,recoder}]
+                           [--expected EXPECTED] [--actual ACTUAL]
+                           [--input INPUT] [--manifest MANIFEST] [--run RUN]
+                           [--reference-sequence {present,absent}]
+                           [--masks MASKS]
+                           [--reference-release {115.2,116.2,116.3}]
+                           [--keep-only {regulatory_feature_rows}]
+                           [--floors FLOORS] [--field-pairs FIELD_PAIRS]
+                           [--nearest-sites NEAREST_SITES]
+                           [--json-cache JSON_CACHE]
+                           [--reference-fasta REFERENCE_FASTA]
+                           [--gwas-catalog GWAS_CATALOG]
+                           [--revel-table REVEL_TABLE] [--revel-no-match]
+                           [--spliceai-table SPLICEAI_TABLE]
+                           [--utrannotator-sweep UTRANNOTATOR_SWEEP]
+                           [--default DEFAULT] [--tab TAB] [--vcf VCF]
+                           [--json JSON] [--parquet PARQUET]
+                           [--expected-skipped EXPECTED_SKIPPED]
+                           [--actual-skipped ACTUAL_SKIPPED] [--unordered]
+                           [--report REPORT] [--examples EXAMPLES]
+
+Per-column comparison of VEP output files; see the Contract section of the
+tool's README for the rules.
+
+options:
+  -h, --help            show this help message and exit
+  --self-parity         one engine's formats against each other
+  --warnings            two engines' warnings files against each other
+  --format {default,tab,vcf,json,parquet,recoder}
+                        the format of --expected and --actual; recoder
+                        compares two variant_recoder outputs
+  --expected EXPECTED   the Ensembl VEP output, or its warnings file
+  --actual ACTUAL       the candidate output, or its warnings file
+  --input INPUT         the input VCF (needed for --format vcf and json;
+                        beside --manifest its name selects the flag set
+                        documented over that input in every format, the text
+                        formats reading nothing else of it but under
+                        reference_skipped_record, the classes that read a
+                        record's alleles, and splice_term_past_the_record_span
+                        and stop_codon_overlap_insertion_range with their
+                        plugin value classes,
+                        stop_codon_completed_by_polyadenylation,
+                        stop_codon_overlap_without_stop_codon,
+                        stop_codon_behind_last_residue_without_stop_codon,
+                        start_codon_overlap_without_start_codon,
+                        refseq_edited_model_equal_span_insertion_term and
+                        hgvsp_frameshift_count_at_the_first_residue, which
+                        read from it the reference bases of a row under an
+                        identifier)
+  --manifest MANIFEST   the corpus manifest.json documenting divergences;
+                        dbnsfp_mitochondrial_record_named_m reads its assembly
+                        and the --plugin dbNSFP words of its runs
+  --run RUN             the run of --manifest the pair belongs to: default,
+                        the manifest's own run, or the name of one of its flag
+                        sets; the lists of that run alone are read, and an
+                        --input of another name than the run's is refused;
+                        without it the lists of every run over the input are
+                        read as one, which is refused where several runs
+                        annotate the input and their lists document a class of
+                        --masks
+  --reference-sequence {present,absent}
+                        whether the candidate's run had a reference sequence:
+                        under present a divergences item that carries
+                        vep_rs_consequence_sets_with_reference_sequence
+                        documents those sets, and none where they are Ensembl
+                        VEP's own; under absent, and without the option, an
+                        item documents its vep_rs_consequence_sets
+  --masks MASKS         comma-separated intended-divergence classes applied:
+                        the manifest's, and the built-in
+                        regulatory_feature_rows (--warnings mode takes it with
+                        the plugin warning classes below), order_only
+                        (DOMAINS, FREQS, ZYG and NearestExonJB compared as
+                        multisets, the 5UTR_annotation groups by their pairs,
+                        the CLIN_SIG lists of a row's known variants as a
+                        multiset of lists, and the JSON domains arrays of both
+                        sides as the arrays of one DOMAINS list written in two
+                        orders, which can differ in the object repeated or in
+                        the number of objects),
+                        individual_allele_order (an individual's alleles
+                        compared as a set), conservation_short_name_spelling
+                        (the reference's phlyoP<N>way key read as
+                        phyloP<N>way), pc_description_text (the reference's PC
+                        header line read with the candidate's description),
+                        motif_score_reverse_strand_mnv (MOTIF_SCORE_CHANGE on
+                        a reverse-strand motif entry whose allele is two or
+                        more bases), colocated_list_cut_at_cache_cap (a PUBMED
+                        or VAR_SYNONYMS list the reference writes with one
+                        last item more than the candidate, on a stored list of
+                        exactly 1,024 bytes that ends in no separator), the
+                        registry pair classes start_cooccurrence_swap and
+                        splice_family_swap (a key whose consequence sets
+                        differ by the shape the SNP/indel comparator's
+                        excluding rule admits, set aside whole), the field
+                        classes gxf_reverse_strand_utr_sequence (the fsTer or
+                        extTer count of an HGVSp on a reverse-strand
+                        transcript read from a GTF or GFF file),
+                        conservation_max_text_order (a Conservation MAX below
+                        the candidate's negative value),
+                        gwas_haplotype_cross_product (under --gwas-catalog, a
+                        GWAS_ field the reference alone fills or both fill
+                        differently, the empty fields of an annotated
+                        reference row included, or one the candidate alone
+                        fills where both rows are annotated under different
+                        studies, on a row at a location of a catalog row of
+                        two or more SNPs whose allele is another of its SNPs'
+                        risk alleles, or any of them where the row's SNPs and
+                        several locations differ in count, and whose reference
+                        GWAS_study names its study),
+                        gwas_interaction_first_snp_allele_whitespace (under
+                        --gwas-catalog, a GWAS_ field the candidate alone
+                        fills on a row at the location of an SNP written
+                        before x in a catalog row, its allele that SNP's risk
+                        allele and the candidate's GWAS_study naming the row's
+                        study, the empty fields of the candidate's annotated
+                        row included),
+                        alphamissense_two_digit_transcript_version (an am_
+                        field the candidate alone fills),
+                        cadd_structural_allele_match (a CADD_ field the
+                        candidate alone fills on a structural allele's row; in
+                        --warnings mode the reference's Plugin 'CADD' went
+                        wrong lines), splicevault_sibling_allele_rows (a
+                        SpliceVault_ field the reference fills with the value
+                        its row of another allele of the record carries on the
+                        same feature, where the candidate leaves it empty or
+                        fills it differently), splicevault_json_later_rows
+                        (the JSON splicevault object the candidate alone
+                        fills), utrannotator_annotation_pair_order (a
+                        5UTR_annotation whose groups carry the same pairs in
+                        different orders, the candidate's pairs in byte order
+                        of their keys), utrannotator_gained_start_window (a
+                        5UTR_consequence one engine alone writes as the gained
+                        start, with the row's 5UTR_annotation: the candidate
+                        at a CapDistanceToStart inside an allele longer than
+                        the reference allele and past that allele's end, the
+                        reference inside a reference allele longer than the
+                        allele and past the allele's end, or the reference at
+                        a negative CapDistanceToStart; a sequence allele at a
+                        two-base Location under an identifier needs --input;
+                        an insertion's row is refused where the reference
+                        reports a start codon lost and the candidate's gained
+                        start stands the allele's length past it; on an
+                        insertion's row the candidate alone may also write it
+                        three or more bases before the lower cDNA_position,
+                        where the Allele, read on the transcript's strand and
+                        on from its last base to its first, spells the start
+                        codon from the base that stands as many bases before
+                        its end: the codon the same sequence shows when it is
+                        written that many bases nearer the cap),
+                        utrannotator_consequence_precedence (under
+                        --utrannotator-sweep, a 5UTR_consequence whose two
+                        values differ and are both terms those runs write on
+                        the row, with the row's 5UTR_annotation where each
+                        side's is one they write beside its term),
+                        utrannotator_structural_allele_text (the
+                        5UTR_consequence and 5UTR_annotation the reference
+                        alone fills on a row whose Allele is a structural
+                        class word, its term one of the plugin's five and the
+                        candidate's row filling neither field; and those the
+                        candidate fills on a default or tab row of a symbolic
+                        deletion inside one exon of the 5' UTR, of a symbolic
+                        inversion there with any of the plugin's terms but the
+                        frameshift, of a copy_number_variation record's row
+                        there with a term a deletion can fire, which a record
+                        read with the row states as the row of a <DEL>, <CN0>
+                        or <CN=0> alternate beside another, or of a plain
+                        symbolic insertion that carries the frameshift its
+                        stated length decides),
+                        utrannotator_lost_start_after_insertion (a
+                        5UTR_consequence that is the lost-start term on the
+                        reference's row alone, with the row's 5UTR_annotation,
+                        where the annotation's one CapDistanceToStart is the
+                        lower cDNA_position of an insertion's row, or lies one
+                        or two below it on a row whose Allele, read on the
+                        transcript's strand, ends with the start codon's first
+                        base or its first two: the insertion only moves the
+                        start codon on, which stands whole),
+                        utrannotator_gained_start_remade_in_place (the two
+                        UTRAnnotator fields of an insertion's row on which the
+                        reference writes the gained start, itself or in a run
+                        of --utrannotator-sweep, at a CapDistanceToStart one
+                        or two below the lower cDNA_position, where the
+                        Allele, read on the transcript's strand, opens with
+                        the start codon's last two bases or its last and the
+                        candidate writes no gained start there: the inserted
+                        bases leave the reference's own start codon in place),
+                        utrannotator_frameshift_at_stop_boundary (the
+                        5UTR_annotation of an insertion's row on which the two
+                        frameshift lists differ, an entry that fills neither
+                        UTRAnnotator field listing nothing, with the row's
+                        5UTR_consequence where one entry fills neither: the
+                        candidate lists, beyond every group of the
+                        reference's, only uORFs whose alt_type_length differs
+                        from their ref_type_length and whose stop codon begins
+                        directly after the insertion point the row's HGVSc and
+                        HGVS_OFFSET give, since the reference's test leaves
+                        out an upstream ORF an insertion written directly
+                        before its stop codon shifts; or the reference lists,
+                        beyond every group of the candidate's, only uORFs
+                        whose alt_type is uORF, whose alt_type_length equals
+                        their ref_type_length and whose stop codon begins at
+                        or after that insertion point and no more than one
+                        base beyond the point the HGVSc itself names, since
+                        the reference's test admits an upstream ORF that ends
+                        on a stop codon at its own index and keeps its length;
+                        a row without an ins or dup notation between 5' UTR
+                        positions is refused),
+                        utrannotator_without_reference (on an entry where the
+                        candidate names none of UTRAnnotator's five fields,
+                        the 5UTR_consequence and 5UTR_annotation the reference
+                        leaves empty or fills with the gained start, and its
+                        three Existing_ counts, each 0, or all empty beside no
+                        effect: the reference ran the plugin with no reference
+                        sequence, which the candidate refuses),
+                        utrannotator_lost_stop_written_before_stop_codon (the
+                        two UTRAnnotator fields of an insertion's row on which
+                        one engine alone writes the lost stop: the reference
+                        writes the frameshift and the candidate the lost stop,
+                        each group of the candidate's carrying the
+                        KozakContext and KozakStrength of exactly one uORF the
+                        reference lists and the alternative stop codon where
+                        that uORF's alt_type_length ends it; or the candidate
+                        writes a lost stop beside a reference that writes no
+                        term, the lost start, the gained start or a frameshift
+                        that lists no ORF of the candidate's Kozak pairs,
+                        where the Allele's length is no multiple of three, the
+                        row's HGVS_OFFSET is not zero and no run of
+                        --utrannotator-sweep writes the lost stop on the row:
+                        the inserted bases can be written inside the uORF's
+                        stop codon, which the reference reads only for a
+                        record written there; or the reference writes a lost
+                        stop the candidate does not, where the Allele's length
+                        is a multiple of three and each AltStopDistanceToCDS
+                        is one or two more than the insertion point the row's
+                        HGVSc and HGVS_OFFSET give, or more by another number
+                        below the Allele's length that is no multiple of
+                        three: the inserted bases can be written at the stop
+                        codon's first base, which leaves the stop codon whole
+                        and in frame), nearest_exon_jb_item_order (a
+                        NearestExonJB whose two values carry the same items in
+                        different orders), loeuf_zero_minimum (a LOEUF of 0
+                        the candidate alone fills),
+                        maxentscan_overlapping_windows (on a row whose one-
+                        base record lies in the acceptor window of one intron
+                        of its transcript and the donor window of the next,
+                        read from --json-cache and nothing without it: a
+                        MaxEntScan_ field both fill with different numbers,
+                        and a window text of a verbose run where the reference
+                        writes nine bases and the candidate twenty-three),
+                        alphamissense_sibling_allele_rows (an am_ field the
+                        reference fills with the value its row of another
+                        allele of the record carries on the same feature
+                        beside the same Amino_acids),
+                        revel_sibling_allele_rows (a REVEL of the same shape),
+                        revel_other_reference_amino_acid_rows (a REVEL the
+                        reference fills with the score of the table row its
+                        walk reaches, a row whose reference amino acid is not
+                        the row's own, where the candidate writes nothing or
+                        the score of the first row of the row's allele that
+                        names both residues of Amino_acids; needs --revel-
+                        table, and --revel-no-match for a run that set the
+                        plugin's no_match), gnomadmt_info_value_second_equals
+                        (a gnomAD_ field both fill, the reference's value the
+                        candidate's up to its first =),
+                        loftee_anc_allele_multiallelic_record (on a one-base
+                        substitution's stop-gained or splice-site row of a
+                        multi-allelic record, a LoF_filter the candidate
+                        writes as the reference's plus ANC_ALLELE, with the
+                        row's LoF, LC beside the item and HC without it),
+                        loftee_first_alt_donor_filter (on a
+                        splice_donor_variant row of a multi-allelic record, a
+                        LoF_filter whose two values differ by GC_TO_GT_DONOR
+                        alone, either side carrying it, with the row's LoF
+                        read the same way, and not on the row of the record's
+                        first alternate; nothing where no entry states the
+                        record's allele order), loftee_gerp_zoom_level_summary
+                        (on a stop-gained or frameshift row whose BP_DIST is
+                        at least 79, a LoF_info whose two values differ in the
+                        GERP_DIST item alone, and, where DIST_FROM_LAST_EXON
+                        is at most 50 and the two totals straddle -58, a
+                        LoF_filter differing by END_TRUNC alone on the side of
+                        the lower total, with the row's LoF),
+                        loftee_gerp_walk_without_conservation_database (on a
+                        stop-gained or frameshift row on which the reference
+                        carries none of LoF, LoF_filter, LoF_flags and
+                        LoF_info and the candidate carries LoF beside a
+                        LoF_info that holds a GERP_DIST item, or beside no
+                        LoF_info as a run under skip_lof_info writes the row,
+                        each of the four fields the candidate fills: the
+                        plugin of a GRCh37 run dies where its GERP walk
+                        crosses a whole exon without a conservation database),
+                        loftee_nagnag_site_first_transcript_strand (on a
+                        splice_acceptor_variant row of a record that has a
+                        splice_acceptor_variant row on the other strand, a
+                        LoF_flags whose two values hold the same items in the
+                        same order but for one NAGNAG_SITE, either side
+                        carrying it, beside an equal LoF, LoF_filter and
+                        LoF_info; the strands are the rows' STRAND, and the
+                        record's rows are read as
+                        loftee_first_alt_donor_filter reads them, under
+                        --input for a default or tab row under an identifier),
+                        nearest_exon_jb_stretch_priming (a NearestExonJB the
+                        candidate alone fills on a row whose DISTANCE is at
+                        most 12), nearest_exon_jb_shifted_span (under
+                        --shift_3prime 1 --shift_length, a NearestExonJB on a
+                        transcript row with a positive SHIFT_LENGTH that one
+                        side fills and the other leaves empty, or whose two
+                        values name different exons),
+                        nearest_start_site_one_base_above (with
+                        --nearest-sites, a NEAREST on a row whose Location has
+                        a start site on its first base or one base above it,
+                        where the reference's value names the sites its two
+                        searches keep, the upper one beginning two bases above
+                        the start, the candidate's the sites kept with a third
+                        search from the start, and the two sets differ),
+                        nearest_exon_jb_id_less_exon_fold (a NearestExonJB
+                        both fill with items of an empty exon id, the
+                        reference's one item whose distance and side are those
+                        of one of the candidate's, on a row the candidate
+                        gives two or more items, or whose Consequence carries
+                        both splice-site terms and whose cDNA position names
+                        two positions), downstream_reverse_strand_rotation
+                        (under --hgvs, a DownstreamProtein or
+                        ProteinLengthChange both fill differently on a
+                        frameshift_variant row of a STRAND -1 transcript whose
+                        HGVS_OFFSET exceeds the number of bases its HGVSc
+                        inserts, duplicates or deletes and is not a multiple
+                        of it), splice_family_swap on the Downstream fields (a
+                        DownstreamProtein or ProteinLengthChange the reference
+                        alone fills on a key whose Consequence sets pair by
+                        that class's rule, the reference's row a frameshift
+                        row none of whose terms names a splice site),
+                        spliceai_chopped_multiallelic (a SpliceAI_ field the
+                        candidate alone fills on a substitution allele's row
+                        of a record whose rows carry an allele written -),
+                        spliceai_multi_entry_cell (a SpliceAI_ field on a row
+                        whose score record holds several comma-joined entries,
+                        the candidate's value every entry of the record that
+                        names the row's gene and the reference's the record's
+                        whole value on a row of the first entry's gene or none
+                        on a row of a later entry's; of record lines that
+                        stand more than once at an allele the reference's is
+                        the last the row's gene leads and the candidate's
+                        entries those of the last that names it; needs
+                        --spliceai-table, and --json-cache for a row that
+                        writes no SYMBOL),
+                        tabix_allele_case_insensitive_match (a field of the
+                        AlphaMissense, AVI, CADD, gnomADMt, GWAS, OpenTargets,
+                        REVEL, SpliceAI or SpliceVault plugin that the
+                        candidate alone fills, and a GWAS_ field it alone
+                        writes empty beside them, for a case over a table
+                        whose row writes its alleles in lower case),
+                        plugin_contig_mitochondrial_spelling (a field of a
+                        tabix-backed plugin other than gnomADMt, of those the
+                        plugins name themselves, that the candidate alone
+                        fills on a row of a record spelt MT, chrM or chrMT, on
+                        every assembly; the comparison reads the two outputs,
+                        so it tells the record's spelling and which output
+                        fills the field, and neither the name the plugin's
+                        file gives the contig nor whether its rows state the
+                        reference bases; the three sibling-allele classes, the
+                        two LoF_filter classes and
+                        spliceai_chopped_multiallelic read a record's alleles
+                        from the VCF and JSON entries and from a default or
+                        tab row whose Uploaded_variation spells them or, under
+                        --input, whose identifier names one input line: the
+                        one line that carries it, or of several the one that
+                        writes the row at its Location with its allele; they
+                        leave any other row under an identifier a difference),
+                        dbnsfp_mitochondrial_record_named_m (beside a
+                        --manifest whose assembly is GRCh37, a dbNSFP field
+                        the reference alone fills on a row of a record spelt
+                        MT or chrMT: a field whose name begins dbNSFP_, or a
+                        column the --plugin dbNSFP words of the manifest's run
+                        hand the plugin without output_prefix, those of --run
+                        where one is named; the comparison tells neither the
+                        columns of a run that selects ALL, nor the name the
+                        plugin's table gives the contig, nor the sequence its
+                        rows count on, nor whether the run gave the candidate
+                        a reference sequence, and beside no manifest, or one
+                        that names no assembly, the class accepts nothing),
+                        refseq_edited_model_hgvsc_offset (an HGVSc on a
+                        BAM_EDIT OK row differing in its coordinates alone),
+                        refseq_edited_model_shifted_insertion_bases (under
+                        --hgvs, two insertion notations of one transcript and
+                        coordinate pair on a BAM_EDIT OK insertion row both
+                        engines give one non-zero HGVS_OFFSET, the reference's
+                        bases the row's Allele on the transcript's strand by
+                        STRAND and the candidate's those bases turned 3' by
+                        the offset), refseq_edited_model_seam_insertion_hgvsc
+                        (under --hgvs, the HGVSc of an insertion standing on
+                        the bases an edited model holds and the genome lacks,
+                        on a row carrying BAM_EDIT OK or FAILED on both sides:
+                        the reference's an ins of the allele, the candidate's
+                        a notation that, applied to the row's reference
+                        codons, gives its alternate codons, or none where the
+                        allele is the model's bases),
+                        refseq_edited_model_unminimised_allele_hgvsc (under
+                        --hgvs, the HGVSc of a row carrying BAM_EDIT OK and
+                        one GIVEN_REF and one USED_REF on both sides: two
+                        substitutions, two ins or two delins of one sequence
+                        name, numbering and coordinate text, the reference's
+                        spelling the row's USED_REF and Allele whole on the
+                        transcript's strand and the candidate's spelling them
+                        without the bases the clip takes from GIVEN_REF and
+                        the Allele, which leave of GIVEN_REF the positions the
+                        coordinates cover), refseq_edited_model_hgvs_offset
+                        (an HGVS_OFFSET on a coding BAM_EDIT OK row whose
+                        HGVSc is a duplication, which the reference leaves
+                        empty and the candidate fills with a non-zero
+                        integer), hgvs_shifted_insertion_clamped_end (under
+                        --shift_3prime 1 --shift_length, the HGVSc of an
+                        insertion's row with a positive SHIFT_LENGTH, a cDNA
+                        position starting at it and an HGVS_OFFSET: the
+                        reference's at one position, a substitution, a delins
+                        or an insertion before it, the candidate's a
+                        duplication ending at the base before or an insertion
+                        at the same point, of as many bases as the allele; the
+                        reference's substitution may print - as its reference
+                        base, and on a row carrying BAM_EDIT OK its insertion
+                        may hold the row's whole allele against the candidate's
+                        duplication),
+                        hgvs_intron_offset_abutting_insertion (the
+                        HGVSIntronOffset plugin's two fields the reference
+                        alone fills, 0 and 0, or 1 and 0 past a reverse-strand
+                        transcript's last base, or 0 and -1 before a forward-
+                        strand transcript's first base, on an insertion's row
+                        both engines annotate outside the transcript at a
+                        DISTANCE of 0, with no HGVSc and no HGVS_OFFSET),
+                        hgvs_shifted_indel_written_span_gate (under --hgvs, an
+                        HGVSc, HGVS_OFFSET or HGVSIntronOffset field the
+                        reference leaves empty on an insertion's or deletion's
+                        row annotated inside the transcript, where the
+                        candidate writes the shifted span's indel notation of
+                        the row's transcript beside a non-zero offset, the
+                        row's SHIFT_LENGTH positive where printed; beside a
+                        del notation the plugin's two fields are the intron
+                        offsets of its coordinates; on such a row carrying
+                        BAM_EDIT OK on both sides, also the REFSEQ_OFFSET the
+                        reference leaves empty where the candidate writes a
+                        non-zero integer),
+                        hgvsp_shifted_indel_written_span_gate (under --hgvs,
+                        an HGVSp the reference leaves empty on an insertion's
+                        or deletion's row annotated in an intron, with no
+                        cDNA, CDS or protein position, or on exon bases of the
+                        5' UTR, with a cDNA position, no CDS or protein
+                        position and the term 5_prime_UTR_variant, where both
+                        engines write one shifted HGVSc placing the allele in
+                        the coding sequence beside one non-zero HGVS_OFFSET,
+                        and the candidate writes the protein notation: at the
+                        stop codon the stop unchanged or an extension named at
+                        it, neither on a row flagged cds_end_NF; a row
+                        annotated in an intron is taken from the row alone
+                        where its notation places the allele in an exon whose
+                        first base is coding base 2 or later, or is a dup that
+                        ends on a coding base and begins before the coding
+                        start, and otherwise with --json-cache, where the
+                        cache's exon spans place the allele as written in the
+                        intron before the exon it is shifted into),
+                        hgvsp_shifted_indel_written_span_start_test (under
+                        --hgvs, the HGVSp of an insertion's or deletion's row
+                        whose 3' shift moves the allele into the first codon:
+                        both engines write one non-zero HGVS_OFFSET and the
+                        same terms, 5_prime_UTR_variant among them and neither
+                        start_lost nor start_retained_variant, and the two
+                        values name one protein. On a row with no CDS position
+                        the reference's is a frameshift at residue 1 with the
+                        unknown count and the candidate's that residue
+                        unchanged; on a row that holds coding_sequence_variant
+                        and whose CDS position has an end and no start, the
+                        reference's is that frameshift and the candidate's the
+                        lost start named at residue 1, to the residue of the
+                        last coding base of its c. deletion, or the reference's
+                        is a deletion from residue 1 to residue n and the
+                        candidate's the lost start over those n residues, each
+                        named),
+                        hgvsp_start_codon_test_past_the_shifted_allele (under
+                        --hgvs --shift_3prime 1 --shift_length, the HGVSp of an
+                        insertion's or deletion's row whose 3' shift moves the
+                        allele onto the start codon: both engines write one
+                        positive SHIFT_LENGTH and the same terms,
+                        start_retained_variant among them and no start_lost,
+                        and a CDS position with a start and an end, and the two
+                        values name one protein. The candidate's is the first
+                        residue unchanged; the reference's is a frameshift at
+                        residue 1 with the unknown count and the same first
+                        residue, or an insertion between a residue 0 and
+                        residue 1 whose two flanks carry one name),
+                        hgvs_shifted_deletion_clamped_span (under --hgvs, two
+                        del notations of one transcript and numbering ending
+                        at the same cDNA coordinate, the reference's starting
+                        later than the candidate's, on a deletion's row both
+                        give a non-zero HGVS_OFFSET, the candidate's span
+                        agreeing with the row's cDNA position where
+                        --shift_length prints the shifted one; on such a row
+                        an HGVS_IntronStartOffset each engine writes as the
+                        intron offset of its own notation's start coordinate),
+                        hgvsp_stop_codon_protein_comparison (under --hgvs, two
+                        HGVSp values naming one protein and the stop at one
+                        residue number: the reference's the stop replaced by a
+                        stop, by the first residues that follow the protein or
+                        by all of them and an inserted stop, residues inserted
+                        before the stop, or the stop unchanged on a stop_lost
+                        row; the candidate's the stop unchanged for the first
+                        and an extension named at the stop for the others; or
+                        the reference's a range from a residue to the stop
+                        replaced by residues on a stop_lost row, the
+                        candidate's a frameshift named at that residue with
+                        the first of them; or the reference's an extension of
+                        unknown count on a stop_lost row, the candidate's the
+                        same extension with a count; or the reference's the
+                        stop written as deleted with an extension count on a
+                        stop_lost row, the candidate's an extension with that
+                        count and the first new residue; or the reference's
+                        one residue and a stop inserted between two
+                        neighbouring residues, the residue the right flank's,
+                        on a stop_retained_variant row, the candidate's the
+                        stop unchanged at the residue after the right flank;
+                        or, beside --json-cache, the reference's two or more
+                        residues and a stop inserted between two neighbouring
+                        residues on a row of any terms, the candidate's the
+                        stop unchanged, where the coding sequence of the
+                        row's transcript spells the left flank, those
+                        residues to its last and a stop at the candidate's
+                        number; or, beside --json-cache, the reference's an
+                        extension of unknown count, or of the count of the
+                        residues after the peptide's last one, on a stop_lost
+                        row, the candidate's the same extension with another
+                        count, where the peptide of the row's
+                        transcript holds a stop and is the translation of
+                        its coding sequence, the residue named is a stop it
+                        holds or the stop codon that closes the coding
+                        sequence, and the next stop of the frame stands the
+                        candidate's count on; or, beside --json-cache, both
+                        values one deletion with an extension count after
+                        it on a stop_lost row, the reference's count unknown
+                        or that of the residues after the peptide's last
+                        one, the candidate's another, where the row's coding
+                        bases are bases of such a transcript, three for each
+                        residue the deletion names, and with them out
+                        the first residue that differs is the deletion's
+                        first and the first stop at or after it stands the
+                        candidate's count of places after the lost stop's;
+                        or the reference's no value on a
+                        stop_retained_variant row whose protein position
+                        names one codon, whose coding positions lie inside
+                        it and whose amino acids are its residue against
+                        that residue and then a stop, the candidate's the
+                        stop unchanged at the residue after that codon; the
+                        row's terms are the reference's; no row whose FLAGS
+                        name cds_end_NF but for the extension counted beside
+                        --json-cache),
+                        hgvsp_stop_named_on_incomplete_coding_sequence (under
+                        --hgvs, a reference HGVSp that names the stop alone,
+                        as unchanged, deleted, replaced by one residue or
+                        extended, where the candidate writes none, on a row
+                        whose FLAGS name cds_end_NF, whose terms hold
+                        incomplete_terminal_codon_variant, or whose
+                        description is the stop unchanged at residue 1 under
+                        FLAGS naming cds_start_NF; with --json-cache also on
+                        a row whose transcript's coding sequence is no whole
+                        number of codons in the candidate's cache),
+                        hgvsp_frameshift_count_past_a_stop_read_as_a_residue
+                        (under --hgvs, a reference HGVSp that is a frameshift
+                        with the unknown count where the candidate writes the
+                        same frameshift with a count, and the coding sequence
+                        and 3' UTR of the row's transcript in the candidate's
+                        cache give that count for the row's allele at its
+                        coding position: a stop codon inside the peptide's
+                        residues stands before the first changed residue, and
+                        the first stop of the new frame from that residue on is
+                        another codon than every such stop codon that the
+                        peptide reads as a residue; or, on a frameshift_variant
+                        row, a reference HGVSp that is an extension of unknown
+                        count named at a stop where the candidate writes the
+                        same extension with a count, the peptide holds a stop
+                        and is the translation of its coding sequence, a stop
+                        stands before the stop named, which the peptide holds
+                        or which closes the coding sequence, and the first
+                        stop of the new frame after that stop stands the
+                        candidate's count on; needs --json-cache),
+                        hgvsp_frameshift_with_no_changed_residue (under
+                        --hgvs, a reference HGVSp that is a frameshift with
+                        the unknown count and one residue name, no stop, on
+                        both sides of its residue number, where the candidate
+                        writes none, on a row whose terms hold
+                        frameshift_variant on both sides; read from the row
+                        alone),
+                        hgvsp_frameshift_count_at_the_first_residue (under
+                        --hgvs, a reference HGVSp that is a frameshift named
+                        at residue 1 with the unknown count where the
+                        candidate writes the same frameshift with a count, on
+                        a row neither side of which holds start_lost and whose
+                        transcript shows no start codon in the candidate's
+                        cache, by its cds_start_NF flag or by its record: the
+                        transcript's coding sequence and 3' UTR give that
+                        residue, the new residue and that count, the place of
+                        the first stop codon of the new frame, for the row's
+                        allele over its coding position, as many positions as
+                        the record has reference bases; a deletion that begins
+                        before the coding start is read where its HGVS_OFFSET
+                        moves it; needs --json-cache, and --input for a
+                        default or tab row),
+                        hgvs_clipped_reference_against_whole_alternate (under
+                        --hgvs, the HGVSc of a sequence allele's row whose
+                        cDNA position has an open side: the reference's a
+                        notation of the row's transcript, or empty; the
+                        candidate's a notation of the same transcript and
+                        numbering whose every coordinate lies within the row's
+                        span plus one of the reference's, a reference
+                        coordinate whose intron offset is the REFSEQ_OFFSET of
+                        a row carrying BAM_EDIT OK and open at its end standing
+                        for every base from its exon base to itself, and a
+                        reference substitution that names two or more reference
+                        bases on a row carrying BAM_EDIT OK read as one of one
+                        base, empty against a reference ins or dup, empty
+                        against a reference del,
+                        delins or substitution on the row of an allele shorter
+                        than its span, or a del against the empty reference;
+                        with --json-cache, on a substitution's row whose cDNA
+                        position is open or empty, two delins notations whose
+                        bases are runs of the row's allele, the reference's
+                        holding the bases outside the transcript's exon spans
+                        that the clamp cut from the candidate's; and the
+                        HGVSIntronOffset plugin's two fields the reference
+                        alone fills beside an ins or dup it prints against an
+                        empty candidate, the candidate alone fills beside an
+                        ins of the bases a longer allele adds inside the span
+                        where the reference prints no notation, on a reverse-
+                        strand transcript's row whose cDNA position is open at
+                        its start and whose HGVSc stays a difference, or both
+                        fill beside two ins notations the class takes as a
+                        pair, each the intron part of its own side's
+                        notation's coordinate it is read from; and the
+                        plugin's end offset alone, on a forward-strand
+                        transcript's row whose cDNA position is open at its
+                        start, where the reference prints an ins from one base
+                        before the transcript's first base of the allele's
+                        bases less those inside, beside the pair 0 and -1, and
+                        the candidate the duplication of the bases the allele
+                        adds, beside the pair 0 and 0 and the bases it was
+                        carried in HGVS_OFFSET, the duplication ending as many
+                        bases into the transcript as the span's bases inside
+                        and that HGVS_OFFSET together; the HGVS_OFFSET of such
+                        a row stays a difference),
+                        hgvs_added_bases_left_at_the_span_end (under --hgvs,
+                        on a row whose allele holds more bases than its
+                        Location spans and whose reference prints an HGVSc and
+                        no HGVS_OFFSET: a reference ins one base past a
+                        coordinate beside the HGVSIntronOffset plugin's pair 1
+                        and 0, against a candidate duplication of as many
+                        bases ending at that coordinate, or against a
+                        candidate that writes nothing where the added bases
+                        have no placement inside the transcript; and a
+                        reference ins between two exonic neighbours, or dup,
+                        against a candidate dup or ins the bases its
+                        HGVS_OFFSET states further 3', or against the dup of
+                        the bases that end at that ins beside no HGVS_OFFSET),
+                        hgvs_insertion_left_where_the_shift_stops (under
+                        --hgvs, on an insertion's row whose reference
+                        HGVS_OFFSET is in size the most steps the reference's
+                        shift walks an allele of that length, or is absent
+                        where that is none, beside an ins or dup: a candidate
+                        dup or ins beside a larger HGVS_OFFSET of the same
+                        sign, or a candidate that writes no HGVSc where the
+                        most 3' placement lies past the transcript's last
+                        base; with them the HGVSIntronOffset plugin's two
+                        fields, each row's the intron parts of its own
+                        notation; and the HGVSp, which each engine reads where
+                        it describes the insertion: the reference's notation
+                        against none where the candidate writes no HGVSc, its
+                        dup ends in an intron or a UTR or its ins stands beside
+                        an intron or UTR base, but for a stop named alone on a
+                        coding sequence the row shows incomplete, and the
+                        candidate's frameshift, insertion, duplication or
+                        deletion-insertion named at a residue other than the
+                        stop against none on a row without a CDS position
+                        whose candidate dup ends, or ins stands, on coding
+                        bases;
+                        with --json-cache a dup is held to the
+                        transcript's exon spans, its two coordinates those of
+                        the first and last base of a run of as many bases as
+                        the allele holds beside its point, so that two exonic
+                        coordinates count the allele's bases less those of
+                        every intron between them: the reference's dup beside
+                        no HGVS_OFFSET is the class's only as such a run, and
+                        a candidate dup of fewer bases than the allele holds
+                        is the class's as one; without --json-cache the
+                        reference's dup beside no HGVS_OFFSET is read by its
+                        count alone, 2 bases up to as many as the allele holds
+                        but for two fewer, whatever intron would explain the
+                        count, and a candidate dup of two exonic coordinates
+                        names as many bases as the allele holds),
+                        hgvs_added_bases_written_outside_the_transcript (under
+                        --hgvs, on an insertion's row both engines annotate
+                        upstream or downstream of the transcript: a candidate
+                        dup or ins of the row's transcript with the
+                        HGVSIntronOffset plugin's two fields of its
+                        coordinates, beside no HGVS_OFFSET on a downstream row
+                        and a non-zero one on an upstream row, larger than the
+                        DISTANCE on an insertion's row and no smaller on the
+                        row of an allele longer than its span, against a
+                        reference that prints no HGVSc and no HGVS_OFFSET and
+                        writes another pair or none; the bases the allele adds
+                        are read from the record's alleles where an entry
+                        carries them, and from the Location on a row under an
+                        identifier, where two bases replaced by a sequence
+                        read as an insertion),
+                        hgvsp_intron_end_insertion (under --hgvs, an HGVSp the
+                        reference fills and the candidate leaves empty on a
+                        row whose HGVSc, one notation of the row's transcript
+                        on both sides beside no HGVS_OFFSET, duplicates intron
+                        positions ending on the one before an exon's first
+                        coding base, or inserts bases between that position
+                        and the base, whether or not they end in a pair that
+                        ends an intron, the record written where an intron of
+                        more than 13 bases of that transcript ends before a
+                        coding exon base; a row with an HGVS_OFFSET and the
+                        end of an intron of 13 bases or fewer stay
+                        differences; a record that holds the insertion with a
+                        reference base it shares is placed by the gap its
+                        allele, clipped of that base to the bases the HGVSc
+                        inserts, lies in; a default or tab row that gives such
+                        a record's Location is placed by the gaps of that
+                        span, its allele read on either strand or, minimised,
+                        equal to the inserted bases or as long as the
+                        duplicated positions; a VCF or JSON entry is placed
+                        from its line of --input, in VCF or in Ensembl format,
+                        by an ALT that clips against the REF to the insertion
+                        the HGVSc describes, however the entry spells its
+                        allele; needs --json-cache),
+                        hgvsp_intron_start_insertion (under --hgvs, an HGVSp
+                        the reference fills and the candidate leaves empty on
+                        a row whose HGVSc, one notation of the row's
+                        transcript on both sides, inserts bases between an
+                        exon's last coding base and the first position of the
+                        intron after it, beside no HGVS_OFFSET or one non-zero
+                        integer on both sides, the record's gap, moved by that
+                        offset or as the Location of a run under
+                        --shift_genomic 1 names it, one where an exon of that
+                        transcript ends inside the coding region before an
+                        intron of any length; a record that holds the
+                        insertion with a reference base it shares carries no
+                        offset and is placed by the gap its clipped allele
+                        lies in; a default or tab row that gives such a
+                        record's Location is placed by the gaps of that span,
+                        its allele read on either strand or, minimised, equal
+                        to the inserted bases; on a row that carries the
+                        offset the allele is read as the record writes it or
+                        as a run under --shift_3prime 1 prints it, turned by
+                        the offset; a VCF or JSON entry is placed from its
+                        line of --input as under hgvsp_intron_end_insertion;
+                        needs --json-cache), shift_intron_term_unshifted_span
+                        (under --shift_3prime 1 --shift_length, a Consequence
+                        set the reference writes as the candidate's plus
+                        intron_variant, on a row with a positive SHIFT_LENGTH
+                        whose HGVSc places the shifted insertion or deletion
+                        at the acceptor's two bases or in the exon),
+                        refseq_edited_model_deleted_span_term (the Consequence
+                        of a BAM_EDIT OK transcript row of a sequence allele
+                        inside the bases the model's alignment deleted:
+                        intergenic_variant in the reference, exactly one of
+                        coding_sequence_variant, 5_prime_UTR_variant and
+                        3_prime_UTR_variant in the candidate, no cDNA position
+                        and one IMPACT on both; the JSON record's
+                        most_severe_consequence follows),
+                        refseq_edited_model_tail_term (the Consequence of a
+                        BAM_EDIT OK transcript row of a sequence allele on one
+                        of the final bases of a model whose edits inserted
+                        bases: intergenic_variant in the reference,
+                        3_prime_UTR_variant in the candidate, a cDNA position
+                        and one IMPACT on both; the JSON record's
+                        most_severe_consequence follows),
+                        refseq_edited_model_equal_span_insertion_term (the
+                        Consequence of a BAM_EDIT OK transcript row of an
+                        insertion between two neighbouring positions whose CDS
+                        span, the same on both sides, holds as many bases as
+                        the allele: intergenic_variant in the reference,
+                        missense_variant in the candidate; an insertion's row
+                        is read as stop_codon_overlap_insertion_range reads
+                        it, from the records of --input for a row under an
+                        identifier, and where no record gives the row its bases
+                        by an allele of another length than two; the cells
+                        term_pair_following_cell reads from the two sets of
+                        terms and the JSON record's most_severe_consequence
+                        follow), mature_mirna_unshifted_span (under
+                        --shift_3prime 1 --shift_length, the Consequence of a
+                        transcript row with a positive SHIFT_LENGTH whose two
+                        sets are equal but for one engine's
+                        mature_miRNA_variant against the other's
+                        non_coding_transcript_exon_variant; the JSON record's
+                        most_severe_consequence follows),
+                        stop_codon_unshifted_span (under --shift_3prime 1
+                        --shift_length, the Consequence of a transcript row
+                        with a positive SHIFT_LENGTH whose two sets are equal
+                        but for the reference's coding_sequence_variant
+                        against the candidate's stop_retained_variant; the
+                        JSON record's most_severe_consequence follows),
+                        structural_deletion_stop_lost_without_stop_codon (the
+                        Consequence of a structural allele's transcript row on
+                        a transcript at whose coding end no stop codon stands,
+                        with cds_end_NF or without, or whose stop codon
+                        polyadenylation completes where the span holds none of
+                        the one or two bases that begin it: the reference's set
+                        holds stop_lost for a deletion over the last three
+                        genomic coding positions and the candidate's is the
+                        same without it; the cells that follow a row of a
+                        coding end follow),
+                        stop_codon_completed_by_polyadenylation (the
+                        Consequence of a sequence allele's transcript row on a
+                        transcript whose coding sequence ends one or two bases
+                        into a stop codon that polyadenylation completes: the
+                        reference reads an incomplete terminal codon and the
+                        candidate's terms of the coding family are the ones
+                        derived on the coding sequence followed by adenines;
+                        the candidate's Amino_acids, Codons and HGVSp are the
+                        derived ones, and the cells that follow a row of a
+                        coding end follow; a deletion from the stop codon past
+                        the transcript's last base is derived with
+                        --reference-fasta alone),
+                        stop_codon_overlap_without_stop_codon (the Consequence
+                        of a sequence allele's transcript row on a transcript
+                        without cds_end_NF at whose coding end no stop codon
+                        stands, or whose stop codon polyadenylation completes:
+                        the reference's set holds stop_lost or
+                        stop_retained_variant by the overlap of the allele
+                        with the last three coding positions, and the
+                        candidate's terms of the coding family are the derived
+                        ones, with neither; where the transcript's last base
+                        cuts a frameshift's first changed codon short the
+                        reference's HGVSp is the deleted residues with an
+                        extension of unknown length and the candidate's the
+                        first of those residues named as a frameshift; the
+                        cells that follow a row of a coding end follow),
+                        stop_codon_behind_last_residue_without_stop_codon (the
+                        Consequence of a sequence allele's transcript row on a
+                        transcript at whose coding end no stop codon stands,
+                        with cds_end_NF or without: the reference's set holds
+                        stop_retained_variant for a stop codon the allele
+                        brings behind the last residue, and the candidate's
+                        terms of the coding family are the derived ones,
+                        without it; the cells that follow a row of a coding
+                        end follow),
+                        start_codon_overlap_without_start_codon (the
+                        Consequence of a transcript row on a transcript
+                        without cds_start_NF that shows no start codon: the
+                        reference's set holds start_lost or
+                        start_retained_variant by the overlap of the allele
+                        with the first three coding positions, and the
+                        candidate's terms of the coding family are the derived
+                        ones, with neither; on a substitution of one residue
+                        at protein position 1 the reference's HGVSp is the
+                        lost start and the candidate's names the two residues;
+                        on a frameshift under the standard genetic code the
+                        reference's is the lost start at the residue the
+                        candidate's frameshift notation opens with, written on
+                        a row without HGVS_OFFSET as a range to the end of the
+                        translation span where that is another residue;
+                        the cells that follow a row of a coding end follow);
+                        the five read the coding ends of the row's transcript
+                        from --json-cache and are refused without it, derive a
+                        sequence allele's terms from the cDNA, CDS and protein
+                        positions, the Amino_acids and the Codons both rows
+                        print (the reference's where the two differ as
+                        alternate_codon_past_the_coding_end reads them) and the
+                        length of the record's reference bases, and take no row
+                        that is not derived; the cells that
+                        follow a row of a coding end are the IMPACT of each
+                        side's own terms, a Downstream, NMD or LOFTEE field on
+                        the side whose terms let the plugin run, and the JSON
+                        record's most_severe_consequence where it is each
+                        side's most severe term over its own entries of the
+                        record,
+                        stop_retained_without_stop_codon_test (the Consequence
+                        of an insertion's or deletion's transcript row whose
+                        two sets are equal but for the reference's
+                        stop_retained_variant, against nothing,
+                        coding_sequence_variant or frameshift_variant, both
+                        rows showing that the stop codon test is not made: an
+                        allele letter that names no base, a cDNA position
+                        missing at one end, or no CDS start; the cells
+                        term_pair_following_cell reads from the two sets of
+                        terms and the JSON record's most_severe_consequence
+                        follow), stop_codon_overlap_genomic_span (the
+                        Consequence of an insertion's or deletion's transcript
+                        row with both cDNA positions and a CDS start whose two
+                        sets are equal but for the reference's
+                        coding_sequence_variant against the candidate's
+                        stop_retained_variant, both holding
+                        splice_region_variant; the cells
+                        term_pair_following_cell reads from the two sets of
+                        terms and the JSON record's most_severe_consequence
+                        follow), stop_retained_three_base_stop_codon_test (the
+                        Consequence of an insertion's or deletion's transcript
+                        row whose stop codon test is made, both cDNA
+                        positions, a CDS start and an allele of bases on both
+                        sides: the reference's stop_retained_variant against
+                        coding_sequence_variant, or it, alone or beside an in-
+                        frame or protein-altering term, against
+                        frameshift_variant with or without stop_gained; the
+                        cells term_pair_following_cell reads from the two sets
+                        of terms and the JSON record's most_severe_consequence
+                        follow), stop_codon_removed_without_stop_codon_test
+                        (the Consequence of an insertion's or deletion's
+                        transcript row without a cDNA position at one end or a
+                        CDS start on both sides, whose two sets are equal but
+                        for the reference's stop_retained_variant against the
+                        candidate's stop_lost; the cells
+                        term_pair_following_cell reads from the two sets of
+                        terms and the JSON record's most_severe_consequence
+                        follow), stop_codon_overlap_insertion_range (the
+                        Consequence of an insertion's transcript row with both
+                        cDNA positions and a CDS start on both sides, whose
+                        two sets are equal but for the reference's
+                        coding_sequence_variant against the candidate's
+                        stop_retained_variant away from splice_region_variant,
+                        or beside it where the allele holds a letter other than
+                        A, C, G and T, or the reference's frameshift_variant
+                        with or without stop_gained against the candidate's
+                        stop_retained_variant with or without
+                        inframe_insertion; an insertion's row is one whose
+                        record's alleles (a default or tab row whose
+                        Uploaded_variation spells them, a VCF or JSON entry's
+                        own, or the records of --input for a row under an
+                        identifier) insert the allele between two neighbouring
+                        positions, however the record pads them; under an
+                        identifier a row at two neighbouring positions whose
+                        record replaces the two bases stays a difference, and
+                        without --input such a row is read as an insertion's
+                        by an allele of another length than two; the cells
+                        term_pair_following_cell reads from the two sets of
+                        terms and the JSON record's most_severe_consequence
+                        follow), stop_codon_settled_before_unknown_bases (the
+                        Consequence of a transcript row whose Codons cell is
+                        the same on both sides and has an alternate half that
+                        holds a letter other than A, C, G and T after a stop
+                        codon among its whole codons, the reference writing no
+                        residues and the candidate the translation of that
+                        half, whose two sets are equal but for the candidate's
+                        stop_gained beside frameshift_variant on both sides,
+                        or for the reference's coding_sequence_variant against
+                        the candidate's stop_gained with at most one of
+                        inframe_insertion, inframe_deletion and
+                        protein_altering_variant, or, on an insertion's or a
+                        deletion's row, for the reference's
+                        stop_retained_variant, both rows showing that the stop
+                        codon test is not made, against the candidate's
+                        stop_gained with frameshift_variant, one of those three
+                        terms or no other term, or for the candidate's
+                        inframe_insertion beside stop_retained_variant on both
+                        sides, or for the reference's frameshift_variant or
+                        coding_sequence_variant against the candidate's
+                        inframe_insertion and stop_retained_variant on an
+                        insertion between two neighbouring positions with both
+                        cDNA positions and a CDS start on both sides; the
+                        candidate's residues, a protein notation that names a
+                        stop where the reference writes none, the HGVS_OFFSET
+                        beside it, these three also on a row whose terms
+                        stop_codon_overlap_insertion_range takes, the cells
+                        term_pair_following_cell reads from the two sets of
+                        terms and the JSON record's most_severe_consequence
+                        follow; with --json-cache also the protein notation
+                        that names a stop and the HGVS_OFFSET beside it, which
+                        the candidate alone writes on the row of an insertion
+                        written in an intron, a row whose two sets of terms
+                        are equal and that holds no position and no Codons
+                        cell, where the cache's transcript places the
+                        insertion, moved by the offset, between two coding
+                        bases of one exon and the allele's known bases settle
+                        a stop codon there before its first unknown base),
+                        frameshift_inside_a_held_stop_codon (an
+                        insertion or a deletion whose length change is no
+                        multiple of three and whose first base lies inside the
+                        codon of a stop that the transcript's peptide holds as
+                        a stop and reads on past, a polymorphic pseudogene's:
+                        the Consequence of a row whose Amino_acids cell is the
+                        same on both sides, opens with * and holds X after its
+                        /, whose Codons cell is the same on both sides with two
+                        halves whose lengths differ by no multiple of three,
+                        and whose two sets are equal but for the candidate's
+                        frameshift_variant against the reference's
+                        coding_sequence_variant, inframe_deletion, or
+                        inframe_insertion with coding_sequence_variant, the
+                        reference holding neither stop_retained_variant nor
+                        stop_lost; the IMPACT each side's terms give, an HGVSp
+                        of any value on either side, a DownstreamProtein, a
+                        ProteinLengthChange, an NMD, a LoF, a LoF_info, a
+                        LoF_filter or a LoF_flags the candidate alone writes
+                        where the terms let the plugin run on its row alone,
+                        and the JSON record's most_severe_consequence
+                        follow), start_codon_removed_without_five_prime_utr
+                        (the Consequence of a transcript row whose cDNA and
+                        CDS positions, the same on both sides, begin at 1 and
+                        whose Amino_acids, the same on both sides, holds no
+                        alternate residue, both sets holding inframe_deletion
+                        and equal but for the candidate's start_lost; the
+                        IMPACT of each side's terms, a protein notation that
+                        is a deletion from residue 1 in the reference and the
+                        lost start of the same residues in the candidate, and
+                        the JSON record's most_severe_consequence follow),
+                        start_codon_kept_without_five_prime_utr (the
+                        Consequence of a transcript row whose two sets both
+                        hold frameshift_variant, inframe_insertion or
+                        inframe_deletion, whose cDNA span is its CDS span, the
+                        same on both sides, and opens on one of the first
+                        three coding bases, and whose two sets are equal but
+                        for the candidate's start_retained_variant against the
+                        reference's start_lost or against no term of the
+                        reference; the IMPACT of each side's terms, a protein
+                        notation that holds a ? in the reference and none in
+                        the candidate where the reference holds start_lost,
+                        both naming one protein, and the JSON record's
+                        most_severe_consequence follow),
+                        splice_term_past_the_record_span (On a record
+                        whose alternate allele is longer than its reference
+                        allele, Ensembl VEP writes a splice donor, splice
+                        acceptor, donor fifth base, donor region,
+                        polypyrimidine tract or intron term from positions
+                        past the end of the record's span; where no base of
+                        the span lies in a window of that term, vep-rs does
+                        not write it, unless it is a term of an insertion
+                        written after the span. A record whose alternate
+                        allele opens
+                        with its whole reference allele
+                        changes no base of its span. vep-rs reads it as the
+                        insertion it writes, between the span's last base and
+                        the base after it, and writes that insertion's terms.
+                        The class takes the Consequence of a transcript row
+                        whose cDNA and CDS positions are the same on both
+                        sides and whose two sets are equal but for the
+                        reference's terms among splice_donor_variant,
+                        splice_acceptor_variant,
+                        splice_donor_5th_base_variant,
+                        splice_donor_region_variant,
+                        splice_polypyrimidine_tract_variant and
+                        intron_variant, whose window is the intron, and the
+                        candidate's splice_donor_region_variant or
+                        splice_region_variant where a term that withholds it
+                        went. With the record's alleles (a default or tab row
+                        whose Uploaded_variation spells them, a VCF or JSON
+                        entry's own, or the records of --input for a row under
+                        an identifier) the record is no pure insertion, the
+                        reference bases are two or more, or one base that opens
+                        the allele, and as many as the
+                        Location's positions, the allele is longer, and one
+                        intron stands beside the span, at a place the row's
+                        cDNA positions allow, at which the record's differing
+                        regions give the reference's terms and the span gives
+                        the candidate's. Where the allele opens with all its
+                        reference bases, the insertion it writes after the
+                        span gives the candidate's terms at that place,
+                        splice_polypyrimidine_tract_variant and intron_variant
+                        among the terms the candidate alone may hold, and the
+                        reference need hold no term alone. After one
+                        reference base Ensembl VEP reads that base as changed,
+                        and the reference alone may hold splice_region_variant
+                        as well. Without them the
+                        Location holds three or more positions, the allele
+                        more nucleotide letters than the span has bases and
+                        the two cDNA positions are numbers as far apart as the
+                        span's two ends, the candidate holding none of the
+                        six, with or without its splice_region_variant where
+                        one of the first four went. Rows printed under
+                        --terms display are read by the names the six terms and
+                        splice_region_variant print there,
+                        ESSENTIAL_SPLICE_SITE, SPLICE_SITE and INTRONIC, with
+                        the record's alleles alone. A row that differs by the
+                        terms of a stop codon class as well is taken where
+                        that class's rule takes the rest of the difference;
+                        the cells term_pair_following_cell reads from the two
+                        sets of terms and the JSON record's
+                        most_severe_consequence follow),
+                        cnv_tr_symbolic_loss_named_a_gain (the Consequence of
+                        a transcript row whose Allele is tandem_repeat on both
+                        sides and whose two lists of terms are equal but for
+                        the reference's feature_elongation, where the
+                        candidate writes feature_truncation or no term; where
+                        it writes none, the IMPACT each side's terms give as
+                        well; the JSON record's most_severe_consequence
+                        follows),
+                        refseq_edited_model_deleted_span_codons
+                        (three cells of a BAM_EDIT OK transcript row whose
+                        USED_REF has more bases than its CDS span: the Codons
+                        whose alternate codons are equal and whose reference
+                        codons, of one length, differ in an upper-case base
+                        alone, the reference's upper-case bases the leading
+                        bases, on the transcript's strand, of USED_REF or of a
+                        GIVEN_REF of its length; the
+                        Amino_acids beside such Codons whose alternate halves
+                        are equal and whose reference halves, of one length,
+                        are each the translation of its own side's reference
+                        codons under the standard genetic code; the
+                        Consequence beside such Codons that the reference
+                        writes with protein_altering_variant where the
+                        candidate writes inframe_deletion, every other term
+                        shared, where the two readings the in-frame test makes
+                        of the codons refuse the reference's and accept the
+                        candidate's, the JSON record's most_severe_consequence
+                        following that term),
+                        refseq_edited_model_intron_span_coding_reference (four
+                        cells of a BAM_EDIT OK transcript row whose CDS span
+                        is one range of numbers on both sides, whose USED_REF,
+                        one text on both sides, has more bases than the range
+                        and whose terms hold splice_acceptor_variant,
+                        splice_donor_variant and intron_variant on both sides:
+                        a Consequence the reference writes with stop_lost and
+                        protein_altering_variant where the candidate writes
+                        inframe_deletion; the Codons as
+                        refseq_edited_model_deleted_span_codons reads them;
+                        the Amino_acids beside such Codons whose alternate
+                        halves are equal and whose reference halves, of one
+                        length, are each the translation of its own side's
+                        reference codons under the standard genetic code; the
+                        HGVSp beside such a Consequence that the reference
+                        writes as the candidate's followed by extTer?),
+                        refseq_edited_model_inserted_span_codons (the
+                        reference halves of Codons and Amino_acids on a
+                        BAM_EDIT OK transcript row of an insertion, its
+                        USED_REF empty, whose CDS span is bases the model
+                        holds and the genome lacks: the candidate's reference
+                        codons are the bases of the --json-cache transcript's
+                        coding sequence over the row's residues and the
+                        reference's are as many bases read from that sequence
+                        with the span cut out; the alternate halves equal; the
+                        Amino_acids beside such Codons each the translation of
+                        its own side's reference codons under the transcript's
+                        genetic code; the class takes no row without the
+                        candidate cache of --json-cache),
+                        frequency_filter_zero_value (a FREQS value the
+                        reference reads NA and the candidate 0, and the rows
+                        of a record the candidate alone keeps on a FREQS of
+                        zeros; Ensembl VEP 116.3 corrects the defect, and the
+                        class applies under an earlier reference release),
+                        merged_same_stable_id_collapse (a transcript row the
+                        candidate alone writes under --refseq or --merged, of
+                        a model the reference wrote no row for on a record it
+                        wrote a transcript row for, its SOURCE RefSeq or
+                        absent: Ensembl VEP keeps one transcript per stable
+                        identifier among the models a buffer loads),
+                        use_transcript_ref_cache_cdna (seven cells of a
+                        BAM_EDIT FAILED transcript row of a one-base allele
+                        whose GIVEN_REF, one base, is the same on both sides,
+                        the candidate's USED_REF that base and the reference's
+                        another: the USED_REF; the Codons of one codon a side
+                        whose alternate halves are equal and whose reference
+                        halves differ in one upper-case base, the reference's
+                        its USED_REF and the candidate's the GIVEN_REF on the
+                        transcript's strand; the Amino_acids each side's
+                        Codons translate to under the standard genetic code; a
+                        Consequence whose two sets differ in the one term each
+                        side's two residues give, missense_variant,
+                        synonymous_variant, stop_gained, stop_lost or
+                        stop_retained_variant; the IMPACT of each side's terms
+                        beside such a Consequence; an HGVSc of one
+                        substitution a side at one position, the base changed
+                        the reference's USED_REF and the candidate's the
+                        GIVEN_REF on the transcript's strand; an HGVSp of one
+                        residue a side at one position, each side's the change
+                        of the reference residue of its own Codons to the
+                        alternate one, the two reference residues differing
+                        and neither a stop; and the most_severe_consequence of
+                        a JSON record that holds a row whose Consequence is
+                        taken is left uncompared: Ensembl VEP cuts the
+                        reference allele of a model whose alignment correction
+                        failed from the exons joined without the model's own
+                        edit, at a cDNA position that counts it),
+                        refseq_failed_edit_model_hgvsc_offset (an HGVSc on a
+                        BAM_EDIT FAILED transcript row, in coding numbering
+                        with no intron offset, past an edit of the transcript
+                        that changes the cDNA's length: the candidate counts
+                        each coordinate along the genome's exons, and the
+                        reference writes a one-base substitution that has a CDS
+                        position at that CDS position and any other notation at
+                        the candidate's count plus the offset Ensembl VEP sums
+                        for the edits before the row, between the cached coding
+                        positions; what follows the coordinates is the same, or
+                        the base changed as use_transcript_ref_cache_cdna reads
+                        it where that class is named too; needs --json-cache),
+                        hgnc_id_copy
+                        (an HGNC_ID one side leaves empty and the other fills
+                        with an id, on a transcript row whose SYMBOL_SOURCE is
+                        not HGNC: Ensembl VEP lends a same-symbol gene's id
+                        per buffer),
+                        alternate_codon_past_the_coding_end (the Codons of a
+                        row whose reference codons are equal and whose
+                        alternate codons differ by 3' UTR bases alone: the
+                        reference's are the candidate's with one or two lower-
+                        case bases behind them, no more than the last of
+                        reference codons that are no whole number of codons
+                        lacks, or as many lower-case bases as the one or two
+                        that a deletion leaves of whole reference codons at
+                        residue 1, which the candidate writes; and on a row of
+                        the first kind the Amino_acids whose alternate
+                        residues are each side's translation of its own
+                        alternate codons),
+                        organelle_peptide_paths_translation_table (the HGVSp
+                        of a frameshift, of a lost stop's extension or of a
+                        duplication against an insertion, both values naming
+                        one protein, on a transcript the candidate JSON cache
+                        files under a codon table that reads some codon unlike
+                        the standard one, the row's consequence set,
+                        positions, amino acids, codons, HGVSc and HGVS_OFFSET
+                        equal on both sides; reads --json-cache, and without
+                        it applies from a manifest alone), the Downstream
+                        plugin's classes downstream_utr_frame_past_coding_end
+                        (the DownstreamProtein of a frameshift deletion's row
+                        that starts on a codon's third base and ends on the
+                        last base of the translateable sequence: the
+                        reference's the 3' UTR translated from its first base,
+                        the candidate's the two coding bases before the
+                        deletion translated with the UTR) and
+                        downstream_start_past_own_codon (the DownstreamProtein
+                        of any other frameshift deletion's row, with or
+                        without inserted bases, that starts on a codon's third
+                        base: the reference's translated from the codon after
+                        the first one the change touches, the candidate's from
+                        that codon), each on a row whose consequence set (or
+                        two sets that differ as start_cooccurrence_swap
+                        admits, as start_codon_kept_without_five_prime_utr
+                        takes them, or as one of the five classes of a coding
+                        end takes them on the transcript's coding ends in the
+                        cache), CDS_position (or a later allele's two, as
+                        plugin_hgvs_shifted_cds_coordinates reads them) and
+                        ProteinLengthChange are equal on both sides, both
+                        values recomputed from the candidate cache's sequences
+                        under the transcript's codon table on the record's own
+                        CDS coordinates, and
+                        plugin_hgvs_shifted_cds_coordinates (a
+                        DownstreamProtein, a ProteinLengthChange or an NMD on
+                        a row whose reference carries a non-zero HGVS_OFFSET:
+                        under --hgvs Ensembl VEP's plugin reads the CDS
+                        coordinates and the allele the protein notation left
+                        shifted, the candidate the record's own; the
+                        reference's value is recomputed on the shifted
+                        coordinates, the candidate's on the own, and Ensembl
+                        VEP's rule gives another value on the own; on the row
+                        of a later alternate allele of its record whose
+                        reference prints the shifted coordinates as its
+                        CDS_position the own coordinates are the candidate's;
+                        a row the start rule changes as well needs the
+                        Downstream class of its own coordinates named beside
+                        this one); the three read --json-cache and accept
+                        nothing without it,
+                        plugin_value_follows_splice_term_past_the_record_span
+                        (a DownstreamProtein, a ProteinLengthChange, an NMD, a
+                        LoF, a LoF_info, a LoF_filter or a LoF_flags that one
+                        side alone writes, the side whose terms let the plugin
+                        run, on a row whose two Consequence sets differ as
+                        splice_term_past_the_record_span admits, with the
+                        record's alleles where the row carries them or --input
+                        gives them and without them where neither does),
+                        plugin_value_follows_stop_codon_term_pair (a field of
+                        a plugin that runs by a row's terms, which one side
+                        alone writes: the side whose terms let the plugin run,
+                        where the other side's do not; a DownstreamProtein, a
+                        ProteinLengthChange, an NMD, a LoF, a LoF_info, a
+                        LoF_filter or a LoF_flags, a REVEL or an AlphaMissense
+                        field, whose plugins run on a row with
+                        missense_variant, and a ClinPred or a dbNSFP_ field,
+                        whose plugins run on a row with missense_variant,
+                        stop_lost, stop_gained or start_lost; on a row whose
+                        two Consequence sets differ as one of the stop codon
+                        classes stop_retained_without_stop_codon_test,
+                        stop_codon_overlap_insertion_range,
+                        stop_retained_three_base_stop_codon_test,
+                        stop_codon_settled_before_unknown_bases and
+                        frameshift_inside_a_held_stop_codon admits or,
+                        beside --json-cache, as one of
+                        structural_deletion_stop_lost_without_stop_codon,
+                        stop_codon_completed_by_polyadenylation,
+                        stop_codon_overlap_without_stop_codon,
+                        stop_codon_behind_last_residue_without_stop_codon and
+                        start_codon_overlap_without_start_codon admits),
+                        total_length_json_range_end (under --total_length, a
+                        cdna_end, cds_end or protein_end of a JSON consequence
+                        object where the candidate writes the last position of
+                        a range with its total, 487/2674, and the reference
+                        repeats the start both entries carry, or writes
+                        neither key of a range whose start is unknown),
+                        allele_number_repeated_or_reference_equal_alt (under
+                        --allele_number, an ALLELE_NUM or allele_num on a row
+                        of a record whose written allele list repeats an
+                        alternate, or lists one equal to the reference allele,
+                        before the row's allele, an alternate as the list
+                        writes it or, on an indel record, without the first
+                        base its alleles share: the candidate writes the
+                        allele's place among the written alternates, 3 for the
+                        T of C/G/G/T, and the reference its count among the
+                        entries left once those are dropped, 2; both entries
+                        carry the list with one text, as UPLOADED_ALLELE or
+                        uploaded_allele, and rows without the list stay
+                        differences, as does a row whose allele fits two
+                        alternates at different places),
+                        blosum62_hgvs_shift_shared_across_alleles (with
+                        --json-cache, a BLOSUM62 the reference alone writes on
+                        a later allele's row whose CDS and protein positions
+                        hgvs_shift_shared_across_alleles takes, where the
+                        reference's Amino_acids is one residue over one, the
+                        first the translation of the moved pair's codon, the
+                        candidate's own pair is none the plugin scores, and
+                        the value is the matrix cell of the reference's pair),
+                        plugin_value_on_reference_skipped_record (a pHaplo, a
+                        pTriplo or a count of existing upstream open reading
+                        frames that the candidate alone writes on a row of a
+                        record Ensembl VEP dropped; such a row has no
+                        reference entry, so this comparison sets it aside
+                        whole under reference_skipped_record and takes no pair
+                        for the class, which the plugin tuple scorer decides),
+                        the structural-variant comparator's classes
+                        reference_skipped_record (a row the candidate alone
+                        writes on a record Ensembl VEP drops before
+                        annotation, an unsupported type or a span over
+                        --max_sv_size, and wrote nothing for; needs --input in
+                        every format), breakend_mate_local_read (a bracket-
+                        mate row whose consequence sets are the local-
+                        coordinate and mate-coordinate derivations over the
+                        cache's transcript model, skipped whole; needs --json-
+                        cache) and bnd_own_chromosome_rows_lost (an own-end
+                        transcript row the candidate alone writes at a
+                        Location where the reference kept the mate rows of
+                        another chromosome and no own-end row, the transcript
+                        within 5,000 bases on the Location's chromosome; needs
+                        --json-cache),
+                        dosage_sensitivity_regulatory_row_warnings (--warnings
+                        mode: the reference's Plugin 'DosageSensitivity' went
+                        wrong lines), fork_warning_pid_prefix (--warnings
+                        mode: the <pid> : Ensembl VEP's parent wrote before a
+                        forked child's line is removed from the reference's
+                        lines), json_mismatch_warning_names_no_record
+                        (--warnings mode: where the reference holds the
+                        Transcript-assembly mismatch warning of a --json run,
+                        which names no record, and the candidate holds it with
+                        a record's name, those lines are set aside with the
+                        reference's interpreter warnings of the statement that
+                        wrote the unnamed line), the manifest-applied classes
+                        (each read from the manifest beside the input)
+                        transcript_annotator_sibling_allele_rows,
+                        transcript_annotator_insertion_window (the table's
+                        fields the candidate alone fills on an insertion's
+                        row, from a row at the insertion's start that Ensembl
+                        VEP's two-base window never reaches),
+                        hgvs_shift_shared_across_alleles (with --json-cache
+                        also decided without a manifest on the row of a second
+                        or later alternate allele of its record: its
+                        CDS_position, Protein_position and Amino_acids where
+                        the reference prints the record's own coordinates
+                        moved by the HGVS_OFFSET of the first allele's row and
+                        the candidate the record's own),
+                        hgvs_shift_sequence_edge_window (beside
+                        --reference-fasta and --json-cache also decided
+                        without a manifest: the HGVSc, HGVSp and HGVS_OFFSET
+                        of an insertion's or deletion's row within 1,000 bases
+                        of the sequence edge its strand runs towards and,
+                        under --shift_3prime 1, its SHIFT_LENGTH and its
+                        cDNA_position, CDS_position and Protein_position,
+                        where each engine's value is the one its own walk
+                        gives),
+                        frequency_filter_allele_key_order (Ensembl VEP 116.3
+                        corrects the defect, and the class applies under an
+                        earlier reference release), minimal_symbolic_alleles
+                        (the keys of a structural record with two or more
+                        symbolic ALTs under --minimal: a two-ALT record's
+                        reference rows at the trimmed span, a longer record's
+                        first two alleles' rows marked MINIMISED, and the
+                        candidate's rows at the record's span),
+                        shift_3prime_shared_predicates (a row whose terms
+                        Ensembl VEP reads at another allele's shifted span
+                        under --shift_3prime 1) and shift_start_codon_test (a
+                        boundary deletion's terms and HGVSp under
+                        --shift_3prime 1) and, in the recoder format,
+                        refseq_transcript_entries and lrg_transcript_entries
+                        (the RefSeq and LRG notations dropped on both sides),
+                        archive_dbsnp_synonyms (the Archive dbSNP synonym
+                        entries dropped) and
+                        identifier_indel_transcript_notations (hgvsc, hgvsp
+                        and mane_select dropped for an identifier input's
+                        insertion or deletion alleles)
+  --reference-release {115.2,116.2,116.3}
+                        the Ensembl VEP release that wrote the reference
+                        output (default: 116.3): a class of --masks whose
+                        defect Ensembl VEP corrects at or before that release
+                        is not applied, in comparison mode and in --warnings
+                        mode, so a row or field it would set aside is a
+                        difference; a comparison's report names such a class
+                        under masks.corrected with the release that corrects
+                        the defect
+  --keep-only {regulatory_feature_rows}
+                        comparison mode: retain only
+                        RegulatoryFeature/MotifFeature rows and their records
+                        on both sides
+  --floors FLOORS       COL=MIN,... minimum populated counts per default-
+                        format column, both sides; in JSON counted under the
+                        column's JSON key or, for a plugin's column, inside
+                        the plugin's object, a column with no row count there
+                        (record-level, Feature_type, Extra, a custom source's
+                        columns) reported as not applicable; in tab and VCF a
+                        column neither header declares is not applicable; the
+                        Contract section of the tool's README states the rules
+  --field-pairs FIELD_PAIRS
+                        COL=EXPECTED=>ACTUAL[;...] value pairs accepted as
+                        equal
+  --nearest-sites NEAREST_SITES
+                        the candidate JSON cache whose start sites settle
+                        NEAREST values
+  --json-cache JSON_CACHE
+                        the candidate JSON cache whose transcript models and
+                        spans the classes breakend_mate_local_read and
+                        bnd_own_chromosome_rows_lost read;
+                        hgvs_shift_sequence_edge_window reads its transcripts
+                        beside --reference-fasta;
+                        hgvs_shift_shared_across_alleles reads its mapper
+                        pairs, coding sequences and codon tables;
+                        hgvsp_stop_named_on_incomplete_coding_sequence reads
+                        the lengths of its coding sequences (without it the
+                        class takes a row by its FLAGS and terms alone);
+                        structural_deletion_stop_lost_without_stop_codon,
+                        stop_codon_completed_by_polyadenylation,
+                        stop_codon_overlap_without_stop_codon,
+                        stop_codon_behind_last_residue_without_stop_codon and
+                        start_codon_overlap_without_start_codon read the
+                        coding ends of its transcripts, the stop codon and the
+                        start codon vep-rs reads there, by the record of the
+                        row's Feature whose span holds the row's Location
+                        (without it the five are refused); beside it
+                        start_cooccurrence_swap, stop_codon_unshifted_span,
+                        stop_retained_without_stop_codon_test,
+                        stop_codon_overlap_genomic_span,
+                        stop_retained_three_base_stop_codon_test,
+                        stop_codon_removed_without_stop_codon_test and
+                        stop_codon_overlap_insertion_range take a pair only on
+                        a transcript that shows the codon they stand on,
+                        splice_term_past_the_record_span and the two plugin
+                        value classes ask those rules so, and
+                        hgvsp_stop_named_on_incomplete_coding_sequence takes
+                        no row on a transcript whose stop codon
+                        polyadenylation completes (without it each reads the
+                        two rows alone);
+                        hgvsp_frameshift_count_at_the_first_residue reads
+                        there whether a start codon stands at a transcript's
+                        coding start and, where none does, its coding
+                        sequence, 3' UTR, peptide and codon table (without it
+                        the class takes no row);
+                        organelle_peptide_paths_translation_table reads its
+                        codon tables; downstream_utr_frame_past_coding_end and
+                        downstream_start_past_own_codon read its coding
+                        sequences, 3' UTRs and codon tables, as
+                        plugin_hgvs_shifted_cds_coordinates does with the
+                        transcripts' strands, exons, coding bounds and mapper
+                        pairs; hgvs_clipped_reference_against_whole_alternate
+                        counts its exon spans for a substitution's row whose
+                        two notations show the clamp (without it that arm
+                        takes no row); hgvsp_shifted_indel_written_span_gate
+                        reads them for a row annotated in an intron that the
+                        class does not take from the row alone (without it the
+                        class takes no such row);
+                        hgvsp_intron_end_insertion and
+                        hgvsp_intron_start_insertion read its exons and coding
+                        bounds; maxentscan_overlapping_windows reads its exons
+                        and strands (without it the class takes no row);
+                        hgvsp_stop_codon_protein_comparison reads its coding
+                        sequences and codon tables for a pair of more than
+                        one residue before an inserted stop (without it such
+                        a pair stays a difference), and its peptides and 3'
+                        UTRs for an extension counted from a stop the
+                        transcript's peptide holds (without it such a pair
+                        is read from the row alone);
+                        spliceai_multi_entry_cell reads its transcripts'
+                        symbols for the gene of a row that writes no SYMBOL;
+                        hgvs_insertion_left_where_the_shift_stops counts its
+                        exon spans between the two coordinates of a dup
+                        (without it the class reads a dup by its count of
+                        bases alone); refseq_edited_model_inserted_span_codons
+                        reads its coding sequences and codon tables (without
+                        it the class takes no row);
+                        refseq_failed_edit_model_hgvsc_offset reads its
+                        transcripts' edits and coding positions (without it
+                        the class takes no row);
+                        stop_codon_settled_before_unknown_bases reads its
+                        transcripts' strands, exons, coding bounds, mapper
+                        pairs, coding sequences and codon tables for the row
+                        of an insertion written in an intron and carried into
+                        the coding sequence (without it the class takes its
+                        rows with a Codons cell alone)
+  --reference-fasta REFERENCE_FASTA
+                        the reference FASTA both engines read, uncompressed
+                        beside its .fai: under --masks
+                        hgvs_shift_sequence_edge_window, with --json-cache,
+                        the class is decided from its sequence and the cache's
+                        transcripts where no manifest documents the row; under
+                        --masks stop_codon_completed_by_polyadenylation, with
+                        --json-cache, a deletion from a completed stop codon
+                        past its transcript's last base is derived from the
+                        bases after the transcript
+  --gwas-catalog GWAS_CATALOG
+                        the GWAS catalog associations file the run's GWAS
+                        plugin read, whose rows of two or more SNPs the
+                        classes gwas_haplotype_cross_product and
+                        gwas_interaction_first_snp_allele_whitespace read
+  --revel-table REVEL_TABLE
+                        the REVEL table the run's REVEL plugin read, with its
+                        tabix index beside it, whose rows the class
+                        revel_other_reference_amino_acid_rows reads; the index
+                        is REVEL_TABLE.tbi, the one the plugin demands of a
+                        table it reads, and a .csi index alone is refused
+  --revel-no-match      the run set the REVEL plugin's no_match, so the class
+                        reads no row's transcript ids
+  --spliceai-table SPLICEAI_TABLE
+                        a score file the run's SpliceAI plugin read, with its
+                        tabix index beside it (repeatable: the snv= file and
+                        the indel= file), whose records the class
+                        spliceai_multi_entry_cell reads at a row's variant;
+                        the gene of a row that writes no SYMBOL is read from
+                        --json-cache; the index of a file is
+                        SPLICEAI_TABLE.tbi, the one the plugin demands of a
+                        file it reads, and a .csi index alone is refused
+  --utrannotator-sweep UTRANNOTATOR_SWEEP
+                        a default-format Ensembl VEP output of the same input
+                        under a fixed Perl hash seed (repeatable, one per
+                        seed), whose rows the classes
+                        utrannotator_consequence_precedence,
+                        utrannotator_gained_start_remade_in_place and
+                        utrannotator_lost_stop_written_before_stop_codon read
+  --default DEFAULT     self-parity: the default-format output
+  --tab TAB             self-parity: the --tab output
+  --vcf VCF             self-parity: the --vcf output
+  --json JSON           self-parity: the --json output
+  --parquet PARQUET     self-parity: the Parquet output (file or directory)
+  --expected-skipped EXPECTED_SKIPPED
+                        warnings: the expected --skipped_variants_file output
+  --actual-skipped ACTUAL_SKIPPED
+                        warnings: the actual --skipped_variants_file output
+  --unordered           compare the shared entries without their order (a run
+                        whose reference rows Ensembl VEP emits in hash order:
+                        --pick_allele, --pick_allele_gene, --per_gene)
+  --report REPORT       where the JSON report is written
+  --examples EXAMPLES   examples kept per difference group

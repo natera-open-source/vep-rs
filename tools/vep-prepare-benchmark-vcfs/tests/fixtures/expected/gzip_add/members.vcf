@@ -1,0 +1,12 @@
+##fileformat=VCFv4.2
+##source=made-up records
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+chr1	2000	.	A	C	.	PASS	DP=3
+chr2	2001	.	C	G	.	PASS	DP=3
+chr3	2002	.	G	T	.	PASS	DP=3
+chrGL1	2003	.	T	A	.	PASS	DP=3
+chr4	2004	.	A	G	.	PASS	DP=3
+chr5	2005	.	C	T	.	PASS	DP=3
+chr6	2006	.	G	A	.	PASS	DP=3
+chrZ	2007	.	T	C	.	PASS	DP=3
+chr7	2008	.	A	T	.	PASS	DP=3

@@ -1,11 +1,11 @@
 [VEP run statistics]
-VEP version (API)	 116.2 (116)
+VEP version (API)	 116.3 (116)
 Annotation sources	Cache: /work/cache/arabidopsis_thaliana/63_TAIR10
 Species	arabidopsis_thaliana
 Command line options	vep --assembly TAIR10 --cache --cache_version 63 --database 0 --dir_cache [PATH]/cache --dir_plugins /plugins --fasta [PATH]/ref.fa --force_overwrite --fork --format vcf --input_file [PATH]/input.vcf --offline --output_file [PATH]/tab.txt --per_gene --pick_order biotype --quiet --species arabidopsis_thaliana --stats_text --tab
-Start time	2026-10-31 19:58:44
-End time	2026-10-31 19:58:46
-Run time	2 seconds
+Start time	2026-11-20 13:22:06
+End time	2026-11-20 13:22:09
+Run time	3 seconds
 Input file	/work/input.vcf
 Output file	/work/perl_out/tab.txt
 

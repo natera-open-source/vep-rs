@@ -1,7 +1,7 @@
 entry = "gwas_shared_site_previous_record_reference"
 page = "docs/divergences/gwas-shared-site-previous-record-reference.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the Ensembl VEP documentation, \"Data formats\", Default Ensembl VEP input, whose strand column is + (forward) or - (reverse) and which sets no rule against two lines at one site; not seen in the measured datasets"
 notes = "Given alone, the forward record carries GWAS_study=GCST005275 on its four rows in both engines and the reverse record none; given forward then reverse, Ensembl VEP writes the fields on all eight rows."
@@ -46,3 +46,10 @@ vep_rs = [
   "ENST00000715812=GCST005275",
   "ENST00000715813=GCST005275",
 ]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/gwas.rs::GwasPlugin::matching_record",
+    "crates/vep-builtins/src/plugins/gwas.rs::RecordAlleles::matches",
+]
+tests = ["crates/vep-builtins/src/plugins/gwas.rs::tests::every_alternate_of_the_record_is_read"]

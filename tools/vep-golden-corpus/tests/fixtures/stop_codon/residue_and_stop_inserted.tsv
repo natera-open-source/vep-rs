@@ -1,0 +1,19 @@
+Asp282_Trp283insTrpTer	Ter284=	inframe_insertion,stop_retained_variant		1
+Asp282_Trp283insTrpTer	Ter284=	stop_retained_variant,NMD_transcript_variant		1
+Met1_Trp2insTrpTer	Ter3=	inframe_insertion,stop_retained_variant		1
+Ter284=	Asp282_Trp283insTrpTer	inframe_insertion,stop_retained_variant		0
+Asp282_Trp283insAspTer	Ter284=	inframe_insertion,stop_retained_variant		0
+Asp281_Trp283insTrpTer	Ter284=	inframe_insertion,stop_retained_variant		0
+Asp283_Trp283insTrpTer	Ter284=	inframe_insertion,stop_retained_variant		0
+Ter282_Trp283insTrpTer	Ter284=	inframe_insertion,stop_retained_variant		0
+Asp282_Trp283insTrpTer	Ter283=	inframe_insertion,stop_retained_variant		0
+Asp282_Trp283insTrpTer	Ter285=	inframe_insertion,stop_retained_variant		0
+Asp282_Trp283insTrpGlyTer	Ter285=	inframe_insertion,stop_retained_variant		0
+Asp282_Trp283insTer	Ter283=	inframe_insertion,stop_retained_variant		0
+Asp282_Trp283insTrpTer	Ter284=	inframe_insertion		0
+Asp282_Trp283insTrpTer	Ter284=	inframe_insertion,stop_gained		0
+Asp282_Trp283insTrpTer	Ter284=	inframe_insertion,stop_retained_variant	cds_end_NF	0
+(Asp282_Trp283insTrpTer)	Ter284=	inframe_insertion,stop_retained_variant		0
+Asp282_Trp283insTrpTer	(Ter284=)	inframe_insertion,stop_retained_variant		0
+Asp282_Trp283insTrpTer		inframe_insertion,stop_retained_variant		0
+Ter284=		inframe_insertion,stop_retained_variant		0

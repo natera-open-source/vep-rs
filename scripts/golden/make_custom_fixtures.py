@@ -51,7 +51,7 @@ span and gets none, nor does a record at POS 0, before the first base, which no 
 bigWig interval can start at. Every record carries INFO AF (Number=A) and CLASS
 (Number=1), and FILTER PASS.
 
-`build_golden_corpus.py check --family-columns custom_match=<exact>/<overlap>` reads the
+`vep-golden-corpus check --family-columns custom_match=<exact>/<overlap>` reads the
 classes a reference realised over these sources; two variants at one locus, or a
 sequence variant inside a structural variant's span, share each other's hits, so the
 realised class of a row can differ from the class its record was written for.
@@ -64,7 +64,7 @@ of a type the mode does not read, so a run raises its one warning.
 
 bgzip and tabix write the compressed sources and their indexes, `bigtools bedgraphtobigwig`
 the bigWig, each found on PATH; the versions they report, the sha256 of every file written
-and the record count per class go under `custom_fixtures` in the corpus's provenance.json,
+and the locus count per class go under `custom_fixtures` in the corpus's provenance.json,
 every other key of which is kept. An existing fixture file is overwritten only under
 --force.
 

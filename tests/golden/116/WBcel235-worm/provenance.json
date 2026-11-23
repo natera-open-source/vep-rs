@@ -1,0 +1,85 @@
+{
+ "plugin_fixtures": {
+  "generator": "scripts/fixtures/cut_plugin_regions.py",
+  "flank": 5000,
+  "record_flank": 2000,
+  "exon_flank": 50,
+  "gerp_regions": "exons",
+  "tools": {
+   "bgzip": "bgzip (htslib) 1.9"
+  },
+  "files": {
+   "reference.fa.fai": "7df18a12836bf1539acdb5ca8d38afd4e1e2580a381f32dc2780afc96098d64c",
+   "reference.fa.gz": "6a76f50cd32f3f56ce572f938920e41e3d1f4239c87c6b503b95c52b43be35e7",
+   "reference.fa.gz.fai": "7df18a12836bf1539acdb5ca8d38afd4e1e2580a381f32dc2780afc96098d64c",
+   "reference.fa.gz.gzi": "676b96af8a54f513707987b5f1ce7055fa28c5c90266b095fe9785f88ed407bd"
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species caenorhabditis_elegans --assembly WBcel235 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "caenorhabditis_elegans/116_WBcel235",
+ "fasta": "reference.fa.gz",
+ "input": "variants.vcf",
+ "sha256": {
+  "default.txt": "1819e48352bd9d5205358598a7522aed3bf120d32f8cd33fc4aac518f0a4095b",
+  "tab.txt": "1f3e89aef25b3d5a78a5206b130856a51f48225737e4164fee2888a4967af71c",
+  "vcf.vcf": "19d66096d8da34e9f378a9a502f93f0eda9716e0652be0abcf026405fed16b6f",
+  "json.jsonl": "edfe9cea8b3080794b86ae40a02a0bbef99f8e4d4693feb072300f435a3051f4"
+ },
+ "variants_vcf_sha256": "36137f6a8dfed774903f8f7b7d3ff98eef7b566a48d7c0d57a973fee6223e19a",
+ "flag_sets": {
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species caenorhabditis_elegans --assembly WBcel235 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "caenorhabditis_elegans/116_WBcel235",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "244cba3a8383780f1be533ac6d4395b5f01b201fb95e8c46b7841cdc3fda3f62",
+    "tab.txt": "c25a8ef7b7a7e1e56ac587252c8de6cf222d6c8c6e897df78efde9606bec4887",
+    "vcf.vcf": "301b26dd0ea29c1186fc7947a58bc303eb6b3d9166c9f25dac8c9aefbf83c4be",
+    "json.jsonl": "0e3f33836479150daa262763cf017eb36049a8ff6fdfe12f2fb66082274bd31b"
+   },
+   "flags": [
+    "--everything"
+   ],
+   "expected_dir": "expected_everything"
+  },
+  "hgvs": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species caenorhabditis_elegans --assembly WBcel235 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs [--tab|--vcf|--json]",
+   "perl_cache": "caenorhabditis_elegans/116_WBcel235",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "54d75bfc4e00222956ccd8afb5bb35f30bff5191274d273d43854d15ea8e7549",
+    "tab.txt": "725f4ccbd2dbc96280938d6bd6a2e4ab88f473fbbef137f18102783478ffb608",
+    "vcf.vcf": "bddeb83c710012e4f229773c27aecb91f7c35d2170a483134e8fcb074433b957",
+    "json.jsonl": "fff80596def66675207119c086a286893c79d0621a7be67d57a19fac03a85c44"
+   },
+   "flags": [
+    "--hgvs"
+   ],
+   "expected_dir": "expected_hgvs"
+  }
+ },
+ "generator": "tools/vep-seeded-variants --cache <converted cache> --seed 1 --records wide --per-category 40 --fasta <genome> --sequence MtDNA --sequence III (912 records, generator version 2); Ensembl VEP over them under the corpus flags; tools/vep-golden-corpus select --release 116 --assembly WBcel235 --species caenorhabditis_elegans --dataset wide=<reference>=<the generated records> --k 2 --seed 1 --max-span 1000000 --max-records 500 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 6 --include <the first ten records of each generator category, 254 named records> --covers species-worm-wbcel235 --covers genetic-code-tables --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --perl-info <cache>/info.txt --cache-version 116 over the whole cache tools/vep-storable-to-json converts from the Ensembl VEP 116 WBcel235 cache; scripts/fixtures/cut_plugin_regions.py --reference <the Ensembl release 116 sequences of MtDNA and III> --flank 5000 --record-flank 2000; scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; tools/vep-golden-corpus flag-set (everything, hgvs) and classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp for the hgvs set)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "III": 1069,
+   "MtDNA": 36
+  },
+  "shards": 15,
+  "synonym_lines": 4,
+  "variation_slices": "none: the cache carries no known variants"
+ }
+}

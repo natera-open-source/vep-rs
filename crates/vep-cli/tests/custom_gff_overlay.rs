@@ -4,8 +4,8 @@
 //! A `--custom` GFF source in `gff_type=gencode_promoter` mode through the
 //! `vep` binary: the `feature_id` and `associated_gene` fields carry the
 //! characters a record's `ID` and `gene_id` attributes encode with `%XX`
-//! escapes, in every output format, where Ensembl VEP 116.2 prints the
-//! escapes as written (`GFF.pm:198-201` over the raw hash of
+//! escapes, in every output format, where Ensembl VEP 116.3 prints the
+//! escapes as written (`GFF.pm:199-202` over the raw hash of
 //! `GFF3.pm:190-198`, the documented `gff_attribute_escapes_read_raw`).
 
 use std::fs;
@@ -17,42 +17,6 @@ mod common;
 fn corpus_cache() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/golden/116/GRCh38-release116/json_cache")
-}
-
-/// A bgzip-compressed GFF3 of `records` under `dir` with its tabix index
-/// beside it, as `bgzip` and `tabix -p gff` write them.
-fn indexed_gff(dir: &Path, name: &str, records: &[&str]) -> PathBuf {
-    use std::io::Write;
-
-    use noodles::core::Position;
-    use noodles::csi::binning_index::index::header;
-    use noodles::csi::binning_index::index::reference_sequence::bin::Chunk;
-    use noodles::{bgzf, tabix};
-
-    let path = dir.join(name);
-    let mut writer = bgzf::io::Writer::new(fs::File::create(&path).unwrap());
-    let mut indexer = tabix::index::Indexer::default();
-    indexer.set_header(header::Builder::gff().build());
-    for record in records {
-        let start = writer.virtual_position();
-        writeln!(writer, "{record}").unwrap();
-        let end = writer.virtual_position();
-        let fields: Vec<&str> = record.split('\t').collect();
-        let position = |column: &str| Position::try_from(column.parse::<usize>().unwrap()).unwrap();
-        indexer
-            .add_record(
-                fields[0],
-                position(fields[3]),
-                position(fields[4]),
-                Chunk::new(start, end),
-            )
-            .unwrap();
-    }
-    writer.finish().unwrap();
-    let mut index_path = path.as_os_str().to_owned();
-    index_path.push(".tbi");
-    tabix::fs::write(index_path, &indexer.build()).unwrap();
-    path
 }
 
 /// Runs the binary over the one-record input on the promoter source `gff`,
@@ -106,12 +70,12 @@ fn rows(text: &str) -> Vec<&str> {
 /// re-spells a `;` inside a value `%3B` (`OutputFactory/VEP_output.pm:118`),
 /// so it prints `PROM,1` and `ENSG%3B1`; the VCF format's `CSQ` entry prints
 /// `PROM&1` and `ENSG%3B1`, the spelling every `CSQ` value gives a `,` and a
-/// `;` (`OutputFactory/VCF.pm:401-404`). Ensembl VEP 116.2 prints `PROM%2C1`
+/// `;` (`OutputFactory/VCF.pm:401-404`). Ensembl VEP 116.3 prints `PROM%2C1`
 /// and `ENSG%3B1` in all four formats, the raw read of `GFF3.pm:190-198`.
 #[test]
 fn promoter_identifiers_carry_the_characters_their_escapes_encode() {
     let dir = tempfile::tempdir().unwrap();
-    let gff = indexed_gff(
+    let gff = common::indexed_gff(
         dir.path(),
         "promoters.gff.gz",
         &["21\t.\tpromoter_window\t30282160\t30282180\t.\t+\t.\tID=PROM%2C1;gene_id=ENSG%3B1"],

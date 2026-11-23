@@ -8,7 +8,8 @@ homepage.workspace = true
 rust-version.workspace = true
 keywords = ["vep", "ensembl", "variant-annotation", "vcf", "genomics"]
 categories = ["science::bioinformatics", "science::bioinformatics::genomics", "command-line-utilities"]
-description = "The vep command: a fast Rust reimplementation of the Ensembl Variant Effect Predictor (VEP) for VCF variant annotation, with VEP's flags and output formats"
+description = "The vep command of vep-rs, a fast Rust reimplementation of Ensembl VEP: annotates VCF variants with the Variant Effect Predictor's flags and output formats"
+exclude = ["tests/"]
 default-run = "vep"
 
 [lib]
@@ -31,6 +32,7 @@ vep-io = { workspace = true }
 vep-plugin = { workspace = true }
 vep-builtins = { workspace = true }
 vep-fasta = { workspace = true }
+vep-cache-builder = { workspace = true }
 noodles = { workspace = true }
 noodles-bgzf = { workspace = true }
 clap = { workspace = true }

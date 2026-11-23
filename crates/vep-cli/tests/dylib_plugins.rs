@@ -459,7 +459,7 @@ fn echo_plugin_fields_are_described_in_every_header() {
 }
 
 /// `echo_plugin` lists `Transcript` alone, so the host never hands it the
-/// intergenic row (OutputFactory.pm:2223, `check_feature_type(... || 'Intergenic')`).
+/// intergenic row (OutputFactory.pm:2232, `check_feature_type(... || 'Intergenic')`).
 #[test]
 fn a_dylib_declaring_transcript_only_skips_intergenic_variants() {
     let Some(dir) = echo_plugin_dir() else {
@@ -530,7 +530,7 @@ fn a_dylib_listing_every_kind_runs_on_every_row_and_intergenic_variants() {
 }
 
 /// Plugin header lines come plugin by plugin in load order, each plugin's keys
-/// sorted (OutputFactory.pm:2407-2421 `get_plugin_headers`): a built-in's line
+/// sorted (OutputFactory.pm:2416-2430 `get_plugin_headers`): a built-in's line
 /// precedes a later dylib's, and the dylib's keys sort regardless of the order it
 /// listed them in.
 #[test]
@@ -573,7 +573,7 @@ fn header_keys_are_sorted_per_plugin_in_load_order() {
     );
 }
 
-/// A plugin runs on the rows whose feature type it lists (`OutputFactory.pm:2223`
+/// A plugin runs on the rows whose feature type it lists (`OutputFactory.pm:2232`
 /// `check_feature_type`): the example's default `Transcript` list reaches no
 /// regulatory or motif row, a list naming both kinds reaches both, and a plugin
 /// that lists `MotifFeature` switches regulatory annotation on for the run
@@ -671,7 +671,7 @@ fn warning_lines(out: &Path) -> Vec<String> {
 /// `faulty_plugin` returns `[1]` on its first call and NULL on its second, then
 /// `FAULTY_OK=1`: `run_plugins` warns `did not return a hashref, output ignored!`
 /// for a result that is not a hash and `went wrong: <reason>` for a failed call
-/// (OutputFactory.pm:2235, 2244), keeps the line and goes on, and the warning
+/// (OutputFactory.pm:2244, 2253), keeps the line and goes on, and the warning
 /// sink writes each text once (BaseVEP.pm:810-813). The run exits 0 with every
 /// row of a plugin-less run, the two warnings once each, and the field on every
 /// transcript row but the two the failing calls served.
@@ -743,7 +743,7 @@ fn a_dylib_that_returns_a_non_object_is_warned_and_the_run_goes_on() {
 
 /// A built-in that fails on every variant of a batch the index maps to a
 /// block costs its own fields and one `Plugin '<Name>' went wrong: <reason>`
-/// warning (OutputFactory.pm:2244), and the built-in after it annotates the
+/// warning (OutputFactory.pm:2253), and the built-in after it annotates the
 /// batch: REVEL over a data file whose index names blocks the file lacks (the
 /// file cut after its header block, so the plugin loads and every read of a
 /// block fails; the record past the file's last row reads none), then pLI
@@ -855,8 +855,8 @@ fn without_revel(row: &str) -> String {
     columns.join("\t")
 }
 
-/// Ensembl VEP 116.2's REVEL reads each line's own span (REVEL.pm:168) inside
-/// `run_plugins`'s per-line `eval` (OutputFactory.pm:2225-2226), and its tabix
+/// Ensembl VEP 116.3's REVEL reads each line's own span (REVEL.pm:168) inside
+/// `run_plugins`'s per-line `eval` (OutputFactory.pm:2234-2235), and its tabix
 /// iterator ends at a block it cannot inflate, so a corrupt block costs the
 /// variants read from it their REVEL field and no other. A batch whose prefetch
 /// fails is retried variant by variant: over the corpus's REVEL file with its
@@ -1009,7 +1009,7 @@ fn two_instances_of_a_failing_plugin_each_write_their_own_line() {
 /// runner reads); it then sees the motif rows and no other. A plugin listing
 /// `Intergenic` runs on the intergenic row of a record that overlaps no
 /// transcript, its regulatory rows notwithstanding, and its field prints on that
-/// row alone (`OutputFactory.pm:2223`); a plugin listing every kind prints on
+/// row alone (`OutputFactory.pm:2232`); a plugin listing every kind prints on
 /// every row.
 #[test]
 fn a_plugin_declaring_motif_features_switches_regulatory_on_and_sees_motif_rows() {
@@ -1101,7 +1101,7 @@ fn a_plugin_declaring_motif_features_switches_regulatory_on_and_sees_motif_rows(
 
     // A field the plugin's header info never declared stays on the intergenic
     // row it was written on as well: Ensembl VEP keeps a plugin's result in the
-    // hash of the row it ran on (OutputFactory.pm:2220-2235).
+    // hash of the row it ran on (OutputFactory.pm:2229-2244).
     let (_, rows) = run(
         &["echo_plugin,hello,undeclared,feature_types=Intergenic"],
         &["--regulatory"],

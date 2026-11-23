@@ -64,6 +64,16 @@ pub struct Breakends {
     pub mates: HashSet<String>,
 }
 
+/// What the reference's stable id pass did to the transcripts of one stable id, as one
+/// record sees it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SharedStableId {
+    /// The transcripts of the id that the pass dropped and that lie in reach of the record.
+    pub dropped: u64,
+    /// Whether the transcript of the id that the pass kept lies in reach of the record.
+    pub kept_in_reach: bool,
+}
+
 /// The 116.2 collector. `absent`: the groups at which vep-rs wrote a structural row and the
 /// reference nothing, less those `record_reference_named` takes out because a row there
 /// carries the name of a record the reference wrote a row for: a record the reference
@@ -73,7 +83,16 @@ pub struct Breakends {
 /// breakpoint the unique key stream dropped; `mate_overflow`: the groups whose reference row
 /// carries a coordinate at or past `BND_MATE_32_BIT_LIMIT`; `reference_only`: the groups the
 /// reference wrote and vep-rs nothing; `gvcf_sites`: the groups of vep-rs rows at a gVCF
-/// variant site, handed in before the merge.
+/// variant site, handed in before the merge; `shared_dbid_drops`: for a comparison that
+/// names the converted cache, the groups of the records in reach of a transcript the
+/// reference dropped for a transcript of the other set with its `dbID`, each with the stable
+/// ids dropped there, and `None` for a comparison that names no converted cache;
+/// `shared_stable_id_drops`: for such a comparison, the groups of the records in reach of a
+/// transcript the reference dropped for another transcript of its stable id, each with what
+/// the record sees of the transcripts of each such id, and `None` likewise;
+/// `shared_synonyms`: for a comparison that names the reference's cache, where that cache's
+/// synonyms file gives a name to two or more sequences the cache holds, those names, and
+/// `None` for any other comparison.
 #[derive(Default)]
 pub struct ReferenceRecordScope {
     pub absent: HashSet<Group>,
@@ -83,6 +102,9 @@ pub struct ReferenceRecordScope {
     pub mate_overflow: HashSet<Group>,
     pub gvcf_sites: HashSet<Group>,
     pub reference_only: HashSet<Group>,
+    pub shared_dbid_drops: Option<HashMap<Group, HashSet<String>>>,
+    pub shared_stable_id_drops: Option<HashMap<Group, HashMap<String, SharedStableId>>>,
+    pub shared_synonyms: Option<HashSet<String>>,
     group: Option<Group>,
     reference_wrote: bool,
     rust_wrote: bool,
@@ -187,6 +209,51 @@ impl ReferenceRecordScope {
         for loc in locations {
             self.gvcf_sites.insert((file_name.to_string(), loc.clone()));
         }
+    }
+
+    /// Records one file's transcripts dropped for a transcript of the other set with the
+    /// same `dbID`, per Location.
+    pub fn record_shared_dbid_drops(
+        &mut self,
+        file_name: &str,
+        dropped: HashMap<String, HashSet<String>>,
+    ) {
+        let drops = self.shared_dbid_drops.get_or_insert_with(HashMap::new);
+        for (location, stable_ids) in dropped {
+            drops
+                .entry((file_name.to_string(), location))
+                .or_default()
+                .extend(stable_ids);
+        }
+    }
+
+    /// Records one file's transcripts dropped for another transcript of the same stable
+    /// id, per Location. Two files' Locations stand apart, and what two records of one
+    /// Location see of an id is kept where it holds for both.
+    pub fn record_shared_stable_id_drops(
+        &mut self,
+        file_name: &str,
+        dropped: HashMap<String, HashMap<String, SharedStableId>>,
+    ) {
+        let drops = self.shared_stable_id_drops.get_or_insert_with(HashMap::new);
+        for (location, stable_ids) in dropped {
+            let at_group = drops.entry((file_name.to_string(), location)).or_default();
+            for (stable_id, seen) in stable_ids {
+                at_group
+                    .entry(stable_id)
+                    .and_modify(|held| {
+                        held.dropped = held.dropped.min(seen.dropped);
+                        held.kept_in_reach &= seen.kept_in_reach;
+                    })
+                    .or_insert(seen);
+            }
+        }
+    }
+
+    /// Records the names the cache's synonyms file gives to two or more sequences the cache
+    /// holds.
+    pub fn record_shared_synonyms(&mut self, names: HashSet<String>) {
+        self.shared_synonyms = Some(names);
     }
 
     /// One file's Locations in `absent`.

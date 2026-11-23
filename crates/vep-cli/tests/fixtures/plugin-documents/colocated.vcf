@@ -1,0 +1,6 @@
+##fileformat=VCFv4.2
+##source=tests/golden/116/GRCh38-colocated/variants.vcf
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+21	5030602	.	A	C	.	.	.
+21	38403526	.	T	TTCC	.	.	.
+21	44293150	.	TGTGTGTG	TGTGTG	.	.	.

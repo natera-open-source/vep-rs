@@ -1,10 +1,10 @@
 entry = "gxf_last_value_trailing_blanks"
 page = "docs/divergences/gtf-repeated-attribute-key.md#2-a-last-value-padded-with-blanks-at-the-end-of-its-line"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the GFF3 specification, \"Description of the Format\", column 9 (pairs are separated by semicolons and spaces are allowed in the field); not seen in the measured datasets; classed by its most reachable shape, the GFF3 line: the GTF line breaks \"Attributes must end in a semicolon\" (GTF 2.2 specification, [attributes])"
-notes = "The GRCh38 release-116 GTF lines of TMPRSS3 and ENST00001113783 with the transcript line's `gene_name \"TMPRSS3\"` moved to the end of the line, written without its closing `;` and followed by three blanks, beside the lines of PWP2 and ENST00000456705 as a control whose rows agree. Both engines read a bgzipped, tabix-indexed file through a library that hands each line without its `\n` and a `\r` before it and nothing else, so the blanks reach Ensembl VEP's parser; GTF.pm's get_attributes (lines 116-136) splits the column on `;` and the last pair's value runs to the end of the line with the blanks, so the symbol is `TMPRSS3   `, printed as read (OutputFactory.pm:1527 escapes each blank as %20 in the VCF). vep-rs's cache builder reads each line of the plain file without its line end and the blanks that pad it, so the symbol is `TMPRSS3`, the name the file encodes. A file whose lines end in `\r\n` reads as one whose lines end in `\n` on both engines, so the line end itself is no shape. The VCF format spells the two symbols `TMPRSS3%20%20%20` and `TMPRSS3`."
+notes = "The GRCh38 release-116 GTF lines of TMPRSS3 and ENST00001113783 with the transcript line's `gene_name \"TMPRSS3\"` moved to the end of the line, written without its closing `;` and followed by three blanks, beside the lines of PWP2 and ENST00000456705 as a control whose rows agree. Both engines read a bgzipped, tabix-indexed file through a library that hands each line without its `\n` and a `\r` before it and nothing else, so the blanks reach Ensembl VEP's parser; GTF.pm's get_attributes (lines 116-136) splits the column on `;` and the last pair's value runs to the end of the line with the blanks, so the symbol is `TMPRSS3   `, printed as read (OutputFactory.pm:1536 escapes each blank as %20 in the VCF). vep-rs's cache builder reads each line of the plain file without its line end and the blanks that pad it, so the symbol is `TMPRSS3`, the name the file encodes. A file whose lines end in `\r\n` reads as one whose lines end in `\n` on both engines, so the line end itself is no shape. The VCF format spells the two symbols `TMPRSS3%20%20%20` and `TMPRSS3`."
 prepare = [
   '''cat > "$STAGE/tmprss3_last_value_blanks.gtf" <<'GTF'
 21	ensembl_havana	gene	42371840	42396122	.	-	.	gene_id "ENSG00000160183"; gene_version "19"; gene_name "TMPRSS3"; gene_source "ensembl_havana"; gene_biotype "protein_coding";
@@ -67,3 +67,11 @@ where = { record = ["tmprss3_codon6", "pwp2_codon3"] }
 [expected]
 ensembl_vep = ["TMPRSS3%20%20%20", "PWP2"]
 vep_rs = ["TMPRSS3", "PWP2"]
+
+[implementation]
+code = ["crates/vep-cache-builder/src/line.rs::record_columns"]
+tests = [
+    "crates/vep-cache-builder/src/gtf.rs::tests::gtf_attributes_are_read_as_the_gtf_parser_reads_them",
+    "crates/vep-cache-builder/src/line.rs::tests::a_reader_takes_the_columns_of_a_line_the_index_build_gives_four",
+    "crates/vep-cli/tests/documented_subsets.rs::gtf_repeated_attribute_key_divergence_is_documented",
+]

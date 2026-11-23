@@ -1,0 +1,622 @@
+F IMPACT impact
+F Feature transcript_id regulatory_feature_id motif_feature_id
+F cDNA_position cdna_start cdna_end
+F SIFT sift_prediction sift_score
+F am_class am_class
+F alphamissense.am_class alphamissense.am_class
+F id id
+F never never_present
+F plug.x plug.x
+F both impact plug.x biotype
+L bad error
+{
+L bad error
+}
+L bad error
+[]
+L bad error
+[{}]
+L bad error
+"x"
+L bad error
+5
+L bad error
+null
+L bad error
+true
+L bad error
+{]
+L bad error
+{"a"}
+L bad error
+{"a":}
+L bad error
+{"a":1,}
+L bad error
+{,"a":1}
+L bad error
+{"a":1 "b":2}
+L bad error
+{'a':1}
+L bad error
+{a:1}
+L bad error
+{"a":1}}
+L bad error
+{"a":1}{"b":2}
+L bad error
+{"a":1} x
+L bad error
+{"a":01}
+L bad error
+{"a":+1}
+L bad error
+{"a":.5}
+L bad error
+{"a":1.}
+L bad error
+{"a":1e}
+L bad error
+{"a":1e+}
+L bad error
+{"a":0x10}
+L bad error
+{"a":1_0}
+L bad error
+{"a":-}
+L bad error
+{"a":--1}
+L bad error
+{"a":1.2.3}
+L bad error
+{"a":tru}
+L bad error
+{"a":True}
+L bad error
+{"a":nul}
+L bad error
+{"a":NULL}
+L bad error
+{"a":"x}
+L bad error
+{"a":"\x41"}
+L bad error
+{"a":"\u12"}
+L bad error
+{"a":"\u12G4"}
+L bad error
+{"a":"\U0041"}
+L bad error
+{"a":"\"}
+L bad error
+{"a":"\
+L bad error
+{"a":[1,]}
+L bad error
+{"a":[,1]}
+L bad error
+{"a":[1 2]}
+L bad error
+{"a":[1}
+L bad error
+{"a":{"b":1]}
+L bad error
+{"a":1,"b"}
+L bad error
+{"a" 1}
+L bad error
+{"a"::1}
+L bad error
+{"a":1,,"b":2}
+L bad error
+{"transcript_consequences":[1]}
+L bad error
+{"transcript_consequences":[{"a":1},"x"]}
+L bad error
+{"motif_feature_consequences":[[]]}
+L bad error
+{"intergenic_consequences":[null]}
+L bad error
+{"regulatory_feature_consequences":[{"a":1},[{"b":2}]]}
+L bad error
+{"a":"\ud800\u12"}
+L bad error
+{"a":"\ud83d\uZZZZ"}
+L bad error
+{"a":"x"y}
+L bad error
+{"a":[[[[[[1]]]]]}
+L bad error
+nul
+L bad error
+{}{}
+L bad error
+{} {}
+L fuzz error
+]
+L fuzz error
+f
+L fuzz error
+n
+L fuzz error
+{
+L fuzz error
+}
+L fuzz error
+,}
+L fuzz error
+-}
+L fuzz error
+.{
+L fuzz error
+/}
+L fuzz error
+0}
+L fuzz error
+E}
+L fuzz error
+N}
+L fuzz error
+[}
+L fuzz error
+\{
+L fuzz error
+\}
+L fuzz error
+a}
+L fuzz object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=
+{}
+L fuzz object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=:1 present=:1
+{"":1}
+L fuzz object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=:1 present=:1
+{ "":1}
+L fuzz object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=:1 present=:1
+{"":11}
+L fuzz object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=
+{"input":1}
+L fuzz object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=
+{ "input":1}
+L fuzz object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=.:1 present=.:1
+{".":1}
+L fuzz object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=0:1 present=0:1
+{"0":1}
+L fuzz object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=a:1 present=a:1
+{"a":1}
+L fuzz object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=e:1 present=e:1
+{"e":1}
+L fuzz object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=
+{"input": ""}
+L fuzz object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=:1 present=:1
+{ "" : 1 }
+L fuzz object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=:1 present=:1
+{ "" :11 }
+L fuzz object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=a:1 present=a:1
+{"a" :1}
+L fuzz object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=a:1 present=a:1
+{"a":11}
+L fuzz object more=0 key=f entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=
+{"input":"f"}
+L good object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=
+{}
+L good object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=a:1 present=a:1
+{ "a" : 1 }
+L good object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=:1 present=:1
+{"":1}
+L good object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=:1 present=:1
+{"":{"":[]}}
+L good object more=0 key=1%092%093%094%095 entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=
+{"input":"1\t2\t3\t4\t5\t6"}
+L good object more=0 key=1%092%093%094%095 entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=1 under=0,0,0,0,0,0,0,0,0,0 populated= present=
+{"input":"1\u00092\t3\t4\t5\t6\t7"}
+L good object more=0 key=a%20b entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=
+{"input":"a b"}
+L good object more=0 key=1%092%093%094%095 entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=
+{"input":"1\t2\t3\t4\t5"}
+L good object more=0 key=1%092%093%094 entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=
+{"input":"1\t2\t3\t4"}
+L good object more=0 key=%09%09%09%09 entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=
+{"input":"\t\t\t\t\t"}
+L good object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=
+{"input":""}
+L good object more=0 key=x%5Cty entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=
+{"input":"x\\ty"}
+L good object more=0 key=caf%C3%A9%091 entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=1 under=0,0,0,0,0,0,0,0,0,0 populated= present=
+{"input":"caf\u00e9\t1"}
+L good object more=0 key=%F0%9F%98%80%091 entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=1 under=0,0,0,0,0,0,0,0,0,0 populated= present=
+{"input":"\ud83d\ude00\t1"}
+L good object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=
+{"input":1}
+L good object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=
+{"input":["1\t2"]}
+L good object more=0 key=1%092%093%094%095 entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=1 under=0,0,0,0,0,0,0,0,0,0 populated= present=
+{"\u0069nput":"1\t2\t3\t4\t5\t6"}
+L good object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=a:1 present=a:1
+{"vep_rs_version":{"a":[1,2]},"a":1}
+L good object more=0 key= entries=2 kinds=1 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=
+{"transcript_consequences":[{}]}
+L good object more=0 key= entries=4 kinds=3 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=
+{"transcript_consequences":[{},{}],"intergenic_consequences":[{}]}
+L good object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=
+{"transcript_consequences":{"a":1}}
+L good object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=
+{"transcript_consequences":"x","motif_feature_consequences":[]}
+L good object more=0 key= entries=2 kinds=1 flags=0000 carried=513 by=0,513,0,0,0 uescape=1 under=1,0,0,0,0,0,0,0,0,1 populated=impact:1 present=impact:1
+{"\u0074ranscript_consequences":[{"impact":"HIGH"}]}
+L good object more=0 key= entries=2 kinds=1 flags=0001 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=variant_allele:1 present=variant_allele:1
+{"transcript_consequences":[{"variant_allele":"A|C"}]}
+L good object more=0 key= entries=2 kinds=1 flags=0001 carried=0 by=0,0,0,0,0 uescape=1 under=0,0,0,0,0,0,0,0,0,0 populated=variant_allele:1 present=variant_allele:1
+{"transcript_consequences":[{"variant_allele":"\u007c"}]}
+L good object more=0 key= entries=2 kinds=1 flags=0001 carried=0 by=0,0,0,0,0 uescape=1 under=0,0,0,0,0,0,0,0,0,0 populated=variant_allele:1 present=variant_allele:1
+{"transcript_consequences":[{"variant_allele":"\u0023"}]}
+L good object more=0 key= entries=2 kinds=1 flags=0001 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=variant_allele:1 present=variant_allele:1
+{"transcript_consequences":[{"variant_allele":["#"]}]}
+L good object more=0 key= entries=2 kinds=1 flags=1001 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=variant_allele:1 present=variant_allele:1
+{"transcript_consequences":[{"variant_allele":{"a|b":1}}]}
+L good object more=0 key= entries=2 kinds=1 flags=1001 carried=0 by=0,0,0,0,0 uescape=1 under=0,0,0,0,0,0,0,0,0,0 populated=variant_allele:1 present=variant_allele:1
+{"transcript_consequences":[{"variant_allele":{"a\u007Cb":1}}]}
+L good object more=0 key= entries=2 kinds=1 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=gene_id:1 present=gene_id:1
+{"transcript_consequences":[{"gene_id":"A|C"}]}
+L good object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=variant_allele:1 present=variant_allele:1
+{"variant_allele":"A|C"}
+L good object more=0 key= entries=2 kinds=2 flags=0001 carried=2 by=0,0,2,0,0 uescape=0 under=0,1,0,0,0,0,0,0,0,0 populated=transcript_id:1 present=transcript_id:1
+{"intergenic_consequences":[{"transcript_id":"x#1"}]}
+L good object more=0 key= entries=2 kinds=4 flags=0001 carried=2 by=0,0,0,2,0 uescape=0 under=0,1,0,0,0,0,0,0,0,0 populated=motif_feature_id:1 present=motif_feature_id:1
+{"regulatory_feature_consequences":[{"motif_feature_id":"x|1"}]}
+L good object more=0 key= entries=2 kinds=1 flags=0001 carried=0 by=0,0,0,0,0 uescape=1 under=0,0,0,0,0,0,0,0,0,0 populated=variant_allele:1 present=variant_allele:1
+{"transcript_consequences":[{"variant_\u0061llele":"|"}]}
+L good object more=0 key= entries=2 kinds=1 flags=0100 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=a.b:1 present=a.b:1
+{"transcript_consequences":[{"a.b":1}]}
+L good object more=0 key= entries=2 kinds=1 flags=0100 carried=0 by=0,0,0,0,0 uescape=1 under=0,0,0,0,0,0,0,0,0,0 populated=a.b:1 present=a.b:1
+{"transcript_consequences":[{"a\u002eb":1}]}
+L good object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=a.b:1 present=a.b:1
+{"a.b":1}
+L good object more=0 key= entries=2 kinds=1 flags=1000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=x:1 present=x:1
+{"transcript_consequences":[{"x":{"a.b":1}}]}
+L good object more=0 key= entries=2 kinds=1 flags=1000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=x:1 present=x:1
+{"transcript_consequences":[{"x":"{"}]}
+L good object more=0 key= entries=2 kinds=1 flags=1000 carried=0 by=0,0,0,0,0 uescape=1 under=0,0,0,0,0,0,0,0,0,0 populated=x:1 present=x:1
+{"transcript_consequences":[{"x":"\u007bx"}]}
+L good object more=0 key= entries=2 kinds=1 flags=1000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=x:1 present=x:1
+{"transcript_consequences":[{"x":[[{"a":1}]]}]}
+L good object more=0 key= entries=2 kinds=1 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=x:1 present=x:1
+{"transcript_consequences":[{"x":[[],{"a":1}]}]}
+L good object more=0 key= entries=2 kinds=1 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=x:1 present=x:1
+{"transcript_consequences":[{"x":["","{"]}]}
+L good object more=0 key= entries=2 kinds=1 flags=1000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=x:1 present=x:1
+{"transcript_consequences":[{"x":[["{"]]}]}
+L good object more=0 key= entries=2 kinds=1 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=x:1 present=x:1
+{"transcript_consequences":[{"x":[[[]],"{"]}]}
+L good object more=0 key= entries=2 kinds=1 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=x:1 present=x:1
+{"transcript_consequences":[{"x":" {"}]}
+L good object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=x:1 present=x:1
+{"x":{"a":1}}
+L good object more=0 key= entries=2 kinds=1 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=x:1 present=x:1
+{"transcript_consequences":[{"x":[1,{"a":1}]}]}
+L good object more=0 key= entries=2 kinds=1 flags=1000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=x:1 present=x:1
+{"transcript_consequences":[{"x":{}}]}
+L good object more=0 key= entries=1 kinds=0 flags=0010 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=custom_annotations:1 present=custom_annotations:1
+{"custom_annotations":1}
+L good object more=0 key= entries=1 kinds=0 flags=0010 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=custom_annotations:1 present=custom_annotations:1
+{"custom_annotations":{"s":[{"name":"n"}]}}
+L good object more=0 key= entries=2 kinds=1 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=custom_annotations:1 present=custom_annotations:1
+{"transcript_consequences":[{"custom_annotations":1}]}
+L good object more=0 key= entries=1 kinds=0 flags=0010 carried=0 by=0,0,0,0,0 uescape=1 under=0,0,0,0,0,0,0,0,0,0 populated=custom_annotations:1 present=custom_annotations:1
+{"custom_\u0061nnotations":null}
+L good object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=1 under=0,0,0,0,0,0,0,0,0,0 populated=j:1,k:1,m:1,n:1,o:1,p:1,q:1,r:1,s:1,t:1,x:1,y:1 present=a:1,b:1,c:1,d:1,e:1,f:1,g:1,h:1,i:1,j:1,k:1,l:1,m:1,n:1,o:1,p:1,q:1,r:1,s:1,t:1,u:1,v:1,w:1,x:1,y:1
+{"a":"","b":"-","c":"\u002d","d":"\u002D","e":[],"f":[""],"g":["-"],"h":[[]],"i":[[""]],"j":[[],[]],"k":["-","-"],"l":[ "-" ],"m":{},"n":0,"o":null,"p":false,"q":"--","r":" ","s":[null],"t":[{}],"u":[[["-"]]],"v":["\u002d"],"w":[[[]]],"x":[[],"-"],"y":["-",[]]}
+L good object more=0 key= entries=2 kinds=1 flags=1100 carried=833 by=0,833,0,0,0 uescape=1 under=0,0,0,0,0,0,1,0,0,0 populated=k:1,m:1,n:1 present=a:1,b:1,biotype:1,c:1,e:1,f:1,g:1,h:1,id:1,impact:1,k:1,m:1,n:1,plug.x:1
+{"transcript_consequences":[{"a":"","b":"-","c":"\u002d","e":[],"f":[""],"g":["-"],"h":[[]],"k":["-","-"],"m":{},"n":0,"impact":"-","biotype":["-"],"plug.x":[["-"]],"id":""}]}
+L good object more=0 key= entries=6 kinds=1 flags=0000 carried=513 by=0,513,0,0,0 uescape=1 under=3,0,0,0,0,0,0,0,0,4 populated=biotype:1,impact:1 present=biotype:1,impact:5
+{"transcript_consequences":[{"impact":"\u002d"},{"impact":[]},{"impact":[[]]},{"impact":"-","biotype":"x"},{"imp\u0061ct":"y"}]}
+L good object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=1 under=0,0,0,0,0,0,0,0,0,0 populated=shift_length:1 present=shift_length:1
+{"shift_length":"\u00b2"}
+L good object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=a:1,b:1 present=a:1,b:1
+{"a":"\\u00b2","b":"\\\\u0041"}
+L good object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=1 under=0,0,0,0,0,0,0,0,0,0 populated=a:1 present=a:1
+{"a":"\\\u005C"}
+L good object more=0 key= entries=5 kinds=1 flags=1100 carried=32 by=0,32,0,0,0 uescape=0 under=0,0,0,0,0,2,0,0,0,0 populated=alphamissense:2,alphamissense.am_class:1 present=alphamissense:2,alphamissense.am_class:2
+{"transcript_consequences":[{"alphamissense":{"am_class":"x"}},{"alphamissense":{"am_class":"-"}},{"alphamissense.am_class":"-"},{"alphamissense.am_class":"x"}]}
+L good object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=a:1 present=a:1
+{"a":[{"a":[{"a":[{"a":[{"a":[{"a":[{"a":[{"a":[{"a":[{"a":[{"a":[{"a":[{"a":[{"a":[{"a":[{"a":[{"a":[{"a":[{"a":[{"a":[{"a":[{"a":[{"a":[{"a":[{"a":[{"a":[{"a":[{"a":[{"a":[{"a":[1]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}
+L good object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=a:1
+{"a":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}
+L more:dup object more=2 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=a:1 present=a:1
+{"a":1,"a":2}
+L more:dup object more=2 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=1 under=0,0,0,0,0,0,0,0,0,0 populated=a:1 present=a:1
+{"a":1,"\u0061":2}
+L more:dup object more=2 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=x:1 present=x:1
+{"x":{"b":1,"c":2,"b":3}}
+L more:dup object more=2 key= entries=2 kinds=1 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=a:1 present=a:1
+{"transcript_consequences":[{"a":1,"a":1}]}
+L more:dup object more=2 key=2 entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=
+{"input":"1","input":"2"}
+L more:dup object more=2 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=a:1,b:1 present=a:1,b:1
+{"b":1,"a":2,"b":3}
+L more:dup object more=2 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=
+{"transcript_consequences":[],"transcript_consequences":[]}
+L more:dup object more=2 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=:1 present=:1
+{"":1,"":2}
+L more:nan object more=1 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=a:1 present=a:1
+{"a":NaN}
+L more:nan object more=1 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=a:1 present=a:1
+{"a":Infinity}
+L more:nan object more=1 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=a:1 present=a:1
+{"a":-Infinity}
+L more:nan object more=1 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=a:1 present=a:1
+{"a":[1,NaN]}
+L more:nan object more=1 key= entries=2 kinds=1 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated=s:1 present=s:1
+{"transcript_consequences":[{"s":-Infinity}]}
+L more:surrogate object more=4 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=1 under=0,0,0,0,0,0,0,0,0,0 populated=a:1 present=a:1
+{"a":"\ud800"}
+L more:surrogate object more=4 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=1 under=0,0,0,0,0,0,0,0,0,0 populated=a:1 present=a:1
+{"a":"\udc00"}
+L more:surrogate object more=4 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=1 under=0,0,0,0,0,0,0,0,0,0 populated=a:1 present=a:1
+{"a":"\ud800\u0041"}
+L more:surrogate object more=4 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=1 under=0,0,0,0,0,0,0,0,0,0 populated=a:1 present=a:1
+{"a":"\ud800x"}
+L more:surrogate object more=4 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=1 under=0,0,0,0,0,0,0,0,0,0 populated=%ED%BF%BF:1 present=%ED%BF%BF:1
+{"\udfff":1}
+L more:surrogate object more=4 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=1 under=0,0,0,0,0,0,0,0,0,0 populated=a:1 present=a:1
+{"a":"\uDBFF\uD800"}
+L more:surrogate object more=4 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=1 under=0,0,0,0,0,0,0,0,0,0 populated=a:1 present=a:1
+{"a":"x\ud83d"}
+L more:surrogate object more=4 key=%ED%A0%80%091 entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=1 under=0,0,0,0,0,0,0,0,0,0 populated= present=
+{"input":"\ud800\t1"}
+L odd object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=k0:1
+{"intergenic_consequences":[],"k0":""}
+L odd object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=k0:1
+{"intergenic_consequences":[],"k0":[]}
+L odd object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=k0:1
+{"k0":"","intergenic_consequences":[]}
+L odd object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=k0:1
+{"k0":"","transcript_consequences":[]}
+L odd object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=k0:1
+{"k0":[],"intergenic_consequences":[]}
+L odd object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=k0:1
+{"k0":[],"transcript_consequences":[]}
+L odd object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=k0:1
+{"transcript_consequences":[],"k0":""}
+L odd object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=k0:1
+{"transcript_consequences":[],"k0":[]}
+L odd object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=k0:1
+{"intergenic_consequences":[],"k0":"-"}
+L odd object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=k0:1
+{"k0":"-","transcript_consequences":[]}
+L odd object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=k0:1
+{"intergenic_consequences":[],"k0":[[]]}
+L odd object more=0 key= entries=2 kinds=2 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=k0:1
+{"intergenic_consequences":[{}],"k0":""}
+L odd object more=0 key= entries=2 kinds=2 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=k0:1
+{"intergenic_consequences":[{}],"k0":[]}
+L odd object more=0 key= entries=2 kinds=1 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=k0:1
+{"k0":"","transcript_consequences":[{}]}
+L odd object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=k0:1
+{"k0":[""],"intergenic_consequences":[]}
+L odd object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=k0:1
+{"k0":[""],"transcript_consequences":[]}
+L odd object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=k0:1
+{"k0":[[]],"intergenic_consequences":[]}
+L odd object more=0 key= entries=2 kinds=2 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=k0:1
+{"k0":[],"intergenic_consequences":[{}]}
+L odd object more=0 key= entries=2 kinds=1 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=k0:1
+{"k0":[],"transcript_consequences":[{}]}
+L odd object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=k0:1
+{"transcript_consequences":[],"k0":[""]}
+L odd object more=0 key= entries=1 kinds=0 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=k0:1
+{"transcript_consequences":[],"k0":[[]]}
+L odd object more=0 key= entries=2 kinds=1 flags=0000 carried=0 by=0,0,0,0,0 uescape=0 under=0,0,0,0,0,0,0,0,0,0 populated= present=k0:1
+{"transcript_consequences":[{}],"k0":""}
+L vep error
+{"start":843529,"id":".","assembly_name":"GRCh38","allele_string":"C/C","transcript_consequences":[[]],"end":843529,"strand":1,"seq_region_name":"X","most_severe_consequence":"missense_variant"}
+L vep error
+{"seq_region_name":"X","transcript_consequences":[[]],"end":486207,"strand":1,"allele_string":"A/C","assembly_name":"GRCh38","most_severe_consequence":"intron_variant","start":486207,"id":"id398"}
+L vep object more=0 key=X entries=3 kinds=3 flags=0000 carried=579 by=66,515,513,0,0 uescape=0 under=1,1,0,0,0,0,0,0,0,1 populated=allele_string:1,assembly_name:1,consequence_terms:2,end:1,id:1,impact:1,most_severe_consequence:1,seq_region_name:1,start:1,strand:1,transcript_id:2,variant_allele:2 present=allele_string:1,assembly_name:1,consequence_terms:2,end:1,id:1,impact:2,most_severe_consequence:1,seq_region_name:1,start:1,strand:1,transcript_id:2,variant_allele:2
+{"seq_region_name":"X","intergenic_consequences":[{"impact":"HIGH","consequence_terms":["missense_variant"],"variant_allele":"AC"}],"transcript_consequences":[{"consequence_terms":["intron_variant"],"transcript_id":"T00037","impact":"-","variant_allele":"<DEL>"}],"id":".","input":"X","allele_string":"-/A","start":934204,"transcript_id":{},"strand":1,"most_severe_consequence":"missense_variant","assembly_name":"GRCh38","end":934204}
+L vep object more=0 key=X entries=3 kinds=3 flags=0000 carried=579 by=64,515,513,0,0 uescape=0 under=2,1,0,0,0,0,0,0,0,2 populated=allele_string:1,assembly_name:1,consequence_terms:2,end:1,gene_id:1,id:1,impact:1,most_severe_consequence:1,seq_region_name:1,start:1,strand:2,transcript_id:1,variant_allele:2 present=allele_string:1,assembly_name:1,biotype:1,consequence_terms:2,end:1,gene_id:1,id:1,impact:2,most_severe_consequence:1,seq_region_name:1,start:1,strand:2,transcript_id:1,variant_allele:2
+{"input":"X","assembly_name":"GRCh38","most_severe_consequence":"intron_variant","start":157310,"id":".","strand":1,"intergenic_consequences":[{"consequence_terms":["missense_variant","upstream_gene_variant"],"impact":"","gene_id":"G00006","biotype":"-","strand":1,"variant_allele":"<DEL>"}],"transcript_consequences":[{"consequence_terms":["intron_variant","upstream_gene_variant"],"transcript_id":"T00022","impact":"LOW","variant_allele":"A"}],"allele_string":"-/A","end":157310,"seq_region_name":"X"}
+L vep object more=0 key=chr7%09739409%09.%09-%09- entries=3 kinds=3 flags=0000 carried=579 by=64,515,513,0,0 uescape=0 under=1,1,0,0,0,0,0,0,0,2 populated=allele_string:1,assembly_name:1,biotype:1,consequence_terms:2,end:1,gene_id:1,id:1,most_severe_consequence:1,seq_region_name:1,start:1,strand:2,transcript_id:1,variant_allele:1 present=allele_string:1,assembly_name:1,biotype:1,consequence_terms:2,end:1,gene_id:1,id:1,impact:2,most_severe_consequence:1,seq_region_name:1,start:1,strand:2,transcript_id:1,variant_allele:2
+{"most_severe_consequence":"intron_variant","intergenic_consequences":[{"variant_allele":"TTG","impact":"","consequence_terms":["upstream_gene_variant"]}],"strand":1,"id":".","seq_region_name":"chr7","start":739409,"allele_string":"-/-","transcript_consequences":[{"gene_id":"G00005","consequence_terms":["intron_variant"],"impact":"-","transcript_id":"T00045","strand":-1,"biotype":"protein_coding","variant_allele":"-"}],"input":"chr7\t739409\t.\t-\t-","assembly_name":"GRCh38","end":739409}
+L vep object more=0 key=21 entries=3 kinds=3 flags=1000 carried=835 by=832,515,513,0,0 uescape=0 under=1,1,0,0,0,0,0,0,0,1 populated=allele_string:1,assembly_name:1,consequence_terms:2,domains:1,end:1,id:1,impact:1,most_severe_consequence:1,plug.x:1,seq_region_name:1,start:1,strand:1,transcript_id:1,variant_allele:2 present=allele_string:1,assembly_name:1,consequence_terms:2,domains:1,end:1,id:1,impact:2,most_severe_consequence:1,plug.x:1,seq_region_name:1,start:1,strand:1,transcript_id:1,variant_allele:2
+{"intergenic_consequences":[{"variant_allele":"AC","impact":"LOW","consequence_terms":["intron_variant"]}],"end":607812,"allele_string":"C/AC","seq_region_name":"21","plug.x":"missense_variant","most_severe_consequence":"intron_variant","input":"21","id":"id606","assembly_name":"GRCh38","transcript_consequences":[{"variant_allele":"C","consequence_terms":["intron_variant","upstream_gene_variant"],"domains":[{"name":"PF00068","db":"Pfam"}],"impact":"-","transcript_id":"T00021"}],"start":607812,"strand":1}
+L vep object more=0 key=X%09948603%09id560%09G entries=3 kinds=3 flags=0000 carried=583 by=64,519,513,0,0 uescape=0 under=2,1,1,0,0,0,0,0,0,2 populated=allele_string:1,assembly_name:1,cdna_end:1,cdna_start:1,consequence_terms:2,end:1,id:1,impact:1,most_severe_consequence:1,seq_region_name:1,start:1,strand:1,transcript_id:1,variant_allele:2 present=allele_string:1,assembly_name:1,cdna_end:1,cdna_start:1,consequence_terms:2,end:1,id:1,impact:2,most_severe_consequence:1,seq_region_name:1,start:1,strand:1,transcript_id:1,variant_allele:2
+{"end":948603,"intergenic_consequences":[{"variant_allele":"C","impact":"","consequence_terms":["upstream_gene_variant","missense_variant"]}],"most_severe_consequence":"intron_variant","id":"id560","input":"X\t948603\tid560\tG","seq_region_name":"X","allele_string":"G/-","assembly_name":"GRCh38","strand":1,"transcript_consequences":[{"consequence_terms":["missense_variant"],"transcript_id":"T00037","cdna_start":2571,"cdna_end":2571,"variant_allele":"T","impact":"MODIFIER"}],"start":null}
+L vep object more=0 key=1%09630419 entries=3 kinds=3 flags=1000 carried=579 by=64,515,513,0,0 uescape=0 under=2,1,0,0,0,0,0,0,0,2 populated=allele_string:1,assembly_name:1,consequence_terms:2,end:1,gene_id:1,id:1,most_severe_consequence:1,odd:1,seq_region_name:1,start:1,strand:2,transcript_id:1,variant_allele:2 present=allele_string:1,assembly_name:1,biotype:1,consequence_terms:2,end:1,gene_id:1,id:1,impact:2,most_severe_consequence:1,odd:1,seq_region_name:1,start:1,strand:2,transcript_id:1,variant_allele:2,vep_rs_version:1
+{"input":"1\t630419","transcript_consequences":[{"transcript_id":"T00012","impact":"","odd":{},"variant_allele":"TTG","vep_rs_version":[],"consequence_terms":["upstream_gene_variant"]}],"id":"id162","assembly_name":"GRCh38","most_severe_consequence":"upstream_gene_variant","end":630419,"intergenic_consequences":[{"gene_id":"G00028","strand":-1,"variant_allele":"C","impact":"","consequence_terms":["intron_variant"],"biotype":"-"}],"strand":1,"start":630419,"allele_string":"-/T","seq_region_name":"1"}
+P change:input 0
+{"end":669570,"start":669570,"assembly_name":"GRCh38","allele_string":"T/-","id":".","strand":1,"most_severe_consequence":"intron_variant","input":"X","seq_region_name":"X"}
+{"input":"zz","start":669570,"allele_string":"T/-","seq_region_name":"X","most_severe_consequence":"intron_variant","id":".","strand":1,"assembly_name":"GRCh38","end":669570}
+P change:input 0
+{"strand":1,"assembly_name":"GRCh38","start":130960,"allele_string":"T/T","input":"21","end":130960,"most_severe_consequence":"intron_variant","id":".","seq_region_name":"21"}
+{"end":130960,"strand":1,"input":5,"allele_string":"T/T","seq_region_name":"21","id":".","start":130960,"assembly_name":"GRCh38","most_severe_consequence":"intron_variant"}
+P change:input 1
+{"seq_region_name":"X","strand":1,"allele_string":"AC/A","id":".","start":402545,"most_severe_consequence":"intron_variant","end":402546,"assembly_name":"GRCh38"}
+{"end":402546,"allele_string":"AC/A","seq_region_name":"X","input":null,"start":402545,"strand":1,"most_severe_consequence":"intron_variant","assembly_name":"GRCh38","id":"."}
+P change:input 1
+{"input":null,"allele_string":"T/-","end":358769,"start":358769,"most_severe_consequence":"missense_variant","strand":1,"seq_region_name":"X","id":".","assembly_name":"GRCh38"}
+{"strand":1,"start":358769,"id":".","allele_string":"T/-","most_severe_consequence":"missense_variant","assembly_name":"GRCh38","seq_region_name":"X","end":358769,"input":null}
+P change:item_member_set 0
+{"assembly_name":"GRCh38","seq_region_name":"1","id":"id53","strand":1,"transcript_consequences":[{"transcript_id":"T00030","consequence_terms":["intron_variant"],"impact":"HIGH","variant_allele":"T"}],"allele_string":"A/-","end":645866,"input":"1","intergenic_consequences":5,"start":645866,"most_severe_consequence":"missense_variant"}
+{"most_severe_consequence":"missense_variant","intergenic_consequences":5,"allele_string":"A/-","input":"1","strand":1,"seq_region_name":"1","end":645866,"assembly_name":"GRCh38","start":645866,"id":"id53","transcript_consequences":[{"extra":"new","consequence_terms":["intron_variant"],"variant_allele":"T","impact":"HIGH","transcript_id":"T00030"}]}
+P change:item_member_set 0
+{"strand":1,"id":"id435","allele_string":"T/A","most_severe_consequence":"missense_variant","end":724648,"start":724648,"assembly_name":"GRCh38","seq_region_name":"X","input":"X\t724648\tid435\tT\tA\t.\t.\t.","transcript_consequences":[{"variant_allele":"G","transcript_id":"T00035","consequence_terms":["intron_variant"],"impact":"LOW"}]}
+{"input":"X\t724648\tid435\tT\tA\t.\t.\t.","end":724648,"most_severe_consequence":"missense_variant","start":724648,"id":"id435","seq_region_name":"X","assembly_name":"GRCh38","allele_string":"T/A","transcript_consequences":[{"variant_allele":"G","transcript_id":"T00035","impact":"LOW","extra":[],"consequence_terms":["intron_variant"]}],"strand":1}
+P change:item_member_set 1
+{"transcript_consequences":[{"transcript_id":"T00034","variant_allele":"<DEL>","flags":"-","impact":"","consequence_terms":["upstream_gene_variant"]}],"allele_string":"T/A","end":645085,"assembly_name":"GRCh38","seq_region_name":"X","strand":1,"input":"","id":"id974","most_severe_consequence":"intron_variant","start":645085}
+{"allele_string":"T/A","most_severe_consequence":"intron_variant","id":"id974","start":645085,"end":645085,"input":"","strand":1,"seq_region_name":"X","assembly_name":"GRCh38","transcript_consequences":[{"impact":[],"transcript_id":"T00034","flags":"-","variant_allele":"<DEL>","consequence_terms":["upstream_gene_variant"]}]}
+P change:item_member_set 1
+{"most_severe_consequence":"missense_variant","seq_region_name":"X","start":303710,"strand":1,"id":".","allele_string":"A/T","end":303710,"assembly_name":"GRCh38","transcript_consequences":[{"variant_allele":"-","cdna_end":2982,"biotype":"protein_coding","strand":-1,"transcript_id":"T00000","consequence_terms":["missense_variant"],"gene_id":"G00019","impact":"","cdna_start":2981}],"input":"X\t303710\t.\tA\tT\t.\t.\t."}
+{"seq_region_name":"X","allele_string":"A/T","end":303710,"assembly_name":"GRCh38","most_severe_consequence":"missense_variant","transcript_consequences":[{"gene_id":"G00019","consequence_terms":["missense_variant"],"transcript_id":"T00000","cdna_end":2982,"strand":-1,"biotype":"protein_coding","variant_allele":"-","impact":[],"cdna_start":2981}],"input":"X\t303710\t.\tA\tT\t.\t.\t.","start":303710,"id":".","strand":1}
+P change:item_removed 0
+{"seq_region_name":"1","most_severe_consequence":"intron_variant","allele_string":"-/C","end":940827,"assembly_name":"GRCh38","start":940827,"strand":1,"transcript_consequences":[{"variant_allele":"A","impact":"","plug.x":"-","consequence_terms":["upstream_gene_variant"],"transcript_id":"T00013"}],"id":"id191"}
+{"seq_region_name":"1","end":940827,"transcript_consequences":[],"strand":1,"assembly_name":"GRCh38","allele_string":"-/C","start":940827,"id":"id191","most_severe_consequence":"intron_variant"}
+P change:item_removed 0
+{"assembly_name":"GRCh38","end":938675,"input":"21","allele_string":"C/G","strand":1,"id":".","start":938675,"seq_region_name":"21","transcript_consequences":[{"variant_allele":"T","impact":"MODIFIER","transcript_id":"T00021","consequence_terms":["intron_variant"],"odd":"--"}],"most_severe_consequence":"intron_variant"}
+{"end":938675,"id":".","most_severe_consequence":"intron_variant","strand":1,"start":938675,"seq_region_name":"21","transcript_consequences":[],"assembly_name":"GRCh38","input":"21","allele_string":"C/G"}
+P change:items_reordered 0
+{"allele_string":"C/-","strand":1,"input":"1\t653125\t.\tC","id":".","transcript_consequences":[{"transcript_id":"N_1.2","consequence_terms":["upstream_gene_variant"],"impact":"HIGH","variant_allele":"G"},{"transcript_id":"T00026","variant_allele":"C","consequence_terms":["upstream_gene_variant","missense_variant"],"impact":"-"}],"assembly_name":"GRCh38","seq_region_name":"1","vep_rs_version":"0.6.0","most_severe_consequence":"upstream_gene_variant","end":653125,"start":653125}
+{"vep_rs_version":"0.6.0","strand":1,"id":".","end":653125,"assembly_name":"GRCh38","start":653125,"allele_string":"C/-","most_severe_consequence":"upstream_gene_variant","seq_region_name":"1","transcript_consequences":[{"impact":"-","consequence_terms":["upstream_gene_variant","missense_variant"],"transcript_id":"T00026","variant_allele":"C"},{"consequence_terms":["upstream_gene_variant"],"impact":"HIGH","transcript_id":"N_1.2","variant_allele":"G"}],"input":"1\t653125\t.\tC"}
+P change:items_reordered 0
+{"start":480156,"allele_string":"A/A","assembly_name":"GRCh38","strand":1,"most_severe_consequence":"missense_variant","input":"chr7\t480156","transcript_consequences":[{"consequence_terms":["upstream_gene_variant","missense_variant"],"id":{"b":"--","A":""},"impact":"","transcript_id":"T00022","variant_allele":"AC"},{"transcript_id":"T00042","impact":"MODIFIER","consequence_terms":["missense_variant"],"variant_allele":"A"}],"vep_rs_version":"0.5.0","id":".","seq_region_name":"chr7","end":480156}
+{"vep_rs_version":"0.5.0","most_severe_consequence":"missense_variant","end":480156,"start":480156,"transcript_consequences":[{"transcript_id":"T00042","consequence_terms":["missense_variant"],"variant_allele":"A","impact":"MODIFIER"},{"variant_allele":"AC","id":{"b":"--","A":""},"transcript_id":"T00022","consequence_terms":["upstream_gene_variant","missense_variant"],"impact":""}],"input":"chr7\t480156","allele_string":"A/A","seq_region_name":"chr7","assembly_name":"GRCh38","strand":1,"id":"."}
+P change:items_under_another_list 0
+{"most_severe_consequence":"intron_variant","allele_string":"AC/C","seq_region_name":"chr7","vep_rs_version":"0.5.0","end":881705,"assembly_name":"GRCh38","strand":1,"start":881704,"id":"id447","transcript_consequences":[{"transcript_id":"T00046","variant_allele":"T","impact":"LOW","consequence_terms":["intron_variant"]}]}
+{"assembly_name":"GRCh38","strand":1,"end":881705,"vep_rs_version":"0.5.0","regulatory_feature_consequences":[{"impact":"LOW","consequence_terms":["intron_variant"],"transcript_id":"T00046","variant_allele":"T"}],"start":881704,"id":"id447","most_severe_consequence":"intron_variant","seq_region_name":"chr7","allele_string":"AC/C"}
+P change:items_under_another_list 0
+{"allele_string":"-/G","id":".","assembly_name":"GRCh38","strand":1,"input":"21\t873545\t.\t-\tG\t.\t.\t.","start":873545,"transcript_consequences":[{"impact":"","consequence_terms":["intron_variant"],"variant_allele":"C","transcript_id":"T00047"}],"end":873545,"seq_region_name":"21","most_severe_consequence":"intron_variant"}
+{"start":873545,"end":873545,"most_severe_consequence":"intron_variant","strand":1,"allele_string":"-/G","assembly_name":"GRCh38","id":".","motif_feature_consequences":[{"variant_allele":"C","impact":"","consequence_terms":["intron_variant"],"transcript_id":"T00047"}],"input":"21\t873545\t.\t-\tG\t.\t.\t.","seq_region_name":"21"}
+P change:value 0
+{"assembly_name":"GRCh38","end":662035,"start":662035,"id":".","seq_region_name":"X","allele_string":"C/-","strand":1,"most_severe_consequence":"intron_variant"}
+{"most_severe_consequence":"intron_variant","assembly_name":"GRCh38","seq_region_name":"X","end":662036,"strand":1,"allele_string":"C/-","id":".","start":662035}
+P change:value 0
+{"id":".","end":371247,"start":371247,"allele_string":"G/-","assembly_name":"GRCh38","seq_region_name":"X","most_severe_consequence":"intron_variant","strand":1}
+{"allele_string":"G/-","strand":1,"most_severe_consequence":"intron_variant","seq_region_name":"X","assembly_name":"GRCh38 ","end":371247,"id":".","start":371247}
+P change:value 1
+{"seq_region_name":"1","end":926064,"strand":1,"start":926064,"allele_string":"C/AC","most_severe_consequence":"upstream_gene_variant","input":null,"id":".","assembly_name":"GRCh38"}
+{"most_severe_consequence":"upstream_gene_variant","input":true,"seq_region_name":"1","allele_string":"C/AC","end":926064,"id":".","strand":1,"assembly_name":"GRCh38","start":926064}
+P change:value 1
+{"id":".","allele_string":"AC/T","start":649630,"input":"1","seq_region_name":"1","vep_rs_version":"0.6.0","assembly_name":"GRCh38","end":649631,"most_severe_consequence":"intron_variant","strand":1}
+{"input":"1","start":649630,"strand":1,"vep_rs_version":"0.6.","assembly_name":"GRCh38","allele_string":"AC/T","end":649631,"id":".","seq_region_name":"1","most_severe_consequence":"intron_variant"}
+P list:empty_absent_or_no_array 1
+{"end":84481,"most_severe_consequence":"missense_variant","assembly_name":"GRCh38","seq_region_name":"chr7","allele_string":"G/G","strand":1,"id":".","start":84481}
+{"most_severe_consequence":"missense_variant","start":84481,"id":".","assembly_name":"GRCh38","seq_region_name":"chr7","allele_string":"G/G","strand":1,"transcript_consequences":"x","end":84481}
+P list:empty_absent_or_no_array 1
+{"start":true,"allele_string":"C/G","strand":1,"end":600834,"id":"id248","most_severe_consequence":"intron_variant","assembly_name":"GRCh38","seq_region_name":"X","input":"X"}
+{"seq_region_name":"X","id":"id248","allele_string":"C/G","input":"X","start":true,"end":600834,"most_severe_consequence":"intron_variant","strand":1,"assembly_name":"GRCh38","transcript_consequences":[]}
+P list:text:array_of_one_as_item 0
+{"allele_string":"G/A","start":218913,"assembly_name":"GRCh38","strand":1,"most_severe_consequence":"intron_variant","seq_region_name":"chr7","input":"chr7","transcript_consequences":[{"consequence_terms":["upstream_gene_variant"],"variant_allele":"TTG","impact":"-","transcript_id":"T00017"}],"end":218913,"id":"."}
+{"end":218913,"allele_string":"G/A","transcript_consequences":{"transcript_id":"T00017","variant_allele":"TTG","consequence_terms":["upstream_gene_variant"],"impact":"-"},"assembly_name":"GRCh38","start":218913,"most_severe_consequence":"intron_variant","input":"chr7","id":".","seq_region_name":"chr7","strand":1}
+P list:text:array_of_one_as_item 0
+{"most_severe_consequence":"upstream_gene_variant","allele_string":"C/T","strand":1,"seq_region_name":"1","assembly_name":"GRCh38","end":528810,"start":528810,"transcript_consequences":[{"impact":"HIGH","variant_allele":"AC","consequence_terms":["intron_variant"],"transcript_id":"T00034"}],"input":"1\t528810\t.\tC","id":"."}
+{"start":528810,"id":".","seq_region_name":"1","allele_string":"C/T","transcript_consequences":{"transcript_id":"T00034","consequence_terms":["intron_variant"],"variant_allele":"AC","impact":"HIGH"},"input":"1\t528810\t.\tC","most_severe_consequence":"upstream_gene_variant","assembly_name":"GRCh38","end":528810,"strand":1}
+P list:text:empty_array_as_empty_string 1
+{"end":148391,"most_severe_consequence":"upstream_gene_variant","allele_string":"T/T","transcript_consequences":[],"id":"id646","seq_region_name":"chr7","strand":1,"input":"chr7\t148391\tid646\tT\tT","assembly_name":"GRCh38","start":148391}
+{"transcript_consequences":"","id":"id646","assembly_name":"GRCh38","start":148391,"allele_string":"T/T","most_severe_consequence":"upstream_gene_variant","strand":1,"end":148391,"input":"chr7\t148391\tid646\tT\tT","seq_region_name":"chr7"}
+P list:text:empty_array_as_empty_string 1
+{"id":".","start":161437,"strand":1,"most_severe_consequence":"upstream_gene_variant","transcript_consequences":5,"input":"1\t161437\t.\tT","allele_string":"T/-","assembly_name":"GRCh38","end":161437,"intergenic_consequences":[],"seq_region_name":"1"}
+{"start":161437,"input":"1\t161437\t.\tT","strand":1,"allele_string":"T/-","intergenic_consequences":"","assembly_name":"GRCh38","most_severe_consequence":"upstream_gene_variant","end":161437,"id":".","transcript_consequences":5,"seq_region_name":"1"}
+P list:text:literal_as_string 1
+{"strand":1,"transcript_consequences":null,"start":603023,"assembly_name":"GRCh38","allele_string":"-/G","end":603023,"seq_region_name":"21","input":"21","most_severe_consequence":"intron_variant","id":"id673"}
+{"seq_region_name":"21","strand":1,"allele_string":"-/G","end":603023,"id":"id673","start":603023,"input":"21","assembly_name":"GRCh38","most_severe_consequence":"intron_variant","transcript_consequences":"null"}
+P list:text:literal_as_string 1
+{"input":"X\t688463","transcript_consequences":null,"allele_string":"T/T","end":688463,"most_severe_consequence":"intron_variant","start":null,"assembly_name":"GRCh38","strand":1,"id":"id865","seq_region_name":"X"}
+{"most_severe_consequence":"intron_variant","assembly_name":"GRCh38","seq_region_name":"X","end":688463,"input":"X\t688463","id":"id865","strand":1,"start":null,"transcript_consequences":"null","allele_string":"T/T"}
+P list:text:number_as_string 0
+{"allele_string":"-/T","input":"21\t696108\t.\t-","transcript_consequences":[{"alphamissense":"{\"am_class\":\"-\"}","plug.x":"v","variant_allele":"<DEL>","impact":"LOW","domains":[],"consequence_terms":["upstream_gene_variant"],"transcript_id":"f#2"},{"variant_allele":"-","consequence_terms":["intron_variant"],"transcript_id":"T00024","impact":"LOW"}],"id":".","most_severe_consequence":"missense_variant","strand":1,"assembly_name":"GRCh38","end":696108,"start":"7","seq_region_name":"21"}
+{"input":"21\t696108\t.\t-","assembly_name":"GRCh38","transcript_consequences":"[{'variant_allele': '<DEL>', 'transcript_id': 'f#2', 'consequence_terms': ['upstream_gene_variant'], 'impact': 'LOW', 'domains': [], 'alphamissense': '{\"am_class\":\"-\"}', 'plug.x': 'v'}, {'variant_allele': '-', 'transcript_id': 'T00024', 'consequence_terms': ['intron_variant'], 'impact': 'LOW'}]","id":".","most_severe_consequence":"missense_variant","strand":1,"end":696108,"seq_region_name":"21","allele_string":"-/T","start":"7"}
+P list:text:number_as_string 0
+{"seq_region_name":"1","id":"id570","end":943556,"transcript_consequences":[{"variant_allele":"AC","transcript_id":"T00047","biotype":"-","strand":1,"consequence_terms":["missense_variant","intron_variant"],"impact":"MODIFIER","gene_id":"G00011"},{"domains":[],"transcript_id":"T00041","consequence_terms":["intron_variant"],"impact":"LOW","variant_allele":"TTG"}],"allele_string":"-/T","strand":1,"assembly_name":"GRCh38","most_severe_consequence":"missense_variant","start":943556,"input":"1\t943556\tid570\t-\tT\t.\t.\t."}
+{"assembly_name":"GRCh38","id":"id570","strand":1,"allele_string":"-/T","transcript_consequences":"[{'variant_allele': 'AC', 'transcript_id': 'T00047', 'consequence_terms': ['missense_variant', 'intron_variant'], 'impact': 'MODIFIER', 'gene_id': 'G00011', 'biotype': '-', 'strand': 1}, {'variant_allele': 'TTG', 'transcript_id': 'T00041', 'consequence_terms': ['intron_variant'], 'impact': 'LOW', 'domains': []}]","start":943556,"end":943556,"input":"1\t943556\tid570\t-\tT\t.\t.\t.","seq_region_name":"1","most_severe_consequence":"missense_variant"}
+P list:text:number_as_string 1
+{"seq_region_name":"21","allele_string":"-/C","start":642825,"input":"21\t642825\t.\t-\tC\t.\t.\t.","id":".","end":642825,"most_severe_consequence":"upstream_gene_variant","assembly_name":"GRCh38","strand":1,"transcript_consequences":5}
+{"id":".","input":"21\t642825\t.\t-\tC\t.\t.\t.","transcript_consequences":"5","assembly_name":"GRCh38","start":642825,"seq_region_name":"21","strand":1,"end":642825,"allele_string":"-/C","most_severe_consequence":"upstream_gene_variant"}
+P list:text:number_as_string 1
+{"colocated_variants":[{"allele_string":"A/G","frequencies":{"G":{"af":1E5,"gnomade":66}},"id":"id279","start":217606},{"start":217606,"frequencies":{"G":{"af":0.1105,"gnomade":303}},"allele_string":"A/G","id":"id240"}],"start":217606,"transcript_consequences":5,"most_severe_consequence":"upstream_gene_variant","assembly_name":"GRCh38","input":"X\t217606\t.\tG\tA","seq_region_name":"X","allele_string":"G/A","end":217606,"strand":1,"id":"."}
+{"strand":1,"id":".","end":217606,"colocated_variants":[{"start":217606,"allele_string":"A/G","frequencies":{"G":{"gnomade":66,"af":1E5}},"id":"id279"},{"start":217606,"allele_string":"A/G","frequencies":{"G":{"gnomade":303,"af":0.1105}},"id":"id240"}],"allele_string":"G/A","assembly_name":"GRCh38","transcript_consequences":"5","start":217606,"input":"X\t217606\t.\tG\tA","most_severe_consequence":"upstream_gene_variant","seq_region_name":"X"}
+P number 0
+{"strand":1,"end":382666,"input":"1\t382665","odd":17,"seq_region_name":"1","most_severe_consequence":"missense_variant","start":382665,"allele_string":"AC/G","assembly_name":"GRCh38","id":"."}
+{"end":382666,"strand":1,"most_severe_consequence":"missense_variant","start":382665,"assembly_name":"GRCh38","input":"1\t382665","id":".","allele_string":"AC/G","odd":17.0,"seq_region_name":"1"}
+P number 0
+{"strand":1,"end":19954,"seq_region_name":"1","allele_string":"C/AC","most_severe_consequence":"intron_variant","start":100,"input":"1\t19954\t.\tC\tAC\t.\t.\t.","assembly_name":"GRCh38","id":"."}
+{"id":".","end":19954,"strand":1,"allele_string":"C/AC","assembly_name":"GRCh38","input":"1\t19954\t.\tC\tAC\t.\t.\t.","seq_region_name":"1","most_severe_consequence":"intron_variant","start":1.0e2}
+P number 1
+{"input":"21","end":461303,"id":".","assembly_name":"GRCh38","seq_region_name":"21","allele_string":"G/-","start":0.5,"strand":1,"most_severe_consequence":"upstream_gene_variant"}
+{"start":5e-1,"id":".","most_severe_consequence":"upstream_gene_variant","allele_string":"G/-","input":"21","strand":1,"seq_region_name":"21","end":461303,"assembly_name":"GRCh38"}
+P number 1
+{"transcript_consequences":5,"end":609634,"start":1e5,"seq_region_name":"1","assembly_name":"GRCh38","most_severe_consequence":"intron_variant","odd":"quote\"d","allele_string":"AC/-","strand":1,"id":"id19"}
+{"most_severe_consequence":"intron_variant","end":609634,"seq_region_name":"1","allele_string":"AC/-","odd":"quote\"d","id":"id19","assembly_name":"GRCh38","strand":1,"start":1e+5,"transcript_consequences":5}
+P respell_escape 1
+{"start":413321,"id":".","allele_string":"T/-","strand":1,"end":413321,"seq_region_name":"chr7","most_severe_consequence":"intron_variant","assembly_name":"GRCh38"}
+{"id":".","alle\u006ce_strin\u0067":"T\u002f-","\u0073eq_region_name":"chr7","end":413321,"most_severe_cons\u0065quen\u0063e":"intron_variant","assembly_name":"\u0047RCh38","start":413321,"strand":1}
+P respell_escape 1
+{"allele_string":"C/-","end":990863,"start":990863,"assembly_name":"GRCh38","most_severe_consequence":"intron_variant","strand":1,"seq_region_name":"X","id":"id533"}
+{"allel\u0065_string":"C\/\u002D","seq_region_name":"X","start":990863,"end":990863,"most_\u0073e\u0076ere_consequenc\u0065":"intron_var\u0069\u0061nt","assembly_name":"GR\u0043h38","strand":1,"id":"id533"}
+P set_aside:identity 1
+{"id":".","seq_region_name":"X","end":651061,"start":651060,"odd":false,"strand":1,"assembly_name":"GRCh38","most_severe_consequence":"intron_variant","allele_string":"AC/AC"}
+{"odd":false,"assembly_name":"GRCh38","start":651060,"most_severe_consequence":"intron_variant","strand":1,"end":651061,"vep_rs_version":5,"id":".","allele_string":"AC/AC","seq_region_name":"X"}
+P set_aside:identity 1
+{"input":"X","most_severe_consequence":"intron_variant","allele_string":"A/T","strand":1,"seq_region_name":"X","assembly_name":"GRCh38","start":true,"end":215131,"id":"id864"}
+{"strand":1,"most_severe_consequence":"intron_variant","seq_region_name":"X","start":true,"allele_string":"A/T","id":"id864","input":"X","vep_rs_version":"9.9.9","assembly_name":"GRCh38","end":215131}
+P set_aside:input_after_its_key 1
+{"allele_string":"T/-","start":357195,"assembly_name":"GRCh38","end":357195,"strand":1,"most_severe_consequence":"missense_variant","id":".","seq_region_name":"X","input":"X\t357195\t.\tT\t-\t.\t.\t."}
+{"strand":1,"allele_string":"T/-","start":357195,"input":"X\t357195\t.\tT\t-\t.\t.\t.x","end":357195,"id":".","most_severe_consequence":"missense_variant","seq_region_name":"X","assembly_name":"GRCh38"}
+P set_aside:input_after_its_key 1
+{"start":975992,"strand":1,"allele_string":"T/A","assembly_name":"GRCh38","input":"X\t975992\t.\tT\tA\t.\t.\t.","seq_region_name":"X","most_severe_consequence":"missense_variant","end":975992,"id":"."}
+{"assembly_name":"GRCh38","id":".","input":"X\t975992\t.\tT\tA\t.\t.\t.x","allele_string":"T/A","end":975992,"start":975992,"most_severe_consequence":"missense_variant","strand":1,"seq_region_name":"X"}
+P shuffle 1
+{"seq_region_name":"X","end":109360,"allele_string":"A/-","start":109360,"strand":1,"most_severe_consequence":"intron_variant","id":".","assembly_name":"GRCh38"}
+{"most_severe_consequence":"intron_variant","strand":1,"id":".","end":109360,"seq_region_name":"X","assembly_name":"GRCh38","start":109360,"allele_string":"A/-"}
+P shuffle 1
+{"strand":1,"assembly_name":"GRCh38","allele_string":"-/AC","seq_region_name":"21","end":16985,"start":16985,"id":".","most_severe_consequence":"missense_variant"}
+{"seq_region_name":"21","strand":1,"end":16985,"start":16985,"most_severe_consequence":"missense_variant","assembly_name":"GRCh38","id":".","allele_string":"-/AC"}
+P text:array_as_joined_string 1
+{"seq_region_name":"21","allele_string":"A/G","strand":1,"start":837692,"id":".","assembly_name":"GRCh38","input":"21\t837692\t.\tA\tG\t.\t.\t.","impact":[[[["","{"],"deleterious",-1e-400],["","{"],65],[" ",{"A_2":100},0.5]],"end":837692,"most_severe_consequence":"upstream_gene_variant"}
+{"id":".","assembly_name":"GRCh38","strand":1,"allele_string":"A/G","seq_region_name":"21","start":837692,"impact":[[[["","{"],"deleterious",-1e-400],",{",65],[" ",{"A_2":100},0.5]],"most_severe_consequence":"upstream_gene_variant","end":837692,"input":"21\t837692\t.\tA\tG\t.\t.\t."}
+P text:array_as_joined_string 1
+{"start":691938,"strand":1,"most_severe_consequence":"intron_variant","input":"1\t691938\tid953\tA\tT\t.\t.\t.","end":691938,"seq_region_name":"1","assembly_name":"GRCh38","motif_feature_consequences":[{"variant_allele":"G","motif_feature_id":"T00022","consequence_terms":["intron_variant","missense_variant"],"impact":"HIGH"}],"id":"id953","allele_string":"A/T"}
+{"allele_string":"A/T","input":"1\t691938\tid953\tA\tT\t.\t.\t.","seq_region_name":"1","end":691938,"most_severe_consequence":"intron_variant","assembly_name":"GRCh38","strand":1,"start":691938,"id":"id953","motif_feature_consequences":[{"impact":"HIGH","variant_allele":"G","motif_feature_id":"T00022","consequence_terms":"intron_variant,missense_variant"}]}
+P text:array_of_one_as_item 0
+{"odd":{"A1":["{"],"a":["","{"]},"most_severe_consequence":"missense_variant","start":526207,"input":"X\t526207","seq_region_name":"X","strand":1,"end":526207,"id":".","assembly_name":"GRCh38","allele_string":"-/A"}
+{"odd":{"a":["","{"],"A1":"{"},"end":526207,"most_severe_consequence":"missense_variant","input":"X\t526207","assembly_name":"GRCh38","allele_string":"-/A","seq_region_name":"X","id":".","strand":1,"start":526207}
+P text:array_of_one_as_item 0
+{"id":".","seq_region_name":"X","assembly_name":"GRCh38","start":370787,"variant_allele":{"am_class":{"k.e":[{}]}},"strand":1,"most_severe_consequence":"missense_variant","input":"X\t370787\t.\tC\tT","allele_string":"C/T","end":370787}
+{"input":"X\t370787\t.\tC\tT","end":370787,"assembly_name":"GRCh38","variant_allele":{"am_class":{"k.e":{}}},"allele_string":"C/T","id":".","strand":1,"most_severe_consequence":"missense_variant","start":370787,"seq_region_name":"X"}
+P text:array_of_one_as_item 1
+{"allele_string":"AC/T","id":".","odd":["-"],"start":208636,"input":"X\t208636\t.\tAC\tT\t.\t.\t.","most_severe_consequence":"intron_variant","assembly_name":"GRCh38","end":208637,"seq_region_name":"X","strand":1}
+{"allele_string":"AC/T","odd":"-","start":208636,"seq_region_name":"X","strand":1,"end":208637,"input":"X\t208636\t.\tAC\tT\t.\t.\t.","assembly_name":"GRCh38","most_severe_consequence":"intron_variant","id":"."}
+P text:array_of_one_as_item 1
+{"id":".","start":484660,"end":484660,"variant_allele":[["{"]],"most_severe_consequence":"upstream_gene_variant","input":"X\t484660\t.\tA\t-","seq_region_name":"X","allele_string":"A/-","assembly_name":"GRCh38","strand":1}
+{"id":".","end":484660,"input":"X\t484660\t.\tA\t-","variant_allele":["{"],"assembly_name":"GRCh38","start":484660,"allele_string":"A/-","strand":1,"seq_region_name":"X","most_severe_consequence":"upstream_gene_variant"}
+P text:empty_array_as_empty_string 0
+{"input":"1\t35201\t.\tA","seq_region_name":"1","strand":1,"most_severe_consequence":"upstream_gene_variant","variant_allele":{"n|m":[[],"{"],"k.e":{}},"allele_string":"A/G","end":35201,"start":1.00,"transcript_consequences":[{"impact":"-","consequence_terms":["intron_variant"],"variant_allele":"AC","transcript_id":"T00027"}],"assembly_name":"GRCh38","id":"."}
+{"variant_allele":{"k.e":{},"n|m":["","{"]},"strand":1,"transcript_consequences":[{"impact":"-","variant_allele":"AC","transcript_id":"T00027","consequence_terms":["intron_variant"]}],"id":".","end":35201,"start":1.00,"seq_region_name":"1","assembly_name":"GRCh38","input":"1\t35201\t.\tA","most_severe_consequence":"upstream_gene_variant","allele_string":"A/G"}
+P text:empty_array_as_empty_string 0
+{"strand":1,"end":475838,"assembly_name":"GRCh38","allele_string":"-/G","seq_region_name":"X","most_severe_consequence":"missense_variant","start":null,"vep_rs_version":"0.6.0","input":"X\t475838\t.\t-","odd":{"k.e":"benign","am_class":[[]],"b_2":false},"colocated_variants":[{"frequencies":{"G":{"gnomade":757,"af":0e0}},"id":"id853","start":475838,"allele_string":"A/G"}],"id":"."}
+{"odd":{"am_class":[""],"b_2":false,"k.e":"benign"},"strand":1,"start":null,"id":".","colocated_variants":[{"start":475838,"id":"id853","frequencies":{"G":{"gnomade":757,"af":0e0}},"allele_string":"A/G"}],"seq_region_name":"X","input":"X\t475838\t.\t-","allele_string":"-/G","most_severe_consequence":"missense_variant","vep_rs_version":"0.6.0","assembly_name":"GRCh38","end":475838}
+P text:empty_array_as_empty_string 1
+{"end":372505,"start":372505,"strand":1,"input":"chr7","seq_region_name":"chr7","most_severe_consequence":"missense_variant","id":".","r.ec":[[],"{"],"allele_string":"T/T","assembly_name":"GRCh38"}
+{"most_severe_consequence":"missense_variant","seq_region_name":"chr7","input":"chr7","assembly_name":"GRCh38","strand":1,"allele_string":"T/T","start":372505,"id":".","end":372505,"r.ec":["","{"]}
+P text:empty_array_as_empty_string 1
+{"assembly_name":"GRCh38","id":".","input":"21\t414245\t.\tC\tA\t.\t.\t.","impact":[],"most_severe_consequence":"intron_variant","allele_string":"C/A","seq_region_name":"21","start":414245,"strand":1,"end":414245}
+{"allele_string":"C/A","assembly_name":"GRCh38","most_severe_consequence":"intron_variant","end":414245,"input":"21\t414245\t.\tC\tA\t.\t.\t.","impact":"","id":".","strand":1,"start":414245,"seq_region_name":"21"}
+P text:literal_as_string 0
+{"start":62079,"end":62079,"input":null,"assembly_name":"GRCh38","id":"id681","seq_region_name":"X","most_severe_consequence":"missense_variant","strand":1,"allele_string":"A/AC","vep_rs_version":"0.5.0"}
+{"id":"id681","vep_rs_version":"0.5.0","start":62079,"end":62079,"most_severe_consequence":"missense_variant","assembly_name":"GRCh38","strand":1,"input":"null","seq_region_name":"X","allele_string":"A/AC"}
+P text:literal_as_string 0
+{"seq_region_name":"X","end":945912,"id":"id829","start":945912,"transcript_consequences":[{"transcript_id":"T00016","impact":"HIGH","odd2":{"am_class":[null]},"variant_allele":"AC","consequence_terms":["intron_variant"]}],"input":"X\t945912","most_severe_consequence":"upstream_gene_variant","strand":1,"allele_string":"A/G","assembly_name":"GRCh38"}
+{"allele_string":"A/G","strand":1,"assembly_name":"GRCh38","most_severe_consequence":"upstream_gene_variant","id":"id829","seq_region_name":"X","input":"X\t945912","transcript_consequences":[{"transcript_id":"T00016","impact":"HIGH","variant_allele":"AC","odd2":{"am_class":["null"]},"consequence_terms":["intron_variant"]}],"end":945912,"start":945912}
+P text:literal_as_string 1
+{"start":true,"most_severe_consequence":"intron_variant","assembly_name":"GRCh38","id":".","seq_region_name":"X","allele_string":"T/T","strand":1,"end":185777,"input":"X\t185777\t.\tT\tT"}
+{"seq_region_name":"X","end":185777,"start":"true","most_severe_consequence":"intron_variant","allele_string":"T/T","id":".","input":"X\t185777\t.\tT\tT","assembly_name":"GRCh38","strand":1}
+P text:literal_as_string 1
+{"assembly_name":"GRCh38","seq_region_name":"chr7","odd":[null," ",""],"input":"chr7","id":".","strand":1,"most_severe_consequence":"intron_variant","end":819019,"allele_string":"-/G","start":819019}
+{"most_severe_consequence":"intron_variant","assembly_name":"GRCh38","input":"chr7","start":819019,"odd":["null"," ",""],"strand":1,"id":".","end":819019,"seq_region_name":"chr7","allele_string":"-/G"}
+P text:number_as_string 0
+{"allele_string":"T/-","end":334663,"seq_region_name":"21","assembly_name":"GRCh38","start":1e5,"input":"21\t334663\t.\tT","most_severe_consequence":"missense_variant","id":".","strand":1}
+{"start":"1e5","assembly_name":"GRCh38","input":"21\t334663\t.\tT","most_severe_consequence":"missense_variant","end":334663,"id":".","allele_string":"T/-","strand":1,"seq_region_name":"21"}
+P text:number_as_string 0
+{"input":"1\t761569\t.\tC\tG\t.\t.\t.","strand":1,"assembly_name":"GRCh38","most_severe_consequence":"upstream_gene_variant","id":".","end":761569,"seq_region_name":"1","start":761569,"plug.x":{"b1":1570,"a":"HIGH"},"allele_string":"C/G"}
+{"seq_region_name":"1","end":761569,"plug.x":{"b1":"1570","a":"HIGH"},"start":761569,"most_severe_consequence":"upstream_gene_variant","strand":1,"allele_string":"C/G","assembly_name":"GRCh38","id":".","input":"1\t761569\t.\tC\tG\t.\t.\t."}
+P text:number_as_string 1
+{"end":835450,"allele_string":"C/AC","most_severe_consequence":"intron_variant","start":835450,"assembly_name":"GRCh38","seq_region_name":"chr7","strand":1,"id":"."}
+{"seq_region_name":"chr7","end":835450,"most_severe_consequence":"intron_variant","strand":1,"allele_string":"C/AC","id":".","assembly_name":"GRCh38","start":"835450"}
+P text:number_as_string 1
+{"most_severe_consequence":"missense_variant","seq_region_name":"21","end":498654,"start":498654,"strand":1,"allele_string":"G/-","id":"id18","assembly_name":"GRCh38"}
+{"most_severe_consequence":"missense_variant","id":"id18","start":498654,"allele_string":"G/-","seq_region_name":"21","strand":1,"assembly_name":"GRCh38","end":"498654"}
+P text:string_as_array 0
+{"strand":1,"end":400512,"id":".","most_severe_consequence":"missense_variant","input":"X","seq_region_name":"X","assembly_name":"GRCh38","allele_string":"AC/-","start":400511}
+{"start":400511,"seq_region_name":"X","id":".","strand":1,"input":["X"],"assembly_name":"GRCh38","allele_string":"AC/-","most_severe_consequence":"missense_variant","end":400512}
+P text:string_as_array 0
+{"strand":1,"end":114872,"assembly_name":"GRCh38","input":"X","allele_string":"G/G","most_severe_consequence":"intron_variant","id":"id817","start":114872,"seq_region_name":"X"}
+{"allele_string":"G/G","input":["X"],"end":114872,"most_severe_consequence":"intron_variant","start":114872,"assembly_name":"GRCh38","seq_region_name":"X","id":"id817","strand":1}
+P text:string_as_array 1
+{"start":64809,"end":64809,"allele_string":"-/T","most_severe_consequence":"intron_variant","seq_region_name":"1","id":".","strand":1,"assembly_name":"GRCh38"}
+{"most_severe_consequence":["intron_variant"],"seq_region_name":"1","allele_string":"-/T","id":".","start":64809,"strand":1,"assembly_name":"GRCh38","end":64809}
+P text:string_as_array 1
+{"strand":1,"start":195344,"most_severe_consequence":"intron_variant","seq_region_name":"1","allele_string":"-/C","end":195344,"assembly_name":"GRCh38","id":"."}
+{"assembly_name":"GRCh38","strand":1,"seq_region_name":"1","allele_string":["-/C"],"most_severe_consequence":"intron_variant","end":195344,"start":195344,"id":"."}
+P unread 0
+{"strand":1,"seq_region_name":"21","start":-0.25,"most_severe_consequence":"upstream_gene_variant","allele_string":"G/C","id":"id2","intergenic_consequences":[],"end":412153,"assembly_name":"GRCh38"}
+{"most_severe_consequence":"upstream_gene_variant","intergenic_consequences":[3],"assembly_name":"GRCh38","end":412153,"id":"id2","allele_string":"G/C","start":-0.25,"seq_region_name":"21","strand":1}
+P unread 0
+{"most_severe_consequence":"missense_variant","seq_region_name":"1","input":"1","assembly_name":"GRCh38","end":950899,"allele_string":"A/A","start":true,"strand":1,"id":"id639","transcript_consequences":"x"}
+{"start":true,"most_severe_consequence":"missense_variant","allele_string":"A/A","transcript_consequences":["x"],"seq_region_name":"1","end":950899,"input":"1","id":"id639","strand":1,"assembly_name":"GRCh38"}

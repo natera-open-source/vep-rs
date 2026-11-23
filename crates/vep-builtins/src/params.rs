@@ -160,6 +160,7 @@ pub(crate) fn parse_none(name: &str, params: &[String]) -> Result<(), PluginErro
 
 /// How a plugin's Ensembl VEP module reads its parameters.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Grammar<'a> {
     /// Every parameter `key=value`, or every one by position; `flags` are the
     /// tokens of the positional reading that are flags, not values.

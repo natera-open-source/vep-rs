@@ -2,19 +2,21 @@
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 //! Codon translation under the genetic codes of BioPerl's `Bio::Tools::CodonTable`,
-//! the module Ensembl VEP translates with, and amino acid utilities.
+//! the module Ensembl VEP translates with, and under NCBI's genetic code 26,
+//! which that module lacks, and amino acid utilities.
 //!
 //! Provides [`translate_codon`] (the standard code) and
 //! [`translate_codon_with_table`] (a transcript's own code) to convert a 3-base
 //! DNA codon to a single-letter amino acid, the start and stop predicates
 //! [`is_start_codon`] and [`is_ter_codon`] with [`known_table`], the set of codes
-//! the module ships, [`complement_base`] / [`reverse_complement`] for strand
+//! read here, and [`module_table`], the table the module itself reads an id
+//! under, [`complement_base`] / [`reverse_complement`] for strand
 //! conversion, and [`aa_three_letter`] for IUPAC three-letter amino acid names.
 
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
-/// One genetic code as `Bio::Tools::CodonTable` holds it: the amino acid of
+/// One genetic code as `Bio::Tools::CodonTable` holds one: the amino acid of
 /// each codon and the start marks (`M` at a start codon, `-` elsewhere), both
 /// in the module's codon order `TTT TTC TTA TTG TCT ... GGG`, the first base
 /// the most significant and `T`, `C`, `A`, `G` counted 0 to 3.
@@ -139,19 +141,53 @@ const CODES: [Option<GeneticCode>; 25] = [
     ),
 ];
 
-/// The genetic code of `table`; `Bio::Tools::CodonTable->new(-id => 0)` is
-/// table 1, as is a transcript whose sequence region carries no `codon_table`
-/// attribute (`BaseTranscriptVariation::_codon_table`).
+/// The id of the module's last table, its `Strict` code.
+const MODULE_LAST_TABLE: u8 = 24;
+
+/// The id of the nuclear genetic code of Pachysolen tannophilus, which the
+/// module holds no table for.
+const PACHYSOLEN_NUCLEAR: u8 = 26;
+
+/// Genetic code 26 as NCBI's genetic code table gives it: `CTG` codes alanine
+/// where the standard code reads leucine, and `CTG` and `ATG` are its start
+/// codons. It stands outside `CODES`, which holds the module's tables alone.
+const PACHYSOLEN_NUCLEAR_CODE: GeneticCode = GeneticCode {
+    amino_acids: b"FFLLSSSSYY**CC*WLLLAPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG",
+    starts: b"-------------------M---------------M----------------------------",
+};
+
+/// The genetic code of `table`: a table of the module, or code 26;
+/// `Bio::Tools::CodonTable->new(-id => 0)` is table 1, as is a transcript
+/// whose sequence region carries no `codon_table` attribute
+/// (`BaseTranscriptVariation::_codon_table`).
 #[inline]
 fn genetic_code(table: u8) -> Option<GeneticCode> {
+    if table == PACHYSOLEN_NUCLEAR {
+        return Some(PACHYSOLEN_NUCLEAR_CODE);
+    }
     let id = if table == 0 { 1 } else { usize::from(table) };
     CODES.get(id).copied().flatten()
 }
 
-/// Whether `table` is a genetic code BioPerl 1.006924, and so Ensembl VEP,
-/// translates with: 0 to 24 except 7, 8 and 17 to 20.
+/// Whether `table` is a genetic code read here: one BioPerl 1.006924, and so
+/// Ensembl VEP, translates with (0 to 24 except 7, 8 and 17 to 20), or 26.
 pub fn known_table(table: u8) -> bool {
     genetic_code(table).is_some()
+}
+
+/// The table `Bio::Tools::CodonTable` reads `table` under: an id from 25 on
+/// holds no table there, so `id` warns and falls to id 0
+/// (`CodonTable.pm:328-338`), under which `translate` and `_codon_is` read the
+/// module's last table (`CodonTable.pm:412-460` and `:735-749`); every other
+/// id is read as itself. Ensembl VEP translates a transcript on such an id
+/// under the table returned, and a dumper on that module writes the
+/// transcript's cached peptide under it.
+pub fn module_table(table: u8) -> u8 {
+    if table > MODULE_LAST_TABLE {
+        MODULE_LAST_TABLE
+    } else {
+        table
+    }
 }
 
 /// The module's rank of a base, in either case, `U` read as `T` as its
@@ -203,9 +239,9 @@ pub fn translate_codon(codon: &[u8]) -> u8 {
 /// mis-calls the consequence for variants touching the codons that differ.
 ///
 /// Returns `X` for a codon not three bases long, for a codon with a byte
-/// outside `ACGTU` in either case (an `N`, a gap) and under a table the module
-/// lacks ([`known_table`]); the cache loader refuses such a table before any
-/// transcript is annotated under it.
+/// outside `ACGTU` in either case (an `N`, a gap) and under a table that is
+/// not known ([`known_table`]); the cache loader refuses such a table before
+/// any transcript is annotated under it.
 pub fn translate_codon_with_table(codon: &[u8], codon_table: u8) -> u8 {
     match (genetic_code(codon_table), codon_index(codon)) {
         (Some(code), Some(index)) => code.amino_acids[index],
@@ -220,8 +256,8 @@ pub fn translate_codon_with_table(codon: &[u8], codon_table: u8) -> u8 {
 /// ambiguous letter by the amino acids its readings code
 /// (`_translate_ambiguous_codon`): one, that one; aspartate and asparagine
 /// `B`; glutamate and glutamine `Z`; anything else `X`, as is a codon with a
-/// byte that is no nucleotide letter. A stop stays `*`. Under a table the
-/// module lacks every codon is `X`.
+/// byte that is no nucleotide letter. A stop stays `*`. Under a table that is
+/// not known every codon is `X`.
 pub fn translate_sequence(seq: &[u8], table: u8) -> Vec<u8> {
     let Some(code) = genetic_code(table) else {
         return vec![b'X'; seq.len() / 3];
@@ -318,8 +354,8 @@ fn every_reading_marked(codon: &[u8], marks: &[u8; 64], mark: u8) -> bool {
 /// table 1; `ATT`, `ATC`, `ATA`, `ATG` and `GTG` under table 2), so `NTG` is a
 /// start under table 11, whose starts include all four `NTG` codons, and not
 /// under table 1. `Transcript::translate` writes `M` over the first residue of
-/// a peptide whose first codon satisfies it. `false` under a table the module
-/// lacks.
+/// a peptide whose first codon satisfies it. `false` under a table that is
+/// not known.
 pub fn is_start_codon(codon: &[u8], table: u8) -> bool {
     genetic_code(table).is_some_and(|code| every_reading_marked(codon, code.starts, b'M'))
 }
@@ -329,7 +365,7 @@ pub fn is_start_codon(codon: &[u8], table: u8) -> bool {
 /// `TAA`, `TAG`, `AGA` and `AGG` under table 2), so `TAR` is a stop under
 /// table 1 and `TRA` is not under table 2, where `TGA` codes Trp.
 /// `Transcript::translate` drops the terminal residue of a peptide whose last
-/// codon satisfies it. `false` under a table the module lacks.
+/// codon satisfies it. `false` under a table that is not known.
 pub fn is_ter_codon(codon: &[u8], table: u8) -> bool {
     genetic_code(table).is_some_and(|code| every_reading_marked(codon, code.amino_acids, b'*'))
 }
@@ -542,7 +578,7 @@ mod tests {
     }
 
     /// Every genetic code BioPerl 1.006924 ships, the `Bio::Tools::CodonTable`
-    /// of Ensembl VEP release 116.2: the 64-codon translation in the module's
+    /// of Ensembl VEP release 116.3: the 64-codon translation in the module's
     /// `TCAG` order, its start codons (`is_start_codon`) and its stop codons
     /// (`is_ter_codon`). Table 11 translates as table 1 and differs in its
     /// starts alone; table 24 is the module's `Strict` code, table 1 with `ATG`
@@ -687,11 +723,13 @@ mod tests {
     /// Ids 7, 8 and 17 to 20 hold no table in BioPerl 1.006924 (a codon reads
     /// as an apostrophe or as nothing there) and 25 and above are unknown to it
     /// (it warns and translates under its last table): none is a table Ensembl
-    /// VEP translates with, so none is known, and under one every codon is `X`
-    /// and no codon is a start or a stop. Table 24, the last one shipped, is.
+    /// VEP translates with, and none but 26 is known. Under an unknown one
+    /// every codon is `X` and no codon is a start or a stop. Table 24, the last
+    /// one the module ships, is known, and so is 26, NCBI's genetic code of
+    /// that number, under which `CTG` codes alanine and starts a translation.
     #[test]
-    fn a_table_bioperl_lacks_is_refused_not_translated_empty() {
-        for table in [7u8, 8, 17, 18, 19, 20, 25, 26, 100, 255] {
+    fn an_unknown_table_is_refused_not_translated_empty() {
+        for table in [7u8, 8, 17, 18, 19, 20, 25, 27, 100, 255] {
             assert!(!known_table(table), "table {table}");
             assert_eq!(translate_codon_with_table(b"ATG", table), b'X', "{table}");
             assert_eq!(translate_codon_with_table(b"TAA", table), b'X', "{table}");
@@ -700,9 +738,17 @@ mod tests {
         }
         for table in (0u8..=6).chain(9..=16).chain(21..=24) {
             assert!(known_table(table), "table {table}");
+            assert_eq!(module_table(table), table, "table {table}");
         }
         assert!(known_table(24));
         assert!(!known_table(25));
+        assert!(known_table(26));
+        assert!(!known_table(27));
+        assert_eq!(module_table(26), 24);
+        assert_eq!(translate_codon_with_table(b"CTG", 26), b'A');
+        assert_eq!(translate_codon_with_table(b"CTG", module_table(26)), b'L');
+        assert_eq!(codons_where(26, is_start_codon), ["CTG", "ATG"]);
+        assert_eq!(codons_where(26, is_ter_codon), ["TAA", "TAG", "TGA"]);
     }
 
     /// `_codon_is` reads an ambiguous codon through every codon it stands for

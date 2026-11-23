@@ -1,0 +1,7 @@
+Processing 1 chromosomes
+  chr21: 1 files, 1 transcripts, 0 variation files, 1 regulatory files
+Wrote empty-regulatory.out/regulatory/binding_matrices.json (0 binding matrices)
+Wrote empty-regulatory.out/sequence_regions.tsv (0 sequences)
+Wrote empty-regulatory.out/info.json
+
+Done. Converted: 1 / 1 files, 1 total transcripts, 0 variation files copied, 1 regulatory files

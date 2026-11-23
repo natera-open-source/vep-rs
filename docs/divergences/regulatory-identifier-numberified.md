@@ -1,16 +1,16 @@
 # A regulatory or motif identifier written as a JSON number
 
-**The defect in one sentence.** In the JSON output, Ensembl VEP 116.2 turns every value Perl's number test admits into a number before encoding, exempting six identifier keys, none of them a regulatory or motif key. A `--regulatory_gff` feature or motif whose identifier is all digits is written as `"regulatory_feature_id":12345` or `"motif_feature_id":424242`, a transcription factor named `123` as the number `123`, and an identifier spelt `007` or `1e3` as `7` or `1000`. vep-rs writes each of them as a JSON string holding the text the file or cache carries.
+**The defect in one sentence.** In the JSON output, Ensembl VEP 116.3 turns every value Perl's number test admits into a number before encoding, exempting six identifier keys, none of them a regulatory or motif key. A `--regulatory_gff` feature or motif whose identifier is all digits is written as `"regulatory_feature_id":12345` or `"motif_feature_id":424242`, a transcription factor named `123` as the number `123`, and an identifier spelt `007` or `1e3` as `7` or `1000`. vep-rs writes each of them as a JSON string holding the text the file or cache carries.
 
 **Why this is a defect.** An identifier is a name, and the JSON output writes names as strings: the same run writes `"transcript_id":"NR_048535.1"`, and the exempt list exists so that an all-digit transcript, gene or variant identifier stays one. A regulatory or motif identifier is the same kind of value under a key the list omits, and a transcription factor name is a name. The conversion loses text: `007` becomes `7` and `1e3` becomes `1000`, so a reader cannot recover the identifier the file wrote, and a reader that expects a string at an identifier key stops on the number. The default, tab and VCF outputs of the same run print the identifier as written.
 
 **What vep-rs does instead.** vep-rs writes every feature identifier (`transcript_id`, `regulatory_feature_id`, `motif_feature_id`) and every transcription factor name as a JSON string holding the text the file or cache carries. It converts the other members as Ensembl VEP converts them, with the rules [the JSON page](../output/json.md#field-details) describes.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3):
 
 - `Bio/EnsEMBL/VEP/OutputFactory/JSON.pm`, lines 114-121, `%NUMBERIFY_EXEMPT`: `seq_region_name`, `id`, `gene_id`, `gene_symbol`, `transcript_id` and `SYMBOL`. Line 288: `numberify($hash, \%NUMBERIFY_EXEMPT)` runs over the whole record before it is encoded. Lines 349 and 379-383: the `Feature` cell is renamed `<feature type>_id`, so `regulatory_feature_id` or `motif_feature_id`, keys the exempt list does not name.
 - `Bio/EnsEMBL/VEP/Utils.pm`, lines 221-247, `numberify`: a hash value under a key the list does not name (line 231), and every element of an array (line 241, with no exemption at all), that `looks_like_number` admits is replaced by itself plus zero. The test admits digit strings, decimals, exponent forms, signed numbers and the infinity and not-a-number words; the addition drops a leading zero and expands an exponent.
-- `Bio/EnsEMBL/VEP/AnnotationSource/File/RegFeat.pm`, lines 575-584, `_record_get_id`: a `--regulatory_gff` record's identifier is its `ID` attribute, else `Name`, else `<chr>:<start>-<end>:<type>`. Lines 432-443: the transcription factor names are the `transcription_factor` attribute split on commas. `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 1867-1884 and 1900-1943: the identifier becomes the `Feature` cell and the names the `TRANSCRIPTION_FACTORS` list.
+- `Bio/EnsEMBL/VEP/AnnotationSource/File/RegFeat.pm`, lines 575-584, `_record_get_id`: a `--regulatory_gff` record's identifier is its `ID` attribute, else `Name`, else `<chr>:<start>-<end>:<type>`. Lines 432-443: the transcription factor names are the `transcription_factor` attribute split on commas. `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 1876-1893 and 1909-1952: the identifier becomes the `Feature` cell and the names the `TRANSCRIPTION_FACTORS` list.
 
 **What correcting it would change.** Exempting `regulatory_feature_id`, `motif_feature_id` and the elements of `transcription_factors` would write them as strings in every run, as vep-rs writes them; the default, tab and VCF outputs would not change. The motif's matrix identifier under `motif_name` is converted by both engines and would stay as it is.
 
@@ -48,7 +48,7 @@ The inputs: the corpus record `del_covers_ctcf`, a 23-base deletion at 21:501432
 
 The identifier members, by record:
 
-| Record | Entry | Ensembl VEP 116.2 | vep-rs |
+| Record | Entry | Ensembl VEP 116.3 | vep-rs |
 | --- | --- | --- | --- |
 | `del_covers_ctcf` | enhancer | `"regulatory_feature_id":12345` | `"regulatory_feature_id":"12345"` |
 | `del_covers_ctcf` | promoter flanking region | `"regulatory_feature_id":7` | `"regulatory_feature_id":"007"` |
@@ -89,7 +89,7 @@ vep -i records.vcf -o out.json --offline --json_cache <corpus>/json_cache \
   --regulatory_gff file=numid.gff3.gz,motifs=nummotif.gff3.gz --json
 ```
 
-`grep -o '"regulatory_feature_id":[^,}]*' out.json` prints the four identifiers quoted from vep-rs and three of them bare from Ensembl VEP 116.2. Without `--json` the two engines' outputs are the same.
+`grep -o '"regulatory_feature_id":[^,}]*' out.json` prints the four identifiers quoted from vep-rs and three of them bare from Ensembl VEP 116.3. Without `--json` the two engines' outputs are the same.
 
 ### 1.7 How the comparator treats this class
 

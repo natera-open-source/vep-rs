@@ -1,0 +1,36 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {corpus} --plugin AVI,file={corpus}/avi_scores.synthetic.tsv.gz,raw=1,links=1 [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "none on either side",
+ "input": "variants.vcf: the 33 records of GRCh38-colocated (29 exemplars of its reference and four multi-allelic records at two of their loci), chosen because they mix single-base substitutions, multi-allelic substitutions, insertions and deletions on chromosome 21, so the plugin scores some alleles of a record and none of others",
+ "sha256": {
+  "default.txt": "197871a4280c9c1b32a6c006a8da6b28fd87f2161a095ca74c0e7f0b17af7a1f",
+  "tab.txt": "3761b917740cb69f6a37027bf76313d4e735aea0e94d08ecc5e12c92b434bb3f",
+  "vcf.vcf": "7fecb5da23a023d30979f2363645b46c1af7eee56886838786f341fdac80e45f",
+  "json.jsonl": "c05ae546192880cab26711bf8096fdaf9671a50393b56ae0566a451a8c6e5569"
+ },
+ "variants_vcf_sha256": "c15831fc540b0190e0c5ea9c2213f4218003a206778001333c15d396021f23f8",
+ "divergences_classified_against": {
+  "engine": "vep-rs",
+  "source": "the tree this corpus is committed with",
+  "binary_md5": "11d3ed77726126296427f1edba3fbdcf",
+  "arch": "aarch64",
+  "flags_passed": [
+   "--dir_plugins",
+   "{corpus}",
+   "--plugin",
+   "AVI,file={corpus}/avi_scores.synthetic.tsv.gz,raw=1,links=1"
+  ]
+ },
+ "plugin_data": "avi_scores.synthetic.tsv.gz (+ .tbi): a six-column AVI-shaped table (chromosome, position, reference allele, alternate allele, raw score, PHRED score; no header; chr-prefixed names; bgzip, tabix -s 1 -b 2 -e 2) covering the three positions around each record's position with every alternate allele, the reference base from the GRCh38 primary assembly, and no rows around 21:5030287 and 21:13610458, so those two substitutions take no score. The values are fabricated deterministically inside the ranges the plugin documents (AVI.pm:53 and 56: raw -1.3 to 4.0; PHRED the quantile of the raw value), not the published scores. The layout follows the six columns AVI.pm:161 splits a line into.",
+ "generator": "variants.vcf and json_cache copied from tests/golden/116/GRCh38-colocated; the made-up plugin table as described under plugin_data; scripts/concordance/generate_reference_output.sh --corpus (the Ensembl VEP image's own AVI.pm, identical to release/116's); tools/vep-golden-corpus classify --field AVI_PHRED --field AVI_RAW --field AVI_LINK",
+ "plugin_data_sha256": {
+  "avi_scores.synthetic.tsv.gz": "175963d31e8a9b78ca35f3b01dfb3a1331f8fccf7c8cb48ada9f15fe9457f1be",
+  "avi_scores.synthetic.tsv.gz.tbi": "51b9a1589a23c1e4c6f58a7b325eb2f095f0ad5e62a5686ac61d433b445337db"
+ },
+ "json_cache": "copied from tests/golden/116/GRCh38-colocated: the pruned transcript shards its records reach and the variation slice that corpus describes; no run of this corpus reads the variations"
+}

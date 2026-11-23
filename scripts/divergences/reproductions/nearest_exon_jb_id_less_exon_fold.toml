@@ -1,9 +1,9 @@
 entry = "nearest_exon_jb_id_less_exon_fold"
 page = "docs/divergences/nearest-exon-jb-id-less-exon-fold.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 675 of 77,675 cache transcripts · 0 flag sets, 2 corpora"
+input_class_basis = "2 · 12,512 of 116,165 cache transcripts · 0 flag sets, 5 corpora"
 
 # compmerge.2.Heart.chr21 is an aligned RefSeq-source model whose exons carry no stable id. The deletion
 # 10578401-10578530 takes the last 18 bases of the exon at 10578337-10578418 (82 bases), the 98-base intron
@@ -34,3 +34,15 @@ where = { record = "idless_two_exons", feature = "compmerge.2.Heart.chr21" }
 [expected]
 ensembl_vep = ["|64|start|89"]
 vep_rs = ["|64|start|82"]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/nearest_exon_jb.rs::NearestExonJbPlugin::items",
+    "crates/vep-builtins/src/plugins/nearest_exon_jb.rs::nearest_junction",
+]
+tests = [
+    "crates/vep-builtins/src/plugins/nearest_exon_jb.rs::tests::an_exon_without_an_id_is_written_with_the_empty_id",
+    "crates/vep-builtins/src/plugins/nearest_exon_jb.rs::tests::id_less_exons_keep_their_own_lengths_and_junctions",
+    "crates/vep-cli/tests/nearest_exon_jb_id_less_exons.rs::an_exon_without_a_stable_id_is_written_with_the_empty_id_in_every_format",
+]
+rules = ["tools/vep-plugin-pairs/src/rules/nearest_exon.rs::id_less_exon_fold"]

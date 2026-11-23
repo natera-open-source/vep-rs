@@ -1,0 +1,73 @@
+{
+  "verdict": "PASS",
+  "gates": [
+    {
+      "gate": "consequence_f1",
+      "threshold": 0.999,
+      "actual": 1.0,
+      "passed": true
+    },
+    {
+      "gate": "total_annotations_delta",
+      "threshold": 0.001,
+      "baseline": 1000,
+      "builder": 1000,
+      "actual": 0.0,
+      "passed": true
+    },
+    {
+      "gate": "colocated_variant_delta",
+      "threshold": 0.01,
+      "baseline": 400,
+      "builder": 400,
+      "actual": 0.0,
+      "passed": true
+    },
+    {
+      "gate": "frequency_field_delta",
+      "threshold": 0.01,
+      "actual": 0.0,
+      "details": {
+        "AF": {
+          "baseline": 100,
+          "builder": 100,
+          "delta": 0.0
+        },
+        "MAX_AF": {
+          "baseline": 300,
+          "builder": 300,
+          "delta": 0.0
+        }
+      },
+      "passed": true
+    },
+    {
+      "gate": "per_consequence_type_delta",
+      "threshold": 0.01,
+      "actual": 0.0,
+      "details": {
+        "intron_variant": {
+          "baseline": 300,
+          "builder": 300,
+          "delta": 0.0
+        },
+        "missense_variant": {
+          "baseline": 600,
+          "builder": 600,
+          "delta": 0.0
+        },
+        "stop_gained": {
+          "baseline": 100,
+          "builder": 100,
+          "delta": 0.0
+        }
+      },
+      "passed": true
+    }
+  ],
+  "cache_diff_summary": {
+    "transcript_match_rate": 1.0,
+    "variation_match_rate": 1.0,
+    "info_json_matches": true
+  }
+}

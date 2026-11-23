@@ -288,3 +288,7 @@ mod tests {
         assert_eq!(py_path_str(b"./ref\xff.txt/"), b"ref\xff.txt");
     }
 }
+
+#[cfg(test)]
+#[path = "pyfmt_half_up_rounding_tests.rs"]
+mod half_up_rounding_tests;

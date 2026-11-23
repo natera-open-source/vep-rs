@@ -9,16 +9,18 @@
 //! index lookup, so the per-variant lookups that follow are in-memory range
 //! lookups rather than I/O.
 //!
-//! Perl citations name modules of Ensembl/VEP_plugins release/115.
+//! Ensembl VEP source citations name modules of Ensembl/VEP_plugins release/116, or
+//! of ensembl-variation release/116 (`Utils/Sequence.pm`, `BaseVepTabixPlugin.pm`).
 
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use noodles::bgzf;
 use noodles::core::Position;
+use noodles::csi::binning_index::index::header::format::CoordinateSystem;
 use noodles::csi::binning_index::index::reference_sequence::bin::Chunk;
 use noodles::csi::binning_index::BinningIndex;
 use noodles::tabix;
@@ -34,6 +36,7 @@ use crate::PluginError;
 /// hundred kilobytes, so the cap sits far above any record; a file with no
 /// line end in it is refused at the cap instead of being read whole into one
 /// line buffer.
+#[doc(hidden)]
 pub const MAX_LINE_BYTES: usize = 64 << 20;
 
 /// The longest index (`.tbi` or `.csi`) read, 256 MiB decompressed. A
@@ -70,7 +73,7 @@ fn read_line_bounded<R: BufRead>(
 }
 
 /// The lines of a text file as bytes, each without its line end (`\n` or
-/// `\r\n`; the `\n` alone through [`Self::chomped`]), read one at a time with
+/// `\r\n`; the `\n` alone through `Self::chomped`), read one at a time with
 /// the length of a line capped at [`MAX_LINE_BYTES`]: through the iterator,
 /// each line its own `Vec`, or through [`Self::next_line`], one buffer reused.
 /// A line is read as Perl's `<$fh>` reads one from a handle opened without an
@@ -80,6 +83,7 @@ fn read_line_bounded<R: BufRead>(
 /// with [`lossy_text`] or `String::from_utf8_lossy`. Every error is
 /// [`PluginError::Init`]: a plugin reads such a file while it opens, whether
 /// the file's head alone or a whole catalogue.
+#[doc(hidden)]
 pub struct BoundedLines<R> {
     reader: R,
     path: PathBuf,
@@ -104,10 +108,10 @@ impl<R: BufRead> BoundedLines<R> {
         }
     }
 
-    /// The lines of `reader` as a Perl module's `chomp` leaves them: the `\n`
+    /// The lines of `reader` as an Ensembl VEP module's `chomp` leaves them: the `\n`
     /// stripped and a `\r` before it kept, for a caller whose `split` then
     /// treats that `\r` as a blank.
-    pub fn chomped(reader: R, path: &Path) -> Self {
+    pub(crate) fn chomped(reader: R, path: &Path) -> Self {
         Self {
             chomp: true,
             ..Self::new(reader, path)
@@ -179,6 +183,7 @@ impl<R: BufRead> Iterator for BoundedLines<R> {
 /// as one U+FFFD, the form the query path gives a record's cells. An Ensembl
 /// VEP plugin prints such a byte as it stands; vep-rs writes UTF-8, so the
 /// replacement character marks the byte's place in the output.
+#[doc(hidden)]
 pub fn lossy_text(bytes: Vec<u8>) -> String {
     match String::from_utf8(bytes) {
         Ok(text) => text,
@@ -188,6 +193,7 @@ pub fn lossy_text(bytes: Vec<u8>) -> String {
 
 /// A parsed record from a tabix-indexed file.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct TabixRecord {
     /// Chromosome / sequence name.
     pub chr: String,
@@ -203,6 +209,23 @@ pub struct TabixRecord {
 }
 
 impl TabixRecord {
+    /// A record, from each of its fields.
+    pub fn new(
+        chr: String,
+        start: u64,
+        end: u64,
+        columns: Vec<String>,
+        header: Option<Arc<Vec<String>>>,
+    ) -> Self {
+        Self {
+            chr,
+            start,
+            end,
+            columns,
+            header,
+        }
+    }
+
     /// Get a column value by header name.
     pub fn get(&self, name: &str) -> Option<&str> {
         let header = self.header.as_ref()?;
@@ -229,7 +252,7 @@ impl TabixRecord {
 /// cell is not empty (TranscriptAnnotator.pm:245-246; :109-110 for a header),
 /// so a cell past the last filled one is undefined where an empty cell before
 /// a filled one is a field holding the empty string.
-pub fn split_field_count(cells: &[String]) -> usize {
+pub(crate) fn split_field_count(cells: &[String]) -> usize {
     cells
         .iter()
         .rposition(|cell| !cell.is_empty())
@@ -253,7 +276,7 @@ pub struct BatchQueryResult {
 
 impl BatchQueryResult {
     /// Create an empty batch result.
-    pub fn empty() -> Self {
+    pub(crate) fn empty() -> Self {
         Self::from_records(HashMap::new())
     }
 
@@ -293,13 +316,14 @@ impl BatchQueryResult {
     }
 
     /// Check if the result is empty.
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.records_by_pos.is_empty()
     }
 }
 
 /// Configuration for how to parse a tabix file's columns.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct TabixConfig {
     /// Path to the tabix-indexed file.
     pub file_path: PathBuf,
@@ -350,7 +374,7 @@ impl TabixConfig {
     /// `strtol` also takes a `-` and a hex or octal prefix (`0x1A`, `0103`);
     /// here a `-` leads no integer (a reader
     /// places such a row only under
-    /// [`TabixAnnotator::reading_rows_as_tabix_indexes_them`]) and a prefix
+    /// `TabixAnnotator::reading_rows_as_tabix_indexes_them`) and a prefix
     /// reads as decimal digits. `None` for a cell no integer leads, which htslib
     /// refuses to index, and for a zero-based start with no one-based form.
     pub fn record_start(&self, cell: &str) -> Option<u64> {
@@ -380,17 +404,22 @@ impl TabixConfig {
     /// inclusive one-based end as it stands); a cell no integer leads ends the
     /// row at its start.
     pub fn record_end(&self, start: u64, columns: &[String]) -> u64 {
-        self.end_or(start, columns, |_| Some(start))
-            .unwrap_or(start)
+        self.record_end_of(start, columns)
+    }
+
+    /// [`Self::record_end`] over cells of any text type, so a reader that
+    /// keeps no row ends one from cells borrowed out of its line.
+    pub fn record_end_of<S: AsRef<str>>(&self, start: u64, cells: &[S]) -> u64 {
+        self.end_or(start, cells, |_| Some(start)).unwrap_or(start)
     }
 
     /// [`Self::record_end`], with `unread` deciding the end of a generic end
     /// cell no integer leads, which it is handed only once that read fails:
     /// `None` from it is no row at all.
-    fn end_or(
+    fn end_or<S: AsRef<str>>(
         &self,
         start: u64,
-        columns: &[String],
+        columns: &[S],
         unread: impl FnOnce(&str) -> Option<u64>,
     ) -> Option<u64> {
         // An end column that is the start column names a single base, as
@@ -399,13 +428,13 @@ impl TabixConfig {
             return Some(start);
         };
         let Some(ref_col) = self.ref_col else {
-            return match columns.get(end_col) {
+            return match columns.get(end_col).map(AsRef::as_ref) {
                 Some(cell) => leading_integer(cell).or_else(|| unread(cell)),
                 None => Some(start),
             };
         };
         let ref_allele_end = || {
-            let ref_len = columns.get(ref_col).map_or(0, String::len) as u64;
+            let ref_len = columns.get(ref_col).map_or(0, |cell| cell.as_ref().len()) as u64;
             start.saturating_add(ref_len.max(1) - 1)
         };
         // A row short of its INFO cell spans its reference allele, as the VCF
@@ -414,7 +443,7 @@ impl TabixConfig {
         Some(
             columns
                 .get(end_col)
-                .and_then(|cell| info_end(cell))
+                .and_then(|cell| info_end(cell.as_ref()))
                 .filter(|&end| end >= start)
                 .unwrap_or_else(ref_allele_end),
         )
@@ -425,6 +454,7 @@ impl TabixConfig {
 /// optional `+`, then at least one digit, the rest of the cell left unread, as
 /// C's `strtoll` reads a cell with neither a `-` nor a hex or octal prefix.
 /// `None` when no digit leads the cell or the digits overflow.
+#[doc(hidden)]
 pub fn leading_integer(cell: &str) -> Option<u64> {
     let cell = cell.trim_start_matches([' ', '\t', '\n', '\x0b', '\x0c', '\r']);
     let digits = cell.strip_prefix('+').unwrap_or(cell);
@@ -441,18 +471,6 @@ pub(crate) fn minus_leads_a_number(cell: &str) -> bool {
         .is_some_and(|digits| digits.starts_with(|digit: char| digit.is_ascii_digit()))
 }
 
-/// The integer a minus sign and the digits after it spell in `cell`: the
-/// blanks [`leading_integer`] skips, a `-`, then at least one digit, the rest
-/// of the cell left unread (`-5x` is -5, `-1e2` is -1). `None` for any other
-/// cell and for digits past the integer range.
-pub(crate) fn leading_negative_integer(cell: &str) -> Option<i64> {
-    let cell = cell.trim_start_matches([' ', '\t', '\n', '\x0b', '\x0c', '\r']);
-    let digits = cell.strip_prefix('-')?;
-    let len = digits.bytes().take_while(u8::is_ascii_digit).count();
-    // Parsed with its sign, so the lowest integer is read too.
-    cell[..len + 1].parse().ok()
-}
-
 /// Batch-oriented tabix query engine.
 ///
 /// Opens a tabix-indexed file and provides four query modes:
@@ -467,6 +485,9 @@ pub struct TabixAnnotator {
     config: TabixConfig,
     /// Column header names parsed from the file header.
     header: Option<Arc<Vec<String>>>,
+    /// Whether `header` is the file's first line, taken for a bare header
+    /// because no integer leads its start cell ([`parse_header`]).
+    bare_header: bool,
     /// Loaded once and reused across queries.
     index: Index,
     /// Where `index` was read from, for error messages.
@@ -485,15 +506,18 @@ pub struct TabixAnnotator {
     /// The run's assembly, which decides the spellings a mitochondrial name
     /// is tried under ([`plugin_table_candidates`]); none by default.
     assembly: Option<Assembly>,
+    /// What decides, on GRCh37, whether the rows of a mitochondrial contig
+    /// are read for a record of the other pair of names.
+    frame: MitochondrialFrame,
 }
 
 /// A cell's text read from its bytes, as a format that spells bytes in
 /// escapes reads a cell: every other cell is the bytes read as UTF-8 with
 /// U+FFFD for a sequence that is not.
-pub type CellDecoder = fn(&[u8]) -> Cow<'_, str>;
+pub(crate) type CellDecoder = fn(&[u8]) -> Cow<'_, str>;
 
 /// A loaded `.tbi` or `.csi` index; the query path is the same for both.
-pub type Index = Box<dyn BinningIndex + Send + Sync>;
+pub(crate) type Index = Box<dyn BinningIndex + Send + Sync>;
 
 /// Where a line's start falls against the windows of one cluster of
 /// [`TabixAnnotator::query_windows`].
@@ -518,7 +542,11 @@ impl TabixAnnotator {
             )));
         }
 
-        let header = parse_header(&file_path, config.start_col)?.map(Arc::new);
+        let header_line = header_line(&file_path, config.start_col)?;
+        let bare_header = header_line
+            .as_ref()
+            .is_some_and(|line| !line.starts_with('#'));
+        let header = header_line.map(|line| Arc::new(header_names(&line)));
         std::fs::File::open(&file_path).map_err(|e| {
             PluginError::Init(format!(
                 "failed to open tabix data file {}: {e}",
@@ -533,15 +561,18 @@ impl TabixAnnotator {
             "opened tabix file"
         );
 
+        let frame = MitochondrialFrame::comparing_column(config.ref_col);
         Ok(Self {
             config,
             header,
+            bare_header,
             index,
             index_path,
             keep_trailing_whitespace: false,
             byte_columns: Vec::new(),
             rows_as_tabix_indexes_them: false,
             assembly: None,
+            frame,
         })
     }
 
@@ -549,22 +580,68 @@ impl TabixAnnotator {
     /// [`check_plugin_table`] first, then the index htslib reads
     /// ([`find_index_path`]). A `--custom` file and the cache's variation
     /// files have no such check and open through [`Self::open`].
-    pub fn open_plugin_table(config: TabixConfig) -> Result<Self, PluginError> {
+    pub(crate) fn open_plugin_table(config: TabixConfig) -> Result<Self, PluginError> {
         check_plugin_table(&config.file_path)?;
         Self::open(config)
     }
 
     /// `self` naming a query's chromosome to the table as a plugin's table is
-    /// named it under `assembly` ([`plugin_table_candidates`]).
+    /// named it under `assembly` (`plugin_table_candidates`).
+    #[doc(hidden)]
     pub fn on_assembly(mut self, assembly: Option<Assembly>) -> Self {
         self.assembly = assembly;
         self
+    }
+
+    /// The frame check's inputs, for the caller that holds the run's reference
+    /// sequence or names the table's reference-allele column
+    /// ([`MitochondrialFrame`]).
+    #[doc(hidden)]
+    pub fn frame_mut(&mut self) -> &mut MitochondrialFrame {
+        &mut self.frame
+    }
+
+    /// The index's reference-sequence id for `chr` and the file's own spelling
+    /// of the name, which its records carry; `None` for a chromosome the
+    /// table is not read under.
+    ///
+    /// A mitochondrial name on GRCh37 is tried under each spelling of
+    /// [`grch37_mitochondrial_candidates`] in turn. A contig of the name's own
+    /// pair is read as it stands; a contig of the other pair is read only
+    /// when its rows state the run's reference bases
+    /// ([`MitochondrialFrame::admits`]). Every other name, and every name on
+    /// another assembly, is resolved by [`plugin_table_candidates`] alone.
+    fn resolve(&self, chr: &str) -> Result<Option<(usize, &bstr::BString)>, PluginError> {
+        let Some(idx_header) = self.index.header() else {
+            return Ok(None);
+        };
+        let names = idx_header.reference_sequence_names();
+        if self.assembly != Some(Assembly::Grch37) || !is_mitochondrial_name(chr.trim()) {
+            return Ok(resolve_reference_sequence(names, chr, self.assembly));
+        }
+        for (candidate, crosses) in grch37_mitochondrial_candidates(chr, self.frame.first_name) {
+            let Some((id, file_chr)) = names.get_full(&bstr::BString::from(candidate.as_bytes()))
+            else {
+                continue;
+            };
+            let read = !crosses
+                || self.frame.admits(
+                    &self.config.file_path,
+                    &candidate,
+                    &|start, end, limit| self.region_rows(id, file_chr, start, end, limit),
+                )?;
+            if read {
+                return Ok(Some((id, file_chr)));
+            }
+        }
+        Ok(None)
     }
 
     /// `self` reading each record line as Ensembl VEP's tabix iterator hands it
     /// to a plugin: the line end removed and the whitespace before it kept, so a
     /// trailing cell that is empty or whitespace stays a cell of the record for
     /// a plugin that counts a row's cells as Ensembl VEP's `split /\t/` does.
+    #[doc(hidden)]
     pub fn keeping_trailing_whitespace(mut self) -> Self {
         self.keep_trailing_whitespace = true;
         self
@@ -578,7 +655,7 @@ impl TabixAnnotator {
     /// byte. Each call adds a column, a later call on the same column replacing
     /// its decoder; the other cells, and every record of a reader without this,
     /// are text.
-    pub fn decoding_column_from_bytes(mut self, column: usize, decode: CellDecoder) -> Self {
+    pub(crate) fn decoding_column_from_bytes(mut self, column: usize, decode: CellDecoder) -> Self {
         self.byte_columns.retain(|(at, _)| *at != column);
         self.byte_columns.push((column, decode));
         self
@@ -596,8 +673,25 @@ impl TabixAnnotator {
     /// where no range returns it; without this it ends at its start
     /// ([`TabixConfig::record_end`]). End digits past the range end the row at
     /// the last position.
-    pub fn reading_rows_as_tabix_indexes_them(mut self) -> Self {
+    ///
+    /// The first line of a file with no `#` header is a row for this reader
+    /// whenever its start cell starts one (`Self::cell_start`), so a line
+    /// [`parse_header`] took for a bare header because a minus sign leads
+    /// that cell is no header here. A batch lists a row that starts below the
+    /// first base among the rows written at the first base, in the file's
+    /// order ([`Self::query_batch`]).
+    pub(crate) fn reading_rows_as_tabix_indexes_them(mut self) -> Self {
         self.rows_as_tabix_indexes_them = true;
+        let first_line_is_a_row = self.bare_header
+            && self
+                .header
+                .as_ref()
+                .and_then(|cells| cells.get(self.config.start_col))
+                .is_some_and(|cell| self.cell_start(cell).is_some());
+        if first_line_is_a_row {
+            self.header = None;
+            self.bare_header = false;
+        }
         self
     }
 
@@ -664,10 +758,18 @@ impl TabixAnnotator {
                     if previous_end.is_some_and(|end| record.start <= end) {
                         continue;
                     }
+                    // `tabix` files a row that starts below the first base at
+                    // the first base (htslib 1.9 `tbx.c:99`) and hands it out
+                    // among the rows written there, in the file's order.
+                    let filed_at = if self.rows_as_tabix_indexes_them {
+                        record.start.max(1)
+                    } else {
+                        record.start
+                    };
                     all_records
                         .entry(chr.to_string())
                         .or_default()
-                        .entry(record.start)
+                        .entry(filed_at)
                         .or_default()
                         .push(record);
                 }
@@ -713,16 +815,12 @@ impl TabixAnnotator {
             }
             return Ok(records);
         }
-        let Some(idx_header) = self.index.header() else {
-            return Ok(records);
-        };
-        let Some((ref_seq_id, file_chr)) =
-            resolve_reference_sequence(idx_header.reference_sequence_names(), chr, self.assembly)
-        else {
+        let Some((ref_seq_id, file_chr)) = self.resolve(chr)? else {
             return Ok(records);
         };
         let file = std::fs::File::open(&self.config.file_path).map_err(|e| self.read_error(e))?;
         let mut bgzf_reader = bgzf::io::Reader::new(file);
+        let last_held = self.last_held();
         let mut line = Vec::new();
         let mut last_chunk_end: Option<bgzf::VirtualPosition> = None;
         // The start and bytes of the line read past the previous cluster's last
@@ -799,7 +897,10 @@ impl TabixAnnotator {
                     if text.is_empty() || text.starts_with('#') {
                         continue;
                     }
-                    let Some(line_start) = self.line_start(&text) else {
+                    let Some(line_start) = self
+                        .line_start(&text)
+                        .filter(|&line_start| line_start <= last_held)
+                    else {
                         continue;
                     };
                     match place(line_start) {
@@ -865,12 +966,7 @@ impl TabixAnnotator {
         if !start_is_span {
             return self.query_windows(chr, windows);
         }
-        let Some(idx_header) = self.index.header() else {
-            return Ok(Vec::new());
-        };
-        let Some((ref_seq_id, file_chr)) =
-            resolve_reference_sequence(idx_header.reference_sequence_names(), chr, self.assembly)
-        else {
+        let Some((ref_seq_id, file_chr)) = self.resolve(chr)? else {
             return Ok(Vec::new());
         };
         let mut chunks = Vec::new();
@@ -1043,6 +1139,7 @@ impl TabixAnnotator {
         if incomplete {
             return Ok(None);
         }
+        let last_held = self.last_held();
         let per_run: Vec<Vec<TabixRecord>> = runs
             .par_iter()
             .map(|run| {
@@ -1062,7 +1159,10 @@ impl TabixAnnotator {
                     if line.is_empty() || line.starts_with(b"#") {
                         continue;
                     }
-                    let Some(line_start) = self.line_start_bytes(line) else {
+                    let Some(line_start) = self
+                        .line_start_bytes(line)
+                        .filter(|&line_start| line_start <= last_held)
+                    else {
                         continue;
                     };
                     let at = window.get_or_insert_with(|| {
@@ -1117,27 +1217,34 @@ impl TabixAnnotator {
         start: u64,
         end: u64,
     ) -> Result<Vec<TabixRecord>, PluginError> {
-        let mut records = Vec::new();
         let (start, end) = normalize_range_bounds(start, end);
-
-        let Some(idx_header) = self.index.header() else {
-            return Ok(records); // No header = can't map chr to ref seq id
+        let Some((ref_seq_id, file_chr)) = self.resolve(chr)? else {
+            return Ok(Vec::new()); // Chromosome not in index
         };
-        let ref_seq_names = idx_header.reference_sequence_names();
+        self.region_rows(ref_seq_id, file_chr, start, end, usize::MAX)
+    }
 
-        let Some((ref_seq_id, file_chr)) =
-            resolve_reference_sequence(ref_seq_names, chr, self.assembly)
-        else {
-            return Ok(records); // Chromosome not in index
-        };
+    /// The records of the index's sequence `ref_seq_id`, which the file names
+    /// `file_chr`, whose span overlaps `start..=end`, in the file's order, the
+    /// read ending once `limit` of them are held.
+    fn region_rows(
+        &self,
+        ref_seq_id: usize,
+        file_chr: &bstr::BString,
+        start: u64,
+        end: u64,
+        limit: usize,
+    ) -> Result<Vec<TabixRecord>, PluginError> {
+        let mut records = Vec::new();
+        if limit == 0 {
+            return Ok(records);
+        }
 
-        // The index holds positions up to 2^(min_shift + 3 depth), 2^29 for a
-        // `.tbi`; `tabix` reads an interval ending past the last one to it and
-        // finds nothing in one starting past it (htslib `reg2bins` clamps the
-        // end). Refusing the interval would drop every record of a merged
-        // region that one wide span reaches past the limit.
-        let address_bits = u32::from(self.index.min_shift()) + 3 * u32::from(self.index.depth());
-        let last_held = 1u64 << address_bits;
+        // `tabix` reads an interval ending past the last position the index
+        // holds to it and finds nothing in one starting past it (htslib
+        // `reg2bins` clamps the end). Refusing the interval would drop every
+        // record of a merged region that one wide span reaches past the limit.
+        let last_held = self.last_held();
         if start > last_held {
             return Ok(records);
         }
@@ -1200,7 +1307,10 @@ impl TabixAnnotator {
                 // as htslib's iterator ends there (the chunks come in file
                 // order, so every later chunk holds later starts), and on a
                 // start-only index the lines before it need no record either.
-                let Some(line_start) = self.line_start(&text) else {
+                let Some(line_start) = self
+                    .line_start(&text)
+                    .filter(|&line_start| line_start <= last_held)
+                else {
                     continue;
                 };
                 if line_start > end {
@@ -1222,6 +1332,9 @@ impl TabixAnnotator {
                     && record.end >= start
                 {
                     records.push(record);
+                    if records.len() >= limit {
+                        break 'chunks;
+                    }
                 }
             }
         }
@@ -1295,6 +1408,17 @@ impl TabixAnnotator {
             }
         }
         blocks.offset() == to
+    }
+
+    /// The last position the index holds, 2^(min_shift + 3 depth): 2^29 for a
+    /// `.tbi`. A row that starts past it is not one `tabix` filed in the
+    /// file's order, so every read passes over it as over a line that is no
+    /// row: it ends no read and moves no window on, and the rows after it are
+    /// read as they stand.
+    #[doc(hidden)]
+    pub fn last_held(&self) -> u64 {
+        let address_bits = u32::from(self.index.min_shift()) + 3 * u32::from(self.index.depth());
+        1u64.checked_shl(address_bits).unwrap_or(u64::MAX)
     }
 
     /// The error for an I/O failure while reading the data file.
@@ -1437,15 +1561,12 @@ impl TabixAnnotator {
     /// ([`plugin_table_candidates`]): a query on a chromosome it does not
     /// name reads nothing, as `tabix` prints nothing for one, so a plugin that
     /// tells a chromosome the file lacks from a span with no records asks here.
-    pub fn holds_chromosome(&self, chr: &str) -> bool {
-        self.index.header().is_some_and(|idx_header| {
-            resolve_reference_sequence(idx_header.reference_sequence_names(), chr, self.assembly)
-                .is_some()
-        })
+    pub(crate) fn holds_chromosome(&self, chr: &str) -> bool {
+        self.resolve(chr).is_ok_and(|found| found.is_some())
     }
 
     /// Get the config.
-    pub fn config(&self) -> &TabixConfig {
+    pub(crate) fn config(&self) -> &TabixConfig {
         &self.config
     }
 }
@@ -1739,7 +1860,7 @@ fn normalize_range_bounds(start: u64, end: u64) -> (u64, u64) {
 /// variants) are tried before giving up.
 ///
 /// Public so the binary (`.vpd`) store applies the identical resolution.
-pub fn chromosome_query_candidates(chr: &str) -> Vec<String> {
+pub(crate) fn chromosome_query_candidates(chr: &str) -> Vec<String> {
     let mut candidates: Vec<String> = Vec::new();
     let mut push_unique = |value: String| {
         if !value.is_empty() && !candidates.iter().any(|existing| existing == &value) {
@@ -1777,7 +1898,7 @@ pub fn chromosome_query_candidates(chr: &str) -> Vec<String> {
 
 /// Whether `name` spells the mitochondrial contig: `M` or `MT`, bare or after
 /// `chr`, in any letter case.
-pub fn is_mitochondrial_name(name: &str) -> bool {
+pub(crate) fn is_mitochondrial_name(name: &str) -> bool {
     let bare = match name.get(..3) {
         Some(prefix) if prefix.eq_ignore_ascii_case("chr") => &name[3..],
         _ => name,
@@ -1785,17 +1906,21 @@ pub fn is_mitochondrial_name(name: &str) -> bool {
     bare.eq_ignore_ascii_case("m") || bare.eq_ignore_ascii_case("mt")
 }
 
-/// The spellings a plugin's table is asked for `chr` under, in order.
+/// The spellings a plugin's table is asked for `chr` under with no check of
+/// its rows, in order.
 ///
 /// [`chromosome_query_candidates`], except for a mitochondrial name on GRCh37.
 /// There `MT` and `chrMT` name the assembly's mitochondrial sequence and
 /// `chrM` and `M` the one of the UCSC hg19 naming, another sequence whose
-/// positions do not stand at the assembly's, so a row under one pair is no row
-/// of a record under the other. The name is tried as Ensembl VEP's tabix
-/// plugins try it (`BaseVepTabixPlugin.pm:693-708`): as written, then without
-/// its `chr` prefix or with `chr` added, which stays inside the pair; a prefix
-/// in another letter case is tried in lower case as well.
-pub fn plugin_table_candidates(chr: &str, assembly: Option<Assembly>) -> Vec<String> {
+/// positions do not stand at the assembly's, so a row under one pair is a row
+/// of a record under the other only in a table that counts on the record's
+/// sequence. The name is tried as Ensembl VEP's tabix plugins try it
+/// (`BaseVepTabixPlugin.pm:693-708`): as written, then without its `chr`
+/// prefix or with `chr` added, which stays inside the pair; a prefix in
+/// another letter case is tried in lower case as well. A reader tries the
+/// other pair after these, behind its frame check
+/// ([`grch37_mitochondrial_candidates`], [`MitochondrialFrame`]).
+pub(crate) fn plugin_table_candidates(chr: &str, assembly: Option<Assembly>) -> Vec<String> {
     let name = chr.trim();
     if assembly != Some(Assembly::Grch37) || !is_mitochondrial_name(name) {
         return chromosome_query_candidates(chr);
@@ -1818,14 +1943,337 @@ pub fn plugin_table_candidates(chr: &str, assembly: Option<Assembly>) -> Vec<Str
 /// The cache's name of the record's contig, which the table's reader spells
 /// every way ([`chromosome_query_candidates`]), except for a mitochondrial
 /// record on GRCh37: there the name is the record's own spelling, the one an
-/// Ensembl VEP module hands its base class (`$vf->{chr}`), and a reader opened
-/// on that assembly tries it one `chr` step and no further
-/// ([`plugin_table_candidates`]).
-pub fn table_contig(variant: &InputVariant, assembly: Option<Assembly>) -> &str {
+/// Ensembl VEP module hands its base class (`$vf->{chr}`), which tells a
+/// reader opened on that assembly the pair of names the record is of: it
+/// tries the name one `chr` step ([`plugin_table_candidates`]) and reads a
+/// contig of the other pair only where the table's rows state the reference
+/// bases ([`MitochondrialFrame`]).
+pub(crate) fn table_contig(variant: &InputVariant, assembly: Option<Assembly>) -> &str {
     if assembly == Some(Assembly::Grch37) && is_mitochondrial_name(&variant.chr) {
         &variant.original_chr
     } else {
         &variant.chr
+    }
+}
+
+/// Whether `name` is of the pair `MT` and `chrMT`, the names GRCh37 gives its
+/// own mitochondrial sequence; the other pair is `M` and `chrM`.
+fn names_the_assembly_sequence(name: &str) -> bool {
+    let bare = match name.get(..3) {
+        Some(prefix) if prefix.eq_ignore_ascii_case("chr") => &name[3..],
+        _ => name,
+    };
+    bare.eq_ignore_ascii_case("mt")
+}
+
+/// The spellings a table is asked for the mitochondrial name `chr` under on
+/// GRCh37, in order, each with whether it is of the other pair of names than
+/// `chr`.
+///
+/// `first`, the name a plugin's Ensembl VEP module gives every mitochondrial
+/// record itself, leads with its `chr` variant. The record's own pair follows
+/// ([`plugin_table_candidates`]), then the two names of the other pair, the
+/// one with `chr`'s own prefix form first.
+pub(crate) fn grch37_mitochondrial_candidates(
+    chr: &str,
+    first: Option<&str>,
+) -> Vec<(String, bool)> {
+    let name = chr.trim();
+    let own_pair = names_the_assembly_sequence(name);
+    let prefixed = name
+        .get(..3)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("chr"));
+    let other_bare = if own_pair { "M" } else { "MT" };
+    let other_pair = if prefixed {
+        [format!("chr{other_bare}"), other_bare.to_string()]
+    } else {
+        [other_bare.to_string(), format!("chr{other_bare}")]
+    };
+    let mut candidates: Vec<(String, bool)> = Vec::new();
+    let named_first = first
+        .map(|first| plugin_table_candidates(first, Some(Assembly::Grch37)))
+        .unwrap_or_default();
+    for candidate in named_first
+        .into_iter()
+        .chain(plugin_table_candidates(name, Some(Assembly::Grch37)))
+        .chain(other_pair)
+    {
+        if !candidates.iter().any(|(held, _)| *held == candidate) {
+            let crosses = names_the_assembly_sequence(&candidate) != own_pair;
+            candidates.push((candidate, crosses));
+        }
+    }
+    candidates
+}
+
+/// The name the frame check reads the run's mitochondrial sequence under: the
+/// one GRCh37 gives it, which the reference reader spells as its file does.
+const ASSEMBLY_MITOCHONDRIAL_NAME: &str = "MT";
+
+/// The equal stretches of the reference sequence the frame check reads a
+/// table's rows from.
+pub(crate) const FRAME_STRETCHES: u64 = 16;
+
+/// The rows the frame check reads of one stretch, at most: its first ones.
+pub(crate) const FRAME_ROWS_A_STRETCH: usize = 8;
+
+/// The fewest positions at which the frame check compares rows before a
+/// table is read across the names.
+pub(crate) const FRAME_POSITIONS: usize = 8;
+
+/// The rows of one contig of a table whose span overlaps `start..=end`, in the
+/// table's order, at most `limit` of them: how the frame check reads a table
+/// or the store built from it.
+pub(crate) type FrameRows<'a> =
+    dyn Fn(u64, u64, usize) -> Result<Vec<TabixRecord>, PluginError> + 'a;
+
+/// What the frame check found of one mitochondrial contig of a table.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FrameVerdict {
+    /// Every compared row states the reference bases at its own position, over
+    /// at least [`FRAME_POSITIONS`] positions: the contig is read.
+    StatesTheReference,
+    /// A compared row states another base than the reference holds at its
+    /// position, or stands past the end of the sequence: the contig is not
+    /// read.
+    StatesAnotherSequence,
+    /// The comparison could not be made, for the reason given: the contig is
+    /// not read.
+    NotCompared(&'static str),
+}
+
+/// The frame check of a plugin's table on GRCh37.
+///
+/// There `MT` and `chrMT` name the assembly's mitochondrial sequence and
+/// `chrM` and `M` another sequence, of another length, whose positions do not
+/// stand at the assembly's. A contig a table names under one pair is read for
+/// a record of the other pair only where the table's rows state the bases the
+/// run's reference sequence holds at the rows' own positions; the reference
+/// allele of a row is the base it states.
+///
+/// The check reads the first `FRAME_ROWS_A_STRETCH` rows of each of
+/// `FRAME_STRETCHES` equal stretches of the reference sequence, and one row
+/// past its end, through the table's index. A row is compared when its
+/// reference allele is made of `A`, `C`, `G` and `T` alone and the reference
+/// holds such bases under it. The contig is read when every compared row
+/// states the reference and the compared rows stand at
+/// `FRAME_POSITIONS` positions or more, so one base that happens to agree
+/// admits no table. The verdict is made once for each contig and kept; it is
+/// logged with the table's path and the rows compared.
+///
+/// Without a reference sequence, or for a table with no reference-allele
+/// column, the comparison cannot be made: the contig is not read, as Ensembl
+/// VEP's base class reads none of the other pair
+/// (`BaseVepTabixPlugin.pm:693-708`), and one warning names the table.
+#[derive(Debug, Default)]
+#[doc(hidden)]
+pub struct MitochondrialFrame {
+    reference: Option<Arc<vep_fasta::IndexedFasta>>,
+    allele_column: Option<usize>,
+    first_name: Option<&'static str>,
+    own_pair_alone: bool,
+    verdicts: Mutex<Vec<(String, FrameVerdict)>>,
+}
+
+impl MitochondrialFrame {
+    /// A check that reads a row's reference allele from `allele_column`, a
+    /// 0-based column, with no reference sequence yet.
+    pub(crate) fn comparing_column(allele_column: Option<usize>) -> Self {
+        Self {
+            allele_column,
+            ..Self::default()
+        }
+    }
+
+    /// Hands the check the run's reference sequence.
+    pub(crate) fn set_reference(&mut self, reference: Option<Arc<vep_fasta::IndexedFasta>>) {
+        self.reference = reference;
+    }
+
+    /// Names the 0-based column that holds a row's reference allele.
+    pub(crate) fn set_allele_column(&mut self, allele_column: Option<usize>) {
+        self.allele_column = allele_column;
+    }
+
+    /// Names the spelling the plugin's Ensembl VEP module gives every
+    /// mitochondrial record, which is then the first one tried
+    /// ([`grch37_mitochondrial_candidates`]).
+    pub(crate) fn set_first_name(&mut self, name: &'static str) {
+        self.first_name = Some(name);
+    }
+
+    /// Has the reader keep every mitochondrial name to its own pair on GRCh37,
+    /// with no comparison made and no warning: the rule of a source that
+    /// Ensembl VEP reads through its own resolver (`BaseVEP.pm:689-738`),
+    /// which reaches no name of the other pair but through a synonym.
+    pub fn keep_to_own_pair(&mut self) {
+        self.own_pair_alone = true;
+    }
+
+    /// The spelling [`Self::set_first_name`] named, if any.
+    pub(crate) fn first_name(&self) -> Option<&'static str> {
+        self.first_name
+    }
+
+    /// Whether the rows `table` holds under `contig` are read for a
+    /// mitochondrial record of the other pair of names: the verdict kept for
+    /// the contig, made from `rows` at the first call.
+    pub(crate) fn admits(
+        &self,
+        table: &Path,
+        contig: &str,
+        rows: &FrameRows<'_>,
+    ) -> Result<bool, PluginError> {
+        if self.own_pair_alone {
+            return Ok(false);
+        }
+        let mut verdicts = self
+            .verdicts
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some((_, verdict)) = verdicts.iter().find(|(held, _)| held == contig) {
+            return Ok(*verdict == FrameVerdict::StatesTheReference);
+        }
+        let comparison = self.compare(rows)?;
+        match comparison.verdict {
+            FrameVerdict::NotCompared(reason) => tracing::warn!(
+                "{}: its contig {contig} is not read for a mitochondrial record written {}: on \
+                 GRCh37 the names MT and chrMT are one sequence and chrM and M another, and the \
+                 table's rows could not be compared with the reference sequence ({reason})",
+                table.display(),
+                if names_the_assembly_sequence(contig) {
+                    "chrM or M"
+                } else {
+                    "MT or chrMT"
+                }
+            ),
+            FrameVerdict::StatesTheReference | FrameVerdict::StatesAnotherSequence => {}
+        }
+        tracing::info!(
+            table = %table.display(),
+            contig,
+            rows_compared = comparison.compared,
+            rows_stating_the_reference = comparison.stating,
+            positions = comparison.positions,
+            outcome = match comparison.verdict {
+                FrameVerdict::StatesTheReference => "read across the mitochondrial names",
+                FrameVerdict::StatesAnotherSequence | FrameVerdict::NotCompared(_) =>
+                    "read under its own pair of names alone",
+            },
+            "mitochondrial rows compared with the reference sequence"
+        );
+        verdicts.push((contig.to_string(), comparison.verdict));
+        Ok(comparison.verdict == FrameVerdict::StatesTheReference)
+    }
+
+    /// Reads the rows and compares them ([`Self`]).
+    fn compare(&self, rows: &FrameRows<'_>) -> Result<FrameComparison, PluginError> {
+        let not_compared = |reason| FrameComparison {
+            verdict: FrameVerdict::NotCompared(reason),
+            ..FrameComparison::default()
+        };
+        let Some(column) = self.allele_column else {
+            return Ok(not_compared("the table has no reference-allele column"));
+        };
+        let Some(reference) = &self.reference else {
+            return Ok(not_compared(
+                "no reference sequence was given; pass --fasta",
+            ));
+        };
+        let (Some(name), Some(length)) = (
+            reference.record_name(ASSEMBLY_MITOCHONDRIAL_NAME),
+            reference.sequence_length(ASSEMBLY_MITOCHONDRIAL_NAME),
+        ) else {
+            return Ok(not_compared(
+                "the reference sequence holds no mitochondrial sequence",
+            ));
+        };
+        // A sequence the reference names `chrM` or `M` at another length than
+        // the assembly's is the other naming's own sequence, which a run's
+        // synonym table can hand a read of `MT`.
+        if !names_the_assembly_sequence(name) && length != vep_fasta::GRCH37_MITOCHONDRIAL_LENGTH {
+            return Ok(not_compared(
+                "the reference sequence holds its mitochondrial sequence under the other pair \
+                 of names, at another length than the assembly's",
+            ));
+        }
+        let mut comparison = FrameComparison::default();
+        // A span that reaches past the end of the sequence is read again
+        // there, so a position is counted by its start, once.
+        let mut positions: Vec<u64> = Vec::new();
+        let mut compare = |row: &TabixRecord| {
+            let Some(allele) = row.columns.get(column).map(|cell| cell.trim()) else {
+                return;
+            };
+            if allele.is_empty() || !allele.bytes().all(is_base) {
+                return;
+            }
+            let end = row.start.saturating_add(allele.len() as u64 - 1);
+            let stated = if row.start == 0 || end > length {
+                false
+            } else {
+                match reference.sequence(ASSEMBLY_MITOCHONDRIAL_NAME, row.start, end) {
+                    Some(bases) if bases.iter().copied().all(is_base) => {
+                        bases.eq_ignore_ascii_case(allele.as_bytes())
+                    }
+                    _ => return,
+                }
+            };
+            comparison.compared += 1;
+            comparison.stating += usize::from(stated);
+            if !positions.contains(&row.start) {
+                positions.push(row.start);
+            }
+        };
+        let stretch = length.div_ceil(FRAME_STRETCHES).max(1);
+        let mut start = 1;
+        while start <= length {
+            let end = (start + stretch - 1).min(length);
+            for row in rows(start, end, FRAME_ROWS_A_STRETCH)?
+                .iter()
+                .filter(|row| row.start >= start)
+            {
+                compare(row);
+            }
+            start = end + 1;
+        }
+        for row in &rows(length + 1, u64::MAX, 1)? {
+            compare(row);
+        }
+        comparison.positions = positions.len();
+        comparison.verdict = if comparison.stating < comparison.compared {
+            FrameVerdict::StatesAnotherSequence
+        } else if comparison.positions < FRAME_POSITIONS {
+            FrameVerdict::NotCompared("too few of its rows state a reference allele to tell")
+        } else {
+            FrameVerdict::StatesTheReference
+        };
+        Ok(comparison)
+    }
+}
+
+/// Whether `byte` is one of the four bases, in either letter case.
+fn is_base(byte: u8) -> bool {
+    matches!(byte.to_ascii_uppercase(), b'A' | b'C' | b'G' | b'T')
+}
+
+/// What [`MitochondrialFrame::compare`] counted, with its verdict.
+#[derive(Debug)]
+struct FrameComparison {
+    compared: usize,
+    stating: usize,
+    positions: usize,
+    verdict: FrameVerdict,
+}
+
+impl Default for FrameComparison {
+    fn default() -> Self {
+        Self {
+            compared: 0,
+            stating: 0,
+            positions: 0,
+            verdict: FrameVerdict::NotCompared("no row was read"),
+        }
     }
 }
 
@@ -1851,7 +2299,7 @@ fn resolve_reference_sequence<'a>(
 /// on the file's stem, is refused naming the missing `.tbi`, though htslib
 /// alone would read it. A plugin that reads the table's header or index before
 /// opening it runs this check first, as Ensembl VEP's plugins do.
-pub fn check_plugin_table(data_path: &Path) -> Result<(), PluginError> {
+pub(crate) fn check_plugin_table(data_path: &Path) -> Result<(), PluginError> {
     if !data_path.exists() {
         return Err(PluginError::Init(format!(
             "data file {} not found",
@@ -1869,32 +2317,43 @@ pub fn check_plugin_table(data_path: &Path) -> Result<(), PluginError> {
     Ok(())
 }
 
-/// Find the index file for a given data file in the order htslib searches:
-/// `<file>.csi` (the format `tabix -C` writes), `<stem>.csi`, `<file>.tbi`,
-/// `<stem>.tbi`, where `<stem>` drops the data file's last extension.
-pub fn find_index_path(data_path: &Path) -> Result<PathBuf, PluginError> {
+/// The paths the index of a data file is looked for at, in the order htslib
+/// searches: `<file>.csi` (the format `tabix -C` writes), `<stem>.csi`,
+/// `<file>.tbi`, `<stem>.tbi`, where `<stem>` drops the data file's last
+/// extension; a data file without an extension has the two appended names.
+#[doc(hidden)]
+pub fn index_path_candidates(data_path: &Path) -> Vec<PathBuf> {
+    let mut candidates = Vec::with_capacity(4);
     for extension in ["csi", "tbi"] {
-        let appended = PathBuf::from(format!("{}.{extension}", data_path.display()));
-        if appended.exists() {
-            return Ok(appended);
-        }
+        candidates.push(PathBuf::from(format!(
+            "{}.{extension}",
+            data_path.display()
+        )));
         if data_path.extension().is_some() {
-            let on_stem = data_path.with_extension(extension);
-            if on_stem.exists() {
-                return Ok(on_stem);
-            }
+            candidates.push(data_path.with_extension(extension));
         }
     }
+    candidates
+}
 
-    Err(PluginError::Init(format!(
-        "tabix index not found for {path}. Expected {path}.csi or {path}.tbi",
-        path = data_path.display(),
-    )))
+/// Find the index file for a given data file: the first of
+/// [`index_path_candidates`] that exists.
+#[doc(hidden)]
+pub fn find_index_path(data_path: &Path) -> Result<PathBuf, PluginError> {
+    index_path_candidates(data_path)
+        .into_iter()
+        .find(|candidate| candidate.exists())
+        .ok_or_else(|| {
+            PluginError::Init(format!(
+                "tabix index not found for {path}. Expected {path}.csi or {path}.tbi",
+                path = data_path.display(),
+            ))
+        })
 }
 
 /// Load a tabix index from a `.tbi` or `.csi` file, by its extension, through
-/// [`read_tabix_index`] or [`read_csi_index`].
-pub fn load_index(index_path: &Path) -> Result<Index, PluginError> {
+/// `read_tabix_index` or `read_csi_index`.
+pub(crate) fn load_index(index_path: &Path) -> Result<Index, PluginError> {
     if index_path.extension().is_some_and(|ext| ext == "csi") {
         Ok(Box::new(read_csi_index(index_path)?))
     } else {
@@ -1902,20 +2361,79 @@ pub fn load_index(index_path: &Path) -> Result<Index, PluginError> {
     }
 }
 
-/// Reads a `.tbi` index with its counts checked ([`checked_index_stream`]).
-pub fn read_tabix_index(index_path: &Path) -> Result<tabix::Index, PluginError> {
-    let stream = checked_index_stream(index_path, false)?;
-    tabix::io::Reader::new(stream)
-        .read_index()
-        .map_err(|e| index_read_error(index_path, e))
+/// The query configuration of a table as its tabix index describes it: the
+/// index's sequence, start and end columns (`tabix -s`, `-b`, `-e`) and a
+/// zero-based start where the index is a BED one, so a table is queried as
+/// `tabix` queries it, whatever its own header says. The configuration names
+/// no allele column.
+///
+/// `no_header` words the refusal of an index that carries no tabix header: it
+/// is handed the index's path and returns the caller's whole message.
+///
+/// A table with no index takes the configuration a `.vpd` store beside it
+/// records (`config_from_store_beside` of the annotation store), the columns
+/// the store was built on, so a plugin that reads its columns here before it
+/// opens its store loads from an accepted store as the other store-backed
+/// plugins do. A caller that reads the table through tabix alone checks the
+/// table's index before it calls.
+pub(crate) fn indexed_table_config(
+    data_path: &Path,
+    no_header: impl FnOnce(&Path) -> String,
+) -> Result<TabixConfig, PluginError> {
+    let index_path = match find_index_path(data_path) {
+        Ok(index_path) => index_path,
+        Err(no_index) => {
+            return crate::annotation_store::config_from_store_beside(data_path, no_index)
+        }
+    };
+    let index = load_index(&index_path)?;
+    let header = index
+        .header()
+        .ok_or_else(|| PluginError::Init(no_header(&index_path)))?;
+    Ok(TabixConfig {
+        file_path: data_path.to_path_buf(),
+        chr_col: header.reference_sequence_name_index(),
+        start_col: header.start_position_index(),
+        end_col: header.end_position_index(),
+        ref_col: None,
+        alt_col: None,
+        zero_based: header.format().coordinate_system() == CoordinateSystem::Bed,
+    })
 }
 
-/// Reads a `.csi` index with its counts checked ([`checked_index_stream`]).
-pub fn read_csi_index(index_path: &Path) -> Result<noodles::csi::Index, PluginError> {
-    let stream = checked_index_stream(index_path, true)?;
-    noodles::csi::io::Reader::new(stream)
-        .read_index()
-        .map_err(|e| index_read_error(index_path, e))
+/// Reads a `.tbi` index with its counts checked (`checked_index_stream`).
+pub(crate) fn read_tabix_index(index_path: &Path) -> Result<tabix::Index, PluginError> {
+    read_checked_index(index_path, false, |stream| {
+        tabix::io::Reader::new(stream).read_index()
+    })
+}
+
+/// Reads a `.csi` index with its counts checked (`checked_index_stream`).
+pub(crate) fn read_csi_index(index_path: &Path) -> Result<noodles::csi::Index, PluginError> {
+    read_checked_index(index_path, true, |stream| {
+        noodles::csi::io::Reader::new(stream).read_index()
+    })
+}
+
+/// What `parse` reads from the index at `index_path`, a `.csi` index under
+/// `csi` and a `.tbi` index otherwise. `parse` is handed the index as the
+/// BGZF stream an index reader takes, held in memory, and only once the
+/// index's counts are checked (`checked_index_stream`), so a reader that
+/// allocates for each count it meets reads counts that fit the index.
+///
+/// An index that cannot be opened or read is [`PluginError::Run`], naming the
+/// index and the read error, and so is an error `parse` returns. An index
+/// that decompresses past the size limit, or that the count check refuses, is
+/// [`PluginError::Init`], naming the index and what is malformed in it;
+/// `parse` is not called for it.
+#[doc(hidden)]
+pub fn read_checked_index<T>(
+    index_path: &Path,
+    csi: bool,
+    parse: impl FnOnce(std::io::Cursor<Vec<u8>>) -> std::io::Result<T>,
+) -> Result<T, PluginError> {
+    let stream = checked_index_stream(index_path, csi)?;
+    parse(stream).map_err(|e| index_read_error(index_path, e))
 }
 
 fn index_read_error(index_path: &Path, e: std::io::Error) -> PluginError {
@@ -2076,7 +2594,8 @@ impl IndexCursor<'_> {
 ///
 /// Returns `None` when no index is present, or when the index carries no header
 /// block. Callers treat that as "cannot verify" rather than "verified compatible".
-pub fn indexed_start_column(data_path: &Path) -> Result<Option<usize>, PluginError> {
+#[cfg(test)]
+pub(crate) fn indexed_start_column(data_path: &Path) -> Result<Option<usize>, PluginError> {
     // Resolved through the same helper as the query path, so the appended
     // `<file>.tbi` form is tried and an extensionless data file (REVEL unzips to
     // a bare `revel_with_transcript_ids`) resolves.
@@ -2087,9 +2606,60 @@ pub fn indexed_start_column(data_path: &Path) -> Result<Option<usize>, PluginErr
     Ok(index.header().map(|h| h.start_position_index()))
 }
 
+/// The 0-based sequence-name and start columns a tabix index was built on
+/// (`tabix -s` and `-b`), the pair `indexed_start_column` reads the second
+/// of: `None` when no index is present or the index carries no header block.
+pub(crate) fn indexed_columns(data_path: &Path) -> Result<Option<(usize, usize)>, PluginError> {
+    let Ok(index_path) = find_index_path(data_path) else {
+        return Ok(None);
+    };
+    let index = load_index(&index_path)?;
+    Ok(index
+        .header()
+        .map(|h| (h.reference_sequence_name_index(), h.start_position_index())))
+}
+
+/// How a table's tabix index stands to the column a plugin reads a record's
+/// position from ([`indexed_position`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum IndexedPosition {
+    /// No index is present, or the index carries no header block, so the
+    /// column cannot be checked.
+    Unchecked,
+    /// The index's start column is the plugin's; `sequence_column` is the
+    /// index's 0-based sequence-name column (`tabix -s`).
+    Agrees {
+        /// The 0-based sequence-name column of the index.
+        sequence_column: usize,
+    },
+    /// The index's start column is another one.
+    Disagrees {
+        /// The 0-based start column of the index (`tabix -b`).
+        indexed_column: usize,
+    },
+}
+
+/// The file's tabix index checked against `position_column`, the 0-based column
+/// a plugin reads a record's position from ([`indexed_columns`]). The answer
+/// is data: a plugin that resolved the column by its own rule words its own
+/// refusal of a disagreement and takes the sequence-name column of an index
+/// that agrees.
+pub(crate) fn indexed_position(
+    path: &Path,
+    position_column: usize,
+) -> Result<IndexedPosition, PluginError> {
+    Ok(match indexed_columns(path)? {
+        None => IndexedPosition::Unchecked,
+        Some((sequence_column, start_column)) if start_column == position_column => {
+            IndexedPosition::Agrees { sequence_column }
+        }
+        Some((_, indexed_column)) => IndexedPosition::Disagrees { indexed_column },
+    })
+}
+
 /// The 0-based index of the column named `wanted_column_name` in `header`, the
-/// column the plugin reads a record's position from, checked against the column
-/// the file's tabix index was built on ([`indexed_start_column`]).
+/// column the plugin reads a record's position from, checked against the start
+/// column of the file's tabix index ([`indexed_position`]).
 ///
 /// A file carrying coordinates on more than one assembly (REVEL's `hg19_pos` and `grch38_pos`,
 /// dbNSFP's `pos(1-based)` and `hg19_pos(1-based)`, dbscSNV's `pos` and `hg38_pos`) is indexed
@@ -2100,7 +2670,7 @@ pub fn indexed_start_column(data_path: &Path) -> Result<Option<usize>, PluginErr
 /// column, so that disagreement is refused here; a file with no index, or an
 /// index with no header block, cannot be checked and is accepted. The message
 /// names no plugin: the caller prefixes its own name.
-pub fn resolve_indexed_position_column(
+pub(crate) fn resolve_indexed_position_column(
     path: &Path,
     header: &[String],
     wanted_column_name: &str,
@@ -2115,62 +2685,23 @@ pub fn resolve_indexed_position_column(
                 header.join(",")
             ))
         })?;
-    if let Some(indexed) = indexed_start_column(path)? {
-        if indexed != column {
-            let indexed_name = header
-                .get(indexed)
-                .map(|name| name.trim().to_string())
-                .unwrap_or_else(|| format!("column {}", indexed + 1));
-            return Err(PluginError::Init(format!(
-                "{} is indexed on '{indexed_name}' (column {}), not on '{wanted_column_name}' \
-                 (column {}); index the file on the '{wanted_column_name}' column",
-                path.display(),
-                indexed + 1,
-                column + 1,
-            )));
-        }
+    if let IndexedPosition::Disagrees {
+        indexed_column: indexed,
+    } = indexed_position(path, column)?
+    {
+        let indexed_name = header
+            .get(indexed)
+            .map(|name| name.trim().to_string())
+            .unwrap_or_else(|| format!("column {}", indexed + 1));
+        return Err(PluginError::Init(format!(
+            "{} is indexed on '{indexed_name}' (column {}), not on '{wanted_column_name}' \
+             (column {}); index the file on the '{wanted_column_name}' column",
+            path.display(),
+            indexed + 1,
+            column + 1,
+        )));
     }
     Ok(column)
-}
-
-/// Detect an assembly marker in a data file's comment preamble.
-///
-/// Returns the assembly named by a `#`-prefixed line, if any. A file may name
-/// its assembly on a line above the column names, as the fixtures' `##CADD
-/// GRCh38-v1.7 ...` line does,
-/// which [`parse_header`] deliberately discards, since it keeps only the last
-/// `#` line as the column names.
-///
-/// This is the same signal Ensembl VEP's `CADD.pm` uses: it greps the file's header
-/// lines for the requested assembly string and **dies** on a mismatch
-/// (CADD.pm:151-157); without
-/// the guard a GRCh38 run over a GRCh37 CADD file yields nothing or wrong-genome
-/// scores.
-///
-/// Only reads the comment preamble, so it costs one bgzf block.
-pub fn detect_assembly_marker(
-    path: &Path,
-) -> Result<Option<vep_core::assembly::Assembly>, PluginError> {
-    let file = std::fs::File::open(path)
-        .map_err(|e| PluginError::Init(format!("failed to open {}: {e}", path.display())))?;
-    let reader = bgzf::io::Reader::new(BufReader::new(file));
-
-    for line_result in BoundedLines::new(reader, path) {
-        let line = line_result?;
-        if !line.starts_with(b"#") {
-            break;
-        }
-        // A header line carries the assembly's name among other words, so the
-        // spellings are searched inside it; Assembly::parse reads a whole value.
-        let lower = lossy_text(line).to_ascii_lowercase();
-        if lower.contains("grch38") || lower.contains("hg38") {
-            return Ok(Some(vep_core::assembly::Assembly::Grch38));
-        }
-        if lower.contains("grch37") || lower.contains("hg19") {
-            return Ok(Some(vep_core::assembly::Assembly::Grch37));
-        }
-    }
-    Ok(None)
 }
 
 /// The last of the file's leading `#` lines, as `tabix -H` prints them: the
@@ -2180,7 +2711,7 @@ pub fn detect_assembly_marker(
 ///
 /// The line is returned whole, every `#` included, for a plugin that applies
 /// its own rule to the raw header text where [`parse_header`] strips the marks.
-pub fn last_preamble_line(path: &Path) -> Result<Option<String>, PluginError> {
+pub(crate) fn last_preamble_line(path: &Path) -> Result<Option<String>, PluginError> {
     let file = std::fs::File::open(path)
         .map_err(|e| PluginError::Init(format!("failed to open {}: {e}", path.display())))?;
     let reader = bgzf::io::Reader::new(BufReader::new(file));
@@ -2200,14 +2731,14 @@ pub fn last_preamble_line(path: &Path) -> Result<Option<String>, PluginError> {
 ///
 /// Some databases declare their build in a data column rather than in a comment
 /// preamble or in their column names: AlphaMissense carries a `genome` column
-/// holding the literal UCSC spelling (`hg19` / `hg38`) on every row. Neither
-/// [`detect_assembly_marker`] (comment preamble only) nor [`parse_header`] (column
-/// names only) can see it, so a wrong-build file passes both and then annotates
-/// nothing, because its positions do not exist in the requested build.
+/// holding the literal UCSC spelling (`hg19` / `hg38`) on every row.
+/// [`parse_header`] reads the column names alone and cannot see it, so a
+/// wrong-build file passes the header check and then annotates nothing, because
+/// its positions do not exist in the requested build.
 ///
 /// Returns `None` when the file has no data row or the row is too short. Reads only
 /// as far as the first data line, so it costs one bgzf block.
-pub fn first_data_row_field(path: &Path, col: usize) -> Result<Option<String>, PluginError> {
+pub(crate) fn first_data_row_field(path: &Path, col: usize) -> Result<Option<String>, PluginError> {
     let file = std::fs::File::open(path)
         .map_err(|e| PluginError::Init(format!("failed to open {}: {e}", path.display())))?;
     let reader = bgzf::io::Reader::new(BufReader::new(file));
@@ -2228,7 +2759,7 @@ pub fn first_data_row_field(path: &Path, col: usize) -> Result<Option<String>, P
 
 /// The header lines of a bgzipped file, the lines `tabix -h` prints: every
 /// leading line opening `#`, each without its line end.
-pub fn header_lines(path: &Path) -> Result<Vec<String>, PluginError> {
+pub(crate) fn header_lines(path: &Path) -> Result<Vec<String>, PluginError> {
     let file = std::fs::File::open(path)
         .map_err(|e| PluginError::Init(format!("failed to open {}: {e}", path.display())))?;
     let reader = bgzf::io::Reader::new(BufReader::new(file));
@@ -2262,7 +2793,17 @@ pub fn header_lines(path: &Path) -> Result<Vec<String>, PluginError> {
 ///
 /// `\r` is stripped so a header line ending in CRLF does not leave a carriage
 /// return welded to the final column name.
-pub fn parse_header(path: &Path, start_col: usize) -> Result<Option<Vec<String>>, PluginError> {
+pub(crate) fn parse_header(
+    path: &Path,
+    start_col: usize,
+) -> Result<Option<Vec<String>>, PluginError> {
+    Ok(header_line(path, start_col)?.map(|line| header_names(&line)))
+}
+
+/// The line [`parse_header`] reads the column names from, as the file writes
+/// it: the last of the leading `#` lines or, in a file with none, a first
+/// line whose start cell no integer leads.
+fn header_line(path: &Path, start_col: usize) -> Result<Option<String>, PluginError> {
     let file = std::fs::File::open(path)
         .map_err(|e| PluginError::Init(format!("failed to open {}: {e}", path.display())))?;
     let reader = bgzf::io::Reader::new(BufReader::new(file));
@@ -2284,12 +2825,16 @@ pub fn parse_header(path: &Path, start_col: usize) -> Result<Option<Vec<String>>
         break;
     }
 
-    Ok(last_header_line.map(|line| {
-        let line = line.trim_start_matches('#');
-        line.split('\t')
-            .map(|s| s.trim_end_matches('\r').to_string())
-            .collect()
-    }))
+    Ok(last_header_line)
+}
+
+/// The column names of a header line: its cells less the leading `#` marks
+/// and each cell's trailing `\r`.
+fn header_names(line: &str) -> Vec<String> {
+    line.trim_start_matches('#')
+        .split('\t')
+        .map(|s| s.trim_end_matches('\r').to_string())
+        .collect()
 }
 
 /// True when the tab-separated `line`'s field at `col` leads with an integer,
@@ -2306,17 +2851,20 @@ fn field_leads_with_integer(line: &str, col: usize) -> bool {
 }
 
 /// Allele matching utilities for tabix plugins.
-pub mod allele_match {
+pub(crate) mod allele_match {
     use super::{split_field_count, TabixRecord};
     use crate::perl_format::{numify_arithmetic, perl_number};
     use crate::PluginError;
     use std::borrow::Cow;
+    use vep_core::allele_trim::{self, strip_shared_first_base, CaseRule};
     use vep_core::sv_routing::perl_true;
     use vep_core::variant::InputVariant;
 
+    pub use vep_core::allele_trim::trim_directions;
+
     /// The position a module's numeric comparison reads from the record's start
     /// cell (`$_->{start} == $start`, BayesDel.pm:141, PrimateAI.pm:175-176):
-    /// the cell's number as Perl's `==` numifies it ([`numify_arithmetic`]), 0
+    /// the cell's number as Perl's `==` numifies it (`numify_arithmetic`), 0
     /// where none leads the cell, as a `u64` when it is a whole non-negative
     /// number and `None` otherwise, since a fractional or negative number
     /// equals no variant position. The record's `start` is the cell's leading
@@ -2379,23 +2927,13 @@ pub mod allele_match {
         (ref_str, alt_str, prefix_len as u64)
     }
 
-    /// Check if a tabix record matches a variant by position and allele. The
-    /// file's alleles are on the forward strand, so a record given on the
-    /// reverse strand is compared through its forward-strand alleles
-    /// (`get_matched_variant_alleles`, ensembl-variation Utils/Sequence.pm:1182
-    /// and 1196).
-    pub fn matches_allele(
-        record: &TabixRecord,
-        variant: &InputVariant,
-        ref_col: usize,
-        alt_col: usize,
-    ) -> bool {
-        matched_allele_offset(record, variant, ref_col, alt_col).is_some()
-    }
-
-    /// Like [`matches_allele`] but requires a position match too: the record's
+    /// Whether a tabix record matches a variant by allele and position: the
+    /// record's alleles, trimmed of their shared prefix and suffix
+    /// ([`normalize_alleles`]), equal the variant's in either case, and its
     /// position cell as a module's `==` numifies it ([`perl_position`]), moved
-    /// past the normalized alleles' shared prefix, equals the variant's start.
+    /// past that prefix, equals the variant's start. The file's alleles are on
+    /// the forward strand, so a record given on the reverse strand is compared
+    /// through its forward-strand alleles.
     pub fn matches_allele_with_position(
         record: &TabixRecord,
         variant: &InputVariant,
@@ -2424,7 +2962,8 @@ pub mod allele_match {
 
     impl KeyPosition<'_> {
         /// The position after one more shared base left the alleles' start.
-        pub fn moved(self) -> Self {
+        #[cfg(test)]
+        pub(crate) fn moved(self) -> Self {
             match self {
                 Self::Number(start) => Self::Number(start + 1),
                 Self::Cell { text, moved } => Self::Cell {
@@ -2434,13 +2973,24 @@ pub mod allele_match {
             }
         }
 
-        /// Whether two keys hold the same position text ([`Self::key_text`]);
+        /// The position after `bases` more shared bases left the alleles' start.
+        pub fn moved_by(self, bases: u64) -> Self {
+            match self {
+                Self::Number(start) => Self::Number(start + bases),
+                Self::Cell { text, moved } => Self::Cell {
+                    text,
+                    moved: moved + bases,
+                },
+            }
+        }
+
+        /// Whether two keys hold the same position text (`Self::key_text`);
         /// `==` compares the representation instead. A cell with no base moved
         /// is in the key as its text, equal to a number only as that number's
         /// plain decimal (`30396092`; not `30396092.0`, `+30396092` or
         /// `030396092`). A cell with a base moved was incremented after
         /// `$start + (length($ref) - 1)` (`:971`) numified it, so it is in the
-        /// key as the number Perl's `+` reads from it ([`numify_arithmetic`],
+        /// key as the number Perl's `+` reads from it (`numify_arithmetic`,
         /// `0` where nothing numeric leads the cell) plus the bases moved,
         /// equal to a number when that sum is the number exactly: `30396092.0`
         /// moved once is `30396093`, `30396092.5` is no position.
@@ -2474,7 +3024,7 @@ pub mod allele_match {
     /// (`abc`, `21`, `09`), takes Perl's string increment, each character
     /// stepping within its range and carrying leftwards (`abd`, `22`, `10`,
     /// `Az` to `Ba`, `zz` to `aaa`); any other cell is its number as Perl's
-    /// `+` reads it ([`numify_arithmetic`], `0` where nothing numeric leads
+    /// `+` reads it (`numify_arithmetic`, `0` where nothing numeric leads
     /// the cell) plus one, written as Perl writes a number ([`perl_number`]:
     /// `21.0` is `22`, `42.5` is `43.5`, `6x` is `7`).
     pub fn perl_increment(text: &str) -> String {
@@ -2543,63 +3093,24 @@ pub mod allele_match {
 
     /// An empty allele as Ensembl writes it.
     pub fn dashed(allele: &[u8]) -> Vec<u8> {
-        if allele.is_empty() {
-            b"-".to_vec()
-        } else {
-            allele.to_vec()
-        }
-    }
-
-    /// `_get_trim_directions` (`Utils/Sequence.pm:1250-1258`): whether the pair
-    /// is trimmed from the right first as well.
-    pub fn trim_directions(reference: &[u8], alt: &[u8]) -> &'static [bool] {
-        if reference.len() > 1 || alt.len() > 1 {
-            &[false, true]
-        } else {
-            &[false]
-        }
+        allele_trim::dashed(allele).to_vec()
     }
 
     /// `trim_sequences` (`Utils/Sequence.pm:965-1038`) with empty alleles written
-    /// `-`: shared bases leave both ends while both alleles are Perl-true, each
-    /// base leaving the left moving the start up; the trimmed pair and its start.
+    /// `-`, compared as written ([`allele_trim::trim_sequences`]): the trimmed
+    /// pair and its start, moved up by each base that left the left end.
     pub fn trim_sequences(
         reference: &[u8],
         alt: &[u8],
         start: i64,
         end_first: bool,
     ) -> (Vec<u8>, Vec<u8>, i64) {
-        fn live(allele: &[u8]) -> bool {
-            !allele.is_empty() && allele != b"0"
-        }
-        fn trim_left<'a>(
-            mut reference: &'a [u8],
-            mut alt: &'a [u8],
-            start: &mut i64,
-        ) -> (&'a [u8], &'a [u8]) {
-            while live(reference) && live(alt) && reference[0] == alt[0] {
-                reference = &reference[1..];
-                alt = &alt[1..];
-                *start += 1;
-            }
-            (reference, alt)
-        }
-        fn trim_right<'a>(mut reference: &'a [u8], mut alt: &'a [u8]) -> (&'a [u8], &'a [u8]) {
-            while live(reference) && live(alt) && reference.last() == alt.last() {
-                reference = &reference[..reference.len() - 1];
-                alt = &alt[..alt.len() - 1];
-            }
-            (reference, alt)
-        }
-        let mut start = start;
-        let (reference, alt) = if end_first {
-            let (reference, alt) = trim_right(reference, alt);
-            trim_left(reference, alt, &mut start)
-        } else {
-            let (reference, alt) = trim_left(reference, alt, &mut start);
-            trim_right(reference, alt)
-        };
-        (dashed(reference), dashed(alt), start)
+        let trimmed = allele_trim::trim_sequences(reference, alt, end_first, CaseRule::AsWritten);
+        (
+            trimmed.reference.to_vec(),
+            trimmed.alt.to_vec(),
+            start + trimmed.left as i64,
+        )
     }
 
     /// The minimal forms of a reference and alternate pair at `start`, as
@@ -2653,9 +3164,15 @@ pub mod allele_match {
                 text: cell,
                 moved: 0,
             },
+            CaseRule::EitherCase,
         );
-        let variant_keys = TrimmedKeys::of(&var_ref, &var_alt, KeyPosition::Number(variant.start));
-        file_keys.any_equal(&variant_keys)
+        let variant_keys = TrimmedKeys::of(
+            &var_ref,
+            &var_alt,
+            KeyPosition::Number(variant.start),
+            CaseRule::EitherCase,
+        );
+        file_keys.any_equal(&variant_keys, CaseRule::EitherCase)
     }
 
     /// The row's reference and alternate cells as a module whose `parse_data`
@@ -2688,8 +3205,9 @@ pub mod allele_match {
 
     /// The row as the `parse_data` of gnomADMt (gnomADMt.pm:306-314) and
     /// AlphaMissense (AlphaMissense.pm:293-300) hands it to the match: when its
-    /// alleles differ in length and share their first base, that base goes, an
-    /// emptied allele is written `-`, the record's start moves up one and the
+    /// alleles differ in length and share their first base under `case`, that
+    /// base goes, an allele left empty or as the one-character zero is written
+    /// `-`, the record's start moves up one and the
     /// position cell steps as `$start++` steps a cell nothing has numified
     /// ([`perl_increment`]: `21.0` is `22`, `42.5` is `43.5`, `0100` is `0101`),
     /// the text the match then compares. The trim inside the match then reads
@@ -2701,30 +3219,31 @@ pub mod allele_match {
         pos_col: usize,
         ref_col: usize,
         alt_col: usize,
+        case: CaseRule,
     ) -> Cow<'_, TabixRecord> {
         let (Some(reference), Some(alt)) =
             (record.columns.get(ref_col), record.columns.get(alt_col))
         else {
             return Cow::Borrowed(record);
         };
-        let shared_first_base = match (reference.as_bytes().first(), alt.as_bytes().first()) {
-            (Some(first_ref), Some(first_alt)) => first_ref.eq_ignore_ascii_case(first_alt),
-            _ => false,
-        };
-        if reference.len() == alt.len() || !shared_first_base {
+        let Some((stripped_reference, stripped_alt)) =
+            strip_shared_first_base(reference.as_bytes(), alt.as_bytes(), case)
+        else {
             return Cow::Borrowed(record);
-        }
-        let without_first_base = |allele: &str| match allele.get(1..) {
-            Some(rest) if !rest.is_empty() => rest.to_string(),
-            _ => "-".to_string(),
         };
+        // A first base that is one byte of a longer character leaves no text.
+        let as_cell = |allele: &[u8]| {
+            std::str::from_utf8(allele).map_or_else(|_| "-".to_string(), str::to_string)
+        };
+        let (stripped_reference, stripped_alt) =
+            (as_cell(stripped_reference), as_cell(stripped_alt));
         let mut adjusted = record.clone();
         adjusted.start = adjusted.start.saturating_add(1);
         if let Some(cell) = adjusted.columns.get_mut(pos_col) {
             *cell = perl_increment(cell);
         }
-        adjusted.columns[ref_col] = without_first_base(reference);
-        adjusted.columns[alt_col] = without_first_base(alt);
+        adjusted.columns[ref_col] = stripped_reference;
+        adjusted.columns[alt_col] = stripped_alt;
         Cow::Owned(adjusted)
     }
 
@@ -2784,11 +3303,27 @@ pub mod allele_match {
     }
 
     impl<'a> TrimmedKeys<'a> {
-        fn of(reference: &'a [u8], alternate: &'a [u8], position: KeyPosition<'a>) -> Self {
+        /// The keys of a pair whose shared bases are found under `case`
+        /// ([`allele_trim::trim_sequences`]), the position moved past each base
+        /// that left the alleles' start.
+        fn of(
+            reference: &'a [u8],
+            alternate: &'a [u8],
+            position: KeyPosition<'a>,
+            case: CaseRule,
+        ) -> Self {
+            let key = |end_first: bool| -> TrimmedKey<'a> {
+                let trimmed = allele_trim::trim_sequences(reference, alternate, end_first, case);
+                (
+                    trimmed.reference,
+                    trimmed.alt,
+                    position.moved_by(trimmed.left as u64),
+                )
+            };
+            let mut orders = trim_directions(reference, alternate).iter();
             Self {
-                left_first: trim_alleles(reference, alternate, position, false),
-                right_first: (reference.len() > 1 || alternate.len() > 1)
-                    .then(|| trim_alleles(reference, alternate, position, true)),
+                left_first: key(*orders.next().expect("the left-first order")),
+                right_first: orders.next().map(|end_first| key(*end_first)),
             }
         }
 
@@ -2797,73 +3332,18 @@ pub mod allele_match {
         }
 
         /// Whether a trimming of each side gives the same reference, alternate
-        /// and position, the bases compared in either case.
-        fn any_equal(&self, other: &TrimmedKeys<'_>) -> bool {
+        /// and position, the alleles compared under `case`.
+        fn any_equal(&self, other: &TrimmedKeys<'_>, case: CaseRule) -> bool {
             self.keys().any(|(reference, alternate, position)| {
                 other
                     .keys()
                     .any(|(other_reference, other_alternate, other_position)| {
-                        reference.eq_ignore_ascii_case(other_reference)
-                            && alternate.eq_ignore_ascii_case(other_alternate)
+                        case.same_allele(reference, other_reference)
+                            && case.same_allele(alternate, other_alternate)
                             && position.equals(*other_position)
                     })
             })
         }
-    }
-
-    /// `trim_sequences` (Utils/Sequence.pm:965-1038) on the forward strand: the
-    /// shared leading bases go first and move the position, then the shared
-    /// trailing bases; under `end_first` the trailing bases go first. A base is
-    /// shared when equal in either case, and an allele trimmed to nothing is `-`.
-    fn trim_alleles<'a>(
-        mut reference: &'a [u8],
-        mut alternate: &'a [u8],
-        mut position: KeyPosition<'a>,
-        end_first: bool,
-    ) -> TrimmedKey<'a> {
-        let trim_left =
-            |reference: &mut &'a [u8], alternate: &mut &'a [u8], position: &mut KeyPosition<'a>| {
-                while let (Some((first_ref, rest_ref)), Some((first_alt, rest_alt))) =
-                    (reference.split_first(), alternate.split_first())
-                {
-                    if !first_ref.eq_ignore_ascii_case(first_alt) {
-                        break;
-                    }
-                    *reference = rest_ref;
-                    *alternate = rest_alt;
-                    *position = position.moved();
-                }
-            };
-        let trim_right = |reference: &mut &'a [u8], alternate: &mut &'a [u8]| {
-            while let (Some((last_ref, rest_ref)), Some((last_alt, rest_alt))) =
-                (reference.split_last(), alternate.split_last())
-            {
-                if !last_ref.eq_ignore_ascii_case(last_alt) {
-                    break;
-                }
-                *reference = rest_ref;
-                *alternate = rest_alt;
-            }
-        };
-        if end_first {
-            trim_right(&mut reference, &mut alternate);
-            trim_left(&mut reference, &mut alternate, &mut position);
-        } else {
-            trim_left(&mut reference, &mut alternate, &mut position);
-            trim_right(&mut reference, &mut alternate);
-        }
-        let dash_when_empty = |allele: &'a [u8]| -> &'a [u8] {
-            if allele.is_empty() {
-                b"-"
-            } else {
-                allele
-            }
-        };
-        (
-            dash_when_empty(reference),
-            dash_when_empty(alternate),
-            position,
-        )
     }
 }
 
@@ -2879,6 +3359,8 @@ mod tests {
     /// chromosome 21 at positions `5010000 + 7i`, enough that the row at
     /// 5031749 straddles the boundary between the file's two bgzf blocks).
     /// `limit.tsv.gz` (`-s 1 -b 2 -e 3`) carries a `.tbi` alone.
+    /// `limit_csi.tsv.gz` (`-s 1 -b 2 -e 3`) and `limit_csi_start.tsv.gz`
+    /// (`-s 1 -b 2 -e 2`) are indexed by `tabix -C` and carry a `.csi` alone.
     fn fixture(name: &str) -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("tests/data")
@@ -2934,6 +3416,18 @@ mod tests {
                 columns.join("\t")
             })
             .collect()
+    }
+
+    /// The lines `query_windows` returns for `windows` of chromosome 21, which
+    /// `query_windows_parallel` returns too.
+    fn window_lines(ann: &TabixAnnotator, windows: &[(u64, u64)]) -> Vec<String> {
+        let by_sweep = lines(&ann.query_windows("21", windows).unwrap());
+        assert_eq!(
+            lines(&ann.query_windows_parallel("21", windows).unwrap()),
+            by_sweep,
+            "{windows:?}"
+        );
+        by_sweep
     }
 
     /// Expected lines are the output of `tabix spans.tsv.gz <region>` for each
@@ -3905,8 +4399,8 @@ mod tests {
     }
 
     /// The decompressed bytes of a `.tbi` up to its first reference's bin
-    /// count: the header of `spans.tsv.gz.tbi` (one reference, `21`), then
-    /// `n_bin`.
+    /// count: a header with the format and columns of `spans.tsv.gz.tbi` and
+    /// one reference, `21`, then `n_bin`.
     fn tbi_head(n_bin: i32) -> Vec<u8> {
         let mut bytes = b"TBI\x01".to_vec();
         for value in [1i32, 0, 1, 2, 3, i32::from(b'#'), 0, 3] {
@@ -4104,7 +4598,7 @@ mod tests {
     }
 
     /// A line holding a byte that is not UTF-8 (Latin-1 `é`, 0xE9) is handed
-    /// over as its bytes, as `<$fh>` hands it to a Perl plugin, and the text
+    /// over as its bytes, as `<$fh>` hands it to an Ensembl VEP plugin, and the text
     /// made of it keeps every other byte, writing the one byte as U+FFFD;
     /// valid UTF-8 is kept as it stands.
     #[test]
@@ -4125,9 +4619,9 @@ mod tests {
     }
 
     /// The header readers read a bgzipped file whose preamble holds a byte that
-    /// is not UTF-8 as `tabix -H` prints it: the assembly marker, the last
-    /// preamble line, the column names and the first data row's field are all
-    /// read, the byte written as U+FFFD in the text they return.
+    /// is not UTF-8 as `tabix -H` prints it: the last preamble line, the column
+    /// names and the first data row's field are all read, the byte written as
+    /// U+FFFD in the text they return.
     #[test]
     fn header_readers_read_a_preamble_that_is_not_utf8() {
         let dir = tempfile::tempdir().unwrap();
@@ -4135,10 +4629,6 @@ mod tests {
         write_bgzf(
             &data,
             b"##CADD GRCh38-v1.7 made-up fixtur\xE9\n#Chrom\tPos\tRef\tAlt\tcaf\xE9\n21\t5\tA\tC\t0.5\xE9\n",
-        );
-        assert_eq!(
-            detect_assembly_marker(&data).unwrap(),
-            Some(vep_core::assembly::Assembly::Grch38)
         );
         assert_eq!(
             last_preamble_line(&data).unwrap().as_deref(),
@@ -4192,6 +4682,62 @@ mod tests {
         assert_eq!(
             ann.query("21", 100, 100).unwrap()[0].get("score"),
             Some("0.5")
+        );
+    }
+
+    /// A headerless file whose first row's start cell a minus sign leads has
+    /// no header under [`TabixAnnotator::reading_rows_as_tabix_indexes_them`],
+    /// the reader that takes the row for a record, where a plugin's table
+    /// reads the line as a bare header and drops the row. A bare header whose
+    /// start cell leads no number, and a `#` header whatever that cell holds,
+    /// stay the header for that reader too.
+    #[test]
+    fn a_headerless_files_minus_led_first_row_is_a_row() {
+        use crate::test_fixtures::{write_tabix_fixture, IndexSpec};
+
+        let dir = tempfile::tempdir().unwrap();
+        let first_row = ["21", "-5", "300", "below"];
+        let headerless = write_tabix_fixture(
+            dir.path(),
+            "headerless.tsv.gz",
+            &["21\t-5\t300\tbelow", "21\t100\t100\tp100"],
+            IndexSpec::standard().with_span_cols(1, 2, 3),
+        );
+        assert_eq!(parse_header(&headerless, 1).unwrap().unwrap(), first_row);
+        let table = open(headerless.clone(), Some(2));
+        assert_eq!(table.header().unwrap(), first_row);
+        assert!(table.query("21", 1, 1).unwrap().is_empty());
+
+        let as_tabix = open(headerless, Some(2)).reading_rows_as_tabix_indexes_them();
+        assert!(as_tabix.header().is_none());
+        let at_first_base = as_tabix.query("21", 1, 1).unwrap();
+        assert_eq!(lines(&at_first_base), ["21\t-5\t300\tbelow"]);
+        assert!(at_first_base[0].header.is_none());
+
+        let bare = write_tabix_fixture(
+            dir.path(),
+            "bare.tsv.gz",
+            &["chr\tstart\tend\tname", "21\t-5\t300\tbelow"],
+            IndexSpec::standard().with_span_cols(1, 2, 3).bare_header(),
+        );
+        let as_tabix = open(bare, Some(2)).reading_rows_as_tabix_indexes_them();
+        assert_eq!(as_tabix.header().unwrap(), ["chr", "start", "end", "name"]);
+        assert_eq!(
+            as_tabix.query("21", 1, 1).unwrap()[0].get("name"),
+            Some("below")
+        );
+
+        let hashed = write_tabix_fixture(
+            dir.path(),
+            "hashed.tsv.gz",
+            &["#chr\t-1\tend\tname", "21\t-5\t300\tbelow"],
+            IndexSpec::standard().with_span_cols(1, 2, 3),
+        );
+        let as_tabix = open(hashed, Some(2)).reading_rows_as_tabix_indexes_them();
+        assert_eq!(as_tabix.header().unwrap(), ["chr", "-1", "end", "name"]);
+        assert_eq!(
+            as_tabix.query("21", 1, 1).unwrap()[0].get("name"),
+            Some("below")
         );
     }
 
@@ -5202,6 +5748,28 @@ mod tests {
             ["21\t1000\t2000\tordinary"]
         );
         assert_eq!(lines(batch.lookup("21", last, last)), at_last);
+        // Each region as a window: a span index answers a window as `query`
+        // answers its region.
+        assert_eq!(window_lines(&ann, &[(last, last)]), at_last);
+        assert_eq!(
+            window_lines(&ann, &[(last - 1, last - 1)]),
+            [one_short, at_last[0]]
+        );
+        assert_eq!(window_lines(&ann, &[(last, 600_000_000)]), at_last);
+        assert_eq!(
+            window_lines(&ann, &[(1_500, 600_000_000)]),
+            [
+                "21\t1000\t2000\tordinary",
+                one_short,
+                at_last[0],
+                at_last[1]
+            ]
+        );
+        assert!(window_lines(&ann, &[(last + 1, last + 1)]).is_empty());
+        assert_eq!(
+            window_lines(&ann, &[(1_500, 1_500), (last, last)]),
+            ["21\t1000\t2000\tordinary", at_last[0], at_last[1]]
+        );
     }
 
     /// `limit_csi.tsv.gz`, written by `bgzip --binary` and indexed by
@@ -5249,6 +5817,80 @@ mod tests {
             ["21\t1000\t2000\tordinary"]
         );
         assert_eq!(lines(batch.lookup("21", last, last)), at_last);
+        // Each region as a window: a span index answers a window as `query`
+        // answers its region.
+        assert_eq!(window_lines(&ann, &[(last, last)]), at_last);
+        assert_eq!(
+            window_lines(&ann, &[(last - 1, last - 1)]),
+            [one_short, at_last[0]]
+        );
+        assert_eq!(window_lines(&ann, &[(last, 300_000_000_000)]), at_last);
+        assert_eq!(
+            window_lines(&ann, &[(1_500, 300_000_000_000)]),
+            [
+                "21\t1000\t2000\tordinary",
+                one_short,
+                at_last[0],
+                at_last[1]
+            ]
+        );
+        assert!(window_lines(&ann, &[(last + 1, last + 1)]).is_empty());
+        assert_eq!(
+            window_lines(&ann, &[(1_500, 1_500), (last, last)]),
+            ["21\t1000\t2000\tordinary", at_last[0], at_last[1]]
+        );
+    }
+
+    /// `limit_csi_start.tsv.gz`, written by `bgzip --binary` and indexed by
+    /// `tabix -C -s 1 -b 2 -e 2`, holds two rows at 2^38, the last position
+    /// that `.csi` holds (`min_shift` 14, depth 8), one a base short of it and
+    /// one at 1000. An index on the start column alone takes `query_windows`
+    /// past the window-by-window answer of a span index, to the read of a
+    /// batch in one pass. Expected lines are the output of
+    /// `tabix limit_csi_start.tsv.gz <region>` for the region of each window,
+    /// in window order. The index lookup takes no bound past 2^38 - 1, so
+    /// `query` answers a cluster of windows that reaches 2^38 and the sweep a
+    /// cluster short of it.
+    #[test]
+    fn query_windows_reads_the_last_position_a_csi_holds_in_one_pass() {
+        let dir = tempfile::tempdir().unwrap();
+        let limit = fixture_with_index(dir.path(), "limit_csi_start.tsv.gz", "csi");
+        let ann = open(limit, None);
+        assert_eq!((ann.index.min_shift(), ann.index.depth()), (14, 8));
+        let last: u64 = 1 << 38;
+        let one_short = "21\t274877906943\tone_short";
+        let at_last = [
+            "21\t274877906944\tat_limit",
+            "21\t274877906944\talso_at_limit",
+        ];
+        let lookup = |position: u64| {
+            let position = Position::try_from(position as usize).unwrap();
+            ann.index.query(0, (position..=position).into())
+        };
+        assert!(lookup(last - 1).is_ok());
+        assert!(lookup(last).is_err());
+
+        assert_eq!(window_lines(&ann, &[(last, last)]), at_last);
+        assert_eq!(window_lines(&ann, &[(last - 1, last - 1)]), [one_short]);
+        assert_eq!(window_lines(&ann, &[(last, 300_000_000_000)]), at_last);
+        assert_eq!(
+            window_lines(&ann, &[(1_500, 300_000_000_000)]),
+            [one_short, at_last[0], at_last[1]]
+        );
+        assert!(window_lines(&ann, &[(last + 1, last + 1)]).is_empty());
+        // One batch of two clusters, the second reaching 2^38 and past it.
+        assert_eq!(
+            window_lines(
+                &ann,
+                &[
+                    (1_000, 1_000),
+                    (last - 1, last - 1),
+                    (last, last),
+                    (last + 1, last + 10)
+                ]
+            ),
+            ["21\t1000\tordinary", one_short, at_last[0], at_last[1]]
+        );
     }
 
     /// A query answered from two chunks returns every record of both, each
@@ -5626,9 +6268,10 @@ mod tests {
     }
 
     /// On GRCh37 `MT` and `chrMT` name the assembly's mitochondrial sequence
-    /// and `chrM` and `M` another one, so a mitochondrial name is tried as
-    /// `BaseVepTabixPlugin.pm:693-708` tries it, inside its pair; every other
-    /// name, GRCh38 and a run without an assembly keep every spelling.
+    /// and `chrM` and `M` another one, so the names tried with no check of
+    /// the table's rows are those `BaseVepTabixPlugin.pm:693-708` tries,
+    /// inside the name's pair; every other name, GRCh38 and a run without an
+    /// assembly keep every spelling.
     #[test]
     fn a_mitochondrial_name_stays_in_its_pair_on_grch37() {
         let grch37 = Some(Assembly::Grch37);
@@ -5667,8 +6310,9 @@ mod tests {
     }
 
     /// A mitochondrial record on GRCh37 is named to its table by its own
-    /// spelling (`$vf->{chr}`); every other record, and every record on GRCh38
-    /// or without an assembly, by the cache's name of its contig.
+    /// spelling (`$vf->{chr}`), which says which pair of names it is of; every
+    /// other record, and every record on GRCh38 or without an assembly, by the
+    /// cache's name of its contig.
     #[test]
     fn table_contig_is_the_records_own_spelling_for_a_mitochondrial_record_on_grch37() {
         let record = |spelling: &str| {
@@ -5686,6 +6330,519 @@ mod tests {
             }
         }
         assert_eq!(table_contig(&record("chr21"), Some(Assembly::Grch37)), "21");
+    }
+
+    use crate::test_fixtures::{made_up_alternate, made_up_reference, made_up_rows, repeated_base};
+
+    /// A made-up five-column table naming its one contig `contig`, with one
+    /// row at each of `positions` ([`made_up_rows`]).
+    fn made_up_table(
+        dir: &Path,
+        name: &str,
+        contig: &str,
+        bases: &[u8],
+        positions: impl Iterator<Item = usize>,
+        offset: usize,
+    ) -> PathBuf {
+        use crate::test_fixtures::{write_tabix_fixture, IndexSpec};
+        let mut lines = vec!["#chr\tpos\tref\talt\tscore".to_string()];
+        lines.extend(made_up_rows(
+            contig,
+            bases,
+            positions,
+            offset,
+            |contig, position, reference, alt| {
+                format!("{contig}\t{position}\t{reference}\t{alt}\t0.{position}")
+            },
+        ));
+        write_tabix_fixture(dir, name, &lines, IndexSpec::standard())
+    }
+
+    fn allele_config(file_path: PathBuf) -> TabixConfig {
+        TabixConfig {
+            file_path,
+            chr_col: 0,
+            start_col: 1,
+            end_col: None,
+            ref_col: Some(2),
+            alt_col: Some(3),
+            zero_based: false,
+        }
+    }
+
+    /// The table at `path` opened on GRCh37 with the made-up `reference`.
+    fn on_grch37(path: &Path, reference: Option<&Arc<vep_fasta::IndexedFasta>>) -> TabixAnnotator {
+        let mut table = TabixAnnotator::open(allele_config(path.to_path_buf()))
+            .unwrap()
+            .on_assembly(Some(Assembly::Grch37));
+        table.frame_mut().set_reference(reference.cloned());
+        table
+    }
+
+    /// On GRCh37 a contig the table names under the other pair of names than
+    /// the record's is read once the table's rows are found to state the
+    /// reference bases at their own positions: a record on `MT` or `chrMT`
+    /// reads a table naming `chrM` or `M`, and a record on `chrM` or `M` one
+    /// naming `MT` or `chrMT`.
+    #[test]
+    fn on_grch37_a_table_under_the_other_pair_is_read_when_its_rows_state_the_reference() {
+        let dir = tempfile::tempdir().unwrap();
+        let (reference, bases) = made_up_reference(dir.path(), 1600);
+        for (contig, records) in [
+            ("chrM", ["MT", "chrMT"]),
+            ("M", ["MT", "chrMT"]),
+            ("MT", ["chrM", "M"]),
+            ("chrMT", ["chrM", "M"]),
+        ] {
+            let path = made_up_table(
+                dir.path(),
+                &format!("stating_{contig}_synthetic.tsv.gz"),
+                contig,
+                &bases,
+                (13..1590).step_by(13),
+                0,
+            );
+            let table = on_grch37(&path, Some(&reference));
+            for record in records {
+                let rows = table.query(record, 130, 130).unwrap();
+                assert_eq!(rows.len(), 1, "record {record}, table {contig}");
+                assert_eq!(rows[0].chr, contig);
+                assert_eq!(rows[0].columns[4], "0.130");
+                assert!(table.holds_chromosome(record), "{record} against {contig}");
+                assert_eq!(table.query_windows(record, &[(130, 130)]).unwrap().len(), 1);
+                assert_eq!(
+                    table
+                        .query_batch(&[(record, 130, 130)])
+                        .unwrap()
+                        .lookup(record, 130, 130)
+                        .len(),
+                    1
+                );
+            }
+        }
+    }
+
+    /// A table whose rows state the bases one position on counts on another
+    /// sequence: on GRCh37 no row of it is read for a record of the other
+    /// pair of names, the row included whose alleles are the record's because
+    /// the reference repeats its base there. A record of the table's own pair
+    /// reads it, as `BaseVepTabixPlugin.pm:693-708` does.
+    #[test]
+    fn on_grch37_a_table_one_position_on_is_not_read_across_the_pairs() {
+        let dir = tempfile::tempdir().unwrap();
+        let (reference, bases) = made_up_reference(dir.path(), 1600);
+        let repeated = repeated_base(&bases, 100);
+        let path = made_up_table(
+            dir.path(),
+            "one_position_on_synthetic.tsv.gz",
+            "chrM",
+            &bases,
+            10..1590,
+            1,
+        );
+        let table = on_grch37(&path, Some(&reference));
+        for record in ["MT", "chrMT"] {
+            for position in [130, repeated as u64] {
+                assert!(
+                    table.query(record, position, position).unwrap().is_empty(),
+                    "record {record} at {position}"
+                );
+            }
+            assert!(!table.holds_chromosome(record));
+        }
+        for record in ["chrM", "M"] {
+            let rows = table
+                .query(record, repeated as u64, repeated as u64)
+                .unwrap();
+            assert_eq!(rows.len(), 1, "record {record}");
+            assert_eq!(rows[0].columns[2].as_bytes(), [bases[repeated - 1]]);
+        }
+    }
+
+    /// The check takes more than rows that agree: a table of rows at fewer
+    /// than eight positions is not read across the pairs though each of its
+    /// rows states the reference, a row past the end of the reference
+    /// sequence refuses a table whose other rows state it, and one row that
+    /// states another base refuses a table.
+    #[test]
+    fn on_grch37_a_few_agreeing_rows_do_not_pass_and_one_row_of_another_sequence_refuses() {
+        let dir = tempfile::tempdir().unwrap();
+        let (reference, bases) = made_up_reference(dir.path(), 1600);
+        let read = |name: &str, lines: Vec<String>| {
+            use crate::test_fixtures::{write_tabix_fixture, IndexSpec};
+            let path = write_tabix_fixture(dir.path(), name, &lines, IndexSpec::standard());
+            let table = on_grch37(&path, Some(&reference));
+            table.query("MT", 130, 130).unwrap().len()
+        };
+        let row = |position: usize, offset: usize| {
+            let reference = bases[position - 1 + offset];
+            format!(
+                "chrM\t{position}\t{}\t{}\t0.{position}",
+                reference as char,
+                made_up_alternate(reference) as char
+            )
+        };
+        let header = "#chr\tpos\tref\talt\tscore".to_string();
+
+        let seven: Vec<String> = std::iter::once(header.clone())
+            .chain((0..7).map(|i| row(130 + 100 * i, 0)))
+            .collect();
+        assert_eq!(read("seven_positions_synthetic.tsv.gz", seven), 0);
+
+        let eight: Vec<String> = std::iter::once(header.clone())
+            .chain((0..8).map(|i| row(130 + 100 * i, 0)))
+            .collect();
+        assert_eq!(read("eight_positions_synthetic.tsv.gz", eight), 1);
+
+        let mut past_the_end: Vec<String> = std::iter::once(header.clone())
+            .chain((13..1590).step_by(13).map(|position| row(position, 0)))
+            .collect();
+        past_the_end.push("chrM\t1601\tA\tC\t0.1601".to_string());
+        assert_eq!(read("past_the_end_synthetic.tsv.gz", past_the_end), 0);
+
+        let one_other_base: Vec<String> = std::iter::once(header)
+            .chain((13..1590).step_by(13).map(|position| {
+                if position == 650 {
+                    let stated = made_up_alternate(bases[position - 1]);
+                    format!("chrM\t{position}\t{}\tN\t0.{position}", stated as char)
+                } else {
+                    row(position, 0)
+                }
+            }))
+            .collect();
+        assert_eq!(read("one_other_base_synthetic.tsv.gz", one_other_base), 0);
+    }
+
+    /// A row is one position however often the check reads it: a table of
+    /// rows at seven positions, one of them a span that reaches past the end
+    /// of the reference sequence and is read again there, is not read across
+    /// the pairs though each of its rows states the reference.
+    #[test]
+    fn on_grch37_a_span_read_again_past_the_end_is_one_position() {
+        use crate::test_fixtures::{write_tabix_fixture, IndexSpec};
+        let dir = tempfile::tempdir().unwrap();
+        let (reference, bases) = made_up_reference(dir.path(), 1600);
+        let mut lines = vec!["#chr\tpos\tend\tref\talt\tscore".to_string()];
+        lines.extend((0..7).map(|i| {
+            let position = 130 + 100 * i;
+            let end = if i == 5 { 1700 } else { position };
+            let reference = bases[position - 1];
+            format!(
+                "chrM\t{position}\t{end}\t{}\t{}\t0.{position}",
+                reference as char,
+                made_up_alternate(reference) as char
+            )
+        }));
+        let path = write_tabix_fixture(
+            dir.path(),
+            "seven_positions_one_span_synthetic.tsv.gz",
+            &lines,
+            IndexSpec::standard().with_span_cols(1, 2, 3),
+        );
+        let mut table = TabixAnnotator::open(config(path, Some(2)))
+            .unwrap()
+            .on_assembly(Some(Assembly::Grch37));
+        table.frame_mut().set_reference(Some(reference));
+        table.frame_mut().set_allele_column(Some(3));
+        assert!(table.query("MT", 130, 130).unwrap().is_empty());
+        assert_eq!(table.query("chrM", 130, 130).unwrap().len(), 1);
+    }
+
+    /// Without a reference sequence the comparison cannot be made: on GRCh37
+    /// the table is read under the record's own pair alone, as
+    /// `BaseVepTabixPlugin.pm:693-708` reads it, and one warning names the
+    /// table, however many records ask.
+    #[test]
+    fn without_a_reference_sequence_the_pairs_stay_apart_and_one_warning_names_the_table() {
+        use crate::test_fixtures::Warnings;
+        let dir = tempfile::tempdir().unwrap();
+        let (_, bases) = made_up_reference(dir.path(), 1600);
+        let path = made_up_table(
+            dir.path(),
+            "no_reference_synthetic.tsv.gz",
+            "chrM",
+            &bases,
+            (13..1590).step_by(13),
+            0,
+        );
+        let table = on_grch37(&path, None);
+        let warnings = Arc::new(Warnings::default());
+        tracing::subscriber::with_default(Arc::clone(&warnings), || {
+            for record in ["MT", "chrMT", "MT"] {
+                assert!(
+                    table.query(record, 130, 130).unwrap().is_empty(),
+                    "{record}"
+                );
+            }
+            assert_eq!(table.query("chrM", 130, 130).unwrap().len(), 1);
+            assert_eq!(table.query("M", 130, 130).unwrap().len(), 1);
+        });
+        let warnings = warnings.0.lock().unwrap();
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert_eq!(
+            warnings[0],
+            format!(
+                "{}: its contig chrM is not read for a mitochondrial record written MT or \
+                 chrMT: on GRCh37 the names MT and chrMT are one sequence and chrM and M \
+                 another, and the table's rows could not be compared with the reference \
+                 sequence (no reference sequence was given; pass --fasta)",
+                path.display()
+            )
+        );
+    }
+
+    /// A reference that holds its mitochondrial sequence as `chrM` at another
+    /// length than the assembly's holds the other naming's sequence: a table
+    /// whose rows state its bases is not read for a record on `MT`, and the
+    /// warning says why.
+    #[test]
+    fn a_reference_of_the_other_naming_and_length_is_not_compared_with() {
+        use crate::test_fixtures::{made_up_reference_named, Warnings};
+        let dir = tempfile::tempdir().unwrap();
+        let (reference, bases) = made_up_reference_named(dir.path(), "chrM", 1600);
+        assert_eq!(reference.record_name("MT"), Some("chrM"));
+        let path = made_up_table(
+            dir.path(),
+            "other_naming_synthetic.tsv.gz",
+            "chrM",
+            &bases,
+            (13..1590).step_by(13),
+            0,
+        );
+        let table = on_grch37(&path, Some(&reference));
+        let warnings = Arc::new(Warnings::default());
+        tracing::subscriber::with_default(Arc::clone(&warnings), || {
+            assert!(table.query("MT", 130, 130).unwrap().is_empty());
+            assert_eq!(table.query("chrM", 130, 130).unwrap().len(), 1);
+        });
+        let warnings = warnings.0.lock().unwrap();
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(
+            warnings[0].ends_with(
+                "(the reference sequence holds its mitochondrial sequence under the other pair \
+                 of names, at another length than the assembly's)"
+            ),
+            "{}",
+            warnings[0]
+        );
+    }
+
+    /// A reader told to keep to the record's own pair reads no contig of the
+    /// other pair on GRCh37 though its rows state the reference, and warns of
+    /// nothing; on GRCh38 it reads every spelling.
+    #[test]
+    fn a_reader_kept_to_the_own_pair_makes_no_comparison() {
+        use crate::test_fixtures::Warnings;
+        let dir = tempfile::tempdir().unwrap();
+        let (reference, bases) = made_up_reference(dir.path(), 1600);
+        let path = made_up_table(
+            dir.path(),
+            "own_pair_alone_synthetic.tsv.gz",
+            "M",
+            &bases,
+            (13..1590).step_by(13),
+            0,
+        );
+        let warnings = Arc::new(Warnings::default());
+        tracing::subscriber::with_default(Arc::clone(&warnings), || {
+            let mut table = on_grch37(&path, Some(&reference));
+            table.frame_mut().keep_to_own_pair();
+            assert!(table.query("MT", 130, 130).unwrap().is_empty());
+            assert!(table.query("chrMT", 130, 130).unwrap().is_empty());
+            assert_eq!(table.query("chrM", 130, 130).unwrap().len(), 1);
+            let mut table = TabixAnnotator::open(allele_config(path.clone()))
+                .unwrap()
+                .on_assembly(Some(Assembly::Grch38));
+            table.frame_mut().keep_to_own_pair();
+            assert_eq!(table.query("MT", 130, 130).unwrap().len(), 1);
+        });
+        assert!(warnings.0.lock().unwrap().is_empty());
+    }
+
+    /// A table with no reference-allele column states no base to compare: on
+    /// GRCh37 it is read under the record's own pair alone, with or without a
+    /// reference sequence, and one warning names the table and the reason.
+    #[test]
+    fn a_table_with_no_reference_column_stays_in_the_records_pair() {
+        use crate::test_fixtures::Warnings;
+        let dir = tempfile::tempdir().unwrap();
+        let (reference, bases) = made_up_reference(dir.path(), 1600);
+        let path = made_up_table(
+            dir.path(),
+            "no_allele_column_synthetic.tsv.gz",
+            "chrM",
+            &bases,
+            (13..1590).step_by(13),
+            0,
+        );
+        let mut table = TabixAnnotator::open(config(path.clone(), None))
+            .unwrap()
+            .on_assembly(Some(Assembly::Grch37));
+        table.frame_mut().set_reference(Some(reference));
+        let warnings = Arc::new(Warnings::default());
+        tracing::subscriber::with_default(Arc::clone(&warnings), || {
+            assert!(table.query("MT", 130, 130).unwrap().is_empty());
+            assert!(table.query("MT", 143, 143).unwrap().is_empty());
+            assert_eq!(table.query("chrM", 130, 130).unwrap().len(), 1);
+        });
+        let warnings = warnings.0.lock().unwrap();
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(
+            warnings[0].starts_with(&format!("{}: its contig chrM is not read", path.display()))
+                && warnings[0].ends_with("(the table has no reference-allele column)"),
+            "{}",
+            warnings[0]
+        );
+    }
+
+    /// On GRCh38, and in a run without an assembly, the four names are one
+    /// sequence: a record, named there by the cache's `MT` whatever its own
+    /// spelling ([`table_contig`]), reads every spelling of the table with no
+    /// comparison made, a table one position on included, and no reference
+    /// sequence is asked for.
+    #[test]
+    fn off_grch37_every_spelling_is_read_as_before() {
+        use crate::test_fixtures::Warnings;
+        let dir = tempfile::tempdir().unwrap();
+        let (_, bases) = made_up_reference(dir.path(), 1600);
+        let warnings = Arc::new(Warnings::default());
+        tracing::subscriber::with_default(Arc::clone(&warnings), || {
+            for contig in ["MT", "chrMT", "M", "chrM"] {
+                let path = made_up_table(
+                    dir.path(),
+                    &format!("one_position_on_{contig}_synthetic.tsv.gz"),
+                    contig,
+                    &bases,
+                    10..1590,
+                    1,
+                );
+                for assembly in [Some(Assembly::Grch38), None] {
+                    let table = TabixAnnotator::open(allele_config(path.clone()))
+                        .unwrap()
+                        .on_assembly(assembly);
+                    for spelling in ["MT", "chrMT", "M", "chrM"] {
+                        let record = InputVariant::new(
+                            spelling.into(),
+                            130,
+                            130,
+                            vec![bases[130]],
+                            b"N".to_vec(),
+                        );
+                        assert_eq!(
+                            table
+                                .query(table_contig(&record, assembly), 130, 130)
+                                .unwrap()
+                                .len(),
+                            1,
+                            "record {spelling}, table {contig}, {assembly:?}"
+                        );
+                    }
+                }
+            }
+        });
+        assert!(warnings.0.lock().unwrap().is_empty());
+    }
+
+    /// The store built from a table gets the table's verdict, since it holds
+    /// the table's rows: on GRCh37 it is read across the pairs when its rows
+    /// state the reference and not when they state the bases one position on.
+    #[test]
+    fn on_grch37_a_store_is_read_across_the_pairs_as_its_table_is() {
+        use crate::annotation_store::{open_backend, AnnotationStore, Backend};
+        use crate::binary_store::{BinaryStoreWriter, ContentIdentity};
+        let dir = tempfile::tempdir().unwrap();
+        let (reference, bases) = made_up_reference(dir.path(), 1600);
+        for (name, offset, read) in [("stating", 0, 1), ("one_on", 1, 0)] {
+            let path = made_up_table(
+                dir.path(),
+                &format!("{name}_store_synthetic.tsv.gz"),
+                "chrM",
+                &bases,
+                10..1590,
+                offset,
+            );
+            let table = on_grch37(&path, Some(&reference));
+            let rows = table.query("chrM", 1, 1600).unwrap();
+            let header: Vec<String> = table.header().unwrap().to_vec();
+            let rows: Vec<TabixRecord> = rows
+                .into_iter()
+                .map(|mut row| {
+                    row.columns[0] = "chrM".to_string();
+                    row
+                })
+                .collect();
+            BinaryStoreWriter::new(dir.path().join(format!("{name}_store_synthetic.tsv.vpd")))
+                .write(
+                    &header,
+                    &[("chrM".to_string(), rows)],
+                    &allele_config(path.clone()),
+                    &ContentIdentity::of_file(&path).unwrap(),
+                )
+                .unwrap();
+            let backend = open_backend(
+                &path,
+                allele_config(path.clone()),
+                Some(Assembly::Grch37),
+                |table| table,
+            )
+            .unwrap();
+            let Backend::Store(mut store) = backend else {
+                panic!("{name}: the store beside the table was not opened");
+            };
+            store.set_reference_fasta(Some(Arc::clone(&reference)));
+            assert_eq!(store.query("MT", 130, 130).unwrap().len(), read, "{name}");
+            assert_eq!(
+                store
+                    .query_batch(&[("chrMT", 130, 130)])
+                    .unwrap()
+                    .lookup("chrMT", 130, 130)
+                    .len(),
+                read,
+                "{name}"
+            );
+            assert_eq!(store.query("chrM", 130, 130).unwrap().len(), 1, "{name}");
+            assert_eq!(table.query("MT", 130, 130).unwrap().len(), read, "{name}");
+        }
+    }
+
+    /// The names a mitochondrial record's rows are asked under on GRCh37: its
+    /// own pair first, then the other pair, marked as read only after the
+    /// check; a name a plugin's module gives every such record leads.
+    #[test]
+    fn on_grch37_the_other_pair_follows_the_records_own_and_a_modules_name_leads() {
+        let names = |chr: &str, first: Option<&str>| -> Vec<(String, bool)> {
+            grch37_mitochondrial_candidates(chr, first)
+        };
+        let listed = |pairs: &[(&str, bool)]| -> Vec<(String, bool)> {
+            pairs
+                .iter()
+                .map(|(name, crosses)| (name.to_string(), *crosses))
+                .collect()
+        };
+        assert_eq!(
+            names("MT", None),
+            listed(&[("MT", false), ("chrMT", false), ("M", true), ("chrM", true)])
+        );
+        assert_eq!(
+            names("chrMT", None),
+            listed(&[("chrMT", false), ("MT", false), ("chrM", true), ("M", true)])
+        );
+        assert_eq!(
+            names("chrM", None),
+            listed(&[("chrM", false), ("M", false), ("chrMT", true), ("MT", true)])
+        );
+        assert_eq!(
+            names("M", None),
+            listed(&[("M", false), ("chrM", false), ("MT", true), ("chrMT", true)])
+        );
+        assert_eq!(
+            names("MT", Some("M")),
+            listed(&[("M", true), ("chrM", true), ("MT", false), ("chrMT", false)])
+        );
+        assert_eq!(
+            names("chrM", Some("M")),
+            listed(&[("M", false), ("chrM", false), ("chrMT", true), ("MT", true)])
+        );
     }
 
     #[test]
@@ -5716,7 +6873,7 @@ mod tests {
     /// A record given on the reverse strand is matched through its forward-strand
     /// alleles, as `get_matched_variant_alleles` reverse-complements them
     /// (Utils/Sequence.pm:1182, 1196): `T/C` on strand -1 matches the file's `A G`
-    /// row and not its `T C` row, by allele and by allele with position alike.
+    /// row and not its `T C` row.
     #[test]
     fn reverse_strand_record_matches_the_complemented_file_row() {
         use vep_core::coordinate::Strand;
@@ -5729,13 +6886,6 @@ mod tests {
         };
         let mut reverse = InputVariant::new("21".into(), 100, 100, b"T".to_vec(), b"C".to_vec());
         reverse.strand = Strand::Reverse;
-        assert!(allele_match::matches_allele(&row("A", "G"), &reverse, 2, 3));
-        assert!(!allele_match::matches_allele(
-            &row("T", "C"),
-            &reverse,
-            2,
-            3
-        ));
         assert!(allele_match::matches_allele_with_position(
             &row("A", "G"),
             &reverse,
@@ -5750,6 +6900,68 @@ mod tests {
             2,
             3
         ));
+    }
+
+    /// A row whose allele cells are written in lower case matches the record it
+    /// describes, whose alleles the parser upper-cases: the shared bases are
+    /// found and the trimmed alleles compared in either letter case, where
+    /// Ensembl VEP's key is compared as written (Utils/Sequence.pm:1207, 1232;
+    /// the documented class `tabix_allele_case_insensitive_match`). A row in
+    /// mixed case loses the bases it shares as letters.
+    #[test]
+    fn matched_variant_alleles_reads_a_row_in_either_letter_case() {
+        let row = |start: u64, reference: &str, alt: &str| TabixRecord {
+            chr: "21".to_string(),
+            start,
+            end: start + reference.len() as u64 - 1,
+            columns: vec!["21".into(), start.to_string(), reference.into(), alt.into()],
+            header: None,
+        };
+        let substitution = InputVariant::new("21".into(), 100, 100, b"G".to_vec(), b"A".to_vec());
+        for (reference, alt) in [("g", "a"), ("G", "a"), ("g", "A"), ("G", "A")] {
+            assert!(
+                allele_match::matched_variant_alleles(
+                    &row(100, reference, alt),
+                    &substitution,
+                    1,
+                    2,
+                    3
+                ),
+                "{reference}/{alt}"
+            );
+            assert_eq!(
+                allele_match::matched_or_undefined(
+                    &row(100, reference, alt),
+                    &substitution,
+                    1,
+                    2,
+                    3
+                ),
+                Some(true),
+                "{reference}/{alt}"
+            );
+        }
+        assert!(!allele_match::matched_variant_alleles(
+            &row(100, "g", "t"),
+            &substitution,
+            1,
+            2,
+            3
+        ));
+
+        let insertion = InputVariant::new("21".into(), 101, 100, b"-".to_vec(), b"AT".to_vec());
+        for (reference, alt) in [("g", "gat"), ("G", "gat"), ("g", "GAT")] {
+            assert!(
+                allele_match::matched_variant_alleles(
+                    &row(100, reference, alt),
+                    &insertion,
+                    1,
+                    2,
+                    3
+                ),
+                "{reference}/{alt}"
+            );
+        }
     }
 
     /// `get_matched_variant_alleles` trims the variant's alleles as well as the
@@ -6074,6 +7286,126 @@ mod tests {
             resolve_indexed_position_column(&orphan, &header, "grch38_pos").unwrap(),
             2
         );
+
+        // The check alone, for a plugin that resolves the column by its own
+        // rule: the answer names the index's sequence-name column where the
+        // index agrees and its start column where it does not.
+        assert_eq!(
+            indexed_position(&on_col2, 1).unwrap(),
+            IndexedPosition::Agrees { sequence_column: 0 }
+        );
+        assert_eq!(
+            indexed_position(&on_col2, 2).unwrap(),
+            IndexedPosition::Disagrees { indexed_column: 1 }
+        );
+        assert_eq!(
+            indexed_position(&orphan, 2).unwrap(),
+            IndexedPosition::Unchecked
+        );
+    }
+
+    /// A row whose start cell is a digit string at 2^63 - 1, 2^63 or 2^64 - 1
+    /// starts past the last position a `.tbi` holds, so no read takes it for
+    /// a row of the file's order: the per-window query, the sweep and the
+    /// block read, on one thread, on four and in slices of one block, each
+    /// pass over it and return the sound rows on both sides of it, whether
+    /// the row after it shares its block, opens the next block or lies in
+    /// another tile. `tabix` (htslib 1.9) indexes such a row only where it
+    /// opens its chromosome, and prints the rows after it for every region
+    /// that holds them: the last layout.
+    #[test]
+    fn sound_rows_read_alike_beside_a_start_at_the_integer_limit() {
+        type Layout = (Vec<String>, usize, Vec<(u64, u64)>, &'static [&'static str]);
+        let position = |block: u64| bgzf::VirtualPosition::try_from((block, 0)).unwrap();
+        let names = |records: Vec<TabixRecord>| -> Vec<String> {
+            records
+                .into_iter()
+                .map(|record| record.columns[2].clone())
+                .collect()
+        };
+        let pool = |threads: usize| {
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(threads)
+                .build()
+                .unwrap()
+        };
+        let before = "21\t100\tb1\n21\t200\tb2\n21\t300\tb3\n";
+        for limit in [i64::MAX as u64, 1 << 63, u64::MAX] {
+            let limit_row = format!("21\t{limit}\tlimit\n");
+            // The blocks of each file, the block the tile of 40000 opens with,
+            // the windows asked for and the rows they hold.
+            let layouts: [Layout; 3] = [
+                (
+                    vec![
+                        format!("{before}{limit_row}21\t400\ta1\n"),
+                        "21\t500\ta2\n21\t600\ta3\n".to_string(),
+                    ],
+                    0,
+                    vec![(100, 100), (200, 300), (400, 400), (500, 600)],
+                    &["b1", "b2", "b3", "a1", "a2", "a3"],
+                ),
+                (
+                    vec![
+                        format!("{before}{limit_row}"),
+                        "21\t40000\ta1\n21\t40100\ta2\n21\t40200\ta3\n".to_string(),
+                    ],
+                    1,
+                    vec![(100, 300), (40_000, 40_200)],
+                    &["b1", "b2", "b3", "a1", "a2", "a3"],
+                ),
+                (
+                    vec![format!(
+                        "{limit_row}21\t400\ta1\n21\t500\ta2\n21\t600\ta3\n"
+                    )],
+                    0,
+                    vec![(400, 400), (500, 600)],
+                    &["a1", "a2", "a3"],
+                ),
+            ];
+            for (blocks, far_tile_block, windows, sound) in layouts {
+                let dir = tempfile::tempdir().unwrap();
+                let data = dir.path().join("limit_row.tsv.gz");
+                let blocks: Vec<&[u8]> = blocks.iter().map(String::as_bytes).collect();
+                let offsets = write_blocks(&data, &blocks);
+                write_tbi_bins(
+                    &data,
+                    vec![(
+                        0,
+                        vec![Chunk::new(position(0), position(offsets[blocks.len()]))],
+                    )],
+                    vec![position(0), position(0), position(offsets[far_tile_block])],
+                );
+                for ann in [
+                    open(data.clone(), None),
+                    open(data.clone(), None).reading_rows_as_tabix_indexes_them(),
+                ] {
+                    for asked in [windows.clone(), vec![(1, 50_000)]] {
+                        let case = format!("{limit} in {} blocks, {asked:?}", blocks.len());
+                        let mut by_query = Vec::new();
+                        for &(start, end) in &asked {
+                            by_query.extend(ann.query("21", start, end).unwrap());
+                        }
+                        assert_eq!(names(by_query), sound, "{case}");
+                        assert_eq!(
+                            names(ann.query_windows("21", &asked).unwrap()),
+                            sound,
+                            "{case}"
+                        );
+                        for threads in [1, 4] {
+                            let by_blocks = pool(threads)
+                                .install(|| ann.query_windows_parallel("21", &asked))
+                                .unwrap();
+                            assert_eq!(names(by_blocks), sound, "{case}, {threads} threads");
+                        }
+                        assert_eq!(
+                            names(ann.query_windows_in_slices("21", &asked, 1).unwrap()),
+                            sound,
+                            "{case}"
+                        );
+                    }
+                }
+            }
+        }
     }
 }
 

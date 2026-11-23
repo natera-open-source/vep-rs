@@ -201,7 +201,7 @@ fn region_records_annotate_as_their_vcf_twins() {
 /// `UPLOADED_ALLELE` prints the allele string the reference lookup leaves,
 /// `C/A` for `21:14221107-14221107/A`, except for a record whose alleles differ
 /// in length with no `-` among them, where Ensembl VEP's minimisation keeps the
-/// placeholder as parsed: Ensembl VEP 116.2 prints `UPLOADED_ALLELE=NN/GTA` for
+/// placeholder as parsed: Ensembl VEP 116.3 prints `UPLOADED_ALLELE=NN/GTA` for
 /// `21:10552677-10552678/GTA`, `ATCCTGTGGGATTACCAGAAAACC/-` for
 /// `21:13630972-13630995/-` and `-/TCA` for `21:13620284-13620283/TCA`.
 #[test]
@@ -233,12 +233,12 @@ fn uploaded_allele_is_the_looked_up_string_except_for_an_unminimised_indel() {
 /// reference lookup (Parser.pm:852), keeping the parser's `N` placeholder as the
 /// string uploaded whether or not a base is trimmed (:1008), so `UPLOADED_ALLELE`
 /// prints the placeholder for every sequence record (OutputFactory.pm:1360):
-/// Ensembl VEP 116.2 prints `N/A` for `21:14221107-14221107/A`, `N/-` for
+/// Ensembl VEP 116.3 prints `N/A` for `21:14221107-14221107/A`, `N/-` for
 /// `21:10521700-10521700/-`, `NN/CA` for the reverse-strand
 /// `21:10542415-10542416:-1/CA`, `NNNNNNNNNNNNNNNNNNNNNNNN/-` for
 /// `21:13630972-13630995/-`, and the `NN/GTA` and `-/TCA` it prints without the
 /// flag, with `MINIMISED=1` on every row. `21:14221105-14221107/NA` prints its
-/// placeholder `NNN/NA` here; Ensembl VEP 116.2 prints `NN/A`, the string its
+/// placeholder `NNN/NA` here; Ensembl VEP 116.3 prints `NN/A`, the string its
 /// second pass over the once-trimmed record leaves (`:862-881` hand `NN/A`, whose
 /// alleles differ in length, to `minimise_alleles` again, and `:1008` resets
 /// `original_allele_string` to it), which is not the allele uploaded.
@@ -278,7 +278,7 @@ fn minimal_keeps_the_placeholder_as_the_uploaded_allele() {
 /// before :492), and under `--minimal` every bi-allelic record is trimmed first,
 /// its length and `-` tests set aside: `21:14221104-14221107/NNAA` is `NN/AA` over
 /// 14221106-14221107, the span 1 that `--max_sv_size 2` admits, and Ensembl VEP
-/// 116.2 annotates it at `21:14221106-14221107` with Allele `AA` and
+/// 116.3 annotates it at `21:14221106-14221107` with Allele `AA` and
 /// `UPLOADED_ALLELE=NNNN/NNAA`. Without `--minimal` the same-length alleles are
 /// not trimmed and the span 3 is refused.
 #[test]
@@ -316,7 +316,7 @@ fn minimal_trims_a_same_length_allele_before_the_size_test() {
 /// The region expression admits a `-` among an allele's bases, and
 /// `validate_vf` removes it from every allele (Parser.pm:578-580) before the
 /// `--lookup_ref` rejoin the format runs (`:645`), so `21:14221107-14221107/A-`
-/// annotates as `21:14221107-14221107/A` does, row for row: Ensembl VEP 116.2
+/// annotates as `21:14221107-14221107/A` does, row for row: Ensembl VEP 116.3
 /// prints 17 rows with Allele `A`, `UPLOADED_ALLELE=C/A` and
 /// `VARIANT_CLASS=SNV`, the ENST00000400577 row a `synonymous_variant` at
 /// cDNA 300, CDS 270, protein 90, `R`, `cgC/cgA`.
@@ -346,7 +346,7 @@ fn dash_inside_an_allele_is_removed_at_the_lookup_ref_rejoin() {
 /// Parser.pm:751) and its allele is read against a forward-strand transcript as
 /// its reverse complement, so `21:14964727-14964727:-1/C` annotates as the
 /// forward `C>G` at that base does with the Allele column `C` in place of `G`:
-/// Ensembl VEP 116.2 prints `missense_variant`, `E/Q`, `Gaa/Caa` and
+/// Ensembl VEP 116.3 prints `missense_variant`, `E/Q`, `Gaa/Caa` and
 /// `UPLOADED_ALLELE=G/C;IMPACT=MODERATE;STRAND=-1` for it.
 #[test]
 fn reverse_strand_region_reads_the_reverse_complement() {
@@ -396,7 +396,7 @@ fn reverse_strand_region_reads_the_reverse_complement() {
 /// An allele outside `ACGTN-` names a structural class through `get_SO_term`
 /// (Parser/Region.pm:205) over the span as written: `DUP` is a duplication,
 /// `del` a deletion and `INS:ME:ALU` an Alu insertion, each printing its class
-/// term as the Allele (Ensembl VEP 116.2 prints `21:14221000-14222000/DUP
+/// term as the Allele (Ensembl VEP 116.3 prints `21:14221000-14222000/DUP
 /// 21:14221000-14222000 duplication ... feature_elongation,coding_sequence_variant,
 /// intron_variant`). A word `%SO_TERMS` lacks is warned about with `get_SO_term`'s
 /// text (Parser.pm:725) and skipped, the run going on.
@@ -451,7 +451,7 @@ fn structural_words_annotate_as_their_class() {
 /// (`RegionParser::parse_record` fails the line with `IoError::SkippedLine`
 /// carrying that text, and the caller warns and skips it), and the lines after
 /// it annotate: `21:14221107-14221107/A` writes its 17 rows, each named by its
-/// line as written, exit 0. Ensembl VEP 116.2 writes the same warning and then
+/// line as written, exit 0. Ensembl VEP 116.3 writes the same warning and then
 /// 0 rows for this input, exit 0: `create_VariationFeatures` builds no feature
 /// for the word (Parser/Region.pm:205-206, `my $so_term =
 /// $self->get_SO_term($allele); return [] unless defined $so_term;`), the
@@ -487,13 +487,14 @@ fn an_unsupported_structural_word_on_the_first_line_is_skipped_and_the_run_goes_
 /// A line outside Ensembl VEP's region expression (Utils/VEP.pm:391) builds no
 /// feature in Ensembl VEP, which ends its buffer fill there and, when the line
 /// opens a fill as this file's first line does, its run (InputBuffer.pm:212,
-/// Runner.pm:424: Ensembl VEP 116.2 writes no row and no warning for this
+/// Runner.pm:424: Ensembl VEP 116.3 writes no row and no warning for this
 /// file); here it is warned about and skipped, the run going on: a position
 /// without its end, a trailing blank, a strand other than `1`, `+1` or `-1`,
 /// and a multi-allelic string. A `#` line is a comment, counted into the line
 /// numbers that follow as Ensembl VEP counts the record it reads there
 /// (Parser/Region.pm:167, over ensembl-io's list parser, which has no metadata
-/// lines, ListBasedParser.pm:60), so the line after it is line 2; an empty line
+/// lines, ListBasedParser.pm:60), so the line after it is line 2, and warned
+/// about once at the end of the input; an empty line
 /// is warned about and counted too, as `skip_empty_lines` counts it
 /// (Parser.pm:266-293, the record after one empty line being line 4). The same
 /// lines are skipped under `--dont_skip`, which has no feature to keep.
@@ -522,6 +523,7 @@ fn lines_outside_the_expression_are_warned_and_skipped() {
                 "WARNING: line 4 skipped (21:14221107-14221107/A ): Unable to parse region '21:14221107-14221107/A ': expected chr:start-end[:strand]/allele",
                 "WARNING: line 5 skipped (21:14221107-14221107:2/A): Unable to parse region '21:14221107-14221107:2/A': expected chr:start-end[:strand]/allele",
                 "WARNING: line 6 skipped (21:14221107-14221107/A/G): Unable to parse region '21:14221107-14221107/A/G': expected chr:start-end[:strand]/allele",
+                "WARNING: Read 1 line that begins with '#' as a comment, at line 1",
             ],
             "{extra:?}: {warnings}"
         );
@@ -535,8 +537,9 @@ fn lines_outside_the_expression_are_warned_and_skipped() {
 /// `$self->line_number($self->line_number + 1);`) and then builds no feature for
 /// (`:171`, `return [] unless $region =~ &_valid_region_regex();`), which ends
 /// the buffer fill there and reads on with the next fill (InputBuffer.pm:212)
-/// unless the line opened the fill; here it is passed over without a word. For
-/// `21:14221107-14221107/A`, `# c`, `21:1-20000000/A`, Ensembl VEP 116.2 writes
+/// unless the line opened the fill; here it is passed over and counted in one
+/// warning at the end of the input. For
+/// `21:14221107-14221107/A`, `# c`, `21:1-20000000/A`, Ensembl VEP 116.3 writes
 /// `WARNING: line 3 skipped (21:1-20000000/A): variant size (19999999) is
 /// bigger than --max_sv_size (10000000)` and the first record's 17 rows, as
 /// here.
@@ -556,21 +559,25 @@ fn a_hash_line_counts_toward_the_line_numbers() {
     );
     assert_eq!(
         warnings.lines().collect::<Vec<_>>(),
-        ["WARNING: line 3 skipped (21:1-20000000/A): variant size (19999999) is bigger than --max_sv_size (10000000)"],
+        [
+            "WARNING: line 3 skipped (21:1-20000000/A): variant size (19999999) is bigger than --max_sv_size (10000000)",
+            "WARNING: Read 1 line that begins with '#' as a comment, at line 2",
+        ],
         "{warnings}"
     );
 }
 
 /// A `#` line with no word character is an empty line to `skip_empty_lines`
 /// (Parser.pm:273, `$parser->{record} !~ /\w+/`), warned about and counted as
-/// one: for `21:14221107-14221107/A`, `#`, `21:1-20000000/A`, Ensembl VEP 116.2
+/// one: for `21:14221107-14221107/A`, `#`, `21:1-20000000/A`, Ensembl VEP 116.3
 /// writes `WARNING: Skipped 1 empty line from line 2` and `WARNING: line 3
 /// skipped (21:1-20000000/A): variant size (19999999) is bigger than
 /// --max_sv_size (10000000)`. A `#` line with a word character before such a
 /// run is the record that ends the run before it and starts the count of the
 /// next: for `21:14221107-14221107/A`, `# c`, `#`, `  `, `21:1-20000000/A`,
-/// Ensembl VEP 116.2 writes `WARNING: Skipped 2 empty lines from line 3` and
-/// `WARNING: line 5 skipped (21:1-20000000/A): ...`. 17 rows each.
+/// Ensembl VEP 116.3 writes `WARNING: Skipped 2 empty lines from line 3` and
+/// `WARNING: line 5 skipped (21:1-20000000/A): ...`; the `# c` line is counted
+/// in the comment warning that ends the input here. 17 rows each.
 #[test]
 fn a_bare_hash_line_is_an_empty_line() {
     let dir = tempfile::tempdir().unwrap();
@@ -578,18 +585,19 @@ fn a_bare_hash_line_is_an_empty_line() {
         (
             "bare.region.txt",
             "21:14221107-14221107/A\n#\n21:1-20000000/A\n",
-            [
+            &[
                 "WARNING: Skipped 1 empty line from line 2",
                 "WARNING: line 3 skipped (21:1-20000000/A): variant size (19999999) is bigger than --max_sv_size (10000000)",
-            ],
+            ][..],
         ),
         (
             "after-comment.region.txt",
             "21:14221107-14221107/A\n# c\n#\n  \n21:1-20000000/A\n",
-            [
+            &[
                 "WARNING: Skipped 2 empty lines from line 3",
                 "WARNING: line 5 skipped (21:1-20000000/A): variant size (19999999) is bigger than --max_sv_size (10000000)",
-            ],
+                "WARNING: Read 1 line that begins with '#' as a comment, at line 2",
+            ][..],
         ),
     ] {
         let region = write(dir.path(), name, text);
@@ -706,7 +714,7 @@ fn format_guess_detects_region() {
 /// The record is named by its line as written (Parser/Region.pm:198): a
 /// lower-case allele and a `chr` prefix stay in `Uploaded_variation` and in the
 /// JSON `id` and `input`, while the chromosome prints as the input spells it
-/// (Ensembl VEP 116.2 prints `chr21:14144642-14144643/CT chr21:14144642-14144643
+/// (Ensembl VEP 116.3 prints `chr21:14144642-14144643/CT chr21:14144642-14144643
 /// CT`).
 #[test]
 fn record_is_named_by_its_line_as_written() {

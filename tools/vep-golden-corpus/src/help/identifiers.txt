@@ -1,0 +1,15 @@
+usage: vep-golden-corpus identifiers [-h] [--check] path [path ...]
+
+Replace every identifier under restricted redistribution terms with the
+fabricated one of the same shape, in each named file and in every text file
+under each named directory; the provenance.json of a directory has each digest
+of a rewritten file recorded again.
+
+positional arguments:
+  path        a corpus directory, or a stored output or annotated input (plain
+              or gzip)
+
+options:
+  -h, --help  show this help message and exit
+  --check     write nothing; fail, naming each file and its count, when one
+              holds such an identifier in another form than the fabricated one

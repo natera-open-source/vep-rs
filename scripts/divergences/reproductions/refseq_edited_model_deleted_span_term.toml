@@ -1,9 +1,9 @@
 entry = "refseq_edited_model_deleted_span_term"
 page = "docs/divergences/refseq-edited-model-deleted-span-term.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 8 of 77,675 cache transcripts · 10 flag sets, 4 corpora"
+input_class_basis = "2 · 14 of 116,165 cache transcripts · 19 flag sets, 5 corpora"
 notes = "The single-exon model NM_198689.3 lacks the fifteen genomic bases 21:46020656-46020670 between its CDS positions 134 and 135; a substitution inside them maps to no transcript coordinate."
 
 [input]
@@ -31,3 +31,16 @@ columns = ["Location", "Allele", "Feature", "Consequence", "cDNA_position", "CDS
 [expected]
 ensembl_vep = ["21:46020662 | T | NM_198689.3 | intergenic_variant | - | - | MODIFIER"]
 vep_rs = ["21:46020662 | T | NM_198689.3 | coding_sequence_variant | - | - | MODIFIER"]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/consequences.rs::push_unmapped_region_terms",
+    "crates/vep-effects/src/mapper.rs::TranscriptPosition::unmapped",
+    "crates/vep-effects/src/mapper.rs::find_intron_position",
+]
+tests = [
+    "crates/vep-cli/tests/deleted_edit_bases.rs::alleles_inside_the_deleted_bases_of_a_multi_exon_model",
+    "crates/vep-cli/tests/deleted_edit_bases.rs::alleles_inside_the_deleted_bases_of_a_single_exon_model",
+    "crates/vep-effects/src/consequences.rs::tests::alleles_inside_deleted_edit_bases_take_the_region_term",
+]
+rules = ["tools/vep-formats-compare/src/rules/term_pairs.rs::deleted_span_term_pair"]

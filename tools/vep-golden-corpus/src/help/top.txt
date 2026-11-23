@@ -1,0 +1,251 @@
+usage: vep-golden-corpus [-h]
+                         {select,classify,check,identifiers,covers,flag-set,generated} ...
+
+Build a golden corpus: exemplar input records for every consequence-set combination a
+VEP reference output contains, keyed by Ensembl release, species and assembly.
+
+The corpus is the fixture behind `crates/vep-cli/tests/golden.rs` and
+`crates/vep-cli/tests/format_parity.rs`: a small VCF whose records, annotated by VEP and by
+vep-rs against the same transcript cache, must yield the same rows in every output format.
+
+Subcommands:
+
+  select    Stream one or more VEP default-format reference outputs, enumerate the distinct
+            consequence sets they contain, choose up to K exemplar records per set
+            (stratified by variant class and transcript strand, and by the family key of
+            `--family-columns` when given; when `--cache` names the JSON cache the fixture
+            is pruned from, the records whose transcripts cost the fixture cache the fewest
+            bytes come first, then the records that exercise transcript flags, coordinate
+            ranges and unmappable ends; every variant class and every family stratum seen
+            keeps at least one exemplar), resolve each exemplar back to its input VCF
+            record, and write `variants.vcf` plus `manifest.json`. A record line taken from
+            an input has every identifier under restricted redistribution terms replaced by
+            the fabricated one of the same shape (`fabricated_identifiers`) before it is
+            kept, and the manifest's text passes through the same step, so neither file
+            carries one; a record a reference row names by such an identifier (its ID
+            column) is refused, since no fabricated name is in the reference. A row's variant class is
+            read from its Location and Allele and, where those print a two-base substitution
+            and a two-base insertion alike, from its input record's REF and ALT
+            (`variant_class`). The manifest's `covers`
+            list names the parity-matrix rows the corpus exercises: `--covers <item>`
+            (repeatable) writes it, each name a row of `--matrix` when one is given, a corpus
+            regenerated over an existing manifest keeps that manifest's list, its `masks`
+            (each one of `MASK_CLASSES`, else the run is refused before anything is
+            written), its `reference_warnings` (the texts Ensembl VEP wrote about the
+            run rather than about one record), its `perl_mode` (how the manifest's own
+            reference was generated, one of `PERL_MODES`; `offline` when absent, and
+            the mode a flag set naming none inherits), its `plugin_files` (the data files an
+            Ensembl VEP plugin reads, per plugin, paths inside the corpus that the
+            reference generator checks and digests), its `generated` block (the command
+            that writes the files the corpus does not commit, and their digests) and its
+            `flag_sets` (each set's run definition and `covers`; the divergence keys
+            `classify --flag-set` wrote describe the old records and are dropped, as the
+            manifest's own are), and a run with neither
+            writes nothing. A `divergences` entry of that manifest, its own or a flag
+            set's, that carries the hand-written
+            `vep_rs_consequence_sets_with_reference_sequence` would go with those keys, and
+            no `classify` writes the key again: the run is refused, each entry named,
+            before a reference is read, unless `--drop-reference-statements` is given:
+            the run goes on and names each entry on standard error as it writes the
+            manifest.
+            `--include <sid>=<name>` (repeatable) names a record of dataset
+            `sid`'s input, by its ID or by VEP's name for an ID-less record, that the
+            corpus carries whatever the sampling chooses: its rows in the dataset's
+            reference join the chosen exemplars after the sampling, so a record chosen
+            for what it co-locates with rather than for its consequence set stays in
+            even when another record of the same stratum is sampled; the names are
+            recorded as `included_records`. `--keep-records` keeps every record of the
+            manifest being regenerated the same way, each resolved again from its
+            dataset's input and rowed again from its dataset's reference, so a regeneration
+            loses no record (the count is recorded as `kept_records`, and the manifest's
+            `included_records` are carried into the new map as named records). A named or
+            kept record is an exemplar of every combination its reference rows show, so
+            `variant_classes` and `family_strata` count each of those rows, and it survives
+            `--max-records`; one with no row in its dataset's reference is an error, and
+            nothing is written, so a corpus whose manifest carries a record the reference
+            skipped (`reference_warning`) is regenerated without `--keep-records`, which
+            keeps no record by name: that record returns only when the sampling picks it.
+            `--keep-samples N` keeps `FORMAT` and the first N sample
+            columns of every record and of the `#CHROM` header, and adds records until
+            every genotype class the inputs show among those samples has
+            `--genotype-exemplars` records (`--require-genotype-class` names a class the
+            corpus must carry whether or not the inputs show it). `--record-classes
+            regulatory_class` classes every record by the regulatory rows of its reference
+            (`regulatory_classes`: which of the two feature types it reaches, whether it
+            reaches no transcript, and the shape of each motif allele) and adds records until
+            every class the references show has `--record-class-exemplars` records.
+  classify  Compare a VEP default-format output for `variants.vcf` with a vep-rs output for
+            the same file and record, per exemplar row VEP emits that vep-rs does not, the
+            documented divergence class that explains it (or `unexplained_residual`), so the
+            golden test asserts the documented difference instead of equality. A record no
+            VEP row names is one VEP dropped before annotation: it must carry
+            `reference_warning` (VEP's reason, from its warnings file, recorded when the
+            corpus is built), it gets `reference_rows` 0, and every key only vep-rs emits
+            for it is classed `reference_skipped_record`; any other key only vep-rs emits is
+            `unexplained_residual`. A zero-row record without the warning, or a warned record
+            with rows, is an error, unless the record carries no row by its nature: a
+            non-variant record (ALT `.`), one the run's expected JSON names as a feature
+            with no allele to annotate (`most_severe_consequence` `?`: every ALT a `*` or
+            `<DEL:*>`, equal to the reference or a repeat) or, under a row filter of the run
+            (`--coding_only`, `--no_intergenic`) or its frequency filter (`--check_frequency`,
+            `--filter_common`), one vep-rs writes no row for either. The
+            records are the run's input's, numbered as the golden tests number them: the
+            manifest's for `variants.vcf`, and for a flag set over another `input` that
+            file's lines, a line the manifest records (a twin of `variants.vcf`) keeping
+            its entry and a file in another format or delimiter, `variants.vcf` re-encoded
+            record for record, taking the manifest's records in order. A row under an
+            identifier is read with the alleles of the record that writes it, found among
+            those records by position, where a class reads them (`record_reference`).
+            A run whose `masks` list
+            `regulatory_feature_rows` has its VEP rows of `Feature_type` RegulatoryFeature
+            and MotifFeature left out first, the rows the golden test sets aside for a run
+            under `--regulatory`; one whose `masks` list `order_only` has its `DOMAINS`,
+            `FREQS` and `ZYG` values compared as multisets of their items under `--field`,
+            as the golden test compares them. A field divergence two causes change (a
+            `DownstreamProtein` Ensembl VEP reads at its HGVS-shifted span on a row whose own
+            span opens on a codon's third base) names the second cause's class under
+            `second_expected_divergence`, and the format comparator applies the entry only
+            where both classes are named. Under `--field` a field is read on every row of a
+            key and consequence set, the rows of the two outputs paired in their order: the
+            entry states the first pair whose two values differ, and where other pairs hold
+            equal values, the rows of other records that share the key, it counts them under
+            `rows_alike`, its last key, the rows the golden test compares like any other.
+            A `divergences` entry may carry, written by hand,
+            `vep_rs_consequence_sets_with_reference_sequence`: vep-rs's sets on the key in a
+            run that has a reference sequence, where `vep_rs_consequence_sets` are those of a
+            run without one. classify never writes the key; it carries a key the target run
+            holds onto the entry it writes for the same Location, Allele, Feature, records
+            and Ensembl VEP set, and refuses the run when it writes no such entry or the key
+            is of another shape; a flag set whose entry holds no `divergences` is held to
+            the manifest's own list by the golden test, so its run carries the keys that
+            list states. With the tab, VCF or JSON output of both engines (`--vep-tab` and
+            `--vep-rs-tab`, `--vep-vcf` and `--vep-rs-vcf`, `--vep-json` and
+            `--vep-rs-json`) a row with an entry under `--field` is read in that format
+            too, and each field of it whose two values differ and that no entry of the row
+            names, in any letter case, is written under the name the format gives it, its
+            values in the default format's spelling (`-` for an absent value, `,` for the
+            VCF format's `&`, a JSON object without blanks and its members in the byte
+            order of their names): the golden test compares every field of a documented
+            row in every format. `covers` and `flag_sets` are kept; with `--flag-set
+            <name>` the divergence keys are written into that flag set instead of the
+            manifest's top level, so each flag set documents its own run, under its own
+            `masks` when its entry carries the key and the manifest's otherwise.
+  check     Refuse a corpus in which a text file, decompressed, holds an identifier under
+            restricted redistribution terms in another form than the fabricated one, read
+            as `identifiers` reads it, naming each such file and its count and reading
+            nothing else. Otherwise
+            recompute the observed combination space from the reference outputs and fail
+            when a combination has no exemplar in the manifest; with `--matrix` fail when a
+            `covers` name (the manifest's or a flag set's) is not a matrix row; with
+            `--family-columns` fail when a family stratum the references show has no
+            exemplar among the corpus's records; on a corpus built with `--keep-samples`
+            fail when `variants.vcf` does not carry `FORMAT` and the manifest's samples on
+            its header and every record, or when a genotype class the inputs show among
+            those samples (or one the manifest or `--require-genotype-class` requires) has
+            no record in the corpus; on a corpus built with `--record-classes` fail when a
+            class the references show has no record in the corpus.
+  identifiers  Replace every identifier under restricted redistribution terms with the
+            fabricated one of the same shape (`fabricated_identifiers`) in each named file
+            and in every text file under each named directory: the step a stored Ensembl
+            VEP output or an annotated input passes through before it is committed. The
+            identifiers are the two shapes of `RESTRICTED_IDENTIFIER`: the first wherever
+            it stands as a word; the second, which a public sequence accession can share,
+            as a member of a list, a JSON `id` or the whole `Existing_variation` cell of an
+            output table and, once it is read that way in one file of a directory, wherever
+            it stands as a word in every file of that directory, so a record's outputs
+            agree. A second-shape identifier that stands alone in another table cell in
+            every file is not read. A gzip
+            file is written back as one member at level 9 with no name and no time stamp; a
+            block-compressed file that holds one is refused and nothing is written, since
+            the index beside it describes the bytes as they are stored. Under a named directory the
+            nearest `provenance.json` has every digest of a rewritten file, of its bytes
+            or of its uncompressed bytes, recorded again. `--check` writes nothing and
+            fails, naming each file and its count, when one holds such an identifier in
+            another form than the fabricated one: the refusal of `check` without the
+            reference outputs.
+  covers    List (`--list`) or extend (`--add <item>`, repeatable) the `covers` of a corpus,
+            or of one of its flag sets (`--flag-set <name>`); a name that is not a row of
+            `--matrix` is refused and nothing is written.
+  flag-set  Write one `flag_sets` entry: a run of the corpus under its own `flags` beside
+            the manifest's default run, with its own expected outputs. An entry carries
+            `name`, `flags` (the whole flag list of that run), `input` (a file in the corpus,
+            `variants.vcf` by default), `stdin` (the input piped on standard input, with
+            `-i STDIN`; its `flags` must name `--format`, which Ensembl VEP needs on
+            STDIN), `unordered` (the reference's rows within a record come out in
+            Ensembl VEP's hash order, so the golden tests compare the rows and not
+            their order), `formats` (the output formats compared, all four by default),
+            `expected_dir` (`expected_<name>` by default), `perl_mode` (written as
+            `database` when the reference was generated against the Ensembl database
+            rather than offline, `gtf` or `gff` when Ensembl VEP read its transcripts from
+            the file given to `--gtf` or `--gff`; the manifest's own `perl_mode` when the
+            option is not given) and `covers`; `input` and `expected_dir` are paths inside
+            the corpus directory. A set that exists has those keys rewritten from the
+            options and keeps every other key of its entry, its hand-written `masks` (the
+            classes of its run alone, each one of `MASK_CLASSES`, as the manifest's) and
+            `reference_warnings` (the texts Ensembl VEP wrote about its run alone) among them;
+            its divergence keys describe the run before the rewrite and go, so
+            `classify --flag-set` runs after it. A `divergences` entry of the set that
+            carries the hand-written `vep_rs_consequence_sets_with_reference_sequence` is
+            refused or, under `--drop-reference-statements`, named on standard error, as
+            `select` does.
+  generated  Write or check the manifest's `generated` block: the `command` that writes the
+            files a corpus does not commit (a set a seeded generator reproduces) and the
+            `sha256` of each file it writes, by its path under the directory written.
+            `--command <word>...` (the last option: every word after it is the command's)
+            runs the words from the repository root, `{generated}` in a word replaced by
+            a temporary directory and `{corpus}` by the corpus directory, and records the
+            words as given with the digest of every file under that directory, in path
+            order. `--check` runs the manifest's own command the same way, writes nothing
+            and fails, naming each path, when a file's digest differs from the recorded
+            one, a recorded file is not written or a written file is not recorded.
+
+Row keys follow `tools/vep-outputs-compare`: (Location, Allele, Feature, Feature_type,
+consequence set), consequence terms sorted and comma-joined. A record is identified by
+VEP's (Uploaded_variation, Location) pair, which every row of one input record shares.
+
+The family key of `--family-columns` is one class per named Extra column plus the variant
+class: a bare name (`HGVSc`) classes a row by the column's presence (`HGVSc+`, `HGVSc-`), a
+name ending in `=` (`IMPACT=`) by its value (`IMPACT=HIGH`); `check --family-columns`
+asserts every stratum the references show is covered, which is the per-family coverage
+claim behind a flag family's corpus. `custom_match=<exact>/<overlap>` names the short names
+of one `--custom` file read as a `type=exact` and as a `type=overlap` source and classes a
+row by how they answered (`custom_match_class`): `exact`, `multi_allelic` (the exact source
+matched one allele of a record whose fields list several), `overlap` (the overlap source
+alone matched), `sv_span` (the overlap source alone matched a structural variant whose span
+covers the record) or `miss`. `<a>/<b>` names two columns and classes a row by their
+agreement (`agreement_class`): `same`, `differ` or `-` when either is absent, so
+`GIVEN_REF/USED_REF` keeps a row whose transcript sequence differs from the input's reference
+allele beside the rows where the two agree. A list-valued column stratified by value
+(`REFSEQ_MATCH=`) makes one stratum per distinct list, so every code the lists carry has an
+exemplar.
+
+The genotype classes of `--keep-samples` are read from the kept samples' GT values as
+Ensembl VEP reads a genotype for `--individual` (ensembl-io BaseVCF4.pm 941-951 and
+Parser/VCF.pm 627-651 at release 116): per sample `het`, `hom_alt`, `hom_ref`, `missing`,
+`partially_missing`, `haploid`, `star` and `multi_allelic`; per record `all_missing`,
+`no_carrier` and `one_hom_ref_rest_missing` (`genotype_labels` and
+`record_genotype_classes` define each; a structural record shows none, since Ensembl VEP
+annotates it without genotypes). A record shows every class any kept sample shows, the
+manifest lists each record's classes and the count of records per class, and `check`
+asserts every class the inputs show is covered.
+
+The record classes of `--record-classes regulatory_class` are read from a record's reference
+rows under `--regulatory` (`regulatory_classes` defines each): `rf_only`, `mf_only` or
+`rf_and_mf` for the regulatory feature types its rows name, `regulatory_only` for a record
+with such a row and no Transcript row, and per MotifFeature row `motif_snv`, `motif_mnv` or
+`motif_indel` by the shape of its allele, read with the input record's REF and ALT
+(`allele_shape`: a two-base substitution and a two-base insertion print the same row), and
+`motif_reverse` for a motif on the reverse strand. A record shows every class any of its rows
+shows; the manifest lists each record's
+classes and the count of records per class, `select` adds records until every class the
+references show has `--record-class-exemplars` records, and `check` asserts every class the
+references show is covered.
+
+Selection is deterministic under `--seed`: reservoir sampling bounds the candidates kept per
+combination and the same seed reproduces the same corpus from the same references.
+
+positional arguments:
+  {select,classify,check,identifiers,covers,flag-set,generated}
+
+options:
+  -h, --help            show this help message and exit

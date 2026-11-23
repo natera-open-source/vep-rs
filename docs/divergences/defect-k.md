@@ -10,7 +10,7 @@ It takes `INFO/END`, `SVLEN` and POS as the text they are written in.
 
 **Where it is in Ensembl VEP's source** (`ensembl-io` and `ensembl-vep`):
 - `ensembl-io`, `BaseVCF4.pm`, `get_end`, lines 307-308: `INFO/END` is returned as the string it is; lines 302-305: a `SVLEN` end is `$start + abs($svlen) - 1`, so `300.7` gives the end `30425950.7` and `NaN` the end `NaN`.
-- `ensembl-io`, `BaseVCF4.pm`, `get_start`, lines 255-275: a sequence record's POS is kept as its text, the increment applying only to a structural record's or an indel's start.
+- `ensembl-io`, `BaseVCF4.pm`, `get_start`, lines 255-276: a sequence record's POS is kept as its text, the increment applying only to a structural record's or an indel's start.
 - `ensembl-vep`, `Bio/EnsEMBL/VEP/Parser.pm`, `validate_vf`, line 475: the values pass `looks_like_number`, which admits a fraction, an exponent and `NaN`; every comparison with `NaN` is false, so line 483's start-against-end test skips nothing.
 
 **What correcting it would change.** The record would be refused, as vep-rs refuses a non-integer `END`, or read at the number its text denotes, as vep-rs reads `SVLEN` and POS; [class 18](#18-a-non-integer-end-svlen-or-pos-text-annotated-and-printed) would vanish.
@@ -37,11 +37,11 @@ vep-rs refuses a non-integer `END`, which names no base, and reports the line. I
 21	30425949.0	pos_float_snv	A	G	.	.	.
 ```
 
-Executed with Ensembl VEP 116.2 (`ensemblorg/ensembl-vep:release_116.2`, the 116 GRCh38 cache, `--offline --cache --allele_number`).
+Executed with Ensembl VEP 116.3 (`ensemblorg/ensembl-vep:release_116.3`, the 116 GRCh38 cache, `--offline --cache --allele_number`).
 
 ### 18.3 What each engine writes
 
-Ensembl VEP 116.2 writes two rows for each of the two `END` records, one per feature, and vep-rs no row for either, each line reported at warning level (`Invalid END: '30425949.5'`). One table per row.
+Ensembl VEP 116.3 writes two rows for each of the two `END` records, one per feature, and vep-rs no row for either, each line reported at warning level (`Invalid END: '30425949.5'`). One table per row.
 
 `del_end_float` on ENST00000334068:
 
@@ -93,7 +93,7 @@ Ensembl VEP 116.2 writes two rows for each of the two `END` records, one per fea
 | Feature_type | `Transcript` |  |
 | Consequence | `feature_truncation,coding_sequence_variant,5_prime_UTR_variant` |  |
 
-For the `SVLEN` and POS records, Ensembl VEP 116.2 prints the text too (the `NaN` record's JSON object carries `"start":30425651,"end":nan`, which is not a JSON value), five rows. For two of these records vep-rs writes the rows of the same record at the number: `21:30425651-30425950` for `SVLEN=300.7` and `21:30425949` for the POS. The `SVLEN=NaN` record, a zero-length deletion once numified, is dropped by default with the warning `deletion looks incomplete`, where the reference wrote one intergenic row; `--dont_skip` keeps it at the two-base interval `21:30425650-30425651` (two transcript rows, `coding_sequence_variant` on ENST00000390690). One table per Ensembl VEP row; the vep-rs column points to these sentences.
+For the `SVLEN` and POS records, Ensembl VEP 116.3 prints the text too (the `NaN` record's JSON object carries `"start":30425651,"end":nan`, which is not a JSON value), five rows. For two of these records vep-rs writes the rows of the same record at the number: `21:30425651-30425950` for `SVLEN=300.7` and `21:30425949` for the POS. The `SVLEN=NaN` record, a zero-length deletion once numified, is dropped by default with the warning `deletion looks incomplete`, where the reference wrote one intergenic row; `--dont_skip` keeps it at the two-base interval `21:30425650-30425651` (two transcript rows, `coding_sequence_variant` on ENST00000390690). One table per Ensembl VEP row; the vep-rs column points to these sentences.
 
 `del_svlen_float` on ENST00000334068:
 
@@ -162,7 +162,7 @@ For the `SVLEN` and POS records, Ensembl VEP 116.2 prints the text too (the `NaN
 
 `BaseVCF4.pm` `get_end` (lines 307-308) returns `INFO/END` as the string it is, and `Parser.pm` `validate_vf` (line 475) accepts it through `looks_like_number`, which admits a fraction, an exponent and `NaN`. The end then takes part in every arithmetic as a number and is printed as the text. A `SVLEN` reaches the same place through lines 302-305, `$start + abs($svlen) - 1`, so `300.7` gives the end `30425950.7` and `NaN` the end `NaN` (every comparison with it is false, so line 483's start-against-end test skips nothing).
 
-On the sequence path POS is kept as its text by `get_start` (lines 255-275, which increment only a structural record's or an indel's start), passes `looks_like_number` and is printed. On the structural path `$start++` numifies it ([Defect N](defect-n.md)). An `END` written with leading zeros or a `+` sign (`030425949`, `+30425949`) is the same shape without the arithmetic: the record is annotated correctly and the Location carries the text, which both comparators read as the number it names.
+On the sequence path POS is kept as its text by `get_start` (lines 255-276, which increment only a structural record's or an indel's start), passes `looks_like_number` and is printed. On the structural path `$start++` numifies it ([Defect N](defect-n.md)). An `END` written with leading zeros or a `+` sign (`030425949`, `+30425949`) is the same shape without the arithmetic: the record is annotated correctly and the Location carries the text, which both comparators read as the number it names.
 
 ### 18.5 Why vep-rs's output is the correct one
 
@@ -172,7 +172,7 @@ A coordinate is a base position; a half base or a floating-point notation names 
 
 ```bash
 printf '##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n21\t30425650\tdel_end_float\tN\t<DEL>\t.\t.\tSVTYPE=DEL;END=30425949.5\n' > float.vcf
-docker run --rm -v "$PWD":/work -v /path/to/vep-cache:/cache ensemblorg/ensembl-vep:release_116.2 \
+docker run --rm -v "$PWD":/work -v /path/to/vep-cache:/cache ensemblorg/ensembl-vep:release_116.3 \
   vep -i /work/float.vcf -o /work/float.perl.txt --offline --cache --dir_cache /cache --cache_version 116 \
   --assembly GRCh38 --species homo_sapiens --allele_number --no_stats
 vep -i float.vcf -o float.vep-rs.txt --offline --json_cache tests/golden/116/GRCh38-release116/json_cache --assembly GRCh38 --no_stats
@@ -180,7 +180,7 @@ vep -i float.vcf -o float.vep-rs.txt --offline --json_cache tests/golden/116/GRC
 
 ### 18.7 How the comparator treats this class
 
-The class is `non_integer_end_annotated` in the 116.2 registry of both comparators, set aside: the reference's rows whose Location carries a coordinate that is not an integer. The structural-variant comparator, which reads the input, also sets aside vep-rs's rows of the same record where vep-rs read the value as a number, so that neither side is charged and the skipped-record cross-check does not stop on them.
+The class is `non_integer_end_annotated` in the 116.3 registry of both comparators, set aside: the reference's rows whose Location carries a coordinate that is not an integer. The structural-variant comparator, which reads the input, also sets aside vep-rs's rows of the same record where vep-rs read the value as a number, so that neither side is charged and the skipped-record cross-check does not stop on them.
 
 Those are the rows at the numified end for a fractional `SVLEN`, `21:30425651-30425950`, at the integer for a POS text, `21:30425949`, and, under `--dont_skip`, at the two-base interval for `SVLEN=NaN`, `21:30425650-30425651`; by default vep-rs writes no row for that record. The SNP/indel comparator, which opens the input only to recognise gVCF variant sites under `--input-dir` or `--input-vcf`, judges this class from the output alone: it locates no vep-rs row of the record and sets aside only the reference's text rows.
 

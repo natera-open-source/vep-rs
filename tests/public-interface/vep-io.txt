@@ -1,0 +1,622 @@
+# Written by scripts/check_public_interface.py --update, which reads the tree; the script's opening comment gives the format.
+library	vep_io
+feature	default	parquet
+feature	parquet	dep:arrow-array dep:arrow-schema dep:arrow-select dep:parquet dep:rayon
+module	vep_io	mod
+re-export	vep_io::InputParser	pub use vep_io::input::InputParser
+re-export	vep_io::IoError	pub use vep_io::error::IoError
+re-export	vep_io::OutputFormatter	pub use vep_io::output::OutputFormatter
+module	vep_io::error	mod
+auto traits	vep_io::error::IoError	!RefUnwindSafe, Send, Sync, Unpin, !UnwindSafe
+enum	vep_io::error::IoError	enum; #[non_exhaustive]
+implementation	vep_io::error::IoError	impl core::convert::From<std::io::error::Error> for vep_io::error::IoError
+implementation	vep_io::error::IoError	impl core::error::Error for vep_io::error::IoError
+implementation	vep_io::error::IoError	impl core::fmt::Debug for vep_io::error::IoError
+implementation	vep_io::error::IoError	impl core::fmt::Display for vep_io::error::IoError
+variant	vep_io::error::IoError::CacheUnreadable	1 positional field
+field	vep_io::error::IoError::CacheUnreadable::0	alloc::string::String
+variant	vep_io::error::IoError::Io	1 positional field
+field	vep_io::error::IoError::Io::0	std::io::error::Error
+variant	vep_io::error::IoError::Parquet	1 positional field
+field	vep_io::error::IoError::Parquet::0	alloc::string::String
+variant	vep_io::error::IoError::SkippedLine	1 positional field
+field	vep_io::error::IoError::SkippedLine::0	alloc::string::String
+variant	vep_io::error::IoError::Unsupported	1 positional field
+field	vep_io::error::IoError::Unsupported::0	alloc::string::String
+variant	vep_io::error::IoError::VcfParse	1 positional field
+field	vep_io::error::IoError::VcfParse::0	alloc::string::String
+module	vep_io::input	mod
+auto traits	vep_io::input::Delimiter	!RefUnwindSafe, Send, Sync, Unpin, !UnwindSafe
+enum	vep_io::input::Delimiter	enum; #[non_exhaustive]
+implementation	vep_io::input::Delimiter	impl core::clone::Clone for vep_io::input::Delimiter
+implementation	vep_io::input::Delimiter	impl core::cmp::Eq for vep_io::input::Delimiter
+implementation	vep_io::input::Delimiter	impl core::cmp::PartialEq for vep_io::input::Delimiter
+implementation	vep_io::input::Delimiter	impl core::default::Default for vep_io::input::Delimiter
+implementation	vep_io::input::Delimiter	impl core::fmt::Debug for vep_io::input::Delimiter
+variant	vep_io::input::Delimiter::Literal	1 positional field
+field	vep_io::input::Delimiter::Literal::0	alloc::string::String
+variant	vep_io::input::Delimiter::Pattern	1 positional field
+field	vep_io::input::Delimiter::Pattern::0	vep_io::input::PatternDelimiter
+variant	vep_io::input::Delimiter::SpaceRun	no fields
+variant	vep_io::input::Delimiter::Tab	no fields
+variant	vep_io::input::Delimiter::Whitespace	no fields
+variant	vep_io::input::Delimiter::WhitespaceRun	no fields
+method	vep_io::input::Delimiter::chosen_for	fn(&self, line: &str) -> Self
+method	vep_io::input::Delimiter::from_flag	fn(value: &str, compile: impl core::ops::function::FnOnce(&str) -> core::result::Result<alloc::sync::Arc<dyn vep_io::input::PatternSplit>, alloc::string::String>) -> core::result::Result<Self, alloc::string::String>
+method	vep_io::input::Delimiter::join_text	fn(&self) -> &str
+method	vep_io::input::Delimiter::split	fn<'a>(&self, line: &'a str) -> alloc::vec::Vec<&'a str>
+method	vep_io::input::Delimiter::split_bytes	fn<'a>(&self, line: &'a [u8]) -> alloc::vec::Vec<&'a [u8]>
+trait	vep_io::input::InputParser	trait: core::marker::Send; dyn
+method	vep_io::input::InputParser::next_variant	fn(&mut self) -> core::option::Option<core::result::Result<vep_core::variant::InputVariant, vep_io::error::IoError>>; required
+method	vep_io::input::InputParser::record_line_number	fn(&self) -> core::option::Option<u64>; provided
+method	vep_io::input::InputParser::take_empty_lines	fn(&mut self) -> u64; provided
+method	vep_io::input::InputParser::take_warnings	fn(&mut self) -> alloc::vec::Vec<alloc::string::String>; provided
+auto traits	vep_io::input::LineTooLong	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_io::input::LineTooLong	impl core::clone::Clone for vep_io::input::LineTooLong
+implementation	vep_io::input::LineTooLong	impl core::cmp::Eq for vep_io::input::LineTooLong
+implementation	vep_io::input::LineTooLong	impl core::cmp::PartialEq for vep_io::input::LineTooLong
+implementation	vep_io::input::LineTooLong	impl core::error::Error for vep_io::input::LineTooLong
+implementation	vep_io::input::LineTooLong	impl core::fmt::Debug for vep_io::input::LineTooLong
+implementation	vep_io::input::LineTooLong	impl core::fmt::Display for vep_io::input::LineTooLong
+struct	vep_io::input::LineTooLong	struct; named fields; #[non_exhaustive]
+method	vep_io::input::LineTooLong::from_io_error	fn(error: &std::io::error::Error) -> core::option::Option<&vep_io::input::LineTooLong>
+method	vep_io::input::LineTooLong::into_io_error	fn(self) -> std::io::error::Error
+field	vep_io::input::LineTooLong::line	u64
+method	vep_io::input::LineTooLong::new	fn(line: u64) -> Self
+constant	vep_io::input::MAX_LINE_BYTES	const: usize
+auto traits	vep_io::input::ParserContext	!RefUnwindSafe, Send, Sync, Unpin, !UnwindSafe
+implementation	vep_io::input::ParserContext	impl core::clone::Clone for vep_io::input::ParserContext
+implementation	vep_io::input::ParserContext	impl core::default::Default for vep_io::input::ParserContext
+struct	vep_io::input::ParserContext	struct; named fields; #[non_exhaustive]
+field	vep_io::input::ParserContext::chromosomes	alloc::sync::Arc<std::collections::hash::set::HashSet<alloc::string::String>>
+field	vep_io::input::ParserContext::delimiter	vep_io::input::Delimiter
+field	vep_io::input::ParserContext::fasta	core::option::Option<alloc::sync::Arc<dyn vep_io::input::ReferenceSequence>>
+field	vep_io::input::ParserContext::max_sv_size	core::option::Option<u64>
+field	vep_io::input::ParserContext::minimal	bool
+field	vep_io::input::ParserContext::synonyms	alloc::sync::Arc<vep_core::synonyms::ChromosomeSynonyms>
+field	vep_io::input::ParserContext::transcripts	core::option::Option<alloc::sync::Arc<dyn vep_io::input::TranscriptSource>>
+method	vep_io::input::ParserContext::with_delimiter	fn(delimiter: vep_io::input::Delimiter) -> Self
+auto traits	vep_io::input::PatternDelimiter	!RefUnwindSafe, Send, Sync, Unpin, !UnwindSafe
+implementation	vep_io::input::PatternDelimiter	impl core::clone::Clone for vep_io::input::PatternDelimiter
+implementation	vep_io::input::PatternDelimiter	impl core::cmp::Eq for vep_io::input::PatternDelimiter
+implementation	vep_io::input::PatternDelimiter	impl core::cmp::PartialEq for vep_io::input::PatternDelimiter
+implementation	vep_io::input::PatternDelimiter	impl core::fmt::Debug for vep_io::input::PatternDelimiter
+struct	vep_io::input::PatternDelimiter	struct; named fields, some private
+method	vep_io::input::PatternDelimiter::new	fn(text: &str, split: alloc::sync::Arc<dyn vep_io::input::PatternSplit>) -> Self
+method	vep_io::input::PatternDelimiter::text	fn(&self) -> &str
+trait	vep_io::input::PatternSplit	trait: core::marker::Send + core::marker::Sync; dyn
+method	vep_io::input::PatternSplit::is_match	fn(&self, line: &[u8]) -> bool; required
+method	vep_io::input::PatternSplit::split_bytes	fn<'a>(&self, line: &'a [u8]) -> alloc::vec::Vec<&'a [u8]>; required
+method	vep_io::input::PatternSplit::split_str	fn<'a>(&self, line: &'a str) -> alloc::vec::Vec<&'a str>; required
+trait	vep_io::input::ReferenceSequence	trait: core::marker::Send + core::marker::Sync; dyn
+method	vep_io::input::ReferenceSequence::record_name	fn(&self, chr: &str) -> core::option::Option<alloc::string::String>; required
+method	vep_io::input::ReferenceSequence::sequence	fn(&self, chr: &str, start: u64, end: u64) -> core::option::Option<alloc::vec::Vec<u8>>; required
+method	vep_io::input::ReferenceSequence::sequence_length	fn(&self, chr: &str) -> core::option::Option<u64>; required
+trait	vep_io::input::TranscriptSource	trait: core::marker::Send + core::marker::Sync; dyn
+method	vep_io::input::TranscriptSource::by_stable_id	fn(&self, stable_id: &str) -> core::result::Result<core::option::Option<vep_core::transcript::Transcript>, alloc::string::String>; required
+method	vep_io::input::TranscriptSource::by_translation_id	fn(&self, stable_id: &str) -> core::result::Result<core::option::Option<vep_core::transcript::Transcript>, alloc::string::String>; required
+method	vep_io::input::TranscriptSource::gene_transcripts	fn(&self, name: &str) -> core::result::Result<alloc::vec::Vec<alloc::vec::Vec<vep_core::transcript::Transcript>>, alloc::string::String>; required
+module	vep_io::input::detect	mod
+auto traits	vep_io::input::detect::Detection	!RefUnwindSafe, Send, Sync, Unpin, !UnwindSafe
+struct	vep_io::input::detect::Detection	struct; named fields; #[non_exhaustive]
+field	vep_io::input::detect::Detection::consumed	alloc::vec::Vec<u8>
+field	vep_io::input::detect::Detection::delimiter	vep_io::input::Delimiter
+field	vep_io::input::detect::Detection::format	core::option::Option<vep_io::input::detect::InputFormat>
+auto traits	vep_io::input::detect::InputFormat	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_io::input::detect::InputFormat	enum; #[non_exhaustive]
+implementation	vep_io::input::detect::InputFormat	impl core::clone::Clone for vep_io::input::detect::InputFormat
+implementation	vep_io::input::detect::InputFormat	impl core::cmp::Eq for vep_io::input::detect::InputFormat
+implementation	vep_io::input::detect::InputFormat	impl core::cmp::PartialEq for vep_io::input::detect::InputFormat
+implementation	vep_io::input::detect::InputFormat	impl core::fmt::Debug for vep_io::input::detect::InputFormat
+implementation	vep_io::input::detect::InputFormat	impl core::fmt::Display for vep_io::input::detect::InputFormat
+implementation	vep_io::input::detect::InputFormat	impl core::marker::Copy for vep_io::input::detect::InputFormat
+associated constant	vep_io::input::detect::InputFormat::ALL	const: &'static [vep_io::input::detect::InputFormat]
+variant	vep_io::input::detect::InputFormat::Caid	no fields
+variant	vep_io::input::detect::InputFormat::Ensembl	no fields
+variant	vep_io::input::detect::InputFormat::Hgvs	no fields
+variant	vep_io::input::detect::InputFormat::Id	no fields
+variant	vep_io::input::detect::InputFormat::Region	no fields
+variant	vep_io::input::detect::InputFormat::Spdi	no fields
+variant	vep_io::input::detect::InputFormat::Vcf	no fields
+method	vep_io::input::detect::InputFormat::as_str	fn(self) -> &'static str
+method	vep_io::input::detect::InputFormat::from_flag	fn(value: &str) -> core::option::Option<Self>
+function	vep_io::input::detect::check_format	fn(fields: &[&str]) -> core::option::Option<vep_io::input::detect::InputFormat>
+function	vep_io::input::detect::detect_format	fn<R: std::io::BufRead>(reader: &mut R) -> std::io::error::Result<vep_io::input::detect::Detection>
+function	vep_io::input::detect::detect_line	fn(line: &str) -> core::option::Option<vep_io::input::detect::InputFormat>
+function	vep_io::input::empty_lines_warning	fn(skipped: u64, from_line: u64) -> alloc::string::String
+module	vep_io::input::ensembl	mod
+auto traits	vep_io::input::ensembl::EnsemblParser	!RefUnwindSafe, Send where R: core::marker::Send, Sync where R: core::marker::Sync, Unpin where R: core::marker::Unpin, !UnwindSafe
+implementation	vep_io::input::ensembl::EnsemblParser	impl<R: std::io::BufRead + core::marker::Send> vep_io::input::InputParser for vep_io::input::ensembl::EnsemblParser<R>
+struct	vep_io::input::ensembl::EnsemblParser	struct<R: std::io::BufRead>; named fields, some private
+method	vep_io::input::ensembl::EnsemblParser::new	fn(reader: R, context: &vep_io::input::ParserContext) -> Self; in impl<R: std::io::BufRead> vep_io::input::ensembl::EnsemblParser<R>
+module	vep_io::input::hgvs	mod
+auto traits	vep_io::input::hgvs::HgvsParser	!RefUnwindSafe, Send where R: core::marker::Send, Sync where R: core::marker::Sync, Unpin where R: core::marker::Unpin, !UnwindSafe
+implementation	vep_io::input::hgvs::HgvsParser	impl<R: std::io::BufRead + core::marker::Send> vep_io::input::InputParser for vep_io::input::hgvs::HgvsParser<R>
+struct	vep_io::input::hgvs::HgvsParser	struct<R: std::io::BufRead>; named fields, some private
+method	vep_io::input::hgvs::HgvsParser::new	fn(reader: R, context: &vep_io::input::ParserContext, lookup_ref: bool) -> Self; in impl<R: std::io::BufRead> vep_io::input::hgvs::HgvsParser<R>
+module	vep_io::input::hgvs::genomic	mod
+module	vep_io::input::hgvs::protein	mod
+module	vep_io::input::hgvs::transcript	mod
+module	vep_io::input::id	mod
+auto traits	vep_io::input::id::IdParser	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_io::input::id::IdParser	impl vep_io::input::InputParser for vep_io::input::id::IdParser
+struct	vep_io::input::id::IdParser	struct; named fields, some private
+method	vep_io::input::id::IdParser::attempted_line	fn(&self) -> core::option::Option<&str>
+method	vep_io::input::id::IdParser::names	fn(&self) -> impl core::iter::traits::iterator::Iterator<Item = &str>
+method	vep_io::input::id::IdParser::read	fn<R: std::io::BufRead>(reader: R) -> core::result::Result<Self, vep_io::error::IoError>
+method	vep_io::input::id::IdParser::supply_mappings	fn(&mut self, mappings: alloc::vec::Vec<alloc::vec::Vec<vep_io::input::id::NameMapping>>)
+auto traits	vep_io::input::id::NameMapping	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_io::input::id::NameMapping	impl core::clone::Clone for vep_io::input::id::NameMapping
+implementation	vep_io::input::id::NameMapping	impl core::cmp::Eq for vep_io::input::id::NameMapping
+implementation	vep_io::input::id::NameMapping	impl core::cmp::PartialEq for vep_io::input::id::NameMapping
+implementation	vep_io::input::id::NameMapping	impl core::fmt::Debug for vep_io::input::id::NameMapping
+struct	vep_io::input::id::NameMapping	struct; named fields
+field	vep_io::input::id::NameMapping::allele_string	alloc::string::String
+field	vep_io::input::id::NameMapping::chr	alloc::string::String
+field	vep_io::input::id::NameMapping::end	u64
+field	vep_io::input::id::NameMapping::start	u64
+field	vep_io::input::id::NameMapping::strand	i8
+function	vep_io::input::minimise_alleles	fn(variant: &mut vep_core::variant::InputVariant) -> bool
+function	vep_io::input::read_until_bounded	fn<R: std::io::BufRead + ?core::marker::Sized>(reader: &mut R, delimiter: u8, buf: &mut alloc::vec::Vec<u8>, line_number: u64) -> std::io::error::Result<usize>
+module	vep_io::input::region	mod
+auto traits	vep_io::input::region::RegionParser	RefUnwindSafe where R: core::panic::unwind_safe::RefUnwindSafe, Send where R: core::marker::Send, Sync where R: core::marker::Sync, Unpin where R: core::marker::Unpin, UnwindSafe where R: core::panic::unwind_safe::UnwindSafe
+implementation	vep_io::input::region::RegionParser	impl<R: std::io::BufRead + core::marker::Send> vep_io::input::InputParser for vep_io::input::region::RegionParser<R>
+struct	vep_io::input::region::RegionParser	struct<R: std::io::BufRead>; named fields, some private
+method	vep_io::input::region::RegionParser::new	fn(reader: R, context: &vep_io::input::ParserContext) -> Self; in impl<R: std::io::BufRead> vep_io::input::region::RegionParser<R>
+module	vep_io::input::spdi	mod
+auto traits	vep_io::input::spdi::SpdiParser	!RefUnwindSafe, Send where R: core::marker::Send, Sync where R: core::marker::Sync, Unpin where R: core::marker::Unpin, !UnwindSafe
+implementation	vep_io::input::spdi::SpdiParser	impl<R: std::io::BufRead + core::marker::Send> vep_io::input::InputParser for vep_io::input::spdi::SpdiParser<R>
+struct	vep_io::input::spdi::SpdiParser	struct<R: std::io::BufRead>; named fields, some private
+method	vep_io::input::spdi::SpdiParser::new	fn(reader: R, context: &vep_io::input::ParserContext) -> Self; in impl<R: std::io::BufRead> vep_io::input::spdi::SpdiParser<R>
+module	vep_io::output	mod
+trait	vep_io::output::OutputFormatter	trait: core::marker::Send; dyn
+method	vep_io::output::OutputFormatter::finish	fn(&mut self, writer: &mut dyn std::io::Write) -> core::result::Result<(), vep_io::error::IoError>; required
+method	vep_io::output::OutputFormatter::format_record	fn(&self, record: &[&vep_core::variant::InputVariant]) -> core::result::Result<alloc::vec::Vec<alloc::string::String>, vep_io::error::IoError>; provided
+method	vep_io::output::OutputFormatter::format_record_bytes	fn(&self, record: &[&vep_core::variant::InputVariant]) -> core::result::Result<alloc::vec::Vec<alloc::vec::Vec<u8>>, vep_io::error::IoError>; provided
+method	vep_io::output::OutputFormatter::format_variant	fn(&self, variant: &vep_core::variant::InputVariant) -> core::result::Result<alloc::vec::Vec<alloc::string::String>, vep_io::error::IoError>; required
+method	vep_io::output::OutputFormatter::write_header	fn(&mut self, writer: &mut dyn std::io::Write) -> core::result::Result<(), vep_io::error::IoError>; required
+module	vep_io::output::fields	mod
+auto traits	vep_io::output::fields::ClinSigAllele	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_io::output::fields::ClinSigAllele	enum
+implementation	vep_io::output::fields::ClinSigAllele	impl core::clone::Clone for vep_io::output::fields::ClinSigAllele
+implementation	vep_io::output::fields::ClinSigAllele	impl core::cmp::Eq for vep_io::output::fields::ClinSigAllele
+implementation	vep_io::output::fields::ClinSigAllele	impl core::cmp::PartialEq for vep_io::output::fields::ClinSigAllele
+implementation	vep_io::output::fields::ClinSigAllele	impl core::default::Default for vep_io::output::fields::ClinSigAllele
+implementation	vep_io::output::fields::ClinSigAllele	impl core::fmt::Debug for vep_io::output::fields::ClinSigAllele
+implementation	vep_io::output::fields::ClinSigAllele	impl core::marker::Copy for vep_io::output::fields::ClinSigAllele
+variant	vep_io::output::fields::ClinSigAllele::PerAllele	no fields
+variant	vep_io::output::fields::ClinSigAllele::WholeVariant	no fields
+type alias	vep_io::output::fields::CustomHeader	type = (alloc::string::String, alloc::string::String)
+auto traits	vep_io::output::fields::CustomSourceInfo	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_io::output::fields::CustomSourceInfo	impl core::clone::Clone for vep_io::output::fields::CustomSourceInfo
+implementation	vep_io::output::fields::CustomSourceInfo	impl core::cmp::PartialEq for vep_io::output::fields::CustomSourceInfo
+implementation	vep_io::output::fields::CustomSourceInfo	impl core::default::Default for vep_io::output::fields::CustomSourceInfo
+implementation	vep_io::output::fields::CustomSourceInfo	impl core::fmt::Debug for vep_io::output::fields::CustomSourceInfo
+struct	vep_io::output::fields::CustomSourceInfo	struct; named fields; #[non_exhaustive]
+field	vep_io::output::fields::CustomSourceInfo::field_descriptions	indexmap::map::IndexMap<alloc::string::String, alloc::string::String>
+field	vep_io::output::fields::CustomSourceInfo::fields	alloc::vec::Vec<alloc::string::String>
+field	vep_io::output::fields::CustomSourceInfo::file	alloc::string::String
+field	vep_io::output::fields::CustomSourceInfo::filter_field	bool
+field	vep_io::output::fields::CustomSourceInfo::reciprocal	bool
+field	vep_io::output::fields::CustomSourceInfo::short_name	alloc::string::String
+field	vep_io::output::fields::CustomSourceInfo::summary_stats	alloc::vec::Vec<alloc::string::String>
+constant	vep_io::output::fields::DEFAULT_OUTPUT_COLS	const: [&str; 13]
+auto traits	vep_io::output::fields::ExtraFieldsPlan	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_io::output::fields::ExtraFieldsPlan	impl core::clone::Clone for vep_io::output::fields::ExtraFieldsPlan
+implementation	vep_io::output::fields::ExtraFieldsPlan	impl core::cmp::PartialEq for vep_io::output::fields::ExtraFieldsPlan
+implementation	vep_io::output::fields::ExtraFieldsPlan	impl core::fmt::Debug for vep_io::output::fields::ExtraFieldsPlan
+struct	vep_io::output::fields::ExtraFieldsPlan	struct; named fields; #[non_exhaustive]
+field	vep_io::output::fields::ExtraFieldsPlan::any_optional_group	bool
+field	vep_io::output::fields::ExtraFieldsPlan::custom_keys	alloc::vec::Vec<alloc::string::String>
+field	vep_io::output::fields::ExtraFieldsPlan::flag_fields	alloc::vec::Vec<&'static str>
+method	vep_io::output::fields::ExtraFieldsPlan::new	fn(options: vep_io::output::fields::FieldOptions) -> Self
+field	vep_io::output::fields::ExtraFieldsPlan::options	vep_io::output::fields::FieldOptions
+field	vep_io::output::fields::ExtraFieldsPlan::transcript_fast_path	bool
+field	vep_io::output::fields::ExtraFieldsPlan::transcript_flag_fields	alloc::vec::Vec<&'static str>
+auto traits	vep_io::output::fields::FieldOptions	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_io::output::fields::FieldOptions	impl core::clone::Clone for vep_io::output::fields::FieldOptions
+implementation	vep_io::output::fields::FieldOptions	impl core::cmp::PartialEq for vep_io::output::fields::FieldOptions
+implementation	vep_io::output::fields::FieldOptions	impl core::default::Default for vep_io::output::fields::FieldOptions
+implementation	vep_io::output::fields::FieldOptions	impl core::fmt::Debug for vep_io::output::fields::FieldOptions
+struct	vep_io::output::fields::FieldOptions	struct; named fields; #[non_exhaustive]
+field	vep_io::output::fields::FieldOptions::af	bool
+field	vep_io::output::fields::FieldOptions::af_1kg	bool
+field	vep_io::output::fields::FieldOptions::af_gnomad	bool
+field	vep_io::output::fields::FieldOptions::af_gnomade	bool
+field	vep_io::output::fields::FieldOptions::af_gnomadg	bool
+field	vep_io::output::fields::FieldOptions::allele_number	bool
+field	vep_io::output::fields::FieldOptions::ambiguity	bool
+method	vep_io::output::fields::FieldOptions::any_optional_group	fn(&self) -> bool
+field	vep_io::output::fields::FieldOptions::appris	bool
+field	vep_io::output::fields::FieldOptions::bam_edited	bool
+field	vep_io::output::fields::FieldOptions::biotype	bool
+field	vep_io::output::fields::FieldOptions::canonical	bool
+field	vep_io::output::fields::FieldOptions::ccds	bool
+field	vep_io::output::fields::FieldOptions::cell_type	bool
+field	vep_io::output::fields::FieldOptions::check_existing	bool
+field	vep_io::output::fields::FieldOptions::check_frequency	bool
+field	vep_io::output::fields::FieldOptions::check_svs	bool
+field	vep_io::output::fields::FieldOptions::clin_sig_allele	vep_io::output::fields::ClinSigAllele
+field	vep_io::output::fields::FieldOptions::clinvar_somatic_classification	bool
+field	vep_io::output::fields::FieldOptions::custom_sources	alloc::vec::Vec<vep_io::output::fields::CustomSourceInfo>
+method	vep_io::output::fields::FieldOptions::distance_shown	fn(&self, tc: &vep_core::consequence::TranscriptConsequence) -> bool
+field	vep_io::output::fields::FieldOptions::domains	bool
+field	vep_io::output::fields::FieldOptions::dont_skip	bool
+method	vep_io::output::fields::FieldOptions::frequency_groups	fn(&self) -> vep_io::output::frequency::FrequencyGroups
+field	vep_io::output::fields::FieldOptions::ga4gh_vrs	bool
+field	vep_io::output::fields::FieldOptions::gencode_primary	bool
+field	vep_io::output::fields::FieldOptions::gene_phenotype	bool
+field	vep_io::output::fields::FieldOptions::gene_version	bool
+field	vep_io::output::fields::FieldOptions::hgvs	bool
+field	vep_io::output::fields::FieldOptions::hgvsg	bool
+field	vep_io::output::fields::FieldOptions::include_pick	bool
+field	vep_io::output::fields::FieldOptions::individual	bool
+field	vep_io::output::fields::FieldOptions::individual_zyg	bool
+field	vep_io::output::fields::FieldOptions::mane	bool
+field	vep_io::output::fields::FieldOptions::mane_plus_clinical	bool
+field	vep_io::output::fields::FieldOptions::mane_select	bool
+field	vep_io::output::fields::FieldOptions::max_af	bool
+field	vep_io::output::fields::FieldOptions::merged	bool
+field	vep_io::output::fields::FieldOptions::minimal	bool
+field	vep_io::output::fields::FieldOptions::mirna	bool
+field	vep_io::output::fields::FieldOptions::nearest	bool
+field	vep_io::output::fields::FieldOptions::no_escape	bool
+field	vep_io::output::fields::FieldOptions::numbers	bool
+method	vep_io::output::fields::FieldOptions::only_regulatory_group_beyond_user	fn(&self) -> bool
+field	vep_io::output::fields::FieldOptions::overlaps	bool
+field	vep_io::output::fields::FieldOptions::plugin_fields	alloc::sync::Arc<std::collections::hash::set::HashSet<alloc::string::String>>
+field	vep_io::output::fields::FieldOptions::plugin_row_kinds	alloc::sync::Arc<std::collections::hash::map::HashMap<alloc::string::String, alloc::vec::Vec<vep_core::consequence::RowKind>>>
+field	vep_io::output::fields::FieldOptions::polyphen	bool
+field	vep_io::output::fields::FieldOptions::positions_of_own_span	bool
+field	vep_io::output::fields::FieldOptions::process_ref_homs	bool
+field	vep_io::output::fields::FieldOptions::protein	bool
+field	vep_io::output::fields::FieldOptions::pubmed	bool
+field	vep_io::output::fields::FieldOptions::refseq	bool
+field	vep_io::output::fields::FieldOptions::regulatory	bool
+method	vep_io::output::fields::FieldOptions::set_plugin_fields	fn(&mut self, names: impl core::iter::traits::collect::IntoIterator<Item = alloc::string::String>)
+field	vep_io::output::fields::FieldOptions::shift_3prime	bool
+field	vep_io::output::fields::FieldOptions::shift_genomic	bool
+field	vep_io::output::fields::FieldOptions::shift_length	bool
+field	vep_io::output::fields::FieldOptions::show_ref_allele	bool
+field	vep_io::output::fields::FieldOptions::sift	bool
+field	vep_io::output::fields::FieldOptions::spdi	bool
+field	vep_io::output::fields::FieldOptions::summary_rows	bool
+field	vep_io::output::fields::FieldOptions::symbol	bool
+field	vep_io::output::fields::FieldOptions::terms	vep_core::terms::Vocabulary
+field	vep_io::output::fields::FieldOptions::total_length	bool
+field	vep_io::output::fields::FieldOptions::transcript_version	bool
+field	vep_io::output::fields::FieldOptions::tsl	bool
+field	vep_io::output::fields::FieldOptions::unflagged_plugin_fields	alloc::sync::Arc<[alloc::string::String]>
+field	vep_io::output::fields::FieldOptions::uniprot	bool
+field	vep_io::output::fields::FieldOptions::uploaded_allele	bool
+field	vep_io::output::fields::FieldOptions::use_transcript_ref	bool
+method	vep_io::output::fields::FieldOptions::user_group_is_plain	fn(&self) -> bool
+field	vep_io::output::fields::FieldOptions::var_synonyms	bool
+field	vep_io::output::fields::FieldOptions::variant_class	bool
+field	vep_io::output::fields::FieldOptions::xref_refseq	bool
+constant	vep_io::output::fields::MOTIF_FIELDS	const: [&str; 5]
+constant	vep_io::output::fields::PLUGIN_LIST_SEPARATOR	const: char
+type alias	vep_io::output::fields::PluginHeader	type = (alloc::string::String, alloc::string::String)
+type alias	vep_io::output::fields::Row	type<'a> = (&'a vep_core::variant::InputVariant, core::option::Option<&'a vep_core::consequence::TranscriptConsequence>)
+constant	vep_io::output::fields::VEP_RS_VERSION	const: &str
+function	vep_io::output::fields::colocated_field	fn(field: &str) -> bool
+function	vep_io::output::fields::consequence_string	fn(tc: &vep_core::consequence::TranscriptConsequence, options: &vep_io::output::fields::FieldOptions) -> alloc::string::String
+function	vep_io::output::fields::custom_extra_keys	fn(sources: &[vep_io::output::fields::CustomSourceInfo]) -> alloc::vec::Vec<alloc::string::String>
+function	vep_io::output::fields::custom_field_names	fn(sources: &[vep_io::output::fields::CustomSourceInfo]) -> alloc::vec::Vec<alloc::string::String>
+function	vep_io::output::fields::custom_headers	fn(sources: &[vep_io::output::fields::CustomSourceInfo]) -> alloc::vec::Vec<vep_io::output::fields::CustomHeader>
+function	vep_io::output::fields::custom_key_present	fn(field: &str, variant: &vep_core::variant::InputVariant, tc: core::option::Option<&vep_core::consequence::TranscriptConsequence>) -> bool
+function	vep_io::output::fields::dash_is_a_value	fn(field: &str) -> bool
+function	vep_io::output::fields::default_format_header	fn(options: &vep_io::output::fields::FieldOptions, plugin_headers: &[vep_io::output::fields::PluginHeader], cache_dir: &str, cache_info: core::option::Option<&vep_core::cache_info::CacheInfo>, command_line: &str) -> alloc::vec::Vec<alloc::string::String>
+function	vep_io::output::fields::empty_plugin_value_is_a_string	fn(field: &str, variant: &vep_core::variant::InputVariant, tc: core::option::Option<&vep_core::consequence::TranscriptConsequence>) -> bool
+function	vep_io::output::fields::empty_plugin_value_is_written	fn(field: &str, variant: &vep_core::variant::InputVariant, tc: core::option::Option<&vep_core::consequence::TranscriptConsequence>, options: &vep_io::output::fields::FieldOptions) -> bool
+function	vep_io::output::fields::empty_value_is_written	fn(field: &str, variant: &vep_core::variant::InputVariant, tc: core::option::Option<&vep_core::consequence::TranscriptConsequence>, options: &vep_io::output::fields::FieldOptions) -> bool
+function	vep_io::output::fields::extra_keys	fn<'a>(variant: &'a vep_core::variant::InputVariant, tc: core::option::Option<&'a vep_core::consequence::TranscriptConsequence>, options: &vep_io::output::fields::FieldOptions) -> alloc::vec::Vec<&'a str>
+function	vep_io::output::fields::extra_keys_with	fn<'a>(flagged: &[&'static str], custom_keys: &'a [alloc::string::String], variant: &'a vep_core::variant::InputVariant, tc: core::option::Option<&'a vep_core::consequence::TranscriptConsequence>, options: &vep_io::output::fields::FieldOptions) -> alloc::vec::Vec<&'a str>
+function	vep_io::output::fields::field_description	fn(field: &str) -> core::option::Option<&'static str>
+function	vep_io::output::fields::field_is_produced	fn(field: &str, options: &vep_io::output::fields::FieldOptions) -> bool
+function	vep_io::output::fields::field_value	fn(field: &str, variant: &vep_core::variant::InputVariant, tc: core::option::Option<&vep_core::consequence::TranscriptConsequence>, options: &vep_io::output::fields::FieldOptions, list_sep: &str) -> alloc::string::String
+function	vep_io::output::fields::field_value_without_custom_pushes	fn(field: &str, variant: &vep_core::variant::InputVariant, tc: core::option::Option<&vep_core::consequence::TranscriptConsequence>, options: &vep_io::output::fields::FieldOptions, list_sep: &str) -> alloc::string::String
+function	vep_io::output::fields::flag_fields	fn(options: &vep_io::output::fields::FieldOptions) -> alloc::vec::Vec<&'static str>
+function	vep_io::output::fields::percent_encode_control_bytes	fn(out: &mut alloc::vec::Vec<u8>, start: usize)
+function	vep_io::output::fields::plugin_field_names	fn(plugin_headers: &[vep_io::output::fields::PluginHeader]) -> alloc::vec::Vec<alloc::string::String>
+function	vep_io::output::fields::plugin_names_a_fixed_column	fn(variant: &vep_core::variant::InputVariant, tc: core::option::Option<&vep_core::consequence::TranscriptConsequence>) -> bool
+function	vep_io::output::fields::plugin_value_is_a_list	fn(field: &str) -> bool
+function	vep_io::output::fields::position_column	fn(position: core::option::Option<&str>, total: core::option::Option<u32>) -> alloc::string::String
+function	vep_io::output::fields::record_rows	fn<'a>(record: &[&'a vep_core::variant::InputVariant]) -> alloc::vec::Vec<vep_io::output::fields::Row<'a>>
+function	vep_io::output::fields::record_rows_into	fn<'a>(record: &[&'a vep_core::variant::InputVariant], rows: &mut alloc::vec::Vec<vep_io::output::fields::Row<'a>>)
+function	vep_io::output::fields::rendered_terms	fn(terms: &[vep_core::consequence::Consequence], vocabulary: vep_core::terms::Vocabulary, once: bool) -> alloc::vec::Vec<&'static str>
+function	vep_io::output::fields::row_ga4gh_vrs	fn<'a>(variant: &'a vep_core::variant::InputVariant, tc: core::option::Option<&vep_core::consequence::TranscriptConsequence>, options: &vep_io::output::fields::FieldOptions) -> core::option::Option<&'a vep_core::spdi::VrsAllele>
+function	vep_io::output::fields::tab_columns	fn(options: &vep_io::output::fields::FieldOptions, plugin_fields: &[alloc::string::String], selected_fields: core::option::Option<&[alloc::string::String]>) -> alloc::vec::Vec<alloc::string::String>
+function	vep_io::output::fields::tab_header	fn(options: &vep_io::output::fields::FieldOptions, plugin_headers: &[vep_io::output::fields::PluginHeader], selected_fields: core::option::Option<&[alloc::string::String]>, cache_dir: &str, cache_info: core::option::Option<&vep_core::cache_info::CacheInfo>, command_line: &str) -> alloc::vec::Vec<alloc::string::String>
+function	vep_io::output::fields::utc_timestamp	fn(secs: u64) -> alloc::string::String
+function	vep_io::output::fields::value_comes_from_a_custom_source	fn(field: &str, variant: &vep_core::variant::InputVariant, tc: core::option::Option<&vep_core::consequence::TranscriptConsequence>, options: &vep_io::output::fields::FieldOptions) -> bool
+function	vep_io::output::fields::value_is_held_by_no_json_row	fn(field: &str, variant: &vep_core::variant::InputVariant, tc: core::option::Option<&vep_core::consequence::TranscriptConsequence>, options: &vep_io::output::fields::FieldOptions) -> bool
+function	vep_io::output::fields::vcf_vep_meta_line	fn(cache_dir: &str, cache_info: core::option::Option<&vep_core::cache_info::CacheInfo>) -> alloc::string::String
+function	vep_io::output::fields::version_suffix	fn(id: &str, version: core::option::Option<u32>) -> core::option::Option<u32>
+function	vep_io::output::fields::vf_level_flag_fields	fn(options: &vep_io::output::fields::FieldOptions) -> alloc::vec::Vec<&'static str>
+function	vep_io::output::fields::write_field_value	fn(out: &mut alloc::vec::Vec<u8>, field: &str, variant: &vep_core::variant::InputVariant, tc: core::option::Option<&vep_core::consequence::TranscriptConsequence>, options: &vep_io::output::fields::FieldOptions, list_sep: &str)
+function	vep_io::output::fields::write_terms	fn(out: &mut alloc::vec::Vec<u8>, terms: &[vep_core::consequence::Consequence], vocabulary: vep_core::terms::Vocabulary)
+function	vep_io::output::fields::write_versioned_id	fn(out: &mut alloc::vec::Vec<u8>, id: &str, version: core::option::Option<u32>, flag: bool)
+module	vep_io::output::frequency	mod
+constant	vep_io::output::frequency::FREQUENCY_KEYS	const: &[(&str, &[&str])]
+auto traits	vep_io::output::frequency::Frequency	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_io::output::frequency::Frequency	enum<'a>; #[non_exhaustive]
+implementation	vep_io::output::frequency::Frequency	impl<'a> core::clone::Clone for vep_io::output::frequency::Frequency<'a>
+implementation	vep_io::output::frequency::Frequency	impl<'a> core::cmp::PartialEq for vep_io::output::frequency::Frequency<'a>
+implementation	vep_io::output::frequency::Frequency	impl<'a> core::fmt::Debug for vep_io::output::frequency::Frequency<'a>
+variant	vep_io::output::frequency::Frequency::Remainder	1 positional field
+field	vep_io::output::frequency::Frequency::Remainder::0	f64
+variant	vep_io::output::frequency::Frequency::Stored	1 positional field
+field	vep_io::output::frequency::Frequency::Stored::0	alloc::borrow::Cow<'a, str>
+method	vep_io::output::frequency::Frequency::text	fn(&self) -> alloc::string::String; in impl vep_io::output::frequency::Frequency<'_>
+auto traits	vep_io::output::frequency::FrequencyGroups	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_io::output::frequency::FrequencyGroups	impl core::clone::Clone for vep_io::output::frequency::FrequencyGroups
+implementation	vep_io::output::frequency::FrequencyGroups	impl core::cmp::Eq for vep_io::output::frequency::FrequencyGroups
+implementation	vep_io::output::frequency::FrequencyGroups	impl core::cmp::PartialEq for vep_io::output::frequency::FrequencyGroups
+implementation	vep_io::output::frequency::FrequencyGroups	impl core::default::Default for vep_io::output::frequency::FrequencyGroups
+implementation	vep_io::output::frequency::FrequencyGroups	impl core::fmt::Debug for vep_io::output::frequency::FrequencyGroups
+implementation	vep_io::output::frequency::FrequencyGroups	impl core::marker::Copy for vep_io::output::frequency::FrequencyGroups
+struct	vep_io::output::frequency::FrequencyGroups	struct; named fields; #[non_exhaustive]
+field	vep_io::output::frequency::FrequencyGroups::af	bool
+field	vep_io::output::frequency::FrequencyGroups::af_1kg	bool
+field	vep_io::output::frequency::FrequencyGroups::af_gnomad	bool
+field	vep_io::output::frequency::FrequencyGroups::af_gnomade	bool
+field	vep_io::output::frequency::FrequencyGroups::af_gnomadg	bool
+method	vep_io::output::frequency::FrequencyGroups::for_json	fn(self) -> Self
+field	vep_io::output::frequency::FrequencyGroups::max_af	bool
+function	vep_io::output::frequency::frequency_column	fn(field: &str) -> core::option::Option<&'static str>
+function	vep_io::output::frequency::frequency_field	fn(column: &str, variant: &vep_core::variant::InputVariant, groups: &vep_io::output::frequency::FrequencyGroups) -> alloc::vec::Vec<alloc::string::String>
+function	vep_io::output::frequency::max_af	fn(variant: &vep_core::variant::InputVariant, groups: &vep_io::output::frequency::FrequencyGroups) -> core::option::Option<(alloc::string::String, alloc::vec::Vec<&'static str>)>
+function	vep_io::output::frequency::reported_frequency	fn<'a>(cv: &'a vep_core::variant::ColocatedVariant, column: &str, allele: &str, groups: &vep_io::output::frequency::FrequencyGroups) -> core::option::Option<vep_io::output::frequency::Frequency<'a>>
+module	vep_io::output::json	mod
+auto traits	vep_io::output::json::JsonOutputFormatter	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_io::output::json::JsonOutputFormatter	impl vep_io::output::OutputFormatter for vep_io::output::json::JsonOutputFormatter
+struct	vep_io::output::json::JsonOutputFormatter	struct; named fields, some private
+method	vep_io::output::json::JsonOutputFormatter::format_record_value	fn(&self, record: &[&vep_core::variant::InputVariant]) -> serde_json::value::Value
+method	vep_io::output::json::JsonOutputFormatter::format_variant_value	fn(&self, variant: &vep_core::variant::InputVariant) -> serde_json::value::Value
+method	vep_io::output::json::JsonOutputFormatter::new	fn(options: vep_io::output::fields::FieldOptions, plugin_fields: alloc::vec::Vec<alloc::string::String>, assembly: core::option::Option<alloc::string::String>) -> Self
+module	vep_io::output::parquet	mod; #[cfg(feature = "parquet")]
+constant	vep_io::output::parquet::BLOOM_FILTER_COLUMNS	const: [&str; 5]
+auto traits	vep_io::output::parquet::BoolSpelling	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_io::output::parquet::BoolSpelling	enum; #[non_exhaustive]
+implementation	vep_io::output::parquet::BoolSpelling	impl core::clone::Clone for vep_io::output::parquet::BoolSpelling
+implementation	vep_io::output::parquet::BoolSpelling	impl core::cmp::Eq for vep_io::output::parquet::BoolSpelling
+implementation	vep_io::output::parquet::BoolSpelling	impl core::cmp::PartialEq for vep_io::output::parquet::BoolSpelling
+implementation	vep_io::output::parquet::BoolSpelling	impl core::fmt::Debug for vep_io::output::parquet::BoolSpelling
+implementation	vep_io::output::parquet::BoolSpelling	impl core::marker::Copy for vep_io::output::parquet::BoolSpelling
+variant	vep_io::output::parquet::BoolSpelling::One	no fields
+variant	vep_io::output::parquet::BoolSpelling::Yes	no fields
+variant	vep_io::output::parquet::BoolSpelling::YesNo	no fields
+auto traits	vep_io::output::parquet::CellValue	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_io::output::parquet::CellValue	enum; #[non_exhaustive]
+implementation	vep_io::output::parquet::CellValue	impl core::clone::Clone for vep_io::output::parquet::CellValue
+implementation	vep_io::output::parquet::CellValue	impl core::cmp::PartialEq for vep_io::output::parquet::CellValue
+implementation	vep_io::output::parquet::CellValue	impl core::fmt::Debug for vep_io::output::parquet::CellValue
+variant	vep_io::output::parquet::CellValue::Boolean	1 positional field
+field	vep_io::output::parquet::CellValue::Boolean::0	bool
+variant	vep_io::output::parquet::CellValue::BooleanList	1 positional field
+field	vep_io::output::parquet::CellValue::BooleanList::0	alloc::vec::Vec<core::option::Option<bool>>
+variant	vep_io::output::parquet::CellValue::Double	1 positional field
+field	vep_io::output::parquet::CellValue::Double::0	f64
+variant	vep_io::output::parquet::CellValue::DoubleList	1 positional field
+field	vep_io::output::parquet::CellValue::DoubleList::0	alloc::vec::Vec<core::option::Option<f64>>
+variant	vep_io::output::parquet::CellValue::Int32	1 positional field
+field	vep_io::output::parquet::CellValue::Int32::0	i32
+variant	vep_io::output::parquet::CellValue::Int64	1 positional field
+field	vep_io::output::parquet::CellValue::Int64::0	i64
+variant	vep_io::output::parquet::CellValue::Positions	1 positional field
+field	vep_io::output::parquet::CellValue::Positions::0	vep_io::output::parquet::Positions
+variant	vep_io::output::parquet::CellValue::Text	1 positional field
+field	vep_io::output::parquet::CellValue::Text::0	alloc::string::String
+variant	vep_io::output::parquet::CellValue::TextList	1 positional field
+field	vep_io::output::parquet::CellValue::TextList::0	alloc::vec::Vec<alloc::string::String>
+auto traits	vep_io::output::parquet::ColumnType	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_io::output::parquet::ColumnType	enum; #[non_exhaustive]
+implementation	vep_io::output::parquet::ColumnType	impl core::clone::Clone for vep_io::output::parquet::ColumnType
+implementation	vep_io::output::parquet::ColumnType	impl core::cmp::Eq for vep_io::output::parquet::ColumnType
+implementation	vep_io::output::parquet::ColumnType	impl core::cmp::PartialEq for vep_io::output::parquet::ColumnType
+implementation	vep_io::output::parquet::ColumnType	impl core::fmt::Debug for vep_io::output::parquet::ColumnType
+implementation	vep_io::output::parquet::ColumnType	impl core::marker::Copy for vep_io::output::parquet::ColumnType
+variant	vep_io::output::parquet::ColumnType::Boolean	1 positional field
+field	vep_io::output::parquet::ColumnType::Boolean::0	vep_io::output::parquet::BoolSpelling
+variant	vep_io::output::parquet::ColumnType::BooleanList	no fields
+variant	vep_io::output::parquet::ColumnType::Double	no fields
+variant	vep_io::output::parquet::ColumnType::DoubleList	no fields
+variant	vep_io::output::parquet::ColumnType::Int32	no fields
+variant	vep_io::output::parquet::ColumnType::Positions	no fields
+variant	vep_io::output::parquet::ColumnType::Text	no fields
+variant	vep_io::output::parquet::ColumnType::TextList	no fields
+method	vep_io::output::parquet::ColumnType::stored_type_name	fn(self) -> &'static str
+auto traits	vep_io::output::parquet::Current	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_io::output::parquet::Current	impl core::clone::Clone for vep_io::output::parquet::Current
+implementation	vep_io::output::parquet::Current	impl core::cmp::Eq for vep_io::output::parquet::Current
+implementation	vep_io::output::parquet::Current	impl core::cmp::PartialEq for vep_io::output::parquet::Current
+implementation	vep_io::output::parquet::Current	impl core::fmt::Debug for vep_io::output::parquet::Current
+struct	vep_io::output::parquet::Current	struct; named fields; #[non_exhaustive]
+field	vep_io::output::parquet::Current::chrom	alloc::string::String
+field	vep_io::output::parquet::Current::max_position	u64
+field	vep_io::output::parquet::Current::rank	i32
+auto traits	vep_io::output::parquet::InputOrder	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_io::output::parquet::InputOrder	enum
+implementation	vep_io::output::parquet::InputOrder	impl core::clone::Clone for vep_io::output::parquet::InputOrder
+implementation	vep_io::output::parquet::InputOrder	impl core::cmp::Eq for vep_io::output::parquet::InputOrder
+implementation	vep_io::output::parquet::InputOrder	impl core::cmp::PartialEq for vep_io::output::parquet::InputOrder
+implementation	vep_io::output::parquet::InputOrder	impl core::fmt::Debug for vep_io::output::parquet::InputOrder
+implementation	vep_io::output::parquet::InputOrder	impl core::marker::Copy for vep_io::output::parquet::InputOrder
+variant	vep_io::output::parquet::InputOrder::Checked	named fields
+field	vep_io::output::parquet::InputOrder::Checked::unlisted_rank	i32
+variant	vep_io::output::parquet::InputOrder::Unchecked	no fields
+constant	vep_io::output::parquet::KEY_COLUMNS	const: [&str; 6]
+constant	vep_io::output::parquet::MANIFEST_NAME	const: &str
+constant	vep_io::output::parquet::MAX_PART_BYTES	const: usize
+auto traits	vep_io::output::parquet::Manifest	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_io::output::parquet::Manifest	impl core::clone::Clone for vep_io::output::parquet::Manifest
+implementation	vep_io::output::parquet::Manifest	impl core::cmp::Eq for vep_io::output::parquet::Manifest
+implementation	vep_io::output::parquet::Manifest	impl core::cmp::PartialEq for vep_io::output::parquet::Manifest
+implementation	vep_io::output::parquet::Manifest	impl core::fmt::Debug for vep_io::output::parquet::Manifest
+implementation	vep_io::output::parquet::Manifest	impl serde_core::ser::Serialize for vep_io::output::parquet::Manifest
+implementation	vep_io::output::parquet::Manifest	impl<'de> serde_core::de::Deserialize<'de> for vep_io::output::parquet::Manifest
+struct	vep_io::output::parquet::Manifest	struct; named fields; #[non_exhaustive]
+method	vep_io::output::parquet::Manifest::new	fn(kv_metadata: &[(alloc::string::String, alloc::string::String)]) -> Self
+field	vep_io::output::parquet::Manifest::parts	alloc::vec::Vec<vep_io::output::parquet::PartEntry>
+method	vep_io::output::parquet::Manifest::read	fn(dir: &std::path::Path) -> core::result::Result<Self, vep_io::error::IoError>
+field	vep_io::output::parquet::Manifest::rows	u64
+field	vep_io::output::parquet::Manifest::run_id	alloc::string::String
+field	vep_io::output::parquet::Manifest::vep_rs_version	alloc::string::String
+method	vep_io::output::parquet::Manifest::write	fn(&mut self, dir: &std::path::Path) -> core::result::Result<(), vep_io::error::IoError>
+auto traits	vep_io::output::parquet::OrderMonitor	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_io::output::parquet::OrderMonitor	impl core::fmt::Debug for vep_io::output::parquet::OrderMonitor
+struct	vep_io::output::parquet::OrderMonitor	struct; named fields, some private
+method	vep_io::output::parquet::OrderMonitor::current	fn(&self) -> core::option::Option<&vep_io::output::parquet::Current>
+method	vep_io::output::parquet::OrderMonitor::new	fn(unlisted_rank: i32) -> Self
+method	vep_io::output::parquet::OrderMonitor::observe	fn(&mut self, batch: &vep_io::output::parquet::RowBatch) -> core::result::Result<(), vep_io::output::parquet::UnsortedInput>
+auto traits	vep_io::output::parquet::ParquetDirectoryWriter	!RefUnwindSafe, Send, !Sync, Unpin, !UnwindSafe
+struct	vep_io::output::parquet::ParquetDirectoryWriter	struct; named fields, some private
+method	vep_io::output::parquet::ParquetDirectoryWriter::block_is_full	fn(&self) -> bool
+method	vep_io::output::parquet::ParquetDirectoryWriter::close	fn(self) -> core::result::Result<(), vep_io::error::IoError>
+method	vep_io::output::parquet::ParquetDirectoryWriter::create	fn(dir: &std::path::Path, formatter: &vep_io::output::parquet::ParquetOutputFormatter, kv_metadata: alloc::vec::Vec<(alloc::string::String, alloc::string::String)>, order: vep_io::output::parquet::InputOrder, partition: core::option::Option<vep_io::output::parquet::Partition>) -> core::result::Result<Self, vep_io::error::IoError>
+method	vep_io::output::parquet::ParquetDirectoryWriter::encode_on_own_thread	fn(&mut self, pool: alloc::sync::Arc<rayon_core::thread_pool::ThreadPool>) -> core::result::Result<(), vep_io::error::IoError>
+method	vep_io::output::parquet::ParquetDirectoryWriter::encode_pending	fn(&mut self) -> core::result::Result<(), vep_io::error::IoError>
+method	vep_io::output::parquet::ParquetDirectoryWriter::write	fn(&mut self, batch: vep_io::output::parquet::RowBatch) -> core::result::Result<(), vep_io::output::parquet::UnsortedInput>
+auto traits	vep_io::output::parquet::ParquetOutputFormatter	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+struct	vep_io::output::parquet::ParquetOutputFormatter	struct; named fields, some private
+method	vep_io::output::parquet::ParquetOutputFormatter::contig_index	fn(&self, chr: &str) -> i32
+method	vep_io::output::parquet::ParquetOutputFormatter::new	fn(options: vep_io::output::fields::FieldOptions, plugin_fields: alloc::vec::Vec<alloc::string::String>, contig_order: alloc::vec::Vec<alloc::string::String>) -> Self
+method	vep_io::output::parquet::ParquetOutputFormatter::unlisted_rank	fn(&self) -> i32
+auto traits	vep_io::output::parquet::PartEntry	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_io::output::parquet::PartEntry	impl core::clone::Clone for vep_io::output::parquet::PartEntry
+implementation	vep_io::output::parquet::PartEntry	impl core::cmp::Eq for vep_io::output::parquet::PartEntry
+implementation	vep_io::output::parquet::PartEntry	impl core::cmp::PartialEq for vep_io::output::parquet::PartEntry
+implementation	vep_io::output::parquet::PartEntry	impl core::fmt::Debug for vep_io::output::parquet::PartEntry
+implementation	vep_io::output::parquet::PartEntry	impl serde_core::ser::Serialize for vep_io::output::parquet::PartEntry
+implementation	vep_io::output::parquet::PartEntry	impl<'de> serde_core::de::Deserialize<'de> for vep_io::output::parquet::PartEntry
+struct	vep_io::output::parquet::PartEntry	struct; named fields; #[non_exhaustive]
+field	vep_io::output::parquet::PartEntry::path	alloc::string::String
+field	vep_io::output::parquet::PartEntry::rows	u64
+auto traits	vep_io::output::parquet::Partition	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_io::output::parquet::Partition	enum; #[non_exhaustive]
+implementation	vep_io::output::parquet::Partition	impl core::clone::Clone for vep_io::output::parquet::Partition
+implementation	vep_io::output::parquet::Partition	impl core::cmp::Eq for vep_io::output::parquet::Partition
+implementation	vep_io::output::parquet::Partition	impl core::cmp::PartialEq for vep_io::output::parquet::Partition
+implementation	vep_io::output::parquet::Partition	impl core::fmt::Debug for vep_io::output::parquet::Partition
+implementation	vep_io::output::parquet::Partition	impl core::marker::Copy for vep_io::output::parquet::Partition
+variant	vep_io::output::parquet::Partition::Chrom	no fields
+auto traits	vep_io::output::parquet::Positions	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_io::output::parquet::Positions	impl core::clone::Clone for vep_io::output::parquet::Positions
+implementation	vep_io::output::parquet::Positions	impl core::cmp::Eq for vep_io::output::parquet::Positions
+implementation	vep_io::output::parquet::Positions	impl core::cmp::PartialEq for vep_io::output::parquet::Positions
+implementation	vep_io::output::parquet::Positions	impl core::default::Default for vep_io::output::parquet::Positions
+implementation	vep_io::output::parquet::Positions	impl core::fmt::Debug for vep_io::output::parquet::Positions
+implementation	vep_io::output::parquet::Positions	impl core::marker::Copy for vep_io::output::parquet::Positions
+struct	vep_io::output::parquet::Positions	struct; named fields; #[non_exhaustive]
+field	vep_io::output::parquet::Positions::end	core::option::Option<i32>
+field	vep_io::output::parquet::Positions::start	core::option::Option<i32>
+field	vep_io::output::parquet::Positions::total	core::option::Option<i32>
+auto traits	vep_io::output::parquet::PreviousOutput	!RefUnwindSafe, Send, Sync, Unpin, !UnwindSafe
+enum	vep_io::output::parquet::PreviousOutput	enum; #[non_exhaustive]
+implementation	vep_io::output::parquet::PreviousOutput	impl core::convert::From<std::io::error::Error> for vep_io::output::parquet::PreviousOutput
+implementation	vep_io::output::parquet::PreviousOutput	impl core::convert::From<vep_io::output::parquet::PreviousOutput> for vep_io::output::parquet::PublishError
+implementation	vep_io::output::parquet::PreviousOutput	impl core::error::Error for vep_io::output::parquet::PreviousOutput
+implementation	vep_io::output::parquet::PreviousOutput	impl core::fmt::Debug for vep_io::output::parquet::PreviousOutput
+implementation	vep_io::output::parquet::PreviousOutput	impl core::fmt::Display for vep_io::output::parquet::PreviousOutput
+variant	vep_io::output::parquet::PreviousOutput::Foreign	1 positional field
+field	vep_io::output::parquet::PreviousOutput::Foreign::0	std::path::PathBuf
+variant	vep_io::output::parquet::PreviousOutput::ForeignFile	1 positional field
+field	vep_io::output::parquet::PreviousOutput::ForeignFile::0	std::path::PathBuf
+variant	vep_io::output::parquet::PreviousOutput::Io	1 positional field
+field	vep_io::output::parquet::PreviousOutput::Io::0	std::io::error::Error
+variant	vep_io::output::parquet::PreviousOutput::Link	1 positional field
+field	vep_io::output::parquet::PreviousOutput::Link::0	std::path::PathBuf
+variant	vep_io::output::parquet::PreviousOutput::LinkInside	1 positional field
+field	vep_io::output::parquet::PreviousOutput::LinkInside::0	std::path::PathBuf
+auto traits	vep_io::output::parquet::PublishError	!RefUnwindSafe, Send, Sync, Unpin, !UnwindSafe
+enum	vep_io::output::parquet::PublishError	enum; #[non_exhaustive]
+implementation	vep_io::output::parquet::PublishError	impl core::convert::From<vep_io::output::parquet::PreviousOutput> for vep_io::output::parquet::PublishError
+implementation	vep_io::output::parquet::PublishError	impl core::error::Error for vep_io::output::parquet::PublishError
+implementation	vep_io::output::parquet::PublishError	impl core::fmt::Debug for vep_io::output::parquet::PublishError
+implementation	vep_io::output::parquet::PublishError	impl core::fmt::Display for vep_io::output::parquet::PublishError
+variant	vep_io::output::parquet::PublishError::Exists	no fields
+variant	vep_io::output::parquet::PublishError::Io	1 positional field
+field	vep_io::output::parquet::PublishError::Io::0	std::io::error::Error
+variant	vep_io::output::parquet::PublishError::Previous	1 positional field
+field	vep_io::output::parquet::PublishError::Previous::0	vep_io::output::parquet::PreviousOutput
+variant	vep_io::output::parquet::PublishError::Unremoved	named fields
+field	vep_io::output::parquet::PublishError::Unremoved::previous	std::path::PathBuf
+field	vep_io::output::parquet::PublishError::Unremoved::reason	vep_io::output::parquet::PreviousOutput
+variant	vep_io::output::parquet::PublishError::Unrestored	named fields
+field	vep_io::output::parquet::PublishError::Unrestored::error	std::io::error::Error
+field	vep_io::output::parquet::PublishError::Unrestored::previous	std::path::PathBuf
+constant	vep_io::output::parquet::ROW_GROUP_SORT	const: &str
+auto traits	vep_io::output::parquet::RowBatch	!RefUnwindSafe, Send, Sync, Unpin, !UnwindSafe
+implementation	vep_io::output::parquet::RowBatch	impl core::fmt::Debug for vep_io::output::parquet::RowBatch
+struct	vep_io::output::parquet::RowBatch	struct; named fields, some private; #[non_exhaustive]
+field	vep_io::output::parquet::RowBatch::lines	alloc::vec::Vec<u64>
+method	vep_io::output::parquet::RowBatch::num_rows	fn(&self) -> usize
+field	vep_io::output::parquet::RowBatch::positions	alloc::vec::Vec<u64>
+auto traits	vep_io::output::parquet::RowBatchBuilder	!RefUnwindSafe, Send, Sync, Unpin, !UnwindSafe
+struct	vep_io::output::parquet::RowBatchBuilder	struct; named fields, some private
+method	vep_io::output::parquet::RowBatchBuilder::finish	fn(self) -> vep_io::output::parquet::RowBatch
+method	vep_io::output::parquet::RowBatchBuilder::new	fn(formatter: alloc::sync::Arc<vep_io::output::parquet::ParquetOutputFormatter>) -> Self
+method	vep_io::output::parquet::RowBatchBuilder::push_record	fn<'a>(&mut self, record: &[&'a vep_core::variant::InputVariant], rows: &mut alloc::vec::Vec<vep_io::output::fields::Row<'a>>)
+constant	vep_io::output::parquet::TAB_COLUMNS_KEY	const: &str
+auto traits	vep_io::output::parquet::UnpublishedOutput	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_io::output::parquet::UnpublishedOutput	impl core::fmt::Debug for vep_io::output::parquet::UnpublishedOutput
+implementation	vep_io::output::parquet::UnpublishedOutput	impl core::ops::drop::Drop for vep_io::output::parquet::UnpublishedOutput
+struct	vep_io::output::parquet::UnpublishedOutput	struct; named fields, some private
+method	vep_io::output::parquet::UnpublishedOutput::beside	fn(output: &std::path::Path, run_id: &str) -> core::option::Option<Self>
+method	vep_io::output::parquet::UnpublishedOutput::check_destination	fn(&self) -> core::result::Result<(), vep_io::output::parquet::PreviousOutput>
+method	vep_io::output::parquet::UnpublishedOutput::create	fn(&mut self) -> std::io::error::Result<()>
+method	vep_io::output::parquet::UnpublishedOutput::discard	fn(self) -> std::io::error::Result<()>
+method	vep_io::output::parquet::UnpublishedOutput::holds	fn(&self, path: &std::path::Path) -> bool
+method	vep_io::output::parquet::UnpublishedOutput::is_named_by	fn(&self, path: &std::path::Path) -> bool
+method	vep_io::output::parquet::UnpublishedOutput::path	fn(&self) -> &std::path::Path
+method	vep_io::output::parquet::UnpublishedOutput::publish	fn(&mut self, replace: bool) -> core::result::Result<(), vep_io::output::parquet::PublishError>
+auto traits	vep_io::output::parquet::UnsortedInput	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_io::output::parquet::UnsortedInput	impl core::clone::Clone for vep_io::output::parquet::UnsortedInput
+implementation	vep_io::output::parquet::UnsortedInput	impl core::cmp::Eq for vep_io::output::parquet::UnsortedInput
+implementation	vep_io::output::parquet::UnsortedInput	impl core::cmp::PartialEq for vep_io::output::parquet::UnsortedInput
+implementation	vep_io::output::parquet::UnsortedInput	impl core::error::Error for vep_io::output::parquet::UnsortedInput
+implementation	vep_io::output::parquet::UnsortedInput	impl core::fmt::Debug for vep_io::output::parquet::UnsortedInput
+implementation	vep_io::output::parquet::UnsortedInput	impl core::fmt::Display for vep_io::output::parquet::UnsortedInput
+struct	vep_io::output::parquet::UnsortedInput	struct; named fields; #[non_exhaustive]
+field	vep_io::output::parquet::UnsortedInput::chrom	alloc::string::String
+field	vep_io::output::parquet::UnsortedInput::line	u64
+field	vep_io::output::parquet::UnsortedInput::position	u64
+field	vep_io::output::parquet::UnsortedInput::previous_chrom	alloc::string::String
+field	vep_io::output::parquet::UnsortedInput::previous_position	u64
+function	vep_io::output::parquet::canonical_tab_text	fn(column_type: vep_io::output::parquet::ColumnType, text: &str) -> alloc::string::String
+function	vep_io::output::parquet::check_previous_output	fn(path: &std::path::Path) -> core::result::Result<(), vep_io::output::parquet::PreviousOutput>
+function	vep_io::output::parquet::column_type	fn(name: &str) -> vep_io::output::parquet::ColumnType
+function	vep_io::output::parquet::hive_escape	fn(value: &str) -> alloc::string::String
+function	vep_io::output::parquet::is_vep_rs_part	fn(path: &std::path::Path) -> bool
+function	vep_io::output::parquet::parse_cell	fn(column_type: vep_io::output::parquet::ColumnType, text: &str) -> core::option::Option<vep_io::output::parquet::CellValue>
+function	vep_io::output::parquet::part_files	fn(path: &std::path::Path) -> core::result::Result<alloc::vec::Vec<std::path::PathBuf>, vep_io::error::IoError>
+function	vep_io::output::parquet::remove_previous_output	fn(path: &std::path::Path) -> core::result::Result<(), vep_io::output::parquet::PreviousOutput>
+function	vep_io::output::parquet::sort_keys	fn(path: &std::path::Path) -> core::result::Result<alloc::vec::Vec<(i32, i64)>, vep_io::error::IoError>
+function	vep_io::output::parquet::stored_column_name	fn(tab_column: &str) -> alloc::borrow::Cow<'_, str>
+function	vep_io::output::parquet::stored_column_names	fn(tab_columns: &[&str]) -> alloc::vec::Vec<alloc::string::String>
+function	vep_io::output::parquet::tab_column_name	fn(stored: &str) -> &str
+function	vep_io::output::parquet::tab_column_types	fn(path: &std::path::Path) -> core::result::Result<alloc::vec::Vec<(alloc::string::String, vep_io::output::parquet::ColumnType)>, vep_io::error::IoError>
+function	vep_io::output::parquet::tab_rows	fn(path: &std::path::Path) -> core::result::Result<alloc::vec::Vec<alloc::string::String>, vep_io::error::IoError>
+function	vep_io::output::parquet::to_tab_text	fn(column_type: vep_io::output::parquet::ColumnType, value: &vep_io::output::parquet::CellValue) -> alloc::string::String
+module	vep_io::output::tab	mod
+auto traits	vep_io::output::tab::TabOutputFormatter	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_io::output::tab::TabOutputFormatter	impl vep_io::output::OutputFormatter for vep_io::output::tab::TabOutputFormatter
+struct	vep_io::output::tab::TabOutputFormatter	struct; named fields, some private
+method	vep_io::output::tab::TabOutputFormatter::columns	fn(&self) -> &[alloc::string::String]
+method	vep_io::output::tab::TabOutputFormatter::new	fn(options: vep_io::output::fields::FieldOptions, plugin_fields: alloc::vec::Vec<alloc::string::String>, selected_fields: core::option::Option<alloc::vec::Vec<alloc::string::String>>, header_lines: alloc::vec::Vec<alloc::string::String>, no_headers: bool) -> Self
+function	vep_io::output::tab::render_tab_record	fn<'a>(out: &mut alloc::vec::Vec<u8>, record: &[&'a vep_core::variant::InputVariant], formatter: &vep_io::output::tab::TabOutputFormatter, rows: &mut alloc::vec::Vec<vep_io::output::fields::Row<'a>>)
+module	vep_io::output::vcf_output	mod
+auto traits	vep_io::output::vcf_output::VcfOutputFormatter	!RefUnwindSafe, Send, Sync, Unpin, !UnwindSafe
+implementation	vep_io::output::vcf_output::VcfOutputFormatter	impl core::default::Default for vep_io::output::vcf_output::VcfOutputFormatter
+implementation	vep_io::output::vcf_output::VcfOutputFormatter	impl vep_io::output::OutputFormatter for vep_io::output::vcf_output::VcfOutputFormatter
+struct	vep_io::output::vcf_output::VcfOutputFormatter	struct; named fields, some private
+method	vep_io::output::vcf_output::VcfOutputFormatter::fields	fn(&self) -> &[alloc::string::String]
+method	vep_io::output::vcf_output::VcfOutputFormatter::header_lines	fn(&self, input_headers: &[alloc::string::String]) -> alloc::vec::Vec<alloc::string::String>
+method	vep_io::output::vcf_output::VcfOutputFormatter::info_field_name	fn(&self) -> &str
+method	vep_io::output::vcf_output::VcfOutputFormatter::new	fn(info_field_name: alloc::string::String, options: vep_io::output::fields::FieldOptions, plugin_headers: alloc::vec::Vec<vep_io::output::fields::PluginHeader>, selected_fields: core::option::Option<alloc::vec::Vec<alloc::string::String>>) -> Self
+method	vep_io::output::vcf_output::VcfOutputFormatter::with_keep_csq	fn(self, keep_csq: bool) -> Self
+method	vep_io::output::vcf_output::VcfOutputFormatter::with_reference	fn(self, reference: core::option::Option<alloc::sync::Arc<dyn vep_io::input::ReferenceSequence>>) -> Self
+method	vep_io::output::vcf_output::VcfOutputFormatter::with_run_info	fn(self, cache_dir: &str, cache_info: core::option::Option<&vep_core::cache_info::CacheInfo>, command_line: &str) -> Self
+method	vep_io::output::vcf_output::VcfOutputFormatter::with_vcf_input	fn(self, vcf_input: bool) -> Self
+function	vep_io::output::vcf_output::to_vcf_record	fn(first: &vep_core::variant::InputVariant, reference: core::option::Option<&dyn vep_io::input::ReferenceSequence>) -> alloc::vec::Vec<u8>

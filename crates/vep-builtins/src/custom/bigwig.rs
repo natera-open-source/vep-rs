@@ -38,7 +38,7 @@ use vep_core::synonyms::ChromosomeSynonyms;
 use vep_core::variant::InputVariant;
 use vep_core::variation::perl_number_string;
 
-use super::grammar::{CustomSpec, MatchType, RecordLimit, SummaryStat};
+use super::grammar::{CustomSpec, Distance, MatchType, RecordLimit, SummaryStat};
 use super::source::{CustomError, CustomSource};
 use crate::bigwig::open_bigwig;
 use crate::traits::PrefetchData;
@@ -123,7 +123,7 @@ impl Accumulator {
 
     /// The statistics in the order `summary_stats` named them: `mean` is the
     /// sum over the matched records divided by their count, and `sum` prints
-    /// only when asked for. With no value added, Perl's closing (`File.pm:344-352`)
+    /// only when asked for. With no value added, Ensembl VEP's closing (`File.pm:344-352`)
     /// creates the hash through `count`, the `mean` test or the deletion of an
     /// unasked `sum`, so `sum` asked for without `count` or `mean` leaves it
     /// undefined.
@@ -159,7 +159,7 @@ struct Rules {
     match_type: MatchType,
     report_coords: bool,
     overlap_cutoff: f64,
-    distance: Option<f64>,
+    distance: Option<Distance>,
     reciprocal: bool,
     limit: RecordLimit,
     /// `summary_stats` as given, `None` when none were asked for.
@@ -219,7 +219,7 @@ impl Rules {
             _ => {}
         }
         if let Some(distance) = self.distance {
-            if vs.abs_diff(ref_start) as f64 > distance || ve.abs_diff(ref_end) as f64 > distance {
+            if !(distance.admits(vs.abs_diff(ref_start)) && distance.admits(ve.abs_diff(ref_end))) {
                 return None;
             }
         }
@@ -397,15 +397,15 @@ impl BigWigSource {
                     if rules.percentage_field {
                         fields.insert("PC".to_string(), CustomFieldValue::Text(percentage));
                     }
-                    records.push(CustomRecord {
-                        name: self.record_name(chromosome, interval),
-                        allele: None,
+                    records.push(CustomRecord::new(
+                        self.record_name(chromosome, interval),
+                        None,
                         fields,
-                        score: rules
+                        rules
                             .stats_order
                             .is_some()
                             .then_some(CustomValue::Number(value)),
-                    });
+                    ));
                 }
             }
         }
@@ -502,12 +502,12 @@ impl BigWigSource {
                         records.push(ellipsis());
                         return Ok(Some(self.annotations(records, stats)));
                     }
-                    records.push(CustomRecord {
-                        name: self.record_name(chromosome, interval),
-                        allele: None,
-                        fields: IndexMap::new(),
-                        score: None,
-                    });
+                    records.push(CustomRecord::new(
+                        self.record_name(chromosome, interval),
+                        None,
+                        IndexMap::new(),
+                        None,
+                    ));
                 }
                 if end > window_end {
                     records.push(ellipsis());
@@ -522,12 +522,8 @@ impl BigWigSource {
         records: Vec<CustomRecord>,
         stats: Option<CustomStats>,
     ) -> CustomAnnotations {
-        CustomAnnotations {
-            short_name: Arc::clone(&self.short_name),
-            matched: !records.is_empty(),
-            records,
-            stats,
-        }
+        let matched = !records.is_empty();
+        CustomAnnotations::new(Arc::clone(&self.short_name), records, matched, stats)
     }
 
     /// Whether `variant` takes the span rule: the source allows it and the
@@ -548,12 +544,7 @@ fn window(variant: &InputVariant) -> (u32, u32) {
 }
 
 fn ellipsis() -> CustomRecord {
-    CustomRecord {
-        name: ELLIPSIS.to_string(),
-        allele: None,
-        fields: IndexMap::new(),
-        score: None,
-    }
+    CustomRecord::new(ELLIPSIS.to_string(), None, IndexMap::new(), None)
 }
 
 impl CustomSource for BigWigSource {
@@ -847,6 +838,28 @@ mod tests {
         assert_eq!(stats(with_zero)["count"], 4.0);
         assert_eq!(names(&annotated[2][0]), ["0.100000001490116"]);
         assert_eq!(annotated[2][0].records[0].score, number(f64::from(0.1f32)));
+    }
+
+    /// `File.pm:546-549` admits an interval only where each of its ends lies
+    /// within the distance of the variant's: of the one-base intervals at 100
+    /// to 103 under a variant spanning them, a distance of 2 admits the two
+    /// in the middle and 3 all four. A distance that is not a number, or one
+    /// below zero, admits none, since no difference is at most it.
+    #[test]
+    fn a_bigwig_distance_admits_an_interval_whose_ends_both_lie_within_it() {
+        let admitted = |distance: &str| -> Vec<u64> {
+            let spec =
+                parse_custom(&format!("file=cons.bw,format=bigwig,distance={distance}")).unwrap();
+            let rules = Rules::from_spec(&spec);
+            (100..=103)
+                .filter(|&at| rules.matches(at, at, 100, 103).is_some())
+                .collect()
+        };
+        assert_eq!(admitted("3"), [100, 101, 102, 103]);
+        assert_eq!(admitted("2"), [101, 102]);
+        assert_eq!(admitted("2.5"), [101, 102]);
+        assert!(admitted("nan").is_empty());
+        assert!(admitted("-1").is_empty());
     }
 
     /// `coords` names a record by the file's chromosome name and the record's

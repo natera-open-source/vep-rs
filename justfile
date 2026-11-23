@@ -1,4 +1,4 @@
-# Run the full test suite
+# Run all the tests
 test:
     cargo test --workspace
 

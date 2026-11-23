@@ -1,7 +1,7 @@
 entry = "hgvs_shift_sequence_edge_window"
 page = "docs/divergences/hgvs-shift-near-sequence-edge.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
 input_class_basis = "seen in the mitochondrial records of the ClinVar GRCh37 and GRCh38 files: 4 of 3,122 records on each, 20 rows under --hgvs"
 notes = "A three-base deletion 291 bases into the Arabidopsis mitochondrial genome, on the reverse-strand ATMG00010.1; the repeat admits a four-base shift towards the transcript's 3' end, and the flank Ensembl VEP walks is cut 1,000 bases into the clipped slice."
@@ -30,3 +30,11 @@ columns = ["Consequence", "Codons", "HGVSc", "HGVSp", "HGVS_OFFSET"]
 [expected]
 ensembl_vep = ["inframe_deletion | AAG/- | ATMG00010.1:c.444_446del | ATMG00010.1:p.Lys149del | -2"]
 vep_rs = ["inframe_deletion | AAG/- | ATMG00010.1:c.446_448del | ATMG00010.1:p.Lys149del | -4"]
+
+[implementation]
+code = ["crates/vep-effects/src/consequences.rs::shift_indel_3prime_within"]
+tests = ["crates/vep-cli/tests/consequence_documented_rows.rs::a_deletion_near_a_sequence_edge_is_shifted_to_the_end_of_its_repeat"]
+rules = [
+    "tools/vep-formats-compare/src/rules/sequence_edges.rs::SequenceEdges::_moved",
+    "tools/vep-formats-compare/src/rules/sequence_edges.rs::SequenceEdges::accepts",
+]

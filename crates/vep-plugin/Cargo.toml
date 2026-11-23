@@ -9,6 +9,7 @@ rust-version.workspace = true
 keywords.workspace = true
 categories.workspace = true
 description = "Plugin interface, dynamic-library loader and registry of vep-rs, a Rust reimplementation of Ensembl VEP"
+exclude = ["tests/"]
 
 [dependencies]
 vep-core = { workspace = true }
@@ -17,17 +18,22 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 
-[features]
-# Makes `examples/echo_plugin.rs` report ABI version 1: the fixture the loader's
-# refusal test compiles with `rustc --cfg 'feature="abi-one"'`.
-abi-one = []
-# Drops `vep_plugin_feature_types` from `examples/echo_all_rows_plugin.rs`: the
-# fixture the loader's default-kind test compiles with
-# `rustc --cfg 'feature="no-feature-types"'`.
-no-feature-types = []
-# Drops `vep_plugin_free` from `examples/echo_plugin.rs`: the fixture the loader's
-# missing-symbol test compiles with `rustc --cfg 'feature="missing-free"'`.
-missing-free = []
+[lints.rust]
+# The `cfg` names the tests pass to `rustc --cfg` when they compile an example a
+# second time as a fixture. Cargo never sets one, so none is a feature of the
+# crate; they are listed here so that the examples build without an
+# `unexpected_cfgs` warning.
+# - `fixture_abi_one`: `examples/echo_plugin.rs` reports ABI version 1, for the
+#   loader's refusal test.
+# - `fixture_no_feature_types`: `examples/echo_all_rows_plugin.rs` exports no
+#   `vep_plugin_feature_types`, for the loader's default-kind test.
+# - `fixture_missing_free`: `examples/echo_plugin.rs` exports no
+#   `vep_plugin_free`, for the loader's missing-symbol test.
+unexpected_cfgs = { level = "warn", check-cfg = [
+    "cfg(fixture_abi_one)",
+    "cfg(fixture_no_feature_types)",
+    "cfg(fixture_missing_free)",
+] }
 
 # The examples are plugins, so they are built as the dynamic libraries the loader
 # opens. `tests/echo_roundtrip.rs` loads `echo_plugin` and `echo_all_rows_plugin`

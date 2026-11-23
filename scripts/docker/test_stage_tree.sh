@@ -4,14 +4,16 @@
 # installs and `python3` record the downloads, the install, the build and the
 # ELF check the script asks for and leave three fabricated binaries, the
 # archive argument picks the row whose
-# recipe is followed, and each fail-closed gate (archive, existing
-# destination or tools directory, host architecture, failed download,
+# recipe is followed, the build's clock is the time of the tree's one commit,
+# and each fail-closed gate (archive, existing
+# destination or tools directory, host architecture, a tree with no commit of
+# its own, failed download,
 # checksum, failed install, failed build, missing binary, glibc floor) is
 # shown to stop the run with nothing staged. The checksums are
 # checked by the real `sha256sum` against the fabricated downloads.
 #
-# Pure bash. No compiler, no network. The script runs from a fabricated tree,
-# so nothing is written into this one.
+# Bash and git. No compiler, no network. The script runs from a fabricated
+# tree, so nothing is written into this one.
 # Run: bash scripts/docker/test_stage_tree.sh
 set -uo pipefail
 
@@ -65,6 +67,23 @@ ROWS
     printf '%s\n' '          - target: aarch64-apple-darwin' '            name: aarch64-apple-darwin'
 } >"$TREE/.github/workflows/release.yml"
 
+# A fabricated tree is a checkout with one commit at a constant time, the time
+# stage_tree.sh reads. The blank LFS filters keep `git add` storing the files
+# themselves on a host where git-lfs is installed.
+COMMIT_TIME=1700000000
+init_tree() { # init_tree <dir>: a checkout with no commit
+    git -C "$1" init -q >/dev/null 2>&1 &&
+        git -C "$1" config user.name "stage tree test" && git -C "$1" config user.email stage-tree-test@example.invalid &&
+        git -C "$1" config commit.gpgsign false && git -C "$1" config filter.lfs.clean "" &&
+        git -C "$1" config filter.lfs.process "" && git -C "$1" config filter.lfs.required false
+}
+commit_tree() { # commit_tree <dir>: every file of <dir> in one commit at COMMIT_TIME
+    init_tree "$1" && git -C "$1" add -A &&
+        GIT_AUTHOR_DATE="$COMMIT_TIME +0000" GIT_COMMITTER_DATE="$COMMIT_TIME +0000" \
+            git -C "$1" commit -q -m "fabricated tree" >/dev/null 2>&1
+}
+commit_tree "$TREE" || bad "git could not commit the fabricated tree"
+
 # curl: logs the URL and writes the fabricated download for it; STUB_CURL_FAIL
 # names a host whose download fails, STUB_CURL_BYTES replaces the zig tarball.
 cat >"$STUBS/curl" <<'STUB'
@@ -114,6 +133,7 @@ STUB
 cat >"$TMP/cargo-zigbuild" <<'STUB'
 #!/usr/bin/env bash
 printf '%s\n' "zigbuild self=$0" "zigbuild cwd=$PWD" "zigbuild rustflags=${RUSTFLAGS:-}" "zigbuild path=$PATH" \
+    "zigbuild clock=${SOURCE_DATE_EPOCH:-unset}" \
     "zigbuild openssl=$(env | grep '_OPENSSL_DIR=' | sort | tr '\n' ' ')" "zigbuild args=$*" >>"$STUB_LOG"
 [[ "$1 ${2:-}" == "zigbuild --release" ]] || exit 2
 [[ "${STUB_CARGO_RC:-0}" -eq 0 ]] || exit "$STUB_CARGO_RC"
@@ -136,6 +156,13 @@ STUB
 cat >"$STUBS/uname" <<'STUB'
 #!/usr/bin/env bash
 [[ "$1" == -m ]] && echo "${STUB_ARCH:-aarch64}"
+STUB
+# gpg: the line git prints ahead of a signed commit where its configuration
+# shows signatures.
+cat >"$STUBS/gpg" <<'STUB'
+#!/usr/bin/env bash
+echo "gpg: fabricated signature" >&2
+exit 1
 STUB
 chmod +x "$STUBS"/* "$TMP/cargo-zigbuild"
 
@@ -230,6 +257,30 @@ grep -qxF "python3 $TREE/scripts/release/check_glibc_floor.py --floor 2.99 $out/
     ok "the release's ELF check holds the three binaries to the recipe's glibc floor" ||
     bad "the ELF check: $(grep '^python3 ' "$LOG")"
 
+dest="$TMP/ctx-clock"
+if run "$dest" "$TMP/tools-clock" SOURCE_DATE_EPOCH=1 >/dev/null 2>&1 && grep -qxF "zigbuild clock=$COMMIT_TIME" "$LOG"; then
+    ok "the build's clock is the time of the tree's commit, whatever SOURCE_DATE_EPOCH the caller holds"
+else
+    bad "the build's clock, $COMMIT_TIME expected: $(grep '^zigbuild clock=' "$LOG")"
+fi
+
+sign_tree() { # sign_tree <dir>: the commit of <dir> again, signed, in a checkout that shows signatures
+    local signed
+    signed=$({
+        git -C "$1" cat-file commit HEAD | sed -n '1,/^committer /p'
+        printf '%s\n' 'gpgsig -----BEGIN PGP SIGNATURE-----' ' fabricated' ' -----END PGP SIGNATURE-----' '' 'fabricated tree'
+    } | git -C "$1" hash-object -t commit -w --stdin) && git -C "$1" update-ref HEAD "$signed" &&
+        git -C "$1" config gpg.program "$STUBS/gpg" && git -C "$1" config log.showSignature true
+}
+sign_tree "$TREE" || bad "git could not sign the fabricated tree's commit"
+dest="$TMP/ctx-signed"
+if run "$dest" "$TMP/tools-signed" >/dev/null 2>&1 && grep -qxF "zigbuild clock=$COMMIT_TIME" "$LOG"; then
+    ok "the build's clock is the time of a signed commit where git's configuration shows signatures"
+else
+    bad "the clock of a signed commit, $COMMIT_TIME expected: $(grep '^zigbuild clock=' "$LOG")"
+fi
+git -C "$TREE" config --unset log.showSignature
+
 dest="$TMP/ctx-target-dir"
 if run "$dest" "$TMP/tools-target-dir" CARGO_TARGET_DIR="$TMP/elsewhere" >/dev/null 2>&1 &&
     [[ -f "$TMP/elsewhere/aarch64-unknown-linux-gnu/release/vep" && -x "$dest/vep" ]]; then
@@ -251,6 +302,7 @@ mkdir -p "$REAL/scripts/docker" "$REAL/scripts/release" "$REAL/.github/workflows
 cp "$HERE/stage_tree.sh" "$HERE/release_recipe.sh" "$REAL/scripts/docker/" 2>/dev/null
 cp "$TREE/LICENSE" "$TREE/NOTICE" "$REAL/"
 cp "$RELEASE_YML" "$REAL/.github/workflows/release.yml"
+commit_tree "$REAL" || bad "git could not commit the tree that holds the real release.yml"
 cat >"$TMP/sumbin/sha256sum" <<'STUB'
 #!/usr/bin/env bash
 echo "sha256sum $(cat)" >>"$STUB_LOG"
@@ -324,11 +376,51 @@ cargo install cargo-zigbuild --locked --version "$CARGO_ZIGBUILD_VERSION"
 -C target-cpu=
 zigbuild --release --locked --target
 --bin vep --bin vep-cache-builder --bin vep-cache-converter
+SOURCE_DATE_EPOCH=
+log -1 --format=%ct
 check_glibc_floor.py
 --floor "$GLIBC_FLOOR"
 FRAGMENTS
 [[ -z "$missing" ]] && ok "stage_tree.sh downloads, installs, builds and checks with the commands of release.yml" ||
     bad "a command release.yml and stage_tree.sh do not share:$missing"
+
+# release.yml's own clock: one unconditional step of the job `build`, ahead
+# of both build steps, writes the commit's time for every later step.
+verdict=$(awk '
+    /^  [a-z][a-z0-9_-]*:$/ { job = $1 }
+    job != "build:" { next }
+    /^      - / { step++ }
+    /^      (- |  )if: / { conditional[step] = 1 }
+    index($0, "echo \"SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)\" >> \"$GITHUB_ENV\"") { clocks++; clock = step }
+    /^ +cargo (zig)?build --release --locked --target / { builds++; if (!first) first = step }
+    END { print clocks + 0, builds + 0, (clock && first && clock < first && !conditional[clock]) ? "ahead" : "not ahead" }' "$RELEASE_YML")
+if [[ "$verdict" == "1 2 ahead" ]]; then
+    ok "release.yml writes SOURCE_DATE_EPOCH, the commit's time, to GITHUB_ENV in an unconditional step ahead of both build steps"
+else
+    bad "release.yml's build clock (clock steps, build steps, order): $verdict"
+fi
+
+no_commit() { # no_commit <name> <tree> [init]: stage_tree.sh from a tree with no commit of its own
+    local name="$1" tree="$2" err rc
+    SEQ=$((SEQ + 1))
+    mkdir -p "$tree/scripts/docker" "$tree/.github/workflows"
+    cp "$HERE/stage_tree.sh" "$HERE/release_recipe.sh" "$tree/scripts/docker/" 2>/dev/null
+    cp "$TREE/.github/workflows/release.yml" "$tree/.github/workflows/"
+    [[ "${3:-}" != init ]] || init_tree "$tree"
+    : >"$LOG"
+    err=$(env -u CARGO_TARGET_DIR -u RUSTFLAGS PATH="$STUBS:$PATH" STUB_LOG="$LOG" STUB_ZIGBUILD="$TMP/cargo-zigbuild" \
+        bash "$tree/scripts/docker/stage_tree.sh" aarch64-unknown-linux-gnu-generic "$TMP/ctx-$SEQ" "$TMP/tools-$SEQ" 2>&1 >/dev/null)
+    rc=$?
+    if [[ "$rc" -ne 0 && "$err" == *"has no commit of its own to take the build clock from"* &&
+        ! -e "$TMP/ctx-$SEQ" && ! -e "$TMP/tools-$SEQ" && ! -s "$LOG" ]]; then
+        ok "$name"
+    else
+        bad "$name (rc=$rc, staged=$([[ -e "$TMP/ctx-$SEQ" ]] && echo yes || echo no), calls: $(cat "$LOG"), stderr: $err)"
+    fi
+}
+no_commit "a tree that is no git checkout stops before any download, with nothing staged" "$TMP/unpacked"
+no_commit "a checkout with no commit stops before any download, with nothing staged" "$TMP/uncommitted" init
+no_commit "a tree unpacked inside another checkout does not take that checkout's commit time" "$TREE/unpacked"
 
 TARGET=aarch64-apple-darwin expect_fail "a macOS target fails" "release.yml states no build recipe for 'aarch64-apple-darwin'" none
 TARGET=x86_64-unknown-linux-gnu-v4 expect_fail "an archive the release does not build fails" "release.yml states no build recipe for 'x86_64-unknown-linux-gnu-v4'" none

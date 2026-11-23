@@ -23,6 +23,9 @@ use std::path::{Path, PathBuf};
 use noodles::bgzf;
 use noodles::csi::binning_index::index::reference_sequence::index::Index as ReferenceIndex;
 use noodles::csi::binning_index::Index;
+use noodles::csi::BinningIndex;
+use vep_builtins::tabix::read_checked_index;
+use vep_builtins::PluginError;
 
 use crate::runner::{bgzf_block_size, GZIP_HEADER_BYTES};
 
@@ -57,8 +60,8 @@ pub enum InputShape {
 }
 
 impl InputShape {
-    /// The shape of the input at `path`, `Unknown` for `STDIN` and for anything
-    /// the module documentation lists.
+    /// The shape of the input at `path`, `Unknown` for `STDIN` and for every
+    /// other input [`InputShape::Unknown`] lists.
     pub fn read(path: &str) -> InputShape {
         if path == "STDIN" {
             return InputShape::Unknown;
@@ -324,16 +327,45 @@ fn block_offsets(path: &Path) -> Option<Vec<u64>> {
     let tbi = with_suffix(".tbi");
     let csi = with_suffix(".csi");
     if tbi.is_file() {
-        vep_builtins::tabix::read_tabix_index(&tbi)
+        read_tabix_index(&tbi)
             .ok()
             .map(|index| index_block_offsets(&index))
     } else if csi.is_file() {
-        vep_builtins::tabix::read_csi_index(&csi)
+        read_csi_index(&csi)
             .ok()
             .map(|index| index_block_offsets(&index))
     } else {
         None
     }
+}
+
+/// A loaded `.tbi` or `.csi` index; the query path is the same for both.
+pub(crate) type TabixIndex = Box<dyn BinningIndex + Send + Sync>;
+
+/// The index at `index_path`, read as a `.csi` index where the path's
+/// extension is `csi` and as a `.tbi` index otherwise.
+pub(crate) fn load_index(index_path: &Path) -> Result<TabixIndex, PluginError> {
+    if index_path.extension().is_some_and(|ext| ext == "csi") {
+        Ok(Box::new(read_csi_index(index_path)?))
+    } else {
+        Ok(Box::new(read_tabix_index(index_path)?))
+    }
+}
+
+/// The `.tbi` index at `index_path`, parsed once its counts are checked
+/// (`vep_builtins::tabix::read_checked_index`).
+pub(crate) fn read_tabix_index(index_path: &Path) -> Result<noodles::tabix::Index, PluginError> {
+    read_checked_index(index_path, false, |stream| {
+        noodles::tabix::io::Reader::new(stream).read_index()
+    })
+}
+
+/// The `.csi` index at `index_path`, parsed once its counts are checked
+/// (`vep_builtins::tabix::read_checked_index`).
+fn read_csi_index(index_path: &Path) -> Result<noodles::csi::Index, PluginError> {
+    read_checked_index(index_path, true, |stream| {
+        noodles::csi::io::Reader::new(stream).read_index()
+    })
 }
 
 /// The compressed offsets of every chunk start and end in `index`. A virtual

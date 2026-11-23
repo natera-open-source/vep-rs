@@ -8,9 +8,9 @@ Under `--hgvs`, Ensembl VEP's Downstream and NMD plugins answer for an insertion
 
 **What vep-rs does instead.** vep-rs's Downstream and NMD plugins read the record's own CDS coordinates, the pair the `CDS_position` column prints, and the allele as written, with and without `--hgvs`. A row's plugin values are the same in both runs. Ensembl VEP's plugins read that same pair when the flag is absent.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2, `ensembl-variation` and `VEP_plugins` at release/116):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3, `ensembl-variation` and `VEP_plugins` at release/116):
 
-- `Bio/EnsEMBL/VEP/OutputFactory.pm`, line 1737, prints `CDS_position` from the pair the row's object holds: the record's own, except on a later allele of a multi-allelic record ([section 9](#9-a-later-allele-of-a-multi-allelic-record)). Line 1760, later in the same row's build, calls `hgvs_protein` under `--hgvs`.
+- `Bio/EnsEMBL/VEP/OutputFactory.pm`, line 1746, prints `CDS_position` from the pair the row's object holds: the record's own, except on a later allele of a multi-allelic record ([section 9](#9-a-later-allele-of-a-multi-allelic-record)). Line 1769, later in the same row's build, calls `hgvs_protein` under `--hgvs`.
 - `Bio/EnsEMBL/Variation/TranscriptVariationAllele.pm`, lines 844-858, `codon`: when the shift is not zero, the row's kept `cds_start` and `cds_end` are deleted and read again at the shifted position. Lines 2406-2410, `_get_alternate_cds`, read them there once more, and that pair stays on the row.
 - The same file, lines 1330-1345, `shift_feature_seqs`, called at line 1778, rotates the allele's bases for the shifted position. Lines 1730-1738 return from `hgvs_protein` before any of this when the shifted span has no translation coordinates, and the own pair stays.
 - `OutputFactory.pm`, line 398, runs the plugins once the row is built. Nothing clears the pair in between.
@@ -28,11 +28,11 @@ On some rows the start rule changes the value as well: vep-rs's value is not the
 
 **How often the shape occurs.** Tier 2, the flag and a plugin being needed. Under `--hgvs --plugin Downstream`, vep-rs writes the plugin's fields on 557,264 rows of the genome-wide ClinVar GRCh37 file. The `DownstreamProtein` of 122,020 of them, from 35,972 records, falls under the class, and no `ProteinLengthChange` does. On the GRCh38 file it is 594,975 of 2,495,728 rows, from 37,669 records, and one `ProteinLengthChange`. The start rule changes the value too on 11,573 of the GRCh37 rows and 56,235 of the GRCh38 rows, which need both classes named. With the NMD plugin loaded under `--hgvs`, 518 rows of the GRCh37 file differ in `NMD`: Ensembl VEP alone writes it on 173 and vep-rs alone on 345.
 
-On the five chromosome 21 population cuts, run under `--hgvs --plugin Downstream --plugin NMD`, 1,954 of 15,646,481 records have a row of the class, 124.9 per million: `DownstreamProtein` on 1,948 of them, `NMD` on 9 and `ProteinLengthChange` on 1. Four committed flag sets carry rows of it, all in `DownstreamProtein`: 29 in each of the two runs of the `GRCh38-plugin-computed` corpus, 31 in the `--hgvs` run of `GRCh37-plugin-downstream-own-span` and ten in that of `GRCh37-plugin-downstream-coding-end`.
+On the five chromosome 21 cuts, run under `--hgvs --plugin Downstream --plugin NMD`, 1,954 of 15,646,481 records have a row of the class, 124.9 per million: `DownstreamProtein` on 1,948 of them, `NMD` on 9 and `ProteinLengthChange` on 1. Four committed flag sets carry rows of it, all in `DownstreamProtein`: 29 in each of the two runs of the `GRCh38-plugin-computed` corpus, 31 in the `--hgvs` run of `GRCh37-plugin-downstream-own-span` and ten in that of `GRCh37-plugin-downstream-coding-end`.
 
 ## 1. A four-base deletion in a repeat of NFIX
 
-**In short.** `19 13136318 2948877 ACAAT A`, a ClinVar record, deletes coding bases 371 to 374 of ENST00000590027 (NFIX, forward strand). The same deletion can be written three bases on, and HGVS notation takes that position: `c.374_377del`, `HGVS_OFFSET=3`. vep-rs writes `DownstreamProtein=TKNW`, the translation from codon 124, where the record starts. Ensembl VEP 116.2 writes `KNW` under `--hgvs`, the translation from codon 125, where the shifted span starts, and `TKNW` without the flag.
+**In short.** `19 13136318 2948877 ACAAT A`, a ClinVar record, deletes coding bases 371 to 374 of ENST00000590027 (NFIX, forward strand). The same deletion can be written three bases on, and HGVS notation takes that position: `c.374_377del`, `HGVS_OFFSET=3`. vep-rs writes `DownstreamProtein=TKNW`, the translation from codon 124, where the record starts. Ensembl VEP 116.3 writes `KNW` under `--hgvs`, the translation from codon 125, where the shifted span starts, and `TKNW` without the flag.
 
 ### 1.1 What a reader needs to know first
 
@@ -52,7 +52,7 @@ The record deletes `CAAT`, 19:13136319-13136322: the last two bases of codon 124
 
 ### 1.3 What each engine writes
 
-Ensembl VEP 116.2, default format:
+Ensembl VEP 116.3, default format:
 
 ```
 2948877	19:13136319-13136322	-	ENSG00000008441	ENST00000590027	Transcript	frameshift_variant	564-567	371-374	124-125	TI/X	aCAATc/ac	-	IMPACT=HIGH;STRAND=1;FLAGS=cds_end_NF;HGVSc=ENST00000590027.1:c.374_377del;HGVSp=ENSP00000465616.1:p.Ile125LysfsTer?;HGVS_OFFSET=3;DownstreamProtein=KNW;ProteinLengthChange=-1
@@ -64,11 +64,11 @@ vep-rs:
 2948877	19:13136319-13136322	-	ENSG00000008441	ENST00000590027	Transcript	frameshift_variant	564-567	371-374	124-125	TI/X	aCAATc/ac	-	IMPACT=HIGH;STRAND=1;FLAGS=cds_end_NF;HGVSc=ENST00000590027.1:c.374_377del;HGVSp=ENSP00000465616.1:p.Ile125LysfsTer?;HGVS_OFFSET=3;DownstreamProtein=TKNW;ProteinLengthChange=-1
 ```
 
-Every other column is equal. The tab, VCF and JSON outputs carry the same two values, the JSON under `downstreamprotein`. Without `--hgvs`, Ensembl VEP 116.2 writes `DownstreamProtein=TKNW` on the row, as vep-rs does in both runs. The record's rows on eight more transcripts of the gene differ the same way, 37 residues against 38.
+Every other column is equal. The tab, VCF and JSON outputs carry the same two values, the JSON under `downstreamprotein`. Without `--hgvs`, Ensembl VEP 116.3 writes `DownstreamProtein=TKNW` on the row, as vep-rs does in both runs. The record's rows on eight more transcripts of the gene differ the same way, 37 residues against 38.
 
 ### 1.4 Why Ensembl VEP writes that
 
-Line 1737 of `OutputFactory.pm` has printed `371-374` when line 1760 computes the protein notation. `hgvs_protein` moves the deletion three bases, and `codon` and `_get_alternate_cds` leave the pair 374 and 377 on the row. Line 108 of `Downstream.pm` reads that pair, and line 110 removes those four bases. Line 113 computes `374 - (374 % 3)`, which is 372, the offset of codon 125. From codon 124 the changed sequence reads `ACA AAG AAC TGG A`, and the translation starts at `AAG`: lysine, asparagine, tryptophan. Without `--hgvs` line 108 reads 371 and 374, line 113 gives 369, and the translation starts at `ACA`.
+Line 1746 of `OutputFactory.pm` has printed `371-374` when line 1769 computes the protein notation. `hgvs_protein` moves the deletion three bases, and `codon` and `_get_alternate_cds` leave the pair 374 and 377 on the row. Line 108 of `Downstream.pm` reads that pair, and line 110 removes those four bases. Line 113 computes `374 - (374 % 3)`, which is 372, the offset of codon 125. From codon 124 the changed sequence reads `ACA AAG AAC TGG A`, and the translation starts at `AAG`: lysine, asparagine, tryptophan. Without `--hgvs` line 108 reads 371 and 374, line 113 gives 369, and the translation starts at `ACA`.
 
 ### 1.5 Why vep-rs's row follows from the record's own coordinates
 
@@ -85,7 +85,7 @@ vep -i variants.vcf -o out.txt --offline --json_cache json_cache \
   --assembly GRCh37 --fasta reference.fa.gz --hgvs --plugin Downstream
 ```
 
-vep-rs writes `DownstreamProtein=TKNW` on the row, and the same value when `--hgvs` is dropped. The corpus's `expected/` directory holds Ensembl VEP 116.2's four outputs of the same records under `--hgvs`, with `KNW`. Its `expected_without-hgvs/` directory holds the four outputs of the run without the flag, with `TKNW`.
+vep-rs writes `DownstreamProtein=TKNW` on the row, and the same value when `--hgvs` is dropped. The corpus's `expected/` directory holds Ensembl VEP 116.3's four outputs of the same records under `--hgvs`, with `KNW`. Its `expected_without-hgvs/` directory holds the four outputs of the run without the flag, with `TKNW`.
 
 ### 1.7 How the comparator treats this class
 
@@ -95,13 +95,13 @@ The same row with a wrong value on either side, with no value or with no `HGVS_O
 
 ## 2. An insertion whose shift crosses an intron
 
-**In short.** ClinVar record 2583096 inserts 133 bases between X:152960073 and X:152960074, 15 bases before the end of an exon of ENST00000253122 (SLC6A8, forward strand). The row prints `CDS_position` 1581-1582. The notation moves the insertion 143 bases along the genome, over the 85-base intron and 43 bases into the next exon: `HGVS_OFFSET=143`. On the coding sequence that is 58 bases, to between bases 1639 and 1640. vep-rs writes a `DownstreamProtein` of 74 residues, from codon 528. Ensembl VEP 116.2 writes 55 residues from codon 547 under `--hgvs`, and vep-rs's 74 without it.
+**In short.** ClinVar record 2583096 inserts 133 bases between X:152960073 and X:152960074, 15 bases before the end of an exon of ENST00000253122 (SLC6A8, forward strand). The row prints `CDS_position` 1581-1582. The notation moves the insertion 143 bases along the genome, over the 85-base intron and 43 bases into the next exon: `HGVS_OFFSET=143`. On the coding sequence that is 58 bases, to between bases 1639 and 1640. vep-rs writes a `DownstreamProtein` of 74 residues, from codon 528. Ensembl VEP 116.3 writes 55 residues from codon 547 under `--hgvs`, and vep-rs's 74 without it.
 
 Inside one exon the two pairs spell one changed sequence. Here they do not. Under `--hgvs` the plugin puts the 133 bases, rotated for the genomic shift, after coding base 1639, behind 58 exon bases that the record's own reading leaves after the insertion. The 55 residues are therefore not the last 55 of the 74. Both readings add 133 bases and meet the same stop, so `ProteinLengthChange=-34` on both engines. The record is in the `GRCh37-plugin-downstream-own-span` corpus, with its row on ENST00000430077 and with record 4730422, another insertion shifted over an intron.
 
 ## 3. An `NMD` value at the edge of the first 100 coding bases
 
-**In short.** `3 10074546 1322879 CAAAG C`, a ClinVar record, deletes coding bases 96 to 99 of ENST00000287647 (FANCD2, forward strand). The NMD plugin marks a frameshift within the first 100 coding bases as escaping nonsense-mediated decay. vep-rs writes `NMD=NMD_escaping_variant`. Ensembl VEP 116.2 writes no `NMD` under `--hgvs`, where its plugin reads the shifted end, base 102, and writes the field without the flag.
+**In short.** `3 10074546 1322879 CAAAG C`, a ClinVar record, deletes coding bases 96 to 99 of ENST00000287647 (FANCD2, forward strand). The NMD plugin marks a frameshift within the first 100 coding bases as escaping nonsense-mediated decay. vep-rs writes `NMD=NMD_escaping_variant`. Ensembl VEP 116.3 writes no `NMD` under `--hgvs`, where its plugin reads the shifted end, base 102, and writes the field without the flag.
 
 ### 3.1 What a reader needs to know first
 
@@ -117,7 +117,7 @@ The record deletes `AAAG`, 3:10074547-10074550, in the third of the transcript's
 
 ### 3.3 What each engine writes
 
-Ensembl VEP 116.2, default format:
+Ensembl VEP 116.3, default format:
 
 ```
 1322879	3:10074547-10074550	-	ENSG00000144554	ENST00000287647	Transcript	frameshift_variant	189-192	96-99	32-33	TK/X	acAAAG/ac	-	IMPACT=HIGH;STRAND=1;HGVSc=ENST00000287647.3:c.99_102del;HGVSp=ENSP00000287647.3:p.Lys33AsnfsTer16;HGVS_OFFSET=3
@@ -129,7 +129,7 @@ vep-rs:
 1322879	3:10074547-10074550	-	ENSG00000144554	ENST00000287647	Transcript	frameshift_variant	189-192	96-99	32-33	TK/X	acAAAG/ac	-	IMPACT=HIGH;STRAND=1;HGVSc=ENST00000287647.3:c.99_102del;HGVSp=ENSP00000287647.3:p.Lys33AsnfsTer16;HGVS_OFFSET=3;NMD=NMD_escaping_variant
 ```
 
-Every other column is equal. Run with `--plugin NMD` and no `--hgvs`, Ensembl VEP 116.2 writes `NMD=NMD_escaping_variant` on the row, as vep-rs does in both runs. The record's rows on four more transcripts of the gene differ the same way.
+Every other column is equal. Run with `--plugin NMD` and no `--hgvs`, Ensembl VEP 116.3 writes `NMD=NMD_escaping_variant` on the row, as vep-rs does in both runs. The record's rows on four more transcripts of the gene differ the same way.
 
 ### 3.4 Why Ensembl VEP writes that
 
@@ -150,7 +150,7 @@ vep -i record.vcf -o out.txt --offline \
   --assembly GRCh37 --hgvs --plugin NMD
 ```
 
-vep-rs writes `NMD=NMD_escaping_variant` on the row, with and without `--hgvs`. Ensembl VEP 116.2, run on the same record against its own GRCh37 cache, writes the field only without `--hgvs`.
+vep-rs writes `NMD=NMD_escaping_variant` on the row, with and without `--hgvs`. Ensembl VEP 116.3, run on the same record against its own GRCh37 cache, writes the field only without `--hgvs`.
 
 ### 3.7 How the comparator treats this class
 
@@ -158,11 +158,11 @@ For `NMD` the comparator accepts a row where one entry carries `NMD_escaping_var
 
 ## 4. An `NMD` value the shift adds
 
-**In short.** `17 74729058 1184977 AGATTG A`, a ClinVar record, deletes five bases of ENST00000341249 (METTL23, forward strand). The first is the last intron base before the third exon, so the row prints `CDS_position` `?-88`, and the plugin gives no value for a pair with an undefined end. The notation moves the deletion two bases, onto coding bases 86 to 90: `c.86_90del`, `HGVS_OFFSET=2`. Under `--hgvs` Ensembl VEP 116.2 reads that pair and writes `NMD=NMD_escaping_variant`, the end being at most 101. Without the flag it writes no `NMD`, and vep-rs writes none in either run.
+**In short.** `17 74729058 1184977 AGATTG A`, a ClinVar record, deletes five bases of ENST00000341249 (METTL23, forward strand). The first is the last intron base before the third exon, so the row prints `CDS_position` `?-88`, and the plugin gives no value for a pair with an undefined end. The notation moves the deletion two bases, onto coding bases 86 to 90: `c.86_90del`, `HGVS_OFFSET=2`. Under `--hgvs` Ensembl VEP 116.3 reads that pair and writes `NMD=NMD_escaping_variant`, the end being at most 101. Without the flag it writes no `NMD`, and vep-rs writes none in either run.
 
 ## 5. A deletion on which the flag and the start rule both change the value
 
-**In short.** ClinVar record 1703957 deletes 25 bases, X:152960007-152960031: coding bases 1515 to 1539 of ENST00000253122 (SLC6A8), the last base of codon 505 and the eight codons after it. Both engines write `c.1519_1543del`, `HGVS_OFFSET=4`, `p.Ile507LeufsTer5` and `ProteinLengthChange=-125`. From codon 505 the changed sequence reads `GAC GAC CTT GCC CCT GGA` and a stop. vep-rs writes `DownstreamProtein=DDLAPG`. Ensembl VEP 116.2 writes `LAPG` under `--hgvs` and `DLAPG` without it.
+**In short.** ClinVar record 1703957 deletes 25 bases, X:152960007-152960031: coding bases 1515 to 1539 of ENST00000253122 (SLC6A8), the last base of codon 505 and the eight codons after it. Both engines write `c.1519_1543del`, `HGVS_OFFSET=4`, `p.Ile507LeufsTer5` and `ProteinLengthChange=-125`. From codon 505 the changed sequence reads `GAC GAC CTT GCC CCT GGA` and a stop. vep-rs writes `DownstreamProtein=DDLAPG`. Ensembl VEP 116.3 writes `LAPG` under `--hgvs` and `DLAPG` without it.
 
 Two mechanisms meet on the row. Base 1515 is a codon's third, so line 113 of `Downstream.pm` starts one codon late on the record's own span: `DLAPG`, from codon 506, where vep-rs starts at codon 505 ([the start one codon late](downstream-start-past-own-codon.md)). Under `--hgvs` the plugin reads the span four bases on, from the first base of codon 507, and writes `LAPG`. The comparator files the `--hgvs` row under this class, since Ensembl VEP's value changes with the flag, and the row of the run without it under `downstream_start_past_own_codon`. It sets the `--hgvs` row aside only where both classes are named, and the corpus's manifest names both on the row's entry. The record is in the `GRCh37-plugin-downstream-own-span` corpus.
 
@@ -170,29 +170,29 @@ On a reverse-strand transcript the shifted reading can also splice bases the var
 
 ## 6. A shift onto a codon's third base: residues past a stop
 
-**In short.** `21 46430158 1338605 CTG C`, a ClinVar record, deletes coding bases 7840 and 7841 of ENST00000359568 (PCNT, forward strand, GRCh38), the first two bases of codon 2614, `TGT`. The base left and the two after it read `TGA`, a stop. Both engines write `p.Cys2614Ter` and `ProteinLengthChange=-723`, and vep-rs writes an empty `DownstreamProtein`. The notation moves the deletion two bases, onto the last base of codon 2614: `c.7842_7843del`, `HGVS_OFFSET=2`. Under `--hgvs` Ensembl VEP 116.2 writes 28 residues.
+**In short.** `21 46430158 1338605 CTG C`, a ClinVar record, deletes coding bases 7840 and 7841 of ENST00000359568 (PCNT, forward strand, GRCh38), the first two bases of codon 2614, `TGT`. The base left and the two after it read `TGA`, a stop. Both engines write `p.Cys2614Ter` and `ProteinLengthChange=-723`, and vep-rs writes an empty `DownstreamProtein`. The notation moves the deletion two bases, onto the last base of codon 2614: `c.7842_7843del`, `HGVS_OFFSET=2`. Under `--hgvs` Ensembl VEP 116.3 writes 28 residues.
 
 Line 113 of `Downstream.pm` computes `7842 - (7842 % 3)`, which is 7842, the offset of codon 2615. From codon 2613 the changed sequence reads `CTC TGA GAG CAG GCA`, and the plugin translates from `GAG`: the bases after the stop the variant makes. On the record's own span the same line gives the offset of codon 2614, and the value is empty, as vep-rs writes it. The shift alone puts the row in the shape of [the start one codon late](downstream-start-past-own-codon.md). The record is in the `GRCh38-plugin-computed` corpus.
 
 ## 7. A shift onto the last coding base: the 3' UTR read out of frame
 
-**In short.** `19 50813042 932016 CAGTG C`, a ClinVar record, deletes coding bases 6107 to 6110 of ENST00000262269 (MYH14, forward strand), from the second base of the last codon, `CAG`, into the stop codon `TGA`. The notation moves it one base, `c.6108_6111del`, `HGVS_OFFSET=1`: a start on the third base of codon 2036 and an end on the last coding base. Both engines write `p.Gln2036HisfsTer32` and `ProteinLengthChange=30`. vep-rs writes the 31 residues before that stop. Ensembl VEP 116.2 writes 58 residues under `--hgvs`, and vep-rs's 31 without the flag.
+**In short.** `19 50813042 932016 CAGTG C`, a ClinVar record, deletes coding bases 6107 to 6110 of ENST00000262269 (MYH14, forward strand), from the second base of the last codon, `CAG`, into the stop codon `TGA`. The notation moves it one base, `c.6108_6111del`, `HGVS_OFFSET=1`: a start on the third base of codon 2036 and an end on the last coding base. Both engines write `p.Gln2036HisfsTer32` and `ProteinLengthChange=30`. vep-rs writes the 31 residues before that stop. Ensembl VEP 116.3 writes 58 residues under `--hgvs`, and vep-rs's 31 without the flag.
 
 The bases left are `CA`, and in frame the changed transcript reads on into the 3' UTR as `CAC CCT ACC CTG`, histidine first, as the `HGVSp` says. On the shifted span line 113 of `Downstream.pm` gives an offset one past the changed coding sequence, so the plugin translates the UTR from its first base, `CCC TAC CCT GTC`. Those 58 codons are of a frame the changed transcript does not have ([the read past the coding end](downstream-utr-frame-past-coding-end.md)). The record is in the `GRCh37-plugin-downstream-coding-end` corpus, whose `without-hgvs` flag set holds the run without the flag.
 
 ## 8. An insertion shifted onto a seam of an edited RefSeq model
 
-**In short.** NM_015120.4 (ALMS1, GRCh38, forward strand) carries three bases the genome lacks, coding bases 75 to 77, between 2:73385942 and 2:73385943. The hand-written record `2 73385940 2_73385942_onto_d2 G GGA` inserts `GA` two bases before that seam, at `CDS_position` 72-73, and the notation moves it onto the seam: `c.73_74dup`, `HGVS_OFFSET=2`. Run with `--refseq`, vep-rs writes a `DownstreamProtein` of 17 residues and `ProteinLengthChange=-4128`, with and without `--hgvs`, and so does Ensembl VEP 116.2 without the flag. Under `--hgvs` Ensembl VEP writes 15 residues and `ProteinLengthChange=-4129`.
+**In short.** NM_015120.4 (ALMS1, GRCh38, forward strand) carries three bases the genome lacks, coding bases 75 to 77, between 2:73385942 and 2:73385943. The hand-written record `2 73385940 2_73385942_onto_d2 G GGA` inserts `GA` two bases before that seam, at `CDS_position` 72-73, and the notation moves it onto the seam: `c.73_74dup`, `HGVS_OFFSET=2`. Run with `--refseq`, vep-rs writes a `DownstreamProtein` of 17 residues and `ProteinLengthChange=-4128`, with and without `--hgvs`, and so does Ensembl VEP 116.3 without the flag. Under `--hgvs` Ensembl VEP writes 15 residues and `ProteinLengthChange=-4129`.
 
 An insertion whose point lies on a seam takes the place of the bases the model carries there, in both engines. The shifted reading therefore puts the two bases in place of the model's three, where the record's own reading adds two and removes none: two changed sequences, three bases apart in length. Both fields differ, and the comparator accepts both under the class. No committed corpus holds the record, which needs Ensembl VEP's RefSeq cache.
 
 ## 9. A later allele of a multi-allelic record
 
-**In short.** `21 47545369 . A AC,ACC`, a 1000 Genomes Phase 3 record on GRCh37, inserts one `C`, or two, between coding bases 478 and 479 of ENST00000413758 (COL6A2, forward strand). Both notations move seven bases: `HGVS_OFFSET=7`. On the second allele's row vep-rs writes a `DownstreamProtein` of 91 residues, from codon 160. Ensembl VEP 116.2 writes 89 residues, from codon 162, and prints `CDS_position` `485-486` where vep-rs prints `478-479`.
+**In short.** `21 47545369 . A AC,ACC`, a 1000 Genomes Phase 3 record on GRCh37, inserts one `C`, or two, between coding bases 478 and 479 of ENST00000413758 (COL6A2, forward strand). Both notations move seven bases: `HGVS_OFFSET=7`. On the second allele's row vep-rs writes a `DownstreamProtein` of 91 residues, from codon 160. Ensembl VEP 116.3 writes 89 residues, from codon 162, and prints `CDS_position` `485-486` where vep-rs prints `478-479`.
 
 The alleles of a record share one object per transcript, and the protein notation of each allele it moves leaves the moved CDS pair on it (`TranscriptVariationAllele.pm`, lines 844-858 and 2406-2410). Line 1737 prints a row's `CDS_position` before line 1760 runs the row's own notation. A later allele's row therefore prints the record's span moved by the `HGVS_OFFSET` of the last earlier allele that has one ([the later alleles of a multi-allelic record](multiallelic-hgvs-shift.md#2-a-record-whose-first-allele-moves-the-coding-positions-of-the-second)). That is the row's own offset only where the alleles move alike, as here. The plugin still reads the pair at the row's own offset, with the allele turned by it.
 
-`14 24646406 . G GGAAGAAGA,GGAAGAAGC`, of the same dataset, inserts eight bases between coding bases 681 and 682 of ENST00000311457 (REC8, forward strand), and its notations move seven bases and eight. On the second allele's row Ensembl VEP 116.2 prints `CDS_position` `688-689`, the span moved by seven, beside `HGVS_OFFSET=8`. Its plugin reads the pair eight bases on, 689-690, and writes 6 residues, from codon 230. vep-rs prints `681-682` and writes 8, from codon 228.
+`14 24646406 . G GGAAGAAGA,GGAAGAAGC`, of the same dataset, inserts eight bases between coding bases 681 and 682 of ENST00000311457 (REC8, forward strand), and its notations move seven bases and eight. On the second allele's row Ensembl VEP 116.3 prints `CDS_position` `688-689`, the span moved by seven, beside `HGVS_OFFSET=8`. Its plugin reads the pair eight bases on, 689-690, and writes 6 residues, from codon 230. vep-rs prints `681-682` and writes 8, from codon 228.
 
 The comparator takes vep-rs's `CDS_position` as the own pair on such a row. The row must be a second or later alternate allele of its record, Ensembl VEP's pair the record's span moved by the row's `HGVS_OFFSET` or by the last earlier allele's, and vep-rs's the span itself. Ensembl VEP's value must be the plugin's rule at the row's own offset. The `NMD` reading is the same.
 
@@ -200,7 +200,7 @@ A pair moved by any other amount stays a difference, the first allele's offset i
 
 ## 10. A later allele whose own notation moves nothing
 
-**In short.** `14 29261309 . A AAAC,AC`, a record of 1000 Genomes Phase 3 (GRCh37), inserts three bases, or one, between coding bases 346 and 347 of ENST00000399387 (C14orf23, forward strand). The first allele's notation moves two bases, `HGVS_OFFSET=2`, and leaves the pair 348-349 on the object the alleles share. The second allele's notation moves nothing: neither engine's row carries an `HGVS_OFFSET`. Ensembl VEP 116.2 prints `CDS_position` `348-349` there, and its Downstream plugin reads that pair with the allele as written: 19 residues, from codon 117. vep-rs reads the record's own pair, `346-347`: 20 residues, from codon 116.
+**In short.** `14 29261309 . A AAAC,AC`, a record of 1000 Genomes Phase 3 (GRCh37), inserts three bases, or one, between coding bases 346 and 347 of ENST00000399387 (C14orf23, forward strand). The first allele's notation moves two bases, `HGVS_OFFSET=2`, and leaves the pair 348-349 on the object the alleles share. The second allele's notation moves nothing: neither engine's row carries an `HGVS_OFFSET`. Ensembl VEP 116.3 prints `CDS_position` `348-349` there, and its Downstream plugin reads that pair with the allele as written: 19 residues, from codon 117. vep-rs reads the record's own pair, `346-347`: 20 residues, from codon 116.
 
 The second allele's row on each engine, `Extra` one field to a line, the differing cells in bold:
 

@@ -1,0 +1,80 @@
+entry = "structural_deletion_stop_lost_without_stop_codon"
+page = "docs/divergences/structural-deletion-stop-lost-without-stop-codon.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "observed"
+input_class_basis = "1 · 28.1 per million · no flag needed"
+notes = "Eight hand-written structural deletions on GRCh37, each holding one of the last three genomic coding positions of a transcript and no base of a stop codon that stands at its coding end, none covering its transcript. The structural part of Ensembl VEP's stop_lost holds the span against those three positions, tests no flag and reads no base (VariationEffect.pm:1268-1280; partial_codon at :1240 is the one test before it), so each row carries stop_lost. vep-rs asks whether a stop codon stands at the coding end and writes the row's other terms alone. kcnj15_fragment_end, 21:39671501-39671700: ENST00000419868 carries cds_end_NF and ends at 39671600 on its codon 139, which names Cys; on the gene's complete transcript ENST00000328656 the same bases are codon 139 of 375 and the stop codon stands at 39672309-39672311, beyond the span, where both engines write frameshift_variant,feature_truncation. cbs_fragment_end, a <CN0> over 21:44485651-44485760: ENST00000441030, reverse strand, carries cds_end_NF and ends at 44485726 on a codon that names Lys. ap000304_end, 21:34947401-34947440: ENST00000595468, reverse strand, no flag, 12 whole codons whose last names Glu, no 3' UTR. ltbp4_coding_end, 19:41125371-41125390: ENST00000243562, no flag, 186 whole codons whose last, 41125377-41125379, names Val, before 1,743 bases of 3' UTR. atp1a3_end, 19:42470701-42470760: ENST00000441343, reverse strand, biotype non_stop_decay, no flag, 1,226 codons and two bases more, 42470735 and 42470734, on the transcript's last base, which adenines do not complete to a stop codon. lims1_coding_end, 2:109276101-109276140: ENST00000434274, no flag, 20 codons and two bases more before a 3' UTR of 666 bases; its last three coding bases, 109276124-109276126, are the last base of codon 20 and the two bases after it and spell a stop codon outside the frame its translation is read in. nd2_before_the_tail, MT:5491-5510: ENST00000361453 is translated under codon table 2 and ends one base into a codon on its last base, MT:5511, which adenines complete to a stop codon; the span ends on the last whole codon, MT:5508-5510, which names Leu, and takes no base of the stop codon, while it holds two of the three positions Ensembl VEP reads, MT:5509-5511. arid4b_flagged_stop, 1:235331831-235331850: the span holds the stop codon 1:235331840-235331842 on which two reverse-strand transcripts of ARID4B end; ENST00000349213 carries cds_start_NF and cds_end_NF, so its record shows no stop codon and vep-rs writes none lost, and on ENST00000264183, which carries no flag, both engines write stop_lost. Every row has IMPACT HIGH in both engines, which feature_truncation gives. The committed GRCh37 cache holds every transcript and no flag is needed."
+
+[input]
+format = "vcf"
+text = """
+21	39671500	kcnj15_fragment_end	N	<DEL>	.	.	SVTYPE=DEL;END=39671700
+21	44485650	cbs_fragment_end	N	<CN0>	.	.	SVTYPE=DEL;END=44485760
+21	34947400	ap000304_end	N	<DEL>	.	.	SVTYPE=DEL;END=34947440
+19	41125370	ltbp4_coding_end	N	<DEL>	.	.	SVTYPE=DEL;END=41125390
+19	42470700	atp1a3_end	N	<DEL>	.	.	SVTYPE=DEL;END=42470760
+2	109276100	lims1_coding_end	N	<DEL>	.	.	SVTYPE=DEL;END=109276140
+MT	5490	nd2_before_the_tail	N	<DEL>	.	.	SVTYPE=DEL;END=5510
+1	235331830	arid4b_flagged_stop	N	<DEL>	.	.	SVTYPE=DEL;END=235331850
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh37"
+json_cache = "tests/golden/116/GRCh37/json_cache"
+
+[run]
+flags = []
+
+[compare]
+kind = "rows"
+where = { record = ["kcnj15_fragment_end", "cbs_fragment_end", "ap000304_end", "ltbp4_coding_end", "atp1a3_end", "lims1_coding_end", "nd2_before_the_tail", "arid4b_flagged_stop"], feature = ["ENST00000419868", "ENST00000328656", "ENST00000441030", "ENST00000595468", "ENST00000243562", "ENST00000441343", "ENST00000434274", "ENST00000361453", "ENST00000349213", "ENST00000264183"] }
+columns = ["Location", "Allele", "Feature", "Consequence", "IMPACT", "FLAGS"]
+
+[expected]
+ensembl_vep = [
+    "21:39671501-39671700 | deletion | ENST00000419868 | stop_lost,feature_truncation,coding_sequence_variant,3_prime_UTR_variant | HIGH | cds_end_NF",
+    "21:39671501-39671700 | deletion | ENST00000328656 | frameshift_variant,feature_truncation | HIGH | -",
+    "21:44485651-44485760 | deletion | ENST00000441030 | stop_lost,feature_truncation,coding_sequence_variant,3_prime_UTR_variant | HIGH | cds_end_NF",
+    "21:34947401-34947440 | deletion | ENST00000595468 | stop_lost,feature_truncation,coding_sequence_variant,3_prime_UTR_variant | HIGH | -",
+    "19:41125371-41125390 | deletion | ENST00000243562 | frameshift_variant,stop_lost,feature_truncation,3_prime_UTR_variant | HIGH | -",
+    "19:42470701-42470760 | deletion | ENST00000441343 | stop_lost,feature_truncation,coding_sequence_variant,3_prime_UTR_variant | HIGH | -",
+    "2:109276101-109276140 | deletion | ENST00000434274 | frameshift_variant,stop_lost,feature_truncation,3_prime_UTR_variant,NMD_transcript_variant | HIGH | -",
+    "MT:5491-5510 | deletion | ENST00000361453 | frameshift_variant,stop_lost,feature_truncation | HIGH | -",
+    "1:235331831-235331850 | deletion | ENST00000349213 | frameshift_variant,stop_lost,feature_truncation,3_prime_UTR_variant | HIGH | cds_start_NF,cds_end_NF",
+    "1:235331831-235331850 | deletion | ENST00000264183 | frameshift_variant,stop_lost,feature_truncation,3_prime_UTR_variant | HIGH | -",
+]
+vep_rs = [
+    "21:39671501-39671700 | deletion | ENST00000419868 | feature_truncation,coding_sequence_variant,3_prime_UTR_variant | HIGH | cds_end_NF",
+    "21:39671501-39671700 | deletion | ENST00000328656 | frameshift_variant,feature_truncation | HIGH | -",
+    "21:44485651-44485760 | deletion | ENST00000441030 | feature_truncation,coding_sequence_variant,3_prime_UTR_variant | HIGH | cds_end_NF",
+    "21:34947401-34947440 | deletion | ENST00000595468 | feature_truncation,coding_sequence_variant,3_prime_UTR_variant | HIGH | -",
+    "19:41125371-41125390 | deletion | ENST00000243562 | frameshift_variant,feature_truncation,3_prime_UTR_variant | HIGH | -",
+    "19:42470701-42470760 | deletion | ENST00000441343 | feature_truncation,coding_sequence_variant,3_prime_UTR_variant | HIGH | -",
+    "2:109276101-109276140 | deletion | ENST00000434274 | frameshift_variant,feature_truncation,3_prime_UTR_variant,NMD_transcript_variant | HIGH | -",
+    "MT:5491-5510 | deletion | ENST00000361453 | frameshift_variant,feature_truncation | HIGH | -",
+    "1:235331831-235331850 | deletion | ENST00000349213 | frameshift_variant,feature_truncation,3_prime_UTR_variant | HIGH | cds_start_NF,cds_end_NF",
+    "1:235331831-235331850 | deletion | ENST00000264183 | frameshift_variant,stop_lost,feature_truncation,3_prime_UTR_variant | HIGH | -",
+]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/sv/mod.rs::structural_stop_lost",
+    "crates/vep-effects/src/coding.rs::stop_codon_at_the_coding_end",
+]
+tests = [
+    "crates/vep-cli/tests/structural_stop_lost_where_no_stop_codon_stands.rs::structural_deletion_over_the_end_of_a_transcript_that_carries_cds_end_nf_loses_no_stop_codon",
+    "crates/vep-cli/tests/structural_stop_lost_where_no_stop_codon_stands.rs::structural_deletion_over_a_coding_end_whose_sequence_shows_no_stop_codon_loses_none",
+    "crates/vep-cli/tests/structural_stop_lost_where_no_stop_codon_stands.rs::structural_deletion_loses_only_a_stop_codon_that_stands_and_whose_base_it_takes",
+    "crates/vep-effects/src/sv/deletion.rs::tests::structural_deletion_over_a_coding_end_where_no_stop_codon_stands_has_no_stop_lost",
+    "crates/vep-effects/src/sv/cnv.rs::tests::cn0_loses_a_stop_codon_only_where_one_stands_at_the_coding_end",
+]
+rules = [
+    "tools/vep-formats-compare/src/coding_end_terms.rs::CodingEndClass::takes",
+    "tools/vep-formats-compare/src/coding_end_terms.rs::class_of_pair",
+    "tools/vep-formats-compare/src/coding_end_terms.rs::expected_terms",
+    "tools/vep-formats-compare/src/rules/coding_end_pairs.rs::structural_deletion_stop_lost_without_stop_codon_pair",
+    "tools/vep-outputs-compare/src/rules/row.rs::structural_deletion_stop_lost_without_stop_codon_pair",
+    "tools/vep-plugin-pairs/src/rules/coding_end.rs::coding_end_class",
+]

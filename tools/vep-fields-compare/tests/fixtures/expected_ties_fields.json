@@ -1,0 +1,269 @@
+{
+  "totals": {
+    "reference_keys": 30,
+    "scored_keys": 30,
+    "intersection": 30,
+    "reference_only": 0,
+    "scored_only": 0,
+    "reference_duplicate_keys": 0,
+    "scored_duplicate_keys": 0
+  },
+  "fields": {
+    "Uploaded_variation": {
+      "compared": 30,
+      "equal": 0,
+      "differ": 30,
+      "agreement": 0.0,
+      "distinct_mismatch_shapes": 12,
+      "top_mismatches": [
+        {
+          "reference": "r0",
+          "scored": "s4",
+          "count": 3
+        },
+        {
+          "reference": "r1",
+          "scored": "s5",
+          "count": 3
+        },
+        {
+          "reference": "r2",
+          "scored": "s0",
+          "count": 3
+        },
+        {
+          "reference": "r3",
+          "scored": "s1",
+          "count": 3
+        },
+        {
+          "reference": "r0",
+          "scored": "s2",
+          "count": 3
+        },
+        {
+          "reference": "r1",
+          "scored": "s3",
+          "count": 3
+        },
+        {
+          "reference": "r2",
+          "scored": "s4",
+          "count": 2
+        },
+        {
+          "reference": "r3",
+          "scored": "s5",
+          "count": 2
+        },
+        {
+          "reference": "r0",
+          "scored": "s0",
+          "count": 2
+        },
+        {
+          "reference": "r1",
+          "scored": "s1",
+          "count": 2
+        },
+        {
+          "reference": "r2",
+          "scored": "s2",
+          "count": 2
+        },
+        {
+          "reference": "r3",
+          "scored": "s3",
+          "count": 2
+        }
+      ]
+    },
+    "Gene": {
+      "compared": 30,
+      "equal": 0,
+      "differ": 30,
+      "agreement": 0.0,
+      "distinct_mismatch_shapes": 30,
+      "top_mismatches": [
+        {
+          "reference": "G100",
+          "scored": "H100",
+          "count": 1
+        },
+        {
+          "reference": "G101",
+          "scored": "H101",
+          "count": 1
+        },
+        {
+          "reference": "G102",
+          "scored": "H102",
+          "count": 1
+        },
+        {
+          "reference": "G103",
+          "scored": "H103",
+          "count": 1
+        },
+        {
+          "reference": "G104",
+          "scored": "H104",
+          "count": 1
+        },
+        {
+          "reference": "G105",
+          "scored": "H105",
+          "count": 1
+        },
+        {
+          "reference": "G106",
+          "scored": "H106",
+          "count": 1
+        },
+        {
+          "reference": "G107",
+          "scored": "H107",
+          "count": 1
+        },
+        {
+          "reference": "G108",
+          "scored": "H108",
+          "count": 1
+        },
+        {
+          "reference": "G109",
+          "scored": "H109",
+          "count": 1
+        },
+        {
+          "reference": "G110",
+          "scored": "H110",
+          "count": 1
+        },
+        {
+          "reference": "G111",
+          "scored": "H111",
+          "count": 1
+        },
+        {
+          "reference": "G112",
+          "scored": "H112",
+          "count": 1
+        },
+        {
+          "reference": "G113",
+          "scored": "H113",
+          "count": 1
+        },
+        {
+          "reference": "G114",
+          "scored": "H114",
+          "count": 1
+        },
+        {
+          "reference": "G115",
+          "scored": "H115",
+          "count": 1
+        },
+        {
+          "reference": "G116",
+          "scored": "H116",
+          "count": 1
+        },
+        {
+          "reference": "G117",
+          "scored": "H117",
+          "count": 1
+        },
+        {
+          "reference": "G118",
+          "scored": "H118",
+          "count": 1
+        },
+        {
+          "reference": "G119",
+          "scored": "H119",
+          "count": 1
+        }
+      ]
+    },
+    "cDNA_position": {
+      "compared": 30,
+      "equal": 30,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "CDS_position": {
+      "compared": 30,
+      "equal": 30,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "Protein_position": {
+      "compared": 30,
+      "equal": 30,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "Amino_acids": {
+      "compared": 30,
+      "equal": 30,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "Codons": {
+      "compared": 30,
+      "equal": 30,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "Existing_variation": {
+      "compared": 30,
+      "equal": 30,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    }
+  },
+  "extra": {
+    "IMPACT": {
+      "compared": 30,
+      "equal": 30,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    },
+    "STRAND": {
+      "compared": 30,
+      "equal": 30,
+      "differ": 0,
+      "agreement": 1.0,
+      "distinct_mismatch_shapes": 0,
+      "top_mismatches": []
+    }
+  },
+  "inputs": {
+    "reference": "tests/fixtures/ties_reference.txt",
+    "scored": "tests/fixtures/ties_scored.txt"
+  },
+  "key": [
+    "Location",
+    "Allele",
+    "Feature",
+    "Feature_type",
+    "consequence_set"
+  ],
+  "comparison": "verbatim per field on tuples both sides emit under the same key"
+}

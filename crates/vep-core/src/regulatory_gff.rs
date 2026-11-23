@@ -5,12 +5,14 @@
 //! share: the annotator reads them at run time under `--regulatory_gff` and
 //! the cache builder bakes them into a cache's regulatory shards, and both must
 //! build the same feature from one record (Ensembl VEP's
-//! `AnnotationSource/File/RegFeat.pm` at release/116.2). [`uri_unescape`] is
+//! `AnnotationSource/File/RegFeat.pm` at release/116.3). [`uri_unescape`] is
 //! the decoding ensembl-io gives a GTF attribute value and a GFF3 type, for
 //! every reader of either, [`decode_type`] the type column as text and
 //! [`decode_attribute`] a GFF3 attribute value as text, for every reader of a
 //! GFF3's ninth column. [`unindexed_coordinate`] names the start or end of a
-//! line that no `tabix` indexes, which refuses a line of any type.
+//! line that no `tabix` indexes, which refuses a line of any type, and
+//! [`index_columns`] is a line's columns as that index build ends them, at a
+//! tab or at a NUL byte.
 
 use std::borrow::Cow;
 
@@ -112,16 +114,17 @@ pub fn undecodable_attribute_error(format: &str, key: &str, value: &str) -> Stri
 /// byte they spell and everything else as written: URI::Escape's
 /// `uri_unescape`, the `decode_string` of ensembl-io's `GXF.pm` (lines
 /// 303-306) that a GTF attribute value (`GTF.pm` line 126) and a GFF3 type
-/// (`GFF3.pm` line 163) go through. The result is bytes, as Perl's is, since
-/// an escape can spell a byte that is no UTF-8 on its own; a text without `%`
-/// is returned as it is.
+/// (`GFF3.pm` line 163) go through. The result is bytes, as Ensembl VEP's is,
+/// since an escape can spell a byte that is no UTF-8 on its own; a text without
+/// `%` is returned as it is.
 pub fn uri_unescape(text: &str) -> Cow<'_, [u8]> {
     unescape_bytes(text.as_bytes())
 }
 
 /// [`uri_unescape`] over bytes: the column as a file holds it, before any
 /// reading as text, so an escape can complete a multi-byte character whose
-/// first byte stands raw in the column, as it does when Perl decodes the bytes.
+/// first byte stands raw in the column, as it does when Ensembl VEP decodes the
+/// bytes.
 fn unescape_bytes(column: &[u8]) -> Cow<'_, [u8]> {
     if !column.contains(&b'%') {
         return Cow::Borrowed(column);
@@ -164,7 +167,7 @@ fn unescape_to_text(column: &[u8]) -> Cow<'_, str> {
 
 /// A GFF3 type column as `get_type` reads it (`GFF3.pm:161-164`): the column's
 /// bytes with every `%` followed by two hexadecimal digits replaced by the
-/// byte they spell, then read as text ([`unescape_to_text`]), which no
+/// byte they spell, then read as text (`unescape_to_text`), which no
 /// accepted type matches in either engine when the bytes are no UTF-8.
 pub fn decode_type(column: &[u8]) -> Cow<'_, str> {
     unescape_to_text(column)
@@ -193,22 +196,38 @@ pub fn transcription_factors(value: Option<&[u8]>) -> Vec<Cow<'_, str>> {
         .collect()
 }
 
+/// Whether `byte` ends a column to the index build of Ensembl VEP's release:
+/// a tab or a NUL byte (htslib 1.9 `tbx.c:89`, the test of `tbx_parse1`'s
+/// loop). An annotation reader ends a column at a tab alone (ensembl-io
+/// `ColumnBasedParser.pm:250`).
+fn ends_an_index_column(byte: &u8) -> bool {
+    matches!(byte, b'\t' | 0)
+}
+
+/// The columns of `line` as the index build ends them: at a tab or at a NUL
+/// byte.
+pub fn index_columns(line: &[u8]) -> impl Iterator<Item = &[u8]> {
+    line.split(ends_an_index_column)
+}
+
 /// The first of a GFF line's `start` and `end` that no `tabix` indexes, as
 /// the column's name and its text. `line` is the line as the file writes it,
-/// whose fourth and fifth columns the index build reads with `strtol` in base
-/// 0 (htslib 1.9 `tbx.c:95` and `:105`): it fails a column no number leads
+/// whose fourth and fifth columns, each ended at a tab or at a NUL byte
+/// ([`index_columns`]), the index build reads with `strtol` in base 0
+/// (htslib 1.9 `tbx.c:95` and `:105`): it fails a column no number leads
 /// (`:96`, `:106`) and an end that reads below zero (`:142`), and takes a
-/// start that does as the first base (`:99`). `None` for a line whose two
-/// columns the build parses, whatever else they spell (`100x`, a start of
-/// `-5`, `0x1A`, an empty start before a numeric end), and for a line too
-/// short to hold them. The cache builder holds a copy of this rule,
-/// `check_skipped_coordinates`: the two change together.
+/// start that does as the first base (`:99`). `strtol` reads on past the tab
+/// of an empty or blank column into the next and stops at a NUL byte, where
+/// the text it is handed ends, so a column whose blanks run into a NUL byte
+/// has no number. `None` for a line whose two columns the build parses,
+/// whatever else they spell (`100x`, a start of `-5`, `0x1A`, an empty start
+/// before a numeric end), and for a line too short to hold them.
 pub fn unindexed_coordinate(line: &[u8]) -> Option<(&'static str, &[u8])> {
-    let mut rest = line.splitn(4, |byte| *byte == b'\t').nth(3);
+    let mut rest = line.splitn(4, ends_an_index_column).nth(3);
     for (name, fails_below_zero) in [("start", false), ("end", true)] {
         let text = rest?;
-        let (value, after) = match text.iter().position(|byte| *byte == b'\t') {
-            Some(tab) => (&text[..tab], Some(&text[tab + 1..])),
+        let (value, after) = match text.iter().position(ends_an_index_column) {
+            Some(end) => (&text[..end], Some(&text[end + 1..])),
             None => (text, None),
         };
         if !leads_a_number(text) || (fails_below_zero && reads_below_zero(text)) {
@@ -219,8 +238,8 @@ pub fn unindexed_coordinate(line: &[u8]) -> Option<(&'static str, &[u8])> {
     None
 }
 
-/// `text` past the blanks `strtol` skips before a number, the tab between
-/// two columns among them.
+/// `text` past the blanks `strtol` skips before a number: the tab between
+/// two columns is one, a NUL byte is none.
 fn after_blanks(text: &[u8]) -> &[u8] {
     let blanks = text
         .iter()
@@ -364,7 +383,7 @@ mod tests {
 
     /// The two texts both readers of a file write: the ignored bound names the
     /// attribute, its value, the record's type and identifier and the file;
-    /// the collision is Ensembl VEP 116.2's text (`RegFeat.pm:489-490`).
+    /// the collision is Ensembl VEP 116.3's text (`RegFeat.pm:489-490`).
     #[test]
     fn bound_and_identifier_warnings_name_the_record_and_the_file() {
         assert_eq!(
@@ -389,7 +408,13 @@ mod tests {
     /// fails before an end that is no number, an empty end before the score
     /// `.` and before a score below zero; the columns are the line's as
     /// written, so one that opens with a tab holds its type where the build
-    /// reads a start.
+    /// reads a start. Under the lines stand the two readings they rest on:
+    /// no number leads a column that is empty, blank, a sign alone, two
+    /// signs, a sign and a blank or other text, on its own and before the
+    /// tabs of empty columns, nor a `.` behind a tab, nor a `-` whose digit
+    /// stands in the next column; and a number reads below zero when a minus
+    /// sign leads digits of which one is not `0`, in the base a `0x` or `0`
+    /// prefix sets, behind blanks and a tab too (`tbx.c:142`).
     #[test]
     fn a_column_no_number_leads_and_an_end_below_zero_are_not_indexed() {
         for (start, end, unindexed) in [
@@ -425,6 +450,20 @@ mod tests {
             unindexed_coordinate(b"20\tx\texon\t1000\txyz"),
             Some(("end", b"xyz".as_slice()))
         );
+        for column in ["", " ", "abc", "x7", "-", "+", "--7", "+-7", ".7", "- 7"] {
+            assert!(!leads_a_number(column.as_bytes()), "{column:?}");
+            assert!(
+                !leads_a_number(format!("\t{column}\t\t").as_bytes()),
+                "{column:?}"
+            );
+        }
+        assert!(!leads_a_number(b"\t.\t+\t."));
+        assert!(!leads_a_number(b"-\t7"));
+        for text in [
+            "-9", "-1.5", "-010", "-0x1A", "-0X1a", " \t-9", "\t-3\t+", "-9x",
+        ] {
+            assert!(reads_below_zero(text.as_bytes()), "{text:?}");
+        }
     }
 
     /// Every other spelling is one the index build parses, so nothing of it
@@ -433,7 +472,13 @@ mod tests {
     /// padding, an empty or blank start before its end, an end that reads
     /// zero after its minus sign, an empty end before a score that is a
     /// number, a byte that is no UTF-8 after the digits, and a line too short
-    /// to hold the columns.
+    /// to hold the columns. Under the lines stand the two readings they rest
+    /// on: a number leads a column when, after any blanks and one sign, a
+    /// digit follows, a reading that runs on past the tab of an empty or
+    /// blank column into the next, so an empty start is led by its end's
+    /// number and an empty end by a score that is one; and no number reads
+    /// below zero that reads zero behind its minus sign, has none, or that
+    /// no number leads.
     #[test]
     fn a_number_led_start_and_end_are_indexed_whatever_else_they_spell() {
         for (start, end) in [
@@ -473,6 +518,86 @@ mod tests {
             b"",
         ] {
             assert_eq!(unindexed_coordinate(written), None, "{written:?}");
+        }
+        for column in [
+            "7", "+7", "-7", " 7", "\x0b7", "7x", "0x1A", "007", "7.5", "7 ",
+        ] {
+            assert!(leads_a_number(column.as_bytes()), "{column:?}");
+            assert!(
+                leads_a_number(format!("\t \t{column}\tx").as_bytes()),
+                "{column:?}"
+            );
+        }
+        assert!(leads_a_number(b"\t1100\t.\t+"));
+        assert!(leads_a_number(b"\t7\t+\t."));
+        for text in [
+            "-0", "-00", "-08", "-0x", "-0xg", "-0.5", "9", "+9", "0", "", "-", "- 9", "--9", "abc",
+        ] {
+            assert!(!reads_below_zero(text.as_bytes()), "{text:?}");
+        }
+    }
+
+    /// The index build ends a column at a tab and at a NUL byte, so a NUL
+    /// byte inside a tab-ended column is one more column to it, and a line
+    /// whose columns NUL bytes end has the columns of the line with tabs in
+    /// their place.
+    #[test]
+    fn a_column_ends_at_a_tab_or_at_a_nul_byte_to_the_index_build() {
+        let columns = |line: &'static [u8]| index_columns(line).collect::<Vec<_>>();
+        assert_eq!(columns(b"a\0\tb\0"), [&b"a"[..], b"", b"b", b""]);
+        assert_eq!(
+            columns(b"21\0x\0exon\x001000\x001100"),
+            columns(b"21\tx\texon\t1000\t1100")
+        );
+        assert_eq!(columns(b"21\tx\tex\0on\t1000").len(), 5);
+        assert_eq!(columns(b""), [b""]);
+    }
+
+    /// A NUL byte before the end column moves the columns the index build
+    /// reads: one in the sequence name or the source, or inside the type,
+    /// puts the type or its tail where a start is read, and the line is
+    /// named for it; one that leads a start or an end leaves an empty
+    /// column whose reading stops at the byte, as blanks that run into one
+    /// do, where a tab is read on past. A line whose NUL bytes leave a
+    /// number in the fourth and fifth columns is one the build parses: its
+    /// columns NUL bytes end, its type, start or end ends in one, or the
+    /// byte stands among a start's or an end's digits or behind the end.
+    #[test]
+    fn a_nul_byte_ends_a_column_where_a_start_and_an_end_are_read() {
+        for (line, unindexed) in [
+            (
+                &b"20\0\tx\texon\t1000\t1100\t.\t+\t.\tID=e"[..],
+                ("start", &b"exon"[..]),
+            ),
+            (b"2\x000\tx\texon\t1000\t1100", ("start", b"exon")),
+            (b"20\tx\0\texon\t1000\t1100", ("start", b"exon")),
+            (b"20\tx\0y\texon\t1000\t1100", ("start", b"exon")),
+            (b"20\tx\tex\0on\t1000\t1100", ("start", b"on")),
+            (b"20\tx\texon\t\x001000\t1100", ("start", b"")),
+            (b"20\tx\texon\t \t\x001100", ("start", b" ")),
+            (b"20\tx\texon\t1000\t\x001100", ("end", b"")),
+            (b"20\tx\texon\t1000\t \x005", ("end", b" ")),
+            (b"20\tx\texon\t1000\0\0", ("end", b"")),
+            (b"20\0x\0exon\0abc\x001100", ("start", b"abc")),
+            (b"20\0x\0exon\x001000\0-9", ("end", b"-9")),
+            (b"20\0x\0exon\0", ("start", b"")),
+        ] {
+            assert_eq!(unindexed_coordinate(line), Some(unindexed), "{line:?}");
+        }
+        for line in [
+            &b"20\0x\0exon\x001000\x001100\0.\0+\0.\0ID=e"[..],
+            b"20\0x\0exon\x001000",
+            b"20\tx\texon\0\t1000\t1100\t.\t+\t.\tID=e",
+            b"20\tx\texon\t1000\0\t1100\t.\t+\t.\tID=e",
+            b"20\tx\texon\t1000\t1100\0\t.\t+\t.\tID=e",
+            b"20\tx\texon\t10\x0000\t1100\t.\t+\t.\tID=e",
+            b"20\tx\texon\t1000\t11\x0000\t.\t+\t.\tID=e",
+            b"20\tx\texon\t1000\t1100\t.\0\t+\t.\tID=e\0",
+            b"20\0x\0exon\0\t1100\0.",
+            b"20\0\0\0\t7\texon\t1000\t1100\t.\t+\t.\tID=e",
+            b"\0\0\x007",
+        ] {
+            assert_eq!(unindexed_coordinate(line), None, "{line:?}");
         }
     }
 }

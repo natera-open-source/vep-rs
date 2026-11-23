@@ -1,7 +1,7 @@
 entry = "gwas_haplotype_cross_product"
 page = "docs/plugins/flat-file.md#1-gwas-every-snp-of-a-haplotype-row-at-every-location-of-the-row"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
 input_class_basis = "2 · 3 of 790 table rows · 2 flag sets, 1 corpus"
 # Ensembl VEP's plugin builds its processed catalog under --dir, which must be writable: a directory of the stage.
@@ -33,3 +33,13 @@ columns = ["Location", "Allele", "Feature", "GWAS_risk_allele", "GWAS_study"]
 [expected]
 ensembl_vep = ["21:45427844 | T | ENST00000651438 | T | GCST008413"]
 vep_rs = ["21:45427844 | T | ENST00000651438 | - | -"]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/gwas.rs::GwasPlugin::load_curated",
+    "crates/vep-builtins/src/plugins/gwas.rs::GwasPlugin::locations",
+]
+tests = [
+    "crates/vep-builtins/src/plugins/gwas.rs::tests::multi_location_row_yields_one_record_per_location",
+]
+rules = ["tools/vep-plugin-pairs/src/rules/gwas.rs::haplotype_cross_product"]

@@ -1,74 +1,106 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --plugin gnomADMt,file=data/gnomad.v3.1.chrM.slice.vcf.bgz [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "none on either side",
  "input": "variants.vcf: 11 records on MT: an SNV at 3, an insertion at 6, a deletion at 21, an insertion at 42 (each as the gnomAD file writes it, with the shared leading base), an SNV at 60 whose allele the file lacks, rs267606617, rs199474657, rs199476118, the two alleles of rs199476133 in one record, rs199476112 and rs199476104",
  "sha256": {
-  "default.txt": "0b4fef88c5c03e1929766bf60c8e83fd43066455be46ee4a27b8818b23a77689",
-  "tab.txt": "fd983ce15f6dcb9957a1f9d5cffef7bb0a1d743aea00c9a5d6d4a3c83741acde",
-  "vcf.vcf": "a98c20f60487849e989ffb72ab67953a1f682ddcab0afe660032cc89084646b3",
-  "json.jsonl": "bde3ee4d0cad57ad7d143e8feae4ffb3af75f4ce6e62a5635082516827e8ce45"
+  "default.txt": "ebc1b409ec5951bb74c5d60099eb92d512caf9b9cc7ce2c7dd0fc8ec5718184d",
+  "tab.txt": "013c697b5a9e5a319117e1dd8fe261fe609eb7412774ed17e4c91b3f82985e54",
+  "vcf.vcf": "bfe7676a63fb3026d9700bd75d23f1efea2e0a35955172fe65f1709520b528c0",
+  "json.jsonl": "0cbdd9324a287ede0ed1f8ff4b4dd77e9aac99f878262c5e19166fc2762aa4a4"
  },
  "variants_vcf_sha256": "72bd640f8edcedcc255811d7271648e1ab31d73c6785cc9b40286778040a81c7",
  "flag_sets": {
   "fields-all": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --plugin gnomADMt,file=data/gnomad.v3.1.chrM.slice.vcf.bgz,fields=all [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "json.jsonl": "7f25d873000bec02a148b7f75840131848eab138d02a20c13d1b4108e44dabf8",
+    "default.txt": "d1c1ea5efee1219ca428ac950d7a3448c73b7f2f1e793d11836cdc33b535e3b5",
+    "tab.txt": "6195add156034f516ee73a89364c183fe8492902c7056fd5044f5305c4c2fba8",
+    "vcf.vcf": "043355ceea34c31958931a2f797b564411f26c21d51db97610c28ad84bb5e6b3"
+   },
    "flags": [
     "--plugin",
     "gnomADMt,file=data/gnomad.v3.1.chrM.slice.vcf.bgz,fields=all"
    ],
    "expected_dir": "expected_fields-all",
-   "sha256": {
-    "default.txt": "b100694d1aad377f2210e66e7121b2a02eca60e42b0b57e0023f2f66e7f0e95c",
-    "tab.txt": "2436ca71541c443967f97fcd9e4f455b8b56b1524d1a578f16a1523139a782b5",
-    "vcf.vcf": "5203c88924b35e675c9b0e8a06932c2a7b958f54729e692ed3ae606dcb1f7ad2",
-    "json.jsonl": "9379a87bdcff7956ea1a13fffc75ed62a246c5cfb9347becd3d0c9d5cea7988f"
-   },
    "note": "The run is compared in the json format. In the default, tab and vcf formats every data row agrees, and five header description lines differ: Ensembl VEP's VCF header parser (ensembl-io BaseVCF4.pm:135, :146) removes every < and > of a header line and cuts a description at its first =, so AC_het, AC_hom, AF_het and AF_hom read '... with a heteroplasmy level ' and common_low_heteroplasmy loses its comparison signs, where vep-rs writes the file's description as written; the reference's default.txt.gz, tab.txt.gz and vcf.vcf.gz are kept beside the compared file. The fields-subset run compares, in every format, fields whose descriptions carry no such sign, among them a field most rows lack and a flag field."
   },
   "hap-filter": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --plugin gnomADMt,file=data/gnomad.v3.1.chrM.slice.vcf.bgz,hap_filter=HV:A:B [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "5156b8d5010c95ac3730cab37797096d6cd61c80e3316ea00190c32a28826bc6",
+    "tab.txt": "354256a9c1798c13bedbc8e10ee3371f403576a279e644b4eb5b81651bfbf654",
+    "vcf.vcf": "489f9f0e69820b56bad3f870540d818d7c609c270cd25d329268ee38c72a3f20",
+    "json.jsonl": "22bcde73d2bd7fb64d7247c4b81f8e8bb340e0c87effa0715a6a9fb944ea043e"
+   },
    "flags": [
     "--plugin",
     "gnomADMt,file=data/gnomad.v3.1.chrM.slice.vcf.bgz,hap_filter=HV:A:B"
    ],
-   "expected_dir": "expected_hap-filter",
-   "sha256": {
-    "default.txt": "c0f1a72bf3c06621772cccecbc25d0e5fbea9160c1c8279b0d2d24c64413645f",
-    "tab.txt": "186fb2858dd8fd35ff8f0980cc3bf19ada8c369a2f374bb9030d71dc96c16964",
-    "vcf.vcf": "96eb2b73b0bb94d1dcd5587f799abf6a2f2361ff235c5329945c3fafd689ef95",
-    "json.jsonl": "0863ce53a50bcb08e42047145aabdadba925cc803f05efc64cc969f3d4d38e39"
-   }
+   "expected_dir": "expected_hap-filter"
   },
   "pop-filter": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --plugin gnomADMt,file=data/gnomad.v3.1.chrM.slice.vcf.bgz,fields=pop_AC_hom:pop_AF_hom:pop_AN,pop_filter=eas:fin:afr [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "54edf234d0b0ea34ad39b6401543252aa3d5e4bedd5819fb71724f7677b22ea7",
+    "tab.txt": "616720f7561123f143393454d2e42a3fc43253e6f32e580d04c0838234145c1e",
+    "vcf.vcf": "9130e4a3079ed3f06da6786357de6a60d25d8335d28eaa7cf47336548e128318",
+    "json.jsonl": "15c7c7e78f64ff0a66aeef37ee66775c29314b949217929971005975c670a99d"
+   },
    "flags": [
     "--plugin",
     "gnomADMt,file=data/gnomad.v3.1.chrM.slice.vcf.bgz,fields=pop_AC_hom:pop_AF_hom:pop_AN,pop_filter=eas:fin:afr"
    ],
-   "expected_dir": "expected_pop-filter",
-   "sha256": {
-    "default.txt": "8a4e1b021bb82926a66e9baed4b48dfe1fa277086666af3d31e6f3dab3f1c9b1",
-    "tab.txt": "b11df5e41ef7cf9c8c5de4bb6bd80d5032693f4e67229efa2504986b85c76b7d",
-    "vcf.vcf": "e0194793e1be6965c6030096fe819278137bce252fba962bf790199c76a81341",
-    "json.jsonl": "937952122a9808aed85462df194a9fdd253475559c81133e500fae38c35bc259"
-   }
+   "expected_dir": "expected_pop-filter"
   },
   "fields-subset": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --plugin gnomADMt,file=data/gnomad.v3.1.chrM.slice.vcf.bgz,fields=filters:hap_defining_variant:AN:max_hl:variant_collapsed [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "72877c822d4a36ceb6ca879b9c86e6f75913a980c4fade05bb17eefafe9bc45a",
+    "tab.txt": "af929e33feaa0904e4340c67e9a02b7af3ace8e3cd139cea1aeba78cf197e273",
+    "vcf.vcf": "972c97fcacddaed80c12b5048c9c9db52f0c49d62138eb3b0e76aa8ca0475c45",
+    "json.jsonl": "628e0a8fb2c9aee434dbe68dcebf68e2cbf65faf1191b9d831f238c523328c86"
+   },
    "flags": [
     "--plugin",
     "gnomADMt,file=data/gnomad.v3.1.chrM.slice.vcf.bgz,fields=filters:hap_defining_variant:AN:max_hl:variant_collapsed"
    ],
-   "expected_dir": "expected_fields-subset",
-   "sha256": {
-    "default.txt": "0b9f5697171e35b25f50150fb4054cc4928e80a9b3556ff4efbc41197ce12cd5",
-    "tab.txt": "6fe1a9d5f114b0cd6c1389c6c449fe5cb9369dfd34bf8dc74d35d46407aba8ba",
-    "vcf.vcf": "0c62f0fdffb40062110386189c7a8faf73d21ddcf0b783989fdf524f1ff74f7e",
-    "json.jsonl": "da13c8a510503814a69a58ef539939da3923bb5abe00d6f3448b7ffab3ccab2d"
-   }
+   "expected_dir": "expected_fields-subset"
   }
  },
  "data": "data/gnomad.v3.1.chrM.slice.vcf.bgz: the full header of gnomAD's v3.1 chrM sites VCF (gnomad.genomes.v3.1.sites.chrM.vcf.bgz, 52 INFO fields) and its 373 records at positions 1-120, 1500-1600, 3230-3260, 3440-3470, 8980-9010, 11760-11790 and 14470-14500, bgzip-compressed and indexed with tabix -p vcf; gnomAD data are released under CC0",
- "generator": "scripts/golden/build_golden_corpus.py select; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; scripts/concordance/generate_reference_output.sh --corpus (the manifest's run and, with the manifest's flags set to each flag set's words in turn, every flag set's run); scripts/golden/build_golden_corpus.py flag-set (one per flag set) and classify (the manifest's run and each flag set)"
+ "generator": "tools/vep-golden-corpus select; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; scripts/concordance/generate_reference_output.sh --corpus (the manifest's run and, with the manifest's flags set to each flag set's words in turn, every flag set's run); tools/vep-golden-corpus flag-set (one per flag set) and classify (the manifest's run and each flag set)"
 }

@@ -1,0 +1,8 @@
+Processing 3 chromosomes
+  chr1: 1 files, 2 transcripts, 0 variation files, 0 regulatory files
+  chr2: 1 files, 0 transcripts, 0 variation files, 0 regulatory files
+  chr3: 1 files, 1 transcripts, 0 variation files, 0 regulatory files
+Wrote roots.out/sequence_regions.tsv (0 sequences)
+Wrote roots.out/info.json
+
+Done. Converted: 3 / 3 files, 3 total transcripts, 0 variation files copied, 0 regulatory files

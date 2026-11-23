@@ -79,7 +79,7 @@
   "NearestExonJB",
   "TSSDistance"
  ],
- "suites": {
+ "datasets": {
   "computed": {
    "reference": "cand.txt",
    "input": "cand_input.vcf",
@@ -261,7 +261,7 @@
  },
  "records": [
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t36896882\t1069237\tTG\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -272,7 +272,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t36937119\t989620\tC\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -283,7 +283,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t37364000\tsv_del_upstream_fwd\tC\t<DEL>\t.\t.\tSVTYPE=DEL;END=37365000",
    "combinations": [
     "downstream_gene_variant",
@@ -292,7 +292,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t37367597\tins_upstream_fwd_200\tG\tGA\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -301,7 +301,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t37480728\t3368316\tT\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -311,7 +311,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t37480768\t1299504\tAAAAGTGG\tA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -321,7 +321,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t37480787\t753666\tC\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -331,7 +331,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t37490163\t487250\tTTTCTC\tT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -341,7 +341,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t37490169\t1343184\tT\tC\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -351,7 +351,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t37490237\t1709937\tT\tTA\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -361,7 +361,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t37505282\t977903\tG\tGTAA\t.\t.\t.",
    "combinations": [
     "inframe_insertion,splice_region_variant,stop_gained",
@@ -370,7 +370,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t37506240\t1631146\tT\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -380,7 +380,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t37512050\t2081367\tAC\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -390,7 +390,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t43053700\tsv_del_exon_rev\tA\t<DEL>\t.\t.\tSVTYPE=DEL;END=43054100",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,feature_truncation,intron_variant",
@@ -402,7 +402,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t43058065\t2889804\tGTGTAGGTGACCGGGCACCTGTTTGAGCTGCCTGTAGGTGACTGCGCATCTGTTTGAGCTGCC\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -412,7 +412,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t43058232\t506415\tC\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -425,7 +425,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t43058268\t4808393\tC\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -438,7 +438,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t43058850\t1162233\tCG\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -450,7 +450,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t43058954\t2137133\tC\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -464,7 +464,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t43065263\t1310379\tC\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -476,7 +476,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t43065417\t212850\tG\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -488,7 +488,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t43066253\t263851\tG\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -501,7 +501,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t43068594\t1726208\tCAAGATTTTTGGAG\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -512,7 +512,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t43068627\t2808166\tG\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_polypyrimidine_tract_variant",
@@ -523,7 +523,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t43071984\t370403\tC\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,splice_donor_variant",
@@ -535,7 +535,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t43072192\t196204\tA\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,start_lost",
@@ -546,7 +546,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t46326360\t2876449\tT\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_polypyrimidine_tract_variant",
@@ -558,7 +558,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t46334488\t2985645\tTCA\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -567,7 +567,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t46334535\t1417293\tG\tGGTGACCACCCACCAGAACAGCGTGGGATGTTCACAGTCA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,inframe_insertion",
@@ -577,7 +577,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t46334594\t2821152\tG\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,synonymous_variant",
@@ -587,7 +587,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t46355539\t436257\tG\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -597,7 +597,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t46355591\t3356143\tA\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -607,7 +607,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t46389353\t2831375\tGCCCATCCGGAGGGTCTTCCAGAGCCTCAGCCTGGCCGTGGACGGCCTCATGGAGATGGCCCTGGACTCCAGCAGGCAGGTGAGGCCCAGGCTCCCGGGGTCCTGTGGAGATGTGAACAACTGAGTAGCTGATGATGCCACACGAGCCTGGTGGATGCCGGTGCCAACGACGCTCGCACGGGTTTCTCCCCAAGGAGGAGGCTTTTCTGAACCAGATCTTTGAGGAAGTGGGCTTGCTACGAATGAGAGAATCTGTTTGTTTAATTTGGATAATAAACAGGCCCATTTTCTTTACTTCATGCACTGTTGCAATTCCATGTGGAGTGTTTTCATATTTAGAGATTATCACTAAGAAAGGAAATTTTTTGTAACCGTTTTAGAACATTTTAGACAATTAAAAAAGACATTAAGTAGGAATACACGGAAAGCAATCAAAGATCTTTTTTTCAGCCAGGCACAGCGGCTCACTCCTGCAGTCCCAGCACTTTGGGAGGCTAAGGTAGGAGGTTCACTTCAGCCTACTTCAGCCCACGAGCTCATCTTGTAGCTCTGGCGCTGGAGGAGATGTGGTCTGATGTGGCCCTCCCGGAGTTGGACAGAACTTTGTCTGAATGTGCAGAGATGTCTTCCGTGGCTGAAATTAGCAGCCACATGTGTGAAAGCTTTCTCATGAGCCCAGAAAGTGTACGGGAGTGTGAGCAA\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -617,7 +617,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t46398010\t2444492\tCCAGGAGCAGGCAGCCGAGCGGGAGCACGAGCGCGAGGAGTTCCAGCAGGAGATTCAGAGGCTGGAGGGGCAGCTCCGCCAGGCGGCCAAGCCGCAGCCCTGGGGCCCTCGCGACAGCCAGGTGAGTCAGTGCAGCGTGCAGTGCTGCTGGTTGCTGTCTTTCACTGTGTTTTTAAGCTTTAACTTTCTTTAAATTTTTGCCTTCCATGTACATGAAATCGGCAGCAGGCGCCGCTGGATGGAGAGGTGAGGAGGCGTCAACGAGATGGGCACTCCCTGCGCTGGCGCCCAGGCTCCCCTGCGCTCGCTGGGACTGTCCTGCCACCCACTCGCTTTTCTTGCTCTTGTTTGGGCTGCAGCCATCTGCTTTCTCTTGTCTGAGGAAGCTGTAGTAGGTTCGTTTATTTTTTTAAAAAATTAATGGTGGATTCACACACAGTTGTAAGAGGTAAGACTCGGATCCCTCGTGCCTGGCACGTGGTTCCCCAGAGGTCTCATCCACAGAGCCGGAATGCAGTGTCACAGCCAGTATGGGCAGGGATCTGGTGACGCTGCAGTGCCTTCTGCCCCCCACGGACCCTCGTGTACTGGGTCACGGCCATGCCGCCGTCCTTTCTCGGGCAACCACTCATCTGTCGTCTATTTCTAAAACTTTACCATCTTCCTGATGGGTGAAGCGTGCCTGTCATCTTGGGGGATTGACACCATTCACCGAGCCTGACTCTCTGGAGATTGATCCAGGTTACTGAGTGTAGCCATAGTTTGTTCTTTATGTTGCTGAGAAGTATTCCATTCTTTTTTTTTCTTTTTCTTTTTTTTTTTTTTTTTGAGTTGGAGTCTCATGCAGTTGCCCAGGCTGGAGTGCAGTGGCGCGATCTCAGCTCACTGCAAGCTCCACCTCCCGGGTTCACGCCATTCTCCTGCCTCAGCCTCCCGAGTAGCTGGGACTACAGGTGCCCGCCACCACACCCCGCTAATTTTTTGTATTTTTAGTAGAGACAGGGTTTCACTGTGTTAGCCAGGATGGTCTCCATCTCCTGACCTCGTGATCTGCCTGCCTCAGCCTCCCAGAGTGCTGGGATTACAGGCGTGAGCCACCGCGCCGGCTGTAGTATTCCATTCTTTTCTATCAGAATAGATTTCATTTTCCTAACAAATTCTGTATTATAGAGAATGCCTTTCTTAACACAACATCACCCTATACTTCCTTTAGATCTCTGTTCAGCCTCTGGGTCTAGGTCTCCCTGTGCAGCCTGTGGGTCTGGGTCTCTGTTCAGCCTGTGAGTCTGGGTCTCTTTTCAGCCTGTGGGTCTAGGTCTCCCTGTGCAGCCTGTGGGTCTAGGTCTCTGTTCAGCCTGTGGGTCTGGGTCTCTCTGTGCAGCCTGTGGGTCTAGGTCTCCCTGTGCAGTCTTTGCGTCTGGGTCTCCCTGTGCAGCCTGTGAGTCTAGGTCTCCCTTTGGGTCTAGGGGAGGGCATAGGGCATCTATTTTGTCTCTGTTGTTTTGGGTACTTTTTTGTTTGGAAAATGGGTTTTTATAAAACATTCTATTGTATTCCTCAAGCATTTTTTGTTGTTTTAGGTTGAGTTGTTACAACAAAAGTTGAGAGAAAAGTTGGATGAATTTAATGAATTGGCTATACAGAAAGAGTCGGCAGATAGACAAGTGTTAATGCAGGAAGAAGAAATTAAACGTCTGGAGGAGATGAACATCAACATCAGGAAAAAAGTGGCCCAGCTCCAGGAAGAAGTGGAAAAACAGAAAAACATCGTGAAAGGGCTGGAA\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant",
@@ -625,7 +625,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t46398030\t3029416\tG\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -633,7 +633,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t46398036\t2269237\tA\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -641,7 +641,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t46401692\t211864\tCAG\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -649,7 +649,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t46411752\t3011238\tC\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -659,7 +659,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t46416481\t138624\tT\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -669,7 +669,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t46428391\t3354564\tC\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant",
@@ -679,7 +679,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t46428519\t3061330\tAGCACTTGC\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -689,7 +689,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t46430158\t1338605\tCTG\tC\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -699,7 +699,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t46435913\t3929695\tG\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -710,7 +710,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t46440197\t2557342\tG\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -720,7 +720,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t46440968\t2801131\tAAC\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -730,7 +730,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t46440971\t2794536\tA\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -740,7 +740,7 @@
    ]
   },
   {
-   "suite": "computed",
+   "dataset": "computed",
    "vcf": "21\t46444822\t4455580\tG\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,splice_donor_variant",
@@ -752,7 +752,7 @@
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "flag_sets": [

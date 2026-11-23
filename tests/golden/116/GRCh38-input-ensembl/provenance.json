@@ -1,45 +1,52 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
- "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --uploaded_allele --variant_class --mask_header_cache_path [--tab|--vcf|--json]",
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --uploaded_allele --variant_class --mask_header_cache_path [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "none on either side",
  "input": "33 hand-built records on chromosome 21 of the GRCh38-release116 cache as a VCF (variants.vcf: an intergenic SNV, two SNVs near a transcript end, a coding SNV written five ways, a multi-allelic SNV, three insertions, four deletions, a <DEL> and a <DUP> with END, and the forward-strand spellings of twelve coding records the Ensembl-format twin writes on the reverse strand: on a forward-strand transcript a missense, a synonymous, a stop-gained and a start-lost SNV, a multi-allelic SNV, an SNV whose forward spelling gives a reference base the transcript contradicts, an anchored frameshift deletion and an in-frame insertion; on a reverse-strand transcript a missense and a stop-lost SNV, an anchored frameshift deletion and an in-frame deletion) and, record for record, the same sites in Ensembl's default input format (variants.ensembl.txt): the twins with Ensembl VEP's coordinates, the two-base deletion written un-minimised as CTA/C over its three bases, the class words DEL and DUP, the strand tokens 1, +, +1, ., -, -1 and an absent strand column, the twelve reverse-strand coding records with their alleles reverse-complemented and the strand token -1 (one -; the two anchored deletions, which Ensembl VEP trims on the written string whatever the strand, annotate one base away from their VCF twins), alleles in lower case with and without an ID, the ID column ., 0 and absent, and a seven-column line; variants.ensembl.space.txt is that file with every tab a single space and variants.space.vcf the VCF with every tab of its data lines a single space, record for record in its order",
  "sha256": {
-  "default.txt": "790915b3ba91782b7317eb678dab6f3d98b061bccba383a8a1f486c70de34495",
-  "tab.txt": "8c597bc69a56b70b7d1e9dff8a2c32953da87dbc0530a7d59caf2a32908ba058",
-  "vcf.vcf": "21faa0ad4a005caeffba86ca6fcacc672c5712462decf32bf19853d2c6deec63",
-  "json.jsonl": "6e11b97071c96edc2a70f0bd92d9c28c614decea4635172ab5073e9a07376274",
-  "default.summary.log": "835f31b826d3b6e5f4796db2b0d11b3b584dff93dcd6a425d467d502545ac8f3",
-  "tab.summary.log": "eb9727be3af5f5e52637134dc7560243bdfaa2dcfb148dd2058326d722ccc537",
-  "vcf.summary.log": "f0444dbd5fe45c0d22ea7347f8a7ac0ab3a18f10d7dcd6653bbbac2ea58a5e5b",
-  "json.summary.log": "047e8e2fc71b536fe7687677e01d3054f0ed2d11754ef679132fd362ef4a5225"
+  "default.txt": "8b1676445fde863a329dde142ab87aaebba576af477173734611cded57cef871",
+  "tab.txt": "a192db5b489c56568d7b06c564510016b092794eb1f7e63e23d452f5044b82ea",
+  "vcf.vcf": "a36c66256f2522208aabd551ce74251da45cd06c951a3157218fe781105345d6",
+  "json.jsonl": "804ac518205869184f6f0f414c3838efb3755ac3ad7c52d4945521e583bd0de6",
+  "default.summary.log": "fd72bd0abca3a5ebbcd74dd049815878a2d7622ea5019133a10eb4c1bca40921",
+  "tab.summary.log": "f80fda8c1ff6e9f3fa8b906b84a5fa436eb2c3dca914da427191b857816b6d40",
+  "vcf.summary.log": "10f4a753af5925ac5c2c6e23bfd613955e1d630485cf845760cee5626b1760d6",
+  "json.summary.log": "70ef7b9a9c390188ab418a590314580223aa169f23843eece78b70e0d035ef8a"
  },
  "variants_vcf_sha256": "d095a93e3a66d71cad3afdd57463ca67009a743cff6ff3a6b95f17571702c6f0",
  "flag_sets": {
   "ensembl": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
+   "vep_command": "vep -i variants.ensembl.txt -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --uploaded_allele --variant_class --mask_header_cache_path --format ensembl [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
    "fasta": "none on either side",
-   "vep_command": "vep -i variants.ensembl.txt -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --uploaded_allele --variant_class --mask_header_cache_path --format ensembl [--tab|--vcf|--json]",
    "input": "variants.ensembl.txt",
-   "expected_dir": "expected_ensembl",
    "sha256": {
-    "default.txt": "08137f573bd9088f7f11aa6d9d1f527e2798cb8a0228c05f6af8ee991d072faa",
-    "tab.txt": "bc1294d8294b9e2f574f1c5c395dba5868e98cf630e7436b0dac7a1bac8a0d50",
-    "vcf.vcf": "acde353314fa631f96304116ded7ea1e1071c13a22d59adb4af7430844cb4931",
-    "json.jsonl": "b9add6776619b84981e161924ffa2c2120fd580d92d24908ec7c23dfb775bf79"
-   }
+    "default.txt": "e1aea60781726986b04571d482098be6d8bea2f9f9ddbfb8cb12e58c3ad1ba2c",
+    "tab.txt": "982dd67bb13917e66aa0676ec81cf69148955c9d5e3fc78250104488a3ce75bf",
+    "vcf.vcf": "17a303b377911aeeb84cdfb9d343bd21951ed8923c624c4cd85fb98bd136e2b1",
+    "json.jsonl": "7154b31d216192cf2019246de80c87fda1a0145a7b88953d6800ff5536d7e3df"
+   },
+   "flags": [
+    "--uploaded_allele",
+    "--variant_class",
+    "--mask_header_cache_path",
+    "--format",
+    "ensembl"
+   ],
+   "expected_dir": "expected_ensembl"
   },
   "ensembl-guess": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "perl_cache": "homo_sapiens/116_GRCh38",
    "fasta": "none on either side",
@@ -47,17 +54,17 @@
    "input": "variants.ensembl.txt",
    "expected_dir": "expected_ensembl",
    "sha256": {
-    "default.txt": "08137f573bd9088f7f11aa6d9d1f527e2798cb8a0228c05f6af8ee991d072faa",
-    "tab.txt": "bc1294d8294b9e2f574f1c5c395dba5868e98cf630e7436b0dac7a1bac8a0d50",
-    "vcf.vcf": "acde353314fa631f96304116ded7ea1e1071c13a22d59adb4af7430844cb4931",
-    "json.jsonl": "b9add6776619b84981e161924ffa2c2120fd580d92d24908ec7c23dfb775bf79"
+    "default.txt": "e1aea60781726986b04571d482098be6d8bea2f9f9ddbfb8cb12e58c3ad1ba2c",
+    "tab.txt": "982dd67bb13917e66aa0676ec81cf69148955c9d5e3fc78250104488a3ce75bf",
+    "vcf.vcf": "17a303b377911aeeb84cdfb9d343bd21951ed8923c624c4cd85fb98bd136e2b1",
+    "json.jsonl": "7154b31d216192cf2019246de80c87fda1a0145a7b88953d6800ff5536d7e3df"
    },
    "expected_outputs": "the ensembl set's files (expected_ensembl): Ensembl VEP detects the format and the delimiter from the first data line, so its output for the input without --format is the output of the ensembl set"
   },
   "ensembl-space": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "perl_cache": "homo_sapiens/116_GRCh38",
    "fasta": "none on either side",
@@ -65,16 +72,16 @@
    "input": "variants.ensembl.space.txt",
    "expected_dir": "expected_ensembl-space",
    "sha256": {
-    "default.txt": "52a8d199732da1018c0f6f119c8ee667eb59e9bbb6423850e8331771cf5eff16",
-    "tab.txt": "88cf4bbf50a062308376d0997d1a8e66c9bfea21a1fb1f08c99f3874e5d2f11e",
-    "vcf.vcf": "a0dcf59ffc89ea1cb65118710735c3e1edc67a8d897d59e39720f4d71833b82f",
-    "json.jsonl": "f5b843e19c4cf3c34f195ce2fe4b778bd3f58c93c322de05e6f126d8dac789e9"
+    "default.txt": "2776fcd7e90db6fb1566d90e2f9b86808c7e847d78b10aa7f80f0665d1af89a5",
+    "tab.txt": "ca326d4e91ca5978675f22b57d0c450aa818d5bbf3532ecf454b091c16441edf",
+    "vcf.vcf": "2aa4313b2f2f25537a060ce575ab667cfd81cdabbccd2099e3dc8873551b278d",
+    "json.jsonl": "5006ffb0bcca4e06d137b713163ab3fdce99f2534b0ef9bffcd1b77bfb9f8cad"
    }
   },
   "ensembl-space-guess": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "perl_cache": "homo_sapiens/116_GRCh38",
    "fasta": "none on either side",
@@ -82,17 +89,17 @@
    "input": "variants.ensembl.space.txt",
    "expected_dir": "expected_ensembl-space",
    "sha256": {
-    "default.txt": "52a8d199732da1018c0f6f119c8ee667eb59e9bbb6423850e8331771cf5eff16",
-    "tab.txt": "88cf4bbf50a062308376d0997d1a8e66c9bfea21a1fb1f08c99f3874e5d2f11e",
-    "vcf.vcf": "a0dcf59ffc89ea1cb65118710735c3e1edc67a8d897d59e39720f4d71833b82f",
-    "json.jsonl": "f5b843e19c4cf3c34f195ce2fe4b778bd3f58c93c322de05e6f126d8dac789e9"
+    "default.txt": "2776fcd7e90db6fb1566d90e2f9b86808c7e847d78b10aa7f80f0665d1af89a5",
+    "tab.txt": "ca326d4e91ca5978675f22b57d0c450aa818d5bbf3532ecf454b091c16441edf",
+    "vcf.vcf": "2aa4313b2f2f25537a060ce575ab667cfd81cdabbccd2099e3dc8873551b278d",
+    "json.jsonl": "5006ffb0bcca4e06d137b713163ab3fdce99f2534b0ef9bffcd1b77bfb9f8cad"
    },
    "expected_outputs": "the ensembl-space set's files (expected_ensembl-space): Ensembl VEP detects the format and the delimiter from the first data line, so its output for the input without --format is the output of the ensembl-space set"
   },
   "vcf-space": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "perl_cache": "homo_sapiens/116_GRCh38",
    "fasta": "none on either side",
@@ -100,14 +107,14 @@
    "input": "variants.space.vcf",
    "expected_dir": "expected_vcf-space",
    "sha256": {
-    "default.txt": "daa8631905d9ee3ea4d6641a9493c672efea8266591fdaa0fbf2db72bd67b9bf",
-    "tab.txt": "89eefacf1070e1fba8cca531dce8de518e7753fa0a9e393038190fe298ad8255",
-    "vcf.vcf": "dc4d68f08481c2a44cd897d8e2e8610731368c6062bc31fd44261ac045faeff5",
-    "json.jsonl": "2b1918a670e288c8f55cb5cf5f069d29aa586ed94aeb346e20ce7fbce8c2038c"
+    "default.txt": "36ec35c8b41f050c14692e1d0de353d7df7bb8f09f9378e8ab46c46ab22f6d54",
+    "tab.txt": "37dbbdd41d921aad2ca53a4471c09619a9ea236fe817b7c629009412aef28348",
+    "vcf.vcf": "a07f7911d3528a1f18fcdc36d2a713247bafa99dce05babc8c48a201e709ae4c",
+    "json.jsonl": "c129f01c5d07d3367c821c752fea9cc1cd908e7cbc525d7da4bc7611b6b6bc62"
    }
   }
  },
- "generator": "cache copied from tests/golden/116/GRCh38-release116; variants.vcf and manifest.json by scripts/golden/build_golden_corpus.py select over Ensembl VEP's default output for the VCF; expected/ by scripts/concordance/generate_reference_output.sh --corpus; each flag set's expected_<set>/ by one container run per format of the same image, cache and base invocation with the set's own input and flags, the four outputs gzipped and their sha256 recorded under flag_sets",
+ "generator": "cache copied from tests/golden/116/GRCh38-release116; variants.vcf and manifest.json by tools/vep-golden-corpus select over Ensembl VEP's default output for the VCF; expected/ by scripts/concordance/generate_reference_output.sh --corpus; each flag set's expected_<set>/ by one container run per format of the same image, cache and base invocation with the set's own input and flags, the four outputs gzipped and their sha256 recorded under flag_sets",
  "twins_sha256": {
   "variants.ensembl.txt": "4eb8fd0c6b1b2871a218d6ade3fb168f9177c3426370656d3fa8e1f746d31333",
   "variants.ensembl.space.txt": "636aa274f9eb7addaecff676ecf71ea53302f0bba0f0784d683fc5d155c58221",

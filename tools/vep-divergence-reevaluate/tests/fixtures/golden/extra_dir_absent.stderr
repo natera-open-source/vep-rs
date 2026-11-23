@@ -1,0 +1,1 @@
+ERROR: [reevaluate] --extra-dir takes NAME=PATH, a lowercase name and an existing directory, not 'loftee={{ROOT}}/absent'

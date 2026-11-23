@@ -1,0 +1,5 @@
+##fileformat=VCFv4.2
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+21	19268555	empty_score_intergenic	C	T	.	.	.
+21	20204701	empty_score	T	C	.	.	.
+21	30282169	scored	C	A	.	.	.

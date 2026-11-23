@@ -1,6 +1,6 @@
 # The stop bases of a RefSeq mitochondrial model whose stop codon an edit completes
 
-**The defect in one sentence.** On a transcript model whose `_rna_edit` appends bases after an exon's last genomic base, Ensembl VEP 116.2 pairs the genomic bases the edit replaces with the last bases of the replacement, not the first. A record at those bases is read one or two positions too far along the coding sequence. `MT 9990` on the RefSeq model `COX3` is the stop codon's first base, c.784; it is written at `CDS_position` 786, the codon's third base, as `stop_retained_variant`, where vep-rs writes `CDS_position` 784 and `stop_lost`.
+**The defect in one sentence.** On a transcript model whose `_rna_edit` appends bases after an exon's last genomic base, Ensembl VEP 116.3 pairs the genomic bases the edit replaces with the last bases of the replacement, not the first. A record at those bases is read one or two positions too far along the coding sequence. `MT 9990` on the RefSeq model `COX3` is the stop codon's first base, c.784; it is written at `CDS_position` 786, the codon's third base, as `stop_retained_variant`, where vep-rs writes `CDS_position` 784 and `stop_lost`.
 
 **Why this is a defect.** Six mitochondrial RefSeq models (`ND1`, `ND2`, `COX3`, `ND3`, `ND4`, `CYTB`) end one or two bases into their stop codon: the genome holds the codon's first base or two, and the rest is added after the transcript's last genomic base. The cache records that as an `_rna_edit` replacing the exon's last one or two bases by the whole codon. On each model the reference sequence at the replaced positions equals the codon's first bases and no other placement of them, so a genomic stop base is the codon's first or second base. Reading it as the second or third applies the record to the wrong base, and the term follows the wrong codon.
 
@@ -36,7 +36,7 @@ MT	9990	stop_first_base	T	A	.	.	.
 
 ### 1.3 What each engine writes
 
-| Field | Ensembl VEP 116.2 | vep-rs |
+| Field | Ensembl VEP 116.3 | vep-rs |
 | --- | --- | --- |
 | `Consequence` | `stop_retained_variant` | `stop_lost` |
 | `cDNA_position` | 786 | 784 |
@@ -66,7 +66,7 @@ vep -i record.vcf -o vep_rs.txt --offline --refseq \
 grep COX3 vep_rs.txt | cut -f 7-12
 ```
 
-The same record through Ensembl VEP 116.2 with `--cache --refseq` on the RefSeq GRCh38 cache of release 116 gives the other column.
+The same record through Ensembl VEP 116.3 with `--cache --refseq` on the RefSeq GRCh38 cache of release 116 gives the other column.
 
 ### 1.7 How the comparator treats this class
 

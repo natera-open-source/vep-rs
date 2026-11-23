@@ -1,0 +1,31 @@
+﻿#!a byte order mark puts this line outside the comments
+21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "S1"; tag "basic";
+21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "None"; tag "gencode_primary";21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "12"; tag "cds_start_NF";
+21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "1"; tag "cds_end_NF";
+21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "True";21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "False";
+21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "V";
+21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "";21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id ".9"; tag "basic";
+21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "0";
+21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "1e+22";21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "nan";
+21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "-inf";
+21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "inf";21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "100";
+21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "100000";
+21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "1e-05";21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "X1"; tag "basic";
+21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "X2"; tag "cds_end_NF";
+21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "ATTR_OBJECT";21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "ATTR_STRING";
+21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "ATTR_ZERO";
+21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "ATTR_FALSE";21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "ATTR_EMPTY_OBJECT";
+21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "ATTR_MIXED"; tag "cds_end_NF";
+21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "FIRST_WINS"; tag "basic";21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "MEMBER_1"; tag "cds_end_NF";
+21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "MEMBER_2";
+21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "MEMBER_3";21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "ONLY2"; tag "gencode_primary";
+21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "INNER"; tag "basic";
+21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "UNI_é中😀"; tag "basic";21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "ESC_é中😀"; tag "gencode_primary";
+21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "Q"B"; tag "basic";
+21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "B\S"; tag "basic";21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "CD"; tag "basic";
+21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "DEL"; tag "basic";
+21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "BIG";21	src	transcript	100	900	.	+	.	transcript_id "IGNORED"; transcript_id  "ODD.2.3" ;tag basic;tag;tag " gencode_primary "; tag ""cds_end_NF"";TAG "cds_start_NF"	column ten
+21	src	transcript	100	900	.	+	.	transcript_id a b.c d; tag gencode_primary
+21	src	transcript	100	900	.	+	.	gene_id "G"; tag "basic";21	src	Transcript	100	900	.	+	.	transcript_id "NOT_A_TRANSCRIPT"; tag "basic";
+21	src	transcript 	100	900	.	+	.	transcript_id "NOT_A_TRANSCRIPT"; tag "basic";
+#21	src	transcript	100	900	.	+	.	gene_id "G"; transcript_id "COMMENTED"; tag "basic";21	src	transcript	100	900	.	+	

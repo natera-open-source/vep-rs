@@ -1,7 +1,7 @@
 entry = "minimal_lookup_ref_repeated_allele"
 page = "docs/divergences/minimal-lookup-ref-repeated-allele.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the VCF 4.2 specification, section 1.4.1 \"Fixed fields\" (REF and ALT, which carry no rule against a repeated ALT allele) and the Ensembl VEP documentation, \"Running Ensembl VEP\", --lookup_ref (which overwrites the supplied reference allele); not seen in the measured datasets"
 notes = "The FASTA reads A at 21:10542415, so the looked-up record is A/A/A: Ensembl VEP splits it after the lookup into one -/- feature per repeat, each writing its reference row under --process_ref_homs, two per transcript; vep-rs reads the repeat as one allele before the lookup and writes one."
@@ -33,3 +33,10 @@ ensembl_vep = [
   "21:10542415 | - | ENST00000427445 | synonymous_variant | 0",
 ]
 vep_rs = ["21:10542415 | - | ENST00000427445 | synonymous_variant | 0"]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/vcf_parser.rs::overlap_alleles_kept",
+    "crates/vep-cli/src/vcf_parser.rs::sequence_variants",
+]
+tests = ["crates/vep-cli/src/pipeline.rs::tests::minimal_splits_after_the_looked_up_reference"]

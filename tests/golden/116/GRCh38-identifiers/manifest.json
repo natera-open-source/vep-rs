@@ -902,7 +902,7 @@
    "field_divergence_summary": {}
   }
  ],
- "suites": {
+ "datasets": {
   "identifiers": {
    "reference": "default.txt",
    "input": "variants.vcf",
@@ -1021,13 +1021,14 @@
   }
  },
  "variant_classes": {
-  "deletion": 132,
-  "insertion": 334,
+  "deletion": 133,
+  "insertion": 310,
+  "mnv_or_complex": 23,
   "snv": 92
  },
  "records": [
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t10451779\texon_di_ins_fwd_1\tA\tATA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -1035,7 +1036,7 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t10521699\tintron_hp_del_fwd_1\tGC\tG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_donor_region_variant",
@@ -1043,7 +1044,7 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t10524701\tintron_hp_del_fwd_2\tAG\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -1051,7 +1052,7 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t10538885\tintron_snv_1\tA\tC\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -1059,7 +1060,7 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t10542415\tcds_mnv_1\tAA\tGG\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -1068,7 +1069,7 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t10552677\tcds_delins_1\tAG\tGTA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -1077,7 +1078,7 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t10561150\tcds_hp_del_fwd_1\tAT\tA\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant",
@@ -1086,7 +1087,7 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t10567681\tcds_hp_del_fwd_2\tAT\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -1094,7 +1095,7 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t10578406\tmulti_two_insertions\tT\tTA,TAA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -1107,7 +1108,7 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t10592341\tcds_hp_ins_fwd_1\tG\tGA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -1116,7 +1117,7 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t10598030\tcds_hp_ins_fwd_2\tT\tTA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -1125,7 +1126,7 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t10602118\tcds_tri_del_fwd_1\tTATG\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -1133,7 +1134,7 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t10605702\texon_di_ins_fwd_2\tT\tTAT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -1141,21 +1142,21 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t13609893\tutr5_hp_ins_1\tG\tGT\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant"
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t13615721\tintron_snv_2\tA\tC\t.\t.\t.",
    "combinations": [
     "intron_variant"
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t13620283\tcds_tri_ins_fwd_1\tG\tGTCA\t.\t.\t.",
    "combinations": [
     "inframe_insertion",
@@ -1163,14 +1164,14 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t13630971\tcds_del24\tAATCCTGTGGGATTACCAGAAAACC\tA\t.\t.\t.",
    "combinations": [
     "inframe_deletion"
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t13641586\tutr3_hp_ins_1\tA\tAT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -1178,14 +1179,14 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t13646823\tflank_1kb_snv_1\tT\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant"
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t13958165\texon_di_ins_rev_2\tA\tACA\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -1194,7 +1195,7 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t13980170\texon_di_ins_rev_1\tC\tCGC\t.\t.\t.",
    "combinations": [
     "non_coding_transcript_exon_variant",
@@ -1202,7 +1203,7 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t14108841\tutr3_hp_ins_2\tT\tTT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -1212,7 +1213,7 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t14144642\tmulti_snv_and_deletion\tAT\tCT,A\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -1227,7 +1228,7 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t14163451\tcds_hp_del_rev_1\tAA\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -1236,7 +1237,7 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t14181865\tintron_hp_del_rev_1\tAA\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant",
@@ -1245,7 +1246,7 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t14185950\tintron_hp_del_rev_2\tAA\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,intron_variant",
@@ -1253,7 +1254,7 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t14189044\tcds_hp_del_rev_2\tTT\tT\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -1263,7 +1264,7 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t14210832\tcds_hp_ins_rev_1\tA\tAA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,frameshift_variant",
@@ -1271,7 +1272,7 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t14221107\tcds_snv_fwd_1\tC\tA\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -1282,7 +1283,7 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t14375782\tcds_tri_del_rev_1\tTGCT\tT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -1292,14 +1293,14 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t14484228\tflank_1kb_snv_2\tT\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant"
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t14500576\tcds_hp_ins_rev_2\tT\tTT\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -1308,7 +1309,7 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t14512455\tcds_snv_rev_1\tT\tA\t.\t.\t.",
    "combinations": [
     "NMD_transcript_variant,missense_variant",
@@ -1318,7 +1319,7 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t14964727\tcds_snv_rev_2\tC\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
@@ -1327,7 +1328,7 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t15064746\texon_edge_hp_del_rev\tCC\tC\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,splice_region_variant",
@@ -1338,7 +1339,7 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t15729922\ttranscript_edge_hp_del\tCG\tC\t.\t.\t.",
    "combinations": [
     "5_prime_UTR_variant,NMD_transcript_variant",
@@ -1346,7 +1347,7 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t15826987\tcds_snv_fwd_2\tC\tG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant,NMD_transcript_variant",
@@ -1356,7 +1357,7 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t16218276\tlong_ins55_genic\tA\tATTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT\t.\t.\t.",
    "combinations": [
     "intron_variant,non_coding_transcript_variant",
@@ -1364,7 +1365,7 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t17594158\tcds_tri_ins_rev_1\tG\tGAGG\t.\t.\t.",
    "combinations": [
     "3_prime_UTR_variant",
@@ -1377,35 +1378,35 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t20000325\tintergenic_hp_del_1\tAT\tA\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t20003757\tintergenic_hp_ins_1\tG\tGT\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t20006769\tintergenic_snv_1\tT\tA\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t30000000\tintergenic_del25\tGCCCACTTTTACTTACTCACGTCTTT\tG\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t31974714\texon_edge_hp_del_fwd\tAG\tA\t.\t.\t.",
    "combinations": [
     "frameshift_variant,splice_region_variant",
@@ -1413,7 +1414,7 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t38218615\tmulti_two_insertions_run\tG\tGT,GTT\t.\t.\t.",
    "combinations": [
     "intron_variant"
@@ -1423,14 +1424,14 @@
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t38218615\tlong_run_del2_genic\tGTT\tG\t.\t.\t.",
    "combinations": [
     "intron_variant"
    ]
   },
   {
-   "suite": "identifiers",
+   "dataset": "identifiers",
    "vcf": "21\t38218615\tmulti_mixed_del_run\tGTT\tG,GT\t.\t.\t.",
    "combinations": [
     "intron_variant"
@@ -1440,7 +1441,7 @@
    ]
   }
  ],
- "multi_allelic_per_suite": 4,
+ "multi_allelic_per_dataset": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
  "divergences": [],

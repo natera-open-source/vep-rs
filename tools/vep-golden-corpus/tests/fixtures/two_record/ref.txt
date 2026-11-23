@@ -1,0 +1,2 @@
+rs1	21:100	G	ENSG1	ENST1	Transcript	missense_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1
+rs2	21:200	T	ENSG1	ENST2	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1

@@ -15,7 +15,8 @@
 //! `transcript` (database identifier to stable identifier),
 //! `transcript_attrib` with `attrib_type` (the attributes Ensembl VEP's
 //! dumper keeps), `translation` and `translation_attrib` (the ENSP, its
-//! version and the sequence edits), `protein_feature` with
+//! version, where it starts and ends in its exons and the sequence edits),
+//! `protein_feature` with
 //! `analysis_description` (the domains and their display labels), `xref`,
 //! `object_xref` and `external_db` (CCDS, RefSeq, UniProt, UniParc, HGNC and
 //! the symbol source), `seq_region` with `seq_region_attrib` (the codon
@@ -35,6 +36,8 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Context, Result};
 use flate2::read::MultiGzDecoder;
 use tracing::{info, warn};
+
+use crate::count::counted;
 
 /// The longest dump line read, 16 MiB. A row's widest values are an xref
 /// description and a protein feature's alignment string, each well under a
@@ -127,7 +130,7 @@ pub const VARIATION_TABLES: [&str; 2] = ["phenotype", "phenotype_feature"];
 
 /// The transcript attribute codes the Ensembl VEP dumper keeps in its cache
 /// (`Pipeline/DumpVEP/Dumper/Core.pm` `clean_transcript`).
-pub const KEPT_ATTRIBUTE_CODES: [&str; 22] = [
+const KEPT_ATTRIBUTE_CODES: [&str; 22] = [
     "gencode_basic",
     "gencode_primary",
     "miRNA",
@@ -163,14 +166,14 @@ const SEQ_EDIT_CODES: [&str; 4] = [
 
 /// A transcript attribute as the cache stores it.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Attribute {
+pub(crate) struct Attribute {
     pub code: String,
     pub value: String,
 }
 
 /// One protein feature of a translation, the four fields the dumper keeps.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProteinFeature {
+pub(crate) struct ProteinFeature {
     /// Protein coordinates (`seq_start`, `seq_end`).
     pub start: u64,
     pub end: u64,
@@ -183,16 +186,33 @@ pub struct ProteinFeature {
 /// A translation sequence edit as `Bio::EnsEMBL::SeqEdit` reads the
 /// attribute: the value is `<start> <end> <alt_seq>`.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SeqEdit {
+pub(crate) struct SeqEdit {
     pub code: String,
     pub value: String,
 }
 
+/// Where a `translation` row places a coding sequence: `seq_start`, the first
+/// coding base's position within the exon `start_exon_id` names, and
+/// `seq_end`, the last coding base's within the exon `end_exon_id` names, each
+/// counted from 1 in transcript orientation (core `Translation.pm:206-215`
+/// and `:234-243`, set from the row at `TranslationAdaptor.pm:211-279`). The
+/// dumps name an exon by its database identifier alone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ExonPositions {
+    pub start: u64,
+    pub end: u64,
+    /// Whether `start_exon_id` and `end_exon_id` name one exon.
+    pub in_one_exon: bool,
+}
+
 /// What the core database knows about a transcript's translation.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct TranslationFacts {
+pub(crate) struct TranslationFacts {
     pub stable_id: String,
     pub version: Option<u32>,
+    /// The row's `seq_start` and `seq_end`; `None` where either is no
+    /// number, and on facts no row was read for.
+    pub positions: Option<ExonPositions>,
     /// `Uniprot/SWISSPROT` xref labels, in object xref row order.
     pub swissprot: Vec<String>,
     /// `Uniprot/SPTREMBL` xref labels.
@@ -207,7 +227,7 @@ pub struct TranslationFacts {
 
 /// What the core database knows about a transcript beyond its GFF3 line.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct TranscriptFacts {
+pub(crate) struct TranscriptFacts {
     /// The kept attributes, in table order, `cds_start_NF` before `cds_end_NF`.
     pub attributes: Vec<Attribute>,
     /// The first `CCDS` xref label.
@@ -224,7 +244,7 @@ pub struct TranscriptFacts {
 
 /// What the core and variation databases know about a gene.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct GeneFacts {
+pub(crate) struct GeneFacts {
     /// The display xref's label, or the `RefSeq_gene_name` xref's label when
     /// the gene has no display xref.
     pub symbol: Option<String>,
@@ -400,6 +420,7 @@ impl CoreDumps {
             transcript_id: String,
             stable_id: String,
             version: Option<u32>,
+            positions: Option<ExonPositions>,
         }
         let mut translation_rows: HashMap<String, TranslationRow> = HashMap::new();
         for row in read_table(dir, "translation", 10)? {
@@ -411,12 +432,21 @@ impl CoreDumps {
             } else {
                 None
             };
+            let position = |column: usize| row.field(column).parse::<u64>().ok();
+            let positions = position(2)
+                .zip(position(4))
+                .map(|(start, end)| ExonPositions {
+                    start,
+                    end,
+                    in_one_exon: row.field(3) == row.field(5),
+                });
             translation_rows.insert(
                 row.field(0).to_string(),
                 TranslationRow {
                     transcript_id: row.field(1).to_string(),
                     stable_id: row.field(6).to_string(),
                     version,
+                    positions,
                 },
             );
         }
@@ -510,6 +540,7 @@ impl CoreDumps {
                 TranslationFacts {
                     stable_id: tl.stable_id.clone(),
                     version: tl.version,
+                    positions: tl.positions,
                     swissprot: labels(xref_ids, "Uniprot/SWISSPROT"),
                     trembl: labels(xref_ids, "Uniprot/SPTREMBL"),
                     uniparc: labels(xref_ids, "UniParc"),
@@ -562,11 +593,11 @@ impl CoreDumps {
         }
 
         info!(
-            "Core dumps: {} transcripts, {} genes, {} codon-table regions, {} karyotype regions",
-            dumps.transcripts.len(),
-            dumps.genes.len(),
-            dumps.codon_tables.len(),
-            dumps.karyotype_ranks.len()
+            "Core dumps: {}, {}, {}, {}",
+            counted(dumps.transcripts.len(), "transcript"),
+            counted(dumps.genes.len(), "gene"),
+            counted(dumps.codon_tables.len(), "codon-table region"),
+            counted(dumps.karyotype_ranks.len(), "karyotype region")
         );
 
         dumps.load_phenotypes(dir)?;
@@ -611,23 +642,23 @@ impl CoreDumps {
             facts.phenotype_count = counts.get(stable_id).copied().unwrap_or(0);
         }
         info!(
-            "Phenotype features: {} genes with a significant phenotype",
-            counts.len()
+            "Phenotype features: {} with a significant phenotype",
+            counted(counts.len(), "gene")
         );
         Ok(())
     }
 
-    pub fn transcript(&self, stable_id: &str) -> Option<&TranscriptFacts> {
+    pub(crate) fn transcript(&self, stable_id: &str) -> Option<&TranscriptFacts> {
         self.transcripts.get(stable_id)
     }
 
-    pub fn gene(&self, stable_id: &str) -> Option<&GeneFacts> {
+    pub(crate) fn gene(&self, stable_id: &str) -> Option<&GeneFacts> {
         self.genes.get(stable_id)
     }
 
     /// The codon table of a sequence region, when it carries the attribute
     /// (table 2 on `MT`).
-    pub fn codon_table(&self, seq_region_name: &str) -> Option<u8> {
+    pub(crate) fn codon_table(&self, seq_region_name: &str) -> Option<u8> {
         self.codon_tables.get(seq_region_name).copied()
     }
 
@@ -663,7 +694,7 @@ impl CoreDumps {
 
 /// Puts `cds_start_NF` before `cds_end_NF` when a transcript carries both,
 /// the other attributes staying where the dump lists them. FLAGS prints the
-/// two in list order (OutputFactory.pm:1477); the Ensembl cache holds the order
+/// two in list order (OutputFactory.pm:1486); the Ensembl cache holds the order
 /// its database query returned (Dumper/Core.pm:203-207), start first on most
 /// transcripts and end first on a few, and the dumps do not carry that query
 /// order, so one fixed order is written.
@@ -678,7 +709,7 @@ fn order_cds_flags(attributes: &mut [Attribute]) {
 
 /// A table's first two columns as a map, its identifier to its name:
 /// `external_db`, `attrib_type` and `seq_region` all start that way.
-pub fn id_to_name(
+pub(crate) fn id_to_name(
     dir: &Path,
     table: &'static str,
     columns: usize,
@@ -712,7 +743,7 @@ impl Row {
     }
 
     /// The field at `index`, `None` for NULL (`\N`) or a missing column.
-    pub fn optional(&self, index: usize) -> Option<&str> {
+    pub(crate) fn optional(&self, index: usize) -> Option<&str> {
         match self.fields.get(index) {
             Some(v) if v != "\\N" => Some(v.as_str()),
             _ => None,
@@ -721,7 +752,7 @@ impl Row {
 
     /// The field at `index` as an unsigned integer; a value that is not one
     /// is an error naming the table and column.
-    pub fn number(&self, index: usize) -> Result<u64> {
+    pub(crate) fn number(&self, index: usize) -> Result<u64> {
         let value = self.field(index);
         value.parse().with_context(|| {
             format!(
@@ -733,7 +764,7 @@ impl Row {
 }
 
 /// The rows of a table dump, each line split on tabs with MySQL's escapes
-/// decoded (a literal `\N` field stays as written, see [`Row::optional`]);
+/// decoded (a literal `\N` field stays as written, see `Row::optional`);
 /// a row with fewer than `columns` fields, the schema's column count, is an
 /// error naming the table and line.
 pub fn read_table(
@@ -1132,7 +1163,7 @@ mod tests {
         assert!(!dumps.transcript("ENST00000622113").unwrap().readthrough);
     }
 
-    /// Without the variation tables every gene counts 0: the Ensembl VEP 116.2
+    /// Without the variation tables every gene counts 0: the Ensembl VEP 116.3
     /// dumper has no phenotype adaptor without a variation database and stores
     /// the 0 it starts from on every transcript (`Database/Transcript.pm`
     /// lines 202, 243-248 and 284), so the key is present and the
@@ -1188,6 +1219,46 @@ mod tests {
             .unwrap()
             .translation
             .is_none());
+    }
+
+    /// A translation's positions are its row's `seq_start` and `seq_end`,
+    /// and its two exon identifiers say whether one exon holds both: the
+    /// fixture's row starts at base 44 of exon 5001 and ends at base 54 of
+    /// exon 5009. A row whose `seq_start` is no number gives none.
+    #[test]
+    fn translation_positions_are_the_rows_seq_start_and_seq_end() {
+        let positions = |rows: &str| {
+            let dir = tempfile::tempdir().unwrap();
+            fixture(dir.path());
+            std::fs::write(dir.path().join("translation.txt"), rows).unwrap();
+            let dumps = CoreDumps::load(dir.path()).unwrap();
+            let tl = dumps
+                .transcript("ENST00000622113")
+                .unwrap()
+                .translation
+                .clone();
+            tl.unwrap().positions
+        };
+        let row = |seq_start: &str, end_exon: &str| {
+            format!("300\t200\t{seq_start}\t5001\t54\t{end_exon}\tENSP00000482040\t1\t\\N\t\\N\n")
+        };
+        assert_eq!(
+            positions(&row("44", "5009")),
+            Some(ExonPositions {
+                start: 44,
+                end: 54,
+                in_one_exon: false
+            })
+        );
+        assert_eq!(
+            positions(&row("44", "5001")),
+            Some(ExonPositions {
+                start: 44,
+                end: 54,
+                in_one_exon: true
+            })
+        );
+        assert_eq!(positions(&row("\\N", "5009")), None);
     }
 
     /// A NULL `translation.version` loads as no version.

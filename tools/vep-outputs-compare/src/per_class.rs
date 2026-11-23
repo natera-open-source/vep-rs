@@ -11,7 +11,7 @@ use crate::classes::{
     vep_totals_fingerprint, write_per_class_by_dataset_csv, write_per_class_pooled_csv,
     write_vep_totals_cache, Counter, DatasetLabels, Exclusions,
 };
-use crate::compare::{resolve_canonical_contigs, sort_keys};
+use crate::compare::{ended_without_contig_filter, resolve_canonical_contigs, sort_keys};
 use crate::partition::{self, PartitionFiles, ScanSpec, Tuning};
 use crate::{file_name_of, glob_sorted, py_resolve, Args, TempDir};
 use std::collections::HashSet;
@@ -79,7 +79,10 @@ pub fn run_by_consequence_class(args: &Args) -> Result<u8, String> {
             discordant_in.display()
         ));
     }
-    let canonical = resolve_canonical_contigs(args)?;
+    let canonical = match resolve_canonical_contigs(args) {
+        Ok(canonical) => canonical,
+        Err(message) => return ended_without_contig_filter(args, message),
+    };
     let perl_files = glob_sorted(&perl_dir, &args.glob)?;
     if perl_files.is_empty() {
         return Err(format!(

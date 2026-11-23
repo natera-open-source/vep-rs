@@ -9,6 +9,7 @@ use super::{BoolSpelling, ColumnType};
 
 /// The members of a `Positions` cell: a span and the `--total_length` total.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub struct Positions {
     pub start: Option<i32>,
     pub end: Option<i32>,
@@ -17,6 +18,7 @@ pub struct Positions {
 
 /// A stored cell value; NULL is the absence of one.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum CellValue {
     Text(String),
     Int32(i32),
@@ -169,10 +171,11 @@ fn shortest_decimal(value: f64) -> String {
     value.to_string()
 }
 
-/// The tab cell as the Parquet round trip prints it: a DOUBLE or
-/// `LIST<DOUBLE>` cell with each number as its shortest round-trip decimal, an
-/// INT32 cell as its integer (a `TSL` of `007` prints `7`) or NULL when the
-/// text is no INT32, every other cell unchanged.
+/// The tab cell in the form a column stored under `column_type` holds it: a
+/// DOUBLE or `LIST<DOUBLE>` cell with each number as its shortest round-trip
+/// decimal, an INT32 cell as its integer (a `TSL` of `007` prints `7`), every
+/// other cell unchanged. A text that is no number of the type stays as
+/// written, where the column stores NULL, so the two differ.
 pub fn canonical_tab_text(column_type: ColumnType, text: &str) -> String {
     if text == null_tab_text() {
         return text.to_string();
@@ -186,7 +189,7 @@ pub fn canonical_tab_text(column_type: ColumnType, text: &str) -> String {
         ColumnType::DoubleList => join(text.split(',').map(canonical_number)),
         ColumnType::Int32 => match text.parse::<i32>() {
             Ok(v) => v.to_string(),
-            Err(_) => null_tab_text().to_string(),
+            Err(_) => text.to_string(),
         },
         _ => text.to_string(),
     }
@@ -277,8 +280,29 @@ mod tests {
         assert_eq!(canonical_tab_text(ColumnType::Int32, "007"), "7");
         assert_eq!(canonical_tab_text(ColumnType::Int32, "00"), "0");
         assert_eq!(canonical_tab_text(ColumnType::Int32, "-1"), "-1");
-        assert_eq!(canonical_tab_text(ColumnType::Int32, "2147483648"), "-");
         assert_eq!(canonical_tab_text(ColumnType::Int32, "-"), "-");
+    }
+
+    /// A text that is no number of its column's type is NULL in a part and stays as
+    /// written in the canonical form, so the two differ: a list a plugin wrote under the
+    /// name of the flag's INT32 column, an integer past the INT32 range, letters in a
+    /// DOUBLE column.
+    #[test]
+    fn canon_keeps_a_text_that_is_no_number_of_its_type() {
+        for (column_type, text) in [
+            (ColumnType::Int32, "5,1,2,3,2,NA"),
+            (ColumnType::Int32, "2147483648"),
+            (ColumnType::Int32, "1.5"),
+            (ColumnType::Int32, ""),
+            (ColumnType::Double, "n/a"),
+        ] {
+            assert_eq!(parse_cell(column_type, text), None, "{text:?}");
+            assert_eq!(canonical_tab_text(column_type, text), text);
+        }
+        assert_eq!(
+            canonical_tab_text(ColumnType::DoubleList, "0.0950,x,-"),
+            "0.095,x,-"
+        );
     }
 
     #[test]

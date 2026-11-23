@@ -1,20 +1,19 @@
 entry = "hgvsp_intron_end_insertion"
 page = "docs/divergences/hgvsp-intron-end-insertion.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 63,698 per million · 23 flag sets, 93 corpora"
+input_class_basis = "2 · 63,698 per million · 95 flag sets, 132 corpora"
 notes = "Five records on GRCh37. Three write an insertion before an exon: a copy of the last base of intron 4 of the forward-strand ENST00000312957 written between that base, 21:27070988, and the first base of exon 5, the same copy written one base earlier, at 21:27070987, and three bases written between 21:38877585, the last base of intron 8 of ENST00000321219, and the first base of exon 9. Two write three bases between 3:37045965, the last coding base of exon 4 of ENST00000231790, and the intron's first base, alone and beside a substitution of the base at 37045965. Both engines write the same consequence terms, positions and HGVSc on every row. Ensembl VEP writes an HGVSp on the four rows of an insertion written in a gap between an intron and a coding exon, where vep-rs writes none; both write none for the copy written one base earlier, and the same HGVSp on the substitution's row."
 
 prepare = [
-  '''[ -n "$IMAGE" ] || { echo "the cut of the cache is converted in the Ensembl VEP image: give --image" >&2; exit 1; }
-[ -n "$PERL_CACHE" ] || { echo "no homo_sapiens/116_GRCh37 with chromosomes 3 and 21 under the --perl-cache-dir roots" >&2; exit 1; }
+  '''[ -n "$PERL_CACHE" ] || { echo "no homo_sapiens/116_GRCh37 with chromosomes 3 and 21 under the --perl-cache-dir roots" >&2; exit 1; }
 cut="$STAGE/perl-cache/homo_sapiens/116_GRCh37"
 mkdir -p "$cut/3" "$cut/21"
 cp "$PERL_CACHE/info.txt" "$PERL_CACHE/chr_synonyms.txt" "$cut/"
 cp "$PERL_CACHE/3/37000001-38000000.gz" "$cut/3/"
 cp "$PERL_CACHE/21/27000001-28000000.gz" "$PERL_CACHE/21/38000001-39000000.gz" "$cut/21/"''',
-  '''docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$REPO/scripts/data:/scripts:ro" -v "$STAGE:/stage" "$IMAGE" perl /scripts/storable_to_json.pl /stage/perl-cache/homo_sapiens/116_GRCh37 /stage/json-cache 3,21 > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
+  '''cargo run --release --locked --quiet --manifest-path "$REPO/tools/vep-storable-to-json/Cargo.toml" -- "$STAGE/perl-cache/homo_sapiens/116_GRCh37" "$STAGE/json-cache" 3,21 > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
 ]
 
 [input]
@@ -60,4 +59,22 @@ vep_rs = [
   "shared_base_after_exon_3_37045965 | 3:37045965 | GTAT | ENST00000231790 | protein_altering_variant,splice_region_variant | 380 | 127 | ENST00000231790.2:c.380_380+1insTAT | - | -",
   "three_bases_after_exon_3_37045965 | 3:37045965-37045966 | TAT | ENST00000231790 | protein_altering_variant,splice_region_variant | 380-381 | 127 | ENST00000231790.2:c.380_380+1insTAT | - | -",
   "three_bases_before_exon_21_38877585 | 21:38877585-38877586 | TAA | ENST00000321219 | stop_gained,inframe_insertion,splice_region_variant | 1239-1240 | 413-414 | ENST00000321219.8:c.1240-1_1240insTAA | - | -",
+]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/coding.rs::insertion_left_at_the_start_of_an_intron",
+    "crates/vep-effects/src/coding.rs::intron_end_insertion",
+    "crates/vep-effects/src/coding.rs::intron_end_insertion_has_no_protein_notation",
+]
+tests = [
+    "crates/vep-effects/src/intron_end_insertion_tests/copy.rs::copy_of_an_introns_last_base_written_before_the_exon_has_no_protein_notation",
+    "crates/vep-effects/src/intron_end_insertion_tests/insertion.rs::insertion_that_cannot_end_the_intron_written_before_the_exon_has_no_protein_notation",
+    "crates/vep-effects/src/intron_end_insertion_tests/intron_start.rs::insertion_left_after_an_exons_last_base_has_no_protein_notation",
+    "crates/vep-effects/src/intron_end_insertion_tests/shared_base.rs::insertion_written_with_the_base_before_it_after_an_exons_last_base_has_no_protein_notation",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/intron_ends.rs::hgvsp_intron_end_insertion",
+    "tools/vep-formats-compare/src/rules/intron_ends.rs::hgvsp_intron_start_insertion",
+    "tools/vep-golden-corpus/src/classify/introns.rs::intron_end_insertion_pair",
 ]

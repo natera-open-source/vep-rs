@@ -1,0 +1,119 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "none on either side",
+ "input": "10 hand-built VCF records on chromosome 21 of the release-116 GRCh38 cache: single-base substitutions at a splice donor, a splice acceptor and four splice regions (one with two alternate alleles, one synonymous, one that is also a missense change), an intronic, a missense and a synonymous substitution away from any splice site, and a deletion",
+ "sha256": {
+  "default.txt": "63e6463e81a3db2ffb1e6c02382db052dab0767f5e69f924f5d877b8f29789fb",
+  "tab.txt": "add9bc5a1003c4fc13f8c3a1b12f66f3f781098d60068dc425f07710612e5ded",
+  "vcf.vcf": "6b6c90b505a9ab7fd58acdaa386033d4b559865560f8324d74e209f9db8064bb",
+  "json.jsonl": "1960ff50314a7abc86c4e820b63202165781f4a5797101c3b5b33494fa5c76e5"
+ },
+ "variants_vcf_sha256": "c42e8bd5e0d23e9f07dfbf8c0fc6fbcfc5aeb11248d81b8dc62ec13ff153ec79",
+ "plugin_fixtures": {
+  "dbscSNV1.1_synthetic_GRCh38.txt.gz": {
+   "generator": "scripts/fixtures/make_plugin_fixture.py",
+   "layout": "dbscsnv",
+   "assembly": "GRCh38",
+   "seed": 7,
+   "preparation": {
+    "index": "tabix -s 5 -b 6 -e 6 -c c",
+    "coordinate_columns": [
+     "hg38_chr",
+     "hg38_pos"
+    ],
+    "other_assembly_columns": [
+     "chr",
+     "pos"
+    ],
+    "other_assembly_shift": 100000,
+    "line_end": "CRLF",
+    "columns": 18
+   },
+   "misses": [],
+   "rows": {
+    "snv": 27,
+    "miss": 0
+   },
+   "tools": {
+    "bgzip": "bgzip (htslib) 1.22.1",
+    "tabix": "tabix (htslib) 1.22.1"
+   },
+   "spec": "plugin_data/dbscSNV1.1_synthetic_GRCh38.txt.gz.spec.json",
+   "files": {
+    "plugin_data/dbscSNV1.1_synthetic_GRCh38.txt.gz": "1664df8ce778e0bfc1fec75ff130e7681480a3bcc6b6e8a9614f141dfc62f34c",
+    "plugin_data/dbscSNV1.1_synthetic_GRCh38.txt.gz.tbi": "4aa34d958e58f22bfcff734d344c04b4255cf3715153596ae33304a5556b62ff",
+    "plugin_data/dbscSNV1.1_synthetic_GRCh38.txt.gz.spec.json": "1aed3b1178248d2649ff4c7e25cbd2ad906f1f662b81ecbad85b1012c878b4d4"
+   }
+  }
+ },
+ "flag_sets": {
+  "dbscsnv": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {plugins} --plugin dbscSNV,{corpus}/plugin_data/dbscSNV1.1_synthetic_GRCh38.txt.gz [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "b7b5792857d4f96bf4418eeacefe64e1f776980033001717a30b44021ecd9ac6",
+    "tab.txt": "572f6b42a7a5aa3b54e5e50ae8714184499555450ab734bc7d98dbacc70c31b0",
+    "vcf.vcf": "1e37e8fe510cc696edbbe6c4638adf3e3f733022e6a2ee4d04e829607715a32d",
+    "json.jsonl": "ba856a417697a4a2a0f6b8f1be9a2748ffd2fd96a8f76554853f6c3ae7695037"
+   },
+   "flags": [
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "dbscSNV,{corpus}/plugin_data/dbscSNV1.1_synthetic_GRCh38.txt.gz"
+   ],
+   "expected_dir": "expected_dbscsnv",
+   "formats_compared": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ]
+  },
+  "dbscsnv-assembly-override": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {plugins} --plugin dbscSNV,{corpus}/plugin_data/dbscSNV1.1_synthetic_GRCh38.txt.gz,GRCh38 [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "0da2eba4281b98112ad66a6c4b584d17c8369e821852f794691d4993537f4e7e",
+    "tab.txt": "c1bee12883c65d88162d5cbac62aff75298445602999aca80c7c61a79b689131",
+    "vcf.vcf": "e8d9780d678cac29769af0f285a781606b2432a450c98c08b81fc6853044ca5a",
+    "json.jsonl": "1859c5e63a6012033af5c1901140fd5fc85ca1b7f8190c3237e0d122e73c869b"
+   },
+   "flags": [
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "dbscSNV,{corpus}/plugin_data/dbscSNV1.1_synthetic_GRCh38.txt.gz,GRCh38"
+   ],
+   "expected_dir": "expected_dbscsnv-assembly-override",
+   "formats_compared": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ]
+  }
+ },
+ "plugin_files": {
+  "plugin_data/dbscSNV1.1_synthetic_GRCh38.txt.gz": "1664df8ce778e0bfc1fec75ff130e7681480a3bcc6b6e8a9614f141dfc62f34c",
+  "plugin_data/dbscSNV1.1_synthetic_GRCh38.txt.gz.tbi": "4aa34d958e58f22bfcff734d344c04b4255cf3715153596ae33304a5556b62ff"
+ },
+ "generator": "plugin_data/<file>: scripts/fixtures/make_plugin_fixture.py --layout dbscsnv from variants.vcf and expected/default.txt.gz, a made-up file in that layout with fabricated scores, one row per alternate base at every single-base site, the fixture's header line without a leading `#` (dbscSNV.pm:61-62 tells tabix the header line starts with `c`) and its line ends CRLF, bgzip and tabix as the plugin's documentation prepares the assembly (dbscSNV.pm:54-55; seed, preparation and digests in the spec beside the file and under plugin_fixtures); json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions over the chromosome 21 slice tools/vep-storable-to-json converts from the Ensembl VEP 116 cache; expected outputs: scripts/concordance/generate_reference_output.sh --corpus for the manifest's run, and one Ensembl VEP 116.3 container run per format for each flag set from the vep command recorded under its flag_sets entry, the corpus mounted read-only at /work/corpus as the working directory and the plugin module read from the VEP_plugins checkout mounted at /work/plugins; manifest: tools/vep-golden-corpus select --include for every record, flag-set, then classify for the manifest's run and each flag set"
+}

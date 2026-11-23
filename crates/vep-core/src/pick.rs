@@ -15,14 +15,16 @@
 //! TSL string that is not the canonical spelling of its number: `007` sorts
 //! with `7` and ties with neither it nor the default.
 //!
-//! Perl citations name modules of ensembl-vep release/116.2 (`Bio/EnsEMBL/VEP/...`)
-//! and ensembl-variation release/116 (`Bio/EnsEMBL/Variation/...`).
+//! Ensembl VEP source citations name modules of ensembl-vep release/116.3
+//! (`Bio/EnsEMBL/VEP/...`) and ensembl-variation release/116
+//! (`Bio/EnsEMBL/Variation/...`).
 
 use std::cmp::Ordering;
 
 /// One category's value for one candidate: a number the code assigned, or the
 /// TSL attribute's digit run as text, the one value the loops keep as a string.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Rank<'a> {
     Number(i64),
     Text(&'a str),

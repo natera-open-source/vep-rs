@@ -31,17 +31,22 @@ Steps, in order, for each selected run:
   Each is written by one container of the pinned image with no network, `PERL_HASH_SEED` set to
   the seed of the file's name and `PERL_PERTURB_KEYS=0`: the run's `ensembl_vep` words in one
   process, with UTRAnnotator alone of the plugins, the header lines kept and no statistics file.
+  A container is named `seeded-<seed>-<assembly>-<place>`, `<place>` the first twelve hex digits
+  of the sha256 of the path of the file it writes: steps that write into different directories
+  run side by side on one host, and Docker refuses a container that would write the file a
+  running container of the same assembly writes.
   The runs read `--sweep-input`, by default the run's `--input`: the whole input, or the records
   behind the UTRAnnotator residual rows of a first score, the rows the classes read the sweep on.
   A file that stands is written over only under `--overwrite-sweep`. A run whose `score` words
   name no such file gets no command and is named on standard error.
 - `vep-rs`: `--vep` (default `vep` on PATH; a relative path is read from the working directory)
   runs with the run's `vep_rs` words, a corpus set inside its corpus directory.
-- `score`: score_plugin_tuples.py scores vep-rs's output against the reference under the class
-  table beside it, through `--pairing-tool` where the built tools/vep-plugin-pairs is given. Without
-  the tool the script's own pairing is used only where the reference and vep-rs's output each hold
-  at most 20,000,000 data lines; a larger output is refused, since only the tool pairs it in
-  reasonable time.
+- `score`: `vep-plugin-pairs score`, the built tools/vep-plugin-pairs, scores vep-rs's output
+  against the reference under the tree's class table, plugin_class_table.tsv beside this script,
+  or the one `--class-table` names. The binary is the file `--pairing-tool` names, else the
+  tree's release build, tools/vep-plugin-pairs/target/release/vep-plugin-pairs, else its debug
+  build under target/debug. Where none stands the run is refused before any step starts, with
+  the cargo command that builds the tool.
 
 `--steps` runs a subset where the caller holds the outputs of the steps left out: vep-rs's output
 at `--engine-output` (default `<work-dir>/<run>/vep-rs.default.txt`) for `score` alone, the
@@ -63,7 +68,10 @@ error. Standard error carries one line per derived row, summed over the row's se
 score empties first. `--rows-out FILE` writes the JSON lines to a file as well.
 
 `--dry-run` prints every command it would run, in order, one shell line each, and runs nothing;
-it checks no file and needs every named input the selected steps read.
+it checks no file and needs every named input the selected steps read. Of the files its options
+name it reads one, the binary `--vep` names where that file stands: the score line carries
+`--engine-binary` with the binary's sha256, in a dry run as in a run, so the printed score
+line is the command the run executes.
 
 Named inputs. A word of plugin_gate_runs.toml in braces is filled from: `--input`,
 `--vep-rs-cache`, `--fasta`, `--plugin-data`, `--loftee`, `--utrannotator-sweep`, `--generated`,
@@ -72,14 +80,13 @@ A corpus is read from `--corpus-root` (default tests/golden/116 of this tree).
 
 Exit 0 when every selected step ran; exit 1 with one `ERROR: [reproduce_plugin_concordance] ...`
 line on the first refusal: a run or row the data file does not hold, a named input not given, a
-missing file, a step that cannot start or ends non-zero, an output too large for the script's own
-pairing, a file of the sweep that stands, a score with a declared class that was not applied.
+missing file, a step that cannot start or ends non-zero, a score with no built tool to run it,
+a file of the sweep that stands, a score with a declared class that was not applied.
 """
 
 from __future__ import annotations
 
 import argparse
-import gzip
 import hashlib
 import json
 import os
@@ -97,19 +104,25 @@ HERE = Path(__file__).resolve().parent
 TREE = HERE.parent.parent
 RUNS_FILE = HERE / "plugin_gate_runs.toml"
 GENERATOR = HERE / "generate_reference_output.sh"
-SCORER = HERE / "score_plugin_tuples.py"
+CLASS_TABLE = HERE / "plugin_class_table.tsv"
+TOOL = TREE / "tools/vep-plugin-pairs"
+# The tree's builds of the tool the score step runs, in the order they are looked for.
+TOOL_BUILDS = (TOOL / "target/release/vep-plugin-pairs", TOOL / "target/debug/vep-plugin-pairs")
 STEPS = ("check", "ensembl-vep", "utrannotator-sweep", "vep-rs", "score")
 SWEEP_STEP = "utrannotator-sweep"
 DEFAULT_STEPS = tuple(step for step in STEPS if step != SWEEP_STEP)
 SWEEP_PLUGIN = "UTRAnnotator"
 SWEEP_OUTPUT_RE = re.compile(r"\{utrannotator_sweep\}/(sweep-seed(.+)\.txt)")
 ENGINE = "vep-rs"
+# Every run of plugin_gate_runs.toml annotates one species at one cache version, so Ensembl VEP's
+# cache of a run stands under `<species>/<cache version>_<assembly>` of `--ensembl-vep-cache`.
+SPECIES = "homo_sapiens"
+CACHE_VERSION = "116"
 BASE_SET = "base"
 PLACEHOLDER_RE = re.compile(r"\{([a-z_]+)\}")
 PLUGIN_DATA_PATH_RE = re.compile(r"\{plugin_data\}/[^,]+")
 IMAGE_RE = re.compile(r'^PERL_IMAGE="([^"$]+)"$', re.MULTILINE)
 DIGEST_RE = re.compile(r'^PERL_IMAGE_DIGEST="\$\{VEP_PERL_IMAGE_DIGEST:-(sha256:[0-9a-f]{64})\}"$', re.MULTILINE)
-PYTHON_PAIRING_LINE_LIMIT = 20_000_000
 NINE_PLACES = Decimal("0.000000001")
 RAW_COUNTS = ("intersection", "perl", "rust")
 ADJUSTED_COUNTS = ("adj_intersection", "adj_perl", "adj_rust")
@@ -304,17 +317,18 @@ def sha256_of(path: Path) -> str:
     return digest.hexdigest()
 
 
-def data_lines_exceed(path: Path, limit: int) -> bool:
-    """Whether a default-format output holds more than `limit` data lines; the read stops there."""
-    opener = gzip.open if path.suffix == ".gz" else open
-    count = 0
-    with opener(path, "rb") as handle:
-        for line in handle:
-            if not line.startswith(b"#"):
-                count += 1
-                if count > limit:
-                    return True
-    return False
+def seeded_container(seed: str, assembly: str, written: Path) -> str:
+    """The name of the container that writes one seeded output: the seed, the assembly and the
+    first twelve hex digits of the sha256 of the output's path. Docker refuses a second container
+    of a name while the first runs, so two containers of one assembly that would write one file
+    share a name and two that write different files do not."""
+    place = hashlib.sha256(os.fsencode(written)).hexdigest()[:12]
+    return f"seeded-{seed}-{assembly}-{place}"
+
+
+def cache_directory(cache: Path, assembly: str) -> Path:
+    """The directory of Ensembl VEP's cache that a run on `assembly` reads under `cache`."""
+    return cache / SPECIES / f"{CACHE_VERSION}_{assembly}"
 
 
 class Plan:
@@ -343,6 +357,7 @@ class Plan:
         if not self.whole and args.dataset:
             raise Refusal(f"the run {self.key} is scored on its corpus; --dataset names a whole run's input")
         self.vep = program(args.vep)
+        self.tool = self.pairing_tool()
         self.dataset = args.dataset or run.get("dataset")
         self.corpus = None if self.whole else Path(args.corpus_root).resolve() / run["corpus"]
         self.output = Path(args.engine_output).resolve() if args.engine_output else self.work / "vep-rs.default.txt"
@@ -376,6 +391,13 @@ class Plan:
             raise Refusal(f"the run {self.key} needs Ensembl VEP's output: pass --reference or --run-ensembl-vep")
         return Path(fill(self.run["reference"], self.values, self.key))
 
+    def pairing_tool(self) -> Path:
+        """The binary the score step runs: the file `--pairing-tool` names, else the first of the
+        tree's builds that stands, else the release build's path."""
+        if self.args.pairing_tool:
+            return Path(self.args.pairing_tool).resolve()
+        return next((path for path in TOOL_BUILDS if path.is_file()), TOOL_BUILDS[0])
+
     def filled(self, field: str) -> list[str]:
         return [fill(word, self.values, self.key) for word in self.run.get(field, [])]
 
@@ -392,27 +414,24 @@ class Plan:
     def score_command(self) -> dict:
         vep_rs = self.vep_rs_command()["argv"]
         argv = [
-            sys.executable, str(SCORER), "--reference", str(self.reference), "--engine", f"{ENGINE}={self.output}",
+            str(self.tool), "score", "--reference", str(self.reference), "--engine", f"{ENGINE}={self.output}",
             f"--run-command={shlex.join(vep_rs)}", *self.filled("score"),
         ]
-        if Path(self.vep).is_file() and not self.args.dry_run:
-            argv += ["--engine-binary", f"{ENGINE}={sha256_of(Path(self.vep))}"]
+        if Path(self.vep).is_file():
+            try:
+                digest = sha256_of(Path(self.vep))
+            except OSError as error:
+                raise Refusal(f"the binary {self.vep} cannot be read: {error.strerror}") from error
+            argv += ["--engine-binary", f"{ENGINE}={digest}"]
         if self.args.engine_commit:
             argv += ["--engine-commit", f"{ENGINE}={self.args.engine_commit}"]
-        if self.args.class_table:
-            argv += ["--class-table", str(Path(self.args.class_table).resolve())]
+        argv += ["--class-table", str(Path(self.args.class_table).resolve() if self.args.class_table else CLASS_TABLE)]
         if self.args.classes is not None:
             argv += ["--classes", self.args.classes]
         argv += ["--work-dir", str(self.work / "scratch"), "--report", str(self.report), "--residuals", str(self.work / "residuals")]
-        if self.args.sort_memory:
-            argv += ["--sort-memory", self.args.sort_memory]
-        if self.args.sort_threads:
-            argv += ["--sort-threads", str(self.args.sort_threads)]
-        if self.args.pairing_tool:
-            argv += ["--pairing-tool", str(Path(self.args.pairing_tool).resolve())]
-            if self.args.pairing_threads:
-                argv += ["--pairing-threads", str(self.args.pairing_threads)]
-        return {"argv": argv, "env": {"PYTHONDONTWRITEBYTECODE": "1"}, "cwd": None,
+        if self.args.pairing_threads:
+            argv += ["--pairing-threads", str(self.args.pairing_threads)]
+        return {"argv": argv, "env": {}, "cwd": None,
                 "stdout": self.work / "score.stdout", "stderr": self.work / "score.stderr",
                 "clears": self.work / "residuals"}
 
@@ -489,7 +508,7 @@ class Plan:
         }
         mounts = [f"{cache}:{SWEEP_CACHE}:ro", f"{records}:{inside['input']}:ro", f"{sweep}:{SWEEP_OUT}",
                   f"{fasta.parent}:{SWEEP_FASTA}:ro"]
-        reads = [cache / "homo_sapiens" / f"116_{self.run['assembly']}", records, fasta, Path(f"{fasta}.fai")]
+        reads = [cache_directory(cache, self.run["assembly"]), records, fasta, Path(f"{fasta}.fai")]
         words: list[str] = []
         recorded = iter(self.run["ensembl_vep"])
         for word in recorded:
@@ -517,7 +536,8 @@ class Plan:
         for output in outputs:
             name, seed = output.groups()
             inside["ensembl_vep_output"] = f"{SWEEP_OUT}/{name}"
-            argv = ["docker", "run", "--rm", "--name", f"seeded-{seed}-{self.run['assembly']}", "--network", "none",
+            argv = ["docker", "run", "--rm", "--name", seeded_container(seed, self.run["assembly"], sweep / name),
+                    "--network", "none",
                     "--user", f"{os.getuid()}:{os.getgid()}",
                     "-e", "HOME=/tmp", "-e", f"PERL_HASH_SEED={seed}", "-e", "PERL_PERTURB_KEYS=0"]
             for mount in mounts:
@@ -584,15 +604,13 @@ class Plan:
         if "score" in steps:
             written = {str(command["writes"]) for command in sweep}
             wanted += [Path(word) for word in self.filled("score") if word.startswith("/") and word not in written]
-            if self.args.pairing_tool:
-                wanted.append(Path(self.args.pairing_tool))
             if "vep-rs" not in steps:
                 wanted.append(self.output)
         if "ensembl-vep" in steps and self.args.run_ensembl_vep:
             if shutil.which("docker") is None:
                 wanted.append(Path("docker"))
             cache = Path(fill("{ensembl_vep_cache}", self.values, self.key))
-            wanted.append(cache / "homo_sapiens" / f"116_{self.run['assembly']}")
+            wanted.append(cache_directory(cache, self.run["assembly"]))
             for word in self.run["ensembl_vep"]:
                 wanted += [Path(fill(path, self.values, self.key)) for path in PLUGIN_DATA_PATH_RE.findall(word)]
             for name in ("loftee", "plugin_modules"):
@@ -668,6 +686,12 @@ def run_plan(plan: Plan, steps: tuple[str, ...]) -> list[dict]:
     standing = [command["writes"] for step, command in commands if step == SWEEP_STEP and command["writes"].exists()]
     if standing and not args.overwrite_sweep:
         raise Refusal(f"the {SWEEP_STEP} step of {plan.key} would write over {standing[0]}: pass --overwrite-sweep")
+    if "score" in steps and not plan.tool.is_file():
+        raise Refusal(
+            f"the score step of {plan.key} runs {plan.tool}, which is not a file: build the tool with "
+            f"'cargo build --release --locked --manifest-path {TOOL / 'Cargo.toml'}' or name a built vep-plugin-pairs "
+            "with --pairing-tool"
+        )
     if "check" in steps:
         missing = plan.missing(steps)
         if missing:
@@ -677,13 +701,6 @@ def run_plan(plan: Plan, steps: tuple[str, ...]) -> list[dict]:
     plan.output.parent.mkdir(parents=True, exist_ok=True)
     plan.report.parent.mkdir(parents=True, exist_ok=True)
     for step, command in commands:
-        if step == "score" and not args.pairing_tool:
-            for path in (plan.reference, plan.output):
-                if data_lines_exceed(path, PYTHON_PAIRING_LINE_LIMIT):
-                    raise Refusal(
-                        f"{path} holds more than {PYTHON_PAIRING_LINE_LIMIT} data lines: pass --pairing-tool with the "
-                        "built tools/vep-plugin-pairs, which alone pairs an output of that size"
-                    )
         execute(command, step, plan.key)
     if "score" not in steps:
         return []
@@ -736,10 +753,9 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--ensembl-vep-fork", type=int, metavar="N", help="replace Ensembl VEP's recorded fork count")
     parser.add_argument("--perl-env", action="append", default=[], metavar="NAME=VALUE", help="a variable of Ensembl VEP's run")
     parser.add_argument("--tool-dir", action="append", default=[], metavar="DIR", help="a directory of programs the image lacks")
-    parser.add_argument("--pairing-tool", metavar="BINARY", help="the built tools/vep-plugin-pairs")
-    parser.add_argument("--pairing-threads", type=int, metavar="N", help="threads of the pairing tool")
-    parser.add_argument("--sort-memory", metavar="SIZE", help="buffer of each sort process of the scorer")
-    parser.add_argument("--sort-threads", type=int, metavar="N", help="threads of each sort process of the scorer")
+    parser.add_argument("--pairing-tool", metavar="BINARY",
+                        help="a built tools/vep-plugin-pairs (default: the tree's release build, else its debug build)")
+    parser.add_argument("--pairing-threads", type=int, metavar="N", help="threads of the score (default: every core)")
     parser.add_argument("--class-table", metavar="TSV", help="a class table in place of the tree's")
     parser.add_argument("--classes", metavar="A,B", help="the declared classes to apply, in place of the table's own")
     return parser.parse_args(argv)

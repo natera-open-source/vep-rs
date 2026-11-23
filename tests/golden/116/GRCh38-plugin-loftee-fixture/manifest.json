@@ -1,0 +1,431 @@
+{
+ "release": "116",
+ "species": "homo_sapiens",
+ "assembly": "GRCh38",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 100,
+ "included_records": {
+  "loftee": [
+   "nagnag_acceptor"
+  ]
+ },
+ "kept_records": 25,
+ "max_span": 1000000,
+ "flags": [
+  "--mask_header_cache_path",
+  "--dir_plugins",
+  "{plugins}",
+  "--plugin",
+  "LoF,loftee_path:{plugins},human_ancestor_fa:{corpus}/plugin_data/human_ancestor.fa.gz,gerp_bigwig:{corpus}/plugin_data/gerp_conservation_scores.homo_sapiens.GRCh38.bw,conservation_file:{corpus}/plugin_data/loftee.synthetic.sql"
+ ],
+ "fasta": "reference.fa.gz",
+ "covers": [
+  "LoFTEE"
+ ],
+ "plugin_files": {
+  "LoFTEE": [
+   "plugin_data/human_ancestor.fa.gz",
+   "plugin_data/human_ancestor.fa.gz.fai",
+   "plugin_data/human_ancestor.fa.gz.gzi",
+   "plugin_data/gerp_conservation_scores.homo_sapiens.GRCh38.bw",
+   "plugin_data/loftee.synthetic.sql"
+  ]
+ },
+ "datasets": {
+  "loftee": {
+   "reference": "default.txt",
+   "input": "variants.vcf",
+   "rows": 585,
+   "combinations": 27
+  }
+ },
+ "combinations": {
+  "3_prime_UTR_variant": {
+   "observed_rows": 84,
+   "exemplar_records": 4
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant": {
+   "observed_rows": 21,
+   "exemplar_records": 3
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 3
+  },
+  "NMD_transcript_variant,frameshift_variant": {
+   "observed_rows": 7,
+   "exemplar_records": 3
+  },
+  "NMD_transcript_variant,intron_variant": {
+   "observed_rows": 10,
+   "exemplar_records": 5
+  },
+  "NMD_transcript_variant,intron_variant,splice_donor_region_variant": {
+   "observed_rows": 24,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,missense_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,splice_acceptor_variant": {
+   "observed_rows": 22,
+   "exemplar_records": 5
+  },
+  "NMD_transcript_variant,splice_donor_variant": {
+   "observed_rows": 7,
+   "exemplar_records": 1
+  },
+  "downstream_gene_variant": {
+   "observed_rows": 29,
+   "exemplar_records": 11
+  },
+  "frameshift_variant": {
+   "observed_rows": 33,
+   "exemplar_records": 6
+  },
+  "frameshift_variant,splice_region_variant": {
+   "observed_rows": 20,
+   "exemplar_records": 2
+  },
+  "frameshift_variant,stop_gained": {
+   "observed_rows": 16,
+   "exemplar_records": 1
+  },
+  "intron_variant": {
+   "observed_rows": 60,
+   "exemplar_records": 11
+  },
+  "intron_variant,non_coding_transcript_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 3
+  },
+  "intron_variant,splice_donor_region_variant": {
+   "observed_rows": 37,
+   "exemplar_records": 1
+  },
+  "missense_variant": {
+   "observed_rows": 5,
+   "exemplar_records": 3
+  },
+  "non_coding_transcript_exon_variant": {
+   "observed_rows": 11,
+   "exemplar_records": 8
+  },
+  "non_coding_transcript_variant,splice_acceptor_variant": {
+   "observed_rows": 10,
+   "exemplar_records": 5
+  },
+  "non_coding_transcript_variant,splice_donor_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "splice_acceptor_variant": {
+   "observed_rows": 107,
+   "exemplar_records": 8
+  },
+  "splice_donor_variant": {
+   "observed_rows": 14,
+   "exemplar_records": 4
+  },
+  "splice_region_variant,synonymous_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "stop_gained": {
+   "observed_rows": 7,
+   "exemplar_records": 4
+  },
+  "synonymous_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 43,
+   "exemplar_records": 9
+  }
+ },
+ "variant_classes": {
+  "deletion": 31,
+  "insertion": 115,
+  "snv": 439
+ },
+ "records": [
+  {
+   "dataset": "loftee",
+   "vcf": "21\t18281038\t3687853\tA\tG\t.\t.\t.",
+   "combinations": [
+    "splice_donor_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t25709432\tnagnag_acceptor\tA\tG\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "NMD_transcript_variant,splice_acceptor_variant",
+    "intron_variant",
+    "non_coding_transcript_variant,splice_acceptor_variant",
+    "splice_acceptor_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t25714639\t4453406\tG\tA\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "NMD_transcript_variant,intron_variant",
+    "NMD_transcript_variant,splice_acceptor_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "non_coding_transcript_variant,splice_acceptor_variant",
+    "splice_acceptor_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t30215764\t64605\tG\tT\t.\t.\t.",
+   "combinations": [
+    "stop_gained",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t31659843\t4453607\tC\tA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "NMD_transcript_variant,splice_donor_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant",
+    "non_coding_transcript_variant,splice_donor_variant",
+    "splice_donor_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t32314564\t4540287\tG\tT\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant",
+    "downstream_gene_variant",
+    "stop_gained"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t32631163\t1346321\tC\tCA\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant",
+    "downstream_gene_variant",
+    "frameshift_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t34799300\t3766477\tC\tCTTGAT\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant",
+    "frameshift_variant,splice_region_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t35048845\t2815871\tT\tTC\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,frameshift_variant",
+    "frameshift_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t36394546\t4454129\tG\tT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,splice_acceptor_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "non_coding_transcript_variant,splice_acceptor_variant",
+    "splice_acceptor_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t36938995\t2676008\tC\tG\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "NMD_transcript_variant,splice_acceptor_variant",
+    "intron_variant",
+    "splice_acceptor_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t37065678\t1388806\tG\tGT\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant",
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "downstream_gene_variant",
+    "frameshift_variant",
+    "frameshift_variant,stop_gained",
+    "intron_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t37478207\t977916\tG\tGA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "frameshift_variant",
+    "frameshift_variant,splice_region_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t40052109\t3349942\tT\tC\t.\t.\t.",
+   "combinations": [
+    "splice_acceptor_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t41427205\t4454478\tG\tA\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant",
+    "NMD_transcript_variant,splice_acceptor_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant",
+    "non_coding_transcript_variant,splice_acceptor_variant",
+    "splice_acceptor_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t41871622\t4454587\tC\tA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "splice_acceptor_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t42076131\t2213778\tG\tA\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t42076175\t4454616\tG\tT\t.\t.\t.",
+   "combinations": [
+    "stop_gained"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t42076183\t2652695\tC\tT\t.\t.\t.",
+   "combinations": [
+    "synonymous_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t43053860\t4454804\tA\tT\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant",
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "non_coding_transcript_exon_variant",
+    "splice_donor_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t44291097\t1162026\tG\tA\t.\t.\t.",
+   "combinations": [
+    "non_coding_transcript_exon_variant",
+    "non_coding_transcript_variant,splice_acceptor_variant",
+    "splice_acceptor_variant",
+    "splice_region_variant,synonymous_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t44711463\t984376\tG\tGGCCGGGGGCC\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,frameshift_variant",
+    "frameshift_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t46126243\t497375\tC\tT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant,splice_donor_region_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "intron_variant,splice_donor_region_variant",
+    "missense_variant",
+    "splice_donor_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t46326358\t2767584\tT\tA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant",
+    "stop_gained",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "dataset": "loftee",
+   "vcf": "21\t46326392\t3702047\tCAG\tC\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant",
+    "NMD_transcript_variant,frameshift_variant",
+    "frameshift_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  }
+ ],
+ "multi_allelic_per_dataset": 4,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {},
+ "fields_compared": [
+  "LoF",
+  "LoF_filter",
+  "LoF_flags",
+  "LoF_info"
+ ],
+ "field_divergences": [],
+ "field_divergence_summary": {}
+}

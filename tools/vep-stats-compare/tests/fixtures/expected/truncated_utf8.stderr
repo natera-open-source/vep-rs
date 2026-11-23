@@ -1,0 +1,1 @@
+ERROR: [compare_vep_stats] cannot read tests/fixtures/truncated_utf8.summary.log: 'utf-8' codec can't decode bytes in position 2632-2633: unexpected end of data

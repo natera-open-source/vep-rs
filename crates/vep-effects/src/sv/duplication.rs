@@ -17,7 +17,7 @@
 //! - **upstream_gene_variant / downstream_gene_variant**: DUP is entirely within the
 //!   upstream or downstream region (no transcript body overlap).
 //!
-//! Perl citations name modules of ensembl-variation release/115
+//! Ensembl VEP source citations name modules of ensembl-variation release/116
 //! (`Bio/EnsEMBL/Variation/...`).
 
 use super::insertion::structural_start_lost;
@@ -34,7 +34,7 @@ use vep_core::transcript::Transcript;
 use vep_core::variant::InputVariant;
 
 /// Calculate consequences for a structural duplication against a transcript.
-pub fn calculate(
+pub(crate) fn calculate(
     variant: &InputVariant,
     transcript: &Arc<Transcript>,
     upstream_distance: u64,
@@ -97,7 +97,7 @@ pub fn calculate(
             // Ensembl's tier-2 short-circuit outranks everything in the `else` below:
             // `@SORTED_OVERLAP_CONSEQUENCES = sort {$a->tier <=> $b->tier}`
             // (`BaseVariationFeatureOverlapAllele.pm:69`) orders predicates by tier
-            // alone and `get_all_OverlapConsequences` (`:266,275-278`) stops at
+            // alone and `get_all_OverlapConsequences` (`:267,277-279`) stops at
             // `last if $assigned_tier && $oc->{tier} > $assigned_tier`.
             // `mature_miRNA_variant` is tier 2; `feature_elongation` and every
             // regional term are tier 3. Only tier-1 `transcript_amplification`,
@@ -216,7 +216,6 @@ fn add_regional_consequences(
     // when there is NO exon overlap (within_non_coding_gene requires not non_coding_exon_variant
     // and not mature_miRNA).
     if !is_protein_coding
-        && !transcript.facts().is_nmd
         && !consequences.contains(&Consequence::NonCodingTranscriptExonVariant)
         && !consequences.contains(&Consequence::MatureMirnaVariant)
         && !consequences.contains(&Consequence::NonCodingTranscriptVariant)
@@ -282,11 +281,10 @@ fn build_base_consequence(
     let mut sorted_csqs: ConsequenceList = SmallVec::from_slice(consequences);
     sorted_csqs.sort_by_key(|c| c.rank());
 
-    TranscriptConsequence {
-        consequences: sorted_csqs,
-        impact,
-        ..TranscriptConsequence::for_transcript(transcript)
-    }
+    let mut consequence = TranscriptConsequence::for_transcript(transcript);
+    consequence.consequences = sorted_csqs;
+    consequence.impact = impact;
+    consequence
 }
 
 /// Push a consequence if not already present.
@@ -303,7 +301,7 @@ mod tests {
     use vep_core::consequence::FeatureType;
     use vep_core::variant::VariantClass;
 
-    /// [`super::calculate`] on a transcript the test owns: the row shares a copy of
+    /// `super::calculate` on a transcript the test owns: the row shares a copy of
     /// it, as the index shares its handle.
     fn calculate(
         variant: &InputVariant,
@@ -484,7 +482,7 @@ mod tests {
 
     /// A reverse-strand transcript whose coding region reaches its first genomic
     /// base has no 3' UTR, and a span starting on that base gets no UTR term:
-    /// Perl's `_before_coding` is `overlap(start, end, transcript start,
+    /// Ensembl VEP's `_before_coding` is `overlap(start, end, transcript start,
     /// coding_region_start - 1)`, an inverted window that holds only for a span
     /// starting before the transcript. A span one base further out does hold it.
     #[test]
@@ -597,7 +595,7 @@ mod tests {
 
     /// A DUP inside exon 1 over the start codon (25_000_050-25_000_052) is exactly
     /// `feature_elongation, start_lost, coding_sequence_variant, 5_prime_UTR_variant`,
-    /// Perl's structural `start_lost` arm without its co-fired `start_retained_variant`.
+    /// Ensembl VEP's structural `start_lost` arm without its co-fired `start_retained_variant`.
     #[test]
     fn test_dup_over_start_codon_within_exon_is_start_lost() {
         let tx = make_test_transcript();
@@ -681,7 +679,7 @@ mod tests {
         }
     }
 
-    /// A duplication wholly inside a frameshift intron. Ensembl VEP 116.2 writes
+    /// A duplication wholly inside a frameshift intron. Ensembl VEP 116.3 writes
     /// `feature_elongation,coding_sequence_variant` for `<DUP>` and `<DUP:TANDEM>`
     /// over GRCh37 `21:38600094-38600097` on ENST00000288304 (a 4-base intron inside
     /// its coding region), `feature_elongation,non_coding_transcript_variant` for
@@ -736,7 +734,7 @@ mod tests {
     }
 
     /// A duplication on only the first or last two bases of an intron, which no
-    /// predicate claims: Ensembl VEP 116.2 writes `intergenic_variant` for `<DUP>`,
+    /// predicate claims: Ensembl VEP 116.3 writes `intergenic_variant` for `<DUP>`,
     /// `<DUP:TANDEM>` and `<CN2>` over GRCh37 `21:38600108-38600109` and
     /// `21:38600522-38600523` on ENST00000288304 (the ends of its 416-base intron),
     /// and `intron_variant` once the span reaches the intron's third base.
@@ -765,6 +763,46 @@ mod tests {
                 );
             }
             assert_eq!(terms(class, 25_000_301, 25_000_302), ["intron_variant"]);
+        }
+    }
+
+    /// A DUP over the first three coding positions is `start_lost` only where
+    /// a start codon stands at the coding start; on a first codon that names
+    /// Ala the row keeps its other terms. Ensembl VEP reads those positions
+    /// as the start codon on every transcript without `cds_start_NF`
+    /// (VariationEffect.pm:886-896 behind 965-990).
+    #[test]
+    fn dup_over_the_first_coding_bases_is_start_lost_only_where_a_start_codon_stands() {
+        use crate::test_helpers::{genomic_of_cds, make_single_exon_transcript};
+        let utr3 = ["GGC", "TTC", "AGG"].concat();
+        for strand in [Strand::Forward, Strand::Reverse] {
+            let opens = ["ATG", "GCT", "GCT", "TAA"].concat();
+            let opens = make_single_exon_transcript(strand, &opens, &utr3);
+            let no_start = ["GCT", "GCT", "GCT", "TAA"].concat();
+            let no_start = make_single_exon_transcript(strand, &no_start, &utr3);
+            let (a, b) = (genomic_of_cds(&opens, 1), genomic_of_cds(&opens, 3));
+            let v = make_dup(a.min(b), a.max(b), VariantClass::Duplication);
+            let terms = |tx: &Transcript| {
+                let tc = calculate(&v, tx, 5000, 5000).expect("a row of the transcript");
+                tc.consequences.to_vec()
+            };
+            assert_eq!(
+                terms(&opens),
+                vec![
+                    Consequence::StartLost,
+                    Consequence::FeatureElongation,
+                    Consequence::CodingSequenceVariant,
+                ],
+                "{strand:?}"
+            );
+            assert_eq!(
+                terms(&no_start),
+                vec![
+                    Consequence::FeatureElongation,
+                    Consequence::CodingSequenceVariant,
+                ],
+                "{strand:?}"
+            );
         }
     }
 }

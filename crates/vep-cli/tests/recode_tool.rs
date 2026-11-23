@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 //! `vep recode`, through the binary: the behaviour of Ensembl VEP's
-//! `variant_recoder` (release/116.2, `VariantRecoder.pm`, whose line numbers
+//! `variant_recoder` (release/116.3, `VariantRecoder.pm`, whose line numbers
 //! the tests cite) on the inputs of the `tests/golden/116/GRCh38-recoder`
 //! corpus over its own cache, and the corpus's
 //! `tool_cases`, each naming the arguments of one `variant_recoder` run and the
@@ -118,7 +118,20 @@ fn stderr(output: &Output) -> String {
     String::from_utf8_lossy(&output.stderr).into_owned()
 }
 
-/// The parsed output of a run that must succeed quietly.
+/// A run's standard error after its notice, the one `INFO:` line every run
+/// that completes writes there first; standard error that opens with no such
+/// line fails the test.
+fn stderr_after_the_notice(output: &Output) -> String {
+    let text = stderr(output);
+    let (notice, rest) = text
+        .split_once('\n')
+        .unwrap_or_else(|| panic!("standard error holds no line: {text:?}"));
+    assert!(notice.starts_with("INFO: "), "{text:?}");
+    rest.to_string()
+}
+
+/// The parsed output of a run that must succeed with its notice alone on
+/// standard error.
 fn recoded(args: &[&str]) -> Vec<Value> {
     let output = recode_in(args, None);
     assert!(
@@ -127,7 +140,7 @@ fn recoded(args: &[&str]) -> Vec<Value> {
         output.status.code(),
         stderr(&output)
     );
-    assert_eq!(stderr(&output), "", "{args:?}");
+    assert_eq!(stderr_after_the_notice(&output), "", "{args:?}");
     parse(&stdout(&output), args)
 }
 
@@ -564,7 +577,7 @@ fn repeated_options_run_with_the_last_value() {
         None,
     );
     assert!(doubled.status.success(), "{}", stderr(&doubled));
-    assert_eq!(stderr(&doubled), "");
+    assert_eq!(stderr_after_the_notice(&doubled), "");
     assert_eq!(stdout(&doubled), stdout(&single));
     assert!(stdout(&doubled).contains("NC_000021.9:g.25702257C>T"));
     let every = recoded(&["--id", "rs781261918", "--fields", "transcript_id"]);
@@ -634,7 +647,7 @@ fn config_file_and_debug_are_read_as_variant_recoder_reads_them() {
     // unindented.
     let from_file = recode_in(&["--config", &ini], None);
     assert!(from_file.status.success(), "{}", stderr(&from_file));
-    assert_eq!(stderr(&from_file), "");
+    assert_eq!(stderr_after_the_notice(&from_file), "");
     assert_eq!(stdout(&from_file), stdout(&default_fields));
 
     let command_line_wins = recode_in(&["--config", &ini, "--fields", "transcript_id"], None);
@@ -662,7 +675,7 @@ fn config_file_and_debug_are_read_as_variant_recoder_reads_them() {
         None,
     );
     assert!(debug.status.success(), "{}", stderr(&debug));
-    assert_eq!(stderr(&debug), "");
+    assert_eq!(stderr_after_the_notice(&debug), "");
     assert_eq!(stdout(&debug), stdout(&pretty));
 
     let missing = recode_in(&["--config", "/no/such/recode.ini"], None);
@@ -746,7 +759,7 @@ fn vep_ini_and_the_environment_are_read_behind_the_config_file() {
     // than one; the variable's narrower filter, applied beside it, leaves one.
     let from_ini = recode_in_home(&[], home, &[]);
     assert!(from_ini.status.success(), "{}", stderr(&from_ini));
-    assert_eq!(stderr(&from_ini), "");
+    assert_eq!(stderr_after_the_notice(&from_ini), "");
     let results = parse(&stdout(&from_ini), "vep.ini alone");
     assert!(
         results[0]["T"].get("hgvsg").is_some()
@@ -864,6 +877,113 @@ fn var_synonyms_come_from_the_cache_column() {
     );
 }
 
+/// The cache and FASTA flags of a copy of the corpus's cache under `dir` whose
+/// chromosome 21 known-variant file holds `known` alone, each `(name,
+/// position, allele string, synonyms)` with every other column at its
+/// default, block-compressed with a tabix index beside it.
+fn cache_with_known_variants(dir: &Path, known: &[(&str, u64, &str, &str)]) -> Vec<String> {
+    use noodles::bgzf;
+    use noodles::core::Position;
+    use noodles::csi::binning_index::index::header::Builder as HeaderBuilder;
+    use noodles::csi::binning_index::index::reference_sequence::bin::Chunk;
+
+    let cache = dir.join("json_cache");
+    copy_dir(Path::new(&resource_path("cache")), &cache);
+    let info: Value =
+        serde_json::from_str(&fs::read_to_string(cache.join("info.json")).unwrap()).unwrap();
+    let columns: Vec<&str> = info["variation_cols"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|column| column.as_str().unwrap())
+        .collect();
+    let column = |name: &str| columns.iter().position(|c| *c == name).unwrap();
+    let variations = cache.join("variations").join("21");
+    fs::remove_file(variations.join("all_vars.gz.csi")).unwrap();
+    let path = variations.join("all_vars.gz");
+    let mut writer = bgzf::io::Writer::new(fs::File::create(&path).unwrap());
+    let mut indexer = noodles::tabix::index::Indexer::default();
+    indexer.set_header(
+        HeaderBuilder::default()
+            .set_reference_sequence_name_index(column("chr"))
+            .set_start_position_index(column("start"))
+            .set_end_position_index(Some(column("end")))
+            .build(),
+    );
+    for (name, position, alleles, synonyms) in known {
+        let mut cells = vec![".".to_string(); columns.len()];
+        cells[column("chr")] = "21".to_string();
+        cells[column("variation_name")] = name.to_string();
+        cells[column("start")] = position.to_string();
+        cells[column("end")] = position.to_string();
+        cells[column("allele_string")] = alleles.to_string();
+        cells[column("var_synonyms")] = synonyms.to_string();
+        let from = writer.virtual_position();
+        writeln!(writer, "{}", cells.join("\t")).unwrap();
+        let at = Position::try_from(*position as usize).unwrap();
+        indexer
+            .add_record("21", at, at, Chunk::new(from, writer.virtual_position()))
+            .unwrap();
+    }
+    writer.finish().unwrap();
+    let mut index_path = path.into_os_string();
+    index_path.push(".tbi");
+    noodles::tabix::fs::write(index_path, &indexer.build()).unwrap();
+    vep_core::cache_manifest::CacheManifest::write(&cache).unwrap();
+    vec![
+        "--json_cache".to_string(),
+        cache.to_string_lossy().into_owned(),
+        "--fasta".to_string(),
+        resource_path("fasta"),
+    ]
+}
+
+/// Where the cache holds two rows whose names differ in letter case alone,
+/// the synonyms are those of the row spelled as the name is, whichever of the
+/// two stands first. `variant_recoder` fetches a variant by `v.name = ?`
+/// (`VariationAdaptor.pm:544` of ensembl-variation), an identifier it is
+/// given (`Parser/ID.pm:162`) and its last co-located variant (427) alike,
+/// from a column that holds each name once (`sql/table.sql:77`), so a
+/// database holding both spellings returns the one asked for. A name spelled
+/// as neither row is takes the first row named so in any case. The
+/// known-variant file here is made up: two rows at one position of the
+/// corpus, the first with an alternate allele the record lacks, so that the
+/// second alone co-locates. The record's name is its ID column, whose
+/// variant's synonyms `vep recode` writes.
+#[test]
+fn var_synonyms_are_those_of_the_row_spelled_as_the_name_is() {
+    let dir = tempfile::tempdir().unwrap();
+    let cache = cache_with_known_variants(
+        dir.path(),
+        &[
+            ("RS9900000001", 25702257, "C/G", "ClinVar::RCV999000001"),
+            ("rs9900000001", 25702257, "C/T", "ClinVar::RCV999000002"),
+        ],
+    );
+    let synonyms = |name: &str| {
+        let record = format!("21\t25702257\t{name}\tC\tT\t.\t.\t.");
+        let output = recode_in_with(
+            &["--input_data", &record, "--var_synonyms", "--fields", "id"],
+            &cache,
+            None,
+        );
+        assert!(output.status.success(), "{name}: {}", stderr(&output));
+        assert_eq!(stderr_after_the_notice(&output), "", "{name}");
+        let results = parse(&stdout(&output), name);
+        assert_eq!(
+            strings(&results[0]["T"], "id"),
+            ["rs9900000001"],
+            "{name}: {}",
+            results[0]
+        );
+        strings(&results[0]["T"], "var_synonyms")
+    };
+    assert_eq!(synonyms("rs9900000001"), ["ClinVar: RCV999000002"]);
+    assert_eq!(synonyms("."), ["ClinVar: RCV999000002"]);
+    assert_eq!(synonyms("RS9900000001"), ["ClinVar: RCV999000001"]);
+    assert_eq!(synonyms("Rs9900000001"), ["ClinVar: RCV999000001"]);
+}
+
 /// `--ga4gh_vrs` adds one GA4GH VRS Allele per SPDI (474-482), its interval
 /// start the SPDI's position as text and its end a number, and switches
 /// `spdi` on beside the fields named.
@@ -899,7 +1019,7 @@ fn ga4gh_vrs_is_an_empty_list_without_an_nc_accession() {
         None,
     );
     assert!(output.status.success(), "{}", stderr(&output));
-    assert_eq!(stderr(&output), "");
+    assert_eq!(stderr_after_the_notice(&output), "");
     assert_eq!(
         stdout(&output),
         "[{\"A\":{\"ga4gh_vrs\":[],\"input\":\"rs779189159\",\"spdi\":[\"21:33553710:C:A\"]},\"G\":{\"ga4gh_vrs\":[],\"input\":\"rs779189159\",\"spdi\":[\"21:33553710:C:G\"]}}]"
@@ -932,7 +1052,7 @@ fn spdi_takes_the_refseq_name_of_a_sequence_without_an_nc_accession() {
         None,
     );
     assert!(output.status.success(), "{}", stderr(&output));
-    assert_eq!(stderr(&output), "");
+    assert_eq!(stderr_after_the_notice(&output), "");
     let results: Vec<Value> = serde_json::from_str(&stdout(&output)).unwrap();
     let alleles = results[0].as_object().unwrap();
     assert!(!alleles.is_empty());
@@ -996,7 +1116,7 @@ fn spdi_off_a_transcript_takes_the_cache_name_not_the_fasta_record_name() {
         None,
     );
     assert!(output.status.success(), "{}", stderr(&output));
-    assert_eq!(stderr(&output), "");
+    assert_eq!(stderr_after_the_notice(&output), "");
     let results: Vec<Value> = serde_json::from_str(&stdout(&output)).unwrap();
     let alleles = results[0].as_object().unwrap();
     assert!(!alleles.is_empty());
@@ -1015,10 +1135,10 @@ fn spdi_off_a_transcript_takes_the_cache_name_not_the_fasta_record_name() {
 /// `--fields hgvs_offset` names a key no entry carries: the field sets the
 /// configuration key of its own name (120), which the output never reads, so
 /// no HGVS notation is computed and each allele's object holds the input
-/// alone; beside `hgvsc`, whose key switches HGVSc on (`OutputFactory.pm:1750`),
+/// alone; beside `hgvsc`, whose key switches HGVSc on (`OutputFactory.pm:1759`),
 /// the insertion's offset is written under it, the five bases its reverse-strand
-/// transcripts shift it by times their strand (`OutputFactory.pm:1755`); beside
-/// `hgvsp` alone it is not, since the protein branch (`:1758-1767`) reads an
+/// transcripts shift it by times their strand (`OutputFactory.pm:1764`); beside
+/// `hgvsp` alone it is not, since the protein branch (`:1767-1776`) reads an
 /// offset only the transcript notation sets (`TranscriptVariationAllele.pm:1447`).
 /// The insertion is given as an SPDI, which the recoder shifts; given as its
 /// identifier, whose stored class is `indel`, it is left unshifted and carries
@@ -1189,6 +1309,225 @@ fn database_flags_are_refused_naming_the_flag() {
     assert!(stdout(&output).contains("--input_data"));
 }
 
+/// A name that is a prefix of two options is refused after one dash as after
+/// two, and its letters are not read as short forms: `-us` is not `-u s`,
+/// which would name `--user` in its refusal, and `-in` names no input file.
+#[test]
+fn a_one_dash_prefix_of_two_options_is_refused_as_after_two_dashes() {
+    let user = "error: unexpected argument '--us' found\n\n  tip: a similar argument exists: \
+                '--user'\n\nUsage: vep recode --user <USER>\n\nFor more information, try \
+                '--help'.\n";
+    for option in ["-us", "--us"] {
+        let output = recode_in_with(&[option, "--id", "rs781261918"], &[], None);
+        assert_eq!(output.status.code(), Some(2), "{option}");
+        assert_eq!(stdout(&output), "", "{option}");
+        assert_eq!(stderr(&output), user, "{option}");
+    }
+    let two_dashes = recode_in_with(&["--in", "rs781261918"], &[], None);
+    assert_eq!(two_dashes.status.code(), Some(2));
+    assert!(
+        stderr(&two_dashes).starts_with("error: unexpected argument '--in' found\n"),
+        "{}",
+        stderr(&two_dashes)
+    );
+    let one_dash = recode_in_with(&["-in", "rs781261918"], &[], None);
+    assert_eq!(one_dash.status.code(), Some(2));
+    assert_eq!(stdout(&one_dash), "");
+    assert_eq!(stderr(&one_dash), stderr(&two_dashes));
+}
+
+/// A value outside the list of `--format`, `--pick_order` or `--shift_hgvs` is
+/// a command-line syntax error of the tool's own parser: exit 2, nothing on
+/// standard output, and clap's text with the list on standard error, the list
+/// `vep` prints when it refuses the same value. A listed value of each option
+/// runs, `--pick_order` as a list of two.
+#[test]
+fn a_value_outside_an_options_list_is_a_command_line_syntax_error() {
+    for (flag, value, refusal) in [
+        (
+            "--format",
+            "foo",
+            "error: invalid value 'foo' for '--format <FORMAT>'\n  [possible values: ensembl, \
+             vcf, hgvs, id, spdi, region, guess]\n\nFor more information, try '--help'.\n",
+        ),
+        (
+            "--pick_order",
+            "rank,foo",
+            "error: invalid value 'foo' for '--pick_order <LIST>'\n  [possible values: \
+             mane_select, mane_plus_clinical, canonical, appris, tsl, biotype, ccds, rank, \
+             length, ensembl, refseq]\n\nFor more information, try '--help'.\n",
+        ),
+        (
+            "--shift_hgvs",
+            "2",
+            "error: invalid value '2' for '--shift_hgvs <0|1>'\n  [possible values: 0, \
+             1]\n\nFor more information, try '--help'.\n",
+        ),
+    ] {
+        let output = recode_in(&["--id", "rs781261918", flag, value], None);
+        assert_eq!(output.status.code(), Some(2), "{flag} {value}");
+        assert_eq!(stdout(&output), "", "{flag} {value}");
+        assert_eq!(stderr(&output), refusal, "{flag} {value}");
+
+        let annotation = common::isolated_vep_anywhere()
+            .args([flag, value])
+            .stdin(Stdio::null())
+            .output()
+            .unwrap();
+        assert_eq!(annotation.status.code(), Some(2), "vep {flag} {value}");
+        let listed = |text: &str| {
+            text.lines()
+                .find(|line| line.trim_start().starts_with("[possible values: "))
+                .unwrap_or_else(|| panic!("{flag} {value}: no list in {text:?}"))
+                .to_string()
+        };
+        assert_eq!(
+            listed(&stderr(&annotation)),
+            listed(refusal),
+            "{flag} {value}"
+        );
+    }
+    let results = recoded(&[
+        "--id",
+        "rs781261918",
+        "--fields",
+        "hgvsg",
+        "--format",
+        "id",
+        "--pick",
+        "--pick_order",
+        "rank,length",
+        "--shift_hgvs",
+        "0",
+    ]);
+    assert_eq!(
+        strings(&results[0]["T"], "hgvsg"),
+        ["NC_000021.9:g.25702257C>T"]
+    );
+}
+
+/// A value that begins with a hyphen reaches the annotation run as the value
+/// of its option, where that run's parser would read a token of its own as an
+/// option: a transcript filter, which the tool takes with a leading hyphen as
+/// Getopt::Long takes a string value (`variant_recoder:66`), filters the
+/// transcripts, and an input given after `=` is looked up as the input it is.
+#[test]
+fn a_value_that_begins_with_a_hyphen_is_read_as_its_options_value() {
+    let filtered = recode_in(
+        &[
+            "--id",
+            "rs781261918",
+            "--fields",
+            "transcript_id",
+            "--transcript_filter",
+            "-x is 1",
+        ],
+        None,
+    );
+    assert_eq!(filtered.status.code(), Some(0), "{}", stderr(&filtered));
+    assert!(
+        !stderr(&filtered).contains("ERROR: "),
+        "{}",
+        stderr(&filtered)
+    );
+    assert_eq!(
+        stdout(&filtered),
+        r#"[{"T":{"input":"rs781261918"}}]"#,
+        "no transcript carries the field the filter names"
+    );
+
+    for (input, written) in [
+        (
+            "--id=-x",
+            r#"[{"warnings":["No variant found with ID '-x'"]}]"#,
+        ),
+        (
+            "--id=--help",
+            r#"[{"warnings":["No variant found with ID '--help'"]}]"#,
+        ),
+    ] {
+        let output = recode_in(&[input], None);
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "{input}: {}",
+            stderr(&output)
+        );
+        assert!(
+            !stderr(&output).contains("ERROR: "),
+            "{input}: {}",
+            stderr(&output)
+        );
+        assert_eq!(stdout(&output), written, "{input}");
+    }
+}
+
+/// Standard error on a stream that takes no bytes changes no exit status of
+/// `vep recode`, a device that refuses every write or a pipe whose reader has
+/// gone. A run that completes, its warning carried in the output, exits 0 with
+/// the output of the same run on a readable stream. A refused run exits 1
+/// though its `ERROR:` line is lost, whether the `--config` file cannot be
+/// opened or the input file does not exist.
+#[test]
+fn vep_recode_keeps_its_exit_status_on_an_unwritable_error_stream() {
+    let run = |args: &[&str], error_stream: Stdio| {
+        common::isolated_vep_anywhere()
+            .arg("recode")
+            .args(args)
+            .args(resources())
+            .current_dir(corpus_dir())
+            .stdin(Stdio::null())
+            .stderr(error_stream)
+            .output()
+            .unwrap()
+    };
+    let completes = [
+        "--input_data",
+        "rs781261918\nrs_not_a_thing\nrs2123538435",
+        "--fields",
+        "hgvsg",
+    ];
+    let refusals: [(&[&str], &str); 2] = [
+        (
+            &["--config", "/no/such/recode.ini", "--id", "rs781261918"],
+            "ERROR: [config] ",
+        ),
+        (&["-i", "/no/such/input.txt"], "ERROR: [input] "),
+    ];
+    let readable = run(&completes, Stdio::piped());
+    assert!(readable.status.success(), "{}", stderr(&readable));
+    assert_eq!(stderr_after_the_notice(&readable), "");
+    let results = parse(&stdout(&readable), completes);
+    assert_eq!(
+        results[1]["warnings"],
+        serde_json::json!(["No variant found with ID 'rs_not_a_thing'"])
+    );
+    for (args, line) in refusals {
+        let refused = run(args, Stdio::piped());
+        assert_eq!(refused.status.code(), Some(1), "{args:?}");
+        assert!(
+            stderr(&refused).starts_with(line),
+            "{args:?}: {}",
+            stderr(&refused)
+        );
+    }
+    for stream in common::unwritable_streams() {
+        let output = run(&completes, common::unwritable(stream));
+        assert!(output.status.success(), "{stream}: {}", output.status);
+        assert_eq!(output.stdout, readable.stdout, "{stream}");
+        for (args, _) in refusals {
+            let refused = run(args, common::unwritable(stream));
+            assert_eq!(
+                refused.status.code(),
+                Some(1),
+                "{stream} {args:?}: {}",
+                refused.status
+            );
+            assert!(refused.stdout.is_empty(), "{stream} {args:?}");
+        }
+    }
+}
+
 /// Copies the directory `from` to `to`, creating it.
 fn copy_dir(from: &Path, to: &Path) {
     fs::create_dir_all(to).unwrap();
@@ -1297,6 +1636,67 @@ fn a_merged_cache_is_read_without_the_flag() {
         recode_merged_records(&layout(&bare), &["--assembly", "GRCh38"]),
         flagged
     );
+}
+
+/// A `--json_cache` directory whose `info.json` declares the RefSeq set is
+/// refused by the annotation run's check of the declared set against the
+/// flags, under the `cache` component: the recoder refuses `--refseq`, the one
+/// flag that reads such a cache. The same directory without the `source_type`
+/// key is checked against nothing: the run reads it as the Ensembl set, says
+/// so in its notice, and writes the notations of its RefSeq models.
+#[test]
+fn a_refseq_cache_is_refused_where_it_declares_its_set_and_read_where_it_declares_none() {
+    let corpus = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden/116/GRCh38-refseq");
+    let declared = corpus.join("cache_root/homo_sapiens_refseq/116_GRCh38");
+    let input = corpus.join("variants.vcf").to_string_lossy().into_owned();
+    let run = |cache: &Path| {
+        let resources = [
+            "--json_cache".to_string(),
+            cache.to_string_lossy().into_owned(),
+            "--fasta".to_string(),
+            corpus
+                .join("reference.fa.gz")
+                .to_string_lossy()
+                .into_owned(),
+        ];
+        recode_in_with(&["-i", input.as_str()], &resources, None)
+    };
+    let refusal = run(&declared);
+    assert_eq!(refusal.status.code(), Some(1), "{}", stderr(&refusal));
+    assert_eq!(stdout(&refusal), "");
+    let refusal_line = format!(
+        "ERROR: [cache] neither --refseq nor --merged was given, selecting the Ensembl \
+         transcript set, but {}/info.json declares source_type refseq",
+        declared.display()
+    );
+    let refused = stderr(&refusal);
+    assert!(
+        refused.lines().any(|line| line == refusal_line),
+        "{refused:?}"
+    );
+
+    let dir = tempfile::tempdir().unwrap();
+    let undeclared = dir.path().join("refseq_models");
+    copy_dir(&declared, &undeclared);
+    let mut info: Value =
+        serde_json::from_str(&fs::read_to_string(undeclared.join("info.json")).unwrap()).unwrap();
+    assert_eq!(
+        info.as_object_mut().unwrap().remove("source_type"),
+        Some(Value::from("refseq"))
+    );
+    fs::write(undeclared.join("info.json"), info.to_string()).unwrap();
+    fs::remove_file(undeclared.join("CHECKSUMS.sha256")).unwrap();
+    let read = run(&undeclared);
+    assert!(read.status.success(), "{}", stderr(&read));
+    let notice = stderr(&read);
+    assert!(
+        notice
+            .lines()
+            .any(|line| line.starts_with("INFO: this cache is read as the Ensembl transcript set")),
+        "{notice:?}"
+    );
+    let output = stdout(&read);
+    assert!(output.contains("\"NM_"), "no RefSeq notation:\n{output}");
 }
 
 /// A cache of the Ensembl set is read as it is unless a JSON merged cache sits

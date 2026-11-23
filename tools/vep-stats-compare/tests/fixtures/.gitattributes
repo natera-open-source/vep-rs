@@ -1,0 +1,2 @@
+# Reports and goldens are compared byte for byte, and some end their lines in CRLF or a lone CR.
+* -text

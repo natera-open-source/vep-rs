@@ -1,0 +1,61 @@
+entry = "loftee_gerp_read_error_counted_as_zero"
+page = "docs/plugins/loftee-grch37.md#a-failed-gerp-read-counted-as-zero"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "malformed"
+input_class_basis = "a BGZF file is \"a series of concatenated BGZF blocks\" whose data is compressed by deflate (SAM specification, section 4.1 \"The BGZF compression format\"), and a deflate block of type 11 is \"reserved (error)\" (RFC 1951, section 3.2.3): the block of the GERP table that holds the record's base opens with a deflate block of that type"
+notes = "Ensembl VEP's LoF plugin on GRCh37 is the LOFTEE repository's master branch, outside the VEP_plugins checkout: the run needs --extra-dir loftee_grch37=<checkout of that branch>, verified at commit c7a87dffe3b96a729d299ca3ccb1c25db7b44e30. The prepare steps build a synthetic GERP table of two rows (bgzip and tabix on the host), each row in a BGZF block of its own, and overwrite the first byte of the second block's compressed data with 0xff, which opens a deflate block of the reserved type, so no inflater reads the block; the index is the whole table's. The first block holds the base before the record and stays whole, since vep-rs reads a table's first lines as the plugin loads. The second holds the record's base, scored 181, one above the 180 at or under which the plugin filters END_TRUNC, so on the whole table both engines write LoF=HC with GERP_DIST:181. The record is a stop gain in the last exon of the two-exon ENST00000439427, the one transcript it is coding in, so the GERP walk is one read of the table and crosses no whole exon. The image's tabix, htslib 1.9, answers that read with one line on standard error, `[E::bgzf_uncompress] Inflate operation failed: invalid block type`, and exit status 0."
+
+# Two rows in the three columns `gerp_dist.pl` reads (chromosome, position, score), each compressed on its own.
+prepare = [
+  '''printf '21\t37443369\t1\n' | bgzip > "$STAGE/first.gz"''',
+  '''printf '21\t37443370\t181\n' | bgzip > "$STAGE/second.gz"''',
+  # The first stream ends in the 28-byte end marker, which a block that is not the last does not carry.
+  '''head -c "$(( $(wc -c < "$STAGE/first.gz") - 28 ))" "$STAGE/first.gz" > "$STAGE/first_block"''',
+  # The table the run reads: byte 19 of the second block, the first of its compressed data, is overwritten.
+  '''{ cat "$STAGE/first_block"; head -c 18 "$STAGE/second.gz"; printf '\xff'; tail -c +20 "$STAGE/second.gz"; } > "$STAGE/GERP_scores.synthetic.txt.gz"''',
+  # The index is the whole table's. It is written after the table the run reads, since `tabix` reports an index older than its file on standard error.
+  '''cat "$STAGE/first_block" "$STAGE/second.gz" > "$STAGE/whole.synthetic.txt.gz"''',
+  '''tabix -s 1 -b 2 -e 2 "$STAGE/whole.synthetic.txt.gz" && mv "$STAGE/whole.synthetic.txt.gz.tbi" "$STAGE/GERP_scores.synthetic.txt.gz.tbi"''',
+]
+
+# A stop gain in the last exon of CBR1's ENST00000439427, past the end of the second exon of the gene's three-exon transcripts.
+[input]
+format = "vcf"
+text = """
+21	37443370	last_exon_stop	A	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh37"
+json_cache = "tests/golden/116/GRCh37/json_cache"
+
+[run]
+flags = [
+  "--dir_plugins", "{loftee_grch37}",
+  "--plugin", "LoF,loftee_path:{loftee_grch37},gerp_file:{stage}/GERP_scores.synthetic.txt.gz,human_ancestor_fa:false,run_splice_predictions:0",
+]
+
+[compare]
+kind = "rows"
+where = { consequence = "stop_gained" }
+columns = ["Uploaded_variation", "Feature", "Consequence", "LoF", "LoF_filter", "LoF_flags", "LoF_info"]
+
+[expected]
+ensembl_vep = [
+  "last_exon_stop | ENST00000439427 | stop_gained | LC | END_TRUNC | - | GERP_DIST:0,BP_DIST:125,PERCENTILE:0.767225325884544,DIST_FROM_LAST_EXON:-122,50_BP_RULE:FAIL",
+]
+vep_rs = [
+  "last_exon_stop | ENST00000439427 | stop_gained | - | - | - | -",
+]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/plugins/loftee.rs::GerpSummer::sum_interval",
+    "crates/vep-builtins/src/plugins/loftee.rs::gerp_weighted_dist",
+]
+tests = [
+    "crates/vep-builtins/src/plugins/loftee.rs::tests::a_failed_gerp_row_loses_its_lof_fields_alone",
+    "crates/vep-builtins/src/plugins/loftee.rs::tests::a_tabix_gerp_read_failure_fails_the_row",
+]

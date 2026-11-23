@@ -1,0 +1,5 @@
+transcripts: gtf 5 cache 0 shared 0 gtf_only 5 cache_only 0
+  gencode_basic    agree         0  disagree       0  present gtf        0 cache        0
+  gencode_primary  agree         0  disagree       0  present gtf        0 cache        0
+  cds_start_NF     agree         0  disagree       0  present gtf        0 cache        0
+  cds_end_NF       agree         0  disagree       0  present gtf        0 cache        0

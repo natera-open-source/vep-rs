@@ -1,0 +1,22 @@
+Perl rows: 3
+Rust rows: 60
+Unique keys: 60
+
+DISCORD	21:1000	A	ENST002	consequence,cds_start	perl_cons=missense_variant	rust_cons=splice_region_variant&missense_variant	perl_cds=21-	perl_pep=S/I	rust_aa=S/I	perl_codon=/	rust_codon=AGT/ATT
+DISCORD	21:2000	T	ENST003	consequence,cds_start	perl_cons=stop_gained	rust_cons=missense_variant	perl_cds=31-	perl_pep=R/*	rust_aa=R/*	perl_codon=/	rust_codon=cGa/tGa
+
+============================================================
+SUMMARY
+============================================================
+Total compared:    3
+Total discordant:  2
+Missing in Rust:   0
+Missing in Perl:   57
+
+Field divergence counts:
+  consequence                2  (100.0%)
+  cds_start                  2  (100.0%)
+
+Top consequence divergence patterns:
+       1  perl=missense_variant rust=missense_variant,splice_region_variant
+       1  perl=stop_gained rust=missense_variant

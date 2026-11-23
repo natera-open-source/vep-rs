@@ -1,0 +1,35 @@
+{
+  "assembly": "IRGSP-1.0",
+  "cache_version": 63,
+  "contig_order": [
+    "9",
+    "Mt",
+    "Pt"
+  ],
+  "polyphen": "",
+  "regulatory": false,
+  "sift": "b",
+  "source_versions": {
+    "assembly": "IRGSP-1.0",
+    "sift": "5.2.2"
+  },
+  "species": "oryza_sativa",
+  "var_type": "tabix",
+  "variation_cols": [
+    "chr",
+    "variation_name",
+    "failed",
+    "somatic",
+    "start",
+    "end",
+    "allele_string",
+    "strand",
+    "clin_sig",
+    "phenotype_or_disease",
+    "clin_sig_allele",
+    "clin_sig_ref_allele",
+    "clinical_impact",
+    "pubmed",
+    "var_synonyms"
+  ]
+}

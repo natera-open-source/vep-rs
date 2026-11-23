@@ -6,7 +6,7 @@
 
 **What vep-rs does instead.** vep-rs writes the term of the transcript region whose genomic span holds the variant: `coding_sequence_variant` inside the coding sequence's span, and the UTR term inside a UTR's span. The row has no cDNA, CDS or protein position, since the model carries none for those bases. The term Ensembl VEP writes once the span touches a mapped base is the term vep-rs writes throughout the span. On a non-coding model both engines write `non_coding_transcript_exon_variant`: that term reads the exon's genomic span, not the mapper.
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2, `ensembl-variation` at release/116, `ensembl` at release/116):
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.3, `ensembl-variation` at release/116, `ensembl` at release/116):
 
 - `Bio/EnsEMBL/TranscriptMapper.pm`, lines 168-221, `_load_mapper`: a deletion edit splits the exon's map pair and, at lines 213-218, moves the genomic start past the deleted bases without a cDNA pair for them. The cache stores that mapper (`mapper` under `variation_effect_feature_cache`), so `genomic2cdna` (line 296) returns a `Bio::EnsEMBL::Mapper::Gap` for any span inside them.
 - `Bio/EnsEMBL/Variation/BaseTranscriptVariation.pm`, lines 505-528, `cds_coords`, and lines 478-500, `cdna_coords`: the gap is the whole result.

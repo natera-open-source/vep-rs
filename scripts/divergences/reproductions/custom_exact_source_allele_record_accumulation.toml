@@ -1,14 +1,17 @@
 entry = "custom_exact_source_allele_record_accumulation"
 page = "docs/custom-annotation.md#1-an-exact-custom-record-repeated-once-per-row-beside-a-whole-variant-record-of-the-same-name"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
-input_class = "unobserved"
-input_class_basis = "well-formed under the VCF 4.2 specification, sections 1.4.1 \"Fixed fields\" and 3 \"INFO keys used for structural variants\" (a symbolic deletion record beside a substitution record in one source), and the exact type of --custom (Ensembl VEP documentation, \"Custom annotations\", Options, type); not seen in the measured datasets"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "observed"
+input_class_basis = "2 · 405.6 per million · 0 flag sets, 80 corpora"
 notes = "The structural record svrec matches by span and belongs to the whole variant; the substitution record seqrec matches the allele G. The variant has nine transcript rows and every row prints the same list; the compare reads the first transcript's. mix_FILTER and mix_TAG repeat with it."
-# An exact VCF source holding a deletion record spanning the variant and a substitution record equal to it.
+# An exact VCF source holding a deletion record spanning the variant and a substitution record equal to it,
+# and a second one holding that substitution record alone.
 prepare = [
   "printf '##fileformat=VCFv4.2\\n##INFO=<ID=SVTYPE,Number=1,Type=String,Description=\"Type of structural variant\">\\n##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position of the variant\">\\n##INFO=<ID=TAG,Number=1,Type=String,Description=\"Record tag\">\\n##contig=<ID=21>\\n#CHROM\\tPOS\\tID\\tREF\\tALT\\tQUAL\\tFILTER\\tINFO\\n21\\t10542414\\tsvrec\\tN\\t<DEL>\\t.\\tPASS\\tSVTYPE=DEL;END=10542415;TAG=sv\\n21\\t10542415\\tseqrec\\tA\\tG\\t.\\tPASS\\tTAG=seq\\n' | bgzip > \"$STAGE/mix.vcf.gz\"",
   "tabix -p vcf \"$STAGE/mix.vcf.gz\"",
+  "printf '##fileformat=VCFv4.2\\n##INFO=<ID=TAG,Number=1,Type=String,Description=\"Record tag\">\\n##contig=<ID=21>\\n#CHROM\\tPOS\\tID\\tREF\\tALT\\tQUAL\\tFILTER\\tINFO\\n21\\t10542415\\tseqrec\\tA\\tG\\t.\\tPASS\\tTAG=seq\\n' | bgzip > \"$STAGE/allele.vcf.gz\"",
+  "tabix -p vcf \"$STAGE/allele.vcf.gz\"",
 ]
 
 [input]
@@ -34,3 +37,42 @@ where = { record = "21_10542415_A/G", feature = "ENST00000427445" }
 [expected]
 ensembl_vep = ["svrec,seqrec,seqrec,seqrec,seqrec,seqrec,seqrec,seqrec,seqrec,seqrec"]
 vep_rs = ["svrec,seqrec"]
+
+[[also]]
+notes = "The substitution record alone, in a source whose short name spells the list --individual_zyg sets on the variant: no record of the source belongs to the whole variant, the list is the one sample's zygosity, and each of the nine rows pushes seqrec onto it."
+
+[also.input]
+format = "vcf"
+samples = ["S1"]
+text = """
+21	10542415	.	A	G	.	.	.	GT	0|1
+"""
+
+[also.run]
+flags = ["--individual_zyg", "all", "--custom", "file={stage}/allele.vcf.gz,short_name=ZYG,format=vcf,type=exact,fields=TAG"]
+format = "default"
+
+[also.compare]
+kind = "field"
+field = "ZYG"
+where = { record = "21_10542415_A/G", feature = "ENST00000427445" }
+
+[also.expected]
+ensembl_vep = ["S1:HET,seqrec,seqrec,seqrec,seqrec,seqrec,seqrec,seqrec,seqrec,seqrec"]
+vep_rs = ["S1:HET,seqrec"]
+
+[implementation]
+code = [
+    "crates/vep-io/src/output/fields.rs::custom_list_items",
+    "crates/vep-io/src/output/fields.rs::custom_record_items",
+    "crates/vep-io/src/output/fields.rs::custom_record_prints",
+    "crates/vep-io/src/output/fields.rs::list_beside_custom_values",
+    "crates/vep-io/src/output/fields.rs::write_list_beside_custom_values",
+]
+tests = [
+    "crates/vep-cli/tests/custom_key_named_as_a_list_field.rs::a_custom_key_named_nearest_lists_the_alleles_record_once_after_the_nearest_names",
+    "crates/vep-cli/tests/custom_key_named_as_a_list_field.rs::a_custom_key_named_zyg_lists_the_alleles_record_once_after_the_samples_zygosities",
+    "crates/vep-cli/tests/custom_key_named_as_a_list_field.rs::the_reproduction_run_under_a_key_named_zyg_lists_the_alleles_record_once_on_each_row",
+    "crates/vep-io/src/output/fields.rs::tests::exact_record_fields_stay_off_a_reference_allele_row",
+    "crates/vep-io/src/output/fields.rs::tests::whole_record_custom_records_list_before_the_rows_allele_records",
+]

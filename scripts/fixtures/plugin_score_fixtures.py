@@ -6,7 +6,9 @@ plugins are verified on made-up fixtures instead: a file with the preamble, head
 column layout its shape lists below, bgzip-compressed and tabix-indexed, whose values are
 fabricated. This tool writes one such file into `<corpus>/data/` from `variants.vcf`,
 deterministically from `--seed`, so a regeneration from the same input and seed writes the same
-bytes and the expected outputs committed beside it stay valid.
+bytes and the expected outputs committed beside it stay valid. The loftee_gerp shape writes the
+conservation table LoFTEE's `master` branch reads, with made-up scores, from the corpus's
+`json_cache` instead.
 
 Shapes:
 
@@ -64,6 +66,13 @@ Shapes:
                 the same layout for the alleles that are not a single base change, one row
                 per allele and per listed symbol, the alleles as the VCF writes them (the
                 anchor base kept); index `tabix -p vcf`
+    loftee_gerp the conservation table of LoFTEE's `master` branch, which runs
+                `tabix <gerp_file> chr:start-end` and adds up the third tab-separated field
+                of every row returned (gerp_dist.pl:92-96): a first line that says the
+                scores are fabricated, a `#chrom pos score` header, then one row a base
+                (chromosome, position, score) over every exon of the corpus's `json_cache`
+                transcripts with `--exon-flank` bases either side;
+                index `tabix -s 1 -b 2 -e 2`
 
 A site is every record of `variants.vcf` whose REF and ALT are bases (a symbolic, `*` or
 breakend allele writes nothing, and a record carrying a symbolic or breakend allele is a
@@ -77,6 +86,14 @@ and the row's chromosome, position, reference and alternate allele (and, for spl
 its transcript id; for the spliceai shapes, its gene symbol; for cadd_sv, its start, end
 and type in place of the position and alleles) alone, so a row's score does not move when
 another row is added.
+
+The loftee_gerp shape reads no record: its rows are the bases of the cached transcripts'
+exons, the bases the plugin's END_TRUNC walk totals, under the cache's chromosome names. A
+base's score, two decimals between -3 and 5, derives from the seed, the chromosome as written
+and the position alone, so tables written from one seed over two caches carry the same score
+at every base both hold. `--exon-flank N` (default 50) keeps N scored bases either side of
+every exon, so a read one base past an exon's end moves a total. A base named by `--miss
+chr:pos` gets no row.
 
 The splicevault shape reads `--transcripts <file>`, a two-column tab-separated file of
 `chr:pos` (the input's spelling and VCF position) and one transcript id per line: the
@@ -135,6 +152,15 @@ with the scores of every entry drawn again from the seed, the entry's record and
 place, so the copies of a line name the same alleles and symbols with other scores. A site
 stands under this option or under `--repeat-lines`, not both.
 
+`--entry-order CHR:POS=I[:D],I[:D],...` (the spliceai shapes; repeatable) writes one record
+per allele of the site, its `SpliceAI` key holding the listed entries in that order. Entry
+`I` is the allele's record of place `I`, the records counted from 1 in the file's order (by
+symbol), with the scores that record carries; entry `I:D` names the same allele and symbol
+with scores drawn again from the seed, the record and the draw `D` (draw 1 is the record's
+own), so one symbol can stand in several entries of a record with equal or with other
+scores. A site stands under this option or under one of the four above, not both, and may
+stand under `--repeat-lines` or `--rescore-lines` beside it.
+
 The file is written under `<corpus>/data/`, or under the directory `--dir` names (a corpus
 that passes `--dir_plugins {plugins}` keeps its fixtures under `plugin_data/`, the directory
 that placeholder names for vep-rs).
@@ -144,8 +170,8 @@ the sha256 of both files (and of the transcripts file), the seed, the shape and 
 counts go under `plugin_fixtures.<name>` in the corpus's provenance.json, every other key
 of which is kept; a mitochondrial name, header names, the second stream's site, the sites
 of the other record forms and the sites whose lines stand more than once, each with its
-count, are recorded there when given. An existing fixture file is overwritten only under
---force.
+count, are recorded there when given, and so is the exon flank of a loftee_gerp table. An
+existing fixture file is overwritten only under --force.
 
 Usage:
     plugin_score_fixtures.py --corpus tests/golden/116/<corpus> --shape primateai \\
@@ -166,13 +192,17 @@ Usage:
         --symbols tests/golden/116/<corpus>/plugin_data/spliceai_symbols.tsv \\
         [--join-entries 21:17619500[=2]]... [--no-information 21:18279000]... \\
         [--join-alternates 21:21324500]... [--any-base-reference 21:26387000]... \\
+        [--entry-order 21:17620200=1,1:2]... \\
         [--repeat-lines 21:17619500=2]... [--rescore-lines 21:17619900=2]... \\
         [--second-stream-at 21:18279000]
+    plugin_score_fixtures.py --corpus tests/golden/116/<corpus> --shape loftee_gerp \\
+        --name GERP_scores.synthetic.txt.gz --seed 37 --dir plugin_data [--exon-flank 50]
 """
 
 from __future__ import annotations
 
 import argparse
+import gzip
 import hashlib
 import json
 import random
@@ -188,7 +218,8 @@ from pathlib import Path
 
 GENERATOR = "scripts/fixtures/plugin_score_fixtures.py"
 SPLICEAI_SHAPES = ("spliceai_snv", "spliceai_indel")
-SHAPES = ("primateai", "clinpred", "bayesdel", "splicevault", "cadd_snv", "cadd_indel", "cadd_sv", *SPLICEAI_SHAPES)
+LOFTEE_GERP_SHAPE = "loftee_gerp"
+SHAPES = ("primateai", "clinpred", "bayesdel", "splicevault", "cadd_snv", "cadd_indel", "cadd_sv", *SPLICEAI_SHAPES, LOFTEE_GERP_SHAPE)
 CADD_SHAPES = ("cadd_snv", "cadd_indel", "cadd_sv")
 CADD_ASSEMBLIES = ("GRCh37", "GRCh38")
 # The shapes whose plugin splits a row into its columns by place and reads no header
@@ -257,6 +288,15 @@ INDEX_ARGS = {
     "spliceai_indel": ["-p", "vcf"],
 }
 DEFAULT_INDEX_ARGS = ["-s", "1", "-b", "2", "-e", "2"]
+LOFTEE_GERP_MARKER = (
+    "## LoFTEE GERP layout: a synthetic conservation table for a vep-rs golden corpus; "
+    "the scores are fabricated from a seed and carry no meaning"
+)
+LOFTEE_GERP_HEADER = "#chrom\tpos\tscore"
+# The fabricated score's bounds in hundredths. Their mean is one a base, so walks of a few
+# hundred bases total on both sides of the 180 the `master` branch compares with (LoF.pm:268).
+LOFTEE_GERP_HUNDREDTHS = (-300, 500)
+DEFAULT_EXON_FLANK = 50
 SPLICEVAULT_SITE_TYPES = ("Donor_loss", "Acceptor_loss")
 SPLICEVAULT_EVENT_TYPES = ("ES", "CD", "CA")
 SPLICEVAULT_FRAMES = ("Frameshift", "inFrame")
@@ -382,6 +422,7 @@ HEADERS = {
     "splicevault": [SPLICEVAULT_HEADER],
     "spliceai_snv": SPLICEAI_HEADER,
     "spliceai_indel": SPLICEAI_HEADER,
+    LOFTEE_GERP_SHAPE: [LOFTEE_GERP_MARKER, LOFTEE_GERP_HEADER],
 }
 
 
@@ -564,7 +605,9 @@ def spliceai_row(rng: random.Random, chrom: str, pos: int, ref: str, alt: str, s
 class RecordForms:
     """The sites, in the input's spelling, whose records a spliceai shape writes in another
     form of the layout: `join_entries` (a site and the entries per record, `None` for every
-    entry in one), `no_information`, `join_alternates` and `any_base_reference`; and
+    entry in one), `no_information`, `join_alternates`, `any_base_reference` and
+    `entry_order` (a site and the entries of its one record per allele, each the place of a
+    symbol among the allele's records and the draw of its scores); and
     `repeat_lines`, the sites whose record lines stand more than once, each with the times
     a line stands, in whichever form the site's lines take, and `rescore_lines`, the sites
     whose further copies of a line carry scores drawn again."""
@@ -573,12 +616,13 @@ class RecordForms:
     no_information: frozenset[str] = frozenset()
     join_alternates: frozenset[str] = frozenset()
     any_base_reference: frozenset[str] = frozenset()
+    entry_order: dict[str, tuple[tuple[int, int], ...]] = field(default_factory=dict)
     repeat_lines: dict[str, int] = field(default_factory=dict)
     rescore_lines: dict[str, int] = field(default_factory=dict)
 
     def of(self, site: str) -> str | None:
         """The form a site's records take, by its option's name."""
-        for name in ("join_entries", "no_information", "join_alternates", "any_base_reference"):
+        for name in ("join_entries", "no_information", "join_alternates", "any_base_reference", "entry_order"):
             if site in getattr(self, name):
                 return name
         return None
@@ -586,7 +630,7 @@ class RecordForms:
     def sites(self) -> dict[str, str]:
         """Every named site with the option that names it, the option of its form where the
         site stands under one beside `--repeat-lines` or `--rescore-lines`."""
-        named = {site: f"--{name.replace('_', '-')}" for name in ("join_entries", "no_information", "join_alternates", "any_base_reference") for site in getattr(self, name)}
+        named = {site: f"--{name.replace('_', '-')}" for name in ("join_entries", "no_information", "join_alternates", "any_base_reference", "entry_order") for site in getattr(self, name)}
         return {**{site: "--repeat-lines" for site in self.repeat_lines}, **{site: "--rescore-lines" for site in self.rescore_lines}, **named}
 
 
@@ -598,20 +642,24 @@ def record_forms_for(
     any_base_reference: list[str],
     repeat_lines: list[str] | None = None,
     rescore_lines: list[str] | None = None,
+    entry_order: list[str] | None = None,
 ) -> RecordForms | None:
-    """The record forms the four options name and the sites `--repeat-lines` names, `None`
+    """The record forms the five options name and the sites `--repeat-lines` names, `None`
     when none is given; refused for a shape that is not a spliceai one, for the two
     single-base forms under the indel shape, for a site that is not `chr:pos`, for an entry
-    count below two and for a site under two of the four options. A site may stand under
+    count below two and for a site under two of the five options. A site may stand under
     `--repeat-lines` or `--rescore-lines` beside one of them; a word of either that is not
     `chr:pos=N`, a count below two, a site named twice by one of the two and a site named
-    by both are refused."""
+    by both are refused. A word of `--entry-order` is `chr:pos=I[:D],I[:D],...`: two or
+    more entries, each the place `I` of a symbol and the draw `D` of its scores (the
+    record's own without one), both counted from 1; any other word and a site named twice
+    are refused."""
     given = {"--join-entries": join_entries, "--no-information": no_information, "--join-alternates": join_alternates, "--any-base-reference": any_base_reference}
     counted = {"--repeat-lines": repeat_lines or [], "--rescore-lines": rescore_lines or []}
-    if not any(given.values()) and not any(counted.values()):
+    if not any(given.values()) and not any(counted.values()) and not entry_order:
         return None
     if shape not in SPLICEAI_SHAPES:
-        raise fail(f"{', '.join([*given, *counted])} are given with --shape spliceai_snv or spliceai_indel and with no other shape")
+        raise fail(f"{', '.join([*given, '--entry-order', *counted])} are given with --shape spliceai_snv or spliceai_indel and with no other shape")
     for option in ("--join-alternates", "--any-base-reference"):
         if given[option] and shape != "spliceai_snv":
             raise fail(f"{option} is given with --shape spliceai_snv: it writes the records of a single-base site")
@@ -628,6 +676,22 @@ def record_forms_for(
                 raise fail(f"{site} stands under {seen[site]} and {option}; a site takes one form")
             if option == "--join-entries":
                 joined[site] = int(count) if count else None
+    ordered: dict[str, tuple[tuple[int, int], ...]] = {}
+    for named in entry_order or []:
+        site, _, word = named.partition("=")
+        slots = [slot.partition(":") for slot in word.split(",")] if word else []
+        if not SITE.fullmatch(site) or not slots or any(not place.isdecimal() or (colon and not draw.isdecimal()) for place, colon, draw in slots):
+            raise fail(f"--entry-order names a site and its entries as chr:pos=I[:D],I[:D],..., got {named!r}")
+        entries = tuple((int(place), int(draw) if colon else 1) for place, colon, draw in slots)
+        if len(entries) < 2:
+            raise fail(f"--entry-order {named}: a record of several entries holds two or more")
+        if any(place < 1 or draw < 1 for place, draw in entries):
+            raise fail(f"--entry-order {named}: a place and a draw count from 1")
+        if seen.setdefault(site, "--entry-order") != "--entry-order":
+            raise fail(f"{site} stands under {seen[site]} and --entry-order; a site takes one form")
+        if site in ordered:
+            raise fail(f"--entry-order names {site} twice; a site's entries stand in one order")
+        ordered[site] = entries
     times: dict[str, dict[str, int]] = {option: {} for option in counted}
     for option, words in counted.items():
         for named in words:
@@ -642,11 +706,14 @@ def record_forms_for(
     for site in times["--rescore-lines"]:
         if site in times["--repeat-lines"]:
             raise fail(f"{site} stands under --repeat-lines and --rescore-lines; the copies of a site's lines are written one way")
-    return RecordForms(joined, frozenset(no_information), frozenset(join_alternates), frozenset(any_base_reference), times["--repeat-lines"], times["--rescore-lines"])
+    return RecordForms(joined, frozenset(no_information), frozenset(join_alternates), frozenset(any_base_reference), ordered, times["--repeat-lines"], times["--rescore-lines"])
 
 
 def in_record_forms(
-    ordered: list[tuple[str, list[str]]], forms: RecordForms, rescored: Callable[[list[str], int], str] | None = None
+    ordered: list[tuple[str, list[str]]],
+    forms: RecordForms,
+    rescored: Callable[[list[str], int], str] | None = None,
+    drawn: Callable[[list[str], int], str] | None = None,
 ) -> tuple[list[str], dict[str, int]]:
     """The rows of `ordered` (each a site in the input's spelling and a record's eight
     cells, in file order) with the sites `forms` names written in their form, and the
@@ -656,11 +723,17 @@ def in_record_forms(
     form counts the lines the file holds in it, `repeat_lines` the lines of its sites. A
     site under `rescore_lines` holds its lines as many times in the same places, each copy
     behind the first being `rescored(cells, place)`, the line of those cells with its
-    entries' scores drawn again for that place (two for the second copy). A named site
-    without a record, and a site joined into records of several entries whose alleles
-    have one record each, are refused."""
+    entries' scores drawn again for that place (two for the second copy). A site under `entry_order` holds one record per
+    allele whose entries are the ones its word lists, in that order: entry `I:D` is the
+    value of the allele's record of place `I`, the records standing in the order of
+    `ordered`, as that record writes it for draw 1 and else `drawn(cells, D)`, the entry of
+    those cells with its scores drawn again for that draw, so one symbol can stand in
+    several entries of a record with equal or with other scores. A named site
+    without a record, a site joined into records of several entries whose alleles
+    have one record each, and an entry whose place is past the allele's records are
+    refused."""
     rows: list[str] = []
-    written = {name: 0 for name in ("join_entries", "no_information", "join_alternates", "any_base_reference", "repeat_lines", "rescore_lines") if getattr(forms, name)}
+    written = {name: 0 for name in ("join_entries", "no_information", "join_alternates", "any_base_reference", "entry_order", "repeat_lines", "rescore_lines") if getattr(forms, name)}
     with_rows = {site for site, _ in ordered}
     for site, option in forms.sites().items():
         if site not in with_rows:
@@ -687,6 +760,18 @@ def in_record_forms(
                 same_allele = list(of_allele)
                 if form == "no_information":
                     rows.append("\t".join([*same_allele[0][:7], "."]))
+                    written[form] += 1
+                    continue
+                if form == "entry_order":
+                    if drawn is None:
+                        raise fail(f"--entry-order names {site}; an entry of a further draw takes its scores from the shape's seed")
+                    listed = []
+                    for place, draw in forms.entry_order[site]:
+                        if place > len(same_allele):
+                            raise fail(f"--entry-order names entry {place} of {site}, whose alleles have {len(same_allele)} record{'' if len(same_allele) == 1 else 's'} each")
+                        cells = same_allele[place - 1]
+                        listed.append(entry(cells) if draw == 1 else drawn(cells, draw))
+                    rows.append("\t".join([*same_allele[0][:7], "SpliceAI=" + ",".join(listed)]))
                     written[form] += 1
                     continue
                 if len(same_allele) < 2:
@@ -722,7 +807,8 @@ def spliceai_rows(records: list[Record], symbols: dict[str, list[str]], shape: s
     form ([`in_record_forms`]): the class counts the rows then written, and each form given
     counts its records under its own name. A further copy of a line under `rescore_lines`
     takes each entry from a row seeded as the entry's own record is, with the copy's place
-    behind the symbol."""
+    behind the symbol, and an entry of a further draw under `entry_order` from a row seeded
+    with the word `entry` and the draw behind the symbol."""
     counts = {"snv": 0, "non_snv": 0, "miss": 0}
     keyed: dict[tuple, str] = {}
     site_of: dict[tuple, str] = {}
@@ -761,7 +847,13 @@ def spliceai_rows(records: list[Record], symbols: dict[str, list[str]], shape: s
             entries.append(spliceai_row(rng, chrom, pos, ref, alt, symbol).split("\t")[7].removeprefix("SpliceAI="))
         return "\t".join([*cells[:7], "SpliceAI=" + ",".join(entries)])
 
-    rows, written = in_record_forms([(site_of[key], keyed[key].split("\t")) for key in sorted(keyed)], forms, rescored)
+    def drawn(cells: list[str], draw: int) -> str:
+        chrom, pos, ref = cells[0], int(cells[1]), cells[3]
+        alt, symbol = cells[7].removeprefix("SpliceAI=").split("|")[:2]
+        rng = score_rng(seed, shape, chrom, pos, ref, f"{alt}:{symbol}:entry{draw}")
+        return spliceai_row(rng, chrom, pos, ref, alt, symbol).split("\t")[7].removeprefix("SpliceAI=")
+
+    rows, written = in_record_forms([(site_of[key], keyed[key].split("\t")) for key in sorted(keyed)], forms, rescored, drawn)
     counts["snv" if wants_snv else "non_snv"] = len(rows)
     return rows, {**counts, **written}
 
@@ -923,6 +1015,57 @@ def cadd_sv_rows(records: list[Structural], seed: int, chr_style: str, misses: s
     return [keyed[key] for key in sorted(keyed)], counts
 
 
+def read_exon_regions(cache: Path, flank: int) -> dict[str, list[tuple[int, int]]]:
+    """Per chromosome directory of a JSON cache, the exons of every cached transcript with
+    `flank` bases either side, merged: sorted 1-based inclusive spans that neither overlap
+    nor touch, none starting below 1. A chromosome without an exon is left out."""
+    regions: dict[str, list[tuple[int, int]]] = {}
+    for chrom_dir in sorted(path for path in (cache / "transcripts").iterdir() if path.is_dir()):
+        spans: list[tuple[int, int]] = []
+        for shard in sorted(chrom_dir.iterdir()):
+            opener = gzip.open if shard.suffix == ".gz" else open
+            with opener(shard, "rt", encoding="utf-8") as handle:
+                transcripts = json.load(handle)
+            for transcript in transcripts:
+                for exon in (transcript or {}).get("exons") or []:
+                    spans.append((max(int(exon["start"]) - flank, 1), int(exon["end"]) + flank))
+        merged: list[tuple[int, int]] = []
+        for start, end in sorted(spans):
+            if merged and start <= merged[-1][1] + 1:
+                merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+            else:
+                merged.append((start, end))
+        if merged:
+            regions[chrom_dir.name] = merged
+    return regions
+
+
+def loftee_gerp_score(seed: int, chrom: str, pos: int) -> str:
+    """The fabricated score of one base, two decimals within `LOFTEE_GERP_HUNDREDTHS`: a
+    function of the seed, the chromosome as the file writes it and the position."""
+    hundredths = score_rng(seed, LOFTEE_GERP_SHAPE, chrom, pos, "", "").randint(*LOFTEE_GERP_HUNDREDTHS)
+    return f"{hundredths / 100:.2f}"
+
+
+def loftee_gerp_rows(regions: dict[str, list[tuple[int, int]]], seed: int, chr_style: str, misses: set[str]) -> tuple[list[str], dict[str, int]]:
+    """The rows of the loftee_gerp shape, one per base of `regions`, each chromosome's rows
+    together and in position order as tabix needs them; a base `--miss` names in the cache's
+    spelling gets none. Counted as `bases` (the rows), `regions` and `miss`."""
+    counts = {"bases": 0, "regions": 0, "miss": 0}
+    rows: list[str] = []
+    for chrom in sorted(regions, key=natural_key):
+        name = spell(chrom, chr_style)
+        for start, end in regions[chrom]:
+            counts["regions"] += 1
+            for pos in range(start, end + 1):
+                if f"{chrom}:{pos}" in misses:
+                    counts["miss"] += 1
+                    continue
+                rows.append(f"{name}\t{pos}\t{loftee_gerp_score(seed, name, pos)}")
+    counts["bases"] = len(rows)
+    return rows, counts
+
+
 def with_mitochondrial_name(rows: list[str], name: str) -> list[str]:
     """`rows` with the mitochondrial contig, in any of its spellings, written as `name`:
     the first column alone changes, so a row keeps the score its own spelling seeds, and
@@ -1050,13 +1193,15 @@ def update_provenance(corpus: Path, out: Path, args: argparse.Namespace, counts:
     }
     if args.assembly:
         entry["assembly"] = args.assembly
+    if args.exon_flank is not None:
+        entry["exon_flank"] = args.exon_flank
     if args.mitochondrial_name:
         entry["mitochondrial_name"] = args.mitochondrial_name
     if args.header_names:
         entry["header_names"] = args.header_names.split(",")
     if args.second_stream_at:
         entry["second_stream_at"] = args.second_stream_at
-    forms = {name: sorted(given) for name in ("join_entries", "no_information", "join_alternates", "any_base_reference", "repeat_lines", "rescore_lines") if (given := getattr(args, name))}
+    forms = {name: sorted(given) for name in ("join_entries", "no_information", "join_alternates", "any_base_reference", "entry_order", "repeat_lines", "rescore_lines") if (given := getattr(args, name))}
     if forms:
         entry["record_forms"] = forms
     for key, given in (("transcripts", args.transcripts), ("symbols", args.symbols)):
@@ -1089,10 +1234,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-information", action="append", metavar="CHR:POS", help="spliceai shapes: the site's records written with the missing-value INFO (repeatable)")
     ap.add_argument("--join-alternates", action="append", metavar="CHR:POS", help="spliceai_snv: the site's records joined into one whose ALT lists the alternate bases (repeatable)")
     ap.add_argument("--any-base-reference", action="append", metavar="CHR:POS", help="spliceai_snv: the site's records written with N as their reference allele (repeatable)")
+    ap.add_argument("--entry-order", action="append", metavar="CHR:POS=I[:D],I[:D],...", help="spliceai shapes: the site's records joined into one record per allele whose entries are the listed ones in that order, I the place of a symbol among the allele's records and D the draw of its scores (the record's own without D) (repeatable)")
     ap.add_argument("--repeat-lines", action="append", metavar="CHR:POS=N", help="spliceai shapes: every record line of the site, in its plain or its other form, written N times next to each other (repeatable)")
     ap.add_argument("--rescore-lines", action="append", metavar="CHR:POS=N", help="spliceai shapes: every record line of the site written N times next to each other, each copy behind the first with its entries' scores drawn again (repeatable)")
     ap.add_argument("--second-stream-at", metavar="CHR:POS", help="the file's first row at this site opens a second bgzip stream joined behind the first")
     ap.add_argument("--assembly", choices=CADD_ASSEMBLIES, help="cadd shapes: the build the first line names (cadd_sv is GRCh38 alone)")
+    ap.add_argument("--exon-flank", type=int, metavar="N", help=f"loftee_gerp: the scored bases kept either side of every exon (default: {DEFAULT_EXON_FLANK})")
     ap.add_argument("--force", action="store_true", help="overwrite an existing fixture file")
     args = ap.parse_args(argv)
 
@@ -1118,8 +1265,18 @@ def main(argv: list[str] | None = None) -> int:
         raise fail("--assembly is given with a cadd shape and with no other shape")
     if args.shape == "cadd_sv" and args.assembly != "GRCh38":
         raise fail("cadd_sv is written for GRCh38 alone")
+    cache = corpus / "json_cache"
+    if args.shape == LOFTEE_GERP_SHAPE:
+        if args.exon_flank is None:
+            args.exon_flank = DEFAULT_EXON_FLANK
+        if args.exon_flank < 0:
+            raise fail(f"--exon-flank is a count of bases, got {args.exon_flank}")
+        if not (cache / "transcripts").is_dir():
+            raise fail(f"corpus has no json_cache/transcripts, whose exons the loftee_gerp shape scores: {corpus}")
+    elif args.exon_flank is not None:
+        raise fail("--exon-flank is given with --shape loftee_gerp and with no other shape")
     header_names = header_names_for(args.shape, args.header_names) if args.header_names is not None else None
-    forms = record_forms_for(args.shape, args.join_entries or [], args.no_information or [], args.join_alternates or [], args.any_base_reference or [], args.repeat_lines or [], args.rescore_lines or [])
+    forms = record_forms_for(args.shape, args.join_entries or [], args.no_information or [], args.join_alternates or [], args.any_base_reference or [], args.repeat_lines or [], args.rescore_lines or [], args.entry_order or [])
     out = corpus / args.dir / args.name
     if out.exists() and not args.force:
         raise fail(f"{out} exists; pass --force to overwrite it")
@@ -1136,6 +1293,10 @@ def main(argv: list[str] | None = None) -> int:
         rows, counts = cadd_indel_rows(read_records(vcf), args.seed, args.chr_style, misses)
     elif args.shape == "cadd_sv":
         rows, counts = cadd_sv_rows(read_structural(vcf), args.seed, args.chr_style, misses)
+    elif args.shape == LOFTEE_GERP_SHAPE:
+        rows, counts = loftee_gerp_rows(read_exon_regions(cache, args.exon_flank), args.seed, args.chr_style, misses)
+        if not rows:
+            raise fail(f"{cache}: no exon base to score (no cached exon, or every base missed)")
     else:
         rows, counts = rows_for(read_alleles(vcf), args.shape, args.seed, args.chr_style, misses)
     if not rows:

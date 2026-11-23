@@ -20,13 +20,13 @@ An upstream ORF whose stop codon begins at the moved codon's second base is read
 
 **The class it produces.** `utrannotator_lost_start_after_insertion`: a `5UTR_consequence` that is the lost-start term on Ensembl VEP's row alone, where the row's `5UTR_annotation` names one codon and the insertion only moves that codon on. It is set aside with the row's `5UTR_annotation` and counted once per row. The concordance figures score consequence sets and never see the field, so nothing is set aside in them.
 
-**How often the shape occurs.** The index, [Intended divergences from Ensembl VEP](../intended-divergences.md), places this entry at its tier 2: ordinary data carries the shape, and the difference needs a plugin. The shape a record alone shows is an insertion. Of the 15,646,481 records of the five chromosome 21 datasets the index counts shapes on, 996,643 are insertions (63,698 per million), and 93 of the golden corpora hold one. The 5' UTR sequence decides whether it only moves a start codon on. Four committed flag sets of the golden corpora run the plugin, two in each UTRAnnotator corpus. On the genome-wide ClinVar files Ensembl VEP 116.2 reports such a codon lost on 89 rows (GRCh37) and 210 rows (GRCh38).
+**How often the shape occurs.** The index, [Intended divergences from Ensembl VEP](../intended-divergences.md), places this entry at its tier 2: ordinary data carries the shape, and the difference needs a plugin. The shape a record alone shows is an insertion. Of the 15,646,481 records of the five chromosome 21 datasets the index counts shapes on, 996,643 are insertions (63,698 per million), and 132 of the golden corpora hold one. The 5' UTR sequence decides whether it only moves a start codon on. Four committed flag sets of the golden corpora run the plugin, two in each UTRAnnotator corpus. On the genome-wide ClinVar files Ensembl VEP 116.3 reports such a codon lost on 89 rows (GRCh37) and 210 rows (GRCh38).
 
 Tuple, pair, set aside, charged and the other scoring terms are defined in [How to read the counts](../intended-divergences.md#how-to-read-the-counts).
 
 ## 1. Three bases inserted directly before an upstream start codon
 
-**In short.** The constructed record `21 10524582 A ACCC` inserts three bases between cDNA positions 145 and 146 of `ENST00000427445`. The upstream ORF's `ATG` begins at cDNA position 146 and is untouched. Ensembl VEP 116.2 reports that start codon lost; vep-rs reports nothing, since the codon stands whole three bases on and no other analysis fires.
+**In short.** The constructed record `21 10524582 A ACCC` inserts three bases between cDNA positions 145 and 146 of `ENST00000427445`. The upstream ORF's `ATG` begins at cDNA position 146 and is untouched. Ensembl VEP 116.3 reports that start codon lost; vep-rs reports nothing, since the codon stands whole three bases on and no other analysis fires.
 
 ### 1.1 What a reader needs to know first
 
@@ -81,7 +81,7 @@ Ensembl VEP writes `5UTR_consequence=5_prime_UTR_premature_start_codon_loss_vari
 
 ### 1.7 How the comparator treats this class
 
-The format comparator (`scripts/concordance/compare_vep_formats.py`) applies `utrannotator_lost_start_after_insertion` when a comparison case names it. It sets a row's `5UTR_consequence` and `5UTR_annotation` aside, counted once per row, when three things hold. Ensembl VEP's value is the lost-start term and its annotation names one `CapDistanceToStart`. The row's two cDNA positions are an insertion's two flanking bases, and that number is the lower of them, or lies one below it on a row whose allele ends with `A`, or two below it on a row whose allele ends with `AT`. vep-rs's row carries the plugin's counts and does not report a lost start.
+The format comparator (`tools/vep-formats-compare`) applies `utrannotator_lost_start_after_insertion` when a comparison case names it. It sets a row's `5UTR_consequence` and `5UTR_annotation` aside, counted once per row, when three things hold. Ensembl VEP's value is the lost-start term and its annotation names one `CapDistanceToStart`. The row's two cDNA positions are an insertion's two flanking bases, and that number is the lower of them, or lies one below it on a row whose allele ends with `A`, or two below it on a row whose allele ends with `AT`. vep-rs's row carries the plugin's counts and does not report a lost start.
 
 The class reads the row alone. The lower cDNA position of an insertion's row is the 5' UTR index of the base after the insertion, so a codon reported at that index begins directly after it. A codon reported one or two below it holds the insertion after its first or second base, and the allele's last bases say whether it stands whole further on. The allele is read on the transcript's strand, reverse-complemented where the row's `STRAND` is `-1`; a row that states no strand is read at the codon's own index alone.
 
@@ -93,7 +93,7 @@ The `GRCh38-plugin-utr-annotator` and `GRCh37-plugin-utr-annotator` golden corpo
 
 ## 2. Three bases inserted after the first base of an upstream start codon
 
-**In short.** The constructed record `21 14210906 A ATGG` inserts three bases between cDNA positions 49 and 50 of `ENST00000400211`, a reverse-strand transcript, after the `A` of the upstream ORF's `ATG` at cDNA position 49. Read on the transcript's strand the inserted bases end with `A`, so the changed sequence is the reference with three bases directly before the codon. Ensembl VEP 116.2 reports that start codon lost; vep-rs reports nothing.
+**In short.** The constructed record `21 14210906 A ATGG` inserts three bases between cDNA positions 49 and 50 of `ENST00000400211`, a reverse-strand transcript, after the `A` of the upstream ORF's `ATG` at cDNA position 49. Read on the transcript's strand the inserted bases end with `A`, so the changed sequence is the reference with three bases directly before the codon. Ensembl VEP 116.3 reports that start codon lost; vep-rs reports nothing.
 
 ### 2.1 What a reader needs to know first
 

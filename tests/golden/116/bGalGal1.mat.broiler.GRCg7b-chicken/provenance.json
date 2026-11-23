@@ -1,0 +1,73 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species gallus_gallus --assembly bGalGal1.mat.broiler.GRCg7b --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "gallus_gallus/116_bGalGal1.mat.broiler.GRCg7b",
+ "fasta": "the three sequences the records and the pruned cache's transcripts sit on (chromosome 25, the mitochondrion MT and the unplaced scaffold MU179272.1) at their full length, from Gallus_gallus.bGalGal1.mat.broiler.GRCg7b.dna.primary_assembly.25.fa.gz, Gallus_gallus.bGalGal1.mat.broiler.GRCg7b.dna.primary_assembly.MT.fa.gz and Gallus_gallus.bGalGal1.mat.broiler.GRCg7b.dna.nonchromosomal.fa.gz of Ensembl release 116, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
+ "input": "variants.vcf: 237 records on chromosome 25, the mitochondrion and the unplaced scaffold MU179272.1. 217 are seeded records of tools/vep-seeded-variants (seed 1, 96 a category, read from the converted cache and the genome sequence), their IDs naming the category and its ordinal: under genetic code tables 1 and 2 a start codon, a stop gained and a stop lost, and under table 2 a codon it reads differently from the standard code; a missense and a synonymous change on each strand; a splice donor and an acceptor; both untranslated regions, an intron, upstream, downstream and between genes; a frameshift insertion, a frameshift deletion and an in-frame deletion; the first and the last base of each sequence; and records named by a synonym of their sequence (the RefSeq and GenBank accessions NC_052556.1, CM028506.1, NC_053523.1 and NW_024095996.1 and the assembly name scaffold_44). 20 are known variants of the cache, single-base substitutions sampled with the same seed, their IDs the cache's identifiers. Six exemplars per consequence-set combination the two references show, stratified by variant class and strand, eighteen per combination carrying a protein-level term, plus the records the manifest's included_records name. The cache marks no sequence circular, so no record crosses an origin. The seeded records named by the mitochondrion's GenBank accession written without its version are not in the pool and the pruned cache's synonyms file has no line for that name, so no file here carries a name of the second shape tools/vep-golden-corpus identifiers reads; the RefSeq accession names the mitochondrion's synonym record",
+ "sha256": {
+  "default.txt": "16fd5ea567ed8fb7fd7b49155eb47060ddca20152d2babc45492eb595030df3a",
+  "tab.txt": "c53e4b4704c308dc286711e94077b597a85cc0f8640aa3911def7d621f4cd807",
+  "vcf.vcf": "4f514c56690682adc1cc66b16509981dc3573abfd9da491cb0bfc1a2289b4b54",
+  "json.jsonl": "71484843f194a3df1938530f4c5a37ffee7af9bb7aa8f659113b3cb3d2f4e04f"
+ },
+ "variants_vcf_sha256": "99f7ad9ee123d3848a66bdbf2f9b05b9057e319d635a8196c4ad15aee9bdc7bd",
+ "flag_sets": {
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species gallus_gallus --assembly bGalGal1.mat.broiler.GRCg7b --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "gallus_gallus/116_bGalGal1.mat.broiler.GRCg7b",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "92e4b79906d2fd3979f97e3830b4be21a40907cfaee84ac9f265f17fcd82d1f0",
+    "tab.txt": "c9ee633248b0a13f228ec0b186bd0db5614c3b616f08fe6564ae7e7fc11a3bbe",
+    "vcf.vcf": "93a42cb6cf0b126849d34344ce40f6dc9c78241c1df0978a0a576b7620a3fca5",
+    "json.jsonl": "215e99ef685e72be464f987bb6a268638cad4255c2646263a0d16534a3c1ac13"
+   },
+   "flags": [
+    "--everything"
+   ],
+   "expected_dir": "expected_everything"
+  },
+  "hgvs-sift": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species gallus_gallus --assembly bGalGal1.mat.broiler.GRCg7b --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs --sift b [--tab|--vcf|--json]",
+   "perl_cache": "gallus_gallus/116_bGalGal1.mat.broiler.GRCg7b",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "c6b17207b09e1162e5c28b127e233c3b660784450cc5d68effc3464737f5154b",
+    "tab.txt": "89975b0b381189afa5322df6a170c0c673a1338036dbc97a185df28624b5e5d8",
+    "vcf.vcf": "435dfb65a42b3db45ba6cd1b2fab79158868f0c4b9c4dfc04a122fc3c9ee1df3",
+    "json.jsonl": "3a1502197546ab370d6cf431f99af98012e90f06bf1dcca9fece4dd8cf6dec54"
+   },
+   "flags": [
+    "--hgvs",
+    "--sift",
+    "b"
+   ],
+   "expected_dir": "expected_hgvs-sift"
+  }
+ },
+ "generator": "tools/vep-seeded-variants --seed 1 --records wide --per-category 96 --sequence MT --sequence 25 --sequence MU179272.1 --fasta <the three sequences> over the converted cache, and the cache's known single-base substitutions on the same sequences sampled with seed 1; Ensembl VEP over the two inputs under the corpus flags; tools/vep-golden-corpus select --release 116 --assembly bGalGal1.mat.broiler.GRCg7b --species gallus_gallus --dataset wide=<reference>=<the seeded records> --dataset known=<reference>=<the known variants> --k 6 --seed 1 --max-span 1000000 --max-records 500 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 18 --include <the named records> --covers species-chicken-grcg7b --covers genetic-code-tables --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_function_predictions --drop-except <the transcripts on which a record changes one residue, the rows SIFT scores> --perl-info <cache>/info.txt --cache-version 116 --variations <cache>/variations over the whole cache tools/vep-storable-to-json converts from the Ensembl VEP 116 bGalGal1.mat.broiler.GRCg7b cache (protein features kept for the DOMAINS column of the everything set; the variation slices hold the known variants within one base of a record; the regulatory build is left out), then --manifest-only once the synonyms file had lost one line; scripts/fixtures/cut_plugin_regions.py --reference <the three sequences> --flank 5000 --record-flank 2000 over the records under their cache names; tools/vep-golden-corpus flag-set (everything, hgvs-sift); scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; tools/vep-golden-corpus classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp --field HGVS_OFFSET for the everything set and those with --field SIFT for the hgvs-sift set)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "25": 438,
+   "MT": 37,
+   "MU179272.1": 87
+  },
+  "shards": 5,
+  "synonym_lines": 5,
+  "matrices_kept_on": 104,
+  "variation_slices": "the known variants within one base of a record under variations/<chr>/all_vars.gz with its .csi, as the Ensembl VEP cache lays them out, for all three sequences"
+ }
+}

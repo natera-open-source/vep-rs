@@ -1,7 +1,7 @@
 {
- "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
- "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
- "vep_version_reported": "ensembl-vep          : 116.2",
+ "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+ "vep_version_reported": "ensembl-vep          : 116.3",
  "cache_version": 116,
  "divergences_classified_against": {
   "engine": "vep-rs",
@@ -19,12 +19,12 @@
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "none on either side",
  "input": "hand-built records at chromosome 21 sites of the GRCh38-release116 corpus's cache and one on chrM: the overlap-allele rules (an ALT equal to the reference, repeated ALTs, `*`, `<DEL:*>`, a `*` beside an allele under a true INFO/SVTYPE), the anchor chop and minimisation, the ID column (a semicolon-joined list, a list whose first element is empty or `0`, an empty column, a multi-allelic record whose ID is `0`), gVCF alleles, structural spans and breakends, the incomplete deletion, a tandem repeat whose SVLEN list ends in a comma, a structural record written with five columns in the short twin and a structural record whose QUAL is `0`, chromosome spellings, a contig no cache carries and POS 0; twins of the same records at five columns (one line with three trailing empty columns), with CRLF line ends, with a Latin-1 header and sample column, and on standard input",
- "generator": "json_cache: the GRCh38-release116 corpus's pruned cache plus the GRCh38-native-builder corpus's MT shard and the chromosome 21 and MT lines of the Ensembl cache's chr_synonyms.txt; expected outputs: one Ensembl VEP 116.2 container run per format per input; manifest: the records' consequence sets and skip warnings from the default output, scripts/golden/build_golden_corpus.py flag-set and classify (the manifest's run and every flag set)",
+ "generator": "json_cache: the GRCh38-release116 corpus's pruned cache plus the GRCh38-native-builder corpus's MT shard and the chromosome 21 and MT lines of the Ensembl cache's chr_synonyms.txt; expected outputs: one Ensembl VEP 116.3 container run per format per input; manifest: the records' consequence sets and skip warnings from the default output, tools/vep-golden-corpus flag-set and classify (the manifest's run and every flag set)",
  "sha256": {
-  "default.txt": "cf30c85f9955ecfa326f989e5331a3e36b435881e8464d21f5c24dcf44c86812",
-  "tab.txt": "d30170c88d2c0bd261ecc3b983e9a300ec2c9e0d257ef15db00a826e7d02a5c9",
-  "vcf.vcf": "c36f2853e09dd39ba3492ee084b2c97eae64f29db3b554dca086c91c707895db",
-  "json.jsonl": "9eb73a3372f4855290064958c0813bd5901a96a032900df0f6329c3a4fb501df"
+  "default.txt": "30be56a7c018d54d20a7fe1430b9d26ae004cc672a7b7eb24a7fd4384090d66f",
+  "tab.txt": "96cea436f862f354861325f586c0b03405db253f0da3106c9b9210802f705e12",
+  "vcf.vcf": "e1a3505f4f4d5cad9c9291d4f5510e1fd3ebef9be2f75d7d18989f03a2f5d228",
+  "json.jsonl": "45da8113a8fc13a657df8a0978295da3f92d89bdd07615b3fd155cab58ca67de"
  },
  "variants_vcf_sha256": "e0dc72fcabf0f2d5cf2d3b059cd7224e70c77d79b22d3d9af3435142f324616e",
  "inputs_sha256": {
@@ -44,9 +44,9 @@
  },
  "flag_sets": {
   "short": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.short.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --allele_number --uploaded_allele --variant_class --mask_header_cache_path [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
@@ -55,15 +55,15 @@
    "expected_dir": "expected",
    "reference_run": "the manifest's run: the twin carries the same records, so expected/ is its reference; a container run on the twin wrote the same default, tab and VCF outputs and the same warning descriptions, each quoting the line as the twin spells it",
    "sha256": {
-    "default.txt": "cf30c85f9955ecfa326f989e5331a3e36b435881e8464d21f5c24dcf44c86812",
-    "tab.txt": "d30170c88d2c0bd261ecc3b983e9a300ec2c9e0d257ef15db00a826e7d02a5c9",
-    "vcf.vcf": "c36f2853e09dd39ba3492ee084b2c97eae64f29db3b554dca086c91c707895db"
+    "default.txt": "30be56a7c018d54d20a7fe1430b9d26ae004cc672a7b7eb24a7fd4384090d66f",
+    "tab.txt": "96cea436f862f354861325f586c0b03405db253f0da3106c9b9210802f705e12",
+    "vcf.vcf": "e1a3505f4f4d5cad9c9291d4f5510e1fd3ebef9be2f75d7d18989f03a2f5d228"
    }
   },
   "crlf": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.crlf.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --allele_number --uploaded_allele --variant_class --mask_header_cache_path [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
@@ -72,26 +72,32 @@
    "expected_dir": "expected",
    "reference_run": "the manifest's run: the twin carries the same records, so expected/ is its reference; a container run on the twin wrote the same default, tab and VCF outputs and the same warning descriptions, each quoting the line as the twin spells it",
    "sha256": {
-    "default.txt": "cf30c85f9955ecfa326f989e5331a3e36b435881e8464d21f5c24dcf44c86812",
-    "tab.txt": "d30170c88d2c0bd261ecc3b983e9a300ec2c9e0d257ef15db00a826e7d02a5c9",
-    "vcf.vcf": "c36f2853e09dd39ba3492ee084b2c97eae64f29db3b554dca086c91c707895db",
-    "json.jsonl": "9eb73a3372f4855290064958c0813bd5901a96a032900df0f6329c3a4fb501df"
+    "default.txt": "30be56a7c018d54d20a7fe1430b9d26ae004cc672a7b7eb24a7fd4384090d66f",
+    "tab.txt": "96cea436f862f354861325f586c0b03405db253f0da3106c9b9210802f705e12",
+    "vcf.vcf": "e1a3505f4f4d5cad9c9291d4f5510e1fd3ebef9be2f75d7d18989f03a2f5d228",
+    "json.jsonl": "45da8113a8fc13a657df8a0978295da3f92d89bdd07615b3fd155cab58ca67de"
    }
   },
   "latin1": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
-   "vep_command": "vep -i variants.latin1.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --allele_number --uploaded_allele --variant_class --mask_header_cache_path [--tab]",
+   "vep_command": "vep -i variants.latin1.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --allele_number --uploaded_allele --variant_class --mask_header_cache_path [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
    "fasta": "none on either side",
    "input": "variants.latin1.vcf",
-   "expected_dir": "expected_latin1",
    "sha256": {
-    "default.txt": "6cdca627550a67a0f908aa360da7f4d36dbc78e29542214620daeeb6010ee475",
-    "tab.txt": "d5051b5c7bef8917c7af882ba66aaa912fc4230b426f6b8b282273a4ad0c316f"
+    "default.txt": "37a60027e44bd4b824fcaa88692862e6f9f5dc9272f514d987890fc5115dc172",
+    "tab.txt": "a6bcab8e3bbb68d6067ffa552d6a93a20d4d3462d19cc344adcdaa51a05dfa4b"
    },
+   "flags": [
+    "--allele_number",
+    "--uploaded_allele",
+    "--variant_class",
+    "--mask_header_cache_path"
+   ],
+   "expected_dir": "expected_latin1",
    "formats_compared": [
     "default",
     "tab"
@@ -99,9 +105,9 @@
    "reference_run": "its own run on the twin; the default and tab outputs compared, the VCF header carrying the Latin-1 bytes as read and the JSON input the sample columns, neither a text the harness reads"
   },
   "stdin": {
-   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
-   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
-   "vep_version_reported": "ensembl-vep          : 116.2",
+   "vep_image": "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.3",
+   "vep_version_reported": "ensembl-vep          : 116.3",
    "cache_version": 116,
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --allele_number --uploaded_allele --variant_class --mask_header_cache_path --format vcf [--tab|--vcf|--json]",
    "perl_cache": "homo_sapiens/116_GRCh38",
@@ -110,10 +116,10 @@
    "expected_dir": "expected",
    "reference_run": "the manifest's run: the same file piped on standard input",
    "sha256": {
-    "default.txt": "cf30c85f9955ecfa326f989e5331a3e36b435881e8464d21f5c24dcf44c86812",
-    "tab.txt": "d30170c88d2c0bd261ecc3b983e9a300ec2c9e0d257ef15db00a826e7d02a5c9",
-    "vcf.vcf": "c36f2853e09dd39ba3492ee084b2c97eae64f29db3b554dca086c91c707895db",
-    "json.jsonl": "9eb73a3372f4855290064958c0813bd5901a96a032900df0f6329c3a4fb501df"
+    "default.txt": "30be56a7c018d54d20a7fe1430b9d26ae004cc672a7b7eb24a7fd4384090d66f",
+    "tab.txt": "96cea436f862f354861325f586c0b03405db253f0da3106c9b9210802f705e12",
+    "vcf.vcf": "e1a3505f4f4d5cad9c9291d4f5510e1fd3ebef9be2f75d7d18989f03a2f5d228",
+    "json.jsonl": "45da8113a8fc13a657df8a0978295da3f92d89bdd07615b3fd155cab58ca67de"
    }
   }
  }

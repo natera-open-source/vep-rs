@@ -1,0 +1,1 @@
+ERROR: [compare_vep_stats] cannot read tests/fixtures/truncated_header.summary.log.gz: Compressed file ended before the end-of-stream marker was reached

@@ -6,8 +6,9 @@ inputs. Every check fails on its recorded or constructed shape and passes once t
 corrected; the comment is edited in place; a stale CI run judges nothing; each exemption holds the
 close back; the API writes of a run are the expected ones and no other. The three tests that read the
 repository's own pull request template, issue forms and guide pages are skipped only when
-`ADMISSION_RELEASE_TREE=1` is set, for a run of this file over a tree whose template, forms and
-pages predate the rules."""
+`ADMISSION_RELEASE_TREE=1` is set. To run, they need the Intended divergences section in the
+tree's template and in each of its ten issue forms, and the declaration's three forms on two of
+its root pages."""
 
 from __future__ import annotations
 
@@ -16,7 +17,6 @@ import os
 import shutil
 import subprocess
 import sys
-import time
 import urllib.error
 from pathlib import Path
 
@@ -30,12 +30,12 @@ import admission as adm
 
 RELEASE_TREE = pytest.mark.skipif(
     os.environ.get("ADMISSION_RELEASE_TREE") == "1",
-    reason="the tree's template, forms and pages predate the rules",
+    reason="ADMISSION_RELEASE_TREE=1 is set; the test needs the Intended divergences section in the tree's template and forms, or the declaration's forms on its root pages",
 )
 FIXTURE_DIR = HERE / "fixtures" / "admission"
 FIXTURES = sorted(FIXTURE_DIR.glob("*.json"))
 FIXTURE_IDS = [path.stem for path in FIXTURES]
-FIXTURE_COUNT = 30
+FIXTURE_COUNT = 36
 INDEX_SAMPLE = (FIXTURE_DIR / "index-sample-main.md").read_text(encoding="utf-8")
 INDEX_SAMPLE_REGROUPED = (FIXTURE_DIR / "index-sample-regrouped.md").read_text(encoding="utf-8")
 CHECKER = ROOT / adm.PARITY_CHECKER
@@ -55,7 +55,8 @@ REPO = "example/vep-rs"
 # The misses each fixture carries, by check name. The ten recorded pull requests were opened before
 # the divergences rule, so their descriptions lack its section and that miss is reported without a
 # close (`opened_before_divergences_rule` in the fixture); the constructed `divergences-*` shapes
-# were opened after it.
+# were opened after it. The `divergences-*mapped*` shapes carry a record of the reproduction registry
+# whose `implementation` table names one function, and the text of the changed file on both sides.
 RECORDED = {
     "bot-dependency-bump": {"base", "signoff", "declaration", "body", "divergences"},
     "fork-many-commits-no-declaration": {"declaration", "divergences"},
@@ -87,7 +88,15 @@ RECORDED = {
     "divergences-proposes-with-description": set(),
     "divergences-proposes-without-description": {"divergences"},
     "divergences-touches-and-proposes": set(),
+    "divergences-none-changes-a-mapped-item": {"divergences"},
+    "divergences-none-changes-beside-a-mapped-item": set(),
+    "divergences-touches-the-entry-of-a-mapped-item": set(),
+    "divergences-none-changes-a-mapped-file-without-a-patch": {"divergences"},
+    "divergences-none-changes-a-renamed-mapped-file": {"divergences"},
+    "divergences-none-changes-a-mapped-item-before-the-rule": {"divergences"},
 }
+# The tool whose case table holds the item reader of this script and its own to one answer.
+ITEM_SPAN_CASES = ROOT / "tools" / "vep-divergence-reevaluate" / "tests" / "fixtures" / "item_span_cases.jsonl"
 NONE_SECTION = f"\n## {adm.DIVERGENCE_SECTION}\n- [x] {adm.NONE_STATEMENT}\n"
 
 
@@ -110,6 +119,19 @@ def regions_of(fixture: dict) -> adm.RegionsFor:
     return lambda side, path: table.get((side, path), [])
 
 
+def mapped_of(fixture: dict) -> list[adm.MappedItem]:
+    """The rows of the `implementation` tables a fixture's records carry at the base and the head."""
+    return adm.read_implementation(fixture.get("base_records")) + adm.read_implementation(
+        fixture.get("head_records")
+    )
+
+
+def sources_of(fixture: dict) -> adm.SourceFor:
+    """The recorded text of a fixture's changed files on each side, as the job reads it from git."""
+    sources = fixture.get("sources") or {}
+    return lambda side, path: (sources.get(side) or {}).get(path)
+
+
 def findings_of(
     fixture: dict, labels: set[str] | None = None, parity: adm.Finding | None = None
 ) -> list[adm.Finding]:
@@ -128,6 +150,9 @@ def findings_of(
         base_index=index_text(fixture, "base_index_file"),
         head_index=index_text(fixture, "head_index_file"),
         divergences_close=not fixture.get("opened_before_divergences_rule", False),
+        mapped=mapped_of(fixture),
+        source_for=sources_of(fixture),
+        mapped_close=not fixture.get("opened_before_mapped_items_rule", False),
     )
 
 
@@ -138,10 +163,12 @@ def evaluate(
 
 
 def write_tree(root: Path, rows: str = "", tests: dict[str, str] | None = None) -> None:
-    """A tree the parity checker reads: the matrix, an args.rs without flags, a plugins page whose
-    support table has no rows, the named test files."""
+    """A tree the parity checker reads: the matrix, the reference list that holds the one module
+    its rows name, an args.rs without flags, a plugins page whose support table has no rows, the
+    named test files."""
     (root / "tests" / "parity").mkdir(parents=True, exist_ok=True)
     (root / "tests" / "parity" / "matrix.tsv").write_text(MATRIX_HEADER + rows)
+    (root / "tests" / "parity" / "reference_files.txt").write_text("Config.pm\n")
     (root / "crates" / "vep-cli" / "src").mkdir(parents=True, exist_ok=True)
     (root / "crates" / "vep-cli" / "src" / "args.rs").write_text("pub struct Args {}\n")
     (root / "docs").mkdir(exist_ok=True)
@@ -153,6 +180,72 @@ def write_tree(root: Path, rows: str = "", tests: dict[str, str] | None = None) 
 
 ROW = "foo\tConfig.pm\terror\tlanded:error\tcrates/vep-cli/src/x.rs::refuses_foo\t\t\n"
 TEST_FILE = "#[cfg(test)]\nmod tests {\n    #[test]\n    fn refuses_foo() {}\n}\n"
+
+
+# --- the items of a Rust file --------------------------------------------------------------------
+
+
+def test_item_spans_are_the_ones_the_case_table_states():
+    """The case table of the re-evaluation tool holds Rust source texts, each with an item's name
+    and the first and the last line of its span, null where the text defines no such item. The
+    tool's own reader is held to the same table, so the two give one answer."""
+    cases = [json.loads(line) for line in ITEM_SPAN_CASES.read_text(encoding="utf-8").splitlines()]
+    assert len(cases) > 100
+    undefined = 0
+    for case in cases:
+        expected = None if case["first"] is None else (case["first"], case["last"])
+        assert adm.rust_item_span(case["text"], case["item"]) == expected, case
+        undefined += expected is None
+    assert undefined > 10
+
+
+def test_items_are_named_by_their_chain_and_listed_as_they_end():
+    text = "struct Thing;\nimpl Thing {\n    fn method() {}\n}\nmod tests {\n    fn pins() {}\n}\n"
+    assert adm.rust_items(text) == [
+        ("Thing", 1, 1),
+        ("Thing::method", 3, 3),
+        ("Thing", 2, 4),
+        ("tests::pins", 6, 6),
+        ("tests", 5, 7),
+    ]
+    assert adm.rust_item_span(text, "Thing") == (1, 1)
+    assert adm.rust_item_span(text, "pins") is None
+
+
+def test_a_mapped_item_spans_its_own_lines_or_the_whole_file():
+    """An item a Rust text defines spans its own lines; one it does not define, and any item of a
+    Python or a shell path, spans the whole file; a side without the file has no span."""
+    text = "fn first() {}\n\nfn second() {\n}\n"
+    assert adm.mapped_span(text, "crates/a/src/b.rs", "second") == (3, 4)
+    assert adm.mapped_span(text, "crates/a/src/b.rs", "third") == (1, 4)
+    assert adm.mapped_span("def test_a():\n    pass\n", "scripts/test_a.py", "test_a") == (1, 2)
+    assert adm.mapped_span("check() {\n    true\n}", "scripts/test_a.sh", "check") == (1, 3)
+    assert adm.mapped_span("", "crates/a/src/b.rs", "second") == (1, 1)
+    assert adm.mapped_span(None, "crates/a/src/b.rs", "second") is None
+    assert adm.count_lines("") == 0 and adm.count_lines("a") == 1 and adm.count_lines("a\nb\n") == 2
+
+
+def test_every_rust_item_the_committed_registry_maps_resolves():
+    """Every row of the committed records' `implementation` tables that names a Rust file names an
+    item the file defines, so the check never reads as a whole file an item the re-evaluation
+    tool's own check passed."""
+    registry = ROOT / adm.DIVERGENCE_REGISTRY
+    records = {
+        f"{adm.DIVERGENCE_REGISTRY}{path.name}": path.read_text(encoding="utf-8")
+        for path in sorted(registry.glob("*.toml"))
+    }
+    rows = adm.read_implementation(records)
+    assert {row.entry for row in rows} == {Path(name).stem for name in records}
+    rust = [row for row in rows if row.path.endswith(".rs")]
+    assert rust
+    spans: dict[str, dict[str, tuple[int, int]]] = {}
+    unresolved = []
+    for row in rust:
+        if row.path not in spans:
+            spans[row.path] = adm.rust_item_spans((ROOT / row.path).read_text(encoding="utf-8"))
+        if row.item not in spans[row.path]:
+            unresolved.append(f"{row.entry}: {row.path}::{row.item}")
+    assert unresolved == []
 
 
 # --- the Rust scanner ----------------------------------------------------------------------------
@@ -867,6 +960,24 @@ def test_a_trailer_without_a_value_does_not_take_the_next_line_for_one():
     assert adm.declared_models([beside]) == ["Example Model 1"]
 
 
+def test_a_trailer_s_value_is_read_whole_by_the_pattern_and_stripped_by_the_caller():
+    # The pattern reads a value to its line's end, trailing blanks included: a group that stopped
+    # before them would be tried again at every blank of a run inside a value.
+    (short,) = adm.DECLARATION_RE.finditer(f"Subject\n\n{MODEL_LINE.rstrip()}  \t\n")
+    assert short.group(1) == "Example Model 1 <noreply@vendor.example>  \t"
+    run = " " * 65_536
+    values = [
+        f"Example Model 1{run}<noreply@vendor.example>",
+        f"Example{run}Model 1 <noreply@vendor.example>{run}",
+        f"Jane{run}Doe <example--login@users.noreply.github.com>",
+    ]
+    lines = [f"Co-Authored-By: {values[0]}", *(f"Co-authored-by: {value}" for value in values[1:]), f"Co-Authored-By:{run}"]
+    message = "Subject\n\n" + "\n".join(lines) + "\n"
+    # A key before blanks alone reads one of them, which the caller strips to no value.
+    assert [match.group(1) for match in adm.DECLARATION_RE.finditer(message)] == [*values, " "]
+    assert adm.declared_models([commit("1" * 40, message)]) == ["Example Model 1"]
+
+
 @RELEASE_TREE
 def test_the_pages_that_print_the_declaration_s_forms_print_the_ones_the_parser_reads():
     """Two root pages print the declaration's two forms on three lines: the model's line and
@@ -1307,8 +1418,8 @@ def test_statements_are_read_by_their_words_with_their_lines():
 def test_divergences_none_passes_and_is_refused_on_an_artefact_edit():
     """The first statement is refused on the index, a page a row links and a record or input of the
     reproduction registry; it passes on every other path: the registry's own page, which describes
-    the record shape, and the runner, the order checker, their tests and their test data beside the
-    registry included."""
+    the record shape, the tool that runs the records, the order checker beside the registry, their
+    tests and their test data included."""
     assert divergences(section({"none"})) is None
     for path in (
         adm.INDEX_PATH,
@@ -1327,14 +1438,14 @@ def test_divergences_none_passes_and_is_refused_on_an_artefact_edit():
     for path in (
         "docs/divergences.md",
         "docs/plugins.md",
-        "scripts/concordance/compare_vep_outputs.py",
+        "tools/vep-outputs-compare/src/main.rs",
         adm.REGISTRY_PAGE,
-        "scripts/divergences/reevaluate.py",
+        "tools/vep-divergence-reevaluate/src/main.rs",
         "scripts/divergences/check_divergence_order.py",
-        "scripts/divergences/test_reevaluate.py",
+        "tools/vep-divergence-reevaluate/tests/runs.rs",
         "scripts/divergences/test_check_divergence_order.py",
-        "scripts/divergences/testdata/reproductions/x.toml",
-        "scripts/divergences/testdata/outputs/vep-rs/default.txt",
+        "tools/vep-divergence-reevaluate/tests/fixtures/reproductions/x.toml",
+        "tools/vep-divergence-reevaluate/tests/fixtures/outputs/vep-rs/default.txt",
         "scripts/divergences/reproductions.md",
         "scripts/divergences-archive/reproductions/x.toml",
         "tests/golden/116/GRCh38/manifest.json",
@@ -1344,19 +1455,19 @@ def test_divergences_none_passes_and_is_refused_on_an_artefact_edit():
 
 
 def test_divergences_refusal_names_the_registry_record_and_not_the_tools_beside_it():
-    """A change that edits a record of the reproduction registry beside the runner and its test is
-    refused under the first statement for the record alone, the refusal naming the record and
-    neither tool; the registry path the check reads is a directory of the tree holding records and
-    its own page, which is no artefact, and no Python file beside it in the parent directory is
-    one."""
+    """A change that edits a record of the reproduction registry beside the tool that runs the
+    records and its test is refused under the first statement for the record alone, the refusal
+    naming the record and neither file of the tool; the registry path the check reads is a directory
+    of the tree holding records and its own page, which is no artefact, and no Python file beside it
+    in the parent directory is one."""
     fixture = load(FIXTURE_DIR / "divergences-none-edits-a-reproduction-record.json")
     index = adm.read_index(INDEX_SAMPLE)
     record = "scripts/divergences/reproductions/example_record.toml"
     assert adm.divergence_artefacts(fixture["files"], index) == [record]
     finding = next(f for f in findings_of(fixture) if f.check == "divergences")
     assert finding.closes and f"`{record}`" in finding.text
-    assert "`scripts/divergences/reevaluate.py`" not in finding.text
-    assert "`scripts/divergences/test_reevaluate.py`" not in finding.text
+    assert "`tools/vep-divergence-reevaluate/src/main.rs`" not in finding.text
+    assert "`tools/vep-divergence-reevaluate/tests/runs.rs`" not in finding.text
     assert adm.DIVERGENCE_REGISTRY == "scripts/divergences/reproductions/"
     assert adm.REGISTRY_PAGE == "scripts/divergences/reproductions/README.md"
     registry = ROOT / adm.DIVERGENCE_REGISTRY
@@ -1366,6 +1477,142 @@ def test_divergences_refusal_names_the_registry_record_and_not_the_tools_beside_
     assert tools, "no tool sits beside the registry"
     for tool in tools:
         assert adm.divergence_artefacts([{"filename": f"scripts/divergences/{tool}"}], index) == [], tool
+
+
+MAPPED_CODE = "crates/vep-effects/src/distance.rs"
+MAPPED_RECORD = "scripts/divergences/reproductions/bare_m_chromosome.toml"
+
+
+def test_read_implementation_reads_the_three_lists_of_each_record():
+    """The rows are the `<path>::<item>` strings of the lists `code`, `tests` and `rules` of each
+    record's table, under the entry the record's file name gives; a file that is no record of the
+    registry, a text that is no TOML, an integer too long for the reader to convert and a table or
+    a row of another shape give nothing."""
+    table = (
+        'entry = "x"\n\n[implementation]\ncode = ["crates/a/src/b.rs::Type::method"]\n'
+        'tests = ["crates/a/tests/c.rs::pins_it", "scripts/test_d.py::test_it"]\n'
+        'rules = ["tools/t/src/r.rs::rule"]\nnone = "ignored"\n'
+    )
+    records = {
+        f"{adm.DIVERGENCE_REGISTRY}first_entry.toml": table,
+        f"{adm.DIVERGENCE_REGISTRY}no_table.toml": 'entry = "y"\n',
+        f"{adm.DIVERGENCE_REGISTRY}not_toml.toml": "[implementation\n",
+        f"{adm.DIVERGENCE_REGISTRY}long_integer.toml": f"[implementation]\ncode = [{'9' * 5000}]\n",
+        f"{adm.DIVERGENCE_REGISTRY}other_shapes.toml": (
+            'implementation = "x"\n[other]\ncode = ["crates/a/src/b.rs::skipped"]\n'
+        ),
+        f"{adm.DIVERGENCE_REGISTRY}odd_rows.toml": (
+            '[implementation]\ncode = "crates/a/src/b.rs::not_a_list"\n'
+            'tests = [3, "no-separator", "::item", "path::"]\n'
+        ),
+        f"{adm.DIVERGENCE_REGISTRY}inputs/first_entry/record.toml": table,
+        adm.REGISTRY_PAGE: table,
+        "scripts/other/first_entry.toml": table,
+    }
+    assert adm.read_implementation(records) == [
+        adm.MappedItem("first_entry", "crates/a/src/b.rs", "Type::method"),
+        adm.MappedItem("first_entry", "crates/a/tests/c.rs", "pins_it"),
+        adm.MappedItem("first_entry", "scripts/test_d.py", "test_it"),
+        adm.MappedItem("first_entry", "tools/t/src/r.rs", "rule"),
+    ]
+    assert adm.read_implementation(None) == [] and adm.read_implementation({}) == []
+
+
+def test_divergences_none_is_refused_on_a_change_inside_a_mapped_item():
+    """The first statement is refused when a changed line lies in an item a record names as an
+    entry's implementation, by the finding that refuses an artefact edit, its sentence naming the
+    entry and the path; a change beside the item in the same file passes, and so does the second
+    statement naming an entry."""
+    inside = load(FIXTURE_DIR / "divergences-none-changes-a-mapped-item.json")
+    assert adm.divergence_artefacts(inside["files"], adm.read_index(INDEX_SAMPLE)) == []
+    assert mapped_of(inside)[0] == adm.MappedItem("bare_m_chromosome", MAPPED_CODE, "flank_distance")
+    assert adm.mapped_items_touched(inside["files"], mapped_of(inside), sources_of(inside)) == [
+        ("bare_m_chromosome", MAPPED_CODE)
+    ]
+    finding = next(f for f in findings_of(inside) if f.check == "divergences")
+    assert finding.closes and finding.reported_only is None
+    assert f"`bare_m_chromosome` (in `{MAPPED_CODE}`)" in finding.text
+    assert "lands in an item that a reproduction record names" in finding.text
+    assert "under the second statement" in finding.text and "under the third" in finding.text
+    # The same change with the statements unchecked, or with another checked, is not a mapped miss.
+    assert "reproduction record names" not in divergences(
+        section(set()), inside["files"], mapped=mapped_of(inside), source_for=sources_of(inside)
+    ).text
+    for kind in ("touches", "proposes"):
+        lines = {"touches": ["- `B`: keeps it, because x."], "proposes": ["The description."]}
+        assert (
+            divergences(
+                section({kind}, lines),
+                inside["files"],
+                mapped=mapped_of(inside),
+                source_for=sources_of(inside),
+            )
+            is None
+        )
+    beside = load(FIXTURE_DIR / "divergences-none-changes-beside-a-mapped-item.json")
+    assert [entry["filename"] for entry in beside["files"]] == [e["filename"] for e in inside["files"]]
+    assert adm.mapped_items_touched(beside["files"], mapped_of(beside), sources_of(beside)) == []
+    assert "divergences" not in evaluate(beside)
+    named = load(FIXTURE_DIR / "divergences-touches-the-entry-of-a-mapped-item.json")
+    assert named["files"] == inside["files"] and "divergences" not in evaluate(named)
+    # Without the records nothing is mapped, and the same change passes.
+    assert divergences(section({"none"}), inside["files"]) is None
+
+
+def test_divergences_a_mapped_file_without_a_patch_or_renamed_is_followed():
+    """A mapped file the API lists without a patch counts as changed throughout; one the change
+    renames is followed by its previous name, the removed line read in the file before the change
+    and the added line in the renamed file; a rename that changes no line touches nothing."""
+    patchless = load(FIXTURE_DIR / "divergences-none-changes-a-mapped-file-without-a-patch.json")
+    assert "patch" not in patchless["files"][0]
+    finding = next(f for f in findings_of(patchless) if f.check == "divergences")
+    assert f"`bare_m_chromosome` (in `{MAPPED_CODE}`)" in finding.text
+    renamed = load(FIXTURE_DIR / "divergences-none-changes-a-renamed-mapped-file.json")
+    entry = renamed["files"][0]
+    assert entry["previous_filename"] == MAPPED_CODE and entry["filename"] != MAPPED_CODE
+    finding = next(f for f in findings_of(renamed) if f.check == "divergences")
+    assert f"`bare_m_chromosome` (in `{MAPPED_CODE}`)" in finding.text
+    mapped, sources = mapped_of(renamed), sources_of(renamed)
+    moved = dict(entry, additions=0, deletions=0)
+    del moved["patch"]
+    assert adm.mapped_items_touched([moved], mapped, sources) == []
+    # A side whose text cannot be read counts as hit by any of its lines.
+    unread = [dict(entry, patch="@@ -13,2 +13,2 @@\n x\n-x\n+x")]
+    assert adm.mapped_items_touched(unread, mapped, sources) == []
+    assert adm.mapped_items_touched(unread, mapped, lambda side, path: None) == [
+        ("bare_m_chromosome", MAPPED_CODE)
+    ]
+    # A removed file's lines are read in the file before the change.
+    removed = [{"filename": MAPPED_CODE, "status": "removed", "additions": 0, "deletions": 15,
+                "patch": "@@ -1,15 +0,0 @@\n" + "\n".join("-x" for _ in range(15))}]
+    assert adm.mapped_items_touched(removed, mapped, sources) == [("bare_m_chromosome", MAPPED_CODE)]
+
+
+def test_divergences_a_mapped_item_alone_does_not_close_an_older_pull_request():
+    """A pull request opened before the mapped items were read is told of the miss and not closed
+    for it; a miss of the section itself beside it closes as before."""
+    older = load(FIXTURE_DIR / "divergences-none-changes-a-mapped-item-before-the-rule.json")
+    finding = next(f for f in findings_of(older) if f.check == "divergences")
+    assert not finding.closes and finding.reported_only == adm.MAPPED_REPORTED_ONLY
+    assert "reproduction record names" in finding.text
+    close, footer = adm.close_footer([finding], older["pull_request"]["user"], set(), False, MAINTAINERS)
+    assert not close and "before the check read the items the reproduction records name" in footer
+    files = older["files"] + [{"filename": adm.INDEX_PATH, "status": "modified", "additions": 1}]
+    both = adm.check_divergences(
+        older["pull_request"]["body"],
+        files,
+        INDEX_SAMPLE,
+        None,
+        mapped=mapped_of(older),
+        source_for=sources_of(older),
+        mapped_closes=False,
+    )
+    assert both.closes and both.reported_only is None
+    assert f"`{adm.INDEX_PATH}`" in both.text and "reproduction record names" in both.text
+    assert adm.IMPLEMENTATION_LANDING_PATH == (
+        "scripts/ci/fixtures/admission/divergences-none-changes-a-mapped-item.json"
+    )
+    assert (ROOT / adm.IMPLEMENTATION_LANDING_PATH).is_file()
 
 
 def test_divergences_exclusivity_and_missing_shapes():
@@ -1506,14 +1753,20 @@ def test_an_entry_whose_name_holds_a_backtick_is_cited_in_a_longer_run_or_withou
     assert divergences(section({"touches"}, fenced)) is None
     issue = issue_body(adm.ISSUE_CHOICES["touches"], "`B`: should go, because x.\n```\nrows\n```")
     assert adm.check_issue_divergences(issue, index) is None
-    # A description is at most 65,536 characters; a line of backticks, or of spaces before a last
-    # character, is read in bounded time.
-    hostile = "- " + "`" * 65_536
-    started = time.perf_counter()
-    adm.entry_lines(
-        [hostile, hostile + "x", hostile + "x" + "`" * 65_535 + "x", "- `a`: x" + " " * 65_536 + "x"]
-    )
-    assert time.perf_counter() - started < 5
+    # An opening run is one to three backticks and a whole run, so a line that opens with a longer
+    # run is no entry line, whatever follows the run. A description is at most 65,536 characters.
+    assert adm.entry_lines(["- ````A````: x"]) == []
+    run = "`" * 65_536
+    assert adm.entry_lines([f"- {run}", f"- {run}x", f"- {run}x{run[1:]}x"]) == []
+    # The pattern reads the rest of a line whole, trailing blanks included, and the caller strips
+    # it: a group that stopped before them would be tried again at every blank of a run.
+    blanks = " " * 65_536
+    tail = adm.ENTRY_LINE_RE.match(f"- `a`: x{blanks}")
+    assert tail is not None and tail.group(3) == f": x{blanks}"
+    assert adm.entry_lines([f"- `a`: x{blanks}x", f"- `a`: x{blanks}"]) == [
+        ("a", f"x{blanks}x"),
+        ("a", "x"),
+    ]
 
 
 def test_entry_remedies_name_the_change_for_a_pull_request_and_the_report_for_an_issue():
@@ -1856,6 +2109,7 @@ class FakeGitHub:
         rule_landed=None,
         fail_landed=False,
         issue=None,
+        mapped_landed=None,
     ):
         self.repo = REPO
         self.commits, self.files, self.comments = list(commits), list(files), list(comments)
@@ -1863,6 +2117,9 @@ class FakeGitHub:
         self.jobs, self.fail_rules, self.landed = list(jobs), fail_rules, list(landed)
         # The commits that landed the divergences rule's fixture; the workflow's own when not given.
         self.rule_landed = list(landed if rule_landed is None else rule_landed)
+        # The commits that landed the mapped-items rule's fixture; the divergences rule's when not
+        # given.
+        self.mapped_landed = list(self.rule_landed if mapped_landed is None else mapped_landed)
         self.fail_landed = fail_landed
         self.calls: list[tuple] = []
 
@@ -1873,6 +2130,8 @@ class FakeGitHub:
                 raise adm.AdmissionError("503")
             if (params or {}).get("path") == adm.DIVERGENCE_LANDING_PATH:
                 return self.rule_landed
+            if (params or {}).get("path") == adm.IMPLEMENTATION_LANDING_PATH:
+                return self.mapped_landed
             return self.landed
         if path.endswith("/commits"):
             return self.commits
@@ -2078,20 +2337,25 @@ def test_every_fixture_has_a_recorded_verdict():
 @pytest.mark.parametrize("path", FIXTURES, ids=FIXTURE_IDS)
 def test_fixture_divergences_miss_closes_only_after_the_rule_landed(path):
     """A pull request opened before the divergences rule carries the miss as comment-only; one
-    opened after it is closed for the miss."""
+    opened after it is closed for the miss, unless the miss is a mapped item alone and the pull
+    request was opened before the mapped items were read."""
     fixture = load(path)
     before = fixture.get("opened_before_divergences_rule", False)
     assert before is (not path.stem.startswith("divergences-"))
+    before_mapped = fixture.get("opened_before_mapped_items_rule", False)
+    assert before_mapped is path.stem.endswith("-before-the-rule")
     divergences = [f for f in findings_of(fixture) if f.check == "divergences"]
     assert ("divergences" in RECORDED[path.stem]) is bool(divergences)
     for finding in divergences:
-        assert finding.closes is (not before)
+        assert finding.closes is (not before and not before_mapped)
+        assert (finding.reported_only is not None) is before_mapped
 
 
 @pytest.mark.parametrize("path", FIXTURES, ids=FIXTURE_IDS)
 def test_fixture_divergences_check_flips(path):
     """A description without the section misses; the same description with the none statement
-    checked passes unless the change edits a divergence artefact, and then naming the entry passes."""
+    checked passes unless the change edits a divergence artefact or lands in a mapped item, and then
+    describing a proposal passes."""
     fixture = load(path)
     pr = fixture["pull_request"]
     pr["body"] = (pr["body"] or "").split(f"## {adm.DIVERGENCE_SECTION}")[0]
@@ -2101,8 +2365,10 @@ def test_fixture_divergences_check_flips(path):
         index_text(fixture, "head_index_file")
     )
     artefacts = adm.divergence_artefacts(fixture["files"], index)
-    assert ("divergences" in evaluate(fixture)) is bool(artefacts)
-    if artefacts:
+    touched = adm.mapped_items_touched(fixture["files"], mapped_of(fixture), sources_of(fixture))
+    assert bool(touched) is ("mapped" in path.stem and "beside" not in path.stem)
+    assert ("divergences" in evaluate(fixture)) is bool(artefacts or touched)
+    if artefacts or touched:
         pr["body"] = pr["body"].replace(
             f"- [x] {adm.NONE_STATEMENT}",
             "- [x] This change proposes a new intended divergence, described below:\n"
@@ -2242,7 +2508,12 @@ def test_fixture_close_decision(path):
     contributor = pr["user"]["login"] not in MAINTAINERS and pr["user"]["type"] != "Bot"
     assert close is (contributor and any(f.closes for f in findings))
     if contributor and not close and all(f.check == "divergences" for f in findings):
-        assert footer is not None and "opened before that section was asked" in footer
+        reason = (
+            "opened before the check read the items the reproduction records name"
+            if fixture.get("opened_before_mapped_items_rule")
+            else "opened before that section was asked"
+        )
+        assert footer is not None and reason in footer
 
 
 # --- the modes -----------------------------------------------------------------------------------
@@ -2256,6 +2527,7 @@ class FakeGit:
         fetched: str | None = None,
         texts: dict | None = None,
         commits: list | None = None,
+        records: dict | None = None,
     ):
         self.head, self.contains, self.fetched, self.texts = (
             head,
@@ -2264,6 +2536,11 @@ class FakeGit:
             texts or {},
         )
         self.commits = list(commits or [])
+        # The records of the reproduction registry, the same at every revision.
+        self.records = dict(records or {})
+
+    def registry_records(self, rev):
+        return self.records
 
     def fetch_pull_head(self, number):
         return self.fetched
@@ -2456,6 +2733,39 @@ def test_run_event_divergences_miss_closes_only_a_pull_request_opened_after_the_
     writes = gh.writes()
     assert ("PATCH", f"/repos/{REPO}/pulls/0", {"state": "closed"}) in writes
     assert "closes=1" in writes[0][2]["body"]
+
+
+def test_run_event_mapped_item_miss_closes_only_a_pull_request_opened_after_that_rule(tmp_path):
+    """The mapped items have their own landing date: a pull request opened after the divergences
+    rule and before it gets the mapped-item miss as a comment; one opened after it is closed. The
+    records are read at the base tip and the head and the files' text on both sides of the change."""
+    fixture = load(FIXTURE_DIR / "divergences-none-changes-a-mapped-item.json")
+    pr = fixture["pull_request"]
+    head = pr["head"]["sha"]
+    workflow = [{"commit": {"committer": {"date": "1999-01-03T00:00:00Z"}}}]
+    mapped_rule = [{"commit": {"committer": {"date": "1999-01-07T00:00:00Z"}}}]
+    texts = dict(fixture["sources"]["new"], **{"CHANGELOG.md": fixture["head_changelog"]})
+    git = FakeGit(head, commits=fixture["commits"], texts=texts, records=fixture["base_records"])
+    pr["created_at"] = "1999-01-06T00:00:00Z"
+    gh = FakeGitHub(files=fixture["files"], landed=workflow, mapped_landed=mapped_rule)
+    assert adm.run_event(event_for(fixture), gh, git, repo_dir(tmp_path)) == 0
+    landing_reads = [call[2]["path"] for call in gh.calls if call[1].endswith(f"/repos/{REPO}/commits")]
+    assert adm.IMPLEMENTATION_LANDING_PATH in landing_reads
+    body = gh.writes()[0][2]["body"]
+    assert "`bare_m_chromosome` (in `crates/vep-effects/src/distance.rs`)" in body
+    assert "before the check read the items the reproduction records name" in body
+    assert "closes=0" in body
+    assert ("PATCH", f"/repos/{REPO}/pulls/0", {"state": "closed"}) not in gh.writes()
+    pr["created_at"] = "1999-01-08T00:00:00Z"
+    gh = FakeGitHub(files=fixture["files"], landed=workflow, mapped_landed=mapped_rule)
+    assert adm.run_event(event_for(fixture), gh, git, repo_dir(tmp_path)) == 1
+    writes = gh.writes()
+    assert ("PATCH", f"/repos/{REPO}/pulls/0", {"state": "closed"}) in writes
+    assert "closes=1" in writes[0][2]["body"]
+    # With no record at either revision the same pull request passes.
+    gh = FakeGitHub(files=fixture["files"], landed=workflow, mapped_landed=mapped_rule)
+    bare = FakeGit(head, commits=fixture["commits"], texts=texts)
+    assert adm.run_event(event_for(fixture), gh, bare, repo_dir(tmp_path)) == 0
 
 
 def test_run_event_pull_request_older_than_the_workflow_is_commented_not_closed(tmp_path):
@@ -2966,6 +3276,56 @@ def test_run_local_checks_the_divergences_section_of_a_body_file(tmp_path, capsy
     body.write_text(TEMPLATE_BODY)
     assert adm.run_local(repo, "origin/main", body) == 1
     assert "lacks the `## Intended divergences` section" in capsys.readouterr().err
+
+
+def test_run_local_refuses_none_on_a_change_inside_a_mapped_item(tmp_path, capsys):
+    """A local run reads the registry's records at the base and the head through git and holds the
+    branch's changed lines to the items they name: a change inside the mapped function is a miss
+    that names the entry, and a change beside it in the same file passes."""
+    repo = scratch_repo(tmp_path)
+    registry = repo / adm.DIVERGENCE_REGISTRY
+    (registry / "inputs" / "example_entry").mkdir(parents=True)
+    (registry / "example_entry.toml").write_text(
+        'entry = "example_entry"\n\n[implementation]\n'
+        'code = ["crates/vep-core/src/lib.rs::f"]\n'
+        'tests = ["crates/vep-core/src/lib.rs::tests::f_is_one"]\n'
+    )
+    (registry / "README.md").write_text("# The records\n")
+    (registry / "inputs" / "example_entry" / "other.toml").write_text('entry = "other"\n')
+    # A directory named as a record is no record, and the record after it keeps its own text.
+    (registry / "a_directory.toml").mkdir()
+    (registry / "a_directory.toml" / "kept.txt").write_text("kept\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-s", "-m", "Add a record\n\nCo-Authored-By: No LLM")
+    git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+    store = adm.Git(repo)
+    assert list(store.registry_records("HEAD")) == [f"{adm.DIVERGENCE_REGISTRY}example_entry.toml"]
+    assert store.registry_records("HEAD~1") == {}
+    assert adm.read_implementation(store.registry_records("HEAD")) == [
+        adm.MappedItem("example_entry", "crates/vep-core/src/lib.rs", "f"),
+        adm.MappedItem("example_entry", "crates/vep-core/src/lib.rs", "tests::f_is_one"),
+    ]
+    lib = repo / "crates" / "vep-core" / "src" / "lib.rs"
+    base_text = lib.read_text()
+    # Beside the mapped items: a second function and its test, below both.
+    lib.write_text(
+        base_text.replace("\n#[cfg(test)]", "\npub fn g() -> u8 {\n    2\n}\n\n#[cfg(test)]").replace(
+            "        assert_eq!(super::f(), 1);\n    }\n",
+            "        assert_eq!(super::f(), 1);\n    }\n\n    #[test]\n    fn g_is_two() {\n"
+            "        assert_eq!(super::g(), 2);\n    }\n",
+        )
+    )
+    (repo / "CHANGELOG.md").write_text(CHANGELOG.replace("- Entry (#0)\n", "- Entry (#0)\n- `g` is added.\n"))
+    git(repo, "commit", "-q", "-s", "-a", "-m", "Add g\n\nCo-Authored-By: No LLM")
+    assert adm.run_local(repo, "origin/main", None) == 0
+    assert "admission: OK" in capsys.readouterr().out
+    # Inside the mapped function.
+    lib.write_text(lib.read_text().replace("    1\n", "    3\n").replace("f(), 1", "f(), 3"))
+    git(repo, "commit", "-q", "-s", "-a", "-m", "Return three\n\nCo-Authored-By: No LLM")
+    assert adm.run_local(repo, "origin/main", None) == 1
+    err = capsys.readouterr().err
+    assert "`example_entry` (in `crates/vep-core/src/lib.rs`)" in err
+    assert "reproduction record names as an entry's implementation" in err
 
 
 def test_export_tree_writes_links_as_files_and_skips_filters(tmp_path):

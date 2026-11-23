@@ -1,7 +1,7 @@
 entry = "reference_skipped_record"
 page = "docs/divergences/defect-c.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
 input_class_basis = "1 · 0.26 per million · no flag needed"
 notes = "A multi-allelic symbolic list with no type of its own: Ensembl VEP marks the record skipped and drops it; vep-rs writes one row per ALT under each ALT's own class."
@@ -30,4 +30,21 @@ ensembl_vep = []
 vep_rs = [
   "21:30165801-30166000 | deletion | ENST00000286808 | frameshift_variant,stop_lost,feature_truncation,3_prime_UTR_variant",
   "21:30165801-30166000 | insertion | ENST00000286808 | feature_elongation,coding_sequence_variant,3_prime_UTR_variant",
+]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/runner.rs::mark_oversize_sv",
+    "crates/vep-core/src/sv_record.rs::structural_variants",
+    "crates/vep-core/src/sv_routing.rs::per_alt_classes",
+]
+tests = [
+    "crates/vep-cli/src/runner.rs::tests::test_annotate_batch_reference_block_over_transcript_is_one_intergenic_row",
+    "crates/vep-cli/src/vcf_parser.rs::tests::multi_allelic_symbolic_shapes_take_the_record_class",
+    "crates/vep-cli/tests/golden.rs::skipped_record_markers_match_the_reference_output",
+    "crates/vep-cli/tests/integration_test.rs::oversize_structural_variant_is_annotated_not_dropped",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/structural.rs::filter_reference_skipped_records",
+    "tools/vep-golden-corpus/src/classify/records.rs::reference_skipped_records",
 ]

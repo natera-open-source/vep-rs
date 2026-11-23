@@ -31,7 +31,10 @@
 //! by name and checked against the column the index was built on, since the two
 //! preparations share the header and differ in their index. A file that keeps
 //! only the columns the plugin reads (`chr pos ref alt ada_score rf_score`, or
-//! `hg38_chr hg38_pos ...` for GRCh38) is read the same way.
+//! `hg38_chr hg38_pos ...` for GRCh38) is read the same way. Ensembl VEP's
+//! module refuses a header without `Ensembl_gene` (dbscSNV.pm:111-113), a
+//! column no line of it reads (the test of dbscSNV.pm:169-170 is commented
+//! out); the reader does not require it.
 //!
 //! Two-phase plugin: [`BuiltinPlugin::prefetch`] batches the tabix query for a
 //! buffer and [`BuiltinPlugin::annotate`] writes the per-variant scores onto
@@ -43,8 +46,8 @@ use tracing::debug;
 use crate::annotation_store::{check_table_or_store, open_best_store_with, AnnotationStore};
 use crate::params::{warn_unread_parameters, PluginParams};
 use crate::tabix::{
-    allele_match, find_index_path, load_index, parse_header, split_field_count, table_contig,
-    BatchQueryResult, TabixAnnotator, TabixConfig, TabixRecord,
+    allele_match, indexed_position, parse_header, split_field_count, table_contig,
+    BatchQueryResult, IndexedPosition, TabixAnnotator, TabixConfig, TabixRecord,
 };
 use crate::traits::{BuiltinPlugin, PluginError, PrefetchData};
 use vep_core::assembly::Assembly;
@@ -67,7 +70,8 @@ pub struct DbscSnvPlugin {
     alt_col: usize,
     /// Columns of `ada_score` and `rf_score`, where the header carries them.
     score_cols: [Option<usize>; 2],
-    /// Assembly from `--assembly`, injected before `init()`.
+    /// The run's assembly (the cache's own, else the value of `--assembly`),
+    /// injected before `init()`.
     assembly: Option<Assembly>,
 }
 
@@ -83,11 +87,23 @@ impl DbscSnvPlugin {
         }
     }
 
-    /// The header name of the position column for `assembly` (dbscSNV.pm:215-220).
-    fn position_column_for(assembly: Assembly) -> &'static str {
+    /// The header name of the position column for `assembly` (dbscSNV.pm:215-220),
+    /// `None` for an assembly the file carries no position column for.
+    fn position_column_for(assembly: Assembly) -> Option<&'static str> {
         match assembly {
-            Assembly::Grch37 => "pos",
-            Assembly::Grch38 => "hg38_pos",
+            Assembly::Grch37 => Some("pos"),
+            Assembly::Grch38 => Some("hg38_pos"),
+            _ => None,
+        }
+    }
+
+    /// The header name of the sequence column for `assembly`, `None` for an
+    /// assembly the file carries no sequence column for.
+    fn sequence_column_for(assembly: Assembly) -> Option<&'static str> {
+        match assembly {
+            Assembly::Grch37 => Some("chr"),
+            Assembly::Grch38 => Some("hg38_chr"),
+            _ => None,
         }
     }
 
@@ -161,6 +177,8 @@ impl std::fmt::Debug for DbscSnvPlugin {
     }
 }
 
+impl crate::traits::sealed::Sealed for DbscSnvPlugin {}
+
 impl BuiltinPlugin for DbscSnvPlugin {
     fn name(&self) -> &str {
         NAME
@@ -196,7 +214,11 @@ impl BuiltinPlugin for DbscSnvPlugin {
             },
             None => self.assembly,
         };
-        let Some(assembly) = assembly else {
+        // An assembly the file carries no position column for is refused as a
+        // run without an assembly is.
+        let position =
+            assembly.and_then(|assembly| Some((assembly, Self::position_column_for(assembly)?)));
+        let Some((assembly, position_name)) = position else {
             return Err(PluginError::Init(format!(
                 "{NAME}: could not establish which position column to use based on assembly; \
                  try setting assembly manually with --assembly"
@@ -213,42 +235,43 @@ impl BuiltinPlugin for DbscSnvPlugin {
             PluginError::Init(format!("{NAME}: could not read headers from {file}"))
         })?;
         let column = |name: &str| header.iter().position(|h| h == name);
+        // dbscSNV.pm:111-113 requires `alt` and `Ensembl_gene`. Of the two the
+        // match reads `alt` alone (dbscSNV.pm:166-168; the gene test of :169-170
+        // is commented out), so a header without `Ensembl_gene` is read.
         let Some(alt_col) = column("alt") else {
             return Err(PluginError::Init(format!(
                 "{NAME}: could not find required column alt in {file}"
             )));
         };
-        let position_name = Self::position_column_for(assembly);
         let Some(start_col) = column(position_name) else {
             return Err(PluginError::Init(format!(
                 "{NAME}: could not find {position_name} column in {file}"
             )));
         };
-        let mut chr_col = match assembly {
-            Assembly::Grch38 => column("hg38_chr").unwrap_or(0),
-            Assembly::Grch37 => column("chr").unwrap_or(0),
-        };
+        let mut chr_col = Self::sequence_column_for(assembly)
+            .and_then(column)
+            .unwrap_or(0);
         // The two preparations share the header and differ in their index, so
         // the index must name the assembly's position column: one built on the
         // other column would place every record at the other assembly's
         // position and match nothing.
-        if let Ok(index_path) = find_index_path(&path) {
-            if let Some(index_header) = load_index(&index_path)?.header() {
-                let indexed = index_header.start_position_index();
-                if indexed != start_col {
-                    let indexed_name = header.get(indexed).map_or_else(
-                        || format!("column {}", indexed + 1),
-                        |name| format!("'{name}'"),
-                    );
-                    return Err(PluginError::Init(format!(
-                        "{NAME}: a {assembly} run reads '{position_name}' (column {}), but {file} is indexed on \
-                         {indexed_name} (column {}); prepare and index the file for {assembly} as the plugin's \
-                         documentation describes, or point --plugin {NAME} at the copy indexed for it",
-                        start_col + 1,
-                        indexed + 1,
-                    )));
-                }
-                chr_col = index_header.reference_sequence_name_index();
+        match indexed_position(&path, start_col)? {
+            IndexedPosition::Unchecked => {}
+            IndexedPosition::Agrees { sequence_column } => chr_col = sequence_column,
+            IndexedPosition::Disagrees {
+                indexed_column: indexed,
+            } => {
+                let indexed_name = header.get(indexed).map_or_else(
+                    || format!("column {}", indexed + 1),
+                    |name| format!("'{name}'"),
+                );
+                return Err(PluginError::Init(format!(
+                    "{NAME}: a {assembly} run reads '{position_name}' (column {}), but {file} is indexed on \
+                     {indexed_name} (column {}); prepare and index the file for {assembly} as the plugin's \
+                     documentation describes, or point --plugin {NAME} at the copy indexed for it",
+                    start_col + 1,
+                    indexed + 1,
+                )));
             }
         }
 
@@ -277,6 +300,12 @@ impl BuiltinPlugin for DbscSnvPlugin {
 
     fn set_assembly(&mut self, assembly: Option<Assembly>) {
         self.assembly = assembly;
+    }
+
+    fn set_reference_fasta(&mut self, fasta: Option<std::sync::Arc<vep_fasta::IndexedFasta>>) {
+        if let Some(store) = self.store.as_mut() {
+            store.set_reference_fasta(fasta);
+        }
     }
 
     fn prefetch(&self, variants: &[InputVariant]) -> Result<Option<PrefetchData>, PluginError> {
@@ -321,7 +350,7 @@ impl BuiltinPlugin for DbscSnvPlugin {
             for tc in &mut variant.transcript_consequences {
                 if self.annotates_row(tc) {
                     // A later plugin's value replaces an earlier one under the
-                    // same key (OutputFactory.pm:2230-2231), its mark too.
+                    // same key (OutputFactory.pm:2239-2240), its mark too.
                     tc.plugin_empty_strings
                         .retain(|key| !scores.values.contains_key(key));
                     tc.plugin_data
@@ -596,6 +625,74 @@ mod tests {
         );
     }
 
+    /// dbscSNV.pm:111-113 dies on a header without `Ensembl_gene`, and the one
+    /// test that reads the cell (dbscSNV.pm:169-170) is commented out, so a
+    /// record matches on its position and alternate allele alone
+    /// (dbscSNV.pm:166-168). A file of the six columns the module reads is
+    /// loaded under either assembly's column names, and each of its rows scores
+    /// as the same row of the eighteen-column fixture does.
+    #[test]
+    fn a_header_without_the_gene_column_is_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let whole = load(Some(Assembly::Grch37), &[&grch37_file(dir.path())]).unwrap();
+        let six37 = write_tabix_fixture(
+            dir.path(),
+            "six_columns_synthetic_GRCh37.txt.gz",
+            &[
+                "chr\tpos\tref\talt\tada_score\trf_score\r",
+                "21\t100\tG\tA\t0.00106\t0.028\r",
+                "21\t100\tG\tT\t0.91234\t.\r",
+                "21\t200\tC\tT\t.\t0.874\r",
+            ],
+            IndexSpec::standard().bare_header(),
+        );
+        let plugin = load(Some(Assembly::Grch37), &[&six37.to_string_lossy()]).unwrap();
+        let expected = [
+            (
+                100,
+                "G",
+                "A",
+                vec![("ada_score", "0.00106"), ("rf_score", "0.028")],
+            ),
+            (100, "G", "T", vec![("ada_score", "0.91234")]),
+            (200, "C", "T", vec![("rf_score", "0.874")]),
+        ];
+        for (pos, reference, alt, scores) in expected {
+            let scores: Vec<(String, String)> = scores
+                .into_iter()
+                .map(|(key, value)| (key.to_string(), value.to_string()))
+                .collect();
+            assert_eq!(
+                scores_of(&plugin, &mut variant(pos, reference, alt)),
+                scores,
+                "{pos} {alt}"
+            );
+            assert_eq!(
+                scores_of(&whole, &mut variant(pos, reference, alt)),
+                scores,
+                "{pos} {alt} in the eighteen-column fixture"
+            );
+        }
+
+        let six38 = write_tabix_fixture(
+            dir.path(),
+            "six_columns_synthetic_GRCh38.txt.gz",
+            &[
+                "hg38_chr\thg38_pos\tref\talt\tada_score\trf_score\r",
+                "21\t300\tG\tA\t0.00106\t0.028\r",
+            ],
+            IndexSpec::standard().bare_header(),
+        );
+        let plugin = load(Some(Assembly::Grch38), &[&six38.to_string_lossy()]).unwrap();
+        assert_eq!(
+            scores_of(&plugin, &mut variant(300, "G", "A")),
+            [
+                ("ada_score".to_string(), "0.00106".to_string()),
+                ("rf_score".to_string(), "0.028".to_string())
+            ]
+        );
+    }
+
     /// The second positional parameter names the assembly the file was prepared for
     /// and outranks the run's (dbscSNV.pm:98-100, 214); a name other than `GRCh37` or
     /// `GRCh38` is refused (dbscSNV.pm:222), and a `key=value` parameter is not read
@@ -614,7 +711,7 @@ mod tests {
             "plugin initialization failed: dbscSNV: assembly \"hg38\" is not compatible with this plugin"
         );
         // A second token that is empty (as `<file>,,X` leaves it) or `0` is no
-        // assembly: the Perl `if(my $assembly = $self->params->[1])` reads
+        // assembly: the Ensembl VEP `if(my $assembly = $self->params->[1])` reads
         // both as false and keeps the run's, and the third token is never read.
         let plugin = load(Some(Assembly::Grch38), &[&file38, "", "X"]).unwrap();
         assert_eq!(scores_of(&plugin, &mut variant(300, "G", "A")).len(), 2);
@@ -625,6 +722,23 @@ mod tests {
             err.to_string().contains("unknown parameter 'file'"),
             "{err}"
         );
+    }
+
+    /// Every assembly `Assembly::ALL` lists has its position and sequence
+    /// columns, so none is refused as an assembly the file carries no columns
+    /// for.
+    #[test]
+    fn every_listed_assembly_has_its_columns() {
+        for &assembly in Assembly::ALL {
+            assert!(
+                DbscSnvPlugin::position_column_for(assembly).is_some(),
+                "{assembly}"
+            );
+            assert!(
+                DbscSnvPlugin::sequence_column_for(assembly).is_some(),
+                "{assembly}"
+            );
+        }
     }
 
     /// Only a single-base substitution whose allele is a base is annotated
@@ -653,9 +767,10 @@ mod tests {
             FeatureType::MotifFeature,
             FeatureType::Transcript,
         ] {
-            variant.transcript_consequences.push(TranscriptConsequence {
-                feature_type,
-                ..TranscriptConsequence::default()
+            variant.transcript_consequences.push({
+                let mut consequence = TranscriptConsequence::default();
+                consequence.feature_type = feature_type;
+                consequence
             });
         }
         plugin
@@ -768,10 +883,10 @@ mod tests {
         );
     }
 
-    /// Ensembl VEP 116.2 never hands dbscSNV a structural variant: the module
+    /// Ensembl VEP 116.3 never hands dbscSNV a structural variant: the module
     /// keeps the default `variant_feature_types` of `['VariationFeature']`
     /// (BaseVepPlugin.pm:100), which the dispatch checks before running a
-    /// plugin on a line (OutputFactory.pm:2220). A one-base `<DEL>` row, whose
+    /// plugin on a line (OutputFactory.pm:2229). A one-base `<DEL>` row, whose
     /// start equals its end as a substitution's does, gets no score, and nor
     /// does a scored substitution carrying the structural mark, which pins the
     /// gate rather than the span test; the plain substitution is scored.

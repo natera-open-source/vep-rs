@@ -1,0 +1,43 @@
+======================================================================
+DISCORDANT CLASSIFICATION SUMMARY
+======================================================================
+
+Total discordants: 63
+
+By mismatch type:
+  true_extra                      63 (100.0%)
+
+By mismatch type + direction:
+  true_extra                extra_in_rust       63
+
+By file + mismatch type (top 30):
+  file_00.txt                         true_extra                       2 (  3.2%)
+  file_01.txt                         true_extra                       2 (  3.2%)
+  file_02.txt                         true_extra                       2 (  3.2%)
+  file_03.txt                         true_extra                       2 (  3.2%)
+  file_04.txt                         true_extra                       2 (  3.2%)
+  file_05.txt                         true_extra                       2 (  3.2%)
+  file_06.txt                         true_extra                       2 (  3.2%)
+  file_07.txt                         true_extra                       2 (  3.2%)
+  file_08.txt                         true_extra                       2 (  3.2%)
+  file_09.txt                         true_extra                       2 (  3.2%)
+  file_10.txt                         true_extra                       2 (  3.2%)
+  file_11.txt                         true_extra                       2 (  3.2%)
+  file_12.txt                         true_extra                       2 (  3.2%)
+  file_13.txt                         true_extra                       2 (  3.2%)
+  file_14.txt                         true_extra                       2 (  3.2%)
+  file_15.txt                         true_extra                       2 (  3.2%)
+  file_16.txt                         true_extra                       2 (  3.2%)
+  file_17.txt                         true_extra                       2 (  3.2%)
+  file_18.txt                         true_extra                       2 (  3.2%)
+  file_19.txt                         true_extra                       2 (  3.2%)
+  file_20.txt                         true_extra                       2 (  3.2%)
+  file_21.txt                         true_extra                       2 (  3.2%)
+  file_22.txt                         true_extra                       2 (  3.2%)
+  file_23.txt                         true_extra                       2 (  3.2%)
+  file_24.txt                         true_extra                       2 (  3.2%)
+  file_25.txt                         true_extra                       2 (  3.2%)
+  file_26.txt                         true_extra                       2 (  3.2%)
+  file_27.txt                         true_extra                       2 (  3.2%)
+  file_28.txt                         true_extra                       2 (  3.2%)
+  file_29.txt                         true_extra                       2 (  3.2%)

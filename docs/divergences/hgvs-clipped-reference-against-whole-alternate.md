@@ -1,6 +1,6 @@
 # The HGVSc of an allele whose span runs over a transcript's edge
 
-**The defect in one sentence.** Under `--hgvs`, Ensembl VEP 116.2 reads the whole alternate allele against the reference bases inside the transcript when an allele's span runs over the transcript's edge. A substitution of several bases is then written as a `delins` of every alternate base over the bases inside, and one whose bases inside are all unchanged as an insertion of the outside bases at an intron coordinate before the first exon. A deletion over the edge written with a base it keeps becomes a `del`, a `delins` or a substitution of bases inside. vep-rs describes only the change inside the transcript, and writes no HGVSc where the change lies outside or is a deletion written nowhere wholly inside.
+**The defect in one sentence.** Under `--hgvs`, Ensembl VEP 116.3 reads the whole alternate allele against the reference bases inside the transcript when an allele's span runs over the transcript's edge. A substitution of several bases is then written as a `delins` of every alternate base over the bases inside, and one whose bases inside are all unchanged as an insertion of the outside bases at an intron coordinate before the first exon. A deletion over the edge written with a base it keeps becomes a `del`, a `delins` or a substitution of bases inside. vep-rs describes only the change inside the transcript, and writes no HGVSc where the change lies outside or is a deletion written nowhere wholly inside.
 
 The allele's other end may lie in an exon, in an intron or past the transcript's other edge, and the reading is the same in each case. Where that end lies in an intron or past the other edge, neither end of the allele maps to a cDNA base, and both engines leave `cDNA_position` empty, as they do on an intronic row.
 
@@ -25,7 +25,7 @@ The exception is a deletion written with bases it keeps that runs over the trans
 
 **What correcting it would change.** Ensembl VEP would write the notation of the change inside the transcript, as it writes for the minimised record, and none for an allele that changes no base of the transcript or deletes over the edge with no placement wholly inside. Release 115.2 wrote none for both: its `_var2transcript_slice_coords` returned nothing for any span with an end outside the transcript (release/115, lines 2656-2661).
 
-**The class it produces.** `hgvs_clipped_reference_against_whole_alternate`: a differing HGVSc on a row of a sequence allele whose cDNA position has an open side (`?-6`, `8485-?`), or is empty where the allele's other end lies in an intron or past the other edge. Ensembl VEP's notation is of the row's transcript, or empty where the whole alternate equals the bases inside; vep-rs's is of the same transcript and numbering, or empty where the change lies outside or is a deletion written nowhere wholly inside the transcript.
+**The class it produces.** `hgvs_clipped_reference_against_whole_alternate`: a differing HGVSc on a row of a sequence allele whose cDNA position has an open side (`?-6`, `8485-?`), or is empty where the allele's other end lies in an intron or past the other edge. Ensembl VEP's notation is of the row's transcript, or empty where the whole alternate equals the bases inside; vep-rs's is of the same transcript and numbering, or empty where the change lies outside or is a deletion written nowhere wholly inside the transcript. On a model edited to the genome, Ensembl VEP's notation may also stand at a coordinate slid past the last base, or name the base outside in a substitution's reference (section 8).
 
 Against an empty notation vep-rs's is a `del`, the bases the aligned change deletes inside; against an empty vep-rs notation Ensembl VEP's is an `ins` or a `dup`, what the outside bases read as once the clip has stripped the unchanged bases inside. It may also be a `del`, a `delins` or a substitution of bases inside, what Ensembl VEP writes for a deletion over the edge. The comparator takes one on a row whose cDNA position has an open side and whose allele holds fewer bases than its Location spans; on any other row it stays a difference.
 
@@ -100,3 +100,36 @@ The written span maps to slice coordinates (0, 2) and is clamped to (1, 2), the 
 The deleted bases stand in a run of four `A`, 213628399 to 213628402, so the deletion can be written at three places. The one the record writes is the most 3' on the transcript's strand, where the HGVS nomenclature's 3' rule puts a change: "the most 3' position possible of the reference sequence is arbitrarily assigned to have been changed" (`hgvs-nomenclature.org/stable/recommendations/general/`). It takes the first base and the base before it; the other two lie wholly before the transcript, and none lies wholly inside.
 
 The nomenclature's DNA deletion page says of deletions extending beyond the transcribed region: "Such deletions can only be described using genomic coordinates" (`hgvs-nomenclature.org/stable/recommendations/DNA/deletion/`). vep-rs therefore writes no HGVSc and, with no notation, neither plugin field. Under `--shift_hgvs 0` it applies no 3' rule and writes `n.1del`.
+
+## 8. An allele over the last base of a RefSeq model edited to the genome
+
+**In short.** On a model that carries an `_rna_edit` attribute, two further steps of Ensembl VEP act on the notation of an allele over the last base. `21 37223419 . AT AA` on GRCh38 changes 21:37223420, the last base of the reverse-strand model NM_001331018.1, and keeps the base past it. Under `--merged --hgvs` both engines write `cDNA_position` `3458-?`, `REFSEQ_OFFSET=19` and `BAM_EDIT=OK`. Ensembl VEP writes `HGVSc=NM_001331018.1:c.*2123+19delinsTT`, the whole alternate at a coordinate slid past the model's last base; vep-rs writes `HGVSc=NM_001331018.1:c.*2124A>T`, the one base the record changes, at its own number.
+
+`21 42297244 . AC G` replaces the last base of the forward-strand model NM_207628.1 and the base past it by one base. Under `--refseq --hgvs` both engines write `3_prime_UTR_variant`, `cDNA_position` `3037-?` and `BAM_EDIT=OK`. Ensembl VEP writes `HGVSc=NM_207628.1:c.*852AC>G`, a substitution whose reference names the base inside and the base outside at one position. vep-rs writes `HGVSc=NM_207628.1:c.*852A>G`, the notation both engines write on NM_207627.2, a model of the same last base that carries no edit.
+
+The steps on the two rows, by line of `TranscriptVariationAllele.pm`:
+
+| Step | Lines | `AT AA` on NM_001331018.1 | `AC G` on NM_207628.1 |
+| --- | --- | --- | --- |
+| The end past the last base is clamped onto the transcript | 2732-2733 | The base inside is slice position 44689, the last | The base inside is the last of the slice |
+| The whole alternate is typed against the clamped reference | 1474-1483 | Two bases against one: a `delins` | One base against one: a substitution, `A>G` |
+| On a model with `_rna_edit` attributes, both alleles are written over with the row's whole alleles | 1508-1514 | The alternate stays whole, as it was typed | The reference becomes `AC`, the base inside and the base past it |
+| The summed length of the edits that start at or before the row's cDNA start is added to the position | 1517, 1594-1624 | cDNA start 3458: the edits `647 646` and `3458 3457` add 1 and 18 bases, so 19 | cDNA start 3037: the one edit, `3038 3037`, starts after it, so 0 |
+| The position is read on the genome and numbered | 1524-1525, 2766-2768, 2798-2829, 2848-2852 | 21:37223401, nineteen bases past the last exon: that exon's end numbered without the edits, 3457, and the distance, less the coding end 1334, `*2123+19` | `*852` |
+
+The first two steps are this entry's. Lines 1508-1514 are the step that [`refseq_edited_model_unminimised_allele_hgvsc`](refseq-edited-model-unminimised-allele-hgvsc.md) describes: there the alleles written back keep a base the clip took, and here the reference keeps a base the clamp cut. Lines 1517 and 1524-1525, with the numbering they call, are those of [`refseq_edited_model_hgvsc_offset`](refseq-edited-model-hgvsc.md).
+
+The model's own mapper numbers the last base of NM_001331018.1, 21:37223420, cDNA 3458, and its coding sequence ends at cDNA 1334: 3458 - 1334 = 2124. The record changes that base from `A` to `T` on the transcript's strand, `c.*2124A>T`. Ensembl VEP's `c.*2123+19` names a base of an intron after c.*2123, and the model has no intron there. On these rows the `Consequence` differs as well, `intergenic_variant` against `3_prime_UTR_variant`, a row of [`refseq_edited_model_tail_term`](refseq-edited-model-tail-term.md).
+
+| Record | Model | Ensembl VEP | vep-rs |
+| --- | --- | --- | --- |
+| `21 37223419 . AT CA`, both bases changed | NM_001331018.1 | `c.*2123+19delinsTG` | `c.*2124A>T` |
+| `21 37223419 . AT C`, two bases replaced by one | NM_001331018.1 | `c.*2123+19AT>G` | `c.*2124A>G` |
+| `21 37223419 . AT AA` | ENST00000929122, the same last base and no edit | `c.*2124delinsTT` | `c.*2124A>T` |
+
+| What the class reads | On the two rows |
+| --- | --- |
+| The slid coordinate | The row prints `BAM_EDIT=OK` and a positive `REFSEQ_OFFSET`, and its `cDNA_position` is open at its end. An Ensembl VEP coordinate whose intron distance is that offset, `*2123+19` beside `REFSEQ_OFFSET=19`, then stands for every base from the exon base it counts from to itself. vep-rs's coordinates are held to the span's length plus one of that stretch. |
+| The respelled reference | The row prints `BAM_EDIT=OK`, and its `cDNA_position` has an open side. An Ensembl VEP substitution that names two or more reference bases at one position is then read as the substitution of one base there. The class's other conditions follow, the slid coordinate among them. |
+| What it cannot tell | That the slid coordinate and vep-rs's name the same base. The count of bases the model's edits add before the last base is in the cache alone, between none and the offset. Nor can it tell which of the named reference bases lies inside the transcript. |
+| What stays a difference | Either pair with the sides exchanged. The HGVSIntronOffset plugin's two fields beside such a pair are not among the shapes the class takes for them. |

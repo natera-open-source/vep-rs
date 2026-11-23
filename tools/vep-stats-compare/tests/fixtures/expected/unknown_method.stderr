@@ -1,0 +1,1 @@
+ERROR: [compare_vep_stats] cannot read tests/fixtures/unknown_method.summary.log.gz: Unknown compression method

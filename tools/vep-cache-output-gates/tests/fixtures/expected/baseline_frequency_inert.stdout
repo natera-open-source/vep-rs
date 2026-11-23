@@ -1,0 +1,3 @@
+  Consequence F1: 1.000000 (gate >= 0.999) PASS
+  Total annotations delta: 1.000000 (0 vs 200000) (gate < 0.001) FAIL
+  Co-located variant delta: 1.000000 (0 vs 150000) (gate < 0.01) FAIL

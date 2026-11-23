@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 //! Region format input, read as Ensembl VEP's `Parser/Region.pm`
-//! `create_VariationFeatures` (release/116.2, lines 157-222) reads it over
+//! `create_VariationFeatures` (release/116.3, lines 157-222) reads it over
 //! ensembl-io's list parser:
 //!
 //! ```text
@@ -43,7 +43,8 @@
 //! as Ensembl VEP numbers them (`LineCount`): a line with no word character is
 //! an empty line, warned about in `skip_empty_lines`'s words and counted
 //! (Parser.pm:273), and any other `#` line is a comment here, counted toward
-//! the line numbers that follow and otherwise passed over without a word,
+//! the line numbers that follow and otherwise passed over, with one warning
+//! at the end of the input that counts such lines,
 //! where ensembl-io's list parser reads it as a record (ListBasedParser.pm:60)
 //! that the expression refuses, with the consequences above.
 
@@ -317,6 +318,7 @@ impl<R: BufRead + Send> InputParser for RegionParser<R> {
             }
             self.lines.record_line();
             if line.starts_with('#') {
+                self.lines.comment_line();
                 continue;
             }
             return Some(self.parse_record(line));
@@ -507,11 +509,11 @@ mod tests {
     /// length and carry no `-` (Parser.pm:862-881), keeping the string as parsed
     /// for `UPLOADED_ALLELE` whether or not a base is trimmed: `21:100-101/N` is
     /// `NN/N`, trimmed to `N/-` at 101; `21:100-102/A` shares no base with its
-    /// `NNN` and stays, its placeholder kept all the same (Ensembl VEP 116.2
+    /// `NNN` and stays, its placeholder kept all the same (Ensembl VEP 116.3
     /// prints `UPLOADED_ALLELE=NN/GTA` for `21:10552677-10552678/GTA`). A
     /// record of one length on each side, or with a `-`, is not minimised and
     /// keeps its placeholder too, for `--minimal`, which minimises every
-    /// bi-allelic record (:852) and prints it (Ensembl VEP 116.2 prints
+    /// bi-allelic record (:852) and prints it (Ensembl VEP 116.3 prints
     /// `UPLOADED_ALLELE=N/A` for `21:14221107-14221107/A` under `--minimal` and
     /// the looked-up `C/A` without it).
     #[test]
@@ -681,7 +683,7 @@ mod tests {
     /// length or with a `-` is not minimised, and an insertion has none. Under
     /// `--minimal` every record is minimised (Parser.pm:852, no length or `-`
     /// test), so `21:14221104-14221107/NNAA` leaves `NN/AA` over 14221106-14221107,
-    /// the span 1 that `--max_sv_size 2` admits in Ensembl VEP 116.2, and `N-A`
+    /// the span 1 that `--max_sv_size 2` admits in Ensembl VEP 116.3, and `N-A`
     /// over three bases the span 1 of `NN/-A`.
     #[test]
     fn minimised_span_follows_trim_sequences() {
@@ -706,12 +708,13 @@ mod tests {
     /// character, blank, `-/-` or a bare `#`, is an empty line (Parser.pm:273),
     /// warned about in `skip_empty_lines`'s words when its run ends, at the
     /// next record (`:273-290`, the run's first line named) or at the end of
-    /// the input; a `#` line with a word character is a comment, counted and
-    /// passed over without a warning, where ensembl-io's list parser reads it
+    /// the input; a `#` line with a word character is a comment, counted,
+    /// passed over and warned about once at the end of the input, where
+    /// ensembl-io's list parser reads it
     /// as a record (ListBasedParser.pm:60) the expression refuses
     /// (Parser/Region.pm:171). The `\r` of a `\r\n` line end is removed with
     /// the `\n`, and a last line without a line end is read whole. Ensembl VEP
-    /// 116.2 numbers `21:14221107-14221107/A`, `# c`, `#`, `  `,
+    /// 116.3 numbers `21:14221107-14221107/A`, `# c`, `#`, `  `,
     /// `21:1-20000000/A` as `Skipped 2 empty lines from line 3` and
     /// `line 5 skipped`.
     #[test]
@@ -736,6 +739,11 @@ mod tests {
             ]
         );
         assert!(parser.next_variant().is_none());
+        assert_eq!(
+            parser.take_warnings(),
+            ["Read 2 lines that begin with '#' as comments, the first at line 4"]
+        );
+        assert!(parser.next_variant().is_none());
         assert!(parser.take_warnings().is_empty());
         assert_eq!(parser.take_empty_lines(), 0);
 
@@ -749,7 +757,10 @@ mod tests {
         assert!(trailing.next_variant().is_none());
         assert_eq!(
             trailing.take_warnings(),
-            ["Skipped 2 empty lines from line 3"]
+            [
+                "Skipped 2 empty lines from line 3",
+                "Read 1 line that begins with '#' as a comment, at line 1"
+            ]
         );
     }
 

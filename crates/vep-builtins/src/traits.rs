@@ -6,13 +6,13 @@
 //! Built-in plugins operate on native Rust types without JSON serialization
 //! or C FFI overhead. The plugin execution model has three layers:
 //!
-//! - [`prefetch`](BuiltinPlugin::prefetch) + [`annotate`](BuiltinPlugin::annotate):
+//! - `prefetch` + `annotate`:
 //!   Two-phase execution that separates I/O (parallelizable) from annotation
 //!   (sequential). Tabix plugins implement these to enable parallel prefetch
 //!   across independent data files.
-//! - [`run_batch`](BuiltinPlugin::run_batch): Single-phase fallback for plugins
+//! - `run_batch`: Single-phase fallback for plugins
 //!   that don't benefit from parallel I/O (e.g., in-memory lookups).
-//! - [`run`](BuiltinPlugin::run): Per-transcript-consequence annotation for
+//! - `run`: Per-transcript-consequence annotation for
 //!   simple per-transcript plugins.
 
 use std::sync::Arc;
@@ -21,8 +21,11 @@ use indexmap::IndexMap;
 use vep_core::consequence::{RowKind, TranscriptConsequence};
 use vep_core::variant::InputVariant;
 
+use crate::pool_pass::about_record;
+
 /// Errors from builtin plugin execution.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum PluginError {
     #[error("plugin initialization failed: {0}")]
     Init(String),
@@ -33,9 +36,17 @@ pub enum PluginError {
 }
 
 impl PluginError {
+    /// The error's own text, without the words its variant prints before it.
+    pub fn detail(&self) -> String {
+        match self {
+            Self::Init(text) | Self::Run(text) => text.clone(),
+            Self::Io(error) => error.to_string(),
+        }
+    }
+
     /// The same error with `note` after its text, `; ` between, in the same
     /// variant.
-    pub fn with_note(self, note: &str) -> Self {
+    pub(crate) fn with_note(self, note: &str) -> Self {
         match self {
             Self::Init(text) => Self::Init(format!("{text}; {note}")),
             Self::Run(text) => Self::Run(format!("{text}; {note}")),
@@ -55,6 +66,8 @@ impl PluginError {
 /// vep-rs format with no Ensembl VEP counterpart: one column per field, so a
 /// plugin shapes its fields for it as for the tab format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
+#[doc(hidden)]
 pub enum OutputFormat {
     #[default]
     Vep,
@@ -90,6 +103,8 @@ impl OutputFormat {
 /// notations (`--hgvs` with a reference FASTA), which a plugin reading the
 /// HGVSc coordinates needs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
+#[doc(hidden)]
 pub struct RunContext<'a> {
     pub output_format: OutputFormat,
     pub refseq: bool,
@@ -101,13 +116,15 @@ pub struct RunContext<'a> {
 /// Prints `line` on standard error alone, the channel a bare `warn` in an
 /// Ensembl VEP plugin reaches: printed under `--quiet` too and never in the
 /// warnings file, which carries the run's own warnings and is compared with
-/// Ensembl VEP's.
-pub fn print_on_stderr(line: &str) {
-    eprintln!("{line}");
+/// Ensembl VEP's. A line the stream refuses is dropped once the process has
+/// called [`vep_core::stderr::drop_refused_writes`], as the `vep` binary does;
+/// in any other process the line is written as `eprintln!` writes it.
+pub(crate) fn print_on_stderr(line: &str) {
+    vep_core::stderr::write(format_args!("{line}\n"));
 }
 
 /// [`print_on_stderr`] of `WARNING: <text>`, the shape of most such lines.
-pub fn warn_on_stderr(text: &str) {
+pub(crate) fn warn_on_stderr(text: &str) {
     print_on_stderr(&format!("WARNING: {text}"));
 }
 
@@ -116,6 +133,8 @@ pub fn warn_on_stderr(text: &str) {
 /// Each plugin stores its own concrete type (e.g., `BatchQueryResult`) inside
 /// the `Box<dyn Any>` and downcasts it in [`BuiltinPlugin::annotate`]. This
 /// keeps the trait free of backend-specific types.
+#[non_exhaustive]
+#[doc(hidden)]
 pub struct PrefetchData(pub Box<dyn std::any::Any + Send>);
 
 impl PrefetchData {
@@ -136,6 +155,12 @@ impl PrefetchData {
     }
 }
 
+pub(crate) mod sealed {
+    /// The supertrait of `BuiltinPlugin` that code outside the crate cannot
+    /// name: a type implements `BuiltinPlugin` only where it implements this.
+    pub trait Sealed {}
+}
+
 /// Trait that all built-in VEP plugins implement.
 ///
 /// Plugins are compiled directly into the binary and operate on native Rust
@@ -153,11 +178,15 @@ impl PrefetchData {
 /// 3. **Per-transcript (run):** Default implementation of [`run_batch`]
 ///    dispatches to [`run`] for each transcript consequence.
 ///
+/// The trait cannot be implemented outside this crate, because the registry
+/// builds plugins by name alone and takes none from a caller.
+///
 /// [`prefetch`]: BuiltinPlugin::prefetch
 /// [`annotate`]: BuiltinPlugin::annotate
 /// [`run_batch`]: BuiltinPlugin::run_batch
 /// [`run`]: BuiltinPlugin::run
-pub trait BuiltinPlugin: Send + Sync {
+#[doc(hidden)]
+pub trait BuiltinPlugin: sealed::Sealed + Send + Sync {
     /// Plugin name matching the `--plugin` CLI argument (e.g., "CADD").
     fn name(&self) -> &str;
 
@@ -167,7 +196,7 @@ pub trait BuiltinPlugin: Send + Sync {
     /// The kinds of row the plugin runs on, Ensembl VEP's `feature_types`
     /// (`BaseVepPlugin.pm:99` defaults it to `Transcript`, `BaseVepPlugin.pm:229-233`
     /// reads it): a plugin writes nothing on a row of another kind
-    /// (`OutputFactory.pm:2223`), and a value it writes for the whole variant
+    /// (`OutputFactory.pm:2232`), and a value it writes for the whole variant
     /// prints on the rows of these kinds alone. A plugin whose Ensembl VEP module
     /// declares `['Feature', 'Intergenic']` returns [`RowKind::ALL`].
     fn feature_types(&self) -> &[RowKind] {
@@ -183,7 +212,7 @@ pub trait BuiltinPlugin: Send + Sync {
 
     /// Whether the plugin runs on structural variants as well as sequence
     /// variants, Ensembl VEP's `variant_feature_types` (`BaseVepPlugin.pm:100`
-    /// defaults it to `['VariationFeature']`; `OutputFactory.pm:2220` checks it
+    /// defaults it to `['VariationFeature']`; `OutputFactory.pm:2229` checks it
     /// before the feature kind, through the `isa` test at
     /// `BaseVepPlugin.pm:290`). A StructuralVariationFeature is a
     /// BaseVariationFeature and not a VariationFeature
@@ -212,7 +241,7 @@ pub trait BuiltinPlugin: Send + Sync {
     /// The URL a `--plugin` word names as a data file under the plugin's own
     /// parameter grammar, read by the registry before [`init`](Self::init),
     /// which refuses the plugin with `remote data files are not supported`
-    /// naming it. The default reading, [`default_remote_data_file`], is the
+    /// naming it. The default reading, `default_remote_data_file`, is the
     /// value of `key=value` or the whole positional word, the grammar of Ensembl
     /// VEP's `params_to_hash` and of the plugins that read by position. A plugin
     /// whose module reads a word another way overrides it (LoFTEE's `key:value`
@@ -227,30 +256,37 @@ pub trait BuiltinPlugin: Send + Sync {
     ///
     /// Default is a no-op; the plugins that read the reference (LoFTEE for
     /// intron boundary motifs, MaxEntScan for splice-site windows, UTRAnnotator
-    /// for the 5' UTR and coding sequence) use it. Sharing the already-loaded
+    /// for the 5' UTR and coding sequence) use it, and a plugin that reads a
+    /// table through an annotation store hands it to the store, which compares
+    /// the table's mitochondrial rows with it on GRCh37
+    /// ([`crate::tabix::MitochondrialFrame`]). Sharing the already-loaded
     /// `Arc` avoids opening the FASTA twice.
     fn set_reference_fasta(&mut self, _fasta: Option<Arc<vep_fasta::IndexedFasta>>) {}
 
     /// Whether the plugin cannot annotate without the reference FASTA. The
-    /// registry refuses to load such a plugin when the run has none, as the
-    /// Ensembl VEP plugins that read sequence die offline without `--fasta`
-    /// (MaxEntScan.pm:94); a plugin that degrades gracefully (LoFTEE) keeps the
-    /// default.
+    /// registry refuses to load such a plugin when the run has none, before
+    /// [`init`](Self::init) runs, so the answer cannot depend on a parameter.
+    /// MaxEntScan and UTRAnnotator declare it: Ensembl VEP's MaxEntScan dies
+    /// offline without `--fasta` (MaxEntScan.pm:94), while its UTRAnnotator
+    /// prints a notice and does not die (UTRAnnotator.pm:88). A plugin that
+    /// degrades gracefully (LoFTEE) keeps the default.
     fn requires_reference_fasta(&self) -> bool {
         false
     }
 
     /// Whether the plugin cannot annotate without the HGVS notations. The
-    /// registry refuses to load such a plugin when the run computes none, as
-    /// HGVSIntronOffset reads its offsets from the HGVSc coordinates
-    /// (HGVSIntronOffset.pm:62-65) that `--hgvs` builds.
+    /// registry refuses to load such a plugin when the run computes none,
+    /// before [`init`](Self::init) runs, as HGVSIntronOffset reads its offsets
+    /// from the HGVSc coordinates (HGVSIntronOffset.pm:62-65) that `--hgvs`
+    /// builds.
     fn requires_hgvs(&self) -> bool {
         false
     }
 
-    /// Inject the run's target assembly, resolved from `--assembly`. Called by
-    /// the registry **before** [`init`](BuiltinPlugin::init), so `init` can use
-    /// it while opening data files.
+    /// Inject the run's target assembly, parsed from the run's assembly name
+    /// (the cache's own, else the value of `--assembly`). Called by the
+    /// registry **before** [`init`](BuiltinPlugin::init), so `init` can use it
+    /// while opening data files.
     ///
     /// Default is a no-op. Plugins that need it fall into two groups:
     ///
@@ -258,8 +294,10 @@ pub trait BuiltinPlugin: Send + Sync {
     ///   `hg19_pos` and `grch38_pos`, indexed on a different column per
     ///   assembly. Without the assembly the plugin cannot know which column
     ///   holds the coordinates tabix indexed, and reads the wrong one.
-    /// - **Per-assembly bundles**: LoFTEE's upstream GERP data is a tabix TSV
-    ///   on GRCh37 and a bigWig on GRCh38, with different END_TRUNC cutoffs.
+    /// - **Per-assembly readers**: LoFTEE reads its GERP scores with `tabix` on
+    ///   GRCh37 and from a bigWig on GRCh38, as each branch of Ensembl VEP's
+    ///   plugin does (`LoF.pm` lines 138 to 141 of `master`, line 130 of
+    ///   `grch38`), with different END_TRUNC cutoffs.
     ///
     /// Plugins keyed on gene symbol (LoFtool, pLI) genuinely ignore this: one file
     /// serves both assemblies.
@@ -269,10 +307,10 @@ pub trait BuiltinPlugin: Send + Sync {
     /// annotating from the wrong genome. A pre-split file is not self-evidently
     /// correct: the two copies share a column layout, so pointing a run at the wrong
     /// one resolves contigs, matches nothing, and exits 0. Each uses whichever
-    /// in-file signal that database carries: CADD a `##`-preamble marker
-    /// ([`tabix::detect_assembly_marker`](crate::tabix::detect_assembly_marker)),
+    /// in-file signal that database carries: CADD the assembly's name in any
+    /// header line (CADD.pm:151-157, checked when the plugin opens its file),
     /// dbscSNV its coordinate column names, AlphaMissense its per-row `genome`
-    /// column ([`tabix::first_data_row_field`](crate::tabix::first_data_row_field)).
+    /// column (`tabix::first_data_row_field`).
     ///
     /// gnomADc deliberately does not: its two files are different
     /// releases (v2.1 genomes on GRCh37, v4.0 exomes on GRCh38) whose headers the
@@ -300,7 +338,7 @@ pub trait BuiltinPlugin: Send + Sync {
     /// Ensembl stable id warn under either flag that the match may fail
     /// (REVEL.pm:144-146, AlphaMissense.pm:188-190, pLI.pm:187-189 and
     /// SpliceVault.pm:129-131, each a bare `warn`, and dbNSFP.pm:617-619; all
-    /// five printed here with [`warn_on_stderr`]), since RefSeq ids never match
+    /// five printed here with `warn_on_stderr`), since RefSeq ids never match
     /// an Ensembl id.
     fn set_transcript_set(&mut self, _refseq: bool, _merged: bool) {}
 
@@ -376,34 +414,47 @@ pub trait BuiltinPlugin: Send + Sync {
     /// [`prefetch`](BuiltinPlugin::prefetch) + [`annotate`](BuiltinPlugin::annotate)
     /// instead.
     ///
-    /// Default implementation calls [`run`](BuiltinPlugin::run) for each
-    /// variant/consequence pair of the variants the plugin annotates
+    /// Default implementation calls [`run`](BuiltinPlugin::run), through
+    /// [`run_naming_empty_strings`](BuiltinPlugin::run_naming_empty_strings),
+    /// for each variant/consequence pair of the variants the plugin annotates
     /// ([`annotates_variant`](BuiltinPlugin::annotates_variant)), every row
     /// of the batch, and reports the first failure after the loop, so a row
     /// whose `run` fails loses the plugin's fields alone, as the row does under
     /// Ensembl VEP, whose `run_plugins` evals each row's plugin call on its own
-    /// (`OutputFactory.pm` lines 2225-2244). An override that fails keeps the
+    /// (`OutputFactory.pm` lines 2234-2253). An override that fails keeps the
     /// same footprint: the registry's warning states that the rows the plugin
     /// failed on alone lack its fields.
+    ///
+    /// A warning a row's `run` raises goes on under the input record of the
+    /// row's variant, unless it names a record itself, so a run that holds a
+    /// batch's warnings reports it with that record
+    /// (`vep_core::warning_hold`).
     fn run_batch(&self, variants: &mut [InputVariant]) -> Result<(), PluginError> {
         let mut first_failure = None;
         for variant in variants.iter_mut() {
             if !self.annotates_variant(variant) {
                 continue;
             }
-            for tc_idx in 0..variant.transcript_consequences.len() {
-                if !self.annotates_row(&variant.transcript_consequences[tc_idx]) {
-                    continue;
-                }
-                match self.run(&variant.transcript_consequences[tc_idx], variant) {
-                    Ok(fields) => variant.transcript_consequences[tc_idx]
-                        .plugin_data
-                        .extend(fields),
-                    Err(error) => {
-                        first_failure.get_or_insert(error);
+            about_record(variant.input_record, || {
+                for tc_idx in 0..variant.transcript_consequences.len() {
+                    if !self.annotates_row(&variant.transcript_consequences[tc_idx]) {
+                        continue;
+                    }
+                    let row = &variant.transcript_consequences[tc_idx];
+                    match self.run_naming_empty_strings(row, variant) {
+                        Ok((fields, empty_strings)) => {
+                            let row = &mut variant.transcript_consequences[tc_idx];
+                            for (key, value) in fields {
+                                let empty_string = empty_strings.contains(&key);
+                                row.set_plugin_value(key, value, empty_string);
+                            }
+                        }
+                        Err(error) => {
+                            first_failure.get_or_insert(error);
+                        }
                     }
                 }
-            }
+            });
         }
         match first_failure {
             Some(error) => Err(error),
@@ -422,6 +473,21 @@ pub trait BuiltinPlugin: Send + Sync {
     ) -> Result<IndexMap<String, String>, PluginError> {
         Ok(IndexMap::new())
     }
+
+    /// [`run`](BuiltinPlugin::run) with the keys of its result whose empty
+    /// value is Ensembl VEP's empty string, a table cell the row has and
+    /// leaves empty, where every other empty value is its undefined value.
+    /// The default [`run_batch`](BuiltinPlugin::run_batch) names those keys
+    /// in the row's `plugin_empty_strings`, as a plugin's own batch route
+    /// does, and a caller that writes the fields itself names them through
+    /// [`TranscriptConsequence::set_plugin_value`]. The default names none.
+    fn run_naming_empty_strings(
+        &self,
+        consequence: &TranscriptConsequence,
+        variant: &InputVariant,
+    ) -> Result<(IndexMap<String, String>, Vec<String>), PluginError> {
+        Ok((self.run(consequence, variant)?, Vec::new()))
+    }
 }
 
 /// The default reading of [`BuiltinPlugin::remote_data_file`]: the URL
@@ -429,7 +495,7 @@ pub trait BuiltinPlugin: Send + Sync {
 /// or as the value of `key=value`, which `params_to_hash` cuts at the value's
 /// first `=` (`perl_key_value`: `file=https://h/f?a=b` names `https://h/f?a`,
 /// the file Ensembl VEP's plugin opens).
-pub fn default_remote_data_file(param: &str) -> Option<&str> {
+pub(crate) fn default_remote_data_file(param: &str) -> Option<&str> {
     use crate::custom::grammar::is_remote;
     if is_remote(param) {
         return Some(param);
@@ -446,6 +512,8 @@ mod tests {
 
     /// A per-consequence plugin whose `run` marks every row it is handed.
     struct MarkerPlugin;
+
+    impl crate::traits::sealed::Sealed for MarkerPlugin {}
 
     impl BuiltinPlugin for MarkerPlugin {
         fn name(&self) -> &str {
@@ -469,10 +537,9 @@ mod tests {
     }
 
     fn row(feature_type: FeatureType) -> TranscriptConsequence {
-        TranscriptConsequence {
-            feature_type,
-            ..TranscriptConsequence::default()
-        }
+        let mut consequence = TranscriptConsequence::default();
+        consequence.feature_type = feature_type;
+        consequence
     }
 
     /// A plugin that names no kinds runs on transcript rows alone, Ensembl
@@ -486,7 +553,7 @@ mod tests {
     }
 
     /// Ensembl VEP hands a row to a plugin only when the plugin's
-    /// `feature_types` names the row's feature class (OutputFactory.pm:2223,
+    /// `feature_types` names the row's feature class (OutputFactory.pm:2232,
     /// BaseVepPlugin.pm `check_feature_type`), so the per-consequence `run`
     /// path writes on the transcript row of a record and on neither of its
     /// regulatory rows.
@@ -516,9 +583,179 @@ mod tests {
         assert!(variants[0].plugin_data.is_empty());
     }
 
+    /// A per-consequence plugin whose `run` raises two warnings on every row,
+    /// one naming no record and one naming record 99, as the layer that writes
+    /// a run's warnings gives them to the hold of the thread raising them.
+    struct WarningRowPlugin;
+
+    impl crate::traits::sealed::Sealed for WarningRowPlugin {}
+
+    impl BuiltinPlugin for WarningRowPlugin {
+        fn name(&self) -> &str {
+            "WarningRow"
+        }
+        fn header_info(&self) -> Vec<(String, String)> {
+            vec![]
+        }
+        fn init(&mut self, _params: &[String]) -> Result<(), PluginError> {
+            Ok(())
+        }
+        fn run(
+            &self,
+            _consequence: &TranscriptConsequence,
+            variant: &InputVariant,
+        ) -> Result<IndexMap<String, String>, PluginError> {
+            let _ = vep_core::warning_hold::offer(0, format!("row at {}", variant.start));
+            let _ = vep_core::warning_hold::offer(99, format!("names 99 at {}", variant.start));
+            Ok(IndexMap::new())
+        }
+    }
+
+    /// The default `run_batch` hands on what a row's `run` raises under the
+    /// input record of the row's variant, in variant order, and leaves a
+    /// warning that names a record under that record.
+    #[test]
+    fn default_run_batch_names_the_variants_record_on_a_rows_warnings() {
+        use vep_core::warning_hold::{holding, Held};
+        let mut variants: Vec<InputVariant> = [(100u64, 7u64), (200, 8)]
+            .into_iter()
+            .map(|(position, input_record)| {
+                let mut variant = InputVariant::new(
+                    "21".into(),
+                    position,
+                    position,
+                    b"A".to_vec(),
+                    b"G".to_vec(),
+                );
+                variant.input_record = input_record;
+                variant
+                    .transcript_consequences
+                    .push(row(FeatureType::Transcript));
+                variant
+            })
+            .collect();
+
+        let (ran, raised) = holding(|| WarningRowPlugin.run_batch(&mut variants));
+        ran.unwrap();
+
+        let held = |input_record: u64, text: &str| Held {
+            input_record,
+            text: text.to_string(),
+        };
+        assert_eq!(
+            raised,
+            [
+                held(7, "row at 100"),
+                held(99, "names 99 at 100"),
+                held(8, "row at 200"),
+                held(99, "names 99 at 200"),
+            ]
+        );
+    }
+
+    /// The value the default `run_batch` writes on a row stands over an
+    /// earlier plugin's under the same key (OutputFactory.pm:2239-2241), so the
+    /// earlier value's mark in the row's `plugin_empty_strings` goes with it,
+    /// and a mark under another key stays.
+    #[test]
+    fn default_run_batch_replaces_an_earlier_value_and_its_mark() {
+        let mut variants = vec![InputVariant::new(
+            "21".into(),
+            100,
+            100,
+            b"A".to_vec(),
+            b"G".to_vec(),
+        )];
+        let mut earlier = row(FeatureType::Transcript);
+        earlier.set_plugin_value("Marker".to_string(), String::new(), true);
+        earlier.set_plugin_value("Other".to_string(), String::new(), true);
+        assert_eq!(earlier.plugin_empty_strings, ["Marker", "Other"]);
+        variants[0].transcript_consequences.push(earlier);
+
+        MarkerPlugin.run_batch(&mut variants).unwrap();
+
+        let written = &variants[0].transcript_consequences[0];
+        assert_eq!(written.plugin_data["Marker"], "1");
+        assert_eq!(written.plugin_empty_strings, ["Other"]);
+    }
+
+    /// A per-consequence plugin whose `run` hands back two empty values and a
+    /// filled one, and which names `Cell` and `Filled` as empty strings.
+    struct EmptyCellPlugin;
+
+    impl crate::traits::sealed::Sealed for EmptyCellPlugin {}
+
+    impl BuiltinPlugin for EmptyCellPlugin {
+        fn name(&self) -> &str {
+            "EmptyCell"
+        }
+        fn header_info(&self) -> Vec<(String, String)> {
+            vec![]
+        }
+        fn init(&mut self, _params: &[String]) -> Result<(), PluginError> {
+            Ok(())
+        }
+        fn run(
+            &self,
+            _consequence: &TranscriptConsequence,
+            _variant: &InputVariant,
+        ) -> Result<IndexMap<String, String>, PluginError> {
+            Ok(IndexMap::from([
+                ("Undefined".to_string(), String::new()),
+                ("Cell".to_string(), String::new()),
+                ("Filled".to_string(), "1".to_string()),
+            ]))
+        }
+        fn run_naming_empty_strings(
+            &self,
+            consequence: &TranscriptConsequence,
+            variant: &InputVariant,
+        ) -> Result<(IndexMap<String, String>, Vec<String>), PluginError> {
+            let named = ["Cell", "Filled"].map(String::from).to_vec();
+            Ok((self.run(consequence, variant)?, named))
+        }
+    }
+
+    /// The default `run_batch` names in the row's `plugin_empty_strings` the
+    /// keys `run_naming_empty_strings` names whose value is empty: a named key
+    /// with a value and an empty value that is not named stay unmarked, and a
+    /// plugin that names none marks none.
+    #[test]
+    fn default_run_batch_names_the_empty_strings_a_plugin_names() {
+        let record = || {
+            let mut variant =
+                InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+            variant
+                .transcript_consequences
+                .push(row(FeatureType::Transcript));
+            vec![variant]
+        };
+
+        let mut variants = record();
+        EmptyCellPlugin.run_batch(&mut variants).unwrap();
+        let written = &variants[0].transcript_consequences[0];
+        assert_eq!(
+            written.plugin_data,
+            IndexMap::from([
+                ("Undefined".to_string(), String::new()),
+                ("Cell".to_string(), String::new()),
+                ("Filled".to_string(), "1".to_string()),
+            ])
+        );
+        assert_eq!(written.plugin_empty_strings, ["Cell"]);
+
+        let mut variants = record();
+        MarkerPlugin.run_batch(&mut variants).unwrap();
+        let written = &variants[0].transcript_consequences[0];
+        assert_eq!(written.plugin_data["Marker"], "1");
+        assert!(written.plugin_empty_strings.is_empty());
+    }
+
     /// A per-consequence plugin whose Ensembl VEP module would list
     /// `StructuralVariationFeature` among its `variant_feature_types`.
     struct StructuralMarkerPlugin;
+
+    impl crate::traits::sealed::Sealed for StructuralMarkerPlugin {}
 
     impl BuiltinPlugin for StructuralMarkerPlugin {
         fn name(&self) -> &str {
@@ -554,9 +791,9 @@ mod tests {
         variant
     }
 
-    /// Ensembl VEP 116.2 runs a plugin on a line only when the plugin's
+    /// Ensembl VEP 116.3 runs a plugin on a line only when the plugin's
     /// `variant_feature_types` names the variant's class
-    /// (`OutputFactory.pm:2220` `check_variant_feature_type(ref($vf))`), and
+    /// (`OutputFactory.pm:2229` `check_variant_feature_type(ref($vf))`), and
     /// the default is `['VariationFeature']` alone (`BaseVepPlugin.pm:100`), a
     /// class a StructuralVariationFeature is not
     /// (`StructuralVariationFeature.pm:87`): a plugin that names no kinds
@@ -608,6 +845,8 @@ mod tests {
     /// as the error, on a row that carries one, and marks every other row.
     struct ExonFailsPlugin;
 
+    impl crate::traits::sealed::Sealed for ExonFailsPlugin {}
+
     impl BuiltinPlugin for ExonFailsPlugin {
         fn name(&self) -> &str {
             "ExonFails"
@@ -631,15 +870,16 @@ mod tests {
     }
 
     /// Ensembl VEP's `run_plugins` evals each row's plugin call on its own
-    /// (`OutputFactory.pm` lines 2225-2244), so a row whose call dies loses the
+    /// (`OutputFactory.pm` lines 2234-2253), so a row whose call dies loses the
     /// plugin's fields alone: the default `run_batch` runs every row, writes
     /// on the rows before and after a failing one and on the next variant's,
     /// and returns the first failure.
     #[test]
     fn default_run_batch_runs_every_row_and_returns_the_first_failure() {
-        let failing = |exon: &str| TranscriptConsequence {
-            exon: Some(exon.to_string()),
-            ..row(FeatureType::Transcript)
+        let failing = |exon: &str| {
+            let mut consequence = row(FeatureType::Transcript);
+            consequence.exon = Some(exon.to_string());
+            consequence
         };
         let mut first = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
         first.transcript_consequences.extend([

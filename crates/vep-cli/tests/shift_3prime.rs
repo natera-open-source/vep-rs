@@ -5,7 +5,7 @@
 //! transcript: the consequences, codons and HGVS notations under
 //! `--shift_3prime 1`, the reference row of `--process_ref_homs` under it, and
 //! the HGVS notations of a `--minimal` split allele.
-//! Every expected value is Ensembl VEP 116.2's output for the same record on
+//! Every expected value is Ensembl VEP 116.3's output for the same record on
 //! the release-116 GRCh38 cache and the chromosome 21 reference the corpus
 //! carries.
 
@@ -182,7 +182,7 @@ fn a_minimal_split_allele_shifts_its_hgvs_as_a_bi_allelic_record_does() {
 /// `1900-1903` and `634-635` with the codon read there, `synonymous_variant`,
 /// while its `SHIFT_LENGTH` is `0`: `_return_3prime` builds no shift for a
 /// reference allele (TranscriptVariationAllele.pm:116), and a row without one
-/// prints `0` (OutputFactory.pm:1690-1691). The deletion's row carries the same
+/// prints `0` (OutputFactory.pm:1699-1700). The deletion's row carries the same
 /// positions with `SHIFT_LENGTH` `1`.
 #[test]
 fn the_reference_row_is_read_at_the_alternates_shifted_span() {
@@ -227,7 +227,7 @@ fn the_reference_row_is_read_at_the_alternates_shifted_span() {
 }
 
 /// `shift_3prime=i` and `shift_genomic=i` (Config.pm:231-232) are read for
-/// truth alone (AnnotationType/Transcript.pm:162, OutputFactory.pm:1349, 1992),
+/// truth alone (AnnotationType/Transcript.pm:162, OutputFactory.pm:1349, 2001),
 /// so any integer but 0 writes the rows of `1` and a spelling of zero the rows
 /// of `0`. The command line's value is the number Getopt::Long stores; a
 /// `--config` file's stays its text (Config.pm:1101), true unless it is `0`, so

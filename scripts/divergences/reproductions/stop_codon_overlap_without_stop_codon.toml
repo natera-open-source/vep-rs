@@ -1,0 +1,136 @@
+entry = "stop_codon_overlap_without_stop_codon"
+page = "docs/divergences/stop-codon-overlap-without-stop-codon.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "observed"
+input_class_basis = "1 · 137,713 per million · no flag needed"
+notes = "Eleven records written for the entry, on GRCh37, each an insertion or deletion at the coding end of a transcript that carries no cds_end_NF and whose last three coding positions are no stop codon. On the forward-strand ENST00000243562 of LTBP4 (558 coding bases, 186 codons, the last the codon of Val at 19:41125377-41125379, then a 3' UTR of 1,743 bases) the first record deletes the codon's middle base and the second its last base with the first 3' UTR base. On the reverse-strand ENST00000287968 of NBPF1 (164 codons, the last the codon of Pro) the third deletes the last codon, the one 3' UTR base of its exon and the first base of the intron. ENST00000593412 and ENST00000595468, on the reverse strand of chromosome 21, have no 3' UTR and end on the codons of Gly and Glu: two records delete the middle base of the first one's last codon and the whole codon with the base past the transcript's end, and one inserts a base before the second one's last codon that leaves a stop codon in the last three coding positions. ENST00000419804 of PNCK (reverse strand, 128 coding bases, 42 codons and two bases, then a 3' UTR of 293 bases; ENST00000425526 and ENST00000458354 share its coding sequence) and ENST00000586663 of PEX12 (reverse strand, 1,076 coding bases, 358 codons and two bases on the transcript's last two bases, which adenines complete to the codon of Lys) each lose the last base of their last whole codon, and a further record inserts a base before that base of ENST00000586663 that leaves a stop codon in the last three coding positions. On ENST00000361453 of MT-ND2 (1,042 coding bases, 347 codons and one base that the adenines of the poly(A) tail complete to a stop codon of the vertebrate mitochondrial code) one record deletes the last base of the last whole codon and one inserts a base before it. Ensembl VEP reads the last three coding positions as the stop codon on every transcript without the flag (VariationEffect.pm:1373-1381 and :1400-1427). It writes stop_lost where its edit leaves a sequence shorter than the coding sequence or no stop codon at those positions (:1466-1480), and stop_retained_variant where the edit leaves a stop codon there or cannot be placed (:1318 with :1508). vep-rs reads that the positions each record meets are no base of a stop codon and writes the frameshift_variant or coding_sequence_variant the same record takes on a transcript with the flag. Thirteen rows differ, each in the Consequence alone but for IMPACT, which follows it on four. The fourteenth row is the PNCK record on ENST00000423545, which has the same coding end and carries cds_end_NF: both engines write frameshift_variant alone there. The prepare steps copy the committed GRCh37 cache and add the one transcript shard of the committed cache of GRCh37-plugin-downstream-own-span that holds the PNCK transcripts, so that one cache holds every kind of coding end; the copy carries no checksum manifest, since the manifest lists the first cache's files alone. No committed cache of a human assembly holds a transcript that ends on one or two bases adenines would complete to a stop codon while its record does not show the model complete, so no record stands at that kind of coding end. No flag is needed."
+
+prepare = [
+  'cp -r "$CORPUS/json_cache" "$STAGE/json-cache" && rm "$STAGE/json-cache/CHECKSUMS.sha256"',
+  'shard=transcripts/X/152000001-153000000.json.gz; cp "$REPO/tests/golden/116/GRCh37-plugin-downstream-own-span/json_cache/$shard" "$STAGE/json-cache/$shard"',
+]
+
+[input]
+format = "vcf"
+text = """
+19	41125377	deletion_in_the_last_codon_19_41125378	GT	G	.	.	.
+19	41125378	deletion_into_the_3_prime_utr_19_41125379	TTC	T	.	.	.
+1	16900980	deletion_into_the_intron_1_16900981	ACCTGG	A	.	.	.
+21	47347679	deletion_in_the_last_codon_21_47347680	TC	T	.	.	.
+21	47347677	deletion_past_the_transcript_end_21_47347678	CATCC	C	.	.	.
+21	34947433	insertion_before_the_last_codon_21_34947433	C	CA	.	.	.
+X	152938094	deletion_in_the_last_whole_codon_X_152938095	GG	G	.	.	.
+17	33902806	deletion_in_the_last_whole_codon_17_33902807	TC	T	.	.	.
+17	33902807	insertion_before_the_last_three_coding_bases_17_33902807	C	CA	.	.	.
+MT	5509	deletion_in_the_last_whole_codon_MT_5510	TA	T	.	.	.
+MT	5509	insertion_in_the_last_whole_codon_MT_5509	T	TC	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh37"
+json_cache = "{stage}/json-cache"
+corpus = "tests/golden/116/GRCh37"
+
+[run]
+flags = []
+
+[compare]
+kind = "rows"
+where = { record = [
+  "deletion_in_the_last_codon_19_41125378",
+  "deletion_into_the_3_prime_utr_19_41125379",
+  "deletion_into_the_intron_1_16900981",
+  "deletion_in_the_last_codon_21_47347680",
+  "deletion_past_the_transcript_end_21_47347678",
+  "insertion_before_the_last_codon_21_34947433",
+  "deletion_in_the_last_whole_codon_X_152938095",
+  "deletion_in_the_last_whole_codon_17_33902807",
+  "insertion_before_the_last_three_coding_bases_17_33902807",
+  "deletion_in_the_last_whole_codon_MT_5510",
+  "insertion_in_the_last_whole_codon_MT_5509",
+], feature = [
+  "ENST00000243562",
+  "ENST00000287968",
+  "ENST00000593412",
+  "ENST00000595468",
+  "ENST00000419804",
+  "ENST00000425526",
+  "ENST00000458354",
+  "ENST00000423545",
+  "ENST00000586663",
+  "ENST00000361453",
+] }
+columns = ["Uploaded_variation", "Location", "Feature", "Consequence", "cDNA_position", "CDS_position", "Protein_position", "IMPACT", "FLAGS"]
+
+[expected]
+ensembl_vep = [
+  "deletion_in_the_last_codon_19_41125378 | 19:41125378 | ENST00000243562 | frameshift_variant,stop_lost | 825 | 557 | 186 | HIGH | -",
+  "deletion_in_the_last_codon_21_47347680 | 21:47347680 | ENST00000593412 | frameshift_variant,stop_lost | 350 | 350 | 117 | HIGH | -",
+  "deletion_in_the_last_whole_codon_17_33902807 | 17:33902807 | ENST00000586663 | frameshift_variant,stop_lost | 1605 | 1074 | 358 | HIGH | -",
+  "deletion_in_the_last_whole_codon_MT_5510 | MT:5510 | ENST00000361453 | frameshift_variant,stop_lost | 1041 | 1041 | 347 | HIGH | -",
+  "deletion_in_the_last_whole_codon_X_152938095 | X:152938095 | ENST00000419804 | frameshift_variant,stop_lost | 266 | 126 | 42 | HIGH | -",
+  "deletion_in_the_last_whole_codon_X_152938095 | X:152938095 | ENST00000423545 | frameshift_variant | 446 | 126 | 42 | HIGH | cds_end_NF",
+  "deletion_in_the_last_whole_codon_X_152938095 | X:152938095 | ENST00000425526 | frameshift_variant,stop_lost | 623 | 126 | 42 | HIGH | -",
+  "deletion_in_the_last_whole_codon_X_152938095 | X:152938095 | ENST00000458354 | frameshift_variant,stop_lost | 324 | 126 | 42 | HIGH | -",
+  "deletion_into_the_3_prime_utr_19_41125379 | 19:41125379-41125380 | ENST00000243562 | stop_lost,3_prime_UTR_variant | 826-827 | 558-? | 186-? | HIGH | -",
+  "deletion_into_the_intron_1_16900981 | 1:16900981-16900985 | ENST00000287968 | splice_donor_variant,stop_retained_variant,3_prime_UTR_variant | 490-? | 490-? | 164-? | HIGH | -",
+  "deletion_past_the_transcript_end_21_47347678 | 21:47347678-47347681 | ENST00000593412 | stop_retained_variant,3_prime_UTR_variant | 349-? | 349-? | 117-? | LOW | -",
+  "insertion_before_the_last_codon_21_34947433 | 21:34947433-34947434 | ENST00000595468 | inframe_insertion,stop_retained_variant | 33-34 | 33-34 | 11-12 | MODERATE | -",
+  "insertion_before_the_last_three_coding_bases_17_33902807 | 17:33902807-33902808 | ENST00000586663 | protein_altering_variant,stop_retained_variant | 1604-1605 | 1073-1074 | 358 | MODERATE | -",
+  "insertion_in_the_last_whole_codon_MT_5509 | MT:5509-5510 | ENST00000361453 | frameshift_variant,stop_lost | 1040-1041 | 1040-1041 | 347 | HIGH | -",
+]
+vep_rs = [
+  "deletion_in_the_last_codon_19_41125378 | 19:41125378 | ENST00000243562 | frameshift_variant | 825 | 557 | 186 | HIGH | -",
+  "deletion_in_the_last_codon_21_47347680 | 21:47347680 | ENST00000593412 | frameshift_variant | 350 | 350 | 117 | HIGH | -",
+  "deletion_in_the_last_whole_codon_17_33902807 | 17:33902807 | ENST00000586663 | frameshift_variant | 1605 | 1074 | 358 | HIGH | -",
+  "deletion_in_the_last_whole_codon_MT_5510 | MT:5510 | ENST00000361453 | frameshift_variant | 1041 | 1041 | 347 | HIGH | -",
+  "deletion_in_the_last_whole_codon_X_152938095 | X:152938095 | ENST00000419804 | frameshift_variant | 266 | 126 | 42 | HIGH | -",
+  "deletion_in_the_last_whole_codon_X_152938095 | X:152938095 | ENST00000423545 | frameshift_variant | 446 | 126 | 42 | HIGH | cds_end_NF",
+  "deletion_in_the_last_whole_codon_X_152938095 | X:152938095 | ENST00000425526 | frameshift_variant | 623 | 126 | 42 | HIGH | -",
+  "deletion_in_the_last_whole_codon_X_152938095 | X:152938095 | ENST00000458354 | frameshift_variant | 324 | 126 | 42 | HIGH | -",
+  "deletion_into_the_3_prime_utr_19_41125379 | 19:41125379-41125380 | ENST00000243562 | coding_sequence_variant,3_prime_UTR_variant | 826-827 | 558-? | 186-? | MODIFIER | -",
+  "deletion_into_the_intron_1_16900981 | 1:16900981-16900985 | ENST00000287968 | splice_donor_variant,coding_sequence_variant,3_prime_UTR_variant | 490-? | 490-? | 164-? | HIGH | -",
+  "deletion_past_the_transcript_end_21_47347678 | 21:47347678-47347681 | ENST00000593412 | coding_sequence_variant,3_prime_UTR_variant | 349-? | 349-? | 117-? | MODIFIER | -",
+  "insertion_before_the_last_codon_21_34947433 | 21:34947433-34947434 | ENST00000595468 | frameshift_variant | 33-34 | 33-34 | 11-12 | HIGH | -",
+  "insertion_before_the_last_three_coding_bases_17_33902807 | 17:33902807-33902808 | ENST00000586663 | frameshift_variant | 1604-1605 | 1073-1074 | 358 | HIGH | -",
+  "insertion_in_the_last_whole_codon_MT_5509 | MT:5509-5510 | ENST00000361453 | frameshift_variant | 1040-1041 | 1040-1041 | 347 | HIGH | -",
+]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/coding.rs::stop_codon_at_the_coding_end",
+    "crates/vep-effects/src/coding.rs::PerlCodingEval::stop_codon_positions",
+    "crates/vep-effects/src/coding.rs::PerlCodingEval::cut_short_frameshift_names_its_first_residue",
+    "crates/vep-effects/src/coding.rs::PerlCodingEval::overlaps_stop_codon",
+    "crates/vep-effects/src/coding.rs::PerlCodingEval::stop_codon_cil_span",
+    "crates/vep-effects/src/coding.rs::PerlCodingEval::given_stop_codon",
+    "crates/vep-effects/src/coding.rs::completed_by_polyadenylation",
+]
+tests = [
+    "crates/vep-cli/tests/frameshift_cut_short_at_an_unclosed_coding_end.rs::a_frameshift_cut_short_at_an_unclosed_coding_end_is_named_at_its_first_residue",
+    "crates/vep-cli/tests/stop_codon_terms_where_no_stop_codon_stands.rs::deletion_in_a_last_codon_that_names_a_residue_is_a_frameshift_alone",
+    "crates/vep-cli/tests/stop_codon_terms_where_no_stop_codon_stands.rs::insertion_or_deletion_at_a_coding_end_no_stop_codon_closes_takes_no_stop_term",
+    "crates/vep-effects/src/frameshift_cut_short_tests.rs::a_deletion_inside_the_last_codon_of_an_unclosed_coding_sequence_is_a_frameshift_at_its_residue",
+    "crates/vep-effects/src/frameshift_cut_short_tests.rs::a_deletion_from_an_earlier_codon_into_the_last_is_a_frameshift_at_the_first_of_its_residues",
+    "crates/vep-effects/src/stop_codon_tests.rs::deletion_in_the_last_whole_codon_of_a_coding_sequence_that_ends_inside_a_codon_loses_no_stop",
+    "crates/vep-effects/src/stop_codon_tests.rs::deletion_in_the_last_codon_of_a_coding_sequence_whose_last_codon_names_a_residue_loses_no_stop",
+    "crates/vep-effects/src/stop_codon_tests.rs::insertion_in_the_last_whole_codon_of_a_coding_sequence_no_stop_codon_closes_loses_no_stop",
+    "crates/vep-effects/src/stop_codon_tests.rs::deletion_that_leaves_a_stop_codon_of_the_3_prime_utr_at_the_old_coding_end_keeps_no_stop",
+    "crates/vep-effects/src/stop_codon_tests.rs::deletion_of_the_last_codon_before_a_stop_codon_of_the_3_prime_utr_is_an_inframe_deletion_alone",
+    "crates/vep-effects/src/stop_codon_tests.rs::deletion_from_a_coding_sequence_no_stop_codon_closes_into_the_3_prime_utr_is_a_coding_sequence_variant",
+    "crates/vep-effects/src/stop_codon_tests.rs::deletion_from_a_coding_sequence_no_stop_codon_closes_past_the_transcripts_end_is_a_coding_sequence_variant",
+    "crates/vep-effects/src/stop_codon_tests.rs::deletion_from_a_coding_sequence_no_stop_codon_closes_into_an_intron_is_a_coding_sequence_variant",
+    "crates/vep-effects/src/stop_codon_tests.rs::insertion_before_the_last_coding_bases_that_leaves_a_stop_codon_there_is_a_frameshift",
+    "crates/vep-effects/src/stop_codon_tests.rs::change_in_the_last_whole_codon_takes_no_stop_term_where_the_record_does_not_show_a_completed_stop_codon",
+    "crates/vep-effects/src/stop_codon_tests.rs::one_base_change_in_the_last_whole_codon_before_a_stop_codon_that_adenines_complete_is_a_frameshift_alone",
+]
+rules = [
+    "tools/vep-formats-compare/src/coding_end_terms.rs::CodingEndClass::takes",
+    "tools/vep-formats-compare/src/coding_end_terms.rs::class_of_pair",
+    "tools/vep-formats-compare/src/coding_end_terms.rs::expected_terms",
+    "tools/vep-formats-compare/src/rules/coding_end_pairs.rs::stop_codon_overlap_without_stop_codon_pair",
+    "tools/vep-outputs-compare/src/rules/row.rs::stop_codon_overlap_without_stop_codon_pair",
+    "tools/vep-plugin-pairs/src/rules/coding_end.rs::coding_end_class",
+]

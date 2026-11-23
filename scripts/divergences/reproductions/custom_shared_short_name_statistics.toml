@@ -1,7 +1,7 @@
 entry = "custom_shared_short_name_statistics"
 page = "docs/custom-annotation.md#2-the-summary-statistics-of-two-custom-sources-sharing-a-short-name"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the short_name and summary_stats options of --custom, any string without commas and a percentage-separated list of min, mean, max, count and sum, with no rule that two sources take different names (Ensembl VEP documentation, \"Custom annotations\", Options); not seen in the measured datasets"
 notes = "Two one-record BED sources under one short name, scores 4 and 9. Ensembl VEP pools min, max and sum over both sources, keeps the second source's count of 1 and divides the pooled sum by it, a mean of 13; vep-rs prints the second source's own figures. Both alleles' rows print the same values."
@@ -39,3 +39,12 @@ columns = ["regions", "regions_min", "regions_max", "regions_sum", "regions_coun
 [expected]
 ensembl_vep = ["regA,regB | 4 | 9 | 13 | 1 | 13"]
 vep_rs = ["regA,regB | 9 | 9 | 9 | 1 | 9"]
+
+[implementation]
+code = [
+    "crates/vep-builtins/src/custom/source.rs::MatchedRecords::finish",
+    "crates/vep-io/src/output/fields.rs::custom_stats",
+]
+tests = [
+    "crates/vep-io/src/output/fields.rs::tests::custom_stats_come_from_the_last_source_that_matched",
+]

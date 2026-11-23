@@ -1,7 +1,7 @@
 entry = "promoter_extension_beyond_seek_margin"
 page = "docs/divergences/regulatory-rows.md#1-a-promoter-whose-extension-reaches-past-the-seek-margin-of-the-next-1-mb-region"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the GFF3 specification and the --regulatory_gff file contract, which states that a promoter's extended region is never smaller than its core and sets no upper bound on its length (Ensembl VEP documentation, \"Running Ensembl VEP\", --extended_promoters); not seen in the measured datasets"
 notes = "The promoter's core starts 20,000 bases past the edge of the variant's 1 Mb region, twice the margin Ensembl VEP pads a region's seek with; a core 100 bases past it is found by both engines."
@@ -33,3 +33,13 @@ columns = ["Location", "Allele", "Feature", "Consequence", "BIOTYPE"]
 [expected]
 ensembl_vep = []
 vep_rs = ["21:20995000 | C | FAR_BIN | regulatory_region_variant | promoter"]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/regulatory/gff.rs::GffRegulatorySource::read_chromosome",
+    "crates/vep-cli/src/regulatory/index.rs::Index::overlapping",
+]
+tests = [
+    "crates/vep-cli/src/regulatory/gff.rs::tests::extended_promoters_widen_promoters_only",
+    "crates/vep-cli/src/regulatory/index.rs::tests::overlap_scan_is_bounded_by_the_running_maximum_end",
+]

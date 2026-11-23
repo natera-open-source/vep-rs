@@ -1,0 +1,1 @@
+ERROR: [compare_vep_stats] cannot read tests/fixtures/invalid_utf8.summary.log.gz: 'utf-8' codec can't decode byte 0xff in position 758: invalid start byte

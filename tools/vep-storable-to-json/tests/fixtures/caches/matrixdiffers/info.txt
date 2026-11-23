@@ -1,0 +1,4 @@
+species	homo_sapiens
+assembly	GRCh38
+sift	b
+polyphen	b

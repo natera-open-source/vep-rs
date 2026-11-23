@@ -121,14 +121,14 @@ def test_tabix_index_column_per_layout():
     dbscSNV.pm:49-59): dbNSFP on
     columns 1 and 2 for GRCh38 and on 8 and 9 for GRCh37, dbscSNV on 1 and 2 for GRCh37 and
     on 5 and 6 for GRCh38 with `c` as the comment character. The generator ends a dbscSNV
-    line in CRLF and a dbNSFP line in LF."""
+    line in CRLF and a dbNSFP line in LF. A name that is no layout is refused."""
     assert mpf.preparation("dbnsfp", "GRCh38").tabix == ("-s", "1", "-b", "2", "-e", "2")
     assert mpf.preparation("dbnsfp", "GRCh37").tabix == ("-s", "8", "-b", "9", "-e", "9")
     assert mpf.preparation("dbnsfp", "GRCh37").line_end == "\n"
     assert mpf.preparation("dbscsnv", "GRCh37").tabix == ("-s", "1", "-b", "2", "-e", "2", "-c", "c")
     assert mpf.preparation("dbscsnv", "GRCh38").tabix == ("-s", "5", "-b", "6", "-e", "6", "-c", "c")
     assert mpf.preparation("dbscsnv", "GRCh38").line_end == "\r\n"
-    with pytest.raises(SystemExit, match="cadd_sv is registered but has no writer"):
+    with pytest.raises(SystemExit, match="unknown layout cadd_sv"):
         mpf.preparation("cadd_sv", "GRCh38")
 
 
@@ -288,13 +288,32 @@ def test_provenance_records_the_fixture_relative_to_the_corpus(tmp_path: Path):
         mpf.main(["--layout", "dbscsnv", "--assembly", "GRCh38", "--seed", "7", "--vcf", str(vcf), "--reference", str(reference), "--out", str(out)])
 
 
-def test_refusals(tmp_path: Path):
-    """A registered layout without a writer, a malformed --miss, a missing input and an
-    output outside the provenance's corpus are refused before anything is written."""
+def test_help_gives_the_data_terms_as_the_plugins_state_them(capsys):
+    """`--help` words each file's terms from the plugin's module (dbNSFP.pm:54-55 names the two
+    branches of its files; dbscSNV.pm names no terms below its licence header, lines 1-16)."""
+    with pytest.raises(SystemExit) as stop:
+        mpf.main(["--help"])
+    assert stop.value.code == 0
+    text = " ".join(capsys.readouterr().out.split())
+    assert (
+        "Ensembl VEP's dbNSFP plugin documents two branches of its files, one for academic and one "
+        "for commercial use (dbNSFP.pm:54-55), and its dbscSNV plugin states no terms for its file, "
+        "its licence header covering the module alone (dbscSNV.pm:1-16). Neither data file is "
+        "redistributed here, so their plugins are verified on made-up fixtures"
+    ) in text
+    for claim in ("free for academic use", "paid agreement", "publishes no licence text"):
+        assert claim not in text
+
+
+def test_refusals(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
+    """A --layout that names no layout, a malformed --miss, a missing input and an output
+    outside the provenance's corpus are refused before anything is written."""
     vcf, reference = write_inputs(tmp_path)
     base = ["--assembly", "GRCh38", "--seed", "1", "--vcf", str(vcf), "--reference", str(reference), "--out", str(tmp_path / "out.gz")]
-    with pytest.raises(SystemExit, match="spliceai_snv is registered but has no writer"):
+    with pytest.raises(SystemExit) as refused:
         mpf.main(["--layout", "spliceai_snv", *base])
+    assert refused.value.code == 2
+    assert "argument --layout: invalid choice: 'spliceai_snv'" in capsys.readouterr().err
     with pytest.raises(SystemExit, match="--miss names a site as chr:pos"):
         mpf.main(["--layout", "dbnsfp", *base, "--miss", "21-100"])
     with pytest.raises(SystemExit, match="input file not found"):

@@ -123,6 +123,8 @@ impl NearestExonJbPlugin {
     }
 }
 
+impl crate::traits::sealed::Sealed for NearestExonJbPlugin {}
+
 impl BuiltinPlugin for NearestExonJbPlugin {
     fn name(&self) -> &str {
         "NearestExonJB"
@@ -391,19 +393,20 @@ mod tests {
                 }
             })
             .collect();
-        LofteeContext {
-            exons,
-            introns,
-            strand,
-            coding_region_start: None,
-            coding_region_end: None,
-            translation_start: None,
-            translation_end: None,
-            cdna_coding_start: None,
-            cdna_coding_end: None,
-            cds_start_nf: false,
-            cds_end_nf: false,
-        }
+        let mut context =
+            LofteeContext::from_transcript(&vep_core::transcript::Transcript::default());
+        context.exons = exons;
+        context.introns = introns;
+        context.strand = strand;
+        context.coding_region_start = None;
+        context.coding_region_end = None;
+        context.translation_start = None;
+        context.translation_end = None;
+        context.cdna_coding_start = None;
+        context.cdna_coding_end = None;
+        context.cds_start_nf = false;
+        context.cds_end_nf = false;
+        context
     }
 
     fn row(
@@ -417,15 +420,14 @@ mod tests {
             .iter()
             .map(|exon| Arc::from(format!("ENSE{:011}", exon.rank)))
             .collect();
-        TranscriptConsequence {
-            consequences: terms.iter().copied().collect(),
-            intron: intron.map(str::to_string),
-            strand: ctx.strand,
-            feature_type: FeatureType::Transcript,
-            loftee_ctx: Some(Box::new(ctx)),
-            exon_ids: Some(exon_ids),
-            ..TranscriptConsequence::default()
-        }
+        let mut consequence = TranscriptConsequence::default();
+        consequence.consequences = terms.iter().copied().collect();
+        consequence.intron = intron.map(str::to_string);
+        consequence.strand = ctx.strand;
+        consequence.feature_type = FeatureType::Transcript;
+        consequence.loftee_ctx = Some(Box::new(ctx));
+        consequence.exon_ids = Some(exon_ids);
+        consequence
     }
 
     fn span(start: u64, end: u64) -> InputVariant {
@@ -851,10 +853,8 @@ mod tests {
     #[test]
     fn rows_without_the_model_or_of_structural_variants_carry_nothing() {
         let plugin = plugin(&[]);
-        let bare = TranscriptConsequence {
-            feature_type: FeatureType::Transcript,
-            ..TranscriptConsequence::default()
-        };
+        let mut bare = TranscriptConsequence::default();
+        bare.feature_type = FeatureType::Transcript;
         assert_eq!(value(&plugin, &bare, &span(2010, 2010)), None);
         let tc = row(&[Consequence::MissenseVariant], None, context(1, &FORWARD));
         let mut deletion = span(2010, 2500);
@@ -1069,8 +1069,8 @@ mod tests {
 
     /// A junction the variant sits on is at distance 0: `max_range=0` reports
     /// it, since `$min` keeps the text `0` that the distance's key matches
-    /// (`NearestExonJB.pm:268`), while `0.0` does not. Perl's `%dists` keys the
-    /// exon's length under `len` beside its distances (`:229-237`), so
+    /// (`NearestExonJB.pm:268`), while `0.0` does not. Ensembl VEP's `%dists`
+    /// keys the exon's length under `len` beside its distances (`:229-237`), so
     /// `max_range=len` makes Ensembl VEP report every overlapped exon with `len`
     /// as its distance; vep-rs reads `len` as 0 and reports nothing, the
     /// documented class `nearest_exon_jb_len_key_collision`.

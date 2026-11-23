@@ -1,0 +1,10 @@
+--version-a
+116
+--dump-a
+a.tsv
+--version-b
+116
+--dump-b
+b.tsv
+--out-dir
+out

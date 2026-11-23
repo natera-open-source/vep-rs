@@ -1,0 +1,1 @@
+ERROR: [vep-cache-diff] {{FIXTURES}}/caches/faults/variations_utf8/baseline/variations/1/all_vars.gz: a byte outside UTF-8

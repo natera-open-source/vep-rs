@@ -18,7 +18,7 @@ On a row that the 3' shift moves onto such bases, vep-rs makes the notation at t
 
 Two neighbouring entries start from the same bases. The entry [`refseq_edited_model_seam_shift_and_duplication_hgvs`](refseq-edited-model-seam-shift-and-duplication-hgvs.md) covers an insertion that the 3' shift carries off them, and a duplication across them. The entry [`refseq_edited_model_unminimised_allele_hgvsc`](refseq-edited-model-unminimised-allele-hgvsc.md) covers an allele that keeps a base it shares with its reference, and says where vep-rs writes an insertion that the 3' placement carries to an exon's last base.
 
-**Where it is in Ensembl VEP's source** (`ensembl-variation` and `ensembl` at release/116, the modules the Ensembl VEP 116.2 image holds; `TranscriptVariationAllele.pm` stands for `Bio/EnsEMBL/Variation/TranscriptVariationAllele.pm`):
+**Where it is in Ensembl VEP's source** (`ensembl-variation` and `ensembl` at release/116, the modules the Ensembl VEP 116.3 image holds; `TranscriptVariationAllele.pm` stands for `Bio/EnsEMBL/Variation/TranscriptVariationAllele.pm`):
 
 - `TranscriptVariationAllele.pm`, lines 1474-1483, `hgvs_transcript`: the call of `hgvs_variant_notation` builds the notation on the transcript's genomic slice, from `_slice_start` and `_slice_end`. On that slice the insertion's two positions are neighbours.
 - `Bio/EnsEMBL/Variation/Utils/Sequence.pm`, lines 591-594: an insertion that copies no bases beside it on the slice gets the type `ins`, between those two positions.
@@ -34,9 +34,9 @@ Two neighbouring entries start from the same bases. The entry [`refseq_edited_mo
 
 The format comparator applies the class's test where a comparison names the class, and no comparison case or corpus manifest does. A row of the shape is therefore reported as a difference in `HGVSc` and charged to vep-rs. Section 1.7 states what the test sets aside and what stays a difference. Sections 2.7 and 3.7 show that it accepts no row of the other two forms. The concordance figures score consequence sets and never see the field.
 
-**How often the shape occurs.** Tier 2, see [Intended divergences from Ensembl VEP](../intended-divergences.md): the shape is an insertion on bases that a RefSeq model holds and the genome lacks, written there or moved there by the 3' shift, in a run under `--hgvs`. The tier counts models: the committed caches hold 33 models with such bases, in 3 corpora, none of them with the bases inside its coding sequence. One committed flag set runs a RefSeq or merged cache under `--hgvs`, and no record of a committed corpus stands on such bases.
+**How often the shape occurs.** Tier 2, see [Intended divergences from Ensembl VEP](../intended-divergences.md): the shape is an insertion on bases that a RefSeq model holds and the genome lacks, written there or moved there by the 3' shift, in a run under `--hgvs`. The tier counts models: the committed caches hold 49 models with such bases, in 7 corpora, 16 of them with the bases inside their coding sequence. Seven committed flag sets run a RefSeq or merged cache under `--hgvs`, and no record of a committed corpus stands on such bases.
 
-A set of 51 hand-written insertions, at and beside 8 such places inside coding sequences of the RefSeq GRCh38 cache, gives 884 rows in each engine under `--refseq --hgvs`. vep-rs writes this entry's notation on 114 of them: a `delins` over the span on 95, an inversion on 15 and a one-base substitution on 4. Of the 114, 108 are on nuclear models, where Ensembl VEP writes an `ins` on every one. The other 6 are on mitochondrial models, whose rows print no `BAM_EDIT`.
+A set of 51 hand-written insertions, at and beside 8 such places inside coding sequences of the RefSeq GRCh38 cache, gives 884 rows in each engine under `--refseq --hgvs`. vep-rs writes this entry's notation on 114 of those written on such bases: a `delins` over the span on 95, an inversion on 15 and a one-base substitution on 4. Of the 114, 108 are on nuclear models, where Ensembl VEP writes an `ins` on every one. The other 6 are on mitochondrial models, whose rows print no `BAM_EDIT`.
 
 Among the ClinVar GRCh38 records, 32 insertions reach such bases, 3 as written and 29 once shifted 3'. vep-rs writes this entry's notation for 13 of them, 2 written there and 11 shifted there, all on `NM_015120.4` at 2:73385942: 5 insertions between neighbours, 4 duplications, 2 substitutions, 1 `delins` and 1 deletion. The other 19 (8 on `NM_015120.4`, 10 on `NM_002111.8` and 1 on `NR_163972.1`) are insertions that the genome shows as a duplication of the bases before the place, and they are no part of this entry. The 32 are not split by region here.
 
@@ -50,7 +50,7 @@ Tuple, pair, set aside, charged and the other scoring terms are defined in [How 
 
 ## 1. One base inserted on the three bases `NM_015120.4` holds and the genome lacks
 
-**In short.** `2 73385942 seam_one_base A AC` on GRCh38 inserts one base between 2:73385942 and 2:73385943. At that point the forward-strand RefSeq model `NM_015120.4` holds three bases that the genome lacks, its coding positions 75 to 77. Both engines print `CDS_position` 75-77 and `frameshift_variant` on the model's row. Under `--hgvs`, Ensembl VEP 116.2 writes `c.77_78insC`, an insertion after the third of those bases that keeps all three. vep-rs writes `c.75_77delinsC`, the three bases replaced by the one. The class's test accepts the row where a comparison names the class.
+**In short.** `2 73385942 seam_one_base A AC` on GRCh38 inserts one base between 2:73385942 and 2:73385943. At that point the forward-strand RefSeq model `NM_015120.4` holds three bases that the genome lacks, its coding positions 75 to 77. Both engines print `CDS_position` 75-77 and `frameshift_variant` on the model's row. Under `--hgvs`, Ensembl VEP 116.3 writes `c.77_78insC`, an insertion after the third of those bases that keeps all three. vep-rs writes `c.75_77delinsC`, the three bases replaced by the one. The class's test accepts the row where a comparison names the class.
 
 ### 1.1 What a reader needs to know first
 
@@ -79,7 +79,7 @@ Both engines run `--refseq --hgvs` with a reference FASTA. No row of the three r
 
 ### 1.3 What each engine writes
 
-The first record's row on the model, in the default format. Ensembl VEP 116.2:
+The first record's row on the model, in the default format. Ensembl VEP 116.3:
 
 ```
 seam_one_base	2:73385942-73385943	C	7840	NM_015120.4	Transcript	frameshift_variant	186-188	75-77	25-26	EE/DX	gaagag/gaCa	-	IMPACT=HIGH;STRAND=1;REFSEQ_OFFSET=3;GIVEN_REF=-;USED_REF=-;BAM_EDIT=OK;HGVSc=NM_015120.4:c.77_78insC;HGVSp=NP_055935.4:p.Glu25AspfsTer102
@@ -93,7 +93,7 @@ seam_one_base	2:73385942-73385943	C	7840	NM_015120.4	Transcript	frameshift_varia
 
 The two rows agree in every column but the `HGVSc` and the reference half of `Codons`. This entry is the `HGVSc`. The codons are the subject of the entry [`refseq_edited_model_inserted_span_codons`](refseq-edited-model-inserted-span-codons.md). The `HGVSc` of the three records on the model:
 
-| Record | Ensembl VEP 116.2 | vep-rs |
+| Record | Ensembl VEP 116.3 | vep-rs |
 | --- | --- | --- |
 | `seam_one_base`, one base | `c.77_78insC` | `c.75_77delinsC` |
 | 551063, three bases | `c.77_78insGGC` | `c.77A>C` |
@@ -139,13 +139,13 @@ vep -i record.vcf -o out.txt --offline \
 grep NM_015120.4 out.txt | grep -o 'HGVSc=[^;]*'
 ```
 
-`<cache>` is Ensembl VEP's RefSeq GRCh38 cache of release 116, converted for vep-rs ([Cache conversion](../cache-conversion.md)). The command prints the three values of the vep-rs column of 1.3. Ensembl VEP 116.2 takes the same flags with the cache options of [Reproducing these examples](reproducing.md) and its own RefSeq cache, and prints `c.77_78ins` with each allele.
+`<cache>` is Ensembl VEP's RefSeq GRCh38 cache of release 116, converted for vep-rs ([Cache conversion](../cache-conversion.md)). The command prints the three values of the vep-rs column of 1.3. Ensembl VEP 116.3 takes the same flags with the cache options of [Reproducing these examples](reproducing.md) and its own RefSeq cache, and prints `c.77_78ins` with each allele.
 
-The entry's reproduction is one run, of these three records. No committed cache holds a model with such bases inside its coding sequence, and no committed FASTA holds chromosome 2. The reproduction therefore converts the one region file of Ensembl VEP's cache that holds the model, `2/73000001-74000000`. It also writes a FASTA that holds the 435 genomic bases of the model's first exon and `N` elsewhere.
+The entry's reproduction is one run of both engines, on GRCh38, of five records: these three and the two of 2.6 and 3.6. No committed GRCh38 cache holds a model with such bases inside its coding sequence, and no committed FASTA holds chromosome 2. A run reads one cache, so the reproduction converts the two region files of Ensembl VEP's cache that hold its models, here `2/73000001-74000000`. It also writes a FASTA that holds the genomic bases of one exon at each place, here the 435 of the model's first exon, and `N` elsewhere.
 
 ### 1.7 How the comparator treats this class
 
-The format comparator (`scripts/concordance/compare_vep_formats.py`) holds the test of this class, the function `edited_model_seam_insertion_replacement`. It applies the test where a comparison names the class, which no comparison case or corpus manifest does. A row of the shape is therefore reported as a difference in `HGVSc`.
+The format comparator (`tools/vep-formats-compare`) holds the test of this class, the function `edited_model_seam_insertion_replacement`. It applies the test where a comparison names the class, which no comparison case or corpus manifest does. A row of the shape is therefore reported as a difference in `HGVSc`.
 
 Where a comparison names the class, the test sets a differing `HGVSc` aside when the row's own fields show the shape. It has four conditions:
 
@@ -158,7 +158,7 @@ Where a comparison names the class, the test sets a differing `HGVSc` aside when
 
 The third condition tells such a span from an ordinary insertion, whose alternate half is longer by the whole allele. The fourth judges the notation by what it says, not by its text, because the 3' placement reads bases of the model that the row does not carry. `c.75_77delinsC` on `gaggaa` gives `gaCa`. `c.78del`, one position past the span and inside the row's codons, turns `gaggaa` into that row's `gaGGa`.
 
-Everything else stays a difference. The comparator's own tests (`scripts/concordance/test_compare_vep_formats.py`) give the class's test each of these and hold it refused:
+Everything else stays a difference. The comparator's own tests (`tools/vep-formats-compare/tests`) give the class's test each of these and hold it refused:
 
 - on a row of the shape, a vep-rs notation that gives another sequence, Ensembl VEP's own `ins` among them, or an `ins` between two positions that are not neighbours;
 - any notation where the allele is the model's own bases, and a notation under another reference name;
@@ -170,7 +170,7 @@ On the 884 paired rows of the set of 51 insertions, `HGVSc` differs on 202. The 
 
 ## 2. Three ClinVar insertions on the bases a model holds in an untranslated region
 
-**In short.** ClinVar records 1049039, 212026 and 335960 on GRCh37 are insertions written exactly where a RefSeq model holds, in an untranslated region, bases the genome lacks. Both engines print the span of those bases as the row's `cDNA_position`, and the row has no `CDS_position`. Under `--refseq --hgvs`, Ensembl VEP 116.2 writes an `ins` of every inserted base, between two positions numbered as if the exon held no added base. vep-rs writes the change the inserted bases make to the model's own, a deletion, no notation and a duplication; `HGVSc` alone differs, and the comparison sets nothing aside for these rows.
+**In short.** ClinVar records 1049039, 212026 and 335960 on GRCh37 are insertions written exactly where a RefSeq model holds, in an untranslated region, bases the genome lacks. Both engines print the span of those bases as the row's `cDNA_position`, and the row has no `CDS_position`. Under `--refseq --hgvs`, Ensembl VEP 116.3 writes an `ins` of every inserted base, between two positions numbered as if the exon held no added base. vep-rs writes the change the inserted bases make to the model's own, a deletion, no notation and a duplication; `HGVSc` alone differs, and the comparison sets nothing aside for these rows.
 
 ### 2.1 What a reader needs to know first
 
@@ -196,12 +196,13 @@ Each model prints `BAM_EDIT=OK` and holds at that point the bases of one inserti
 | First base of the last exon | 6:57512472, cDNA 1381 |
 | Mapper pair before the point | cDNA 1381-1697 on 6:57512472-57512788 |
 | Mapper pair after the point | cDNA 1709-1713 on 6:57512789-57512793 |
+| Mapper pair after that one | cDNA 1714-1841 on 6:57512797-57512924 |
 
 ### 2.3 What each engine writes
 
 Of the 18 columns and fields compared on each row, `HGVSc` alone differs. Both engines print the same term, the region's, which is `3_prime_UTR_variant` on the first row. Both print the span as `cDNA_position`, no `CDS_position` and the same `REFSEQ_OFFSET`: 11, 1 and 1. The `HGVSc` of each row, by its kind and positions:
 
-| Record | `cDNA_position` | Ensembl VEP 116.2 | vep-rs |
+| Record | `cDNA_position` | Ensembl VEP 116.3 | vep-rs |
 | --- | --- | --- | --- |
 | 1049039 | 1698-1708 | `ins` of 2 bases between `c.*97` and `c.*98` | `del` of `c.*87` to `c.*95` |
 | 212026 | 3169 | `ins` of 1 base between `c.*2586` and `c.*2587` | no notation |
@@ -220,7 +221,7 @@ The cause is that of section 1, and the steps are those of 1.4. On the first rec
 | Counted from the first base of the last exon | 1381 + (57512799 - 57512472) = 1708, and 1709 |
 | Lines 2848-2852, past the stop codon at cDNA 1611 | `c.*97` and `c.*98` |
 
-On the model's own sequence `c.*97` is cDNA 1708, the last of the 11 added bases, and `c.*98` is cDNA 1709, the record's neighbour after the point. The two genomic bases the numbers were counted from, 6:57512799 and 6:57512800, lie past both mapper pairs of 2.2. The model's mapper numbers them cDNA 1716 and 1717, `c.*105` and `c.*106`, in pairs that 2.2 does not list. On the third record lines 2865 and 2867 count both positions before the start codon as negative numbers.
+On the model's own sequence `c.*97` is cDNA 1708, the last of the 11 added bases, and `c.*98` is cDNA 1709, the record's neighbour after the point. The two genomic bases the numbers were counted from, 6:57512799 and 6:57512800, lie in the last mapper pair of 2.2, which numbers them cDNA 1714 + 2 = 1716 and 1717, `c.*105` and `c.*106`. On the third record lines 2865 and 2867 count both positions before the start codon as negative numbers.
 
 On all three rows the `ins` stands between exactly the two numbers that the slide by the row's `REFSEQ_OFFSET` gives. Read on the model, it gives another sequence than the record's.
 
@@ -228,7 +229,7 @@ On all three rows the `ins` stands between exactly the two numbers that the slid
 
 The first record's flanking bases are cDNA 1697 and 1709. Between them lie cDNA 1698 to 1708, the 11 bases the genome has no position for, 87 to 97 bases past the stop codon.
 
-Both flanking bases have a position on the model, with the model's added bases between them. On either side of the point the model carries the genome's sequence. The two mapper pairs of 2.2 hold 322 bases: the model's sequence is the genome's on 313 of them, and the other 9 stand at substitution edits of the model. On the other two models the mapper pairs on either side of the point hold 4,371 and 371 bases, with 1 and 0 at such edits.
+Both flanking bases have a position on the model, with the model's added bases between them. On either side of the point the model carries the genome's sequence. The first two pairs of 2.2 hold 322 bases: the model's sequence is the genome's on 313 of them, and the other 9 stand at substitution edits of the model. On the other two models the mapper pairs on either side of the point hold 4,371 and 371 bases, with 1 and 0 at such edits.
 
 So whatever sequence the record gives on the genome, on the model it is the model's own with the bases between the two flanking bases exchanged for the inserted ones. An HGVSc is a statement on the model's sequence, and the row's notation is the description of that exchange.
 
@@ -244,7 +245,18 @@ On the second record the inserted base is the model's own. The record's sequence
 
 ### 2.6 Try it yourself
 
-The records are taken from the ClinVar GRCh37 file by their numbers. The `vep` command of 1.6 runs them with `--assembly GRCh37`, the conversion of Ensembl VEP's RefSeq GRCh37 cache of release 116 and a GRCh37 FASTA. The rows of `NM_000947.5`, `NM_005105.5` and `NM_000104.4` then carry, in each engine, the `HGVSc` that 2.3 describes. This form has no reproduction of its own: the entry's reproduction is one run, on GRCh38, of the records of section 1, and it does not run these three.
+The records are taken from the ClinVar GRCh37 file by their numbers. The `vep` command of 1.6 runs them with `--assembly GRCh37`, the conversion of Ensembl VEP's RefSeq GRCh37 cache of release 116 and a GRCh37 FASTA. The rows of `NM_000947.5`, `NM_005105.5` and `NM_000104.4` then carry, in each engine, the `HGVSc` that 2.3 describes. The entry's reproduction, on GRCh38, does not run these three: it runs a record written for this form.
+
+| Of that record | Value |
+| --- | --- |
+| The record | `10 11331456 untranslated_one_base T TA`: one base inserted between 10:11331456 and 10:11331457 |
+| Models, forward and `BAM_EDIT=OK` | `NM_001083591.1` and `NM_001025076.2`, in the region file `10/11000001-12000000` |
+| Last coding base of each | cDNA 1774 and cDNA 1780 |
+| Bases each holds at the point and the genome lacks | 2, of one insertion edit in the 3' untranslated region: `c.*1046` and `c.*1047` of each |
+| `cDNA_position` and `REFSEQ_OFFSET` in both engines | 2820-2821 on the first model and 2826-2827 on the second, with no `CDS_position`; 2 |
+| Ensembl VEP 116.3 on both rows | `c.*1047_*1048insA`, between the second added base and the base after the point |
+| vep-rs on both rows | `c.*1046_*1047delinsA`: the inserted base is neither of the two bases and replaces both |
+| Every other column and field of the two rows | equal in both engines |
 
 ### 2.7 How the comparator treats this class
 
@@ -254,7 +266,7 @@ The format comparator was run on the three rows of each engine three times: appl
 
 ## 3. A ClinVar insertion that the 3' shift moves onto the bases five models hold
 
-**In short.** The 3' shift moves ClinVar record 768677, 18 bases inserted on GRCh37, onto 9 bases that five RefSeq models hold and the genome lacks. Ensembl VEP 116.2 writes an `ins` of the 18, vep-rs a `dup` of the 9, and nothing is set aside.
+**In short.** The 3' shift moves ClinVar record 768677, 18 bases inserted on GRCh37, onto 9 bases that five RefSeq models hold and the genome lacks. Ensembl VEP 116.3 writes an `ins` of the 18, vep-rs a `dup` of the 9, and nothing is set aside.
 
 ### 3.1 What a reader needs to know first
 
@@ -283,7 +295,7 @@ Both engines run `--refseq --hgvs`.
 
 ### 3.3 What each engine writes
 
-| On each of the 5 rows | Ensembl VEP 116.2 | vep-rs |
+| On each of the 5 rows | Ensembl VEP 116.3 | vep-rs |
 | --- | --- | --- |
 | `CDS_position`, the two coding positions the written point lies between | 125-126 | 125-126 |
 | `Protein_position` | 42 | 42 |
@@ -323,7 +335,17 @@ With `--shift_hgvs 0`, vep-rs writes on these rows an `ins` of 18 bases between 
 
 ### 3.6 Try it yourself
 
-The record is taken by its number and run as 2.6 says; the five models' rows then carry the `HGVSc` of 3.3. This form has no reproduction of its own: the entry's reproduction is one run, on GRCh38, and does not run this record.
+The record is taken by its number and run as 2.6 says; the five models' rows then carry the `HGVSc` of 3.3. The entry's reproduction, on GRCh38, does not run this record: it runs one written for this form.
+
+| Of that record | Value |
+| --- | --- |
+| The record | `2 73385940 shifted_onto_the_bases G GGAC`: three bases inserted between 2:73385940 and 2:73385941 |
+| The genome lets it move 3' | by 2 bases and no further, to the point of section 1, where `NM_015120.4` holds its three bases |
+| `CDS_position` and `HGVS_OFFSET` in both engines | 72-73, the written point's; 2 |
+| `REFSEQ_OFFSET` in both engines | none |
+| Ensembl VEP 116.3 | `c.74_75insGAC`: the three bases as the record spells them, between two positions numbered as if the exon held no added base |
+| vep-rs | `c.75G>C`: the three bases rotated by the shift, `CGA`, stand in place of the model's `GGA` |
+| Every other column and field of the row | equal in both engines; `HGVSp` is `p.Glu25Asp` in both, the one residue that `c.75G>C` changes |
 
 ### 3.7 How the comparator treats this class
 

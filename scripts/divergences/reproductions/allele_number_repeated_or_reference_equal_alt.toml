@@ -1,0 +1,83 @@
+entry = "allele_number_repeated_or_reference_equal_alt"
+page = "docs/divergences/allele-number-repeated-or-reference-equal-alt.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "unobserved"
+input_class_basis = "well-formed under the VCF 4.2 specification, section 1.4.1 \"Fixed fields\" (ALT carries no rule against a repeated allele); not seen in the measured datasets; classed by its most reachable shape, a repeated ALT allele: an ALT equal to REF breaks \"alternate non-reference alleles\" (ALT, the same section)"
+notes = "Three records on the middle base of the stop codon of ENST00000416044. The first is line 15 of the GRCh38-vcf-edge-cases corpus, whose second ALT repeats the first; the other two are made up: one whose first ALT is the reference base, one that opens with a `*` before a repeated ALT."
+
+[input]
+format = "vcf"
+text = """
+21	30289183	dup_alt	C	G,G,T	.	.	.
+21	30289183	after_reference	C	C,T	.	.	.
+21	30289183	after_star	C	*,G,G,T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-vcf-edge-cases/json_cache"
+
+[run]
+flags = ["--allele_number", "--uploaded_allele"]
+
+[compare]
+kind = "rows"
+where = { feature = "ENST00000416044" }
+columns = ["Uploaded_variation", "Allele", "Consequence", "ALLELE_NUM", "UPLOADED_ALLELE"]
+
+[expected]
+ensembl_vep = [
+  "dup_alt | G | stop_lost | 1 | C/G/G/T",
+  "dup_alt | T | stop_retained_variant | 2 | C/G/G/T",
+  "after_reference | T | stop_retained_variant | 1 | C/C/T",
+  "after_star | G | stop_lost | 2 | C/*/G/G/T",
+  "after_star | T | stop_retained_variant | 3 | C/*/G/G/T",
+]
+vep_rs = [
+  "dup_alt | G | stop_lost | 1 | C/G/G/T",
+  "dup_alt | T | stop_retained_variant | 3 | C/G/G/T",
+  "after_reference | T | stop_retained_variant | 2 | C/C/T",
+  "after_star | G | stop_lost | 2 | C/*/G/G/T",
+  "after_star | T | stop_retained_variant | 4 | C/*/G/G/T",
+]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/validate.rs::keep_overlap_allele",
+    "crates/vep-cli/src/vcf_parser.rs::sequence_variants",
+]
+tests = [
+    "crates/vep-cli/src/validate.rs::tests::lookup_ref_drops_an_alt_the_reference_now_equals",
+    "crates/vep-cli/src/vcf_parser.rs::tests::an_alt_after_a_repeated_alt_keeps_its_written_place",
+    "crates/vep-cli/tests/allele_number_written_place.rs::an_alternate_prints_the_number_of_its_place_in_the_record",
+    "crates/vep-cli/tests/allele_number_written_place.rs::an_ensembl_format_line_prints_the_place_in_its_allele_string",
+    "crates/vep-cli/tests/allele_number_written_place.rs::every_output_format_prints_the_place",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/allele_number.rs::allele_number_place_pair",
+    "tools/vep-golden-corpus/src/classify/allele_number.rs::allele_number_repeated_or_reference_equal_alt",
+]
+
+[[also]]
+notes = "The first record under `--minimal`, which switches `--allele_number` on and does not split the record: none of its alternates trims."
+
+[also.input]
+format = "vcf"
+text = """
+21	30289183	dup_alt	C	G,G,T	.	.	.
+"""
+
+[also.run]
+flags = ["--minimal", "--uploaded_allele"]
+
+[also.expected]
+ensembl_vep = [
+  "dup_alt | G | stop_lost | 1 | C/G/G/T",
+  "dup_alt | T | stop_retained_variant | 2 | C/G/G/T",
+]
+vep_rs = [
+  "dup_alt | G | stop_lost | 1 | C/G/G/T",
+  "dup_alt | T | stop_retained_variant | 3 | C/G/G/T",
+]

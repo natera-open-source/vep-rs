@@ -1,0 +1,2 @@
+Can't stat storable/no-such-cache: No such file or directory
+No .gz Storable chunks found under storable/no-such-cache

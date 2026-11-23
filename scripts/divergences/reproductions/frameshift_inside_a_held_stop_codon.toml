@@ -1,0 +1,79 @@
+entry = "frameshift_inside_a_held_stop_codon"
+page = "docs/divergences/frameshift-inside-a-held-stop-codon.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "observed"
+input_class_basis = "seen in the whole-genome population datasets: 55 rows of 53 records, on 18 transcripts whose protein holds a stop and names the residues after it; none on the cuts"
+notes = "Five records on the reverse-strand polymorphic pseudogene ENST00000435769 of GRCh37 chromosome 7, whose protein of 669 residues holds 23 stops, the first at residue 339. The first is a record of 1000 Genomes Phase 3 and of the gnomAD v2.1.1 genomes: it deletes the first base of that stop's codon. The base before the codon is the same base, so the second record, written for the entry, deletes that one and leaves the same sequence. The third and fourth add one base at the same two places and leave one sequence as well. On the second and the fourth, whose first base lies in codon 338, both engines write frameshift_variant and the extension named at the stop. On the first and the third, whose first base lies inside the stop codon, Ensembl VEP writes coding_sequence_variant with the stop unchanged or a deletion-insertion, and vep-rs the row of the same change written one base on. The fifth, written for the entry, deletes the second base of the stop codon: the codon stays a stop codon in the new frame and residue 340 is the first that changes, which Ensembl VEP writes as the stop unchanged and vep-rs as a frameshift named at residue 340."
+
+prepare = [
+  '''[ -n "$PERL_CACHE" ] || { echo "no homo_sapiens/116_GRCh37 with chromosome 7 under the --perl-cache-dir roots" >&2; exit 1; }
+cut="$STAGE/perl-cache/homo_sapiens/116_GRCh37"
+mkdir -p "$cut/7"
+cp "$PERL_CACHE/info.txt" "$PERL_CACHE/chr_synonyms.txt" "$cut/"
+cp "$PERL_CACHE/7/72000001-73000000.gz" "$cut/7/"''',
+  '''cargo run --release --locked --quiet --manifest-path "$REPO/tools/vep-storable-to-json/Cargo.toml" -- "$STAGE/perl-cache/homo_sapiens/116_GRCh37" "$STAGE/json-cache" 7 > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
+]
+
+[input]
+format = "vcf"
+text = """
+7	72209527	base_lost_inside_the_stop_codon_7_72209527	CA	C	.	.	.
+7	72209528	same_base_lost_written_before_the_stop_codon	AA	A	.	.	.
+7	72209527	base_added_inside_the_stop_codon	C	CA	.	.	.
+7	72209528	same_base_added_written_before_the_stop_codon	A	AA	.	.	.
+7	72209526	base_lost_and_the_stop_kept	TC	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh37"
+json_cache = "{stage}/json-cache"
+perl_cache = "{stage}/perl-cache"
+
+[run]
+flags = [
+  "--hgvs",
+  "--fasta", "{grch37_fasta}/Homo_sapiens.GRCh37.75.dna.primary_assembly.fa",
+]
+
+[compare]
+kind = "rows"
+where = { record = ["base_added_inside_the_stop_codon", "base_lost_and_the_stop_kept", "base_lost_inside_the_stop_codon_7_72209527", "same_base_added_written_before_the_stop_codon", "same_base_lost_written_before_the_stop_codon"], feature = "ENST00000435769" }
+columns = ["Uploaded_variation", "Feature", "Consequence", "IMPACT", "CDS_position", "Protein_position", "HGVSc", "HGVSp"]
+
+[expected]
+ensembl_vep = [
+  "base_added_inside_the_stop_codon | ENST00000435769 | coding_sequence_variant | MODIFIER | 1015-1016 | 339 | ENST00000435769.2:c.1015dup | ENSP00000477053.1:p.Ter339delinsLeuTer",
+  "base_lost_and_the_stop_kept | ENST00000435769 | coding_sequence_variant | MODIFIER | 1016 | 339 | ENST00000435769.2:c.1016del | ENSP00000477053.1:p.Ter339%3D",
+  "base_lost_inside_the_stop_codon_7_72209527 | ENST00000435769 | coding_sequence_variant | MODIFIER | 1015 | 339 | ENST00000435769.2:c.1015del | ENSP00000477053.1:p.Ter339%3D",
+  "same_base_added_written_before_the_stop_codon | ENST00000435769 | frameshift_variant | HIGH | 1014-1015 | 338-339 | ENST00000435769.2:c.1015dup | ENSP00000477053.1:p.Ter339LeuextTer42",
+  "same_base_lost_written_before_the_stop_codon | ENST00000435769 | frameshift_variant | HIGH | 1014 | 338 | ENST00000435769.2:c.1015del | ENSP00000477053.1:p.Ter339GluextTer34",
+]
+vep_rs = [
+  "base_added_inside_the_stop_codon | ENST00000435769 | frameshift_variant | HIGH | 1015-1016 | 339 | ENST00000435769.2:c.1015dup | ENSP00000477053.1:p.Ter339LeuextTer42",
+  "base_lost_and_the_stop_kept | ENST00000435769 | frameshift_variant | HIGH | 1016 | 339 | ENST00000435769.2:c.1016del | ENSP00000477053.1:p.Glu340SerfsTer34",
+  "base_lost_inside_the_stop_codon_7_72209527 | ENST00000435769 | frameshift_variant | HIGH | 1015 | 339 | ENST00000435769.2:c.1015del | ENSP00000477053.1:p.Ter339GluextTer34",
+  "same_base_added_written_before_the_stop_codon | ENST00000435769 | frameshift_variant | HIGH | 1014-1015 | 338-339 | ENST00000435769.2:c.1015dup | ENSP00000477053.1:p.Ter339LeuextTer42",
+  "same_base_lost_written_before_the_stop_codon | ENST00000435769 | frameshift_variant | HIGH | 1014 | 338 | ENST00000435769.2:c.1015del | ENSP00000477053.1:p.Ter339GluextTer34",
+]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/coding.rs::PerlCodingEval::begins_at_a_stop_the_peptide_reads_past",
+    "crates/vep-effects/src/coding.rs::PerlCodingEval::begins_at_the_stop_no_residue_follows",
+    "crates/vep-effects/src/coding.rs::PerlCodingEval::peptide_reads_on_past",
+]
+tests = [
+    "crates/vep-cli/tests/frameshift_inside_a_stop_the_peptide_holds.rs::a_frameshift_length_allele_inside_a_stop_the_peptide_holds_is_a_frameshift",
+    "crates/vep-effects/src/frameshift_inside_a_held_stop_tests.rs::a_base_added_inside_a_stop_the_peptide_holds_shifts_the_frame",
+    "crates/vep-effects/src/frameshift_inside_a_held_stop_tests.rs::a_base_lost_inside_a_stop_the_peptide_holds_shifts_the_frame",
+    "crates/vep-effects/src/frameshift_inside_a_held_stop_tests.rs::a_stop_the_new_frame_keeps_still_shifts_the_residues_after_it",
+    "crates/vep-effects/src/frameshift_inside_a_held_stop_tests.rs::four_bases_lost_from_inside_the_stop_are_no_inframe_deletion",
+    "crates/vep-effects/src/frameshift_inside_a_held_stop_tests.rs::one_change_written_on_either_side_of_the_stop_codons_first_base_gets_one_row",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/frameshift_at_a_held_stop.rs::frameshift_inside_a_held_stop_codon_pair",
+    "tools/vep-outputs-compare/src/rules/row.rs::frameshift_inside_a_held_stop_codon_pair",
+    "tools/vep-plugin-pairs/src/rules/term_pair.rs::frameshift_inside_a_held_stop_codon_pair",
+]

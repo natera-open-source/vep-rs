@@ -39,19 +39,24 @@ use vep_plugin::PluginRegistry;
 pub(crate) const HGVS_NEEDS_FASTA: &str = "Cannot generate HGVS coordinates (--hgvs and --hgvsg) in offline mode without a FASTA file (see --fasta)";
 
 /// Shared annotation resources that can be reused across batches.
+#[non_exhaustive]
 pub struct AnnotationResources {
     pub transcripts: Arc<LazyTranscriptIndexes>,
     pub variation_source: Option<Arc<VariationSource>>,
+    #[doc(hidden)]
     pub regulatory_source: Option<Arc<crate::regulatory::RegulatorySource>>,
     /// The epigenomes `--cell_type` named, resolved against the regulatory
     /// source's list; `None` without the flag or without a source.
+    #[doc(hidden)]
     pub cell_types: Option<Arc<crate::regulatory::CellTypes>>,
     /// The known structural variants of `--check_svs <file>`, `None` without
     /// the flag.
+    #[doc(hidden)]
     pub sv_source: Option<Arc<SvSource>>,
     /// Which known variants of a window co-locate with an input variant.
     pub colocation: ColocationRules,
     pub effects_config: Arc<vep_effects::EffectsConfig>,
+    #[doc(hidden)]
     pub builtin_plugins: Arc<BuiltinRegistry>,
     /// C-ABI plugins loaded from the `--plugin` arguments no built-in claimed.
     pub dylib_plugins: Arc<PluginRegistry>,
@@ -63,6 +68,7 @@ pub struct AnnotationResources {
     /// The compiled `--transcript_filter`, which every transcript passes before
     /// its consequences are computed, as in the `vep` binary; `None` filters
     /// nothing.
+    #[doc(hidden)]
     pub transcript_filter: Option<Arc<FilterSet>>,
     /// The chromosome synonyms every input chromosome is resolved through
     /// before the cache lookups, as the `vep` binary resolves them: Ensembl VEP
@@ -73,10 +79,47 @@ pub struct AnnotationResources {
     pub synonyms: Arc<ChromosomeSynonyms>,
     /// The `--custom` sources, which annotate each batch after the plugins;
     /// `None` without a specification.
+    #[doc(hidden)]
     pub custom_sources: Option<Arc<CustomSources>>,
     /// What the output headers print for each custom source, in order
     /// ([`Annotator::custom_source_infos`]); empty without a source.
     pub custom_source_infos: Vec<vep_io::output::fields::CustomSourceInfo>,
+}
+
+impl AnnotationResources {
+    /// The resources of an annotator over `transcripts` under `effects_config`
+    /// and nothing else. Every other field starts with the value that leaves
+    /// its part out, and is a public field to assign:
+    ///
+    /// - `variation_source`, `regulatory_source`, `cell_types`, `sv_source`,
+    ///   `nearest`, `transcript_filter` and `custom_sources` are `None`;
+    /// - `builtin_plugins` and `dylib_plugins` are registries without a plugin;
+    /// - `synonyms` is a table without a synonym, and `custom_source_infos` an
+    ///   empty list;
+    /// - `colocation` and `prediction_config` are the `Default` of their type:
+    ///   Ensembl VEP's co-location rules, and no SIFT or PolyPhen column.
+    pub fn new(
+        transcripts: Arc<LazyTranscriptIndexes>,
+        effects_config: Arc<vep_effects::EffectsConfig>,
+    ) -> Self {
+        Self {
+            transcripts,
+            variation_source: None,
+            regulatory_source: None,
+            cell_types: None,
+            sv_source: None,
+            colocation: ColocationRules::default(),
+            effects_config,
+            builtin_plugins: Arc::new(BuiltinRegistry::new()),
+            dylib_plugins: Arc::new(PluginRegistry::new()),
+            prediction_config: PredictionConfig::default(),
+            nearest: None,
+            transcript_filter: None,
+            synonyms: Arc::new(ChromosomeSynonyms::new()),
+            custom_sources: None,
+            custom_source_infos: Vec::new(),
+        }
+    }
 }
 
 /// Build a scoped rayon thread pool sized for one annotator.
@@ -100,6 +143,7 @@ pub fn build_thread_pool(num_threads: usize) -> anyhow::Result<Arc<ThreadPool>> 
 
 /// Configuration for SIFT/PolyPhen prediction lookup.
 #[derive(Debug, Clone, Default)]
+#[non_exhaustive]
 pub struct PredictionConfig {
     /// SIFT output mode: "p" (prediction), "s" (score), "b" (both), or None.
     pub sift: Option<String>,
@@ -110,6 +154,7 @@ pub struct PredictionConfig {
 }
 
 #[derive(Debug, Clone, Copy, Default)]
+#[non_exhaustive]
 pub struct AnnotationStats {
     pub variants_processed: u64,
     pub consequences_calculated: u64,
@@ -120,9 +165,11 @@ pub struct AnnotationStats {
 /// Embedding consumers want to map a single bad row to a row-level error
 /// rather than failing the whole batch. The
 /// taxonomy distinguishes input/configuration errors (caller's fault, return
-/// to caller as a row error) from engine errors (annotator's fault, but still
-/// row-scoped, never panicking the whole batch).
+/// to caller as a row error) from the engine error (an annotation file the
+/// batch could not read: every row of that batch carries it, and the batch
+/// never panics).
 #[derive(Debug, Clone, Error)]
+#[non_exhaustive]
 pub enum AnnotationError {
     /// Row failed pre-annotation validation (empty allele, ALT='.', etc.).
     #[error("invalid input: {0}")]
@@ -312,7 +359,7 @@ impl Annotator {
         // The resolution settles the cache's decisions on a copy of the
         // configuration, the one read from here on.
         let mut settled = config.clone();
-        let cache = crate::cache_resolve::resolve(&mut settled)?;
+        let cache = crate::runner::resolve_cache(&mut settled)?;
         let config = &settled;
         // After the cache and before the cache's notices and the FASTA, as the
         // binary orders them (`Runner::new` resolves the cache; `Runner::run`
@@ -325,13 +372,24 @@ impl Annotator {
         let predictions = crate::runner::prediction_checks(config, &cache.info)?;
         log_notices(&predictions.notices);
         let custom_specs = crate::runner::parse_custom_specs(config)?;
+        for notice in crate::cache_left_out::notices(config, &cache.info, !custom_specs.is_empty())
+        {
+            log_notices(&[notice.as_str()]);
+        }
         let reference_fasta = crate::runner::open_fasta(config, &cache)?;
+        let (custom_specs, gene_models) =
+            crate::runner::split_custom_specs(custom_specs, reference_fasta.as_deref())?;
         let custom_sources = crate::runner::open_custom_sources(
             custom_specs,
             reference_fasta.as_deref(),
             &cache.synonyms,
             crate::runner::custom_run_options(config),
+            cache.assembly.as_deref(),
         )?;
+        // A gene-model file's refusals come with the custom sources', before
+        // the FASTA checks below, as the binary orders them: its files are
+        // read further down, once the cache's transcripts are loaded.
+        crate::gene_model::check(&gene_models, reference_fasta.is_some())?;
         let checks = match crate::runner::fasta_setup_checks(config, reference_fasta.is_some()) {
             Ok(checks) => checks,
             Err(refusal) => {
@@ -346,7 +404,7 @@ impl Annotator {
             &config.dir_plugins,
             config.safe,
             reference_fasta.clone(),
-            cache.assembly.as_deref(),
+            RunAssembly::of(config, &cache),
             run_context(config, checks.hgvs),
         )?;
         let mut effects = new_effects_config(
@@ -369,14 +427,57 @@ impl Annotator {
         let builtin_plugins = Arc::new(builtin);
         let dylib_plugins = Arc::new(dylib);
         let regulatory = regulatory_enabled(config, &dylib_plugins);
-        let transcripts = load_transcript_indexes_with_exon_ids(
+        let keep_exon_ids = exon_ids_wanted(&config.plugin);
+        let transcripts = load_indexes(
             &cache.dir,
             &effects_config,
             TranscriptSet::from_config(config),
-            exon_ids_wanted(&config.plugin),
+            keep_exon_ids,
+            |raw| {
+                // The cache's transcripts alone are loaded at this point.
+                if let Some(filter) = transcript_filter.as_deref() {
+                    let carries_db_id = raw
+                        .values()
+                        .find_map(|transcripts| transcripts.first())
+                        .map(|transcript| transcript.db_id.is_some());
+                    for notice in crate::runner::unset_filter_key_notices(
+                        filter,
+                        carries_db_id,
+                        !gene_models.is_empty(),
+                    ) {
+                        log_notices(&[notice.as_str()]);
+                    }
+                }
+                if gene_models.is_empty() {
+                    return Ok(());
+                }
+                // The files' transcripts join the cache's before a chromosome
+                // is indexed, each chromosome ranked over both.
+                let from_files = crate::gene_model::load(
+                    &gene_models,
+                    crate::gene_model::Reference {
+                        fasta: effects_config.reference_fasta.as_deref(),
+                        assembly: cache.assembly.as_deref(),
+                    },
+                    &cache.synonyms,
+                    |name| raw.contains_key(name),
+                    &TranscriptSet::from_config(config),
+                    keep_exon_ids,
+                    config.nearest.is_some(),
+                )?;
+                for (chr, transcripts) in from_files {
+                    let all = raw.entry(chr).or_default();
+                    all.extend(transcripts);
+                    json_cache::assign_id_ranks(all);
+                }
+                Ok(())
+            },
         )?;
         let variation_source = crate::runner::open_variation_source(config, &cache)?;
-        let sv_source = crate::runner::open_sv_source(config)?;
+        let sv_source = crate::runner::open_sv_source(config, cache.assembly.as_deref())?;
+        if sv_source.is_some() {
+            log_notices(&[crate::sv_source::DUMP_LACKS_NOTICE]);
+        }
         let regulatory_source =
             crate::regulatory::RegulatorySource::open_for(config, &cache, regulatory)?;
         let cell_types = crate::regulatory::CellTypes::resolve(
@@ -405,6 +506,7 @@ impl Annotator {
                 synonyms: Arc::clone(&cache.synonyms),
                 custom_source_infos: crate::runner::custom_source_infos(
                     custom_sources.as_deref(),
+                    &gene_models,
                     crate::runner::custom_run_options(config),
                 ),
                 custom_sources,
@@ -414,14 +516,17 @@ impl Annotator {
         )
     }
 
+    #[doc(hidden)]
     pub fn resources(&self) -> &AnnotationResources {
         &self.inner.resources
     }
 
+    #[doc(hidden)]
     pub fn pool(&self) -> &Arc<ThreadPool> {
         &self.inner.pool
     }
 
+    #[doc(hidden)]
     pub fn plugin_count(&self) -> usize {
         self.inner.resources.builtin_plugins.plugin_count()
             + self.inner.resources.dylib_plugins.plugin_count()
@@ -476,7 +581,7 @@ impl Annotator {
     /// serially without rebuilding the annotator or changing the pool size.
     /// The work still runs inside the annotator's scoped pool so any nested
     /// rayon code stays on the intended worker set.
-    pub fn annotate_batch_with_parallelism(
+    pub(crate) fn annotate_batch_with_parallelism(
         &self,
         batch: &mut Vec<InputVariant>,
         use_parallel: bool,
@@ -515,10 +620,12 @@ impl Annotator {
         (stats, failure.take_with_component())
     }
 
+    #[doc(hidden)]
     pub fn annotate_variants(&self, batch: &mut Vec<InputVariant>) -> AnnotationStats {
         self.annotate_batch(batch)
     }
 
+    #[doc(hidden)]
     pub fn annotate_variants_with_parallelism(
         &self,
         batch: &mut Vec<InputVariant>,
@@ -529,7 +636,7 @@ impl Annotator {
 
     /// Annotate a batch with per-row error semantics.
     ///
-    /// Mutates each variant in place (same as [`annotate_batch`]) and returns
+    /// Mutates each variant in place (same as `annotate_batch`) and returns
     /// a parallel `Vec<Result<(), AnnotationError>>` where the i-th entry maps
     /// to `batch[i]`. Every entry is `Ok` unless a variation file of the cache
     /// or the `--check_svs` file could not be read, when every entry carries
@@ -542,7 +649,7 @@ impl Annotator {
         self.try_annotate_batch_with_parallelism(batch, true)
     }
 
-    pub fn try_annotate_batch_with_parallelism(
+    pub(crate) fn try_annotate_batch_with_parallelism(
         &self,
         batch: &mut Vec<InputVariant>,
         use_parallel: bool,
@@ -569,7 +676,7 @@ impl Annotator {
         self.try_annotate_rows_with_parallelism(rows, true)
     }
 
-    pub fn try_annotate_rows_with_parallelism(
+    pub(crate) fn try_annotate_rows_with_parallelism(
         &self,
         rows: &[RawRow],
         use_parallel: bool,
@@ -617,15 +724,47 @@ fn log_notices(notices: &[&str]) {
     }
 }
 
-/// The assembly hint the built-in plugins read, from the run's assembly
-/// (`--assembly`, else the cache's own): one of the two assemblies
+/// The assembly hint the built-in plugins read, from the run's assembly name
+/// (the cache's own, else the value of `--assembly`): one of the two assemblies
 /// [`Assembly`](vep_core::assembly::Assembly) names, or `None` for no assembly
 /// and for a name [`Assembly::parse`](vep_core::assembly::Assembly::parse) reads
 /// as neither (`GRCm39`). `load_plugins` warns about an assembly that gives no
 /// hint, once per built-in it loads, so a run without plugins says nothing
-/// about it.
-pub fn resolve_assembly(raw: Option<&str>) -> Option<vep_core::assembly::Assembly> {
+/// about it; the warning names `--assembly` where the flag gave the name and
+/// the cache where the name was read from it (`RunAssembly`).
+pub(crate) fn resolve_assembly(raw: Option<&str>) -> Option<vep_core::assembly::Assembly> {
     raw.and_then(vep_core::assembly::Assembly::parse)
+}
+
+/// The run's assembly name with where it was read: `--assembly`, or the cache
+/// (its `info.json`, else the name of its directory).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RunAssembly<'a> {
+    Flag(&'a str),
+    Cache(&'a str),
+}
+
+impl<'a> RunAssembly<'a> {
+    /// The assembly `cache` resolved for the run, read from the flag where
+    /// `config` carries `--assembly`: a cache that names another assembly is
+    /// refused before this, so the flag's name is then the run's.
+    pub(crate) fn of(
+        config: &Config,
+        cache: &'a crate::cache_resolve::ResolvedCache,
+    ) -> Option<Self> {
+        let name = cache.assembly.as_deref()?;
+        Some(if config.assembly.is_some() {
+            Self::Flag(name)
+        } else {
+            Self::Cache(name)
+        })
+    }
+
+    fn name(self) -> &'a str {
+        match self {
+            Self::Flag(name) | Self::Cache(name) => name,
+        }
+    }
 }
 
 /// The plugins one run loads: the built-ins claimed by name, and the C-ABI dylibs
@@ -674,7 +813,8 @@ pub(crate) fn regulatory_enabled(config: &Config, dylib: &PluginRegistry) -> boo
 /// assembly contradicts the run. A hint of `None` leaves every one of those guards
 /// inert, so a wrong-assembly file annotates nothing and still exits 0; an assembly
 /// name that gives no hint is therefore warned about as each built-in loads under
-/// it, naming the plugin, and not at all when no plugin loads. `run` carries the
+/// it, naming the plugin and where the name was read (`--assembly`, or the
+/// cache), and not at all when no plugin loads. `run` carries the
 /// output format and the transcript set Ensembl VEP's plugins read from
 /// `$self->{config}` as they construct; the directories of `dir_plugins` reach
 /// the built-ins through it, so LoFtool and pLI find their bundled score files.
@@ -683,7 +823,7 @@ pub(crate) fn load_plugins(
     dir_plugins: &PluginDirs,
     safe: bool,
     reference_fasta: Option<Arc<vep_fasta::IndexedFasta>>,
-    assembly: Option<&str>,
+    assembly: Option<RunAssembly<'_>>,
     run: RunContext<'_>,
 ) -> anyhow::Result<LoadedPlugins> {
     let mut builtin = BuiltinRegistry::new();
@@ -691,11 +831,9 @@ pub(crate) fn load_plugins(
     if plugin_args.is_empty() {
         return Ok(LoadedPlugins { builtin, dylib });
     }
-    let run = RunContext {
-        plugin_dirs: &dir_plugins.dirs,
-        ..run
-    };
-    let hint = resolve_assembly(assembly);
+    let mut run = run;
+    run.plugin_dirs = &dir_plugins.dirs;
+    let hint = resolve_assembly(assembly.map(RunAssembly::name));
     let unrecognised_assembly = assembly.filter(|_| hint.is_none());
 
     for missing in &dir_plugins.not_found {
@@ -710,12 +848,17 @@ pub(crate) fn load_plugins(
             run,
         );
         let builtin_loaded = outcome.failed.is_empty() && outcome.unresolved.is_empty();
-        if let Some(raw) = unrecognised_assembly {
+        if let Some(unrecognised) = unrecognised_assembly {
             if builtin_loaded {
-                tracing::warn!(
-                    "--assembly '{raw}' is not an assembly {} recognises; it runs without an assembly hint",
-                    vep_core::sv_routing::split_plugin_arg(arg).0
-                );
+                let plugin = vep_core::sv_routing::split_plugin_arg(arg).0;
+                match unrecognised {
+                    RunAssembly::Flag(raw) => tracing::warn!(
+                        "--assembly '{raw}' is not an assembly {plugin} recognises; it runs without an assembly hint"
+                    ),
+                    RunAssembly::Cache(raw) => tracing::warn!(
+                        "the cache's assembly '{raw}' is not an assembly {plugin} recognises; it runs without an assembly hint"
+                    ),
+                }
             }
         }
         for (name, error) in &outcome.failed {
@@ -725,10 +868,7 @@ pub(crate) fn load_plugins(
                 vep_builtins::PluginError::Init(text) => text.clone(),
                 other => other.to_string(),
             };
-            plugin_warning(
-                format!("Failed to instantiate plugin {name}: {reason}"),
-                safe,
-            )?;
+            plugin_warning(failed_to_instantiate(name, &reason), safe)?;
         }
         for unresolved in &outcome.unresolved {
             let dylib_outcome =
@@ -779,13 +919,13 @@ fn settle_unresolved_name(name: &str, dir_plugins: &PluginDirs, safe: bool) -> a
 /// whether the run computes the HGVS notations (`hgvs`: the `--hgvs` the FASTA
 /// checks kept); [`load_plugins`] adds the plugins directories it is handed.
 pub(crate) fn run_context(config: &Config, hgvs: bool) -> RunContext<'static> {
-    RunContext {
-        output_format: OutputFormat::from_name(&config.output_format),
-        refseq: config.refseq,
-        merged: config.merged,
-        hgvs,
-        plugin_dirs: &[],
-    }
+    let mut run = RunContext::default();
+    run.output_format = OutputFormat::from_name(&config.output_format);
+    run.refseq = config.refseq;
+    run.merged = config.merged;
+    run.hgvs = hgvs;
+    run.plugin_dirs = &[];
+    run
 }
 
 /// The built-in plugins that read the transcript model on every row.
@@ -835,6 +975,19 @@ pub(crate) fn context_sequence_rows(builtin: &BuiltinRegistry) -> LofteeContextR
     }
 }
 
+/// The line for a plugin whose constructor fails, as Ensembl VEP words it
+/// (`Failed to instantiate plugin $module: $@`, Runner.pm:950). A built-in
+/// plugin opens the texts it words with its own name and a colon, so a `reason`
+/// that opens with `name` so is written from the text after it and the line
+/// names the plugin once; any other reason is written whole.
+fn failed_to_instantiate(name: &str, reason: &str) -> String {
+    let reason = reason
+        .strip_prefix(name)
+        .and_then(|rest| rest.strip_prefix(": "))
+        .unwrap_or(reason);
+    format!("Failed to instantiate plugin {name}: {reason}")
+}
+
 /// A plugin-loading warning (Runner.pm:911-918, `:929-939`, `:946-954`): the
 /// plugin component's error carrying `message` under `safe`, else the warning,
 /// and the run goes on.
@@ -858,7 +1011,7 @@ pub(crate) fn run_builtin_plugins(registry: &BuiltinRegistry, batch: &mut [Input
 /// ends ([`Annotator::run_batch`]). The reason is a `Run` error's own text and
 /// any other error's description: `run_plugins` warns `Plugin '<Class>' went
 /// wrong: $@` when a plugin dies, and the next plugin runs
-/// (OutputFactory.pm:2243-2245).
+/// (OutputFactory.pm:2252-2254).
 pub(crate) fn report_plugin_failures(outcome: vep_builtins::BatchOutcome) {
     for failure in outcome.failures {
         let reason = match failure.error {
@@ -909,34 +1062,34 @@ fn new_effects_config(
     compute_exon_intron_numbers: bool,
     protein_version: bool,
 ) -> vep_effects::EffectsConfig {
-    vep_effects::EffectsConfig {
-        upstream_distance: distance.0,
-        downstream_distance: distance.1,
-        reference_fasta,
-        enable_indel_3prime_shift: shift_3prime,
-        hgvs,
-        loftee_context: LofteeContextRows::None,
-        context_sequences: LofteeContextRows::None,
-        compute_hgvs,
-        compute_exon_intron_numbers,
-        protein_version,
-        hgvsg: None,
-        spdi: None,
-        domains: false,
-        use_transcript_ref: false,
-        process_ref_homs: false,
-    }
+    let mut effects = vep_effects::EffectsConfig::default();
+    effects.upstream_distance = distance.0;
+    effects.downstream_distance = distance.1;
+    effects.reference_fasta = reference_fasta;
+    effects.enable_indel_3prime_shift = shift_3prime;
+    effects.hgvs = hgvs;
+    effects.loftee_context = LofteeContextRows::None;
+    effects.context_sequences = LofteeContextRows::None;
+    effects.compute_hgvs = compute_hgvs;
+    effects.compute_exon_intron_numbers = compute_exon_intron_numbers;
+    effects.protein_version = protein_version;
+    effects.hgvsg = None;
+    effects.spdi = None;
+    effects.domains = false;
+    effects.use_transcript_ref = false;
+    effects.process_ref_homs = false;
+    effects
 }
 
 /// The HGVSc and HGVSp options of a configuration: the shift under `--shift_hgvs`,
 /// the two HGVSp forms and whether `--shift_3prime 1` moved the consequences.
 pub(crate) fn hgvs_options(config: &Config) -> vep_effects::hgvs::HgvsOptions {
-    vep_effects::hgvs::HgvsOptions {
-        shift_hgvs: config.shift_hgvs,
-        hgvsp_use_prediction: config.hgvsp_use_prediction,
-        remove_hgvsp_version: config.remove_hgvsp_version,
-        shift_3prime: config.shift_3prime,
-    }
+    let mut options = vep_effects::hgvs::HgvsOptions::default();
+    options.shift_hgvs = config.shift_hgvs;
+    options.hgvsp_use_prediction = config.hgvsp_use_prediction;
+    options.remove_hgvsp_version = config.remove_hgvsp_version;
+    options.shift_3prime = config.shift_3prime;
+    options
 }
 
 /// The HGVSg options of a configuration: `None` without `--hgvsg`. Insertions
@@ -952,9 +1105,11 @@ pub(crate) fn hgvsg_options(
     config: &Config,
     synonyms: &ChromosomeSynonyms,
 ) -> Option<vep_effects::hgvsg::HgvsgOptions> {
-    config.hgvsg.then(|| vep_effects::hgvsg::HgvsgOptions {
-        shift: config.shift_hgvs,
-        accessions: config.hgvsg_use_accession.then(|| refseq_names(synonyms)),
+    config.hgvsg.then(|| {
+        let mut options = vep_effects::hgvsg::HgvsgOptions::default();
+        options.shift = config.shift_hgvs;
+        options.accessions = config.hgvsg_use_accession.then(|| refseq_names(synonyms));
+        options
     })
 }
 
@@ -965,9 +1120,11 @@ pub(crate) fn spdi_options(
     config: &Config,
     synonyms: &ChromosomeSynonyms,
 ) -> Option<vep_effects::spdi::SpdiOptions> {
-    (config.spdi || config.ga4gh_vrs).then(|| vep_effects::spdi::SpdiOptions {
-        vrs_accessions: config.ga4gh_vrs.then(|| nc_accessions(synonyms)),
-        cache_name_on_every_row: config.spdi_on_the_cache_name,
+    (config.spdi || config.ga4gh_vrs).then(|| {
+        let mut options = vep_effects::spdi::SpdiOptions::default();
+        options.vrs_accessions = config.ga4gh_vrs.then(|| nc_accessions(synonyms));
+        options.cache_name_on_every_row = config.spdi_on_the_cache_name;
+        options
     })
 }
 
@@ -1029,14 +1186,35 @@ pub fn load_transcript_indexes(
 /// [`load_transcript_indexes`] keeping each exon's stable id on its transcript
 /// under `keep_exon_ids` ([`vep_core::transcript::Transcript::exon_ids`]), for a
 /// run whose plugins print them (`exon_ids_wanted`).
-pub fn load_transcript_indexes_with_exon_ids(
+pub(crate) fn load_transcript_indexes_with_exon_ids(
     json_cache_path: &str,
     effects_config: &vep_effects::EffectsConfig,
     transcript_set: TranscriptSet,
     keep_exon_ids: bool,
 ) -> anyhow::Result<Arc<LazyTranscriptIndexes>> {
+    load_indexes(
+        json_cache_path,
+        effects_config,
+        transcript_set,
+        keep_exon_ids,
+        |_| Ok(()),
+    )
+}
+
+/// [`load_transcript_indexes_with_exon_ids`], with `join` adding to the
+/// loaded chromosomes before any is indexed: the transcripts of the run's
+/// gene-model files, for a run that names one. The load's status lines are
+/// written after `join`, so a chromosome's line counts its transcripts of the
+/// cache and of the files together, as the line of the lazy load does.
+fn load_indexes(
+    json_cache_path: &str,
+    effects_config: &vep_effects::EffectsConfig,
+    transcript_set: TranscriptSet,
+    keep_exon_ids: bool,
+    join: impl FnOnce(&mut HashMap<String, Vec<vep_core::transcript::Transcript>>) -> anyhow::Result<()>,
+) -> anyhow::Result<Arc<LazyTranscriptIndexes>> {
     info!("Loading transcripts from JSON cache: {}", json_cache_path);
-    let mut raw = json_cache::load_all_transcripts_in_set_with(
+    let mut raw = json_cache::load_all_transcripts_without_status_lines(
         json_cache_path,
         Some(&transcript_set),
         keep_exon_ids,
@@ -1046,6 +1224,8 @@ pub fn load_transcript_indexes_with_exon_ids(
             json_cache::pair_completed_stop_codons(transcripts, reference);
         }
     }
+    join(&mut raw)?;
+    json_cache::write_loaded_lines(&raw);
     info!("Building transcript index");
     Ok(Arc::new(LazyTranscriptIndexes::from_loaded(
         raw,
@@ -1061,6 +1241,7 @@ pub fn load_transcript_indexes_with_exon_ids(
 /// statistics, and the lookups inside the closure have no error channel of
 /// their own. A caller that drops the slot unread annotates the batch without
 /// its co-located or overlapping known variants and never learns it.
+#[doc(hidden)]
 pub fn annotate_batch(
     batch: &mut Vec<InputVariant>,
     resources: &AnnotationResources,
@@ -1079,6 +1260,7 @@ pub fn annotate_batch(
             &resources.synonyms,
             &resources.transcripts,
             &source_chromosomes,
+            resources.effects_config.reference_fasta.as_deref(),
         );
     }
     if let Some(source) = &resources.variation_source {
@@ -1266,6 +1448,34 @@ mod tests {
         annotator_over(Arc::new(LazyTranscriptIndexes::empty())).unwrap()
     }
 
+    /// `AnnotationResources::new` keeps the two parts it is given and starts
+    /// every other field with the value its documentation lists.
+    #[test]
+    fn resources_start_with_the_transcripts_and_the_effects_settings_alone() {
+        let transcripts = Arc::new(LazyTranscriptIndexes::empty());
+        let mut effects = vep_effects::EffectsConfig::default();
+        effects.upstream_distance = 7;
+        let effects = Arc::new(effects);
+        let resources = AnnotationResources::new(Arc::clone(&transcripts), Arc::clone(&effects));
+        assert!(Arc::ptr_eq(&resources.transcripts, &transcripts));
+        assert!(Arc::ptr_eq(&resources.effects_config, &effects));
+        assert!(resources.variation_source.is_none());
+        assert!(resources.regulatory_source.is_none());
+        assert!(resources.cell_types.is_none());
+        assert!(resources.sv_source.is_none());
+        assert_eq!(resources.colocation, ColocationRules::default());
+        assert!(resources.builtin_plugins.is_empty());
+        assert!(resources.dylib_plugins.is_empty());
+        assert_eq!(resources.prediction_config.sift, None);
+        assert_eq!(resources.prediction_config.polyphen, None);
+        assert!(!resources.prediction_config.humdiv);
+        assert_eq!(resources.nearest, None);
+        assert!(resources.transcript_filter.is_none());
+        assert!(resources.synonyms.is_empty());
+        assert!(resources.custom_sources.is_none());
+        assert!(resources.custom_source_infos.is_empty());
+    }
+
     /// The messages of the `WARN` events `work` emits on this thread.
     fn warnings_of(work: impl FnOnce()) -> Vec<String> {
         messages_of(tracing::Level::WARN, work)
@@ -1393,7 +1603,9 @@ mod tests {
     /// warned about once per built-in that loads under it, naming the plugin, and
     /// not at all when no plugin loads, when the plugin fails to load, or when the
     /// assembly is one the plugins recognise; so a run without `--plugin` under
-    /// such an assembly prints no line about it. REVEL refuses to load without
+    /// such an assembly prints no line about it. The line names `--assembly`
+    /// where the flag gave the name and the cache where the name was read from
+    /// it. REVEL refuses to load without
     /// a hint, as `REVEL.pm:133` dies without an assembly it knows, so its run
     /// under `GRCm39` is a failed load with no hint line.
     #[test]
@@ -1412,7 +1624,7 @@ mod tests {
         let hint_lines = |lines: Vec<String>| -> Vec<String> {
             lines
                 .into_iter()
-                .filter(|line| line.starts_with("--assembly"))
+                .filter(|line| line.ends_with("it runs without an assembly hint"))
                 .collect()
         };
 
@@ -1422,7 +1634,7 @@ mod tests {
                 dir_plugins,
                 false,
                 None,
-                Some("GRCm39"),
+                Some(RunAssembly::Flag("GRCm39")),
                 RunContext::default(),
             )
             .unwrap();
@@ -1435,7 +1647,7 @@ mod tests {
                 dir_plugins,
                 false,
                 None,
-                Some("GRCm39"),
+                Some(RunAssembly::Flag("GRCm39")),
                 RunContext::default(),
             )
             .unwrap();
@@ -1446,13 +1658,30 @@ mod tests {
             ["--assembly 'GRCm39' is not an assembly AlphaMissense recognises; it runs without an assembly hint"]
         );
 
+        let read_from_the_cache = warnings_of(|| {
+            let plugins = load_plugins(
+                std::slice::from_ref(&alphamissense),
+                dir_plugins,
+                false,
+                None,
+                Some(RunAssembly::Cache("GRCm39")),
+                RunContext::default(),
+            )
+            .unwrap();
+            assert_eq!(plugins.builtin.plugin_count(), 1);
+        });
+        assert_eq!(
+            hint_lines(read_from_the_cache),
+            ["the cache's assembly 'GRCm39' is not an assembly AlphaMissense recognises; it runs without an assembly hint"]
+        );
+
         let recognised = warnings_of(|| {
             let plugins = load_plugins(
                 &[alphamissense.clone(), revel.clone()],
                 dir_plugins,
                 false,
                 None,
-                Some("GRCh37"),
+                Some(RunAssembly::Flag("GRCh37")),
                 RunContext::default(),
             )
             .unwrap();
@@ -1467,7 +1696,7 @@ mod tests {
                     dir_plugins,
                     false,
                     None,
-                    Some("GRCm39"),
+                    Some(RunAssembly::Flag("GRCm39")),
                     RunContext::default(),
                 )
                 .unwrap();
@@ -1477,11 +1706,60 @@ mod tests {
         }
     }
 
-    /// A registry that loaded the built-ins `names` name, every name claimed.
+    /// LoFTEE's default file names are `LoF.pm`'s own and name human on GRCh38
+    /// (`LoF.pm:130`). Under an assembly that gives no hint the plugin takes the
+    /// `grch38` branch's default, the bigWig of that name under `loftee_path`:
+    /// it loads where the file exists, the hint warning naming it, and where
+    /// the file is absent the failed load names the file it looked for.
+    #[test]
+    fn loftee_under_another_assembly_reads_the_human_default_and_is_warned_about() {
+        let _guard = crate::warnings::sink_test_guard();
+        const DEFAULT_BIGWIG: &str = "gerp_conservation_scores.homo_sapiens.GRCh38.bw";
+        let data = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/golden/116/GRCh38-plugin-loftee/plugin_data");
+        assert!(data.join(DEFAULT_BIGWIG).is_file());
+        let dir = tempfile::tempdir().unwrap();
+        let dir_plugins = &PluginDirs::expand(dir.path().to_str().unwrap());
+        let load = |loftee_path: &std::path::Path| {
+            load_plugins(
+                &[format!("LoF,loftee_path:{}/", loftee_path.display())],
+                dir_plugins,
+                true,
+                None,
+                Some(RunAssembly::Flag("GRCm39")),
+                RunContext::default(),
+            )
+        };
+
+        let loaded = warnings_of(|| {
+            assert_eq!(load(&data).unwrap().builtin.plugin_count(), 1);
+        });
+        assert_eq!(
+            loaded,
+            ["--assembly 'GRCm39' is not an assembly LoF recognises; it runs without an assembly hint"]
+        );
+
+        let absent = load(dir.path()).err().unwrap().to_string();
+        assert!(
+            absent.contains("Failed to instantiate plugin LoF:") && absent.contains(DEFAULT_BIGWIG),
+            "{absent}"
+        );
+    }
+
+    /// A registry that loaded the built-ins `names` name, every name claimed,
+    /// in a run with the reference of the GRCh38-plugin-utr-annotator corpus,
+    /// without which the registry refuses UTRAnnotator.
     fn registry_loading(names: &[&str]) -> BuiltinRegistry {
+        let reference = vep_fasta::IndexedFasta::from_path(format!(
+            "{}/../../tests/golden/116/GRCh38-plugin-utr-annotator/reference.fa.gz",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .unwrap();
         let mut registry = BuiltinRegistry::new();
         let args: Vec<String> = names.iter().map(|name| name.to_string()).collect();
-        assert!(registry.load_from_args(&args).unwrap().is_empty());
+        let outcome = registry.load_from_args_with_context(&args, Some(Arc::new(reference)), None);
+        assert!(outcome.failed.is_empty(), "{:?}", outcome.failed);
+        assert!(outcome.unresolved.is_empty(), "{:?}", outcome.unresolved);
         registry
     }
 
@@ -1561,6 +1839,60 @@ mod tests {
         assert!(!wanted(&["Downstream", "TSSDistance"]));
     }
 
+    /// A run that gives no flag the plugins' settings follow, `vep` alone,
+    /// builds the settings `RunContext::default()` holds. The two are compared
+    /// one field at a time, so a field the run sets apart from the default
+    /// fails here by its name with both values, as the one field `--refseq`
+    /// sets does.
+    #[test]
+    fn a_run_without_a_plugin_setting_flag_builds_the_default_run_context() {
+        /// The fields of `context` in declaration order, each with its name
+        /// and its value as `{:#?}` prints it.
+        fn context_values(context: &RunContext) -> Vec<(String, String)> {
+            let mut fields: Vec<(String, String)> = Vec::new();
+            for line in format!("{context:#?}").lines() {
+                let Some(rest) = line.strip_prefix("    ") else {
+                    continue;
+                };
+                // A line at the first indent opens a field unless it closes a
+                // list; a deeper line continues the value before it.
+                if rest.starts_with([' ', ']', '}', ')']) {
+                    let (_, value) = fields.last_mut().expect("a field before the line");
+                    value.push_str(rest.trim());
+                } else {
+                    let (name, value) = rest.split_once(": ").expect("a field and its value");
+                    fields.push((name.to_string(), value.to_string()));
+                }
+            }
+            fields
+        }
+        let default = RunContext::default();
+        let built = |flags: &[&str]| -> RunContext<'static> {
+            let mut argv = vec!["vep"];
+            argv.extend_from_slice(flags);
+            let config = Config::from_argv(argv).unwrap();
+            let checks = crate::runner::fasta_setup_checks(&config, false).unwrap();
+            run_context(&config, checks.hgvs)
+        };
+        let differing = |flags: &[&str]| -> Vec<String> {
+            context_values(&built(flags))
+                .into_iter()
+                .zip(context_values(&default))
+                .filter(|(built, default)| built != default)
+                .map(|((name, built), (_, default))| {
+                    let default = default.trim_end_matches(',');
+                    format!("{name}: {built} where the default holds {default}")
+                })
+                .collect()
+        };
+        assert_eq!(differing(&[]), [] as [&str; 0]);
+        assert_eq!(built(&[]), default);
+        assert_eq!(
+            differing(&["--refseq"]),
+            ["refseq: true, where the default holds false"]
+        );
+    }
+
     /// Every pool thread carries a distinct `vep-annot-<i>` name that fits the
     /// 15 bytes Linux keeps of a thread name, so a per-thread profile of a
     /// 16-worker run attributes each worker separately.
@@ -1587,6 +1919,7 @@ mod tests {
         use crate::runner::make_runner_test_transcript;
         use crate::transcript_index::TranscriptIndex;
         use std::collections::HashMap;
+        let _guard = crate::warnings::sink_test_guard();
 
         fn two_transcript_index() -> Arc<LazyTranscriptIndexes> {
             let buffered_tx =
@@ -1718,6 +2051,7 @@ mod tests {
     /// would satisfy a bare equality. Naming the transcript is what prevents that.
     #[test]
     fn annotator_and_cli_agree_on_interchromosomal_bnd_mate_annotation() {
+        let _guard = crate::warnings::sink_test_guard();
         let dir = tempfile::Builder::new()
             .prefix("vep_annotator_bnd_")
             .tempdir()
@@ -1824,6 +2158,7 @@ mod tests {
 
     #[test]
     fn try_annotate_rows_preserves_input_order_and_errors() {
+        let _guard = crate::warnings::sink_test_guard();
         let annotator = empty_annotator();
         let rows = vec![
             RawRow {
@@ -1868,6 +2203,7 @@ mod tests {
 
     #[test]
     fn try_annotate_batch_returns_one_result_per_input() {
+        let _guard = crate::warnings::sink_test_guard();
         let annotator = empty_annotator();
         let mut batch: Vec<InputVariant> = vec![
             InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec()),
@@ -1882,13 +2218,11 @@ mod tests {
     /// `<dir>/variations/<chr>/`, read by the five-column layout, on a pool of
     /// `threads`.
     fn annotator_over_variation_files(dir: &std::path::Path, threads: usize) -> Annotator {
-        let info = vep_core::cache_info::CacheInfo {
-            variation_cols: ["variation_name", "failed", "start", "end", "allele_string"]
-                .iter()
-                .map(|name| name.to_string())
-                .collect(),
-            ..Default::default()
-        };
+        let mut info = vep_core::cache_info::CacheInfo::default();
+        info.variation_cols = ["variation_name", "failed", "start", "end", "allele_string"]
+            .iter()
+            .map(|name| name.to_string())
+            .collect();
         let source = crate::variation_source::VariationSource::open(
             dir,
             &info,
@@ -1921,6 +2255,7 @@ mod tests {
     /// error on every row of the batch; the statistics API logs it instead.
     #[test]
     fn try_annotate_batch_reports_a_variation_read_failure_on_every_row() {
+        let _guard = crate::warnings::sink_test_guard();
         let dir = tempfile::tempdir().unwrap();
         let region = dir
             .path()
@@ -1965,6 +2300,7 @@ mod tests {
     /// interleaving of their prefetches and lookups on the shared source.
     #[test]
     fn concurrent_batches_report_only_their_own_variation_read_failure() {
+        let _guard = crate::warnings::sink_test_guard();
         let dir = tempfile::tempdir().unwrap();
         let chromosome = dir.path().join("variations").join("21");
         std::fs::create_dir_all(&chromosome).unwrap();
@@ -2008,6 +2344,7 @@ mod tests {
 
     #[test]
     fn explicit_serial_annotation_preserves_batch_contract() {
+        let _guard = crate::warnings::sink_test_guard();
         let annotator = empty_annotator();
         let mut batch: Vec<InputVariant> = vec![
             InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec()),
@@ -2031,6 +2368,7 @@ mod tests {
     /// the release 116 corpus cache.
     #[test]
     fn the_library_path_annotates_through_the_command_line_path() {
+        let _guard = crate::warnings::sink_test_guard();
         const EXPECTED_ROW: &str = "ENST00000390690:frameshift_variant,feature_truncation";
         let cache = format!(
             "{}/../../tests/golden/116/GRCh38-release116/json_cache",
@@ -2084,6 +2422,7 @@ mod tests {
         use crate::runner::make_runner_test_transcript;
         use crate::transcript_index::TranscriptIndex;
         use std::collections::HashMap;
+        let _guard = crate::warnings::sink_test_guard();
 
         let mut coding = make_runner_test_transcript("ENSTCODING", "ENSGCODING", "21", 10_000);
         coding.biotype = "protein_coding".into();
@@ -2148,7 +2487,7 @@ mod tests {
             &PluginDirs::expand(dir.path().to_str().unwrap()),
             false,
             None,
-            Some("GRCh37"),
+            Some(RunAssembly::Flag("GRCh37")),
             RunContext::default(),
         )
         .unwrap();
@@ -2164,15 +2503,12 @@ mod tests {
         sink.configure(Target::Memory, true, false);
         let mut batch = parse_vcf_line("21\t100300\tin_block\tC\tT\t.\t.\t.", true).unwrap();
         let _ = annotator.annotate_batch(&mut batch);
-        // Another test's warning can land in the same process-wide sink while
-        // the window is open, so only the plugin lines are counted.
         let texts: Vec<String> = sink
             .take_collected()
             .into_iter()
             .map(|(_, text)| text)
             .filter(|text| text.starts_with("WARNING: Plugin '"))
             .collect();
-        sink.configure(Target::Stderr, false, false);
         assert_eq!(texts.len(), 1, "{texts:#?}");
         assert!(
             texts[0].starts_with("WARNING: Plugin 'REVEL' went wrong: "),
@@ -2201,11 +2537,9 @@ mod tests {
             "{}/../../tests/golden/116/GRCh38-gencode-basic/json_cache",
             env!("CARGO_MANIFEST_DIR")
         );
-        let effects = vep_effects::EffectsConfig {
-            upstream_distance: 5_000,
-            downstream_distance: 5_000,
-            ..Default::default()
-        };
+        let mut effects = vep_effects::EffectsConfig::default();
+        effects.upstream_distance = 5_000;
+        effects.downstream_distance = 5_000;
         let indexed = |indexes: &LazyTranscriptIndexes| {
             CHROMOSOMES
                 .iter()
@@ -2275,6 +2609,7 @@ mod tests {
     /// for the output.
     #[test]
     fn from_config_resolves_input_chromosomes_through_the_synonyms() {
+        let _guard = crate::warnings::sink_test_guard();
         let cache = format!(
             "{}/../../tests/golden/116/GRCh38-synonyms/json_cache",
             env!("CARGO_MANIFEST_DIR")
@@ -2317,11 +2652,12 @@ mod tests {
     /// then `:179`; `BaseVEP.pm:689-738`), so a record written `chr21` with a
     /// `]chr21:...]` mate gets the rows the bare `21` spelling gets, under the
     /// cache's name for both. On the GRCh38-synonyms corpus, whose `chr_synonyms.txt`
-    /// lists `chr21` for `21`, Ensembl VEP 116.2 prints 60 rows for this record
+    /// lists `chr21` for `21`, Ensembl VEP 116.3 prints 60 rows for this record
     /// under either spelling, 30 transcripts for each of its two breakend
     /// alleles, as the `vep` binary does over the corpus's `json_cache`.
     #[test]
     fn from_config_resolves_a_breakend_mate_through_the_synonyms() {
+        let _guard = crate::warnings::sink_test_guard();
         let cache = format!(
             "{}/../../tests/golden/116/GRCh38-synonyms/json_cache",
             env!("CARGO_MANIFEST_DIR")
@@ -2373,10 +2709,11 @@ mod tests {
 
     /// `from_config` carries the co-location flags into the library path: on the
     /// GRCh38-colocated corpus, `21 5230609 A C` gains the failed null allele
-    /// `rs1979841086` beside `rs373402393` under `--failed 1`, as Ensembl VEP 116.2
+    /// `rs1979841086` beside `rs373402393` under `--failed 1`, as Ensembl VEP 116.3
     /// prints it, and `rs373402393` alone without the flag.
     #[test]
     fn from_config_carries_the_colocation_rules() {
+        let _guard = crate::warnings::sink_test_guard();
         let cache = format!(
             "{}/../../tests/golden/116/GRCh38-colocated/json_cache",
             env!("CARGO_MANIFEST_DIR")
@@ -2420,17 +2757,21 @@ mod tests {
         let config = Config::from_argv(["vep", "--hgvsg", "--hgvsg_use_accession"]).unwrap();
         assert_eq!(
             hgvsg_options(&config, &table),
-            Some(vep_effects::hgvsg::HgvsgOptions {
-                shift: true,
-                accessions: Some(accessions.clone()),
+            Some({
+                let mut options = vep_effects::hgvsg::HgvsgOptions::default();
+                options.shift = true;
+                options.accessions = Some(accessions.clone());
+                options
             })
         );
         let config = Config::from_argv(["vep", "--hgvsg", "--shift_hgvs", "0"]).unwrap();
         assert_eq!(
             hgvsg_options(&config, &table),
-            Some(vep_effects::hgvsg::HgvsgOptions {
-                shift: false,
-                accessions: None,
+            Some({
+                let mut options = vep_effects::hgvsg::HgvsgOptions::default();
+                options.shift = false;
+                options.accessions = None;
+                options
             })
         );
         let config = Config::from_argv(["vep", "--hgvsg_use_accession"]).unwrap();
@@ -2439,17 +2780,21 @@ mod tests {
         let config = Config::from_argv(["vep", "--ga4gh_vrs", "--tab"]).unwrap();
         assert_eq!(
             spdi_options(&config, &table),
-            Some(vep_effects::spdi::SpdiOptions {
-                vrs_accessions: Some(accessions),
-                cache_name_on_every_row: false,
+            Some({
+                let mut options = vep_effects::spdi::SpdiOptions::default();
+                options.vrs_accessions = Some(accessions);
+                options.cache_name_on_every_row = false;
+                options
             })
         );
         let config = Config::from_argv(["vep", "--spdi"]).unwrap();
         assert_eq!(
             spdi_options(&config, &table),
-            Some(vep_effects::spdi::SpdiOptions {
-                vrs_accessions: None,
-                cache_name_on_every_row: false,
+            Some({
+                let mut options = vep_effects::spdi::SpdiOptions::default();
+                options.vrs_accessions = None;
+                options.cache_name_on_every_row = false;
+                options
             })
         );
         assert_eq!(
@@ -2483,7 +2828,37 @@ mod tests {
         );
     }
 
-    /// Ensembl VEP 116.2 prints the `--everything` notice (Runner.pm:752,
+    /// A gene-model file without a FASTA is refused, naming the FASTA,
+    /// before the FASTA checks, as the binary refuses it: Ensembl VEP builds
+    /// its sources, and so raises the file source's refusal (`BaseGXF.pm:105`),
+    /// before `post_setup_checks` (Runner.pm:128, :139).
+    #[test]
+    fn from_config_refuses_a_gene_model_file_without_a_fasta_before_the_hgvs_check() {
+        let leaf = format!(
+            "{}/../../tests/golden/116/GRCh38-release116/json_cache",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let config = Config::from_argv([
+            "vep",
+            "--fork",
+            "1",
+            "--json_cache",
+            &leaf,
+            "--hgvsg",
+            "--gtf",
+            "genes.gtf.gz",
+        ])
+        .unwrap();
+        let err = Annotator::from_config(&config)
+            .err()
+            .expect("a gene-model file without a FASTA is refused");
+        assert_eq!(
+            CliError::from_run(&err),
+            format!("ERROR: [custom] {}", crate::gene_model::FASTA_REQUIRED)
+        );
+    }
+
+    /// Ensembl VEP 116.3 prints the `--everything` notice (Runner.pm:752,
     /// BaseVEP.pm:785) before it throws for `--hgvsg` without a FASTA (:759), so
     /// `from_config` logs it at `INFO` before it returns that refusal, as the
     /// binary prints it before the error.
@@ -2522,7 +2897,7 @@ mod tests {
         );
     }
 
-    /// Ensembl VEP 116.2 prints the `--var_synonyms` notice as `init` begins
+    /// Ensembl VEP 116.3 prints the `--var_synonyms` notice as `init` begins
     /// (Runner.pm:117-120), before the annotation sources are built (:128),
     /// where a missing cache directory is refused (CacheDir.pm:109) and the
     /// transcript filter is compiled (AnnotationSource.pm:87-90), so
@@ -2610,12 +2985,13 @@ mod tests {
     /// `from_config` compiles the `--transcript_filter` and the batch path applies
     /// it as the binary does: over the transcript-filter corpus under
     /// `biotype is protein_coding`, the embedding caller's rows, by record, allele
-    /// and feature, are exactly the rows of Ensembl VEP 116.2's reference output
+    /// and feature, are exactly the rows of Ensembl VEP 116.3's reference output
     /// for that flag set, intergenic rows for the records every transcript of
     /// which fails included, and fewer than the unfiltered rows.
     #[test]
     fn from_config_applies_the_transcript_filter_as_the_binary_does() {
         use std::io::Read as _;
+        let _guard = crate::warnings::sink_test_guard();
         let corpus = format!(
             "{}/../../tests/golden/116/GRCh38-transcript-filter",
             env!("CARGO_MANIFEST_DIR")
@@ -2768,6 +3144,7 @@ mod tests {
     /// `NearestExonJB=ENSE00001282176|23|start|272` and both intron offsets `0`.
     #[test]
     fn from_config_gates_the_plugin_context_as_the_binary_does() {
+        let _guard = crate::warnings::sink_test_guard();
         let corpus = format!(
             "{}/../../tests/golden/116/GRCh38-plugin-computed",
             env!("CARGO_MANIFEST_DIR")
@@ -2851,14 +3228,49 @@ mod tests {
         assert!(hgvs_options(&config(&["--shift_3prime", "1"])).shift_3prime);
 
         let forms = config(&["--hgvsp_use_prediction", "--remove_hgvsp_version"]);
+        assert_eq!(hgvs_options(&forms), {
+            let mut options = vep_effects::hgvs::HgvsOptions::default();
+            options.shift_hgvs = true;
+            options.hgvsp_use_prediction = true;
+            options.remove_hgvsp_version = true;
+            options.shift_3prime = false;
+            options
+        });
+    }
+
+    /// A run that gives no HGVS flag builds the options `HgvsOptions::default()`
+    /// holds. The two are compared one field at a time, so a field the run sets
+    /// apart from the default fails here by its name, as the one field
+    /// `--hgvsp_use_prediction` sets does.
+    #[test]
+    fn a_run_without_an_hgvs_flag_builds_the_default_hgvs_options() {
+        let default = vep_effects::hgvs::HgvsOptions::default();
+        let differing = |flags: &[&str]| -> Vec<&'static str> {
+            let mut argv = vec!["vep"];
+            argv.extend_from_slice(flags);
+            let built = hgvs_options(&Config::from_argv(argv).unwrap());
+            [
+                ("shift_hgvs", built.shift_hgvs == default.shift_hgvs),
+                (
+                    "hgvsp_use_prediction",
+                    built.hgvsp_use_prediction == default.hgvsp_use_prediction,
+                ),
+                (
+                    "remove_hgvsp_version",
+                    built.remove_hgvsp_version == default.remove_hgvsp_version,
+                ),
+                ("shift_3prime", built.shift_3prime == default.shift_3prime),
+            ]
+            .into_iter()
+            .filter(|(_, equal)| !equal)
+            .map(|(name, _)| name)
+            .collect()
+        };
+        assert_eq!(differing(&[]), [] as [&str; 0]);
+        assert_eq!(hgvs_options(&Config::from_argv(["vep"]).unwrap()), default);
         assert_eq!(
-            hgvs_options(&forms),
-            vep_effects::hgvs::HgvsOptions {
-                shift_hgvs: true,
-                hgvsp_use_prediction: true,
-                remove_hgvsp_version: true,
-                shift_3prime: false,
-            }
+            differing(&["--hgvsp_use_prediction"]),
+            ["hgvsp_use_prediction"]
         );
     }
 
@@ -2866,12 +3278,11 @@ mod tests {
     /// forms reach it as `--shift_hgvs` does; HGVSg stays off on this path.
     #[test]
     fn build_effects_config_carries_the_hgvs_options() {
-        let options = vep_effects::hgvs::HgvsOptions {
-            shift_hgvs: false,
-            hgvsp_use_prediction: true,
-            remove_hgvsp_version: true,
-            shift_3prime: false,
-        };
+        let mut options = vep_effects::hgvs::HgvsOptions::default();
+        options.shift_hgvs = false;
+        options.hgvsp_use_prediction = true;
+        options.remove_hgvsp_version = true;
+        options.shift_3prime = false;
         let effects =
             build_effects_config((5_000, 5_000), None, false, options, true, false, false);
         assert_eq!(effects.hgvs, options);
@@ -2884,6 +3295,7 @@ mod tests {
     /// gets no intergenic row.
     #[test]
     fn annotator_applies_the_breakend_record_verdict() {
+        let _guard = crate::warnings::sink_test_guard();
         let dir = tmp_json_cache("bnd_record");
         let lazy = Arc::new(
             LazyTranscriptIndexes::new(dir.path().to_str().unwrap(), 5_000, 5_000).unwrap(),
@@ -2976,7 +3388,7 @@ mod tests {
             assert_eq!(
                 CliError::from_run(&err),
                 format!(
-                    "ERROR: [plugin] Failed to instantiate plugin LoFtool: LoFtool: scores file {first_param} not found"
+                    "ERROR: [plugin] Failed to instantiate plugin LoFtool: scores file {first_param} not found"
                 ),
                 "{arg}"
             );
@@ -3004,9 +3416,55 @@ mod tests {
         assert_eq!(
             CliError::from_run(&err),
             format!(
-                "ERROR: [plugin] Failed to instantiate plugin LoFtool: LoFtool: scores file {} not found",
+                "ERROR: [plugin] Failed to instantiate plugin LoFtool: scores file {} not found",
                 dir.path().join("LoFtool_scores.txt").display()
             )
         );
+    }
+
+    /// The failed-load line drops the plugin's own name and colon where a reason
+    /// opens with them and nothing else: a second copy of the name, a longer
+    /// name that begins with it, the name without its colon and blank, and a
+    /// reason that names no plugin all stay as they are.
+    #[test]
+    fn failed_load_line_names_the_plugin_once() {
+        for (name, reason, line) in [
+            (
+                "CADD",
+                "CADD: no CADD files specified",
+                "Failed to instantiate plugin CADD: no CADD files specified",
+            ),
+            (
+                "GWAS",
+                "GWAS: GWAS: twice",
+                "Failed to instantiate plugin GWAS: GWAS: twice",
+            ),
+            (
+                "LoF",
+                "LoFTEE: GERP data file not found",
+                "Failed to instantiate plugin LoF: LoFTEE: GERP data file not found",
+            ),
+            (
+                "pLI",
+                "pLI:no blank",
+                "Failed to instantiate plugin pLI: pLI:no blank",
+            ),
+            (
+                "pLI",
+                "pLI mode",
+                "Failed to instantiate plugin pLI: pLI mode",
+            ),
+            (
+                "REVEL",
+                "remote data files are not supported",
+                "Failed to instantiate plugin REVEL: remote data files are not supported",
+            ),
+        ] {
+            assert_eq!(
+                failed_to_instantiate(name, reason),
+                line,
+                "{name}: {reason}"
+            );
+        }
     }
 }

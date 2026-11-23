@@ -1,0 +1,21 @@
+[package]
+name = "vep-storable-dump"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.89"
+license = "Apache-2.0"
+description = "The Data::Dumper text of named transcripts of an Ensembl VEP Storable cache, for a field-level comparison of two cache builds"
+publish = false
+
+[dependencies]
+flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
+
+# Its own Cargo root: the repository workspace's commands do not reach this package, and
+# a cargo command for it names this manifest.
+[workspace]
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"

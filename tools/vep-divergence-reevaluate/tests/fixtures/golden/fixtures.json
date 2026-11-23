@@ -1,0 +1,33 @@
+[
+ {
+  "entry": "closed_fixture",
+  "verdict": "closed",
+  "ensembl_vep": [
+   "ENSP2:p.Leu4%3D"
+  ],
+  "vep_rs": [
+   "ENSP2:p.Leu4%3D"
+  ],
+  "detail": "Ensembl VEP ['ENSP2:p.Leu4%3D'], vep-rs ['ENSP2:p.Leu4%3D']",
+  "implementation": {
+   "code": [
+    "tools/vep-divergence-reevaluate/tests/fixtures/implementation/recorded.rs::PLAIN_EQUALS_SIGN"
+   ],
+   "tests": [
+    "tools/vep-divergence-reevaluate/tests/fixtures/implementation/recorded.rs::tests::the_equals_sign_is_written_plain"
+   ],
+   "rules": [
+    "tools/vep-divergence-reevaluate/tests/fixtures/implementation/recorded.rs::is_escaped_equals_sign"
+   ]
+  }
+ },
+ {
+  "entry": "still_present_fixture",
+  "verdict": "still-present",
+  "ensembl_vep": [],
+  "vep_rs": [
+   "21:100 | A | ENST1 | downstream_gene_variant | 5000"
+  ],
+  "detail": ""
+ }
+]

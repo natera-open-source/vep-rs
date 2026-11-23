@@ -1,0 +1,1 @@
+fastvep_plugin_tuples: wrote 0 tuples from 0 rows (0 too short); by field: REVEL=0; mapped columns: FV_REVEL; dropped parts with no Ensembl VEP field: 0; values outside --fields: 0; parts not written word(score): 0; cells with several entries: 0; unmapped columns: none

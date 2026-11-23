@@ -6,23 +6,23 @@
 
 **What vep-rs does instead.** vep-rs judges each split allele over its own trimmed span in every output format: its own genomic end against the last exon and the penultimate exon's window, and its own CDS coordinates: both ends defined, and the end against coding base 101. The alleles beside it change nothing, and the answer equals the one the allele gets written alone. The plugin's rules are described under [NMD](../plugins.md).
 
-**Where it is in Ensembl VEP's source** (`VEP_plugins` at release/116, `ensembl-vep` at release/116.2, `ensembl-variation` at release/116):
+**Where it is in Ensembl VEP's source** (`VEP_plugins` at release/116, `ensembl-vep` at release/116.3, `ensembl-variation` at release/116):
 
 - `NMD.pm`, line 137: `my $vf_end = $vf->seq_region_end;` is the position tested against the last exon (line 148) and the penultimate exon's window (lines 159-161 and 165-167). Line 88 reads `$tv->cds_end`, which line 98 tests against 101, and lines 103-105 return nothing unless both `$tv->cds_start` and `$tv->cds_end` are defined.
-- `OutputFactory.pm`, lines 2284-2316: the rejoin annotates each split feature on its own span (lines 2289 and 2303), then writes the record's span back onto the first feature (lines 2291-2293) and points every merged feature's TranscriptVariations at it (line 2314). The output pass that runs the plugin follows, so `$vf->seq_region_end` is the record's end in every format.
+- `OutputFactory.pm`, lines 2293-2325: the rejoin annotates each split feature on its own span (lines 2298 and 2312), then writes the record's span back onto the first feature (lines 2300-2302) and points every merged feature's TranscriptVariations at it (line 2323). The output pass that runs the plugin follows, so `$vf->seq_region_end` is the record's end in every format.
 - `OutputFactory.pm`, lines 294-302: the default and tab formats rejoin, then clear every cached CDS, cDNA and protein position (`clear_shifting_variables`, `TranscriptVariationAllele.pm` lines 509-517), so the output pass maps `$tv->cds_start` and `$tv->cds_end` from the record's span (`BaseTranscriptVariation.pm` lines 505-513). `OutputFactory/VCF.pm` lines 305-308 and `OutputFactory/JSON.pm` lines 217-220 clear first and rejoin after, so those formats keep the CDS coordinates cached on the allele's own span.
 
 **What correcting it would change.** The plugin would read each allele's own end and CDS coordinates, and a split allele's `NMD` value would equal the value it gets on a record of its own, in every format.
 
 **The class it produces.** `nmd_minimal_rejoined_end`: an `NMD` value that differs between the engines on a row of a multi-allelic record whose alleles trim to different spans under `--minimal`. No comparison tool sets a row of the shape aside: no committed flag set runs the plugin with `--minimal`, so a disagreement of this shape would be reported as a difference and charged to vep-rs. The concordance figures score consequence sets and never see the field.
 
-**How often the shape occurs.** Tier 2, see [Intended divergences from Ensembl VEP](../intended-divergences.md): the shape the record alone shows is a multi-allelic record whose sequence alleles trim to different spans, 1,894 of the cuts' 15,646,481 records (121.0 per million), in 24 corpora. The transcript decides whether an allele's own span and the record's differ in what the plugin reads, the genomic end or the CDS coordinates, and whether the two fall on different sides of a rule. Of the committed flag sets, none runs the plugin with `--minimal`.
+**How often the shape occurs.** Tier 2, see [Intended divergences from Ensembl VEP](../intended-divergences.md): the shape the record alone shows is a multi-allelic record whose sequence alleles trim to different spans, 1,894 of the cuts' 15,646,481 records (121.0 per million), in 27 corpora. The transcript decides whether an allele's own span and the record's differ in what the plugin reads, the genomic end or the CDS coordinates, and whether the two fall on different sides of a rule. Of the committed flag sets, none runs the plugin with `--minimal`.
 
 Tuple, pair, set aside, charged and the other scoring terms are defined in [How to read the counts](../intended-divergences.md#how-to-read-the-counts).
 
 ## 1. A deletion two bases short of the penultimate exon's window
 
-**In short.** `21 36071003 acgta_agta_acgtc ACGTA AGTA,ACGTC` on GRCh38 lies in the second of CBR1's three exons on ENST00000290349, whose penultimate exon ends at 36071057. Under `--minimal`, `AGTA` trims to the deletion of `C` at 36071004, two bases before the plugin's window, the 52 positions within 51 bases of that end, starts at 36071006, and `ACGTC` to a substitution at 36071007, inside it. Ensembl VEP 116.2 writes `NMD_escaping_variant` on the deletion's frameshift rows of 11 transcripts; vep-rs on one, whose last exon holds 36071004.
+**In short.** `21 36071003 acgta_agta_acgtc ACGTA AGTA,ACGTC` on GRCh38 lies in the second of CBR1's three exons on ENST00000290349, whose penultimate exon ends at 36071057. Under `--minimal`, `AGTA` trims to the deletion of `C` at 36071004, two bases before the plugin's window, the 52 positions within 51 bases of that end, starts at 36071006, and `ACGTC` to a substitution at 36071007, inside it. Ensembl VEP 116.3 writes `NMD_escaping_variant` on the deletion's frameshift rows of 11 transcripts; vep-rs on one, whose last exon holds 36071004.
 
 ### 1.1 What a reader needs to know first
 
@@ -40,7 +40,7 @@ Both engines run `--minimal --plugin NMD`.
 
 ### 1.3 What each engine writes
 
-The deletion's rows on ENST00000290349 and ENST00000439427 in the default format. Ensembl VEP 116.2:
+The deletion's rows on ENST00000290349 and ENST00000439427 in the default format. Ensembl VEP 116.3:
 
 ```
 acgta_agta_acgtc	21:36071004-36071007	-	ENSG00000159228	ENST00000290349	Transcript	frameshift_variant	436-439	344-347	115-116	F/X	tTc/tc	-	ALLELE_NUM=1;IMPACT=HIGH;STRAND=1;MINIMISED=1;NMD=NMD_escaping_variant
@@ -56,7 +56,7 @@ acgta_agta_acgtc	21:36071004-36071007	-	ENSG00000159228	ENST00000439427	Transcri
 
 The record writes 38 rows in each engine, 19 per allele, equal in every column but `NMD`. The substitution's rows are missense and carry no value in either engine. The deletion's `NMD` cell by transcript, in every output format:
 
-| Transcript | Penultimate exon's window | Ensembl VEP 116.2 | vep-rs |
+| Transcript | Penultimate exon's window | Ensembl VEP 116.3 | vep-rs |
 | --- | --- | --- | --- |
 | ENST00000290349 and nine others | 36071006-36071057 | `NMD_escaping_variant` | none |
 | ENST00000439427 | its last exon spans 36070950-36071583 | `NMD_escaping_variant` | `NMD_escaping_variant` |
@@ -79,15 +79,15 @@ vep -i record.vcf -o out.txt --offline --json_cache <cache> --assembly GRCh38 \
   --minimal --plugin NMD
 ```
 
-vep-rs writes `NMD=NMD_escaping_variant` on the deletion's ENST00000439427 row alone. Ensembl VEP 116.2 writes it on eleven of the deletion's rows, the ENST00000290349 row included. Writing the deletion on a record of its own gives one row in both engines.
+vep-rs writes `NMD=NMD_escaping_variant` on the deletion's ENST00000439427 row alone. Ensembl VEP 116.3 writes it on eleven of the deletion's rows, the ENST00000290349 row included. Writing the deletion on a record of its own gives one row in both engines.
 
 ### 1.7 How the comparator treats this class
 
-Nothing is set aside. The format comparator (`scripts/concordance/compare_vep_formats.py`) has no class of this shape, and the golden harness compares the `NMD` cell of every row of the four corpora that run the plugin, whose single-allele records never put the shape to the test. A disagreement of the shape would be reported as a difference and charged to vep-rs.
+Nothing is set aside. The format comparator (`tools/vep-formats-compare`) has no class of this shape, and the golden harness compares the `NMD` cell of every row of the four corpora that run the plugin, whose single-allele records never put the shape to the test. A disagreement of the shape would be reported as a difference and charged to vep-rs.
 
 ## 2. A deletion of coding base 101 beside a deletion of bases 101-102
 
-**In short.** `21 36070215 gtg_gg_g GTG GG,G` on GRCh38 lies in CBR1's first exon. Under `--minimal`, `GG` trims to the deletion of `T` at 36070216, coding base 101 of ENST00000290349, and `G` to the deletion of `TG` at 36070216-36070217, coding bases 101-102. The plugin's first rule marks a CDS end at or before 101. Ensembl VEP 116.2 marks the one-base deletion's 14 frameshift rows in the VCF and JSON formats and none of them in the default and tab formats; vep-rs marks the 14 in every format, and neither engine marks the two-base deletion.
+**In short.** `21 36070215 gtg_gg_g GTG GG,G` on GRCh38 lies in CBR1's first exon. Under `--minimal`, `GG` trims to the deletion of `T` at 36070216, coding base 101 of ENST00000290349, and `G` to the deletion of `TG` at 36070216-36070217, coding bases 101-102. The plugin's first rule marks a CDS end at or before 101. Ensembl VEP 116.3 marks the one-base deletion's 14 frameshift rows in the VCF and JSON formats and none of them in the default and tab formats; vep-rs marks the 14 in every format, and neither engine marks the two-base deletion.
 
 ### 2.1 What a reader needs to know first
 
@@ -103,7 +103,7 @@ Both engines drop the shared first base, so the record spans 36070216-36070217, 
 
 ### 2.3 What each engine writes
 
-The two alleles' rows on ENST00000290349 in the default format. Ensembl VEP 116.2:
+The two alleles' rows on ENST00000290349 in the default format. Ensembl VEP 116.3:
 
 ```
 gtg_gg_g	21:36070216-36070217	-	ENSG00000159228	ENST00000290349	Transcript	frameshift_variant	193-194	101-102	34	V/X	gTg/gg	-	ALLELE_NUM=1;IMPACT=HIGH;STRAND=1;MINIMISED=1
@@ -126,7 +126,7 @@ The same two alleles' `CSQ` entries for the transcript in the VCF format, where 
 
 The record writes 38 rows in each engine, 19 per allele. The one-base deletion (`ALLELE_NUM=1`) has 14 frameshift rows and the two-base deletion (`ALLELE_NUM=2`) 14; the rows carrying `NMD_escaping_variant`, by format, with the `CDS_position` both engines print for the allele:
 
-| Format and allele | `CDS_position` | Ensembl VEP 116.2 | vep-rs |
+| Format and allele | `CDS_position` | Ensembl VEP 116.3 | vep-rs |
 | --- | --- | --- | --- |
 | default and tab, one base | `101-102` | none | 14 rows |
 | VCF and JSON, one base | `101` | 14 rows | 14 rows |
@@ -147,7 +147,7 @@ vep -i record.vcf -o out.txt --offline --json_cache <cache> --assembly GRCh38 \
   --minimal --plugin NMD
 ```
 
-vep-rs writes `NMD=NMD_escaping_variant` on the one-base deletion's 14 frameshift rows and nothing on the two-base deletion's, in every format. Ensembl VEP 116.2 writes the same 14 under `--vcf` and `--json` and none in the default and tab formats. Writing `GTG GG` on a record of its own gives the 14 rows in both engines.
+vep-rs writes `NMD=NMD_escaping_variant` on the one-base deletion's 14 frameshift rows and nothing on the two-base deletion's, in every format. Ensembl VEP 116.3 writes the same 14 under `--vcf` and `--json` and none in the default and tab formats. Writing `GTG GG` on a record of its own gives the 14 rows in both engines.
 
 ### 2.7 How the comparator treats this class
 

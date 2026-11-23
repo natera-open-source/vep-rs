@@ -1,0 +1,17 @@
+keys: reference 6 scored 6 intersection 6 (reference-only 0, scored-only 0)
+  Uploaded_variation       equal            6 /            6  agreement 1.0
+  Gene                     equal            6 /            6  agreement 1.0
+  cDNA_position            equal            6 /            6  agreement 1.0
+  CDS_position             equal            6 /            6  agreement 1.0
+  Protein_position         equal            6 /            6  agreement 1.0
+  Amino_acids              equal            6 /            6  agreement 1.0
+  Codons                   equal            6 /            6  agreement 1.0
+  Existing_variation       equal            6 /            6  agreement 1.0
+  Extra:                   equal            0 /            1  agreement 0.0
+  Extra:A                  equal            1 /            1  agreement 1.0
+  Extra:B                  equal            1 /            1  agreement 1.0
+  Extra:FLAG               equal            1 /            1  agreement 1.0
+  Extra:IMPACT             equal            1 /            2  agreement 0.5
+  Extra:ONLY_REF           equal            0 /            1  agreement 0.0
+  Extra:ONLY_SCO           equal            0 /            1  agreement 0.0
+  Extra:X                  equal            1 /            1  agreement 1.0

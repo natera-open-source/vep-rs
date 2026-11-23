@@ -2,13 +2,12 @@
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 //! The byte rules shared by every pass: the order `sort` gives tuple lines under C
-//! collation, the scorer's reading of a Location, and the encodings of the scratch and of
-//! the dialogue.
+//! collation, the reading of a Location, and the encodings of the scratch.
 
 use std::cmp::Ordering;
 
-/// A Location longer than this is canonicalised by the driver, whose integer conversion
-/// refuses a coordinate of several thousand digits.
+/// A Location longer than this is left to the run's resolver, which keeps a coordinate of
+/// more digits than CPython's `int()` converts as written.
 const PLAIN_LOCATION_BYTES: usize = 255;
 
 /// The order of two columns that each end at a tab inside a whole line: where one is the
@@ -42,10 +41,8 @@ pub fn strip(mut bytes: &[u8]) -> &[u8] {
     bytes
 }
 
-/// The Location with each coordinate written as its number, as `canonical` of the scorer
-/// writes it; `None` for a Location only the scorer's own code can settle: one with a byte
-/// outside ASCII, where Python counts digits of other scripts, or longer than
-/// `PLAIN_LOCATION_BYTES`.
+/// The Location with each coordinate written as its number; `None` for a Location left to
+/// the run's resolver: one with a byte outside ASCII or longer than `PLAIN_LOCATION_BYTES`.
 pub fn canonical_location(written: &[u8]) -> Option<Vec<u8>> {
     let location = strip(written);
     if location.len() > PLAIN_LOCATION_BYTES || !location.is_ascii() {
@@ -74,7 +71,7 @@ pub fn canonical_location(written: &[u8]) -> Option<Vec<u8>> {
 }
 
 /// A value with the percent-encoding of `=` and `;` undone, as `decode_extra` of
-/// `compare_vep_formats.py` reads it: `%3D` first, then `%3B`, upper case alone.
+/// `tools/vep-formats-compare` reads it: `%3D` first, then `%3B`, upper case alone.
 pub fn decode_extra(value: &[u8], decoded: &mut Vec<u8>) {
     decoded.clear();
     let mut rest = value;
@@ -131,16 +128,6 @@ pub fn hex(bytes: &[u8]) -> String {
     text
 }
 
-pub fn unhex(text: &[u8]) -> Option<Vec<u8>> {
-    if !text.len().is_multiple_of(2) {
-        return None;
-    }
-    let digit = |byte: u8| (byte as char).to_digit(16).map(|value| value as u8);
-    text.chunks(2)
-        .map(|pair| Some(digit(pair[0])? << 4 | digit(pair[1])?))
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -170,7 +157,7 @@ mod tests {
     }
 
     #[test]
-    fn location_outside_ascii_or_over_long_is_left_to_the_driver() {
+    fn location_outside_ascii_or_over_long_is_left_to_the_resolver() {
         assert_eq!(canonical("21:²"), None);
         assert_eq!(canonical(&format!("21:{}", "9".repeat(300))), None);
     }
@@ -212,7 +199,7 @@ mod tests {
     }
 
     #[test]
-    fn varints_and_hex_round_trip() {
+    fn varints_round_trip_and_bytes_are_written_as_hex() {
         let mut bytes = Vec::new();
         let values = [0, 1, 127, 128, 300, u64::from(u32::MAX), u64::MAX];
         for value in values {
@@ -223,10 +210,6 @@ mod tests {
             assert_eq!(take_varint(&bytes, &mut at), value);
         }
         assert_eq!(at, bytes.len());
-        assert_eq!(
-            unhex(hex(b"\x00K\xc3\xa9y\xff").as_bytes()).unwrap(),
-            b"\x00K\xc3\xa9y\xff"
-        );
-        assert_eq!(unhex(b"0g"), None);
+        assert_eq!(hex(b"\x00K\xc3\xa9y\xff"), "004bc3a979ff");
     }
 }

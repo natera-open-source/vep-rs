@@ -1,0 +1,131 @@
+entry = "hgvsp_frameshift_count_past_a_stop_read_as_a_residue"
+page = "docs/divergences/hgvsp-frameshift-count-past-a-stop-read-as-a-residue.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "observed"
+input_class_basis = "seen in the genome-wide ClinVar GRCh38 and GRCh37 files: 9 of 4,398,127 records and 7 of 4,388,172, on 17 and 16 rows under --hgvs"
+notes = "Four records of the genome-wide ClinVar GRCh37 file and two of the gnomAD v2.1.1 genomes. Two lie on a selenoprotein gene of chromosome 19, a one-base insertion and a two-base deletion, each a frameshift after the stop codon that three of the four compared transcripts read as a selenocysteine. On four of their eight rows the new frame's first stop is another codon than that one: Ensembl VEP writes the unknown count and vep-rs the count. On one it is the same codon, and on one the transcript holds no stop in the new frame: both engines write the unknown count. On the two rows of the transcript whose coding sequence opens after that codon both engines write the same count. Two lie on a polymorphic pseudogene of chromosome 7, whose protein holds stops and names the residues after them, on the six transcripts of that biotype. The deletion of 35 bases changes a residue after eleven of those stops: Ensembl VEP writes the unknown count on the six rows and vep-rs the count to the new frame's first stop, the last codon of the alternate coding sequence. The one-base insertion changes a residue before the first of them, and both engines write the same count on its six rows. The two gnomAD records each delete bases right before a stop that a polymorphic pseudogene's protein holds, so that the stop is the first changed residue and both engines write an extension named at it. On chromosome 7 it is the sixteenth stop of that protein: Ensembl VEP writes the unknown count on the six rows and vep-rs the count from the lost stop to the new frame's first stop. On chromosome 17 it is the one stop of its protein, and both engines write the same count on its row."
+
+prepare = [
+  '''[ -n "$PERL_CACHE" ] || { echo "no homo_sapiens/116_GRCh37 with chromosomes 7, 17 and 19 under the --perl-cache-dir roots" >&2; exit 1; }
+cut="$STAGE/perl-cache/homo_sapiens/116_GRCh37"
+mkdir -p "$cut/7" "$cut/17" "$cut/19"
+cp "$PERL_CACHE/info.txt" "$PERL_CACHE/chr_synonyms.txt" "$cut/"
+cp "$PERL_CACHE/7/100000001-101000000.gz" "$cut/7/"
+cp "$PERL_CACHE/17/79000001-80000000.gz" "$cut/17/"
+cp "$PERL_CACHE/19/1000001-2000000.gz" "$cut/19/"''',
+  '''cargo run --release --locked --quiet --manifest-path "$REPO/tools/vep-storable-to-json/Cargo.toml" -- "$STAGE/perl-cache/homo_sapiens/116_GRCh37" "$STAGE/json-cache" 7,17,19 > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
+]
+
+[input]
+format = "vcf"
+text = """
+19	1105661	selenoprotein_one_base_insertion_19_1105661	C	CA	.	.	.
+19	1106405	selenoprotein_two_base_deletion_19_1106405	ATC	A	.	.	.
+7	100371474	pseudogene_insertion_7_100371474	G	GT	.	.	.
+7	100385561	pseudogene_deletion_7_100385561	GGCTTCAGCTACCGCTTGCAAGGCCGCATGACCTAT	G	.	.	.
+7	100388594	pseudogene_later_stop_deletion_7_100388594	TTG	T	.	.	.
+17	79614932	pseudogene_first_stop_deletion_17_79614932	TTAAC	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh37"
+json_cache = "{stage}/json-cache"
+perl_cache = "{stage}/perl-cache"
+
+[run]
+flags = [
+  "--hgvs",
+  "--fasta", "{grch37_fasta}/Homo_sapiens.GRCh37.75.dna.primary_assembly.fa",
+]
+
+[compare]
+kind = "rows"
+where = { record = ["pseudogene_deletion_7_100385561", "pseudogene_first_stop_deletion_17_79614932", "pseudogene_insertion_7_100371474", "pseudogene_later_stop_deletion_7_100388594", "selenoprotein_one_base_insertion_19_1105661", "selenoprotein_two_base_deletion_19_1106405"], feature = ["ENST00000348028", "ENST00000349350", "ENST00000354171", "ENST00000421100", "ENST00000427578", "ENST00000443370", "ENST00000449052", "ENST00000572675", "ENST00000585480", "ENST00000587648", "ENST00000589115"] }
+columns = ["Uploaded_variation", "Feature", "Consequence", "CDS_position", "Protein_position", "HGVSc", "HGVSp"]
+
+[expected]
+ensembl_vep = [
+  "pseudogene_deletion_7_100385561 | ENST00000348028 | frameshift_variant | 7030-7064 | 2344-2355 | ENST00000348028.3:c.7031_7065del | ENSP00000423579.1:p.Ala2344ValfsTer?",
+  "pseudogene_deletion_7_100385561 | ENST00000349350 | frameshift_variant | 7030-7064 | 2344-2355 | ENST00000349350.6:c.7031_7065del | ENSP00000422387.1:p.Ala2344ValfsTer?",
+  "pseudogene_deletion_7_100385561 | ENST00000421100 | frameshift_variant | 7030-7064 | 2344-2355 | ENST00000421100.1:c.7031_7065del | ENSP00000425454.1:p.Ala2344ValfsTer?",
+  "pseudogene_deletion_7_100385561 | ENST00000427578 | frameshift_variant | 7030-7064 | 2344-2355 | ENST00000427578.1:c.7031_7065del | ENSP00000425200.1:p.Ala2344ValfsTer?",
+  "pseudogene_deletion_7_100385561 | ENST00000443370 | frameshift_variant | 7030-7064 | 2344-2355 | ENST00000443370.1:c.7031_7065del | ENSP00000421245.1:p.Ala2344ValfsTer?",
+  "pseudogene_deletion_7_100385561 | ENST00000449052 | frameshift_variant | 7030-7064 | 2344-2355 | ENST00000449052.1:c.7031_7065del | ENSP00000422208.1:p.Ala2344ValfsTer?",
+  "pseudogene_first_stop_deletion_17_79614932 | ENST00000572675 | frameshift_variant | 681-684 | 227-228 | ENST00000572675.1:c.686_689del | ENSP00000458850.1:p.Ter229CysextTer127",
+  "pseudogene_insertion_7_100371474 | ENST00000348028 | frameshift_variant | 5765-5766 | 1922 | ENST00000348028.3:c.5768dup | ENSP00000423579.1:p.Gly1924ArgfsTer799",
+  "pseudogene_insertion_7_100371474 | ENST00000349350 | frameshift_variant | 5765-5766 | 1922 | ENST00000349350.6:c.5768dup | ENSP00000422387.1:p.Gly1924ArgfsTer890",
+  "pseudogene_insertion_7_100371474 | ENST00000421100 | frameshift_variant | 5765-5766 | 1922 | ENST00000421100.1:c.5768dup | ENSP00000425454.1:p.Gly1924ArgfsTer679",
+  "pseudogene_insertion_7_100371474 | ENST00000427578 | frameshift_variant | 5765-5766 | 1922 | ENST00000427578.1:c.5768dup | ENSP00000425200.1:p.Gly1924ArgfsTer802",
+  "pseudogene_insertion_7_100371474 | ENST00000443370 | frameshift_variant | 5765-5766 | 1922 | ENST00000443370.1:c.5768dup | ENSP00000421245.1:p.Gly1924ArgfsTer702",
+  "pseudogene_insertion_7_100371474 | ENST00000449052 | frameshift_variant | 5765-5766 | 1922 | ENST00000449052.1:c.5768dup | ENSP00000422208.1:p.Gly1924ArgfsTer767",
+  "pseudogene_later_stop_deletion_7_100388594 | ENST00000348028 | frameshift_variant | 7388-7389 | 2463 | ENST00000348028.3:c.7390_7391del | ENSP00000423579.1:p.Ter2464SerextTer?",
+  "pseudogene_later_stop_deletion_7_100388594 | ENST00000349350 | frameshift_variant | 7388-7389 | 2463 | ENST00000349350.6:c.7390_7391del | ENSP00000422387.1:p.Ter2464SerextTer?",
+  "pseudogene_later_stop_deletion_7_100388594 | ENST00000421100 | frameshift_variant | 7388-7389 | 2463 | ENST00000421100.1:c.7390_7391del | ENSP00000425454.1:p.Ter2464SerextTer?",
+  "pseudogene_later_stop_deletion_7_100388594 | ENST00000427578 | frameshift_variant | 7388-7389 | 2463 | ENST00000427578.1:c.7390_7391del | ENSP00000425200.1:p.Ter2464SerextTer?",
+  "pseudogene_later_stop_deletion_7_100388594 | ENST00000443370 | frameshift_variant | 7388-7389 | 2463 | ENST00000443370.1:c.7390_7391del | ENSP00000421245.1:p.Ter2464SerextTer?",
+  "pseudogene_later_stop_deletion_7_100388594 | ENST00000449052 | frameshift_variant | 7388-7389 | 2463 | ENST00000449052.1:c.7390_7391del | ENSP00000422208.1:p.Ter2464SerextTer?",
+  "selenoprotein_one_base_insertion_19_1105661 | ENST00000354171 | frameshift_variant | 329-330 | 110 | ENST00000354171.8:c.330dup | ENSP00000346103.7:p.Gly111ArgfsTer?",
+  "selenoprotein_one_base_insertion_19_1105661 | ENST00000585480 | frameshift_variant | 62-63 | 21 | ENST00000585480.1:c.63dup | ENSP00000467900.1:p.Gly22ArgfsTer3",
+  "selenoprotein_one_base_insertion_19_1105661 | ENST00000587648 | frameshift_variant | 209-210 | 70 | ENST00000587648.1:c.210dup | ENSP00000468349.1:p.Gly71ArgfsTer?",
+  "selenoprotein_one_base_insertion_19_1105661 | ENST00000589115 | frameshift_variant | 329-330 | 110 | ENST00000589115.1:c.330dup | ENSP00000466872.2:p.Gly111ArgfsTer?",
+  "selenoprotein_two_base_deletion_19_1106405 | ENST00000354171 | frameshift_variant | 509-510 | 170 | ENST00000354171.8:c.509_510del | ENSP00000346103.7:p.Ile170ArgfsTer?",
+  "selenoprotein_two_base_deletion_19_1106405 | ENST00000585480 | frameshift_variant | 242-243 | 81 | ENST00000585480.1:c.242_243del | ENSP00000467900.1:p.Ile81ArgfsTer40",
+  "selenoprotein_two_base_deletion_19_1106405 | ENST00000587648 | frameshift_variant | 389-390 | 130 | ENST00000587648.1:c.389_390del | ENSP00000468349.1:p.Ile130ArgfsTer?",
+  "selenoprotein_two_base_deletion_19_1106405 | ENST00000589115 | frameshift_variant | 484-485 | 162 | ENST00000589115.1:c.484_485del | ENSP00000466872.2:p.Ser162AspfsTer?",
+]
+vep_rs = [
+  "pseudogene_deletion_7_100385561 | ENST00000348028 | frameshift_variant | 7030-7064 | 2344-2355 | ENST00000348028.3:c.7031_7065del | ENSP00000423579.1:p.Ala2344ValfsTer367",
+  "pseudogene_deletion_7_100385561 | ENST00000349350 | frameshift_variant | 7030-7064 | 2344-2355 | ENST00000349350.6:c.7031_7065del | ENSP00000422387.1:p.Ala2344ValfsTer458",
+  "pseudogene_deletion_7_100385561 | ENST00000421100 | frameshift_variant | 7030-7064 | 2344-2355 | ENST00000421100.1:c.7031_7065del | ENSP00000425454.1:p.Ala2344ValfsTer247",
+  "pseudogene_deletion_7_100385561 | ENST00000427578 | frameshift_variant | 7030-7064 | 2344-2355 | ENST00000427578.1:c.7031_7065del | ENSP00000425200.1:p.Ala2344ValfsTer370",
+  "pseudogene_deletion_7_100385561 | ENST00000443370 | frameshift_variant | 7030-7064 | 2344-2355 | ENST00000443370.1:c.7031_7065del | ENSP00000421245.1:p.Ala2344ValfsTer270",
+  "pseudogene_deletion_7_100385561 | ENST00000449052 | frameshift_variant | 7030-7064 | 2344-2355 | ENST00000449052.1:c.7031_7065del | ENSP00000422208.1:p.Ala2344ValfsTer335",
+  "pseudogene_first_stop_deletion_17_79614932 | ENST00000572675 | frameshift_variant | 681-684 | 227-228 | ENST00000572675.1:c.686_689del | ENSP00000458850.1:p.Ter229CysextTer127",
+  "pseudogene_insertion_7_100371474 | ENST00000348028 | frameshift_variant | 5765-5766 | 1922 | ENST00000348028.3:c.5768dup | ENSP00000423579.1:p.Gly1924ArgfsTer799",
+  "pseudogene_insertion_7_100371474 | ENST00000349350 | frameshift_variant | 5765-5766 | 1922 | ENST00000349350.6:c.5768dup | ENSP00000422387.1:p.Gly1924ArgfsTer890",
+  "pseudogene_insertion_7_100371474 | ENST00000421100 | frameshift_variant | 5765-5766 | 1922 | ENST00000421100.1:c.5768dup | ENSP00000425454.1:p.Gly1924ArgfsTer679",
+  "pseudogene_insertion_7_100371474 | ENST00000427578 | frameshift_variant | 5765-5766 | 1922 | ENST00000427578.1:c.5768dup | ENSP00000425200.1:p.Gly1924ArgfsTer802",
+  "pseudogene_insertion_7_100371474 | ENST00000443370 | frameshift_variant | 5765-5766 | 1922 | ENST00000443370.1:c.5768dup | ENSP00000421245.1:p.Gly1924ArgfsTer702",
+  "pseudogene_insertion_7_100371474 | ENST00000449052 | frameshift_variant | 5765-5766 | 1922 | ENST00000449052.1:c.5768dup | ENSP00000422208.1:p.Gly1924ArgfsTer767",
+  "pseudogene_later_stop_deletion_7_100388594 | ENST00000348028 | frameshift_variant | 7388-7389 | 2463 | ENST00000348028.3:c.7390_7391del | ENSP00000423579.1:p.Ter2464SerextTer257",
+  "pseudogene_later_stop_deletion_7_100388594 | ENST00000349350 | frameshift_variant | 7388-7389 | 2463 | ENST00000349350.6:c.7390_7391del | ENSP00000422387.1:p.Ter2464SerextTer348",
+  "pseudogene_later_stop_deletion_7_100388594 | ENST00000421100 | frameshift_variant | 7388-7389 | 2463 | ENST00000421100.1:c.7390_7391del | ENSP00000425454.1:p.Ter2464SerextTer137",
+  "pseudogene_later_stop_deletion_7_100388594 | ENST00000427578 | frameshift_variant | 7388-7389 | 2463 | ENST00000427578.1:c.7390_7391del | ENSP00000425200.1:p.Ter2464SerextTer260",
+  "pseudogene_later_stop_deletion_7_100388594 | ENST00000443370 | frameshift_variant | 7388-7389 | 2463 | ENST00000443370.1:c.7390_7391del | ENSP00000421245.1:p.Ter2464SerextTer160",
+  "pseudogene_later_stop_deletion_7_100388594 | ENST00000449052 | frameshift_variant | 7388-7389 | 2463 | ENST00000449052.1:c.7390_7391del | ENSP00000422208.1:p.Ter2464SerextTer225",
+  "selenoprotein_one_base_insertion_19_1105661 | ENST00000354171 | frameshift_variant | 329-330 | 110 | ENST00000354171.8:c.330dup | ENSP00000346103.7:p.Gly111ArgfsTer3",
+  "selenoprotein_one_base_insertion_19_1105661 | ENST00000585480 | frameshift_variant | 62-63 | 21 | ENST00000585480.1:c.63dup | ENSP00000467900.1:p.Gly22ArgfsTer3",
+  "selenoprotein_one_base_insertion_19_1105661 | ENST00000587648 | frameshift_variant | 209-210 | 70 | ENST00000587648.1:c.210dup | ENSP00000468349.1:p.Gly71ArgfsTer3",
+  "selenoprotein_one_base_insertion_19_1105661 | ENST00000589115 | frameshift_variant | 329-330 | 110 | ENST00000589115.1:c.330dup | ENSP00000466872.2:p.Gly111ArgfsTer3",
+  "selenoprotein_two_base_deletion_19_1106405 | ENST00000354171 | frameshift_variant | 509-510 | 170 | ENST00000354171.8:c.509_510del | ENSP00000346103.7:p.Ile170ArgfsTer?",
+  "selenoprotein_two_base_deletion_19_1106405 | ENST00000585480 | frameshift_variant | 242-243 | 81 | ENST00000585480.1:c.242_243del | ENSP00000467900.1:p.Ile81ArgfsTer40",
+  "selenoprotein_two_base_deletion_19_1106405 | ENST00000587648 | frameshift_variant | 389-390 | 130 | ENST00000587648.1:c.389_390del | ENSP00000468349.1:p.Ile130ArgfsTer?",
+  "selenoprotein_two_base_deletion_19_1106405 | ENST00000589115 | frameshift_variant | 484-485 | 162 | ENST00000589115.1:c.484_485del | ENSP00000466872.2:p.Ser162AspfsTer28",
+]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/coding.rs::PerlCodingEval::residues_from_a_stop_a_frameshift_changes_first",
+    "crates/vep-effects/src/coding.rs::PerlCodingEval::residues_to_a_new_stop_past_stops_inside_the_coding_sequence",
+]
+tests = [
+    "crates/vep-cli/tests/frameshift_count_past_a_stop_read_as_a_residue.rs::a_frameshift_past_a_stop_read_as_a_residue_counts_to_a_stop_of_another_codon",
+    "crates/vep-cli/tests/frameshift_count_past_a_stop_the_peptide_holds.rs::a_frameshift_past_a_stop_the_peptide_holds_counts_to_the_new_frames_stop",
+    "crates/vep-cli/tests/frameshift_extension_count_from_a_stop_the_peptide_holds.rs::a_frameshift_that_changes_a_stop_the_peptide_holds_counts_its_extension_from_that_stop",
+    "crates/vep-effects/src/concordance_tests.rs::concordance_hgvsp_h23_mitochondrial_frameshift_peptides_follow_the_codon_table",
+    "crates/vep-effects/src/frameshift_stop_count_tests.rs::a_coding_sequence_whose_end_is_not_found_still_counts_to_a_stop_inside_it",
+    "crates/vep-effects/src/frameshift_stop_count_tests.rs::a_first_codon_that_is_no_methionine_codon_leaves_the_count",
+    "crates/vep-effects/src/frameshift_stop_count_tests.rs::a_frameshift_inside_a_later_selenocysteine_codon_counts_past_the_first",
+    "crates/vep-effects/src/frameshift_stop_count_tests.rs::a_frameshift_past_a_selenocysteine_codon_counts_to_a_stop_of_another_codon",
+    "crates/vep-effects/src/frameshift_stop_count_tests.rs::a_frameshift_past_a_stop_the_peptide_holds_counts_to_the_new_frames_stop",
+    "crates/vep-effects/src/frameshift_stop_count_tests.rs::a_frameshift_that_changes_a_later_stop_the_peptide_holds_counts_its_extension",
+    "crates/vep-effects/src/frameshift_stop_count_tests.rs::a_new_stop_with_the_bases_of_a_codon_read_as_a_residue_stays_unknown_beside_a_held_stop",
+    "crates/vep-effects/src/frameshift_stop_count_tests.rs::the_count_past_a_stop_the_peptide_holds_runs_into_the_three_prime_utr",
+    "crates/vep-effects/src/frameshift_stop_count_tests.rs::the_extension_of_a_frameshift_at_the_closing_stop_counts_behind_a_held_stop",
+    "crates/vep-effects/src/frameshift_stop_count_tests.rs::the_extension_of_a_frameshift_counts_to_a_stop_inside_the_coding_sequence",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/frameshift_count.rs::frameshift_count_past_a_stop_read_as_a_residue",
+]

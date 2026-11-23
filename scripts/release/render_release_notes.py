@@ -94,8 +94,8 @@ TARGETS = {
     ),
 }
 LINUX = tuple(t for t, target in TARGETS.items() if target.arch)
-GENERIC_SUITE = "s02"
-SUITE_LABELS = {
+GENERIC_DATASET = "s02"
+DATASET_LABELS = {
     "s01": ("ClinVar full", "GRCh37"),
     "s02": ("ClinVar full", "GRCh38"),
     "s03": ("gnomAD v2.1.1 chr21", "GRCh37"),
@@ -144,6 +144,13 @@ SAME_DAY_ENTRY_KEYS = (
     "release_sum_of_cell_medians_sec", "previous_release_sum_of_cell_medians_sec",
 )
 RELEASE_TAG = re.compile(r"v(\d+\.\d+\.\d+)")
+REEVALUATION = "the release record's divergence_reevaluation"
+# The keys of that block, the ones the caption reads first, and the verdicts its `verdicts` object counts.
+REEVALUATION_KEYS = (
+    "ensembl_vep", "entries_run", "verdicts", "retired", "retraced", "previous_ensembl_vep", "image", "plugins_commit",
+    "verdict_file_sha256",
+)
+REEVALUATION_VERDICTS = ("still-present", "closed", "changed", "error")
 PLUGINS = "the release record's plugin_concordance"
 PLUGIN_ASSEMBLIES = ("GRCh37", "GRCh38")
 PLUGIN_DATA = {"clinvar": "ClinVar", "synthetic_fixture": "synthetic fixture", "committed_table": "committed table"}
@@ -440,8 +447,9 @@ def latest_record(repo: Path, kind: str, version: str) -> Path:
 
 def six_dataset_shape(release: dict, conc: dict) -> bool:
     """Whether a release record is of the six-dataset shape: its ClinVar GRCh37 cell carries the adjusted
-    counts, or its `perl_reference` block is keyed by suite family (`snv_indel`, `sv`). The version number
-    never decides, so a record of the earlier shape renders the earlier page whatever its version."""
+    counts, or its `perl_reference` block is keyed by dataset family (`snv_indel`, `sv`). The version
+    number never decides, so a record of any other shape renders the page with the chromosome 21 table
+    whatever its version."""
     block = release.get("perl_reference")
     by_family = isinstance(block, dict) and any(isinstance(block.get(f), dict) for f in FAMILIES)
     s01 = conc.get("s01")
@@ -449,10 +457,10 @@ def six_dataset_shape(release: dict, conc: dict) -> bool:
 
 
 def load_release_record(repo: Path, version: str) -> tuple[dict, dict, dict, str]:
-    """The release record, its per-suite concordance, its whole-genome concordance and the record directory's
+    """The release record, its per-cell concordance, its whole-genome concordance and the record directory's
     path; the record and its two blocks are refused by name when not objects, and the whole-genome block when
     it lacks `per_dataset` or `pooled`. A record of the six-dataset shape needs the two ClinVar cells and the
-    two structural-variant cells; any other needs the eight scored suites."""
+    two structural-variant cells; any other needs the eight scored cells."""
     record_path = latest_record(repo, "release", version)
     record = json.loads(record_path.read_text())
     if not isinstance(record, dict):
@@ -511,7 +519,7 @@ def comparator_version(population: dict, pop: dict, release: dict | None = None)
 
 def named_releases(where: str, block) -> dict[str, str]:
     """The Ensembl VEP release each part of a `perl_reference` block names, keyed by its place: one part per
-    suite family when the block is keyed by family, else the block itself; an absent block names nothing."""
+    dataset family when the block is keyed by family, else the block itself; an absent block names nothing."""
     if not isinstance(block, dict):
         return {}
     parts = {f"{where}.{f}": block[f] for f in FAMILIES if isinstance(block.get(f), dict)} or {where: block}
@@ -732,12 +740,53 @@ def same_day_sentence(population: dict, datasets: list[tuple[str, str]], version
     )
 
 
-def caption_close(same_day: str, records: str) -> str:
+def reevaluation_sentence(release: dict) -> str:
+    """The whole-genome caption's sentence on the release record's `divergence_reevaluation` block: the
+    documented divergences run again on the Ensembl VEP release the block names (`entries_run` of them, on
+    `ensembl_vep`), how many of them that release corrects (`verdicts.closed`) and how many were traced again
+    in its source (the members of `retraced`), each noun and verb agreeing with its count. An absent block
+    renders nothing. A present block is refused by name when it lacks a key of `REEVALUATION_KEYS` or its
+    `verdicts` a count of `REEVALUATION_VERDICTS`, when `ensembl_vep` is not a non-empty string, when a count
+    is not an integer or is below zero, when `retired` or `retraced` is not a list, when the four verdict
+    counts do not sum to `entries_run`, when `verdicts.error` is not zero, which counts a divergence that
+    did not run, and when `retired` has another number of members than `verdicts.closed`."""
+    block = release.get("divergence_reevaluation")
+    if block is None:
+        return ""
+    ensembl_vep, run, verdicts, retired, retraced, *_ = required(block, REEVALUATION_KEYS, REEVALUATION)
+    if not isinstance(ensembl_vep, str) or not ensembl_vep.strip():
+        fail(f"{REEVALUATION} carries ensembl_vep that is not a non-empty string: {ensembl_vep!r}")
+    run = count(run, "entries_run", REEVALUATION)
+    where = f"{REEVALUATION}.verdicts"
+    counts = {
+        verdict: count(value, verdict, where)
+        for verdict, value in zip(REEVALUATION_VERDICTS, required(verdicts, REEVALUATION_VERDICTS, where))
+    }
+    for key, members in (("retired", retired), ("retraced", retraced)):
+        if not isinstance(members, list):
+            fail(f"{REEVALUATION}.{key} is not a list")
+    if sum(counts.values()) != run:
+        fail(f"{where} sums to {sum(counts.values())} and entries_run is {run}")
+    if counts["error"]:
+        fail(f"{where} carries error that is not zero: {counts['error']}")
+    closed, traced = counts["closed"], len(retraced)
+    if len(retired) != closed:
+        fail(f"{REEVALUATION}.retired lists {len(retired)} and verdicts.closed is {closed}")
+    return (
+        f"Of the {run} documented {'divergence' if run == 1 else 'divergences'} run again on Ensembl VEP {ensembl_vep}, "
+        f"{closed} {'is' if closed == 1 else 'are'} corrected by that release and retired, and {traced} "
+        f"{'was' if traced == 1 else 'were'} traced again in its source."
+    )
+
+
+def caption_close(same_day: str, reevaluation: str, records: str) -> str:
     """How a whole-genome caption ends: the clause naming the records, joined by a semicolon; or, when the page
-    carries the same-day sentence, a full stop, that sentence, and the records clause as a sentence of its own."""
-    if not same_day:
+    carries the same-day sentence, the re-evaluation sentence or both, a full stop, the sentences it carries in
+    that order, and the records clause as a sentence of its own."""
+    sentences = [sentence for sentence in (same_day, reevaluation) if sentence]
+    if not sentences:
         return f"; {records}"
-    return f". {same_day} {records[0].upper()}{records[1:]}"
+    return f". {' '.join(sentences)} {records[0].upper()}{records[1:]}"
 
 
 def instance_types(block, where: str) -> dict[str, str]:
@@ -869,22 +918,22 @@ def int_triple(block, keys: tuple[str, str, str], where: str) -> tuple[int, int,
     return integer(i, keys[0], where), integer(a, keys[1], where), integer(b, keys[2], where)
 
 
-def whole_file_aggregate(release: dict, suite: str, arch: str, target_cpu: str | None = None) -> dict:
+def whole_file_aggregate(release: dict, dataset_id: str, arch: str, target_cpu: str | None = None) -> dict:
     """The release record's `per_cell_aggregates` entry of one ClinVar cell and architecture: the measured
     binary's whole-file wall time, or a generic build's when `target_cpu` names one; refused when absent or
     repeated, as is a `per_cell_aggregates` that is not a list of objects."""
     entries = release.get("per_cell_aggregates")
     if not isinstance(entries, list) or not all(isinstance(a, dict) for a in entries):
         fail("the release record's per_cell_aggregates is not a list of objects")
-    hits = cell_aggregates(release, suite, arch, target_cpu)
+    hits = cell_aggregates(release, dataset_id, arch, target_cpu)
     if len(hits) != 1:
         build = f" of the {target_cpu} build" if target_cpu else ""
-        fail(f"the release record has {len(hits)} per_cell_aggregates entries for {suite} on {arch}{build}; one is read")
+        fail(f"the release record has {len(hits)} per_cell_aggregates entries for {dataset_id} on {arch}{build}; one is read")
     return hits[0]
 
 
-def cell_aggregates(release: dict, suite: str, arch: str, target_cpu: str | None) -> list[dict]:
-    """The `per_cell_aggregates` entries timing vep-rs built for `target_cpu` on one suite and architecture. A
+def cell_aggregates(release: dict, dataset_id: str, arch: str, target_cpu: str | None) -> list[dict]:
+    """The `per_cell_aggregates` entries timing vep-rs built for `target_cpu` on one cell and architecture. A
     block that is not a list, and an entry that is not an object, contribute nothing: `whole_file_aggregate`
     refuses those by name first, and `generic_wall_time` reads an empty result as a build not measured."""
     entries = release.get("per_cell_aggregates")
@@ -893,7 +942,7 @@ def cell_aggregates(release: dict, suite: str, arch: str, target_cpu: str | None
     return [
         a
         for a in entries
-        if isinstance(a, dict) and a.get("suite_id") == suite and a.get("arch") == arch and is_vep_rs(a, target_cpu)
+        if isinstance(a, dict) and a.get("suite_id") == dataset_id and a.get("arch") == arch and is_vep_rs(a, target_cpu)
     ]
 
 
@@ -908,13 +957,13 @@ def is_vep_rs(aggregate: dict, target_cpu: str | None) -> bool:
     return cpu == target_cpu
 
 
-def whole_file_wall_time(release: dict, suite: str, arch: str) -> tuple[Decimal, str, int, str]:
+def whole_file_wall_time(release: dict, dataset_id: str, arch: str) -> tuple[Decimal, str, int, str]:
     """One ClinVar cell's aggregate as (median seconds, instance type, clone count, peak RSS in GB or the empty
     cell), each refused by name when absent, the median when it is not a finite number and the clone count
     when it is not an integer."""
-    where = f"the per_cell_aggregates entry for {suite} on {arch}"
+    where = f"the per_cell_aggregates entry for {dataset_id} on {arch}"
     keys = ("median_sec", "instance_type", "n_clones")
-    aggregate = whole_file_aggregate(release, suite, arch)
+    aggregate = whole_file_aggregate(release, dataset_id, arch)
     median, instance_type, n_clones = required(aggregate, keys, where)
     return (
         median_seconds(median, where),
@@ -937,7 +986,7 @@ def clone_count_clause(clones: dict[tuple[str, str], int]) -> str:
     `19 (ClinVar GRCh37, ARM), 20 (ClinVar GRCh37, x86), ... and 20 (ClinVar GRCh38, x86)`."""
     if len(set(clones.values())) == 1:
         return str(next(iter(clones.values())))
-    parts = [f"{n} ({CLINVAR[suite]}, {ARCH_LABELS[arch]})" for (suite, arch), n in clones.items()]
+    parts = [f"{n} ({CLINVAR[dataset_id]}, {ARCH_LABELS[arch]})" for (dataset_id, arch), n in clones.items()]
     return f"{', '.join(parts[:-1])} and {parts[-1]}"
 
 
@@ -1091,7 +1140,8 @@ def six_dataset_blocks(
     """The page of the six-dataset shape: the whole-genome table (the four population datasets in the
     record's order, the two genome-wide ClinVar files, then `All six` pooled from the summed integer counts
     of all six) under a caption naming the reference release, both protocols, the instance types and the
-    peak memory, with `same_day_sentence` when the population record carries its block, then the
+    peak memory, with `same_day_sentence` when the population record carries its block and
+    `reevaluation_sentence` when the release record carries its own, then the
     structural-variant F1 table (per assembly the ClinVar, gnomAD and 1000 Genomes
     sets and the synthetic files pooled) under the caption that the paper's figures stay as published, then
     `plugin_blocks` when the release record carries a `plugin_concordance` block.
@@ -1126,8 +1176,8 @@ def six_dataset_blocks(
         rows.append(whole_genome_row(row_label, r, arm, x86, where, dataset_peaks(dataset, peaks)))
     clinvar_types: dict[str, set[str]] = {"arm64": set(), "x86_64": set()}
     clinvar_clones: dict[tuple[str, str], int] = {}
-    for suite, label in CLINVAR.items():
-        cell, where = conc[suite], f"concordance.{suite}"
+    for dataset_id, label in CLINVAR.items():
+        cell, where = conc[dataset_id], f"concordance.{dataset_id}"
         i, a, b = int_triple(cell, ("intersection", "perl", "rust"), where)
         adj = int_triple(cell, ("adj_intersection", "adj_perl", "adj_rust"), where)
         raw.append((i, a, b))
@@ -1135,11 +1185,11 @@ def six_dataset_blocks(
         medians: dict[str, str] = {}
         clinvar_peaks: dict[str, str] = {}
         for arch, seen in clinvar_types.items():
-            seconds, instance_type, n_clones, peak = whole_file_wall_time(release, suite, arch)
+            seconds, instance_type, n_clones, peak = whole_file_wall_time(release, dataset_id, arch)
             medians[arch] = whole_seconds(seconds)
             clinvar_peaks[arch] = peak
             seen.add(instance_type)
-            clinvar_clones[(suite, arch)] = n_clones
+            clinvar_clones[(dataset_id, arch)] = n_clones
         peak_cells = "".join(f" {clinvar_peaks[arch]} |" if clinvar_peaks[arch] else " |" for arch in ARCH_LABELS)
         rows.append(f"| {label} | {f1_9(i, a, b)} | {f1_9(*adj)} | {medians['arm64']} | {medians['x86_64']} |{peak_cells}")
     rows.append(f"| All six | {pooled_f1(raw)} | {pooled_f1(adjusted)} | | | | |")
@@ -1161,6 +1211,7 @@ def six_dataset_blocks(
         f"any chromosome, and a whole-file cell's own median where its campaign recorded one{single_file_clause(release)}"
     ) + caption_close(
         same_day_sentence(population, population_labels, version),
+        reevaluation_sentence(release),
         "tuple counts, per-chromosome rows and per-file counts are in the "
         f"[provenance records]({REPO_URL}/tree/v{version}/{record_dir}).",
     )
@@ -1170,8 +1221,8 @@ def six_dataset_blocks(
         f"[docs/published-figures.md]({REPO_URL}/blob/v{version}/docs/published-figures.md)."
     )
     sv = ["| File set | Assembly | Raw F1 | Adjusted F1 |", "| --- | --- | --- | --- |"]
-    for suite, assembly in SV.items():
-        for label, raw_files, adjusted_files in sv_sets(conc[suite], f"concordance.{suite}"):
+    for dataset_id, assembly in SV.items():
+        for label, raw_files, adjusted_files in sv_sets(conc[dataset_id], f"concordance.{dataset_id}"):
             sv.append(f"| {label} | {assembly} | {pooled_f1(raw_files)} | {pooled_f1(adjusted_files)} |")
     return [
         "## Concordance and wall time", caption, "\n".join(rows), sv_caption, "\n".join(sv),
@@ -1181,19 +1232,20 @@ def six_dataset_blocks(
 
 def measurements_blocks(repo: Path, version: str) -> list[str]:
     """The `## Concordance and wall time` blocks for the record's shape: six_dataset_blocks for a record of
-    the six-dataset shape, else the earlier page: the whole-genome table (one row per population dataset
-    and the pooled row: raw and adjusted F1 from the release record's counts, wall time per architecture
-    from the population record) under its caption, then the chromosome 21 table over the eight scored
-    suites under its caption. A suite row's adjusted F1 is the record's `adj_f1`: the suite rows carry no
+    the six-dataset shape, else the page with the chromosome 21 table: the whole-genome table (one row per
+    population dataset and the pooled row: raw and adjusted F1 from the release record's counts, wall time
+    per architecture from the population record) under its caption, then the chromosome 21 table over the
+    eight scored cells under its caption. A cell's adjusted F1 is the record's `adj_f1`: the cells carry no
     excluded counts to derive it from. Either shape's whole-genome caption carries `same_day_sentence` when
-    the population record carries its block. A `plugin_concordance` block is rendered by the six-dataset
-    page alone, so a record of the earlier shape carrying one is refused."""
+    the population record carries its block and `reevaluation_sentence` when the release record carries its
+    own. A `plugin_concordance` block is rendered by the six-dataset page alone, so a record of any other
+    shape carrying one is refused."""
     release, conc, pop, record_dir = load_release_record(repo, version)
     population = load_population_record(repo, version)
     if six_dataset_shape(release, conc):
         return six_dataset_blocks(release, conc, pop, population, record_dir, version)
     if release.get("plugin_concordance") is not None:
-        fail(f"{PLUGINS} is rendered after the structural-variant table, which a record of the earlier shape lacks")
+        fail(f"{PLUGINS} is rendered after the structural-variant table, which only a record of the six-dataset shape carries")
     clones, fork, types, sums, rows = whole_genome_setup(population)
     generation_label = pair_label(types, WALL_TIME)
     classes = class_names(types)
@@ -1220,6 +1272,7 @@ def measurements_blocks(repo: Path, version: str) -> list[str]:
     rows.append(whole_genome_row(str(label), p, total_arm, total_x86, "population_concordance.pooled"))
     caption += caption_close(
         same_day_sentence(population, population_labels, version),
+        reevaluation_sentence(release),
         "tuple counts and per-chromosome rows are in the "
         f"[provenance records]({REPO_URL}/tree/v{version}/{record_dir}).",
     )
@@ -1230,7 +1283,7 @@ def measurements_blocks(repo: Path, version: str) -> list[str]:
     chr21 = ["| Dataset | Assembly | Raw F1 | Adjusted F1 |", "| --- | --- | --- | --- |"]
     for s in SCORED:
         r = conc[s]
-        dataset, assembly = SUITE_LABELS[s]
+        dataset, assembly = DATASET_LABELS[s]
         chr21.append(
             f"| {dataset} | {assembly} | {f1_9(r['intersection'], r['perl'], r['rust'])} | {half_up(float(r['adj_f1']), 9)} |"
         )
@@ -1276,15 +1329,15 @@ def generic_wall_time(release: dict, target: Target) -> str:
     """How a generic build's wall time compares with the measured archive's on the campaign's generic cell, the
     genome-wide ClinVar GRCh38 file: the ratio of the two medians when the record carries the generic build's
     aggregate, else that it was not measured."""
-    if not cell_aggregates(release, GENERIC_SUITE, target.arch, target.target_cpu):
+    if not cell_aggregates(release, GENERIC_DATASET, target.arch, target.target_cpu):
         return f"wall time against the {MEASURED_CPU[target.arch]} build not measured"
-    where = f"the per_cell_aggregates entry for {GENERIC_SUITE} on {target.arch} of the {target.target_cpu} build"
-    (generic,) = required(whole_file_aggregate(release, GENERIC_SUITE, target.arch, target.target_cpu), ("median_sec",), where)
-    reference, _, _, _ = whole_file_wall_time(release, GENERIC_SUITE, target.arch)
+    where = f"the per_cell_aggregates entry for {GENERIC_DATASET} on {target.arch} of the {target.target_cpu} build"
+    (generic,) = required(whole_file_aggregate(release, GENERIC_DATASET, target.arch, target.target_cpu), ("median_sec",), where)
+    reference, _, _, _ = whole_file_wall_time(release, GENERIC_DATASET, target.arch)
     if reference == 0:
-        fail(f"the measured build's {GENERIC_SUITE} median on {target.arch} is zero")
+        fail(f"the measured build's {GENERIC_DATASET} median on {target.arch} is zero")
     ratio = (median_seconds(generic, where) / reference).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-    return f"{ratio} times the {MEASURED_CPU[target.arch]} build's wall time on {CLINVAR[GENERIC_SUITE]}"
+    return f"{ratio} times the {MEASURED_CPU[target.arch]} build's wall time on {CLINVAR[GENERIC_DATASET]}"
 
 
 def install_bullets(

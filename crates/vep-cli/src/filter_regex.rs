@@ -53,8 +53,9 @@
 //! characters that is one atom, a run of literals of its own and an
 //! alternative inside a bracketed class. `\e`, `\a`, `\cX`, `\h`, `\v`, `\R`,
 //! `\N`, `\K`, `\G` and `\Z` are read as Perl reads them, and an escape Perl
-//! does not know is its character. Back-references, look-around and the other
-//! constructs the crate lacks are refused naming the pattern.
+//! does not know is its character. Back-references, look-around, a possessive
+//! quantifier and the other constructs the crate lacks are refused naming the
+//! pattern.
 
 use std::fmt::Write as _;
 
@@ -440,11 +441,14 @@ impl<'p> Reader<'p> {
         Ok(())
     }
 
-    /// The quantifier after an atom, with a lazy `?` kept and a possessive
-    /// `+` read as greedy; `None` when none follows. A quantifier on a
-    /// quantifier is Perl's `Nested quantifiers` refusal.
+    /// The quantifier after an atom, with a lazy `?` kept; `None` when none
+    /// follows. A quantifier on a quantifier is Perl's `Nested quantifiers`
+    /// refusal. A possessive `+` after the quantifier is the dialect's
+    /// refusal, naming the quantifier as written: `X++` is the atomic group
+    /// `(?>X+)`, which the crate lacks.
     fn quantifier(&mut self, flags: Flags) -> Result<Option<Tok>, Refusal> {
         self.skip_ignored(flags)?;
+        let start = self.at;
         let (mut text, never) = match self.peek() {
             Some(byte @ (b'*' | b'+' | b'?')) => {
                 self.at += 1;
@@ -460,13 +464,18 @@ impl<'p> Reader<'p> {
             },
             _ => return Ok(None),
         };
+        let written = start..self.at;
         self.skip_ignored(flags)?;
+        let mut possessive = false;
         match self.peek() {
             Some(b'?') => {
                 self.at += 1;
                 text.push('?');
             }
-            Some(b'+') => self.at += 1,
+            Some(b'+') => {
+                self.at += 1;
+                possessive = true;
+            }
             _ => {}
         }
         self.skip_ignored(flags)?;
@@ -477,6 +486,12 @@ impl<'p> Reader<'p> {
         };
         if nested {
             return Err(perl("Nested quantifiers"));
+        }
+        if possessive {
+            return Err(Refusal::Unsupported(format!(
+                "the possessive quantifier {}+ is not supported",
+                String::from_utf8_lossy(&self.pattern[written])
+            )));
         }
         Ok(Some(Tok::Quant { text, never }))
     }
@@ -2442,7 +2457,7 @@ mod tests {
         );
         assert_eq!(crate_pattern(br"r{{1}"), r"r\{{1}");
         assert_eq!(crate_pattern(br"r{2,1}"), r"[^\x00-\xFF]");
-        assert_eq!(crate_pattern(br"r{1,2}?r{1,2}+"), r"r{1,2}?r{1,2}");
+        assert_eq!(crate_pattern(br"r{1,2}?r{1,2}"), r"r{1,2}?r{1,2}");
         assert_eq!(
             refused(br"r{01}"),
             Refusal::Perl("Invalid quantifier in {,}".to_string())
@@ -2473,13 +2488,46 @@ mod tests {
         );
         assert_eq!(crate_pattern(br"^{1}s(?:){2}"), r"^{1}s(?:){2}");
         assert_eq!(
-            crate_pattern(br"a(?#c)+b(?#c){2}c+(?#c)+d(?#c)*?e(?#c)(?#d){"),
+            crate_pattern(br"a(?#c)+b(?#c){2}c+d(?#c)*?e(?#c)(?#d){"),
             r"a+b{2}c+d*?e\{"
         );
         assert_eq!(
             refused(br"a(?#c"),
             Refusal::Perl("Sequence (?#... not terminated".to_string())
         );
+    }
+
+    /// A possessive quantifier is refused in every spelling, naming the
+    /// quantifier as written: Perl reads `X++` as the atomic group `(?>X+)`,
+    /// which never gives a character back, and the crate has no such group.
+    /// The marker is found past a comment and, under `x`, past a blank; a
+    /// quantifier after it is Perl's `Nested quantifiers` refusal.
+    #[test]
+    fn possessive_quantifiers_are_refused_naming_the_quantifier() {
+        let possessive = |quantifier: &str| {
+            Refusal::Unsupported(format!(
+                "the possessive quantifier {quantifier} is not supported"
+            ))
+        };
+        assert_eq!(refused(br"s++s$"), possessive("++"));
+        assert_eq!(refused(br"s*+"), possessive("*+"));
+        assert_eq!(refused(br"s?+s"), possessive("?+"));
+        assert_eq!(refused(br"r{1,2}?r{1,2}+"), possessive("{1,2}+"));
+        assert_eq!(refused(br"r{ 1 , 2 }+"), possessive("{ 1 , 2 }+"));
+        assert_eq!(refused(br"r{2}+"), possessive("{2}+"));
+        assert_eq!(refused(br"(?:r|s)++$"), possessive("++"));
+        assert_eq!(refused(br"c+(?#c)+d"), possessive("++"));
+        assert_eq!(refused(br"(?x)c+ +d"), possessive("++"));
+        assert_eq!(refused(br"s++{"), possessive("++"));
+        assert_eq!(
+            refused(br"s+++"),
+            Refusal::Perl("Nested quantifiers".to_string())
+        );
+        assert_eq!(
+            refused(br"s{1,2}++"),
+            Refusal::Perl("Nested quantifiers".to_string())
+        );
+        assert_eq!(crate_pattern(br"r+?r+r"), r"r+?r+r");
     }
 
     /// Octal: `\o{}`, `\0`, and the back-reference reading of `\1` to `\9`

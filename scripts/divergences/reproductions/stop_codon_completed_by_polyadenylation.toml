@@ -1,0 +1,123 @@
+entry = "stop_codon_completed_by_polyadenylation"
+page = "docs/divergences/stop-codon-completed-by-polyadenylation.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "observed"
+input_class_basis = "1 · 999,950 per million · no flag needed"
+notes = "Twenty-one records written for the entry on GRCh38, each at the coding end of a human mitochondrial transcript whose coding sequence ends inside its stop codon on the transcript's last base, with no 3' UTR, under codon table 2 and without cds_end_NF. ENST00000361390 of MT-ND1 holds 956 coding bases at MT:3307-4262: 318 codons and the first two bases of the stop codon, at MT:4261 and MT:4262. ENST00000361381 of MT-ND4 holds 1,378 coding bases at MT:10760-12137: 459 codons and the first base of the stop codon, at MT:12137. The next genomic base opens a tRNA gene on both, and the adenines of the poly(A) tail complete the codon, as the translation exceptions of the reference record NC_012920.1 state at those positions. Ensembl VEP reads an allele that starts in those bases as one in an incomplete terminal codon (partial_codon, VariationEffect.pm:1601-1610), so stop_lost, stop_retained and frameshift return 0 (:1240, :1296, :1548) and inframe_insertion asks neither the incomplete codon nor the inserted length (:1100-1128): the rows carry incomplete_terminal_codon_variant and no stop term. For a deletion that starts in the last whole codon it reads the peptide alleles, whose reference ends on the unknown residue of the incomplete codon and holds no stop (:1259-1260). vep-rs reads every record on the completed stop codon with the poly(A) tail after it. The thirteen records on ENST00000361390 and the eight on ENST00000361381 are substitutions of a stop codon base (stop_lost, or stop_retained_variant where the new codon is a stop codon of the table), deletions of one base or both (stop_lost, or stop_retained_variant where the deleted base is an adenine and the tail's adenines follow), insertions before the codon (frameshift_variant for one base, inframe_insertion for three) and inside it (stop_retained_variant or stop_lost, by the codon the bases then spell), deletions from the last whole codon into the stop codon (frameshift_variant,stop_lost, or inframe_deletion alone where three bases go and the bases left spell a stop codon with the tail), and alleles that run from the stop codon past the transcript's end (stop_lost,3_prime_UTR_variant for a deletion, coding_sequence_variant,3_prime_UTR_variant for a substitution of as many bases). The position cells are equal in both engines on every row. The committed GRCh38 cache holds both transcripts and no flag is needed."
+
+[input]
+format = "vcf"
+text = """
+MT	4261	substitution_of_the_first_stop_codon_base_MT_4261	T	C	.	.	.
+MT	4262	substitution_of_the_second_stop_codon_base_MT_4262	A	G	.	.	.
+MT	4261	substitution_to_another_stop_codon_MT_4261	TA	AG	.	.	.
+MT	4260	deletion_of_the_first_stop_codon_base_MT_4261	CT	C	.	.	.
+MT	4261	deletion_of_the_second_stop_codon_base_MT_4262	TA	T	.	.	.
+MT	4260	deletion_of_both_stop_codon_bases_MT_4261	CTA	C	.	.	.
+MT	4260	insertion_of_one_base_before_the_stop_codon_MT_4260	C	CC	.	.	.
+MT	4260	insertion_of_three_bases_before_the_stop_codon_MT_4260	C	CCCC	.	.	.
+MT	4261	insertion_of_an_adenine_inside_the_stop_codon_MT_4261	T	TA	.	.	.
+MT	4261	insertion_of_a_cytosine_inside_the_stop_codon_MT_4261	T	TC	.	.	.
+MT	4259	deletion_from_the_last_whole_codon_into_the_stop_codon_MT_4260	CCT	C	.	.	.
+MT	4260	deletion_of_the_stop_codon_past_the_transcript_end_MT_4261	CTAAG	C	.	.	.
+MT	4261	substitution_from_the_stop_codon_past_the_transcript_end_MT_4261	TAA	CCC	.	.	.
+MT	12137	substitution_of_the_stop_codon_base_MT_12137	T	C	.	.	.
+MT	12136	deletion_of_the_stop_codon_base_MT_12137	TT	T	.	.	.
+MT	12136	insertion_of_one_base_before_the_stop_codon_MT_12136	T	TC	.	.	.
+MT	12136	insertion_of_three_bases_before_the_stop_codon_MT_12136	T	TCCC	.	.	.
+MT	12134	deletion_of_three_bases_that_leaves_a_stop_codon_MT_12135	TCTT	T	.	.	.
+MT	12133	deletion_of_the_last_whole_codon_and_the_stop_codon_base_MT_12134	CTCTT	C	.	.	.
+MT	12136	deletion_of_the_stop_codon_past_the_transcript_end_MT_12137	TTGT	T	.	.	.
+MT	12137	substitution_from_the_stop_codon_past_the_transcript_end_MT_12137	TGT	CCC	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38/json_cache"
+
+[run]
+flags = []
+
+[compare]
+kind = "rows"
+where = { feature = ["ENST00000361390", "ENST00000361381"] }
+columns = ["Uploaded_variation", "Location", "Feature", "Consequence", "CDS_position", "Protein_position", "Amino_acids", "Codons", "IMPACT"]
+
+[expected]
+ensembl_vep = [
+    "deletion_from_the_last_whole_codon_into_the_stop_codon_MT_4260 | MT:4260-4261 | ENST00000361390 | frameshift_variant | 954-955 | 318-319 | TX/T | acCTa/aca | HIGH",
+    "deletion_of_both_stop_codon_bases_MT_4261 | MT:4261-4262 | ENST00000361390 | protein_altering_variant,incomplete_terminal_codon_variant | 955-956 | 319 | X/- | TA/- | MODERATE",
+    "deletion_of_the_first_stop_codon_base_MT_4261 | MT:4261 | ENST00000361390 | incomplete_terminal_codon_variant,coding_sequence_variant | 955 | 319 | X | Ta/a | LOW",
+    "deletion_of_the_last_whole_codon_and_the_stop_codon_base_MT_12134 | MT:12134-12137 | ENST00000361381 | frameshift_variant | 1375-1378 | 459-460 | SX/- | TCTT/- | HIGH",
+    "deletion_of_the_second_stop_codon_base_MT_4262 | MT:4262 | ENST00000361390 | incomplete_terminal_codon_variant,coding_sequence_variant | 956 | 319 | X | tA/t | LOW",
+    "deletion_of_the_stop_codon_base_MT_12137 | MT:12137 | ENST00000361381 | protein_altering_variant,incomplete_terminal_codon_variant | 1378 | 460 | X/- | T/- | MODERATE",
+    "deletion_of_the_stop_codon_past_the_transcript_end_MT_12137 | MT:12137-12139 | ENST00000361381 | incomplete_terminal_codon_variant,coding_sequence_variant,3_prime_UTR_variant | 1378-? | 460-? | - | - | LOW",
+    "deletion_of_the_stop_codon_past_the_transcript_end_MT_4261 | MT:4261-4264 | ENST00000361390 | incomplete_terminal_codon_variant,coding_sequence_variant,3_prime_UTR_variant | 955-? | 319-? | - | - | LOW",
+    "deletion_of_three_bases_that_leaves_a_stop_codon_MT_12135 | MT:12135-12137 | ENST00000361381 | stop_lost,inframe_deletion | 1376-1378 | 459-460 | SX/X | tCTT/t | HIGH",
+    "insertion_of_a_cytosine_inside_the_stop_codon_MT_4261 | MT:4261-4262 | ENST00000361390 | incomplete_terminal_codon_variant,coding_sequence_variant | 955-956 | 319 | X/S | ta/tCa | LOW",
+    "insertion_of_an_adenine_inside_the_stop_codon_MT_4261 | MT:4261-4262 | ENST00000361390 | stop_gained,incomplete_terminal_codon_variant,coding_sequence_variant | 955-956 | 319 | X/* | ta/tAa | HIGH",
+    "insertion_of_one_base_before_the_stop_codon_MT_12136 | MT:12136-12137 | ENST00000361381 | inframe_insertion,incomplete_terminal_codon_variant,coding_sequence_variant | 1377-1378 | 459-460 | -/X | -/C | MODERATE",
+    "insertion_of_one_base_before_the_stop_codon_MT_4260 | MT:4260-4261 | ENST00000361390 | inframe_insertion,incomplete_terminal_codon_variant,coding_sequence_variant | 954-955 | 318-319 | -/X | -/C | MODERATE",
+    "insertion_of_three_bases_before_the_stop_codon_MT_12136 | MT:12136-12137 | ENST00000361381 | inframe_insertion,incomplete_terminal_codon_variant | 1377-1378 | 459-460 | -/P | -/CCC | MODERATE",
+    "insertion_of_three_bases_before_the_stop_codon_MT_4260 | MT:4260-4261 | ENST00000361390 | inframe_insertion,incomplete_terminal_codon_variant | 954-955 | 318-319 | -/P | -/CCC | MODERATE",
+    "substitution_from_the_stop_codon_past_the_transcript_end_MT_12137 | MT:12137-12139 | ENST00000361381 | incomplete_terminal_codon_variant,coding_sequence_variant,3_prime_UTR_variant | 1378-? | 460-? | - | - | LOW",
+    "substitution_from_the_stop_codon_past_the_transcript_end_MT_4261 | MT:4261-4263 | ENST00000361390 | incomplete_terminal_codon_variant,coding_sequence_variant,3_prime_UTR_variant | 955-? | 319-? | - | - | LOW",
+    "substitution_of_the_first_stop_codon_base_MT_4261 | MT:4261 | ENST00000361390 | incomplete_terminal_codon_variant,coding_sequence_variant | 955 | 319 | X | Ta/Ca | LOW",
+    "substitution_of_the_second_stop_codon_base_MT_4262 | MT:4262 | ENST00000361390 | incomplete_terminal_codon_variant,coding_sequence_variant | 956 | 319 | X | tA/tG | LOW",
+    "substitution_of_the_stop_codon_base_MT_12137 | MT:12137 | ENST00000361381 | incomplete_terminal_codon_variant,coding_sequence_variant | 1378 | 460 | X | T/C | LOW",
+    "substitution_to_another_stop_codon_MT_4261 | MT:4261-4262 | ENST00000361390 | incomplete_terminal_codon_variant,coding_sequence_variant | 955-956 | 319 | X | TA/AG | LOW",
+]
+vep_rs = [
+    "deletion_from_the_last_whole_codon_into_the_stop_codon_MT_4260 | MT:4260-4261 | ENST00000361390 | frameshift_variant,stop_lost | 954-955 | 318-319 | T*/TX | acCTaa/acaa | HIGH",
+    "deletion_of_both_stop_codon_bases_MT_4261 | MT:4261-4262 | ENST00000361390 | stop_lost | 955-956 | 319 | */X | TAa/a | HIGH",
+    "deletion_of_the_first_stop_codon_base_MT_4261 | MT:4261 | ENST00000361390 | stop_lost | 955 | 319 | */X | Taa/aa | HIGH",
+    "deletion_of_the_last_whole_codon_and_the_stop_codon_base_MT_12134 | MT:12134-12137 | ENST00000361381 | frameshift_variant,stop_lost | 1375-1378 | 459-460 | S*/X | TCTTaa/aa | HIGH",
+    "deletion_of_the_second_stop_codon_base_MT_4262 | MT:4262 | ENST00000361390 | stop_retained_variant | 956 | 319 | */X | tAa/ta | LOW",
+    "deletion_of_the_stop_codon_base_MT_12137 | MT:12137 | ENST00000361381 | stop_lost | 1378 | 460 | */X | Taa/aa | HIGH",
+    "deletion_of_the_stop_codon_past_the_transcript_end_MT_12137 | MT:12137-12139 | ENST00000361381 | stop_lost,3_prime_UTR_variant | 1378-? | 460-? | - | - | HIGH",
+    "deletion_of_the_stop_codon_past_the_transcript_end_MT_4261 | MT:4261-4264 | ENST00000361390 | stop_lost,3_prime_UTR_variant | 955-? | 319-? | - | - | HIGH",
+    "deletion_of_three_bases_that_leaves_a_stop_codon_MT_12135 | MT:12135-12137 | ENST00000361381 | inframe_deletion | 1376-1378 | 459-460 | S*/* | tCTTaa/taa | MODERATE",
+    "insertion_of_a_cytosine_inside_the_stop_codon_MT_4261 | MT:4261-4262 | ENST00000361390 | stop_lost | 955-956 | 319 | */SX | taa/tCaa | HIGH",
+    "insertion_of_an_adenine_inside_the_stop_codon_MT_4261 | MT:4261-4262 | ENST00000361390 | stop_retained_variant | 955-956 | 319 | * | taa/tAaa | LOW",
+    "insertion_of_one_base_before_the_stop_codon_MT_12136 | MT:12136-12137 | ENST00000361381 | frameshift_variant | 1377-1378 | 459-460 | -/X | -/C | HIGH",
+    "insertion_of_one_base_before_the_stop_codon_MT_4260 | MT:4260-4261 | ENST00000361390 | frameshift_variant | 954-955 | 318-319 | -/X | -/C | HIGH",
+    "insertion_of_three_bases_before_the_stop_codon_MT_12136 | MT:12136-12137 | ENST00000361381 | inframe_insertion | 1377-1378 | 459-460 | -/P | -/CCC | MODERATE",
+    "insertion_of_three_bases_before_the_stop_codon_MT_4260 | MT:4260-4261 | ENST00000361390 | inframe_insertion | 954-955 | 318-319 | -/P | -/CCC | MODERATE",
+    "substitution_from_the_stop_codon_past_the_transcript_end_MT_12137 | MT:12137-12139 | ENST00000361381 | coding_sequence_variant,3_prime_UTR_variant | 1378-? | 460-? | - | - | MODIFIER",
+    "substitution_from_the_stop_codon_past_the_transcript_end_MT_4261 | MT:4261-4263 | ENST00000361390 | coding_sequence_variant,3_prime_UTR_variant | 955-? | 319-? | - | - | MODIFIER",
+    "substitution_of_the_first_stop_codon_base_MT_4261 | MT:4261 | ENST00000361390 | stop_lost | 955 | 319 | */Q | Taa/Caa | HIGH",
+    "substitution_of_the_second_stop_codon_base_MT_4262 | MT:4262 | ENST00000361390 | stop_lost | 956 | 319 | */W | tAa/tGa | HIGH",
+    "substitution_of_the_stop_codon_base_MT_12137 | MT:12137 | ENST00000361381 | stop_lost | 1378 | 460 | */Q | Taa/Caa | HIGH",
+    "substitution_to_another_stop_codon_MT_4261 | MT:4261-4262 | ENST00000361390 | stop_retained_variant | 955-956 | 319 | * | TAa/AGa | LOW",
+]
+
+[implementation]
+code = [
+    "crates/vep-effects/src/coding.rs::CODON_TABLES_THAT_SHOW_A_COMPLETED_STOP_CODON",
+    "crates/vep-effects/src/coding.rs::carries_a_consensus_coding_sequence_id",
+    "crates/vep-effects/src/coding.rs::record_shows_the_model_complete",
+    "crates/vep-effects/src/coding.rs::stop_codon_at_the_coding_end",
+    "crates/vep-effects/src/coding.rs::completed_by_polyadenylation",
+    "crates/vep-effects/src/consequences.rs::calculate_consequences",
+]
+tests = [
+    "crates/vep-cli/tests/gene_model_stop_codon_completed_by_polyadenylation.rs::substitution_in_a_stop_codon_that_adenines_complete_reads_alike_on_a_gene_model_and_the_cache",
+    "crates/vep-effects/src/stop_codon_tests.rs::substitution_in_a_stop_codon_that_adenines_complete_loses_or_keeps_the_stop_codon",
+    "crates/vep-effects/src/stop_codon_tests.rs::deletion_in_a_stop_codon_that_adenines_complete_is_stop_lost",
+    "crates/vep-effects/src/stop_codon_tests.rs::deletion_of_an_adenine_of_a_stop_codon_that_adenines_complete_keeps_the_stop_codon",
+    "crates/vep-effects/src/stop_codon_tests.rs::insertion_at_a_stop_codon_that_adenines_complete_is_read_on_the_whole_codon",
+    "crates/vep-effects/src/stop_codon_tests.rs::deletion_from_the_last_whole_codon_through_a_stop_codon_that_adenines_complete_reads_the_bases_left",
+    "crates/vep-effects/src/stop_codon_tests.rs::deletion_past_the_end_of_a_transcript_whose_stop_codon_adenines_complete_is_stop_lost",
+    "crates/vep-effects/src/stop_codon_tests.rs::row_on_a_record_that_shows_its_stop_codon_completed_is_the_row_of_the_completed_record",
+    "crates/vep-effects/src/stop_codon_tests.rs::stop_codon_at_a_coding_end_is_whole_begun_by_its_last_bases_or_none",
+]
+rules = [
+    "tools/vep-formats-compare/src/coding_end_terms.rs::CodingEndClass::takes",
+    "tools/vep-formats-compare/src/coding_end_terms.rs::class_of_pair",
+    "tools/vep-formats-compare/src/coding_end_terms.rs::expected_terms",
+    "tools/vep-formats-compare/src/rules/coding_end_pairs.rs::stop_codon_completed_by_polyadenylation_pair",
+    "tools/vep-outputs-compare/src/rules/row.rs::stop_codon_completed_by_polyadenylation_pair",
+    "tools/vep-plugin-pairs/src/rules/coding_end.rs::coding_end_class",
+]

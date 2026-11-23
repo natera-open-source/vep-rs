@@ -1,0 +1,105 @@
+# Written by scripts/check_public_interface.py --update, which reads the tree; the script's opening comment gives the format.
+library	vep_fasta
+module	vep_fasta	mod
+auto traits	vep_fasta::FastaError	!RefUnwindSafe, Send, Sync, Unpin, !UnwindSafe
+enum	vep_fasta::FastaError	enum; #[non_exhaustive]
+implementation	vep_fasta::FastaError	impl core::error::Error for vep_fasta::FastaError
+implementation	vep_fasta::FastaError	impl core::fmt::Debug for vep_fasta::FastaError
+implementation	vep_fasta::FastaError	impl core::fmt::Display for vep_fasta::FastaError
+variant	vep_fasta::FastaError::DuplicateSequence	named fields
+field	vep_fasta::FastaError::DuplicateSequence::first	alloc::string::String
+field	vep_fasta::FastaError::DuplicateSequence::name	alloc::string::String
+field	vep_fasta::FastaError::DuplicateSequence::second	alloc::string::String
+variant	vep_fasta::FastaError::GziMismatch	named fields
+field	vep_fasta::FastaError::GziMismatch::fasta	alloc::string::String
+field	vep_fasta::FastaError::GziMismatch::gzi	alloc::string::String
+field	vep_fasta::FastaError::GziMismatch::reason	alloc::string::String
+variant	vep_fasta::FastaError::IndexBeyondFile	named fields
+field	vep_fasta::FastaError::IndexBeyondFile::bases	u64
+field	vep_fasta::FastaError::IndexBeyondFile::path	alloc::string::String
+variant	vep_fasta::FastaError::InvalidFaiLine	named fields
+field	vep_fasta::FastaError::InvalidFaiLine::path	alloc::string::String
+field	vep_fasta::FastaError::InvalidFaiLine::reason	alloc::string::String
+variant	vep_fasta::FastaError::InvalidStorageMode	1 positional field
+field	vep_fasta::FastaError::InvalidStorageMode::0	alloc::string::String
+variant	vep_fasta::FastaError::Io	named fields
+field	vep_fasta::FastaError::Io::action	&'static str
+field	vep_fasta::FastaError::Io::path	alloc::string::String
+field	vep_fasta::FastaError::Io::source	std::io::error::Error
+variant	vep_fasta::FastaError::LockFile	named fields
+field	vep_fasta::FastaError::LockFile::lock	alloc::string::String
+field	vep_fasta::FastaError::LockFile::source	std::io::error::Error
+variant	vep_fasta::FastaError::MalformedBgzfBlock	named fields
+field	vep_fasta::FastaError::MalformedBgzfBlock::offset	u64
+field	vep_fasta::FastaError::MalformedBgzfBlock::path	alloc::string::String
+variant	vep_fasta::FastaError::MalformedRazf	named fields
+field	vep_fasta::FastaError::MalformedRazf::path	alloc::string::String
+field	vep_fasta::FastaError::MalformedRazf::reason	alloc::string::String
+variant	vep_fasta::FastaError::MissingFai	1 positional field
+field	vep_fasta::FastaError::MissingFai::0	alloc::string::String
+variant	vep_fasta::FastaError::MissingFasta	1 positional field
+field	vep_fasta::FastaError::MissingFasta::0	alloc::string::String
+variant	vep_fasta::FastaError::MissingGzi	1 positional field
+field	vep_fasta::FastaError::MissingGzi::0	alloc::string::String
+variant	vep_fasta::FastaError::NoIndexedFasta	1 positional field
+field	vep_fasta::FastaError::NoIndexedFasta::0	alloc::string::String
+variant	vep_fasta::FastaError::NotBgzf	1 positional field
+field	vep_fasta::FastaError::NotBgzf::0	alloc::string::String
+variant	vep_fasta::FastaError::Unindexable	named fields
+field	vep_fasta::FastaError::Unindexable::path	alloc::string::String
+field	vep_fasta::FastaError::Unindexable::reason	alloc::string::String
+auto traits	vep_fasta::FastaStorageMode	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_fasta::FastaStorageMode	enum; #[non_exhaustive]
+implementation	vep_fasta::FastaStorageMode	impl core::clone::Clone for vep_fasta::FastaStorageMode
+implementation	vep_fasta::FastaStorageMode	impl core::cmp::Eq for vep_fasta::FastaStorageMode
+implementation	vep_fasta::FastaStorageMode	impl core::cmp::PartialEq for vep_fasta::FastaStorageMode
+implementation	vep_fasta::FastaStorageMode	impl core::fmt::Debug for vep_fasta::FastaStorageMode
+implementation	vep_fasta::FastaStorageMode	impl core::marker::Copy for vep_fasta::FastaStorageMode
+implementation	vep_fasta::FastaStorageMode	impl core::str::traits::FromStr for vep_fasta::FastaStorageMode { type Err = vep_fasta::FastaError }
+variant	vep_fasta::FastaStorageMode::Memory	no fields
+variant	vep_fasta::FastaStorageMode::Mmap	no fields
+constant	vep_fasta::GRCH37_MITOCHONDRIAL_LENGTH	const: u64
+auto traits	vep_fasta::IndexedFasta	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_fasta::IndexedFasta	impl core::fmt::Debug for vep_fasta::IndexedFasta
+struct	vep_fasta::IndexedFasta	struct; named fields, some private
+method	vep_fasta::IndexedFasta::add_synonyms	fn(&mut self, synonyms: &vep_core::synonyms::ChromosomeSynonyms)
+method	vep_fasta::IndexedFasta::base	fn(&self, chr: &str, pos: u64) -> core::option::Option<u8>
+method	vep_fasta::IndexedFasta::corruption	fn(&self) -> core::option::Option<vep_fasta::FastaError>
+method	vep_fasta::IndexedFasta::fasta_path	fn(&self) -> &std::path::Path
+method	vep_fasta::IndexedFasta::files	fn(&self) -> impl core::iter::traits::iterator::Iterator<Item = &std::path::Path>
+method	vep_fasta::IndexedFasta::from_path	fn(path: impl core::convert::AsRef<std::path::Path>) -> core::result::Result<Self, vep_fasta::FastaError>
+method	vep_fasta::IndexedFasta::from_path_in_memory	fn(path: impl core::convert::AsRef<std::path::Path>) -> core::result::Result<Self, vep_fasta::FastaError>
+method	vep_fasta::IndexedFasta::from_path_mmap	fn(path: impl core::convert::AsRef<std::path::Path>) -> core::result::Result<Self, vep_fasta::FastaError>
+method	vep_fasta::IndexedFasta::from_path_with_storage	fn(path: impl core::convert::AsRef<std::path::Path>, mode: vep_fasta::FastaStorageMode) -> core::result::Result<Self, vep_fasta::FastaError>
+method	vep_fasta::IndexedFasta::keep_grch37_mitochondrial_pairs_apart	fn(&mut self)
+method	vep_fasta::IndexedFasta::mitochondrial_record_of_another_sequence	fn(&self, name: &str) -> core::option::Option<(&str, u64)>
+method	vep_fasta::IndexedFasta::record_name	fn(&self, chr: &str) -> core::option::Option<&str>
+method	vep_fasta::IndexedFasta::record_names	fn(&self) -> impl core::iter::traits::iterator::Iterator<Item = &str>
+method	vep_fasta::IndexedFasta::records	fn(&self) -> alloc::vec::Vec<(&str, u64)>
+method	vep_fasta::IndexedFasta::sequence	fn(&self, chr: &str, start: u64, end: u64) -> core::option::Option<alloc::vec::Vec<u8>>
+method	vep_fasta::IndexedFasta::sequence_as_written	fn(&self, chr: &str, start: u64, end: u64) -> core::option::Option<alloc::vec::Vec<u8>>
+method	vep_fasta::IndexedFasta::sequence_length	fn(&self, chr: &str) -> core::option::Option<u64>
+method	vep_fasta::IndexedFasta::sequence_names	fn(&self) -> alloc::vec::Vec<&str>
+method	vep_fasta::IndexedFasta::set_assembly	fn(&mut self, assembly: &str)
+method	vep_fasta::IndexedFasta::storage_mode	fn(&self) -> vep_fasta::FastaStorageMode
+constant	vep_fasta::MAX_LINE_BYTES	const: usize
+auto traits	vep_fasta::Par	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_fasta::Par	impl core::clone::Clone for vep_fasta::Par
+implementation	vep_fasta::Par	impl core::cmp::Eq for vep_fasta::Par
+implementation	vep_fasta::Par	impl core::cmp::PartialEq for vep_fasta::Par
+implementation	vep_fasta::Par	impl core::fmt::Debug for vep_fasta::Par
+implementation	vep_fasta::Par	impl core::marker::Copy for vep_fasta::Par
+struct	vep_fasta::Par	struct; named fields; #[non_exhaustive]
+field	vep_fasta::Par::adj	u64
+field	vep_fasta::Par::end	u64
+field	vep_fasta::Par::start	u64
+function	vep_fasta::fasta_dir_match	fn(dir: &std::path::Path, species: &str, assembly: core::option::Option<&str>) -> std::io::error::Result<core::option::Option<std::path::PathBuf>>
+function	vep_fasta::first_indexed_fasta	fn(dir: &std::path::Path) -> core::option::Option<std::path::PathBuf>
+module	vep_fasta::index	mod
+function	vep_fasta::index::index_if_missing	fn(fasta: &std::path::Path) -> core::result::Result<(), vep_fasta::FastaError>
+function	vep_fasta::index::open_indexed	fn(fasta: &std::path::Path) -> core::result::Result<vep_fasta::IndexedFasta, vep_fasta::FastaError>
+function	vep_fasta::index::write_fai	fn(fasta: &std::path::Path) -> core::result::Result<(), vep_fasta::FastaError>
+function	vep_fasta::index::write_gzi	fn(fasta: &std::path::Path) -> core::result::Result<(), vep_fasta::FastaError>
+function	vep_fasta::indexed_fasta_files	fn(dir: &std::path::Path) -> alloc::vec::Vec<std::path::PathBuf>
+function	vep_fasta::pars_for_assembly	fn(assembly: &str) -> &'static [vep_fasta::Par]
+function	vep_fasta::unindexed_fasta_files	fn(dir: &std::path::Path) -> alloc::vec::Vec<(std::path::PathBuf, vep_fasta::FastaError)>

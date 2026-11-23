@@ -7,14 +7,16 @@
 //! A gzip input is unpacked once into the scratch, every member of it, so that each pass
 //! reads any block of it without unpacking what comes before.
 
-use crate::{Refusal, Res};
+use crate::rules::{Refusal, Res};
+use crate::score::interrupt;
 use flate2::bufread::GzDecoder;
 use sha2::{Digest, Sha256};
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
 use std::os::unix::fs::FileExt;
 use std::path::{Path, PathBuf};
-use std::thread::JoinHandle;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::OnceLock;
 
 pub const DEFAULT_COLUMNS: usize = 14;
 pub const TUPLE_COLUMNS: usize = 5;
@@ -34,11 +36,6 @@ impl Kind {
     }
 }
 
-enum Digesting {
-    Known(String),
-    Running(JoinHandle<io::Result<String>>),
-}
-
 pub struct Input {
     /// The path as the command line gave it, for the messages.
     pub shown: String,
@@ -47,7 +44,8 @@ pub struct Input {
     pub file: File,
     /// Where each block starts, and the file's length last.
     pub bounds: Vec<u64>,
-    digest: Digesting,
+    /// The sha256 of the file as stored, once it is taken.
+    digest: OnceLock<io::Result<String>>,
 }
 
 /// Digests every byte read through it.
@@ -66,15 +64,6 @@ impl<R: Read> Read for Digested<R> {
 
 fn hex_digest(digest: Sha256) -> String {
     crate::order::hex(&digest.finalize())
-}
-
-fn digest_of(path: &Path) -> io::Result<String> {
-    let mut digested = Digested {
-        inner: File::open(path)?,
-        digest: Sha256::new(),
-    };
-    io::copy(&mut digested, &mut io::sink())?;
-    Ok(hex_digest(digested.digest))
 }
 
 /// Unpacks every member of the gzip file into `plain` and returns the digest of the file as
@@ -116,8 +105,9 @@ fn unpack(shown: &str, packed: File, plain: &Path) -> Res<String> {
     Ok(hex_digest(stored.into_inner().digest))
 }
 
-/// What the column count of the first data line makes of a file that may be a tuple file:
-/// `first_line_kind` of the scorer, and its reading of a file with no data line.
+/// What the column count of the first data line makes of a file that may be a tuple file;
+/// a file with no data line is a default-format output where it holds a `#` line and a
+/// tuple file otherwise.
 fn kind_of(file: &File) -> io::Result<Kind> {
     let mut lines = BufReader::with_capacity(1 << 16, file);
     let mut line = Vec::new();
@@ -178,7 +168,8 @@ fn block_bounds(file: &File, length: u64, block_bytes: u64) -> io::Result<Vec<u6
 }
 
 impl Input {
-    /// Opens `path`, unpacking a gzip file to `plain`, and starts the digest of a plain one.
+    /// Opens `path`, unpacking a gzip file to `plain`, which is digested as it is unpacked;
+    /// a plain file's digest is taken by `digest`.
     pub fn open(
         path: &Path,
         tuple_file_allowed: bool,
@@ -192,13 +183,9 @@ impl Input {
         let packed = stored.read_at(&mut magic, 0).map_err(named)? == 2 && magic == [0x1f, 0x8b];
         let (file, digest) = if packed {
             let digest = unpack(&shown, stored, plain)?;
-            (File::open(plain)?, Digesting::Known(digest))
+            (File::open(plain)?, OnceLock::from(Ok(digest)))
         } else {
-            let path = path.to_path_buf();
-            (
-                stored,
-                Digesting::Running(std::thread::spawn(move || digest_of(&path))),
-            )
+            (stored, OnceLock::new())
         };
         let kind = if tuple_file_allowed {
             kind_of(&file).map_err(named)?
@@ -232,23 +219,45 @@ impl Input {
         self.file.read_exact_at(buffer, start)
     }
 
-    /// The sha256 of the file as stored, waited for where it is still being taken.
-    pub fn sha256(&mut self) -> Res<&str> {
-        if let Digesting::Running(_) = self.digest {
-            let Digesting::Running(running) =
-                std::mem::replace(&mut self.digest, Digesting::Known(String::new()))
-            else {
-                unreachable!()
-            };
-            let digest = running
-                .join()
-                .map_err(|_| Refusal(format!("{}: the digest could not be taken", self.shown)))?
-                .map_err(|error| Refusal(format!("{}: {error}", self.shown)))?;
-            self.digest = Digesting::Known(digest);
+    /// Whether the sha256 of the file as stored is still to be taken.
+    pub fn digest_is_due(&self) -> bool {
+        self.digest.get().is_none()
+    }
+
+    /// Takes the sha256 of a plain file as stored, unless it is known. The reading ends with
+    /// no digest taken once `stop` is set or a stop signal arrived.
+    pub fn digest(&self, stop: &AtomicBool) {
+        if !self.digest_is_due() {
+            return;
         }
-        match &self.digest {
-            Digesting::Known(digest) => Ok(digest),
-            Digesting::Running(_) => unreachable!(),
+        let mut digest = Sha256::new();
+        let mut block = vec![0u8; 1 << 20];
+        let mut at = 0;
+        let taken = loop {
+            if stop.load(Ordering::Relaxed) || interrupt::requested() {
+                return;
+            }
+            match self.file.read_at(&mut block, at) {
+                Ok(0) => break Ok(hex_digest(digest)),
+                Ok(count) => {
+                    digest.update(&block[..count]);
+                    at += count as u64;
+                }
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
+                Err(error) => break Err(error),
+            }
+        };
+        let _ = self.digest.set(taken);
+    }
+
+    /// The sha256 of the file as stored, taken here where it is still due.
+    pub fn sha256(&self) -> Res<&str> {
+        self.digest(&AtomicBool::new(false));
+        match self.digest.get() {
+            Some(Ok(digest)) => Ok(digest),
+            Some(Err(error)) => Err(Refusal(format!("{}: {error}", self.shown))),
+            // A stop signal ended the reading, and the run ends on the signal.
+            None => Err(Refusal(format!("{}: the digest was not taken", self.shown))),
         }
     }
 }

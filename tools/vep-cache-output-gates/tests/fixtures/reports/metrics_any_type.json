@@ -1,0 +1,9 @@
+{
+  "total_annotation_lines": "many",
+  "existing_variation_count": [1, {"a": null, "b": "it's \"x\""}, 2.50, "é\u200b", true],
+  "frequency_field_counts": {
+    "AF": "x", "MAX_AF": null, "EUR_AF": [1.5], "SAS_AF": {"k": "v"}, "AFR_AF": false,
+    "AMR_AF": 0.0, "EAS_AF": 340282366920938463463374607431768211456, "gnomADe_AF": "a\ud800"
+  },
+  "consequence_counts": {}
+}

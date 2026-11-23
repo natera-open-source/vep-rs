@@ -1,0 +1,25 @@
+# a comment	line
+no tab here
+
+species	homo_sapiens
+assembly	-
+polyphen	
+sift	b
+source_sift	0
+source_polyphen	2.2.3
+source_assembly	GRCh38.p14
+variation_cols	a,,b,c,,
+variation_cols_more	a,,b
+regulatory	1
+cell_types	A,B
+tabbed	first	second
+species	homo_sapiens_again
+café	valÿ "q" back\slash
+crlf	value
+cache_version	5
+source_type	from the file
+contig_order	from the file
+regulatory_schema	7
+	empty key
+source_	empty source
+last	no newline

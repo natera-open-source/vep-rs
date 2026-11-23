@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 //! HGVS notation input, one notation per line, read as Ensembl VEP's
-//! `Parser/HGVS.pm` `create_VariationFeatures` (release/116.2, lines 141-252)
+//! `Parser/HGVS.pm` `create_VariationFeatures` (release/116.3, lines 141-252)
 //! reads it over ensembl-io's list parser and resolves it through
 //! `VariationFeatureAdaptor::fetch_by_hgvs_notation` (ensembl-variation
 //! release/116, lines 1767-1991):
@@ -25,9 +25,9 @@
 //! which stand in for its core database, with the parser's warning when the
 //! reference reads as a gene name (`:219-229`). An `r.` notation is one
 //! Ensembl VEP's resolver throws on (`HGVS type r not recognised`, `:1989`)
-//! and its parser then skips with that message; here it fails the line with
-//! [`IoError::Unsupported`], which stops the run. A transcript cache a `c.`,
-//! `n.` or `p.` lookup cannot read fails the line with
+//! and its parser then skips with that message; here it is skipped with the
+//! same message, as any notation the resolver cannot resolve is. A transcript
+//! cache a `c.`, `n.` or `p.` lookup cannot read fails the line with
 //! [`IoError::CacheUnreadable`] carrying the cache's refusal, which stops the
 //! run under the `cache` component.
 //!
@@ -41,8 +41,9 @@
 //! are numbered as Ensembl VEP numbers them (`LineCount`): a line with no
 //! word character is an empty line, warned about in `skip_empty_lines`'s words
 //! and counted (Parser.pm:273), and any other `#` line is a comment here,
-//! counted toward the line numbers that follow and otherwise passed over
-//! without a word, where ensembl-io's list parser has no comment lines
+//! counted toward the line numbers that follow and otherwise passed over,
+//! with one warning at the end of the input that counts such lines, where
+//! ensembl-io's list parser has no comment lines
 //! (ListBasedParser.pm:60) and Ensembl VEP warns about the notation it cannot
 //! parse (`:204-216`).
 
@@ -169,15 +170,13 @@ impl<R: BufRead> HgvsParser<R> {
                     _ => Ok(variant),
                 }
             }
-            Some('r') => Err(IoError::Unsupported(
-                "HGVS r. notation is not supported (Ensembl VEP refuses it too: HGVS type r not recognised)"
-                    .into(),
-            )),
-            other => Err(unable(
+            // The resolver's last branch (VariationFeatureAdaptor.pm:1988-1990)
+            // quotes the type as written: an `r` in either case, or nothing.
+            _ => Err(unable(
                 hgvs,
                 Some(&format!(
                     "HGVS type {} not recognised for {}",
-                    other.map(String::from).unwrap_or_default(),
+                    notation.kind.map(String::from).unwrap_or_default(),
                     notation.cleaned
                 )),
             )),
@@ -418,6 +417,7 @@ impl<R: BufRead + Send> InputParser for HgvsParser<R> {
             }
             self.lines.record_line();
             if text.starts_with('#') {
+                self.lines.comment_line();
                 continue;
             }
             // `s/\s+//g` (Parser/HGVS.pm:156): the line end goes with every
@@ -606,11 +606,12 @@ mod tests {
     /// Whitespace inside a notation is removed before anything else and the
     /// record is named by the notation without it, so `21:g.30282169 C>A`
     /// annotates as `21:g.30282169C>A` does and prints that name (Ensembl VEP
-    /// 116.2 prints `21:g.30282169C>A` in `Uploaded_variation` for the spaced
+    /// 116.3 prints `21:g.30282169C>A` in `Uploaded_variation` for the spaced
     /// line). Every line counts toward Ensembl VEP's line number
     /// (Parser/HGVS.pm:151 per record, Parser.pm:275 per empty line): a `#` line
-    /// with a word character is a comment here, counted and passed over without
-    /// a warning, where ensembl-io's list parser reads it as a record
+    /// with a word character is a comment here, counted, passed over and warned
+    /// about once at the end of the input, where ensembl-io's list parser reads
+    /// it as a record
     /// (ListBasedParser.pm:60) that `fetch_by_hgvs_notation` refuses
     /// (`:204-216`); a line with no word character, blank or a bare `#`, is an
     /// empty line (Parser.pm:273), warned about in `skip_empty_lines`'s words
@@ -634,14 +635,17 @@ mod tests {
         assert!(parser.next_variant().is_none());
         assert_eq!(
             parser.take_warnings(),
-            ["Skipped 2 empty lines from line 5"]
+            [
+                "Skipped 2 empty lines from line 5",
+                "Read 1 line that begins with '#' as a comment, at line 1"
+            ]
         );
         assert_eq!(parser.take_empty_lines(), 0);
     }
 
     /// A notation with a `[` or `]` is skipped with the parser's own warning,
     /// which carries no resolver message (Parser/HGVS.pm:158-161); Ensembl VEP
-    /// 116.2 warns `Unable to parse HGVS notation '21:g.30282169C[3]'` and
+    /// 116.3 warns `Unable to parse HGVS notation '21:g.30282169C[3]'` and
     /// writes no row for it.
     #[test]
     fn repeats_are_skipped_with_the_parser_warning() {
@@ -683,20 +687,26 @@ mod tests {
         assert!(parser.next_variant().unwrap().is_ok());
     }
 
-    /// An r. notation fails its line with the refusal variant and a message
-    /// naming the type, as Ensembl VEP's resolver throws `HGVS type r not
-    /// recognised` (DBSQL/VariationFeatureAdaptor.pm:1989), where its parser
-    /// warns and skips the line; the parser here reads on, and the caller stops
-    /// the run on the variant.
+    /// An r. notation is a skipped line carrying the resolver's message, the
+    /// type letter as written: Ensembl VEP's resolver reads the letter as a
+    /// type (DBSQL/VariationFeatureAdaptor.pm:1789), has no branch for it and
+    /// throws `HGVS type r not recognised` (`:1989`), which its parser warns
+    /// about before it reads the next line (Parser/HGVS.pm:204-216). The
+    /// notation after it resolves.
     #[test]
     fn rna_hgvs_is_refused_naming_r() {
-        let mut parser = parser("ENST00000366667:r.803C>T\n21:g.30282169C>A\n");
-        let err = parser.next_variant().unwrap().unwrap_err();
-        assert!(matches!(err, IoError::Unsupported(_)), "{err:?}");
-        assert_eq!(
-            err.to_string(),
-            "HGVS r. notation is not supported (Ensembl VEP refuses it too: HGVS type r not recognised)"
-        );
+        let mut parser =
+            parser("ENST00000366667:r.803C>T\nENST00000366667:R.803C>T\n21:g.30282169C>A\n");
+        for expected in [
+            "Unable to parse HGVS notation 'ENST00000366667:r.803C>T': \
+             HGVS type r not recognised for ENST00000366667:r.803C>T",
+            "Unable to parse HGVS notation 'ENST00000366667:R.803C>T': \
+             HGVS type R not recognised for ENST00000366667:R.803C>T",
+        ] {
+            let err = parser.next_variant().unwrap().unwrap_err();
+            assert!(matches!(err, IoError::SkippedLine(_)), "{err:?}");
+            assert_eq!(err.to_string(), expected);
+        }
         assert!(parser.next_variant().unwrap().is_ok());
     }
 

@@ -1,7 +1,7 @@
 entry = "bnd_own_chromosome_rows_lost"
 page = "docs/divergences/defect-p.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the VCF 4.2 specification, section 5.4 \"Specifying complex rearrangements with breakends\" (bracket breakend records with SVTYPE=BND whose mates lie on another chromosome; no clause fixes the spelling of a mate chromosome name); not seen in the measured datasets"
 notes = "The entry's first mechanism, the own-end rows lost to load order. The first record asks for the chromosome 21 region holding the transcripts within reach of the second record's mate before the second record's own region is asked for, so a chromosome 21 transcript names the second record's slice and its chromosome 1 transcripts fail the slice test; vep-rs annotates each breakend on its own chromosome. The second mechanism, the mate rows lost to a mate written Chr21, is not reproduced here."
@@ -29,3 +29,18 @@ columns = ["Location", "Allele", "Feature", "Consequence"]
 [expected]
 ensembl_vep = []
 vep_rs = ["1:16900001 | N. | ENST00000430580 | feature_truncation,intron_variant"]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/pipeline.rs::name_source_chromosomes",
+    "crates/vep-cli/src/runner.rs::append_bnd_mate_consequences",
+]
+tests = [
+    "crates/vep-cli/src/annotator.rs::tests::annotator_and_cli_agree_on_interchromosomal_bnd_mate_annotation",
+    "crates/vep-cli/src/annotator.rs::tests::from_config_resolves_a_breakend_mate_through_the_synonyms",
+    "crates/vep-cli/src/pipeline.rs::tests::name_source_chromosomes_resolves_synonyms_against_the_cache",
+]
+rules = [
+    "tools/vep-formats-compare/src/rules/structural.rs::filter_bnd_own_rows_lost",
+    "tools/vep-sv-compare/src/masks/breakend116.rs::filter_bnd_own_rows_lost",
+]

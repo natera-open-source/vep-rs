@@ -1,7 +1,7 @@
 entry = "damaged_cache_shard_regulatory"
 page = "docs/divergences/damaged-cache-shard.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "malformed"
 input_class_basis = "each member of a gzip file has a header, its compressed blocks, then CRC32 and ISIZE (RFC 1952, section 2.3 \"Member format\"): the regulatory region file of the cache is cut short inside its compressed blocks and carries neither CRC32 nor ISIZE"
 notes = "The regulatory file of region 46000001-47000000 of chromosome 21 is cut to half its bytes in both caches; the record's regulatory feature and four motif features lie 300,745 bases inside that region, so that file alone held them. The transcript files stay whole, and the vep-rs copy drops CHECKSUMS.sha256 so the inflater, not the checksum, refuses the shard."
@@ -36,3 +36,10 @@ pattern = "Failed to inflate"
 [expected]
 ensembl_vep = []
 vep_rs = ["ERROR: [cache] Failed to inflate <path> incomplete deflate stream"]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/json_cache.rs::read_shard",
+    "crates/vep-cli/src/regulatory/source.rs::read_shard_features",
+]
+tests = ["crates/vep-cli/tests/regulatory.rs::malformed_regulatory_shards_fail_the_run_by_name"]

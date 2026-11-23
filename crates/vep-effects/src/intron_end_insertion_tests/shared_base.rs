@@ -112,11 +112,14 @@ fn insertion_written_with_the_base_after_it_before_an_exon_has_no_protein_notati
 /// Three bases written before the first base of exon 9 of ENST00000321219
 /// with the intron's last base before them as the reference allele: the
 /// allele as the record holds it lies in the intron, and the row carries no
-/// protein notation whatever its form.
+/// protein notation whatever its form. Its splice term is the one of the
+/// insertion between the intron's last base and the exon, where Ensembl VEP
+/// reads the intron's last base as changed
+/// (VariationFeatureOverlapAllele.pm:452-454) and writes the acceptor term.
 #[test]
 fn insertion_written_with_an_intron_base_before_it_keeps_its_empty_notation() {
     let row = ENST00000321219_EXONS_8_9.row(38877585, 38877585, "G", "GTAA");
-    assert_eq!(terms(&row), ["splice_acceptor_variant"]);
+    assert_eq!(terms(&row), ["splice_region_variant"]);
     assert_eq!(
         row.hgvsc.as_deref(),
         Some("ENST00000000001.1:c.1240-1_1240insTAA")

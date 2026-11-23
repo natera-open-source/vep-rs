@@ -49,10 +49,10 @@ const BYTES_PER_CELL: usize = 2;
 /// Sentinel value indicating no prediction is available.
 const NO_PREDICTION: u16 = 0xFFFF;
 
-/// Mask for the score (bottom 10 bits), Perl's `$val & (2**10 - 1)`.
+/// Mask for the score (bottom 10 bits), Ensembl VEP's `$val & (2**10 - 1)`.
 const SCORE_MASK: u16 = 0x03FF;
 
-/// Number of bits to shift right to get the category index: Perl's
+/// Number of bits to shift right to get the category index: Ensembl VEP's
 /// `$val >> (16 - $NUM_PRED_BITS)` with `NUM_PRED_BITS = 2`.
 const CATEGORY_SHIFT: u32 = 14;
 
@@ -61,6 +61,7 @@ const SCORE_DIVISOR: f64 = 1000.0;
 
 /// Prediction analysis type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AnalysisType {
     Sift,
     PolyPhenHumDiv,
@@ -71,6 +72,7 @@ pub enum AnalysisType {
 /// PolyPhen-2 categories, in the order of their 2-bit indexes
 /// (`ProteinFunctionPredictionMatrix.pm` `$PREDICTION_TO_VAL`, release/116).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum PredictionTerm {
     Tolerated,
     Deleterious,
@@ -109,7 +111,7 @@ impl PredictionTerm {
 
     /// The term as the output prints it: the database's wording with each
     /// whitespace run replaced by `_` and ` - ` collapsed to one `_`
-    /// (`OutputFactory.pm` `add_sift_polyphen`, release/116.2), so
+    /// (`OutputFactory.pm` `add_sift_polyphen`, release/116.3), so
     /// `tolerated - low confidence` prints `tolerated_low_confidence`.
     pub fn label(self) -> &'static str {
         match self {
@@ -226,7 +228,7 @@ pub fn decode_prediction(
 }
 
 /// Format a prediction as the `SIFT` and `PolyPhen` columns print it under the
-/// flag's value (`OutputFactory.pm` `add_sift_polyphen`, release/116.2): `p`
+/// flag's value (`OutputFactory.pm` `add_sift_polyphen`, release/116.3): `p`
 /// the term alone, `s` the score alone, `b` the term with the score in
 /// parentheses. A value outside the three is refused when the command line is
 /// read, so anything else here is rendered as `b`.
@@ -417,7 +419,7 @@ mod tests {
         assert_eq!(format_prediction(&pred, "s"), "0.95");
     }
 
-    /// Perl prints `$prob / 1000` as a bare number, so a whole score and a two-place
+    /// Ensembl VEP prints `$prob / 1000` as a bare number, so a whole score and a two-place
     /// score carry no padding zeros.
     #[test]
     fn test_format_prediction_matches_perl_number_stringification() {

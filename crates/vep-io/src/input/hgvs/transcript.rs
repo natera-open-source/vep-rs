@@ -524,83 +524,84 @@ pub(super) mod tests {
             db_id: None,
             start,
             end,
-            start_exon_index: 0,
-            end_exon_index: exons.len() - 1,
             seq: None,
         });
-        Transcript {
-            stable_id: stable_id.into(),
-            version: Some(3),
-            db_id: None,
-            gene_stable_id: "ENSG00000000001".into(),
-            gene_version: None,
-            chr: "T".into(),
-            start: exons.iter().map(|e| e.0).min().unwrap(),
-            end: exons.iter().map(|e| e.1).max().unwrap(),
-            strand,
-            biotype: if coding.is_some() {
-                "protein_coding".into()
-            } else {
-                "lncRNA".into()
-            },
-            source: "Ensembl".into(),
-            gene_symbol: Some("GENE1".into()),
-            gene_symbol_source: None,
-            gene_symbol_id: None,
-            hgnc_id: None,
-            gene_phenotype: None,
-            canonical: false,
-            mane_select: None,
-            mane_plus_clinical: None,
-            tsl: None,
-            appris: None,
-            ccds: None,
-            protein_id: None,
-            refseq: None,
-            swissprot: None,
-            trembl: None,
-            uniparc: None,
-            uniprot_isoform: None,
-            exons: exons
-                .iter()
-                .enumerate()
-                .map(|(i, &(start, end))| Exon {
-                    start,
-                    end,
-                    rank: i as u32 + 1,
-                    phase: -1,
-                    end_phase: -1,
-                })
-                .collect(),
-            introns: vec![],
-            exon_ids: None,
-            cdna_coding_start: coding.map(|c| c.0),
-            cdna_coding_end: coding.map(|c| c.1),
-            coding_region_start: None,
-            coding_region_end: None,
-            translation_start: None,
-            translation_end: None,
-            translation,
-            cdna_sequence: None,
-            protein_sequence: None,
-            flags: Arc::from([]),
-            gencode_basic: false,
-            gencode_primary: false,
-            attributes: vec![],
-            vefc: Some(TranscriptVEFC {
-                mapper: Some(TranscriptMapper {
-                    start_phase: 0,
-                    cdna_coding_start: coding.map_or(0, |c| c.0),
-                    cdna_coding_end: coding.map_or(0, |c| c.1),
-                    exon_coord_mapper: ExonCoordMapper::new(pairs),
-                }),
-                ..Default::default()
-            }),
-            source_cache: None,
-            bam_edit_status: None,
-            derived: Default::default(),
-            id_rank: 0,
-        }
+        let mut transcript = Transcript::default();
+        transcript.stable_id = stable_id.into();
+        transcript.version = Some(3);
+        transcript.db_id = None;
+        transcript.gene_stable_id = "ENSG00000000001".into();
+        transcript.gene_version = None;
+        transcript.chr = "T".into();
+        transcript.start = exons.iter().map(|e| e.0).min().unwrap();
+        transcript.end = exons.iter().map(|e| e.1).max().unwrap();
+        transcript.strand = strand;
+        transcript.biotype = if coding.is_some() {
+            "protein_coding".into()
+        } else {
+            "lncRNA".into()
+        };
+        transcript.source = "Ensembl".into();
+        transcript.gene_symbol = Some("GENE1".into());
+        transcript.gene_symbol_source = None;
+        transcript.gene_symbol_id = None;
+        transcript.hgnc_id = None;
+        transcript.gene_phenotype = None;
+        transcript.canonical = false;
+        transcript.mane_select = None;
+        transcript.mane_plus_clinical = None;
+        transcript.tsl = None;
+        transcript.appris = None;
+        transcript.ccds = None;
+        transcript.protein_id = None;
+        transcript.refseq = None;
+        transcript.swissprot = None;
+        transcript.trembl = None;
+        transcript.uniparc = None;
+        transcript.uniprot_isoform = None;
+        transcript.exons = exons
+            .iter()
+            .enumerate()
+            .map(|(i, &(start, end))| Exon {
+                start,
+                end,
+                rank: i as u32 + 1,
+                phase: -1,
+                end_phase: -1,
+            })
+            .collect();
+        transcript.introns = vec![];
+        transcript.exon_ids = None;
+        transcript.cdna_coding_start = coding.map(|c| c.0);
+        transcript.cdna_coding_end = coding.map(|c| c.1);
+        transcript.coding_region_start = None;
+        transcript.coding_region_end = None;
+        transcript.translation_start = None;
+        transcript.translation_end = None;
+        transcript.translation = translation;
+        transcript.cdna_sequence = None;
+        transcript.protein_sequence = None;
+        transcript.flags = Arc::from([]);
+        transcript.gencode_basic = false;
+        transcript.gencode_primary = false;
+        transcript.attributes = vec![];
+        transcript.vefc = Some({
+            let mut vefc = TranscriptVEFC::default();
+            vefc.mapper = Some(TranscriptMapper {
+                start_phase: 0,
+                cdna_coding_start: coding.map_or(0, |c| c.0),
+                cdna_coding_end: coding.map_or(0, |c| c.1),
+                exon_coord_mapper: ExonCoordMapper::new(pairs),
+            });
+            vefc
+        });
+        transcript.source_cache = None;
+        transcript.bam_edit_status = None;
+        transcript.circular_length = None;
+        transcript.region_files = None;
+        transcript.derived = Default::default();
+        transcript.id_rank = 0;
+        transcript
     }
 
     /// A forward coding transcript: cDNA 1-60 on 101-160, 61-120 on 201-260,

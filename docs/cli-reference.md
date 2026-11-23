@@ -16,26 +16,26 @@ Worked examples are on [Examples](examples.md); the output formats and their par
 
 ## Option groups
 
-Every flag has a row on one of these pages, grouped as `--help` groups them: its names, its value type, its default and its description. A default of `false` is a switch that is off; `none` marks a flag with no declared default, and where a value applies in its absence the description names it.
+Every flag has a row on one of these pages, grouped by the `--help` heading the command line declares for it: its names, its value type, its default and its description. `--help` itself leaves out the flags marked `(hidden)`. A default of `false` is a switch that is off; `none` marks a flag with no declared default, and where a value applies in its absence the description names it.
 
 | Group | Covers |
 | --- | --- |
 | [Input and output](cli/input-output.md) | The input file, its format and how it is read, the output file, its format and compression, the header lines, the warnings and skipped-variants files. |
-| [Cache, species and runtime](cli/cache-species-runtime.md) | The cache directory and its layout, the reference FASTA, species and assembly, the batch size, thread counts and distances. |
-| [Output control](cli/output-control.md) | The field flags, `--everything` among them, that choose which annotation columns appear. |
+| [Cache, species and runtime](cli/cache-species-runtime.md) | The cache directory and its layout, the reference FASTA, the 3' shifting of insertions and deletions, species and assembly, the batch size, thread counts and distances. |
+| [Output control](cli/output-control.md) | The field flags, `--everything` among them, that choose which annotation columns appear, the flags that report co-located known variants, and the two flags that drop rows. |
 | [Allele frequencies and co-located variants](cli/allele-frequencies.md) | Co-located known variants, population frequencies, the frequency filter, PubMed identifiers and gene-phenotype associations. |
-| [Filtering, picking and transcript sets](cli/filtering-picking.md) | The pick and flag-pick families, the allele columns, the transcript filter and the transcript-set flags. |
-| [Plugins](cli/plugins.md) | Loading built-in and dynamic-library plugins. |
-| [Statistics, verbosity and miscellaneous](cli/statistics-verbosity-misc.md) | The statistics flags, logging, and the flags that change how a record is handled. |
+| [Filtering, picking and transcript sets](cli/filtering-picking.md) | The pick and flag-pick families, the transcript filter, the allele and position columns, the transcript-set flags and the reference allele a row reads. |
+| [Plugins](cli/plugins.md) | Loading built-in and dynamic-library plugins, and the custom annotation sources with their bigWig and conservation-score shortcuts. |
+| [Statistics, verbosity and record handling](cli/statistics-verbosity-misc.md) | The statistics flags, logging, and the two flags that keep a record a run would otherwise skip. |
 | [Compatibility with Ensembl VEP](cli/compatibility.md) | The database flags, the flags refused or accepted without effect, where `Config.pm` is not followed, the configuration sources, the option spellings and the exit status. |
 
-A repeated single-value flag keeps its last value, as Getopt::Long does. `-o` accumulates and the last wins with a warning, as the `vep` script does (vep:32-33). A long option is also read in any case, as a unique prefix and after one dash, and from the `--config` file, `vep.ini` and the `VEP_*` variables ([configuration sources](cli/compatibility.md#configuration-sources)).
+A repeated single-value flag keeps its last value, as Getopt::Long does. `-o` accumulates and the last wins with a warning, as the `vep` script does (vep:32-33). A long option is also read in any case, after one dash and as a unique prefix, which is resolved against the flags of the release that reads it ([option spellings](cli/compatibility.md#option-spellings-configpm62)), and from the `--config` file, `vep.ini` and the `VEP_*` variables ([configuration sources](cli/compatibility.md#configuration-sources)).
 
 `--help` prints the flag list and exits 0, as does a command line with no argument at all (vep:29); `--version` prints `vep <version>` and exits 0.
 
 ## Option rules
 
-Ensembl VEP's option rules are applied as data, from `Config.pm:327-645` at release/116.2, in this order after parsing. A flag the error table refuses is refused first. Then the option sets switch on the flags they imply, in the order below, a set's value overwriting an explicit one (`apply_option_sets`, `Config.pm:816-884`). Then the checks of `check_config` (`Config.pm:944-985`) run: valid values, incompatible pairs, requirements, deprecations, each refused with Ensembl VEP's own message. A rule naming a flag vep-rs does not declare cannot fire and is listed so the table reads as Ensembl VEP's.
+Ensembl VEP's option rules are applied as data, from `Config.pm:327-645` at release/116.3, in this order after parsing. A flag the error table refuses is refused first. Then the option sets switch on the flags they imply, in the order below, a set's value overwriting an explicit one (`apply_option_sets`, `Config.pm:816-884`). Then the checks of `check_config` (`Config.pm:944-985`) run: valid values, incompatible pairs, requirements, deprecations, each refused with Ensembl VEP's own message. A rule naming a flag vep-rs does not declare cannot fire and is listed so the table reads as Ensembl VEP's.
 
 ### Option sets (`Config.pm:351-593`)
 
@@ -72,7 +72,9 @@ Ensembl VEP's option rules are applied as data, from `Config.pm:327-645` at rele
 | `--mane` | `--mane_select`, `--mane_plus_clinical` |
 | `--use_given_ref` | `--use_transcript_ref 0` |
 
-`--everything` therefore reaches `--hgvsc` and `--hgvsp` through `--hgvs`, `--mane_select` and `--mane_plus_clinical` through `--mane`, and `--check_existing` through the frequency flags; it does not switch on `--allele_number` or `--hgvsg`. `--regulatory` is switched on and emits RegulatoryFeature and MotifFeature rows, with every motif field, when the converted cache carries regulatory data; `CELL_TYPE` needs `--cell_type`, which is not in Ensembl VEP's set either.
+`--everything` therefore reaches `--hgvsc` and `--hgvsp` through `--hgvs`, `--mane_select` and `--mane_plus_clinical` through `--mane`, and `--check_existing` through the frequency flags; it does not switch on `--allele_number` or `--hgvsg`. `--regulatory` is switched on and emits RegulatoryFeature and MotifFeature rows when the cache carries regulatory features, with every motif field where it carries the binding matrices' counts; `CELL_TYPE` needs `--cell_type`, which is not in Ensembl VEP's set either.
+
+The `--phyloP` row is Ensembl VEP's own text, the short name `phlyoP%phyloP%way` included; vep-rs names that source `phyloP<N>way` ([The key of a `--phyloP` source](divergences/phylop-short-name.md)).
 
 ### Incompatible flags (`Config.pm:615-632`)
 

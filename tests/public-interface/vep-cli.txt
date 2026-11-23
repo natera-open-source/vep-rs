@@ -1,0 +1,518 @@
+# Written by scripts/check_public_interface.py --update, which reads the tree; the script's opening comment gives the format.
+library	vep_cli
+feature	bench	-
+feature	default	mimalloc parquet
+feature	mimalloc	dep:mimalloc
+feature	parquet	vep-io/parquet
+module	vep_cli	mod
+re-export	vep_cli::AnnotationError	pub use vep_cli::annotator::AnnotationError
+re-export	vep_cli::AnnotationResources	pub use vep_cli::annotator::AnnotationResources
+re-export	vep_cli::AnnotationStats	pub use vep_cli::annotator::AnnotationStats
+re-export	vep_cli::Annotator	pub use vep_cli::annotator::Annotator
+auto traits	vep_cli::ColocationRules	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_cli::ColocationRules	impl core::clone::Clone for vep_cli::ColocationRules
+implementation	vep_cli::ColocationRules	impl core::cmp::Eq for vep_cli::ColocationRules
+implementation	vep_cli::ColocationRules	impl core::cmp::PartialEq for vep_cli::ColocationRules
+implementation	vep_cli::ColocationRules	impl core::default::Default for vep_cli::ColocationRules
+implementation	vep_cli::ColocationRules	impl core::fmt::Debug for vep_cli::ColocationRules
+implementation	vep_cli::ColocationRules	impl core::marker::Copy for vep_cli::ColocationRules
+struct	vep_cli::ColocationRules	struct; named fields; #[non_exhaustive]
+field	vep_cli::ColocationRules::exclude_null_alleles	bool
+field	vep_cli::ColocationRules::failed	i64
+field	vep_cli::ColocationRules::no_check_alleles	bool
+re-export	vep_cli::Config	pub use vep_cli::config::Config
+re-export	vep_cli::Consequence	pub use vep_core::consequence::Consequence
+re-export	vep_cli::FilterConfig	pub use vep_cli::pick::FilterConfig
+re-export	vep_cli::Impact	pub use vep_core::consequence::Impact
+re-export	vep_cli::InputVariant	pub use vep_core::variant::InputVariant
+re-export	vep_cli::JsonOutputFormatter	pub use vep_io::output::json::JsonOutputFormatter
+re-export	vep_cli::LazyTranscriptIndexes	pub use vep_cli::transcript_index::LazyTranscriptIndexes
+re-export	vep_cli::MaterializedTranscriptIndexes	pub use vep_cli::transcript_index::MaterializedTranscriptIndexes
+auto traits	vep_cli::NearestType	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_cli::NearestType	enum; #[non_exhaustive]
+implementation	vep_cli::NearestType	impl core::clone::Clone for vep_cli::NearestType
+implementation	vep_cli::NearestType	impl core::cmp::Eq for vep_cli::NearestType
+implementation	vep_cli::NearestType	impl core::cmp::PartialEq for vep_cli::NearestType
+implementation	vep_cli::NearestType	impl core::fmt::Debug for vep_cli::NearestType
+implementation	vep_cli::NearestType	impl core::marker::Copy for vep_cli::NearestType
+implementation	vep_cli::NearestType	impl core::str::traits::FromStr for vep_cli::NearestType { type Err = alloc::string::String }
+variant	vep_cli::NearestType::Gene	no fields
+variant	vep_cli::NearestType::Symbol	no fields
+variant	vep_cli::NearestType::Transcript	no fields
+re-export	vep_cli::PickCriterion	pub use vep_cli::pick::PickCriterion
+re-export	vep_cli::PredictionConfig	pub use vep_cli::annotator::PredictionConfig
+re-export	vep_cli::RawRow	pub use vep_cli::annotator::RawRow
+re-export	vep_cli::RowFilters	pub use vep_cli::row_filter::RowFilters
+re-export	vep_cli::Runner	pub use vep_cli::runner::Runner
+auto traits	vep_cli::SourceType	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_cli::SourceType	enum; #[non_exhaustive]
+implementation	vep_cli::SourceType	impl core::clone::Clone for vep_cli::SourceType
+implementation	vep_cli::SourceType	impl core::cmp::Eq for vep_cli::SourceType
+implementation	vep_cli::SourceType	impl core::cmp::PartialEq for vep_cli::SourceType
+implementation	vep_cli::SourceType	impl core::fmt::Debug for vep_cli::SourceType
+implementation	vep_cli::SourceType	impl core::marker::Copy for vep_cli::SourceType
+variant	vep_cli::SourceType::Ensembl	no fields
+variant	vep_cli::SourceType::Merged	no fields
+variant	vep_cli::SourceType::RefSeq	no fields
+re-export	vep_cli::TranscriptConsequence	pub use vep_core::consequence::TranscriptConsequence
+re-export	vep_cli::TranscriptSet	pub use vep_cli::transcript_index::TranscriptSet
+auto traits	vep_cli::VariationSource	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+struct	vep_cli::VariationSource	struct; named fields, some private
+method	vep_cli::VariationSource::missing_warning	fn(json_cache_dir: &str) -> alloc::string::String
+method	vep_cli::VariationSource::open	fn(json_cache_dir: &std::path::Path, info: &vep_core::cache_info::CacheInfo, old_maf: bool, manifest: alloc::sync::Arc<vep_core::cache_manifest::CacheManifest>) -> anyhow::Result<core::option::Option<Self>>
+module	vep_cli::annotator	mod
+auto traits	vep_cli::annotator::AnnotationError	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_cli::annotator::AnnotationError	enum; #[non_exhaustive]
+implementation	vep_cli::annotator::AnnotationError	impl core::clone::Clone for vep_cli::annotator::AnnotationError
+implementation	vep_cli::annotator::AnnotationError	impl core::error::Error for vep_cli::annotator::AnnotationError
+implementation	vep_cli::annotator::AnnotationError	impl core::fmt::Debug for vep_cli::annotator::AnnotationError
+implementation	vep_cli::annotator::AnnotationError	impl core::fmt::Display for vep_cli::annotator::AnnotationError
+variant	vep_cli::annotator::AnnotationError::Annotation	1 positional field
+field	vep_cli::annotator::AnnotationError::Annotation::0	alloc::string::String
+variant	vep_cli::annotator::AnnotationError::InvalidInput	1 positional field
+field	vep_cli::annotator::AnnotationError::InvalidInput::0	alloc::string::String
+variant	vep_cli::annotator::AnnotationError::UnsupportedAssembly	1 positional field
+field	vep_cli::annotator::AnnotationError::UnsupportedAssembly::0	alloc::string::String
+auto traits	vep_cli::annotator::AnnotationResources	!RefUnwindSafe, Send, Sync, Unpin, !UnwindSafe
+struct	vep_cli::annotator::AnnotationResources	struct; named fields; #[non_exhaustive]
+field	vep_cli::annotator::AnnotationResources::colocation	vep_cli::ColocationRules
+field	vep_cli::annotator::AnnotationResources::custom_source_infos	alloc::vec::Vec<vep_io::output::fields::CustomSourceInfo>
+field	vep_cli::annotator::AnnotationResources::dylib_plugins	alloc::sync::Arc<vep_plugin::registry::PluginRegistry>
+field	vep_cli::annotator::AnnotationResources::effects_config	alloc::sync::Arc<vep_effects::consequences::EffectsConfig>
+field	vep_cli::annotator::AnnotationResources::nearest	core::option::Option<vep_cli::NearestType>
+method	vep_cli::annotator::AnnotationResources::new	fn(transcripts: alloc::sync::Arc<vep_cli::transcript_index::LazyTranscriptIndexes>, effects_config: alloc::sync::Arc<vep_effects::consequences::EffectsConfig>) -> Self
+field	vep_cli::annotator::AnnotationResources::prediction_config	vep_cli::annotator::PredictionConfig
+field	vep_cli::annotator::AnnotationResources::synonyms	alloc::sync::Arc<vep_core::synonyms::ChromosomeSynonyms>
+field	vep_cli::annotator::AnnotationResources::transcripts	alloc::sync::Arc<vep_cli::transcript_index::LazyTranscriptIndexes>
+field	vep_cli::annotator::AnnotationResources::variation_source	core::option::Option<alloc::sync::Arc<vep_cli::VariationSource>>
+auto traits	vep_cli::annotator::AnnotationStats	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_cli::annotator::AnnotationStats	impl core::clone::Clone for vep_cli::annotator::AnnotationStats
+implementation	vep_cli::annotator::AnnotationStats	impl core::default::Default for vep_cli::annotator::AnnotationStats
+implementation	vep_cli::annotator::AnnotationStats	impl core::fmt::Debug for vep_cli::annotator::AnnotationStats
+implementation	vep_cli::annotator::AnnotationStats	impl core::marker::Copy for vep_cli::annotator::AnnotationStats
+struct	vep_cli::annotator::AnnotationStats	struct; named fields; #[non_exhaustive]
+field	vep_cli::annotator::AnnotationStats::consequences_calculated	u64
+field	vep_cli::annotator::AnnotationStats::variants_processed	u64
+auto traits	vep_cli::annotator::Annotator	!RefUnwindSafe, Send, Sync, Unpin, !UnwindSafe
+implementation	vep_cli::annotator::Annotator	impl core::clone::Clone for vep_cli::annotator::Annotator
+struct	vep_cli::annotator::Annotator	struct; named fields, some private
+method	vep_cli::annotator::Annotator::annotate_batch	fn(&self, batch: &mut alloc::vec::Vec<vep_core::variant::InputVariant>) -> vep_cli::annotator::AnnotationStats
+method	vep_cli::annotator::Annotator::bam_edited	fn(&self) -> bool
+method	vep_cli::annotator::Annotator::custom_source_infos	fn(&self) -> alloc::vec::Vec<vep_io::output::fields::CustomSourceInfo>
+method	vep_cli::annotator::Annotator::from_config	fn(config: &vep_cli::config::Config) -> anyhow::Result<Self>
+method	vep_cli::annotator::Annotator::from_config_with_pool	fn(config: &vep_cli::config::Config, pool: alloc::sync::Arc<rayon_core::thread_pool::ThreadPool>) -> anyhow::Result<Self>
+method	vep_cli::annotator::Annotator::new	fn(resources: vep_cli::annotator::AnnotationResources, pool: alloc::sync::Arc<rayon_core::thread_pool::ThreadPool>) -> anyhow::Result<Self>
+method	vep_cli::annotator::Annotator::plugin_header_fields	fn(&self) -> alloc::vec::Vec<alloc::string::String>
+method	vep_cli::annotator::Annotator::try_annotate_batch	fn(&self, batch: &mut alloc::vec::Vec<vep_core::variant::InputVariant>) -> alloc::vec::Vec<core::result::Result<(), vep_cli::annotator::AnnotationError>>
+method	vep_cli::annotator::Annotator::try_annotate_rows	fn(&self, rows: &[vep_cli::annotator::RawRow]) -> alloc::vec::Vec<core::result::Result<vep_core::variant::InputVariant, vep_cli::annotator::AnnotationError>>
+method	vep_cli::annotator::Annotator::use_transcript_ref	fn(&self) -> bool
+auto traits	vep_cli::annotator::PredictionConfig	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_cli::annotator::PredictionConfig	impl core::clone::Clone for vep_cli::annotator::PredictionConfig
+implementation	vep_cli::annotator::PredictionConfig	impl core::default::Default for vep_cli::annotator::PredictionConfig
+implementation	vep_cli::annotator::PredictionConfig	impl core::fmt::Debug for vep_cli::annotator::PredictionConfig
+struct	vep_cli::annotator::PredictionConfig	struct; named fields; #[non_exhaustive]
+field	vep_cli::annotator::PredictionConfig::humdiv	bool
+field	vep_cli::annotator::PredictionConfig::polyphen	core::option::Option<alloc::string::String>
+field	vep_cli::annotator::PredictionConfig::sift	core::option::Option<alloc::string::String>
+auto traits	vep_cli::annotator::RawRow	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_cli::annotator::RawRow	impl core::clone::Clone for vep_cli::annotator::RawRow
+implementation	vep_cli::annotator::RawRow	impl core::fmt::Debug for vep_cli::annotator::RawRow
+struct	vep_cli::annotator::RawRow	struct; named fields
+field	vep_cli::annotator::RawRow::alt_allele	alloc::string::String
+field	vep_cli::annotator::RawRow::chrom	alloc::string::String
+field	vep_cli::annotator::RawRow::pos	u64
+field	vep_cli::annotator::RawRow::ref_allele	alloc::string::String
+function	vep_cli::annotator::build_effects_config	fn(distance: (u64, u64), reference_fasta: core::option::Option<alloc::sync::Arc<vep_fasta::IndexedFasta>>, shift_3prime: bool, hgvs: vep_effects::hgvs::HgvsOptions, compute_hgvs: bool, compute_exon_intron_numbers: bool, protein_version: bool) -> alloc::sync::Arc<vep_effects::consequences::EffectsConfig>
+function	vep_cli::annotator::build_thread_pool	fn(num_threads: usize) -> anyhow::Result<alloc::sync::Arc<rayon_core::thread_pool::ThreadPool>>
+function	vep_cli::annotator::load_transcript_indexes	fn(json_cache_path: &str, effects_config: &vep_effects::consequences::EffectsConfig, transcript_set: vep_cli::transcript_index::TranscriptSet) -> anyhow::Result<alloc::sync::Arc<vep_cli::transcript_index::LazyTranscriptIndexes>>
+function	vep_cli::annotator::row_to_input_variant	fn(row: &vep_cli::annotator::RawRow) -> core::result::Result<vep_core::variant::InputVariant, vep_cli::annotator::AnnotationError>
+function	vep_cli::annotator::validate_raw_row	fn(row: &vep_cli::annotator::RawRow) -> core::result::Result<(), vep_cli::annotator::AnnotationError>
+re-export	vep_cli::apply_to_batch	pub use vep_cli::pick::apply_to_batch
+re-export	vep_cli::apply_to_record	pub use vep_cli::pick::apply_to_record
+module	vep_cli::argv	mod
+function	vep_cli::argv::prepass	fn<I>(argv: alloc::vec::Vec<std::ffi::os_str::OsString>, env: I) -> core::result::Result<alloc::vec::Vec<std::ffi::os_str::OsString>, vep_cli::config::CliError> where I: core::iter::traits::collect::IntoIterator<Item = (std::ffi::os_str::OsString, std::ffi::os_str::OsString)>
+re-export	vep_cli::build_thread_pool	pub use vep_cli::annotator::build_thread_pool
+module	vep_cli::config	mod
+auto traits	vep_cli::config::CliError	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_cli::config::CliError	impl core::clone::Clone for vep_cli::config::CliError
+implementation	vep_cli::config::CliError	impl core::cmp::Eq for vep_cli::config::CliError
+implementation	vep_cli::config::CliError	impl core::cmp::PartialEq for vep_cli::config::CliError
+implementation	vep_cli::config::CliError	impl core::error::Error for vep_cli::config::CliError
+implementation	vep_cli::config::CliError	impl core::fmt::Debug for vep_cli::config::CliError
+implementation	vep_cli::config::CliError	impl core::fmt::Display for vep_cli::config::CliError
+struct	vep_cli::config::CliError	struct; named fields; #[non_exhaustive]
+field	vep_cli::config::CliError::component	&'static str
+field	vep_cli::config::CliError::message	alloc::string::String
+auto traits	vep_cli::config::Config	!RefUnwindSafe, Send, Sync, Unpin, !UnwindSafe
+implementation	vep_cli::config::Config	impl core::clone::Clone for vep_cli::config::Config
+implementation	vep_cli::config::Config	impl core::default::Default for vep_cli::config::Config
+implementation	vep_cli::config::Config	impl core::fmt::Debug for vep_cli::config::Config
+struct	vep_cli::config::Config	struct; named fields; #[non_exhaustive]
+field	vep_cli::config::Config::af	bool
+field	vep_cli::config::Config::af_1kg	bool
+field	vep_cli::config::Config::af_gnomad	bool
+field	vep_cli::config::Config::af_gnomade	bool
+field	vep_cli::config::Config::af_gnomadg	bool
+field	vep_cli::config::Config::all_refseq	bool
+field	vep_cli::config::Config::allele_number	bool
+field	vep_cli::config::Config::allow_non_variant	bool
+field	vep_cli::config::Config::ambiguity	bool
+field	vep_cli::config::Config::appris	bool
+field	vep_cli::config::Config::assembly	core::option::Option<alloc::string::String>
+field	vep_cli::config::Config::bam_edited	bool
+field	vep_cli::config::Config::biotype	bool
+field	vep_cli::config::Config::buffer_size	usize
+field	vep_cli::config::Config::cache	bool
+field	vep_cli::config::Config::cache_version	u32
+field	vep_cli::config::Config::canonical	bool
+field	vep_cli::config::Config::ccds	bool
+field	vep_cli::config::Config::cell_type	core::option::Option<alloc::string::String>
+field	vep_cli::config::Config::check_existing	bool
+field	vep_cli::config::Config::check_frequency	bool
+field	vep_cli::config::Config::check_ref	bool
+field	vep_cli::config::Config::check_svs	core::option::Option<alloc::string::String>
+field	vep_cli::config::Config::chr	core::option::Option<alloc::vec::Vec<alloc::string::String>>
+field	vep_cli::config::Config::clin_sig_allele	bool
+field	vep_cli::config::Config::clinvar_somatic_classification	bool
+field	vep_cli::config::Config::coding_only	bool
+field	vep_cli::config::Config::command_line	alloc::vec::Vec<alloc::string::String>
+field	vep_cli::config::Config::compress_output	core::option::Option<alloc::string::String>
+field	vep_cli::config::Config::compression_threads	usize
+field	vep_cli::config::Config::custom	alloc::vec::Vec<alloc::string::String>
+field	vep_cli::config::Config::custom_multi_allelic	bool
+field	vep_cli::config::Config::custom_suppress_filter	bool
+field	vep_cli::config::Config::decompression_threads	vep_cli::config::DecompressionThreads
+field	vep_cli::config::Config::delimiter	vep_io::input::Delimiter
+field	vep_cli::config::Config::dir	alloc::string::String
+field	vep_cli::config::Config::dir_cache	alloc::string::String
+field	vep_cli::config::Config::dir_plugins	vep_cli::config::PluginDirs
+field	vep_cli::config::Config::distance	(u64, u64)
+field	vep_cli::config::Config::domains	bool
+field	vep_cli::config::Config::dont_skip	bool
+field	vep_cli::config::Config::everything	bool
+field	vep_cli::config::Config::exclude_null_alleles	bool
+field	vep_cli::config::Config::extended_promoters	bool
+field	vep_cli::config::Config::failed	i64
+field	vep_cli::config::Config::fasta	core::option::Option<alloc::string::String>
+field	vep_cli::config::Config::fasta_dir	core::option::Option<alloc::string::String>
+field	vep_cli::config::Config::fields	core::option::Option<alloc::vec::Vec<alloc::string::String>>
+field	vep_cli::config::Config::flag_gencode_primary	bool
+field	vep_cli::config::Config::flag_pick	bool
+field	vep_cli::config::Config::flag_pick_allele	bool
+field	vep_cli::config::Config::flag_pick_allele_gene	bool
+field	vep_cli::config::Config::force_overwrite	bool
+field	vep_cli::config::Config::fork	vep_cli::config::Fork
+field	vep_cli::config::Config::format	alloc::string::String
+field	vep_cli::config::Config::freq_filter	alloc::string::String
+field	vep_cli::config::Config::freq_freq	f64
+field	vep_cli::config::Config::freq_gt_lt	alloc::string::String
+field	vep_cli::config::Config::freq_pop	alloc::string::String
+method	vep_cli::config::Config::from_argv	fn<I, T>(argv: I) -> core::result::Result<Self, vep_cli::config::ParseFailure> where I: core::iter::traits::collect::IntoIterator<Item = T>, T: core::convert::Into<std::ffi::os_str::OsString> + core::clone::Clone
+field	vep_cli::config::Config::ga4gh_vrs	bool
+field	vep_cli::config::Config::gencode_basic	bool
+field	vep_cli::config::Config::gencode_primary	bool
+field	vep_cli::config::Config::gene_phenotype	bool
+field	vep_cli::config::Config::gene_version	bool
+field	vep_cli::config::Config::hgvs	bool
+field	vep_cli::config::Config::hgvsg	bool
+field	vep_cli::config::Config::hgvsg_use_accession	bool
+field	vep_cli::config::Config::hgvsp_use_prediction	bool
+field	vep_cli::config::Config::humdiv	bool
+field	vep_cli::config::Config::individual	core::option::Option<alloc::vec::Vec<alloc::string::String>>
+field	vep_cli::config::Config::individual_zyg	core::option::Option<alloc::vec::Vec<alloc::string::String>>
+field	vep_cli::config::Config::input_data	core::option::Option<alloc::string::String>
+field	vep_cli::config::Config::input_file	alloc::string::String
+field	vep_cli::config::Config::json_cache	core::option::Option<alloc::string::String>
+field	vep_cli::config::Config::keep_csq	bool
+field	vep_cli::config::Config::lookup_ref	bool
+field	vep_cli::config::Config::mane	bool
+field	vep_cli::config::Config::mane_plus_clinical	bool
+field	vep_cli::config::Config::mane_select	bool
+field	vep_cli::config::Config::mask_header_cache_path	bool
+field	vep_cli::config::Config::max_af	bool
+field	vep_cli::config::Config::max_sv_size	core::option::Option<u64>
+field	vep_cli::config::Config::merged	bool
+field	vep_cli::config::Config::minimal	bool
+field	vep_cli::config::Config::mirna	bool
+field	vep_cli::config::Config::most_severe	bool
+field	vep_cli::config::Config::nearest	core::option::Option<vep_cli::NearestType>
+field	vep_cli::config::Config::no_check_alleles	bool
+field	vep_cli::config::Config::no_check_variants_order	bool
+field	vep_cli::config::Config::no_escape	bool
+field	vep_cli::config::Config::no_fasta	bool
+field	vep_cli::config::Config::no_headers	bool
+field	vep_cli::config::Config::no_intergenic	bool
+field	vep_cli::config::Config::no_progress	bool
+field	vep_cli::config::Config::no_stats	bool
+field	vep_cli::config::Config::notices	alloc::vec::Vec<&'static str>
+field	vep_cli::config::Config::numbers	bool
+field	vep_cli::config::Config::offline	bool
+field	vep_cli::config::Config::old_maf	bool
+field	vep_cli::config::Config::output_buffer_size	usize
+field	vep_cli::config::Config::output_file	alloc::string::String
+field	vep_cli::config::Config::output_file_as_spelled	alloc::string::String
+field	vep_cli::config::Config::output_format	alloc::string::String
+field	vep_cli::config::Config::overlaps	bool
+field	vep_cli::config::Config::parquet_partition	core::option::Option<alloc::string::String>
+field	vep_cli::config::Config::parse_threads	core::option::Option<usize>
+field	vep_cli::config::Config::per_gene	bool
+field	vep_cli::config::Config::pick	bool
+field	vep_cli::config::Config::pick_allele	bool
+field	vep_cli::config::Config::pick_allele_gene	bool
+field	vep_cli::config::Config::pick_order	core::option::Option<alloc::vec::Vec<alloc::string::String>>
+field	vep_cli::config::Config::pipeline_depth	usize
+field	vep_cli::config::Config::pipeline_mode	vep_cli::config::PipelineMode
+field	vep_cli::config::Config::plugin	alloc::vec::Vec<alloc::string::String>
+field	vep_cli::config::Config::polyphen	core::option::Option<alloc::string::String>
+field	vep_cli::config::Config::prewarm_ahead	vep_cli::config::PrewarmAhead
+field	vep_cli::config::Config::process_ref_homs	bool
+field	vep_cli::config::Config::protein	bool
+field	vep_cli::config::Config::protein_version	bool
+field	vep_cli::config::Config::pubmed	bool
+field	vep_cli::config::Config::quiet	bool
+field	vep_cli::config::Config::reader_core	vep_cli::config::ReaderCore
+field	vep_cli::config::Config::refseq	bool
+field	vep_cli::config::Config::regulatory	bool
+field	vep_cli::config::Config::regulatory_gff	core::option::Option<vep_cli::config::RegulatoryGff>
+field	vep_cli::config::Config::remove_hgvsp_version	bool
+field	vep_cli::config::Config::render_task_records	core::option::Option<usize>
+field	vep_cli::config::Config::resolved_config	bool
+field	vep_cli::config::Config::safe	bool
+field	vep_cli::config::Config::shift_3prime	bool
+field	vep_cli::config::Config::shift_genomic	bool
+field	vep_cli::config::Config::shift_hgvs	bool
+field	vep_cli::config::Config::shift_length	bool
+field	vep_cli::config::Config::show_cache_info	bool
+field	vep_cli::config::Config::show_ref_allele	bool
+field	vep_cli::config::Config::sift	core::option::Option<alloc::string::String>
+field	vep_cli::config::Config::skipped_variants_file	core::option::Option<alloc::string::String>
+field	vep_cli::config::Config::spdi	bool
+field	vep_cli::config::Config::spdi_on_the_cache_name	bool
+field	vep_cli::config::Config::species	alloc::string::String
+field	vep_cli::config::Config::stats_file	core::option::Option<alloc::string::String>
+field	vep_cli::config::Config::stats_html	bool
+field	vep_cli::config::Config::stats_text	bool
+field	vep_cli::config::Config::summary	bool
+field	vep_cli::config::Config::symbol	bool
+field	vep_cli::config::Config::synonyms	core::option::Option<alloc::string::String>
+field	vep_cli::config::Config::terms	vep_core::terms::Vocabulary
+field	vep_cli::config::Config::total_length	bool
+field	vep_cli::config::Config::transcript_filter	alloc::vec::Vec<alloc::string::String>
+field	vep_cli::config::Config::transcript_version	bool
+field	vep_cli::config::Config::tsl	bool
+field	vep_cli::config::Config::uniprot	bool
+field	vep_cli::config::Config::uploaded_allele	bool
+field	vep_cli::config::Config::use_given_ref	bool
+field	vep_cli::config::Config::use_transcript_ref	bool
+field	vep_cli::config::Config::var_synonyms	bool
+field	vep_cli::config::Config::variant_class	bool
+field	vep_cli::config::Config::vcf_info_field	alloc::string::String
+field	vep_cli::config::Config::verbose	bool
+field	vep_cli::config::Config::warning_file	alloc::string::String
+field	vep_cli::config::Config::writer_strategy	vep_cli::config::WriterStrategy
+field	vep_cli::config::Config::xref_refseq	bool
+auto traits	vep_cli::config::DecompressionThreads	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_cli::config::DecompressionThreads	enum; #[non_exhaustive]
+implementation	vep_cli::config::DecompressionThreads	impl core::clone::Clone for vep_cli::config::DecompressionThreads
+implementation	vep_cli::config::DecompressionThreads	impl core::cmp::Eq for vep_cli::config::DecompressionThreads
+implementation	vep_cli::config::DecompressionThreads	impl core::cmp::PartialEq for vep_cli::config::DecompressionThreads
+implementation	vep_cli::config::DecompressionThreads	impl core::default::Default for vep_cli::config::DecompressionThreads
+implementation	vep_cli::config::DecompressionThreads	impl core::fmt::Debug for vep_cli::config::DecompressionThreads
+implementation	vep_cli::config::DecompressionThreads	impl core::fmt::Display for vep_cli::config::DecompressionThreads
+implementation	vep_cli::config::DecompressionThreads	impl core::marker::Copy for vep_cli::config::DecompressionThreads
+implementation	vep_cli::config::DecompressionThreads	impl core::str::traits::FromStr for vep_cli::config::DecompressionThreads { type Err = alloc::string::String }
+variant	vep_cli::config::DecompressionThreads::Auto	no fields
+variant	vep_cli::config::DecompressionThreads::Fixed	1 positional field
+field	vep_cli::config::DecompressionThreads::Fixed::0	usize
+variant	vep_cli::config::DecompressionThreads::HostCapped	no fields
+auto traits	vep_cli::config::Fork	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_cli::config::Fork	enum; #[non_exhaustive]
+implementation	vep_cli::config::Fork	impl core::clone::Clone for vep_cli::config::Fork
+implementation	vep_cli::config::Fork	impl core::cmp::Eq for vep_cli::config::Fork
+implementation	vep_cli::config::Fork	impl core::cmp::PartialEq for vep_cli::config::Fork
+implementation	vep_cli::config::Fork	impl core::default::Default for vep_cli::config::Fork
+implementation	vep_cli::config::Fork	impl core::fmt::Debug for vep_cli::config::Fork
+implementation	vep_cli::config::Fork	impl core::marker::Copy for vep_cli::config::Fork
+variant	vep_cli::config::Fork::Auto	no fields
+variant	vep_cli::config::Fork::Fixed	1 positional field
+field	vep_cli::config::Fork::Fixed::0	usize
+auto traits	vep_cli::config::ParseFailure	!RefUnwindSafe, Send, Sync, Unpin, !UnwindSafe
+enum	vep_cli::config::ParseFailure	enum; #[non_exhaustive]
+implementation	vep_cli::config::ParseFailure	impl core::error::Error for vep_cli::config::ParseFailure
+implementation	vep_cli::config::ParseFailure	impl core::fmt::Debug for vep_cli::config::ParseFailure
+implementation	vep_cli::config::ParseFailure	impl core::fmt::Display for vep_cli::config::ParseFailure
+variant	vep_cli::config::ParseFailure::Refused	1 positional field
+field	vep_cli::config::ParseFailure::Refused::0	vep_cli::config::CliError
+variant	vep_cli::config::ParseFailure::Usage	1 positional field
+field	vep_cli::config::ParseFailure::Usage::0	vep_cli::config::UsageError
+auto traits	vep_cli::config::PipelineMode	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_cli::config::PipelineMode	enum; #[non_exhaustive]
+implementation	vep_cli::config::PipelineMode	impl core::clone::Clone for vep_cli::config::PipelineMode
+implementation	vep_cli::config::PipelineMode	impl core::cmp::Eq for vep_cli::config::PipelineMode
+implementation	vep_cli::config::PipelineMode	impl core::cmp::PartialEq for vep_cli::config::PipelineMode
+implementation	vep_cli::config::PipelineMode	impl core::default::Default for vep_cli::config::PipelineMode
+implementation	vep_cli::config::PipelineMode	impl core::fmt::Debug for vep_cli::config::PipelineMode
+implementation	vep_cli::config::PipelineMode	impl core::marker::Copy for vep_cli::config::PipelineMode
+implementation	vep_cli::config::PipelineMode	impl core::str::traits::FromStr for vep_cli::config::PipelineMode { type Err = alloc::string::String }
+variant	vep_cli::config::PipelineMode::Batched	no fields
+variant	vep_cli::config::PipelineMode::Streaming	no fields
+auto traits	vep_cli::config::PluginDirs	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_cli::config::PluginDirs	impl core::clone::Clone for vep_cli::config::PluginDirs
+implementation	vep_cli::config::PluginDirs	impl core::cmp::Eq for vep_cli::config::PluginDirs
+implementation	vep_cli::config::PluginDirs	impl core::cmp::PartialEq for vep_cli::config::PluginDirs
+implementation	vep_cli::config::PluginDirs	impl core::default::Default for vep_cli::config::PluginDirs
+implementation	vep_cli::config::PluginDirs	impl core::fmt::Debug for vep_cli::config::PluginDirs
+struct	vep_cli::config::PluginDirs	struct; named fields; #[non_exhaustive]
+field	vep_cli::config::PluginDirs::dirs	alloc::vec::Vec<alloc::string::String>
+field	vep_cli::config::PluginDirs::not_found	alloc::vec::Vec<alloc::string::String>
+field	vep_cli::config::PluginDirs::pattern	alloc::string::String
+auto traits	vep_cli::config::PrewarmAhead	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_cli::config::PrewarmAhead	enum; #[non_exhaustive]
+implementation	vep_cli::config::PrewarmAhead	impl core::clone::Clone for vep_cli::config::PrewarmAhead
+implementation	vep_cli::config::PrewarmAhead	impl core::cmp::Eq for vep_cli::config::PrewarmAhead
+implementation	vep_cli::config::PrewarmAhead	impl core::cmp::PartialEq for vep_cli::config::PrewarmAhead
+implementation	vep_cli::config::PrewarmAhead	impl core::default::Default for vep_cli::config::PrewarmAhead
+implementation	vep_cli::config::PrewarmAhead	impl core::fmt::Debug for vep_cli::config::PrewarmAhead
+implementation	vep_cli::config::PrewarmAhead	impl core::fmt::Display for vep_cli::config::PrewarmAhead
+implementation	vep_cli::config::PrewarmAhead	impl core::marker::Copy for vep_cli::config::PrewarmAhead
+implementation	vep_cli::config::PrewarmAhead	impl core::str::traits::FromStr for vep_cli::config::PrewarmAhead { type Err = alloc::string::String }
+variant	vep_cli::config::PrewarmAhead::All	no fields
+variant	vep_cli::config::PrewarmAhead::Chromosomes	1 positional field
+field	vep_cli::config::PrewarmAhead::Chromosomes::0	usize
+auto traits	vep_cli::config::ReaderCore	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_cli::config::ReaderCore	enum; #[non_exhaustive]
+implementation	vep_cli::config::ReaderCore	impl core::clone::Clone for vep_cli::config::ReaderCore
+implementation	vep_cli::config::ReaderCore	impl core::cmp::Eq for vep_cli::config::ReaderCore
+implementation	vep_cli::config::ReaderCore	impl core::cmp::PartialEq for vep_cli::config::ReaderCore
+implementation	vep_cli::config::ReaderCore	impl core::default::Default for vep_cli::config::ReaderCore
+implementation	vep_cli::config::ReaderCore	impl core::fmt::Debug for vep_cli::config::ReaderCore
+implementation	vep_cli::config::ReaderCore	impl core::fmt::Display for vep_cli::config::ReaderCore
+implementation	vep_cli::config::ReaderCore	impl core::marker::Copy for vep_cli::config::ReaderCore
+implementation	vep_cli::config::ReaderCore	impl core::str::traits::FromStr for vep_cli::config::ReaderCore { type Err = alloc::string::String }
+variant	vep_cli::config::ReaderCore::Auto	no fields
+variant	vep_cli::config::ReaderCore::Fixed	1 positional field
+field	vep_cli::config::ReaderCore::Fixed::0	usize
+variant	vep_cli::config::ReaderCore::None	no fields
+auto traits	vep_cli::config::RegulatoryGff	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_cli::config::RegulatoryGff	impl core::clone::Clone for vep_cli::config::RegulatoryGff
+implementation	vep_cli::config::RegulatoryGff	impl core::cmp::Eq for vep_cli::config::RegulatoryGff
+implementation	vep_cli::config::RegulatoryGff	impl core::cmp::PartialEq for vep_cli::config::RegulatoryGff
+implementation	vep_cli::config::RegulatoryGff	impl core::default::Default for vep_cli::config::RegulatoryGff
+implementation	vep_cli::config::RegulatoryGff	impl core::fmt::Debug for vep_cli::config::RegulatoryGff
+struct	vep_cli::config::RegulatoryGff	struct; named fields; #[non_exhaustive]
+field	vep_cli::config::RegulatoryGff::emars	core::option::Option<alloc::string::String>
+field	vep_cli::config::RegulatoryGff::file	core::option::Option<alloc::string::String>
+field	vep_cli::config::RegulatoryGff::motifs	core::option::Option<alloc::string::String>
+auto traits	vep_cli::config::UsageError	!RefUnwindSafe, Send, Sync, Unpin, !UnwindSafe
+implementation	vep_cli::config::UsageError	impl core::error::Error for vep_cli::config::UsageError
+implementation	vep_cli::config::UsageError	impl core::fmt::Debug for vep_cli::config::UsageError
+implementation	vep_cli::config::UsageError	impl core::fmt::Display for vep_cli::config::UsageError
+struct	vep_cli::config::UsageError	struct; 1 positional field, 1 private
+method	vep_cli::config::UsageError::exit	fn(&self) -> never
+method	vep_cli::config::UsageError::exit_code	fn(&self) -> i32
+method	vep_cli::config::UsageError::is_help_or_version	fn(&self) -> bool
+auto traits	vep_cli::config::WriterStrategy	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_cli::config::WriterStrategy	enum; #[non_exhaustive]
+implementation	vep_cli::config::WriterStrategy	impl core::clone::Clone for vep_cli::config::WriterStrategy
+implementation	vep_cli::config::WriterStrategy	impl core::cmp::Eq for vep_cli::config::WriterStrategy
+implementation	vep_cli::config::WriterStrategy	impl core::cmp::PartialEq for vep_cli::config::WriterStrategy
+implementation	vep_cli::config::WriterStrategy	impl core::default::Default for vep_cli::config::WriterStrategy
+implementation	vep_cli::config::WriterStrategy	impl core::fmt::Debug for vep_cli::config::WriterStrategy
+implementation	vep_cli::config::WriterStrategy	impl core::marker::Copy for vep_cli::config::WriterStrategy
+implementation	vep_cli::config::WriterStrategy	impl core::str::traits::FromStr for vep_cli::config::WriterStrategy { type Err = alloc::string::String }
+variant	vep_cli::config::WriterStrategy::Buffered	no fields
+variant	vep_cli::config::WriterStrategy::Direct	no fields
+variant	vep_cli::config::WriterStrategy::Vectored	no fields
+function	vep_cli::config::resolve_fork	fn(raw: usize) -> usize
+re-export	vep_cli::parse_vcf_line	pub use vep_cli::vcf_parser::parse_vcf_line
+re-export	vep_cli::parse_vcf_line_with	pub use vep_cli::vcf_parser::parse_vcf_line_with
+module	vep_cli::pick	mod
+auto traits	vep_cli::pick::FilterConfig	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_cli::pick::FilterConfig	impl core::clone::Clone for vep_cli::pick::FilterConfig
+implementation	vep_cli::pick::FilterConfig	impl core::default::Default for vep_cli::pick::FilterConfig
+implementation	vep_cli::pick::FilterConfig	impl core::fmt::Debug for vep_cli::pick::FilterConfig
+struct	vep_cli::pick::FilterConfig	struct; named fields; #[non_exhaustive]
+method	vep_cli::pick::FilterConfig::any_active	fn(&self) -> bool
+field	vep_cli::pick::FilterConfig::flag_pick	bool
+field	vep_cli::pick::FilterConfig::flag_pick_allele	bool
+field	vep_cli::pick::FilterConfig::flag_pick_allele_gene	bool
+field	vep_cli::pick::FilterConfig::most_severe	bool
+field	vep_cli::pick::FilterConfig::per_gene	bool
+field	vep_cli::pick::FilterConfig::pick	bool
+field	vep_cli::pick::FilterConfig::pick_allele	bool
+field	vep_cli::pick::FilterConfig::pick_allele_gene	bool
+field	vep_cli::pick::FilterConfig::pick_order	alloc::vec::Vec<vep_cli::pick::PickCriterion>
+field	vep_cli::pick::FilterConfig::row_filters	vep_cli::row_filter::RowFilters
+field	vep_cli::pick::FilterConfig::summary	bool
+auto traits	vep_cli::pick::PickCriterion	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+enum	vep_cli::pick::PickCriterion	enum; #[non_exhaustive]
+implementation	vep_cli::pick::PickCriterion	impl core::clone::Clone for vep_cli::pick::PickCriterion
+implementation	vep_cli::pick::PickCriterion	impl core::cmp::Eq for vep_cli::pick::PickCriterion
+implementation	vep_cli::pick::PickCriterion	impl core::cmp::PartialEq for vep_cli::pick::PickCriterion
+implementation	vep_cli::pick::PickCriterion	impl core::fmt::Debug for vep_cli::pick::PickCriterion
+implementation	vep_cli::pick::PickCriterion	impl core::marker::Copy for vep_cli::pick::PickCriterion
+variant	vep_cli::pick::PickCriterion::Appris	no fields
+variant	vep_cli::pick::PickCriterion::Biotype	no fields
+variant	vep_cli::pick::PickCriterion::Canonical	no fields
+variant	vep_cli::pick::PickCriterion::Ccds	no fields
+variant	vep_cli::pick::PickCriterion::Ensembl	no fields
+variant	vep_cli::pick::PickCriterion::Length	no fields
+variant	vep_cli::pick::PickCriterion::ManePlusClinical	no fields
+variant	vep_cli::pick::PickCriterion::ManeSelect	no fields
+variant	vep_cli::pick::PickCriterion::Rank	no fields
+variant	vep_cli::pick::PickCriterion::RefSeq	no fields
+variant	vep_cli::pick::PickCriterion::Tsl	no fields
+function	vep_cli::pick::apply_to_batch	fn(batch: &mut [vep_core::variant::InputVariant], config: &vep_cli::pick::FilterConfig)
+function	vep_cli::pick::apply_to_record	fn(record: &mut [vep_core::variant::InputVariant], config: &vep_cli::pick::FilterConfig)
+re-export	vep_cli::prepass	pub use vep_cli::argv::prepass
+re-export	vep_cli::resolve_fork	pub use vep_cli::config::resolve_fork
+module	vep_cli::row_filter	mod
+auto traits	vep_cli::row_filter::RowFilters	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_cli::row_filter::RowFilters	impl core::clone::Clone for vep_cli::row_filter::RowFilters
+implementation	vep_cli::row_filter::RowFilters	impl core::cmp::Eq for vep_cli::row_filter::RowFilters
+implementation	vep_cli::row_filter::RowFilters	impl core::cmp::PartialEq for vep_cli::row_filter::RowFilters
+implementation	vep_cli::row_filter::RowFilters	impl core::default::Default for vep_cli::row_filter::RowFilters
+implementation	vep_cli::row_filter::RowFilters	impl core::fmt::Debug for vep_cli::row_filter::RowFilters
+implementation	vep_cli::row_filter::RowFilters	impl core::marker::Copy for vep_cli::row_filter::RowFilters
+struct	vep_cli::row_filter::RowFilters	struct; named fields; #[non_exhaustive]
+field	vep_cli::row_filter::RowFilters::cds_of_own_span	bool
+field	vep_cli::row_filter::RowFilters::coding_only	bool
+field	vep_cli::row_filter::RowFilters::no_intergenic	bool
+re-export	vep_cli::row_to_input_variant	pub use vep_cli::annotator::row_to_input_variant
+module	vep_cli::runner	mod
+auto traits	vep_cli::runner::Runner	!RefUnwindSafe, Send, Sync, Unpin, !UnwindSafe
+struct	vep_cli::runner::Runner	struct; named fields, some private
+method	vep_cli::runner::Runner::new	fn(config: vep_cli::config::Config) -> anyhow::Result<Self>
+method	vep_cli::runner::Runner::run	fn(&self) -> anyhow::Result<()>
+module	vep_cli::transcript_index	mod
+auto traits	vep_cli::transcript_index::LazyTranscriptIndexes	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+struct	vep_cli::transcript_index::LazyTranscriptIndexes	struct; named fields, some private
+method	vep_cli::transcript_index::LazyTranscriptIndexes::from_loaded	fn(raw: std::collections::hash::map::HashMap<alloc::string::String, alloc::vec::Vec<vep_core::transcript::Transcript>>, upstream_distance: u64, downstream_distance: u64) -> Self
+method	vep_cli::transcript_index::LazyTranscriptIndexes::with_reference	fn(self, reference: core::option::Option<alloc::sync::Arc<vep_fasta::IndexedFasta>>) -> Self
+auto traits	vep_cli::transcript_index::MaterializedTranscriptIndexes	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+struct	vep_cli::transcript_index::MaterializedTranscriptIndexes	struct; 1 positional field, 1 private
+auto traits	vep_cli::transcript_index::TranscriptSet	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_cli::transcript_index::TranscriptSet	impl core::clone::Clone for vep_cli::transcript_index::TranscriptSet
+implementation	vep_cli::transcript_index::TranscriptSet	impl core::cmp::Eq for vep_cli::transcript_index::TranscriptSet
+implementation	vep_cli::transcript_index::TranscriptSet	impl core::cmp::PartialEq for vep_cli::transcript_index::TranscriptSet
+implementation	vep_cli::transcript_index::TranscriptSet	impl core::default::Default for vep_cli::transcript_index::TranscriptSet
+implementation	vep_cli::transcript_index::TranscriptSet	impl core::fmt::Debug for vep_cli::transcript_index::TranscriptSet
+implementation	vep_cli::transcript_index::TranscriptSet	impl core::marker::Copy for vep_cli::transcript_index::TranscriptSet
+struct	vep_cli::transcript_index::TranscriptSet	struct; named fields; #[non_exhaustive]
+field	vep_cli::transcript_index::TranscriptSet::all_refseq	bool
+field	vep_cli::transcript_index::TranscriptSet::gencode_basic	bool
+field	vep_cli::transcript_index::TranscriptSet::gencode_primary	bool
+field	vep_cli::transcript_index::TranscriptSet::source_type	vep_cli::SourceType
+re-export	vep_cli::validate_raw_row	pub use vep_cli::annotator::validate_raw_row
+module	vep_cli::vcf_parser	mod
+auto traits	vep_cli::vcf_parser::VcfParse	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+implementation	vep_cli::vcf_parser::VcfParse	impl<'a> core::clone::Clone for vep_cli::vcf_parser::VcfParse<'a>
+implementation	vep_cli::vcf_parser::VcfParse	impl<'a> core::marker::Copy for vep_cli::vcf_parser::VcfParse<'a>
+struct	vep_cli::vcf_parser::VcfParse	struct<'a>; named fields; #[non_exhaustive]
+field	vep_cli::vcf_parser::VcfParse::capture_raw_input	bool
+method	vep_cli::vcf_parser::VcfParse::default_run	fn(capture_raw_input: bool) -> Self; in impl vep_cli::vcf_parser::VcfParse<'_>
+field	vep_cli::vcf_parser::VcfParse::fasta	core::option::Option<&'a vep_fasta::IndexedFasta>
+field	vep_cli::vcf_parser::VcfParse::max_sv_size	core::option::Option<u64>
+field	vep_cli::vcf_parser::VcfParse::minimal	bool
+function	vep_cli::vcf_parser::parse_vcf_line	fn(line: &str, capture_raw_input: bool) -> anyhow::Result<alloc::vec::Vec<vep_core::variant::InputVariant>>
+function	vep_cli::vcf_parser::parse_vcf_line_with	fn(line: &str, parse: &vep_cli::vcf_parser::VcfParse<'_>) -> anyhow::Result<alloc::vec::Vec<vep_core::variant::InputVariant>>

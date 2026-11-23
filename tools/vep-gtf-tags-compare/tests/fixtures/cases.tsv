@@ -1,0 +1,76 @@
+# One case a line: name, exit code, stdout, stderr, arguments (tab-separated; the arguments
+# split at spaces). The binary runs in this directory. `{out}` is a report path in a scratch
+# directory and `{scratch}` that directory. stdout is `golden` (the bytes of
+# expected/<name>.stdout), `empty` or `any`; stderr is `empty`, `golden`
+# (expected/<name>.stderr) or `any` (some text). A case writes the report
+# expected/<name>.json where that file exists and no report where it does not.
+agree	0	golden	empty	--gtf agree/genes.gtf --cache agree/cache --out {out}
+agree-no-report	0	golden	empty	--gtf agree/genes.gtf --cache agree/cache
+agree-equals-forms	0	golden	empty	--cache=agree/cache --gtf=agree/genes.gtf --out={out} --max-mismatches=5
+agree-prefixes	0	golden	empty	--g agree/genes.gtf --c agree/cache --o {out} --m 5
+agree-repeated-options	0	golden	empty	--gtf missing.gtf --cache missing --gtf agree/genes.gtf --cache agree/cache --out missing/report.json --out {out}
+agree-empty-out	0	golden	empty	--gtf agree/genes.gtf --cache agree/cache --out=
+agree-cache-is-its-transcripts-directory	0	golden	empty	--gtf agree/genes.gtf --cache agree/cache/transcripts --out {out}
+agree-cache-is-one-chromosome	0	golden	empty	--gtf agree/genes.gtf --cache agree/cache/transcripts/21 --out {out}
+disagree	1	golden	empty	--gtf disagree/genes.gtf.gz --cache disagree/cache --out {out}
+disagree-no-report	1	golden	empty	--gtf disagree/genes.gtf.gz --cache disagree/cache
+disagree-two-examples	1	golden	empty	--gtf disagree/genes.gtf.gz --cache disagree/cache --out {out} --max-mismatches 2
+disagree-one-example	1	golden	empty	--gtf disagree/genes.gtf.gz --cache disagree/cache --out {out} --max-mismatches=1
+disagree-no-examples	1	golden	empty	--gtf disagree/genes.gtf.gz --cache disagree/cache --out {out} --max-mismatches 0
+disagree-negative-bound	1	golden	empty	--gtf disagree/genes.gtf.gz --cache disagree/cache --out {out} --max-mismatches -1
+disagree-grouped-bound	1	golden	empty	--gtf disagree/genes.gtf.gz --cache disagree/cache --out {out} --max-mismatches 1_000
+disagree-signed-bound	1	golden	empty	--gtf disagree/genes.gtf.gz --cache disagree/cache --out {out} --max-mismatches=+3
+shapes	1	golden	empty	--gtf shapes/genes.gtf --cache shapes/cache --out {out}
+shapes-unbounded-examples	1	golden	empty	--gtf shapes/genes.gtf --cache shapes/cache --out {out} --max-mismatches 99999999999999999999999999
+many	1	golden	empty	--gtf many/genes.gtf.gz --cache many/cache --out {out}
+many-all-examples	1	golden	empty	--gtf many/genes.gtf.gz --cache many/cache --out {out} --max-mismatches 1000
+many-gtf-against-another-cache	0	golden	empty	--gtf many/genes.gtf.gz --cache agree/cache --out {out}
+shapes-gtf-against-the-many-cache	0	golden	empty	--gtf shapes/genes.gtf --cache many/cache --out {out}
+empty-gtf	0	golden	empty	--gtf edge/empty.gtf --cache agree/cache --out {out}
+empty-gzip-gtf	0	golden	empty	--gtf edge/empty.gtf.gz --cache agree/cache --out {out}
+empty-member-gtf	0	golden	empty	--gtf edge/empty-member.gtf.gz --cache agree/cache --out {out}
+gz-inside-the-name-is-plain-text	0	golden	empty	--gtf edge/genes.gtf.gz.txt --cache agree/cache --out {out}
+gtf-without-transcript-lines	0	golden	empty	--gtf agree/cache/info.json --cache agree/cache --out {out}
+no-shards	0	golden	empty	--gtf agree/genes.gtf --cache edge/no-shards --out {out}
+missing-gtf	2	empty	golden	--gtf missing.gtf --cache agree/cache --out {out}
+cache-is-a-file	2	empty	golden	--gtf agree/genes.gtf --cache agree/genes.gtf --out {out}
+missing-cache	2	empty	golden	--gtf agree/genes.gtf --cache missing
+both-missing	2	empty	golden	--gtf missing.gtf --cache missing
+usage-no-arguments	2	empty	any	
+usage-no-cache	2	empty	any	--gtf agree/genes.gtf
+usage-no-gtf	2	empty	any	--cache agree/cache
+usage-bound-is-no-integer	2	empty	any	--gtf agree/genes.gtf --cache agree/cache --max-mismatches x
+usage-bound-is-a-float	2	empty	any	--gtf agree/genes.gtf --cache agree/cache --max-mismatches 5.0
+usage-unknown-option	2	empty	any	--gtf agree/genes.gtf --cache agree/cache --bogus
+usage-argument-too-many	2	empty	any	--gtf agree/genes.gtf --cache agree/cache extra
+usage-value-missing	2	empty	any	--gtf agree/genes.gtf --cache
+usage-option-as-value	2	empty	any	--gtf --cache agree/cache
+usage-double-dash	2	empty	any	--gtf agree/genes.gtf --cache agree/cache --
+usage-single-dash-name	2	empty	any	-gtf agree/genes.gtf --cache agree/cache
+usage-error-before-help	2	empty	any	--max-mismatches x --help
+usage-dash-and-equals-before-help	2	empty	any	-=x --help
+help	0	any	empty	--help
+help-short	0	any	empty	-h
+help-prefix	0	any	empty	--he
+help-before-an-error	0	any	empty	--bogus extra --help --max-mismatches x
+fault-trailing-comma	1	empty	any	--gtf agree/genes.gtf --cache faults/trailing-comma --out {out}
+fault-extra-data	1	empty	any	--gtf agree/genes.gtf --cache faults/extra-data --out {out}
+fault-byte-order-mark	1	empty	any	--gtf agree/genes.gtf --cache faults/byte-order-mark --out {out}
+fault-truthy-element	1	empty	any	--gtf agree/genes.gtf --cache faults/truthy-element --out {out}
+fault-string-element	1	empty	any	--gtf agree/genes.gtf --cache faults/string-element --out {out}
+fault-attributes-number	1	empty	any	--gtf agree/genes.gtf --cache faults/attributes-number --out {out}
+fault-attributes-true	1	empty	any	--gtf agree/genes.gtf --cache faults/attributes-true --out {out}
+fault-invalid-utf8-shard	1	empty	any	--gtf agree/genes.gtf --cache faults/invalid-utf8 --out {out}
+fault-control-character	1	empty	any	--gtf agree/genes.gtf --cache faults/control-character --out {out}
+fault-invalid-escape	1	empty	any	--gtf agree/genes.gtf --cache faults/invalid-escape --out {out}
+fault-big-integer	1	empty	any	--gtf agree/genes.gtf --cache faults/big-integer --out {out}
+fault-empty-shard	1	empty	any	--gtf agree/genes.gtf --cache faults/empty-shard --out {out}
+fault-empty-gzip-shard	1	empty	any	--gtf agree/genes.gtf --cache faults/empty-gzip-shard --out {out}
+fault-shard-is-not-gzip	1	empty	any	--gtf agree/genes.gtf --cache faults/not-gzip --out {out}
+fault-truncated-gzip-shard	1	empty	any	--gtf agree/genes.gtf --cache faults/truncated-gzip --out {out}
+fault-garbage-after-a-gzip-member	1	empty	any	--gtf agree/genes.gtf --cache faults/garbage-after-member --out {out}
+fault-invalid-utf8-gtf	1	empty	any	--gtf faults/invalid-utf8.gtf --cache agree/cache --out {out}
+fault-gtf-is-not-gzip	1	empty	any	--gtf faults/not-gzip.gtf.gz --cache agree/cache --out {out}
+fault-gtf-is-a-directory	1	empty	any	--gtf agree --cache agree/cache --out {out}
+fault-report-in-a-missing-directory	1	golden	any	--gtf agree/genes.gtf --cache agree/cache --out {scratch}/no-such-directory/report.json
+fault-report-is-a-directory	1	golden	any	--gtf disagree/genes.gtf.gz --cache disagree/cache --out {scratch}

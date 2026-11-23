@@ -1,0 +1,25 @@
+##fileformat=VCFv4.2
+##source=vep-seeded-variants generator_version=5
+##seed=1
+##records=light
+##reference_alleles=cache
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+Chromosome	1	first_base_1	A	G	.	.	.
+Chromosome	3	code11_start_codon_1	G	C	.	.	.
+Chromosome	130	code11_stop_gained_1	A	T	.	.	.
+Chromosome	202	first_sequence_1	C	T	.	.	.
+Chromosome	213	frameshift_insertion_1	T	TCA	.	.	.
+Chromosome	1490	missense_forward_1	T	A	.	.	.
+Chromosome	1810	missense_reverse_1	C	A	.	.	.
+Chromosome	1995	frameshift_deletion_1	TCT	T	.	.	.
+Chromosome	2402	code11_changed_codon_1	G	T	.	.	.
+Chromosome	2450	synonymous_forward_1	G	A	.	.	.
+Chromosome	6597	downstream_1	G	A	.	.	.
+Chromosome	8754	inframe_deletion_1	CGAA	C	.	.	.
+Chromosome	8998	code11_stop_lost_1	T	A	.	.	.
+Chromosome	9000	last_base_1	A	C	.	.	.
+pMADE	975	last_sequence_1	T	A	.	.	.
+MADE0002.1	975	synonym_1	T	A	.	.	.
+pMADE	1413	synonymous_reverse_1	G	T	.	.	.
+pMADE	1583	upstream_1	T	C	.	.	.
+pMADE	2399	origin_1	TACA	T	.	.	.

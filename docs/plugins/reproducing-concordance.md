@@ -25,8 +25,9 @@ scorer for one row and prints those counts.
    | `committed_table` | TranscriptAnnotator | its committed corpora, whose table is authored for them |
 
    `scripts/concordance/plugin_gate_runs.toml` lists the runs behind the rows.
-   A genome-wide row stands on one of four runs, named `plugins_grch37`,
-   `plugins_grch38`, `gwas` and `loftee_grch38`. A corpus row stands on one
+   A genome-wide row stands on one of five runs, named `plugins_grch37`,
+   `plugins_grch38`, `gwas`, `loftee_grch38` and `loftee_grch37`. A corpus row
+   stands on one
    run per set of its corpus: `base`, the manifest's own run, and each of the
    manifest's flag sets. In that file every run states the words vep-rs takes,
    the words Ensembl VEP took for the reference and the scorer's words. The
@@ -38,11 +39,13 @@ scorer for one row and prints those counts.
 
    `--row` takes a row's `label` and `--assembly` its assembly. The label is
    the plugin's name, except `CADD (structural variants)` for the second CADD
-   corpus.
+   corpus and `LoFTEE (synthetic conservation data)` for LoFTEE on GRCh37. That
+   row's variants are the dataset's real records, and its conservation data
+   are synthetic.
 
-2. **Build the two programs.** The driver runs a `vep` binary and, for a
-   genome-wide output, the pairing tool of the scorer. It needs Python 3.11 or
-   later.
+2. **Build the two programs.** The driver runs a `vep` binary and the scorer,
+   the `score` command of `tools/vep-plugin-pairs`, whose release build it
+   finds in the tree. It needs Python 3.11 or later.
 
    ```bash
    cargo build --release --locked
@@ -104,12 +107,11 @@ scorer for one row and prints those counts.
 
    The plugin data directory holds each file under a scope directory,
    `grch37`, `grch38` or `assembly_agnostic`, at
-   the path of the table below. Where `scripts/data/plugin_data_layout.sh`
-   names a plugin's file, the path is the layout's. gnomADMt and UTRAnnotator
-   are outside that layout, and their paths are the runs file's own.
+   the path of the table below, the one `scripts/data/plugin_data_layout.sh`
+   names for the file.
 
-   The support table names each source and its terms. For the plugins of the
-   layout, `scripts/data/setup_plugin_data.sh` prints the download and the
+   The support table names each source and its terms.
+   `scripts/data/setup_plugin_data.sh` prints the download and the
    preparation of each file
    ([Preparing data files](data-files.md#the-setup_plugin_datash-script)). It
    stages one assembly under one directory, so give it the scope directory,
@@ -119,10 +121,6 @@ scorer for one row and prints those counts.
    scripts/data/setup_plugin_data.sh --assembly GRCh38 \
      --source upstream --data-dir $DATA/plugin_data/grch38
    ```
-
-   The plugin pages give the preparation of the other two
-   ([annotation-store plugins](annotation-store.md),
-   [transcript-model plugins](transcript-model.md)).
 
    | Plugin | Scope | File under the scope |
    | --- | --- | --- |
@@ -134,6 +132,7 @@ scorer for one row and prints those counts.
    | gnomADMt | `assembly_agnostic` | `gnomadmt/gnomad.genomes.v3.1.sites.chrM.vcf.bgz`, `.tbi` |
    | GWAS | `assembly_agnostic` | `gwas/gwas_catalog_associations.tsv` |
    | LOEUF | assembly | `loeuf/loeuf_dataset.tsv.gz` on GRCh37, `loeuf/loeuf_dataset_grch38.tsv.gz` on GRCh38, `.tbi` |
+   | LoFTEE | `grch37` | under `loftee_synthetic_conservation/`, synthetic conservation data and the ancestral FASTA: `GERP_scores.synthetic.txt.gz`, `.tbi`; `phylocsf_gerp.synthetic.sql`; `human_ancestor.fa.gz`, `.fai`, `.gzi` |
    | LoFTEE | `grch38` | `loftee/grch38/human_ancestor.fa`, `.fai`; the GERP bigWig Conservation reads |
    | LoFtool | `assembly_agnostic` | `loftool/LoFtool_scores.txt` |
    | OpenTargets | `grch38` | `opentargets/open_targets_vep_full.tsv.gz`, `.tbi` |
@@ -145,6 +144,37 @@ scorer for one row and prints those counts.
    read no data file. The driver's first action is a check, by name, that every
    file the run names stands in the directory with its index. A missing file
    ends the run before either engine starts.
+
+   The `grch37` row of LoFTEE is the run `loftee_grch37`. Its variants are the
+   dataset's real records and its conservation data are synthetic: a made-up
+   GERP table and a made-up conservation database. No source publishes a
+   made-up file, so `scripts/data/setup_plugin_data.sh` prints no download for
+   one and reports the run's six files in a summary line of their own.
+   `tools/vep-loftee-synthetic-conservation` writes the table, its index and
+   the database from the GRCh37 JSON cache, every value a function of the seed
+   and the row's key
+   ([what the files hold](loftee-grch37.md#how-grch37-is-compared-with-ensembl-vep)):
+
+   ```bash
+   TOOL=tools/vep-loftee-synthetic-conservation
+   RUN=$DATA/plugin_data/grch37/loftee_synthetic_conservation
+   cargo build --release --locked --manifest-path $TOOL/Cargo.toml
+   $TOOL/target/release/vep-loftee-synthetic-conservation \
+     --cache $DATA/caches/vep-rs/grch37 --seed 1 --out-dir $RUN
+   ```
+
+   The run's ancestral FASTA is the AncestralAllele file of the table above,
+   written under the bare sequence names that the plugin's `samtools` read
+   asks for (the `master` branch's `LoF.pm` lines 552-553). It is block-gzipped
+   and indexed with `samtools faidx`:
+
+   ```bash
+   ANC=$DATA/plugin_data/grch37/ancestral_allele/homo_sapiens_ancestor.fa.gz
+   bgzip -dc $ANC \
+     | sed -E 's/^>ANCESTOR_for_[a-z]+:GRCh37:([^:]+):.*$/>\1/' \
+     | bgzip > $RUN/human_ancestor.fa.gz
+   samtools faidx $RUN/human_ancestor.fa.gz
+   ```
 
 ## Prepare the Ensembl VEP reference
 
@@ -161,6 +191,18 @@ scorer for one row and prints those counts.
    git -C loftee sparse-checkout set --no-cone '/*' '!/maxEntScan/'
    git -C loftee checkout v1.0.4_GRCh38
    python3 scripts/data/write_loftee_stand_ins.py loftee
+   ```
+
+   A GRCh37 reference runs the plugin's `master` branch. Its checkout is made
+   the same way, at the commit that the `provenance.json` of the GRCh37 LoFTEE
+   corpus records:
+
+   ```bash
+   git clone --filter=blob:none --no-checkout \
+     https://github.com/konradjk/loftee loftee-master
+   git -C loftee-master sparse-checkout set --no-cone '/*' '!/maxEntScan/'
+   git -C loftee-master checkout c7a87dffe3b96a729d299ca3ccb1c25db7b44e30
+   python3 scripts/data/write_loftee_stand_ins.py loftee-master
    ```
 
    The writer reads the module's own Perl files for the scripts they `require`
@@ -181,14 +223,14 @@ scorer for one row and prints those counts.
    binary that runs inside the image, and the driver puts that directory first
    on the container's `PATH` ([LoFTEE](loftee.md#4-the-ancestral-allele-filter-withheld-from-every-allele-of-a-multi-allelic-record)).
 
-6. **Get Ensembl VEP's output.** The reference of a run is Ensembl VEP 116.2's
+6. **Get Ensembl VEP's output.** The reference of a run is Ensembl VEP 116.3's
    default-format output of the same input under the run's `ensembl_vep`
    words. `--reference` names a stored output.
 
    `--run-ensembl-vep` writes one with Docker, from the image
    `scripts/concordance/generate_reference_output.sh` pins,
-   `ensemblorg/ensembl-vep:release_116.2` at the digest
-   `sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da`.
+   `ensemblorg/ensembl-vep:release_116.3` at the digest
+   `sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3`.
    It needs the Ensembl VEP cache of release 116, whose download that script's
    header describes. The output lands at
    `<work-dir>/<run>/ensembl-vep/output.txt`. One output serves every later
@@ -225,7 +267,9 @@ scorer for one row and prints those counts.
    container, `vep` and the scorer. `--steps` runs a part where the outputs of
    the rest are held, for instance `--steps check,score` on an engine output
    already written. The LoFTEE row adds `--loftee loftee` and `--tool-dir`
-   with the `samtools` directory of step 5.
+   with the `samtools` directory of step 5. The GRCh37 row,
+   `LoFTEE (synthetic conservation data)`, adds the same two options with the
+   `master` checkout, `--loftee loftee-master`.
 
    The rows of `plugins_grch37` and `plugins_grch38` run together, all plugins
    of the run loaded at once, and add `--utrannotator-sweep`. That directory

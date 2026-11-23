@@ -1,7 +1,7 @@
 entry = "gwas_interaction_first_snp_allele_whitespace"
 page = "docs/plugins/flat-file.md#3-gwas-the-first-snp-of-an-interaction-row-never-matches-its-own-risk-allele"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
 input_class_basis = "2 · 1 of 790 table rows · 2 flag sets, 1 corpus"
 # The committed slice's one interaction row, `rs10830963-G x rs4818032-C` on `11 x 21`, with its two SNPs written in the other order;
@@ -33,3 +33,11 @@ columns = ["Location", "Allele", "Feature", "GWAS_risk_allele", "GWAS_study"]
 [expected]
 ensembl_vep = ["21:39375657 | C | ENST00000398753 | - | -"]
 vep_rs = ["21:39375657 | C | ENST00000398753 | C | GCST006494"]
+
+[implementation]
+code = ["crates/vep-builtins/src/plugins/gwas.rs::GwasPlugin::risk_allele_for_rs_id"]
+tests = [
+    "crates/vep-builtins/src/plugins/gwas.rs::tests::fields_follow_the_plugins_reading_of_the_catalog",
+    "crates/vep-builtins/src/plugins/gwas.rs::tests::multi_location_row_yields_one_record_per_location",
+]
+rules = ["tools/vep-plugin-pairs/src/rules/gwas.rs::interaction_first_snp_allele_whitespace"]

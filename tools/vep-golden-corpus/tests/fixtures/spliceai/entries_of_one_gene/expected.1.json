@@ -1,0 +1,161 @@
+{
+ "records": [
+  {
+   "dataset": "pool",
+   "vcf": "21\t7000\tsnv_one_gene\tA\tC\t.\t.\t.",
+   "combinations": []
+  }
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {},
+ "fields_compared": [
+  "SpliceAI_pred"
+ ],
+ "field_divergences": [
+  {
+   "location": "21:7000",
+   "allele": "C",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "intron_variant",
+   "field": "SpliceAI_pred_SYMBOL",
+   "vep": "GENEA",
+   "vep_rs": "GENEA,GENEA",
+   "expected_divergence": "spliceai_multi_entry_cell"
+  },
+  {
+   "location": "21:7000",
+   "allele": "C",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "intron_variant",
+   "field": "SpliceAI_pred_DS_AG",
+   "vep": "0.15",
+   "vep_rs": "0.15,0.31",
+   "expected_divergence": "spliceai_multi_entry_cell"
+  },
+  {
+   "location": "21:7000",
+   "allele": "C",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "intron_variant",
+   "field": "SpliceAI_pred_DS_AL",
+   "vep": "0.08",
+   "vep_rs": "0.08,0.00",
+   "expected_divergence": "spliceai_multi_entry_cell"
+  },
+  {
+   "location": "21:7000",
+   "allele": "C",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "intron_variant",
+   "field": "SpliceAI_pred_DS_DG",
+   "vep": "0.06",
+   "vep_rs": "0.06,0.44",
+   "expected_divergence": "spliceai_multi_entry_cell"
+  },
+  {
+   "location": "21:7000",
+   "allele": "C",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "intron_variant",
+   "field": "SpliceAI_pred_DS_DL",
+   "vep": "0.17",
+   "vep_rs": "0.17,0.09",
+   "expected_divergence": "spliceai_multi_entry_cell"
+  },
+  {
+   "location": "21:7000",
+   "allele": "C",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "intron_variant",
+   "field": "SpliceAI_pred_DP_AG",
+   "vep": "-6",
+   "vep_rs": "-6,3",
+   "expected_divergence": "spliceai_multi_entry_cell"
+  },
+  {
+   "location": "21:7000",
+   "allele": "C",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "intron_variant",
+   "field": "SpliceAI_pred_DP_AL",
+   "vep": "-41",
+   "vep_rs": "-41,-2",
+   "expected_divergence": "spliceai_multi_entry_cell"
+  },
+  {
+   "location": "21:7000",
+   "allele": "C",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "intron_variant",
+   "field": "SpliceAI_pred_DP_DG",
+   "vep": "-17",
+   "vep_rs": "-17,11",
+   "expected_divergence": "spliceai_multi_entry_cell"
+  },
+  {
+   "location": "21:7000",
+   "allele": "C",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "intron_variant",
+   "field": "SpliceAI_pred_DP_DL",
+   "vep": "-9,C",
+   "vep_rs": "-9,-30",
+   "expected_divergence": "spliceai_multi_entry_cell"
+  },
+  {
+   "location": "21:7000",
+   "allele": "C",
+   "feature": "ENST1",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "intron_variant",
+   "field": "spliceai",
+   "vep": "{\"DP_AG\":-6,\"DP_AL\":-41,\"DP_DG\":-17,\"DP_DL\":\"-9,C\",\"DS_AG\":0.15,\"DS_AL\":0.08,\"DS_DG\":0.06,\"DS_DL\":0.17,\"SYMBOL\":\"GENEA\"}",
+   "vep_rs": "{\"DP_AG\":\"-6,3\",\"DP_AL\":\"-41,-2\",\"DP_DG\":\"-17,11\",\"DP_DL\":\"-9,-30\",\"DS_AG\":\"0.15,0.31\",\"DS_AL\":\"0.08,0.00\",\"DS_DG\":\"0.06,0.44\",\"DS_DL\":\"0.17,0.09\",\"SYMBOL\":\"GENEA,GENEA\"}",
+   "expected_divergence": "spliceai_multi_entry_cell"
+  }
+ ],
+ "field_divergence_summary": {
+  "spliceai_multi_entry_cell": 10
+ }
+}

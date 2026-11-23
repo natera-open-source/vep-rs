@@ -1,0 +1,6 @@
+outcome	meaning
+differs:unclassified	The two outputs differ and the difference has no name.
+excluded:cache-unreadable	The cache archive does not extract, lacks the genome's directory, or holds a shard that does not convert.
+excluded:ensembl-vep-failed	Ensembl VEP ended in an error or wrote no row for the genome's records.
+excluded:no-transcripts	The cache holds no transcript.
+excluded:serialiser-not-storable	The cache is serialised with Sereal, which the converter does not read.

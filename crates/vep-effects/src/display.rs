@@ -5,11 +5,11 @@
 //! renders them: `cDNA_position`, `CDS_position`, `Protein_position`,
 //! `Amino_acids` and `Codons`.
 //!
-//! This is a port of the Perl path VEP takes for those columns and nothing
+//! This is a port of the path Ensembl VEP takes for those columns and nothing
 //! else; consequence terms come from [`crate::consequences`] and are never read
-//! here. The pieces, with their Perl sources:
+//! here. The pieces, with their Ensembl VEP sources:
 //!
-//! * [`genomic2cdna`], [`genomic2cds`], [`genomic2pep`]: `TranscriptMapper.pm`
+//! * `genomic2cdna`, `genomic2cds`, `genomic2pep`: `TranscriptMapper.pm`
 //!   over the cached exon mapper pairs, with `Mapper.pm`'s `map_coordinates`
 //!   and `map_insert` (an insertion maps the two flanking bases and swaps the
 //!   result, so it prints as `end-start`). Each returns the mapped segments in
@@ -23,16 +23,20 @@
 //!   (`_pre_consequence_predicates`), read by `OutputFactory.pm`.
 //! * `Amino_acids` and `Codons`: `pep_allele_string`, `display_codon_allele_string`,
 //!   `codon`, `display_codon`, `peptide` and `_get_alternate_cds` in
-//!   `TranscriptVariationAllele.pm`, including the alternate CDS carrying the
-//!   3' UTR (so a frameshift reads past the reference stop) and the partial
-//!   codon marker `X`. `_trim_incomplete_codon` assigns where it means to
-//!   compare, so it leaves every sequence of one codon or more alone and
-//!   empties a shorter one; the port does the same.
+//!   `TranscriptVariationAllele.pm`, including the partial codon marker `X`.
+//!   The alternate codon is cut from the alternate coding sequence alone, as
+//!   the reference codon is cut from the reference one. Ensembl VEP cuts it
+//!   from another string (lines 2422-2433 and 877): the alternate coding
+//!   sequence, emptied by `_trim_incomplete_codon` where it is shorter than
+//!   one codon, with the 3' UTR joined on. Its alternate codon so holds UTR
+//!   bases where the coding sequence ends inside the codon, and UTR bases
+//!   alone where a deletion leaves fewer than three coding bases.
 //!
-//! Perl citations name modules of ensembl-variation release/115
-//! (`Bio/EnsEMBL/Variation/...`), except `TranscriptMapper.pm` and `Mapper.pm`
-//! (ensembl core release/115, `Bio/EnsEMBL/`) and `Utils.pm` and
-//! `OutputFactory.pm` (ensembl-vep release/115, `Bio/EnsEMBL/VEP/`).
+//! Ensembl VEP source citations name modules of ensembl-variation release/116
+//! (`Bio/EnsEMBL/Variation/...`), except `TranscriptMapper.pm`, `Mapper.pm`,
+//! `Transcript.pm` and `SeqEdit.pm` (ensembl core release/116, `Bio/EnsEMBL/`)
+//! and `Utils.pm`, `OutputFactory.pm` and `OutputFactory/*.pm` (ensembl-vep
+//! release/116.3, `Bio/EnsEMBL/VEP/`).
 
 use smallvec::SmallVec;
 use vep_core::consequence::{OwnSpanPositions, TranscriptConsequence};
@@ -41,7 +45,7 @@ use vep_core::variant::InputVariant;
 
 /// One mapped piece of a genomic range, in the target coordinate system.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Segment {
+pub(crate) enum Segment {
     /// A part that maps; `start > end` marks an insertion point.
     Coord { start: i64, end: i64, strand: i8 },
     /// A part with no counterpart in the target system.
@@ -50,7 +54,7 @@ pub enum Segment {
 
 /// The mapped pieces of one range; a variant rarely crosses more than one
 /// exon boundary, so the list lives inline.
-pub type Segments = SmallVec<[Segment; 4]>;
+pub(crate) type Segments = SmallVec<[Segment; 4]>;
 
 impl Segment {
     fn is_gap(&self) -> bool {
@@ -81,7 +85,7 @@ fn for_each_overlapping_pair<'a>(
     mut f: impl FnMut(&'a MapperPair),
 ) {
     let pairs = &ecm.pairs;
-    let idx = &ecm.by_genomic_start;
+    let idx = ecm.by_genomic_start();
     if idx.len() == pairs.len() {
         let lo = idx.partition_point(|&i| (pairs[i as usize].to_end as i64) < start);
         let hi = idx.partition_point(|&i| (pairs[i as usize].to_start as i64) <= end);
@@ -215,13 +219,19 @@ fn map_insert(ecm: &ExonCoordMapper, start: i64, end: i64, strand: i8) -> Segmen
 }
 
 /// Genomic range to cDNA segments, in transcript orientation.
-pub fn genomic2cdna(mapper: &TranscriptMapper, start: i64, end: i64, strand: i8) -> Segments {
+pub(crate) fn genomic2cdna(
+    mapper: &TranscriptMapper,
+    start: i64,
+    end: i64,
+    strand: i8,
+) -> Segments {
     map_coordinates(&mapper.exon_coord_mapper, start, end, strand)
 }
 
 /// Genomic range to CDS segments: cDNA segments with the UTR parts turned into
 /// gaps and the coding parts renumbered from the coding start.
-pub fn genomic2cds(mapper: &TranscriptMapper, start: i64, end: i64, strand: i8) -> Segments {
+#[cfg(test)]
+pub(crate) fn genomic2cds(mapper: &TranscriptMapper, start: i64, end: i64, strand: i8) -> Segments {
     cds_from_cdna(
         mapper,
         &genomic2cdna(mapper, start, end, strand),
@@ -230,7 +240,7 @@ pub fn genomic2cds(mapper: &TranscriptMapper, start: i64, end: i64, strand: i8) 
     )
 }
 
-/// [`genomic2cds`] over already-mapped cDNA segments of the range `start..end`.
+/// `genomic2cds` over already-mapped cDNA segments of the range `start..end`.
 fn cds_from_cdna(mapper: &TranscriptMapper, cdna: &[Segment], start: i64, end: i64) -> Segments {
     let cstart = mapper.cdna_coding_start as i64;
     let cend = mapper.cdna_coding_end as i64;
@@ -282,11 +292,12 @@ fn cds_from_cdna(mapper: &TranscriptMapper, cdna: &[Segment], start: i64, end: i
 }
 
 /// Genomic range to peptide segments, allowing for an incomplete first codon.
-pub fn genomic2pep(mapper: &TranscriptMapper, start: i64, end: i64, strand: i8) -> Segments {
+#[cfg(test)]
+pub(crate) fn genomic2pep(mapper: &TranscriptMapper, start: i64, end: i64, strand: i8) -> Segments {
     pep_from_cds(mapper, &genomic2cds(mapper, start, end, strand))
 }
 
-/// [`genomic2pep`] over already-mapped CDS segments.
+/// `genomic2pep` over already-mapped CDS segments.
 fn pep_from_cds(mapper: &TranscriptMapper, cds: &[Segment]) -> Segments {
     let shift = if mapper.start_phase > 0 {
         mapper.start_phase as i64
@@ -317,7 +328,7 @@ fn last_end(segs: &[Segment]) -> Option<i64> {
 
 /// `Utils::format_coords`: `start-end`, a single value when equal, the two
 /// swapped when start exceeds end, `?` for an undefined end, `-` for neither.
-pub fn format_coords(start: Option<i64>, end: Option<i64>) -> String {
+pub(crate) fn format_coords(start: Option<i64>, end: Option<i64>) -> String {
     match (start, end) {
         (Some(s), Some(e)) if s > e => format!("{e}-{s}"),
         (Some(s), Some(e)) if s == e => s.to_string(),
@@ -328,7 +339,7 @@ pub fn format_coords(start: Option<i64>, end: Option<i64>) -> String {
     }
 }
 
-/// [`format_coords`] as a column value: `None` where it would print `-`.
+/// `format_coords` as a column value: `None` where it would print `-`.
 fn coords_column(start: Option<i64>, end: Option<i64>) -> Option<String> {
     if start.is_none() && end.is_none() {
         return None;
@@ -397,7 +408,7 @@ fn number_string(
 /// overlap; `exon_number` and `intron_number` then number the fetched features
 /// the placed span strictly overlaps (BaseTranscriptVariation.pm:679-760), so
 /// a shift across an exon boundary leaves both columns empty.
-pub fn exon_intron_numbers(
+pub(crate) fn exon_intron_numbers(
     variant: &InputVariant,
     placed: &InputVariant,
     transcript: &Transcript,
@@ -454,7 +465,6 @@ struct Allele<'a> {
 /// Everything the codon and peptide rules read for one (variant, transcript).
 struct CodingContext<'a> {
     cds: &'a [u8],
-    utr3: &'a [u8],
     /// The cached translation, SeqEdits applied, for the reference peptide of a
     /// cache without `seq_edits`.
     pep_seq: &'a [u8],
@@ -470,6 +480,9 @@ struct CodingContext<'a> {
     pep_start: Option<i64>,
     pep_end: Option<i64>,
     reverse: bool,
+    /// Whether the row reads a peptide for an alternate allele that holds
+    /// unknown bases; `false` for an allele of known bases.
+    unknown_alt_translated: bool,
 }
 
 /// Perl's rvalue `substr($s, $offset, $len)`: the empty string when the offset
@@ -484,11 +497,14 @@ fn substr(s: &[u8], offset: i64, len: i64) -> &[u8] {
     &s[start..end]
 }
 
-/// The alternate CDS of `_get_alternate_cds` as pieces, read without joining
-/// them: reference CDS up to the variant, the allele, the reference CDS after
-/// the variant, then the 3' UTR.
+/// The alternate coding sequence as pieces, read without joining them:
+/// reference CDS up to the variant, the allele, the reference CDS after the
+/// variant. Ensembl VEP's `_get_alternate_cds` empties the three where they
+/// hold fewer than three bases and joins the 3' UTR on after them
+/// (TranscriptVariationAllele.pm:2422-2433); here a codon window holds the
+/// bases of the alternate coding sequence and ends where it ends.
 struct AltCds<'a> {
-    pieces: [&'a [u8]; 4],
+    pieces: [&'a [u8]; 3],
 }
 
 impl<'a> AltCds<'a> {
@@ -567,16 +583,8 @@ fn codon(ctx: &CodingContext, allele: &Allele) -> Option<Bases> {
             *b = vep_core::codon::complement_base(*b);
         }
     }
-    // `_trim_incomplete_codon` returns its input unchanged except when it is
-    // shorter than one codon, which it empties.
-    let alt_cds = if upstream.len() + alt.len() + downstream.len() < 3 {
-        AltCds {
-            pieces: [b"", b"", b"", ctx.utr3],
-        }
-    } else {
-        AltCds {
-            pieces: [upstream, alt.as_slice(), downstream, ctx.utr3],
-        }
+    let alt_cds = AltCds {
+        pieces: [upstream, alt.as_slice(), downstream],
     };
     Some(alt_cds.substr(codon_cds_start - 1, codon_len + (allele_len - vf_nt_len)))
 }
@@ -629,7 +637,9 @@ fn translate_codon(codon: &[u8], table: u8) -> u8 {
 
 /// `TranscriptVariationAllele::peptide` over the allele's codon window.
 fn peptide(ctx: &CodingContext, allele: &Allele, window: Option<&Bases>) -> Option<Bases> {
-    if !is_unambiguous_dna(allele.vf_seq) {
+    // An alternate allele that holds unknown bases is translated on a row
+    // that reads its peptide (`coding::unknown_bases_allele_is_translated`).
+    if !is_unambiguous_dna(allele.vf_seq) && (allele.is_reference || !ctx.unknown_alt_translated) {
         return None;
     }
     let codon = window?;
@@ -755,12 +765,14 @@ impl AlleleWindows {
 /// The five display columns of one row; `None` prints as `-`. The three
 /// totals are the lengths `--total_length` appends to the positions
 /// (`OutputFactory.pm` `TranscriptVariationAllele_to_output_hash`): the
-/// transcript's exon length sum whenever the variant overlaps an exon, the
+/// transcript's cDNA length (`cdna_length`: its exon length sum with its
+/// `_rna_edit` attributes applied) whenever the variant overlaps an exon, the
 /// cached coding sequence's length and the cached peptide's length whenever the
 /// variant lies in the coding region and the sequence is present; each is set
 /// whether or not its position is, so the writers print `-/<total>` where
 /// Ensembl VEP appends to its placeholder.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct DisplayFields {
     pub cdna_position: Option<String>,
     pub cds_position: Option<String>,
@@ -778,20 +790,21 @@ pub struct DisplayFields {
     /// `translation_start` alone, set whenever the start residue is mapped,
     /// the end mapped or not: [`TranscriptConsequence::protein_start`].
     pub protein_start: Option<i64>,
-    /// The span's own positions once [`Self::record_span_positions`] has put
+    /// The span's own positions once `Self::record_span_positions` has put
     /// another span's in the three position columns; `None` while the columns
     /// are the span's own.
     pub own_span_positions: Option<Box<OwnSpanPositions>>,
     /// [`TranscriptConsequence::record_span_in_cds`]: whether the record's span
-    /// maps to a CDS coordinate once [`Self::record_span_positions`] has mapped
+    /// maps to a CDS coordinate once `Self::record_span_positions` has mapped
     /// it.
     pub record_span_in_cds: bool,
     /// The span's `exon` predicate (`_bvfo_preds`,
     /// BaseVariationFeatureOverlapAllele.pm:511-516), which admits
     /// `cDNA_position`.
     exon: bool,
-    /// The span's `coding` predicate (:540-557), which admits `CDS_position`
-    /// and `Protein_position`.
+    /// The span's `coding` predicate
+    /// (BaseVariationFeatureOverlapAllele.pm:540-557), which admits
+    /// `CDS_position` and `Protein_position`.
     coding: bool,
     /// Whether the span's `cds_coords` hold a Coordinate, the test `within_cds`
     /// makes (VariationEffect.pm:645-651); false for a span `coding` admits on
@@ -824,8 +837,8 @@ impl DisplayFields {
     /// its own span admits: Ensembl VEP clears every merged allele's cached
     /// positions (`clear_shifting_variables`, TranscriptVariationAllele.pm:502-517)
     /// and recomputes them from the feature the rejoin pointed it at, the record
-    /// (OutputFactory.pm:2291-2293, 2315), while the `exon` and `coding`
-    /// predicates that gate the columns (OutputFactory.pm:1724-1741) were cached
+    /// (OutputFactory.pm:2300-2302, 2323), while the `exon` and `coding`
+    /// predicates that gate the columns (OutputFactory.pm:1733-1750) were cached
     /// on the allele before the rejoin (BaseVariationFeatureOverlapAllele.pm:340,
     /// 394), as its codons and consequences were; the allele's own positions
     /// move to `own_span_positions` for the VCF and JSON formats, which clear the
@@ -835,7 +848,11 @@ impl DisplayFields {
     /// `--coding_only` filter asks of the rejoined row
     /// (`Utils/VariationEffect.pm:642-652`). Any other allele keeps the
     /// positions of its own span.
-    pub fn record_span_positions(&mut self, variant: &InputVariant, transcript: &Transcript) {
+    pub(crate) fn record_span_positions(
+        &mut self,
+        variant: &InputVariant,
+        transcript: &Transcript,
+    ) {
         let (Some(start), Some(end)) = (variant.original_start, variant.original_end) else {
             return;
         };
@@ -1017,15 +1034,10 @@ pub fn display_fields(variant: &InputVariant, transcript: &Transcript) -> Displa
         .and_then(|v| v.peptide.as_deref())
         .unwrap_or("")
         .as_bytes();
-    let utr3 = vefc
-        .and_then(|v| v.three_prime_utr.as_deref())
-        .unwrap_or("")
-        .as_bytes();
     let seq_edits: &[SeqEdit] = vefc.map_or(&[], |v| v.seq_edits.as_slice());
     let phase_offset = transcript.facts().start_phase_offset as i64;
     let ctx = CodingContext {
         cds: cds_seq,
-        utr3,
         pep_seq,
         seq_edits,
         codon_table: crate::coding::codon_table_for(transcript),
@@ -1040,6 +1052,9 @@ pub fn display_fields(variant: &InputVariant, transcript: &Transcript) -> Displa
         pep_start: coding.pep_start,
         pep_end: coding.pep_end,
         reverse: variant.strand.as_i8() != strand,
+        unknown_alt_translated: !variant.reference_allele_row
+            && !is_unambiguous_dna(variant.alt_allele())
+            && crate::coding::unknown_bases_allele_is_translated(variant, transcript),
     };
     let reference = Allele {
         vf_seq: &variant.ref_allele,
@@ -1059,30 +1074,10 @@ pub fn display_fields(variant: &InputVariant, transcript: &Transcript) -> Displa
     out
 }
 
-/// Writes the display columns onto a transcript consequence; the `EXON` and
-/// `INTRON` ordinals only when `numbers` is set, else both stay `None`.
-pub fn apply_display_fields(
-    tc: &mut TranscriptConsequence,
-    variant: &InputVariant,
-    transcript: &Transcript,
-    numbers: bool,
-) {
-    let mut fields = display_fields(variant, transcript);
-    fields.record_span_positions(variant, transcript);
-    fields.write_to(tc);
-    let (exon, intron) = if numbers {
-        exon_intron_numbers(variant, variant, transcript)
-    } else {
-        (None, None)
-    };
-    tc.exon = exon;
-    tc.intron = intron;
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vep_core::transcript::{Exon, TranscriptVEFC};
+    use vep_core::transcript::Exon;
 
     fn mapper_for(
         exons: &[(u64, u64)],
@@ -1154,13 +1149,14 @@ mod tests {
         tx.cdna_coding_end = Some(350);
         let cds: String = "ATG".to_string() + &"GCT".repeat(98) + "TAA";
         assert_eq!(cds.len(), 300);
-        let vefc = TranscriptVEFC {
-            spliced_seq: None,
-            translateable_seq: Some(cds),
-            three_prime_utr: Some("GGGCCC".repeat(20)),
-            mapper: Some(mapper_for(&exons, 1, (51, 350), -1)),
-            sorted_exons: tx.exons.clone(),
-            ..tx.vefc.take().unwrap_or_default()
+        let vefc = {
+            let mut sequences = tx.vefc.take().unwrap_or_default();
+            sequences.spliced_seq = None;
+            sequences.translateable_seq = Some(cds);
+            sequences.three_prime_utr = Some("GGGCCC".repeat(20));
+            sequences.mapper = Some(mapper_for(&exons, 1, (51, 350), -1));
+            sequences.sorted_exons = tx.exons.clone();
+            sequences
         };
         tx.vefc = Some(vefc);
         tx
@@ -1320,6 +1316,96 @@ mod tests {
         assert_eq!(d.codons.as_deref(), Some("gct/gTct"));
     }
 
+    /// `forward_transcript` with its coding sequence ended after `kept` bases
+    /// of its last codon, `TAA`; the bases cut off open the 3' UTR.
+    fn transcript_ending_inside_a_codon(kept: usize) -> Transcript {
+        let exons = [(1000, 1199), (1500, 1699), (1900, 1999)];
+        let mut tx = forward_transcript();
+        let mut vefc = tx.vefc.take().unwrap();
+        let cds = vefc.translateable_seq.take().unwrap();
+        let coding_bases = 297 + kept;
+        let utr = vefc.three_prime_utr.take().unwrap();
+        vefc.three_prime_utr = Some(format!("{}{utr}", &cds[coding_bases..]));
+        vefc.translateable_seq = Some(cds[..coding_bases].to_string());
+        let cdna_coding_end = 50 + coding_bases as u64;
+        vefc.mapper = Some(mapper_for(&exons, 1, (51, cdna_coding_end), -1));
+        tx.vefc = Some(vefc);
+        tx.cdna_coding_end = Some(cdna_coding_end);
+        // cDNA 201-400 is the second exon, genomic 1500-1699.
+        tx.coding_region_end = Some(1299 + cdna_coding_end);
+        tx
+    }
+
+    #[test]
+    fn a_deletion_that_leaves_under_three_coding_bases_reads_those_bases() {
+        // A coding sequence of two codons, `ATG` and `TAA`, at cDNA 51-56 (genomic
+        // 1050-1055); the 3' UTR opens with `G`.
+        let exons = [(1000, 1199), (1500, 1699), (1900, 1999)];
+        let mut tx = forward_transcript();
+        let mut vefc = tx.vefc.take().unwrap();
+        vefc.translateable_seq = Some("ATGTAA".to_string());
+        vefc.mapper = Some(mapper_for(&exons, 1, (51, 56), -1));
+        tx.vefc = Some(vefc);
+        tx.cdna_coding_end = Some(56);
+        tx.coding_region_end = Some(1055);
+        // One coding base is left, the last: it is the alternate codon.
+        let d = display_fields(&deletion(1050, 1054, "ATGTA"), &tx);
+        assert_eq!(d.cds_position.as_deref(), Some("1-5"));
+        assert_eq!(d.protein_position.as_deref(), Some("1-2"));
+        assert_eq!(d.amino_acids.as_deref(), Some("M*/X"));
+        assert_eq!(d.codons.as_deref(), Some("ATGTAa/a"));
+        // Two are left, the first and the last.
+        let d = display_fields(&deletion(1051, 1054, "TGTA"), &tx);
+        assert_eq!(d.cds_position.as_deref(), Some("2-5"));
+        assert_eq!(d.amino_acids.as_deref(), Some("M*/X"));
+        assert_eq!(d.codons.as_deref(), Some("aTGTAa/aa"));
+    }
+
+    #[test]
+    fn a_substitution_in_a_partial_last_codon_keeps_the_alternate_codon_partial() {
+        // The coding sequence ends on the second base of codon 100 and the 3' UTR
+        // opens with `A`. Each allele's codon holds the two coding bases, so neither
+        // names a residue.
+        let tx = transcript_ending_inside_a_codon(2);
+        let d = display_fields(&snv(1647, "T", "A"), &tx);
+        assert_eq!(d.cdna_position.as_deref(), Some("348"));
+        assert_eq!(d.cds_position.as_deref(), Some("298"));
+        assert_eq!(d.protein_position.as_deref(), Some("100"));
+        assert_eq!(d.amino_acids.as_deref(), Some("X"));
+        assert_eq!(d.codons.as_deref(), Some("Ta/Aa"));
+        // With the UTR's first base the alternate bases would spell a stop codon.
+        let d = display_fields(&snv(1648, "A", "G"), &tx);
+        assert_eq!(d.cds_position.as_deref(), Some("299"));
+        assert_eq!(d.amino_acids.as_deref(), Some("X"));
+        assert_eq!(d.codons.as_deref(), Some("tA/tG"));
+    }
+
+    #[test]
+    fn a_substitution_in_a_one_base_last_codon_reads_no_utr_base() {
+        let tx = transcript_ending_inside_a_codon(1);
+        let d = display_fields(&snv(1647, "T", "C"), &tx);
+        assert_eq!(d.cds_position.as_deref(), Some("298"));
+        assert_eq!(d.protein_position.as_deref(), Some("100"));
+        assert_eq!(d.amino_acids.as_deref(), Some("X"));
+        assert_eq!(d.codons.as_deref(), Some("T/C"));
+    }
+
+    #[test]
+    fn an_indel_in_a_partial_last_codon_reads_the_alternate_coding_bases_alone() {
+        let tx = transcript_ending_inside_a_codon(2);
+        // The deletion of the last coding base leaves one base of codon 100.
+        let d = display_fields(&deletion(1648, 1648, "A"), &tx);
+        assert_eq!(d.cds_position.as_deref(), Some("299"));
+        assert_eq!(d.amino_acids.as_deref(), Some("X"));
+        assert_eq!(d.codons.as_deref(), Some("tA/t"));
+        // An inserted base between the two coding bases completes the codon.
+        let d = display_fields(&insertion(1647, "C"), &tx);
+        assert_eq!(d.cds_position.as_deref(), Some("298-299"));
+        assert_eq!(d.protein_position.as_deref(), Some("100"));
+        assert_eq!(d.amino_acids.as_deref(), Some("X/S"));
+        assert_eq!(d.codons.as_deref(), Some("ta/tCa"));
+    }
+
     #[test]
     fn deletion_crossing_an_exon_boundary_prints_question_marks() {
         let tx = forward_transcript();
@@ -1456,7 +1542,7 @@ mod tests {
     /// CDS Gap, which the `coding` predicate admits as "partly in coding region"
     /// (BaseVariationFeatureOverlapAllele.pm:555-556), so the CDS and protein
     /// columns carry their totals behind the `-` of their unmapped positions
-    /// (OutputFactory.pm:1737-1743) and no codon or peptide: Ensembl VEP 116.2
+    /// (OutputFactory.pm:1746-1752) and no codon or peptide: Ensembl VEP 116.3
     /// prints `26-27/1648 -/765 -/254` for `21 31655250 T TG` against
     /// ENST00000340345 on GRCh37, a `5_prime_UTR_variant`. On the fixture the
     /// insertion after 1049 maps to cDNA 50-51 and CDS Gap alone. The span holds
@@ -1503,7 +1589,7 @@ mod tests {
     }
 
     /// A `--minimal` split allele's columns print the record's span where its own
-    /// span admits the column, the own positions kept aside: Ensembl VEP 116.2
+    /// span admits the column, the own positions kept aside: Ensembl VEP 116.3
     /// prints `?-418`, `?-66` and `?-22` for the exonic allele of a record over an
     /// intron-exon boundary and `-` three times for its intronic allele, whose
     /// cached `exon` predicate is false. On the fixture a record 1198-1200 (the
@@ -1594,9 +1680,12 @@ mod tests {
         for strand in [1i8, -1] {
             let indexed = mapper_for(&exons, strand, (51, 350), -1);
             let mut linear = indexed.clone();
-            linear.exon_coord_mapper.by_genomic_start.clear();
+            // The index, rebuilt over no pairs, is empty; the pair count stays as cloned.
+            let pairs = std::mem::take(&mut linear.exon_coord_mapper.pairs);
+            linear.exon_coord_mapper.rebuild_genomic_index();
+            linear.exon_coord_mapper.pairs = pairs;
             assert!(
-                linear.exon_coord_mapper.by_genomic_start.len()
+                linear.exon_coord_mapper.by_genomic_start().len()
                     != linear.exon_coord_mapper.pairs.len()
             );
             let points = [

@@ -1,0 +1,46 @@
+entry = "stats_consequences_custom_key_named_consequence"
+page = "docs/divergences/stats-consequences-custom-key-named-consequence.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "unobserved"
+input_class_basis = "well-formed under the --custom short_name contract, \"any string without commas\" (Ensembl VEP documentation, \"Custom annotations\", short_name); not seen in the measured datasets"
+notes = "Line 9 of the GRCh38-custom corpus's input under the corpus's site file as an exact VCF source keyed Consequence, in the tab format with the text report. The source's record exact_2 names the first alternate, and no transcript of the cache lies within 5,000 bases of the record, so each alternate has one intergenic row. Ensembl VEP pushes the record's name onto the row's Consequence list after the row's term (OutputFactory.pm:1301, called at :1426-1435) and its report counts every item of that list (Stats.pm:282), so [Consequences (all)] holds one count under the name beside the two of the term; in a JSON run the names never reach the list (OutputFactory/JSON.pm:250-251). vep-rs counts the rows' terms alone in every format."
+
+[input]
+format = "vcf"
+text = """
+21	5380280	rs1444031311	A	C,G	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-custom/json_cache"
+
+[run]
+flags = ["--custom", "file={corpus}/custom/sites.vcf.gz,short_name=Consequence,format=vcf,type=exact,fields=AF%CLASS"]
+format = "tab"
+stats = true
+
+[compare]
+kind = "stats"
+section = "[Consequences (all)]"
+
+[expected]
+ensembl_vep = ["exact_2\t1", "intergenic_variant\t2"]
+vep_rs = ["intergenic_variant\t2"]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/stats.rs::ThreadStats::log_record",
+]
+tests = [
+    "crates/vep-cli/tests/statistics_report_under_a_custom_key_named_consequence.rs::a_custom_key_named_consequence_adds_no_consequence_type_to_the_report",
+    "crates/vep-cli/tests/statistics_report_under_a_custom_key_named_consequence.rs::a_name_on_nine_rows_of_one_allele_is_counted_on_none",
+    "crates/vep-cli/tests/statistics_report_under_a_custom_key_named_consequence.rs::the_consequence_column_lists_the_records_name_the_report_does_not_count",
+    "crates/vep-cli/tests/statistics_report_under_a_custom_key_named_consequence.rs::the_report_counts_what_the_same_source_gives_under_another_key",
+]
+rules = [
+    "tools/vep-stats-compare/src/report.rs::custom_source_keyed_consequence",
+    "tools/vep-stats-compare/src/report.rs::record_name_counted_as_a_consequence",
+]

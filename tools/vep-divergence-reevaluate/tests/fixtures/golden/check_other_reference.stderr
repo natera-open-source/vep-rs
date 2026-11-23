@@ -1,0 +1,4 @@
+ERROR: [reevaluate] still_present_fixture: verified against 116.3, the reference is 116.2
+ERROR: [reevaluate] still_present_fixture: the page says verified against '116.3', the reference is 116.2
+ERROR: [reevaluate] closed_fixture: verified against 116.3, the reference is 116.2
+ERROR: [reevaluate] closed_fixture: the page says verified against '116.3', the reference is 116.2

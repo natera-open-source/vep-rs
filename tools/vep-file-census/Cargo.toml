@@ -1,0 +1,26 @@
+[package]
+name = "vep-file-census"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.89"
+license = "Apache-2.0"
+description = "Counts, digests and row passes over whole VCF inputs, VEP outputs and cache trees, across the host's cores, in the bytes grep -c, sha256sum, md5sum and the launchers' awk passes print"
+publish = false
+
+[dependencies]
+crc32fast = "1"
+flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
+md5 = "0.8"
+memchr = "2"
+sha2 = "0.11"
+twox-hash = { version = "2", default-features = false, features = ["std", "xxhash3_128"] }
+
+# Its own Cargo root: the repository workspace's commands do not reach this package, and
+# a cargo command for it names this manifest.
+[workspace]
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"

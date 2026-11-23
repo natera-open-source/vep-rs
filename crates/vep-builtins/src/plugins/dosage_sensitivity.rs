@@ -174,6 +174,8 @@ fn covers_transcript(variant: &InputVariant, tc: &TranscriptConsequence) -> bool
         && variant.end >= tc.feature_end
 }
 
+impl crate::traits::sealed::Sealed for DosageSensitivityPlugin {}
+
 impl BuiltinPlugin for DosageSensitivityPlugin {
     fn name(&self) -> &str {
         "DosageSensitivity"
@@ -224,7 +226,7 @@ impl BuiltinPlugin for DosageSensitivityPlugin {
     /// `plugin_empty_strings` the field of an empty cell, whose empty value is
     /// Ensembl VEP's empty string where a missing cell's is its undefined value.
     /// A later plugin's value replaces an earlier one under the same key
-    /// (OutputFactory.pm:2230-2231), its mark too.
+    /// (OutputFactory.pm:2239-2240), its mark too.
     fn run_batch(&self, variants: &mut [InputVariant]) -> Result<(), PluginError> {
         for variant in variants.iter_mut().filter(|v| self.annotates_variant(v)) {
             for idx in 0..variant.transcript_consequences.len() {
@@ -350,17 +352,17 @@ mod tests {
 
     /// A transcript row of `gene` at `symbol`, spanning `start..=end`.
     fn row(symbol: Option<&str>, gene_id: &str, start: u64, end: u64) -> TranscriptConsequence {
-        TranscriptConsequence {
-            transcript: Some(Arc::new(Transcript {
-                stable_id: "ENST00000270142".into(),
-                gene_stable_id: gene_id.into(),
-                gene_symbol: symbol.map(Into::into),
-                ..Transcript::default()
-            })),
-            feature_start: start,
-            feature_end: end,
-            ..Default::default()
-        }
+        let mut consequence = TranscriptConsequence::default();
+        consequence.transcript = Some(Arc::new({
+            let mut transcript = Transcript::default();
+            transcript.stable_id = "ENST00000270142".into();
+            transcript.gene_stable_id = gene_id.into();
+            transcript.gene_symbol = symbol.map(Into::into);
+            transcript
+        }));
+        consequence.feature_start = start;
+        consequence.feature_end = end;
+        consequence
     }
 
     fn snv(pos: u64) -> InputVariant {
@@ -515,7 +517,7 @@ mod tests {
     /// format as `""` (`Tab.pm:128`, `OutputFactory/JSON.pm:327`); the row
     /// names that field in `plugin_empty_strings` and leaves a missing cell's
     /// field unnamed. A later value under the same key replaces the mark
-    /// (OutputFactory.pm:2230-2231).
+    /// (OutputFactory.pm:2239-2240).
     #[test]
     fn an_empty_cell_is_the_empty_string() {
         let dir = tempfile::tempdir().unwrap();
@@ -673,7 +675,7 @@ mod tests {
     /// `DosageSensitivity.pm:113-115, :152-154`: a structural variant is handed
     /// to the plugin (its `variant_feature_types` lists
     /// `StructuralVariationFeature`, which the dispatch gate of
-    /// `OutputFactory.pm:2220` reads) and its feature's span is the one the
+    /// `OutputFactory.pm:2229` reads) and its feature's span is the one the
     /// cover test reads, so a deletion spanning the transcript prints the
     /// scores under `cover=1` and a duplication ending inside it does not.
     #[test]

@@ -1,0 +1,36 @@
+[package]
+name = "vep-parquet-to-tab"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.89"
+license = "Apache-2.0"
+description = "Projects a vep-rs Parquet output back to the --tab format through the writer's cell contract"
+publish = false
+
+[dependencies]
+arrow-array = "60"
+arrow-buffer = "60"
+arrow-schema = "60"
+bytes = "1"
+# The zlib-rs inflater refuses what zlib refuses, a distance past the start of the data
+# included, so a broken gzip stream ends where a zlib reader ends on it.
+flate2 = { version = "1", default-features = false, features = ["zlib-rs", "runtime_detection"] }
+itoa = "1"
+memchr = "2"
+# Every codec a Parquet writer may have chosen, so that a file of the writer's schema reads
+# whatever compressed it; no async reader and no object store.
+parquet = { version = "60", default-features = false, features = ["arrow", "snap", "brotli", "flate2-zlib-rs", "lz4", "zstd", "simdutf8"] }
+rayon = "1.10"
+
+[dev-dependencies]
+libc = "0.2"
+serde_json = "1"
+
+# Its own Cargo root: the repository workspace's commands do not reach this package, and
+# a cargo command for it names this manifest.
+[workspace]
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = "symbols"

@@ -6,12 +6,12 @@
 
 **What vep-rs does instead.** vep-rs clamps every tabix query at position 1 and matches the record against the rows it holds, so a table row at position 1 or 2 annotates its record as a row anywhere else does.
 
-**Where it is in Ensembl VEP's source** (`VEP_plugins` at release/116, `ensembl-variation` at release/116, `ensembl-vep` at release/116.2, Bio::DB::HTS 2.11):
+**Where it is in Ensembl VEP's source** (`VEP_plugins` at release/116, `ensembl-variation` at release/116, `ensembl-vep` at release/116.3, Bio::DB::HTS 2.11):
 
 - The two-base window, `get_data($vf->{chr}, $vf->{start} - 2, $vf->{end})` in each plugin's `run`: `CADD.pm`, line 227; `AlphaMissense.pm`, line 248; `OpenTargets.pm`, line 350; `SpliceVault.pm`, line 158; `TranscriptAnnotator.pm`, line 218. The one-base window, `$vf->{start} - 1`, which reaches 0 for a record at position 1 alone: `dbNSFP.pm`, line 314; `dbscSNV.pm`, line 163. `CADD.pm`, line 220, takes a structural variant's start one base earlier before the same subtraction, so a structural record at position 1, 2 or 3 under a CADD structural-variant table reaches the shape.
 - `Bio/EnsEMBL/Variation/Utils/BaseVepTabixPlugin.pm`, line 354, `get_data`: `die("ERROR: No start specified\n") unless $s`, which a start of 0 fails; lines 596-602, `_get_data_hts`: the region is formatted `chr:start-end`, so a start of -1 gives `21:-1-1`.
 - `Bio/DB/HTS/Tabix.pm`, lines 102-104, `query`: the region must match `chr`, `chr:start` or `chr:start-end` with unsigned digits, and `21:-1-1` is refused with `You must specify a region in the format chr, chr:start or chr:start-end`.
-- `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 2243-2245: the exception from the plugin's `run` becomes the warning `Plugin '<Name>' went wrong: <reason>` and the row is written without the plugin's fields.
+- `Bio/EnsEMBL/VEP/OutputFactory.pm`, lines 2252-2254: the exception from the plugin's `run` becomes the warning `Plugin '<Name>' went wrong: <reason>` and the row is written without the plugin's fields.
 - `GWAS.pm`, line 176, reads its processed catalog through the same base class with the same two-base window; its class is [No GWAS annotation at position 1 or 2 of a chromosome](gwas-window-below-position-one.md).
 
 **What correcting it would change.** A record whose window reaches below position 1 would be matched against the rows from position 1 to its end, as vep-rs matches it, and the warning would go.
@@ -20,7 +20,7 @@
 
 ## 1. Three records at the start of chromosome 21 under CADD
 
-**In short.** With the `GRCh38-plugin-cadd` corpus's synthetic SNV table carrying its three rows at 19268555 moved to positions 1 to 3 with the alternate `G`, the records `21 1 pos1 C G`, `21 2 pos2 C G` and `21 3 pos3 C G` are run under CADD. Ensembl VEP writes `CADD_PHRED=3.312;CADD_RAW=1.239896` on the record at 3 and no CADD field on the other two. vep-rs writes each record's own row: `CADD_PHRED=39.801;CADD_RAW=9.984677` at 1, `CADD_PHRED=22.363;CADD_RAW=7.465190` at 2 and `CADD_PHRED=3.312;CADD_RAW=1.239896` at 3.
+**In short.** With the `GRCh38-plugin-cadd-fixture` corpus's synthetic SNV table carrying its three rows at 19268555 moved to positions 1 to 3 with the alternate `G`, the records `21 1 pos1 C G`, `21 2 pos2 C G` and `21 3 pos3 C G` are run under CADD. Ensembl VEP writes `CADD_PHRED=3.312;CADD_RAW=1.239896` on the record at 3 and no CADD field on the other two. vep-rs writes each record's own row: `CADD_PHRED=39.801;CADD_RAW=9.984677` at 1, `CADD_PHRED=22.363;CADD_RAW=7.465190` at 2 and `CADD_PHRED=3.312;CADD_RAW=1.239896` at 3.
 
 ### 1.1 What a reader needs to know first
 
@@ -36,11 +36,11 @@ Three substitutions at positions 1, 2 and 3, against the Ensembl 116 GRCh38 cach
 21	3	pos3	C	G	.	.	.
 ```
 
-The table is the committed `tests/golden/116/GRCh38-plugin-cadd/plugin_data/whole_genome_SNVs_synthetic.tsv.gz`, the corpus's synthetic fixture, with its three rows at 19268555 moved to positions 1, 2 and 3 and their alternate set to `G`, compressed and indexed again. Both engines run `--plugin CADD,snv=<that table>`.
+The table is the committed `tests/golden/116/GRCh38-plugin-cadd-fixture/plugin_data/whole_genome_SNVs_synthetic.tsv.gz`, the corpus's synthetic fixture, with its three rows at 19268555 moved to positions 1, 2 and 3 and their alternate set to `G`, compressed and indexed again. Both engines run `--plugin CADD,snv=<that table>`.
 
 ### 1.3 What each engine writes
 
-The rows in the default format. Ensembl VEP 116.2:
+The rows in the default format. Ensembl VEP 116.3:
 
 ```
 pos1	21:1	G	-	-	-	intergenic_variant	-	-	-	-	-	-	IMPACT=MODIFIER
@@ -80,7 +80,7 @@ vep -i record.vcf -o out.txt --offline --json_cache <cache> --assembly GRCh38 \
   --plugin CADD,snv=cadd_pos_synthetic.tsv.gz
 ```
 
-vep-rs writes a `CADD_PHRED` and a `CADD_RAW` value on all three rows. Ensembl VEP 116.2 writes them on the row at 3 alone and two `Plugin 'CADD' went wrong` lines to its warnings file. Moving the three table rows to positions 3, 4 and 5 and the records with them makes the engines agree.
+vep-rs writes a `CADD_PHRED` and a `CADD_RAW` value on all three rows. Ensembl VEP 116.3 writes them on the row at 3 alone and two `Plugin 'CADD' went wrong` lines to its warnings file. Moving the three table rows to positions 3, 4 and 5 and the records with them makes the engines agree.
 
 ### 1.7 How the comparator treats this class
 

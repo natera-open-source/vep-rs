@@ -6,7 +6,8 @@
 //! `TranscriptConsequence::plugin_data`, or in `InputVariant::plugin_data` on an
 //! intergenic row.
 //!
-//! Perl citations name modules of ensembl-vep release/116.2 (`Bio/EnsEMBL/VEP/...`).
+//! Ensembl VEP source citations name modules of ensembl-vep release/116.3
+//! (`Bio/EnsEMBL/VEP/...`).
 
 use std::ffi::{CStr, CString};
 use std::io::Read;
@@ -128,7 +129,7 @@ pub fn perl_plugin_refusal(module: &Path) -> CliError {
 /// feature type the plugin listed (`Transcript` alone when it listed none), and
 /// on the intergenic row of a variant that overlaps no transcript, its regulatory
 /// and motif rows notwithstanding, for a plugin that listed `Intergenic`
-/// (OutputFactory.pm:2220-2223, `check_feature_type(ref($bvfoa->feature) ||
+/// (OutputFactory.pm:2229-2232, `check_feature_type(ref($bvfoa->feature) ||
 /// 'Intergenic')`). A plugin's result lands in the consequence's `plugin_data`,
 /// or the variant's on an intergenic row, where the Extra column and the plugin
 /// columns read it on the rows of the kinds the plugin listed.
@@ -208,7 +209,7 @@ fn run_plugins_on_row(
 /// consequence of its own, and its keys are noted on the variant
 /// ([`InputVariant::intergenic_row_plugin_keys`]), so they print on that row
 /// alone whatever the plugin declared: Ensembl VEP keeps a plugin's result in
-/// the hash of the row it ran on (`OutputFactory.pm:2220-2235`), and the rows
+/// the hash of the row it ran on (`OutputFactory.pm:2229-2244`), and the rows
 /// of the other kinds carry their own results.
 fn run_plugins_on_intergenic_row(
     registry: &PluginRegistry,
@@ -234,7 +235,7 @@ fn run_plugins_on_intergenic_row(
 
 /// Runs one plugin on one consequence and variant document pair and merges its
 /// result into `fields`, as `run_plugins` does per plugin per line
-/// (OutputFactory.pm:2226-2245): a result that is not a JSON object is
+/// (OutputFactory.pm:2235-2254): a result that is not a JSON object is
 /// `Plugin '<name>' did not return a hashref, output ignored!`, a `run` that
 /// returns NULL or text that is not JSON is `Plugin '<name>' went wrong:
 /// <reason>`, each a warning after which the next plugin runs on the row. The
@@ -353,7 +354,7 @@ mod tests {
 
     /// A JSON value that is not an object merges nothing and is told apart from
     /// text that is not JSON, which names the plugin and the parse error: the
-    /// two warnings `run_plugins` writes (OutputFactory.pm:2235, 2244).
+    /// two warnings `run_plugins` writes (OutputFactory.pm:2244, 2253).
     #[test]
     fn merge_plugin_result_tells_a_non_object_from_invalid_json() {
         let mut tc = TranscriptConsequence::default();
@@ -380,7 +381,7 @@ mod tests {
     /// directory searched, the plugin component's error under `safe`
     /// (Runner.pm:929-939, thrown under `--safe`).
     #[test]
-    fn load_unresolved_skips_an_unknown_name_and_dies_under_safe() {
+    fn an_unknown_name_is_returned_not_found_and_the_caller_skips_it_or_dies_under_safe() {
         // The `Failed to load plugin` warning goes to the process-wide sink.
         let _guard = crate::warnings::sink_test_guard();
         let dirs = PluginDirs::expand("/no/such/dir");
@@ -545,11 +546,9 @@ mod tests {
         let mut expected: Vec<String> = ALWAYS.iter().map(|k| k.to_string()).collect();
         expected.sort();
 
-        let mut tc = TranscriptConsequence {
-            id_rank: 7,
-            record_span_in_cds: true,
-            ..TranscriptConsequence::default()
-        };
+        let mut tc = TranscriptConsequence::default();
+        tc.id_rank = 7;
+        tc.record_span_in_cds = true;
         assert_eq!(sorted_keys(&tc), expected);
 
         tc.plugin_data
@@ -574,13 +573,13 @@ mod tests {
         }));
         tc.used_ref = Some(std::sync::Arc::from("A"));
         tc.shifted_allele = Some(std::sync::Arc::from("GAA"));
-        tc.motif = Some(Box::new(vep_core::consequence::MotifFields {
-            name: std::sync::Arc::from("ENSPFM0290"),
-            pos: Some(7),
-            high_inf_pos: Some(true),
-            score_change: Some(-0.089),
-            factors: std::sync::Arc::from([std::sync::Arc::from("HNF4A")]),
-        }));
+        tc.motif = Some(Box::new(vep_core::consequence::MotifFields::new(
+            std::sync::Arc::from("ENSPFM0290"),
+            Some(7),
+            Some(true),
+            Some(-0.089),
+            std::sync::Arc::from([std::sync::Arc::from("HNF4A")]),
+        )));
         tc.cell_type = Some(Box::new([vep_core::consequence::CellTypeActivity {
             name: std::sync::Arc::from("HUVEC"),
             activity: vep_core::consequence::Activity::Repressed,
@@ -623,6 +622,280 @@ mod tests {
             Some("21\t100\tid_\u{FFFD}\tA\tG\t.\t.\t.")
         );
         assert!(!object.contains_key("raw_input_bytes"), "{value}");
+    }
+
+    /// One run whose plugin documents a committed file holds.
+    struct DocumentRun {
+        /// The stem of the run's two files under
+        /// `tests/fixtures/plugin-documents`: `<name>.vcf`, the input records,
+        /// and `<name>.jsonl`, the documents.
+        name: &'static str,
+        /// The directory under `tests/golden/116` that `{corpus}` names in
+        /// `flags`.
+        corpus: &'static str,
+        /// The command line after `vep --offline --fork 1 --species
+        /// homo_sapiens --assembly GRCh38`.
+        flags: &'static [&'static str],
+    }
+
+    /// The runs, each over records that fill keys of the two documents no
+    /// other run fills: an Ensembl cache under the flags of `--everything`
+    /// that read no known variant, with HGVS, SPDI, `--nearest` and a 3'
+    /// shift; a RefSeq cache and a merged cache; the LoFTEE built-in;
+    /// regulatory and motif rows with cell types, on sequence and structural
+    /// records; known variants; and structural records under `--check_svs`.
+    const DOCUMENT_RUNS: &[DocumentRun] = &[
+        DocumentRun {
+            name: "ensembl",
+            corpus: "GRCh38-everything-fasta",
+            flags: &[
+                "--json_cache",
+                "{corpus}/json_cache",
+                "--fasta",
+                "{corpus}/reference.fa.gz",
+                "--sift",
+                "b",
+                "--polyphen",
+                "b",
+                "--ccds",
+                "--hgvs",
+                "--hgvsg",
+                "--spdi",
+                "--ga4gh_vrs",
+                "--symbol",
+                "--numbers",
+                "--domains",
+                "--regulatory",
+                "--canonical",
+                "--protein",
+                "--biotype",
+                "--uniprot",
+                "--mane",
+                "--tsl",
+                "--appris",
+                "--variant_class",
+                "--gene_phenotype",
+                "--mirna",
+                "--total_length",
+                "--nearest",
+                "symbol",
+                "--shift_3prime",
+                "1",
+            ],
+        },
+        DocumentRun {
+            name: "refseq",
+            corpus: "GRCh38-refseq",
+            flags: &[
+                "--cache",
+                "--dir_cache",
+                "{corpus}/cache_root",
+                "--cache_version",
+                "116",
+                "--refseq",
+                "--fasta",
+                "{corpus}/reference.fa.gz",
+                "--hgvs",
+                "--numbers",
+                "--total_length",
+            ],
+        },
+        DocumentRun {
+            name: "merged",
+            corpus: "GRCh38-merged",
+            flags: &[
+                "--json_cache",
+                "{corpus}/json_cache",
+                "--merged",
+                "--fasta",
+                "{corpus}/reference.fa.gz",
+                "--hgvs",
+                "--numbers",
+                "--total_length",
+            ],
+        },
+        DocumentRun {
+            name: "loftee",
+            corpus: "GRCh38-plugin-loftee",
+            flags: &[
+                "--json_cache",
+                "{corpus}/json_cache",
+                "--fasta",
+                "{corpus}/reference.fa.gz",
+                "--dir_plugins",
+                "{corpus}/plugin_data",
+                "--plugin",
+                "LoF,loftee_path:{corpus}/plugin_data,human_ancestor_fa:{corpus}/plugin_data/human_ancestor.fa.gz,gerp_bigwig:{corpus}/plugin_data/gerp_conservation_scores.homo_sapiens.GRCh38.bw",
+            ],
+        },
+        DocumentRun {
+            name: "regulatory",
+            corpus: "GRCh38-regulatory",
+            flags: &[
+                "--json_cache",
+                "{corpus}/json_cache",
+                "--fasta",
+                "{corpus}/reference.fa.gz",
+                "--regulatory",
+                "--cell_type",
+                "GM12878_(f),H1_(m),astrocyte",
+            ],
+        },
+        DocumentRun {
+            name: "colocated",
+            corpus: "GRCh38-colocated",
+            flags: &["--json_cache", "{corpus}/json_cache", "--check_existing"],
+        },
+        DocumentRun {
+            name: "structural",
+            corpus: "GRCh38-checksvs",
+            flags: &[
+                "--json_cache",
+                "{corpus}/json_cache",
+                "--check_svs",
+                "{corpus}/structural_variants.vcf.gz",
+            ],
+        },
+    ];
+
+    /// The command that rewrites the committed documents.
+    const REGENERATE: &str =
+        "VEP_UPDATE_PLUGIN_DOCUMENTS=1 cargo test -p vep-cli --lib plugin_documents";
+
+    /// Where `written` first departs from `committed`: the number of the line,
+    /// counted from 1, and the length in bytes of that line in each; `None`
+    /// for the same bytes. A line itself is never returned, since a document
+    /// can hold sequence.
+    fn first_difference(committed: &[u8], written: &[u8]) -> Option<(usize, usize, usize)> {
+        if committed == written {
+            return None;
+        }
+        let mut committed_lines = committed.split(|byte| *byte == b'\n');
+        let mut written_lines = written.split(|byte| *byte == b'\n');
+        let mut number = 1;
+        loop {
+            match (committed_lines.next(), written_lines.next()) {
+                (Some(committed_line), Some(written_line)) if committed_line == written_line => {
+                    number += 1;
+                }
+                (committed_line, written_line) => {
+                    return Some((
+                        number,
+                        committed_line.map_or(0, <[u8]>::len),
+                        written_line.map_or(0, <[u8]>::len),
+                    ));
+                }
+            }
+        }
+    }
+
+    /// The two documents a plugin receives are, byte for byte, the committed
+    /// ones on the records of each run of `DOCUMENT_RUNS`: the library's
+    /// annotator, built from the run's command line, annotates each record of
+    /// `<name>.vcf` as one batch, and every variant of the batch is written
+    /// through `variant_c_json` and each of its consequences through `c_json`,
+    /// the two calls `run` makes, one document a line in batch order, the
+    /// variant's line before its consequences'. No run loads a shared library
+    /// or a `--custom` source, so the batch the annotator returns is the batch
+    /// `run` is handed.
+    ///
+    /// The variant document writes the frequencies of a known variant
+    /// (`frequency_strings`) in the iteration order of a `HashMap`, which
+    /// differs from one process to the next once the map holds two
+    /// populations. The `colocated` run, the one run that reads known
+    /// variants, therefore takes records whose known variants carry no
+    /// frequency, and the bytes of a populated map are held by no run.
+    ///
+    /// `VEP_UPDATE_PLUGIN_DOCUMENTS=1` rewrites the committed files instead of
+    /// comparing them.
+    #[test]
+    fn plugin_documents_of_the_corpus_runs_equal_the_committed_bytes() {
+        let _guard = crate::warnings::sink_test_guard();
+        let update = std::env::var_os("VEP_UPDATE_PLUGIN_DOCUMENTS").is_some();
+        let fixtures =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/plugin-documents");
+        let mut differing = Vec::new();
+        for run in DOCUMENT_RUNS {
+            let corpus = format!(
+                "{}/../../tests/golden/116/{}",
+                env!("CARGO_MANIFEST_DIR"),
+                run.corpus
+            );
+            let mut argv: Vec<String> = [
+                "vep",
+                "--offline",
+                "--fork",
+                "1",
+                "--species",
+                "homo_sapiens",
+                "--assembly",
+                "GRCh38",
+            ]
+            .map(str::to_string)
+            .to_vec();
+            argv.extend(
+                run.flags
+                    .iter()
+                    .map(|flag| flag.replace("{corpus}", &corpus)),
+            );
+            let config = crate::config::Config::from_argv(argv).unwrap();
+            let annotator = crate::annotator::Annotator::from_config(&config).unwrap();
+
+            let input = std::fs::read_to_string(fixtures.join(format!("{}.vcf", run.name)))
+                .unwrap_or_else(|error| panic!("{}.vcf: {error}", run.name));
+            let records = input
+                .lines()
+                .filter(|line| !line.is_empty() && !line.starts_with('#'));
+            let mut documents = Vec::new();
+            for (index, line) in records.enumerate() {
+                let record = index + 1;
+                let mut batch = crate::vcf_parser::parse_vcf_line(line, true)
+                    .unwrap_or_else(|_| panic!("{}: record {record} does not parse", run.name));
+                annotator.annotate_batch(&mut batch);
+                for variant in &batch {
+                    let document = variant_c_json(variant).unwrap_or_else(|_| {
+                        panic!(
+                            "{}: a variant of record {record} does not serialise",
+                            run.name
+                        )
+                    });
+                    documents.extend_from_slice(document.as_bytes());
+                    documents.push(b'\n');
+                    for tc in &variant.transcript_consequences {
+                        let document = c_json(tc).unwrap_or_else(|_| {
+                            panic!(
+                                "{}: a consequence of record {record} does not serialise",
+                                run.name
+                            )
+                        });
+                        documents.extend_from_slice(document.as_bytes());
+                        documents.push(b'\n');
+                    }
+                }
+            }
+            assert!(!documents.is_empty(), "{}.vcf holds no record", run.name);
+
+            let path = fixtures.join(format!("{}.jsonl", run.name));
+            if update {
+                std::fs::write(&path, &documents).unwrap();
+                continue;
+            }
+            let committed = std::fs::read(&path).unwrap_or_default();
+            if let Some((line, committed_len, written_len)) =
+                first_difference(&committed, &documents)
+            {
+                differing.push(format!(
+                    "{}: line {line} is {committed_len} bytes committed and {written_len} bytes \
+                     written, the first line that differs",
+                    path.display()
+                ));
+            }
+        }
+        assert!(
+            differing.is_empty(),
+            "{}\nregenerate with `{REGENERATE}`",
+            differing.join("\n")
+        );
     }
 
     #[test]

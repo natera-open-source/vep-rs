@@ -1,0 +1,6 @@
+Comparing caches:
+  Baseline: {{FIXTURES}}/caches/faults/info_json/baseline
+  Builder:  {{FIXTURES}}/caches/faults/info_json/builder
+  Comparing transcripts...
+    1 shared, 1 matched, 0 differed, rate=1.0000
+  Comparing variations...

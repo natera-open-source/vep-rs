@@ -1,0 +1,55 @@
+entry = "stats_existing_variants_check_frequency"
+page = "docs/divergences/stats-existing-variants-check-frequency.md"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
+input_class = "observed"
+input_class_basis = "2 · 5 of 511 flag sets · 5 flag sets, 2 corpora"
+notes = "Two records of the GRCh38-freqfilter corpus under its own frequency flags, which drop neither: the cache holds a known variant at the first record's position and none within a base of the second's. Ensembl VEP's frequency routine leaves an empty list of known variants on the second, which its report counts as existing; vep-rs counts one novel and one existing, the row both engines print under --check_existing alone."
+
+[input]
+format = "vcf"
+text = """
+21	30107044	known	T	C	.	.	.
+21	33030010	novel	A	G	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-freqfilter/json_cache"
+
+[run]
+flags = ["--check_frequency", "--freq_pop", "AF", "--freq_freq", "0.01", "--freq_gt_lt", "gt", "--freq_filter", "exclude"]
+stats = true
+
+[compare]
+kind = "stats"
+section = "[General statistics]"
+sorted = false
+
+[expected]
+ensembl_vep = [
+  "Lines of input read\t2", "Variants processed\t2", "Variants filtered out\t0",
+  "Novel / existing variants\t0 (0.0) / 2 (100.0)", "Overlapped genes\t3", "Overlapped transcripts\t20",
+  "Overlapped regulatory features\t-",
+]
+vep_rs = [
+  "Lines of input read\t2", "Variants processed\t2", "Variants filtered out\t0",
+  "Novel / existing variants\t1 (50.0) / 1 (50.0)", "Overlapped genes\t3", "Overlapped transcripts\t20",
+  "Overlapped regulatory features\t-",
+]
+
+[implementation]
+code = [
+    "crates/vep-cli/src/stats.rs::ThreadStats::log_record",
+    "crates/vep-cli/src/stats.rs::general_stats_rows",
+]
+tests = [
+    "crates/vep-cli/tests/stats_existing_variants.rs::a_frequency_check_leaves_the_count_of_existing_variants_as_it_is",
+    "crates/vep-cli/tests/stats_existing_variants.rs::a_frequency_check_over_a_record_with_no_known_variant_counts_none_existing",
+    "crates/vep-cli/tests/stats_existing_variants.rs::the_corpus_run_counts_its_one_record_with_no_known_variant_as_novel",
+]
+rules = [
+    "tools/vep-stats-compare/src/report.rs::existing_rows_agree",
+    "tools/vep-stats-compare/src/report.rs::frequency_checked",
+]

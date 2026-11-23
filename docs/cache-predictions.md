@@ -1,6 +1,6 @@
 # SIFT and PolyPhen predictions
 
-`--sift` and `--polyphen` take `p` (prediction), `s` (score) or `b` (both), reading matrices embedded in the cache. `vep-cache-builder --include-predictions` fetches per-transcript prediction matrix blobs from Ensembl's public MySQL server and stores them base64-encoded and gzip-compressed beside each transcript.
+`--sift` and `--polyphen` take `p` (prediction), `s` (score) or `b` (both), reading matrices embedded in the cache. `vep-cache-builder --auto` reads per-transcript prediction matrix blobs from the release's variation table dumps, and `--include-predictions` fetches them from Ensembl's public MySQL server. The builder stores them base64-encoded and gzip-compressed beside each transcript.
 
 ## Build the cache and run
 
@@ -46,11 +46,15 @@ Ensembl VEP reads its `info.txt`'s `source_sift` and `source_polyphen` lines alo
 
 Under `--everything` or `--safe` the run instead drops the tool and writes no column for it. It prints `INFO: disabling SIFT` on standard error (withheld under `--quiet`).
 
-A natively built cache names no tool version. Its `sift` and `polyphen` markers, written only when the build embedded a matrix of that tool, count as availability instead. A native cache built without `--include-predictions` is therefore the one case the flags refuse that Ensembl VEP's own caches never present.
+A natively built cache names no tool version. Its `sift` and `polyphen` markers, written only when the build embedded a matrix of that tool, count as availability instead. A native cache of a species with predictions whose build read no matrix is therefore the one case the flags refuse that Ensembl VEP's own caches never present: a build with `--output-dir` and no `--include-predictions`, or a GRCh37 installation without the switch.
 
 ## How the matrices are fetched and stored
 
-The build fetches the matrices from:
+An `--auto` installation reads the matrices from the table dumps the release publishes of the variation database: `attrib_type`, `attrib`, `translation_md5` and `protein_function_predictions`. It reads them for any species whose database holds matrices, and checks each file against its `CHECKSUMS` line like every other input.
+
+The GRCh37 tree publishes the matrices table without the `translation_md5` table that keys it. So a GRCh37 installation holds no matrices, and its closing warning names `--include-predictions`. Beside `--auto` that switch fetches the matrices from Ensembl's MySQL server instead, for human on GRCh37 (`--mysql-port 3337`) and GRCh38 alone.
+
+With `--include-predictions`, which serves human on GRCh37 and GRCh38 alone, the build fetches the matrices from:
 
 - the server `ensembldb.ensembl.org`, anonymous read-only
 - port 3306 for the GRCh38 databases and `--mysql-port 3337` for the GRCh37 ones

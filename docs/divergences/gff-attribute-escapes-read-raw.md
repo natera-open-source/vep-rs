@@ -1,6 +1,6 @@
 # A GFF3 attribute value holding an escape, read as the transcript source or a promoter window
 
-**The defect in one sentence.** Ensembl VEP 116.2's `--gff` and `--custom` GFF promoter sources read every attribute value of the ninth column as written, so a value carrying a GFF3 escape prints the escape in place of the character: `Name=A%2CB` prints the symbol `A%2CB` and `ID=PROM%2c1%3E` the `feature_id` `PROM%2c1%3E`.
+**The defect in one sentence.** Ensembl VEP 116.3's `--gff` and `--custom` GFF promoter sources read every attribute value of the ninth column as written, so a value carrying a GFF3 escape prints the escape in place of the character: `Name=A%2CB` prints the symbol `A%2CB` and `ID=PROM%2c1%3E` the `feature_id` `PROM%2c1%3E`.
 
 **Why this is a defect.** GFF3 reserves `;`, `=`, `,`, `&` and `%` in the ninth column and has a value carry them as `%XX` escapes; Ensembl's own files write `%2C` and `%3B` in gene names. The escaping is the URL convention: any byte may be written as `%XX`, the hexadecimal digits in either case, and a reader decodes every such escape, `%3E` for `>` as much as `%2c` for `,`. The parser Ensembl VEP reads a GFF3 with decodes them in its `get_attribute_by_name` and `get_type` accessors, through its `decode_string`. Its `get_attributes`, the accessor both sources call, stores each value as written. Ensembl's database and cache carry the character, so the `--gff` source prints a symbol no other source prints.
 
@@ -8,13 +8,13 @@
 
 Both engines decode a GTF value the same way, so the GTF form of the shape reaches no class.
 
-**Where it is in Ensembl VEP's source** (`ensembl-io` at release/116, `ensembl-vep` at release/116.2):
+**Where it is in Ensembl VEP's source** (`ensembl-io` at release/116, `ensembl-vep` at release/116.3):
 
 - `Bio/EnsEMBL/IO/Parser/GFF3.pm`, lines 190-198, `get_attributes`: `split(';', ...)` then `split('=', $attr)` into two variables (line 194), no decoding. Lines 174-183, `get_attribute_by_name`: `decode_string($value)`; lines 161-164, `get_type`: decoded likewise. `Bio/EnsEMBL/IO/Parser/GXF.pm`, lines 303-307, `decode_string`: `uri_unescape`.
 - `Bio/EnsEMBL/VEP/AnnotationSource/File/BaseGXF.pm`, line 289: `attributes => $parser->get_attributes`, the hash every later read takes a value from.
 - `BaseGXF.pm`, lines 632-703, `_add_identifiers`: line 638 the transcript line's `gene_id`, lines 662-666 its `gene_name` or `gene`, line 670 the gene line's `name` or `Name`, line 674 `transcript_support_level` or `tsl`, lines 683-685 the `tag` list. Line 464, `_create_transcript`: `transcript_id`; line 481: `version` or `transcript_version`; line 723, `_add_translation`: the CDS line's `protein_id`.
-- `Bio/EnsEMBL/VEP/AnnotationSource/File/GFF.pm`, line 277, `_record_get_id`: `ID`, `Name`, `id` or `name`; line 248, `_record_get_parent_ids`: `Parent` or `parent`; lines 304-335, `_record_get_biotype`: `biotype`, `transcript_type` or `transcript_biotype`.
-- `GFF.pm`, lines 198-201, `_create_records`: a `gff_type=gencode_promoter` source's `feature_id` is the hash's `ID` and its `associated_gene` the hash's `gene_id`, the same hash of `BaseGXF.pm`, line 289, so a promoter window's two fields print as written.
+- `Bio/EnsEMBL/VEP/AnnotationSource/File/GFF.pm`, line 278, `_record_get_id`: `ID`, `Name`, `id` or `name`; line 249, `_record_get_parent_ids`: `Parent` or `parent`; lines 305-336, `_record_get_biotype`: `biotype`, `transcript_type` or `transcript_biotype`.
+- `GFF.pm`, lines 199-202, `_create_records`: a `gff_type=gencode_promoter` source's `feature_id` is the hash's `ID` and its `associated_gene` the hash's `gene_id`, the same hash of `BaseGXF.pm`, line 289, so a promoter window's two fields print as written.
 
 **What correcting it would change.** Every value read through `get_attributes` would carry the characters the file encodes, as the values read through `get_attribute_by_name` do. The symbol, identifier, biotype or support level of a record whose value holds an escape, and the `feature_id` and `associated_gene` of a promoter window, would print as vep-rs prints them. The human release files hold no escape in a value the source reads, so their rows would not change.
 
@@ -26,7 +26,7 @@ An identifier whose `gene:` or `transcript:` prefix is written with an escaped c
 
 ## 1. A TMPRSS3 gene line whose `Name` holds an escaped comma
 
-**In short.** The GRCh38 release-116 GFF3 lines of the gene TMPRSS3 and its transcript `ENST00001113783`, with the gene's `Name=TMPRSS3` rewritten `Name=A%2CB`, the GFF3 spelling of the symbol `A,B`, make a two-gene file with the gene PWP2 and its transcript `ENST00000456705` as a control. On the record `tmprss3_codon6`, `21 42395401 G>A`, a `missense_variant` on that transcript, vep-rs writes `SYMBOL=A,B`. Ensembl VEP 116.2 reading the file through `--gff` writes `SYMBOL=A%2CB` in every format, and on the yeast release file's ARG5,6 gene the same way, `ARG5%2C6` where its own cache carries `ARG5,6`. A promoter window overlaid through `--custom`, `ID=PROM%2c1%3E;gene_id=ENSG%3B1`, prints `PROM%2c1%3E` and `ENSG%3B1` on Ensembl VEP in every format, `PROM,1>` and `ENSG;1` on vep-rs in the tab and JSON formats.
+**In short.** The GRCh38 release-116 GFF3 lines of the gene TMPRSS3 and its transcript `ENST00001113783`, with the gene's `Name=TMPRSS3` rewritten `Name=A%2CB`, the GFF3 spelling of the symbol `A,B`, make a two-gene file with the gene PWP2 and its transcript `ENST00000456705` as a control. On the record `tmprss3_codon6`, `21 42395401 G>A`, a `missense_variant` on that transcript, vep-rs writes `SYMBOL=A,B`. Ensembl VEP 116.3 reading the file through `--gff` writes `SYMBOL=A%2CB` in every format, and on the yeast release file's ARG5,6 gene the same way, `ARG5%2C6` where its own cache carries `ARG5,6`. A promoter window overlaid through `--custom`, `ID=PROM%2c1%3E;gene_id=ENSG%3B1`, prints `PROM%2c1%3E` and `ENSG%3B1` on Ensembl VEP in every format, `PROM,1>` and `ENSG;1` on vep-rs in the tab and JSON formats.
 
 ### 1.1 What a reader needs to know first
 
@@ -58,7 +58,7 @@ Both engines run `--symbol --biotype --tsl --protein --protein_version --transcr
 
 ### 1.3 What each engine writes
 
-Ensembl VEP 116.2:
+Ensembl VEP 116.3:
 
 ```
 tmprss3_codon6	21:42395401	A	ENSG00000160183.19	ENST00001113783.1	Transcript	missense_variant	249	17	6	P/L	cCg/cTg	-	IMPACT=MODERATE;STRAND=-1;SYMBOL=A%2CB;BIOTYPE=protein_coding;ENSP=ENSP00000783588.1;SOURCE=tmprss3_escaped_name.gff3.gz;HGVSc=ENST00001113783.1:c.17C>T;HGVSp=ENSP00000783588.1:p.Pro6Leu;GENCODE_PROMOTER=21:42395390-42395410;GENCODE_PROMOTER_associated_gene=ENSG%3B1;GENCODE_PROMOTER_feature_id=PROM%2c1%3E;GENCODE_PROMOTER_type=promoter_window
@@ -95,7 +95,7 @@ vep -i record.vcf -o out.txt --offline --json_cache cache \
   --custom file=promoters.gff.gz,format=gff,gff_type=gencode_promoter
 ```
 
-vep-rs writes `SYMBOL=A,B` and `GENCODE_PROMOTER_feature_id=PROM,1>`. Ensembl VEP 116.2 with `--gff tmprss3_escaped_name.gff3.gz --symbol` and the same `--custom` source, both files bgzipped and indexed, writes `SYMBOL=A%2CB` and `GENCODE_PROMOTER_feature_id=PROM%2c1%3E`. Restoring `Name=TMPRSS3`, `ID=PROM1` and `gene_id=ENSG1` makes the engines agree, and so does the same comma in a GTF, `gene_name "A%2CB"`, which both engines read as `A,B`.
+vep-rs writes `SYMBOL=A,B` and `GENCODE_PROMOTER_feature_id=PROM,1>`. Ensembl VEP 116.3 with `--gff tmprss3_escaped_name.gff3.gz --symbol` and the same `--custom` source, both files bgzipped and indexed, writes `SYMBOL=A%2CB` and `GENCODE_PROMOTER_feature_id=PROM%2c1%3E`. Restoring `Name=TMPRSS3`, `ID=PROM1` and `gene_id=ENSG1` makes the engines agree, and so does the same comma in a GTF, `gene_name "A%2CB"`, which both engines read as `A,B`.
 
 ### 1.7 How the comparator treats this class
 

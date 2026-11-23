@@ -1,0 +1,9 @@
+transcript_id	classes	other_keys	json_cache_peptide_matches
+ENST00000000001	identical_after_normalisation		
+ENST00000000002	peptide+predictions		
+ENST00000000003	protein_features		
+ENST00000000004	other+protein_features	biotype,source	
+ENST00000000005	peptide		
+ENST00000000006	identical_after_normalisation		
+ENST00000000007			
+ENST00000000008	other+protein_features	biotype	

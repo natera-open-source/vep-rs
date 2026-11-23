@@ -1,0 +1,1 @@
+{"records": [{"dataset": "pool", "vcf": "21\t100\trs_masked\tT\tTA\t.\tPASS\t.", "combinations": []}, {"dataset": "pool", "vcf": "21\t200\trs_masked_ref\tT\tTA\t.\tPASS\t.", "combinations": []}, {"dataset": "pool", "vcf": "21\t300\trs_masked_alt\tT\tTA\t.\tPASS\t.", "combinations": []}]}

@@ -1,7 +1,7 @@
 entry = "transcript_filter_zero_field_read_as_unset"
 page = "docs/divergences/transcript-filter-zero-field.md"
-verified_against = "116.2"
-image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+verified_against = "116.3"
+image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "unobserved"
 input_class_basis = "well-formed under the filter notation, a field, an operator and a value separated by whitespace (Ensembl VEP documentation, \"Filtering results\", Writing filters); not seen in the measured datasets; classed by its most reachable shape, a three-word unit: a four-word unit breaks that section's three-component filter string"
 notes = "The corpus record tf_17608184 lies within reach of 41 transcripts. The filter unit `0 is 1` opens with the word `0`, which FilterSet.pm:260 tests with Perl's truth test as the unit's field slot: `0` is false, so `is` overwrites the field and `1` is read as the operator, which :276 refuses with `No such operator \"1\"` and exit status 2. vep-rs reads `0` as the field, a name no transcript key matches, so the unit with a value fails on every transcript and the record is written as one intergenic_variant row, exit status 0. The two-word shapes differ without a refusal: `0 ne` keeps nothing on Ensembl VEP (the field `ne`, undefined) and everything on vep-rs (the field `0` is not defined); `0 is` keeps the canonical transcripts on Ensembl VEP (the field `is`, a prefix of is_canonical) and everything on vep-rs."
@@ -28,3 +28,7 @@ pattern = "No such operator"
 ensembl_vep = ["MSG: ERROR: No such operator \"1\""]
 vep_rs = []
 ensembl_vep_exit = 2
+
+[implementation]
+code = ["crates/vep-cli/src/filter_set.rs::parse_into"]
+tests = ["crates/vep-cli/tests/filter_report_and_run_documented_rows.rs::a_filter_unit_that_opens_with_the_word_zero_has_zero_as_its_field"]
